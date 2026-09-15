@@ -1,0 +1,23 @@
+﻿{
+    "scripts":  {
+                    "clean":  "rimraf dist *.tsbuildinfo",
+                    "build":  "tsc -b",
+                    "typecheck":  "tsc -b --pretty"
+                },
+    "description":  "值班者状态机、queue、群类型管理",
+    "type":  "module",
+    "types":  "./dist/index.d.ts",
+    "version":  "0.1.0",
+    "name":  "@ccarmy/group-router",
+    "private":  true,
+    "exports":  {
+                    ".":  {
+                              "types":  "./dist/index.d.ts",
+                              "import":  "./dist/index.js"
+                          }
+                },
+    "main":  "./dist/index.js",
+    "dependencies":  {
+                         "@ccarmy/contracts":  "workspace:*"
+                     }
+}

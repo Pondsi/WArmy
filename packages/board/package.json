@@ -1,0 +1,23 @@
+﻿{
+    "scripts":  {
+                    "clean":  "rimraf dist *.tsbuildinfo",
+                    "build":  "tsc -b",
+                    "typecheck":  "tsc -b --pretty"
+                },
+    "description":  "看板数据模型与视图",
+    "type":  "module",
+    "types":  "./dist/index.d.ts",
+    "version":  "0.1.0",
+    "name":  "@ccarmy/board",
+    "private":  true,
+    "exports":  {
+                    ".":  {
+                              "types":  "./dist/index.d.ts",
+                              "import":  "./dist/index.js"
+                          }
+                },
+    "main":  "./dist/index.js",
+    "dependencies":  {
+                         "@ccarmy/contracts":  "workspace:*"
+                     }
+}

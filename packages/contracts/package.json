@@ -1,0 +1,20 @@
+﻿{
+    "scripts":  {
+                    "clean":  "rimraf dist *.tsbuildinfo",
+                    "build":  "tsc -b",
+                    "typecheck":  "tsc -b --pretty"
+                },
+    "description":  "P0冻结的全部TS接口契约",
+    "type":  "module",
+    "types":  "./dist/index.d.ts",
+    "version":  "0.1.0",
+    "name":  "@ccarmy/contracts",
+    "private":  true,
+    "exports":  {
+                    ".":  {
+                              "types":  "./dist/index.d.ts",
+                              "import":  "./dist/index.js"
+                          }
+                },
+    "main":  "./dist/index.js"
+}

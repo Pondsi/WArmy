@@ -1,0 +1,16 @@
+{
+  "name": "@ccarmy/spikes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "spike-01": "node spike-01-bundled-node/run.mjs",
+    "spike-02": "node spike-02-sqlite-ipc/run.mjs",
+    "spike-09": "node spike-09-loopback/run.mjs"
+  },
+  "version": "1.0.0",
+  "description": "对照 ADR 000 第四章 P0。每个 Spike 独立目录，结果写入 `RESULTS.md`。",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

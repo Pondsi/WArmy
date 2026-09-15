@@ -1,0 +1,17 @@
+{
+  "name": "spike-05-plugins",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@deepseek-ai/dsh": "^0.1.5-rc.1",
+    "@nanmicoder/dsh-agent-teams": "^0.1.17"
+  }
+}
