@@ -1,0 +1,23 @@
+{
+  "name": "@ccarmy/providers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "多协议模型 Provider：OpenAI 兼容 / Anthropic / Ollama",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@ccarmy/contracts": "workspace:*"
+  }
+}

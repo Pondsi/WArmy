@@ -19,3 +19,9 @@ spikes/*/node_modules/
 spikes/*/models/
 spikes/*/dsh-memory-plus/
 
+
+spikes/spike-07-onnx/models/
+spikes/spike-05-plugins/dsh-memory-plus/
+spikes/spike-05-plugins/node_modules/
+spikes/node_modules/
+

@@ -47,15 +47,23 @@
 **状态：通过（25/25，2字词 100%）**
 
 ## Spike 5 — agent-teams + memory-plus 共存
-**状态：安装级通过 / 运行时合并部分未测**
+**状态：通过（安装 + 运行时 profile 合并）**
 
 | 项 | 结果 |
 |---|---|
-| `@nanmicoder/dsh-agent-teams@0.1.17` | 安装成功（需 `--legacy-peer-deps`） |
-| memory-plus 仓库 | **不是** nanmicoder；正确源：`QIANLING-0831/dsh-memory-plus` |
-| memory-plus 自测 | **47/48 通过**（`dsh-memory-index` 1 失败） |
-| 包结构冲突 | 可共存：teams 走 `cordis.patch.yml`；memory-plus 为独立 plugin packages（CJK FTS / dedup / compaction locator） |
-| 未做 | 在真实 dsh profile 里同时启用两插件的 patch 合并 |
+| `@nanmicoder/dsh-agent-teams@0.1.17` | 安装成功 |
+| memory-plus 源 | `QIANLING-0831/dsh-memory-plus` → `dsh-memory-bundle` |
+| 自测 | 47/48（memory-index 1 失败，上游） |
+| **dsh profile 合并** | **通过** — `--dump-config` 同时含 `agent-teams` 与 `dsh-memory-*` 全套 |
+| 冲突面 | memory-bundle 按设计 disable 基座 `session-query-sqlite` / `compaction-basic`；teams 只 insert tools，不改检索 |
+| 脚本 | `spikes/spike-05-plugins/run-merge2.mjs` + 手工 patch（见 RESULTS 合并步骤） |
+
+合并要点（写入 P1 插件管理）：
+1. `cordis.patch.yml` 必须是**单一顶层 YAML 数组**（不能 `[]` 后再追加）
+2. profile `package.json` 不能带 UTF-8 BOM
+3. 需绝对路径 pnpm（Windows PATH 对 dsh 子进程不可见）
+4. `dsh.profile.bundles` 声明包名 + patch insert id，二者都要
+
 
 ## Spike 6 — DeepSeek V4 Pro 可用性
 **状态：通过**
@@ -109,7 +117,7 @@ DoD（P95 < 50ms）**达标**。边界输入（空串/超长/纯标点）输出�
 | 2 | SQLite IPC | **通过** |
 | 3 | in-history | **架构通过** |
 | 4 | FTS CJK | **通过** |
-| 5 | 插件共存 | **安装通过** |
+| 5 | 插件共存 | **通过（含 profile 合并）** |
 | 6 | V4 Pro | **通过** |
 | 7 | ONNX WASM | **通过** |
 | 8 | gsudo | **通过** |
@@ -124,3 +132,4 @@ DoD（P95 < 50ms）**达标**。边界输入（空串/超长/纯标点）输出�
 5. **Provider 抽象必需**：DeepSeek 仅作参考实现；缓存指标字段各厂不同，统一到 `CacheUsage { hitTokens, missTokens, source }`
 6. in-history 更新写在 JSONL 追加流里，禁止重写 system 前缀
 7. memory-plus 源仓库以 GitHub 搜索结果为准，ADR 原 nanmicoder 路径作废
+8. **Provider 三协议**（P1 已落地）：OpenAI 兼容（DeepSeek/SiliconFlow/Kimi/GLM…）/ Anthropic / Ollama；预设 7 个，可改 baseURL
