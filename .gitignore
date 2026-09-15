@@ -25,3 +25,5 @@ spikes/spike-05-plugins/dsh-memory-plus/
 spikes/spike-05-plugins/node_modules/
 spikes/node_modules/
 
+
+vendor/agency-agents/
