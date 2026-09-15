@@ -46,6 +46,7 @@
         <input id="list-search" type="search" data-i18n-placeholder="list.search" data-i18n-title="list.search" />
       </div>
       <div id="list-body" class="list-body"></div>
+      <div id="col-resizer" title="拖动调整宽度"></div>
     </aside>
 
     <main id="main-col">
@@ -85,20 +86,24 @@
             <ul id="queue-items" class="queue-items"></ul>
           </div>
           <footer class="composer">
+            <div id="attach-list" class="hidden"></div>
             <div class="composer-tools">
               <div class="urgency" id="urgency-bar">
                 <button data-u="P1" data-i18n="chat.p1" data-i18n-title="chat.p1Tip"></button>
                 <button class="on" data-u="P2" data-i18n="chat.p2" data-i18n-title="chat.p2Tip"></button>
                 <button data-u="P3" data-i18n="chat.p3" data-i18n-title="chat.p3Tip"></button>
               </div>
+              <button class="btn-tool" id="btn-attach" data-i18n="chat.attach" data-i18n-title="chat.attachTip"></button>
             </div>
             <textarea id="input" rows="3" data-i18n-placeholder="chat.placeholder"></textarea>
             <div class="composer-send">
+              <button id="btn-voice" class="btn-tool" data-i18n="chat.voice" data-i18n-title="chat.voiceTip"></button>
               <button id="btn-send" class="btn-primary" data-i18n="chat.send"></button>
             </div>
           </footer>
         </section>
         <aside id="panel-col">
+          <div id="panel-resizer" title="拖动调整宽度"></div>
           <div class="panel-block">
             <h3 data-i18n="panel.tasks"></h3>
             <ul id="task-list" class="task-list"><li class="muted" data-i18n="panel.noTasks"></li></ul>

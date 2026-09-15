@@ -2,7 +2,7 @@
  * Electron 主进程 — 零原生模块
  * 注意：Windows 中文路径下 fork 子进程可能乱码，memory ipc 先拷到 userData（ASCII）
  */
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -221,4 +221,59 @@ ipcMain.handle('ccarmy:i18n', (_e, locale: string) => {
 ipcMain.handle('ccarmy:locale-info', () => {
   const sys = app.getLocale();
   return { system: sys, isZh: sys.startsWith('zh') };
+});
+
+// ── 主题 ──
+ipcMain.handle('ccarmy:set-theme-source', (_e, source: 'system' | 'light' | 'dark') => {
+  nativeTheme.themeSource = source === 'system' ? 'system' : source;
+  return { shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource };
+});
+ipcMain.handle('ccarmy:theme-info', () => ({
+  shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
+  themeSource: nativeTheme.themeSource,
+}));
+
+// ── 拉取供应商模型列表（OpenAI 兼容 /models） ──
+ipcMain.handle(
+  'ccarmy:list-models',
+  async (_e, cfg: { protocol: string; baseURL: string; apiKey?: string }) => {
+    try {
+      const { createProvider } = await import('@ccarmy/providers');
+      const p = createProvider(
+        (cfg.protocol as 'openai-compatible' | 'anthropic' | 'ollama') || 'openai-compatible',
+        { baseURL: cfg.baseURL, apiKey: cfg.apiKey }
+      );
+      const models = await p.listModels();
+      return { ok: true, models };
+    } catch (e) {
+      return { ok: false, models: [], error: String((e as Error).message || e) };
+    }
+  }
+);
+
+// ── 选择本地提示音文件 ──
+ipcMain.handle('ccarmy:pick-sound', async () => {
+  if (!win) return { ok: false };
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Select sound',
+    filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }],
+    properties: ['openFile'],
+  });
+  if (r.canceled || !r.filePaths[0]) return { ok: false };
+  return { ok: true, path: r.filePaths[0] };
+});
+
+// ── 检查更新（占位） ──
+ipcMain.handle('ccarmy:check-update', async () => {
+  return { ok: true, upToDate: true, version: '0.1.0' };
+});
+
+// ── 选择附件文件 ──
+ipcMain.handle('ccarmy:pick-file', async () => {
+  if (!win) return { ok: false };
+  const r = await dialog.showOpenDialog(win, {
+    properties: ['openFile'],
+  });
+  if (r.canceled || !r.filePaths[0]) return { ok: false };
+  return { ok: true, path: r.filePaths[0] };
 });

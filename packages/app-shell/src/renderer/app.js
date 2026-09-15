@@ -1,4 +1,4 @@
-/* CCArmy renderer — 所有可见文案来自 i18n json */
+/* CCArmy renderer — 文案全在 i18n；主题/分栏/模型拉取/附件/语音/总看板 */
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -15,29 +15,79 @@
     globalSecurity: 'normal',
     sessionSecurity: {},
     sound: { complete: true, request: true, error: true },
+    soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,
     theme: '#07c160',
-    profile: {
-      loggedIn: false,
-      username: '主人',
-      avatarDataUrl: '',
-      email: '',
-    },
-    /** 每会话待执行队列（P2插入/P3排队） */
+    themeMode: 'system',
+    listWidth: 280,
+    panelWidth: 300,
+    attachments: [],
+    profile: { loggedIn: false, username: '主人', avatarDataUrl: '', email: '' },
     queues: {},
+    board: {
+      tasks: [
+        { id: 't1', title: '整理周报', status: 'doing', progress: 40 },
+        { id: 't2', title: '群聊值班编排', status: 'todo', progress: 0 },
+        { id: 't3', title: '记忆库归档', status: 'done', progress: 100 },
+      ],
+      recent: ['实例主力牛马已启动', '完成 FTS 中文检索校验'],
+    },
     plugins: [
-      { id: 'agent-teams', name: '@nanmicoder/dsh-agent-teams', enabled: true },
-      { id: 'memory-plus', name: 'dsh-memory-bundle', enabled: true },
+      {
+        id: 'agent-teams',
+        name: '@nanmicoder/dsh-agent-teams',
+        enabled: true,
+        desc: '多智能体团队编排：在会话中用自然语言驱动 AgentTeams 分工协作，适合内部群值班者派活。',
+      },
+      {
+        id: 'memory-plus',
+        name: 'dsh-memory-bundle',
+        enabled: true,
+        desc: '记忆增强：中文全文检索、工具结果去重、混合向量+FTS5、跨会话核心记忆与压缩定位。',
+      },
     ],
     providers: [
-      { id: 'deepseek', label: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat', apiKey: '' },
-      { id: 'ollama', label: 'Ollama 本地', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434', defaultModel: 'qwen2.5:7b', apiKey: '' },
+      {
+        id: 'deepseek',
+        label: 'DeepSeek',
+        protocol: 'openai-compatible',
+        baseURL: 'https://api.deepseek.com',
+        defaultModel: 'deepseek-chat',
+        apiKey: '',
+        models: [],
+      },
+      {
+        id: 'ollama',
+        label: 'Ollama 本地',
+        protocol: 'ollama',
+        baseURL: 'http://127.0.0.1:11434',
+        defaultModel: 'qwen2.5:7b',
+        apiKey: '',
+        models: [],
+      },
     ],
   };
 
   const t = (k) => state.t[k] || k;
   const displayName = () =>
     state.t['app.displayName'] || (state.locale.startsWith('zh') ? t('app.zhName') : t('app.enName'));
+  const escapeHtml = (s) =>
+    String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function applyAvatar() {
+    const img = $('selfAvatarImg');
+    const span = $('selfAvatar');
+    if (state.profile.avatarDataUrl) {
+      img.src = state.profile.avatarDataUrl;
+      img.classList.remove('hidden');
+      span.classList.add('hidden');
+    } else {
+      img.classList.add('hidden');
+      img.removeAttribute('src');
+      span.classList.remove('hidden');
+      span.textContent = (state.profile.username || t('nav.avatar')).slice(0, 1);
+    }
+  }
 
   function applyI18n() {
     document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -55,27 +105,11 @@
     document.title = displayName();
   }
 
-  function applyAvatar() {
-    const img = $('selfAvatarImg');
-    const span = $('selfAvatar');
-    if (state.profile.avatarDataUrl) {
-      img.src = state.profile.avatarDataUrl;
-      img.classList.remove('hidden');
-      span.classList.add('hidden');
-    } else {
-      img.classList.add('hidden');
-      img.removeAttribute('src');
-      span.classList.remove('hidden');
-      span.textContent = (state.profile.username || t('nav.avatar')).slice(0, 1);
-    }
-  }
-
   async function loadI18n(locale) {
     const pack = await window.ccarmy.i18n(locale);
     state.locale = pack.locale;
     state.t = pack.strings;
     if (pack.displayName) state.t['app.displayName'] = pack.displayName;
-    // 会话安全 select 选项也要本地化
     const sel = $('session-sec');
     [...sel.options].forEach((o) => {
       const key = 'chat.security' + o.value.charAt(0).toUpperCase() + o.value.slice(1);
@@ -84,8 +118,16 @@
     applyI18n();
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function applyThemeMode(mode) {
+    state.themeMode = mode;
+    const root = document.documentElement;
+    if (mode === 'system') {
+      root.removeAttribute('data-theme');
+      window.ccarmy?.setThemeSource?.('system');
+    } else {
+      root.setAttribute('data-theme', mode);
+      window.ccarmy?.setThemeSource?.(mode);
+    }
   }
 
   const NAV_TITLES = {
@@ -128,10 +170,7 @@
     if (nav === 'instances') {
       if (!state.selectedInstance) {
         $('empty-state').classList.remove('hidden');
-        const nameEl = $('logo-name');
-        // 空态提示
         $('logo-sub').textContent = t('instances.selectHint');
-        void nameEl;
       } else {
         $('inst-detail').classList.remove('hidden');
         renderInstanceDetail();
@@ -200,11 +239,9 @@
         <div class="muted">${t('instances.suggested')}: <b>${hw.suggested}</b></div>
         <div class="muted">${t('instances.max')}: <b>${hw.max ?? '—'}</b></div>`;
       box.appendChild(card);
-
       state.instances
         .filter((i) => !q || (i.name || '').toLowerCase().includes(q))
         .forEach((inst) => {
-          const active = state.selectedInstance?.id === inst.id;
           box.appendChild(
             row(
               inst.name || inst.id,
@@ -217,7 +254,7 @@
                 renderInstanceDetail();
                 renderList();
               },
-              active
+              state.selectedInstance?.id === inst.id
             )
           );
         });
@@ -231,20 +268,15 @@
         .sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0));
       const source = items.length
         ? items
-        : state.instances.map((i) => ({
-            id: i.id,
-            name: i.name,
-            kind: 'single',
-            lastPreview: t('list.noReply'),
-            lastTs: 0,
-          }));
+        : state.instances.map((i) => ({ id: i.id, name: i.name, kind: 'single', lastPreview: t('list.noReply') }));
       if (!source.length) {
         box.innerHTML = `<div class="list-empty">${t('list.empty')}</div>`;
         return;
       }
       source.forEach((c) => {
-        const active = state.selectedChat?.id === c.id;
-        box.appendChild(row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('single', c.id, c.name), active));
+        box.appendChild(
+          row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('single', c.id, c.name), state.selectedChat?.id === c.id)
+        );
       });
       return;
     }
@@ -257,14 +289,13 @@
         return;
       }
       items.forEach((g) => {
-        const active = state.selectedChat?.id === g.id;
         box.appendChild(
           row(
             g.name,
             `${t('group.type.' + g.type)} · ${g.members?.length || 0}`,
             g.name[0],
             () => openChat(g.type === 'internal' ? 'internal' : 'extgroup', g.id, g.name),
-            active
+            state.selectedChat?.id === g.id
           )
         );
       });
@@ -278,8 +309,9 @@
         return;
       }
       items.forEach((c) => {
-        const active = state.selectedChat?.id === c.id;
-        box.appendChild(row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('extdm', c.id, c.name), active));
+        box.appendChild(
+          row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('extdm', c.id, c.name), state.selectedChat?.id === c.id)
+        );
       });
     }
   }
@@ -292,6 +324,8 @@
     $('chat-meta').textContent =
       kind === 'internal' ? t('group.type.internal') : kind.includes('ext') ? t('group.type.external') : t('nav.singleAi');
     $('session-sec').value = state.sessionSecurity[id] || state.globalSecurity;
+    state.attachments = [];
+    renderAttach();
     renderChat();
     renderQueueBar();
     renderList();
@@ -307,8 +341,7 @@
       const av = state.profile.avatarDataUrl
         ? `<img class="avatar-img" src="${state.profile.avatarDataUrl}" alt=""/>`
         : `<div class="av">${escapeHtml((state.profile.username || '我').slice(0, 1))}</div>`;
-      const themAv = `<div class="av">${escapeHtml((state.selectedChat?.name || 'A')[0])}</div>`;
-      div.innerHTML = `${m.role === 'me' ? av : themAv}<div class="bubble">${escapeHtml(m.text)}</div>`;
+      div.innerHTML = `${m.role === 'me' ? av : `<div class="av">${escapeHtml((state.selectedChat?.name || 'A')[0])}</div>`}<div class="bubble">${escapeHtml(m.text)}</div>`;
       box.appendChild(div);
     });
     box.scrollTop = box.scrollHeight;
@@ -344,8 +377,7 @@
     list.innerHTML = '';
     q.forEach((item, idx) => {
       const li = document.createElement('li');
-      const tag =
-        item.u === 'P2' ? t('chat.p2') : t('chat.p3');
+      const tag = item.u === 'P2' ? t('chat.p2') : t('chat.p3');
       li.innerHTML = `<span class="q-tag">${escapeHtml(tag)}</span>`;
       if (item.editing) {
         const ta = document.createElement('textarea');
@@ -353,11 +385,9 @@
         const save = document.createElement('button');
         save.className = 'btn-mini';
         save.textContent = t('chat.queueSave');
-        save.title = t('chat.queueSave');
         const del = document.createElement('button');
         del.className = 'btn-mini';
         del.textContent = t('chat.queueDelete');
-        del.title = t('chat.queueDelete');
         save.onclick = () => {
           item.text = ta.value.trim() || item.text;
           item.editing = false;
@@ -367,9 +397,7 @@
           q.splice(idx, 1);
           renderQueueBar();
         };
-        li.appendChild(ta);
-        li.appendChild(save);
-        li.appendChild(del);
+        li.append(ta, save, del);
       } else {
         const span = document.createElement('div');
         span.className = 'q-text';
@@ -377,29 +405,46 @@
         const edit = document.createElement('button');
         edit.className = 'btn-mini';
         edit.textContent = t('chat.queueEdit');
-        edit.title = t('chat.queueEdit');
+        const del = document.createElement('button');
+        del.className = 'btn-mini';
+        del.textContent = t('chat.queueDelete');
         edit.onclick = () => {
           item.editing = true;
           renderQueueBar();
         };
-        const del = document.createElement('button');
-        del.className = 'btn-mini';
-        del.textContent = t('chat.queueDelete');
-        del.title = t('chat.queueDelete');
         del.onclick = () => {
           q.splice(idx, 1);
           renderQueueBar();
         };
-        li.appendChild(span);
-        li.appendChild(edit);
-        li.appendChild(del);
+        li.append(span, edit, del);
       }
       list.appendChild(li);
     });
   }
 
+  function renderAttach() {
+    const el = $('attach-list');
+    if (!state.attachments.length) {
+      el.classList.add('hidden');
+      el.innerHTML = '';
+      return;
+    }
+    el.classList.remove('hidden');
+    el.innerHTML = state.attachments
+      .map(
+        (a, i) =>
+          `<span class="attach-chip">${escapeHtml(a.name)} <button data-i="${i}" title="${escapeHtml(t('chat.queueDelete'))}">×</button></span>`
+      )
+      .join(' ');
+    el.querySelectorAll('button').forEach((b) => {
+      b.onclick = () => {
+        state.attachments.splice(Number(b.dataset.i), 1);
+        renderAttach();
+      };
+    });
+  }
+
   function stopAllAi() {
-    // 停止所有运行中实例
     state.instances.forEach((inst) => {
       if (inst.status === 'running') {
         try {
@@ -410,16 +455,14 @@
         inst.status = 'stopped';
       }
     });
-    // 清空本会话队列中未执行项的“进行中”标记
     if (state.selectedChat) {
-      const q = queueOf(state.selectedChat.id);
-      q.forEach((item) => {
+      queueOf(state.selectedChat.id).forEach((item) => {
         item.editing = false;
       });
+      pushMsg(state.selectedChat.id, 'them', t('chat.stopAll'));
     }
     renderList();
     if (state.nav === 'instances' && state.selectedInstance) renderInstanceDetail();
-    pushMsg(state.selectedChat?.id || '_', 'them', t('chat.stopAll'));
     renderChat();
   }
 
@@ -428,21 +471,27 @@
     if (!text || !state.selectedChat) return;
     const id = state.selectedChat.id;
     const u = state.urgency;
+    const attachNote = state.attachments.length
+      ? `\n[${state.attachments.map((a) => a.name).join(', ')}]`
+      : '';
+    const full = text + attachNote;
 
-    // P1 加急：立即当消息发出
-    // P2 插入 / P3 排队：进入输入框上方队列，本轮结束后执行
     if (u === 'P2' || u === 'P3') {
-      queueOf(id).push({ id: 'q-' + Date.now(), text, u, editing: false });
+      queueOf(id).push({ id: 'q-' + Date.now(), text: full, u, editing: false });
       $('input').value = '';
+      state.attachments = [];
+      renderAttach();
       renderQueueBar();
       return;
     }
 
-    pushMsg(id, 'me', text);
+    pushMsg(id, 'me', full);
     $('input').value = '';
+    state.attachments = [];
+    renderAttach();
     renderChat();
     try {
-      await window.ccarmy.memoryAppend(text);
+      await window.ccarmy.memoryAppend(full);
     } catch {
       /* optional */
     }
@@ -454,7 +503,6 @@
         c.lastPreview = text.slice(0, 30);
       }
       renderChat();
-      // 模拟本轮结束后冲刷队列
       flushQueue(id);
       if (CHAT_NAVS.has(state.nav)) renderList();
     }, 350);
@@ -469,6 +517,42 @@
     }
     renderQueueBar();
     renderChat();
+  }
+
+  function renderDashboard(host) {
+    const running = state.instances.filter((i) => i.status === 'running').length;
+    const queued = Object.values(state.queues).reduce((n, q) => n + q.length, 0);
+    const doing = state.board.tasks.filter((x) => x.status === 'doing').length;
+    const done = state.board.tasks.filter((x) => x.status === 'done').length;
+    host.innerHTML = `
+      <h1>${t('dashboard.title')}</h1>
+      <div class="dash-grid">
+        <div class="dash-card"><div class="muted">${t('dashboard.tasks')}</div><div class="stat">${doing}</div></div>
+        <div class="dash-card"><div class="muted">${t('dashboard.done')}</div><div class="stat">${done}</div></div>
+        <div class="dash-card"><div class="muted">${t('dashboard.agents')}</div><div class="stat">${running}</div></div>
+        <div class="dash-card"><div class="muted">${t('dashboard.queue')}</div><div class="stat">${queued}</div></div>
+      </div>
+      <div class="set-card" style="margin-bottom:16px">
+        <h2 style="margin:0 0 10px;font-size:14px">${t('panel.board')}</h2>
+        <div class="board-kanban">
+          <div class="board-col"><h3>TODO</h3>${state.board.tasks
+            .filter((x) => x.status === 'todo')
+            .map((x) => `<div class="board-item">${escapeHtml(x.title)}</div>`)
+            .join('') || '<div class="muted">—</div>'}</div>
+          <div class="board-col"><h3>DOING</h3>${state.board.tasks
+            .filter((x) => x.status === 'doing')
+            .map((x) => `<div class="board-item">${escapeHtml(x.title)}<div class="progress" style="margin-top:6px"><div class="progress-bar" style="width:${x.progress}%"></div></div></div>`)
+            .join('') || '<div class="muted">—</div>'}</div>
+          <div class="board-col"><h3>DONE</h3>${state.board.tasks
+            .filter((x) => x.status === 'done')
+            .map((x) => `<div class="board-item">${escapeHtml(x.title)}</div>`)
+            .join('') || '<div class="muted">—</div>'}</div>
+        </div>
+      </div>
+      <div class="set-card">
+        <h2 style="margin:0 0 10px;font-size:14px">${t('dashboard.recent')}</h2>
+        <ul class="task-list">${state.board.recent.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+      </div>`;
   }
 
   function renderInstanceDetail() {
@@ -494,7 +578,6 @@
           <button class="btn-mini" id="i-stop" title="${escapeHtml(t('instances.stop'))}">${t('instances.stop')}</button>
           <button class="btn-danger" id="i-del" title="${escapeHtml(t('instances.delete'))}">${t('instances.delete')}</button>
           <span class="badge ${inst.status === 'running' ? '' : 'off'}">${inst.status === 'running' ? t('instances.running') : t('instances.stopped')}</span>
-          <span class="muted" id="i-saved"></span>
         </div>
       </div>`;
     $('i-save').onclick = () => {
@@ -502,7 +585,6 @@
       inst.model = $('i-model').value.trim();
       inst.memoryFile = $('i-mem').value.trim();
       inst.persona = $('i-persona').value;
-      $('i-saved').textContent = t('instances.saved');
       renderList();
     };
     $('i-start').onclick = async () => {
@@ -549,7 +631,7 @@
         : `<div class="big-av">${escapeHtml((p.username || '?').slice(0, 1))}</div>`;
       box.innerHTML = `
         <h1>${t('nav.avatar')}</h1>
-        <div class="set-card" style="max-width:520px">
+        <div class="set-card" style="max-width:520px;margin-bottom:20px">
           <div class="profile-head">
             <button id="p-av-btn" class="av-btn" title="${escapeHtml(t('me.avatarHint'))}">${avHtml}</button>
             <div>
@@ -562,19 +644,19 @@
             </div>
           </div>
           <p class="muted">${t('me.loginHint')}</p>
-          <div class="field" style="margin-bottom:10px"><label>${t('me.username')}</label><input id="p-name" value="${escapeHtml(p.username)}" title="${escapeHtml(t('me.username'))}"/></div>
+          <div class="field" style="margin-bottom:10px"><label>${t('me.username')}</label><input id="p-name" value="${escapeHtml(p.username)}"/></div>
           <div class="field" style="margin-bottom:10px"><label>${t('me.avatar')}</label>
             <button class="btn-mini" id="p-av-upload">${t('me.avatarUpload')}</button>
             <span class="muted">${t('me.avatarHint')}</span>
           </div>
-          <div class="field" style="margin-bottom:10px"><label>${t('me.email')}</label><input id="p-email" type="email" value="${escapeHtml(p.email)}" placeholder="you@example.com" title="${escapeHtml(t('me.email'))}"/></div>
+          <div class="field" style="margin-bottom:10px"><label>${t('me.email')}</label><input id="p-email" type="email" value="${escapeHtml(p.email)}"/></div>
           <div class="field" style="margin-bottom:14px"><label>${t('me.changePassword')}</label>
-            <input id="p-pw" type="password" placeholder="${escapeHtml(t('me.newPassword'))}" title="${escapeHtml(t('me.newPassword'))}"/>
-            <input id="p-pw2" type="password" placeholder="${escapeHtml(t('me.confirmPassword'))}" title="${escapeHtml(t('me.confirmPassword'))}" style="margin-top:6px"/>
+            <input id="p-pw" type="password" placeholder="${escapeHtml(t('me.newPassword'))}"/>
+            <input id="p-pw2" type="password" placeholder="${escapeHtml(t('me.confirmPassword'))}" style="margin-top:6px"/>
           </div>
-          <button class="btn-primary" id="p-save" title="${escapeHtml(t('me.saveProfile'))}">${t('me.saveProfile')}</button>
-          <span class="muted" id="p-msg" style="margin-left:8px"></span>
-        </div>`;
+          <button class="btn-primary" id="p-save">${t('me.saveProfile')}</button>
+        </div>
+        <div id="dash-host"></div>`;
       $('p-login').onclick = () => alert(t('me.notAvailable'));
       $('p-reg').onclick = () => alert(t('me.notAvailable'));
       $('p-av-btn').onclick = () => $('avatar-file').click();
@@ -583,8 +665,8 @@
         state.profile.username = $('p-name').value.trim() || state.profile.username;
         state.profile.email = $('p-email').value.trim();
         applyAvatar();
-        $('p-msg').textContent = t('instances.saved');
       };
+      renderDashboard($('dash-host'));
       return;
     }
 
@@ -597,15 +679,20 @@
             <option value="zh-CN" ${state.locale.startsWith('zh') ? 'selected' : ''}>中文</option>
             <option value="en-US" ${state.locale.startsWith('en') ? 'selected' : ''}>English</option>
           </select>
-          <div class="muted" style="margin-top:6px">${escapeHtml(displayName())}</div>
         </div>
         <div class="set-section set-card">
-          <h2>${t('settings.theme')}</h2>
+          <h2>${t('settings.themeMode')}</h2>
+          <div class="theme-mode">
+            <button data-m="light" class="${state.themeMode === 'light' ? 'on' : ''}">${t('settings.themeLight')}</button>
+            <button data-m="dark" class="${state.themeMode === 'dark' ? 'on' : ''}">${t('settings.themeDark')}</button>
+            <button data-m="system" class="${state.themeMode === 'system' ? 'on' : ''}">${t('settings.themeSystem')}</button>
+          </div>
+          <h2 style="margin-top:12px">${t('settings.theme')}</h2>
           <div class="theme-swatches">
-            <button data-c="#07c160" style="background:#07c160" title="#07c160"></button>
-            <button data-c="#3d8bfd" style="background:#3d8bfd" title="#3d8bfd"></button>
-            <button data-c="#b8860b" style="background:#b8860b" title="#b8860b"></button>
-            <button data-c="#c45c26" style="background:#c45c26" title="#c45c26"></button>
+            <button data-c="#07c160" style="background:#07c160"></button>
+            <button data-c="#3d8bfd" style="background:#3d8bfd"></button>
+            <button data-c="#b8860b" style="background:#b8860b"></button>
+            <button data-c="#c45c26" style="background:#c45c26"></button>
           </div>
         </div>
         <div class="set-section set-card">
@@ -620,42 +707,71 @@
         <div class="set-section set-card">
           <h2>${t('settings.sound')}</h2>
           <div class="sound-row">
-            <label title="${escapeHtml(t('settings.soundComplete'))}"><input type="checkbox" id="s-complete" ${state.sound.complete ? 'checked' : ''}/> ${t('settings.soundComplete')}</label>
-            <label title="${escapeHtml(t('settings.soundRequest'))}"><input type="checkbox" id="s-request" ${state.sound.request ? 'checked' : ''}/> ${t('settings.soundRequest')}</label>
-            <label title="${escapeHtml(t('settings.soundError'))}"><input type="checkbox" id="s-error" ${state.sound.error ? 'checked' : ''}/> ${t('settings.soundError')}</label>
+            <label><input type="checkbox" id="s-complete" ${state.sound.complete ? 'checked' : ''}/> ${t('settings.soundComplete')}</label>
+            <label><input type="checkbox" id="s-request" ${state.sound.request ? 'checked' : ''}/> ${t('settings.soundRequest')}</label>
+            <label><input type="checkbox" id="s-error" ${state.sound.error ? 'checked' : ''}/> ${t('settings.soundError')}</label>
           </div>
+          <div class="field" style="margin-top:10px"><label>${t('settings.soundCompleteFile')}</label>
+            <div class="inst-row"><input id="sf-complete" value="${escapeHtml(state.soundFiles.complete)}" readonly/>
+            <button class="btn-mini" data-pick="complete">${t('settings.soundPick')}</button>
+            <button class="btn-mini" data-clear="complete">${t('settings.soundClear')}</button></div></div>
+          <div class="field" style="margin-top:8px"><label>${t('settings.soundRequestFile')}</label>
+            <div class="inst-row"><input id="sf-request" value="${escapeHtml(state.soundFiles.request)}" readonly/>
+            <button class="btn-mini" data-pick="request">${t('settings.soundPick')}</button>
+            <button class="btn-mini" data-clear="request">${t('settings.soundClear')}</button></div></div>
+          <div class="field" style="margin-top:8px"><label>${t('settings.soundErrorFile')}</label>
+            <div class="inst-row"><input id="sf-error" value="${escapeHtml(state.soundFiles.error)}" readonly/>
+            <button class="btn-mini" data-pick="error">${t('settings.soundPick')}</button>
+            <button class="btn-mini" data-clear="error">${t('settings.soundClear')}</button></div></div>
           <div style="margin-top:12px">
-            <label title="${escapeHtml(t('settings.emailOnRequest'))}"><input type="checkbox" id="s-email" ${state.emailOnRequest ? 'checked' : ''}/> ${t('settings.emailOnRequest')}</label>
+            <label><input type="checkbox" id="s-email" ${state.emailOnRequest ? 'checked' : ''}/> ${t('settings.emailOnRequest')}</label>
             <div class="muted">${t('settings.emailHint')}</div>
           </div>
           <div style="margin-top:12px">
-            <button class="btn-mini" id="btn-update" title="${escapeHtml(t('settings.checkUpdate'))}">${t('settings.checkUpdate')}</button>
+            <button class="btn-mini" id="btn-update">${t('settings.checkUpdate')}</button>
             <span class="muted" id="upd-msg"></span>
           </div>
         </div>
         <div class="set-section set-card">
           <h2>${t('settings.providers')}</h2>
           <div id="prov-list"></div>
-          <button class="btn-mini" id="btn-add-prov" title="${escapeHtml(t('settings.addProvider'))}">${t('settings.addProvider')}</button>
+          <button class="btn-mini" id="btn-add-prov">${t('settings.addProvider')}</button>
         </div>
         <div class="set-section set-card">
           <h2>${t('settings.plugins')}</h2>
           <table class="plugins">
-            <thead><tr><th>${t('settings.pluginId')}</th><th>${t('settings.pluginStatus')}</th><th>${t('settings.pluginActions')}</th></tr></thead>
+            <thead><tr><th>${t('settings.pluginId')}</th><th>${t('settings.pluginDesc')}</th><th>${t('settings.pluginStatus')}</th><th>${t('settings.pluginActions')}</th></tr></thead>
             <tbody id="plug-body"></tbody>
           </table>
-          <div style="margin-top:8px"><input id="plug-path" placeholder="package or path" style="width:55%" title="${escapeHtml(t('settings.pluginInstall'))}"/>
+          <div style="margin-top:8px"><input id="plug-path" placeholder="package or path" style="width:55%"/>
             <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button></div>
         </div>
         <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
-          <div class="muted">CCArmy · ${t('app.subtitle')} · v0.1.0</div>
+          <div class="muted">${t('about.version')} 0.1.0 · CCArmy · ${t('app.subtitle')}</div>
+          <div style="margin-top:8px"><button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
+          <span class="muted" id="about-upd"></span></div>
         </div>`;
 
       $('sel-locale').onchange = async (e) => {
         await loadI18n(e.target.value);
         setNav('settings');
       };
+      document.querySelectorAll('.theme-mode button').forEach((b) => {
+        b.onclick = () => {
+          applyThemeMode(b.dataset.m);
+          renderPage();
+        };
+      });
+      document.querySelectorAll('.theme-swatches button').forEach((b) => {
+        if (b.dataset.c === state.theme) b.classList.add('on');
+        b.onclick = () => {
+          state.theme = b.dataset.c;
+          document.documentElement.style.setProperty('--accent', state.theme);
+          document.documentElement.style.setProperty('--me-bubble', state.theme);
+          renderPage();
+        };
+      });
       $('sel-sec').value = state.globalSecurity;
       $('sel-sec').onchange = async (e) => {
         state.globalSecurity = e.target.value;
@@ -673,45 +789,95 @@
       $('s-email').onchange = (e) => {
         state.emailOnRequest = e.target.checked;
       };
-      $('btn-update').onclick = () => {
-        $('upd-msg').textContent = t('settings.upToDate');
-      };
-      document.querySelectorAll('.theme-swatches button').forEach((b) => {
-        if (b.dataset.c === state.theme) b.classList.add('on');
+      document.querySelectorAll('[data-pick]').forEach((b) => {
+        b.onclick = async () => {
+          const r = await window.ccarmy.pickSound();
+          if (r?.ok) {
+            state.soundFiles[b.dataset.pick] = r.path;
+            renderPage();
+          }
+        };
+      });
+      document.querySelectorAll('[data-clear]').forEach((b) => {
         b.onclick = () => {
-          state.theme = b.dataset.c;
-          document.documentElement.style.setProperty('--accent', state.theme);
-          document.documentElement.style.setProperty('--me-bubble', state.theme);
+          state.soundFiles[b.dataset.clear] = '';
           renderPage();
         };
       });
+      $('btn-update').onclick = async () => {
+        const r = await window.ccarmy.checkUpdate();
+        $('upd-msg').textContent = r?.upToDate ? t('settings.upToDate') : t('settings.updateAvailable');
+      };
+      $('btn-about-update').onclick = async () => {
+        const r = await window.ccarmy.checkUpdate();
+        $('about-upd').textContent = r?.upToDate ? t('settings.upToDate') : t('settings.updateAvailable');
+      };
+
       const prov = $('prov-list');
       state.providers.forEach((p) => {
         const el = document.createElement('div');
-        el.className = 'inst-row';
-        el.style.marginBottom = '10px';
+        el.style.cssText = 'border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--card)';
         el.innerHTML = `
-          <div class="field"><label>${t('settings.providerName')}</label><input data-k="label" value="${escapeHtml(p.label)}" title="${escapeHtml(t('settings.providerName'))}"/></div>
-          <div class="field"><label>${t('settings.baseUrl')}</label><input data-k="baseURL" value="${escapeHtml(p.baseURL)}" title="${escapeHtml(t('settings.baseUrl'))}"/></div>
-          <div class="field"><label>${t('settings.apiKey')}</label><input data-k="apiKey" type="password" value="${escapeHtml(p.apiKey || '')}" placeholder="••••••••" title="${escapeHtml(t('settings.apiKey'))}"/></div>
-          <div class="field"><label>${t('settings.defaultModel')}</label><input data-k="defaultModel" value="${escapeHtml(p.defaultModel)}" title="${escapeHtml(t('settings.defaultModel'))}"/></div>`;
-        el.querySelectorAll('input').forEach((inp) => {
+          <div class="inst-row">
+            <div class="field"><label>${t('settings.providerName')}</label><input data-k="label" value="${escapeHtml(p.label)}"/></div>
+            <div class="field"><label>${t('settings.baseUrl')}</label><input data-k="baseURL" value="${escapeHtml(p.baseURL)}"/></div>
+            <div class="field"><label>${t('settings.apiKey')}</label><input data-k="apiKey" type="password" value="${escapeHtml(p.apiKey || '')}"/></div>
+          </div>
+          <div class="inst-row" style="margin-top:8px">
+            <div class="field"><label>${t('settings.defaultModel')}</label><input data-k="defaultModel" value="${escapeHtml(p.defaultModel)}"/></div>
+            <button class="btn-mini" data-fetch>${t('settings.fetchModels')}</button>
+          </div>
+          <div class="model-row">${(p.models || []).map((m) => `<span class="model-chip ${m === p.defaultModel ? 'on' : ''}" data-m="${escapeHtml(m)}">${escapeHtml(m)}</span>`).join('') || `<span class="muted">${t('settings.modelsEmpty')}</span>`}</div>`;
+        el.querySelectorAll('input[data-k]').forEach((inp) => {
           inp.onchange = () => {
             p[inp.dataset.k] = inp.value;
+          };
+        });
+        el.querySelector('[data-fetch]').onclick = async () => {
+          const btn = el.querySelector('[data-fetch]');
+          btn.textContent = t('common.loading');
+          const r = await window.ccarmy.listModels({
+            protocol: p.protocol,
+            baseURL: p.baseURL,
+            apiKey: p.apiKey,
+          });
+          if (r?.ok && r.models?.length) {
+            p.models = r.models;
+            if (!p.defaultModel) p.defaultModel = r.models[0];
+          } else {
+            p.models = [];
+          }
+          renderPage();
+        };
+        el.querySelectorAll('.model-chip').forEach((chip) => {
+          chip.onclick = () => {
+            p.defaultModel = chip.dataset.m;
+            renderPage();
           };
         });
         prov.appendChild(el);
       });
       $('btn-add-prov').onclick = () => {
-        state.providers.push({ id: 'custom-' + Date.now(), label: 'Custom', protocol: 'openai-compatible', baseURL: '', defaultModel: '', apiKey: '' });
+        state.providers.push({
+          id: 'custom-' + Date.now(),
+          label: 'Custom',
+          protocol: 'openai-compatible',
+          baseURL: '',
+          defaultModel: '',
+          apiKey: '',
+          models: [],
+        });
         renderPage();
       };
+
       const tbody = $('plug-body');
       state.plugins.forEach((p) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${escapeHtml(p.name)}</td><td><span class="badge ${p.enabled ? '' : 'off'}">${p.enabled ? t('settings.pluginEnable') : t('settings.pluginDisable')}</span></td>
-          <td><button class="btn-mini" data-a="toggle" title="${escapeHtml(p.enabled ? t('settings.pluginDisable') : t('settings.pluginEnable'))}">${p.enabled ? t('settings.pluginDisable') : t('settings.pluginEnable')}</button>
-          <button class="btn-mini" data-a="un" title="${escapeHtml(t('settings.pluginUninstall'))}">${t('settings.pluginUninstall')}</button></td>`;
+        tr.innerHTML = `<td>${escapeHtml(p.name)}</td>
+          <td class="plugin-desc">${escapeHtml(p.desc || '')}</td>
+          <td><span class="badge ${p.enabled ? '' : 'off'}">${p.enabled ? t('settings.pluginEnable') : t('settings.pluginDisable')}</span></td>
+          <td><button class="btn-mini" data-a="toggle">${p.enabled ? t('settings.pluginDisable') : t('settings.pluginEnable')}</button>
+          <button class="btn-mini" data-a="un">${t('settings.pluginUninstall')}</button></td>`;
         tr.querySelector('[data-a=toggle]').onclick = () => {
           p.enabled = !p.enabled;
           renderPage();
@@ -725,7 +891,7 @@
       $('btn-plug-install').onclick = () => {
         const v = $('plug-path').value.trim();
         if (!v) return;
-        state.plugins.push({ id: v, name: v, enabled: true });
+        state.plugins.push({ id: v, name: v, enabled: true, desc: '' });
         renderPage();
       };
     }
@@ -759,6 +925,29 @@
     renderList();
   }
 
+  function bindResizer(el, cssVar, min, max) {
+    let startX = 0;
+    let startW = 0;
+    let dragging = false;
+    el.addEventListener('mousedown', (e) => {
+      dragging = true;
+      el.classList.add('dragging');
+      startX = e.clientX;
+      startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue(cssVar), 10) || 280;
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const w = Math.min(max, Math.max(min, startW + (e.clientX - startX)));
+      document.documentElement.style.setProperty(cssVar, w + 'px');
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove('dragging');
+    });
+  }
+
   // ── 绑定 ──
   document.querySelectorAll('.rail-item').forEach((el) => {
     el.onclick = () => setNav(el.dataset.nav);
@@ -766,6 +955,24 @@
   $('list-search').oninput = () => renderList();
   $('btn-send').onclick = send;
   $('btn-stop-all').onclick = stopAllAi;
+  $('btn-attach').onclick = async () => {
+    const r = await window.ccarmy.pickFile();
+    if (r?.ok) {
+      const name = r.path.split(/[\\/]/).pop();
+      state.attachments.push({ name, path: r.path });
+      renderAttach();
+    }
+  };
+  $('btn-voice').onclick = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('no');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((tr) => tr.stop());
+      alert(t('chat.voice') + ' · OK');
+    } catch {
+      alert(t('chat.voiceUnsupported'));
+    }
+  };
   $('input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -785,10 +992,6 @@
   $('avatar-file').addEventListener('change', (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
-    if (f.size > 2 * 1024 * 1024) {
-      alert('2MB');
-      return;
-    }
     const reader = new FileReader();
     reader.onload = () => {
       state.profile.avatarDataUrl = String(reader.result || '');
@@ -798,26 +1001,20 @@
     reader.readAsDataURL(f);
     e.target.value = '';
   });
+  bindResizer($('col-resizer'), '--list-w', 200, 420);
+  bindResizer($('panel-resizer'), '--panel-w', 220, 480);
 
   (async () => {
     try {
       await loadI18n(navigator.language.startsWith('zh') ? 'zh-CN' : 'en-US');
     } catch {
       state.locale = 'zh-CN';
-      state.t = {
-        'app.zhName': '无限牛马',
-        'app.enName': 'CCArmy',
-        'app.subtitle': 'Corporate Cattle Army',
-        'app.displayName': '无限牛马',
-      };
+      state.t = { 'app.zhName': '无限牛马', 'app.enName': 'CCArmy', 'app.subtitle': 'Corporate Cattle Army', 'app.displayName': '无限牛马' };
       applyI18n();
     }
+    applyThemeMode('system');
     try {
       state.globalSecurity = (await window.ccarmy.securityMode()) || 'normal';
-    } catch {
-      /* noop */
-    }
-    try {
       state.hardware = await window.ccarmy.hardware();
       state.instances = (await window.ccarmy.listInstances()) || [];
     } catch {

@@ -1,5 +1,5 @@
 /**
- * Electron preload — 仅暴露白名单 API + i18n
+ * Electron preload — 白名单 API
  */
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -14,4 +14,10 @@ contextBridge.exposeInMainWorld('ccarmy', {
   memoryAppend: (body) => ipcRenderer.invoke('ccarmy:memory-append', body),
   i18n: (locale) => ipcRenderer.invoke('ccarmy:i18n', locale),
   localeInfo: () => ipcRenderer.invoke('ccarmy:locale-info'),
+  setThemeSource: (s) => ipcRenderer.invoke('ccarmy:set-theme-source', s),
+  themeInfo: () => ipcRenderer.invoke('ccarmy:theme-info'),
+  listModels: (cfg) => ipcRenderer.invoke('ccarmy:list-models', cfg),
+  pickSound: () => ipcRenderer.invoke('ccarmy:pick-sound'),
+  checkUpdate: () => ipcRenderer.invoke('ccarmy:check-update'),
+  pickFile: () => ipcRenderer.invoke('ccarmy:pick-file'),
 });
