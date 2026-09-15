@@ -25,10 +25,19 @@
     profile: { loggedIn: false, username: '主人', avatarDataUrl: '', email: '' },
     queues: {},
     board: {
-      tasks: [
-        { id: 't1', title: '整理周报', status: 'doing', progress: 40 },
-        { id: 't2', title: '群聊值班编排', status: 'todo', progress: 0 },
-        { id: 't3', title: '记忆库归档', status: 'done', progress: 100 },
+      /** ADR：外部聚合看板 — 会话进展只读，点击跳转；值班者写 board.jsonl */
+      sessions: [
+        { id: 's-internal-1', kind: 'internal', name: '项目推进群', progress: 65, status: 'doing', blocked: false },
+        { id: 's-internal-2', kind: 'internal', name: '研发排期群', progress: 30, status: 'doing', blocked: true },
+        { id: 's-ext-1', kind: 'extgroup', name: '客户对接群', progress: 90, status: 'doing', blocked: false },
+        { id: 's-single-demo-1', kind: 'single', name: '主力牛马', progress: 40, status: 'doing', blocked: false },
+      ],
+      /** board.jsonl 结构化事件（值班者解析写入） */
+      events: [
+        { id: 'e1', ts: Date.now() - 3600e3, action: 'create_task', title: '整理周报', session: '项目推进群' },
+        { id: 'e2', ts: Date.now() - 1800e3, action: 'update_progress', title: '整理周报 → 40%', session: '项目推进群' },
+        { id: 'e3', ts: Date.now() - 900e3, action: 'block', title: '等待接口文档', session: '研发排期群' },
+        { id: 'e4', ts: Date.now() - 300e3, action: 'complete_task', title: '记忆库归档', session: '主力牛马' },
       ],
       recent: ['实例主力牛马已启动', '完成 FTS 中文检索校验'],
     },
@@ -522,10 +531,22 @@
   function renderDashboard(host) {
     const running = state.instances.filter((i) => i.status === 'running').length;
     const queued = Object.values(state.queues).reduce((n, q) => n + q.length, 0);
-    const doing = state.board.tasks.filter((x) => x.status === 'doing').length;
-    const done = state.board.tasks.filter((x) => x.status === 'done').length;
+    const doing = state.board.sessions.filter((x) => x.status === 'doing').length;
+    const done = state.board.events.filter((e) => e.action === 'complete_task').length;
+    const typeLabel = (k) =>
+      k === 'internal' ? t('group.type.internal') : k === 'extgroup' ? t('group.type.external') : t('nav.singleAi');
+    const evLabel = (a) =>
+      ({
+        create_task: t('board.create_task'),
+        update_progress: t('board.update_progress'),
+        complete_task: t('board.complete_task'),
+        add_note: t('board.add_note'),
+        block: t('board.block'),
+      })[a] || a;
+
     host.innerHTML = `
       <h1>${t('dashboard.title')}</h1>
+      <p class="board-hint">${t('dashboard.readOnlyHint')}</p>
       <div class="dash-grid">
         <div class="dash-card"><div class="muted">${t('dashboard.tasks')}</div><div class="stat">${doing}</div></div>
         <div class="dash-card"><div class="muted">${t('dashboard.done')}</div><div class="stat">${done}</div></div>
@@ -533,26 +554,52 @@
         <div class="dash-card"><div class="muted">${t('dashboard.queue')}</div><div class="stat">${queued}</div></div>
       </div>
       <div class="set-card" style="margin-bottom:16px">
-        <h2 style="margin:0 0 10px;font-size:14px">${t('panel.board')}</h2>
-        <div class="board-kanban">
-          <div class="board-col"><h3>TODO</h3>${state.board.tasks
-            .filter((x) => x.status === 'todo')
-            .map((x) => `<div class="board-item">${escapeHtml(x.title)}</div>`)
-            .join('') || '<div class="muted">—</div>'}</div>
-          <div class="board-col"><h3>DOING</h3>${state.board.tasks
-            .filter((x) => x.status === 'doing')
-            .map((x) => `<div class="board-item">${escapeHtml(x.title)}<div class="progress" style="margin-top:6px"><div class="progress-bar" style="width:${x.progress}%"></div></div></div>`)
-            .join('') || '<div class="muted">—</div>'}</div>
-          <div class="board-col"><h3>DONE</h3>${state.board.tasks
-            .filter((x) => x.status === 'done')
-            .map((x) => `<div class="board-item">${escapeHtml(x.title)}</div>`)
-            .join('') || '<div class="muted">—</div>'}</div>
-        </div>
+        <h2 style="margin:0 0 10px;font-size:14px">${t('dashboard.sessions')}</h2>
+        <div id="board-sessions"></div>
       </div>
       <div class="set-card">
-        <h2 style="margin:0 0 10px;font-size:14px">${t('dashboard.recent')}</h2>
-        <ul class="task-list">${state.board.recent.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+        <h2 style="margin:0 0 10px;font-size:14px">${t('panel.board')} · ${t('dashboard.recent')}</h2>
+        <div id="board-events"></div>
       </div>`;
+
+    const sess = $('board-sessions');
+    state.board.sessions.forEach((s) => {
+      const el = document.createElement('div');
+      el.className = 'board-session';
+      el.title = t('dashboard.jump');
+      el.innerHTML = `
+        <div class="bs-name">${escapeHtml(s.name)}</div>
+        <span class="bs-type">${escapeHtml(typeLabel(s.kind))}</span>
+        <div class="bs-prog">
+          <div class="progress"><div class="progress-bar" style="width:${s.progress}%"></div></div>
+          <div class="muted" style="margin-top:2px">${t('dashboard.progressLabel')} ${s.progress}%${s.blocked ? ' · ' + t('dashboard.blocked') : ''}</div>
+        </div>
+        <span class="bs-status">${t('dashboard.jump')} →</span>`;
+      el.onclick = () => {
+        const kind = s.kind === 'single' ? 'single' : s.kind === 'internal' ? 'internal' : 'extgroup';
+        const nav = kind === 'single' ? 'singleAi' : kind === 'internal' ? 'internalGroup' : 'externalGroup';
+        if (kind !== 'single') {
+          if (!state.groups.find((g) => g.id === s.id)) {
+            state.groups.push({ id: s.id, name: s.name, type: kind, members: [] });
+          }
+        }
+        setNav(nav);
+        openChat(kind, s.id, s.name);
+      };
+      sess.appendChild(el);
+    });
+
+    const evBox = $('board-events');
+    [...state.board.events]
+      .sort((a, b) => b.ts - a.ts)
+      .forEach((e) => {
+        const d = document.createElement('div');
+        d.className = 'board-event';
+        d.innerHTML = `<span class="ev-tag">${escapeHtml(evLabel(e.action))}</span>
+          <div><div>${escapeHtml(e.title)}</div>
+          <div class="muted">${escapeHtml(e.session)} · ${new Date(e.ts).toLocaleString()}</div></div>`;
+        evBox.appendChild(d);
+      });
   }
 
   function renderInstanceDetail() {
@@ -816,21 +863,27 @@
       const prov = $('prov-list');
       state.providers.forEach((p) => {
         const el = document.createElement('div');
-        el.style.cssText = 'border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--card)';
+        el.className = 'prov-card';
         el.innerHTML = `
+          <div class="prov-head">${escapeHtml(p.label)}</div>
           <div class="inst-row">
             <div class="field"><label>${t('settings.providerName')}</label><input data-k="label" value="${escapeHtml(p.label)}"/></div>
             <div class="field"><label>${t('settings.baseUrl')}</label><input data-k="baseURL" value="${escapeHtml(p.baseURL)}"/></div>
             <div class="field"><label>${t('settings.apiKey')}</label><input data-k="apiKey" type="password" value="${escapeHtml(p.apiKey || '')}"/></div>
           </div>
-          <div class="inst-row" style="margin-top:8px">
-            <div class="field"><label>${t('settings.defaultModel')}</label><input data-k="defaultModel" value="${escapeHtml(p.defaultModel)}"/></div>
-            <button class="btn-mini" data-fetch>${t('settings.fetchModels')}</button>
+          <div class="prov-actions">
+            <button class="btn-mini" data-fetch title="${escapeHtml(t('settings.fetchModels'))}">${t('settings.fetchModels')}</button>
           </div>
-          <div class="model-row">${(p.models || []).map((m) => `<span class="model-chip ${m === p.defaultModel ? 'on' : ''}" data-m="${escapeHtml(m)}">${escapeHtml(m)}</span>`).join('') || `<span class="muted">${t('settings.modelsEmpty')}</span>`}</div>`;
+          <div class="model-row">${(p.models || [])
+            .map(
+              (m) =>
+                `<span class="model-chip" data-m="${escapeHtml(m)}">${escapeHtml(m)}<button class="x" data-del="${escapeHtml(m)}" title="${escapeHtml(t('settings.removeModel'))}">×</button></span>`
+            )
+            .join('') || `<span class="muted">${t('settings.modelsEmpty')}</span>`}</div>`;
         el.querySelectorAll('input[data-k]').forEach((inp) => {
           inp.onchange = () => {
             p[inp.dataset.k] = inp.value;
+            if (inp.dataset.k === 'label') el.querySelector('.prov-head').textContent = inp.value;
           };
         });
         el.querySelector('[data-fetch]').onclick = async () => {
@@ -842,16 +895,16 @@
             apiKey: p.apiKey,
           });
           if (r?.ok && r.models?.length) {
-            p.models = r.models;
-            if (!p.defaultModel) p.defaultModel = r.models[0];
-          } else {
-            p.models = [];
+            // 合并去重，不自动设默认模型
+            const set = new Set([...(p.models || []), ...r.models]);
+            p.models = [...set];
           }
           renderPage();
         };
-        el.querySelectorAll('.model-chip').forEach((chip) => {
-          chip.onclick = () => {
-            p.defaultModel = chip.dataset.m;
+        el.querySelectorAll('[data-del]').forEach((btn) => {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            p.models = (p.models || []).filter((m) => m !== btn.dataset.del);
             renderPage();
           };
         });

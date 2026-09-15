@@ -21,12 +21,13 @@
   font-size: 14px;
 }
 
-/* ── Light (WeChat desktop) ── */
+/* ── Light (WeChat desktop) — 左栏同为浅色 ── */
 :root, [data-theme="light"] {
-  --rail-bg: #2e2e2e;
-  --rail-active: #3a3a3a;
-  --rail-fg: #bbb;
-  --rail-fg-hover: #fff;
+  --rail-bg: #ebebeb;
+  --rail-active: var(--accent);
+  --rail-fg: #666;
+  --rail-fg-hover: #111;
+  --rail-active-fg: #fff;
   --list-bg: #f7f7f7;
   --chat-bg: #ededed;
   --panel-bg: #f5f5f5;
@@ -45,33 +46,38 @@
   --active-list: #d9d9d9;
   --scroll: #c1c1c1;
   --logo-fg: #bbb;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
   color-scheme: light;
 }
 
 /* ── Dark ── */
 [data-theme="dark"] {
-  --rail-bg: #1a1a1a;
-  --rail-active: #2a2a2a;
+  --rail-bg: #1e1e1e;
+  --rail-active: var(--accent);
   --rail-fg: #888;
   --rail-fg-hover: #eee;
-  --list-bg: #1f1f1f;
-  --chat-bg: #141414;
-  --panel-bg: #1a1a1a;
-  --card: #242424;
+  --rail-active-fg: #fff;
+  --list-bg: #252526;
+  --chat-bg: #1e1e1e;
+  --panel-bg: #252526;
+  --card: #2d2d2d;
   --ink: #e8e8e8;
-  --muted: #8a8a8a;
-  --line: #333;
-  --input-bg: #2a2a2a;
+  --muted: #9a9a9a;
+  --line: #3a3a3a;
+  --input-bg: #333;
   --input-border: #444;
-  --me-bubble: #3d8a40;
-  --them-bubble: #2a2a2a;
+  --me-bubble: #2f6b3a;
+  --them-bubble: #2d2d2d;
   --queue-bg: #3a3018;
   --queue-border: #5a4a20;
   --queue-ink: #e0c070;
   --hover: #2a2a2a;
-  --active-list: #333;
+  --active-list: #37373d;
   --scroll: #555;
   --logo-fg: #666;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.4);
   --accent: #2ea56a;
   --danger: #e06060;
   color-scheme: dark;
@@ -123,15 +129,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .rail-top, .rail-bottom { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
 .rail-item {
   width: 44px; height: 44px;
-  border: none; border-radius: 10px;
+  border: none; border-radius: 12px;
   background: transparent;
   color: var(--rail-fg);
   cursor: pointer;
   display: grid; place-items: center;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--transition-fast, 0.15s), color var(--transition-fast, 0.15s), transform 0.12s;
 }
-.rail-item:hover { background: var(--rail-active); color: var(--rail-fg-hover); }
-.rail-item.active { background: var(--rail-active); color: #fff; }
+.rail-item:hover { background: var(--hover); color: var(--rail-fg-hover); transform: translateY(-1px); }
+/* 主题色 = 选中态底色 */
+.rail-item.active {
+  background: var(--accent);
+  color: var(--rail-active-fg);
+  box-shadow: var(--shadow-md);
+}
+.rail-item.active svg { fill: currentColor; }
 .rail-item svg { width: 22px; height: 22px; fill: currentColor; }
 .avatar {
   width: 36px; height: 36px; border-radius: 8px;
@@ -433,17 +445,48 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
   border: 2px solid transparent; background-clip: content-box;
 }
 
-/* Dashboard board cards */
-.board-kanban {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3);
-}
-.board-col h3 { margin: 0 0 8px; font-size: var(--fs-sm); color: var(--muted); }
-.board-item {
+/* 外部聚合看板（ADR：只读、会话进展、点击跳转） */
+.board-session {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; margin-bottom: 8px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius-sm); padding: 10px; margin-bottom: 8px; font-size: var(--fs-base);
+  border-radius: var(--radius); cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-@media (max-width: 900px) {
-  .board-kanban { grid-template-columns: 1fr; }
-  .chat-layout { grid-template-columns: 1fr; }
-  #panel-col { display: none; }
+.board-session:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+.board-session .bs-name { font-weight: 600; min-width: 100px; }
+.board-session .bs-type { font-size: var(--fs-xs); color: var(--muted); }
+.board-session .bs-prog { flex: 1; min-width: 80px; }
+.board-session .bs-status { font-size: var(--fs-sm); color: var(--muted); white-space: nowrap; }
+.board-hint {
+  font-size: var(--fs-sm); color: var(--muted);
+  padding: 10px 12px; border-left: 3px solid var(--accent);
+  background: var(--card); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: 14px; line-height: 1.5;
 }
+.board-event {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--hover); margin-bottom: 6px; font-size: var(--fs-base);
+}
+.board-event .ev-tag {
+  font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
+  background: rgba(7,193,96,.12); color: var(--accent); flex-shrink: 0;
+}
+.prov-card {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 12px; background: var(--card);
+}
+.prov-card .prov-head { font-weight: 600; margin-bottom: 8px; }
+.model-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.model-chip {
+  border: 1px solid var(--line); border-radius: 99px; padding: 4px 8px 4px 12px;
+  font-size: var(--fs-sm); background: var(--card); display: inline-flex; align-items: center; gap: 6px;
+}
+.model-chip .x {
+  border: none; background: transparent; cursor: pointer;
+  color: var(--muted); font-size: 14px; line-height: 1; padding: 0 2px;
+}
+.model-chip .x:hover { color: var(--danger); }
+.prov-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
