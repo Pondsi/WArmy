@@ -22,7 +22,9 @@
     "@ccarmy/contracts": "workspace:*",
     "@ccarmy/dsh-runtime": "workspace:*",
     "@ccarmy/memory-os": "workspace:*",
-    "@ccarmy/providers": "workspace:*"
+    "@ccarmy/providers": "workspace:*",
+    "@ccarmy/group-router": "workspace:*",
+    "@ccarmy/board": "workspace:*"
   },
   "devDependencies": {
     "electron": "33.2.0"

@@ -490,3 +490,40 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .model-chip .x:hover { color: var(--danger); }
 .prov-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* ── 应用内弹窗（相对主窗口居中） ── */
+.modal-root {
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-items: center;
+}
+.modal-mask {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.45);
+}
+.modal-card {
+  position: relative;
+  width: min(420px, calc(100vw - 48px));
+  background: var(--card);
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 20px 20px 16px;
+  box-shadow: var(--shadow-md, 0 12px 40px rgba(0,0,0,.25));
+  border: 1px solid var(--line);
+  animation: modal-in .16s ease;
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+.modal-title { font-size: var(--fs-lg); font-weight: 600; margin-bottom: 8px; }
+.modal-body { font-size: var(--fs-base); line-height: 1.5; color: var(--ink); margin-bottom: 16px; white-space: pre-wrap; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.modal-actions button { min-width: 72px; }
+.username-display {
+  font-size: 18px; font-weight: 600; cursor: text;
+  border-bottom: 1px dashed transparent; padding-bottom: 1px;
+}
+.username-display:hover { border-bottom-color: var(--muted); }
+.username-display::after {
+  content: "✎"; font-size: 12px; color: var(--muted); margin-left: 6px; font-weight: 400;
+}
+

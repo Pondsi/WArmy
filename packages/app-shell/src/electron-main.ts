@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createP1Runtime } from './runtime.js';
 import { MemoryClient } from './memory-client.js';
+import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@ccarmy/group-router';
+import { BoardStore, parseBoardCommand } from '@ccarmy/board';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bootLog = path.join(app.getPath('userData'), 'ccarmy-boot.log');
@@ -26,6 +28,8 @@ Menu.setApplicationMenu(null);
 let win: BrowserWindow | null = null;
 let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
 let memory: MemoryClient | null = null;
+const router = new GroupChatRouter({ queueWhenFixedBusy: false });
+let board: BoardStore | null = null;
 
 function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
   const userData = app.getPath('userData');
@@ -71,6 +75,8 @@ async function bootstrap() {
     instancesRoot: path.join(app.getPath('userData'), 'instances'),
   });
   boot('p1 ready');
+  board = new BoardStore(path.join(app.getPath('userData'), 'board'));
+  boot('board ready');
 }
 
 function startMemoryAsync() {
@@ -276,4 +282,110 @@ ipcMain.handle('ccarmy:pick-file', async () => {
   });
   if (r.canceled || !r.filePaths[0]) return { ok: false };
   return { ok: true, path: r.filePaths[0] };
+});
+
+// ── 群聊编排 + 看板 ──
+ipcMain.handle(
+  'ccarmy:group-create',
+  (_e, cfg: { groupId: string; name: string; type: 'internal' | 'external'; directedMode?: boolean }) => {
+    router.createGroup({
+      groupId: cfg.groupId,
+      name: cfg.name,
+      type: cfg.type,
+      dutyInstanceId: null,
+      directedMode: !!cfg.directedMode,
+      members: [],
+      permissions: DEFAULT_PERMISSIONS as never,
+      checkpointLimit: 50,
+    });
+    // 本机实例全部可值班
+    for (const inst of p1?.instances.list() || []) {
+      router.join(cfg.groupId, {
+        id: inst.id,
+        name: inst.name,
+        local: true,
+        dutyEligible: inst.dutyEligible,
+        status: inst.status === 'running' ? 'idle' : 'offline',
+      });
+    }
+    return { ok: true, groupId: cfg.groupId };
+  }
+);
+
+ipcMain.handle('ccarmy:group-list', () => {
+  // GroupChatRouter 未暴露 groups 枚举，用 board/session 聚合 + 内部缓存
+  return { ok: true };
+});
+
+ipcMain.handle(
+  'ccarmy:group-message',
+  async (
+    _e,
+    msg: { groupId: string; userId?: string; content: string; urgency?: string; mentionIds?: string[] }
+  ) => {
+    const urgency = (msg.urgency || 'P2') as 'P0' | 'P1' | 'P2' | 'P3';
+    const route = router.route({
+      groupId: msg.groupId,
+      userId: msg.userId || 'local-user',
+      content: msg.content,
+      urgency,
+      mentionIds: msg.mentionIds || [],
+      timestamp: Date.now(),
+    });
+
+    // 值班者看板解析（仅 duty 写入）
+    if (board && route.action !== 'silent') {
+      const parsed = parseBoardCommand(msg.content, msg.groupId);
+      if (parsed) {
+        try {
+          board.append(parsed, 'duty');
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    try {
+      await memory?.append({
+        id: `g-${Date.now()}`,
+        sessionId: msg.groupId,
+        kind: 'message',
+        body: msg.content,
+      }, 'duty');
+    } catch {
+      /* optional */
+    }
+    return {
+      ok: true,
+      action: route.action,
+      reason: route.reason,
+      duty: route.duty?.id,
+      decision: route.decision,
+      queueLength: router.listQueue(msg.groupId).length,
+    };
+  }
+);
+
+ipcMain.handle('ccarmy:board-tasks', (_e, groupId?: string) => {
+  return { ok: true, tasks: board?.listTasks(groupId) || [] };
+});
+
+ipcMain.handle('ccarmy:board-events', () => {
+  return { ok: true, events: board?.tailEvents(30) || [] };
+});
+
+ipcMain.handle('ccarmy:board-aggregate', () => {
+  return { ok: true, sessions: board?.aggregateByGroup() || [] };
+});
+
+ipcMain.handle('ccarmy:group-join-instance', (_e, groupId: string, instanceId: string) => {
+  const inst = p1?.instances.list().find((x) => x.id === instanceId);
+  if (!inst) return { ok: false };
+  router.join(groupId, {
+    id: inst.id,
+    name: inst.name,
+    local: true,
+    dutyEligible: inst.dutyEligible,
+    status: inst.status === 'running' ? 'idle' : 'offline',
+  });
+  return { ok: true };
 });

@@ -11,6 +11,8 @@
     { "path": "../contracts" },
     { "path": "../providers" },
     { "path": "../memory-os" },
-    { "path": "../dsh-runtime" }
+    { "path": "../dsh-runtime" },
+    { "path": "../group-router" },
+    { "path": "../board" }
   ]
 }

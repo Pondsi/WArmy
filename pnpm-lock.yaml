@@ -14,12 +14,18 @@ importers:
 
   packages/app-shell:
     dependencies:
+      '@ccarmy/board':
+        specifier: workspace:*
+        version: link:../board
       '@ccarmy/contracts':
         specifier: workspace:*
         version: link:../contracts
       '@ccarmy/dsh-runtime':
         specifier: workspace:*
         version: link:../dsh-runtime
+      '@ccarmy/group-router':
+        specifier: workspace:*
+        version: link:../group-router
       '@ccarmy/memory-os':
         specifier: workspace:*
         version: link:../memory-os

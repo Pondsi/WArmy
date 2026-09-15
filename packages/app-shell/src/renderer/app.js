@@ -83,6 +83,92 @@
   const escapeHtml = (s) =>
     String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  /** 应用内弹窗：居中于主窗口，替代系统 alert/confirm */
+  function uiAlert(message, title) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = title || displayName();
+      $('modal-body').textContent = String(message ?? '');
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const ok = document.createElement('button');
+      ok.className = 'btn-primary';
+      ok.textContent = t('common.ok');
+      ok.onclick = () => {
+        root.classList.add('hidden');
+        resolve(true);
+      };
+      acts.appendChild(ok);
+      root.classList.remove('hidden');
+      ok.focus();
+    });
+  }
+
+  function uiConfirm(message, title) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = title || displayName();
+      $('modal-body').textContent = String(message ?? '');
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.className = 'btn-mini';
+      cancel.textContent = t('common.cancel');
+      cancel.onclick = () => {
+        root.classList.add('hidden');
+        resolve(false);
+      };
+      const ok = document.createElement('button');
+      ok.className = 'btn-primary';
+      ok.textContent = t('common.ok');
+      ok.onclick = () => {
+        root.classList.remove('hidden');
+        resolve(true);
+      };
+      acts.append(cancel, ok);
+      root.classList.remove('hidden');
+      ok.focus();
+    });
+  }
+
+  function uiPrompt(message, defaultValue, title) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = title || displayName();
+      $('modal-body').innerHTML = '';
+      const p = document.createElement('div');
+      p.textContent = String(message ?? '');
+      const input = document.createElement('input');
+      input.style.cssText = 'width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--input-bg);color:var(--ink);font:inherit';
+      input.value = defaultValue ?? '';
+      $('modal-body').append(p, input);
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.className = 'btn-mini';
+      cancel.textContent = t('common.cancel');
+      cancel.onclick = () => {
+        root.classList.add('hidden');
+        resolve(null);
+      };
+      const ok = document.createElement('button');
+      ok.className = 'btn-primary';
+      ok.textContent = t('common.ok');
+      ok.onclick = () => {
+        root.classList.add('hidden');
+        resolve(input.value);
+      };
+      acts.append(cancel, ok);
+      root.classList.remove('hidden');
+      input.focus();
+      input.select();
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') ok.click();
+        if (e.key === 'Escape') cancel.click();
+      };
+    });
+  }
+
   function applyAvatar() {
     const img = $('selfAvatarImg');
     const span = $('selfAvatar');
@@ -499,6 +585,26 @@
     state.attachments = [];
     renderAttach();
     renderChat();
+
+    // 内部群走值班者编排（GroupChatRouter + Board）
+    if (state.selectedChat.kind === 'internal') {
+      try {
+        const r = await window.ccarmy.groupMessage({
+          groupId: id,
+          content: text,
+          urgency: u,
+        });
+        const extra = r?.duty ? ` · duty=${r.duty}` : r?.action === 'queue' ? ' · queued' : '';
+        pushMsg(id, 'them', `[${u}] ${r?.action || 'ok'}${extra}`);
+      } catch (e) {
+        pushMsg(id, 'them', String(e.message || e));
+      }
+      renderChat();
+      flushQueue(id);
+      if (CHAT_NAVS.has(state.nav)) renderList();
+      return;
+    }
+
     try {
       await window.ccarmy.memoryAppend(full);
     } catch {
@@ -528,11 +634,41 @@
     renderChat();
   }
 
-  function renderDashboard(host) {
+  async function renderDashboard(host) {
+    let sessions = state.board.sessions;
+    let events = state.board.events;
+    try {
+      const agg = await window.ccarmy.boardAggregate();
+      const ev = await window.ccarmy.boardEvents();
+      if (agg?.ok && agg.sessions?.length) {
+        sessions = agg.sessions.map((s) => ({
+          id: s.groupId,
+          kind: 'internal',
+          name: s.groupId,
+          progress: s.avgProgress,
+          status: 'doing',
+          blocked: false,
+          taskCount: s.taskCount,
+          done: s.done,
+        }));
+      }
+      if (ev?.ok && ev.events?.length) {
+        events = ev.events.map((e) => ({
+          id: String(e.seq),
+          ts: e.ts,
+          action: e.action,
+          title: e.title + (typeof e.progress === 'number' ? ` → ${e.progress}%` : ''),
+          session: e.groupId,
+        }));
+      }
+    } catch {
+      /* fallback demo */
+    }
+
     const running = state.instances.filter((i) => i.status === 'running').length;
     const queued = Object.values(state.queues).reduce((n, q) => n + q.length, 0);
-    const doing = state.board.sessions.filter((x) => x.status === 'doing').length;
-    const done = state.board.events.filter((e) => e.action === 'complete_task').length;
+    const doing = sessions.filter((x) => x.status !== 'done').length;
+    const done = events.filter((e) => e.action === 'complete_task').length;
     const typeLabel = (k) =>
       k === 'internal' ? t('group.type.internal') : k === 'extgroup' ? t('group.type.external') : t('nav.singleAi');
     const evLabel = (a) =>
@@ -563,7 +699,7 @@
       </div>`;
 
     const sess = $('board-sessions');
-    state.board.sessions.forEach((s) => {
+    sessions.forEach((s) => {
       const el = document.createElement('div');
       el.className = 'board-session';
       el.title = t('dashboard.jump');
@@ -578,10 +714,8 @@
       el.onclick = () => {
         const kind = s.kind === 'single' ? 'single' : s.kind === 'internal' ? 'internal' : 'extgroup';
         const nav = kind === 'single' ? 'singleAi' : kind === 'internal' ? 'internalGroup' : 'externalGroup';
-        if (kind !== 'single') {
-          if (!state.groups.find((g) => g.id === s.id)) {
-            state.groups.push({ id: s.id, name: s.name, type: kind, members: [] });
-          }
+        if (kind !== 'single' && !state.groups.find((g) => g.id === s.id)) {
+          state.groups.push({ id: s.id, name: s.name, type: kind, members: [] });
         }
         setNav(nav);
         openChat(kind, s.id, s.name);
@@ -590,7 +724,7 @@
     });
 
     const evBox = $('board-events');
-    [...state.board.events]
+    [...events]
       .sort((a, b) => b.ts - a.ts)
       .forEach((e) => {
         const d = document.createElement('div');
@@ -641,7 +775,7 @@
         renderInstanceDetail();
         renderList();
       } catch (e) {
-        alert(String(e.message || e));
+        uiAlert(String(e.message || e));
       }
     };
     $('i-stop').onclick = async () => {
@@ -655,7 +789,7 @@
       renderList();
     };
     $('i-del').onclick = async () => {
-      if (!confirm(t('instances.delete') + '?')) return;
+      if (!uiConfirm(t('instances.delete') + '?')) return;
       try {
         await window.ccarmy.stopInstance(inst.id);
       } catch {
@@ -682,7 +816,7 @@
           <div class="profile-head">
             <button id="p-av-btn" class="av-btn" title="${escapeHtml(t('me.avatarHint'))}">${avHtml}</button>
             <div>
-              <div style="font-size:18px;font-weight:600">${escapeHtml(p.username)}</div>
+              <div id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username)}</div>
               <div class="muted">${p.loggedIn ? escapeHtml(p.email || '') : t('me.notLoggedIn')}</div>
               <div style="margin-top:8px;display:flex;gap:8px">
                 <button class="btn-mini" id="p-login">${t('me.login')}</button>
@@ -691,7 +825,10 @@
             </div>
           </div>
           <p class="muted">${t('me.loginHint')}</p>
-          <div class="field" style="margin-bottom:10px"><label>${t('me.username')}</label><input id="p-name" value="${escapeHtml(p.username)}"/></div>
+          <div class="field" style="margin-bottom:10px">
+            <label for="p-name">${t('me.username')}</label>
+            <input id="p-name" name="username" autocomplete="username" spellcheck="false" value="${escapeHtml(p.username)}" title="${escapeHtml(t('me.username'))}"/>
+          </div>
           <div class="field" style="margin-bottom:10px"><label>${t('me.avatar')}</label>
             <button class="btn-mini" id="p-av-upload">${t('me.avatarUpload')}</button>
             <span class="muted">${t('me.avatarHint')}</span>
@@ -704,14 +841,27 @@
           <button class="btn-primary" id="p-save">${t('me.saveProfile')}</button>
         </div>
         <div id="dash-host"></div>`;
-      $('p-login').onclick = () => alert(t('me.notAvailable'));
-      $('p-reg').onclick = () => alert(t('me.notAvailable'));
+      $('p-login').onclick = () => uiAlert(t('me.notAvailable'));
+      $('p-reg').onclick = () => uiAlert(t('me.notAvailable'));
+      $('p-name-display').onclick = () => {
+        const inp = $('p-name');
+        inp.focus();
+        inp.select();
+      };
+      // 实时同步显示名，避免“看起来不能编辑”
+      $('p-name').oninput = () => {
+        const v = $('p-name').value;
+        $('p-name-display').textContent = v || p.username;
+      };
       $('p-av-btn').onclick = () => $('avatar-file').click();
       $('p-av-upload').onclick = () => $('avatar-file').click();
       $('p-save').onclick = () => {
-        state.profile.username = $('p-name').value.trim() || state.profile.username;
+        const v = $('p-name').value.trim();
+        if (v) state.profile.username = v;
         state.profile.email = $('p-email').value.trim();
         applyAvatar();
+        $('p-name-display').textContent = state.profile.username;
+        uiAlert(t('instances.saved'));
       };
       renderDashboard($('dash-host'));
       return;
@@ -951,31 +1101,40 @@
   }
 
   function createGroupFlow() {
-    const name = prompt(t('list.createGroup'), state.nav === 'internalGroup' ? '项目群' : '外部协作群');
-    if (!name) return;
-    const type = state.nav === 'internalGroup' ? 'internal' : 'external';
-    state.groups.push({ id: 'g-' + Date.now(), name, type, members: [] });
-    renderList();
+    uiPrompt(t('list.createGroup'), state.nav === 'internalGroup' ? '项目群' : '外部协作群').then(async (name) => {
+      if (!name) return;
+      const type = state.nav === 'internalGroup' ? 'internal' : 'external';
+      const id = 'g-' + Date.now();
+      try {
+        await window.ccarmy.groupCreate({ groupId: id, name, type, directedMode: false });
+      } catch (e) {
+        uiAlert(String(e.message || e));
+        return;
+      }
+      state.groups.push({ id, name, type, members: [] });
+      renderList();
+    });
   }
 
   function addInstanceFlow() {
-    const name = prompt(t('instances.name'), '牛马-' + (state.instances.length + 1));
-    if (!name) return;
-    const inst = {
-      id: 'inst-' + Date.now(),
-      name,
-      status: 'stopped',
-      dutyEligible: true,
-      model: 'deepseek-chat',
-      memoryFile: `persona/${name}.md`,
-      persona: '',
-    };
-    state.instances.push(inst);
-    state.selectedInstance = inst;
-    hideMain();
-    $('inst-detail').classList.remove('hidden');
-    renderInstanceDetail();
-    renderList();
+    uiPrompt(t('instances.name'), '牛马-' + (state.instances.length + 1)).then((name) => {
+      if (!name) return;
+      const inst = {
+        id: 'inst-' + Date.now(),
+        name,
+        status: 'stopped',
+        dutyEligible: true,
+        model: 'deepseek-chat',
+        memoryFile: `persona/${name}.md`,
+        persona: '',
+      };
+      state.instances.push(inst);
+      state.selectedInstance = inst;
+      hideMain();
+      $('inst-detail').classList.remove('hidden');
+      renderInstanceDetail();
+      renderList();
+    });
   }
 
   function bindResizer(el, cssVar, min, max) {
@@ -1021,9 +1180,9 @@
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('no');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((tr) => tr.stop());
-      alert(t('chat.voice') + ' · OK');
+      uiAlert(t('chat.voice') + ' · OK');
     } catch {
-      alert(t('chat.voiceUnsupported'));
+      uiAlert(t('chat.voiceUnsupported'));
     }
   };
   $('input').addEventListener('keydown', (e) => {

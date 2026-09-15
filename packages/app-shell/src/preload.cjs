@@ -20,4 +20,10 @@ contextBridge.exposeInMainWorld('ccarmy', {
   pickSound: () => ipcRenderer.invoke('ccarmy:pick-sound'),
   checkUpdate: () => ipcRenderer.invoke('ccarmy:check-update'),
   pickFile: () => ipcRenderer.invoke('ccarmy:pick-file'),
+  groupCreate: (cfg) => ipcRenderer.invoke('ccarmy:group-create', cfg),
+  groupMessage: (msg) => ipcRenderer.invoke('ccarmy:group-message', msg),
+  groupJoinInstance: (groupId, instanceId) => ipcRenderer.invoke('ccarmy:group-join-instance', groupId, instanceId),
+  boardTasks: (groupId) => ipcRenderer.invoke('ccarmy:board-tasks', groupId),
+  boardEvents: () => ipcRenderer.invoke('ccarmy:board-events'),
+  boardAggregate: () => ipcRenderer.invoke('ccarmy:board-aggregate'),
 });

@@ -1,23 +1,22 @@
-﻿{
-    "scripts":  {
-                    "clean":  "rimraf dist *.tsbuildinfo",
-                    "build":  "tsc -b",
-                    "typecheck":  "tsc -b --pretty"
-                },
-    "description":  "看板数据模型与视图",
-    "type":  "module",
-    "types":  "./dist/index.d.ts",
-    "version":  "0.1.0",
-    "name":  "@ccarmy/board",
-    "private":  true,
-    "exports":  {
-                    ".":  {
-                              "types":  "./dist/index.d.ts",
-                              "import":  "./dist/index.js"
-                          }
-                },
-    "main":  "./dist/index.js",
-    "dependencies":  {
-                         "@ccarmy/contracts":  "workspace:*"
-                     }
+{
+  "name": "@ccarmy/board",
+  "version": "0.1.0",
+  "private": true,
+  "description": "看板：board.jsonl 只追加，仅 duty 可写",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty"
+  },
+  "dependencies": {
+    "@ccarmy/contracts": "workspace:*"
+  }
 }
