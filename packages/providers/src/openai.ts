@@ -1,6 +1,5 @@
 import {
   BaseProvider,
-  emptyUsage,
   httpJson,
   joinUrl,
   messagesToOpenAI,

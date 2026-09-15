@@ -265,8 +265,9 @@ export class SecurityManager {
     }
 
     const suggested = this.mode === 'strict' ? 'once' : 'once';
+    // fail-closed：没有审批 UI 时，normal/strict 都不放行
     if (!this.onApprove) {
-      return this.record(action, { action, scope: 'once', allowed: this.mode !== 'strict' });
+      return this.record(action, { action, scope: 'once', allowed: false });
     }
     const d = await this.onApprove({ action, mode: this.mode, suggested });
     if (d.allowed && d.scope !== 'once' && this.mode === 'normal') {
@@ -508,7 +509,7 @@ export class InstanceManager extends EventEmitter {
   }
 }
 
-export function createP1Runtime(opts?: {
+export async function createP1Runtime(opts?: {
   instancesRoot?: string;
   nodePath?: string;
   maxInstances?: number;
@@ -518,6 +519,7 @@ export function createP1Runtime(opts?: {
 }) {
   const teardown = new TeardownRegistry();
   const security = new SecurityManager(opts?.store ?? new MemorySecurityStore(), opts?.onApprove);
+  await security.init();
   const instances = new InstanceManager({
     instancesRoot: opts?.instancesRoot || path.join(os.tmpdir(), 'ccarmy-instances'),
     teardown,
