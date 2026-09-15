@@ -28,6 +28,13 @@ body {
   display: grid;
   grid-template-columns: 64px 280px 1fr;
   height: 100vh;
+  overflow: hidden;
+}
+#app.hide-list {
+  grid-template-columns: 64px 1fr;
+}
+#app.hide-list #list-col {
+  display: none;
 }
 /* ── 第一列 ── */
 #rail {
@@ -193,10 +200,19 @@ body {
 .muted { color: var(--muted); font-size: 12px; }
 .hidden { display: none !important; }
 
-/* 页面：实例 / 设置 */
-.page-layout { height: 100%; overflow: auto; padding: 20px 28px; background: #fafafa; }
+/* 页面：实例 / 设置 / 我 */
+.page-layout {
+  height: 100%;
+  overflow: auto;
+  padding: 20px 28px 40px;
+  background: #fafafa;
+}
+.page-layout.full {
+  /* 无第二列时占满 main-col */
+  width: 100%;
+}
 .page-layout h1 { font-size: 18px; margin: 0 0 16px; }
-.hw-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-bottom: 20px; }
+.hw-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
 .hw-card, .inst-card, .set-card {
   background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
   padding: 14px;
@@ -209,8 +225,9 @@ body {
 .field input, .field select, .field textarea {
   border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: inherit;
 }
+.field textarea { min-height: 120px; resize: vertical; }
 .btn-danger { background: var(--danger); color: #fff; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
-.set-section { margin-bottom: 24px; }
+.set-section { margin-bottom: 20px; }
 .set-section h2 { font-size: 14px; margin: 0 0 10px; }
 table.plugins { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); }
@@ -225,3 +242,13 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 }
 .theme-swatches button.on { border-color: #222; }
 .btn-mini { padding: 4px 8px; font-size: 12px; }
+.sec-pick { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.sec-pick select { border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.sound-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.profile-head { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; }
+.profile-head .big-av {
+  width: 72px; height: 72px; border-radius: 16px;
+  background: linear-gradient(135deg, #07c160, #10ad6a);
+  color: #fff; display: grid; place-items: center; font-size: 28px; font-weight: 700;
+}
+

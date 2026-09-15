@@ -2,7 +2,7 @@
  * Electron 主进程 — 零原生模块
  * 注意：Windows 中文路径下 fork 子进程可能乱码，memory ipc 先拷到 userData（ASCII）
  */
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,8 @@ function boot(msg: string) {
   }
 }
 boot(`main loaded dir=${__dirname}`);
+// 去掉 File/Edit/View/Window/Help 应用菜单
+Menu.setApplicationMenu(null);
 
 let win: BrowserWindow | null = null;
 let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;

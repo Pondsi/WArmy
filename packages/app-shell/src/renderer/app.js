@@ -1,19 +1,28 @@
-/* CCArmy renderer — 文案全部走 i18n，业务数据经 preload IPC */
+/* CCArmy renderer — 文案走 i18n；设置无第二列；实例左列表右详情 */
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = {
     nav: 'singleAi',
     locale: 'zh-CN',
     t: {},
-    selectedChat: null, // { kind, id, name }
+    selectedChat: null,
+    selectedInstance: null,
     urgency: 'P2',
     instances: [],
     groups: [],
-    chats: [], // 单AI / 外部私聊 列表
+    chats: [],
     hardware: null,
-    security: 'normal',
-    sound: true,
+    globalSecurity: 'normal',
+    sessionSecurity: {},
+    sound: { complete: true, request: true, error: true },
+    emailOnRequest: false,
     theme: '#07c160',
+    profile: {
+      loggedIn: false,
+      username: '主人',
+      avatarInitial: '主',
+      email: '',
+    },
     plugins: [
       { id: 'agent-teams', name: '@nanmicoder/dsh-agent-teams', enabled: true },
       { id: 'memory-plus', name: 'dsh-memory-bundle', enabled: true },
@@ -24,13 +33,8 @@
     ],
   };
 
-  function t(key) {
-    return state.t[key] || key;
-  }
-
-  function appName() {
-    return state.locale.startsWith('zh') ? t('app.zhName') : t('app.enName');
-  }
+  const t = (k) => state.t[k] || k;
+  const displayName = () => state.t['app.displayName'] || (state.locale.startsWith('zh') ? t('app.zhName') : t('app.enName'));
 
   function applyI18n() {
     document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -41,7 +45,7 @@
     });
     $('logo-name').textContent = displayName();
     $('logo-sub').textContent = t('app.subtitle');
-    $('selfAvatar').textContent = t('nav.avatar').slice(0, 1);
+    $('selfAvatar').textContent = state.profile.avatarInitial || t('nav.avatar').slice(0, 1);
     document.title = displayName();
   }
 
@@ -53,11 +57,10 @@
     applyI18n();
   }
 
-  function displayName() {
-    return state.t['app.displayName'] || appName();
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  // ── 导航 ──
   const NAV_TITLES = {
     me: 'nav.avatar',
     singleAi: 'nav.singleAi',
@@ -68,33 +71,53 @@
     settings: 'nav.settings',
   };
 
+  const CHAT_NAVS = new Set(['singleAi', 'internalGroup', 'externalChat', 'externalGroup']);
+
+  function hideMain() {
+    $('empty-state').classList.add('hidden');
+    $('chat-layout').classList.add('hidden');
+    $('page-layout').classList.add('hidden');
+    $('inst-detail').classList.add('hidden');
+  }
+
   function setNav(nav) {
     state.nav = nav;
     document.querySelectorAll('.rail-item').forEach((el) => {
       el.classList.toggle('active', el.dataset.nav === nav);
     });
-    $('list-title').textContent = t(NAV_TITLES[nav] || nav);
-    renderList();
-    // 实例/设置显示页，不进聊天布局
-    const isPage = nav === 'instances' || nav === 'settings' || nav === 'me';
-    $('empty-state').classList.add('hidden');
-    $('chat-layout').classList.add('hidden');
-    $('page-layout').classList.add('hidden');
-    if (isPage) {
+    hideMain();
+
+    // 设置 / 我：无第二列
+    if (nav === 'settings' || nav === 'me') {
+      $('app').classList.add('hide-list');
       $('page-layout').classList.remove('hidden');
       renderPage();
-      $('list-body').innerHTML = '';
-      $('list-action').classList.add('hidden');
-    } else {
-      // 未选会话 → 空白 logo
-      if (!state.selectedChat || !matchNav(state.selectedChat, nav)) {
-        state.selectedChat = null;
+      return;
+    }
+
+    $('app').classList.remove('hide-list');
+    $('list-title').textContent = t(NAV_TITLES[nav] || nav);
+    setupListAction();
+    renderList();
+
+    if (nav === 'instances') {
+      if (!state.selectedInstance) {
         $('empty-state').classList.remove('hidden');
+        // 空态也可提示去左列选实例
       } else {
-        $('chat-layout').classList.remove('hidden');
-        renderChat();
+        $('inst-detail').classList.remove('hidden');
+        renderInstanceDetail();
       }
-      setupListAction();
+      return;
+    }
+
+    // 会话类
+    if (!state.selectedChat || !matchNav(state.selectedChat, nav)) {
+      state.selectedChat = null;
+      $('empty-state').classList.remove('hidden');
+    } else {
+      $('chat-layout').classList.remove('hidden');
+      renderChat();
     }
   }
 
@@ -113,34 +136,79 @@
       btn.textContent = t('list.createGroup');
       btn.classList.remove('hidden');
       btn.onclick = createGroupFlow;
+    } else if (state.nav === 'instances') {
+      btn.textContent = t('list.addInstance');
+      btn.classList.remove('hidden');
+      btn.onclick = addInstanceFlow;
     } else {
       btn.classList.add('hidden');
+      btn.onclick = null;
     }
   }
 
-  // ── 第二列列表 ──
+  function row(name, sub, ch, onClick, active) {
+    const el = document.createElement('div');
+    el.className = 'list-item' + (active ? ' active' : '');
+    el.innerHTML = `<div class="av">${escapeHtml(ch || '?')}</div><div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
+    el.onclick = onClick;
+    return el;
+  }
+
   function renderList() {
     const q = ($('list-search').value || '').trim().toLowerCase();
     const box = $('list-body');
     box.innerHTML = '';
+
+    if (state.nav === 'instances') {
+      // 硬件建议卡片在列表顶
+      const hw = state.hardware || { cpus: '—', suggested: '—', max: '—' };
+      const card = document.createElement('div');
+      card.className = 'list-card';
+      card.innerHTML = `<h4>${t('instances.hardware')}</h4>
+        <div class="muted">${t('instances.cpus')}: <b>${hw.cpus}</b> · ${t('instances.suggested')}: <b>${hw.suggested}</b></div>
+        <div class="muted" style="margin-top:4px">max ${hw.max ?? '—'}</div>`;
+      box.appendChild(card);
+
+      state.instances
+        .filter((i) => !q || (i.name || '').toLowerCase().includes(q))
+        .forEach((inst) => {
+          const active = state.selectedInstance?.id === inst.id;
+          box.appendChild(
+            row(
+              inst.name || inst.id,
+              inst.status === 'running' ? t('instances.running') : t('instances.stopped'),
+              (inst.name || 'A')[0],
+              () => {
+                state.selectedInstance = inst;
+                hideMain();
+                $('inst-detail').classList.remove('hidden');
+                renderInstanceDetail();
+                renderList();
+              },
+              active
+            )
+          );
+        });
+      return;
+    }
 
     if (state.nav === 'singleAi') {
       const items = state.chats
         .filter((c) => c.kind === 'single')
         .filter((c) => !q || c.name.toLowerCase().includes(q))
         .sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0));
-      if (!items.length) {
+      const source = items.length
+        ? items
+        : state.instances.map((i) => ({ id: i.id, name: i.name, kind: 'single', lastPreview: t('list.noReply'), lastTs: 0 }));
+      if (!source.length) {
         box.innerHTML = `<div class="list-empty">${t('list.empty')}</div>`;
-        // 仍展示本机实例供选择
-        state.instances.forEach((inst) => {
-          box.appendChild(
-            row(inst.name, t('list.noReply'), inst.name[0] || 'A', () => openChat('single', inst.id, inst.name))
-          );
-        });
         return;
       }
-      items.forEach((c) => {
-        box.appendChild(row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('single', c.id, c.name)));
+      source.forEach((c) => {
+        const active = state.selectedChat?.id === c.id;
+        box.appendChild(
+          row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('single', c.id, c.name), active)
+        );
       });
       return;
     }
@@ -155,9 +223,14 @@
         return;
       }
       items.forEach((g) => {
+        const active = state.selectedChat?.id === g.id;
         box.appendChild(
-          row(g.name, `${t('group.type.' + g.type)} · ${g.members?.length || 0}${t('group.members')}`, g.name[0], () =>
-            openChat(g.type === 'internal' ? 'internal' : 'extgroup', g.id, g.name)
+          row(
+            g.name,
+            `${t('group.type.' + g.type)} · ${g.members?.length || 0}`,
+            g.name[0],
+            () => openChat(g.type === 'internal' ? 'internal' : 'extgroup', g.id, g.name),
+            active
           )
         );
       });
@@ -165,39 +238,27 @@
     }
 
     if (state.nav === 'externalChat') {
-      const items = state.chats
-        .filter((c) => c.kind === 'extdm')
-        .filter((c) => !q || c.name.toLowerCase().includes(q));
+      const items = state.chats.filter((c) => c.kind === 'extdm').filter((c) => !q || c.name.toLowerCase().includes(q));
       if (!items.length) {
         box.innerHTML = `<div class="list-empty">${t('list.empty')}</div>`;
         return;
       }
       items.forEach((c) => {
-        box.appendChild(row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('extdm', c.id, c.name)));
+        const active = state.selectedChat?.id === c.id;
+        box.appendChild(row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('extdm', c.id, c.name), active));
       });
     }
   }
 
-  function row(name, sub, ch, onClick) {
-    const el = document.createElement('div');
-    el.className = 'list-item';
-    el.innerHTML = `<div class="av">${escapeHtml(ch || '?')}</div><div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
-    el.onclick = onClick;
-    return el;
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
-
-  // ── 会话 ──
   function openChat(kind, id, name) {
     state.selectedChat = { kind, id, name };
-    $('empty-state').classList.add('hidden');
-    $('page-layout').classList.add('hidden');
+    hideMain();
     $('chat-layout').classList.remove('hidden');
     $('chat-title').textContent = name;
-    $('chat-meta').textContent = kind.includes('ext') ? t('group.type.external') : kind === 'internal' ? t('group.type.internal') : t('nav.singleAi');
+    $('chat-meta').textContent =
+      kind === 'internal' ? t('group.type.internal') : kind.includes('ext') ? t('group.type.external') : t('nav.singleAi');
+    const sec = $('session-sec');
+    sec.value = state.sessionSecurity[id] || state.globalSecurity;
     renderChat();
     renderList();
   }
@@ -209,7 +270,7 @@
     msgs.forEach((m) => {
       const div = document.createElement('div');
       div.className = 'msg' + (m.role === 'me' ? ' me' : '');
-      div.innerHTML = `<div class="av">${m.role === 'me' ? t('nav.avatar').slice(0, 1) : escapeHtml((state.selectedChat?.name || 'A')[0])}</div><div class="bubble">${escapeHtml(m.text)}</div>`;
+      div.innerHTML = `<div class="av">${m.role === 'me' ? escapeHtml(state.profile.avatarInitial || '我') : escapeHtml((state.selectedChat?.name || 'A')[0])}</div><div class="bubble">${escapeHtml(m.text)}</div>`;
       box.appendChild(div);
     });
     box.scrollTop = box.scrollHeight;
@@ -232,9 +293,8 @@
     try {
       await window.ccarmy.memoryAppend(text);
     } catch {
-      /* memory optional */
+      /* optional */
     }
-    // 占位：值班者/实例回复
     setTimeout(() => {
       pushMsg(id, 'them', `[${state.urgency}] ${text.slice(0, 40)}…`);
       const c = state.chats.find((x) => x.id === id);
@@ -243,102 +303,137 @@
         c.lastPreview = text.slice(0, 30);
       }
       renderChat();
-      if (state.nav === 'singleAi' || state.nav === 'externalChat') renderList();
-    }, 400);
+      if (CHAT_NAVS.has(state.nav)) renderList();
+    }, 350);
   }
 
-  // ── 页面：实例 / 设置 / 我 ──
-  async function renderPage() {
-    const box = $('page-body');
-    if (state.nav === 'instances') {
-      if (!state.hardware) {
-        try {
-          state.hardware = await window.ccarmy.hardware();
-        } catch {
-          state.hardware = { cpus: '—', suggested: '—', max: '—' };
-        }
-      }
-      try {
-        state.instances = (await window.ccarmy.listInstances()) || state.instances;
-      } catch {
-        /* keep mock */
-      }
-      const hw = state.hardware;
-      box.innerHTML = `
-        <h1>${t('nav.instances')}</h1>
-        <div class="hw-grid">
-          <div class="hw-card"><div class="muted">${t('instances.hardware')}</div><div class="stat">${hw.cpus ?? '—'}</div><div class="muted">${t('instances.cpus')}</div></div>
-          <div class="hw-card"><div class="muted">${t('instances.suggested')}</div><div class="stat">${hw.suggested ?? '—'}</div><div class="muted">${t('instances.running')} / max ${hw.max ?? '—'}</div></div>
-          <div class="hw-card" style="display:grid;place-items:center">
-            <button class="btn-primary" id="btn-add-inst">${t('list.addInstance')}</button>
-          </div>
+  // ── 实例详情 ──
+  function renderInstanceDetail() {
+    const inst = state.selectedInstance;
+    if (!inst) return;
+    const box = $('inst-detail');
+    box.innerHTML = `
+      <h1>${escapeHtml(inst.name || inst.id)}</h1>
+      <div class="set-card" style="max-width:720px">
+        <div class="inst-row">
+          <div class="field"><label>${t('instances.name')}</label><input id="i-name" value="${escapeHtml(inst.name || '')}"/></div>
+          <div class="field"><label>${t('instances.model')}</label><input id="i-model" value="${escapeHtml(inst.model || 'deepseek-chat')}"/></div>
+          <div class="field"><label>${t('instances.memoryFile')}</label><input id="i-mem" value="${escapeHtml(inst.memoryFile || '')}"/></div>
         </div>
-        <div id="inst-list"></div>`;
-      $('btn-add-inst').onclick = addInstanceFlow;
-      const list = $('inst-list');
-      const items = state.instances.length
-        ? state.instances
-        : [{ id: 'demo-1', name: '主力牛马', status: 'stopped', dutyEligible: true, model: 'deepseek-chat', memoryFile: 'persona/main.md' }];
-      items.forEach((inst) => {
-        const el = document.createElement('div');
-        el.className = 'inst-card';
-        el.innerHTML = `
-          <div class="inst-row">
-            <div class="field"><label>${t('instances.name')}</label><input value="${escapeHtml(inst.name || '')}" data-k="name"/></div>
-            <div class="field"><label>${t('instances.model')}</label><input value="${escapeHtml(inst.model || 'deepseek-chat')}" data-k="model"/></div>
-            <div class="field"><label>${t('instances.memoryFile')}</label><input value="${escapeHtml(inst.memoryFile || '')}" data-k="memoryFile" placeholder="${escapeHtml(t('instances.memoryHint'))}"/></div>
-            <label class="muted"><input type="checkbox" ${inst.dutyEligible ? 'checked' : ''}/> ${t('instances.dutyEligible')}</label>
-            <span class="badge ${inst.status === 'running' ? '' : 'off'}">${inst.status === 'running' ? t('instances.running') : t('instances.stopped')}</span>
-            <button class="btn-mini" data-a="start">${t('instances.start')}</button>
-            <button class="btn-mini" data-a="stop">${t('instances.stop')}</button>
-            <button class="btn-danger" data-a="del">${t('instances.delete')}</button>
-          </div>`;
-        el.querySelectorAll('button').forEach((b) => {
-          b.onclick = async () => {
-            const a = b.dataset.a;
-            if (a === 'start') {
-              try {
-                await window.ccarmy.spawnInstance({ id: inst.id || 'i-' + Date.now(), name: inst.name || 'agent', dutyEligible: true });
-                renderPage();
-              } catch (e) {
-                alert(String(e.message || e));
-              }
-            } else if (a === 'stop') {
-              try {
-                await window.ccarmy.stopInstance(inst.id);
-                renderPage();
-              } catch {
-                /* noop */
-              }
-            } else if (a === 'del') {
-              if (confirm(t('instances.delete') + '?')) {
-                try {
-                  await window.ccarmy.stopInstance(inst.id);
-                } catch {
-                  /* noop */
-                }
-                state.instances = state.instances.filter((x) => x.id !== inst.id);
-                renderPage();
-              }
-            }
-          };
+        <div class="field" style="margin-top:12px">
+          <label>${t('instances.persona')}</label>
+          <textarea id="i-persona" placeholder="${escapeHtml(t('instances.personaPlaceholder'))}">${escapeHtml(inst.persona || '')}</textarea>
+          <div class="muted">${t('instances.memoryHint')}</div>
+        </div>
+        <div class="inst-row" style="margin-top:14px">
+          <button class="btn-primary" id="i-save">${t('common.save')}</button>
+          <button class="btn-mini" id="i-start">${t('instances.start')}</button>
+          <button class="btn-mini" id="i-stop">${t('instances.stop')}</button>
+          <button class="btn-danger" id="i-del">${t('instances.delete')}</button>
+          <span class="badge ${inst.status === 'running' ? '' : 'off'}" id="i-status">${inst.status === 'running' ? t('instances.running') : t('instances.stopped')}</span>
+          <span class="muted" id="i-saved"></span>
+        </div>
+      </div>`;
+    $('i-save').onclick = () => {
+      inst.name = $('i-name').value.trim() || inst.name;
+      inst.model = $('i-model').value.trim();
+      inst.memoryFile = $('i-mem').value.trim();
+      inst.persona = $('i-persona').value;
+      $('i-saved').textContent = t('instances.saved');
+      renderList();
+      setTimeout(() => {
+        const el = $('i-saved');
+        if (el) el.textContent = '';
+      }, 1500);
+    };
+    $('i-start').onclick = async () => {
+      try {
+        await window.ccarmy.spawnInstance({
+          id: inst.id,
+          name: inst.name,
+          dutyEligible: true,
         });
-        list.appendChild(el);
-      });
+        inst.status = 'running';
+        renderInstanceDetail();
+        renderList();
+      } catch (e) {
+        alert(String(e.message || e));
+      }
+    };
+    $('i-stop').onclick = async () => {
+      try {
+        await window.ccarmy.stopInstance(inst.id);
+      } catch {
+        /* noop */
+      }
+      inst.status = 'stopped';
+      renderInstanceDetail();
+      renderList();
+    };
+    $('i-del').onclick = async () => {
+      if (!confirm(t('instances.delete') + '?')) return;
+      try {
+        await window.ccarmy.stopInstance(inst.id);
+      } catch {
+        /* noop */
+      }
+      state.instances = state.instances.filter((x) => x.id !== inst.id);
+      state.selectedInstance = null;
+      hideMain();
+      $('empty-state').classList.remove('hidden');
+      renderList();
+    };
+  }
+
+  // ── 我 / 设置 ──
+  function renderPage() {
+    const box = $('page-body');
+    if (state.nav === 'me') {
+      const p = state.profile;
+      box.innerHTML = `
+        <h1>${t('nav.avatar')}</h1>
+        <div class="set-card" style="max-width:520px">
+          <div class="profile-head">
+            <div class="big-av">${escapeHtml(p.avatarInitial || '?')}</div>
+            <div>
+              <div style="font-size:18px;font-weight:600">${escapeHtml(p.username)}</div>
+              <div class="muted">${p.loggedIn ? escapeHtml(p.email || '') : t('me.notLoggedIn')}</div>
+            </div>
+          </div>
+          <p class="muted">${t('me.loginHint')}</p>
+          <div class="field" style="margin-bottom:10px"><label>${t('me.username')}</label><input id="p-name" value="${escapeHtml(p.username)}"/></div>
+          <div class="field" style="margin-bottom:10px"><label>${t('me.avatarInitial')}</label><input id="p-av" maxlength="2" value="${escapeHtml(p.avatarInitial)}"/></div>
+          <div class="field" style="margin-bottom:10px"><label>${t('me.email')}</label><input id="p-email" type="email" value="${escapeHtml(p.email)}" placeholder="you@example.com"/></div>
+          <div class="field" style="margin-bottom:14px"><label>${t('me.changePassword')}</label>
+            <input id="p-pw" type="password" placeholder="${escapeHtml(t('me.newPassword'))}"/>
+            <input id="p-pw2" type="password" placeholder="${escapeHtml(t('me.confirmPassword'))}" style="margin-top:6px"/>
+          </div>
+          <button class="btn-primary" id="p-save">${t('me.saveProfile')}</button>
+          <span class="muted" id="p-msg" style="margin-left:8px"></span>
+        </div>`;
+      $('p-save').onclick = () => {
+        state.profile.username = $('p-name').value.trim() || state.profile.username;
+        state.profile.avatarInitial = $('p-av').value.trim().slice(0, 2) || state.profile.username.slice(0, 1);
+        state.profile.email = $('p-email').value.trim();
+        applyI18n();
+        $('p-msg').textContent = t('instances.saved');
+      };
       return;
     }
 
     if (state.nav === 'settings') {
       box.innerHTML = `
         <h1>${t('nav.settings')}</h1>
+
         <div class="set-section set-card">
           <h2>${t('settings.language')}</h2>
           <select id="sel-locale">
             <option value="zh-CN" ${state.locale.startsWith('zh') ? 'selected' : ''}>中文</option>
             <option value="en-US" ${state.locale.startsWith('en') ? 'selected' : ''}>English</option>
           </select>
-          <div class="muted" style="margin-top:6px">${state.locale.startsWith('zh') ? t('app.zhName') : t('app.enName')}</div>
+          <div class="muted" style="margin-top:6px">${escapeHtml(displayName())}</div>
         </div>
+
         <div class="set-section set-card">
           <h2>${t('settings.theme')}</h2>
           <div class="theme-swatches">
@@ -348,6 +443,7 @@
             <button data-c="#c45c26" style="background:#c45c26"></button>
           </div>
         </div>
+
         <div class="set-section set-card">
           <h2>${t('settings.security')}</h2>
           <select id="sel-sec">
@@ -355,22 +451,39 @@
             <option value="strict">${t('settings.securityStrict')}</option>
             <option value="full">${t('settings.securityFull')}</option>
           </select>
+          <p class="muted" style="margin:8px 0 0">${t('settings.securityHint')}</p>
         </div>
+
         <div class="set-section set-card">
           <h2>${t('settings.sound')}</h2>
-          <label><input type="checkbox" id="chk-sound" ${state.sound ? 'checked' : ''}/> ${state.sound ? t('settings.soundOn') : t('settings.soundOff')}</label>
-          <div style="margin-top:8px"><button class="btn-mini" id="btn-update">${t('settings.checkUpdate')}</button> <span class="muted" id="upd-msg"></span></div>
+          <div class="sound-row">
+            <label><input type="checkbox" id="s-complete" ${state.sound.complete ? 'checked' : ''}/> ${t('settings.soundComplete')}</label>
+            <label><input type="checkbox" id="s-request" ${state.sound.request ? 'checked' : ''}/> ${t('settings.soundRequest')}</label>
+            <label><input type="checkbox" id="s-error" ${state.sound.error ? 'checked' : ''}/> ${t('settings.soundError')}</label>
+          </div>
+          <div style="margin-top:12px">
+            <label><input type="checkbox" id="s-email" ${state.emailOnRequest ? 'checked' : ''}/> ${t('settings.emailOnRequest')}</label>
+            <div class="muted">${t('settings.emailHint')}</div>
+          </div>
+          <div style="margin-top:12px">
+            <button class="btn-mini" id="btn-update">${t('settings.checkUpdate')}</button>
+            <span class="muted" id="upd-msg"></span>
+          </div>
         </div>
+
         <div class="set-section set-card">
           <h2>${t('settings.providers')}</h2>
           <div id="prov-list"></div>
           <button class="btn-mini" id="btn-add-prov">${t('settings.addProvider')}</button>
         </div>
+
         <div class="set-section set-card">
           <h2>${t('settings.plugins')}</h2>
           <table class="plugins"><thead><tr><th>ID</th><th></th><th></th></tr></thead><tbody id="plug-body"></tbody></table>
-          <div style="margin-top:8px"><input id="plug-path" placeholder="package or path" style="width:60%"/> <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button></div>
+          <div style="margin-top:8px"><input id="plug-path" placeholder="package or path" style="width:55%"/>
+            <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button></div>
         </div>
+
         <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
           <div class="muted">CCArmy · ${t('app.subtitle')} · v0.1.0</div>
@@ -380,18 +493,23 @@
         await loadI18n(e.target.value);
         setNav('settings');
       };
-      $('sel-sec').value = state.security;
+      $('sel-sec').value = state.globalSecurity;
       $('sel-sec').onchange = async (e) => {
-        state.security = e.target.value;
+        state.globalSecurity = e.target.value;
         try {
-          await window.ccarmy.setSecurityMode(state.security);
+          await window.ccarmy.setSecurityMode(state.globalSecurity);
         } catch {
           /* noop */
         }
       };
-      $('chk-sound').onchange = (e) => {
-        state.sound = e.target.checked;
-        renderPage();
+      ['complete', 'request', 'error'].forEach((k) => {
+        const id = 's-' + k;
+        $(id).onchange = (e) => {
+          state.sound[k] = e.target.checked;
+        };
+      });
+      $('s-email').onchange = (e) => {
+        state.emailOnRequest = e.target.checked;
       };
       $('btn-update').onclick = () => {
         $('upd-msg').textContent = t('settings.upToDate');
@@ -411,7 +529,7 @@
         el.className = 'inst-row';
         el.style.marginBottom = '10px';
         el.innerHTML = `
-          <div class="field"><label>${escapeHtml(p.label)}</label><input data-k="baseURL" value="${escapeHtml(p.baseURL)}"/></div>
+          <div class="field"><label>${escapeHtml(p.label)}</label><input data-k="label" value="${escapeHtml(p.label)}"/></div>
           <div class="field"><label>${t('settings.baseUrl')}</label><input data-k="baseURL" value="${escapeHtml(p.baseURL)}"/></div>
           <div class="field"><label>${t('settings.apiKey')}</label><input data-k="apiKey" type="password" value="${escapeHtml(p.apiKey || '')}" placeholder="••••••••"/></div>
           <div class="field"><label>${t('settings.defaultModel')}</label><input data-k="defaultModel" value="${escapeHtml(p.defaultModel)}"/></div>`;
@@ -423,7 +541,14 @@
         prov.appendChild(el);
       });
       $('btn-add-prov').onclick = () => {
-        state.providers.push({ id: 'custom-' + Date.now(), label: 'Custom', protocol: 'openai-compatible', baseURL: '', defaultModel: '', apiKey: '' });
+        state.providers.push({
+          id: 'custom-' + Date.now(),
+          label: 'Custom',
+          protocol: 'openai-compatible',
+          baseURL: '',
+          defaultModel: '',
+          apiKey: '',
+        });
         renderPage();
       };
       const tbody = $('plug-body');
@@ -448,22 +573,6 @@
         state.plugins.push({ id: v, name: v, enabled: true });
         renderPage();
       };
-      return;
-    }
-
-    if (state.nav === 'me') {
-      box.innerHTML = `
-        <h1>${t('nav.avatar')}</h1>
-        <div class="set-card" style="max-width:420px">
-          <div style="display:flex;gap:16px;align-items:center">
-            <div class="avatar" style="width:64px;height:64px;font-size:22px">${escapeHtml(t('nav.avatar').slice(0, 1))}</div>
-            <div>
-              <div style="font-size:18px;font-weight:600">${escapeHtml(appName())}</div>
-              <div class="muted">${t('app.subtitle')}</div>
-            </div>
-          </div>
-          <p class="muted" style="margin-top:16px">${t('instances.memoryHint')}</p>
-        </div>`;
     }
   }
 
@@ -478,15 +587,21 @@
   function addInstanceFlow() {
     const name = prompt(t('instances.name'), '牛马-' + (state.instances.length + 1));
     if (!name) return;
-    state.instances.push({
+    const inst = {
       id: 'inst-' + Date.now(),
       name,
       status: 'stopped',
       dutyEligible: true,
       model: 'deepseek-chat',
       memoryFile: `persona/${name}.md`,
-    });
-    renderPage();
+      persona: '',
+    };
+    state.instances.push(inst);
+    state.selectedInstance = inst;
+    hideMain();
+    $('inst-detail').classList.remove('hidden');
+    renderInstanceDetail();
+    renderList();
   }
 
   // ── 绑定 ──
@@ -507,6 +622,10 @@
     state.urgency = b.dataset.u;
     $('urgency-bar').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
   });
+  $('session-sec').addEventListener('change', (e) => {
+    if (!state.selectedChat) return;
+    state.sessionSecurity[state.selectedChat.id] = e.target.value;
+  });
 
   // ── 启动 ──
   (async () => {
@@ -514,13 +633,38 @@
       await loadI18n(navigator.language.startsWith('zh') ? 'zh-CN' : 'en-US');
     } catch {
       state.locale = 'zh-CN';
-      state.t = { 'app.zhName': '无限牛马', 'app.enName': 'CCArmy', 'app.subtitle': 'Corporate Cattle Army' };
+      state.t = {
+        'app.zhName': '无限牛马',
+        'app.enName': 'CCArmy',
+        'app.subtitle': 'Corporate Cattle Army',
+        'app.displayName': '无限牛马',
+      };
       applyI18n();
     }
     try {
-      state.security = (await window.ccarmy.securityMode()) || 'normal';
+      state.globalSecurity = (await window.ccarmy.securityMode()) || 'normal';
     } catch {
       /* noop */
+    }
+    try {
+      state.hardware = await window.ccarmy.hardware();
+      state.instances = (await window.ccarmy.listInstances()) || [];
+    } catch {
+      /* noop */
+    }
+    // 演示实例，便于空环境也能点开详情
+    if (!state.instances.length) {
+      state.instances = [
+        {
+          id: 'demo-1',
+          name: '主力牛马',
+          status: 'stopped',
+          dutyEligible: true,
+          model: 'deepseek-chat',
+          memoryFile: 'persona/main.md',
+          persona: '性格：沉稳可靠\n角色：值班执行者\n戒律：不泄露密钥，不越权写文件',
+        },
+      ];
     }
     setNav('singleAi');
   })();
