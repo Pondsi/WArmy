@@ -2,203 +2,118 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
-  <title>CCArmy 无限牛马</title>
-  <style>
-    :root {
-      --bg: #0f1419;
-      --panel: #1a2332;
-      --ink: #e7ecf3;
-      --muted: #8b9bb4;
-      --accent: #3d8bfd;
-      --ok: #3dd68c;
-      --danger: #f07178;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-      height: 100vh;
-      display: grid;
-      grid-template-rows: auto 1fr;
-    }
-    header {
-      padding: 14px 20px;
-      background: var(--panel);
-      border-bottom: 1px solid #2a3548;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    header h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: 0.04em; }
-    header .badge {
-      font-size: 12px;
-      color: var(--muted);
-      border: 1px solid #2a3548;
-      padding: 2px 8px;
-      border-radius: 999px;
-    }
-    main {
-      display: grid;
-      grid-template-columns: 280px 1fr 280px;
-      min-height: 0;
-    }
-    section {
-      padding: 16px;
-      border-right: 1px solid #2a3548;
-      overflow: auto;
-    }
-    section:last-child { border-right: none; }
-    h2 {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      margin: 0 0 12px;
-    }
-    button {
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 12px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    button.ghost {
-      background: transparent;
-      border: 1px solid #2a3548;
-      color: var(--ink);
-    }
-    button.danger { background: var(--danger); }
-    input, select {
-      width: 100%;
-      background: #0c1017;
-      border: 1px solid #2a3548;
-      color: var(--ink);
-      border-radius: 6px;
-      padding: 8px 10px;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-    .row { display: flex; gap: 8px; margin-bottom: 8px; }
-    .row > * { flex: 1; }
-    ul { list-style: none; padding: 0; margin: 0; }
-    li {
-      padding: 10px;
-      border: 1px solid #2a3548;
-      border-radius: 8px;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-    li .meta { color: var(--muted); font-size: 11px; margin-top: 4px; }
-    .stat {
-      font-size: 22px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-    .ok { color: var(--ok); }
-    .muted { color: var(--muted); font-size: 12px; }
-  </style>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>CCArmy</title>
+  <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
-  <header>
-    <h1>CCArmy · 无限牛马</h1>
-    <span class="badge">Corporate Cattle Army</span>
-    <span class="badge" id="hw">—</span>
-  </header>
-  <main>
-    <section>
-      <h2>实例</h2>
-      <div class="row">
-        <input id="instName" placeholder="实例名称" value="worker-1" />
+  <div id="app">
+    <!-- 第一列：导航窄栏 -->
+    <nav id="rail">
+      <div class="rail-top">
+        <button class="rail-item" data-nav="me" title="me">
+          <span class="avatar" id="selfAvatar">我</span>
+        </button>
+        <button class="rail-item active" data-nav="singleAi" title="single">
+          <svg viewBox="0 0 24 24"><path d="M12 3a7 7 0 017 7v1h1v8H4v-8h1v-7a7 7 0 017-7zm0 2a5 5 0 00-5 5v1h10v-1a5 5 0 00-5-5zM7 15v2h2v-2H7zm8 0v2h2v-2h-2z"/></svg>
+        </button>
+        <button class="rail-item" data-nav="internalGroup" title="internal">
+          <svg viewBox="0 0 24 24"><path d="M8 11a3 3 0 100-6 3 3 0 000 6zm8 0a3 3 0 100-6 3 3 0 000 6zM2 19a6 6 0 0112 0v1H2v-1zm12 1v-1c0-1.5-.5-2.9-1.4-4A6 6 0 0122 19v1h-8z"/></svg>
+        </button>
+        <button class="rail-item" data-nav="externalChat" title="extdm">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16v12H7l-3 3V4zm4 5h8v2H8V9zm0 4h5v2H8v-2z"/></svg>
+        </button>
+        <button class="rail-item" data-nav="externalGroup" title="extg">
+          <svg viewBox="0 0 24 24"><path d="M12 3l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V7l8-4zm0 2.2L6 7.5v5.3c0 3.7 2.5 6.5 6 7.8 3.5-1.3 6-4.1 6-7.8V7.5l-6-2.3z"/></svg>
+        </button>
       </div>
-      <div class="row">
-        <button id="btnSpawn">启动实例</button>
-        <button class="ghost" id="btnRefresh">刷新</button>
+      <div class="rail-bottom">
+        <button class="rail-item" data-nav="instances" title="agents">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h10v2H4v-2z"/></svg>
+        </button>
+        <button class="rail-item" data-nav="settings" title="settings">
+          <svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 100 8 4 4 0 000-8zm8.9 4l1.6 1.3-1.6 2.8-1.9-.6a7 7 0 01-1.7 1l-.4 2h-3.2l-.4-2a7 7 0 01-1.7-1l-1.9.6-1.6-2.8L7.1 12l-1.6-1.3 1.6-2.8 1.9.6a7 7 0 011.7-1l.4-2h3.2l.4 2c.6.2 1.2.6 1.7 1l1.9-.6 1.6 2.8L20.9 12z"/></svg>
+        </button>
       </div>
-      <ul id="instList"></ul>
-    </section>
-    <section>
-      <h2>安全模式</h2>
-      <select id="secMode">
-        <option value="normal">常规（默认）</option>
-        <option value="strict">严格</option>
-        <option value="full">完全授权（危险）</option>
-      </select>
-      <p class="muted">无审批 UI 时 normal/strict 均 fail-closed 拒绝工具调用。</p>
-      <h2 style="margin-top:24px">记忆</h2>
-      <input id="memBody" placeholder="写入一条记忆…" />
-      <div class="row">
-        <button id="btnMemWrite">写入</button>
-        <button class="ghost" id="btnMemRecall">检索</button>
+    </nav>
+
+    <!-- 第二列：列表 -->
+    <aside id="list-col">
+      <header class="list-head">
+        <h2 id="list-title">—</h2>
+        <button id="list-action" class="btn-mini hidden"></button>
+      </header>
+      <div class="search-wrap">
+        <input id="list-search" type="search" data-i18n-placeholder="list.search" />
       </div>
-      <input id="memQuery" placeholder="检索关键词" />
-      <ul id="memList"></ul>
-    </section>
-    <section>
-      <h2>硬件建议</h2>
-      <div class="stat" id="hwCpu">—</div>
-      <div class="muted">建议实例数 <span id="hwSug">—</span></div>
-      <h2 style="margin-top:24px">Provider</h2>
-      <p class="muted">OpenAI 兼容 / Anthropic / Ollama 已在 <code>@ccarmy/providers</code> 落地。设置页后续接入。</p>
-    </section>
-  </main>
-  <script>
-    const $ = (id) => document.getElementById(id);
-    async function refresh() {
-      const hw = await window.ccarmy.hardware();
-      if (hw) {
-        $('hw').textContent = `${hw.cpus} 核 · 建议 ${hw.suggested}`;
-        $('hwCpu').textContent = hw.cpus + ' 核';
-        $('hwSug').textContent = hw.suggested;
-      }
-      const list = await window.ccarmy.listInstances();
-      $('instList').innerHTML = (list || [])
-        .map(
-          (i) =>
-            `<li><strong>${i.name}</strong><div class="meta">${i.status} · pid ${i.pid || '—'} · duty ${i.dutyEligible}</div>
-             <button class="ghost" style="margin-top:8px" onclick="window.__stop('${i.id}')">停止</button></li>`
-        )
-        .join('') || '<li class="muted">暂无实例</li>';
-      const mode = await window.ccarmy.securityMode();
-      if (mode) $('secMode').value = mode;
-    }
-    window.__stop = async (id) => {
-      await window.ccarmy.stopInstance(id);
-      refresh();
-    };
-    $('btnSpawn').onclick = async () => {
-      const name = $('instName').value || 'worker';
-      const id = name + '-' + Date.now().toString(36);
-      try {
-        await window.ccarmy.spawnInstance({ id, name, dutyEligible: true });
-      } catch (e) {
-        alert(String(e.message || e));
-      }
-      refresh();
-    };
-    $('btnRefresh').onclick = refresh;
-    $('secMode').onchange = async (e) => {
-      await window.ccarmy.setSecurityMode(e.target.value);
-    };
-    $('btnMemWrite').onclick = async () => {
-      const b = $('memBody').value.trim();
-      if (!b) return;
-      await window.ccarmy.memoryAppend(b);
-      $('memBody').value = '';
-    };
-    $('btnMemRecall').onclick = async () => {
-      const q = $('memQuery').value.trim();
-      if (!q) return;
-      const r = await window.ccarmy.memoryRecall(q);
-      $('memList').innerHTML = (r.cards || [])
-        .map((c) => `<li>${c.snippet}<div class="meta">seq ${c.seq} · ${c.source}</div></li>`)
-        .join('') || '<li class="muted">无结果</li>';
-    };
-    refresh();
-  </script>
+      <div id="list-body" class="list-body"></div>
+    </aside>
+
+    <!-- 第三+四列：会话 + 侧板 -->
+    <main id="main-col">
+      <div id="empty-state" class="empty-state">
+        <div class="logo-mark">
+          <div class="logo-glyph">牛</div>
+          <div class="logo-name" id="logo-name">无限牛马</div>
+          <div class="logo-sub" id="logo-sub">Corporate Cattle Army</div>
+        </div>
+      </div>
+
+      <div id="chat-layout" class="chat-layout hidden">
+        <section id="chat-col">
+          <header class="chat-head">
+            <div>
+              <div class="chat-title" id="chat-title">—</div>
+              <div class="chat-meta" id="chat-meta"></div>
+            </div>
+            <div class="chat-actions">
+              <button id="btn-stop-task" class="btn-ghost hidden" data-i18n="chat.stopTask"></button>
+            </div>
+          </header>
+          <div id="messages" class="messages"></div>
+          <footer class="composer">
+            <div class="composer-tools">
+              <button class="btn-tool" id="btn-mention" data-i18n="chat.mention"></button>
+              <div class="urgency" id="urgency-bar">
+                <button data-u="P0" data-i18n="chat.p0"></button>
+                <button data-u="P1" data-i18n="chat.p1"></button>
+                <button class="on" data-u="P2" data-i18n="chat.p2"></button>
+                <button data-u="P3" data-i18n="chat.p3"></button>
+              </div>
+            </div>
+            <textarea id="input" rows="3" data-i18n-placeholder="chat.placeholder"></textarea>
+            <div class="composer-send">
+              <button id="btn-send" class="btn-primary" data-i18n="chat.send"></button>
+            </div>
+          </footer>
+        </section>
+        <aside id="panel-col">
+          <div class="panel-block">
+            <h3 data-i18n="panel.tasks"></h3>
+            <ul id="task-list" class="task-list"><li class="muted" data-i18n="panel.noTasks"></li></ul>
+          </div>
+          <div class="panel-block">
+            <h3 data-i18n="panel.progress"></h3>
+            <div class="progress"><div id="progress-bar" class="progress-bar" style="width:0%"></div></div>
+            <div class="muted" id="progress-text">0%</div>
+          </div>
+          <div class="panel-block">
+            <h3 data-i18n="panel.duty"></h3>
+            <div id="duty-info" class="muted">—</div>
+          </div>
+          <div class="panel-block">
+            <h3 data-i18n="panel.queue"></h3>
+            <ul id="queue-list" class="queue-list"></ul>
+          </div>
+        </aside>
+      </div>
+
+      <!-- 实例 / 设置 全宽页（仍占 3+4 列区域） -->
+      <div id="page-layout" class="page-layout hidden">
+        <div id="page-body"></div>
+      </div>
+    </main>
+  </div>
+  <script src="./app.js"></script>
 </body>
 </html>

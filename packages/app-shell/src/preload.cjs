@@ -1,5 +1,5 @@
 /**
- * Electron preload — 仅暴露白名单 API
+ * Electron preload — 仅暴露白名单 API + i18n
  */
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -12,4 +12,6 @@ contextBridge.exposeInMainWorld('ccarmy', {
   setSecurityMode: (mode) => ipcRenderer.invoke('ccarmy:set-security-mode', mode),
   memoryRecall: (q) => ipcRenderer.invoke('ccarmy:memory-recall', q),
   memoryAppend: (body) => ipcRenderer.invoke('ccarmy:memory-append', body),
+  i18n: (locale) => ipcRenderer.invoke('ccarmy:i18n', locale),
+  localeInfo: () => ipcRenderer.invoke('ccarmy:locale-info'),
 });

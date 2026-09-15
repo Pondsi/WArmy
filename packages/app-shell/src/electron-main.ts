@@ -87,9 +87,12 @@ function startMemoryAsync() {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1100,
-    height: 720,
-    title: 'CCArmy 无限牛马',
+    width: 1280,
+    height: 800,
+    minWidth: 960,
+    minHeight: 600,
+    title: 'CCArmy',
+    backgroundColor: '#ededed',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -182,4 +185,38 @@ ipcMain.handle('ccarmy:memory-append', async (_e, body: string) => {
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+});
+
+// ── i18n：文案全部在独立 json，中文产品名「无限牛马」，其余「CCArmy」 ──
+function i18nDir(): string {
+  const candidates = [
+    path.join(__dirname, 'i18n'),
+    path.join(__dirname, '..', 'src', 'i18n'),
+  ];
+  const found = candidates.find((d) => fs.existsSync(path.join(d, 'zh-CN.json')));
+  return found ?? candidates[0]!;
+}
+
+ipcMain.handle('ccarmy:i18n', (_e, locale: string) => {
+  const loc = locale?.startsWith('zh') ? 'zh-CN' : 'en-US';
+  const file = path.join(i18nDir(), `${loc}.json`);
+  let strings: Record<string, string> = {};
+  try {
+    strings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    strings = {};
+  }
+  // 产品名：仅中文显示「无限牛马」
+  strings['app.displayName'] = loc === 'zh-CN' ? (strings['app.zhName'] || '无限牛马') : (strings['app.enName'] || 'CCArmy');
+  if (loc !== 'zh-CN') {
+    // 非中文时列表等处不再用中文名
+    strings['app.zhName'] = strings['app.enName'] || 'CCArmy';
+  }
+  win?.setTitle(strings['app.displayName'] || 'CCArmy');
+  return { locale: loc, strings, displayName: strings['app.displayName'] };
+});
+
+ipcMain.handle('ccarmy:locale-info', () => {
+  const sys = app.getLocale();
+  return { system: sys, isZh: sys.startsWith('zh') };
 });

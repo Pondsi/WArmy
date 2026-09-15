@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, existsSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,6 +7,13 @@ const src = path.join(root, '..', 'src');
 const dist = path.join(root, '..', 'dist');
 
 mkdirSync(path.join(dist, 'renderer'), { recursive: true });
+mkdirSync(path.join(dist, 'i18n'), { recursive: true });
+
 copyFileSync(path.join(src, 'preload.cjs'), path.join(dist, 'preload.cjs'));
-copyFileSync(path.join(src, 'renderer', 'index.html'), path.join(dist, 'renderer', 'index.html'));
-console.log('app-shell assets copied');
+for (const f of readdirSync(path.join(src, 'renderer'))) {
+  copyFileSync(path.join(src, 'renderer', f), path.join(dist, 'renderer', f));
+}
+for (const f of readdirSync(path.join(src, 'i18n'))) {
+  copyFileSync(path.join(src, 'i18n', f), path.join(dist, 'i18n', f));
+}
+console.log('app-shell assets copied (renderer + i18n)');
