@@ -1,0 +1,12 @@
+import { fork } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+const ipcEntry = path.resolve('C:/Users/p/.openclaw/workspace/´óÁúÏº»¥¶¯Çø/CCArmy/packages/memory-os/dist/ipc.js');
+console.log('exists', fs.existsSync(ipcEntry), ipcEntry);
+const child = fork(ipcEntry, [], { execArgv: [], env: { ...process.env, CCA_ARMY_MEMORY_DIR: 'C:/Users/p/AppData/Local/Temp/memdbg' }, stdio: ['ignore','pipe','pipe','ipc'] });
+child.stderr.on('data', d => console.error('ERR', String(d)));
+child.stdout.on('data', d => console.log('OUT', String(d)));
+child.on('message', m => console.log('MSG', m));
+child.on('error', e => console.error('error', e));
+child.on('exit', c => { console.log('EXIT', c); process.exit(0); });
+setTimeout(() => { console.log('timeout'); process.exit(1); }, 4000);

@@ -1,23 +1,31 @@
-﻿{
-    "scripts":  {
-                    "clean":  "rimraf dist *.tsbuildinfo",
-                    "build":  "tsc -b",
-                    "typecheck":  "tsc -b --pretty"
-                },
-    "description":  "JSONL + SQLite + 记忆服务子进程",
-    "type":  "module",
-    "types":  "./dist/index.d.ts",
-    "version":  "0.1.0",
-    "name":  "@ccarmy/memory-os",
-    "private":  true,
-    "exports":  {
-                    ".":  {
-                              "types":  "./dist/index.d.ts",
-                              "import":  "./dist/index.js"
-                          }
-                },
-    "main":  "./dist/index.js",
-    "dependencies":  {
-                         "@ccarmy/contracts":  "workspace:*"
-                     }
+{
+  "name": "@ccarmy/memory-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "L2 记忆服务：JSONL 只追加 + SQLite FTS 投影（长驻子进程）",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./ipc": {
+      "import": "./dist/ipc.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty",
+    "start": "node dist/ipc.js",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@ccarmy/contracts": "workspace:*",
+    "better-sqlite3": "13.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13"
+  }
 }

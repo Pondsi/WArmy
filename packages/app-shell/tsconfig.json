@@ -1,9 +1,16 @@
-﻿{
+{
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "types": ["node"]
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../contracts" }]
+  "exclude": ["src/**/*.cjs", "src/renderer/**"],
+  "references": [
+    { "path": "../contracts" },
+    { "path": "../providers" },
+    { "path": "../memory-os" },
+    { "path": "../dsh-runtime" }
+  ]
 }

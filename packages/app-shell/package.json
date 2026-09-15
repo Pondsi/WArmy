@@ -1,23 +1,30 @@
-﻿{
-    "scripts":  {
-                    "clean":  "rimraf dist *.tsbuildinfo",
-                    "build":  "tsc -b",
-                    "typecheck":  "tsc -b --pretty"
-                },
-    "description":  "Electron主/渲染进程壳（零原生模块）",
-    "type":  "module",
-    "types":  "./dist/index.d.ts",
-    "version":  "0.1.0",
-    "name":  "@ccarmy/app-shell",
-    "private":  true,
-    "exports":  {
-                    ".":  {
-                              "types":  "./dist/index.d.ts",
-                              "import":  "./dist/index.js"
-                          }
-                },
-    "main":  "./dist/index.js",
-    "dependencies":  {
-                         "@ccarmy/contracts":  "workspace:*"
-                     }
+{
+  "name": "@ccarmy/app-shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron主/渲染进程壳（零原生模块）",
+  "type": "module",
+  "main": "./dist/electron-main.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && node scripts/copy-assets.mjs",
+    "typecheck": "tsc -b --pretty",
+    "start": "electron dist/electron-main.js",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@ccarmy/contracts": "workspace:*",
+    "@ccarmy/dsh-runtime": "workspace:*",
+    "@ccarmy/memory-os": "workspace:*",
+    "@ccarmy/providers": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "33.2.0"
+  }
 }

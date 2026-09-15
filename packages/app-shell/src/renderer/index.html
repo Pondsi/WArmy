@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>CCArmy 无限牛马</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --ink: #e7ecf3;
+      --muted: #8b9bb4;
+      --accent: #3d8bfd;
+      --ok: #3dd68c;
+      --danger: #f07178;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    header {
+      padding: 14px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid #2a3548;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: 0.04em; }
+    header .badge {
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid #2a3548;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 280px 1fr 280px;
+      min-height: 0;
+    }
+    section {
+      padding: 16px;
+      border-right: 1px solid #2a3548;
+      overflow: auto;
+    }
+    section:last-child { border-right: none; }
+    h2 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin: 0 0 12px;
+    }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button.ghost {
+      background: transparent;
+      border: 1px solid #2a3548;
+      color: var(--ink);
+    }
+    button.danger { background: var(--danger); }
+    input, select {
+      width: 100%;
+      background: #0c1017;
+      border: 1px solid #2a3548;
+      color: var(--ink);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .row > * { flex: 1; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li {
+      padding: 10px;
+      border: 1px solid #2a3548;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    li .meta { color: var(--muted); font-size: 11px; margin-top: 4px; }
+    .stat {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .ok { color: var(--ok); }
+    .muted { color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CCArmy · 无限牛马</h1>
+    <span class="badge">Corporate Cattle Army</span>
+    <span class="badge" id="hw">—</span>
+  </header>
+  <main>
+    <section>
+      <h2>实例</h2>
+      <div class="row">
+        <input id="instName" placeholder="实例名称" value="worker-1" />
+      </div>
+      <div class="row">
+        <button id="btnSpawn">启动实例</button>
+        <button class="ghost" id="btnRefresh">刷新</button>
+      </div>
+      <ul id="instList"></ul>
+    </section>
+    <section>
+      <h2>安全模式</h2>
+      <select id="secMode">
+        <option value="normal">常规（默认）</option>
+        <option value="strict">严格</option>
+        <option value="full">完全授权（危险）</option>
+      </select>
+      <p class="muted">无审批 UI 时 normal/strict 均 fail-closed 拒绝工具调用。</p>
+      <h2 style="margin-top:24px">记忆</h2>
+      <input id="memBody" placeholder="写入一条记忆…" />
+      <div class="row">
+        <button id="btnMemWrite">写入</button>
+        <button class="ghost" id="btnMemRecall">检索</button>
+      </div>
+      <input id="memQuery" placeholder="检索关键词" />
+      <ul id="memList"></ul>
+    </section>
+    <section>
+      <h2>硬件建议</h2>
+      <div class="stat" id="hwCpu">—</div>
+      <div class="muted">建议实例数 <span id="hwSug">—</span></div>
+      <h2 style="margin-top:24px">Provider</h2>
+      <p class="muted">OpenAI 兼容 / Anthropic / Ollama 已在 <code>@ccarmy/providers</code> 落地。设置页后续接入。</p>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    async function refresh() {
+      const hw = await window.ccarmy.hardware();
+      if (hw) {
+        $('hw').textContent = `${hw.cpus} 核 · 建议 ${hw.suggested}`;
+        $('hwCpu').textContent = hw.cpus + ' 核';
+        $('hwSug').textContent = hw.suggested;
+      }
+      const list = await window.ccarmy.listInstances();
+      $('instList').innerHTML = (list || [])
+        .map(
+          (i) =>
+            `<li><strong>${i.name}</strong><div class="meta">${i.status} · pid ${i.pid || '—'} · duty ${i.dutyEligible}</div>
+             <button class="ghost" style="margin-top:8px" onclick="window.__stop('${i.id}')">停止</button></li>`
+        )
+        .join('') || '<li class="muted">暂无实例</li>';
+      const mode = await window.ccarmy.securityMode();
+      if (mode) $('secMode').value = mode;
+    }
+    window.__stop = async (id) => {
+      await window.ccarmy.stopInstance(id);
+      refresh();
+    };
+    $('btnSpawn').onclick = async () => {
+      const name = $('instName').value || 'worker';
+      const id = name + '-' + Date.now().toString(36);
+      try {
+        await window.ccarmy.spawnInstance({ id, name, dutyEligible: true });
+      } catch (e) {
+        alert(String(e.message || e));
+      }
+      refresh();
+    };
+    $('btnRefresh').onclick = refresh;
+    $('secMode').onchange = async (e) => {
+      await window.ccarmy.setSecurityMode(e.target.value);
+    };
+    $('btnMemWrite').onclick = async () => {
+      const b = $('memBody').value.trim();
+      if (!b) return;
+      await window.ccarmy.memoryAppend(b);
+      $('memBody').value = '';
+    };
+    $('btnMemRecall').onclick = async () => {
+      const q = $('memQuery').value.trim();
+      if (!q) return;
+      const r = await window.ccarmy.memoryRecall(q);
+      $('memList').innerHTML = (r.cards || [])
+        .map((c) => `<li>${c.snippet}<div class="meta">seq ${c.seq} · ${c.source}</div></li>`)
+        .join('') || '<li class="muted">无结果</li>';
+    };
+    refresh();
+  </script>
+</body>
+</html>
