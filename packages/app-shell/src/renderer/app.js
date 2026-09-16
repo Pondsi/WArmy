@@ -382,21 +382,21 @@
       state.instances
         .filter((i) => !q || (i.name || '').toLowerCase().includes(q))
         .forEach((inst) => {
-          box.appendChild(
-            row(
-              inst.name || inst.id,
-              inst.status === 'running' ? t('instances.running') : t('instances.stopped'),
-              (inst.name || 'A')[0],
-              () => {
-                state.selectedInstance = inst;
-                hideMain();
-                $('inst-detail').classList.remove('hidden');
-                renderInstanceDetail();
-                renderList();
-              },
-              state.selectedInstance?.id === inst.id
-            )
+          const rowEl = row(
+            inst.name || inst.id,
+            inst.status === 'running' ? t('instances.running') : t('instances.stopped'),
+            (inst.name || 'A')[0],
+            () => {
+              state.selectedInstance = inst;
+              hideMain();
+              $('inst-detail').classList.remove('hidden');
+              renderInstanceDetail();
+              renderList();
+            },
+            state.selectedInstance?.id === inst.id
           );
+          bindRowContext(rowEl, () => agentMenu(inst, rowEl));
+          box.appendChild(rowEl);
         });
       return;
     }
@@ -414,9 +414,10 @@
         return;
       }
       source.forEach((c) => {
-        box.appendChild(
-          row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('single', c.id, c.name), state.selectedChat?.id === c.id)
-        );
+        const rowEl = row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('single', c.id, c.name), state.selectedChat?.id === c.id);
+        const inst = state.instances.find((x) => x.id === c.id) || { id: c.id, name: c.name, status: 'stopped', notify: false };
+        bindRowContext(rowEl, () => agentMenu(inst, rowEl));
+        box.appendChild(rowEl);
       });
       return;
     }
@@ -429,15 +430,15 @@
         return;
       }
       items.forEach((g) => {
-        box.appendChild(
-          row(
-            g.name,
-            `${t('group.type.' + g.type)} · ${g.members?.length || 0}`,
-            g.name[0],
-            () => openChat(g.type === 'internal' ? 'internal' : 'extgroup', g.id, g.name),
-            state.selectedChat?.id === g.id
-          )
+        const rowEl = row(
+          g.name,
+          `${t('group.type.' + g.type)} · ${g.members?.length || 0}`,
+          g.name[0],
+          () => openChat(g.type === 'internal' ? 'internal' : 'extgroup', g.id, g.name),
+          state.selectedChat?.id === g.id
         );
+        bindRowContext(rowEl, () => groupMenu(g, rowEl));
+        box.appendChild(rowEl);
       });
       return;
     }
@@ -1106,10 +1107,7 @@
             <label for="p-name">${t('me.username')}</label>
             <input id="p-name" name="username" autocomplete="username" spellcheck="false" value="${escapeHtml(p.username)}" title="${escapeHtml(t('me.username'))}"/>
           </div>
-          <div class="field" style="margin-bottom:10px"><label>${t('me.avatar')}</label>
-            <button class="btn-mini" id="p-av-upload">${t('me.avatarUpload')}</button>
-            <span class="muted">${t('me.avatarHint')}</span>
-          </div>
+          <div class="muted" style="margin-bottom:10px">${t('me.avatarHint')}</div>
           <div class="field" style="margin-bottom:10px"><label>${t('me.email')}</label><input id="p-email" type="email" value="${escapeHtml(p.email)}"/></div>
           <div class="field" style="margin-bottom:14px"><label>${t('me.changePassword')}</label>
             <input id="p-pw" type="password" placeholder="${escapeHtml(t('me.newPassword'))}"/>
@@ -1131,7 +1129,6 @@
         $('p-name-display').textContent = v || p.username;
       };
       $('p-av-btn').onclick = () => $('avatar-file').click();
-      $('p-av-upload').onclick = () => $('avatar-file').click();
       $('p-save').onclick = () => {
         const v = $('p-name').value.trim();
         if (v) state.profile.username = v;
@@ -1203,6 +1200,7 @@
             <button class="btn-mini" data-pick="error">${t('settings.soundPick')}</button>
             <button class="btn-mini" data-clear="error">${t('settings.soundClear')}</button></div></div>
           <div style="margin-top:12px">
+            <div style="font-weight:600;font-size:13px;margin-bottom:6px">${t('settings.emailNotify')}</div>
             ${['complete', 'request', 'error']
             .map(
               (k) =>
@@ -1875,6 +1873,195 @@
   bindVerticalResizer('console-top-resizer', 'console-pane', 'up');
   // 控制台下方（输入框上方）：拉伸输入区
   bindVerticalResizer('input-top-resizer', 'input', 'up');
+
+  // ── 右键菜单 ──
+  function openContextMenu(x, y, items) {
+    closeContextMenu();
+    const el = document.createElement('div');
+    el.className = 'ctx-menu';
+    el.id = 'ctx-menu';
+    items.forEach((it) => {
+      if (!it) return;
+      if (it.sep) {
+        const s = document.createElement('div');
+        s.className = 'ctx-sep';
+        el.appendChild(s);
+        return;
+      }
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = it.label;
+      if (it.danger) b.classList.add('danger');
+      if (it.checked) b.classList.add('on');
+      b.onclick = async () => {
+        closeContextMenu();
+        await it.onClick?.();
+      };
+      el.appendChild(b);
+    });
+    el.style.left = Math.min(x, window.innerWidth - 200) + 'px';
+    el.style.top = Math.min(y, window.innerHeight - 220) + 'px';
+    document.body.appendChild(el);
+    setTimeout(() => {
+      document.addEventListener('click', closeContextMenu, { once: true });
+      document.addEventListener('keydown', onCtxKey, { once: true });
+    }, 0);
+  }
+  function onCtxKey(e) {
+    if (e.key === 'Escape') closeContextMenu();
+  }
+  function closeContextMenu() {
+    document.getElementById('ctx-menu')?.remove();
+  }
+
+  function sessionHasBlockingTasks(id) {
+    const q = state.queues[id] || [];
+    return q.some((x) => x.status !== 'done' && x.status !== 'cancelled');
+  }
+
+  function agentMenu(inst, rowEl) {
+    const running = inst.status === 'running';
+    const blocked = running || sessionHasBlockingTasks(inst.id);
+    const rect = rowEl.getBoundingClientRect();
+    return [
+      {
+        label: running ? t('ctx.close') : t('ctx.enable'),
+        onClick: async () => {
+          if (running) {
+            if (sessionHasBlockingTasks(inst.id)) {
+              uiAlert(t('ctx.taskRunning'));
+              return;
+            }
+            const ok = await uiConfirm(t('ctx.closeConfirm'));
+            if (!ok) return;
+            await window.ccarmy.stopInstance(inst.id);
+            inst.status = 'stopped';
+          } else {
+            try {
+              await window.ccarmy.spawnInstance({ id: inst.id, name: inst.name, dutyEligible: true });
+              inst.status = 'running';
+            } catch (e) {
+              uiAlert(String(e.message || e));
+            }
+          }
+          renderList();
+        },
+      },
+      {
+        label: t('ctx.settings'),
+        onClick: () => {
+          state.selectedInstance = inst;
+          setNav('instances');
+        },
+      },
+      {
+        label: t('ctx.rename'),
+        onClick: async () => {
+          const name = await uiPrompt(t('ctx.renamePrompt'), inst.name);
+          if (!name) return;
+          inst.name = name;
+          renderList();
+          if (state.selectedInstance?.id === inst.id) renderInstanceDetail();
+        },
+      },
+      {
+        label: t('ctx.archive'),
+        onClick: async () => {
+          const ok = await uiConfirm(t('ctx.archiveConfirm'));
+          if (!ok) return;
+          inst.archived = true;
+          uiAlert(t('instances.saved'));
+          renderList();
+        },
+      },
+      {
+        label: t('ctx.clear'),
+        danger: true,
+        onClick: async () => {
+          const ok = await uiConfirm(t('ctx.clearConfirm'));
+          if (!ok) return;
+          state.queues[inst.id] = [];
+          window.__msgs = window.__msgs || {};
+          delete window.__msgs[inst.id];
+          uiAlert(t('instances.saved'));
+          renderQueueBar();
+        },
+      },
+      {
+        label: t('ctx.notify') + (inst.notify ? ' ✓' : ''),
+        onClick: () => {
+          inst.notify = !inst.notify;
+          renderList();
+        },
+      },
+    ];
+  }
+
+  function groupMenu(g, rowEl) {
+    const blocked = sessionHasBlockingTasks(g.id);
+    const joined = !g.joinedByOther;
+    return [
+      {
+        label: t('ctx.rename'),
+        onClick: async () => {
+          const name = await uiPrompt(t('ctx.renamePrompt'), g.name);
+          if (!name) return;
+          g.name = name;
+          renderList();
+        },
+      },
+      joined
+        ? {
+            label: t('ctx.delete'),
+            danger: true,
+            onClick: async () => {
+              if (blocked) {
+                uiAlert(t('ctx.taskRunning'));
+                return;
+              }
+              const ok = await uiConfirm(t('ctx.closeConfirm'));
+              if (!ok) return;
+              state.groups = state.groups.filter((x) => x.id !== g.id);
+              if (state.selectedChat?.id === g.id) state.selectedChat = null;
+              renderList();
+              setNav(state.nav);
+            },
+          }
+        : {
+            label: t('ctx.leave'),
+            danger: true,
+            onClick: () => {
+              state.groups = state.groups.filter((x) => x.id !== g.id);
+              renderList();
+            },
+          },
+      g.type === 'internal'
+        ? {
+            label: t('ctx.archive'),
+            onClick: async () => {
+              const ok = await uiConfirm(t('ctx.archiveConfirm'));
+              if (!ok) return;
+              g.archived = true;
+              uiAlert(t('instances.saved'));
+            },
+          }
+        : null,
+      {
+        label: t('ctx.notify') + (g.notify ? ' ✓' : ''),
+        onClick: () => {
+          g.notify = !g.notify;
+          renderList();
+        },
+      },
+    ].filter(Boolean);
+  }
+
+  function bindRowContext(rowEl, getItems) {
+    rowEl.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      openContextMenu(e.clientX, e.clientY, getItems());
+    });
+  }
 
   // ── 顶层交互绑定（必须全局执行一次） ──
   document.querySelectorAll('.rail-item').forEach((el) => {
