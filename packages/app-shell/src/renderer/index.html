@@ -10,8 +10,7 @@
   <div id="app">
     <div id="titlebar">
       <div class="tb-drag">
-        <div class="tb-logo" id="tb-logo" aria-hidden="true"><img src="./icons/logo-color.svg" alt="" class="tb-logo-img"/></div>
-        <div class="tb-logo-cow" id="tb-logo-cow"></div>
+        <div class="tb-logo" id="tb-logo" aria-hidden="true"><img src="./icons/logo-64.png" alt="" class="tb-logo-img"/></div>
       </div>
       <div class="tb-actions" id="tb-actions">
         <button id="btn-always-top" title="置顶窗口" aria-label="always on top" data-i18n-title="tip.pin">
@@ -117,7 +116,7 @@
                   <button type="button" id="mi-export" data-i18n="chat.export"></button>
                 </div>
               </div>
-              <button id="btn-stop-all" class="btn-stop-icon" data-i18n-title="chat.stopAllTip" aria-label="stop"><svg viewBox="0 0 24 24" class="ico"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg></button>
+              <button id="btn-stop-all" class="btn-stop-icon" data-i18n-title="chat.stopAllTip" aria-label="stop"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path fill-rule="evenodd" fill="currentColor" d="M12 21a9 9 0 110-18 9 9 0 010 18zM9.4 9.4h5.2v5.2H9.4z"/></svg></button>
             </div>
           </header>
           <div id="messages" class="messages"></div>
@@ -137,7 +136,7 @@
           <footer class="composer">
             <div id="attach-list" class="hidden"></div>
             <div class="composer-main">
-              <textarea id="input" rows="3" data-i18n-placeholder="chat.placeholder"></textarea>
+              <textarea id="input" rows="3" data-i18n-placeholder="chat.placeholder" spellcheck="false"></textarea>
               <div class="composer-bar">
                 <div class="composer-left">
                   <button class="btn-icon" id="btn-attach" data-i18n-title="chat.attachTip">

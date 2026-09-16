@@ -265,8 +265,7 @@
     $('logo-name').textContent = displayName();
     $('logo-sub').textContent = t('app.subtitle');
     if ($('tb-brand')) $('tb-brand').textContent = displayName();
-    if ($('tb-logo')) $('tb-logo').textContent = state.locale.startsWith('zh') ? '牛' : 'C';
-    applyAvatar();
+        applyAvatar();
     document.title = displayName();
   }
 
@@ -320,9 +319,11 @@
     if (nav === 'settings' || nav === 'me') {
       $('app-body').classList.add('hide-list');
       $('page-layout').classList.remove('hidden');
+      $('page-layout').classList.toggle('settings-mode', nav === 'settings');
       renderPage();
       return;
     }
+    $('page-layout').classList.remove('settings-mode');
 
     $('app-body').classList.remove('hide-list');
     const lt = $('list-title');
@@ -354,6 +355,16 @@
     }
 
     $('logo-sub').textContent = t('app.subtitle');
+    // 我的牛马：无选中会话时自动打开第一个
+    if (nav === 'singleAi' && (!state.selectedChat || !matchNav(state.selectedChat, nav))) {
+      const first = state.chats
+        .filter((c) => c.kind === 'single')
+        .sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0))[0];
+      if (first) {
+        openChat('single', first.id, first.name);
+        return;
+      }
+    }
     if (!state.selectedChat || !matchNav(state.selectedChat, nav)) {
       state.selectedChat = null;
       $('empty-state').classList.remove('hidden');
@@ -1188,20 +1199,18 @@
         </div>
         <div class="me-strip">
           <div class="profile-head">
-            <button id="p-av-btn" class="av-btn" title="${escapeHtml(t('me.avatarHint'))}">${avHtml}</button>
+            <button id="p-av-btn" class="av-btn" aria-label="${escapeHtml(t('me.avatar'))}">${avHtml}</button>
             <div>
               <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
               <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
               <div class="muted">${p.loggedIn ? escapeHtml(p.email || '') : t('me.notLoggedIn')}</div>
+              <div class="muted me-hint">${t('me.loginHint')}</div>
               <div style="margin-top:8px;display:flex;gap:8px">
                 <button class="btn-mini" id="p-login">${t('me.login')}</button>
                 <button class="btn-mini" id="p-reg">${t('me.register')}</button>
               </div>
             </div>
           </div>
-          <p class="muted">${t('me.loginHint')}</p>
-
-          <div class="muted" style="margin-bottom:10px">${t('me.avatarHint')}</div>
           <div class="field" style="margin-bottom:10px"><label>${t('me.email')}</label><input id="p-email" type="email" value="${escapeHtml(p.email)}"/></div>
           <div class="field" style="margin-bottom:14px"><label>${t('me.changePassword')}</label>
             <input id="p-pw" type="password" placeholder="${escapeHtml(t('me.newPassword'))}"/>
@@ -1260,7 +1269,7 @@
           <button data-sec="func">${t('settings.section.func')}</button>
         </div>
         <div class="settings-content" id="settings-content">
-        <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.ui')}</h2></div>
+        <div class="set-section" data-sec="ui"><h2 style="color:var(--accent)">${t('settings.section.ui')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.language')}</h2>
           <select id="sel-locale" title="${escapeHtml(t('settings.language'))}">
@@ -1292,7 +1301,7 @@
           </select>
           <p class="muted" style="margin:8px 0 0">${t('settings.securityHint')}</p>
         </div>
-        <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.notify')}</h2></div>
+        <div class="set-section" data-sec="notify"><h2 style="color:var(--accent)">${t('settings.section.notify')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.soundName')}</h2>
           <div class="sound-row">
@@ -1324,13 +1333,13 @@
             <div class="muted">${t('settings.emailHint')}</div>
           </div>
         </div>
-        <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.model')}</h2></div>
+        <div class="set-section" data-sec="model"><h2 style="color:var(--accent)">${t('settings.section.model')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.providers')}</h2>
           <div id="prov-list"></div>
           <button class="btn-mini" id="btn-add-prov">${t('settings.addProvider')}</button>
         </div>
-        <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.func')}</h2></div>
+        <div class="set-section" data-sec="func"><h2 style="color:var(--accent)">${t('settings.section.func')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.plugins')}</h2>
           <table class="plugins">
@@ -1471,18 +1480,26 @@
         $('about-upd').textContent = r?.upToDate ? t('settings.upToDate') : t('settings.updateAvailable');
       };
 
-      // settings nav click -> scroll to section
-      const navBtns = document.querySelectorAll('#settings-nav button');
-      const secMap = { ui: 0, notify: 1, model: 2, func: 3 };
-      navBtns.forEach((btn) => {
-        btn.onclick = () => {
-          navBtns.forEach((b) => b.classList.remove('on'));
-          btn.classList.add('on');
-          const secIdx = secMap[btn.dataset.sec];
-          const secs = document.querySelectorAll('#settings-content .set-section:not(.set-card) h2');
-          if (secs[secIdx]) secs[secIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // 设置：第二列是菜单，第三列只显示对应板块
+      (function bindSettingsMenu() {
+        const contentEl = $('settings-content');
+        if (!contentEl) return;
+        const secIds = ['ui', 'notify', 'model', 'func'];
+        const groups = { ui: [], notify: [], model: [], func: [] };
+        let curSec = 'ui';
+        Array.from(contentEl.children).forEach((el) => {
+          const ds = el.getAttribute && el.getAttribute('data-sec');
+          if (ds) curSec = ds;
+          if (groups[curSec]) groups[curSec].push(el);
+        });
+        const navBtns = Array.from(document.querySelectorAll('#settings-nav button'));
+        const showSec = (s) => {
+          secIds.forEach((k) => groups[k].forEach((el) => { el.style.display = k === s ? '' : 'none'; }));
+          navBtns.forEach((b) => b.classList.toggle('on', b.dataset.sec === s));
         };
-      });
+        navBtns.forEach((btn) => { btn.onclick = () => showSec(btn.dataset.sec); });
+        showSec('ui');
+      })();
       $('sel-locale').onchange = async (e) => {
         await loadI18n(e.target.value);
         window.ccarmy.settingsSave({ locale: e.target.value });
@@ -1857,11 +1874,17 @@
     }
   });
   // 输入防抖：仅更新内部状态，不触发重渲染
+  const syncSendState = () => {
+    const btn = $('btn-send');
+    if (btn) btn.disabled = !($('input')?.value || '').trim();
+  };
   $('input')?.addEventListener('input', () => {
+    syncSendState();
     const now = Date.now();
     if (now - __inputThrottle < 100) return;
     __inputThrottle = now;
   });
+  syncSendState();
   // 紧急度下拉：悬停显框，点击展开
   (function bindUrgency() {
     const trigger = $('urg-trigger');

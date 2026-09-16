@@ -2,7 +2,7 @@
  * Electron 主进程 — 零原生模块
  * 注意：Windows 中文路径下 fork 子进程可能乱码，memory ipc 先拷到 userData（ASCII）
  */
-import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -1359,7 +1359,6 @@ ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: str
 // ── I. 全局热键 ──
 ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
   try {
-    const { globalShortcut } = require('electron');
     globalShortcut.unregister(accel);
     const ok = globalShortcut.register(accel, () => {
       if (!win) return;
@@ -1376,7 +1375,6 @@ ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
 // ── J. 托盘 ──
 let tray: import('electron').Tray | null = null;
 function createTray() {
-  const { Tray, Menu, nativeImage } = require('electron');
   if (tray) return;
   // 用真实 logo 生成托盘图标（16/32 均可，Windows 托盘实际显示 16px）
   const iconPath = path.join(__dirname, 'renderer', 'icons', 'logo-32.png');

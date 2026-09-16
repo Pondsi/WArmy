@@ -17,7 +17,8 @@
     "typecheck": "tsc -b --pretty",
     "start": "electron dist/electron-main.js",
     "dist": "electron-builder --config electron-builder.yml",
-    "clean": "rimraf dist *.tsbuildinfo"
+    "clean": "rimraf dist *.tsbuildinfo",
+    "dev": "node scripts/dev-restart.mjs"
   },
   "dependencies": {
     "@ccarmy/contracts": "workspace:*",
