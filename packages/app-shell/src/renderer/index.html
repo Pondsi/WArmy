@@ -119,12 +119,12 @@
                 </button>
                 <div class="urg-menu more-menu-panel hidden" id="more-menu" role="menu">
                   <button type="button" id="mi-search" data-i18n="list.search"></button>
-                  <label class="more-check"><input type="checkbox" id="mi-directed"/> <span data-i18n="group.directed"></span></label>
+                  <button type="button" id="mi-directed" class="more-menu-btn"><span data-i18n="group.directed"></span><span id="mi-directed-mark" class="mark">✕</span></button>
                   <button type="button" id="mi-open" data-i18n="chat.openWindow"></button>
                   <button type="button" id="mi-export" data-i18n="chat.export"></button>
                 </div>
               </div>
-              <button id="btn-stop-all" class="btn-stop" data-i18n="chat.stopAll" data-i18n-title="chat.stopAllTip"></button>
+              <button id="btn-stop-all" class="btn-stop-icon" data-i18n-title="chat.stopAllTip"><svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg></button>
             </div>
           </header>
           <div id="messages" class="messages"></div>

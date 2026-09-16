@@ -417,6 +417,8 @@ body.platform-darwin .tb-mac-extra {
   padding: 10px; font: inherit; outline: none; background: var(--input-bg);
 }
 .composer-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-top: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -844,7 +846,7 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .task-list li .dot.done { background: var(--accent); }
 .task-list li .dot.fail { background: var(--danger); }
 .task-list li .dot.active { background: #f5a623; }
-.task-list li.task-done { color: var(--muted); }
+.task-list li.task-done { color: var(--muted); text-decoration: line-through; }
 .task-list li.task-done .dot { background: var(--accent); }
 .task-list li.task-fail { color: var(--muted); }
 .task-list li.task-fail .dot { background: var(--danger); }
@@ -861,13 +863,14 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 /* 更多菜单边框 */
 .more-menu-panel {
-  min-width: 140px;
-  border: 1px solid var(--line);
+  min-width: 160px;
+  border: 1px solid var(--line) !important;
   border-radius: 10px;
   background: var(--card);
-  box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.16));
-  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  padding: 6px;
   z-index: 500;
+  overflow: visible !important;
 }
 .more-menu-panel button,
 .more-menu-panel label {

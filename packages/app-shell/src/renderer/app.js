@@ -1844,9 +1844,14 @@
     $('more-menu')?.classList.add('hidden');
     showSearchPopup();
   });
-  $('mi-directed')?.addEventListener('change', async (e) => {
-    if (!state.selectedChat) return;
-    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: e.target.checked }).catch(() => {});
+  let __directed = false;
+  $('mi-directed')?.addEventListener('click', async () => {
+    __directed = !__directed;
+    const mark = $('mi-directed-mark');
+    if (mark) mark.textContent = __directed ? '✓' : '✕';
+    if (state.selectedChat) {
+      await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: __directed }).catch(() => {});
+    }
   });
   $('mi-open')?.addEventListener('click', () => {
     $('more-menu')?.classList.add('hidden');
@@ -2334,7 +2339,7 @@
       badge.classList.toggle('hidden', n === 0);
     }
   }
-  setInterval(() => raf(refreshJoinBadge), 10000);
+  
   refreshJoinBadge();
 
   function showJoinRequestModal(req) {
@@ -2456,7 +2461,7 @@
   });
   $('list-search').addEventListener('input', () => renderList());
   $('btn-send').addEventListener('click', () => send());
-  $('btn-stop-all').addEventListener('click', () => stopAllAi());
+  $('btn-stop-all')?.addEventListener('click', () => stopAllAi());
   $('btn-attach').addEventListener('click', async () => {
     const r = await window.ccarmy.pickFile();
     if (r?.ok) {
@@ -2477,7 +2482,7 @@
       box.textContent = '¥' + c.estCostCny + ' · ' + c.promptTokens + ' in / ' + c.completionTokens + ' out · cache ' + ((c.cacheHitRate||0)*100).toFixed(1) + '%';
     }
   }
-  setInterval(() => raf(refreshCost), 10000);
+  
 
   async function refreshMetrics() {
     const box = $('metrics-box');
@@ -2579,7 +2584,7 @@
     $('member-name').value = '';
     refreshMembers();
   });
-  setInterval(() => raf(() => { refreshSessionBoard(); refreshMembers(); }), 10000);
+  
 
   // Q. 错误重试
   async function checkLastError() {
@@ -2595,7 +2600,7 @@
       }
     }
   }
-  setInterval(() => raf(checkLastError), 15000);
+  
 
   // R. 启动引导
   async function maybeShowSetup() {
@@ -2622,7 +2627,7 @@
     await window.ccarmy.executorsRunBrief({ brief, contextItems: [] });
     refreshExecutors();
   });
-  setInterval(() => raf(refreshExecutors), 12000);
+  
 
   $('btn-kb-go')?.addEventListener('click', async () => {
     const q = $('kb-q').value.trim();
@@ -2741,7 +2746,19 @@
     }
   } catch { /* noop */ }
 
-  setInterval(() => raf(refreshMetrics), 8000);
+  // 主刷新循环：合并所有定时刷新，降低频率
+  let __loopTick = 0;
+  setInterval(() => {
+    __loopTick++;
+    if (__loopTick % 2 === 0) raf(refreshMetrics);
+    if (__loopTick % 3 === 0) raf(refreshCost);
+    if (__loopTick % 4 === 0) raf(refreshExecutors);
+    if (__loopTick % 5 === 0) raf(() => { refreshSessionBoard(); refreshMembers(); });
+    if (__loopTick % 6 === 0) raf(checkLastError);
+    if (__loopTick % 8 === 0) raf(refreshJoinBadge);
+    if (__loopTick % 15 === 0) raf(saveState);
+  }, 5000);
+  const __mainLoop = true;
 
   (async () => {
     try {
@@ -2813,7 +2830,7 @@
       }).catch(() => {});
     };
     window.__saveState = saveState;
-    setInterval(() => raf(saveState), 30000);
+    
     setNav('singleAi');
     refreshMetrics();
     refreshExecutors();
