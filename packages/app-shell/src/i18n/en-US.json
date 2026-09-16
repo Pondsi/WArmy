@@ -371,5 +371,13 @@
   "ctx.runningTasks": "Running",
   "ctx.waitingTasks": "Waiting",
   "settings.emailNotify": "Email notifications",
-  "me.removeAvatarBtn": "Click avatar to change"
+  "me.removeAvatarBtn": "Click avatar to change",
+  "approval.title": "Approval",
+  "approval.hint": "This action needs authorization",
+  "approval.deny": "Deny",
+  "approval.once": "Allow once",
+  "approval.project": "Allow for project",
+  "approval.global": "Allow globally",
+  "knowledge.save": "Save to KB",
+  "cost.title": "Cost"
 }

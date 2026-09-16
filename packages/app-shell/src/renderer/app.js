@@ -632,22 +632,30 @@
     renderAttach();
     renderChat();
 
-    // 内部群走值班者编排 + LLM
+    // 内部群：值班编排闭环
     if (state.selectedChat.kind === 'internal') {
       try {
-        const r = await window.ccarmy.groupMessage({
+        const r = await window.ccarmy.groupOrchestrate({
           groupId: id,
           content: text,
           urgency: u,
         });
-        const duty = r?.duty ? ` · duty=${r.duty}` : '';
-        const reply = r?.reply || `[${u}] ${r?.action || 'ok'}${duty}`;
+        const reply = r?.reply || `[${u}] ${r?.action || 'ok'}`;
         pushMsg(id, 'them', reply);
+        if (r?.boardEvent) {
+          state.board = state.board || { sessions: [], events: [], recent: [] };
+          state.board.events = state.board.events || [];
+          state.board.events.unshift({ id: 'e' + Date.now(), ts: Date.now(), action: r.boardEvent.split(':')[0], title: r.boardEvent, session: id });
+        }
       } catch (e) {
         pushMsg(id, 'them', String(e.message || e));
       }
+      window.ccarmy.checkpointAuto?.('round_end');
       renderChat();
       flushQueue(id);
+      playNotifySound('complete');
+      refreshMetrics();
+      refreshCheckpoints();
       if (CHAT_NAVS.has(state.nav)) renderList();
       return;
     }
@@ -674,9 +682,12 @@
     } catch (e) {
       pushMsg(id, 'them', String(e.message || e));
     }
+    window.ccarmy.checkpointAuto?.('round_end');
     renderChat();
     flushQueue(id);
     playNotifySound('complete');
+    refreshMetrics();
+    refreshCheckpoints();
     if (CHAT_NAVS.has(state.nav)) renderList();
   }
 
@@ -1877,6 +1888,39 @@
   bindVerticalResizer('input-top-resizer', 'input', 'up');
 
   // ── 右键菜单 ──
+  // ── 3 权限审批弹窗 ──
+  function showApprovalDialog(payload) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = t('approval.title');
+      $('modal-body').innerHTML =
+        '<div style="margin-bottom:8px">' + escapeHtml(payload.action || '') + '</div>' +
+        '<div class="muted">' + t('approval.hint') + '</div>';
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const mk = (label, cls, fn) => {
+        const b = document.createElement('button');
+        b.className = cls;
+        b.textContent = label;
+        b.onclick = async () => {
+          root.classList.add('hidden');
+          await fn();
+        };
+        acts.appendChild(b);
+      };
+      mk(t('common.cancel'), 'btn-mini', () => resolve({ allowed: false, scope: 'deny' }));
+      mk(t('approval.deny'), 'btn-mini', () => resolve({ allowed: false, scope: 'deny' }));
+      mk(t('approval.once'), 'btn-primary', () => resolve({ allowed: true, scope: 'once' }));
+      mk(t('approval.project'), 'btn-mini', () => resolve({ allowed: true, scope: 'project' }));
+      mk(t('approval.global'), 'btn-mini', () => resolve({ allowed: true, scope: 'global' }));
+      root.classList.remove('hidden');
+    });
+  }
+  window.ccarmy.onApprovalRequest?.(async (d) => {
+    const r = await showApprovalDialog(d);
+    await window.ccarmy.approvalRespond(d.id, r.allowed, r.scope);
+  });
+
   function openContextMenu(x, y, items) {
     closeContextMenu();
     const el = document.createElement('div');
@@ -2120,6 +2164,10 @@
       const m = await window.ccarmy.metricsSummary();
       if (!m?.ok) return;
       box.textContent = `turns=${m.turns} · cache=${((m.cacheHitRate || 0) * 100).toFixed(1)}% · ccr=${((m.ccrRatio || 1) * 100).toFixed(0)}% · avg=${m.avgDurationMs}ms`;
+      const cost = await window.ccarmy.costSummary().catch(() => null);
+      if (cost?.ok) {
+        box.textContent += ` · ¥${cost.estCostCny}`;
+      }
     } catch {
       /* noop */
     }

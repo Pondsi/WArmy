@@ -371,5 +371,13 @@
   "ctx.runningTasks": "运行中任务",
   "ctx.waitingTasks": "等待中任务",
   "settings.emailNotify": "邮件通知",
-  "me.removeAvatarBtn": "仅点击头像即可更换"
+  "me.removeAvatarBtn": "仅点击头像即可更换",
+  "approval.title": "权限审批",
+  "approval.hint": "该操作需要授权，可选择允许范围",
+  "approval.deny": "拒绝",
+  "approval.once": "允许一次",
+  "approval.project": "本项目允许",
+  "approval.global": "全局允许",
+  "knowledge.save": "存入知识库",
+  "cost.title": "成本"
 }
