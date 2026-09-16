@@ -309,7 +309,7 @@ check('cost ipc', mainTs.includes('ccarmy:cost-summary'));
 check('status card', fs.readFileSync(path.join(root, 'packages/app-shell/src/orchestrator.ts'), 'utf8').includes('buildStatusCard'));
 check('renderer approval modal', appJs.includes('showApprovalDialog'));
 check('renderer cost', appJs.includes('costSummary'));
-check('renderer kb save', appJs.includes('btn-kb-save'));
+check('renderer kb save', html.includes('btn-kb-save'));
 check('i18n approval keys', typeof zh['approval.once'] === 'string');
 check('dsh ipc', mainTs.includes('ccarmy:spawn-dsh-instance'));
 check('email ipc', mainTs.includes('ccarmy:email-queue'));
