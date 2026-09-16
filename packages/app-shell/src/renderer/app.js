@@ -781,7 +781,17 @@
     };
     $('i-start').onclick = async () => {
       try {
-        await window.ccarmy.spawnInstance({ id: inst.id, name: inst.name, dutyEligible: true });
+        const dsh = await window.ccarmy.dshAvailable().catch(() => ({ ok: false }));
+        let r;
+        if (dsh?.ok) {
+          r = await window.ccarmy.spawnDshInstance({ id: inst.id, name: inst.name });
+        } else {
+          r = await window.ccarmy.spawnInstance({ id: inst.id, name: inst.name, dutyEligible: true });
+        }
+        if (r?.ok === false && r?.error) {
+          uiAlert(String(r.error));
+          return;
+        }
         inst.status = 'running';
         renderInstanceDetail();
         renderList();

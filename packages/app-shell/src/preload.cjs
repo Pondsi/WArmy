@@ -51,4 +51,8 @@ contextBridge.exposeInMainWorld('ccarmy', {
   inviteCreate: (groupId) => ipcRenderer.invoke('ccarmy:invite-create', groupId),
   syncPublish: (env) => ipcRenderer.invoke('ccarmy:sync-publish', env),
   syncPull: (nodeId) => ipcRenderer.invoke('ccarmy:sync-pull', nodeId),
+  dshAvailable: () => ipcRenderer.invoke('ccarmy:dsh-available'),
+  spawnDshInstance: (cfg) => ipcRenderer.invoke('ccarmy:spawn-dsh-instance', cfg),
+  emailQueue: (mail) => ipcRenderer.invoke('ccarmy:email-queue', mail),
+  emailList: () => ipcRenderer.invoke('ccarmy:email-list'),
 });

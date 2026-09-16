@@ -14,8 +14,13 @@ asar: true
 extraResources:
   - from: ../memory-os/dist
     to: memory-os/dist
+    filter:
+      - '**/*'
   - from: ../memory-os/package.json
     to: memory-os/package.json
+# better-sqlite3 需在 memory-os 的 node_modules，打包时由 asarUnpack/extraResources 另行拷贝
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
 win:
   target:
     - target: nsis

@@ -296,6 +296,11 @@ check('renderer saveVoice', appJs.includes('saveVoice'));
 check('renderer profileSave', appJs.includes('profileSave'));
 check('i18n metrics keys', typeof zh['metrics.title'] === 'string' && typeof en['metrics.title'] === 'string');
 check('i18n cp keys', typeof zh['cp.rollback'] === 'string');
+check('dsh ipc', mainTs.includes('ccarmy:spawn-dsh-instance'));
+check('email ipc', mainTs.includes('ccarmy:email-queue'));
+check('external silent policy', mainTs.includes("type === 'external'"));
+check('builder extraResources', fs.readFileSync(path.join(root, 'packages/app-shell/electron-builder.yml'), 'utf8').includes('memory-os/dist'));
+check('renderer spawnDsh', appJs.includes('spawnDshInstance'));
 
 const { MetricsCollector } = await import(
   toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'metrics.js'))

@@ -17,6 +17,7 @@ import { CheckpointStore } from './checkpoint.js';
 import { MetricsCollector } from './metrics.js';
 import { LocalAccountStore, SettingsStore } from './settings-store.js';
 import { NodeRegistry, SyncBus, createInvite, consumeInvite } from '@ccarmy/sync-protocol';
+import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@ccarmy/dsh-runtime';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bootLog = path.join(app.getPath('userData'), 'ccarmy-boot.log');
@@ -45,6 +46,7 @@ let accountStore: LocalAccountStore | null = null;
 let settingsStore: SettingsStore | null = null;
 let nodeReg: NodeRegistry | null = null;
 let syncBus: SyncBus | null = null;
+const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
 /** 会话消息历史（主进程侧） */
 const chatHistories = new Map<string, ChatMessage[]>();
 /** 运行中的插入指令级别 */
@@ -370,6 +372,12 @@ ipcMain.handle(
       timestamp: Date.now(),
     });
 
+    // 外部群：无 @ 静默（不变量：仅聊天）
+    const g = router.getGroup(msg.groupId);
+    if (g?.type === 'external' && route.action === 'silent') {
+      return { ok: true, action: 'silent', reason: route.reason, reply: null };
+    }
+
     // 值班者看板解析（仅 duty 写入）
     if (board && route.action !== 'silent') {
       const parsed = parseBoardCommand(msg.content, msg.groupId);
@@ -379,6 +387,19 @@ ipcMain.handle(
         } catch {
           /* ignore */
         }
+      }
+    }
+
+    // 请求时邮件提醒（队列占位）
+    if (settingsStore?.load().emailOnRequest) {
+      const profile = accountStore?.loadProfile();
+      if (profile?.email) {
+        emailQueue.push({
+          to: profile.email,
+          subject: `CCArmy request ${msg.groupId}`,
+          body: msg.content.slice(0, 500),
+          ts: Date.now(),
+        });
       }
     }
     try {
@@ -687,3 +708,47 @@ ipcMain.handle('ccarmy:sync-publish', (_e, env: { fromNode: string; toNode: stri
   envelope: syncBus?.publish(env as never),
 }));
 ipcMain.handle('ccarmy:sync-pull', (_e, nodeId: string) => ({ ok: true, messages: syncBus?.pull(nodeId) || [] }));
+
+// ── dsh 实例入口（可选） ──
+ipcMain.handle('ccarmy:dsh-available', () => {
+  const dir = findDshPackageDir([
+    path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
+    path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
+  ]);
+  return { ok: !!dir, dir: dir || null };
+});
+
+ipcMain.handle('ccarmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: string }) => {
+  const dshDir = findDshPackageDir([
+    path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
+    path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
+  ]);
+  if (!dshDir) return { ok: false, error: 'dsh not found' };
+  const dshHome = path.join(app.getPath('userData'), 'dsh-home');
+  const profile = 'ccarmy';
+  await ensureDshProfile({
+    nodePath: process.execPath,
+    dshPackageDir: dshDir,
+    dshHome,
+    profile,
+  });
+  const entry = path.join(app.getPath('userData'), 'instances', cfg.id, 'dsh-entry.mjs');
+  writeDshInstanceEntry(entry, { dshPackageDir: dshDir, dshHome, profile });
+  const handle = await p1!.instances.spawn({
+    config: {
+      id: cfg.id,
+      name: cfg.name,
+      workspace: path.join(app.getPath('userData'), 'instances', cfg.id),
+      dutyEligible: true,
+    },
+    entryScript: entry,
+  });
+  return { ok: true, handle };
+});
+
+// ── 邮件提醒（队列占位，功能待接 SMTP） ──
+ipcMain.handle('ccarmy:email-queue', (_e, mail: { to: string; subject: string; body: string }) => {
+  emailQueue.push({ ...mail, ts: Date.now() });
+  return { ok: true, pending: emailQueue.length };
+});
+ipcMain.handle('ccarmy:email-list', () => ({ ok: true, items: emailQueue }));
