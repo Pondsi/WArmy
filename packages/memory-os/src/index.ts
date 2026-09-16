@@ -260,3 +260,7 @@ export function startMemoryServiceIpc(dataDir: string): MemoryService {
   });
   return svc;
 }
+
+export * from "./migrate.js";
+export * from "./lock.js";
+export * from "./vectors.js";

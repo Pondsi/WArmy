@@ -352,6 +352,31 @@ check('renderer kb detail', appJs.includes('kbDetail'));
 check('renderer cost box', appJs.includes('cost-box'));
 check('html cost box', html.includes('cost-box'));
 check('html archived', appJs.includes('archived-box'));
+check('audit module', exists('packages', 'app-shell', 'dist', 'audit.js'));
+check('secure-keys module', exists('packages', 'app-shell', 'dist', 'secure-keys.js'));
+check('archive-cleanup module', exists('packages', 'app-shell', 'dist', 'archive-cleanup.js'));
+check('model-roles module', exists('packages', 'app-shell', 'dist', 'model-roles.js'));
+check('memory-os migrate', exists('packages', 'memory-os', 'dist', 'migrate.js'));
+check('memory-os lock', exists('packages', 'memory-os', 'dist', 'lock.js'));
+check('memory-os vectors', exists('packages', 'memory-os', 'dist', 'vectors.js'));
+check('audit ipc', mainTs.includes('ccarmy:audit-log'));
+check('safeStorage ipc', mainTs.includes('ccarmy:secure-key-save'));
+check('archive ipc', mainTs.includes('ccarmy:archive-external'));
+check('cleanup ipc', mainTs.includes('ccarmy:cleanup-run'));
+check('role-models ipc', mainTs.includes('ccarmy:role-models-set'));
+check('dissolve ipc', mainTs.includes('ccarmy:group-dissolve'));
+check('export-allowlist ipc', mainTs.includes('ccarmy:export-allowlist'));
+check('dsh-app protocol', mainTs.includes('dsh-app'));
+check('node binaries 5', [
+  'node-v24.20.0-win-x64.zip',
+  'node-v24.20.0-win-arm64.zip',
+  'node-v24.20.0-darwin-x64.tar.gz',
+  'node-v24.20.0-darwin-arm64.tar.gz',
+  'node-v24.20.0-linux-x64.tar.xz',
+].every((f) => exists('resources', 'node', f)));
+check('rrf fusion', fs.readFileSync(path.join(root, 'packages/memory-os/src/vectors.ts'), 'utf8').includes('rrfFusion'));
+check('swmr lock', fs.readFileSync(path.join(root, 'packages/memory-os/src/lock.ts'), 'utf8').includes('JsonlLock'));
+check('session v3', fs.readFileSync(path.join(root, 'packages/memory-os/src/migrate.ts'), 'utf8').includes('migrateSessionV2ToV3'));
 check('dsh ipc', mainTs.includes('ccarmy:spawn-dsh-instance'));
 check('email ipc', mainTs.includes('ccarmy:email-queue'));
 check('external silent policy', mainTs.includes("type === 'external'"));
