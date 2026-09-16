@@ -83,6 +83,15 @@
   };
 
   const t = (k) => state.t[k] || k;
+  /** 把下拉菜单 fixed 定位到触发按钮下方，避免被 overflow 裁切 */
+  function positionMenuFixed(trigger, menu) {
+    if (!trigger || !menu) return;
+    const r = trigger.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.left = Math.min(r.left, window.innerWidth - 180) + 'px';
+    menu.style.top = (r.bottom + 4) + 'px';
+    menu.style.zIndex = '500';
+  }
   let __rafThrottle = false;
   function raf(fn) {
     if (__rafThrottle) return;
@@ -1800,6 +1809,7 @@
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
       menu.classList.toggle('hidden');
+      if (!menu.classList.contains('hidden')) positionMenuFixed(trigger, menu);
     });
     document.addEventListener('click', () => menu.classList.add('hidden'));
 
@@ -1825,7 +1835,9 @@
   // 「…」更多菜单
   $('more-trigger')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    $('more-menu')?.classList.toggle('hidden');
+    const menu = $('more-menu');
+    menu?.classList.toggle('hidden');
+    if (menu && !menu.classList.contains('hidden')) positionMenuFixed($('more-trigger'), menu);
   });
   document.addEventListener('click', () => $('more-menu')?.classList.add('hidden'));
   $('mi-search')?.addEventListener('click', () => {
@@ -1908,6 +1920,7 @@
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
       menu.classList.toggle('hidden');
+      if (!menu.classList.contains('hidden')) positionMenuFixed(trigger, menu);
     });
     document.addEventListener('click', () => menu.classList.add('hidden'));
 
