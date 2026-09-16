@@ -36,6 +36,19 @@ boot(`main loaded dir=${__dirname}`);
 // 去掉 File/Edit/View/Window/Help 应用菜单
 Menu.setApplicationMenu(null);
 
+function loadMainStrings(locale: string | undefined): Record<string, string> {
+  const f = locale && locale.startsWith('zh') ? 'zh-CN' : 'en-US';
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'i18n', `${f}.json`), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+const MAIN_I18N = loadMainStrings(app.getLocale());
+function tMain(k: string, fallback = ''): string {
+  return MAIN_I18N[k] || fallback || k;
+}
+
 let win: BrowserWindow | null = null;
 let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
 let memory: MemoryClient | null = null;
@@ -445,7 +458,7 @@ ipcMain.handle(
             {
               role: 'system',
               content:
-                '你是 CCArmy 内部群的值班者。请用简短中文回复用户，并在需要时使用看板指令格式：新建任务:/完成/进度 标题:百分比。',
+                tMain('llm.dutySystem'),
             },
             ...hist.slice(-20),
           ],
@@ -551,7 +564,7 @@ ipcMain.handle(
     }
 
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
-      const reply = `[未配置 API Key] 已收到：${msg.content.slice(0, 80)}`;
+      const reply = tMain('llm.noKey') + msg.content.slice(0, 80);
       hist.push({ role: 'assistant', content: reply });
       chatHistories.set(sessionId, hist);
       return { ok: true, reply, usage: null, needsKey: true };
