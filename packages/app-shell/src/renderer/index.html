@@ -132,10 +132,17 @@
                   <button class="btn-icon" id="btn-shot" data-i18n-title="chat.screenshotTip">
                     <svg viewBox="0 0 1024 1024" class="ico"><path d="M334 111.6c0-24.6-20-44.4-44.4-44.4s-44.4 20-44.4 44.4v89H111.6c-24.6 0-44.4 20-44.4 44.4s20 44.4 44.4 44.4h623V690h89V245c0-24.6-20-44.4-44.4-44.4H334V111.6zM245 334v445c0 24.6 20 44.4 44.4 44.4h445v89c0 24.6 20 44.4 44.4 44.4s44.4-20 44.4-44.4v-89h89c24.6 0 44.4-20 44.4-44.4s-20-44.4-44.4-44.4H334V334h-89z"/></svg>
                   </button>
-                  <div class="urg-pills" id="urgency-bar" role="group">
-                    <button type="button" data-u="P1" data-i18n="urgency.urgentLabel"></button>
-                    <button type="button" class="on" data-u="P2" data-i18n="urgency.insertLabel"></button>
-                    <button type="button" data-u="P3" data-i18n="urgency.queueLabel"></button>
+                  <div class="urg-dd" id="urgency-dd">
+                    <button class="urg-trigger" id="urg-trigger" type="button" data-i18n-title="chat.urgency">
+                      <svg class="ico urgent-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8.5 4.9v9.8L12 21.6 3.5 16.7V6.9L12 2zm0 2.3L5.5 8v7.6L12 19.3l6.5-3.7V8L12 4.3zM11 8h2v5h-2V8zm0 6h2v2h-2v-2z"/></svg>
+                      <span id="urg-label" data-i18n="urgency.insertLabel"></span>
+                      <svg class="ico urg-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
+                    </button>
+                    <div class="urg-menu hidden" id="urg-menu" role="menu">
+                      <button type="button" data-u="P1" data-i18n="urgency.urgentLabel"></button>
+                      <button type="button" class="on" data-u="P2" data-i18n="urgency.insertLabel"></button>
+                      <button type="button" data-u="P3" data-i18n="urgency.queueLabel"></button>
+                    </div>
                   </div>
                 </div>
                 <div class="composer-send-row">

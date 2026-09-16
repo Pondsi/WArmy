@@ -246,6 +246,7 @@
     state.locale = pack.locale;
     state.t = pack.strings;
     if (pack.displayName) state.t['app.displayName'] = pack.displayName;
+    window.__refreshUrgency?.();
     const sel = $('session-sec');
     [...sel.options].forEach((o) => {
       const key = 'chat.security' + o.value.charAt(0).toUpperCase() + o.value.slice(1);
@@ -1345,17 +1346,48 @@
       send();
     }
   });
-  $('urgency-bar')?.addEventListener('click', async (e) => {
-    const b = e.target.closest('button[data-u]');
-    if (!b) return;
-    const u = b.dataset.u;
-    if (u === 'P1') {
-      const ok = await uiConfirmCountdown(t('urgency.confirmBody'), t('urgency.confirmTitle'), 5);
-      if (!ok) return;
+  // 紧急度下拉：悬停显框，点击展开
+  (function bindUrgency() {
+    const trigger = $('urg-trigger');
+    const menu = $('urg-menu');
+    const dd = $('urgency-dd');
+    const label = $('urg-label');
+    if (!trigger || !menu || !dd) return;
+
+    const LABELS = { P1: 'urgency.urgentLabel', P2: 'urgency.insertLabel', P3: 'urgency.queueLabel' };
+
+    function refresh() {
+      if (label) label.textContent = t(LABELS[state.urgency] || 'urgency.insertLabel');
+      dd.classList.toggle('urgent', state.urgency === 'P1');
+      menu.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.u === state.urgency));
     }
-    state.urgency = u;
-    $('urgency-bar').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-  });
+    refresh();
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => menu.classList.add('hidden'));
+
+    menu.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-u]');
+      if (!b) return;
+      const u = b.dataset.u;
+      if (u === 'P1') {
+        const ok = await uiConfirmCountdown(t('urgency.confirmBody'), t('urgency.confirmTitle'), 5);
+        if (!ok) {
+          menu.classList.add('hidden');
+          return;
+        }
+      }
+      state.urgency = u;
+      menu.classList.add('hidden');
+      refresh();
+    });
+
+    // 语言切换后刷新文案
+    window.__refreshUrgency = refresh;
+  })();
   $('btn-console')?.addEventListener('click', () => {
     state.consoleOpen = !state.consoleOpen;
     $('btn-console')?.classList.toggle('tb-on', state.consoleOpen);

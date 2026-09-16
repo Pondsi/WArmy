@@ -432,11 +432,59 @@ body.platform-darwin .tb-mac-extra {
 }
 .btn-icon:hover { background: var(--hover); color: var(--ink); }
 .btn-icon .ico { width: 22px; height: 22px; fill: currentColor; }
-.urg-sel {
-  border: 1px solid var(--line); border-radius: 8px;
-  background: var(--input-bg); color: var(--ink);
-  padding: 8px 10px; font: inherit; min-width: 110px;
+/* 紧急度：默认无框，悬停出外框，点击展开 */
+.urg-dd { position: relative; display: inline-flex; }
+.urg-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-base);
+  cursor: pointer;
+  transition: border-color .12s, background .12s, color .12s;
 }
+.urg-trigger:hover {
+  border-color: var(--line);
+  background: var(--hover);
+  color: var(--ink);
+}
+.urg-trigger:focus-visible { border-color: var(--line); }
+.urg-trigger .ico { width: 18px; height: 18px; fill: currentColor; }
+.urg-trigger .urg-chev { width: 14px; height: 14px; opacity: .7; }
+.urg-dd.urgent .urg-trigger { color: var(--danger); }
+.urg-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 132px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.16));
+  padding: 4px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+.urg-menu button {
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: var(--fs-base);
+  cursor: pointer;
+}
+.urg-menu button:hover { background: var(--hover); }
+.urg-menu button.on { color: var(--accent); font-weight: 600; }
+.urg-menu button[data-u="P1"].on { color: var(--danger); }
 .console-pane {
   display: flex; flex-direction: column;
   background: #1e1e1e; color: #d4d4d4;
