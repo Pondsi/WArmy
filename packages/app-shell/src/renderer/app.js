@@ -200,6 +200,8 @@
     });
     $('logo-name').textContent = displayName();
     $('logo-sub').textContent = t('app.subtitle');
+    if ($('tb-brand')) $('tb-brand').textContent = displayName();
+    if ($('tb-logo')) $('tb-logo').textContent = state.locale.startsWith('zh') ? '牛' : 'C';
     applyAvatar();
     document.title = displayName();
   }
