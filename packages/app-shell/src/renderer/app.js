@@ -1841,26 +1841,22 @@
   });
   document.addEventListener('click', () => $('more-menu')?.classList.add('hidden'));
   $('mi-search')?.addEventListener('click', () => {
-    const q = uiPromptSync(t('list.search'));
-    // 简化：聚焦搜索
-    $('list-search')?.focus();
+    $('more-menu')?.classList.add('hidden');
+    showSearchPopup();
   });
-  $('mi-directed')?.addEventListener('change', async () => {
+  $('mi-directed')?.addEventListener('change', async (e) => {
     if (!state.selectedChat) return;
-    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: true }).catch(() => {});
+    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: e.target.checked }).catch(() => {});
   });
   $('mi-open')?.addEventListener('click', () => {
+    $('more-menu')?.classList.add('hidden');
     if (!state.selectedChat) return;
-    window.ccarmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind });
+    // 子窗口：只有聊天+右栏
+    window.ccarmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind, mode: 'sub' });
   });
-  $('mi-export')?.addEventListener('click', async () => {
-    if (!state.selectedChat) return;
-    const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
-    const r = await window.ccarmy.exportSession({
-      title: state.selectedChat.name,
-      messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
-    });
-    uiAlert(r?.ok ? r.path : t('common.error'));
+  $('mi-export')?.addEventListener('click', () => {
+    $('more-menu')?.classList.add('hidden');
+    showExportDialog();
   });
 
   $('btn-console')?.addEventListener('click', () => {
@@ -2380,6 +2376,80 @@
     });
   });
 
+  // ── 进度折叠 ──
+  $('progress-toggle')?.addEventListener('click', () => {
+    $('progress-toggle')?.classList.toggle('open');
+    $('task-list')?.classList.toggle('hidden');
+  });
+
+  // ── only-group 显示/隐藏 ──
+  function updatePanelVisibility() {
+    const isGroup = state.selectedChat && (state.selectedChat.kind === 'internal' || state.selectedChat.kind === 'extgroup');
+    document.querySelectorAll('.only-group').forEach((el) => {
+      el.classList.toggle('hidden', !isGroup);
+    });
+  }
+
+  // ── 搜索浮窗 ──
+  function showSearchPopup() {
+    const root = $('modal-root');
+    $('modal-title').textContent = t('list.search');
+    $('modal-body').innerHTML = '<input id="search-popup-input" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px" placeholder="' + t('list.search') + '"/><div id="search-popup-results" class="muted" style="margin-top:8px;max-height:200px;overflow:auto"></div>';
+    const acts = $('modal-actions');
+    acts.innerHTML = '';
+    const close = document.createElement('button');
+    close.className = 'btn-mini';
+    close.textContent = t('common.close');
+    close.onclick = () => { root.classList.add('hidden'); };
+    acts.appendChild(close);
+    root.classList.remove('hidden');
+    const inp = $('search-popup-input');
+    inp?.focus();
+    let timer = null;
+    inp?.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const q = inp.value.trim();
+        if (!q) { $('search-popup-results').textContent = ''; return; }
+        const r = await window.ccarmy.searchMessages(q).catch(() => null);
+        const hits = r?.hits || [];
+        $('search-popup-results').innerHTML = hits.length
+          ? hits.map((x) => '<div style="padding:4px 0;border-bottom:1px solid var(--line)">' + escapeHtml(x.snippet) + '</div>').join('')
+          : t('list.empty');
+      }, 300);
+    });
+  }
+
+  // ── 导出弹窗 ──
+  function showExportDialog() {
+    const root = $('modal-root');
+    $('modal-title').textContent = t('chat.export');
+    $('modal-body').innerHTML =
+      '<div style="margin-bottom:8px">' + t('export.hint') + '</div>' +
+      '<div class="muted">' + t('export.include') + '</div>';
+    const acts = $('modal-actions');
+    acts.innerHTML = '';
+    const cancel = document.createElement('button');
+    cancel.className = 'btn-mini';
+    cancel.textContent = t('common.cancel');
+    cancel.onclick = () => { root.classList.add('hidden'); };
+    const ok = document.createElement('button');
+    ok.className = 'btn-primary';
+    ok.textContent = t('chat.export');
+    ok.onclick = async () => {
+      if (!state.selectedChat) { root.classList.add('hidden'); return; }
+      const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
+      const r = await window.ccarmy.exportSession({
+        title: state.selectedChat.name,
+        messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
+      });
+      root.classList.add('hidden');
+      uiAlert(r?.ok ? r.path : t('common.error'));
+    };
+    acts.append(cancel, ok);
+    root.classList.remove('hidden');
+  }
+
   // ── 顶层交互绑定（必须全局执行一次） ──
   document.querySelectorAll('.rail-item').forEach((el) => {
     el.onclick = () => setNav(el.dataset.nav);
@@ -2656,6 +2726,13 @@
   // 从 URL 参数自动打开会话（多窗口）
   try {
     const q = new URLSearchParams(window.location.search);
+    const mode = q.get('mode');
+    if (mode === 'sub') {
+      document.getElementById('titlebar')?.classList.add('hidden');
+      document.getElementById('rail')?.classList.add('hidden');
+      document.getElementById('list-col')?.classList.add('hidden');
+      document.getElementById('app-body')?.classList.add('hide-list');
+    }
     const cid = q.get('chatId');
     if (cid) {
       const title = q.get('chatTitle') || cid;

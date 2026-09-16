@@ -436,5 +436,8 @@
   "nav.addGroup": "Join group",
   "join.scanQr": "Scan to join",
   "archive.hint": "Archived conversations are hidden from the main list but data is kept. Restore or delete here. All conversations can be archived via right-click.",
-  "common.more": "More"
+  "common.more": "More",
+  "panel.directory": "Directory",
+  "export.hint": "Export the full chat history as a Markdown file.",
+  "export.include": "Includes: messages, roles, timestamps"
 }

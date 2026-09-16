@@ -436,5 +436,8 @@
   "nav.addGroup": "加入群聊",
   "join.scanQr": "扫码加入",
   "archive.hint": "归档后会话从主列表隐藏，但数据仍保留。可在此恢复或彻底删除。所有会话（项目/群聊/联系人/牛马）均可通过右键菜单归档。",
-  "common.more": "更多"
+  "common.more": "更多",
+  "panel.directory": "项目目录",
+  "export.hint": "将导出当前会话的完整聊天记录为 Markdown 文件。",
+  "export.include": "包含：消息内容、角色、时间戳"
 }

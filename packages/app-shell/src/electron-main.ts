@@ -1327,7 +1327,7 @@ ipcMain.handle('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; e
 
 // ── H. 多窗口：在新窗口打开会话 ──
 const chatWindows = new Map<string, BrowserWindow>();
-ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string }) => {
+ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string }) => {
   if (chatWindows.has(payload.id)) {
     chatWindows.get(payload.id)?.focus();
     return { ok: true };
@@ -1345,7 +1345,7 @@ ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: str
     },
   });
   void w.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
-    query: { chatId: payload.id, chatKind: payload.kind || 'single', chatTitle: payload.title || '' },
+    query: { chatId: payload.id, chatKind: payload.kind || 'single', chatTitle: payload.title || '', mode: payload.mode || 'full' },
   });
   w.on('closed', () => chatWindows.delete(payload.id));
   chatWindows.set(payload.id, w);

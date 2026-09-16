@@ -117,9 +117,9 @@
                 <button class="urg-trigger" id="more-trigger" type="button" data-i18n-title="common.more">
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
                 </button>
-                <div class="urg-menu hidden" id="more-menu" role="menu">
+                <div class="urg-menu more-menu-panel hidden" id="more-menu" role="menu">
                   <button type="button" id="mi-search" data-i18n="list.search"></button>
-                  <button type="button" id="mi-directed" data-i18n="group.directed"></button>
+                  <label class="more-check"><input type="checkbox" id="mi-directed"/> <span data-i18n="group.directed"></span></label>
                   <button type="button" id="mi-open" data-i18n="chat.openWindow"></button>
                   <button type="button" id="mi-export" data-i18n="chat.export"></button>
                 </div>
@@ -148,7 +148,7 @@
               <div class="composer-bar">
                 <div class="composer-left">
                   <button class="btn-icon" id="btn-attach" data-i18n-title="chat.attachTip">
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M8 3h7l5 5v13H8V3zm7 1.5V9h4.5L15 4.5z"/></svg>
+                    <svg viewBox="0 0 100 100" class="ico"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter"><path d="M22,24 L56,24 L70,38 L70,86 L22,86 Z"/><polyline points="56,24 56,38 70,38"/></g><g stroke="currentColor" stroke-width="8" stroke-linecap="square"><line x1="76" y1="14" x2="76" y2="30"/><line x1="68" y1="22" x2="84" y2="22"/></g></svg>
                   </button>
                   <button class="btn-icon" id="btn-shot" data-i18n-title="chat.screenshotTip">
                     <svg viewBox="0 0 1024 1024" class="ico"><path d="M334 111.6c0-24.6-20-44.4-44.4-44.4s-44.4 20-44.4 44.4v89H111.6c-24.6 0-44.4 20-44.4 44.4s20 44.4 44.4 44.4h623V690h89V245c0-24.6-20-44.4-44.4-44.4H334V111.6zM245 334v445c0 24.6 20 44.4 44.4 44.4h445v89c0 24.6 20 44.4 44.4 44.4s44.4-20 44.4-44.4v-89h89c24.6 0 44.4-20 44.4-44.4s-20-44.4-44.4-44.4H334V334h-89z"/></svg>
@@ -178,16 +178,32 @@
         </section>
         <aside id="panel-col">
           <div id="panel-resizer" title="拖动调整宽度"></div>
+
+          <!-- 进度（折叠：百分比条；展开：任务列表） -->
           <div class="panel-block">
-            <h3 data-i18n="checkpoints.title"></h3>
-            <div class="muted" id="cp-space"></div>
-            <div id="cp-detail-list" class="cp-list"></div>
+            <div class="panel-toggle" id="progress-toggle">
+              <span data-i18n="panel.progress"></span>
+              <div class="progress" style="flex:1;margin:0 8px"><div id="progress-bar" class="progress-bar" style="width:0%"></div></div>
+              <span id="progress-text" class="muted">0%</span>
+              <span class="chev">›</span>
+            </div>
+            <ul id="task-list" class="task-list hidden">
+              <li class="task-done">整理周报 <span class="dot done"></span></li>
+              <li class="task-fail">接口对接 <span class="dot fail"></span></li>
+              <li class="task-active">值班编排 <span class="dot active"></span></li>
+              <li>知识库归档 <span class="dot"></span></li>
+              <li class="task-abandoned">旧方案验证 <span class="dot fail"></span></li>
+            </ul>
           </div>
-          <div class="panel-block">
-            <h3 data-i18n="board.session"></h3>
-            <div id="board-sess-box" class="muted">—</div>
+
+          <!-- 项目目录（仅项目/群聊） -->
+          <div class="panel-block only-group">
+            <h3 data-i18n="panel.directory"></h3>
+            <div id="dir-box" class="muted">—</div>
           </div>
-          <div class="panel-block">
+
+          <!-- 成员（仅项目/群聊） -->
+          <div class="panel-block only-group">
             <h3 data-i18n="group.members"></h3>
             <div id="members-box" class="muted">—</div>
             <div style="margin-top:6px;display:flex;gap:6px">
@@ -195,10 +211,32 @@
               <button class="btn-mini" id="btn-member-add">+</button>
             </div>
           </div>
-          <div class="panel-block">
+
+          <!-- 值班者（仅项目/群聊） -->
+          <div class="panel-block only-group">
             <h3 data-i18n="panel.duty"></h3>
             <div id="duty-info" class="muted">—</div>
           </div>
+
+          <!-- 知识库 -->
+          <div class="panel-block">
+            <h3 data-i18n="knowledge.title"></h3>
+            <input id="kb-q" data-i18n-placeholder="knowledge.search" style="width:100%;margin-bottom:6px"/>
+            <div style="display:flex;gap:6px">
+              <button class="btn-mini" id="btn-kb-go" data-i18n="knowledge.search"></button>
+              <button class="btn-mini" id="btn-kb-save" data-i18n="knowledge.save"></button>
+            </div>
+            <div id="kb-out" class="muted" style="margin-top:8px;max-height:100px;overflow:auto"></div>
+          </div>
+
+          <!-- 回退点 -->
+          <div class="panel-block">
+            <h3 data-i18n="checkpoints.title"></h3>
+            <div class="muted" id="cp-space"></div>
+            <div id="cp-detail-list" class="cp-list"></div>
+          </div>
+
+          <!-- 执行者 -->
           <div class="panel-block">
             <h3 data-i18n="executors.title"></h3>
             <div id="exec-box" class="muted">—</div>
@@ -206,20 +244,15 @@
               <button class="btn-mini" id="btn-exec-run" data-i18n="executors.run"></button>
             </div>
           </div>
-          <div class="panel-block">
-            <h3 data-i18n="cost.title"></h3>
-            <div id="cost-box" class="muted">—</div>
-          </div>
+
+          <!-- 指标 + 成本 -->
           <div class="panel-block">
             <h3 data-i18n="metrics.title"></h3>
             <div id="metrics-box" class="muted">—</div>
           </div>
           <div class="panel-block">
-            <h3 data-i18n="knowledge.title"></h3>
-            <input id="kb-q" data-i18n-placeholder="knowledge.search" style="width:100%;margin-bottom:6px"/>
-            <button class="btn-mini" id="btn-kb-go" data-i18n="knowledge.search"></button>
-            <button class="btn-mini" id="btn-kb-save" data-i18n="knowledge.save"></button>
-            <div id="kb-out" class="muted" style="margin-top:8px;max-height:100px;overflow:auto"></div>
+            <h3 data-i18n="cost.title"></h3>
+            <div id="cost-box" class="muted">—</div>
           </div>
         </aside>
       </div>

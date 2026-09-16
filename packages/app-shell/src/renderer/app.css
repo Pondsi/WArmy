@@ -837,3 +837,49 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 .more-dd { position: relative; display: inline-flex; }
 .urg-trigger .ico { width: 18px; height: 18px; fill: currentColor; }
+
+/* 任务列表状态点 */
+.task-list li { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.task-list li .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex-shrink: 0; }
+.task-list li .dot.done { background: var(--accent); }
+.task-list li .dot.fail { background: var(--danger); }
+.task-list li .dot.active { background: #f5a623; }
+.task-list li.task-done { color: var(--muted); }
+.task-list li.task-done .dot { background: var(--accent); }
+.task-list li.task-fail { color: var(--muted); }
+.task-list li.task-fail .dot { background: var(--danger); }
+.task-list li.task-abandoned { color: var(--muted); text-decoration: line-through; }
+.task-list li.task-active .dot { background: #f5a623; }
+
+/* 面板折叠 */
+.panel-toggle {
+  display: flex; align-items: center; cursor: pointer;
+  padding: 4px 0; user-select: none;
+}
+.panel-toggle .chev { transition: transform 0.15s; color: var(--muted); }
+.panel-toggle.open .chev { transform: rotate(90deg); }
+
+/* 更多菜单边框 */
+.more-menu-panel {
+  min-width: 140px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.16));
+  padding: 4px;
+  z-index: 500;
+}
+.more-menu-panel button,
+.more-menu-panel label {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; border: none; background: transparent;
+  padding: 8px 12px; border-radius: 6px;
+  font: inherit; font-size: var(--fs-base); color: var(--ink);
+  cursor: pointer; text-align: left;
+}
+.more-menu-panel button:hover,
+.more-menu-panel label:hover { background: var(--hover); }
+.more-check { margin: 0; }
+
+/* only-group: 仅项目/群聊显示 */
+.only-group.hidden { display: none !important; }
