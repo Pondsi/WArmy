@@ -16,6 +16,7 @@
     "build": "tsc -b && node scripts/copy-assets.mjs",
     "typecheck": "tsc -b --pretty",
     "start": "electron dist/electron-main.js",
+    "dist": "electron-builder --config electron-builder.yml",
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
@@ -26,9 +27,11 @@
     "@ccarmy/group-router": "workspace:*",
     "@ccarmy/board": "workspace:*",
     "@ccarmy/ccr-compressor": "workspace:*",
-    "@ccarmy/knowledge-base": "workspace:*"
+    "@ccarmy/knowledge-base": "workspace:*",
+    "@ccarmy/sync-protocol": "workspace:*"
   },
   "devDependencies": {
-    "electron": "33.2.0"
+    "electron": "33.2.0",
+    "electron-builder": "25.1.8"
   }
 }

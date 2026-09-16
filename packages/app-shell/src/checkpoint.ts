@@ -1,6 +1,7 @@
 /**
- * 检查点 / 回退（简化实现：对话 JSONL 快照 + 工作区文件快照目录）
- * CoW 优先在有 reflink 时由上层增强；此处提供可移植 shadow 目录方案
+ * 检查点 / 回退
+ * CoW：优先 fs.copyFile 的 COPYFILE_FICLONE（APFS/BTRFS/XFS reflink）；
+ * 失败则回退普通拷贝（Windows 上无 reflink 时行为等价 shadow）
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,8 +12,38 @@ export interface Checkpoint {
   phase: 'round_start' | 'round_end';
   logSeq: number;
   createdAt: number;
-  /** shadow 目录相对路径 */
   dir: string;
+  strategy: 'cow' | 'shadow';
+}
+
+const FICLONE = 2; // fs.constants.COPYFILE_FICLONE
+
+function cowCopy(src: string, dest: string): 'cow' | 'shadow' {
+  try {
+    fs.copyFileSync(src, dest, FICLONE);
+    return 'cow';
+  } catch {
+    try {
+      fs.copyFileSync(src, dest);
+      return 'shadow';
+    } catch {
+      return 'shadow';
+    }
+  }
+}
+
+function cowCopyDir(src: string, dest: string): 'cow' | 'shadow' {
+  let mode: 'cow' | 'shadow' = 'cow';
+  fs.mkdirSync(dest, { recursive: true });
+  for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+    if (e.name === 'node_modules' || e.name === '.git') continue;
+    const s = path.join(src, e.name);
+    const d = path.join(dest, e.name);
+    if (e.isDirectory()) {
+      if (cowCopyDir(s, d) === 'shadow') mode = 'shadow';
+    } else if (cowCopy(s, d) === 'shadow') mode = 'shadow';
+  }
+  return mode;
 }
 
 export class CheckpointStore {
@@ -39,17 +70,23 @@ export class CheckpointStore {
     fs.writeFileSync(this.meta, JSON.stringify(this.items, null, 2));
   }
 
-  /** 创建检查点：复制 jsonl 与 workspace 快照 */
-  create(opts: { phase: 'round_start' | 'round_end'; logSeq: number; jsonlPath?: string; workspace?: string; limit?: number }): Checkpoint {
+  create(opts: {
+    phase: 'round_start' | 'round_end';
+    logSeq: number;
+    jsonlPath?: string;
+    workspace?: string;
+    limit?: number;
+  }): Checkpoint {
     const id = `cp-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
     const dir = path.join('shadows', id);
     const abs = path.join(this.root, dir);
     fs.mkdirSync(abs, { recursive: true });
+    let strategy: 'cow' | 'shadow' = 'cow';
     if (opts.jsonlPath && fs.existsSync(opts.jsonlPath)) {
-      fs.copyFileSync(opts.jsonlPath, path.join(abs, 'fast-memory.jsonl'));
+      if (cowCopy(opts.jsonlPath, path.join(abs, 'fast-memory.jsonl')) === 'shadow') strategy = 'shadow';
     }
     if (opts.workspace && fs.existsSync(opts.workspace)) {
-      copyDirLite(opts.workspace, path.join(abs, 'workspace'));
+      if (cowCopyDir(opts.workspace, path.join(abs, 'workspace')) === 'shadow') strategy = 'shadow';
     }
     const cp: Checkpoint = {
       id,
@@ -57,6 +94,7 @@ export class CheckpointStore {
       logSeq: opts.logSeq,
       createdAt: Date.now(),
       dir,
+      strategy,
     };
     this.items.push(cp);
     const limit = opts.limit ?? 50;
@@ -72,7 +110,6 @@ export class CheckpointStore {
     return [...this.items].reverse();
   }
 
-  /** 回退：还原 jsonl 与 workspace */
   rollback(id: string, targets: { jsonlPath?: string; workspace?: string }): boolean {
     const cp = this.items.find((x) => x.id === id);
     if (!cp) return false;
@@ -85,20 +122,9 @@ export class CheckpointStore {
       const src = path.join(abs, 'workspace');
       if (fs.existsSync(src)) {
         fs.rmSync(targets.workspace, { recursive: true, force: true });
-        copyDirLite(src, targets.workspace);
+        cowCopyDir(src, targets.workspace);
       }
     }
     return true;
-  }
-}
-
-function copyDirLite(src: string, dest: string) {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const e of fs.readdirSync(src, { withFileTypes: true })) {
-    if (e.name === 'node_modules' || e.name === '.git') continue;
-    const s = path.join(src, e.name);
-    const d = path.join(dest, e.name);
-    if (e.isDirectory()) copyDirLite(s, d);
-    else fs.copyFileSync(s, d);
   }
 }

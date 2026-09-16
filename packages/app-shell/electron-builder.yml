@@ -1,0 +1,37 @@
+appId: com.pondsi.ccarmy
+productName: CCArmy
+copyright: Copyright © Pondsi
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+  - "!**/*.map"
+  - "!**/node_modules/**"
+asar: true
+# 零原生模块主进程；better-sqlite3 仅在 memory 子进程，打包时用 extraResources
+extraResources:
+  - from: ../memory-os/dist
+    to: memory-os/dist
+  - from: ../memory-os/package.json
+    to: memory-os/package.json
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+linux:
+  target:
+    - AppImage
+    - deb
+# 发布：electron-updater 差分由 CI 生成 blockmap
+publish: null

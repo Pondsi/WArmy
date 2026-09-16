@@ -15,6 +15,7 @@
     { "path": "../group-router" },
     { "path": "../board" },
     { "path": "../ccr-compressor" },
-    { "path": "../knowledge-base" }
+    { "path": "../knowledge-base" },
+    { "path": "../sync-protocol" }
   ]
 }

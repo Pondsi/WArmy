@@ -872,6 +872,11 @@
         state.profile.email = $('p-email').value.trim();
         applyAvatar();
         $('p-name-display').textContent = state.profile.username;
+        window.ccarmy.profileSave({
+          username: state.profile.username,
+          email: state.profile.email,
+          avatarDataUrl: state.profile.avatarDataUrl,
+        });
         uiAlert(t('instances.saved'));
       };
       renderDashboard($('dash-host'));
@@ -963,11 +968,13 @@
 
       $('sel-locale').onchange = async (e) => {
         await loadI18n(e.target.value);
+        window.ccarmy.settingsSave({ locale: e.target.value });
         setNav('settings');
       };
       document.querySelectorAll('.theme-mode button').forEach((b) => {
         b.onclick = () => {
           applyThemeMode(b.dataset.m);
+          window.ccarmy.settingsSave({ themeMode: b.dataset.m });
           renderPage();
         };
       });
@@ -977,6 +984,7 @@
           state.theme = b.dataset.c;
           document.documentElement.style.setProperty('--accent', state.theme);
           document.documentElement.style.setProperty('--me-bubble', state.theme);
+          window.ccarmy.settingsSave({ accent: state.theme });
           renderPage();
         };
       });
@@ -1218,8 +1226,31 @@
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('no');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((tr) => tr.stop());
-      uiAlert(t('chat.voice') + ' · OK');
+      const rec = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const chunks = [];
+      rec.ondataavailable = (e) => chunks.push(e.data);
+      rec.onstop = async () => {
+        stream.getTracks().forEach((tr) => tr.stop());
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const buf = await blob.arrayBuffer();
+        let bin = '';
+        const bytes = new Uint8Array(buf);
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+          bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        }
+        const dataUrl = 'data:audio/webm;base64,' + btoa(bin);
+        const r = await window.ccarmy.saveVoice({ dataUrl, ext: 'webm' });
+        if (r?.ok && state.selectedChat) {
+          pushMsg(state.selectedChat.id, 'me', `[${t('chat.voice')}] ${r.path.split(/[\\/]/).pop()}`);
+          renderChat();
+        } else {
+          uiAlert(t('chat.voiceUnsupported'));
+        }
+      };
+      rec.start();
+      uiAlert(t('chat.voice') + '…').then(() => {
+        setTimeout(() => rec.stop(), 1200);
+      });
     } catch {
       uiAlert(t('chat.voiceUnsupported'));
     }
@@ -1255,6 +1286,59 @@
   bindResizer($('col-resizer'), '--list-w', 200, 420);
   bindResizer($('panel-resizer'), '--panel-w', 220, 480);
 
+  async function refreshMetrics() {
+    const box = $('metrics-box');
+    if (!box) return;
+    try {
+      const m = await window.ccarmy.metricsSummary();
+      if (!m?.ok) return;
+      box.textContent = `turns=${m.turns} · cache=${((m.cacheHitRate || 0) * 100).toFixed(1)}% · ccr=${((m.ccrRatio || 1) * 100).toFixed(0)}% · avg=${m.avgDurationMs}ms`;
+    } catch {
+      /* noop */
+    }
+  }
+
+  async function refreshCheckpoints() {
+    const ul = $('cp-list');
+    if (!ul) return;
+    const r = await window.ccarmy.checkpointList();
+    ul.innerHTML = (r?.list || [])
+      .slice(0, 8)
+      .map(
+        (c) =>
+          `<li>${c.phase} · ${c.strategy} · <button class="btn-mini" data-cp="${c.id}">${t('cp.rollback')}</button></li>`
+      )
+      .join('');
+    ul.querySelectorAll('[data-cp]').forEach((b) => {
+      b.onclick = async () => {
+        await window.ccarmy.checkpointRollback(b.dataset.cp);
+        uiAlert(t('instances.saved'));
+        refreshCheckpoints();
+      };
+    });
+  }
+
+  $('btn-cp-start')?.addEventListener('click', async () => {
+    await window.ccarmy.checkpointCreate('round_start');
+    refreshCheckpoints();
+  });
+  $('btn-cp-end')?.addEventListener('click', async () => {
+    await window.ccarmy.checkpointCreate('round_end');
+    refreshCheckpoints();
+  });
+  $('btn-cp-list')?.addEventListener('click', refreshCheckpoints);
+  $('btn-kb-go')?.addEventListener('click', async () => {
+    const q = $('kb-q').value.trim();
+    if (!q) return;
+    const r = await window.ccarmy.knowledgeQuery(q);
+    $('kb-out').textContent =
+      (r?.entities || []).map((e) => e.name).join(', ') +
+      ' | ' +
+      (r?.events || []).map((e) => e.title).join(', ');
+  });
+
+  setInterval(refreshMetrics, 5000);
+
   (async () => {
     try {
       await loadI18n(navigator.language.startsWith('zh') ? 'zh-CN' : 'en-US');
@@ -1263,9 +1347,30 @@
       state.t = { 'app.zhName': '无限牛马', 'app.enName': 'CCArmy', 'app.subtitle': 'Corporate Cattle Army', 'app.displayName': '无限牛马' };
       applyI18n();
     }
-    applyThemeMode('system');
     try {
-      state.globalSecurity = (await window.ccarmy.securityMode()) || 'normal';
+      const s = await window.ccarmy.settingsGet();
+      if (s?.settings) {
+        state.themeMode = s.settings.themeMode || 'system';
+        state.theme = s.settings.accent || state.theme;
+        state.sound = s.settings.sound || state.sound;
+        state.soundFiles = s.settings.soundFiles || state.soundFiles;
+        state.emailOnRequest = !!s.settings.emailOnRequest;
+        state.globalSecurity = s.settings.globalSecurity || 'normal';
+        document.documentElement.style.setProperty('--accent', state.theme);
+      }
+      const p = await window.ccarmy.profileGet();
+      if (p?.profile) {
+        state.profile.username = p.profile.username || state.profile.username;
+        state.profile.email = p.profile.email || '';
+        state.profile.avatarDataUrl = p.profile.avatarDataUrl || '';
+      }
+    } catch {
+      /* noop */
+    }
+    applyThemeMode(state.themeMode);
+    applyAvatar();
+    try {
+      state.globalSecurity = (await window.ccarmy.securityMode()) || state.globalSecurity;
       state.hardware = await window.ccarmy.hardware();
       state.instances = (await window.ccarmy.listInstances()) || [];
     } catch {
@@ -1285,5 +1390,6 @@
       ];
     }
     setNav('singleAi');
+    refreshMetrics();
   })();
 })();

@@ -14,6 +14,9 @@ import { createProviderFromPreset, type ChatMessage } from '@ccarmy/providers';
 import { CcrGateway } from '@ccarmy/ccr-compressor';
 import { KnowledgeBase } from '@ccarmy/knowledge-base';
 import { CheckpointStore } from './checkpoint.js';
+import { MetricsCollector } from './metrics.js';
+import { LocalAccountStore, SettingsStore } from './settings-store.js';
+import { NodeRegistry, SyncBus, createInvite, consumeInvite } from '@ccarmy/sync-protocol';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bootLog = path.join(app.getPath('userData'), 'ccarmy-boot.log');
@@ -37,6 +40,11 @@ let board: BoardStore | null = null;
 const ccr = new CcrGateway(4000);
 let knowledge: KnowledgeBase | null = null;
 let checkpoints: CheckpointStore | null = null;
+const metrics = new MetricsCollector();
+let accountStore: LocalAccountStore | null = null;
+let settingsStore: SettingsStore | null = null;
+let nodeReg: NodeRegistry | null = null;
+let syncBus: SyncBus | null = null;
 /** 会话消息历史（主进程侧） */
 const chatHistories = new Map<string, ChatMessage[]>();
 /** 运行中的插入指令级别 */
@@ -98,7 +106,14 @@ async function bootstrap() {
   board = new BoardStore(path.join(userData, 'board'));
   knowledge = new KnowledgeBase(path.join(userData, 'knowledge'));
   checkpoints = new CheckpointStore(path.join(userData, 'checkpoints'));
-  boot('board/knowledge/checkpoints ready');
+  accountStore = new LocalAccountStore(path.join(userData, 'profile.json'));
+  settingsStore = new SettingsStore(path.join(userData, 'settings.json'));
+  nodeReg = new NodeRegistry(path.join(userData, 'nodes.json'));
+  syncBus = new SyncBus(path.join(userData, 'bus'));
+  if (!nodeReg.list().some((n) => n.isLocal)) {
+    nodeReg.registerLocal('local');
+  }
+  boot('board/knowledge/checkpoints/account/settings/sync ready');
 }
 
 function startMemoryAsync() {
@@ -474,6 +489,12 @@ ipcMain.handle(
 
     // 写入侧 CCR
     const compressed = ccr.beforeLog({ kind: 'message', content: msg.content });
+    metrics.recordCcr({
+      ts: Date.now(),
+      kind: 'message',
+      originalBytes: compressed.originalBytes,
+      compressedBytes: compressed.compressedBytes,
+    });
     const userMsg: ChatMessage = { role: 'user', content: compressed.content };
     const hist = chatHistories.get(sessionId) || [];
     hist.push(userMsg);
@@ -499,6 +520,7 @@ ipcMain.handle(
       return { ok: true, reply, usage: null, needsKey: true };
     }
 
+    const t0 = Date.now();
     try {
       const provider = createProviderFromPreset(providerCfg.presetId, {
         apiKey: providerCfg.apiKey,
@@ -512,6 +534,17 @@ ipcMain.handle(
       const reply = resp.choices[0]?.message?.content || '';
       hist.push({ role: 'assistant', content: reply });
       chatHistories.set(sessionId, hist);
+      metrics.recordTurn({
+        sessionId,
+        ts: Date.now(),
+        promptTokens: resp.usage.promptTokens,
+        completionTokens: resp.usage.completionTokens,
+        cacheHitTokens: resp.usage.cacheHitTokens,
+        cacheMissTokens: resp.usage.cacheMissTokens,
+        durationMs: Date.now() - t0,
+        providerId: providerCfg.presetId,
+        model: msg.model || providerCfg.model,
+      });
       try {
         await memory?.append(
           { id: `a-${Date.now()}`, sessionId, kind: 'message', body: reply.slice(0, 4000) },
@@ -520,7 +553,6 @@ ipcMain.handle(
       } catch {
         /* optional */
       }
-      // 知识库：从回复抽取简单事件（可扩展）
       if (knowledge && reply.length > 0) {
         knowledge.upsertEntity({
           id: 'session-' + sessionId,
@@ -593,3 +625,65 @@ ipcMain.handle('ccarmy:get-insert-mode', (_e, sessionId: string) => ({
   ok: true,
   mode: insertMode.get(sessionId) || 'outer',
 }));
+
+// ── 指标 ──
+ipcMain.handle('ccarmy:metrics-summary', () => ({ ok: true, ...metrics.summary() }));
+ipcMain.handle('ccarmy:metrics-turns', () => ({ ok: true, turns: metrics.lastTurns(20) }));
+
+// ── 设置持久化 ──
+ipcMain.handle('ccarmy:settings-get', () => ({ ok: true, settings: settingsStore?.load() }));
+ipcMain.handle('ccarmy:settings-save', (_e, partial: Record<string, unknown>) => ({
+  ok: true,
+  settings: settingsStore?.save(partial as never),
+}));
+
+// ── 本地账号 ──
+ipcMain.handle('ccarmy:profile-get', () => ({ ok: true, profile: accountStore?.loadProfile() }));
+ipcMain.handle('ccarmy:profile-save', (_e, p: { username: string; email: string; avatarDataUrl?: string }) => {
+  const prev = accountStore?.loadProfile();
+  const next = { ...prev!, ...p };
+  return { ok: true, profile: accountStore?.saveProfile(next) };
+});
+ipcMain.handle('ccarmy:profile-set-password', (_e, pw: string) => {
+  accountStore?.setPassword(pw);
+  return { ok: true };
+});
+ipcMain.handle('ccarmy:profile-login', (_e, pw: string) => {
+  const r = accountStore?.loginLocal(pw) || { ok: false };
+  return r;
+});
+
+// ── 语音保存 ──
+ipcMain.handle('ccarmy:save-voice', async (_e, data: { dataUrl: string; ext?: string }) => {
+  try {
+    const dir = path.join(app.getPath('userData'), 'voice');
+    fs.mkdirSync(dir, { recursive: true });
+    const ext = (data.ext || 'webm').replace(/[^\w]/g, '');
+    const file = path.join(dir, `v-${Date.now()}.${ext}`);
+    const b64 = String(data.dataUrl).replace(/^data:[^,]+,/, '');
+    fs.writeFileSync(file, Buffer.from(b64, 'base64'));
+    return { ok: true, path: file };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+// ── 节点 / 邀请 ──
+ipcMain.handle('ccarmy:nodes-list', () => ({ ok: true, nodes: nodeReg?.list() || [] }));
+ipcMain.handle('ccarmy:nodes-pair', (_e, nodeId: string, name: string) => ({
+  ok: true,
+  node: nodeReg?.pairRemote(nodeId, name),
+}));
+ipcMain.handle('ccarmy:nodes-revoke', (_e, nodeId: string) => {
+  nodeReg?.revoke(nodeId);
+  return { ok: true };
+});
+ipcMain.handle('ccarmy:invite-create', (_e, groupId?: string) => ({ ok: true, invite: createInvite(15 * 60_000, groupId) }));
+ipcMain.handle('ccarmy:invite-use', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
+  ok: consumeInvite(tok),
+}));
+ipcMain.handle('ccarmy:sync-publish', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => ({
+  ok: true,
+  envelope: syncBus?.publish(env as never),
+}));
+ipcMain.handle('ccarmy:sync-pull', (_e, nodeId: string) => ({ ok: true, messages: syncBus?.pull(nodeId) || [] }));

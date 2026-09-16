@@ -121,6 +121,22 @@
             <h3 data-i18n="panel.queue"></h3>
             <ul id="queue-list" class="queue-list"></ul>
           </div>
+          <div class="panel-block">
+            <h3 data-i18n="metrics.title"></h3>
+            <div id="metrics-box" class="muted">—</div>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn-mini" id="btn-cp-start" data-i18n="cp.roundStart"></button>
+              <button class="btn-mini" id="btn-cp-end" data-i18n="cp.roundEnd"></button>
+              <button class="btn-mini" id="btn-cp-list" data-i18n="cp.list"></button>
+            </div>
+            <ul id="cp-list" class="queue-list" style="margin-top:8px;max-height:120px;overflow:auto"></ul>
+          </div>
+          <div class="panel-block">
+            <h3 data-i18n="knowledge.title"></h3>
+            <input id="kb-q" data-i18n-placeholder="knowledge.search" style="width:100%;margin-bottom:6px"/>
+            <button class="btn-mini" id="btn-kb-go" data-i18n="knowledge.search"></button>
+            <div id="kb-out" class="muted" style="margin-top:8px;max-height:120px;overflow:auto"></div>
+          </div>
         </aside>
       </div>
 

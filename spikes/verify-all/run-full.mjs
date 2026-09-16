@@ -278,6 +278,50 @@ check('no mirror in npmrc', (() => {
   return !n.includes('registry.npmmirror') && n.includes('save-exact');
 })());
 
+// 9. 后续交付项
+check('electron-builder config', exists('packages', 'app-shell', 'electron-builder.yml'));
+check('ci workflow', exists('.github', 'workflows', 'ci.yml'));
+check('metrics module', exists('packages', 'app-shell', 'dist', 'metrics.js'));
+check('checkpoint cow', fs.readFileSync(path.join(root, 'packages/app-shell/src/checkpoint.ts'), 'utf8').includes('COPYFILE_FICLONE'));
+check('settings store', exists('packages', 'app-shell', 'dist', 'settings-store.js'));
+check('save-voice ipc', mainTs.includes('ccarmy:save-voice'));
+check('metrics ipc', mainTs.includes('ccarmy:metrics-summary'));
+check('nodes ipc', mainTs.includes('ccarmy:nodes-list'));
+check('profile login ipc', mainTs.includes('ccarmy:profile-login'));
+check('settings persist ipc', mainTs.includes('ccarmy:settings-save'));
+check('renderer metrics panel', html.includes('metrics-box'));
+check('renderer checkpoint btns', html.includes('btn-cp-start'));
+check('renderer knowledge', html.includes('btn-kb-go'));
+check('renderer saveVoice', appJs.includes('saveVoice'));
+check('renderer profileSave', appJs.includes('profileSave'));
+check('i18n metrics keys', typeof zh['metrics.title'] === 'string' && typeof en['metrics.title'] === 'string');
+check('i18n cp keys', typeof zh['cp.rollback'] === 'string');
+
+const { MetricsCollector } = await import(
+  toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'metrics.js'))
+);
+const mc = new MetricsCollector();
+mc.recordTurn({
+  sessionId: 's', ts: Date.now(), promptTokens: 100, completionTokens: 10,
+  cacheHitTokens: 90, cacheMissTokens: 10, durationMs: 20, providerId: 'deepseek', model: 'deepseek-chat',
+});
+const sum = mc.summary();
+check('metrics cache rate', sum.cacheHitRate === 0.9 && sum.turns === 1, sum);
+
+const { LocalAccountStore, SettingsStore } = await import(
+  toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'settings-store.js'))
+);
+const accFile = path.join(os.tmpdir(), 'ccarmy-verify-acc.json');
+const acc = new LocalAccountStore(accFile);
+acc.setPassword('secret123');
+check('local login', acc.loginLocal('secret123').ok === true && acc.loginLocal('wrong').ok === false);
+fs.rmSync(accFile, { force: true });
+const setFile = path.join(os.tmpdir(), 'ccarmy-verify-set.json');
+const st = new SettingsStore(setFile);
+st.save({ themeMode: 'dark', accent: '#3d8bfd' });
+check('settings persist', st.load().themeMode === 'dark');
+fs.rmSync(setFile, { force: true });
+
 console.log('\n=== SUMMARY ===');
 console.log(`pass=${pass} fail=${fail}`);
 if (fails.length) {
