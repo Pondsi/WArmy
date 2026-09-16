@@ -616,10 +616,17 @@ ipcMain.handle('ccarmy:checkpoint-create', (_e, phase: 'round_start' | 'round_en
   return { ok: true, checkpoint: cp, list: checkpoints.list() };
 });
 
-ipcMain.handle('ccarmy:checkpoint-list', () => ({ ok: true, list: checkpoints?.list() || [] }));
+ipcMain.handle('ccarmy:checkpoint-list', () => ({
+  ok: true,
+  list: checkpoints?.list() || [],
+  space: checkpoints?.space() || { maxBytes: 512 * 1024 * 1024, usedBytes: 0, count: 0 },
+}));
 
-ipcMain.handle('ccarmy:checkpoint-rollback', (_e, id: string) => {
+ipcMain.handle('ccarmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: boolean }) => {
   if (!checkpoints) return { ok: false };
+  if (opts?.stopFirst) {
+    void p1?.instances.stopAll();
+  }
   const memDir = path.join(app.getPath('userData'), 'memory');
   const jsonl = path.join(memDir, 'fast-memory.jsonl');
   const ok = checkpoints.rollback(id, { jsonlPath: jsonl });

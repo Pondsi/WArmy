@@ -7,6 +7,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+export interface CheckpointDetail {
+  tasks: string[];
+  filesChanged: Array<{ path: string; ts: number }>;
+  filesCreated: Array<{ path: string; ts: number }>;
+  irreversible: string[];
+  assets: string[];
+}
+
 export interface Checkpoint {
   id: string;
   phase: 'round_start' | 'round_end';
@@ -14,6 +22,16 @@ export interface Checkpoint {
   createdAt: number;
   dir: string;
   strategy: 'cow' | 'shadow';
+  /** 人读摘要：几点几分、大致进行到哪一步 */
+  summary: string;
+  detail: CheckpointDetail;
+  bytes: number;
+}
+
+export interface CheckpointSpaceInfo {
+  maxBytes: number;
+  usedBytes: number;
+  count: number;
 }
 
 const FICLONE = 2; // fs.constants.COPYFILE_FICLONE
@@ -76,6 +94,9 @@ export class CheckpointStore {
     jsonlPath?: string;
     workspace?: string;
     limit?: number;
+    maxBytes?: number;
+    summary?: string;
+    detail?: Partial<CheckpointDetail>;
   }): Checkpoint {
     const id = `cp-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
     const dir = path.join('shadows', id);
@@ -88,13 +109,27 @@ export class CheckpointStore {
     if (opts.workspace && fs.existsSync(opts.workspace)) {
       if (cowCopyDir(opts.workspace, path.join(abs, 'workspace')) === 'shadow') strategy = 'shadow';
     }
+    const bytes = dirSize(abs);
+    const now = Date.now();
     const cp: Checkpoint = {
       id,
       phase: opts.phase,
       logSeq: opts.logSeq,
-      createdAt: Date.now(),
+      createdAt: now,
       dir,
       strategy,
+      summary:
+        opts.summary ||
+        `${new Date(now).toLocaleTimeString()} · ${opts.phase === 'round_start' ? '轮起' : '轮末'}`,
+      detail: {
+        tasks: [],
+        filesChanged: [],
+        filesCreated: [],
+        irreversible: [],
+        assets: [],
+        ...opts.detail,
+      },
+      bytes,
     };
     this.items.push(cp);
     const limit = opts.limit ?? 50;
@@ -102,8 +137,19 @@ export class CheckpointStore {
       const old = this.items.shift();
       if (old) fs.rmSync(path.join(this.root, old.dir), { recursive: true, force: true });
     }
+    // 容量：超出 maxBytes 删最早
+    const maxBytes = opts.maxBytes ?? 512 * 1024 * 1024;
+    while (this.space(maxBytes).usedBytes > maxBytes && this.items.length > 1) {
+      const old = this.items.shift();
+      if (old) fs.rmSync(path.join(this.root, old.dir), { recursive: true, force: true });
+    }
     this.save();
     return cp;
+  }
+
+  space(maxBytes = 512 * 1024 * 1024): CheckpointSpaceInfo {
+    const usedBytes = this.items.reduce((s, c) => s + (c.bytes || 0), 0);
+    return { maxBytes, usedBytes, count: this.items.length };
   }
 
   list(): Checkpoint[] {
@@ -127,4 +173,18 @@ export class CheckpointStore {
     }
     return true;
   }
+}
+
+function dirSize(dir: string): number {
+  let n = 0;
+  try {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) n += dirSize(p);
+      else n += fs.statSync(p).size;
+    }
+  } catch {
+    /* ignore */
+  }
+  return n;
 }

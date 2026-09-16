@@ -37,4 +37,5 @@ linux:
     - target: deb
       arch: [x64]
   artifactName: ${productName}-${version}-${arch}.${ext}
+# HarmonyOS：Electron 无官方目标；可后续走 ArkTS/WebView 壳或侧载 Linux 兼容层（待评估）
 publish: null

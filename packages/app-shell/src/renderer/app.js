@@ -19,6 +19,7 @@
     emailOnRequest: false,
     theme: '#07c160',
     themeMode: 'system',
+    consoleOpen: false,
     smtp: { host: '', port: 465, secure: true, user: '', pass: '' },
     smtpAccounts: [],
     embedUseGpu: true,
@@ -1008,10 +1009,15 @@
           <div class="muted" id="lan-inbox" style="margin-top:8px;max-height:100px;overflow:auto"></div>
         </div>
         <div class="set-section set-card">
-          <h2>${t('webgpu.title')}</h2>
+          <h2>${t('settings.embedding')}</h2>
+          <p class="muted">${t('settings.embeddingHint')}</p>
+          <div class="field" style="margin-bottom:8px">
+            <label>${t('settings.embeddingModel')}</label>
+            <input id="embed-model" value="${escapeHtml(state.embedModel || 'Xenova/bge-small-zh-v1.5')}"/>
+          </div>
           <label style="display:block;margin-bottom:8px">
             <input type="checkbox" id="embed-gpu" ${state.embedUseGpu !== false ? 'checked' : ''}/>
-            ${t('embed.useGpu')}
+            ${t('settings.embeddingGpu')}
           </label>
           <div class="muted">${t('embed.gpuHint')}</div>
           <div style="margin-top:8px">
@@ -1020,7 +1026,7 @@
           </div>
         </div>
         <div class="set-section set-card">
-          <h2>${t('lan.title')} · ${t('mesh.title')}</h2>
+          <h2>${t('mesh.title')}</h2>
           <p class="muted">${t('mesh.hint')}</p>
           <div class="inst-row">
             <div class="field"><label>${t('lan.port')}</label><input id="mesh-port" value="7788"/></div>
@@ -1041,8 +1047,6 @@
         <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
           <div class="muted">${t('about.version')} 0.1.0 · CCArmy · ${t('app.subtitle')}</div>
-          <div style="margin-top:8px"><button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
-          <span class="muted" id="about-upd"></span></div>
         </div>`;
 
       $('sel-locale').onchange = async (e) => {
@@ -1520,12 +1524,35 @@
       send();
     }
   });
-  $('urgency-bar').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-u]');
-    if (!b) return;
-    state.urgency = b.dataset.u;
-    $('urgency-bar').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  $('urgency-sel')?.addEventListener('change', (e) => {
+    state.urgency = e.target.value;
   });
+  $('btn-console')?.addEventListener('click', () => {
+    state.consoleOpen = !state.consoleOpen;
+    $('btn-console')?.classList.toggle('tb-on', state.consoleOpen);
+    $('console-pane')?.classList.toggle('hidden', !state.consoleOpen);
+    $('console-resizer')?.classList.toggle('hidden', !state.consoleOpen);
+    if (state.consoleOpen && $('console-out')) {
+      $('console-out').textContent = 'CCArmy console ready.\n' + new Date().toLocaleString() + '\n';
+    }
+  });
+  (function bindConsoleResize() {
+    const el = $('console-resizer');
+    const pane = $('console-pane');
+    if (!el || !pane) return;
+    let y0 = 0, h0 = 0, drag = false;
+    el.addEventListener('mousedown', (e) => {
+      drag = true; y0 = e.clientY; h0 = pane.getBoundingClientRect().height; e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!drag) return;
+      const h = Math.min(360, Math.max(80, h0 + (y0 - e.clientY)));
+      pane.style.maxHeight = h + 'px';
+      pane.style.height = h + 'px';
+    });
+    window.addEventListener('mouseup', () => { drag = false; });
+  })();
+  $('btn-shot')?.addEventListener('click', () => uiAlert(t('chat.screenshotPending')));
   $('session-sec').addEventListener('change', (e) => {
     if (!state.selectedChat) return;
     state.sessionSecurity[state.selectedChat.id] = e.target.value;
@@ -1578,19 +1605,49 @@
   }
 
   async function refreshCheckpoints() {
-    const ul = $('cp-list');
-    if (!ul) return;
+    const box = $('cp-detail-list') || $('cp-list');
+    const space = $('cp-space');
+    if (!box) return;
     const r = await window.ccarmy.checkpointList();
-    ul.innerHTML = (r?.list || [])
-      .slice(0, 8)
-      .map(
-        (c) =>
-          `<li>${c.phase} · ${c.strategy} · <button class="btn-mini" data-cp="${c.id}">${t('cp.rollback')}</button></li>`
-      )
+    const list = r?.list || [];
+    const maxMb = 50;
+    const usedMb = Math.min(maxMb, list.length * 0.5);
+    if (space) {
+      space.textContent = `${t('checkpoints.used')} ${usedMb.toFixed(1)}MB / ${t('checkpoints.max')} ${maxMb}MB`;
+    }
+    if (!list.length) {
+      box.innerHTML = `<div class="muted">${t('checkpoints.empty')}</div>`;
+      return;
+    }
+    const now = Date.now();
+    box.innerHTML = list
+      .slice(0, 12)
+      .map((c) => {
+        const d = new Date(c.createdAt);
+        const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const when = now - c.createdAt < 86400000 ? hm : d.toLocaleString();
+        return `<details class="cp-item" data-id="${c.id}">
+          <summary>${when} · ${c.phase} · ${c.strategy}</summary>
+          <div class="cp-body">
+            <div>${t('checkpoints.tasks')}: —</div>
+            <ul>
+              <li>${t('checkpoints.changed')}: fast-memory.jsonl</li>
+              <li>${t('checkpoints.created')}: ${c.dir}</li>
+              <li>${t('checkpoints.irreversible')}: —</li>
+              <li>${t('checkpoints.assets')}: —</li>
+            </ul>
+          </div>
+          <div class="cp-actions">
+            <button class="btn-mini" data-load="${c.id}">${t('checkpoints.stopAndLoad')}</button>
+          </div>
+        </details>`;
+      })
       .join('');
-    ul.querySelectorAll('[data-cp]').forEach((b) => {
+    box.querySelectorAll('[data-load]').forEach((b) => {
       b.onclick = async () => {
-        await window.ccarmy.checkpointRollback(b.dataset.cp);
+        const ok = await uiConfirm(t('checkpoints.confirmBody'), t('checkpoints.confirmTitle'));
+        if (!ok) return;
+        await window.ccarmy.checkpointRollback(b.dataset.load);
         uiAlert(t('instances.saved'));
         refreshCheckpoints();
       };
