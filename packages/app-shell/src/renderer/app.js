@@ -1322,6 +1322,7 @@
         </div>
         <div class="set-section set-card">
           <h2>${t('ctx.archive')}</h2>
+          <p class="muted">${t('archive.hint')}</p>
           <div id="archived-box" class="muted">—</div>
         </div>
         <div class="set-section set-card">
