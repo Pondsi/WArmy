@@ -379,5 +379,8 @@
   "approval.project": "本项目允许",
   "approval.global": "全局允许",
   "knowledge.save": "存入知识库",
-  "cost.title": "成本"
+  "cost.title": "成本",
+  "executors.title": "执行者",
+  "executors.run": "试运行",
+  "executors.none": "无运行中"
 }

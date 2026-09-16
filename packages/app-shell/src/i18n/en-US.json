@@ -379,5 +379,8 @@
   "approval.project": "Allow for project",
   "approval.global": "Allow globally",
   "knowledge.save": "Save to KB",
-  "cost.title": "Cost"
+  "cost.title": "Cost",
+  "executors.title": "Executors",
+  "executors.run": "Try run",
+  "executors.none": "None"
 }

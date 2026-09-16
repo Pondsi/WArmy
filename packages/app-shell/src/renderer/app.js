@@ -851,24 +851,14 @@
             <input type="checkbox" id="i-all-models" ${inst.allModels !== false ? 'checked' : ''}/> ${t('instances.allAvailable')}
           </label>
 
-          <div id="i-all-list" class="${inst.allModels !== false ? '' : 'hidden'}">
-            <div class="model-row">
-              ${state.providers.flatMap((p) => (p.models || []).map((m) => p.label + ' · ' + m))
-                .map((full) => '<span class="model-chip">' + escapeHtml(full) + '</span>')
-                .join('') || '<span class="muted">' + t('settings.modelsEmpty') + '</span>'}
-            </div>
-          </div>
-
           <div id="i-manual" class="${inst.allModels !== false ? 'hidden' : ''}">
-            <div class="field" style="margin-bottom:8px">
-              <label>${t('instances.manualAdd')}</label>
-            </div>
             <div style="display:grid;grid-template-columns:140px 1fr;gap:8px;max-width:520px">
               <select id="i-prov-pick" size="6">${state.providers.map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</option>').join('')}</select>
               <select id="i-model-pick" size="6"></select>
             </div>
-            <div style="margin-top:8px">
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
               <button class="btn-mini" id="i-add-model">${t('instances.addModel')}</button>
+              <button class="btn-mini" id="i-del-model">${t('settings.removeModel')}</button>
             </div>
           </div>
 
@@ -1009,19 +999,18 @@
       }
       renderChain();
 
-      // 全部可用：勾选 → 显示全部；取消 → 手动添加
+      // 全部可用：勾选时不显示模型列表；取消时进入手动添加
       if (allChk) {
         allChk.onchange = () => {
           inst2.allModels = allChk.checked;
-          allList?.classList.toggle('hidden', !allChk.checked);
           manual?.classList.toggle('hidden', allChk.checked);
           if (allChk.checked) {
             const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.label + ' · ' + m));
             inst2.availableModels = all;
             inst2.chain = [...all];
             renderChain();
-            renderPageCurrentInstanceOptions();
           }
+          updateAddDelState();
         };
       }
 
@@ -1032,30 +1021,61 @@
         modelPick.innerHTML = (p?.models || [])
           .map((m) => '<option value="' + escapeHtml(m) + '">' + escapeHtml(m) + '</option>')
           .join('');
+        updateAddDelState();
       }
+
+      function selectedFull() {
+        const p = state.providers.find((x) => x.id === provPick?.value);
+        const m = modelPick?.value;
+        if (!p || !m) return '';
+        return p.label + ' · ' + m;
+      }
+
+      function updateAddDelState() {
+        const full = selectedFull();
+        const inChain = full && (inst2.chain || []).includes(full);
+        const addBtn = $('i-add-model');
+        const delBtn = $('i-del-model');
+        if (addBtn) {
+          addBtn.disabled = !full || inChain;
+          addBtn.style.opacity = addBtn.disabled ? 0.45 : 1;
+        }
+        if (delBtn) {
+          delBtn.disabled = !full || !inChain;
+          delBtn.style.opacity = delBtn.disabled ? 0.45 : 1;
+        }
+      }
+
       if (provPick) {
         provPick.onchange = fillModels;
         fillModels();
       }
-      const addBtn = $('i-add-model');
-      if (addBtn) {
-        addBtn.onclick = () => {
-          const p = state.providers.find((x) => x.id === provPick.value);
-          const m = modelPick.value;
-          if (!p || !m) return;
-          const full = p.label + ' · ' + m;
-          inst2.availableModels = [...new Set([...(inst2.availableModels || []), full])];
-          inst2.chain = [...new Set([...(inst2.chain || []), full])];
-          const sel = $('i-default-model');
-          if (sel && ![...sel.options].some((o) => o.value === full)) {
-            const opt = document.createElement('option');
-            opt.value = full;
-            opt.textContent = full;
-            sel.appendChild(opt);
-          }
-          renderChain();
-        };
-      }
+      modelPick?.addEventListener('change', updateAddDelState);
+
+      $('i-add-model')?.addEventListener('click', () => {
+        const full = selectedFull();
+        if (!full) return;
+        inst2.availableModels = [...new Set([...(inst2.availableModels || []), full])];
+        inst2.chain = [...new Set([...(inst2.chain || []), full])];
+        const sel = $('i-default-model');
+        if (sel && ![...sel.options].some((o) => o.value === full)) {
+          const opt = document.createElement('option');
+          opt.value = full;
+          opt.textContent = full;
+          sel.appendChild(opt);
+        }
+        renderChain();
+        updateAddDelState();
+      });
+
+      $('i-del-model')?.addEventListener('click', () => {
+        const full = selectedFull();
+        if (!full) return;
+        inst2.chain = (inst2.chain || []).filter((x) => x !== full);
+        inst2.availableModels = (inst2.availableModels || []).filter((x) => x !== full);
+        renderChain();
+        updateAddDelState();
+      });
 
       if (defSel) {
         defSel.onchange = () => {
@@ -1509,7 +1529,10 @@
         const el = document.createElement('div');
         el.className = 'prov-card';
         el.innerHTML =
-          '<div class="prov-head">' + escapeHtml(pr.label) + '</div>' +
+          '<div class="prov-head" style="display:flex;justify-content:space-between;align-items:center">' +
+          '<span>' + escapeHtml(pr.label) + '</span>' +
+          '<button class="btn-mini" data-prov-del="' + escapeHtml(pr.id) + '" title="' + t('settings.pluginUninstall') + '">' + t('settings.pluginUninstall') + '</button>' +
+          '</div>' +
           '<div class="inst-row">' +
           '<div class="field"><label>' + t('settings.providerName') + '</label><input data-k="label" value="' + escapeHtml(pr.label) + '"/></div>' +
           '<div class="field"><label>' + t('settings.baseUrl') + '</label><input data-k="baseURL" value="' + escapeHtml(pr.baseURL) + '"/></div>' +
@@ -1561,6 +1584,11 @@
             renderPage();
           };
         });
+        el.querySelector('[data-prov-del]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          state.providers = state.providers.filter((x) => x.id !== pr.id);
+          renderPage();
+        });
         el.querySelectorAll('.model-chip').forEach((chip) => {
           chip.onclick = async () => {
             pr.defaultModel = chip.dataset.m;
@@ -1611,7 +1639,10 @@
         const dataUrl = 'data:audio/webm;base64,' + btoa(bin);
         const r = await window.ccarmy.saveVoice({ dataUrl, ext: 'webm' });
         if (r?.ok && state.selectedChat) {
-          pushMsg(state.selectedChat.id, 'me', `[${t('chat.voice')}] ${r.path.split(/[\\/]/).pop()}`);
+          // 尝试 ASR 转文字
+          const asr = await window.ccarmy.asrTranscribe({ dataUrl, ext: 'webm' }).catch(() => null);
+          const text = asr?.ok && asr.text ? asr.text : `[${t('chat.voice')}] ${r.path.split(/[\\/]/).pop()}`;
+          pushMsg(state.selectedChat.id, 'me', text);
           renderChat();
         } else {
           uiAlert(t('chat.voiceUnsupported'));
@@ -2198,12 +2229,12 @@
         return `<details class="cp-item" data-id="${c.id}">
           <summary>${when} · ${c.phase} · ${c.strategy}</summary>
           <div class="cp-body">
-            <div>${t('checkpoints.tasks')}: —</div>
+            <div>${t('checkpoints.tasks')}: ${escapeHtml(c.phase || '')}</div>
             <ul>
-              <li>${t('checkpoints.changed')}: fast-memory.jsonl</li>
-              <li>${t('checkpoints.created')}: ${c.dir}</li>
-              <li>${t('checkpoints.irreversible')}: —</li>
-              <li>${t('checkpoints.assets')}: —</li>
+              <li>${t('checkpoints.changed')}: ${escapeHtml((c.filesChanged || []).map((f) => f.path).join(', ') || '—')}</li>
+              <li>${t('checkpoints.created')}: ${escapeHtml((c.filesCreated || []).map((f) => f.path).join(', ') || c.dir)}</li>
+              <li>${t('checkpoints.irreversible')}: ${escapeHtml((c.irreversible || []).join(', ') || '—')}</li>
+              <li>${t('checkpoints.assets')}: ${escapeHtml((c.assets || []).join(', ') || '—')}</li>
             </ul>
           </div>
           <div class="cp-actions">
@@ -2232,6 +2263,22 @@
     refreshCheckpoints();
   });
   $('btn-cp-list')?.addEventListener('click', refreshCheckpoints);
+  async function refreshExecutors() {
+    const box = $('exec-box');
+    if (!box) return;
+    const r = await window.ccarmy.executorsStatus().catch(() => null);
+    const items = r?.items || [];
+    box.innerHTML = items.length
+      ? items.map((it) => '<div>' + escapeHtml(it.name) + ' · ' + it.status + ' · ' + it.durationMs + 'ms</div>').join('')
+      : '—';
+  }
+  $('btn-exec-run')?.addEventListener('click', async () => {
+    const brief = state.selectedChat?.name || 'run task';
+    await window.ccarmy.executorsRunBrief({ brief, contextItems: [] });
+    refreshExecutors();
+  });
+  setInterval(refreshExecutors, 8000);
+
   $('btn-kb-go')?.addEventListener('click', async () => {
     const q = $('kb-q').value.trim();
     if (!q) return;
@@ -2296,7 +2343,27 @@
         },
       ];
     }
+    // E. 加载持久化状态
+    try {
+      const st = await window.ccarmy.stateLoad();
+      if (st?.state) {
+        if (Array.isArray(st.state.plugins) && st.state.plugins.length) state.plugins = st.state.plugins;
+        if (Array.isArray(st.state.groups) && st.state.groups.length) state.groups = st.state.groups;
+        if (Array.isArray(st.state.chats) && st.state.chats.length) state.chats = st.state.chats;
+      }
+    } catch { /* noop */ }
+    // 变更时保存
+    const saveState = () => {
+      window.ccarmy.stateSave({
+        plugins: state.plugins,
+        groups: state.groups,
+        chats: state.chats,
+      }).catch(() => {});
+    };
+    window.__saveState = saveState;
+    setInterval(saveState, 15000);
     setNav('singleAi');
     refreshMetrics();
+    refreshExecutors();
   })();
 })();

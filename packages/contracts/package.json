@@ -1,4 +1,4 @@
-﻿{
+{
     "scripts":  {
                     "clean":  "rimraf dist *.tsbuildinfo",
                     "build":  "tsc -b",

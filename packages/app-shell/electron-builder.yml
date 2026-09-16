@@ -2,40 +2,60 @@ appId: com.pondsi.ccarmy
 productName: CCArmy
 copyright: Copyright © Pondsi
 directories:
-  output: release
+  output: ../../release
   buildResources: build
 files:
   - dist/**
   - package.json
   - "!**/*.map"
-asar: true
+  - "!**/node_modules/**"
+asar: false
+npmRebuild: false
+nodeGypRebuild: false
 extraResources:
   - from: ../memory-os/dist
     to: memory-os/dist
   - from: ../memory-os/package.json
     to: memory-os/package.json
-asarUnpack:
-  - "**/node_modules/better-sqlite3/**"
-win:
-  target:
-    - target: nsis
-      arch: [x64, arm64]
-  artifactName: ${productName}-${version}-${arch}-setup.${ext}
-nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
-mac:
-  category: public.app-category.productivity
-  target:
-    - target: dmg
-      arch: [x64, arm64]
-  artifactName: ${productName}-${version}-${arch}.${ext}
-linux:
-  target:
-    - target: AppImage
-      arch: [x64]
-    - target: deb
-      arch: [x64]
-  artifactName: ${productName}-${version}-${arch}.${ext}
-# HarmonyOS：Electron 无官方目标；可后续走 ArkTS/WebView 壳或侧载 Linux 兼容层（待评估）
-publish: null
+  - from: ../providers/dist
+    to: ccarmy/providers/dist
+  - from: ../providers/package.json
+    to: ccarmy/providers/package.json
+  - from: ../board/dist
+    to: ccarmy/board/dist
+  - from: ../board/package.json
+    to: ccarmy/board/package.json
+  - from: ../group-router/dist
+    to: ccarmy/group-router/dist
+  - from: ../group-router/package.json
+    to: ccarmy/group-router/package.json
+  - from: ../ccr-compressor/dist
+    to: ccarmy/ccr-compressor/dist
+  - from: ../ccr-compressor/package.json
+    to: ccarmy/ccr-compressor/package.json
+  - from: ../knowledge-base/dist
+    to: ccarmy/knowledge-base/dist
+  - from: ../knowledge-base/package.json
+    to: ccarmy/knowledge-base/package.json
+  - from: ../sync-protocol/dist
+    to: ccarmy/sync-protocol/dist
+  - from: ../sync-protocol/package.json
+    to: ccarmy/sync-protocol/package.json
+  - from: ../asset-governance/dist
+    to: ccarmy/asset-governance/dist
+  - from: ../asset-governance/package.json
+    to: ccarmy/asset-governance/package.json
+  - from: ../dsh-runtime/dist
+    to: ccarmy/dsh-runtime/dist
+  - from: ../dsh-runtime/package.json
+    to: ccarmy/dsh-runtime/package.json
+  - from: ../contracts/dist
+    to: ccarmy/contracts/dist
+  - from: ../contracts/package.json
+    to: ccarmy/contracts/package.json
+  - from: ../../node_modules/.pnpm
+    to: pnpm-store
+    filter:
+      - "**/better-sqlite3/**"
+      - "**/bindings/**"
+      - "**/file-uri-to-path/**"

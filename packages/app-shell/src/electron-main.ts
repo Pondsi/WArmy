@@ -129,6 +129,23 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
 async function bootstrap() {
   p1 = await createP1Runtime({
     instancesRoot: path.join(app.getPath('userData'), 'instances'),
+    onApprove: async (req) => {
+      // 安全模式 full 时自动放行；normal/strict 向渲染进程请求审批
+      const mode = p1?.security.getMode();
+      if (mode === 'full') return { action: req.action, scope: 'once', allowed: true };
+      const id = 'ap-' + ++approvalSeq;
+      return new Promise((resolve) => {
+        pendingApprovals.set(id, { resolve: resolve as never });
+        win?.webContents.send('ccarmy:approval-request', { id, action: req.action, suggested: req.suggested });
+        setTimeout(() => {
+          const p = pendingApprovals.get(id);
+          if (p) {
+            pendingApprovals.delete(id);
+            (p.resolve as (d: unknown) => void)({ allowed: false, scope: 'deny' });
+          }
+        }, 30000);
+      });
+    },
   });
   boot('p1 ready');
   const userData = app.getPath('userData');
@@ -1225,4 +1242,68 @@ ipcMain.handle('ccarmy:group-orchestrate', async (_e, msg: { groupId: string; co
   } catch { /* noop */ }
 
   return { ok: result.action !== 'error', ...result };
+});
+
+
+// ── C. 执行者状态 ──
+const executorStatus: Array<{ id: string; name: string; taskId: string; brief: string; status: string; durationMs: number; ts: number }> = [];
+ipcMain.handle('ccarmy:executors-status', () => ({ ok: true, items: executorStatus.slice(-10) }));
+ipcMain.handle('ccarmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
+  const ids = payload.executorIds?.length
+    ? payload.executorIds
+    : (p1?.instances.list() || []).filter((x) => x.status === 'running').map((x) => x.id).slice(0, 3);
+  const t0 = Date.now();
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      const item = { id, name: id, taskId: 't-' + Date.now(), brief: payload.brief, status: 'running', durationMs: 0, ts: Date.now() };
+      executorStatus.push(item);
+      const r = await runShortLivedExecutor(
+        { taskId: item.taskId, brief: payload.brief, contextItems: payload.contextItems || [] },
+        { presetId: providerCfg.presetId, apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL || undefined, model: providerCfg.model }
+      );
+      item.status = r.error ? 'error' : 'done';
+      item.durationMs = Date.now() - t0;
+      return r;
+    })
+  );
+  return { ok: true, results };
+});
+
+
+// ── E. 会话状态持久化 ──
+ipcMain.handle('ccarmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unknown[]; groups?: unknown[]; chats?: unknown[] }) => {
+  if (!settingsStore) return { ok: false };
+  const cur = settingsStore.load();
+  const next = { ...cur, ...state } as never;
+  settingsStore.save(next as never);
+  return { ok: true };
+});
+ipcMain.handle('ccarmy:state-load', () => {
+  const s = settingsStore?.load() as never;
+  return { ok: true, state: s || {} };
+});
+
+
+// ── D. ASR 语音转文字（调用 DeepSeek 兼容接口的 audio 端点；失败返回 null） ──
+ipcMain.handle('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
+  try {
+    if (!providerCfg.apiKey) return { ok: false, error: 'no key' };
+    // 优先走用户配置的 ASR 端点（若支持）；否则尝试 /audio/transcriptions
+    const base = (providerCfg.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '');
+    const b64 = String(payload.dataUrl).replace(/^data:[^,]+,/, '');
+    const buf = Buffer.from(b64, 'base64');
+    const form = new FormData();
+    form.append('file', new Blob([buf], { type: 'audio/webm' }), 'voice.webm');
+    form.append('model', 'whisper-1');
+    const res = await fetch(base + '/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + providerCfg.apiKey },
+      body: form,
+    });
+    if (!res.ok) return { ok: false, error: 'http ' + res.status };
+    const data = (await res.json()) as { text?: string };
+    return { ok: true, text: data.text || '' };
+  } catch (e) {
+    return { ok: false, error: String((e as Error).message || e) };
+  }
 });
