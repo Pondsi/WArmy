@@ -215,7 +215,7 @@ function createWindow() {
       backgroundThrottling: false,
       spellcheck: false,
     },
-    icon: path.join(__dirname, 'renderer', 'icons', 'block-256.png'),
+    icon: path.join(__dirname, 'renderer', 'icons', 'app-256.png'),
   });
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('ready-to-show', () => {
@@ -747,6 +747,90 @@ ipcMain.handle('ccarmy:settings-save', (_e, partial: Record<string, unknown>) =>
 }));
 
 // ── 本地账号 ──
+
+// ── 本地 SKILL：扫描 / 删除 ──
+function skillMdInfo(file: string): { name: string; description: string } {
+  let name = '';
+  let description = '';
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    const fm = raw.match(/^---\s*\n([\s\S]*?)\n---/);
+    const head = fm && fm[1] ? fm[1] : '';
+    if (head) {
+      const nm = head.match(/^\s*name\s*:\s*(.+)$/m);
+      const dm = head.match(/^\s*description\s*:\s*(.+)$/m);
+      if (nm && nm[1]) name = nm[1].trim().replace(/^["']|["']$/g, '');
+      if (dm && dm[1]) description = dm[1].trim().replace(/^["']|["']$/g, '');
+    }
+    if (!name) {
+      const h = raw.match(/^#\s+(.+)$/m);
+      if (h && h[1]) name = h[1].trim();
+    }
+    if (!description) {
+      const body = raw.replace(/^---[\s\S]*?---/, '').replace(/^#.*$/gm, '').trim();
+      description = (body.split(/\n\s*\n/)[0] || '').replace(/\s+/g, ' ').slice(0, 180);
+    }
+  } catch {
+    /* 忽略 */
+  }
+  return { name, description };
+}
+
+function skillRoots(): Array<{ root: string; source: string }> {
+  const roots: Array<{ root: string; source: string }> = [];
+  try {
+    roots.push({ root: path.join(app.getPath('userData'), 'skills'), source: 'userData' });
+  } catch {
+    /* 忽略 */
+  }
+  const local = path.join(process.cwd(), 'skills');
+  if (fs.existsSync(local)) roots.push({ root: local, source: 'workspace' });
+  return roots;
+}
+
+ipcMain.handle('ccarmy:skills-list', () => {
+  const skills: Array<Record<string, unknown>> = [];
+  for (const { root, source } of skillRoots()) {
+    if (!fs.existsSync(root)) continue;
+    let dirs: string[] = [];
+    try {
+      dirs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    } catch {
+      continue;
+    }
+    for (const d of dirs) {
+      const md = path.join(root, d, 'SKILL.md');
+      if (!fs.existsSync(md)) continue;
+      const info = skillMdInfo(md);
+      let mtime = 0;
+      try {
+        mtime = fs.statSync(md).mtimeMs;
+      } catch {
+        /* 忽略 */
+      }
+      skills.push({ id: d, name: info.name || d, description: info.description, source, mtime });
+    }
+  }
+  skills.sort((x, y) => Number(y.mtime || 0) - Number(x.mtime || 0));
+  return { ok: true, skills };
+});
+
+ipcMain.handle('ccarmy:skills-remove', (_e, id: string) => {
+  try {
+    for (const { root } of skillRoots()) {
+      const dir = path.resolve(root, String(id || ''));
+      // 防目录穿越：必须仍在该 root 之下
+      if (!dir.startsWith(path.resolve(root) + path.sep)) continue;
+      if (!fs.existsSync(dir)) continue;
+      fs.rmSync(dir, { recursive: true, force: true });
+      return { ok: true };
+    }
+    return { ok: false, error: 'skill not found' };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
 ipcMain.handle('ccarmy:profile-get', () => ({ ok: true, profile: accountStore?.loadProfile() }));
 // 读自家 package.json 的版本；dev 下 app.getVersion() 返回的是 Electron 版本，不可用
 function appVersion(): string {
@@ -1409,7 +1493,7 @@ let tray: import('electron').Tray | null = null;
 function createTray() {
   if (tray) return;
   // 用真实 logo 生成托盘图标（16/32 均可，Windows 托盘实际显示 16px）
-  const iconPath = path.join(__dirname, 'renderer', 'icons', 'block-32.png');
+  const iconPath = path.join(__dirname, 'renderer', 'icons', 'app-32.png');
   let img = nativeImage.createFromPath(iconPath);
   if (img.isEmpty()) {
     // 回退：16x16 占位

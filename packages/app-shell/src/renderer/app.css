@@ -301,6 +301,10 @@ body.platform-darwin .tb-mac-extra {
   background: var(--line); color: var(--muted);
   display: grid; place-items: center; font-weight: 600; flex-shrink: 0;
 }
+.list-item .av-img {
+  width: 40px; height: 40px; border-radius: 6px; object-fit: cover;
+  flex-shrink: 0; background: var(--hover); display: block;
+}
 .list-item .meta { min-width: 0; flex: 1; }
 .list-item .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list-item .sub {
@@ -524,7 +528,7 @@ body.platform-darwin .tb-mac-extra {
 .console-pane {
   display: flex; flex-direction: column;
   background: #1e1e1e; color: #d4d4d4;
-  border-radius: 8px; margin-bottom: 8px;
+  border-radius: 8px; margin-bottom: 0;
   min-height: 120px; max-height: 280px; overflow: hidden;
   font-family: var(--font-mono);
 }
@@ -537,8 +541,8 @@ body.platform-darwin .tb-mac-extra {
   font-size: 12px; line-height: 1.4; white-space: pre-wrap;
 }
 .console-resizer {
-  width: 100%; height: 6px; cursor: row-resize; margin-bottom: 6px;
-  background: transparent;
+  width: 100%; height: 10px; cursor: row-resize;
+  background: transparent; flex-shrink: 0; margin: 0;
 }
 .console-resizer:hover { background: var(--accent); opacity: .4; }
 #chat-layout.with-console { grid-template-columns: var(--console-w, 360px) 1fr 1fr; }
@@ -588,7 +592,7 @@ body.platform-darwin .tb-mac-extra {
   cursor: default; filter: none;
 }
 #input-top-resizer {
-  display: block; height: 6px; cursor: row-resize;
+  display: block; height: 10px; cursor: row-resize;
   background: transparent; flex-shrink: 0;
 }
 #input-top-resizer:hover { background: var(--accent); opacity: .35; }
@@ -697,7 +701,7 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 }
 .badge.off { background: var(--hover); color: var(--muted); }
 .plugin-desc { color: var(--muted); font-size: var(--fs-sm); margin-top: 4px; line-height: 1.4; }
-.theme-swatches { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.theme-swatches { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: center; }
 .theme-swatches button {
   width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
 }
@@ -986,8 +990,10 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
   background: var(--card);
   padding: 22px 8px 8px;
   display: flex; flex-direction: column; gap: 2px;
-  overflow: auto;
+  overflow: hidden;
+  position: relative;
 }
+
 .settings-nav button {
   display: flex; align-items: center; width: 100%;
   border: none; background: transparent; border-radius: 8px;
@@ -1052,7 +1058,7 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .avatar-choice.on { border-color: var(--accent); }
 
 /* ── 关于页 ── */
-.about-card { max-width: 720px; }
+.about-card { max-width: none; }
 .about-brand {
   display: flex; align-items: center; gap: 16px;
   padding-bottom: 14px; margin-bottom: 14px;
@@ -1073,3 +1079,81 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 }
 .about-block p { margin: 0; font-size: 13px; line-height: 1.7; }
 .about-actions { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* ── 控制台 / 输入区之间的间距与把手 ── */
+/* 控制台顶部把手：贴近控制台顶部 */
+#console-top-resizer { margin-bottom: 2px; }
+/* 输入区上沿把手：上下各重叠 5px，鼠标贴着聊天框上边缘就能拖 */
+.input-resizer { margin-top: -5px; margin-bottom: -5px; position: relative; z-index: 3; }
+/* 控制台与聊天框之间不再留白 */
+#console-pane { margin-bottom: 0; }
+
+/* ── 右侧「模型管理」 ── */
+.mgr-card { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; }
+.mgr-card[open] { background: var(--hover); }
+.mgr-card.readonly-panel { opacity: 0.5; }
+.mgr-card summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 9px; cursor: pointer; list-style: none;
+  font-size: var(--fs-sm); font-weight: 600;
+}
+.mgr-card summary::-webkit-details-marker { display: none; }
+.mgr-card .mgr-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mgr-card .mgr-ro {
+  font-size: 11px; font-weight: 400; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 5px;
+}
+.mgr-card .av-img.small { width: 22px; height: 22px; border-radius: 5px; }
+.mgr-body { padding: 0 9px 10px; }
+.mgr-lb { display: block; font-size: 11px; color: var(--muted); margin: 8px 0 4px; }
+.mgr-body select { width: 100%; }
+.mgr-models { display: flex; flex-wrap: wrap; gap: 4px; }
+.mgr-chain { list-style: none; margin: 0; padding: 0; }
+.mgr-chain li { display: flex; align-items: center; gap: 4px; margin: 3px 0; font-size: 12px; }
+.mgr-chain li > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mgr-chain .btn-mini { padding: 1px 6px; }
+
+/* ── 设置第二列：品牌水印（上移，底部留空） ── */
+.settings-nav::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 66px;
+  height: 160px; pointer-events: none;
+  background: url("./icons/logo-color.svg") no-repeat center bottom / 168px auto;
+  opacity: 0.26;
+}
+.settings-nav::before {
+  content: '无限牛马'; position: absolute; left: 0; right: 0; bottom: 46px;
+  text-align: center; font-size: 12px; font-weight: 600;
+  letter-spacing: 0.16em; color: var(--ink); opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ── 关于页：大 logo 展示 ── */
+.about-brand {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 18px 0 20px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.about-logo { width: 240px; height: 172px; object-fit: contain; }
+.about-brand-text { text-align: center; }
+.about-name { font-size: 22px; font-weight: 700; }
+
+/* ── 主题色：大色板 ── */
+.theme-swatches {
+  display: grid; grid-template-columns: repeat(12, 1fr);
+  gap: 6px; align-items: center;
+}
+.theme-swatches button {
+  width: 100%; aspect-ratio: 1 / 1; height: auto;
+  border-radius: 50%; padding: 0;
+}
+
+/* ── 本地 SKILL 列表 ── */
+.skill-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-top: 1px solid var(--line);
+}
+.skill-row:first-child { border-top: none; }
+.skill-main { flex: 1; min-width: 0; }
+.skill-name { font-size: 13px; font-weight: 600; }
+.skill-desc { font-size: 12px; line-height: 1.5; margin-top: 2px; }
+.skill-src { font-size: 11px; opacity: 0.75; margin-top: 2px; }

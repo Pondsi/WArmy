@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('ccarmy', {
   settingsSave: (partial) => ipcRenderer.invoke('ccarmy:settings-save', partial),
   profileGet: () => ipcRenderer.invoke('ccarmy:profile-get'),
   appInfo: () => ipcRenderer.invoke('ccarmy:app-info'),
+  skillsList: () => ipcRenderer.invoke('ccarmy:skills-list'),
+  skillsRemove: (id) => ipcRenderer.invoke('ccarmy:skills-remove', id),
   profileSave: (p) => ipcRenderer.invoke('ccarmy:profile-save', p),
   profileSetPassword: (pw) => ipcRenderer.invoke('ccarmy:profile-set-password', pw),
   profileLogin: (pw) => ipcRenderer.invoke('ccarmy:profile-login', pw),

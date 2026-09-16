@@ -21,6 +21,7 @@
     theme: '#07c160',
     themeMode: 'system',
     consoleOpen: false,
+    listSort: 'time',
     smtp: { host: '', port: 465, secure: true, user: '', pass: '' },
     smtpAccounts: [],
     embedUseGpu: true,
@@ -102,6 +103,9 @@
     menu.style.position = 'fixed';
     menu.style.left = Math.min(r.left, window.innerWidth - 180) + 'px';
     menu.style.top = (r.bottom + 4) + 'px';
+    // .urg-menu 的 CSS 带 bottom:calc(100% + 6px)，不清掉会与 top 冲突、菜单被拉出视口
+    menu.style.bottom = 'auto';
+    menu.style.right = 'auto';
     menu.style.zIndex = '500';
   }
   let __rafThrottle = false;
@@ -325,6 +329,35 @@
     }
   }
 
+  /** 主题色板：24 个色相 × 2 个明度 + 6 个灰阶 = 54 色 */
+  function accentPalette() {
+    const hslToHex = (h, s, l) => {
+      const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
+      const f = (n) => {
+        const k = (n + h / 30) % 12;
+        const v = l / 100 - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
+        return Math.round(255 * v).toString(16).padStart(2, '0');
+      };
+      return '#' + f(0) + f(8) + f(4);
+    };
+    const out = [];
+    for (let hue = 0; hue < 360; hue += 15) {
+      out.push(hslToHex(hue, 68, 52));
+      out.push(hslToHex(hue, 58, 36));
+    }
+    ['#000000', '#3a3a3a', '#6b6b6b', '#9a9a9a', '#c8c8c8', '#f0f0f0'].forEach((g) => out.push(g));
+    return out;
+  }
+
+  function renderThemeSwatches() {
+    const box = $('theme-swatches');
+    if (!box || box.dataset.filled === '1') return;
+    box.innerHTML = accentPalette()
+      .map((col) => `<button data-c="${col}" style="background:${col}" title="${col}"></button>`)
+      .join('');
+    box.dataset.filled = '1';
+  }
+
   function saveProfile() {
     window.ccarmy.profileSave({
       username: state.profile.username,
@@ -438,13 +471,13 @@
 
     $('logo-sub').textContent = t('app.subtitle');
 
-    // 「我的牛马」：只要没停在某个会话上，就自动打开第一个（会话为空时用实例兜底）
-    if (nav === 'singleAi') {
-      const items = singleChatItems();
+    // 四个列表页：只要没停在本栏的某个会话上，就自动打开第一个
+    if (nav === 'singleAi' || nav === 'internalGroup' || nav === 'externalGroup' || nav === 'externalChat') {
+      const items = listItemsFor(nav);
       const cur = state.selectedChat;
-      const stillHere = !!cur && cur.kind === 'single' && items.some((c) => c.id === cur.id);
+      const stillHere = !!cur && matchNav(cur, nav) && items.some((c) => c.id === cur.id);
       if (!stillHere && items.length) {
-        openChat('single', items[0].id, items[0].name);
+        openChat(items[0].kind, items[0].id, items[0].name);
         return;
       }
     }
@@ -462,10 +495,46 @@
   }
 
   /** 我的牛马候选列表：优先真实会话，没有会话时用实例兜底 */
+  /** 列表排序：按时间（默认，最近有消息在上）或按名称 */
+  function sortList(list) {
+    const arr = list.slice();
+    if (state.listSort === 'name') {
+      arr.sort((x, y) => String(x.name || '').localeCompare(String(y.name || ''), 'zh'));
+    } else {
+      arr.sort((x, y) => tsOfItem(y) - tsOfItem(x));
+    }
+    return arr;
+  }
+
+  /** 条目最近消息时间：优先自身 lastTs，否则查会话表 */
+  function tsOfItem(it) {
+    if (it.lastTs) return it.lastTs;
+    const c = state.chats.find((x) => x.id === it.id);
+    return c ? (c.lastTs || 0) : 0;
+  }
+
+  function setListSort(mode) {
+    state.listSort = mode;
+    renderList();
+    window.__saveState?.();
+  }
+
   function singleChatItems() {
     const chats = state.chats.filter((c) => c.kind === 'single');
     if (chats.length) return chats.slice().sort((x, y) => (y.lastTs || 0) - (x.lastTs || 0));
     return state.instances.map((i) => ({ id: i.id, name: i.name, kind: 'single', lastTs: 0 }));
+  }
+
+  /** 某个列表页的候选会话列表（用于自动打开第一个） */
+  function listItemsFor(nav) {
+    if (nav === 'singleAi') return singleChatItems();
+    if (nav === 'externalChat') {
+      return sortList(state.chats.filter((c) => c.kind === 'extdm'))
+        .map((c) => ({ id: c.id, name: c.name, kind: 'extdm' }));
+    }
+    const type = nav === 'internalGroup' ? 'internal' : 'external';
+    return sortList(state.groups.filter((g) => g.type === type))
+      .map((g) => ({ id: g.id, name: g.name, kind: g.type === 'internal' ? 'internal' : 'extgroup' }));
   }
 
   function matchNav(sel, nav) {
@@ -510,10 +579,11 @@
     }
   }
 
-  function row(name, sub, ch, onClick, active) {
+  function row(name, sub, ch, onClick, active, avatarSrc) {
     const el = document.createElement('div');
     el.className = 'list-item' + (active ? ' active' : '');
-    el.innerHTML = `<div class="av">${escapeHtml(ch || '?')}</div><div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
+    if (avatarSrc) el.dataset.av = '1';
+    el.innerHTML = `${avatarSrc ? `<img class="av-img" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}<div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
     el.title = `${name}\n${sub}`;
     el.onclick = onClick;
     return el;
@@ -547,19 +617,18 @@
               renderInstanceDetail();
               renderList();
             },
-            state.selectedInstance?.id === inst.id
+            state.selectedInstance?.id === inst.id,
+            instanceAvatarSrc(inst)
           );
-          bindRowContext(rowEl, () => agentMenu(inst, rowEl));
           box.appendChild(rowEl);
         });
       return;
     }
 
     if (state.nav === 'singleAi') {
-      const items = state.chats
+      const items = sortList(state.chats
         .filter((c) => c.kind === 'single')
-        .filter((c) => !q || c.name.toLowerCase().includes(q))
-        .sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0));
+        .filter((c) => !q || c.name.toLowerCase().includes(q)));
       const source = items.length
         ? items
         : state.instances.map((i) => ({ id: i.id, name: i.name, kind: 'single', lastPreview: t('list.noReply') }));
@@ -576,9 +645,17 @@
         return;
       }
       source.forEach((c) => {
-        const rowEl = row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('single', c.id, c.name), state.selectedChat?.id === c.id);
-        const inst = state.instances.find((x) => x.id === c.id) || { id: c.id, name: c.name, status: 'stopped', notify: true };
-        bindRowContext(rowEl, () => agentMenu(inst, rowEl));
+        const inst = state.instances.find((x) => x.id === c.id);
+        const rowEl = row(
+          c.name,
+          c.lastPreview || t('list.noReply'),
+          c.name[0],
+          () => openChat('single', c.id, c.name),
+          state.selectedChat?.id === c.id,
+          inst ? instanceAvatarSrc(inst) : null
+        );
+        const menuInst = inst || { id: c.id, name: c.name, status: 'stopped', notify: true };
+        bindRowContext(rowEl, () => agentMenu(menuInst, rowEl));
         box.appendChild(rowEl);
       });
       return;
@@ -586,7 +663,7 @@
 
     if (state.nav === 'internalGroup' || state.nav === 'externalGroup') {
       const type = state.nav === 'internalGroup' ? 'internal' : 'external';
-      const items = state.groups.filter((g) => g.type === type).filter((g) => !q || g.name.toLowerCase().includes(q));
+      const items = sortList(state.groups.filter((g) => g.type === type).filter((g) => !q || g.name.toLowerCase().includes(q)));
       if (!items.length) {
         box.innerHTML = `<div class="list-empty">${t('list.empty')}</div>`;
         return;
@@ -606,7 +683,7 @@
     }
 
     if (state.nav === 'externalChat') {
-      const items = state.chats.filter((c) => c.kind === 'extdm').filter((c) => !q || c.name.toLowerCase().includes(q));
+      const items = sortList(state.chats.filter((c) => c.kind === 'extdm').filter((c) => !q || c.name.toLowerCase().includes(q)));
       if (!items.length) {
         box.innerHTML = `<div class="list-empty">${t('list.empty')}</div>`;
         return;
@@ -632,6 +709,8 @@
     renderChat();
     renderQueueBar();
     renderList();
+    updatePanelVisibility();
+    renderModelMgr();
   }
 
   function renderChat() {
@@ -979,7 +1058,6 @@
           </button>
           <div style="flex:1">
             <div class="field"><label>${t('instances.name')}</label><input id="i-name" value="${escapeHtml(inst.name || '')}"/></div>
-            <div class="muted" style="margin-top:6px">${t('instances.avatarUpload')}</div>
           </div>
         </div>
 
@@ -991,10 +1069,9 @@
         </div>
         <div class="field" style="margin-top:12px">
           <label>${t('instances.persona')}</label>
-          <textarea id="i-persona" placeholder="${escapeHtml(t('instances.personaPlaceholder'))}" title="${escapeHtml(t('instances.memoryHint'))}">${escapeHtml(inst.persona || '')}</textarea>
-          <div class="muted">${t('instances.memoryHint')}</div>
+          <textarea id="i-persona" placeholder="${escapeHtml(t('instances.personaPlaceholder'))}">${escapeHtml(inst.persona || '')}</textarea>
         </div>
-        <div class="set-card" style="margin-top:14px" id="i-modelcfg">
+        <div class="set-card hidden" style="margin-top:14px" id="i-modelcfg">
           <h3 style="margin:0 0 10px;font-size:13px">${t('instances.defaultModel')}</h3>
           <div class="inst-row">
             <div class="field">
@@ -1120,6 +1197,7 @@
     })();
 
     (function bindModelConfig() {
+      if (!$('i-modelcfg') || $('i-modelcfg').classList.contains('hidden')) return;
       const inst2 = inst;
       if (!inst2.availableModels) inst2.availableModels = [];
       if (inst2.allModels === undefined) inst2.allModels = true;
@@ -1286,9 +1364,7 @@
     const box = $('page-body');
     if (state.nav === 'me') {
       const p = state.profile;
-      const avHtml = p.avatarDataUrl
-        ? `<img class="avatar-img big" src="${p.avatarDataUrl}" alt=""/>`
-        : `<div class="big-av">${escapeHtml((p.username || '?').slice(0, 1))}</div>`;
+      const avHtml = `<img class="avatar-img big" src="${personAvatarSrc(p)}" alt=""/>`;
       box.innerHTML = `
         <div class="brand-strip">
           <div class="brand-cow"><svg viewBox="0 0 140 100" style="width:48px;height:34px"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/></g></svg></div>
@@ -1394,21 +1470,7 @@
             <button data-m="system" class="${state.themeMode === 'system' ? 'on' : ''}">${t('settings.themeSystem')}</button>
           </div>
           <h2 style="margin-top:12px">${t('settings.theme')}</h2>
-          <div class="theme-swatches">
-            <button data-c="#07c160" style="background:#07c160"></button>
-            <button data-c="#3d8bfd" style="background:#3d8bfd"></button>
-            <button data-c="#b8860b" style="background:#b8860b"></button>
-            <button data-c="#c45c26" style="background:#c45c26"></button>
-          </div>
-        </div>
-        <div class="set-section set-card">
-          <h2>${t('settings.security')}</h2>
-          <select id="sel-sec" title="${escapeHtml(t('settings.securityHint'))}">
-            <option value="normal">${t('settings.securityNormal')}</option>
-            <option value="strict">${t('settings.securityStrict')}</option>
-            <option value="full">${t('settings.securityFull')}</option>
-          </select>
-          <p class="muted" style="margin:8px 0 0">${t('settings.securityHint')}</p>
+          <div class="theme-swatches" id="theme-swatches"></div>
         </div>
         <div class="set-section" data-sec="notify"><h2 style="color:var(--accent)">${t('settings.section.notify')}</h2></div>
         <div class="set-section set-card">
@@ -1443,6 +1505,11 @@
           </div>
         </div>
         <div class="set-section set-card">
+          <h2>${t('settings.skills')}</h2>
+          <p class="muted" style="margin:0 0 8px">${t('settings.skillsHint')}</p>
+          <div id="skill-list" class="muted">${t('settings.skillsEmpty')}</div>
+        </div>
+        <div class="set-section set-card">
           <h2>${t('smtp.title')} <span class="muted">(${t('smtp.count')} <span id="smtp-n">0</span>/10 · ${t('smtp.max10')})</span></h2>
           <p class="muted">${t('smtp.hint')}</p>
           <div id="smtp-accounts"></div>
@@ -1466,6 +1533,15 @@
           <button class="btn-mini" id="btn-add-prov">${t('settings.addProvider')}</button>
         </div>
         <div class="set-section" data-sec="func"><h2 style="color:var(--accent)">${t('settings.section.func')}</h2></div>
+        <div class="set-section set-card">
+          <h2>${t('settings.security')}</h2>
+          <select id="sel-sec" title="${escapeHtml(t('settings.securityHint'))}">
+            <option value="normal">${t('settings.securityNormal')}</option>
+            <option value="strict">${t('settings.securityStrict')}</option>
+            <option value="full">${t('settings.securityFull')}</option>
+          </select>
+          <p class="muted" style="margin:8px 0 0">${t('settings.securityHint')}</p>
+        </div>
         <div class="set-section set-card">
           <h2>${t('settings.plugins')}</h2>
           <table class="plugins">
@@ -1578,10 +1654,9 @@
         <div class="set-section" data-sec="about"><h2 style="color:var(--accent)">${t('settings.section.about')}</h2></div>
         <div class="set-section set-card about-card">
           <div class="about-brand">
-            <img class="about-logo" src="./icons/logo-128.png" alt="${escapeHtml(t('about.logoAlt'))}"/>
+            <img class="about-logo" src="./icons/logo-256.png" alt="${escapeHtml(t('about.logoAlt'))}"/>
             <div class="about-brand-text">
               <div class="about-name">无限牛马 <span class="about-en">CCArmy</span></div>
-              <div class="muted">${t('about.tagline')}</div>
               <div class="muted about-ver" id="about-version">—</div>
             </div>
           </div>
@@ -1653,6 +1728,8 @@
           renderPage();
         };
       });
+      renderThemeSwatches();
+      renderSkillList();
       document.querySelectorAll('.theme-swatches button').forEach((b) => {
         if (b.dataset.c === state.theme) b.classList.add('on');
         b.onclick = () => {
@@ -2585,6 +2662,17 @@
     });
   }
 
+  // 列表空白处右键：按时间 / 按名称排序（我的牛马、项目、联系人、群聊）
+  $('list-body')?.addEventListener('contextmenu', (e) => {
+    if (e.target.closest && e.target.closest('.list-item, .list-card, .enter-hq-wrap')) return;
+    if (!['singleAi', 'internalGroup', 'externalGroup', 'externalChat'].includes(state.nav)) return;
+    e.preventDefault();
+    openContextMenu(e.clientX, e.clientY, [
+      { label: t('list.sortByTime'), checked: state.listSort !== 'name', onClick: () => setListSort('time') },
+      { label: t('list.sortByName'), checked: state.listSort === 'name', onClick: () => setListSort('name') },
+    ]);
+  });
+
   // ── 加入请求处理 ──
   async function refreshJoinBadge() {
     const r = await window.ccarmy.joinPending().catch(() => null);
@@ -2648,6 +2736,129 @@
     const isGroup = state.selectedChat && (state.selectedChat.kind === 'internal' || state.selectedChat.kind === 'extgroup');
     document.querySelectorAll('.only-group').forEach((el) => {
       el.classList.toggle('hidden', !isGroup);
+    });
+  }
+
+  // ── 模型管理（会话右侧）──
+  let __mgrOpen = new Set();
+  function renderModelMgr() {
+    const box = $('model-mgr');
+    if (!box) return;
+    const sel = state.selectedChat;
+    if (!sel) {
+      box.innerHTML = '<div class="muted">' + t('panel.modelMgrEmpty') + '</div>';
+      return;
+    }
+    const isGroup = sel.kind === 'internal' || sel.kind === 'extgroup';
+    let entries = [];
+    if (isGroup) {
+      const g = state.groups.find((x) => x.id === sel.id);
+      const members = (g && g.members) || [];
+      entries = members.map((m) => {
+        const nm = typeof m === 'string' ? m : (m && (m.name || m.id)) || '';
+        const local = state.instances.find((i) => i.name === nm || i.id === nm);
+        return local
+          ? { inst: local, editable: true }
+          : { inst: { name: nm, availableModels: [], chain: [], defaultModel: '' }, editable: false };
+      });
+    } else {
+      const local =
+        state.instances.find((i) => i.id === sel.id) ||
+        state.instances.find((i) => i.name === sel.name);
+      if (local) entries = [{ inst: local, editable: true }];
+    }
+    if (!entries.length) {
+      box.innerHTML = '<div class="muted">' + t('panel.modelMgrEmpty') + '</div>';
+      return;
+    }
+    box.innerHTML = entries
+      .map((x, idx) => modelMgrCard(x.inst, x.editable, idx))
+      .join('');
+    bindModelMgr(entries);
+  }
+
+  function modelMgrCard(inst, editable, idx) {
+    const models = inst.availableModels || [];
+    const chain = (inst.chain && inst.chain.length) ? inst.chain : models;
+    const dis = editable ? '' : ' disabled';
+    const open = __mgrOpen.has(idx) ? ' open' : '';
+    return `<details class="mgr-card${editable ? '' : ' readonly-panel'}" data-mgidx="${idx}"${open}>
+      <summary>
+        <img class="av-img small" src="${escapeHtml(instanceAvatarSrc(inst))}" alt=""/>
+        <span class="mgr-name">${escapeHtml(inst.name || inst.id || '')}</span>
+        ${editable ? '' : '<span class="mgr-ro">' + t('panel.modelMgrReadonly') + '</span>'}
+      </summary>
+      <div class="mgr-body">
+        <label class="mgr-lb">${t('instances.defaultModel')}</label>
+        <select data-mg="default" data-i="${idx}"${dis}>
+          <option value="__smart__"${!inst.defaultModel ? ' selected' : ''}>${t('instances.smartPick')}</option>
+          ${models.map((m) => `<option value="${escapeHtml(m)}"${inst.defaultModel === m ? ' selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+        </select>
+        <label class="mgr-lb">${t('instances.availableModels')}</label>
+        <div class="mgr-models">${
+          models.length
+            ? models.map((m) => `<span class="model-chip">${escapeHtml(m)}${
+                editable ? `<button class="x" data-mgdel="${idx}" data-m="${escapeHtml(m)}" title="${t('settings.removeModel')}">×</button>` : ''
+              }</span>`).join('')
+            : '<span class="muted">' + t('settings.modelsEmpty') + '</span>'
+        }</div>
+        <label class="mgr-lb">${t('instances.fallbackChain')}</label>
+        <ol class="mgr-chain">${
+          chain.length
+            ? chain.map((m, k) => `<li><span>${escapeHtml(m)}</span>${
+                editable ? `<button class="btn-mini" data-mgup="${idx}" data-k="${k}" title="${t('instances.moveUp')}">↑</button><button class="btn-mini" data-mgdown="${idx}" data-k="${k}" title="${t('instances.moveDown')}">↓</button>` : ''
+              }</li>`).join('')
+            : '<li class="muted">—</li>'
+        }</ol>
+      </div>
+    </details>`;
+  }
+
+  function bindModelMgr(entries) {
+    const box = $('model-mgr');
+    if (!box) return;
+    box.querySelectorAll('details.mgr-card').forEach((d) => {
+      d.addEventListener('toggle', () => {
+        const i = Number(d.dataset.mgidx);
+        if (d.open) __mgrOpen.add(i);
+        else __mgrOpen.delete(i);
+      });
+    });
+    box.querySelectorAll('[data-mg="default"]').forEach((selEl) => {
+      selEl.onchange = () => {
+        const e = entries[Number(selEl.dataset.i)];
+        if (!e || !e.editable) return;
+        e.inst.defaultModel = selEl.value === '__smart__' ? '' : selEl.value;
+        window.__saveState?.();
+      };
+    });
+    box.querySelectorAll('[data-mgdel]').forEach((b) => {
+      b.onclick = () => {
+        const e = entries[Number(b.dataset.mgdel)];
+        if (!e || !e.editable) return;
+        const m = b.dataset.m;
+        e.inst.availableModels = (e.inst.availableModels || []).filter((x) => x !== m);
+        e.inst.chain = (e.inst.chain || []).filter((x) => x !== m);
+        renderModelMgr();
+        window.__saveState?.();
+      };
+    });
+    const move = (idx, k, dir) => {
+      const e = entries[idx];
+      if (!e || !e.editable) return;
+      const arr = e.inst.chain;
+      if (!arr) return;
+      const t2 = k + dir;
+      if (t2 < 0 || t2 >= arr.length) return;
+      [arr[k], arr[t2]] = [arr[t2], arr[k]];
+      renderModelMgr();
+      window.__saveState?.();
+    };
+    box.querySelectorAll('[data-mgup]').forEach((b) => {
+      b.onclick = () => move(Number(b.dataset.mgup), Number(b.dataset.k), -1);
+    });
+    box.querySelectorAll('[data-mgdown]').forEach((b) => {
+      b.onclick = () => move(Number(b.dataset.mgdown), Number(b.dataset.k), 1);
     });
   }
 
@@ -2824,6 +3035,45 @@
       ? tasks.map((t) => '<div>' + escapeHtml(t.title) + ' · ' + (t.progress || 0) + '% · ' + t.status + '</div>').join('')
       : '—';
   }
+  async function renderSkillList() {
+    const box = $('skill-list');
+    if (!box) return;
+    try {
+      const r = await window.ccarmy.skillsList();
+      const items = (r && r.skills) || [];
+      if (!items.length) {
+        box.className = 'muted';
+        box.textContent = t('settings.skillsEmpty');
+        return;
+      }
+      box.className = '';
+      box.innerHTML = items
+        .map(
+          (s) => `<div class="skill-row">
+            <div class="skill-main">
+              <div class="skill-name">${escapeHtml(s.name || s.id)}</div>
+              <div class="muted skill-desc">${escapeHtml(s.description || '—')}</div>
+              <div class="muted skill-src">${t('settings.skillFrom')}: ${escapeHtml(s.source || '')}</div>
+            </div>
+            <button class="btn-danger" data-skill-del="${escapeHtml(s.id)}">${t('settings.skillRemove')}</button>
+          </div>`
+        )
+        .join('');
+      box.querySelectorAll('[data-skill-del]').forEach((b) => {
+        b.onclick = async () => {
+          const id = b.dataset.skillDel;
+          if (!(await uiConfirm(t('settings.skillRemove') + ': ' + id + '?'))) return;
+          const rr = await window.ccarmy.skillsRemove(id);
+          if (rr && rr.ok === false) uiAlert(String(rr.error || ''));
+          renderSkillList();
+        };
+      });
+    } catch {
+      box.className = 'muted';
+      box.textContent = t('settings.skillsEmpty');
+    }
+  }
+
   async function refreshMembers() {
     const box = $('members-box');
     if (!box || !state.selectedChat) return;
@@ -3085,6 +3335,7 @@
         if (Array.isArray(st.state.plugins) && st.state.plugins.length) state.plugins = st.state.plugins;
         if (Array.isArray(st.state.groups) && st.state.groups.length) state.groups = st.state.groups;
         if (Array.isArray(st.state.chats) && st.state.chats.length) state.chats = st.state.chats;
+        if (st.state.listSort === 'name' || st.state.listSort === 'time') state.listSort = st.state.listSort;
         const av = st.state.instanceAvatars;
         if (av && typeof av === 'object') {
           state.instances.forEach((i) => {
@@ -3110,6 +3361,7 @@
         groups: state.groups,
         chats: state.chats,
         instanceAvatars,
+        listSort: state.listSort,
       }).catch(() => {});
     };
     window.__saveState = saveState;

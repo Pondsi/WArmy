@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b && node scripts/copy-assets.mjs",
+    "build": "tsc -b && node scripts/check-syntax.mjs && node scripts/copy-assets.mjs",
     "typecheck": "tsc -b --pretty",
     "start": "electron dist/electron-main.js",
     "dist": "electron-builder --config electron-builder.yml",
