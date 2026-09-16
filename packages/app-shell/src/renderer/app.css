@@ -886,3 +886,16 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 /* only-group: 仅项目/群聊显示 */
 .only-group.hidden { display: none !important; }
+
+.list-hq-icon {
+  border: none; background: transparent; color: var(--muted);
+  cursor: pointer; padding: 4px; margin-left: 8px;
+  display: inline-flex; align-items: center; border-radius: 6px;
+}
+.list-hq-icon:hover { background: var(--hover); color: var(--ink); }
+.logo-glyph {
+  width: 120px; height: 86px;
+  background: transparent;
+  display: grid; place-items: center;
+  box-shadow: none;
+}

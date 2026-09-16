@@ -439,5 +439,6 @@
   "common.more": "More",
   "panel.directory": "Directory",
   "export.hint": "Export the full chat history as a Markdown file.",
-  "export.include": "Includes: messages, roles, timestamps"
+  "export.include": "Includes: messages, roles, timestamps",
+  "nav.addProject": "Join project"
 }

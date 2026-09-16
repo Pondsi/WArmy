@@ -439,5 +439,6 @@
   "common.more": "更多",
   "panel.directory": "项目目录",
   "export.hint": "将导出当前会话的完整聊天记录为 Markdown 文件。",
-  "export.include": "包含：消息内容、角色、时间戳"
+  "export.include": "包含：消息内容、角色、时间戳",
+  "nav.addProject": "加入项目"
 }

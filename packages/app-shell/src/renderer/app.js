@@ -313,7 +313,19 @@
     }
 
     $('app-body').classList.remove('hide-list');
-    $('list-title').textContent = t(NAV_TITLES[nav] || nav);
+    const lt = $('list-title');
+    lt.textContent = t(NAV_TITLES[nav] || nav);
+    // 我的牛马：标题右侧加牛马管理局图标
+    const oldIcon = lt.querySelector('.list-hq-icon');
+    if (oldIcon) oldIcon.remove();
+    if (nav === 'singleAi') {
+      const icon = document.createElement('button');
+      icon.className = 'list-hq-icon';
+      icon.title = t('nav.instances');
+      icon.innerHTML = '<svg viewBox="0 0 100 100" style="width:18px;height:18px"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/><line x1="40" y1="52" x2="48" y2="52"/><line x1="52" y1="52" x2="60" y2="52"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>';
+      icon.onclick = () => setNav('instances');
+      lt.appendChild(icon);
+    }
     setupListAction();
     renderList();
 
@@ -355,6 +367,9 @@
     if (joinBtn) {
       const showJoin = state.nav === 'internalGroup' || state.nav === 'externalGroup' || state.nav === 'externalChat';
       joinBtn.classList.toggle('hidden', !showJoin);
+      if (state.nav === 'internalGroup') joinBtn.textContent = t('nav.addProject');
+      else if (state.nav === 'externalGroup') joinBtn.textContent = t('nav.addGroup');
+      else if (state.nav === 'externalChat') joinBtn.textContent = t('contact.add');
     }
     if (state.nav === 'internalGroup' || state.nav === 'externalGroup') {
       const createKey = state.nav === 'internalGroup' ? 'list.createProject' : 'list.createGroupChat';
@@ -1786,6 +1801,12 @@
       e.preventDefault();
       send();
     }
+  });
+  // 输入防抖：仅更新内部状态，不触发重渲染
+  $('input')?.addEventListener('input', () => {
+    const now = Date.now();
+    if (now - __inputThrottle < 100) return;
+    __inputThrottle = now;
   });
   // 紧急度下拉：悬停显框，点击展开
   (function bindUrgency() {
