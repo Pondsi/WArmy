@@ -32,7 +32,7 @@
     board: {
       /** ADR：外部聚合看板 — 会话进展只读，点击跳转；值班者写 board.jsonl */
       sessions: [
-        { id: 's-internal-1', kind: 'internal', name: 'demo.project1', progress: 65, status: 'doing', blocked: false },
+        { id: 's-internal-1', kind: 'internal', name: 'demo.project1', progress: 65, status: 'doing', blocked: false, notify: true },
         { id: 's-internal-2', kind: 'internal', name: 'demo.project2', progress: 30, status: 'doing', blocked: true },
         { id: 's-ext-1', kind: 'extgroup', name: 'demo.client', progress: 90, status: 'doing', blocked: false },
         { id: 's-single-demo-1', kind: 'single', name: 'demo.agent', progress: 40, status: 'doing', blocked: false },
@@ -415,7 +415,7 @@
       }
       source.forEach((c) => {
         const rowEl = row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('single', c.id, c.name), state.selectedChat?.id === c.id);
-        const inst = state.instances.find((x) => x.id === c.id) || { id: c.id, name: c.name, status: 'stopped', notify: false };
+        const inst = state.instances.find((x) => x.id === c.id) || { id: c.id, name: c.name, status: 'stopped', notify: true };
         bindRowContext(rowEl, () => agentMenu(inst, rowEl));
         box.appendChild(rowEl);
       });
@@ -676,6 +676,7 @@
     }
     renderChat();
     flushQueue(id);
+    playNotifySound('complete');
     if (CHAT_NAVS.has(state.nav)) renderList();
   }
 
@@ -1794,7 +1795,7 @@
         uiAlert(String(e.message || e));
         return;
       }
-      state.groups.push({ id, name, type, members: [] });
+      state.groups.push({ id, name, type, members: [], notify: true });
       renderList();
     });
   }
@@ -1802,7 +1803,7 @@
   function addContactFlow() {
     uiPrompt(t('contact.add'), '').then((name) => {
       if (!name) return;
-      state.chats.push({ id: 'c-' + Date.now(), name, kind: 'extdm', lastPreview: t('list.noReply') });
+      state.chats.push({ id: 'c-' + Date.now(), name, kind: 'extdm', lastPreview: t('list.noReply'), notify: true });
       renderList();
     });
   }
@@ -1815,6 +1816,7 @@
         name,
         status: 'stopped',
         dutyEligible: true,
+        notify: true,
         model: 'deepseek-chat',
         memoryFile: 'persona/' + name + '.md',
         persona: t('instances.personaDefault'),
@@ -1912,6 +1914,35 @@
   }
   function closeContextMenu() {
     document.getElementById('ctx-menu')?.remove();
+  }
+
+  function playNotifySound(kind) {
+    const sid = state.selectedChat?.id;
+    if (!shouldNotify(sid)) return; // 未勾选提醒：无提示音
+    if (!state.sound || !state.sound[kind]) return; // 全局开关
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = kind === 'error' ? 220 : kind === 'request' ? 880 : 660;
+      gain.gain.value = 0.04;
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } catch { /* noop */ }
+  }
+
+  function shouldNotify(sessionId) {
+    if (!sessionId) return true;
+    const inst = state.instances.find((x) => x.id === sessionId);
+    if (inst) return inst.notify !== false;
+    const g = state.groups.find((x) => x.id === sessionId);
+    if (g) return g.notify !== false;
+    const c = state.chats.find((x) => x.id === sessionId);
+    if (c) return c.notify !== false;
+    // 未知会话：默认提醒
+    return true;
   }
 
   function sessionHasBlockingTasks(id) {
@@ -2208,6 +2239,7 @@
         {
           id: 'demo-1',
           name: 'demo.agent',
+          notify: true,
           status: 'stopped',
           dutyEligible: true,
           model: 'deepseek-chat',

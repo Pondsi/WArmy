@@ -424,8 +424,11 @@ ipcMain.handle(
       }
     }
 
-    // 请求时邮件提醒（队列占位）
-    if (settingsStore?.load().emailOnRequest) {
+    // 请求时邮件提醒：仅在该会话勾选了「提醒」时才入队
+    const notifyOk = (p1?.instances.list().find((x) => x.id === msg.groupId)?.dutyEligible !== false);
+    const sset = settingsStore?.load();
+    const emailOn = sset?.emailNotify?.request !== false || sset?.emailOnRequest;
+    if (emailOn && notifyOk) {
       const profile = accountStore?.loadProfile();
       if (profile?.email) {
         emailQueue.push({

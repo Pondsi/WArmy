@@ -40,6 +40,8 @@ export interface AppSettings {
   smtpAccounts: SmtpAccount[];
   /** 嵌入是否使用 GPU（WebGPU）；false=WASM/CPU */
   embedUseGpu: boolean;
+  /** 邮件通知：完成/请求/错误 */
+  emailNotify: { complete: boolean; request: boolean; error: boolean };
 }
 
 function hash(pw: string) {
@@ -117,6 +119,7 @@ function defaults(): AppSettings {
     globalSecurity: 'normal',
     smtpAccounts: [],
     embedUseGpu: true,
+    emailNotify: { complete: true, request: true, error: true },
   };
 }
 
