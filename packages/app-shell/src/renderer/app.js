@@ -83,6 +83,18 @@
   };
 
   const t = (k) => state.t[k] || k;
+  // 全局只注册一次 document click（避免每次开菜单都叠加）
+  let __docClickBound = false;
+  const __docClickHandlers = new Set();
+  function onDocClick(fn) {
+    __docClickHandlers.add(fn);
+    if (!__docClickBound) {
+      __docClickBound = true;
+      document.addEventListener('click', (e) => {
+        for (const fn of __docClickHandlers) fn(e);
+      });
+    }
+  }
   /** 把下拉菜单 fixed 定位到触发按钮下方，避免被 overflow 裁切 */
   function positionMenuFixed(trigger, menu) {
     if (!trigger || !menu) return;
@@ -1832,7 +1844,7 @@
       menu.classList.toggle('hidden');
       if (!menu.classList.contains('hidden')) positionMenuFixed(trigger, menu);
     });
-    document.addEventListener('click', () => menu.classList.add('hidden'));
+    onDocClick(() => menu?.classList.add('hidden'));
 
     menu.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-u]');
@@ -1860,7 +1872,7 @@
     menu?.classList.toggle('hidden');
     if (menu && !menu.classList.contains('hidden')) positionMenuFixed($('more-trigger'), menu);
   });
-  document.addEventListener('click', () => $('more-menu')?.classList.add('hidden'));
+  onDocClick(() => $('more-menu')?.classList.add('hidden'));
   $('mi-search')?.addEventListener('click', () => {
     $('more-menu')?.classList.add('hidden');
     showSearchPopup();
@@ -1899,16 +1911,19 @@
     const pane = $('console-pane');
     if (!el || !pane) return;
     let y0 = 0, h0 = 0, drag = false;
-    el.addEventListener('mousedown', (e) => {
-      drag = true; y0 = e.clientY; h0 = pane.getBoundingClientRect().height; e.preventDefault();
-    });
-    window.addEventListener('mousemove', (e) => {
+    const onMove = (e) => {
       if (!drag) return;
       const h = Math.min(360, Math.max(80, h0 + (y0 - e.clientY)));
       pane.style.maxHeight = h + 'px';
       pane.style.height = h + 'px';
+    };
+    const onUp = () => { drag = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    el.addEventListener('mousedown', (e) => {
+      drag = true; y0 = e.clientY; h0 = pane.getBoundingClientRect().height;
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      e.preventDefault();
     });
-    window.addEventListener('mouseup', () => { drag = false; });
   })();
   $('btn-shot')?.addEventListener('click', () => uiAlert(t('chat.screenshotPending')));
   // 本会话安全模式：同紧急度的下拉样式
@@ -1944,7 +1959,7 @@
       menu.classList.toggle('hidden');
       if (!menu.classList.contains('hidden')) positionMenuFixed(trigger, menu);
     });
-    document.addEventListener('click', () => menu.classList.add('hidden'));
+    onDocClick(() => menu?.classList.add('hidden'));
 
     menu.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-s]');
@@ -2054,25 +2069,27 @@
 
   function bindResizer(el, cssVar, min, max) {
     if (!el) return;
-    let startX = 0;
-    let startW = 0;
-    let dragging = false;
+    let startX = 0, startW = 0, dragging = false;
+    const onMove = (e) => {
+      if (!dragging) return;
+      const w = Math.min(max, Math.max(min, startW + (e.clientX - startX)));
+      document.documentElement.style.setProperty(cssVar, w + 'px');
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove('dragging');
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
     el.addEventListener('mousedown', (e) => {
       dragging = true;
       el.classList.add('dragging');
       startX = e.clientX;
       startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue(cssVar), 10) || 280;
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
       e.preventDefault();
-    });
-    window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const w = Math.min(max, Math.max(min, startW + (e.clientX - startX)));
-      document.documentElement.style.setProperty(cssVar, w + 'px');
-    });
-    window.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false;
-      el.classList.remove('dragging');
     });
   }
 
@@ -2081,17 +2098,25 @@
     const target = $(targetId);
     if (!el || !target) return;
     let y0 = 0, h0 = 0, drag = false;
-    el.addEventListener('mousedown', (e) => {
-      drag = true; y0 = e.clientY; h0 = target.getBoundingClientRect().height; e.preventDefault();
-    });
-    window.addEventListener('mousemove', (e) => {
+    const onMove = (e) => {
       if (!drag) return;
       const delta = dir === 'up' ? (y0 - e.clientY) : (e.clientY - y0);
       const h = Math.min(400, Math.max(80, h0 + delta));
       target.style.height = h + 'px';
       target.style.maxHeight = h + 'px';
+    };
+    const onUp = () => {
+      if (!drag) return;
+      drag = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    el.addEventListener('mousedown', (e) => {
+      drag = true; y0 = e.clientY; h0 = target.getBoundingClientRect().height;
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      e.preventDefault();
     });
-    window.addEventListener('mouseup', () => { drag = false; });
   }
   // 控制台上方：拉伸控制台自身
   bindVerticalResizer('console-top-resizer', 'console-pane', 'up');
