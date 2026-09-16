@@ -327,16 +327,17 @@
     $('app-body').classList.remove('hide-list');
     const lt = $('list-title');
     lt.textContent = t(NAV_TITLES[nav] || nav);
-    // 我的牛马：标题右侧加牛马管理局图标
-    const oldIcon = lt.querySelector('.list-hq-icon');
+    // 我的牛马：列表头右侧加牛马管理局图标
+    const headActions = $('list-head-actions');
+    const oldIcon = headActions?.querySelector('.list-hq-icon');
     if (oldIcon) oldIcon.remove();
-    if (nav === 'singleAi') {
+    if (nav === 'singleAi' && headActions) {
       const icon = document.createElement('button');
       icon.className = 'list-hq-icon';
       icon.title = t('nav.instances');
       icon.innerHTML = '<svg viewBox="0 0 100 100" style="width:18px;height:18px"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/><line x1="40" y1="52" x2="48" y2="52"/><line x1="52" y1="52" x2="60" y2="52"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>';
       icon.onclick = () => setNav('instances');
-      lt.appendChild(icon);
+      headActions.insertBefore(icon, headActions.firstChild);
     }
     setupListAction();
     renderList();
@@ -459,7 +460,15 @@
         ? items
         : state.instances.map((i) => ({ id: i.id, name: i.name, kind: 'single', lastPreview: t('list.noReply') }));
       if (!source.length) {
-        box.innerHTML = `<div class="list-empty">${t('list.empty')}</div>`;
+        // 一个实例都没有 → 显示「进入牛马管理局」按钮
+        box.innerHTML = `<div class="enter-hq-wrap">
+          <div class="muted">${t('list.empty')}</div>
+          <button class="enter-hq-btn" id="btn-enter-hq">
+            <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/><line x1="40" y1="52" x2="48" y2="52"/><line x1="52" y1="52" x2="60" y2="52"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>
+            <span>${t('nav.instances')}</span>
+          </button>
+        </div>`;
+        $('btn-enter-hq')?.addEventListener('click', () => setNav('instances'));
         return;
       }
       source.forEach((c) => {
@@ -1181,7 +1190,8 @@
           <div class="profile-head">
             <button id="p-av-btn" class="av-btn" title="${escapeHtml(t('me.avatarHint'))}">${avHtml}</button>
             <div>
-              <input id="p-name" class="username-input" value="${escapeHtml(p.username)}" title="${escapeHtml(t('me.username'))}"/>
+              <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
+              <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
               <div class="muted">${p.loggedIn ? escapeHtml(p.email || '') : t('me.notLoggedIn')}</div>
               <div style="margin-top:8px;display:flex;gap:8px">
                 <button class="btn-mini" id="p-login">${t('me.login')}</button>
@@ -1202,23 +1212,33 @@
         <div id="dash-host"></div>`;
       $('p-login').onclick = () => uiAlert(t('me.notAvailable'));
       $('p-reg').onclick = () => uiAlert(t('me.notAvailable'));
-      $('p-name-display').onclick = () => {
-        const inp = $('p-name');
-        inp.focus();
-        inp.select();
+      // click name -> edit
+      const nameDisp = $('p-name-display');
+      const nameInp = $('p-name');
+      nameDisp.onclick = () => {
+        nameDisp.classList.add('hidden');
+        nameInp.classList.remove('hidden');
+        nameInp.focus();
+        nameInp.select();
       };
-      // 实时同步显示名，避免“看起来不能编辑”
-      $('p-name').oninput = () => {
-        const v = $('p-name').value;
-        $('p-name-display').textContent = v || p.username;
+      const commitName = () => {
+        const v = nameInp.value.trim();
+        if (v) {
+          state.profile.username = v;
+          nameDisp.textContent = v;
+        }
+        nameInp.classList.add('hidden');
+        nameDisp.classList.remove('hidden');
       };
+      nameInp.onblur = commitName;
+      nameInp.onkeydown = (e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') { nameInp.value = state.profile.username; commitName(); } };
       $('p-av-btn').onclick = () => $('avatar-file').click();
       $('p-save').onclick = () => {
         const v = $('p-name').value.trim();
         if (v) state.profile.username = v;
         state.profile.email = $('p-email').value.trim();
         applyAvatar();
-        $('p-name-display').textContent = state.profile.username;
+        
         window.ccarmy.profileSave({
           username: state.profile.username,
           email: state.profile.email,
@@ -1234,10 +1254,10 @@
       box.innerHTML = `
         <div class="settings-layout">
         <div class="settings-nav" id="settings-nav">
-          <button data-sec="ui" class="on">UI</button>
-          <button data-sec="notify">Notify</button>
-          <button data-sec="model">Model</button>
-          <button data-sec="func">Func</button>
+          <button data-sec="ui" class="on">${t('settings.section.ui')}</button>
+          <button data-sec="notify">${t('settings.section.notify')}</button>
+          <button data-sec="model">${t('settings.section.model')}</button>
+          <button data-sec="func">${t('settings.section.func')}</button>
         </div>
         <div class="settings-content" id="settings-content">
         <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.ui')}</h2></div>
@@ -1451,6 +1471,18 @@
         $('about-upd').textContent = r?.upToDate ? t('settings.upToDate') : t('settings.updateAvailable');
       };
 
+      // settings nav click -> scroll to section
+      const navBtns = document.querySelectorAll('#settings-nav button');
+      const secMap = { ui: 0, notify: 1, model: 2, func: 3 };
+      navBtns.forEach((btn) => {
+        btn.onclick = () => {
+          navBtns.forEach((b) => b.classList.remove('on'));
+          btn.classList.add('on');
+          const secIdx = secMap[btn.dataset.sec];
+          const secs = document.querySelectorAll('#settings-content .set-section:not(.set-card) h2');
+          if (secs[secIdx]) secs[secIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+      });
       $('sel-locale').onchange = async (e) => {
         await loadI18n(e.target.value);
         window.ccarmy.settingsSave({ locale: e.target.value });

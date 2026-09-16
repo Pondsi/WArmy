@@ -10,7 +10,7 @@
   <div id="app">
     <div id="titlebar">
       <div class="tb-drag">
-        <div class="tb-logo" id="tb-logo" aria-hidden="true">牛</div>
+        <div class="tb-logo" id="tb-logo" aria-hidden="true"><img src="./icons/logo-color.svg" alt="" class="tb-logo-img"/></div>
         <div class="tb-logo-cow" id="tb-logo-cow"></div>
       </div>
       <div class="tb-actions" id="tb-actions">
@@ -62,7 +62,7 @@
     <aside id="list-col">
       <header class="list-head">
         <h2 id="list-title">—</h2>
-        <div style="display:flex;gap:6px;align-items:center">
+        <div class="list-head-actions" id="list-head-actions" style="display:flex;gap:6px;align-items:center">
           <button id="btn-join-qr" class="btn-mini hidden" data-i18n="join.scanQr" data-i18n-title="join.qrHint"></button>
           <button id="list-action" class="btn-mini hidden"></button>
         </div>
@@ -117,7 +117,7 @@
                   <button type="button" id="mi-export" data-i18n="chat.export"></button>
                 </div>
               </div>
-              <button id="btn-stop-all" class="btn-stop-icon" data-i18n-title="chat.stopAllTip"><svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg></button>
+              <button id="btn-stop-all" class="btn-stop-icon" data-i18n-title="chat.stopAllTip" aria-label="stop"><svg viewBox="0 0 24 24" class="ico"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg></button>
             </div>
           </header>
           <div id="messages" class="messages"></div>

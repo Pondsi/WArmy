@@ -215,7 +215,7 @@ function createWindow() {
       backgroundThrottling: false,
       spellcheck: false,
     },
-    icon: path.join(__dirname, 'renderer', 'icons', 'logo-color.svg'),
+    icon: path.join(__dirname, 'renderer', 'icons', 'logo-256.png'),
   });
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('ready-to-show', () => {
@@ -232,6 +232,7 @@ app
     boot('window created');
     await bootstrap();
     startMemoryAsync();
+    try { createTray(); boot('tray ready'); } catch (e) { boot(`tray fail ${String(e)}`); }
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
@@ -1374,30 +1375,43 @@ ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
 
 // ── J. 托盘 ──
 let tray: import('electron').Tray | null = null;
-ipcMain.handle('ccarmy:tray-init', () => {
-  try {
-    const { Tray, Menu, nativeImage } = require('electron');
-    if (tray) return { ok: true };
-    // 16x16 简易图标
-    const img = nativeImage.createFromBuffer(
+function createTray() {
+  const { Tray, Menu, nativeImage } = require('electron');
+  if (tray) return;
+  // 用真实 logo 生成托盘图标（16/32 均可，Windows 托盘实际显示 16px）
+  const iconPath = path.join(__dirname, 'renderer', 'icons', 'logo-32.png');
+  let img = nativeImage.createFromPath(iconPath);
+  if (img.isEmpty()) {
+    // 回退：16x16 占位
+    img = nativeImage.createFromBuffer(
       Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKklEQVQ4y2NgGAWjYBSMglEwCkbBKBgFo2AUjIJRMApGwSgYBaNgFIwCAAgQAAF/lPurAAAAAElFTkSuQmCC', 'base64')
     );
-    const t = new Tray(img);
-    t.setToolTip('CCArmy');
-    // 右键仅「退出」
-    t.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: '退出', click: () => { app.quit(); } },
-      ])
-    );
-    // 双击打开主窗口
-    t.on('double-click', () => {
-      if (!win) return;
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
-    });
-    tray = t;
+  }
+  const t = new Tray(img);
+  t.setToolTip('无限牛马 CCArmy');
+  t.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: '打开主窗口', click: () => {
+        if (!win) { createWindow(); return; }
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }},
+      { type: 'separator' },
+      { label: '退出', click: () => { app.quit(); } },
+    ])
+  );
+  t.on('double-click', () => {
+    if (!win) { createWindow(); return; }
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  });
+  tray = t;
+}
+ipcMain.handle('ccarmy:tray-init', () => {
+  try {
+    createTray();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: String(e) };
