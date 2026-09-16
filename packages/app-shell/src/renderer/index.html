@@ -15,9 +15,6 @@
         <span class="muted" id="tb-sub"></span>
       </div>
       <div class="tb-actions" id="tb-actions">
-        <button id="btn-console" title="控制台" aria-label="console" data-i18n-title="tip.console">
-          <svg class="tb-svg" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="16" width="80" height="68" rx="6"/><polyline points="28,40 42,52 28,64"/><line x1="50" y1="64" x2="72" y2="64"/></g></svg>
-        </button>
         <button id="btn-always-top" title="置顶窗口" aria-label="always on top" data-i18n-title="tip.pin">
           <svg class="tb-svg" viewBox="0 0 100 100" aria-hidden="true"><rect x="18" y="14" width="64" height="12" rx="6" fill="currentColor"/><polygon points="32,26 68,26 58,58 42,58" fill="none" stroke="currentColor" stroke-width="9" stroke-linejoin="round"/><rect x="45" y="58" width="10" height="28" rx="5" fill="currentColor"/></svg>
         </button>
@@ -53,12 +50,12 @@
           <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><circle cx="42" cy="34" r="14"/><path d="M18,82 C18,62 30,56 42,56 C48,56 53,58 57,62"/><path d="M68,32 C74,38 74,50 68,56"/><path d="M78,24 C88,36 88,52 78,64"/></g></svg>
         </button>
         <button class="rail-item" data-nav="externalGroup" data-i18n-title="tip.externalGroup">
-          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M26,16 L82,16 L82,54 L68,54 L68,64 L58,54 L26,54 Z"/><path d="M18,32 L74,32 L74,70 L60,70 L60,80 L50,70 L18,70 Z"/></g></svg>
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M16,78 C16,62 24,54 34,54 C44,54 52,62 52,78"/><circle cx="66" cy="34" r="12"/><path d="M48,78 C48,62 56,54 66,54 C76,54 84,62 84,78"/></g></svg>
         </button>
       </div>
       <div class="rail-bottom">
         <button class="rail-item" data-nav="instances" data-i18n-title="tip.instances">
-          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square"><polyline points="32,40 20,28 20,12"/><polyline points="68,40 80,28 80,12"/><path d="M 32,40 L 68,40 L 68,60 L 50,80 L 32,60 Z"/><line x1="40" y1="52" x2="48" y2="52"/><line x1="52" y1="52" x2="60" y2="52"/></g><rect x="17" y="9" width="6" height="6" fill="currentColor"/><rect x="77" y="9" width="6" height="6" fill="currentColor"/></svg>
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>
         </button>
         <button class="rail-item" data-nav="settings" data-i18n-title="tip.settings">
           <svg viewBox="0 0 100 100"><defs><mask id="h2"><rect width="100" height="100" fill="white"/><polygon points="50,32 66,42 66,58 50,68 34,58 34,42" fill="black"/></mask></defs><g fill="currentColor" mask="url(#h2)"><circle cx="50" cy="50" r="30"/><g stroke="currentColor" stroke-width="14"><line x1="50" y1="20" x2="50" y2="6"/><line x1="50" y1="80" x2="50" y2="94"/><line x1="20" y1="50" x2="6" y2="50"/><line x1="80" y1="50" x2="94" y2="50"/><line x1="29" y1="29" x2="19" y2="19"/><line x1="71" y1="71" x2="81" y2="81"/><line x1="71" y1="29" x2="81" y2="19"/><line x1="29" y1="71" x2="19" y2="81"/></g></g></svg>
@@ -75,7 +72,7 @@
         <input id="list-search" type="search" data-i18n-placeholder="list.search" data-i18n-title="list.search" />
       </div>
       <div id="list-body" class="list-body"></div>
-      <div id="col-resizer" title="拖动调整宽度"></div>
+      <div id="col-resizer" data-i18n-title="tip.dragWidth"></div>
     </aside>
 
     <main id="main-col">
@@ -95,6 +92,9 @@
               <div class="chat-meta" id="chat-meta"></div>
             </div>
             <div class="chat-actions">
+              <button id="btn-console" class="btn-icon" data-i18n-title="tip.console" aria-label="console">
+                <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="16" width="80" height="68" rx="6"/><polyline points="28,40 42,52 28,64"/><line x1="50" y1="64" x2="72" y2="64"/></g></svg>
+              </button>
               <label class="sec-pick muted">
                 <span data-i18n="chat.security"></span>
                 <select id="session-sec" data-i18n-title="chat.security">
@@ -114,33 +114,36 @@
             </div>
             <ul id="queue-items" class="queue-items"></ul>
           </div>
+          <div id="console-pane" class="console-pane hidden">
+            <div id="console-top-resizer" class="console-resizer"></div>
+            <div class="console-head" data-i18n="chat.console"></div>
+            <pre id="console-out" class="console-out"></pre>
+          </div>
+          <div id="input-top-resizer" class="console-resizer input-resizer"></div>
           <footer class="composer">
             <div id="attach-list" class="hidden"></div>
-            <div id="console-pane" class="console-pane hidden">
-              <div class="console-head" data-i18n="chat.console"></div>
-              <pre id="console-out" class="console-out"></pre>
-            </div>
-            <div id="console-resizer" class="console-resizer hidden"></div>
             <div class="composer-main">
               <textarea id="input" rows="3" data-i18n-placeholder="chat.placeholder"></textarea>
               <div class="composer-bar">
                 <div class="composer-left">
-                  <button class="btn-icon" id="btn-attach" data-i18n-title="chat.attachTip" title="文件">
+                  <button class="btn-icon" id="btn-attach" data-i18n-title="chat.attachTip">
                     <svg viewBox="0 0 24 24" class="ico"><path d="M8 3h7l5 5v13H8V3zm7 1.5V9h4.5L15 4.5z"/></svg>
                   </button>
-                  <button class="btn-icon" id="btn-shot" data-i18n-title="chat.screenshotTip" title="截图">
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M4 7h4l2-2h4l2 2h4v12H4V7zm8 3a4 4 0 100 8 4 4 0 000-8z"/></svg>
+                  <button class="btn-icon" id="btn-shot" data-i18n-title="chat.screenshotTip">
+                    <svg viewBox="0 0 1024 1024" class="ico"><path d="M334 111.6c0-24.6-20-44.4-44.4-44.4s-44.4 20-44.4 44.4v89H111.6c-24.6 0-44.4 20-44.4 44.4s20 44.4 44.4 44.4h623V690h89V245c0-24.6-20-44.4-44.4-44.4H334V111.6zM245 334v445c0 24.6 20 44.4 44.4 44.4h445v89c0 24.6 20 44.4 44.4 44.4s44.4-20 44.4-44.4v-89h89c24.6 0 44.4-20 44.4-44.4s-20-44.4-44.4-44.4H334V334h-89z"/></svg>
                   </button>
-                  <select id="urgency-sel" class="urg-sel" data-i18n-title="chat.urgency">
-                    <option value="P1" data-i18n="chat.p1"></option>
-                    <option value="P2" selected data-i18n="chat.p2"></option>
-                    <option value="P3" data-i18n="chat.p3"></option>
-                  </select>
-                  <button class="btn-icon" id="btn-voice" data-i18n-title="chat.voiceTip" title="语音">
+                  <div class="urg-pills" id="urgency-bar" role="group">
+                    <button type="button" data-u="P1" data-i18n="urgency.urgentLabel"></button>
+                    <button type="button" class="on" data-u="P2" data-i18n="urgency.insertLabel"></button>
+                    <button type="button" data-u="P3" data-i18n="urgency.queueLabel"></button>
+                  </div>
+                </div>
+                <div class="composer-send-row">
+                  <button class="btn-icon" id="btn-voice" data-i18n-title="chat.voiceTip">
                     <svg viewBox="0 0 24 24" class="ico"><path d="M12 3a3 3 0 013 3v6a3 3 0 11-6 0V6a3 3 0 013-3zm-7 9a7 7 0 0014 0h2a9 9 0 01-8 8.9V24h-2v-3.1A9 9 0 013 12h2z"/></svg>
                   </button>
+                  <button id="btn-send" class="btn-primary" data-i18n="chat.send"></button>
                 </div>
-                <button id="btn-send" class="btn-primary" data-i18n="chat.send"></button>
               </div>
             </div>
           </footer>

@@ -235,7 +235,7 @@ body.platform-darwin .tb-mac-extra {
   margin-top: auto;
 }
 .rail-item {
-  width: 44px; height: 44px;
+  width: 52px; height: 52px;
   border: none; border-radius: 12px;
   background: transparent;
   color: var(--rail-fg);
@@ -251,14 +251,15 @@ body.platform-darwin .tb-mac-extra {
   box-shadow: var(--shadow-md);
 }
 .rail-item.active svg { fill: currentColor; }
-.rail-item svg { width: 22px; height: 22px; fill: currentColor; }
+.rail-item svg { width: 28px; height: 28px; fill: currentColor; }
+.rail-item { width: 48px; height: 48px; }
 .avatar {
-  width: 36px; height: 36px; border-radius: 8px;
+  width: 40px; height: 40px; border-radius: 8px;
   background: linear-gradient(135deg, var(--accent), #10ad6a);
   color: #fff; display: grid; place-items: center;
   font-size: var(--fs-md); font-weight: 600;
 }
-.avatar-img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; display: block; }
+.avatar-img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; display: block; }
 .avatar-img.big, .big-av { width: 72px; height: 72px; border-radius: 16px; }
 .big-av {
   background: linear-gradient(135deg, var(--accent), #10ad6a);
@@ -473,6 +474,34 @@ body.platform-darwin .tb-mac-extra {
 .cp-body ul { margin: 4px 0; padding-left: 16px; }
 .cp-actions { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); }
 .tb-actions button.tb-on { color: var(--accent); background: var(--hover); }
+
+/* 左栏图标加大 */
+#rail .rail-item { width: 52px; height: 52px; border-radius: 14px; }
+#rail .rail-item svg { width: 28px; height: 28px; }
+
+/* 紧急度胶囊 */
+.urg-pills {
+  display: inline-flex; gap: 4px;
+  background: var(--hover); border-radius: 999px; padding: 3px;
+}
+.urg-pills button {
+  border: none; background: transparent; color: var(--muted);
+  border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+}
+.urg-pills button.on { background: var(--card); color: var(--ink); box-shadow: var(--shadow-sm); }
+.urg-pills button.on[data-u="P1"] { color: var(--danger); font-weight: 600; }
+.composer-send-row { display: flex; align-items: center; gap: 4px; }
+#input-top-resizer {
+  display: block; height: 6px; cursor: row-resize;
+  background: transparent; flex-shrink: 0;
+}
+#input-top-resizer:hover { background: var(--accent); opacity: .35; }
+.chat-head .btn-icon .ico { width: 20px; height: 20px; fill: currentColor; }
+.chat-head .btn-icon { color: var(--muted); }
+.chat-head .btn-icon.tb-on { color: var(--accent); background: var(--hover); }
+.btn-icon .ico { width: 22px; height: 22px; fill: currentColor; }
+#btn-shot .ico { width: 20px; height: 20px; }
+
 
 .attach-chip {
   display: inline-flex; align-items: center; gap: 6px;
@@ -699,3 +728,5 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
   .chat-layout { grid-template-columns: 1fr; }
   #col-resizer, #panel-resizer { display: none; }
 }
+
+:root { --rail-icon: 30px; }

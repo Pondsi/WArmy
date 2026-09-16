@@ -26,37 +26,37 @@
     listWidth: 280,
     panelWidth: 300,
     attachments: [],
-    profile: { loggedIn: false, username: '主人', avatarDataUrl: '', email: '' },
+    profile: { loggedIn: false, username: 'nav.avatar', avatarDataUrl: '', email: '' },
     queues: {},
     board: {
       /** ADR：外部聚合看板 — 会话进展只读，点击跳转；值班者写 board.jsonl */
       sessions: [
-        { id: 's-internal-1', kind: 'internal', name: '项目推进群', progress: 65, status: 'doing', blocked: false },
-        { id: 's-internal-2', kind: 'internal', name: '研发排期群', progress: 30, status: 'doing', blocked: true },
-        { id: 's-ext-1', kind: 'extgroup', name: '客户对接群', progress: 90, status: 'doing', blocked: false },
-        { id: 's-single-demo-1', kind: 'single', name: '主力牛马', progress: 40, status: 'doing', blocked: false },
+        { id: 's-internal-1', kind: 'internal', name: 'demo.project1', progress: 65, status: 'doing', blocked: false },
+        { id: 's-internal-2', kind: 'internal', name: 'demo.project2', progress: 30, status: 'doing', blocked: true },
+        { id: 's-ext-1', kind: 'extgroup', name: 'demo.client', progress: 90, status: 'doing', blocked: false },
+        { id: 's-single-demo-1', kind: 'single', name: 'demo.agent', progress: 40, status: 'doing', blocked: false },
       ],
       /** board.jsonl 结构化事件（值班者解析写入） */
       events: [
-        { id: 'e1', ts: Date.now() - 3600e3, action: 'create_task', title: '整理周报', session: '项目推进群' },
-        { id: 'e2', ts: Date.now() - 1800e3, action: 'update_progress', title: '整理周报 → 40%', session: '项目推进群' },
-        { id: 'e3', ts: Date.now() - 900e3, action: 'block', title: '等待接口文档', session: '研发排期群' },
-        { id: 'e4', ts: Date.now() - 300e3, action: 'complete_task', title: '记忆库归档', session: '主力牛马' },
+        { id: 'e1', ts: Date.now() - 3600e3, action: 'create_task', title: 'demo.task1', session: '项目推进群' },
+        { id: 'e2', ts: Date.now() - 1800e3, action: 'update_progress', title: 'demo.task1', session: '项目推进群' },
+        { id: 'e3', ts: Date.now() - 900e3, action: 'block', title: 'demo.task2', session: '研发排期群' },
+        { id: 'e4', ts: Date.now() - 300e3, action: 'complete_task', title: 'demo.task3', session: '主力牛马' },
       ],
-      recent: ['实例主力牛马已启动', '完成 FTS 中文检索校验'],
+      recent: ['demo.recent1', 'demo.recent2'],
     },
     plugins: [
       {
         id: 'agent-teams',
         name: '@nanmicoder/dsh-agent-teams',
         enabled: true,
-        desc: '多智能体团队编排：在会话中用自然语言驱动 AgentTeams 分工协作，适合内部群值班者派活。',
+        desc: 'plugin.teams.desc',
       },
       {
         id: 'memory-plus',
         name: 'dsh-memory-bundle',
         enabled: true,
-        desc: '记忆增强：中文全文检索、工具结果去重、混合向量+FTS5、跨会话核心记忆与压缩定位。',
+        desc: 'plugin.memory.desc',
       },
     ],
     providers: [
@@ -71,7 +71,7 @@
       },
       {
         id: 'ollama',
-        label: 'Ollama 本地',
+        label: 'Ollama',
         protocol: 'ollama',
         baseURL: 'http://127.0.0.1:11434',
         defaultModel: 'qwen2.5:7b',
@@ -133,6 +133,40 @@
       acts.append(cancel, ok);
       root.classList.remove('hidden');
       ok.focus();
+    });
+  }
+
+  /** 强制倒计时确认（危险操作） */
+  function uiConfirmCountdown(message, title, seconds = 5) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = title || displayName();
+      $('modal-body').textContent = String(message ?? '');
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.className = 'btn-mini';
+      cancel.textContent = t('common.cancel');
+      cancel.onclick = () => { root.classList.add('hidden'); clearInterval(timer); resolve(false); };
+      const ok = document.createElement('button');
+      ok.className = 'btn-danger';
+      ok.disabled = true;
+      let left = seconds;
+      const label = () => (t('urgency.confirmWait') || 'wait {s}s').replace('{s}', String(left));
+      ok.textContent = label();
+      const timer = setInterval(() => {
+        left -= 1;
+        if (left <= 0) {
+          clearInterval(timer);
+          ok.disabled = false;
+          ok.textContent = t('common.ok');
+        } else {
+          ok.textContent = label();
+        }
+      }, 1000);
+      ok.onclick = () => { if (ok.disabled) return; root.classList.add('hidden'); clearInterval(timer); resolve(true); };
+      acts.append(cancel, ok);
+      root.classList.remove('hidden');
     });
   }
 
@@ -442,7 +476,7 @@
       div.className = 'msg' + (m.role === 'me' ? ' me' : '');
       const av = state.profile.avatarDataUrl
         ? `<img class="avatar-img" src="${state.profile.avatarDataUrl}" alt=""/>`
-        : `<div class="av">${escapeHtml((state.profile.username || '我').slice(0, 1))}</div>`;
+        : `<div class="av">${escapeHtml((state.profile.username || t('nav.avatar')).slice(0, 1))}</div>`;
       div.innerHTML = `${m.role === 'me' ? av : `<div class="av">${escapeHtml((state.selectedChat?.name || 'A')[0])}</div>`}<div class="bubble">${escapeHtml(m.text)}</div>`;
       box.appendChild(div);
     });
@@ -956,10 +990,6 @@
             <label><input type="checkbox" id="s-email" ${state.emailOnRequest ? 'checked' : ''}/> ${t('settings.emailOnRequest')}</label>
             <div class="muted">${t('settings.emailHint')}</div>
           </div>
-          <div style="margin-top:12px">
-            <button class="btn-mini" id="btn-update">${t('settings.checkUpdate')}</button>
-            <span class="muted" id="upd-msg"></span>
-          </div>
         </div>
         <div class="set-section set-card">
           <h2>${t('settings.providers')}</h2>
@@ -980,7 +1010,7 @@
           <p class="muted">${t('smtp.hint')}</p>
           <div id="smtp-accounts"></div>
           <div class="inst-row" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:10px">
-            <div class="field"><label>${t('smtp.label')}</label><input id="smtp-label" placeholder="工作邮箱"/></div>
+            <div class="field"><label>${t('smtp.label')}</label><input id="smtp-label" placeholder="' + t('placeholder.email') + '"/></div>
             <div class="field"><label>${t('smtp.host')}</label><input id="smtp-host" value="" placeholder="smtp.example.com"/></div>
             <div class="field"><label>${t('smtp.port')}</label><input id="smtp-port" value="465"/></div>
           </div>
@@ -1035,8 +1065,8 @@
             <button class="btn-mini" id="btn-mesh-bcast">${t('mesh.broadcast')}</button>
           </div>
           <div class="inst-row" style="margin-top:8px">
-            <div class="field"><label>${t('mesh.name')}</label><input id="peer-name" placeholder="节点名"/></div>
-            <div class="field"><label>${t('lan.peerHost')}</label><input id="peer-host" placeholder="192.168.1.123 或公网IP"/></div>
+            <div class="field"><label>${t('mesh.name')}</label><input id="peer-name" placeholder="' + t('placeholder.nodeName') + '"/></div>
+            <div class="field"><label>${t('lan.peerHost')}</label><input id="peer-host" placeholder="' + t('placeholder.peerHost') + '"/></div>
             <div class="field"><label>${t('lan.peerPort')}</label><input id="peer-port" value="7788"/></div>
             <button class="btn-mini" id="btn-peer-add">${t('mesh.addPeer')}</button>
           </div>
@@ -1047,7 +1077,16 @@
         <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
           <div class="muted">${t('about.version')} 0.1.0 · CCArmy · ${t('app.subtitle')}</div>
+          <div style="margin-top:10px">
+            <button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
+            <span class="muted" id="about-upd"></span>
+          </div>
         </div>`;
+
+      $('btn-about-update').onclick = async () => {
+        const r = await window.ccarmy.checkUpdate();
+        $('about-upd').textContent = r?.upToDate ? t('settings.upToDate') : t('settings.updateAvailable');
+      };
 
       $('sel-locale').onchange = async (e) => {
         await loadI18n(e.target.value);
@@ -1103,388 +1142,10 @@
           renderPage();
         };
       });
-      $('btn-update').onclick = async () => {
-        const r = await window.ccarmy.checkUpdate();
-        $('upd-msg').textContent = r?.upToDate ? t('settings.upToDate') : t('settings.updateAvailable');
-      };
-      $('btn-about-update').onclick = async () => {
-        const r = await window.ccarmy.checkUpdate();
-        $('about-upd').textContent = r?.upToDate ? t('settings.upToDate') : t('settings.updateAvailable');
-      };
-
-      const prov = $('prov-list');
-      state.providers.forEach((p) => {
-        const el = document.createElement('div');
-        el.className = 'prov-card';
-        el.innerHTML = `
-          <div class="prov-head">${escapeHtml(p.label)}</div>
-          <div class="inst-row">
-            <div class="field"><label>${t('settings.providerName')}</label><input data-k="label" value="${escapeHtml(p.label)}"/></div>
-            <div class="field"><label>${t('settings.baseUrl')}</label><input data-k="baseURL" value="${escapeHtml(p.baseURL)}"/></div>
-            <div class="field"><label>${t('settings.apiKey')}</label><input data-k="apiKey" type="password" value="${escapeHtml(p.apiKey || '')}"/></div>
-          </div>
-          <div class="prov-actions">
-            <button class="btn-mini" data-fetch title="${escapeHtml(t('settings.fetchModels'))}">${t('settings.fetchModels')}</button>
-          </div>
-          <div class="model-row">${(p.models || [])
-            .map(
-              (m) =>
-                `<span class="model-chip" data-m="${escapeHtml(m)}">${escapeHtml(m)}<button class="x" data-del="${escapeHtml(m)}" title="${escapeHtml(t('settings.removeModel'))}">×</button></span>`
-            )
-            .join('') || `<span class="muted">${t('settings.modelsEmpty')}</span>`}</div>`;
-        el.querySelectorAll('input[data-k]').forEach((inp) => {
-          inp.onchange = () => {
-            p[inp.dataset.k] = inp.value;
-            if (inp.dataset.k === 'label') el.querySelector('.prov-head').textContent = inp.value;
-            // 同步到主进程 Provider
-            window.ccarmy.setProvider({
-              presetId: p.id,
-              apiKey: p.apiKey,
-              baseURL: p.baseURL,
-              model: p.defaultModel || (p.models && p.models[0]) || providerCfgModel(p),
-              protocol: p.protocol,
-            });
-          };
-        });
-        el.querySelector('[data-fetch]').onclick = async () => {
-          const btn = el.querySelector('[data-fetch]');
-          btn.textContent = t('common.loading');
-          // 先同步 key/url
-          await window.ccarmy.setProvider({
-            presetId: p.id,
-            apiKey: p.apiKey,
-            baseURL: p.baseURL,
-            protocol: p.protocol,
-            model: p.defaultModel || '',
-          });
-          const r = await window.ccarmy.listModels({
-            protocol: p.protocol,
-            baseURL: p.baseURL,
-            apiKey: p.apiKey,
-          });
-          if (r?.ok && r.models?.length) {
-            const set = new Set([...(p.models || []), ...r.models]);
-            p.models = [...set];
-          }
-          renderPage();
-        };
-        el.querySelectorAll('[data-del]').forEach((btn) => {
-          btn.onclick = (e) => {
-            e.stopPropagation();
-            p.models = (p.models || []).filter((m) => m !== btn.dataset.del);
-            renderPage();
-          };
-        });
-        el.querySelectorAll('.model-chip').forEach((chip) => {
-          chip.onclick = async () => {
-            p.defaultModel = chip.dataset.m;
-            await window.ccarmy.setProvider({
-              presetId: p.id,
-              apiKey: p.apiKey,
-              baseURL: p.baseURL,
-              model: p.defaultModel,
-              protocol: p.protocol,
-            });
-            renderPage();
-          };
-        });
-        prov.appendChild(el);
-      });
-      $('btn-add-prov').onclick = () => {
-        state.providers.push({
-          id: 'custom-' + Date.now(),
-          label: 'Custom',
-          protocol: 'openai-compatible',
-          baseURL: '',
-          defaultModel: '',
-          apiKey: '',
-          models: [],
-        });
-        renderPage();
-      };
-
-      const tbody = $('plug-body');
-      state.plugins.forEach((p) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${escapeHtml(p.name)}</td>
-          <td class="plugin-desc">${escapeHtml(p.desc || '')}</td>
-          <td><span class="badge ${p.enabled ? '' : 'off'}">${p.enabled ? t('settings.pluginEnable') : t('settings.pluginDisable')}</span></td>
-          <td><button class="btn-mini" data-a="toggle">${p.enabled ? t('settings.pluginDisable') : t('settings.pluginEnable')}</button>
-          <button class="btn-mini" data-a="un">${t('settings.pluginUninstall')}</button></td>`;
-        tr.querySelector('[data-a=toggle]').onclick = () => {
-          p.enabled = !p.enabled;
-          renderPage();
-        };
-        tr.querySelector('[data-a=un]').onclick = () => {
-          state.plugins = state.plugins.filter((x) => x.id !== p.id);
-          renderPage();
-        };
-        tbody.appendChild(tr);
-      });
-      $('btn-plug-install').onclick = () => {
-        const v = $('plug-path').value.trim();
-        if (!v) return;
-        state.plugins.push({ id: v, name: v, enabled: true, desc: '' });
-        renderPage();
-      };
-
-      // SMTP 多账号（最多 10）
-      async function renderSmtpList() {
-        const r = await window.ccarmy.smtpList();
-        const accounts = r?.accounts || [];
-        $('smtp-n').textContent = String(accounts.length);
-        const box = $('smtp-accounts');
-        if (!accounts.length) {
-          box.innerHTML = `<div class="muted">${t('smtp.empty')}</div>`;
-          return;
-        }
-        box.innerHTML = accounts
-          .map(
-            (a) => `
-          <div class="prov-card" style="margin-bottom:8px" data-id="${escapeHtml(a.id)}">
-            <div class="inst-row">
-              <div><b>${escapeHtml(a.label)}</b> <span class="muted">${escapeHtml(a.user)}@${escapeHtml(a.host)}:${a.port}</span></div>
-              <span class="badge ${a.verified ? '' : 'off'}">${a.verified ? t('smtp.verified') : t('smtp.unverified')}</span>
-              <button class="btn-mini" data-v="${escapeHtml(a.id)}">${t('smtp.verify')}</button>
-              <button class="btn-mini" data-x="${escapeHtml(a.id)}">${t('smtp.remove')}</button>
-            </div>
-          </div>`
-          )
-          .join('');
-        box.querySelectorAll('[data-x]').forEach((b) => {
-          b.onclick = async () => {
-            await window.ccarmy.smtpRemove(b.dataset.x);
-            renderSmtpList();
-          };
-        });
-        box.querySelectorAll('[data-v]').forEach((b) => {
-          b.onclick = async () => {
-            const id = b.dataset.v;
-            const full = (state.smtpAccounts || []).find((x) => x.id === id);
-            if (!full?.pass) {
-              $('smtp-msg').textContent = t('smtp.fail');
-              return;
-            }
-            $('smtp-msg').textContent = t('common.loading');
-            const vr = await window.ccarmy.smtpVerify({ ...full, id });
-            $('smtp-msg').textContent = vr?.ok ? t('smtp.ok') : `${t('smtp.fail')}: ${vr?.message || ''}`;
-            renderSmtpList();
-          };
-        });
-      }
-      renderSmtpList();
-
-      $('btn-smtp-add').onclick = async () => {
-        const acc = {
-          label: $('smtp-label').value.trim(),
-          host: $('smtp-host').value.trim(),
-          port: parseInt($('smtp-port').value, 10) || 465,
-          secure: $('smtp-secure').checked,
-          user: $('smtp-user').value.trim(),
-          pass: $('smtp-pass').value,
-        };
-        if (!acc.host || !acc.user) {
-          $('smtp-msg').textContent = t('common.error');
-          return;
-        }
-        const r = await window.ccarmy.smtpAdd(acc);
-        if (r?.ok) {
-          state.smtpAccounts = [...(state.smtpAccounts || []), { ...acc, id: r.accounts[r.accounts.length - 1]?.id }];
-          $('smtp-label').value = '';
-          $('smtp-host').value = '';
-          $('smtp-user').value = '';
-          $('smtp-pass').value = '';
-          $('smtp-msg').textContent = t('instances.saved');
-        } else {
-          $('smtp-msg').textContent = String(r?.error || t('common.error'));
-        }
-        renderSmtpList();
-      };
-
-      // LAN
-      $('btn-lan-start').onclick = async () => {
-        const port = parseInt($('lan-port').value, 10) || 7788;
-        const r = await window.ccarmy.lanStart(port);
-        $('lan-msg').textContent = r?.ok ? `${t('lan.start')} :${r.port} ${r.nodeId}` : String(r?.error || '');
-      };
-      $('btn-lan-stop').onclick = async () => {
-        await window.ccarmy.lanStop();
-        $('lan-msg').textContent = t('lan.stop');
-      };
-      $('btn-lan-send').onclick = async () => {
-        const r = await window.ccarmy.lanSend({
-          host: $('lan-host').value.trim(),
-          port: parseInt($('lan-pport').value, 10) || 7788,
-          payload: { text: 'hello-from-ccarmy', ts: Date.now() },
-        });
-        $('lan-msg').textContent = r?.ok ? 'sent' : String(r?.error || '');
-      };
-      $('btn-lan-dual').onclick = async () => {
-        $('lan-msg').textContent = t('common.loading');
-        const r = await window.ccarmy.lanDualSmoke({
-          peerHost: $('lan-host').value.trim(),
-          peerPort: parseInt($('lan-pport').value, 10) || 7788,
-        });
-        $('lan-msg').textContent = JSON.stringify(r);
-        const inbox = await window.ccarmy.lanInbox().catch(() => null);
-        if (inbox?.messages?.length) {
-          $('lan-inbox').textContent = inbox.messages
-            .slice(-5)
-            .map((m) => `${m.from}: ${JSON.stringify(m.payload).slice(0, 80)}`)
-            .join('\n');
-        }
-      };
-
-      // WebGPU / 嵌入 GPU 开关
-      $('btn-webgpu').onclick = async () => {
-        $('webgpu-msg').textContent = t('common.loading');
-        try {
-          if (!navigator.gpu) throw new Error('no navigator.gpu');
-          const adapter = await navigator.gpu.requestAdapter();
-          if (!adapter) throw new Error('no adapter');
-          const info = adapter.info || {};
-          $('webgpu-msg').textContent =
-            t('webgpu.ok') +
-            ` · vendor=${info.vendor || ''} arch=${info.architecture || ''} desc=${info.description || ''}`;
-        } catch (e) {
-          $('webgpu-msg').textContent = `${t('webgpu.fail')} (${String(e.message || e).slice(0, 80)})`;
-        }
-      };
-      $('embed-gpu').onchange = (e) => {
-        state.embedUseGpu = e.target.checked;
-        window.ccarmy.settingsSave({ embedUseGpu: e.target.checked });
-      };
-
-      // Mesh
-      async function renderPeers() {
-        const r = await window.ccarmy.peersList();
-        const box = $('peer-list');
-        const peers = r?.peers || [];
-        box.innerHTML = `<div class="muted">${t('mesh.peers')} (${peers.length})</div>` +
-          peers
-            .map(
-              (p) =>
-                `<div class="inst-row" style="margin:4px 0"><span>${escapeHtml(p.name)} · ${escapeHtml(p.host)}:${p.port} · ${p.kind}</span>
-                 <button class="btn-mini" data-rm="${escapeHtml(p.nodeId)}">${t('mesh.remove')}</button></div>`
-            )
-            .join('') || `<div class="muted">—</div>`;
-        box.querySelectorAll('[data-rm]').forEach((b) => {
-          b.onclick = async () => {
-            await window.ccarmy.peersRemove(b.dataset.rm);
-            renderPeers();
-          };
-        });
-      }
-      renderPeers();
-      $('btn-mesh-start').onclick = async () => {
-        const port = parseInt($('mesh-port').value, 10) || 7788;
-        const r = await window.ccarmy.meshStart(port);
-        $('mesh-msg').textContent = r?.ok
-          ? `${t('mesh.start')} :${r.port}\n${r.notes?.lan || ''}\n${r.notes?.wanManual || ''}`
-          : String(r?.error || '');
-        renderPeers();
-      };
-      $('btn-mesh-stop').onclick = async () => {
-        await window.ccarmy.meshStop();
-        $('mesh-msg').textContent = t('mesh.stop');
-      };
-      $('btn-mesh-bcast').onclick = async () => {
-        const r = await window.ccarmy.meshBroadcast({ text: 'hello-mesh', ts: Date.now() });
-        $('mesh-msg').textContent = JSON.stringify(r);
-        const inbox = await window.ccarmy.meshInbox();
-        $('mesh-inbox').textContent = (inbox?.messages || [])
-          .slice(-5)
-          .map((m) => `${m.from}: ${JSON.stringify(m.payload).slice(0, 60)}`)
-          .join('\n');
-      };
-      $('btn-peer-add').onclick = async () => {
-        await window.ccarmy.peersAdd({
-          name: $('peer-name').value.trim() || 'peer',
-          host: $('peer-host').value.trim(),
-          port: parseInt($('peer-port').value, 10) || 7788,
-          kind: 'wan',
-        });
-        $('peer-name').value = '';
-        renderPeers();
-      };
     }
   }
+  /* renderPage-end */
 
-  function createGroupFlow() {
-    uiPrompt(t('list.createGroup'), state.nav === 'internalGroup' ? '项目群' : '外部协作群').then(async (name) => {
-      if (!name) return;
-      const type = state.nav === 'internalGroup' ? 'internal' : 'external';
-      const id = 'g-' + Date.now();
-      try {
-        await window.ccarmy.groupCreate({ groupId: id, name, type, directedMode: false });
-      } catch (e) {
-        uiAlert(String(e.message || e));
-        return;
-      }
-      state.groups.push({ id, name, type, members: [] });
-      renderList();
-    });
-  }
-
-  function addInstanceFlow() {
-    uiPrompt(t('instances.name'), '牛马-' + (state.instances.length + 1)).then((name) => {
-      if (!name) return;
-      const inst = {
-        id: 'inst-' + Date.now(),
-        name,
-        status: 'stopped',
-        dutyEligible: true,
-        model: 'deepseek-chat',
-        memoryFile: `persona/${name}.md`,
-        persona: '',
-      };
-      state.instances.push(inst);
-      state.selectedInstance = inst;
-      hideMain();
-      $('inst-detail').classList.remove('hidden');
-      renderInstanceDetail();
-      renderList();
-    });
-  }
-
-  function bindResizer(el, cssVar, min, max) {
-    let startX = 0;
-    let startW = 0;
-    let dragging = false;
-    el.addEventListener('mousedown', (e) => {
-      dragging = true;
-      el.classList.add('dragging');
-      startX = e.clientX;
-      startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue(cssVar), 10) || 280;
-      e.preventDefault();
-    });
-    window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const w = Math.min(max, Math.max(min, startW + (e.clientX - startX)));
-      document.documentElement.style.setProperty(cssVar, w + 'px');
-    });
-    window.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false;
-      el.classList.remove('dragging');
-    });
-  }
-
-  // ── 绑定 ──
-  document.querySelectorAll('.rail-item').forEach((el) => {
-    el.onclick = () => setNav(el.dataset.nav);
-  });
-  $('list-search').oninput = () => renderList();
-  $('btn-send').onclick = send;
-  $('btn-stop-all').onclick = stopAllAi;
-  $('btn-attach').onclick = async () => {
-    const r = await window.ccarmy.pickFile();
-    if (r?.ok) {
-      const name = r.path.split(/[\\/]/).pop();
-      state.attachments.push({ name, path: r.path });
-      renderAttach();
-    }
-  };
   $('btn-voice').onclick = async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('no');
@@ -1524,8 +1185,16 @@
       send();
     }
   });
-  $('urgency-sel')?.addEventListener('change', (e) => {
-    state.urgency = e.target.value;
+  $('urgency-bar')?.addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-u]');
+    if (!b) return;
+    const u = b.dataset.u;
+    if (u === 'P1') {
+      const ok = await uiConfirmCountdown(t('urgency.confirmBody'), t('urgency.confirmTitle'), 5);
+      if (!ok) return;
+    }
+    state.urgency = u;
+    $('urgency-bar').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
   });
   $('btn-console')?.addEventListener('click', () => {
     state.consoleOpen = !state.consoleOpen;
@@ -1588,6 +1257,89 @@
       /* noop */
     }
   })();
+
+  function createGroupFlow() {
+    uiPrompt(t('list.createGroup'), state.nav === 'internalGroup' ? t('placeholder.groupName') : t('placeholder.groupNameExt')).then(async (name) => {
+      if (!name) return;
+      const type = state.nav === 'internalGroup' ? 'internal' : 'external';
+      const id = 'g-' + Date.now();
+      try {
+        await window.ccarmy.groupCreate({ groupId: id, name, type, directedMode: false });
+      } catch (e) {
+        uiAlert(String(e.message || e));
+        return;
+      }
+      state.groups.push({ id, name, type, members: [] });
+      renderList();
+    });
+  }
+
+  function addInstanceFlow() {
+    uiPrompt(t('instances.name'), t('placeholder.agentName') + '-' + (state.instances.length + 1)).then((name) => {
+      if (!name) return;
+      const inst = {
+        id: 'inst-' + Date.now(),
+        name,
+        status: 'stopped',
+        dutyEligible: true,
+        model: 'deepseek-chat',
+        memoryFile: 'persona/' + name + '.md',
+        persona: t('instances.personaDefault'),
+      };
+      state.instances.push(inst);
+      state.selectedInstance = inst;
+      hideMain();
+      $('inst-detail').classList.remove('hidden');
+      renderInstanceDetail();
+      renderList();
+    });
+  }
+
+  function bindResizer(el, cssVar, min, max) {
+    if (!el) return;
+    let startX = 0;
+    let startW = 0;
+    let dragging = false;
+    el.addEventListener('mousedown', (e) => {
+      dragging = true;
+      el.classList.add('dragging');
+      startX = e.clientX;
+      startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue(cssVar), 10) || 280;
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const w = Math.min(max, Math.max(min, startW + (e.clientX - startX)));
+      document.documentElement.style.setProperty(cssVar, w + 'px');
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove('dragging');
+    });
+  }
+
+  function bindVerticalResizer(handleId, targetId, dir) {
+    const el = $(handleId);
+    const target = $(targetId);
+    if (!el || !target) return;
+    let y0 = 0, h0 = 0, drag = false;
+    el.addEventListener('mousedown', (e) => {
+      drag = true; y0 = e.clientY; h0 = target.getBoundingClientRect().height; e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!drag) return;
+      const delta = dir === 'up' ? (y0 - e.clientY) : (e.clientY - y0);
+      const h = Math.min(400, Math.max(80, h0 + delta));
+      target.style.height = h + 'px';
+      target.style.maxHeight = h + 'px';
+    });
+    window.addEventListener('mouseup', () => { drag = false; });
+  }
+  // 控制台上方：拉伸控制台自身
+  bindVerticalResizer('console-top-resizer', 'console-pane', 'up');
+  // 控制台下方（输入框上方）：拉伸输入区
+  bindVerticalResizer('input-top-resizer', 'input', 'up');
 
   bindResizer($('col-resizer'), '--list-w', 200, 420);
   bindResizer($('panel-resizer'), '--panel-w', 220, 480);
@@ -1717,12 +1469,12 @@
       state.instances = [
         {
           id: 'demo-1',
-          name: '主力牛马',
+          name: 'demo.agent',
           status: 'stopped',
           dutyEligible: true,
           model: 'deepseek-chat',
           memoryFile: 'persona/main.md',
-          persona: '性格：沉稳可靠\n角色：值班执行者\n戒律：不泄露密钥，不越权写文件',
+          persona: 'instances.personaDefault',
         },
       ];
     }
