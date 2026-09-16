@@ -14,11 +14,23 @@
         <span class="tb-brand" id="tb-brand">CCArmy</span>
         <span class="muted" id="tb-sub"></span>
       </div>
-      <div class="tb-actions">
-        <button id="btn-ui-refresh" title="刷新界面" aria-label="refresh"><span class="tb-icon">⟳</span></button>
-        <button id="btn-win-min" title="最小化" aria-label="minimize"><span class="tb-icon">—</span></button>
-        <button id="btn-win-max" title="最大化" aria-label="maximize"><span class="tb-icon">▢</span></button>
-        <button id="btn-win-close" class="tb-close" title="关闭" aria-label="close"><span class="tb-icon">×</span></button>
+      <div class="tb-actions" id="tb-actions">
+        <button id="btn-always-top" title="置顶窗口" aria-label="always on top">
+          <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l1.2 2.6 2.8.4-2 2 .5 2.9L8 8.1 5.5 9.4l.5-2.9-2-2 2.8-.4L8 1.5zM3 12.5h10v1H3v-1z"/></svg>
+        </button>
+        <button id="btn-ui-refresh" title="刷新并清除缓存" aria-label="refresh">
+          <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.7 0 3.2.7 4.2 1.9V3h1.5v4.5H9.2V6.2h1.9A4 4 0 1 0 12 8h1.5z"/></svg>
+        </button>
+        <span class="tb-sep" aria-hidden="true"></span>
+        <button id="btn-win-min" title="最小化" aria-label="minimize">
+          <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 7.5h10v1H3v-1z"/></svg>
+        </button>
+        <button id="btn-win-max" title="最大化" aria-label="maximize">
+          <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v8H4V4zm1 1v6h6V5H5z"/></svg>
+        </button>
+        <button id="btn-win-close" class="tb-close" title="关闭" aria-label="close">
+          <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+        </button>
       </div>
     </div>
     <div id="app-body">

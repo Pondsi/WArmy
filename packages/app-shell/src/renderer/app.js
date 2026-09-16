@@ -1546,6 +1546,21 @@
   $('btn-win-max')?.addEventListener('click', () => window.ccarmy.winMaximize());
   $('btn-win-close')?.addEventListener('click', () => window.ccarmy.winClose());
   $('btn-ui-refresh')?.addEventListener('click', () => window.ccarmy.winReload());
+  $('btn-always-top')?.addEventListener('click', async () => {
+    const r = await window.ccarmy.winAlwaysOnTop();
+    $('btn-always-top')?.classList.toggle('tb-active', !!r?.alwaysOnTop);
+  });
+
+  (async () => {
+    try {
+      const p = await window.ccarmy.platformInfo();
+      if (p?.isMac) document.body.classList.add('platform-darwin');
+      else if (p?.isWin) document.body.classList.add('platform-win32');
+      else if (p?.isLinux) document.body.classList.add('platform-linux');
+    } catch {
+      /* noop */
+    }
+  })();
 
   bindResizer($('col-resizer'), '--list-w', 200, 420);
   bindResizer($('panel-resizer'), '--panel-w', 220, 480);

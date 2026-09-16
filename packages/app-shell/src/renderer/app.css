@@ -140,7 +140,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   -webkit-app-region: no-drag;
   margin-left: 12px;
 }
-/* 四颗窗控按钮：统一尺寸与视觉 */
+/* 四颗窗控 + 置顶/刷新：统一 46×40，SVG 同尺寸 */
 .tb-actions button {
   width: 46px;
   height: 40px;
@@ -148,28 +148,49 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: transparent;
   color: var(--ink);
   cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   transition: background 0.12s;
 }
+.tb-svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  fill: currentColor;
+  pointer-events: none;
+}
 .tb-actions button:hover { background: var(--hover); }
 .tb-actions button:active { filter: brightness(0.92); }
-/* 刷新与窗控之间留出分隔 */
+.tb-actions button.tb-active { background: var(--hover); color: var(--accent); }
+.tb-actions #btn-always-top {
+  margin-right: 0;
+}
 .tb-actions #btn-ui-refresh {
-  margin-right: 10px;
-  border-right: 1px solid var(--line);
-  width: 44px;
+  margin-right: 8px;
+}
+.tb-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--line);
+  margin: 0 4px 0 4px;
+  flex-shrink: 0;
 }
 .tb-actions .tb-close:hover { background: #e81123; color: #fff; }
-/* Windows 风格字符（macOS 可换成 traffic-light 布局，见下） */
-.tb-actions .tb-icon {
-  font-size: 14px;
-  font-weight: 500;
-  transform: translateY(0);
+/* macOS：隐藏自定义窗控，使用系统红绿灯 */
+body.platform-darwin #tb-actions {
+  display: none;
+}
+body.platform-darwin #titlebar {
+  padding-left: 76px; /* 给系统红绿灯留位 */
+}
+body.platform-darwin #btn-always-top {
+  display: inline-flex;
+}
+/* mac 上仍可提供置顶（在标题区左侧操作，无刷新） */
+body.platform-darwin .tb-mac-extra {
+  display: inline-flex;
 }
 
 #app {

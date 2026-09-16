@@ -144,13 +144,17 @@ function startMemoryAsync() {
 }
 
 function createWindow() {
+  const isMac = process.platform === 'darwin';
   win = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 960,
     minHeight: 600,
     title: 'CCArmy',
-    frame: false,
+    // macOS：系统原生标题栏与红绿灯；Windows/Linux：无边框 + 自定义窗控
+    frame: isMac,
+    titleBarStyle: isMac ? 'hiddenInset' : 'default',
+    trafficLightPosition: isMac ? { x: 12, y: 10 } : undefined,
     backgroundColor: '#ededed',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -162,7 +166,7 @@ function createWindow() {
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('ready-to-show', () => {
     win?.show();
-    boot('window ready-to-show');
+    boot(`window ready platform=${process.platform}`);
   });
 }
 
@@ -965,6 +969,23 @@ ipcMain.handle('ccarmy:win-maximize', () => {
 });
 ipcMain.handle('ccarmy:win-close', () => win?.close());
 ipcMain.handle('ccarmy:win-reload', () => {
-  win?.webContents.reload();
+  if (!win) return { ok: false };
+  // 清 HTTP 缓存后重载，避免旧 JS/CSS 残留
+  const ses = win.webContents.session;
+  ses.clearCache().catch(() => {});
+  win.webContents.reloadIgnoringCache();
   return { ok: true };
 });
+ipcMain.handle('ccarmy:win-always-on-top', (_e, on?: boolean) => {
+  if (!win) return { ok: false };
+  const next = typeof on === 'boolean' ? on : !win.isAlwaysOnTop();
+  win.setAlwaysOnTop(next);
+  return { ok: true, alwaysOnTop: next };
+});
+ipcMain.handle('ccarmy:platform', () => ({
+  ok: true,
+  platform: process.platform,
+  isMac: process.platform === 'darwin',
+  isWin: process.platform === 'win32',
+  isLinux: process.platform === 'linux',
+}));

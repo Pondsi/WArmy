@@ -79,4 +79,6 @@ contextBridge.exposeInMainWorld('ccarmy', {
   winMaximize: () => ipcRenderer.invoke('ccarmy:win-maximize'),
   winClose: () => ipcRenderer.invoke('ccarmy:win-close'),
   winReload: () => ipcRenderer.invoke('ccarmy:win-reload'),
+  winAlwaysOnTop: (on) => ipcRenderer.invoke('ccarmy:win-always-on-top', on),
+  platformInfo: () => ipcRenderer.invoke('ccarmy:platform'),
 });
