@@ -52,9 +52,12 @@
         <button class="rail-item" data-nav="externalGroup" data-i18n-title="tip.externalGroup">
           <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M16,78 C16,62 24,54 34,54 C44,54 52,62 52,78"/><circle cx="66" cy="34" r="12"/><path d="M48,78 C48,62 56,54 66,54 C76,54 84,62 84,78"/></g></svg>
         </button>
+          <span id="join-badge" class="badge hidden" style="position:absolute;top:-2px;right:-2px;background:#fa5151;color:#fff;min-width:16px;height:16px;font-size:10px;display:grid;place-items:center;border-radius:99px">0</span>
+        </div>
       </div>
       <div class="rail-bottom">
-        <button class="rail-item" data-nav="instances" data-i18n-title="tip.instances">
+        <div style="position:relative">
+          <button class="rail-item" data-nav="instances" data-i18n-title="tip.instances">
           <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>
         </button>
         <button class="rail-item" data-nav="settings" data-i18n-title="tip.settings">
@@ -107,6 +110,7 @@
                   <button type="button" data-s="full" data-i18n="chat.securityFull"></button>
                 </div>
               </div>
+              <button id="btn-join-qr" class="btn-mini" data-i18n="join.scanQr" data-i18n-title="join.qrHint"></button>
               <input id="chat-search" style="width:100px" data-i18n-placeholder="list.search"/>
               <button id="btn-chat-search" class="btn-mini">🔍</button>
               <button id="btn-open-win" class="btn-mini" data-i18n="chat.openWindow" data-i18n-title="chat.openWindowTip"></button>

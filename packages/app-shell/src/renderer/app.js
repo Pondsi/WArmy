@@ -1188,6 +1188,7 @@
     if (state.nav === 'settings') {
       box.innerHTML = `
         <h1>${t('nav.settings')}</h1>
+        <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.ui')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.language')}</h2>
           <select id="sel-locale" title="${escapeHtml(t('settings.language'))}">
@@ -1219,8 +1220,9 @@
           </select>
           <p class="muted" style="margin:8px 0 0">${t('settings.securityHint')}</p>
         </div>
+        <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.notify')}</h2></div>
         <div class="set-section set-card">
-          <h2>${t('settings.sound')}</h2>
+          <h2>${t('settings.soundName')}</h2>
           <div class="sound-row">
             <label><input type="checkbox" id="s-complete" ${state.sound.complete ? 'checked' : ''}/> ${t('settings.soundComplete')}</label>
             <label><input type="checkbox" id="s-request" ${state.sound.request ? 'checked' : ''}/> ${t('settings.soundRequest')}</label>
@@ -1250,11 +1252,13 @@
             <div class="muted">${t('settings.emailHint')}</div>
           </div>
         </div>
+        <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.model')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.providers')}</h2>
           <div id="prov-list"></div>
           <button class="btn-mini" id="btn-add-prov">${t('settings.addProvider')}</button>
         </div>
+        <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.func')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.plugins')}</h2>
           <table class="plugins">
@@ -1298,40 +1302,6 @@
           <div class="muted" id="lan-inbox" style="margin-top:8px;max-height:100px;overflow:auto"></div>
         </div>
         <div class="set-section set-card">
-          <h2>${t('settings.embedding')}</h2>
-          <p class="muted">${t('settings.embeddingHint')}</p>
-          <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.embeddingModel')}</label>
-            <input id="embed-model" value="${escapeHtml(state.embedModel || 'Xenova/bge-small-zh-v1.5')}"/>
-          </div>
-          <label style="display:block;margin-bottom:8px">
-            <input type="checkbox" id="embed-gpu" ${state.embedUseGpu !== false ? 'checked' : ''}/>
-            ${t('settings.embeddingGpu')}
-          </label>
-          <div class="muted">${t('embed.gpuHint')}</div>
-          <div style="margin-top:8px">
-            <button class="btn-mini" id="btn-webgpu">${t('webgpu.test')}</button>
-            <span class="muted" id="webgpu-msg"></span>
-          </div>
-        </div>
-        <div class="set-section set-card">
-          <h2>${t('join.title')}</h2>
-          <div class="join-row">
-            <div class="join-qr" id="join-qr"></div>
-            <div>
-              <div class="muted" style="margin-bottom:6px">${t('join.qrHint')}</div>
-              <div class="join-link" id="join-link">—</div>
-              <div style="margin-top:8px"><button class="btn-mini" id="btn-join-copy">${t('join.copyLink')}</button>
-              <span class="muted" id="join-msg"></span></div>
-              <div class="field" style="margin-top:10px">
-                <label>${t('join.scanHint')}</label>
-                <input id="join-input" placeholder="${escapeHtml(t('join.pastePlaceholder'))}"/>
-              </div>
-              <button class="btn-mini" id="btn-join-accept">${t('join.accept')}</button>
-            </div>
-          </div>
-        </div>
-        <div class="set-section set-card">
           <h2>${t('mesh.title')}</h2>
           <p class="muted">${t('mesh.hint')}</p>
           <div class="inst-row">
@@ -1355,10 +1325,31 @@
           <div id="archived-box" class="muted">—</div>
         </div>
         <div class="set-section set-card">
-          <h2>${t('settings.importProviders')}</h2>
-          <p class="muted">${t('settings.importHint')}</p>
-          <button class="btn-mini" id="btn-import-openclaw">${t('settings.importDo')}</button>
-          <span class="muted" id="import-msg"></span>
+          <h2>${t('settings.embeddingSpecial')}</h2>
+          <p class="muted">${t('settings.specialModelsHint')}</p>
+          <div class="field" style="margin-bottom:8px">
+            <label>${t('settings.asrModel')}</label>
+            <select id="sm-asr">
+              <option value="ollama">Ollama (whisper-tiny)</option>
+              <option value="whisper-cpp">whisper.cpp (local)</option>
+              <option value="openai">OpenAI Whisper API</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:8px">
+            <label>${t('settings.embeddingModel')}</label>
+            <select id="sm-embed">
+              <option value="onnx">ONNX (bge-small-zh)</option>
+              <option value="ollama">Ollama embedding</option>
+              <option value="api">API embedding</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:8px">
+            <label>${t('settings.organizerModel')}</label>
+            <input id="sm-organizer" placeholder="deepseek-chat"/>
+          </div>
+          <div style="margin-top:8px"><button class="btn-mini" id="btn-webgpu">${t('webgpu.test')}</button> <span class="muted" id="webgpu-msg"></span></div>
+          <button class="btn-mini" id="btn-save-special">${t('common.save')}</button>
+          <span class="muted" id="sm-msg"></span>
         </div>
         <div class="set-section set-card">
           <h2>${t('settings.specialModels')}</h2>
@@ -1380,8 +1371,7 @@
             </select>
           </div>
           <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.summaryModel')}</label>
-            <input id="sm-summary" placeholder="deepseek-flash"/>
+            
           </div>
           <div class="field" style="margin-bottom:8px">
             <label>${t('settings.organizerModel')}</label>
@@ -1389,6 +1379,10 @@
           </div>
           <button class="btn-mini" id="btn-save-special">${t('common.save')}</button>
           <span class="muted" id="sm-msg"></span>
+        </div>
+        <div class="set-section set-card">
+          <h2>${t('join.blacklistTitle')}</h2>
+          <div id="blacklist-box" class="muted">${t('join.blacklistEmpty')}</div>
         </div>
         <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
@@ -1475,6 +1469,18 @@
           $('import-msg').textContent = String(r?.error || t('common.error'));
         }
       });
+      $('btn-webgpu')?.addEventListener('click', async () => {
+        $('webgpu-msg').textContent = t('common.loading');
+        try {
+          if (!navigator.gpu) throw new Error('no navigator.gpu');
+          const adapter = await navigator.gpu.requestAdapter();
+          if (!adapter) throw new Error('no adapter');
+          const info = adapter.info || {};
+          $('webgpu-msg').textContent = t('webgpu.ok') + ' · vendor=' + (info.vendor||'') + ' arch=' + (info.architecture||'');
+        } catch (e) {
+          $('webgpu-msg').textContent = t('webgpu.fail');
+        }
+      });
       $('btn-save-special')?.addEventListener('click', async () => {
         const cfg = {
           asr: { provider: $('sm-asr')?.value || 'ollama' },
@@ -1517,6 +1523,23 @@
         if (!v) return;
         $('join-msg').textContent = v.startsWith('ccarmy://') ? t('join.ok') : t('join.fail');
       });
+
+      async function refreshBlacklist() {
+        const box = $('blacklist-box');
+        if (!box) return;
+        const r = await window.ccarmy.blacklistList().catch(() => null);
+        const items = r?.items || [];
+        box.innerHTML = items.length
+          ? items.map((b) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(b.name) + ' · ' + escapeHtml(b.target) + ' · ' + new Date(b.blockedAt).toLocaleString() + '</span><button class="btn-mini" data-unblock="' + escapeHtml(b.id) + '">' + t('join.removeBlacklist') + '</button></div>').join('')
+          : t('join.blacklistEmpty');
+        box.querySelectorAll('[data-unblock]').forEach((btn) => {
+          btn.onclick = async () => {
+            await window.ccarmy.blacklistRemove(btn.dataset.unblock).catch(() => {});
+            refreshBlacklist();
+          };
+        });
+      }
+      refreshBlacklist();
 
       async function refreshArchived() {
         const box = $('archived-box');
@@ -2256,6 +2279,58 @@
     });
   }
 
+  // ── 加入请求处理 ──
+  async function refreshJoinBadge() {
+    const r = await window.ccarmy.joinPending().catch(() => null);
+    const n = r?.count || 0;
+    const badge = $('join-badge');
+    if (badge) {
+      badge.textContent = String(n);
+      badge.classList.toggle('hidden', n === 0);
+    }
+  }
+  setInterval(() => raf(refreshJoinBadge), 10000);
+  refreshJoinBadge();
+
+  function showJoinRequestModal(req) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = t('join.requestBadge');
+      $('modal-body').innerHTML =
+        '<div>' + t('join.requester') + ': ' + escapeHtml(req.name) + '</div>' +
+        '<div>' + t('join.kind') + ': ' + escapeHtml(req.kind) + '</div>' +
+        '<div>' + t('join.target') + ': ' + escapeHtml(req.targetType) + ' ' + escapeHtml(req.target) + '</div>' +
+        '<div>' + t('join.applyTime') + ': ' + new Date(req.ts).toLocaleString() + '</div>' +
+        '<div>' + t('join.expireTime') + ': ' + new Date(req.expireAt).toLocaleString() + '</div>';
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const mk = (label, cls, fn) => {
+        const b = document.createElement('button');
+        b.className = cls;
+        b.textContent = label;
+        b.onclick = async () => { root.classList.add('hidden'); await fn(); };
+        acts.appendChild(b);
+      };
+      mk(t('join.reject'), 'btn-mini', () => resolve('reject'));
+      mk(t('join.blacklist'), 'btn-danger', () => resolve('block'));
+      mk(t('join.agree'), 'btn-primary', () => resolve('agree'));
+      root.classList.remove('hidden');
+    });
+  }
+
+  document.querySelectorAll('[data-nav="instances"]').forEach((el) => {
+    el.addEventListener('click', async () => {
+      const r = await window.ccarmy.joinPending().catch(() => null);
+      if (r?.items?.length) {
+        const req = r.items[0];
+        const action = await showJoinRequestModal(req);
+        await window.ccarmy.joinRespond({ id: req.id, action });
+        refreshJoinBadge();
+        uiAlert(t('instances.saved'));
+      }
+    });
+  });
+
   // ── 顶层交互绑定（必须全局执行一次） ──
   document.querySelectorAll('.rail-item').forEach((el) => {
     el.onclick = () => setNav(el.dataset.nav);
@@ -2441,6 +2516,45 @@
       (det?.entities?.length
         ? '<div style="margin-top:6px">' + det.entities.slice(0, 3).map((e) => escapeHtml(e.name) + ' [' + e.kind + ']').join(', ') + '</div>'
         : '');
+  });
+
+  // 加入项目/群聊：扫码或粘贴链接
+  $('btn-join-qr')?.addEventListener('click', async () => {
+    const root = $('modal-root');
+    $('modal-title').textContent = t('join.title');
+    $('modal-body').innerHTML =
+      '<div class="muted" style="margin-bottom:8px">' + t('join.dropHint') + '</div>' +
+      '<input type="file" id="join-qr-file" accept="image/*" style="margin-bottom:8px"/>' +
+      '<div class="muted" style="margin-bottom:8px">' + t('join.scanHint') + '</div>' +
+      '<input id="join-link-input" placeholder="' + t('join.pastePlaceholder') + '" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px"/>' +
+      '<div id="join-qr-msg" class="muted" style="margin-top:6px"></div>';
+    const acts = $('modal-actions');
+    acts.innerHTML = '';
+    const cancel = document.createElement('button');
+    cancel.className = 'btn-mini';
+    cancel.textContent = t('common.cancel');
+    cancel.onclick = () => { root.classList.add('hidden'); };
+    const ok = document.createElement('button');
+    ok.className = 'btn-primary';
+    ok.textContent = t('join.apply');
+    ok.onclick = async () => {
+      const link = $('join-link-input')?.value?.trim();
+      if (!link) { $('join-qr-msg').textContent = t('join.qrFail'); return; }
+      const r = await window.ccarmy.joinRequest({
+        name: state.profile.username || 'user',
+        kind: 'human',
+        target: state.selectedChat?.name || link,
+        targetType: state.selectedChat?.kind === 'internal' ? 'project' : 'group',
+      }).catch(() => null);
+      $('join-qr-msg').textContent = r?.ok ? t('join.ok') : t('join.fail');
+      setTimeout(() => root.classList.add('hidden'), 800);
+    };
+    acts.append(cancel, ok);
+    root.classList.remove('hidden');
+    // 文件选择后提示（完整二维码识别需 jsQR，这里提示粘贴链接）
+    $('join-qr-file')?.addEventListener('change', () => {
+      $('join-qr-msg').textContent = t('join.scanHint');
+    });
   });
 
   $('btn-chat-search')?.addEventListener('click', async () => {

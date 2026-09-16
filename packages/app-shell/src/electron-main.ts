@@ -1722,3 +1722,37 @@ ipcMain.handle('ccarmy:asr-ollama', async (_e, payload: { audioBase64: string; m
     return { ok: true, text: data.response || '' };
   } catch (e) { return { ok: false, error: String(e) }; }
 });
+
+// ── 加入请求 / 黑名单 ──
+const joinRequests: Array<{ id: string; name: string; kind: string; target: string; targetType: string; ts: number; expireAt: number }> = [];
+const blacklist: Array<{ id: string; name: string; blockedAt: number; target: string }> = [];
+ipcMain.handle('ccarmy:join-request', (_e, payload: { name: string; kind: string; target: string; targetType: string }) => {
+  const id = "jr-" + Date.now();
+  const ts = Date.now();
+  joinRequests.push({ id, name: payload.name, kind: payload.kind, target: payload.target, targetType: payload.targetType, ts, expireAt: ts + 30 * 24 * 3600_000 });
+  audit?.log('join.request', { id, name: payload.name, target: payload.target });
+  return { ok: true, id };
+});
+ipcMain.handle('ccarmy:join-pending', () => {
+  const now = Date.now();
+  const valid = joinRequests.filter((r) => r.expireAt > now);
+  return { ok: true, items: valid, count: valid.length };
+});
+ipcMain.handle('ccarmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
+  const idx = joinRequests.findIndex((r) => r.id === payload.id);
+  if (idx < 0) return { ok: false };
+  const req = joinRequests[idx];
+  if (!req) return { ok: false };
+  if (payload.action === 'block') {
+    blacklist.push({ id: req.id, name: req.name, blockedAt: Date.now(), target: req.target });
+  }
+  joinRequests.splice(idx, 1);
+  audit?.log('join.respond', { id: req.id, action: payload.action });
+  return { ok: true, remaining: joinRequests.filter((r) => r.expireAt > Date.now()).length };
+});
+ipcMain.handle('ccarmy:blacklist-list', () => ({ ok: true, items: blacklist }));
+ipcMain.handle('ccarmy:blacklist-remove', (_e, id: string) => {
+  const i = blacklist.findIndex((b) => b.id === id);
+  if (i >= 0) blacklist.splice(i, 1);
+  return { ok: true };
+});
