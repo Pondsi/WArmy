@@ -4,12 +4,49 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 
 export interface LocalProfile {
   username: string;
   avatarDataUrl: string;
   email: string;
   passwordHash?: string;
+  /** 本机唯一 ID：9 位数字，首次生成后写入配置文件 */
+  deviceId?: string;
+}
+
+/**
+ * 采集本机熵源（网络 / 硬件 / IP / 13 位时间戳），
+ * 哈希后折算成 9 位十进制数字（100000000–999999999），几乎不会重复。
+ */
+function collectEntropy(): string {
+  const parts: string[] = [];
+  parts.push(String(Date.now()));                 // 13 位毫秒时间戳
+  parts.push(`${process.platform}-${process.arch}`);
+  try { parts.push(os.hostname()); } catch { /* 忽略 */ }
+  try { parts.push(os.userInfo().username); } catch { /* 忽略 */ }
+  try {
+    const cpus = os.cpus();
+    const first = cpus[0];
+    if (first) parts.push(`${first.model}#${cpus.length}`);
+  } catch { /* 忽略 */ }
+  try { parts.push(String(os.totalmem())); } catch { /* 忽略 */ }
+  try {
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets).sort()) {
+      for (const a of nets[name] || []) {
+        if (a.internal) continue;
+        parts.push(`${name}/${a.family}/${a.mac}/${a.address}`);  // MAC + 局域网 IP
+      }
+    }
+  } catch { /* 忽略 */ }
+  return parts.join('|');
+}
+
+export function generateDeviceId(): string {
+  const digest = crypto.createHash('sha256').update(collectEntropy()).digest('hex');
+  const n = BigInt('0x' + digest.slice(0, 16)) % 900000000n;
+  return String(n + 100000000n);   // 恒为 9 位
 }
 
 export interface SmtpAccount {
@@ -52,11 +89,18 @@ export class LocalAccountStore {
   constructor(private file: string) {}
 
   loadProfile(): LocalProfile {
+    let p: LocalProfile;
     try {
-      return JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      p = JSON.parse(fs.readFileSync(this.file, 'utf8'));
     } catch {
-      return { username: '主人', avatarDataUrl: '', email: '' };
+      p = { username: '主人', avatarDataUrl: '', email: '' };
     }
+    // 首次访问即生成 9 位 ID 并落盘，之后一直跟随配置文件
+    if (!p.deviceId) {
+      p.deviceId = generateDeviceId();
+      try { this.saveProfile(p); } catch { /* 只读目录时忽略 */ }
+    }
+    return p;
   }
 
   saveProfile(p: LocalProfile): LocalProfile {

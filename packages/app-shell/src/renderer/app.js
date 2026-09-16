@@ -27,7 +27,7 @@
     listWidth: 280,
     panelWidth: 300,
     attachments: [],
-    profile: { loggedIn: false, username: 'nav.avatar', avatarDataUrl: '', email: '' },
+    profile: { loggedIn: false, username: 'nav.avatar', avatarDataUrl: '', email: '', deviceId: '' },
     queues: {},
     board: {
       /** ADR：外部聚合看板 — 会话进展只读，点击跳转；值班者写 board.jsonl */
@@ -1204,7 +1204,7 @@
               <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
               <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
               <div class="muted">${p.loggedIn ? escapeHtml(p.email || '') : t('me.notLoggedIn')}</div>
-              <div class="muted me-hint">${t('me.loginHint')}</div>
+              <div class="muted me-hint">${t('me.userId')}: ${escapeHtml(p.deviceId || '—')}</div>
               <div style="margin-top:8px;display:flex;gap:8px">
                 <button class="btn-mini" id="p-login">${t('me.login')}</button>
                 <button class="btn-mini" id="p-reg">${t('me.register')}</button>
@@ -1333,6 +1333,23 @@
             <div class="muted">${t('settings.emailHint')}</div>
           </div>
         </div>
+        <div class="set-section set-card">
+          <h2>${t('smtp.title')} <span class="muted">(${t('smtp.count')} <span id="smtp-n">0</span>/10 · ${t('smtp.max10')})</span></h2>
+          <p class="muted">${t('smtp.hint')}</p>
+          <div id="smtp-accounts"></div>
+          <div class="inst-row" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:10px">
+            <div class="field"><label>${t('smtp.label')}</label><input id="smtp-label" placeholder="${escapeHtml(t('placeholder.email'))}"/></div>
+            <div class="field"><label>${t('smtp.host')}</label><input id="smtp-host" value="" placeholder="smtp.example.com"/></div>
+            <div class="field"><label>${t('smtp.port')}</label><input id="smtp-port" value="465"/></div>
+          </div>
+          <div class="inst-row" style="margin-top:8px">
+            <label><input type="checkbox" id="smtp-secure" checked/> ${t('smtp.secure')}</label>
+            <div class="field"><label>${t('smtp.user')}</label><input id="smtp-user"/></div>
+            <div class="field"><label>${t('smtp.pass')}</label><input id="smtp-pass" type="password"/></div>
+            <button class="btn-mini" id="btn-smtp-add">${t('smtp.add')}</button>
+          </div>
+          <span class="muted" id="smtp-msg"></span>
+        </div>
         <div class="set-section" data-sec="model"><h2 style="color:var(--accent)">${t('settings.section.model')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.providers')}</h2>
@@ -1348,23 +1365,6 @@
           </table>
           <div style="margin-top:8px"><input id="plug-path" placeholder="package or path" style="width:55%"/>
             <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button></div>
-        </div>
-        <div class="set-section set-card">
-          <h2>${t('smtp.title')} <span class="muted">(${t('smtp.count')} <span id="smtp-n">0</span>/10 · ${t('smtp.max10')})</span></h2>
-          <p class="muted">${t('smtp.hint')}</p>
-          <div id="smtp-accounts"></div>
-          <div class="inst-row" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:10px">
-            <div class="field"><label>${t('smtp.label')}</label><input id="smtp-label" placeholder="' + t('placeholder.email') + '"/></div>
-            <div class="field"><label>${t('smtp.host')}</label><input id="smtp-host" value="" placeholder="smtp.example.com"/></div>
-            <div class="field"><label>${t('smtp.port')}</label><input id="smtp-port" value="465"/></div>
-          </div>
-          <div class="inst-row" style="margin-top:8px">
-            <label><input type="checkbox" id="smtp-secure" checked/> ${t('smtp.secure')}</label>
-            <div class="field"><label>${t('smtp.user')}</label><input id="smtp-user"/></div>
-            <div class="field"><label>${t('smtp.pass')}</label><input id="smtp-pass" type="password"/></div>
-            <button class="btn-mini" id="btn-smtp-add">${t('smtp.add')}</button>
-          </div>
-          <span class="muted" id="smtp-msg"></span>
         </div>
         <div class="set-section set-card">
           <h2>${t('lan.title')}</h2>
@@ -1392,8 +1392,8 @@
             <button class="btn-mini" id="btn-mesh-bcast">${t('mesh.broadcast')}</button>
           </div>
           <div class="inst-row" style="margin-top:8px">
-            <div class="field"><label>${t('mesh.name')}</label><input id="peer-name" placeholder="' + t('placeholder.nodeName') + '"/></div>
-            <div class="field"><label>${t('lan.peerHost')}</label><input id="peer-host" placeholder="' + t('placeholder.peerHost') + '"/></div>
+            <div class="field"><label>${t('mesh.name')}</label><input id="peer-name" placeholder="${escapeHtml(t('placeholder.nodeName'))}"/></div>
+            <div class="field"><label>${t('lan.peerHost')}</label><input id="peer-host" placeholder="${escapeHtml(t('placeholder.peerHost'))}"/></div>
             <div class="field"><label>${t('lan.peerPort')}</label><input id="peer-port" value="7788"/></div>
             <button class="btn-mini" id="btn-peer-add">${t('mesh.addPeer')}</button>
           </div>
@@ -2896,6 +2896,7 @@
         state.profile.username = p.profile.username || state.profile.username;
         state.profile.email = p.profile.email || '';
         state.profile.avatarDataUrl = p.profile.avatarDataUrl || '';
+        state.profile.deviceId = p.profile.deviceId || '';
       }
     } catch {
       /* noop */

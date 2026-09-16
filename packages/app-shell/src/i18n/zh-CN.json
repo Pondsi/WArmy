@@ -165,6 +165,7 @@
   "me.loginHint": "登录功能开发中，可先编辑本地资料",
   "me.notAvailable": "暂未开放登录功能",
   "me.username": "用户名",
+  "me.userId": "ID",
   "me.avatar": "头像",
   "me.avatarUpload": "上传头像",
   "me.avatarHint": "支持 PNG / JPG，点击更换",

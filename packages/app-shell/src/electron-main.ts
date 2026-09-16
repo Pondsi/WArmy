@@ -215,7 +215,7 @@ function createWindow() {
       backgroundThrottling: false,
       spellcheck: false,
     },
-    icon: path.join(__dirname, 'renderer', 'icons', 'logo-256.png'),
+    icon: path.join(__dirname, 'renderer', 'icons', 'block-256.png'),
   });
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('ready-to-show', () => {
@@ -1377,7 +1377,7 @@ let tray: import('electron').Tray | null = null;
 function createTray() {
   if (tray) return;
   // 用真实 logo 生成托盘图标（16/32 均可，Windows 托盘实际显示 16px）
-  const iconPath = path.join(__dirname, 'renderer', 'icons', 'logo-32.png');
+  const iconPath = path.join(__dirname, 'renderer', 'icons', 'block-32.png');
   let img = nativeImage.createFromPath(iconPath);
   if (img.isEmpty()) {
     // 回退：16x16 占位
@@ -1387,16 +1387,10 @@ function createTray() {
   }
   const t = new Tray(img);
   t.setToolTip('无限牛马 CCArmy');
+  // 托盘菜单：只有一个「下班」（= 退出）
   t.setContextMenu(
     Menu.buildFromTemplate([
-      { label: '打开主窗口', click: () => {
-        if (!win) { createWindow(); return; }
-        if (win.isMinimized()) win.restore();
-        win.show();
-        win.focus();
-      }},
-      { type: 'separator' },
-      { label: '退出', click: () => { app.quit(); } },
+      { label: '下班', click: () => { app.quit(); } },
     ])
   );
   t.on('double-click', () => {

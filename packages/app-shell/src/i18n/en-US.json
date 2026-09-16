@@ -149,6 +149,7 @@
   "me.register": "Sign up",
   "me.saveProfile": "Save profile",
   "me.username": "Username",
+  "me.userId": "ID",
   "mesh.addPeer": "Add peer",
   "mesh.broadcast": "Broadcast",
   "mesh.hint": "LAN auto-discover via UDP; for WAN add peer public-ip:port (both sides need port mapping). No central server; symmetric NAT on both sides cannot connect without a relay.",
