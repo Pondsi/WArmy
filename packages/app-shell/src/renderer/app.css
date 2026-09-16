@@ -370,8 +370,8 @@ body.platform-darwin .tb-mac-extra {
 .chat-actions { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .messages {
   flex: 1; overflow: auto; padding: var(--sp-4);
-  content-visibility: auto;
-  contain-intrinsic-size: auto 500px;
+  contain: strict;
+  height: 0;
 }
 .msg { display: flex; margin-bottom: 14px; gap: 10px; animation: msg-in 0.12s ease; }
 @keyframes msg-in { from { opacity: 0; } to { opacity: 1; } }
@@ -420,8 +420,6 @@ body.platform-darwin .tb-mac-extra {
 #input {
   width: 100%; resize: none; border: 1px solid var(--input-border); border-radius: var(--radius-sm);
   padding: 10px; font: inherit; outline: none; background: var(--input-bg);
-  contain: layout style;
-  will-change: contents;
 }
 .composer-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -943,4 +941,14 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .tb-logo-cow {
   width: 28px; height: 20px;
   background: url("data:image/svg+xml,...") no-repeat center;
+}
+
+.username-input {
+  font-size: 18px; font-weight: 600;
+  border: none; border-bottom: 1px dashed transparent;
+  background: transparent; color: var(--ink);
+  padding: 2px 0; outline: none; width: 200px;
+}
+.username-input:hover, .username-input:focus {
+  border-bottom-color: var(--muted);
 }

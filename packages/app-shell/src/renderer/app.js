@@ -1181,7 +1181,7 @@
           <div class="profile-head">
             <button id="p-av-btn" class="av-btn" title="${escapeHtml(t('me.avatarHint'))}">${avHtml}</button>
             <div>
-              <div id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username)}</div>
+              <input id="p-name" class="username-input" value="${escapeHtml(p.username)}" title="${escapeHtml(t('me.username'))}"/>
               <div class="muted">${p.loggedIn ? escapeHtml(p.email || '') : t('me.notLoggedIn')}</div>
               <div style="margin-top:8px;display:flex;gap:8px">
                 <button class="btn-mini" id="p-login">${t('me.login')}</button>
@@ -1190,10 +1190,7 @@
             </div>
           </div>
           <p class="muted">${t('me.loginHint')}</p>
-          <div class="field" style="margin-bottom:10px">
-            <label for="p-name">${t('me.username')}</label>
-            <input id="p-name" name="username" autocomplete="username" spellcheck="false" value="${escapeHtml(p.username)}" title="${escapeHtml(t('me.username'))}"/>
-          </div>
+
           <div class="muted" style="margin-bottom:10px">${t('me.avatarHint')}</div>
           <div class="field" style="margin-bottom:10px"><label>${t('me.email')}</label><input id="p-email" type="email" value="${escapeHtml(p.email)}"/></div>
           <div class="field" style="margin-bottom:14px"><label>${t('me.changePassword')}</label>
@@ -1235,7 +1232,14 @@
 
     if (state.nav === 'settings') {
       box.innerHTML = `
-        <h1>${t('nav.settings')}</h1>
+        <div class="settings-layout">
+        <div class="settings-nav" id="settings-nav">
+          <button data-sec="ui" class="on">UI</button>
+          <button data-sec="notify">Notify</button>
+          <button data-sec="model">Model</button>
+          <button data-sec="func">Func</button>
+        </div>
+        <div class="settings-content" id="settings-content">
         <div class="set-section"><h2 style="color:var(--accent)">${t('settings.section.ui')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.language')}</h2>
@@ -1440,7 +1444,7 @@
             <button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
             <span class="muted" id="about-upd"></span>
           </div>
-        </div>`;
+        </div></div></div>`;
 
       $('btn-about-update').onclick = async () => {
         const r = await window.ccarmy.checkUpdate();

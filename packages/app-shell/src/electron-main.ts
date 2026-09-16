@@ -212,7 +212,10 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
+      spellcheck: false,
     },
+    icon: path.join(__dirname, 'renderer', 'icons', 'logo-color.svg'),
   });
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('ready-to-show', () => {
@@ -1376,7 +1379,9 @@ ipcMain.handle('ccarmy:tray-init', () => {
     const { Tray, Menu, nativeImage } = require('electron');
     if (tray) return { ok: true };
     // 16x16 简易图标
-    const img = nativeImage.createEmpty();
+    const img = nativeImage.createFromBuffer(
+      Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKklEQVQ4y2NgGAWjYBSMglEwCkbBKBgFo2AUjIJRMApGwSgYBaNgFIwCAAgQAAF/lPurAAAAAElFTkSuQmCC', 'base64')
+    );
     const t = new Tray(img);
     t.setToolTip('CCArmy');
     // 右键仅「退出」
