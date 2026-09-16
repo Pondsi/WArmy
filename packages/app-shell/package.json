@@ -28,7 +28,8 @@
     "@ccarmy/board": "workspace:*",
     "@ccarmy/ccr-compressor": "workspace:*",
     "@ccarmy/knowledge-base": "workspace:*",
-    "@ccarmy/sync-protocol": "workspace:*"
+    "@ccarmy/sync-protocol": "workspace:*",
+    "@ccarmy/asset-governance": "workspace:*"
   },
   "devDependencies": {
     "electron": "33.2.0",

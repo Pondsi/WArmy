@@ -79,6 +79,13 @@ contextBridge.exposeInMainWorld('ccarmy', {
   winMaximize: () => ipcRenderer.invoke('ccarmy:win-maximize'),
   winClose: () => ipcRenderer.invoke('ccarmy:win-close'),
   winReload: () => ipcRenderer.invoke('ccarmy:win-reload'),
+  executorRun: (task) => ipcRenderer.invoke('ccarmy:executor-run', task),
+  executorBatch: (tasks) => ipcRenderer.invoke('ccarmy:executor-batch', tasks),
+  assetsRetrieve: (opts) => ipcRenderer.invoke('ccarmy:assets-retrieve', opts),
+  assetsRegister: (a) => ipcRenderer.invoke('ccarmy:assets-register', a),
+  assetsFeedback: (id, good) => ipcRenderer.invoke('ccarmy:assets-feedback', id, good),
+  assetsSweep: () => ipcRenderer.invoke('ccarmy:assets-sweep'),
+  kbFromChat: (payload) => ipcRenderer.invoke('ccarmy:kb-from-chat', payload),
   winAlwaysOnTop: (on) => ipcRenderer.invoke('ccarmy:win-always-on-top', on),
   platformInfo: () => ipcRenderer.invoke('ccarmy:platform'),
 });
