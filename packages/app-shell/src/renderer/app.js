@@ -247,11 +247,7 @@
     state.t = pack.strings;
     if (pack.displayName) state.t['app.displayName'] = pack.displayName;
     window.__refreshUrgency?.();
-    const sel = $('session-sec');
-    [...sel.options].forEach((o) => {
-      const key = 'chat.security' + o.value.charAt(0).toUpperCase() + o.value.slice(1);
-      o.textContent = t(key);
-    });
+    window.__refreshSecurity?.();
     applyI18n();
   }
 
@@ -460,7 +456,7 @@
     $('chat-title').textContent = name;
     $('chat-meta').textContent =
       kind === 'internal' ? t('group.type.internal') : kind.includes('ext') ? t('group.type.external') : t('nav.singleAi');
-    $('session-sec').value = state.sessionSecurity[id] || state.globalSecurity;
+        window.__refreshSecurity?.();
     state.attachments = [];
     renderAttach();
     renderChat();
@@ -805,6 +801,47 @@
           <textarea id="i-persona" placeholder="${escapeHtml(t('instances.personaPlaceholder'))}" title="${escapeHtml(t('instances.memoryHint'))}">${escapeHtml(inst.persona || '')}</textarea>
           <div class="muted">${t('instances.memoryHint')}</div>
         </div>
+        <div class="set-card" style="margin-top:14px" id="i-modelcfg">
+          <h3 style="margin:0 0 10px;font-size:13px">${t('instances.defaultModel')}</h3>
+          <div class="inst-row">
+            <div class="field">
+              <label>${t('instances.defaultModel')}</label>
+              <select id="i-default-model">
+                <option value="__smart__">${t('instances.smartPick')}</option>
+                ${(inst.availableModels || []).map((m) => '<option value="' + escapeHtml(m) + '"' + (inst.defaultModel === m ? ' selected' : '') + '>' + escapeHtml(m) + '</option>').join('')}
+              </select>
+            </div>
+          </div>
+
+          <h3 style="margin:14px 0 8px;font-size:13px">${t('instances.availableModels')}</h3>
+          <label style="display:block;margin-bottom:8px">
+            <input type="checkbox" id="i-all-models" ${inst.allModels !== false ? 'checked' : ''}/> ${t('instances.allAvailable')}
+          </label>
+
+          <div id="i-all-list" class="${inst.allModels !== false ? '' : 'hidden'}">
+            <div class="model-row">
+              ${state.providers.flatMap((p) => (p.models || []).map((m) => p.label + ' · ' + m))
+                .map((full) => '<span class="model-chip">' + escapeHtml(full) + '</span>')
+                .join('') || '<span class="muted">' + t('settings.modelsEmpty') + '</span>'}
+            </div>
+          </div>
+
+          <div id="i-manual" class="${inst.allModels !== false ? 'hidden' : ''}">
+            <div class="field" style="margin-bottom:8px">
+              <label>${t('instances.manualAdd')}</label>
+            </div>
+            <div style="display:grid;grid-template-columns:140px 1fr;gap:8px;max-width:520px">
+              <select id="i-prov-pick" size="6">${state.providers.map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</option>').join('')}</select>
+              <select id="i-model-pick" size="6"></select>
+            </div>
+            <div style="margin-top:8px">
+              <button class="btn-mini" id="i-add-model">${t('instances.addModel')}</button>
+            </div>
+          </div>
+
+          <h3 style="margin:14px 0 8px;font-size:13px">${t('instances.fallbackChain')}</h3>
+          <div id="i-chain"></div>
+        </div>
         <div class="inst-row" style="margin-top:14px">
           <button class="btn-primary" id="i-save" title="${escapeHtml(t('common.save'))}">${t('common.save')}</button>
           <button class="btn-mini" id="i-start" title="${escapeHtml(t('instances.start'))}">${t('instances.start')}</button>
@@ -850,6 +887,125 @@
       renderInstanceDetail();
       renderList();
     };
+    // ── 模型配置：默认模型 / 全部可用 / 手动添加 / 调用链 ──
+    (function bindModelConfig() {
+      const inst2 = inst;
+      if (!inst2.availableModels) inst2.availableModels = [];
+      if (inst2.allModels === undefined) inst2.allModels = true;
+      if (!inst2.chain) inst2.chain = [...inst2.availableModels];
+
+      const defSel = $('i-default-model');
+      const allChk = $('i-all-models');
+      const allList = $('i-all-list');
+      const manual = $('i-manual');
+      const provPick = $('i-prov-pick');
+      const modelPick = $('i-model-pick');
+      const chainBox = $('i-chain');
+
+      function renderChain() {
+        if (!chainBox) return;
+        const list = inst2.chain || [];
+        chainBox.innerHTML =
+          list
+            .map(
+              (m, i) =>
+                '<div class="inst-row" style="margin:4px 0">' +
+                '<span style="flex:1">' + escapeHtml(m) + '</span>' +
+                '<button class="btn-mini" data-up="' + i + '">' + t('instances.moveUp') + '</button>' +
+                '<button class="btn-mini" data-down="' + i + '">' + t('instances.moveDown') + '</button>' +
+                '</div>'
+            )
+            .join('') || '<div class="muted">' + t('settings.modelsEmpty') + '</div>';
+        chainBox.querySelectorAll('[data-up]').forEach((b) => {
+          b.onclick = () => {
+            const i = Number(b.dataset.up);
+            if (i <= 0) return;
+            const arr = inst2.chain;
+            [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
+            renderChain();
+          };
+        });
+        chainBox.querySelectorAll('[data-down]').forEach((b) => {
+          b.onclick = () => {
+            const i = Number(b.dataset.down);
+            const arr = inst2.chain;
+            if (i >= arr.length - 1) return;
+            [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]];
+            renderChain();
+          };
+        });
+      }
+      renderChain();
+
+      // 全部可用：勾选 → 显示全部；取消 → 手动添加
+      if (allChk) {
+        allChk.onchange = () => {
+          inst2.allModels = allChk.checked;
+          allList?.classList.toggle('hidden', !allChk.checked);
+          manual?.classList.toggle('hidden', allChk.checked);
+          if (allChk.checked) {
+            const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.label + ' · ' + m));
+            inst2.availableModels = all;
+            inst2.chain = [...all];
+            renderChain();
+            renderPageCurrentInstanceOptions();
+          }
+        };
+      }
+
+      // 两列选择器：左供应商 → 右模型
+      function fillModels() {
+        if (!provPick || !modelPick) return;
+        const p = state.providers.find((x) => x.id === provPick.value) || state.providers[0];
+        modelPick.innerHTML = (p?.models || [])
+          .map((m) => '<option value="' + escapeHtml(m) + '">' + escapeHtml(m) + '</option>')
+          .join('');
+      }
+      if (provPick) {
+        provPick.onchange = fillModels;
+        fillModels();
+      }
+      const addBtn = $('i-add-model');
+      if (addBtn) {
+        addBtn.onclick = () => {
+          const p = state.providers.find((x) => x.id === provPick.value);
+          const m = modelPick.value;
+          if (!p || !m) return;
+          const full = p.label + ' · ' + m;
+          inst2.availableModels = [...new Set([...(inst2.availableModels || []), full])];
+          inst2.chain = [...new Set([...(inst2.chain || []), full])];
+          const sel = $('i-default-model');
+          if (sel && ![...sel.options].some((o) => o.value === full)) {
+            const opt = document.createElement('option');
+            opt.value = full;
+            opt.textContent = full;
+            sel.appendChild(opt);
+          }
+          renderChain();
+        };
+      }
+
+      if (defSel) {
+        defSel.onchange = () => {
+          inst2.defaultModel = defSel.value === '__smart__' ? '' : defSel.value;
+        };
+      }
+    })();
+
+    function renderPageCurrentInstanceOptions() {
+      const sel = $('i-default-model');
+      if (!sel) return;
+      const cur = inst2DefaultModel();
+      sel.innerHTML =
+        '<option value="__smart__">' + t('instances.smartPick') + '</option>' +
+        (inst.availableModels || [])
+          .map((m) => '<option value="' + escapeHtml(m) + '"' + (cur === m ? ' selected' : '') + '>' + escapeHtml(m) + '</option>')
+          .join('');
+      function inst2DefaultModel() {
+        return inst.defaultModel || '';
+      }
+    }
+
     $('i-del').onclick = async () => {
       if (!uiConfirm(t('instances.delete') + '?')) return;
       try {
@@ -1416,10 +1572,61 @@
     window.addEventListener('mouseup', () => { drag = false; });
   })();
   $('btn-shot')?.addEventListener('click', () => uiAlert(t('chat.screenshotPending')));
-  $('session-sec').addEventListener('change', (e) => {
-    if (!state.selectedChat) return;
-    state.sessionSecurity[state.selectedChat.id] = e.target.value;
-  });
+  // 本会话安全模式：同紧急度的下拉样式
+  (function bindSecurityDropdown() {
+    const trigger = $('sec-trigger');
+    const menu = $('sec-menu');
+    const dd = $('sec-dd');
+    const label = $('sec-label');
+    if (!trigger || !menu || !dd) return;
+
+    const LABELS = {
+      normal: 'chat.securityNormal',
+      strict: 'chat.securityStrict',
+      full: 'chat.securityFull',
+    };
+    function currentMode() {
+      const id = state.selectedChat?.id;
+      return (id && state.sessionSecurity[id]) || state.globalSecurity || 'normal';
+    }
+    function refresh() {
+      const mode = currentMode();
+      if (label) label.textContent = t(LABELS[mode] || LABELS.normal);
+      dd.classList.toggle('urgent', mode === 'full');
+      const warn = dd.querySelector('.sec-warn');
+      if (warn) warn.classList.toggle('hidden', mode !== 'full');
+      menu.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.s === mode));
+    }
+    window.__refreshSecurity = refresh;
+    refresh();
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => menu.classList.add('hidden'));
+
+    menu.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-s]');
+      if (!b) return;
+      const mode = b.dataset.s;
+      if (mode === 'full') {
+        const ok = await uiConfirmCountdown(t('sec.confirmBody'), t('sec.confirmTitle'), 5);
+        if (!ok) {
+          menu.classList.add('hidden');
+          return;
+        }
+      }
+      menu.classList.add('hidden');
+      if (state.selectedChat) {
+        state.sessionSecurity[state.selectedChat.id] = mode;
+      } else {
+        state.globalSecurity = mode;
+        try { await window.ccarmy.setSecurityMode(mode); } catch { /* noop */ }
+      }
+      refresh();
+    });
+  })();
   $('avatar-file').addEventListener('change', (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;

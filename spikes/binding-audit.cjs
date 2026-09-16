@@ -41,7 +41,7 @@ const must = [
   ['smtp add', "$('btn-smtp-add')"],
   ['provider add', "$('btn-add-prov')"],
   ['list action', "$('list-action')"],
-  ['session security', "$('session-sec')"],
+  ['sec dropdown', "$('sec-trigger')"],
   ['avatar file', "$('avatar-file')"],
   ['input enter', "$('input').addEventListener('keydown'"],
 ];

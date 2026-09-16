@@ -31,7 +31,7 @@
   "chat.queueTitle": "Pending queue",
   "chat.screenshot": "Screenshot",
   "chat.security": "Session security",
-  "chat.securityFull": "Full",
+  "chat.securityFull": "Full access",
   "chat.securityNormal": "Normal",
   "chat.securityStrict": "Strict",
   "chat.send": "Send",
@@ -332,5 +332,7 @@
   "urgency.queueLabel": "Queue",
   "llm.dutySystem": "You are the duty agent of a CCArmy project group. Reply briefly; you may use board commands.",
   "llm.noKey": "[No API key] received: ",
-  "instances.personaDefault": "Personality: steady\nRole: duty executor\nPrecepts: never leak keys or write outside workspace"
+  "instances.personaDefault": "Personality: steady\nRole: duty executor\nPrecepts: never leak keys or write outside workspace",
+  "sec.confirmTitle": "Confirm full access",
+  "sec.confirmBody": "Full access disables all approvals for tools, scripts and file writes. This is dangerous. Continue?"
 }

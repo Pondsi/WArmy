@@ -44,8 +44,8 @@
   "chat.p3Tip": "排队等待，本轮结束后按队列执行；队列中内容可编辑",
   "chat.stopTask": "停止任务",
   "chat.security": "本会话安全模式",
-  "chat.securityNormal": "常规",
-  "chat.securityStrict": "严格",
+  "chat.securityNormal": "常规授权",
+  "chat.securityStrict": "严格授权",
   "chat.securityFull": "完全授权",
   "chat.queueTitle": "待执行队列",
   "chat.queueEmpty": "队列为空",
@@ -332,5 +332,7 @@
   "urg.P1": "Urgent",
   "urg.P2": "Insert",
   "urg.P3": "Queue",
-  "urg.label": "Priority"
+  "urg.label": "Priority",
+  "sec.confirmTitle": "确认完全授权",
+  "sec.confirmBody": "完全授权将不再审批任何工具、脚本与文件写入操作，风险极高。确定继续？"
 }
