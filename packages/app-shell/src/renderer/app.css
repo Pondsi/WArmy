@@ -141,8 +141,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   margin-left: 12px;
 }
 /* 四颗窗控 + 置顶/刷新：统一 46×40，SVG 同尺寸 */
+/* 窗控：更大的统一热区，图标也放大 */
 .tb-actions button {
-  width: 46px;
+  width: 56px;
   height: 40px;
   border: none;
   background: transparent;
@@ -155,8 +156,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   transition: background 0.12s;
 }
 .tb-svg {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   display: block;
   fill: currentColor;
   pointer-events: none;
@@ -164,17 +165,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tb-actions button:hover { background: var(--hover); }
 .tb-actions button:active { filter: brightness(0.92); }
 .tb-actions button.tb-active { background: var(--hover); color: var(--accent); }
-.tb-actions #btn-always-top {
-  margin-right: 0;
-}
 .tb-actions #btn-ui-refresh {
   margin-right: 8px;
 }
 .tb-sep {
   width: 1px;
-  height: 16px;
+  height: 18px;
   background: var(--line);
-  margin: 0 4px 0 4px;
+  margin: 0 2px;
   flex-shrink: 0;
 }
 .tb-actions .tb-close:hover { background: #e81123; color: #fff; }

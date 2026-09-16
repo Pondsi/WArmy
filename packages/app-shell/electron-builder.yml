@@ -8,24 +8,19 @@ files:
   - dist/**
   - package.json
   - "!**/*.map"
-  - "!**/node_modules/**"
 asar: true
-# 零原生模块主进程；better-sqlite3 仅在 memory 子进程，打包时用 extraResources
 extraResources:
   - from: ../memory-os/dist
     to: memory-os/dist
-    filter:
-      - '**/*'
   - from: ../memory-os/package.json
     to: memory-os/package.json
-# better-sqlite3 需在 memory-os 的 node_modules，打包时由 asarUnpack/extraResources 另行拷贝
 asarUnpack:
-  - '**/node_modules/better-sqlite3/**'
+  - "**/node_modules/better-sqlite3/**"
 win:
   target:
     - target: nsis
-      arch: [x64]
-  artifactName: ${productName}-${version}-setup.${ext}
+      arch: [x64, arm64]
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -34,9 +29,12 @@ mac:
   target:
     - target: dmg
       arch: [x64, arm64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
 linux:
   target:
-    - AppImage
-    - deb
-# 发布：electron-updater 差分由 CI 生成 blockmap
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
 publish: null
