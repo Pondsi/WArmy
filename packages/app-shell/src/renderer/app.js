@@ -1460,8 +1460,15 @@
         const r = await window.ccarmy.archivedList().catch(() => null);
         const items = r?.items || [];
         box.innerHTML = items.length
-          ? items.map((a) => '<div>' + escapeHtml(a.name) + ' · ' + a.kind + '</div>').join('')
+          ? items.map((a) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(a.name) + ' · ' + a.kind + '</span><button class="btn-mini" data-restore="' + escapeHtml(a.id) + '">' + t('cp.rollback') + '</button></div>').join('')
           : '—';
+        box.querySelectorAll('[data-restore]').forEach((b) => {
+          b.onclick = async () => {
+            await window.ccarmy.archivedRestore(b.dataset.restore).catch(() => {});
+            refreshArchived();
+            uiAlert(t('instances.saved'));
+          };
+        });
       }
       refreshArchived();
 
