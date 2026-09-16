@@ -1379,16 +1379,18 @@ ipcMain.handle('ccarmy:tray-init', () => {
     const img = nativeImage.createEmpty();
     const t = new Tray(img);
     t.setToolTip('CCArmy');
+    // 右键仅「退出」
     t.setContextMenu(
       Menu.buildFromTemplate([
-        { label: '显示主窗口', click: () => { win?.show(); win?.focus(); } },
-        { type: 'separator' },
         { label: '退出', click: () => { app.quit(); } },
       ])
     );
-    t.on('click', () => {
-      if (win?.isVisible()) win.hide();
-      else { win?.show(); win?.focus(); }
+    // 双击打开主窗口
+    t.on('double-click', () => {
+      if (!win) return;
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
     });
     tray = t;
     return { ok: true };

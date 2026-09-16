@@ -1170,7 +1170,13 @@
         ? `<img class="avatar-img big" src="${p.avatarDataUrl}" alt=""/>`
         : `<div class="big-av">${escapeHtml((p.username || '?').slice(0, 1))}</div>`;
       box.innerHTML = `
-        <h1>${t('nav.avatar')}</h1>
+        <div class="brand-strip">
+          <div class="brand-cow"><svg viewBox="0 0 140 100" style="width:48px;height:34px"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/></g></svg></div>
+          <div>
+            <div class="brand-name">无限牛马 CCArmy</div>
+            <div class="brand-sub">Corporate Cattle Army</div>
+          </div>
+        </div>
         <div class="me-strip">
           <div class="profile-head">
             <button id="p-av-btn" class="av-btn" title="${escapeHtml(t('me.avatarHint'))}">${avHtml}</button>
@@ -2878,6 +2884,11 @@
     window.__saveState = saveState;
     
     setNav('singleAi');
+    // 默认选中第一个聊天
+    setTimeout(() => {
+      const first = state.instances[0] || state.chats.find((x) => x.kind === 'single');
+      if (first) openChat('single', first.id, first.name);
+    }, 100);
     refreshMetrics();
     refreshExecutors();
   })();
