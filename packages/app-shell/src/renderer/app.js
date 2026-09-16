@@ -1344,6 +1344,10 @@
           <div class="muted" id="mesh-inbox" style="margin-top:8px;max-height:100px;overflow:auto"></div>
         </div>
         <div class="set-section set-card">
+          <h2>${t('ctx.archive')}</h2>
+          <div id="archived-box" class="muted">—</div>
+        </div>
+        <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
           <div class="muted">${t('about.version')} 0.1.0 · CCArmy · ${t('app.subtitle')}</div>
           <div style="margin-top:10px">
@@ -1449,6 +1453,17 @@
         if (!v) return;
         $('join-msg').textContent = v.startsWith('ccarmy://') ? t('join.ok') : t('join.fail');
       });
+
+      async function refreshArchived() {
+        const box = $('archived-box');
+        if (!box) return;
+        const r = await window.ccarmy.archivedList().catch(() => null);
+        const items = r?.items || [];
+        box.innerHTML = items.length
+          ? items.map((a) => '<div>' + escapeHtml(a.name) + ' · ' + a.kind + '</div>').join('')
+          : '—';
+      }
+      refreshArchived();
 
       async function renderSmtpList() {
         const r = await window.ccarmy.smtpList();
@@ -2348,10 +2363,13 @@
     const q = $('kb-q').value.trim();
     if (!q) return;
     const r = await window.ccarmy.knowledgeQuery(q);
-    $('kb-out').textContent =
-      (r?.entities || []).map((e) => e.name).join(', ') +
-      ' | ' +
-      (r?.events || []).map((e) => e.title).join(', ');
+    const det = await window.ccarmy.kbDetail(q).catch(() => null);
+    $('kb-out').innerHTML =
+      '<div>' + escapeHtml((r?.entities || []).map((e) => e.name).join(', ') || '—') + '</div>' +
+      '<div>' + escapeHtml((r?.events || []).map((e) => e.title).join(' | ') || '—') + '</div>' +
+      (det?.entities?.length
+        ? '<div style="margin-top:6px">' + det.entities.slice(0, 3).map((e) => escapeHtml(e.name) + ' [' + e.kind + ']').join(', ') + '</div>'
+        : '');
   });
 
   $('btn-chat-search')?.addEventListener('click', async () => {

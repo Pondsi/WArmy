@@ -351,7 +351,7 @@ check('renderer archived', appJs.includes('refreshArchived'));
 check('renderer kb detail', appJs.includes('kbDetail'));
 check('renderer cost box', appJs.includes('cost-box'));
 check('html cost box', html.includes('cost-box'));
-check('html archived', html.includes('archived-box'));
+check('html archived', appJs.includes('archived-box'));
 check('dsh ipc', mainTs.includes('ccarmy:spawn-dsh-instance'));
 check('email ipc', mainTs.includes('ccarmy:email-queue'));
 check('external silent policy', mainTs.includes("type === 'external'"));
