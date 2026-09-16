@@ -83,6 +83,13 @@
   };
 
   const t = (k) => state.t[k] || k;
+  let __rafThrottle = false;
+  function raf(fn) {
+    if (__rafThrottle) return;
+    __rafThrottle = true;
+    requestAnimationFrame(() => { __rafThrottle = false; fn(); });
+  }
+  let __inputThrottle = 0;
   const providerCfgModel = (p) => p.defaultModel || (p.models && p.models[0]) || 'deepseek-chat';
   const displayName = () =>
     state.t['app.displayName'] || (state.locale.startsWith('zh') ? t('app.zhName') : t('app.enName'));
@@ -1348,6 +1355,42 @@
           <div id="archived-box" class="muted">—</div>
         </div>
         <div class="set-section set-card">
+          <h2>${t('settings.importProviders')}</h2>
+          <p class="muted">${t('settings.importHint')}</p>
+          <button class="btn-mini" id="btn-import-openclaw">${t('settings.importDo')}</button>
+          <span class="muted" id="import-msg"></span>
+        </div>
+        <div class="set-section set-card">
+          <h2>${t('settings.specialModels')}</h2>
+          <p class="muted">${t('settings.specialModelsHint')}</p>
+          <div class="field" style="margin-bottom:8px">
+            <label>${t('settings.asrModel')}</label>
+            <select id="sm-asr">
+              <option value="ollama">Ollama (whisper-tiny)</option>
+              <option value="whisper-cpp">whisper.cpp (local)</option>
+              <option value="openai">OpenAI Whisper API</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:8px">
+            <label>${t('settings.embeddingModel')}</label>
+            <select id="sm-embed">
+              <option value="onnx">ONNX (bge-small-zh)</option>
+              <option value="ollama">Ollama embedding</option>
+              <option value="api">API embedding</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:8px">
+            <label>${t('settings.summaryModel')}</label>
+            <input id="sm-summary" placeholder="deepseek-flash"/>
+          </div>
+          <div class="field" style="margin-bottom:8px">
+            <label>${t('settings.organizerModel')}</label>
+            <input id="sm-organizer" placeholder="deepseek-chat"/>
+          </div>
+          <button class="btn-mini" id="btn-save-special">${t('common.save')}</button>
+          <span class="muted" id="sm-msg"></span>
+        </div>
+        <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
           <div class="muted">${t('about.version')} 0.1.0 · CCArmy · ${t('app.subtitle')}</div>
           <div style="margin-top:10px">
@@ -1421,6 +1464,27 @@
       });
 
       // ── SMTP 多账号（最多 10） ──
+      $('btn-import-openclaw')?.addEventListener('click', async () => {
+        $('import-msg').textContent = t('common.loading');
+        const r = await window.ccarmy.importOpenclaw().catch(() => null);
+        if (r?.ok) {
+          $('import-msg').textContent = t('instances.saved') + ' (' + r.providers.length + ')';
+          state.providers = r.providers;
+          renderPage();
+        } else {
+          $('import-msg').textContent = String(r?.error || t('common.error'));
+        }
+      });
+      $('btn-save-special')?.addEventListener('click', async () => {
+        const cfg = {
+          asr: { provider: $('sm-asr')?.value || 'ollama' },
+          embedding: { provider: $('sm-embed')?.value || 'onnx' },
+          summary: { provider: 'deepseek', model: $('sm-summary')?.value || 'deepseek-flash' },
+          organizer: { provider: 'deepseek', model: $('sm-organizer')?.value || 'deepseek-chat' },
+        };
+        await window.ccarmy.specialModelsSet(cfg).catch(() => {});
+        $('sm-msg').textContent = t('instances.saved');
+      });
       // 邀请链接 / 二维码
       (async () => {
         const st = await window.ccarmy.meshStatus().catch(() => null);
@@ -2219,7 +2283,7 @@
       box.textContent = '¥' + c.estCostCny + ' · ' + c.promptTokens + ' in / ' + c.completionTokens + ' out · cache ' + ((c.cacheHitRate||0)*100).toFixed(1) + '%';
     }
   }
-  setInterval(refreshCost, 8000);
+  setInterval(() => raf(refreshCost), 10000);
 
   async function refreshMetrics() {
     const box = $('metrics-box');
@@ -2321,7 +2385,7 @@
     $('member-name').value = '';
     refreshMembers();
   });
-  setInterval(() => { refreshSessionBoard(); refreshMembers(); }, 6000);
+  setInterval(() => raf(() => { refreshSessionBoard(); refreshMembers(); }), 10000);
 
   // Q. 错误重试
   async function checkLastError() {
@@ -2337,7 +2401,7 @@
       }
     }
   }
-  setInterval(checkLastError, 10000);
+  setInterval(() => raf(checkLastError), 15000);
 
   // R. 启动引导
   async function maybeShowSetup() {
@@ -2364,7 +2428,7 @@
     await window.ccarmy.executorsRunBrief({ brief, contextItems: [] });
     refreshExecutors();
   });
-  setInterval(refreshExecutors, 8000);
+  setInterval(() => raf(refreshExecutors), 12000);
 
   $('btn-kb-go')?.addEventListener('click', async () => {
     const q = $('kb-q').value.trim();
@@ -2437,7 +2501,7 @@
     }
   } catch { /* noop */ }
 
-  setInterval(refreshMetrics, 5000);
+  setInterval(() => raf(refreshMetrics), 8000);
 
   (async () => {
     try {
@@ -2509,7 +2573,7 @@
       }).catch(() => {});
     };
     window.__saveState = saveState;
-    setInterval(saveState, 15000);
+    setInterval(() => raf(saveState), 30000);
     setNav('singleAi');
     refreshMetrics();
     refreshExecutors();

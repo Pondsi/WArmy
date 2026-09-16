@@ -393,5 +393,13 @@
   "setup.title": "欢迎使用",
   "setup.locale": "选择语言",
   "common.copy": "复制",
-  "common.quote": "引用"
+  "common.quote": "引用",
+  "settings.specialModels": "特殊模型",
+  "settings.importProviders": "导入供应商",
+  "settings.importHint": "从 openclaw.json 一键导入已配置的模型供应商",
+  "settings.importDo": "导入",
+  "settings.specialModelsHint": "ASR / 向量 / 摘要 / 整理 等系统模型，可单独配置",
+  "settings.asrModel": "语音识别模型",
+  "settings.summaryModel": "摘要模型",
+  "settings.organizerModel": "整理模型"
 }

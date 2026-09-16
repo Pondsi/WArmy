@@ -393,5 +393,13 @@
   "setup.title": "Welcome",
   "setup.locale": "Language",
   "common.copy": "Copy",
-  "common.quote": "Quote"
+  "common.quote": "Quote",
+  "settings.specialModels": "Special models",
+  "settings.importProviders": "Import providers",
+  "settings.importHint": "Import model providers from openclaw.json",
+  "settings.importDo": "Import",
+  "settings.specialModelsHint": "ASR / embedding / summary / organizer models",
+  "settings.asrModel": "ASR model",
+  "settings.summaryModel": "Summary model",
+  "settings.organizerModel": "Organizer model"
 }

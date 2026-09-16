@@ -1669,3 +1669,56 @@ try {
 } catch {
   /* noop */
 }
+
+// ── 导入 openclaw.json 供应商配置 ──
+ipcMain.handle('ccarmy:import-openclaw', () => {
+  try {
+    const ocPath = path.join(app.getPath('userData'), '..', 'openclaw.json');
+    if (!fs.existsSync(ocPath)) return { ok: false, error: 'openclaw.json not found' };
+    const j = JSON.parse(fs.readFileSync(ocPath, 'utf8'));
+    const provs = Object.entries(j.models?.providers || {}).map(([id, pv]) => {
+      const p = pv as { baseURL?: string; baseUrl?: string; apiKey?: string; api?: string; models?: Array<{ name?: string; id?: string }> };
+      return {
+        id, label: id, protocol: 'openai-compatible' as const,
+        baseURL: p.baseURL || p.baseUrl || '',
+        apiKey: p.apiKey || p.api || '',
+        defaultModel: (p.models?.[0]?.name || p.models?.[0]?.id) || '',
+        models: (p.models || []).map((m) => m.name || m.id).filter(Boolean) as string[],
+      };
+    });
+    if (settingsStore) {
+      const cur = settingsStore.load() as unknown as Record<string, unknown>;
+      settingsStore.save({ ...cur, importedProviders: provs } as never);
+    }
+    audit?.log('providers.import', { count: provs.length });
+    return { ok: true, providers: provs };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+ipcMain.handle('ccarmy:special-models-set', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {
+  if (settingsStore) {
+    const cur = settingsStore.load() as unknown as Record<string, unknown>;
+    settingsStore.save({ ...cur, specialModels: cfg } as never);
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('ccarmy:special-models-get', () => {
+  const s = settingsStore?.load() as unknown as Record<string, unknown>;
+  return { ok: true, specialModels: s?.specialModels || {} };
+});
+
+ipcMain.handle('ccarmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
+  try {
+    const res = await fetch('http://127.0.0.1:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: payload.model || 'dimavz/whisper-tiny', prompt: 'Transcribe audio:', stream: false, options: { audio: payload.audioBase64 } }),
+    });
+    if (!res.ok) return { ok: false, error: 'http ' + res.status };
+    const data = (await res.json()) as { response?: string };
+    return { ok: true, text: data.response || '' };
+  } catch (e) { return { ok: false, error: String(e) }; }
+});

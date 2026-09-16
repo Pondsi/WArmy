@@ -377,6 +377,13 @@ check('node binaries 5', [
 check('rrf fusion', fs.readFileSync(path.join(root, 'packages/memory-os/src/vectors.ts'), 'utf8').includes('rrfFusion'));
 check('swmr lock', fs.readFileSync(path.join(root, 'packages/memory-os/src/lock.ts'), 'utf8').includes('JsonlLock'));
 check('session v3', fs.readFileSync(path.join(root, 'packages/memory-os/src/migrate.ts'), 'utf8').includes('migrateSessionV2ToV3'));
+check('import-openclaw ipc', mainTs.includes('ccarmy:import-openclaw'));
+check('special-models ipc', mainTs.includes('ccarmy:special-models-set'));
+check('ollama-asr ipc', mainTs.includes('ccarmy:asr-ollama'));
+check('renderer raf', appJs.includes('__rafThrottle'));
+check('renderer import btn', appJs.includes('btn-import-openclaw'));
+check('renderer special models', appJs.includes('btn-save-special'));
+check('i18n special models', typeof zh['settings.specialModels'] === 'string');
 check('dsh ipc', mainTs.includes('ccarmy:spawn-dsh-instance'));
 check('email ipc', mainTs.includes('ccarmy:email-queue'));
 check('external silent policy', mainTs.includes("type === 'external'"));
