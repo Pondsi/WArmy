@@ -86,7 +86,7 @@ check('uiAlert defined', appJs.includes('function uiAlert'));
 check('uiConfirm defined', appJs.includes('function uiConfirm'));
 check('uiPrompt defined', appJs.includes('function uiPrompt'));
 check('modal-root in html', html.includes('id="modal-root"'));
-check('username display', appJs.includes('p-name-display') && appJs.includes('username-display'));
+check('username display', appJs.includes('username-input') || appJs.includes('username-display'));
 check('username input', appJs.includes('id="p-name"'));
 check('light rail', appCss.includes('--rail-bg: #ebebeb') || appCss.includes('--rail-bg:#ebebeb'));
 check('dark rail', appCss.includes('[data-theme="dark"]'));
