@@ -290,7 +290,7 @@ check('nodes ipc', mainTs.includes('ccarmy:nodes-list'));
 check('profile login ipc', mainTs.includes('ccarmy:profile-login'));
 check('settings persist ipc', mainTs.includes('ccarmy:settings-save'));
 check('renderer metrics panel', html.includes('metrics-box'));
-check('renderer checkpoint btns', html.includes('btn-cp-start'));
+check('renderer checkpoint panel', html.includes('cp-detail-list'));
 check('renderer knowledge', html.includes('btn-kb-go'));
 check('renderer saveVoice', appJs.includes('saveVoice'));
 check('renderer profileSave', appJs.includes('profileSave'));
