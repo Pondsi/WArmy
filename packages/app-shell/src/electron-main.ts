@@ -19,6 +19,7 @@ import { LocalAccountStore, SettingsStore } from './settings-store.js';
 import { NodeRegistry, SyncBus, createInvite, consumeInvite } from '@ccarmy/sync-protocol';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@ccarmy/dsh-runtime';
 import { LanSyncServer, LanSyncClient, dualMachineSmoke } from '@ccarmy/sync-protocol';
+import { PeerRegistry, LanDiscovery, MeshNode, P2P_NOTES } from '@ccarmy/sync-protocol';
 import { verifySmtp, type SmtpConfig } from './smtp-verify.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +52,10 @@ let syncBus: SyncBus | null = null;
 const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
 let lanServer: LanSyncServer | null = null;
 let localNodeId = 'node-local';
+let peerReg: PeerRegistry | null = null;
+let mesh: MeshNode | null = null;
+let discovery: LanDiscovery | null = null;
+let discoverTimer: NodeJS.Timeout | null = null;
 /** 会话消息历史（主进程侧） */
 const chatHistories = new Map<string, ChatMessage[]>();
 /** 运行中的插入指令级别 */
@@ -116,10 +121,12 @@ async function bootstrap() {
   settingsStore = new SettingsStore(path.join(userData, 'settings.json'));
   nodeReg = new NodeRegistry(path.join(userData, 'nodes.json'));
   syncBus = new SyncBus(path.join(userData, 'bus'));
+  peerReg = new PeerRegistry(path.join(userData, 'peers.json'));
   if (!nodeReg.list().some((n) => n.isLocal)) {
     nodeReg.registerLocal('local');
   }
-  boot('board/knowledge/checkpoints/account/settings/sync ready');
+  localNodeId = nodeReg.list().find((n) => n.isLocal)?.nodeId || 'node-local';
+  boot('board/knowledge/checkpoints/account/settings/sync/mesh ready');
 }
 
 function startMemoryAsync() {
@@ -143,6 +150,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 600,
     title: 'CCArmy',
+    frame: false,
     backgroundColor: '#ededed',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -874,3 +882,89 @@ ipcMain.handle(
     });
   }
 );
+
+// ── 多节点 mesh ──
+ipcMain.handle('ccarmy:mesh-start', async (_e, port = 7788) => {
+  try {
+    await mesh?.stop();
+    mesh = new MeshNode(localNodeId, port, peerReg!, path.join(app.getPath('userData'), 'bus', 'mesh.jsonl'));
+    await mesh.start();
+    // 启动 UDP 发现
+    await discovery?.stop();
+    discovery = new LanDiscovery(localNodeId, 'ccarmy-' + localNodeId.slice(-4), port, (p) => {
+      peerReg?.upsert({
+        nodeId: p.nodeId,
+        name: p.name,
+        host: p.host,
+        port: p.port,
+        kind: 'lan',
+        lastSeen: Date.now(),
+      });
+    });
+    await discovery.start();
+    discovery.broadcast();
+    if (discoverTimer) clearInterval(discoverTimer);
+    discoverTimer = setInterval(() => discovery?.broadcast(), 8000);
+    return { ok: true, port, nodeId: localNodeId, notes: P2P_NOTES };
+  } catch (e) {
+    return { ok: false, error: String((e as Error).message || e) };
+  }
+});
+
+ipcMain.handle('ccarmy:mesh-stop', async () => {
+  if (discoverTimer) clearInterval(discoverTimer);
+  discoverTimer = null;
+  await discovery?.stop();
+  await mesh?.stop();
+  discovery = null;
+  mesh = null;
+  return { ok: true };
+});
+
+ipcMain.handle('ccarmy:peers-list', () => ({
+  ok: true,
+  peers: peerReg?.list() || [],
+  notes: P2P_NOTES,
+}));
+
+ipcMain.handle(
+  'ccarmy:peers-add',
+  (_e, p: { nodeId?: string; name: string; host: string; port: number; kind?: 'lan' | 'wan' }) => {
+    const nodeId = p.nodeId || `peer-${p.host}-${p.port}`;
+    const info = peerReg!.addManual(nodeId, p.name || nodeId, p.host, p.port, p.kind || 'wan');
+    return { ok: true, peer: info, peers: peerReg!.list() };
+  }
+);
+
+ipcMain.handle('ccarmy:peers-remove', (_e, nodeId: string) => {
+  peerReg?.revoke(nodeId);
+  return { ok: true, peers: peerReg?.list() || [] };
+});
+
+ipcMain.handle('ccarmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) => {
+  if (!mesh) return { ok: false, error: 'mesh not started' };
+  const r = await mesh.sendToAll({ to: '*', channel: 'group', groupId, payload });
+  return { ok: true, ...r };
+});
+
+ipcMain.handle('ccarmy:mesh-inbox', () => ({ ok: true, messages: mesh?.inboxOf() || [] }));
+
+ipcMain.handle('ccarmy:mesh-status', () => ({
+  ok: true,
+  listening: !!mesh,
+  nodeId: localNodeId,
+  peerCount: peerReg?.list().length || 0,
+}));
+
+// ── 窗口控制（自定义标题栏） ──
+ipcMain.handle('ccarmy:win-minimize', () => win?.minimize());
+ipcMain.handle('ccarmy:win-maximize', () => {
+  if (!win) return;
+  if (win.isMaximized()) win.unmaximize();
+  else win.maximize();
+});
+ipcMain.handle('ccarmy:win-close', () => win?.close());
+ipcMain.handle('ccarmy:win-reload', () => {
+  win?.webContents.reload();
+  return { ok: true };
+});

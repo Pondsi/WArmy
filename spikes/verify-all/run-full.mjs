@@ -305,7 +305,7 @@ check('smtp verify ipc', mainTs.includes('ccarmy:smtp-verify'));
 check('lan start ipc', mainTs.includes('ccarmy:lan-start'));
 check('lan dual smoke', mainTs.includes('ccarmy:lan-dual-smoke'));
 check('smtp not hardcoded', !mainTs.includes('smtp.qq.com') && !mainTs.includes('@gmail.com'));
-check('renderer smtp verify btn', appJs.includes('btn-smtp-verify'));
+check('renderer smtp add btn', appJs.includes('btn-smtp-add') && appJs.includes('smtpAdd'));
 check('renderer lan start', appJs.includes('btn-lan-start'));
 check('renderer webgpu test', appJs.includes('btn-webgpu'));
 

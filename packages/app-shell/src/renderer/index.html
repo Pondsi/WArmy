@@ -8,6 +8,19 @@
 </head>
 <body>
   <div id="app">
+    <div id="titlebar">
+      <div class="tb-drag">
+        <span class="tb-brand" id="tb-brand">CCArmy</span>
+        <span class="muted" id="tb-sub"></span>
+      </div>
+      <div class="tb-actions">
+        <button id="btn-ui-refresh" title="刷新界面" aria-label="refresh">⟳</button>
+        <button id="btn-win-min" title="最小化" aria-label="minimize">—</button>
+        <button id="btn-win-max" title="最大化" aria-label="maximize">▢</button>
+        <button id="btn-win-close" class="tb-close" title="关闭" aria-label="close">×</button>
+      </div>
+    </div>
+    <div id="app-body">
     <nav id="rail">
       <div class="rail-top">
         <button class="rail-item" data-nav="me" data-i18n-title="tip.me">
@@ -146,6 +159,7 @@
         <div id="page-body"></div>
       </div>
     </main>
+    </div><!-- /app-body -->
   </div>
   <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="hidden" />
   <div id="modal-root" class="modal-root hidden" role="dialog" aria-modal="true">

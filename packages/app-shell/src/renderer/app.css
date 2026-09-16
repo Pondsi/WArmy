@@ -100,19 +100,47 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .hidden { display: none !important; }
 .muted { color: var(--muted); font-size: var(--fs-sm); }
 
+/* 自定义标题栏 */
+#titlebar {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--list-bg);
+  border-bottom: 1px solid var(--line);
+  padding: 0 4px 0 12px;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+.tb-drag { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.tb-brand { font-weight: 600; font-size: 13px; }
+.tb-actions { display: flex; -webkit-app-region: no-drag; }
+.tb-actions button {
+  width: 40px; height: 32px;
+  border: none; background: transparent;
+  color: var(--ink); cursor: pointer; font-size: 14px;
+}
+.tb-actions button:hover { background: var(--hover); }
+.tb-actions .tb-close:hover { background: #e81123; color: #fff; }
+
 #app {
-  display: grid;
-  grid-template-columns: 64px var(--list-w, 280px) 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow: hidden;
 }
-#app.hide-list {
+#app-body {
+  display: grid;
+  grid-template-columns: 64px var(--list-w, 280px) 1fr;
+  height: calc(100vh - 36px);
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+#app-body.hide-list {
   grid-template-columns: 64px 1fr;
 }
-#app.hide-list #list-col { display: none; }
-#app.chat-mode {
-  grid-template-columns: 64px var(--list-w, 280px) 1fr;
-}
+#app-body.hide-list #list-col { display: none; }
 
 /* Rail */
 #rail {

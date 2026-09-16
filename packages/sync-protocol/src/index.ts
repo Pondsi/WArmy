@@ -135,6 +135,7 @@ export function consumeInvite(tok: InviteToken): boolean {
 }
 
 export * from './lan.js';
+export * from './mesh.js';
 
 /** 远程 AI 执行约定：本地零痕迹目录（临时，用完即删） */
 export function incognitoWorkDir(): string {

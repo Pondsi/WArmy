@@ -38,6 +38,8 @@ export interface AppSettings {
   globalSecurity: 'full' | 'normal' | 'strict';
   /** 最多 10 个 SMTP 账号 */
   smtpAccounts: SmtpAccount[];
+  /** 嵌入是否使用 GPU（WebGPU）；false=WASM/CPU */
+  embedUseGpu: boolean;
 }
 
 function hash(pw: string) {
@@ -114,6 +116,7 @@ function defaults(): AppSettings {
     panelWidth: 300,
     globalSecurity: 'normal',
     smtpAccounts: [],
+    embedUseGpu: true,
   };
 }
 

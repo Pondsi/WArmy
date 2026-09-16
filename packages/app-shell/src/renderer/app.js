@@ -20,6 +20,8 @@
     theme: '#07c160',
     themeMode: 'system',
     smtp: { host: '', port: 465, secure: true, user: '', pass: '' },
+    smtpAccounts: [],
+    embedUseGpu: true,
     listWidth: 280,
     panelWidth: 300,
     attachments: [],
@@ -253,13 +255,13 @@
     hideMain();
 
     if (nav === 'settings' || nav === 'me') {
-      $('app').classList.add('hide-list');
+      $('app-body').classList.add('hide-list');
       $('page-layout').classList.remove('hidden');
       renderPage();
       return;
     }
 
-    $('app').classList.remove('hide-list');
+    $('app-body').classList.remove('hide-list');
     $('list-title').textContent = t(NAV_TITLES[nav] || nav);
     setupListAction();
     renderList();
@@ -1005,8 +1007,34 @@
         </div>
         <div class="set-section set-card">
           <h2>${t('webgpu.title')}</h2>
-          <button class="btn-mini" id="btn-webgpu">${t('webgpu.test')}</button>
-          <span class="muted" id="webgpu-msg"></span>
+          <label style="display:block;margin-bottom:8px">
+            <input type="checkbox" id="embed-gpu" ${state.embedUseGpu !== false ? 'checked' : ''}/>
+            ${t('embed.useGpu')}
+          </label>
+          <div class="muted">${t('embed.gpuHint')}</div>
+          <div style="margin-top:8px">
+            <button class="btn-mini" id="btn-webgpu">${t('webgpu.test')}</button>
+            <span class="muted" id="webgpu-msg"></span>
+          </div>
+        </div>
+        <div class="set-section set-card">
+          <h2>${t('lan.title')} · ${t('mesh.title')}</h2>
+          <p class="muted">${t('mesh.hint')}</p>
+          <div class="inst-row">
+            <div class="field"><label>${t('lan.port')}</label><input id="mesh-port" value="7788"/></div>
+            <button class="btn-mini" id="btn-mesh-start">${t('mesh.start')}</button>
+            <button class="btn-mini" id="btn-mesh-stop">${t('mesh.stop')}</button>
+            <button class="btn-mini" id="btn-mesh-bcast">${t('mesh.broadcast')}</button>
+          </div>
+          <div class="inst-row" style="margin-top:8px">
+            <div class="field"><label>${t('mesh.name')}</label><input id="peer-name" placeholder="节点名"/></div>
+            <div class="field"><label>${t('lan.peerHost')}</label><input id="peer-host" placeholder="192.168.1.123 或公网IP"/></div>
+            <div class="field"><label>${t('lan.peerPort')}</label><input id="peer-port" value="7788"/></div>
+            <button class="btn-mini" id="btn-peer-add">${t('mesh.addPeer')}</button>
+          </div>
+          <div id="peer-list" style="margin-top:10px"></div>
+          <div class="muted" id="mesh-msg" style="margin-top:8px"></div>
+          <div class="muted" id="mesh-inbox" style="margin-top:8px;max-height:100px;overflow:auto"></div>
         </div>
         <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
@@ -1301,7 +1329,7 @@
         }
       };
 
-      // WebGPU（渲染进程原生探测）
+      // WebGPU / 嵌入 GPU 开关
       $('btn-webgpu').onclick = async () => {
         $('webgpu-msg').textContent = t('common.loading');
         try {
@@ -1315,6 +1343,63 @@
         } catch (e) {
           $('webgpu-msg').textContent = `${t('webgpu.fail')} (${String(e.message || e).slice(0, 80)})`;
         }
+      };
+      $('embed-gpu').onchange = (e) => {
+        state.embedUseGpu = e.target.checked;
+        window.ccarmy.settingsSave({ embedUseGpu: e.target.checked });
+      };
+
+      // Mesh
+      async function renderPeers() {
+        const r = await window.ccarmy.peersList();
+        const box = $('peer-list');
+        const peers = r?.peers || [];
+        box.innerHTML = `<div class="muted">${t('mesh.peers')} (${peers.length})</div>` +
+          peers
+            .map(
+              (p) =>
+                `<div class="inst-row" style="margin:4px 0"><span>${escapeHtml(p.name)} · ${escapeHtml(p.host)}:${p.port} · ${p.kind}</span>
+                 <button class="btn-mini" data-rm="${escapeHtml(p.nodeId)}">${t('mesh.remove')}</button></div>`
+            )
+            .join('') || `<div class="muted">—</div>`;
+        box.querySelectorAll('[data-rm]').forEach((b) => {
+          b.onclick = async () => {
+            await window.ccarmy.peersRemove(b.dataset.rm);
+            renderPeers();
+          };
+        });
+      }
+      renderPeers();
+      $('btn-mesh-start').onclick = async () => {
+        const port = parseInt($('mesh-port').value, 10) || 7788;
+        const r = await window.ccarmy.meshStart(port);
+        $('mesh-msg').textContent = r?.ok
+          ? `${t('mesh.start')} :${r.port}\n${r.notes?.lan || ''}\n${r.notes?.wanManual || ''}`
+          : String(r?.error || '');
+        renderPeers();
+      };
+      $('btn-mesh-stop').onclick = async () => {
+        await window.ccarmy.meshStop();
+        $('mesh-msg').textContent = t('mesh.stop');
+      };
+      $('btn-mesh-bcast').onclick = async () => {
+        const r = await window.ccarmy.meshBroadcast({ text: 'hello-mesh', ts: Date.now() });
+        $('mesh-msg').textContent = JSON.stringify(r);
+        const inbox = await window.ccarmy.meshInbox();
+        $('mesh-inbox').textContent = (inbox?.messages || [])
+          .slice(-5)
+          .map((m) => `${m.from}: ${JSON.stringify(m.payload).slice(0, 60)}`)
+          .join('\n');
+      };
+      $('btn-peer-add').onclick = async () => {
+        await window.ccarmy.peersAdd({
+          name: $('peer-name').value.trim() || 'peer',
+          host: $('peer-host').value.trim(),
+          port: parseInt($('peer-port').value, 10) || 7788,
+          kind: 'wan',
+        });
+        $('peer-name').value = '';
+        renderPeers();
       };
     }
   }
@@ -1455,6 +1540,11 @@
     reader.readAsDataURL(f);
     e.target.value = '';
   });
+  $('btn-win-min')?.addEventListener('click', () => window.ccarmy.winMinimize());
+  $('btn-win-max')?.addEventListener('click', () => window.ccarmy.winMaximize());
+  $('btn-win-close')?.addEventListener('click', () => window.ccarmy.winClose());
+  $('btn-ui-refresh')?.addEventListener('click', () => window.ccarmy.winReload());
+
   bindResizer($('col-resizer'), '--list-w', 200, 420);
   bindResizer($('panel-resizer'), '--panel-w', 220, 480);
 
@@ -1528,6 +1618,7 @@
         state.soundFiles = s.settings.soundFiles || state.soundFiles;
         state.emailOnRequest = !!s.settings.emailOnRequest;
         state.globalSecurity = s.settings.globalSecurity || 'normal';
+        state.embedUseGpu = s.settings.embedUseGpu !== false;
         document.documentElement.style.setProperty('--accent', state.theme);
       }
       const p = await window.ccarmy.profileGet();
