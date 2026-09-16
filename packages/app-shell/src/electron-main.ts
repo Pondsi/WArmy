@@ -343,10 +343,12 @@ ipcMain.handle('ccarmy:check-update', async () => {
 });
 
 // ── 选择附件文件 ──
-ipcMain.handle('ccarmy:pick-file', async () => {
+ipcMain.handle('ccarmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
   if (!win) return { ok: false };
+  const ext = opts?.filters?.length ? opts.filters : undefined;
   const r = await dialog.showOpenDialog(win, {
     properties: ['openFile'],
+    filters: ext ? [{ name: ext.join('/'), extensions: ext }] : undefined,
   });
   if (r.canceled || !r.filePaths[0]) return { ok: false };
   return { ok: true, path: r.filePaths[0] };

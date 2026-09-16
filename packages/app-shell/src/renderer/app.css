@@ -781,3 +781,27 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 .urg-ddd .urgent-i.hidden, .urgent-i.hidden { display: none; }
 .urg-ddd .urgent .urgent-i, .urg-dd.urgent .urgent-i { color: var(--danger); fill: currentColor; }
+
+/* 我的：横排紧凑，不用卡片 */
+.me-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 0 16px;
+  background: transparent;
+  border: none;
+}
+.me-strip .field { min-width: 180px; }
+.me-strip .profile-head { margin-bottom: 0; }
+.join-qr {
+  width: 168px; height: 168px;
+  background: #fff; border: 1px solid var(--line);
+  border-radius: 10px; display: grid; place-items: center;
+}
+.join-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.join-link {
+  font-family: var(--font-mono); font-size: 12px;
+  word-break: break-all; max-width: 320px;
+  background: var(--hover); padding: 8px 10px; border-radius: 6px;
+}

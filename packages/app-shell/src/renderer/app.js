@@ -1,6 +1,7 @@
 /* CCArmy renderer — 文案全在 i18n；主题/分栏/模型拉取/附件/语音/总看板 */
 (() => {
   const $ = (id) => document.getElementById(id);
+  let pendingAvatarTarget = null;
   const state = {
     nav: 'singleAi',
     locale: 'zh-CN',
@@ -334,10 +335,16 @@
   function setupListAction() {
     const btn = $('list-action');
     if (state.nav === 'internalGroup' || state.nav === 'externalGroup') {
-      btn.textContent = t('list.createGroup');
-      btn.title = t('list.createGroup');
+      const createKey = state.nav === 'internalGroup' ? 'list.createProject' : 'list.createGroupChat';
+      btn.textContent = t(createKey);
+      btn.title = t(createKey);
       btn.classList.remove('hidden');
       btn.onclick = createGroupFlow;
+    } else if (state.nav === 'externalChat') {
+      btn.textContent = t('contact.add');
+      btn.title = t('contact.add');
+      btn.classList.remove('hidden');
+      btn.onclick = addContactFlow;
     } else if (state.nav === 'instances') {
       btn.textContent = t('list.addInstance');
       btn.title = t('list.addInstance');
@@ -791,10 +798,23 @@
     box.innerHTML = `
       <h1>${escapeHtml(inst.name || inst.id)}</h1>
       <div class="set-card" style="max-width:720px">
-        <div class="inst-row">
-          <div class="field"><label>${t('instances.name')}</label><input id="i-name" value="${escapeHtml(inst.name || '')}" title="${escapeHtml(t('instances.name'))}"/></div>
-          <div class="field"><label>${t('instances.model')}</label><input id="i-model" value="${escapeHtml(inst.model || 'deepseek-chat')}" title="${escapeHtml(t('instances.model'))}"/></div>
-          <div class="field"><label>${t('instances.memoryFile')}</label><input id="i-mem" value="${escapeHtml(inst.memoryFile || '')}" title="${escapeHtml(t('instances.memoryHint'))}"/></div>
+        <div class="profile-head" style="align-items:center;gap:14px">
+          <button id="i-av-btn" class="av-btn" title="${t('instances.avatarUpload')}">
+            ${inst.avatarDataUrl
+              ? '<img class="avatar-img big" src="' + inst.avatarDataUrl + '" alt=""/>'
+              : '<div class="big-av">' + escapeHtml((inst.name || '?').slice(0, 1)) + '</div>'}
+          </button>
+          <div style="flex:1">
+            <div class="field"><label>${t('instances.name')}</label><input id="i-name" value="${escapeHtml(inst.name || '')}"/></div>
+            <div class="muted" style="margin-top:6px">${t('instances.avatarUpload')}</div>
+          </div>
+        </div>
+
+        <h3 style="margin:14px 0 8px;font-size:13px">${t('instances.cognition')}</h3>
+        <div class="muted" style="margin-bottom:8px">${t('instances.cognitionHint')}</div>
+        <div id="i-cog-list"></div>
+        <div style="margin-top:8px">
+          <button class="btn-mini" id="i-cog-add">${t('instances.cognitionAdd')}</button>
         </div>
         <div class="field" style="margin-top:12px">
           <label>${t('instances.persona')}</label>
@@ -888,6 +908,45 @@
       renderList();
     };
     // ── 模型配置：默认模型 / 全部可用 / 手动添加 / 调用链 ──
+    // ── 牛马头像 + 认知注入 ──
+    (function bindInstanceAvatarCognition() {
+      if (!inst.cognitionFiles) inst.cognitionFiles = [];
+      const list = $('i-cog-list');
+      function renderCog() {
+        if (!list) return;
+        list.innerHTML =
+          inst.cognitionFiles
+            .map(
+              (f, i) =>
+                '<div class="inst-row" style="margin:4px 0"><span style="flex:1">' +
+                escapeHtml(f.name) +
+                '</span><span class="muted">' + escapeHtml(String(f.size || 0)) + ' B</span>' +
+                '<button class="btn-mini" data-cog-del="' + i + '">' + t('mesh.remove') + '</button></div>'
+            )
+            .join('') || '<div class="muted">' + t('instances.cognitionEmpty') + '</div>';
+        list.querySelectorAll('[data-cog-del]').forEach((b) => {
+          b.onclick = () => {
+            inst.cognitionFiles.splice(Number(b.dataset.cogDel), 1);
+            renderCog();
+          };
+        });
+      }
+      renderCog();
+
+      $('i-av-btn')?.addEventListener('click', () => {
+        pendingAvatarTarget = { kind: 'instance', inst };
+        $('avatar-file').click();
+      });
+
+      $('i-cog-add')?.addEventListener('click', async () => {
+        const r = await window.ccarmy.pickFile({ filters: ['md'] });
+        if (!r?.ok) return;
+        const name = r.path.split(/[\\/]/).pop();
+        inst.cognitionFiles.push({ name, path: r.path, size: 0 });
+        renderCog();
+      });
+    })();
+
     (function bindModelConfig() {
       const inst2 = inst;
       if (!inst2.availableModels) inst2.availableModels = [];
@@ -1030,7 +1089,7 @@
         : `<div class="big-av">${escapeHtml((p.username || '?').slice(0, 1))}</div>`;
       box.innerHTML = `
         <h1>${t('nav.avatar')}</h1>
-        <div class="set-card" style="max-width:520px;margin-bottom:20px">
+        <div class="me-strip">
           <div class="profile-head">
             <button id="p-av-btn" class="av-btn" title="${escapeHtml(t('me.avatarHint'))}">${avHtml}</button>
             <div>
@@ -1144,7 +1203,13 @@
             <button class="btn-mini" data-pick="error">${t('settings.soundPick')}</button>
             <button class="btn-mini" data-clear="error">${t('settings.soundClear')}</button></div></div>
           <div style="margin-top:12px">
-            <label><input type="checkbox" id="s-email" ${state.emailOnRequest ? 'checked' : ''}/> ${t('settings.emailOnRequest')}</label>
+            ${['complete', 'request', 'error']
+            .map(
+              (k) =>
+                '<label style="margin-right:14px"><input type="checkbox" data-email-k="' + k + '" ' +
+                (state.emailNotify && state.emailNotify[k] ? 'checked' : '') + '/> ' + t('settings.sound' + k.charAt(0).toUpperCase() + k.slice(1)) + '</label>'
+            )
+            .join('')}
             <div class="muted">${t('settings.emailHint')}</div>
           </div>
         </div>
@@ -1210,6 +1275,23 @@
           <div style="margin-top:8px">
             <button class="btn-mini" id="btn-webgpu">${t('webgpu.test')}</button>
             <span class="muted" id="webgpu-msg"></span>
+          </div>
+        </div>
+        <div class="set-section set-card">
+          <h2>${t('join.title')}</h2>
+          <div class="join-row">
+            <div class="join-qr" id="join-qr"></div>
+            <div>
+              <div class="muted" style="margin-bottom:6px">${t('join.qrHint')}</div>
+              <div class="join-link" id="join-link">—</div>
+              <div style="margin-top:8px"><button class="btn-mini" id="btn-join-copy">${t('join.copyLink')}</button>
+              <span class="muted" id="join-msg"></span></div>
+              <div class="field" style="margin-top:10px">
+                <label>${t('join.scanHint')}</label>
+                <input id="join-input" placeholder="${escapeHtml(t('join.pastePlaceholder'))}"/>
+              </div>
+              <button class="btn-mini" id="btn-join-accept">${t('join.accept')}</button>
+            </div>
           </div>
         </div>
         <div class="set-section set-card">
@@ -1281,9 +1363,13 @@
           state.sound[k] = e.target.checked;
         };
       });
-      $('s-email').onchange = (e) => {
-        state.emailOnRequest = e.target.checked;
-      };
+      document.querySelectorAll('[data-email-k]').forEach((el) => {
+        el.onchange = () => {
+          state.emailNotify = state.emailNotify || { complete: false, request: true, error: true };
+          state.emailNotify[el.dataset.emailK] = el.checked;
+          window.ccarmy.settingsSave({ emailNotify: state.emailNotify });
+        };
+      });
       document.querySelectorAll('[data-pick]').forEach((b) => {
         b.onclick = async () => {
           const r = await window.ccarmy.pickSound();
@@ -1301,6 +1387,39 @@
       });
 
       // ── SMTP 多账号（最多 10） ──
+      // 邀请链接 / 二维码
+      (async () => {
+        const st = await window.ccarmy.meshStatus().catch(() => null);
+        const node = st?.nodeId || 'local';
+        const inv = await window.ccarmy.inviteCreate().catch(() => null);
+        const tok = inv?.invite?.token ? '&tok=' + inv.invite.token : '';
+        const link = 'ccarmy://join?node=' + encodeURIComponent(node) + '&port=7788' + tok;
+        const lk = $('join-link');
+        if (lk) lk.textContent = link;
+        const qr = $('join-qr');
+        if (qr) {
+          try {
+            const mod = await import('./qr.js');
+            qr.innerHTML = mod.qrSvg(link, 168);
+          } catch {
+            qr.textContent = link.slice(0, 26) + '…';
+          }
+        }
+      })();
+      $('btn-join-copy')?.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText($('join-link').textContent);
+          $('join-msg').textContent = t('join.copied');
+        } catch {
+          $('join-msg').textContent = t('join.fail');
+        }
+      });
+      $('btn-join-accept')?.addEventListener('click', () => {
+        const v = $('join-input').value.trim();
+        if (!v) return;
+        $('join-msg').textContent = v.startsWith('ccarmy://') ? t('join.ok') : t('join.fail');
+      });
+
       async function renderSmtpList() {
         const r = await window.ccarmy.smtpList();
         const accounts = r?.accounts || [];
@@ -1632,7 +1751,14 @@
     if (!f) return;
     const reader = new FileReader();
     reader.onload = () => {
-      state.profile.avatarDataUrl = String(reader.result || '');
+      const url = String(reader.result || '');
+      if (pendingAvatarTarget && pendingAvatarTarget.kind === 'instance') {
+        pendingAvatarTarget.inst.avatarDataUrl = url;
+        pendingAvatarTarget = null;
+        if (state.selectedInstance) renderInstanceDetail();
+        return;
+      }
+      state.profile.avatarDataUrl = url;
       applyAvatar();
       if (state.nav === 'me') renderPage();
     };
@@ -1660,7 +1786,7 @@
   })();
 
   function createGroupFlow() {
-    uiPrompt(t('list.createGroup'), state.nav === 'internalGroup' ? t('placeholder.groupName') : t('placeholder.groupNameExt')).then(async (name) => {
+    uiPrompt(state.nav === 'internalGroup' ? t('list.createProject') : t('list.createGroupChat'), state.nav === 'internalGroup' ? t('placeholder.groupName') : t('placeholder.groupNameExt')).then(async (name) => {
       if (!name) return;
       const type = state.nav === 'internalGroup' ? 'internal' : 'external';
       const id = 'g-' + Date.now();
@@ -1671,6 +1797,14 @@
         return;
       }
       state.groups.push({ id, name, type, members: [] });
+      renderList();
+    });
+  }
+
+  function addContactFlow() {
+    uiPrompt(t('contact.add'), '').then((name) => {
+      if (!name) return;
+      state.chats.push({ id: 'c-' + Date.now(), name, kind: 'extdm', lastPreview: t('list.noReply') });
       renderList();
     });
   }
