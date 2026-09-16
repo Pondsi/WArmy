@@ -2263,6 +2263,60 @@
     refreshCheckpoints();
   });
   $('btn-cp-list')?.addEventListener('click', refreshCheckpoints);
+  async function refreshSessionBoard() {
+    const box = $('board-sess-box');
+    if (!box || !state.selectedChat) return;
+    const r = await window.ccarmy.boardSession(state.selectedChat.id).catch(() => null);
+    const tasks = r?.tasks || [];
+    box.innerHTML = tasks.length
+      ? tasks.map((t) => '<div>' + escapeHtml(t.title) + ' · ' + (t.progress || 0) + '% · ' + t.status + '</div>').join('')
+      : '—';
+  }
+  async function refreshMembers() {
+    const box = $('members-box');
+    if (!box || !state.selectedChat) return;
+    const r = await window.ccarmy.groupMembers(state.selectedChat.id).catch(() => null);
+    const ms = r?.members || [];
+    box.innerHTML = ms.length
+      ? ms.map((x) => '<div>' + escapeHtml(x.name) + ' · ' + x.role + '</div>').join('')
+      : '—';
+  }
+  $('btn-member-add')?.addEventListener('click', async () => {
+    const name = $('member-name')?.value?.trim();
+    if (!name || !state.selectedChat) return;
+    await window.ccarmy.groupInvite({ groupId: state.selectedChat.id, name });
+    $('member-name').value = '';
+    refreshMembers();
+  });
+  setInterval(() => { refreshSessionBoard(); refreshMembers(); }, 6000);
+
+  // Q. 错误重试
+  async function checkLastError() {
+    const r = await window.ccarmy.lastError().catch(() => null);
+    if (r?.error) {
+      // 简单提示 + 可重试
+      const ok = await uiConfirm(t('common.error') + ': ' + r.error.message.slice(0, 80) + ' · ' + t('common.retry'), t('common.error'));
+      if (ok && state.selectedChat) {
+        await window.ccarmy.clearError();
+        send();
+      } else {
+        await window.ccarmy.clearError();
+      }
+    }
+  }
+  setInterval(checkLastError, 10000);
+
+  // R. 启动引导
+  async function maybeShowSetup() {
+    const st = await window.ccarmy.setupState().catch(() => null);
+    if (!st || st.done) return;
+    const locale = await uiPrompt(t('settings.language'), 'zh-CN');
+    if (locale) await window.ccarmy.setupComplete({ locale });
+    else await window.ccarmy.setupComplete({});
+    uiAlert(t('instances.saved'));
+  }
+  maybeShowSetup();
+
   async function refreshExecutors() {
     const box = $('exec-box');
     if (!box) return;

@@ -66,6 +66,7 @@ let settingsStore: SettingsStore | null = null;
 let nodeReg: NodeRegistry | null = null;
 let syncBus: SyncBus | null = null;
 const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
+let lastError: { ts: number; message: string; context?: string } | null = null;
 const pendingApprovals = new Map<string, { resolve: (d: { allowed: boolean; scope: string }) => void }>();
 let approvalSeq = 0;
 let lanServer: LanSyncServer | null = null;
@@ -643,7 +644,8 @@ ipcMain.handle(
       return { ok: true, reply, usage: resp.usage, needsKey: false };
     } catch (e) {
       const err = String((e as Error).message || e);
-      return { ok: false, reply: '', error: err, needsKey: false };
+      lastError = { ts: Date.now(), message: err, context: 'chat-send' };
+      return { ok: false, reply: '', error: err, needsKey: false, retry: true };
     }
   }
 );
@@ -1415,4 +1417,92 @@ ipcMain.handle('ccarmy:auto-update-check', async () => {
 });
 ipcMain.handle('ccarmy:auto-update-download', async () => {
   return { ok: false, status: 'skipped', message: 'requires signed release + update server' };
+});
+
+
+// ── M. 群成员管理 ──
+const groupMembers = new Map<string, Array<{ id: string; name: string; role: string; joinedAt: number }>>();
+ipcMain.handle('ccarmy:group-members', (_e, groupId: string) => ({
+  ok: true,
+  members: groupMembers.get(groupId) || [],
+}));
+ipcMain.handle('ccarmy:group-invite', (_e, payload: { groupId: string; name: string; role?: string }) => {
+  const list = groupMembers.get(payload.groupId) || [];
+  if (list.length >= 50) return { ok: false, error: 'max 50' };
+  list.push({ id: 'm-' + Date.now(), name: payload.name, role: payload.role || 'member', joinedAt: Date.now() });
+  groupMembers.set(payload.groupId, list);
+  return { ok: true, members: list };
+});
+ipcMain.handle('ccarmy:group-kick', (_e, payload: { groupId: string; memberId: string }) => {
+  const list = groupMembers.get(payload.groupId) || [];
+  const next = list.filter((x) => x.id !== payload.memberId);
+  groupMembers.set(payload.groupId, next);
+  return { ok: true, members: next };
+});
+ipcMain.handle('ccarmy:group-set-admin', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
+  const list = groupMembers.get(payload.groupId) || [];
+  const m = list.find((x) => x.id === payload.memberId);
+  if (m) m.role = payload.admin ? 'admin' : 'member';
+  groupMembers.set(payload.groupId, list);
+  return { ok: true, members: list };
+});
+ipcMain.handle('ccarmy:group-directed', (_e, payload: { groupId: string; directed: boolean }) => {
+  const g = router.getGroup(payload.groupId);
+  if (!g) return { ok: false, error: 'no group' };
+  g.directedMode = payload.directed;
+  return { ok: true, directedMode: g.directedMode };
+});
+
+
+// ── N. 会话内嵌看板 ──
+ipcMain.handle('ccarmy:board-session', (_e, groupId: string) => ({
+  ok: true,
+  tasks: board?.listTasks(groupId) || [],
+  events: (board?.tailEvents(20) || []).filter((e) => e.groupId === groupId),
+}));
+
+
+// ── O. CCR 工具输出压缩 ──
+ipcMain.handle('ccarmy:ccr-tool-output', (_e, payload: { toolName?: string; content: string }) => {
+  const r = ccr.beforeLog({ kind: 'tool_result', content: payload.content, toolName: payload.toolName });
+  metrics.recordCcr({ ts: Date.now(), kind: 'tool_result', originalBytes: r.originalBytes, compressedBytes: r.compressedBytes });
+  return { ok: true, ...r };
+});
+
+
+// ── P. 知识库详情 ──
+ipcMain.handle('ccarmy:kb-detail', (_e, q: string) => {
+  const r = knowledge?.query(q) || { entities: [], events: [] };
+  return {
+    ok: true,
+    entities: r.entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, attrs: e.attrs, eventIds: e.eventIds })),
+    events: r.events.map((e) => ({ id: e.id, title: e.title, result: e.result, ts: e.ts, entityIds: e.entityIds })),
+  };
+});
+
+
+// ── Q. 错误提示 ──
+ipcMain.handle('ccarmy:last-error', () => ({ ok: true, error: lastError }));
+ipcMain.handle('ccarmy:clear-error', () => { lastError = null; return { ok: true }; });
+
+
+// ── R. 启动引导 ──
+ipcMain.handle('ccarmy:setup-state', () => {
+  const s = settingsStore?.load() as Record<string, unknown> | undefined;
+  return { ok: true, done: !!(s as { setupDone?: boolean })?.setupDone, locale: s?.locale || app.getLocale() };
+});
+ipcMain.handle('ccarmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
+  if (payload.locale) settingsStore?.save({ locale: payload.locale } as never);
+  if (payload.provider) {
+    // 预填 provider
+    Object.assign(providerCfg, {
+      presetId: (payload.provider.presetId as string) || providerCfg.presetId,
+      apiKey: (payload.provider.apiKey as string) || providerCfg.apiKey,
+      baseURL: (payload.provider.baseURL as string) || providerCfg.baseURL,
+      model: (payload.provider.model as string) || providerCfg.model,
+    });
+  }
+  const cur = settingsStore?.load() as unknown as Record<string, unknown>;
+  settingsStore?.save({ ...cur, setupDone: true } as never);
+  return { ok: true };
 });

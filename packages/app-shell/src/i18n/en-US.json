@@ -386,5 +386,10 @@
   "chat.openWindow": "New window",
   "chat.openWindowTip": "Open this chat in a new window",
   "chat.export": "Export",
-  "chat.exportTip": "Export as Markdown"
+  "chat.exportTip": "Export as Markdown",
+  "common.retry": "Retry",
+  "board.session": "Session board",
+  "group.addMember": "Add member",
+  "setup.title": "Welcome",
+  "setup.locale": "Language"
 }

@@ -386,5 +386,10 @@
   "chat.openWindow": "新窗口",
   "chat.openWindowTip": "在新窗口打开此会话",
   "chat.export": "导出",
-  "chat.exportTip": "导出为 Markdown"
+  "chat.exportTip": "导出为 Markdown",
+  "common.retry": "重试",
+  "board.session": "会话看板",
+  "group.addMember": "添加成员",
+  "setup.title": "欢迎使用",
+  "setup.locale": "选择语言"
 }
