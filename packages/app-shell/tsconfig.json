@@ -13,6 +13,8 @@
     { "path": "../memory-os" },
     { "path": "../dsh-runtime" },
     { "path": "../group-router" },
-    { "path": "../board" }
+    { "path": "../board" },
+    { "path": "../ccr-compressor" },
+    { "path": "../knowledge-base" }
   ]
 }

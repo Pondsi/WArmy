@@ -1,23 +1,19 @@
-﻿{
-    "scripts":  {
-                    "clean":  "rimraf dist *.tsbuildinfo",
-                    "build":  "tsc -b",
-                    "typecheck":  "tsc -b --pretty"
-                },
-    "description":  "跨设备同步协议 + NodeRegistry",
-    "type":  "module",
-    "types":  "./dist/index.d.ts",
-    "version":  "0.1.0",
-    "name":  "@ccarmy/sync-protocol",
-    "private":  true,
-    "exports":  {
-                    ".":  {
-                              "types":  "./dist/index.d.ts",
-                              "import":  "./dist/index.js"
-                          }
-                },
-    "main":  "./dist/index.js",
-    "dependencies":  {
-                         "@ccarmy/contracts":  "workspace:*"
-                     }
+{
+  "name": "@ccarmy/sync-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "跨设备同步协议 + NodeRegistry",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty"
+  }
 }

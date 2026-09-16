@@ -78,6 +78,7 @@
   };
 
   const t = (k) => state.t[k] || k;
+  const providerCfgModel = (p) => p.defaultModel || (p.models && p.models[0]) || 'deepseek-chat';
   const displayName = () =>
     state.t['app.displayName'] || (state.locale.startsWith('zh') ? t('app.zhName') : t('app.enName'));
   const escapeHtml = (s) =>
@@ -586,7 +587,7 @@
     renderAttach();
     renderChat();
 
-    // 内部群走值班者编排（GroupChatRouter + Board）
+    // 内部群走值班者编排 + LLM
     if (state.selectedChat.kind === 'internal') {
       try {
         const r = await window.ccarmy.groupMessage({
@@ -594,8 +595,9 @@
           content: text,
           urgency: u,
         });
-        const extra = r?.duty ? ` · duty=${r.duty}` : r?.action === 'queue' ? ' · queued' : '';
-        pushMsg(id, 'them', `[${u}] ${r?.action || 'ok'}${extra}`);
+        const duty = r?.duty ? ` · duty=${r.duty}` : '';
+        const reply = r?.reply || `[${u}] ${r?.action || 'ok'}${duty}`;
+        pushMsg(id, 'them', reply);
       } catch (e) {
         pushMsg(id, 'them', String(e.message || e));
       }
@@ -605,22 +607,31 @@
       return;
     }
 
+    // 单 AI / 外部：真 Provider 对话
     try {
-      await window.ccarmy.memoryAppend(full);
-    } catch {
-      /* optional */
-    }
-    setTimeout(() => {
-      pushMsg(id, 'them', `[${u}] ${text.slice(0, 40)}…`);
-      const c = state.chats.find((x) => x.id === id);
-      if (c) {
-        c.lastTs = Date.now();
-        c.lastPreview = text.slice(0, 30);
+      const r = await window.ccarmy.chatSend({
+        sessionId: id,
+        content: text,
+        insertMode: state.urgency === 'P1' ? 'inner' : 'outer',
+      });
+      if (r?.needsKey) {
+        pushMsg(id, 'them', r.reply);
+      } else if (r?.ok) {
+        pushMsg(id, 'them', r.reply);
+        const c = state.chats.find((x) => x.id === id);
+        if (c) {
+          c.lastTs = Date.now();
+          c.lastPreview = (r.reply || text).slice(0, 30);
+        }
+      } else {
+        pushMsg(id, 'them', r?.error || t('common.error'));
       }
-      renderChat();
-      flushQueue(id);
-      if (CHAT_NAVS.has(state.nav)) renderList();
-    }, 350);
+    } catch (e) {
+      pushMsg(id, 'them', String(e.message || e));
+    }
+    renderChat();
+    flushQueue(id);
+    if (CHAT_NAVS.has(state.nav)) renderList();
   }
 
   function flushQueue(chatId) {
@@ -1034,18 +1045,33 @@
           inp.onchange = () => {
             p[inp.dataset.k] = inp.value;
             if (inp.dataset.k === 'label') el.querySelector('.prov-head').textContent = inp.value;
+            // 同步到主进程 Provider
+            window.ccarmy.setProvider({
+              presetId: p.id,
+              apiKey: p.apiKey,
+              baseURL: p.baseURL,
+              model: p.defaultModel || (p.models && p.models[0]) || providerCfgModel(p),
+              protocol: p.protocol,
+            });
           };
         });
         el.querySelector('[data-fetch]').onclick = async () => {
           const btn = el.querySelector('[data-fetch]');
           btn.textContent = t('common.loading');
+          // 先同步 key/url
+          await window.ccarmy.setProvider({
+            presetId: p.id,
+            apiKey: p.apiKey,
+            baseURL: p.baseURL,
+            protocol: p.protocol,
+            model: p.defaultModel || '',
+          });
           const r = await window.ccarmy.listModels({
             protocol: p.protocol,
             baseURL: p.baseURL,
             apiKey: p.apiKey,
           });
           if (r?.ok && r.models?.length) {
-            // 合并去重，不自动设默认模型
             const set = new Set([...(p.models || []), ...r.models]);
             p.models = [...set];
           }
@@ -1055,6 +1081,19 @@
           btn.onclick = (e) => {
             e.stopPropagation();
             p.models = (p.models || []).filter((m) => m !== btn.dataset.del);
+            renderPage();
+          };
+        });
+        el.querySelectorAll('.model-chip').forEach((chip) => {
+          chip.onclick = async () => {
+            p.defaultModel = chip.dataset.m;
+            await window.ccarmy.setProvider({
+              presetId: p.id,
+              apiKey: p.apiKey,
+              baseURL: p.baseURL,
+              model: p.defaultModel,
+              protocol: p.protocol,
+            });
             renderPage();
           };
         });

@@ -1,23 +1,19 @@
-﻿{
-    "scripts":  {
-                    "clean":  "rimraf dist *.tsbuildinfo",
-                    "build":  "tsc -b",
-                    "typecheck":  "tsc -b --pretty"
-                },
-    "description":  "写入侧CCR压缩网关",
-    "type":  "module",
-    "types":  "./dist/index.d.ts",
-    "version":  "0.1.0",
-    "name":  "@ccarmy/ccr-compressor",
-    "private":  true,
-    "exports":  {
-                    ".":  {
-                              "types":  "./dist/index.d.ts",
-                              "import":  "./dist/index.js"
-                          }
-                },
-    "main":  "./dist/index.js",
-    "dependencies":  {
-                         "@ccarmy/contracts":  "workspace:*"
-                     }
+{
+  "name": "@ccarmy/ccr-compressor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "写入侧 CCR 压缩网关（零 LLM）",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty"
+  }
 }

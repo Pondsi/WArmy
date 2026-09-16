@@ -1,23 +1,19 @@
-﻿{
-    "scripts":  {
-                    "clean":  "rimraf dist *.tsbuildinfo",
-                    "build":  "tsc -b",
-                    "typecheck":  "tsc -b --pretty"
-                },
-    "description":  "名称驱动+事件驱动知识库",
-    "type":  "module",
-    "types":  "./dist/index.d.ts",
-    "version":  "0.1.0",
-    "name":  "@ccarmy/knowledge-base",
-    "private":  true,
-    "exports":  {
-                    ".":  {
-                              "types":  "./dist/index.d.ts",
-                              "import":  "./dist/index.js"
-                          }
-                },
-    "main":  "./dist/index.js",
-    "dependencies":  {
-                         "@ccarmy/contracts":  "workspace:*"
-                     }
+{
+  "name": "@ccarmy/knowledge-base",
+  "version": "0.1.0",
+  "private": true,
+  "description": "名称驱动+事件驱动知识库",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty"
+  }
 }

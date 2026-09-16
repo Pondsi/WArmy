@@ -186,6 +186,89 @@ mem.close();
 fs.rmSync(memDir, { recursive: true, force: true });
 fs.rmSync(memAscii, { recursive: true, force: true });
 
+// 7b. CCR / knowledge / sync / assets / checkpoint
+for (const p of ['ccr-compressor', 'knowledge-base', 'sync-protocol', 'asset-governance']) {
+  check(`dist ${p}`, exists('packages', p, 'dist', 'index.js'));
+  const dst = path.join(ascii, p);
+  fs.mkdirSync(path.join(dst, 'dist'), { recursive: true });
+  fs.copyFileSync(path.join(root, 'packages', p, 'package.json'), path.join(dst, 'package.json'));
+  for (const f of fs.readdirSync(path.join(root, 'packages', p, 'dist'))) {
+    fs.copyFileSync(path.join(root, 'packages', p, 'dist', f), path.join(dst, 'dist', f));
+  }
+}
+
+const { CcrGateway } = await import(toImportUrl(path.join(ascii, 'ccr-compressor', 'dist', 'index.js')));
+const ccr = new CcrGateway(200);
+const big = Array.from({ length: 80 }, (_, i) => `line-${i} payload value ${i}`).join('\n');
+const out = ccr.beforeLog({ kind: 'tool_result', content: big, toolName: 'bash' });
+check('ccr compresses', out.compressedBytes < out.originalBytes && (out.truncated || out.ratio < 1), {
+  o: out.originalBytes,
+  c: out.compressedBytes,
+  t: out.truncated,
+  r: out.ratio,
+});
+
+const { KnowledgeBase } = await import(toImportUrl(path.join(ascii, 'knowledge-base', 'dist', 'index.js')));
+const kbDir = path.join(os.tmpdir(), 'ccarmy-verify-kb-' + Date.now());
+const kb = new KnowledgeBase(kbDir);
+kb.upsertEntity({ id: 'e1', kind: 'person', name: '值班者A', attrs: { role: 'duty' }, anchors: [] });
+kb.addEvent({ id: 'ev1', title: '完成周报', entityIds: ['e1'], anchors: [], ts: Date.now() });
+check('kb bidirectional', kb.eventsOfEntity('e1').length === 1 && kb.entitiesOfEvent('ev1')[0]?.id === 'e1');
+check('kb query', kb.query('周报').events.length === 1);
+fs.rmSync(kbDir, { recursive: true, force: true });
+
+const { NodeRegistry, SyncBus, createInvite, consumeInvite, incognitoWorkDir } = await import(
+  toImportUrl(path.join(ascii, 'sync-protocol', 'dist', 'index.js'))
+);
+const regFile = path.join(os.tmpdir(), 'ccarmy-verify-reg.json');
+const reg = new NodeRegistry(regFile);
+const local = reg.registerLocal('A');
+const remote = reg.pairRemote('node-b', 'B');
+check('registry local', reg.isLocal(local.nodeId) && !reg.isLocal(remote.nodeId));
+const busDir = path.join(os.tmpdir(), 'ccarmy-verify-bus');
+const bus = new SyncBus(busDir);
+bus.publish({ fromNode: local.nodeId, toNode: remote.nodeId, channel: 'group', payload: { text: 'hi' } });
+const incog = bus.publish({ fromNode: remote.nodeId, toNode: local.nodeId, channel: 'group', payload: { text: 'secret' }, incognito: true });
+const pulled = bus.pull(remote.nodeId);
+check('sync bus deliver', pulled.some((m) => (m.payload)?.text === 'hi'));
+check('incognito not persisted', !bus.pull(local.nodeId).some((m) => m.id === incog.id));
+const inv = createInvite(1000, 'g1');
+check('invite once', consumeInvite(inv) && !consumeInvite(inv));
+check('incog dir', incognitoWorkDir().includes('incog'));
+fs.rmSync(busDir, { recursive: true, force: true });
+fs.rmSync(regFile, { force: true });
+
+const { AssetGovernor } = await import(toImportUrl(path.join(ascii, 'asset-governance', 'dist', 'index.js')));
+const gov = new AssetGovernor();
+gov.register({ id: 'a1', category: 'rule', scope: 'project', strength: 'strong', title: 'r', body: 'b' });
+check('assets strict empty', gov.retrieve({ strict: true }).length === 0);
+check('assets normal has', gov.retrieve({}).length === 1);
+gov.negativeFeedback('a1', 6);
+check('assets downrank', gov.list()[0]?.strength === 'weak');
+
+// checkpoint
+const { CheckpointStore } = await import(
+  toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'checkpoint.js'))
+);
+const cpDir = path.join(os.tmpdir(), 'ccarmy-verify-cp-' + Date.now());
+const cps = new CheckpointStore(cpDir);
+const jsonl = path.join(cpDir, 'mem.jsonl');
+fs.writeFileSync(jsonl, '{"seq":1}\n');
+const cp = cps.create({ phase: 'round_end', logSeq: 1, jsonlPath: jsonl });
+fs.writeFileSync(jsonl, '{"seq":999}\n');
+check('checkpoint create', !!cp.id && cps.list().length === 1);
+check('checkpoint rollback', cps.rollback(cp.id, { jsonlPath: jsonl }) && fs.readFileSync(jsonl, 'utf8').includes('"seq":1'));
+fs.rmSync(cpDir, { recursive: true, force: true });
+
+// main process chat IPC surface
+check('chat-send ipc', mainTs.includes('ccarmy:chat-send'));
+check('checkpoint ipc', mainTs.includes('ccarmy:checkpoint-create'));
+check('knowledge ipc', mainTs.includes('ccarmy:knowledge-query'));
+check('set-provider ipc', mainTs.includes('ccarmy:set-provider'));
+const appJs2 = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.js'), 'utf8');
+check('renderer uses chatSend', appJs2.includes('ccarmy.chatSend'));
+check('renderer setProvider', appJs2.includes('ccarmy.setProvider'));
+
 // 8. ADR / agents / lock
 check('ADR archived', exists('docs', 'ADR', '000-多智能体群聊桌面应用定稿方案.md'));
 check('UI agents installed', exists('packages', 'app-shell', 'agents', 'design-ui-designer.md'));

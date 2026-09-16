@@ -10,6 +10,10 @@ import { createP1Runtime } from './runtime.js';
 import { MemoryClient } from './memory-client.js';
 import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@ccarmy/group-router';
 import { BoardStore, parseBoardCommand } from '@ccarmy/board';
+import { createProviderFromPreset, type ChatMessage } from '@ccarmy/providers';
+import { CcrGateway } from '@ccarmy/ccr-compressor';
+import { KnowledgeBase } from '@ccarmy/knowledge-base';
+import { CheckpointStore } from './checkpoint.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bootLog = path.join(app.getPath('userData'), 'ccarmy-boot.log');
@@ -30,6 +34,21 @@ let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
 let memory: MemoryClient | null = null;
 const router = new GroupChatRouter({ queueWhenFixedBusy: false });
 let board: BoardStore | null = null;
+const ccr = new CcrGateway(4000);
+let knowledge: KnowledgeBase | null = null;
+let checkpoints: CheckpointStore | null = null;
+/** 会话消息历史（主进程侧） */
+const chatHistories = new Map<string, ChatMessage[]>();
+/** 运行中的插入指令级别 */
+const insertMode = new Map<string, 'outer' | 'inner'>();
+/** Provider 配置（由设置 UI 写入） */
+let providerCfg = {
+  presetId: 'deepseek',
+  apiKey: '',
+  baseURL: '',
+  model: 'deepseek-chat',
+  protocol: 'openai-compatible' as 'openai-compatible' | 'anthropic' | 'ollama',
+};
 
 function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
   const userData = app.getPath('userData');
@@ -75,8 +94,11 @@ async function bootstrap() {
     instancesRoot: path.join(app.getPath('userData'), 'instances'),
   });
   boot('p1 ready');
-  board = new BoardStore(path.join(app.getPath('userData'), 'board'));
-  boot('board ready');
+  const userData = app.getPath('userData');
+  board = new BoardStore(path.join(userData, 'board'));
+  knowledge = new KnowledgeBase(path.join(userData, 'knowledge'));
+  checkpoints = new CheckpointStore(path.join(userData, 'checkpoints'));
+  boot('board/knowledge/checkpoints ready');
 }
 
 function startMemoryAsync() {
@@ -354,6 +376,37 @@ ipcMain.handle(
     } catch {
       /* optional */
     }
+
+    // 值班者调用 LLM 生成回复（有 Key 时）
+    let llmReply: string | null = null;
+    if (providerCfg.apiKey || providerCfg.protocol === 'ollama') {
+      try {
+        const provider = createProviderFromPreset(providerCfg.presetId, {
+          apiKey: providerCfg.apiKey,
+          baseURL: providerCfg.baseURL || undefined,
+        });
+        const hist = chatHistories.get(msg.groupId) || [];
+        hist.push({ role: 'user', content: msg.content });
+        const resp = await provider.chat({
+          model: providerCfg.model,
+          messages: [
+            {
+              role: 'system',
+              content:
+                '你是 CCArmy 内部群的值班者。请用简短中文回复用户，并在需要时使用看板指令格式：新建任务:/完成/进度 标题:百分比。',
+            },
+            ...hist.slice(-20),
+          ],
+          maxTokens: 512,
+        });
+        llmReply = resp.choices[0]?.message?.content || '';
+        hist.push({ role: 'assistant', content: llmReply });
+        chatHistories.set(msg.groupId, hist);
+      } catch (e) {
+        llmReply = `LLM error: ${String((e as Error).message || e).slice(0, 160)}`;
+      }
+    }
+
     return {
       ok: true,
       action: route.action,
@@ -361,6 +414,7 @@ ipcMain.handle(
       duty: route.duty?.id,
       decision: route.decision,
       queueLength: router.listQueue(msg.groupId).length,
+      reply: llmReply,
     };
   }
 );
@@ -389,3 +443,153 @@ ipcMain.handle('ccarmy:group-join-instance', (_e, groupId: string, instanceId: s
   });
   return { ok: true };
 });
+
+// ── 真 LLM 对话 ──
+ipcMain.handle('ccarmy:set-provider', (_e, cfg: Partial<typeof providerCfg>) => {
+  providerCfg = { ...providerCfg, ...cfg };
+  return { ok: true, providerCfg: { ...providerCfg, apiKey: providerCfg.apiKey ? '***' : '' } };
+});
+
+ipcMain.handle('ccarmy:get-provider', () => ({
+  ok: true,
+  providerCfg: { ...providerCfg, apiKey: providerCfg.apiKey ? '***' : '' },
+  hasKey: !!providerCfg.apiKey || providerCfg.protocol === 'ollama',
+}));
+
+ipcMain.handle(
+  'ccarmy:chat-send',
+  async (
+    _e,
+    msg: {
+      sessionId: string;
+      role?: 'user';
+      content: string;
+      model?: string;
+      /** 指令插入：outer=外循环后，inner=内循环边界 */
+      insertMode?: 'outer' | 'inner';
+    }
+  ) => {
+    const sessionId = msg.sessionId;
+    if (msg.insertMode) insertMode.set(sessionId, msg.insertMode);
+
+    // 写入侧 CCR
+    const compressed = ccr.beforeLog({ kind: 'message', content: msg.content });
+    const userMsg: ChatMessage = { role: 'user', content: compressed.content };
+    const hist = chatHistories.get(sessionId) || [];
+    hist.push(userMsg);
+
+    try {
+      await memory?.append(
+        {
+          id: `m-${Date.now()}`,
+          sessionId,
+          kind: 'message',
+          body: compressed.content,
+        },
+        'duty'
+      );
+    } catch {
+      /* optional */
+    }
+
+    if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
+      const reply = `[未配置 API Key] 已收到：${msg.content.slice(0, 80)}`;
+      hist.push({ role: 'assistant', content: reply });
+      chatHistories.set(sessionId, hist);
+      return { ok: true, reply, usage: null, needsKey: true };
+    }
+
+    try {
+      const provider = createProviderFromPreset(providerCfg.presetId, {
+        apiKey: providerCfg.apiKey,
+        baseURL: providerCfg.baseURL || undefined,
+      });
+      const resp = await provider.chat({
+        model: msg.model || providerCfg.model,
+        messages: hist,
+        maxTokens: 1024,
+      });
+      const reply = resp.choices[0]?.message?.content || '';
+      hist.push({ role: 'assistant', content: reply });
+      chatHistories.set(sessionId, hist);
+      try {
+        await memory?.append(
+          { id: `a-${Date.now()}`, sessionId, kind: 'message', body: reply.slice(0, 4000) },
+          'duty'
+        );
+      } catch {
+        /* optional */
+      }
+      // 知识库：从回复抽取简单事件（可扩展）
+      if (knowledge && reply.length > 0) {
+        knowledge.upsertEntity({
+          id: 'session-' + sessionId,
+          kind: 'project',
+          name: sessionId,
+          attrs: {},
+          anchors: [],
+        });
+      }
+      return { ok: true, reply, usage: resp.usage, needsKey: false };
+    } catch (e) {
+      const err = String((e as Error).message || e);
+      return { ok: false, reply: '', error: err, needsKey: false };
+    }
+  }
+);
+
+// ── 检查点 ──
+ipcMain.handle('ccarmy:checkpoint-create', (_e, phase: 'round_start' | 'round_end') => {
+  if (!checkpoints) return { ok: false };
+  const memDir = path.join(app.getPath('userData'), 'memory');
+  const jsonl = path.join(memDir, 'fast-memory.jsonl');
+  const cp = checkpoints.create({ phase, logSeq: Date.now(), jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined });
+  return { ok: true, checkpoint: cp, list: checkpoints.list() };
+});
+
+ipcMain.handle('ccarmy:checkpoint-list', () => ({ ok: true, list: checkpoints?.list() || [] }));
+
+ipcMain.handle('ccarmy:checkpoint-rollback', (_e, id: string) => {
+  if (!checkpoints) return { ok: false };
+  const memDir = path.join(app.getPath('userData'), 'memory');
+  const jsonl = path.join(memDir, 'fast-memory.jsonl');
+  const ok = checkpoints.rollback(id, { jsonlPath: jsonl });
+  return { ok };
+});
+
+// ── 知识库 ──
+ipcMain.handle('ccarmy:knowledge-query', (_e, q: string) => {
+  return { ok: true, ...(knowledge?.query(q) || { entities: [], events: [] }) };
+});
+
+ipcMain.handle(
+  'ccarmy:knowledge-add-event',
+  (_e, ev: { id: string; title: string; entityIds?: string[]; result?: string }) => {
+    knowledge?.upsertEntity({
+      id: 'default',
+      kind: 'project',
+      name: 'default',
+      attrs: {},
+      anchors: [],
+    });
+    knowledge?.addEvent({
+      id: ev.id,
+      title: ev.title,
+      result: ev.result,
+      entityIds: ev.entityIds || ['default'],
+      anchors: [],
+      ts: Date.now(),
+    });
+    return { ok: true };
+  }
+);
+
+// ── 指令插入级别 ──
+ipcMain.handle('ccarmy:set-insert-mode', (_e, sessionId: string, mode: 'outer' | 'inner') => {
+  insertMode.set(sessionId, mode);
+  return { ok: true, mode };
+});
+ipcMain.handle('ccarmy:get-insert-mode', (_e, sessionId: string) => ({
+  ok: true,
+  mode: insertMode.get(sessionId) || 'outer',
+}));

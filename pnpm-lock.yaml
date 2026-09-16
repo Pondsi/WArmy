@@ -17,6 +17,9 @@ importers:
       '@ccarmy/board':
         specifier: workspace:*
         version: link:../board
+      '@ccarmy/ccr-compressor':
+        specifier: workspace:*
+        version: link:../ccr-compressor
       '@ccarmy/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -26,6 +29,9 @@ importers:
       '@ccarmy/group-router':
         specifier: workspace:*
         version: link:../group-router
+      '@ccarmy/knowledge-base':
+        specifier: workspace:*
+        version: link:../knowledge-base
       '@ccarmy/memory-os':
         specifier: workspace:*
         version: link:../memory-os
@@ -37,11 +43,7 @@ importers:
         specifier: 33.2.0
         version: 33.2.0
 
-  packages/asset-governance:
-    dependencies:
-      '@ccarmy/contracts':
-        specifier: workspace:*
-        version: link:../contracts
+  packages/asset-governance: {}
 
   packages/board:
     dependencies:
@@ -49,11 +51,7 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
-  packages/ccr-compressor:
-    dependencies:
-      '@ccarmy/contracts':
-        specifier: workspace:*
-        version: link:../contracts
+  packages/ccr-compressor: {}
 
   packages/contracts: {}
 
@@ -69,11 +67,7 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
-  packages/knowledge-base:
-    dependencies:
-      '@ccarmy/contracts':
-        specifier: workspace:*
-        version: link:../contracts
+  packages/knowledge-base: {}
 
   packages/memory-os:
     dependencies:
@@ -94,11 +88,7 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
-  packages/sync-protocol:
-    dependencies:
-      '@ccarmy/contracts':
-        specifier: workspace:*
-        version: link:../contracts
+  packages/sync-protocol: {}
 
 packages:
 
