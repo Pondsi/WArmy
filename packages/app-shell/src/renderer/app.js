@@ -341,6 +341,12 @@
 
   function setupListAction() {
     const btn = $('list-action');
+    const joinBtn = $('btn-join-qr');
+    // 项目/群聊/联系人：显示扫码加入
+    if (joinBtn) {
+      const showJoin = state.nav === 'internalGroup' || state.nav === 'externalGroup' || state.nav === 'externalChat';
+      joinBtn.classList.toggle('hidden', !showJoin);
+    }
     if (state.nav === 'internalGroup' || state.nav === 'externalGroup') {
       const createKey = state.nav === 'internalGroup' ? 'list.createProject' : 'list.createGroupChat';
       btn.textContent = t(createKey);
@@ -1816,6 +1822,35 @@
     // 语言切换后刷新文案
     window.__refreshUrgency = refresh;
   })();
+  // 「…」更多菜单
+  $('more-trigger')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('more-menu')?.classList.toggle('hidden');
+  });
+  document.addEventListener('click', () => $('more-menu')?.classList.add('hidden'));
+  $('mi-search')?.addEventListener('click', () => {
+    const q = uiPromptSync(t('list.search'));
+    // 简化：聚焦搜索
+    $('list-search')?.focus();
+  });
+  $('mi-directed')?.addEventListener('change', async () => {
+    if (!state.selectedChat) return;
+    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: true }).catch(() => {});
+  });
+  $('mi-open')?.addEventListener('click', () => {
+    if (!state.selectedChat) return;
+    window.ccarmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind });
+  });
+  $('mi-export')?.addEventListener('click', async () => {
+    if (!state.selectedChat) return;
+    const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
+    const r = await window.ccarmy.exportSession({
+      title: state.selectedChat.name,
+      messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
+    });
+    uiAlert(r?.ok ? r.path : t('common.error'));
+  });
+
   $('btn-console')?.addEventListener('click', () => {
     state.consoleOpen = !state.consoleOpen;
     $('btn-console')?.classList.toggle('tb-on', state.consoleOpen);

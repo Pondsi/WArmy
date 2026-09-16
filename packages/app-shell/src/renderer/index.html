@@ -69,7 +69,10 @@
     <aside id="list-col">
       <header class="list-head">
         <h2 id="list-title">—</h2>
-        <button id="list-action" class="btn-mini hidden"></button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button id="btn-join-qr" class="btn-mini hidden" data-i18n="join.scanQr" data-i18n-title="join.qrHint"></button>
+          <button id="list-action" class="btn-mini hidden"></button>
+        </div>
       </header>
       <div class="search-wrap">
         <input id="list-search" type="search" data-i18n-placeholder="list.search" data-i18n-title="list.search" />
@@ -110,14 +113,17 @@
                   <button type="button" data-s="full" data-i18n="chat.securityFull"></button>
                 </div>
               </div>
-              <button id="btn-join-qr" class="btn-mini" data-i18n="join.scanQr" data-i18n-title="join.qrHint"></button>
-              <input id="chat-search" style="width:100px" data-i18n-placeholder="list.search"/>
-              <button id="btn-chat-search" class="btn-mini">🔍</button>
-              <button id="btn-open-win" class="btn-mini" data-i18n="chat.openWindow" data-i18n-title="chat.openWindowTip"></button>
-              <label class="muted" style="display:inline-flex;align-items:center;gap:4px">
-                <input type="checkbox" id="btn-directed"/> <span data-i18n="group.directed"></span>
-              </label>
-              <button id="btn-export" class="btn-mini" data-i18n="chat.export" data-i18n-title="chat.exportTip"></button>
+              <div class="urg-dd" id="more-dd">
+                <button class="urg-trigger" id="more-trigger" type="button" data-i18n-title="common.more">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
+                </button>
+                <div class="urg-menu hidden" id="more-menu" role="menu">
+                  <button type="button" id="mi-search" data-i18n="list.search"></button>
+                  <button type="button" id="mi-directed" data-i18n="group.directed"></button>
+                  <button type="button" id="mi-open" data-i18n="chat.openWindow"></button>
+                  <button type="button" id="mi-export" data-i18n="chat.export"></button>
+                </div>
+              </div>
               <button id="btn-stop-all" class="btn-stop" data-i18n="chat.stopAll" data-i18n-title="chat.stopAllTip"></button>
             </div>
           </header>

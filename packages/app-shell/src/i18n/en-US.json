@@ -435,5 +435,6 @@
   "nav.addFriends": "Add friend",
   "nav.addGroup": "Join group",
   "join.scanQr": "Scan to join",
-  "archive.hint": "Archived conversations are hidden from the main list but data is kept. Restore or delete here. All conversations can be archived via right-click."
+  "archive.hint": "Archived conversations are hidden from the main list but data is kept. Restore or delete here. All conversations can be archived via right-click.",
+  "common.more": "More"
 }

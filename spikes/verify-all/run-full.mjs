@@ -345,7 +345,7 @@ check('plugin-install ipc', mainTs.includes('ccarmy:plugin-install'));
 check('archived ipc', mainTs.includes('ccarmy:archived-list'));
 check('renderer chat search', appJs.includes('btn-chat-search'));
 check('renderer directed', appJs.includes('btn-directed'));
-check('html directed', html.includes('btn-directed'));
+check('html directed', html.includes('mi-directed'));
 check('i18n copy quote', typeof zh['common.copy'] === 'string');
 check('renderer archived', appJs.includes('refreshArchived'));
 check('renderer kb detail', appJs.includes('kbDetail'));
