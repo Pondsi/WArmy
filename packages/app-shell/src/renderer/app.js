@@ -2189,6 +2189,16 @@
   bindResizer($('col-resizer'), '--list-w', 200, 420);
   bindResizer($('panel-resizer'), '--panel-w', 220, 480);
 
+  async function refreshCost() {
+    const box = $('cost-box');
+    if (!box) return;
+    const c = await window.ccarmy.costSummary().catch(() => null);
+    if (c?.ok) {
+      box.textContent = '¥' + c.estCostCny + ' · ' + c.promptTokens + ' in / ' + c.completionTokens + ' out · cache ' + ((c.cacheHitRate||0)*100).toFixed(1) + '%';
+    }
+  }
+  setInterval(refreshCost, 8000);
+
   async function refreshMetrics() {
     const box = $('metrics-box');
     if (!box) return;
