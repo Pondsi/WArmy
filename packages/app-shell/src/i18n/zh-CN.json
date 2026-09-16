@@ -382,5 +382,9 @@
   "cost.title": "成本",
   "executors.title": "执行者",
   "executors.run": "试运行",
-  "executors.none": "无运行中"
+  "executors.none": "无运行中",
+  "chat.openWindow": "新窗口",
+  "chat.openWindowTip": "在新窗口打开此会话",
+  "chat.export": "导出",
+  "chat.exportTip": "导出为 Markdown"
 }

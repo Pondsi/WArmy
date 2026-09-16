@@ -2289,6 +2289,37 @@
       (r?.events || []).map((e) => e.title).join(', ');
   });
 
+  $('btn-open-win')?.addEventListener('click', () => {
+    if (!state.selectedChat) return;
+    window.ccarmy.openChatWindow({
+      id: state.selectedChat.id,
+      title: state.selectedChat.name,
+      kind: state.selectedChat.kind,
+    });
+  });
+  $('btn-export')?.addEventListener('click', async () => {
+    if (!state.selectedChat) return;
+    const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
+    const r = await window.ccarmy.exportSession({
+      title: state.selectedChat.name,
+      messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
+    });
+    uiAlert(r?.ok ? r.path : t('common.error'));
+  });
+  // 托盘 + 热键
+  window.ccarmy.trayInit?.().catch(() => {});
+  window.ccarmy.registerHotkey?.('CommandOrControl+Shift+M').catch(() => {});
+  // 从 URL 参数自动打开会话（多窗口）
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const cid = q.get('chatId');
+    if (cid) {
+      const title = q.get('chatTitle') || cid;
+      const kind = q.get('chatKind') || 'single';
+      setTimeout(() => openChat(kind, cid, title), 300);
+    }
+  } catch { /* noop */ }
+
   setInterval(refreshMetrics, 5000);
 
   (async () => {

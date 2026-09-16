@@ -111,6 +111,35 @@ export class CheckpointStore {
     }
     const bytes = dirSize(abs);
     const now = Date.now();
+    // G. 真实文件时间戳
+    const filesChanged: Array<{ path: string; ts: number }> = [];
+    const filesCreated: Array<{ path: string; ts: number }> = [];
+    if (opts.jsonlPath && fs.existsSync(opts.jsonlPath)) {
+      try {
+        const st = fs.statSync(opts.jsonlPath);
+        filesChanged.push({ path: 'fast-memory.jsonl', ts: st.mtimeMs });
+      } catch {
+        filesChanged.push({ path: 'fast-memory.jsonl', ts: now });
+      }
+    }
+    if (opts.workspace && fs.existsSync(opts.workspace)) {
+      try {
+        for (const e of fs.readdirSync(opts.workspace, { withFileTypes: true }).slice(0, 20)) {
+          if (e.isFile()) {
+            const fp = path.join(opts.workspace, e.name);
+            let ts = now;
+            try {
+              ts = fs.statSync(fp).mtimeMs;
+            } catch {
+              /* noop */
+            }
+            filesCreated.push({ path: e.name, ts });
+          }
+        }
+      } catch {
+        /* noop */
+      }
+    }
     const cp: Checkpoint = {
       id,
       phase: opts.phase,
@@ -123,8 +152,8 @@ export class CheckpointStore {
         `${new Date(now).toLocaleTimeString()} · ${opts.phase === 'round_start' ? '轮起' : '轮末'}`,
       detail: {
         tasks: [],
-        filesChanged: [],
-        filesCreated: [],
+        filesChanged,
+        filesCreated,
         irreversible: [],
         assets: [],
         ...opts.detail,

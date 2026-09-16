@@ -382,5 +382,9 @@
   "cost.title": "Cost",
   "executors.title": "Executors",
   "executors.run": "Try run",
-  "executors.none": "None"
+  "executors.none": "None",
+  "chat.openWindow": "New window",
+  "chat.openWindowTip": "Open this chat in a new window",
+  "chat.export": "Export",
+  "chat.exportTip": "Export as Markdown"
 }

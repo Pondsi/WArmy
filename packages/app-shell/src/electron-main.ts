@@ -1307,3 +1307,112 @@ ipcMain.handle('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; e
     return { ok: false, error: String((e as Error).message || e) };
   }
 });
+
+
+// ── H. 多窗口：在新窗口打开会话 ──
+const chatWindows = new Map<string, BrowserWindow>();
+ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string }) => {
+  if (chatWindows.has(payload.id)) {
+    chatWindows.get(payload.id)?.focus();
+    return { ok: true };
+  }
+  const w = new BrowserWindow({
+    width: 900,
+    height: 700,
+    title: payload.title || 'CCArmy',
+    frame: process.platform === 'darwin',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  void w.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
+    query: { chatId: payload.id, chatKind: payload.kind || 'single', chatTitle: payload.title || '' },
+  });
+  w.on('closed', () => chatWindows.delete(payload.id));
+  chatWindows.set(payload.id, w);
+  return { ok: true };
+});
+
+// ── I. 全局热键 ──
+ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
+  try {
+    const { globalShortcut } = require('electron');
+    globalShortcut.unregister(accel);
+    const ok = globalShortcut.register(accel, () => {
+      if (!win) return;
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    });
+    return { ok };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+// ── J. 托盘 ──
+let tray: import('electron').Tray | null = null;
+ipcMain.handle('ccarmy:tray-init', () => {
+  try {
+    const { Tray, Menu, nativeImage } = require('electron');
+    if (tray) return { ok: true };
+    // 16x16 简易图标
+    const img = nativeImage.createEmpty();
+    const t = new Tray(img);
+    t.setToolTip('CCArmy');
+    t.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: '显示主窗口', click: () => { win?.show(); win?.focus(); } },
+        { type: 'separator' },
+        { label: '退出', click: () => { app.quit(); } },
+      ])
+    );
+    t.on('click', () => {
+      if (win?.isVisible()) win.hide();
+      else { win?.show(); win?.focus(); }
+    });
+    tray = t;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+// ── K. 会话导出 Markdown ──
+ipcMain.handle('ccarmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
+  try {
+    const dir = path.join(app.getPath('userData'), 'exports');
+    fs.mkdirSync(dir, { recursive: true });
+    const lines = [
+      '# ' + payload.title,
+      '',
+      '> 导出自 CCArmy · ' + new Date().toLocaleString(),
+      '',
+    ];
+    for (const msg of payload.messages) {
+      const who = msg.role === 'me' ? '我' : payload.title;
+      const time = msg.ts ? new Date(msg.ts).toLocaleString() : '';
+      lines.push(`**${who}** ${time}`);
+      lines.push('');
+      lines.push(msg.text || '');
+      lines.push('');
+    }
+    const file = path.join(dir, `${payload.title.replace(/[\\/:*?"<>|]/g, '_')}-${Date.now()}.md`);
+    fs.writeFileSync(file, lines.join('\n'), 'utf8');
+    return { ok: true, path: file };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+// ── L. 自动更新（electron-updater 占位） ──
+ipcMain.handle('ccarmy:auto-update-check', async () => {
+  // 无签名/发布源时只返回状态，不实际下载
+  return { ok: true, status: 'idle', message: 'no release channel configured' };
+});
+ipcMain.handle('ccarmy:auto-update-download', async () => {
+  return { ok: false, status: 'skipped', message: 'requires signed release + update server' };
+});
