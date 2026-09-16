@@ -19,6 +19,7 @@
     emailOnRequest: false,
     theme: '#07c160',
     themeMode: 'system',
+    smtp: { host: '', port: 465, secure: true, user: '', pass: '' },
     listWidth: 280,
     panelWidth: 300,
     attachments: [],
@@ -970,6 +971,42 @@
             <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button></div>
         </div>
         <div class="set-section set-card">
+          <h2>${t('smtp.title')}</h2>
+          <p class="muted">${t('smtp.hint')}</p>
+          <div class="inst-row">
+            <div class="field"><label>${t('smtp.host')}</label><input id="smtp-host" value="${escapeHtml(state.smtp.host || '')}" placeholder="smtp.example.com"/></div>
+            <div class="field"><label>${t('smtp.port')}</label><input id="smtp-port" value="${escapeHtml(String(state.smtp.port || 465))}"/></div>
+            <div class="field"><label>${t('smtp.secure')}</label><label><input type="checkbox" id="smtp-secure" ${state.smtp.secure !== false ? 'checked' : ''}/> ${t('smtp.secure')}</label></div>
+          </div>
+          <div class="inst-row" style="margin-top:8px">
+            <div class="field"><label>${t('smtp.user')}</label><input id="smtp-user" value="${escapeHtml(state.smtp.user || '')}"/></div>
+            <div class="field"><label>${t('smtp.pass')}</label><input id="smtp-pass" type="password" value="${escapeHtml(state.smtp.pass || '')}"/></div>
+            <button class="btn-mini" id="btn-smtp-verify">${t('smtp.verify')}</button>
+            <span class="muted" id="smtp-msg"></span>
+          </div>
+        </div>
+        <div class="set-section set-card">
+          <h2>${t('lan.title')}</h2>
+          <div class="inst-row">
+            <div class="field"><label>${t('lan.port')}</label><input id="lan-port" value="7788"/></div>
+            <button class="btn-mini" id="btn-lan-start">${t('lan.start')}</button>
+            <button class="btn-mini" id="btn-lan-stop">${t('lan.stop')}</button>
+          </div>
+          <div class="inst-row" style="margin-top:8px">
+            <div class="field"><label>${t('lan.peerHost')}</label><input id="lan-host" value="192.168.1.123" placeholder="192.168.1.123"/></div>
+            <div class="field"><label>${t('lan.peerPort')}</label><input id="lan-pport" value="7788"/></div>
+            <button class="btn-mini" id="btn-lan-send">${t('lan.sendTest')}</button>
+            <button class="btn-mini" id="btn-lan-dual">${t('lan.dualSmoke')}</button>
+          </div>
+          <div class="muted" id="lan-msg" style="margin-top:8px"></div>
+          <div class="muted" id="lan-inbox" style="margin-top:8px;max-height:100px;overflow:auto"></div>
+        </div>
+        <div class="set-section set-card">
+          <h2>${t('webgpu.title')}</h2>
+          <button class="btn-mini" id="btn-webgpu">${t('webgpu.test')}</button>
+          <span class="muted" id="webgpu-msg"></span>
+        </div>
+        <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
           <div class="muted">${t('about.version')} 0.1.0 · CCArmy · ${t('app.subtitle')}</div>
           <div style="margin-top:8px"><button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
@@ -1153,6 +1190,72 @@
         if (!v) return;
         state.plugins.push({ id: v, name: v, enabled: true, desc: '' });
         renderPage();
+      };
+
+      // SMTP
+      $('btn-smtp-verify').onclick = async () => {
+        const cfg = {
+          host: $('smtp-host').value.trim(),
+          port: parseInt($('smtp-port').value, 10) || 465,
+          secure: $('smtp-secure').checked,
+          user: $('smtp-user').value.trim(),
+          pass: $('smtp-pass').value,
+        };
+        state.smtp = cfg;
+        $('smtp-msg').textContent = t('common.loading');
+        const r = await window.ccarmy.smtpVerify(cfg);
+        $('smtp-msg').textContent = r?.ok ? t('smtp.ok') : `${t('smtp.fail')}: ${r?.step || ''} ${r?.message || ''}`;
+        window.ccarmy.settingsSave({ emailOnRequest: state.emailOnRequest });
+      };
+
+      // LAN
+      $('btn-lan-start').onclick = async () => {
+        const port = parseInt($('lan-port').value, 10) || 7788;
+        const r = await window.ccarmy.lanStart(port);
+        $('lan-msg').textContent = r?.ok ? `${t('lan.start')} :${r.port} ${r.nodeId}` : String(r?.error || '');
+      };
+      $('btn-lan-stop').onclick = async () => {
+        await window.ccarmy.lanStop();
+        $('lan-msg').textContent = t('lan.stop');
+      };
+      $('btn-lan-send').onclick = async () => {
+        const r = await window.ccarmy.lanSend({
+          host: $('lan-host').value.trim(),
+          port: parseInt($('lan-pport').value, 10) || 7788,
+          payload: { text: 'hello-from-ccarmy', ts: Date.now() },
+        });
+        $('lan-msg').textContent = r?.ok ? 'sent' : String(r?.error || '');
+      };
+      $('btn-lan-dual').onclick = async () => {
+        $('lan-msg').textContent = t('common.loading');
+        const r = await window.ccarmy.lanDualSmoke({
+          peerHost: $('lan-host').value.trim(),
+          peerPort: parseInt($('lan-pport').value, 10) || 7788,
+        });
+        $('lan-msg').textContent = JSON.stringify(r);
+        const inbox = await window.ccarmy.lanInbox().catch(() => null);
+        if (inbox?.messages?.length) {
+          $('lan-inbox').textContent = inbox.messages
+            .slice(-5)
+            .map((m) => `${m.from}: ${JSON.stringify(m.payload).slice(0, 80)}`)
+            .join('\n');
+        }
+      };
+
+      // WebGPU（渲染进程原生探测）
+      $('btn-webgpu').onclick = async () => {
+        $('webgpu-msg').textContent = t('common.loading');
+        try {
+          if (!navigator.gpu) throw new Error('no navigator.gpu');
+          const adapter = await navigator.gpu.requestAdapter();
+          if (!adapter) throw new Error('no adapter');
+          const info = adapter.info || {};
+          $('webgpu-msg').textContent =
+            t('webgpu.ok') +
+            ` · vendor=${info.vendor || ''} arch=${info.architecture || ''} desc=${info.description || ''}`;
+        } catch (e) {
+          $('webgpu-msg').textContent = `${t('webgpu.fail')} (${String(e.message || e).slice(0, 80)})`;
+        }
       };
     }
   }

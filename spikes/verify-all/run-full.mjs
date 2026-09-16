@@ -301,6 +301,19 @@ check('email ipc', mainTs.includes('ccarmy:email-queue'));
 check('external silent policy', mainTs.includes("type === 'external'"));
 check('builder extraResources', fs.readFileSync(path.join(root, 'packages/app-shell/electron-builder.yml'), 'utf8').includes('memory-os/dist'));
 check('renderer spawnDsh', appJs.includes('spawnDshInstance'));
+check('smtp verify ipc', mainTs.includes('ccarmy:smtp-verify'));
+check('lan start ipc', mainTs.includes('ccarmy:lan-start'));
+check('lan dual smoke', mainTs.includes('ccarmy:lan-dual-smoke'));
+check('smtp not hardcoded', !mainTs.includes('smtp.qq.com') && !mainTs.includes('@gmail.com'));
+check('renderer smtp verify btn', appJs.includes('btn-smtp-verify'));
+check('renderer lan start', appJs.includes('btn-lan-start'));
+check('renderer webgpu test', appJs.includes('btn-webgpu'));
+
+const { dualMachineSmoke } = await import(
+  toImportUrl(path.join(ascii, 'sync-protocol', 'dist', 'lan.js'))
+);
+const lan = await dualMachineSmoke({ localId: 'verify-node', localPort: 7799 });
+check('lan loopback', lan.loopbackOk === true, lan);
 
 const { MetricsCollector } = await import(
   toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'metrics.js'))

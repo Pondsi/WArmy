@@ -55,4 +55,12 @@ contextBridge.exposeInMainWorld('ccarmy', {
   spawnDshInstance: (cfg) => ipcRenderer.invoke('ccarmy:spawn-dsh-instance', cfg),
   emailQueue: (mail) => ipcRenderer.invoke('ccarmy:email-queue', mail),
   emailList: () => ipcRenderer.invoke('ccarmy:email-list'),
+  smtpVerify: (cfg) => ipcRenderer.invoke('ccarmy:smtp-verify', cfg),
+  lanStart: (port) => ipcRenderer.invoke('ccarmy:lan-start', port),
+  lanStop: () => ipcRenderer.invoke('ccarmy:lan-stop'),
+  lanSend: (msg) => ipcRenderer.invoke('ccarmy:lan-send', msg),
+  lanInbox: () => ipcRenderer.invoke('ccarmy:lan-inbox'),
+  lanStatus: () => ipcRenderer.invoke('ccarmy:lan-status'),
+  lanDualSmoke: (opts) => ipcRenderer.invoke('ccarmy:lan-dual-smoke', opts),
+  webgpuProbe: () => ipcRenderer.invoke('ccarmy:webgpu-probe'),
 });

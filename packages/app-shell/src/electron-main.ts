@@ -18,6 +18,8 @@ import { MetricsCollector } from './metrics.js';
 import { LocalAccountStore, SettingsStore } from './settings-store.js';
 import { NodeRegistry, SyncBus, createInvite, consumeInvite } from '@ccarmy/sync-protocol';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@ccarmy/dsh-runtime';
+import { LanSyncServer, LanSyncClient, dualMachineSmoke } from '@ccarmy/sync-protocol';
+import { verifySmtp, type SmtpConfig } from './smtp-verify.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bootLog = path.join(app.getPath('userData'), 'ccarmy-boot.log');
@@ -47,6 +49,8 @@ let settingsStore: SettingsStore | null = null;
 let nodeReg: NodeRegistry | null = null;
 let syncBus: SyncBus | null = null;
 const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
+let lanServer: LanSyncServer | null = null;
+let localNodeId = 'node-local';
 /** 会话消息历史（主进程侧） */
 const chatHistories = new Map<string, ChatMessage[]>();
 /** 运行中的插入指令级别 */
@@ -752,3 +756,67 @@ ipcMain.handle('ccarmy:email-queue', (_e, mail: { to: string; subject: string; b
   return { ok: true, pending: emailQueue.length };
 });
 ipcMain.handle('ccarmy:email-list', () => ({ ok: true, items: emailQueue }));
+
+// ── SMTP 验证（用户设置，非写死） ──
+ipcMain.handle('ccarmy:smtp-verify', async (_e, cfg: SmtpConfig) => {
+  return verifySmtp(cfg);
+});
+
+// ── 内网同步 ──
+ipcMain.handle('ccarmy:lan-start', async (_e, port = 7788) => {
+  try {
+    if (lanServer?.listening) await lanServer.stop();
+    const local = nodeReg?.list().find((n) => n.isLocal);
+    localNodeId = local?.nodeId || 'node-local';
+    lanServer = new LanSyncServer(
+      localNodeId,
+      port,
+      path.join(app.getPath('userData'), 'bus', 'lan.jsonl')
+    );
+    await lanServer.start();
+    return { ok: true, port, nodeId: localNodeId };
+  } catch (e) {
+    return { ok: false, error: String((e as Error).message || e) };
+  }
+});
+
+ipcMain.handle('ccarmy:lan-stop', async () => {
+  await lanServer?.stop();
+  lanServer = null;
+  return { ok: true };
+});
+
+ipcMain.handle('ccarmy:lan-send', async (_e, msg: { host: string; port: number; to?: string; payload: unknown; groupId?: string; incognito?: boolean }) => {
+  const client = new LanSyncClient(localNodeId);
+  const r = await client.send(msg.host, msg.port, {
+    to: msg.to || '*',
+    channel: 'group',
+    groupId: msg.groupId,
+    payload: msg.payload,
+    incognito: msg.incognito,
+  });
+  return r;
+});
+
+ipcMain.handle('ccarmy:lan-inbox', () => ({
+  ok: true,
+  messages: lanServer?.inboxOf() || [],
+}));
+
+ipcMain.handle('ccarmy:lan-status', () => ({
+  ok: true,
+  listening: !!lanServer?.listening,
+  nodeId: localNodeId,
+}));
+
+ipcMain.handle(
+  'ccarmy:lan-dual-smoke',
+  async (_e, opts: { localPort?: number; peerHost?: string; peerPort?: number }) => {
+    return dualMachineSmoke({
+      localId: localNodeId,
+      localPort: opts.localPort || 7790,
+      peerHost: opts.peerHost,
+      peerPort: opts.peerPort,
+    });
+  }
+);

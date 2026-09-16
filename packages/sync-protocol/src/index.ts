@@ -134,6 +134,8 @@ export function consumeInvite(tok: InviteToken): boolean {
   return true;
 }
 
+export * from './lan.js';
+
 /** 远程 AI 执行约定：本地零痕迹目录（临时，用完即删） */
 export function incognitoWorkDir(): string {
   return path.join(os.tmpdir(), `ccarmy-incog-${crypto.randomBytes(6).toString('hex')}`);
