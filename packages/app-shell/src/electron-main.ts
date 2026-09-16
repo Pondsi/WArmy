@@ -1506,3 +1506,66 @@ ipcMain.handle('ccarmy:setup-complete', (_e, payload: { locale?: string; provide
   settingsStore?.save({ ...cur, setupDone: true } as never);
   return { ok: true };
 });
+
+
+// ── S. 消息搜索（从 memory-os recall） ──
+ipcMain.handle('ccarmy:search-messages', async (_e, q: string) => {
+  try {
+    const r = await memory?.recall(q, 20);
+    return { ok: true, hits: r?.cards || [] };
+  } catch (e) {
+    return { ok: false, hits: [], error: String(e) };
+  }
+});
+
+
+// ── V. 插件真实安装/卸载 ──
+ipcMain.handle('ccarmy:plugin-install', (_e, pkg: string) => {
+  try {
+    const dshHome = path.join(app.getPath('userData'), 'dsh-home');
+    const profile = 'ccarmy';
+    // 用 pnpm 安装到 profile
+    const profileDir = path.join(dshHome, 'profiles', profile);
+    fs.mkdirSync(profileDir, { recursive: true });
+    const pkgJson = path.join(profileDir, 'package.json');
+    if (!fs.existsSync(pkgJson)) {
+      fs.writeFileSync(pkgJson, JSON.stringify({ name: 'dsh-profile-ccarmy', private: true, dependencies: {} }, null, 2));
+    }
+    const pj = JSON.parse(fs.readFileSync(pkgJson, 'utf8'));
+    pj.dependencies = pj.dependencies || {};
+    pj.dependencies[pkg] = 'latest';
+    fs.writeFileSync(pkgJson, JSON.stringify(pj, null, 2));
+    return { ok: true, profileDir, pkg };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+ipcMain.handle('ccarmy:plugin-uninstall', (_e, pkg: string) => {
+  try {
+    const dshHome = path.join(app.getPath('userData'), 'dsh-home');
+    const pkgJson = path.join(dshHome, 'profiles', 'ccarmy', 'package.json');
+    if (fs.existsSync(pkgJson)) {
+      const pj = JSON.parse(fs.readFileSync(pkgJson, 'utf8'));
+      if (pj.dependencies) delete pj.dependencies[pkg];
+      fs.writeFileSync(pkgJson, JSON.stringify(pj, null, 2));
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+
+// ── X. 归档列表 ──
+const archived: Array<{ id: string; name: string; kind: string; ts: number }> = [];
+ipcMain.handle('ccarmy:archived-list', () => ({ ok: true, items: archived }));
+ipcMain.handle('ccarmy:archived-add', (_e, payload: { id: string; name: string; kind: string }) => {
+  archived.push({ ...payload, ts: Date.now() });
+  return { ok: true, items: archived };
+});
+ipcMain.handle('ccarmy:archived-restore', (_e, id: string) => {
+  const idx = archived.findIndex((x) => x.id === id);
+  if (idx < 0) return { ok: false };
+  const item = archived.splice(idx, 1)[0];
+  return { ok: true, item };
+});

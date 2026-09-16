@@ -391,5 +391,7 @@
   "board.session": "会话看板",
   "group.addMember": "添加成员",
   "setup.title": "欢迎使用",
-  "setup.locale": "选择语言"
+  "setup.locale": "选择语言",
+  "common.copy": "复制",
+  "common.quote": "引用"
 }

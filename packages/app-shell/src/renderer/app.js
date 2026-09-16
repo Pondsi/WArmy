@@ -2076,6 +2076,7 @@
           const ok = await uiConfirm(t('ctx.archiveConfirm'));
           if (!ok) return;
           inst.archived = true;
+          await window.ccarmy.archivedAdd({ id: inst.id, name: inst.name, kind: 'agent' }).catch(() => {});
           uiAlert(t('instances.saved'));
           renderList();
         },
@@ -2343,6 +2344,29 @@
       (r?.events || []).map((e) => e.title).join(', ');
   });
 
+  $('btn-chat-search')?.addEventListener('click', async () => {
+    const q = $('chat-search')?.value?.trim();
+    if (!q) return;
+    const r = await window.ccarmy.searchMessages(q).catch(() => null);
+    const hits = r?.hits || [];
+    pushMsg(state.selectedChat?.id || 'search', 'them', hits.length ? hits.map((x) => x.snippet).join('\n') : t('list.empty'));
+    renderChat();
+  });
+  // T. 消息右键：复制/引用
+  $('messages')?.addEventListener('contextmenu', (e) => {
+    const bubble = e.target.closest('.bubble');
+    if (!bubble) return;
+    e.preventDefault();
+    const text = bubble.textContent || '';
+    openContextMenu(e.clientX, e.clientY, [
+      { label: t('common.copy'), onClick: () => { navigator.clipboard?.writeText(text); } },
+      { label: t('common.quote'), onClick: () => {
+          const inp = $('input');
+          if (inp) inp.value = '> ' + text.slice(0, 120) + '\n' + inp.value;
+        } },
+    ]);
+  });
+  // W. 定向模式开关（聊天头）
   $('btn-open-win')?.addEventListener('click', () => {
     if (!state.selectedChat) return;
     window.ccarmy.openChatWindow({
@@ -2350,6 +2374,10 @@
       title: state.selectedChat.name,
       kind: state.selectedChat.kind,
     });
+  });
+  $('btn-directed')?.addEventListener('change', async (e) => {
+    if (!state.selectedChat) return;
+    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: e.target.checked }).catch(() => {});
   });
   $('btn-export')?.addEventListener('click', async () => {
     if (!state.selectedChat) return;

@@ -391,5 +391,7 @@
   "board.session": "Session board",
   "group.addMember": "Add member",
   "setup.title": "Welcome",
-  "setup.locale": "Language"
+  "setup.locale": "Language",
+  "common.copy": "Copy",
+  "common.quote": "Quote"
 }
