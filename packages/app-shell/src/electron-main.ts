@@ -758,8 +758,62 @@ ipcMain.handle('ccarmy:email-queue', (_e, mail: { to: string; subject: string; b
 ipcMain.handle('ccarmy:email-list', () => ({ ok: true, items: emailQueue }));
 
 // ── SMTP 验证（用户设置，非写死） ──
-ipcMain.handle('ccarmy:smtp-verify', async (_e, cfg: SmtpConfig) => {
-  return verifySmtp(cfg);
+ipcMain.handle('ccarmy:smtp-verify', async (_e, cfg: SmtpConfig & { id?: string }) => {
+  const r = await verifySmtp(cfg);
+  if (r.ok && cfg.id && settingsStore) {
+    const s = settingsStore.load();
+    const acc = (s.smtpAccounts || []).find((a) => a.id === cfg.id);
+    if (acc) {
+      acc.verified = true;
+      acc.lastVerifyAt = Date.now();
+      settingsStore.save({ smtpAccounts: s.smtpAccounts });
+    }
+  }
+  return r;
+});
+
+ipcMain.handle('ccarmy:smtp-list', () => {
+  const s = settingsStore?.load();
+  const accounts = (s?.smtpAccounts || []).map((a) => ({
+    ...a,
+    pass: a.pass ? '••••••••' : '',
+  }));
+  return { ok: true, accounts, max: 10 };
+});
+
+ipcMain.handle('ccarmy:smtp-add', (_e, acc: { label: string; host: string; port: number; secure: boolean; user: string; pass: string }) => {
+  const s = settingsStore!.load();
+  const list = s.smtpAccounts || [];
+  if (list.length >= 10) return { ok: false, error: 'max 10' };
+  const full = {
+    id: 'smtp-' + Date.now().toString(36),
+    label: acc.label || acc.user || `smtp-${list.length + 1}`,
+    host: acc.host,
+    port: acc.port || 465,
+    secure: acc.secure !== false,
+    user: acc.user,
+    pass: acc.pass,
+  };
+  list.push(full);
+  settingsStore!.save({ smtpAccounts: list });
+  return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })), max: 10 };
+});
+
+ipcMain.handle('ccarmy:smtp-remove', (_e, id: string) => {
+  const s = settingsStore!.load();
+  const list = (s.smtpAccounts || []).filter((a) => a.id !== id);
+  settingsStore!.save({ smtpAccounts: list });
+  return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
+});
+
+ipcMain.handle('ccarmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; host: string; port: number; secure: boolean; user: string; pass: string }>) => {
+  const s = settingsStore!.load();
+  const list = s.smtpAccounts || [];
+  const acc = list.find((a) => a.id === id);
+  if (!acc) return { ok: false, error: 'not found' };
+  Object.assign(acc, patch);
+  settingsStore!.save({ smtpAccounts: list });
+  return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
 });
 
 // ── 内网同步 ──

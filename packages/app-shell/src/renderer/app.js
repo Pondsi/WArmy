@@ -971,19 +971,21 @@
             <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button></div>
         </div>
         <div class="set-section set-card">
-          <h2>${t('smtp.title')}</h2>
+          <h2>${t('smtp.title')} <span class="muted">(${t('smtp.count')} <span id="smtp-n">0</span>/10 · ${t('smtp.max10')})</span></h2>
           <p class="muted">${t('smtp.hint')}</p>
-          <div class="inst-row">
-            <div class="field"><label>${t('smtp.host')}</label><input id="smtp-host" value="${escapeHtml(state.smtp.host || '')}" placeholder="smtp.example.com"/></div>
-            <div class="field"><label>${t('smtp.port')}</label><input id="smtp-port" value="${escapeHtml(String(state.smtp.port || 465))}"/></div>
-            <div class="field"><label>${t('smtp.secure')}</label><label><input type="checkbox" id="smtp-secure" ${state.smtp.secure !== false ? 'checked' : ''}/> ${t('smtp.secure')}</label></div>
+          <div id="smtp-accounts"></div>
+          <div class="inst-row" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:10px">
+            <div class="field"><label>${t('smtp.label')}</label><input id="smtp-label" placeholder="工作邮箱"/></div>
+            <div class="field"><label>${t('smtp.host')}</label><input id="smtp-host" value="" placeholder="smtp.example.com"/></div>
+            <div class="field"><label>${t('smtp.port')}</label><input id="smtp-port" value="465"/></div>
           </div>
           <div class="inst-row" style="margin-top:8px">
-            <div class="field"><label>${t('smtp.user')}</label><input id="smtp-user" value="${escapeHtml(state.smtp.user || '')}"/></div>
-            <div class="field"><label>${t('smtp.pass')}</label><input id="smtp-pass" type="password" value="${escapeHtml(state.smtp.pass || '')}"/></div>
-            <button class="btn-mini" id="btn-smtp-verify">${t('smtp.verify')}</button>
-            <span class="muted" id="smtp-msg"></span>
+            <label><input type="checkbox" id="smtp-secure" checked/> ${t('smtp.secure')}</label>
+            <div class="field"><label>${t('smtp.user')}</label><input id="smtp-user"/></div>
+            <div class="field"><label>${t('smtp.pass')}</label><input id="smtp-pass" type="password"/></div>
+            <button class="btn-mini" id="btn-smtp-add">${t('smtp.add')}</button>
           </div>
+          <span class="muted" id="smtp-msg"></span>
         </div>
         <div class="set-section set-card">
           <h2>${t('lan.title')}</h2>
@@ -1192,20 +1194,77 @@
         renderPage();
       };
 
-      // SMTP
-      $('btn-smtp-verify').onclick = async () => {
-        const cfg = {
+      // SMTP 多账号（最多 10）
+      async function renderSmtpList() {
+        const r = await window.ccarmy.smtpList();
+        const accounts = r?.accounts || [];
+        $('smtp-n').textContent = String(accounts.length);
+        const box = $('smtp-accounts');
+        if (!accounts.length) {
+          box.innerHTML = `<div class="muted">${t('smtp.empty')}</div>`;
+          return;
+        }
+        box.innerHTML = accounts
+          .map(
+            (a) => `
+          <div class="prov-card" style="margin-bottom:8px" data-id="${escapeHtml(a.id)}">
+            <div class="inst-row">
+              <div><b>${escapeHtml(a.label)}</b> <span class="muted">${escapeHtml(a.user)}@${escapeHtml(a.host)}:${a.port}</span></div>
+              <span class="badge ${a.verified ? '' : 'off'}">${a.verified ? t('smtp.verified') : t('smtp.unverified')}</span>
+              <button class="btn-mini" data-v="${escapeHtml(a.id)}">${t('smtp.verify')}</button>
+              <button class="btn-mini" data-x="${escapeHtml(a.id)}">${t('smtp.remove')}</button>
+            </div>
+          </div>`
+          )
+          .join('');
+        box.querySelectorAll('[data-x]').forEach((b) => {
+          b.onclick = async () => {
+            await window.ccarmy.smtpRemove(b.dataset.x);
+            renderSmtpList();
+          };
+        });
+        box.querySelectorAll('[data-v]').forEach((b) => {
+          b.onclick = async () => {
+            const id = b.dataset.v;
+            const full = (state.smtpAccounts || []).find((x) => x.id === id);
+            if (!full?.pass) {
+              $('smtp-msg').textContent = t('smtp.fail');
+              return;
+            }
+            $('smtp-msg').textContent = t('common.loading');
+            const vr = await window.ccarmy.smtpVerify({ ...full, id });
+            $('smtp-msg').textContent = vr?.ok ? t('smtp.ok') : `${t('smtp.fail')}: ${vr?.message || ''}`;
+            renderSmtpList();
+          };
+        });
+      }
+      renderSmtpList();
+
+      $('btn-smtp-add').onclick = async () => {
+        const acc = {
+          label: $('smtp-label').value.trim(),
           host: $('smtp-host').value.trim(),
           port: parseInt($('smtp-port').value, 10) || 465,
           secure: $('smtp-secure').checked,
           user: $('smtp-user').value.trim(),
           pass: $('smtp-pass').value,
         };
-        state.smtp = cfg;
-        $('smtp-msg').textContent = t('common.loading');
-        const r = await window.ccarmy.smtpVerify(cfg);
-        $('smtp-msg').textContent = r?.ok ? t('smtp.ok') : `${t('smtp.fail')}: ${r?.step || ''} ${r?.message || ''}`;
-        window.ccarmy.settingsSave({ emailOnRequest: state.emailOnRequest });
+        if (!acc.host || !acc.user) {
+          $('smtp-msg').textContent = t('common.error');
+          return;
+        }
+        const r = await window.ccarmy.smtpAdd(acc);
+        if (r?.ok) {
+          state.smtpAccounts = [...(state.smtpAccounts || []), { ...acc, id: r.accounts[r.accounts.length - 1]?.id }];
+          $('smtp-label').value = '';
+          $('smtp-host').value = '';
+          $('smtp-user').value = '';
+          $('smtp-pass').value = '';
+          $('smtp-msg').textContent = t('instances.saved');
+        } else {
+          $('smtp-msg').textContent = String(r?.error || t('common.error'));
+        }
+        renderSmtpList();
       };
 
       // LAN

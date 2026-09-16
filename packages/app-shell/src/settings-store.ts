@@ -12,6 +12,20 @@ export interface LocalProfile {
   passwordHash?: string;
 }
 
+export interface SmtpAccount {
+  id: string;
+  label: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  /** 授权码；本地保存，界面可用密文展示 */
+  pass: string;
+  /** 验证结果缓存 */
+  verified?: boolean;
+  lastVerifyAt?: number;
+}
+
 export interface AppSettings {
   locale: string;
   themeMode: 'light' | 'dark' | 'system';
@@ -22,6 +36,8 @@ export interface AppSettings {
   listWidth: number;
   panelWidth: number;
   globalSecurity: 'full' | 'normal' | 'strict';
+  /** 最多 10 个 SMTP 账号 */
+  smtpAccounts: SmtpAccount[];
 }
 
 function hash(pw: string) {
@@ -97,5 +113,8 @@ function defaults(): AppSettings {
     listWidth: 280,
     panelWidth: 300,
     globalSecurity: 'normal',
+    smtpAccounts: [],
   };
 }
+
+export const SMTP_MAX_ACCOUNTS = 10;
