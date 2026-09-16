@@ -1029,3 +1029,47 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
   background: transparent; color: var(--ink);
   padding: 2px 0; outline: none; width: 200px;
 }
+
+/* ── 头像选择器 ── */
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.avatar-choice {
+  border: 2px solid transparent;
+  background: var(--hover);
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.avatar-choice img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.avatar-choice:hover { border-color: var(--muted); transform: scale(1.04); }
+.avatar-choice.on { border-color: var(--accent); }
+
+/* ── 关于页 ── */
+.about-card { max-width: 720px; }
+.about-brand {
+  display: flex; align-items: center; gap: 16px;
+  padding-bottom: 14px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.about-logo {
+  width: 64px; height: 46px; object-fit: contain; flex-shrink: 0;
+}
+.about-brand-text { min-width: 0; }
+.about-name { font-size: 19px; font-weight: 700; }
+.about-en { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; letter-spacing: 0.04em; }
+.about-ver { font-size: 12px; margin-top: 2px; }
+.about-block { margin-bottom: 14px; }
+.about-block:last-of-type { margin-bottom: 6px; }
+.about-block h3 {
+  font-size: 13px; font-weight: 600; margin: 0 0 4px;
+  color: var(--accent);
+}
+.about-block p { margin: 0; font-size: 13px; line-height: 1.7; }
+.about-actions { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }

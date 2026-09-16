@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,27 +6,22 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const src = path.join(root, '..', 'src');
 const dist = path.join(root, '..', 'dist');
 
+/** 递归复制目录（支持任意层级子目录，如 renderer/icons/avatars） */
+function copyDir(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const entry of readdirSync(from, { withFileTypes: true })) {
+    const s = path.join(from, entry.name);
+    const d = path.join(to, entry.name);
+    if (entry.isDirectory()) copyDir(s, d);
+    else copyFileSync(s, d);
+  }
+}
+
 mkdirSync(path.join(dist, 'renderer'), { recursive: true });
 mkdirSync(path.join(dist, 'i18n'), { recursive: true });
 
 copyFileSync(path.join(src, 'preload.cjs'), path.join(dist, 'preload.cjs'));
+copyDir(path.join(src, 'renderer'), path.join(dist, 'renderer'));
+copyDir(path.join(src, 'i18n'), path.join(dist, 'i18n'));
 
-// 拷贝 renderer 下的文件（不含子目录）
-for (const f of readdirSync(path.join(src, 'renderer'), { withFileTypes: true })) {
-  if (f.isFile()) {
-    copyFileSync(path.join(src, 'renderer', f.name), path.join(dist, 'renderer', f.name));
-  } else if (f.isDirectory()) {
-    // 拷贝子目录（如 icons）
-    const srcDir = path.join(src, 'renderer', f.name);
-    const destDir = path.join(dist, 'renderer', f.name);
-    mkdirSync(destDir, { recursive: true });
-    for (const sub of readdirSync(srcDir)) {
-      copyFileSync(path.join(srcDir, sub), path.join(destDir, sub));
-    }
-  }
-}
-
-for (const f of readdirSync(path.join(src, 'i18n'))) {
-  copyFileSync(path.join(src, 'i18n', f), path.join(dist, 'i18n', f));
-}
-console.log('app-shell assets copied (renderer + i18n)');
+console.log('app-shell assets copied (renderer + i18n, recursive)');

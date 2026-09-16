@@ -27,7 +27,7 @@
     listWidth: 280,
     panelWidth: 300,
     attachments: [],
-    profile: { loggedIn: false, username: 'nav.avatar', avatarDataUrl: '', email: '', deviceId: '' },
+    profile: { loggedIn: false, username: 'nav.avatar', avatarDataUrl: '', email: '', deviceId: '', avatarPreset: 0 },
     queues: {},
     board: {
       /** ADR：外部聚合看板 — 会话进展只读，点击跳转；值班者写 board.jsonl */
@@ -237,11 +237,84 @@
     });
   }
 
+  // ── 头像资源 ──
+  const PERSON_AVATARS = Array.from({ length: 10 }, (_, i) => `./icons/avatars/person-${i + 1}.svg`);
+  const PERSON_DEFAULT = './icons/avatars/person-default.svg';
+  const PRESET_AVATARS = Array.from({ length: 10 }, (_, i) => `./icons/avatars/preset-${i + 1}.svg`);
+
+  /** 我的头像：自定义图片 > 选定的人物头像 > 人物头像默认 */
+  function personAvatarSrc(p) {
+    if (p && p.avatarDataUrl) return p.avatarDataUrl;
+    const n = Number(p && p.avatarPreset);
+    if (Number.isInteger(n) && n >= 1 && n <= 10) return PERSON_AVATARS[n - 1];
+    return PERSON_DEFAULT;
+  }
+
+  /** 实例头像：自定义图片 > 分配的预设头像 > 第一个预设 */
+  function instanceAvatarSrc(inst) {
+    if (inst && inst.avatarDataUrl) return inst.avatarDataUrl;
+    const n = Number(inst && inst.avatarPreset);
+    if (Number.isInteger(n) && n >= 1 && n <= 10) return PRESET_AVATARS[n - 1];
+    return PRESET_AVATARS[0];
+  }
+
+  /** 实例创建时随机挑一个预设头像 */
+  function randomPreset() {
+    return 1 + Math.floor(Math.random() * PRESET_AVATARS.length);
+  }
+
+  /** 头像选择器：10 个预设 + 选择本地图片 */
+  function pickAvatar(list, currentPreset, labelOf) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = t('avatar.pickTitle');
+      const body = $('modal-body');
+      body.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.className = 'avatar-grid';
+      list.forEach((src, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'avatar-choice' + (Number(currentPreset) === i + 1 ? ' on' : '');
+        b.title = labelOf(i);
+        const im = document.createElement('img');
+        im.src = src;
+        im.alt = labelOf(i);
+        b.appendChild(im);
+        b.onclick = () => {
+          root.classList.add('hidden');
+          resolve({ type: 'preset', preset: i + 1 });
+        };
+        grid.appendChild(b);
+      });
+      body.appendChild(grid);
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const localBtn = document.createElement('button');
+      localBtn.className = 'btn-mini';
+      localBtn.textContent = t('avatar.local');
+      localBtn.onclick = () => {
+        root.classList.add('hidden');
+        resolve({ type: 'local' });
+      };
+      const cancel = document.createElement('button');
+      cancel.className = 'btn-mini';
+      cancel.textContent = t('common.cancel');
+      cancel.onclick = () => {
+        root.classList.add('hidden');
+        resolve(null);
+      };
+      acts.append(localBtn, cancel);
+      root.classList.remove('hidden');
+    });
+  }
+
   function applyAvatar() {
     const img = $('selfAvatarImg');
     const span = $('selfAvatar');
-    if (state.profile.avatarDataUrl) {
-      img.src = state.profile.avatarDataUrl;
+    const src = personAvatarSrc(state.profile);
+    if (src) {
+      img.src = src;
       img.classList.remove('hidden');
       span.classList.add('hidden');
     } else {
@@ -250,6 +323,15 @@
       span.classList.remove('hidden');
       span.textContent = (state.profile.username || t('nav.avatar')).slice(0, 1);
     }
+  }
+
+  function saveProfile() {
+    window.ccarmy.profileSave({
+      username: state.profile.username,
+      email: state.profile.email,
+      avatarDataUrl: state.profile.avatarDataUrl,
+      avatarPreset: state.profile.avatarPreset,
+    });
   }
 
   function applyI18n() {
@@ -355,24 +437,35 @@
     }
 
     $('logo-sub').textContent = t('app.subtitle');
-    // 我的牛马：无选中会话时自动打开第一个
-    if (nav === 'singleAi' && (!state.selectedChat || !matchNav(state.selectedChat, nav))) {
-      const first = state.chats
-        .filter((c) => c.kind === 'single')
-        .sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0))[0];
-      if (first) {
-        openChat('single', first.id, first.name);
+
+    // 「我的牛马」：只要没停在某个会话上，就自动打开第一个（会话为空时用实例兜底）
+    if (nav === 'singleAi') {
+      const items = singleChatItems();
+      const cur = state.selectedChat;
+      const stillHere = !!cur && cur.kind === 'single' && items.some((c) => c.id === cur.id);
+      if (!stillHere && items.length) {
+        openChat('single', items[0].id, items[0].name);
         return;
       }
     }
+
     if (!state.selectedChat || !matchNav(state.selectedChat, nav)) {
       state.selectedChat = null;
+      $('chat-layout').classList.add('hidden');
       $('empty-state').classList.remove('hidden');
     } else {
+      $('empty-state').classList.add('hidden');
       $('chat-layout').classList.remove('hidden');
       renderChat();
       renderQueueBar();
     }
+  }
+
+  /** 我的牛马候选列表：优先真实会话，没有会话时用实例兜底 */
+  function singleChatItems() {
+    const chats = state.chats.filter((c) => c.kind === 'single');
+    if (chats.length) return chats.slice().sort((x, y) => (y.lastTs || 0) - (x.lastTs || 0));
+    return state.instances.map((i) => ({ id: i.id, name: i.name, kind: 'single', lastTs: 0 }));
   }
 
   function matchNav(sel, nav) {
@@ -881,10 +974,8 @@
       <h1>${escapeHtml(inst.name || inst.id)}</h1>
       <div class="set-card" style="max-width:720px">
         <div class="profile-head" style="align-items:center;gap:14px">
-          <button id="i-av-btn" class="av-btn" title="${t('instances.avatarUpload')}">
-            ${inst.avatarDataUrl
-              ? '<img class="avatar-img big" src="' + inst.avatarDataUrl + '" alt=""/>'
-              : '<div class="big-av">' + escapeHtml((inst.name || '?').slice(0, 1)) + '</div>'}
+          <button id="i-av-btn" class="av-btn" title="${escapeHtml(t('avatar.pickTitle'))}">
+            <img class="avatar-img big" src="${instanceAvatarSrc(inst)}" alt=""/>
           </button>
           <div style="flex:1">
             <div class="field"><label>${t('instances.name')}</label><input id="i-name" value="${escapeHtml(inst.name || '')}"/></div>
@@ -1005,9 +1096,18 @@
       }
       renderCog();
 
-      $('i-av-btn')?.addEventListener('click', () => {
-        pendingAvatarTarget = { kind: 'instance', inst };
-        $('avatar-file').click();
+      $('i-av-btn')?.addEventListener('click', async () => {
+        const r = await pickAvatar(PRESET_AVATARS, inst.avatarPreset, (i) => t('avatar.preset.' + (i + 1)));
+        if (!r) return;
+        if (r.type === 'local') {
+          pendingAvatarTarget = { kind: 'instance', inst };
+          $('avatar-file').click();
+          return;
+        }
+        inst.avatarPreset = r.preset;
+        inst.avatarDataUrl = '';
+        renderInstanceDetail();
+        window.__saveState?.();
       });
 
       $('i-cog-add')?.addEventListener('click', async () => {
@@ -1241,18 +1341,26 @@
       };
       nameInp.onblur = commitName;
       nameInp.onkeydown = (e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') { nameInp.value = state.profile.username; commitName(); } };
-      $('p-av-btn').onclick = () => $('avatar-file').click();
+      $('p-av-btn').onclick = async () => {
+        const r = await pickAvatar(PERSON_AVATARS, state.profile.avatarPreset, (i) => t('avatar.person.' + (i + 1)));
+        if (!r) return;
+        if (r.type === 'local') {
+          pendingAvatarTarget = { kind: 'profile' };
+          $('avatar-file').click();
+          return;
+        }
+        state.profile.avatarPreset = r.preset;
+        state.profile.avatarDataUrl = '';
+        applyAvatar();
+        saveProfile();
+        renderPage();
+      };
       $('p-save').onclick = () => {
         const v = $('p-name').value.trim();
         if (v) state.profile.username = v;
         state.profile.email = $('p-email').value.trim();
         applyAvatar();
-        
-        window.ccarmy.profileSave({
-          username: state.profile.username,
-          email: state.profile.email,
-          avatarDataUrl: state.profile.avatarDataUrl,
-        });
+        saveProfile();
         uiAlert(t('instances.saved'));
       };
       renderDashboard($('dash-host'));
@@ -1267,6 +1375,7 @@
           <button data-sec="notify">${t('settings.section.notify')}</button>
           <button data-sec="model">${t('settings.section.model')}</button>
           <button data-sec="func">${t('settings.section.func')}</button>
+          <button data-sec="about">${t('settings.section.about')}</button>
         </div>
         <div class="settings-content" id="settings-content">
         <div class="set-section" data-sec="ui"><h2 style="color:var(--accent)">${t('settings.section.ui')}</h2></div>
@@ -1466,10 +1575,28 @@
           <h2>${t('join.blacklistTitle')}</h2>
           <div id="blacklist-box" class="muted">${t('join.blacklistEmpty')}</div>
         </div>
-        <div class="set-section set-card">
-          <h2>${t('settings.about')}</h2>
-          <div class="muted">${t('about.version')} 0.1.0 · CCArmy · ${t('app.subtitle')}</div>
-          <div style="margin-top:10px">
+        <div class="set-section" data-sec="about"><h2 style="color:var(--accent)">${t('settings.section.about')}</h2></div>
+        <div class="set-section set-card about-card">
+          <div class="about-brand">
+            <img class="about-logo" src="./icons/logo-128.png" alt="${escapeHtml(t('about.logoAlt'))}"/>
+            <div class="about-brand-text">
+              <div class="about-name">无限牛马 <span class="about-en">CCArmy</span></div>
+              <div class="muted">${t('about.tagline')}</div>
+              <div class="muted about-ver" id="about-version">—</div>
+            </div>
+          </div>
+          <div class="about-block">
+            <h3>${t('about.versionInfo')}</h3>
+            <div class="muted" id="about-runtime">—</div>
+            <div class="muted" id="about-device">—</div>
+          </div>
+          <div class="about-block"><h3>${t('about.opensource')}</h3><p class="muted">${t('about.opensourceBody')}</p></div>
+          <div class="about-block"><h3>${t('about.techStack')}</h3><p class="muted">${t('about.techStackBody')}</p></div>
+          <div class="about-block"><h3>${t('about.copyright')}</h3><p class="muted">${t('about.copyrightBody')}</p></div>
+          <div class="about-block"><h3>${t('about.author')}</h3><p class="muted">${t('about.authorBody')}</p></div>
+          <div class="about-block"><h3>${t('about.contact')}</h3><p class="muted">${t('about.contactBody')}</p></div>
+          <div class="about-block"><h3>${t('about.legal')}</h3><p class="muted">${t('about.legalBody')}</p></div>
+          <div class="about-actions">
             <button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
             <span class="muted" id="about-upd"></span>
           </div>
@@ -1479,13 +1606,27 @@
         const r = await window.ccarmy.checkUpdate();
         $('about-upd').textContent = r?.upToDate ? t('settings.upToDate') : t('settings.updateAvailable');
       };
+      (async () => {
+        try {
+          const info = await window.ccarmy.appInfo();
+          if (!info?.ok) return;
+          const v = $('about-version');
+          if (v) v.textContent = `${t('about.version')} ${info.version}`;
+          const rt = $('about-runtime');
+          if (rt) rt.textContent =
+            `Electron ${info.electron} · Chromium ${info.chrome} · Node ${info.node} · ${info.platform}/${info.arch}`;
+          const dv = $('about-device');
+          if (dv) dv.textContent =
+            `${t('me.userId')}: ${info.deviceId || '—'} ${info.deviceIdValid ? t('about.idVerified') : t('about.idRegenerated')}`;
+        } catch { /* noop */ }
+      })();
 
       // 设置：第二列是菜单，第三列只显示对应板块
       (function bindSettingsMenu() {
         const contentEl = $('settings-content');
         if (!contentEl) return;
-        const secIds = ['ui', 'notify', 'model', 'func'];
-        const groups = { ui: [], notify: [], model: [], func: [] };
+        const secIds = ['ui', 'notify', 'model', 'func', 'about'];
+        const groups = { ui: [], notify: [], model: [], func: [], about: [] };
         let curSec = 'ui';
         Array.from(contentEl.children).forEach((el) => {
           const ds = el.getAttribute && el.getAttribute('data-sec');
@@ -2057,10 +2198,12 @@
         pendingAvatarTarget.inst.avatarDataUrl = url;
         pendingAvatarTarget = null;
         if (state.selectedInstance) renderInstanceDetail();
+        window.__saveState?.();
         return;
       }
       state.profile.avatarDataUrl = url;
       applyAvatar();
+      saveProfile();
       if (state.nav === 'me') renderPage();
     };
     reader.readAsDataURL(f);
@@ -2122,6 +2265,8 @@
         model: 'deepseek-chat',
         memoryFile: 'persona/' + name + '.md',
         persona: t('instances.personaDefault'),
+        avatarPreset: randomPreset(),
+        avatarDataUrl: '',
       };
       state.instances.push(inst);
       state.selectedInstance = inst;
@@ -2924,6 +3069,15 @@
         },
       ];
     }
+    // 老实例缺头像时补一个稳定的预设（按 id 派生，重启后不变）
+    state.instances.forEach((i) => {
+      if (!i.avatarPreset && !i.avatarDataUrl) {
+        let h = 0;
+        const s = String(i.id || i.name || '');
+        for (let k = 0; k < s.length; k++) h = (h * 31 + s.charCodeAt(k)) % 100000;
+        i.avatarPreset = 1 + (h % PRESET_AVATARS.length);
+      }
+    });
     // E. 加载持久化状态
     try {
       const st = await window.ccarmy.stateLoad();
@@ -2931,14 +3085,31 @@
         if (Array.isArray(st.state.plugins) && st.state.plugins.length) state.plugins = st.state.plugins;
         if (Array.isArray(st.state.groups) && st.state.groups.length) state.groups = st.state.groups;
         if (Array.isArray(st.state.chats) && st.state.chats.length) state.chats = st.state.chats;
+        const av = st.state.instanceAvatars;
+        if (av && typeof av === 'object') {
+          state.instances.forEach((i) => {
+            const one = av[i.id];
+            if (one) {
+              if (one.avatarPreset) i.avatarPreset = one.avatarPreset;
+              if (one.avatarDataUrl) i.avatarDataUrl = one.avatarDataUrl;
+            }
+          });
+        }
       }
     } catch { /* noop */ }
     // 变更时保存
     const saveState = () => {
+      const instanceAvatars = {};
+      state.instances.forEach((i) => {
+        if (i.avatarPreset || i.avatarDataUrl) {
+          instanceAvatars[i.id] = { avatarPreset: i.avatarPreset || 0, avatarDataUrl: i.avatarDataUrl || '' };
+        }
+      });
       window.ccarmy.stateSave({
         plugins: state.plugins,
         groups: state.groups,
         chats: state.chats,
+        instanceAvatars,
       }).catch(() => {});
     };
     window.__saveState = saveState;

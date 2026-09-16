@@ -201,7 +201,7 @@ function createWindow() {
     height: 800,
     minWidth: 960,
     minHeight: 600,
-    title: 'CCArmy',
+    title: '无限牛马',
     // macOS：系统原生标题栏与红绿灯；Windows/Linux：无边框 + 自定义窗控
     frame: isMac,
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
@@ -223,6 +223,10 @@ function createWindow() {
     boot(`window ready platform=${process.platform}`);
   });
 }
+
+// 应用身份：影响任务栏悬停/右键菜单里显示的名称（默认会显示 Electron）
+app.setName('无限牛马');
+if (process.platform === 'win32') app.setAppUserModelId('com.pondsi.ccarmy');
 
 app
   .whenReady()
@@ -744,6 +748,34 @@ ipcMain.handle('ccarmy:settings-save', (_e, partial: Record<string, unknown>) =>
 
 // ── 本地账号 ──
 ipcMain.handle('ccarmy:profile-get', () => ({ ok: true, profile: accountStore?.loadProfile() }));
+// 读自家 package.json 的版本；dev 下 app.getVersion() 返回的是 Electron 版本，不可用
+function appVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+    if (pkg && pkg.version) return String(pkg.version);
+  } catch {
+    /* 忽略 */
+  }
+  return app.getVersion();
+}
+
+// 关于页：版本 / 运行时 / 平台 / 用户 ID 及其签名校验状态
+ipcMain.handle('ccarmy:app-info', () => {
+  const st = accountStore?.idStatus();
+  return {
+    ok: true,
+    name: '无限牛马',
+    enName: 'CCArmy',
+    version: appVersion(),
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    platform: process.platform,
+    arch: process.arch,
+    deviceId: st?.id || '',
+    deviceIdValid: st?.valid ?? false,
+  };
+});
 ipcMain.handle('ccarmy:profile-save', (_e, p: { username: string; email: string; avatarDataUrl?: string }) => {
   const prev = accountStore?.loadProfile();
   const next = { ...prev!, ...p };

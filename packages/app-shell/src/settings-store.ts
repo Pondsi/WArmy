@@ -13,6 +13,8 @@ export interface LocalProfile {
   passwordHash?: string;
   /** 本机唯一 ID：9 位数字，首次生成后写入配置文件 */
   deviceId?: string;
+  /** deviceId 的 HMAC 签名，用于检测配置文件被手改 */
+  deviceIdSig?: string;
 }
 
 /**
@@ -47,6 +49,23 @@ export function generateDeviceId(): string {
   const digest = crypto.createHash('sha256').update(collectEntropy()).digest('hex');
   const n = BigInt('0x' + digest.slice(0, 16)) % 900000000n;
   return String(n + 100000000n);   // 恒为 9 位
+}
+
+/** 仅接受「9 位且首位非 0」的形态 */
+export function isValidDeviceId(v: unknown): v is string {
+  return typeof v === 'string' && /^[1-9][0-9]{8}$/.test(v);
+}
+
+/** 设备 ID 的 HMAC 签名：ID 被手改一位，签名就对不上 */
+function signDeviceId(id: string): string {
+  return crypto.createHmac('sha256', 'ccarmy.device-id.v1').update(id).digest('hex');
+}
+
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 export interface SmtpAccount {
@@ -95,12 +114,31 @@ export class LocalAccountStore {
     } catch {
       p = { username: '主人', avatarDataUrl: '', email: '' };
     }
-    // 首次访问即生成 9 位 ID 并落盘，之后一直跟随配置文件
-    if (!p.deviceId) {
+    // 首次访问即生成 9 位 ID 并落盘；若 ID 或签名被改动/缺失，则重新生成
+    if (!this.verifyIdFields(p)) {
       p.deviceId = generateDeviceId();
+      p.deviceIdSig = signDeviceId(p.deviceId);
       try { this.saveProfile(p); } catch { /* 只读目录时忽略 */ }
     }
     return p;
+  }
+
+  /** 校验 ID 形态与 HMAC 签名；不触碰文件、不重新生成 */
+  verifyIdFields(p: Partial<LocalProfile>): boolean {
+    if (!isValidDeviceId(p.deviceId)) return false;
+    if (typeof p.deviceIdSig !== 'string' || !p.deviceIdSig) return false;
+    return safeEqual(signDeviceId(p.deviceId), p.deviceIdSig);
+  }
+
+  /** 供界面展示：当前 ID 与校验状态（只读，不修复） */
+  idStatus(): { id: string; valid: boolean } {
+    let raw: Partial<LocalProfile>;
+    try {
+      raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+    } catch {
+      return { id: '', valid: false };
+    }
+    return { id: raw.deviceId || '', valid: this.verifyIdFields(raw) };
   }
 
   saveProfile(p: LocalProfile): LocalProfile {
