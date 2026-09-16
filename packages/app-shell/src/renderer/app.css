@@ -778,3 +778,6 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 }
 
 :root { --rail-icon: 30px; }
+
+.urg-ddd .urgent-i.hidden, .urgent-i.hidden { display: none; }
+.urg-ddd .urgent .urgent-i, .urg-dd.urgent .urgent-i { color: var(--danger); fill: currentColor; }

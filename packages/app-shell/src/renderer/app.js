@@ -1359,6 +1359,8 @@
     function refresh() {
       if (label) label.textContent = t(LABELS[state.urgency] || 'urgency.insertLabel');
       dd.classList.toggle('urgent', state.urgency === 'P1');
+      const icon = dd.querySelector('.urgent-i');
+      if (icon) icon.classList.toggle('hidden', state.urgency !== 'P1');
       menu.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.u === state.urgency));
     }
     refresh();
@@ -1532,6 +1534,22 @@
   bindVerticalResizer('console-top-resizer', 'console-pane', 'up');
   // 控制台下方（输入框上方）：拉伸输入区
   bindVerticalResizer('input-top-resizer', 'input', 'up');
+
+  // ── 顶层交互绑定（必须全局执行一次） ──
+  document.querySelectorAll('.rail-item').forEach((el) => {
+    el.onclick = () => setNav(el.dataset.nav);
+  });
+  $('list-search').addEventListener('input', () => renderList());
+  $('btn-send').addEventListener('click', () => send());
+  $('btn-stop-all').addEventListener('click', () => stopAllAi());
+  $('btn-attach').addEventListener('click', async () => {
+    const r = await window.ccarmy.pickFile();
+    if (r?.ok) {
+      const name = r.path.split(/[\\/]/).pop();
+      state.attachments.push({ name, path: r.path });
+      renderAttach();
+    }
+  });
 
   bindResizer($('col-resizer'), '--list-w', 200, 420);
   bindResizer($('panel-resizer'), '--panel-w', 220, 480);
