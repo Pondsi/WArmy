@@ -2504,6 +2504,49 @@
     }
   })();
 
+  /**
+   * 群列表以主进程存储为准（userData/groups.json）。
+   * 历史问题：建群会同步调用 groupCreate，但「解散 / 退出群」只改本地 state.groups，
+   * 主进程存储纹丝不动 —— 两边分叉，重启后界面上又会冒出已经解散的群。
+   * 所以在启动时、以及每次群变更后，都从真实存储重新拉一遍。
+   */
+  async function syncGroupsFromStore() {
+    try {
+      const r = await window.ccarmy.groupList();
+      if (!r || r.ok !== true || !Array.isArray(r.groups)) return false;
+      const prev = new Map(state.groups.map((g) => [g.id, g]));
+      const fromStore = r.groups.map((g) => {
+        const old = prev.get(g.groupId) || {};
+        return {
+          id: g.groupId,
+          name: g.name,
+          type: g.type,
+          members: old.members || [],
+          notify: old.notify !== false,
+          archived: !!old.archived,
+          directedMode: !!g.directedMode,
+          memberCount: g.memberCount,
+        };
+      });
+      // 只替换群类条目，保留看板派生出来的其它条目
+      const keep = state.groups.filter((g) => g.type !== 'internal' && g.type !== 'external');
+      state.groups = keep.concat(fromStore);
+      if (
+        state.selectedChat &&
+        state.selectedChat.kind !== 'single' &&
+        state.selectedChat.kind !== 'extdm' &&
+        !fromStore.some((g) => g.id === state.selectedChat.id)
+      ) {
+        state.selectedChat = null;
+      }
+      renderList();
+      return true;
+    } catch {
+      // 预览桩或旧主进程没有该 API：不影响其余功能
+      return false;
+    }
+  }
+
   function createGroupFlow() {
     uiPrompt(state.nav === 'internalGroup' ? t('list.createProject') : t('list.createGroupChat'), state.nav === 'internalGroup' ? t('placeholder.groupName') : t('placeholder.groupNameExt')).then(async (name) => {
       if (!name) return;
@@ -2515,8 +2558,7 @@
         uiAlert(String(e.message || e));
         return;
       }
-      state.groups.push({ id, name, type, members: [], notify: true });
-      renderList();
+      await syncGroupsFromStore();
     });
   }
 
@@ -2818,6 +2860,11 @@
               }
               const ok = await uiConfirm(t('ctx.closeConfirm'));
               if (!ok) return;
+              const dr = await window.ccarmy.groupDissolve(g.id).catch(() => null);
+              if (dr && dr.ok === false) {
+                uiAlert(t('ctx.dissolveFailed'));
+                return;
+              }
               state.groups = state.groups.filter((x) => x.id !== g.id);
               if (state.selectedChat?.id === g.id) state.selectedChat = null;
               renderList();
@@ -2827,7 +2874,11 @@
         : {
             label: t('ctx.leave'),
             danger: true,
-            onClick: () => {
+            onClick: async () => {
+              // 本机单节点部署下，群记录只存在这台机器上，
+              // 因此「退出」与「解散」的效果一致；都必须在存储里删掉，
+              // 否则下次启动 syncGroupsFromStore() 会把它拉回来。
+              await window.ccarmy.groupDissolve(g.id).catch(() => null);
               state.groups = state.groups.filter((x) => x.id !== g.id);
               renderList();
             },
@@ -3925,6 +3976,8 @@
         }
       }
     } catch { /* noop */ }
+    // 群列表以主进程落盘存储为准（避免界面与存储分叉）
+    await syncGroupsFromStore();
     // 变更时保存
     const saveState = () => {
       const instanceAvatars = {};

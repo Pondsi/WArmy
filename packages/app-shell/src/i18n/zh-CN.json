@@ -197,6 +197,7 @@
   "ctx.close": "关闭",
   "ctx.closeConfirm": "确定关闭该实例？",
   "ctx.delete": "删除",
+  "ctx.dissolveFailed": "解散群失败，已保留该群（未做本地删除）",
   "ctx.enable": "启用",
   "ctx.leave": "退出",
   "ctx.noTasks": "无运行中任务",

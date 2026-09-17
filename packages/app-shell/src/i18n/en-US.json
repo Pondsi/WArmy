@@ -197,6 +197,7 @@
   "ctx.close": "Close",
   "ctx.closeConfirm": "Close this agent?",
   "ctx.delete": "Delete",
+  "ctx.dissolveFailed": "Failed to dissolve the group; it was kept locally.",
   "ctx.enable": "Enable",
   "ctx.leave": "Leave",
   "ctx.noTasks": "No running tasks",
