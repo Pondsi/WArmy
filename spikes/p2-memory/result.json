@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-17T18:16:06.161Z",
+  "generatedAt": "2026-09-17T22:21:07.651Z",
   "host": {
     "node": "v24.20.0",
     "platform": "win32",
@@ -256,7 +256,7 @@
             "channel": "fts_uni",
             "used": false,
             "hits": 0,
-            "ms": 0,
+            "ms": 1,
             "skipped": "matched via LIKE fallback"
           },
           {
@@ -408,11 +408,11 @@
       "detail": {
         "cards": [],
         "timings": {
-          "totalMs": 1,
+          "totalMs": 0,
           "hydrateMs": 0,
           "embedQueryMs": 0,
           "uniMs": 0,
-          "triMs": 1,
+          "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 6,
@@ -451,7 +451,7 @@
         "channel": "vector",
         "used": true,
         "hits": 1,
-        "ms": 0
+        "ms": 1
       }
     },
     {
@@ -833,7 +833,7 @@
       "ok": true,
       "detail": {
         "embedded": 14,
-        "ms": 175,
+        "ms": 170,
         "remaining": 0
       }
     },
@@ -1003,15 +1003,15 @@
       "ok": true,
       "detail": {
         "triIndexed": {
-          "medianMs": 0.253,
-          "minMs": 0.217,
-          "maxMs": 0.294,
+          "medianMs": 0.238,
+          "minMs": 0.216,
+          "maxMs": 0.289,
           "reps": 7
         },
         "recordsFullScan": {
-          "medianMs": 0.28,
-          "minMs": 0.27,
-          "maxMs": 0.305,
+          "medianMs": 0.275,
+          "minMs": 0.271,
+          "maxMs": 0.302,
           "reps": 7
         }
       }
@@ -1020,12 +1020,12 @@
       "name": "大语料上向量扫描可测（cosines>0）",
       "ok": true,
       "detail": {
-        "totalMs": 4860,
-        "hydrateMs": 4851,
-        "embedQueryMs": 5,
-        "uniMs": 0,
-        "triMs": 1,
-        "vecMs": 3,
+        "totalMs": 4622,
+        "hydrateMs": 4614,
+        "embedQueryMs": 6,
+        "uniMs": 1,
+        "triMs": 0,
+        "vecMs": 1,
         "fuseMs": 0,
         "cosines": 512,
         "hydrated": 256,
@@ -1193,7 +1193,7 @@
           "last_seq"
         ],
         "jsonl": {
-          "sha1Simple": "6934dc83",
+          "sha1Simple": "4af78ab7",
           "bytes": 604
         },
         "recordCount": 4
@@ -1261,7 +1261,7 @@
       "ok": true,
       "detail": {
         "before": {
-          "sha1Simple": "6934dc83",
+          "sha1Simple": "4af78ab7",
           "bytes": 604
         },
         "after": {
@@ -1429,7 +1429,7 @@
         "queryPrefix": "",
         "tokenizer": null,
         "modelCandidates": [
-          "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-env-1789668966167-iodd6\\models\\model_quantized.onnx",
+          "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-env-1789683667656-c1elv\\models\\model_quantized.onnx",
           "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
         ]
       },
@@ -2061,7 +2061,7 @@
       "ortTried": [
         "require:onnxruntime-web"
       ],
-      "loadMs": 250,
+      "loadMs": 185,
       "embeds": 0,
       "embedTotalMs": 0,
       "lastEmbedMs": 0,
@@ -2086,7 +2086,7 @@
         "last_hidden_state"
       ],
       "modelCandidates": [
-        "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-main-1789668966224-qw51d\\models\\model_quantized.onnx",
+        "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-main-1789683667714-2hfi6\\models\\model_quantized.onnx",
         "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
       ]
     },
@@ -2159,8 +2159,8 @@
           "fused": 2
         },
         "timings": {
-          "totalMs": 178,
-          "hydrateMs": 173,
+          "totalMs": 181,
+          "hydrateMs": 177,
           "embedQueryMs": 3,
           "uniMs": 0,
           "triMs": 0,
@@ -2249,9 +2249,9 @@
           "fused": 2
         },
         "timings": {
-          "totalMs": 4,
+          "totalMs": 3,
           "hydrateMs": 0,
-          "embedQueryMs": 4,
+          "embedQueryMs": 3,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
@@ -2322,7 +2322,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 2,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "fts_tri",
@@ -2334,7 +2334,7 @@
             "channel": "vector",
             "used": true,
             "hits": 2,
-            "ms": 0
+            "ms": 1
           }
         ],
         "candidates": {
@@ -2347,9 +2347,9 @@
           "totalMs": 4,
           "hydrateMs": 0,
           "embedQueryMs": 3,
-          "uniMs": 1,
+          "uniMs": 0,
           "triMs": 0,
-          "vecMs": 0,
+          "vecMs": 1,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -2440,13 +2440,13 @@
             "channel": "fts_tri",
             "used": true,
             "hits": 2,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "vector",
             "used": true,
             "hits": 3,
-            "ms": 0
+            "ms": 1
           }
         ],
         "candidates": {
@@ -2456,12 +2456,12 @@
           "fused": 3
         },
         "timings": {
-          "totalMs": 6,
+          "totalMs": 5,
           "hydrateMs": 0,
           "embedQueryMs": 4,
           "uniMs": 0,
-          "triMs": 1,
-          "vecMs": 0,
+          "triMs": 0,
+          "vecMs": 1,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -2558,7 +2558,7 @@
             "channel": "vector",
             "used": true,
             "hits": 3,
-            "ms": 1
+            "ms": 0
           }
         ],
         "candidates": {
@@ -2568,12 +2568,12 @@
           "fused": 3
         },
         "timings": {
-          "totalMs": 7,
+          "totalMs": 6,
           "hydrateMs": 0,
           "embedQueryMs": 6,
           "uniMs": 0,
           "triMs": 0,
-          "vecMs": 1,
+          "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -2623,7 +2623,7 @@
             "channel": "fts_tri",
             "used": false,
             "hits": 0,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "vector",
@@ -2648,9 +2648,9 @@
         "timings": {
           "totalMs": 4,
           "hydrateMs": 0,
-          "embedQueryMs": 3,
+          "embedQueryMs": 4,
           "uniMs": 0,
-          "triMs": 1,
+          "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
@@ -2770,13 +2770,13 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 2,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "fts_tri",
             "used": true,
             "hits": 2,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "vector",
@@ -2795,8 +2795,8 @@
           "totalMs": 4,
           "hydrateMs": 0,
           "embedQueryMs": 3,
-          "uniMs": 1,
-          "triMs": 0,
+          "uniMs": 0,
+          "triMs": 1,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
@@ -2861,13 +2861,13 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "fts_tri",
             "used": true,
             "hits": 1,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "vector",
@@ -2883,11 +2883,11 @@
           "fused": 2
         },
         "timings": {
-          "totalMs": 5,
+          "totalMs": 6,
           "hydrateMs": 0,
-          "embedQueryMs": 4,
-          "uniMs": 0,
-          "triMs": 1,
+          "embedQueryMs": 5,
+          "uniMs": 1,
+          "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
@@ -3003,7 +3003,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "fts_tri",
@@ -3025,10 +3025,10 @@
           "fused": 5
         },
         "timings": {
-          "totalMs": 9,
+          "totalMs": 10,
           "hydrateMs": 0,
-          "embedQueryMs": 6,
-          "uniMs": 1,
+          "embedQueryMs": 7,
+          "uniMs": 0,
           "triMs": 1,
           "vecMs": 1,
           "fuseMs": 0,
@@ -3097,13 +3097,13 @@
           "fused": 1
         },
         "timings": {
-          "totalMs": 0,
+          "totalMs": 1,
           "hydrateMs": 0,
           "embedQueryMs": 0,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
-          "fuseMs": 0,
+          "fuseMs": 1,
           "cosines": 0,
           "hydrated": 0,
           "vectorBelowThreshold": 0,
@@ -3146,7 +3146,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "fts_tri",
@@ -3169,10 +3169,10 @@
           "fused": 1
         },
         "timings": {
-          "totalMs": 1,
+          "totalMs": 0,
           "hydrateMs": 0,
           "embedQueryMs": 0,
-          "uniMs": 1,
+          "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3332,9 +3332,9 @@
           "fused": 2
         },
         "timings": {
-          "totalMs": 5,
+          "totalMs": 6,
           "hydrateMs": 0,
-          "embedQueryMs": 5,
+          "embedQueryMs": 6,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
@@ -3381,7 +3381,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "fts_tri",
@@ -3404,10 +3404,10 @@
           "fused": 1
         },
         "timings": {
-          "totalMs": 1,
+          "totalMs": 0,
           "hydrateMs": 0,
           "embedQueryMs": 0,
-          "uniMs": 1,
+          "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3434,7 +3434,7 @@
             "channel": "fts_uni",
             "used": false,
             "hits": 0,
-            "ms": 0,
+            "ms": 1,
             "skipped": "matched via LIKE fallback"
           },
           {
@@ -3465,10 +3465,10 @@
           "fused": 0
         },
         "timings": {
-          "totalMs": 5,
+          "totalMs": 6,
           "hydrateMs": 0,
           "embedQueryMs": 5,
-          "uniMs": 0,
+          "uniMs": 1,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3505,10 +3505,10 @@
           }
         ],
         "timings": {
-          "totalMs": 0,
+          "totalMs": 1,
           "hydrateMs": 0,
           "embedQueryMs": 0,
-          "uniMs": 0,
+          "uniMs": 1,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3522,7 +3522,7 @@
             "channel": "fts_uni",
             "used": false,
             "hits": 0,
-            "ms": 0,
+            "ms": 1,
             "skipped": "matched via LIKE fallback"
           },
           {
@@ -3572,7 +3572,7 @@
         "timings": {
           "totalMs": 6,
           "hydrateMs": 0,
-          "embedQueryMs": 6,
+          "embedQueryMs": 5,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
@@ -4102,8 +4102,8 @@
       "unrelatedInt8Cos": 0.254484,
       "blobBytes": 512,
       "float32Bytes": 2048,
-      "embedMsLast": 6,
-      "embedMsAvg": 9.106,
+      "embedMsLast": 7,
+      "embedMsAvg": 9.255,
       "embeds": 47
     },
     "semanticPairs": [
@@ -4261,7 +4261,7 @@
     },
     "latency": {
       "corpusRecords": 2000,
-      "buildMs": 873,
+      "buildMs": 859,
       "jsonlBytes": 397214,
       "indexed": {
         "ftsUniDocs": 2000,
@@ -4287,90 +4287,90 @@
           "len": 31,
           "hits": 220,
           "uni": {
-            "medianMs": 1.604,
-            "minMs": 1.477,
-            "maxMs": 2.443,
+            "medianMs": 1.514,
+            "minMs": 1.462,
+            "maxMs": 1.606,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.779,
-            "minMs": 0.769,
-            "maxMs": 0.807,
+            "medianMs": 0.851,
+            "minMs": 0.778,
+            "maxMs": 0.918,
             "reps": 7
           },
-          "speedupTriVsUni": 2.06
+          "speedupTriVsUni": 1.78
         },
         {
           "query": "E_MEMORY_CORRUPT",
           "len": 16,
           "hits": 212,
           "uni": {
-            "medianMs": 1.157,
-            "minMs": 1.094,
-            "maxMs": 2.14,
+            "medianMs": 1.073,
+            "minMs": 1.057,
+            "maxMs": 1.167,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.447,
-            "minMs": 0.431,
-            "maxMs": 0.461,
+            "medianMs": 0.459,
+            "minMs": 0.444,
+            "maxMs": 0.489,
             "reps": 7
           },
-          "speedupTriVsUni": 2.59
+          "speedupTriVsUni": 2.34
         },
         {
           "query": "CCA_ARMY_MEMORY_DIR",
           "len": 19,
           "hits": 205,
           "uni": {
-            "medianMs": 1.33,
-            "minMs": 1.179,
-            "maxMs": 2.112,
+            "medianMs": 1.186,
+            "minMs": 1.154,
+            "maxMs": 1.253,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.507,
-            "minMs": 0.481,
-            "maxMs": 0.535,
+            "medianMs": 0.502,
+            "minMs": 0.491,
+            "maxMs": 0.614,
             "reps": 7
           },
-          "speedupTriVsUni": 2.62
+          "speedupTriVsUni": 2.36
         },
         {
           "query": "多智能体群聊桌面应用",
           "len": 10,
           "hits": 0,
           "uni": {
-            "medianMs": 0.023,
+            "medianMs": 0.024,
             "minMs": 0.022,
-            "maxMs": 0.026,
+            "maxMs": 0.028,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.02,
-            "minMs": 0.019,
-            "maxMs": 0.021,
+            "medianMs": 0.023,
+            "minMs": 0.022,
+            "maxMs": 0.027,
             "reps": 7
           },
-          "speedupTriVsUni": 1.15
+          "speedupTriVsUni": 1.04
         },
         {
           "query": "值班者状态机在指定成员忙碌时",
           "len": 14,
           "hits": 0,
           "uni": {
-            "medianMs": 0.058,
-            "minMs": 0.057,
-            "maxMs": 0.068,
+            "medianMs": 0.059,
+            "minMs": 0.058,
+            "maxMs": 0.063,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.039,
-            "minMs": 0.038,
-            "maxMs": 0.041,
+            "medianMs": 0.042,
+            "minMs": 0.041,
+            "maxMs": 0.048,
             "reps": 7
           },
-          "speedupTriVsUni": 1.49
+          "speedupTriVsUni": 1.4
         },
         {
           "query": "记忆服务作为长驻子进程",
@@ -4378,14 +4378,14 @@
           "hits": 0,
           "uni": {
             "medianMs": 0.046,
-            "minMs": 0.045,
-            "maxMs": 0.108,
+            "minMs": 0.046,
+            "maxMs": 0.049,
             "reps": 7
           },
           "tri": {
             "medianMs": 0.03,
-            "minMs": 0.029,
-            "maxMs": 0.037,
+            "minMs": 0.03,
+            "maxMs": 0.031,
             "reps": 7
           },
           "speedupTriVsUni": 1.53
@@ -4404,42 +4404,42 @@
       },
       "likeBench": {
         "triIndexed": {
-          "medianMs": 0.253,
-          "minMs": 0.217,
-          "maxMs": 0.294,
+          "medianMs": 0.238,
+          "minMs": 0.216,
+          "maxMs": 0.289,
           "reps": 7
         },
         "recordsFullScan": {
-          "medianMs": 0.28,
-          "minMs": 0.27,
-          "maxMs": 0.305,
+          "medianMs": 0.275,
+          "minMs": 0.271,
+          "maxMs": 0.302,
           "reps": 7
         }
       },
-      "likeSpeedup": 1.11,
+      "likeSpeedup": 1.16,
       "triFasterCount": "6/6"
     },
     "vectorScanLarge": {
       "hydrated": {
         "embedded": 256,
-        "ms": 4570,
+        "ms": 4517,
         "remaining": 1744
       },
       "vecRows": 512,
       "timings": {
-        "totalMs": 4860,
-        "hydrateMs": 4851,
-        "embedQueryMs": 5,
-        "uniMs": 0,
-        "triMs": 1,
-        "vecMs": 3,
+        "totalMs": 4622,
+        "hydrateMs": 4614,
+        "embedQueryMs": 6,
+        "uniMs": 1,
+        "triMs": 0,
+        "vecMs": 1,
         "fuseMs": 0,
         "cosines": 512,
         "hydrated": 256,
         "vectorBelowThreshold": 492,
         "vectorUnkRatio": 0
       },
-      "msPerCosine": 0.0059,
+      "msPerCosine": 0.002,
       "cards": [
         {
           "id": "L1548",
@@ -4479,7 +4479,7 @@
       ]
     },
     "persistence": {
-      "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789668977487-z912x",
+      "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789683678667-i1n0w",
       "dir": "tmp",
       "phases": {
         "A_tail": 14,
@@ -4561,12 +4561,12 @@
             ]
           ],
           "timings": {
-            "totalMs": 4,
+            "totalMs": 5,
             "hydrateMs": 0,
             "embedQueryMs": 4,
             "uniMs": 0,
             "triMs": 0,
-            "vecMs": 0,
+            "vecMs": 1,
             "fuseMs": 0,
             "cosines": 14,
             "hydrated": 0,
@@ -4680,8 +4680,8 @@
       },
       "readyA": {
         "type": "ready",
-        "pid": 26220,
-        "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789668977487-z912x",
+        "pid": 39536,
+        "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789683678667-i1n0w",
         "schemaVersion": 2
       },
       "deletedDbFiles": [
@@ -4725,7 +4725,7 @@
           "last_seq"
         ],
         "jsonl": {
-          "sha1Simple": "6934dc83",
+          "sha1Simple": "4af78ab7",
           "bytes": 604
         },
         "recordCount": 4
@@ -4830,7 +4830,7 @@
   },
   "failures": [],
   "summary": {
-    "totalMs": 53585,
+    "totalMs": 53285,
     "checks": 97,
     "passed": 97,
     "failed": 0,
