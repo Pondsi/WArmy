@@ -19,6 +19,13 @@ import { SecureKeyStore } from './secure-keys.js';
 import { KnowledgeArchiver, CleanupManager } from './archive-cleanup.js';
 import { pickModelForUrgency, pickEmbeddingModel, type RoleModelConfig } from './model-roles.js';
 import { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';
+import {
+  renderBoundedView,
+  DEFAULT_CONTEXT_BUDGET_CHARS,
+  DEFAULT_KEEP_HEAD,
+  DEFAULT_KEEP_TAIL,
+  type LogEntry,
+} from './context-renderer.js';
 import { runShortLivedExecutor, runExecutors } from './executor.js';
 import { initAssetGovernor, retrieveAssetsForChat, registerChatAsset, recordAssetUsage, sweepAssets } from './asset-wire.js';
 import { MetricsCollector } from './metrics.js';
@@ -99,8 +106,85 @@ let peerReg: PeerRegistry | null = null;
 let mesh: MeshNode | null = null;
 let discovery: LanDiscovery | null = null;
 let discoverTimer: NodeJS.Timeout | null = null;
-/** 会话消息历史（主进程侧） */
+/** 会话消息历史（主进程侧）—— 日志的镜像（不变量 #1/#5），视图由 chatLogs 渲染而来 */
 const chatHistories = new Map<string, ChatMessage[]>();
+/**
+ * 会话日志（只追加，ADR 002 / 不变量 #1）：不变量 #2 的"日志"侧。
+ * chat-send、群消息、值班者输入共用这一份；注入模型的是 renderBoundedView 的有界视图。
+ */
+const chatLogs = new Map<string, LogEntry[]>();
+/**
+ * 日志序号：单调计数器（ADR §6「seq 由单调计数器分配」，决定裁剪顺序）。
+ * 记忆服务可用时对齐它分配的 seq，这样指针里的 `retrieve(seq=…)` 能走 sqlite:seq 精确命中。
+ */
+let chatLogSeq = 0;
+/** recordId 内的单调后缀：`m-${Date.now()}` 同毫秒会撞 id（记忆服务里 id 是 UNIQUE，撞了就 REPLACE） */
+let chatLogIdSeq = 0;
+/** 视图预算下限（字符）：再小连可执行指针都放不下 */
+const MIN_CONTEXT_BUDGET_CHARS = 200;
+
+function nextChatSeq(memSeq?: number): number {
+  const s =
+    typeof memSeq === 'number' && Number.isFinite(memSeq) && memSeq > chatLogSeq
+      ? Math.floor(memSeq)
+      : chatLogSeq + 1;
+  chatLogSeq = s;
+  return s;
+}
+
+function newChatRecordId(prefix: 'm' | 'a' | 'g'): string {
+  chatLogIdSeq += 1;
+  return `${prefix}-${Date.now()}-${chatLogIdSeq}`;
+}
+
+/** 记忆服务 IPC 的 append 回包是 { ok, seq }；兼容直接返回记录对象的实现 */
+function memSeqOf(res: unknown): number | undefined {
+  const r = res as { seq?: unknown; result?: { seq?: unknown } } | null | undefined;
+  if (!r || typeof r !== 'object') return undefined;
+  const n = Number(r.seq ?? r.result?.seq);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function appendChatLog(key: string, entry: LogEntry): void {
+  const arr = chatLogs.get(key);
+  if (arr) arr.push(entry);
+  else chatLogs.set(key, [entry]);
+}
+
+/** 视图预算：SettingsStore 可配（ADR 002 要求"注入上下文有固定上限"且可调） */
+function contextBudgetChars(): number {
+  try {
+    const v = Number(settingsStore?.load()?.contextBudgetChars);
+    // 低于下限会让可执行指针放不下（下限 200 + 上限 20 万，防止误配出荒唐值）
+    if (Number.isFinite(v)) {
+      return Math.min(200000, Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.floor(v)));
+    }
+  } catch {
+    /* 配置坏了就退回默认 */
+  }
+  return DEFAULT_CONTEXT_BUDGET_CHARS;
+}
+
+/** 统一的视图渲染入口：所有注入点都走这里，不许另写一份（不变量 #2） */
+function renderChatView(key: string, recallHint?: string) {
+  const view = renderBoundedView(chatLogs.get(key) || [], {
+    budgetChars: contextBudgetChars(),
+    keepHead: DEFAULT_KEEP_HEAD,
+    keepTail: DEFAULT_KEEP_TAIL,
+    recallHint,
+  });
+  metrics.recordView({
+    ts: Date.now(),
+    sessionId: key,
+    logEntries: view.stats.logEntries,
+    logBytes: view.stats.logBytes,
+    viewBytes: view.stats.viewBytes,
+    budgetChars: view.stats.budgetChars,
+    pointers: view.stats.pointers,
+  });
+  return view;
+}
+
 /** 运行中的插入指令级别 */
 const insertMode = new Map<string, 'outer' | 'inner'>();
 /** Provider 配置（由设置 UI 写入） */
@@ -750,16 +834,28 @@ handleIpc(
         });
       }
     }
+    const dutyUserRecordId = newChatRecordId('g');
+    let dutyUserSeq: number | undefined;
     try {
-      await memory?.append({
-        id: `g-${Date.now()}`,
-        sessionId: msg.groupId,
-        kind: 'message',
-        body: msg.content,
-      }, 'duty');
+      dutyUserSeq = memSeqOf(
+        await memory?.append({
+          id: dutyUserRecordId,
+          sessionId: msg.groupId,
+          kind: 'message',
+          body: msg.content,
+        }, 'duty')
+      );
     } catch {
       /* optional */
     }
+    // 日志只追加 + 真实 recordId/seq（不变量 #1、#5）
+    appendChatLog(msg.groupId, {
+      seq: nextChatSeq(dutyUserSeq),
+      role: 'user',
+      content: msg.content,
+      recordId: dutyUserRecordId,
+      ts: Date.now(),
+    });
 
     // 值班者调用 LLM 生成回复（有 Key 时）
     let llmReply: string | null = null;
@@ -771,6 +867,10 @@ handleIpc(
         });
         const hist = chatHistories.get(msg.groupId) || [];
         hist.push({ role: 'user', content: msg.content });
+        chatHistories.set(msg.groupId, hist);
+        // 不变量 #2：注入的是有界渲染视图（原来这里是 hist.slice(-20)，只按条数有界）。
+        // 值班系统提示是**冻结头**，不随日志增长，作为固定前缀在预算之外（常数开销）。
+        const view = renderChatView(msg.groupId, msg.content);
         const resp = await provider.chat({
           model: providerCfg.model,
           messages: [
@@ -779,13 +879,19 @@ handleIpc(
               content:
                 tMain('llm.dutySystem'),
             },
-            ...hist.slice(-20),
+            ...(view.messages as ChatMessage[]),
           ],
           maxTokens: 512,
         });
         llmReply = resp.choices[0]?.message?.content || '';
         hist.push({ role: 'assistant', content: llmReply });
         chatHistories.set(msg.groupId, hist);
+        appendChatLog(msg.groupId, {
+          seq: nextChatSeq(),
+          role: 'assistant',
+          content: llmReply,
+          ts: Date.now(),
+        });
       } catch (e) {
         llmReply = `LLM error: ${sanitizeError(e).slice(0, 160)}`;
       }
@@ -879,25 +985,45 @@ handleIpc(
     const userMsg: ChatMessage = { role: 'user', content: compressed.content };
     const hist = chatHistories.get(sessionId) || [];
     hist.push(userMsg);
+    chatHistories.set(sessionId, hist);
 
+    // 日志只追加（不变量 #1）：先写入记忆服务，拿到**真实 recordId + seq** 再落日志，
+    // 这样指针里的 retrieve(recordId=…)/retrieve(seq=…) 真的能回到这条原文。
+    const userRecordId = newChatRecordId('m');
+    let userMemSeq: number | undefined;
     try {
-      await memory?.append(
-        {
-          id: `m-${Date.now()}`,
-          sessionId,
-          kind: 'message',
-          body: compressed.content,
-        },
-        'duty'
+      userMemSeq = memSeqOf(
+        await memory?.append(
+          {
+            id: userRecordId,
+            sessionId,
+            kind: 'message',
+            body: compressed.content,
+          },
+          'duty'
+        )
       );
     } catch {
       /* optional */
     }
+    appendChatLog(sessionId, {
+      seq: nextChatSeq(userMemSeq),
+      role: 'user',
+      content: compressed.content,
+      recordId: userRecordId,
+      ts: Date.now(),
+    });
 
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       const reply = tMain('llm.noKey') + msg.content.slice(0, 80);
       hist.push({ role: 'assistant', content: reply });
       chatHistories.set(sessionId, hist);
+      appendChatLog(sessionId, {
+        seq: nextChatSeq(),
+        role: 'assistant',
+        content: reply,
+        ts: Date.now(),
+      });
       return { ok: true, reply, usage: null, needsKey: true };
     }
 
@@ -907,9 +1033,11 @@ handleIpc(
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL || undefined,
       });
+      // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）
+      const view = renderChatView(sessionId, msg.content);
       const resp = await provider.chat({
         model: msg.model || providerCfg.model,
-        messages: hist,
+        messages: view.messages as ChatMessage[],
         maxTokens: 1024,
       });
       const reply = resp.choices[0]?.message?.content || '';
@@ -926,14 +1054,25 @@ handleIpc(
         providerId: providerCfg.presetId,
         model: msg.model || providerCfg.model,
       });
+      const replyRecordId = newChatRecordId('a');
+      let replyMemSeq: number | undefined;
       try {
-        await memory?.append(
-          { id: `a-${Date.now()}`, sessionId, kind: 'message', body: reply.slice(0, 4000) },
-          'duty'
+        replyMemSeq = memSeqOf(
+          await memory?.append(
+            { id: replyRecordId, sessionId, kind: 'message', body: reply.slice(0, 4000) },
+            'duty'
+          )
         );
       } catch {
         /* optional */
       }
+      appendChatLog(sessionId, {
+        seq: nextChatSeq(replyMemSeq),
+        role: 'assistant',
+        content: reply,
+        recordId: replyRecordId,
+        ts: Date.now(),
+      });
       if (knowledge && reply.length > 0) {
         knowledge.upsertEntity({
           id: 'session-' + sessionId,
@@ -1024,7 +1163,7 @@ handleIpc('ccarmy:get-insert-mode', (_e, sessionId: string) => ({
 }));
 
 // ── 指标 ──
-handleIpc('ccarmy:metrics-summary', () => safeHandle(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false }))
+handleIpc('ccarmy:metrics-summary', () => safeHandle(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true }))
 handleIpc('ccarmy:metrics-turns', () => safeHandle(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
 
 // ── 设置持久化 ──
@@ -1695,6 +1834,9 @@ handleIpc('ccarmy:group-orchestrate', async (_e, msg: { groupId: string; content
       board: board!,
       ccr,
       history: chatHistories,
+      // 值班者输入与 chat-send 共享同一份日志 + 同一个渲染器（不变量 #2）
+      logOf: (key: string) => chatLogs.get(key) || [],
+      contextBudgetChars,
       listInstances: () => instList,
       addEvent: (title, body, groupId) => {
         knowledge?.upsertEntity({ id: 'grp-' + groupId, kind: 'project', name: groupId, attrs: {}, anchors: [] });

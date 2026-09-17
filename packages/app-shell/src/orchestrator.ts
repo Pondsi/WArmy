@@ -6,6 +6,13 @@ import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@ccarmy/group-router';
 import { BoardStore, parseBoardCommand } from '@ccarmy/board';
 import { runShortLivedExecutor } from './executor.js';
 import { CcrGateway } from '@ccarmy/ccr-compressor';
+import {
+  renderBoundedView,
+  DEFAULT_CONTEXT_BUDGET_CHARS,
+  DEFAULT_KEEP_HEAD,
+  DEFAULT_KEEP_TAIL,
+  type LogEntry,
+} from './context-renderer.js';
 import { retrieveAssetsForChat, registerChatAsset } from './asset-wire.js';
 import type { ChatMessage } from '@ccarmy/providers';
 
@@ -45,6 +52,13 @@ export interface OrchestratorDeps {
   addEvent?: (title: string, body: string, groupId: string) => void;
   /** 取本机实例 ID 列表 */
   listInstances: () => Array<{ id: string; name: string; status: string; dutyEligible: boolean }>;
+  /**
+   * 会话日志（只追加，ADR 002 / 不变量 #2）：由主进程提供同一份日志，值班者输入复用它渲染。
+   * 缺省时退化为按 history 下标造 seq，仍然走同一个渲染器（不另写一份）。
+   */
+  logOf?: (key: string) => LogEntry[];
+  /** 视图预算（字符）；缺省用 context-renderer 的默认预算 */
+  contextBudgetChars?: () => number;
 }
 
 export interface OrchestrateResult {
@@ -159,9 +173,24 @@ export async function orchestrateGroupMessage(
         role: 'system',
         content: `你是 CCArmy 项目「${msg.groupId}」的值班者。\n${card}\n请用简短中文回复。若需更新任务，使用指令：新建任务:/完成/进度 标题:百分比`,
       };
+      // 不变量 #2：值班者输入复用**同一个**有界渲染器（原来这里是 hist.slice(-12)，只按条数有界）。
+      // 值班系统提示里已含状态卡片，保持冻结头；会话部分恒 ≤ 预算且与日志总长解耦。
+      const entries: LogEntry[] = deps.logOf
+        ? deps.logOf(msg.groupId)
+        : hist.map((m, i) => ({
+            seq: i + 1,
+            role: (m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user') as LogEntry['role'],
+            content: typeof m.content === 'string' ? m.content : '',
+          }));
+      const view = renderBoundedView(entries, {
+        budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars() : DEFAULT_CONTEXT_BUDGET_CHARS,
+        keepHead: DEFAULT_KEEP_HEAD,
+        keepTail: DEFAULT_KEEP_TAIL,
+        recallHint: msg.content,
+      });
       const resp = await provider.chat({
         model: cfg.model || 'deepseek-chat',
-        messages: [sys, ...hist.slice(-12)],
+        messages: [sys, ...(view.messages as ChatMessage[])],
         maxTokens: 512,
       });
       distilled = resp.choices[0]?.message?.content || '';

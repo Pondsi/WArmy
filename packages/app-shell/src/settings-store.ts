@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
+import { DEFAULT_CONTEXT_BUDGET_CHARS } from './context-renderer.js';
 
 export interface LocalProfile {
   username: string;
@@ -98,6 +99,12 @@ export interface AppSettings {
   embedUseGpu: boolean;
   /** 邮件通知：完成/请求/错误 */
   emailNotify: { complete: boolean; request: boolean; error: boolean };
+  /**
+   * 上下文有界渲染器的视图预算（字符）—— ADR 002 / 不变量 #2。
+   * 注入给模型的上下文恒 ≤ 该值，与日志总长解耦（默认见 DEFAULT_CONTEXT_BUDGET_CHARS）。
+   * 下限 200：更小的预算连可执行指针都放不下（渲染器仍不抛错，只是退化为截断指针）。
+   */
+  contextBudgetChars: number;
 }
 
 function hash(pw: string) {
@@ -202,6 +209,19 @@ function defaults(): AppSettings {
     smtpAccounts: [],
     embedUseGpu: true,
     emailNotify: { complete: true, request: true, error: true },
+    /**
+     * 默认 4000 字符（= context-renderer 的 DEFAULT_CONTEXT_BUDGET_CHARS，单一来源）。
+     * 理由（ADR §8 已声明"预算用字符近似 token，后续按模型 tokenizer 校正"）：
+     *  1) 与写入侧 CCR 的单条预算同量级（ccr-compressor DEFAULT_BUDGET = 4000），
+     *     两侧串联后不放大：单条先被压到 4000，整段视图再被限在 4000；
+     *  2) 4000 字符按常见 BPE 经验值折算约 1.5k~2.7k token（中文约 1.5 字符/token、
+     *     ASCII 约 4 字符/token），而 chat-send 的 maxTokens = 1024：
+     *     合计留在常见 8k 窗口内，并给输出留 1k token 余量；
+     *  3) 明显大于 keepHead(1) + keepTail(8) 的近期原文（约 9 条），
+     *     保证"指针 + 要点"与近期原文能同时放进同一个视图（否则视图会退化到只剩头尾）。
+     * 本机未提供 tokenizer 词表，故此处是折算估计而非实测 token 数；换算口径可按模型替换。
+     */
+    contextBudgetChars: DEFAULT_CONTEXT_BUDGET_CHARS,
   };
 }
 
