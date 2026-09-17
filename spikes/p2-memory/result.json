@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-17T14:36:13.151Z",
+  "generatedAt": "2026-09-17T17:47:29.537Z",
   "host": {
     "node": "v24.20.0",
     "platform": "win32",
@@ -833,7 +833,7 @@
       "ok": true,
       "detail": {
         "embedded": 14,
-        "ms": 170,
+        "ms": 172,
         "remaining": 0
       }
     },
@@ -999,19 +999,19 @@
       "detail": "SCAN fts_uni VIRTUAL TABLE INDEX 0:"
     },
     {
-      "name": "fts_tri 的 LIKE 比 records 全表扫更快",
+      "name": "fts_tri 的 LIKE 不慢于 records 全表扫（min-of-N，容 5% 噪声）",
       "ok": true,
       "detail": {
         "triIndexed": {
-          "medianMs": 0.256,
-          "minMs": 0.228,
-          "maxMs": 0.279,
+          "medianMs": 0.229,
+          "minMs": 0.214,
+          "maxMs": 0.261,
           "reps": 7
         },
         "recordsFullScan": {
-          "medianMs": 0.28,
-          "minMs": 0.274,
-          "maxMs": 0.3,
+          "medianMs": 0.283,
+          "minMs": 0.275,
+          "maxMs": 0.315,
           "reps": 7
         }
       }
@@ -1020,12 +1020,12 @@
       "name": "大语料上向量扫描可测（cosines>0）",
       "ok": true,
       "detail": {
-        "totalMs": 4370,
-        "hydrateMs": 4361,
-        "embedQueryMs": 5,
-        "uniMs": 0,
+        "totalMs": 4757,
+        "hydrateMs": 4748,
+        "embedQueryMs": 6,
+        "uniMs": 1,
         "triMs": 0,
-        "vecMs": 1,
+        "vecMs": 2,
         "fuseMs": 0,
         "cosines": 512,
         "hydrated": 256,
@@ -1193,7 +1193,7 @@
           "last_seq"
         ],
         "jsonl": {
-          "sha1Simple": "964b3593",
+          "sha1Simple": "7666172d",
           "bytes": 604
         },
         "recordCount": 4
@@ -1261,7 +1261,7 @@
       "ok": true,
       "detail": {
         "before": {
-          "sha1Simple": "964b3593",
+          "sha1Simple": "7666172d",
           "bytes": 604
         },
         "after": {
@@ -1429,7 +1429,7 @@
         "queryPrefix": "",
         "tokenizer": null,
         "modelCandidates": [
-          "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-env-1789655773159-ug6l3\\models\\model_quantized.onnx",
+          "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-env-1789667249542-x8h0n\\models\\model_quantized.onnx",
           "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
         ]
       },
@@ -2061,7 +2061,7 @@
       "ortTried": [
         "require:onnxruntime-web"
       ],
-      "loadMs": 260,
+      "loadMs": 249,
       "embeds": 0,
       "embedTotalMs": 0,
       "lastEmbedMs": 0,
@@ -2086,7 +2086,7 @@
         "last_hidden_state"
       ],
       "modelCandidates": [
-        "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-main-1789655773219-59evy\\models\\model_quantized.onnx",
+        "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-main-1789667249599-eo59w\\models\\model_quantized.onnx",
         "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
       ]
     },
@@ -2159,9 +2159,9 @@
           "fused": 2
         },
         "timings": {
-          "totalMs": 176,
-          "hydrateMs": 171,
-          "embedQueryMs": 3,
+          "totalMs": 183,
+          "hydrateMs": 178,
+          "embedQueryMs": 2,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 1,
@@ -2226,7 +2226,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "fts_tri",
@@ -2239,7 +2239,7 @@
             "channel": "vector",
             "used": true,
             "hits": 2,
-            "ms": 1
+            "ms": 0
           }
         ],
         "candidates": {
@@ -2252,9 +2252,9 @@
           "totalMs": 4,
           "hydrateMs": 0,
           "embedQueryMs": 3,
-          "uniMs": 0,
+          "uniMs": 1,
           "triMs": 0,
-          "vecMs": 1,
+          "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -2328,7 +2328,7 @@
             "channel": "fts_tri",
             "used": true,
             "hits": 2,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "vector",
@@ -2344,11 +2344,11 @@
           "fused": 2
         },
         "timings": {
-          "totalMs": 3,
+          "totalMs": 4,
           "hydrateMs": 0,
           "embedQueryMs": 3,
           "uniMs": 0,
-          "triMs": 0,
+          "triMs": 1,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
@@ -2434,7 +2434,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 2,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "fts_tri",
@@ -2458,8 +2458,8 @@
         "timings": {
           "totalMs": 5,
           "hydrateMs": 0,
-          "embedQueryMs": 4,
-          "uniMs": 1,
+          "embedQueryMs": 5,
+          "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -2568,8 +2568,8 @@
           "fused": 3
         },
         "timings": {
-          "totalMs": 7,
-          "hydrateMs": 1,
+          "totalMs": 6,
+          "hydrateMs": 0,
           "embedQueryMs": 6,
           "uniMs": 0,
           "triMs": 0,
@@ -2629,7 +2629,7 @@
             "channel": "vector",
             "used": true,
             "hits": 1,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "like",
@@ -2646,12 +2646,12 @@
           "fused": 1
         },
         "timings": {
-          "totalMs": 4,
+          "totalMs": 5,
           "hydrateMs": 0,
           "embedQueryMs": 3,
           "uniMs": 0,
           "triMs": 0,
-          "vecMs": 0,
+          "vecMs": 1,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -2770,7 +2770,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 2,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "fts_tri",
@@ -2794,8 +2794,8 @@
         "timings": {
           "totalMs": 4,
           "hydrateMs": 0,
-          "embedQueryMs": 3,
-          "uniMs": 1,
+          "embedQueryMs": 4,
+          "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -2867,7 +2867,7 @@
             "channel": "fts_tri",
             "used": true,
             "hits": 1,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "vector",
@@ -2885,9 +2885,9 @@
         "timings": {
           "totalMs": 5,
           "hydrateMs": 0,
-          "embedQueryMs": 4,
+          "embedQueryMs": 5,
           "uniMs": 0,
-          "triMs": 1,
+          "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
@@ -3015,7 +3015,7 @@
             "channel": "vector",
             "used": true,
             "hits": 5,
-            "ms": 0
+            "ms": 1
           }
         ],
         "candidates": {
@@ -3025,12 +3025,12 @@
           "fused": 5
         },
         "timings": {
-          "totalMs": 8,
+          "totalMs": 9,
           "hydrateMs": 0,
           "embedQueryMs": 7,
           "uniMs": 0,
           "triMs": 1,
-          "vecMs": 0,
+          "vecMs": 1,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -3074,7 +3074,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "fts_tri",
@@ -3100,7 +3100,7 @@
           "totalMs": 1,
           "hydrateMs": 0,
           "embedQueryMs": 0,
-          "uniMs": 1,
+          "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3218,7 +3218,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "fts_tri",
@@ -3244,7 +3244,7 @@
           "totalMs": 1,
           "hydrateMs": 0,
           "embedQueryMs": 0,
-          "uniMs": 0,
+          "uniMs": 1,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3310,13 +3310,13 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "fts_tri",
             "used": true,
             "hits": 1,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "vector",
@@ -3335,8 +3335,8 @@
           "totalMs": 6,
           "hydrateMs": 0,
           "embedQueryMs": 5,
-          "uniMs": 0,
-          "triMs": 1,
+          "uniMs": 1,
+          "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
@@ -3387,7 +3387,7 @@
             "channel": "fts_tri",
             "used": true,
             "hits": 1,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "vector",
@@ -3404,11 +3404,11 @@
           "fused": 1
         },
         "timings": {
-          "totalMs": 0,
+          "totalMs": 1,
           "hydrateMs": 0,
           "embedQueryMs": 0,
           "uniMs": 0,
-          "triMs": 0,
+          "triMs": 1,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 0,
@@ -3465,9 +3465,9 @@
           "fused": 0
         },
         "timings": {
-          "totalMs": 6,
+          "totalMs": 5,
           "hydrateMs": 0,
-          "embedQueryMs": 6,
+          "embedQueryMs": 5,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
@@ -3505,10 +3505,10 @@
           }
         ],
         "timings": {
-          "totalMs": 1,
+          "totalMs": 0,
           "hydrateMs": 0,
           "embedQueryMs": 0,
-          "uniMs": 1,
+          "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3522,7 +3522,7 @@
             "channel": "fts_uni",
             "used": false,
             "hits": 0,
-            "ms": 1,
+            "ms": 0,
             "skipped": "matched via LIKE fallback"
           },
           {
@@ -3570,9 +3570,9 @@
           }
         ],
         "timings": {
-          "totalMs": 5,
+          "totalMs": 7,
           "hydrateMs": 0,
-          "embedQueryMs": 5,
+          "embedQueryMs": 7,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
@@ -3637,9 +3637,9 @@
         "timings": {
           "totalMs": 5,
           "hydrateMs": 0,
-          "embedQueryMs": 4,
+          "embedQueryMs": 5,
           "uniMs": 0,
-          "triMs": 1,
+          "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
@@ -3659,7 +3659,7 @@
             "channel": "fts_tri",
             "used": false,
             "hits": 0,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "vector",
@@ -3682,9 +3682,9 @@
         "query": "zzz_not_present_zzz",
         "cards": [],
         "timings": {
-          "totalMs": 1,
+          "totalMs": 0,
           "hydrateMs": 0,
-          "embedQueryMs": 1,
+          "embedQueryMs": 0,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
@@ -3706,12 +3706,12 @@
         "query": "今天中午吃什么比较好",
         "cards": [],
         "timings": {
-          "totalMs": 5,
+          "totalMs": 7,
           "hydrateMs": 0,
-          "embedQueryMs": 5,
+          "embedQueryMs": 6,
           "uniMs": 0,
           "triMs": 0,
-          "vecMs": 0,
+          "vecMs": 1,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -3722,7 +3722,7 @@
           "channel": "vector",
           "used": false,
           "hits": 0,
-          "ms": 0,
+          "ms": 1,
           "skipped": "all 14 cosines below minCosine 0.5"
         }
       },
@@ -4102,8 +4102,8 @@
       "unrelatedInt8Cos": 0.254484,
       "blobBytes": 512,
       "float32Bytes": 2048,
-      "embedMsLast": 6,
-      "embedMsAvg": 8.915,
+      "embedMsLast": 5,
+      "embedMsAvg": 9.213,
       "embeds": 47
     },
     "semanticPairs": [
@@ -4261,7 +4261,7 @@
     },
     "latency": {
       "corpusRecords": 2000,
-      "buildMs": 887,
+      "buildMs": 872,
       "jsonlBytes": 397214,
       "indexed": {
         "ftsUniDocs": 2000,
@@ -4287,90 +4287,90 @@
           "len": 31,
           "hits": 220,
           "uni": {
-            "medianMs": 1.543,
-            "minMs": 1.477,
-            "maxMs": 1.708,
+            "medianMs": 1.606,
+            "minMs": 1.515,
+            "maxMs": 1.804,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.781,
-            "minMs": 0.765,
-            "maxMs": 0.817,
+            "medianMs": 0.792,
+            "minMs": 0.783,
+            "maxMs": 0.867,
             "reps": 7
           },
-          "speedupTriVsUni": 1.98
+          "speedupTriVsUni": 2.03
         },
         {
           "query": "E_MEMORY_CORRUPT",
           "len": 16,
           "hits": 212,
           "uni": {
-            "medianMs": 1.072,
+            "medianMs": 1.112,
             "minMs": 1.047,
-            "maxMs": 1.314,
+            "maxMs": 1.305,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.483,
-            "minMs": 0.451,
-            "maxMs": 0.891,
+            "medianMs": 0.507,
+            "minMs": 0.444,
+            "maxMs": 0.678,
             "reps": 7
           },
-          "speedupTriVsUni": 2.22
+          "speedupTriVsUni": 2.19
         },
         {
           "query": "CCA_ARMY_MEMORY_DIR",
           "len": 19,
           "hits": 205,
           "uni": {
-            "medianMs": 1.149,
-            "minMs": 1.119,
-            "maxMs": 1.208,
+            "medianMs": 1.175,
+            "minMs": 1.157,
+            "maxMs": 1.249,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.501,
-            "minMs": 0.483,
-            "maxMs": 0.776,
+            "medianMs": 0.493,
+            "minMs": 0.474,
+            "maxMs": 0.521,
             "reps": 7
           },
-          "speedupTriVsUni": 2.29
+          "speedupTriVsUni": 2.38
         },
         {
           "query": "多智能体群聊桌面应用",
           "len": 10,
           "hits": 0,
           "uni": {
-            "medianMs": 0.023,
+            "medianMs": 0.022,
             "minMs": 0.022,
-            "maxMs": 0.028,
+            "maxMs": 0.027,
             "reps": 7
           },
           "tri": {
             "medianMs": 0.02,
-            "minMs": 0.019,
-            "maxMs": 0.021,
+            "minMs": 0.02,
+            "maxMs": 0.023,
             "reps": 7
           },
-          "speedupTriVsUni": 1.15
+          "speedupTriVsUni": 1.1
         },
         {
           "query": "值班者状态机在指定成员忙碌时",
           "len": 14,
           "hits": 0,
           "uni": {
-            "medianMs": 0.057,
-            "minMs": 0.056,
-            "maxMs": 0.06,
+            "medianMs": 0.059,
+            "minMs": 0.058,
+            "maxMs": 0.063,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.04,
-            "minMs": 0.038,
-            "maxMs": 0.043,
+            "medianMs": 0.042,
+            "minMs": 0.041,
+            "maxMs": 0.044,
             "reps": 7
           },
-          "speedupTriVsUni": 1.43
+          "speedupTriVsUni": 1.4
         },
         {
           "query": "记忆服务作为长驻子进程",
@@ -4378,17 +4378,17 @@
           "hits": 0,
           "uni": {
             "medianMs": 0.045,
-            "minMs": 0.045,
-            "maxMs": 0.048,
+            "minMs": 0.044,
+            "maxMs": 0.054,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.035,
-            "minMs": 0.03,
-            "maxMs": 0.083,
+            "medianMs": 0.03,
+            "minMs": 0.029,
+            "maxMs": 0.031,
             "reps": 7
           },
-          "speedupTriVsUni": 1.29
+          "speedupTriVsUni": 1.5
         }
       ],
       "likePlan": {
@@ -4404,42 +4404,42 @@
       },
       "likeBench": {
         "triIndexed": {
-          "medianMs": 0.256,
-          "minMs": 0.228,
-          "maxMs": 0.279,
+          "medianMs": 0.229,
+          "minMs": 0.214,
+          "maxMs": 0.261,
           "reps": 7
         },
         "recordsFullScan": {
-          "medianMs": 0.28,
-          "minMs": 0.274,
-          "maxMs": 0.3,
+          "medianMs": 0.283,
+          "minMs": 0.275,
+          "maxMs": 0.315,
           "reps": 7
         }
       },
-      "likeSpeedup": 1.09,
+      "likeSpeedup": 1.24,
       "triFasterCount": "6/6"
     },
     "vectorScanLarge": {
       "hydrated": {
         "embedded": 256,
-        "ms": 4390,
+        "ms": 4564,
         "remaining": 1744
       },
       "vecRows": 512,
       "timings": {
-        "totalMs": 4370,
-        "hydrateMs": 4361,
-        "embedQueryMs": 5,
-        "uniMs": 0,
+        "totalMs": 4757,
+        "hydrateMs": 4748,
+        "embedQueryMs": 6,
+        "uniMs": 1,
         "triMs": 0,
-        "vecMs": 1,
+        "vecMs": 2,
         "fuseMs": 0,
         "cosines": 512,
         "hydrated": 256,
         "vectorBelowThreshold": 492,
         "vectorUnkRatio": 0
       },
-      "msPerCosine": 0.002,
+      "msPerCosine": 0.0039,
       "cards": [
         {
           "id": "L1548",
@@ -4479,7 +4479,7 @@
       ]
     },
     "persistence": {
-      "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789655783825-qozb4",
+      "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789667260764-i9ly9",
       "dir": "tmp",
       "phases": {
         "A_tail": 14,
@@ -4531,10 +4531,10 @@
             ]
           ],
           "timings": {
-            "totalMs": 7,
+            "totalMs": 5,
             "hydrateMs": 0,
-            "embedQueryMs": 4,
-            "uniMs": 2,
+            "embedQueryMs": 5,
+            "uniMs": 0,
             "triMs": 0,
             "vecMs": 0,
             "fuseMs": 0,
@@ -4561,11 +4561,11 @@
             ]
           ],
           "timings": {
-            "totalMs": 5,
+            "totalMs": 4,
             "hydrateMs": 0,
-            "embedQueryMs": 4,
+            "embedQueryMs": 3,
             "uniMs": 0,
-            "triMs": 1,
+            "triMs": 0,
             "vecMs": 0,
             "fuseMs": 0,
             "cosines": 14,
@@ -4680,8 +4680,8 @@
       },
       "readyA": {
         "type": "ready",
-        "pid": 10116,
-        "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789655783825-qozb4",
+        "pid": 33452,
+        "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789667260764-i9ly9",
         "schemaVersion": 2
       },
       "deletedDbFiles": [
@@ -4725,7 +4725,7 @@
           "last_seq"
         ],
         "jsonl": {
-          "sha1Simple": "964b3593",
+          "sha1Simple": "7666172d",
           "bytes": 604
         },
         "recordCount": 4
@@ -4830,7 +4830,7 @@
   },
   "failures": [],
   "summary": {
-    "totalMs": 53022,
+    "totalMs": 53492,
     "checks": 97,
     "passed": 97,
     "failed": 0,

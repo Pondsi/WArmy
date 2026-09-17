@@ -30,3 +30,6 @@ vendor/agency-agents/
 
 # spike-08 的 hosts 备份是证据，但含本机 hosts 内容，不入库
 spikes/spike-08-helper/backups/
+
+# build-preview.mjs 的默认输出目录（构建产物，验证器会把产物输出到交付目录，不入库）
+packages/app-shell/preview/
