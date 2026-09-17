@@ -815,6 +815,29 @@ ipcMain.handle('ccarmy:skills-list', () => {
   return { ok: true, skills };
 });
 
+
+ipcMain.handle('ccarmy:skills-import', async () => {
+  if (!win) return { ok: false, error: 'no window' };
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+  const src = r.filePaths[0];
+  if (!fs.existsSync(path.join(src, 'SKILL.md'))) {
+    return { ok: false, error: 'SKILL.md not found in the selected folder' };
+  }
+  const id = path.basename(src);
+  const dest = path.join(app.getPath('userData'), 'skills', id);
+  try {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.rmSync(dest, { recursive: true, force: true });
+    fs.cpSync(src, dest, { recursive: true });
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+ipcMain.handle('ccarmy:skills-paths', () => ({ ok: true, paths: skillRoots().map((r) => r.root) }));
+
 ipcMain.handle('ccarmy:skills-remove', (_e, id: string) => {
   try {
     for (const { root } of skillRoots()) {
@@ -1520,6 +1543,17 @@ function createTray() {
 ipcMain.handle('ccarmy:tray-init', () => {
   try {
     createTray();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+
+// 托盘提示语由渲染层按当前语言下发（logo 文案随语言变化）
+ipcMain.handle('ccarmy:tray-tooltip', (_e, text: string) => {
+  try {
+    tray?.setToolTip(String(text || '').slice(0, 120));
     return { ok: true };
   } catch (e) {
     return { ok: false, error: String(e) };

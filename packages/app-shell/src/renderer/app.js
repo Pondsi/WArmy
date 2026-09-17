@@ -329,24 +329,114 @@
     }
   }
 
-  /** 主题色板：24 个色相 × 2 个明度 + 6 个灰阶 = 54 色 */
-  function accentPalette() {
-    const hslToHex = (h, s, l) => {
-      const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
-      const f = (n) => {
-        const k = (n + h / 30) % 12;
-        const v = l / 100 - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
-        return Math.round(255 * v).toString(16).padStart(2, '0');
-      };
-      return '#' + f(0) + f(8) + f(4);
+  function hslToHex(h, s, l) {
+    const a2 = (s / 100) * Math.min(l / 100, 1 - l / 100);
+    const f = (n) => {
+      const k = (n + h / 30) % 12;
+      const v = l / 100 - a2 * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
+      return Math.round(255 * v).toString(16).padStart(2, '0');
     };
-    const out = [];
-    for (let hue = 0; hue < 360; hue += 15) {
-      out.push(hslToHex(hue, 68, 52));
-      out.push(hslToHex(hue, 58, 36));
+    return '#' + f(0) + f(8) + f(4);
+  }
+
+  /** 相对亮度（WCAG） */
+  function relLuminance(hex) {
+    const ch = [1, 3, 5]
+      .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  }
+
+  /** 该颜色配白字的对比度 */
+  function contrastWithWhite(hex) {
+    return 1.05 / (relLuminance(hex) + 0.05);
+  }
+
+  /**
+   * 主题色板：9 个色相 × 7 个明度 = 63 色（每行 9 个）。
+   *
+   * 约束（离线用 node 搜出来的参数，见 %TEMP%\perf\palette-search4.mjs）：
+   *  - 每个色相先向下搜索出「白字对比度 >= 3.0」的最亮明度作为该列上限，
+   *    再在 [上限, 上限-36] 区间内均分 7 档 —— 因此没有看不清的颜色；
+   *  - 同一列越暗越饱和（+5%/档），使相邻两档在 RGB 上也有明显差异；
+   *  - 相邻色相相差 40°，不会出现彼此接近的颜色。
+   * 实测：63 色互不重复，最低白字对比度 3.02，平均饱和度 73%。
+   */
+  function accentPalette() {
+    const HUES = [0, 40, 80, 120, 160, 200, 240, 280, 320];
+    const ROWS = 7;
+    const SAT_TOP = 58;
+    const SAT_STEP = 5;
+    const FLOOR = 22;
+    const SPAN = 36;
+    const TARGET = 3.0;
+    const maxLight = (hue, sat) => {
+      let l = 64;
+      while (l > 12 && contrastWithWhite(hslToHex(hue, sat, l)) < TARGET) l -= 1;
+      return l;
+    };
+    const cols = [];
+    for (const h of HUES) {
+      const lmax = maxLight(h, SAT_TOP);
+      const lmin = Math.max(FLOOR, lmax - SPAN);
+      const col = [];
+      for (let k = 0; k < ROWS; k++) {
+        const l = lmax - k * ((lmax - lmin) / (ROWS - 1));
+        col.push(hslToHex(h, Math.min(96, SAT_TOP + k * SAT_STEP), l));
+      }
+      cols.push(col);
     }
-    ['#000000', '#3a3a3a', '#6b6b6b', '#9a9a9a', '#c8c8c8', '#f0f0f0'].forEach((g) => out.push(g));
-    return out;
+    const grid = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < HUES.length; c++) grid.push(cols[c][r]);
+    return grid;
+  }
+
+  /** 应用主题色（色板与自定义入口共用） */
+  function applyAccent(color) {
+    if (!color) return;
+    state.theme = color;
+    document.documentElement.style.setProperty('--accent', color);
+    document.documentElement.style.setProperty('--me-bubble', color);
+    window.ccarmy.settingsSave({ accent: color });
+  }
+
+  /** 自定义主题色：调色板 + 预览 + 取消/确定 */
+  function pickCustomAccent() {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = t('settings.themeCustomTitle');
+      const body = $('modal-body');
+      body.innerHTML = `<div class="theme-picker-body">
+        <input type="color" id="theme-picker-input" value="${escapeHtml(state.theme || '#c45c26')}"/>
+        <div class="theme-picker-preview">
+          <span class="swatch" id="theme-picker-swatch"></span>
+          <span class="muted" id="theme-picker-hex"></span>
+        </div>
+        <div class="muted">${t('settings.themePreview')}</div>
+      </div>`;
+      const input = $('theme-picker-input');
+      const swatch = $('theme-picker-swatch');
+      const hex = $('theme-picker-hex');
+      const sync = () => {
+        if (!input) return;
+        swatch.style.background = input.value;
+        hex.textContent = String(input.value).toUpperCase();
+      };
+      if (input) input.oninput = sync;
+      sync();
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.className = 'btn-mini';
+      cancel.textContent = t('common.cancel');
+      cancel.onclick = () => { root.classList.add('hidden'); resolve(null); };
+      const ok = document.createElement('button');
+      ok.className = 'btn-primary';
+      ok.textContent = t('common.ok');
+      ok.onclick = () => { root.classList.add('hidden'); resolve(input ? input.value : null); };
+      acts.append(cancel, ok);
+      root.classList.remove('hidden');
+    });
   }
 
   function renderThemeSwatches() {
@@ -367,6 +457,14 @@
     });
   }
 
+  function syncTrayText() {
+    try {
+      window.ccarmy.trayTooltip?.(`${t('brand.name')} ${t('brand.sub')}`);
+    } catch {
+      /* noop */
+    }
+  }
+
   function applyI18n() {
     document.querySelectorAll('[data-i18n]').forEach((el) => {
       el.textContent = t(el.getAttribute('data-i18n'));
@@ -382,6 +480,7 @@
     if ($('tb-brand')) $('tb-brand').textContent = displayName();
         applyAvatar();
     document.title = displayName();
+    syncTrayText();
   }
 
   async function loadI18n(locale) {
@@ -620,6 +719,11 @@
             state.selectedInstance?.id === inst.id,
             instanceAvatarSrc(inst)
           );
+          // 双击实例：跳到「我的牛马」并打开该实例的聊天
+          rowEl.ondblclick = () => {
+            setNav('singleAi');
+            openChat('single', inst.id, inst.name);
+          };
           box.appendChild(rowEl);
         });
       return;
@@ -1367,10 +1471,10 @@
       const avHtml = `<img class="avatar-img big" src="${personAvatarSrc(p)}" alt=""/>`;
       box.innerHTML = `
         <div class="brand-strip">
-          <div class="brand-cow"><svg viewBox="0 0 140 100" style="width:48px;height:34px"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/></g></svg></div>
-          <div>
-            <div class="brand-name">无限牛马 CCArmy</div>
-            <div class="brand-sub">Corporate Cattle Army</div>
+          <img class="brand-logo" src="./icons/logo-256.png" alt="${escapeHtml(t('brand.name'))}"/>
+          <div class="brand-text">
+            <div class="brand-name">${escapeHtml(t('brand.name'))}</div>
+            <div class="brand-sub">${escapeHtml(t('brand.sub'))}</div>
           </div>
         </div>
         <div class="me-strip">
@@ -1471,6 +1575,11 @@
           </div>
           <h2 style="margin-top:12px">${t('settings.theme')}</h2>
           <div class="theme-swatches" id="theme-swatches"></div>
+          <div class="theme-custom-row">
+            <button class="btn-mini" id="btn-theme-custom">${t('settings.themeCustom')}</button>
+            <span class="theme-custom-preview" id="theme-custom-preview"></span>
+            <span class="muted">${t('settings.themePreview')}</span>
+          </div>
         </div>
         <div class="set-section" data-sec="notify"><h2 style="color:var(--accent)">${t('settings.section.notify')}</h2></div>
         <div class="set-section set-card">
@@ -1507,7 +1616,9 @@
         <div class="set-section set-card">
           <h2>${t('settings.skills')}</h2>
           <p class="muted" style="margin:0 0 8px">${t('settings.skillsHint')}</p>
+          <div style="margin-bottom:8px"><button class="btn-mini" id="btn-skill-import">${t('settings.skillsImport')}</button></div>
           <div id="skill-list" class="muted">${t('settings.skillsEmpty')}</div>
+          <div class="muted skill-paths" id="skill-paths"></div>
         </div>
         <div class="set-section set-card">
           <h2>${t('smtp.title')} <span class="muted">(${t('smtp.count')} <span id="smtp-n">0</span>/10 · ${t('smtp.max10')})</span></h2>
@@ -1535,11 +1646,14 @@
         <div class="set-section" data-sec="func"><h2 style="color:var(--accent)">${t('settings.section.func')}</h2></div>
         <div class="set-section set-card">
           <h2>${t('settings.security')}</h2>
-          <select id="sel-sec" title="${escapeHtml(t('settings.securityHint'))}">
-            <option value="normal">${t('settings.securityNormal')}</option>
-            <option value="strict">${t('settings.securityStrict')}</option>
-            <option value="full">${t('settings.securityFull')}</option>
-          </select>
+          <div class="sec-row">
+            <select id="sel-sec" title="${escapeHtml(t('settings.securityHint'))}">
+              <option value="normal">${t('settings.securityNormal')}</option>
+              <option value="strict">${t('settings.securityStrict')}</option>
+              <option value="full">${t('settings.securityFull')}</option>
+            </select>
+            <span class="sec-desc" id="sec-desc"></span>
+          </div>
           <p class="muted" style="margin:8px 0 0">${t('settings.securityHint')}</p>
         </div>
         <div class="set-section set-card">
@@ -1592,7 +1706,7 @@
           <div id="archived-box" class="muted">—</div>
         </div>
         <div class="set-section set-card">
-          <h2>${t('settings.embeddingSpecial')}</h2>
+          <h2>${t('settings.specialModels')}</h2>
           <p class="muted">${t('settings.specialModelsHint')}</p>
           <div class="field" style="margin-bottom:8px">
             <label>${t('settings.asrModel')}</label>
@@ -1618,35 +1732,7 @@
           <button class="btn-mini" id="btn-save-special">${t('common.save')}</button>
           <span class="muted" id="sm-msg"></span>
         </div>
-        <div class="set-section set-card">
-          <h2>${t('settings.specialModels')}</h2>
-          <p class="muted">${t('settings.specialModelsHint')}</p>
-          <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.asrModel')}</label>
-            <select id="sm-asr">
-              <option value="ollama">Ollama (whisper-tiny)</option>
-              <option value="whisper-cpp">whisper.cpp (local)</option>
-              <option value="openai">OpenAI Whisper API</option>
-            </select>
-          </div>
-          <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.embeddingModel')}</label>
-            <select id="sm-embed">
-              <option value="onnx">ONNX (bge-small-zh)</option>
-              <option value="ollama">Ollama embedding</option>
-              <option value="api">API embedding</option>
-            </select>
-          </div>
-          <div class="field" style="margin-bottom:8px">
-            
-          </div>
-          <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.organizerModel')}</label>
-            <input id="sm-organizer" placeholder="deepseek-chat"/>
-          </div>
-          <button class="btn-mini" id="btn-save-special">${t('common.save')}</button>
-          <span class="muted" id="sm-msg"></span>
-        </div>
+        
         <div class="set-section set-card">
           <h2>${t('join.blacklistTitle')}</h2>
           <div id="blacklist-box" class="muted">${t('join.blacklistEmpty')}</div>
@@ -1656,8 +1742,13 @@
           <div class="about-brand">
             <img class="about-logo" src="./icons/logo-256.png" alt="${escapeHtml(t('about.logoAlt'))}"/>
             <div class="about-brand-text">
-              <div class="about-name">无限牛马 <span class="about-en">CCArmy</span></div>
-              <div class="muted about-ver" id="about-version">—</div>
+              <div class="about-name">${escapeHtml(t('brand.name'))}</div>
+              <div class="about-sub">${escapeHtml(t('brand.sub'))}</div>
+              <div class="about-ver-line">
+                <span class="muted about-ver" id="about-version">—</span>
+                <button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
+                <span class="muted" id="about-upd"></span>
+              </div>
             </div>
           </div>
           <div class="about-block">
@@ -1671,10 +1762,6 @@
           <div class="about-block"><h3>${t('about.author')}</h3><p class="muted">${t('about.authorBody')}</p></div>
           <div class="about-block"><h3>${t('about.contact')}</h3><p class="muted">${t('about.contactBody')}</p></div>
           <div class="about-block"><h3>${t('about.legal')}</h3><p class="muted">${t('about.legalBody')}</p></div>
-          <div class="about-actions">
-            <button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
-            <span class="muted" id="about-upd"></span>
-          </div>
         </div></div></div>`;
 
       $('btn-about-update').onclick = async () => {
@@ -1733,16 +1820,45 @@
       document.querySelectorAll('.theme-swatches button').forEach((b) => {
         if (b.dataset.c === state.theme) b.classList.add('on');
         b.onclick = () => {
-          state.theme = b.dataset.c;
-          document.documentElement.style.setProperty('--accent', state.theme);
-          document.documentElement.style.setProperty('--me-bubble', state.theme);
-          window.ccarmy.settingsSave({ accent: state.theme });
+          applyAccent(b.dataset.c);
           renderPage();
         };
       });
+      (function bindThemeCustom() {
+        const btn = $('btn-theme-custom');
+        const preview = $('theme-custom-preview');
+        if (preview) preview.style.background = state.theme || '#c45c26';
+        if (!btn) return;
+        btn.onclick = async () => {
+          const picked = await pickCustomAccent();
+          if (!picked) return;
+          applyAccent(picked);
+          renderPage();
+        };
+      })();
+      const SEC_DESC = {
+        normal: 'settings.securityNormalDesc',
+        strict: 'settings.securityStrictDesc',
+        full: 'settings.securityFullDesc',
+      };
+      const syncSecDesc = () => {
+        const d = $('sec-desc');
+        if (d) d.textContent = t(SEC_DESC[state.globalSecurity] || SEC_DESC.normal);
+      };
       $('sel-sec').value = state.globalSecurity;
+      syncSecDesc();
       $('sel-sec').onchange = async (e) => {
-        state.globalSecurity = e.target.value;
+        const next = e.target.value;
+        if (next === 'full') {
+          const okGo = await uiConfirmCountdown(t('sec.confirmBody'), t('sec.confirmTitle'), 5);
+          if (!okGo) {
+            e.target.value = state.globalSecurity;
+            syncSecDesc();
+            return;
+          }
+        }
+        state.globalSecurity = next;
+        syncSecDesc();
         try {
           await window.ccarmy.setSecurityMode(state.globalSecurity);
         } catch {
@@ -3038,6 +3154,26 @@
   async function renderSkillList() {
     const box = $('skill-list');
     if (!box) return;
+    const importBtn = $('btn-skill-import');
+    if (importBtn && !importBtn.dataset.bound) {
+      importBtn.dataset.bound = '1';
+      importBtn.onclick = async () => {
+        const r = await window.ccarmy.skillsImport();
+        if (r && r.ok) {
+          uiAlert(t('settings.skillsImported') + ': ' + r.id);
+          renderSkillList();
+        } else if (r && r.error) {
+          uiAlert(String(r.error));
+        }
+      };
+    }
+    try {
+      const pr = await window.ccarmy.skillsPaths();
+      const pb = $('skill-paths');
+      if (pb) pb.textContent = t('settings.skillsPaths') + ': ' + ((pr && pr.paths) || []).join('  ·  ');
+    } catch {
+      /* noop */
+    }
     try {
       const r = await window.ccarmy.skillsList();
       const items = (r && r.skills) || [];
