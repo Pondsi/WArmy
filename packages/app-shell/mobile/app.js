@@ -23,7 +23,7 @@
     'me.language': '语言', 'me.theme': '主题', 'me.accent': '主题色',
     'me.light': '浅色', 'me.dark': '深色', 'me.system': '跟随系统',
     'me.version': '版本', 'me.checkUpdate': '检查更新', 'me.opensource': '开源信息',
-    'me.copyright': '版权', 'me.deviceId': '设备 ID',
+    'me.copyright': '版权', 'me.deviceId': '设备 ID', 'me.owner': '主人',
     'chat.placeholder': '输入消息', 'm.chat.placeholder': '输入消息', 'chat.send': '发送', 'chat.more': '更多',
     'chat.members': '成员', 'chat.model': '模型管理', 'chat.kb': '知识库',
     'chat.checkpoints': '回退点', 'chat.metrics': '性能指标', 'chat.export': '导出会话',
@@ -32,8 +32,23 @@
     'inst.status.running': '运行中', 'inst.status.stopped': '已停止',
     'inst.defaultModel': '默认模型', 'inst.models': '可用模型', 'inst.chain': '调用链',
     'inst.persona': '写入更多', 'inst.group': '成员',
-    'kb.hint': '输入关键词检索知识库', 'cp.empty': '暂无回退点', 'cp.rollback': '回退',
-    'metrics.turns': '轮次', 'metrics.cost': '成本(¥)', 'export.hint': '导出当前会话为 Markdown',
+    'kb.hint': '输入关键词检索知识库', 'cp.empty': '暂无回退点', 'cp.rollback': '回退', 'cp.rollbackHint': '回退：将停止当前任务并回到该节点。',
+    'metrics.turns': '轮次', 'metrics.cost': '成本(¥)',
+
+    'common.yes': '是',
+    'ui.type.single': '牛马', 'ui.type.internal': '项目', 'ui.type.contact': '联系人', 'ui.type.external': '群聊',
+    'board.blocked': '阻塞', 'board.readonlyHint': '看板为只读聚合视图，修改请通过与值班者对话完成。',
+    'chat.sub.single': '我的牛马', 'chat.sub.group': '群聊',
+    'export.hasTs': '包含时间戳', 'accent.custom': '自定义取色',
+    'provider.list': '供应商列表', 'provider.add': '+ 添加供应商', 'provider.configured': '已配置', 'provider.notConfigured': '未配置',
+    'smtp.settings': '邮箱 SMTP 设置', 'smtp.hostLabel': 'SMTP 服务器', 'smtp.portLabel': '端口', 'smtp.userLabel': '用户名',
+    'smtp.passLabel': '授权码', 'smtp.passPlaceholder': '输入授权码', 'smtp.fromLabel': '发件人名称', 'smtp.fromPlaceholder': '无限牛马通知', 'smtp.verifyBtn': '验证并保存',
+    'notify.title': '邮件通知', 'notify.done': '完成通知', 'notify.req': '请求通知', 'notify.err': '错误通知',
+    'mesh.portLabel': '监听端口', 'mesh.stateLabel': '状态', 'mesh.peers': '已连接节点', 'mesh.start': '启动组网', 'mesh.stop': '停止组网',
+    'mesh.stopped': '未启动', 'mesh.invite': '邀请加入', 'mesh.genInvite': '生成邀请码', 'mesh.scanJoin': '扫码加入',
+    'about.license': '许可证',
+    'msg.initFailed': '移动端初始化失败：', 'msg.smtpDesktopOnly': 'SMTP 验证需要桌面端配合，手机端仅作界面预览。', 'prompt.providerName': '供应商名称',
+    'msg.latest': '当前已是最新版本', 'msg.inviteCopied': '邀请码已复制到剪贴板', 'msg.scanOnDesktop': '请使用桌面端扫码功能', 'export.hint': '导出当前会话为 Markdown',
   };
   const t = (k) => (I18N.strings && I18N.strings[k]) || D[k] || k;
   const brandName = () => t('brand.name');
@@ -104,6 +119,54 @@
     return '#' + f(0) + f(8) + f(4);
   }
 
+  /** 相对亮度（WCAG） */
+  function relLuminance(hex) {
+    const ch = [1, 3, 5]
+      .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  }
+
+  /** 该颜色配白字的对比度 */
+  function contrastWithWhite(hex) {
+    return 1.05 / (relLuminance(hex) + 0.05);
+  }
+
+  /**
+   * 主题色板：17 色相 × 3 明度 = 51 色（每行 17 个）。
+   * 与桌面端同一套算法：每列先向下搜索出「白字对比度 >= 3.0」的最亮明度作为上限，
+   * 再在 [上限, 上限-20] 区间内均分 3 档，因此没有看不清的颜色；
+   * 同一列越暗越饱和（+8%/档），相邻色相相差 20°，不会出现彼此接近的颜色。
+   */
+  function accentPalette() {
+    const HUES = [0, 20, 40, 60, 80, 100, 120, 150, 180, 200, 220, 240, 260, 280, 300, 320, 340];
+    const ROWS = 3;
+    const SAT_TOP = 58;
+    const SAT_STEP = 8;
+    const FLOOR = 22;
+    const SPAN = 20;
+    const TARGET = 3.0;
+    const maxLight = (hue, sat) => {
+      let l = 64;
+      while (l > 12 && contrastWithWhite(hslToHex(hue, sat, l)) < TARGET) l -= 1;
+      return l;
+    };
+    const cols = [];
+    for (const h of HUES) {
+      const lmax = maxLight(h, SAT_TOP);
+      const lmin = Math.max(FLOOR, lmax - SPAN);
+      const col = [];
+      for (let k = 0; k < ROWS; k++) {
+        const l = lmax - k * ((lmax - lmin) / (ROWS - 1));
+        col.push(hslToHex(h, Math.min(96, SAT_TOP + k * SAT_STEP), l));
+      }
+      cols.push(col);
+    }
+    const grid = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < HUES.length; c++) grid.push(cols[c][r]);
+    return grid;
+  }
+
   // ── 通用片段 ──
   const avHtml = (name, preset, cls) => {
     const src = preset ? AV(preset) : null;
@@ -132,7 +195,7 @@
     contact: '<svg viewBox="0 0 16 16" class="type-badge"><circle cx="8" cy="5" r="3.5" fill="#576b95"/><path d="M2 15c0-3.3 2.7-6 6-6s6 2.7 6 6" fill="#576b95"/></svg>',
     external: '<svg viewBox="0 0 16 16" class="type-badge"><rect x="1" y="1" width="14" height="10" rx="2" fill="#576b95"/><path d="M4 11l4 4 4-4" fill="#576b95"/></svg>',
   };
-  const typeLabel = (kind) => ({ single: '牛马', internal: '项目', contact: '联系人', external: '群聊' }[kind] || '');
+  const typeLabel = (kind) => t({ single: 'ui.type.single', internal: 'ui.type.internal', contact: 'ui.type.contact', external: 'ui.type.external' }[kind] || '');
 
   // ── 一级：四个 Tab ──
   function renderSessions() {
@@ -172,16 +235,16 @@
       '<div class="body">' +
       '<div class="stats">' + stat(t('board.running'), 3) + stat(t('board.done'), 1) + stat(t('board.instances'), 1) + stat(t('board.queue'), 0) + '</div>' +
       '<div class="card"><div class="card-title">' + esc(t('board.progress')) + '</div>' +
-      prog('项目推进群', 65) + prog('研发排期', 30, '阻塞') + prog('demo.agent', 40) +
-      '</div><div class="hint">看板为只读聚合视图，修改请通过与值班者对话完成。</div></div>';
+      prog('项目推进群', 65) + prog('研发排期', 30, t('board.blocked')) + prog('demo.agent', 40) +
+      '</div><div class="hint">' + esc(t('board.readonlyHint')) + '</div></div>';
   }
 
   function renderMe() {
     const inst = INSTANCES[0];
     return barHtml(t('me.title')) +
       '<div class="body">' +
-      '<div class="me-head">' + avHtml('主人', 1) +
-      '<div class="who"><div class="n">主人</div><div class="m">ID: 884024787 · ' + esc(brandName()) + '</div></div></div>' +
+      '<div class="me-head">' + avHtml(t('me.owner'), 1) +
+      '<div class="who"><div class="n">' + esc(t('me.owner')) + '</div><div class="m">ID: 884024787 · ' + esc(brandName()) + '</div></div></div>' +
       '<div class="card">' +
       cellHtml(t('me.appearance'), '', 'set-appearance') +
       cellHtml(t('me.provider'), 'DeepSeek', 'set-provider') +
@@ -250,11 +313,11 @@
       if (m.who === 'sys') return '<div class="msg-row"><span class="sys">' + esc(m.text) + '</span></div>';
       const me = m.who === 'me';
       const inst = me ? null : instOf(id);
-      const av = me ? avHtml('主人', 1) : inst ? avHtml(inst.name, inst.preset) : avHtml(s.name, 0);
+      const av = me ? avHtml(t('me.owner'), 1) : inst ? avHtml(inst.name, inst.preset) : avHtml(s.name, 0);
       return '<div class="msg' + (me ? ' me' : '') + '">' + av + '<div class="bubble">' + esc(m.text) + '</div></div>';
     }).join('');
     const inner =
-      barHtml(s.name, s.kind === 'single' ? '我的牛马' : '群聊', { back: true, more: true }) +
+      barHtml(s.name, s.kind === 'single' ? t('chat.sub.single') : t('chat.sub.group'), { back: true, more: true }) +
       '<div class="body chat-body"><div class="msgs" id="msgs">' + body + '</div></div>' +
       '<div class="composer"><textarea id="input" rows="1" placeholder="' + esc(t('m.chat.placeholder')) + '"></textarea>' +
       '<button class="send" id="send" disabled>' + esc(t('chat.send')) + '</button></div>';
@@ -278,7 +341,7 @@
       if (!v) return;
       const d = document.createElement('div');
       d.className = 'msg me';
-      d.innerHTML = avHtml('主人', 1) + '<div class="bubble">' + esc(v) + '</div>';
+      d.innerHTML = avHtml(t('me.owner'), 1) + '<div class="bubble">' + esc(v) + '</div>';
       $('#msgs', el).appendChild(d);
       ta.value = ''; sync();
       $('#msgs', el).scrollTop = $('#msgs', el).scrollHeight;
@@ -333,7 +396,7 @@
     } else if (kind === 'cp') {
       title = t('chat.checkpoints');
       bodyHtml = '<div class="card">' + cellHtml('今天 12:04 · round_end', '65%') + cellHtml('昨天 18:20 · round_start', '30%') + '</div>' +
-        '<div class="hint">' + esc(t('cp.rollback')) + '：将停止当前任务并回到该节点。</div>';
+        '<div class="hint">' + esc(t('cp.rollbackHint')) + '</div>';
     } else if (kind === 'metrics') {
       title = t('chat.metrics');
       bodyHtml = '<div class="stats"><div class="cellbox"><span>' + esc(t('metrics.turns')) + '</span><b>3</b></div>' +
@@ -341,7 +404,7 @@
         '<div class="card">' + cellHtml('cache', '32%') + cellHtml('ccr', '90%') + cellHtml('avg', '2400ms') + '</div>';
     } else {
       title = t('chat.export');
-      bodyHtml = '<div class="card">' + cellHtml('Markdown', '.md') + cellHtml('包含时间戳', '是') + '</div>' +
+      bodyHtml = '<div class="card">' + cellHtml('Markdown', '.md') + cellHtml(t('export.hasTs'), t('common.yes')) + '</div>' +
         '<div class="hint">' + esc(t('export.hint')) + '</div>';
     }
     push(barHtml(title, s.name, { back: true }) + '<div class="body">' + bodyHtml + '</div>');
@@ -357,59 +420,53 @@
       about: t('me.about'),
     };
     let body = '';
-    // ── 主题色板（17x3=51 色）──
-    const HUES = [0, 20, 40, 60, 80, 100, 120, 150, 180, 200, 220, 240, 260, 280, 300, 320, 340];
-    const palette = HUES.map((h) => {
-      const l1 = 55, l2 = 42, l3 = 30;
-      return [hslToHex(h, 58, l1), hslToHex(h, 66, l2), hslToHex(h, 74, l3)];
-    });
-    const flatColors = [];
-    for (let r = 0; r < 3; r++) for (let c = 0; c < HUES.length; c++) flatColors.push(palette[c][r]);
+    // ── 主题色板（17 色相 × 3 明度 = 51 色，对比度自适应与桌面端一致）──
+    const flatColors = accentPalette();
     const swatchHtml = flatColors.map((c) => '<button data-color="' + c + '" style="width:100%;aspect-ratio:1;border-radius:50%;background:' + c + ';border:2px solid ' + (c === state.accent ? 'var(--ink)' : 'transparent') + ';cursor:pointer;padding:0"></button>').join('');
 
     if (group === 'appearance') {
       body = '<div class="card"><div class="card-title">' + esc(t('me.language')) + '</div>' +
-        cellHtml('中文', state.locale === 'zh-CN' ? '✓' : '', 'lang-zh') +
-        cellHtml('English', state.locale === 'en-US' ? '✓' : '', 'lang-en') + '</div>' +
+        cellHtml(t('settings.localeZh'), state.locale === 'zh-CN' ? '✓' : '', 'lang-zh') +
+        cellHtml(t('settings.localeEn'), state.locale === 'en-US' ? '✓' : '', 'lang-en') + '</div>' +
         '<div class="card"><div class="card-title">' + esc(t('me.theme')) + '</div>' +
         cellHtml(t('me.light'), state.theme === 'light' ? '✓' : '', 'theme-light') +
         cellHtml(t('me.dark'), state.theme === 'dark' ? '✓' : '', 'theme-dark') +
         cellHtml(t('me.system'), state.theme === 'system' ? '✓' : '', 'theme-system') + '</div>' +
         '<div class="card"><div class="card-title">' + esc(t('me.accent')) + '</div>' +
         '<div style="display:grid;grid-template-columns:repeat(17,1fr);gap:5px;padding:10px 14px">' + swatchHtml + '</div>' +
-        '<div style="padding:0 14px 12px;text-align:center"><button data-act="custom-color" style="font-size:13px;color:var(--accent);background:none;border:none;cursor:pointer">自定义颜色 ›</button></div>' +
+        '<div style="padding:0 14px 12px;text-align:center"><button data-act="custom-color" style="font-size:13px;color:var(--accent);background:none;border:none;cursor:pointer">' + esc(t('accent.custom')) + ' ›</button></div>' +
         '</div>';
     } else if (group === 'provider') {
       const rows = state.providers || [{ name: 'DeepSeek', url: 'api.deepseek.com', key: '***', configured: true }, { name: 'Ollama 本地', url: '127.0.0.1:11434', key: '', configured: false }];
-      body = '<div class="card"><div class="card-title">供应商列表</div>' +
-        rows.map((p, i) => '<div class="cell" data-edit-prov="' + i + '"><span class="label">' + esc(p.name) + '</span><span class="value">' + (p.configured ? '已配置' : '未配置') + '</span><span class="chev">›</span></div>').join('') +
-        '<div class="cell" data-act="add-provider"><span class="label" style="color:var(--accent)">+ 添加供应商</span></div>' +
+      body = '<div class="card"><div class="card-title">' + esc(t('provider.list')) + '</div>' +
+        rows.map((p, i) => '<div class="cell" data-edit-prov="' + i + '"><span class="label">' + esc(p.name) + '</span><span class="value">' + (p.configured ? t('provider.configured') : t('provider.notConfigured')) + '</span><span class="chev">›</span></div>').join('') +
+        '<div class="cell" data-act="add-provider"><span class="label" style="color:var(--accent)">' + esc(t('provider.add')) + '</span></div>' +
         '</div>';
     } else if (group === 'smtp') {
       const smtp = state.smtp || { host: '', port: '465', user: '', pass: '', from: '' };
-      body = '<div class="card"><div class="card-title">邮箱 SMTP 设置</div>' +
+      body = '<div class="card"><div class="card-title">' + esc(t('smtp.settings')) + '</div>' +
         '<div style="padding:10px 14px;display:flex;flex-direction:column;gap:10px">' +
-        '<label style="font-size:13px">SMTP 服务器<input id="smtp-host" value="' + esc(smtp.host) + '" placeholder="smtp.example.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '<label style="font-size:13px">端口<input id="smtp-port" value="' + esc(smtp.port) + '" placeholder="465" type="number" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '<label style="font-size:13px">用户名<input id="smtp-user" value="' + esc(smtp.user) + '" placeholder="your@email.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '<label style="font-size:13px">授权码<input id="smtp-pass" value="" type="password" placeholder="输入授权码" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '<label style="font-size:13px">发件人名称<input id="smtp-from" value="' + esc(smtp.from) + '" placeholder="无限牛马通知" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '</div><div style="padding:0 14px 12px"><button data-act="verify-smtp" class="btn-primary" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font:inherit;cursor:pointer">验证邮箱设置</button></div></div>' +
-        '<div class="card"><div class="card-title">邮件通知</div>' +
-        cellHtml('完成通知', state.notifyDone ? '✓' : '', 'notify-done') +
-        cellHtml('请求通知', state.notifyReq ? '✓' : '', 'notify-req') +
-        cellHtml('错误通知', state.notifyErr ? '✓' : '', 'notify-err') + '</div>';
+        '<label style="font-size:13px">' + esc(t('smtp.hostLabel')) + '<input id="smtp-host" value="' + esc(smtp.host) + '" placeholder="smtp.example.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">' + esc(t('smtp.portLabel')) + '<input id="smtp-port" value="' + esc(smtp.port) + '" placeholder="465" type="number" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">' + esc(t('smtp.userLabel')) + '<input id="smtp-user" value="' + esc(smtp.user) + '" placeholder="your@email.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">' + esc(t('smtp.passLabel')) + '<input id="smtp-pass" value="" type="password" placeholder="' + esc(t('smtp.passPlaceholder')) + '" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">' + esc(t('smtp.fromLabel')) + '<input id="smtp-from" value="' + esc(smtp.from) + '" placeholder="' + esc(t('smtp.fromPlaceholder')) + '" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '</div><div style="padding:0 14px 12px"><button data-act="verify-smtp" class="btn-primary" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font:inherit;cursor:pointer">' + esc(t('smtp.verifyBtn')) + '</button></div></div>' +
+        '<div class="card"><div class="card-title">' + esc(t('notify.title')) + '</div>' +
+        cellHtml(t('notify.done'), state.notifyDone ? '✓' : '', 'notify-done') +
+        cellHtml(t('notify.req'), state.notifyReq ? '✓' : '', 'notify-req') +
+        cellHtml(t('notify.err'), state.notifyErr ? '✓' : '', 'notify-err') + '</div>';
     } else if (group === 'mesh') {
       const mesh = state.mesh || { port: 7788, running: false, peers: 0 };
-      body = '<div class="card"><div class="card-title">多节点组网</div>' +
-        cellHtml('监听端口', String(mesh.port)) +
-        cellHtml('状态', mesh.running ? '运行中' : '未启动') +
-        cellHtml('已连接节点', String(mesh.peers)) +
-        '<div style="padding:10px 14px 12px"><button data-act="toggle-mesh" style="width:100%;padding:10px;border:none;border-radius:8px;background:' + (mesh.running ? 'var(--danger)' : 'var(--accent)') + ';color:#fff;font:inherit;cursor:pointer">' + (mesh.running ? '停止组网' : '启动组网') + '</button></div>' +
+      body = '<div class="card"><div class="card-title">' + esc(t('me.mesh')) + '</div>' +
+        cellHtml(t('mesh.portLabel'), String(mesh.port)) +
+        cellHtml(t('mesh.stateLabel'), mesh.running ? t('inst.status.running') : t('mesh.stopped')) +
+        cellHtml(t('mesh.peers'), String(mesh.peers)) +
+        '<div style="padding:10px 14px 12px"><button data-act="toggle-mesh" style="width:100%;padding:10px;border:none;border-radius:8px;background:' + (mesh.running ? 'var(--danger)' : 'var(--accent)') + ';color:#fff;font:inherit;cursor:pointer">' + (mesh.running ? t('mesh.stop') : t('mesh.start')) + '</button></div>' +
         '</div>' +
-        '<div class="card"><div class="card-title">邀请加入</div>' +
-        cellHtml('生成邀请码', '', 'gen-invite') +
-        cellHtml('扫码加入', '', 'scan-invite') + '</div>';
+        '<div class="card"><div class="card-title">' + esc(t('mesh.invite')) + '</div>' +
+        cellHtml(t('mesh.genInvite'), '', 'gen-invite') +
+        cellHtml(t('mesh.scanJoin'), '', 'scan-invite') + '</div>';
     } else {
       body = '<div class="card"><div class="card-title">' + esc(t('me.about')) + '</div>' +
         cellHtml(t('me.version'), 'v0.1.0') +
@@ -417,10 +474,10 @@
         cellHtml('Electron', '33.2.0') +
         cellHtml('Chromium', '130.0.6723.191') +
         cellHtml('Node.js', '24.20.0') + '</div>' +
-        '<div class="card"><div class="card-title">开源信息</div>' +
-        cellHtml('许可证', 'MIT') +
-        cellHtml('作者', 'Pondsi') +
-        cellHtml('版权', '© 2026 Pondsi') +
+        '<div class="card"><div class="card-title">' + esc(t('about.opensource')) + '</div>' +
+        cellHtml(t('about.license'), 'MIT') +
+        cellHtml(t('about.author'), 'Pondsi') +
+        cellHtml(t('about.copyright'), '© 2026 Pondsi') +
         cellHtml(t('me.deviceId'), '884024787') + '</div>';
     }
     const el = push(barHtml(map[group], '', { back: true }) + '<div class="body">' + body + '</div>');
@@ -454,7 +511,7 @@
         inp.click();
       },
       'verify-smtp': () => {
-        alert('SMTP 验证功能需要桌面端配合，手机端为外观预览。');
+        alert(t('msg.smtpDesktopOnly'));
       },
       'toggle-mesh': () => {
         state.mesh.running = !state.mesh.running;
@@ -464,15 +521,15 @@
       'notify-req': () => { state.notifyReq = !state.notifyReq; openSetting('smtp'); },
       'notify-err': () => { state.notifyErr = !state.notifyErr; openSetting('smtp'); },
       'add-provider': () => {
-        const name = prompt('供应商名称');
+        const name = prompt(t('prompt.providerName'));
         if (name) {
           state.providers.push({ name, url: '', key: '', configured: false });
           openSetting('provider');
         }
       },
-      'check-update': () => alert('当前已是最新版本 v0.1.0'),
-      'gen-invite': () => alert('邀请码已复制到剪贴板'),
-      'scan-invite': () => alert('请使用桌面端扫码功能'),
+      'check-update': () => alert(t('msg.latest') + ' v0.1.0'),
+      'gen-invite': () => alert(t('msg.inviteCopied')),
+      'scan-invite': () => alert(t('msg.scanOnDesktop')),
     });
     // 供应商编辑点击
     el.querySelectorAll('[data-edit-prov]').forEach((b) => {
@@ -574,8 +631,7 @@
     } catch (e) {
       // 初始化异常时直接把原因显示出来，避免整页空白
       document.body.innerHTML =
-        '<pre style="padding:16px;font-size:12px;color:#c00;white-space:pre-wrap">移动端初始化失败：' +
-        String((e && e.message) || e) + '</pre>';
+        '<pre style="padding:16px;font-size:12px;color:#c00;white-space:pre-wrap">' + esc(t('msg.initFailed')) + String((e && e.message) || e) + '</pre>';
     }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
