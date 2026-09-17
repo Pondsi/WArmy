@@ -579,6 +579,8 @@
       el.classList.toggle('active', el.dataset.nav === nav);
     });
     hideMain();
+    // 顶部横幅依赖「会话是否可见」，等同步流程走完（本函数各分支的 return）再重算
+    requestAnimationFrame(() => renderNetBanner());
 
     if (nav === 'settings' || nav === 'me') {
       $('app-body').classList.add('hide-list');
@@ -738,6 +740,38 @@
     return el;
   }
 
+  /** 列表行上的「身份变更待核实」常驻标记（附六：三个入口都能看到） */
+  function attachIdChangeMark(rowEl) {
+    if (!rowEl || rowEl.querySelector('.id-change-mark')) return rowEl;
+    const m = document.createElement('span');
+    m.className = 'id-change-mark';
+    m.setAttribute('data-idchg-mark', '1');
+    m.textContent = '! ' + t('idchg.pending');
+    m.title = t('idchg.title') + ' · ' + t('idchg.marker');
+    rowEl.appendChild(m);
+    return rowEl;
+  }
+
+  /**
+   * R12：停用（stopped）的牛马实例 → 整行灰 + 名字删除线（灰仍须可读，见 --ink-dim）。
+   * R11 在成员列表里，列表行这里只处理实例自身的停用态。
+   */
+  function applyInstanceRowState(rowEl, inst, sessionKind) {
+    if (!rowEl || !inst) return rowEl;
+    if (inst.status === 'stopped') {
+      rowEl.classList.add('is-disabled');
+      const nm = rowEl.querySelector('.name');
+      if (nm) nm.classList.add('struck');
+      const b = document.createElement('span');
+      b.className = 'row-badge off';
+      b.setAttribute('data-state', 'disabled');
+      b.textContent = t('group.memberDisabled');
+      rowEl.appendChild(b);
+    }
+    if (sessionKind && hasPendingIdChange(sessionKind, inst.id)) attachIdChangeMark(rowEl);
+    return rowEl;
+  }
+
   function renderList() {
     const q = ($('list-search').value || '').trim().toLowerCase();
     const box = $('list-body');
@@ -774,6 +808,7 @@
             setNav('singleAi');
             openChat('single', inst.id, inst.name);
           };
+          applyInstanceRowState(rowEl, inst, 'single');
           box.appendChild(rowEl);
         });
       return;
@@ -810,6 +845,7 @@
         );
         const menuInst = inst || { id: c.id, name: c.name, status: 'stopped', notify: true };
         bindRowContext(rowEl, () => agentMenu(menuInst, rowEl));
+        applyInstanceRowState(rowEl, inst, 'single');
         box.appendChild(rowEl);
       });
       return;
@@ -831,6 +867,7 @@
           state.selectedChat?.id === g.id
         );
         bindRowContext(rowEl, () => groupMenu(g, rowEl));
+        if (hasPendingIdChange(g.type === 'internal' ? 'internal' : 'extgroup', g.id)) attachIdChangeMark(rowEl);
         box.appendChild(rowEl);
       });
       return;
@@ -843,9 +880,9 @@
         return;
       }
       items.forEach((c) => {
-        box.appendChild(
-          row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('extdm', c.id, c.name), state.selectedChat?.id === c.id)
-        );
+        const rowEl = row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('extdm', c.id, c.name), state.selectedChat?.id === c.id);
+        if (hasPendingIdChange('extdm', c.id)) attachIdChangeMark(rowEl);
+        box.appendChild(rowEl);
       });
     }
   }
@@ -865,6 +902,8 @@
     renderList();
     updatePanelVisibility();
     renderModelMgr();
+    // 附六：「下次进该会话」要重新出现（关闭只是暂时隐藏）
+    void idRefreshForChat();
   }
 
   function renderChat() {
@@ -1743,6 +1782,31 @@
           <div class="muted" id="mesh-msg" style="margin-top:8px"></div>
           <div class="muted" id="mesh-inbox" style="margin-top:8px;max-height:100px;overflow:auto"></div>
         </div>
+        <!-- R8：公网地址（自动填入 / 手改 / 多域名）+ 检测 + 组网开关（检测通过才能打开） -->
+        <div class="set-section set-card" id="net-card">
+          <h2>${t('net.title')}</h2>
+          <p class="muted" style="margin:0 0 10px">${t('net.hint')}</p>
+          <div class="inst-row">
+            <div class="field"><label>${t('net.address')}</label><input id="net-ip" value="${escapeHtml(netState.addr.ip || '')}" placeholder="${escapeHtml(t('net.address'))}"/></div>
+            <div class="field" style="max-width:120px"><label>${t('net.port')}</label><input id="net-port" value="${escapeHtml(String(netState.addr.port || ''))}"/></div>
+            <button class="btn-mini" id="btn-net-autofill">${t('net.autofill')}</button>
+          </div>
+          <div class="muted" id="net-local-info" style="margin:6px 0"></div>
+          <div style="margin-top:6px">
+            <label class="net-sub-label">${t('net.domainTitle')}</label>
+            <div id="net-domains"></div>
+            <div style="margin-top:6px"><button class="btn-mini" id="btn-net-domain-add">${t('net.domainAdd')}</button></div>
+          </div>
+          <div class="inst-row" style="margin-top:10px;align-items:center">
+            <button class="btn-primary" id="btn-net-detect">${t('net.detect')}</button>
+            <div id="net-probe-result" style="flex:1;min-width:220px"></div>
+          </div>
+          <div class="net-switch-row">
+            <label class="net-switch"><input type="checkbox" id="net-switch" aria-label="${escapeHtml(t('net.switch'))}"/><span class="net-switch-track"></span></label>
+            <span class="net-switch-label">${t('net.switch')}</span>
+            <span class="muted" id="net-switch-msg"></span>
+          </div>
+        </div>
         <div class="set-section set-card">
           <h2>${t('ctx.archive')}</h2>
           <p class="muted">${t('archive.hint')}</p>
@@ -1899,6 +1963,7 @@
       renderThemeSwatches();
       renderSkillList();
       bindDiagnostics();
+      bindNetCard();
       document.querySelectorAll('.theme-swatches button').forEach((b) => {
         if (b.dataset.c === state.theme) b.classList.add('on');
         b.onclick = () => {
@@ -2245,6 +2310,1351 @@
       };
     }
   }
+  /* ══════════════════════════════════════════════════════════════════════
+   * 组网状态与身份变更横幅（ADR 003 R8–R12 / 附六）
+   * ----------------------------------------------------------------------
+   * 改这块之前先读这五条：
+   *
+   *  1) 这里**只做 UI 与判定**，不实现网络：一律走 window.ccarmy 的组网/身份 IPC。
+   *     该 IPC 还没落地（身份层并行开发中）时用**可注入的桩**顶替：
+   *       window.__ccarmyNetStub / window.__ccarmyIdentityStub
+   *     桩优先于真实 IPC（自动化才能压出各种状态）。两者都没有时如实显示
+   *     「组网层未就绪」，**不假装检测通过**。
+   *
+   *  2) R9 的迟滞判定在本文件里做，且写成纯函数 netStep()：连续 N 次心跳失败
+   *     **且**持续 M 秒才判「断链」→ 先出横幅 + 退避重试 → 重试 R 轮仍失败才
+   *     自动关组网。判定与关断分两步，就是为了不让开关反复自动开关。
+   *
+   *  3) R9（断链）与 R10（组网关了但存在异地成员）会同时发生，因此
+   *     netBannerModel() **只返回一个模型**；DOM 里恒只有一行
+   *     .bn-row[data-kind="net"]，不会出两条。
+   *
+   *  4) R11/R12 的置灰用 --ink-dim（对 --list-bg/--hover/--active-list 都 ≥ 3.0，
+   *     沿用项目已立的对比度硬规则），不是简单 opacity 变淡。验收脚本用真实
+   *     Chromium 读计算色复算对比度。
+   *
+   *  5) 附六的换证横幅：可折叠（保留常驻标记）或关闭（二次确认 + 审计），
+   *     但关闭只是「暂时隐藏」——下次进该会话 / 下次启动会重现，直到用户点
+   *     「已联系本人核实」。旧联系方式必须来自变更记录里的**旧名片快照**，
+   *     空值显示「未填写」占位，绝不表现为对方隐藏。
+   * ══════════════════════════════════════════════════════════════════════ */
+
+  const NET_DEFAULTS = {
+    port: 7788,
+    hysteresisFailures: 3, // 连续失败次数
+    hysteresisSeconds: 30, // 且持续这么久
+    retryRounds: 3, // 先重试几轮
+    backoffMs: [5000, 15000, 30000],
+    tickMs: 1000,
+  };
+
+  /**
+   * 迟滞/重试参数。window.__netTuning 只用于自动化把时间窗缩短
+   * （语义不变：仍是「连续 N 次 + 持续 M 秒」），运行期随时可注入。
+   */
+  function netTuning() {
+    const o = (typeof window !== 'undefined' && window.__netTuning) || {};
+    const n = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
+    return {
+      port: n(o.port, NET_DEFAULTS.port),
+      failures: n(o.hysteresisFailures, NET_DEFAULTS.hysteresisFailures),
+      seconds: n(o.hysteresisSeconds, NET_DEFAULTS.hysteresisSeconds),
+      rounds: n(o.retryRounds, NET_DEFAULTS.retryRounds),
+      backoff: Array.isArray(o.backoffMs) && o.backoffMs.length ? o.backoffMs.map(Number) : NET_DEFAULTS.backoffMs.slice(),
+      tickMs: n(o.tickMs, NET_DEFAULTS.tickMs),
+    };
+  }
+
+  /** 组网层 IPC：桩优先，其次真实 IPC，都没有则 null（= 未就绪） */
+  function netIpc(name, ...args) {
+    const stub = window.__ccarmyNetStub;
+    if (stub && typeof stub[name] === 'function') {
+      try { return Promise.resolve(stub[name](...args)); } catch (e) { return Promise.reject(e); }
+    }
+    const api = window.ccarmy && window.ccarmy[name];
+    if (typeof api === 'function') {
+      try { return Promise.resolve(api(...args)); } catch (e) { return Promise.reject(e); }
+    }
+    return Promise.resolve(null);
+  }
+
+  /** 身份层 IPC：同上（window.ccarmy.identity*） */
+  function idIpc(name, ...args) {
+    const stub = window.__ccarmyIdentityStub;
+    if (stub && typeof stub[name] === 'function') {
+      try { return Promise.resolve(stub[name](...args)); } catch (e) { return Promise.reject(e); }
+    }
+    const api = window.ccarmy && window.ccarmy[name];
+    if (typeof api === 'function') {
+      try { return Promise.resolve(api(...args)); } catch (e) { return Promise.reject(e); }
+    }
+    return Promise.resolve(null);
+  }
+
+  /** 带 {name} 变量的 i18n 文本 */
+  function fmtKey(k, vars) {
+    return String(t(k)).replace(/\{(\w+)\}/g, (m, name) => (vars && name in vars ? String(vars[name]) : m));
+  }
+
+  const netState = {
+    /** 组网开关 */
+    enabled: false,
+    /** 公网地址：1 个 IP + 多个域名（R8） */
+    addr: { ip: '', port: NET_DEFAULTS.port, domains: [] },
+    /** 最近一次检测结果 { verdict:'pass'|'fail'|'unknown', isPublic, outboundOk, method, at, code } */
+    probe: null,
+    probing: false,
+    /** 链接迟滞状态（netStep 的输入与输出） */
+    link: { fails: 0, downSince: 0, linkDown: false, round: 0, autoOff: false, nextRetryAt: 0 },
+    /** 最近一次采样：true=通 / false=失败 / null=未知（无 IPC，不计数） */
+    linkSample: null,
+    /** 自动关组网时留下的现场（用于横幅文案）；用户重新打开组网时清空 */
+    autoOffInfo: null,
+    /** 已手动关闭的提示签名（状态变化后签名改变，于是会重新提示） */
+    dismissed: {},
+    /** 组网「关闭」事件序号：让同一原因只弹一次，再次关闭时重新弹 */
+    meshOffSeq: 0,
+    /** 本地地址信息（自动填入用） */
+    local: null,
+    /** 异地成员总数（横幅用）与按群缓存的成员状态 */
+    remoteCount: 0,
+    presence: {},
+    /** 组网层是否就绪（有 netStatus/netProbe 之类的 IPC 才算） */
+    ready: null,
+    /** 渲染签名：相同就不重建 DOM（避免 1s 心跳把用户正在点的按钮刷掉） */
+    renderedSig: '',
+    booted: false,
+  };
+
+  /**
+   * 断链迟滞判定（纯函数：给定状态与一个事件，返回新状态）。
+   * 事件：
+   *   'heartbeat-failed' 一次心跳失败
+   *   'heartbeat-ok' / 'up' 恢复
+   *   'retry-tick' 重试时钟（只有到点才推进轮次）
+   * 规则：
+   *   - 连续 N 次失败 **且** downSince 起的持续时长 ≥ M 秒 → linkDown=true（先出横幅）
+   *   - linkDown 后每轮退避重试，重试 R 轮仍失败 → autoOff=true（这时才关组网）
+   *   - 任一成功样本 → 全部清零（不自动重开组网，开必须由用户手动且要重新检测）
+   */
+  function netStep(s, ev, cfg, now) {
+    const next = {
+      fails: s.fails,
+      downSince: s.downSince,
+      linkDown: s.linkDown,
+      round: s.round,
+      autoOff: s.autoOff,
+      nextRetryAt: s.nextRetryAt || 0,
+    };
+    if (ev.type === 'heartbeat-ok' || ev.type === 'up') {
+      next.fails = 0;
+      next.downSince = 0;
+      next.linkDown = false;
+      next.round = 0;
+      next.nextRetryAt = 0;
+      return next;
+    }
+    if (ev.type === 'heartbeat-failed') {
+      next.fails = s.fails + 1;
+      if (!next.downSince) next.downSince = now;
+      const lastedEnough = now - next.downSince >= cfg.seconds * 1000;
+      if (!next.linkDown && next.fails >= cfg.failures && lastedEnough) {
+        next.linkDown = true;
+        next.round = 0;
+        next.nextRetryAt = now + cfg.backoff[0];
+      }
+      return next;
+    }
+    if (ev.type === 'retry-tick') {
+      if (!next.linkDown || next.autoOff) return next;
+      if (now < next.nextRetryAt) return next;
+      next.round = s.round + 1;
+      if (next.round >= cfg.rounds) {
+        next.autoOff = true;
+        next.nextRetryAt = 0;
+      } else {
+        next.nextRetryAt = now + cfg.backoff[Math.min(next.round, cfg.backoff.length - 1)];
+      }
+      return next;
+    }
+    return next;
+  }
+
+  /** 推进链接状态机；'retry-tick' 之外的样本都走这里 */
+  function netLinkStep(ev, now) {
+    const prev = netState.link;
+    const next = netStep(prev, ev, netTuning(), now || Date.now());
+    const changed =
+      next.fails !== prev.fails ||
+      next.linkDown !== prev.linkDown ||
+      next.round !== prev.round ||
+      next.autoOff !== prev.autoOff ||
+      next.downSince !== prev.downSince ||
+      next.nextRetryAt !== prev.nextRetryAt;
+    netState.link = next;
+    if (next.autoOff && !prev.autoOff) void netAutoDisableMesh();
+    return changed;
+  }
+
+  /** 本地实例（成员可能是邀请来的人，没有实例） */
+  function localInstanceOf(member) {
+    const id = String(member.instanceId || member.id || member.name || '');
+    const nm = String(member.name || '');
+    return (state.instances || []).find((i) => i.id === id || i.name === nm) || null;
+  }
+
+  /** 成员三态 + 停用（R11/R12）：disabled 优先，其次组网关闭，再次异地离线 */
+  function memberVisual(groupId, member) {
+    const bag = netState.presence[groupId] || {};
+    const p = bag[String(member.id || member.name)] || bag[String(member.name)] || null;
+    const local = localInstanceOf(member);
+    const remote = !!(p && p.remote);
+    const localStopped = !!local && local.status === 'stopped';
+    const disabled = (p && p.disabled === true) || (!remote && localStopped);
+    const online = p && typeof p.online === 'boolean' ? p.online : !!(local && local.status === 'running');
+    let kind = 'normal';
+    if (disabled) kind = 'disabled';
+    else if (remote && !netState.enabled) kind = 'meshOff';
+    else if (remote && !online) kind = 'offline';
+    else if (remote) kind = 'remoteOnline';
+    return { kind, remote, disabled, online };
+  }
+
+  /** 实例是否异地：显式标记、或组网层在成员表里标过 */
+  function instanceIsRemote(inst) {
+    if (!inst) return false;
+    if (inst.remote === true) return true;
+    const stub = window.__ccarmyNetStub;
+    if (stub && Array.isArray(stub.remoteInstanceIds) && stub.remoteInstanceIds.includes(inst.id)) return true;
+    for (const gid of Object.keys(netState.presence)) {
+      const bag = netState.presence[gid] || {};
+      for (const k of Object.keys(bag)) {
+        const rec = bag[k];
+        if (rec && rec.remote && (k === inst.id || k === inst.name)) return true;
+      }
+    }
+    return false;
+  }
+
+  /** 地址格式校验（IP 或域名） */
+  function isValidHost(v) {
+    const s = String(v || '').trim();
+    if (!s || /\s/.test(s)) return false;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) return s.split('.').every((x) => Number(x) >= 0 && Number(x) <= 255);
+    if (s.includes(':')) return /^[0-9a-fA-F:]+$/.test(s); // IPv6
+    return /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/.test(s);
+  }
+
+  function parsePort(v) {
+    const n = Number(String(v ?? '').trim());
+    return Number.isInteger(n) && n >= 1 && n <= 65535 ? n : null;
+  }
+
+  /* ── R8：公网地址（自动填入 + 手改 + 多域名）与检测 ── */
+
+  /** 读取已保存的组网地址配置（走既有 settings IPC，不新开持久化通道） */
+  async function netLoadConfig() {
+    try {
+      const s = await window.ccarmy.settingsGet();
+      const saved = s && s.settings && s.settings.net;
+      if (saved && typeof saved === 'object') {
+        netState.addr.ip = String(saved.ip || '');
+        const p = parsePort(saved.port);
+        if (p) netState.addr.port = p;
+        netState.addr.domains = Array.isArray(saved.domains) ? saved.domains.map(String).filter(Boolean) : [];
+      }
+    } catch {
+      /* 预览桩/旧主进程没有该字段：保持默认 */
+    }
+    try {
+      const st = await netIpc('netStatus');
+      if (st && st.ok !== false && typeof st.meshEnabled === 'boolean') {
+        netState.enabled = st.meshEnabled;
+        netState.ready = true;
+      }
+    } catch {
+      /* noop */
+    }
+    if (netState.ready === null) {
+      // 退一步：既有 meshStatus（老 IPC）至少能给出「监听中」这一个事实
+      try {
+        const ms = await window.ccarmy.meshStatus();
+        if (ms && ms.ok !== false && typeof ms.listening === 'boolean') netState.enabled = ms.listening;
+      } catch {
+        /* noop */
+      }
+    }
+  }
+
+  /** 本机地址（自动填入的默认值） */
+  async function netFetchLocal() {
+    try {
+      const r = await netIpc('netLocalAddress');
+      if (r && r.ok !== false && (r.localIp || r.ip)) {
+        netState.local = { ip: String(r.localIp || r.ip), publicIp: String(r.publicIp || ''), behindNat: !!r.behindNat, port: parsePort(r.port) || null };
+      }
+    } catch {
+      /* noop */
+    }
+    return netState.local;
+  }
+
+  /** 自动填入：本机 IP + 默认端口（只在字段为空时覆盖，不打断用户手改） */
+  async function netAutofill(force) {
+    const loc = await netFetchLocal();
+    const tn = netTuning();
+    if (!netState.addr.ip || force) netState.addr.ip = (loc && loc.ip) || netState.addr.ip || '';
+    if (!netState.addr.port) netState.addr.port = (loc && loc.port) || tn.port;
+    return netState.addr;
+  }
+
+  function netPersist() {
+    window.ccarmy
+      .settingsSave({ net: { ip: netState.addr.ip, port: netState.addr.port, domains: netState.addr.domains } })
+      .catch(() => {});
+  }
+
+  /** 检测：判断是否公网地址 + 能否与外网连通（不通过就不能打开组网开关） */
+  async function netDetect() {
+    const ip = String(netState.addr.ip || '').trim();
+    const port = parsePort(netState.addr.port);
+    if (!isValidHost(ip)) return { ok: false, code: 'invalid-ip' };
+    if (!port) return { ok: false, code: 'invalid-port' };
+    netState.probing = true;
+    renderNetCard();
+    let r = null;
+    try {
+      r = await netIpc('netProbe', { ip, port, domains: netState.addr.domains.slice() });
+    } catch (e) {
+      r = { ok: false, errorCode: 'error', error: String(e && e.message) };
+    }
+    let probe;
+    if (!r || typeof r !== 'object') {
+      probe = { verdict: 'unknown', code: 'no-ipc', at: Date.now() };
+    } else if (r.ok === false && !('isPublic' in r) && !('outboundOk' in r)) {
+      probe = { verdict: 'unknown', code: r.errorCode || 'probe-error', at: Date.now() };
+    } else {
+      const isPublic = r.isPublic === true;
+      const outboundOk = r.outboundOk === true;
+      const lanOnly = r.lanOnly === true;
+      let verdict = 'fail';
+      let code = 'not-public';
+      if (outboundOk && isPublic) verdict = 'pass', code = 'public';
+      else if (outboundOk && lanOnly) verdict = 'pass', code = 'lan';
+      else if (!outboundOk) code = 'no-outbound';
+      probe = { verdict, code, isPublic, outboundOk, lanOnly, method: r.method || '', behindNat: !!r.behindNat, at: Date.now() };
+    }
+    netState.probing = false;
+    netState.probe = probe;
+    renderNetCard();
+    renderNetBanner();
+    return probe;
+  }
+
+  /** 组网开关（R8：检测通过才允许打开；R9：自动关闭走 opts.auto） */
+  async function netSetEnabled(on, opts) {
+    const tn = netTuning();
+    if (on && !(netState.probe && netState.probe.verdict === 'pass')) {
+      await uiAlert(t('net.result.needPass'), t('net.switch'));
+      return false;
+    }
+    let r = null;
+    try {
+      r = on
+        ? await netIpc('meshEnable', { ip: netState.addr.ip, port: netState.addr.port, domains: netState.addr.domains.slice() }) || (await window.ccarmy.meshStart(netState.addr.port))
+        : await netIpc('meshDisable') || (await window.ccarmy.meshStop());
+    } catch (e) {
+      r = { ok: false, error: String(e && e.message) };
+    }
+    if (r && r.ok === false) {
+      await uiAlert(fmtKey(on ? 'net.enableFailed' : 'net.disableFailed', { err: String(r.error || '') }));
+      return false;
+    }
+    const wasOn = netState.enabled;
+    netState.enabled = !!on;
+    netState.ready = true;
+    if (on) {
+      netState.autoOffInfo = null;
+      netState.link = { fails: 0, downSince: 0, linkDown: false, round: 0, autoOff: false, nextRetryAt: 0 };
+      netState.linkSample = null;
+    } else {
+      if (wasOn) netState.meshOffSeq += 1;
+      if (!opts || !opts.auto) netState.autoOffInfo = null;
+      netState.link = { fails: 0, downSince: 0, linkDown: false, round: 0, autoOff: false, nextRetryAt: 0 };
+      netState.linkSample = null;
+    }
+    netState.dismissed = {};
+    netPersist();
+    renderNetCard();
+    renderNetBanner();
+    return true;
+  }
+
+  /** R9：重试若干轮仍失败 → 自动关组网（并留下现场供横幅说明原因） */
+  async function netAutoDisableMesh() {
+    const l = netState.link;
+    netState.autoOffInfo = {
+      fails: l.fails,
+      secs: Math.max(0, Math.round((Date.now() - (l.downSince || Date.now())) / 1000)),
+      rounds: netTuning().rounds,
+    };
+    await netSetEnabled(false, { auto: true });
+  }
+
+  /** 采样一次链接状态（只有组网开着才采；没有 IPC 时返回 null，不计数、不误报） */
+  async function netPollOnce() {
+    if (!netState.enabled) return;
+    let st = null;
+    try {
+      st = await netIpc('netStatus');
+    } catch {
+      st = null;
+    }
+    if (!st || typeof st !== 'object') {
+      netState.linkSample = null;
+      return;
+    }
+    netState.ready = true;
+    const reachable = st.link && typeof st.link.reachable === 'boolean' ? st.link.reachable : null;
+    netState.linkSample = reachable;
+    if (typeof st.meshEnabled === 'boolean' && st.meshEnabled !== netState.enabled) {
+      netState.enabled = st.meshEnabled;
+      renderNetCard();
+    }
+  }
+
+  /** 1s 心跳：采样 → 迟滞推进 → 重试轮次 → 重渲染（幂等） */
+  async function netHeartbeatTick() {
+    const tn = netTuning();
+    const now = Date.now();
+    await netPollOnce();
+    if (netState.enabled && netState.linkSample !== null) {
+      netLinkStep(netState.linkSample ? { type: 'heartbeat-ok' } : { type: 'heartbeat-failed' }, now);
+    } else if (!netState.enabled && netState.link.linkDown) {
+      netLinkStep({ type: 'up' }, now);
+    }
+    if (netState.link.linkDown && !netState.link.autoOff) {
+      const next = netStep(netState.link, { type: 'retry-tick' }, tn, now);
+      if (next !== netState.link) netState.link = next;
+      // 轮次推进后到点即 autoOff
+      if (netState.link.autoOff) void netAutoDisableMesh();
+    }
+    renderNetBanner();
+  }
+
+  /** 成员在线/异地/停用状态（R11）：按群刷新，供成员列表与横幅用 */
+  async function netRefreshPresence() {
+    const ids = [];
+    (state.groups || []).forEach((g) => ids.push(g.id));
+    if (state.selectedChat && !ids.includes(state.selectedChat.id)) ids.push(state.selectedChat.id);
+    for (const gid of ids) {
+      let r = null;
+      try {
+        r = await netIpc('netMembersPresence', { groupId: gid });
+      } catch {
+        r = null;
+      }
+      if (!r || typeof r !== 'object' || !Array.isArray(r.members)) continue;
+      const bag = {};
+      r.members.forEach((m) => {
+        const key = String(m.id || m.name || '');
+        if (!key) return;
+        bag[key] = { remote: !!m.remote, online: m.online !== false, disabled: !!m.disabled };
+        if (m.name) bag[String(m.name)] = bag[key]; // 成员表里 id 与显示名都可能被用来查
+      });
+      netState.presence[gid] = bag;
+    }
+    // 去重：同一个异地成员可能同时以 id 与 name 存在 bag 里，只算一次
+    const remoteKeys = new Set();
+    Object.keys(netState.presence).forEach((gid) => {
+      const bag = netState.presence[gid] || {};
+      Object.keys(bag).forEach((k) => {
+        if (!bag[k] || !bag[k].remote) return;
+        const inst = (state.instances || []).find((i) => i.id === k || i.name === k);
+        remoteKeys.add(inst ? inst.id : k);
+      });
+    });
+    netState.remoteCount = remoteKeys.size;
+    return netState.remoteCount;
+  }
+
+  /* ── 顶部横幅：断链 / 组网关闭（合并成一条）+ 身份变更（附六） ── */
+
+  /**
+   * R9 + R10 合并后的**单一**模型。返回 null = 不出组网横幅。
+   * DOM 里恒只有一行 .bn-row[data-kind="net"]，所以不会同时出现两条。
+   */
+  function netBannerModel() {
+    const tn = netTuning();
+    const l = netState.link;
+    const info = netState.autoOffInfo;
+    // ① 组网已关（含断链自动关）：只要有异地成员或刚自动关过，就出这一条
+    if (!netState.enabled && (info || netState.remoteCount > 0)) {
+      const sig = 'meshoff:' + netState.meshOffSeq;
+      if (netState.dismissed[sig]) return null;
+      const affected = netState.remoteCount;
+      const impact = affected > 0 ? fmtKey('net.banner.meshOffBody', { n: affected }) : '';
+      return {
+        sig,
+        tone: info ? 'danger' : 'warn',
+        title: info ? fmtKey('net.banner.mergedTitle', { n: affected }) : t('net.banner.meshOffTitle'),
+        body: info
+          ? [fmtKey('net.banner.mergedBody', { fails: info.fails, secs: info.secs, rounds: info.rounds }), impact].filter(Boolean).join(' ')
+          : impact,
+        showTurnOn: true,
+      };
+    }
+    // ② 仍在重试的断链：先提示（还没关组网）
+    if (l.linkDown) {
+      const sig = 'link:' + (l.downSince || 0);
+      if (netState.dismissed[sig]) return null;
+      const secs = Math.max(0, Math.round((Date.now() - (l.downSince || Date.now())) / 1000));
+      const after = Math.max(0, Math.round(((l.nextRetryAt || Date.now()) - Date.now()) / 1000));
+      const impact = netState.remoteCount > 0 ? fmtKey('net.banner.meshOffBody', { n: netState.remoteCount }) : '';
+      return {
+        sig,
+        tone: 'warn',
+        title: t('net.banner.linkTitle'),
+        body: [
+          fmtKey('net.banner.linkBody', {
+            fails: l.fails,
+            secs,
+            round: Math.min(l.round + 1, tn.rounds),
+            rounds: tn.rounds,
+            after,
+          }),
+          impact,
+        ]
+          .filter(Boolean)
+          .join(' '),
+        showTurnOn: false,
+      };
+    }
+    return null;
+  }
+
+  const BN_ICON = {
+    warn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 1 21h22L12 2zm0 5 7.5 12h-15L12 7zm-1 4h2v5h-2v-5zm0 6h2v2h-2v-2z"/></svg>',
+    danger: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 1 21h22L12 2zm-1 7h2v7h-2V9zm0 8h2v2h-2v-2z"/></svg>',
+  };
+
+  function bnHidden(cid) {
+    return !!idchgState.dismissedLocal[cid];
+  }
+
+  const idchgState = {
+    changes: [],
+    collapsed: {},
+    /** 关闭只是暂时隐藏：本次页面存活期内不显示，重进会话/重启会重现 */
+    dismissedLocal: {},
+    /** 「已联系本人核实」成功后的本地镜像 */
+    verifiedLocal: {},
+    /** 「采用新联系方式」成功后的本地镜像 */
+    adoptedLocal: {},
+    ready: null,
+    loadedAt: 0,
+  };
+
+  /* ── 附六（冻结规则）：联系方式的两份来源与 7 天冻结期 ──
+   *  历史留存卡（historicalContactCard）：这个人当初加入群/项目/加联系人时，
+   *    **本机**存下来的那份名片 —— 横幅里的「旧值」只能来自这里，
+   *    不能从换证声明里取（声明不含联系方式）。
+   *  新提交卡（newContactCard）：换证时对方新提交的，可能为空。
+   *  冻结期：收到提醒后 7 天内本机**不得**把联系方式更新为新值；到期后也**不自动**
+   *    采用，必须用户手动确认（否则攻击者只要等 7 天就能得手，冷却期形同虚设）。
+   */
+  const IDCHG_DEFAULTS = { freezeMs: 7 * 24 * 60 * 60 * 1000 };
+
+  function idchgTuning() {
+    const o = (typeof window !== 'undefined' && window.__idchgTuning) || {};
+    const n = Number(o.freezeMs);
+    return { freezeMs: Number.isFinite(n) && n >= 0 ? n : IDCHG_DEFAULTS.freezeMs };
+  }
+
+  function idHistoryCard(c) {
+    if (c && c.historicalContactCard) return c.historicalContactCard;
+    if (c && c.previousCard) return c.previousCard; // 身份层的 PeerContactView 字段名
+    if (c && c.storedCard) return c.storedCard; // 身份层的 PeerContactState 字段名
+    if (c && c.oldCard) return c.oldCard; // 兼容早期字段名
+    return null;
+  }
+
+  function idNewCard(c) {
+    return (c && (c.newContactCard || c.pendingCard || c.newCard)) || null;
+  }
+
+  /**
+   * 联系方式决策。以身份层给的字段为准（contactDecision / contactFreezeUntil /
+   * receivedAt / remainingMs / frozen），缺省按「收到提醒的时刻 + 7 天」推算。
+   * ⚠️ 冻结期结束后**不自动采用**新值：本机仍然显示历史留存值，直到用户手动确认
+   *    （父任务冻结规则；身份层的 peerContactSettle 会在到期时把 pending 提升为
+   *     storedCard —— 那是存储层的行为，UI 这边一律要求显式确认）。
+   */
+  function idContactDecision(c) {
+    const d = (c && c.contactDecision) || {};
+    const id = String((c && c.id) || '');
+    const adopted = !!idchgState.adoptedLocal[id] || d.state === 'adopted' || !!d.adoptedAt || !!(c && c.cardAdopted);
+    const now = Date.now();
+    let frozenUntil = Number(d.frozenUntil) || Number(c && c.contactFreezeUntil) || 0;
+    if (!frozenUntil) {
+      const start = Number(c && (c.receivedAt || c.ts)) || now;
+      frozenUntil = start + idchgTuning().freezeMs;
+    }
+    let msLeft = Math.max(0, frozenUntil - now);
+    const hasRemaining = !!(c && typeof c.remainingMs === 'number');
+    if (hasRemaining) msLeft = Math.max(0, Number(c.remainingMs));
+    const frozenFlag = hasRemaining ? Number(c.remainingMs) > 0 : now < frozenUntil;
+    const frozen = !adopted && (!!(c && c.frozen === true) || frozenFlag);
+    return { adopted, frozenUntil, frozen, msLeft };
+  }
+
+  /** 身份变更（附六）：待核实 + 属于当前会话（或未指定范围） */
+  function idChangePending(c) {
+    if (!c) return false;
+    if (idchgState.verifiedLocal[String(c.id)]) return false;
+    return !(c.ack && c.ack.verifiedAt);
+  }
+
+  function idScopesOf(c) {
+    if (Array.isArray(c && c.scopes)) return c.scopes;
+    if (c && c.scope) return [c.scope];
+    return [];
+  }
+
+  function sessionScopeKind(kind) {
+    if (kind === 'internal') return 'internal';
+    if (kind === 'extgroup') return 'external';
+    if (kind === 'extdm') return 'extdm';
+    return '';
+  }
+
+  /** 该变更是否落在某个会话（群聊 / 项目 / 联系人）上；范围为空视为三处都出 */
+  function idMatches(c, kind, id) {
+    const scopes = idScopesOf(c);
+    if (!scopes.length) return true;
+    const sk = sessionScopeKind(kind);
+    return scopes.some((s) => s && (s.kind === 'all' || s.kind === sk) && (!s.id || String(s.id) === String(id)));
+  }
+
+  function idForSession(sel) {
+    if (!sel) return [];
+    return idchgState.changes.filter((c) => idChangePending(c) && idMatches(c, sel.kind, sel.id));
+  }
+
+  /** 列表行上的常驻标记：不打开会话也能看到「这里有身份变更待核实」 */
+  function hasPendingIdChange(kind, id) {
+    return idchgState.changes.some((c) => idChangePending(c) && idMatches(c, kind, id));
+  }
+
+  async function idLoadChanges() {
+    let r;
+    try {
+      r = await idIpc('identityChanges', { scope: 'all' });
+    } catch {
+      r = null;
+    }
+    if (r === null || typeof r !== 'object') {
+      idchgState.ready = false; // 身份层未就绪：不显示、也不假装没有变更
+      idchgState.changes = [];
+    } else if (r.ok !== false && Array.isArray(r.changes)) {
+      idchgState.ready = true;
+      idchgState.changes = r.changes;
+    } else if (r.ok === false) {
+      idchgState.ready = false;
+      idchgState.changes = [];
+    } else {
+      idchgState.ready = true;
+      idchgState.changes = [];
+    }
+    idchgState.loadedAt = Date.now();
+    return idchgState.changes;
+  }
+
+  const SCOPE_LABEL = { internal: 'idchg.scope.internal', external: 'idchg.scope.external', extdm: 'idchg.scope.extdm' };
+
+  function scopeLabelOf(c) {
+    const scopes = idScopesOf(c);
+    if (!scopes.length) return '';
+    return scopes
+      .map((s) => (s.kind === 'all' ? '' : t(SCOPE_LABEL[s.kind] || 'idchg.scope.internal')))
+      .filter(Boolean)
+      .join(' / ');
+  }
+
+  /** 联系方式取值：空值一律显示「未填写」占位（不得表现为对方隐藏） */
+  function cardValueWith(v, placeholderKey) {
+    const s = String(v == null ? '' : v).trim();
+    if (!s) return '<span class="id-v id-val-empty" data-empty="1">' + escapeHtml(t(placeholderKey || 'idchg.empty')) + '</span>';
+    return '<span class="id-v">' + escapeHtml(s) + '</span>';
+  }
+
+  function cardValue(v) {
+    return cardValueWith(v, 'idchg.empty');
+  }
+
+  function idTagHtml(textKey, cls) {
+    return '<span class="id-tag ' + cls + '" data-tag="' + cls + '">' + escapeHtml(t(textKey)) + '</span>';
+  }
+
+  /**
+   * 附六：历史留存卡 / 新提交卡并排 + 冻结期说明。
+   *  - 历史卡缺失 → 如实说「本机无历史联系方式」（不是留空让对方以为「他没写」）；
+   *  - 新卡为空 → 「未填写」占位；
+   *  - 两者不一致 → 明确提示「联系方式已变化，请自行核实」。
+   */
+  function idContactCardsHtml(c) {
+    const hist = idHistoryCard(c);
+    const nw = idNewCard(c);
+    const dec = idContactDecision(c);
+    const histHtml = hist
+      ? '<div class="id-card" data-card="history">' +
+        '<div class="id-card-h">' + escapeHtml(t('idchg.histTitle')) + idTagHtml('idchg.cardHistoryTag', 'hist') + '</div>' +
+        '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.email')) + '</span>' + cardValue(hist.email) + '</div>' +
+        '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.phone')) + '</span>' + cardValue(hist.phone) + '</div>' +
+        (hist.capturedAt
+          ? '<div class="bn-hint">' + escapeHtml(fmtKey('idchg.historyCapturedAt', { t: new Date(hist.capturedAt).toLocaleString() })) + '</div>'
+          : '') +
+        '</div>'
+      : '<div class="id-card" data-card="history" data-empty-history="1">' +
+        '<div class="id-card-h">' + escapeHtml(t('idchg.histTitle')) + idTagHtml('idchg.cardHistoryTag', 'hist') + '</div>' +
+        '<div class="id-nohistory">' + escapeHtml(t('idchg.noHistory')) + '</div>' +
+        '<div class="bn-hint">' + escapeHtml(t('idchg.noHistoryHint')) + '</div>' +
+        '</div>';
+    const nwEmpty = !String((nw && nw.email) || '').trim() && !String((nw && nw.phone) || '').trim();
+    const newHtml =
+      '<div class="id-card" data-card="new">' +
+      '<div class="id-card-h">' + escapeHtml(t('idchg.newTitle')) + idTagHtml('idchg.cardNewTag', 'pending') + '</div>' +
+      '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.email')) + '</span>' + cardValue(nw && nw.email) + '</div>' +
+      '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.phone')) + '</span>' + cardValue(nw && nw.phone) + '</div>' +
+      (nw && nw.submittedAt
+        ? '<div class="bn-hint">' + escapeHtml(fmtKey('idchg.newSubmittedAt', { t: new Date(nw.submittedAt).toLocaleString() })) + '</div>'
+        : '') +
+      (nwEmpty ? '<div class="bn-hint">' + escapeHtml(t('idchg.newEmptyHint')) + '</div>' : '') +
+      '</div>';
+    const changed =
+      !!hist && !!nw && (String(hist.email || '') !== String(nw.email || '') || String(hist.phone || '') !== String(nw.phone || ''));
+    const days = Math.floor(dec.msLeft / 86400000);
+    const hours = Math.floor((dec.msLeft % 86400000) / 3600000);
+    const freezeText = dec.adopted
+      ? t('idchg.adopted')
+      : dec.frozen
+        ? fmtKey('idchg.freeze', { days, hours })
+        : t('idchg.freezeOver');
+    const nowText = hist
+      ? fmtKey('idchg.contactNowIs', { v: [hist.email, hist.phone].filter((x) => String(x || '').trim()).join(' / ') || t('idchg.empty') })
+      : '';
+    return (
+      '<div class="id-cards">' + histHtml + newHtml + '</div>' +
+      (changed ? '<div class="bn-hint id-contact-warn" data-changed="1">' + escapeHtml(t('idchg.contactChanged')) + '</div>' : '') +
+      (nowText ? '<div class="bn-hint">' + escapeHtml(nowText) + '</div>' : '') +
+      '<div class="bn-hint id-freeze" data-freeze="' + (dec.frozen ? '1' : '0') + '" data-adopted="' + (dec.adopted ? '1' : '0') + '">' +
+      escapeHtml(freezeText) +
+      '</div>'
+    );
+  }
+
+  function idChangeItemHtml(c) {
+    const cid = escapeHtml(String(c.id));
+    const collapsed = !!idchgState.collapsed[String(c.id)];
+    const at = c.ts ? new Date(c.ts).toLocaleString() : '—';
+    const reasonKey = c.reason === 'compromised' ? 'idchg.reason.compromised' : c.reason === 'rotate' ? 'idchg.reason.rotate' : '';
+    const hist = idHistoryCard(c);
+    const dec = idContactDecision(c);
+    // 折叠时只留常驻标记 + 一行历史值摘要（历史留存值才是本机当前认的那份）
+    const summary =
+      t('idchg.oldEmail') + ' ' + (hist ? String(hist.email || '').trim() || t('idchg.empty') : t('idchg.noHistory')) + ' · ' +
+      t('idchg.oldPhone') + ' ' + (hist ? String(hist.phone || '').trim() || t('idchg.empty') : t('idchg.noHistory'));
+    return (
+      '<div class="id-item' + (collapsed ? ' is-collapsed' : '') + '" data-cid="' + cid + '">' +
+      '<div class="id-head">' +
+      '<span class="id-title">' + escapeHtml(fmtKey('idchg.titleNamed', { name: c.subjectName || c.subjectId || '—' })) + '</span>' +
+      '<span class="id-pending">' + escapeHtml(t('idchg.pending')) + '</span>' +
+      (scopeLabelOf(c) ? '<span class="id-scope">' + escapeHtml(scopeLabelOf(c)) + '</span>' : '') +
+      (c.generation ? '<span class="id-gen">' + escapeHtml(fmtKey('idchg.generation', { n: c.generation })) + '</span>' : '') +
+      '</div>' +
+      '<div class="id-summary">' + escapeHtml(summary) + '</div>' +
+      '<div class="id-detail">' +
+      '<div class="bn-body">' +
+      escapeHtml(
+        fmtKey('idchg.body', {
+          old: c.oldFingerprint || '—',
+          new: c.newFingerprint || '—',
+          gen: c.generation || '—',
+          at,
+        })
+      ) +
+      '</div>' +
+      idContactCardsHtml(c) +
+      '<div class="bn-hint">' + escapeHtml(t('idchg.emptyHint')) + '</div>' +
+      (reasonKey ? '<div class="bn-hint">' + escapeHtml(t('idchg.reason')) + ': ' + escapeHtml(t(reasonKey)) + '</div>' : '') +
+      '</div>' +
+      '<div class="bn-actions">' +
+      '<button class="btn-mini" data-bn="idCollapse" data-cid="' + cid + '">' +
+      escapeHtml(collapsed ? t('idchg.expand') : t('idchg.collapse')) +
+      '</button>' +
+      '<button class="btn-mini" data-bn="idAdopt" data-cid="' + cid + '"' + (dec.frozen || dec.adopted ? ' disabled' : '') +
+      ' title="' + escapeHtml(dec.frozen ? t('idchg.adoptFrozen') : t('idchg.adopt')) + '">' + escapeHtml(t('idchg.adopt')) + '</button>' +
+      '<button class="btn-mini" data-bn="idDismiss" data-cid="' + cid + '">' + escapeHtml(t('idchg.dismiss')) + '</button>' +
+      '<button class="btn-primary" data-bn="idVerify" data-cid="' + cid + '" title="' + escapeHtml(t('idchg.verifiedHint')) + '">' +
+      escapeHtml(t('idchg.verified')) +
+      '</button>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  /** 当前会话的身份变更行（三处：项目 / 群聊 / 联系人） */
+  function idRowModel() {
+    const sel = state.selectedChat;
+    if (!sel) return null;
+    // 会话没显示出来时（例如在设置页）不出这条：列表行上的常驻标记仍然可见
+    const chat = $('chat-layout');
+    if (chat && chat.classList.contains('hidden')) return null;
+    const all = idForSession(sel);
+    if (!all.length) return null;
+    const visible = all.filter((c) => !bnHidden(String(c.id)));
+    const markerOnly = visible.length === 0;
+    const collapsedAll = !markerOnly && visible.every((c) => idchgState.collapsed[String(c.id)]);
+    return { all, visible, markerOnly, collapsedAll, total: all.length };
+  }
+
+  function renderNetBanner() {
+    const host = $('net-banner');
+    if (!host) return;
+    const netRow = netBannerModel();
+    const idRow = idRowModel();
+    const sig = JSON.stringify([
+      netRow ? [netRow.sig, netRow.title, netRow.body, netRow.tone, netRow.showTurnOn] : null,
+      idRow ? [idRow.total, idRow.markerOnly, idRow.collapsedAll, idRow.all.map((c) => String(c.id))] : null,
+      state.selectedChat ? state.selectedChat.id : '',
+    ]);
+    if (sig === netState.renderedSig) return;
+    netState.renderedSig = sig;
+
+    const rows = [];
+    if (netRow) {
+      rows.push(
+        '<div class="bn-row net-row tone-' + netRow.tone + '" data-kind="net" data-sig="' + escapeHtml(netRow.sig) + '">' +
+          '<span class="bn-ico">' + BN_ICON[netRow.tone] + '</span>' +
+          '<div class="bn-main">' +
+          '<div class="bn-title">' + escapeHtml(netRow.title) + '</div>' +
+          '<div class="bn-body">' + escapeHtml(netRow.body) + '</div>' +
+          (netRow.tone === 'danger' ? '<div class="bn-body">' + escapeHtml(t('net.banner.autoOff')) + '</div>' : '') +
+          '<div class="bn-actions">' +
+          (netRow.showTurnOn
+            ? '<button class="btn-mini" data-bn="turnOn">' + escapeHtml(t('net.banner.turnOn')) + '</button>'
+            : '') +
+          '<button class="btn-mini" data-bn="netDismiss" data-sig="' + escapeHtml(netRow.sig) + '">' + escapeHtml(t('net.banner.close')) + '</button>' +
+          '<span class="bn-hint">' + escapeHtml(t('net.banner.dismissHint')) + '</span>' +
+          '</div>' +
+          '</div>' +
+          '<button class="bn-x" data-bn="netDismiss" data-sig="' + escapeHtml(netRow.sig) + '" title="' + escapeHtml(t('net.banner.close')) + '">×</button>' +
+          '</div>'
+      );
+    }
+    if (idRow) {
+      const items = idRow.markerOnly
+        ? '<div class="bn-hint">' + escapeHtml(t('idchg.audited') + ' · ' + t('idchg.marker')) + '</div>'
+        : idRow.visible.map(idChangeItemHtml).join('');
+      rows.push(
+        '<div class="bn-row id-row" data-kind="idchg" data-marker="' + (idRow.markerOnly ? '1' : '0') + '">' +
+          '<span class="bn-ico">' + BN_ICON.danger + '</span>' +
+          '<div class="bn-main">' +
+          '<div class="bn-head">' +
+          '<span class="bn-title">' + escapeHtml(t('idchg.title')) + '</span>' +
+          '<span class="id-marker" data-marker="1">' + escapeHtml(t('idchg.marker')) + ' · ' + idRow.total + '</span>' +
+          '</div>' +
+          items +
+          (idRow.markerOnly
+            ? '<div class="bn-actions"><button class="btn-mini" data-bn="idExpandAll">' + escapeHtml(t('idchg.expand')) + '</button></div>'
+            : '') +
+          '</div>' +
+          '</div>'
+      );
+    }
+
+    host.innerHTML = rows.join('');
+    const any = rows.length > 0;
+    host.classList.toggle('hidden', !any);
+    const main = $('main-col');
+    if (main) main.classList.toggle('has-banner', any);
+    requestAnimationFrame(() => {
+      const h = any ? host.offsetHeight : 0;
+      document.documentElement.style.setProperty('--banner-h', h + 'px');
+    });
+  }
+
+  function bindBannerHost() {
+    const host = $('net-banner');
+    if (!host || host.dataset.bound === '1') return;
+    host.dataset.bound = '1';
+    host.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-bn]');
+      if (!btn) return;
+      const act = btn.dataset.bn;
+      if (act === 'netDismiss') {
+        netState.dismissed[btn.dataset.sig] = true;
+        netState.renderedSig = '';
+        renderNetBanner();
+        return;
+      }
+      if (act === 'turnOn') {
+        netState.autoOffInfo = null;
+        netState.dismissed = {};
+        if (netState.probe && netState.probe.verdict === 'pass') await netSetEnabled(true);
+        else gotoNetSettings();
+        netState.renderedSig = '';
+        renderNetBanner();
+        return;
+      }
+      const cid = btn.dataset.cid;
+      if (act === 'idCollapse') {
+        idchgState.collapsed[cid] = !idchgState.collapsed[cid];
+      } else if (act === 'idExpandAll') {
+        idchgState.dismissedLocal = {};
+        Object.keys(idchgState.collapsed).forEach((k) => { idchgState.collapsed[k] = false; });
+      } else if (act === 'idAdopt') {
+        // 冻结期内禁止；冻结期后也**不自动**采用，必须用户手动确认
+        const ch = idchgState.changes.find((x) => String(x.id) === cid);
+        const dec = idContactDecision(ch);
+        if (dec.frozen) {
+          await uiAlert(t('idchg.adoptFrozen'), t('idchg.adopt'));
+          return;
+        }
+        if (dec.adopted) return;
+        const goAdopt = await uiConfirm(t('idchg.adoptConfirm'), t('idchg.adopt'));
+        if (!goAdopt) return;
+        let ra = null;
+        try {
+          ra = await idIpc('identityContactAdopt', { changeId: cid });
+        } catch {
+          ra = null;
+        }
+        if (ra === null) {
+          // 身份层真实形状是「按指纹手动确认采用对方的新名片」（ccarmy:identity-peer-confirm）
+          const fp = String((ch && (ch.newFingerprint || ch.fingerprint)) || '');
+          if (fp) {
+            try {
+              ra = await idIpc('identityPeerConfirm', fp);
+            } catch {
+              ra = null;
+            }
+          }
+        }
+        if (!ra || ra.ok === false) {
+          await uiAlert(t('idchg.adoptFailed'), t('idchg.adopt'));
+          return;
+        }
+        idchgState.adoptedLocal[cid] = true;
+      } else if (act === 'idDismiss') {
+        // 「不得被随意关闭」：二次确认 + 记审计；且只是暂时隐藏
+        const go = await uiConfirmCountdown(t('idchg.dismissConfirm'), t('idchg.dismissTitle'), 3);
+        if (!go) return;
+        let r = null;
+        try {
+          r = await idIpc('identityChangeAcknowledge', { changeId: cid, level: 'dismiss' });
+        } catch {
+          r = null;
+        }
+        if (!r || r.ok === false) {
+          await uiAlert(t('idchg.auditFailed'), t('idchg.dismissTitle'));
+          return;
+        }
+        idchgState.dismissedLocal[cid] = true;
+        idchgState.collapsed[cid] = false;
+      } else if (act === 'idVerify') {
+        const go = await uiConfirm(t('idchg.verifyConfirm'), t('idchg.verified'));
+        if (!go) return;
+        let r = null;
+        try {
+          r = await idIpc('identityChangeAcknowledge', { changeId: cid, level: 'verified' });
+        } catch {
+          r = null;
+        }
+        if (!r || r.ok === false) {
+          await uiAlert(t('idchg.verifyFailed'), t('idchg.verified'));
+          return;
+        }
+        idchgState.verifiedLocal[cid] = true;
+        delete idchgState.dismissedLocal[cid];
+      }
+      netState.renderedSig = '';
+      renderNetBanner();
+    });
+  }
+
+  /* ── R8 的设置卡片：渲染 / 绑定 / 跳转 ── */
+
+  /** 检测结论 → 文案 + 样式 */
+  function netProbeView() {
+    const p = netState.probe;
+    if (netState.probing) return { text: t('net.detecting'), cls: '' };
+    if (!p) return { text: '', cls: '' };
+    if (p.verdict === 'pass') return { text: t(p.code === 'lan' ? 'net.result.passLan' : 'net.result.pass'), cls: 'net-ok' };
+    if (p.code === 'no-ipc' || p.code === 'probe-error') return { text: t('net.result.unknown'), cls: 'net-bad' };
+    if (p.code === 'no-outbound') return { text: t('net.result.failOutbound'), cls: 'net-bad' };
+    return { text: t('net.result.failPublic'), cls: 'net-bad' };
+  }
+
+  function renderNetCard() {
+    if (!$('net-card')) return;
+    renderNetDomains();
+    renderNetProbeState();
+  }
+
+  /** 域名列表（1 个 IP + 多个域名）。只在需要重建行时调用，输入过程中不重建（会打断输入） */
+  function renderNetDomains() {
+    if (!$('net-card')) return;
+    const box = $('net-domains');
+    if (!box) return;
+    box.innerHTML = netState.addr.domains.length
+      ? netState.addr.domains
+          .map(
+            (d, i) =>
+              '<div class="net-domain-row" data-di="' + i + '">' +
+              '<input class="net-domain-input" data-di="' + i + '" value="' + escapeHtml(d) + '" placeholder="' +
+              escapeHtml(t('net.domainPlaceholder')) + '"/>' +
+              '<button class="btn-mini" data-domain-del="' + i + '">' + escapeHtml(t('net.domainRemove')) + '</button>' +
+              '</div>'
+          )
+          .join('')
+      : '<div class="muted">' + escapeHtml(t('net.domainTitle')) + '</div>';
+    box.querySelectorAll('[data-domain-del]').forEach((b) => {
+      b.onclick = () => {
+        netState.addr.domains.splice(Number(b.dataset.domainDel), 1);
+        netPersist();
+        renderNetCard();
+      };
+    });
+    box.querySelectorAll('input.net-domain-input').forEach((inp) => {
+      inp.onchange = () => {
+        const i = Number(inp.dataset.di);
+        const v = String(inp.value || '').trim();
+        if (!v || !isValidHost(v)) {
+          inp.classList.add('net-invalid');
+          return;
+        }
+        inp.classList.remove('net-invalid');
+        netState.addr.domains[i] = v;
+        netPersist();
+        netInvalidateProbe(); // 地址集合变了：旧检测结论作废
+      };
+    });
+  }
+
+  /** 检测结论 + 开关（地址被改动时只刷这一块，不动输入框） */
+  function renderNetProbeState() {
+    if (!$('net-card')) return;
+    const tn = netTuning();
+    const res = $('net-probe-result');
+    if (res) {
+      const v = netProbeView();
+      const p = netState.probe;
+      const details = [];
+      if (p && p.at) details.push(fmtKey('net.result.at', { t: new Date(p.at).toLocaleString() }));
+      if (p && p.method) details.push(fmtKey('net.result.method', { m: p.method }));
+      if (p && p.behindNat) details.push(t('net.result.behindNat'));
+      res.innerHTML =
+        (v.text ? '<div class="net-probe-line ' + v.cls + '">' + escapeHtml(v.text) + '</div>' : '') +
+        (details.length ? '<div class="muted">' + escapeHtml(details.join(' · ')) + '</div>' : '');
+    }
+    const pass = !!(netState.probe && netState.probe.verdict === 'pass');
+    const sw = $('net-switch');
+    if (sw) {
+      sw.checked = !!netState.enabled;
+      sw.disabled = !netState.enabled && !pass;
+      sw.title = pass || netState.enabled ? t('net.switch') : t('net.result.needPass');
+    }
+    const msg = $('net-switch-msg');
+    if (msg) {
+      msg.textContent = netState.enabled
+        ? fmtKey('net.switchOn', { port: netState.addr.port || tn.port })
+        : netState.probe
+          ? pass
+            ? t('net.switchOff')
+            : t('net.switchBlocked')
+          : t('net.switchNeedDetect');
+    }
+    const info = $('net-local-info');
+    if (info) {
+      const loc = netState.local;
+      info.textContent = loc
+        ? t('net.localIp') + ': ' + loc.ip + (loc.publicIp ? ' · ' + t('net.publicIp') + ': ' + loc.publicIp : '')
+        : '';
+    }
+  }
+
+  /**
+   * 地址被改动 → 上一次检测结论不再代表当前地址，必须重新检测。
+   * 否则「检测通过才能打开组网开关」就成了摆设（改完地址还能拿旧结论去开）。
+   */
+  function netInvalidateProbe() {
+    if (!netState.probe) return;
+    netState.probe = null;
+    renderNetProbeState();
+  }
+
+  /** 打开设置并定位到组网卡片（横幅 / 加成员提示的「去设置打开」都走这里） */
+  function gotoNetSettings() {
+    setNav('settings');
+    const navBtn = document.querySelector('#settings-nav button[data-sec="func"]');
+    if (navBtn) navBtn.click();
+    const card = $('net-card');
+    if (card && card.scrollIntoView) card.scrollIntoView({ block: 'center' });
+    const ip = $('net-ip');
+    if (ip) ip.focus();
+  }
+
+  function bindNetCard() {
+    const box = $('net-card');
+    if (!box) return;
+    const ip = $('net-ip');
+    if (ip && ip.dataset.bound !== '1') {
+      ip.dataset.bound = '1';
+      ip.oninput = () => {
+        netState.addr.ip = String(ip.value || '').trim();
+        ip.classList.toggle('net-invalid', !!netState.addr.ip && !isValidHost(netState.addr.ip));
+        netInvalidateProbe();
+      };
+      ip.onchange = () => {
+        if (!isValidHost(netState.addr.ip)) {
+          void uiAlert(t('net.invalidIp'), t('net.address'));
+          return;
+        }
+        netPersist();
+      };
+    }
+    const port = $('net-port');
+    if (port && port.dataset.bound !== '1') {
+      port.dataset.bound = '1';
+      port.onchange = () => {
+        const p = parsePort(port.value);
+        if (!p) {
+          void uiAlert(t('net.invalidPort'), t('net.port'));
+          port.value = String(netState.addr.port);
+          return;
+        }
+        netState.addr.port = p;
+        netPersist();
+        netInvalidateProbe();
+      };
+    }
+    const auto = $('btn-net-autofill');
+    if (auto && auto.dataset.bound !== '1') {
+      auto.dataset.bound = '1';
+      auto.onclick = async () => {
+        await netAutofill(true);
+        if (ip) ip.value = netState.addr.ip;
+        if (port) port.value = String(netState.addr.port);
+        netPersist();
+        netState.probe = null;
+        renderNetCard();
+        void uiAlert(fmtKey('net.autofillDone', { ip: netState.addr.ip, port: netState.addr.port }), t('net.autofill'));
+      };
+    }
+    const detect = $('btn-net-detect');
+    if (detect && detect.dataset.bound !== '1') {
+      detect.dataset.bound = '1';
+      detect.onclick = async () => {
+        const r = await netDetect();
+        if (r && r.code === 'invalid-ip') void uiAlert(t('net.invalidIp'), t('net.address'));
+        else if (r && r.code === 'invalid-port') void uiAlert(t('net.invalidPort'), t('net.port'));
+      };
+    }
+    const addD = $('btn-net-domain-add');
+    if (addD && addD.dataset.bound !== '1') {
+      addD.dataset.bound = '1';
+      addD.onclick = () => {
+        netState.addr.domains.push('');
+        renderNetCard();
+        const last = $('net-domains') && $('net-domains').querySelector('input.net-domain-input:last-of-type');
+        if (last) last.focus();
+      };
+    }
+    const sw = $('net-switch');
+    if (sw && sw.dataset.bound !== '1') {
+      sw.dataset.bound = '1';
+      sw.onchange = async () => {
+        const want = !!sw.checked;
+        const okGo = await netSetEnabled(want);
+        if (!okGo) renderNetCard();
+      };
+    }
+    renderNetCard();
+  }
+
+  /* ── 附六：名片（加入群 / 项目 / 联系人时对方一定看得到，不可隐藏但可以不写） ── */
+
+  /**
+   * 名片标签/占位文案的键名：身份层（身份层还没有 `card.*` 这套键）通过
+   * identityInfo.contactI18n 声明它需要的键（CONTACT_CARD_I18N），这里照它给的用，
+   * 拿不到时退回本地 card.* 键。两套键都在 i18n 里，不会显示成 key 原文。
+   */
+  let identityCardI18n = null;
+  function cardKey(name, fallback) {
+    const m = identityCardI18n || {};
+    const k = m[name];
+    return k && state.t && state.t[k] ? k : fallback;
+  }
+
+  /** 本人身份（真实 IPC 已落地：ccarmy:identity-info；桩：identityGet） */
+  async function myIdentity() {
+    let r = null;
+    try {
+      r = await idIpc('identityInfo');
+    } catch {
+      r = null;
+    }
+    if (!r || typeof r !== 'object' || r.ok === false || !r.identity) {
+      let r2 = null;
+      try {
+        r2 = await idIpc('identityGet');
+      } catch {
+        r2 = null;
+      }
+      if (r2 && typeof r2 === 'object' && r2.ok !== false) r = Object.assign({}, r, r2);
+    }
+    if (r && typeof r === 'object' && r.contactI18n) identityCardI18n = r.contactI18n;
+    return r;
+  }
+
+  async function myCard() {
+    const card = { email: String(state.profile.email || ''), phone: '' };
+    const r = await myIdentity();
+    if (r && typeof r === 'object' && r.ok !== false) {
+      const info = r.identity || {};
+      const c = info.contactCard || r.contactCard || r.card || {};
+      if (c.email) card.email = String(c.email);
+      if (c.phone) card.phone = String(c.phone);
+      if (c.extra) card.extra = c.extra;
+    }
+    return card;
+  }
+
+  function myCardHtml(card) {
+    const c = card || {};
+    const titleKey = cardKey('title', 'card.title');
+    const emailKey = cardKey('email', 'card.email');
+    const phoneKey = cardKey('phone', 'card.phone');
+    const noteKey = cardKey('alwaysVisible', 'card.cannotHide');
+    const empty = !String(c.email || '').trim() && !String(c.phone || '').trim();
+    return (
+      '<div class="my-card">' +
+      '<div class="id-card-h">' + escapeHtml(t(titleKey)) + '</div>' +
+      '<div class="id-field"><span class="id-k">' + escapeHtml(t(emailKey)) + '</span>' + cardValueWith(c.email, cardKey('unfilled', 'card.empty')) + '</div>' +
+      '<div class="id-field"><span class="id-k">' + escapeHtml(t(phoneKey)) + '</span>' + cardValueWith(c.phone, cardKey('unfilled', 'card.empty')) + '</div>' +
+      (Array.isArray(c.extra) && c.extra.length
+        ? c.extra
+            .map(
+              (e) =>
+                '<div class="id-field"><span class="id-k">' + escapeHtml(String(e.label || t('card.extra'))) + '</span>' +
+                cardValueWith(e.value, cardKey('unfilled', 'card.empty')) + '</div>'
+            )
+            .join('')
+        : '') +
+      '<div class="bn-hint">' + escapeHtml(t(noteKey)) + '</div>' +
+      (empty ? '<div class="bn-hint">' + escapeHtml(t('card.fillInProfile')) + '</div>' : '') +
+      '</div>'
+    );
+  }
+
+  /** 加入动作前把「对方将看到的名片」摆在用户面前；空值显示未填写占位 */
+  function shareCardConfirm(card, titleKey) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = t(titleKey || 'card.title');
+      $('modal-body').innerHTML = '<div class="muted">' + escapeHtml(t('card.peerWillSee')) + '</div>' + myCardHtml(card);
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.className = 'btn-mini';
+      cancel.textContent = t('common.cancel');
+      cancel.onclick = () => { root.classList.add('hidden'); resolve(false); };
+      const ok = document.createElement('button');
+      ok.className = 'btn-primary';
+      ok.textContent = t('common.ok');
+      ok.onclick = () => { root.classList.add('hidden'); resolve(true); };
+      acts.append(cancel, ok);
+      root.classList.remove('hidden');
+    });
+  }
+
+  /* ── 初始化与心跳 ── */
+
+  function scheduleHeartbeat() {
+    setTimeout(async () => {
+      try {
+        await netHeartbeatTick();
+      } catch (e) {
+        /* 单次心跳异常不应打断后续监测 */
+      }
+      scheduleHeartbeat();
+    }, netTuning().tickMs);
+  }
+
+  async function netInit() {
+    if (netState.booted) return;
+    netState.booted = true;
+    bindBannerHost();
+    await netLoadConfig();
+    await netAutofill(false);
+    await netRefreshPresence();
+    await idLoadChanges();
+    renderNetCard();
+    netState.renderedSig = '';
+    renderNetBanner();
+    scheduleHeartbeat();
+    // 成员状态与身份变更：低频刷新（5s 主循环之外，避免和它抢渲染）
+    setInterval(() => {
+      void netRefreshPresence().then(() => {
+        netState.renderedSig = '';
+        renderNetBanner();
+        if (state.nav === 'internalGroup' || state.nav === 'externalGroup') refreshMembers();
+      });
+    }, 15000);
+  }
+
+  /** 会话切换时：重新拉一次身份变更，让「下次进该会话重现」成立 */
+  async function idRefreshForChat() {
+    // 「下次进该会话/下次启动重现」：进入会话即清掉本次页面存活期内的「暂时隐藏」
+    const sel = state.selectedChat;
+    if (sel) {
+      (idchgState.changes || []).forEach((c) => {
+        if (idMatches(c, sel.kind, sel.id)) delete idchgState.dismissedLocal[String(c.id)];
+      });
+    }
+    if (!(Date.now() - idchgState.loadedAt < 3000)) await idLoadChanges();
+    netState.renderedSig = '';
+    renderNetBanner();
+    void netRefreshPresence().then(() => {
+      netState.renderedSig = '';
+      renderNetBanner();
+    });
+  }
+
+  // 自动化用的可见钩子（与既有 window.__refreshSecurity / __saveState 同一风格）
+  window.__netUi = {
+    net: netState,
+    idchg: idchgState,
+    tuning: netTuning,
+    idchgTuning,
+    step: netStep,
+    bannerModel: netBannerModel,
+    memberVisual,
+    hasPendingIdChange,
+    idContactDecision,
+    idHistoryCard,
+    idNewCard,
+    refreshBanner: () => { netState.renderedSig = ''; renderNetBanner(); },
+    refreshPresence: netRefreshPresence,
+    refreshMembers,
+    loadIdChanges: idLoadChanges,
+    detect: netDetect,
+    setEnabled: netSetEnabled,
+    heartbeat: netHeartbeatTick,
+    gotoNetSettings,
+  };
+
   /* renderPage-end */
 
   $('btn-voice').onclick = async () => {
@@ -2563,10 +3973,15 @@
   }
 
   function addContactFlow() {
-    uiPrompt(t('contact.add'), '').then((name) => {
+    uiPrompt(t('contact.add'), '').then(async (name) => {
       if (!name) return;
-      state.chats.push({ id: 'c-' + Date.now(), name, kind: 'extdm', lastPreview: t('list.noReply'), notify: true });
+      // 附六：加入联系人时对方一定看得到你的联系方式（不可隐藏，但可以不写）
+      const card = await myCard();
+      const go = await shareCardConfirm(card, 'contact.add');
+      if (!go) return;
+      state.chats.push({ id: 'c-' + Date.now(), name, kind: 'extdm', lastPreview: t('list.noReply'), notify: true, card });
       renderList();
+      window.__saveState?.();
     });
   }
 
@@ -3597,15 +5012,41 @@
     if (!box || !state.selectedChat) return;
     const r = await window.ccarmy.groupMembers(state.selectedChat.id).catch(() => null);
     const ms = (r && r.members) || [];
+    // R11 三态：在线正常 / 异地离线（灰 + 离线角标）/ 组网关闭（异地成员灰 + 异常角标）
+    // R12：停用实例灰 + 名字删除线（灰色仍满足对比度 ≥ 3.0，见 --ink-dim）
     box.innerHTML = ms.length
       ? ms
-          .map(
-            (x) =>
-              '<div class="member-row" data-mid="' + escapeHtml(String(x.id || x.name)) + '">' +
-              '<span class="member-name">' + escapeHtml(x.name) + ' · ' + escapeHtml(String(x.role || '')) + '</span>' +
+          .map((x) => {
+            const v = memberVisual(state.selectedChat.id, x);
+            const badge =
+              v.kind === 'disabled'
+                ? { state: 'disabled', key: 'group.memberDisabled' }
+                : v.kind === 'meshOff'
+                  ? { state: 'mesh-off', key: 'group.memberMeshOff' }
+                  : v.kind === 'offline'
+                    ? { state: 'offline', key: 'group.memberOffline' }
+                    : v.kind === 'remoteOnline'
+                      ? { state: 'remote-online', key: 'group.memberOnline' }
+                      : null;
+            const cls =
+              v.kind === 'disabled'
+                ? ' is-disabled'
+                : v.kind === 'meshOff'
+                  ? ' is-mesh-off'
+                  : v.kind === 'offline'
+                    ? ' is-offline'
+                    : '';
+            return (
+              '<div class="member-row' + cls + '" data-mid="' + escapeHtml(String(x.id || x.name)) + '" data-state="' + v.kind + '">' +
+              '<span class="member-name' + (v.kind === 'disabled' ? ' struck' : '') + '">' +
+              escapeHtml(x.name) + ' · ' + escapeHtml(String(x.role || '')) +
+              '</span>' +
+              (v.remote ? '<span class="member-badge remote" data-state="remote">' + escapeHtml(t('group.memberRemote')) + '</span>' : '') +
+              (badge ? '<span class="member-badge" data-state="' + badge.state + '">' + escapeHtml(t(badge.key)) + '</span>' : '') +
               '<button class="btn-mini" data-mkick="' + escapeHtml(String(x.id || x.name)) + '">' + t('group.kick') + '</button>' +
               '</div>'
-          )
+            );
+          })
           .join('')
       : '<div class="muted">' + t('group.memberEmpty') + '</div>';
     box.querySelectorAll('[data-mkick]').forEach((b) => {
@@ -3630,6 +5071,12 @@
     const instId = pick.value;
     if (!instId) return;
     const inst = (state.instances || []).find((i) => i.id === instId);
+    // R10：添加异地成员前先检查组网开关；没开就问一句是否进设置打开
+    if (instanceIsRemote(inst) && !netState.enabled) {
+      const go = await uiConfirm(fmtKey('net.addRemoteBody', { name: (inst && inst.name) || instId }), t('net.addRemoteTitle'));
+      if (go) gotoNetSettings();
+      return;
+    }
     try {
       const r = await window.ccarmy.groupJoinInstance(state.selectedChat.id, instId);
       if (r && r.ok === false) {
@@ -3780,11 +5227,13 @@
   $('btn-join-qr')?.addEventListener('click', async () => {
     const root = $('modal-root');
     $('modal-title').textContent = t('join.title');
+    const card = await myCard();
     $('modal-body').innerHTML =
       '<div class="muted" style="margin-bottom:8px">' + t('join.dropHint') + '</div>' +
       '<input type="file" id="join-qr-file" accept="image/*" style="margin-bottom:8px"/>' +
       '<div class="muted" style="margin-bottom:8px">' + t('join.scanHint') + '</div>' +
       '<input id="join-link-input" placeholder="' + t('join.pastePlaceholder') + '" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px"/>' +
+      '<div class="muted" style="margin-top:10px">' + escapeHtml(t('card.peerWillSee')) + '</div>' + myCardHtml(card) +
       '<div id="join-qr-msg" class="muted" style="margin-top:6px"></div>';
     const acts = $('modal-actions');
     acts.innerHTML = '';
@@ -3803,6 +5252,8 @@
         kind: 'human',
         target: state.selectedChat?.name || link,
         targetType: state.selectedChat?.kind === 'internal' ? 'project' : 'group',
+        // 附六：加入动作即交换名片（邮箱/手机号为空也照发，对方看到的是「未填写」而不是「被隐藏」）
+        card: { email: card.email || '', phone: card.phone || '' },
       }).catch(() => null);
       $('join-qr-msg').textContent = r?.ok ? t('join.ok') : t('join.fail');
       setTimeout(() => root.classList.add('hidden'), 800);
@@ -3978,6 +5429,12 @@
     } catch { /* noop */ }
     // 群列表以主进程落盘存储为准（避免界面与存储分叉）
     await syncGroupsFromStore();
+    // 组网层：地址自动填入 + 横幅 + 1s 心跳（迟滞判定与重试都在 netInit 里）
+    try {
+      await netInit();
+    } catch (e) {
+      /* 组网层异常不能拖垮整个界面 */
+    }
     // 变更时保存
     const saveState = () => {
       const instanceAvatars = {};

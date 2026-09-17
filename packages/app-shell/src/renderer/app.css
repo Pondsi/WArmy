@@ -48,6 +48,21 @@
   --logo-fg: #bbb;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.06);
   --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+  /* ── 置灰 / 告警态专用色（ADR 003 R11/R12 的对比度硬规则）──
+     灰色的含义是「状态不同」，不是「看不清」：
+       --ink-dim 对 --list-bg(#f7f7f7) / --hover(#ececec) / --active-list(#d9d9d9)
+                 都 ≥ 3.0（最差 3.5）；
+       告警/危险色的前景色对各自底色 ≥ 5.0。
+     改这几个值前先跑 verify：cdp-verify-net.mjs 会用真实 Chromium 读计算色复算。 */
+  --ink-dim: #6e6e6e;
+  --warn-bg: #fff4e0;
+  --warn-fg: #8a5a00;
+  --warn-line: #e0b060;
+  --danger-bg: #ffecec;
+  --danger-fg: #8a1f1f;
+  --danger-line: #e8a8a8;
+  /* 通过态正文（深绿）：对 --card 白底与 --chat-bg 都 ≥ 5.0，不用 --accent（亮绿在白底只有 2.4） */
+  --ok-fg: #1a7f3c;
   color-scheme: light;
 }
 
@@ -78,6 +93,14 @@
   --logo-fg: #666;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
   --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+  --ink-dim: #a8a8a8;
+  --warn-bg: #3a3018;
+  --warn-fg: #e8c07a;
+  --warn-line: #5a4a20;
+  --danger-bg: #3d1f1f;
+  --danger-fg: #ffb3b3;
+  --danger-line: #6b3434;
+  --ok-fg: #6fd18f;
   --accent: #2ea56a;
   --danger: #e06060;
   color-scheme: dark;
@@ -1237,3 +1260,133 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .diag-cell .v { font-size: 15px; font-weight: 600; margin-top: 2px; }
 .diag-verdict { font-size: 12px; margin-top: 6px; }
 .diag-verdict.bad { color: var(--danger); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   组网状态与身份变更横幅（ADR 003 R8–R12 / 附六）
+   ------------------------------------------------------------------------
+   位置：绝对定位在 #main-col 顶部，z-index 高于 .page-layout(1)，
+        并在 #main-col.has-banner 时把主内容整体下移 --banner-h
+        （高度由 JS 在渲染后写回，不用手写死高度，避免遮住聊天头）。
+   纪律：.bn-row[data-kind="net"] 恒最多一行（断链与「组网关闭+异地成员」在
+        netBannerModel() 里已合并）；身份变更行是另一类，允许与组网行各一行。
+   ══════════════════════════════════════════════════════════════════════ */
+.net-banner {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  display: flex; flex-direction: column;
+  font-size: var(--fs-base);
+  box-shadow: var(--shadow-md);
+}
+#main-col.has-banner .chat-layout { height: calc(100% - var(--banner-h, 44px)); }
+#main-col.has-banner .empty-state { height: calc(100% - var(--banner-h, 44px)); }
+#main-col.has-banner .page-layout { top: var(--banner-h, 44px); }
+
+.net-banner .bn-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 12px; border-bottom: 1px solid transparent;
+}
+.net-banner .bn-row.tone-warn { background: var(--warn-bg); color: var(--warn-fg); border-bottom-color: var(--warn-line); }
+.net-banner .bn-row.tone-danger { background: var(--danger-bg); color: var(--danger-fg); border-bottom-color: var(--danger-line); }
+.net-banner .bn-ico { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; }
+.net-banner .bn-ico svg { width: 18px; height: 18px; display: block; }
+.net-banner .bn-main { flex: 1; min-width: 0; }
+.net-banner .bn-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.net-banner .bn-title { font-weight: 600; }
+.net-banner .bn-body { margin-top: 3px; line-height: 1.5; word-break: break-word; }
+.net-banner .bn-hint { margin-top: 3px; font-size: var(--fs-xs); }
+.net-banner .bn-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.net-banner .bn-x {
+  flex-shrink: 0; width: 24px; height: 24px; line-height: 1;
+  border: none; border-radius: 6px; background: transparent;
+  color: inherit; cursor: pointer; font-size: 16px; padding: 0;
+}
+.net-banner .bn-x:hover { background: rgba(0,0,0,0.08); }
+
+/* 身份变更（附六）：与组网行同构，但强调色不同且必须显眼 */
+.net-banner .id-row .id-item { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--danger-line); }
+.net-banner .id-row .id-item:first-of-type { margin-top: 6px; border-top: none; padding-top: 0; }
+.net-banner .id-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.net-banner .id-title { font-weight: 600; }
+.net-banner .id-pending {
+  font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
+  background: var(--danger-line); color: var(--danger-fg); font-weight: 600;
+}
+.net-banner .id-marker {
+  font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
+  background: var(--danger-line); color: var(--danger-fg);
+}
+.net-banner .id-scope, .net-banner .id-gen { font-size: var(--fs-xs); }
+.net-banner .id-tag {
+  font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px; margin-left: 6px;
+  background: var(--danger-line); color: var(--danger-fg);
+}
+.net-banner .id-tag.hist { background: var(--hover); color: var(--ink-dim); }
+.net-banner .id-nohistory { font-weight: 600; }
+.net-banner .id-summary { margin-top: 3px; font-size: var(--fs-sm); }
+.net-banner .id-detail { margin-top: 4px; }
+.net-banner .id-item.is-collapsed .id-detail { display: none; }
+.net-banner .id-cards { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.net-banner .id-card, .my-card {
+  min-width: 190px; padding: 6px 10px; border-radius: 6px;
+  border: 1px solid var(--danger-line); background: var(--card); color: var(--ink);
+}
+.net-banner .id-card-h { font-size: var(--fs-xs); color: var(--muted); margin-bottom: 2px; }
+.net-banner .id-field { display: flex; gap: 8px; align-items: baseline; font-size: var(--fs-sm); }
+.net-banner .id-k { color: var(--muted); flex-shrink: 0; }
+.net-banner .id-v { word-break: break-all; }
+.net-banner .id-val-empty { color: var(--muted); font-style: normal; }
+.my-card .id-field, .my-card .id-card-h { display: flex; gap: 8px; align-items: baseline; font-size: var(--fs-sm); }
+.my-card .id-k { color: var(--muted); flex-shrink: 0; }
+.my-card .bn-hint { font-size: var(--fs-xs); color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.my-card { border-color: var(--line); margin-top: 4px; }
+
+/* 列表行 / 成员行上的常驻标记与置灰（R11/R12）：灰色一律用 --ink-dim，不用 opacity */
+.id-change-mark {
+  flex-shrink: 0; font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
+  background: var(--danger-line); color: var(--danger-fg); font-weight: 600;
+}
+.list-item.is-disabled .name, .list-item.is-disabled .sub, .list-item.is-disabled .av { color: var(--ink-dim); }
+.list-item.is-disabled .name.struck, .member-row .member-name.struck { text-decoration: line-through; }
+.row-badge {
+  flex-shrink: 0; font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
+  background: var(--hover); color: var(--ink-dim);
+}
+.member-row.is-disabled, .member-row.is-offline, .member-row.is-mesh-off { color: var(--ink-dim); }
+.member-row.is-disabled .member-name, .member-row.is-offline .member-name, .member-row.is-mesh-off .member-name { color: var(--ink-dim); }
+.member-badge {
+  flex-shrink: 0; font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
+  background: var(--hover); color: var(--ink-dim); border: 1px solid var(--line);
+}
+.member-badge[data-state='mesh-off'] { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-line); }
+.member-badge[data-state='offline'] { background: var(--hover); color: var(--ink-dim); }
+.member-badge[data-state='remote'] { background: transparent; color: var(--muted); }
+
+/* 组网设置卡片（R8） */
+.net-sub-label { display: block; font-size: var(--fs-sm); color: var(--muted); margin-bottom: 4px; }
+.net-domain-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.net-domain-row input {
+  flex: 1; border: 1px solid var(--input-border); border-radius: var(--radius-sm);
+  padding: 6px 10px; font: inherit; background: var(--input-bg); color: var(--ink);
+}
+.net-probe-line { font-size: var(--fs-sm); }
+.net-probe-line.net-ok { color: var(--ok-fg); font-weight: 600; }
+.net-probe-line.net-bad { color: var(--warn-fg); font-weight: 600; }
+.net-probe-line.net-bad, .net-probe-line.net-ok { display: inline-block; }
+input.net-invalid { border-color: var(--danger) !important; }
+.net-switch-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.net-switch { position: relative; display: inline-flex; width: 44px; height: 24px; flex-shrink: 0; }
+.net-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.net-switch .net-switch-track {
+  position: absolute; inset: 0; border-radius: 99px; background: var(--line);
+  transition: background 0.15s;
+}
+.net-switch .net-switch-track::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
+  border-radius: 50%; background: #fff; box-shadow: var(--shadow-sm);
+  transition: transform 0.15s;
+}
+.net-switch input:checked + .net-switch-track { background: var(--accent); }
+.net-switch input:checked + .net-switch-track::after { transform: translateX(20px); }
+.net-switch input:disabled + .net-switch-track { opacity: 0.5; }
+.net-switch input:disabled { cursor: not-allowed; }
+.net-switch-label { font-weight: 600; }
+
