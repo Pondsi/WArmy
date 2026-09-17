@@ -1,0 +1,264 @@
+/* CCArmy 移动端 — 微信式单列布局
+   约定：任何页面都只有一列；二级/三级页面靠顶部返回键回退；
+   一级切换只走底部 Tab。 */
+
+:root {
+  --accent: #07c160;
+  --danger: #fa5151;
+  --bg: #ededed;
+  --bar: #f7f7f7;
+  --card: #ffffff;
+  --ink: #191919;
+  --muted: #888888;
+  --line: #e0e0e0;
+  --me-bubble: #95ec69;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --bar-h: 46px;
+  --tab-h: 52px;
+}
+
+[data-theme='dark'] {
+  --accent: #2ea56a;
+  --bg: #191919;
+  --bar: #1f1f1f;
+  --card: #252525;
+  --ink: #e8e8e8;
+  --muted: #9a9a9a;
+  --line: #333333;
+  --me-bubble: #3a6b45;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+  overscroll-behavior: none;
+  font-size: 15px;
+}
+#phone {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── 顶部栏：左返回 / 中标题 / 右动作 ── */
+.bar {
+  flex-shrink: 0;
+  height: calc(var(--bar-h) + var(--safe-t));
+  padding-top: var(--safe-t);
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+  padding-right: 8px;
+  position: relative;
+  z-index: 3;
+}
+.bar .title {
+  flex: 1;
+  text-align: center;
+  font-weight: 600;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bar .title small { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+.iconbtn {
+  border: none; background: transparent; color: var(--ink);
+  width: 34px; height: 34px; border-radius: 8px;
+  display: grid; place-items: center; cursor: pointer; flex-shrink: 0;
+  font-size: 17px;
+}
+.iconbtn:active { background: rgba(0, 0, 0, 0.06); }
+.iconbtn.back { font-size: 22px; line-height: 1; }
+.iconbtn svg { width: 21px; height: 21px; fill: currentColor; }
+.bar .spacer { width: 34px; flex-shrink: 0; }
+
+/* ── 内容区（唯一滚动列） ── */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 会话列表（微信首页） ── */
+.row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.row:active { background: rgba(0, 0, 0, 0.04); }
+.row .av {
+  width: 46px; height: 46px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center; overflow: hidden;
+  background: #d8d8d8; color: #fff; font-weight: 600; font-size: 17px;
+}
+.row .av img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.row .mid { flex: 1; min-width: 0; }
+.row .mid .n { font-size: 16px; font-weight: 500; }
+.row .mid .s {
+  font-size: 13px; color: var(--muted); margin-top: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row .right { text-align: right; flex-shrink: 0; }
+.row .right .t { font-size: 11px; color: var(--muted); }
+.row .badge {
+  margin-top: 5px; min-width: 18px; height: 18px; padding: 0 5px;
+  background: var(--danger); color: #fff; border-radius: 99px;
+  font-size: 11px; display: inline-grid; place-items: center;
+}
+
+/* ── 分组标题 / 说明 ── */
+.group-title {
+  font-size: 12px; color: var(--muted);
+  padding: 14px 14px 6px;
+}
+.hint { padding: 10px 14px 18px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.empty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* ── 卡片式列表（我 / 设置下钻） ── */
+.card {
+  margin: 10px 0 0;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.card .card-title { font-size: 12px; color: var(--muted); padding: 12px 14px 6px; }
+.cell {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 14px; border-bottom: 1px solid var(--line);
+  cursor: pointer; font-size: 15px;
+}
+.cell:last-child { border-bottom: none; }
+.cell:active { background: rgba(0, 0, 0, 0.04); }
+.cell .label { flex: 1; }
+.cell .value { color: var(--muted); font-size: 13px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell .chev { color: #c8c8c8; font-size: 15px; }
+.cell .swatch { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); }
+
+/* 「我」页头部 */
+.me-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 22px 16px; background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.me-head .av { width: 62px; height: 62px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: #d8d8d8; color: #fff; font-size: 22px; font-weight: 600; }
+.me-head .av img { width: 100%; height: 100%; object-fit: cover; }
+.me-head .who { flex: 1; min-width: 0; }
+.me-head .who .n { font-size: 18px; font-weight: 600; }
+.me-head .who .m { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* ── 看板统计 ── */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; }
+.stats .cellbox {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px; text-align: center;
+}
+.stats .cellbox span { font-size: 12px; color: var(--muted); }
+.stats .cellbox b { display: block; font-size: 22px; margin-top: 6px; }
+.progress { height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 6px; }
+.progress i { display: block; height: 100%; background: var(--accent); }
+
+/* ── 聊天页 ── */
+.chat-body { background: var(--bg); }
+.msgs { padding: 12px 12px 4px; }
+.msg { display: flex; gap: 8px; margin-bottom: 14px; align-items: flex-start; }
+.msg .av { width: 34px; height: 34px; border-radius: 7px; flex-shrink: 0; overflow: hidden; background: #d8d8d8; display: grid; place-items: center; color: #fff; font-size: 13px; }
+.msg .av img { width: 100%; height: 100%; object-fit: cover; }
+.msg .bubble {
+  max-width: 74%; padding: 9px 12px; border-radius: 8px;
+  background: var(--card); line-height: 1.5; font-size: 15px;
+  word-break: break-word; position: relative;
+}
+.msg.me { flex-direction: row-reverse; }
+.msg.me .bubble { background: var(--me-bubble); color: #111; }
+.msg .sys { align-self: center; margin: 0 auto; font-size: 11px; color: var(--muted); background: var(--line); padding: 3px 10px; border-radius: 99px; }
+.msg-row { display: flex; justify-content: center; margin-bottom: 14px; }
+
+/* 输入区 */
+.composer {
+  flex-shrink: 0;
+  background: var(--bar); border-top: 1px solid var(--line);
+  padding: 8px 10px calc(8px + var(--safe-b));
+  display: flex; align-items: flex-end; gap: 8px;
+}
+.composer textarea {
+  flex: 1; border: none; border-radius: 8px; background: var(--card);
+  padding: 10px 12px; font: inherit; resize: none; outline: none;
+  min-height: 40px; max-height: 110px; line-height: 1.4;
+}
+.send {
+  border: none; border-radius: 8px; padding: 10px 16px;
+  background: var(--accent); color: #fff; font-weight: 600;
+  font-size: 15px; cursor: pointer; flex-shrink: 0;
+}
+.send:disabled { background: var(--line); color: var(--muted); }
+
+/* ── 底部 Tab（一级导航） ── */
+.tabs {
+  flex-shrink: 0;
+  height: calc(var(--tab-h) + var(--safe-b));
+  padding-bottom: var(--safe-b);
+  background: var(--bar); border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  z-index: 3;
+}
+.tabs button {
+  border: none; background: transparent; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; color: var(--muted); font-size: 11px;
+}
+.tabs button svg { width: 23px; height: 23px; fill: currentColor; }
+.tabs button.on { color: var(--accent); }
+
+/* ── 二级/三级页面：从右侧滑入，覆盖整屏 ── */
+.page {
+  position: absolute; inset: 0; z-index: 10;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+  will-change: transform;
+}
+.page.on { transform: translateX(0); }
+.page > .body { flex: 1; min-height: 0; overflow: auto; }
+
+/* ── 底部动作面板（「…」菜单） ── */
+.mask {
+  position: absolute; inset: 0; background: rgba(0, 0, 0, 0.35);
+  z-index: 20; display: none;
+}
+.mask.on { display: block; }
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 21;
+  background: var(--card); border-radius: 14px 14px 0 0;
+  padding-bottom: var(--safe-b);
+  transform: translateY(100%); transition: transform 0.22s ease;
+}
+.sheet.on { transform: translateY(0); }
+.sheet .sheet-title { text-align: center; font-size: 12px; color: var(--muted); padding: 12px; border-bottom: 1px solid var(--line); }
+.sheet button {
+  display: block; width: 100%; border: none; background: transparent;
+  padding: 15px 16px; font: inherit; font-size: 16px; color: var(--ink);
+  border-bottom: 1px solid var(--line); cursor: pointer; text-align: center;
+}
+.sheet button:last-child { border-bottom: none; }
+.sheet button.cancel { color: var(--muted); border-top: 6px solid var(--bg); }
+
+/* 桌面预览时模拟手机宽度 */
+@media (min-width: 520px) {
+  body { background: #d5d5d5; }
+  #phone { width: 390px; height: 844px; margin: 24px auto; border-radius: 26px; box-shadow: 0 12px 40px rgba(0,0,0,.22); }
+}
