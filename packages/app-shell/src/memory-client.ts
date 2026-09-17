@@ -18,10 +18,18 @@ export class MemoryClient {
 
   async start(): Promise<void> {
     if (this.child) return;
+    const execPath = this.opts.nodePath || process.execPath;
+    // 只有在拿 Electron 二进制兜底当 Node 时才需要这个开关；
+    // 用真正的 node.exe 时设了也无害，但不设的话 electron 会当普通 GUI 启动并立刻崩。
+    const useElectronAsNode = /electron(\.exe)?$/i.test(execPath);
     this.child = fork(this.opts.ipcEntry, [], {
-      execPath: this.opts.nodePath || process.execPath,
+      execPath,
       execArgv: [],
-      env: { ...process.env, CCA_ARMY_MEMORY_DIR: this.opts.dataDir },
+      env: {
+        ...process.env,
+        CCA_ARMY_MEMORY_DIR: this.opts.dataDir,
+        ...(useElectronAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
+      },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
     this.child.on('message', (m: any) => {
