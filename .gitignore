@@ -27,3 +27,6 @@ spikes/node_modules/
 
 
 vendor/agency-agents/
+
+# spike-08 的 hosts 备份是证据，但含本机 hosts 内容，不入库
+spikes/spike-08-helper/backups/
