@@ -145,6 +145,27 @@ const report = {
 };
 
 console.log(JSON.stringify(report, null, 2));
+
+// ── 落盘原始证据（P0 复核：判定必须有原始输出支撑）──
+const evidence = {
+  spike: 'spike-04-fts-cjk',
+  title: 'FTS5 单字索引 + 中文短语/边界查询',
+  dod: '2 字词命中率 100%',
+  ranAt: new Date().toISOString(),
+  command: 'node spikes/spike-04-fts-cjk/run.mjs',
+  environment: { node: process.version, platform: process.platform, arch: process.arch },
+  dataset: { docs: samples.length, tokenizer: 'unicode61', indexStrategy: '双侧字符间插空格 + FTS5 短语 MATCH' },
+  caseResults: cases.map((c) => {
+    const got = search(c.q).sort((a, b) => a - b);
+    const expect = [...c.expectIds].sort((a, b) => a - b);
+    return { label: c.label, q: c.q, expect, got, pass: got.length === expect.length && got.every((v, i) => v === expect[i]) };
+  }),
+  report,
+  exitCode: report.passDoD ? 0 : 1,
+};
+fs.writeFileSync(path.join(import.meta.dirname, 'result.json'), JSON.stringify(evidence, null, 2) + '\n', 'utf8');
+console.log(`原始结果已写入 ${path.join(import.meta.dirname, 'result.json')}`);
+
 db.close();
 fs.rmSync(dbPath, { force: true });
 process.exit(report.passDoD ? 0 : 1);

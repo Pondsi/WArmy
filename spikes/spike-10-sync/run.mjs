@@ -115,6 +115,30 @@ const report = {
 };
 
 console.log(JSON.stringify(report, null, 2));
+
+// ── 落盘原始证据（P0 复核：判定必须有原始输出支撑）──
+const evidence = {
+  spike: 'spike-10-sync',
+  title: '跨设备同步协议（本机双节点文件总线模拟）',
+  dod: '两节点间消息互通；远程 AI 执行后本地无会话日志',
+  ranAt: new Date().toISOString(),
+  command: 'node spikes/spike-10-sync/run.mjs',
+  environment: { node: process.version, platform: process.platform, arch: process.arch },
+  scopeNote:
+    '同机双进程 + 共享目录模拟，**不是两台真机**；不覆盖真实网络/时钟偏差/并发冲突场景',
+  details: {
+    aToB: { publish: send1, pull: { count: pull1.messages?.length ?? 0, texts: (pull1.messages ?? []).map((m) => m.text) } },
+    bToA: { publish: send2, pull: { count: pull2.messages?.length ?? 0, texts: (pull2.messages ?? []).map((m) => m.text) } },
+    incognito: { raw: incog, filesBefore: before, filesAfter: after },
+    duty: duty,
+    busDir: bus,
+  },
+  report,
+  exitCode: report.passDoD ? 0 : 1,
+};
+fs.writeFileSync(path.join(__dirname, 'result.json'), JSON.stringify(evidence, null, 2) + '\n', 'utf8');
+console.log(`原始结果已写入 ${path.join(__dirname, 'result.json')}`);
+
 await A.stop();
 await B.stop();
 fs.rmSync(root, { recursive: true, force: true });

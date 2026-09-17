@@ -1,0 +1,88 @@
+{
+  "spike": "spike-06-v4-pro",
+  "title": "DeepSeek V4 Pro 可用性（真实 API 调用）",
+  "dod": "V4 Pro API 返回正常响应",
+  "ranAt": "2026-09-17T11:53:40.712Z",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64",
+    "hostname": "DESKTOP-6N59TGI"
+  },
+  "request": {
+    "baseUrl": "https://api.deepseek.com",
+    "modelsProbed": [
+      "deepseek-v4-pro",
+      "deepseek-pro"
+    ],
+    "timeoutMs": 20000,
+    "authHeaderPresent": true
+  },
+  "credential": {
+    "source": "env:DEEPSEEK_API_KEY",
+    "present": true,
+    "length": 35,
+    "keySha256Prefix": "1c84a8ae6317"
+  },
+  "reachabilityProbe": {
+    "note": "匿名（无 Authorization）请求，仅用于确认端点可达；401/403 属预期，不代表模型可用",
+    "httpStatus": 401,
+    "elapsedMs": 210,
+    "rawBodySnippet": "Authentication Fails (governor)"
+  },
+  "modelsEndpoint": {
+    "transportOk": true,
+    "requestFailed": false,
+    "httpStatus": 401,
+    "httpStatusText": "Authorization Required",
+    "elapsedMs": 285,
+    "rawBodySnippet": "{\"error\":{\"message\":\"Authentication Fails, Your api key: ****0000 is invalid\",\"type\":\"authentication_error\",\"param\":null,\"code\":\"invalid_request_error\"}}",
+    "modelEcho": null,
+    "finishReason": null,
+    "contentSnippet": "",
+    "errorCode": "invalid_request_error",
+    "errorMessage": "Authentication Fails, Your api key: ****0000 is invalid",
+    "ok": false,
+    "modelIds": []
+  },
+  "calls": [
+    {
+      "model": "deepseek-v4-pro",
+      "transportOk": true,
+      "requestFailed": false,
+      "httpStatus": 401,
+      "httpStatusText": "Authorization Required",
+      "elapsedMs": 89,
+      "rawBodySnippet": "{\"error\":{\"message\":\"Authentication Fails, Your api key: ****0000 is invalid\",\"type\":\"authentication_error\",\"param\":null,\"code\":\"invalid_request_error\"}}",
+      "modelEcho": null,
+      "finishReason": null,
+      "contentSnippet": "",
+      "errorCode": "invalid_request_error",
+      "errorMessage": "Authentication Fails, Your api key: ****0000 is invalid",
+      "ok": false
+    },
+    {
+      "model": "deepseek-pro",
+      "transportOk": true,
+      "requestFailed": false,
+      "httpStatus": 401,
+      "httpStatusText": "Authorization Required",
+      "elapsedMs": 89,
+      "rawBodySnippet": "{\"error\":{\"message\":\"Authentication Fails, Your api key: ****0000 is invalid\",\"type\":\"authentication_error\",\"param\":null,\"code\":\"invalid_request_error\"}}",
+      "modelEcho": null,
+      "finishReason": null,
+      "contentSnippet": "",
+      "errorCode": "invalid_request_error",
+      "errorMessage": "Authentication Fails, Your api key: ****0000 is invalid",
+      "ok": false
+    }
+  ],
+  "verdict": {
+    "status": "verified-fail",
+    "dodMet": false,
+    "deepseekV4ProOk": false,
+    "deepseekProAliasOk": false,
+    "reason": "deepseek-v4-pro 未返回正常响应（HTTP 401），DoD 不达标。",
+    "note": "ADR 原文写的 deepseek-pro 未返回正常响应，需以 deepseek-v4-pro 为准。"
+  }
+}

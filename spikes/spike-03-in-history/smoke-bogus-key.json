@@ -1,0 +1,17 @@
+{
+  "spike": "spike-03-in-history",
+  "title": "in-history 缓存稳定性（DeepSeek prefix cache）",
+  "dod": "50 轮记录每轮命中率；第 25 轮注入 in-history 后 cacheRead 保持",
+  "ranAt": "2026-09-17T12:02:38.359Z",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "model": "deepseek-flash",
+  "credentialPresent": true,
+  "status": "blocked-api-error",
+  "dodMet": false,
+  "reason": "凭据存在但 API 调用失败，未能完成测量：401 {\"error\":{\"message\":\"Authentication Fails, Your api key: ****0000 is invalid\",\"type\":\"authentication_error\",\"param\":null,\"code\":\"invalid_request_error\"}}",
+  "exitCode": 3
+}

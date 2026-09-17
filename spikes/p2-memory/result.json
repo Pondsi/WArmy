@@ -1,0 +1,4843 @@
+{
+  "generatedAt": "2026-09-17T12:18:15.420Z",
+  "host": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64",
+    "repo": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy",
+    "cpus": 32,
+    "totalMemMB": 65228
+  },
+  "checks": [
+    {
+      "name": "空库建立时 fts_tri 即存在",
+      "ok": true,
+      "detail": true
+    },
+    {
+      "name": "sqlite >= 3.34（trigram tokenizer 可用）",
+      "ok": true,
+      "detail": "3.53.4"
+    },
+    {
+      "name": "tokenizer 词表 21128（配套 bge-small-zh）",
+      "ok": true,
+      "detail": 21128
+    },
+    {
+      "name": "特殊 token id 正确",
+      "ok": true,
+      "detail": {
+        "pad": 0,
+        "unk": 100,
+        "cls": 101,
+        "sep": 102,
+        "mask": 103
+      }
+    },
+    {
+      "name": "CJK 逐字切分",
+      "ok": true,
+      "detail": [
+        "无",
+        "限",
+        "牛",
+        "马"
+      ]
+    },
+    {
+      "name": "标点独立成词",
+      "ok": true,
+      "detail": [
+        "a",
+        ",",
+        "b",
+        ".",
+        "c",
+        "-",
+        "d"
+      ]
+    },
+    {
+      "name": "ASCII 路径整段走词表（无 UNK）",
+      "ok": true,
+      "detail": [
+        "[CLS]",
+        "pack",
+        "##age",
+        "##s",
+        "/",
+        "memory",
+        "-",
+        "os",
+        "/",
+        "sr",
+        "##c",
+        "/",
+        "index",
+        ".",
+        "ts",
+        "[SEP]"
+      ]
+    },
+    {
+      "name": "照实不转小写（tokenizer.json lowercase=false）",
+      "ok": true,
+      "detail": false
+    },
+    {
+      "name": "fts_tri 索引全部记录",
+      "ok": true,
+      "detail": {
+        "ftsTriDocs": 14,
+        "records": 14
+      }
+    },
+    {
+      "name": "fts_uni 索引全部记录",
+      "ok": true,
+      "detail": {
+        "ftsUniDocs": 14
+      }
+    },
+    {
+      "name": "executor 不能写 message 记录（不变量 #6）",
+      "ok": true,
+      "detail": "executor cannot write message records"
+    },
+    {
+      "name": "queue 只能 router 写（不变量 #6）",
+      "ok": true,
+      "detail": "queue.jsonl writer must be router"
+    },
+    {
+      "name": "预期命中集全部被至少一路召回",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "不存在的串三路皆空",
+      "ok": true,
+      "detail": {
+        "query": "zzz_not_present_zzz",
+        "kind": "完全不存在",
+        "expect": [],
+        "len": 19,
+        "uni": [],
+        "tri": [],
+        "like": []
+      }
+    },
+    {
+      "name": "向量通路就绪（WASM，无 .node）",
+      "ok": true,
+      "detail": {
+        "ready": true,
+        "backend": "wasm-simd",
+        "reason": "ok(wasmPaths=file-url)",
+        "dim": 512
+      }
+    },
+    {
+      "name": "向量维度 512",
+      "ok": true,
+      "detail": 512
+    },
+    {
+      "name": "后端为 wasm（不变量 #4：零原生模块）",
+      "ok": true,
+      "detail": "wasm-simd"
+    },
+    {
+      "name": "tokenizer 与模型配套（词表 21128）",
+      "ok": true,
+      "detail": 21128
+    },
+    {
+      "name": "语义查询「值班安排」由向量通道命中 m-010（词法候选 0）",
+      "ok": true,
+      "detail": {
+        "candidates": {
+          "uni": 0,
+          "tri": 0,
+          "vector": 14,
+          "fused": 1
+        },
+        "cards": [
+          [
+            "m-010",
+            [
+              "vector"
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "name": "ASCII 路径查询命中 m-003 且 fts_tri 参与融合",
+      "ok": true,
+      "detail": [
+        [
+          "m-003",
+          [
+            "fts_uni",
+            "fts_tri",
+            "vector"
+          ]
+        ],
+        [
+          "m-005",
+          [
+            "vector"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "错误码 E_WRITER_DENIED 命中 m-007",
+      "ok": true,
+      "detail": [
+        "m-007"
+      ]
+    },
+    {
+      "name": "环境变量查询命中 m-013",
+      "ok": true,
+      "detail": [
+        "m-013"
+      ]
+    },
+    {
+      "name": "1 字 CJK 查询可召回",
+      "ok": true,
+      "detail": [
+        [
+          "m-009",
+          "fused"
+        ],
+        [
+          "m-001",
+          "fts_uni"
+        ]
+      ]
+    },
+    {
+      "name": "2 字 CJK 查询命中 m-001",
+      "ok": true,
+      "detail": [
+        "m-001",
+        "m-009"
+      ]
+    },
+    {
+      "name": "3 字 CJK 查询命中状态机记录",
+      "ok": true,
+      "detail": [
+        "m-001",
+        "m-010"
+      ]
+    },
+    {
+      "name": "长 CJK 子串查询命中 m-008/m-014",
+      "ok": true,
+      "detail": [
+        "m-014",
+        "m-008",
+        "m-006"
+      ]
+    },
+    {
+      "name": "完全不存在串返回空（向量通道有 minCosine 地板）",
+      "ok": true,
+      "detail": {
+        "cards": [],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "matched via LIKE fallback"
+          },
+          {
+            "channel": "fts_tri",
+            "used": false,
+            "hits": 0,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": false,
+            "hits": 0,
+            "ms": 1,
+            "skipped": "all 14 cosines below minCosine 0.5"
+          },
+          {
+            "channel": "like",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "fallback-of-fts_uni"
+          }
+        ]
+      }
+    },
+    {
+      "name": "向量专属查询「值班安排」命中 m-010",
+      "ok": true,
+      "detail": {
+        "cards": [
+          {
+            "id": "m-010",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.8400482765423818
+          }
+        ],
+        "lexical": {
+          "uni": 0,
+          "tri": 0
+        }
+      }
+    },
+    {
+      "name": "向量专属查询「子进程之间怎么通信」命中 m-011",
+      "ok": true,
+      "detail": {
+        "cards": [
+          {
+            "id": "m-011",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.8026958594981488
+          },
+          {
+            "id": "m-013",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.7949935548128148
+          }
+        ],
+        "lexical": {
+          "uni": 0,
+          "tri": 0
+        }
+      }
+    },
+    {
+      "name": "向量专属查询「记忆层怎么设计」命中 m-008",
+      "ok": true,
+      "detail": {
+        "cards": [
+          {
+            "id": "m-008",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.8269455475420806
+          },
+          {
+            "id": "m-011",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.7887680068728711
+          }
+        ],
+        "lexical": {
+          "uni": 0,
+          "tri": 0
+        }
+      }
+    },
+    {
+      "name": "噪声查询不返回向量噪声（minCosine 地板生效）",
+      "ok": true,
+      "detail": [
+        [
+          "zzz_not_present_zzz",
+          [],
+          "all 14 cosines below minCosine 0.5"
+        ],
+        [
+          "今天中午吃什么比较好",
+          [],
+          "all 14 cosines below minCosine 0.5"
+        ],
+        [
+          "量子纠缠与黑洞信息悖论",
+          [],
+          "all 14 cosines below minCosine 0.5"
+        ]
+      ]
+    },
+    {
+      "name": "作用域过滤：授权 s1 / 拒绝 s2",
+      "ok": true,
+      "detail": {
+        "scopeActive": true,
+        "predicate": "session_id = ?",
+        "table": "scope_filter_c5b7d005",
+        "totalRecords": 14,
+        "authorizedRecords": 8,
+        "deniedRecords": 6
+      }
+    },
+    {
+      "name": "余弦只在授权集合上计算（#9）",
+      "ok": true,
+      "detail": {
+        "cosines": 8,
+        "s1VecRows": 8,
+        "vecRowsTotal": 14
+      }
+    },
+    {
+      "name": "s1 作用域：语义查询命中 m-010（s1 记录）",
+      "ok": true,
+      "detail": [
+        "m-010"
+      ]
+    },
+    {
+      "name": "s2 作用域：同一查询不再返回 m-010（预过滤挡在余弦之前）",
+      "ok": true,
+      "detail": {
+        "cards": [],
+        "timings": {
+          "totalMs": 0,
+          "hydrateMs": 0,
+          "embedQueryMs": 0,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 6,
+          "hydrated": 0,
+          "vectorBelowThreshold": 6,
+          "vectorUnkRatio": 0
+        }
+      }
+    },
+    {
+      "name": "词法查询无作用域时跨 s1/s2 命中",
+      "ok": true,
+      "detail": [
+        "m-008",
+        "m-002"
+      ]
+    },
+    {
+      "name": "s1 作用域下只返回 s1 记录",
+      "ok": true,
+      "detail": [
+        "m-002"
+      ]
+    },
+    {
+      "name": "group-B 作用域下只返回 group-B 记录",
+      "ok": true,
+      "detail": [
+        "m-008"
+      ]
+    },
+    {
+      "name": "向量通道在作用域下仍有命中",
+      "ok": true,
+      "detail": {
+        "channel": "vector",
+        "used": true,
+        "hits": 1,
+        "ms": 0
+      }
+    },
+    {
+      "name": "entityType 作用域生效",
+      "ok": true,
+      "detail": {
+        "scopeActive": true,
+        "predicate": "entity_type = ?",
+        "table": "scope_filter_bd27c30d",
+        "totalRecords": 14,
+        "authorizedRecords": 6,
+        "deniedRecords": 8
+      }
+    },
+    {
+      "name": "并发 recall：各作用域互不串味（临时表按谓词取键）",
+      "ok": true,
+      "detail": [
+        {
+          "scope": "session_id = ?",
+          "table": "scope_filter_c5b7d005",
+          "ids": [
+            "m-002"
+          ],
+          "cosines": 0
+        },
+        {
+          "scope": "group_id = ?",
+          "table": "scope_filter_5243db80",
+          "ids": [
+            "m-008"
+          ],
+          "cosines": 0
+        },
+        {
+          "scope": "session_id = ?",
+          "table": "scope_filter_86cbcd8",
+          "ids": [
+            "m-008"
+          ],
+          "cosines": 0
+        },
+        {
+          "scope": "session_id = ?",
+          "table": "scope_filter_c5b7d005",
+          "ids": [
+            "m-010"
+          ],
+          "cosines": 8
+        },
+        {
+          "scope": "session_id = ?",
+          "table": "scope_filter_86cbcd8",
+          "ids": [],
+          "cosines": 6
+        },
+        {
+          "scope": "",
+          "table": null,
+          "ids": [
+            "m-011",
+            "m-008"
+          ],
+          "cosines": 14
+        }
+      ]
+    },
+    {
+      "name": "并发 recall：临时表名随作用域不同而不同",
+      "ok": true,
+      "detail": [
+        "scope_filter_c5b7d005",
+        "scope_filter_5243db80",
+        "scope_filter_86cbcd8"
+      ]
+    },
+    {
+      "name": "retrieve exact sqlite:id",
+      "ok": true,
+      "detail": {
+        "name": "exact:sqlite:id",
+        "input": {
+          "recordId": "m-003"
+        },
+        "opts": {},
+        "hitLevel": "exact",
+        "via": "sqlite:id",
+        "seq": 3,
+        "recordId": "m-003",
+        "rawHead": "实现文件 packages/memory-os/src/index.ts 新增 fts_tri 三元索引",
+        "note": null
+      }
+    },
+    {
+      "name": "retrieve exact sqlite:seq",
+      "ok": true,
+      "detail": {
+        "name": "exact:sqlite:seq",
+        "input": {
+          "seq": 9
+        },
+        "opts": {},
+        "hitLevel": "exact",
+        "via": "sqlite:seq",
+        "seq": 9,
+        "recordId": "m-005",
+        "rawHead": "外部群归档流水线 KnowledgeArchiver 处理证据锚点与双向索引",
+        "note": null
+      }
+    },
+    {
+      "name": "retrieve exact jsonl:offset（证据锚点 byteOffset）",
+      "ok": true,
+      "detail": {
+        "name": "exact:jsonl:offset",
+        "input": {
+          "file": "fast-memory.jsonl",
+          "byteOffset": 1738
+        },
+        "opts": {},
+        "hitLevel": "exact",
+        "via": "jsonl:offset",
+        "seq": 10,
+        "recordId": "m-006",
+        "rawHead": "群聊桌面应用支持单 AI、内部群、外部群三种群类型",
+        "note": null
+      }
+    },
+    {
+      "name": "retrieve nearby seq±5（seq=15 → 14）",
+      "ok": true,
+      "detail": {
+        "name": "nearby:seq±5",
+        "input": {
+          "seq": 15
+        },
+        "opts": {},
+        "hitLevel": "nearby",
+        "via": "sqlite:seq±5",
+        "seq": 14,
+        "recordId": "m-013",
+        "rawHead": "ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程",
+        "note": "previous levels failed: exact"
+      }
+    },
+    {
+      "name": "retrieve nearby seq 超出窗口即降级",
+      "ok": true,
+      "detail": {
+        "name": "nearby:seq-out-of-window",
+        "input": {
+          "seq": 999,
+          "recordId": "zzz-absent"
+        },
+        "opts": {},
+        "hitLevel": "fuzzy",
+        "via": "sqlite:newest",
+        "seq": 14,
+        "recordId": "m-013",
+        "rawHead": "ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程",
+        "note": "previous levels failed: exact, nearby"
+      }
+    },
+    {
+      "name": "retrieve nearby id-trim (#7)",
+      "ok": true,
+      "detail": {
+        "name": "nearby:id-trim-#",
+        "input": {
+          "recordId": "m-003#7"
+        },
+        "opts": {},
+        "hitLevel": "nearby",
+        "via": "sqlite:id-trim",
+        "seq": 3,
+        "recordId": "m-003",
+        "rawHead": "实现文件 packages/memory-os/src/index.ts 新增 fts_tri 三元索引",
+        "note": "previous levels failed: exact"
+      }
+    },
+    {
+      "name": "retrieve nearby id-trim (-v2)",
+      "ok": true,
+      "detail": {
+        "name": "nearby:id-trim--v2",
+        "input": {
+          "recordId": "m-012-v2"
+        },
+        "opts": {},
+        "hitLevel": "nearby",
+        "via": "sqlite:id-trim",
+        "seq": 7,
+        "recordId": "m-012",
+        "rawHead": "pnpm --filter @ccarmy/memory-os build 编译投影层",
+        "note": "previous levels failed: exact"
+      }
+    },
+    {
+      "name": "retrieve nearby offset-nearest",
+      "ok": true,
+      "detail": {
+        "name": "nearby:offset-nearest",
+        "input": {
+          "file": "fast-memory.jsonl",
+          "byteOffset": 185
+        },
+        "opts": {},
+        "hitLevel": "nearby",
+        "via": "jsonl:offset-nearest",
+        "seq": 2,
+        "recordId": "m-002",
+        "rawHead": "错误码 E_MEMORY_CORRUPT 表示 SQLite 投影损坏，可从 JSONL 全量重建",
+        "note": "previous levels failed: exact"
+      }
+    },
+    {
+      "name": "retrieve fuzzy 经 FTS",
+      "ok": true,
+      "detail": {
+        "name": "fuzzy:fts",
+        "input": {
+          "recordId": "牛马"
+        },
+        "opts": {
+          "fallback": "fuzzy"
+        },
+        "hitLevel": "fuzzy",
+        "via": "fts:uni",
+        "seq": 1,
+        "recordId": "m-001",
+        "rawHead": "无限牛马项目进度正常，值班者状态机已上线",
+        "note": "previous levels failed: exact, nearby"
+      }
+    },
+    {
+      "name": "retrieve fuzzy 兜底最新一条",
+      "ok": true,
+      "detail": {
+        "name": "fuzzy:newest",
+        "input": {
+          "recordId": "zzz-unknown"
+        },
+        "opts": {
+          "fallback": "fuzzy"
+        },
+        "hitLevel": "fuzzy",
+        "via": "sqlite:newest",
+        "seq": 14,
+        "recordId": "m-013",
+        "rawHead": "ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程",
+        "note": "previous levels failed: exact, nearby"
+      }
+    },
+    {
+      "name": "fallback=exact 不降级",
+      "ok": true,
+      "detail": {
+        "name": "exact-only:miss",
+        "input": {
+          "seq": 999
+        },
+        "opts": {
+          "fallback": "exact"
+        },
+        "hitLevel": null,
+        "via": null,
+        "seq": null,
+        "recordId": null,
+        "rawHead": null,
+        "note": null
+      }
+    },
+    {
+      "name": "fallback=nearby 且超窗 → 不降级",
+      "ok": true,
+      "detail": {
+        "name": "nearby-only:miss",
+        "input": {
+          "seq": 999
+        },
+        "opts": {
+          "fallback": "nearby"
+        },
+        "hitLevel": null,
+        "via": null,
+        "seq": null,
+        "recordId": null,
+        "rawHead": null,
+        "note": null
+      }
+    },
+    {
+      "name": "fallback=nearby 命中 nearby（seq）",
+      "ok": true,
+      "detail": {
+        "name": "nearby-only:seq",
+        "input": {
+          "seq": 15
+        },
+        "opts": {
+          "fallback": "nearby"
+        },
+        "hitLevel": "nearby",
+        "via": "sqlite:seq±5",
+        "seq": 14,
+        "recordId": "m-013",
+        "rawHead": "ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程",
+        "note": "previous levels failed: exact"
+      }
+    },
+    {
+      "name": "recordId 存在时 exact 优先于 seq（id 优先）",
+      "ok": true,
+      "detail": {
+        "name": "nearby-only:id",
+        "input": {
+          "seq": 999,
+          "recordId": "m-003"
+        },
+        "opts": {
+          "fallback": "nearby"
+        },
+        "hitLevel": "exact",
+        "via": "sqlite:id",
+        "seq": 3,
+        "recordId": "m-003",
+        "rawHead": "实现文件 packages/memory-os/src/index.ts 新增 fts_tri 三元索引",
+        "note": null
+      }
+    },
+    {
+      "name": "投影删行后 retrieve 回 JSONL（exact/jsonl:id）",
+      "ok": true,
+      "detail": {
+        "raw": "实现文件 packages/memory-os/src/index.ts 新增 fts_tri 三元索引",
+        "seq": 3,
+        "recordId": "m-003",
+        "hitLevel": "exact",
+        "via": "jsonl:id",
+        "anchor": {
+          "file": "fast-memory.jsonl",
+          "seq": 3,
+          "recordId": "m-003"
+        }
+      }
+    },
+    {
+      "name": "投影删行后 recall 不再返回该行",
+      "ok": true,
+      "detail": [
+        "m-005"
+      ]
+    },
+    {
+      "name": "rebuildProjection 从 JSONL 全量重建",
+      "ok": true,
+      "detail": {
+        "rebuilt": 14,
+        "records": 14,
+        "ftsUniDocs": 14,
+        "ftsTriDocs": 14,
+        "vecRows": 0
+      }
+    },
+    {
+      "name": "重建后 recall 恢复",
+      "ok": true,
+      "detail": [
+        "m-003"
+      ]
+    },
+    {
+      "name": "重建后向量行清空（待被动水合）",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "被动水合重建向量",
+      "ok": true,
+      "detail": {
+        "embedded": 14,
+        "ms": 178,
+        "remaining": 0
+      }
+    },
+    {
+      "name": "纯语义查询（词法 0 命中）经向量召回 m-011",
+      "ok": true,
+      "detail": [
+        [
+          "m-011",
+          [
+            "vector"
+          ]
+        ],
+        [
+          "m-013",
+          [
+            "vector"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "同一文本嵌入一致（cos≈1）",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "int8 与 float32 余弦误差 < 1e-2",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "BLOB = 512 字节（int8，float32 要 2048）",
+      "ok": true,
+      "detail": 512
+    },
+    {
+      "name": "无关文本余弦明显更低",
+      "ok": true,
+      "detail": {
+        "same": 1,
+        "unrelated": 0.25551871970443163
+      }
+    },
+    {
+      "name": "改写对余弦 > 无关对余弦（嵌入语义有效）",
+      "ok": true,
+      "detail": {
+        "minParaphrase": 0.6171,
+        "maxUnrelated": 0.241
+      }
+    },
+    {
+      "name": "recall(query, limit) 旧签名仍可用且字段不变",
+      "ok": true,
+      "detail": {
+        "seq": 1,
+        "recordId": "m-001",
+        "snippet": "无限牛马项目进度正常，值班者状态机已上线",
+        "score": 0.7817955357387834,
+        "source": "fused"
+      }
+    },
+    {
+      "name": "recall 卡片满足 contracts.RecallCard 形状",
+      "ok": true,
+      "detail": {
+        "required": [
+          "anchor",
+          "snippet",
+          "score",
+          "source"
+        ],
+        "anchor": [
+          "file",
+          "seq",
+          "recordId"
+        ],
+        "conforms": true
+      }
+    },
+    {
+      "name": "retrieve 结果满足 contracts.RetrieveResult 形状",
+      "ok": true,
+      "detail": {
+        "required": [
+          "raw",
+          "hitLevel",
+          "anchor"
+        ],
+        "conforms": true,
+        "sample": {
+          "hitLevel": "exact",
+          "via": "sqlite:id",
+          "anchor": {
+            "file": "fast-memory.jsonl",
+            "seq": 1,
+            "recordId": "m-001"
+          }
+        }
+      }
+    },
+    {
+      "name": "RRF：多通道共现的 id 排在最前",
+      "ok": true,
+      "detail": {
+        "id": "2",
+        "rrfScore": 0.048651507139079855,
+        "sources": [
+          "fts_uni",
+          "fts_tri",
+          "vector"
+        ],
+        "ranks": {
+          "fts_uni": 2,
+          "fts_tri": 1,
+          "vector": 2
+        }
+      }
+    },
+    {
+      "name": "RRF：单通道 id 得分低于多通道",
+      "ok": true,
+      "detail": {
+        "nine": 0.015873015873015872,
+        "top": 0.048651507139079855
+      }
+    },
+    {
+      "name": "2000 条语料下 fts_tri 索引齐全",
+      "ok": true,
+      "detail": {
+        "ftsTriDocs": 2000,
+        "records": 2000
+      }
+    },
+    {
+      "name": "fts_tri 的 distinct term 数远多于 fts_uni（选择性更高）",
+      "ok": true,
+      "detail": {
+        "fts_uni": {
+          "distinctTerms": 89,
+          "totalPostings": 135147,
+          "avgOccurrencesPerDoc": 3003.3,
+          "docsIndexed": 2000
+        },
+        "fts_tri": {
+          "distinctTerms": 1598,
+          "totalPostings": 158713,
+          "avgOccurrencesPerDoc": 1345,
+          "docsIndexed": 2000
+        }
+      }
+    },
+    {
+      "name": "LIKE 走 trigram 索引（EXPLAIN 显示 INDEX 0:L0）",
+      "ok": true,
+      "detail": "SCAN fts_tri VIRTUAL TABLE INDEX 0:L0"
+    },
+    {
+      "name": "LIKE 在 fts_uni 上退化为全扫（无索引）",
+      "ok": true,
+      "detail": "SCAN fts_uni VIRTUAL TABLE INDEX 0:"
+    },
+    {
+      "name": "fts_tri 的 LIKE 比 records 全表扫更快",
+      "ok": true,
+      "detail": {
+        "triIndexed": {
+          "medianMs": 0.236,
+          "minMs": 0.213,
+          "maxMs": 0.266,
+          "reps": 7
+        },
+        "recordsFullScan": {
+          "medianMs": 0.325,
+          "minMs": 0.281,
+          "maxMs": 0.521,
+          "reps": 7
+        }
+      }
+    },
+    {
+      "name": "大语料上向量扫描可测（cosines>0）",
+      "ok": true,
+      "detail": {
+        "totalMs": 4803,
+        "hydrateMs": 4795,
+        "embedQueryMs": 6,
+        "uniMs": 0,
+        "triMs": 0,
+        "vecMs": 1,
+        "fuseMs": 0,
+        "cosines": 512,
+        "hydrated": 256,
+        "vectorBelowThreshold": 492,
+        "vectorUnkRatio": 0
+      }
+    },
+    {
+      "name": "子进程 A：2 字 CJK 可召回",
+      "ok": true,
+      "detail": [
+        "m-001",
+        "m-009"
+      ]
+    },
+    {
+      "name": "子进程 A：fts_tri 参与路径查询",
+      "ok": true,
+      "detail": [
+        [
+          "m-003",
+          [
+            "fts_uni",
+            "fts_tri",
+            "vector"
+          ]
+        ],
+        [
+          "m-005",
+          [
+            "vector"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "子进程 A：语义查询经向量命中 m-010",
+      "ok": true,
+      "detail": [
+        "m-010"
+      ]
+    },
+    {
+      "name": "子进程 A：向量已写入 SQLite BLOB",
+      "ok": true,
+      "detail": 14
+    },
+    {
+      "name": "重启后向量 BLOB 仍在（未重新嵌入）",
+      "ok": true,
+      "detail": {
+        "embeds": 0,
+        "vecRows": 14
+      }
+    },
+    {
+      "name": "重启后 fts_uni/fts_tri 可检索（真持久化）",
+      "ok": true,
+      "detail": {
+        "embeds": 1,
+        "vecRows": 14,
+        "recall牛马": [
+          [
+            "m-001",
+            [
+              "fts_uni",
+              "vector"
+            ]
+          ],
+          [
+            "m-009",
+            [
+              "vector"
+            ]
+          ]
+        ],
+        "recall错误码": [
+          [
+            "m-007",
+            [
+              "fts_uni",
+              "fts_tri"
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "name": "重启后 fts_tri 仍参与融合",
+      "ok": true,
+      "detail": [
+        [
+          "fts_uni",
+          "fts_tri"
+        ]
+      ]
+    },
+    {
+      "name": "重启后向量通道可检索（未重新嵌入历史向量）",
+      "ok": true,
+      "detail": [
+        [
+          "m-010",
+          [
+            "vector"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "删掉 memory.db 后重启：投影从 JSONL 全量重建",
+      "ok": true,
+      "detail": {
+        "rebuilt": true,
+        "lines": 14,
+        "reason": "projection missing, rebuilt from jsonl"
+      }
+    },
+    {
+      "name": "重建后 fts_tri 立即可用",
+      "ok": true,
+      "detail": {
+        "ftsTriDocs": 14,
+        "cards": [
+          "m-003",
+          "m-012",
+          "m-004",
+          "m-007",
+          "m-011"
+        ]
+      }
+    },
+    {
+      "name": "重建后 retrieve 可用",
+      "ok": true,
+      "detail": {
+        "hitLevel": "exact",
+        "via": "sqlite:id"
+      }
+    },
+    {
+      "name": "升级前：无 fts_tri / 无 vec_index / 无 schema_version",
+      "ok": true,
+      "detail": {
+        "tables": [
+          "fts_uni",
+          "fts_uni_config",
+          "fts_uni_data",
+          "fts_uni_docsize",
+          "fts_uni_idx",
+          "meta",
+          "records"
+        ],
+        "hasFtsTri": false,
+        "hasVecIndex": false,
+        "recordsColumns": [
+          "seq",
+          "id",
+          "session_id",
+          "kind",
+          "ts",
+          "body"
+        ],
+        "metaKeys": [
+          "last_seq"
+        ],
+        "jsonl": {
+          "sha1Simple": "20bb3d75",
+          "bytes": 604
+        },
+        "recordCount": 4
+      }
+    },
+    {
+      "name": "升级后：fts_tri 建表并回填",
+      "ok": true,
+      "detail": {
+        "ftsTriDocs": 4,
+        "upgrade": {
+          "schemaVersionBefore": 0,
+          "schemaVersionAfter": 2,
+          "hadFtsUni": true,
+          "hadFtsTri": false,
+          "createdFtsTri": true,
+          "addedColumns": [
+            "records.group_id",
+            "records.entity_type"
+          ],
+          "backfilledTriRows": 4,
+          "backfilledUniRows": 0
+        }
+      }
+    },
+    {
+      "name": "升级后：schema_version 0/未设置 → 2",
+      "ok": true,
+      "detail": {
+        "schemaVersionBefore": 0,
+        "schemaVersionAfter": 2,
+        "hadFtsUni": true,
+        "hadFtsTri": false,
+        "createdFtsTri": true,
+        "addedColumns": [
+          "records.group_id",
+          "records.entity_type"
+        ],
+        "backfilledTriRows": 4,
+        "backfilledUniRows": 0
+      }
+    },
+    {
+      "name": "升级后：补齐作用域列 group_id/entity_type",
+      "ok": true,
+      "detail": [
+        "records.group_id",
+        "records.entity_type"
+      ]
+    },
+    {
+      "name": "升级后：fts_tri 查询命中（错误码 / 长 CJK 子串）",
+      "ok": true,
+      "detail": {
+        "E_MEMORY_CORRUPT": [
+          "legacy-2"
+        ],
+        "多智能体群聊": [
+          "legacy-4"
+        ]
+      }
+    },
+    {
+      "name": "升级不改 JSONL（事实源只追加）",
+      "ok": true,
+      "detail": {
+        "before": {
+          "sha1Simple": "20bb3d75",
+          "bytes": 604
+        },
+        "after": {
+          "tables": [
+            "fts_tri",
+            "fts_tri_config",
+            "fts_tri_data",
+            "fts_tri_docsize",
+            "fts_tri_idx",
+            "fts_uni",
+            "fts_uni_config",
+            "fts_uni_data",
+            "fts_uni_docsize",
+            "fts_uni_idx",
+            "meta",
+            "records",
+            "vec_index"
+          ],
+          "recordsColumns": [
+            "seq",
+            "id",
+            "session_id",
+            "kind",
+            "ts",
+            "body",
+            "group_id",
+            "entity_type"
+          ],
+          "metaKeys": [
+            "last_seq",
+            "schema_version"
+          ],
+          "schemaVersion": 2,
+          "upgrade": {
+            "schemaVersionBefore": 0,
+            "schemaVersionAfter": 2,
+            "hadFtsUni": true,
+            "hadFtsTri": false,
+            "createdFtsTri": true,
+            "addedColumns": [
+              "records.group_id",
+              "records.entity_type"
+            ],
+            "backfilledTriRows": 4,
+            "backfilledUniRows": 0
+          },
+          "ftsTriDocs": 4,
+          "ftsUniDocs": 4,
+          "coldStart": {
+            "rebuilt": false,
+            "lines": 4,
+            "reason": "projection present"
+          }
+        }
+      }
+    },
+    {
+      "name": "子进程重新打开升级后的库：fts_tri 可用且不重复回填",
+      "ok": true,
+      "detail": {
+        "cards": [
+          [
+            "legacy-3",
+            [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ]
+          ]
+        ],
+        "ftsTriDocs": 4,
+        "schemaVersion": 2,
+        "coldStart": {
+          "rebuilt": false,
+          "lines": 4,
+          "reason": "projection present"
+        }
+      }
+    }
+  ],
+  "sections": {
+    "env": {
+      "sqliteVersion": "3.53.4",
+      "fts5": [
+        "ENABLE_FTS4",
+        "ENABLE_FTS5"
+      ],
+      "schemaVersion": 2,
+      "ftsTriPresent": true,
+      "tables": [
+        {
+          "name": "fts_tri",
+          "type": "table"
+        },
+        {
+          "name": "fts_tri_config",
+          "type": "table"
+        },
+        {
+          "name": "fts_tri_data",
+          "type": "table"
+        },
+        {
+          "name": "fts_tri_docsize",
+          "type": "table"
+        },
+        {
+          "name": "fts_tri_idx",
+          "type": "table"
+        },
+        {
+          "name": "fts_uni",
+          "type": "table"
+        },
+        {
+          "name": "fts_uni_config",
+          "type": "table"
+        },
+        {
+          "name": "fts_uni_data",
+          "type": "table"
+        },
+        {
+          "name": "fts_uni_docsize",
+          "type": "table"
+        },
+        {
+          "name": "fts_uni_idx",
+          "type": "table"
+        },
+        {
+          "name": "meta",
+          "type": "table"
+        },
+        {
+          "name": "records",
+          "type": "table"
+        },
+        {
+          "name": "vec_index",
+          "type": "table"
+        }
+      ],
+      "coldStart": {
+        "rebuilt": false,
+        "lines": 0,
+        "reason": "no jsonl"
+      },
+      "vector": {
+        "ready": false,
+        "reason": "initializing",
+        "backend": "none",
+        "dim": 0,
+        "threads": 1,
+        "modelPath": null,
+        "tokenizerPath": null,
+        "modelBytes": 0,
+        "ortMain": null,
+        "ortTried": [],
+        "loadMs": 0,
+        "embeds": 0,
+        "embedTotalMs": 0,
+        "lastEmbedMs": 0,
+        "maxLength": 256,
+        "queryPrefix": "",
+        "tokenizer": null,
+        "modelCandidates": [
+          "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-env-1789647495425-r3v1f\\models\\model_quantized.onnx",
+          "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
+        ]
+      },
+      "modelFiles": [
+        {
+          "f": "model_quantized.onnx",
+          "bytes": 24010842
+        },
+        {
+          "f": "tokenizer.json",
+          "bytes": 439125
+        }
+      ]
+    },
+    "tokenizer": {
+      "config": {
+        "type": "WordPiece",
+        "lowercasing": false,
+        "stripAccents": false,
+        "handleChineseChars": true,
+        "cleanText": true,
+        "preTokenizer": "BertPreTokenizer",
+        "postProcessor": "TemplateProcessing",
+        "vocabSize": 21128,
+        "unkToken": "[UNK]",
+        "continuingSubwordPrefix": "##",
+        "maxInputCharsPerWord": 100,
+        "truncation": null,
+        "padding": null
+      },
+      "specialIds": {
+        "pad": 0,
+        "unk": 100,
+        "cls": 101,
+        "sep": 102,
+        "mask": 103
+      },
+      "samples": [
+        {
+          "input": "无限牛马多智能体群聊桌面应用",
+          "tokens": [
+            "[CLS]",
+            "无",
+            "限",
+            "牛",
+            "马",
+            "多",
+            "智",
+            "能",
+            "体",
+            "群",
+            "聊",
+            "桌",
+            "面",
+            "应",
+            "用",
+            "[SEP]"
+          ],
+          "ids": [
+            101,
+            3187,
+            7361,
+            4281,
+            7716,
+            1914,
+            3255,
+            5543,
+            860,
+            5408,
+            5464,
+            3430,
+            7481,
+            2418,
+            4500,
+            102
+          ],
+          "tokenCount": 16,
+          "decoded": "无 限 牛 马 多 智 能 体 群 聊 桌 面 应 用",
+          "hasUnk": false
+        },
+        {
+          "input": "packages/memory-os/src/index.ts",
+          "tokens": [
+            "[CLS]",
+            "pack",
+            "##age",
+            "##s",
+            "/",
+            "memory",
+            "-",
+            "os",
+            "/",
+            "sr",
+            "##c",
+            "/",
+            "index",
+            ".",
+            "ts",
+            "[SEP]"
+          ],
+          "ids": [
+            101,
+            12736,
+            9103,
+            8118,
+            120,
+            11910,
+            118,
+            8721,
+            120,
+            12109,
+            8177,
+            120,
+            9405,
+            119,
+            9154,
+            102
+          ],
+          "tokenCount": 16,
+          "decoded": "packages / memory - os / src / index . ts",
+          "hasUnk": false
+        },
+        {
+          "input": "E_MEMORY_CORRUPT",
+          "tokens": [
+            "[CLS]",
+            "[UNK]",
+            "_",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "_",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[SEP]"
+          ],
+          "ids": [
+            101,
+            100,
+            142,
+            100,
+            100,
+            100,
+            100,
+            100,
+            100,
+            142,
+            100,
+            100,
+            100,
+            100,
+            100,
+            100,
+            100,
+            102
+          ],
+          "tokenCount": 18,
+          "decoded": "[UNK] _ [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] _ [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK]",
+          "hasUnk": true
+        },
+        {
+          "input": "CCA_ARMY_MEMORY_DIR=/tmp/mem",
+          "tokens": [
+            "[CLS]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "_",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "_",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "_",
+            "[UNK]",
+            "[UNK]",
+            "[UNK]",
+            "=",
+            "/",
+            "tm",
+            "##p",
+            "/",
+            "me",
+            "##m",
+            "[SEP]"
+          ],
+          "ids": [
+            101,
+            100,
+            100,
+            100,
+            142,
+            100,
+            100,
+            100,
+            100,
+            142,
+            100,
+            100,
+            100,
+            100,
+            100,
+            100,
+            142,
+            100,
+            100,
+            100,
+            134,
+            120,
+            9908,
+            8187,
+            120,
+            8450,
+            8175,
+            102
+          ],
+          "tokenCount": 28,
+          "decoded": "[UNK] [UNK] [UNK] _ [UNK] [UNK] [UNK] [UNK] _ [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] _ [UNK] [UNK] [UNK] = / tmp / mem",
+          "hasUnk": true
+        },
+        {
+          "input": "Hello 世界，World!",
+          "tokens": [
+            "[CLS]",
+            "[UNK]",
+            "##ello",
+            "世",
+            "界",
+            "，",
+            "[UNK]",
+            "##or",
+            "##ld",
+            "!",
+            "[SEP]"
+          ],
+          "ids": [
+            101,
+            100,
+            13213,
+            686,
+            4518,
+            8024,
+            100,
+            8372,
+            8635,
+            106,
+            102
+          ],
+          "tokenCount": 11,
+          "decoded": "[UNK]ello 世 界 ， [UNK]orld !",
+          "hasUnk": true
+        },
+        {
+          "input": "记忆层采用双层设计",
+          "tokens": [
+            "[CLS]",
+            "记",
+            "忆",
+            "层",
+            "采",
+            "用",
+            "双",
+            "层",
+            "设",
+            "计",
+            "[SEP]"
+          ],
+          "ids": [
+            101,
+            6381,
+            2554,
+            2231,
+            7023,
+            4500,
+            1352,
+            2231,
+            6392,
+            6369,
+            102
+          ],
+          "tokenCount": 11,
+          "decoded": "记 忆 层 采 用 双 层 设 计",
+          "hasUnk": false
+        }
+      ],
+      "cjkIsolation": [
+        "无",
+        "限",
+        "牛",
+        "马"
+      ],
+      "punctuationIsolation": [
+        "a",
+        ",",
+        "b",
+        ".",
+        "c",
+        "-",
+        "d"
+      ],
+      "vocabHasCJK": [
+        {
+          "c": "无",
+          "id": 3187
+        },
+        {
+          "c": "限",
+          "id": 7361
+        },
+        {
+          "c": "牛",
+          "id": 4281
+        },
+        {
+          "c": "马",
+          "id": 7716
+        },
+        {
+          "c": "群",
+          "id": 5408
+        },
+        {
+          "c": "聊",
+          "id": 5464
+        }
+      ],
+      "whitespaceHandling": [
+        "a",
+        "b"
+      ]
+    },
+    "channels": [
+      {
+        "query": "牛",
+        "kind": "CJK-1字",
+        "expect": [
+          "uni",
+          "like"
+        ],
+        "len": 1,
+        "uni": [
+          "m-009",
+          "m-001"
+        ],
+        "tri": null,
+        "triSkipped": "query<3chars (fts5 trigram 限制)",
+        "like": [
+          "m-009",
+          "m-001"
+        ]
+      },
+      {
+        "query": "牛马",
+        "kind": "CJK-2字",
+        "expect": [
+          "uni"
+        ],
+        "len": 2,
+        "uni": [
+          "m-001"
+        ],
+        "tri": null,
+        "triSkipped": "query<3chars (fts5 trigram 限制)",
+        "like": [
+          "m-001"
+        ]
+      },
+      {
+        "query": "状态机",
+        "kind": "CJK-3字",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 3,
+        "uni": [
+          "m-001",
+          "m-010"
+        ],
+        "tri": [
+          "m-001",
+          "m-010"
+        ],
+        "like": [
+          "m-010",
+          "m-001"
+        ]
+      },
+      {
+        "query": "多智能体群聊",
+        "kind": "CJK-长子串",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 6,
+        "uni": [
+          "m-014",
+          "m-008"
+        ],
+        "tri": [
+          "m-014",
+          "m-008"
+        ],
+        "like": [
+          "m-008",
+          "m-014"
+        ]
+      },
+      {
+        "query": "智能体群聊桌面应用",
+        "kind": "CJK-长子串",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 9,
+        "uni": [
+          "m-014",
+          "m-008"
+        ],
+        "tri": [
+          "m-014",
+          "m-008"
+        ],
+        "like": [
+          "m-008",
+          "m-014"
+        ]
+      },
+      {
+        "query": "值班安排",
+        "kind": "语义（无词面重叠）",
+        "expect": [
+          "vector"
+        ],
+        "len": 4,
+        "uni": [],
+        "tri": [],
+        "like": []
+      },
+      {
+        "query": "memory-os",
+        "kind": "ASCII-标识符",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 9,
+        "uni": [
+          "m-012",
+          "m-003"
+        ],
+        "tri": [
+          "m-012",
+          "m-003"
+        ],
+        "like": [
+          "m-012",
+          "m-003"
+        ]
+      },
+      {
+        "query": "src/index.ts",
+        "kind": "ASCII-路径",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 12,
+        "uni": [
+          "m-003"
+        ],
+        "tri": [
+          "m-003"
+        ],
+        "like": [
+          "m-003"
+        ]
+      },
+      {
+        "query": "packages/memory-os/src/index.ts",
+        "kind": "ASCII-长路径",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 31,
+        "uni": [
+          "m-003"
+        ],
+        "tri": [
+          "m-003"
+        ],
+        "like": [
+          "m-003"
+        ]
+      },
+      {
+        "query": "E_MEMORY_CORRUPT",
+        "kind": "错误码",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 16,
+        "uni": [
+          "m-002"
+        ],
+        "tri": [
+          "m-002"
+        ],
+        "like": [
+          "m-002"
+        ]
+      },
+      {
+        "query": "E_WRITER_DENIED",
+        "kind": "错误码",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 15,
+        "uni": [
+          "m-007"
+        ],
+        "tri": [
+          "m-007"
+        ],
+        "like": [
+          "m-007"
+        ]
+      },
+      {
+        "query": "CCA_ARMY_MEMORY_DIR",
+        "kind": "环境变量",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 19,
+        "uni": [
+          "m-013"
+        ],
+        "tri": [
+          "m-013"
+        ],
+        "like": [
+          "m-013"
+        ]
+      },
+      {
+        "query": "--filter @ccarmy",
+        "kind": "命令行",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 16,
+        "uni": [
+          "m-012"
+        ],
+        "tri": [
+          "m-012"
+        ],
+        "like": [
+          "m-012"
+        ]
+      },
+      {
+        "query": "JSONL 全量重建",
+        "kind": "混合（含空格）",
+        "expect": [
+          "uni",
+          "tri"
+        ],
+        "len": 10,
+        "uni": [
+          "m-002"
+        ],
+        "tri": [
+          "m-002"
+        ],
+        "like": [
+          "m-002"
+        ]
+      },
+      {
+        "query": "zzz_not_present_zzz",
+        "kind": "完全不存在",
+        "expect": [],
+        "len": 19,
+        "uni": [],
+        "tri": [],
+        "like": []
+      }
+    ],
+    "channelDelta": {
+      "triHitsUniMisses": [],
+      "uniHitsTriMisses": [],
+      "note": "fts_uni 用\"字符间插空格 + 短语\"实现子串匹配，覆盖率与 trigram 高度重叠；差异在选择性/速度与 LIKE 加速（见 latency 段）"
+    },
+    "vectorStatus": {
+      "ready": true,
+      "reason": "ok(wasmPaths=file-url)",
+      "backend": "wasm-simd",
+      "dim": 512,
+      "simdSupported": true,
+      "threads": 1,
+      "modelPath": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx",
+      "tokenizerPath": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\tokenizer.json",
+      "modelBytes": 24010842,
+      "ortMain": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\node_modules\\onnxruntime-web\\dist\\ort.node.min.js",
+      "ortTried": [
+        "require:onnxruntime-web"
+      ],
+      "loadMs": 184,
+      "embeds": 0,
+      "embedTotalMs": 0,
+      "lastEmbedMs": 0,
+      "maxLength": 256,
+      "queryPrefix": "",
+      "tokenizer": {
+        "type": "WordPiece",
+        "lowercasing": false,
+        "stripAccents": false,
+        "handleChineseChars": true,
+        "cleanText": true,
+        "preTokenizer": "BertPreTokenizer",
+        "postProcessor": "TemplateProcessing",
+        "vocabSize": 21128,
+        "unkToken": "[UNK]",
+        "continuingSubwordPrefix": "##",
+        "maxInputCharsPerWord": 100,
+        "truncation": null,
+        "padding": null
+      },
+      "outputs": [
+        "last_hidden_state"
+      ],
+      "modelCandidates": [
+        "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-main-1789647495478-b9mia\\models\\model_quantized.onnx",
+        "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
+      ]
+    },
+    "fused": [
+      {
+        "query": "牛",
+        "kind": "CJK-1字",
+        "cards": [
+          {
+            "recordId": "m-009",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "vector": 1
+            },
+            "cosine": 1,
+            "rrfScore": 0.032787,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 5,
+              "recordId": "m-009"
+            }
+          },
+          {
+            "recordId": "m-001",
+            "source": "fts_uni",
+            "sources": [
+              "fts_uni"
+            ],
+            "ranks": {
+              "fts_uni": 2
+            },
+            "rrfScore": 0.016129,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 1,
+              "recordId": "m-001"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 2,
+            "ms": 1
+          },
+          {
+            "channel": "fts_tri",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "query<3chars"
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 1,
+            "ms": 1
+          }
+        ],
+        "candidates": {
+          "uni": 2,
+          "tri": 0,
+          "vector": 14,
+          "fused": 2
+        },
+        "timings": {
+          "totalMs": 175,
+          "hydrateMs": 170,
+          "embedQueryMs": 3,
+          "uniMs": 1,
+          "triMs": 0,
+          "vecMs": 1,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 14,
+          "vectorBelowThreshold": 13,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "牛马",
+        "kind": "CJK-2字",
+        "cards": [
+          {
+            "recordId": "m-001",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "vector": 2
+            },
+            "cosine": 0.7817955357387834,
+            "rrfScore": 0.032522,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 1,
+              "recordId": "m-001"
+            }
+          },
+          {
+            "recordId": "m-009",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 1
+            },
+            "cosine": 0.8987969244199541,
+            "rrfScore": 0.016393,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 5,
+              "recordId": "m-009"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "fts_tri",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "query<3chars"
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 2,
+            "ms": 1
+          }
+        ],
+        "candidates": {
+          "uni": 1,
+          "tri": 0,
+          "vector": 14,
+          "fused": 2
+        },
+        "timings": {
+          "totalMs": 4,
+          "hydrateMs": 0,
+          "embedQueryMs": 3,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 1,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 12,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "状态机",
+        "kind": "CJK-3字",
+        "cards": [
+          {
+            "recordId": "m-001",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1,
+              "vector": 2
+            },
+            "cosine": 0.7723083674812465,
+            "rrfScore": 0.048916,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 1,
+              "recordId": "m-001"
+            }
+          },
+          {
+            "recordId": "m-010",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 2,
+              "fts_tri": 2,
+              "vector": 1
+            },
+            "cosine": 0.8317022129014919,
+            "rrfScore": 0.048652,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 6,
+              "recordId": "m-010"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          }
+        ],
+        "candidates": {
+          "uni": 2,
+          "tri": 2,
+          "vector": 14,
+          "fused": 2
+        },
+        "timings": {
+          "totalMs": 3,
+          "hydrateMs": 0,
+          "embedQueryMs": 3,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 12,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "多智能体群聊",
+        "kind": "CJK-长子串",
+        "cards": [
+          {
+            "recordId": "m-014",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1,
+              "vector": 3
+            },
+            "cosine": 0.8290318837972991,
+            "rrfScore": 0.04866,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 8,
+              "recordId": "m-014"
+            }
+          },
+          {
+            "recordId": "m-008",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 2,
+              "fts_tri": 2,
+              "vector": 1
+            },
+            "cosine": 0.854175191659696,
+            "rrfScore": 0.048652,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 12,
+              "recordId": "m-008"
+            }
+          },
+          {
+            "recordId": "m-006",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 2
+            },
+            "cosine": 0.8391882719369059,
+            "rrfScore": 0.016129,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 10,
+              "recordId": "m-006"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 2,
+            "ms": 1
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 3,
+            "ms": 0
+          }
+        ],
+        "candidates": {
+          "uni": 2,
+          "tri": 2,
+          "vector": 14,
+          "fused": 3
+        },
+        "timings": {
+          "totalMs": 5,
+          "hydrateMs": 0,
+          "embedQueryMs": 4,
+          "uniMs": 1,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 11,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "智能体群聊桌面应用",
+        "kind": "CJK-长子串",
+        "cards": [
+          {
+            "recordId": "m-014",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1,
+              "vector": 3
+            },
+            "cosine": 0.8352663778144367,
+            "rrfScore": 0.04866,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 8,
+              "recordId": "m-014"
+            }
+          },
+          {
+            "recordId": "m-008",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 2,
+              "fts_tri": 2,
+              "vector": 2
+            },
+            "cosine": 0.8749246319430931,
+            "rrfScore": 0.048387,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 12,
+              "recordId": "m-008"
+            }
+          },
+          {
+            "recordId": "m-006",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 1
+            },
+            "cosine": 0.889001833241332,
+            "rrfScore": 0.016393,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 10,
+              "recordId": "m-006"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 2,
+            "ms": 1
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 3,
+            "ms": 0
+          }
+        ],
+        "candidates": {
+          "uni": 2,
+          "tri": 2,
+          "vector": 14,
+          "fused": 3
+        },
+        "timings": {
+          "totalMs": 6,
+          "hydrateMs": 0,
+          "embedQueryMs": 5,
+          "uniMs": 0,
+          "triMs": 1,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 11,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "值班安排",
+        "kind": "语义（无词面重叠）",
+        "cards": [
+          {
+            "recordId": "m-010",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 1
+            },
+            "cosine": 0.8400482765423818,
+            "rrfScore": 0.016393,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 6,
+              "recordId": "m-010"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": false,
+            "hits": 0,
+            "ms": 1,
+            "skipped": "matched via LIKE fallback"
+          },
+          {
+            "channel": "fts_tri",
+            "used": false,
+            "hits": 0,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "like",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "fallback-of-fts_uni"
+          }
+        ],
+        "candidates": {
+          "uni": 0,
+          "tri": 0,
+          "vector": 14,
+          "fused": 1
+        },
+        "timings": {
+          "totalMs": 5,
+          "hydrateMs": 0,
+          "embedQueryMs": 4,
+          "uniMs": 1,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 13,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "memory-os",
+        "kind": "ASCII-标识符",
+        "cards": [
+          {
+            "recordId": "m-012",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1,
+              "vector": 1
+            },
+            "cosine": 0.8241681379426393,
+            "rrfScore": 0.04918,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 7,
+              "recordId": "m-012"
+            }
+          },
+          {
+            "recordId": "m-003",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 2,
+              "fts_tri": 2,
+              "vector": 2
+            },
+            "cosine": 0.8203733311520256,
+            "rrfScore": 0.048387,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 3,
+              "recordId": "m-003"
+            }
+          },
+          {
+            "recordId": "m-004",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 3
+            },
+            "cosine": 0.7777649573300922,
+            "rrfScore": 0.015873,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 4,
+              "recordId": "m-004"
+            }
+          },
+          {
+            "recordId": "m-007",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 4
+            },
+            "cosine": 0.7661829878084603,
+            "rrfScore": 0.015625,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 11,
+              "recordId": "m-007"
+            }
+          },
+          {
+            "recordId": "m-011",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 5
+            },
+            "cosine": 0.7660092715488648,
+            "rrfScore": 0.015385,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 13,
+              "recordId": "m-011"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 2,
+            "ms": 1
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 6,
+            "ms": 0
+          }
+        ],
+        "candidates": {
+          "uni": 2,
+          "tri": 2,
+          "vector": 14,
+          "fused": 6
+        },
+        "timings": {
+          "totalMs": 4,
+          "hydrateMs": 0,
+          "embedQueryMs": 3,
+          "uniMs": 0,
+          "triMs": 1,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 8,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "src/index.ts",
+        "kind": "ASCII-路径",
+        "cards": [
+          {
+            "recordId": "m-003",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1,
+              "vector": 1
+            },
+            "cosine": 0.8341198684385197,
+            "rrfScore": 0.04918,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 3,
+              "recordId": "m-003"
+            }
+          },
+          {
+            "recordId": "m-005",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 2
+            },
+            "cosine": 0.7642375196104616,
+            "rrfScore": 0.016129,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 9,
+              "recordId": "m-005"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 1,
+            "ms": 1
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          }
+        ],
+        "candidates": {
+          "uni": 1,
+          "tri": 1,
+          "vector": 14,
+          "fused": 2
+        },
+        "timings": {
+          "totalMs": 5,
+          "hydrateMs": 0,
+          "embedQueryMs": 4,
+          "uniMs": 0,
+          "triMs": 1,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 12,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "packages/memory-os/src/index.ts",
+        "kind": "ASCII-长路径",
+        "cards": [
+          {
+            "recordId": "m-003",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1,
+              "vector": 1
+            },
+            "cosine": 0.9191248690339988,
+            "rrfScore": 0.04918,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 3,
+              "recordId": "m-003"
+            }
+          },
+          {
+            "recordId": "m-012",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 2
+            },
+            "cosine": 0.8272572180043996,
+            "rrfScore": 0.016129,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 7,
+              "recordId": "m-012"
+            }
+          },
+          {
+            "recordId": "m-004",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 3
+            },
+            "cosine": 0.8084904811660052,
+            "rrfScore": 0.015873,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 4,
+              "recordId": "m-004"
+            }
+          },
+          {
+            "recordId": "m-007",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 4
+            },
+            "cosine": 0.7825227325859938,
+            "rrfScore": 0.015625,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 11,
+              "recordId": "m-007"
+            }
+          },
+          {
+            "recordId": "m-011",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 5
+            },
+            "cosine": 0.752466927802393,
+            "rrfScore": 0.015385,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 13,
+              "recordId": "m-011"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 1,
+            "ms": 1
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 5,
+            "ms": 0
+          }
+        ],
+        "candidates": {
+          "uni": 1,
+          "tri": 1,
+          "vector": 14,
+          "fused": 5
+        },
+        "timings": {
+          "totalMs": 9,
+          "hydrateMs": 0,
+          "embedQueryMs": 8,
+          "uniMs": 1,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 9,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "E_MEMORY_CORRUPT",
+        "kind": "错误码",
+        "cards": [
+          {
+            "recordId": "m-002",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1
+            },
+            "rrfScore": 0.032787,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 2,
+              "recordId": "m-002"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 1,
+            "ms": 1
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "unk-ratio 0.88 > 0.5（稠密向量不可信，交给词法通道）"
+          }
+        ],
+        "candidates": {
+          "uni": 1,
+          "tri": 1,
+          "vector": 0,
+          "fused": 1
+        },
+        "timings": {
+          "totalMs": 1,
+          "hydrateMs": 0,
+          "embedQueryMs": 0,
+          "uniMs": 1,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 0,
+          "hydrated": 0,
+          "vectorBelowThreshold": 0,
+          "vectorUnkRatio": 0.875
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "E_WRITER_DENIED",
+        "kind": "错误码",
+        "cards": [
+          {
+            "recordId": "m-007",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1
+            },
+            "rrfScore": 0.032787,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 11,
+              "recordId": "m-007"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "unk-ratio 0.87 > 0.5（稠密向量不可信，交给词法通道）"
+          }
+        ],
+        "candidates": {
+          "uni": 1,
+          "tri": 1,
+          "vector": 0,
+          "fused": 1
+        },
+        "timings": {
+          "totalMs": 0,
+          "hydrateMs": 0,
+          "embedQueryMs": 0,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 0,
+          "hydrated": 0,
+          "vectorBelowThreshold": 0,
+          "vectorUnkRatio": 0.8666666666666667
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "CCA_ARMY_MEMORY_DIR",
+        "kind": "环境变量",
+        "cards": [
+          {
+            "recordId": "m-013",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1
+            },
+            "rrfScore": 0.032787,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 14,
+              "recordId": "m-013"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "unk-ratio 0.84 > 0.5（稠密向量不可信，交给词法通道）"
+          }
+        ],
+        "candidates": {
+          "uni": 1,
+          "tri": 1,
+          "vector": 0,
+          "fused": 1
+        },
+        "timings": {
+          "totalMs": 1,
+          "hydrateMs": 0,
+          "embedQueryMs": 0,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 0,
+          "hydrated": 0,
+          "vectorBelowThreshold": 0,
+          "vectorUnkRatio": 0.8421052631578947
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "--filter @ccarmy",
+        "kind": "命令行",
+        "cards": [
+          {
+            "recordId": "m-012",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1,
+              "vector": 1
+            },
+            "cosine": 0.8516654713151788,
+            "rrfScore": 0.04918,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 7,
+              "recordId": "m-012"
+            }
+          },
+          {
+            "recordId": "m-002",
+            "source": "vector",
+            "sources": [
+              "vector"
+            ],
+            "ranks": {
+              "vector": 2
+            },
+            "cosine": 0.7646632959937048,
+            "rrfScore": 0.016129,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 2,
+              "recordId": "m-002"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 1,
+            "ms": 1
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          }
+        ],
+        "candidates": {
+          "uni": 1,
+          "tri": 1,
+          "vector": 14,
+          "fused": 2
+        },
+        "timings": {
+          "totalMs": 6,
+          "hydrateMs": 0,
+          "embedQueryMs": 5,
+          "uniMs": 0,
+          "triMs": 1,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 12,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "JSONL 全量重建",
+        "kind": "混合（含空格）",
+        "cards": [
+          {
+            "recordId": "m-002",
+            "source": "fused",
+            "sources": [
+              "fts_uni",
+              "fts_tri"
+            ],
+            "ranks": {
+              "fts_uni": 1,
+              "fts_tri": 1
+            },
+            "rrfScore": 0.032787,
+            "anchor": {
+              "file": "fast-memory.jsonl",
+              "seq": 2,
+              "recordId": "m-002"
+            }
+          }
+        ],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "fts_tri",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "unk-ratio 0.56 > 0.5（稠密向量不可信，交给词法通道）"
+          }
+        ],
+        "candidates": {
+          "uni": 1,
+          "tri": 1,
+          "vector": 0,
+          "fused": 1
+        },
+        "timings": {
+          "totalMs": 0,
+          "hydrateMs": 0,
+          "embedQueryMs": 0,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 0,
+          "hydrated": 0,
+          "vectorBelowThreshold": 0,
+          "vectorUnkRatio": 0.5555555555555556
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      },
+      {
+        "query": "zzz_not_present_zzz",
+        "kind": "完全不存在",
+        "cards": [],
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "matched via LIKE fallback"
+          },
+          {
+            "channel": "fts_tri",
+            "used": false,
+            "hits": 0,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": false,
+            "hits": 0,
+            "ms": 1,
+            "skipped": "all 14 cosines below minCosine 0.5"
+          },
+          {
+            "channel": "like",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "fallback-of-fts_uni"
+          }
+        ],
+        "candidates": {
+          "uni": 0,
+          "tri": 0,
+          "vector": 14,
+          "fused": 0
+        },
+        "timings": {
+          "totalMs": 7,
+          "hydrateMs": 0,
+          "embedQueryMs": 5,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 1,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 14,
+          "vectorUnkRatio": 0
+        },
+        "scopeStats": {
+          "scopeActive": false,
+          "predicate": "",
+          "table": null,
+          "totalRecords": 14,
+          "authorizedRecords": 14,
+          "deniedRecords": 0
+        }
+      }
+    ],
+    "vectorOnlyQueries": [
+      {
+        "query": "值班安排",
+        "expect": "m-010",
+        "lexicalCandidates": {
+          "uni": 0,
+          "tri": 0
+        },
+        "cards": [
+          {
+            "id": "m-010",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.8400482765423818
+          }
+        ],
+        "timings": {
+          "totalMs": 1,
+          "hydrateMs": 0,
+          "embedQueryMs": 0,
+          "uniMs": 0,
+          "triMs": 1,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 13,
+          "vectorUnkRatio": 0
+        },
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "matched via LIKE fallback"
+          },
+          {
+            "channel": "fts_tri",
+            "used": false,
+            "hits": 0,
+            "ms": 1
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 1,
+            "ms": 0
+          },
+          {
+            "channel": "like",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "fallback-of-fts_uni"
+          }
+        ]
+      },
+      {
+        "query": "子进程之间怎么通信",
+        "expect": "m-011",
+        "lexicalCandidates": {
+          "uni": 0,
+          "tri": 0
+        },
+        "cards": [
+          {
+            "id": "m-011",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.8026958594981488
+          },
+          {
+            "id": "m-013",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.7949935548128148
+          }
+        ],
+        "timings": {
+          "totalMs": 5,
+          "hydrateMs": 0,
+          "embedQueryMs": 5,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 12,
+          "vectorUnkRatio": 0
+        },
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "matched via LIKE fallback"
+          },
+          {
+            "channel": "fts_tri",
+            "used": false,
+            "hits": 0,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          },
+          {
+            "channel": "like",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "fallback-of-fts_uni"
+          }
+        ]
+      },
+      {
+        "query": "记忆层怎么设计",
+        "expect": "m-008",
+        "lexicalCandidates": {
+          "uni": 0,
+          "tri": 0
+        },
+        "cards": [
+          {
+            "id": "m-008",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.8269455475420806
+          },
+          {
+            "id": "m-011",
+            "sources": [
+              "vector"
+            ],
+            "cosine": 0.7887680068728711
+          }
+        ],
+        "timings": {
+          "totalMs": 5,
+          "hydrateMs": 1,
+          "embedQueryMs": 4,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 12,
+          "vectorUnkRatio": 0
+        },
+        "channels": [
+          {
+            "channel": "fts_uni",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "matched via LIKE fallback"
+          },
+          {
+            "channel": "fts_tri",
+            "used": false,
+            "hits": 0,
+            "ms": 0
+          },
+          {
+            "channel": "vector",
+            "used": true,
+            "hits": 2,
+            "ms": 0
+          },
+          {
+            "channel": "like",
+            "used": false,
+            "hits": 0,
+            "ms": 0,
+            "skipped": "fallback-of-fts_uni"
+          }
+        ]
+      }
+    ],
+    "noiseQueries": [
+      {
+        "query": "zzz_not_present_zzz",
+        "cards": [],
+        "timings": {
+          "totalMs": 1,
+          "hydrateMs": 0,
+          "embedQueryMs": 0,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 14,
+          "vectorUnkRatio": 0
+        },
+        "vectorChannel": {
+          "channel": "vector",
+          "used": false,
+          "hits": 0,
+          "ms": 0,
+          "skipped": "all 14 cosines below minCosine 0.5"
+        }
+      },
+      {
+        "query": "今天中午吃什么比较好",
+        "cards": [],
+        "timings": {
+          "totalMs": 6,
+          "hydrateMs": 0,
+          "embedQueryMs": 6,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 0,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 14,
+          "vectorUnkRatio": 0
+        },
+        "vectorChannel": {
+          "channel": "vector",
+          "used": false,
+          "hits": 0,
+          "ms": 0,
+          "skipped": "all 14 cosines below minCosine 0.5"
+        }
+      },
+      {
+        "query": "量子纠缠与黑洞信息悖论",
+        "cards": [],
+        "timings": {
+          "totalMs": 7,
+          "hydrateMs": 0,
+          "embedQueryMs": 6,
+          "uniMs": 0,
+          "triMs": 0,
+          "vecMs": 1,
+          "fuseMs": 0,
+          "cosines": 14,
+          "hydrated": 0,
+          "vectorBelowThreshold": 14,
+          "vectorUnkRatio": 0
+        },
+        "vectorChannel": {
+          "channel": "vector",
+          "used": false,
+          "hits": 0,
+          "ms": 1,
+          "skipped": "all 14 cosines below minCosine 0.5"
+        }
+      }
+    ],
+    "scopePrefilter": {
+      "s1Records": 8,
+      "s2Records": 6,
+      "predicate": "session_id = ?",
+      "vecRowsTotal": 14,
+      "s1VecRows": 8,
+      "cosinesComputed": 8,
+      "s1TopCard": [
+        "m-010"
+      ],
+      "s2TopCard": [],
+      "lexicalNoScope": [
+        "m-008",
+        "m-002"
+      ],
+      "lexicalScopeS1": [
+        "m-002"
+      ],
+      "lexicalScopeGroupB": [
+        "m-008"
+      ],
+      "entityScoped": {
+        "scopeStats": {
+          "scopeActive": true,
+          "predicate": "entity_type = ?",
+          "table": "scope_filter_bd27c30d",
+          "totalRecords": 14,
+          "authorizedRecords": 6,
+          "deniedRecords": 8
+        },
+        "ids": [
+          "m-008"
+        ]
+      }
+    },
+    "scopeConcurrent": [
+      {
+        "scope": "session_id = ?",
+        "table": "scope_filter_c5b7d005",
+        "ids": [
+          "m-002"
+        ],
+        "cosines": 0
+      },
+      {
+        "scope": "group_id = ?",
+        "table": "scope_filter_5243db80",
+        "ids": [
+          "m-008"
+        ],
+        "cosines": 0
+      },
+      {
+        "scope": "session_id = ?",
+        "table": "scope_filter_86cbcd8",
+        "ids": [
+          "m-008"
+        ],
+        "cosines": 0
+      },
+      {
+        "scope": "session_id = ?",
+        "table": "scope_filter_c5b7d005",
+        "ids": [
+          "m-010"
+        ],
+        "cosines": 8
+      },
+      {
+        "scope": "session_id = ?",
+        "table": "scope_filter_86cbcd8",
+        "ids": [],
+        "cosines": 6
+      },
+      {
+        "scope": "",
+        "table": null,
+        "ids": [
+          "m-011",
+          "m-008"
+        ],
+        "cosines": 14
+      }
+    ],
+    "retrieve": [
+      {
+        "name": "exact:sqlite:id",
+        "input": {
+          "recordId": "m-003"
+        },
+        "opts": {},
+        "hitLevel": "exact",
+        "via": "sqlite:id",
+        "seq": 3,
+        "recordId": "m-003",
+        "rawHead": "实现文件 packages/memory-os/src/index.ts 新增 fts_tri 三元索引",
+        "note": null
+      },
+      {
+        "name": "exact:sqlite:seq",
+        "input": {
+          "seq": 9
+        },
+        "opts": {},
+        "hitLevel": "exact",
+        "via": "sqlite:seq",
+        "seq": 9,
+        "recordId": "m-005",
+        "rawHead": "外部群归档流水线 KnowledgeArchiver 处理证据锚点与双向索引",
+        "note": null
+      },
+      {
+        "name": "exact:jsonl:offset",
+        "input": {
+          "file": "fast-memory.jsonl",
+          "byteOffset": 1738
+        },
+        "opts": {},
+        "hitLevel": "exact",
+        "via": "jsonl:offset",
+        "seq": 10,
+        "recordId": "m-006",
+        "rawHead": "群聊桌面应用支持单 AI、内部群、外部群三种群类型",
+        "note": null
+      },
+      {
+        "name": "nearby:seq±5",
+        "input": {
+          "seq": 15
+        },
+        "opts": {},
+        "hitLevel": "nearby",
+        "via": "sqlite:seq±5",
+        "seq": 14,
+        "recordId": "m-013",
+        "rawHead": "ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程",
+        "note": "previous levels failed: exact"
+      },
+      {
+        "name": "nearby:seq-out-of-window",
+        "input": {
+          "seq": 999,
+          "recordId": "zzz-absent"
+        },
+        "opts": {},
+        "hitLevel": "fuzzy",
+        "via": "sqlite:newest",
+        "seq": 14,
+        "recordId": "m-013",
+        "rawHead": "ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程",
+        "note": "previous levels failed: exact, nearby"
+      },
+      {
+        "name": "nearby:id-trim-#",
+        "input": {
+          "recordId": "m-003#7"
+        },
+        "opts": {},
+        "hitLevel": "nearby",
+        "via": "sqlite:id-trim",
+        "seq": 3,
+        "recordId": "m-003",
+        "rawHead": "实现文件 packages/memory-os/src/index.ts 新增 fts_tri 三元索引",
+        "note": "previous levels failed: exact"
+      },
+      {
+        "name": "nearby:id-trim--v2",
+        "input": {
+          "recordId": "m-012-v2"
+        },
+        "opts": {},
+        "hitLevel": "nearby",
+        "via": "sqlite:id-trim",
+        "seq": 7,
+        "recordId": "m-012",
+        "rawHead": "pnpm --filter @ccarmy/memory-os build 编译投影层",
+        "note": "previous levels failed: exact"
+      },
+      {
+        "name": "nearby:offset-nearest",
+        "input": {
+          "file": "fast-memory.jsonl",
+          "byteOffset": 185
+        },
+        "opts": {},
+        "hitLevel": "nearby",
+        "via": "jsonl:offset-nearest",
+        "seq": 2,
+        "recordId": "m-002",
+        "rawHead": "错误码 E_MEMORY_CORRUPT 表示 SQLite 投影损坏，可从 JSONL 全量重建",
+        "note": "previous levels failed: exact"
+      },
+      {
+        "name": "fuzzy:fts",
+        "input": {
+          "recordId": "牛马"
+        },
+        "opts": {
+          "fallback": "fuzzy"
+        },
+        "hitLevel": "fuzzy",
+        "via": "fts:uni",
+        "seq": 1,
+        "recordId": "m-001",
+        "rawHead": "无限牛马项目进度正常，值班者状态机已上线",
+        "note": "previous levels failed: exact, nearby"
+      },
+      {
+        "name": "fuzzy:newest",
+        "input": {
+          "recordId": "zzz-unknown"
+        },
+        "opts": {
+          "fallback": "fuzzy"
+        },
+        "hitLevel": "fuzzy",
+        "via": "sqlite:newest",
+        "seq": 14,
+        "recordId": "m-013",
+        "rawHead": "ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程",
+        "note": "previous levels failed: exact, nearby"
+      },
+      {
+        "name": "exact-only:miss",
+        "input": {
+          "seq": 999
+        },
+        "opts": {
+          "fallback": "exact"
+        },
+        "hitLevel": null,
+        "via": null,
+        "seq": null,
+        "recordId": null,
+        "rawHead": null,
+        "note": null
+      },
+      {
+        "name": "nearby-only:miss",
+        "input": {
+          "seq": 999
+        },
+        "opts": {
+          "fallback": "nearby"
+        },
+        "hitLevel": null,
+        "via": null,
+        "seq": null,
+        "recordId": null,
+        "rawHead": null,
+        "note": null
+      },
+      {
+        "name": "nearby-only:seq",
+        "input": {
+          "seq": 15
+        },
+        "opts": {
+          "fallback": "nearby"
+        },
+        "hitLevel": "nearby",
+        "via": "sqlite:seq±5",
+        "seq": 14,
+        "recordId": "m-013",
+        "rawHead": "ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程",
+        "note": "previous levels failed: exact"
+      },
+      {
+        "name": "nearby-only:id",
+        "input": {
+          "seq": 999,
+          "recordId": "m-003"
+        },
+        "opts": {
+          "fallback": "nearby"
+        },
+        "hitLevel": "exact",
+        "via": "sqlite:id",
+        "seq": 3,
+        "recordId": "m-003",
+        "rawHead": "实现文件 packages/memory-os/src/index.ts 新增 fts_tri 三元索引",
+        "note": null
+      },
+      {
+        "name": "empty-anchor",
+        "input": {},
+        "opts": {},
+        "hitLevel": "fuzzy",
+        "via": "sqlite:newest",
+        "seq": 14,
+        "recordId": "m-013",
+        "rawHead": "ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程",
+        "note": "previous levels failed: exact, nearby"
+      }
+    ],
+    "sourceOfTruth": {
+      "deletedFromProjection_retrieve": {
+        "hitLevel": "exact",
+        "via": "jsonl:id"
+      },
+      "deletedFromProjection_recall": [
+        "m-005"
+      ],
+      "rebuildCount": 14,
+      "afterRebuild_retrieve": {
+        "hitLevel": "exact",
+        "via": "sqlite:id"
+      },
+      "afterRebuild_recall": [
+        "m-003"
+      ],
+      "statsAfter": {
+        "records": 14,
+        "ftsUniDocs": 14,
+        "ftsTriDocs": 14,
+        "vecRows": 0
+      }
+    },
+    "vectorOnly": {
+      "query": "子进程之间怎么通信",
+      "lexical": {
+        "uni": 0,
+        "tri": 0
+      },
+      "cards": [
+        {
+          "id": "m-011",
+          "sources": [
+            "vector"
+          ],
+          "cosine": 0.8026958594981488
+        },
+        {
+          "id": "m-013",
+          "sources": [
+            "vector"
+          ],
+          "cosine": 0.7949935548128148
+        }
+      ]
+    },
+    "vectorMath": {
+      "dim": 512,
+      "normOfEmbedding": 1,
+      "sameTextFloatCos": 1,
+      "sameTextInt8Cos": 1,
+      "int8vsFloat32MaxAbsDiff": 0.001034,
+      "unrelatedFloatCos": 0.255519,
+      "unrelatedInt8Cos": 0.254484,
+      "blobBytes": 512,
+      "float32Bytes": 2048,
+      "embedMsLast": 7,
+      "embedMsAvg": 9.213,
+      "embeds": 47
+    },
+    "semanticPairs": [
+      {
+        "a": "值班者状态机在指定成员忙碌时自动排队并顺延",
+        "b": "值班安排如何顺延到下一个空闲成员",
+        "label": "paraphrase-值班",
+        "cosine": 0.7051
+      },
+      {
+        "a": "记忆服务作为长驻子进程通过 IPC 通信",
+        "b": "子进程与主进程之间的通信方式",
+        "label": "paraphrase-IPC",
+        "cosine": 0.6171
+      },
+      {
+        "a": "记忆服务作为长驻子进程通过 IPC 通信",
+        "b": "今天中午吃什么比较好",
+        "label": "unrelated",
+        "cosine": 0.241
+      },
+      {
+        "a": "错误码 E_MEMORY_CORRUPT 表示投影损坏",
+        "b": "数据库投影损坏的报错名",
+        "label": "paraphrase-错误码",
+        "cosine": 0.7486
+      }
+    ],
+    "backCompat": {
+      "oldSignature": {
+        "call": "recall('牛马')",
+        "cards": 2,
+        "shape": {
+          "seq": 1,
+          "recordId": "m-001",
+          "snippet": "无限牛马项目进度正常，值班者状态机已上线",
+          "score": 0.7817955357387834,
+          "source": "fused"
+        }
+      },
+      "oldSignatureWithLimit": {
+        "call": "recall('牛马', 3)",
+        "cards": 2
+      },
+      "contractRecallCard": {
+        "required": [
+          "anchor",
+          "snippet",
+          "score",
+          "source"
+        ],
+        "anchor": [
+          "file",
+          "seq",
+          "recordId"
+        ],
+        "conforms": true
+      },
+      "contractRetrieveResult": {
+        "required": [
+          "raw",
+          "hitLevel",
+          "anchor"
+        ],
+        "conforms": true,
+        "sample": {
+          "hitLevel": "exact",
+          "via": "sqlite:id",
+          "anchor": {
+            "file": "fast-memory.jsonl",
+            "seq": 1,
+            "recordId": "m-001"
+          }
+        }
+      }
+    },
+    "rrf": {
+      "input": {
+        "fts_uni": [
+          "1",
+          "2",
+          "3"
+        ],
+        "fts_tri": [
+          "2",
+          "1",
+          "9"
+        ],
+        "vector": [
+          "3",
+          "2",
+          "8"
+        ]
+      },
+      "fused": [
+        {
+          "id": "2",
+          "rrfScore": 0.04865,
+          "sources": [
+            "fts_uni",
+            "fts_tri",
+            "vector"
+          ],
+          "ranks": {
+            "fts_uni": 2,
+            "fts_tri": 1,
+            "vector": 2
+          }
+        },
+        {
+          "id": "1",
+          "rrfScore": 0.03252,
+          "sources": [
+            "fts_uni",
+            "fts_tri"
+          ],
+          "ranks": {
+            "fts_uni": 1,
+            "fts_tri": 2
+          }
+        },
+        {
+          "id": "3",
+          "rrfScore": 0.03227,
+          "sources": [
+            "fts_uni",
+            "vector"
+          ],
+          "ranks": {
+            "fts_uni": 3,
+            "vector": 1
+          }
+        },
+        {
+          "id": "8",
+          "rrfScore": 0.01587,
+          "sources": [
+            "vector"
+          ],
+          "ranks": {
+            "vector": 3
+          }
+        },
+        {
+          "id": "9",
+          "rrfScore": 0.01587,
+          "sources": [
+            "fts_tri"
+          ],
+          "ranks": {
+            "fts_tri": 3
+          }
+        }
+      ]
+    },
+    "latency": {
+      "corpusRecords": 2000,
+      "buildMs": 863,
+      "jsonlBytes": 397214,
+      "indexed": {
+        "ftsUniDocs": 2000,
+        "ftsTriDocs": 2000
+      },
+      "vocabStats": {
+        "fts_uni": {
+          "distinctTerms": 89,
+          "totalPostings": 135147,
+          "avgOccurrencesPerDoc": 3003.3,
+          "docsIndexed": 2000
+        },
+        "fts_tri": {
+          "distinctTerms": 1598,
+          "totalPostings": 158713,
+          "avgOccurrencesPerDoc": 1345,
+          "docsIndexed": 2000
+        }
+      },
+      "queryLatency": [
+        {
+          "query": "packages/memory-os/src/index.ts",
+          "len": 31,
+          "hits": 220,
+          "uni": {
+            "medianMs": 1.56,
+            "minMs": 1.457,
+            "maxMs": 1.627,
+            "reps": 7
+          },
+          "tri": {
+            "medianMs": 0.819,
+            "minMs": 0.766,
+            "maxMs": 0.875,
+            "reps": 7
+          },
+          "speedupTriVsUni": 1.9
+        },
+        {
+          "query": "E_MEMORY_CORRUPT",
+          "len": 16,
+          "hits": 212,
+          "uni": {
+            "medianMs": 1.106,
+            "minMs": 1.08,
+            "maxMs": 1.143,
+            "reps": 7
+          },
+          "tri": {
+            "medianMs": 0.432,
+            "minMs": 0.42,
+            "maxMs": 0.453,
+            "reps": 7
+          },
+          "speedupTriVsUni": 2.56
+        },
+        {
+          "query": "CCA_ARMY_MEMORY_DIR",
+          "len": 19,
+          "hits": 205,
+          "uni": {
+            "medianMs": 1.277,
+            "minMs": 1.131,
+            "maxMs": 1.71,
+            "reps": 7
+          },
+          "tri": {
+            "medianMs": 0.487,
+            "minMs": 0.48,
+            "maxMs": 0.515,
+            "reps": 7
+          },
+          "speedupTriVsUni": 2.62
+        },
+        {
+          "query": "多智能体群聊桌面应用",
+          "len": 10,
+          "hits": 0,
+          "uni": {
+            "medianMs": 0.023,
+            "minMs": 0.022,
+            "maxMs": 0.025,
+            "reps": 7
+          },
+          "tri": {
+            "medianMs": 0.02,
+            "minMs": 0.019,
+            "maxMs": 0.021,
+            "reps": 7
+          },
+          "speedupTriVsUni": 1.15
+        },
+        {
+          "query": "值班者状态机在指定成员忙碌时",
+          "len": 14,
+          "hits": 0,
+          "uni": {
+            "medianMs": 0.059,
+            "minMs": 0.057,
+            "maxMs": 0.065,
+            "reps": 7
+          },
+          "tri": {
+            "medianMs": 0.039,
+            "minMs": 0.038,
+            "maxMs": 0.045,
+            "reps": 7
+          },
+          "speedupTriVsUni": 1.51
+        },
+        {
+          "query": "记忆服务作为长驻子进程",
+          "len": 11,
+          "hits": 0,
+          "uni": {
+            "medianMs": 0.046,
+            "minMs": 0.045,
+            "maxMs": 0.048,
+            "reps": 7
+          },
+          "tri": {
+            "medianMs": 0.03,
+            "minMs": 0.029,
+            "maxMs": 0.031,
+            "reps": 7
+          },
+          "speedupTriVsUni": 1.53
+        }
+      ],
+      "likePlan": {
+        "fts_tri": [
+          "SCAN fts_tri VIRTUAL TABLE INDEX 0:L0"
+        ],
+        "fts_uni": [
+          "SCAN fts_uni VIRTUAL TABLE INDEX 0:"
+        ],
+        "records_fullscan": [
+          "SCAN records"
+        ]
+      },
+      "likeBench": {
+        "triIndexed": {
+          "medianMs": 0.236,
+          "minMs": 0.213,
+          "maxMs": 0.266,
+          "reps": 7
+        },
+        "recordsFullScan": {
+          "medianMs": 0.325,
+          "minMs": 0.281,
+          "maxMs": 0.521,
+          "reps": 7
+        }
+      },
+      "likeSpeedup": 1.38,
+      "triFasterCount": "6/6"
+    },
+    "vectorScanLarge": {
+      "hydrated": {
+        "embedded": 256,
+        "ms": 4891,
+        "remaining": 1744
+      },
+      "vecRows": 512,
+      "timings": {
+        "totalMs": 4803,
+        "hydrateMs": 4795,
+        "embedQueryMs": 6,
+        "uniMs": 0,
+        "triMs": 0,
+        "vecMs": 1,
+        "fuseMs": 0,
+        "cosines": 512,
+        "hydrated": 256,
+        "vectorBelowThreshold": 492,
+        "vectorUnkRatio": 0
+      },
+      "msPerCosine": 0.002,
+      "cards": [
+        {
+          "id": "L1548",
+          "sources": [
+            "vector"
+          ],
+          "cosine": 0.9011805094730803
+        },
+        {
+          "id": "L1656",
+          "sources": [
+            "vector"
+          ],
+          "cosine": 0.8713335921501252
+        },
+        {
+          "id": "L1642",
+          "sources": [
+            "vector"
+          ],
+          "cosine": 0.8711036469883957
+        },
+        {
+          "id": "L1606",
+          "sources": [
+            "vector"
+          ],
+          "cosine": 0.86634606430955
+        },
+        {
+          "id": "L1846",
+          "sources": [
+            "vector"
+          ],
+          "cosine": 0.864769749245248
+        }
+      ]
+    },
+    "persistence": {
+      "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789647506987-d8oz5",
+      "dir": "tmp",
+      "phases": {
+        "A_tail": 14,
+        "A_stats": {
+          "records": 14,
+          "ftsUniDocs": 14,
+          "ftsTriDocs": 14,
+          "vecRows": 0,
+          "schemaVersion": 2,
+          "coldStart": {
+            "rebuilt": false,
+            "lines": 0,
+            "reason": "no jsonl"
+          }
+        },
+        "A_recall_牛马": {
+          "cards": 2,
+          "sources": [
+            [
+              "m-001",
+              [
+                "fts_uni",
+                "vector"
+              ]
+            ],
+            [
+              "m-009",
+              [
+                "vector"
+              ]
+            ]
+          ]
+        },
+        "A_recall_path": {
+          "cards": [
+            [
+              "m-003",
+              [
+                "fts_uni",
+                "fts_tri",
+                "vector"
+              ]
+            ],
+            [
+              "m-005",
+              [
+                "vector"
+              ]
+            ]
+          ],
+          "timings": {
+            "totalMs": 5,
+            "hydrateMs": 0,
+            "embedQueryMs": 4,
+            "uniMs": 0,
+            "triMs": 1,
+            "vecMs": 0,
+            "fuseMs": 0,
+            "cosines": 14,
+            "hydrated": 0,
+            "vectorBelowThreshold": 12,
+            "vectorUnkRatio": 0
+          },
+          "candidates": {
+            "uni": 1,
+            "tri": 1,
+            "vector": 14,
+            "fused": 2
+          }
+        },
+        "A_recall_semantic": {
+          "cards": [
+            [
+              "m-010",
+              [
+                "vector"
+              ],
+              0.8400482765423818
+            ]
+          ],
+          "timings": {
+            "totalMs": 4,
+            "hydrateMs": 0,
+            "embedQueryMs": 4,
+            "uniMs": 0,
+            "triMs": 0,
+            "vecMs": 0,
+            "fuseMs": 0,
+            "cosines": 14,
+            "hydrated": 0,
+            "vectorBelowThreshold": 13,
+            "vectorUnkRatio": 0
+          }
+        },
+        "A_stats2": {
+          "vecRows": 14,
+          "vector": {
+            "ready": true,
+            "embeds": 17,
+            "backend": "wasm-simd"
+          }
+        },
+        "B_before_query": {
+          "embeds": 0,
+          "vecRows": 14,
+          "ftsTriDocs": 14,
+          "coldStart": {
+            "rebuilt": false,
+            "lines": 14,
+            "reason": "projection present"
+          }
+        },
+        "B_after_query": {
+          "embeds": 1,
+          "vecRows": 14,
+          "recall牛马": [
+            [
+              "m-001",
+              [
+                "fts_uni",
+                "vector"
+              ]
+            ],
+            [
+              "m-009",
+              [
+                "vector"
+              ]
+            ]
+          ],
+          "recall错误码": [
+            [
+              "m-007",
+              [
+                "fts_uni",
+                "fts_tri"
+              ]
+            ]
+          ]
+        },
+        "B_recall_semantic": {
+          "cards": [
+            [
+              "m-010",
+              [
+                "vector"
+              ],
+              0.8400482765423818
+            ]
+          ]
+        },
+        "C_after_dbdelete": {
+          "stats": {
+            "records": 14,
+            "ftsUniDocs": 14,
+            "ftsTriDocs": 14,
+            "coldStart": {
+              "rebuilt": true,
+              "lines": 14,
+              "reason": "projection missing, rebuilt from jsonl"
+            }
+          },
+          "cards": [
+            [
+              "m-003",
+              [
+                "fts_uni",
+                "fts_tri",
+                "vector"
+              ]
+            ],
+            [
+              "m-012",
+              [
+                "vector"
+              ]
+            ],
+            [
+              "m-004",
+              [
+                "vector"
+              ]
+            ],
+            [
+              "m-007",
+              [
+                "vector"
+              ]
+            ],
+            [
+              "m-011",
+              [
+                "vector"
+              ]
+            ]
+          ]
+        }
+      },
+      "readyA": {
+        "type": "ready",
+        "pid": 39768,
+        "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789647506987-d8oz5",
+        "schemaVersion": 2
+      },
+      "deletedDbFiles": [
+        {
+          "f": "memory.db",
+          "exists": true
+        },
+        {
+          "f": "memory.db-wal",
+          "exists": false
+        },
+        {
+          "f": "memory.db-shm",
+          "exists": false
+        }
+      ],
+      "embedsA": 17
+    },
+    "legacyUpgrade": {
+      "before": {
+        "tables": [
+          "fts_uni",
+          "fts_uni_config",
+          "fts_uni_data",
+          "fts_uni_docsize",
+          "fts_uni_idx",
+          "meta",
+          "records"
+        ],
+        "hasFtsTri": false,
+        "hasVecIndex": false,
+        "recordsColumns": [
+          "seq",
+          "id",
+          "session_id",
+          "kind",
+          "ts",
+          "body"
+        ],
+        "metaKeys": [
+          "last_seq"
+        ],
+        "jsonl": {
+          "sha1Simple": "20bb3d75",
+          "bytes": 604
+        },
+        "recordCount": 4
+      },
+      "after": {
+        "tables": [
+          "fts_tri",
+          "fts_tri_config",
+          "fts_tri_data",
+          "fts_tri_docsize",
+          "fts_tri_idx",
+          "fts_uni",
+          "fts_uni_config",
+          "fts_uni_data",
+          "fts_uni_docsize",
+          "fts_uni_idx",
+          "meta",
+          "records",
+          "vec_index"
+        ],
+        "recordsColumns": [
+          "seq",
+          "id",
+          "session_id",
+          "kind",
+          "ts",
+          "body",
+          "group_id",
+          "entity_type"
+        ],
+        "metaKeys": [
+          "last_seq",
+          "schema_version"
+        ],
+        "schemaVersion": 2,
+        "upgrade": {
+          "schemaVersionBefore": 0,
+          "schemaVersionAfter": 2,
+          "hadFtsUni": true,
+          "hadFtsTri": false,
+          "createdFtsTri": true,
+          "addedColumns": [
+            "records.group_id",
+            "records.entity_type"
+          ],
+          "backfilledTriRows": 4,
+          "backfilledUniRows": 0
+        },
+        "ftsTriDocs": 4,
+        "ftsUniDocs": 4,
+        "coldStart": {
+          "rebuilt": false,
+          "lines": 4,
+          "reason": "projection present"
+        }
+      },
+      "jsonlUnchanged": true,
+      "triQueryHits": {
+        "E_MEMORY_CORRUPT": [
+          "legacy-2"
+        ],
+        "多智能体群聊": [
+          "legacy-4"
+        ]
+      },
+      "recallHit": [
+        [
+          "legacy-3",
+          [
+            "fts_uni",
+            "fts_tri",
+            "vector"
+          ]
+        ],
+        [
+          "legacy-4",
+          [
+            "vector"
+          ]
+        ]
+      ],
+      "childAfterUpgrade": {
+        "cards": [
+          [
+            "legacy-3",
+            [
+              "fts_uni",
+              "fts_tri",
+              "vector"
+            ]
+          ]
+        ],
+        "ftsTriDocs": 4,
+        "schemaVersion": 2,
+        "coldStart": {
+          "rebuilt": false,
+          "lines": 4,
+          "reason": "projection present"
+        }
+      }
+    }
+  },
+  "failures": [],
+  "summary": {
+    "totalMs": 53814,
+    "checks": 97,
+    "passed": 97,
+    "failed": 0,
+    "largeCorpus": 2000,
+    "qValueSkippedVector": false,
+    "ftsTri": "FTS5 native trigram tokenizer, 与 fts_uni 并存，三路 RRF 融合",
+    "vector": "ready backend=wasm-simd dim=512",
+    "retrieve": "exact → nearby → fuzzy，返回 hitLevel/via"
+  }
+}

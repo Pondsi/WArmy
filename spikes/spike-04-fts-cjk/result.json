@@ -1,0 +1,309 @@
+{
+  "spike": "spike-04-fts-cjk",
+  "title": "FTS5 单字索引 + 中文短语/边界查询",
+  "dod": "2 字词命中率 100%",
+  "ranAt": "2026-09-17T12:07:02.243Z",
+  "command": "node spikes/spike-04-fts-cjk/run.mjs",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "dataset": {
+    "docs": 15,
+    "tokenizer": "unicode61",
+    "indexStrategy": "双侧字符间插空格 + FTS5 短语 MATCH"
+  },
+  "caseResults": [
+    {
+      "label": "1字-马",
+      "q": "马",
+      "expect": [
+        1,
+        9,
+        10
+      ],
+      "got": [
+        1,
+        9,
+        10
+      ],
+      "pass": true
+    },
+    {
+      "label": "1字-项",
+      "q": "项",
+      "expect": [
+        1,
+        2
+      ],
+      "got": [
+        1,
+        2
+      ],
+      "pass": true
+    },
+    {
+      "label": "2字-牛马",
+      "q": "牛马",
+      "expect": [
+        1,
+        10
+      ],
+      "got": [
+        1,
+        10
+      ],
+      "pass": true
+    },
+    {
+      "label": "2字-项目",
+      "q": "项目",
+      "expect": [
+        1,
+        2
+      ],
+      "got": [
+        1,
+        2
+      ],
+      "pass": true
+    },
+    {
+      "label": "2字-进度",
+      "q": "进度",
+      "expect": [
+        2,
+        3
+      ],
+      "got": [
+        2,
+        3
+      ],
+      "pass": true
+    },
+    {
+      "label": "2字-短语",
+      "q": "短语",
+      "expect": [
+        12
+      ],
+      "got": [
+        12
+      ],
+      "pass": true
+    },
+    {
+      "label": "2字-查询",
+      "q": "查询",
+      "expect": [
+        12
+      ],
+      "got": [
+        12
+      ],
+      "pass": true
+    },
+    {
+      "label": "2字-状态",
+      "q": "状态",
+      "expect": [
+        8,
+        13
+      ],
+      "got": [
+        8,
+        13
+      ],
+      "pass": true
+    },
+    {
+      "label": "2字-失败",
+      "q": "失败",
+      "expect": [
+        11
+      ],
+      "got": [
+        11
+      ],
+      "pass": true
+    },
+    {
+      "label": "3字-状态机",
+      "q": "状态机",
+      "expect": [
+        8
+      ],
+      "got": [
+        8
+      ],
+      "pass": true
+    },
+    {
+      "label": "4字-马尔可夫",
+      "q": "马尔可夫",
+      "expect": [
+        9
+      ],
+      "got": [
+        9
+      ],
+      "pass": true
+    },
+    {
+      "label": "4字-中文分词",
+      "q": "中文分词",
+      "expect": [
+        4
+      ],
+      "got": [
+        4
+      ],
+      "pass": true
+    },
+    {
+      "label": "短语-无限牛马",
+      "q": "无限牛马",
+      "expect": [
+        1
+      ],
+      "got": [
+        1
+      ],
+      "pass": true
+    },
+    {
+      "label": "短语-项目进度",
+      "q": "项目进度",
+      "expect": [
+        2
+      ],
+      "got": [
+        2
+      ],
+      "pass": true
+    },
+    {
+      "label": "短语-进度正常",
+      "q": "进度正常",
+      "expect": [
+        2
+      ],
+      "got": [
+        2
+      ],
+      "pass": true
+    },
+    {
+      "label": "短语-牛马协作",
+      "q": "牛马协作",
+      "expect": [
+        10
+      ],
+      "got": [
+        10
+      ],
+      "pass": true
+    },
+    {
+      "label": "反序-不应命中",
+      "q": "进度项目",
+      "expect": [],
+      "got": [],
+      "pass": true
+    },
+    {
+      "label": "跳字-不应命中",
+      "q": "牛项目",
+      "expect": [],
+      "got": [],
+      "pass": true
+    },
+    {
+      "label": "无中生有",
+      "q": "不存在的词",
+      "expect": [],
+      "got": [],
+      "pass": true
+    },
+    {
+      "label": "ascii-EPIPE",
+      "q": "EPIPE",
+      "expect": [
+        5
+      ],
+      "got": [
+        5
+      ],
+      "pass": true
+    },
+    {
+      "label": "ascii-retryOnce",
+      "q": "retryOnce",
+      "expect": [
+        11
+      ],
+      "got": [
+        11
+      ],
+      "pass": true
+    },
+    {
+      "label": "ascii-IPC_DEAD",
+      "q": "IPC_DEAD",
+      "expect": [
+        14
+      ],
+      "got": [
+        14
+      ],
+      "pass": true
+    },
+    {
+      "label": "ascii-hyphen-pkg",
+      "q": "better-sqlite3",
+      "expect": [
+        7
+      ],
+      "got": [
+        7
+      ],
+      "pass": true
+    },
+    {
+      "label": "ascii-path-leaf",
+      "q": "package.json",
+      "expect": [
+        6
+      ],
+      "got": [
+        6
+      ],
+      "pass": true
+    },
+    {
+      "label": "ascii-path-seg",
+      "q": "CCArmy",
+      "expect": [
+        6
+      ],
+      "got": [
+        6
+      ],
+      "pass": true
+    }
+  ],
+  "report": {
+    "total": 25,
+    "pass": 25,
+    "fail": 0,
+    "twoChar": {
+      "pass": 7,
+      "total": 7,
+      "rate": 1
+    },
+    "failures": [],
+    "passDoD": true
+  },
+  "exitCode": 0
+}

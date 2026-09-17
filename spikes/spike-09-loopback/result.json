@@ -1,0 +1,21 @@
+{
+  "spike": "spike-09-loopback",
+  "title": "本地回环：主进程 ↔ 子进程 IPC 生命周期",
+  "dod": "完整生命周期无死锁；停止后进程树归零",
+  "ranAt": "2026-09-17T12:07:03.875Z",
+  "command": "node spikes/spike-09-loopback/run.mjs",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "scopeNote": "本脚本只验证 Node 子进程 IPC 回环与退出码；ADR 要求的「Electron 主进程 → 记忆子进程 → dsh 实例」三段链路未验证",
+  "result": {
+    "ready": true,
+    "pong": true,
+    "rttMs": 0.416,
+    "exitCode": 0,
+    "pass": true
+  },
+  "exitCode": 0
+}

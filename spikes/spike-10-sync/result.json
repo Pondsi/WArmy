@@ -1,0 +1,67 @@
+{
+  "spike": "spike-10-sync",
+  "title": "跨设备同步协议（本机双节点文件总线模拟）",
+  "dod": "两节点间消息互通；远程 AI 执行后本地无会话日志",
+  "ranAt": "2026-09-17T12:07:03.952Z",
+  "command": "node spikes/spike-10-sync/run.mjs",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "scopeNote": "同机双进程 + 共享目录模拟，**不是两台真机**；不覆盖真实网络/时钟偏差/并发冲突场景",
+  "details": {
+    "aToB": {
+      "publish": {
+        "id": 2,
+        "ok": true
+      },
+      "pull": {
+        "count": 1,
+        "texts": [
+          "from-A-to-B"
+        ]
+      }
+    },
+    "bToA": {
+      "publish": {
+        "id": 3,
+        "ok": true
+      },
+      "pull": {
+        "count": 1,
+        "texts": [
+          "from-B-to-A"
+        ]
+      }
+    },
+    "incognito": {
+      "raw": {
+        "id": 4,
+        "distilled": "incognito:B-remote:OK",
+        "wroteDisk": false
+      },
+      "filesBefore": 0,
+      "filesAfter": 0
+    },
+    "duty": {
+      "id": 5,
+      "allowed": false,
+      "reason": "remote-node-cannot-be-duty"
+    },
+    "busDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike10-1789646823910\\bus"
+  },
+  "report": {
+    "abOk": true,
+    "baOk": true,
+    "incognito": {
+      "distilled": "incognito:B-remote:OK",
+      "before": 0,
+      "after": 0,
+      "zeroTrace": true
+    },
+    "dutyOnBRejected": true,
+    "passDoD": true
+  },
+  "exitCode": 0
+}

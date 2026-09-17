@@ -16,6 +16,18 @@ function ensureDb(dbPath) {
   db.pragma('journal_mode = WAL');
 }
 
+function seedFts(database, rows) {
+  database.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(body, tokenize='unicode61');`);
+  const insF = database.prepare('INSERT INTO docs_fts (rowid, body) VALUES (?, ?)');
+  const txF = database.transaction(() => {
+    for (let i = 1; i <= rows; i++) {
+      const raw = `这是第${i}条记录 关于项目进度 与无限牛马协作 的说明`;
+      insF.run(i, Array.from(raw).join(' '));
+    }
+  });
+  txF();
+}
+
 process.on('message', (msg) => {
   const { id, op } = msg;
   try {
@@ -30,16 +42,21 @@ process.on('message', (msg) => {
       });
       tx();
 
-      db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(body, tokenize='unicode61');`);
-      const insF = db.prepare('INSERT INTO docs_fts (rowid, body) VALUES (?, ?)');
-      const txF = db.transaction(() => {
-        for (let i = 1; i <= 10000; i++) {
-          const raw = `这是第${i}条记录 关于项目进度 与无限牛马协作 的说明`;
-          insF.run(i, Array.from(raw).join(' '));
-        }
-      });
-      txF();
-      process.send({ id, ok: true });
+      const rows = msg.ftsRows ?? 10000;
+      const t0 = Date.now();
+      seedFts(db, rows);
+      process.send({ id, ok: true, ftsRows: rows, seedMs: Date.now() - t0 });
+      return;
+    }
+
+    // 重建 FTS 索引到指定规模（用于按 ADR 的 10 万条记录口径重测）
+    if (op === 'reseed-fts') {
+      const rows = msg.ftsRows ?? 100000;
+      db.exec('DROP TABLE IF EXISTS docs_fts');
+      const t0 = Date.now();
+      seedFts(db, rows);
+      const count = db.prepare('SELECT count(*) AS c FROM docs_fts').get().c;
+      process.send({ id, ok: true, ftsRows: rows, actualRows: count, seedMs: Date.now() - t0 });
       return;
     }
 

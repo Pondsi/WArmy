@@ -36,7 +36,13 @@ function run(cmd, args, cwd) {
   });
 }
 
-fs.mkdirSync(profileDir, { recursive: true });
+// 复核修订（2026-09）：原先在调用 dsh 之前就 mkdir 了 profileDir，
+// 导致 dsh `--from-default-profile` 认为 profile 已存在而直接失败（exit 1，无 package.json）。
+// 现在只准备 DSH_HOME，profile 目录交给 dsh 自己创建。
+fs.mkdirSync(dshHome, { recursive: true });
+if (fs.existsSync(profileDir)) fs.rmSync(profileDir, { recursive: true, force: true });
+
+const raw = { profileCreate: null, pnpmInstall: null, dumpConfig: null };
 
 // 创建 profile
 let r = await run(
@@ -45,6 +51,20 @@ let r = await run(
   __dirname
 );
 console.log('profile create', r.code);
+raw.profileCreate = { code: r.code, stdoutTail: (r.out || '').slice(-2000), stderrTail: (r.err || '').slice(-2000) };
+
+if (!fs.existsSync(path.join(profileDir, 'package.json'))) {
+  const fail = {
+    spike: 'spike-05-plugins',
+    status: 'rerun-failed',
+    reason: 'dsh profile 创建失败，未产出 profile/package.json，后续共存验证无法进行',
+    raw,
+    exitCode: 1,
+  };
+  console.log(JSON.stringify(fail, null, 2));
+  fs.writeFileSync(path.join(__dirname, 'result.json'), JSON.stringify(fail, null, 2) + '\n', 'utf8');
+  process.exit(1);
+}
 
 // 读 package.json 并注入依赖 + bundles
 const pkgPath = path.join(profileDir, 'package.json');
@@ -87,6 +107,7 @@ fs.writeFileSync(profilePatch, merged);
 // pnpm install（绝对路径）
 const inst = await run(pnpm, ['install'], profileDir);
 console.log('pnpm install', inst.code, (inst.err || inst.out).slice(-500));
+raw.pnpmInstall = { code: inst.code, stdoutTail: (inst.out || '').slice(-2000), stderrTail: (inst.err || '').slice(-2000) };
 
 // dump-config
 const dump = await run(
@@ -106,6 +127,13 @@ const memInstalled =
   fs.existsSync(path.join(profileDir, 'node_modules', 'dsh-memory-bundle'));
 
 const report = {
+  spike: 'spike-05-plugins',
+  title: 'dsh-agent-teams + dsh-memory-plus 共存（profile 合并）',
+  ranAt: new Date().toISOString(),
+  command: 'node spikes/spike-05-plugins/run-merge2.mjs',
+  environment: { node: process.version, platform: process.platform, arch: process.arch },
+  scopeNote:
+    '依赖本地已安装的 node_modules（@nanmicoder/dsh-agent-teams 与 dsh-memory-plus 源码树）+ npx/pnpm；离线或未安装时无法复现',
   dshHome,
   profileDir,
   memPackageName: memPkg.name,
@@ -119,7 +147,14 @@ const report = {
   bothMounted: hasTeams && hasMemory,
   bundleIds: pkg.dsh.profile.bundles,
   passDoD: teamsInstalled && memInstalled && hasTeams && hasMemory,
+  raw: {
+    ...raw,
+    dumpConfig: { code: dump.code, stdoutTail: (dump.out || '').slice(-4000), stderrTail: (dump.err || '').slice(-2000) },
+  },
+  exitCode: teamsInstalled && memInstalled && hasTeams && hasMemory ? 0 : 1,
 };
 
 console.log(JSON.stringify(report, null, 2));
+fs.writeFileSync(path.join(__dirname, 'result.json'), JSON.stringify(report, null, 2) + '\n', 'utf8');
+console.log(`原始结果已写入 ${path.join(__dirname, 'result.json')}`);
 process.exit(report.passDoD ? 0 : 1);

@@ -1,0 +1,44 @@
+{
+  "spike": "spike-06-v4-pro",
+  "title": "DeepSeek V4 Pro 可用性（真实 API 调用）",
+  "dod": "V4 Pro API 返回正常响应",
+  "ranAt": "2026-09-17T12:07:02.283Z",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64",
+    "hostname": "DESKTOP-6N59TGI"
+  },
+  "request": {
+    "baseUrl": "https://api.deepseek.com",
+    "modelsProbed": [
+      "deepseek-v4-pro",
+      "deepseek-pro",
+      "deepseek-flash",
+      "deepseek-chat",
+      "deepseek-reasoner"
+    ],
+    "timeoutMs": 20000,
+    "authHeaderPresent": false
+  },
+  "credential": {
+    "source": null,
+    "present": false,
+    "length": 0,
+    "keySha256Prefix": null
+  },
+  "reachabilityProbe": {
+    "note": "匿名（无 Authorization）请求，仅用于确认端点可达；401/403 属预期，不代表模型可用",
+    "httpStatus": 401,
+    "elapsedMs": 685,
+    "rawBodySnippet": "Authentication Fails (governor)"
+  },
+  "modelsEndpoint": null,
+  "calls": [],
+  "verdict": {
+    "status": "skipped",
+    "dodMet": false,
+    "reason": "未设置环境变量 DEEPSEEK_API_KEY（本机无任何 API key），未发出任何鉴权请求，因此**无法验证** deepseek-v4-pro / deepseek-pro 的可用性。",
+    "howToReproduce": "设置 DEEPSEEK_API_KEY 后重跑本脚本：node spikes/spike-06-v4-pro/run.mjs"
+  }
+}

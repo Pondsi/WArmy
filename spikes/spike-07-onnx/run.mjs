@@ -188,4 +188,29 @@ const report = {
   bestBackend: best?.backend,
 };
 console.log(JSON.stringify(report, null, 2));
+
+// ── 落盘原始证据（P0 复核：判定必须有原始输出支撑）──
+const evidence = {
+  spike: 'spike-07-onnx',
+  title: 'onnxruntime-web + bge-small-zh-v1.5 int8 嵌入延迟',
+  dod: 'WebGPU 或 WASM SIMD P95 < 50ms',
+  ranAt: new Date().toISOString(),
+  command: 'node spikes/spike-07-onnx/run.mjs',
+  environment: { node: process.version, platform: process.platform, arch: process.arch },
+  runtime: {
+    package: 'onnxruntime-web',
+    ortEnvWasm: { simd: ort.env.wasm.simd, numThreads: ort.env.wasm.numThreads },
+    model: { path: 'spikes/spike-07-onnx/models/model_quantized.onnx', vocabSize: Object.keys(vocab).length },
+  },
+  notes: [
+    'Node 侧没有 WebGPU backend：onnxruntime-web 会把 executionProviders=[webgpu,wasm] 静默降级为 wasm（运行时已输出 “removing requested execution provider \\"webgpu\\" … backend not found”），因此上面 webgpu 行的数值实际是 wasm 回退结果，不能当作 WebGPU 证据',
+    'WebGPU 需在 Electron 浏览器上下文单独测；本次未测',
+    '三条路径的 P95 均在 8~9ms，差异不显著（同一 wasm 后端重复测量）',
+  ],
+  report,
+  exitCode: report.passDoD ? 0 : 1,
+};
+fs.writeFileSync(path.join(__dirname, 'result.json'), JSON.stringify(evidence, null, 2) + '\n', 'utf8');
+console.log(`原始结果已写入 ${path.join(__dirname, 'result.json')}`);
+
 process.exit(report.passDoD ? 0 : 1);

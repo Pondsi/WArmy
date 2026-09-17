@@ -1,0 +1,38 @@
+{
+  "spike": "spike-01-bundled-node",
+  "title": "bundled Node 拉起 dsh（本机部分）",
+  "dod": "5 平台 bundled Node 分别拉起 dsh 0.1.5-rc.1；node-pty / koffi prebuild 可得",
+  "ranAt": "2026-09-17T12:07:01.374Z",
+  "command": "node spikes/spike-01-bundled-node/run.mjs",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "note": "本机只验证了「系统 Node 24 可加载 @deepseek-ai/dsh 与 node-pty prebuild」；5 平台 bundled Node 未验证",
+  "report": {
+    "node": "v24.20.0",
+    "arch": "x64",
+    "platform": "win32",
+    "dsh": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.1.5-rc.1",
+      "main": {
+        "dsh": "lib/bin.js"
+      }
+    },
+    "nodePty": {
+      "load": true
+    },
+    "koffi": {
+      "load": true,
+      "version": "3.3.0"
+    },
+    "nodeAddonRequireBuiltin": {
+      "load": true,
+      "version": null
+    },
+    "dshPath": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\node_modules\\@deepseek-ai\\dsh\\package.json"
+  },
+  "exitCode": 0
+}

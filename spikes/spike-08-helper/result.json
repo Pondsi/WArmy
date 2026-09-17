@@ -1,0 +1,1114 @@
+{
+  "spike": "spike-08-helper",
+  "title": "系统级 Helper Tool：平台探测 / 提权工具选择 / 安全修改 hosts",
+  "dod": "修改 hosts 文件成功",
+  "ranAt": "2026-09-17T12:10:03.782Z",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64",
+    "hostname": "DESKTOP-6N59TGI",
+    "repoRoot": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy"
+  },
+  "subject": {
+    "module": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\packages\\app-shell\\src\\helper-tool.ts",
+    "loadMode": "ts-type-strip",
+    "loadError": null,
+    "version": "0.1.0-p0-spike8"
+  },
+  "platformSuite": {
+    "detect": {
+      "win32": "win32",
+      "darwin": "darwin",
+      "linux": "linux",
+      "freebsd": "unsupported",
+      "actual": "win32"
+    },
+    "hostsPathPerPlatform": {
+      "win32": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+      "darwin": "/etc/hosts",
+      "linux": "/etc/hosts"
+    },
+    "gsudoCandidates": [
+      "C:\\Program Files\\gsudo\\Current\\gsudo.exe",
+      "C:\\Program Files (x86)\\gsudo\\Current\\gsudo.exe",
+      "C:\\Users\\p\\AppData\\Local\\Programs\\gsudo\\Current\\gsudo.exe",
+      "C:\\ProgramData\\chocolatey\\bin\\gsudo.exe"
+    ],
+    "selectedTool": {
+      "platform": "win32",
+      "tool": "gsudo",
+      "available": true,
+      "executable": "C:\\Program Files\\gsudo\\Current\\gsudo.exe",
+      "version": "2.6.1",
+      "nonInteractiveArgs": [
+        "-n"
+      ],
+      "supportsNonInteractive": true,
+      "reason": "Windows 使用 gsudo；非交互参数 -n。注意：实测 gsudo -n 不回传内层退出码，写操作必须回读校验。",
+      "unverified": []
+    },
+    "isAdmin": false,
+    "helperStatus": {
+      "version": "0.1.0-p0-spike8",
+      "platform": "win32",
+      "isAdmin": false,
+      "hostsFile": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+      "hostsWritableByCurrentProcess": true,
+      "tool": {
+        "platform": "win32",
+        "tool": "gsudo",
+        "available": true,
+        "executable": "C:\\Program Files\\gsudo\\Current\\gsudo.exe",
+        "version": "2.6.1",
+        "nonInteractiveArgs": [
+          "-n"
+        ],
+        "supportsNonInteractive": true,
+        "reason": "Windows 使用 gsudo；非交互参数 -n。注意：实测 gsudo -n 不回传内层退出码，写操作必须回读校验。",
+        "unverified": []
+      },
+      "credentialCache": {
+        "queried": true,
+        "available": false,
+        "raw": "Caller Pid: 10228\r\nRunning as:\n  User: DESKTOP-6N59TGI\\p\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n     2088     10228 Medium     DESKTOP-6N59TGI\\p         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)",
+        "note": "gsudo status 报告的缓存状态**不代表实际能否提权**：本机实测 Available=False 时 gsudo -n 仍可提权成功。"
+      },
+      "unverified": [
+        "gsudo 凭据缓存的“可用性”与“能否提权”在实际环境中不一致，必须以实际执行结果为准"
+      ]
+    }
+  },
+  "credentialSuite": {
+    "available": false,
+    "rawStdout": "Caller Pid: 10228\r\nRunning as:\n  User: DESKTOP-6N59TGI\\p\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n    36072     10228 Medium     DESKTOP-6N59TGI\\p         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)\r\n",
+    "rawStderr": "",
+    "exitCode": 0,
+    "elapsedMs": 26,
+    "note": "gsudo status 的 “Available for this process” 与“实际能否提权”本机实测不一致（见 elevationSuite）"
+  },
+  "nonElevatedSuite": {
+    "items": [
+      {
+        "id": "N-1",
+        "name": "合法记录通过校验",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-2",
+        "name": "非法 IP 被拒",
+        "expected": false,
+        "actual": false,
+        "pass": true,
+        "evidence": "ip 不是合法 IPv4/IPv6：\"999.1.1.1\""
+      },
+      {
+        "id": "N-3",
+        "name": "含空格的主机名被拒",
+        "expected": false,
+        "actual": false,
+        "pass": true,
+        "evidence": "hostname 含非法字符：\"a b.local\""
+      },
+      {
+        "id": "N-4",
+        "name": "含 # 的注释被拒",
+        "expected": false,
+        "actual": false,
+        "pass": true,
+        "evidence": "comment 不能包含 #"
+      },
+      {
+        "id": "N-5",
+        "name": "含换行的注释被拒",
+        "expected": false,
+        "actual": false,
+        "pass": true,
+        "evidence": "comment 含换行"
+      },
+      {
+        "id": "N-6",
+        "name": "注入型主机名被拒（; / | / &）",
+        "expected": false,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-7",
+        "name": "渲染出的目标行格式正确",
+        "expected": "127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe",
+        "actual": "127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe",
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-8",
+        "name": "渲染结果能被自身解析器接受（不盲拼接）",
+        "expected": "entry",
+        "actual": "entry",
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-9",
+        "name": "内容体检：合法 hosts 无 fatal",
+        "expected": 0,
+        "actual": 0,
+        "pass": true,
+        "evidence": {
+          "ok": true,
+          "fatal": [],
+          "warnings": [],
+          "stats": {
+            "lines": 6,
+            "entries": 3,
+            "comments": 2,
+            "blanks": 0
+          }
+        }
+      },
+      {
+        "id": "N-10",
+        "name": "内容体检：合法 hosts 无 warnings",
+        "expected": 0,
+        "actual": 0,
+        "pass": true,
+        "evidence": []
+      },
+      {
+        "id": "N-11",
+        "name": "内容体检：统计出 3 条映射",
+        "expected": 3,
+        "actual": 3,
+        "pass": true,
+        "evidence": {
+          "lines": 6,
+          "entries": 3,
+          "comments": 2,
+          "blanks": 0
+        }
+      },
+      {
+        "id": "N-12",
+        "name": "内容体检：NUL 字节 → fatal",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": [
+          "文件含 NUL 字节（疑似二进制/损坏）"
+        ]
+      },
+      {
+        "id": "N-13",
+        "name": "内容体检：识别出非 hosts 行 → warning 但保留",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-14",
+        "name": "首次 upsert 产生变更",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": {
+          "appendedLine": "127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe"
+        }
+      },
+      {
+        "id": "N-15",
+        "name": "追加行保留 CRLF 且位于末尾",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": {
+          "tail": "\"  \\r\\n127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe\\r\\n\""
+        }
+      },
+      {
+        "id": "N-16",
+        "name": "二次 upsert 幂等（不重复写）",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-17",
+        "name": "幂等时内容逐字节不变",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-18",
+        "name": "remove 精确删除 1 行",
+        "expected": 1,
+        "actual": 1,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-19",
+        "name": "remove 后回到原始内容",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-20",
+        "name": "临时文件真实写入成功",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": {
+          "message": "写入成功（direct）并回读校验通过：sha256=7e40f7cd32a51c13a8d3865c00a14fc82269c22f7b3282231bfd4f8cb7037725",
+          "method": "direct"
+        }
+      },
+      {
+        "id": "N-21",
+        "name": "写入方式为 direct（未提权）",
+        "expected": "direct",
+        "actual": "direct",
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-22",
+        "name": "回读校验通过（sha256 一致）",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-23",
+        "name": "备份文件真实生成且与原始内容一致",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": {
+          "backup": {
+            "source": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\hosts-fake",
+            "path": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\backups\\hosts-fake.2026-09-17T12-10-03-947Z.bak",
+            "bytes": 252,
+            "sha256": "9d6bf416608c34a7adacc08f8949cf2822832f3003cb2a85f8751f34d40c3873",
+            "createdAt": "2026-09-17T12:10:03.947Z"
+          }
+        }
+      },
+      {
+        "id": "N-24",
+        "name": "写后文件确实含目标行",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-25",
+        "name": "写后字节数 = 原字节 + 追加行字节",
+        "expected": 308,
+        "actual": 308,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-26",
+        "name": "重复 apply 幂等：报告 alreadyPresent",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": "幂等跳过：127.0.0.1 ccarmy-spike08.local 已存在（行 6）"
+      },
+      {
+        "id": "N-27",
+        "name": "幂等时文件 sha256 不变（未重复写）",
+        "expected": "7e40f7cd32a51c13a8d3865c00a14fc82269c22f7b3282231bfd4f8cb7037725",
+        "actual": "7e40f7cd32a51c13a8d3865c00a14fc82269c22f7b3282231bfd4f8cb7037725",
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-28",
+        "name": "从备份回滚成功",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": "已从备份回滚并校验通过"
+      },
+      {
+        "id": "N-29",
+        "name": "回滚后内容与原始逐字节一致",
+        "expected": "9d6bf416608c34a7adacc08f8949cf2822832f3003cb2a85f8751f34d40c3873",
+        "actual": "9d6bf416608c34a7adacc08f8949cf2822832f3003cb2a85f8751f34d40c3873",
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-30",
+        "name": "目标文件含 NUL → 拒绝写入",
+        "expected": "HOSTS_CONTENT_INVALID",
+        "actual": "HOSTS_CONTENT_INVALID",
+        "pass": true,
+        "evidence": "拒绝写入：目标文件内容体检未通过（文件含 NUL 字节（疑似二进制/损坏））"
+      },
+      {
+        "id": "N-31",
+        "name": "非法目标行 → 拒绝写入",
+        "expected": "HOSTS_ENTRY_INVALID",
+        "actual": "HOSTS_ENTRY_INVALID",
+        "pass": true,
+        "evidence": "目标行非法：ip 不是合法 IPv4/IPv6：\"nope\""
+      },
+      {
+        "id": "N-32",
+        "name": "目标不可读 → HOSTS_TARGET_UNREADABLE",
+        "expected": "HOSTS_TARGET_UNREADABLE",
+        "actual": "HOSTS_TARGET_UNREADABLE",
+        "pass": true,
+        "evidence": "无法读取 hosts：C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\nope\\hosts"
+      },
+      {
+        "id": "N-33",
+        "name": "回读校验能识破不匹配内容",
+        "expected": false,
+        "actual": false,
+        "pass": true,
+        "evidence": {
+          "attempts": 4
+        }
+      },
+      {
+        "id": "N-34",
+        "name": "回读校验对一致内容通过",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": {
+          "attempts": 1
+        }
+      },
+      {
+        "id": "N-35",
+        "name": "dryRun 不写盘",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-36",
+        "name": "可重试错误分类正确（DENIED/FAILED 可重试，无凭据不可重试）",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "N-37",
+        "name": "cmd 的 GBK 输出能被正确解码（不再乱码）",
+        "expected": "已复制 1 个文件。",
+        "actual": "已复制 1 个文件。",
+        "pass": true,
+        "evidence": null
+      }
+    ],
+    "passCount": 37,
+    "failCount": 0,
+    "scratchDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782",
+    "fakeHostsPath": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\hosts-fake",
+    "backupDirUsed": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\backups"
+  },
+  "noHangSuite": {
+    "items": [
+      {
+        "id": "H-1",
+        "name": "超时保护生效（不挂住）",
+        "expected": "ELEVATION_TIMEOUT",
+        "actual": "ELEVATION_TIMEOUT",
+        "pass": true,
+        "evidence": {
+          "wallMs": 5392,
+          "outerTimedOut": true,
+          "outerExit": 0
+        }
+      },
+      {
+        "id": "H-2",
+        "name": "超时在约定时间内返回（< 15s）",
+        "expected": true,
+        "actual": true,
+        "pass": true,
+        "evidence": {
+          "wallMs": 5392
+        }
+      },
+      {
+        "id": "H-3",
+        "name": "内层非零退出码被捕获",
+        "expected": 7,
+        "actual": 7,
+        "pass": true,
+        "evidence": {
+          "outerExit": 0,
+          "note": "gsudo 自身退出码被观测为 0，说明必须依赖标记文件 + 回读校验"
+        }
+      },
+      {
+        "id": "H-4",
+        "name": "内层失败被判为 ELEVATION_DENIED",
+        "expected": "ELEVATION_DENIED",
+        "actual": "ELEVATION_DENIED",
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "H-5",
+        "name": "内层成功退出码为 0",
+        "expected": 0,
+        "actual": 0,
+        "pass": true,
+        "evidence": {
+          "message": "提权命令执行完成"
+        }
+      },
+      {
+        "id": "H-6",
+        "name": "提权进程写出的文件真实存在且内容正确",
+        "expected": "elevated-ok",
+        "actual": "elevated-ok",
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "H-13",
+        "name": "瞬态失败被重试救回（fail-once 用例，attempts 应为 2）",
+        "expected": true,
+        "actual": {
+          "ok": true,
+          "attempts": 2,
+          "innerExit": 0
+        },
+        "pass": true,
+        "evidence": {
+          "attemptLog": [
+            "#1 code=ELEVATION_DENIED outerExit=0 innerExit=3 innerOutput=\"\"",
+            "#2 code=OK outerExit=0 innerExit=0 innerOutput=\"\""
+          ]
+        }
+      },
+      {
+        "id": "H-7",
+        "name": "工具缺失 → ELEVATION_TOOL_MISSING 且立即返回",
+        "expected": "ELEVATION_TOOL_MISSING",
+        "actual": "ELEVATION_TOOL_MISSING",
+        "pass": true,
+        "evidence": {
+          "wallMs": 0
+        }
+      },
+      {
+        "id": "H-8",
+        "name": "可执行文件不存在 → ELEVATION_FAILED 且立即返回",
+        "expected": "ELEVATION_FAILED",
+        "actual": "ELEVATION_FAILED",
+        "pass": true,
+        "evidence": {
+          "wallMs": 1220,
+          "spawnError": "spawn C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\not-exists-gsudo.exe ENOENT"
+        }
+      },
+      {
+        "id": "H-9",
+        "name": "不支持平台 → ELEVATION_UNSUPPORTED_PLATFORM",
+        "expected": "ELEVATION_UNSUPPORTED_PLATFORM",
+        "actual": "ELEVATION_UNSUPPORTED_PLATFORM",
+        "pass": true,
+        "evidence": null
+      },
+      {
+        "id": "H-10",
+        "name": "超时后无残留 gsudo 进程",
+        "expected": 0,
+        "actual": 0,
+        "pass": true,
+        "evidence": "��Ϣ: û�����е�����ƥ��ָ����׼��"
+      },
+      {
+        "id": "H-11",
+        "name": "超时后的残留进程观测（ping.exe，仅记录不判定）",
+        "expected": "evidence-only",
+        "actual": 0,
+        "pass": true,
+        "evidence": "��Ϣ: û�����е�����ƥ��ָ����׼��"
+      },
+      {
+        "id": "H-12",
+        "name": "提权调用实际尝试次数（证据项）",
+        "expected": "evidence",
+        "actual": {
+          "innerFail": 3,
+          "innerOk": 1,
+          "timeoutRun": 1
+        },
+        "pass": true,
+        "evidence": {
+          "attemptLog": {
+            "innerFail": [
+              "#1 code=ELEVATION_DENIED outerExit=0 innerExit=7 innerOutput=\"\"",
+              "#2 code=ELEVATION_DENIED outerExit=0 innerExit=7 innerOutput=\"\"",
+              "#3 code=ELEVATION_DENIED outerExit=0 innerExit=7 innerOutput=\"\""
+            ],
+            "innerOk": [
+              "#1 code=OK outerExit=0 innerExit=0 innerOutput=\"已复制         1 个文件。\""
+            ]
+          }
+        }
+      }
+    ],
+    "passCount": 13,
+    "failCount": 0
+  },
+  "hostsRealWrite": {
+    "target": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+    "spec": {
+      "ip": "127.0.0.1",
+      "hostname": "ccarmy-spike08.local",
+      "comment": "CCArmy spike-08 helper probe (auto-removed)"
+    },
+    "baseline": {
+      "path": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+      "exists": true,
+      "bytes": 2538,
+      "sha256": "b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
+      "lineCount": 74,
+      "entryPresent": false
+    },
+    "baselineSha256": "b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
+    "statBefore": {
+      "size": 2538,
+      "mode": 33206
+    },
+    "writableByCurrentProcess": true,
+    "skipped": false,
+    "attempt": {
+      "ok": true,
+      "changed": true,
+      "alreadyPresent": false,
+      "removedCount": 0,
+      "errorCode": "OK",
+      "message": "写入成功（elevated）并回读校验通过：sha256=411f8f91c2c20a697dcceb83ca628cf25c42e2bfd325285d1dbcd036a6f2c2ec",
+      "hostsFile": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+      "writeMethod": "elevated",
+      "backup": {
+        "source": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+        "path": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak",
+        "bytes": 2538,
+        "sha256": "b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
+        "createdAt": "2026-09-17T12:10:15.002Z"
+      },
+      "before": {
+        "path": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+        "exists": true,
+        "bytes": 2538,
+        "sha256": "b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
+        "lineCount": 74,
+        "entryPresent": false
+      },
+      "after": {
+        "path": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+        "exists": true,
+        "bytes": 2616,
+        "sha256": "411f8f91c2c20a697dcceb83ca628cf25c42e2bfd325285d1dbcd036a6f2c2ec",
+        "lineCount": 75,
+        "entryPresent": true
+      },
+      "verified": true,
+      "rolledBack": false,
+      "warnings": [],
+      "tool": {
+        "platform": "win32",
+        "tool": "gsudo",
+        "available": true,
+        "executable": "C:\\Program Files\\gsudo\\Current\\gsudo.exe",
+        "version": "2.6.1",
+        "nonInteractiveArgs": [
+          "-n"
+        ],
+        "supportsNonInteractive": true,
+        "reason": "Windows 使用 gsudo；非交互参数 -n。注意：实测 gsudo -n 不回传内层退出码，写操作必须回读校验。",
+        "unverified": []
+      },
+      "raw": {
+        "outer": {
+          "exe": "C:\\Program Files\\gsudo\\Current\\gsudo.exe",
+          "args": [
+            "-n",
+            "cmd",
+            "/c",
+            "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-helper-stage\\elevated-10228-1789647015003-b288daee.cmd"
+          ],
+          "exitCode": 0,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "timedOut": false,
+          "spawnError": null,
+          "elapsedMs": 332
+        },
+        "innerExitCode": 0,
+        "innerOutput": "已复制         1 个文件。\r\n",
+        "markerFiles": null,
+        "attemptCount": 1,
+        "attemptLog": [
+          "#1 code=OK outerExit=0 innerExit=0 innerOutput=\"已复制         1 个文件。\""
+        ]
+      },
+      "plan": {
+        "appendedLine": "127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 helper probe (auto-removed)",
+        "contentSha256": "411f8f91c2c20a697dcceb83ca628cf25c42e2bfd325285d1dbcd036a6f2c2ec",
+        "bytesToWrite": 2616
+      }
+    },
+    "verify": {
+      "entryPresentAfter": true,
+      "sha256After": "411f8f91c2c20a697dcceb83ca628cf25c42e2bfd325285d1dbcd036a6f2c2ec"
+    },
+    "cleanup": {
+      "ok": true,
+      "changed": true,
+      "alreadyPresent": false,
+      "removedCount": 1,
+      "errorCode": "OK",
+      "message": "写入成功（elevated）并回读校验通过：sha256=b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
+      "hostsFile": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+      "writeMethod": "elevated",
+      "backup": {
+        "source": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+        "path": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-337Z.bak",
+        "bytes": 2616,
+        "sha256": "411f8f91c2c20a697dcceb83ca628cf25c42e2bfd325285d1dbcd036a6f2c2ec",
+        "createdAt": "2026-09-17T12:10:15.337Z"
+      },
+      "before": {
+        "path": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+        "exists": true,
+        "bytes": 2616,
+        "sha256": "411f8f91c2c20a697dcceb83ca628cf25c42e2bfd325285d1dbcd036a6f2c2ec",
+        "lineCount": 75,
+        "entryPresent": true
+      },
+      "after": {
+        "path": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+        "exists": true,
+        "bytes": 2538,
+        "sha256": "b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
+        "lineCount": 74,
+        "entryPresent": false
+      },
+      "verified": true,
+      "rolledBack": false,
+      "warnings": [],
+      "tool": {
+        "platform": "win32",
+        "tool": "gsudo",
+        "available": true,
+        "executable": "C:\\Program Files\\gsudo\\Current\\gsudo.exe",
+        "version": "2.6.1",
+        "nonInteractiveArgs": [
+          "-n"
+        ],
+        "supportsNonInteractive": true,
+        "reason": "Windows 使用 gsudo；非交互参数 -n。注意：实测 gsudo -n 不回传内层退出码，写操作必须回读校验。",
+        "unverified": []
+      },
+      "raw": {
+        "outer": {
+          "exe": "C:\\Program Files\\gsudo\\Current\\gsudo.exe",
+          "args": [
+            "-n",
+            "cmd",
+            "/c",
+            "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-helper-stage\\elevated-10228-1789647015338-f650ee80.cmd"
+          ],
+          "exitCode": 0,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "timedOut": false,
+          "spawnError": null,
+          "elapsedMs": 339
+        },
+        "innerExitCode": 0,
+        "innerOutput": "已复制         1 个文件。\r\n",
+        "markerFiles": null,
+        "attemptCount": 1,
+        "attemptLog": [
+          "#1 code=OK outerExit=0 innerExit=0 innerOutput=\"已复制         1 个文件。\""
+        ]
+      },
+      "plan": {
+        "appendedLine": null,
+        "contentSha256": "b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
+        "bytesToWrite": 2538
+      }
+    },
+    "final": {
+      "fingerprint": {
+        "path": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
+        "exists": true,
+        "bytes": 2538,
+        "sha256": "b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
+        "lineCount": 74,
+        "entryPresent": false
+      },
+      "statAfter": {
+        "size": 2538,
+        "mode": 33206
+      },
+      "bytesUnchanged": true
+    },
+    "restoredToOriginal": true,
+    "observedOutcome": "success-elevated-write-verified",
+    "originalBackupPath": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak"
+  },
+  "macosSuite": {
+    "plan": {
+      "tool": "smappservice",
+      "label": "com.ccarmy.helper",
+      "plistPath": "/Library/LaunchDaemons/com.ccarmy.helper.plist",
+      "helperExecutable": "\\Library\\PrivilegedHelperTools\\ccarmy-helper",
+      "plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>com.ccarmy.helper</string>\n  <key>ProgramArguments</key>\n  <array>\n    <string>\\Library\\PrivilegedHelperTools\\ccarmy-helper</string>\n    <string>--write-hosts</string>\n  </array>\n  <key>MachServices</key>\n  <dict>\n    <key>com.ccarmy.helper</key>\n    <dict><key>ResetAtClose</key><true/></dict>\n  </dict>\n  <key>RunAtLoad</key>\n  <false/>\n</dict>\n</plist>\n",
+      "registrationSteps": [
+        "1. 在 Xcode 中为 helper target 打开 App Sandbox 之外的 \"Enable XPC Service / Privileged Helper\" 能力，并用同一 Team ID 签名（含 hardened runtime）。",
+        "2. 主 App 内调用 ServiceManagement.SMAppService.daemon(plistName:) 或 launchd.plist(serviceName:) 注册；注册前把 plist 放进 App bundle 的 Contents/Library/LaunchDaemons/。",
+        "3. 注册目标路径（安装后）：/Library/LaunchDaemons/com.ccarmy.helper.plist；helper 可执行：\\Library\\PrivilegedHelperTools\\ccarmy-helper",
+        "4. 用户首次授权后由 launchd 拉活 XPC listener；主 App 通过 NSXPCConnection 调 write-hosts。",
+        "5. macOS 26 已知 XPC 断言 fullPath is nil（bundle 未被正确签名/注册时出现），需校验 code signature 与 Team ID。"
+      ],
+      "verified": false,
+      "unverifiedReason": "SMAppService 只能由 macOS 上已签名并注册的 helper bundle 调用；本机为 win32，无 macOS 环境，未验证。"
+    },
+    "canVerifyHere": false,
+    "verified": false,
+    "note": "SMAppService 需要 macOS + 已签名的 helper bundle；本机为 win32，该分支未验证（代码路径真实存在）",
+    "simulatedToolSelection": {
+      "note": "selectElevationTool() 依赖 process.platform，无法在此模拟；此处仅记录 detectHelperPlatform(\"darwin\") 与 plan",
+      "detected": "darwin",
+      "hostsPath": "/etc/hosts"
+    }
+  },
+  "summary": {
+    "totalChecks": 57,
+    "passed": 57,
+    "failed": 0,
+    "failedIds": [],
+    "all": [
+      {
+        "id": "P-1",
+        "name": "平台探测（win32/darwin/linux/freebsd）",
+        "pass": true
+      },
+      {
+        "id": "P-2",
+        "name": "Windows 选定 gsudo",
+        "pass": true
+      },
+      {
+        "id": "P-3",
+        "name": "gsudo 可执行文件存在",
+        "pass": true
+      },
+      {
+        "id": "P-4",
+        "name": "gsudo 非交互参数为 -n",
+        "pass": true
+      },
+      {
+        "id": "P-5",
+        "name": "当前进程非管理员（故必须提权）",
+        "pass": true
+      },
+      {
+        "id": "C-1",
+        "name": "gsudo -n status 能取到原始输出（不挂住）",
+        "pass": true
+      },
+      {
+        "id": "N-1",
+        "name": "合法记录通过校验",
+        "pass": true
+      },
+      {
+        "id": "N-2",
+        "name": "非法 IP 被拒",
+        "pass": true
+      },
+      {
+        "id": "N-3",
+        "name": "含空格的主机名被拒",
+        "pass": true
+      },
+      {
+        "id": "N-4",
+        "name": "含 # 的注释被拒",
+        "pass": true
+      },
+      {
+        "id": "N-5",
+        "name": "含换行的注释被拒",
+        "pass": true
+      },
+      {
+        "id": "N-6",
+        "name": "注入型主机名被拒（; / | / &）",
+        "pass": true
+      },
+      {
+        "id": "N-7",
+        "name": "渲染出的目标行格式正确",
+        "pass": true
+      },
+      {
+        "id": "N-8",
+        "name": "渲染结果能被自身解析器接受（不盲拼接）",
+        "pass": true
+      },
+      {
+        "id": "N-9",
+        "name": "内容体检：合法 hosts 无 fatal",
+        "pass": true
+      },
+      {
+        "id": "N-10",
+        "name": "内容体检：合法 hosts 无 warnings",
+        "pass": true
+      },
+      {
+        "id": "N-11",
+        "name": "内容体检：统计出 3 条映射",
+        "pass": true
+      },
+      {
+        "id": "N-12",
+        "name": "内容体检：NUL 字节 → fatal",
+        "pass": true
+      },
+      {
+        "id": "N-13",
+        "name": "内容体检：识别出非 hosts 行 → warning 但保留",
+        "pass": true
+      },
+      {
+        "id": "N-14",
+        "name": "首次 upsert 产生变更",
+        "pass": true
+      },
+      {
+        "id": "N-15",
+        "name": "追加行保留 CRLF 且位于末尾",
+        "pass": true
+      },
+      {
+        "id": "N-16",
+        "name": "二次 upsert 幂等（不重复写）",
+        "pass": true
+      },
+      {
+        "id": "N-17",
+        "name": "幂等时内容逐字节不变",
+        "pass": true
+      },
+      {
+        "id": "N-18",
+        "name": "remove 精确删除 1 行",
+        "pass": true
+      },
+      {
+        "id": "N-19",
+        "name": "remove 后回到原始内容",
+        "pass": true
+      },
+      {
+        "id": "N-20",
+        "name": "临时文件真实写入成功",
+        "pass": true
+      },
+      {
+        "id": "N-21",
+        "name": "写入方式为 direct（未提权）",
+        "pass": true
+      },
+      {
+        "id": "N-22",
+        "name": "回读校验通过（sha256 一致）",
+        "pass": true
+      },
+      {
+        "id": "N-23",
+        "name": "备份文件真实生成且与原始内容一致",
+        "pass": true
+      },
+      {
+        "id": "N-24",
+        "name": "写后文件确实含目标行",
+        "pass": true
+      },
+      {
+        "id": "N-25",
+        "name": "写后字节数 = 原字节 + 追加行字节",
+        "pass": true
+      },
+      {
+        "id": "N-26",
+        "name": "重复 apply 幂等：报告 alreadyPresent",
+        "pass": true
+      },
+      {
+        "id": "N-27",
+        "name": "幂等时文件 sha256 不变（未重复写）",
+        "pass": true
+      },
+      {
+        "id": "N-28",
+        "name": "从备份回滚成功",
+        "pass": true
+      },
+      {
+        "id": "N-29",
+        "name": "回滚后内容与原始逐字节一致",
+        "pass": true
+      },
+      {
+        "id": "N-30",
+        "name": "目标文件含 NUL → 拒绝写入",
+        "pass": true
+      },
+      {
+        "id": "N-31",
+        "name": "非法目标行 → 拒绝写入",
+        "pass": true
+      },
+      {
+        "id": "N-32",
+        "name": "目标不可读 → HOSTS_TARGET_UNREADABLE",
+        "pass": true
+      },
+      {
+        "id": "N-33",
+        "name": "回读校验能识破不匹配内容",
+        "pass": true
+      },
+      {
+        "id": "N-34",
+        "name": "回读校验对一致内容通过",
+        "pass": true
+      },
+      {
+        "id": "N-35",
+        "name": "dryRun 不写盘",
+        "pass": true
+      },
+      {
+        "id": "N-36",
+        "name": "可重试错误分类正确（DENIED/FAILED 可重试，无凭据不可重试）",
+        "pass": true
+      },
+      {
+        "id": "N-37",
+        "name": "cmd 的 GBK 输出能被正确解码（不再乱码）",
+        "pass": true
+      },
+      {
+        "id": "H-1",
+        "name": "超时保护生效（不挂住）",
+        "pass": true
+      },
+      {
+        "id": "H-2",
+        "name": "超时在约定时间内返回（< 15s）",
+        "pass": true
+      },
+      {
+        "id": "H-3",
+        "name": "内层非零退出码被捕获",
+        "pass": true
+      },
+      {
+        "id": "H-4",
+        "name": "内层失败被判为 ELEVATION_DENIED",
+        "pass": true
+      },
+      {
+        "id": "H-5",
+        "name": "内层成功退出码为 0",
+        "pass": true
+      },
+      {
+        "id": "H-6",
+        "name": "提权进程写出的文件真实存在且内容正确",
+        "pass": true
+      },
+      {
+        "id": "H-13",
+        "name": "瞬态失败被重试救回（fail-once 用例，attempts 应为 2）",
+        "pass": true
+      },
+      {
+        "id": "H-7",
+        "name": "工具缺失 → ELEVATION_TOOL_MISSING 且立即返回",
+        "pass": true
+      },
+      {
+        "id": "H-8",
+        "name": "可执行文件不存在 → ELEVATION_FAILED 且立即返回",
+        "pass": true
+      },
+      {
+        "id": "H-9",
+        "name": "不支持平台 → ELEVATION_UNSUPPORTED_PLATFORM",
+        "pass": true
+      },
+      {
+        "id": "H-10",
+        "name": "超时后无残留 gsudo 进程",
+        "pass": true
+      },
+      {
+        "id": "H-11",
+        "name": "超时后的残留进程观测（ping.exe，仅记录不判定）",
+        "pass": true
+      },
+      {
+        "id": "H-12",
+        "name": "提权调用实际尝试次数（证据项）",
+        "pass": true
+      },
+      {
+        "id": "W-1",
+        "name": "真实 hosts 写入后已还原到原始状态（无残留）",
+        "pass": true
+      }
+    ],
+    "nonElevatedAllPass": true,
+    "noHangAllPass": true,
+    "hostsWriteSucceeded": true,
+    "hostsRestored": true,
+    "dodMet": true,
+    "status": "pass-windows-macos-unverified",
+    "blockers": [
+      "macOS SMAppService 分支未验证（无 macOS 环境）"
+    ],
+    "verdictHint": "Windows 侧（gsudo 非交互 + 安全 hosts 写入 + 幂等/备份/回滚/回读校验）已实测；macOS 侧（SMAppService）仅有注册计划与代码路径，未在任何 macOS 上验证。"
+  },
+  "finishedAt": "2026-09-17T12:10:15.678Z"
+}

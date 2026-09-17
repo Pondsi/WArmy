@@ -1,0 +1,18 @@
+{
+  "spike": "spike-03-in-history",
+  "title": "in-history 缓存稳定性（DeepSeek prefix cache）",
+  "dod": "50 轮记录每轮命中率；第 25 轮注入 in-history 后 cacheRead 保持",
+  "ranAt": "2026-09-17T12:07:02.186Z",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "model": "deepseek-flash",
+  "credentialPresent": false,
+  "status": "skipped-no-credential",
+  "dodMet": false,
+  "reason": "未设置 DEEPSEEK_API_KEY，未发出任何 API 请求，无法复现缓存命中率测量；RESULTS.md 中此前的具体数值（hit=128、in-history 均值 0.42、rewrite 均值 0.078）在本仓库无任何原始输出可佐证。",
+  "howToReproduce": "设置 DEEPSEEK_API_KEY 后重跑：node spikes/spike-03-in-history/run.mjs",
+  "exitCode": 3
+}
