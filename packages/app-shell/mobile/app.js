@@ -47,7 +47,8 @@
     'mesh.portLabel': '监听端口', 'mesh.stateLabel': '状态', 'mesh.peers': '已连接节点', 'mesh.start': '启动组网', 'mesh.stop': '停止组网',
     'mesh.stopped': '未启动', 'mesh.invite': '邀请加入', 'mesh.genInvite': '生成邀请码', 'mesh.scanJoin': '扫码加入',
     'about.license': '许可证',
-    'msg.initFailed': '移动端初始化失败：', 'msg.smtpDesktopOnly': 'SMTP 验证需要桌面端配合，手机端仅作界面预览。', 'prompt.providerName': '供应商名称',
+    'msg.initFailed': '移动端初始化失败：',
+    'preview.settingsNotice': '以下设置仅为本机预览：改动不会保存，也不会同步到桌面端。', 'msg.smtpDesktopOnly': 'SMTP 验证需要桌面端配合，手机端仅作界面预览。', 'prompt.providerName': '供应商名称',
     'msg.latest': '当前已是最新版本', 'msg.inviteCopied': '邀请码已复制到剪贴板', 'msg.scanOnDesktop': '请使用桌面端扫码功能', 'export.hint': '导出当前会话为 Markdown',
   };
   const t = (k) => (I18N.strings && I18N.strings[k]) || D[k] || k;
@@ -178,6 +179,9 @@
     const inner = src ? '<img src="' + src + '" alt=""/>' : esc((name || '?').slice(0, 1));
     return '<div class="av ' + (cls || '') + '">' + inner + '</div>';
   };
+  // 预览定位提示：手机端设置不落盘、不与桌面端通信，必须让用户一眼看到
+  const noticeHtml = (key) => '<div class="notice">' + esc(t(key || 'preview.settingsNotice')) + '</div>';
+
   const barHtml = (title, sub, opts) => {
     const o = opts || {};
     const left = o.back ? '<button class="iconbtn back" data-act="back" aria-label="back">‹</button>' : '<div class="spacer"></div>';
@@ -266,6 +270,7 @@
       '<div class="body">' +
       '<div class="me-head">' + avHtml(t('me.owner'), 1) +
       '<div class="who"><div class="n">' + esc(t('me.owner')) + '</div><div class="m">ID: 884024787 · ' + esc(brandName()) + '</div></div></div>' +
+      noticeHtml() +
       '<div class="card">' +
       cellHtml(t('me.appearance'), '', 'set-appearance') +
       cellHtml(t('me.provider'), 'DeepSeek', 'set-provider') +
@@ -501,7 +506,7 @@
         cellHtml(t('about.copyright'), '© 2026 Pondsi') +
         cellHtml(t('me.deviceId'), '884024787') + '</div>';
     }
-    const el = push(barHtml(map[group], '', { back: true }) + '<div class="body">' + body + '</div>');
+    const el = push(barHtml(map[group], '', { back: true }) + '<div class="body">' + noticeHtml() + body + '</div>');
     // 色板点击
     el.querySelectorAll('[data-color]').forEach((b) => {
       b.addEventListener('click', () => {

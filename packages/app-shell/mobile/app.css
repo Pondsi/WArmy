@@ -12,6 +12,8 @@
   --muted: #888888;
   --line: #e0e0e0;
   --me-bubble: #95ec69;
+  --notice-bg: rgba(250, 176, 5, 0.14);
+  --notice-ink: #9a6100;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
   --bar-h: 46px;
@@ -27,6 +29,8 @@
   --muted: #9a9a9a;
   --line: #333333;
   --me-bubble: #3a6b45;
+  --notice-bg: rgba(250, 176, 5, 0.18);
+  --notice-ink: #f0c060;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -118,6 +122,17 @@ body {
   margin-top: 5px; min-width: 18px; height: 18px; padding: 0 5px;
   background: var(--danger); color: #fff; border-radius: 99px;
   font-size: 11px; display: inline-grid; place-items: center;
+}
+
+/* ── 预览定位提示条 ── */
+.notice {
+  margin: 10px 14px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--notice-bg);
+  color: var(--notice-ink);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 /* ── 会话头像与类型角标 ──
