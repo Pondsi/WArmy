@@ -98,7 +98,7 @@
     urgent: 'P2',
     providers: [
       { name: 'DeepSeek', url: 'api.deepseek.com', key: '***', configured: true },
-      { name: 'Ollama 本地', url: '127.0.0.1:11434', key: '', configured: false },
+      { name: 'Ollama', url: '127.0.0.1:11434', key: '', configured: false },
     ],
     smtp: { host: '', port: '465', user: '', pass: '', from: '' },
     mesh: { port: 7788, running: false, peers: 0 },
@@ -437,7 +437,7 @@
         '<div style="padding:0 14px 12px;text-align:center"><button data-act="custom-color" style="font-size:13px;color:var(--accent);background:none;border:none;cursor:pointer">' + esc(t('accent.custom')) + ' ›</button></div>' +
         '</div>';
     } else if (group === 'provider') {
-      const rows = state.providers || [{ name: 'DeepSeek', url: 'api.deepseek.com', key: '***', configured: true }, { name: 'Ollama 本地', url: '127.0.0.1:11434', key: '', configured: false }];
+      const rows = state.providers || [{ name: 'DeepSeek', url: 'api.deepseek.com', key: '***', configured: true }, { name: 'Ollama', url: '127.0.0.1:11434', key: '', configured: false }];
       body = '<div class="card"><div class="card-title">' + esc(t('provider.list')) + '</div>' +
         rows.map((p, i) => '<div class="cell" data-edit-prov="' + i + '"><span class="label">' + esc(p.name) + '</span><span class="value">' + (p.configured ? t('provider.configured') : t('provider.notConfigured')) + '</span><span class="chev">›</span></div>').join('') +
         '<div class="cell" data-act="add-provider"><span class="label" style="color:var(--accent)">' + esc(t('provider.add')) + '</span></div>' +
@@ -589,6 +589,8 @@
     document.title = brandName() + ' ' + t('brand.sub');
     while (stack.length) pop();
     renderTab();
+    // 与 setTheme 保持一致：切完语言仍停留在「外观」页，不把用户踢回一级 Tab
+    openSetting('appearance');
   }
   function setTheme(mode) {
     state.theme = mode;
