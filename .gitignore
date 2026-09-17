@@ -33,3 +33,7 @@ spikes/spike-08-helper/backups/
 
 # build-preview.mjs 的默认输出目录（构建产物，验证器会把产物输出到交付目录，不入库）
 packages/app-shell/preview/
+
+# 捆绑 Node 运行时（按入库清单有意不跟踪：单个 node.exe 就 89MB，由安装脚本按平台解压）。
+# 加进 .gitignore 是为了防止有人 `git add -A` 时把它误提交进仓库。
+resources/node/
