@@ -120,7 +120,14 @@ const logSeries = rows.map((r) => r.logBytes);
 const monotonic = logSeries.every((v, i) => i === 0 || v > logSeries[i - 1]);
 console.log('');
 check('logBytes 单调上涨（日志确实在长）', monotonic, { from: logSeries[0], to: logSeries[logSeries.length - 1], ratio: +(logSeries[logSeries.length - 1] / logSeries[0]).toFixed(1) });
-check('viewBytes 方差为 0（与日志总长完全解耦）', variance(viewSeries) === 0, { variance: variance(viewSeries), values: viewSeries });
+// 注意：日志尚未超过预算、或中间段太小以致要点填不满预留份额时，视图会略小于预算——
+// 那不该补白。所以判据是「进入有界区后恒定」，而不是对所有行都恒等。
+const plateau = viewSeries.slice(-5);
+check('viewBytes 进入有界区后恒定（与日志总长解耦）', variance(plateau) === 0, {
+  plateauVariance: variance(plateau),
+  plateau,
+  values: viewSeries,
+});
 check('viewBytes 恒 ≤ 预算', viewSeries.every((v) => v <= BUDGET), { max: Math.max(...viewSeries), budget: BUDGET });
 check('所有行都注入了可执行指针', rows.every((r) => r.pointers >= 1 && r.elided > 0));
 
@@ -210,9 +217,19 @@ check('指针文本含 recordId 线索', /retrieve\(recordId="m-/.test(pointerTe
 check('指针文本含 recall 语义线索', /recall\("值班者状态机"\)/.test(pointerText));
 // 视图里被逐条塞进来的原文必须只是"采样"（≤ 24 条样本上限），而不是整段日志
 const verbatimInView = log.filter((e) => pointerText.includes(e.content)).length;
-check('视图只含采样级原文（不把被省略条目整段塞进视图）', verbatimInView > 0 && verbatimInView <= 24 && memView.elided.reduce((s, r) => s + r.count, 0) === 56, {
-  verbatimInView,
-  elidedCount: memView.elided.reduce((s, r) => s + r.count, 0),
+const elidedTotal = memView.elided.reduce((s, r) => s + r.count, 0);
+const headTailInView = memView.messages.length - 1; // 减去指针那条
+check(
+  '视图只含采样级原文，且被省略条数与日志/视图自洽',
+  verbatimInView > 0 &&
+    verbatimInView <= 24 &&
+    elidedTotal > 0 &&
+    elidedTotal === log.length - headTailInView,
+  {
+    verbatimInView,
+    elidedTotal,
+    logEntries: log.length,
+    headTailInView,
   sampleCap: 24,
 });
 console.log(`  取回校验：recordId ${idExact}/${idChecks} 精确、seq ${seqExact}/${seqChecks} 精确、recall ${recallExact}/${cards.length} 精确` + (mismatch.length ? ` 失配=${JSON.stringify(mismatch.slice(0, 3))}` : ''));
@@ -225,12 +242,24 @@ console.log('\n[3] 头尾保真：keepHead / keepTail 条逐字节等于原文')
   const big = makeLog(500, 400);
   const view = renderBoundedView(big, { budgetChars: BUDGET, keepHead: 1, keepTail: 8, recallHint: 'hint' });
   const headOk = view.messages[0].content === big[0].content;
-  const tailMsgs = view.messages.slice(-8);
-  const tailOk = tailMsgs.every((m, i) => m.content === big[big.length - 8 + i].content);
+  // 尾部条数由渲染器按预算决定（要点要占预留份额，所以可能少于请求的 keepTail=8）；
+  // 断言的是「保留下来的尾段逐字节等于原文」，不是「必须有 8 条」。
+  const ptrIdx = view.messages.findIndex((m) => m.role === 'system');
+  const tailMsgs = ptrIdx >= 0 ? view.messages.slice(ptrIdx + 1) : view.messages.slice(-8);
+  const tailOk =
+    tailMsgs.length > 0 &&
+    tailMsgs.every((m, i) => m.content === big[big.length - tailMsgs.length + i].content);
   check('keepHead=1 逐字节等于原文', headOk && view.messages[0].role === big[0].role);
-  check('keepTail=8 逐字节等于原文（顺序一致）', tailOk, { roles: tailMsgs.map((m) => m.role) });
+  check('保留的尾部逐字节等于原文（顺序一致；条数可少于 keepTail——预算优先给要点）', tailOk, {
+    tailCount: tailMsgs.length,
+    requested: 8,
+    roles: tailMsgs.map((m) => m.role),
+  });
   // 指针插在头尾之间（不混进真实对话）
-  check('指针消息 role=system 且位于头尾之间', view.messages.length === 10 && view.messages[1].role === 'system');
+  check(
+    '指针消息 role=system 且位于头尾之间',
+    ptrIdx === view.messages.length - 1 - tailMsgs.length && view.messages[ptrIdx].content.includes('已省略')
+  );
   // 中间某条被省略的原文不在视图里（真的被挤出去了）
   const mid = big[Math.floor(big.length / 2)].content;
   check('被省略的中间条目不在视图里（确实发生了裁剪）', !view.messages.some((m) => m.content === mid));

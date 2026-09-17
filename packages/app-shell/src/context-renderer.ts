@@ -72,6 +72,13 @@ export const DEFAULT_KEEP_TAIL = 8;
  */
 export const DEFAULT_CONTEXT_BUDGET_CHARS = 4000;
 
+/**
+ * 为「压缩要点」预留的预算份额下限。
+ * 不加这个约束时，keepTail 会把预算吃到只剩几十字符给要点，
+ * 于是"有界"成立了、但"压缩"这一半等于没做（ADR §9.4 待办 1）。
+ */
+export const DIGEST_MIN_SHARE = 0.25;
+
 /** 中段压缩器的样本上限：渲染器必须是 O(视图) 而不是 O(日志)，所以只取中段头尾样本 */
 const ENTRY_SAMPLE_MAX = 24;
 const ENTRY_SAMPLE_CHARS = 240;
@@ -343,37 +350,46 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
   let satisfied = false;
 
   // ── 1. 逐级降配：先截断要点，再缩 keepTail，再缩 keepHead；指针最后才动 ──
-  for (const tier of TIERS) {
-    const hasBody = tier !== 'min';
-    for (let total = headWant + tailWant; total >= 0; total--) {
-      // ADR §4.3：优先缩 keepTail，再缩 keepHead（tail 先被牺牲）
-      const h = Math.min(headWant, total);
-      const t = total - h;
-      const headMsgs = log.slice(0, h).map((e) => ({ role: e.role as string, content: e.content }));
-      const tailMsgs = log.slice(n - t).map((e) => ({ role: e.role as string, content: e.content }));
-      const headTailChars = prefix[h]! + (prefix[n]! - prefix[n - t]!);
+  // ADR §9.4 待办 1：要点若被头尾挤到只剩几十字符，"压缩"这一半就白做了。
+  // 所以先按「要点至少占预算 DIGEST_MIN_SHARE」搜一遍——total 从大到小遍历，
+  // 第一个满足条件的即"尽可能多留头尾、同时要点拿到应有份额"的最优解；
+  // 若连 total=0 都满足不了（预算极小），再退回原策略，绝不因要点份额丢掉近期对话。
+  const minDigest = Math.ceil(budgetChars * DIGEST_MIN_SHARE);
+  const attempt = (enforceDigestShare: boolean): boolean => {
+    for (const tier of TIERS) {
+      const hasBody = tier !== 'min';
+      for (let total = headWant + tailWant; total >= 0; total--) {
+        // ADR §4.3：优先缩 keepTail，再缩 keepHead（tail 先被牺牲）
+        const h = Math.min(headWant, total);
+        const t = total - h;
+        const headMsgs = log.slice(0, h).map((e) => ({ role: e.role as string, content: e.content }));
+        const tailMsgs = log.slice(n - t).map((e) => ({ role: e.role as string, content: e.content }));
+        const headTailChars = prefix[h]! + (prefix[n]! - prefix[n - t]!);
 
-      const omitted = h + t < n;
-      const ranges = omitted ? rangesOf(log, h, n - t) : [];
-      const elidedChars = omitted ? logBytes - headTailChars : 0;
-      const pre = omitted ? pointerPrefix(tier, ranges, hint, elidedChars) : '';
-      const cap = budgetChars - headTailChars - pre.length;
-      if (cap < 0) continue; // 连指针都放不下 → 继续缩头尾 / 降级指针
+        const omitted = h + t < n;
+        const ranges = omitted ? rangesOf(log, h, n - t) : [];
+        const elidedChars = omitted ? logBytes - headTailChars : 0;
+        const pre = omitted ? pointerPrefix(tier, ranges, hint, elidedChars) : '';
+        const cap = budgetChars - headTailChars - pre.length;
+        if (cap < 0) continue; // 连指针都放不下 → 继续缩头尾 / 降级指针
+        // 有省略、且该档要点有正文时，才要求要点拿到份额
+        if (enforceDigestShare && omitted && hasBody && cap < minDigest) continue;
 
-      const body = omitted && hasBody ? clipTailSafe(digestOf(h, t), cap) : '';
-      const msgs = omitted
-        ? [...headMsgs, { role: 'system', content: pre + body }, ...tailMsgs]
-        : [...headMsgs, ...tailMsgs];
-      if (countChars(msgs) > budgetChars) continue; // 双保险：绝不超过预算
+        const body = omitted && hasBody ? clipTailSafe(digestOf(h, t), cap) : '';
+        const msgs = omitted
+          ? [...headMsgs, { role: 'system', content: pre + body }, ...tailMsgs]
+          : [...headMsgs, ...tailMsgs];
+        if (countChars(msgs) > budgetChars) continue; // 双保险：绝不超过预算
 
-      messages = msgs;
-      elided = ranges;
-      pointers = ranges.length; // 完整可执行的指针条数
-      satisfied = true;
-      break;
+        messages = msgs;
+        elided = ranges;
+        pointers = ranges.length; // 完整可执行的指针条数
+        return true;
+      }
     }
-    if (satisfied) break;
-  }
+    return false;
+  };
+  satisfied = attempt(true) || attempt(false);
 
   // ── 2. 兜底：连最小指针都放不下（极端预算）——截断指针而不是抛错 ──
   if (!satisfied) {
