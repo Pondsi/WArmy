@@ -104,14 +104,25 @@
       (act ? '<span class="chev">›</span>' : '') + '</div>';
   };
 
+  // ── 会话类型角标 SVG ──
+  const TYPE_ICONS = {
+    single: '<svg viewBox="0 0 16 16" class="type-badge"><circle cx="6" cy="5" r="3" fill="#07c160"/><rect x="0" y="10" width="12" height="4" rx="2" fill="#07c160"/><rect x="10" y="2" width="5" height="5" rx="1" fill="#576b95"/></svg>',
+    internal: '<svg viewBox="0 0 16 16" class="type-badge"><circle cx="8" cy="8" r="6" fill="none" stroke="#576b95" stroke-width="1.5"/><path d="M5 8C5 5 8 5 8 8S11 11 11 8" fill="none" stroke="#576b95" stroke-width="1.5"/></svg>',
+    contact: '<svg viewBox="0 0 16 16" class="type-badge"><circle cx="8" cy="5" r="3.5" fill="#576b95"/><path d="M2 15c0-3.3 2.7-6 6-6s6 2.7 6 6" fill="#576b95"/></svg>',
+    external: '<svg viewBox="0 0 16 16" class="type-badge"><rect x="1" y="1" width="14" height="10" rx="2" fill="#576b95"/><path d="M4 11l4 4 4-4" fill="#576b95"/></svg>',
+  };
+  const typeLabel = (kind) => ({ single: '牛马', internal: '项目', contact: '联系人', external: '群聊' }[kind] || '');
+
   // ── 一级：四个 Tab ──
   function renderSessions() {
     const rows = SESSIONS.map((s) => {
       const isGroup = s.kind !== 'single';
       const inst = instOf(s.id);
       const av = inst ? avHtml(s.name, inst.preset) : avHtml(s.name, 0, 'g');
-      return '<div class="row" data-open="' + esc(s.id) + '">' + av +
-        '<div class="mid"><div class="n">' + esc(s.name) + '</div><div class="s">' + esc(s.last) + '</div></div>' +
+      const badge = TYPE_ICONS[s.kind] || '';
+      const avWrap = '<div class="av-wrap">' + av + badge + '</div>';
+      return '<div class="row" data-open="' + esc(s.id) + '">' + avWrap +
+        '<div class="mid"><div class="n">' + esc(s.name) + ' <span class="type-tag" data-kind="' + esc(s.kind) + '">' + esc(typeLabel(s.kind)) + '</span></div><div class="s">' + esc(s.last) + '</div></div>' +
         '<div class="right"><div class="t">' + esc(s.ts) + '</div>' +
         (s.unread ? '<div class="badge">' + s.unread + '</div>' : '') + '</div></div>';
     }).join('');
