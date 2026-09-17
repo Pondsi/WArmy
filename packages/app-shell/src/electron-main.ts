@@ -23,6 +23,17 @@ import { runShortLivedExecutor, runExecutors } from './executor.js';
 import { initAssetGovernor, retrieveAssetsForChat, registerChatAsset, recordAssetUsage, sweepAssets } from './asset-wire.js';
 import { MetricsCollector } from './metrics.js';
 import { LocalAccountStore, SettingsStore } from './settings-store.js';
+import { GroupStore, type GroupListResult, type GroupMembersResult } from './group-store.js';
+import {
+  Updater,
+  updaterUnavailableCheck,
+  updaterUnavailableDownload,
+  validateFeedUrl,
+  type UpdateCheckResult,
+  type UpdateDownloadResult,
+  type UpdateSourceInfo,
+} from './updater.js';
+import { sweepTempFiles } from './atomic-json.js';
 import { NodeRegistry, SyncBus, createInvite, consumeInvite } from '@ccarmy/sync-protocol';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@ccarmy/dsh-runtime';
 import { LanSyncServer, LanSyncClient, dualMachineSmoke } from '@ccarmy/sync-protocol';
@@ -72,6 +83,10 @@ let cleanup: CleanupManager | null = null;
 let roleModels: RoleModelConfig = {};
 let accountStore: LocalAccountStore | null = null;
 let settingsStore: SettingsStore | null = null;
+/** 群列表 / 群成员的真实持久化（userData/groups.json） */
+let groupStore: GroupStore | null = null;
+/** 自动更新（真实查询 + 真实下载校验；安装未实现） */
+let updater: Updater | null = null;
 let nodeReg: NodeRegistry | null = null;
 let syncBus: SyncBus | null = null;
 const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
@@ -97,6 +112,39 @@ let providerCfg = {
   protocol: 'openai-compatible' as 'openai-compatible' | 'anthropic' | 'ollama',
 };
 
+/** 打包态资源根目录；开发态下 Electron 也会给值，兜底空串便于拼路径 */
+const RES_ROOT = process.resourcesPath || '';
+
+/**
+ * 解析记忆服务要用的 Node 运行时。
+ * ADR 不变量 #4 要求「记忆服务一律 spawn 捆绑的独立 Node」，不能拿 Electron 当 Node：
+ * 实测用 electron.exe 跑该子进程会立刻崩溃（crashpad not connected），
+ * 而且那条路径还额外要求 ELECTRON_RUN_AS_NODE。
+ * 顺序：捆绑 Node → 环境变量 → Electron 兜底。
+ */
+function resolveNodeRuntime(): { path: string; source: string } {
+  const isWin = process.platform === 'win32';
+  const exe = isWin ? 'node.exe' : 'node';
+  // 仓库里的 Node 压缩包按 win-x64 / darwin-arm64 / linux-x64 命名，
+  // 与 process.platform（win32）不同名，两种目录名都要认。
+  const platDirs = [isWin ? 'win-' + process.arch : process.platform + '-' + process.arch,
+                    process.platform + '-' + process.arch];
+  const roots = [process.resourcesPath || '',
+                 path.join(__dirname, '..', '..', '..', 'resources')];
+  const candidates: Array<{ p: string; source: string }> = [];
+  for (const r of roots) {
+    for (const d of platDirs) {
+      candidates.push({ p: path.join(r, 'node', d, exe), source: 'bundled:' + path.join('node', d) });
+    }
+    candidates.push({ p: path.join(r, 'node', exe), source: 'bundled:node/' + exe });
+  }
+  candidates.push({ p: process.env['CCARM_NODE'] || '', source: 'env:CCARM_NODE' });
+  for (const c of candidates) {
+    if (c.p && fs.existsSync(c.p)) return { path: c.p, source: c.source };
+  }
+  return { path: process.execPath, source: 'electron-fallback(不推荐)' };
+}
+
 function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
   const userData = app.getPath('userData');
   const dataDir = path.join(userData, 'memory');
@@ -121,17 +169,78 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
   if (fs.existsSync(srcPkg)) {
     fs.copyFileSync(srcPkg, path.join(runtimeDir, 'package.json'));
   }
-  // 链接/复制 better-sqlite3：从 memory-os 的 node_modules 解析
+  // 链接 better-sqlite3：开发态与打包态布局不同，而且旧链接可能是坏的，必须校验 + 可修复。
+  // 历史教训：这里原本只做 `existsSync(nmSrc) && !existsSync(nmDst)`。
+  //   - existsSync 对**空目录**也返回 true，包目录一度是空壳时就会链到空目录；
+  //   - 链接一旦存在就不再重建，即使依赖后来补齐也修不回来；
+  //   结果子进程报 `Cannot find module 'better-sqlite3'`，记忆服务永远启动超时（L2 实际从未起来）。
   const memPkgDir = path.dirname(src);
-  const nmSrc = path.join(memPkgDir, 'node_modules');
   const nmDst = path.join(runtimeDir, 'node_modules');
-  if (fs.existsSync(nmSrc) && !fs.existsSync(nmDst)) {
+  const nativeName = process.platform + '-' + process.arch + '.node';
+  /** 目录里是否有**可用**的 better-sqlite3（含本平台原生二进制） */
+  const sqliteUsable = (dir: string): boolean => {
+    if (!fs.existsSync(path.join(dir, 'package.json'))) return false;
     try {
-      fs.symlinkSync(nmSrc, nmDst, 'junction');
+      // v13 用 prebuilds/<platform>-<arch>.node；旧版走 build/Release
+      const lib = fs.readFileSync(path.join(dir, 'lib', 'binding.js'), 'utf8');
+      if (lib.includes('prebuilds')) return fs.existsSync(path.join(dir, 'prebuilds', nativeName));
     } catch {
-      // 回退：不链，依赖 require 从包目录向上找（可能失败）
-      boot('symlink node_modules failed');
+      /* 读不到就退回通用判断 */
     }
+    return (
+      fs.existsSync(path.join(dir, 'prebuilds', nativeName)) ||
+      fs.existsSync(path.join(dir, 'build', 'Release', 'better_sqlite3.node'))
+    );
+  };
+  const sqliteVer = (() => {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(runtimeDir, 'package.json'), 'utf8')) as {
+        dependencies?: Record<string, string>;
+      };
+      return pkg.dependencies?.['better-sqlite3'] || '13.0.3';
+    } catch {
+      return '13.0.3';
+    }
+  })();
+  const sqliteCandidates = [
+    path.join(memPkgDir, 'node_modules', 'better-sqlite3'),                                   // 开发态：包内 junction
+    path.join(RES_ROOT, 'pnpm-store', 'better-sqlite3@' + sqliteVer,
+      'node_modules', 'better-sqlite3'),                                                      // 打包态
+    path.join(RES_ROOT, 'pnpm-store', 'better-sqlite3'),                    // 打包态（扁平）
+  ].filter((p) => p && !p.startsWith(path.sep + 'pnpm-store'));
+
+  const srcSqlite = sqliteCandidates.find(sqliteUsable);
+  const dstSqlite = path.join(nmDst, 'better-sqlite3');
+  if (srcSqlite && !sqliteUsable(dstSqlite)) {
+    // 只拆链接/空目录，绝不递归删除（junction 递归删会连带删掉目标内容）
+    try {
+      fs.unlinkSync(nmDst);
+    } catch {
+      try {
+        fs.rmdirSync(nmDst);
+      } catch {
+        /* 目标不存在或非空目录，交给下面的 mkdir 报错 */
+      }
+    }
+    fs.mkdirSync(nmDst, { recursive: true });
+    try {
+      fs.unlinkSync(dstSqlite);
+    } catch {
+      /* 不存在就算了 */
+    }
+    try {
+      fs.symlinkSync(srcSqlite, dstSqlite, 'junction');
+      boot('memory sqlite linked: ' + srcSqlite);
+    } catch {
+      try {
+        fs.cpSync(srcSqlite, dstSqlite, { recursive: true });
+        boot('memory sqlite copied: ' + srcSqlite);
+      } catch (e) {
+        boot('memory sqlite link failed ' + String(e));
+      }
+    }
+  } else if (!srcSqlite) {
+    boot('memory sqlite not found in ' + sqliteCandidates.join(' | '));
   }
   return { ipcEntry: path.join(runtimeDir, 'ipc.js'), dataDir };
 }
@@ -164,6 +273,17 @@ async function bootstrap() {
   checkpoints = new CheckpointStore(path.join(userData, 'checkpoints'));
   accountStore = new LocalAccountStore(path.join(userData, 'profile.json'));
   settingsStore = new SettingsStore(path.join(userData, 'settings.json'));
+  groupStore = new GroupStore(path.join(userData, 'groups.json'));
+  updater = new Updater({
+    currentVersion: appVersion(),
+    downloadDir: path.join(userData, 'updates'),
+    getSettings: () => settingsStore?.load() ?? null,
+    env: process.env,
+    userAgent: `CCArmy/${appVersion()} (${process.platform}; ${process.arch})`,
+    log: (msg) => boot(`updater: ${msg}`),
+  });
+  sweepTempFiles(path.join(userData, 'updates'));
+  restoreGroups();
   nodeReg = new NodeRegistry(path.join(userData, 'nodes.json'));
   syncBus = new SyncBus(path.join(userData, 'bus'));
   peerReg = new PeerRegistry(path.join(userData, 'peers.json'));
@@ -180,11 +300,80 @@ async function bootstrap() {
   boot('board/knowledge/checkpoints/account/sync/mesh/assets ready');
 }
 
+// ── 群路由 / 群成员：持久化与重启恢复 ──
+
+/** 本机实例入群（路由 + 持久化成员表），已入群则跳过 */
+function joinLocalInstances(groupId: string): void {
+  for (const inst of p1?.instances.list() || []) {
+    if (router.listMembers(groupId).some((m) => m.id === inst.id)) continue;
+    try {
+      router.join(groupId, {
+        id: inst.id,
+        name: inst.name,
+        local: true,
+        dutyEligible: inst.dutyEligible,
+        status: inst.status === 'running' ? 'idle' : 'offline',
+      });
+    } catch {
+      continue;
+    }
+    groupStore?.addMember(groupId, { name: inst.name, role: 'member', source: 'instance', instanceId: inst.id });
+  }
+}
+
+/** 把路由里已有但成员表没有的成员补进持久化（幂等） */
+function syncMembersFromRouter(groupId: string): void {
+  if (!groupStore) return;
+  const g = router.getGroup(groupId);
+  if (!g) return;
+  for (const m of router.listMembers(groupId)) {
+    groupStore.addMember(groupId, { name: m.name, role: 'member', source: 'instance', instanceId: m.id });
+  }
+}
+
+/**
+ * 重启后恢复：把持久化的群灌回路由（否则重启后群聊收不到消息），
+ * 并从旧版会话状态（settings.json 的 state.groups）回填一次。
+ */
+function restoreGroups(): void {
+  if (!groupStore) return;
+  try {
+    const s = settingsStore?.load() as unknown as { groups?: unknown } | undefined;
+    const uiGroups = Array.isArray(s?.groups) ? (s?.groups as Array<{ id?: unknown; name?: unknown; type?: unknown }>) : [];
+    const migrated = groupStore.migrateFrom(uiGroups);
+    if (migrated) boot(`groups migrated from ui state: ${migrated}`);
+    for (const g of groupStore.listGroups()) {
+      if (!router.getGroup(g.groupId)) {
+        try {
+          router.createGroup({
+            groupId: g.groupId,
+            name: g.name,
+            type: g.type,
+            dutyInstanceId: g.dutyInstanceId,
+            directedMode: g.directedMode,
+            members: [],
+            permissions: DEFAULT_PERMISSIONS as never,
+            checkpointLimit: 50,
+          });
+        } catch {
+          continue;
+        }
+      }
+      joinLocalInstances(g.groupId);
+    }
+    boot(`groups restored: ${groupStore.listGroups().length}`);
+  } catch {
+    boot('groups restore failed');
+  }
+}
+
 function startMemoryAsync() {
   try {
     const { ipcEntry, dataDir } = prepareMemoryRuntime();
     boot(`memory ipc=${ipcEntry}`);
-    memory = new MemoryClient({ nodePath: process.execPath, ipcEntry, dataDir });
+    const nodeRt = resolveNodeRuntime();
+    boot(`memory node=${nodeRt.path} (${nodeRt.source})`);
+    memory = new MemoryClient({ nodePath: nodeRt.path, ipcEntry, dataDir });
     memory
       .start()
       .then(() => boot('memory ready'))
@@ -240,6 +429,40 @@ function safeHandle<T>(fn: () => T, fallback: T): T {
 async function safeHandleAsync<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try { return await fn(); } catch (e) { return fallback; }
 }
+/**
+ * 统一 IPC 收口：所有 `ccarmy:*` 通道自动获得
+ *   1) try/catch —— 任何未捕获异常都不会变成渲染进程的未处理 rejection；
+ *   2) 错误脱敏 —— 完整错误只写主进程日志，回传给渲染进程的 message 里
+ *      不含绝对路径 / 堆栈 / 凭据片段；
+ *   3) 重复通道保护 —— 重复注册只记日志并跳过，而不是让 Electron 抛异常把主进程带崩。
+ */
+const __ipcRegistered = new Set<string>();
+function sanitizeError(e: unknown): string {
+  const raw = e instanceof Error ? (e.message || e.name) : String(e);
+  // noUncheckedIndexedAccess：split(..)[0] 的类型是 string | undefined，必须兜一下
+  const firstLine = String(raw ?? '').split('\n')[0] ?? '';
+  const cleaned = firstLine
+    .replace(/[A-Za-z]:\\[^\s"'<>|]+/g, '<path>')                        // Windows 绝对路径
+    .replace(/\/(?:Users|home|var|tmp|opt|mnt)\/[^\s"'<>|]*/g, '<path>')  // POSIX 绝对路径
+    .slice(0, 200);
+  return cleaned || 'unknown error';
+}
+function handleIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any): void {
+  if (__ipcRegistered.has(channel)) {
+    console.error('[ipc] duplicate channel registration ignored: ' + channel);
+    return;
+  }
+  __ipcRegistered.add(channel);
+  ipcMain.handle(channel, async (event, ...args) => {
+    try {
+      return await fn(event, ...args);
+    } catch (e) {
+      console.error('[ipc] ' + channel + ' failed:', e);
+      throw new Error(sanitizeError(e));
+    }
+  });
+}
+
 
 // 应用身份：影响任务栏悬停/右键菜单里显示的名称（默认会显示 Electron）
 app.setName('无限牛马');
@@ -278,9 +501,9 @@ app.on('before-quit', () => {
   })();
 });
 
-ipcMain.handle('ccarmy:hardware', () => safeHandle(() => p1?.instances.hardwareAdvice(), null));
-ipcMain.handle('ccarmy:list-instances', () => safeHandle(() => p1?.instances.list() ?? [], []));
-ipcMain.handle(
+handleIpc('ccarmy:hardware', () => safeHandle(() => p1?.instances.hardwareAdvice(), null));
+handleIpc('ccarmy:list-instances', () => safeHandle(() => p1?.instances.list() ?? [], []));
+handleIpc(
   'ccarmy:spawn-instance',
   async (_e, cfg: { id: string; name: string; dutyEligible?: boolean }) => {
     if (!p1) throw new Error('runtime not ready');
@@ -294,28 +517,28 @@ ipcMain.handle(
     });
   }
 );
-ipcMain.handle('ccarmy:stop-instance', async (_e, id: string) => {
+handleIpc('ccarmy:stop-instance', async (_e, id: string) => {
   try {
     await p1?.instances.stop(id);
     return true;
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:security-mode', () => safeHandle(() => p1?.security.getMode(), 'normal'));
-ipcMain.handle(
+handleIpc('ccarmy:security-mode', () => safeHandle(() => p1?.security.getMode(), 'normal'));
+handleIpc(
   'ccarmy:set-security-mode',
   async (_e, mode: 'full' | 'normal' | 'strict') => {
     await p1?.security.setMode(mode);
     return p1?.security.getMode();
   }
 );
-ipcMain.handle('ccarmy:memory-recall', async (_e, q: string) => {
+handleIpc('ccarmy:memory-recall', async (_e, q: string) => {
   try {
     return await memory?.recall(q);
   } catch (e) {
-    return { cards: [], error: String(e) };
+    return { cards: [], error: sanitizeError(e) };
   }
 });
-ipcMain.handle('ccarmy:memory-append', async (_e, body: string) => {
+handleIpc('ccarmy:memory-append', async (_e, body: string) => {
   try {
     return await memory?.append({
       id: `m-${Date.now()}`,
@@ -324,7 +547,7 @@ ipcMain.handle('ccarmy:memory-append', async (_e, body: string) => {
       body,
     });
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
@@ -338,7 +561,7 @@ function i18nDir(): string {
   return found ?? candidates[0]!;
 }
 
-ipcMain.handle('ccarmy:i18n', (_e, locale: string) => {
+handleIpc('ccarmy:i18n', (_e, locale: string) => {
   const loc = locale?.startsWith('zh') ? 'zh-CN' : 'en-US';
   const file = path.join(i18nDir(), `${loc}.json`);
   let strings: Record<string, string> = {};
@@ -357,19 +580,19 @@ ipcMain.handle('ccarmy:i18n', (_e, locale: string) => {
   return { locale: loc, strings, displayName: strings['app.displayName'] };
 });
 
-ipcMain.handle('ccarmy:locale-info', () => safeHandle(() => { const sys = app.getLocale(); return { system: sys, isZh: sys.startsWith('zh') }; }, { system: 'zh-CN', isZh: true }));
+handleIpc('ccarmy:locale-info', () => safeHandle(() => { const sys = app.getLocale(); return { system: sys, isZh: sys.startsWith('zh') }; }, { system: 'zh-CN', isZh: true }));
 
 // ── 主题 ──
-ipcMain.handle('ccarmy:set-theme-source', (_e, source: 'system' | 'light' | 'dark') => {
+handleIpc('ccarmy:set-theme-source', (_e, source: 'system' | 'light' | 'dark') => {
   try {
     nativeTheme.themeSource = source === 'system' ? 'system' : source;
     return { shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:theme-info', () => safeHandle(() => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource }), { shouldUseDarkColors: false, themeSource: 'system' }));
+handleIpc('ccarmy:theme-info', () => safeHandle(() => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource }), { shouldUseDarkColors: false, themeSource: 'system' }));
 
 // ── 拉取供应商模型列表（OpenAI 兼容 /models） ──
-ipcMain.handle(
+handleIpc(
   'ccarmy:list-models',
   async (_e, cfg: { protocol: string; baseURL: string; apiKey?: string }) => {
     try {
@@ -381,13 +604,13 @@ ipcMain.handle(
       const models = await p.listModels();
       return { ok: true, models };
     } catch (e) {
-      return { ok: false, models: [], error: String((e as Error).message || e) };
+      return { ok: false, models: [], error: sanitizeError(e) };
     }
   }
 );
 
 // ── 选择本地提示音文件 ──
-ipcMain.handle('ccarmy:pick-sound', async () => {
+handleIpc('ccarmy:pick-sound', async () => {
   try {
     if (!win) return { ok: false };
     const r = await dialog.showOpenDialog(win, {
@@ -397,14 +620,19 @@ ipcMain.handle('ccarmy:pick-sound', async () => {
     });
     if (r.canceled || !r.filePaths[0]) return { ok: false };
     return { ok: true, path: r.filePaths[0] };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-// ── 检查更新（占位） ──
-ipcMain.handle('ccarmy:check-update', async () => safeHandleAsync(async () => ({ ok: true, upToDate: true, version: '0.1.0' }), { ok: true, upToDate: true, version: '0.1.0' }));
+// ── 检查更新：真实网络查询，状态可区分（不再恒定返回 upToDate:true） ──
+handleIpc('ccarmy:check-update', async () =>
+  safeHandleAsync<UpdateCheckResult>(
+    async () => (updater ? await updater.check() : updaterUnavailableCheck(appVersion())),
+    updaterUnavailableCheck(appVersion())
+  )
+);
 
 // ── 选择附件文件 ──
-ipcMain.handle('ccarmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
+handleIpc('ccarmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
   try {
     if (!win) return { ok: false };
     const ext = opts?.filters?.length ? opts.filters : undefined;
@@ -414,45 +642,66 @@ ipcMain.handle('ccarmy:pick-file', async (_e, opts?: { filters?: string[] }) => 
     });
     if (r.canceled || !r.filePaths[0]) return { ok: false };
     return { ok: true, path: r.filePaths[0] };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 群聊编排 + 看板 ──
-ipcMain.handle(
+handleIpc(
   'ccarmy:group-create',
   (_e, cfg: { groupId: string; name: string; type: 'internal' | 'external'; directedMode?: boolean }) => {
-    router.createGroup({
-      groupId: cfg.groupId,
-      name: cfg.name,
-      type: cfg.type,
-      dutyInstanceId: null,
-      directedMode: !!cfg.directedMode,
-      members: [],
-      permissions: DEFAULT_PERMISSIONS as never,
-      checkpointLimit: 50,
-    });
-    // 本机实例全部可值班
-    for (const inst of p1?.instances.list() || []) {
-      router.join(cfg.groupId, {
-        id: inst.id,
-        name: inst.name,
-        local: true,
-        dutyEligible: inst.dutyEligible,
-        status: inst.status === 'running' ? 'idle' : 'offline',
+    try {
+      // 已存在（例如重启后 restoreGroups 已恢复）则不再 createGroup，直接复用
+      if (!router.getGroup(cfg.groupId)) {
+        router.createGroup({
+          groupId: cfg.groupId,
+          name: cfg.name,
+          type: cfg.type,
+          dutyInstanceId: null,
+          directedMode: !!cfg.directedMode,
+          members: [],
+          permissions: DEFAULT_PERMISSIONS as never,
+          checkpointLimit: 50,
+        });
+      }
+      // 群记录落盘（group-list 的真实数据来源）
+      const saved = groupStore?.upsertGroup({
+        groupId: cfg.groupId,
+        name: cfg.name,
+        type: cfg.type,
+        directedMode: !!cfg.directedMode,
       });
+      if (saved && !saved.ok) return { ok: false, error: 'cannot persist group' };
+      // 本机实例全部可值班（同时写入持久化成员表）
+      joinLocalInstances(cfg.groupId);
+      audit?.log('group.create', { groupId: cfg.groupId, type: cfg.type });
+      return { ok: true, groupId: cfg.groupId };
+    } catch (e) {
+      return { ok: false, error: 'group create failed' };
     }
-    return { ok: true, groupId: cfg.groupId };
   }
 );
 
-ipcMain.handle('ccarmy:group-list', () => {
-  try {
-    // GroupChatRouter 未暴露 groups 枚举，用 board/session 聚合 + 内部缓存
-    return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
-});
+// ── 群列表：来自 userData/groups.json（真实存储），不是空数组 / 演示数据 ──
+handleIpc('ccarmy:group-list', () =>
+  safeHandle<GroupListResult>(
+    () => {
+      if (!groupStore) return { ok: false, groups: [], count: 0, error: 'group store unavailable' };
+      const snap = groupStore.snapshot();
+      const groups = snap.groups
+        .slice()
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map((g) => ({
+          ...g,
+          memberCount: (snap.members[g.groupId] || []).length,
+          active: !!router.getGroup(g.groupId),
+        }));
+      return { ok: true, groups, count: groups.length };
+    },
+    { ok: false, groups: [], count: 0, error: 'group store unavailable' }
+  )
+);
 
-ipcMain.handle(
+handleIpc(
   'ccarmy:group-message',
   async (
     _e,
@@ -538,7 +787,7 @@ ipcMain.handle(
         hist.push({ role: 'assistant', content: llmReply });
         chatHistories.set(msg.groupId, hist);
       } catch (e) {
-        llmReply = `LLM error: ${String((e as Error).message || e).slice(0, 160)}`;
+        llmReply = `LLM error: ${sanitizeError(e).slice(0, 160)}`;
       }
     }
 
@@ -554,25 +803,25 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle('ccarmy:board-tasks', (_e, groupId?: string) => {
+handleIpc('ccarmy:board-tasks', (_e, groupId?: string) => {
   try {
     return { ok: true, tasks: board?.listTasks(groupId) || [] };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:board-events', () => {
+handleIpc('ccarmy:board-events', () => {
   try {
     return { ok: true, events: board?.tailEvents(30) || [] };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:board-aggregate', () => {
+handleIpc('ccarmy:board-aggregate', () => {
   try {
     return { ok: true, sessions: board?.aggregateByGroup() || [] };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:group-join-instance', (_e, groupId: string, instanceId: string) => {
+handleIpc('ccarmy:group-join-instance', (_e, groupId: string, instanceId: string) => {
   try {
     const inst = p1?.instances.list().find((x) => x.id === instanceId);
     if (!inst) return { ok: false };
@@ -583,25 +832,27 @@ ipcMain.handle('ccarmy:group-join-instance', (_e, groupId: string, instanceId: s
       dutyEligible: inst.dutyEligible,
       status: inst.status === 'running' ? 'idle' : 'offline',
     });
+    // 成员关系落盘：重启后仍在群里
+    groupStore?.addMember(groupId, { name: inst.name, role: 'member', source: 'instance', instanceId: inst.id });
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: 'join failed' }; }
 });
 
 // ── 真 LLM 对话 ──
-ipcMain.handle('ccarmy:set-provider', (_e, cfg: Partial<typeof providerCfg>) => {
+handleIpc('ccarmy:set-provider', (_e, cfg: Partial<typeof providerCfg>) => {
   try {
     providerCfg = { ...providerCfg, ...cfg };
     return { ok: true, providerCfg: { ...providerCfg, apiKey: providerCfg.apiKey ? '***' : '' } };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:get-provider', () => ({
+handleIpc('ccarmy:get-provider', () => ({
   ok: true,
   providerCfg: { ...providerCfg, apiKey: providerCfg.apiKey ? '***' : '' },
   hasKey: !!providerCfg.apiKey || providerCfg.protocol === 'ollama',
 }));
 
-ipcMain.handle(
+handleIpc(
   'ccarmy:chat-send',
   async (
     _e,
@@ -694,7 +945,7 @@ ipcMain.handle(
       }
       return { ok: true, reply, usage: resp.usage, needsKey: false };
     } catch (e) {
-      const err = String((e as Error).message || e);
+      const err = sanitizeError(e);
       lastError = { ts: Date.now(), message: err, context: 'chat-send' };
       return { ok: false, reply: '', error: err, needsKey: false, retry: true };
     }
@@ -702,23 +953,23 @@ ipcMain.handle(
 );
 
 // ── 检查点 ──
-ipcMain.handle('ccarmy:checkpoint-create', (_e, phase: 'round_start' | 'round_end') => {
+handleIpc('ccarmy:checkpoint-create', (_e, phase: 'round_start' | 'round_end') => {
   try {
     if (!checkpoints) return { ok: false };
     const memDir = path.join(app.getPath('userData'), 'memory');
     const jsonl = path.join(memDir, 'fast-memory.jsonl');
     const cp = checkpoints.create({ phase, logSeq: Date.now(), jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined });
     return { ok: true, checkpoint: cp, list: checkpoints.list() };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:checkpoint-list', () => ({
+handleIpc('ccarmy:checkpoint-list', () => ({
   ok: true,
   list: checkpoints?.list() || [],
   space: checkpoints?.space() || { maxBytes: 512 * 1024 * 1024, usedBytes: 0, count: 0 },
 }));
 
-ipcMain.handle('ccarmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: boolean }) => {
+handleIpc('ccarmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: boolean }) => {
   try {
     if (!checkpoints) return { ok: false };
     if (opts?.stopFirst) {
@@ -728,17 +979,17 @@ ipcMain.handle('ccarmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst
     const jsonl = path.join(memDir, 'fast-memory.jsonl');
     const ok = checkpoints.rollback(id, { jsonlPath: jsonl });
     return { ok };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 知识库 ──
-ipcMain.handle('ccarmy:knowledge-query', (_e, q: string) => {
+handleIpc('ccarmy:knowledge-query', (_e, q: string) => {
   try {
     return { ok: true, ...(knowledge?.query(q) || { entities: [], events: [] }) };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle(
+handleIpc(
   'ccarmy:knowledge-add-event',
   (_e, ev: { id: string; title: string; entityIds?: string[]; result?: string }) => {
     knowledge?.upsertEntity({
@@ -761,24 +1012,24 @@ ipcMain.handle(
 );
 
 // ── 指令插入级别 ──
-ipcMain.handle('ccarmy:set-insert-mode', (_e, sessionId: string, mode: 'outer' | 'inner') => {
+handleIpc('ccarmy:set-insert-mode', (_e, sessionId: string, mode: 'outer' | 'inner') => {
   try {
     insertMode.set(sessionId, mode);
     return { ok: true, mode };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:get-insert-mode', (_e, sessionId: string) => ({
+handleIpc('ccarmy:get-insert-mode', (_e, sessionId: string) => ({
   ok: true,
   mode: insertMode.get(sessionId) || 'outer',
 }));
 
 // ── 指标 ──
-ipcMain.handle('ccarmy:metrics-summary', () => safeHandle(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false }))
-ipcMain.handle('ccarmy:metrics-turns', () => safeHandle(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
+handleIpc('ccarmy:metrics-summary', () => safeHandle(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false }))
+handleIpc('ccarmy:metrics-turns', () => safeHandle(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
 
 // ── 设置持久化 ──
-ipcMain.handle('ccarmy:settings-get', () => safeHandle(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
-ipcMain.handle('ccarmy:settings-save', (_e, partial: Record<string, unknown>) => ({
+handleIpc('ccarmy:settings-get', () => safeHandle(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
+handleIpc('ccarmy:settings-save', (_e, partial: Record<string, unknown>) => ({
   ok: true,
   settings: settingsStore?.save(partial as never),
 }));
@@ -825,7 +1076,7 @@ function skillRoots(): Array<{ root: string; source: string }> {
   return roots;
 }
 
-ipcMain.handle('ccarmy:skills-list', () => {
+handleIpc('ccarmy:skills-list', () => {
   const skills: Array<Record<string, unknown>> = [];
   for (const { root, source } of skillRoots()) {
     if (!fs.existsSync(root)) continue;
@@ -853,7 +1104,7 @@ ipcMain.handle('ccarmy:skills-list', () => {
 });
 
 
-ipcMain.handle('ccarmy:skills-import', async () => {
+handleIpc('ccarmy:skills-import', async () => {
   if (!win) return { ok: false, error: 'no window' };
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
@@ -869,13 +1120,13 @@ ipcMain.handle('ccarmy:skills-import', async () => {
     fs.cpSync(src, dest, { recursive: true });
     return { ok: true, id };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
-ipcMain.handle('ccarmy:skills-paths', () => safeHandle(() => ({ ok: true, paths: skillRoots().map((r) => r.root) }), { ok: true, paths: [] }))
+handleIpc('ccarmy:skills-paths', () => safeHandle(() => ({ ok: true, paths: skillRoots().map((r) => r.root) }), { ok: true, paths: [] }))
 
-ipcMain.handle('ccarmy:skills-remove', (_e, id: string) => {
+handleIpc('ccarmy:skills-remove', (_e, id: string) => {
   try {
     for (const { root } of skillRoots()) {
       const dir = path.resolve(root, String(id || ''));
@@ -887,11 +1138,11 @@ ipcMain.handle('ccarmy:skills-remove', (_e, id: string) => {
     }
     return { ok: false, error: 'skill not found' };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
-ipcMain.handle('ccarmy:profile-get', () => safeHandle(() => ({ ok: true, profile: accountStore?.loadProfile() }), { ok: true, profile: undefined }))
+handleIpc('ccarmy:profile-get', () => safeHandle(() => ({ ok: true, profile: accountStore?.loadProfile() }), { ok: true, profile: undefined }))
 // 读自家 package.json 的版本；dev 下 app.getVersion() 返回的是 Electron 版本，不可用
 function appVersion(): string {
   try {
@@ -904,7 +1155,7 @@ function appVersion(): string {
 }
 
 // 关于页：版本 / 运行时 / 平台 / 用户 ID 及其签名校验状态
-ipcMain.handle('ccarmy:app-info', () => {
+handleIpc('ccarmy:app-info', () => {
   try {
     const st = accountStore?.idStatus();
     return {
@@ -920,30 +1171,30 @@ ipcMain.handle('ccarmy:app-info', () => {
       deviceId: st?.id || '',
       deviceIdValid: st?.valid ?? false,
     };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:profile-save', (_e, p: { username: string; email: string; avatarDataUrl?: string }) => {
+handleIpc('ccarmy:profile-save', (_e, p: { username: string; email: string; avatarDataUrl?: string }) => {
   try {
     const prev = accountStore?.loadProfile();
     const next = { ...prev!, ...p };
     return { ok: true, profile: accountStore?.saveProfile(next) };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:profile-set-password', (_e, pw: string) => {
+handleIpc('ccarmy:profile-set-password', (_e, pw: string) => {
   try {
     accountStore?.setPassword(pw);
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:profile-login', (_e, pw: string) => {
+handleIpc('ccarmy:profile-login', (_e, pw: string) => {
   try {
     const r = accountStore?.loginLocal(pw) || { ok: false };
     return r;
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 语音保存 ──
-ipcMain.handle('ccarmy:save-voice', async (_e, data: { dataUrl: string; ext?: string }) => {
+handleIpc('ccarmy:save-voice', async (_e, data: { dataUrl: string; ext?: string }) => {
   try {
     const dir = path.join(app.getPath('userData'), 'voice');
     fs.mkdirSync(dir, { recursive: true });
@@ -953,44 +1204,44 @@ ipcMain.handle('ccarmy:save-voice', async (_e, data: { dataUrl: string; ext?: st
     fs.writeFileSync(file, Buffer.from(b64, 'base64'));
     return { ok: true, path: file };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
 // ── 节点 / 邀请 ──
-ipcMain.handle('ccarmy:nodes-list', () => safeHandle(() => ({ ok: true, nodes: nodeReg?.list() || [] }), { ok: true, nodes: [] }))
-ipcMain.handle('ccarmy:nodes-pair', (_e, nodeId: string, name: string) => ({
+handleIpc('ccarmy:nodes-list', () => safeHandle(() => ({ ok: true, nodes: nodeReg?.list() || [] }), { ok: true, nodes: [] }))
+handleIpc('ccarmy:nodes-pair', (_e, nodeId: string, name: string) => ({
   ok: true,
   node: nodeReg?.pairRemote(nodeId, name),
 }));
-ipcMain.handle('ccarmy:nodes-revoke', (_e, nodeId: string) => {
+handleIpc('ccarmy:nodes-revoke', (_e, nodeId: string) => {
   try {
     nodeReg?.revoke(nodeId);
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:invite-create', (_e, groupId?: string) => safeHandle(() => ({ ok: true, invite: createInvite(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
-ipcMain.handle('ccarmy:invite-use', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
+handleIpc('ccarmy:invite-create', (_e, groupId?: string) => safeHandle(() => ({ ok: true, invite: createInvite(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
+handleIpc('ccarmy:invite-use', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
   ok: consumeInvite(tok),
 }));
-ipcMain.handle('ccarmy:sync-publish', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => ({
+handleIpc('ccarmy:sync-publish', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => ({
   ok: true,
   envelope: syncBus?.publish(env as never),
 }));
-ipcMain.handle('ccarmy:sync-pull', (_e, nodeId: string) => safeHandle(() => ({ ok: true, messages: syncBus?.pull(nodeId) || [] }), { ok: true, messages: [] }))
+handleIpc('ccarmy:sync-pull', (_e, nodeId: string) => safeHandle(() => ({ ok: true, messages: syncBus?.pull(nodeId) || [] }), { ok: true, messages: [] }))
 
 // ── dsh 实例入口（可选） ──
-ipcMain.handle('ccarmy:dsh-available', () => {
+handleIpc('ccarmy:dsh-available', () => {
   try {
     const dir = findDshPackageDir([
       path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
       path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
     ]);
     return { ok: !!dir, dir: dir || null };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: string }) => {
+handleIpc('ccarmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: string }) => {
   const dshDir = findDshPackageDir([
     path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
     path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
@@ -1019,16 +1270,16 @@ ipcMain.handle('ccarmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: 
 });
 
 // ── 邮件提醒（队列占位，功能待接 SMTP） ──
-ipcMain.handle('ccarmy:email-queue', (_e, mail: { to: string; subject: string; body: string }) => {
+handleIpc('ccarmy:email-queue', (_e, mail: { to: string; subject: string; body: string }) => {
   try {
     emailQueue.push({ ...mail, ts: Date.now() });
     return { ok: true, pending: emailQueue.length };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:email-list', () => safeHandle(() => ({ ok: true, items: emailQueue }), { ok: true, items: [] }))
+handleIpc('ccarmy:email-list', () => safeHandle(() => ({ ok: true, items: emailQueue }), { ok: true, items: [] }))
 
 // ── SMTP 验证（用户设置，非写死） ──
-ipcMain.handle('ccarmy:smtp-verify', async (_e, cfg: SmtpConfig & { id?: string }) => {
+handleIpc('ccarmy:smtp-verify', async (_e, cfg: SmtpConfig & { id?: string }) => {
   try {
     const r = await verifySmtp(cfg);
     if (r.ok && cfg.id && settingsStore) {
@@ -1041,10 +1292,10 @@ ipcMain.handle('ccarmy:smtp-verify', async (_e, cfg: SmtpConfig & { id?: string 
       }
     }
     return r;
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:smtp-list', () => {
+handleIpc('ccarmy:smtp-list', () => {
   try {
     const s = settingsStore?.load();
     const accounts = (s?.smtpAccounts || []).map((a) => ({
@@ -1052,10 +1303,10 @@ ipcMain.handle('ccarmy:smtp-list', () => {
       pass: a.pass ? '••••••••' : '',
     }));
     return { ok: true, accounts, max: 10 };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:smtp-add', (_e, acc: { label: string; host: string; port: number; secure: boolean; user: string; pass: string }) => {
+handleIpc('ccarmy:smtp-add', (_e, acc: { label: string; host: string; port: number; secure: boolean; user: string; pass: string }) => {
   try {
     const s = settingsStore!.load();
     const list = s.smtpAccounts || [];
@@ -1072,19 +1323,19 @@ ipcMain.handle('ccarmy:smtp-add', (_e, acc: { label: string; host: string; port:
     list.push(full);
     settingsStore!.save({ smtpAccounts: list });
     return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })), max: 10 };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:smtp-remove', (_e, id: string) => {
+handleIpc('ccarmy:smtp-remove', (_e, id: string) => {
   try {
     const s = settingsStore!.load();
     const list = (s.smtpAccounts || []).filter((a) => a.id !== id);
     settingsStore!.save({ smtpAccounts: list });
     return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; host: string; port: number; secure: boolean; user: string; pass: string }>) => {
+handleIpc('ccarmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; host: string; port: number; secure: boolean; user: string; pass: string }>) => {
   try {
     const s = settingsStore!.load();
     const list = s.smtpAccounts || [];
@@ -1093,11 +1344,11 @@ ipcMain.handle('ccarmy:smtp-update', (_e, id: string, patch: Partial<{ label: st
     Object.assign(acc, patch);
     settingsStore!.save({ smtpAccounts: list });
     return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 内网同步 ──
-ipcMain.handle('ccarmy:lan-start', async (_e, port = 7788) => {
+handleIpc('ccarmy:lan-start', async (_e, port = 7788) => {
   try {
     if (lanServer?.listening) await lanServer.stop();
     const local = nodeReg?.list().find((n) => n.isLocal);
@@ -1110,19 +1361,19 @@ ipcMain.handle('ccarmy:lan-start', async (_e, port = 7788) => {
     await lanServer.start();
     return { ok: true, port, nodeId: localNodeId };
   } catch (e) {
-    return { ok: false, error: String((e as Error).message || e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
-ipcMain.handle('ccarmy:lan-stop', async () => {
+handleIpc('ccarmy:lan-stop', async () => {
   try {
     await lanServer?.stop();
     lanServer = null;
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:lan-send', async (_e, msg: { host: string; port: number; to?: string; payload: unknown; groupId?: string; incognito?: boolean }) => {
+handleIpc('ccarmy:lan-send', async (_e, msg: { host: string; port: number; to?: string; payload: unknown; groupId?: string; incognito?: boolean }) => {
   try {
     const client = new LanSyncClient(localNodeId);
     const r = await client.send(msg.host, msg.port, {
@@ -1133,21 +1384,21 @@ ipcMain.handle('ccarmy:lan-send', async (_e, msg: { host: string; port: number; 
       incognito: msg.incognito,
     });
     return r;
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:lan-inbox', () => ({
+handleIpc('ccarmy:lan-inbox', () => ({
   ok: true,
   messages: lanServer?.inboxOf() || [],
 }));
 
-ipcMain.handle('ccarmy:lan-status', () => ({
+handleIpc('ccarmy:lan-status', () => ({
   ok: true,
   listening: !!lanServer?.listening,
   nodeId: localNodeId,
 }));
 
-ipcMain.handle(
+handleIpc(
   'ccarmy:lan-dual-smoke',
   async (_e, opts: { localPort?: number; peerHost?: string; peerPort?: number }) => {
     return dualMachineSmoke({
@@ -1160,7 +1411,7 @@ ipcMain.handle(
 );
 
 // ── 多节点 mesh ──
-ipcMain.handle('ccarmy:mesh-start', async (_e, port = 7788) => {
+handleIpc('ccarmy:mesh-start', async (_e, port = 7788) => {
   try {
     await mesh?.stop();
     mesh = new MeshNode(localNodeId, port, peerReg!, path.join(app.getPath('userData'), 'bus', 'mesh.jsonl'));
@@ -1183,11 +1434,11 @@ ipcMain.handle('ccarmy:mesh-start', async (_e, port = 7788) => {
     discoverTimer = setInterval(() => discovery?.broadcast(), 8000);
     return { ok: true, port, nodeId: localNodeId, notes: P2P_NOTES };
   } catch (e) {
-    return { ok: false, error: String((e as Error).message || e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
-ipcMain.handle('ccarmy:mesh-stop', async () => {
+handleIpc('ccarmy:mesh-stop', async () => {
   try {
     if (discoverTimer) clearInterval(discoverTimer);
     discoverTimer = null;
@@ -1196,16 +1447,16 @@ ipcMain.handle('ccarmy:mesh-stop', async () => {
     discovery = null;
     mesh = null;
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:peers-list', () => ({
+handleIpc('ccarmy:peers-list', () => ({
   ok: true,
   peers: peerReg?.list() || [],
   notes: P2P_NOTES,
 }));
 
-ipcMain.handle(
+handleIpc(
   'ccarmy:peers-add',
   (_e, p: { nodeId?: string; name: string; host: string; port: number; kind?: 'lan' | 'wan' }) => {
     const nodeId = p.nodeId || `peer-${p.host}-${p.port}`;
@@ -1214,24 +1465,24 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle('ccarmy:peers-remove', (_e, nodeId: string) => {
+handleIpc('ccarmy:peers-remove', (_e, nodeId: string) => {
   try {
     peerReg?.revoke(nodeId);
     return { ok: true, peers: peerReg?.list() || [] };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) => {
+handleIpc('ccarmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) => {
   try {
     if (!mesh) return { ok: false, error: 'mesh not started' };
     const r = await mesh.sendToAll({ to: '*', channel: 'group', groupId, payload });
     return { ok: true, ...r };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:mesh-inbox', () => safeHandle(() => ({ ok: true, messages: mesh?.inboxOf() || [] }), { ok: true, messages: [] }))
+handleIpc('ccarmy:mesh-inbox', () => safeHandle(() => ({ ok: true, messages: mesh?.inboxOf() || [] }), { ok: true, messages: [] }))
 
-ipcMain.handle('ccarmy:mesh-status', () => ({
+handleIpc('ccarmy:mesh-status', () => ({
   ok: true,
   listening: !!mesh,
   nodeId: localNodeId,
@@ -1239,16 +1490,16 @@ ipcMain.handle('ccarmy:mesh-status', () => ({
 }));
 
 // ── 窗口控制（自定义标题栏） ──
-ipcMain.handle('ccarmy:win-minimize', () => safeHandle(() => win?.minimize(), null))
-ipcMain.handle('ccarmy:win-maximize', () => {
+handleIpc('ccarmy:win-minimize', () => safeHandle(() => win?.minimize(), null))
+handleIpc('ccarmy:win-maximize', () => {
   try {
     if (!win) return;
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:win-close', () => safeHandle(() => win?.close(), null))
-ipcMain.handle('ccarmy:win-reload', () => {
+handleIpc('ccarmy:win-close', () => safeHandle(() => win?.close(), null))
+handleIpc('ccarmy:win-reload', () => {
   try {
     if (!win) return { ok: false };
     // 清 HTTP 缓存后重载，避免旧 JS/CSS 残留
@@ -1256,17 +1507,17 @@ ipcMain.handle('ccarmy:win-reload', () => {
     ses.clearCache().catch(() => {});
     win.webContents.reloadIgnoringCache();
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:win-always-on-top', (_e, on?: boolean) => {
+handleIpc('ccarmy:win-always-on-top', (_e, on?: boolean) => {
   try {
     if (!win) return { ok: false };
     const next = typeof on === 'boolean' ? on : !win.isAlwaysOnTop();
     win.setAlwaysOnTop(next);
     return { ok: true, alwaysOnTop: next };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:platform', () => ({
+handleIpc('ccarmy:platform', () => ({
   ok: true,
   platform: process.platform,
   isMac: process.platform === 'darwin',
@@ -1276,7 +1527,7 @@ ipcMain.handle('ccarmy:platform', () => ({
 
 
 // ── P5 短命执行者 ──
-ipcMain.handle('ccarmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
+handleIpc('ccarmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
   try {
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       return { ok: false, error: 'no key' };
@@ -1295,10 +1546,10 @@ ipcMain.handle('ccarmy:executor-run', async (_e, task: { taskId?: string; brief:
       }
     );
     return { ok: !r.error, ...r };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
+handleIpc('ccarmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
   try {
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       return { ok: false, error: 'no key' };
@@ -1313,33 +1564,33 @@ ipcMain.handle('ccarmy:executor-batch', async (_e, tasks: Array<{ taskId?: strin
       }
     );
     return { ok: true, results: rs };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── P7 资产治理 ──
-ipcMain.handle('ccarmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: boolean }) => ({
+handleIpc('ccarmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: boolean }) => ({
   ok: true,
   assets: retrieveAssetsForChat({ scope: opts?.scope as never, strict: opts?.strict }),
 }));
 
-ipcMain.handle('ccarmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
+handleIpc('ccarmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
   try {
     registerChatAsset({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:assets-feedback', (_e, id: string, good: boolean) => {
+handleIpc('ccarmy:assets-feedback', (_e, id: string, good: boolean) => {
   try {
     recordAssetUsage(id, good);
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:assets-sweep', () => safeHandle(() => ({ ok: true, n: 0 }), { ok: true, n: 0 }))
+handleIpc('ccarmy:assets-sweep', () => safeHandle(() => ({ ok: true, n: 0 }), { ok: true, n: 0 }))
 
 // ── P6 知识库：从对话写入 ──
-ipcMain.handle('ccarmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
+handleIpc('ccarmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
   try {
     knowledge?.upsertEntity({
       id: 'sess-' + payload.sessionId,
@@ -1364,13 +1615,13 @@ ipcMain.handle('ccarmy:kb-from-chat', (_e, payload: { sessionId: string; title: 
       scope: 'session',
     });
     return { ok: true, eventId: evId };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 
 
 // ── 3 权限审批弹窗 ──
-ipcMain.handle('ccarmy:request-approval', (_e, req: { action: string; suggested?: string }) => {
+handleIpc('ccarmy:request-approval', (_e, req: { action: string; suggested?: string }) => {
   try {
     const id = 'ap-' + ++approvalSeq;
     return new Promise((resolve) => {
@@ -1384,21 +1635,21 @@ ipcMain.handle('ccarmy:request-approval', (_e, req: { action: string; suggested?
         }
       }, 30000);
     });
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:approval-respond', (_e, id: string, allowed: boolean, scope: string) => {
+handleIpc('ccarmy:approval-respond', (_e, id: string, allowed: boolean, scope: string) => {
   try {
     const p = pendingApprovals.get(id);
     if (!p) return { ok: false };
     pendingApprovals.delete(id);
     p.resolve({ allowed, scope });
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 4 自动检查点 ──
-ipcMain.handle('ccarmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
+handleIpc('ccarmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
   try {
     if (!checkpoints) return { ok: false };
     const memDir = path.join(app.getPath('userData'), 'memory');
@@ -1409,11 +1660,11 @@ ipcMain.handle('ccarmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end'
       jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined,
     });
     return { ok: true, checkpoint: cp, list: checkpoints.list() };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 6 成本仪表盘 ──
-ipcMain.handle('ccarmy:cost-summary', () => {
+handleIpc('ccarmy:cost-summary', () => {
   try {
     const m = metrics.summary();
     const estCost = ((m.promptTokens + m.completionTokens) / 1000) * 0.002;
@@ -1426,11 +1677,11 @@ ipcMain.handle('ccarmy:cost-summary', () => {
       avgDurationMs: m.avgDurationMs,
       estCostCny: +estCost.toFixed(4),
     };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 1 值班编排闭环 ──
-ipcMain.handle('ccarmy:group-orchestrate', async (_e, msg: { groupId: string; content: string; urgency?: string; userId?: string }) => {
+handleIpc('ccarmy:group-orchestrate', async (_e, msg: { groupId: string; content: string; urgency?: string; userId?: string }) => {
   const instList = (p1?.instances.list() || []).map((x) => ({
     id: x.id,
     name: x.name,
@@ -1501,8 +1752,8 @@ ipcMain.handle('ccarmy:group-orchestrate', async (_e, msg: { groupId: string; co
 
 // ── C. 执行者状态 ──
 const executorStatus: Array<{ id: string; name: string; taskId: string; brief: string; status: string; durationMs: number; ts: number }> = [];
-ipcMain.handle('ccarmy:executors-status', () => safeHandle(() => ({ ok: true, items: executorStatus.slice(-10) }), { ok: true, items: [] }))
-ipcMain.handle('ccarmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
+handleIpc('ccarmy:executors-status', () => safeHandle(() => ({ ok: true, items: executorStatus.slice(-10) }), { ok: true, items: [] }))
+handleIpc('ccarmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
   try {
     const ids = payload.executorIds?.length
       ? payload.executorIds
@@ -1522,42 +1773,42 @@ ipcMain.handle('ccarmy:executors-run-brief', async (_e, payload: { brief: string
       })
     );
     return { ok: true, results };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 
 // ── E. 会话状态持久化 ──
-ipcMain.handle('ccarmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unknown[]; groups?: unknown[]; chats?: unknown[] }) => {
+handleIpc('ccarmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unknown[]; groups?: unknown[]; chats?: unknown[] }) => {
   try {
     if (!settingsStore) return { ok: false };
     const cur = settingsStore.load();
     const next = { ...cur, ...state } as never;
     settingsStore.save(next as never);
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:state-load', () => {
+handleIpc('ccarmy:state-load', () => {
   try {
     const s = settingsStore?.load() as never;
     return { ok: true, state: s || {} };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 
 
 // ── 知识库删除 ──
-ipcMain.handle('ccarmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: string }) => {
+handleIpc('ccarmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: string }) => {
   try {
     if (!knowledge) return { ok: false, error: 'kb not ready' };
     const removed = payload?.kind === 'event' ? knowledge.removeEvent(payload.id) : knowledge.removeEntity(payload.id);
     return { ok: removed };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
 // ── 通用：把文本保存到文件（CSV / Markdown 等）──
-ipcMain.handle('ccarmy:save-text', async (_e, payload: { defaultName?: string; content: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
+handleIpc('ccarmy:save-text', async (_e, payload: { defaultName?: string; content: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
   try {
     if (!win) return { ok: false, error: 'no window' };
     const r = await dialog.showSaveDialog(win, {
@@ -1568,14 +1819,14 @@ ipcMain.handle('ccarmy:save-text', async (_e, payload: { defaultName?: string; c
     fs.writeFileSync(r.filePath, String(payload?.content ?? ''), 'utf8');
     return { ok: true, path: r.filePath };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
 // ── 卡顿自检：主进程 CPU / 内存 / 事件循环延迟 ──
 let __diagPrevCpu: NodeJS.CpuUsage | null = null;
 let __diagPrevAt = Date.now();
-ipcMain.handle('ccarmy:diagnostics', async () => {
+handleIpc('ccarmy:diagnostics', async () => {
   try {
     const now = Date.now();
     const cpu = process.cpuUsage();
@@ -1623,11 +1874,11 @@ ipcMain.handle('ccarmy:diagnostics', async () => {
       nodeVersion: process.versions.node,
       electronVersion: process.versions.electron,
     };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── D. ASR 语音转文字（调用 DeepSeek 兼容接口的 audio 端点；失败返回 null） ──
-ipcMain.handle('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
+handleIpc('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
   try {
     if (!providerCfg.apiKey) return { ok: false, error: 'no key' };
     // 优先走用户配置的 ASR 端点（若支持）；否则尝试 /audio/transcriptions
@@ -1646,14 +1897,14 @@ ipcMain.handle('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; e
     const data = (await res.json()) as { text?: string };
     return { ok: true, text: data.text || '' };
   } catch (e) {
-    return { ok: false, error: String((e as Error).message || e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
 
 // ── H. 多窗口：在新窗口打开会话 ──
 const chatWindows = new Map<string, BrowserWindow>();
-ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string }) => {
+handleIpc('ccarmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string }) => {
   try {
     if (chatWindows.has(payload.id)) {
       chatWindows.get(payload.id)?.focus();
@@ -1677,11 +1928,11 @@ ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: str
     w.on('closed', () => chatWindows.delete(payload.id));
     chatWindows.set(payload.id, w);
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── I. 全局热键 ──
-ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
+handleIpc('ccarmy:register-hotkey', (_e, accel: string) => {
   try {
     globalShortcut.unregister(accel);
     const ok = globalShortcut.register(accel, () => {
@@ -1692,7 +1943,7 @@ ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
     });
     return { ok };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
@@ -1727,18 +1978,18 @@ function createTray() {
   });
   tray = t;
 }
-ipcMain.handle('ccarmy:tray-init', () => {
+handleIpc('ccarmy:tray-init', () => {
   try {
     createTray();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
 
 // 托盘提示语由渲染层按当前语言下发（logo 文案随语言变化）
-ipcMain.handle('ccarmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?: string; header?: string; me?: string }) => {
+handleIpc('ccarmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?: string; header?: string; me?: string }) => {
   try {
     const p = typeof payload === 'string' ? { text: payload } : payload || {};
     if (p.text) tray?.setToolTip(String(p.text).slice(0, 120));
@@ -1751,12 +2002,12 @@ ipcMain.handle('ccarmy:tray-tooltip', (_e, payload: string | { text?: string; of
     if (p.me) exportMeLabel = String(p.me);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
 // ── K. 会话导出 Markdown ──
-ipcMain.handle('ccarmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
+handleIpc('ccarmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
   try {
     const dir = path.join(app.getPath('userData'), 'exports');
     fs.mkdirSync(dir, { recursive: true });
@@ -1778,68 +2029,129 @@ ipcMain.handle('ccarmy:export-session', (_e, payload: { title: string; messages:
     fs.writeFileSync(file, lines.join('\n'), 'utf8');
     return { ok: true, path: file };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
-// ── L. 自动更新（electron-updater 占位） ──
-ipcMain.handle('ccarmy:auto-update-check', async () => {
+// ── L. 自动更新（真实查询 + 真实下载校验；自动安装未实现，明确标记） ──
+handleIpc('ccarmy:auto-update-check', async () =>
+  safeHandleAsync<UpdateCheckResult>(
+    async () => (updater ? await updater.check() : updaterUnavailableCheck(appVersion())),
+    updaterUnavailableCheck(appVersion())
+  )
+);
+handleIpc('ccarmy:auto-update-download', async () =>
+  safeHandleAsync<UpdateDownloadResult>(
+    async () => (updater ? await updater.download() : updaterUnavailableDownload(appVersion())),
+    updaterUnavailableDownload(appVersion())
+  )
+);
+
+// ── L2. 更新源配置（写入 settings.json 的 updateFeedUrl / updateChannel） ──
+function updateSourceSnapshot(): UpdateSourceInfo & { ok: boolean } {
+  const info = updater?.getSourceInfo();
+  if (info) return { ok: true, ...info };
+  return {
+    ok: false,
+    configured: false,
+    url: null,
+    origin: 'none',
+    channel: '',
+    currentVersion: appVersion(),
+    error: 'updater unavailable',
+  };
+}
+handleIpc('ccarmy:update-source-get', () => safeHandle(() => updateSourceSnapshot(), updateSourceSnapshot()));
+handleIpc('ccarmy:update-source-set', (_e, payload: { url?: string; channel?: string }) => {
   try {
-    // 无签名/发布源时只返回状态，不实际下载
-    return { ok: true, status: 'idle', message: 'no release channel configured' };
-  } catch (e) { return { ok: false, error: String(e) }; }
-});
-ipcMain.handle('ccarmy:auto-update-download', async () => {
-  try {
-    return { ok: false, status: 'skipped', message: 'requires signed release + update server' };
-  } catch (e) { return { ok: false, error: String(e) }; }
+    if (!settingsStore) return { ok: false, error: 'settings not ready' };
+    const patch: Record<string, unknown> = {};
+    const url = typeof payload?.url === 'string' ? payload.url.trim() : '';
+    if (url) {
+      const v = validateFeedUrl(url);
+      if (!v.ok) return { ok: false, error: v.error }; // 校验信息是给用户看的，不含内部路径
+      patch['updateFeedUrl'] = v.url;
+    } else {
+      patch['updateFeedUrl'] = ''; // 清空 = 未配置
+    }
+    if (typeof payload?.channel === 'string') patch['updateChannel'] = payload.channel.trim().slice(0, 40);
+    const w = settingsStore.save(patch as never);
+    if (!w) return { ok: false, error: 'cannot persist update source' };
+    audit?.log('update.source.set', { configured: !!url });
+    return updateSourceSnapshot();
+  } catch {
+    return { ok: false, error: 'cannot persist update source' };
+  }
 });
 
 
-// ── M. 群成员管理 ──
-const groupMembers = new Map<string, Array<{ id: string; name: string; role: string; joinedAt: number }>>();
-ipcMain.handle('ccarmy:group-members', (_e, groupId: string) => ({
-  ok: true,
-  members: groupMembers.get(groupId) || [],
-}));
-ipcMain.handle('ccarmy:group-invite', (_e, payload: { groupId: string; name: string; role?: string }) => {
+// ── M. 群成员管理（真实持久化：userData/groups.json） ──
+handleIpc('ccarmy:group-members', (_e, groupId: string) =>
+  safeHandle<GroupMembersResult>(
+    () => {
+      const gid = String(groupId || '');
+      if (!groupStore) return { ok: false, groupId: gid, members: [], error: 'group store unavailable' };
+      // 路由里已有但成员表缺的（例如更早版本入群）补一次，保证列表与路由一致
+      syncMembersFromRouter(gid);
+      return { ok: true, groupId: gid, members: groupStore.listMembers(gid) };
+    },
+    { ok: false, members: [], error: 'group store unavailable' }
+  )
+);
+handleIpc('ccarmy:group-invite', (_e, payload: { groupId: string; name: string; role?: string }) => {
   try {
-    const list = groupMembers.get(payload.groupId) || [];
-    if (list.length >= 50) return { ok: false, error: 'max 50' };
-    list.push({ id: 'm-' + Date.now(), name: payload.name, role: payload.role || 'member', joinedAt: Date.now() });
-    groupMembers.set(payload.groupId, list);
-    return { ok: true, members: list };
-  } catch (e) { return { ok: false, error: String(e) }; }
+    if (!groupStore) return { ok: false, error: 'group store unavailable' };
+    const gid = String(payload?.groupId || '');
+    const role = payload?.role === 'admin' ? 'admin' : 'member';
+    const r = groupStore.addMember(gid, { name: String(payload?.name || ''), role, source: 'invite' });
+    if (!r.ok) return { ok: false, error: r.error || 'invite failed', members: r.members };
+    audit?.log('group.invite', { groupId: gid });
+    return { ok: true, members: r.members };
+  } catch {
+    return { ok: false, error: 'invite failed' };
+  }
 });
-ipcMain.handle('ccarmy:group-kick', (_e, payload: { groupId: string; memberId: string }) => {
+handleIpc('ccarmy:group-kick', (_e, payload: { groupId: string; memberId: string }) => {
   try {
-    const list = groupMembers.get(payload.groupId) || [];
-    const next = list.filter((x) => x.id !== payload.memberId);
-    groupMembers.set(payload.groupId, next);
-    return { ok: true, members: next };
-  } catch (e) { return { ok: false, error: String(e) }; }
+    if (!groupStore) return { ok: false, error: 'group store unavailable' };
+    const gid = String(payload?.groupId || '');
+    const mid = String(payload?.memberId || '');
+    const r = groupStore.removeMember(gid, mid);
+    if (!r.ok) return { ok: false, error: r.error || 'kick failed', members: r.members };
+    // 本机实例被踢时同步退出路由值班池
+    const kicked = router.listMembers(gid).find((m) => m.id === mid || `inst:${m.id}` === mid);
+    if (kicked) router.leave(gid, kicked.id);
+    audit?.log('group.kick', { groupId: gid });
+    return { ok: true, members: r.members };
+  } catch {
+    return { ok: false, error: 'kick failed' };
+  }
 });
-ipcMain.handle('ccarmy:group-set-admin', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
+handleIpc('ccarmy:group-set-admin', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
   try {
-    const list = groupMembers.get(payload.groupId) || [];
-    const m = list.find((x) => x.id === payload.memberId);
-    if (m) m.role = payload.admin ? 'admin' : 'member';
-    groupMembers.set(payload.groupId, list);
-    return { ok: true, members: list };
-  } catch (e) { return { ok: false, error: String(e) }; }
+    if (!groupStore) return { ok: false, error: 'group store unavailable' };
+    const gid = String(payload?.groupId || '');
+    const mid = String(payload?.memberId || '');
+    const r = groupStore.setAdmin(gid, mid, !!payload?.admin);
+    if (!r.ok) return { ok: false, error: r.error || 'set admin failed', members: r.members };
+    return { ok: true, members: r.members };
+  } catch {
+    return { ok: false, error: 'set admin failed' };
+  }
 });
-ipcMain.handle('ccarmy:group-directed', (_e, payload: { groupId: string; directed: boolean }) => {
+handleIpc('ccarmy:group-directed', (_e, payload: { groupId: string; directed: boolean }) => {
   try {
     const g = router.getGroup(payload.groupId);
     if (!g) return { ok: false, error: 'no group' };
-    g.directedMode = payload.directed;
+    g.directedMode = !!payload.directed;
+    groupStore?.setDirected(payload.groupId, g.directedMode);
     return { ok: true, directedMode: g.directedMode };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: 'directed mode failed' }; }
 });
 
 
 // ── N. 会话内嵌看板 ──
-ipcMain.handle('ccarmy:board-session', (_e, groupId: string) => ({
+handleIpc('ccarmy:board-session', (_e, groupId: string) => ({
   ok: true,
   tasks: board?.listTasks(groupId) || [],
   events: (board?.tailEvents(20) || []).filter((e) => e.groupId === groupId),
@@ -1847,17 +2159,17 @@ ipcMain.handle('ccarmy:board-session', (_e, groupId: string) => ({
 
 
 // ── O. CCR 工具输出压缩 ──
-ipcMain.handle('ccarmy:ccr-tool-output', (_e, payload: { toolName?: string; content: string }) => {
+handleIpc('ccarmy:ccr-tool-output', (_e, payload: { toolName?: string; content: string }) => {
   try {
     const r = ccr.beforeLog({ kind: 'tool_result', content: payload.content, toolName: payload.toolName });
     metrics.recordCcr({ ts: Date.now(), kind: 'tool_result', originalBytes: r.originalBytes, compressedBytes: r.compressedBytes });
     return { ok: true, ...r };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 
 // ── P. 知识库详情 ──
-ipcMain.handle('ccarmy:kb-detail', (_e, q: string) => {
+handleIpc('ccarmy:kb-detail', (_e, q: string) => {
   try {
     const r = knowledge?.query(q) || { entities: [], events: [] };
     return {
@@ -1865,24 +2177,23 @@ ipcMain.handle('ccarmy:kb-detail', (_e, q: string) => {
       entities: r.entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, attrs: e.attrs, eventIds: e.eventIds })),
       events: r.events.map((e) => ({ id: e.id, title: e.title, result: e.result, ts: e.ts, entityIds: e.entityIds })),
     };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 
 // ── Q. 错误提示 ──
-ipcMain.handle('ccarmy:last-error', () => safeHandle(() => ({ ok: true, error: lastError }), { ok: true, error: null }))
-ipcMain.handle('ccarmy:clear-error', () => { lastError = null; return { ok: true }; });
-ipcMain.handle('ccarmy:clear-error', () => { lastError = null; return { ok: true }; });
+handleIpc('ccarmy:last-error', () => safeHandle(() => ({ ok: true, error: lastError }), { ok: true, error: null }))
+handleIpc('ccarmy:clear-error', () => { lastError = null; return { ok: true }; });
 
 
 // ── R. 启动引导 ──
-ipcMain.handle('ccarmy:setup-state', () => {
+handleIpc('ccarmy:setup-state', () => {
   try {
     const s = settingsStore?.load() as Record<string, unknown> | undefined;
     return { ok: true, done: !!(s as { setupDone?: boolean })?.setupDone, locale: s?.locale || app.getLocale() };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
+handleIpc('ccarmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
   try {
     if (payload.locale) settingsStore?.save({ locale: payload.locale } as never);
     if (payload.provider) {
@@ -1897,23 +2208,23 @@ ipcMain.handle('ccarmy:setup-complete', (_e, payload: { locale?: string; provide
     const cur = settingsStore?.load() as unknown as Record<string, unknown>;
     settingsStore?.save({ ...cur, setupDone: true } as never);
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 
 // ── S. 消息搜索（从 memory-os recall） ──
-ipcMain.handle('ccarmy:search-messages', async (_e, q: string) => {
+handleIpc('ccarmy:search-messages', async (_e, q: string) => {
   try {
     const r = await memory?.recall(q, 20);
     return { ok: true, hits: r?.cards || [] };
   } catch (e) {
-    return { ok: false, hits: [], error: String(e) };
+    return { ok: false, hits: [], error: sanitizeError(e) };
   }
 });
 
 
 // ── V. 插件真实安装/卸载 ──
-ipcMain.handle('ccarmy:plugin-install', (_e, pkg: string) => {
+handleIpc('ccarmy:plugin-install', (_e, pkg: string) => {
   try {
     const dshHome = path.join(app.getPath('userData'), 'dsh-home');
     const profile = 'ccarmy';
@@ -1930,10 +2241,10 @@ ipcMain.handle('ccarmy:plugin-install', (_e, pkg: string) => {
     fs.writeFileSync(pkgJson, JSON.stringify(pj, null, 2));
     return { ok: true, profileDir, pkg };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
-ipcMain.handle('ccarmy:plugin-uninstall', (_e, pkg: string) => {
+handleIpc('ccarmy:plugin-uninstall', (_e, pkg: string) => {
   try {
     const dshHome = path.join(app.getPath('userData'), 'dsh-home');
     const pkgJson = path.join(dshHome, 'profiles', 'ccarmy', 'package.json');
@@ -1944,59 +2255,59 @@ ipcMain.handle('ccarmy:plugin-uninstall', (_e, pkg: string) => {
     }
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
 
 // ── X. 归档列表 ──
 const archived: Array<{ id: string; name: string; kind: string; ts: number }> = [];
-ipcMain.handle('ccarmy:archived-list', () => safeHandle(() => ({ ok: true, items: archived }), { ok: true, items: [] }))
-ipcMain.handle('ccarmy:archived-add', (_e, payload: { id: string; name: string; kind: string }) => {
+handleIpc('ccarmy:archived-list', () => safeHandle(() => ({ ok: true, items: archived }), { ok: true, items: [] }))
+handleIpc('ccarmy:archived-add', (_e, payload: { id: string; name: string; kind: string }) => {
   try {
     archived.push({ ...payload, ts: Date.now() });
     return { ok: true, items: archived };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:archived-restore', (_e, id: string) => {
+handleIpc('ccarmy:archived-restore', (_e, id: string) => {
   try {
     const idx = archived.findIndex((x) => x.id === id);
     if (idx < 0) return { ok: false };
     const item = archived.splice(idx, 1)[0];
     return { ok: true, item };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 
 // ── 审计日志 ──
-ipcMain.handle('ccarmy:audit-log', (_e, limit?: number) => ({
+handleIpc('ccarmy:audit-log', (_e, limit?: number) => ({
   ok: true,
   entries: audit?.read(limit || 50) || [],
 }));
-ipcMain.handle('ccarmy:audit-clear', () => {
+handleIpc('ccarmy:audit-clear', () => {
   try {
     audit?.clear();
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── SafeStorage 密钥 ──
-ipcMain.handle('ccarmy:secure-key-save', async (_e, payload: { providerId: string; apiKey: string }) => {
+handleIpc('ccarmy:secure-key-save', async (_e, payload: { providerId: string; apiKey: string }) => {
   try {
     await secureKeys?.save(payload.providerId, payload.apiKey);
     audit?.log('key.save', { providerId: payload.providerId });
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:secure-key-load', async (_e, providerId: string) => {
+handleIpc('ccarmy:secure-key-load', async (_e, providerId: string) => {
   try {
     const key = await secureKeys?.load(providerId);
     return { ok: !!key, key: key || null };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── KnowledgeArchiver ──
-ipcMain.handle('ccarmy:archive-external', (_e, payload: { groupId: string; title: string; summary: string; anchors?: Array<{ file: string; seq: number }> }) => {
+handleIpc('ccarmy:archive-external', (_e, payload: { groupId: string; title: string; summary: string; anchors?: Array<{ file: string; seq: number }> }) => {
   const r = archiver?.archive({
     id: 'arc-' + Date.now(),
     groupId: payload.groupId,
@@ -2007,33 +2318,33 @@ ipcMain.handle('ccarmy:archive-external', (_e, payload: { groupId: string; title
   audit?.log('archive.external', { groupId: payload.groupId });
   return { ok: true, entry: r };
 });
-ipcMain.handle('ccarmy:archive-list', (_e, groupId?: string) => ({
+handleIpc('ccarmy:archive-list', (_e, groupId?: string) => ({
   ok: true,
   entries: archiver?.list(groupId) || [],
 }));
 
 // ── CleanupManager ──
-ipcMain.handle('ccarmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
+handleIpc('ccarmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
   try {
     const n = cleanup?.cleanCheckpoints(opts?.checkpoints || 20) || 0;
     const v = cleanup?.cleanVoice() || 0;
     audit?.log('cleanup.run', { checkpoints: n, voice: v });
     return { ok: true, checkpointsRemoved: n, voiceRemoved: v };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 模型角色分配 ──
-ipcMain.handle('ccarmy:role-models-set', (_e, roles: RoleModelConfig) => {
+handleIpc('ccarmy:role-models-set', (_e, roles: RoleModelConfig) => {
   try {
     roleModels = { ...roleModels, ...roles };
     audit?.log('roles.set', roles);
     return { ok: true, roles: roleModels };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:role-models-get', () => safeHandle(() => ({ ok: true, roles: roleModels }), { ok: true, roles: {} }))
+handleIpc('ccarmy:role-models-get', () => safeHandle(() => ({ ok: true, roles: roleModels }), { ok: true, roles: {} }))
 
 // ── 解散群组 ──
-ipcMain.handle('ccarmy:group-dissolve', (_e, groupId: string) => {
+handleIpc('ccarmy:group-dissolve', (_e, groupId: string) => {
   try {
     // 只有创建者可解散（简化：本机节点）
     const g = router.getGroup(groupId);
@@ -2041,13 +2352,18 @@ ipcMain.handle('ccarmy:group-dissolve', (_e, groupId: string) => {
     // 从 router 移除
     const members = router.listMembers(groupId);
     for (const m of members) router.leave(groupId, m.id);
+    // 持久化的群记录与成员一起删掉
+    const r = groupStore?.removeGroup(String(groupId || ''));
+    if (r && !r.ok) return { ok: false, error: 'cannot persist dissolve' };
     audit?.log('group.dissolve', { groupId });
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) {
+    return { ok: false, error: 'dissolve failed' };
+  }
 });
 
 // ── 允许库导出 ──
-ipcMain.handle('ccarmy:export-allowlist', () => {
+handleIpc('ccarmy:export-allowlist', () => {
   try {
     const list = p1?.security.listAllowlist() || [];
     const dir = path.join(app.getPath('userData'), 'permissions');
@@ -2056,7 +2372,7 @@ ipcMain.handle('ccarmy:export-allowlist', () => {
     fs.writeFileSync(file, JSON.stringify(list, null, 2), 'utf8');
     audit?.log('allowlist.export', { count: list.length });
     return { ok: true, path: file, count: list.length };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── dsh-app:// 自定义协议（零对外端口） ──
@@ -2068,7 +2384,7 @@ try {
 }
 
 // ── 导入 openclaw.json 供应商配置 ──
-ipcMain.handle('ccarmy:import-openclaw', () => {
+handleIpc('ccarmy:import-openclaw', () => {
   try {
     const ocPath = path.join(app.getPath('userData'), '..', 'openclaw.json');
     if (!fs.existsSync(ocPath)) return { ok: false, error: 'openclaw.json not found' };
@@ -2090,28 +2406,28 @@ ipcMain.handle('ccarmy:import-openclaw', () => {
     audit?.log('providers.import', { count: provs.length });
     return { ok: true, providers: provs };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: sanitizeError(e) };
   }
 });
 
-ipcMain.handle('ccarmy:special-models-set', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {
+handleIpc('ccarmy:special-models-set', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {
   try {
     if (settingsStore) {
       const cur = settingsStore.load() as unknown as Record<string, unknown>;
       settingsStore.save({ ...cur, specialModels: cfg } as never);
     }
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:special-models-get', () => {
+handleIpc('ccarmy:special-models-get', () => {
   try {
     const s = settingsStore?.load() as unknown as Record<string, unknown>;
     return { ok: true, specialModels: s?.specialModels || {} };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-ipcMain.handle('ccarmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
+handleIpc('ccarmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
   try {
     const res = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
@@ -2121,29 +2437,29 @@ ipcMain.handle('ccarmy:asr-ollama', async (_e, payload: { audioBase64: string; m
     if (!res.ok) return { ok: false, error: 'http ' + res.status };
     const data = (await res.json()) as { response?: string };
     return { ok: true, text: data.response || '' };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 加入请求 / 黑名单 ──
 const joinRequests: Array<{ id: string; name: string; kind: string; target: string; targetType: string; ts: number; expireAt: number }> = [];
 const blacklist: Array<{ id: string; name: string; blockedAt: number; target: string }> = [];
-ipcMain.handle('ccarmy:join-request', (_e, payload: { name: string; kind: string; target: string; targetType: string }) => {
+handleIpc('ccarmy:join-request', (_e, payload: { name: string; kind: string; target: string; targetType: string }) => {
   try {
     const id = "jr-" + Date.now();
     const ts = Date.now();
     joinRequests.push({ id, name: payload.name, kind: payload.kind, target: payload.target, targetType: payload.targetType, ts, expireAt: ts + 30 * 24 * 3600_000 });
     audit?.log('join.request', { id, name: payload.name, target: payload.target });
     return { ok: true, id };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:join-pending', () => {
+handleIpc('ccarmy:join-pending', () => {
   try {
     const now = Date.now();
     const valid = joinRequests.filter((r) => r.expireAt > now);
     return { ok: true, items: valid, count: valid.length };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
+handleIpc('ccarmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
   try {
     const idx = joinRequests.findIndex((r) => r.id === payload.id);
     if (idx < 0) return { ok: false };
@@ -2155,13 +2471,13 @@ ipcMain.handle('ccarmy:join-respond', (_e, payload: { id: string; action: 'agree
     joinRequests.splice(idx, 1);
     audit?.log('join.respond', { id: req.id, action: payload.action });
     return { ok: true, remaining: joinRequests.filter((r) => r.expireAt > Date.now()).length };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-ipcMain.handle('ccarmy:blacklist-list', () => safeHandle(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
-ipcMain.handle('ccarmy:blacklist-remove', (_e, id: string) => {
+handleIpc('ccarmy:blacklist-list', () => safeHandle(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
+handleIpc('ccarmy:blacklist-remove', (_e, id: string) => {
   try {
     const i = blacklist.findIndex((b) => b.id === id);
     if (i >= 0) blacklist.splice(i, 1);
     return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });

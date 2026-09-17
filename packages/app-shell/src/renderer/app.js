@@ -40,10 +40,10 @@
       ],
       /** board.jsonl 结构化事件（值班者解析写入） */
       events: [
-        { id: 'e1', ts: Date.now() - 3600e3, action: 'create_task', title: 'demo.task1', session: t('demo.project1') },
-        { id: 'e2', ts: Date.now() - 1800e3, action: 'update_progress', title: 'demo.task1', session: t('demo.project1') },
-        { id: 'e3', ts: Date.now() - 900e3, action: 'block', title: 'demo.task2', session: t('demo.project2') },
-        { id: 'e4', ts: Date.now() - 300e3, action: 'complete_task', title: 'demo.task3', session: t('demo.agent') },
+        { id: 'e1', ts: Date.now() - 3600e3, action: 'create_task', title: 'demo.task1', session: 'demo.project1' },
+        { id: 'e2', ts: Date.now() - 1800e3, action: 'update_progress', title: 'demo.task1', session: 'demo.project1' },
+        { id: 'e3', ts: Date.now() - 900e3, action: 'block', title: 'demo.task2', session: 'demo.project2' },
+        { id: 'e4', ts: Date.now() - 300e3, action: 'complete_task', title: 'demo.task3', session: 'demo.agent' },
       ],
       recent: ['demo.recent1', 'demo.recent2'],
     },
@@ -123,6 +123,21 @@
   const providerCfgModel = (p) => p.defaultModel || (p.models && p.models[0]) || 'deepseek-chat';
   const displayName = () =>
     state.t['app.displayName'] || (state.locale.startsWith('zh') ? t('app.zhName') : t('app.enName'));
+  /** 把任意输入夹成 0-100 的整数百分比，用于宽度与文本，避免注入 style 属性 */
+  function clampPercent(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
+  }
+  /** 把 check-update 的可区分状态翻成用户能看懂的一句话（未配置/出错绝不冒充「最新」或「有新版本」） */
+  function updateStatusText(r) {
+    const st = r && r.status;
+    if (st === 'update-available') {
+      return t('update.status.available') + (r.latestVersion ? ' ' + r.latestVersion : '');
+    }
+    if (st === 'up-to-date') return t('update.status.upToDate');
+    if (r && r.i18nKey) return t(r.i18nKey);
+    return t('update.status.unknown');
+  }
   const escapeHtml = (s) =>
     String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -733,9 +748,9 @@
       const card = document.createElement('div');
       card.className = 'list-card';
       card.innerHTML = `<h4>${t('instances.hardware')}</h4>
-        <div class="muted">${t('instances.cpus')}: <b>${hw.cpus}</b></div>
-        <div class="muted">${t('instances.suggested')}: <b>${hw.suggested}</b></div>
-        <div class="muted">${t('instances.max')}: <b>${hw.max ?? '—'}</b></div>`;
+        <div class="muted">${t('instances.cpus')}: <b>${escapeHtml(String(hw.cpus ?? '—'))}</b></div>
+        <div class="muted">${t('instances.suggested')}: <b>${escapeHtml(String(hw.suggested ?? '—'))}</b></div>
+        <div class="muted">${t('instances.max')}: <b>${escapeHtml(String(hw.max ?? '—'))}</b></div>`;
       box.appendChild(card);
       state.instances
         .filter((i) => !q || (i.name || '').toLowerCase().includes(q))
@@ -1132,10 +1147,10 @@
       <h1>${t('dashboard.title')}</h1>
       <p class="board-hint">${t('dashboard.readOnlyHint')}</p>
       <div class="dash-grid">
-        <div class="dash-card"><div class="muted">${t('dashboard.tasks')}</div><div class="stat">${doing}</div></div>
-        <div class="dash-card"><div class="muted">${t('dashboard.done')}</div><div class="stat">${done}</div></div>
-        <div class="dash-card"><div class="muted">${t('dashboard.agents')}</div><div class="stat">${running}</div></div>
-        <div class="dash-card"><div class="muted">${t('dashboard.queue')}</div><div class="stat">${queued}</div></div>
+        <div class="dash-card"><div class="muted">${t('dashboard.tasks')}</div><div class="stat">${escapeHtml(String(doing ?? 0))}</div></div>
+        <div class="dash-card"><div class="muted">${t('dashboard.done')}</div><div class="stat">${escapeHtml(String(done ?? 0))}</div></div>
+        <div class="dash-card"><div class="muted">${t('dashboard.agents')}</div><div class="stat">${escapeHtml(String(running ?? 0))}</div></div>
+        <div class="dash-card"><div class="muted">${t('dashboard.queue')}</div><div class="stat">${escapeHtml(String(queued ?? 0))}</div></div>
       </div>
       <div class="set-card" style="margin-bottom:16px">
         <h2 style="margin:0 0 10px;font-size:14px">${t('dashboard.sessions')}</h2>
@@ -1152,21 +1167,21 @@
       el.className = 'board-session';
       el.title = t('dashboard.jump');
       el.innerHTML = `
-        <div class="bs-name">${escapeHtml(s.name)}</div>
+        <div class="bs-name">${escapeHtml(t(s.name))}</div>
         <span class="bs-type">${escapeHtml(typeLabel(s.kind))}</span>
         <div class="bs-prog">
-          <div class="progress"><div class="progress-bar" style="width:${s.progress}%"></div></div>
-          <div class="muted" style="margin-top:2px">${t('dashboard.progressLabel')} ${s.progress}%${s.blocked ? ' · ' + t('dashboard.blocked') : ''}</div>
+          <div class="progress"><div class="progress-bar" style="width:${clampPercent(s.progress)}%"></div></div>
+          <div class="muted" style="margin-top:2px">${t('dashboard.progressLabel')} ${clampPercent(s.progress)}%${s.blocked ? ' · ' + t('dashboard.blocked') : ''}</div>
         </div>
         <span class="bs-status">${t('dashboard.jump')} →</span>`;
       el.onclick = () => {
         const kind = s.kind === 'single' ? 'single' : s.kind === 'internal' ? 'internal' : 'extgroup';
         const nav = kind === 'single' ? 'singleAi' : kind === 'internal' ? 'internalGroup' : 'externalGroup';
         if (kind !== 'single' && !state.groups.find((g) => g.id === s.id)) {
-          state.groups.push({ id: s.id, name: s.name, type: kind, members: [] });
+          state.groups.push({ id: s.id, name: t(s.name), type: kind, members: [] });
         }
         setNav(nav);
-        openChat(kind, s.id, s.name);
+        openChat(kind, s.id, t(s.name));
       };
       sess.appendChild(el);
     });
@@ -1178,8 +1193,8 @@
         const d = document.createElement('div');
         d.className = 'board-event';
         d.innerHTML = `<span class="ev-tag">${escapeHtml(evLabel(e.action))}</span>
-          <div><div>${escapeHtml(e.title)}</div>
-          <div class="muted">${escapeHtml(e.session)} · ${new Date(e.ts).toLocaleString()}</div></div>`;
+          <div><div>${escapeHtml(t(e.title))}</div>
+          <div class="muted">${escapeHtml(t(e.session))} · ${new Date(e.ts).toLocaleString()}</div></div>`;
         evBox.appendChild(d);
       });
   }
@@ -1790,6 +1805,11 @@
                 <button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
                 <span class="muted" id="about-upd"></span>
               </div>
+              <div class="about-feed-line" style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                <input id="update-feed" placeholder="${escapeHtml(t('update.feedPlaceholder'))}" style="flex:1;min-width:220px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit"/>
+                <button class="btn-mini" id="btn-feed-save">${t('update.feedSave')}</button>
+                <span class="muted" id="feed-msg"></span>
+              </div>
             </div>
           </div>
           <div class="about-block">
@@ -1805,9 +1825,29 @@
           <div class="about-block"><h3>${t('about.legal')}</h3><p class="muted">${t('about.legalBody')}</p></div>
         </div></div></div>`;
 
+      // 更新源：不填则永远只会是「未配置」，所以必须给界面入口
+      (async () => {
+        try {
+          const cur = await window.ccarmy.updateSourceGet();
+          const inp = $('update-feed');
+          if (inp && cur && cur.url) inp.value = cur.url;
+          const msg = $('feed-msg');
+          if (msg && !(cur && cur.url)) msg.textContent = t('update.status.notConfigured');
+        } catch (e) { /* 预览桩或旧版本可能没有该 API，静默跳过 */ }
+      })();
+      $('btn-feed-save').onclick = async () => {
+        const msg = $('feed-msg');
+        const url = (($('update-feed') || {}).value || '').trim();
+        const r = await window.ccarmy.updateSourceSet({ url }).catch(() => null);
+        if (msg) msg.textContent = r && r.ok === false ? t('update.feedInvalid') : t('update.feedSaved');
+      };
       $('btn-about-update').onclick = async () => {
-        const r = await window.ccarmy.checkUpdate();
-        $('about-upd').textContent = r?.upToDate ? t('settings.upToDate') : t('settings.updateAvailable');
+        const el = $('about-upd');
+        if (el) el.textContent = t('about.checking');
+        // 主进程会区分「未配置 / 网络失败 / HTTP 错误 / 格式非法 / 已最新 / 有更新」，
+        // 不能只看 upToDate —— 那会把「未配置」误报成「发现新版本」。
+        const r = await window.ccarmy.checkUpdate().catch(() => null);
+        if (el) el.textContent = updateStatusText(r);
       };
       (async () => {
         try {
@@ -2025,7 +2065,7 @@
         const r = await window.ccarmy.archivedList().catch(() => null);
         const items = r?.items || [];
         box.innerHTML = items.length
-          ? items.map((a) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(a.name) + ' · ' + a.kind + '</span><button class="btn-mini" data-restore="' + escapeHtml(a.id) + '">' + t('cp.rollback') + '</button></div>').join('')
+          ? items.map((a) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(a.name) + ' · ' + escapeHtml(String(a.kind || '')) + '</span><button class="btn-mini" data-restore="' + escapeHtml(a.id) + '">' + t('cp.rollback') + '</button></div>').join('')
           : '—';
         box.querySelectorAll('[data-restore]').forEach((b) => {
           b.onclick = async () => {
@@ -2053,7 +2093,7 @@
             (a) =>
               '<div class="prov-card" style="margin-bottom:8px" data-id="' + escapeHtml(a.id) + '">' +
               '<div class="inst-row">' +
-              '<div><b>' + escapeHtml(a.label) + '</b> <span class="muted">' + escapeHtml(a.user) + '@' + escapeHtml(a.host) + ':' + a.port + '</span></div>' +
+              '<div><b>' + escapeHtml(a.label) + '</b> <span class="muted">' + escapeHtml(a.user) + '@' + escapeHtml(a.host) + ':' + escapeHtml(String(a.port)) + '</span></div>' +
               '<span class="badge ' + (a.verified ? '' : 'off') + '">' + (a.verified ? t('smtp.verified') : t('smtp.unverified')) + '</span>' +
               '<button class="btn-mini" data-v="' + escapeHtml(a.id) + '">' + t('smtp.verify') + '</button>' +
               '<button class="btn-mini" data-x="' + escapeHtml(a.id) + '">' + t('smtp.remove') + '</button>' +
@@ -3354,8 +3394,8 @@
         const d = new Date(c.createdAt);
         const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const when = now - c.createdAt < 86400000 ? hm : d.toLocaleString();
-        return `<details class="cp-item" data-id="${c.id}">
-          <summary>${when} · ${c.phase} · ${c.strategy}</summary>
+        return `<details class="cp-item" data-id="${escapeHtml(String(c.id))}">
+          <summary>${escapeHtml(String(when))} · ${escapeHtml(String(c.phase || ''))} · ${escapeHtml(String(c.strategy || ''))}</summary>
           <div class="cp-body">
             <div>${t('checkpoints.tasks')}: ${escapeHtml(c.phase || '')}</div>
             <ul>
@@ -3397,7 +3437,7 @@
     const r = await window.ccarmy.boardSession(state.selectedChat.id).catch(() => null);
     const tasks = r?.tasks || [];
     box.innerHTML = tasks.length
-      ? tasks.map((t) => '<div>' + escapeHtml(t.title) + ' · ' + (t.progress || 0) + '% · ' + t.status + '</div>').join('')
+      ? tasks.map((t) => '<div>' + escapeHtml(t.title) + ' · ' + clampPercent(t.progress) + '% · ' + escapeHtml(String(t.status || '')) + '</div>').join('')
       : '—';
   }
   /** 卡顿自检：主进程 CPU/事件循环延迟 + 渲染进程帧率 */
@@ -3618,7 +3658,7 @@
     const r = await window.ccarmy.executorsStatus().catch(() => null);
     const items = r?.items || [];
     box.innerHTML = items.length
-      ? items.map((it) => '<div>' + escapeHtml(it.name) + ' · ' + it.status + ' · ' + it.durationMs + 'ms</div>').join('')
+      ? items.map((it) => '<div>' + escapeHtml(it.name) + ' · ' + escapeHtml(String(it.status || '')) + ' · ' + escapeHtml(String(it.durationMs ?? 0)) + 'ms</div>').join('')
       : '—';
   }
   $('btn-exec-run')?.addEventListener('click', async () => {
