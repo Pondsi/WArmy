@@ -6,6 +6,8 @@ import type { ModelProvider, ProviderAuth, ProviderProtocol } from './types.js';
 
 export * from './types.js';
 export * from './base.js';
+export * from './tools.js';
+export * from './util.js';
 export { OpenAICompatibleProvider, createDeepSeekProvider } from './openai.js';
 export { AnthropicProvider } from './anthropic.js';
 export { OllamaProvider } from './ollama.js';

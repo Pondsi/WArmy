@@ -50,7 +50,7 @@ if (!fs.existsSync(distRenderer)) {
   console.error('[verify-context-renderer] 缺少 dist，请先 pkg build：' + distRenderer);
   process.exit(2);
 }
-const { renderBoundedView, DEFAULT_CONTEXT_BUDGET_CHARS } = await import(pathToFileURL(distRenderer).href);
+const { renderBoundedView, DEFAULT_CONTEXT_BUDGET_CHARS, MAX_RANGE_RECORD_IDS } = await import(pathToFileURL(distRenderer).href);
 
 const BUDGET = DEFAULT_CONTEXT_BUDGET_CHARS; // 4000
 console.log(`=== ADR 002 上下文有界渲染器验证 ===`);
@@ -233,6 +233,50 @@ check(
   sampleCap: 24,
 });
 console.log(`  取回校验：recordId ${idExact}/${idChecks} 精确、seq ${seqExact}/${seqChecks} 精确、recall ${recallExact}/${cards.length} 精确` + (mismatch.length ? ` 失配=${JSON.stringify(mismatch.slice(0, 3))}` : ''));
+
+// (e) ADR 002 §9.4 待办 3：recordIds 必须**有界**（否则渲染代价随日志条数线性膨胀）
+//     断言口径是不变量（每个段 ≤ MAX_RANGE_RECORD_IDS、与日志总长无关、seq 范围仍完整覆盖），
+//     不写死具体条数 —— 采样策略变化时这些断言仍然成立。
+{
+  const idsPerRange = memView.elided.map((r) => r.recordIds.length);
+  check(
+    `elided.recordIds 每段 ≤ ${MAX_RANGE_RECORD_IDS}（有界采样，接口仍兼容）`,
+    idsPerRange.length > 0 && idsPerRange.every((n) => n <= MAX_RANGE_RECORD_IDS),
+    { perRange: idsPerRange, cap: MAX_RANGE_RECORD_IDS }
+  );
+  check(
+    '接口兼容：recordIds 仍在且仍是 string[]（只是被采样）',
+    memView.elided.every((r) => Array.isArray(r.recordIds) && r.recordIds.every((x) => typeof x === 'string')),
+    memView.elided.map((r) => ({ count: r.count, ids: r.recordIds.length }))
+  );
+  // 采样同时覆盖段首与段尾（只取前 N 个会丢掉"最近的被省略条目"，那往往是模型最想要的）
+  const r0 = memView.elided[0];
+  const firstElided = log.find((e) => e.seq === r0.fromSeq);
+  const lastElided = log.find((e) => e.seq === r0.toSeq);
+  check(
+    '采样同时命中段首与段尾的 recordId',
+    !!firstElided && !!lastElided && r0.recordIds.includes(firstElided.recordId) && r0.recordIds.includes(lastElided.recordId),
+    { head: r0.recordIds[0], tail: r0.recordIds[r0.recordIds.length - 1], firstElided: firstElided?.recordId, lastElided: lastElided?.recordId }
+  );
+  // 完整覆盖不靠 recordIds：seq 范围必须覆盖全部被省略条目
+  const covered = memView.elided.reduce((s, r) => s + (r.toSeq - r.fromSeq + 1), 0);
+  const elidedTotal2 = memView.elided.reduce((s, r) => s + r.count, 0);
+  check('seq 范围完整覆盖被省略条目（覆盖性不依赖 recordIds 采样）', covered === elidedTotal2 && elidedTotal2 > 0, { covered, elidedTotal: elidedTotal2 });
+  // 有界性与日志总长解耦：1 万条与 10 万条下，列出的 id 总数一致（只随段数变）
+  const a = renderBoundedView(makeLog(10000, 512), { budgetChars: BUDGET, recallHint: 'hint' });
+  const t0 = Date.now();
+  const b = renderBoundedView(makeLog(100000, 512), { budgetChars: BUDGET, recallHint: 'hint' });
+  const ms100k = Date.now() - t0;
+  const idsA = a.elided.reduce((s, r) => s + r.recordIds.length, 0);
+  const idsB = b.elided.reduce((s, r) => s + r.recordIds.length, 0);
+  check('列出的 recordId 总数与日志总长解耦（1e4 与 1e5 条相同）', idsA === idsB && idsA <= a.elided.length * MAX_RANGE_RECORD_IDS, {
+    ids10k: idsA,
+    ids100k: idsB,
+    capPerRange: MAX_RANGE_RECORD_IDS,
+  });
+  check('10 万条日志仍能渲染（耗时宽松上界 5s，只作病态防御）', viewChars(b) <= BUDGET && ms100k < 5000, { viewBytes: viewChars(b), ms: ms100k });
+  console.log(`  有界采样：每段 ≤ ${MAX_RANGE_RECORD_IDS} 个 id（1e4→${idsA} 个、1e5→${idsB} 个），10 万条渲染 ${ms100k}ms`);
+}
 
 // ══════════════════════════════════════════════════════════════
 // 3. 头尾保真

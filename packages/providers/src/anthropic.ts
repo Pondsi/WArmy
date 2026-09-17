@@ -10,6 +10,16 @@ function splitSystem(messages: ChatMessage[]): { system?: string; rest: ChatMess
   return { system: sys || undefined, rest };
 }
 
+/** tool_call.arguments 是字符串（OpenAI 形状）；脏参数不能让整个请求 400 */
+function safeJson(s: string | undefined): unknown {
+  try {
+    const v = JSON.parse(s || '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Anthropic Messages API
  * https://docs.anthropic.com/en/api/messages
@@ -32,9 +42,10 @@ export class AnthropicProvider extends BaseProvider {
 
   private body(req: ChatRequest): Record<string, unknown> {
     const { system, rest } = splitSystem(req.messages);
-    const contents = rest.map((m) => {
+    const contents: Array<{ role: string; content: unknown }> = [];
+    for (const m of rest) {
       if (m.role === 'assistant' && m.toolCalls?.length) {
-        return {
+        contents.push({
           role: 'assistant',
           content: [
             ...(m.content ? [{ type: 'text', text: m.content }] : []),
@@ -42,25 +53,31 @@ export class AnthropicProvider extends BaseProvider {
               type: 'tool_use',
               id: t.id,
               name: t.function.name,
-              input: JSON.parse(t.function.arguments || '{}'),
+              input: safeJson(t.function.arguments),
             })),
           ],
-        };
+        });
+        continue;
       }
       if (m.role === 'tool') {
-        return {
-          role: 'user',
-          content: [
-            {
-              type: 'tool_result',
-              tool_use_id: m.toolCallId,
-              content: m.content,
-            },
-          ],
+        // Anthropic 要求 role 交替：一轮里的多个 tool_result 必须合成**一条** user 消息，
+        // 否则连续两条 user 会被 API 拒绝（400 messages: roles must alternate）。
+        const block = {
+          type: 'tool_result',
+          tool_use_id: m.toolCallId,
+          content: m.content,
         };
+        const prev = contents[contents.length - 1];
+        const prevBlocks = prev?.role === 'user' ? (prev.content as Array<{ type?: string }>) : null;
+        if (prevBlocks && Array.isArray(prevBlocks) && prevBlocks.every((b) => b?.type === 'tool_result')) {
+          prevBlocks.push(block);
+        } else {
+          contents.push({ role: 'user', content: [block] });
+        }
+        continue;
       }
-      return { role: m.role === 'system' ? 'user' : m.role, content: m.content };
-    });
+      contents.push({ role: m.role === 'system' ? 'user' : m.role, content: m.content });
+    }
 
     return {
       model: req.model,

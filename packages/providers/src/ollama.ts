@@ -14,6 +14,15 @@ export class OllamaProvider extends BaseProvider {
     this.id = opts.id || 'ollama';
   }
 
+  /**
+   * Ollama 的 /api/chat 目前只对部分模型支持 tools，旧版本对 tools 字段直接报错，
+   * 且本 provider 的 body() 也不透传 tools —— 如实声明"不支持"，
+   * 让工具调用循环走优雅降级（普通单轮对话），而不是把整轮对话打成 error。
+   */
+  override get supportsTools(): boolean {
+    return false;
+  }
+
   private body(req: ChatRequest, stream: boolean): Record<string, unknown> {
     const messages = req.messages.map((m) => ({
       role: m.role === 'tool' ? 'tool' : m.role,

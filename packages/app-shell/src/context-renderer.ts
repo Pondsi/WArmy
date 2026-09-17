@@ -47,6 +47,10 @@ export interface ElidedRange {
   fromSeq: number;
   toSeq: number;
   count: number;
+  /**
+   * 该段内的 recordId **采样**（有界，见 MAX_RANGE_RECORD_IDS）。
+   * 完整覆盖不靠它，靠 `fromSeq..toSeq` 范围 + `recall(语义线索)`（ADR §5 / §9.4 待办 3）。
+   */
   recordIds: string[];
 }
 
@@ -90,11 +94,29 @@ const MAX_POINTER_RANGES = 4;
 /** recallHint 在指针里的截断长度 */
 const HINT_MAX_CHARS = 24;
 
+/**
+ * 每个 elided 段最多保留的 recordId 数（ADR §9.4 待办 3）。
+ *
+ * 原实现把段内**所有** recordId 都塞进 `ElidedRange.recordIds`，
+ * 渲染代价（内存 + 指针拼接 + includes 去重）随日志条数线性放大的部分就在这儿：
+ * n=10000 时 1.9ms 还能接受，n≈1e6 时会变成几十 MB 的数组与上百 ms 的拼接。
+ *
+ * 现在改成**有界采样**：段首 4 个 + 段尾 4 个（两端各留一半，比只取前 N 个更有代表性，
+ * 因为"最近的被省略条目"往往是模型最想要的）。接口不变（`recordIds` 仍是 string[]），
+ * 被省略的完整覆盖由 `fromSeq..toSeq`（retrieve(seq) 精确命中）与 `recall(hint)` 保证。
+ */
+export const MAX_RANGE_RECORD_IDS = 8;
+/** 段内 recordId 采样的头/尾配额 */
+const RANGE_ID_HEAD = 4;
+const RANGE_ID_TAIL = MAX_RANGE_RECORD_IDS - RANGE_ID_HEAD;
+
 type Tier = 'full' | 'compact' | 'min';
 const TIERS: Tier[] = ['full', 'compact', 'min'];
 
 interface RangeDraft extends ElidedRange {
   lastSeq: number;
+  /** 段尾采样的环形缓冲（长度 ≤ RANGE_ID_TAIL） */
+  tailIds: string[];
 }
 
 function coerceText(v: unknown): string {
@@ -167,7 +189,10 @@ function defaultCompress(entries: LogEntry[]): string {
   }
 }
 
-/** 把 [from, to) 切成连续 seq 的段；每个段带齐 recordIds 冗余线索 */
+/**
+ * 把 [from, to) 切成连续 seq 的段；每个段带齐 recordIds 冗余线索（**有界采样**）。
+ * 时间与内存都是 O(日志) 的常数因子：只存段首/段尾各几个 id，不再把段内全部 id 堆起来。
+ */
 function rangesOf(log: LogEntry[], from: number, to: number): ElidedRange[] {
   const drafts: RangeDraft[] = [];
   let cur: RangeDraft | null = null;
@@ -175,15 +200,38 @@ function rangesOf(log: LogEntry[], from: number, to: number): ElidedRange[] {
     const e = log[i]!;
     if (cur && e.seq !== cur.lastSeq + 1) cur = null;
     if (!cur) {
-      cur = { fromSeq: e.seq, toSeq: e.seq, count: 0, recordIds: [], lastSeq: e.seq };
+      cur = {
+        fromSeq: e.seq,
+        toSeq: e.seq,
+        count: 0,
+        recordIds: [],
+        lastSeq: e.seq,
+        tailIds: [],
+      };
       drafts.push(cur);
     }
     cur.count += 1;
     cur.toSeq = e.seq;
     cur.lastSeq = e.seq;
-    if (e.recordId) cur.recordIds.push(e.recordId);
+    if (e.recordId) {
+      if (cur.recordIds.length < RANGE_ID_HEAD) {
+        cur.recordIds.push(e.recordId);
+      } else if (RANGE_ID_TAIL > 0) {
+        cur.tailIds.push(e.recordId);
+        if (cur.tailIds.length > RANGE_ID_TAIL) cur.tailIds.shift();
+      }
+    }
   }
-  return drafts.map((d) => ({ fromSeq: d.fromSeq, toSeq: d.toSeq, count: d.count, recordIds: d.recordIds }));
+  return drafts.map((d) => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const id of [...d.recordIds, ...d.tailIds]) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+    }
+    return { fromSeq: d.fromSeq, toSeq: d.toSeq, count: d.count, recordIds: ids };
+  });
 }
 
 function rangeText(ranges: ElidedRange[]): string {
@@ -192,7 +240,12 @@ function rangeText(ranges: ElidedRange[]): string {
   return `seq ${shown.join(',')}${tail}`;
 }
 
-/** 指针里的可执行线索（seq 范围 + recordId + 语义线索，ADR §5） */
+/**
+ * 指针里的可执行线索（seq 范围 + recordId + 语义线索，ADR §5）。
+ *
+ * recordId 是**有界采样**（每段最多 MAX_RANGE_RECORD_IDS 个），所以这里不再声称
+ * "还有 +N 个 id"，只列出来的这几条；完整覆盖靠 seq 范围与 recall（ADR §9.4 待办 3）。
+ */
 function anchorText(ranges: ElidedRange[], hint: string, maxIds: number): string {
   const parts: string[] = [];
   if (ranges.length) parts.push(`retrieve(seq=${ranges[0]!.fromSeq})`);
@@ -204,9 +257,9 @@ function anchorText(ranges: ElidedRange[], hint: string, maxIds: number): string
     }
     if (ids.length >= maxIds) break;
   }
+  const idSlots = ranges.reduce((s, r) => s + r.recordIds.length, 0);
   if (ids.length) {
-    const more = ranges.reduce((s, r) => s + r.recordIds.length, 0) - ids.length;
-    parts.push(`retrieve(recordId="${ids.join('", "')}"${more > 0 ? `, …+${more}` : ''})`);
+    parts.push(`retrieve(recordId="${ids.join('", "')}"${idSlots > ids.length ? ', …' : ''})`);
   }
   if (hint) parts.push(`recall("${hint}")`);
   return parts.join(' 或 ');
@@ -223,7 +276,7 @@ function pointerPrefix(tier: Tier, ranges: ElidedRange[], hint: string, elidedCh
   if (tier === 'full') {
     return (
       `[已省略 ${count} 条历史，${rt}，共 ${fmtNum(elidedChars)} 字]\n` +
-      `如需原文，可调用 ${anchorText(ranges, hint, MAX_POINTER_IDS)} 取回逐字节内容。\n` +
+      `如需原文，可调用 ${anchorText(ranges, hint, MAX_POINTER_IDS)} 取回逐字节内容（如本会话提供这两个工具，可直接调用）。\n` +
       `以下是被压缩的要点：\n`
     );
   }

@@ -131,6 +131,12 @@ export interface ModelProvider {
   readonly id: string;
   readonly protocol: ProviderProtocol;
   readonly baseURL: string;
+  /**
+   * 是否支持 function calling（ADR 002 §9.4 待办 2）。
+   * 缺省时按协议表判定（见 tools.ts 的 PROTOCOL_TOOL_SUPPORT）：
+   * 不支持 → 工具调用循环**优雅降级**为普通单轮对话。
+   */
+  readonly supportsTools?: boolean;
 
   /** 同步对话 */
   chat(req: ChatRequest, signal?: AbortSignal): Promise<ChatResponse>;

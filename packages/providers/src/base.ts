@@ -1,3 +1,4 @@
+import { PROTOCOL_TOOL_SUPPORT } from './tools.js';
 import type {
   CacheUsage,
   ChatChunk,
@@ -121,6 +122,14 @@ export abstract class BaseProvider implements ModelProvider {
   abstract chat(req: ChatRequest, signal?: AbortSignal): Promise<ChatResponse>;
   abstract chatStream(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatChunk>;
   abstract listModels(signal?: AbortSignal): Promise<string[]>;
+
+  /**
+   * function calling 能力：默认按协议表判定（tools.ts）。
+   * 写成 getter 而不是字段，是因为 protocol 由子类以字段形式声明。
+   */
+  get supportsTools(): boolean {
+    return PROTOCOL_TOOL_SUPPORT[this.protocol] ?? true;
+  }
 
   async ping(signal?: AbortSignal): Promise<{ ok: boolean; latencyMs: number; detail?: string }> {
     const t0 = performance.now();

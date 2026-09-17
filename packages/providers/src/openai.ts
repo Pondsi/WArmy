@@ -20,6 +20,11 @@ export class OpenAICompatibleProvider extends BaseProvider {
     this.id = opts.id || 'openai-compatible';
   }
 
+  /** OpenAI 兼容协议原生支持 tools（ADR 002 §9.4 待办 2）；个别中转不吃 tools 时由循环降级兜住 */
+  override get supportsTools(): boolean {
+    return true;
+  }
+
   private headers(): Record<string, string> {
     const h: Record<string, string> = {};
     if (this.auth.apiKey) h.Authorization = `Bearer ${this.auth.apiKey}`;

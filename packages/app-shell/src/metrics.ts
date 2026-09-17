@@ -36,10 +36,39 @@ export interface ViewMetric {
   pointers: number;
 }
 
+/**
+ * 工具调用指标（ADR 002 §9.4 待办 2）。
+ * 观测面：模型是否真的在解引用被省略的历史、有没有越界、有没有降级。
+ */
+export interface ToolCallMetric {
+  ts: number;
+  sessionId: string;
+  round: number;
+  tool: string;
+  ok: boolean;
+  /** 回给模型的文本长度（字符） */
+  chars: number;
+  ms: number;
+}
+
+/** 一次 chat-send 的工具循环总体结果 */
+export interface ToolLoopMetric {
+  ts: number;
+  sessionId: string;
+  requests: number;
+  rounds: number;
+  toolCalls: number;
+  toolResultChars: number;
+  degraded: boolean;
+  stopReason: string;
+}
+
 export class MetricsCollector {
   private turns: TurnMetric[] = [];
   private ccr: CcrMetric[] = [];
   private views: ViewMetric[] = [];
+  private toolCallsLog: ToolCallMetric[] = [];
+  private toolLoops: ToolLoopMetric[] = [];
 
   recordTurn(m: TurnMetric): void {
     this.turns.push(m);
@@ -56,8 +85,22 @@ export class MetricsCollector {
     if (this.views.length > 500) this.views.shift();
   }
 
+  recordToolCall(m: ToolCallMetric): void {
+    this.toolCallsLog.push(m);
+    if (this.toolCallsLog.length > 500) this.toolCallsLog.shift();
+  }
+
+  recordToolLoop(m: ToolLoopMetric): void {
+    this.toolLoops.push(m);
+    if (this.toolLoops.length > 500) this.toolLoops.shift();
+  }
+
   lastViews(n = 20): ViewMetric[] {
     return this.views.slice(-n);
+  }
+
+  lastToolCalls(n = 20): ToolCallMetric[] {
+    return this.toolCallsLog.slice(-n);
   }
 
   summary() {
@@ -90,6 +133,18 @@ export class MetricsCollector {
       viewBytesMax: viewValues.length ? Math.max(...viewValues) : 0,
       logEntries: lastView ? lastView.logEntries : 0,
       viewPointers: lastView ? lastView.pointers : 0,
+      /** ADR 002 §9.4 待办 2：工具调用观测（模型是否真的 recall/retrieve 了） */
+      toolCalls: this.toolCallsLog.length,
+      toolCallsOk: this.toolCallsLog.filter((x) => x.ok).length,
+      toolChars: this.toolCallsLog.reduce((s, x) => s + x.chars, 0),
+      toolTurns: this.toolLoops.length,
+      toolDegradedTurns: this.toolLoops.filter((x) => x.degraded).length,
+      toolStopReasons: this.toolLoops.reduce<Record<string, number>>((acc, x) => {
+        acc[x.stopReason] = (acc[x.stopReason] || 0) + 1;
+        return acc;
+      }, {}),
+      /** 工具循环从未越界（请求数受 maxRounds 约束） */
+      toolLoopBounded: this.toolLoops.every((x) => x.requests <= 9 && x.rounds <= 8),
       /** 历史观测里 viewBytes 从未越过预算 → 不变量 #2 成立 */
       viewBounded: this.views.every((x) => x.viewBytes <= x.budgetChars),
       /** ADR：命中率 >95% 为健康；工具输出压缩比目标可观察 */

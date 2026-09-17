@@ -14,7 +14,7 @@ import {
   type LogEntry,
 } from './context-renderer.js';
 import { retrieveAssetsForChat, registerChatAsset } from './asset-wire.js';
-import type { ChatMessage } from '@ccarmy/providers';
+import { chatWithTools, type ChatMessage, type ToolCall, type ToolSpec } from '@ccarmy/providers';
 
 export interface DutyProviderCfg {
   presetId: string;
@@ -59,6 +59,13 @@ export interface OrchestratorDeps {
   logOf?: (key: string) => LogEntry[];
   /** 视图预算（字符）；缺省用 context-renderer 的默认预算 */
   contextBudgetChars?: () => number;
+  /**
+   * 工具调用（ADR 002 §9.4 待办 2）：与 chat-send 共用同一套 recall/retrieve 工具与同一个循环。
+   * 不给就等于"不暴露工具"（退回普通单轮对话）。
+   */
+  toolSpecs?: () => ToolSpec[] | undefined;
+  runTool?: (call: ToolCall, ctx: { round: number; maxResultChars: number }) => Promise<string> | string;
+  toolLimits?: () => { maxRounds: number; maxResultChars: number; totalChars: number };
 }
 
 export interface OrchestrateResult {
@@ -113,23 +120,29 @@ export async function orchestrateGroupMessage(
   const executors = (route.decision?.executorIds || []).filter((id) => id !== duty.id);
   const queueLen = deps.router.listQueue(msg.groupId).length;
 
-  // 状态卡片
+  // 状态卡片：有日志时以日志为准（不变量 #5：日志是唯一事实来源），否则退回历史镜像
+  const logEntries: LogEntry[] | null = deps.logOf ? deps.logOf(msg.groupId) : null;
   const card = buildStatusCard({
     groupId: msg.groupId,
     dutyId: duty.id,
     queueLength: queueLen,
     runningTasks: executors.map((id) => deps.listInstances().find((x) => x.id === id)?.name || id),
-    recent: (deps.history.get(msg.groupId) || []).slice(-6).map((m) => m.content.slice(0, 40)),
+    recent: (logEntries ?? (deps.history.get(msg.groupId) || []))
+      .slice(-6)
+      .map((m) => String(m.content ?? '').slice(0, 40)),
     tokenBudget: 2000,
   });
 
   // CCR 压缩用户输入
   const compressed = deps.ccr.beforeLog({ kind: 'message', content: msg.content });
 
-  // 值班者历史
+  // 值班者历史：有 logOf 时**不写** history —— 那份日志由主进程 appendChatLog 统一维护，
+  // 这里再 push 一份就是第二份真相（重启后与 JSONL 脱节）。
   const hist = deps.history.get(msg.groupId) || [];
-  hist.push({ role: 'user', content: compressed.content });
-  deps.history.set(msg.groupId, hist);
+  if (!deps.logOf) {
+    hist.push({ role: 'user', content: compressed.content });
+    deps.history.set(msg.groupId, hist);
+  }
 
   // 看板解析（仅 duty）
   let boardEvent: string | undefined;
@@ -188,11 +201,23 @@ export async function orchestrateGroupMessage(
         keepTail: DEFAULT_KEEP_TAIL,
         recallHint: msg.content,
       });
-      const resp = await provider.chat({
+      // ADR 002 §9.4 待办 2：值班者路径同样可以用 recall/retrieve 解引用被省略的历史
+      const limits = deps.toolLimits?.() ?? { maxRounds: 3, maxResultChars: 4000, totalChars: 12000 };
+      const tools: ToolSpec[] | undefined = deps.toolSpecs?.();
+      const req: Parameters<typeof chatWithTools>[1] = {
         model: cfg.model || 'deepseek-chat',
         messages: [sys, ...(view.messages as ChatMessage[])],
         maxTokens: 512,
-      });
+        tools,
+      };
+      const loop = deps.runTool
+        ? await chatWithTools(provider, req, deps.runTool, {
+            maxRounds: limits.maxRounds,
+            maxResultChars: limits.maxResultChars,
+            maxToolResultChars: limits.totalChars,
+          })
+        : null;
+      const resp = loop ? loop.response : await provider.chat(req);
       distilled = resp.choices[0]?.message?.content || '';
       usage = {
         promptTokens: resp.usage.promptTokens,
@@ -204,8 +229,10 @@ export async function orchestrateGroupMessage(
     distilled = `[未配置 Key] 值班=${duty.name} 执行者=${executors.join(',') || '无'} 卡片已生成`;
   }
 
-  hist.push({ role: 'assistant', content: distilled });
-  deps.history.set(msg.groupId, hist);
+  if (!deps.logOf) {
+    hist.push({ role: 'assistant', content: distilled });
+    deps.history.set(msg.groupId, hist);
+  }
 
   // 冲刷队列中 P2/P3
   const next = deps.router.complete(msg.groupId);

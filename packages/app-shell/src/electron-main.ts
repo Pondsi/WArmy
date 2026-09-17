@@ -7,10 +7,27 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createP1Runtime } from './runtime.js';
-import { MemoryClient } from './memory-client.js';
+import {
+  MemoryClient,
+  memoryToolSpecs,
+  runMemoryTool,
+  chatRoleOfRecordId,
+  contentDigest,
+  DEFAULT_MEMORY_TOOL_LABELS,
+  type MemoryToolLabels,
+} from './memory-client.js';
 import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@ccarmy/group-router';
 import { BoardStore, parseBoardCommand } from '@ccarmy/board';
-import { createProviderFromPreset, type ChatMessage } from '@ccarmy/providers';
+import {
+  createProviderFromPreset,
+  chatWithTools,
+  providerSupportsTools,
+  type ChatMessage,
+  type ChatRequest,
+  type ModelProvider,
+  type ToolLoopResult,
+  type ToolSpec,
+} from '@ccarmy/providers';
 import { CcrGateway } from '@ccarmy/ccr-compressor';
 import { KnowledgeBase } from '@ccarmy/knowledge-base';
 import { CheckpointStore } from './checkpoint.js';
@@ -29,7 +46,7 @@ import {
 import { runShortLivedExecutor, runExecutors } from './executor.js';
 import { initAssetGovernor, retrieveAssetsForChat, registerChatAsset, recordAssetUsage, sweepAssets } from './asset-wire.js';
 import { MetricsCollector } from './metrics.js';
-import { LocalAccountStore, SettingsStore } from './settings-store.js';
+import { LocalAccountStore, SettingsStore, type AppSettings } from './settings-store.js';
 import { GroupStore, type GroupListResult, type GroupMembersResult } from './group-store.js';
 import {
   Updater,
@@ -123,6 +140,32 @@ let chatLogIdSeq = 0;
 /** 视图预算下限（字符）：再小连可执行指针都放不下 */
 const MIN_CONTEXT_BUDGET_CHARS = 200;
 
+/**
+ * 重启历史重建的上限（ADR 002 §9.4 待办 4）。
+ * 只重建最近这些条：更早的记录**不丢**（JSONL 是唯一事实来源，seq/recordId 仍可 retrieve），
+ * 只是不进本进程的日志镜像 —— 视图本来就有界，指针才是取回旧内容的通道。
+ */
+const HISTORY_RESTORE_LIMIT = 400;
+const HISTORY_RESTORE_MAX_CHARS = 400000;
+/** 记忆服务重新拉起的冷却：晚起/崩过的场景下别把 fork 打爆 */
+const MEMORY_ENSURE_COOLDOWN_MS = 15000;
+
+/**
+ * 上一次历史重建的结果（可观测：IPC 与验证脚本都读它）。
+ * `done` = 尝试已结束，`ok` = 真的从记忆服务重建成功。
+ */
+let historyRestore: {
+  done: boolean;
+  ok: boolean;
+  entries: number;
+  sessions: number;
+  maxSeq: number;
+  reason: string;
+  trigger: string;
+  at: number;
+} = { done: false, ok: false, entries: 0, sessions: 0, maxSeq: 0, reason: '', trigger: '', at: 0 };
+let memoryEnsureAt = 0;
+
 function nextChatSeq(memSeq?: number): number {
   const s =
     typeof memSeq === 'number' && Number.isFinite(memSeq) && memSeq > chatLogSeq
@@ -145,10 +188,278 @@ function memSeqOf(res: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/** 会话日志 → 模型消息数组（chatHistories 只是它的派生镜像，见下） */
+function chatMessagesOf(key: string): ChatMessage[] {
+  return (chatLogs.get(key) || []).map((e) => ({ role: e.role, content: e.content }));
+}
+
+/**
+ * 只追加日志（不变量 #1）+ 同步派生镜像。
+ * **唯一写入点**：只有这样，"chatHistories 与 chatLogs 是同一份东西"才是结构性成立的，
+ * 而不是靠每个调用点自觉（历史 bug 就是两处各自 push，重启后一起清零、与 JSONL 脱节）。
+ */
 function appendChatLog(key: string, entry: LogEntry): void {
   const arr = chatLogs.get(key);
   if (arr) arr.push(entry);
   else chatLogs.set(key, [entry]);
+  const mirror = chatHistories.get(key);
+  if (mirror) mirror.push({ role: entry.role, content: entry.content });
+  else chatHistories.set(key, [{ role: entry.role, content: entry.content }]);
+}
+
+/** 读会话历史（缺镜像时按需从日志派生，绝不返回第二份真相） */
+function historyOf(key: string): ChatMessage[] {
+  const cached = chatHistories.get(key);
+  if (cached) return cached;
+  const derived = chatMessagesOf(key);
+  chatHistories.set(key, derived);
+  return derived;
+}
+
+/**
+ * 从记忆服务的只追加日志重建会话日志 —— ADR 002 §9.4 待办 4 / 不变量 #5。
+ *
+ * `chatHistories` 原本是纯进程内内存数组，重启即丢，与"JSONL 是唯一事实来源"有差距。
+ * 现在启动（以及记忆服务重新拉起）后从 `tail()` 拉回最近 `HISTORY_RESTORE_LIMIT` 条
+ * `kind='message'` 记录：seq 直接用记忆服务分配的 seq（与 `nextChatSeq` 同一条序列），
+ * 角色由 recordId 前缀还原（见 memory-client.CHAT_RECORD_PREFIX）。
+ *
+ * **降级**：记忆服务不可用/超时 → 什么都不做（日志与镜像为空），对话照常发送。
+ */
+async function restoreChatLogsFromMemory(trigger: string): Promise<typeof historyRestore> {
+  const report = {
+    done: true,
+    ok: false,
+    entries: 0,
+    sessions: 0,
+    maxSeq: 0,
+    reason: '',
+    trigger,
+    at: Date.now(),
+  };
+  if (!memory || !memory.isReady) {
+    report.reason = 'memory-unavailable';
+    historyRestore = report;
+    boot(`chat log restore skipped (${trigger}): memory unavailable`);
+    return report;
+  }
+  try {
+    const res = await memory.tail(HISTORY_RESTORE_LIMIT);
+    const records: Array<Record<string, unknown>> = Array.isArray(res?.records) ? res.records : [];
+    // tail() 是 seq 倒序（最近的在前），重建要按 seq 升序灌入
+    const asc = [...records]
+      .filter((r) => r && typeof r === 'object')
+      .sort((a, b) => Number(a['seq'] ?? 0) - Number(b['seq'] ?? 0));
+    const have = new Map<string, Set<number>>();
+    for (const [k, arr] of chatLogs) have.set(k, new Set(arr.map((e) => e.seq)));
+    const sessions = new Set<string>();
+    let chars = 0;
+    for (const r of asc) {
+      if (String(r['kind'] ?? '') !== 'message') continue;
+      const key = String(r['sessionId'] ?? '');
+      const seq = Number(r['seq']);
+      const body = typeof r['body'] === 'string' ? r['body'] : '';
+      if (!key || !Number.isFinite(seq) || seq <= 0) continue;
+      const seen = have.get(key) ?? new Set<number>();
+      if (seen.has(seq)) continue;
+      if (chars + body.length > HISTORY_RESTORE_MAX_CHARS) continue;
+      seen.add(seq);
+      have.set(key, seen);
+      chars += body.length;
+      const rid = String(r['id'] ?? '');
+      appendChatLog(key, {
+        seq,
+        role: chatRoleOfRecordId(rid),
+        content: body,
+        recordId: rid || undefined,
+        ts: Number(r['ts']) || undefined,
+      });
+      sessions.add(key);
+      if (seq > report.maxSeq) report.maxSeq = seq;
+      report.entries += 1;
+    }
+    chatLogSeq = Math.max(chatLogSeq, report.maxSeq);
+    // 镜像整份重派生：重建后 chatHistories 与日志逐条对齐
+    for (const key of chatLogs.keys()) chatHistories.set(key, chatMessagesOf(key));
+    report.ok = true;
+    report.sessions = sessions.size;
+    historyRestore = report;
+    boot(
+      `chat log restored (${trigger}): ${report.entries} 条 / ${report.sessions} 会话 / maxSeq=${report.maxSeq}`
+    );
+    audit?.log('chat.history.restore', {
+      trigger,
+      entries: report.entries,
+      sessions: report.sessions,
+      maxSeq: report.maxSeq,
+      limit: HISTORY_RESTORE_LIMIT,
+    });
+    return report;
+  } catch (e) {
+    report.reason = `restore-failed: ${sanitizeError(e)}`;
+    historyRestore = report;
+    boot(`chat log restore failed (${trigger}): ${report.reason}`);
+    return report;
+  }
+}
+
+/**
+ * 记忆服务可用性（工具暴露 + 历史重建的前提）。
+ * 不可用一律**不报错**：撤回工具、跳过重建，对话继续用进程内日志发出去。
+ */
+async function ensureMemoryReady(): Promise<boolean> {
+  if (!memory) return false;
+  if (memory.isReady) return true;
+  const now = Date.now();
+  if (now - memoryEnsureAt < MEMORY_ENSURE_COOLDOWN_MS) return false;
+  memoryEnsureAt = now;
+  try {
+    await memory.start();
+    boot('memory ready (re-start)');
+    void restoreChatLogsFromMemory('memory-restart');
+    return memory.isReady;
+  } catch (e) {
+    boot(`memory re-start fail ${String(e)}`);
+    return false;
+  }
+}
+
+/** 工具描述（i18n，缺键时退回 memory-client 的中文默认文案） */
+function toolLabels(): Partial<MemoryToolLabels> {
+  const d = DEFAULT_MEMORY_TOOL_LABELS;
+  return {
+    recall: tMain('llm.toolRecallDesc', d.recall),
+    retrieve: tMain('llm.toolRetrieveDesc', d.retrieve),
+    queryParam: tMain('llm.toolQueryParam', d.queryParam),
+    limitParam: tMain('llm.toolLimitParam', d.limitParam),
+    recordIdParam: tMain('llm.toolRecordIdParam', d.recordIdParam),
+    seqParam: tMain('llm.toolSeqParam', d.seqParam),
+    offsetParam: tMain('llm.toolOffsetParam', d.offsetParam),
+    maxCharsParam: tMain('llm.toolMaxCharsParam', d.maxCharsParam),
+  };
+}
+
+/** 工具调用上限（settings 可配；越界值一律夹到安全区间） */
+function toolLimits(): { maxRounds: number; maxResultChars: number; totalChars: number } {
+  let s: Partial<AppSettings> | undefined;
+  try {
+    s = settingsStore?.load();
+  } catch {
+    /* 配置坏了就用默认 */
+  }
+  const rounds = Number(s?.contextToolMaxRounds);
+  const per = Number(s?.contextToolResultChars);
+  const total = Number(s?.contextToolTotalChars);
+  return {
+    maxRounds: Number.isFinite(rounds) ? Math.min(8, Math.max(0, Math.floor(rounds))) : 3,
+    maxResultChars: Number.isFinite(per) ? Math.min(8000, Math.max(200, Math.floor(per))) : 4000,
+    totalChars: Number.isFinite(total) ? Math.min(40000, Math.max(200, Math.floor(total))) : 12000,
+  };
+}
+
+/**
+ * **所有**注入模型的对话都从这里走（ADR 002 §9.4 待办 2）：
+ * 有界视图 → 多轮工具调用（recall / retrieve 走记忆服务）→ 结果回给模型 → 终答。
+ *
+ * 降级链（任一环节不满足就退回"现状"的普通单轮对话，**不报错**）：
+ *   1. 记忆服务不可用 → 不暴露工具；
+ *   2. `settings.contextToolMaxRounds = 0` → 不暴露工具；
+ *   3. provider 不支持 function calling（如 Ollama）→ chatWithTools 内部降级；
+ *   4. 首次带 tools 的请求报错（中转/模型不吃 tools）→ 重试一次不带工具。
+ *
+ * 审计：decide / enabled / unavailable / tool / degraded / done 六个事件全程留痕，
+ * 只记工具名、锚点、长度与错误摘要 —— **不落 API Key，也不落工具结果正文**。
+ */
+async function runChatLoop(
+  sessionId: string,
+  provider: ModelProvider,
+  req: ChatRequest
+): Promise<ToolLoopResult & { tooled: boolean }> {
+  const limits = toolLimits();
+  const memReady = await ensureMemoryReady();
+  const tools: ToolSpec[] | undefined =
+    memReady && limits.maxRounds > 0 ? memoryToolSpecs(toolLabels()) : undefined;
+  const supported = providerSupportsTools(provider);
+
+  audit?.log('chat.tools.decide', {
+    sessionId,
+    memoryReady: memReady,
+    supported,
+    exposed: !!tools,
+    maxRounds: limits.maxRounds,
+    resultChars: limits.maxResultChars,
+    totalChars: limits.totalChars,
+  });
+  if (tools) {
+    audit?.log('chat.tools.enabled', { sessionId, tools: tools.map((t) => t.function.name) });
+  } else {
+    audit?.log('chat.tools.unavailable', {
+      sessionId,
+      reason: !memReady ? 'memory-unavailable' : 'disabled-by-settings',
+    });
+  }
+
+  const loop = await chatWithTools(
+    provider,
+    { ...req, tools },
+    async (call, ctx) => {
+      const t1 = Date.now();
+      const out = await runMemoryTool(memory, call, { maxChars: ctx.maxResultChars });
+      metrics.recordToolCall({
+        ts: Date.now(),
+        sessionId,
+        round: ctx.round,
+        tool: out.meta.tool,
+        ok: out.ok,
+        chars: out.chars,
+        ms: Date.now() - t1,
+      });
+      audit?.log('chat.tool', {
+        sessionId,
+        round: ctx.round,
+        tool: out.meta.tool,
+        ok: out.ok,
+        chars: out.chars,
+        anchor: out.meta.anchor,
+        cards: out.meta.cards,
+        hitLevel: out.meta.hitLevel,
+        truncated: out.meta.truncated,
+        queryChars: out.meta.queryChars,
+        error: out.meta.error,
+        ms: Date.now() - t1,
+      });
+      return out.content;
+    },
+    {
+      maxRounds: limits.maxRounds,
+      maxResultChars: limits.maxResultChars,
+      maxToolResultChars: limits.totalChars,
+      onEvent: (ev) => {
+        if (ev.kind === 'degraded') audit?.log('chat.tools.degraded', { sessionId, detail: ev.detail });
+      },
+    }
+  );
+
+  metrics.recordToolLoop({
+    ts: Date.now(),
+    sessionId,
+    requests: loop.requests,
+    rounds: loop.rounds,
+    toolCalls: loop.toolCalls,
+    toolResultChars: loop.toolResultChars,
+    degraded: loop.degraded,
+    stopReason: loop.stopReason,
+  });
+  audit?.log('chat.tools.done', {
+    sessionId,
+    requests: loop.requests,
+    rounds: loop.rounds,
+    toolCalls: loop.toolCalls,
+    toolResultChars: loop.toolResultChars,
+    degraded: loop.degraded,
+    stopReason: loop.stopReason,
+  });
+  return { ...loop, tooled: !!tools };
 }
 
 /** 视图预算：SettingsStore 可配（ADR 002 要求"注入上下文有固定上限"且可调） */
@@ -460,10 +771,37 @@ function startMemoryAsync() {
     memory = new MemoryClient({ nodePath: nodeRt.path, ipcEntry, dataDir });
     memory
       .start()
-      .then(() => boot('memory ready'))
-      .catch((e) => boot(`memory start fail ${String(e)}`));
+      .then(() => {
+        boot('memory ready');
+        // 不变量 #5：记忆服务的 JSONL 是唯一事实来源 → 启动即重建会话日志（ADR 002 §9.4 待办 4）
+        return restoreChatLogsFromMemory('boot');
+      })
+      .catch((e) => {
+        boot(`memory start fail ${String(e)}`);
+        // 降级路径的可观测信号：记忆服务没起来，重建被跳过（对话仍可发送）
+        historyRestore = {
+          done: true,
+          ok: false,
+          entries: 0,
+          sessions: 0,
+          maxSeq: 0,
+          reason: 'memory-start-failed',
+          trigger: 'boot',
+          at: Date.now(),
+        };
+      });
   } catch (e) {
     boot(`memory prepare fail ${String(e)}`);
+    historyRestore = {
+      done: true,
+      ok: false,
+      entries: 0,
+      sessions: 0,
+      maxSeq: 0,
+      reason: 'memory-prepare-failed',
+      trigger: 'boot',
+      at: Date.now(),
+    };
   }
 }
 
@@ -848,12 +1186,14 @@ handleIpc(
     } catch {
       /* optional */
     }
-    // 日志只追加 + 真实 recordId/seq（不变量 #1、#5）
+    // 日志只追加 + 真实 recordId/seq（不变量 #1、#5）。
+    // recordId 只在记忆服务**真的写入成功**时才挂到日志上：否则指针会给出一个解引用不到的死 id
+    // （降级路径下宁可只留 seq + recall 两种线索，也不给假线索）。
     appendChatLog(msg.groupId, {
       seq: nextChatSeq(dutyUserSeq),
       role: 'user',
       content: msg.content,
-      recordId: dutyUserRecordId,
+      recordId: dutyUserSeq !== undefined ? dutyUserRecordId : undefined,
       ts: Date.now(),
     });
 
@@ -865,13 +1205,13 @@ handleIpc(
           apiKey: providerCfg.apiKey,
           baseURL: providerCfg.baseURL || undefined,
         });
-        const hist = chatHistories.get(msg.groupId) || [];
-        hist.push({ role: 'user', content: msg.content });
-        chatHistories.set(msg.groupId, hist);
+        // 注意：用户消息已经在上面 appendChatLog 时进了镜像（chatHistories 不再是独立真相，
+        // 见 appendChatLog —— 历史 bug 就是两处各自 push，重启后与 JSONL 脱节）
         // 不变量 #2：注入的是有界渲染视图（原来这里是 hist.slice(-20)，只按条数有界）。
         // 值班系统提示是**冻结头**，不随日志增长，作为固定前缀在预算之外（常数开销）。
         const view = renderChatView(msg.groupId, msg.content);
-        const resp = await provider.chat({
+        // ADR 002 §9.4 待办 2：值班者路径也只走这一个循环入口（工具/降级/审计行为一致）
+        const loop = await runChatLoop(msg.groupId, provider, {
           model: providerCfg.model,
           messages: [
             {
@@ -883,13 +1223,12 @@ handleIpc(
           ],
           maxTokens: 512,
         });
-        llmReply = resp.choices[0]?.message?.content || '';
-        hist.push({ role: 'assistant', content: llmReply });
-        chatHistories.set(msg.groupId, hist);
+        llmReply = loop.response.choices[0]?.message?.content || '';
         appendChatLog(msg.groupId, {
           seq: nextChatSeq(),
           role: 'assistant',
           content: llmReply,
+          recordId: newChatRecordId('a'),
           ts: Date.now(),
         });
       } catch (e) {
@@ -982,13 +1321,9 @@ handleIpc(
       originalBytes: compressed.originalBytes,
       compressedBytes: compressed.compressedBytes,
     });
-    const userMsg: ChatMessage = { role: 'user', content: compressed.content };
-    const hist = chatHistories.get(sessionId) || [];
-    hist.push(userMsg);
-    chatHistories.set(sessionId, hist);
-
     // 日志只追加（不变量 #1）：先写入记忆服务，拿到**真实 recordId + seq** 再落日志，
     // 这样指针里的 retrieve(recordId=…)/retrieve(seq=…) 真的能回到这条原文。
+    // recordId 只在写入成功时才挂到日志（失败时宁缺勿假：死 id 会让模型白跑一轮工具）。
     const userRecordId = newChatRecordId('m');
     let userMemSeq: number | undefined;
     try {
@@ -998,6 +1333,9 @@ handleIpc(
             id: userRecordId,
             sessionId,
             kind: 'message',
+            // role 一并落 JSONL（SQLite 投影查不到它，但 JSONL 才是事实来源；
+            // 重建时先用 recordId 前缀，将来有读 JSONL 的 IPC 就能直接用这个字段）
+            role: 'user',
             body: compressed.content,
           },
           'duty'
@@ -1010,18 +1348,17 @@ handleIpc(
       seq: nextChatSeq(userMemSeq),
       role: 'user',
       content: compressed.content,
-      recordId: userRecordId,
+      recordId: userMemSeq !== undefined ? userRecordId : undefined,
       ts: Date.now(),
     });
 
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       const reply = tMain('llm.noKey') + msg.content.slice(0, 80);
-      hist.push({ role: 'assistant', content: reply });
-      chatHistories.set(sessionId, hist);
       appendChatLog(sessionId, {
         seq: nextChatSeq(),
         role: 'assistant',
         content: reply,
+        recordId: newChatRecordId('a'),
         ts: Date.now(),
       });
       return { ok: true, reply, usage: null, needsKey: true };
@@ -1035,14 +1372,14 @@ handleIpc(
       });
       // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）
       const view = renderChatView(sessionId, msg.content);
-      const resp = await provider.chat({
+      // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
+      const loop = await runChatLoop(sessionId, provider, {
         model: msg.model || providerCfg.model,
         messages: view.messages as ChatMessage[],
         maxTokens: 1024,
       });
+      const resp = loop.response;
       const reply = resp.choices[0]?.message?.content || '';
-      hist.push({ role: 'assistant', content: reply });
-      chatHistories.set(sessionId, hist);
       metrics.recordTurn({
         sessionId,
         ts: Date.now(),
@@ -1059,7 +1396,9 @@ handleIpc(
       try {
         replyMemSeq = memSeqOf(
           await memory?.append(
-            { id: replyRecordId, sessionId, kind: 'message', body: reply.slice(0, 4000) },
+            // 与日志正文**一致**地落盘：之前这里 slice(0,4000)，会让 retrieve(recordId) 只能回到前 4000 字符，
+            // 而日志里是全量 —— 两份真相不一致，等于长回复的尾巴取不回来（不丢细节的前提是两边同一份内容）。
+            { id: replyRecordId, sessionId, kind: 'message', role: 'assistant', body: reply },
             'duty'
           )
         );
@@ -1070,7 +1409,7 @@ handleIpc(
         seq: nextChatSeq(replyMemSeq),
         role: 'assistant',
         content: reply,
-        recordId: replyRecordId,
+        recordId: replyMemSeq !== undefined ? replyRecordId : undefined,
         ts: Date.now(),
       });
       if (knowledge && reply.length > 0) {
@@ -1082,7 +1421,21 @@ handleIpc(
           anchors: [],
         });
       }
-      return { ok: true, reply, usage: resp.usage, needsKey: false };
+      return {
+        ok: true,
+        reply,
+        usage: resp.usage,
+        needsKey: false,
+        /** 工具调用观测（渲染层可据此展示"本轮调用了 retrieve/recall"） */
+        tools: {
+          requested: !!loop.tooled,
+          calls: loop.toolCalls,
+          rounds: loop.rounds,
+          requests: loop.requests,
+          degraded: loop.degraded,
+          stopReason: loop.stopReason,
+        },
+      };
     } catch (e) {
       const err = sanitizeError(e);
       lastError = { ts: Date.now(), message: err, context: 'chat-send' };
@@ -1163,8 +1516,49 @@ handleIpc('ccarmy:get-insert-mode', (_e, sessionId: string) => ({
 }));
 
 // ── 指标 ──
-handleIpc('ccarmy:metrics-summary', () => safeHandle(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true }))
+handleIpc('ccarmy:metrics-summary', () => safeHandle(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true, toolCalls: 0, toolCallsOk: 0, toolChars: 0, toolTurns: 0, toolDegradedTurns: 0, toolStopReasons: {}, toolLoopBounded: true }))
 handleIpc('ccarmy:metrics-turns', () => safeHandle(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
+handleIpc('ccarmy:metrics-tools', () => safeHandle(() => ({ ok: true, calls: metrics.lastToolCalls(50) }), { ok: true, calls: [] }))
+
+/**
+ * 会话日志（只追加）的只读视图 —— ADR 002 §9.4 待办 4 的观测面。
+ * 只回 seq / 角色 / 长度 / 摘要，不回正文（正文在记忆服务里，靠 retrieve 取）。
+ */
+handleIpc('ccarmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number }) => {
+  try {
+    const sessionId = String(payload?.sessionId ?? '');
+    const limit = Math.min(500, Math.max(1, Math.floor(Number(payload?.limit)) || 200));
+    const all = chatLogs.get(sessionId) || [];
+    return {
+      ok: true,
+      sessionId,
+      count: all.length,
+      entries: all.slice(-limit).map((e) => ({
+        seq: e.seq,
+        role: e.role,
+        chars: e.content.length,
+        recordId: e.recordId || null,
+        digest: contentDigest(e.content),
+        ts: e.ts ?? null,
+      })),
+      stats: {
+        sessions: [...chatLogs.keys()],
+        logSeq: chatLogSeq,
+        restore: historyRestore,
+        // 缺镜像时按需从日志派生（历史上是两份各自 push 的真相，重启后一起清零）
+        historyMirror: historyOf(sessionId).length,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/** 手动触发一次历史重建（排障/验证用；与启动路径同一函数） */
+handleIpc('ccarmy:chat-log-restore', async () => {
+  const report = await restoreChatLogsFromMemory('ipc');
+  return { ok: report.ok, restore: report, sessions: [...chatLogs.keys()], logSeq: chatLogSeq };
+});
 
 // ── 设置持久化 ──
 handleIpc('ccarmy:settings-get', () => safeHandle(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
@@ -1837,6 +2231,32 @@ handleIpc('ccarmy:group-orchestrate', async (_e, msg: { groupId: string; content
       // 值班者输入与 chat-send 共享同一份日志 + 同一个渲染器（不变量 #2）
       logOf: (key: string) => chatLogs.get(key) || [],
       contextBudgetChars,
+      // ADR 002 §9.4 待办 2：值班者路径共用同一套工具与限额（memory-client 是唯一实现）
+      toolSpecs: () => (memory?.isReady && toolLimits().maxRounds > 0 ? memoryToolSpecs(toolLabels()) : undefined),
+      toolLimits,
+      runTool: async (call, ctx) => {
+        const t1 = Date.now();
+        const out = await runMemoryTool(memory, call, { maxChars: ctx.maxResultChars });
+        metrics.recordToolCall({
+          ts: Date.now(),
+          sessionId: msg.groupId,
+          round: ctx.round,
+          tool: out.meta.tool,
+          ok: out.ok,
+          chars: out.chars,
+          ms: Date.now() - t1,
+        });
+        audit?.log('chat.tool', {
+          sessionId: msg.groupId,
+          round: ctx.round,
+          tool: out.meta.tool,
+          ok: out.ok,
+          chars: out.chars,
+          anchor: out.meta.anchor,
+          error: out.meta.error,
+        });
+        return out.content;
+      },
       listInstances: () => instList,
       addEvent: (title, body, groupId) => {
         knowledge?.upsertEntity({ id: 'grp-' + groupId, kind: 'project', name: groupId, attrs: {}, anchors: [] });

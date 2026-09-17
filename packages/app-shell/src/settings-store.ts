@@ -105,6 +105,16 @@ export interface AppSettings {
    * 下限 200：更小的预算连可执行指针都放不下（渲染器仍不抛错，只是退化为截断指针）。
    */
   contextBudgetChars: number;
+  /**
+   * 工具调用循环的最大轮数 —— ADR 002 §9.4 待办 2。
+   * 模型要工具 → 宿主执行 recall/retrieve → 结果回给模型 → 再问，最多这么多轮。
+   * **0 = 不暴露工具**（退回普通单轮对话，即"现状"）。
+   */
+  contextToolMaxRounds: number;
+  /** 单条工具结果上限（字符，默认 4000） */
+  contextToolResultChars: number;
+  /** 一轮对话内工具结果的**总**预算（字符，默认 12000） */
+  contextToolTotalChars: number;
 }
 
 function hash(pw: string) {
@@ -222,6 +232,15 @@ function defaults(): AppSettings {
      * 本机未提供 tokenizer 词表，故此处是折算估计而非实测 token 数；换算口径可按模型替换。
      */
     contextBudgetChars: DEFAULT_CONTEXT_BUDGET_CHARS,
+    /**
+     * 工具调用上限（ADR 002 §9.4 待办 2）。
+     * 3 轮足够"recall → retrieve → 终答"的典型链路，又是硬上限：
+     * 最坏 4 次模型请求（3 轮工具 + 1 次强制收敛），每次注入都 ≤ contextBudgetChars，
+     * 工具结果另有 12000 字符总预算与 4000 字符单条上限 —— 三层都在"有界"这一侧。
+     */
+    contextToolMaxRounds: 3,
+    contextToolResultChars: 4000,
+    contextToolTotalChars: 12000,
   };
 }
 
