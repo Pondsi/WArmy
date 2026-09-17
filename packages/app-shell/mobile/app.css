@@ -120,16 +120,32 @@ body {
   font-size: 11px; display: inline-grid; place-items: center;
 }
 
-/* ── 会话类型角标 ── */
-.av-wrap { position: relative; flex-shrink: 0; }
+/* ── 会话头像与类型角标 ──
+   角标必须有一部分落在头像的裁剪区之外：头像本身 overflow:hidden + 圆角，
+   所以任何人无论换成什么样的头像图片，都无法在图片里做出“压出头像边界”的角标，
+   真角标与伪造角标因此一眼可分。 */
+.av-wrap { position: relative; flex-shrink: 0; overflow: visible; }
 .av-wrap .av { width: 46px; height: 46px; }
-.av-wrap .type-badge {
-  position: absolute; bottom: -2px; right: -2px;
-  width: 16px; height: 16px;
-  background: var(--card); border-radius: 50%;
-  border: 1.5px solid var(--card);
-  box-shadow: 0 0 2px rgba(0,0,0,0.15);
+
+/* 群聊 / 项目：统一头像 = PC 端左侧导航图标 */
+.av-wrap .av.unified {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--accent);
 }
+.av-wrap .av.unified svg { width: 58%; height: 58%; display: block; }
+
+/* 牛马 / 联系人：右下角角标，负偏移使其超出头像边界 6px */
+.av-wrap .av-badge {
+  position: absolute; right: -6px; bottom: -6px;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  background: var(--card);
+  border-radius: 50%;
+  color: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--card), 0 1px 3px rgba(0, 0, 0, 0.22);
+}
+.av-wrap .av-badge svg { width: 13px; height: 13px; display: block; }
 .type-tag {
   display: inline-block;
   font-size: 10px; padding: 1px 5px;

@@ -40,10 +40,10 @@
       ],
       /** board.jsonl 结构化事件（值班者解析写入） */
       events: [
-        { id: 'e1', ts: Date.now() - 3600e3, action: 'create_task', title: 'demo.task1', session: '项目推进群' },
-        { id: 'e2', ts: Date.now() - 1800e3, action: 'update_progress', title: 'demo.task1', session: '项目推进群' },
-        { id: 'e3', ts: Date.now() - 900e3, action: 'block', title: 'demo.task2', session: '研发排期群' },
-        { id: 'e4', ts: Date.now() - 300e3, action: 'complete_task', title: 'demo.task3', session: '主力牛马' },
+        { id: 'e1', ts: Date.now() - 3600e3, action: 'create_task', title: 'demo.task1', session: t('demo.project1') },
+        { id: 'e2', ts: Date.now() - 1800e3, action: 'update_progress', title: 'demo.task1', session: t('demo.project1') },
+        { id: 'e3', ts: Date.now() - 900e3, action: 'block', title: 'demo.task2', session: t('demo.project2') },
+        { id: 'e4', ts: Date.now() - 300e3, action: 'complete_task', title: 'demo.task3', session: t('demo.agent') },
       ],
       recent: ['demo.recent1', 'demo.recent2'],
     },

@@ -70,6 +70,7 @@
     { id: 'g-1', name: '项目推进群', kind: 'internal', last: '值班者：排期已同步', ts: '12:04', unread: 2 },
     { id: 'g-2', name: '研发排期', kind: 'internal', last: '排期表已更新', ts: '昨天' },
     { id: 'g-3', name: '客户对接群', kind: 'external', last: '仅 @ 时响应', ts: '周一' },
+    { id: 'c-1', name: '王工', kind: 'contact', last: '收到，周报我这边看过了', ts: '昨天' },
   ];
   const GROUP_MEMBERS = { 'g-1': ['demo.agent', '归档员'], 'g-2': ['demo.agent'], 'g-3': ['demo.agent'] };
   const MSGS = {
@@ -85,6 +86,10 @@
     ],
     'g-2': [{ who: 'them', text: '排期表已更新。' }],
     'g-3': [{ who: 'sys', text: '外部群默认静默，@ 后才回复' }],
+    'c-1': [
+      { who: 'them', text: '收到，周报我这边看过了' },
+      { who: 'me', text: '好的，有问题随时说' },
+    ],
   };
   const sessionOf = (id) => SESSIONS.filter((s) => s.id === id)[0];
   const instOf = (id) => INSTANCES.filter((i) => i.id === id || i.name === id)[0];
@@ -188,23 +193,39 @@
       (act ? '<span class="chev">›</span>' : '') + '</div>';
   };
 
-  // ── 会话类型角标 SVG ──
-  const TYPE_ICONS = {
-    single: '<svg viewBox="0 0 16 16" class="type-badge"><circle cx="6" cy="5" r="3" fill="#07c160"/><rect x="0" y="10" width="12" height="4" rx="2" fill="#07c160"/><rect x="10" y="2" width="5" height="5" rx="1" fill="#576b95"/></svg>',
-    internal: '<svg viewBox="0 0 16 16" class="type-badge"><circle cx="8" cy="8" r="6" fill="none" stroke="#576b95" stroke-width="1.5"/><path d="M5 8C5 5 8 5 8 8S11 11 11 8" fill="none" stroke="#576b95" stroke-width="1.5"/></svg>',
-    contact: '<svg viewBox="0 0 16 16" class="type-badge"><circle cx="8" cy="5" r="3.5" fill="#576b95"/><path d="M2 15c0-3.3 2.7-6 6-6s6 2.7 6 6" fill="#576b95"/></svg>',
-    external: '<svg viewBox="0 0 16 16" class="type-badge"><rect x="1" y="1" width="14" height="10" rx="2" fill="#576b95"/><path d="M4 11l4 4 4-4" fill="#576b95"/></svg>',
+  // ── PC 端左侧导航图标：内容逐字节照抄自 src/renderer/index.html 的左侧导航 ──
+  // 会话类型 -> PC 导航项：single=我的牛马 / internal=项目 / contact=联系人 / external=群聊
+  // 注意 PC 端这 4 个图标本身并不统一（project 没有 <g> 且两条 path 宽度不同），
+  // 所以这里按原样保存，不做任何归一化，便于与 PC 端做逐字节比对。
+  const NAV_INNER = {
+    single: '<g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M14,78 C14,60 24,54 34,54 C40,54 45,56 49,60"/><rect x="58" y="26" width="24" height="24" rx="4"/><circle cx="70" cy="38" r="3" fill="currentColor"/><line x1="70" y1="26" x2="70" y2="18"/><circle cx="70" cy="16" r="3" fill="currentColor"/></g>',
+    internal: '<path d="M50,14 A36,36 0 1,1 21,71" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M34,50 C30,38 42,38 50,50 C58,62 70,62 66,50 C62,38 50,38 50,50" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>',
+    contact: '<g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><circle cx="42" cy="34" r="14"/><path d="M18,82 C18,62 30,56 42,56 C48,56 53,58 57,62"/><path d="M68,32 C74,38 74,50 68,56"/><path d="M78,24 C88,36 88,52 78,64"/></g>',
+    external: '<g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M16,78 C16,62 24,54 34,54 C44,54 52,62 52,78"/><circle cx="66" cy="34" r="12"/><path d="M48,78 C48,62 56,54 66,54 C76,54 84,62 84,78"/></g>',
   };
+  // 群聊 / 项目：头像位直接放导航图标，不再用各自头像（同类共用同一张头像，靠名称区分）
+  const UNIFIED_AVATAR = { internal: 1, external: 1 };
+  function navSvg(kind, cls) {
+    const inner = NAV_INNER[kind];
+    if (!inner) return '';
+    return '<svg viewBox="0 0 100 100" class="' + (cls || '') + '" aria-hidden="true">' + inner + '</svg>';
+  }
+
   const typeLabel = (kind) => t({ single: 'ui.type.single', internal: 'ui.type.internal', contact: 'ui.type.contact', external: 'ui.type.external' }[kind] || '');
 
   // ── 一级：四个 Tab ──
   function renderSessions() {
     const rows = SESSIONS.map((s) => {
-      const isGroup = s.kind !== 'single';
       const inst = instOf(s.id);
-      const av = inst ? avHtml(s.name, inst.preset) : avHtml(s.name, 0, 'g');
-      const badge = TYPE_ICONS[s.kind] || '';
-      const avWrap = '<div class="av-wrap">' + av + badge + '</div>';
+      let avWrap;
+      if (UNIFIED_AVATAR[s.kind]) {
+        // 群聊 / 项目：统一头像 = PC 导航图标
+        avWrap = '<div class="av-wrap"><div class="av unified">' + navSvg(s.kind, 'nav-ic') + '</div></div>';
+      } else {
+        // 牛马 / 联系人：自身头像 + 右下角角标；角标用负偏移压在头像裁剪区之外，无法被伪造的头像图片复刻
+        avWrap = '<div class="av-wrap">' + avHtml(s.name, inst ? inst.preset : 0) +
+          '<span class="av-badge">' + navSvg(s.kind, 'badge-ic') + '</span></div>';
+      }
       return '<div class="row" data-open="' + esc(s.id) + '">' + avWrap +
         '<div class="mid"><div class="n">' + esc(s.name) + ' <span class="type-tag" data-kind="' + esc(s.kind) + '">' + esc(typeLabel(s.kind)) + '</span></div><div class="s">' + esc(s.last) + '</div></div>' +
         '<div class="right"><div class="t">' + esc(s.ts) + '</div>' +
