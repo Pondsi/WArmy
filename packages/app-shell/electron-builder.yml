@@ -59,3 +59,13 @@ extraResources:
       - "**/better-sqlite3/**"
       - "**/bindings/**"
       - "**/file-uri-to-path/**"
+
+# ── 应用图标（打包进 exe，任务栏/资源管理器都读它）──
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+mac:
+  icon: build/icon.png
+linux:
+  icon: build/icon.png

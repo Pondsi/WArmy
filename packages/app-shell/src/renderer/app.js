@@ -489,7 +489,12 @@
       /* noop */
     }
     try {
-      window.ccarmy.trayTooltip?.(`${t('brand.name')} ${t('brand.sub')}`);
+      window.ccarmy.trayTooltip?.({
+        text: `${t('brand.name')} ${t('brand.sub')}`,
+        offWork: t('tray.offWork'),
+        header: t('export.header'),
+        me: t('export.me'),
+      });
     } catch {
       /* noop */
     }
@@ -1592,8 +1597,8 @@
         <div class="set-section set-card">
           <h2>${t('settings.language')}</h2>
           <select id="sel-locale" title="${escapeHtml(t('settings.language'))}">
-            <option value="zh-CN" ${state.locale.startsWith('zh') ? 'selected' : ''}>中文</option>
-            <option value="en-US" ${state.locale.startsWith('en') ? 'selected' : ''}>English</option>
+            <option value="zh-CN" ${state.locale.startsWith('zh') ? 'selected' : ''}>${t('settings.localeZh')}</option>
+            <option value="en-US" ${state.locale.startsWith('en') ? 'selected' : ''}>${t('settings.localeEn')}</option>
           </select>
         </div>
         <div class="set-section set-card">
@@ -1643,14 +1648,7 @@
             <div class="muted">${t('settings.emailHint')}</div>
           </div>
         </div>
-        <div class="set-section set-card">
-          <h2>${t('settings.skills')}</h2>
-          <p class="muted" style="margin:0 0 8px">${t('settings.skillsHint')}</p>
-          <div style="margin-bottom:8px"><button class="btn-mini" id="btn-skill-import">${t('settings.skillsImport')}</button></div>
-          <div id="skill-list" class="muted">${t('settings.skillsEmpty')}</div>
-          <div class="muted skill-paths" id="skill-paths"></div>
-        </div>
-        <div class="set-section set-card">
+                <div class="set-section set-card">
           <h2>${t('smtp.title')} <span class="muted">(${t('smtp.count')} <span id="smtp-n">0</span>/10 · ${t('smtp.max10')})</span></h2>
           <p class="muted">${t('smtp.hint')}</p>
           <div id="smtp-accounts"></div>
@@ -1767,6 +1765,19 @@
           <h2>${t('join.blacklistTitle')}</h2>
           <div id="blacklist-box" class="muted">${t('join.blacklistEmpty')}</div>
         </div>
+        <div class="set-section set-card">
+          <h2>${t('diag.title')}</h2>
+          <p class="muted" style="margin:0 0 8px">${t('diag.hint')}</p>
+          <div id="diag-out" class="muted">—</div>
+          <div style="margin-top:8px"><button class="btn-mini" id="btn-diag-run">${t('diag.run')}</button></div>
+        </div>
+        <div class="set-section set-card">
+          <h2>${t('settings.skills')}</h2>
+          <p class="muted" style="margin:0 0 8px">${t('settings.skillsHint')}</p>
+          <div style="margin-bottom:8px"><button class="btn-mini" id="btn-skill-import">${t('settings.skillsImport')}</button></div>
+          <div id="skill-list" class="muted">${t('settings.skillsEmpty')}</div>
+          <div class="muted skill-paths" id="skill-paths"></div>
+        </div>
         <div class="set-section" data-sec="about"><h2 style="color:var(--accent)">${t('settings.section.about')}</h2></div>
         <div class="set-section set-card about-card">
           <div class="about-brand">
@@ -1847,6 +1858,7 @@
       });
       renderThemeSwatches();
       renderSkillList();
+      bindDiagnostics();
       document.querySelectorAll('.theme-swatches button').forEach((b) => {
         if (b.dataset.c === state.theme) b.classList.add('on');
         b.onclick = () => {
@@ -2923,6 +2935,18 @@
     bindModelMgr(entries);
   }
 
+  /** 某模型属于哪个供应商 */
+  function providerLabelOf(model) {
+    const p = (state.providers || []).find((x) => (x.models || []).includes(model));
+    return p ? p.label : '—';
+  }
+
+  /** 延迟显示：state.modelLatency[model] 单位 ms */
+  function latencyText(model) {
+    const ms = state.modelLatency && state.modelLatency[model];
+    return ms ? ms + ' ms' : t('model.latencyNA');
+  }
+
   function modelMgrCard(inst, editable, idx) {
     const models = inst.availableModels || [];
     const chain = (inst.chain && inst.chain.length) ? inst.chain : models;
@@ -2951,11 +2975,14 @@
         <label class="mgr-lb">${t('instances.fallbackChain')}</label>
         <ol class="mgr-chain">${
           chain.length
-            ? chain.map((m, k) => `<li><span>${escapeHtml(m)}</span>${
-                editable ? `<button class="btn-mini" data-mgup="${idx}" data-k="${k}" title="${t('instances.moveUp')}">↑</button><button class="btn-mini" data-mgdown="${idx}" data-k="${k}" title="${t('instances.moveDown')}">↓</button>` : ''
-              }</li>`).join('')
+            ? chain.map((m, k) => `<li data-chain="${idx}" data-k="${k}"${editable ? ' draggable="true"' : ''}>
+                <span class="mgr-chain-name">${escapeHtml(m)}</span>
+                <span class="mgr-chain-meta">${escapeHtml(providerLabelOf(m))} · ${escapeHtml(latencyText(m))}</span>
+                ${editable ? `<button class="btn-mini" data-mgtest="${idx}" data-m="${escapeHtml(m)}" title="${t('model.test')}">⚡</button>` : ''}
+              </li>`).join('')
             : '<li class="muted">—</li>'
         }</ol>
+        ${editable ? `<div class="mgr-add-row"><button class="btn-mini" data-mgadd="${idx}">＋ ${t('instances.addModel')}</button></div>` : ''}
       </div>
     </details>`;
   }
@@ -3005,6 +3032,131 @@
     });
     box.querySelectorAll('[data-mgdown]').forEach((b) => {
       b.onclick = () => move(Number(b.dataset.mgdown), Number(b.dataset.k), 1);
+    });
+    // 拖拽排序
+    let dragFrom = null;
+    box.querySelectorAll('.mgr-chain li[draggable="true"]').forEach((li) => {
+      li.ondragstart = (e) => {
+        dragFrom = { idx: Number(li.dataset.chain), k: Number(li.dataset.k) };
+        li.classList.add('dragging');
+        try { e.dataTransfer.setData('text/plain', String(li.dataset.k)); } catch { /* noop */ }
+      };
+      li.ondragend = () => { li.classList.remove('dragging'); dragFrom = null; };
+      li.ondragover = (e) => { e.preventDefault(); li.classList.add('drop-target'); };
+      li.ondragleave = () => li.classList.remove('drop-target');
+      li.ondrop = (e) => {
+        e.preventDefault();
+        li.classList.remove('drop-target');
+        if (!dragFrom) return;
+        const to = { idx: Number(li.dataset.chain), k: Number(li.dataset.k) };
+        if (dragFrom.idx !== to.idx || dragFrom.k === to.k) return;
+        const e2 = entries[dragFrom.idx];
+        if (!e2 || !e2.editable || !e2.inst.chain) return;
+        const arr = e2.inst.chain;
+        const [item] = arr.splice(dragFrom.k, 1);
+        arr.splice(to.k, 0, item);
+        renderModelMgr();
+        window.__saveState?.();
+      };
+    });
+    // 测速：请求供应商的 models 接口，记录耗时
+    box.querySelectorAll('[data-mgtest]').forEach((b) => {
+      b.onclick = async () => {
+        const model = b.dataset.m;
+        b.disabled = true;
+        const label = b.textContent;
+        b.textContent = '…';
+        try {
+          const p = (state.providers || []).find((x) => (x.models || []).includes(model));
+          const t0 = performance.now();
+          const r = await window.ccarmy.listModels({ protocol: p && p.protocol, baseURL: p && p.baseURL, apiKey: p && p.apiKey });
+          const ms = Math.round(performance.now() - t0);
+          if (r && r.ok) {
+            if (!state.modelLatency) state.modelLatency = {};
+            state.modelLatency[model] = ms;
+          }
+        } catch {
+          /* noop */
+        }
+        b.disabled = false;
+        b.textContent = label;
+        renderModelMgr();
+      };
+    });
+    // 添加模型
+    box.querySelectorAll('[data-mgadd]').forEach((b) => {
+      b.onclick = async () => {
+        const e3 = entries[Number(b.dataset.mgadd)];
+        if (!e3 || !e3.editable) return;
+        const picked = await pickModelsToAdd(e3.inst);
+        if (picked && picked.length) {
+          e3.inst.availableModels = [...new Set([...(e3.inst.availableModels || []), ...picked])];
+          e3.inst.chain = [...new Set([...(e3.inst.chain || []), ...picked])];
+          renderModelMgr();
+          window.__saveState?.();
+        }
+      };
+    });
+  }
+
+  /** 添加模型：选供应商 → 拉取 → 勾选 */
+  function pickModelsToAdd(inst) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = t('model.addTitle');
+      const body = $('modal-body');
+      const provs = state.providers || [];
+      body.innerHTML = `<div class="field">
+          <label>${t('model.pickProvider')}</label>
+          <div style="display:flex;gap:6px">
+            <select id="mp-prov" style="flex:1">${provs.map((p, i) => `<option value="${i}">${escapeHtml(p.label || p.id)}</option>`).join('')}</select>
+            <button class="btn-mini" id="mp-fetch">${t('model.fetch')}</button>
+          </div>
+        </div>
+        <div class="muted" style="font-size:12px">${t('model.fetchHint')}</div>
+        <div class="model-pick-list" id="mp-list"></div>`;
+      const listBox = $('mp-list');
+      const renderList = () => {
+        const p = provs[Number($('mp-prov').value)] || {};
+        const have = new Set(inst.availableModels || []);
+        const cand = (p.models || []).filter((m) => !have.has(m));
+        listBox.innerHTML = cand.length
+          ? cand.map((m) => `<label><input type="checkbox" value="${escapeHtml(m)}"/> ${escapeHtml(m)}</label>`).join('')
+          : `<div class="muted">${t('model.noneAvailable')}</div>`;
+      };
+      renderList();
+      $('mp-prov').onchange = renderList;
+      $('mp-fetch').onclick = async () => {
+        const btn = $('mp-fetch');
+        btn.textContent = t('common.loading');
+        const p = provs[Number($('mp-prov').value)] || {};
+        try {
+          const r = await window.ccarmy.listModels({ protocol: p.protocol, baseURL: p.baseURL, apiKey: p.apiKey });
+          if (r && r.ok && r.models && r.models.length) {
+            p.models = [...new Set([...(p.models || []), ...r.models])];
+          }
+        } catch {
+          /* noop */
+        }
+        btn.textContent = t('model.fetch');
+        renderList();
+      };
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.className = 'btn-mini';
+      cancel.textContent = t('common.cancel');
+      cancel.onclick = () => { root.classList.add('hidden'); resolve(null); };
+      const okAdd = document.createElement('button');
+      okAdd.className = 'btn-primary';
+      okAdd.textContent = t('model.addSelected');
+      okAdd.onclick = () => {
+        const picked = Array.from(listBox.querySelectorAll('input[type=checkbox]:checked')).map((i) => i.value);
+        root.classList.add('hidden');
+        resolve(picked);
+      };
+      acts.append(cancel, okAdd);
+      root.classList.remove('hidden');
     });
   }
 
@@ -3059,6 +3211,7 @@
       const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
       const r = await window.ccarmy.exportSession({
         title: state.selectedChat.name,
+        labels: { header: t('export.header'), me: t('export.me') },
         messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
       });
       root.classList.add('hidden');
@@ -3112,6 +3265,72 @@
       /* noop */
     }
   }
+
+  /** 成本明细：按会话 / 按模型聚合，可导出 CSV */
+  async function renderCostDash() {
+    const box = $('cost-dash');
+    if (!box) return;
+    const r = await window.ccarmy.metricsTurns().catch(() => null);
+    const turns = (r && r.turns) || [];
+    if (!turns.length) {
+      box.innerHTML = '<div class="muted">' + t('cost.empty') + '</div>';
+      return;
+    }
+    const agg = (key) => {
+      const m = new Map();
+      turns.forEach((x) => {
+        const k = x[key] || '—';
+        const cur = m.get(k) || { turns: 0, tokens: 0, cost: 0 };
+        cur.turns += 1;
+        cur.tokens += (x.promptTokens || 0) + (x.completionTokens || 0);
+        cur.cost += ((x.promptTokens || 0) + (x.completionTokens || 0)) / 1000 * 0.002;
+        m.set(k, cur);
+      });
+      return [...m.entries()].sort((p, q2) => q2[1].cost - p[1].cost);
+    };
+    const table = (rows, firstCol) => {
+      const head =
+        '<tr><th>' + firstCol + '</th><th>' + t('cost.turns') + '</th><th>' + t('cost.tokens') + '</th><th>' + t('cost.cost') + '</th></tr>';
+      const body = rows
+        .slice(0, 8)
+        .map(
+          ([k, v]) =>
+            '<tr><td>' + escapeHtml(String(k).slice(0, 18)) + '</td><td>' + v.turns + '</td><td>' + v.tokens +
+            '</td><td>' + v.cost.toFixed(4) + '</td></tr>'
+        )
+        .join('');
+      return '<table class="cost-table">' + head + body + '</table>';
+    };
+    box.innerHTML =
+      '<div class="cost-sub">' + t('cost.bySession') + '</div>' + table(agg('sessionId'), t('cost.session')) +
+      '<div class="cost-sub">' + t('cost.byModel') + '</div>' + table(agg('model'), t('cost.model'));
+
+    const btn = $('btn-cost-csv');
+    if (btn) {
+      btn.onclick = async () => {
+        const esc = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+        const lines = ['dimension,key,turns,tokens,cost_cny'];
+        for (const [label, key] of [['session', 'sessionId'], ['model', 'model']]) {
+          agg(key).forEach(([k, v]) => lines.push([label, esc(k), v.turns, v.tokens, v.cost.toFixed(6)].join(',')));
+        }
+        const rr = await window.ccarmy.saveText({
+          defaultName: 'ccarmy-cost.csv',
+          content: lines.join('\n'),
+          filters: [{ name: 'CSV', extensions: ['csv'] }],
+        });
+        if (rr && rr.ok) uiAlert(t('instances.saved'));
+        else if (rr && rr.error) uiAlert(String(rr.error));
+      };
+    }
+  }
+
+  $('cost-toggle')?.addEventListener('click', () => {
+    const body = $('cost-body');
+    if (!body) return;
+    body.classList.toggle('hidden');
+    $('cost-toggle').classList.toggle('open', !body.classList.contains('hidden'));
+    if (!body.classList.contains('hidden')) renderCostDash();
+  });
 
   async function refreshCheckpoints() {
     const box = $('cp-detail-list') || $('cp-list');
@@ -3181,6 +3400,48 @@
       ? tasks.map((t) => '<div>' + escapeHtml(t.title) + ' · ' + (t.progress || 0) + '% · ' + t.status + '</div>').join('')
       : '—';
   }
+  /** 卡顿自检：主进程 CPU/事件循环延迟 + 渲染进程帧率 */
+  function bindDiagnostics() {
+    // 设置页每次重渲染都会产生新的按钮元素，必须每次都重新绑定
+    const btn = $('btn-diag-run');
+    if (!btn) return;
+    btn.onclick = async () => {
+      const out = $('diag-out');
+      if (!out) return;
+      out.textContent = t('diag.running');
+      // 渲染进程帧率：统计 500ms 内的 rAF 次数
+      const fps = await new Promise((resolve) => {
+        let frames = 0;
+        const t0 = performance.now();
+        const tick = () => {
+          frames += 1;
+          if (performance.now() - t0 < 500) requestAnimationFrame(tick);
+          else resolve(Math.round((frames * 1000) / (performance.now() - t0)));
+        };
+        requestAnimationFrame(tick);
+      });
+      const d = await window.ccarmy.diagnostics().catch(() => null);
+      if (!d || !d.ok) {
+        out.textContent = '—';
+        return;
+      }
+      const heapMb = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null;
+      const cell = (k, v) => '<div class="diag-cell"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>';
+      const bad = d.cpuPercent > 60 || d.loopLagMs > 50 || fps < 30;
+      out.innerHTML =
+        '<div class="diag-grid">' +
+        cell(t('diag.mainCpu'), d.cpuPercent + '%') +
+        cell(t('diag.loopLag'), d.loopLagMs + ' ms') +
+        cell(t('diag.rss'), d.rssMb + ' MB') +
+        cell(t('diag.heap'), heapMb === null ? '—' : heapMb + ' MB') +
+        cell(t('diag.fps'), fps + ' fps') +
+        cell(t('diag.reqAnim'), d.handles + ' / ' + d.requests) +
+        cell(t('diag.uptime'), d.uptimeSec + ' s') +
+        '</div>' +
+        '<div class="diag-verdict' + (bad ? ' bad' : '') + '">' + t(bad ? 'diag.verdictBad' : 'diag.verdictOk') + '</div>';
+    };
+  }
+
   async function renderSkillList() {
     const box = $('skill-list');
     if (!box) return;
@@ -3244,16 +3505,48 @@
     const box = $('members-box');
     if (!box || !state.selectedChat) return;
     const r = await window.ccarmy.groupMembers(state.selectedChat.id).catch(() => null);
-    const ms = r?.members || [];
+    const ms = (r && r.members) || [];
     box.innerHTML = ms.length
-      ? ms.map((x) => '<div>' + escapeHtml(x.name) + ' · ' + x.role + '</div>').join('')
-      : '—';
+      ? ms
+          .map(
+            (x) =>
+              '<div class="member-row" data-mid="' + escapeHtml(String(x.id || x.name)) + '">' +
+              '<span class="member-name">' + escapeHtml(x.name) + ' · ' + escapeHtml(String(x.role || '')) + '</span>' +
+              '<button class="btn-mini" data-mkick="' + escapeHtml(String(x.id || x.name)) + '">' + t('group.kick') + '</button>' +
+              '</div>'
+          )
+          .join('')
+      : '<div class="muted">' + t('group.memberEmpty') + '</div>';
+    box.querySelectorAll('[data-mkick]').forEach((b) => {
+      b.onclick = async () => {
+        await window.ccarmy.groupKick({ groupId: state.selectedChat.id, memberId: b.dataset.mkick });
+        refreshMembers();
+      };
+    });
+    // 可选牛马下拉（排除已在群里的）
+    const pick = $('member-pick');
+    if (pick) {
+      const inGroup = new Set(ms.map((x) => x.name));
+      const cand = (state.instances || []).filter((i) => !inGroup.has(i.name));
+      pick.innerHTML = cand.length
+        ? cand.map((i) => '<option value="' + escapeHtml(i.id) + '">' + escapeHtml(i.name) + '</option>').join('')
+        : '<option value="">' + t('group.memberEmpty') + '</option>';
+    }
   }
   $('btn-member-add')?.addEventListener('click', async () => {
-    const name = $('member-name')?.value?.trim();
-    if (!name || !state.selectedChat) return;
-    await window.ccarmy.groupInvite({ groupId: state.selectedChat.id, name });
-    $('member-name').value = '';
+    const pick = $('member-pick');
+    if (!pick || !state.selectedChat) return;
+    const instId = pick.value;
+    if (!instId) return;
+    const inst = (state.instances || []).find((i) => i.id === instId);
+    try {
+      const r = await window.ccarmy.groupJoinInstance(state.selectedChat.id, instId);
+      if (r && r.ok === false) {
+        await window.ccarmy.groupInvite({ groupId: state.selectedChat.id, name: (inst && inst.name) || instId });
+      }
+    } catch {
+      await window.ccarmy.groupInvite({ groupId: state.selectedChat.id, name: (inst && inst.name) || instId });
+    }
     refreshMembers();
   });
   
@@ -3274,14 +3567,48 @@
   }
   
 
-  // R. 启动引导
+  // R. 启动引导：让用户「选」语言，而不是手输 locale 字符串
+  function pickOnboardingLocale() {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = t('settings.language');
+      $('modal-body').innerHTML =
+        '<div class="field"><select id="setup-locale">' +
+        '<option value="zh-CN">' + t('settings.localeZh') + '</option>' +
+        '<option value="en-US">' + t('settings.localeEn') + '</option>' +
+        '</select></div>';
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'btn-mini';
+      closeBtn.textContent = t('common.close');
+      closeBtn.onclick = () => { root.classList.add('hidden'); resolve(null); };
+      const okBtn = document.createElement('button');
+      okBtn.className = 'btn-primary';
+      okBtn.textContent = t('common.ok');
+      okBtn.onclick = () => {
+        const v = $('setup-locale') ? $('setup-locale').value : 'zh-CN';
+        root.classList.add('hidden');
+        resolve(v);
+      };
+      acts.append(closeBtn, okBtn);
+      root.classList.remove('hidden');
+    });
+  }
+
   async function maybeShowSetup() {
     const st = await window.ccarmy.setupState().catch(() => null);
     if (!st || st.done) return;
-    const locale = await uiPrompt(t('settings.language'), 'zh-CN');
-    if (locale) await window.ccarmy.setupComplete({ locale });
-    else await window.ccarmy.setupComplete({});
-    uiAlert(t('instances.saved'));
+    const pick = await pickOnboardingLocale();
+    if (pick) {
+      await window.ccarmy.setupComplete({ locale: pick }).catch(() => {});
+      if (!state.locale.startsWith(String(pick).slice(0, 2))) {
+        try { await loadI18n(pick); } catch { /* noop */ }
+      }
+      await window.ccarmy.settingsSave({ locale: pick }).catch(() => {});
+    } else {
+      await window.ccarmy.setupComplete({}).catch(() => {});
+    }
   }
   maybeShowSetup();
 
@@ -3301,17 +3628,61 @@
   });
   
 
-  $('btn-kb-go')?.addEventListener('click', async () => {
-    const q = $('kb-q').value.trim();
-    if (!q) return;
-    const r = await window.ccarmy.knowledgeQuery(q);
+  /** 知识库检索：结果可点击跳转（跳到聊天搜索）并可删除 */
+  async function runKbQuery(q) {
+    const out = $('kb-out');
+    if (!out) return;
+    const r = await window.ccarmy.knowledgeQuery(q).catch(() => null);
     const det = await window.ccarmy.kbDetail(q).catch(() => null);
-    $('kb-out').innerHTML =
-      '<div>' + escapeHtml((r?.entities || []).map((e) => e.name).join(', ') || '—') + '</div>' +
-      '<div>' + escapeHtml((r?.events || []).map((e) => e.title).join(' | ') || '—') + '</div>' +
-      (det?.entities?.length
-        ? '<div style="margin-top:6px">' + det.entities.slice(0, 3).map((e) => escapeHtml(e.name) + ' [' + e.kind + ']').join(', ') + '</div>'
-        : '');
+    const ents = (r && r.entities) || (det && det.entities) || [];
+    const evs = (r && r.events) || [];
+    const rows = [];
+    ents.forEach((e) => {
+      const id = String(e.id || e.name);
+      rows.push(
+        '<div class="kb-row"><button class="kb-link" data-kbent="' + escapeHtml(id) + '">' +
+          escapeHtml(e.name || id) + '</button><span class="muted" style="font-size:11px">' + escapeHtml(String(e.kind || '')) + '</span>' +
+          '<button class="btn-mini" data-kbdel="entity" data-kbid="' + escapeHtml(id) + '">×</button></div>'
+      );
+    });
+    evs.forEach((e) => {
+      const id = String(e.id || e.title);
+      rows.push(
+        '<div class="kb-row"><button class="kb-link" data-kbev="' + escapeHtml(id) + '">' +
+          escapeHtml(e.title || id) + '</button>' +
+          '<button class="btn-mini" data-kbdel="event" data-kbid="' + escapeHtml(id) + '">×</button></div>'
+      );
+    });
+    out.innerHTML = rows.length ? rows.join('') : '<div class="muted">' + t('knowledge.empty') + '</div>';
+    // 点击 → 跳到聊天搜索（把关键词带过去）
+    out.querySelectorAll('.kb-link').forEach((b) => {
+      b.onclick = () => {
+        const kw = b.textContent || '';
+        showSearchPopup();
+        setTimeout(() => {
+          const inp = $('search-popup-input');
+          if (!inp) return;
+          inp.value = kw;
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+        }, 80);
+      };
+    });
+    // 删除
+    out.querySelectorAll('[data-kbdel]').forEach((b) => {
+      b.onclick = async () => {
+        const kind = b.dataset.kbdel;
+        const id = b.dataset.kbid;
+        if (!(await uiConfirm(t('knowledge.delete') + ': ' + id + '?'))) return;
+        const rr = await window.ccarmy.kbDelete({ kind, id }).catch(() => null);
+        if (rr && rr.ok === false) uiAlert(String(rr.error || ''));
+        runKbQuery(q);
+      };
+    });
+  }
+
+  $('btn-kb-go')?.addEventListener('click', () => {
+    const q = $('kb-q').value.trim();
+    if (q) void runKbQuery(q);
   });
 
   // 加入项目/群聊：扫码或粘贴链接
@@ -3428,7 +3799,7 @@
     if (__loopTick % 5 === 0) raf(() => { refreshSessionBoard(); refreshMembers(); });
     if (__loopTick % 6 === 0) raf(checkLastError);
     if (__loopTick % 8 === 0) raf(refreshJoinBadge);
-    if (__loopTick % 15 === 0) raf(saveState);
+    if (__loopTick % 15 === 0) raf(() => window.__saveState?.());
   }, 5000);
   const __mainLoop = true;
 

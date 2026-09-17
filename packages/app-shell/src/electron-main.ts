@@ -1443,6 +1443,86 @@ ipcMain.handle('ccarmy:state-load', () => {
 });
 
 
+
+// ── 知识库删除 ──
+ipcMain.handle('ccarmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: string }) => {
+  try {
+    if (!knowledge) return { ok: false, error: 'kb not ready' };
+    const removed = payload?.kind === 'event' ? knowledge.removeEvent(payload.id) : knowledge.removeEntity(payload.id);
+    return { ok: removed };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+// ── 通用：把文本保存到文件（CSV / Markdown 等）──
+ipcMain.handle('ccarmy:save-text', async (_e, payload: { defaultName?: string; content: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
+  try {
+    if (!win) return { ok: false, error: 'no window' };
+    const r = await dialog.showSaveDialog(win, {
+      defaultPath: payload?.defaultName || 'ccarmy-export.txt',
+      filters: payload?.filters || [{ name: 'Text', extensions: ['txt'] }],
+    });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    fs.writeFileSync(r.filePath, String(payload?.content ?? ''), 'utf8');
+    return { ok: true, path: r.filePath };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+// ── 卡顿自检：主进程 CPU / 内存 / 事件循环延迟 ──
+let __diagPrevCpu: NodeJS.CpuUsage | null = null;
+let __diagPrevAt = Date.now();
+ipcMain.handle('ccarmy:diagnostics', async () => {
+  const now = Date.now();
+  const cpu = process.cpuUsage();
+  const dtMs = Math.max(1, now - __diagPrevAt);
+  let cpuPercent = 0;
+  if (__diagPrevCpu) {
+    const du = (cpu.user - __diagPrevCpu.user) + (cpu.system - __diagPrevCpu.system); // 微秒
+    cpuPercent = Math.round((du / 1000 / dtMs) * 100);
+  }
+  __diagPrevCpu = cpu;
+  __diagPrevAt = now;
+
+  // 事件循环延迟：连续 setTimeout(0) 采样
+  const lag = await new Promise<number>((resolve) => {
+    const samples: number[] = [];
+    let n = 0;
+    const tick = () => {
+      const t0 = process.hrtime.bigint();
+      setImmediate(() => {
+        const t1 = process.hrtime.bigint();
+        samples.push(Number(t1 - t0) / 1e6);
+        if (++n >= 20) {
+          samples.sort((x, y) => x - y);
+          const mid = samples[Math.floor(samples.length / 2)] ?? 0;
+          resolve(Math.round(mid * 10) / 10);
+        } else {
+          tick();
+        }
+      });
+    };
+    tick();
+  });
+
+  const mem = process.memoryUsage();
+  return {
+    ok: true,
+    pid: process.pid,
+    uptimeSec: Math.round(process.uptime()),
+    cpuPercent,
+    loopLagMs: lag,
+    rssMb: Math.round(mem.rss / 1048576),
+    heapUsedMb: Math.round(mem.heapUsed / 1048576),
+    handles: (process as unknown as { _getActiveHandles?: () => unknown[] })._getActiveHandles?.()?.length ?? 0,
+    requests: (process as unknown as { _getActiveRequests?: () => unknown[] })._getActiveRequests?.()?.length ?? 0,
+    nodeVersion: process.versions.node,
+    electronVersion: process.versions.electron,
+  };
+});
+
 // ── D. ASR 语音转文字（调用 DeepSeek 兼容接口的 audio 端点；失败返回 null） ──
 ipcMain.handle('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
   try {
@@ -1513,6 +1593,9 @@ ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
 
 // ── J. 托盘 ──
 let tray: import('electron').Tray | null = null;
+let trayOffWorkLabel = '下班';
+let exportHeaderLabel = '导出自';
+let exportMeLabel = '我';
 function createTray() {
   if (tray) return;
   // 用真实 logo 生成托盘图标（16/32 均可，Windows 托盘实际显示 16px）
@@ -1530,11 +1613,7 @@ function createTray() {
   const t = new Tray(img);
   t.setToolTip('无限牛马 CCArmy');
   // 托盘菜单：只有一个「下班」（= 退出）
-  t.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: '下班', click: () => { app.quit(); } },
-    ])
-  );
+  t.setContextMenu(Menu.buildFromTemplate([{ label: trayOffWorkLabel, click: () => { app.quit(); } }]));
   t.on('double-click', () => {
     if (!win) { createWindow(); return; }
     if (win.isMinimized()) win.restore();
@@ -1554,9 +1633,17 @@ ipcMain.handle('ccarmy:tray-init', () => {
 
 
 // 托盘提示语由渲染层按当前语言下发（logo 文案随语言变化）
-ipcMain.handle('ccarmy:tray-tooltip', (_e, text: string) => {
+ipcMain.handle('ccarmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?: string; header?: string; me?: string }) => {
   try {
-    tray?.setToolTip(String(text || '').slice(0, 120));
+    const p = typeof payload === 'string' ? { text: payload } : payload || {};
+    if (p.text) tray?.setToolTip(String(p.text).slice(0, 120));
+    if (p.offWork && p.offWork !== trayOffWorkLabel) {
+      trayOffWorkLabel = String(p.offWork);
+      const { Menu } = require('electron');
+      tray?.setContextMenu(Menu.buildFromTemplate([{ label: trayOffWorkLabel, click: () => { app.quit(); } }]));
+    }
+    if (p.header) exportHeaderLabel = String(p.header);
+    if (p.me) exportMeLabel = String(p.me);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: String(e) };
@@ -1571,11 +1658,11 @@ ipcMain.handle('ccarmy:export-session', (_e, payload: { title: string; messages:
     const lines = [
       '# ' + payload.title,
       '',
-      '> 导出自 CCArmy · ' + new Date().toLocaleString(),
+      '> ' + exportHeaderLabel + ' CCArmy · ' + new Date().toLocaleString(),
       '',
     ];
     for (const msg of payload.messages) {
-      const who = msg.role === 'me' ? '我' : payload.title;
+      const who = msg.role === 'me' ? exportMeLabel : payload.title;
       const time = msg.ts ? new Date(msg.ts).toLocaleString() : '';
       lines.push(`**${who}** ${time}`);
       lines.push('');

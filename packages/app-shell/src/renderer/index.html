@@ -16,17 +16,17 @@
         <button id="btn-always-top" title="置顶窗口" aria-label="always on top" data-i18n-title="tip.pin">
           <svg class="tb-svg" viewBox="0 0 100 100" aria-hidden="true"><rect x="18" y="14" width="64" height="12" rx="6" fill="currentColor"/><polygon points="32,26 68,26 58,58 42,58" fill="none" stroke="currentColor" stroke-width="9" stroke-linejoin="round"/><rect x="45" y="58" width="10" height="28" rx="5" fill="currentColor"/></svg>
         </button>
-        <button id="btn-ui-refresh" title="刷新并清除缓存" aria-label="refresh">
+        <button id="btn-ui-refresh" title="刷新并清除缓存" aria-label="refresh" data-i18n-title="tip.refresh">
           <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.7 0 3.2.7 4.2 1.9V3h1.5v4.5H9.2V6.2h1.9A4 4 0 1 0 12 8h1.5z"/></svg>
         </button>
         <span class="tb-sep" aria-hidden="true"></span>
-        <button id="btn-win-min" title="最小化" aria-label="minimize">
+        <button id="btn-win-min" title="最小化" aria-label="minimize" data-i18n-title="tip.min">
           <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 7.5h10v1H3v-1z"/></svg>
         </button>
-        <button id="btn-win-max" title="最大化" aria-label="maximize">
+        <button id="btn-win-max" title="最大化" aria-label="maximize" data-i18n-title="tip.max">
           <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v8H4V4zm1 1v6h6V5H5z"/></svg>
         </button>
-        <button id="btn-win-close" class="tb-close" title="关闭" aria-label="close">
+        <button id="btn-win-close" class="tb-close" title="关闭" aria-label="close" data-i18n-title="tip.close">
           <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
         </button>
       </div>
@@ -36,7 +36,7 @@
       <div class="rail-top">
         <button class="rail-item" data-nav="me" data-i18n-title="tip.me">
           <img class="avatar-img hidden" id="selfAvatarImg" alt="" />
-          <span class="avatar" id="selfAvatar">我</span>
+          <span class="avatar" id="selfAvatar" data-i18n="nav.avatar">我</span>
         </button>
         <button class="rail-item active" data-nav="singleAi" data-i18n-title="tip.singleAi">
           <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M14,78 C14,60 24,54 34,54 C40,54 45,56 49,60"/><rect x="58" y="26" width="24" height="24" rx="4"/><circle cx="70" cy="38" r="3" fill="currentColor"/><line x1="70" y1="26" x2="70" y2="18"/><circle cx="70" cy="16" r="3" fill="currentColor"/></g></svg>
@@ -168,7 +168,7 @@
           </footer>
         </section>
         <aside id="panel-col">
-          <div id="panel-resizer" title="拖动调整宽度"></div>
+          <div id="panel-resizer" title="拖动调整宽度" data-i18n-title="tip.dragWidth"></div>
 
           <!-- 进度（折叠：百分比条；展开：任务列表） -->
           <div class="panel-block">
@@ -179,11 +179,11 @@
               <span class="chev">›</span>
             </div>
             <ul id="task-list" class="task-list hidden">
-              <li class="task-done">整理周报 <span class="dot done"></span></li>
-              <li class="task-fail">接口对接 <span class="dot fail"></span></li>
-              <li class="task-active">值班编排 <span class="dot active"></span></li>
-              <li>知识库归档 <span class="dot"></span></li>
-              <li class="task-abandoned">旧方案验证 <span class="dot fail"></span></li>
+              <li class="task-done"><span data-i18n="panel.taskDemo.1"></span> <span class="dot done"></span></li>
+              <li class="task-fail"><span data-i18n="panel.taskDemo.2"></span> <span class="dot fail"></span></li>
+              <li class="task-active"><span data-i18n="panel.taskDemo.3"></span> <span class="dot active"></span></li>
+              <li><span data-i18n="panel.taskDemo.4"></span> <span class="dot"></span></li>
+              <li class="task-abandoned"><span data-i18n="panel.taskDemo.5"></span> <span class="dot fail"></span></li>
             </ul>
           </div>
 
@@ -204,8 +204,8 @@
             <h3 data-i18n="group.members"></h3>
             <div id="members-box" class="muted">—</div>
             <div style="margin-top:6px;display:flex;gap:6px">
-              <input id="member-name" style="flex:1" placeholder=""/>
-              <button class="btn-mini" id="btn-member-add">+</button>
+              <select id="member-pick" style="flex:1" data-i18n-title="group.pickInstance"></select>
+              <button class="btn-mini" id="btn-member-add" data-i18n="group.pullIn"></button>
             </div>
           </div>
 
@@ -246,10 +246,14 @@
           <div class="panel-block">
             <h3 data-i18n="metrics.title"></h3>
             <div id="metrics-box" class="muted">—</div>
-          </div>
-          <div class="panel-block">
-            <h3 data-i18n="cost.title"></h3>
-            <div id="cost-box" class="muted">—</div>
+            <div class="panel-toggle" id="cost-toggle" style="margin-top:8px">
+              <span data-i18n="cost.title"></span>
+              <span class="chev">›</span>
+            </div>
+            <div id="cost-body" class="hidden">
+              <div id="cost-dash" class="muted"></div>
+              <div style="margin-top:6px"><button class="btn-mini" id="btn-cost-csv" data-i18n="cost.export"></button></div>
+            </div>
           </div>
         </aside>
       </div>

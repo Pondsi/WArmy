@@ -399,7 +399,7 @@ body.platform-darwin .tb-mac-extra {
 .msg.me .bubble { background: var(--me-bubble); color: #111; }
 [data-theme="dark"] .msg.me .bubble { color: #e8ffe8; }
 
-.composer { background: var(--list-bg); padding: 0 12px 12px; }
+.composer { background: transparent; padding: 0 12px 12px; }
 .composer-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .urgency { display: flex; gap: 6px; flex-wrap: wrap; }
 .urgency button, .btn-tool, .btn-ghost, .btn-mini, .btn-primary, .btn-stop {
@@ -610,7 +610,7 @@ body.platform-darwin .tb-mac-extra {
 /* Queue bar */
 .queue-bar {
   background: var(--queue-bg);
-  border-top: 1px solid var(--queue-border);
+  border-top: none;
   padding: 8px 12px;
   max-height: 140px;
   overflow: auto;
@@ -1199,3 +1199,41 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .about-sub { margin-top: 0; }
 .about-ver-line { margin-top: 2px; }
 .brand-logo { width: 84px; height: 48px; object-fit: fill; }
+
+/* ── 模型管理：调用链拖拽 / 供应商与延迟 ── */
+.mgr-chain li[draggable='true'] { cursor: grab; }
+.mgr-chain li.dragging { opacity: 0.45; }
+.mgr-chain li.drop-target { box-shadow: inset 0 2px 0 var(--accent); }
+.mgr-chain .mgr-chain-meta { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.mgr-chain .mgr-chain-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mgr-add-row { display: flex; gap: 6px; margin-top: 6px; }
+.model-pick-list {
+  max-height: 240px; overflow: auto; border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 8px; margin: 8px 0;
+}
+.model-pick-list label { display: block; padding: 3px 0; font-size: 13px; }
+
+/* ── 群成员行 ── */
+.member-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+.member-row .member-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── 知识库结果行 ── */
+.kb-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.kb-link {
+  flex: 1; text-align: left; border: none; background: transparent;
+  color: var(--accent); cursor: pointer; font: inherit; font-size: 12px;
+  padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.kb-link:hover { text-decoration: underline; }
+/* ── 成本明细表 ── */
+.cost-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.cost-table th, .cost-table td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+.cost-table th { color: var(--muted); font-weight: 500; }
+.cost-sub { margin: 6px 0 2px; font-size: 11px; color: var(--muted); }
+/* ── 诊断面板 ── */
+.diag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 8px 0; }
+.diag-cell { background: var(--hover); border-radius: 8px; padding: 8px 10px; }
+.diag-cell .k { font-size: 11px; color: var(--muted); }
+.diag-cell .v { font-size: 15px; font-weight: 600; margin-top: 2px; }
+.diag-verdict { font-size: 12px; margin-top: 6px; }
+.diag-verdict.bad { color: var(--danger); }

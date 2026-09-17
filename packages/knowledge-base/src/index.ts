@@ -80,6 +80,30 @@ export class KnowledgeBase {
     return e;
   }
 
+  /** 删除实体（并解除事件里的引用） */
+  removeEntity(id: string): boolean {
+    if (!this.entities.has(id)) return false;
+    this.entities.delete(id);
+    for (const ev of this.events.values()) {
+      const i = ev.entityIds.indexOf(id);
+      if (i >= 0) ev.entityIds.splice(i, 1);
+    }
+    this.save();
+    return true;
+  }
+
+  /** 删除事件（并解除实体里的引用） */
+  removeEvent(id: string): boolean {
+    if (!this.events.has(id)) return false;
+    this.events.delete(id);
+    for (const ent of this.entities.values()) {
+      const i = ent.eventIds.indexOf(id);
+      if (i >= 0) ent.eventIds.splice(i, 1);
+    }
+    this.save();
+    return true;
+  }
+
   addEvent(ev: KnowledgeEvent): KnowledgeEvent {
     this.events.set(ev.id, ev);
     for (const eid of ev.entityIds) {

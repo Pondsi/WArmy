@@ -148,6 +148,9 @@ contextBridge.exposeInMainWorld('ccarmy', {
   assetsFeedback: (id, good) => ipcRenderer.invoke('ccarmy:assets-feedback', id, good),
   assetsSweep: () => ipcRenderer.invoke('ccarmy:assets-sweep'),
   kbFromChat: (payload) => ipcRenderer.invoke('ccarmy:kb-from-chat', payload),
+  kbDelete: (payload) => ipcRenderer.invoke('ccarmy:kb-delete', payload),
+  saveText: (payload) => ipcRenderer.invoke('ccarmy:save-text', payload),
+  diagnostics: () => ipcRenderer.invoke('ccarmy:diagnostics'),
   winAlwaysOnTop: (on) => ipcRenderer.invoke('ccarmy:win-always-on-top', on),
   platformInfo: () => ipcRenderer.invoke('ccarmy:platform'),
 });
