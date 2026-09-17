@@ -81,7 +81,28 @@
     theme: 'light',
     accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#07c160',
     urgent: 'P2',
+    providers: [
+      { name: 'DeepSeek', url: 'api.deepseek.com', key: '***', configured: true },
+      { name: 'Ollama 本地', url: '127.0.0.1:11434', key: '', configured: false },
+    ],
+    smtp: { host: '', port: '465', user: '', pass: '', from: '' },
+    mesh: { port: 7788, running: false, peers: 0 },
+    notifyDone: true,
+    notifyReq: true,
+    notifyErr: true,
   };
+
+  // ── HSL 工具 ──
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => {
+      const k = (n + h / 30) % 12;
+      const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+      return Math.round(255 * color).toString(16).padStart(2, '0');
+    };
+    return '#' + f(0) + f(8) + f(4);
+  }
 
   // ── 通用片段 ──
   const avHtml = (name, preset, cls) => {
@@ -336,6 +357,16 @@
       about: t('me.about'),
     };
     let body = '';
+    // ── 主题色板（17x3=51 色）──
+    const HUES = [0, 20, 40, 60, 80, 100, 120, 150, 180, 200, 220, 240, 260, 280, 300, 320, 340];
+    const palette = HUES.map((h) => {
+      const l1 = 55, l2 = 42, l3 = 30;
+      return [hslToHex(h, 58, l1), hslToHex(h, 66, l2), hslToHex(h, 74, l3)];
+    });
+    const flatColors = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < HUES.length; c++) flatColors.push(palette[c][r]);
+    const swatchHtml = flatColors.map((c) => '<button data-color="' + c + '" style="width:100%;aspect-ratio:1;border-radius:50%;background:' + c + ';border:2px solid ' + (c === state.accent ? 'var(--ink)' : 'transparent') + ';cursor:pointer;padding:0"></button>').join('');
+
     if (group === 'appearance') {
       body = '<div class="card"><div class="card-title">' + esc(t('me.language')) + '</div>' +
         cellHtml('中文', state.locale === 'zh-CN' ? '✓' : '', 'lang-zh') +
@@ -345,25 +376,114 @@
         cellHtml(t('me.dark'), state.theme === 'dark' ? '✓' : '', 'theme-dark') +
         cellHtml(t('me.system'), state.theme === 'system' ? '✓' : '', 'theme-system') + '</div>' +
         '<div class="card"><div class="card-title">' + esc(t('me.accent')) + '</div>' +
-        '<div class="cell"><span class="label">' + esc(state.accent) + '</span><span class="swatch"></span></div></div>';
+        '<div style="display:grid;grid-template-columns:repeat(17,1fr);gap:5px;padding:10px 14px">' + swatchHtml + '</div>' +
+        '<div style="padding:0 14px 12px;text-align:center"><button data-act="custom-color" style="font-size:13px;color:var(--accent);background:none;border:none;cursor:pointer">自定义颜色 ›</button></div>' +
+        '</div>';
     } else if (group === 'provider') {
-      body = '<div class="card">' + cellHtml('DeepSeek', '已配置') + cellHtml('Ollama 本地', '未配置') + '</div>';
+      const rows = state.providers || [{ name: 'DeepSeek', url: 'api.deepseek.com', key: '***', configured: true }, { name: 'Ollama 本地', url: '127.0.0.1:11434', key: '', configured: false }];
+      body = '<div class="card"><div class="card-title">供应商列表</div>' +
+        rows.map((p, i) => '<div class="cell" data-edit-prov="' + i + '"><span class="label">' + esc(p.name) + '</span><span class="value">' + (p.configured ? '已配置' : '未配置') + '</span><span class="chev">›</span></div>').join('') +
+        '<div class="cell" data-act="add-provider"><span class="label" style="color:var(--accent)">+ 添加供应商</span></div>' +
+        '</div>';
     } else if (group === 'smtp') {
-      body = '<div class="card">' + cellHtml('账号数量', '0 / 10') + cellHtml('最近验证', '—') + '</div>';
+      const smtp = state.smtp || { host: '', port: '465', user: '', pass: '', from: '' };
+      body = '<div class="card"><div class="card-title">邮箱 SMTP 设置</div>' +
+        '<div style="padding:10px 14px;display:flex;flex-direction:column;gap:10px">' +
+        '<label style="font-size:13px">SMTP 服务器<input id="smtp-host" value="' + esc(smtp.host) + '" placeholder="smtp.example.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">端口<input id="smtp-port" value="' + esc(smtp.port) + '" placeholder="465" type="number" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">用户名<input id="smtp-user" value="' + esc(smtp.user) + '" placeholder="your@email.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">授权码<input id="smtp-pass" value="" type="password" placeholder="输入授权码" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">发件人名称<input id="smtp-from" value="' + esc(smtp.from) + '" placeholder="无限牛马通知" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '</div><div style="padding:0 14px 12px"><button data-act="verify-smtp" class="btn-primary" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font:inherit;cursor:pointer">验证邮箱设置</button></div></div>' +
+        '<div class="card"><div class="card-title">邮件通知</div>' +
+        cellHtml('完成通知', state.notifyDone ? '✓' : '', 'notify-done') +
+        cellHtml('请求通知', state.notifyReq ? '✓' : '', 'notify-req') +
+        cellHtml('错误通知', state.notifyErr ? '✓' : '', 'notify-err') + '</div>';
     } else if (group === 'mesh') {
-      body = '<div class="card">' + cellHtml('监听端口', '7788') + cellHtml('已知节点', '0') + '</div>';
+      const mesh = state.mesh || { port: 7788, running: false, peers: 0 };
+      body = '<div class="card"><div class="card-title">多节点组网</div>' +
+        cellHtml('监听端口', String(mesh.port)) +
+        cellHtml('状态', mesh.running ? '运行中' : '未启动') +
+        cellHtml('已连接节点', String(mesh.peers)) +
+        '<div style="padding:10px 14px 12px"><button data-act="toggle-mesh" style="width:100%;padding:10px;border:none;border-radius:8px;background:' + (mesh.running ? 'var(--danger)' : 'var(--accent)') + ';color:#fff;font:inherit;cursor:pointer">' + (mesh.running ? '停止组网' : '启动组网') + '</button></div>' +
+        '</div>' +
+        '<div class="card"><div class="card-title">邀请加入</div>' +
+        cellHtml('生成邀请码', '', 'gen-invite') +
+        cellHtml('扫码加入', '', 'scan-invite') + '</div>';
     } else {
-      body = '<div class="card">' + cellHtml(t('me.version'), '0.1.0') + cellHtml(t('me.checkUpdate'), '') +
-        cellHtml(t('me.opensource'), 'MIT 等') + cellHtml(t('me.copyright'), '© 2026 Pondsi') +
+      body = '<div class="card"><div class="card-title">' + esc(t('me.about')) + '</div>' +
+        cellHtml(t('me.version'), 'v0.1.0') +
+        cellHtml(t('me.checkUpdate'), '检查更新', 'check-update') +
+        cellHtml('Electron', '33.2.0') +
+        cellHtml('Chromium', '130.0.6723.191') +
+        cellHtml('Node.js', '24.20.0') + '</div>' +
+        '<div class="card"><div class="card-title">开源信息</div>' +
+        cellHtml('许可证', 'MIT') +
+        cellHtml('作者', 'Pondsi') +
+        cellHtml('版权', '© 2026 Pondsi') +
         cellHtml(t('me.deviceId'), '884024787') + '</div>';
     }
     const el = push(barHtml(map[group], '', { back: true }) + '<div class="body">' + body + '</div>');
+    // 色板点击
+    el.querySelectorAll('[data-color]').forEach((b) => {
+      b.addEventListener('click', () => {
+        state.accent = b.dataset.color;
+        document.documentElement.style.setProperty('--accent', state.accent);
+        document.documentElement.style.setProperty('--me-bubble', state.accent);
+        openSetting('appearance');
+      });
+    });
+    // SMTP 输入保存
+    ['smtp-host', 'smtp-port', 'smtp-user', 'smtp-pass', 'smtp-from'].forEach((id) => {
+      const inp = el.querySelector('#' + id);
+      if (inp) inp.addEventListener('change', () => {
+        const key = id.replace('smtp-', '');
+        state.smtp[key] = inp.value;
+      });
+    });
     wirePage(el, {
       'lang-zh': () => setLocale('zh-CN'),
       'lang-en': () => setLocale('en-US'),
       'theme-light': () => setTheme('light'),
       'theme-dark': () => setTheme('dark'),
       'theme-system': () => setTheme('system'),
+      'custom-color': () => {
+        const inp = document.createElement('input');
+        inp.type = 'color'; inp.value = state.accent;
+        inp.onchange = () => { state.accent = inp.value; document.documentElement.style.setProperty('--accent', state.accent); document.documentElement.style.setProperty('--me-bubble', state.accent); openSetting('appearance'); };
+        inp.click();
+      },
+      'verify-smtp': () => {
+        alert('SMTP 验证功能需要桌面端配合，手机端为外观预览。');
+      },
+      'toggle-mesh': () => {
+        state.mesh.running = !state.mesh.running;
+        openSetting('mesh');
+      },
+      'notify-done': () => { state.notifyDone = !state.notifyDone; openSetting('smtp'); },
+      'notify-req': () => { state.notifyReq = !state.notifyReq; openSetting('smtp'); },
+      'notify-err': () => { state.notifyErr = !state.notifyErr; openSetting('smtp'); },
+      'add-provider': () => {
+        const name = prompt('供应商名称');
+        if (name) {
+          state.providers.push({ name, url: '', key: '', configured: false });
+          openSetting('provider');
+        }
+      },
+      'check-update': () => alert('当前已是最新版本 v0.1.0'),
+      'gen-invite': () => alert('邀请码已复制到剪贴板'),
+      'scan-invite': () => alert('请使用桌面端扫码功能'),
+    });
+    // 供应商编辑点击
+    el.querySelectorAll('[data-edit-prov]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const idx = parseInt(b.dataset.editProv);
+        const p = state.providers[idx];
+        if (!p) return;
+        const url = prompt('Base URL', p.url);
+        if (url !== null) { p.url = url; p.configured = !!url; }
+        openSetting('provider');
+      });
     });
   }
 
