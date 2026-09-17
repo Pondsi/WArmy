@@ -1,5 +1,7 @@
-﻿/**
- * Electron 主进�?�?零原生模�? * 注意：Windows 中文路径�?fork 子进程可能乱码，memory ipc 先拷�?userData（ASCII�? */
+/**
+ * Electron 主进程 — 零原生模块
+ * 注意：Windows 中文路径下 fork 子进程可能乱码，memory ipc 先拷到 userData（ASCII）
+ */
 import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -86,7 +88,7 @@ let discoverTimer: NodeJS.Timeout | null = null;
 const chatHistories = new Map<string, ChatMessage[]>();
 /** 运行中的插入指令级别 */
 const insertMode = new Map<string, 'outer' | 'inner'>();
-/** Provider 配置（由设置 UI 写入�?*/
+/** Provider 配置（由设置 UI 写入） */
 let providerCfg = {
   presetId: 'deepseek',
   apiKey: '',
@@ -109,7 +111,7 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
     throw new Error('memory-os dist not found');
   }
   fs.mkdirSync(runtimeDir, { recursive: true });
-  // 拷贝 dist 下全�?js（ipc + index + map 可选）
+  // 拷贝 dist 下全部 js（ipc + index + map 可选）
   for (const f of fs.readdirSync(src)) {
     if (!f.endsWith('.js') && !f.endsWith('.js.map')) continue;
     fs.copyFileSync(path.join(src, f), path.join(runtimeDir, f));
@@ -119,7 +121,7 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
   if (fs.existsSync(srcPkg)) {
     fs.copyFileSync(srcPkg, path.join(runtimeDir, 'package.json'));
   }
-  // 链接/复制 better-sqlite3：从 memory-os �?node_modules 解析
+  // 链接/复制 better-sqlite3：从 memory-os 的 node_modules 解析
   const memPkgDir = path.dirname(src);
   const nmSrc = path.join(memPkgDir, 'node_modules');
   const nmDst = path.join(runtimeDir, 'node_modules');
@@ -127,7 +129,8 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
     try {
       fs.symlinkSync(nmSrc, nmDst, 'junction');
     } catch {
-      // 回退：不链，依赖 require 从包目录向上找（可能失败�?      boot('symlink node_modules failed');
+      // 回退：不链，依赖 require 从包目录向上找（可能失败）
+      boot('symlink node_modules failed');
     }
   }
   return { ipcEntry: path.join(runtimeDir, 'ipc.js'), dataDir };
@@ -137,7 +140,8 @@ async function bootstrap() {
   p1 = await createP1Runtime({
     instancesRoot: path.join(app.getPath('userData'), 'instances'),
     onApprove: async (req) => {
-      // 安全模式 full 时自动放行；normal/strict 向渲染进程请求审�?      const mode = p1?.security.getMode();
+      // 安全模式 full 时自动放行；normal/strict 向渲染进程请求审批
+      const mode = p1?.security.getMode();
       if (mode === 'full') return { action: req.action, scope: 'once', allowed: true };
       const id = 'ap-' + ++approvalSeq;
       return new Promise((resolve) => {
@@ -190,6 +194,8 @@ function startMemoryAsync() {
   }
 }
 
+let forceQuit = false;
+
 function createWindow() {
   const isMac = process.platform === 'darwin';
   win = new BrowserWindow({
@@ -198,7 +204,8 @@ function createWindow() {
     minWidth: 960,
     minHeight: 600,
     title: '无限牛马',
-    // macOS：系统原生标题栏与红绿灯；Windows/Linux：无边框 + 自定义窗�?    frame: isMac,
+    // macOS：系统原生标题栏与红绿灯；Windows/Linux：无边框 + 自定义窗控
+    frame: isMac,
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
     trafficLightPosition: isMac ? { x: 12, y: 10 } : undefined,
     backgroundColor: '#ededed',
@@ -226,7 +233,8 @@ function createWindow() {
   });
 }
 
-// 应用身份：影响任务栏悬停/右键菜单里显示的名称（默认会显示 Electron�?app.setName('无限牛马');
+// 应用身份：影响任务栏悬停/右键菜单里显示的名称（默认会显示 Electron）
+app.setName('无限牛马');
 if (process.platform === 'win32') app.setAppUserModelId('com.pondsi.ccarmy');
 
 app
@@ -251,8 +259,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-    forceQuit = true;
-    void (async () => {
+  void (async () => {
     try {
       await memory?.stop();
       await p1?.instances.stopAll();
@@ -311,7 +318,7 @@ ipcMain.handle('ccarmy:memory-append', async (_e, body: string) => {
   }
 });
 
-// ── i18n：文案全部在独立 json，中文产品名「无限牛马」，其余「CCArmy�?──
+// ── i18n：文案全部在独立 json，中文产品名「无限牛马」，其余「CCArmy」 ──
 function i18nDir(): string {
   const candidates = [
     path.join(__dirname, 'i18n'),
@@ -330,7 +337,8 @@ ipcMain.handle('ccarmy:i18n', (_e, locale: string) => {
   } catch {
     strings = {};
   }
-  // 产品名：仅中文显示「无限牛马�?  strings['app.displayName'] = loc === 'zh-CN' ? (strings['app.zhName'] || '无限牛马') : (strings['app.enName'] || 'CCArmy');
+  // 产品名：仅中文显示「无限牛马」
+  strings['app.displayName'] = loc === 'zh-CN' ? (strings['app.zhName'] || '无限牛马') : (strings['app.enName'] || 'CCArmy');
   if (loc !== 'zh-CN') {
     // 非中文时列表等处不再用中文名
     strings['app.zhName'] = strings['app.enName'] || 'CCArmy';
@@ -354,7 +362,7 @@ ipcMain.handle('ccarmy:theme-info', () => ({
   themeSource: nativeTheme.themeSource,
 }));
 
-// ── 拉取供应商模型列表（OpenAI 兼容 /models�?──
+// ── 拉取供应商模型列表（OpenAI 兼容 /models） ──
 ipcMain.handle(
   'ccarmy:list-models',
   async (_e, cfg: { protocol: string; baseURL: string; apiKey?: string }) => {
@@ -372,7 +380,7 @@ ipcMain.handle(
   }
 );
 
-// ── 选择本地提示音文�?──
+// ── 选择本地提示音文件 ──
 ipcMain.handle('ccarmy:pick-sound', async () => {
   if (!win) return { ok: false };
   const r = await dialog.showOpenDialog(win, {
@@ -384,7 +392,7 @@ ipcMain.handle('ccarmy:pick-sound', async () => {
   return { ok: true, path: r.filePaths[0] };
 });
 
-// ── 检查更新（占位�?──
+// ── 检查更新（占位） ──
 ipcMain.handle('ccarmy:check-update', async () => {
   return { ok: true, upToDate: true, version: '0.1.0' };
 });
@@ -430,7 +438,7 @@ ipcMain.handle(
 );
 
 ipcMain.handle('ccarmy:group-list', () => {
-  // GroupChatRouter 未暴�?groups 枚举，用 board/session 聚合 + 内部缓存
+  // GroupChatRouter 未暴露 groups 枚举，用 board/session 聚合 + 内部缓存
   return { ok: true };
 });
 
@@ -450,12 +458,14 @@ ipcMain.handle(
       timestamp: Date.now(),
     });
 
-    // 外部群：�?@ 静默（不变量：仅聊天�?    const g = router.getGroup(msg.groupId);
+    // 外部群：无 @ 静默（不变量：仅聊天）
+    const g = router.getGroup(msg.groupId);
     if (g?.type === 'external' && route.action === 'silent') {
       return { ok: true, action: 'silent', reason: route.reason, reply: null };
     }
 
-    // 值班者看板解析（�?duty 写入�?    if (board && route.action !== 'silent') {
+    // 值班者看板解析（仅 duty 写入）
+    if (board && route.action !== 'silent') {
       const parsed = parseBoardCommand(msg.content, msg.groupId);
       if (parsed) {
         try {
@@ -466,7 +476,8 @@ ipcMain.handle(
       }
     }
 
-    // 请求时邮件提醒：仅在该会话勾选了「提醒」时才入�?    const notifyOk = (p1?.instances.list().find((x) => x.id === msg.groupId)?.dutyEligible !== false);
+    // 请求时邮件提醒：仅在该会话勾选了「提醒」时才入队
+    const notifyOk = (p1?.instances.list().find((x) => x.id === msg.groupId)?.dutyEligible !== false);
     const sset = settingsStore?.load();
     const emailOn = sset?.emailNotify?.request !== false || sset?.emailOnRequest;
     if (emailOn && notifyOk) {
@@ -491,7 +502,7 @@ ipcMain.handle(
       /* optional */
     }
 
-    // 值班者调�?LLM 生成回复（有 Key 时）
+    // 值班者调用 LLM 生成回复（有 Key 时）
     let llmReply: string | null = null;
     if (providerCfg.apiKey || providerCfg.protocol === 'ollama') {
       try {
@@ -558,7 +569,7 @@ ipcMain.handle('ccarmy:group-join-instance', (_e, groupId: string, instanceId: s
   return { ok: true };
 });
 
-// ── �?LLM 对话 ──
+// ── 真 LLM 对话 ──
 ipcMain.handle('ccarmy:set-provider', (_e, cfg: Partial<typeof providerCfg>) => {
   providerCfg = { ...providerCfg, ...cfg };
   return { ok: true, providerCfg: { ...providerCfg, apiKey: providerCfg.apiKey ? '***' : '' } };
@@ -579,14 +590,14 @@ ipcMain.handle(
       role?: 'user';
       content: string;
       model?: string;
-      /** 指令插入：outer=外循环后，inner=内循环边�?*/
+      /** 指令插入：outer=外循环后，inner=内循环边界 */
       insertMode?: 'outer' | 'inner';
     }
   ) => {
     const sessionId = msg.sessionId;
     if (msg.insertMode) insertMode.set(sessionId, msg.insertMode);
 
-    // 写入�?CCR
+    // 写入侧 CCR
     const compressed = ccr.beforeLog({ kind: 'message', content: msg.content });
     metrics.recordCcr({
       ts: Date.now(),
@@ -696,7 +707,7 @@ ipcMain.handle('ccarmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst
   return { ok };
 });
 
-// ── 知识�?──
+// ── 知识库 ──
 ipcMain.handle('ccarmy:knowledge-query', (_e, q: string) => {
   return { ok: true, ...(knowledge?.query(q) || { entities: [], events: [] }) };
 });
@@ -737,7 +748,7 @@ ipcMain.handle('ccarmy:get-insert-mode', (_e, sessionId: string) => ({
 ipcMain.handle('ccarmy:metrics-summary', () => ({ ok: true, ...metrics.summary() }));
 ipcMain.handle('ccarmy:metrics-turns', () => ({ ok: true, turns: metrics.lastTurns(20) }));
 
-// ── 设置持久�?──
+// ── 设置持久化 ──
 ipcMain.handle('ccarmy:settings-get', () => ({ ok: true, settings: settingsStore?.load() }));
 ipcMain.handle('ccarmy:settings-save', (_e, partial: Record<string, unknown>) => ({
   ok: true,
@@ -746,7 +757,7 @@ ipcMain.handle('ccarmy:settings-save', (_e, partial: Record<string, unknown>) =>
 
 // ── 本地账号 ──
 
-// ── 本地 SKILL：扫�?/ 删除 ──
+// ── 本地 SKILL：扫描 / 删除 ──
 function skillMdInfo(file: string): { name: string; description: string } {
   let name = '';
   let description = '';
@@ -840,7 +851,7 @@ ipcMain.handle('ccarmy:skills-remove', (_e, id: string) => {
   try {
     for (const { root } of skillRoots()) {
       const dir = path.resolve(root, String(id || ''));
-      // 防目录穿越：必须仍在�?root 之下
+      // 防目录穿越：必须仍在该 root 之下
       if (!dir.startsWith(path.resolve(root) + path.sep)) continue;
       if (!fs.existsSync(dir)) continue;
       fs.rmSync(dir, { recursive: true, force: true });
@@ -853,7 +864,7 @@ ipcMain.handle('ccarmy:skills-remove', (_e, id: string) => {
 });
 
 ipcMain.handle('ccarmy:profile-get', () => ({ ok: true, profile: accountStore?.loadProfile() }));
-// 读自�?package.json 的版本；dev �?app.getVersion() 返回的是 Electron 版本，不可用
+// 读自家 package.json 的版本；dev 下 app.getVersion() 返回的是 Electron 版本，不可用
 function appVersion(): string {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
@@ -864,7 +875,8 @@ function appVersion(): string {
   return app.getVersion();
 }
 
-// 关于页：版本 / 运行�?/ 平台 / 用户 ID 及其签名校验状�?ipcMain.handle('ccarmy:app-info', () => {
+// 关于页：版本 / 运行时 / 平台 / 用户 ID 及其签名校验状态
+ipcMain.handle('ccarmy:app-info', () => {
   const st = accountStore?.idStatus();
   return {
     ok: true,
@@ -909,7 +921,7 @@ ipcMain.handle('ccarmy:save-voice', async (_e, data: { dataUrl: string; ext?: st
   }
 });
 
-// ── 节点 / 邀�?──
+// ── 节点 / 邀请 ──
 ipcMain.handle('ccarmy:nodes-list', () => ({ ok: true, nodes: nodeReg?.list() || [] }));
 ipcMain.handle('ccarmy:nodes-pair', (_e, nodeId: string, name: string) => ({
   ok: true,
@@ -966,7 +978,7 @@ ipcMain.handle('ccarmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: 
   return { ok: true, handle };
 });
 
-// ── 邮件提醒（队列占位，功能待接 SMTP�?──
+// ── 邮件提醒（队列占位，功能待接 SMTP） ──
 ipcMain.handle('ccarmy:email-queue', (_e, mail: { to: string; subject: string; body: string }) => {
   emailQueue.push({ ...mail, ts: Date.now() });
   return { ok: true, pending: emailQueue.length };
@@ -992,7 +1004,7 @@ ipcMain.handle('ccarmy:smtp-list', () => {
   const s = settingsStore?.load();
   const accounts = (s?.smtpAccounts || []).map((a) => ({
     ...a,
-    pass: a.pass ? '•••••••�? : '',
+    pass: a.pass ? '••••••••' : '',
   }));
   return { ok: true, accounts, max: 10 };
 });
@@ -1012,14 +1024,14 @@ ipcMain.handle('ccarmy:smtp-add', (_e, acc: { label: string; host: string; port:
   };
   list.push(full);
   settingsStore!.save({ smtpAccounts: list });
-  return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '•••••••�? : '' })), max: 10 };
+  return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })), max: 10 };
 });
 
 ipcMain.handle('ccarmy:smtp-remove', (_e, id: string) => {
   const s = settingsStore!.load();
   const list = (s.smtpAccounts || []).filter((a) => a.id !== id);
   settingsStore!.save({ smtpAccounts: list });
-  return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '•••••••�? : '' })) };
+  return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
 });
 
 ipcMain.handle('ccarmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; host: string; port: number; secure: boolean; user: string; pass: string }>) => {
@@ -1029,7 +1041,7 @@ ipcMain.handle('ccarmy:smtp-update', (_e, id: string, patch: Partial<{ label: st
   if (!acc) return { ok: false, error: 'not found' };
   Object.assign(acc, patch);
   settingsStore!.save({ smtpAccounts: list });
-  return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '•••••••�? : '' })) };
+  return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
 });
 
 // ── 内网同步 ──
@@ -1091,7 +1103,7 @@ ipcMain.handle(
   }
 );
 
-// ── 多节�?mesh ──
+// ── 多节点 mesh ──
 ipcMain.handle('ccarmy:mesh-start', async (_e, port = 7788) => {
   try {
     await mesh?.stop();
@@ -1171,10 +1183,10 @@ ipcMain.handle('ccarmy:win-maximize', () => {
   if (win.isMaximized()) win.unmaximize();
   else win.maximize();
 });
-ipcMain.handle('ccarmy:win-close', () => { if (win) { win.hide(); } });
+ipcMain.handle('ccarmy:win-close', () => win?.close());
 ipcMain.handle('ccarmy:win-reload', () => {
   if (!win) return { ok: false };
-  // �?HTTP 缓存后重载，避免�?JS/CSS 残留
+  // 清 HTTP 缓存后重载，避免旧 JS/CSS 残留
   const ses = win.webContents.session;
   ses.clearCache().catch(() => {});
   win.webContents.reloadIgnoringCache();
@@ -1195,7 +1207,7 @@ ipcMain.handle('ccarmy:platform', () => ({
 }));
 
 
-// ── P5 短命执行�?──
+// ── P5 短命执行者 ──
 ipcMain.handle('ccarmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
   if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
     return { ok: false, error: 'no key' };
@@ -1250,7 +1262,7 @@ ipcMain.handle('ccarmy:assets-feedback', (_e, id: string, good: boolean) => {
 
 ipcMain.handle('ccarmy:assets-sweep', () => ({ ok: true, n: sweepAssets() }));
 
-// ── P6 知识库：从对话写�?──
+// ── P6 知识库：从对话写入 ──
 ipcMain.handle('ccarmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
   knowledge?.upsertEntity({
     id: 'sess-' + payload.sessionId,
@@ -1316,7 +1328,7 @@ ipcMain.handle('ccarmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end'
   return { ok: true, checkpoint: cp, list: checkpoints.list() };
 });
 
-// ── 6 成本仪表�?──
+// ── 6 成本仪表盘 ──
 ipcMain.handle('ccarmy:cost-summary', () => {
   const m = metrics.summary();
   const estCost = ((m.promptTokens + m.completionTokens) / 1000) * 0.002;
@@ -1401,7 +1413,7 @@ ipcMain.handle('ccarmy:group-orchestrate', async (_e, msg: { groupId: string; co
 });
 
 
-// ── C. 执行者状�?──
+// ── C. 执行者状态 ──
 const executorStatus: Array<{ id: string; name: string; taskId: string; brief: string; status: string; durationMs: number; ts: number }> = [];
 ipcMain.handle('ccarmy:executors-status', () => ({ ok: true, items: executorStatus.slice(-10) }));
 ipcMain.handle('ccarmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
@@ -1441,7 +1453,7 @@ ipcMain.handle('ccarmy:state-load', () => {
 
 
 
-// ── 知识库删�?──
+// ── 知识库删除 ──
 ipcMain.handle('ccarmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: string }) => {
   try {
     if (!knowledge) return { ok: false, error: 'kb not ready' };
@@ -1483,7 +1495,7 @@ ipcMain.handle('ccarmy:diagnostics', async () => {
   __diagPrevCpu = cpu;
   __diagPrevAt = now;
 
-  // 事件循环延迟：连�?setTimeout(0) 采样
+  // 事件循环延迟：连续 setTimeout(0) 采样
   const lag = await new Promise<number>((resolve) => {
     const samples: number[] = [];
     let n = 0;
@@ -1520,7 +1532,7 @@ ipcMain.handle('ccarmy:diagnostics', async () => {
   };
 });
 
-// ── D. ASR 语音转文字（调用 DeepSeek 兼容接口�?audio 端点；失败返�?null�?──
+// ── D. ASR 语音转文字（调用 DeepSeek 兼容接口的 audio 端点；失败返回 null） ──
 ipcMain.handle('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
   try {
     if (!providerCfg.apiKey) return { ok: false, error: 'no key' };
@@ -1590,19 +1602,19 @@ ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
 
 // ── J. 托盘 ──
 let tray: import('electron').Tray | null = null;
-let forceQuit = false;
 let trayOffWorkLabel = '下班';
-let exportHeaderLabel = '导出�?;
-let exportMeLabel = '�?;
+let exportHeaderLabel = '导出自';
+let exportMeLabel = '我';
 function createTray() {
   if (tray) return;
-  // 用真�?logo 生成托盘图标�?6/32 均可，Windows 托盘实际显示 16px�?  const iconPath = path.join(__dirname, 'renderer', 'icons', 'app.ico');
+  // 用真实 logo 生成托盘图标（16/32 均可，Windows 托盘实际显示 16px）
+  const iconPath = path.join(__dirname, 'renderer', 'icons', 'app.ico');
   let img = nativeImage.createFromPath(iconPath);
   if (img.isEmpty()) {
     img = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'app-32.png'));
   }
   if (img.isEmpty()) {
-    // 回退�?6x16 占位
+    // 回退：16x16 占位
     img = nativeImage.createFromBuffer(
       Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKklEQVQ4y2NgGAWjYBSMglEwCkbBKBgFo2AUjIJRMApGwSgYBaNgFIwCAAgQAAF/lPurAAAAAElFTkSuQmCC', 'base64')
     );
@@ -1610,7 +1622,7 @@ function createTray() {
   const t = new Tray(img);
   t.setToolTip('无限牛马 CCArmy');
   // 托盘菜单：只有一个「下班」（= 退出）
-  t.setContextMenu(Menu.buildFromTemplate([{ label: trayOffWorkLabel, click: () => { forceQuit = true; app.quit(); } }]));
+  t.setContextMenu(Menu.buildFromTemplate([{ label: trayOffWorkLabel, click: () => { app.quit(); } }]));
   t.on('double-click', () => {
     if (!win) { createWindow(); return; }
     if (win.isMinimized()) win.restore();
@@ -1629,14 +1641,15 @@ ipcMain.handle('ccarmy:tray-init', () => {
 });
 
 
-// 托盘提示语由渲染层按当前语言下发（logo 文案随语言变化�?ipcMain.handle('ccarmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?: string; header?: string; me?: string }) => {
+// 托盘提示语由渲染层按当前语言下发（logo 文案随语言变化）
+ipcMain.handle('ccarmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?: string; header?: string; me?: string }) => {
   try {
     const p = typeof payload === 'string' ? { text: payload } : payload || {};
     if (p.text) tray?.setToolTip(String(p.text).slice(0, 120));
     if (p.offWork && p.offWork !== trayOffWorkLabel) {
       trayOffWorkLabel = String(p.offWork);
       const { Menu } = require('electron');
-      tray?.setContextMenu(Menu.buildFromTemplate([{ label: trayOffWorkLabel, click: () => { forceQuit = true; app.quit(); } }]));
+      tray?.setContextMenu(Menu.buildFromTemplate([{ label: trayOffWorkLabel, click: () => { app.quit(); } }]));
     }
     if (p.header) exportHeaderLabel = String(p.header);
     if (p.me) exportMeLabel = String(p.me);
@@ -1673,16 +1686,17 @@ ipcMain.handle('ccarmy:export-session', (_e, payload: { title: string; messages:
   }
 });
 
-// ── L. 自动更新（electron-updater 占位�?──
+// ── L. 自动更新（electron-updater 占位） ──
 ipcMain.handle('ccarmy:auto-update-check', async () => {
-  // 无签�?发布源时只返回状态，不实际下�?  return { ok: true, status: 'idle', message: 'no release channel configured' };
+  // 无签名/发布源时只返回状态，不实际下载
+  return { ok: true, status: 'idle', message: 'no release channel configured' };
 });
 ipcMain.handle('ccarmy:auto-update-download', async () => {
   return { ok: false, status: 'skipped', message: 'requires signed release + update server' };
 });
 
 
-// ── M. 群成员管�?──
+// ── M. 群成员管理 ──
 const groupMembers = new Map<string, Array<{ id: string; name: string; role: string; joinedAt: number }>>();
 ipcMain.handle('ccarmy:group-members', (_e, groupId: string) => ({
   ok: true,
@@ -1732,7 +1746,7 @@ ipcMain.handle('ccarmy:ccr-tool-output', (_e, payload: { toolName?: string; cont
 });
 
 
-// ── P. 知识库详�?──
+// ── P. 知识库详情 ──
 ipcMain.handle('ccarmy:kb-detail', (_e, q: string) => {
   const r = knowledge?.query(q) || { entities: [], events: [] };
   return {
@@ -1770,7 +1784,7 @@ ipcMain.handle('ccarmy:setup-complete', (_e, payload: { locale?: string; provide
 });
 
 
-// ── S. 消息搜索（从 memory-os recall�?──
+// ── S. 消息搜索（从 memory-os recall） ──
 ipcMain.handle('ccarmy:search-messages', async (_e, q: string) => {
   try {
     const r = await memory?.recall(q, 20);
@@ -1786,7 +1800,7 @@ ipcMain.handle('ccarmy:plugin-install', (_e, pkg: string) => {
   try {
     const dshHome = path.join(app.getPath('userData'), 'dsh-home');
     const profile = 'ccarmy';
-    // �?pnpm 安装�?profile
+    // 用 pnpm 安装到 profile
     const profileDir = path.join(dshHome, 'profiles', profile);
     fs.mkdirSync(profileDir, { recursive: true });
     const pkgJson = path.join(profileDir, 'package.json');
@@ -1889,16 +1903,17 @@ ipcMain.handle('ccarmy:role-models-get', () => ({ ok: true, roles: roleModels })
 
 // ── 解散群组 ──
 ipcMain.handle('ccarmy:group-dissolve', (_e, groupId: string) => {
-  // 只有创建者可解散（简化：本机节点�?  const g = router.getGroup(groupId);
+  // 只有创建者可解散（简化：本机节点）
+  const g = router.getGroup(groupId);
   if (!g) return { ok: false, error: 'no group' };
-  // �?router 移除
+  // 从 router 移除
   const members = router.listMembers(groupId);
   for (const m of members) router.leave(groupId, m.id);
   audit?.log('group.dissolve', { groupId });
   return { ok: true };
 });
 
-// ── 允许库导�?──
+// ── 允许库导出 ──
 ipcMain.handle('ccarmy:export-allowlist', () => {
   const list = p1?.security.listAllowlist() || [];
   const dir = path.join(app.getPath('userData'), 'permissions');
@@ -1917,7 +1932,7 @@ try {
   /* noop */
 }
 
-// ── 导入 openclaw.json 供应商配�?──
+// ── 导入 openclaw.json 供应商配置 ──
 ipcMain.handle('ccarmy:import-openclaw', () => {
   try {
     const ocPath = path.join(app.getPath('userData'), '..', 'openclaw.json');
@@ -1970,7 +1985,7 @@ ipcMain.handle('ccarmy:asr-ollama', async (_e, payload: { audioBase64: string; m
   } catch (e) { return { ok: false, error: String(e) }; }
 });
 
-// ── 加入请求 / 黑名�?──
+// ── 加入请求 / 黑名单 ──
 const joinRequests: Array<{ id: string; name: string; kind: string; target: string; targetType: string; ts: number; expireAt: number }> = [];
 const blacklist: Array<{ id: string; name: string; blockedAt: number; target: string }> = [];
 ipcMain.handle('ccarmy:join-request', (_e, payload: { name: string; kind: string; target: string; targetType: string }) => {
