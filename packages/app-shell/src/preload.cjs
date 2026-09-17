@@ -54,6 +54,24 @@ contextBridge.exposeInMainWorld('ccarmy', {
   skillsPaths: () => ipcRenderer.invoke('ccarmy:skills-paths'),
   trayTooltip: (text) => ipcRenderer.invoke('ccarmy:tray-tooltip', text),
   profileSave: (p) => ipcRenderer.invoke('ccarmy:profile-save', p),
+  // 身份层（ADR 003）：指纹 / 代次 / 名片 / 换证 / 备份导出
+  identityInfo: () => ipcRenderer.invoke('ccarmy:identity-info'),
+  identityRotate: (payload) => ipcRenderer.invoke('ccarmy:identity-rotate', payload),
+  identityBackupExport: (payload) => ipcRenderer.invoke('ccarmy:identity-backup-export', payload),
+  identityVerifyRotation: (payload) => ipcRenderer.invoke('ccarmy:identity-verify-rotation', payload),
+  identitySetPassphrase: (payload) => ipcRenderer.invoke('ccarmy:identity-set-passphrase', payload),
+  // 本机留存的名片历史（换证横幅展示"旧联系方式"用；不从换证声明读）
+  identityCardHistory: () => ipcRenderer.invoke('ccarmy:identity-card-history'),
+  // 接收方侧：对端名片 + 7 天冻结期（本机各自判定）
+  identityPeerContact: (fingerprint) => ipcRenderer.invoke('ccarmy:identity-peer-contact', fingerprint),
+  identityPeerCard: (payload) => ipcRenderer.invoke('ccarmy:identity-peer-card', payload),
+  identityPeerRotation: (payload) => ipcRenderer.invoke('ccarmy:identity-peer-rotation', payload),
+  identityPeerConfirm: (fingerprint) => ipcRenderer.invoke('ccarmy:identity-peer-confirm', fingerprint),
+  // 身份变更横幅（附六）：本机换证 + 对端换证；ack 必须审计成功才算数
+  identityChanges: (payload) => ipcRenderer.invoke('ccarmy:identity-changes', payload),
+  identityChangeAcknowledge: (payload) => ipcRenderer.invoke('ccarmy:identity-change-ack', payload),
+  // 本机已知的**全部**对端名片状态（「有谁换了证」）
+  identityPeers: () => ipcRenderer.invoke('ccarmy:identity-peers'),
   profileSetPassword: (pw) => ipcRenderer.invoke('ccarmy:profile-set-password', pw),
   profileLogin: (pw) => ipcRenderer.invoke('ccarmy:profile-login', pw),
   saveVoice: (data) => ipcRenderer.invoke('ccarmy:save-voice', data),
@@ -87,6 +105,25 @@ contextBridge.exposeInMainWorld('ccarmy', {
   meshBroadcast: (payload, groupId) => ipcRenderer.invoke('ccarmy:mesh-broadcast', payload, groupId),
   meshInbox: () => ipcRenderer.invoke('ccarmy:mesh-inbox'),
   meshStatus: () => ipcRenderer.invoke('ccarmy:mesh-status'),
+  // 组网状态 / 探测（R8/R9/R11）：真实现 = 本机地址、TCP 连通性、DNS、出站探测、活会话表；
+  // 入站可达性本机无法验证（inboundVerified 恒 false），拿不到就如实降级，不假装检测通过。
+  netStatus: () => ipcRenderer.invoke('ccarmy:net-status'),
+  netProbe: (payload) => ipcRenderer.invoke('ccarmy:net-probe', payload),
+  netLocalAddress: () => ipcRenderer.invoke('ccarmy:net-local-address'),
+  netMembersPresence: (payload) => ipcRenderer.invoke('ccarmy:net-members-presence', payload),
+  meshEnable: (payload) => ipcRenderer.invoke('ccarmy:net-mesh-enable', payload),
+  meshDisable: () => ipcRenderer.invoke('ccarmy:net-mesh-disable'),
+  netMeshAnnounce: (reason) => ipcRenderer.invoke('ccarmy:net-mesh-announce', reason),
+  // 本体协作层：ref / 路径门禁 + 租约（写操作前 acquire、写完 release）
+  repoGuardCheckRef: (payload) => ipcRenderer.invoke('ccarmy:repo-guard-check-ref', payload),
+  repoGuardCheckPaths: (payload) => ipcRenderer.invoke('ccarmy:repo-guard-check-paths', payload),
+  repoGuardPreReceive: (payload) => ipcRenderer.invoke('ccarmy:repo-guard-pre-receive', payload),
+  repoGuardInstallHooks: (payload) => ipcRenderer.invoke('ccarmy:repo-guard-install-hooks', payload),
+  repoGuardStatus: () => ipcRenderer.invoke('ccarmy:repo-guard-status'),
+  leaseAcquire: (payload) => ipcRenderer.invoke('ccarmy:lease-acquire', payload),
+  leaseRelease: (payload) => ipcRenderer.invoke('ccarmy:lease-release', payload),
+  leaseList: () => ipcRenderer.invoke('ccarmy:lease-list'),
+  leaseCheck: (payload) => ipcRenderer.invoke('ccarmy:lease-check', payload),
   winMinimize: () => ipcRenderer.invoke('ccarmy:win-minimize'),
   winMaximize: () => ipcRenderer.invoke('ccarmy:win-maximize'),
   winClose: () => ipcRenderer.invoke('ccarmy:win-close'),

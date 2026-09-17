@@ -46,7 +46,22 @@ import {
 import { runShortLivedExecutor, runExecutors } from './executor.js';
 import { initAssetGovernor, retrieveAssetsForChat, registerChatAsset, recordAssetUsage, sweepAssets } from './asset-wire.js';
 import { MetricsCollector } from './metrics.js';
-import { LocalAccountStore, SettingsStore, type AppSettings } from './settings-store.js';
+import { LocalAccountStore, SettingsStore, generateDeviceId, type AppSettings } from './settings-store.js';
+import { IdentityStore } from './identity-store.js';
+import {
+  CONTACT_CARD_I18N,
+  CONTACT_FREEZE_NOTE,
+  GENERATION_RULE_NOTE,
+  isValidFingerprint,
+  verifyIdentityCard,
+  verifyRevocationDeclaration,
+  verifyRotationDeclaration,
+  type ContactCard,
+  type IdentityCard,
+  type IdentityDeclaration,
+  type KeyRingEntry,
+  type RotationDeclaration,
+} from './identity.js';
 import { GroupStore, type GroupListResult, type GroupMembersResult } from './group-store.js';
 import {
   Updater,
@@ -57,12 +72,50 @@ import {
   type UpdateDownloadResult,
   type UpdateSourceInfo,
 } from './updater.js';
-import { sweepTempFiles } from './atomic-json.js';
+import { readJsonFile, sweepTempFiles, writeJsonAtomicSafe } from './atomic-json.js';
 import { NodeRegistry, SyncBus, createInvite, consumeInvite } from '@ccarmy/sync-protocol';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@ccarmy/dsh-runtime';
-import { LanSyncServer, LanSyncClient, dualMachineSmoke } from '@ccarmy/sync-protocol';
-import { PeerRegistry, LanDiscovery, MeshNode, P2P_NOTES } from '@ccarmy/sync-protocol';
+// 组网：**鉴权通道**（SecureSyncServer/Client + 名册 + 持久化重放防护），旧 lan.ts/mesh.ts 只留数据层 PeerRegistry
+import { PeerRegistry } from '@ccarmy/sync-protocol';
+import {
+  NET_NOTES,
+  SecureMesh,
+  discoverPublicIp,
+  ensureNetDir,
+  listLocalAddresses,
+  localAddressInfo,
+  probeNet,
+  secureLoopbackSmoke,
+  tcpProbe,
+  type MeshPeerRef,
+  type MeshStatusResult,
+  type SecureInboundMessage,
+} from './net-wiring.js';
+// 身份 ↔ 组网的唯一接缝：指纹推导 + 签名者注入 + 「能否后台签名」的门控
+import {
+  IdentityUnavailableError,
+  assertDerivationMatches,
+  buildIdentityChangeEntries,
+  createIdentityProvider,
+  createIdentitySigner,
+  fingerprintDerivationForAppShell,
+  knownContactFingerprints,
+  listPeerContactViews,
+  peerContactKeys,
+  requireSignableIdentity,
+} from './identity-provider.js';
+// 本体协作层：ref/路径门禁 + 租约（写操作前 acquire、写完 release）
+import { validatePushPaths, validateRefUpdate, type PushPathEntry } from './repo-guard.js';
+import { LeaseRegistry, type AcquireRequest, type LeaseRefRequest } from './lease.js';
+import {
+  createGitRunner,
+  findHookScript,
+  installPreReceiveHook,
+  runPreReceive,
+  type PreReceiveResult,
+} from './repo-hooks.js';
 import { verifySmtp, type SmtpConfig } from './smtp-verify.js';
+import crypto from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bootLog = path.join(app.getPath('userData'), 'ccarmy-boot.log');
@@ -107,6 +160,11 @@ let cleanup: CleanupManager | null = null;
 let roleModels: RoleModelConfig = {};
 let accountStore: LocalAccountStore | null = null;
 let settingsStore: SettingsStore | null = null;
+/**
+ * 身份层（ADR 003 附五.2 第 1 步）：Ed25519 身份 + 公钥指纹 + 单调代次 + 加密私钥。
+ * 它是握手 / DHT 签名 / 成员证书的共同前提，所以在启动时最先就绪。
+ */
+let identityStore: IdentityStore | null = null;
 /** 群列表 / 群成员的真实持久化（userData/groups.json） */
 let groupStore: GroupStore | null = null;
 /** 自动更新（真实查询 + 真实下载校验；安装未实现） */
@@ -115,14 +173,23 @@ let nodeReg: NodeRegistry | null = null;
 let syncBus: SyncBus | null = null;
 const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
 let lastError: { ts: number; message: string; context?: string } | null = null;
-const pendingApprovals = new Map<string, { resolve: (d: { allowed: boolean; scope: string }) => void }>();
+let pendingApprovals = new Map<string, { resolve: (d: { allowed: boolean; scope: string }) => void }>();
 let approvalSeq = 0;
-let lanServer: LanSyncServer | null = null;
+/**
+ * 组网服务（**鉴权通道**）：一台 SecureSyncServer + 出站 SecureSyncClient。
+ * 取代原先的 `LanSyncServer` / `MeshNode`（明文 JSONL、无握手、无身份）——
+ * 那两处是"发一行 JSON 即 ACK"，任何能被连上的进程都能发/收消息。
+ */
+let secureMesh: SecureMesh | null = null;
 let localNodeId = 'node-local';
 let peerReg: PeerRegistry | null = null;
-let mesh: MeshNode | null = null;
-let discovery: LanDiscovery | null = null;
-let discoverTimer: NodeJS.Timeout | null = null;
+/**
+ * 本体协作层：任务/目录/文件租约（进程内唯一权威实例）。
+ * 只保护"写入前的声明"：拿到租约才能写；写完释放。见 `lease.ts` 的接线说明。
+ */
+let leases: LeaseRegistry | null = null;
+/** 换证横幅「已核实 / 已关闭」的本地留痕（审计是硬要求，落盘失败即拒绝关闭） */
+let changeAckFile = '';
 /** 会话消息历史（主进程侧）—— 日志的镜像（不变量 #1/#5），视图由 chatLogs 渲染而来 */
 const chatHistories = new Map<string, ChatMessage[]>();
 /**
@@ -691,7 +758,69 @@ async function bootstrap() {
   secureKeys = new SecureKeyStore(userData);
   archiver = new KnowledgeArchiver(userData);
   cleanup = new CleanupManager(userData);
+  // ── 身份层：首次运行即生成（ADR 003 附三 C6「首次运行即生成唯一 ID 与凭证」）──
+  // 私钥用 safeStorage 包裹的 DEK 加密后落盘；启用口令后连同一台机器也不够（附五.1 第一层）。
+  identityStore = new IdentityStore(path.join(userData, 'identity', 'identity.json'), {
+    onAudit: (op, detail) => audit?.log(op, detail),
+  });
+  try {
+    const profile = accountStore.loadProfile();
+    // 旧 9 位 deviceId 降级为**人读别名**（附 ADR §2.2：ID 不再是身份，身份是指纹）
+    const idInit = identityStore.ensureIdentity(profile.deviceId || generateDeviceId(), {
+      email: profile.email || '',
+    });
+    if (idInit.ok) {
+      boot(
+        `identity ${idInit.created ? 'created' : 'loaded'} fp=${idInit.info.fingerprint} gen=${idInit.info.generation} alias=${idInit.info.alias} protection=${
+          idInit.info.passphraseProtected ? 'passphrase' : idInit.info.osProtected ? idInit.info.osLabel : 'none'
+        }`,
+      );
+    } else {
+      // 绝不静默重建：文件损坏时保留证据（已隔离为 .corrupt-*），由用户走"导入备份"恢复
+      boot(`identity init fail: ${idInit.error}`);
+      lastError = { ts: Date.now(), message: `身份初始化失败：${idInit.error}`, context: 'identity' };
+    }
+  } catch (e) {
+    boot(`identity init fail ${String(e)}`);
+  }
+  // 启动时结算一次对端冻结期：到期则把"待采用的新名片"提升为本机留存值（纯本地判定，无定时器）
+  try {
+    const settled = identityStore.settlePeerContacts();
+    boot(`identity peer-contacts settled promoted=${settled.promoted}/${settled.total}`);
+  } catch (e) {
+    boot(`identity peer settle fail ${String(e)}`);
+  }
   audit.log('app.start', { platform: process.platform });
+  // ── 租约表（本体协作层）：写操作的唯一仲裁者 ──
+  leases = new LeaseRegistry({ idPrefix: 'ccarmy' });
+  // ── 换证横幅的确认留痕（「已核实 / 已关闭」）；审计写不进去时拒绝关闭，见 IPC ──
+  changeAckFile = path.join(userData, 'identity', 'change-acks.json');
+  // ── 组网（鉴权通道）：**门控在前**，身份拿不到签名能力就不起监听、不发宣告 ──
+  const netDir = ensureNetDir(userData);
+  if (!netDir.ok) boot(`net dir unavailable: ${netDir.error}`);
+  try {
+    // 启动自检：身份层指纹必须能由身份文件里的公钥推出；不一致则整条组网线不可用
+    const check = assertDerivationMatches(identityStore);
+    boot(`identity derivation ok fp=${check.fingerprint} raw=${check.publicKeyRawBytes}B`);
+  } catch (e) {
+    const err = e as IdentityUnavailableError;
+    boot(`identity derivation FAILED: ${err.name}: ${err.message}`);
+    lastError = { ts: Date.now(), message: err.message, context: 'identity-derivation' };
+  }
+  secureMesh = new SecureMesh({
+    userDataDir: userData,
+    nodeId: localNodeId,
+    store: () => identityStore,
+    peers: () => peerRefs(),
+    onInbound: (msg) => boot(`mesh inbound ${msg.channel} from ${msg.peerFingerprint.slice(0, 12)}`),
+    onEvent: (ev) => {
+      if (ev.type === 'handshake-ok' || ev.type === 'offline') boot(`mesh ${ev.type} ${ev.peer ?? ''}`);
+    },
+  });
+  {
+    const gate = requireSignableIdentity(identityStore);
+    boot(`net gate signReady=${gate.ok} mode=${gate.unlock?.mode ?? 'none'} error=${gate.errorCode ?? '-'}`);
+  }
   boot('board/knowledge/checkpoints/account/sync/mesh/assets ready');
 }
 
@@ -1647,11 +1776,16 @@ handleIpc('ccarmy:skills-import', async () => {
   }
   const id = path.basename(src);
   const dest = path.join(app.getPath('userData'), 'skills', id);
-  try {
+  // 写操作门禁：导入技能会整目录覆盖 → 先拿租约（另一台/另一个身份正在导入同一目录就被挡住）
+  const guarded = withLease('skills', ['skills'], () => {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
-    return { ok: true, id };
+    return id;
+  });
+  try {
+    if (!guarded.ok) return { ok: false, error: 'lease-denied', errorCode: guarded.errorCode, reason: guarded.reason, conflicts: guarded.conflicts };
+    return { ok: true, id: guarded.value };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
@@ -1661,15 +1795,20 @@ handleIpc('ccarmy:skills-paths', () => safeHandle(() => ({ ok: true, paths: skil
 
 handleIpc('ccarmy:skills-remove', (_e, id: string) => {
   try {
-    for (const { root } of skillRoots()) {
-      const dir = path.resolve(root, String(id || ''));
-      // 防目录穿越：必须仍在该 root 之下
-      if (!dir.startsWith(path.resolve(root) + path.sep)) continue;
-      if (!fs.existsSync(dir)) continue;
-      fs.rmSync(dir, { recursive: true, force: true });
-      return { ok: true };
-    }
-    return { ok: false, error: 'skill not found' };
+    // 删除也是写操作：与导入共用同一把租约（否则导入中途被删 = 半个目录）
+    const guarded = withLease('skills', ['skills'], () => {
+      for (const { root } of skillRoots()) {
+        const dir = path.resolve(root, String(id || ''));
+        // 防目录穿越：必须仍在该 root 之下
+        if (!dir.startsWith(path.resolve(root) + path.sep)) continue;
+        if (!fs.existsSync(dir)) continue;
+        fs.rmSync(dir, { recursive: true, force: true });
+        return true;
+      }
+      return false;
+    });
+    if (!guarded.ok) return { ok: false, error: 'lease-denied', errorCode: guarded.errorCode, reason: guarded.reason };
+    return guarded.value ? { ok: true } : { ok: false, error: 'skill not found' };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
@@ -1703,6 +1842,9 @@ handleIpc('ccarmy:app-info', () => {
       arch: process.arch,
       deviceId: st?.id || '',
       deviceIdValid: st?.valid ?? false,
+      // 身份层（ADR 003）：deviceId 只是人读别名，身份以公钥指纹为准
+      identityFingerprint: identityStore?.info()?.fingerprint || '',
+      identityGeneration: identityStore?.info()?.generation ?? 0,
     };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
@@ -1726,6 +1868,238 @@ handleIpc('ccarmy:profile-login', (_e, pw: string) => {
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
+// ── 身份层（ADR 003 附五 / 附五.1 / 附六） ──
+/**
+ * 身份公开信息。**只给公开部分**：指纹 / 公钥 / 代次 / 名片 / 退役公钥 / 时间线。
+ * 私钥永远不出主进程（导出也只能是加密备份）。
+ */
+handleIpc('ccarmy:identity-info', () =>
+  safeHandle(
+    () => ({
+      ok: true,
+      identity: identityStore?.info() ?? null,
+      unlock: identityStore?.unlockState() ?? null,
+      /** 换证 / 作废时间线（含**旧名片快照**，供附六的横幅展示旧联系方式） */
+      timeline: identityStore?.timeline() ?? [],
+      /** ⚠️ 代次规则的诚实说明，UI 文案必须照此写：只防回滚，不防抢占（附五.1） */
+      generationRuleNote: GENERATION_RULE_NOTE,
+      /** 名片占位/标签所需 i18n 键：渲染层自己 t()，主进程不拼中文 */
+      contactI18n: CONTACT_CARD_I18N,
+      /** 7 天联系信息冻结期的说明（含"从本机收到通知起算"） */
+      contactFreezeNote: CONTACT_FREEZE_NOTE,
+      /** 导出/换证都要口令；这里只声明需求，不代填 */
+      passphraseMinLength: 8,
+    }),
+    {
+      ok: true,
+      identity: null,
+      unlock: null,
+      timeline: [],
+      generationRuleNote: GENERATION_RULE_NOTE,
+      contactI18n: CONTACT_CARD_I18N,
+      contactFreezeNote: CONTACT_FREEZE_NOTE,
+      passphraseMinLength: 8,
+    },
+  ),
+);
+
+/**
+ * 换证（主动轮换）：用**旧私钥**签迁移声明（旧公钥→新公钥 + 代次 + 时间戳，**不含任何联系方式**）
+ * 与"旧的作废"声明，代次 +1，旧公钥进退役列表（保公钥丢私钥），并开启 7 天联系信息冻结期。
+ * `previousCard` 取自**本机留存历史**（不是声明）—— 横幅展示旧联系方式用它。
+ */
+handleIpc('ccarmy:identity-rotate', (_e, payload: { reason?: string; passphrase?: string } = {}) => {
+  try {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+    const r = identityStore.rotate(payload || {});
+    if (!r.ok) return { ok: false, error: r.error };
+    return {
+      ok: true,
+      identity: r.info,
+      /** 迁移声明：随 DHT 记录 / 群内记录 / 联系人通道传播（接收方用旧公钥验签 + 代次规则判定） */
+      declaration: r.declaration,
+      /** 作废声明：由旧私钥自签，表示"这把旧钥匙下线了" */
+      revocation: r.revocation,
+      /** 换证前的名片：来自本机留存（声明里没有联系方式，也不该有） */
+      previousCard: r.previousCard,
+      contactFreezeUntil: r.contactFreezeUntil,
+      timeline: identityStore.timeline(),
+      generationRuleNote: GENERATION_RULE_NOTE,
+      contactFreezeNote: CONTACT_FREEZE_NOTE,
+    };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/** 本机的名片历史（旧值留存；换证横幅的"旧联系方式"取自这里） */
+handleIpc('ccarmy:identity-card-history', () =>
+  safeHandle(() => ({ ok: true, history: identityStore?.contactCardHistory() ?? [], freeze: identityStore?.contactFreeze() ?? null }), { ok: true, history: [], freeze: null }),
+);
+
+/**
+ * 接收方侧：记录对方的名片（加入时交换 / 换证后补发）。
+ * 首次加入直接留存、**不冻结**；处于冻结期则只记为 pending，展示继续用本机留存值。
+ */
+handleIpc('ccarmy:identity-peer-card', (_e, payload: { fingerprint?: string; card?: ContactCard; signedCard?: IdentityCard } = {}) => {
+  try {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+    let fingerprint = payload?.fingerprint || '';
+    let card = payload?.card as ContactCard | undefined;
+    if (payload?.signedCard) {
+      // 带签名的名片先验签（自签 + 指纹自洽），再决定是否留存
+      const v = verifyIdentityCard(payload.signedCard);
+      if (!v.ok) return { ok: false, error: `bad-card:${v.reason}` };
+      fingerprint = payload.signedCard.fingerprint;
+      card = payload.signedCard.contactCard;
+    }
+    if (!fingerprint || !isValidFingerprint(fingerprint)) return { ok: false, error: 'fingerprint-required' };
+    return { ok: true, peer: identityStore.recordPeerCard(fingerprint, card || {}, Date.now()) };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/**
+ * 接收方侧：记录"收到换证通知"并**从本机此刻**起算 7 天冻结（不用声明里的时间戳）。
+ * 先验签 + 走代次规则，规则不过就不落地。
+ */
+handleIpc(
+  'ccarmy:identity-peer-rotation',
+  (_e, payload: { declaration?: RotationDeclaration; knownKeys?: KeyRingEntry[]; currentGeneration?: number } = {}) => {
+    try {
+      if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+      const d = payload?.declaration;
+      if (!d) return { ok: false, error: 'declaration-required' };
+      const verdict = verifyRotationDeclaration(d, {
+        ...(payload?.knownKeys ? { knownKeys: payload.knownKeys } : {}),
+        ...(typeof payload?.currentGeneration === 'number' ? { currentGeneration: payload.currentGeneration } : {}),
+      });
+      if (!verdict.accepted) return { ok: false, error: verdict.reason, verdict };
+      const peer = identityStore.recordPeerRotation(d, Date.now());
+      return { ok: true, verdict, peer };
+    } catch (e) {
+      return { ok: false, error: sanitizeError(e) };
+    }
+  },
+);
+
+/** 接收方侧：取某指纹的对端名片视图（旧/新两个字段并列 + 冻结状态） */
+handleIpc('ccarmy:identity-peer-contact', (_e, fingerprint: string) =>
+  safeHandle(() => ({ ok: true, peer: fingerprint ? identityStore?.peerContact(fingerprint) ?? null : null }), { ok: true, peer: null }),
+);
+
+/**
+ * 接收方侧：**手动确认**采用对方的新名片（冻结期结束后才生效）。
+ * 对应 UI 文案「冻结期已结束，但不会自动采用新值——需要你手动确认」。
+ */
+handleIpc('ccarmy:identity-peer-confirm', (_e, fingerprint: string) => {
+  try {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+    if (!fingerprint) return { ok: false, error: 'fingerprint-required' };
+    const peer = identityStore.confirmPeerCard(fingerprint);
+    if (!peer) return { ok: false, error: 'unknown-peer' };
+    return { ok: true, peer, adopted: !peer.awaitingConfirmation && !peer.pendingCard };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/**
+ * 导出身份凭证备份（附三 C6：产品无服务器，凭证必须用户自持）。
+ * **永远是加密文件**：不存在"明文导出私钥"这条路径（附五：默认不显示明文）。
+ */
+handleIpc('ccarmy:identity-backup-export', (_e, payload: { passphrase?: string; writeFile?: boolean } = {}) => {
+  try {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+    const passphrase = payload?.passphrase || '';
+    const r = identityStore.exportBackup({ passphrase });
+    if (!r.ok) return { ok: false, error: r.error };
+    let savedTo: string | null = null;
+    if (payload?.writeFile !== false) {
+      const dir = path.join(app.getPath('userData'), 'identity-backup');
+      fs.mkdirSync(dir, { recursive: true });
+      const f = path.join(dir, `identity-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+      fs.writeFileSync(f, JSON.stringify(r.backup, null, 2), 'utf8');
+      savedTo = f;
+      audit?.log('identity.backup.save', { file: path.basename(f), fingerprint: r.backup.fingerprint });
+    }
+    return {
+      ok: true,
+      savedTo,
+      // 备份本身是口令加密的密文（可打印 / 拷到别的硬盘），不含明文私钥
+      backup: r.backup,
+      fingerprint: r.backup.fingerprint,
+      generation: r.backup.generation,
+    };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/**
+ * 设置 / 启用私钥口令保护（附五.1 第一层：投入产出比最高的一条预防）。
+ * 两种用法：
+ *   ① 首次运行且 OS 钥匙串不可用 —— 用口令创建身份（否则身份层会拒绝明文落盘）；
+ *   ② 已有身份（OS 模式）—— 升级成口令模式：此后"文件 + 同一台机器"都不够，必须知道口令。
+ * ⚠️ 代价必须对用户讲清：口令忘了 = 身份没了（产品无服务器，不存在找回/补发）。
+ */
+handleIpc('ccarmy:identity-set-passphrase', (_e, payload: { passphrase?: string; currentPassphrase?: string } = {}) => {
+  try {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+    const passphrase = payload?.passphrase || '';
+    if (!identityStore.exists()) {
+      const profile = accountStore?.loadProfile();
+      const made = identityStore.ensureIdentity(profile?.deviceId || generateDeviceId(), { email: profile?.email || '' }, { passphrase });
+      if (!made.ok) return { ok: false, error: made.error };
+      return { ok: true, created: made.created, identity: made.info, timeline: identityStore.timeline() };
+    }
+    const r = identityStore.setPassphrase(passphrase, {
+      ...(payload?.currentPassphrase ? { currentPassphrase: payload.currentPassphrase } : {}),
+    });
+    if (!r.ok) return { ok: false, error: r.error };
+    return { ok: true, created: false, identity: r.info, timeline: identityStore.timeline() };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/**
+ * 联系人侧：验一条换证 / 作废声明并应用**单调代次规则**（横幅分支与信任更新用）。
+ * 返回值里的 generationRuleNote 必须一路带到 UI —— 它明确写了"不防抢先"。
+ */
+handleIpc(
+  'ccarmy:identity-verify-rotation',
+  (_e, payload: { declaration?: IdentityDeclaration; knownKeys?: KeyRingEntry[]; currentGeneration?: number } = {}) => {
+    try {
+      const d = payload?.declaration;
+      if (!d) return { ok: false, error: 'declaration-required' };
+      if (d.kind === 'ccarmy.identity.revocation') {
+        const r = verifyRevocationDeclaration(d);
+        return { ok: true, kind: d.kind, accepted: r.accepted, reason: r.reason, warnings: r.warnings, honestNote: r.honestNote, detail: r.detail ?? '' };
+      }
+      const r = verifyRotationDeclaration(d as RotationDeclaration, {
+        ...(payload?.knownKeys ? { knownKeys: payload.knownKeys } : {}),
+        ...(typeof payload?.currentGeneration === 'number' ? { currentGeneration: payload.currentGeneration } : {}),
+      });
+      return {
+        ok: true,
+        kind: 'ccarmy.identity.rotation',
+        accepted: r.accepted,
+        reason: r.reason,
+        warnings: r.warnings,
+        honestNote: r.honestNote,
+        oldFingerprint: r.oldFingerprint,
+        newFingerprint: r.newFingerprint,
+        generation: r.generation,
+        detail: r.detail ?? '',
+      };
+    } catch (e) {
+      return { ok: false, error: sanitizeError(e) };
+    }
+  },
+);
+
 // ── 语音保存 ──
 handleIpc('ccarmy:save-voice', async (_e, data: { dataUrl: string; ext?: string }) => {
   try {
@@ -1746,7 +2120,291 @@ handleIpc('ccarmy:nodes-list', () => safeHandle(() => ({ ok: true, nodes: nodeRe
 handleIpc('ccarmy:nodes-pair', (_e, nodeId: string, name: string) => ({
   ok: true,
   node: nodeReg?.pairRemote(nodeId, name),
-}));
+}));
+// ── D. 身份变更横幅（UI 已经按这个形状写完：identityChanges / identityChangeAcknowledge / identityPeers） ──
+
+interface ChangeAckRecord {
+  level: 'dismiss' | 'verified';
+  at: number;
+  auditId: string;
+}
+
+function readChangeAcks(): Record<string, ChangeAckRecord> {
+  return readJsonFile<Record<string, ChangeAckRecord>>(changeAckFile, {});
+}
+
+function writeChangeAcks(map: Record<string, ChangeAckRecord>): { ok: boolean; error?: string } {
+  return writeJsonAtomicSafe(changeAckFile, map);
+}
+
+/**
+ * 身份变更 = ① 本机换证（声明由本机自己写、可信） ② 对端换证（本机记过 receivedAt 的条目）。
+ * 组装逻辑放在 `identity-provider.buildIdentityChangeEntries`（纯函数、可被验证脚本真跑），
+ * 这里只负责「读确认留痕 → 交给它 → 返回 UI 契约形状」。
+ * ⚠️ previousCard **只从本机留存历史取**：换证声明是攻击者可控数据。
+ */
+handleIpc('ccarmy:identity-changes', (_e, payload: { scope?: string } = {}) => {
+  try {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable', changes: [] };
+    void payload;
+    const changes = buildIdentityChangeEntries(identityStore, { now: Date.now(), acks: readChangeAcks() });
+    return { ok: true, changes };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e), changes: [] };
+  }
+});
+
+/**
+ * 「已核实 / 关闭提示」——**必须先审计成功**：审计写不进去就拒绝关闭
+ * （UI 明确依赖这一点：`{ok:false}` 时不会把横幅消掉）。
+ * auditId 同时写进审计日志与本地留痕，便于事后对账。
+ */
+handleIpc('ccarmy:identity-change-ack', (_e, payload: { changeId?: string; level?: 'dismiss' | 'verified' } = {}) => {
+  try {
+    if (!audit) return { ok: false, error: 'audit-unavailable' };
+    if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+    const changeId = String(payload.changeId || '');
+    const level: ChangeAckRecord['level'] | '' = payload.level === 'verified' ? 'verified' : payload.level === 'dismiss' ? 'dismiss' : '';
+    if (!changeId || !level) return { ok: false, error: 'invalid-request' };
+    const auditId = `idchg-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
+    audit.log('identity.change.ack', { changeId, level, auditId });
+    // 审计真的落地了吗？AuditLogger.log 会吞掉写失败 → 读回来确认（不确认就等于假装记过了）
+    const last = audit.read(1)[0];
+    const landed =
+      !!last && last.op === 'identity.change.ack' && (last.detail as { auditId?: string } | undefined)?.auditId === auditId;
+    if (!landed) return { ok: false, error: 'audit-write-failed' };
+    const acks = readChangeAcks();
+    acks[changeId] = { level, at: Date.now(), auditId };
+    const w = writeChangeAcks(acks);
+    if (!w.ok) return { ok: false, error: 'ack-persist-failed' };
+    return { ok: true, auditId };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/** 本机已知的**全部**对端名片状态（UI 靠它知道"有谁换了证"；按指纹单查的通道见 identity-peer-contact） */
+handleIpc('ccarmy:identity-peers', () => {
+  try {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable', peers: [] };
+    return { ok: true, peers: listPeerContactViews(identityStore) };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e), peers: [] };
+  }
+});
+
+// ── C. 本体协作层接线：ref / 路径门禁 + 租约 ──
+//
+// 这里**不删减任何既有校验**：IPC 只是把 repo-guard / lease 的既有实现暴露出去，
+// pre-receive 钩子（scripts/git-hooks/pre-receive.mjs）跑的是同一份实现（repo-hooks.ts）。
+// 也**不动**用户机器上的全局 git config（只写目标仓库自己的 hooks/pre-receive）。
+
+interface RepoGuardRefInput {
+  ref?: string;
+  oldSha?: string;
+  newSha?: string;
+  role?: 'member' | 'admin' | 'creator' | 'duty';
+  memberId?: string;
+  knownSha?: string;
+  repoDir?: string;
+  force?: boolean;
+  assumeFastForward?: boolean;
+  allowForceByCreator?: boolean;
+  protectedRefs?: string[];
+  proposalPrefixes?: string[];
+  memberPrefixes?: string[];
+  envRefPrefixes?: string[];
+  blockedRefPrefixes?: string[];
+}
+
+/**
+ * 写操作门禁：先拿租约，写完释放。拿不到就**不写**，也不假装成功。
+ * holder = 本机身份指纹（不同身份/实例互斥）。
+ */
+function withLease<T>(  scope: string,
+  paths: string[],
+  fn: () => T
+):
+  | { ok: true; value: T; leaseId: string }
+  | { ok: false; errorCode: string; reason: string; conflicts: unknown[] } {
+  if (!leases) return { ok: false, errorCode: 'no-registry', reason: 'lease-registry-unavailable', conflicts: [] };
+  const holder = leaseHolder();
+  const acq = leases.acquire({ holder, kind: 'dir', scope, paths });
+  if (!acq.ok || !acq.lease) {
+    audit?.log('lease.denied', { scope, error: acq.error?.code, conflicts: acq.conflicts?.length ?? 0 });
+    return {
+      ok: false,
+      errorCode: acq.error?.code ?? 'acquire-failed',
+      reason: acq.error?.reason ?? 'unknown',
+      conflicts: acq.conflicts ?? [],
+    };
+  }
+  const leaseId = acq.lease.id;
+  try {
+    return { ok: true, value: fn(), leaseId };
+  } finally {
+    leases.release({ holder, leaseId });
+  }
+}
+
+handleIpc('ccarmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as RepoGuardRefInput) => {
+  try {
+    const ref = String(payload.ref || '');
+    const oldSha = String(payload.oldSha || '');
+    const newSha = String(payload.newSha || '');
+    if (!ref) return { ok: false, error: 'ref-required' };
+    let knownSha = typeof payload.knownSha === 'string' ? payload.knownSha : '';
+    let isAncestor: ((a: string, d: string) => boolean | undefined) | undefined;
+    const repoDir = payload.repoDir ? String(payload.repoDir) : '';
+    if (repoDir) {
+      const git = createGitRunner(repoDir);
+      const probe = git(['rev-parse', '--absolute-git-dir']);
+      if (probe.code !== 0) return { ok: false, error: 'not-a-git-repo' };
+      if (!knownSha) {
+        const k = git(['rev-parse', '--verify', '--quiet', ref]);
+        if (k.code === 0) knownSha = k.stdout.trim();
+      }
+      const cache = new Map<string, boolean | undefined>();
+      isAncestor = (a: string, d: string): boolean | undefined => {
+        const key = `${a}..${d}`;
+        if (cache.has(key)) return cache.get(key);
+        const r = git(['merge-base', '--is-ancestor', a, d]);
+        const v: boolean | undefined = r.code === 0 ? true : r.code === 1 ? false : undefined;
+        cache.set(key, v);
+        return v;
+      };
+    }
+    const result = validateRefUpdate(ref, oldSha, newSha, {
+      role: payload.role ?? 'member',
+      ...(payload.memberId ? { memberId: String(payload.memberId) } : {}),
+      ...(knownSha ? { knownSha } : {}),
+      ...(isAncestor ? { isAncestor } : {}),
+      force: payload.force === true,
+      assumeFastForward: payload.assumeFastForward === true,
+      allowForceByCreator: payload.allowForceByCreator === true,
+      ...(Array.isArray(payload.protectedRefs) ? { protectedRefs: payload.protectedRefs.map(String) } : {}),
+      ...(Array.isArray(payload.proposalPrefixes) ? { proposalPrefixes: payload.proposalPrefixes.map(String) } : {}),
+      ...(Array.isArray(payload.memberPrefixes) ? { memberPrefixes: payload.memberPrefixes.map(String) } : {}),
+      ...(Array.isArray(payload.envRefPrefixes) ? { envRefPrefixes: payload.envRefPrefixes.map(String) } : {}),
+      ...(Array.isArray(payload.blockedRefPrefixes) ? { blockedRefPrefixes: payload.blockedRefPrefixes.map(String) } : {}),
+    });
+    return { ok: true, result, knownSha, usedGit: !!repoDir };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+handleIpc('ccarmy:repo-guard-check-paths', (_e, payload: { paths?: Array<string | PushPathEntry> | string; base?: 'worktree' | 'gitdir' } = {}) => {
+  try {
+    const validation = validatePushPaths(payload.paths ?? [], {
+      base: payload.base === 'gitdir' ? 'gitdir' : 'worktree',
+    });
+    return { ok: true, validation };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/** 真跑一遍 pre-receive 逻辑（stdin 三列格式）；UI / 验证脚本 / 钩子共用同一实现 */
+handleIpc(
+  'ccarmy:repo-guard-pre-receive',
+  (_e, payload: { stdin?: string; role?: string; memberId?: string; repoDir?: string; assumeFastForward?: boolean } = {}) => {
+    try {
+      const git = createGitRunner(payload.repoDir ? String(payload.repoDir) : undefined);
+      const result: PreReceiveResult = runPreReceive({
+        git,
+        stdin: String(payload.stdin ?? ''),
+        role: (payload.role as 'member' | 'admin' | 'creator' | 'duty') ?? 'member',
+        memberId: payload.memberId ? String(payload.memberId) : '',
+        assumeFastForward: payload.assumeFastForward === true,
+      });
+      return { ok: true, result };
+    } catch (e) {
+      return { ok: false, error: sanitizeError(e) };
+    }
+  }
+);
+
+/** 给仓库初始化（安装）pre-receive 钩子；找不到钩子脚本时如实报错，不假装装好了 */
+handleIpc('ccarmy:repo-guard-install-hooks', (_e, payload: { repoDir?: string; force?: boolean } = {}) => {
+  try {
+    const repoDir = String(payload.repoDir || '');
+    if (!repoDir) return { ok: false, error: 'repo-dir-required' };
+    const appRoot = path.join(__dirname, '..');
+    const hookScript = findHookScript(appRoot);
+    if (!hookScript) return { ok: false, error: 'hook-script-not-found', searched: appRoot };
+    const r = installPreReceiveHook({
+      repoDir,
+      hookScript,
+      nodeBin: process.execPath,
+      force: payload.force === true,
+    });
+    audit?.log('repo.hook.install', { ok: r.ok, error: r.error, alreadyInstalled: r.alreadyInstalled === true });
+    return { ...r, script: hookScript };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+handleIpc('ccarmy:repo-guard-status', () =>
+  safeHandle(
+    () => ({
+      ok: true,
+      hookScript: findHookScript(path.join(__dirname, '..')),
+      leaseStats: leases?.stats() ?? null,
+      mesh: secureMesh?.diagnostics() ?? null,
+      netDir: ensureNetDir(app.getPath('userData')).ok,
+    }),
+    { ok: false, hookScript: null, leaseStats: null, mesh: null, netDir: false }
+  )
+);
+
+handleIpc('ccarmy:lease-acquire', (_e, req: AcquireRequest = {} as AcquireRequest) => {
+  try {
+    if (!leases) return { ok: false, error: { code: 'no-registry', reason: 'lease-registry-unavailable' }, leases: [] };
+    const r = leases.acquire({ ...req, holder: req.holder || leaseHolder() });
+    if (r.ok) audit?.log('lease.acquire', { scope: r.lease?.scope, holder: r.lease?.holder, kind: r.lease?.kind });
+    return { ...r, leases: leases.list() };
+  } catch (e) {
+    return { ok: false, error: { code: 'invalid-request', reason: sanitizeError(e) }, leases: [] };
+  }
+});
+
+handleIpc('ccarmy:lease-release', (_e, req: LeaseRefRequest = {} as LeaseRefRequest) => {
+  try {
+    if (!leases) return { ok: false, released: false, error: { code: 'no-registry', reason: 'lease-registry-unavailable' } };
+    const r = leases.release({ ...req, ...(req.holder || req.leaseId ? {} : { holder: leaseHolder() }) });
+    if (r.released) audit?.log('lease.release', { leaseId: r.lease?.id, scope: r.lease?.scope });
+    return { ...r, leases: leases.list() };
+  } catch (e) {
+    return { ok: false, released: false, error: { code: 'invalid-request', reason: sanitizeError(e) } };
+  }
+});
+
+handleIpc('ccarmy:lease-list', () =>
+  safeHandle(
+    () => ({
+      ok: true,
+      holder: leaseHolder(),
+      leases: leases?.list() ?? [],
+      expired: leases?.expiredHistory() ?? [],
+      stats: leases?.stats() ?? null,
+    }),
+    { ok: true, holder: '', leases: [], expired: [], stats: null }
+  )
+);
+
+handleIpc('ccarmy:lease-check', (_e, payload: { holder?: string; path?: string; paths?: string[] } = {}) => {
+  try {
+    if (!leases) return { ok: false, errorCode: 'no-registry', results: [] };
+    const holder = payload.holder || leaseHolder();
+    const list = Array.isArray(payload.paths) && payload.paths.length ? payload.paths.map(String) : [String(payload.path ?? '')];
+    const results = list.map((p) => leases!.checkWrite(holder, p));
+    return { ok: results.every((r) => r.allowed), holder, results, holders: list.map((p) => leases!.holdersOf(p)) };
+  } catch (e) {
+    return { ok: false, errorCode: sanitizeError(e), results: [] };
+  }
+});
 handleIpc('ccarmy:nodes-revoke', (_e, nodeId: string) => {
   try {
     nodeReg?.revoke(nodeId);
@@ -1880,19 +2538,67 @@ handleIpc('ccarmy:smtp-update', (_e, id: string, patch: Partial<{ label: string;
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-// ── 内网同步 ──
+// ── 组网：**鉴权通道**（取代原 lan.ts / mesh.ts 的明文 JSONL TCP） ──
+//
+// 旧实现（`LanSyncServer` / `LanSyncClient` / `MeshNode`）是「发一行 JSON 即 ACK」：
+// 任何能连上端口的人都能收发消息、不需要身份。现在两处都换成 `SecureSyncServer` /
+// `SecureSyncClient`：先跑 HS1–HS4（Ed25519 双向认证 + X25519 ECDHE + HKDF + AES-256-GCM），
+// 名册外的人直接被 `not-authorized` 拒绝，重放计数**持久化**到 userData/net/replay-guard.json。
+// 通道名与返回形状保持向后兼容（lan-* / mesh-* 一个都没删）。
+// `PeerRegistry` 仍然保留，但它只当**地址簿**用（没有任何鉴权语义）：能不能通信由握手 + 名册决定。
+
+/** PeerRegistry（地址簿）→ 组网层要的对端列表 */
+function peerRefs(): MeshPeerRef[] {
+  return (peerReg?.list() ?? [])
+    .filter((p) => !!p && typeof p.host === 'string' && Number(p.port) > 0)
+    .map((p) => ({
+      nodeId: p.nodeId,
+      name: p.name,
+      host: p.host,
+      port: Number(p.port),
+      kind: p.kind,
+      lastSeen: p.lastSeen,
+    }));
+}
+
+/** 本机节点 id 刷新（nodeReg 里的 isLocal 那条） */
+function refreshLocalNodeId(): string {
+  const local = nodeReg?.list().find((n) => n.isLocal);
+  localNodeId = local?.nodeId || 'node-local';
+  return localNodeId;
+}
+
+/** 身份指纹（写操作租约的持有者 id；没有身份时退回本机节点 id） */
+function leaseHolder(): string {
+  return identityStore?.info()?.fingerprint || localNodeId || 'local';
+}
+
+/**
+ * 起组网（鉴权）。**门控在前**：拿不到签名能力就返回 `identity-locked`，
+ * 既不监听也不宣告 —— UI 会据此显示「身份未解锁」，而不是"打开了但谁连不上"。
+ */
+async function startSecureMesh(port: number, opts: { discovery?: boolean; announce?: boolean } = {}) {
+  refreshLocalNodeId();
+  if (!secureMesh) return { ok: false as const, errorCode: 'net-unavailable', error: 'net-wiring-unavailable' };
+  const r = await secureMesh.enable(port, opts);
+  if (!r.ok) {
+    audit?.log('net.enable.failed', { errorCode: r.errorCode, port });
+    return r;
+  }
+  audit?.log('net.enable', {
+    port: r.port,
+    nodeId: r.nodeId,
+    discovery: opts.discovery === true,
+    announce: opts.announce === true,
+  });
+  return r;
+}
+
 handleIpc('ccarmy:lan-start', async (_e, port = 7788) => {
   try {
-    if (lanServer?.listening) await lanServer.stop();
-    const local = nodeReg?.list().find((n) => n.isLocal);
-    localNodeId = local?.nodeId || 'node-local';
-    lanServer = new LanSyncServer(
-      localNodeId,
-      port,
-      path.join(app.getPath('userData'), 'bus', 'lan.jsonl')
-    );
-    await lanServer.start();
-    return { ok: true, port, nodeId: localNodeId };
+    const r = await startSecureMesh(Number(port) || 7788, { discovery: false, announce: false });
+    if (!r.ok) return r;
+    return { ok: true, port: r.port, nodeId: r.nodeId };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
@@ -1900,72 +2606,82 @@ handleIpc('ccarmy:lan-start', async (_e, port = 7788) => {
 
 handleIpc('ccarmy:lan-stop', async () => {
   try {
-    await lanServer?.stop();
-    lanServer = null;
+    await secureMesh?.disable();
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
 });
-
-handleIpc('ccarmy:lan-send', async (_e, msg: { host: string; port: number; to?: string; payload: unknown; groupId?: string; incognito?: boolean }) => {
-  try {
-    const client = new LanSyncClient(localNodeId);
-    const r = await client.send(msg.host, msg.port, {
-      to: msg.to || '*',
-      channel: 'group',
-      groupId: msg.groupId,
-      payload: msg.payload,
-      incognito: msg.incognito,
-    });
-    return r;
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
-});
-
-handleIpc('ccarmy:lan-inbox', () => ({
-  ok: true,
-  messages: lanServer?.inboxOf() || [],
-}));
-
-handleIpc('ccarmy:lan-status', () => ({
-  ok: true,
-  listening: !!lanServer?.listening,
-  nodeId: localNodeId,
-}));
 
 handleIpc(
-  'ccarmy:lan-dual-smoke',
-  async (_e, opts: { localPort?: number; peerHost?: string; peerPort?: number }) => {
-    return dualMachineSmoke({
-      localId: localNodeId,
-      localPort: opts.localPort || 7790,
-      peerHost: opts.peerHost,
-      peerPort: opts.peerPort,
-    });
+  'ccarmy:lan-send',
+  async (
+    _e,
+    msg: { host: string; port: number; to?: string; payload: unknown; groupId?: string; incognito?: boolean; fingerprint?: string } = {
+      host: '',
+      port: 0,
+      payload: null,
+    }
+  ) => {
+    try {
+      if (!secureMesh) return { ok: false, error: 'net-unavailable' };
+      const host = String(msg.host || '');
+      const port = Number(msg.port);
+      if (!host || !Number.isInteger(port) || port <= 0 || port > 65535) return { ok: false, error: 'invalid-target' };
+      // 出站一次拨号一次握手。给了 fingerprint 就 pin（同时在名册里放行它），
+      // 没给则 TOFU + 严格名册校验（只有本机已知联系人能通过）。
+      return await secureMesh.sendToHost(
+        host,
+        port,
+        {
+          to: msg.to || '*',
+          channel: 'group',
+          ...(msg.groupId ? { groupId: msg.groupId } : {}),
+          payload: msg.payload,
+          ...(msg.incognito ? { incognito: true } : {}),
+        },
+        { ...(msg.fingerprint ? { pin: String(msg.fingerprint) } : {}) }
+      );
+    } catch (e) {
+      return { ok: false, error: sanitizeError(e) };
+    }
   }
 );
 
-// ── 多节点 mesh ──
+handleIpc('ccarmy:lan-inbox', () => safeHandle(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
+
+handleIpc('ccarmy:lan-status', () =>
+  safeHandle(() => ({ ok: true, listening: !!secureMesh?.enabled, nodeId: localNodeId }), { ok: true, listening: false, nodeId: localNodeId })
+);
+
+handleIpc('ccarmy:lan-dual-smoke', async (_e, opts: { localPort?: number; peerHost?: string; peerPort?: number } = {}) => {
+  try {
+    refreshLocalNodeId();
+    // 回环冒烟用**一次性**身份：握手层拒绝"对端指纹 == 本机指纹"（自反射），
+    // 拿本机身份自己连自己必定失败 —— 这不是缺陷，是设计。
+    return await secureLoopbackSmoke({
+      nodeId: localNodeId,
+      localPort: Number(opts.localPort) || 7790,
+      ...(opts.peerHost ? { peerHost: opts.peerHost } : {}),
+      ...(opts.peerPort ? { peerPort: Number(opts.peerPort) } : {}),
+    });
+  } catch (e) {
+    return {
+      serverPort: 0,
+      loopbackOk: false,
+      peerOk: false,
+      peerError: sanitizeError(e),
+      secure: { handshakeOk: false, ephemeral: true as const, peerFingerprint: '' },
+    };
+  }
+});
+
+// ── 多节点 mesh（同样走鉴权通道；UDP 只做地址发现，不传业务数据） ──
 handleIpc('ccarmy:mesh-start', async (_e, port = 7788) => {
   try {
-    await mesh?.stop();
-    mesh = new MeshNode(localNodeId, port, peerReg!, path.join(app.getPath('userData'), 'bus', 'mesh.jsonl'));
-    await mesh.start();
-    // 启动 UDP 发现
-    await discovery?.stop();
-    discovery = new LanDiscovery(localNodeId, 'ccarmy-' + localNodeId.slice(-4), port, (p) => {
-      peerReg?.upsert({
-        nodeId: p.nodeId,
-        name: p.name,
-        host: p.host,
-        port: p.port,
-        kind: 'lan',
-        lastSeen: Date.now(),
-      });
-    });
-    await discovery.start();
-    discovery.broadcast();
-    if (discoverTimer) clearInterval(discoverTimer);
-    discoverTimer = setInterval(() => discovery?.broadcast(), 8000);
-    return { ok: true, port, nodeId: localNodeId, notes: P2P_NOTES };
+    const r = await startSecureMesh(Number(port) || 7788, { discovery: true, announce: true });
+    if (!r.ok) return r;
+    return { ok: true, port: r.port, nodeId: r.nodeId, notes: NET_NOTES };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
@@ -1973,20 +2689,17 @@ handleIpc('ccarmy:mesh-start', async (_e, port = 7788) => {
 
 handleIpc('ccarmy:mesh-stop', async () => {
   try {
-    if (discoverTimer) clearInterval(discoverTimer);
-    discoverTimer = null;
-    await discovery?.stop();
-    await mesh?.stop();
-    discovery = null;
-    mesh = null;
+    await secureMesh?.disable();
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
 });
 
 handleIpc('ccarmy:peers-list', () => ({
   ok: true,
   peers: peerReg?.list() || [],
-  notes: P2P_NOTES,
+  notes: NET_NOTES,
 }));
 
 handleIpc(
@@ -2007,20 +2720,128 @@ handleIpc('ccarmy:peers-remove', (_e, nodeId: string) => {
 
 handleIpc('ccarmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) => {
   try {
-    if (!mesh) return { ok: false, error: 'mesh not started' };
-    const r = await mesh.sendToAll({ to: '*', channel: 'group', groupId, payload });
-    return { ok: true, ...r };
+    if (!secureMesh?.enabled) return { ok: false, error: 'mesh not started' };
+    const r = await secureMesh.broadcast({
+      to: '*',
+      channel: 'group',
+      ...(groupId ? { groupId } : {}),
+      payload,
+    });
+    return { ok: true, sent: r.sent, failed: r.failed, errors: r.errors };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('ccarmy:mesh-inbox', () => safeHandle(() => ({ ok: true, messages: mesh?.inboxOf() || [] }), { ok: true, messages: [] }))
+handleIpc('ccarmy:mesh-inbox', () => safeHandle(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
 
-handleIpc('ccarmy:mesh-status', () => ({
-  ok: true,
-  listening: !!mesh,
-  nodeId: localNodeId,
-  peerCount: peerReg?.list().length || 0,
-}));
+handleIpc('ccarmy:mesh-status', () =>
+  safeHandle(
+    () => ({
+      ok: true,
+      listening: !!secureMesh?.enabled,
+      nodeId: localNodeId,
+      peerCount: peerReg?.list().length || 0,
+      sessions: secureMesh?.sessionCount ?? 0,
+    }),
+    { ok: true, listening: false, nodeId: localNodeId, peerCount: 0, sessions: 0 }
+  )
+);
+
+// ── 组网状态 / 探测（UI 的 netStatus/netProbe/netLocalAddress/netMembersPresence/meshEnable/meshDisable） ──
+//
+// 真实现：网卡枚举、TCP 连通性（含时延）、DNS 解析、出站连通性、公网地址回显、监听端口自测、活会话表。
+// 降级：**入站可达性**（别人拨我）需要一台真的在公网的第三方对端 → 一律 `inboundVerified:false`，
+//       且 `isPublic` 只由地址事实推出（私网/回环/链路本地/CGNAT 恒 false），绝不硬编码 true。
+// 未实现：UPnP/NAT-PMP 端口映射、打洞、中继 —— 这些不开"假装成功"的口子。
+handleIpc('ccarmy:net-status', async () => {
+  const fallback: MeshStatusResult = {
+    ok: true,
+    meshEnabled: false,
+    link: { reachable: false, lastError: 'net-unavailable', peers: [] },
+    unlock: identityStore ? requireSignableIdentity(identityStore).unlock ?? null : null,
+  };
+  return await safeHandleAsync<MeshStatusResult>(async () => (await secureMesh?.status()) ?? fallback, fallback);
+});
+
+handleIpc('ccarmy:net-probe', async (_e, input: { ip?: string; port?: number; domains?: string[] } = {}) => {
+  try {
+    return await probeNet({
+      ip: String(input.ip ?? ''),
+      port: Number(input.port),
+      ...(Array.isArray(input.domains) ? { domains: input.domains.map(String) } : {}),
+    });
+  } catch (e) {
+    return { ok: false, isPublic: false, outboundOk: false, errorCode: sanitizeError(e), inboundVerified: false as const };
+  }
+});
+
+handleIpc('ccarmy:net-local-address', async () => {
+  const port = secureMesh?.enabled ? secureMesh.boundPort : undefined;
+  return await safeHandleAsync(
+    async () => await localAddressInfo(port ? { port } : {}),
+    { ok: true, localIp: '127.0.0.1', interfaces: [], hasPublicInterface: false, behindNat: true }
+  );
+});
+
+handleIpc('ccarmy:net-members-presence', (_e, payload: { groupId?: string } = {}) => {
+  try {
+    const groupId = String(payload.groupId || '');
+    const members = groupId ? groupStore?.listMembers(groupId) ?? [] : [];
+    const meshEnabled = !!secureMesh?.enabled;
+    const liveSessions = (secureMesh?.presence() ?? []).filter((p) => p.online).length;
+    const instances = p1?.instances.list() ?? [];
+    return {
+      ok: true,
+      meshEnabled,
+      // 成员表里只有 id/name/instanceId，**没有指纹** → 本机无法把人映射到指纹上。
+      // 因此：本地实例用 InstanceManager 的真实状态；异地成员只给"是不是异地"，
+      // online 一律不给（宁可不给，也不假装知道他在不在线）。
+      presenceAvailable: meshEnabled,
+      remoteSessions: liveSessions,
+      members: members.map((m) => {
+        const inst = m.instanceId ? instances.find((h) => h.id === m.instanceId) : undefined;
+        const remote = m.source === 'invite' && !inst;
+        return {
+          id: m.id,
+          name: m.name,
+          remote,
+          ...(remote
+            ? { presenceBasis: 'unattributed' as const }
+            : { online: inst ? inst.status === 'running' : false, presenceBasis: 'local-instance' as const }),
+        };
+      }),
+    };
+  } catch (e) {
+    return { ok: false, meshEnabled: false, members: [], error: sanitizeError(e) };
+  }
+});
+
+handleIpc('ccarmy:net-mesh-enable', async (_e, input: { ip?: string; port?: number; domains?: string[] } = {}) => {
+  try {
+    const port = Number(input.port) || 7788;
+    const r = await startSecureMesh(port, { discovery: true, announce: true });
+    return r.ok ? { ok: true, port: r.port, nodeId: r.nodeId, errorCode: r.errorCode } : r;
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+handleIpc('ccarmy:net-mesh-disable', async () => {
+  try {
+    await secureMesh?.disable();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+handleIpc('ccarmy:net-mesh-announce', async (_e, reason: 'startup' | 'address-changed' | 'manual' = 'manual') => {
+  try {
+    if (!secureMesh?.enabled) return { ok: false, errorCode: 'mesh-disabled' };
+    return await secureMesh.announce(reason);
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
 
 // ── 窗口控制（自定义标题栏） ──
 handleIpc('ccarmy:win-minimize', () => safeHandle(() => win?.minimize(), null))
@@ -2572,24 +3393,31 @@ handleIpc('ccarmy:tray-tooltip', (_e, payload: string | { text?: string; offWork
 handleIpc('ccarmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
   try {
     const dir = path.join(app.getPath('userData'), 'exports');
-    fs.mkdirSync(dir, { recursive: true });
-    const lines = [
-      '# ' + payload.title,
-      '',
-      '> ' + exportHeaderLabel + ' CCArmy · ' + new Date().toLocaleString(),
-      '',
-    ];
-    for (const msg of payload.messages) {
-      const who = msg.role === 'me' ? exportMeLabel : payload.title;
-      const time = msg.ts ? new Date(msg.ts).toLocaleString() : '';
-      lines.push(`**${who}** ${time}`);
-      lines.push('');
-      lines.push(msg.text || '');
-      lines.push('');
+    // 写操作门禁：导出目录是共享产物，先拿租约再写
+    const guarded = withLease('exports', ['exports'], () => {
+      fs.mkdirSync(dir, { recursive: true });
+      const lines = [
+        '# ' + payload.title,
+        '',
+        '> ' + exportHeaderLabel + ' CCArmy · ' + new Date().toLocaleString(),
+        '',
+      ];
+      for (const msg of payload.messages) {
+        const who = msg.role === 'me' ? exportMeLabel : payload.title;
+        const time = msg.ts ? new Date(msg.ts).toLocaleString() : '';
+        lines.push(`**${who}** ${time}`);
+        lines.push('');
+        lines.push(msg.text || '');
+        lines.push('');
+      }
+      const file = path.join(dir, `${payload.title.replace(/[\\/:*?"<>|]/g, '_')}-${Date.now()}.md`);
+      fs.writeFileSync(file, lines.join('\n'), 'utf8');
+      return file;
+    });
+    if (!guarded.ok) {
+      return { ok: false, error: 'lease-denied', errorCode: guarded.errorCode, reason: guarded.reason, conflicts: guarded.conflicts };
     }
-    const file = path.join(dir, `${payload.title.replace(/[\\/:*?"<>|]/g, '_')}-${Date.now()}.md`);
-    fs.writeFileSync(file, lines.join('\n'), 'utf8');
-    return { ok: true, path: file };
+    return { ok: true, path: guarded.value };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
