@@ -23,7 +23,8 @@
   },
   "dependencies": {
     "@ccarmy/contracts": "workspace:*",
-    "better-sqlite3": "13.0.3"
+    "better-sqlite3": "13.0.3",
+    "onnxruntime-web": "1.22.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.13"
