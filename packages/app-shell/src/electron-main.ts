@@ -215,7 +215,7 @@ function createWindow() {
       backgroundThrottling: false,
       spellcheck: false,
     },
-    icon: path.join(__dirname, 'renderer', 'icons', 'app-256.png'),
+    icon: path.join(__dirname, 'renderer', 'icons', 'app.ico'),
   });
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('ready-to-show', () => {
@@ -1516,8 +1516,11 @@ let tray: import('electron').Tray | null = null;
 function createTray() {
   if (tray) return;
   // 用真实 logo 生成托盘图标（16/32 均可，Windows 托盘实际显示 16px）
-  const iconPath = path.join(__dirname, 'renderer', 'icons', 'app-32.png');
+  const iconPath = path.join(__dirname, 'renderer', 'icons', 'app.ico');
   let img = nativeImage.createFromPath(iconPath);
+  if (img.isEmpty()) {
+    img = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'app-32.png'));
+  }
   if (img.isEmpty()) {
     // 回退：16x16 占位
     img = nativeImage.createFromBuffer(

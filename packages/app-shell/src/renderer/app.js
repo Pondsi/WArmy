@@ -101,12 +101,17 @@
     if (!trigger || !menu) return;
     const r = trigger.getBoundingClientRect();
     menu.style.position = 'fixed';
-    menu.style.left = Math.min(r.left, window.innerWidth - 180) + 'px';
-    menu.style.top = (r.bottom + 4) + 'px';
     // .urg-menu 的 CSS 带 bottom:calc(100% + 6px)，不清掉会与 top 冲突、菜单被拉出视口
     menu.style.bottom = 'auto';
     menu.style.right = 'auto';
     menu.style.zIndex = '500';
+    const mw = menu.offsetWidth || 170;
+    const mh = menu.offsetHeight || 150;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8));
+    const below = r.bottom + 4;
+    const top = below + mh > window.innerHeight - 8 ? Math.max(8, r.top - 4 - mh) : below;
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
   }
   let __rafThrottle = false;
   function raf(fn) {
@@ -419,11 +424,30 @@
       const hex = $('theme-picker-hex');
       const sync = () => {
         if (!input) return;
-        swatch.style.background = input.value;
-        hex.textContent = String(input.value).toUpperCase();
+        const v = String(input.value || '#000000');
+        swatch.style.background = v;
+        const n = parseInt(v.slice(1), 16);
+        const r = (n >> 16) & 255;
+        const g = (n >> 8) & 255;
+        const b = n & 255;
+        hex.textContent = v.toUpperCase() + '   rgb(' + r + ', ' + g + ', ' + b + ')';
       };
-      if (input) input.oninput = sync;
+      if (input) {
+        input.oninput = sync;
+        input.onchange = sync;
+      }
       sync();
+      // 打开弹窗即直接弹出系统调色板，不需要再点一次色块
+      if (input) {
+        setTimeout(() => {
+          try {
+            if (typeof input.showPicker === 'function') input.showPicker();
+            else input.click();
+          } catch {
+            try { input.click(); } catch { /* noop */ }
+          }
+        }, 60);
+      }
       const acts = $('modal-actions');
       acts.innerHTML = '';
       const cancel = document.createElement('button');
@@ -458,6 +482,12 @@
   }
 
   function syncTrayText() {
+    // 设置第二列的水印文字也要随语言变化（CSS 里读这个变量）
+    try {
+      document.documentElement.style.setProperty('--brand-watermark', `"${t('brand.name')}"`);
+    } catch {
+      /* noop */
+    }
     try {
       window.ccarmy.trayTooltip?.(`${t('brand.name')} ${t('brand.sub')}`);
     } catch {
@@ -1471,7 +1501,7 @@
       const avHtml = `<img class="avatar-img big" src="${personAvatarSrc(p)}" alt=""/>`;
       box.innerHTML = `
         <div class="brand-strip">
-          <img class="brand-logo" src="./icons/logo-256.png" alt="${escapeHtml(t('brand.name'))}"/>
+          <img class="brand-logo" src="./icons/logo-tight.png" alt="${escapeHtml(t('brand.name'))}"/>
           <div class="brand-text">
             <div class="brand-name">${escapeHtml(t('brand.name'))}</div>
             <div class="brand-sub">${escapeHtml(t('brand.sub'))}</div>
@@ -1740,7 +1770,7 @@
         <div class="set-section" data-sec="about"><h2 style="color:var(--accent)">${t('settings.section.about')}</h2></div>
         <div class="set-section set-card about-card">
           <div class="about-brand">
-            <img class="about-logo" src="./icons/logo-256.png" alt="${escapeHtml(t('about.logoAlt'))}"/>
+            <img class="about-logo" src="./icons/logo-tight.png" alt="${escapeHtml(t('about.logoAlt'))}"/>
             <div class="about-brand-text">
               <div class="about-name">${escapeHtml(t('brand.name'))}</div>
               <div class="about-sub">${escapeHtml(t('brand.sub'))}</div>

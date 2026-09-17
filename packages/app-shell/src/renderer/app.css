@@ -360,7 +360,6 @@ body.platform-darwin .tb-mac-extra {
   display: flex; flex-direction: column;
   border-right: 1px solid var(--line);
   min-width: 0; position: relative;
-  contain: layout style paint;
 }
 #panel-resizer {
   position: absolute; right: -3px; top: 0; bottom: 0;
@@ -595,7 +594,7 @@ body.platform-darwin .tb-mac-extra {
 #input-top-resizer:hover { background: var(--accent); opacity: .35; }
 .chat-head .btn-icon .ico { width: 20px; height: 20px; fill: currentColor; }
 .chat-head .btn-icon { color: var(--muted); }
-.chat-head .btn-icon.tb-on { color: var(--accent); background: var(--hover); }
+.chat-head .btn-icon.tb-on { background: var(--accent); color: #fff; }
 .btn-icon .ico { width: 22px; height: 22px; fill: currentColor; }
 #btn-shot .ico { width: 20px; height: 20px; }
 
@@ -698,10 +697,8 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 }
 .badge.off { background: var(--hover); color: var(--muted); }
 .plugin-desc { color: var(--muted); font-size: var(--fs-sm); margin-top: 4px; line-height: 1.4; }
-.theme-swatches { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: center; }
-.theme-swatches button {
-  width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
-}
+.theme-swatches { display: grid; grid-template-columns: repeat(9, 34px); gap: 8px; justify-content: start; }
+.theme-swatches button { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
 .theme-swatches button.on { border-color: var(--ink); }
 .theme-mode { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 .theme-mode button {
@@ -1118,7 +1115,8 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
   opacity: 0.26;
 }
 .settings-nav::before {
-  content: '无限牛马'; position: absolute; left: 0; right: 0; bottom: 46px;
+  content: var(--brand-watermark, 'CCArmy');
+  position: absolute; left: 0; right: 0; bottom: 46px;
   text-align: center; font-size: 12px; font-weight: 600;
   letter-spacing: 0.16em; color: var(--ink); opacity: 0.55;
   pointer-events: none;
@@ -1135,14 +1133,6 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .about-name { font-size: 22px; font-weight: 700; }
 
 /* ── 主题色：大色板 ── */
-.theme-swatches {
-  display: grid; grid-template-columns: repeat(12, 1fr);
-  gap: 6px; align-items: center;
-}
-.theme-swatches button {
-  width: 100%; aspect-ratio: 1 / 1; height: auto;
-  border-radius: 50%; padding: 0;
-}
 
 /* ── 本地 SKILL 列表 ── */
 .skill-row {
@@ -1202,3 +1192,10 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 /* ── SKILL 扫描路径提示 ── */
 .skill-paths { font-size: 11px; line-height: 1.6; word-break: break-all; margin-top: 6px; }
+
+/* ── 关于页/我的页：改用零留白紧裁 logo，彻底消除「间隙过大」 ── */
+.about-brand { gap: 0; padding: 6px 0 10px; }
+.about-logo { width: 320px; height: 183px; object-fit: fill; }
+.about-sub { margin-top: 0; }
+.about-ver-line { margin-top: 2px; }
+.brand-logo { width: 84px; height: 48px; object-fit: fill; }
