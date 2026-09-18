@@ -46,6 +46,12 @@
     lastSample: null,
     members: CFG.members || {},
     remoteInstanceIds: CFG.remoteInstanceIds || [],
+    /* 附八.9 / 附八.3：可达性（档位 / 中继）与本机 IPv6 事实。
+       默认**不给**（= 主进程还没报），此时 UI 必须显示"无法判定/未知"，而不是假装在跑。
+       真实主进程的 netStatus 里这两个字段是常有的（net-wiring 的 buildReachabilityHint）。 */
+    reachability: CFG.reachability || null,
+    ipv6: CFG.ipv6 || null,
+    sessions: CFG.sessions || 0,
     calls: [],
   };
   window.__netTest = net;
@@ -61,13 +67,21 @@
     get remoteInstanceIds() { return (net.remoteInstanceIds || []).slice(); },
     netLocalAddress: async function () {
       rec('netLocalAddress');
-      return { ok: true, localIp: net.localIp, publicIp: net.publicIp, behindNat: net.behindNat, port: 7788 };
+      // 真实 localAddressInfo() 也带 ipv6（附八.9 的"IPv6 单列一档"）
+      var out = { ok: true, localIp: net.localIp, publicIp: net.publicIp, behindNat: net.behindNat, port: 7788 };
+      if (net.ipv6) out.ipv6 = net.ipv6;
+      return out;
     },
     netProbe: async function () { rec('netProbe'); return Object.assign({ ok: true }, net.probe); },
     netStatus: async function () {
       var s = net.samples.length ? net.samples[net.sampleIdx++ % net.samples.length] : null;
       net.lastSample = s;
-      return { ok: true, meshEnabled: net.meshEnabled, link: s === null ? {} : { reachable: s, lastError: s ? '' : 'probe-timeout' } };
+      var out = { ok: true, meshEnabled: net.meshEnabled, link: s === null ? {} : { reachable: s, lastError: s ? '' : 'probe-timeout' } };
+      // 与真实 MeshStatusResult 同形状：可达性提示 / 本机 IPv6 事实 / 活会话数
+      if (net.reachability) out.reachability = net.reachability;
+      if (net.ipv6) out.ipv6 = net.ipv6;
+      out.sessions = net.sessions || 0;
+      return out;
     },
     netMembersPresence: async function (p) {
       return { ok: true, groupId: p && p.groupId, meshEnabled: net.meshEnabled, members: (net.members[(p && p.groupId) || ''] || []) };

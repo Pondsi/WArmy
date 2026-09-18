@@ -72,6 +72,14 @@ contextBridge.exposeInMainWorld('ccarmy', {
   identityChangeAcknowledge: (payload) => ipcRenderer.invoke('ccarmy:identity-change-ack', payload),
   // 本机已知的**全部**对端名片状态（「有谁换了证」）
   identityPeers: () => ipcRenderer.invoke('ccarmy:identity-peers'),
+  // 成员证书 + 吊销列表（ADR §附八.8）：签发 / 换证重签 / 吊销 / 收证书 / 同步吊销列表 / 名册判定
+  membershipList: (payload) => ipcRenderer.invoke('ccarmy:membership-list', payload),
+  membershipAuthorize: (payload) => ipcRenderer.invoke('ccarmy:membership-authorize', payload),
+  membershipIssue: (payload) => ipcRenderer.invoke('ccarmy:membership-issue', payload),
+  membershipRotate: (payload) => ipcRenderer.invoke('ccarmy:membership-rotate', payload),
+  membershipRevoke: (payload) => ipcRenderer.invoke('ccarmy:membership-revoke', payload),
+  membershipReceiveCert: (payload) => ipcRenderer.invoke('ccarmy:membership-receive-cert', payload),
+  membershipSyncRevocation: (payload) => ipcRenderer.invoke('ccarmy:membership-sync-revocation', payload),
   profileSetPassword: (pw) => ipcRenderer.invoke('ccarmy:profile-set-password', pw),
   profileLogin: (pw) => ipcRenderer.invoke('ccarmy:profile-login', pw),
   saveVoice: (data) => ipcRenderer.invoke('ccarmy:save-voice', data),

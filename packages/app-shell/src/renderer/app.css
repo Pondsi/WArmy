@@ -1390,3 +1390,27 @@ input.net-invalid { border-color: var(--danger) !important; }
 .net-switch input:disabled { cursor: not-allowed; }
 .net-switch-label { font-weight: 600; }
 
+/* ── 连接阶梯（附八.9 / 附八.3）：六档全列 + 当前档 + 中继状态 + 本机可拨入性 ──
+   置灰一律用 --ink-dim（对 --card / --hover / --active-list 都 ≥ 3.0），不用 --muted
+   （--muted 在选中态底色上只有 2.51）。 */
+.net-ladder {
+  margin: 8px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.net-ladder-head { font-size: var(--fs-sm); font-weight: 600; margin-bottom: 6px; }
+.net-ladder-list { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.net-rung { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-sm); color: var(--ink-dim); }
+.net-rung-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.55; flex-shrink: 0;
+}
+.net-rung[data-state='current'] { color: var(--ok-fg); font-weight: 600; }
+.net-rung[data-state='current'] .net-rung-dot { opacity: 1; }
+.net-rung[data-state='candidate'] { color: var(--ink); }
+.net-rung[data-state='candidate'] .net-rung-dot { opacity: 0.8; }
+.net-rung[data-state='unsupported'] { color: var(--ink-dim); font-style: italic; }
+.net-rung[data-state='unsupported'] .net-rung-dot { opacity: 0.3; }
+.net-ladder-kv { display: flex; gap: 8px; font-size: var(--fs-sm); margin-top: 2px; }
+.net-ladder-k { color: var(--ink-dim); flex-shrink: 0; }
+.net-ladder-v { color: var(--ink); font-weight: 600; }
+.net-ladder[data-terminal='1'] .net-ladder-v[data-terminal='1'] { color: var(--danger-fg); }
+

@@ -1792,6 +1792,8 @@
             <button class="btn-mini" id="btn-net-autofill">${t('net.autofill')}</button>
           </div>
           <div class="muted" id="net-local-info" style="margin:6px 0"></div>
+          <!-- 附八.9 / 附八.3：连接阶梯档位 + 中继状态（全部走 i18n；未实现的档如实标「尚未实现」） -->
+          <div class="net-ladder" id="net-ladder" data-sig=""></div>
           <div style="margin-top:6px">
             <label class="net-sub-label">${t('net.domainTitle')}</label>
             <div id="net-domains"></div>
@@ -2346,6 +2348,8 @@
     retryRounds: 3, // 先重试几轮
     backoffMs: [5000, 15000, 30000],
     tickMs: 1000,
+    // 可达性数据（档位/中继）的保鲜期：超过就不再据此下结论，避免"数据早过期了还在说"
+    reachTtlMs: 30000,
   };
 
   /**
@@ -2362,6 +2366,7 @@
       rounds: n(o.retryRounds, NET_DEFAULTS.retryRounds),
       backoff: Array.isArray(o.backoffMs) && o.backoffMs.length ? o.backoffMs.map(Number) : NET_DEFAULTS.backoffMs.slice(),
       tickMs: n(o.tickMs, NET_DEFAULTS.tickMs),
+      reachTtlMs: n(o.reachTtlMs, NET_DEFAULTS.reachTtlMs),
     };
   }
 
@@ -2421,6 +2426,20 @@
     presence: {},
     /** 组网层是否就绪（有 netStatus/netProbe 之类的 IPC 才算） */
     ready: null,
+    /**
+     * 附八.9 / 附八.3：组网层给的**可达性**（ReachabilityHint，结构化）。
+     * 档位名、中继结论、是否需要"有公网地址的机器做中继"都由它给；
+     * UI 只做 key → 文案的映射，**不在这里推断协议层没给的结论**。
+     */
+    reachability: null,
+    /** `reachability` 的采样时刻（过期就不再用它下结论） */
+    reachedAt: 0,
+    /** 本机 IPv6 事实（netStatus.ipv6 / netProbe.details.localIpv6 / netLocalAddress.ipv6） */
+    ipv6: null,
+    /** 最近一次 netStatus 里的对端探测行（用 `session` 判断是否已有活连接） */
+    linkPeers: [],
+    /** 活会话数（netStatus.sessions） */
+    sessions: 0,
     /** 渲染签名：相同就不重建 DOM（避免 1s 心跳把用户正在点的按钮刷掉） */
     renderedSig: '',
     booted: false,
@@ -2496,6 +2515,188 @@
     return changed;
   }
 
+  /* ── 附八.9 / 附八.3：连接阶梯档位与中继状态（UI 只做映射，不猜结论） ──
+   *
+   *  数据来源**全部是结构化的**：
+   *    · `netStatus.reachability`（ReachabilityHint）——`suggestedRung` / `i18n.rung` /
+   *      `relay`（RelayDecision）/ `needsPublicRelayNotice` / `dialableKind`；
+   *    · `netStatus.ipv6`、`netProbe.details.localIpv6`、`netLocalAddress.ipv6` —— 本机 IPv6 事实。
+   *  拿不到（或数据已过期）就显示"无法判定/未知"，**绝不**写成好像在跑。
+   */
+
+  /** 档位顺序（与 packages/sync-protocol/src/ladder.ts DEFAULT_LADDER_ORDER 一致；附八.9 定的顺序） */
+  const NET_RUNGS = ['ipv6-direct', 'public-direct', 'upnp', 'holepunch', 'relay', 'lan'];
+
+  /** 档位 → i18n key（键名与协议层 `LADDER_RUNG_I18N` 一一对应） */
+  const NET_RUNG_I18N = {
+    'ipv6-direct': 'net.rung.ipv6Direct',
+    'public-direct': 'net.rung.publicDirect',
+    upnp: 'net.rung.upnp',
+    holepunch: 'net.rung.holepunch',
+    relay: 'net.rung.relay',
+    lan: 'net.rung.lan',
+  };
+
+  /**
+   * 协议层**当前未实现**的档位（`packages/sync-protocol/src/ladder.ts` 里挂的是 unsupportedStrategy）：
+   *   · upnp      —— 未实现：UPnP/SSDP 与 NAT-PMP/PCP 需要额外依赖或原生模块
+   *   · holepunch —— 未实现：真实 STUN 服务器与同时打洞需要公网对端
+   * 这两档**绝不能**显示成"正在跑"：只能如实标「尚未实现（不可用）」（附八.3 的诚实性要求）。
+   * 即便将来主进程把它们报成当前档，这里也会拒绝把它显示为 current（见 netLadderModel）。
+   */
+  const NET_RUNG_UNSUPPORTED = { upnp: true, holepunch: true };
+
+  /** 中继结论码 → i18n key（与协议层 `relay.ts` 的 `RELAY_STATUS_I18N` 对齐） */
+  const NET_RELAY_I18N = {
+    'relay-selected': 'net.relay.selected',
+    'relay-none-configured': 'net.relay.missing.noneConfigured',
+    'relay-unreachable': 'net.relay.missing.unreachable',
+    'relay-not-needed-peer-dialable': 'net.relay.notNeeded.peerDialable',
+    'relay-not-needed-inbound-expected': 'net.relay.notNeeded.inboundExpected',
+    'dialability-unknown': 'net.relay.unknown',
+  };
+
+  /** 可拨入性结论类型 → i18n key（与协议层 `dialability.ts` 的 `DIALABILITY_I18N` 对齐） */
+  const NET_DIALABILITY_I18N = {
+    'peer-verified': 'net.dialability.peerVerified',
+    'ipv6-global-natural': 'net.dialability.ipv6Natural',
+    undetermined: 'net.dialability.undetermined',
+    undialable: 'net.dialability.undialable',
+  };
+
+  /** i18n key → 档位（主进程给的是 key 时反查；未知 key 返回 null，不瞎猜） */
+  function netRungFromKey(key) {
+    const k = String(key || '');
+    const hit = NET_RUNGS.filter((r) => NET_RUNG_I18N[r] === k)[0];
+    return hit || null;
+  }
+
+  /** i18n key → 可拨入性类型（同上） */
+  function netDialKindFromKey(key) {
+    const k = String(key || '');
+    const hit = Object.keys(NET_DIALABILITY_I18N).filter((x) => NET_DIALABILITY_I18N[x] === k)[0];
+    return hit || null;
+  }
+
+  /** 本机 IPv6 事实（三个来源形状不同，统一成 {hasGlobalUnicast, publicCandidate}；形状不符返回 null） */
+  function netIpv6Facts(v) {
+    if (!v || typeof v !== 'object' || typeof v.hasGlobalUnicast !== 'boolean') return null;
+    return { hasGlobalUnicast: v.hasGlobalUnicast === true, publicCandidate: v.publicCandidate || null };
+  }
+
+  /** 组网层给的可达性；过期 / 缺失一律返回 null（不拿旧数据下结论） */
+  function netReach() {
+    const r = netState.reachability;
+    if (!r || typeof r !== 'object') return null;
+    const at = Number(netState.reachedAt || 0);
+    if (!at || Date.now() - at > netTuning().reachTtlMs) return null;
+    return r;
+  }
+
+  /**
+   * 阶梯模型（**纯函数**：只读 netState，不碰 DOM）。
+   *   current   —— 能**确定**在用的档位（null = 还不能确定；注意未实现的档永远不会成为 current）
+   *   claimed   —— 主进程/协议层报上来的档位（可能落在未实现的档上，此时只用于如实标注）
+   *   suggested —— 建议首档（地址事实推出，尚未被选中）
+   *   relayKey / relayCode —— 中继状态
+   *   dialKind / dialDerived —— 本机可拨入性（是否由地址事实推出）
+   */
+  function netLadderModel() {
+    const r = netReach();
+    const dec = r && r.relay && typeof r.relay === 'object' ? r.relay : null;
+    const ipv6 = (r && r.ipv6) || netState.ipv6 || null;
+    const hasV6 = !!(ipv6 && ipv6.hasGlobalUnicast === true);
+    const relayCode = String((r && r.relayCode) || (dec && dec.code) || 'not-attempted');
+    const relaySelected = relayCode === 'relay-selected' || !!(dec && dec.selected === true);
+    const peers = Array.isArray(netState.linkPeers) ? netState.linkPeers : [];
+    const livePeers = peers.filter((p) => p && p.session === true);
+    const sessions = Number(netState.sessions || 0) || livePeers.length;
+
+    // ① 档位：主进程给什么就用什么（结构化优先：rung id → i18n key → 中继选中）
+    let claimed = null;
+    if (r && typeof r.rung === 'string' && NET_RUNG_I18N[r.rung]) claimed = r.rung;
+    else {
+      const byKey = r && r.i18n ? netRungFromKey(r.i18n.rung) : null;
+      if (byKey) claimed = byKey;
+      else if (relaySelected) claimed = 'relay';
+    }
+
+    // ② 建议首档（还没确定在走哪一档时，显示"将会先试哪一档"）
+    const suggested = r && typeof r.suggestedRung === 'string' && NET_RUNG_I18N[r.suggestedRung]
+      ? r.suggestedRung
+      : hasV6 ? 'ipv6-direct' : r ? 'public-direct' : null;
+
+    // ③ 未实现的档不得显示成"当前档位"（这是本次接线要防住的"写得像在跑"）
+    const current = claimed && !NET_RUNG_UNSUPPORTED[claimed] ? claimed : null;
+
+    // ④ 中继状态：优先用协议层自己选的 key（白名单校验过才用），否则按结论码映射
+    const wanted = r && r.i18n && typeof r.i18n.relay === 'string' ? r.i18n.relay : '';
+    const knownRelayKeys = Object.keys(NET_RELAY_I18N).map((k) => NET_RELAY_I18N[k]);
+    let relayKey;
+    if (wanted && knownRelayKeys.indexOf(wanted) >= 0) relayKey = wanted;
+    else if (NET_RELAY_I18N[relayCode]) relayKey = NET_RELAY_I18N[relayCode];
+    else if (r && r.needsPublicRelayNotice === true) relayKey = 'net.relay.missing.needsPublicRelay';
+    else relayKey = 'net.relay.unknown';
+
+    // ⑤ 本机可拨入性：优先协议层的结构化类型；不然由"已验证标志 + 地址事实"推出（并标 data-derived）
+    let dialKind = null;
+    if (r && typeof r.dialableKind === 'string' && NET_DIALABILITY_I18N[r.dialableKind]) dialKind = r.dialableKind;
+    else if (r && typeof r.dialableI18n === 'string') dialKind = netDialKindFromKey(r.dialableI18n);
+    let dialDerived = false;
+    if (!dialKind) {
+      dialDerived = true;
+      const self = r && typeof r.selfDialable === 'boolean' ? r.selfDialable : null;
+      const natural = (r && r.naturalDialable === true) || hasV6;
+      // 优先级与协议层 dialability.ts 一致：已验证 > 地址事实（IPv6 无 NAT）> 判定不可拨入 > 无法判定
+      dialKind = self === true ? 'peer-verified' : natural ? 'ipv6-global-natural' : self === false ? 'undialable' : 'undetermined';
+    }
+
+    return {
+      rungs: NET_RUNGS.slice(),
+      current,
+      claimed,
+      suggested,
+      connected: sessions > 0,
+      sessions,
+      relayCode,
+      relaySelected,
+      relayKey,
+      relayAttempts: dec && Array.isArray(dec.attempts) ? dec.attempts.length : 0,
+      dialKind,
+      dialDerived,
+      hasV6,
+      ipv6Candidate: ipv6 && ipv6.publicCandidate ? ipv6.publicCandidate : null,
+    };
+  }
+
+  /**
+   * 「双不可拨入且无中继」——附八.3 第 2 条的**终态**（不是"重试中"）。
+   *
+   * 只在**结构化数据**同时给出 bothUndialable 与 needsPublicRelayNotice 时才成立；
+   * 拿不到就返回 null —— 不猜、也不会把普通重试说成死锁（反过来也不会把死锁说成在转圈）。
+   */
+  function netRelayGap() {
+    const r = netReach();
+    if (!r) return null;
+    const dec = r.relay && typeof r.relay === 'object' ? r.relay : null;
+    const bothUndialable = r.bothUndialable === true || !!(dec && dec.bothUndialable === true);
+    const notice = r.needsPublicRelayNotice === true || !!(dec && dec.needsPublicRelayNotice === true);
+    if (!(bothUndialable && notice)) return null;
+    const code = String((dec && dec.code) || r.relayCode || '');
+    const key =
+      code === 'relay-unreachable'
+        ? 'net.relay.missing.unreachable'
+        : code === 'relay-none-configured'
+          ? 'net.relay.missing.noneConfigured'
+          : 'net.relay.missing.needsPublicRelay';
+    return {
+      code,
+      key,
+      bothUndialable: true,
+      attempts: dec && Array.isArray(dec.attempts) ? dec.attempts.length : 0,
+    };
+  }
+
   /** 本地实例（成员可能是邀请来的人，没有实例） */
   function localInstanceOf(member) {
     const id = String(member.instanceId || member.id || member.name || '');
@@ -2517,7 +2718,11 @@
     else if (remote && !netState.enabled) kind = 'meshOff';
     else if (remote && !online) kind = 'offline';
     else if (remote) kind = 'remoteOnline';
-    return { kind, remote, disabled, online };
+    // 在线判据的来历（结构化，供 DOM 属性与提示用）：
+    // local-instance=本机实例真实状态；mesh-session=活连接按指纹判定；
+    // unattributed=本机没有该成员的指纹，**无法归属**（此时不声称在线）
+    const basis = (p && p.basis) || (remote ? '' : 'local-instance');
+    return { kind, remote, disabled, online, basis, fingerprint: (p && p.fp) || '' };
   }
 
   /** 实例是否异地：显式标记、或组网层在成员表里标过 */
@@ -2593,6 +2798,9 @@
       if (r && r.ok !== false && (r.localIp || r.ip)) {
         netState.local = { ip: String(r.localIp || r.ip), publicIp: String(r.publicIp || ''), behindNat: !!r.behindNat, port: parsePort(r.port) || null };
       }
+      // 附八.9：本机 IPv6 事实（有全局单播 = 天然可拨入候选，阶梯第一档就是 IPv6 直连）
+      const v6 = r ? netIpv6Facts(r.ipv6) : null;
+      if (v6) netState.ipv6 = v6;
     } catch {
       /* noop */
     }
@@ -2642,7 +2850,15 @@
       if (outboundOk && isPublic) verdict = 'pass', code = 'public';
       else if (outboundOk && lanOnly) verdict = 'pass', code = 'lan';
       else if (!outboundOk) code = 'no-outbound';
-      probe = { verdict, code, isPublic, outboundOk, lanOnly, method: r.method || '', behindNat: !!r.behindNat, at: Date.now() };
+      probe = { verdict, code, isPublic, outboundOk, lanOnly, inboundVerified: r.inboundVerified === true,
+        method: r.method || '', behindNat: !!r.behindNat, at: Date.now() };
+    }
+    // 附八.9：检测结果里也带"本机有没有全局 IPv6 / 目标地址是不是可拨号的 IPv6 候选"
+    const v6 = netIpv6Facts(r && r.details ? r.details.localIpv6 : null);
+    if (v6) netState.ipv6 = v6;
+    if (probe && r && typeof r.naturallyDialable === 'boolean') probe.naturallyDialable = r.naturallyDialable;
+    if (probe && r && r.details && typeof r.details.targetIsDialableIpv6 === 'boolean') {
+      probe.targetIsDialableIpv6 = r.details.targetIsDialableIpv6;
     }
     netState.probing = false;
     netState.probe = probe;
@@ -2717,6 +2933,15 @@
     netState.ready = true;
     const reachable = st.link && typeof st.link.reachable === 'boolean' ? st.link.reachable : null;
     netState.linkSample = reachable;
+    // 附八.9 / 附八.3：档位与中继的**结构化**依据（这里只存，不在心跳路径上翻译）
+    netState.reachability = st.reachability && typeof st.reachability === 'object' ? st.reachability : null;
+    if (netState.reachability) netState.reachedAt = Date.now();
+    const v6 = netIpv6Facts(st.ipv6);
+    if (v6) netState.ipv6 = v6;
+    netState.linkPeers = st.link && Array.isArray(st.link.peers) ? st.link.peers : [];
+    netState.sessions = Number(st.sessions || 0) || 0;
+    // 档位区块只在签名变化时重建（1s 心跳不能把界面刷掉）
+    renderNetLadder();
     if (typeof st.meshEnabled === 'boolean' && st.meshEnabled !== netState.enabled) {
       netState.enabled = st.meshEnabled;
       renderNetCard();
@@ -2759,7 +2984,16 @@
       r.members.forEach((m) => {
         const key = String(m.id || m.name || '');
         if (!key) return;
-        bag[key] = { remote: !!m.remote, online: m.online !== false, disabled: !!m.disabled };
+        bag[key] = {
+          remote: !!m.remote,
+          online: m.online !== false,
+          disabled: !!m.disabled,
+          // 在线判据（主进程给的结构化字段）：'local-instance' | 'mesh-session' | 'unattributed'。
+          // 'unattributed' = 成员表里没有指纹，本机无法把人映射到指纹上 → 只用于展示"无法判定"，
+          // **不再据此声称在线**（R11 的精确判定依赖它）。
+          basis: String(m.presenceBasis || ''),
+          fp: String(m.fingerprint || ''),
+        };
         if (m.name) bag[String(m.name)] = bag[key]; // 成员表里 id 与显示名都可能被用来查
       });
       netState.presence[gid] = bag;
@@ -2788,6 +3022,8 @@
     const tn = netTuning();
     const l = netState.link;
     const info = netState.autoOffInfo;
+    // 附八.3 的**终态**：两端都不可拨入且没有可用中继 —— 再重试也没用，必须给"加一台中继"这条出路
+    const gap = netRelayGap();
     // ① 组网已关（含断链自动关）：只要有异地成员或刚自动关过，就出这一条
     if (!netState.enabled && (info || netState.remoteCount > 0)) {
       const sig = 'meshoff:' + netState.meshOffSeq;
@@ -2798,13 +3034,33 @@
         sig,
         tone: info ? 'danger' : 'warn',
         title: info ? fmtKey('net.banner.mergedTitle', { n: affected }) : t('net.banner.meshOffTitle'),
-        body: info
-          ? [fmtKey('net.banner.mergedBody', { fails: info.fails, secs: info.secs, rounds: info.rounds }), impact].filter(Boolean).join(' ')
-          : impact,
+        body: [
+          ...(info
+            ? [fmtKey('net.banner.mergedBody', { fails: info.fails, secs: info.secs, rounds: info.rounds }), impact]
+            : [impact]),
+          gap ? t(gap.key) : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
         showTurnOn: true,
       };
     }
-    // ② 仍在重试的断链：先提示（还没关组网）
+    // ② 终态优先于"正在重试"：双不可拨入且无中继时，转圈文案是**错的**（重试不会有结果）
+    if (gap) {
+      const sig = 'relaygap:' + gap.code;
+      if (netState.dismissed[sig]) return null;
+      return {
+        sig,
+        tone: 'danger',
+        terminal: true,
+        title: t('net.banner.relayTerminalTitle'),
+        body: t(gap.key),
+        // 终态要**可执行**：去设置里配一台有公网地址的机器做中继（而不是让用户等）
+        action: 'relaySettings',
+        showTurnOn: false,
+      };
+    }
+    // ③ 仍在重试的断链：先提示（还没关组网）
     if (l.linkDown) {
       const sig = 'link:' + (l.downSince || 0);
       if (netState.dismissed[sig]) return null;
@@ -3065,7 +3321,8 @@
       t('idchg.oldEmail') + ' ' + (hist ? String(hist.email || '').trim() || t('idchg.empty') : t('idchg.noHistory')) + ' · ' +
       t('idchg.oldPhone') + ' ' + (hist ? String(hist.phone || '').trim() || t('idchg.empty') : t('idchg.noHistory'));
     return (
-      '<div class="id-item' + (collapsed ? ' is-collapsed' : '') + '" data-cid="' + cid + '">' +
+      '<div class="id-item' + (collapsed ? ' is-collapsed' : '') + '" data-cid="' + cid + '"' +
+      ' data-scope-basis="' + escapeHtml(String(c.scopeBasis || '')) + '">' +
       '<div class="id-head">' +
       '<span class="id-title">' + escapeHtml(fmtKey('idchg.titleNamed', { name: c.subjectName || c.subjectId || '—' })) + '</span>' +
       '<span class="id-pending">' + escapeHtml(t('idchg.pending')) + '</span>' +
@@ -3134,15 +3391,19 @@
     const rows = [];
     if (netRow) {
       rows.push(
-        '<div class="bn-row net-row tone-' + netRow.tone + '" data-kind="net" data-sig="' + escapeHtml(netRow.sig) + '">' +
+        '<div class="bn-row net-row tone-' + netRow.tone + '" data-kind="net" data-sig="' + escapeHtml(netRow.sig) +
+          '" data-terminal="' + (netRow.terminal ? '1' : '0') + '">' +
           '<span class="bn-ico">' + BN_ICON[netRow.tone] + '</span>' +
           '<div class="bn-main">' +
           '<div class="bn-title">' + escapeHtml(netRow.title) + '</div>' +
           '<div class="bn-body">' + escapeHtml(netRow.body) + '</div>' +
-          (netRow.tone === 'danger' ? '<div class="bn-body">' + escapeHtml(t('net.banner.autoOff')) + '</div>' : '') +
+          (netRow.tone === 'danger' && !netRow.terminal ? '<div class="bn-body">' + escapeHtml(t('net.banner.autoOff')) + '</div>' : '') +
           '<div class="bn-actions">' +
           (netRow.showTurnOn
             ? '<button class="btn-mini" data-bn="turnOn">' + escapeHtml(t('net.banner.turnOn')) + '</button>'
+            : '') +
+          (netRow.action === 'relaySettings'
+            ? '<button class="btn-primary" data-bn="relaySettings">' + escapeHtml(t('net.banner.relayConfigure')) + '</button>'
             : '') +
           '<button class="btn-mini" data-bn="netDismiss" data-sig="' + escapeHtml(netRow.sig) + '">' + escapeHtml(t('net.banner.close')) + '</button>' +
           '<span class="bn-hint">' + escapeHtml(t('net.banner.dismissHint')) + '</span>' +
@@ -3205,6 +3466,11 @@
         else gotoNetSettings();
         netState.renderedSig = '';
         renderNetBanner();
+        return;
+      }
+      // 附八.3 终态的动作：去设置里配一台有公网地址的机器做中继（不是"再等一会儿"）
+      if (act === 'relaySettings') {
+        gotoNetSettings();
         return;
       }
       const cid = btn.dataset.cid;
@@ -3290,7 +3556,14 @@
     const p = netState.probe;
     if (netState.probing) return { text: t('net.detecting'), cls: '' };
     if (!p) return { text: '', cls: '' };
-    if (p.verdict === 'pass') return { text: t(p.code === 'lan' ? 'net.result.passLan' : 'net.result.pass'), cls: 'net-ok' };
+    if (p.verdict === 'pass') {
+      if (p.code === 'lan') return { text: t('net.result.passLan'), cls: 'net-ok' };
+      // 「公网可达」是**强断言**：它要求别人真的能拨进来。而检测实际只验了两件事
+      // ——「地址是公网」+「出站能连通」；入站可达性要第三方对端拨回才算验过。
+      // 没验过就照实补一句，不要把「地址是公网」说成「可达」（附八.3 的诚实性要求）。
+      const tail = p.inboundVerified === true ? '' : t('net.result.passUnverifiedInbound');
+      return { text: t('net.result.pass') + tail, cls: 'net-ok' };
+    }
     if (p.code === 'no-ipc' || p.code === 'probe-error') return { text: t('net.result.unknown'), cls: 'net-bad' };
     if (p.code === 'no-outbound') return { text: t('net.result.failOutbound'), cls: 'net-bad' };
     return { text: t('net.result.failPublic'), cls: 'net-bad' };
@@ -3298,8 +3571,68 @@
 
   function renderNetCard() {
     if (!$('net-card')) return;
+    renderNetLadder();
     renderNetDomains();
     renderNetProbeState();
+  }
+
+  /**
+   * 连接阶梯区块（`#net-ladder`）：六个档位**全部列出来**并标出当前档，
+   * 再给出中继状态与本机可拨入性。全部文案走 i18n（未实现的档额外标「尚未实现（不可用）」）。
+   *
+   * 为什么把六档全列出来：用户要能看出"现在在哪一档、下一档是什么、哪一档还没实现"，
+   * 只显示当前一档时，"打洞中"与"打洞未实现"在界面上会长得一模一样。
+   */
+  function renderNetLadder() {
+    const box = $('net-ladder');
+    if (!box) return;
+    const m = netLadderModel();
+    const gap = netRelayGap();
+    const dialKind = m.dialKind || 'undetermined';
+    const sig = JSON.stringify([
+      m.current, m.claimed, m.suggested, m.relayKey, m.relayCode, m.dialKind, m.dialDerived,
+      m.connected, m.sessions, m.hasV6, m.ipv6Candidate, gap ? gap.key : '', state.locale,
+    ]);
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.setAttribute('data-terminal', gap ? '1' : '0');
+
+    const items = m.rungs
+      .map((rung) => {
+        const unsupported = !!NET_RUNG_UNSUPPORTED[rung];
+        const isCurrent = m.current === rung;
+        const isSuggested = !m.current && m.suggested === rung;
+        // 未实现优先于一切：即便它就是"当前档"，也只能显示成 unsupported（不许像在跑）
+        const st = unsupported ? 'unsupported' : isCurrent ? 'current' : isSuggested ? 'candidate' : 'idle';
+        const text = t(NET_RUNG_I18N[rung]) + (unsupported ? ' · ' + t('net.ladder.unsupported') : '');
+        return (
+          '<li class="net-rung" data-rung="' + rung + '" data-state="' + st + '"' +
+          (isCurrent ? ' aria-current="true"' : '') + '>' +
+          '<span class="net-rung-dot" aria-hidden="true"></span>' +
+          '<span class="net-rung-text">' + escapeHtml(text) + '</span>' +
+          '</li>'
+        );
+      })
+      .join('');
+
+    const currentRung = m.current || m.suggested;
+    const currentText = currentRung ? t(NET_RUNG_I18N[currentRung]) : t('net.ladder.none');
+    box.innerHTML =
+      '<div class="net-ladder-head">' + escapeHtml(t('net.ladder.title')) + '</div>' +
+      '<ul class="net-ladder-list">' + items + '</ul>' +
+      '<div class="net-ladder-kv" data-k="current">' +
+      '<span class="net-ladder-k">' + escapeHtml(m.current ? t('net.ladder.current') : t('net.ladder.candidate')) + '</span>' +
+      '<span class="net-ladder-v" id="net-ladder-current" data-rung="' + escapeHtml(currentRung || '') +
+      '" data-derived="' + (m.current ? '0' : '1') + '" data-claimed="' + escapeHtml(m.claimed || '') + '">' +
+      escapeHtml(currentText) + '</span></div>' +
+      '<div class="net-ladder-kv" data-k="relay">' +
+      '<span class="net-ladder-k">' + escapeHtml(t('net.ladder.relay')) + '</span>' +
+      '<span class="net-ladder-v" id="net-ladder-relay" data-code="' + escapeHtml(m.relayCode) +
+      '" data-terminal="' + (gap ? '1' : '0') + '">' + escapeHtml(t(m.relayKey)) + '</span></div>' +
+      '<div class="net-ladder-kv" data-k="dialability">' +
+      '<span class="net-ladder-k">' + escapeHtml(t('net.ladder.dialability')) + '</span>' +
+      '<span class="net-ladder-v" id="net-ladder-dial" data-kind="' + escapeHtml(dialKind) +
+      '" data-derived="' + (m.dialDerived ? '1' : '0') + '">' + escapeHtml(t(NET_DIALABILITY_I18N[dialKind])) + '</span></div>';
   }
 
   /** 域名列表（1 个 IP + 多个域名）。只在需要重建行时调用，输入过程中不重建（会打断输入） */
@@ -3645,6 +3978,15 @@
     idContactDecision,
     idHistoryCard,
     idNewCard,
+    // 附八.9 / 附八.3：档位与中继的模型（纯函数，便于自动化直接断言映射与"未实现不显示成在跑"）
+    ladder: netLadderModel,
+    relayGap: netRelayGap,
+    renderLadder: renderNetLadder,
+    rungI18n: () => Object.assign({}, NET_RUNG_I18N),
+    rungUnsupported: () => Object.assign({}, NET_RUNG_UNSUPPORTED),
+    relayI18n: () => Object.assign({}, NET_RELAY_I18N),
+    dialabilityI18n: () => Object.assign({}, NET_DIALABILITY_I18N),
+    rungs: () => NET_RUNGS.slice(),
     refreshBanner: () => { netState.renderedSig = ''; renderNetBanner(); },
     refreshPresence: netRefreshPresence,
     refreshMembers,
@@ -5037,7 +5379,13 @@
                     ? ' is-offline'
                     : '';
             return (
-              '<div class="member-row' + cls + '" data-mid="' + escapeHtml(String(x.id || x.name)) + '" data-state="' + v.kind + '">' +
+              '<div class="member-row' + cls + '" data-mid="' + escapeHtml(String(x.id || x.name)) + '" data-state="' + v.kind + '"' +
+              ' data-presence-basis="' + escapeHtml(v.basis || '') + '"' +
+              (v.fingerprint ? ' data-fp="' + escapeHtml(v.fingerprint) + '"' : '') +
+              (v.remote && v.basis === 'unattributed'
+                ? ' data-presence-unknown="1" title="' + escapeHtml(t('group.memberPresenceUnknown')) + '"'
+                : '') +
+              '>' +
               '<span class="member-name' + (v.kind === 'disabled' ? ' struck' : '') + '">' +
               escapeHtml(x.name) + ' · ' + escapeHtml(String(x.role || '')) +
               '</span>' +

@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { attach, sleep, reporter } from './cdp-lib.mjs';
 
 const PORT = Number(process.env.PORT || 9555);
@@ -23,6 +24,35 @@ const OUT = process.env.CCARMY_NET_OUT || path.join(os.tmpdir(), 'ccarmy-net-ui'
 // 结果文件写回 OUT；目录可能还不存在（默认值就是临时目录），必须先建，否则跑完全部断言却因写结果而报错退出。
 fs.mkdirSync(OUT, { recursive: true });
 const HARNESS = fs.readFileSync(new URL('./net-ui-harness.js', import.meta.url), 'utf8');
+// i18n 真值包：用来把界面文案与语言包**逐字**比对（不是"看起来像翻译过"）
+const SELF_DIR = path.dirname(fileURLToPath(import.meta.url));
+const I18N_DIR = path.join(SELF_DIR, '..', 'src', 'i18n');
+const ZH = JSON.parse(fs.readFileSync(path.join(I18N_DIR, 'zh-CN.json'), 'utf8'));
+const EN = JSON.parse(fs.readFileSync(path.join(I18N_DIR, 'en-US.json'), 'utf8'));
+const CJK = /[\u4e00-\u9fff]/;
+
+/**
+ * 附八.9 / 附八.3 新增的键（「六档 + 中继 + 可拨入性」三组 + 阶梯区块与终态横幅的文案）。
+ * 这些键**必须在两包都有且非空**，且英文包里不能出现中文。
+ */
+const NEW_NET_KEYS = [
+  'net.rung.ipv6Direct', 'net.rung.publicDirect', 'net.rung.upnp', 'net.rung.holepunch', 'net.rung.relay', 'net.rung.lan',
+  'net.relay.selected', 'net.relay.missing.noneConfigured', 'net.relay.missing.unreachable', 'net.relay.missing.needsPublicRelay',
+  'net.relay.notNeeded.peerDialable', 'net.relay.notNeeded.inboundExpected', 'net.relay.unknown',
+  'net.dialability.peerVerified', 'net.dialability.ipv6Natural', 'net.dialability.undetermined', 'net.dialability.undialable',
+  'net.ladder.title', 'net.ladder.current', 'net.ladder.candidate', 'net.ladder.unsupported',
+  'net.ladder.relay', 'net.ladder.dialability', 'net.ladder.none',
+  'net.banner.relayTerminalTitle', 'net.banner.relayConfigure',
+];
+/** 六个档位与协议层 LADDER_RUNG_I18N 的对应（顺序 = 附八.9 定的阶梯顺序） */
+const RUNG_KEYS = [
+  ['ipv6-direct', 'net.rung.ipv6Direct'],
+  ['public-direct', 'net.rung.publicDirect'],
+  ['upnp', 'net.rung.upnp'],
+  ['holepunch', 'net.rung.holepunch'],
+  ['relay', 'net.rung.relay'],
+  ['lan', 'net.rung.lan'],
+];
 
 const R = reporter();
 const { ok, warn } = R;
@@ -874,6 +904,299 @@ try {
   ok(injObj.domainValue.indexOf('<img src=x') === 0, '11-3 域名输入框里是原始文本（属性值已转义）', injObj.domainValue.slice(0, 40));
   // 收尾：把桩数据还原，避免影响后续（本用例已是最后一段，仅保持状态干净）
   await c.evaluate("window.__idTest.setChanges([]); void window.__netUi.loadIdChanges(); true");
+
+  /* ══ 12. 附八.9 / 附八.3：连接阶梯档位 + 中继状态 + 终态（双不可拨入且无中继）══ */
+  step('12. 附八.9/附八.3 连接阶梯：六档文案 + 中继状态 + 终态（与"正在重试"区分开）');
+  at = '12 i18n 键对齐';
+
+  // 12a. 键必须两边都有、非空、英文包不许有中文（键集合对齐）
+  {
+    const missZh = NEW_NET_KEYS.filter((k) => typeof ZH[k] !== 'string' || !ZH[k].length);
+    const missEn = NEW_NET_KEYS.filter((k) => typeof EN[k] !== 'string' || !EN[k].length);
+    ok(missZh.length === 0 && missEn.length === 0,
+      '12-1 新增的 ' + NEW_NET_KEYS.length + ' 个 net.* 键在中英两包都存在且非空',
+      'zh 缺=' + JSON.stringify(missZh) + ' en 缺=' + JSON.stringify(missEn));
+    const cjk = NEW_NET_KEYS.filter((k) => CJK.test(EN[k]));
+    ok(cjk.length === 0, '12-1 英文包里这些键不含中文', JSON.stringify(cjk));
+    const groups = ['net.rung.', 'net.relay.', 'net.dialability.', 'net.ladder.'];
+    const misaligned = groups.flatMap((g) =>
+      Object.keys(ZH).filter((k) => k.startsWith(g) && !(k in EN)).concat(Object.keys(EN).filter((k) => k.startsWith(g) && !(k in ZH))));
+    ok(misaligned.length === 0, '12-1 中英两包的 net.rung./net.relay./net.dialability./net.ladder. 键集合完全对齐', JSON.stringify(misaligned));
+    ok(!CJK.test(EN['net.rung.ipv6Direct']) && EN['net.rung.ipv6Direct'].length > 0,
+      '12-1 IPv6 档的英文文案确实是英文', EN['net.rung.ipv6Direct']);
+  }
+
+  // 12b. 让阶梯区块吃到**组网层 IPC** 给的数据（走 netStatus 桩 → netPollOnce → 渲染，不是直接塞 DOM）
+  at = '12 打开组网并喂入可达性';
+  await c.evaluate("window.__netUi.net.probe = { verdict:'pass', at: Date.now(), isPublic:true, outboundOk:true, method:'autonat' }; true");
+  await c.evaluate("window.__netTest.setSamples([true]); void window.__netUi.setEnabled(true); true");
+  await c.waitFor('window.__netUi.net.enabled === true', { timeout: 8000, label: '12：组网打开（阶梯区块的前提）' });
+  await c.evaluate(`window.__netTest.setState({ ipv6: { hasGlobalUnicast: true, publicCandidate: '2001:db8::1' }, ipv6Facts: null }); true`);
+  await c.evaluate(`window.__netTest.setState({
+    reachability: {
+      selfDialable: true, peerDialable: true, bothUndialable: false, needsPublicRelayNotice: false,
+      relayCode: 'relay-not-needed-peer-dialable', localIpv6: { hasGlobalUnicast: true, publicCandidate: '2001:db8::1' },
+      ipv6: { hasGlobalUnicast: true, publicCandidate: '2001:db8::1' },
+      naturalDialable: true, dialableKind: 'peer-verified',
+      suggestedRung: 'ipv6-direct',
+      i18n: { rung: 'net.rung.ipv6Direct', relay: 'net.relay.notNeeded.peerDialable' },
+    }, sessions: 1,
+  }); true`);
+  await ensureNetCard();
+  await c.evaluate('void window.__netUi.heartbeat(); true');
+  await c.waitFor(`document.querySelectorAll('#net-ladder .net-rung').length === 6`, { timeout: 8000, label: '12：阶梯区块出现 6 档' });
+  ok((await cnt('#net-ladder .net-rung')) === 6, '12-2 组网卡片里把六个档位全部列出来（不是只显示当前一档）', 'rows=' + (await cnt('#net-ladder .net-rung')));
+  ok(await visible('#net-ladder'), '12-2 阶梯区块真实可见（有尺寸）');
+
+  // 12c. 六档文案逐字等于语言包（zh）
+  at = '12 六档文案（zh）';
+  const rungTexts = JSON.parse(await c.evaluate(`(function(){
+    var out={};
+    Array.from(document.querySelectorAll('#net-ladder .net-rung')).forEach(function(li){
+      out[li.dataset.rung] = { text: li.querySelector('.net-rung-text').textContent, state: li.dataset.state };
+    });
+    return JSON.stringify(out);
+  })()`));
+  const order = JSON.parse(await c.evaluate(`JSON.stringify(Array.from(document.querySelectorAll('#net-ladder .net-rung')).map(function(li){return li.dataset.rung;}))`));
+  ok(JSON.stringify(order) === JSON.stringify(RUNG_KEYS.map((x) => x[0])),
+    '12-2 六档顺序 = 附八.9 定的阶梯顺序（IPv6 → IPv4 → 映射 → 打洞 → 中继 → 局域网）', JSON.stringify(order));
+  const supported = [['ipv6-direct', 'net.rung.ipv6Direct'], ['public-direct', 'net.rung.publicDirect'], ['relay', 'net.rung.relay'], ['lan', 'net.rung.lan']];
+  const supportedBad = supported.filter(([r, k]) => !rungTexts[r] || rungTexts[r].text !== ZH[k]);
+  ok(supportedBad.length === 0, '12-2 已实现四档的文案**逐字**等于 zh-CN 语言包', JSON.stringify(supportedBad.map((x) => [x[0], rungTexts[x[0]] && rungTexts[x[0]].text, ZH[x[1]]])));
+  const unsupportedBad = [['upnp', 'net.rung.upnp'], ['holepunch', 'net.rung.holepunch']]
+    .filter(([r, k]) => !rungTexts[r] || rungTexts[r].text !== ZH[k] + ' · ' + ZH['net.ladder.unsupported']);
+  ok(unsupportedBad.length === 0, '12-2 未实现两档的文案 = 档位名 + 「尚未实现（不可用）」（逐字比对 zh 包）',
+    JSON.stringify(unsupportedBad.map((x) => [x[0], rungTexts[x[0]] && rungTexts[x[0]].text])));
+  const leaked = order.filter((r) => /net\.(rung|relay|ladder|dialability)\./.test(rungTexts[r] ? rungTexts[r].text : ''));
+  ok(leaked.length === 0, '12-2 六档文案里没有未翻译的 i18n key 泄漏', JSON.stringify(leaked));
+
+  // 12d. 未实现的档**不得**显示成"正在跑"
+  at = '12 未实现档不得像在跑';
+  ok(rungTexts['upnp'] && rungTexts['upnp'].state === 'unsupported' && rungTexts['holepunch'] && rungTexts['holepunch'].state === 'unsupported',
+    '12-3 upnp/holepunch 标为 unsupported（不是 current/candidate）', JSON.stringify({ upnp: rungTexts['upnp'], holepunch: rungTexts['holepunch'] }));
+  ok(rungTexts['ipv6-direct'] && rungTexts['ipv6-direct'].state === 'current',
+    '12-3 IPv6 档被标为当前档（附八.9：IPv6 无 NAT，是阶梯第一档）', JSON.stringify(rungTexts['ipv6-direct']));
+  ok((await cnt('#net-ladder .net-rung[data-state="current"]')) === 1, '12-3 当前档恒只有一个（不并列）', 'current=' + (await cnt('#net-ladder .net-rung[data-state="current"]')));
+  await okContrast('#net-ladder .net-rung[data-state="current"] .net-rung-text', '12-3 当前档文案可读（对比度 >= 3.0）');
+  await okContrast('#net-ladder .net-rung[data-state="unsupported"] .net-rung-text', '12-3 未实现档文案可读（置灰用 --ink-dim）');
+  await okContrast('#net-ladder .net-ladder-v', '12-3 阶梯取值文案可读');
+
+  // 主进程若（错误地）把未实现的档报成当前档，UI 也只能显示成 unsupported
+  await c.evaluate(`window.__netTest.setState({ reachability: Object.assign({}, window.__netTest.reachability, { suggestedRung: 'holepunch', i18n: { rung: 'net.rung.holepunch' } }) }); true`);
+  await c.evaluate('void window.__netUi.heartbeat(); true');
+  await c.waitFor(`document.querySelector('#net-ladder .net-rung[data-rung="holepunch"]').dataset.state === 'unsupported'`, { timeout: 8000, label: '12：上报未实现档后仍标 unsupported' });
+  const claimedView = JSON.parse(await c.evaluate(`(function(){
+    var li=document.querySelector('#net-ladder .net-rung[data-rung="holepunch"]');
+    var cur=document.querySelector('#net-ladder-current');
+    return JSON.stringify({ state: li.dataset.state, curRung: cur.dataset.rung, claimed: cur.dataset.claimed,
+      currentCount: document.querySelectorAll('#net-ladder .net-rung[data-state="current"]').length });
+  })()`));
+  ok(claimedView.state === 'unsupported' && claimedView.currentCount === 0,
+    '12-3 即便组网层把打洞报成当前档，界面也**拒绝**显示成"正在打洞"（如实标未实现）', JSON.stringify(claimedView));
+  ok(claimedView.claimed === 'holepunch', '12-3 但仍如实记录"组网层声称的档"（可诊断，不丢信息）', JSON.stringify(claimedView));
+
+  // 12e. 中继状态四条文案（走 i18n）
+  at = '12 中继状态';
+  /** 用**组网层桩**喂一条可达性（走 netStatus → netPollOnce → 渲染链路），并立刻心跳一次 */
+  const setReach = async (reach) => {
+    await c.evaluate(`window.__netTest.setState({ reachability: ${JSON.stringify(reach)} }); true`);
+    await c.evaluate('void window.__netUi.heartbeat(); true');
+  };
+  const relayText = () => c.evaluate("(function(){var e=document.querySelector('#net-ladder-relay');return e?e.textContent:null;})()");
+  const relayCode = () => c.evaluate("(function(){var e=document.querySelector('#net-ladder-relay');return e?e.dataset.code:null;})()");
+
+  await setReach({ relayCode: 'relay-not-needed-peer-dialable', suggestedRung: 'ipv6-direct', i18n: { rung: 'net.rung.ipv6Direct', relay: 'net.relay.notNeeded.peerDialable' } });
+  ok((await relayText()) === ZH['net.relay.notNeeded.peerDialable'], '12-4 对端可直连 → 「无需中继」文案（逐字等于 zh 包）', await relayText());
+
+  await setReach({ relayCode: 'relay-none-configured', i18n: {} });
+  ok((await relayText()) === ZH['net.relay.missing.noneConfigured'] && (await relayCode()) === 'relay-none-configured',
+    '12-4 无中继候选 → 「需要一台有公网地址的机器做中继」（逐字等于 zh 包）', await relayText());
+
+  await setReach({ relayCode: 'relay-unreachable', i18n: {} });
+  ok((await relayText()) === ZH['net.relay.missing.unreachable'], '12-4 配了中继但都连不上 → 如实报缺口（逐字等于 zh 包）', await relayText());
+
+  await setReach({
+    relayCode: 'relay-selected', i18n: { rung: 'net.rung.relay', relay: 'net.relay.selected' },
+    relay: { needed: true, selected: true, code: 'relay-selected', reason: 'x', bothUndialable: false, tokenSymmetric: true, attempts: [{ addr: { host: '203.0.113.7', port: 7788 }, ok: true, ms: 12 }], needsPublicRelayNotice: false },
+  });
+  ok((await relayText()) === ZH['net.relay.selected'], '12-4 选中可用中继 → 「经中继（更慢，但可用）」（逐字等于 zh 包）', await relayText());
+  const relayCurrent = JSON.parse(await c.evaluate(`(function(){var li=document.querySelector('#net-ladder .net-rung[data-rung="relay"]');var cur=document.querySelector('#net-ladder-current');return JSON.stringify({state: li.dataset.state, curText: cur.textContent, code: document.querySelector('#net-ladder-relay').dataset.code});})()`));
+  ok(relayCurrent.state === 'current' && relayCurrent.curText === ZH['net.rung.relay'],
+    '12-4 中继被选中时，当前档位随之变为"中继"', JSON.stringify(relayCurrent));
+
+  // 12f. 本机可拨入性四类
+  at = '12 可拨入性';
+  const dialView = () => c.evaluate("(function(){var e=document.querySelector('#net-ladder-dial');return e?{kind:e.dataset.kind, text:e.textContent, derived:e.dataset.derived}:null;})()");
+  await setReach({ i18n: {}, dialableKind: 'peer-verified', naturalDialable: true });
+  let dv = await dialView();
+  ok(dv && dv.kind === 'peer-verified' && dv.text === ZH['net.dialability.peerVerified'] && dv.derived === '0',
+    '12-5 已验证可拨入 → 走协议层给的 dialableKind（不是本地猜的）', JSON.stringify(dv));
+  await setReach({ i18n: {}, selfDialable: false, naturalDialable: true });
+  dv = await dialView();
+  ok(dv && dv.kind === 'ipv6-global-natural' && dv.text === ZH['net.dialability.ipv6Natural'] && dv.derived === '1',
+    '12-5 有全局 IPv6（地址事实）→ 天然可拨入，且标出是本地推导（data-derived=1）', JSON.stringify(dv));
+  await setReach({ i18n: {}, selfDialable: false, naturalDialable: false, ipv6: { hasGlobalUnicast: false, publicCandidate: null } });
+  await c.evaluate("window.__netTest.setState({ ipv6: { hasGlobalUnicast: false, publicCandidate: null } }); true");
+  await c.evaluate('void window.__netUi.heartbeat(); true');
+  await c.waitFor("document.querySelector('#net-ladder-dial').dataset.kind === 'undialable'", { timeout: 8000, label: '12：判定不可拨入' });
+  dv = await dialView();
+  ok(dv && dv.kind === 'undialable' && dv.text === ZH['net.dialability.undialable'], '12-5 有结论但不可拨入 → 「判定不可拨入」', JSON.stringify(dv));
+  await setReach({ i18n: {} });
+  dv = await dialView();
+  ok(dv && dv.kind === 'undetermined' && dv.text === ZH['net.dialability.undetermined'], '12-5 没有任何可拨入性数据 → 「无法判定」（不猜）', JSON.stringify(dv));
+
+  /* 12g. 终态：双不可拨入且无中继 —— 必须与"正在重试"区分开，且给可执行的出路 */
+  at = '12 终态：先造出"正在重试"的对照组';
+  // 把重试节奏放慢，好让"重试中"与"终态"两个状态都稳定可观测（退避 60s → 不会自动关组网）
+  await c.evaluate('window.__netTuning = { hysteresisFailures: 3, hysteresisSeconds: 1, retryRounds: 3, backoffMs: [60000,60000,60000], tickMs: 200, reachTtlMs: 30000 }; true');
+  await c.evaluate("window.__netTest.setState({ reachability: null, sessions: 0, samples: [false] }); true");
+  await c.waitFor(`!!document.querySelector('${netRowSel}')`, { timeout: 12000, label: '12：断链横幅（对照组）' });
+  const retryRow = JSON.parse(await c.evaluate(`(function(){var r=document.querySelector('${netRowSel}');return JSON.stringify({terminal:r.dataset.terminal, text:r.textContent, title:r.querySelector('.bn-title').textContent});})()`));
+  ok(retryRow.terminal === '0' && /正在自动重试/.test(retryRow.text),
+    '12-6 对照组：只有"链路失败"时是**重试**文案（data-terminal=0）', String(retryRow.title).slice(0, 40));
+  ok(/第 \d+\/3 轮/.test(retryRow.text), '12-6 对照组确实在报重试轮次（证明对照组不是假的）', String(retryRow.text).slice(0, 80));
+
+  at = '12 终态：双不可拨入且无中继';
+  /** 附八.3 第 2 条的终态数据（bothUndialable + needsPublicRelayNotice + 缺口码） */
+  const GAP_REACH = {
+    selfDialable: false, peerDialable: false, bothUndialable: true, needsPublicRelayNotice: true,
+    relayCode: 'relay-none-configured',
+    ipv6: { hasGlobalUnicast: false, publicCandidate: null }, naturalDialable: false, dialableKind: 'undialable',
+    relay: {
+      needed: true, selected: false, code: 'relay-none-configured', reason: 'x', selfDialable: false, peerDialable: false,
+      bothUndialable: true, tokenSymmetric: false, attempts: [], needsPublicRelayNotice: true,
+    },
+    i18n: { relay: 'net.relay.missing.needsPublicRelay' },
+  };
+  await setReach(GAP_REACH);
+  await c.waitFor(`document.querySelector('${netRowSel}') && document.querySelector('${netRowSel}').dataset.terminal === '1'`, {
+    timeout: 12000, label: '12：终态横幅出现（覆盖重试文案）',
+  });
+  const termRow = JSON.parse(await c.evaluate(`(function(){var r=document.querySelector('${netRowSel}');
+    return JSON.stringify({ terminal:r.dataset.terminal, title:r.querySelector('.bn-title').textContent, body:r.querySelector('.bn-body').textContent,
+      btn:(r.querySelector('button[data-bn="relaySettings"]')||{}).textContent||'', hasTurnOn: !!r.querySelector('button[data-bn="turnOn"]'),
+      n:document.querySelectorAll('${netRowSel}').length });})()`));
+  ok(termRow.n === 1, '12-6 终态与"正在重试"只能有一条组网横幅（DOM 恒一行）', 'rows=' + termRow.n);
+  ok(termRow.title === ZH['net.banner.relayTerminalTitle'], '12-6 终态标题走 i18n（逐字等于 zh 包）', String(termRow.title).slice(0, 40));
+  ok(termRow.body === ZH['net.relay.missing.noneConfigured'],
+    '12-6 终态正文给出**可执行**的说法：需要一台有公网地址的机器做中继（逐字等于 zh 包）', String(termRow.body).slice(0, 70));
+  ok(!/正在自动重试|第 \d+\/3 轮/.test(termRow.body), '12-6 终态里**没有**通用重试文案（重试没用，不该转圈）', String(termRow.body).slice(0, 60));
+  ok(termRow.btn === ZH['net.banner.relayConfigure'], '12-6 终态带可执行动作按钮（去设置配中继），文案走 i18n', String(termRow.btn).slice(0, 40));
+  ok(termRow.hasTurnOn === false, '12-6 终态不给"打开组网"按钮（组网本来就开着，那不是这个问题的出路）');
+  await okContrast(netRowSel + ' .bn-title', '12-6 终态横幅标题可读');
+  await okContrast(netRowSel + ' button[data-bn="relaySettings"]', '12-6 终态动作按钮可读');
+
+  // 组网横幅恒一行：同时存在身份变更行时也一样（两类各行一条）。
+  // 身份变更行只在**会话可见**时出现（idRowModel 的既有语义），所以先回到会话再注入。
+  at = '12 终态 + 身份变更行并存';
+  await navTo('internalGroup');
+  await c.waitFor(`!!document.querySelector('${netRowSel}')`, { timeout: 8000, label: '12：离开设置页后终态横幅仍在' });
+  await c.evaluate(`window.__idTest.setChanges([{ id:'gap-id-1', ts: Date.now(), receivedAt: Date.now(), generation: 4,
+    subjectId:'ext-9', subjectName:'王五', oldFingerprint:'FP-OLD-Z', newFingerprint:'FP-NEW-Z',
+    previousCard:{ email:'wangwu@old.example', phone:'' }, pendingCard:{ email:'wangwu@new.example', phone:'' },
+    contactFreezeUntil: Date.now() + 86400000, frozen:true, remainingMs: 86400000, scopes:[{ kind:'internal', id:'g-1' }] }]); void window.__netUi.loadIdChanges(); true`);
+  await c.waitFor(`!!document.querySelector('${idRowSel}')`, { timeout: 9000, label: '12：身份变更行在场' });
+  await c.evaluate('window.__netUi.refreshBanner(); true');
+  const bothRows = JSON.parse(await c.evaluate(`JSON.stringify({ net: document.querySelectorAll('${netRowSel}').length, idchg: document.querySelectorAll('${idRowSel}').length })`));
+  ok(bothRows.net === 1 && bothRows.idchg === 1, '12-6 终态横幅与身份变更横幅并存时，组网行仍恒为一行', JSON.stringify(bothRows));
+  await c.evaluate("window.__idTest.setChanges([]); void window.__netUi.loadIdChanges(); true");
+  await c.waitFor(`!document.querySelector('${idRowSel}')`, { timeout: 8000, label: '12：身份变更行收回' });
+
+  // 12h. 真实点击终态按钮 → 跳到组网设置卡片
+  at = '12 点终态按钮去设置';
+  await c.waitFor(`!!document.querySelector('${netRowSel}')`, { timeout: 8000, label: '12：终态横幅仍在（准备点击）' });
+  await clickReal(netRowSel + ' button[data-bn="relaySettings"]', "!!document.querySelector('.rail-item[data-nav=\"settings\"].active') && !!document.querySelector('#net-card')");
+  ok(await exists('#net-card'), '12-6 点「配置中继」真实跳进设置页的组网卡片（可执行，不是死胡同）');
+  const termLadder = JSON.parse(await c.evaluate(`(function(){var e=document.querySelector('#net-ladder-relay');var b=document.querySelector('#net-ladder');return JSON.stringify({code:e?e.dataset.code:null, terminal:b?b.dataset.terminal:null, text:e?e.textContent:null});})()`));
+  ok(termLadder.terminal === '1' && termLadder.text === ZH['net.relay.missing.noneConfigured'],
+    '12-6 卡片里的中继状态同步标出"需要中继"（与横幅一致）', JSON.stringify(termLadder));
+
+  // 12i. 过期数据不作数（不拿旧结论说话）：链路恢复后关组网 → 不再轮询 → 旧结论过期即失效
+  at = '12 数据过期';
+  await c.evaluate('window.__netTest.setSamples([true]); true');
+  await c.waitFor('window.__netUi.net.link.linkDown === false', { timeout: 10000, label: '12：链路恢复' });
+  await c.evaluate("window.__netTest.setState({ members: { 'g-1': [ { id:'remote-bob', name:'remote-bob', remote:true, online:true } ] } }); true");
+  await c.evaluate('void window.__netUi.refreshPresence(); true');
+  await c.waitFor('window.__netUi.net.remoteCount >= 1', { timeout: 8000, label: '12：异地成员就绪（组网关闭行需要它）' });
+  await c.evaluate('void window.__netUi.setEnabled(false); true');
+  await c.waitFor('window.__netUi.net.enabled === false', { timeout: 8000, label: '12：关组网（停止轮询）' });
+  await c.waitFor(`!!document.querySelector('${netRowSel}')`, { timeout: 8000, label: '12：组网已关闭横幅' });
+  const freshOff = await c.evaluate(`document.querySelector('${netRowSel} .bn-body').textContent`);
+  ok(String(freshOff).indexOf(ZH['net.relay.missing.noneConfigured']) >= 0,
+    '12-7 关组网后（数据仍新鲜）组网关闭横幅里带上"需要中继"这条出路', String(freshOff).slice(0, 80));
+  await c.evaluate('window.__netTuning.reachTtlMs = 200; true');
+  await sleep(600);
+  await c.evaluate('window.__netUi.refreshBanner(); window.__netUi.renderLadder(); true');
+  const staleOff = await c.evaluate(`document.querySelector('${netRowSel} .bn-body').textContent`);
+  ok(String(staleOff).indexOf(ZH['net.relay.missing.noneConfigured']) < 0,
+    '12-7 数据过期（> reachTtlMs）后不再拿它下结论：横幅不再声称"需要中继"', String(staleOff).slice(0, 80));
+  ok((await c.evaluate(`document.querySelectorAll('${netRowSel}').length`)) === 1,
+    '12-7 过期只影响"可达性结论"，组网关闭这件事本身照常显示（不误删真实状态）');
+  const staleLadder = await c.evaluate("(function(){var e=document.querySelector('#net-ladder-relay');return e?e.textContent:null;})()");
+  ok(staleLadder === ZH['net.relay.unknown'], '12-7 过期后卡片里的中继状态退回「未知」而不是继续声称需要中继', String(staleLadder).slice(0, 40));
+
+  // 12j. 英文包（同一批断言再来一遍）
+  at = '12 切英文';
+  await c.evaluate("(function(){var s=document.querySelector('#sel-locale'); s.value='en-US'; s.dispatchEvent(new Event('change',{bubbles:true})); return true;})()");
+  await c.waitFor("document.querySelector('#logo-name').textContent === 'CCArmy'", { timeout: 10000, label: '12：切到 en-US' });
+  // 组网开着才会有 netStatus 轮询 → 可达性才会进到界面（12i 收尾时关掉了）
+  await c.evaluate('window.__netTuning.reachTtlMs = 30000; true');
+  await c.evaluate("void window.__netUi.setEnabled(true); true");
+  await c.waitFor('window.__netUi.net.enabled === true', { timeout: 8000, label: '12：英文下重新打开组网' });
+  await ensureNetCard();
+  await c.evaluate(`window.__netTest.setState({ reachability: ${JSON.stringify({
+    selfDialable: false, peerDialable: false, bothUndialable: true, needsPublicRelayNotice: true,
+    relayCode: 'relay-unreachable',
+    ipv6: { hasGlobalUnicast: true, publicCandidate: '2001:db8::1' }, naturalDialable: true, dialableKind: 'ipv6-global-natural',
+    suggestedRung: 'ipv6-direct', i18n: { rung: 'net.rung.ipv6Direct', relay: 'net.relay.missing.unreachable' },
+  })}, ipv6: { hasGlobalUnicast: true, publicCandidate: '2001:db8::1' }, sessions: 0 }); true`);
+  await c.evaluate('void window.__netUi.heartbeat(); true');
+  await c.waitFor(`document.querySelector('#net-ladder .net-rung[data-rung="lan"]').querySelector('.net-rung-text').textContent.indexOf('LAN') >= 0`, {
+    timeout: 10000, label: '12：英文下阶梯区块刷新',
+  });
+  const enRungs = JSON.parse(await c.evaluate(`(function(){
+    var out={};
+    Array.from(document.querySelectorAll('#net-ladder .net-rung')).forEach(function(li){
+      out[li.dataset.rung] = { text: li.querySelector('.net-rung-text').textContent, state: li.dataset.state };
+    });
+    return JSON.stringify(out);
+  })()`));
+  const enBad = RUNG_KEYS.filter(([r, k]) => {
+    const want = (r === 'upnp' || r === 'holepunch') ? EN[k] + ' · ' + EN['net.ladder.unsupported'] : EN[k];
+    return !enRungs[r] || enRungs[r].text !== want;
+  });
+  ok(enBad.length === 0, '12-8 英文包下六档文案**逐字**等于 en-US 语言包', JSON.stringify(enBad.map((x) => [x[0], enRungs[x[0]] && enRungs[x[0]].text, EN[x[1]]])));
+  ok((await c.evaluate("(function(){var t=document.querySelector('#net-ladder').textContent;return /[\\u4e00-\\u9fff]/.test(t);})()")) === false,
+    '12-8 英文包下阶梯区块里**没有中文**');
+  const enTerm = JSON.parse(await c.evaluate(`(function(){var r=document.querySelector('${netRowSel}');
+    return JSON.stringify({ terminal:r?r.dataset.terminal:null, title:r?r.querySelector('.bn-title').textContent:null,
+      body:r?r.querySelector('.bn-body').textContent:null, btn:r?(r.querySelector('button[data-bn="relaySettings"]')||{}).textContent||'':null });})()`));
+  ok(enTerm.terminal === '1' && enTerm.title === EN['net.banner.relayTerminalTitle'],
+    '12-8 英文下终态横幅标题走英文包', String(enTerm.title).slice(0, 60));
+  ok(enTerm.body === EN['net.relay.missing.unreachable'] && enTerm.btn === EN['net.banner.relayConfigure'],
+    '12-8 英文下终态正文与按钮走英文包（且是"中继都连不上"这一条）', String(JSON.stringify(enTerm)).slice(0, 120));
+  const enCjk = await c.evaluate(`(function(){
+    var bad=[];
+    ['#net-card','#net-banner'].forEach(function(root){
+      var host=document.querySelector(root); if(!host) return;
+      Array.from(host.querySelectorAll('*')).forEach(function(e){
+        if(e.children.length) return;
+        var tag=e.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='OPTION') return;
+        var t=(e.textContent||'').trim();
+        if(/[\\u4e00-\\u9fff]/.test(t)) bad.push(tag+'#'+(e.id||e.className||'')+':'+t.slice(0,24));
+      });
+    });
+    return JSON.stringify(bad.slice(0,8));
+  })()`);
+  ok(enCjk === '[]', '12-8 英文包下组网卡片与横幅里没有中文残留（可见文字全部走 i18n）', String(enCjk).slice(0, 160));
+  await c.evaluate("(function(){var s=document.querySelector('#sel-locale'); s.value='zh-CN'; s.dispatchEvent(new Event('change',{bubbles:true})); return true;})()");
+  await c.waitFor("document.querySelector('#logo-name').textContent === '无限牛马'", { timeout: 10000, label: '12：切回中文' });
+
+  // 收尾：把桩数据清干净，避免影响最后的全局断言
+  await c.evaluate("window.__netTuning = { hysteresisFailures: 3, hysteresisSeconds: 30, retryRounds: 3, backoffMs: [5000,15000,30000], tickMs: 1000, reachTtlMs: 30000 }; true");
+  await c.evaluate("window.__netTest.setState({ reachability: null, ipv6: null, sessions: 0, samples: [true] }); true");
+  await c.evaluate('void window.__netUi.setEnabled(false); true');
+  await c.waitFor('window.__netUi.net.enabled === false', { timeout: 8000, label: '12：收尾（关组网）' });
 
   const errs = c.errors();
   ok(errs.length === 0, '全程无控制台异常/未捕获错误', JSON.stringify(errs.slice(0, 3)).slice(0, 240));

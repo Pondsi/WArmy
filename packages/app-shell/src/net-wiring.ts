@@ -14,7 +14,10 @@
  *   · 降级：**入站可达性**（"别人能不能拨到我"）需要一台真的在公网的第三方对端来拨回；
  *     本机自测只能证明「同机/同网可达」→ 结论里显式带 `inboundVerified: false`，
  *     绝不因为"地址字面看起来是公网"就宣称公网可达。
- *   · 未实现：UPnP / NAT-PMP 端口映射、打洞（对称 NAT）、中继。
+ *   · 未实现：UPnP / NAT-PMP 端口映射、打洞（真实 STUN + 同时打洞）。
+ *     中继**只实现了判定与候选探测**（`decideRelay`：真拨一次候选地址）——
+ *     转发隧道在协议层（`relay.ts` 的 RelayTunnel*），接线层**尚未启用**，
+ *     所以 `canDial`/可达性只报结论，不假装隧道已在跑。
  *
  * 旧实现（`lan.ts` / `mesh.ts`）保留文件但**不再被主进程使用**：它们是明文 JSONL、无握手、无身份。
  */
@@ -32,8 +35,24 @@ import {
   SecureSyncServer,
   SecureSession,
   classifyAddress,
+  classifyIpv6Scope,
+  decideRelay,
+  inspectLocalIpv6,
+  isPublicDialCandidate,
+  DIALABILITY_I18N,
+  LADDER_RUNG_I18N,
+  RELAY_STATUS_I18N,
+  normalizeHostLiteral,
+  resolveCanDial,
+  type CanDialResolution,
+  type CanDialSignals,
+  type DialableKind,
   type HandshakeFailureRecord,
+  type Ipv6Report,
+  type LadderRung,
   type MemberLiveness,
+  type RelayCandidateRef,
+  type RelayDecision,
   type SyncMessage,
 } from '@ccarmy/sync-protocol';
 import {
@@ -103,6 +122,8 @@ export interface LocalAddressInfo {
   /** 公网地址 ≠ 本机任一网卡地址 → NAT 后才有了公网地址（证据更强） */
   behindNatConfirmed?: boolean;
   tcp?: TcpProbeResult;
+  /** 本机 IPv6 事实（附八.9：有全局单播 = 天然可拨入候选，无需打洞） */
+  ipv6?: { hasGlobalUnicast: boolean; publicCandidate: string | null; ula: string[]; linkLocal: string[]; reason: string };
 }
 
 function isIpv4(v: string): boolean {
@@ -146,6 +167,64 @@ export function pickLocalAddress(all: string[]): string {
   const sorted = [...all].sort((a, b) => rank(a) - rank(b));
   if (sorted.length > 0) return sorted[0] as string;
   return '127.0.0.1';
+}
+
+/* ────────────────────────── IPv6 / 可达性接线（ADR 附八.9 / 附八.3） ────────────────────────── */
+
+/**
+ * 本机 IPv6 事实（真实现：`os.networkInterfaces`，两种 `family` 写法都认）。
+ * 附八.9：**有全局单播 IPv6 = 天然可拨入候选**（IPv6 无 NAT）⇒ 阶梯第一档就是 IPv6 直连，
+ * 有 IPv6 的用户不该被误判成"非公网、不可组网"而白走打洞/中继。
+ */
+export function listLocalIpv6(): Ipv6Report {
+  return inspectLocalIpv6();
+}
+
+/** 本机 IPv6 是否构成"天然可拨入候选"（不含"已验证公网可达"的意思） */
+export function hasNaturalIpv6Reachability(): boolean {
+  return inspectLocalIpv6().hasGlobalUnicast;
+}
+
+/**
+ * 可拨入性的**结构化类型**（与协议层 `dialability.ts` 的优先级一致）：
+ *  已验证可拨入（对端真的拨回来过）> 地址事实（全局 IPv6 无 NAT）> 判定不可拨入 > 无法判定。
+ *
+ * 单独一个函数的理由：UI 与日志都要能区分"验证过"和"只是地址事实"，
+ * 所以这里只产出**类型**，不产出布尔（附八.9）。
+ */
+export function dialableKindOf(selfDialable: boolean | undefined, hasGlobalIpv6: boolean): DialableKind {
+  if (selfDialable === true) return 'peer-verified';
+  if (hasGlobalIpv6) return 'ipv6-global-natural';
+  return selfDialable === false ? 'undialable' : 'undetermined';
+}
+
+/**
+ * 可达性提示（**结构化**：只给结论码与 i18n key，绝不拼句子）。
+ * 附八.9 的"IPv6 单列一档"与附八.3 的"中继兜底 + 明确告知"都在这里落地给 UI 用。
+ */
+export interface ReachabilityHint {
+  /** 本机 IPv6 事实 */
+  ipv6: { hasGlobalUnicast: boolean; publicCandidate: string | null; ula: string[]; linkLocal: string[]; reason: string };
+  /** 本机是否可拨入（undefined = 未测） */
+  selfDialable?: boolean;
+  /** 建议的阶梯首档 */
+  suggestedRung: LadderRung;
+  /**
+   * 附八.9：本机是否有"地址事实推出"的天然可拨入候选（有全局单播 IPv6 ⇒ IPv6 无 NAT）。
+   * **与 `selfDialable` 是两件事**：前者是地址事实（未验证），后者是对端拨回来的结论（已验证）。
+   * 两者都不给布尔合并，UI 才能说清"是验证过还是只是地址事实"。
+   */
+  naturalDialable?: boolean;
+  /** 可拨入性的**结构化类型**（协议层 DialableKind；UI 按它选 i18n key，不解析句子） */
+  dialableKind?: DialableKind;
+  /** 与 `dialableKind` 对应的 i18n key（`net.dialability.*`） */
+  dialableI18n?: string;
+  /** 中继判定（附八.3；结构化，含"需要一台有公网地址的机器做中继"这个状态） */
+  relay?: RelayDecision;
+  /** 需要 UI 明确告知"两端都无法直连，需要中继" */
+  needsPublicRelayNotice: boolean;
+  /** i18n key（net.rung.* / net.relay.*） */
+  i18n: { rung: string; relay?: string };
 }
 
 /** 公网地址回显服务（多个，取第一个成功且格式合法的）。这是**尽力而为**的真实探测。 */
@@ -225,6 +304,17 @@ export async function localAddressInfo(opts: { port?: number; timeoutMs?: number
     hasPublicInterface: publicOnes.length > 0,
     behindNat: publicOnes.length === 0,
   };
+  // 附八.9：IPv6 单独判一档（否则有 IPv6 的用户会被误判成"非公网、不可组网"）
+  {
+    const v6 = inspectLocalIpv6();
+    base.ipv6 = {
+      hasGlobalUnicast: v6.hasGlobalUnicast,
+      publicCandidate: v6.publicCandidate,
+      ula: v6.ula,
+      linkLocal: v6.linkLocal,
+      reason: v6.reason,
+    };
+  }
   if (opts.port) base.tcp = await tcpProbe('127.0.0.1', opts.port, 1200);
   const pub = await discoverPublicIp(opts.timeoutMs ?? 4000);
   if (pub.ok && pub.ip) {
@@ -258,6 +348,10 @@ export interface ProbeNetResult {
   errorCode?: string;
   /** 入站可达性在本机**无法验证**（缺公网第三方对端）；恒 false，别当"已验证"用 */
   inboundVerified: false;
+  /** 本机有全局单播 IPv6 → 天然可拨入候选（附八.9；与 inboundVerified 是两件事） */
+  naturallyDialable?: boolean;
+  /** 被探测地址若是 IPv6，给出其作用域（global/ula/link-local/loopback/…） */
+  targetIpv6Scope?: string;
   /** 结构化证据（UI/日志可用；不含任何文案） */
   details?: {
     scope: string;
@@ -271,6 +365,10 @@ export interface ProbeNetResult {
     publicIpError?: string;
     portCheck?: TcpProbeResult;
     portCheckTarget?: string;
+    /** 本机 IPv6 事实（附八.9） */
+    localIpv6?: { hasGlobalUnicast: boolean; publicCandidate: string | null; ula: string[]; linkLocal: string[]; reason: string };
+    /** 目标地址是不是"可拨号的 IPv6 候选"（全局单播且非文档段） */
+    targetIsDialableIpv6?: boolean;
   };
 }
 
@@ -304,6 +402,9 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
 
   const { all, publicOnes } = listLocalAddresses();
   const scope = classifyAddress(ip);
+  const ipv6 = inspectLocalIpv6();
+  const targetHost = normalizeHostLiteral(ip);
+  const isIPv6Target = targetHost.includes(':') && ipv6ScopeOrNull(targetHost) !== null;
   const resolvedIpv4: string[] = [];
   const dnsErrors: string[] = [];
   const hosts = [ip, ...(Array.isArray(input.domains) ? input.domains : []).map((d) => String(d ?? '').trim()).filter(Boolean)];
@@ -363,6 +464,15 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
     ...(pub.ok && pub.ip ? { publicIp: pub.ip, publicIpSource: pub.source as string } : { publicIpError: pub.error ?? 'unavailable' }),
     ...(portCheck ? { portCheck } : {}),
     ...(portCheckTarget ? { portCheckTarget } : {}),
+    // 附八.9：把本机 IPv6 事实与"目标是不是可拨号的 IPv6 候选"一起回出来（UI 据此提示"可用 IPv6 直连"）
+    localIpv6: {
+      hasGlobalUnicast: ipv6.hasGlobalUnicast,
+      publicCandidate: ipv6.publicCandidate,
+      ula: ipv6.ula,
+      linkLocal: ipv6.linkLocal,
+      reason: ipv6.reason,
+    },
+    targetIsDialableIpv6: isIPv6Target ? isPublicDialCandidate(ip) : false,
   };
 
   let errorCode: string | undefined;
@@ -380,8 +490,16 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
     ...(pub.ok && pub.ip ? { observedIp: pub.ip } : {}),
     ...(errorCode ? { errorCode } : {}),
     inboundVerified: false,
+    naturallyDialable: ipv6.hasGlobalUnicast,
+    ...(isIPv6Target ? { targetIpv6Scope: classifyIpv6Scope(targetHost) } : {}),
     details,
   };
+}
+
+/** 只是语法糖：把"是不是 IPv6 字面量"的判断收敛到一处（非法返回 null → 不算 IPv6） */
+function ipv6ScopeOrNull(host: string): string | null {
+  const s = classifyIpv6Scope(host);
+  return s === 'invalid' ? null : s;
 }
 
 /* ────────────────────────────── 鉴权组网服务 ────────────────────────────── */
@@ -437,6 +555,10 @@ export interface MeshStatusResult {
   sessions?: number;
   handshakeRejections?: Record<string, number>;
   unlock?: SignerUnlockState | null;
+  /** 附八.9：本机 IPv6 事实（有全局单播 = 天然可拨入候选，阶梯第一档就是 IPv6 直连） */
+  ipv6?: { hasGlobalUnicast: boolean; publicCandidate: string | null; ula: string[]; linkLocal: string[]; reason: string };
+  /** 附八.9/附八.3：可达性提示（结构化，含"需中继"状态与 i18n key） */
+  reachability?: ReachabilityHint;
 }
 
 export interface SecureMeshOptions {
@@ -449,6 +571,13 @@ export interface SecureMeshOptions {
   /** 收到对端消息（IPC 层转渲染进程） */
   onInbound?: (msg: SecureInboundMessage) => void;
   onEvent?: (e: { type: string; detail?: string; peer?: string; ts: number }) => void;
+  /**
+   * 本机是否可拨入（来自 DialabilityProbe / autonat 结论；`undefined` = 还没测过）。
+   * **不要猜**：拿不到就留 undefined，`reachabilityFor()` 会如实标"未知"。
+   */
+  selfDialable?: () => boolean | undefined;
+  /** 中继候选（有公网地址、能转发的节点）——附八.3 双 CGNAT 的唯一出路 */
+  relays?: () => RelayCandidateRef[];
   now?: () => number;
 }
 
@@ -503,6 +632,52 @@ export class SecureMesh {
 
   get announceCallCount(): number {
     return this.announceCount;
+  }
+
+  /**
+   * 宣告 / 存活判定的「能不能主动拨出」输入（附八.9）。
+   *
+   * **两个信号刻意不合并**：
+   *   · `dialable`        —— 对端真的拨回来了（`selfDialable` 的已验证结论）；
+   *   · `naturalDialable` —— 地址事实：本机有全局单播 IPv6 ⇒ IPv6 无 NAT ⇒ 天然可拨入候选。
+   *
+   * 只认 `dialable === true` 会让有全局 IPv6 的机器被误判成"不可拨入"，
+   * 从而只被动等对端拨 —— 正是附八.9 点名的"有 IPv6 的用户白白走上打洞/中继"。
+   */
+  canDialSignals(): CanDialSignals {
+    const dialable = this.opts.selfDialable?.();
+    return {
+      ...(dialable === undefined ? {} : { dialable }),
+      naturalDialable: hasNaturalIpv6Reachability(),
+    };
+  }
+
+  /** 合并后的判据（回答"要不要主动拨"）；来历仍由 `canDialSignals()` 保留 */
+  canDialResolution(): CanDialResolution {
+    return resolveCanDial(this.canDialSignals());
+  }
+
+  canDial(): boolean {
+    return this.canDialResolution().canDial;
+  }
+
+  /** 供 `AnnounceService` / 其它接线方直接用的回调（把两个信号原样带过去） */
+  canDialProvider(): () => CanDialSignals {
+    return () => this.canDialSignals();
+  }
+
+  /**
+   * 把"可拨出"结论同步给存活判定（`ConnectionLiveness`）。
+   * 不同步的后果是实测过的：`dialableFlag` 默认 false 且没人置真 ⇒ `sweep()` 永远短路成
+   * "本机不可拨入" ⇒ 待探测成员**一次都不会被拨**（纯被动等）。
+   */
+  private syncLivenessDialable(): CanDialResolution {
+    const res = this.canDialResolution();
+    this.liveness.setDialable({
+      ...(res.dialable === undefined ? {} : { dialable: res.dialable }),
+      naturalDialable: res.naturalDialable === true,
+    });
+    return res;
   }
 
   /** 名册（= 本机已知联系人 + 显式 pin 过的指纹） */
@@ -570,6 +745,8 @@ export class SecureMesh {
     }
     this.server = server;
     this.port = server.boundPort;
+    // 附八.9：上线即同步"可拨出"判据（否则存活判定的 sweep 会一直当成不可拨入而短路）
+    this.syncLivenessDialable();
     if (opts.discovery) await this.startDiscovery();
     if (opts.announce) await this.announce('startup');
     return { ok: true, port: this.port, nodeId: this.opts.nodeId, notes: NET_NOTES };
@@ -634,6 +811,8 @@ export class SecureMesh {
     const fp = session.info.peerFingerprint;
     this.liveness.closeConnection(fp, session.info.sessionId, this.now());
     this.liveness.markMiss(fp, this.now());
+    // 断开后才轮到"要不要主动拨回"：这里必须用**最新的**可拨出判据（地址可能刚变，例如刚拿到 IPv6）
+    this.syncLivenessDialable();
     void this.liveness.sweep(this.now());
   }
 
@@ -842,6 +1021,7 @@ export class SecureMesh {
 
     const { all, publicOnes } = listLocalAddresses();
     const localIp = pickLocalAddress(all);
+    const ipv6 = inspectLocalIpv6();
     const sessions = this.sessionCount;
     const reachable = self.ok && (peerProbes.length === 0 || sessions > 0 || peerProbes.some((p) => p.reachable));
     const firstFail = peerProbes.find((p) => !p.reachable);
@@ -865,6 +1045,15 @@ export class SecureMesh {
       sessions,
       handshakeRejections: { ...(this.server?.rejectionCounts ?? {}) },
       unlock,
+      // 附八.9：IPv6 单独一档（IPv6 无 NAT）——注意 behindNat 是 IPv4 视角，两者不能互相替代
+      ipv6: {
+        hasGlobalUnicast: ipv6.hasGlobalUnicast,
+        publicCandidate: ipv6.publicCandidate,
+        ula: ipv6.ula,
+        linkLocal: ipv6.linkLocal,
+        reason: ipv6.reason,
+      },
+      reachability: this.buildReachabilityHint(),
     };
 
     this.lastStatusAt = now;
@@ -879,6 +1068,83 @@ export class SecureMesh {
       announceCalls: this.announceCount,
       sessions: this.sessionCount,
       inbox: this.inbox.length,
+    };
+  }
+
+  /**
+   * 可达性提示（附八.9 IPv6 单列一档 + 附八.3 中继兜底与"明确告知"）。
+   *
+   * **同步部分只报"地址事实"**（IPv6 是否可用 / 本机可拨入性），因为中继是否可用
+   * 必须**真的拨一次**才算数 —— 那属于 `reachabilityFor()`（异步、真 TCP 探测）。
+   * 在同步路径上不编中继结论。
+   */
+  private buildReachabilityHint(): ReachabilityHint {
+    const v6 = inspectLocalIpv6();
+    const selfDialable = this.opts.selfDialable?.();
+    const rung: LadderRung = v6.hasGlobalUnicast ? 'ipv6-direct' : 'public-direct';
+    const dial = resolveCanDial({
+      ...(selfDialable === undefined ? {} : { dialable: selfDialable }),
+      naturalDialable: v6.hasGlobalUnicast,
+    });
+    return {
+      ipv6: {
+        hasGlobalUnicast: v6.hasGlobalUnicast,
+        publicCandidate: v6.publicCandidate,
+        ula: v6.ula,
+        linkLocal: v6.linkLocal,
+        reason: v6.reason,
+      },
+      ...(selfDialable === undefined ? {} : { selfDialable }),
+      // 附八.9：地址事实（有全局 IPv6 ⇒ 无 NAT ⇒ 天然可拨入候选）与"已验证可拨入"分开给
+      naturalDialable: v6.hasGlobalUnicast,
+      dialableKind: dialableKindOf(selfDialable, v6.hasGlobalUnicast),
+      dialableI18n: DIALABILITY_I18N[dialableKindOf(selfDialable, v6.hasGlobalUnicast)],
+      suggestedRung: rung,
+      needsPublicRelayNotice: false,
+      i18n: { rung: LADDER_RUNG_I18N[rung] },
+    };
+  }
+
+  /**
+   * 异步可达性（**会真的拨一次中继候选**）：给 UI/IPC 用。
+   * 结论码与 i18n key 都是结构化的，UI 不需要解析句子。
+   */
+  async reachabilityFor(peerFingerprint: string, peerDialable?: boolean): Promise<ReachabilityHint> {
+    const v6 = inspectLocalIpv6();
+    const selfDialable = this.opts.selfDialable?.();
+    const relays = this.opts.relays?.() ?? [];
+    const selfFp = this.opts.store()?.info()?.fingerprint;
+    // 注意：传给 decideRelay 的 selfDialable **仍然只用已验证的那个信号**。
+    // 刻意不把 naturalDialable 塞进去：本地有全局 IPv6 只说明"我这条路可能通"，
+    // 对端未必有 IPv6（IPv4-only 对端照样拨不进来），据此宣布"不需要中继"会漏掉应有的兜底。
+    const decision = await decideRelay(
+      { fingerprint: peerFingerprint },
+      {
+        selfDialable,
+        peerDialable,
+        ...(selfFp ? { selfFingerprint: selfFp } : {}),
+        candidates: relays,
+        timeoutMs: 1500,
+      }
+    );
+    const rung: LadderRung = decision.selected ? 'relay' : v6.hasGlobalUnicast ? 'ipv6-direct' : 'public-direct';
+    const kind = dialableKindOf(selfDialable, v6.hasGlobalUnicast);
+    return {
+      ipv6: {
+        hasGlobalUnicast: v6.hasGlobalUnicast,
+        publicCandidate: v6.publicCandidate,
+        ula: v6.ula,
+        linkLocal: v6.linkLocal,
+        reason: v6.reason,
+      },
+      ...(selfDialable === undefined ? {} : { selfDialable }),
+      naturalDialable: v6.hasGlobalUnicast,
+      dialableKind: kind,
+      dialableI18n: DIALABILITY_I18N[kind],
+      suggestedRung: rung,
+      relay: decision,
+      needsPublicRelayNotice: decision.needsPublicRelayNotice,
+      i18n: { rung: LADDER_RUNG_I18N[rung], relay: RELAY_STATUS_I18N[decision.code] },
     };
   }
 }

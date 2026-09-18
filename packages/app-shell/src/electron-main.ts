@@ -47,11 +47,12 @@ import { runShortLivedExecutor, runExecutors } from './executor.js';
 import { initAssetGovernor, retrieveAssetsForChat, registerChatAsset, recordAssetUsage, sweepAssets } from './asset-wire.js';
 import { MetricsCollector } from './metrics.js';
 import { LocalAccountStore, SettingsStore, generateDeviceId, type AppSettings } from './settings-store.js';
-import { IdentityStore } from './identity-store.js';
+import { IdentityStore, type MembershipStore } from './identity-store.js';
 import {
   CONTACT_CARD_I18N,
   CONTACT_FREEZE_NOTE,
   GENERATION_RULE_NOTE,
+  fingerprintMatches,
   isValidFingerprint,
   verifyIdentityCard,
   verifyRevocationDeclaration,
@@ -89,20 +90,30 @@ import {
   tcpProbe,
   type MeshPeerRef,
   type MeshStatusResult,
+  type ReachabilityHint,
   type SecureInboundMessage,
 } from './net-wiring.js';
 // 身份 ↔ 组网的唯一接缝：指纹推导 + 签名者注入 + 「能否后台签名」的门控
 import {
   IdentityUnavailableError,
+  applyInboundRevocationUpdate,
   assertDerivationMatches,
   buildIdentityChangeEntries,
+  buildMemberPresence,
   createIdentityProvider,
   createIdentitySigner,
+  explainRosterDecision,
   fingerprintDerivationForAppShell,
+  issueMemberCertificate,
   knownContactFingerprints,
   listPeerContactViews,
+  membershipFileFor,
+  membershipSnapshot,
+  membershipStoreFor,
   peerContactKeys,
   requireSignableIdentity,
+  revokeMemberCertificate,
+  rotateMemberCertificate,
 } from './identity-provider.js';
 // 本体协作层：ref/路径门禁 + 租约（写操作前 acquire、写完 release）
 import { validatePushPaths, validateRefUpdate, type PushPathEntry } from './repo-guard.js';
@@ -791,6 +802,15 @@ async function bootstrap() {
     boot(`identity peer settle fail ${String(e)}`);
   }
   audit.log('app.start', { platform: process.platform });
+  // ── 成员证书 / 吊销列表（ADR §附八.8）：先"热身"建好带审计回调的实例 ──
+  // ⚠️ 顺序有讲究：`membershipStoreFor` 按 IdentityStore 实例缓存，第一次调用决定它有没有审计回调；
+  // 这里先建，后续所有调用点（名册/在线态/IPC）都拿到同一个带审计的实例，
+  // 证书签发/拒收、吊销应用/拒绝都会落到审计日志（audit 已在上面初始化）。
+  {
+    const ms = membershipStoreFor(identityStore, { onAudit: (op, detail) => audit?.log(op, detail) });
+    const sum = ms?.summary();
+    if (sum) boot(`membership ready groups=${sum.groupCount} certs=${sum.certCount} revoked=${sum.revokedCount}`);
+  }
   // ── 租约表（本体协作层）：写操作的唯一仲裁者 ──
   leases = new LeaseRegistry({ idPrefix: 'ccarmy' });
   // ── 换证横幅的确认留痕（「已核实 / 已关闭」）；审计写不进去时拒绝关闭，见 IPC ──
@@ -812,7 +832,26 @@ async function bootstrap() {
     nodeId: localNodeId,
     store: () => identityStore,
     peers: () => peerRefs(),
-    onInbound: (msg) => boot(`mesh inbound ${msg.channel} from ${msg.peerFingerprint.slice(0, 12)}`),
+    onInbound: (msg) => {
+      boot(`mesh inbound ${msg.channel} from ${msg.peerFingerprint.slice(0, 12)}`);
+      // 成员证书 / 吊销列表的**同步落点**：对端指纹来自握手（msg.peerFingerprint），
+      // 不是消息体自称 —— 只有本群创建者发来的吊销列表才会被接受。
+      const payload = msg.payload as { type?: string; groupId?: string; list?: unknown } | null;
+      if (payload && payload.type === 'ccarmy.membership.revocation') {
+        const gid = String(payload.groupId || msg.groupId || '');
+        const membership = membershipStoreFor(identityStore);
+        const expect = expectedIssuerFor(gid);
+        const r = applyInboundRevocationUpdate({
+          membership: membership as MembershipStore,
+          groupId: gid,
+          list: payload.list as never,
+          fromFingerprint: msg.peerFingerprint,
+          ...(expect ? { expectedIssuerFingerprint: expect } : {}),
+        });
+        audit?.log('membership.revocation.inbound', { groupId: gid, ok: r.ok, code: r.code, changed: r.changed ?? false });
+        boot(`membership revocation inbound ok=${r.ok} code=${r.code}`);
+      }
+    },
     onEvent: (ev) => {
       if (ev.type === 'handshake-ok' || ev.type === 'offline') boot(`mesh ${ev.type} ${ev.peer ?? ''}`);
     },
@@ -841,7 +880,11 @@ function joinLocalInstances(groupId: string): void {
     } catch {
       continue;
     }
-    groupStore?.addMember(groupId, { name: inst.name, role: 'member', source: 'instance', instanceId: inst.id });
+    groupStore?.addMemberWithFingerprint(
+      groupId,
+      { name: inst.name, role: 'member', source: 'instance', instanceId: inst.id },
+      { onAudit: (op, detail) => audit?.log(op, detail) }
+    );
   }
 }
 
@@ -851,7 +894,11 @@ function syncMembersFromRouter(groupId: string): void {
   const g = router.getGroup(groupId);
   if (!g) return;
   for (const m of router.listMembers(groupId)) {
-    groupStore.addMember(groupId, { name: m.name, role: 'member', source: 'instance', instanceId: m.id });
+    groupStore.addMemberWithFingerprint(
+      groupId,
+      { name: m.name, role: 'member', source: 'instance', instanceId: m.id },
+      { onAudit: (op, detail) => audit?.log(op, detail) }
+    );
   }
 }
 
@@ -1220,6 +1267,9 @@ handleIpc(
         name: cfg.name,
         type: cfg.type,
         directedMode: !!cfg.directedMode,
+        // 本机建的群 = 本机身份是创建者（成员证书的签发者就是它）。
+        // 拿不到身份时**不填**（留空 = 未知），上层会退回"首次收到的签发者即群主"。
+        ...(identityStore?.info()?.fingerprint ? { creatorFingerprint: String(identityStore.info()?.fingerprint) } : {}),
       });
       if (saved && !saved.ok) return { ok: false, error: 'cannot persist group' };
       // 本机实例全部可值班（同时写入持久化成员表）
@@ -1407,7 +1457,11 @@ handleIpc('ccarmy:group-join-instance', (_e, groupId: string, instanceId: string
       status: inst.status === 'running' ? 'idle' : 'offline',
     });
     // 成员关系落盘：重启后仍在群里
-    groupStore?.addMember(groupId, { name: inst.name, role: 'member', source: 'instance', instanceId: inst.id });
+    groupStore?.addMemberWithFingerprint(
+      groupId,
+      { name: inst.name, role: 'member', source: 'instance', instanceId: inst.id },
+      { onAudit: (op, detail) => audit?.log(op, detail) }
+    );
     return { ok: true };
   } catch (e) { return { ok: false, error: 'join failed' }; }
 });
@@ -2147,7 +2201,14 @@ handleIpc('ccarmy:identity-changes', (_e, payload: { scope?: string } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable', changes: [] };
     void payload;
-    const changes = buildIdentityChangeEntries(identityStore, { now: Date.now(), acks: readChangeAcks() });
+    const changes = buildIdentityChangeEntries(identityStore, {
+      now: Date.now(),
+      acks: readChangeAcks(),
+      // 成员表给了才能把「某个指纹换了证」精确定位到群/项目（scopes）；
+      // 拿不到映射时 computeChangeScopes 会如实退回 [{kind:'all'}] 并标 scopeBasis
+      membership: membershipStoreFor(identityStore),
+      directory: groupStore,
+    });
     return { ok: true, changes };
   } catch (e) {
     return { ok: false, error: sanitizeError(e), changes: [] };
@@ -2184,6 +2245,303 @@ handleIpc('ccarmy:identity-change-ack', (_e, payload: { changeId?: string; level
 });
 
 /** 本机已知的**全部**对端名片状态（UI 靠它知道"有谁换了证"；按指纹单查的通道见 identity-peer-contact） */
+// ── D2. 成员证书 / 吊销列表（ADR §2.3 第 6 条 + §附八.8 + §附五.1 第四层） ──
+//
+// 这里只做**接线**：协议与验签在 `@ccarmy/sync-protocol` 的 membership.ts（可单测），
+// 签发/换证/吊销的编排在 identity-provider.ts。主进程只回结构化数据 + 错误码，**不拼文案**。
+
+/** 该群的创建者（群主）指纹：群记录里有就用它，否则用本机已钉住的那个 */
+function expectedIssuerFor(groupId: string): string {
+  const fromGroup = groupStore?.getGroup(groupId)?.creatorFingerprint ?? '';
+  if (fromGroup) return fromGroup;
+  return membershipStoreFor(identityStore)?.groupState(groupId)?.issuerFingerprint ?? '';
+}
+
+/** 用本机身份（必须是该群创建者且已解锁）为成员签发证书 */
+async function issueMemberCertForGroup(
+  groupId: string,
+  input: {
+    memberFingerprint: string;
+    memberPublicKey: string;
+    displayName?: string;
+    role?: 'creator' | 'admin' | 'member';
+    memberId?: string;
+    supersedes?: string;
+    ttlMs?: number;
+  }
+): Promise<{ ok: boolean; code: string; cert?: { certId: string; memberFingerprint: string; expiresAt: number }; detail?: string }> {
+  const membership = membershipStoreFor(identityStore);
+  if (!membership || !identityStore) return { ok: false, code: 'identity-missing' };
+  const signer = createIdentitySigner(identityStore);
+  const expect = expectedIssuerFor(groupId);
+  if (expect && !fingerprintMatches(expect, signer.fingerprint)) {
+    // 本机不是该群的创建者 → 无权签发（星型拓扑里只有群主能发证书）
+    // 诊断串用 ASCII（主进程不拼面向用户的文字；界面文案一律走 i18n）
+    return { ok: false, code: 'not-the-creator', detail: `issuer=${expect} local=${signer.fingerprint}` };
+  }
+  const r = await issueMemberCertificate({
+    signer,
+    membership,
+    groupId,
+    memberFingerprint: input.memberFingerprint,
+    memberPublicKey: input.memberPublicKey,
+    ...(input.displayName ? { displayName: input.displayName } : {}),
+    ...(input.role ? { role: input.role } : {}),
+    ...(input.memberId ? { memberId: input.memberId } : {}),
+    ...(input.supersedes ? { supersedes: input.supersedes } : {}),
+    ...(input.ttlMs ? { ttlMs: input.ttlMs } : {}),
+    ...(expect ? { expectIssuerFingerprint: expect } : {}),
+  });
+  if (!r.ok || !r.cert) return { ok: false, code: r.code, detail: r.detail };
+  audit?.log('membership.cert.issued', {
+    groupId,
+    certId: r.cert.certId,
+    member: r.cert.memberFingerprint,
+    supersedes: r.cert.supersedes ?? '',
+  });
+  return {
+    ok: true,
+    code: r.code,
+    cert: { certId: r.cert.certId, memberFingerprint: r.cert.memberFingerprint, expiresAt: r.cert.expiresAt },
+  };
+}
+
+/** 把新版吊销列表广播给在线成员（走**已鉴权**通道；失败不重试，与本设计一致） */
+async function broadcastRevocationList(groupId: string, list: unknown): Promise<{ sent: number; failed: number } | null> {
+  try {
+    if (!secureMesh?.enabled) return null;
+    const r = await secureMesh.broadcast({
+      to: '*',
+      channel: 'control',
+      groupId,
+      payload: { type: 'ccarmy.membership.revocation', groupId, list },
+    });
+    audit?.log('membership.revocation.broadcast', { groupId, sent: r.sent, failed: r.failed });
+    return { sent: r.sent, failed: r.failed };
+  } catch (e) {
+    audit?.log('membership.revocation.broadcast.failed', { groupId, error: sanitizeError(e) });
+    return null;
+  }
+}
+
+/**
+ * 收到成员证书（例如刚入群时对端送来一张）。
+ * 签发者必须是**本群创建者**：群记录里有创建者指纹就按它校验，否则按本机已钉住的那个。
+ */
+handleIpc('ccarmy:membership-receive-cert', (_e, payload: { groupId?: string; cert?: unknown } = {}) => {
+  try {
+    const membership = membershipStoreFor(identityStore);
+    if (!membership) return { ok: false, code: 'identity-missing' };
+    const groupId = String(payload?.groupId || '');
+    if (!groupId || !payload?.cert || typeof payload.cert !== 'object') return { ok: false, code: 'malformed' };
+    const expect = expectedIssuerFor(groupId);
+    const r = membership.putCertificate(payload.cert as never, expect ? { expectIssuerFingerprint: expect } : {});
+    return { ok: r.ok, code: r.code, stored: r.stored, certId: r.certId, detail: r.detail ?? '' };
+  } catch (e) {
+    return { ok: false, code: 'error', detail: sanitizeError(e) };
+  }
+});
+
+/** 同步（收到）一份吊销列表：验签 + 单调合并（回滚 / 条目变少一律拒绝） */
+handleIpc('ccarmy:membership-sync-revocation', (_e, payload: { groupId?: string; list?: unknown } = {}) => {
+  try {
+    const membership = membershipStoreFor(identityStore);
+    if (!membership) return { ok: false, code: 'identity-missing' };
+    const groupId = String(payload?.groupId || '');
+    if (!groupId || !payload?.list || typeof payload.list !== 'object') return { ok: false, code: 'malformed' };
+    const expect = expectedIssuerFor(groupId);
+    const r = membership.applyRevocationList(groupId, payload.list as never, expect ? { expectIssuerFingerprint: expect } : {});
+    return {
+      ok: r.ok,
+      code: r.code,
+      changed: r.changed,
+      listVersion: r.listVersion,
+      previousVersion: r.previousVersion,
+      detail: r.detail ?? '',
+    };
+  } catch (e) {
+    return { ok: false, code: 'error', detail: sanitizeError(e) };
+  }
+});
+
+/** 成员证书与吊销列表的结构化快照（UI 只读；含本地时钟判定结果） */
+handleIpc('ccarmy:membership-list', (_e, payload: { groupId?: string } = {}) => {
+  try {
+    const membership = membershipStoreFor(identityStore);
+    if (!membership) return { ok: false, schema: 'ccarmy.membership.file.v1', groups: [] };
+    const gid = String(payload?.groupId || '');
+    const snap = membershipSnapshot(membership, gid ? { groupId: gid } : {});
+    return { ...snap, summary: membership.summary() };
+  } catch (e) {
+    return { ok: false, schema: 'ccarmy.membership.file.v1', groups: [], error: sanitizeError(e) };
+  }
+});
+
+/** 名册判定（含依据）：给 UI/排障用的只读通道，不改任何状态 */
+handleIpc(
+  'ccarmy:membership-authorize',
+  (_e, payload: { fingerprint?: string; groupId?: string; requireCertificate?: boolean } = {}) => {
+    try {
+      const fp = String(payload?.fingerprint || '');
+      if (!fp) return { ok: false, error: 'fingerprint-required' };
+      const membership = membershipStoreFor(identityStore);
+      const verdict = explainRosterDecision(identityStore, fp, {
+        membership,
+        ...(payload?.requireCertificate === true ? { requireCertificate: true } : {}),
+      });
+      return { ok: true, verdict };
+    } catch (e) {
+      return { ok: false, error: sanitizeError(e) };
+    }
+  }
+);
+
+/** 签发成员证书（创建者；身份锁着就如实回 identity-locked） */
+handleIpc(
+  'ccarmy:membership-issue',
+  async (
+    _e,
+    payload: {
+      groupId?: string;
+      memberFingerprint?: string;
+      memberPublicKey?: string;
+      displayName?: string;
+      role?: string;
+      memberId?: string;
+      supersedes?: string;
+      ttlMs?: number;
+    } = {}
+  ) => {
+    const groupId = String(payload?.groupId || '');
+    const memberFingerprint = String(payload?.memberFingerprint || '');
+    const memberPublicKey = String(payload?.memberPublicKey || '');
+    if (!groupId || !memberFingerprint || !memberPublicKey) return { ok: false, code: 'malformed' };
+    return await issueMemberCertForGroup(groupId, {
+      memberFingerprint,
+      memberPublicKey,
+      ...(payload?.displayName ? { displayName: String(payload.displayName) } : {}),
+      ...(payload?.role === 'admin' || payload?.role === 'creator' ? { role: payload.role } : {}),
+      ...(payload?.memberId ? { memberId: String(payload.memberId) } : {}),
+      ...(payload?.supersedes ? { supersedes: String(payload.supersedes) } : {}),
+      ...(typeof payload?.ttlMs === 'number' ? { ttlMs: payload.ttlMs } : {}),
+    });
+  }
+);
+
+/**
+ * **换证后重签**（§附五.1 第四层的落地点）。
+ * 需要：本机有该成员的旧证书 + 成员用旧私钥签的换证声明。
+ * 成功后旧证书进吊销列表（rotation），新指纹持有 `supersedes` 链 → "新指纹 = 原成员"。
+ */
+handleIpc(
+  'ccarmy:membership-rotate',
+  async (
+    _e,
+    payload: {
+      groupId?: string;
+      declaration?: unknown;
+      currentGeneration?: number;
+      knownKeys?: unknown[];
+      ttlMs?: number;
+    } = {}
+  ) => {
+    try {
+      const membership = membershipStoreFor(identityStore);
+      if (!membership || !identityStore) return { ok: false, code: 'identity-missing' };
+      const groupId = String(payload?.groupId || '');
+      if (!groupId || !payload?.declaration || typeof payload.declaration !== 'object') {
+        return { ok: false, code: 'malformed' };
+      }
+      const expect = expectedIssuerFor(groupId);
+      const signer = createIdentitySigner(identityStore);
+      if (expect && !fingerprintMatches(expect, signer.fingerprint)) {
+        return { ok: false, code: 'not-the-creator' };
+      }
+      const r = await rotateMemberCertificate({
+        signer,
+        membership,
+        groupId,
+        declaration: payload.declaration as never,
+        ...(typeof payload.currentGeneration === 'number' ? { currentGeneration: payload.currentGeneration } : {}),
+        ...(Array.isArray(payload.knownKeys) ? { knownKeys: payload.knownKeys as never } : {}),
+        ...(typeof payload.ttlMs === 'number' ? { ttlMs: payload.ttlMs } : {}),
+      });
+      if (!r.ok || !r.cert) {
+        return { ok: false, code: r.code, reason: r.verification?.reason ?? '', detail: r.detail ?? '' };
+      }
+      // 证书链落盘后**顺手把成员表的指纹换成新指纹**：
+      // 这样横幅（scopes）与在线态映射立刻跟着新指纹走，不用等下次加入。
+      const member = groupStore
+        ?.listMembers(groupId)
+        .find((m) => m.fingerprint && fingerprintMatches(m.fingerprint, String(r.verification?.oldFingerprint || '')));
+      let memberPatched: string | null = null;
+      if (member && groupStore) {
+        const patched = groupStore.setMemberFingerprint(groupId, member.id, r.cert.memberFingerprint);
+        memberPatched = patched.ok && patched.changed ? member.id : null;
+      }
+      void broadcastRevocationList(groupId, r.revocation);
+      audit?.log('membership.cert.rotated', {
+        groupId,
+        old: r.verification?.oldFingerprint ?? '',
+        next: r.cert.memberFingerprint,
+        certId: r.cert.certId,
+        supersedes: r.cert.supersedes ?? '',
+        replacement: memberPatched ?? '',
+      });
+      return {
+        ok: true,
+        code: 'ok',
+        cert: {
+          certId: r.cert.certId,
+          memberFingerprint: r.cert.memberFingerprint,
+          supersedes: r.cert.supersedes ?? '',
+          expiresAt: r.cert.expiresAt,
+        },
+        memberId: memberPatched ?? member?.id ?? '',
+        listVersion: r.revocation?.listVersion ?? 0,
+      };
+    } catch (e) {
+      return { ok: false, code: 'error', detail: sanitizeError(e) };
+    }
+  }
+);
+
+/** 主动吊销（踢人之外的场景：私钥泄漏 / 管理员处置） */
+handleIpc(
+  'ccarmy:membership-revoke',
+  async (_e, payload: { groupId?: string; certId?: string; memberFingerprint?: string; reason?: string } = {}) => {
+    try {
+      const membership = membershipStoreFor(identityStore);
+      if (!membership || !identityStore) return { ok: false, code: 'identity-missing' };
+      const groupId = String(payload?.groupId || '');
+      const reason = String(payload?.reason || 'admin');
+      const allowed = ['rotation', 'compromise', 'departed', 'admin'];
+      if (!groupId || !allowed.includes(reason)) return { ok: false, code: 'malformed' };
+      const cert =
+        (payload?.certId ? membership.certificateById(groupId, String(payload.certId)) : null) ??
+        (payload?.memberFingerprint ? membership.certificateForFingerprint(groupId, String(payload.memberFingerprint)) : null);
+      if (!cert) return { ok: false, code: 'no-certificate' };
+      const expect = expectedIssuerFor(groupId);
+      const signer = createIdentitySigner(identityStore);
+      if (expect && !fingerprintMatches(expect, signer.fingerprint)) return { ok: false, code: 'not-the-creator' };
+      const r = await revokeMemberCertificate({
+        signer,
+        membership,
+        groupId,
+        certId: cert.certId,
+        memberFingerprint: cert.memberFingerprint,
+        reason: reason as never,
+        ...(expect ? { expectation: expect } : {}),
+      });
+      if (!r.ok) return { ok: false, code: r.code, detail: r.detail ?? '' };
+      void broadcastRevocationList(groupId, r.list);
+      return { ok: true, code: 'ok', certId: cert.certId, listVersion: r.list?.listVersion ?? 0 };
+    } catch (e) {
+      return { ok: false, code: 'error', detail: sanitizeError(e) };
+    }
+  }
+);
+
 handleIpc('ccarmy:identity-peers', () => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable', peers: [] };
@@ -2748,10 +3106,40 @@ handleIpc('ccarmy:mesh-status', () =>
 
 // ── 组网状态 / 探测（UI 的 netStatus/netProbe/netLocalAddress/netMembersPresence/meshEnable/meshDisable） ──
 //
-// 真实现：网卡枚举、TCP 连通性（含时延）、DNS 解析、出站连通性、公网地址回显、监听端口自测、活会话表。
+// 真实现：网卡枚举、TCP 连通性（含时延）、DNS 解析、出站连通性、公网地址回显、监听端口自测、活会话表、
+//        IPv6 地址分档、中继候选判定（附八.9 / 附八.3）。
 // 降级：**入站可达性**（别人拨我）需要一台真的在公网的第三方对端 → 一律 `inboundVerified:false`，
 //       且 `isPublic` 只由地址事实推出（私网/回环/链路本地/CGNAT 恒 false），绝不硬编码 true。
-// 未实现：UPnP/NAT-PMP 端口映射、打洞、中继 —— 这些不开"假装成功"的口子。
+// 未实现：UPnP/NAT-PMP 端口映射、STUN+同时打洞；中继的**判定与选中**已实现，但**转发隧道尚未启用**。
+
+/**
+ * 异步可达性（附八.3 的「双不可拨入且无中继」终态只能在这里才算得出来）：
+ * `secureMesh.reachabilityFor()` 会**真的拨一次中继候选**（1.5s 超时），而 UI 每秒轮询
+ * `net-status` —— 每轮都去拨是不可接受的，所以这里带 TTL 缓存。
+ * TTL(20s) < UI 侧保鲜期(30s)，保证 UI 不会拿到"已过期却还没刷新"的结论。
+ * ⚠️ 判定必须有**一个对端**：没有已知对端指纹时如实返回 null（不编造中继结论）。
+ */
+let netReachCache: { at: number; value: ReachabilityHint | null } = { at: 0, value: null };
+const NET_REACH_TTL_MS = 20_000;
+
+async function netReachabilityCached(): Promise<ReachabilityHint | null> {
+  const now = Date.now();
+  if (now - netReachCache.at < NET_REACH_TTL_MS) return netReachCache.value;
+  let value: ReachabilityHint | null = null;
+  try {
+    const localFp = identityStore?.info()?.fingerprint;
+    const peers = secureMesh?.presence() ?? [];
+    const peer = peers.find((p) => !!p.fingerprint && p.fingerprint !== localFp);
+    if (secureMesh && peer?.fingerprint) {
+      value = await secureMesh.reachabilityFor(peer.fingerprint, peer.online === true);
+    }
+  } catch {
+    value = null; // 探测失败不影响 net-status 本身：上层按"未知"处理
+  }
+  netReachCache = { at: now, value };
+  return value;
+}
+
 handleIpc('ccarmy:net-status', async () => {
   const fallback: MeshStatusResult = {
     ok: true,
@@ -2759,7 +3147,14 @@ handleIpc('ccarmy:net-status', async () => {
     link: { reachable: false, lastError: 'net-unavailable', peers: [] },
     unlock: identityStore ? requireSignableIdentity(identityStore).unlock ?? null : null,
   };
-  return await safeHandleAsync<MeshStatusResult>(async () => (await secureMesh?.status()) ?? fallback, fallback);
+  return await safeHandleAsync<MeshStatusResult>(async () => {
+    const base = (await secureMesh?.status()) ?? fallback;
+    // status() 里的 reachability 是**同步且刻意保守**的（needsPublicRelayNotice 恒 false）。
+    // 终态能力在异步的 reachabilityFor() 里，必须在这里合并出去，否则 UI 的终态横幅
+    // 在真实应用里永远不会出现（只有异步路径才敢说"两端都拨不进来、而且没有中继"）。
+    const reach = await netReachabilityCached();
+    return reach ? { ...base, reachability: reach } : base;
+  }, fallback);
 });
 
 handleIpc('ccarmy:net-probe', async (_e, input: { ip?: string; port?: number; domains?: string[] } = {}) => {
@@ -2787,28 +3182,21 @@ handleIpc('ccarmy:net-members-presence', (_e, payload: { groupId?: string } = {}
     const groupId = String(payload.groupId || '');
     const members = groupId ? groupStore?.listMembers(groupId) ?? [] : [];
     const meshEnabled = !!secureMesh?.enabled;
-    const liveSessions = (secureMesh?.presence() ?? []).filter((p) => p.online).length;
+    const liveness = secureMesh?.presence() ?? [];
+    const liveSessions = liveness.filter((p) => p.online).length;
     const instances = p1?.instances.list() ?? [];
+    // 判定逻辑在 identity-provider 的 buildMemberPresence（纯函数、验证脚本能真跑）：
+    //  · 本机实例成员 → InstanceManager 的真实状态（presenceBasis: 'local-instance'）；
+    //  · **有指纹**的异地成员 → 用活连接集合（SecureMesh / ConnectionLiveness）按指纹判
+    //    （presenceBasis: 'mesh-session'：没有活连接就是不在线，不假装知道）；
+    //  · **没指纹**的异地成员 → presenceBasis: 'unattributed'，如实**不给** online。
+    const rows = buildMemberPresence({ members, instances, liveness, meshEnabled });
     return {
       ok: true,
       meshEnabled,
-      // 成员表里只有 id/name/instanceId，**没有指纹** → 本机无法把人映射到指纹上。
-      // 因此：本地实例用 InstanceManager 的真实状态；异地成员只给"是不是异地"，
-      // online 一律不给（宁可不给，也不假装知道他在不在线）。
       presenceAvailable: meshEnabled,
       remoteSessions: liveSessions,
-      members: members.map((m) => {
-        const inst = m.instanceId ? instances.find((h) => h.id === m.instanceId) : undefined;
-        const remote = m.source === 'invite' && !inst;
-        return {
-          id: m.id,
-          name: m.name,
-          remote,
-          ...(remote
-            ? { presenceBasis: 'unattributed' as const }
-            : { online: inst ? inst.status === 'running' : false, presenceBasis: 'local-instance' as const }),
-        };
-      }),
+      members: rows,
     };
   } catch (e) {
     return { ok: false, meshEnabled: false, members: [], error: sanitizeError(e) };
@@ -3488,31 +3876,109 @@ handleIpc('ccarmy:group-members', (_e, groupId: string) =>
     { ok: false, members: [], error: 'group store unavailable' }
   )
 );
-handleIpc('ccarmy:group-invite', (_e, payload: { groupId: string; name: string; role?: string }) => {
-  try {
-    if (!groupStore) return { ok: false, error: 'group store unavailable' };
-    const gid = String(payload?.groupId || '');
-    const role = payload?.role === 'admin' ? 'admin' : 'member';
-    const r = groupStore.addMember(gid, { name: String(payload?.name || ''), role, source: 'invite' });
-    if (!r.ok) return { ok: false, error: r.error || 'invite failed', members: r.members };
-    audit?.log('group.invite', { groupId: gid });
-    return { ok: true, members: r.members };
-  } catch {
-    return { ok: false, error: 'invite failed' };
+/**
+ * 邀请入群。**邀请时若带了对方的身份名片（fingerprint + publicKey）就顺手签发成员证书**
+ * （ADR §2.3 第 6 条：成员加入时由项目主签发）。
+ * 拿不到名片也照常加入，但**指纹留空**并记一条审计 —— 不猜、不伪造。
+ */
+handleIpc(
+  'ccarmy:group-invite',
+  async (
+    _e,
+    payload: { groupId: string; name: string; role?: string; fingerprint?: string; publicKey?: string; displayName?: string }
+  ) => {
+    try {
+      if (!groupStore) return { ok: false, error: 'group store unavailable' };
+      const gid = String(payload?.groupId || '');
+      const role = payload?.role === 'admin' ? 'admin' : 'member';
+      const fp = String(payload?.fingerprint || '').trim();
+      const pub = String(payload?.publicKey || '').trim();
+      const r = groupStore.addMemberWithFingerprint(
+        gid,
+        {
+          name: String(payload?.name || ''),
+          role,
+          source: 'invite',
+          ...(fp ? { fingerprint: fp } : {}),
+        },
+        { onAudit: (op, detail) => audit?.log(op, detail) }
+      );
+      if (!r.ok) return { ok: false, error: r.error || 'invite failed', members: r.members };
+      audit?.log('group.invite', { groupId: gid, withFingerprint: !!fp });
+      const result: { ok: boolean; members: typeof r.members; certId?: string; certError?: string } = {
+        ok: true,
+        members: r.members,
+      };
+      if (fp && pub) {
+        const issued = await issueMemberCertForGroup(gid, {
+          memberFingerprint: fp,
+          memberPublicKey: pub,
+          displayName: String(payload?.displayName || payload?.name || ''),
+          role,
+          memberId: String(payload?.name || ''),
+        });
+        if (issued.ok && issued.cert) result.certId = issued.cert.certId;
+        else result.certError = String(issued.code);
+      }
+      return result;
+    } catch {
+      return { ok: false, error: 'invite failed' };
+    }
   }
-});
-handleIpc('ccarmy:group-kick', (_e, payload: { groupId: string; memberId: string }) => {
+);
+/**
+ * 踢人 —— **同时吊销他的成员证书**（reason: 'departed'），并把新版吊销列表广播给在线成员。
+ * 这是"吊销后拿旧证书重连必须被拒"的真实入口：证书先在本地吊销，再同步出去。
+ */
+handleIpc('ccarmy:group-kick', async (_e, payload: { groupId: string; memberId: string }) => {
   try {
     if (!groupStore) return { ok: false, error: 'group store unavailable' };
     const gid = String(payload?.groupId || '');
     const mid = String(payload?.memberId || '');
+    const before = groupStore.listMembers(gid).find((m) => m.id === mid);
     const r = groupStore.removeMember(gid, mid);
     if (!r.ok) return { ok: false, error: r.error || 'kick failed', members: r.members };
     // 本机实例被踢时同步退出路由值班池
     const kicked = router.listMembers(gid).find((m) => m.id === mid || `inst:${m.id}` === mid);
     if (kicked) router.leave(gid, kicked.id);
     audit?.log('group.kick', { groupId: gid });
-    return { ok: true, members: r.members };
+    let revoked: { certId: string; listVersion: number } | null = null;
+    let revokeError: string | null = null;
+    const membership = membershipStoreFor(identityStore);
+    const targetFp = before?.fingerprint ?? '';
+    if (membership && targetFp) {
+      const cert = membership.certificateForFingerprint(gid, targetFp);
+      const signer = identityStore ? createIdentitySigner(identityStore) : null;
+      if (!cert) {
+        revokeError = 'no-certificate';
+      } else if (!signer) {
+        revokeError = 'identity-missing';
+      } else {
+        const rv = await revokeMemberCertificate({
+          signer,
+          membership,
+          groupId: gid,
+          certId: cert.certId,
+          memberFingerprint: cert.memberFingerprint,
+          reason: 'departed',
+        });
+        if (rv.ok && rv.list) {
+          revoked = { certId: cert.certId, listVersion: rv.list.listVersion };
+          audit?.log('membership.revoked', { groupId: gid, certId: cert.certId, reason: 'departed' });
+          void broadcastRevocationList(gid, rv.list);
+        } else {
+          revokeError = String(rv.code);
+        }
+      }
+    } else if (membership && !targetFp) {
+      revokeError = 'no-fingerprint';
+    }
+    return {
+      ok: true,
+      members: r.members,
+      revoked,
+      ...(revokeError ? { revokeError } : {}),
+    };
   } catch {
     return { ok: false, error: 'kick failed' };
   }

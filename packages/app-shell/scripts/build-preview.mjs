@@ -59,9 +59,13 @@ const demoInstances = [
     avatarPreset: 9, availableModels: ['mimo-v2.5-pro'], chain: ['mimo-v2.5-pro'], defaultModel: 'mimo-v2.5-pro', allModels: true,
     persona: '', cognitionFiles: [] },
 ];
+// 演示用的群：字段按主进程 group-store 的 GroupRecord 写（groupId/type/origin…），
+// 成员名单独放 memberNames —— 因为 GroupRecord 里**没有**成员的形状，成员走 groupMembers 另一次调用。
 const demoGroups = [
-  { id: 'g-1', name: '项目推进群', type: 'internal', members: ['demo.agent', '归档员'], lastTs: now - 60000 },
-  { id: 'g-3', name: '外部协作群', type: 'external', members: ['demo.agent'], lastTs: now - 300000 },
+  { groupId: 'g-1', name: '项目推进群', type: 'internal', directedMode: false, dutyInstanceId: null,
+    createdAt: now - 86400000, updatedAt: now - 60000, origin: 'ipc', memberNames: ['demo.agent', '归档员'] },
+  { groupId: 'g-3', name: '外部协作群', type: 'external', directedMode: false, dutyInstanceId: null,
+    createdAt: now - 86400000, updatedAt: now - 300000, origin: 'ipc', memberNames: ['demo.agent'] },
 ];
 const demoChats = [
   { id: 'demo-1', kind: 'single', name: 'demo.agent', lastTs: now - 30000, lastPreview: '好的，已安排' },
@@ -93,13 +97,33 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.ccarmy 用演示
     settingsSave: async () => ok(),
     profileGet: async () => ok({ profile: { username: '主人', avatarDataUrl: '', email: '', deviceId: '884024787', avatarPreset: 3 } }),
     profileSave: async (p) => ok({ profile: p }),
-    stateLoad: async () => ok({ state: { listSort: 'time', instanceAvatars: {} } }),
+    stateLoad: async () => ok({ state: { listSort: 'time', instanceAvatars: {}, chats: CHATS } }),
     stateSave: async () => ok(),
     appInfo: async () => ok({ name: '无限牛马', enName: 'CCArmy', version: '0.1.0', electron: '33.2.0', chrome: '130.0.6723.118',
       node: '20.18.0', platform: 'win32', arch: 'x64', deviceId: '884024787', deviceIdValid: true }),
     listInstances: async () => INSTANCES,
-    groupList: async () => GROUPS,
-    groupMembers: async (id) => ok({ members: (GROUPS.find((g) => g.id === id) || { members: [] }).members.map((n) => ({ id: n, name: n, role: '成员' })) }),
+    // 形状必须与主进程一致（GroupListResult / GroupMembersResult）。早期桩返回裸数组、字段叫 id，
+    // 导致渲染层 syncGroupsFromStore() 因形状不符整段跳过 —— 预览里群 id 全是 undefined、群列表为空。
+    groupList: async () => ok({
+      count: GROUPS.length,
+      groups: GROUPS.map((g) => {
+        const rest = Object.assign({}, g);
+        delete rest.memberNames;
+        return Object.assign(rest, { memberCount: (g.memberNames || []).length, active: true });
+      }),
+    }),
+    groupMembers: async (id) => {
+      const g = GROUPS.filter((x) => x.groupId === id)[0];
+      const names = g ? (g.memberNames || []) : [];
+      return {
+        ok: true, groupId: id,
+        members: names.map((n, i) => ({
+          id: n, groupId: id, name: n,
+          role: n === 'demo.agent' ? 'creator' : 'member',
+          source: 'invite', instanceId: n, joinedAt: Date.now() - 3600000 + i,
+        })),
+      };
+    },
     groupInvite: async () => ok(), groupKick: async () => ok(), groupJoinInstance: async () => ok(),
     hardwareSuggest: async () => ok({ cpus: 32, suggested: 8, max: 8 }),
     metricsSummary: async () => ok({ turns: TURNS.length, promptTokens: 10900, completionTokens: 3800, cacheHitRate: 0.32, avgDurationMs: 2400, ccrRatio: 0.9, estCostCny: 0.0294 }),
