@@ -25,6 +25,26 @@ import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { readJsonFileQuarantine, writeJsonAtomicSafe } from './atomic-json.js';
 import {
+  MEMBER_CERT_ROLES,
+  MEMBER_CERT_SCHEMA,
+  MEMBERSHIP_CLOCK_SKEW_MS,
+  REVOCATION_LIST_SCHEMA,
+  REVOCATION_REASONS,
+  chainFingerprintsFor,
+  defaultMemberFingerprintOf,
+  isSameMember,
+  verifyAndApplyRevocationList,
+  verifyMemberCertificate,
+  type MemberCertCode,
+  type MemberCertificate,
+  type MemberFingerprintOf,
+  type MembershipVerifyOptions,
+  type RevocationApplyResult,
+  type RevocationEntry,
+  type RevocationList,
+  type RevocationListCode,
+} from '@ccarmy/sync-protocol';
+import {
   IDENTITY_ALGO,
   IDENTITY_SCHEMA,
   KeyRingEntry,
@@ -49,6 +69,7 @@ import {
   createPeerContact,
   fingerprintFromPublicKey,
   fingerprintMatches,
+  normalizeFingerprint,
   keyObjectFromPublicB64,
   keyObjectFromPrivateDer,
   keyRing,
@@ -761,6 +782,16 @@ export class IdentityStore {
   }
 
   /**
+   * 本机留存了对端名片的指纹键（**公开**）。
+   * 之前 `readPeers()` 是私有的，调用方（identity-provider）只能按落盘 schema 旁路读同一个文件 ——
+   * 那是"绕过封装读私有格式"，schema 一改就静默失效。这里给出唯一入口，内容仍由 `peerContact()` 解析。
+   */
+  peerContactKeys(): string[] {
+    const peers = this.readPeers();
+    return Object.keys(peers).filter((k) => typeof k === 'string' && k.length > 0);
+  }
+
+  /**
    * 对端名片状态（读取时顺带结算：冻结到期 → 清冻结标记并置 `awaitingConfirmation`，
    * **不自动采用新值**——见 `peerContactSettle` 与 ADR 003 附七.3-1：若到期即自动采用，
    * 攻击者只要等满 7 天就赢了）。
@@ -904,6 +935,617 @@ export class IdentityStore {
     this.sessionDek = dek;
     this.onAudit('identity.backup.import', { fingerprint: next.identity.fingerprint, generation: next.identity.generation });
     return { ok: true, info: this.info()! };
+  }
+}
+
+/* ────────────────────── 成员证书 / 吊销列表的落盘（ADR §附八.8） ────────────────────── */
+
+/**
+ * 群成员证书 + 吊销列表的本机副本（`<userData>/identity/membership.json`）。
+ *
+ * 协议与验签逻辑在 `@ccarmy/sync-protocol` 的 `membership.ts`（可单独单测）；
+ * 这里只负责**磁盘形态**、**单调合并**与**给名册/在线态的查询接口**。
+ *
+ * 为什么"过期证书也要存"：见 `putCertificate` 的注释 —— 如果过期证书被直接丢掉，
+ * 名册就会退回 TOFU 放行，等于"过期证书反而更好用"。
+ */
+export const MEMBERSHIP_FILE_SCHEMA = 'ccarmy.membership.file.v1' as const;
+
+/** 每个群最多保留多少张证书（超出时淘汰最老的"无人指涉"证书，保证 supersedes 链不断） */
+export const MEMBERSHIP_MAX_CERTS_PER_GROUP = 256;
+
+export interface GroupMembershipState {
+  groupId: string;
+  /** 本机认可的该群创建者（群主）指纹；首次接受证书时钉住（或由调用方显式给出） */
+  issuerFingerprint: string;
+  certs: MemberCertificate[];
+  /** 已同步到的吊销列表（null = 还没同步过） */
+  revocation: RevocationList | null;
+  updatedAt: number;
+}
+
+export interface MembershipFile {
+  schema: typeof MEMBERSHIP_FILE_SCHEMA;
+  groups: Record<string, GroupMembershipState>;
+  updatedAt: number;
+}
+
+export interface MembershipStoreOptions {
+  onAudit?: (op: string, detail?: unknown) => void;
+  now?: () => number;
+  /** 指纹推导（app-shell 传身份层的 fingerprintFromPublicKey） */
+  fingerprintOf?: MemberFingerprintOf;
+  /** 本地时钟容差（app-shell 传身份层的 DEFAULT_CLOCK_SKEW_MS） */
+  clockSkewMs?: number;
+  /** 独立验签实现（默认本地 Ed25519 复核） */
+  verifySignature?: (message: Buffer, signature: Buffer, publicKeySpkiB64: string) => boolean | null;
+}
+
+export interface MembershipAuthorizeResult {
+  /** true = 本机对"这个指纹是不是群成员"**有明确结论**（不论结论是放行还是拒绝） */
+  decided: boolean;
+  ok: boolean;
+  code: MemberCertCode | 'revoked' | 'unknown-fingerprint';
+  groupId?: string;
+  certId?: string;
+  detail?: string;
+}
+
+function emptyMembershipFile(): MembershipFile {
+  return { schema: MEMBERSHIP_FILE_SCHEMA, groups: {}, updatedAt: Date.now() };
+}
+
+function copyCert(c: MemberCertificate): MemberCertificate {
+  return { ...c, permissions: [...(c.permissions ?? [])] };
+}
+
+function copyRevocation(l: RevocationList | null): RevocationList | null {
+  if (!l) return null;
+  return { ...l, entries: (l.entries ?? []).map((e) => ({ ...e })) };
+}
+
+/**
+ * 吊销查询（**本层用容错比较**：短横分组/大小写/形近字都要认出来，与身份层一致）。
+ * sync-protocol 的 `findRevocationEntry` 是**精确比较**（协议层把指纹当不透明字符串），
+ * 这里包一层是因为本层的指纹来自 UI / 名片，用户抄录与展示形式都可能有差异。
+ */
+function revocationHit(
+  list: RevocationList | null,
+  q: { certId?: string; memberFingerprint?: string }
+): RevocationEntry | null {
+  if (!list || !Array.isArray(list.entries)) return null;
+  for (const e of list.entries) {
+    if (q.certId && e.certId === q.certId) return e;
+    if (q.memberFingerprint && fingerprintMatches(e.memberFingerprint, q.memberFingerprint)) return e;
+  }
+  return null;
+}
+
+const CERT_ROLE_SET: readonly string[] = MEMBER_CERT_ROLES;
+const REVOCATION_REASON_SET: readonly string[] = REVOCATION_REASONS;
+
+/** 把磁盘上的（可能被手改坏 / 版本更旧的）数据收敛成合法结构；坏群不抛错、直接丢 */
+function normalizeMembership(raw: unknown): MembershipFile {
+  const out = emptyMembershipFile();
+  if (!raw || typeof raw !== 'object') return out;
+  const src = raw as Partial<MembershipFile>;
+  const groupsSrc = src.groups && typeof src.groups === 'object' ? src.groups : {};
+  for (const key of Object.keys(groupsSrc)) {
+    const g = (groupsSrc as Record<string, unknown>)[key];
+    if (!g || typeof g !== 'object') continue;
+    const rec = g as Partial<GroupMembershipState>;
+    const groupId = typeof rec.groupId === 'string' && rec.groupId ? rec.groupId : key;
+    if (!groupId) continue;
+    const certs: MemberCertificate[] = [];
+    const certIds = new Set<string>();
+    for (const c of Array.isArray(rec.certs) ? rec.certs : []) {
+      if (!c || typeof c !== 'object') continue;
+      const cr = c as Partial<MemberCertificate>;
+      if (cr.schema !== MEMBER_CERT_SCHEMA) continue;
+      if (typeof cr.certId !== 'string' || !cr.certId || certIds.has(cr.certId)) continue;
+      if (typeof cr.memberFingerprint !== 'string' || !cr.memberFingerprint) continue;
+      if (typeof cr.memberPublicKey !== 'string' || !cr.memberPublicKey) continue;
+      if (typeof cr.issuerFingerprint !== 'string' || !cr.issuerFingerprint) continue;
+      if (typeof cr.issuerPublicKey !== 'string' || !cr.issuerPublicKey) continue;
+      if (typeof cr.issuerSignature !== 'string' || !cr.issuerSignature) continue;
+      if (!CERT_ROLE_SET.includes(String(cr.role))) continue;
+      if (typeof cr.issuedAt !== 'number' || typeof cr.expiresAt !== 'number') continue;
+      certIds.add(cr.certId);
+      const row: MemberCertificate = {
+        schema: MEMBER_CERT_SCHEMA,
+        certId: cr.certId,
+        groupId: typeof cr.groupId === 'string' && cr.groupId ? cr.groupId : groupId,
+        memberFingerprint: cr.memberFingerprint,
+        memberPublicKey: cr.memberPublicKey,
+        role: cr.role as MemberCertificate['role'],
+        permissions: Array.isArray(cr.permissions) ? cr.permissions.filter((p): p is string => typeof p === 'string') : [],
+        issuedAt: cr.issuedAt,
+        expiresAt: cr.expiresAt,
+        issuerFingerprint: cr.issuerFingerprint,
+        issuerPublicKey: cr.issuerPublicKey,
+        issuerSignature: cr.issuerSignature,
+      };
+      if (typeof cr.displayName === 'string' && cr.displayName) row.displayName = cr.displayName;
+      if (typeof cr.supersedes === 'string' && cr.supersedes) row.supersedes = cr.supersedes;
+      if (typeof cr.memberId === 'string' && cr.memberId) row.memberId = cr.memberId;
+      certs.push(row);
+    }
+    let revocation: RevocationList | null = null;
+    const rl = rec.revocation;
+    if (rl && typeof rl === 'object' && rl.schema === REVOCATION_LIST_SCHEMA && typeof rl.issuerSignature === 'string') {
+      const entries: RevocationEntry[] = [];
+      const seen = new Set<string>();
+      for (const e of Array.isArray(rl.entries) ? rl.entries : []) {
+        if (!e || typeof e !== 'object') continue;
+        if (typeof e.certId !== 'string' || !e.certId || seen.has(e.certId)) continue;
+        if (!REVOCATION_REASON_SET.includes(String(e.reason))) continue;
+        if (typeof e.revokedAt !== 'number') continue;
+        seen.add(e.certId);
+        entries.push({
+          certId: e.certId,
+          memberFingerprint: typeof e.memberFingerprint === 'string' ? e.memberFingerprint : '',
+          reason: e.reason as RevocationEntry['reason'],
+          revokedAt: e.revokedAt,
+        });
+      }
+      if (typeof rl.listVersion === 'number' && Number.isInteger(rl.listVersion) && rl.listVersion >= 1) {
+        revocation = {
+          schema: REVOCATION_LIST_SCHEMA,
+          groupId: typeof rl.groupId === 'string' && rl.groupId ? rl.groupId : groupId,
+          listVersion: rl.listVersion,
+          entries,
+          issuedAt: typeof rl.issuedAt === 'number' ? rl.issuedAt : 0,
+          issuerFingerprint: typeof rl.issuerFingerprint === 'string' ? rl.issuerFingerprint : '',
+          issuerPublicKey: typeof rl.issuerPublicKey === 'string' ? rl.issuerPublicKey : '',
+          issuerSignature: rl.issuerSignature,
+        };
+      }
+    }
+    const issuerFingerprint =
+      typeof rec.issuerFingerprint === 'string' && rec.issuerFingerprint
+        ? rec.issuerFingerprint
+        : revocation?.issuerFingerprint || certs[0]?.issuerFingerprint || '';
+    out.groups[groupId] = {
+      groupId,
+      issuerFingerprint,
+      certs,
+      revocation,
+      updatedAt: typeof rec.updatedAt === 'number' ? rec.updatedAt : 0,
+    };
+  }
+  return out;
+}
+
+export type MemberCertStoreCode = MemberCertCode | 'issuer-changed' | 'write-failed';
+
+export interface PutCertificateResult {
+  ok: boolean;
+  code: MemberCertStoreCode;
+  /** 是否**落盘**了这张证书（过期证书也会落盘 —— 见 putCertificate 注释） */
+  stored: boolean;
+  certId: string;
+  groupId: string;
+  detail?: string;
+}
+
+/**
+ * 群成员证书 / 吊销列表的本机存储。
+ *
+ * ⚠️ 两条容易写错的行为，都在这里钉死：
+ *  1. **名册判定的依据是"有没有记录"，不是"证书好不好"**：只要本机对某个指纹有证书或吊销记录，
+ *     就由这条记录给出结论（`decided = true`），**不再退回 TOFU**。否则"拿一张过期证书来连"
+ *     会比"什么都不带"更容易通过 —— 这是最典型的降级漏洞。
+ *  2. **签发者（群主）在首次接受时钉住**：之后换成别的签发者一律拒绝，直到本机显式改绑。
+ */
+export class MembershipStore {
+  private readonly onAudit: (op: string, detail?: unknown) => void;
+  private readonly now: () => number;
+  private readonly fingerprintOf: MemberFingerprintOf;
+  private readonly clockSkewMs: number;
+  private readonly verifySignature?: (message: Buffer, signature: Buffer, publicKeySpkiB64: string) => boolean | null;
+  /** mtime+size 缓存：同一个进程里的多个调用点（名册每次握手都会查）不必反复读盘 */
+  private cache: { file: MembershipFile; key: string } | null = null;
+
+  constructor(private file: string, opts: MembershipStoreOptions = {}) {
+    this.onAudit = opts.onAudit || (() => undefined);
+    this.now = opts.now || (() => Date.now());
+    this.fingerprintOf = opts.fingerprintOf || defaultMemberFingerprintOf;
+    this.clockSkewMs = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
+    if (opts.verifySignature) this.verifySignature = opts.verifySignature;
+  }
+
+  path(): string {
+    return this.file;
+  }
+
+  private fileKey(): string {
+    try {
+      const st = fs.statSync(this.file);
+      return `${st.mtimeMs}:${st.size}`;
+    } catch {
+      return 'absent';
+    }
+  }
+
+  snapshot(): MembershipFile {
+    const key = this.fileKey();
+    if (this.cache && this.cache.key === key) return this.cache.file;
+    const file = normalizeMembership(readJsonFileQuarantine<unknown>(this.file, null));
+    this.cache = { file, key };
+    return file;
+  }
+
+  private persist(file: MembershipFile): { ok: boolean; error?: string } {
+    const r = writeJsonAtomicSafe(this.file, { ...file, updatedAt: this.now() });
+    if (!r.ok) this.onAudit('membership.write.failed', { error: r.error });
+    this.cache = null;
+    return r;
+  }
+
+  /** 串行队列（见 runExclusive） */
+  private exclusiveChain: Promise<unknown> = Promise.resolve();
+
+  /**
+   * 串行化「读 → 签名 → 落盘」这一整段。
+   *
+   * 为什么必须有：签发 / 换证 / 吊销都是「读当前列表 → 算出版本 +1 → **await 签名** → 落盘」，
+   * 中间那个 await 会让两路并发（例如同时踢两个人）各自读到同一版本、各算出 version+1、各签一份，
+   * 后写覆盖先写 —— **前一次的吊销会静默丢失**（不是"多授权"，但仍是一次漏掉的吊销）。
+   * 写入者在本设计里只有 Electron 主进程一个，所以一条进程内队列就够（跨进程写不在本设计内）。
+   *
+   * ⚠️ **不可重入**：调用方必须保证不在持有队列时再进队列。
+   * `rotateMemberCertificate` / `reissueMemberCertificateForRecovery` 内部要调
+   * `issueMemberCertificateImpl` / `revokeMemberCertificateImpl`（不带锁的那两个），
+   * 就是为了避免嵌套加锁把自己锁死。
+   */
+  runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.exclusiveChain.then(fn, fn);
+    // 队列本身不能因为某次失败而断掉：把结果吞掉只用于续接
+    this.exclusiveChain = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  private verifyOpts(extra: MembershipVerifyOptions = {}): MembershipVerifyOptions {
+    return { fingerprintOf: this.fingerprintOf, clockSkewMs: this.clockSkewMs, now: this.now(), ...extra };
+  }
+
+  listGroups(): string[] {
+    return Object.keys(this.snapshot().groups);
+  }
+
+  /** 只读视图（数组已复制；调用方拿到的是副本，改不坏缓存） */
+  groupState(groupId: string): GroupMembershipState | null {
+    const g = this.snapshot().groups[groupId];
+    if (!g) return null;
+    return {
+      groupId: g.groupId,
+      issuerFingerprint: g.issuerFingerprint,
+      certs: g.certs.map(copyCert),
+      revocation: copyRevocation(g.revocation),
+      updatedAt: g.updatedAt,
+    };
+  }
+
+  private mutableGroup(file: MembershipFile, groupId: string): GroupMembershipState {
+    const cur = file.groups[groupId];
+    if (cur) return cur;
+    const next: GroupMembershipState = {
+      groupId,
+      issuerFingerprint: '',
+      certs: [],
+      revocation: null,
+      updatedAt: this.now(),
+    };
+    file.groups[groupId] = next;
+    return next;
+  }
+
+  /** 某个群里的全部证书（副本） */
+  listCertificates(groupId: string): MemberCertificate[] {
+    return (this.snapshot().groups[groupId]?.certs ?? []).map(copyCert);
+  }
+
+  /** 全部群的证书（副本）+ 所属群 id */
+  allCertificates(): Array<{ groupId: string; cert: MemberCertificate }> {
+    const out: Array<{ groupId: string; cert: MemberCertificate }> = [];
+    for (const [groupId, g] of Object.entries(this.snapshot().groups)) {
+      for (const c of g.certs) out.push({ groupId, cert: copyCert(c) });
+    }
+    return out;
+  }
+
+  certificateById(groupId: string, certId: string): MemberCertificate | null {
+    const c = this.snapshot().groups[groupId]?.certs.find((x) => x.certId === certId);
+    return c ? copyCert(c) : null;
+  }
+
+  /** 该指纹在该群的**最新**一张证书（按 issuedAt，其次按链长） */
+  certificateForFingerprint(groupId: string, fingerprint: string): MemberCertificate | null {
+    const list = (this.snapshot().groups[groupId]?.certs ?? []).filter((c) =>
+      fingerprintMatches(c.memberFingerprint, fingerprint)
+    );
+    if (!list.length) return null;
+    const sorted = list.slice().sort((a, b) => b.issuedAt - a.issuedAt);
+    return copyCert(sorted[0] as MemberCertificate);
+  }
+
+  /**
+   * 存一张**别处签来**的证书（创建者本人签发的走 `issueCertificate`）。
+   *
+   * ⚠️ 过期 / 未生效的证书**也会落盘**（`stored=true`, `code='expired'|'not-yet-valid'`）：
+   * 本机对"这个人"从此有明确结论，名册会**拒绝**他，而不是把记录丢掉退回 TOFU。
+   * 结构 / 指纹绑定 / 签发者 / 签名不通过的一律**不入库**（`stored=false`），
+   * 因为那种证书连"这是谁签的"都不可信，留着只会污染判定。
+   */
+  putCertificate(cert: MemberCertificate, opts: { expectIssuerFingerprint?: string } = {}): PutCertificateResult {
+    const groupId = String(cert?.groupId || '');
+    const base: PutCertificateResult = {
+      ok: false,
+      code: 'malformed',
+      stored: false,
+      certId: String(cert?.certId || ''),
+      groupId,
+    };
+    const file = this.snapshot();
+    const existing = file.groups[groupId];
+    const pinned = opts.expectIssuerFingerprint || existing?.issuerFingerprint || '';
+    // ① 签发者必须还是本机钉住的那一个（换签发者 = 换群主，本机不接受替身）
+    if (pinned && !fingerprintMatches(pinned, cert?.issuerFingerprint || '')) {
+      this.onAudit('membership.cert.issuer-changed', {
+        groupId,
+        certId: base.certId,
+        pinned,
+        claimed: String(cert?.issuerFingerprint || ''),
+      });
+      return {
+        ...base,
+        code: 'issuer-changed',
+        detail: `本机已把该群创建者钉在 ${pinned}，不接受 ${String(cert?.issuerFingerprint || '')} 签发的证书`,
+      };
+    }
+    // ② 结构 / 指纹绑定 / 时间 / 签名
+    const v = verifyMemberCertificate(
+      cert,
+      this.verifyOpts({ expectGroupId: groupId, ...(pinned ? { expectIssuerFingerprint: pinned } : {}) })
+    );
+    if (!v.ok && v.code !== 'expired' && v.code !== 'not-yet-valid') {
+      this.onAudit('membership.cert.rejected', { groupId, certId: base.certId, code: v.code });
+      return { ...base, code: v.code, detail: v.detail };
+    }
+    const g = this.mutableGroup(file, groupId);
+    if (!g.issuerFingerprint) {
+      g.issuerFingerprint = cert.issuerFingerprint;
+      this.onAudit('membership.issuer.pinned', { groupId, issuer: cert.issuerFingerprint, certId: cert.certId });
+    }
+    const idx = g.certs.findIndex((c) => c.certId === cert.certId);
+    const stored: MemberCertificate = copyCert(cert);
+    if (idx >= 0) {
+      // 同一 certId 再送来：内容必须完全一致（否则就是有人想用同 id 覆盖已有的证书）
+      const prev = g.certs[idx] as MemberCertificate;
+      if (prev.issuerSignature !== stored.issuerSignature || prev.memberPublicKey !== stored.memberPublicKey) {
+        this.onAudit('membership.cert.conflict', { groupId, certId: stored.certId });
+        return { ...base, code: 'malformed', detail: '同一 certId 已存在但内容不同（拒绝覆盖）' };
+      }
+      g.certs[idx] = stored;
+    } else {
+      g.certs.push(stored);
+    }
+    this.evictOverflow(g);
+    g.updatedAt = this.now();
+    const w = this.persist(file);
+    if (!w.ok) return { ...base, code: 'write-failed', detail: w.error };
+    this.onAudit('membership.cert.stored', {
+      groupId,
+      certId: stored.certId,
+      member: stored.memberFingerprint,
+      role: stored.role,
+      supersedes: stored.supersedes ?? '',
+      code: v.code,
+    });
+    return { ok: true, code: v.code, stored: true, certId: stored.certId, groupId, detail: v.detail };
+  }
+
+  /** 证书数量上限：淘汰最老的"没有任何证书 supersedes 指向它"的那张，保证换证链不断 */
+  private evictOverflow(g: GroupMembershipState): void {
+    if (g.certs.length <= MEMBERSHIP_MAX_CERTS_PER_GROUP) return;
+    const referenced = new Set(g.certs.map((c) => c.supersedes).filter((v): v is string => typeof v === 'string' && v.length > 0));
+    const sorted = g.certs.slice().sort((a, b) => a.issuedAt - b.issuedAt);
+    const keep = new Set(g.certs.map((c) => c.certId));
+    while (keep.size > MEMBERSHIP_MAX_CERTS_PER_GROUP) {
+      const victim = sorted.find((c) => keep.has(c.certId) && !referenced.has(c.certId));
+      if (!victim) break;
+      keep.delete(victim.certId);
+      this.onAudit('membership.cert.evicted', { groupId: g.groupId, certId: victim.certId, reason: 'overflow' });
+    }
+    g.certs = g.certs.filter((c) => keep.has(c.certId));
+  }
+
+  /** 当前吊销列表（副本） */
+  revocation(groupId: string): RevocationList | null {
+    return copyRevocation(this.snapshot().groups[groupId]?.revocation ?? null);
+  }
+
+  /**
+   * 同步（收到）一份吊销列表：**先验签，再单调合并**。
+   * 验签失败、版本回滚、同版本不同内容、条目变少 —— 全部拒绝并保持本机列表不变。
+   */
+  applyRevocationList(
+    groupId: string,
+    list: RevocationList,
+    opts: { expectIssuerFingerprint?: string } = {}
+  ): RevocationApplyResult & { stored: boolean } {
+    const file = this.snapshot();
+    const existing = file.groups[groupId];
+    const pinned = opts.expectIssuerFingerprint || existing?.issuerFingerprint || '';
+    const current = existing?.revocation ?? null;
+    const res = verifyAndApplyRevocationList(
+      current,
+      list,
+      this.verifyOpts({ expectGroupId: groupId, ...(pinned ? { expectIssuerFingerprint: pinned } : {}) })
+    );
+    if (!res.ok) {
+      this.onAudit('membership.revocation.rejected', {
+        groupId,
+        code: res.code,
+        incoming: res.listVersion,
+        current: res.previousVersion,
+      });
+      return { ...res, stored: false };
+    }
+    if (!res.changed) return { ...res, stored: true };
+    const g = this.mutableGroup(file, groupId);
+    if (!g.issuerFingerprint) {
+      g.issuerFingerprint = list.issuerFingerprint;
+      this.onAudit('membership.issuer.pinned', { groupId, issuer: list.issuerFingerprint, via: 'revocation-list' });
+    }
+    g.revocation = copyRevocation(list);
+    g.updatedAt = this.now();
+    const w = this.persist(file);
+    if (!w.ok) return { ...res, ok: false, code: 'write-failed' as RevocationListCode, stored: false };
+    this.onAudit('membership.revocation.applied', {
+      groupId,
+      from: res.previousVersion,
+      to: res.listVersion,
+      entries: res.entryCount,
+    });
+    return { ...res, stored: true };
+  }
+
+  /**
+   * 名册判定：**这个指纹是不是某个群的合法成员**。
+   *
+   * 返回 `decided = false` 只表示"本机对这个人一无所知（没有证书、也没有吊销记录）"，
+   * 调用方此时可以走 TOFU 降级；`decided = true` 时结论就是最终结论。
+   */
+  authorizeFingerprint(
+    fingerprint: string,
+    opts: { groupId?: string; now?: number } = {}
+  ): MembershipAuthorizeResult {
+    const fp = String(fingerprint || '').trim();
+    if (!fp) return { decided: false, ok: false, code: 'unknown-fingerprint' };
+    const file = this.snapshot();
+    const groupIds = opts.groupId ? [opts.groupId] : Object.keys(file.groups);
+    // ① **先扫全部吊销**：任一命中即拒。
+    //    这一步必须与群顺序无关：如果"先看证书"就会变成"哪个群先被遍历到就听谁的"，
+    //    同一个指纹在不同 key 顺序下会得到不同结论（实测过）。吊销 = 全局拒绝（fail-closed）。
+    for (const groupId of groupIds) {
+      const g = file.groups[groupId];
+      if (!g) continue;
+      const hit = revocationHit(g.revocation, { memberFingerprint: fp });
+      if (hit) {
+        return {
+          decided: true,
+          ok: false,
+          code: 'revoked',
+          groupId,
+          certId: hit.certId,
+          detail: `吊销名单命中（reason=${hit.reason}）`,
+        };
+      }
+    }
+    // ② 再找有效证书：任一"有效且未被吊销"的证书 → 放行
+    let sawCert = false;
+    let firstReject: MembershipAuthorizeResult | null = null;
+    for (const groupId of groupIds) {
+      const g = file.groups[groupId];
+      if (!g) continue;
+      const certs = g.certs.filter((c) => fingerprintMatches(c.memberFingerprint, fp));
+      if (!certs.length) continue;
+      sawCert = true;
+      for (const cert of certs) {
+        const v = verifyMemberCertificate(
+          cert,
+          this.verifyOpts({
+            now: opts.now,
+            expectGroupId: groupId,
+            ...(g.issuerFingerprint ? { expectIssuerFingerprint: g.issuerFingerprint } : {}),
+          })
+        );
+        // 该证书自身被点名吊销（certId 命中）→ 即使是"另一条"证书被吊销也不放行这一张
+        const certRevoked = revocationHit(g.revocation, { certId: cert.certId });
+        if (v.ok && !certRevoked) {
+          return { decided: true, ok: true, code: 'ok', groupId, certId: cert.certId };
+        }
+        const code = v.ok ? 'revoked' : v.code;
+        if (!firstReject) {
+          firstReject = {
+            decided: true,
+            ok: false,
+            code,
+            groupId,
+            certId: cert.certId,
+            detail: v.ok ? '该证书已被吊销' : v.detail,
+          };
+        }
+      }
+    }
+    if (sawCert && firstReject) return firstReject;
+    return { decided: false, ok: false, code: 'unknown-fingerprint' };
+  }
+
+  /** 同一条换证链上的全部指纹（跨群合并） */
+  chainFingerprints(fingerprint: string): string[] {
+    const out = new Set<string>([String(fingerprint || '')]);
+    for (const g of Object.values(this.snapshot().groups)) {
+      for (const fp of chainFingerprintsFor(g.certs, fingerprint)) out.add(fp);
+    }
+    return [...out].filter((v) => v.length > 0);
+  }
+
+  /** 这两个指纹是不是同一个群成员（换证后重新进群的判据） */
+  isSameMember(groupId: string, fpA: string, fpB: string): { same: boolean; reason: string; rootA: string; rootB: string } {
+    const g = this.snapshot().groups[groupId];
+    if (!g) return { same: false, reason: '本机没有该群的证书记录', rootA: '', rootB: '' };
+    const r = isSameMember(g.certs, fpA, fpB);
+    return { same: r.same, reason: r.reason, rootA: r.rootA, rootB: r.rootB };
+  }
+
+  /** 这些指纹在哪些群里有证书（T179：scopes / 归属查询） */
+  groupsContaining(fingerprints: readonly string[]): string[] {
+    const out: string[] = [];
+    for (const [groupId, g] of Object.entries(this.snapshot().groups)) {
+      if (g.certs.some((c) => fingerprints.some((fp) => fingerprintMatches(c.memberFingerprint, fp)))) out.push(groupId);
+    }
+    return out;
+  }
+
+  /** 结构化摘要（IPC/UI 用；不含任何文案） */
+  summary(): {
+    schema: typeof MEMBERSHIP_FILE_SCHEMA;
+    groupCount: number;
+    certCount: number;
+    revokedCount: number;
+    groups: Array<{
+      groupId: string;
+      issuerFingerprint: string;
+      certCount: number;
+      memberCount: number;
+      revocationListVersion: number;
+      revokedCount: number;
+    }>;
+  } {
+    const file = this.snapshot();
+    const groups = Object.values(file.groups).map((g) => {
+      const members = new Set(g.certs.map((c) => normalizeFingerprint(c.memberFingerprint)));
+      return {
+        groupId: g.groupId,
+        issuerFingerprint: g.issuerFingerprint,
+        certCount: g.certs.length,
+        memberCount: members.size,
+        revocationListVersion: g.revocation?.listVersion ?? 0,
+        revokedCount: g.revocation?.entries.length ?? 0,
+      };
+    });
+    return {
+      schema: MEMBERSHIP_FILE_SCHEMA,
+      groupCount: groups.length,
+      certCount: groups.reduce((n, g) => n + g.certCount, 0),
+      revokedCount: groups.reduce((n, g) => n + g.revokedCount, 0),
+      groups,
+    };
   }
 }
 

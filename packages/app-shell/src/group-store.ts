@@ -30,6 +30,13 @@ export interface GroupRecord {
   updatedAt: number;
   /** ipc=由群创建接口写入；migrated=启动时从旧会话状态回填 */
   origin: 'ipc' | 'migrated';
+  /**
+   * 建群者（= 本机身份）的指纹；**拿不到就留空**（例如从旧会话状态回填的群）。
+   * 用途：校验成员证书的签发者必须是本群创建者 —— 本机建的群这一步是确定的，
+   * 迁移来的旧群没有这个信息，宁可留空让上层退回"首次收到的签发者即群主"，
+   * 也不要编一个出来。
+   */
+  creatorFingerprint?: string;
 }
 
 export interface GroupMemberRecord {
@@ -40,6 +47,17 @@ export interface GroupMemberRecord {
   source: GroupMemberSource;
   /** 本机牛马实例 ID（source=instance 时有值） */
   instanceId?: string;
+  /**
+   * 该成员的身份公钥指纹（身份层线上表示）。
+   *
+   * **可选，缺失 = 未知**（旧记录、拿不到名片的邀请、本机实例成员都是这样）：
+   *  - 旧格式（本字段出现之前落盘的 groups.json）读进来就是 `undefined`，
+   *    **不猜、不伪造、不改写文件**；下次因别的原因写盘时也依旧是 `undefined`；
+   *  - 有了它，`ccarmy:identity-changes` 才能把"某个指纹换了证"精确定位到
+   *    具体是哪个群（`scopes`），`ccarmy:net-members-presence` 才能用**活连接**
+   *    判定异地成员在不在线（而不是只知道"他是异地"）。
+   */
+  fingerprint?: string;
 }
 
 export interface GroupStoreState {
@@ -91,6 +109,23 @@ function normalizeType(v: unknown): GroupType {
   return v === 'external' ? 'external' : 'internal';
 }
 
+/**
+ * 指纹文本比较（忽略大小写 / 短横分组 / 常见形近字）。
+ * 与 `identity.normalizeFingerprint` 同一套规则，但这里**刻意不 import identity.js**：
+ * group-store 要能被验证脚本脱离身份层单独加载。两边规则若改动需要同步 —— 见
+ * `packages/app-shell/scripts/verify-membership.mjs` 里对两者的对照断言。
+ */
+export function sameFingerprintText(a: string, b: string): boolean {
+  const norm = (s: string): string =>
+    String(s || '')
+      .toUpperCase()
+      .replace(/[^0-9A-Z]/g, '')
+      .replace(/[IL]/g, '1')
+      .replace(/O/g, '0');
+  const na = norm(a);
+  return na.length > 0 && na === norm(b);
+}
+
 /** 把磁盘上的（可能被手改坏的）数据收敛成合法结构 */
 function normalize(raw: unknown): GroupStoreState {
   if (!raw || typeof raw !== 'object') return emptyState();
@@ -104,7 +139,7 @@ function normalize(raw: unknown): GroupStoreState {
     const groupId = asString(rec.groupId);
     if (!groupId || seen.has(groupId)) continue;
     seen.add(groupId);
-    out.groups.push({
+    const row: GroupRecord = {
       groupId,
       name: asString(rec.name) || groupId,
       type: normalizeType(rec.type),
@@ -113,7 +148,11 @@ function normalize(raw: unknown): GroupStoreState {
       createdAt: asNumber(rec.createdAt) || Date.now(),
       updatedAt: asNumber(rec.updatedAt) || asNumber(rec.createdAt) || Date.now(),
       origin: rec.origin === 'migrated' ? 'migrated' : 'ipc',
-    });
+    };
+    // 旧记录没有 creatorFingerprint → 保持缺失（不编造）
+    const creatorFp = asString(rec.creatorFingerprint);
+    if (creatorFp) row.creatorFingerprint = creatorFp;
+    out.groups.push(row);
   }
   const membersSrc = src.members && typeof src.members === 'object' ? src.members : {};
   for (const key of Object.keys(membersSrc)) {
@@ -136,6 +175,10 @@ function normalize(raw: unknown): GroupStoreState {
       };
       const instId = asString(rec.instanceId);
       if (instId) row.instanceId = instId;
+      // ⚠️ 旧格式（没有 fingerprint 字段）读进来必须是 undefined：
+      // 不猜、不用 id/name 凑、也不因为"看起来像指纹"就填上。
+      const fp = asString(rec.fingerprint);
+      if (fp) row.fingerprint = fp;
       out2.push(row);
     }
     out.members[key] = out2;
@@ -173,6 +216,8 @@ export class GroupStore {
     type: GroupType;
     directedMode?: boolean;
     origin?: 'ipc' | 'migrated';
+    /** 建群者（本机身份）指纹；不确定就**不要传**（留空 = 未知） */
+    creatorFingerprint?: string;
   }): { ok: boolean; group?: GroupRecord; error?: string } {
     const groupId = asString(input.groupId);
     if (!groupId) return { ok: false, error: 'groupId required' };
@@ -184,6 +229,9 @@ export class GroupStore {
       existing.name = asString(input.name) || existing.name;
       existing.type = normalizeType(input.type);
       if (typeof input.directedMode === 'boolean') existing.directedMode = input.directedMode;
+      // 只在"本来不知道"时补写，绝不覆盖已知的创建者
+      const creatorFp = asString(input.creatorFingerprint);
+      if (creatorFp && !existing.creatorFingerprint) existing.creatorFingerprint = creatorFp;
       existing.updatedAt = now;
       group = existing;
     } else {
@@ -197,6 +245,8 @@ export class GroupStore {
         updatedAt: now,
         origin: input.origin === 'migrated' ? 'migrated' : 'ipc',
       };
+      const creatorFp = asString(input.creatorFingerprint);
+      if (creatorFp) group.creatorFingerprint = creatorFp;
       state.groups.push(group);
     }
     if (!state.members[groupId]) state.members[groupId] = [];
@@ -224,10 +274,18 @@ export class GroupStore {
   /**
    * 加成员。幂等：同 instanceId（或同名）已存在则原样返回，不重复写盘。
    * 上限 50，与旧实现一致。
+   * `fingerprint` 可选：**给了就写，没给就留空**（绝不猜）。
    */
   addMember(
     groupId: string,
-    input: { name: string; role?: GroupMemberRole; source?: GroupMemberSource; instanceId?: string; id?: string }
+    input: {
+      name: string;
+      role?: GroupMemberRole;
+      source?: GroupMemberSource;
+      instanceId?: string;
+      id?: string;
+      fingerprint?: string;
+    }
   ): GroupMembersResult {
     const name = asString(input.name).trim();
     if (!name) return { ok: false, groupId, members: [], error: 'name required' };
@@ -248,10 +306,107 @@ export class GroupStore {
       source: normalizeSource(input.source),
     };
     if (instId) row.instanceId = instId;
+    const fp = asString(input.fingerprint);
+    if (fp) row.fingerprint = fp;
     list.push(row);
     const w = this.persist(state);
     if (!w.ok) return { ok: false, groupId, members: list.slice(0, -1), error: w.error };
     return { ok: true, groupId, members: list.slice() };
+  }
+
+  /**
+   * 三条加入路径的指纹写入策略（**统一走这里**，免得各调用点各写一套）：
+   *
+   * | source | 指纹策略 | 拿不到时 |
+   * | :-- | :-- | :-- |
+   * | `invite` | 有就用（邀请方应带上对方身份名片里的指纹） | 留空 + 审计一条（`group.member.fingerprint.missing`） |
+   * | `instance` | **一律不用**：本机牛马实例不是远端身份，套上本机指纹等于伪造归属 | 留空（原因已明确，不记 missing 审计） |
+   * | `migrated` | 旧格式回填，指纹不可知 | 留空 + 审计一条 |
+   *
+   * 已知成员（同名/同 instanceId）再次调用时只补指纹、不重复加人 ——
+   * 这样"先入群后拿到名片"这条真实顺序也能把指纹补上。
+   */
+  addMemberWithFingerprint(
+    groupId: string,
+    input: {
+      name: string;
+      role?: GroupMemberRole;
+      source?: GroupMemberSource;
+      instanceId?: string;
+      id?: string;
+      fingerprint?: string;
+    },
+    hooks: { onAudit?: (op: string, detail?: unknown) => void } = {}
+  ): GroupMembersResult {
+    const source = normalizeSource(input.source);
+    const rawFp = asString(input.fingerprint).trim();
+    // 本机实例成员永不携带指纹（它不是"某个远端身份"）
+    const fingerprint = source === 'instance' ? '' : rawFp;
+    // ⚠️ 必须把入参里的 fingerprint 拆掉再往下传：否则 `{...input}` 会把原值带进去，
+    // "instance 一律不写指纹"这条策略会被 input 覆盖掉（实测踩过）。
+    const { fingerprint: _dropFingerprint, ...rest } = input;
+    void _dropFingerprint;
+    const res = this.addMember(groupId, { ...rest, source, ...(fingerprint ? { fingerprint } : {}) });
+    if (!res.ok) return res;
+    const name = asString(input.name).trim();
+    if (fingerprint) {
+      const before = this.listMembers(groupId).find((m) => m.name === name);
+      // 已存在但当时没指纹：这次补上（幂等；已有同一个就什么都不做）
+      if (before && before.fingerprint !== fingerprint) {
+        this.setMemberFingerprint(groupId, before.id, fingerprint);
+        hooks.onAudit?.('group.member.fingerprint', { groupId, source, bound: 'patched' });
+      } else {
+        hooks.onAudit?.('group.member.fingerprint', { groupId, source, bound: 'already-present' });
+      }
+      return this.listMembersResult(groupId);
+    }
+    if (source !== 'instance') {
+      hooks.onAudit?.('group.member.fingerprint.missing', {
+        groupId,
+        source,
+        reason: source === 'migrated' ? 'legacy-record' : 'no-identity-card',
+      });
+    }
+    return this.listMembersResult(groupId);
+  }
+
+  private listMembersResult(groupId: string): GroupMembersResult {
+    return { ok: true, groupId, members: this.listMembers(groupId) };
+  }
+
+  /**
+   * 给已有成员补/换指纹（幂等；`memberId` 为空时按 name 找）。
+   * 传空指纹 = 不改（**没有"清空指纹"这条路径**：指纹一旦绑定就是审计事实，
+   * 要"解绑"应该走换证/吊销，而不是抹掉记录）。
+   */
+  setMemberFingerprint(groupId: string, memberId: string, fingerprint: string): { ok: boolean; changed: boolean; members: GroupMemberRecord[]; error?: string } {
+    const fp = asString(fingerprint).trim();
+    if (!fp) return { ok: false, changed: false, members: [], error: 'fingerprint required' };
+    const state = this.snapshot();
+    const list = state.members[groupId] || [];
+    const target = memberId ? list.find((m) => m.id === memberId) : undefined;
+    if (!target) return { ok: false, changed: false, members: list.slice(), error: 'member not found' };
+    if (target.fingerprint === fp) return { ok: true, changed: false, members: list.slice() };
+    target.fingerprint = fp;
+    const w = this.persist(state);
+    if (!w.ok) return { ok: false, changed: false, members: list.slice(), error: w.error };
+    return { ok: true, changed: true, members: list.slice() };
+  }
+
+  /** 哪些群里出现过这个指纹（T179：把"某个指纹换了证"定位到具体群） */
+  groupsWithFingerprint(fingerprint: string): Array<{ groupId: string; memberId: string; name: string }> {
+    const fp = asString(fingerprint).trim();
+    if (!fp) return [];
+    const out: Array<{ groupId: string; memberId: string; name: string }> = [];
+    const snap = this.snapshot();
+    for (const [groupId, list] of Object.entries(snap.members)) {
+      for (const m of list) {
+        if (m.fingerprint && sameFingerprintText(m.fingerprint, fp)) {
+          out.push({ groupId, memberId: m.id, name: m.name });
+        }
+      }
+    }
+    return out;
   }
 
   /** 移除成员；creator 不可被移除（与权限表一致：只有创建者可解散群） */

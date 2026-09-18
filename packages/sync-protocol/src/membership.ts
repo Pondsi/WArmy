@@ -1,0 +1,869 @@
+/**
+ * membership —— 成员证书 + 吊销列表（ADR 003 §2.3 第 6 条 / §附八.8 / §附五.1 第四层）
+ *
+ * 为什么这个模块必须存在（不是"数据结构摆着好看"）：
+ *
+ *  1. **没有证书格式，就没有「群内身份恢复」路径**（§附八.8）。成员的标识如果只有指纹，
+ *     那么"换证"就等于"换人"：群主没有任何办法把一个**新指纹**认定成"原来那个人"。
+ *     证书把"这个公钥"绑到"这个群成员身份"上，并由群主（创建者）签名背书 ——
+ *     换证后用 `supersedes` 串成一条**变更链**，链上任意一环都能推出同一个成员身份。
+ *  2. 成员被踢 / 换证 / 私钥泄漏，都需要**可验证的吊销**：光靠"本机记住不许连"没法在
+ *     多台机器之间对齐结论。吊销列表由同一个群主签名，成员重连时同步。
+ *
+ * 安全要点（改动本文件前先读这几条）：
+ *
+ *  - **签名覆盖全部语义字段**。任何字段被改（哪怕只是 displayName / role）都必须验签失败。
+ *    `memberCertSigningPayload()` 明确列出参与签名的字段，加字段时**必须同时加进去**。
+ *  - **时间判定只用接收方本地时钟**，声明里的 `issuedAt` / `revokedAt` 只做"荒谬未来时间"的
+ *    粗筛（容差 `clockSkewMs`）。绝不能因为"证书自称还没过期"就放行 ——
+ *    证书是攻击者可控数据（§附七.2 同一个道理）。
+ *  - **吊销只看"有没有这条记录"**，不看 `revokedAt`：条目存在即吊销，即便时间戳被改成未来。
+ *    否则攻击者只要把 revokedAt 往后调就能"撤销对自己的吊销"。
+ *  - **吊销列表必须单调递增**（`listVersion`），且**只增不减**：低版本（重放旧列表）与
+ *    "条目变少"（用新版本偷偷解除吊销）都必须被拒。这是本模块里最容易写漏的两条。
+ *  - **假名签名（§附八.4 / 八.5）与本模块无关**：那是 DHT 记录写入的授权模型（群派生假名），
+ *    解决"高 seq 垃圾占位"。成员证书走的是**真实身份指纹**，因为它要表达"这个人是谁"。
+ *
+ * 本模块只用 `node:crypto` 与同包的 codec（零第三方依赖、零原生模块）。
+ * 它**不碰磁盘、不碰 Electron**，因此可以被纯 Node 验证脚本直接驱动。
+ */
+import {
+  type Bytes,
+  b64u,
+  base32,
+  ed25519SpkiDerFromRaw,
+  normalizeEd25519PublicKey,
+  sha256,
+  toBuf,
+  verifyEd25519Local,
+} from './codec.js';
+
+/* ────────────────────────────── 常量 / 类型 ────────────────────────────── */
+
+export const MEMBER_CERT_SCHEMA = 'ccarmy.member-cert.v1' as const;
+export const REVOCATION_LIST_SCHEMA = 'ccarmy.revocation-list.v1' as const;
+
+/** 域分隔：证书与吊销列表的签名域不同，跨用途不互串 */
+export const MEMBER_CERT_DOMAIN = 'ccarmy.member-cert.v1' as const;
+export const REVOCATION_LIST_DOMAIN = 'ccarmy.revocation-list.v1' as const;
+
+/**
+ * 本地时间容差（与身份层 `DEFAULT_CLOCK_SKEW_MS` 同一个值）。
+ * app-shell 侧会显式把身份层的 `DEFAULT_CLOCK_SKEW_MS` 传进来；这里给默认值是为了让
+ * sync-protocol 单独可测，不依赖 app-shell。
+ */
+export const MEMBERSHIP_CLOCK_SKEW_MS = 5 * 60_000;
+
+/** 成员证书有效期默认值（发布时可由调用方覆盖） */
+export const DEFAULT_MEMBER_CERT_TTL_MS = 180 * 24 * 3600_000;
+
+export type MemberCertRole = 'creator' | 'admin' | 'member';
+
+export const MEMBER_CERT_ROLES: readonly MemberCertRole[] = ['creator', 'admin', 'member'];
+
+export type RevocationReason = 'rotation' | 'compromise' | 'departed' | 'admin';
+
+export const REVOCATION_REASONS: readonly RevocationReason[] = ['rotation', 'compromise', 'departed', 'admin'];
+
+/**
+ * 成员证书。
+ *
+ * 比 ADR 给的最小形态多了两个字段，都是**为了能离线自证**，方向是更严不是更松：
+ *  · `issuerPublicKey` —— 没有它就无法在本机验证"这张证书确实由群主签的"（只能信自称的 issuerFingerprint）；
+ *  · `memberId`（可选）—— 创建者给该成员分配的**稳定成员标识**（跨换证不变）。它让"群成员表的一行"
+ *    与"证书链"能对上；缺失时以证书链根 `certId` 充当成员标识。
+ */
+export interface MemberCertificate {
+  schema: typeof MEMBER_CERT_SCHEMA;
+  certId: string;
+  groupId: string;
+  memberFingerprint: string;
+  /** SPKI DER base64（与身份层线上表示一致） */
+  memberPublicKey: string;
+  displayName?: string;
+  role: MemberCertRole;
+  permissions: string[];
+  issuedAt: number;
+  expiresAt: number;
+  issuerFingerprint: string;
+  /** SPKI DER base64（群主 / 创建者公钥） */
+  issuerPublicKey: string;
+  /** 群主对规范化字节的签名（raw 64 字节 Ed25519，base64） */
+  issuerSignature: string;
+  /** 换证后重签时指向**旧证书** —— 这是"群内身份恢复"的关键字段 */
+  supersedes?: string;
+  /** 创建者分配的稳定成员标识（跨换证不变；可选） */
+  memberId?: string;
+}
+
+export interface RevocationEntry {
+  certId: string;
+  memberFingerprint: string;
+  reason: RevocationReason;
+  revokedAt: number;
+}
+
+export interface RevocationList {
+  schema: typeof REVOCATION_LIST_SCHEMA;
+  groupId: string;
+  /** **单调递增，必须**：否则被吊销者可以重放旧列表 */
+  listVersion: number;
+  entries: RevocationEntry[];
+  issuedAt: number;
+  issuerFingerprint: string;
+  issuerPublicKey: string;
+  issuerSignature: string;
+}
+
+/** 指纹推导注入点（与 identity.ts 同款做法）：默认 base32(sha256(raw32)) */
+export type MemberFingerprintOf = (publicKeySpkiB64: string) => string;
+
+export function defaultMemberFingerprintOf(publicKeySpkiB64: string): string {
+  const der = Buffer.from(String(publicKeySpkiB64 || ''), 'base64');
+  const raw = normalizeEd25519PublicKey(der);
+  return base32(sha256(raw));
+}
+
+export interface MembershipVerifyOptions {
+  /** 期望的签发者（群主）指纹。给了就必须相等 —— 这是"不是创建者签的就不认"的落点 */
+  expectIssuerFingerprint?: string;
+  /** 期望的群 id。给了就必须相等（防止把 A 群的证书塞进 B 群） */
+  expectGroupId?: string;
+  now?: number;
+  clockSkewMs?: number;
+  fingerprintOf?: MemberFingerprintOf;
+  /** 独立的验签实现（默认用本地 Ed25519 复核） */
+  verifySignature?: (message: Buffer, signature: Buffer, publicKeySpkiB64: string) => boolean | null;
+}
+
+export type MemberCertCode =
+  | 'ok'
+  | 'malformed'
+  | 'unknown-schema'
+  | 'fingerprint-mismatch'
+  | 'issuer-fingerprint-mismatch'
+  | 'wrong-issuer'
+  | 'wrong-group'
+  | 'expired'
+  | 'not-yet-valid'
+  | 'bad-signature';
+
+export interface MemberCertVerifyResult {
+  ok: boolean;
+  code: MemberCertCode;
+  certId: string;
+  groupId: string;
+  memberFingerprint: string;
+  issuerFingerprint: string;
+  /** 本地时钟判定（不是声明里的时间） */
+  now: number;
+  expiresAt: number;
+  detail?: string;
+}
+
+export type RevocationListCode =
+  | 'ok'
+  | 'malformed'
+  | 'unknown-schema'
+  | 'issuer-fingerprint-mismatch'
+  | 'wrong-issuer'
+  | 'wrong-group'
+  | 'not-yet-valid'
+  | 'bad-signature'
+  | 'rollback'
+  | 'replay'
+  | 'entries-dropped';
+
+export interface RevocationApplyResult {
+  ok: boolean;
+  code: RevocationListCode;
+  changed: boolean;
+  listVersion: number;
+  previousVersion: number;
+  entryCount: number;
+  detail?: string;
+}
+
+/* ────────────────────────────── 规范化 / 签名载荷 ────────────────────────────── */
+
+/** 确定性序列化：键排序 + 丢 undefined（两端必须算出同一串字节） */
+export function canonicalMembershipJson(value: unknown): string {
+  if (value === null) return 'null';
+  const t = typeof value;
+  if (t === 'number' || t === 'boolean' || t === 'string') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((v) => canonicalMembershipJson(v)).join(',')}]`;
+  if (t === 'object') {
+    const o = value as Record<string, unknown>;
+    const keys = Object.keys(o)
+      .filter((k) => o[k] !== undefined)
+      .sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalMembershipJson(o[k])}`).join(',')}}`;
+  }
+  return 'null';
+}
+
+/** 域分隔 + 规范化载荷 */
+export function membershipSigningBytes(domain: string, payload: unknown): Buffer {
+  return Buffer.from(`${domain}\n${canonicalMembershipJson(payload)}`, 'utf8');
+}
+
+/**
+ * 证书**参与签名**的字段（加字段必须同时加到签名载荷里，否则等于没签）。
+ * `issuerSignature` 本身当然不在其中。
+ */
+export function memberCertSigningPayload(cert: MemberCertificate): Record<string, unknown> {
+  return {
+    schema: cert.schema,
+    certId: cert.certId,
+    groupId: cert.groupId,
+    memberFingerprint: cert.memberFingerprint,
+    memberPublicKey: cert.memberPublicKey,
+    displayName: cert.displayName ?? '',
+    role: cert.role,
+    permissions: cert.permissions ?? [],
+    issuedAt: cert.issuedAt,
+    expiresAt: cert.expiresAt,
+    issuerFingerprint: cert.issuerFingerprint,
+    issuerPublicKey: cert.issuerPublicKey,
+    supersedes: cert.supersedes ?? '',
+    memberId: cert.memberId ?? '',
+  };
+}
+
+export function memberCertSigningBytes(cert: MemberCertificate): Buffer {
+  return membershipSigningBytes(MEMBER_CERT_DOMAIN, memberCertSigningPayload(cert));
+}
+
+export function revocationListSigningPayload(list: RevocationList): Record<string, unknown> {
+  return {
+    schema: list.schema,
+    groupId: list.groupId,
+    listVersion: list.listVersion,
+    entries: (list.entries ?? []).map((e) => ({
+      certId: e.certId,
+      memberFingerprint: e.memberFingerprint,
+      reason: e.reason,
+      revokedAt: e.revokedAt,
+    })),
+    issuedAt: list.issuedAt,
+    issuerFingerprint: list.issuerFingerprint,
+    issuerPublicKey: list.issuerPublicKey,
+  };
+}
+
+export function revocationListSigningBytes(list: RevocationList): Buffer {
+  return membershipSigningBytes(REVOCATION_LIST_DOMAIN, revocationListSigningPayload(list));
+}
+
+/* ────────────────────────────── 构造（不含签名 / 含签名） ────────────────────────────── */
+
+export interface BuildMemberCertInput {
+  certId: string;
+  groupId: string;
+  memberFingerprint: string;
+  memberPublicKey: string;
+  displayName?: string;
+  role?: MemberCertRole;
+  permissions?: string[];
+  issuedAt?: number;
+  expiresAt?: number;
+  issuerFingerprint: string;
+  issuerPublicKey: string;
+  supersedes?: string;
+  memberId?: string;
+}
+
+/** 由公钥 raw 32B 生成 SPKI DER base64（与身份层线上表示一致） */
+export function spkiB64FromRaw(raw: Bytes): string {
+  return ed25519SpkiDerFromRaw(raw).toString('base64');
+}
+
+/** 构造一张**未签名**的证书（字段归一化：权限去重排序、时间必须自洽） */
+export function buildMemberCertificate(
+  input: BuildMemberCertInput,
+  opts: { now?: number; ttlMs?: number } = {}
+): MemberCertificate {
+  const now = opts.now ?? Date.now();
+  const issuedAt = typeof input.issuedAt === 'number' ? input.issuedAt : now;
+  const expiresAt =
+    typeof input.expiresAt === 'number'
+      ? input.expiresAt
+      : issuedAt + (typeof opts.ttlMs === 'number' ? opts.ttlMs : DEFAULT_MEMBER_CERT_TTL_MS);
+  if (!(expiresAt > issuedAt)) throw new Error('expiresAt 必须大于 issuedAt');
+  const role: MemberCertRole = MEMBER_CERT_ROLES.includes(input.role as MemberCertRole)
+    ? (input.role as MemberCertRole)
+    : 'member';
+  const permissions = [...new Set((input.permissions ?? []).map((p) => String(p)).filter((p) => p.length > 0))].sort();
+  const cert: MemberCertificate = {
+    schema: MEMBER_CERT_SCHEMA,
+    certId: String(input.certId),
+    groupId: String(input.groupId),
+    memberFingerprint: String(input.memberFingerprint),
+    memberPublicKey: String(input.memberPublicKey),
+    role,
+    permissions,
+    issuedAt,
+    expiresAt,
+    issuerFingerprint: String(input.issuerFingerprint),
+    issuerPublicKey: String(input.issuerPublicKey),
+    issuerSignature: '',
+  };
+  if (input.displayName) cert.displayName = String(input.displayName);
+  if (input.supersedes) cert.supersedes = String(input.supersedes);
+  if (input.memberId) cert.memberId = String(input.memberId);
+  return cert;
+}
+
+/** 用签名器（`sign(bytes) → raw 64B`）把未签名证书变成已签名证书 */
+export async function signMemberCertificate(
+  cert: MemberCertificate,
+  sign: (bytes: Buffer) => Promise<Bytes> | Bytes
+): Promise<MemberCertificate> {
+  const sig = toBuf(await sign(memberCertSigningBytes(cert)));
+  if (sig.length !== 64) throw new Error(`member cert 签名长度异常：${sig.length}（应为 64）`);
+  return { ...cert, issuerSignature: sig.toString('base64') };
+}
+
+export interface BuildRevocationListInput {
+  groupId: string;
+  listVersion: number;
+  entries: RevocationEntry[];
+  issuedAt?: number;
+  issuerFingerprint: string;
+  issuerPublicKey: string;
+}
+
+export function buildRevocationList(input: BuildRevocationListInput, opts: { now?: number } = {}): RevocationList {
+  const now = opts.now ?? Date.now();
+  const seen = new Set<string>();
+  const entries: RevocationEntry[] = [];
+  for (const e of input.entries ?? []) {
+    const certId = String(e?.certId || '');
+    if (!certId || seen.has(certId)) continue; // 同一条只留一份（同一证书不能既 A 又 B）
+    seen.add(certId);
+    entries.push({
+      certId,
+      memberFingerprint: String(e?.memberFingerprint || ''),
+      reason: REVOCATION_REASONS.includes(e?.reason as RevocationReason) ? (e.reason as RevocationReason) : 'admin',
+      revokedAt: typeof e?.revokedAt === 'number' && Number.isFinite(e.revokedAt) ? e.revokedAt : now,
+    });
+  }
+  return {
+    schema: REVOCATION_LIST_SCHEMA,
+    groupId: String(input.groupId),
+    listVersion: Math.max(1, Math.floor(input.listVersion)),
+    entries,
+    issuedAt: typeof input.issuedAt === 'number' ? input.issuedAt : now,
+    issuerFingerprint: String(input.issuerFingerprint),
+    issuerPublicKey: String(input.issuerPublicKey),
+    issuerSignature: '',
+  };
+}
+
+export async function signRevocationList(
+  list: RevocationList,
+  sign: (bytes: Buffer) => Promise<Bytes> | Bytes
+): Promise<RevocationList> {
+  const sig = toBuf(await sign(revocationListSigningBytes(list)));
+  if (sig.length !== 64) throw new Error(`revocation list 签名长度异常：${sig.length}（应为 64）`);
+  return { ...list, issuerSignature: sig.toString('base64') };
+}
+
+/* ────────────────────────────── 验签 ────────────────────────────── */
+
+function verifySig(
+  message: Buffer,
+  signatureB64: string,
+  publicKeySpkiB64: string,
+  opts: MembershipVerifyOptions
+): boolean {
+  if (typeof signatureB64 !== 'string' || signatureB64.length === 0) return false;
+  const sig = Buffer.from(signatureB64, 'base64');
+  if (sig.length !== 64) return false;
+  if (opts.verifySignature) {
+    const r = opts.verifySignature(message, sig, publicKeySpkiB64);
+    // null = "这次没验过" → 一律按**失败**处理（fail-closed）
+    return r === true;
+  }
+  let raw: Buffer;
+  try {
+    raw = normalizeEd25519PublicKey(Buffer.from(publicKeySpkiB64, 'base64'));
+  } catch {
+    return false;
+  }
+  return verifyEd25519Local(message, sig, raw) === true;
+}
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0;
+}
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/**
+ * 验证成员证书。
+ *
+ * 检查顺序（每条失败都给出可枚举的 code，调用方按 code 决定怎么处理，不解析文案）：
+ *  结构 → 公钥↔指纹自洽 → 签发者自洽 → expectIssuer/expectGroup → 本地时钟（过期/未来）
+ *  → 签名 → supersedes 自洽。
+ */
+export function verifyMemberCertificate(
+  cert: MemberCertificate,
+  opts: MembershipVerifyOptions = {}
+): MemberCertVerifyResult {
+  const now = opts.now ?? Date.now();
+  const skew = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
+  const fingerprintOf = opts.fingerprintOf ?? defaultMemberFingerprintOf;
+  const base: MemberCertVerifyResult = {
+    ok: false,
+    code: 'malformed',
+    certId: String(cert?.certId || ''),
+    groupId: String(cert?.groupId || ''),
+    memberFingerprint: String(cert?.memberFingerprint || ''),
+    issuerFingerprint: String(cert?.issuerFingerprint || ''),
+    now,
+    expiresAt: isFiniteNumber(cert?.expiresAt) ? cert.expiresAt : 0,
+  };
+  if (!cert || typeof cert !== 'object') return { ...base, detail: '证书不是对象' };
+  if (cert.schema !== MEMBER_CERT_SCHEMA) {
+    return { ...base, code: 'unknown-schema', detail: `schema=${String(cert.schema)}` };
+  }
+  if (!isNonEmptyString(cert.certId) || !isNonEmptyString(cert.groupId)) return { ...base, detail: 'certId/groupId 缺失' };
+  if (!isNonEmptyString(cert.memberFingerprint) || !isNonEmptyString(cert.memberPublicKey)) {
+    return { ...base, detail: 'memberFingerprint/memberPublicKey 缺失' };
+  }
+  if (!isNonEmptyString(cert.issuerFingerprint) || !isNonEmptyString(cert.issuerPublicKey)) {
+    return { ...base, detail: 'issuerFingerprint/issuerPublicKey 缺失' };
+  }
+  if (!MEMBER_CERT_ROLES.includes(cert.role)) return { ...base, detail: `role 非法：${String(cert.role)}` };
+  if (!Array.isArray(cert.permissions) || !cert.permissions.every((p) => isNonEmptyString(p))) {
+    return { ...base, detail: 'permissions 必须是字符串数组' };
+  }
+  if (cert.permissions.length > 32) return { ...base, detail: `permissions 过多：${cert.permissions.length}` };
+  if (!isFiniteNumber(cert.issuedAt) || !isFiniteNumber(cert.expiresAt)) return { ...base, detail: 'issuedAt/expiresAt 非法' };
+  if (cert.supersedes !== undefined && (!isNonEmptyString(cert.supersedes) || cert.supersedes === cert.certId)) {
+    return { ...base, detail: 'supersedes 非法（不能等于自身 certId）' };
+  }
+  // 公钥 ↔ 指纹必须自洽（"换了公钥但沿用旧指纹"必然失败）
+  let derivedMember: string;
+  let derivedIssuer: string;
+  try {
+    derivedMember = fingerprintOf(cert.memberPublicKey);
+    derivedIssuer = fingerprintOf(cert.issuerPublicKey);
+  } catch (e) {
+    return { ...base, detail: `公钥无法解释：${(e as Error).message}` };
+  }
+  if (derivedMember !== cert.memberFingerprint) {
+    return { ...base, code: 'fingerprint-mismatch', detail: `memberFingerprint 与公钥不符（推出 ${derivedMember}）` };
+  }
+  if (derivedIssuer !== cert.issuerFingerprint) {
+    return { ...base, code: 'issuer-fingerprint-mismatch', detail: `issuerFingerprint 与公钥不符（推出 ${derivedIssuer}）` };
+  }
+  if (opts.expectIssuerFingerprint && opts.expectIssuerFingerprint !== cert.issuerFingerprint) {
+    return {
+      ...base,
+      code: 'wrong-issuer',
+      detail: `签发者不是本群创建者：期望 ${opts.expectIssuerFingerprint}，实际 ${cert.issuerFingerprint}`,
+    };
+  }
+  if (opts.expectGroupId && opts.expectGroupId !== cert.groupId) {
+    return { ...base, code: 'wrong-group', detail: `群不符：期望 ${opts.expectGroupId}，实际 ${cert.groupId}` };
+  }
+  // 时间：只用本地时钟。声明里的时间戳只用来挡"荒谬的未来时间"。
+  if (cert.expiresAt <= now - skew) {
+    return { ...base, code: 'expired', detail: `已过期（本地 now=${now} > expiresAt=${cert.expiresAt}）` };
+  }
+  if (cert.issuedAt > now + skew) {
+    return { ...base, code: 'not-yet-valid', detail: `issuedAt 比本地时间超前 ${Math.round((cert.issuedAt - now) / 1000)}s` };
+  }
+  if (cert.expiresAt <= cert.issuedAt) return { ...base, detail: 'expiresAt <= issuedAt' };
+  if (!verifySig(memberCertSigningBytes(cert), cert.issuerSignature, cert.issuerPublicKey, opts)) {
+    return { ...base, code: 'bad-signature', detail: 'issuerSignature 不通过（字段被改过 / 不是该公钥签的）' };
+  }
+  return { ...base, ok: true, code: 'ok' };
+}
+
+/** 只问"在本地时钟下有效吗"（不含结构/签名以外的东西）—— 便捷封装 */
+export function isCertificateValidAt(
+  cert: MemberCertificate,
+  opts: MembershipVerifyOptions = {}
+): MemberCertVerifyResult {
+  return verifyMemberCertificate(cert, opts);
+}
+
+export function verifyRevocationList(
+  list: RevocationList,
+  opts: MembershipVerifyOptions = {}
+): { ok: boolean; code: RevocationListCode; listVersion: number; entryCount: number; now: number; detail?: string } {
+  const now = opts.now ?? Date.now();
+  const skew = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
+  const fingerprintOf = opts.fingerprintOf ?? defaultMemberFingerprintOf;
+  const base = {
+    ok: false,
+    code: 'malformed' as RevocationListCode,
+    listVersion: isFiniteNumber(list?.listVersion) ? Math.floor(list.listVersion) : 0,
+    entryCount: Array.isArray(list?.entries) ? list.entries.length : 0,
+    now,
+  };
+  if (!list || typeof list !== 'object') return { ...base, detail: '列表不是对象' };
+  if (list.schema !== REVOCATION_LIST_SCHEMA) return { ...base, code: 'unknown-schema', detail: `schema=${String(list.schema)}` };
+  if (!isNonEmptyString(list.groupId)) return { ...base, detail: 'groupId 缺失' };
+  if (!isFiniteNumber(list.listVersion) || !Number.isInteger(list.listVersion) || list.listVersion < 1) {
+    return { ...base, detail: 'listVersion 必须是 ≥1 的整数' };
+  }
+  if (!isFiniteNumber(list.issuedAt)) return { ...base, detail: 'issuedAt 非法' };
+  if (!isNonEmptyString(list.issuerFingerprint) || !isNonEmptyString(list.issuerPublicKey)) {
+    return { ...base, detail: 'issuerFingerprint/issuerPublicKey 缺失' };
+  }
+  if (!Array.isArray(list.entries)) return { ...base, detail: 'entries 必须是数组' };
+  const ids = new Set<string>();
+  for (const e of list.entries) {
+    if (!e || typeof e !== 'object') return { ...base, detail: 'entries 里有非对象' };
+    if (!isNonEmptyString(e.certId)) return { ...base, detail: 'entry.certId 缺失' };
+    if (ids.has(e.certId)) return { ...base, detail: `entry.certId 重复：${e.certId}` };
+    ids.add(e.certId);
+    if (!isNonEmptyString(e.memberFingerprint)) return { ...base, detail: 'entry.memberFingerprint 缺失' };
+    if (!REVOCATION_REASONS.includes(e.reason)) return { ...base, detail: `entry.reason 非法：${String(e.reason)}` };
+    if (!isFiniteNumber(e.revokedAt)) return { ...base, detail: 'entry.revokedAt 非法' };
+  }
+  let derivedIssuer: string;
+  try {
+    derivedIssuer = fingerprintOf(list.issuerPublicKey);
+  } catch (e) {
+    return { ...base, detail: `issuerPublicKey 无法解释：${(e as Error).message}` };
+  }
+  if (derivedIssuer !== list.issuerFingerprint) {
+    return { ...base, code: 'issuer-fingerprint-mismatch', detail: `issuerFingerprint 与公钥不符（推出 ${derivedIssuer}）` };
+  }
+  if (opts.expectIssuerFingerprint && opts.expectIssuerFingerprint !== list.issuerFingerprint) {
+    return { ...base, code: 'wrong-issuer', detail: `签发者不是本群创建者：期望 ${opts.expectIssuerFingerprint}` };
+  }
+  if (opts.expectGroupId && opts.expectGroupId !== list.groupId) {
+    return { ...base, code: 'wrong-group', detail: `群不符：期望 ${opts.expectGroupId}，实际 ${list.groupId}` };
+  }
+  if (list.issuedAt > now + skew) {
+    return { ...base, code: 'not-yet-valid', detail: `issuedAt 比本地时间超前 ${Math.round((list.issuedAt - now) / 1000)}s` };
+  }
+  if (!verifySig(revocationListSigningBytes(list), list.issuerSignature, list.issuerPublicKey, opts)) {
+    return { ...base, code: 'bad-signature', detail: 'issuerSignature 不通过（字段被改过 / 不是该公钥签的）' };
+  }
+  return { ...base, ok: true, code: 'ok' };
+}
+
+/* ────────────────────────────── 单调合并（拒绝回滚 / 拒绝偷偷解吊销） ────────────────────────────── */
+
+function entrySignature(list: RevocationList): string {
+  return `${list.listVersion}|${list.entries.map((e) => e.certId).join(',')}|${list.issuedAt}|${list.issuerSignature}`;
+}
+
+/**
+ * 把收到（且**已验签**）的吊销列表合并进本机当前列表。
+ *
+ * 三条硬规则（缺一条就能被绕过）：
+ *  1. `listVersion` 必须**严格更大**才更新；更小 = **回滚**（重放旧列表），相等但内容不同 = **重放**，都拒；
+ *  2. **条目只增不减**：新列表若少了本机记过的 certId，一律拒（否则"发一版新列表顺手解掉吊销"即可绕过）；
+ *  3. 同一 certId 的 `reason` 可以变（rotation → compromise），但 certId 不能消失。
+ *
+ * `current = null`（本机还没同步过）时直接采纳 —— 前提是调用方已经验过签名
+ * （用 `verifyAndApplyRevocationList` 就不会漏）。
+ */
+export function applyRevocationList(
+  current: RevocationList | null,
+  incoming: RevocationList
+): RevocationApplyResult {
+  const previousVersion = current ? current.listVersion : 0;
+  if (!current) {
+    return {
+      ok: true,
+      code: 'ok',
+      changed: true,
+      listVersion: incoming.listVersion,
+      previousVersion,
+      entryCount: incoming.entries.length,
+      detail: '本机尚无吊销列表（首次同步）',
+    };
+  }
+  if (incoming.listVersion < current.listVersion) {
+    return {
+      ok: false,
+      code: 'rollback',
+      changed: false,
+      listVersion: incoming.listVersion,
+      previousVersion,
+      entryCount: incoming.entries.length,
+      detail: `列表回滚：收到 v${incoming.listVersion} < 本机 v${current.listVersion}`,
+    };
+  }
+  if (incoming.listVersion === current.listVersion) {
+    if (entrySignature(incoming) === entrySignature(current)) {
+      return {
+        ok: true,
+        code: 'ok',
+        changed: false,
+        listVersion: incoming.listVersion,
+        previousVersion,
+        entryCount: incoming.entries.length,
+        detail: '同一版本、同一内容 → 幂等忽略',
+      };
+    }
+    return {
+      ok: false,
+      code: 'replay',
+      changed: false,
+      listVersion: incoming.listVersion,
+      previousVersion,
+      entryCount: incoming.entries.length,
+      detail: `同版本 v${incoming.listVersion} 但内容不同（疑似重放/伪造）`,
+    };
+  }
+  const incomingIds = new Set(incoming.entries.map((e) => e.certId));
+  const dropped = current.entries.filter((e) => !incomingIds.has(e.certId)).map((e) => e.certId);
+  if (dropped.length) {
+    return {
+      ok: false,
+      code: 'entries-dropped',
+      changed: false,
+      listVersion: incoming.listVersion,
+      previousVersion,
+      entryCount: incoming.entries.length,
+      detail: `新列表少了已吊销项（${dropped.slice(0, 3).join(',')}…）：吊销只增不减`,
+    };
+  }
+  return {
+    ok: true,
+    code: 'ok',
+    changed: true,
+    listVersion: incoming.listVersion,
+    previousVersion,
+    entryCount: incoming.entries.length,
+    detail: `v${current.listVersion} → v${incoming.listVersion}`,
+  };
+}
+
+/** 验签 + 单调合并（**调用方不要自己先 apply 再 verify**，顺序反了就等于没验） */
+export function verifyAndApplyRevocationList(
+  current: RevocationList | null,
+  incoming: RevocationList,
+  opts: MembershipVerifyOptions = {}
+): RevocationApplyResult {
+  const v = verifyRevocationList(incoming, opts);
+  if (!v.ok) {
+    return {
+      ok: false,
+      code: v.code,
+      changed: false,
+      listVersion: v.listVersion,
+      previousVersion: current ? current.listVersion : 0,
+      entryCount: v.entryCount,
+      detail: `验签/结构不通过：${v.detail ?? v.code}`,
+    };
+  }
+  return applyRevocationList(current, incoming);
+}
+
+/* ────────────────────────────── 吊销查询 ────────────────────────────── */
+
+export interface RevocationQuery {
+  certId?: string;
+  memberFingerprint?: string;
+}
+
+/**
+ * 是否被吊销。
+ * ⚠️ **只看有没有这条记录，不看 `revokedAt`** —— 条目存在即吊销。
+ * 理由：revokedAt 是可被签发者写成任意值（甚至未来）的字段；若用它做判定，
+ * 攻击者只要把时间往后调就能"撤销对自己的吊销"。
+ */
+export function findRevocationEntry(list: RevocationList | null, q: RevocationQuery): RevocationEntry | null {
+  if (!list || !Array.isArray(list.entries)) return null;
+  for (const e of list.entries) {
+    if (q.certId && e.certId === q.certId) return e;
+    if (q.memberFingerprint && e.memberFingerprint === q.memberFingerprint) return e;
+  }
+  return null;
+}
+
+export function isRevoked(list: RevocationList | null, q: RevocationQuery): boolean {
+  return findRevocationEntry(list, q) !== null;
+}
+
+/* ────────────────────────────── 变更链（supersedes）＝ 群内身份恢复 ────────────────────────────── */
+
+export interface CertChain {
+  /** 链根证书 id（换证链上最早那一张）；成员身份就绑在它上面 */
+  rootCertId: string;
+  /** 从根到该证书的 certId 序列 */
+  certIds: string[];
+  /** 链上出现过的全部指纹（旧 → 新） */
+  fingerprints: string[];
+  /** 检测到 supersedes 环时为 true（链不可信） */
+  cycle: boolean;
+  /** supersedes 指向本地不存在的证书（链断了） */
+  broken: boolean;
+}
+
+function indexById(certs: readonly MemberCertificate[]): Map<string, MemberCertificate> {
+  const m = new Map<string, MemberCertificate>();
+  for (const c of certs) if (c && isNonEmptyString(c.certId)) m.set(c.certId, c);
+  return m;
+}
+
+/** 沿 `supersedes` 往回走到根，得到完整的变更链 */
+export function walkCertChain(certs: readonly MemberCertificate[], certId: string): CertChain {
+  const byId = indexById(certs);
+  const start = byId.get(certId);
+  if (!start) {
+    return { rootCertId: '', certIds: [], fingerprints: [], cycle: false, broken: true };
+  }
+  const seen = new Set<string>();
+  const path: MemberCertificate[] = [];
+  let cur: MemberCertificate | undefined = start;
+  let broken = false;
+  let cycle = false;
+  while (cur) {
+    if (seen.has(cur.certId)) {
+      cycle = true;
+      break;
+    }
+    seen.add(cur.certId);
+    path.push(cur);
+    const prevId: string | undefined = cur.supersedes;
+    if (!prevId) break;
+    const prev: MemberCertificate | undefined = byId.get(prevId);
+    if (!prev) {
+      // 链断了：本机没有旧证书（例如只收到最新那一张）。不因此否定本人，
+      // 但要把"链不完整"如实标出来，好让调用方决定是否要求补齐。
+      broken = true;
+      break;
+    }
+    cur = prev;
+  }
+  path.reverse(); // 旧 → 新
+  return {
+    rootCertId: path[0]?.certId ?? '',
+    certIds: path.map((c) => c.certId),
+    fingerprints: path.map((c) => c.memberFingerprint),
+    cycle,
+    broken,
+  };
+}
+
+/** supersedes 链的**根** certId（成员身份 id，跨换证不变） */
+export function chainRootCertId(certs: readonly MemberCertificate[], certId: string): string {
+  return walkCertChain(certs, certId).rootCertId;
+}
+
+/**
+ * 给定指纹，返回**同一条变更链**上的全部指纹（含自己）。
+ * 本机不知道这个指纹（没有任何证书）时返回 `[fingerprint]` 本身 —— "只为查找用"，
+ * **不代表认定它是成员**。是否成员由证书验签结论决定。
+ */
+export function chainFingerprintsFor(certs: readonly MemberCertificate[], fingerprint: string): string[] {
+  const own = certs.filter((c) => c.memberFingerprint === fingerprint);
+  const out = new Set<string>([fingerprint]);
+  for (const c of own) {
+    const chain = walkCertChain(certs, c.certId);
+    if (chain.cycle) continue; // 环 = 链不可信，不用它做归属
+    for (const fp of chain.fingerprints) out.add(fp);
+  }
+  // 反向：别的证书 supersedes 到"我这一环"（例如本机只有旧证书）
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const c of certs) {
+      if (!c.supersedes) continue;
+      if (out.has(c.memberFingerprint)) continue;
+      if (out.has(c.supersedes)) {
+        out.add(c.memberFingerprint);
+        grew = true;
+      }
+    }
+  }
+  return [...out];
+}
+
+/**
+ * 这两个指纹是不是**同一个群成员**（= 换证后重新进群的判据）。
+ *
+ * 判据：两边都能在同一个群内找到证书，且**链根 certId 相同**（或者 `memberId` 相同 ——
+ * 创建者可显式重签并把 memberId 沿用）。否则一律 false：
+ * **无关的新指纹不能因为"本机也认识"就被当成原成员**。
+ */
+export function isSameMember(
+  certs: readonly MemberCertificate[],
+  fingerprintA: string,
+  fingerprintB: string
+): { same: boolean; rootA: string; rootB: string; memberId: string; reason: string } {
+  const empty = { same: false, rootA: '', rootB: '', memberId: '', reason: '' };
+  if (!fingerprintA || !fingerprintB) return { ...empty, reason: '指纹为空' };
+  const certsA = certs.filter((c) => c.memberFingerprint === fingerprintA);
+  const certsB = certs.filter((c) => c.memberFingerprint === fingerprintB);
+  if (!certsA.length || !certsB.length) {
+    return { ...empty, reason: !certsA.length ? 'A 没有成员证书' : 'B 没有成员证书' };
+  }
+  const rootsA = certsA.map((c) => chainRootCertId(certs, c.certId)).filter((r) => r.length > 0);
+  const rootsB = certsB.map((c) => chainRootCertId(certs, c.certId)).filter((r) => r.length > 0);
+  const rootA = rootsA[0] ?? '';
+  const rootB = rootsB[0] ?? '';
+  const shared = rootsA.some((r) => rootsB.includes(r));
+  // memberId（创建者分配的稳定成员标识）也可以作为"同一人"的等价判据
+  const idsA = new Set(certsA.map((c) => c.memberId).filter((v): v is string => typeof v === 'string' && v.length > 0));
+  const idsB = certsB.map((c) => c.memberId).filter((v): v is string => typeof v === 'string' && v.length > 0);
+  const sharedId = idsB.find((id) => idsA.has(id)) ?? '';
+  if (shared || sharedId) {
+    return {
+      same: true,
+      rootA,
+      rootB,
+      memberId: sharedId,
+      reason: shared ? `变更链根相同（${rootA}）` : `创建者沿用了 memberId（${sharedId}）`,
+    };
+  }
+  return { same: false, rootA, rootB, memberId: '', reason: `链根不同（${rootA || '无'} ≠ ${rootB || '无'}）` };
+}
+
+/* ────────────────────────────── 便于断言 / 展示 ────────────────────────────── */
+
+/** 公开描述（不含任何私钥材料；证书本来就只有公钥） */
+export function describeMemberCertificate(cert: MemberCertificate): {
+  certId: string;
+  groupId: string;
+  memberFingerprint: string;
+  memberPublicKeyRawB64u: string;
+  role: MemberCertRole;
+  permissions: string[];
+  supersedes: string;
+  memberId: string;
+  issuedAt: number;
+  expiresAt: number;
+  issuerFingerprint: string;
+} {
+  let raw = '';
+  try {
+    raw = b64u(normalizeEd25519PublicKey(Buffer.from(cert.memberPublicKey, 'base64')));
+  } catch {
+    raw = '';
+  }
+  return {
+    certId: cert.certId,
+    groupId: cert.groupId,
+    memberFingerprint: cert.memberFingerprint,
+    memberPublicKeyRawB64u: raw,
+    role: cert.role,
+    permissions: [...(cert.permissions ?? [])],
+    supersedes: cert.supersedes ?? '',
+    memberId: cert.memberId ?? '',
+    issuedAt: cert.issuedAt,
+    expiresAt: cert.expiresAt,
+    issuerFingerprint: cert.issuerFingerprint,
+  };
+}
+
+/** 群内成员身份 id：优先 `memberId`，否则用变更链根 certId */
+export function memberIdentityOf(certs: readonly MemberCertificate[], cert: MemberCertificate): string {
+  if (cert.memberId) return `member:${cert.memberId}`;
+  const root = chainRootCertId(certs, cert.certId);
+  return root ? `chain:${root}` : '';
+}

@@ -144,8 +144,10 @@ export * from './secure-session.js';
 export * from './dht.js';
 export * from './ladder.js';
 export * from './dialability.js';
+export * from './relay.js';
 export * from './announce.js';
 export * from './liveness.js';
+export * from './membership.js';
 
 /** 远程 AI 执行约定：本地零痕迹目录（临时，用完即删） */
 export function incognitoWorkDir(): string {

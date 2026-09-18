@@ -37,25 +37,45 @@
  * 本模块不做：密钥存储、身份文件读写、代次规则、联系方式冻结（都在 identity / identity-store 里）。
  */
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 import {
+  MEMBERSHIP_CLOCK_SKEW_MS,
+  REVOCATION_REASONS,
+  buildMemberCertificate,
+  buildRevocationList,
   ed25519PublicKeyObject,
   ed25519RawFromSpkiDer,
   ed25519SpkiDerFromRaw,
   normalizeEd25519PublicKey,
+  randomHex,
+  signMemberCertificate,
+  signRevocationList,
+  verifyMemberCertificate,
   type FingerprintDerivation,
   type IdentityProvider,
+  type MemberCertCode,
+  type MemberCertRole,
+  type MemberCertificate,
+  type MemberFingerprintOf,
   type NormalizedIdentity,
+  type RevocationList,
+  type RevocationReason,
 } from '@ccarmy/sync-protocol';
 import {
+  DEFAULT_CLOCK_SKEW_MS,
   fingerprintFromPublicKey,
+  fingerprintMatches,
   keyObjectFromPrivateDer,
+  verifyRotationDeclaration,
   type ContactCard,
+  type KeyRingEntry,
   type PeerContactView,
+  type RotationDeclaration,
+  type RotationVerifyResult,
 } from './identity.js';
 import {
-  PEER_CONTACTS_SCHEMA,
+  MEMBERSHIP_FILE_SCHEMA,
+  MembershipStore,
   type IdentityStore,
   type UnlockState,
 } from './identity-store.js';
@@ -272,57 +292,147 @@ export function requireSignableIdentity(store: IdentityStore | null): SignableGa
 
 /* ────────────────────── 本机已知联系人（名册 / presence 用） ────────────────────── */
 
-/** 对端名片旁路文件（与 identity-store 的 peerFile() 同一份数据；schema 常量复用它的导出） */
-function peerStoreFile(store: IdentityStore): string {
-  return path.join(path.dirname(store.path()), 'peer-contacts.json');
-}
-
 /**
  * 本机 peer-contacts.json 里的指纹键。
- * ⚠️ `IdentityStore.readPeers()` 是私有的，这里按它的落盘 schema（PEER_CONTACTS_SCHEMA）读同一份文件，
- * 只取键名；每条的实际内容仍走 `store.peerContact(fp)`（含结算逻辑），不做第二份解析。
+ * 走 `IdentityStore.peerContactKeys()`（身份层已把它公开）；每条的实际内容仍由
+ * `store.peerContact(fp)` 解析（含冻结结算逻辑），这里不做第二份解析。
  */
 export function peerContactKeys(store: IdentityStore | null): string[] {
   if (!store) return [];
   try {
-    const raw = fs.readFileSync(peerStoreFile(store), 'utf8');
-    const parsed = JSON.parse(raw) as { schema?: string; peers?: Record<string, unknown> };
-    if (!parsed || typeof parsed !== 'object') return [];
-    if (parsed.schema !== PEER_CONTACTS_SCHEMA) return [];
-    const peers = parsed.peers;
-    if (!peers || typeof peers !== 'object') return [];
-    return Object.keys(peers).filter((k) => typeof k === 'string' && k.length > 0);
+    return store.peerContactKeys();
   } catch {
     return [];
   }
 }
 
-/** 已知联系人指纹集合（= 名册） */
+/** 本机已知联系人指纹集合（= 名册的 TOFU 部分） */
 export function knownContactFingerprints(store: IdentityStore | null): string[] {
   return peerContactKeys(store);
 }
 
+/* ────────────────────── 成员证书存储（落盘在身份目录下） ────────────────────── */
+
+/** 成员证书 / 吊销列表的落盘位置（与身份文件同目录；两边都是本机数据） */
+export function membershipFileFor(store: IdentityStore): string {
+  return path.join(path.dirname(store.path()), 'membership.json');
+}
+
+const membershipCache = new WeakMap<IdentityStore, MembershipStore>();
+
 /**
- * 名册校验器：**只放行本机已知联系人**（+ 调用方显式加入的指纹，如刚 pin 过的地址）。
- * 握手层对 `roster(fp) === false` 的处理是 `not-authorized` 直接拒绝 —— 这正是我们要的 fail-closed。
- * 注意：调用方若给了 pin（`peerFingerprint`），也要同时把它加进名册，否则 pin 过了名册也会拒。
+ * 取（并缓存）本机身份的成员证书存储。
+ * 缓存按 IdentityStore 实例走：同一进程里所有调用点（名册、IPC、在线态）看到同一份数据；
+ * `MembershipStore` 内部再按文件 mtime+size 判定是否重读，所以外部改文件也能被看见。
+ */
+export function membershipStoreFor(
+  store: IdentityStore | null,
+  opts: { onAudit?: (op: string, detail?: unknown) => void } = {}
+): MembershipStore | null {
+  if (!store) return null;
+  const hit = membershipCache.get(store);
+  if (hit) return hit;
+  const made = new MembershipStore(membershipFileFor(store), {
+    ...(opts.onAudit ? { onAudit: opts.onAudit } : {}),
+    // 指纹推导与本地时间容差都对齐身份层（同一个值、同一个实现）
+    fingerprintOf: fingerprintFromPublicKey,
+    clockSkewMs: DEFAULT_CLOCK_SKEW_MS,
+  });
+  membershipCache.set(store, made);
+  return made;
+}
+
+export interface RosterCheckerOptions {
+  /** 显式注入的成员证书存储（默认从 IdentityStore 推导） */
+  membership?: MembershipStore | null;
+  now?: () => number;
+  /** 打开"没有证书就不放行"（默认 false —— 没证书的群保留 TOFU 降级） */
+  requireCertificate?: boolean;
+}
+
+/**
+ * 名册校验器 —— 握手层对 `roster(fp) === false` 的处理是 `not-authorized` 直接拒绝（fail-closed）。
+ *
+ * 判定顺序（**顺序本身是安全语义，别调换**）：
+ *  ① `extra`（调用方显式 pin 过的地址对应的指纹）→ 放行；
+ *  ② **本机对该指纹有成员证书/吊销记录** → 由记录给最终结论：
+ *     · 有效且未被吊销 → 放行；
+ *     · 过期 / 未生效 / 签名不对 / 签发者不是群主 / 在吊销名单里 → **拒绝**（不再退回 TOFU）。
+ *     这一步是"被吊销者拿旧证书重连必须被拒"的落点；
+ *  ③ 没有记录 → **TOFU 降级**：已知联系人（peer-contacts.json）放行。
+ *     没有证书的群（还没铺开证书的老流程）因此不会被卡死 —— 这是刻意的兼容，
+ *     但一旦某人在本机有了证书，②就接管他，TOFU 不再能替他背书。
+ *
+ * `requireCertificate: true` 时关掉③（只有②和①能放行）。默认关闭：现有单测/老库都还没有证书。
  */
 export function createRosterChecker(
   store: IdentityStore | null,
-  extra: string[] = []
+  extra: string[] = [],
+  opts: RosterCheckerOptions = {}
 ): (fingerprint: string) => boolean {
   const allow = new Set<string>();
   for (const fp of knownContactFingerprints(store)) allow.add(fp);
   for (const fp of extra) if (typeof fp === 'string' && fp) allow.add(fp);
-  return (fingerprint: string): boolean => {
-    if (typeof fingerprint !== 'string' || !fingerprint) return false;
-    if (allow.has(fingerprint)) return true;
-    // 指纹是"短横分组"写法，比较时容忍大小写与短横差异
-    const norm = (s: string): string => s.replace(/-/g, '').toLowerCase();
+  const pinned = new Set<string>(extra.filter((fp) => typeof fp === 'string' && fp.length > 0));
+  const membership = opts.membership !== undefined ? opts.membership : membershipStoreFor(store);
+  const now = opts.now ?? ((): number => Date.now());
+  const norm = (s: string): string => s.replace(/-/g, '').toLowerCase();
+  const inSet = (set: Set<string>, fingerprint: string): boolean => {
+    if (set.has(fingerprint)) return true;
     const target = norm(fingerprint);
-    for (const fp of allow) if (norm(fp) === target) return true;
+    for (const fp of set) if (norm(fp) === target) return true;
     return false;
   };
+  return (fingerprint: string): boolean => {
+    if (typeof fingerprint !== 'string' || !fingerprint) return false;
+    // ① 显式 pin（"我刚把这个地址 pin 过"）—— 调用方自己负责这个信任，不在名册里再判一次
+    if (inSet(pinned, fingerprint)) return true;
+    // ② 证书 / 吊销记录优先
+    if (membership) {
+      const verdict = membership.authorizeFingerprint(fingerprint, { now: now() });
+      if (verdict.decided) return verdict.ok;
+    }
+    // ③ TOFU 降级
+    if (opts.requireCertificate) return false;
+    return inSet(allow, fingerprint);
+  };
+}
+
+/** 名册判定 + 原因（给 IPC / UI / 审计用；`createRosterChecker` 只回布尔） */
+export function explainRosterDecision(
+  store: IdentityStore | null,
+  fingerprint: string,
+  opts: RosterCheckerOptions & { extra?: string[] } = {}
+): {
+  allowed: boolean;
+  basis: 'pin' | 'certificate' | 'revoked' | 'tofu' | 'none';
+  code: string;
+  groupId?: string;
+  certId?: string;
+  detail?: string;
+} {
+  const membership = opts.membership !== undefined ? opts.membership : membershipStoreFor(store);
+  const extra = opts.extra ?? [];
+  if (extra.some((fp) => fingerprintMatches(fp, fingerprint))) {
+    return { allowed: true, basis: 'pin', code: 'pinned' };
+  }
+  if (membership) {
+    const v = membership.authorizeFingerprint(fingerprint, { now: (opts.now ?? (() => Date.now()))() });
+    if (v.decided) {
+      return {
+        allowed: v.ok,
+        basis: v.ok ? 'certificate' : 'revoked',
+        code: v.code,
+        ...(v.groupId ? { groupId: v.groupId } : {}),
+        ...(v.certId ? { certId: v.certId } : {}),
+        ...(v.detail ? { detail: v.detail } : {}),
+      };
+    }
+  }
+  if (!opts.requireCertificate && knownContactFingerprints(store).some((fp) => fingerprintMatches(fp, fingerprint))) {
+    return { allowed: true, basis: 'tofu', code: 'known-contact' };
+  }
+  return { allowed: false, basis: 'none', code: 'unknown-fingerprint' };
 }
 
 /** 所有对端名片视图（UI 用「有谁换了证」；逐键走 store.peerContact 以复用冻结期结算） */
@@ -348,6 +458,21 @@ export interface ChangeAckRecord {
   auditId: string;
 }
 
+/**
+ * `scopes` 是怎么算出来的（**必须如实标出来**，UI / 审计都靠它区分"精确"与"降级"）：
+ *  · `membership`   —— 由成员表（群/项目）与联系人表里的**指纹映射**算出来的，精确到具体会话；
+ *  · `fallback-all` —— 本机**没有**任何映射（没指纹 / 成员表为空）→ 退回"到处都出现"
+ *                      （旧行为，不许因为改动而退化）；
+ *  · `self-all`     —— 这是**本机自己**的换证：与"本机在哪些地方出现"全都相关，
+ *                      给 `all` 是真实结论，不是降级。
+ */
+export type ChangeScopeBasis = 'membership' | 'fallback-all' | 'self-all';
+
+export interface ChangeScope {
+  kind: 'internal' | 'external' | 'extdm' | 'all';
+  id?: string;
+}
+
 export interface IdentityChangeEntry {
   id: string;
   ts: number;
@@ -364,9 +489,85 @@ export interface IdentityChangeEntry {
   contactFreezeUntil?: number;
   frozen?: boolean;
   remainingMs?: number;
-  /** 该在哪些地方出现横幅。群成员表里没有指纹 → 本机无法归属，如实给 all */
-  scopes: Array<{ kind: 'internal' | 'external' | 'extdm' | 'all'; id?: string }>;
+  /** 该在哪些地方出现横幅（精确到具体群/项目；拿不到映射时如实给 all） */
+  scopes: ChangeScope[];
+  /** `scopes` 的来历（见 ChangeScopeBasis 的三条说明） */
+  scopeBasis: ChangeScopeBasis;
   ack?: { dismissedAt?: number; verifiedAt?: number };
+}
+
+/**
+ * 成员表最小接口（GroupStore 天然满足它）。
+ * 用接口而不是直接依赖 GroupStore：验证脚本可以喂真 GroupStore，也可以喂一个受控替身，
+ * 而 identity-provider 不必知道 groups.json 的存在。
+ */
+export interface MemberDirectory {
+  listGroups(): Array<{ groupId: string; type: 'internal' | 'external' }>;
+  listMembers(groupId: string): Array<{ id: string; name: string; fingerprint?: string }>;
+}
+
+export interface ComputeScopesInput {
+  /** 变更链上的指纹（旧 + 新；通常由 `chainFingerprintsFor` 扩展过） */
+  fingerprints: string[];
+  directory?: MemberDirectory | null;
+  /** 本机已知联系人指纹（peer-contacts.json 的键） */
+  contacts?: string[];
+  /** 本机自己的指纹：命中它 → 本机的换证，`scopes = [{kind:'all'}]` */
+  selfFingerprint?: string;
+}
+
+export interface ComputeScopesResult {
+  scopes: ChangeScope[];
+  scopeBasis: ChangeScopeBasis;
+  matchedGroups: Array<{ groupId: string; type: 'internal' | 'external'; memberId: string; memberName: string }>;
+  matchedContacts: string[];
+}
+
+/**
+ * 把"某个指纹换了证"翻译成"哪些会话该出横幅"。
+ *
+ * 关键点：**映射缺失时不许凭空变成"到处都出现"，但也不许变成"哪里都不出现"**。
+ * 前者是降级（旧行为，UI 依赖），后者会让用户完全看不到换证提醒 —— 所以回退方向是 `all`，
+ * 并用 `scopeBasis` 如实标出"这是回退，不是结论"。
+ */
+export function computeChangeScopes(input: ComputeScopesInput): ComputeScopesResult {
+  const fps = [...new Set((input.fingerprints ?? []).map((f) => String(f || '')).filter((f) => f.length > 0))];
+  const matchedGroups: ComputeScopesResult['matchedGroups'] = [];
+  const matchedContacts: string[] = [];
+  if (input.selfFingerprint && fps.some((fp) => fingerprintMatches(fp, String(input.selfFingerprint)))) {
+    return { scopes: [{ kind: 'all' }], scopeBasis: 'self-all', matchedGroups, matchedContacts };
+  }
+  const scopes: ChangeScope[] = [];
+  const seen = new Set<string>();
+  const push = (kind: ChangeScope['kind'], id?: string): void => {
+    const key = `${kind}:${id ?? ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    scopes.push(id ? { kind, id } : { kind });
+  };
+  const hit = (fp: string | undefined): boolean =>
+    !!fp && fps.some((target) => fingerprintMatches(fp, target));
+  if (input.directory) {
+    for (const g of input.directory.listGroups()) {
+      const kind: ChangeScope['kind'] = g.type === 'external' ? 'external' : 'internal';
+      for (const m of input.directory.listMembers(g.groupId)) {
+        if (!hit(m.fingerprint)) continue;
+        matchedGroups.push({ groupId: g.groupId, type: g.type, memberId: m.id, memberName: m.name });
+        push(kind, g.groupId);
+      }
+    }
+  }
+  for (const fp of input.contacts ?? []) {
+    if (!hit(fp)) continue;
+    matchedContacts.push(fp);
+  }
+  // 联系人的会话 id 与指纹之间本机没有映射表 → 只能标到"联系人（extdm）"这一级，
+  // **不填 id**（填了会与 UI 的会话 id 对不上，横幅反而会彻底消失）
+  if (matchedContacts.length) push('extdm');
+  if (!scopes.length) {
+    return { scopes: [{ kind: 'all' }], scopeBasis: 'fallback-all', matchedGroups, matchedContacts };
+  }
+  return { scopes, scopeBasis: 'membership', matchedGroups, matchedContacts };
 }
 
 /**
@@ -378,14 +579,35 @@ export interface IdentityChangeEntry {
  *   从声明里读旧名片 = 让攻击者伪造"旧联系方式"来冒充熟人。
  *   对端的 new/old 指纹也由**本机留存条目**推出（同一 receivedAt 的新旧两条，代次高者为新），
  *   不采信声明里的 oldFingerprint。
+ *
+ * `scopes` 的算法见 `computeChangeScopes`：给了 `directory`（真群成员表）与 `membership`（证书链）
+ * 才能精确到具体群；**不给就退回 `[{kind:'all'}]`**（旧行为，UI 175 项验收依赖它）。
  */
 export function buildIdentityChangeEntries(
   store: IdentityStore | null,
-  opts: { now?: number; acks?: Record<string, ChangeAckRecord> } = {}
+  opts: {
+    now?: number;
+    acks?: Record<string, ChangeAckRecord>;
+    membership?: MembershipStore | null;
+    directory?: MemberDirectory | null;
+    contacts?: string[];
+  } = {}
 ): IdentityChangeEntry[] {
   if (!store) return [];
   const now = opts.now ?? Date.now();
   const acks = opts.acks ?? {};
+  const membership = opts.membership !== undefined ? opts.membership : membershipStoreFor(store);
+  const contacts = opts.contacts ?? knownContactFingerprints(store);
+  const chainOf = (fps: string[]): string[] => {
+    const out = new Set<string>();
+    for (const fp of fps) {
+      if (!fp) continue;
+      out.add(fp);
+      // 证书链上的任一指纹都算"同一个成员"，用它去成员表里找归属
+      for (const linked of membership ? membership.chainFingerprints(fp) : []) out.add(linked);
+    }
+    return [...out];
+  };
   const mkAck = (id: string): IdentityChangeEntry['ack'] => {
     const a = acks[id];
     if (!a) return undefined;
@@ -397,12 +619,20 @@ export function buildIdentityChangeEntries(
   const info = store.info();
   const history = store.contactCardHistory();
   const freeze = store.contactFreeze(now);
+  const selfFingerprint = info?.fingerprint ?? '';
   if (info) {
     for (const d of store.declarations()) {
       if (d.kind !== 'ccarmy.identity.rotation') continue;
       const id = `self:${d.oldFingerprint}->${d.newFingerprint}`;
       // 旧名片 = 换证时刻之前、本机留存的最后一条（声明里没有联系方式）
       const prev = history.filter((h) => h.at <= d.issuedAt).slice(-1)[0]?.card ?? null;
+      const scoped = computeChangeScopes({
+        fingerprints: chainOf([d.oldFingerprint, d.newFingerprint]),
+        directory: opts.directory ?? null,
+        contacts,
+        // 本机自己的换证：三处都该看到（真实结论，不是降级）
+        selfFingerprint: selfFingerprint || d.newFingerprint,
+      });
       const entry: IdentityChangeEntry = {
         id,
         ts: d.issuedAt,
@@ -417,7 +647,8 @@ export function buildIdentityChangeEntries(
         contactFreezeUntil: freeze.contactFreezeUntil,
         frozen: freeze.frozen,
         remainingMs: freeze.remainingMs,
-        scopes: [{ kind: 'all' }],
+        scopes: scoped.scopes,
+        scopeBasis: scoped.scopeBasis,
       };
       const ack = mkAck(id);
       if (ack) entry.ack = ack;
@@ -435,6 +666,11 @@ export function buildIdentityChangeEntries(
     if (newest !== view) continue; // 旧条目不再单独出横幅
     const oldest = pair.find((v) => v !== newest);
     const id = `peer:${newest.fingerprint}:${newest.receivedAt}`;
+    const scoped = computeChangeScopes({
+      fingerprints: chainOf([oldest?.fingerprint ?? '', newest.fingerprint]),
+      directory: opts.directory ?? null,
+      contacts,
+    });
     const entry: IdentityChangeEntry = {
       id,
       ts: newest.receivedAt,
@@ -450,7 +686,8 @@ export function buildIdentityChangeEntries(
       contactFreezeUntil: newest.contactFreezeUntil,
       frozen: newest.frozen,
       remainingMs: newest.remainingMs,
-      scopes: [{ kind: 'all' }],
+      scopes: scoped.scopes,
+      scopeBasis: scoped.scopeBasis,
     };
     const ack = mkAck(id);
     if (ack) entry.ack = ack;
@@ -459,3 +696,588 @@ export function buildIdentityChangeEntries(
 
   return changes.sort((a, b) => b.ts - a.ts);
 }
+
+/* ────────────── 成员在线态：用**活连接集合**按指纹判定（T179） ────────────── */
+
+export type PresenceBasis = 'local-instance' | 'mesh-session' | 'unattributed';
+
+export interface MemberPresenceRow {
+  id: string;
+  name: string;
+  /** 异地成员（不在本机实例列表里） */
+  remote: boolean;
+  /** 成员表里记的身份指纹（缺失 = 未知，**不猜**） */
+  fingerprint?: string;
+  /** 只有"知道是谁"时才给这一项（`local-instance` / `mesh-session`）；unattributed 时**不给** */
+  online?: boolean;
+  disabled?: boolean;
+  presenceBasis: PresenceBasis;
+  /** 在线判据的细节：命中哪条活连接（`creator-probe` 是弱证据，会被迟滞判回离线） */
+  presenceVia?: 'member-connection' | 'creator-probe' | 'none';
+}
+
+export interface LivenessLike {
+  fingerprint: string;
+  online: boolean;
+  via?: string;
+}
+
+export interface BuildMemberPresenceInput {
+  members: Array<{ id: string; name: string; source?: string; instanceId?: string; fingerprint?: string }>;
+  instances: Array<{ id: string; name?: string; status?: string }>;
+  /** 活连接集合（`SecureMesh.presence()` / `ConnectionLiveness.list()` 的原样输出） */
+  liveness: LivenessLike[];
+  /** 关掉时异地成员一律不判在线（UI 会显示"组网关闭"） */
+  meshEnabled: boolean;
+  /** 成员表里显式停用的 instance（如已停用的本机牛马） */
+  disabledInstanceIds?: string[];
+}
+
+/**
+ * 组装"成员在线态"。
+ *
+ * 判据（ADR C1）：**成员发起的鉴权连接存活 = 在线**；没有活连接就是不在线。
+ *  - 本机实例成员 → 用 InstanceManager 的真实状态（`local-instance`）；
+ *  - 有指纹的异地成员 → 用活连接集合按指纹判（`mesh-session`）：
+ *      命中活连接 → online=该连接状态；**没命中 → online=false**（"没有连接"就是"不在线"，
+ *      不假装知道、也不假装在线）；
+ *  - 没指纹的异地成员 → `unattributed`，**不给 `online`**（宁可不给，也不编）。
+ */
+export function buildMemberPresence(input: BuildMemberPresenceInput): MemberPresenceRow[] {
+  const disabled = new Set(input.disabledInstanceIds ?? []);
+  const liveByFp = new Map<string, LivenessLike>();
+  for (const l of input.liveness ?? []) {
+    if (l && typeof l.fingerprint === 'string' && l.fingerprint) liveByFp.set(l.fingerprint, l);
+  }
+  const findLive = (fp: string): LivenessLike | null => {
+    const exact = liveByFp.get(fp);
+    if (exact) return exact;
+    for (const [k, v] of liveByFp) if (fingerprintMatches(k, fp)) return v;
+    return null;
+  };
+  return (input.members ?? []).map((m) => {
+    const id = String(m.id || m.name || '');
+    const inst = m.instanceId
+      ? input.instances.find((h) => h.id === m.instanceId)
+      : input.instances.find((h) => h.id === id || (h.name && h.name === m.name));
+    const isLocal = !!inst || m.source === 'instance';
+    if (isLocal) {
+      const row: MemberPresenceRow = {
+        id,
+        name: String(m.name || id),
+        remote: false,
+        online: inst ? inst.status === 'running' : false,
+        presenceBasis: 'local-instance',
+      };
+      if (inst && disabled.has(inst.id)) row.disabled = true;
+      return row;
+    }
+    const fp = String(m.fingerprint || '');
+    if (fp) {
+      const live = findLive(fp);
+      const row: MemberPresenceRow = {
+        id,
+        name: String(m.name || id),
+        remote: true,
+        fingerprint: fp,
+        online: input.meshEnabled ? live?.online === true : false,
+        presenceBasis: 'mesh-session',
+        presenceVia: (live?.via as MemberPresenceRow['presenceVia']) ?? 'none',
+      };
+      return row;
+    }
+    // 拿不到指纹 → 如实说"本机无法归属"，**不给 online**
+    return {
+      id,
+      name: String(m.name || id),
+      remote: true,
+      presenceBasis: 'unattributed',
+    };
+  });
+}
+
+/* ══════════ 成员证书的签发 / 换证 / 吊销（ADR §2.3 第 6 条 + §附八.8 + §附五.1 第四层） ══════════
+ *
+ * 这四条路径是"证书不是摆着好看"的全部意义所在：
+ *   · `issueMemberCertificate`      —— 创建者签发（成员加入，或人工恢复）
+ *   · `rotateMemberCertificate`     —— **换证后重签**（supersedes 指向旧证书）+ 旧证书进吊销列表
+ *   · `revokeMemberCertificate`     —— 踢人 / 私钥泄漏：拉黑某个 certId
+ *   · `applyInboundRevocationUpdate` —— 收到（已鉴权对端发来的）吊销列表：验签 + 单调合并
+ *
+ * 签名一律走 `IdentitySigner.sign()`：**raw 64 字节 Ed25519**，私钥不出主进程。
+ */
+
+/** 签发一张成员证书（创建者视角）。`signer` 必须是**已解锁**的本机身份。 */
+export interface IssueMemberCertInput {
+  signer: IdentitySigner;
+  membership: MembershipStore;
+  groupId: string;
+  /** 成员的指纹与公钥（SPKI DER base64）：两者必须自洽，否则签发直接失败 */
+  memberFingerprint: string;
+  memberPublicKey: string;
+  displayName?: string;
+  role?: MemberCertRole;
+  permissions?: string[];
+  /** 创建者分配的**稳定成员标识**：换证后沿用同一个值，链就断不了 */
+  memberId?: string;
+  /** 换证重签时指向旧证书 certId */
+  supersedes?: string;
+  /** 显式指定 certId（默认随机）；测试与"重放同一张证书"时用得上 */
+  certId?: string;
+  ttlMs?: number;
+  now?: number;
+  /** 证书有效期上限（默认 DEFAULT_MEMBER_CERT_TTL_MS） */
+  expectIssuerFingerprint?: string;
+}
+
+export interface IssueMemberCertResult {
+  ok: boolean;
+  code: string;
+  cert?: MemberCertificate;
+  stored?: boolean;
+  detail?: string;
+}
+
+/**
+ * 串行化包装：见 `MembershipStore.runExclusive`。
+ * 内层实现不拿锁，所以 rotate / reissue 里嵌套调用它不会死锁。
+ */
+export function issueMemberCertificate(input: IssueMemberCertInput): Promise<IssueMemberCertResult> {
+  return input.membership.runExclusive(() => issueMemberCertificateImpl(input));
+}
+
+async function issueMemberCertificateImpl(input: IssueMemberCertInput): Promise<IssueMemberCertResult> {
+  const signer = input.signer;
+  if (!signer) return { ok: false, code: 'identity-missing' };
+  if (!signer.signReady()) {
+    // 绝不允许"拿不到私钥就发一张没有签名的证书"
+    return { ok: false, code: 'identity-locked', detail: '身份未解锁：不能签发成员证书' };
+  }
+  const now = input.now ?? Date.now();
+  const certId = input.certId || `mc-${randomHex(8)}`;
+  let cert: MemberCertificate;
+  try {
+    cert = buildMemberCertificate(
+      {
+        certId,
+        groupId: input.groupId,
+        memberFingerprint: input.memberFingerprint,
+        memberPublicKey: input.memberPublicKey,
+        issuerFingerprint: signer.fingerprint,
+        issuerPublicKey: signer.publicKey,
+        ...(input.displayName ? { displayName: input.displayName } : {}),
+        ...(input.role ? { role: input.role } : {}),
+        ...(input.permissions ? { permissions: input.permissions } : {}),
+        ...(input.memberId ? { memberId: input.memberId } : {}),
+        ...(input.supersedes ? { supersedes: input.supersedes } : {}),
+      },
+      { now, ...(input.ttlMs ? { ttlMs: input.ttlMs } : {}) }
+    );
+    cert = await signMemberCertificate(cert, (bytes) => signer.sign(bytes));
+  } catch (e) {
+    return { ok: false, code: 'build-failed', detail: (e as Error).message };
+  }
+  // 自检：签出来的东西必须能过自己的验证（签名实现坏掉时立刻暴露，而不是等成员连不上）
+  const self = verifyMemberCertificate(cert, {
+    fingerprintOf: fingerprintFromPublicKey,
+    clockSkewMs: DEFAULT_CLOCK_SKEW_MS,
+    now,
+    expectGroupId: input.groupId,
+    expectIssuerFingerprint: input.expectIssuerFingerprint || signer.fingerprint,
+  });
+  if (!self.ok) return { ok: false, code: `self-check:${self.code}`, detail: self.detail };
+  const stored = input.membership.putCertificate(cert, {
+    ...(input.expectIssuerFingerprint ? { expectIssuerFingerprint: input.expectIssuerFingerprint } : {}),
+  });
+  if (!stored.ok) return { ok: false, code: stored.code, cert, stored: false, detail: stored.detail };
+  return { ok: true, code: stored.code, cert, stored: true };
+}
+
+/** 生成下一版吊销列表（在**本机当前列表**基础上追加条目；版本单调 +1） */
+async function appendRevocationEntries(input: {
+  signer: IdentitySigner;
+  membership: MembershipStore;
+  groupId: string;
+  add: Array<{ certId: string; memberFingerprint: string; reason: RevocationReason }>;
+  now?: number;
+}): Promise<{ ok: true; list: RevocationList; previousVersion: number } | { ok: false; code: string; detail?: string }> {
+  const now = input.now ?? Date.now();
+  if (!input.signer.signReady()) return { ok: false, code: 'identity-locked', detail: '身份未解锁：不能签发吊销列表' };
+  const current = input.membership.revocation(input.groupId);
+  const entries = (current?.entries ?? []).map((e) => ({ ...e }));
+  for (const a of input.add) {
+    const idx = entries.findIndex((e) => e.certId === a.certId);
+    const row = { certId: a.certId, memberFingerprint: a.memberFingerprint, reason: a.reason, revokedAt: now };
+    if (idx >= 0) entries[idx] = row;
+    else entries.push(row);
+  }
+  const listVersion = (current?.listVersion ?? 0) + 1;
+  let list = buildRevocationList(
+    {
+      groupId: input.groupId,
+      listVersion,
+      entries,
+      issuedAt: now,
+      issuerFingerprint: input.signer.fingerprint,
+      issuerPublicKey: input.signer.publicKey,
+    },
+    { now }
+  );
+  try {
+    list = await signRevocationList(list, (bytes) => input.signer.sign(bytes));
+  } catch (e) {
+    return { ok: false, code: 'build-failed', detail: (e as Error).message };
+  }
+  return { ok: true, list, previousVersion: current?.listVersion ?? 0 };
+}
+
+/**
+ * 吊销某个成员（踢人 / 私钥泄漏 / 换证的旧证书）。
+ * 结果是一份**新的、已签名、版本 +1** 的吊销列表，并落到本机存储。
+ */
+export function revokeMemberCertificate(input: {
+  signer: IdentitySigner;
+  membership: MembershipStore;
+  groupId: string;
+  certId: string;
+  memberFingerprint: string;
+  reason: RevocationReason;
+  now?: number;
+  expectation?: string;
+}): Promise<{ ok: boolean; code: string; list?: RevocationList; listVersion?: number; previousVersion?: number; detail?: string }> {
+  return input.membership.runExclusive(() => revokeMemberCertificateImpl(input));
+}
+
+async function revokeMemberCertificateImpl(input: {
+  signer: IdentitySigner;
+  membership: MembershipStore;
+  groupId: string;
+  certId: string;
+  memberFingerprint: string;
+  reason: RevocationReason;
+  now?: number;
+  expectation?: string;
+}): Promise<{ ok: boolean; code: string; list?: RevocationList; listVersion?: number; previousVersion?: number; detail?: string }> {
+  if (!REVOCATION_REASONS.includes(input.reason)) return { ok: false, code: 'bad-reason' };
+  const built = await appendRevocationEntries({
+    signer: input.signer,
+    membership: input.membership,
+    groupId: input.groupId,
+    add: [{ certId: input.certId, memberFingerprint: input.memberFingerprint, reason: input.reason }],
+    ...(typeof input.now === 'number' ? { now: input.now } : {}),
+  });
+  if (!built.ok) return built;
+  const applied = input.membership.applyRevocationList(input.groupId, built.list, {
+    ...(input.expectation ? { expectIssuerFingerprint: input.expectation } : {}),
+  });
+  if (!applied.ok) return { ok: false, code: applied.code, detail: applied.detail };
+  return {
+    ok: true,
+    code: 'ok',
+    list: built.list,
+    listVersion: built.list.listVersion,
+    previousVersion: built.previousVersion,
+  };
+}
+
+export interface RotateMemberCertResult {
+  ok: boolean;
+  code: string;
+  cert?: MemberCertificate;
+  revocation?: RevocationList;
+  verification?: RotationVerifyResult;
+  detail?: string;
+}
+
+/**
+ * **成员换证后重签成员证书** —— 这就是 §附五.1 第四层（兜底恢复）的落地。
+ *
+ * 流程（每一步都是必需的）：
+ *  1. 本机（创建者）必须先有**该成员的旧证书** —— 否则"我认识的是谁"无从谈起
+ *     （拿不到就 `no-existing-cert`，绝不凭空给一个新指纹发证书）；
+ *  2. 用**旧公钥**验成员的换证声明（`verifyRotationDeclaration`：签名 + 新公钥指纹自洽 +
+ *     代次严格递增 + 时间不在未来）；
+ *  3. 签一张新证书：`memberFingerprint/newPublicKey` 来自声明，`supersedes = 旧 certId`，
+ *     `memberId`/role/permissions **沿用旧证书**；
+ *  4. 旧证书进**新版**吊销列表（`reason: 'rotation'`）—— 旧密钥从此连不进来，
+ *     而新指纹因为持有有效证书 + 不在吊销名单里，照样是"原来那个人"。
+ *
+ * 注意：**声明是攻击者可控数据**，所以第 2 步的验签是硬门槛；`knownKeys` / `currentGeneration`
+ * 由调用方从**本机留存**（对端名片 / 密钥环）给出，不能从声明里读。
+ */
+export function rotateMemberCertificate(input: {
+  signer: IdentitySigner;
+  membership: MembershipStore;
+  groupId: string;
+  declaration: RotationDeclaration;
+  knownKeys?: KeyRingEntry[];
+  currentGeneration?: number;
+  ttlMs?: number;
+  now?: number;
+  clockSkewMs?: number;
+  /** 显式指定新 certId（默认随机） */
+  certId?: string;
+}): Promise<RotateMemberCertResult> {
+  return input.membership.runExclusive(() => rotateMemberCertificateImpl(input));
+}
+
+async function rotateMemberCertificateImpl(input: {
+  signer: IdentitySigner;
+  membership: MembershipStore;
+  groupId: string;
+  declaration: RotationDeclaration;
+  knownKeys?: KeyRingEntry[];
+  currentGeneration?: number;
+  ttlMs?: number;
+  now?: number;
+  clockSkewMs?: number;
+  /** 显式指定新 certId（默认随机） */
+  certId?: string;
+}): Promise<RotateMemberCertResult> {
+  const oldCert = input.membership.certificateForFingerprint(input.groupId, input.declaration?.oldFingerprint ?? '');
+  if (!oldCert) {
+    return {
+      ok: false,
+      code: 'no-existing-cert',
+      detail: `本机没有 ${input.declaration?.oldFingerprint ?? ''} 在该群的成员证书：无法认定"新指纹 = 原成员"`,
+    };
+  }
+  const knownKeys = input.knownKeys ?? [
+    { fingerprint: oldCert.memberFingerprint, publicKey: oldCert.memberPublicKey, generation: 0, current: false },
+  ];
+  const verification = verifyRotationDeclaration(input.declaration, {
+    knownKeys,
+    ...(typeof input.currentGeneration === 'number' ? { currentGeneration: input.currentGeneration } : {}),
+    ...(typeof input.now === 'number' ? { now: input.now } : {}),
+    clockSkewMs: typeof input.clockSkewMs === 'number' ? input.clockSkewMs : DEFAULT_CLOCK_SKEW_MS,
+  });
+  if (!verification.accepted) {
+    return { ok: false, code: `declaration:${verification.reason}`, verification, detail: verification.detail };
+  }
+  const issued = await issueMemberCertificateImpl({
+    signer: input.signer,
+    membership: input.membership,
+    groupId: input.groupId,
+    memberFingerprint: input.declaration.newFingerprint,
+    memberPublicKey: input.declaration.newPublicKey,
+    supersedes: oldCert.certId,
+    role: oldCert.role,
+    permissions: oldCert.permissions,
+    ...(oldCert.memberId ? { memberId: oldCert.memberId } : {}),
+    ...(oldCert.displayName ? { displayName: oldCert.displayName } : {}),
+    ...(input.certId ? { certId: input.certId } : {}),
+    ...(input.ttlMs ? { ttlMs: input.ttlMs } : {}),
+    ...(typeof input.now === 'number' ? { now: input.now } : {}),
+  });
+  if (!issued.ok || !issued.cert) return { ok: false, code: `issue:${issued.code}`, verification, detail: issued.detail };
+  const revoked = await revokeMemberCertificateImpl({
+    signer: input.signer,
+    membership: input.membership,
+    groupId: input.groupId,
+    certId: oldCert.certId,
+    memberFingerprint: oldCert.memberFingerprint,
+    reason: 'rotation',
+    ...(typeof input.now === 'number' ? { now: input.now } : {}),
+  });
+  if (!revoked.ok || !revoked.list) {
+    return { ok: false, code: `revoke:${revoked.code}`, cert: issued.cert, verification, detail: revoked.detail };
+  }
+  return { ok: true, code: 'ok', cert: issued.cert, revocation: revoked.list, verification };
+}
+
+/**
+ * 人工恢复（创建者当面/其他渠道确认"这就是原来那个人"后重签）：
+ * 不需要换证声明，但**必须沿用旧证书的 `memberId`**（或显式给出 `supersedes`），
+ * 这样 `isSameMember` 才能推出"新指纹 = 原成员"。没有这两样之一就只是发一张新证书，
+ * 与"恢复原成员身份"无关 —— 这时返回 `code: 'not-linked'` 让调用方确认自己知道后果。
+ */
+export function reissueMemberCertificateForRecovery(input: {
+  signer: IdentitySigner;
+  membership: MembershipStore;
+  groupId: string;
+  oldFingerprint: string;
+  newFingerprint: string;
+  newPublicKey: string;
+  ttlMs?: number;
+  now?: number;
+  revokeOld?: boolean;
+  certId?: string;
+  /** 显式要求"这确实是同一个人"（默认 true：没有链就不给恢复） */
+  requireLink?: boolean;
+}): Promise<RotateMemberCertResult & { linked?: boolean; memberId?: string }> {
+  return input.membership.runExclusive(() => reissueMemberCertificateForRecoveryImpl(input));
+}
+
+async function reissueMemberCertificateForRecoveryImpl(input: {
+  signer: IdentitySigner;
+  membership: MembershipStore;
+  groupId: string;
+  oldFingerprint: string;
+  newFingerprint: string;
+  newPublicKey: string;
+  ttlMs?: number;
+  now?: number;
+  revokeOld?: boolean;
+  certId?: string;
+  /** 显式要求"这确实是同一个人"（默认 true：没有链就不给恢复） */
+  requireLink?: boolean;
+}): Promise<RotateMemberCertResult & { linked?: boolean; memberId?: string }> {
+  const oldCert = input.membership.certificateForFingerprint(input.groupId, input.oldFingerprint);
+  if (!oldCert) return { ok: false, code: 'no-existing-cert', detail: '本机没有旧证书，无法认定归属' };
+  const requireLink = input.requireLink !== false;
+  const memberId = oldCert.memberId ?? oldCert.certId;
+  if (requireLink && !oldCert.memberId && !oldCert.certId) {
+    return { ok: false, code: 'not-linked', detail: '旧证书没有可用于延续的成员标识' };
+  }
+  const issued = await issueMemberCertificateImpl({
+    signer: input.signer,
+    membership: input.membership,
+    groupId: input.groupId,
+    memberFingerprint: input.newFingerprint,
+    memberPublicKey: input.newPublicKey,
+    supersedes: oldCert.certId,
+    memberId,
+    role: oldCert.role,
+    permissions: oldCert.permissions,
+    ...(oldCert.displayName ? { displayName: oldCert.displayName } : {}),
+    ...(input.certId ? { certId: input.certId } : {}),
+    ...(input.ttlMs ? { ttlMs: input.ttlMs } : {}),
+    ...(typeof input.now === 'number' ? { now: input.now } : {}),
+  });
+  if (!issued.ok || !issued.cert) return { ok: false, code: `issue:${issued.code}`, detail: issued.detail };
+  let revocation: RevocationList | undefined;
+  if (input.revokeOld !== false) {
+    const revoked = await revokeMemberCertificateImpl({
+      signer: input.signer,
+      membership: input.membership,
+      groupId: input.groupId,
+      certId: oldCert.certId,
+      memberFingerprint: oldCert.memberFingerprint,
+      reason: 'rotation',
+      ...(typeof input.now === 'number' ? { now: input.now } : {}),
+    });
+    if (!revoked.ok) return { ok: false, code: `revoke:${revoked.code}`, cert: issued.cert, detail: revoked.detail };
+    revocation = revoked.list;
+  }
+  const same = input.membership.isSameMember(input.groupId, input.oldFingerprint, input.newFingerprint);
+  return { ok: true, code: 'ok', cert: issued.cert, revocation, linked: same.same, memberId };
+}
+
+/**
+ * 收到对端（走鉴权通道）发来的吊销列表：**先按"这个对端是不是本群主"过滤，再验签 + 单调合并**。
+ *
+ * `fromFingerprint` 必须是**握手得到的对端指纹**（`SecureInboundMessage.peerFingerprint`），
+ * **绝不能**用消息体里自称的签发者 —— 否则谁都能自称群主来发吊销名单。
+ */
+export function applyInboundRevocationUpdate(input: {
+  membership: MembershipStore;
+  groupId: string;
+  list: RevocationList;
+  fromFingerprint: string;
+  /** 本机已知的群主（创建者）指纹；给定就要求 `fromFingerprint` 必须是他 */
+  expectedIssuerFingerprint?: string;
+}): { ok: boolean; code: string; changed?: boolean; listVersion?: number; detail?: string } {
+  const expected = input.expectedIssuerFingerprint || input.membership.groupState(input.groupId)?.issuerFingerprint || '';
+  if (!expected) {
+    return { ok: false, code: 'unknown-issuer', detail: '本机不知道该群的创建者，无法判断这份吊销列表的来路' };
+  }
+  if (!fingerprintMatches(input.fromFingerprint, expected)) {
+    return {
+      ok: false,
+      code: 'not-issuer',
+      detail: `发来吊销列表的连接指纹不是本群创建者（${input.fromFingerprint} ≠ ${expected}）`,
+    };
+  }
+  const applied = input.membership.applyRevocationList(input.groupId, input.list, {
+    expectIssuerFingerprint: expected,
+  });
+  return {
+    ok: applied.ok,
+    code: applied.code,
+    changed: applied.changed,
+    listVersion: applied.listVersion,
+    ...(applied.detail ? { detail: applied.detail } : {}),
+  };
+}
+
+/** 结构化快照（IPC/UI 用；只有数据与枚举码，没有任何文案） */
+export function membershipSnapshot(
+  membership: MembershipStore | null,
+  opts: { groupId?: string; now?: number } = {}
+): {
+  ok: boolean;
+  schema: typeof MEMBERSHIP_FILE_SCHEMA;
+  groups: Array<{
+    groupId: string;
+    issuerFingerprint: string;
+    revocationListVersion: number;
+    revokedCount: number;
+    certs: Array<{
+      certId: string;
+      memberFingerprint: string;
+      displayName: string;
+      role: MemberCertRole;
+      permissions: string[];
+      issuedAt: number;
+      expiresAt: number;
+      supersedes: string;
+      memberId: string;
+      /** 本地时钟判定结果（不是证书自称） */
+      valid: boolean;
+      code: MemberCertCode;
+      detail?: string;
+    }>;
+  }>;
+} {
+  const now = opts.now ?? Date.now();
+  if (!membership) return { ok: false, schema: MEMBERSHIP_FILE_SCHEMA, groups: [] };
+  const ids = opts.groupId ? [opts.groupId] : membership.listGroups();
+  const groups = ids.map((groupId) => {
+    const st = membership.groupState(groupId);
+    const rev = st?.revocation ?? null;
+    return {
+      groupId,
+      issuerFingerprint: st?.issuerFingerprint ?? '',
+      revocationListVersion: rev?.listVersion ?? 0,
+      revokedCount: rev?.entries.length ?? 0,
+      certs: (st?.certs ?? []).map((c) => {
+        const v = verifyMemberCertificate(c, {
+          fingerprintOf: fingerprintFromPublicKey,
+          clockSkewMs: DEFAULT_CLOCK_SKEW_MS,
+          now,
+          expectGroupId: groupId,
+          ...(st?.issuerFingerprint ? { expectIssuerFingerprint: st.issuerFingerprint } : {}),
+        });
+        return {
+          certId: c.certId,
+          memberFingerprint: c.memberFingerprint,
+          displayName: c.displayName ?? '',
+          role: c.role,
+          permissions: [...c.permissions],
+          issuedAt: c.issuedAt,
+          expiresAt: c.expiresAt,
+          supersedes: c.supersedes ?? '',
+          memberId: c.memberId ?? '',
+          valid: v.ok,
+          code: v.code,
+          ...(v.detail ? { detail: v.detail } : {}),
+        };
+      }),
+    };
+  });
+  return { ok: true, schema: MEMBERSHIP_FILE_SCHEMA, groups };
+}
+
+/** 便于验证脚本与 UI：把"这两个指纹是否同一成员"包一层（跨群） */
+export function membershipSameMember(
+  membership: MembershipStore | null,
+  groupId: string,
+  fpA: string,
+  fpB: string
+): { same: boolean; reason: string; rootA: string; rootB: string } {
+  if (!membership) return { same: false, reason: 'no-membership-store', rootA: '', rootB: '' };
+  return membership.isSameMember(groupId, fpA, fpB);
+}
+
+/** 与 sync-protocol 的默认容差必须一致（写在这里，好让验证脚本直接断言） */
+export const MEMBERSHIP_SKEW_CHECK = { appShell: DEFAULT_CLOCK_SKEW_MS, protocol: MEMBERSHIP_CLOCK_SKEW_MS };
