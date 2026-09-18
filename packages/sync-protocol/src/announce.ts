@@ -11,8 +11,13 @@
  *  - **C3 退化路径**：连不上的成员标记为 `await-peer-announce`（"待其上线"，而非失败），
  *    而不是反复重试。
  *  - **创建者上线广播的前提**：成员名册 + DHT 解析地址 + 连得上；对不可达者退化为上述路径。
- *  - **C1**：`canDial()` 为 false（本机不可拨入）时，收到宣告**不主动拨**，
+ *  - **C1**：本机不可拨入时，收到宣告**不主动拨**，
  *    只登记地址等待对方拨入 —— 心跳方向服从连通性。
+ *  - **C1 的前提要判对（附八.9）**：`canDial` 从布尔放宽为**两个信号**
+ *    （`dialable` = 对端真的拨回来了；`naturalDialable` = 地址事实推出的天然可拨入候选，如全局单播 IPv6）。
+ *    **任一为真即可主动拨**，且两个信号**不合并**（报告里分别保留）——
+ *    只认 `dialable === true` 会让有全局 IPv6 的机器被误判成"不可拨入"，
+ *    从而被动等对端拨、白白退化成打洞/中继（附八.9 点名的正是这一处）。
  *
  * 注意：本模块不做消息层广播（那是 group-router / 消息总线的事）；
  * 它只负责"上线宣告 + 建连"这一段，通过回调把结果交出去。
@@ -30,6 +35,53 @@ import {
 import type { ConnectionLadder, LadderRung } from './ladder.js';
 
 export type AnnounceReason = 'startup' | 'address-changed' | 'creator-online' | 'manual';
+
+/**
+ * 「能不能主动拨出」的**两个独立信号**（附八.9）。
+ *
+ * 为什么要分开而不是一个布尔：
+ *  · `dialable`        —— 对端**真的拨回来过**（DialabilityProbe 的最强证据，已验证）；
+ *  · `naturalDialable` —— **地址事实**推出的天然可拨入候选（本机有全局单播 IPv6 ⇒ IPv6 无 NAT），
+ *                        强度弱于前者（不等于"已验证公网可达"），但足以说明"我方不必被动等"。
+ *
+ * UI/日志需要分得清"是验证过还是只是地址事实"，所以两者在报告里都保留。
+ */
+export interface CanDialSignals {
+  /** 对端真的拨回来了（已验证） */
+  dialable?: boolean;
+  /** 地址事实推出：天然可拨入候选（未经验证） */
+  naturalDialable?: boolean;
+}
+
+export interface CanDialResolution extends CanDialSignals {
+  /** 是否允许主动拨出（两个信号任一为真） */
+  canDial: boolean;
+  /** 依据来源（不合并两个信号的来历，便于日志/UI 区分） */
+  basis: 'verified-dialable' | 'natural-address' | 'neither' | 'unspecified';
+}
+
+/**
+ * 把 `canDial` 的输入（旧的布尔写法 / 新的两信号写法 / 不给）归一成
+ * `{ canDial, dialable?, naturalDialable?, basis }`。**纯函数**，便于直接断言。
+ *
+ * 不给（undefined）= 默认允许主动拨（保持既有语义：不知道就不自我阉割）。
+ */
+export function resolveCanDial(input?: CanDialSignals | boolean): CanDialResolution {
+  if (input === undefined) return { canDial: true, basis: 'unspecified' };
+  if (typeof input === 'boolean') {
+    return input
+      ? { dialable: true, canDial: true, basis: 'verified-dialable' }
+      : { dialable: false, canDial: false, basis: 'neither' };
+  }
+  const dialable = input.dialable === true;
+  const naturalDialable = input.naturalDialable === true;
+  return {
+    dialable,
+    naturalDialable,
+    canDial: dialable || naturalDialable,
+    basis: dialable ? 'verified-dialable' : naturalDialable ? 'natural-address' : 'neither',
+  };
+}
 
 export interface RosterMember {
   fingerprint: string;
@@ -56,6 +108,11 @@ export interface UnreachableMember {
   reason: string;
   /** C3 退化路径：等对方上线时反向宣告 */
   fallback: 'wait-for-peer-announce';
+  /**
+   * 这条记录是**哪一种"不可拨入"**造成的（附八.9）：只有两个信号都为假时才会出现；
+   * 有全局 IPv6（`natural-address`）时**不再**走这条路径（那是被修正掉的误判）。
+   */
+  canDialBasis?: CanDialResolution['basis'];
 }
 
 export interface AnnounceReport {
@@ -68,6 +125,8 @@ export interface AnnounceReport {
   unreachable: UnreachableMember[];
   /** 因本机不可拨入而跳过的主动连接 */
   skippedNotDialable: string[];
+  /** 本次宣告的 canDial 判据（两个信号分开保留，附八.9） */
+  canDial: CanDialResolution;
   durationMs: number;
   at: number;
 }
@@ -82,6 +141,8 @@ export interface InboundAnnouncement {
   connected?: boolean;
   rung?: LadderRung | null;
   reason?: string;
+  /** 判定"本机不可拨入"时的依据（附八.9；两个信号分别为 verified-dialable / natural-address / neither） */
+  canDialBasis?: CanDialResolution['basis'];
 }
 
 /**
@@ -106,8 +167,12 @@ export interface AnnounceServiceOptions {
   /** 地址性质 */
   scope?: () => PeerAddressRecord['scope'];
   signing?: RecordSigningMode;
-  /** 是否可主动拨出（C1：不可拨入时收到宣告也不主动拨） */
-  canDial?: () => boolean;
+  /**
+   * 是否可主动拨出（C1）。
+   * 输入可以是旧布尔（`() => true`），也可以是两个信号（`() => ({ dialable, naturalDialable })`）——
+   * **有全局 IPv6 的机器必须算"可拨出"**（附八.9），所以不要只认 `dialable === true`。
+   */
+  canDial?: () => CanDialSignals | boolean;
   /** 自定义建连（默认走阶梯）；返回 ok 表示已建立 */
   connect?: (member: RosterMember, addresses: { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[]) => Promise<{ ok: boolean; rung?: LadderRung | null; detail?: string }>;
   onPeerAnnouncement?: (a: InboundAnnouncement, env: DhtRecordEnvelope, from: DhtAddr | null) => void;
@@ -193,17 +258,20 @@ export class AnnounceService {
     const connected: string[] = [];
     const unreachable: UnreachableMember[] = [];
     const skippedNotDialable: string[] = [];
-    const canDial = this.opts.canDial ? this.opts.canDial() : true;
+    // 附八.9：`dialable`（已验证）与 `naturalDialable`（地址事实）**任一为真即可主动拨**；
+    // 两个信号都保留在报告里，别在这里压成一个布尔丢掉来历。
+    const canDialRes = resolveCanDial(this.opts.canDial?.());
 
     for (const member of this.opts.roster()) {
       if (member.fingerprint === myFingerprint) continue;
-      if (!canDial) {
-        // C1：本机不可拨入 → 不主动拨，等对方拨入
+      if (!canDialRes.canDial) {
+        // C1：本机确实不可拨入（既没被对端验证过，也没有 IPv6 这类天然可拨入地址）→ 不主动拨，等对方拨入
         skippedNotDialable.push(member.fingerprint);
         const u: UnreachableMember = {
           fingerprint: member.fingerprint,
-          reason: '本机不可拨入（autonat 未通过）→ 不主动探测，等待对方上线宣告/拨入',
+          reason: '本机不可拨入（既无对端验证，也无天然可拨入地址）→ 不主动探测，等待对方上线宣告/拨入',
           fallback: 'wait-for-peer-announce',
+          canDialBasis: canDialRes.basis,
         };
         unreachable.push(u);
         this.unreachableLog.push(u);
@@ -246,6 +314,7 @@ export class AnnounceService {
       connected,
       unreachable,
       skippedNotDialable,
+      canDial: canDialRes,
       durationMs: this.now() - startedAt,
       at: startedAt,
     };
@@ -385,10 +454,17 @@ export class AnnounceService {
       return dup;
     }
 
-    const canDial = this.opts.canDial ? this.opts.canDial() : true;
-    if (!canDial) {
-      // C1：本机不可拨入 → 只登记地址，等对方拨入（不主动拨）
-      const res: InboundAnnouncement = { ...base, connected: false, reason: '本机不可拨入 → 只登记地址，等待对方拨入（C1）' };
+    // 附八.9：这里**同样**要认 `naturalDialable`（有全局 IPv6 ⇒ 天然可拨入），
+    // 否则有 IPv6 的机器收到宣告后会只登记地址、白白放弃一次可直连的机会。
+    const canDialRes = resolveCanDial(this.opts.canDial?.());
+    if (!canDialRes.canDial) {
+      // C1：本机确实不可拨入 → 只登记地址，等对方拨入（不主动拨）
+      const res: InboundAnnouncement = {
+        ...base,
+        connected: false,
+        reason: '本机不可拨入（既无对端验证，也无天然可拨入地址）→ 只登记地址，等待对方拨入（C1）',
+        canDialBasis: canDialRes.basis,
+      };
       this.inboundAcceptedLog.push(res);
       this.opts.onPeerAnnouncement?.(res, env, from);
       return res;

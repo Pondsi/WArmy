@@ -335,7 +335,14 @@ async function main() {
       addresses: [{ host: '127.0.0.1', port: memberTcpPort, source: 'dht' }],
     });
     check('第 1 级 public-direct 命中', direct.ok && direct.rung === 'public-direct', { rung: direct.rung, detail: direct.attempts[0]?.detail });
-    check('命中后不再继续后续级（不浪费）', direct.attempts.length === 1, direct.attempts.map((a) => a.rung));
+    // 附八.9：IPv6 档现在是第一档 —— 纯 IPv4 回环目标上它必须**如实判"无候选"**再降级，不许静默跳过
+    check('命中后不再继续后续级（不浪费；IPv6 档如实判无候选后停在 public-direct）', direct.attempts.length === 2, direct.attempts.map((a) => a.rung));
+    check(
+      '第一档 ipv6-direct 先试、如实报"无 IPv6 候选"',
+      direct.attempts[0]?.rung === 'ipv6-direct' && direct.attempts[0]?.status === 'failed' && direct.attempts[0]?.code === 'no-ipv6-candidate',
+      direct.attempts[0]
+    );
+    check('第二档 public-direct 命中并给出地址族', direct.attempts[1]?.status === 'ok' && direct.attempts[1]?.rung === 'public-direct', direct.attempts[1]);
 
     // 6.4 直连失败 → 降级到 LAN 级
     const fallback = await ladderWithLan.connect({
@@ -344,7 +351,15 @@ async function main() {
     });
     check('第 1 级失败后逐级降级到 lan 命中', fallback.ok && fallback.rung === 'lan', { rung: fallback.rung, summary: fallback.summary });
     check('记录每级结果（含失败原因）', fallback.attempts.filter((a) => a.status === 'failed').length >= 1, fallback.attempts.map((a) => `${a.rung}:${a.status}`));
-    check('中间三级明确标注 unsupported（降级路径未被跳过）', fallback.attempts.filter((a) => a.status === 'unsupported').length === 3, fallback.attempts.filter((a) => a.status === 'unsupported').map((a) => a.rung));
+    // 附八.3：relay 档**已实现**，不再计入 unsupported；未实现的只剩 upnp / holepunch
+    check('未实现的级只剩 upnp/holepunch 两级（relay 已实现，不再 unsupported）', fallback.attempts.filter((a) => a.status === 'unsupported').length === 2, fallback.attempts.filter((a) => a.status === 'unsupported').map((a) => a.rung));
+    const relayAttempt = fallback.attempts.find((a) => a.rung === 'relay');
+    check(
+      'relay 档真的被尝试过并给出结构化结论（不是 unsupported、不是静默跳过）',
+      relayAttempt !== undefined && relayAttempt.status === 'failed' && typeof relayAttempt.code === 'string' && /^relay-|^dialability-/.test(relayAttempt.code),
+      relayAttempt
+    );
+    check('relay 档结论可解释（带原因文本）', (relayAttempt?.detail ?? '').length > 0, relayAttempt?.detail);
     check('unsupported 级给出原因（含"未实现"）', fallback.attempts.every((a) => a.status !== 'unsupported' || (a.detail ?? '').includes('未实现')), fallback.attempts.filter((a) => a.status === 'unsupported').map((a) => a.detail));
 
     // 6.5 全失败
@@ -357,7 +372,20 @@ async function main() {
 
     // 6.6 无地址（用不带 LAN 探测的阶梯，否则 LAN 级会兜住）
     const noAddr = await new ConnectionLadder({ perRungTimeoutMs: 800 }).connect({ fingerprint: memberId.fingerprint, addresses: [] });
-    check('无地址时直接判失败并说明原因', noAddr.ok === false && /没有可用地址/.test(noAddr.attempts[0]?.detail ?? ''), noAddr.attempts[0]?.detail);
+    // 附八.9 之后第一档是 IPv6：无地址时它必须如实说"档不适用"，第二档 public-direct 说"没有可用地址"
+    check('无地址时 IPv6 档如实判"无候选"（不假装试过）', noAddr.attempts[0]?.rung === 'ipv6-direct' && noAddr.attempts[0]?.code === 'no-ipv6-candidate', noAddr.attempts[0]?.detail);
+    check(
+      '无地址时 public-direct 直接判失败并说明原因',
+      noAddr.ok === false && /没有可用地址/.test(noAddr.attempts.find((a) => a.rung === 'public-direct')?.detail ?? ''),
+      noAddr.attempts.find((a) => a.rung === 'public-direct')?.detail
+    );
+    check(
+      '无地址时 relay 档结论码合法（未配置中继 ⇒ 如实报结论码而不是崩掉）',
+      ['dialability-unknown', 'relay-none-configured', 'relay-not-needed-inbound-expected', 'relay-not-needed-peer-dialable'].includes(
+        String(noAddr.attempts.find((a) => a.rung === 'relay')?.code)
+      ),
+      noAddr.attempts.find((a) => a.rung === 'relay')
+    );
     // 6.7 有 LAN 探测时，即使 DHT 没有地址也能靠同网降级路径打通
     const lanOnly = await ladderWithLan.connect({ fingerprint: memberId.fingerprint, addresses: [] });
     check('DHT 无地址但同网可达时仍能建连（最后一级兜底）', lanOnly.ok === true && lanOnly.rung === 'lan', lanOnly.summary);

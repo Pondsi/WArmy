@@ -11,8 +11,13 @@
  *    才判定离线（ADR §2.6 的抖动治理）。
  *  - `sweep()`：**绝不遍历全部成员**。它只做两件事：
  *      ① 对处于迟滞窗口内的成员做超时判定（本地计时，不发网络请求）；
- *      ② 对**显式列入 `pendingProbe`** 的成员发起探测，且**仅当 `dialable === true`**。
+ *      ② 对**显式列入 `pendingProbe`** 的成员发起探测，且**仅当本机确实可拨出**。
  *    没进过 `pendingProbe` 的成员永不成为探测目标 —— 这就是"创建者不轮询所有成员"。
+ *  - **"可拨出"的判据有两个信号（附八.9）**：`dialable`（对端真的拨回来过，已验证）与
+ *    `naturalDialable`（地址事实：本机有全局单播 IPv6 ⇒ IPv6 无 NAT ⇒ 天然可拨入）。
+ *    **任一为真即可主动探测**；只认 `dialable === true` 会让有 IPv6 的机器永远不敢拨出
+ *    （`setDialable` 默认 false 且没人置真时，`sweep()` 会一直短路成"不可拨入"），
+ *    正是附八.9 说的"有 IPv6 的用户白白走上打洞/中继"。
  *  - `pendingProbe` 的典型来源：收到某成员的宣告但当时连不上（附三.2 的"失败即放弃"），
  *    或成员连接断开且创建者可拨入（此时主动拨回一次，仍不做无限重试）。
  *
@@ -20,6 +25,8 @@
  * 需要 TCP keepalive 或应用层 ping/pong —— 本包提供 `SecureSession.heartbeatMs`
  * 与 `heartbeat()` 钩子，接线方决定保活间隔。
  */
+
+import { type CanDialResolution, type CanDialSignals, resolveCanDial } from './announce.js';
 
 export type ConnectionKind = 'member-initiated' | 'creator-probe';
 
@@ -66,8 +73,10 @@ export interface SweepResult {
   probed: string[];
   /** 本轮判定离线的成员 */
   markedOffline: string[];
-  /** 未探测的原因（dialable=false / 无待探测成员） */
+  /** 未探测的原因（不可拨出 / 无待探测成员） */
   note: string;
+  /** 本轮"是否可拨出"的依据来源（附八.9；两个信号不合并） */
+  canDialBasis: CanDialResolution['basis'];
 }
 
 interface MemberState {
@@ -95,6 +104,11 @@ export class ConnectionLiveness {
   private members = new Map<string, MemberState>();
   private pendingProbe = new Set<string>();
   private dialableFlag = false;
+  /** 对端真的拨回来过（已验证）——与 naturalDialableFlag **刻意分开**（附八.9） */
+  private dialableFlagVerified = false;
+  /** 地址事实推出的天然可拨入候选（如全局单播 IPv6） */
+  private naturalDialableFlag = false;
+  private dialableBasis: CanDialResolution['basis'] = 'unspecified';
   private readonly offlineFailures: number;
   private readonly offlineAfterMs: number;
   private readonly now: () => number;
@@ -108,12 +122,37 @@ export class ConnectionLiveness {
     this.now = opts.now ?? (() => Date.now());
   }
 
-  /** 创建者是否"确实可拨入"（由 autonat 式检测的结果驱动） */
-  setDialable(v: boolean): void {
-    this.dialableFlag = v;
+  /**
+   * 本机是否可拨出（决定 `sweep()` 要不要主动探测）。
+   *
+   * 入参可以是旧布尔，也可以是**两个信号**（附八.9）：
+   *  · `dialable`        —— 对端真的拨回来过（已验证；最强证据）；
+   *  · `naturalDialable` —— 地址事实推出的天然可拨入候选（如全局单播 IPv6，无 NAT）。
+   * 任一为真即视为可拨出；两个信号**分别保留**（`dialable` / `naturalDialable` / `canDialBasis`），
+   * UI 与日志要分得清"验证过"与"只是地址事实"。
+   */
+  setDialable(v: CanDialSignals | boolean): void {
+    const res = resolveCanDial(v);
+    this.dialableFlag = res.canDial;
+    this.dialableFlagVerified = res.dialable === true;
+    this.naturalDialableFlag = res.naturalDialable === true;
+    this.dialableBasis = res.basis;
   }
+  /** 合并后的判据（"要不要主动探测"只看它） */
   get dialable(): boolean {
     return this.dialableFlag;
+  }
+  /** 对端真的拨回来过（**已验证**，与"地址事实"分开） */
+  get verifiedDialable(): boolean {
+    return this.dialableFlagVerified;
+  }
+  /** 地址事实推出的天然可拨入候选（如全局单播 IPv6；**未经验证**） */
+  get naturalDialable(): boolean {
+    return this.naturalDialableFlag;
+  }
+  /** 上面这个结论的依据来源（附八.9） */
+  get canDialBasis(): CanDialResolution['basis'] {
+    return this.dialableBasis;
   }
 
   get pendingProbes(): string[] {
@@ -272,17 +311,21 @@ export class ConnectionLiveness {
     }
 
     if (this.pendingProbe.size === 0) {
-      return { probed: [], markedOffline, note: '无待探测成员（创建者不主动轮询名册）' };
+      return { probed: [], markedOffline, note: '无待探测成员（创建者不主动轮询名册）', canDialBasis: this.dialableBasis };
     }
     if (!this.dialableFlag) {
       return {
         probed: [],
         markedOffline,
-        note: '本机不可拨入（autonat 检测未通过）→ 不做主动探测，等待成员宣告/拨入',
+        note:
+          this.dialableBasis === 'unspecified'
+            ? '尚未判定本机可拨出（未设置拨入性信号）→ 不做主动探测，等待成员宣告/拨入'
+            : '本机不可拨出（既无对端验证，也无天然可拨入地址）→ 不做主动探测，等待成员宣告/拨入',
+        canDialBasis: this.dialableBasis,
       };
     }
     if (!this.opts.probe) {
-      return { probed: [], markedOffline, note: '未注入 probe 执行器' };
+      return { probed: [], markedOffline, note: '未注入 probe 执行器', canDialBasis: this.dialableBasis };
     }
     const targets = [...this.pendingProbe];
     this.pendingProbe.clear();
@@ -303,6 +346,6 @@ export class ConnectionLiveness {
         if (s.connections.size === 0) s.offlineSince = s.offlineSince ?? this.now();
       }
     }
-    return { probed, markedOffline, note: `对 ${probed.length} 个待探测成员各拨一次（无重试）` };
+    return { probed, markedOffline, note: `对 ${probed.length} 个待探测成员各拨一次（无重试）`, canDialBasis: this.dialableBasis };
   }
 }

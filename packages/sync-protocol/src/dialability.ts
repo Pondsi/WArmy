@@ -16,15 +16,23 @@
  */
 import { randomHex } from './codec.js';
 import type { DhtAddr } from './dht.js';
+import { type Ipv6Scope, type Ipv6Report, classifyIpv6Scope, inspectLocalIpv6, ipFamilyOfHost, normalizeHostLiteral, parseIpv4Bytes } from './ladder.js';
 
 export type AddressScope = 'loopback' | 'private' | 'link-local' | 'public' | 'hostname' | 'unknown';
 
+/**
+ * 地址性质判定（IPv4 + IPv6 都按**数值范围**判，不靠字符串前缀猜）。
+ * IPv6：全局单播 `2000::/3` → public；ULA `fc00::/7` → private；`fe80::/10` → link-local；
+ * `::1` → loopback；组播/未指定/非法 → unknown；`::ffff:a.b.c.d` 按内嵌 IPv4 判。
+ */
 export function classifyAddress(host: string): AddressScope {
-  if (/^127\./.test(host) || host === '::1' || host === 'localhost') return 'loopback';
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (m) {
-    const a = Number(m[1]);
-    const b = Number(m[2]);
+  const h = normalizeHostLiteral(host);
+  if (h === 'localhost' || h === '') return h === '' ? 'unknown' : 'loopback';
+  const v4 = parseIpv4Bytes(h);
+  if (v4) {
+    const a = v4[0] as number;
+    const b = v4[1] as number;
+    if (a === 127) return 'loopback';
     if (a === 10) return 'private';
     if (a === 172 && b >= 16 && b <= 31) return 'private';
     if (a === 192 && b === 168) return 'private';
@@ -33,15 +41,52 @@ export function classifyAddress(host: string): AddressScope {
     if (a === 0) return 'unknown';
     return 'public';
   }
-  if (/^[0-9a-f:]+$/i.test(host) && host.includes(':')) {
-    const lower = host.toLowerCase();
-    if (lower === '::1') return 'loopback';
-    if (lower.startsWith('fe80')) return 'link-local';
-    if (lower.startsWith('fc') || lower.startsWith('fd')) return 'private';
-    return 'public';
+  if (ipFamilyOfHost(h) !== 6) return 'hostname';
+  const scope: Ipv6Scope = classifyIpv6Scope(h);
+  if (scope === 'global') return 'public';
+  if (scope === 'ula') return 'private';
+  if (scope === 'link-local') return 'link-local';
+  if (scope === 'loopback') return 'loopback';
+  if (scope === 'ipv4-mapped') {
+    const tail = h.split(':').slice(-1)[0] as string;
+    return parseIpv4Bytes(tail) ? classifyAddress(tail) : 'unknown';
   }
-  return 'hostname';
+  return 'unknown';
 }
+
+/** 本机 IPv6 事实（附八.9：IPv6 无 NAT ⇒ 有全局单播地址就是天然可拨入候选，无需打洞） */
+export interface DialabilityIpv6Info {
+  hasGlobalUnicast: boolean;
+  publicCandidate: string | null;
+  global: string[];
+  ula: string[];
+  linkLocal: string[];
+  loopback: string[];
+  documentation: string[];
+  /** 枚举时实际见到的 family 写法（'IPv6' 字符串 / 6 数字，两种都要认） */
+  familyFormsSeen: (string | number)[];
+  /** 有全局单播 IPv6 ⇒ **天然可拨入候选**（无需打洞/中继） */
+  naturalDialableCandidate: boolean;
+  reason: string;
+}
+
+/** 可拨入性结论的**结构化类型**（UI/接线方按它选文案，不靠解析句子） */
+export type DialableKind =
+  /** 有对端真的拨回来了（最强证据） */
+  | 'peer-verified'
+  /** 本机有全局单播 IPv6 ⇒ 天然可拨入候选（无 NAT；尚未被对端验证） */
+  | 'ipv6-global-natural'
+  /** 没有可用探测对端 → **无法判定**（不是"不可拨入"） */
+  | 'undetermined'
+  /** 有对端但全部拨入失败 → 判定不可拨入 */
+  | 'undialable';
+
+export const DIALABILITY_I18N: Record<DialableKind, string> = {
+  'peer-verified': 'net.dialability.peerVerified',
+  'ipv6-global-natural': 'net.dialability.ipv6Natural',
+  undetermined: 'net.dialability.undetermined',
+  undialable: 'net.dialability.undialable',
+};
 
 export interface DialabilityPeer {
   fingerprint: string;
@@ -71,6 +116,14 @@ export interface DialabilityResult {
   verifiedFrom: 'loopback' | 'lan-peers' | 'public-peers' | 'none';
   reason: string;
   checkedAt: number;
+  /** 结构化结论类型（见 DialableKind） */
+  dialableKind: DialableKind;
+  /** 本机有全局单播 IPv6 ⇒ 天然可拨入候选，无需打洞（附八.9） */
+  naturalDialable: boolean;
+  /** 本机 IPv6 事实细节 */
+  ipv6: DialabilityIpv6Info;
+  /** i18n key 建议（主代理接文案用） */
+  i18n: string;
 }
 
 export function dialBackMessage(token: string, addr: DhtAddr): Record<string, unknown> {
@@ -90,6 +143,8 @@ export interface DialabilityProbeOptions {
   token?: () => string;
   timeoutMs?: number;
   maxPeers?: number;
+  /** 本机 IPv6 事实（默认真实枚举网卡；可注入以便验证分类矩阵） */
+  localIpv6?: () => Ipv6Report;
   now?: () => number;
 }
 
@@ -152,7 +207,21 @@ export class DialabilityProbe {
       else verifiedFrom = 'loopback';
     }
     const dialable = verifiedBy.length > 0;
-    const reason = dialable
+    // 附八.9：IPv6 可达性是**独立的一档**，且是"天然可拨入候选"（IPv6 无 NAT）
+    const v6: Ipv6Report = (this.opts.localIpv6 ?? inspectLocalIpv6)();
+    const ipv6: DialabilityIpv6Info = {
+      hasGlobalUnicast: v6.hasGlobalUnicast,
+      publicCandidate: v6.publicCandidate,
+      global: v6.global,
+      ula: v6.ula,
+      linkLocal: v6.linkLocal,
+      loopback: v6.loopback,
+      documentation: v6.documentation,
+      familyFormsSeen: v6.familyFormsSeen,
+      naturalDialableCandidate: v6.hasGlobalUnicast,
+      reason: v6.reason,
+    };
+    const baseReason = dialable
       ? verifiedFrom === 'public-peers'
         ? '有公网/域名对端成功拨入本机宣告地址 → 外部可拨入'
         : verifiedFrom === 'lan-peers'
@@ -161,7 +230,31 @@ export class DialabilityProbe {
       : peers.length === 0
         ? '没有可用探测对端（路由表为空）→ 无法判定'
         : `全部 ${attempts.length} 个对端拨入失败（${attempts.map((a) => a.error).filter(Boolean).slice(0, 3).join(' / ')}）→ 判定为不可拨入`;
+    const ipv6Note = ipv6.hasGlobalUnicast
+      ? `；另：本机有全局单播 IPv6 ${ipv6.publicCandidate ?? ''}（IPv6 无 NAT）→ **天然可拨入候选，无需打洞**（仅地址事实，不等于已验证公网可达）`
+      : '；本机没有全局单播 IPv6（IPv6 档不适用）';
+    const reason = `${baseReason}${ipv6Note}`;
+    const dialableKind: DialableKind = dialable
+      ? 'peer-verified'
+      : ipv6.naturalDialableCandidate
+        ? 'ipv6-global-natural'
+        : peers.length === 0
+          ? 'undetermined'
+          : 'undialable';
 
-    return { dialable, scope, advertised, verifiedBy, attempts, verifiedFrom, reason, checkedAt: now() };
+    return {
+      dialable,
+      scope,
+      advertised,
+      verifiedBy,
+      attempts,
+      verifiedFrom,
+      reason,
+      checkedAt: now(),
+      dialableKind,
+      naturalDialable: ipv6.naturalDialableCandidate,
+      ipv6,
+      i18n: DIALABILITY_I18N[dialableKind],
+    };
   }
 }
