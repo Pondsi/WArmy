@@ -5,13 +5,13 @@ import {
   createProvider,
   createProviderFromPreset,
   PROVIDER_PRESETS,
-} from '@ccarmy/providers';
+} from '@warmy/providers';
 import {
   createP1Runtime,
   SecurityManager,
   MemorySecurityStore,
   suggestMaxInstances,
-} from '@ccarmy/app-shell';
+} from '@warmy/app-shell';
 
 const report = {};
 
@@ -41,11 +41,11 @@ await sec.setMode('normal');
 const d1 = await sec.requestToolCall('tool:fs.read');
 const d2 = await sec.requestBoundaryWrite(
   'C:\\Windows\\System32\\drivers\\etc\\hosts',
-  'C:\\ccarmy-ws'
+  'C:\\warmy-ws'
 );
 report.security = { mode: sec.getMode(), tool: d1, outsideWrite: d2 };
 
-const root = 'C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p1-test';
+const root = 'C:\\Users\\p\\AppData\\Local\\Temp\\warmy-p1-test';
 const { instances, teardown } = createP1Runtime({ instancesRoot: root });
 report.hardware = instances.hardwareAdvice();
 const h = await instances.spawn({

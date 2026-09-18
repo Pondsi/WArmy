@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 const zhP = base + 'i18n/zh-CN.json';
 const enP = base + 'i18n/en-US.json';
 const zh = JSON.parse(fs.readFileSync(zhP, 'utf8'));

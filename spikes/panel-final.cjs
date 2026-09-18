@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 
 // i18n
 const zhP = base + 'i18n/zh-CN.json';
@@ -25,8 +25,8 @@ const mp = base + 'electron-main.ts';
 let m = fs.readFileSync(mp, 'utf8');
 if (!m.includes("mode?: string")) {
   m = m.replace(
-    "ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string }) => {",
-    "ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string }) => {"
+    "ipcMain.handle('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string }) => {",
+    "ipcMain.handle('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string }) => {"
   );
   m = m.replace(
     "query: { chatId: payload.id, chatKind: payload.kind || 'single', chatTitle: payload.title || '' },",

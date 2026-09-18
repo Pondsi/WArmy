@@ -37,3 +37,11 @@ packages/app-shell/preview/
 # 捆绑 Node 运行时（按入库清单有意不跟踪：单个 node.exe 就 89MB，由安装脚本按平台解压）。
 # 加进 .gitignore 是为了防止有人 `git add -A` 时把它误提交进仓库。
 resources/node/
+
+# electron-builder unpack output at repo root (build artifact)
+win-unpacked/
+packages/app-shell/win-unpacked/
+# phone-simulator entry is intentional (product page); keep it
+# but do not commit local temp profiles
+**/profile-net/
+**/profile-qr/

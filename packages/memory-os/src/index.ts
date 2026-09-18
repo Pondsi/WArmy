@@ -1,5 +1,5 @@
 /**
- * @ccarmy/memory-os — L2 记忆服务（长驻子进程）
+ * @warmy/memory-os — L2 记忆服务（长驻子进程）
  *
  * 铁律：
  * - better-sqlite3 仅在本子进程加载 .node（不变量 #4：Electron 主/渲染进程零原生模块）
@@ -1376,7 +1376,7 @@ function encodeVectorToInt8ForQuery(vec: Float32Array): { data: Int8Array; scale
 // IPC 子进程入口
 // ─────────────────────────────────────────────
 
-/** IPC 子进程入口（pnpm --filter @ccarmy/memory-os start） */
+/** IPC 子进程入口（pnpm --filter @warmy/memory-os start） */
 export function startMemoryServiceIpc(dataDir: string): MemoryService {
   const svc = new MemoryService({ dataDir });
   const send = (msg: any) => {

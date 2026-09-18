@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/electron-main.ts';
+const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/electron-main.ts';
 let s = fs.readFileSync(p, 'utf8');
 
 if (!s.includes('runShortLivedExecutor')) {
@@ -17,7 +17,7 @@ if (!s.includes('runShortLivedExecutor')) {
   // IPC: executor + assets + knowledge-from-chat
   const ipc = `
 // ── P5 短命执行者 ──
-ipcMain.handle('ccarmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
+ipcMain.handle('warmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
   if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
     return { ok: false, error: 'no key' };
   }
@@ -37,7 +37,7 @@ ipcMain.handle('ccarmy:executor-run', async (_e, task: { taskId?: string; brief:
   return { ok: !r.error, ...r };
 });
 
-ipcMain.handle('ccarmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
+ipcMain.handle('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
   if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
     return { ok: false, error: 'no key' };
   }
@@ -54,25 +54,25 @@ ipcMain.handle('ccarmy:executor-batch', async (_e, tasks: Array<{ taskId?: strin
 });
 
 // ── P7 资产治理 ──
-ipcMain.handle('ccarmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: boolean }) => ({
+ipcMain.handle('warmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: boolean }) => ({
   ok: true,
   assets: retrieveAssetsForChat({ scope: opts?.scope as never, strict: opts?.strict }),
 }));
 
-ipcMain.handle('ccarmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
+ipcMain.handle('warmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
   registerChatAsset({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
   return { ok: true };
 });
 
-ipcMain.handle('ccarmy:assets-feedback', (_e, id: string, good: boolean) => {
+ipcMain.handle('warmy:assets-feedback', (_e, id: string, good: boolean) => {
   recordAssetUsage(id, good);
   return { ok: true };
 });
 
-ipcMain.handle('ccarmy:assets-sweep', () => ({ ok: true, n: sweepAssets() }));
+ipcMain.handle('warmy:assets-sweep', () => ({ ok: true, n: sweepAssets() }));
 
 // ── P6 知识库：从对话写入 ──
-ipcMain.handle('ccarmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
+ipcMain.handle('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
   knowledge?.upsertEntity({
     id: 'sess-' + payload.sessionId,
     kind: 'project',

@@ -66,7 +66,7 @@ if (process.argv.includes('--read')) {
 }
 
 // ── 阶段 1：父进程写入 ──
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-group-store-'));
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-group-store-'));
 const file = path.join(tmpRoot, 'groups.json');
 console.log(`[1] 写盘目标: ${file}`);
 const store = new GroupStore(file);

@@ -1,15 +1,15 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 
 // ── D. ASR 语音转文字 ──
-if (!m.includes('ccarmy:asr-transcribe')) {
+if (!m.includes('warmy:asr-transcribe')) {
   m += `
 
 // ── D. ASR 语音转文字（调用 DeepSeek 兼容接口的 audio 端点；失败返回 null） ──
-ipcMain.handle('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
+ipcMain.handle('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
   try {
     if (!providerCfg.apiKey) return { ok: false, error: 'no key' };
     // 优先走用户配置的 ASR 端点（若支持）；否则尝试 /audio/transcriptions
@@ -39,13 +39,13 @@ ipcMain.handle('ccarmy:asr-transcribe', async (_e, payload: { dataUrl: string; e
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 if (!p.includes('executorsStatus')) {
   p = p.replace(
-    "  costSummary: () => ipcRenderer.invoke('ccarmy:cost-summary'),",
-    `  costSummary: () => ipcRenderer.invoke('ccarmy:cost-summary'),
-  executorsStatus: () => ipcRenderer.invoke('ccarmy:executors-status'),
-  executorsRunBrief: (payload) => ipcRenderer.invoke('ccarmy:executors-run-brief', payload),
-  stateSave: (s) => ipcRenderer.invoke('ccarmy:state-save', s),
-  stateLoad: () => ipcRenderer.invoke('ccarmy:state-load'),
-  asrTranscribe: (p) => ipcRenderer.invoke('ccarmy:asr-transcribe', p),`
+    "  costSummary: () => ipcRenderer.invoke('warmy:cost-summary'),",
+    `  costSummary: () => ipcRenderer.invoke('warmy:cost-summary'),
+  executorsStatus: () => ipcRenderer.invoke('warmy:executors-status'),
+  executorsRunBrief: (payload) => ipcRenderer.invoke('warmy:executors-run-brief', payload),
+  stateSave: (s) => ipcRenderer.invoke('warmy:state-save', s),
+  stateLoad: () => ipcRenderer.invoke('warmy:state-load'),
+  asrTranscribe: (p) => ipcRenderer.invoke('warmy:asr-transcribe', p),`
   );
   fs.writeFileSync(base + 'preload.cjs', p);
   console.log('preload updated');
@@ -98,7 +98,7 @@ if (!j.includes('btn-exec-run')) {
     `  async function refreshExecutors() {
     const box = $('exec-box');
     if (!box) return;
-    const r = await window.ccarmy.executorsStatus().catch(() => null);
+    const r = await window.warmy.executorsStatus().catch(() => null);
     const items = r?.items || [];
     box.innerHTML = items.length
       ? items.map((it) => '<div>' + escapeHtml(it.name) + ' · ' + it.status + ' · ' + it.durationMs + 'ms</div>').join('')
@@ -106,7 +106,7 @@ if (!j.includes('btn-exec-run')) {
   }
   $('btn-exec-run')?.addEventListener('click', async () => {
     const brief = state.selectedChat?.name || 'run task';
-    await window.ccarmy.executorsRunBrief({ brief, contextItems: [] });
+    await window.warmy.executorsRunBrief({ brief, contextItems: [] });
     refreshExecutors();
   });
   setInterval(refreshExecutors, 8000);
@@ -118,17 +118,17 @@ if (!j.includes('btn-exec-run')) {
 
 // ── 语音转文字 ──
 j = j.replace(
-  `        const r = await window.ccarmy.saveVoice({ dataUrl, ext: 'webm' });
+  `        const r = await window.warmy.saveVoice({ dataUrl, ext: 'webm' });
         if (r?.ok && state.selectedChat) {
           pushMsg(state.selectedChat.id, 'me', \`[\${t('chat.voice')}] \${r.path.split(/[\\\\/]/).pop()}\`);
           renderChat();
         } else {
           uiAlert(t('chat.voiceUnsupported'));
         }`,
-  `        const r = await window.ccarmy.saveVoice({ dataUrl, ext: 'webm' });
+  `        const r = await window.warmy.saveVoice({ dataUrl, ext: 'webm' });
         if (r?.ok && state.selectedChat) {
           // 尝试 ASR 转文字
-          const asr = await window.ccarmy.asrTranscribe({ dataUrl, ext: 'webm' }).catch(() => null);
+          const asr = await window.warmy.asrTranscribe({ dataUrl, ext: 'webm' }).catch(() => null);
           const text = asr?.ok && asr.text ? asr.text : \`[\${t('chat.voice')}] \${r.path.split(/[\\\\/]/).pop()}\`;
           pushMsg(state.selectedChat.id, 'me', text);
           renderChat();
@@ -143,7 +143,7 @@ if (!j.includes('stateSave')) {
     "    setNav('singleAi');\n    refreshMetrics();\n  })();",
     `    // E. 加载持久化状态
     try {
-      const st = await window.ccarmy.stateLoad();
+      const st = await window.warmy.stateLoad();
       if (st?.state) {
         if (Array.isArray(st.state.plugins) && st.state.plugins.length) state.plugins = st.state.plugins;
         if (Array.isArray(st.state.groups) && st.state.groups.length) state.groups = st.state.groups;
@@ -152,7 +152,7 @@ if (!j.includes('stateSave')) {
     } catch { /* noop */ }
     // 变更时保存
     const saveState = () => {
-      window.ccarmy.stateSave({
+      window.warmy.stateSave({
         plugins: state.plugins,
         groups: state.groups,
         chats: state.chats,

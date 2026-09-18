@@ -1,16 +1,16 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 
 // ── 1) 导入 openclaw 供应商 + 特殊模型配置 IPC ──
-if (!m.includes('ccarmy:import-openclaw')) {
+if (!m.includes('warmy:import-openclaw')) {
   m += `
 
 // ── 导入 openclaw.json 供应商配置 ──
-ipcMain.handle('ccarmy:import-openclaw', () => {
+ipcMain.handle('warmy:import-openclaw', () => {
   try {
     const ocPath = path.join(app.getPath('userData'), '..', 'openclaw.json');
     if (!fs.existsSync(ocPath)) return { ok: false, error: 'openclaw.json not found' };
@@ -40,7 +40,7 @@ ipcMain.handle('ccarmy:import-openclaw', () => {
 });
 
 // ── 特殊模型配置：ASR / 向量 / 摘要 / 整理 ──
-ipcMain.handle('ccarmy:special-models-set', (_e, cfg: {
+ipcMain.handle('warmy:special-models-set', (_e, cfg: {
   asr?: { provider: 'ollama' | 'whisper-cpp' | 'openai'; model?: string; path?: string };
   embedding?: { provider: 'onnx' | 'ollama' | 'api'; model?: string };
   summary?: { provider: string; model?: string };
@@ -53,13 +53,13 @@ ipcMain.handle('ccarmy:special-models-set', (_e, cfg: {
   audit?.log('special-models.set', cfg);
   return { ok: true };
 });
-ipcMain.handle('ccarmy:special-models-get', () => {
+ipcMain.handle('warmy:special-models-get', () => {
   const s = settingsStore?.load() as Record<string, unknown>;
   return { ok: true, specialModels: s?.specialModels || {} };
 });
 
 // ── Ollama whisper ASR（通过 Ollama /api/generate 或自定义端点） ──
-ipcMain.handle('ccarmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
+ipcMain.handle('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
   try {
     const ollamaBase = 'http://127.0.0.1:11434';
     const res = await fetch(ollamaBase + '/api/generate', {
@@ -86,12 +86,12 @@ ipcMain.handle('ccarmy:asr-ollama', async (_e, payload: { audioBase64: string; m
 // preload
 if (!p.includes('importOpenclaw')) {
   p = p.replace(
-    "  exportAllowlist: () => ipcRenderer.invoke('ccarmy:export-allowlist'),",
-    `  exportAllowlist: () => ipcRenderer.invoke('ccarmy:export-allowlist'),
-  importOpenclaw: () => ipcRenderer.invoke('ccarmy:import-openclaw'),
-  specialModelsSet: (cfg) => ipcRenderer.invoke('ccarmy:special-models-set', cfg),
-  specialModelsGet: () => ipcRenderer.invoke('ccarmy:special-models-get'),
-  asrOllama: (payload) => ipcRenderer.invoke('ccarmy:asr-ollama', payload),`
+    "  exportAllowlist: () => ipcRenderer.invoke('warmy:export-allowlist'),",
+    `  exportAllowlist: () => ipcRenderer.invoke('warmy:export-allowlist'),
+  importOpenclaw: () => ipcRenderer.invoke('warmy:import-openclaw'),
+  specialModelsSet: (cfg) => ipcRenderer.invoke('warmy:special-models-set', cfg),
+  specialModelsGet: () => ipcRenderer.invoke('warmy:special-models-get'),
+  asrOllama: (payload) => ipcRenderer.invoke('warmy:asr-ollama', payload),`
   );
   fs.writeFileSync(base + 'preload.cjs', p);
   console.log('preload ok');
@@ -201,7 +201,7 @@ if (!j.includes('btn-import-openclaw')) {
     '      // 邀请链接 / 二维码',
     `      $('btn-import-openclaw')?.addEventListener('click', async () => {
         $('import-msg').textContent = t('common.loading');
-        const r = await window.ccarmy.importOpenclaw().catch(() => null);
+        const r = await window.warmy.importOpenclaw().catch(() => null);
         if (r?.ok) {
           $('import-msg').textContent = t('instances.saved') + ' (' + r.providers.length + ')';
           // 刷新供应商列表
@@ -218,7 +218,7 @@ if (!j.includes('btn-import-openclaw')) {
           summary: { provider: 'deepseek', model: $('sm-summary')?.value || 'deepseek-flash' },
           organizer: { provider: 'deepseek', model: $('sm-organizer')?.value || 'deepseek-chat' },
         };
-        await window.ccarmy.specialModelsSet(cfg).catch(() => {});
+        await window.warmy.specialModelsSet(cfg).catch(() => {});
         $('sm-msg').textContent = t('instances.saved');
       });
       // 邀请链接 / 二维码`

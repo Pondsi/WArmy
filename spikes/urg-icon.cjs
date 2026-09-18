@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 
 // JS: P1 才显示感叹号图标
 let j = fs.readFileSync(base + 'app.js', 'utf8');

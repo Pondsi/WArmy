@@ -34,15 +34,15 @@ import type { KeyObject } from 'node:crypto';
 
 /** 身份算法：长期**签名**密钥用 Ed25519（ADR §2.3 第 4 条：签名密钥与协商密钥分开，X25519 属于握手层） */
 export const IDENTITY_ALGO = 'Ed25519' as const;
-export const IDENTITY_SCHEMA = 'ccarmy.identity.v1' as const;
-export const IDENTITY_CARD_SCHEMA = 'ccarmy.identity-card.v1' as const;
-export const ROTATION_SCHEMA = 'ccarmy.identity.rotation.v1' as const;
-export const REVOCATION_SCHEMA = 'ccarmy.identity.revocation.v1' as const;
-export const SIGNED_PAYLOAD_SCHEMA = 'ccarmy.identity.signed.v1' as const;
+export const IDENTITY_SCHEMA = 'warmy.identity.v1' as const;
+export const IDENTITY_CARD_SCHEMA = 'warmy.identity-card.v1' as const;
+export const ROTATION_SCHEMA = 'warmy.identity.rotation.v1' as const;
+export const REVOCATION_SCHEMA = 'warmy.identity.revocation.v1' as const;
+export const SIGNED_PAYLOAD_SCHEMA = 'warmy.identity.signed.v1' as const;
 
 /** 签名的域分隔前缀：不同用途的签名不互串（防跨协议签名重放） */
-export const DOMAIN_STATEMENT = 'ccarmy.identity.statement.v1';
-export const DOMAIN_CARD = 'ccarmy.identity.card.v1';
+export const DOMAIN_STATEMENT = 'warmy.identity.statement.v1';
+export const DOMAIN_CARD = 'warmy.identity.card.v1';
 
 /**
  * 代次规则的**诚实说明**。任何一次换证验签都必须把它原样带给调用方（UI 文案必须照此写），
@@ -64,7 +64,7 @@ const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const FPR_DATA_CHARS = 19;
 const FPR_TOTAL_CHARS = FPR_DATA_CHARS + 1; // 末位是校验位
 const FPR_GROUP = 5; // 展示时每 5 位一组
-const FPR_CHECK_DOMAIN = 'ccarmy.fpr.check.v1';
+const FPR_CHECK_DOMAIN = 'warmy.fpr.check.v1';
 
 /** base32（无填充，MSB first） */
 export function base32Encode(buf: Buffer): string {
@@ -643,7 +643,7 @@ export function signingBytes(domain: string, payload: unknown): Buffer {
 
 export interface SignedPayload {
   schema: typeof SIGNED_PAYLOAD_SCHEMA;
-  kind: 'ccarmy.identity.signed';
+  kind: 'warmy.identity.signed';
   version: 1;
   domain: string;
   payload: string;
@@ -670,7 +670,7 @@ export function signWithIdentity(
   const signature = crypto.sign(null, signingBytes(domain, payload), privateKey).toString('base64');
   return {
     schema: SIGNED_PAYLOAD_SCHEMA,
-    kind: 'ccarmy.identity.signed',
+    kind: 'warmy.identity.signed',
     version: 1,
     domain,
     payload,
@@ -770,7 +770,7 @@ export function verifySignedPayload(env: SignedPayload, keys: KeyRingEntry[]): V
  */
 export interface RotationDeclaration {
   schema: typeof ROTATION_SCHEMA;
-  kind: 'ccarmy.identity.rotation';
+  kind: 'warmy.identity.rotation';
   version: 1;
   algo: typeof IDENTITY_ALGO;
   /** 旧指纹（签名者） */
@@ -795,7 +795,7 @@ export interface RotationDeclaration {
  */
 export interface RevocationDeclaration {
   schema: typeof REVOCATION_SCHEMA;
-  kind: 'ccarmy.identity.revocation';
+  kind: 'warmy.identity.revocation';
   version: 1;
   algo: typeof IDENTITY_ALGO;
   /** 被作废的指纹（= 签名者） */
@@ -862,7 +862,7 @@ export function rotateIdentity(args: RotateArgs): RotateOutput {
 
   const declarationDraft: Omit<RotationDeclaration, 'signature'> = {
     schema: ROTATION_SCHEMA,
-    kind: 'ccarmy.identity.rotation',
+    kind: 'warmy.identity.rotation',
     version: 1,
     algo: IDENTITY_ALGO,
     oldFingerprint: previousFingerprint,
@@ -884,7 +884,7 @@ export function rotateIdentity(args: RotateArgs): RotateOutput {
 
   const revocationDraft: Omit<RevocationDeclaration, 'signature'> = {
     schema: REVOCATION_SCHEMA,
-    kind: 'ccarmy.identity.revocation',
+    kind: 'warmy.identity.revocation',
     version: 1,
     algo: IDENTITY_ALGO,
     fingerprint: previousFingerprint,
@@ -1120,7 +1120,7 @@ export function verifyRevocationDeclaration(decl: RevocationDeclaration): Revoca
 
 export interface IdentityCard {
   schema: typeof IDENTITY_CARD_SCHEMA;
-  kind: 'ccarmy.identity-card';
+  kind: 'warmy.identity-card';
   version: 1;
   fingerprint: string;
   alias: string;
@@ -1134,7 +1134,7 @@ export interface IdentityCard {
 export function exportIdentityCard(identity: IdentityRecord, privateKey: KeyObject, now = Date.now()): IdentityCard {
   const draft = {
     schema: IDENTITY_CARD_SCHEMA,
-    kind: 'ccarmy.identity-card' as const,
+    kind: 'warmy.identity-card' as const,
     version: 1 as const,
     fingerprint: identity.fingerprint,
     alias: identity.alias,

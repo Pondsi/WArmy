@@ -1,28 +1,28 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 
 // ── 1) 加入请求 + 黑名单 IPC ──
-if (!m.includes('ccarmy:join-request')) {
+if (!m.includes('warmy:join-request')) {
   m += '\n// ── 加入请求 / 黑名单 ──\n';
   m += 'const joinRequests: Array<{ id: string; name: string; kind: string; target: string; targetType: string; ts: number; expireAt: number }> = [];\n';
   m += 'const blacklist: Array<{ id: string; name: string; blockedAt: number; target: string }> = [];\n';
-  m += "ipcMain.handle('ccarmy:join-request', (_e, payload: { name: string; kind: string; target: string; targetType: string }) => {\n";
+  m += "ipcMain.handle('warmy:join-request', (_e, payload: { name: string; kind: string; target: string; targetType: string }) => {\n";
   m += '  const id = "jr-" + Date.now();\n';
   m += '  const ts = Date.now();\n';
   m += '  joinRequests.push({ id, name: payload.name, kind: payload.kind, target: payload.target, targetType: payload.targetType, ts, expireAt: ts + 30 * 24 * 3600_000 });\n';
   m += "  audit?.log('join.request', { id, name: payload.name, target: payload.target });\n";
   m += '  return { ok: true, id };\n';
   m += '});\n';
-  m += "ipcMain.handle('ccarmy:join-pending', () => {\n";
+  m += "ipcMain.handle('warmy:join-pending', () => {\n";
   m += '  const now = Date.now();\n';
   m += '  const valid = joinRequests.filter((r) => r.expireAt > now);\n';
   m += '  return { ok: true, items: valid, count: valid.length };\n';
   m += '});\n';
-  m += "ipcMain.handle('ccarmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {\n";
+  m += "ipcMain.handle('warmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {\n";
   m += '  const idx = joinRequests.findIndex((r) => r.id === payload.id);\n';
   m += '  if (idx < 0) return { ok: false };\n';
   m += '  const req = joinRequests[idx];\n';
@@ -33,8 +33,8 @@ if (!m.includes('ccarmy:join-request')) {
   m += "  audit?.log('join.respond', { id: req.id, action: payload.action });\n";
   m += '  return { ok: true, remaining: joinRequests.filter((r) => r.expireAt > Date.now()).length };\n';
   m += '});\n';
-  m += "ipcMain.handle('ccarmy:blacklist-list', () => ({ ok: true, items: blacklist }));\n";
-  m += "ipcMain.handle('ccarmy:blacklist-remove', (_e, id: string) => {\n";
+  m += "ipcMain.handle('warmy:blacklist-list', () => ({ ok: true, items: blacklist }));\n";
+  m += "ipcMain.handle('warmy:blacklist-remove', (_e, id: string) => {\n";
   m += '  const i = blacklist.findIndex((b) => b.id === id);\n';
   m += '  if (i >= 0) blacklist.splice(i, 1);\n';
   m += '  return { ok: true };\n';
@@ -47,13 +47,13 @@ if (!m.includes('ccarmy:join-request')) {
 
 // preload
 if (!p.includes('joinRequest')) {
-  const anchor = "  asrOllama: (payload) => ipcRenderer.invoke('ccarmy:asr-ollama', payload),";
+  const anchor = "  asrOllama: (payload) => ipcRenderer.invoke('warmy:asr-ollama', payload),";
   p = p.replace(anchor, anchor + '\n' +
-    "  joinRequest: (payload) => ipcRenderer.invoke('ccarmy:join-request', payload),\n" +
-    "  joinPending: () => ipcRenderer.invoke('ccarmy:join-pending'),\n" +
-    "  joinRespond: (payload) => ipcRenderer.invoke('ccarmy:join-respond', payload),\n" +
-    "  blacklistList: () => ipcRenderer.invoke('ccarmy:blacklist-list'),\n" +
-    "  blacklistRemove: (id) => ipcRenderer.invoke('ccarmy:blacklist-remove', id),");
+    "  joinRequest: (payload) => ipcRenderer.invoke('warmy:join-request', payload),\n" +
+    "  joinPending: () => ipcRenderer.invoke('warmy:join-pending'),\n" +
+    "  joinRespond: (payload) => ipcRenderer.invoke('warmy:join-respond', payload),\n" +
+    "  blacklistList: () => ipcRenderer.invoke('warmy:blacklist-list'),\n" +
+    "  blacklistRemove: (id) => ipcRenderer.invoke('warmy:blacklist-remove', id),");
   fs.writeFileSync(base + 'preload.cjs', p);
   console.log('preload join ok');
 }
@@ -130,7 +130,7 @@ if (!j.includes('showJoinRequests')) {
     '  // ── 顶层交互绑定（必须全局执行一次） ──',
     `  // ── 加入请求处理 ──
   async function refreshJoinBadge() {
-    const r = await window.ccarmy.joinPending().catch(() => null);
+    const r = await window.warmy.joinPending().catch(() => null);
     const n = r?.count || 0;
     const badge = $('join-badge');
     if (badge) {
@@ -169,11 +169,11 @@ if (!j.includes('showJoinRequests')) {
 
   document.querySelectorAll('[data-nav="instances"]').forEach((el) => {
     el.addEventListener('click', async () => {
-      const r = await window.ccarmy.joinPending().catch(() => null);
+      const r = await window.warmy.joinPending().catch(() => null);
       if (r?.items?.length) {
         const req = r.items[0];
         const action = await showJoinRequestModal(req);
-        await window.ccarmy.joinRespond({ id: req.id, action });
+        await window.warmy.joinRespond({ id: req.id, action });
         refreshJoinBadge();
         uiAlert(t('instances.saved'));
       }
@@ -192,14 +192,14 @@ if (!j.includes('refreshBlacklist')) {
     `      async function refreshBlacklist() {
         const box = $('blacklist-box');
         if (!box) return;
-        const r = await window.ccarmy.blacklistList().catch(() => null);
+        const r = await window.warmy.blacklistList().catch(() => null);
         const items = r?.items || [];
         box.innerHTML = items.length
           ? items.map((b) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(b.name) + ' · ' + escapeHtml(b.target) + ' · ' + new Date(b.blockedAt).toLocaleString() + '</span><button class="btn-mini" data-unblock="' + escapeHtml(b.id) + '">' + t('join.removeBlacklist') + '</button></div>').join('')
           : t('join.blacklistEmpty');
         box.querySelectorAll('[data-unblock]').forEach((btn) => {
           btn.onclick = async () => {
-            await window.ccarmy.blacklistRemove(btn.dataset.unblock).catch(() => {});
+            await window.warmy.blacklistRemove(btn.dataset.unblock).catch(() => {});
             refreshBlacklist();
           };
         });

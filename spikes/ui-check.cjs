@@ -1,7 +1,7 @@
 const fs = require('node:fs');
-const j = fs.readFileSync('C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/app.js', 'utf8');
-const h = fs.readFileSync('C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/index.html', 'utf8');
-const css = fs.readFileSync('C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/app.css', 'utf8');
+const j = fs.readFileSync('C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.js', 'utf8');
+const h = fs.readFileSync('C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/index.html', 'utf8');
+const css = fs.readFileSync('C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.css', 'utf8');
 const checks = [
   ['countdown modal', j.includes('uiConfirmCountdown')],
   ['urgency-bar bind', j.includes("'urgency-bar'")],

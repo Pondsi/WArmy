@@ -1,5 +1,5 @@
 /**
- * @ccarmy/group-router — 值班者状态机 + 队列 + 群类型
+ * @warmy/group-router — 值班者状态机 + 队列 + 群类型
  *
  * 不变量：
  * - 值班权仅限本机实例
@@ -16,7 +16,7 @@ import type {
   OrchestrationDecision,
   OrchestrationRequest,
   Urgency,
-} from '@ccarmy/contracts';
+} from '@warmy/contracts';
 
 export interface RouterInstance {
   id: string;
@@ -46,6 +46,16 @@ export interface QueueItem {
 export interface GroupChatRouterOptions {
   /** 固定值班忙时：true=排队，false=顺延 +1 */
   queueWhenFixedBusy?: boolean;
+  /** 队列变更后的落盘回调（主进程注入；Router 自己不碰文件系统） */
+  onQueueMutated?: (groupId: string) => void;
+}
+
+/** 队列/值班态快照（持久化用；只含 Router 自己拥有的状态） */
+export interface RouterQueueSnapshot {
+  version: 1;
+  seq: number;
+  queues: Record<string, QueueItem[]>;
+  dutyState: Record<string, DutyState>;
 }
 
 export class GroupChatRouter {
@@ -57,6 +67,52 @@ export class GroupChatRouter {
 
   constructor(private opts: GroupChatRouterOptions = {}) {}
 
+  private notifyQueueMutated(groupId: string): void {
+    try {
+      this.opts.onQueueMutated?.(groupId);
+    } catch {
+      /* 落盘失败不影响内存态 */
+    }
+  }
+
+  /** 导出队列 + 值班态（主进程写 userData/router-queues.json） */
+  serializeState(): RouterQueueSnapshot {
+    const queues: Record<string, QueueItem[]> = {};
+    for (const [gid, q] of this.queues) {
+      queues[gid] = q.map((x) => ({ ...x, request: { ...x.request } }));
+    }
+    const dutyState: Record<string, DutyState> = {};
+    for (const [gid, s] of this.dutyState) dutyState[gid] = s;
+    return { version: 1, seq: this.seq, queues, dutyState };
+  }
+
+  /** 从快照恢复（启动时调用；只恢复队列/值班态，不覆盖成员与群配置） */
+  restoreState(snap: RouterQueueSnapshot | null | undefined): void {
+    if (!snap || snap.version !== 1) return;
+    this.seq = Number(snap.seq) || 0;
+    this.queues.clear();
+    for (const [gid, q] of Object.entries(snap.queues || {})) {
+      if (!Array.isArray(q)) continue;
+      this.queues.set(
+        gid,
+        q
+          .filter((x) => x && typeof x.id === 'string' && x.request)
+          .map((x) => ({
+            id: String(x.id),
+            groupId: String(x.groupId || gid),
+            urgency: (x.urgency as Urgency) || 'P2',
+            request: { ...x.request },
+            enqueuedAt: Number(x.enqueuedAt) || Date.now(),
+            status: (x.status as QueueItem['status']) || 'queued',
+          }))
+      );
+    }
+    this.dutyState.clear();
+    for (const [gid, s] of Object.entries(snap.dutyState || {})) {
+      this.dutyState.set(gid, s as DutyState);
+    }
+  }
+
   // ── 群与成员 ──
 
   createGroup(cfg: GroupConfig): GroupConfig {
@@ -65,6 +121,7 @@ export class GroupChatRouter {
     this.members.set(cfg.groupId, []);
     this.queues.set(cfg.groupId, []);
     this.dutyState.set(cfg.groupId, 'idle');
+    this.notifyQueueMutated(cfg.groupId);
     return this.groups.get(cfg.groupId)!;
   }
 
@@ -158,6 +215,7 @@ export class GroupChatRouter {
     if (!q) throw new Error('group not found');
     q.push(item);
     this.sortQueue(request.groupId);
+    this.notifyQueueMutated(request.groupId);
     return item;
   }
 
@@ -184,6 +242,7 @@ export class GroupChatRouter {
     if (patch.request) item.request = patch.request;
     if (patch.status) item.status = patch.status;
     this.sortQueue(groupId);
+    this.notifyQueueMutated(groupId);
     return true;
   }
 
@@ -195,6 +254,7 @@ export class GroupChatRouter {
     const item = q[i];
     if (item) item.status = 'cancelled';
     q.splice(i, 1);
+    this.notifyQueueMutated(groupId);
     return true;
   }
 
@@ -206,6 +266,7 @@ export class GroupChatRouter {
     if (i > 0) {
       q.splice(i, 1);
       q.unshift(item);
+      this.notifyQueueMutated(request.groupId);
     }
     return item;
   }
@@ -222,6 +283,8 @@ export class GroupChatRouter {
     decision?: OrchestrationDecision;
     duty?: RouterInstance;
     reason?: string;
+    /** action==='queue' 时为 true：本方法**已经**入队，调用方不要重复 enqueue */
+    queued?: boolean;
   } {
     const g = this.groups.get(req.groupId);
     if (!g) return { action: 'silent', reason: 'no-group' };
@@ -256,9 +319,11 @@ export class GroupChatRouter {
     // 非定向：值班者编排
     const duty = this.selectDuty(req.groupId);
     if (!duty) {
+      // 已入队；调用方**不要**再 enqueue 一次（会双写队列）
       this.enqueue(req);
       this.dutyState.set(req.groupId, 'queued');
-      return { action: 'queue', reason: 'no-idle-duty' };
+      this.notifyQueueMutated(req.groupId);
+      return { action: 'queue', reason: 'no-idle-duty', queued: true };
     }
 
     this.dutyState.set(req.groupId, 'orchestrating');
@@ -281,14 +346,44 @@ export class GroupChatRouter {
     return { action: 'dispatch', decision, duty };
   }
 
-  /** 值班者完成一轮后回到 idle 并冲刷队列 */
-  complete(groupId: string): QueueItem | null {
+  /**
+   * 值班者完成一轮后回到 idle。
+   * **不在此处弹出队列项** —— 弹出必须走 `dequeueNext`，且调用方要真的处理它。
+   * 旧实现 here 标 `dispatched` 却把项留在队列里，orchestrator 又忽略返回值 ⇒ 等于丢弃。
+   */
+  complete(groupId: string): null {
     this.dutyState.set(groupId, 'idle');
+    this.notifyQueueMutated(groupId);
+    return null;
+  }
+
+  /**
+   * 真正弹出下一条排队项：从队列**移除**并返回，调用方必须处理。
+   * 处理失败时调用方应 `requeue` 放回，绝不静默丢掉。
+   */
+  dequeueNext(groupId: string): QueueItem | null {
     const q = this.queues.get(groupId) || [];
-    const next = q.find((x) => x.status === 'queued');
-    if (!next) return null;
-    next.status = 'dispatched';
-    return next;
+    const i = q.findIndex((x) => x.status === 'queued');
+    if (i < 0) return null;
+    const [item] = q.splice(i, 1);
+    if (!item) return null;
+    item.status = 'dispatched';
+    this.notifyQueueMutated(groupId);
+    return item;
+  }
+
+  /** 处理失败时把项放回队列（保持原 urgency/时间，重新排序） */
+  requeue(item: QueueItem): QueueItem {
+    const q = this.queues.get(item.groupId);
+    const restored: QueueItem = { ...item, status: 'queued' };
+    if (!q) {
+      this.queues.set(item.groupId, [restored]);
+    } else {
+      q.push(restored);
+      this.sortQueue(item.groupId);
+    }
+    this.notifyQueueMutated(item.groupId);
+    return restored;
   }
 }
 

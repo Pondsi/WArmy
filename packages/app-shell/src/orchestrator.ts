@@ -2,10 +2,10 @@
  * 值班者编排闭环（ADR P3/P4）
  * 用户消息 → 选值班 → 组装状态卡片 → 派发执行者 → 回写看板/知识库 → 返回聊天
  */
-import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@ccarmy/group-router';
-import { BoardStore, parseBoardCommand } from '@ccarmy/board';
+import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@warmy/group-router';
+import { BoardStore, parseBoardCommand } from '@warmy/board';
 import { runShortLivedExecutor } from './executor.js';
-import { CcrGateway } from '@ccarmy/ccr-compressor';
+import { CcrGateway } from '@warmy/ccr-compressor';
 import {
   renderBoundedView,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -14,7 +14,7 @@ import {
   type LogEntry,
 } from './context-renderer.js';
 import { retrieveAssetsForChat, registerChatAsset } from './asset-wire.js';
-import { chatWithTools, type ChatMessage, type ToolCall, type ToolSpec } from '@ccarmy/providers';
+import { chatWithTools, type ChatMessage, type ToolCall, type ToolSpec } from '@warmy/providers';
 
 export interface DutyProviderCfg {
   presetId: string;
@@ -101,18 +101,15 @@ export async function orchestrateGroupMessage(
   }
 
   if (route.action === 'queue' || !route.duty) {
-    deps.router.enqueue({
-      groupId: msg.groupId,
-      userId: msg.userId || 'local-user',
-      content: msg.content,
-      urgency,
-      mentionIds: msg.mentionIds || [],
-      timestamp: Date.now(),
-    });
+    /**
+     * route() 在无空闲值班时**已经** enqueue 过（group-router.route 内部）。
+     * 这里绝不能再次 enqueue —— 那会双写同一条消息。
+     */
+    const qlen = deps.router.listQueue(msg.groupId).length;
     return {
       action: 'queue',
-      reply: `[排队] 队列长度 ${deps.router.listQueue(msg.groupId).length}`,
-      queueLength: deps.router.listQueue(msg.groupId).length,
+      reply: `[排队] 队列长度 ${qlen}`,
+      queueLength: qlen,
     };
   }
 
@@ -177,14 +174,14 @@ export async function orchestrateGroupMessage(
       distilled = r.distilled;
     } else {
       // 无空闲执行者 → 值班者自己（带卡片）
-      const { createProviderFromPreset } = await import('@ccarmy/providers');
+      const { createProviderFromPreset } = await import('@warmy/providers');
       const provider = createProviderFromPreset(cfg.presetId, {
         apiKey: cfg.apiKey,
         baseURL: cfg.baseURL || undefined,
       });
       const sys: ChatMessage = {
         role: 'system',
-        content: `你是 CCArmy 项目「${msg.groupId}」的值班者。\n${card}\n请用简短中文回复。若需更新任务，使用指令：新建任务:/完成/进度 标题:百分比`,
+        content: `你是 WArmy 项目「${msg.groupId}」的值班者。\n${card}\n请用简短中文回复。若需更新任务，使用指令：新建任务:/完成/进度 标题:百分比`,
       };
       // 不变量 #2：值班者输入复用**同一个**有界渲染器（原来这里是 hist.slice(-12)，只按条数有界）。
       // 值班系统提示里已含状态卡片，保持冻结头；会话部分恒 ≤ 预算且与日志总长解耦。
@@ -234,18 +231,155 @@ export async function orchestrateGroupMessage(
     deps.history.set(msg.groupId, hist);
   }
 
-  // 冲刷队列中 P2/P3
-  const next = deps.router.complete(msg.groupId);
-  if (next) {
-    // 简化：直接标记 dispatched，不再递归（避免无限循环）
+  /**
+   * 冲刷队列：complete 只把值班置 idle；**真正弹出**走 dequeueNext，
+   * 且弹出后必须真的处理 —— 处理不了就 requeue，绝不静默丢弃（旧实现的 bug）。
+   * 深度上限防止同一条故障消息无限循环。
+   */
+  deps.router.complete(msg.groupId);
+  let drainDepth = 0;
+  const DRAIN_MAX = 5;
+  let extraReplies: string[] = [];
+  while (drainDepth < DRAIN_MAX) {
+    drainDepth += 1;
+    const next = deps.router.dequeueNext(msg.groupId);
+    if (!next) break;
+    try {
+      const nextRes = await runOneDutyRound(deps, cfg, {
+        groupId: next.request.groupId || msg.groupId,
+        userId: next.request.userId || 'local-user',
+        content: next.request.content,
+        urgency: next.urgency || 'P2',
+        mentionIds: next.request.mentionIds || [],
+      });
+      if (nextRes.action === 'queue') {
+        // route() 在无值班时已重新入队 —— 不要再 requeue 一次
+        break;
+      }
+      if (nextRes.action === 'silent') {
+        // 静默规则挡下：放回队列，等条件满足；绝不丢
+        try {
+          deps.router.requeue(next);
+        } catch { /* ignore */ }
+        break;
+      }
+      if (nextRes.reply) extraReplies.push(nextRes.reply);
+      deps.router.complete(msg.groupId);
+    } catch {
+      // 处理失败 ⇒ 放回队列，留给下一轮；**不丢**
+      try {
+        deps.router.requeue(next);
+      } catch { /* ignore */ }
+      break;
+    }
   }
 
+  return {
+    action: 'dispatch',
+    reply: extraReplies.length ? `${distilled}\n\n[队列冲刷]\n${extraReplies.join('\n---\n')}` : distilled,
+    dutyId: duty.id,
+    executorIds: executors,
+    boardEvent,
+    queueLength: deps.router.listQueue(msg.groupId).length,
+    usage,
+  };
+}
+
+/** 队列冲刷用的一轮：与主路径同一套卡片/工具预算，但不再递归冲刷自己的队列 */
+async function runOneDutyRound(
+  deps: OrchestratorDeps,
+  cfg: DutyProviderCfg,
+  msg: { groupId: string; userId: string; content: string; urgency: 'P0'|'P1'|'P2'|'P3'; mentionIds: string[] }
+): Promise<OrchestrateResult> {
+  const route = deps.router.route({
+    groupId: msg.groupId,
+    userId: msg.userId,
+    content: msg.content,
+    urgency: msg.urgency,
+    mentionIds: msg.mentionIds,
+    timestamp: Date.now(),
+  });
+  if (route.action === 'silent' || !route.duty) {
+    // 冲刷时又没值班了：放回队列（由 requeue 的调用方处理 —— 这里返回空让上层 requeue）
+    if (route.action === 'queue' || !route.duty) {
+      // route 可能已再次入队；若没有 duty 则上层 catch/requeue
+      if (!route.duty && route.action !== 'queue') {
+        return { action: 'queue', reply: '', queueLength: deps.router.listQueue(msg.groupId).length };
+      }
+    }
+    return { action: 'silent', reply: '', queueLength: deps.router.listQueue(msg.groupId).length };
+  }
+  const duty = route.duty;
+  const executors = (route.decision?.executorIds || []).filter((id) => id !== duty.id);
+  const logEntries: LogEntry[] | null = deps.logOf ? deps.logOf(msg.groupId) : null;
+  const card = buildStatusCard({
+    groupId: msg.groupId,
+    dutyId: duty.id,
+    queueLength: deps.router.listQueue(msg.groupId).length,
+    runningTasks: executors.map((id) => deps.listInstances().find((x) => x.id === id)?.name || id),
+    recent: (logEntries ?? (deps.history.get(msg.groupId) || []))
+      .slice(-6)
+      .map((m) => String(m.content ?? '').slice(0, 40)),
+    tokenBudget: 2000,
+  });
+  let distilled = '';
+  let usage: OrchestrateResult['usage'];
+  const brief = route.decision?.taskBrief || msg.content;
+  if (cfg.apiKey || cfg.presetId === 'ollama') {
+    if (executors.length) {
+      const r = await runShortLivedExecutor({ taskId: 't-' + Date.now(), brief, contextItems: [card, `用户消息: ${msg.content}`] }, cfg);
+      distilled = r.distilled;
+    } else {
+      const { createProviderFromPreset } = await import('@warmy/providers');
+      const provider = createProviderFromPreset(cfg.presetId, { apiKey: cfg.apiKey, baseURL: cfg.baseURL || undefined });
+      const sys: ChatMessage = {
+        role: 'system',
+        content: `你是 WArmy 项目「${msg.groupId}」的值班者。\n${card}\n请用简短中文回复。`,
+      };
+      const entries: LogEntry[] = deps.logOf
+        ? deps.logOf(msg.groupId)
+        : (deps.history.get(msg.groupId) || []).map((m, i) => ({
+            seq: i + 1,
+            role: (m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user') as LogEntry['role'],
+            content: typeof m.content === 'string' ? m.content : '',
+          }));
+      const view = renderBoundedView(entries, {
+        budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars() : DEFAULT_CONTEXT_BUDGET_CHARS,
+        keepHead: DEFAULT_KEEP_HEAD,
+        keepTail: DEFAULT_KEEP_TAIL,
+        recallHint: msg.content,
+      });
+      const limits = deps.toolLimits?.() ?? { maxRounds: 3, maxResultChars: 4000, totalChars: 12000 };
+      const tools: ToolSpec[] | undefined = deps.toolSpecs?.();
+      const req: Parameters<typeof chatWithTools>[1] = {
+        model: cfg.model || 'deepseek-chat',
+        messages: [sys, ...(view.messages as ChatMessage[])],
+        maxTokens: 512,
+        tools,
+      };
+      const loop = deps.runTool
+        ? await chatWithTools(provider, req, deps.runTool, {
+            maxRounds: limits.maxRounds,
+            maxResultChars: limits.maxResultChars,
+            maxToolResultChars: limits.totalChars,
+          })
+        : null;
+      const resp = loop ? loop.response : await provider.chat(req);
+      distilled = resp.choices[0]?.message?.content || '';
+      usage = {
+        promptTokens: resp.usage.promptTokens,
+        completionTokens: resp.usage.completionTokens,
+        cacheHitTokens: resp.usage.cacheHitTokens,
+      };
+    }
+  } else {
+    distilled = `[未配置 Key] 队列项已处理 duty=${duty.name}`;
+  }
   return {
     action: 'dispatch',
     reply: distilled,
     dutyId: duty.id,
     executorIds: executors,
-    boardEvent,
     queueLength: deps.router.listQueue(msg.groupId).length,
     usage,
   };

@@ -7,7 +7,7 @@ import {
   createProviderFromPreset,
   PROVIDER_PRESETS,
   normalizeUsage,
-} from '@ccarmy/providers';
+} from '@warmy/providers';
 import {
   createP1Runtime,
   SecurityManager,
@@ -15,7 +15,7 @@ import {
   FileSecurityStore,
   TeardownRegistry,
   suggestMaxInstances,
-} from '@ccarmy/app-shell';
+} from '@warmy/app-shell';
 
 const fails = [];
 function check(name, cond, detail) {
@@ -104,7 +104,7 @@ check('boundary inside ok', inside.allowed === true, inside);
 check('boundary outside denied no-ui', outside.allowed === false, outside);
 
 // FileSecurityStore
-const storeFile = 'C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-sec-test.json';
+const storeFile = 'C:\\Users\\p\\AppData\\Local\\Temp\\warmy-sec-test.json';
 const fstore = new FileSecurityStore(storeFile);
 await fstore.save({ mode: 'strict', allowlist: [{ key: 'k', scope: 'global', decision: 'allow', createdAt: 1 }] });
 const loaded = await fstore.load();
@@ -112,7 +112,7 @@ check('file store roundtrip', loaded.mode === 'strict' && loaded.allowlist.lengt
 
 // ── Instance + Teardown ──
 const { instances, teardown } = await createP1Runtime({
-  instancesRoot: 'C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-verify-instances',
+  instancesRoot: 'C:\\Users\\p\\AppData\\Local\\Temp\\warmy-verify-instances',
 });
 check('suggest 1..8', suggestMaxInstances() >= 1 && suggestMaxInstances() <= 8, { s: suggestMaxInstances() });
 const h = await instances.spawn({
@@ -127,7 +127,7 @@ check('list empty', instances.list().length === 0, { n: instances.list().length 
 
 // max instances
 const { instances: im2, teardown: tr2 } = await createP1Runtime({
-  instancesRoot: 'C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-verify-instances',
+  instancesRoot: 'C:\\Users\\p\\AppData\\Local\\Temp\\warmy-verify-instances',
   maxInstances: 1,
 });
 await im2.spawn({ config: { id: 'a', name: 'a', workspace: 'x', dutyEligible: true } });

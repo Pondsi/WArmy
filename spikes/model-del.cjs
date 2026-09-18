@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 
 // ── 1) 实例模型配置重写：全部可用时隐藏列表；手动模式下添加/删除常显 ──

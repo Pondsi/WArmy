@@ -17,14 +17,14 @@ export const MEM_PKG = path.join(REPO_ROOT, 'packages', 'memory-os');
 export const MODEL_DIR = path.join(REPO_ROOT, 'spikes', 'spike-07-onnx', 'models');
 
 export function tmpDir(tag) {
-  const d = path.join(os.tmpdir(), `ccarmy-p2-${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+  const d = path.join(os.tmpdir(), `warmy-p2-${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
   fs.mkdirSync(d, { recursive: true });
   return d;
 }
 
 /** 复制 dist 到 ASCII 目录 + junction node_modules（子进程用） */
 export function makeAsciiRuntime(tag = 'runtime') {
-  const root = path.join(os.tmpdir(), `ccarmy-p2-${tag}`);
+  const root = path.join(os.tmpdir(), `warmy-p2-${tag}`);
   fs.rmSync(root, { recursive: true, force: true });
   fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
   fs.copyFileSync(path.join(MEM_PKG, 'package.json'), path.join(root, 'package.json'));

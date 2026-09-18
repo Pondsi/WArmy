@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const root = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/i18n';
+const root = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/i18n';
 const zhP = path.join(root, 'zh-CN.json');
 const enP = path.join(root, 'en-US.json');
 const zh = JSON.parse(fs.readFileSync(zhP, 'utf8'));

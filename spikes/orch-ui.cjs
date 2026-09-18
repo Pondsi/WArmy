@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 let h = fs.readFileSync(base + 'index.html', 'utf8');
 let c = fs.readFileSync(base + 'app.css', 'utf8');
@@ -10,7 +10,7 @@ if (oldGroup) {
   j = j.replace(oldGroup[0], `    // 内部群：值班编排闭环
     if (state.selectedChat.kind === 'internal') {
       try {
-        const r = await window.ccarmy.groupOrchestrate({
+        const r = await window.warmy.groupOrchestrate({
           groupId: id,
           content: text,
           urgency: u,
@@ -25,7 +25,7 @@ if (oldGroup) {
       } catch (e) {
         pushMsg(id, 'them', String(e.message || e));
       }
-      window.ccarmy.checkpointAuto?.('round_end');
+      window.warmy.checkpointAuto?.('round_end');
       renderChat();
       flushQueue(id);
       playNotifySound('complete');
@@ -71,9 +71,9 @@ if (!j.includes('function showApprovalDialog')) {
       root.classList.remove('hidden');
     });
   }
-  window.ccarmy.onApprovalRequest?.(async (d) => {
+  window.warmy.onApprovalRequest?.(async (d) => {
     const r = await showApprovalDialog(d);
-    await window.ccarmy.approvalRespond(d.id, r.allowed, r.scope);
+    await window.warmy.approvalRespond(d.id, r.allowed, r.scope);
   });
 
   function openContextMenu(x, y, items) {`
@@ -85,7 +85,7 @@ if (!j.includes('function showApprovalDialog')) {
 j = j.replace(
   /      box.textContent = `turns=\$\{m.turns\} · cache=\$\{\(\(m.cacheHitRate \|\| 0\) \* 100\)\.toFixed\(1\)\}% · ccr=\$\{\(\(m.ccrRatio \|\| 1\) \* 100\)\.toFixed\(0\)\}% · avg=\$\{m.avgDurationMs\}ms`;/,
   `      box.textContent = \`turns=\${m.turns} · cache=\${((m.cacheHitRate || 0) * 100).toFixed(1)}% · ccr=\${((m.ccrRatio || 1) * 100).toFixed(0)}% · avg=\${m.avgDurationMs}ms\`;
-      const cost = await window.ccarmy.costSummary().catch(() => null);
+      const cost = await window.warmy.costSummary().catch(() => null);
       if (cost?.ok) {
         box.textContent += \` · ¥\${cost.estCostCny}\`;
       }`
@@ -97,7 +97,7 @@ j = j.replace(
   `      $('btn-kb-go')?.addEventListener('click', async () => {
         const q = $('kb-q').value.trim();
         if (!q) return;
-        const r = await window.ccarmy.knowledgeQuery(q);
+        const r = await window.warmy.knowledgeQuery(q);
         const ents = (r?.entities || []).map((e) => e.name + '(' + e.kind + ')').join(', ');
         const evs = (r?.events || []).map((e) => e.title).join(' | ');
         $('kb-out').innerHTML =
@@ -116,7 +116,7 @@ j = j.replace(
         const last = msgs[msgs.length - 1];
         const body = last?.text || '';
         if (!body) return;
-        await window.ccarmy.kbFromChat({
+        await window.warmy.kbFromChat({
           sessionId: sid,
           title: body.slice(0, 40),
           body,
@@ -128,7 +128,7 @@ j = j.replace(
 // 5) 自动检查点：单 AI 发送也打轮末
 j = j.replace(
   "    renderChat();\n    flushQueue(id);\n    playNotifySound('complete');\n    if (CHAT_NAVS.has(state.nav)) renderList();\n  }",
-  "    window.ccarmy.checkpointAuto?.('round_end');\n    renderChat();\n    flushQueue(id);\n    playNotifySound('complete');\n    refreshMetrics();\n    refreshCheckpoints();\n    if (CHAT_NAVS.has(state.nav)) renderList();\n  }"
+  "    window.warmy.checkpointAuto?.('round_end');\n    renderChat();\n    flushQueue(id);\n    playNotifySound('complete');\n    refreshMetrics();\n    refreshCheckpoints();\n    if (CHAT_NAVS.has(state.nav)) renderList();\n  }"
 );
 
 // 6) HTML：知识库加「存入」按钮

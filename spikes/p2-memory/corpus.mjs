@@ -19,7 +19,7 @@ export const CORPUS = [
     entityType: 'note',
     body: '值班者状态机在指定成员忙碌时自动排队并顺延到下一个空闲成员',
   },
-  { id: 'm-012', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: 'pnpm --filter @ccarmy/memory-os build 编译投影层' },
+  { id: 'm-012', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: 'pnpm --filter @warmy/memory-os build 编译投影层' },
   { id: 'm-014', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: '多智能体群聊桌面应用的定稿方案由 ADR 000 固化，十一条不变量为硬约束' },
   // ── s2 / group-B ──────────────────────────────
   { id: 'm-005', sessionId: 's2', groupId: 'group-B', entityType: 'archive', body: '外部群归档流水线 KnowledgeArchiver 处理证据锚点与双向索引' },
@@ -56,7 +56,7 @@ export const QUERIES = [
   { q: 'E_MEMORY_CORRUPT', kind: '错误码', expect: ['uni', 'tri'] },
   { q: 'E_WRITER_DENIED', kind: '错误码', expect: ['uni', 'tri'] },
   { q: 'CCA_ARMY_MEMORY_DIR', kind: '环境变量', expect: ['uni', 'tri'] },
-  { q: '--filter @ccarmy', kind: '命令行', expect: ['uni', 'tri'] },
+  { q: '--filter @warmy', kind: '命令行', expect: ['uni', 'tri'] },
   { q: 'JSONL 全量重建', kind: '混合（含空格）', expect: ['uni', 'tri'] },
   { q: 'zzz_not_present_zzz', kind: '完全不存在', expect: [] },
 ];
@@ -73,7 +73,7 @@ export const EXPECTED_HITS = {
   E_MEMORY_CORRUPT: ['m-002'],
   E_WRITER_DENIED: ['m-007'],
   CCA_ARMY_MEMORY_DIR: ['m-013'],
-  '--filter @ccarmy': ['m-012'],
+  '--filter @warmy': ['m-012'],
 };
 
 /** 无词面重叠、只能靠向量命中的查询（验证向量通道必要性） */

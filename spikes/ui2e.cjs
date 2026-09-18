@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 
 // 加入群聊邀请绑定（若尚未注入）
@@ -13,11 +13,11 @@ if (!j.includes("btn-join-copy")) {
   }
   j = j.replace(use, `      // 邀请链接 / 二维码
       (async () => {
-        const st = await window.ccarmy.meshStatus().catch(() => null);
+        const st = await window.warmy.meshStatus().catch(() => null);
         const node = st?.nodeId || 'local';
-        const inv = await window.ccarmy.inviteCreate().catch(() => null);
+        const inv = await window.warmy.inviteCreate().catch(() => null);
         const tok = inv?.invite?.token ? '&tok=' + inv.invite.token : '';
-        const link = 'ccarmy://join?node=' + encodeURIComponent(node) + '&port=7788' + tok;
+        const link = 'warmy://join?node=' + encodeURIComponent(node) + '&port=7788' + tok;
         const lk = $('join-link');
         if (lk) lk.textContent = link;
         const qr = $('join-qr');
@@ -41,7 +41,7 @@ if (!j.includes("btn-join-copy")) {
       $('btn-join-accept')?.addEventListener('click', () => {
         const v = $('join-input').value.trim();
         if (!v) return;
-        $('join-msg').textContent = v.startsWith('ccarmy://') ? t('join.ok') : t('join.fail');
+        $('join-msg').textContent = v.startsWith('warmy://') ? t('join.ok') : t('join.fail');
       });
 
 ${use}`);

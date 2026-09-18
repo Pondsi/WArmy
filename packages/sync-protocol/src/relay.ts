@@ -15,7 +15,7 @@
  * 安全边界（必须看清，别把中继当成一条"可信管道"）：
  *  · 中继**看不到明文**：会话密钥来自两端之间的 X25519 ECDHE，中继只是把密文搬来搬去；
  *    它能看到握手帧里的公钥/nonce/签名（那是**元数据**，不是内容），但推不出共享密钥。
- *  · 中继**不能冒充对端**：指纹由公钥推出（`ccarmyFingerprint`），且握手会校验对端指纹；
+ *  · 中继**不能冒充对端**：指纹由公钥推出（`warmyFingerprint`），且握手会校验对端指纹；
  *    中继/第三方用别的身份来配对，会在握手层被 roster / 指纹校验拒掉。
  *  · 中继**不能篡改/重排/重放后仍被接受**：记录层每方向一个严格递增的单调计数并被写进 AAD
  *    （见 secure-channel.ts），任何重放/乱序/改字节都会认证失败并断连。
@@ -31,7 +31,7 @@ import net from 'node:net';
 import { sha256Hex } from './codec.js';
 import type { DhtAddr } from './dht.js';
 
-export const RELAY_PROTOCOL = 'ccarmy-relay/1';
+export const RELAY_PROTOCOL = 'warmy-relay/1';
 export const DEFAULT_RELAY_PAIR_TIMEOUT_MS = 10_000;
 export const DEFAULT_RELAY_SAMPLE_BYTES = 64;
 const RELAY_MAX_LINE = 8 * 1024;

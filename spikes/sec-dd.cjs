@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 
 // ── 1) 安全模式下拉：替换 session-sec 绑定 ──
@@ -56,7 +56,7 @@ if (oldSec) {
         state.sessionSecurity[state.selectedChat.id] = mode;
       } else {
         state.globalSecurity = mode;
-        try { await window.ccarmy.setSecurityMode(mode); } catch { /* noop */ }
+        try { await window.warmy.setSecurityMode(mode); } catch { /* noop */ }
       }
       refresh();
     });

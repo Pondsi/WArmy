@@ -1,8 +1,8 @@
 /**
  * 自动更新：真实查询 + 真实下载（校验），不伪装成功
  *
- * 之前 `ccarmy:check-update` 恒定返回 { ok:true, upToDate:true }，
- * `ccarmy:auto-update-check/download` 是「no release channel configured」占位。
+ * 之前 `warmy:check-update` 恒定返回 { ok:true, upToDate:true }，
+ * `warmy:auto-update-check/download` 是「no release channel configured」占位。
  * 这里做成可验证的真实实现：
  *
  * 1. 更新源可配置（优先 settings.json 的 updateFeedUrl，其次环境变量），未配置时
@@ -13,7 +13,7 @@
  *    **安装未实现**（installImplemented:false），不提供看似可用的空壳。
  *
  * 更新源清单（feed）支持两种真实形态：
- *   A. 通用 JSON：{ "version": "0.2.0", "url": "https://…/CCArmy-0.2.0.exe",
+ *   A. 通用 JSON：{ "version": "0.2.0", "url": "https://…/WArmy-0.2.0.exe",
  *                   "sha256": "…", "size": 12345, "notes": "…", "mandatory": false }
  *      （也接受 latest/latestVersion、downloadUrl/download_url/asset、checksum/hash、
  *        sizeBytes/bytes、releaseNotes/body、force、publishedAt/published_at/date）
@@ -37,7 +37,7 @@ export type UpdateStatus =
   | 'invalid-response'
   | 'updater-unavailable';
 
-/** electron-updater 风格状态，保留给 ccarmy:auto-update-check */
+/** electron-updater 风格状态，保留给 warmy:auto-update-check */
 export type AutoUpdateStatus = 'available' | 'not-available' | 'error' | 'not-configured' | 'unavailable';
 
 export type DownloadStatus =
@@ -67,7 +67,7 @@ export interface UpdateCheckResult {
   status: UpdateStatus;
   autoUpdateStatus: AutoUpdateStatus;
   currentVersion: string;
-  /** 兼容旧 `ccarmy:check-update` 的 { version } 字段：当前版本 */
+  /** 兼容旧 `warmy:check-update` 的 { version } 字段：当前版本 */
   version: string;
   latestVersion?: string;
   updateAvailable?: boolean;
@@ -459,7 +459,7 @@ function fileNameFromUrl(raw: string, version: string): string {
   } catch {
     /* 用兜底名 */
   }
-  return `ccarmy-${sanitizeSegment(version)}-update.bin`;
+  return `warmy-${sanitizeSegment(version)}-update.bin`;
 }
 
 export class Updater {
@@ -485,7 +485,7 @@ export class Updater {
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.downloadTimeoutMs = opts.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
     this.maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
-    this.userAgent = opts.userAgent || `CCArmy/${this.currentVersion}`;
+    this.userAgent = opts.userAgent || `WArmy/${this.currentVersion}`;
     this.log = opts.log || (() => {});
   }
 
@@ -504,7 +504,7 @@ export class Updater {
       if (!v.ok) return { url: null, origin: 'settings', channel: fromSettings.channel, error: v.error };
       return { url: v.url, origin: 'settings', channel: fromSettings.channel };
     }
-    const fromEnv = str(this.env['CCARMY_UPDATE_FEED_URL']);
+    const fromEnv = str(this.env['WARMY_UPDATE_FEED_URL']);
     if (fromEnv) {
       const v = validateFeedUrl(fromEnv);
       if (!v.ok) return { url: null, origin: 'env', channel: '', error: v.error };

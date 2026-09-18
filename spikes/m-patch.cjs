@@ -1,41 +1,41 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 
 // ── M. 群成员管理 IPC ──
-if (!m.includes('ccarmy:group-members')) {
+if (!m.includes('warmy:group-members')) {
   m += `
 
 // ── M. 群成员管理 ──
 const groupMembers = new Map<string, Array<{ id: string; name: string; role: string; joinedAt: number }>>();
-ipcMain.handle('ccarmy:group-members', (_e, groupId: string) => ({
+ipcMain.handle('warmy:group-members', (_e, groupId: string) => ({
   ok: true,
   members: groupMembers.get(groupId) || [],
 }));
-ipcMain.handle('ccarmy:group-invite', (_e, payload: { groupId: string; name: string; role?: string }) => {
+ipcMain.handle('warmy:group-invite', (_e, payload: { groupId: string; name: string; role?: string }) => {
   const list = groupMembers.get(payload.groupId) || [];
   if (list.length >= 50) return { ok: false, error: 'max 50' };
   list.push({ id: 'm-' + Date.now(), name: payload.name, role: payload.role || 'member', joinedAt: Date.now() });
   groupMembers.set(payload.groupId, list);
   return { ok: true, members: list };
 });
-ipcMain.handle('ccarmy:group-kick', (_e, payload: { groupId: string; memberId: string }) => {
+ipcMain.handle('warmy:group-kick', (_e, payload: { groupId: string; memberId: string }) => {
   const list = groupMembers.get(payload.groupId) || [];
   const next = list.filter((x) => x.id !== payload.memberId);
   groupMembers.set(payload.groupId, next);
   return { ok: true, members: next };
 });
-ipcMain.handle('ccarmy:group-set-admin', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
+ipcMain.handle('warmy:group-set-admin', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
   const list = groupMembers.get(payload.groupId) || [];
   const m = list.find((x) => x.id === payload.memberId);
   if (m) m.role = payload.admin ? 'admin' : 'member';
   groupMembers.set(payload.groupId, list);
   return { ok: true, members: list };
 });
-ipcMain.handle('ccarmy:group-directed', (_e, payload: { groupId: string; directed: boolean }) => {
+ipcMain.handle('warmy:group-directed', (_e, payload: { groupId: string; directed: boolean }) => {
   const g = router.getGroup(payload.groupId);
   if (!g) return { ok: false, error: 'no group' };
   g.directedMode = payload.directed;
@@ -46,11 +46,11 @@ ipcMain.handle('ccarmy:group-directed', (_e, payload: { groupId: string; directe
 }
 
 // ── N. 会话内嵌看板（只读展示，值班者写入） ──
-if (!m.includes('ccarmy:board-session')) {
+if (!m.includes('warmy:board-session')) {
   m += `
 
 // ── N. 会话内嵌看板 ──
-ipcMain.handle('ccarmy:board-session', (_e, groupId: string) => ({
+ipcMain.handle('warmy:board-session', (_e, groupId: string) => ({
   ok: true,
   tasks: board?.listTasks(groupId) || [],
   events: (board?.tailEvents(20) || []).filter((e) => e.groupId === groupId),
@@ -60,11 +60,11 @@ ipcMain.handle('ccarmy:board-session', (_e, groupId: string) => ({
 }
 
 // ── O. CCR 工具输出压缩 ──
-if (!m.includes('ccarmy:ccr-tool-output')) {
+if (!m.includes('warmy:ccr-tool-output')) {
   m += `
 
 // ── O. CCR 工具输出压缩 ──
-ipcMain.handle('ccarmy:ccr-tool-output', (_e, payload: { toolName?: string; content: string }) => {
+ipcMain.handle('warmy:ccr-tool-output', (_e, payload: { toolName?: string; content: string }) => {
   const r = ccr.beforeLog({ kind: 'tool_result', content: payload.content, toolName: payload.toolName });
   metrics.recordCcr({ ts: Date.now(), kind: 'tool_result', originalBytes: r.originalBytes, compressedBytes: r.compressedBytes });
   return { ok: true, ...r };
@@ -74,11 +74,11 @@ ipcMain.handle('ccarmy:ccr-tool-output', (_e, payload: { toolName?: string; cont
 }
 
 // ── P. 知识库详情 ──
-if (!m.includes('ccarmy:kb-detail')) {
+if (!m.includes('warmy:kb-detail')) {
   m += `
 
 // ── P. 知识库详情 ──
-ipcMain.handle('ccarmy:kb-detail', (_e, q: string) => {
+ipcMain.handle('warmy:kb-detail', (_e, q: string) => {
   const r = knowledge?.query(q) || { entities: [], events: [] };
   return {
     ok: true,
@@ -91,7 +91,7 @@ ipcMain.handle('ccarmy:kb-detail', (_e, q: string) => {
 }
 
 // ── Q. 错误提示与重试（主进程暴露 last error） ──
-if (!m.includes('ccarmy:last-error')) {
+if (!m.includes('warmy:last-error')) {
   m = m.replace(
     "const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];",
     `const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
@@ -100,8 +100,8 @@ let lastError: { ts: number; message: string; context?: string } | null = null;`
   m += `
 
 // ── Q. 错误提示 ──
-ipcMain.handle('ccarmy:last-error', () => ({ ok: true, error: lastError }));
-ipcMain.handle('ccarmy:clear-error', () => { lastError = null; return { ok: true }; });
+ipcMain.handle('warmy:last-error', () => ({ ok: true, error: lastError }));
+ipcMain.handle('warmy:clear-error', () => { lastError = null; return { ok: true }; });
 `;
   // chat-send 错误时记录
   m = m.replace(
@@ -112,15 +112,15 @@ ipcMain.handle('ccarmy:clear-error', () => { lastError = null; return { ok: true
 }
 
 // ── R. 启动引导 ──
-if (!m.includes('ccarmy:setup-state')) {
+if (!m.includes('warmy:setup-state')) {
   m += `
 
 // ── R. 启动引导 ──
-ipcMain.handle('ccarmy:setup-state', () => {
+ipcMain.handle('warmy:setup-state', () => {
   const s = settingsStore?.load() as Record<string, unknown> | undefined;
   return { ok: true, done: !!(s as { setupDone?: boolean })?.setupDone, locale: s?.locale || app.getLocale() };
 });
-ipcMain.handle('ccarmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
+ipcMain.handle('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
   if (payload.locale) settingsStore?.save({ locale: payload.locale } as never);
   if (payload.provider) {
     // 预填 provider
@@ -144,20 +144,20 @@ fs.writeFileSync(base + 'electron-main.ts', m);
 // preload
 if (!p.includes('groupMembers')) {
   p = p.replace(
-    "  autoUpdateCheck: () => ipcRenderer.invoke('ccarmy:auto-update-check'),",
-    `  autoUpdateCheck: () => ipcRenderer.invoke('ccarmy:auto-update-check'),
-  groupMembers: (groupId) => ipcRenderer.invoke('ccarmy:group-members', groupId),
-  groupInvite: (payload) => ipcRenderer.invoke('ccarmy:group-invite', payload),
-  groupKick: (payload) => ipcRenderer.invoke('ccarmy:group-kick', payload),
-  groupSetAdmin: (payload) => ipcRenderer.invoke('ccarmy:group-set-admin', payload),
-  groupDirected: (payload) => ipcRenderer.invoke('ccarmy:group-directed', payload),
-  boardSession: (groupId) => ipcRenderer.invoke('ccarmy:board-session', groupId),
-  ccrToolOutput: (payload) => ipcRenderer.invoke('ccarmy:ccr-tool-output', payload),
-  kbDetail: (q) => ipcRenderer.invoke('ccarmy:kb-detail', q),
-  lastError: () => ipcRenderer.invoke('ccarmy:last-error'),
-  clearError: () => ipcRenderer.invoke('ccarmy:clear-error'),
-  setupState: () => ipcRenderer.invoke('ccarmy:setup-state'),
-  setupComplete: (payload) => ipcRenderer.invoke('ccarmy:setup-complete', payload),`
+    "  autoUpdateCheck: () => ipcRenderer.invoke('warmy:auto-update-check'),",
+    `  autoUpdateCheck: () => ipcRenderer.invoke('warmy:auto-update-check'),
+  groupMembers: (groupId) => ipcRenderer.invoke('warmy:group-members', groupId),
+  groupInvite: (payload) => ipcRenderer.invoke('warmy:group-invite', payload),
+  groupKick: (payload) => ipcRenderer.invoke('warmy:group-kick', payload),
+  groupSetAdmin: (payload) => ipcRenderer.invoke('warmy:group-set-admin', payload),
+  groupDirected: (payload) => ipcRenderer.invoke('warmy:group-directed', payload),
+  boardSession: (groupId) => ipcRenderer.invoke('warmy:board-session', groupId),
+  ccrToolOutput: (payload) => ipcRenderer.invoke('warmy:ccr-tool-output', payload),
+  kbDetail: (q) => ipcRenderer.invoke('warmy:kb-detail', q),
+  lastError: () => ipcRenderer.invoke('warmy:last-error'),
+  clearError: () => ipcRenderer.invoke('warmy:clear-error'),
+  setupState: () => ipcRenderer.invoke('warmy:setup-state'),
+  setupComplete: (payload) => ipcRenderer.invoke('warmy:setup-complete', payload),`
   );
   fs.writeFileSync(base + 'preload.cjs', p);
   console.log('preload M-R');
@@ -192,7 +192,7 @@ if (!j.includes('refreshSessionBoard')) {
     `  async function refreshSessionBoard() {
     const box = $('board-sess-box');
     if (!box || !state.selectedChat) return;
-    const r = await window.ccarmy.boardSession(state.selectedChat.id).catch(() => null);
+    const r = await window.warmy.boardSession(state.selectedChat.id).catch(() => null);
     const tasks = r?.tasks || [];
     box.innerHTML = tasks.length
       ? tasks.map((t) => '<div>' + escapeHtml(t.title) + ' · ' + (t.progress || 0) + '% · ' + t.status + '</div>').join('')
@@ -201,7 +201,7 @@ if (!j.includes('refreshSessionBoard')) {
   async function refreshMembers() {
     const box = $('members-box');
     if (!box || !state.selectedChat) return;
-    const r = await window.ccarmy.groupMembers(state.selectedChat.id).catch(() => null);
+    const r = await window.warmy.groupMembers(state.selectedChat.id).catch(() => null);
     const ms = r?.members || [];
     box.innerHTML = ms.length
       ? ms.map((x) => '<div>' + escapeHtml(x.name) + ' · ' + x.role + '</div>').join('')
@@ -210,7 +210,7 @@ if (!j.includes('refreshSessionBoard')) {
   $('btn-member-add')?.addEventListener('click', async () => {
     const name = $('member-name')?.value?.trim();
     if (!name || !state.selectedChat) return;
-    await window.ccarmy.groupInvite({ groupId: state.selectedChat.id, name });
+    await window.warmy.groupInvite({ groupId: state.selectedChat.id, name });
     $('member-name').value = '';
     refreshMembers();
   });
@@ -218,15 +218,15 @@ if (!j.includes('refreshSessionBoard')) {
 
   // Q. 错误重试
   async function checkLastError() {
-    const r = await window.ccarmy.lastError().catch(() => null);
+    const r = await window.warmy.lastError().catch(() => null);
     if (r?.error) {
       // 简单提示 + 可重试
       const ok = await uiConfirm(t('common.error') + ': ' + r.error.message.slice(0, 80) + ' · ' + t('common.retry'), t('common.error'));
       if (ok && state.selectedChat) {
-        await window.ccarmy.clearError();
+        await window.warmy.clearError();
         send();
       } else {
-        await window.ccarmy.clearError();
+        await window.warmy.clearError();
       }
     }
   }
@@ -234,11 +234,11 @@ if (!j.includes('refreshSessionBoard')) {
 
   // R. 启动引导
   async function maybeShowSetup() {
-    const st = await window.ccarmy.setupState().catch(() => null);
+    const st = await window.warmy.setupState().catch(() => null);
     if (!st || st.done) return;
     const locale = await uiPrompt(t('settings.language'), 'zh-CN');
-    if (locale) await window.ccarmy.setupComplete({ locale });
-    else await window.ccarmy.setupComplete({});
+    if (locale) await window.warmy.setupComplete({ locale });
+    else await window.warmy.setupComplete({});
     uiAlert(t('instances.saved'));
   }
   maybeShowSetup();

@@ -44,7 +44,7 @@ import {
   SecureSyncServer,
   classifyAddress,
   classifyIpv6Scope,
-  ccarmyFingerprint,
+  warmyFingerprint,
   createEphemeralIdentity,
   decideRelay,
   dialTcpDetailed,
@@ -88,8 +88,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const here = path.dirname(fileURLToPath(import.meta.url));
 const childScript = path.join(here, 'connectivity-child.mjs');
 
-const MARKER_SEND = 'CCARMY-RELAY-PLAINTEXT-MARKER-SEND-9f3a71';
-const MARKER_REPLY = 'CCARMY-RELAY-PLAINTEXT-MARKER-REPLY-4c2b88';
+const MARKER_SEND = 'WARMY-RELAY-PLAINTEXT-MARKER-SEND-9f3a71';
+const MARKER_REPLY = 'WARMY-RELAY-PLAINTEXT-MARKER-REPLY-4c2b88';
 
 /**
  * 子进程（connectivity-child.mjs）用**每次运行随机生成**的 32 字节 seed 派生身份：
@@ -97,7 +97,7 @@ const MARKER_REPLY = 'CCARMY-RELAY-PLAINTEXT-MARKER-REPLY-4c2b88';
  */
 function fingerprintFromSeedHex(hex) {
   const seed = sha256(Buffer.from(hex, 'utf8'));
-  return ccarmyFingerprint(ed25519FromSeed(seed).publicKey);
+  return warmyFingerprint(ed25519FromSeed(seed).publicKey);
 }
 
 /* ────────────────────────── 通用工具 ────────────────────────── */
@@ -776,7 +776,7 @@ async function main() {
   /* ══════════════ [9] 真多进程 ══════════════ */
   group('[9] 真多进程：中继进程 + 两个"不可拨入"的端点进程（A→中继→B）');
   {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-conn-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-conn-'));
     const children = [];
     const spawnChild = (role, extra = []) => {
       const out = path.join(tmpDir, `${role}-${Math.random().toString(36).slice(2, 8)}.json`);

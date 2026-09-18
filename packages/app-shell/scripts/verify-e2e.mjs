@@ -5,14 +5,14 @@
  *
  * 做三件事：
  *   1. 把 dist 拷到临时目录跑真实主进程（用户数据目录也是临时的），
- *      通过 CDP 调用渲染进程里的 window.ccarmy.*，走完整 IPC 链路。
+ *      通过 CDP 调用渲染进程里的 window.warmy.*，走完整 IPC 链路。
  *   2. 第一轮：设置更新源（本地 HTTP 更新源）→ check-update 各分支 → 下载校验；
  *      建群 → 邀请成员 → group-list / group-members。
  *   3. 关闭进程，用**同一个 userData 目录**再起一次：group-list / group-members
  *      必须还在（真实重启持久化），更新源也必须还在。
  *
  * 说明：为了让临时副本能启动，会 patch 两行与本次改动无关的代码（真实源码不动）：
- *   - 去掉重复注册的 ccarmy:clear-error（Electron 会因重复注册抛异常）
+ *   - 去掉重复注册的 warmy:clear-error（Electron 会因重复注册抛异常）
  *   - 去掉 app.setAsDefaultProtocolClient（避免改到本机注册表）
  */
 import { execFileSync, spawn } from 'node:child_process';
@@ -37,7 +37,7 @@ function check(label, cond, detail) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── 本地更新源 ──
-const ARTIFACT = Buffer.from('CCArmy e2e installer payload 无限牛马\n'.repeat(64), 'utf8');
+const ARTIFACT = Buffer.from('WArmy e2e installer payload 无限牛马\n'.repeat(64), 'utf8');
 const ARTIFACT_SHA = crypto.createHash('sha256').update(ARTIFACT).digest('hex');
 let port = 0;
 const server = http.createServer((req, res) => {
@@ -76,7 +76,7 @@ console.log(`本地更新源: ${feedUrl}\n构件 ${ARTIFACT.length} 字节 sha25
 
 // ── 准备临时可运行副本 ──
 const electronPath = require('electron');
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-e2e-'));
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-e2e-'));
 const appRoot = path.join(tmpRoot, 'app');
 fs.mkdirSync(appRoot, { recursive: true });
 fs.cpSync(path.join(pkgRoot, 'dist'), path.join(appRoot, 'dist'), { recursive: true });
@@ -91,7 +91,7 @@ let dedupRemoved = 0;
 let protocolPatched = 0;
 const patched = [];
 for (const line of lines) {
-  if (line.includes("ipcMain.handle('ccarmy:clear-error'")) {
+  if (line.includes("ipcMain.handle('warmy:clear-error'")) {
     if (seenClearError) {
       dedupRemoved++;
       continue; // 丢掉重复注册那一行
@@ -108,7 +108,7 @@ for (const line of lines) {
 fs.writeFileSync(mainFile, patched.join('\n'), 'utf8');
 
 // 工作区包用 junction 链到真实包目录（临时副本没有 pnpm 的 node_modules）
-const nmDir = path.join(appRoot, 'node_modules', '@ccarmy');
+const nmDir = path.join(appRoot, 'node_modules', '@warmy');
 fs.mkdirSync(nmDir, { recursive: true });
 const linked = [];
 for (const pkg of ['contracts', 'providers', 'group-router', 'board', 'ccr-compressor', 'knowledge-base', 'sync-protocol', 'dsh-runtime', 'asset-governance']) {
@@ -178,7 +178,7 @@ async function connect(devtoolsPort, appPrefix) {
   let ready = false;
   while (Date.now() < readyDeadline && !ready) {
     try {
-      ready = await evaluate(`(async () => { try { const r = await window.ccarmy.appInfo(); return !!(r && r.ok); } catch { return false; } })()`);
+      ready = await evaluate(`(async () => { try { const r = await window.warmy.appInfo(); return !!(r && r.ok); } catch { return false; } })()`);
     } catch {
       /* 渲染进程还没就绪 */
     }
@@ -244,9 +244,9 @@ console.log('\n[第一轮] 启动真实 Electron 主进程');
 const app1 = await launchApp('run1');
 const q = (expr) => app1.cdp.evaluate(expr);
 const call = (api, ...args) =>
-  q(`(async () => { try { return await window.ccarmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
+  q(`(async () => { try { return await window.warmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
 
-const info = await q('(async () => await window.ccarmy.appInfo())()');
+const info = await q('(async () => await window.warmy.appInfo())()');
 check('preload 暴露 appInfo（真实 IPC 通）', info?.ok === true, { version: info?.version, electron: info?.electron });
 
 console.log('\n[第一轮 A] check-update：未配置 / 有更新 / 网络失败 / 响应非法');
@@ -320,7 +320,7 @@ console.log('\n[第二轮] 用同一个 userData 目录重启，检查是否还�
 const app2 = await launchApp('run2');
 const q2 = (expr) => app2.cdp.evaluate(expr);
 const call2 = (api, ...args) =>
-  q2(`(async () => { try { return await window.ccarmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
+  q2(`(async () => { try { return await window.warmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
 
 const g2 = await call2('groupList');
 check('重启后 group-list 仍有 g-e2e（真实持久化）', g2.ok === true && g2.count === 1 && g2.groups[0].groupId === 'g-e2e', g2.groups);
@@ -346,7 +346,7 @@ const g4 = await call2('groupList');
 check('解散后 group-list 为空（存储删除）', d.ok === true && g4.count === 0, { dissolve: d, count: g4.count });
 await killApp(app2, 'run2');
 
-const bootLog = path.join(userData, 'ccarmy-boot.log');
+const bootLog = path.join(userData, 'warmy-boot.log');
 if (fs.existsSync(bootLog)) {
   const log = fs.readFileSync(bootLog, 'utf8').trim().split('\n');
   console.log('\n[主进程 boot 日志摘录（groups / updater 相关）]');

@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const root = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/';
+const root = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/';
 
 // Fix TS
 const p = root + 'packages/app-shell/src/electron-main.ts';

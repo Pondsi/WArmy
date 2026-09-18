@@ -11,7 +11,7 @@
  *   [4] 公开目录发布扫描（邮箱 / 密钥 / 聊天日志 / 成员名册 / 本机绝对路径）
  *   [5] 租约仲裁（无租约被拒、持有通过、他人冲突被拒、过期自动失效、越权释放/续租）
  *
- * 依赖 dist（先 `pnpm --filter @ccarmy/app-shell build`）。不联网、不碰电子主进程、不影响仓库本体。
+ * 依赖 dist（先 `pnpm --filter @warmy/app-shell build`）。不联网、不碰电子主进程、不影响仓库本体。
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -22,7 +22,7 @@ import { LeaseRegistry } from '../dist/lease.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const keep = process.argv.includes('--keep');
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-repo-guard-'));
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-repo-guard-'));
 
 let pass = 0;
 let fail = 0;
@@ -349,7 +349,7 @@ fs.writeFileSync(
 );
 fs.writeFileSync(path.join(dirtyDir, 'secret.pem'), '-----BEGIN OPENSSH PRIVATE KEY-----\nAAAAB3NzaC1yc2E\n-----END OPENSSH PRIVATE KEY-----\n', 'utf8');
 fs.writeFileSync(path.join(dirtyDir, '.env'), 'API_KEY=abcdef123456\n', 'utf8');
-fs.writeFileSync(path.join(dirtyDir, 'docs', 'config.md'), '本机路径：D:\\Projects\\CCArmy\\本体\n', 'utf8');
+fs.writeFileSync(path.join(dirtyDir, 'docs', 'config.md'), '本机路径：D:\\Projects\\WArmy\\本体\n', 'utf8');
 fs.writeFileSync(path.join(dirtyDir, 'src', 'transcript.ts'), 'const h = [{"role": "user", "content": "hi"}];\n', 'utf8');
 fs.writeFileSync(path.join(dirtyDir, 'src', 'cred.ts'), `const token = "ghp_${'a'.repeat(30)}";\n`, 'utf8');
 fs.writeFileSync(path.join(dirtyDir, 'src', 'mail.ts'), 'export const mail = "bob@corp.example.cn";\n', 'utf8');

@@ -407,7 +407,7 @@ async function main() {
     check('requireInjectedVerify=true 且注入 verify 恒假 → 拒绝', reason === 'signature-invalid', reason);
   }
   {
-    const file = path.join(process.env.TEMP || process.env.TMPDIR || '/tmp', `ccarmy-replay-${Date.now()}.json`);
+    const file = path.join(process.env.TEMP || process.env.TMPDIR || '/tmp', `warmy-replay-${Date.now()}.json`);
     const g1 = new ReplayGuard({ persistFile: file });
     const c1 = g1.nextLocalCounter();
     const g2 = new ReplayGuard({ persistFile: file });

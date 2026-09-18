@@ -9,8 +9,8 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dshHome = path.join(os.tmpdir(), `ccarmy-dsh-home-${Date.now()}`);
-const profile = 'ccarmy-spike5';
+const dshHome = path.join(os.tmpdir(), `warmy-dsh-home-${Date.now()}`);
+const profile = 'warmy-spike5';
 const teamsPkg = path.join(__dirname, 'node_modules', '@nanmicoder', 'dsh-agent-teams');
 const memBundle = path.join(__dirname, 'dsh-memory-plus', 'packages', 'dsh-memory-bundle');
 

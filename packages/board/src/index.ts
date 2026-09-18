@@ -1,5 +1,5 @@
 /**
- * @ccarmy/board — 看板数据模型（ADR P6）
+ * @warmy/board — 看板数据模型（ADR P6）
  * 用户不能直接写看板；仅值班者解析自然语言后写入 board.jsonl
  */
 import fs from 'node:fs';

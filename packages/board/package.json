@@ -1,5 +1,5 @@
 {
-  "name": "@ccarmy/board",
+  "name": "@warmy/board",
   "version": "0.1.0",
   "private": true,
   "description": "看板：board.jsonl 只追加，仅 duty 可写",
@@ -17,6 +17,6 @@
     "typecheck": "tsc -b --pretty"
   },
   "dependencies": {
-    "@ccarmy/contracts": "workspace:*"
+    "@warmy/contracts": "workspace:*"
   }
 }

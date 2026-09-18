@@ -125,7 +125,7 @@ const texts = [
   '值班者状态机与队列编排',
   '记忆服务长驻子进程 IPC',
   'FTS5 中文单字索引短语查询',
-  'Corporate Cattle Army CCArmy',
+  'Workhorse Army WArmy',
 ];
 
 const backends = ['webgpu', 'wasm-simd', 'wasm-nosimd'];

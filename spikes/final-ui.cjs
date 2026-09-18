@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
@@ -8,7 +8,7 @@ let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 
 // ── 1) 标题栏：去掉文字，只留 Logo ──
 h = h.replace(
-  '<span class="tb-brand" id="tb-brand">CCArmy</span>\n        <span class="muted" id="tb-sub"></span>',
+  '<span class="tb-brand" id="tb-brand">WArmy</span>\n        <span class="muted" id="tb-sub"></span>',
   '<div class="tb-logo-cow" id="tb-logo-cow"></div>'
 );
 console.log('titlebar logo');
@@ -20,7 +20,7 @@ console.log('titlebar logo');
 if (!j.includes('brand-strip')) {
   j = j.replace(
     "      box.innerHTML = `\n        <h1>${t('nav.avatar')}</h1>\n        <div class=\"me-strip\">",
-    "      box.innerHTML = `\n        <div class=\"brand-strip\">\n          <div class=\"brand-cow\"><svg viewBox=\"0 0 140 100\" style=\"width:48px;height:34px\"><g><rect x=\"120\" y=\"0\" width=\"10\" height=\"10\" fill=\"#D2B48C\"/><rect x=\"130\" y=\"10\" width=\"10\" height=\"10\" fill=\"#D2B48C\"/><rect x=\"90\" y=\"0\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"100\" y=\"0\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"100\" y=\"10\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"110\" y=\"10\" width=\"10\" height=\"10\" fill=\"#8B5A2B\"/><rect x=\"110\" y=\"20\" width=\"10\" height=\"10\" fill=\"#A0522D\"/><rect x=\"120\" y=\"20\" width=\"10\" height=\"10\" fill=\"#A0522D\"/><rect x=\"110\" y=\"30\" width=\"10\" height=\"10\" fill=\"#A0522D\"/><rect x=\"120\" y=\"30\" width=\"10\" height=\"10\" fill=\"#A0522D\"/><rect x=\"120\" y=\"40\" width=\"10\" height=\"10\" fill=\"#C19A6B\"/><rect x=\"130\" y=\"40\" width=\"10\" height=\"10\" fill=\"#C19A6B\"/><rect x=\"100\" y=\"20\" width=\"10\" height=\"10\" fill=\"#8B5A2B\"/><rect x=\"100\" y=\"30\" width=\"10\" height=\"10\" fill=\"#8B5A2B\"/><rect x=\"20\" y=\"20\" width=\"80\" height=\"30\" fill=\"#A0522D\"/><rect x=\"90\" y=\"50\" width=\"10\" height=\"15\" fill=\"#8B5A2B\"/><rect x=\"100\" y=\"65\" width=\"10\" height=\"15\" fill=\"#8B5A2B\"/><rect x=\"70\" y=\"50\" width=\"10\" height=\"30\" fill=\"#8B5A2B\"/><rect x=\"40\" y=\"50\" width=\"10\" height=\"30\" fill=\"#8B5A2B\"/><rect x=\"20\" y=\"50\" width=\"10\" height=\"15\" fill=\"#8B5A2B\"/><rect x=\"10\" y=\"65\" width=\"10\" height=\"15\" fill=\"#8B5A2B\"/><rect x=\"10\" y=\"30\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"0\" y=\"40\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"0\" y=\"50\" width=\"10\" height=\"10\" fill=\"#3E2723\"/></g></svg></div>\n          <div>\n            <div class=\"brand-name\">无限牛马 CCArmy</div>\n            <div class=\"brand-sub\">Corporate Cattle Army</div>\n          </div>\n        </div>\n        <div class=\"me-strip\">"
+    "      box.innerHTML = `\n        <div class=\"brand-strip\">\n          <div class=\"brand-cow\"><svg viewBox=\"0 0 140 100\" style=\"width:48px;height:34px\"><g><rect x=\"120\" y=\"0\" width=\"10\" height=\"10\" fill=\"#D2B48C\"/><rect x=\"130\" y=\"10\" width=\"10\" height=\"10\" fill=\"#D2B48C\"/><rect x=\"90\" y=\"0\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"100\" y=\"0\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"100\" y=\"10\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"110\" y=\"10\" width=\"10\" height=\"10\" fill=\"#8B5A2B\"/><rect x=\"110\" y=\"20\" width=\"10\" height=\"10\" fill=\"#A0522D\"/><rect x=\"120\" y=\"20\" width=\"10\" height=\"10\" fill=\"#A0522D\"/><rect x=\"110\" y=\"30\" width=\"10\" height=\"10\" fill=\"#A0522D\"/><rect x=\"120\" y=\"30\" width=\"10\" height=\"10\" fill=\"#A0522D\"/><rect x=\"120\" y=\"40\" width=\"10\" height=\"10\" fill=\"#C19A6B\"/><rect x=\"130\" y=\"40\" width=\"10\" height=\"10\" fill=\"#C19A6B\"/><rect x=\"100\" y=\"20\" width=\"10\" height=\"10\" fill=\"#8B5A2B\"/><rect x=\"100\" y=\"30\" width=\"10\" height=\"10\" fill=\"#8B5A2B\"/><rect x=\"20\" y=\"20\" width=\"80\" height=\"30\" fill=\"#A0522D\"/><rect x=\"90\" y=\"50\" width=\"10\" height=\"15\" fill=\"#8B5A2B\"/><rect x=\"100\" y=\"65\" width=\"10\" height=\"15\" fill=\"#8B5A2B\"/><rect x=\"70\" y=\"50\" width=\"10\" height=\"30\" fill=\"#8B5A2B\"/><rect x=\"40\" y=\"50\" width=\"10\" height=\"30\" fill=\"#8B5A2B\"/><rect x=\"20\" y=\"50\" width=\"10\" height=\"15\" fill=\"#8B5A2B\"/><rect x=\"10\" y=\"65\" width=\"10\" height=\"15\" fill=\"#8B5A2B\"/><rect x=\"10\" y=\"30\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"0\" y=\"40\" width=\"10\" height=\"10\" fill=\"#3E2723\"/><rect x=\"0\" y=\"50\" width=\"10\" height=\"10\" fill=\"#3E2723\"/></g></svg></div>\n          <div>\n            <div class=\"brand-name\">无限牛马 WArmy</div>\n            <div class=\"brand-sub\">Workhorse Army</div>\n          </div>\n        </div>\n        <div class=\"me-strip\">"
   );
   console.log('brand strip added');
 }
@@ -40,7 +40,7 @@ console.log('auto-select first chat');
 
 // ── 4) 系统托盘：双击打开，右键仅退出 ──
 m = m.replace(
-  `    t.setToolTip('CCArmy');
+  `    t.setToolTip('WArmy');
     t.setContextMenu(
       Menu.buildFromTemplate([
         { label: '显示主窗口', click: () => { win?.show(); win?.focus(); } },
@@ -52,7 +52,7 @@ m = m.replace(
       if (win?.isVisible()) win.hide();
       else { win?.show(); win?.focus(); }
     });`,
-  `    t.setToolTip('CCArmy');
+  `    t.setToolTip('WArmy');
     // 右键仅「退出」
     t.setContextMenu(
       Menu.buildFromTemplate([

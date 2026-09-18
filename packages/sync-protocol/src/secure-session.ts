@@ -299,7 +299,7 @@ export interface SecureSyncServerOptions {
   peerFingerprint?: string | null;
   /**
    * 指纹推导（公钥 → 指纹）。**接线方必须注入身份层那一套**：
-   * 默认 `ccarmyFingerprint` 是 base32(sha256(raw 32B))，而现有身份层是
+   * 默认 `warmyFingerprint` 是 base32(sha256(raw 32B))，而现有身份层是
    * 「sha256(SPKI DER) → base32 前 20 位 + 校验位」—— 不注入会让**每一条**合法连接
    * 在 `normalizeIdentity()` / `checkPeerIdentity()` 处以 fingerprint-mismatch 被拒。
    */

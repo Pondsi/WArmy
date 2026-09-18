@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: blob:" />
-  <title>CCArmy</title>
+  <title>WArmy</title>
   <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
@@ -11,6 +11,8 @@
     <div id="titlebar">
       <div class="tb-drag">
         <div class="tb-logo" id="tb-logo" aria-hidden="true"><img src="./icons/logo-64.png" alt="" class="tb-logo-img"/></div>
+        <!-- Owner rule: this titlebar line is logo + tagline ONLY (app.js fills #tb-brand with brand.tagline). -->
+        <span class="tb-brand" id="tb-brand"></span>
       </div>
       <div class="tb-actions" id="tb-actions">
         <button id="btn-always-top" title="置顶窗口" aria-label="always on top" data-i18n-title="tip.pin">
@@ -62,7 +64,9 @@
       <header class="list-head">
         <h2 id="list-title">—</h2>
         <div class="list-head-actions" id="list-head-actions" style="display:flex;gap:6px;align-items:center">
-          <button id="btn-join-qr" class="btn-mini hidden" data-i18n="join.scanQr" data-i18n-title="join.qrHint"></button>
+          <!-- 标签由 setupListAction 按页面设置（联系人页=添加联系人，项目/群聊=新建），
+               所以不要挂 static data-i18n，否则切换语言时会把它改回「扫码加入」 -->
+          <button id="btn-join-qr" class="btn-mini hidden" data-i18n-title="join.qrHint"></button>
           <button id="list-action" class="btn-mini hidden"></button>
         </div>
       </header>
@@ -80,7 +84,7 @@
         <div class="logo-mark">
           <div class="logo-glyph"><svg viewBox="0 0 140 100" style="width:96px;height:68px"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/><rect x="100" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="70" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="40" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="10" y="75" width="10" height="5" fill="#1A1A1A"/></g></svg></div>
           <div class="logo-name" id="logo-name">无限牛马</div>
-          <div class="logo-sub" id="logo-sub">Corporate Cattle Army</div>
+          <div class="logo-sub" id="logo-sub">Workhorse Army</div>
         </div>
       </div>
 
@@ -92,8 +96,16 @@
               <div class="chat-meta" id="chat-meta"></div>
             </div>
             <div class="chat-actions">
-              <button id="btn-console" class="btn-icon" data-i18n-title="tip.console" aria-label="console">
+              <!-- 诊断事件流（T194，**已降级为独立的排障视图**）：这是本机事件日志，
+                   不是控制台。控制台 = 容器内的 shell（右边的 btn-container-shell）。 -->
+              <button id="btn-console" class="btn-icon" data-i18n-title="tip.console" aria-label="diagnostic event stream">
                 <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="16" width="80" height="68" rx="6"/><polyline points="28,40 42,52 28,64"/><line x1="50" y1="64" x2="72" y2="64"/></g></svg>
+              </button>
+              <!-- ADR 004 P4 定稿：**控制台就是容器内的控制台**（其价值是给主机带来安全性防护）。
+                   硬约束：只在「项目 / 我的牛马」里、且容器真的就绪时才可用；否则置灰并给出
+                   诚实原因（见 app.js 的 refreshContainerConsoleGate / openContainerShell）。 -->
+              <button id="btn-container-shell" class="btn-icon" data-i18n-title="container.console.tip" aria-label="in-container shell console" disabled>
+                <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="24" width="84" height="56" rx="6"/><line x1="22" y1="48" x2="46" y2="48"/><circle cx="60" cy="48" r="5" fill="currentColor" stroke="none"/><circle cx="76" cy="48" r="5" fill="currentColor" stroke="none"/></g></svg>
               </button>
               <div class="urg-dd" id="sec-dd">
                 <button class="urg-trigger" id="sec-trigger" type="button" data-i18n-title="chat.security">
@@ -113,6 +125,9 @@
                 </button>
                 <div class="urg-menu more-menu-panel hidden" id="more-menu" role="menu">
                   <button type="button" id="mi-search" data-i18n="list.search"></button>
+                  <!-- ADR 004 第七批：「在容器中开发」是**创建项目时**选的开发环境，不是菜单里能随时开关的选项；
+                       「运行/测试在容器中」这个选项已作废删除（容器 = 开发环境，测试/运行不在其职责内）。
+                       启用/停用项目与切换容器都在**项目右键菜单**里。 -->
                   <button type="button" id="mi-directed" class="more-menu-btn"><span data-i18n="group.directed"></span><span id="mi-directed-mark" class="mark">✕</span></button>
                   <button type="button" id="mi-open" data-i18n="chat.openWindow"></button>
                   <button type="button" id="mi-export" data-i18n="chat.export"></button>
@@ -129,9 +144,35 @@
             </div>
             <ul id="queue-items" class="queue-items"></ul>
           </div>
+          <!-- 诊断事件流（T194）：**不是控制台**，是排障用的本机事件日志；
+               标题与说明由 app.js 按 i18n 渲染（console.diag.*），与容器控制台面板分开。 -->
           <div id="console-pane" class="console-pane hidden">
             <div id="console-top-resizer" class="console-resizer"></div>
-            <pre id="console-out" class="console-out"></pre>
+            <div class="console-head">
+              <span id="console-hint" class="console-hint"></span>
+              <button type="button" id="console-clear" class="console-clear" data-i18n-title="console.clearTip"></button>
+            </div>
+            <pre id="console-out" class="console-out" role="log" aria-live="polite"></pre>
+          </div>
+          <!-- 控制台 = **容器内的 shell**（ADR 004 P4 定稿）：与上面的诊断视图**分开**。
+               价值是给主机带来安全性防护：AI 生成的命令跑在容器边界内，不在主机上跑。
+               现在容器里还没有项目镜像，所以这里如实说明"为什么还开不了"，
+               并且**输入行是禁用的**（一条命令都不会执行），不给假 shell、也不回退成事件日志。 -->
+          <div id="ctg-shell-pane" class="console-pane hidden">
+            <div class="console-head">
+              <span id="ctg-shell-hint" class="console-hint"></span>
+              <!-- 状态行：就绪/未就绪 + 运行时 + 门禁原因（全走 i18n） -->
+              <span id="ctg-shell-status" class="console-hint ctg-dim" data-shell-state="unknown"></span>
+              <button type="button" id="ctg-shell-close" class="console-clear" data-i18n-title="common.close"></button>
+            </div>
+            <pre id="ctg-shell-out" class="console-out" role="log" aria-live="polite"></pre>
+            <!-- 只有本机的人手动输入；远程对端/群成员/智能体没有任何注入路径；
+                 输入行在容器未就绪时**禁用**（不是"能敲但被忽略"）。 -->
+            <div class="ctg-shell-input-row">
+              <input id="ctg-shell-input" type="text" data-i18n-placeholder="container.console.inputPlaceholder" spellcheck="false" disabled />
+              <button type="button" id="ctg-shell-send" data-i18n="container.console.run" disabled></button>
+              <span id="ctg-shell-note" class="ctg-dim" data-shell-note="none"></span>
+            </div>
           </div>
           <div id="input-top-resizer" class="console-resizer input-resizer"></div>
           <footer class="composer">
@@ -168,9 +209,27 @@
               </div>
             </div>
           </footer>
+          <!-- R3：聊天区与右栏之间的竖分隔条（放在 #chat-col 右缘，和 #col-resizer 同一套做法；
+               放在 #panel-col 里会被它的 overflow:auto 裁掉，拖不到） -->
+          <div id="panel-resizer" data-i18n-title="tip.splitHint"></div>
         </section>
         <aside id="panel-col">
-          <div id="panel-resizer" title="拖动调整宽度" data-i18n-title="tip.dragWidth"></div>
+          <!-- ADR 004 第七批：右栏顶部**只有只读的项目状态**（动作都在项目右键菜单里）。
+               产品主明确：**不要**把"切换容器"放在右侧顶部 —— 切换容器在项目的右键菜单里。
+               只出现在「项目」与「我的牛马」（data-only="proj-single"）。 -->
+          <div class="panel-block" id="project-state-block" data-only="proj-single">
+            <h3 data-i18n="panel.projectState"></h3>
+            <div id="project-state-box"></div>
+            <div class="ctg-dim" id="project-state-msg"></div>
+          </div>
+
+          <!-- ADR 004 第七批新增三块（真实数据）：最近改动文件 / 其他文件 / 生成的产品。
+               数据来自主进程 warmy:project-files（checkpoint 明细 + 产物目录扫描）；
+               拿不到就如实显示空态与原因，**绝不用演示数据充数**。 -->
+          <div class="panel-block" id="project-files-block" data-only="proj-single">
+            <h3 data-i18n="panel.projectFiles"></h3>
+            <div id="project-files-box"></div>
+          </div>
 
           <!-- 进度（折叠：百分比条；展开：任务列表） -->
           <div class="panel-block">
@@ -180,13 +239,9 @@
               <span id="progress-text" class="muted">0%</span>
               <span class="chev">›</span>
             </div>
-            <ul id="task-list" class="task-list hidden">
-              <li class="task-done"><span data-i18n="panel.taskDemo.1"></span> <span class="dot done"></span></li>
-              <li class="task-fail"><span data-i18n="panel.taskDemo.2"></span> <span class="dot fail"></span></li>
-              <li class="task-active"><span data-i18n="panel.taskDemo.3"></span> <span class="dot active"></span></li>
-              <li><span data-i18n="panel.taskDemo.4"></span> <span class="dot"></span></li>
-              <li class="task-abandoned"><span data-i18n="panel.taskDemo.5"></span> <span class="dot fail"></span></li>
-            </ul>
+            <!-- 任务列表内容由 app.js 的 renderProgressTasks() 填**真任务**（看板任务）；
+                 这里不再放写死的演示任务 —— 那会让人以为"任务真的在跑"。 -->
+            <ul id="task-list" class="task-list hidden"></ul>
           </div>
 
           <!-- 模型管理（我的牛马 / 项目 / 群聊 都显示） -->
@@ -194,6 +249,10 @@
             <h3 data-i18n="panel.modelMgr"></h3>
             <div id="model-mgr"></div>
           </div>
+
+          <!-- ADR 004 P2/P3：运行/测试环境（容器）——只在「我的牛马」与「项目」里出现；
+               联系人与群聊用不到容器，故由 app.js 置灰/隐藏（data-only="proj-single"）。
+               入口已按产品主要求挪到聊天「…」菜单里；这里只保留"当前容器"下拉框（在右栏最上面）。 -->
 
           <!-- 项目目录（仅项目/群聊） -->
           <div class="panel-block only-group">
@@ -277,6 +336,14 @@
       <div class="modal-actions" id="modal-actions"></div>
     </div>
   </div>
+  <!-- 二维码编码器 + 解码器：都是 vendored 的**经典脚本**（非 ESM，全局 `qrcode` / `jsQR`）。
+       file:// + CSP `script-src 'self'` 下这是唯一可行的加载方式：本轮在真实 dist 产物上复现过
+       —— 动态 import 与 module 脚本都被拦。两者都必须排在 app.js 之前。
+       解码器（jsqr-1.4.0，Apache-2.0，许可证就在同目录）用于「扫别人的二维码」：
+       用户选/拖/粘一张图 -> canvas -> getImageData -> jsQR，全程本机、零联网。
+       Apache-2.0 要求随发行保留许可证与版权声明：./vendor/jsqr-1.4.0.LICENSE.txt 必须一起打包。 -->
+  <script src="./vendor/qrcode-generator-2.0.4.js"></script>
+  <script src="./vendor/jsqr-1.4.0.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

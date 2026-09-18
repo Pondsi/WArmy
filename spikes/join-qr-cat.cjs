@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
@@ -40,7 +40,7 @@ if (!j.includes('btn-join-qr')) {
     ok.onclick = async () => {
       const link = $('join-link-input')?.value?.trim();
       if (!link) { $('join-qr-msg').textContent = t('join.qrFail'); return; }
-      const r = await window.ccarmy.joinRequest({
+      const r = await window.warmy.joinRequest({
         name: state.profile.username || 'user',
         kind: 'human',
         target: state.selectedChat?.name || link,

@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
@@ -33,12 +33,12 @@ if (!ck.includes('mtimeMs')) {
 }
 
 // ── H/I/J/L: 主进程 IPC ──
-if (!m.includes('ccarmy:open-chat-window')) {
+if (!m.includes('warmy:open-chat-window')) {
   m += `
 
 // ── H. 多窗口：在新窗口打开会话 ──
 const chatWindows = new Map<string, BrowserWindow>();
-ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string }) => {
+ipcMain.handle('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string }) => {
   if (chatWindows.has(payload.id)) {
     chatWindows.get(payload.id)?.focus();
     return { ok: true };
@@ -46,7 +46,7 @@ ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: str
   const w = new BrowserWindow({
     width: 900,
     height: 700,
-    title: payload.title || 'CCArmy',
+    title: payload.title || 'WArmy',
     frame: process.platform === 'darwin',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -64,7 +64,7 @@ ipcMain.handle('ccarmy:open-chat-window', (_e, payload: { id: string; title: str
 });
 
 // ── I. 全局热键 ──
-ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
+ipcMain.handle('warmy:register-hotkey', (_e, accel: string) => {
   try {
     const { globalShortcut } = require('electron');
     globalShortcut.unregister(accel);
@@ -82,14 +82,14 @@ ipcMain.handle('ccarmy:register-hotkey', (_e, accel: string) => {
 
 // ── J. 托盘 ──
 let tray: import('electron').Tray | null = null;
-ipcMain.handle('ccarmy:tray-init', () => {
+ipcMain.handle('warmy:tray-init', () => {
   try {
     const { Tray, Menu, nativeImage } = require('electron');
     if (tray) return { ok: true };
     // 16x16 简易图标
     const img = nativeImage.createEmpty();
     tray = new Tray(img);
-    tray.setToolTip('CCArmy');
+    tray.setToolTip('WArmy');
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: '显示主窗口', click: () => { win?.show(); win?.focus(); } },
@@ -108,15 +108,15 @@ ipcMain.handle('ccarmy:tray-init', () => {
 });
 
 // ── K. 会话导出 Markdown ──
-ipcMain.handle('ccarmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
+ipcMain.handle('warmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
   try {
     const dir = path.join(app.getPath('userData'), 'exports');
     fs.mkdirSync(dir, { recursive: true });
-    const lines = [\n      '# ' + payload.title,\n      '',\n      '> 导出自 CCArmy · ' + new Date().toLocaleString(),\n      '',\n    ];
+    const lines = [\n      '# ' + payload.title,\n      '',\n      '> 导出自 WArmy · ' + new Date().toLocaleString(),\n      '',\n    ];
     for (const msg of payload.messages) {
       const who = msg.role === 'me' ? '我' : payload.title;
       const time = msg.ts ? new Date(msg.ts).toLocaleString() : '';
-      lines.push(\`**\${who}** \${time}\`);\n      lines.push('');\n      lines.push(msg.text || '');\n      lines.push('');\n    }\n    const file = path.join(dir, \`\${payload.title.replace(/[\\\\/:*?"<>|]/g, '_')}-\${Date.now()}.md\`);\n    fs.writeFileSync(file, lines.join('\\n'), 'utf8');\n    return { ok: true, path: file };\n  } catch (e) {\n    return { ok: false, error: String(e) };\n  }\n});\n\n// ── L. 自动更新（electron-updater 占位） ──\nipcMain.handle('ccarmy:auto-update-check', async () => {\n  // 无签名/发布源时只返回状态，不实际下载\n  return { ok: true, status: 'idle', message: 'no release channel configured' };\n});\nipcMain.handle('ccarmy:auto-update-download', async () => {\n  return { ok: false, status: 'skipped', message: 'requires signed release + update server' };\n});\n`;
+      lines.push(\`**\${who}** \${time}\`);\n      lines.push('');\n      lines.push(msg.text || '');\n      lines.push('');\n    }\n    const file = path.join(dir, \`\${payload.title.replace(/[\\\\/:*?"<>|]/g, '_')}-\${Date.now()}.md\`);\n    fs.writeFileSync(file, lines.join('\\n'), 'utf8');\n    return { ok: true, path: file };\n  } catch (e) {\n    return { ok: false, error: String(e) };\n  }\n});\n\n// ── L. 自动更新（electron-updater 占位） ──\nipcMain.handle('warmy:auto-update-check', async () => {\n  // 无签名/发布源时只返回状态，不实际下载\n  return { ok: true, status: 'idle', message: 'no release channel configured' };\n});\nipcMain.handle('warmy:auto-update-download', async () => {\n  return { ok: false, status: 'skipped', message: 'requires signed release + update server' };\n});\n`;
   console.log('H/I/J/K/L ipc added');
 }
 
@@ -125,14 +125,14 @@ fs.writeFileSync(base + 'electron-main.ts', m);
 // preload
 if (!p.includes('openChatWindow')) {
   p = p.replace(
-    "  asrTranscribe: (p) => ipcRenderer.invoke('ccarmy:asr-transcribe', p),",
-    `  asrTranscribe: (p) => ipcRenderer.invoke('ccarmy:asr-transcribe', p),
-  openChatWindow: (payload) => ipcRenderer.invoke('ccarmy:open-chat-window', payload),
-  registerHotkey: (accel) => ipcRenderer.invoke('ccarmy:register-hotkey', accel),
-  trayInit: () => ipcRenderer.invoke('ccarmy:tray-init'),
-  exportSession: (payload) => ipcRenderer.invoke('ccarmy:export-session', payload),
-  autoUpdateCheck: () => ipcRenderer.invoke('ccarmy:auto-update-check'),
-  autoUpdateDownload: () => ipcRenderer.invoke('ccarmy:auto-update-download'),
+    "  asrTranscribe: (p) => ipcRenderer.invoke('warmy:asr-transcribe', p),",
+    `  asrTranscribe: (p) => ipcRenderer.invoke('warmy:asr-transcribe', p),
+  openChatWindow: (payload) => ipcRenderer.invoke('warmy:open-chat-window', payload),
+  registerHotkey: (accel) => ipcRenderer.invoke('warmy:register-hotkey', accel),
+  trayInit: () => ipcRenderer.invoke('warmy:tray-init'),
+  exportSession: (payload) => ipcRenderer.invoke('warmy:export-session', payload),
+  autoUpdateCheck: () => ipcRenderer.invoke('warmy:auto-update-check'),
+  autoUpdateDownload: () => ipcRenderer.invoke('warmy:auto-update-download'),
   getChatQuery: () => { try { return new URLSearchParams(window.location.search); } catch { return new URLSearchParams(); } },`
   );
   fs.writeFileSync(base + 'preload.cjs', p);
@@ -151,7 +151,7 @@ if (!j.includes('btn-export')) {
     "  setInterval(refreshMetrics, 5000);",
     `  $('btn-open-win')?.addEventListener('click', () => {
     if (!state.selectedChat) return;
-    window.ccarmy.openChatWindow({
+    window.warmy.openChatWindow({
       id: state.selectedChat.id,
       title: state.selectedChat.name,
       kind: state.selectedChat.kind,
@@ -160,15 +160,15 @@ if (!j.includes('btn-export')) {
   $('btn-export')?.addEventListener('click', async () => {
     if (!state.selectedChat) return;
     const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
-    const r = await window.ccarmy.exportSession({
+    const r = await window.warmy.exportSession({
       title: state.selectedChat.name,
       messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
     });
     uiAlert(r?.ok ? r.path : t('common.error'));
   });
   // 托盘 + 热键
-  window.ccarmy.trayInit?.().catch(() => {});
-  window.ccarmy.registerHotkey?.('CommandOrControl+Shift+M').catch(() => {});
+  window.warmy.trayInit?.().catch(() => {});
+  window.warmy.registerHotkey?.('CommandOrControl+Shift+M').catch(() => {});
   // 从 URL 参数自动打开会话（多窗口）
   try {
     const q = new URLSearchParams(window.location.search);

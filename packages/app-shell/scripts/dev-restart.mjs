@@ -1,5 +1,5 @@
 /**
- * 构建并重启 CCArmy 桌面应用。
+ * 构建并重启 WArmy 桌面应用。
  * 重要：改完源码后必须重启 Electron 进程，否则界面不会更新（历史上多次踩坑）。
  *
  *   node scripts/dev-restart.mjs
@@ -18,11 +18,11 @@ function log(msg) {
   process.stdout.write(`[dev-restart] ${msg}\n`);
 }
 
-// 1. 杀掉在跑的 CCArmy Electron 进程（按命令行匹配，避免误伤其它 electron 应用）
+// 1. 杀掉在跑的 WArmy Electron 进程（按命令行匹配，避免误伤其它 electron 应用）
 function killRunning() {
   const ps = `
 $procs = Get-CimInstance Win32_Process -Filter "Name='electron.exe'" |
-  Where-Object { $_.CommandLine -match 'CCArmy|app-shell' }
+  Where-Object { $_.CommandLine -match 'WArmy|app-shell' }
 $n = ($procs | Measure-Object).Count
 $procs | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Write-Output $n
@@ -42,7 +42,7 @@ function build() {
   const nodeDir = 'C:\\Program Files\\nodejs';
   const env = { ...process.env };
   if (existsSync(nodeDir)) env.Path = `${nodeDir};${env.Path ?? ''}`;
-  execFileSync('corepack', ['pnpm', '--filter', '@ccarmy/app-shell', 'build'], {
+  execFileSync('corepack', ['pnpm', '--filter', '@warmy/app-shell', 'build'], {
     cwd: path.join(pkgRoot, '..', '..'),
     stdio: 'inherit',
     env,

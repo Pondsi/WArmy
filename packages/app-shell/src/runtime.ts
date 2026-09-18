@@ -521,7 +521,7 @@ export async function createP1Runtime(opts?: {
   const security = new SecurityManager(opts?.store ?? new MemorySecurityStore(), opts?.onApprove);
   await security.init();
   const instances = new InstanceManager({
-    instancesRoot: opts?.instancesRoot || path.join(os.tmpdir(), 'ccarmy-instances'),
+    instancesRoot: opts?.instancesRoot || path.join(os.tmpdir(), 'warmy-instances'),
     teardown,
     security,
     nodePath: opts?.nodePath,

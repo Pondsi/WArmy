@@ -21,6 +21,7 @@
  *
  * 旧实现（`lan.ts` / `mesh.ts`）保留文件但**不再被主进程使用**：它们是明文 JSONL、无握手、无身份。
  */
+import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import dns from 'node:dns';
 import fs from 'node:fs';
@@ -54,7 +55,7 @@ import {
   type RelayCandidateRef,
   type RelayDecision,
   type SyncMessage,
-} from '@ccarmy/sync-protocol';
+} from '@warmy/sync-protocol';
 import {
   createIdentityProvider,
   createRosterChecker,
@@ -63,6 +64,391 @@ import {
   type SignerUnlockState,
 } from './identity-provider.js';
 import type { IdentityStore } from './identity-store.js';
+import { CCAARMY_SUGGESTED_NET_PORTS } from './settings-store.js';
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * R13：候选端口的**实测**（只推荐"本机真的能绑上"的端口）
+ *
+ * 静态候选表（CCAARMY_SUGGESTED_NET_PORTS）只是**优先池**，**不能直接推给用户**：
+ * 它"干净"不代表本机现在绑得上（可能已被别的进程占用，也可能落在 OS 保留段里 EACCES）。
+ * 所以推荐前逐个**真 bind 一次**（与组网监听同一个 host/协议），绑上立刻关闭、不泄漏句柄，
+ * 三元结果如实回出（ok / occupied / no-permission）。
+ *
+ * 优先池全不可用时**继续找**（同号段相邻值 → 整个动态区间 49152–65535 随机样本），
+ * 直到凑够目标数量 —— "不能让用户无路可走"。
+ *
+ * 扩展搜索时会**先读本机 OS 保留段**（Windows 的 `netsh … excludedportrange`），落在保留段里的
+ * 端口**根本不进探测队列**：它们连 bind 都不允许（EACCES），探了也只是浪费一次往返、
+ * 结论永远一样。被跳过的端口**如实记在 `skipped` 里**（不静默丢弃），读了什么也一并回报（`osReserved`）。
+ *
+ * 不做模块级缓存：端口占用状况随时在变，陈旧结论比没有结论更糟。
+ *（例外：OS 保留段是**系统级稳定事实**，按进程缓存一次；见 `getOsReservedTcpRanges`。）
+ * ══════════════════════════════════════════════════════════════════════════════ */
+
+/** 实测结论：ok=本机可用 / occupied=被占用(EADDRINUSE) / no-permission=权限等其它原因 */
+export type PortProbeStatus = 'ok' | 'occupied' | 'no-permission';
+
+export interface PortProbeEntry {
+  port: number;
+  status: PortProbeStatus;
+  /** 非 ok 时的底层 errno（EADDRINUSE / EACCES …）——原样带出，不吞 */
+  errorCode?: string;
+  latencyMs: number;
+}
+
+export interface PortCandidateReport {
+  /** 用户当前配置的端口（原样回报；它**永远不会**出现在 recommended 里） */
+  requestedPort: number;
+  /** **只含实测 ok** 的端口（按优先顺序） */
+  recommended: PortProbeEntry[];
+  /** 本次实测到的全部结果（含不可用的；UI 据此解释"为什么少了某个号"） */
+  probed: PortProbeEntry[];
+  /**
+   * 扩展搜索时因落在本机 OS 保留段里而**没有被探测**的端口。
+   * 刻意与 `probed` 分开：`probed` 的语义是"真 bind 过一次"，把这些端口塞进去
+   * 会让"共实测 N 个"变成假话（而且它们本来就不是候选）。
+   */
+  skipped: PortCandidateSkip[];
+  /** 本次读到的 OS 保留段（含 supported / source / error）——"为什么跳过"对界面是可见的，不是黑箱 */
+  osReserved: OsReservedRanges;
+  /** pool = 优先池里就凑够了；extended = 优先池不够，已扩展到整个动态区间 */
+  coverage: 'pool' | 'extended';
+  /** 是否因总超时提前结束（提前结束时会少于目标数量，如实告知而不是假装找过） */
+  timedOut: boolean;
+  elapsedMs: number;
+  probedAt: number;
+  /** 实测用的主机地址（与组网监听保持一致，默认 0.0.0.0） */
+  host: string;
+}
+
+/** 动态/临时端口区间（Windows 默认也是这一段）——"优先池不够时"的扩展搜索范围 */
+export const EPHEMERAL_PORT_RANGE: readonly [number, number] = [49152, 65535];
+
+/** 推荐数量目标：至少 3 个、最多 5 个（产品要求"不能让用户无路可走"） */
+export const PORT_CANDIDATE_MIN = 3;
+export const PORT_CANDIDATE_WANT = 4;
+export const PORT_CANDIDATE_MAX = 5;
+
+/* ────────────────────────── OS 保留段（Windows 排除端口段） ────────────────────────── */
+
+/**
+ * 本机 OS **保留（排除）**的 TCP 端口段。
+ *
+ * 为什么需要它：Windows 上 Hyper-V / WSL / 已注册的服务会把整段端口从动态区间里挖走
+ * （`netsh int ipv4 show excludedportrange protocol=tcp`，本机实测有 7 段，其中 63840–63939
+ * 正好覆盖原来的建议端口 63888）。这些端口**连 bind 都不允许**（EACCES），探测它们
+ * 只是白跑一趟，结论永远是"不可用"。
+ *
+ * 为什么**只读 TCP 表**：这里的候选池是**组网 TCP 监听端口**（`SecureMesh.enable` →
+ * `net.Server.listen`）。UDP 只在固定端口 7799（`LanDiscovery` 内网广播）与系统临时端口
+ * （DHT / 阶梯探测的 `bind({ port: 0 })`）上绑定，**没有任何一处**从本池子里挑 UDP 端口 ——
+ * 拿 UDP 排除段来筛 TCP 候选只会**误杀**本来绑得上的端口。所以只看 tcp 表，不看 udp 表。
+ *
+ * 读不到**不算错**，但不许假装"本机没有保留段"：`source` / `error` 如实带出，
+ * `ranges` 为空就是"不跳过任何端口"。
+ */
+export interface OsReservedRanges {
+  /** 本平台是否**支持**读取（只有 Windows 有 netsh 排除段；非 Windows 恒 false） */
+  supported: boolean;
+  /** 数据来源，原样带出便于自证：命令原文 / unsupported-platform / command-failed / disabled / injected / not-read */
+  source: string;
+  /** 保留段 [start, end]（含两端）；空数组 = 不跳过任何端口 */
+  ranges: Array<readonly [number, number]>;
+  /** 读取失败的原因（有它就说明 ranges 空是"读不到"，不是"本机没有保留段"） */
+  error?: string;
+}
+
+/** 被跳过的候选端口（不是"探测失败"，而是**没有探测**） */
+export interface PortCandidateSkip {
+  port: number;
+  /** 唯一原因：端口落在本机 OS 保留段里 */
+  reason: 'os-reserved-range';
+  /** 命中的保留段（含两端，原样来自系统） */
+  range: readonly [number, number];
+}
+
+const NETS_EXCLUDED_RANGE_CMD = 'netsh int ipv4 show excludedportrange protocol=tcp';
+
+/**
+ * 解析 netsh 排除端口表格。只认"一行两个数字"（可选尾随 `*`），表头 / 分隔线 /
+ * `* - Administered port exclusions.` 之类的说明行天然不匹配 —— 所以中文 Windows 的
+ * 本地化表头（GBK 下解码成乱码也一样）不影响解析，数字是 ASCII 的。
+ */
+export function parseExcludedPortRanges(text: string): Array<readonly [number, number]> {
+  const out: Array<readonly [number, number]> = [];
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    const m = /^\s*(\d{1,5})\s+(\d{1,5})\s*\*?\s*$/.exec(line);
+    if (!m) continue;
+    const start = Number(m[1]);
+    const end = Number(m[2]);
+    if (!Number.isInteger(start) || !Number.isInteger(end)) continue;
+    if (start < 1 || end > 65535 || start > end) continue; // 端口范围以外的行不是排除段
+    out.push([start, end]);
+  }
+  return out;
+}
+
+/** 进程内缓存：排除段是系统级稳定事实（不像端口占用那样随时在变），读一次就够 */
+let osReservedRangesCache: Promise<OsReservedRanges> | null = null;
+
+async function readOsReservedTcpRanges(): Promise<OsReservedRanges> {
+  return new Promise<OsReservedRanges>((resolve) => {
+    if (process.platform !== 'win32') {
+      // 非 Windows 没有"排除段"这回事：如实回报不支持（空列表 = 不跳过任何端口）
+      resolve({ supported: false, source: 'unsupported-platform', ranges: [] });
+      return;
+    }
+    let settled = false;
+    const done = (r: OsReservedRanges): void => {
+      if (settled) return;
+      settled = true;
+      resolve(r);
+    };
+    try {
+      execFile(
+        'netsh',
+        ['int', 'ipv4', 'show', 'excludedportrange', 'protocol=tcp'],
+        { timeout: 4000, windowsHide: true, maxBuffer: 1024 * 1024, encoding: 'utf8' },
+        (err, stdout) => {
+          if (err) {
+            // 读不到就**不跳过**（空列表），但把原因原样带出 —— 绝不假装"本机没有保留段"
+            done({
+              supported: true,
+              source: 'command-failed',
+              ranges: [],
+              error: (err as NodeJS.ErrnoException).code ?? err.message,
+            });
+            return;
+          }
+          done({ supported: true, source: NETS_EXCLUDED_RANGE_CMD, ranges: parseExcludedPortRanges(String(stdout)) });
+        },
+      );
+    } catch (e) {
+      done({ supported: true, source: 'command-failed', ranges: [], error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+}
+
+/** 读本机 OS 保留的 TCP 段（按进程缓存一次；失败也如实回报，绝不抛错打断候选生成） */
+export function getOsReservedTcpRanges(): Promise<OsReservedRanges> {
+  if (!osReservedRangesCache) osReservedRangesCache = readOsReservedTcpRanges();
+  return osReservedRangesCache;
+}
+
+/** 仅供验证/诊断：清掉进程内缓存，强制下次重新读系统事实 */
+export function resetOsReservedRangesCache(): void {
+  osReservedRangesCache = null;
+}
+
+/** 测试注入的保留段：给数组 = "读到的保留段"；给完整对象可连 source/error 一起注入 */
+function normalizeInjectedReservedRanges(
+  v: readonly (readonly [number, number])[] | OsReservedRanges | undefined,
+): OsReservedRanges | null {
+  if (v === undefined) return null;
+  if (Array.isArray(v)) {
+    const list = v as readonly (readonly [number, number])[];
+    return { supported: true, source: 'injected', ranges: list.map((r) => [r[0], r[1]] as const) };
+  }
+  return v as OsReservedRanges;
+}
+
+/** errno → 三元结论（非 EADDRINUSE 一律记 no-permission，但 errno 仍原样带在 errorCode 里） */
+function classifyBindProbe(code: string | undefined): PortProbeStatus {
+  return code === 'EADDRINUSE' ? 'occupied' : 'no-permission';
+}
+
+/**
+ * 真的 bind 一次看能不能绑上；**绑上立刻关闭**（绝不泄漏监听句柄）。
+ * 与组网监听用同一个 host（默认 0.0.0.0），否则结论不可信（0.0.0.0 与 127.0.0.1 的占用面不同）。
+ */
+export function probePortAvailability(port: number, host = '0.0.0.0', timeoutMs = 400): Promise<PortProbeEntry> {
+  return new Promise<PortProbeEntry>((resolve) => {
+    const started = Date.now();
+    let settled = false;
+    const s = net.createServer();
+    const done = (status: PortProbeStatus, errorCode?: string): void => {
+      if (settled) return;
+      settled = true;
+      if (status !== 'ok') {
+        try {
+          s.close();
+        } catch {
+          /* ignore */
+        }
+      }
+      resolve({ port, status, ...(errorCode ? { errorCode } : {}), latencyMs: Date.now() - started });
+    };
+    s.once('error', (e: NodeJS.ErrnoException) => done(classifyBindProbe(e.code), e.code ?? 'probe-error'));
+    s.once('listening', () => {
+      // 等 close 回调再回结论：这样"探测完不留句柄"是可以被验证的
+      s.close(() => done('ok'));
+    });
+    const guard = setTimeout(() => {
+      try {
+        s.close();
+      } catch {
+        /* ignore */
+      }
+      done('no-permission', 'probe-timeout');
+    }, Math.max(80, timeoutMs));
+    if (typeof guard.unref === 'function') guard.unref();
+    try {
+      s.listen(port, host);
+    } catch (e) {
+      clearTimeout(guard);
+      done(classifyBindProbe((e as NodeJS.ErrnoException).code), (e as NodeJS.ErrnoException).code ?? 'probe-throw');
+      return;
+    }
+  });
+}
+
+export interface PickPortCandidatesOptions {
+  /** 用户当前配置的端口（不会出现在推荐里） */
+  requestedPort?: number;
+  /** 想要几个（clamp 到 PORT_CANDIDATE_MIN..MAX） */
+  want?: number;
+  host?: string;
+  /** 并发上限（默认 8）——探测本身不能把端口占满，也不能无限并发 */
+  concurrency?: number;
+  /** 总超时（默认 4000ms）——到点就停，绝不卡界面 */
+  totalTimeoutMs?: number;
+  /** 优先池（默认 CCAARMY_SUGGESTED_NET_PORTS；测试可注入） */
+  pool?: readonly number[];
+  /** 是否允许扩展到整个动态区间（默认 true） */
+  allowExtended?: boolean;
+  /** 扩展搜索时是否跳过本机 OS 保留段（默认 true；false 只用于对照实验） */
+  skipReservedRanges?: boolean;
+  /** OS 保留段（测试可注入，避免结论依赖机器环境） */
+  reservedRanges?: readonly (readonly [number, number])[] | OsReservedRanges;
+  /** 随机源（测试可注入，便于复现） */
+  random?: () => number;
+  /** 探测函数（测试可注入，用于把"优先池全被占"这种局面压出来） */
+  probe?: (port: number, host: string, timeoutMs: number) => Promise<PortProbeEntry>;
+}
+
+/**
+ * 实测并挑选候选端口。**每次调用都真探测**（无模块级缓存；OS 保留段除外，那是系统稳定事实）。
+ * 顺序：优先池 → （不够时）同号段相邻值 → （还不够时）动态区间随机样本 → 到点即停。
+ * 扩展搜索时**先剔除**本机 OS 保留段里的端口（跳过而不是探测），被跳过的端口记在 `skipped` 里。
+ */
+export async function pickPortCandidates(opts: PickPortCandidatesOptions = {}): Promise<PortCandidateReport> {
+  const host = opts.host ?? '0.0.0.0';
+  const requestedPort = Number.isInteger(opts.requestedPort) ? Number(opts.requestedPort) : 0;
+  const want = Math.min(PORT_CANDIDATE_MAX, Math.max(PORT_CANDIDATE_MIN, Number(opts.want) || PORT_CANDIDATE_WANT));
+  const concurrency = Math.min(16, Math.max(1, Number(opts.concurrency) || 8));
+  const totalTimeoutMs = Math.max(200, Number(opts.totalTimeoutMs) || 4000);
+  const pool = (opts.pool ?? CCAARMY_SUGGESTED_NET_PORTS).slice();
+  const allowExtended = opts.allowExtended !== false;
+  const skipReserved = opts.skipReservedRanges !== false;
+  const random = opts.random ?? Math.random;
+  const probeFn = opts.probe ?? probePortAvailability;
+  const [lo, hi] = EPHEMERAL_PORT_RANGE;
+
+  const started = Date.now();
+  const probed = new Map<number, PortProbeEntry>();
+  const seen = new Set<number>();
+  const recommended: PortProbeEntry[] = [];
+  const skipped: PortCandidateSkip[] = [];
+  // 只有真的走进扩展搜索才会去读系统保留段：优先池够用时读它纯属多余，
+  // source='not-read' 就是"这次没读"（如实，不是"本机没有保留段"）。
+  let osReserved: OsReservedRanges = { supported: false, source: 'not-read', ranges: [] };
+  let timedOut = false;
+  let coverage: 'pool' | 'extended' = 'pool';
+  // 探测总次数上界：优先池全被占时也要有界，不能变成端口扫描器
+  const PROBE_BUDGET = 240;
+  let probeCount = 0;
+
+  const leftMs = (): number => totalTimeoutMs - (Date.now() - started);
+  const outOfTime = (): boolean => leftMs() <= 0;
+  const enough = (): boolean => recommended.length >= want;
+
+  async function runBatch(ports: number[]): Promise<void> {
+    for (let i = 0; i < ports.length; i += concurrency) {
+      if (enough() || outOfTime() || probeCount >= PROBE_BUDGET) {
+        if (outOfTime()) timedOut = true;
+        return;
+      }
+      const slice = ports.slice(i, i + concurrency).filter((p) => Number.isInteger(p) && p >= 1 && p <= 65535);
+      probeCount += slice.length;
+      const perTimeout = Math.min(400, Math.max(120, leftMs()));
+      const results = await Promise.all(slice.map((p) => probeFn(p, host, perTimeout)));
+      for (const r of results) {
+        probed.set(r.port, r);
+        if (r.status === 'ok' && r.port !== requestedPort && !recommended.some((x) => x.port === r.port)) recommended.push(r);
+      }
+    }
+  }
+
+  // 阶段 1：优先池（用户当前那个端口不做候选 —— 它就是绑不上的那个）
+  await runBatch(pool.filter((p) => p !== requestedPort && !seen.has(p)));
+  for (const p of pool) seen.add(p);
+
+  // 阶段 2：优先池不够 → 先探同号段相邻值，再在整个动态区间随机取样
+  if (!enough() && allowExtended) {
+    coverage = 'extended';
+    /*
+     * **在生成新候选之前**读本机 OS 保留段（只在这一段读）：
+     *   · 优先池是产品给定的固定短表，逐个探测既然很快、结论对用户也有信息量，就照旧探；
+     *   · 扩展到整个动态区间时，如果拿保留段里的号当样本，那 100% 是白跑：
+     *     这些端口连 bind 都不允许（EACCES），既浪费时间又可能把探测预算耗在"永远不可用"的号上。
+     * 读不到（非 Windows / netsh 跑失败）→ ranges 为空 → 不跳过任何端口，并如实回报 source/error。
+     */
+    const injected = normalizeInjectedReservedRanges(opts.reservedRanges);
+    osReserved =
+      injected ??
+      (skipReserved
+        ? await getOsReservedTcpRanges()
+        : { supported: process.platform === 'win32', source: 'disabled', ranges: [] });
+    const inReservedRange = (p: number): readonly [number, number] | undefined =>
+      osReserved.ranges.find(([start, end]) => p >= start && p <= end);
+    /** 保留段里的端口**不进探测队列**，但必须如实记账（skipped）——不许静默丢弃 */
+    const skipIfReserved = (p: number): boolean => {
+      const range = inReservedRange(p);
+      if (!range) return false;
+      skipped.push({ port: p, reason: 'os-reserved-range', range });
+      return true;
+    };
+    const neighbours: number[] = [];
+    for (const base of pool) {
+      for (let k = 1; k <= 6 && neighbours.length < pool.length * 3; k += 1) {
+        for (const cand of [base + k, base - k]) {
+          if (cand >= lo && cand <= hi && !seen.has(cand) && cand !== requestedPort) {
+            seen.add(cand);
+            if (skipIfReserved(cand)) continue;
+            neighbours.push(cand);
+          }
+        }
+      }
+    }
+    await runBatch(neighbours);
+
+    if (!enough() && !outOfTime()) {
+      const samples: number[] = [];
+      for (let i = 0; i < PROBE_BUDGET && samples.length < PROBE_BUDGET - probeCount; i += 1) {
+        const cand = lo + Math.floor(random() * (hi - lo + 1));
+        if (!seen.has(cand) && cand !== requestedPort) {
+          seen.add(cand);
+          if (skipIfReserved(cand)) continue;
+          samples.push(cand);
+        }
+      }
+      await runBatch(samples);
+    }
+  }
+
+  return {
+    requestedPort,
+    recommended,
+    probed: [...probed.values()],
+    skipped,
+    osReserved,
+    coverage,
+    timedOut: timedOut || (outOfTime() && !enough()),
+    elapsedMs: Date.now() - started,
+    probedAt: Date.now(),
+    host,
+  };
+}
 
 /** 无服务器拓扑说明。**只给 i18n key**，主进程不拼句子（渲染层负责翻译） */
 export const NET_NOTES = {
@@ -527,15 +913,40 @@ export interface SecureInboundMessage {
   remoteAddress?: string;
 }
 
+/**
+ * 端口绑定事实。**请求的端口与实际绑上的端口必须分开报**。
+ *
+ * 实现**绝不改端口**（绑不上就是失败，不换一个接着试，也不改内存/设置里的值），
+ * 所以绑成功时两者恒等；绑失败时 `boundPort = 0`、`errorCode` 是底层 errno。
+ * 分开报是为了让 UI 能说清"**你填的哪个端口**绑不上、为什么"。
+ */
+export interface MeshBindInfo {
+  /** 调用方要求的端口（原样回报，实现绝不改写） */
+  requestedPort: number;
+  /** 真正 bind 成功的端口；0 = 没绑上（组网没起来） */
+  boundPort: number;
+  /** 绑定失败的底层错误码（EADDRINUSE / EACCES …）；绑上了就没有这个字段 */
+  errorCode?: string;
+}
+
 export interface MeshEnableResult {
   ok: boolean;
+  /** **实际**绑定的端口（= 请求的那个；实现不会换成别的） */
   port?: number;
   nodeId?: string;
-  /** 未就绪时如实回错误码：identity-locked / identity-missing / port-in-use */
+  /**
+   * 失败时如实回错误码：
+   * · `port-bind-failed` —— 端口无法绑定（`error` 里是底层 errno，如 EADDRINUSE）
+   * · `identity-locked` / `identity-missing` —— 身份门控没过
+   */
   errorCode?: string;
   unlock?: SignerUnlockState | null;
   error?: string;
   notes?: typeof NET_NOTES;
+  /** 便捷字段：= bind.requestedPort */
+  requestedPort?: number;
+  /** 端口绑定事实（请求的端口 / 实际绑上的端口 / 底层错误码） */
+  bind?: MeshBindInfo;
 }
 
 export interface MeshStatusResult {
@@ -549,6 +960,11 @@ export interface MeshStatusResult {
     peers?: { nodeId: string; host: string; port: number; reachable: boolean; latencyMs?: number; lastError?: string; session?: boolean }[];
   };
   local?: { ip: string; port: number };
+  /**
+   * 端口绑定事实：请求的端口 vs **实际**绑上的端口。
+   * 组网因端口绑不上而没起来时，这里给出"是哪个端口、什么底层错误"（UI 据此明确告知用户）。
+   */
+  bind?: MeshBindInfo;
   publicIp?: string;
   behindNat?: boolean;
   nodeId?: string;
@@ -589,6 +1005,10 @@ export interface SecureMeshOptions {
 export class SecureMesh {
   private server: SecureSyncServer | null = null;
   private port = 0;
+  /** 调用方**要求**的端口（与 this.port = 实际绑上的端口分开记；实现绝不改写它） */
+  private requestedPort = 0;
+  /** 最近一次绑定失败的底层错误码（成功就清掉）——UI 据此说清"为什么绑不上" */
+  private bindError: string | null = null;
   private readonly clients = new Map<string, SecureSyncClient>();
   private readonly inbox: SecureInboundMessage[] = [];
   private readonly liveness: ConnectionLiveness;
@@ -624,6 +1044,20 @@ export class SecureMesh {
 
   get boundPort(): number {
     return this.server?.boundPort ?? this.port;
+  }
+
+  /** 调用方要求的端口（= 用户在界面上填的那个；实现从不改写它） */
+  get requestedNetPort(): number {
+    return this.requestedPort;
+  }
+
+  /** 端口绑定事实（请求的端口 / 实际绑上的端口 / 底层错误码） */
+  bindInfo(): MeshBindInfo {
+    return {
+      requestedPort: this.requestedPort,
+      boundPort: this.enabled ? this.boundPort : 0,
+      ...(this.bindError ? { errorCode: this.bindError } : {}),
+    };
   }
 
   get sessionCount(): number {
@@ -707,13 +1141,24 @@ export class SecureMesh {
     // 不注入的话握手层会把每一条合法连接都判成 fingerprint-mismatch。
     const derivation = fingerprintDerivationForAppShell();
 
-    if (this.server?.listening && this.boundPort === port) {
+    if (this.server?.listening && this.requestedPort === port) {
       if (opts.discovery) await this.startDiscovery();
       if (opts.announce) await this.announce('manual');
-      return { ok: true, port: this.boundPort, nodeId: this.opts.nodeId, notes: NET_NOTES };
+      return {
+        ok: true,
+        port: this.boundPort,
+        requestedPort: this.requestedPort,
+        nodeId: this.opts.nodeId,
+        notes: NET_NOTES,
+        bind: this.bindInfo(),
+      };
     }
 
     await this.disable();
+    // ⚠️ **只试用户要的那一个端口**。绑不上就**失败**：不换端口、不改内存里的值、
+    //    不写回设置、不"兜底顺延"。理由见 settings-store 的 CCAARMY_SUGGESTED_NET_PORTS
+    //    注释：静默换端口会让防火墙/端口映射/对端配置全部对不上，而且用户无从发现。
+    //    用户下一步由界面引导（明确告知 + 可点选的建议端口）。
     const server = new SecureSyncServer({
       identity,
       nodeId: this.opts.nodeId,
@@ -737,19 +1182,34 @@ export class SecureMesh {
       await server.start();
     } catch (e) {
       const err = e as NodeJS.ErrnoException;
+      const errno = err.code ?? 'listen-failed';
+      // 如实记下"是哪个端口、什么底层错误"：requestedPort 保持用户填的值不变
+      this.requestedPort = port;
+      this.bindError = errno;
       return {
         ok: false,
-        errorCode: err.code === 'EADDRINUSE' ? 'port-in-use' : 'listen-failed',
-        error: err.code ?? err.message,
+        errorCode: 'port-bind-failed',
+        error: errno,
+        requestedPort: port,
+        bind: { requestedPort: port, boundPort: 0, errorCode: errno },
       };
     }
     this.server = server;
     this.port = server.boundPort;
+    this.requestedPort = port;
+    this.bindError = null;
     // 附八.9：上线即同步"可拨出"判据（否则存活判定的 sweep 会一直当成不可拨入而短路）
     this.syncLivenessDialable();
     if (opts.discovery) await this.startDiscovery();
     if (opts.announce) await this.announce('startup');
-    return { ok: true, port: this.port, nodeId: this.opts.nodeId, notes: NET_NOTES };
+    return {
+      ok: true,
+      port: this.port,
+      requestedPort: port,
+      nodeId: this.opts.nodeId,
+      notes: NET_NOTES,
+      bind: this.bindInfo(),
+    };
   }
 
   async disable(): Promise<{ ok: boolean }> {
@@ -760,6 +1220,8 @@ export class SecureMesh {
     await this.server?.stop();
     this.server = null;
     this.port = 0;
+    // requestedPort / bindError **刻意保留**：那是"上一次尝试的事实"，
+    // 关掉组网不等于"用户填的端口变了"或"上次为什么失败"没发生过。
     this.lastPeerProbes = null;
     this.lastStatusValue = null;
     return { ok: true };
@@ -997,6 +1459,9 @@ export class SecureMesh {
           reason: ipv6.reason,
         },
         reachability: this.buildReachabilityHint(),
+        // 组网没起来但"上次绑定失败"是有价值的现场（哪个端口、什么错误）——如实带出去，
+        // 让 UI 能在设置里说清原因，而不是只说一句"组网没开"。
+        ...(this.bindError ? { bind: this.bindInfo() } : {}),
       };
       this.lastStatusAt = now;
       this.lastStatusValue = value;
@@ -1049,6 +1514,8 @@ export class SecureMesh {
         peers: peerProbes,
       },
       local: { ip: localIp, port: this.port },
+      // 实际绑上的端口在这里（this.port = server.boundPort）；实现不会换成别的端口
+      bind: this.bindInfo(),
       // behindNat 用证据判定：网卡里有公网地址 → false（本机可直接被拨入）
       behindNat: publicOnes.length === 0,
       ...(publicOnes.length > 0 && publicOnes[0] ? { publicIp: publicOnes[0] } : {}),
@@ -1196,7 +1663,7 @@ export async function secureLoopbackSmoke(opts: {
     failure?: string;
   };
 }> {
-  const { createEphemeralIdentity } = await import('@ccarmy/sync-protocol');
+  const { createEphemeralIdentity } = await import('@warmy/sync-protocol');
   const serverId = createEphemeralIdentity('smoke-server');
   const clientId = createEphemeralIdentity('smoke-client');
 
@@ -1307,3 +1774,245 @@ export function ensureNetDir(userDataDir: string): { ok: boolean; dir: string; e
     return { ok: false, dir, error: (e as NodeJS.ErrnoException).code ?? 'mkdir-failed' };
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ADR 004（本轮定稿）：**项目级属性的跨机同步**
+   ---------------------------------------------------------------------------
+   产品主的原话（这条决定了整个做法）：**「记录文件的改动应该是无限牛马的功能，
+   不是本机的功能」**。
+
+   所以"这是一个容器开发项目 / 创建的容器是哪个 / 创建者停用了它 / 项目目录在哪 /
+   工具改过哪些文件"这些**全都是项目属性**，必须**随项目同步给成员**；
+   而"创建者那台机器上的容器现在到底起没起"是**现场事实**，只能作为**信号**跟着走。
+
+   因此这一层给两个东西：
+     ① `projectAttrsMessage()` / `parseProjectAttrsMessage()` —— 一条**有界、可校验**的
+        项目属性 + 可用性信号（不塞文件内容，只塞路径台账的**尾部**）；
+     ② `projectInboundGate()` —— 成员侧拿到信号后**怎么处理入站流量**：
+        项目不可用时**拒绝并挂到"创建者离线"那一档**（复用 ADR 003 §2.4 / R6 的既有语义，
+        **不新造第三种状态**）。
+
+   ⚠️ 纪律：
+    · 这里**只做形状与判定**，不 import 容器判定（`container-probe.deriveProjectState`
+      才是唯一一份判定）；调用方把 `projectAttrsToStateInput()` 的结果喂给它即可。
+    · 解析不认识的东西 ⇒ **如实报错**，不"尽力猜"（半懂不懂地接受一条对端消息比拒绝更危险）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * 项目属性同步走的**线上频道**。
+ * ⚠️ 不是新造一个 channel：协议层的 channel 集合是固定的
+ * （`'group' | 'control' | 'invite' | 'gossip' | 'announce'`，见 sync-protocol 的 SyncMessage），
+ * 而我们**不改 sync-protocol**。所以搭在既有的 `'control'` 频道上（它本来就是
+ * "控制面小消息"的通道，握手层自己的 ping/pong 也走它），用下面的 `kind` 自报身份：
+ * 不认识的 kind 一律**拒绝**，不会被误当成 ping 或别的东西。
+ */
+export const PROJECT_ATTRS_CHANNEL = 'control' as const;
+/** 消息内的 type 常量（防止别的负载被误认成项目属性） */
+export const PROJECT_ATTRS_KIND = 'warmy.project.attrs';
+/** 信号里最多带多少条台账（有界：频道消息不能被台账撑爆） */
+export const PROJECT_ATTRS_LEDGER_TAIL = 30;
+
+export type ProjectAvailabilitySignalValue = 'available' | 'stopped' | 'not-ready' | 'not-installed' | 'not-chosen' | 'unknown';
+
+export interface ProjectAvailabilitySignal {
+  /** 创建者节点**当时算出来的**可用性（现场事实，随时间变） */
+  availability: ProjectAvailabilitySignalValue;
+  /** 机器可读的原因码（与 container-probe 的状态码同族：ok / disabled-by-owner / …） */
+  code: string;
+  at: number;
+}
+
+export interface ProjectAttrsPayload {
+  kind: typeof PROJECT_ATTRS_KIND;
+  groupId: string;
+  /** 群名/类型跟着走，成员第一次收到时才有东西可建 */
+  name?: string;
+  type?: 'internal' | 'external';
+  /** 项目属性（**项目级事实**，不是"本机设置"） */
+  project: {
+    devEnv: 'host' | 'container';
+    runtimeId: string;
+    disabledAt: number;
+    directory?: string;
+    directorySource?: 'creator-picked' | 'checkpoint-workspace';
+    env?: { containerRef?: string; imageRef?: string; solidifiedAt?: number };
+  };
+  availability: ProjectAvailabilitySignal;
+  /** 创建者身份指纹：成员侧认"谁是项目主"用它（拿不到就不带） */
+  creatorFingerprint?: string;
+  /** 工具文件访问台账的**尾部**（项目级、成员可见：只带路径/操作/时间，绝无内容） */
+  ledgerTail?: Array<{ op: string; path: string; ts: number; ok: boolean; by: string; bytes?: number }>;
+  updatedAt: number;
+}
+
+/**
+ * 造一条同步消息（**只带白名单字段**；多余字段不会被带出去）。
+ * 台账尾部截断到 `PROJECT_ATTRS_LEDGER_TAIL` 条（按时间倒序取最新）。
+ */
+export function projectAttrsMessage(input: {
+  groupId: string;
+  name?: string;
+  type?: 'internal' | 'external';
+  project: ProjectAttrsPayload['project'];
+  availability: ProjectAvailabilitySignal;
+  creatorFingerprint?: string;
+  ledger?: Array<{ op: string; path: string; ts: number; ok: boolean; by: string; bytes?: number }>;
+  updatedAt?: number;
+}): ProjectAttrsPayload {
+  const msg: ProjectAttrsPayload = {
+    kind: PROJECT_ATTRS_KIND,
+    groupId: String(input.groupId || ''),
+    project: {
+      devEnv: input.project.devEnv === 'container' ? 'container' : 'host',
+      runtimeId: String(input.project.runtimeId || ''),
+      disabledAt: Math.max(0, Number(input.project.disabledAt) || 0),
+    },
+    availability: {
+      availability: input.availability.availability,
+      code: String(input.availability.code || ''),
+      at: Number(input.availability.at) || Date.now(),
+    },
+    updatedAt: Number(input.updatedAt) || Date.now(),
+  };
+  if (input.name) msg.name = String(input.name);
+  if (input.type) msg.type = input.type === 'external' ? 'external' : 'internal';
+  if (input.project.directory) {
+    msg.project.directory = String(input.project.directory);
+    msg.project.directorySource = input.project.directorySource === 'checkpoint-workspace' ? 'checkpoint-workspace' : 'creator-picked';
+  }
+  if (input.project.env && (input.project.env.containerRef || input.project.env.imageRef || input.project.env.solidifiedAt)) {
+    const env: NonNullable<ProjectAttrsPayload['project']['env']> = {};
+    if (input.project.env.containerRef) env.containerRef = String(input.project.env.containerRef);
+    if (input.project.env.imageRef) env.imageRef = String(input.project.env.imageRef);
+    if (input.project.env.solidifiedAt) env.solidifiedAt = Number(input.project.env.solidifiedAt);
+    msg.project.env = env;
+  }
+  if (input.creatorFingerprint) msg.creatorFingerprint = String(input.creatorFingerprint);
+  if (Array.isArray(input.ledger) && input.ledger.length) {
+    msg.ledgerTail = input.ledger
+      .slice()
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+      .slice(0, PROJECT_ATTRS_LEDGER_TAIL)
+      .map((e) => ({
+        op: String(e.op || ''),
+        path: String(e.path || ''),
+        ts: Number(e.ts) || 0,
+        ok: e.ok !== false,
+        by: String(e.by || 'unknown'),
+        ...(Number(e.bytes) > 0 ? { bytes: Number(e.bytes) } : {}),
+      }));
+  }
+  return msg;
+}
+
+const AVAILABILITY_VALUES: readonly ProjectAvailabilitySignalValue[] = ['available', 'stopped', 'not-ready', 'not-installed', 'not-chosen', 'unknown'];
+
+/** 校验对端发来的项目属性消息：**不认识就拒绝**（不做"尽力而为"的宽容解析） */
+export function parseProjectAttrsMessage(raw: unknown): { ok: true; value: ProjectAttrsPayload } | { ok: false; error: string } {
+  if (!raw || typeof raw !== 'object') return { ok: false, error: 'not-an-object' };
+  const m = raw as Partial<ProjectAttrsPayload>;
+  if (m.kind !== PROJECT_ATTRS_KIND) return { ok: false, error: 'not-project-attrs' };
+  const groupId = String(m.groupId || '');
+  if (!groupId) return { ok: false, error: 'missing-group-id' };
+  const p = m.project;
+  if (!p || typeof p !== 'object') return { ok: false, error: 'missing-project' };
+  if (p.devEnv !== 'host' && p.devEnv !== 'container') return { ok: false, error: 'bad-dev-env' };
+  if (typeof p.runtimeId !== 'string') return { ok: false, error: 'bad-runtime-id' };
+  const dis = Number(p.disabledAt);
+  if (p.disabledAt !== undefined && p.disabledAt !== null && !Number.isFinite(dis)) return { ok: false, error: 'bad-disabled-at' };
+  const a = m.availability;
+  if (!a || typeof a !== 'object') return { ok: false, error: 'missing-availability' };
+  if (!AVAILABILITY_VALUES.includes(a.availability as ProjectAvailabilitySignalValue)) return { ok: false, error: 'bad-availability' };
+  const value: ProjectAttrsPayload = projectAttrsMessage({
+    groupId,
+    ...(m.name ? { name: String(m.name) } : {}),
+    ...(m.type ? { type: m.type === 'external' ? 'external' : 'internal' } : {}),
+    project: {
+      devEnv: p.devEnv,
+      runtimeId: String(p.runtimeId),
+      disabledAt: Number.isFinite(dis) ? Math.max(0, dis) : 0,
+      ...(p.directory ? { directory: String(p.directory) } : {}),
+      ...(p.directorySource ? { directorySource: p.directorySource } : {}),
+      ...(p.env && typeof p.env === 'object' ? { env: p.env } : {}),
+    },
+    availability: {
+      availability: a.availability as ProjectAvailabilitySignalValue,
+      code: String(a.code || ''),
+      at: Number(a.at) || 0,
+    },
+    ...(m.creatorFingerprint ? { creatorFingerprint: String(m.creatorFingerprint) } : {}),
+    ...(Array.isArray(m.ledgerTail) ? { ledger: m.ledgerTail.map((e) => ({ op: String(e.op || ''), path: String(e.path || ''), ts: Number(e.ts) || 0, ok: e.ok !== false, by: String(e.by || 'unknown'), ...(Number(e.bytes) > 0 ? { bytes: Number(e.bytes) } : {}) })) } : {}),
+    updatedAt: Number(m.updatedAt) || 0,
+  });
+  return { ok: true, value };
+}
+
+/**
+ * 信号 → `container-probe.deriveProjectState` 的输入事实（**唯一的判定仍然在那份纯函数里**）。
+ * 映射规则（拿不准一律当"没就绪" —— 与 ADR 004 §7.1「拿不准当停止」一致）：
+ *   · `available` ⇒ runtimeStatus='ready'
+ *   · `not-ready` / `stopped` ⇒ 'installed-not-running'（⇒ 项目不可用）
+ *   · `not-installed` ⇒ 'not-installed'
+ *   · `not-chosen` ⇒ runtimeId 清空（⇒ container-not-chosen）
+ *   · `unknown` / 其它 ⇒ runtimeStatus=null（⇒ 按未就绪处理，不乐观放开）
+ */
+export function projectAttrsToStateInput(signal: {
+  project: ProjectAttrsPayload['project'];
+  availability: ProjectAvailabilitySignal;
+}): { devEnv: 'host' | 'container'; runtimeId: string; runtimeStatus: string | null; disabledByOwner: boolean; source: 'creator-signal' } {
+  const availability = signal.availability.availability;
+  let runtimeId = String(signal.project.runtimeId || '');
+  let runtimeStatus: string | null = null;
+  if (signal.project.devEnv === 'container') {
+    if (availability === 'available') runtimeStatus = 'ready';
+    else if (availability === 'not-installed') runtimeStatus = 'not-installed';
+    else if (availability === 'not-ready' || availability === 'stopped') runtimeStatus = 'installed-not-running';
+    else runtimeStatus = null;
+    if (availability === 'not-chosen') runtimeId = '';
+  } else {
+    runtimeStatus = null;
+  }
+  return {
+    devEnv: signal.project.devEnv === 'container' ? 'container' : 'host',
+    runtimeId,
+    runtimeStatus,
+    disabledByOwner: Number(signal.project.disabledAt) > 0,
+    source: 'creator-signal',
+  };
+}
+
+/** 成员侧的入站门控结论 */
+export interface ProjectInboundGate {
+  /** 放行 = 这个项目的入站流量照常处理 */
+  allow: boolean;
+  /** 不放行时**挂到哪一档**（复用既有语义，不新造状态） */
+  queue: 'creator-offline' | null;
+  /** 与"创建者下线"同一句文案键（渲染层直接用，**不要**另写一句） */
+  memberFaceKey: string | null;
+  /** 机器可读原因（项目状态码；文案仍走既有 container.project.reason.<suffix>） */
+  projectCode: string;
+  /** 放行时也需要知道"这条项目现在可用" */
+  projectRunning: boolean;
+}
+
+/**
+ * 成员侧入站门控：项目不可用（容器没就绪 / 被创建者停用 / 还没选容器）⇒
+ * **拒绝并排队为"创建者离线"**，而不是"接受之后再失败"。
+ *
+ * ⚠️ 这里**不重复**原因码→文案的映射：`projectCode` 原样带回，渲染层用**既有**的
+ * `container.project.reason.<suffix>`（与"创建者下线"那一档共用 `group.memberOffline`）。
+ */
+export function projectInboundGate(state: { running: boolean; code: string; devEnv?: string }): ProjectInboundGate {
+  const running = state?.running === true;
+  if (running) {
+    return { allow: true, queue: null, memberFaceKey: null, projectCode: String(state?.code || 'ok'), projectRunning: true };
+  }
+  return {
+    allow: false,
+    queue: 'creator-offline',
+    memberFaceKey: 'group.memberOffline',
+    projectCode: String(state?.code || 'container-not-ready'),
+    projectRunning: false,
+  };
+}
+

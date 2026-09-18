@@ -1,4 +1,4 @@
-/* CCArmy renderer — 文案全在 i18n；主题/分栏/模型拉取/附件/语音/总看板 */
+/* WArmy renderer — 文案全在 i18n；主题/分栏/模型拉取/附件/语音/总看板 */
 (() => {
   const $ = (id) => document.getElementById(id);
   let pendingAvatarTarget = null;
@@ -27,25 +27,29 @@
     embedUseGpu: true,
     listWidth: 280,
     panelWidth: 300,
+    /**
+     * R2：用户自己设的快捷键（动作 id → 组合键字符串）。
+     * 只存**用户改过的**；没写过的动作走 SHORTCUT_ACTIONS 里的预置值。
+     * 空串 = 用户显式解绑（不会回落到预置值）。走既有 settings 通道持久化。
+     */
+    shortcuts: {},
     attachments: [],
     profile: { loggedIn: false, username: 'nav.avatar', avatarDataUrl: '', email: '', deviceId: '', avatarPreset: 0 },
     queues: {},
     board: {
-      /** ADR：外部聚合看板 — 会话进展只读，点击跳转；值班者写 board.jsonl */
-      sessions: [
-        { id: 's-internal-1', kind: 'internal', name: 'demo.project1', progress: 65, status: 'doing', blocked: false, notify: true },
-        { id: 's-internal-2', kind: 'internal', name: 'demo.project2', progress: 30, status: 'doing', blocked: true },
-        { id: 's-ext-1', kind: 'extgroup', name: 'demo.client', progress: 90, status: 'doing', blocked: false },
-        { id: 's-single-demo-1', kind: 'single', name: 'demo.agent', progress: 40, status: 'doing', blocked: false },
-      ],
+      /**
+       * ADR：外部聚合看板 — 会话进展只读，点击跳转；值班者写 board.jsonl。
+       *
+       * ⚠️ 这里**刻意是空的**：以前预置了 4 个演示会话 + 4 条演示动态（demo.project1…），
+       * 于是「总看板」在真数据还没来时显示得像"真的有 4 个项目在跑、刚刚完成了任务"
+       * （时间戳还是相对现在算的，看着很新）。那属于"看起来在跑其实没跑"。
+       * 现在：真数据一律来自 `warmy:board-aggregate` / `warmy:board-events`；
+       * 没数据就由 renderDashboard() 如实显示"暂无…"。
+       */
+      sessions: [],
       /** board.jsonl 结构化事件（值班者解析写入） */
-      events: [
-        { id: 'e1', ts: Date.now() - 3600e3, action: 'create_task', title: 'demo.task1', session: 'demo.project1' },
-        { id: 'e2', ts: Date.now() - 1800e3, action: 'update_progress', title: 'demo.task1', session: 'demo.project1' },
-        { id: 'e3', ts: Date.now() - 900e3, action: 'block', title: 'demo.task2', session: 'demo.project2' },
-        { id: 'e4', ts: Date.now() - 300e3, action: 'complete_task', title: 'demo.task3', session: 'demo.agent' },
-      ],
-      recent: ['demo.recent1', 'demo.recent2'],
+      events: [],
+      recent: [],
     },
     plugins: [
       {
@@ -130,8 +134,45 @@
   }
   let __inputThrottle = 0;
   const providerCfgModel = (p) => p.defaultModel || (p.models && p.models[0]) || 'deepseek-chat';
+  // Locale packs shipped under src/i18n/. Native names are intentionally not translated.
+  const SUPPORTED_LOCALES = [
+    ['zh-CN', '简体中文'],
+    ['zh-TW', '繁體中文'],
+    ['en-US', 'English'],
+    ['ja', '日本語'],
+    ['ko', '한국어'],
+    ['ru', 'Русский'],
+    ['es', 'Español'],
+    ['fr', 'Français'],
+    ['pt', 'Português'],
+    ['eo', 'Esperanto'],
+  ];
+  function resolveLocalePack(locale) {
+    if (!locale) return 'zh-CN';
+    const raw = String(locale).trim();
+    if (SUPPORTED_LOCALES.some((x) => x[0] === raw)) return raw;
+    const l = raw.toLowerCase().replace('_', '-');
+    if (l.startsWith('zh-tw') || l.startsWith('zh-hant') || l === 'zh-hk' || l === 'zh-mo') return 'zh-TW';
+    if (l.startsWith('zh')) return 'zh-CN';
+    if (l.startsWith('ja')) return 'ja';
+    if (l.startsWith('ko')) return 'ko';
+    if (l.startsWith('ru')) return 'ru';
+    if (l.startsWith('es')) return 'es';
+    if (l.startsWith('fr')) return 'fr';
+    if (l.startsWith('pt')) return 'pt';
+    if (l.startsWith('eo')) return 'eo';
+    if (l.startsWith('en')) return 'en-US';
+    return 'zh-CN';
+  }
+  function localeOptionsHtml(selected) {
+    return SUPPORTED_LOCALES.map(([code, label]) => {
+      const on = resolveLocalePack(selected) === code ? ' selected' : '';
+      return `<option value="${code}"${on}>${escapeHtml(label)}</option>`;
+    }).join('');
+  }
+
   const displayName = () =>
-    state.t['app.displayName'] || (state.locale.startsWith('zh') ? t('app.zhName') : t('app.enName'));
+    state.t['app.displayName'] || state.t['brand.name'] || (state.locale.startsWith('zh') ? t('app.zhName') : t('app.enName'));
   /** 把任意输入夹成 0-100 的整数百分比，用于宽度与文本，避免注入 style 属性 */
   function clampPercent(v) {
     const n = Number(v);
@@ -189,7 +230,12 @@
       ok.className = 'btn-primary';
       ok.textContent = t('common.ok');
       ok.onclick = () => {
-        root.classList.remove('hidden');
+        // 确认后**必须关上**：这里原本写成 remove('hidden')（= 保持打开），
+        // 于是「采用新联系方式 / 已联系本人核实」等确认框点完确定还留在屏幕上，
+        // 遮住整页（遮蔽层连顶部横幅一起挡住），用户以为没生效、也点不到下面的按钮。
+        // 对照 uiConfirmCountdown / uiAlert 的实现：两者都是 add('hidden')。
+        // 若调用方紧接着还要弹下一个框（uiAlert 会自己 remove('hidden')），不受影响。
+        root.classList.add('hidden');
         resolve(true);
       };
       acts.append(cancel, ok);
@@ -426,7 +472,7 @@
     state.theme = color;
     document.documentElement.style.setProperty('--accent', color);
     document.documentElement.style.setProperty('--me-bubble', color);
-    window.ccarmy.settingsSave({ accent: color });
+    window.warmy.settingsSave({ accent: color });
   }
 
   /** 自定义主题色：调色板 + 预览 + 取消/确定 */
@@ -497,7 +543,7 @@
   }
 
   function saveProfile() {
-    window.ccarmy.profileSave({
+    window.warmy.profileSave({
       username: state.profile.username,
       email: state.profile.email,
       avatarDataUrl: state.profile.avatarDataUrl,
@@ -513,7 +559,7 @@
       /* noop */
     }
     try {
-      window.ccarmy.trayTooltip?.({
+      window.warmy.trayTooltip?.({
         text: `${t('brand.name')} ${t('brand.sub')}`,
         offWork: t('tray.offWork'),
         header: t('export.header'),
@@ -535,15 +581,18 @@
       el.title = t(el.getAttribute('data-i18n-title'));
     });
     $('logo-name').textContent = displayName();
-    $('logo-sub').textContent = t('app.subtitle');
-    if ($('tb-brand')) $('tb-brand').textContent = displayName();
+    $('logo-sub').textContent = t('brand.sub');
+    // Owner rule: top-left titlebar line = logo + tagline ONLY (no product name on that line).
+    if ($('tb-brand')) $('tb-brand').textContent = t('brand.tagline') || t('about.tagline');
         applyAvatar();
     document.title = displayName();
     syncTrayText();
+    // T194：控制台表头/清空按钮也走 i18n（面板合着时只更新表头那一行）
+    try { renderConsole(); } catch { /* 控制台还没初始化完 */ }
   }
 
   async function loadI18n(locale) {
-    const pack = await window.ccarmy.i18n(locale);
+    const pack = await window.warmy.i18n(locale);
     state.locale = pack.locale;
     state.t = pack.strings;
     if (pack.displayName) state.t['app.displayName'] = pack.displayName;
@@ -557,10 +606,10 @@
     const root = document.documentElement;
     if (mode === 'system') {
       root.removeAttribute('data-theme');
-      window.ccarmy?.setThemeSource?.('system');
+      window.warmy?.setThemeSource?.('system');
     } else {
       root.setAttribute('data-theme', mode);
-      window.ccarmy?.setThemeSource?.(mode);
+      window.warmy?.setThemeSource?.(mode);
     }
   }
 
@@ -709,13 +758,18 @@
   function setupListAction() {
     const btn = $('list-action');
     const joinBtn = $('btn-join-qr');
-    // 项目/群聊/联系人：显示扫码加入
+    // 项目/群聊/联系人：右侧入口显示（联系人页它就是「添加联系人」本身）
     if (joinBtn) {
       const showJoin = state.nav === 'internalGroup' || state.nav === 'externalGroup' || state.nav === 'externalChat';
       joinBtn.classList.toggle('hidden', !showJoin);
+      joinBtn.title = t('join.qrHint');
       if (state.nav === 'internalGroup') joinBtn.textContent = t('nav.addProject');
       else if (state.nav === 'externalGroup') joinBtn.textContent = t('nav.addGroup');
-      else if (state.nav === 'externalChat') joinBtn.textContent = t('contact.add');
+      else if (state.nav === 'externalChat') {
+        // R4：联系人页**只留这一个**添加按钮——右手那个 #list-action 原本同名同位（已知缺陷）。
+        joinBtn.textContent = t('contact.add');
+        joinBtn.title = t('contact.add');
+      }
     }
     if (state.nav === 'internalGroup' || state.nav === 'externalGroup') {
       const createKey = state.nav === 'internalGroup' ? 'list.createProject' : 'list.createGroupChat';
@@ -724,10 +778,9 @@
       btn.classList.remove('hidden');
       btn.onclick = createGroupFlow;
     } else if (state.nav === 'externalChat') {
-      btn.textContent = t('contact.add');
-      btn.title = t('contact.add');
-      btn.classList.remove('hidden');
-      btn.onclick = addContactFlow;
+      // R4：这里不再出现第二个「添加联系人」。加联系人走 #btn-join-qr（带「我的链接/二维码」的那个弹窗）。
+      btn.classList.add('hidden');
+      btn.onclick = null;
     } else if (state.nav === 'instances') {
       btn.textContent = t('list.addInstance');
       btn.title = t('list.addInstance');
@@ -911,8 +964,15 @@
     renderList();
     updatePanelVisibility();
     renderModelMgr();
+    // ADR 004 第七批：右栏「项目状态 / 最近改动文件 / 其他文件 / 生成的产品」+ 容器控制台门禁。
+    // 右侧顶部**不再有切换容器的入口**（切换容器在项目右键菜单里）。
+    void renderProjectStateBlock();
+    void renderProjectFilesBlock();
+    void refreshContainerConsoleGate();
     // 附六：「下次进该会话」要重新出现（关闭只是暂时隐藏）
     void idRefreshForChat();
+    // 右栏「进度」按当前会话拉真任务（没有就如实说"暂无任务"）
+    void renderProgressTasks();
   }
 
   function renderChat() {
@@ -941,6 +1001,48 @@
   function queueOf(chatId) {
     if (!state.queues[chatId]) state.queues[chatId] = [];
     return state.queues[chatId];
+  }
+
+  /** 待执行队列落盘（主进程 userData/ui-queues.json）；失败不打断 UI */
+  let __uiQueuesTimer = 0;
+  function persistUiQueuesSoon() {
+    if (!window.warmy?.uiQueuesSet) return;
+    if (__uiQueuesTimer) return;
+    __uiQueuesTimer = setTimeout(() => {
+      __uiQueuesTimer = 0;
+      try {
+        // 只序列化可 JSON 化的字段（去掉 editing 等瞬时 UI 态）
+        const out = {};
+        for (const [k, arr] of Object.entries(state.queues || {})) {
+          if (!Array.isArray(arr) || !arr.length) continue;
+          out[k] = arr.map((x) => ({
+            text: String(x.text || ''),
+            u: String(x.u || 'P2'),
+            status: String(x.status || 'queued'),
+          }));
+        }
+        void window.warmy.uiQueuesSet(out);
+      } catch { /* noop */ }
+    }, 200);
+  }
+
+  async function restoreUiQueuesOnce() {
+    if (!window.warmy?.uiQueuesGet) return;
+    try {
+      const r = await window.warmy.uiQueuesGet();
+      const q = r && r.ok && r.queues && typeof r.queues === 'object' ? r.queues : null;
+      if (!q) return;
+      for (const [k, arr] of Object.entries(q)) {
+        if (!Array.isArray(arr) || !arr.length) continue;
+        state.queues[k] = arr.map((x) => ({
+          text: String(x?.text || ''),
+          u: x?.u === 'P3' ? 'P3' : 'P2',
+          status: 'queued',
+          editing: false,
+        }));
+      }
+      renderQueueBar();
+    } catch { /* noop */ }
   }
 
   function renderQueueBar() {
@@ -976,10 +1078,12 @@
           item.text = ta.value.trim() || item.text;
           item.editing = false;
           renderQueueBar();
+          persistUiQueuesSoon();
         };
         del.onclick = () => {
           q.splice(idx, 1);
           renderQueueBar();
+          persistUiQueuesSoon();
         };
         li.append(ta, save, del);
       } else {
@@ -999,6 +1103,7 @@
         del.onclick = () => {
           q.splice(idx, 1);
           renderQueueBar();
+          persistUiQueuesSoon();
         };
         li.append(span, edit, del);
       }
@@ -1032,7 +1137,7 @@
     state.instances.forEach((inst) => {
       if (inst.status === 'running') {
         try {
-          window.ccarmy.stopInstance(inst.id);
+          window.warmy.stopInstance(inst.id);
         } catch {
           /* noop */
         }
@@ -1050,107 +1155,209 @@
     renderChat();
   }
 
+  /** 会话 id → 类型（内部群走值班编排，其余走单会话 Provider 对话） */
+  function chatKindOf(chatId) {
+    const c = state.chats.find((x) => x.id === chatId);
+    if (c && c.kind) return c.kind;
+    const g = (state.groups || []).find((x) => x.id === chatId);
+    if (g && g.type) return g.type === 'internal' ? 'internal' : 'extgroup';
+    if (state.selectedChat && state.selectedChat.id === chatId) return state.selectedChat.kind || '';
+    return '';
+  }
+
+  /**
+   * 真的把一条消息交给模型（一轮 = 一次派发，从发起到回包）。
+   *   · 内部群 → groupOrchestrate（值班编排闭环：回包 + 看板事件 + 检查点都在主进程那侧）
+   *   · 单 AI / 外部 → chatSend（真 Provider 对话）
+   * 直接路径（P0·P1，见 send()）与「待执行队列」的冲刷走的是**同一个**实现 ——
+   * 修前排队项只被本地回显、从不派发，根因就是没有这一份共用的"派发"。
+   */
+  async function deliver(chatId, text, u) {
+    const kind = chatKindOf(chatId);
+    queueRounds[chatId] = true;
+    try {
+      if (kind === 'internal') {
+        try {
+          const r = await window.warmy.groupOrchestrate({ groupId: chatId, content: text, urgency: u });
+          const reply = r?.reply || `[${u}] ${r?.action || 'ok'}`;
+          pushMsg(chatId, 'them', reply);
+          if (r?.boardEvent) {
+            state.board = state.board || { sessions: [], events: [], recent: [] };
+            state.board.events = state.board.events || [];
+            state.board.events.unshift({ id: 'e' + Date.now(), ts: Date.now(), action: r.boardEvent.split(':')[0], title: r.boardEvent, session: chatId });
+          }
+        } catch (e) {
+          pushMsg(chatId, 'them', String(e.message || e));
+        }
+        return;
+      }
+      // 单 AI / 外部：真 Provider 对话
+      try {
+        const r = await window.warmy.chatSend({
+          sessionId: chatId,
+          content: text,
+          insertMode: u === 'P1' ? 'inner' : 'outer',
+        });
+        if (r?.needsKey) {
+          pushMsg(chatId, 'them', r.reply);
+        } else if (r?.ok) {
+          pushMsg(chatId, 'them', r.reply);
+          const c = state.chats.find((x) => x.id === chatId);
+          if (c) {
+            c.lastTs = Date.now();
+            c.lastPreview = (r.reply || text).slice(0, 30);
+          }
+        } else {
+          pushMsg(chatId, 'them', r?.error || t('common.error'));
+        }
+      } catch (e) {
+        pushMsg(chatId, 'them', String(e.message || e));
+      }
+    } finally {
+      queueRounds[chatId] = false;
+    }
+  }
+
+  /** 一轮结束的收尾（直接路径与排队冲刷共用，避免两条路各收一半） */
+  function endOfRound(chatId) {
+    window.warmy.checkpointAuto?.('round_end');
+    renderChat();
+    playNotifySound('complete');
+    refreshMetrics();
+    refreshCheckpoints();
+    if (chatKindOf(chatId) === 'internal') {
+      // 值班者编排可能改了看板任务 → 右栏「进度」跟着刷真数据
+      void renderProgressTasks();
+    }
+    if (CHAT_NAVS.has(state.nav)) renderList();
+  }
+
+  /**
+   * 待执行队列（P2 插入 / P3 排队）的**真冲刷**。
+   *
+   * 事实（修前）：send() 把 P2/P3 塞进本会话队列就 return；flushQueue() 只把队列项
+   * 本地回显成两条气泡，**从不**调用 chatSend / groupOrchestrate —— 而 P2 是**默认**紧急度，
+   * 于是「输入 → 发送 → 界面上出现消息、模型那头什么都没收到」：默认路径整条是死的。
+   *
+   * 设计依据（ADR000 不变量 #8 与 §指令插入）：
+   *   P1 立即插入（手动按钮）；P2 **默认**「当前任务完成后插入执行」；P3 排队「本轮结束后按队列执行，
+   *   队列中内容可编辑/删除」；P0 = 停止。群聊那侧的同一语义在 group-router 里写得很直白：
+   *   complete() = 「值班者完成一轮后回到 idle 并冲刷队列」，而冲刷的结果就是**被派发**。
+   * 结论：排队项的唯一正确归宿是"真的发出去并被回答"，不是回显。
+   *
+   * 触发时机（"本轮结束"有两种）：
+   *   ① 有轮在跑：消息留在队列里，等那一轮结束（直接路径在 endOfRound 之后调 flushQueue）
+   *   ② 没有轮在跑（用户刚按下发送、谁都不忙）：排到下一个轮边界 —— QUEUE_GRACE_MS。
+   *      这段窗口里队列项就在「待执行队列」条上，可编辑 / 可移除（产品写明的能力），
+   *      窗口一过就真的派发；没有窗口的话这条队列只剩"闪一下"，编辑/删除根本够不着。
+   * 顺序：FIFO（数组 push / shift），不按紧急度重排 —— 重排是群聊 Router 的职责
+   * （Router.sortQueue 会按 P0<P1<P2<P3 再按入队时间重排），桌面端这条队列只做用户自己的待办序。
+   */
+  const QUEUE_GRACE_MS = 800;
+  const queueRounds = {}; // chatId -> 本轮是否在跑
+  const queueTimers = {}; // chatId -> 已排定的轮边界定时器
+  const queueDrains = {}; // chatId -> 正在冲刷（同会话串行，保证顺序）
+
+  function queueBusy(chatId) {
+    return !!queueRounds[chatId] || !!queueDrains[chatId];
+  }
+
+  /** 排定一次"轮边界"冲刷；有轮在跑就交给那一轮结束时冲刷，不重复排 */
+  function scheduleQueueFlush(chatId) {
+    if (!chatId || queueTimers[chatId] || queueDrains[chatId]) return;
+    if (queueBusy(chatId)) return;
+    queueTimers[chatId] = setTimeout(() => {
+      delete queueTimers[chatId];
+      flushQueue(chatId);
+    }, QUEUE_GRACE_MS);
+  }
+
+  /** 本轮结束点：真的冲刷该会话的待执行队列 */
+  function flushQueue(chatId) {
+    if (queueTimers[chatId]) {
+      clearTimeout(queueTimers[chatId]);
+      delete queueTimers[chatId];
+    }
+    if (queueBusy(chatId)) return; // 还有轮在跑：等它结束
+    void drainQueue(chatId);
+  }
+
+  /** 逐条派发（同会话串行、FIFO；冲刷过程中新入队的排在其后） */
+  async function drainQueue(chatId) {
+    const q = queueOf(chatId);
+    if (queueDrains[chatId] || !q.length) return;
+    queueDrains[chatId] = true;
+    try {
+      while (q.length) {
+        const item = q.shift();
+        persistUiQueuesSoon();
+        renderQueueBar();
+        pushMsg(chatId, 'me', item.text);
+        renderChat();
+        if (CHAT_NAVS.has(state.nav)) renderList();
+        await deliver(chatId, item.text, item.u);
+        endOfRound(chatId);
+      }
+    } finally {
+      delete queueDrains[chatId];
+      persistUiQueuesSoon();
+      renderQueueBar();
+      renderChat();
+      if (CHAT_NAVS.has(state.nav)) renderList();
+    }
+  }
+
   async function send() {
     const text = $('input').value.trim();
     if (!text || !state.selectedChat) return;
     const id = state.selectedChat.id;
     const u = state.urgency;
+    /**
+     * ADR 004 P3 定稿：容器项目的开发面**只在容器里**。容器没运行 ⇒ 项目 = 已停止
+     * （等同创建者下线）⇒ **拒绝在宿主侧派发这一轮**，而不是静默地在本机编辑项目文件。
+     * 这不是"少一个功能"，而是这条安全承诺的全部意义所在（主进程还会再拒一次）。
+     */
+    const blocked = await projectDevBlock(id);
+    if (blocked) {
+      await uiAlert(fmtKey('container.project.devBlocked', { reason: blocked }), t('container.devEnv.title'));
+      return;
+    }
     const attachNote = state.attachments.length
       ? `\n[${state.attachments.map((a) => a.name).join(', ')}]`
       : '';
     const full = text + attachNote;
 
+    // P2（默认「插入」）/ P3（「排队」）：进「待执行队列」，本轮结束后由冲刷**真的派发**出去
     if (u === 'P2' || u === 'P3') {
       queueOf(id).push({ id: 'q-' + Date.now(), text: full, u, editing: false });
       $('input').value = '';
       state.attachments = [];
       renderAttach();
       renderQueueBar();
+      persistUiQueuesSoon();
+      if (CHAT_NAVS.has(state.nav)) renderList();
+      scheduleQueueFlush(id);
       return;
     }
 
+    // P0（停止，见 stopAllAi）/ P1（加急）：立即插入 —— 直接派发
     pushMsg(id, 'me', full);
     $('input').value = '';
     state.attachments = [];
     renderAttach();
     renderChat();
 
-    // 内部群：值班编排闭环
-    if (state.selectedChat.kind === 'internal') {
-      try {
-        const r = await window.ccarmy.groupOrchestrate({
-          groupId: id,
-          content: text,
-          urgency: u,
-        });
-        const reply = r?.reply || `[${u}] ${r?.action || 'ok'}`;
-        pushMsg(id, 'them', reply);
-        if (r?.boardEvent) {
-          state.board = state.board || { sessions: [], events: [], recent: [] };
-          state.board.events = state.board.events || [];
-          state.board.events.unshift({ id: 'e' + Date.now(), ts: Date.now(), action: r.boardEvent.split(':')[0], title: r.boardEvent, session: id });
-        }
-      } catch (e) {
-        pushMsg(id, 'them', String(e.message || e));
-      }
-      window.ccarmy.checkpointAuto?.('round_end');
-      renderChat();
-      flushQueue(id);
-      playNotifySound('complete');
-      refreshMetrics();
-      refreshCheckpoints();
-      if (CHAT_NAVS.has(state.nav)) renderList();
-      return;
-    }
-
-    // 单 AI / 外部：真 Provider 对话
-    try {
-      const r = await window.ccarmy.chatSend({
-        sessionId: id,
-        content: text,
-        insertMode: state.urgency === 'P1' ? 'inner' : 'outer',
-      });
-      if (r?.needsKey) {
-        pushMsg(id, 'them', r.reply);
-      } else if (r?.ok) {
-        pushMsg(id, 'them', r.reply);
-        const c = state.chats.find((x) => x.id === id);
-        if (c) {
-          c.lastTs = Date.now();
-          c.lastPreview = (r.reply || text).slice(0, 30);
-        }
-      } else {
-        pushMsg(id, 'them', r?.error || t('common.error'));
-      }
-    } catch (e) {
-      pushMsg(id, 'them', String(e.message || e));
-    }
-    window.ccarmy.checkpointAuto?.('round_end');
-    renderChat();
-    flushQueue(id);
-    playNotifySound('complete');
-    refreshMetrics();
-    refreshCheckpoints();
-    if (CHAT_NAVS.has(state.nav)) renderList();
-  }
-
-  function flushQueue(chatId) {
-    const q = queueOf(chatId);
-    while (q.length) {
-      const item = q.shift();
-      pushMsg(chatId, 'me', item.text);
-      pushMsg(chatId, 'them', `[${item.u === 'P2' ? t('chat.p2') : t('chat.p3')}] ${item.text.slice(0, 30)}…`);
-    }
-    renderQueueBar();
-    renderChat();
+    await deliver(id, text, u);
+    endOfRound(id);
+    flushQueue(id); // 本轮结束 → 冲刷队列（真的发，不再只回显）
   }
 
   async function renderDashboard(host) {
     let sessions = state.board.sessions;
     let events = state.board.events;
     try {
-      const agg = await window.ccarmy.boardAggregate();
-      const ev = await window.ccarmy.boardEvents();
+      const agg = await window.warmy.boardAggregate();
+      const ev = await window.warmy.boardEvents();
       if (agg?.ok && agg.sessions?.length) {
         sessions = agg.sessions.map((s) => ({
           id: s.groupId,
@@ -1210,6 +1417,10 @@
       </div>`;
 
     const sess = $('board-sessions');
+    if (!sessions.length) {
+      // 如实话术：没有真数据就说没有（不摆演示数据）
+      sess.innerHTML = '<div class="board-empty">' + escapeHtml(t('dashboard.emptySessions')) + '</div>';
+    }
     sessions.forEach((s) => {
       const el = document.createElement('div');
       el.className = 'board-session';
@@ -1235,6 +1446,9 @@
     });
 
     const evBox = $('board-events');
+    if (!events.length) {
+      evBox.innerHTML = '<div class="board-empty">' + escapeHtml(t('dashboard.emptyEvents')) + '</div>';
+    }
     [...events]
       .sort((a, b) => b.ts - a.ts)
       .forEach((e) => {
@@ -1321,12 +1535,12 @@
     };
     $('i-start').onclick = async () => {
       try {
-        const dsh = await window.ccarmy.dshAvailable().catch(() => ({ ok: false }));
+        const dsh = await window.warmy.dshAvailable().catch(() => ({ ok: false }));
         let r;
         if (dsh?.ok) {
-          r = await window.ccarmy.spawnDshInstance({ id: inst.id, name: inst.name });
+          r = await window.warmy.spawnDshInstance({ id: inst.id, name: inst.name });
         } else {
-          r = await window.ccarmy.spawnInstance({ id: inst.id, name: inst.name, dutyEligible: true });
+          r = await window.warmy.spawnInstance({ id: inst.id, name: inst.name, dutyEligible: true });
         }
         if (r?.ok === false && r?.error) {
           uiAlert(String(r.error));
@@ -1341,7 +1555,7 @@
     };
     $('i-stop').onclick = async () => {
       try {
-        await window.ccarmy.stopInstance(inst.id);
+        await window.warmy.stopInstance(inst.id);
       } catch {
         /* noop */
       }
@@ -1390,7 +1604,7 @@
       });
 
       $('i-cog-add')?.addEventListener('click', async () => {
-        const r = await window.ccarmy.pickFile({ filters: ['md'] });
+        const r = await window.warmy.pickFile({ filters: ['md'] });
         if (!r?.ok) return;
         const name = r.path.split(/[\\/]/).pop();
         inst.cognitionFiles.push({ name, path: r.path, size: 0 });
@@ -1548,9 +1762,11 @@
     }
 
     $('i-del').onclick = async () => {
-      if (!uiConfirm(t('instances.delete') + '?')) return;
+      // 这里原本漏了 await：`!uiConfirm(...)` 永远是 false（Promise 恒真），于是**确认框形同虚设**
+      // —— 还没等用户点，牛马就已经被删掉了（顺手修掉，属同类缺陷：确认框必须真的能拦住操作）。
+      if (!(await uiConfirm(t('instances.delete') + '?'))) return;
       try {
-        await window.ccarmy.stopInstance(inst.id);
+        await window.warmy.stopInstance(inst.id);
       } catch {
         /* noop */
       }
@@ -1653,6 +1869,7 @@
           <button data-sec="notify">${t('settings.section.notify')}</button>
           <button data-sec="model">${t('settings.section.model')}</button>
           <button data-sec="func">${t('settings.section.func')}</button>
+          <button data-sec="hotkey">${t('settings.section.hotkey')}</button>
           <button data-sec="about">${t('settings.section.about')}</button>
         </div>
         <div class="settings-content" id="settings-content">
@@ -1660,8 +1877,7 @@
         <div class="set-section set-card">
           <h2>${t('settings.language')}</h2>
           <select id="sel-locale" title="${escapeHtml(t('settings.language'))}">
-            <option value="zh-CN" ${state.locale.startsWith('zh') ? 'selected' : ''}>${t('settings.localeZh')}</option>
-            <option value="en-US" ${state.locale.startsWith('en') ? 'selected' : ''}>${t('settings.localeEn')}</option>
+            ${localeOptionsHtml(state.locale)}
           </select>
         </div>
         <div class="set-section set-card">
@@ -1747,6 +1963,92 @@
           </div>
           <p class="muted" style="margin:8px 0 0">${t('settings.securityHint')}</p>
         </div>
+        <!-- ═══ ADR 004：功能 → 容器 ═══════════════════════════════════════
+             ADR §3.2：主操作 =「查看本机已有容器」→ 列出本机**已有**的容器（含三态与不可用原因）；
+             下方 =「常用容器安装说明」折叠区（折叠只显示名字，展开显示 收费/商用/系统/体积 + 官网四条链接）。
+             列表数据来自主进程真探测（warmy:container-probe），不是写死的。 -->
+        <div class="set-section set-card" id="container-card">
+          <h2>${t('container.title')}</h2>
+          <p class="ctg-dim">${t('container.hint')}</p>
+          <div class="inst-row" style="align-items:center;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn-primary" id="btn-container-probe">${t('container.probeBtn')}</button>
+            <span class="ctg-dim" id="container-probe-msg" data-probe-state="idle"></span>
+          </div>
+          <div id="container-cta" class="ctg-cta hidden">${t('container.guideFirstStep')}</div>
+          <div class="ctg-summary" id="container-summary" data-summary="none"></div>
+          <div class="ctg-list-head">
+            <span>${t('container.listTitle')}</span>
+            <span class="ctg-dim">${t('container.listTitleHint')}</span>
+          </div>
+          <div id="container-list" class="ctg-list" data-probe="none"></div>
+          <div class="ctg-dim" id="container-missing-note"></div>
+          <!-- 第三批：环境类型（Linux 真容器 / Windows 受限 / Android 非容器）+ 镜像（digest）+ 实测耗时 -->
+          <div class="ctg-hint-box" id="container-dev-isolation">
+            <div class="ctg-hint-title">${t('container.runEnv.title')}</div>
+            <div class="ctg-dim">${t('container.devIsolation')}</div>
+            <div class="ctg-dim">${t('container.devIsolationTest')}</div>
+          </div>
+          <div class="ctg-guide-head">${t('container.envType.title')}</div>
+          <div class="ctg-dim">${t('container.envType.hint')}</div>
+          <div class="ctg-dim">${t('container.envType.onlyLinux')}</div>
+          <div id="container-env-types" class="ctg-list"></div>
+          <div class="ctg-hint-box" id="container-os-mode-note">
+            <div class="ctg-hint-title">${t('container.envType.title')}</div>
+            <div class="ctg-dim">${t('container.envType.modeHint')}</div>
+          </div>
+          <div class="ctg-hint-box" id="container-target-note">
+            <div class="ctg-hint-title">${t('container.target.title')}</div>
+            <div class="ctg-dim">${t('container.target.hint')}</div>
+            <div class="ctg-hint-title">${t('container.mount.title')}</div>
+            <div class="ctg-dim">${t('container.mount.body')}</div>
+            <div class="ctg-dim">${t('container.mount.perf')}</div>
+          </div>
+          <div class="ctg-guide-head">${t('container.image.title')}</div>
+          <div class="ctg-dim">${t('container.image.why')}</div>
+          <div class="ctg-dim">${t('container.image.node')}</div>
+          <div class="ctg-dim">${t('container.image.sourcePending')}</div>
+          <div id="container-images" class="ctg-list"></div>
+          <!-- 第八/九批：镜像按**项目技术栈**选 + 环境由用户自装 + 一键复制的安装提示词 -->
+          <div class="ctg-hint-box" id="container-image-stack-scale">
+            <div class="ctg-hint-title">${t('container.image.stack.title')}</div>
+            <div class="ctg-dim">${t('container.image.stack.nodeOnly')}</div>
+            <div class="ctg-dim">${t('container.image.executorHost')}</div>
+            <div class="ctg-dim">${t('container.image.stack.moreLater')}</div>
+            <div id="container-image-stacks" class="ctg-list"></div>
+          </div>
+          <div class="ctg-hint-box" id="container-env-install">
+            <div class="ctg-hint-title">${t('container.env.install.title')}</div>
+            <div class="ctg-dim">${t('container.env.install.body')}</div>
+            <div class="ctg-hint-title">${t('container.env.install.persistTitle')}</div>
+            <div class="ctg-dim">${t('container.env.install.persistBody')}</div>
+            <div class="ctg-hint-title">${t('container.env.install.netTitle')}</div>
+            <div class="ctg-dim">${t('container.env.install.netBody')}</div>
+            <div class="ctg-dim">${t('container.env.install.noNodeForUs')}</div>
+          </div>
+          <div class="ctg-hint-box" id="container-install-prompt">
+            <div class="ctg-hint-title">${t('container.env.prompt.title')}</div>
+            <div class="ctg-dim">${t('container.env.prompt.hint')}</div>
+            <pre id="ctg-install-prompt-text" class="ctg-prompt-text" data-prompt-lang=""></pre>
+            <div class="ctg-actions-row">
+              <button type="button" class="btn-mini" id="btn-copy-install-prompt">${t('container.env.prompt.copy')}</button>
+              <span class="ctg-dim" id="ctg-install-prompt-msg" data-copy-state="idle"></span>
+            </div>
+          </div>
+          <!-- 第八批：快照与回退点的关系（分层；不许声称"有容器回退点就更简单"） -->
+          <div class="ctg-hint-box" id="container-snapshot-note">
+            <div class="ctg-hint-title">${t('container.snapshot.title')}</div>
+            <div class="ctg-dim">${t('container.snapshot.body')}</div>
+            <div class="ctg-dim">${t('container.snapshot.layerFiles')}</div>
+            <div class="ctg-dim">${t('container.snapshot.layerEnv')}</div>
+            <div class="ctg-dim">${t('container.snapshot.fingerprint')}</div>
+            <div class="ctg-dim">${t('container.snapshot.noClaim')}</div>
+          </div>
+          <div class="ctg-guide-head">${t('container.timing.title')}</div>
+          <div id="container-timings" class="ctg-dim"></div>
+          <div class="ctg-guide-head">${t('container.guideTitle')}</div>
+          <div class="ctg-dim">${t('container.guideHint')}</div>
+          <div id="container-guide" class="ctg-guide"></div>
+        </div>
         <div class="set-section set-card">
           <h2>${t('settings.plugins')}</h2>
           <table class="plugins">
@@ -1756,59 +2058,38 @@
           <div style="margin-top:8px"><input id="plug-path" placeholder="package or path" style="width:55%"/>
             <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button></div>
         </div>
-        <div class="set-section set-card">
-          <h2>${t('lan.title')}</h2>
-          <div class="inst-row">
-            <div class="field"><label>${t('lan.port')}</label><input id="lan-port" value="7788"/></div>
-            <button class="btn-mini" id="btn-lan-start">${t('lan.start')}</button>
-            <button class="btn-mini" id="btn-lan-stop">${t('lan.stop')}</button>
-          </div>
-          <div class="inst-row" style="margin-top:8px">
-            <div class="field"><label>${t('lan.peerHost')}</label><input id="lan-host" value="192.168.1.123" placeholder="192.168.1.123"/></div>
-            <div class="field"><label>${t('lan.peerPort')}</label><input id="lan-pport" value="7788"/></div>
-            <button class="btn-mini" id="btn-lan-send">${t('lan.sendTest')}</button>
-            <button class="btn-mini" id="btn-lan-dual">${t('lan.dualSmoke')}</button>
-          </div>
-          <div class="muted" id="lan-msg" style="margin-top:8px"></div>
-          <div class="muted" id="lan-inbox" style="margin-top:8px;max-height:100px;overflow:auto"></div>
-        </div>
-        <div class="set-section set-card">
-          <h2>${t('mesh.title')}</h2>
-          <p class="muted">${t('mesh.hint')}</p>
-          <div class="inst-row">
-            <div class="field"><label>${t('lan.port')}</label><input id="mesh-port" value="7788"/></div>
-            <button class="btn-mini" id="btn-mesh-start">${t('mesh.start')}</button>
-            <button class="btn-mini" id="btn-mesh-stop">${t('mesh.stop')}</button>
-            <button class="btn-mini" id="btn-mesh-bcast">${t('mesh.broadcast')}</button>
-          </div>
-          <div class="inst-row" style="margin-top:8px">
-            <div class="field"><label>${t('mesh.name')}</label><input id="peer-name" placeholder="${escapeHtml(t('placeholder.nodeName'))}"/></div>
-            <div class="field"><label>${t('lan.peerHost')}</label><input id="peer-host" placeholder="${escapeHtml(t('placeholder.peerHost'))}"/></div>
-            <div class="field"><label>${t('lan.peerPort')}</label><input id="peer-port" value="7788"/></div>
-            <button class="btn-mini" id="btn-peer-add">${t('mesh.addPeer')}</button>
-          </div>
-          <div id="peer-list" style="margin-top:10px"></div>
-          <div class="muted" id="mesh-msg" style="margin-top:8px"></div>
-          <div class="muted" id="mesh-inbox" style="margin-top:8px;max-height:100px;overflow:auto"></div>
-        </div>
-        <!-- R8：公网地址（自动填入 / 手改 / 多域名）+ 检测 + 组网开关（检测通过才能打开） -->
+        <!-- 内网同步 / 多节点组网 旧设置块已移除：功能由下方「组网设置」卡片承接。
+             底层 IPC 通道 warmy:lan-* / warmy:mesh-* 保留为产品契约，仅去掉 UI 与死渲染代码。 -->
+        <!-- R8：组网设置：混合公网地址列表（IP + 域名）+ 刷新本机/公网地址 + 逐条检测 + 开关（检测通过才能打开） -->
         <div class="set-section set-card" id="net-card">
           <h2>${t('net.title')} <button type="button" class="btn-mini net-help-btn" id="btn-net-help" aria-label="${escapeHtml(t('net.helpTitle'))}" title="${escapeHtml(t('net.helpTitle'))}">?</button></h2>
           <div id="net-help-box" class="muted net-help-box hidden">${escapeHtml(t('net.helpBody'))}</div>
           <p class="muted" style="margin:0 0 10px">${t('net.hint')}</p>
           <div class="inst-row">
-            <div class="field"><label>${t('net.address')}</label><input id="net-ip" value="${escapeHtml(netState.addr.ip || '')}" placeholder="${escapeHtml(t('net.address'))}"/></div>
             <div class="field" style="max-width:120px"><label>${t('net.port')}</label><input id="net-port" value="${escapeHtml(String(netState.addr.port || ''))}"/></div>
-            <button class="btn-mini" id="btn-net-autofill">${t('net.autofill')}</button>
           </div>
-          <div class="muted" id="net-local-info" style="margin:6px 0"></div>
+          <!-- R13：端口**只是默认值 + 约定**，不是限制 —— 输入框永远可改（1–65535）。
+               约定端口（开发/测试）在这里提示；实际绑上的端口由组网层事实驱动。
+               data-convention / data-bound 是给验收脚本的稳定契约（不必解析文案）。 -->
+          <div class="muted net-port-hint" id="net-port-hint" data-convention=""></div>
+          <div class="muted net-port-bound" id="net-port-bound" data-bound=""></div>
+          <!-- R13：**端口无法绑定**时在这里明确告知（端口号 + 底层错误码）+ 给出**可点选的建议**
+               端口（点一下只填进输入框，不自动改端口、不替用户做主）。默认隐藏。 -->
+          <div class="net-port-conflict hidden" id="net-port-conflict" data-fail-port="" data-fail-code=""></div>
+          <!-- 本机地址事实 + 刷新按钮（取代旧「自动填入本机地址」） -->
+          <div class="inst-row" style="align-items:center;gap:8px;margin:6px 0">
+            <div class="muted" id="net-local-info" style="flex:1;min-width:0"></div>
+            <button type="button" class="btn-mini" id="btn-net-refresh" title="${escapeHtml(t('net.refresh'))}">${t('net.refresh')}</button>
+          </div>
           <!-- 附八.9 / 附八.3：连接阶梯档位 + 中继状态（全部走 i18n；未实现的档如实标「尚未实现」） -->
           <div class="net-ladder" id="net-ladder" data-sig=""></div>
+          <!-- 公网地址列表：IP 与域名共用同一列表；标签只出现一次（修复旧双重渲染缺陷） -->
           <div style="margin-top:6px">
-            <label class="net-sub-label">${t('net.domainTitle')}</label>
+            <label class="net-sub-label" id="net-public-list-label">${t('net.domainTitle')}</label>
             <div id="net-domains"></div>
             <div style="margin-top:6px"><button class="btn-mini" id="btn-net-domain-add">${t('net.domainAdd')}</button></div>
           </div>
+          <div id="net-entry-results" class="net-entry-results"></div>
           <div class="inst-row" style="margin-top:10px;align-items:center">
             <button class="btn-primary" id="btn-net-detect">${t('net.detect')}</button>
             <div id="net-probe-result" style="flex:1;min-width:220px"></div>
@@ -1861,18 +2142,42 @@
           <h2>${t('join.blacklistTitle')}</h2>
           <div id="blacklist-box" class="muted">${t('join.blacklistEmpty')}</div>
         </div>
-        <div class="set-section set-card">
-          <h2>${t('diag.title')}</h2>
-          <p class="muted" style="margin:0 0 8px">${t('diag.hint')}</p>
-          <div id="diag-out" class="muted">—</div>
-          <div style="margin-top:8px"><button class="btn-mini" id="btn-diag-run">${t('diag.run')}</button></div>
-        </div>
-        <div class="set-section set-card">
+        <div class="set-section set-card" id="skills-card">
           <h2>${t('settings.skills')}</h2>
           <p class="muted" style="margin:0 0 8px">${t('settings.skillsHint')}</p>
           <div style="margin-bottom:8px"><button class="btn-mini" id="btn-skill-import">${t('settings.skillsImport')}</button></div>
+          <div class="skill-scan-block">
+            <div class="skill-scan-title">${t('settings.skillsScanTitle')}</div>
+            <div class="muted">${t('settings.skillsScanHint')}</div>
+            <div id="skill-scan-dirs"></div>
+            <div class="inst-row" style="margin-top:6px;align-items:center">
+              <input id="skill-scan-dir-input" class="skill-scan-input" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}" style="flex:1;min-width:120px"/>
+              <button class="btn-mini" id="btn-skill-scan-add">${t('settings.skillsScanAdd')}</button>
+            </div>
+            <div class="muted" id="skill-scan-msg"></div>
+          </div>
           <div id="skill-list" class="muted">${t('settings.skillsEmpty')}</div>
           <div class="muted skill-paths" id="skill-paths"></div>
+        </div>
+        <!-- R2「快捷」：上半给其他智能体看本机 API 表面，下半给人设键盘快捷键 -->
+        <div class="set-section" data-sec="hotkey"><h2 style="color:var(--accent)">${t('settings.section.hotkey')}</h2></div>
+        <div class="set-section set-card" id="hk-api-card">
+          <h2>${t('settings.hotkey.apiTitle')}</h2>
+          <p class="hk-hint">${t('settings.hotkey.apiHint')}</p>
+          <div class="hk-count" id="hk-api-count"></div>
+          <input class="hk-filter" id="hk-api-filter" placeholder="${escapeHtml(t('settings.hotkey.apiFilter'))}"/>
+          <div id="hk-api-body"></div>
+          <div class="hk-api-events" id="hk-api-events"></div>
+        </div>
+        <div class="set-section set-card" id="hk-keys-card">
+          <h2>${t('settings.hotkey.keyTitle')}</h2>
+          <p class="hk-hint">${t('settings.hotkey.keyHint')}</p>
+          <p class="hk-hint">${t('settings.hotkey.onlyWired')}</p>
+          <table class="hk-keys">
+            <thead><tr><th>${t('settings.hotkey.colAction')}</th><th>${t('settings.hotkey.colBinding')}</th><th>${t('settings.hotkey.colDesc')}</th></tr></thead>
+            <tbody id="hk-keys-body"></tbody>
+          </table>
+          <div class="hk-msg" id="hk-keys-msg"></div>
         </div>
         <div class="set-section" data-sec="about"><h2 style="color:var(--accent)">${t('settings.section.about')}</h2></div>
         <div class="set-section set-card about-card">
@@ -1881,15 +2186,11 @@
             <div class="about-brand-text">
               <div class="about-name">${escapeHtml(t('brand.name'))}</div>
               <div class="about-sub">${escapeHtml(t('brand.sub'))}</div>
+              <div class="about-tagline">${escapeHtml(t('brand.tagline') || t('about.tagline'))}</div>
               <div class="about-ver-line">
                 <span class="muted about-ver" id="about-version">—</span>
                 <button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
                 <span class="muted" id="about-upd"></span>
-              </div>
-              <div class="about-feed-line" style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-                <input id="update-feed" placeholder="${escapeHtml(t('update.feedPlaceholder'))}" style="flex:1;min-width:220px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit"/>
-                <button class="btn-mini" id="btn-feed-save">${t('update.feedSave')}</button>
-                <span class="muted" id="feed-msg"></span>
               </div>
             </div>
           </div>
@@ -1906,33 +2207,20 @@
           <div class="about-block"><h3>${t('about.legal')}</h3><p class="muted">${t('about.legalBody')}</p></div>
         </div></div></div>`;
 
-      // 更新源：不填则永远只会是「未配置」，所以必须给界面入口
-      (async () => {
-        try {
-          const cur = await window.ccarmy.updateSourceGet();
-          const inp = $('update-feed');
-          if (inp && cur && cur.url) inp.value = cur.url;
-          const msg = $('feed-msg');
-          if (msg && !(cur && cur.url)) msg.textContent = t('update.status.notConfigured');
-        } catch (e) { /* 预览桩或旧版本可能没有该 API，静默跳过 */ }
-      })();
-      $('btn-feed-save').onclick = async () => {
-        const msg = $('feed-msg');
-        const url = (($('update-feed') || {}).value || '').trim();
-        const r = await window.ccarmy.updateSourceSet({ url }).catch(() => null);
-        if (msg) msg.textContent = r && r.ok === false ? t('update.feedInvalid') : t('update.feedSaved');
-      };
+      // 更新源 UI 已从「关于」移除（产品要求）。设置项 updateFeedUrl 仍然生效：
+      // 可由 settings.json / 环境变量 WARMY_UPDATE_FEED_URL / IPC updateSourceSet 写入。
+      // 这里不再渲染入口，也不再调用 updateSourceGet/Set。
       $('btn-about-update').onclick = async () => {
         const el = $('about-upd');
         if (el) el.textContent = t('about.checking');
         // 主进程会区分「未配置 / 网络失败 / HTTP 错误 / 格式非法 / 已最新 / 有更新」，
         // 不能只看 upToDate —— 那会把「未配置」误报成「发现新版本」。
-        const r = await window.ccarmy.checkUpdate().catch(() => null);
+        const r = await window.warmy.checkUpdate().catch(() => null);
         if (el) el.textContent = updateStatusText(r);
       };
       (async () => {
         try {
-          const info = await window.ccarmy.appInfo();
+          const info = await window.warmy.appInfo();
           if (!info?.ok) return;
           const v = $('about-version');
           if (v) v.textContent = `${t('about.version')} ${info.version}`;
@@ -1949,8 +2237,8 @@
       (function bindSettingsMenu() {
         const contentEl = $('settings-content');
         if (!contentEl) return;
-        const secIds = ['ui', 'notify', 'model', 'func', 'about'];
-        const groups = { ui: [], notify: [], model: [], func: [], about: [] };
+        const secIds = ['ui', 'notify', 'model', 'func', 'hotkey', 'about'];
+        const groups = { ui: [], notify: [], model: [], func: [], hotkey: [], about: [] };
         let curSec = 'ui';
         Array.from(contentEl.children).forEach((el) => {
           const ds = el.getAttribute && el.getAttribute('data-sec');
@@ -1967,20 +2255,25 @@
       })();
       $('sel-locale').onchange = async (e) => {
         await loadI18n(e.target.value);
-        window.ccarmy.settingsSave({ locale: e.target.value });
+        window.warmy.settingsSave({ locale: e.target.value });
         setNav('settings');
       };
       document.querySelectorAll('.theme-mode button').forEach((b) => {
         b.onclick = () => {
           applyThemeMode(b.dataset.m);
-          window.ccarmy.settingsSave({ themeMode: b.dataset.m });
+          window.warmy.settingsSave({ themeMode: b.dataset.m });
           renderPage();
         };
       });
       renderThemeSwatches();
       renderSkillList();
-      bindDiagnostics();
+      renderSkillScanDirs().catch(() => {});
+      bindSkillScanDirs();
+      bindDataMetricsOnly();
       bindNetCard();
+      bindHotkeySection();
+      // ADR 004 P1：设置 → 功能 → 容器（折叠安装说明 + 探测 + 可操作状态列表）
+      bindContainerCard();
       document.querySelectorAll('.theme-swatches button').forEach((b) => {
         if (b.dataset.c === state.theme) b.classList.add('on');
         b.onclick = () => {
@@ -2024,7 +2317,7 @@
         state.globalSecurity = next;
         syncSecDesc();
         try {
-          await window.ccarmy.setSecurityMode(state.globalSecurity);
+          await window.warmy.setSecurityMode(state.globalSecurity);
         } catch {
           /* noop */
         }
@@ -2038,12 +2331,12 @@
         el.onchange = () => {
           state.emailNotify = state.emailNotify || { complete: false, request: true, error: true };
           state.emailNotify[el.dataset.emailK] = el.checked;
-          window.ccarmy.settingsSave({ emailNotify: state.emailNotify });
+          window.warmy.settingsSave({ emailNotify: state.emailNotify });
         };
       });
       document.querySelectorAll('[data-pick]').forEach((b) => {
         b.onclick = async () => {
-          const r = await window.ccarmy.pickSound();
+          const r = await window.warmy.pickSound();
           if (r?.ok) {
             state.soundFiles[b.dataset.pick] = r.path;
             renderPage();
@@ -2060,7 +2353,7 @@
       // ── SMTP 多账号（最多 10） ──
       $('btn-import-openclaw')?.addEventListener('click', async () => {
         $('import-msg').textContent = t('common.loading');
-        const r = await window.ccarmy.importOpenclaw().catch(() => null);
+        const r = await window.warmy.importOpenclaw().catch(() => null);
         if (r?.ok) {
           $('import-msg').textContent = t('instances.saved') + ' (' + r.providers.length + ')';
           state.providers = r.providers;
@@ -2088,53 +2381,61 @@
           summary: { provider: 'deepseek', model: $('sm-summary')?.value || 'deepseek-flash' },
           organizer: { provider: 'deepseek', model: $('sm-organizer')?.value || 'deepseek-chat' },
         };
-        await window.ccarmy.specialModelsSet(cfg).catch(() => {});
+        await window.warmy.specialModelsSet(cfg).catch(() => {});
         $('sm-msg').textContent = t('instances.saved');
       });
-      // 邀请链接 / 二维码
+      // 邀请链接 / 二维码（二维码由 index.html 引入的经典脚本编码器生成，见 qrSvg）
+      //
+      // 链接**只有**一个来源：ownInviteLink() —— node ← meshStatus().nodeId、
+      // port ← 组网设置里当前配置的端口（netState.addr.port）、tok ← inviteCreate().invite.token。
+      // 这里曾经硬编码了一个**早已退休的旧约定端口**（不是产品默认端口），改成读真实端口；
+      // 真端口拿不到就**少一个字段**（如实少说），绝不编一个旧端口出来。
+      // 面板元素在当前布局里可能不存在 —— 不存在就连 IPC 都不发（不白造邀请令牌）。
       (async () => {
-        const st = await window.ccarmy.meshStatus().catch(() => null);
-        const node = st?.nodeId || 'local';
-        const inv = await window.ccarmy.inviteCreate().catch(() => null);
-        const tok = inv?.invite?.token ? '&tok=' + inv.invite.token : '';
-        const link = 'ccarmy://join?node=' + encodeURIComponent(node) + '&port=7788' + tok;
+        if (!$('join-link') && !$('join-qr')) return;
+        const own = await ownInviteLink();
         const lk = $('join-link');
-        if (lk) lk.textContent = link;
+        if (lk) lk.textContent = own.link;
+        const msg = $('join-msg');
+        if (msg && !own.ok) msg.textContent = t('join.linkUnavailable');
         const qr = $('join-qr');
         if (qr) {
-          try {
-            const mod = await import('./qr.js');
-            qr.innerHTML = mod.qrSvg(link, 168);
-          } catch {
-            qr.textContent = link.slice(0, 26) + '…';
-          }
+          const svg = own.ok ? qrSvg(own.link, 168) : '';
+          // 编码器没加载上就如实说明：不画占位矩阵、也不拿截断的链接冒充二维码
+          if (svg) qr.innerHTML = svg;
+          else qr.textContent = t('join.qrUnavailable');
         }
       })();
       $('btn-join-copy')?.addEventListener('click', async () => {
+        const link = String($('join-link')?.textContent || '').trim();
+        if (!link) {
+          if ($('join-msg')) $('join-msg').textContent = t('join.linkUnavailable');
+          return;
+        }
         try {
-          await navigator.clipboard.writeText($('join-link').textContent);
+          await navigator.clipboard.writeText(link);
           $('join-msg').textContent = t('join.copied');
         } catch {
           $('join-msg').textContent = t('join.fail');
         }
       });
       $('btn-join-accept')?.addEventListener('click', () => {
-        const v = $('join-input').value.trim();
+        const v = String(($('join-input') || {}).value || '').trim();
         if (!v) return;
-        $('join-msg').textContent = v.startsWith('ccarmy://') ? t('join.ok') : t('join.fail');
+        $('join-msg').textContent = v.startsWith('warmy://') ? t('join.ok') : t('join.fail');
       });
 
       async function refreshBlacklist() {
         const box = $('blacklist-box');
         if (!box) return;
-        const r = await window.ccarmy.blacklistList().catch(() => null);
+        const r = await window.warmy.blacklistList().catch(() => null);
         const items = r?.items || [];
         box.innerHTML = items.length
           ? items.map((b) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(b.name) + ' · ' + escapeHtml(b.target) + ' · ' + new Date(b.blockedAt).toLocaleString() + '</span><button class="btn-mini" data-unblock="' + escapeHtml(b.id) + '">' + t('join.removeBlacklist') + '</button></div>').join('')
           : t('join.blacklistEmpty');
         box.querySelectorAll('[data-unblock]').forEach((btn) => {
           btn.onclick = async () => {
-            await window.ccarmy.blacklistRemove(btn.dataset.unblock).catch(() => {});
+            await window.warmy.blacklistRemove(btn.dataset.unblock).catch(() => {});
             refreshBlacklist();
           };
         });
@@ -2144,14 +2445,14 @@
       async function refreshArchived() {
         const box = $('archived-box');
         if (!box) return;
-        const r = await window.ccarmy.archivedList().catch(() => null);
+        const r = await window.warmy.archivedList().catch(() => null);
         const items = r?.items || [];
         box.innerHTML = items.length
           ? items.map((a) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(a.name) + ' · ' + escapeHtml(String(a.kind || '')) + '</span><button class="btn-mini" data-restore="' + escapeHtml(a.id) + '">' + t('cp.rollback') + '</button></div>').join('')
           : '—';
         box.querySelectorAll('[data-restore]').forEach((b) => {
           b.onclick = async () => {
-            await window.ccarmy.archivedRestore(b.dataset.restore).catch(() => {});
+            await window.warmy.archivedRestore(b.dataset.restore).catch(() => {});
             refreshArchived();
             uiAlert(t('instances.saved'));
           };
@@ -2160,7 +2461,7 @@
       refreshArchived();
 
       async function renderSmtpList() {
-        const r = await window.ccarmy.smtpList();
+        const r = await window.warmy.smtpList();
         const accounts = r?.accounts || [];
         const n = $('smtp-n');
         if (n) n.textContent = String(accounts.length);
@@ -2184,7 +2485,7 @@
           .join('');
         box.querySelectorAll('[data-x]').forEach((b) => {
           b.onclick = async () => {
-            await window.ccarmy.smtpRemove(b.dataset.x);
+            await window.warmy.smtpRemove(b.dataset.x);
             renderSmtpList();
           };
         });
@@ -2197,7 +2498,7 @@
               return;
             }
             $('smtp-msg').textContent = t('common.loading');
-            const vr = await window.ccarmy.smtpVerify({ ...full, id });
+            const vr = await window.warmy.smtpVerify({ ...full, id });
             $('smtp-msg').textContent = vr?.ok ? t('smtp.ok') : t('smtp.fail') + ': ' + (vr?.message || '');
             renderSmtpList();
           };
@@ -2218,7 +2519,7 @@
           $('smtp-msg').textContent = t('common.error');
           return;
         }
-        const r = await window.ccarmy.smtpAdd(acc);
+        const r = await window.warmy.smtpAdd(acc);
         if (r?.ok) {
           state.smtpFull = (state.smtpFull || []).concat([acc]);
           ['smtp-label', 'smtp-host', 'smtp-user', 'smtp-pass'].forEach((id) => {
@@ -2261,7 +2562,7 @@
           inp.onchange = () => {
             pr[inp.dataset.k] = inp.value;
             if (inp.dataset.k === 'label') el.querySelector('.prov-head').textContent = inp.value;
-            window.ccarmy.setProvider({
+            window.warmy.setProvider({
               presetId: pr.id,
               apiKey: pr.apiKey,
               baseURL: pr.baseURL,
@@ -2273,14 +2574,14 @@
         el.querySelector('[data-fetch]').onclick = async () => {
           const btn = el.querySelector('[data-fetch]');
           btn.textContent = t('common.loading');
-          await window.ccarmy.setProvider({
+          await window.warmy.setProvider({
             presetId: pr.id,
             apiKey: pr.apiKey,
             baseURL: pr.baseURL,
             protocol: pr.protocol,
             model: providerCfgModel(pr),
           });
-          const r = await window.ccarmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, apiKey: pr.apiKey });
+          const r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, apiKey: pr.apiKey });
           if (r?.ok && r.models?.length) {
             pr.models = [...new Set([...(pr.models || []), ...r.models])];
           }
@@ -2301,7 +2602,7 @@
         el.querySelectorAll('.model-chip').forEach((chip) => {
           chip.onclick = async () => {
             pr.defaultModel = chip.dataset.m;
-            await window.ccarmy.setProvider({
+            await window.warmy.setProvider({
               presetId: pr.id,
               apiKey: pr.apiKey,
               baseURL: pr.baseURL,
@@ -2332,9 +2633,9 @@
    * ----------------------------------------------------------------------
    * 改这块之前先读这五条：
    *
-   *  1) 这里**只做 UI 与判定**，不实现网络：一律走 window.ccarmy 的组网/身份 IPC。
+   *  1) 这里**只做 UI 与判定**，不实现网络：一律走 window.warmy 的组网/身份 IPC。
    *     该 IPC 还没落地（身份层并行开发中）时用**可注入的桩**顶替：
-   *       window.__ccarmyNetStub / window.__ccarmyIdentityStub
+   *       window.__warmyNetStub / window.__warmyIdentityStub
    *     桩优先于真实 IPC（自动化才能压出各种状态）。两者都没有时如实显示
    *     「组网层未就绪」，**不假装检测通过**。
    *
@@ -2356,8 +2657,34 @@
    *     空值显示「未填写」占位，绝不表现为对方隐藏。
    * ══════════════════════════════════════════════════════════════════════ */
 
+  /**
+   * Default mesh TCP port. 产品负责人**最终**决定：生产默认 59599。
+   *
+   * ⚠️ 渲染层不能用 import，只能**镜像**主进程那份常量：
+   *    packages/app-shell/src/settings-store.ts 的 `CCAARMY_DEFAULT_NET_PORT`
+   * 两处必须逐字一致（验证脚本会真的比对，不一致就红）。
+   * LAN discovery UDP stays on 7799 (unchanged, elsewhere).
+   *
+   * 端口**不是**从用户视角硬编码的：下面这个值只是输入框的默认值，
+   * 用户随时可以改成 1–65535 的任意值（parsePort 校验），不做任何"角色端口"限制。
+   */
+  const CCAARMY_DEFAULT_NET_PORT = 59599;
+
+  /**
+   * 开发/调试 与 测试 的**约定**端口（仅作提示；同样镜像 settings-store 的同名常量）。
+   * 刻意**不**校验、不锁定：约定不是限制。
+   */
+  const CCAARMY_DEV_NET_PORT = 58588;
+  const CCAARMY_TEST_NET_PORT = 62666;
+
+  // 注意：候选端口表**刻意不在渲染层镜像** —— 它由主进程的 `CCAARMY_SUGGESTED_NET_PORTS`
+  // 当"优先池"，再经 `warmy:net-port-candidates`（逐个**真 bind 实测**）后才可能出现在界面上。
+  // 渲染层不自己拿静态表充建议：静态表"干净"不代表本机现在绑得上。
+
   const NET_DEFAULTS = {
-    port: 7788,
+    port: CCAARMY_DEFAULT_NET_PORT,
+    devPort: CCAARMY_DEV_NET_PORT,
+    testPort: CCAARMY_TEST_NET_PORT,
     hysteresisFailures: 3, // 连续失败次数
     hysteresisSeconds: 30, // 且持续这么久
     retryRounds: 3, // 先重试几轮
@@ -2387,24 +2714,24 @@
 
   /** 组网层 IPC：桩优先，其次真实 IPC，都没有则 null（= 未就绪） */
   function netIpc(name, ...args) {
-    const stub = window.__ccarmyNetStub;
+    const stub = window.__warmyNetStub;
     if (stub && typeof stub[name] === 'function') {
       try { return Promise.resolve(stub[name](...args)); } catch (e) { return Promise.reject(e); }
     }
-    const api = window.ccarmy && window.ccarmy[name];
+    const api = window.warmy && window.warmy[name];
     if (typeof api === 'function') {
       try { return Promise.resolve(api(...args)); } catch (e) { return Promise.reject(e); }
     }
     return Promise.resolve(null);
   }
 
-  /** 身份层 IPC：同上（window.ccarmy.identity*） */
+  /** 身份层 IPC：同上（window.warmy.identity*） */
   function idIpc(name, ...args) {
-    const stub = window.__ccarmyIdentityStub;
+    const stub = window.__warmyIdentityStub;
     if (stub && typeof stub[name] === 'function') {
       try { return Promise.resolve(stub[name](...args)); } catch (e) { return Promise.reject(e); }
     }
-    const api = window.ccarmy && window.ccarmy[name];
+    const api = window.warmy && window.warmy[name];
     if (typeof api === 'function') {
       try { return Promise.resolve(api(...args)); } catch (e) { return Promise.reject(e); }
     }
@@ -2419,10 +2746,15 @@
   const netState = {
     /** 组网开关 */
     enabled: false,
-    /** 公网地址：1 个 IP + 多个域名（R8） */
-    addr: { ip: '', port: NET_DEFAULTS.port, domains: [] },
-    /** 最近一次检测结果 { verdict:'pass'|'fail'|'unknown', isPublic, outboundOk, method, at, code } */
+    /**
+     * 公网地址列表：IP 与域名共用同一条列表（混合列表）。
+     * 默认**不**用本机地址预填；用户可手动添加，或点「刷新」把检测到的公网地址写进来。
+     */
+    addr: { port: NET_DEFAULTS.port, publicAddresses: [] },
+    /** 最近一次检测结果 { verdict:'pass'|'fail'|'unknown', code, entries:[], at } */
     probe: null,
+    /** 逐条检测结果（每个 IP / 域名一行，诚实展示通过/失败） */
+    entryResults: [],
     probing: false,
     /** 链接迟滞状态（netStep 的输入与输出） */
     link: { fails: 0, downSince: 0, linkDown: false, round: 0, autoOff: false, nextRetryAt: 0 },
@@ -2434,6 +2766,13 @@
     dismissed: {},
     /** 组网「关闭」事件序号：让同一原因只弹一次，再次关闭时重新弹 */
     meshOffSeq: 0,
+    /**
+     * 终态（两端都拨不进来且无中继）的**发生次数**与"上一次那次"的结论码。
+     * 终态是一次**事件**，不是常驻状态：上一次关掉了，不代表这一次也不用提醒。
+     * 产品要求：公网地址再次不可达 → 横幅必须重新出现（即使上一次被手动关过）。
+     */
+    gapEpisode: 0,
+    gapLastCode: '',
     /** 本地地址信息（自动填入用） */
     local: null,
     /** 异地成员总数（横幅用）与按群缓存的成员状态 */
@@ -2455,6 +2794,33 @@
     linkPeers: [],
     /** 活会话数（netStatus.sessions） */
     sessions: 0,
+    /**
+     * R13：端口绑定事实（netStatus.bind / meshEnable.bind）。
+     * { requestedPort, boundPort, errorCode? } —— 组网层给的**事实**，UI 只显示不推断。
+     */
+    bind: null,
+    /**
+     * R13：**端口无法绑定**的现场（{ port, errorCode, error }）。
+     * 由"打开组网"失败时记下；界面据此明确告知原因并给出可点选的建议端口。
+     * 成功打开 / 关闭组网时清掉。**只用于告知与建议，绝不触发自动改端口**。
+     */
+    bindFail: null,
+    /**
+     * R13：**实测**得到的候选端口报告（netPortCandidates IPC）。
+     * { requestedPort, recommended:[{port,status,...}], probed:[...],
+     *   skipped:[{port,reason:'os-reserved-range',range:[s,e]}],
+     *   osReserved:{supported,source,ranges,error?}, coverage, timedOut, elapsedMs }
+     * 只推荐 status==='ok'（真的试绑成功过）的端口；**绝不**用静态列表直接充数。
+     * skipped = 落在本机 OS 保留段里、**根本没被探测**的端口（如实回报，不是"探测失败"；
+     * osReserved 说明这次保留段是从哪儿读的、读没读到）。
+     */
+    portCandidates: null,
+    /** 正在实测中（UI 显示"正在实测…"，不卡界面） */
+    portCandidatesLoading: false,
+    /** 端口提示区的渲染签名（防 1s 心跳刷 DOM） */
+    portHintSig: '',
+    /** 端口冲突区块的渲染签名 */
+    portConflictSig: '',
     /** 渲染签名：相同就不重建 DOM（避免 1s 心跳把用户正在点的按钮刷掉） */
     renderedSig: '',
     booted: false,
@@ -2744,7 +3110,7 @@
   function instanceIsRemote(inst) {
     if (!inst) return false;
     if (inst.remote === true) return true;
-    const stub = window.__ccarmyNetStub;
+    const stub = window.__warmyNetStub;
     if (stub && Array.isArray(stub.remoteInstanceIds) && stub.remoteInstanceIds.includes(inst.id)) return true;
     for (const gid of Object.keys(netState.presence)) {
       const bag = netState.presence[gid] || {};
@@ -2775,13 +3141,25 @@
   /** 读取已保存的组网地址配置（走既有 settings IPC，不新开持久化通道） */
   async function netLoadConfig() {
     try {
-      const s = await window.ccarmy.settingsGet();
+      const s = await window.warmy.settingsGet();
       const saved = s && s.settings && s.settings.net;
       if (saved && typeof saved === 'object') {
-        netState.addr.ip = String(saved.ip || '');
         const p = parsePort(saved.port);
         if (p) netState.addr.port = p;
-        netState.addr.domains = Array.isArray(saved.domains) ? saved.domains.map(String).filter(Boolean) : [];
+        // 新契约：publicAddresses 混合列表。旧契约 ip+domains 迁移进同一列表（仅在用户曾保存时）。
+        if (Array.isArray(saved.publicAddresses)) {
+          netState.addr.publicAddresses = saved.publicAddresses.map(String).map((x) => x.trim()).filter(Boolean);
+        } else {
+          const migrated = [];
+          if (saved.ip && String(saved.ip).trim()) migrated.push(String(saved.ip).trim());
+          if (Array.isArray(saved.domains)) {
+            for (const d of saved.domains) {
+              const v = String(d || '').trim();
+              if (v && migrated.indexOf(v) < 0) migrated.push(v);
+            }
+          }
+          netState.addr.publicAddresses = migrated;
+        }
       }
     } catch {
       /* 预览桩/旧主进程没有该字段：保持默认 */
@@ -2792,13 +3170,15 @@
         netState.enabled = st.meshEnabled;
         netState.ready = true;
       }
+      // R13：启动时组网已在跑 → 立刻显示"实际绑在哪个端口"（含兜底换端口的事实）
+      if (st && st.bind && typeof st.bind === 'object') netState.bind = st.bind;
     } catch {
       /* noop */
     }
     if (netState.ready === null) {
       // 退一步：既有 meshStatus（老 IPC）至少能给出「监听中」这一个事实
       try {
-        const ms = await window.ccarmy.meshStatus();
+        const ms = await window.warmy.meshStatus();
         if (ms && ms.ok !== false && typeof ms.listening === 'boolean') netState.enabled = ms.listening;
       } catch {
         /* noop */
@@ -2806,7 +3186,7 @@
     }
   }
 
-  /** 本机地址（自动填入的默认值） */
+  /** 本机地址事实（local / public）；由「刷新」触发重采 */
   async function netFetchLocal() {
     try {
       const r = await netIpc('netLocalAddress');
@@ -2822,64 +3202,145 @@
     return netState.local;
   }
 
-  /** 自动填入：本机 IP + 默认端口（只在字段为空时覆盖，不打断用户手改） */
-  async function netAutofill(force) {
+  /**
+   * 刷新：重新检测本机地址与公网地址，并把检测到的**公网地址**自动写入下方地址列表。
+   * 不会把本机（私网）地址写进列表；列表默认也不用本机地址预填。
+   */
+  async function netRefreshAddresses() {
+    netState.local = null;
     const loc = await netFetchLocal();
-    const tn = netTuning();
-    if (!netState.addr.ip || force) netState.addr.ip = (loc && loc.ip) || netState.addr.ip || '';
-    if (!netState.addr.port) netState.addr.port = (loc && loc.port) || tn.port;
-    return netState.addr;
+    const publicIp = loc && loc.publicIp ? String(loc.publicIp).trim() : '';
+    if (publicIp) {
+      const list = netState.addr.publicAddresses || (netState.addr.publicAddresses = []);
+      if (list.indexOf(publicIp) < 0) list.push(publicIp);
+    }
+    netPersist();
+    netState.probe = null;
+    netState.entryResults = [];
+    renderNetCard();
+    return { local: loc, publicIp, list: (netState.addr.publicAddresses || []).slice() };
   }
 
   function netPersist() {
-    window.ccarmy
-      .settingsSave({ net: { ip: netState.addr.ip, port: netState.addr.port, domains: netState.addr.domains } })
+    const list = (netState.addr.publicAddresses || []).slice();
+    window.warmy
+      .settingsSave({
+        net: {
+          port: netState.addr.port,
+          publicAddresses: list,
+          // legacy mirrors for any older readers of the settings blob
+          ip: list[0] || '',
+          domains: list.slice(),
+        },
+      })
       .catch(() => {});
   }
 
-  /** 检测：判断是否公网地址 + 能否与外网连通（不通过就不能打开组网开关） */
+  /** 把一次 netProbe 结果解析成单条 entry 的诚实结论 */
+  function netParseProbeResult(r, entry) {
+    if (!r || typeof r !== 'object') return { entry, verdict: 'unknown', code: 'no-ipc' };
+    if (r.ok === false && !('isPublic' in r) && !('outboundOk' in r)) {
+      return { entry, verdict: 'unknown', code: r.errorCode || 'probe-error' };
+    }
+    const isPublic = r.isPublic === true;
+    const outboundOk = r.outboundOk === true;
+    const lanOnly = r.lanOnly === true;
+    let verdict = 'fail';
+    let code = 'not-public';
+    if (outboundOk && isPublic) { verdict = 'pass'; code = 'public'; }
+    else if (outboundOk && lanOnly) { verdict = 'pass'; code = 'lan'; }
+    else if (!outboundOk) { code = 'no-outbound'; }
+    return {
+      entry,
+      verdict,
+      code,
+      isPublic,
+      outboundOk,
+      lanOnly,
+      inboundVerified: r.inboundVerified === true,
+      method: r.method || '',
+      behindNat: !!r.behindNat,
+    };
+  }
+
+  /**
+   * 检测：对公网地址列表里的**每一条**（每个 IP 与每个域名）都发探测，
+   * 并逐条展示通过/失败。列表为空或端口非法时如实拒绝。
+   * 总开关门控：至少一条通过才算 pass（逐条结果仍全部展示）。
+   */
   async function netDetect() {
-    const ip = String(netState.addr.ip || '').trim();
+    const entries = (netState.addr.publicAddresses || []).map((s) => String(s || '').trim()).filter(Boolean);
     const port = parsePort(netState.addr.port);
-    if (!isValidHost(ip)) return { ok: false, code: 'invalid-ip' };
-    if (!port) return { ok: false, code: 'invalid-port' };
+    if (!entries.length) return { ok: false, code: 'empty-list', entries: [] };
+    if (!port) return { ok: false, code: 'invalid-port', entries: [] };
     netState.probing = true;
+    netState.entryResults = [];
     renderNetCard();
-    let r = null;
-    try {
-      r = await netIpc('netProbe', { ip, port, domains: netState.addr.domains.slice() });
-    } catch (e) {
-      r = { ok: false, errorCode: 'error', error: String(e && e.message) };
+    const results = [];
+    let lastR = null;
+    for (const entry of entries) {
+      if (!isValidHost(entry)) {
+        results.push({ entry, verdict: 'fail', code: 'invalid-entry' });
+        continue;
+      }
+      let r = null;
+      try {
+        r = await netIpc('netProbe', { ip: entry, port, domains: [], publicAddresses: [entry] });
+      } catch (e) {
+        r = { ok: false, errorCode: 'error', error: String(e && e.message) };
+      }
+      lastR = r;
+      results.push(netParseProbeResult(r, entry));
     }
-    let probe;
-    if (!r || typeof r !== 'object') {
-      probe = { verdict: 'unknown', code: 'no-ipc', at: Date.now() };
-    } else if (r.ok === false && !('isPublic' in r) && !('outboundOk' in r)) {
-      probe = { verdict: 'unknown', code: r.errorCode || 'probe-error', at: Date.now() };
-    } else {
-      const isPublic = r.isPublic === true;
-      const outboundOk = r.outboundOk === true;
-      const lanOnly = r.lanOnly === true;
-      let verdict = 'fail';
-      let code = 'not-public';
-      if (outboundOk && isPublic) verdict = 'pass', code = 'public';
-      else if (outboundOk && lanOnly) verdict = 'pass', code = 'lan';
-      else if (!outboundOk) code = 'no-outbound';
-      probe = { verdict, code, isPublic, outboundOk, lanOnly, inboundVerified: r.inboundVerified === true,
-        method: r.method || '', behindNat: !!r.behindNat, at: Date.now() };
-    }
-    // 附八.9：检测结果里也带"本机有没有全局 IPv6 / 目标地址是不是可拨号的 IPv6 候选"
-    const v6 = netIpv6Facts(r && r.details ? r.details.localIpv6 : null);
+    const v6 = netIpv6Facts(lastR && lastR.details ? lastR.details.localIpv6 : null);
     if (v6) netState.ipv6 = v6;
-    if (probe && r && typeof r.naturallyDialable === 'boolean') probe.naturallyDialable = r.naturallyDialable;
-    if (probe && r && r.details && typeof r.details.targetIsDialableIpv6 === 'boolean') {
-      probe.targetIsDialableIpv6 = r.details.targetIsDialableIpv6;
+    const passCount = results.filter((x) => x.verdict === 'pass').length;
+    const anyPass = passCount > 0;
+    const anyPublic = results.some((x) => x.code === 'public');
+    const allUnknown = results.length > 0 && results.every((x) => x.verdict === 'unknown');
+    let verdict = 'fail';
+    let code = results.length ? results[0].code : 'fail';
+    if (anyPass) {
+      verdict = 'pass';
+      code = anyPublic ? 'public' : 'lan';
+    } else if (allUnknown) {
+      verdict = 'unknown';
+      code = results[0].code || 'probe-error';
+    } else if (results.some((x) => x.code === 'no-outbound')) {
+      code = 'no-outbound';
+    } else {
+      code = 'not-public';
     }
+    const probe = {
+      verdict,
+      code,
+      at: Date.now(),
+      entries: results.slice(),
+      passCount,
+      total: results.length,
+      method: (results.find((x) => x.method) || {}).method || '',
+      behindNat: !!((netState.local && netState.local.behindNat) || (results.find((x) => x.behindNat) || {}).behindNat),
+    };
     netState.probing = false;
     netState.probe = probe;
+    netState.entryResults = results.slice();
     renderNetCard();
     renderNetBanner();
     return probe;
+  }
+
+  /**
+   * R13：这次失败是不是"**端口无法绑定**"。
+   *
+   * 认两个码：新的 `port-bind-failed`（主进程统一给这个，底层 errno 在 `error` 里）
+   * 与旧的 `port-in-use`（EADDRINUSE）。除此之外的失败（身份未解锁等）走原有提示。
+   */
+  function netIsBindFailure(r) {
+    const code = r && r.errorCode ? String(r.errorCode) : '';
+    if (code === 'port-bind-failed' || code === 'port-in-use') return true;
+    // 兜底：老实现只给了 bind.errorCode（底层 errno）
+    const bindCode = r && r.bind && r.bind.errorCode ? String(r.bind.errorCode) : '';
+    return !!bindCode;
   }
 
   /** 组网开关（R8：检测通过才允许打开；R9：自动关闭走 opts.auto） */
@@ -2892,18 +3353,48 @@
     let r = null;
     try {
       r = on
-        ? await netIpc('meshEnable', { ip: netState.addr.ip, port: netState.addr.port, domains: netState.addr.domains.slice() }) || (await window.ccarmy.meshStart(netState.addr.port))
-        : await netIpc('meshDisable') || (await window.ccarmy.meshStop());
+        ? await netIpc('meshEnable', {
+            port: netState.addr.port,
+            publicAddresses: (netState.addr.publicAddresses || []).slice(),
+            ip: (netState.addr.publicAddresses || [])[0] || '',
+            domains: (netState.addr.publicAddresses || []).slice(),
+          }) || (await window.warmy.meshStart(netState.addr.port))
+        : await netIpc('meshDisable') || (await window.warmy.meshStop());
     } catch (e) {
       r = { ok: false, error: String(e && e.message) };
     }
     if (r && r.ok === false) {
+      // R13：端口绑不上要**说清楚**（哪个端口 + 底层错误码），并给出可点选的建议端口。
+      // 复用既有的"打开组网失败"提示通道（uiAlert）+ 组网卡片里的一块现场说明；
+      // **不**换端口、**不**改 netState.addr.port、**不**写回设置 —— 用户自己选。
+      if (on && netIsBindFailure(r)) {
+        const failPort = parsePort(r.requestedPort != null ? r.requestedPort : netState.addr.port) || netState.addr.port;
+        const errno = String(r.error || (r.bind && r.bind.errorCode) || '');
+        netState.bindFail = { port: failPort, errorCode: String(r.errorCode || ''), error: errno };
+        netState.portConflictSig = '';
+        renderNetCard();
+        // 立刻去**实测**一批可用端口（只探测、不绑定；失败也不影响下面的告知）
+        void netFetchPortCandidates();
+        await uiAlert(
+          fmtKey('net.portBindFailedBody', { port: String(failPort), error: errno }),
+          t('net.portBindFailedTitle')
+        );
+        return false;
+      }
       await uiAlert(fmtKey(on ? 'net.enableFailed' : 'net.disableFailed', { err: String(r.error || '') }));
       return false;
     }
     const wasOn = netState.enabled;
     netState.enabled = !!on;
     netState.ready = true;
+    // R13：打开成功 → 清掉旧的"端口无法绑定"现场；并记下**实际**绑定的端口
+    if (on) {
+      netState.bindFail = null;
+      netState.portCandidates = null;
+      netState.bind = r && r.bind && typeof r.bind === 'object' ? r.bind : netState.bind;
+    } else {
+      netState.bindFail = null;
+    }
     if (on) {
       netState.autoOffInfo = null;
       netState.link = { fails: 0, downSince: 0, linkDown: false, round: 0, autoOff: false, nextRetryAt: 0 };
@@ -2953,6 +3444,8 @@
     if (v6) netState.ipv6 = v6;
     netState.linkPeers = st.link && Array.isArray(st.link.peers) ? st.link.peers : [];
     netState.sessions = Number(st.sessions || 0) || 0;
+    // R13：实际绑上的端口 / 是否走了兜底链。缺字段就清空（组网关着时不该还挂着旧结论）
+    netState.bind = st.bind && typeof st.bind === 'object' ? st.bind : null;
     // 附八.9 / 附八.3：可达性结论只在组网开着时吃进并刷新时间戳。
     // 组网关闭时无法做现场探测：含 bothUndialable/needsPublicRelayNotice 的**结论**不作数、
     // 也不刷新 reachedAt —— 旧结论按 reachTtlMs 过期后 netReach() 返回 null，界面退回「未知」。
@@ -2976,6 +3469,7 @@
     // 含结论的数据在组网关闭时：不写入、不刷新时间戳 → 让旧结论按 TTL 自然过期
     // 档位区块只在签名变化时重建（1s 心跳不能把界面刷掉）
     renderNetLadder();
+    renderNetPortHint();
     if (typeof st.meshEnabled === 'boolean' && st.meshEnabled !== netState.enabled) {
       netState.enabled = st.meshEnabled;
       renderNetCard();
@@ -3081,7 +3575,10 @@
     }
     // ② 终态优先于"正在重试"：双不可拨入且无中继时，转圈文案是**错的**（重试不会有结果）
     if (gap) {
-      const sig = 'relaygap:' + gap.code;
+      // 「没有这个结论 → 有这个结论」= 新的一次发生（netGapEpisode 在渲染前推进序号）。
+      // 序号进签名，所以：同一次发生里手动关闭仍然有效（不反复打扰），
+      // 但下一次（中间恢复过）必须重新出现 —— 这就是产品要求的"公网地址再次不可达要再弹"。
+      const sig = 'relaygap:' + gap.code + ':' + netState.gapEpisode;
       if (netState.dismissed[sig]) return null;
       return {
         sig,
@@ -3409,9 +3906,29 @@
     return { all, visible, markerOnly, collapsedAll, total: all.length };
   }
 
+  /**
+   * 终态（双不可拨入且无中继）的**发生次数**。
+   * 「没有这个结论 → 有这个结论」= 新的一次；一直在同一个结论里 = 同一次（不重复计数）。
+   * 结论消失（公网地址又可达了）会把 gapLastCode 清空，于是下次再不可达 = 新的一次。
+   * 只在这里推进，netBannerModel 只读 —— 模型保持纯函数，序号在渲染路径上推进。
+   */
+  function netGapEpisode(gap) {
+    const code = gap ? String(gap.code || '') : '';
+    if (!gap) {
+      netState.gapLastCode = '';
+      return;
+    }
+    if (netState.gapLastCode !== code) {
+      netState.gapLastCode = code;
+      netState.gapEpisode += 1;
+    }
+  }
+
   function renderNetBanner() {
     const host = $('net-banner');
     if (!host) return;
+    // 先推进"终态发生次数"，再算模型（模型的 sig 里带这个序号）
+    netGapEpisode(netRelayGap());
     const netRow = netBannerModel();
     const idRow = idRowModel();
     const sig = JSON.stringify([
@@ -3531,7 +4048,7 @@
           ra = null;
         }
         if (ra === null) {
-          // 身份层真实形状是「按指纹手动确认采用对方的新名片」（ccarmy:identity-peer-confirm）
+          // 身份层真实形状是「按指纹手动确认采用对方的新名片」（warmy:identity-peer-confirm）
           const fp = String((ch && (ch.newFingerprint || ch.fingerprint)) || '');
           if (fp) {
             try {
@@ -3591,23 +4108,165 @@
     if (netState.probing) return { text: t('net.detecting'), cls: '' };
     if (!p) return { text: '', cls: '' };
     if (p.verdict === 'pass') {
-      if (p.code === 'lan') return { text: t('net.result.passLan'), cls: 'net-ok' };
+      const total = Number(p.total || (p.entries && p.entries.length) || 0);
+      const passCount = Number(p.passCount || 0);
+      const partial = total > 0 && passCount > 0 && passCount < total
+        ? ' · ' + fmtKey('net.partialPass', { pass: passCount, total })
+        : '';
+      if (p.code === 'lan') return { text: t('net.result.passLan') + partial, cls: 'net-ok' };
       // 「公网可达」是**强断言**：它要求别人真的能拨进来。而检测实际只验了两件事
       // ——「地址是公网」+「出站能连通」；入站可达性要第三方对端拨回才算验过。
       // 没验过就照实补一句，不要把「地址是公网」说成「可达」（附八.3 的诚实性要求）。
-      const tail = p.inboundVerified === true ? '' : t('net.result.passUnverifiedInbound');
-      return { text: t('net.result.pass') + tail, cls: 'net-ok' };
+      const tail = t('net.result.passUnverifiedInbound');
+      return { text: t('net.result.pass') + tail + partial, cls: 'net-ok' };
     }
     if (p.code === 'no-ipc' || p.code === 'probe-error') return { text: t('net.result.unknown'), cls: 'net-bad' };
     if (p.code === 'no-outbound') return { text: t('net.result.failOutbound'), cls: 'net-bad' };
     return { text: t('net.result.failPublic'), cls: 'net-bad' };
   }
 
+  /**
+   * R13：取一份**实测**的候选端口报告（只读：只探测，不绑定、不改配置、不替用户做主）。
+   *
+   * 为什么必须实测：静态候选表"看着干净"不代表本机现在绑得上（可能被别的进程占用，
+   * 也可能落在 OS 保留段里 EACCES）。所以主进程会逐个真 bind 一次再回结果。
+   * 不缓存：端口占用状况随时在变，陈旧结论比没有结论更糟（打开设置页/展开失败提示时重取）。
+   */
+  async function netFetchPortCandidates() {
+    if (netState.portCandidatesLoading) return netState.portCandidates;
+    netState.portCandidatesLoading = true;
+    netState.portConflictSig = '';
+    renderNetPortHint();
+    try {
+      const r = await netIpc('netPortCandidates', { requestedPort: netState.addr.port });
+      if (r && r.ok !== false && Array.isArray(r.recommended)) netState.portCandidates = r;
+      else netState.portCandidates = null;
+    } catch {
+      netState.portCandidates = null;
+    }
+    netState.portCandidatesLoading = false;
+    netState.portConflictSig = '';
+    renderNetPortHint();
+    return netState.portCandidates;
+  }
+
+  /**
+   * 端口提示区（R13）。三件事，都**只报事实/约定，绝不代替用户做决定**：
+   *
+   *   1) 约定端口：开发惯用 58588、测试惯用 62666 —— 提示，不是限制；
+   *      输入框依旧可填 1–65535 的任意值（`parsePort` 在 onchange 里校验）。
+   *   2) 实际绑上的端口：来自组网层 `bind` 事实（`boundPort` 与请求端口分开报）。
+   *   3) **端口无法绑定**时：明确写出"哪个端口 + 底层错误码"，并给出**本机实测可用**的
+   *      建议端口（只列 status==='ok' 的）。点一下**只是把该端口填进输入框**
+   *      （走用户手改的同一条 onchange 路径），不自动重开组网、不替用户做主。
+   */
+  function renderNetPortHint() {
+    const hint = $('net-port-hint');
+    const boundEl = $('net-port-bound');
+    const conflict = $('net-port-conflict');
+    if (!hint && !boundEl && !conflict) return;
+
+    const bind = netState.bind && typeof netState.bind === 'object' ? netState.bind : null;
+    // 不用"渲染签名"跳过：设置页会被整块重画（innerHTML 重建 = dataset/textContent 全丢），
+    // 而签名没变 → 只靠签名的守卫会让提示永久空着。改成**按 DOM 实际值比对**：
+    // 值相同就不写（不抖动），值不同就补上（重画后自愈）。
+    if (hint) {
+      const wantConvention = 'dev:' + CCAARMY_DEV_NET_PORT + ',test:' + CCAARMY_TEST_NET_PORT;
+      if (hint.dataset.convention !== wantConvention) hint.dataset.convention = wantConvention;
+      const wantText = fmtKey('net.portConventionHint', { dev: CCAARMY_DEV_NET_PORT, test: CCAARMY_TEST_NET_PORT });
+      if (hint.textContent !== wantText) hint.textContent = wantText;
+    }
+    if (boundEl) {
+      // 只有**真的绑上了**才显示；失败时不显示"正在监听"之类的话术
+      const bound = bind && Number(bind.boundPort) > 0 ? Number(bind.boundPort) : 0;
+      const wantBound = bound ? String(bound) : '';
+      if (boundEl.dataset.bound !== wantBound) boundEl.dataset.bound = wantBound;
+      const wantBoundText = bound ? fmtKey('net.portBound', { port: String(bound) }) : '';
+      if (boundEl.textContent !== wantBoundText) boundEl.textContent = wantBoundText;
+    }
+
+    if (!conflict) return;
+    const bf = netState.bindFail;
+    const cur = String(netState.addr.port || '');
+    const report = netState.portCandidates && typeof netState.portCandidates === 'object' ? netState.portCandidates : null;
+    // 只认实测 ok 的（防御式：即使上游给错，也不把非 ok 的当推荐）
+    const okPorts = report && Array.isArray(report.recommended)
+      ? report.recommended.filter((x) => x && x.status === 'ok' && Number(x.port) > 0).map((x) => Number(x.port)).filter((p) => String(p) !== cur)
+      : [];
+    const csig = bf
+      ? [bf.port, bf.errorCode || '', bf.error || '', cur, state.locale,
+         netState.portCandidatesLoading ? 'L' : '-', okPorts.join(','), report ? String(report.probed ? report.probed.length : 0) : '-'].join('|')
+      : '';
+    // 同样按 DOM 实际值比对：整个卡片重画后 dataset 会丢，签名相同也必须补画
+    const domDrawn = !!conflict.getAttribute('data-sig') && conflict.getAttribute('data-sig') === netState.portConflictSig;
+    if (netState.portConflictSig === csig && domDrawn) return;
+    netState.portConflictSig = csig;
+    conflict.setAttribute('data-sig', csig);
+
+    if (!bf) {
+      conflict.classList.add('hidden');
+      conflict.innerHTML = '';
+      conflict.dataset.failPort = '';
+      conflict.dataset.failCode = '';
+      return;
+    }
+
+    conflict.classList.remove('hidden');
+    conflict.dataset.failPort = String(bf.port || '');
+    conflict.dataset.failCode = String(bf.errorCode || '');
+    conflict.dataset.failErrno = String(bf.error || '');
+    conflict.dataset.suggestState = netState.portCandidatesLoading ? 'checking' : okPorts.length ? 'ok' : 'none';
+
+    let suggestHtml;
+    if (netState.portCandidatesLoading) {
+      suggestHtml = '<div class="muted net-conflict-hint" id="net-port-suggest-state">' + escapeHtml(t('net.portSuggestChecking')) + '</div>';
+    } else if (okPorts.length) {
+      suggestHtml =
+        '<div class="muted net-conflict-hint" id="net-port-suggest-state">' +
+        escapeHtml(fmtKey('net.portSuggestMeasured', { probed: String(report && report.probed ? report.probed.length : okPorts.length) })) +
+        '</div>' +
+        '<div class="net-port-suggest" id="net-port-suggest">' +
+        okPorts.map((p) => '<button type="button" class="btn-mini net-port-suggest-btn" data-port="' + p + '" data-status="ok">' + p + '</button>').join('') +
+        '</div>';
+    } else {
+      suggestHtml = '<div class="muted net-conflict-hint" id="net-port-suggest-state">' + escapeHtml(t('net.portSuggestNone')) + '</div>';
+    }
+
+    conflict.innerHTML =
+      '<div class="net-conflict-title">' + escapeHtml(t('net.portBindFailedTitle')) + '</div>' +
+      '<div class="net-conflict-body">' +
+      escapeHtml(fmtKey('net.portBindFailedBody', { port: String(bf.port || ''), error: String(bf.error || bf.errorCode || '') })) +
+      '</div>' +
+      suggestHtml +
+      '<div class="muted net-conflict-hint">' + escapeHtml(t('net.portSuggestHint')) + '</div>' +
+      '<div><button type="button" class="btn-mini" id="btn-net-port-suggest-refresh">' + escapeHtml(t('net.portSuggestRefresh')) + '</button></div>';
+
+    const refreshBtn = $('btn-net-port-suggest-refresh');
+    if (refreshBtn) refreshBtn.onclick = () => void netFetchPortCandidates();
+
+    const suggestBox = $('net-port-suggest');
+    if (suggestBox) {
+      suggestBox.onclick = (ev) => {
+        const btn = ev && ev.target && ev.target.closest ? ev.target.closest('.net-port-suggest-btn') : null;
+        if (!btn) return;
+        const input = $('net-port');
+        const p = parsePort(btn.dataset.port);
+        if (!input || !p) return;
+        // 只填输入框：走与"用户手改"完全相同的那条路径（onchange → 校验 → netPersist），
+        // 不自动重开组网 —— 选哪个端口、什么时候重试，都是用户的事。
+        input.value = String(p);
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+    }
+  }
+
   function renderNetCard() {
     if (!$('net-card')) return;
     renderNetLadder();
     renderNetDomains();
+    renderNetEntryResults();
     renderNetProbeState();
+    renderNetPortHint();
     const helpBtn = $('btn-net-help');
     if (helpBtn && !helpBtn.dataset.bound) {
       helpBtn.dataset.bound = '1';
@@ -3684,13 +4343,17 @@
       '" data-derived="' + (m.dialDerived ? '1' : '0') + '">' + escapeHtml(t(NET_DIALABILITY_I18N[dialKind] || 'net.dialability.undetermined')) + '</span></div>';
   }
 
-  /** 域名列表（1 个 IP + 多个域名）。只在需要重建行时调用，输入过程中不重建（会打断输入） */
+  /**
+   * 公网地址列表（IP + 域名混合）。标签在 HTML 里只出现一次（#net-public-list-label），
+   * 这里空态文案使用**另一个** key，避免旧缺陷里「域名标签渲染两次」。
+   */
   function renderNetDomains() {
     if (!$('net-card')) return;
     const box = $('net-domains');
     if (!box) return;
-    box.innerHTML = netState.addr.domains.length
-      ? netState.addr.domains
+    const list = netState.addr.publicAddresses || [];
+    box.innerHTML = list.length
+      ? list
           .map(
             (d, i) =>
               '<div class="net-domain-row" data-di="' + i + '">' +
@@ -3700,11 +4363,12 @@
               '</div>'
           )
           .join('')
-      : '<div class="muted">' + escapeHtml(t('net.domainTitle')) + '</div>';
+      : '<div class="muted">' + escapeHtml(t('net.publicListEmpty')) + '</div>';
     box.querySelectorAll('[data-domain-del]').forEach((b) => {
       b.onclick = () => {
-        netState.addr.domains.splice(Number(b.dataset.domainDel), 1);
+        (netState.addr.publicAddresses || []).splice(Number(b.dataset.domainDel), 1);
         netPersist();
+        netInvalidateProbe();
         renderNetCard();
       };
     });
@@ -3717,11 +4381,44 @@
           return;
         }
         inp.classList.remove('net-invalid');
-        netState.addr.domains[i] = v;
+        if (!netState.addr.publicAddresses) netState.addr.publicAddresses = [];
+        netState.addr.publicAddresses[i] = v;
         netPersist();
-        netInvalidateProbe(); // 地址集合变了：旧检测结论作废
+        netInvalidateProbe();
       };
     });
+  }
+
+  /** 逐条检测结果：每个 IP / 域名一行，诚实标出通过/失败/格式错误 */
+  function renderNetEntryResults() {
+    const box = $('net-entry-results');
+    if (!box) return;
+    const rows = netState.entryResults || [];
+    if (!rows.length) {
+      box.innerHTML = '';
+      return;
+    }
+    const labelOf = (r) => {
+      if (r.verdict === 'pass') return t('net.entryOk');
+      if (r.verdict === 'unknown') return t('net.entryUnknown');
+      if (r.code === 'invalid-entry') return t('net.entryInvalid');
+      return t('net.entryFail');
+    };
+    box.innerHTML =
+      '<div class="muted net-entry-title">' +
+      escapeHtml(t('net.entryResultsTitle') + ' · ' + fmtKey('net.probeCount', { n: rows.length })) +
+      '</div>' +
+      rows
+        .map(
+          (r) =>
+            '<div class="net-entry-row" data-entry="' + escapeHtml(r.entry || '') + '" data-verdict="' +
+            escapeHtml(r.verdict || '') + '" data-code="' + escapeHtml(r.code || '') + '">' +
+            '<span class="net-entry-host">' + escapeHtml(r.entry || '') + '</span>' +
+            '<span class="net-entry-status ' + escapeHtml(r.verdict || '') + '">' + escapeHtml(labelOf(r)) + '</span>' +
+            '<span class="muted net-entry-code">' + escapeHtml(r.code || '') + '</span>' +
+            '</div>'
+        )
+        .join('');
   }
 
   /** 检测结论 + 开关（地址被改动时只刷这一块，不动输入框） */
@@ -3769,6 +4466,100 @@
     }
   }
 
+  /** 技能自动发现目录：读（既有 settings 通道 / 专用 IPC） */
+  async function skillScanDirsGet() {
+    try {
+      if (window.warmy.skillsScanDirsGet) return await window.warmy.skillsScanDirsGet();
+      const s = await window.warmy.settingsGet();
+      const dirs = (s && s.settings && Array.isArray(s.settings.skillScanDirs) ? s.settings.skillScanDirs : []).map(String);
+      return { ok: true, dirs, scanDirs: [], max: 10 };
+    } catch (e) {
+      return { ok: false, error: String(e && e.message), dirs: [], scanDirs: [] };
+    }
+  }
+
+  async function skillScanDirsSet(dirs) {
+    const list = (dirs || []).map((d) => String(d || '').trim()).filter(Boolean);
+    const MAX = 10;
+    if (list.length > MAX) return { ok: false, error: 'too-many-dirs', max: MAX, count: list.length };
+    try {
+      if (window.warmy.skillsScanDirsSet) return await window.warmy.skillsScanDirsSet(list);
+      await window.warmy.settingsSave({ skillScanDirs: list });
+      return { ok: true, dirs: list };
+    } catch (e) {
+      return { ok: false, error: String(e && e.message) };
+    }
+  }
+
+  function skillScanStatusText(st) {
+    if (!st) return '';
+    if (st.ok) return t('settings.skillsScanOk') + (typeof st.skillCount === 'number' ? ' · ' + st.skillCount : '');
+    if (st.error === 'missing') return t('settings.skillsScanMissing');
+    return t('settings.skillsScanInvalid');
+  }
+
+  async function renderSkillScanDirs() {
+    const box = $('skill-scan-dirs');
+    if (!box) return;
+    const msg = $('skill-scan-msg');
+    const r = await skillScanDirsGet();
+    const dirs = (r && r.dirs) || [];
+    const status = (r && r.scanDirs) || [];
+    const byPath = {};
+    status.forEach((s) => { byPath[s.path] = s; });
+    window.__skillScanState = { dirs: dirs.slice(), scanDirs: status.slice(), lastResult: r };
+    if (!dirs.length) {
+      box.innerHTML = '<div class="muted">' + escapeHtml(t('settings.skillsScanEmpty')) + '</div>';
+      return;
+    }
+    box.innerHTML = dirs
+      .map((p, i) => {
+        const st = byPath[p] || null;
+        const bad = st && st.ok === false;
+        return (
+          '<div class="skill-scan-row" data-scan-i="' + i + '" data-scan-path="' + escapeHtml(p) + '" data-ok="' +
+          (bad ? '0' : '1') + '">' +
+          '<span class="skill-scan-path">' + escapeHtml(p) + '</span>' +
+          '<span class="skill-scan-status ' + (bad ? 'bad' : 'ok') + '">' + escapeHtml(skillScanStatusText(st)) + '</span>' +
+          '<button class="btn-mini" data-scan-edit="' + i + '">' + escapeHtml(t('settings.skillsScanEdit')) + '</button>' +
+          '<button class="btn-mini" data-scan-del="' + i + '">' + escapeHtml(t('settings.skillsScanRemove')) + '</button>' +
+          '</div>'
+        );
+      })
+      .join('');
+    box.querySelectorAll('[data-scan-del]').forEach((b) => {
+      b.onclick = async () => {
+        const i = Number(b.dataset.scanDel);
+        const next = dirs.slice();
+        next.splice(i, 1);
+        const rr = await skillScanDirsSet(next);
+        if (rr && rr.ok === false) {
+          if (msg) msg.textContent = t('settings.skillsScanMax');
+          return;
+        }
+        const inp = $('skill-scan-dir-input');
+        if (inp) inp.removeAttribute('data-edit-i');
+        const btn = $('btn-skill-scan-add');
+        if (btn) btn.textContent = t('settings.skillsScanAdd');
+        await renderSkillScanDirs();
+        await renderSkillList();
+      };
+    });
+    box.querySelectorAll('[data-scan-edit]').forEach((b) => {
+      b.onclick = () => {
+        const i = Number(b.dataset.scanEdit);
+        const inp = $('skill-scan-dir-input');
+        const btn = $('btn-skill-scan-add');
+        if (inp) {
+          inp.value = dirs[i] || '';
+          inp.setAttribute('data-edit-i', String(i));
+        }
+        if (btn) btn.textContent = t('settings.skillsScanSave');
+        if (msg) msg.textContent = '';
+      };
+    });
+  }
+
   /**
    * 地址被改动 → 上一次检测结论不再代表当前地址，必须重新检测。
    * 否则「检测通过才能打开组网开关」就成了摆设（改完地址还能拿旧结论去开）。
@@ -3786,29 +4577,19 @@
     if (navBtn) navBtn.click();
     const card = $('net-card');
     if (card && card.scrollIntoView) card.scrollIntoView({ block: 'center' });
-    const ip = $('net-ip');
-    if (ip) ip.focus();
+    // R13：进组网设置页时**重新实测**一次候选端口（端口占用状况随时在变，不用旧结论）
+    if (netState.bindFail) void netFetchPortCandidates();
+    const focusEl = $('net-domains') && $('net-domains').querySelector('input.net-domain-input');
+    if (focusEl) focusEl.focus();
+    else {
+      const addBtn = $('btn-net-domain-add');
+      if (addBtn) addBtn.focus();
+    }
   }
 
   function bindNetCard() {
     const box = $('net-card');
     if (!box) return;
-    const ip = $('net-ip');
-    if (ip && ip.dataset.bound !== '1') {
-      ip.dataset.bound = '1';
-      ip.oninput = () => {
-        netState.addr.ip = String(ip.value || '').trim();
-        ip.classList.toggle('net-invalid', !!netState.addr.ip && !isValidHost(netState.addr.ip));
-        netInvalidateProbe();
-      };
-      ip.onchange = () => {
-        if (!isValidHost(netState.addr.ip)) {
-          void uiAlert(t('net.invalidIp'), t('net.address'));
-          return;
-        }
-        netPersist();
-      };
-    }
     const port = $('net-port');
     if (port && port.dataset.bound !== '1') {
       port.dataset.bound = '1';
@@ -3824,17 +4605,16 @@
         netInvalidateProbe();
       };
     }
-    const auto = $('btn-net-autofill');
-    if (auto && auto.dataset.bound !== '1') {
-      auto.dataset.bound = '1';
-      auto.onclick = async () => {
-        await netAutofill(true);
-        if (ip) ip.value = netState.addr.ip;
-        if (port) port.value = String(netState.addr.port);
-        netPersist();
-        netState.probe = null;
-        renderNetCard();
-        void uiAlert(fmtKey('net.autofillDone', { ip: netState.addr.ip, port: netState.addr.port }), t('net.autofill'));
+    // 刷新按钮：重采本机地址 + 公网地址，并把公网地址写入列表（取代旧「自动填入本机地址」）
+    const refresh = $('btn-net-refresh');
+    if (refresh && refresh.dataset.bound !== '1') {
+      refresh.dataset.bound = '1';
+      refresh.onclick = async () => {
+        const r = await netRefreshAddresses();
+        void uiAlert(
+          fmtKey('net.refreshDone', { local: (r.local && r.local.ip) || '—', public: r.publicIp || '—' }),
+          t('net.refresh')
+        );
       };
     }
     const detect = $('btn-net-detect');
@@ -3842,7 +4622,7 @@
       detect.dataset.bound = '1';
       detect.onclick = async () => {
         const r = await netDetect();
-        if (r && r.code === 'invalid-ip') void uiAlert(t('net.invalidIp'), t('net.address'));
+        if (r && r.code === 'empty-list') void uiAlert(t('net.emptyList'), t('net.detect'));
         else if (r && r.code === 'invalid-port') void uiAlert(t('net.invalidPort'), t('net.port'));
       };
     }
@@ -3850,7 +4630,8 @@
     if (addD && addD.dataset.bound !== '1') {
       addD.dataset.bound = '1';
       addD.onclick = () => {
-        netState.addr.domains.push('');
+        if (!netState.addr.publicAddresses) netState.addr.publicAddresses = [];
+        netState.addr.publicAddresses.push('');
         renderNetCard();
         const last = $('net-domains') && $('net-domains').querySelector('input.net-domain-input:last-of-type');
         if (last) last.focus();
@@ -3882,7 +4663,7 @@
     return k && state.t && state.t[k] ? k : fallback;
   }
 
-  /** 本人身份（真实 IPC 已落地：ccarmy:identity-info；桩：identityGet） */
+  /** 本人身份（真实 IPC 已落地：warmy:identity-info；桩：identityGet） */
   async function myIdentity() {
     let r = null;
     try {
@@ -3982,7 +4763,8 @@
     netState.booted = true;
     bindBannerHost();
     await netLoadConfig();
-    await netAutofill(false);
+    // 只采本机/公网地址事实用于展示；**不**把本机地址写入公网地址列表（产品要求默认不预填）。
+    await netFetchLocal();
     await netRefreshPresence();
     await idLoadChanges();
     renderNetCard();
@@ -4040,13 +4822,42 @@
     dialabilityI18n: () => Object.assign({}, NET_DIALABILITY_I18N),
     rungs: () => NET_RUNGS.slice(),
     refreshBanner: () => { netState.renderedSig = ''; renderNetBanner(); },
+    /** 终态"发生次数"（只读诊断：证明"再次不可达 = 新的一次"） */
+    gapEpisode: () => netState.gapEpisode,
     refreshPresence: netRefreshPresence,
     refreshMembers,
     loadIdChanges: idLoadChanges,
     detect: netDetect,
     setEnabled: netSetEnabled,
+    refreshAddresses: netRefreshAddresses,
     heartbeat: netHeartbeatTick,
     gotoNetSettings,
+    // R13：实测候选端口（只读；给自动化用，也能被界面的"重新实测"按钮调用）
+    fetchPortCandidates: netFetchPortCandidates,
+    renderPortHint: renderNetPortHint,
+    // T194：控制台（真实事件流）—— push 走的就是 IPC 回调那条同路径函数。
+    // 注意：cap/lines/lastSeq/isOpen 一律用**惰性取值函数**：``window.__netUi`` 这个字面量
+    // 在本文件里出现得比 CONSOLE_CAP/consoleLines 的声明更早，直接取值会踩 TDZ。
+    console: {
+      push: consoleAppend,
+      clear: consoleClear,
+      render: renderConsole,
+      lines: () => consoleLines.slice(),
+      cap: () => CONSOLE_CAP,
+      redact: consoleRedact,
+      format: consoleLineText,
+      lastSeq: () => consoleLastSeq,
+      isOpen: () => !!state.consoleOpen,
+    },
+    // 邀请链接的**唯一**构造入口（node ← meshStatus.nodeId、port ← 组网设置里的真端口）
+    ownInviteLink,
+  };
+  window.__skillsUi = {
+    getDirs: skillScanDirsGet,
+    setDirs: skillScanDirsSet,
+    renderDirs: renderSkillScanDirs,
+    renderList: renderSkillList,
+    state: () => window.__skillScanState || null,
   };
 
   /* renderPage-end */
@@ -4068,10 +4879,10 @@
           bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         }
         const dataUrl = 'data:audio/webm;base64,' + btoa(bin);
-        const r = await window.ccarmy.saveVoice({ dataUrl, ext: 'webm' });
+        const r = await window.warmy.saveVoice({ dataUrl, ext: 'webm' });
         if (r?.ok && state.selectedChat) {
           // 尝试 ASR 转文字
-          const asr = await window.ccarmy.asrTranscribe({ dataUrl, ext: 'webm' }).catch(() => null);
+          const asr = await window.warmy.asrTranscribe({ dataUrl, ext: 'webm' }).catch(() => null);
           const text = asr?.ok && asr.text ? asr.text : `[${t('chat.voice')}] ${r.path.split(/[\\/]/).pop()}`;
           pushMsg(state.selectedChat.id, 'me', text);
           renderChat();
@@ -4096,7 +4907,10 @@
   // 输入防抖：仅更新内部状态，不触发重渲染
   const syncSendState = () => {
     const btn = $('btn-send');
-    if (btn) btn.disabled = !($('input')?.value || '').trim();
+    if (!btn) return;
+    // 容器项目停止态：开发入口整体禁用（不是"能敲但发不出去"）
+    if (($('input') || {}).dataset && $('input').dataset.devBlocked === '1') { btn.disabled = true; return; }
+    btn.disabled = !($('input')?.value || '').trim();
   };
   $('input')?.addEventListener('input', () => {
     syncSendState();
@@ -4168,29 +4982,240 @@
     const mark = $('mi-directed-mark');
     if (mark) mark.textContent = __directed ? '✓' : '✕';
     if (state.selectedChat) {
-      await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: __directed }).catch(() => {});
+      await window.warmy.groupDirected({ groupId: state.selectedChat.id, directed: __directed }).catch(() => {});
     }
   });
+  // ADR 004 第七批：「运行/测试在容器中」这个菜单项**已删除**（容器 = 开发环境，测试/运行不在其职责内）。
+  // 开发环境在**创建项目时**选定；启用/停用项目与切换容器都在**项目右键菜单**里。
   $('mi-open')?.addEventListener('click', () => {
     $('more-menu')?.classList.add('hidden');
     if (!state.selectedChat) return;
     // 子窗口：只有聊天+右栏
-    window.ccarmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind, mode: 'sub' });
+    window.warmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind, mode: 'sub' });
   });
   $('mi-export')?.addEventListener('click', () => {
     $('more-menu')?.classList.add('hidden');
     showExportDialog();
   });
 
+  /* ══ 容器项目的开发面门禁（定稿语义）════════════════════════════════════════
+     「容器项目 = 只能在容器里开发」。停止态（容器没起 或 创建者点了停止）下：
+       · 开发入口（输入 + 发送）**禁用**，并给出原因；
+       · 成员看到的状态**与"创建者下线"完全一致**（同一个标志位 + 同一句离线文案）；
+       · 宿主侧编辑被**拒绝**（主进程会再拒一次 —— 渲染层不是授权层）。
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /** 返回"被拒绝的原因文案"，null = 放行 */
+  async function projectDevBlock(sessionId) {
+    const id = String(sessionId || '');
+    if (!id) return null;
+    const pstate = await projectStateFor(id);
+    if (!pstate || pstate.devEnv !== 'container' || pstate.developmentAllowed) return null;
+    return t(PROJECT_STOP_REASON(pstate.code, pstate.reasonKey));
+  }
+
+  /**
+   * 把停止态落到**开发入口**上（输入框 / 发送按钮）+ 给聊天区挂一个可断言的标志位。
+   * 只在「项目」里生效：「我的牛马」恒为本机开发，不受影响。
+   */
+  async function applyProjectDevGate() {
+    const sel = state.selectedChat;
+    const input = $('input');
+    const col = $('chat-col');
+    const pstate = sel && sel.kind === 'internal' ? await projectStateFor(sel.id) : null;
+    const stopped = !!(pstate && pstate.stopped);
+    if (col) {
+      col.dataset.projectState = pstate ? (stopped ? 'stopped' : 'running') : 'none';
+      col.dataset.projectCode = pstate ? String(pstate.code) : '';
+    }
+    if (input) {
+      input.dataset.devBlocked = stopped ? '1' : '0';
+      input.disabled = stopped;
+      input.title = stopped
+        ? fmtKey('container.project.devBlocked', { reason: t(PROJECT_STOP_REASON(pstate ? pstate.code : 'container-not-ready', pstate ? pstate.reasonKey : '')) })
+        : '';
+    }
+    const btn = $('btn-send');
+    if (btn) {
+      btn.title = stopped ? (input ? input.title : '') : '';
+    }
+    syncSendState();
+    return stopped;
+  }
+
+  // 本机的人敲回车 / 点「执行」→ 走 submitShellLine（主进程未就绪则**不执行任何东西**）
+  $('ctg-shell-send')?.addEventListener('click', () => { void submitShellLine(); });
+  $('ctg-shell-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); void submitShellLine(); }
+  });
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     诊断事件流（T194，**已降级为独立排障视图**）—— 它是本机事件日志，**不是控制台**。
+     控制台 = **容器内的 shell**（`#ctg-shell-pane`，见 openContainerShell）。
+     把事件日志当"控制台"正是上一版做错的地方（已撤销），所以两者刻意分开。
+     事件来源（主进程**推送**，不是轮询）：
+       · cat=tool   工具调用开始 / 结束（recall、retrieve …）
+       · cat=net    组网：开启、关闭、端口绑定失败、对端会话上/下线、局域网发现、握手
+       · cat=error  错误：未捕获异常、未处理的 Promise 拒绝、IPC 处理器抛出的"已处理失败"、
+                    chat-send 自己吞掉并回 retry 的失败
+       · cat=ui     渲染层自身异常（error / unhandledrejection）
+     没接上的：无。主进程侧只有这些"事件源"（其余 IPC 都是请求-应答式状态查询，
+             没有事件语义，硬塞进来只会变成噪音）。
+     渲染层只做三件事：①按 code 取 i18n 文案（未知 code 也如实显示原始 code）；②**打码**；
+                     ③按上限截断（超上限丢最旧）。
+     只显示**元数据**（工具名、端口、errno、频道名、错误首行）：消息正文与工具结果正文
+     主进程根本不推。打码是双保险，不是唯一防线。
+     ══════════════════════════════════════════════════════════════════════════ */
+  /** 环形上限：超过就丢最旧的（面板不可能无限长） */
+  const CONSOLE_CAP = 800;
+  const consoleLines = [];
+  /** 已处理的最大 seq：IPC 重投/窗口重建时不重复贴同一行 */
+  let consoleLastSeq = 0;
+
+  /**
+   * 凭据打码（命中即替换成 t('console.redacted')）。
+   * 覆盖：sk-/pk-/rk- 风格 API Key、GitHub gh*_ 令牌、Slack xox*、JWT（eyJ…）、
+   *      `key=value` 形状里的密钥字段（api_key/token/tok/secret/password/…）、Bearer 头、
+   *      以及 ≥40 位且字母数字混合的长串（密钥/哈希的典型形状）。
+   * 宁可多打一点：这是"别把密钥显示在界面上"的最后一道防线。
+   */
+  function consoleRedact(text) {
+    const mask = t('console.redacted');
+    let s = String(text == null ? '' : text);
+    s = s.replace(/\b(?:sk|pk|rk)-[A-Za-z0-9_-]{6,}/g, mask);
+    s = s.replace(/\bgh[pousr]_[A-Za-z0-9]{10,}/g, mask);
+    s = s.replace(/\bxox[baprs]-[A-Za-z0-9-]{6,}/g, mask);
+    s = s.replace(/\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{4,}/g, mask);
+    s = s.replace(/\b[A-Za-z0-9+/]{40,}={0,2}\b/g, (m) => (/[0-9]/.test(m) && /[A-Za-z]/.test(m) ? mask : m));
+    s = s.replace(
+      /\b(api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|auth[_-]?token|token|tok|secret|password|passwd|passphrase|authorization)\b(\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)/gi,
+      (_m, k, sep) => k + sep + mask
+    );
+    s = s.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, 'Bearer ' + mask);
+    return s;
+  }
+
+  /** 事件里的 data 直出成一行 JSON（对象不直出 [object Object]）；照样打码 */
+  function consoleDataText(d) {
+    try {
+      const keys = Object.keys(d || {});
+      if (!keys.length) return '';
+      const parts = keys.map((k) => k + '=' + String(d[k] == null ? '' : d[k]));
+      return parts.join(' ');
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * 事件 → 一行文本。未知 code **不静默丢**：照原样显示 code + 数据（并打码）。
+   * 返回 null = 这条事件不该显示（目前不会发生）。
+   */
+  function consoleLineText(ev) {
+    const cat = String((ev && ev.cat) || 'system');
+    const code = String((ev && ev.code) || '');
+    let d = ev && ev.data && typeof ev.data === 'object' ? ev.data : {};
+    // 少量"展示期派生"：布尔/枚举 → i18n 词（模板只做占位符替换，不做条件判断）
+    if (code === 'tool.finish') d = Object.assign({}, d, { result: d.ok === false ? t('console.result.fail') : t('console.result.ok') });
+    const catLabel = fmtKey('console.cat.' + cat);
+    const catText = catLabel === 'console.cat.' + cat ? cat : catLabel;
+    const key = 'console.' + code;
+    const known = t(key) !== key;
+    const body = known
+      ? fmtKey(key, d)
+      : fmtKey('console.unknown', { code: code || '?' }) + (consoleDataText(d) ? ' ' + consoleDataText(d) : '');
+    const ts = new Date(Number((ev && ev.ts) || Date.now()) || Date.now());
+    const hh = String(ts.getHours()).padStart(2, '0');
+    const mm = String(ts.getMinutes()).padStart(2, '0');
+    const ss = String(ts.getSeconds()).padStart(2, '0');
+    return consoleRedact('[' + hh + ':' + mm + ':' + ss + '] [' + catText + '] ' + body);
+  }
+
+  /** 一条事件进面板：格式化 → 打码 → 入队 → 超上限丢最旧 → （面板开着才）重画 */
+  function consoleAppend(ev) {
+    try {
+      const seq = Number(ev && ev.seq);
+      if (Number.isFinite(seq) && seq > 0) {
+        if (seq <= consoleLastSeq) return null; // 重复投递：同一 seq 只显示一次
+        consoleLastSeq = seq;
+      }
+      const line = consoleLineText(ev);
+      if (!line) return null;
+      consoleLines.push(line);
+      while (consoleLines.length > CONSOLE_CAP) consoleLines.shift();
+      renderConsole();
+      return line;
+    } catch {
+      // 渲染层自己的格式化异常不能反过来打断消息流
+      return null;
+    }
+  }
+
+  /**
+   * 画面板：表头（如实话术 + 上限）+ 清空按钮 + 正文。
+   * 关闭时**不写正文**（避免无谓重排）；打开时由 toggle 调一次补齐 ——
+   * 于是"打开面板"既不会刷屏、也不会重复贴行（正文永远是 buffer 的一次快照）。
+   */
+  function renderConsole() {
+    const hint = $('console-hint');
+    if (hint) hint.textContent = fmtKey('console.hint', { n: CONSOLE_CAP });
+    const btn = $('console-clear');
+    if (btn) btn.textContent = t('console.clear');
+    const out = $('console-out');
+    if (!out || !state.consoleOpen) return;
+    out.textContent = (consoleLines.length ? consoleLines.join('\n') : t('console.empty')) + '\n';
+    out.scrollTop = out.scrollHeight;
+  }
+
+  /** 清空：buffer 清掉，并留一行"已清空"的时间戳（谁清的、什么时候清的要看得见） */
+  function consoleClear() {
+    const wasOpen = !!state.consoleOpen;
+    consoleLines.length = 0;
+    consoleLines.push(consoleRedact(fmtKey('console.cleared', { ts: new Date().toLocaleTimeString() })));
+    if (wasOpen) renderConsole();
+    return consoleLines.length;
+  }
+
+  // ── 接线：主进程推送 + 渲染层自身异常 ──
+  /** onConsoleEvent 的退订函数（preload 返回；拿不到就是 null） */
+  let consoleOffConsoleEvent = null;
+  (function bindConsoleStream() {
+    try {
+      const off = window.warmy?.onConsoleEvent?.((ev) => consoleAppend(ev));
+      if (typeof off === 'function') consoleOffConsoleEvent = off;
+    } catch {
+      /* preload 没这个方法（例如极旧的壳）：面板照样能用，只是没有主进程事件 */
+    }
+    window.addEventListener('error', (e) => {
+      consoleAppend({
+        cat: 'ui',
+        code: 'ui.uncaught',
+        ts: Date.now(),
+        data: { message: String((e && (e.message || (e.error && e.error.message))) || 'error') },
+      });
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      const r = e && e.reason;
+      consoleAppend({
+        cat: 'ui',
+        code: 'ui.unhandled-rejection',
+        ts: Date.now(),
+        data: { message: String((r && (r.message || r)) || 'rejection') },
+      });
+    });
+  })();
+
+  // ADR 004 P4：容器控制台（只在容器就绪 + 本会话开启容器运行时可用）
+  $('btn-container-shell')?.addEventListener('click', () => { void openContainerShell(); });
+  $('ctg-shell-close')?.addEventListener('click', () => { $('ctg-shell-pane')?.classList.add('hidden'); });
   $('btn-console')?.addEventListener('click', () => {
     state.consoleOpen = !state.consoleOpen;
     $('btn-console')?.classList.toggle('tb-on', state.consoleOpen);
     $('console-pane')?.classList.toggle('hidden', !state.consoleOpen);
-    $('console-resizer')?.classList.toggle('hidden', !state.consoleOpen);
-    if (state.consoleOpen && $('console-out')) {
-      $('console-out').textContent = 'CCArmy console ready.\n' + new Date().toLocaleString() + '\n';
-    }
+    // 打开：把 buffer 快照画一次（不新增事件、因此不会刷屏也不会重复）
+    renderConsole();
   });
+  $('console-clear')?.addEventListener('click', () => { consoleClear(); });
   (function bindConsoleResize() {
     const el = $('console-resizer');
     const pane = $('console-pane');
@@ -4262,7 +5287,7 @@
         state.sessionSecurity[state.selectedChat.id] = mode;
       } else {
         state.globalSecurity = mode;
-        try { await window.ccarmy.setSecurityMode(mode); } catch { /* noop */ }
+        try { await window.warmy.setSecurityMode(mode); } catch { /* noop */ }
       }
       refresh();
     });
@@ -4288,18 +5313,18 @@
     reader.readAsDataURL(f);
     e.target.value = '';
   });
-  $('btn-win-min')?.addEventListener('click', () => window.ccarmy.winMinimize());
-  $('btn-win-max')?.addEventListener('click', () => window.ccarmy.winMaximize());
-  $('btn-win-close')?.addEventListener('click', () => window.ccarmy.winClose());
-  $('btn-ui-refresh')?.addEventListener('click', () => window.ccarmy.winReload());
+  $('btn-win-min')?.addEventListener('click', () => window.warmy.winMinimize());
+  $('btn-win-max')?.addEventListener('click', () => window.warmy.winMaximize());
+  $('btn-win-close')?.addEventListener('click', () => window.warmy.winClose());
+  $('btn-ui-refresh')?.addEventListener('click', () => window.warmy.winReload());
   $('btn-always-top')?.addEventListener('click', async () => {
-    const r = await window.ccarmy.winAlwaysOnTop();
+    const r = await window.warmy.winAlwaysOnTop();
     $('btn-always-top')?.classList.toggle('tb-active', !!r?.alwaysOnTop);
   });
 
   (async () => {
     try {
-      const p = await window.ccarmy.platformInfo();
+      const p = await window.warmy.platformInfo();
       if (p?.isMac) document.body.classList.add('platform-darwin');
       else if (p?.isWin) document.body.classList.add('platform-win32');
       else if (p?.isLinux) document.body.classList.add('platform-linux');
@@ -4316,7 +5341,7 @@
    */
   async function syncGroupsFromStore() {
     try {
-      const r = await window.ccarmy.groupList();
+      const r = await window.warmy.groupList();
       if (!r || r.ok !== true || !Array.isArray(r.groups)) return false;
       const prev = new Map(state.groups.map((g) => [g.id, g]));
       const fromStore = r.groups.map((g) => {
@@ -4351,13 +5376,109 @@
     }
   }
 
+  /**
+   * 创建项目（ADR 004 P3）：**必须**先选开发环境（本机 / 容器）才能创建。
+   * 选「容器中」时，创建后每次启动项目都必须先启动容器（启动流程见 startProjectFlow）。
+   *
+   * 第十六批（产品主定稿：**「记录文件的改动应该是无限牛马的功能，不是本机的功能」**）：
+   * 开发环境随 `groupCreate` **写进项目记录**（项目级、会同步给成员）——
+   * 键是 `devEnv`。下面那份 `containerDev` 只是**兼容旧版本读取路径的本机镜像**
+   * （主进程读的时候**项目记录优先**）；它不再是"这条项目是不是容器项目"的唯一来源。
+   */
+  function projectCreateDialog() {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = t('container.devEnv.createTitle');
+      const body = $('modal-body');
+      body.innerHTML = '';
+      const p1 = document.createElement('div');
+      p1.textContent = t('container.devEnv.required');
+      const nameLabel = document.createElement('div');
+      nameLabel.className = 'ctg-dim';
+      nameLabel.textContent = t('container.devEnv.nameLabel');
+      const input = document.createElement('input');
+      input.id = 'project-name-input';
+      input.style.cssText = 'width:100%;margin:6px 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--input-bg);color:var(--ink);font:inherit';
+      input.placeholder = t('placeholder.groupName');
+      const devRow = document.createElement('div');
+      devRow.id = 'project-dev-env';
+      devRow.className = 'ctg-seg';
+      devRow.dataset.chosen = '';
+      const mk = (val, labelKey) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.devEnvPick = val;
+        b.id = 'project-dev-env-' + val;
+        b.textContent = t(labelKey);
+        b.onclick = () => {
+          devRow.dataset.chosen = val;
+          Array.from(devRow.querySelectorAll('[data-dev-env-pick]')).forEach((x) => x.classList.toggle('on', x.dataset.devEnvPick === val));
+          ok.disabled = false;
+        };
+        return b;
+      };
+      devRow.append(mk('host', 'container.devEnv.host'), mk('container', 'container.devEnv.container'));
+      const note = document.createElement('div');
+      note.className = 'ctg-dim';
+      note.textContent = t('container.devEnv.note');
+      body.append(p1, nameLabel, input, devRow, note);
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.className = 'btn-mini';
+      cancel.textContent = t('common.cancel');
+      cancel.onclick = () => { root.classList.add('hidden'); resolve(null); };
+      const ok = document.createElement('button');
+      ok.className = 'btn-primary';
+      ok.id = 'project-create-ok';
+      ok.textContent = t('common.ok');
+      // **没选开发环境就不让创建**（这正是 P3 的要求：创建时必须选）
+      ok.disabled = true;
+      ok.onclick = () => {
+        if (!devRow.dataset.chosen) return;
+        const name = String(input.value || '').trim();
+        if (!name) { input.focus(); return; }
+        root.classList.add('hidden');
+        resolve({ name, devEnv: devRow.dataset.chosen });
+      };
+      acts.append(cancel, ok);
+      root.classList.remove('hidden');
+      input.focus();
+    });
+  }
+
   function createGroupFlow() {
-    uiPrompt(state.nav === 'internalGroup' ? t('list.createProject') : t('list.createGroupChat'), state.nav === 'internalGroup' ? t('placeholder.groupName') : t('placeholder.groupNameExt')).then(async (name) => {
+    if (state.nav === 'internalGroup') {
+      // 项目：必须选开发环境（P3）
+      void projectCreateDialog().then(async (res) => {
+        if (!res) return;
+        const id = 'g-' + Date.now();
+        try {
+          // devEnv 一起送进主进程 → 写进**项目记录**（项目级事实，随项目同步给成员）
+          await window.warmy.groupCreate({ groupId: id, name: res.name, type: 'internal', directedMode: false, devEnv: res.devEnv });
+        } catch (e) {
+          uiAlert(String(e.message || e));
+          return;
+        }
+        // 兼容旧版本读取路径的本机镜像（**不是**唯一来源：主进程读时项目记录优先）
+        try {
+          const s = await window.warmy.settingsGet();
+          const map = (s && s.settings && s.settings.containerDev) || {};
+          map[id] = res.devEnv;
+          await window.warmy.settingsSave({ containerDev: map });
+        } catch {
+          /* 镜像写不进去也不该挡住创建：项目记录里那份才是事实来源 */
+        }
+        await syncGroupsFromStore();
+      });
+      return;
+    }
+    uiPrompt(t('list.createGroupChat'), t('placeholder.groupNameExt')).then(async (name) => {
       if (!name) return;
-      const type = state.nav === 'internalGroup' ? 'internal' : 'external';
+      const type = 'external';
       const id = 'g-' + Date.now();
       try {
-        await window.ccarmy.groupCreate({ groupId: id, name, type, directedMode: false });
+        await window.warmy.groupCreate({ groupId: id, name, type, directedMode: false });
       } catch (e) {
         uiAlert(String(e.message || e));
         return;
@@ -4366,17 +5487,22 @@
     });
   }
 
-  function addContactFlow() {
-    uiPrompt(t('contact.add'), '').then(async (name) => {
-      if (!name) return;
-      // 附六：加入联系人时对方一定看得到你的联系方式（不可隐藏，但可以不写）
-      const card = await myCard();
-      const go = await shareCardConfirm(card, 'contact.add');
-      if (!go) return;
-      state.chats.push({ id: 'c-' + Date.now(), name, kind: 'extdm', lastPreview: t('list.noReply'), notify: true, card });
-      renderList();
-      window.__saveState?.();
-    });
+  /**
+   * 加联系人（附六：对方一定看得到你的联系方式 —— 不可隐藏，但可以不写）。
+   * 原来是「提示框填名字」的 addContactFlow，R4 把它并进「添加联系人」弹窗的右列
+   * （左列放自己的链接/二维码），流程本身一字未改：填名字 → 名片确认 → 落一行联系人。
+   * 返回 true = 真的加上了。
+   */
+  async function createContactWithCard(name) {
+    const nm = String(name || '').trim();
+    if (!nm) return false;
+    const card = await myCard();
+    const go = await shareCardConfirm(card, 'contact.add');
+    if (!go) return false;
+    state.chats.push({ id: 'c-' + Date.now(), name: nm, kind: 'extdm', lastPreview: t('list.noReply'), notify: true, card });
+    renderList();
+    window.__saveState?.();
+    return true;
   }
 
   function addInstanceFlow() {
@@ -4403,13 +5529,50 @@
     });
   }
 
-  function bindResizer(el, cssVar, min, max) {
+  /**
+   * 竖分隔条拖动（列表栏 #col-resizer 与右栏 #panel-resizer 共用这**一套**，不另造轮子）。
+   *   opts.dir === 'right'：被拖的栏在**右边**（指针右移 → 该栏变窄），左侧那一栏由 1fr 吃掉差值。
+   *   opts.hostId / opts.minOther：给「另一侧」留最小宽度——上限随容器宽度收缩，
+   *     两边都拖不到 0（420px 的窗口里也拖不塌）。
+   *   opts.persistKey：松手 / 双击复位后把宽度写回**既有 settings 通道**（不新开存储文件）。
+   *   opts.resetWidth：双击恢复的默认宽度。
+   */
+  function bindResizer(el, cssVar, min, max, opts) {
     if (!el) return;
-    let startX = 0, startW = 0, dragging = false;
+    const o = opts || {};
+    const dir = o.dir === 'right' ? -1 : 1;
+    const resetWidth = Number(o.resetWidth) || min;
+    const minOther = Number(o.minOther) || 0;
+    const curW = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue(cssVar), 10) || resetWidth;
+    /** 上限：还要给另一侧留出 minOther，否则窄窗口下会把对面挤成 0 */
+    const capMax = () => {
+      let cap = max;
+      const host = o.hostId ? $(o.hostId) : null;
+      if (host && minOther) {
+        const avail = host.getBoundingClientRect().width - minOther;
+        if (avail > min) cap = Math.min(cap, Math.floor(avail));
+      }
+      return cap;
+    };
+    const setW = (w) => {
+      const v = Math.min(capMax(), Math.max(min, Math.round(w)));
+      document.documentElement.style.setProperty(cssVar, v + 'px');
+      return v;
+    };
+    const persist = (w) => {
+      if (!o.persistKey || !w) return;
+      try {
+        const patch = {};
+        patch[o.persistKey] = w;
+        window.warmy.settingsSave(patch);
+      } catch {
+        /* 持久化失败不影响拖动本身 */
+      }
+    };
+    let startX = 0, startW = 0, dragging = false, lastW = 0;
     const onMove = (e) => {
       if (!dragging) return;
-      const w = Math.min(max, Math.max(min, startW + (e.clientX - startX)));
-      document.documentElement.style.setProperty(cssVar, w + 'px');
+      lastW = setW(startW + dir * (e.clientX - startX));
     };
     const onUp = () => {
       if (!dragging) return;
@@ -4417,15 +5580,23 @@
       el.classList.remove('dragging');
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      persist(lastW);
     };
     el.addEventListener('mousedown', (e) => {
       dragging = true;
       el.classList.add('dragging');
       startX = e.clientX;
-      startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue(cssVar), 10) || 280;
+      startW = curW();
+      lastW = startW;
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
       e.preventDefault();
+    });
+    // 双击复位：被拖到极限后也能一步回到默认布局
+    el.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      lastW = setW(resetWidth);
+      persist(lastW);
     });
   }
 
@@ -4459,6 +5630,371 @@
   // 控制台下方（输入框上方）：拉伸输入区
   bindVerticalResizer('input-top-resizer', 'input', 'up');
 
+  /* ══════════════════════════════════════════════════════════════════════
+     R2 设置「快捷」列：给其他智能体的接口目录 + 给人用的键盘快捷键
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * 真二维码：用 index.html 里以**普通 <script src>** 引入的经典脚本编码器
+   * （vendor/qrcode-generator-2.0.4.js，MIT，全局 `qrcode`）把文本编成真 QR 再画成 SVG。
+   *
+   * 为什么是它、为什么必须 vendored 成文件而不是 npm 依赖：
+   *   渲染层是 file:// 页面，index.html 的 CSP 是 `script-src 'self'`（没有 unsafe-eval）。
+   *   本轮在**真实 dist 产物**上复现过：动态 import('./qr.js') 报
+   *   "Failed to fetch dynamically imported module"，`<script type=module src>` 也加载失败
+   *   —— ESM 这条路在 file:// + CSP 下走不通。所以编码器只能是「经典脚本 + 全局变量」，
+   *   且必须随仓库、不联网、不加第三方依赖。
+   *   （别拿 CDP 的 Runtime.evaluate 去测 eval/new Function：DevTools 求值不受页面 CSP 约束，
+   *    实测在同一个 CSP 页面上 new Function 也能通过 —— 那种测法证不了 CSP。）
+   *
+   * 参数按 QR 规范取值，不是随手填的：
+   *   * 纠错等级 M（产品要求，约 15% 冗余）；
+   *   * 静区 4 个模块（ISO/IEC 18004 要求 ≥4），四周留白写进 viewBox，扫码才认得出边界；
+   *   * 版本自适应（typeNumber 0），因此模块数 = 4*版本+17 是由载荷长度算出来的真值，
+   *     并写进 data-qr-* 属性，验收脚本据此从**几何**上反解矩阵来核对。
+   *
+   * 拿不到编码器（脚本没加载上）或编码失败时返回空串，调用方**如实说明**，绝不画假码。
+   */
+  function qrSvg(text, size = 168, ecc = 'M') {
+    const enc = typeof window !== 'undefined' ? window.qrcode : null;
+    const data = String(text == null ? '' : text);
+    if (typeof enc !== 'function' || !data) return '';
+    try {
+      // 上游默认 stringToBytes 是 Latin-1 式的逐字节映射；链接里可能出现非 ASCII
+      // （身份别名/名字），显式换成 UTF-8，否则编出来的码扫出来是乱码。
+      if (enc.stringToBytesFuncs && enc.stringToBytesFuncs['UTF-8']) {
+        enc.stringToBytes = enc.stringToBytesFuncs['UTF-8'];
+      }
+      const qr = enc(0, ecc);
+      qr.addData(data, 'Byte');
+      qr.make();
+      const n = qr.getModuleCount();
+      const quiet = 4;
+      const total = n + quiet * 2;
+      const unit = size / total;
+      const rects = [];
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (!qr.isDark(r, c)) continue;
+          rects.push(
+            '<rect x="' + ((c + quiet) * unit).toFixed(3) + '" y="' + ((r + quiet) * unit).toFixed(3) +
+            '" width="' + unit.toFixed(3) + '" height="' + unit.toFixed(3) + '"/>'
+          );
+        }
+      }
+      const attrs =
+        ' data-qr-version="' + ((n - 17) / 4) + '" data-qr-modules="' + n +
+        '" data-qr-ecc="' + ecc + '" data-qr-quiet="' + quiet + '" data-qr-unit="' + unit.toFixed(6) +
+        '" data-qr-payload-len="' + data.length + '"';
+      return '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
+        '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + escapeHtml(t('contact.mineQr')) + '"' + attrs + '>' +
+        '<rect width="' + size + '" height="' + size + '" fill="#fff"/>' +
+        '<g fill="#111">' + rects.join('') + '</g></svg>';
+    } catch {
+      return '';
+    }
+  }
+
+  /** 组合键 → 规范串（Ctrl+Alt+Shift+Meta+K）；只按了修饰键返回 null */
+  function comboFromEvent(ev) {
+    const raw = String(ev.key || '');
+    if (raw === 'Control' || raw === 'Alt' || raw === 'Shift' || raw === 'Meta') return null;
+    if (!raw) return null;
+    let k = raw;
+    if (raw === ' ') k = 'Space';
+    else if (raw === 'Esc') k = 'Escape';
+    else if (raw.length === 1) k = raw.toUpperCase();
+    const mods = [];
+    if (ev.ctrlKey) mods.push('Ctrl');
+    if (ev.altKey) mods.push('Alt');
+    if (ev.shiftKey) mods.push('Shift');
+    if (ev.metaKey) mods.push('Meta');
+    return { combo: mods.concat([k]).join('+'), key: k, mods, usable: mods.length > 0 || /^F([1-9]|1[0-2])$/.test(k) };
+  }
+
+  /**
+   * 可绑定的动作：**只列真的接上了动作的**（跑不通的宁可不给绑，不要让用户绑了没反应）。
+   * def = 预置的少数常用键；空串 = 默认留空，由用户自己设。
+   */
+  const SHORTCUT_ACTIONS = [
+    { id: 'toggleSidebar', def: 'Ctrl+B', run: () => { const b = $('app-body'); if (b) b.classList.toggle('hide-list'); } },
+    { id: 'openSettings', def: 'Ctrl+,', run: () => setNav('settings') },
+    { id: 'newSession', def: 'Ctrl+N', run: () => { const b = primaryAddButton(); if (b) b.click(); } },
+    { id: 'focusSearch', def: 'Ctrl+F', run: () => { const i = $('list-search'); if (i) { i.focus(); i.select(); } } },
+    { id: 'focusInput', def: '', run: () => { const i = $('input'); if (i) i.focus(); } },
+    { id: 'toggleConsole', def: '', run: () => { const b = $('btn-console'); if (b && !b.classList.contains('hidden')) b.click(); } },
+    { id: 'stopAll', def: '', run: () => { const b = $('btn-stop-all'); if (b) b.click(); } },
+    { id: 'openMe', def: '', run: () => setNav('me') },
+    { id: 'openContacts', def: '', run: () => setNav('externalChat') },
+  ];
+
+  /** 当前页面的「新建」入口（实例页/项目页/群聊页/联系人页各不相同） */
+  function primaryAddButton() {
+    const b = $('list-action');
+    if (b && !b.classList.contains('hidden')) return b;
+    const j = $('btn-join-qr');
+    if (j && !j.classList.contains('hidden')) return j;
+    return null;
+  }
+
+  function shortcutActionById(id) {
+    return SHORTCUT_ACTIONS.filter((a) => a.id === id)[0] || null;
+  }
+
+  /** 生效的按键：用户存过就用用户的（空串 = 显式解绑，不回落到预置值） */
+  function shortcutBinding(id) {
+    const s = state.shortcuts || {};
+    if (Object.prototype.hasOwnProperty.call(s, id)) return String(s[id] || '');
+    const a = shortcutActionById(id);
+    return (a && a.def) || '';
+  }
+
+  /** 持久化：走既有 settings 通道（settings-store 落盘），不新开存储文件 */
+  function saveShortcuts() {
+    try {
+      window.warmy.settingsSave({ shortcuts: state.shortcuts || {} });
+    } catch {
+      /* 保存失败不影响本次界面 */
+    }
+  }
+
+  let shortcutCapturing = null;
+
+  function shortcutMsg(text) {
+    const el = $('hk-keys-msg');
+    if (el) el.textContent = text || '';
+  }
+
+  function stopShortcutCapture() {
+    const cur = shortcutCapturing;
+    shortcutCapturing = null;
+    if (cur && cur.btn) cur.btn.classList.remove('listening', 'invalid');
+  }
+
+  function startShortcutCapture(id, btn) {
+    if (!btn) return;
+    stopShortcutCapture();
+    shortcutCapturing = { id, btn };
+    btn.classList.remove('invalid', 'unbound');
+    btn.classList.add('listening');
+    btn.textContent = t('settings.hotkey.press');
+    shortcutMsg(t('settings.hotkey.keyHint'));
+  }
+
+  /** 录制期：捕获阶段先吃掉按键，别让它触发别的快捷键/菜单 */
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (!shortcutCapturing) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const id = shortcutCapturing.id;
+      const btn = shortcutCapturing.btn;
+      if (e.key === 'Escape') {
+        stopShortcutCapture();
+        renderShortcuts();
+        return;
+      }
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        state.shortcuts[id] = '';
+        saveShortcuts();
+        stopShortcutCapture();
+        renderShortcuts();
+        shortcutMsg(t('settings.hotkey.saved'));
+        return;
+      }
+      const c = comboFromEvent(e);
+      if (!c) return; // 只按了修饰键：继续等
+      if (!c.usable) {
+        btn.classList.add('invalid');
+        btn.textContent = t('settings.hotkey.invalid');
+        return;
+      }
+      state.shortcuts[id] = c.combo;
+      saveShortcuts();
+      stopShortcutCapture();
+      renderShortcuts();
+      shortcutMsg(t('settings.hotkey.saved') + ' · ' + t('settings.hotkey.act.' + id) + ' → ' + c.combo);
+    },
+    true
+  );
+
+  /** 派发：按下已绑定的组合键就执行它的动作 */
+  document.addEventListener('keydown', (e) => {
+    if (shortcutCapturing) return;
+    const c = comboFromEvent(e);
+    if (!c || !c.usable) return;
+    const tgt = e.target;
+    const typing =
+      !!tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable);
+    // 正在打字时不抢：只有带真修饰键（Ctrl/Alt/Meta）的组合才算快捷键
+    if (typing && !(e.ctrlKey || e.altKey || e.metaKey)) return;
+    for (const a of SHORTCUT_ACTIONS) {
+      if (shortcutBinding(a.id) !== c.combo) continue;
+      e.preventDefault();
+      try {
+        a.run();
+      } catch {
+        /* 单个动作异常不影响快捷键本身 */
+      }
+      break;
+    }
+  });
+
+  function renderShortcuts() {
+    const body = $('hk-keys-body');
+    if (!body) return;
+    body.innerHTML = SHORTCUT_ACTIONS.map((a) => {
+      const bound = shortcutBinding(a.id);
+      return (
+        '<tr data-hk-row="' + a.id + '">' +
+        '<td>' + escapeHtml(t('settings.hotkey.act.' + a.id)) + '</td>' +
+        '<td><button type="button" class="hk-key' + (bound ? '' : ' unbound') + '" data-hk="' + a.id + '" title="' +
+        escapeHtml(t('settings.hotkey.keyHint')) + '">' +
+        escapeHtml(bound || t('settings.hotkey.unbound')) + '</button></td>' +
+        '<td class="hk-keys-desc">' + escapeHtml(t('settings.hotkey.actDesc.' + a.id)) + '</td>' +
+        '</tr>'
+      );
+    }).join('');
+    body.querySelectorAll('[data-hk]').forEach((btn) => {
+      btn.onclick = () => startShortcutCapture(btn.dataset.hk, btn);
+    });
+  }
+
+  /* ── 给其他智能体的接口目录 ──
+     目录来自 window.warmy 的**真实方法表**（键名即操作名），一个都不多、不硬编码清单；
+     通道名与形参从桥函数的源码里解析（ipcRenderer.invoke('warmy:xxx', a, b)），解析不到就留空。 */
+
+  const API_GROUP_RULES = [
+    [/^(chatSend|chatLog|chatLogRestore|searchMessages|exportSession|saveText|openChatWindow|setInsertMode|getInsertMode|getChatQuery)$/, 'chat'],
+    [/^(group|board)/, 'group'],
+    [/^(joinRequest|joinPending|joinRespond|inviteCreate|blacklist)/, 'invite'],
+    [/^identity/, 'identity'],
+    [/^membership/, 'membership'],
+    [/^(net|mesh|peers|sync|lan|nodes)/, 'net'],
+    [/^(knowledge|kb|memory)/, 'knowledge'],
+    [/^(metrics|cost|audit)/, 'metrics'],
+    [/^skills?/, 'skill'],
+    [/^(smtp|email)/, 'smtp'],
+    [/^checkpoint/, 'checkpoint'],
+    [/^(executors|executor)/, 'executor'],
+    [/^assets/, 'asset'],
+    [/^(security|approval|requestApproval|plugin|secureKey|repoGuard)/, 'security'],
+    [/^(settings|profile|specialModels|roleModels|importOpenclaw|exportAllowlist|setup|lastError|clearError|i18n|localeInfo|theme|hardware|state)/, 'settings'],
+    [/^(win|tray|registerHotkey|platformInfo|appInfo|checkUpdate|autoUpdate|updateSource|asr|voice|webgpu|pick|request)/, 'window'],
+    [/^lease/, 'repo'],
+    [/^(archived|archive|cleanup)/, 'archive'],
+  ];
+
+  function apiGroupOf(name) {
+    for (let i = 0; i < API_GROUP_RULES.length; i++) {
+      if (API_GROUP_RULES[i][0].test(name)) return API_GROUP_RULES[i][1];
+    }
+    return 'other';
+  }
+
+  /** 从桥函数源码里取 IPC 通道与形参；取不到就留空（不猜） */
+  function apiFaceOf(fn) {
+    const out = { channel: '', params: '' };
+    let src = '';
+    try {
+      src = String(fn);
+    } catch {
+      return out;
+    }
+    const ch = src.match(/['"](warmy:[a-z0-9-]+)['"]/i);
+    if (ch) out.channel = ch[1];
+    const ps = src.match(/^\s*(?:async\s+)?(?:function\s*)?\(?\s*([^)=]*?)\s*\)?\s*=>/);
+    if (ps && ps[1]) out.params = ps[1].replace(/\s+/g, ' ').trim();
+    return out;
+  }
+
+  function apiCatalogue() {
+    const bridge = (typeof window !== 'undefined' && window.warmy) || null;
+    const rows = [];
+    const events = [];
+    if (!bridge) return { rows, events, available: false };
+    Object.keys(bridge).sort().forEach((name) => {
+      let fn = null;
+      try {
+        fn = bridge[name];
+      } catch {
+        fn = null;
+      }
+      if (typeof fn !== 'function') return;
+      if (/^on[A-Z]/.test(name)) {
+        events.push(name); // 事件订阅：主进程 → 渲染层，不是可调用操作
+        return;
+      }
+      const face = apiFaceOf(fn);
+      rows.push({ name, group: apiGroupOf(name), channel: face.channel, params: face.params });
+    });
+    return { rows, events, available: true };
+  }
+
+  const API_GROUP_ORDER = [
+    'chat', 'group', 'board', 'identity', 'membership', 'net', 'invite', 'knowledge',
+    'metrics', 'skill', 'smtp', 'checkpoint', 'executor', 'asset', 'security',
+    'settings', 'window', 'repo', 'archive', 'other',
+  ];
+
+  function renderApiCatalogue() {
+    const box = $('hk-api-body');
+    if (!box) return;
+    const cat = apiCatalogue();
+    const cnt = $('hk-api-count');
+    if (cnt) cnt.textContent = fmtKey('settings.hotkey.apiCount', { n: cat.rows.length });
+    const ev = $('hk-api-events');
+    if (ev) ev.textContent = cat.events.length ? t('settings.hotkey.apiEvents') + ' ' + cat.events.join(', ') : '';
+    if (!cat.available || !cat.rows.length) {
+      box.innerHTML = '<div class="muted">' + escapeHtml(t('settings.hotkey.apiUnavailable')) + '</div>';
+      return;
+    }
+    const q = ((($('hk-api-filter') || {}).value) || '').trim().toLowerCase();
+    const hits = q ? cat.rows.filter((r) => r.name.toLowerCase().indexOf(q) >= 0) : cat.rows;
+    const head =
+      '<thead><tr><th>' + escapeHtml(t('settings.hotkey.apiColOp')) + '</th><th>' +
+      escapeHtml(t('settings.hotkey.apiColChannel')) + '</th><th>' +
+      escapeHtml(t('settings.hotkey.apiColParams')) + '</th><th>' +
+      escapeHtml(t('settings.hotkey.apiColDesc')) + '</th></tr></thead>';
+    let html = '';
+    API_GROUP_ORDER.forEach((g) => {
+      const list = hits.filter((r) => r.group === g);
+      if (!list.length) return;
+      html +=
+        '<div class="hk-group-title">' + escapeHtml(t('settings.hotkey.group.' + g)) + ' · ' + list.length + '</div>' +
+        '<table class="hk-api">' + head + '<tbody>' +
+        list
+          .map((r) => {
+            // 说明：只对**我们确实知道**的操作写了文案；其余如实标「未收录说明」，不编
+            const k = 'settings.hotkey.api.' + r.name;
+            const desc = state.t[k] ? t(k) : '';
+            return (
+              '<tr data-api-op="' + escapeHtml(r.name) + '">' +
+              '<td class="hk-op">' + escapeHtml(r.name) + '</td>' +
+              '<td class="hk-ch">' + escapeHtml(r.channel || '—') + '</td>' +
+              '<td class="hk-pa">' + escapeHtml(r.params || '—') + '</td>' +
+              '<td class="hk-desc' + (desc ? '' : ' none') + '">' + escapeHtml(desc || t('settings.hotkey.apiNoDesc')) + '</td>' +
+              '</tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table>';
+    });
+    box.innerHTML = html || '<div class="muted">' + escapeHtml(t('settings.hotkey.apiEmpty')) + '</div>';
+  }
+
+  function bindHotkeySection() {
+    renderApiCatalogue();
+    renderShortcuts();
+    shortcutMsg('');
+    const f = $('hk-api-filter');
+    if (f && f.dataset.bound !== '1') {
+      f.dataset.bound = '1';
+      f.addEventListener('input', () => renderApiCatalogue());
+    }
+  }
+
   // ── 右键菜单 ──
   // ── 3 权限审批弹窗 ──
   function showApprovalDialog(payload) {
@@ -4488,9 +6024,9 @@
       root.classList.remove('hidden');
     });
   }
-  window.ccarmy.onApprovalRequest?.(async (d) => {
+  window.warmy.onApprovalRequest?.(async (d) => {
     const r = await showApprovalDialog(d);
-    await window.ccarmy.approvalRespond(d.id, r.allowed, r.scope);
+    await window.warmy.approvalRespond(d.id, r.allowed, r.scope);
   });
 
   function openContextMenu(x, y, items) {
@@ -4581,11 +6117,11 @@
             }
             const ok = await uiConfirm(t('ctx.closeConfirm'));
             if (!ok) return;
-            await window.ccarmy.stopInstance(inst.id);
+            await window.warmy.stopInstance(inst.id);
             inst.status = 'stopped';
           } else {
             try {
-              await window.ccarmy.spawnInstance({ id: inst.id, name: inst.name, dutyEligible: true });
+              await window.warmy.spawnInstance({ id: inst.id, name: inst.name, dutyEligible: true });
               inst.status = 'running';
             } catch (e) {
               uiAlert(String(e.message || e));
@@ -4617,7 +6153,7 @@
           const ok = await uiConfirm(t('ctx.archiveConfirm'));
           if (!ok) return;
           inst.archived = true;
-          await window.ccarmy.archivedAdd({ id: inst.id, name: inst.name, kind: 'agent' }).catch(() => {});
+          await window.warmy.archivedAdd({ id: inst.id, name: inst.name, kind: 'agent' }).catch(() => {});
           uiAlert(t('instances.saved'));
           renderList();
         },
@@ -4645,10 +6181,16 @@
     ];
   }
 
-  function groupMenu(g, rowEl) {
+  async function groupMenu(g, rowEl) {
     const blocked = sessionHasBlockingTasks(g.id);
     const joined = !g.joinedByOther;
-    return [
+    /**
+     * ADR 004 第七批：「启用/停用项目」与「切换容器…」都在**项目的右键菜单**里。
+     * 前者任何项目都有（与容器无关）；后者只有"创建时选了容器开发的项目"才有。
+     */
+    const projectItems = g.type === 'internal' ? await projectMenuItems(g) : [];
+    void rowEl;
+    return projectItems.concat([
       {
         label: t('ctx.rename'),
         onClick: async () => {
@@ -4669,7 +6211,7 @@
               }
               const ok = await uiConfirm(t('ctx.closeConfirm'));
               if (!ok) return;
-              const dr = await window.ccarmy.groupDissolve(g.id).catch(() => null);
+              const dr = await window.warmy.groupDissolve(g.id).catch(() => null);
               if (dr && dr.ok === false) {
                 uiAlert(t('ctx.dissolveFailed'));
                 return;
@@ -4687,7 +6229,7 @@
               // 本机单节点部署下，群记录只存在这台机器上，
               // 因此「退出」与「解散」的效果一致；都必须在存储里删掉，
               // 否则下次启动 syncGroupsFromStore() 会把它拉回来。
-              await window.ccarmy.groupDissolve(g.id).catch(() => null);
+              await window.warmy.groupDissolve(g.id).catch(() => null);
               state.groups = state.groups.filter((x) => x.id !== g.id);
               renderList();
             },
@@ -4710,13 +6252,20 @@
           renderList();
         },
       },
-    ].filter(Boolean);
+    ].filter(Boolean));
   }
 
   function bindRowContext(rowEl, getItems) {
     rowEl.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      openContextMenu(e.clientX, e.clientY, getItems());
+      // 菜单构造可以是 async（例如"只有容器开发项目才有切换容器"要先读设置）：
+      // 先把坐标固定下来，再等构造完成才弹菜单，避免异步期间鼠标已经移走。
+      const x = e.clientX;
+      const y = e.clientY;
+      Promise.resolve()
+        .then(() => getItems())
+        .then((items) => openContextMenu(x, y, items || []))
+        .catch(() => { /* 菜单构造失败就不弹，不抛到控制台 */ });
     });
   }
 
@@ -4733,7 +6282,7 @@
 
   // ── 加入请求处理 ──
   async function refreshJoinBadge() {
-    const r = await window.ccarmy.joinPending().catch(() => null);
+    const r = await window.warmy.joinPending().catch(() => null);
     const n = r?.count || 0;
     const badge = $('join-badge');
     if (badge) {
@@ -4772,11 +6321,11 @@
 
   document.querySelectorAll('[data-nav="instances"]').forEach((el) => {
     el.addEventListener('click', async () => {
-      const r = await window.ccarmy.joinPending().catch(() => null);
+      const r = await window.warmy.joinPending().catch(() => null);
       if (r?.items?.length) {
         const req = r.items[0];
         const action = await showJoinRequestModal(req);
-        await window.ccarmy.joinRespond({ id: req.id, action });
+        await window.warmy.joinRespond({ id: req.id, action });
         refreshJoinBadge();
         uiAlert(t('instances.saved'));
       }
@@ -4789,12 +6338,1491 @@
     $('task-list')?.classList.toggle('hidden');
   });
 
+  /**
+   * 右栏「进度」区块 = **真任务**（值班者编排产生的看板任务），没有就如实说"暂无任务"。
+   *
+   * 背景（本轮巡检发现的"看起来在跑其实没跑"）：这一块以前是 index.html 里写死的 5 行演示任务
+   * （整理周报 / 接口对接 / 值班编排 / 知识库归档 / 旧方案验证）+ 写死的 0% 进度条 ——
+   * 界面上像是真实任务状态。现在：任务来自 `warmy:board-tasks`（真看板），
+   * 一条都没有时显示一句如实话术（i18n），进度条按"完成数/总数"算真比例。
+   */
+  function setProgressPct(pct) {
+    const p = clampPercent(pct);
+    const bar = $('progress-bar');
+    if (bar) bar.style.width = p + '%';
+    const txt = $('progress-text');
+    if (txt) txt.textContent = p + '%';
+  }
+
+  async function renderProgressTasks() {
+    const list = $('task-list');
+    if (!list) return;
+    const sel = state.selectedChat;
+    const isGroup = !!(sel && (sel.kind === 'internal' || sel.kind === 'extgroup'));
+    let tasks = [];
+    if (isGroup) {
+      try {
+        const r = await window.warmy.boardTasks(sel.id);
+        if (r && Array.isArray(r.tasks)) tasks = r.tasks;
+      } catch {
+        tasks = [];
+      }
+    }
+    if (!tasks.length) {
+      list.innerHTML = '<li class="task-empty">' + escapeHtml(t('panel.progressEmpty')) + '</li>';
+      setProgressPct(0);
+      return;
+    }
+    const DOT = { done: 'done', failed: 'fail', blocked: 'fail', doing: 'active', todo: '' };
+    list.innerHTML = tasks
+      .map((task) => {
+        const status = String((task && task.status) || '').toLowerCase();
+        const dot = DOT[status] !== undefined ? DOT[status] : '';
+        const pct = task && task.progress != null ? clampPercent(task.progress) : null;
+        return (
+          '<li class="task-' + escapeHtml(status || 'todo') + '">' +
+          '<span>' + escapeHtml(String((task && (task.title || task.name)) || '')) +
+          (pct === null ? '' : ' · ' + pct + '%') +
+          '</span>' +
+          '<span class="dot ' + dot + '"></span>' +
+          '</li>'
+        );
+      })
+      .join('');
+    const done = tasks.filter((x) => String((x && x.status) || '').toLowerCase() === 'done').length;
+    setProgressPct(Math.round((done / tasks.length) * 100));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ADR 004：执行环境（容器）
+     ---------------------------------------------------------------------------
+     P1 = 设置 → 功能 → 容器：探测（12 候选、三态）+ 可操作状态列表 + 折叠安装说明；
+     P2 = 「我的牛马」与「非容器项目」的「运行/测试在容器中」选项 + 未就绪**硬提示**；
+     P3 = 创建项目时**必选**开发环境（本机 / 容器）+ 仅创建者可启停（部分，见报告）。
+
+     三条不许违反的规矩：
+       1) **绝不静默降级**：选了"容器中"而本机没有可用运行时 → 出提示 + 跳设置引导，
+          **不会**退回本机执行（那会让用户以为在沙箱里跑、实际在主机跑）；
+       2) **只驱动、不安装**：这里不会跑安装器、不提权、不下载；
+       3) **"命令在" ≠ "可用"**：状态一律来自主进程真探测（三态 + 引擎报错/系统不适用单列），
+          不在渲染层猜、也不拿"上次探测"当"现在的事实"。
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * 12 个候选运行时的官网四条链接（URL 与语言无关，所以**不进 i18n**；
+   * 链接的**标题文案**才进 i18n：container.link.official / install / download / support）。
+   * 顺序 = 安装说明的展示顺序：Podman 第一（许可最干净，ADR §3.4 结论）。
+   */
+  const CONTAINER_LINKS = {
+    podman: { official: 'https://podman.io/', install: 'https://podman.io/docs/installation', download: 'https://podman-desktop.io/downloads', support: 'https://github.com/containers/podman/discussions' },
+    docker: { official: 'https://www.docker.com/', install: 'https://docs.docker.com/engine/install/', download: 'https://www.docker.com/products/docker-desktop/', support: 'https://forums.docker.com/' },
+    wsl: { official: 'https://learn.microsoft.com/windows/wsl/', install: 'https://learn.microsoft.com/windows/wsl/install', download: 'https://learn.microsoft.com/windows/wsl/install-manual', support: 'https://github.com/microsoft/WSL/issues' },
+    nerdctl: { official: 'https://containerd.io/', install: 'https://github.com/containerd/nerdctl#install', download: 'https://github.com/containerd/nerdctl/releases', support: 'https://github.com/containerd/nerdctl/issues' },
+    'rancher-desktop': { official: 'https://rancherdesktop.io/', install: 'https://docs.rancherdesktop.io/getting-started/installation/', download: 'https://github.com/rancher-sandbox/rancher-desktop/releases', support: 'https://github.com/rancher-sandbox/rancher-desktop/issues' },
+    colima: { official: 'https://github.com/abiosoft/colima', install: 'https://github.com/abiosoft/colima#installation', download: 'https://github.com/abiosoft/colima/releases', support: 'https://github.com/abiosoft/colima/issues' },
+    lima: { official: 'https://lima-vm.io/', install: 'https://lima-vm.io/docs/installation/', download: 'https://github.com/lima-vm/lima/releases', support: 'https://github.com/lima-vm/lima/issues' },
+    'windows-sandbox': { official: 'https://learn.microsoft.com/windows/security/application-security/application-isolation/windows-sandbox/', install: 'https://learn.microsoft.com/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-install', download: 'https://learn.microsoft.com/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-install', support: 'https://answers.microsoft.com/' },
+    'lxd-incus': { official: 'https://linuxcontainers.org/incus/', install: 'https://linuxcontainers.org/incus/docs/main/installing/', download: 'https://github.com/lxc/incus/releases', support: 'https://discuss.linuxcontainers.org/' },
+    isulad: { official: 'https://gitee.com/openeuler/iSulad', install: 'https://docs.openeuler.org/', download: 'https://gitee.com/openeuler/iSulad/releases', support: 'https://gitee.com/openeuler/iSulad/issues' },
+    pouch: { official: 'https://github.com/alibaba/pouch', install: 'https://github.com/alibaba/pouch/blob/master/INSTALL.md', download: 'https://github.com/alibaba/pouch/releases', support: 'https://github.com/alibaba/pouch/issues' },
+    kata: { official: 'https://katacontainers.io/', install: 'https://github.com/kata-containers/kata-containers/blob/main/docs/install/README.md', download: 'https://github.com/kata-containers/kata-containers/releases', support: 'https://github.com/kata-containers/kata-containers/issues' },
+  };
+  const CONTAINER_GUIDE_ORDER = ['podman', 'docker', 'wsl', 'nerdctl', 'rancher-desktop', 'colima', 'lima', 'windows-sandbox', 'lxd-incus', 'isulad', 'pouch', 'kata'];
+  /**
+   * 「运行环境」的选项（第四批）：**实现方式**（容器 / 设备环境）是两条并列的路，不是同一层级。
+   * 每条都给出「适合跑什么 / 需要什么 / 哪里不可用」，避免用户拿容器去跑安卓 App 然后失败。
+   * 只有 `container-linux` 在本批真的落地；其余四项如实列出、**不假装支持**。
+   */
+  const RUN_ENV_OPTIONS = [
+    { key: 'container-linux', kind: 'container', envType: 'linux', implemented: true },
+    { key: 'container-windows', kind: 'container', envType: 'windows', implemented: false },
+    { key: 'device-android', kind: 'device', envType: 'android', implemented: false },
+    { key: 'device-ios', kind: 'device', envType: 'ios', implemented: false },
+    { key: 'device-windows-desktop', kind: 'device', envType: 'windows-desktop', implemented: false },
+  ];
+  const CONTAINER_ENV_TYPE_IDS = RUN_ENV_OPTIONS.map((x) => x.envType);
+  /**
+   * 「运行 / 预览目标」（第五批）——**与"构建/测试在哪"是两个维度**。
+   * 容器是 Linux 的，提供不了 Windows / macOS 的图形界面：这是物理约束，不是"还没做"。
+   * 每个目标都如实写清"界面在哪里预览"，免得用户以为容器能把 Windows 界面送出来。
+   */
+  const RUN_TARGETS = ['linux-service', 'web', 'windows-desktop', 'macos', 'android', 'ios'];
+  const CONTAINER_LINK_KEYS = ['official', 'install', 'download', 'support'];
+
+  /** 渲染层侧的执行环境状态（**事实来自主进程探测**，这里只缓存最近一次报告） */
+  const containerUi = {
+    report: null,
+    probing: false,
+    /** 过渡态：{ id, action, deadline } */
+    pending: null,
+    /** 从引导（右键菜单 / 项目状态里的"去装/启动容器"）跳到设置卡片时高亮它 */
+    cameFromGuidance: false,
+    /** 进行中的轮询计时器 */
+    pollTimer: null,
+  };
+
+  const containerEntry = (id) => ((containerUi.report && containerUi.report.runtimes) || []).find((x) => x.id === id) || null;
+  const containerReadyIds = () => ((containerUi.report && containerUi.report.usableIds) || []).slice();
+
+  /**
+   * 容器项目的开发面状态。传入的 facts 由调用方从**主进程**取（`warmy:project-dev-state`）；
+   * 只有主进程不可用（预览桩 / 老版本）时才走这里的兜底 —— 兜底**一律保守**：
+   * 只要不是"明确就绪"，就当停止（宁可显示停止，也不乐观放开宿主侧编辑）。
+   */
+  const PROJECT_STOP_REASON = (code, reasonKey) =>
+    'container.project.stopReason.' +
+    ((reasonKey && String(reasonKey)) ||
+      (code === 'stopped-by-creator' ? 'stoppedByCreator'
+        : code === 'container-not-installed' ? 'notInstalled'
+          : code === 'container-not-chosen' ? 'notChosen'
+            : code === 'ok' ? 'ok' : 'containerDown'));
+
+  /**
+   * 「没有可用容器」时那句提示里的 reason：如实列**已经装了的**运行时现在是什么状态
+   * （本机实测 = docker·未运行 / wsl·未运行），而不是一句空话。
+   */
+  function noReadyReason(rep) {
+    if (!rep) return t('container.status.not-installed');
+    const att = (rep.attentionIds || []).map((id) => ((rep.runtimes || []).find((x) => x.id === id))).filter(Boolean);
+    if (att.length) {
+      return att.map((e) => t('container.rt.' + e.id + '.name') + ' · ' + t('container.run.' + e.run)).join('；');
+    }
+    return t('container.status.not-installed');
+  }
+
+  /**
+   * 最近一次启停结果的**原因 + 原始输出**（第十批：进程派生了 ≠ 成功）。
+   * 文案两层：① 具体原因码（例如"安装不完整或未能启动"）；② 原始输出行（可核对）。
+   * 都用 --ink-dim/--danger-fg 的次要样式，对比度 >= 3.0。
+   */
+  function containerActionErrorText(entry) {
+    const a = entry && entry.action;
+    if (!a || !a.result || a.result.ok) return '';
+    const reasonCode = String(a.result.reasonCode || (a.result.kind === 'start' ? 'engine-start-failed' : 'engine-stop-failed'));
+    const reasonKey = t('container.action.reason.' + reasonCode) === 'container.action.reason.' + reasonCode
+      ? t('container.action.reason.' + (a.result.kind === 'start' ? 'engine-start-failed' : 'engine-stop-failed'))
+      : t('container.action.reason.' + reasonCode);
+    return fmtKey('container.action.failedLine', {
+      verb: t(a.result.kind === 'start' ? 'container.action.startVerb' : 'container.action.stopVerb'),
+      reason: reasonKey,
+      out: String(a.result.output || ('exit=' + a.result.code)),
+    });
+  }
+
+  function containerBadge(entry) {
+    const map = {
+      running: ['container.run.running', 'ok'],
+      'not-running': ['container.run.notRunning', 'dim'],
+      error: ['container.run.error', 'danger'],
+      unsupported: ['container.run.unsupported', 'dim'],
+    };
+    const pair = map[entry.run] || ['container.run.notRunning', 'dim'];
+    return '<span class="ctg-badge" data-run="' + escapeHtml(entry.run) + '" data-tone="' + pair[1] + '">' + escapeHtml(t(pair[0])) + '</span>';
+  }
+
+  function containerCapabilityText(entry) {
+    if (!entry.capability || !entry.capability.runCommand) return t('container.cap.none');
+    const parts = [];
+    if (entry.capability.runCommand) parts.push(t('container.cap.run'));
+    if (entry.capability.interactiveShell) parts.push(t('container.cap.shell'));
+    if (entry.capability.mountHostDir) parts.push(t('container.cap.mount'));
+    return parts.join(' · ');
+  }
+
+  /** 一级行：状态 + 名称 + 类别 + 版本 + 原因/证据 + 能力 + 启停按钮 */
+  function containerRowHtml(entry) {
+    const name = t('container.rt.' + entry.id + '.name');
+    const kind = t('container.kind.' + (entry.engine && entry.engine.kind ? entry.engine.kind : 'container'));
+    const action = entry.action || null;
+    const pending = !!(action && action.pending) || !!(containerUi.pending && containerUi.pending.id === entry.id);
+    const pendingKind = action && action.pending ? action.kind : (containerUi.pending && containerUi.pending.id === entry.id ? containerUi.pending.action : null);
+    let buttons = '';
+    if (entry.lifecycle && entry.lifecycle.startable && entry.run !== 'running') {
+      buttons += '<button type="button" class="btn-mini" id="ctg-act-start-' + escapeHtml(entry.id) + '" data-ctg-act="start" data-ctg-id="' + escapeHtml(entry.id) + '"' + (pending ? ' disabled' : '') + '>' +
+        escapeHtml(pending && pendingKind === 'start' ? t('container.action.starting') : t('container.action.start')) + '</button>';
+    }
+    if (entry.lifecycle && entry.lifecycle.stoppable && entry.run === 'running') {
+      buttons += '<button type="button" class="btn-mini ctg-danger" id="ctg-act-stop-' + escapeHtml(entry.id) + '" data-ctg-act="stop" data-ctg-id="' + escapeHtml(entry.id) + '"' + (pending ? ' disabled' : '') + '>' +
+        escapeHtml(pending && pendingKind === 'stop' ? t('container.action.stopping') : t('container.action.stop')) + '</button>';
+    }
+    const reasonNote = buttons ? '' :
+      '<div class="ctg-dim ctg-reason" data-reason="' + escapeHtml(entry.lifecycle ? entry.lifecycle.reason : 'ok') + '">' +
+      escapeHtml(fmtKey('container.action.noButtons', { reason: t('container.reason.' + (entry.lifecycle ? entry.lifecycle.reason : 'ok')) })) + '</div>';
+    const transition = pending
+      ? '<div class="ctg-dim ctg-pending" data-pending="' + escapeHtml(String(pendingKind || '')) + '">' +
+        escapeHtml(fmtKey(pendingKind === 'stop' ? 'container.action.stopping' : 'container.action.waitingReady', { s: String(Math.round((entry.lifecycle && entry.lifecycle.waitMs ? entry.lifecycle.waitMs : 120000) / 1000)) })) + '</div>'
+      : '';
+    const errText = containerActionErrorText(entry);
+    const errLine = errText ? '<div class="ctg-err" data-ctg-error="' + escapeHtml(entry.id) + '">' + escapeHtml(errText) + '</div>' : '';
+    return '<div class="ctg-row" data-rt="' + escapeHtml(entry.id) + '" data-status="' + escapeHtml(entry.status) + '" data-run="' + escapeHtml(entry.run) + '"' +
+      ' data-kind="' + escapeHtml(String(entry.engine && entry.engine.kind)) + '"' +
+      ' data-startable="' + (entry.lifecycle && entry.lifecycle.startable ? '1' : '0') + '"' +
+      ' data-stoppable="' + (entry.lifecycle && entry.lifecycle.stoppable ? '1' : '0') + '">' +
+      '<div class="ctg-row-head">' +
+      '<span class="ctg-name">' + escapeHtml(name) + '</span>' +
+      containerBadge(entry) +
+      '<span class="ctg-kind">' + escapeHtml(kind) + '</span>' +
+      (entry.version ? '<span class="ctg-dim">' + escapeHtml(t('container.versionLabel')) + ' ' + escapeHtml(entry.version) + '</span>' : '') +
+      '<span class="ctg-spacer"></span>' +
+      buttons +
+      '</div>' +
+      '<div class="ctg-dim ctg-dateil" data-close="' + escapeHtml(entry.detail || '') + '">' +
+      escapeHtml(t('container.detailLabel')) + '：' + escapeHtml(entry.detail || '') +
+      (entry.evidence ? ' · ' + escapeHtml(String(entry.evidence).slice(0, 240)) : ' · ' + escapeHtml(t('container.evidenceNone'))) +
+      '</div>' +
+      '<div class="ctg-dim ctg-cap">' + escapeHtml(t('container.capLabel')) + '：' + escapeHtml(containerCapabilityText(entry)) + '</div>' +
+      reasonNote + transition + errLine +
+      '</div>';
+  }
+
+  /** 折叠的安装说明：**折叠时只显示名字**；展开才是四要素 + 四条链接 */
+  function renderContainerGuide() {
+    const box = $('container-guide');
+    if (!box) return;
+    box.innerHTML = CONTAINER_GUIDE_ORDER.map((id) => {
+      const links = CONTAINER_LINKS[id] || {};
+      const linkRows = CONTAINER_LINK_KEYS.map((k) =>
+        '<a class="ctg-link" href="' + escapeHtml(links[k] || '') + '" target="_blank" rel="noreferrer noopener"' +
+        ' data-link="' + escapeHtml(k) + '">' + escapeHtml(t('container.link.' + k)) + '</a>'
+      ).join('');
+      const field = (key, labelKey) =>
+        '<div class="ctg-guide-field" data-field="' + escapeHtml(key) + '"><span class="ctg-guide-label">' +
+        escapeHtml(t(labelKey)) + '</span><span class="ctg-guide-value">' + escapeHtml(t('container.rt.' + id + '.' + key)) + '</span></div>';
+      return '<details class="ctg-guide-item" data-rt="' + escapeHtml(id) + '">' +
+        '<summary class="ctg-guide-summary" id="ctg-guide-summary-' + escapeHtml(id) + '">' +
+        '<span class="ctg-guide-name" data-name="' + escapeHtml(id) + '">' + escapeHtml(t('container.rt.' + id + '.name')) + '</span>' +
+        // 第二批要求：折叠时除名称外，还要显示该容器**支持哪些系统**
+        '<span class="ctg-guide-os ctg-dim" data-os="' + escapeHtml(id) + '">' + escapeHtml(t('container.rt.' + id + '.osShort')) + '</span>' +
+        '</summary>' +
+        '<div class="ctg-guide-body">' +
+        field('cost', 'container.guideCost') +
+        field('commercial', 'container.guideCommercial') +
+        field('os', 'container.guideOs') +
+        field('size', 'container.guideSize') +
+        '<div class="ctg-links">' + linkRows + '</div>' +
+        '</div></details>';
+    }).join('');
+  }
+
+  /**
+   * 列表 = 本机**已有**的运行时（`not-installed` 不进列表，只进下方安装说明）。
+   * `unsupported-platform` 与 `engine-error` 如实单列，**不**硬并进 running/not-running 两态。
+   */
+  function renderContainerList() {
+    const box = $('container-list');
+    const note = $('container-missing-note');
+    const sum = $('container-summary');
+    if (!box) return;
+    const rep = containerUi.report;
+    if (!rep) {
+      box.dataset.probe = 'none';
+      box.innerHTML = '';
+      if (note) note.textContent = '';
+      if (sum) { sum.textContent = ''; sum.dataset.summary = 'none'; }
+      return;
+    }
+    const listed = (rep.runtimes || []).filter((r) => r.status !== 'not-installed');
+    box.dataset.probe = 'done';
+    box.innerHTML = listed.length ? listed.map(containerRowHtml).join('') : '<div class="ctg-dim">' + escapeHtml(t('container.listEmpty')) + '</div>';
+    if (note) note.textContent = rep.notInstalledCount ? fmtKey('container.notInstalledNote', { n: String(rep.notInstalledCount) }) : '';
+    if (sum) {
+      sum.dataset.summary = String(rep.usableIds ? rep.usableIds.length : 0);
+      sum.textContent = fmtKey('container.probeSummary', {
+        n: String(listed.length),
+        ready: String((rep.usableIds || []).length),
+        attention: String((rep.attentionIds || []).length),
+        missing: String(rep.notInstalledCount || 0),
+      });
+    }
+  }
+
+  async function probeContainers(force) {
+    if (containerUi.probing) return containerUi.report;
+    containerUi.probing = true;
+    const msg = $('container-probe-msg');
+    if (msg) { msg.dataset.probeState = 'probing'; msg.textContent = t('container.probing'); }
+    const btn = $('btn-container-probe');
+    if (btn) btn.disabled = true;
+    try {
+      const r = await window.warmy.containerProbe({ force: !!force });
+      const rep = r && r.report ? r.report : null;
+      containerUi.report = rep;
+      if (msg) {
+        if (rep) {
+          msg.dataset.probeState = 'done';
+          msg.textContent = fmtKey('container.probeDone', { n: String((rep.usableIds || []).length) });
+        } else {
+          msg.dataset.probeState = 'failed';
+          msg.textContent = fmtKey('container.probeFailed', { err: String((r && r.error) || 'unknown') });
+        }
+      }
+    } catch (e) {
+      containerUi.report = null;
+      if (msg) { msg.dataset.probeState = 'failed'; msg.textContent = fmtKey('container.probeFailed', { err: String(e && e.message ? e.message : e) }); }
+    } finally {
+      containerUi.probing = false;
+      if (btn) btn.disabled = false;
+      renderContainerList();
+      renderContainerFacts();
+    }
+    return containerUi.report;
+  }
+
+  /** 启停：**停止必须二次确认**（它是破坏性动作，会影响该运行时上其它程序的容器） */
+  async function containerAction(id, action) {
+    const entry = containerEntry(id);
+    const name = t('container.rt.' + id + '.name');
+    if (action === 'stop') {
+      const go = await uiConfirm(fmtKey('container.action.confirmStopBody', { name }), t('container.action.confirmStopTitle'));
+      if (!go) return false; // 未确认 → 一个操作都不发
+    }
+    const r = await window.warmy.containerAction({ id, action }).catch((e) => ({ ok: false, error: String(e && e.message ? e.message : e) }));
+    if (!r || !r.ok) {
+      await uiAlert(fmtKey('container.action.rejected', { err: String((r && (r.error || r.code)) || 'unknown') }));
+      return false;
+    }
+    containerUi.pending = { id, action, deadline: Date.now() + ((entry && entry.lifecycle && entry.lifecycle.waitMs) || 120000) };
+    renderContainerList();
+    containerPollAction(id);
+    return true;
+  }
+
+  /** 过渡态 + **真刷新**：轮询重探，直到状态真的变了 / 操作结束 / 超时 */
+  function containerPollAction(id, round = 0) {
+    if (containerUi.pollTimer) { clearTimeout(containerUi.pollTimer); containerUi.pollTimer = null; }
+    const pend = containerUi.pending;
+    if (!pend || pend.id !== id) return;
+    const tick = async () => {
+      containerPollAction(id, round + 1);
+    };
+    containerUi.pollTimer = setTimeout(async () => {
+      containerUi.pollTimer = null;
+      const rep = await probeContainers(true);
+      const cur = containerUi.pending;
+      if (!cur || cur.id !== id) return;
+      const after = (rep && rep.runtimes || []).find((x) => x.id === id);
+      const act = after && after.action;
+      const settled = act && !act.pending;
+      const reached = cur.action === 'start' ? (after && after.run === 'running') : (after && after.run !== 'running');
+      if (settled || reached) {
+        containerUi.pending = null;
+        renderContainerList();
+        return;
+      }
+      if (Date.now() > cur.deadline || round >= 90) {
+        containerUi.pending = null;
+        renderContainerList();
+        await uiAlert(t('container.action.timeout'));
+        return;
+      }
+      void tick();
+    }, 1500);
+  }
+
+  /**
+   * 安装提示词（第八批）：把**当前语言包**里的那段提示词灌进 `<pre>`，并绑一键复制。
+   * 复制的必须是"语言包里那段"（逐字一致），不做二次拼接 —— 否则用户拿到的和验收的不是一份。
+   */
+  function renderInstallPrompt() {
+    const pre = $('ctg-install-prompt-text');
+    const btn = $('btn-copy-install-prompt');
+    if (!pre) return;
+    pre.textContent = t('container.env.prompt.content');
+    pre.dataset.promptLang = String(state.locale || 'zh-CN');
+    if (btn) btn.textContent = t('container.env.prompt.copy');
+    const msg = $('ctg-install-prompt-msg');
+    if (msg) {
+      msg.textContent = '';
+      msg.dataset.copyState = 'idle';
+    }
+    if (btn) {
+      btn.onclick = async () => {
+        const text = t('container.env.prompt.content');
+        let okCopy = false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            okCopy = true;
+          }
+        } catch {
+          okCopy = false;
+        }
+        if (!okCopy) {
+          // 兜底：选中内容让用户手动复制（**不假装已复制**）
+          try {
+            const range = document.createRange();
+            range.selectNodeContents(pre);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } catch {
+            /* 选中也失败就只给提示 */
+          }
+        }
+        if (msg) {
+          msg.dataset.copyState = okCopy ? 'copied' : 'failed';
+          msg.textContent = okCopy ? t('container.env.prompt.copied') : t('container.env.prompt.failed');
+        }
+        return okCopy;
+      };
+    }
+  }
+
+  /** 设置卡片绑定（重渲染后要重新绑，所以是函数而不是一次性的） */
+  function bindContainerCard() {
+    renderContainerGuide();
+    renderContainerList();
+    renderContainerFacts();
+    renderInstallPrompt();
+    const btn = $('btn-container-probe');
+    if (btn) btn.onclick = () => { void probeContainers(true); };
+    const box = $('container-list');
+    if (box) {
+      box.onclick = (ev) => {
+        const t2 = ev.target;
+        const b = t2 && t2.closest ? t2.closest('[data-ctg-act]') : null;
+        if (!b) return;
+        void containerAction(b.dataset.ctgId, b.dataset.ctgAct);
+      };
+    }
+    if (containerUi.cameFromGuidance) markContainerCardFocused();
+  }
+
+  /** 环境类型 / 镜像 / 实测耗时三段：数据全部来自探测报告，未获取就如实说"未获取" */
+  function renderContainerFacts() {
+    const etBox = $('container-env-types');
+    if (etBox) {
+      const list = (containerUi.report && containerUi.report.envTypes) || [];
+      // 键名要按"运行环境选项"的 id 取（envType -> opt key），否则会渲染成裸 key
+      const optKeyOf = (envId) => {
+        const hit = RUN_ENV_OPTIONS.find((o) => o.envType === envId);
+        return hit ? hit.key : envId;
+      };
+      etBox.innerHTML = list.length
+        ? list.map((x) => {
+            const k = optKeyOf(x.id);
+            const facts = t('container.runEnv.opt.' + k + '.needs') + '\n' + t('container.runEnv.opt.' + k + '.blocked') + '\n' + t('container.runEnv.opt.' + k + '.impl');
+            return '<div class="ctg-row" data-env-type="' + escapeHtml(x.id) + '" data-opt="' + escapeHtml(k) + '" data-implemented="' + (x.implemented ? '1' : '0') + '" data-real="' + (x.realContainer ? '1' : '0') + '">' +
+              '<div class="ctg-row-head"><span class="ctg-name">' + escapeHtml(t('container.runEnv.opt.' + k + '.title')) + '</span>' +
+              '<span class="ctg-badge" data-tone="' + (x.implemented ? 'ok' : 'dim') + '">' +
+              escapeHtml(x.realContainer ? (x.implemented ? t('container.status.ready') : t('container.envType.limited')) : t('container.envType.notContainer')) +
+              '</span></div>' +
+              '<div class="ctg-dim">' + escapeHtml(t('container.runEnv.opt.' + k + '.fits')) + '</div>' +
+              '<div class="ctg-dim">' + escapeHtml(t('container.runEnv.needsLabel')) + '：' + escapeHtml(t('container.runEnv.opt.' + k + '.needs')) + '</div>' +
+              '<div class="ctg-dim">' + escapeHtml(t('container.runEnv.blockedLabel')) + '：' + escapeHtml(t('container.runEnv.opt.' + k + '.blocked')) + '</div>' +
+              '<div class="ctg-dim" data-facts="' + escapeHtml(k) + '">' + escapeHtml(facts.replace(/\n/g, ' ')) + '</div>' +
+              '</div>';
+          }).join('')
+        : '<div class="ctg-dim">' + escapeHtml(t('container.probing')) + '</div>';
+    }
+    const imgBox = $('container-images');
+    if (imgBox) {
+      const imgs = (containerUi.report && containerUi.report.images) || [];
+      imgBox.innerHTML = imgs.length
+        ? imgs.map((x) => {
+            const pinned = !!x.digest;
+            return '<div class="ctg-row" data-image="' + escapeHtml(x.id) + '" data-digest="' + (pinned ? '1' : '0') + '">' +
+              '<div class="ctg-row-head"><span class="ctg-name">' + escapeHtml(x.ref) + '</span>' +
+              '<span class="ctg-badge" data-tone="' + (pinned ? 'ok' : 'danger') + '" data-pinned="' + (pinned ? '1' : '0') + '">' +
+              escapeHtml(pinned ? t('container.image.pinned') : t('container.image.sourcePending')) + '</span></div>' +
+              '<div class="ctg-dim">' + escapeHtml(x.license) + ' · ' + escapeHtml(x.approxSize) + ' · ' + escapeHtml(x.platform) + '</div>' +
+              '<div class="ctg-dim">' + escapeHtml(x.purpose) + '</div>' +
+              '<div class="ctg-dim" data-digest-value="' + escapeHtml(String(x.digest || '')) + '">' +
+              escapeHtml(pinned ? String(x.digest) : 'digest: —') + '</div>' +
+              '</div>';
+          }).join('')
+        : '<div class="ctg-dim">' + escapeHtml(t('container.probing')) + '</div>';
+    }
+    // 第八/九批：镜像**按项目技术栈**分档（最小 / 带 Node）+ 每档"适合什么项目"
+    const stackBox = $('container-image-stacks');
+    if (stackBox) {
+      const imgs = (containerUi.report && containerUi.report.images) || [];
+      const stacks = ['minimal', 'node'];
+      stackBox.innerHTML = stacks
+        .map((st) => {
+          const rows = imgs.filter((x) => x.stack === st);
+          const title = t(st === 'minimal' ? 'container.image.stack.minimal' : 'container.image.stack.node');
+          const detail = rows.length
+            ? rows.map((x) => '<div class="ctg-dim" data-fits="' + escapeHtml(x.id) + '">' + escapeHtml(x.ref) + ' · ' +
+                escapeHtml(t('container.image.stack.fits')) + '：' + escapeHtml(x.fits) + '</div>').join('')
+            : '<div class="ctg-dim" data-fits="none">' + escapeHtml(t('container.probing')) + '</div>';
+          return '<div class="ctg-row" data-stack="' + st + '"><div class="ctg-row-head"><span class="ctg-name">' +
+            escapeHtml(title) + '</span></div>' + detail + '</div>';
+        })
+        .join('');
+    }
+    const tBox = $('container-timings');
+    if (tBox) {
+      const tm = (containerUi.report && containerUi.report.timings) || {};
+      const parts = [];
+      if (typeof tm.engineStartMs === 'number') parts.push(fmtKey('container.timing.start', { s: (tm.engineStartMs / 1000).toFixed(1) }));
+      if (typeof tm.engineStopMs === 'number') parts.push(fmtKey('container.timing.stop', { s: (tm.engineStopMs / 1000).toFixed(1) }));
+      if (typeof tm.runMs === 'number') parts.push(fmtKey('container.timing.run', { ms: String(tm.runMs) }));
+      tBox.dataset.measured = parts.length ? '1' : '0';
+      tBox.textContent = parts.length ? parts.join('；') : t('container.timing.none');
+    }
+  }
+
+  function markContainerCardFocused() {
+    const card = $('container-card');
+    if (!card) return;
+    card.classList.add('container-card-focus');
+    card.dataset.focusFrom = 'run-env';
+    const cta = $('container-cta');
+    if (cta) cta.classList.remove('hidden');
+    try { card.scrollIntoView({ block: 'center' }); } catch { /* noop */ }
+  }
+
+  /**
+   * 「去安装」的真实跳转：设置 → 功能 → 容器，并**滚到卡片 + 高亮 + 显示引导第一步**。
+   * 这是 ADR §3.3 的那条链路，必须真的走到页面上（不是只改一个变量）。
+   */
+  async function gotoContainerCard() {
+    containerUi.cameFromGuidance = true;
+    setNav('settings');
+    const funcBtn = document.querySelector('#settings-nav button[data-sec="func"]');
+    if (funcBtn) funcBtn.click();
+    // 首次进来 report 还是空的：顺手探一次，用户落地就能看到「已有容器」
+    if (!containerUi.report) await probeContainers(true);
+    markContainerCardFocused();
+    return true;
+  }
+
+  /* ══ 项目可用性（ADR 004 第七批定稿）════════════════════════════════════════
+     · 创建时选了「容器中开发」⇒ **容器必须启动，项目才可用**；否则项目置灰、**不可聊天**、
+       其中功能不可用，**只能翻看之前的记录（历史仍可读 —— 这一点必须保证）**。
+     · 创建时没选容器、或这是「我的牛马」⇒ **无需容器也能正常聊天**（绝不误伤）。
+     · 对成员的可见效果**等同「创建者下线」**（同一个标志位 + 同一句既有文案，不新造状态）。
+     · 「启用/停用项目」与容器**无关**：任何项目都能被创建者停用（入口在**项目右键菜单**）。
+     · 「运行/测试在容器中」这个选项**已作废删除**（容器 = 开发环境；测试/运行不在其职责内）。
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /** 开发环境（dev）映射：缺项**一律按本机**（不猜旧项目） */
+  async function loadContainerDevMap() {
+    try {
+      const s = await window.warmy.settingsGet();
+      const m = (s && s.settings && s.settings.containerDev) || {};
+      return m && typeof m === 'object' ? m : {};
+    } catch {
+      return {};
+    }
+  }
+  /** 被创建者**停用**的项目（groupId → 停用时间戳；缺项 = 启用中） */
+  async function loadProjectDisabledMap() {
+    try {
+      const s = await window.warmy.settingsGet();
+      const m = (s && s.settings && s.settings.projectDisabled) || {};
+      return m && typeof m === 'object' ? m : {};
+    } catch {
+      return {};
+    }
+  }
+  /** 容器开发项目选定的运行时（groupId → runtimeId；缺项 = 还没选） */
+  async function loadProjectRuntimeMap() {
+    try {
+      const s = await window.warmy.settingsGet();
+      const m = (s && s.settings && s.settings.containerProjectRuntime) || {};
+      return m && typeof m === 'object' ? m : {};
+    } catch {
+      return {};
+    }
+  }
+  const devEnvOf = (map, id) => (map && map[id] === 'container' ? 'container' : 'host');
+
+  /** 状态码 → i18n 原因后缀（与主进程 projectReasonKey **逐档对齐**） */
+  const PROJECT_REASON = (code) =>
+    'container.project.reason.' +
+    (code === 'disabled-by-owner' ? 'disabledByOwner'
+      : code === 'container-not-installed' ? 'notInstalled'
+        : code === 'container-not-chosen' ? 'notChosen'
+          : code === 'ok' || code === 'host-dev' ? 'ok' : 'containerDown');
+
+  /**
+   * 项目可用性：**主进程是唯一事实来源**（同一份 deriveProjectState）。
+   * 返回 null = 这个会话不是"项目"（牛马/联系人/群聊），也就完全不受容器影响。
+   * 主进程拿不到时走**保守兜底**：只要不是"明确可用"，一律当不可用（宁可不给，也不乐观放开）。
+   */
+  async function projectStateFor(sessionId) {
+    const id = String(sessionId || '');
+    if (!id) return null;
+    try {
+      const r = await window.warmy.projectState({ sessionId: id });
+      if (r && r.ok && r.state) {
+        return {
+          ...r.state,
+          runtimeId: String(r.state.runtimeId || ''),
+          memberFaceKey: r.memberFaceKey || (r.state.memberFace === 'creator-offline' ? 'group.memberOffline' : null),
+          localIsCreator: r.localIsCreator === true,
+          historyReadable: true,
+          /**
+           * 第十六批：这条状态**是谁说的**。
+           * `creator-signal` = 属性与可用性来自创建者节点同步来的信号（异地成员的情况）——
+           * 渲染层据此多给一行说明，让成员看到"是创建者那边不可用"（而不是自己机器上的问题）。
+           */
+          projectSource: r.projectSource === 'creator-signal' ? 'creator-signal' : 'local',
+          projectReportedAt: Number(r.projectReportedAt) || 0,
+          projectDir: String(r.projectDir || ''),
+          projectDirReason: String(r.projectDirReason || 'not-recorded'),
+          inboundGate: r.inboundGate || null,
+        };
+      }
+    } catch {
+      /* 兜底见下 */
+    }
+    const dev = await loadContainerDevMap();
+    const devEnv = devEnvOf(dev, id);
+    const disabledMap = await loadProjectDisabledMap();
+    const rtMap = await loadProjectRuntimeMap();
+    const runtimeId = String(rtMap[id] || '');
+    if (devEnv !== 'container' && !disabledMap[id]) return null; // 本机项目没被停用 ⇒ 与容器无关
+    if (devEnv === 'host') {
+      return {
+        devEnv: 'host', containerOnly: false, running: false, stopped: true, code: 'disabled-by-owner',
+        hostEditingRefused: false, developmentAllowed: false, developmentWhere: 'host',
+        testingAllowed: true, testingWhere: 'host-or-other-device', historyReadable: true,
+        memberFace: 'creator-offline', memberFaceKey: 'group.memberOffline',
+        reasonKey: 'disabledByOwner', fix: 'enable-project', runtimeId, localIsCreator: false, restrictions: ['development', 'collaboration', 'features'],
+      };
+    }
+    await probeContainers(false);
+    const row = runtimeId ? containerEntry(runtimeId) : null;
+    const ready = !!(row && row.status === 'ready');
+    const disabled = !!disabledMap[id];
+    const code = disabled ? 'disabled-by-owner' : !runtimeId ? 'container-not-chosen' : ready ? 'ok' : 'container-not-ready';
+    const stopped = code !== 'ok';
+    return {
+      devEnv: 'container', containerOnly: true, running: !stopped, stopped, code,
+      hostEditingRefused: true, developmentAllowed: !stopped, developmentWhere: 'container',
+      testingAllowed: true, testingWhere: 'host-or-other-device', historyReadable: true,
+      memberFace: stopped ? 'creator-offline' : null,
+      memberFaceKey: stopped ? 'group.memberOffline' : null,
+      reasonKey: code === 'disabled-by-owner' ? 'disabledByOwner' : code === 'ok' ? 'ok' : code === 'container-not-chosen' ? 'notChosen' : 'containerDown',
+      fix: disabled ? 'enable-project' : code === 'ok' ? 'ok' : code === 'container-not-chosen' ? 'choose-container' : 'start-container',
+      runtimeId, localIsCreator: false,
+      restrictions: stopped ? ['host-editing', 'development', 'collaboration', 'features'] : ['host-editing'],
+    };
+  }
+
+  /** 不可用时的原因文案（走 i18n） */
+  const projectReasonText = (pstate) => t(PROJECT_REASON(pstate ? pstate.code : 'container-not-ready'));
+
+  /** 返回"不可用的原因文案"，null = 放行（发送前调用；主进程还会再拒一次） */
+  async function projectDevBlock(sessionId) {
+    const pstate = await projectStateFor(sessionId);
+    if (!pstate || pstate.running) return null;
+    return projectReasonText(pstate);
+  }
+
+  /**
+   * 把"不可用"落到界面：**开发与功能入口禁用**，但**历史照常可读**（绝不能把整块灰掉）。
+   * 只在 `kind === 'internal'`（项目）上生效：「我的牛马」恒为本机开发，不受容器影响。
+   */
+  async function applyProjectDevGate() {
+    const sel = state.selectedChat;
+    const input = $('input');
+    const col = $('chat-col');
+    const pstate = sel && sel.kind === 'internal' ? await projectStateFor(sel.id) : null;
+    const blocked = !!(pstate && pstate.stopped);
+    const reason = blocked ? projectReasonText(pstate) : '';
+    if (col) {
+      col.dataset.projectState = pstate ? (blocked ? 'unavailable' : 'available') : 'none';
+      col.dataset.projectCode = pstate ? String(pstate.code) : '';
+      col.dataset.historyReadable = pstate ? '1' : '0';
+    }
+    if (input) {
+      input.dataset.devBlocked = blocked ? '1' : '0';
+      input.disabled = blocked;
+      input.title = blocked ? fmtKey('container.project.blockedNotice', { reason }) : '';
+    }
+    const btn = $('btn-send');
+    if (btn) btn.title = blocked ? (input ? input.title : '') : '';
+    // 项目功能入口：不可用时禁用（跑执行者=在项目里干活；控制台另有自己的门禁）
+    const exec = $('btn-exec-run');
+    if (exec && pstate) {
+      exec.disabled = blocked;
+      exec.title = blocked ? fmtKey('container.project.blockedNotice', { reason }) : '';
+    }
+    // 历史区**保持可读**：不做任何 opacity/filter 之类会降低可读性的处理（对比度也不许降）
+    const msgs = $('messages');
+    if (msgs) msgs.dataset.readonlyHistory = blocked ? '1' : '0';
+    syncSendState();
+    return blocked;
+  }
+
+  /** 右栏：项目状态（只读；动作在右键菜单里，右侧顶部**不再有**切换容器的入口） */
+  async function renderProjectStateBlock() {
+    const box = $('project-state-box');
+    if (!box) return;
+    const sel = state.selectedChat;
+    if (!sel || sel.kind !== 'internal') { box.innerHTML = ''; return; }
+    const dev = await loadContainerDevMap();
+    const devEnv = devEnvOf(dev, sel.id);
+    const pstate = await projectStateFor(sel.id);
+    if (!pstate) { box.innerHTML = ''; return; }
+    // 环境事实（当前容器 / 引擎系统模式 / 固化能力 / 上次固化）——来自主进程，不假定 Linux
+    let envInfo = null;
+    try { envInfo = await window.warmy.projectEnvStatus({ sessionId: sel.id }); } catch { envInfo = null; }
+    const blocked = pstate.stopped;
+    const rt = pstate.runtimeId ? t('container.rt.' + pstate.runtimeId + '.name') : t('container.project.none');
+    const offline = pstate.memberFaceKey ? t(pstate.memberFaceKey) : '';
+    const html = [];
+    html.push('<div class="ctg-project-state" id="project-state" data-project-state="' + escapeHtml(blocked ? 'unavailable' : 'available') + '"' +
+      ' data-project-code="' + escapeHtml(pstate.code) + '"' +
+      ' data-member-face="' + escapeHtml(pstate.memberFace || '') + '"' +
+      ' data-host-editing="' + (pstate.hostEditingRefused ? 'refused' : 'allowed') + '"' +
+      ' data-history-readable="' + (pstate.historyReadable ? '1' : '0') + '">');
+    if (blocked) {
+      html.push('<div class="ctg-dim ctg-badge-line"><span class="ctg-badge" data-tone="danger" data-offline="' + escapeHtml(offline) + '">' + escapeHtml(offline) + '</span>' +
+        '<span class="ctg-stopped-title">' + escapeHtml(t('container.project.unavailable')) + '</span></div>');
+    } else {
+      html.push('<div class="ctg-dim ctg-badge-line"><span class="ctg-badge" data-tone="ok">' + escapeHtml(t('container.project.available')) + '</span></div>');
+    }
+    html.push('<div class="ctg-dim" data-dev-env="' + escapeHtml(devEnv) + '">' + escapeHtml(t('container.devEnv.title')) + '：' +
+      escapeHtml(devEnv === 'container' ? t('container.devEnv.container') : t('container.devEnv.host')) + '</div>');
+    html.push('<div class="ctg-dim" data-project-runtime="' + escapeHtml(pstate.runtimeId || '') + '">' +
+      escapeHtml(t('container.project.usingContainer')) + '：' + escapeHtml(rt) + '</div>');
+    html.push('<div class="ctg-dim" data-project-reason="' + escapeHtml(pstate.reasonKey || '') + '">' +
+      escapeHtml(fmtKey('container.project.reasonBody', { reason: projectReasonText(pstate) })) + '</div>');
+    if (blocked) {
+      html.push('<div class="ctg-dim" data-project-fix="' + escapeHtml(pstate.fix) + '">' + escapeHtml(t('container.project.fix.' + pstate.fix)) + '</div>');
+      html.push('<div class="ctg-dim" data-project-history="1">' + escapeHtml(t('container.project.historyStillReadable')) + '</div>');
+      // 需要先启动/选容器时才给跳转（走与之前一致的引导流）
+      if (pstate.fix === 'start-container' || pstate.fix === 'install-container' || pstate.fix === 'choose-container') {
+        html.push('<div><button type="button" class="btn-mini" id="btn-project-goto-container">' + escapeHtml(t('container.console.gotoInstall')) + '</button></div>');
+      }
+    }
+    html.push('<div class="ctg-dim" data-project-offline-note="1">' + escapeHtml(t('container.project.unavailableAsOffline')) + '</div>');
+    /**
+     * 第十六批：**异地成员**看到的是"创建者那边"的事实（属性与可用性都来自创建者的信号）。
+     * 这一行是给成员的解释：为什么我这台机器上找不到这个容器，却依然显示"已停止"。
+     * 复用同一句「创建者离线」文案，不新造第三种状态。
+     */
+    if (pstate.projectSource === 'creator-signal') {
+      html.push('<div class="ctg-dim" data-project-source="creator-signal">' + escapeHtml(t('container.project.remoteNotice')) + '</div>');
+      if (pstate.projectReportedAt) {
+        html.push('<div class="ctg-dim" data-project-reported-at="' + String(pstate.projectReportedAt) + '">' +
+          escapeHtml(fmtKey('container.project.remoteReportedAt', { time: new Date(pstate.projectReportedAt).toLocaleString() })) + '</div>');
+      }
+    }
+    // 项目目录（**产品级事实**：成员也能看到这个项目挂的是哪个目录）
+    if (pstate.projectDir) {
+      html.push('<div class="ctg-dim" data-project-dir="' + escapeHtml(pstate.projectDir) + '">' +
+        escapeHtml(fmtKey('container.project.dirBody', { dir: pstate.projectDir })) + '</div>');
+    } else if (devEnv === 'container') {
+      html.push('<div class="ctg-dim" data-project-dir-missing="1">' + escapeHtml(t('container.project.dirNotRecorded')) + '</div>');
+    }
+    if (devEnv === 'container') {
+      html.push('<div class="ctg-dim" data-project-host-edit="1">' + escapeHtml(t('container.project.hostEditingRefused')) + '</div>');
+      html.push('<div class="ctg-dim" data-project-boundary="1">' + escapeHtml(t('container.project.enforceBoundary')) + '</div>');
+    }
+    html.push('<div class="ctg-dim" data-project-testing="1">' + escapeHtml(t('container.project.testingAllowed')) + '</div>');
+    html.push('<div class="ctg-dim" data-project-menu-hint="1">' + escapeHtml(t('container.project.menuHint')) + '</div>');
+    /**
+     * ADR 004 §7.8/§7.9（第九批）：**环境状态** —— 当前容器 / 引擎的系统模式 /
+     * 固化能力 / 上次固化时间，并给一个显式的「固化当前环境」按钮。
+     * 全部来自主进程的真实事实：能力**按运行时区分**（Docker/Podman 可 commit；WSL 没有 commit），
+     * 系统模式从真探测里读（**不假定 Linux**），固化记录只写"真发生过的事"。
+     */
+    if (devEnv === 'container') {
+      const env = envInfo;
+      const abilityKey = (k) => 'container.env.solidify.ability.' + (k === 'commit' ? 'commit' : k === 'export-import' ? 'export-import' : 'unsupported');
+      const whyText = env && env.solidify ? t('container.env.solidify.why.' + env.solidify.why) : '';
+      const modeText = env && env.engineMode && env.engineMode !== 'unknown'
+        ? String(env.engineMode)
+        : t('container.env.mode.unknown');
+      html.push('<div class="ctg-hint-box" id="project-env-box" data-env-kind="' + escapeHtml(env && env.solidify ? env.solidify.kind : 'unsupported') + '"' +
+        ' data-env-programmatic="' + (env && env.solidify && env.solidify.programmatic ? '1' : '0') + '">' +
+        '<div class="ctg-hint-title">' + escapeHtml(t('container.env.solidify.title')) + '</div>' +
+        '<div class="ctg-dim" data-env-status="1">' + escapeHtml(fmtKey('container.env.solidify.status', {
+          runtime: rt, ability: t(abilityKey(env && env.solidify ? env.solidify.kind : 'unsupported')),
+        })) + '</div>' +
+        '<div class="ctg-dim" data-env-mode="' + escapeHtml(modeText) + '">' + escapeHtml(fmtKey('container.env.mode.body', { mode: modeText })) + '</div>' +
+        '<div class="ctg-dim" data-env-why="' + escapeHtml(env && env.solidify ? env.solidify.why : 'no-runtime-chosen') + '">' + escapeHtml(whyText) + '</div>' +
+        '<div class="ctg-dim" data-env-last="' + escapeHtml(String((env && env.solidify && env.solidify.lastSolidifiedAt) || 0)) + '">' +
+        escapeHtml((env && env.solidify && env.solidify.lastSolidifiedAt)
+          ? fmtKey('container.env.solidify.last', { time: new Date(env.solidify.lastSolidifiedAt).toLocaleString(), image: String(env.solidify.lastImageRef || '—') })
+          : t('container.env.solidify.never')) + '</div>' +
+        '<div class="ctg-dim">' + escapeHtml(t('container.env.solidify.retained')) + '</div>' +
+        '<div class="ctg-dim">' + escapeHtml(fmtKey('container.env.solidify.keep', { n: String((env && env.solidify && env.solidify.keep) || 3) })) + '</div>' +
+        '<div class="ctg-dim">' + escapeHtml(t('container.env.solidify.security')) + '</div>' +
+        '<div class="ctg-dim">' + escapeHtml(t('container.env.solidify.restore')) + '</div>' +
+        /**
+         * 容器里**真的有**什么东西：这是"真实执行"在 UI 上的一个入口（跑的是固定命令表里的
+         * `env-probe` 那一组，一条命令都不会来自渲染层）。
+         */
+        '<div class="ctg-actions-row">' +
+        '<button type="button" class="btn-mini" id="btn-env-probe">' + escapeHtml(t('container.env.probe.button')) + '</button>' +
+        '<button type="button" class="btn-mini" id="btn-solidify-env">' + escapeHtml(t('container.env.solidify.button')) + '</button>' +
+        '<button type="button" class="btn-mini" id="btn-rollback-env"' + (env && env.solidify && env.solidify.lastImageRef ? '' : ' disabled') + '>' +
+        escapeHtml(t('container.env.rollback.button')) + '</button>' +
+        '</div>' +
+        '<div class="ctg-dim" id="env-probe-msg" data-probe-state="idle"></div>' +
+        '<span class="ctg-dim" id="solidify-msg" data-solidify-state="idle"></span>' +
+        '<span class="ctg-dim" id="rollback-msg" data-rollback-state="idle"></span>' +
+        '</div>');
+      // 宿主目录加锁（P5）：**只有创建者**、**只有用户按键**才会真的改 ACL；这里如实显示当前状态
+      let guard = null;
+      try { guard = await window.warmy.projectFsGuard({ sessionId: sel.id, action: 'status' }); } catch { guard = null; }
+      html.push('<div class="ctg-hint-box" id="fs-guard-box" data-guard-supported="' + (guard && guard.platformSupported ? '1' : '0') + '"' +
+        ' data-guard-active="' + (guard && guard.guarded ? '1' : '0') + '">' +
+        '<div class="ctg-hint-title">' + escapeHtml(t('container.fsGuard.title')) + '</div>' +
+        '<div class="ctg-dim" data-guard-state="' + escapeHtml(guard && guard.guarded ? 'guarded' : (guard && guard.code ? guard.code : 'off')) + '">' +
+        escapeHtml(guard && guard.ok && guard.guarded ? t('container.fsGuard.on')
+          : guard && !guard.ok ? t('container.fsGuard.unavailable.' + String(guard.code || 'unknown'))
+            : t('container.fsGuard.off')) + '</div>' +
+        '<div class="ctg-dim">' + escapeHtml(t('container.fsGuard.what')) + '</div>' +
+        '<div class="ctg-dim">' + escapeHtml(t('container.fsGuard.undo')) + '</div>' +
+        '<div class="ctg-dim">' + escapeHtml(t('container.fsGuard.limits')) + '</div>' +
+        '<div class="ctg-actions-row">' +
+        '<button type="button" class="btn-mini" id="btn-fs-guard"' + (guard && guard.platformSupported && pstate.localIsCreator ? '' : ' disabled') + '>' +
+        escapeHtml(guard && guard.guarded ? t('container.fsGuard.unlock') : t('container.fsGuard.lock')) + '</button>' +
+        '<span class="ctg-dim" id="fs-guard-msg"></span></div></div>');
+    }
+    html.push('</div>');
+    box.innerHTML = html.join('');
+    const go = $('btn-project-goto-container');
+    if (go) go.onclick = () => { void gotoContainerCard(); };
+    /**
+     * 「固化当前环境」：现在**真的会 commit**（第十六批）。
+     * 三种结果如实分开：真成功（有镜像 id）/ 如实拒绝（能力不支持·没容器·节流）/ 失败（带原始输出）。
+     * **绝不在没成功的时候显示"已固化"**。
+     */
+    const solid = $('btn-solidify-env');
+    if (solid) {
+      solid.disabled = !(envInfo && envInfo.solidify && envInfo.solidify.programmatic);
+      solid.onclick = async () => {
+        const msg = $('solidify-msg');
+        const r = await window.warmy.projectEnvSolidify({ sessionId: sel.id, explicit: true }).catch((e) => ({ ok: false, code: 'ipc-failed', error: String((e && e.message) || e) }));
+        const ok = !!(r && r.ok && r.evidence === 'commit-succeeded');
+        // ⚠️ 顺序很重要：**先重新渲染**（固化成功会改变"上次固化/回滚按钮"），
+        // 再把结果写在**新的**那个消息节点上 —— 反过来会被重渲染冲掉（实测踩过）。
+        if (ok) await renderProjectStateBlock();
+        const msg2 = $('solidify-msg') || msg;
+        if (msg2) {
+          msg2.dataset.solidifyState = ok ? 'done' : (r && r.evidence === 'not-attempted' ? 'throttled' : 'refused');
+          msg2.dataset.solidifyEvidence = String((r && r.evidence) || 'refused');
+          if (ok) {
+            msg2.textContent = fmtKey('container.env.solidify.done', {
+              time: new Date(Number(r.solidifiedAt) || Date.now()).toLocaleString(),
+              image: String(r.imageRef || '—'),
+              id: String(r.imageId || '').slice(0, 12),
+            });
+          } else {
+            const key = 'container.env.solidify.refused.' + String((r && r.code) || 'no-runtime-chosen');
+            const text = t(key);
+            msg2.textContent = text === key
+              ? fmtKey('container.project.enableFailed', { err: String((r && (r.error || r.code)) || 'unknown') })
+              : text;
+          }
+        }
+        return r;
+      };
+    }
+    /** 「回滚到固化点」：真的从固化镜像起一个容器（与文件回退点**分层**，文案里写清） */
+    const roll = $('btn-rollback-env');
+    if (roll) {
+      roll.onclick = async () => {
+        const msg = $('rollback-msg');
+        const go2 = await uiConfirm(t('container.env.rollback.confirmBody'), t('container.env.rollback.confirmTitle'));
+        if (!go2) return null;
+        const r = await window.warmy.projectEnvRollback({ sessionId: sel.id }).catch((e) => ({ ok: false, code: 'ipc-failed', error: String((e && e.message) || e) }));
+        // 先刷新（回滚会改变容器状态），再写消息 —— 否则会被重渲染冲掉
+        await afterProjectStateChange(sel.id);
+        const msg2 = $('rollback-msg') || msg;
+        if (msg2) {
+          const ok = !!(r && r.ok && r.evidence === 'container-started');
+          msg2.dataset.rollbackState = ok ? 'done' : 'refused';
+          msg2.dataset.rollbackEvidence = String((r && r.evidence) || 'refused');
+          const key = 'container.env.rollback.refused.' + String((r && r.code) || 'unknown');
+          const text = t(key);
+          msg2.textContent = ok
+            ? fmtKey('container.env.rollback.done', { image: String(r.imageRef || ''), container: String(r.containerRef || '') })
+            : (text === key ? fmtKey('container.project.enableFailed', { err: String((r && (r.error || r.code)) || 'unknown') }) : text);
+        }
+        return r;
+      };
+    }
+    /** 「容器里到底有什么」：真的在容器里跑一组**固定命令**（探针），结果原样贴出来 */
+    const probeBtn = $('btn-env-probe');
+    if (probeBtn) {
+      probeBtn.onclick = async () => {
+        const msg = $('env-probe-msg');
+        const r = await window.warmy.projectExec({ sessionId: sel.id, command: 'env-probe' }).catch((e) => ({ ok: false, code: 'ipc-failed', error: String((e && e.message) || e) }));
+        if (msg) {
+          msg.dataset.probeState = r && r.ok ? 'done' : 'refused';
+          if (r && r.ok) {
+            msg.textContent = String(r.output || '').replace(/\s+/g, ' ').slice(0, 300);
+          } else {
+            const key = 'container.env.probe.refused.' + String((r && r.code) || 'unknown');
+            const text = t(key);
+            msg.textContent = text === key ? fmtKey('container.project.enableFailed', { err: String((r && (r.error || r.code)) || 'unknown') }) : text;
+          }
+        }
+        return r;
+      };
+    }
+    /** 「锁定 / 解锁项目目录」：**文件系统级**那道防线，可一键撤销 */
+    const guardBtn = $('btn-fs-guard');
+    if (guardBtn) {
+      guardBtn.onclick = async () => {
+        const msg = $('fs-guard-msg');
+        const box2 = $('fs-guard-box');
+        const wantLift = box2 && box2.dataset.guardActive === '1';
+        if (!wantLift) {
+          const go3 = await uiConfirm(t('container.fsGuard.confirmBody'), t('container.fsGuard.confirmTitle'));
+          if (!go3) return null;
+        }
+        const r = await window.warmy.projectFsGuard({ sessionId: sel.id, action: wantLift ? 'lift' : 'apply' })
+          .catch((e) => ({ ok: false, code: 'ipc-failed', error: String((e && e.message) || e) }));
+        // 先重渲染（状态块要换成"已锁定/未锁定"），再写消息
+        await renderProjectStateBlock();
+        const msg2 = $('fs-guard-msg') || msg;
+        if (msg2) {
+          const key = 'container.fsGuard.failed.' + String((r && r.code) || 'unknown');
+          const text = t(key);
+          msg2.textContent = r && r.ok
+            ? (wantLift ? t('container.fsGuard.lifted') : t('container.fsGuard.applied'))
+            : (text === key ? fmtKey('container.project.enableFailed', { err: String((r && (r.error || r.code)) || 'unknown') }) : text);
+        }
+        return r;
+      };
+    }
+  }
+
+  /**
+   * 右栏三块：**最近改动文件 / 其他文件 / 生成的产品**。
+   *
+   * 数据全部来自主进程 `warmy:project-files`，第十六批之后有**四类真实来源**：
+   *   ① **工具文件访问台账**（项目级、成员可见：读/写/改/删/建/备份/回滚 + 时间）；
+   *   ② 回退点明细（真实 path + 真实 ts）；
+   *   ③ **项目目录扫描**（真实 mtime；目录来自项目记录）；
+   *   ④ 产物目录扫描（入口识别 + 能不能在本机跑）。
+   * 拿不到就**如实显示空态与原因**（`missingSources`），**绝不**拿演示数据充数。
+   * 「其他文件」= 被工具动过但**不在项目目录下**的路径（来源逐条标出来）。
+   */
+  async function renderProjectFilesBlock() {
+    const box = $('project-files-box');
+    if (!box) return;
+    const sel = state.selectedChat;
+    if (!sel || sel.kind !== 'internal') { box.innerHTML = ''; return; }
+    let facts = null;
+    try { facts = await window.warmy.projectFiles({ sessionId: sel.id }); } catch { facts = null; }
+    if (!facts || !facts.ok) {
+      box.innerHTML = '<div class="ctg-dim" data-files-empty="load-failed">' + escapeHtml(t('projectFiles.loadFailed')) + '</div>';
+      return;
+    }
+    const kindLabel = (k) => t('projectFiles.kind.' + (k || 'changed'));
+    const sourceLabel = (s) => t('projectFiles.source.' + (s || 'unknown'));
+    const when = (ts) => (ts ? new Date(ts).toLocaleString() : '—');
+    const rowOf = (f, extra) =>
+      '<div class="ctg-row pf-row" data-path="' + escapeHtml(f.path) + '" data-kind="' + escapeHtml(f.kind) + '"' +
+      (f.op ? ' data-op="' + escapeHtml(f.op) + '"' : '') +
+      (f.source ? ' data-source="' + escapeHtml(f.source) + '"' : '') + '>' +
+      '<div class="ctg-row-head"><span class="pf-kind" data-kind="' + escapeHtml(f.kind) + '">' + escapeHtml(kindLabel(f.kind)) + '</span>' +
+      '<span class="ctg-dim">' + escapeHtml(when(f.ts)) + '</span></div>' +
+      '<div class="pf-path">' + escapeHtml(f.path) + '</div>' +
+      (extra ? '<div class="ctg-dim">' + escapeHtml(extra) + '</div>' : '') +
+      '</div>';
+    const html = [];
+    // ① 最近改动文件
+    html.push('<div class="pf-head" data-pf="changed">' + escapeHtml(t('projectFiles.changedTitle')) + '</div>');
+    html.push(facts.changed && facts.changed.length
+      ? facts.changed.slice(0, 20).map((f) => rowOf(f, f.source ? sourceLabel(f.source) : '')).join('')
+      : '<div class="ctg-dim" data-empty="changed">' + escapeHtml(t('projectFiles.empty.' + (facts.projectDirReason === 'not-recorded' ? 'noProjectDir' : 'changed'))) + '</div>');
+    // ② 其他文件（非项目内的）
+    html.push('<div class="pf-head" data-pf="other">' + escapeHtml(t('projectFiles.otherTitle')) + '</div>');
+    html.push(facts.other && facts.other.length
+      ? facts.other.slice(0, 20).map((f) => rowOf(f, sourceLabel(f.source))).join('')
+      : '<div class="ctg-dim" data-empty="other">' + escapeHtml(t('projectFiles.empty.other')) + '</div>');
+    // ③ 生成的产品
+    const p = facts.product || {};
+    html.push('<div class="pf-head" data-pf="product">' + escapeHtml(t('projectFiles.productTitle')) + '</div>');
+    html.push('<div class="ctg-row" id="product-card" data-product-kind="' + escapeHtml(p.kind || 'none') + '"' +
+      ' data-product-dir-exists="' + (p.dirExists ? '1' : '0') + '" data-entry-runnable="' + (p.entryHostRunnable ? '1' : '0') + '">' +
+      '<div class="ctg-dim" data-product-dir="' + escapeHtml(p.dir || '') + '">' +
+      escapeHtml(t('projectFiles.productDir')) + '：' + escapeHtml(p.dir || '—') +
+      (p.dirExists ? '' : ' · ' + escapeHtml(t('projectFiles.productDirPlanned'))) + '</div>');
+    if (p.entry) {
+      html.push('<div class="pf-path" data-product-entry="' + escapeHtml(p.entry) + '">' + escapeHtml(p.entry) + '</div>');
+      html.push('<div class="ctg-dim">' + escapeHtml(kindLabel(p.kind === 'program' ? 'program' : 'file')) + '</div>');
+    } else {
+      html.push('<div class="ctg-dim" data-product-none="' + escapeHtml(p.entryReason || 'none') + '">' + escapeHtml(t('projectFiles.entry.' + (p.entryReason || 'none'))) + '</div>');
+    }
+    html.push('<div class="ctg-dim" data-product-run-reason="' + escapeHtml(p.entryReason || '') + '">' +
+      escapeHtml(t('projectFiles.runReason.' + (p.entryReason || 'none'))) + '</div>');
+    html.push('<div class="pf-actions"><button type="button" class="btn-mini" id="btn-product-run"' +
+      (p.kind === 'program' && p.entryHostRunnable ? '' : ' disabled') + '>' + escapeHtml(t('projectFiles.run')) + '</button>' +
+      '<span class="ctg-dim" id="product-run-msg"></span></div>');
+    /**
+     * 台账本身也如实摆一行出来（**项目级、成员可见**）：有多少条、什么来源。
+     * 这样"记录文件的改动是产品功能"这件事在界面上是**看得见**的，而不是只写在文档里。
+     */
+    const ledgerRows = facts.ledger || [];
+    html.push('<div class="ctg-dim" data-ledger-count="' + String(ledgerRows.length) + '" data-ledger-scope="project">' +
+      escapeHtml(fmtKey('projectFiles.ledgerCount', { n: String(ledgerRows.length) })) + '</div>');
+    if (facts.projectSource === 'creator-signal') {
+      html.push('<div class="ctg-dim" data-project-source="creator-signal">' +
+        escapeHtml(t('projectFiles.fromCreatorSignal')) + '</div>');
+    }
+    if (facts.missingSources && facts.missingSources.length) {
+      html.push('<div class="ctg-dim" data-missing-sources="' + escapeHtml(facts.missingSources.join(',')) + '">' +
+        escapeHtml(fmtKey('projectFiles.missingHint', { n: String(facts.missingSources.length) })) + '</div>');
+    }
+    html.push('</div>');
+    box.innerHTML = html.join('');
+    const run = $('btn-product-run');
+    if (run) {
+      run.onclick = async () => {
+        const msg = $('product-run-msg');
+        const r = await window.warmy.productRun({ sessionId: sel.id }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+        if (msg) {
+          msg.textContent = r && r.ok
+            ? fmtKey('projectFiles.runStarted', { pid: String((r && r.pid) || 0) })
+            : fmtKey('projectFiles.runFailed', { code: String((r && (r.code || r.error)) || 'unknown') });
+        }
+      };
+    }
+  }
+
+  /* ── 控制台 = **容器内的 shell**（P4 定稿）：只在「项目 / 我的牛马」 + 容器真的就绪时可用 ──
+     门禁顺序与主进程的 containerShellGate **完全一致**（不可用就一条命令都不执行）：
+       ① 不在这两处聊天里 → 按钮本来就隐藏（不占位）
+       ② 会话没开启"运行/测试在容器中" → 置灰 + notEnabled
+       ③ 容器项目已停止（= 等同创建者下线）→ 置灰 + projectStopped
+       ④ 所选运行时现在不是 ready → 置灰 + notReady（并给安装/启动引导）
+       ⑤ 就绪但没有项目容器镜像 → 能打开面板，但**输入行禁用**、如实说明（现在是这一档）
+     诚实边界：面板里写清"只有本机的人手动输入才会执行；远程/群成员/智能体没有注入路径；
+     不自动跑；不带密钥环境变量"（契约见 container-probe 的 CONTAINER_SHELL_SECURITY）。 */
+  async function refreshContainerConsoleGate() {
+    const btn = $('btn-container-shell');
+    if (!btn) return;
+    const gate = await currentShellGate();
+    // 按钮可用 = 面板能打开（引擎就绪）；能不能**跑命令**另有一说（见 applyShellAvailability）
+    btn.disabled = !gate.openable;
+    btn.dataset.gate = gate.openable ? 'ok' : gate.code;
+    btn.dataset.gateReason = gate.reason;
+    btn.dataset.shellExecutable = gate.available ? '1' : '0';
+    btn.title = gate.openable ? t('container.console.tip') : t('container.console.' + gate.reason);
+    const pane = $('ctg-shell-pane');
+    if (pane && !pane.classList.contains('hidden')) applyShellAvailability(gate);
+    return btn.dataset.gate;
+  }
+
+  /** 输入行的可用性 = 门禁的直接结果（不可用就 disabled，不是"能敲但被忽略"） */
+  function applyShellAvailability(gate) {
+    const input = $('ctg-shell-input');
+    const send = $('ctg-shell-send');
+    const note = $('ctg-shell-note');
+    const status = $('ctg-shell-status');
+    const usable = !!(gate && gate.available);
+    if (input) {
+      input.disabled = !usable;
+      input.dataset.shellInput = usable ? 'enabled' : 'disabled';
+    }
+    if (send) send.disabled = !usable;
+    if (status) {
+      status.dataset.shellState = gate ? gate.code : 'unknown';
+      status.textContent = t('container.console.' + ((gate && gate.reason) || 'notReady'));
+    }
+    if (note) {
+      note.dataset.shellNote = usable ? 'ok' : ((gate && gate.code) || 'not-ready');
+      note.textContent = t('container.console.' + ((gate && gate.reason) || 'notReady'));
+    }
+    return usable;
+  }
+
+  async function openContainerShell() {
+    const pane = $('ctg-shell-pane');
+    if (!pane) return false;
+    const gate = await currentShellGate();
+    if (!gate.openable) return false;
+    pane.classList.remove('hidden');
+    const hint = $('ctg-shell-hint');
+    if (hint) hint.textContent = t('container.console.title');
+    const out = $('ctg-shell-out');
+    const sel = state.selectedChat;
+    const conn = sel ? await window.warmy.projectState({ sessionId: sel.id }).catch(() => null) : null;
+    const rec = { runtimeId: (conn && conn.ok && conn.state && conn.state.runtimeId) || '' };
+    /**
+     * **真的去问主进程**（不写死一段文案）：主进程做参数校验 + 门禁，
+     * 并在任何未就绪的情况下如实拒绝（`executed: false`）—— 也就是**一条命令都没执行**。
+     * 参数形状只有 { runtimeId, action }（action 是枚举）——**没有任何命令字符串**。
+     */
+    let resp = null;
+    try {
+      resp = await window.warmy.containerShell({ runtimeId: String(rec.runtimeId || ''), action: 'open', sessionId: sel ? sel.id : '' });
+    } catch (e) {
+      resp = { ok: false, code: 'ipc-failed', reasonKey: 'notReady', security: null, error: String((e && e.message) || e) };
+    }
+    const lines = [
+      t('container.console.intro'),
+      '',
+      fmtKey('container.console.stateLine', {
+        code: String((resp && resp.code) || 'unknown'),
+        why: t('container.console.' + ((resp && resp.reasonKey) || 'notReady')),
+      }),
+      '',
+    ];
+    if (!resp || !resp.ok) {
+      lines.push(t('container.console.needsImage'));
+      lines.push('');
+      lines.push(t('container.console.linuxNode'));
+      lines.push('');
+      lines.push(t('container.console.noExec'));
+      lines.push('');
+    } else {
+      /**
+       * 第十六批：门禁通过 ⇒ **真的在容器里开了一条 shell**（`insideContainer:true` 是主进程
+       * 回给我们的**事实**）。这里如实说明容器名与"容器是新起的还是原本就在"。
+       */
+      lines.push(fmtKey('container.console.openedInContainer', { container: String(resp.containerRef || '') }));
+      lines.push('');
+      lines.push(resp.containerCreated ? t('container.console.containerCreated') : t('container.console.containerReused'));
+      lines.push('');
+    }
+    lines.push(t('container.console.security'));
+    lines.push(fmtKey('container.console.securityDetail', {
+      remote: String((resp && resp.security && resp.security.remoteInjectPaths) ?? 0),
+      auto: (resp && resp.security && resp.security.autoRun) === true ? '1' : '0',
+      secretEnv: (resp && resp.security && resp.security.forwardsSecretEnv) === true ? '1' : '0',
+    }));
+    if (out) out.textContent = lines.join('\n') + '\n';
+    applyShellAvailability(gate);
+    return true;
+  }
+
+  /** 当前门禁（不复用按钮上的 dataset，避免"按钮被别处改过"时口径不一致） */
+  async function currentShellGate() {
+    const sel = state.selectedChat;
+    const inChat = !!sel && (sel.kind === 'single' || sel.kind === 'internal');
+    if (!inChat) return { available: false, openable: false, code: 'not-in-chat', reason: 'onlyInChat', needsInstall: false };
+    await probeContainers(false);
+    const pstate = sel.kind === 'internal' ? await projectStateFor(sel.id) : null;
+    // 控制台只属于**容器开发**的项目：「运行/测试在容器中」那个选项已作废删除
+    const runInContainer = !!(pstate && pstate.devEnv === 'container');
+    // 运行时来自项目状态（containerProjectRuntime），不再有会话级的容器记录
+    const rec = { runtimeId: (pstate && pstate.runtimeId) || '' };
+    if (!runInContainer) return { available: false, openable: false, code: 'not-enabled', reason: 'notEnabled', needsInstall: false };
+    if (pstate && pstate.stopped) return { available: false, openable: false, code: 'project-stopped', reason: 'projectStopped', needsInstall: false };
+    const row = rec.runtimeId ? containerEntry(rec.runtimeId) : null;
+    if (!row || row.status !== 'ready') return { available: false, openable: false, code: 'container-not-ready', reason: 'notReady', needsInstall: true };
+    /**
+     * 第十六批：引擎就绪 ⇒ **可以真的跑命令**（镜像表已钉死 digest、项目容器按需创建）。
+     * 门禁第 ⑤ 档（`no-image`）只在"运行时不是容器可执行的白名单"时才成立 ——
+     * 这与主进程 `containerShellGate({ imageReady })` 的判据保持一致。
+     */
+    const executable = rec.runtimeId === 'docker' || rec.runtimeId === 'podman' || rec.runtimeId === 'nerdctl' || rec.runtimeId === 'rancher-desktop';
+    if (!executable) return { available: false, openable: true, code: 'no-image', reason: 'needsImage', needsInstall: false };
+    return { available: true, openable: true, code: 'ok', reason: 'ok', needsInstall: false };
+  }
+
+  /**
+   * 本机的人敲了一行 → 送到主进程（`action:'write'`）。
+   * 主进程未就绪时**不会**执行任何东西（`executed:false`），这里如实回显拒绝，
+   * 并且**不会**在本机执行、也**不会**把内容塞进事件日志（那是另一个面板）。
+   */
+  async function submitShellLine() {
+    const gate = await currentShellGate();
+    const input = $('ctg-shell-input');
+    const out = $('ctg-shell-out');
+    const line = input ? String(input.value || '') : '';
+    if (!gate.available) {
+      applyShellAvailability(gate);
+      if (out) out.textContent += t('container.console.noExec') + '\n';
+      return false;
+    }
+    if (!line.trim()) return false;
+    const sel = state.selectedChat;
+    const conn2 = sel ? await window.warmy.projectState({ sessionId: sel.id }).catch(() => null) : null;
+    const rec = { runtimeId: (conn2 && conn2.ok && conn2.state && conn2.state.runtimeId) || '' };
+    let resp = null;
+    try {
+      resp = await window.warmy.containerShell({ runtimeId: String(rec.runtimeId || ''), action: 'write', sessionId: sel ? sel.id : '', data: line });
+    } catch (e) {
+      resp = { ok: false, code: 'ipc-failed', reasonKey: 'notReady', executed: false, error: String((e && e.message) || e) };
+    }
+    const executed = !!(resp && resp.ok && resp.executed !== false);
+    if (out) {
+      out.textContent += (executed ? t('container.console.sent') : t('container.console.refused') + ' ') + line + '\n';
+      if (!executed) out.textContent += t('container.console.' + ((resp && resp.reasonKey) || 'notReady')) + '\n';
+      /**
+       * 第十六批：**容器里的真实输出**原样贴出来（这是"真的在容器里跑"最直接的证据）。
+       * 没有输出就什么都不加（不编一句"没有输出"以外的内容）。
+       */
+      if (executed && resp && resp.output) out.textContent += String(resp.output);
+      if (executed && resp && resp.autoSolidify && resp.autoSolidify.done) {
+        out.textContent += '\n' + fmtKey('container.env.solidify.done', {
+          time: new Date().toLocaleString(), image: String(resp.autoSolidify.imageRef || ''), id: '',
+        });
+      }
+      out.scrollTop = out.scrollHeight;
+    }
+    if (input) input.value = '';
+    return executed;
+  }
+
+  /* ══ 项目右键菜单的动作（第七批定稿）══════════════════════════════════════════
+     · **启用/停用项目**：任何项目都有（与是否选了容器无关）；**容器没启动时不能启用**，
+       提示"需先到设置中启动容器"并给与之前一致的跳转引导。
+     · **切换容器…**：只属于"创建时选了容器开发的项目"；点开是**独立弹窗**，
+       列出设置中已检测到的所有容器 + 「添加更多容器 → 跳转设置」；
+       **项目正在运行时切换 ⇒ 提示"重启项目才能生效"**。
+     · 右侧顶部**不再**有切换容器的入口（产品主明确要求）。
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /** 启用项目：容器开发项目必须先有就绪的容器，否则出提示 + 跳设置引导 */
+  async function enableProjectFlow(groupId) {
+    const r = await window.warmy.projectEnable({ sessionId: groupId }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+    if (r && r.ok) {
+      await afterProjectStateChange(groupId);
+      const msg = $('project-ctl-msg') || $('project-state-msg');
+      if (msg) msg.textContent = t('container.project.enabledAt');
+      return true;
+    }
+    if (r && r.code === 'not-creator') { await uiAlert(t('container.project.notCreator'), t('container.devEnv.title')); return false; }
+    if (r && (r.needsContainer || r.code === 'container-not-ready' || r.code === 'container-not-chosen')) {
+      // 产品主定稿的那句提示 + 与之前一致的跳转引导
+      const go = await uiConfirm(
+        t('container.project.enableNeedsContainer'),
+        t('container.project.enableNeedsContainerTitle')
+      );
+      if (go) await gotoContainerCard();
+      return false;
+    }
+    await uiAlert(fmtKey('container.project.enableFailed', { err: String((r && (r.error || r.code)) || 'unknown') }));
+    return false;
+  }
+
+  /** 停用项目（与容器无关；效果 = 不可用、只能看历史、对成员等同创建者下线） */
+  async function disableProjectFlow(groupId) {
+    const go = await uiConfirm(t('container.project.disableConfirmBody'), t('container.project.disableConfirmTitle'));
+    if (!go) return false;
+    const r = await window.warmy.projectDisable({ sessionId: groupId }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+    if (!r || !r.ok) {
+      if (r && r.code === 'not-creator') { await uiAlert(t('container.project.notCreator'), t('container.devEnv.title')); return false; }
+      await uiAlert(fmtKey('container.project.disableFailed', { err: String((r && (r.error || r.code)) || 'unknown') }));
+      return false;
+    }
+    await afterProjectStateChange(groupId);
+    return true;
+  }
+
+  /** 状态变化后把与项目有关的三处刷新一遍（右栏状态、三块文件事实、控制台门禁） */
+  async function afterProjectStateChange(groupId) {
+    const sel = state.selectedChat;
+    if (sel && sel.id === groupId) {
+      await renderProjectStateBlock();
+      await renderProjectFilesBlock();
+    }
+    await applyProjectDevGate();
+    await refreshContainerConsoleGate();
+  }
+
+  /**
+   * 「切换容器…」弹窗：列出**设置中已检测到的**所有容器（真探测，不写死），
+   * 另给一个「添加更多容器 → 跳转设置」。项目正在运行时切换 ⇒ 提示"重启项目才能生效"。
+   */
+  async function switchContainerDialog(groupId) {
+    const dev = await loadContainerDevMap();
+    if (devEnvOf(dev, groupId) !== 'container') {
+      await uiAlert(t('container.project.notContainerProject'), t('container.devEnv.title'));
+      return null;
+    }
+    const rep = await probeContainers(true);
+    const usable = (rep && rep.usableIds) || [];
+    const cur = (await loadProjectRuntimeMap())[groupId] || '';
+    const root = $('modal-root');
+    $('modal-title').textContent = t('container.project.switchTitle');
+    const body = $('modal-body');
+    body.innerHTML = '';
+    const head = document.createElement('div');
+    head.className = 'ctg-dim';
+    head.textContent = t('container.project.switchBody');
+    body.appendChild(head);
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; root.classList.add('hidden'); resolveSwitch(v); };
+    let resolveSwitch = null;
+    const p = new Promise((res) => { resolveSwitch = res; });
+    if (!usable.length) {
+      const none = document.createElement('div');
+      none.className = 'ctg-err';
+      none.id = 'switch-none';
+      none.textContent = fmtKey('container.project.switchNoContainer', { reason: noReadyReason(rep) });
+      body.appendChild(none);
+    }
+    usable.forEach((id) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = cur === id ? 'ctg-env-opt on' : 'ctg-env-opt';
+      b.id = 'switch-rt-' + id;
+      b.setAttribute('data-pick', id);
+      b.innerHTML = '<span class="ctg-env-title">' + escapeHtml(t('container.rt.' + id + '.name')) + '</span>' +
+        '<span class="ctg-dim">' + escapeHtml(t('container.project.switchFits')) + '</span>';
+      b.onclick = () => finish(id);
+      body.appendChild(b);
+    });
+    const acts = $('modal-actions');
+    acts.innerHTML = '';
+    const more = document.createElement('button');
+    more.className = 'btn-mini';
+    more.id = 'switch-more';
+    more.textContent = t('container.project.switchMore');
+    more.onclick = () => { finish('__more__'); };
+    const cancel = document.createElement('button');
+    cancel.className = 'btn-mini';
+    cancel.id = 'switch-cancel';
+    cancel.textContent = t('common.cancel');
+    cancel.onclick = () => finish(null);
+    acts.append(more, cancel);
+    root.classList.remove('hidden');
+    if (more) more.focus();
+    const picked = await p;
+    if (picked === '__more__') { await gotoContainerCard(); return null; }
+    if (!picked) return null;
+    const r = await window.warmy.projectSetContainer({ sessionId: groupId, runtimeId: picked }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+    if (!r || !r.ok) {
+      await uiAlert(fmtKey('container.project.switchFailed', { err: String((r && (r.error || r.code)) || 'unknown') }));
+      return null;
+    }
+    await afterProjectStateChange(groupId);
+    const msg = $('project-state-msg');
+    if (msg) {
+      msg.textContent = r.restartRequired
+        ? t('container.project.switchNeedRestart')
+        : fmtKey('container.project.switchDone', { name: t('container.rt.' + picked + '.name') });
+    }
+    return picked;
+  }
+
+  /** 项目右键菜单条目（追加到既有的 groupMenu 上；只在 internal 项目里出现） */
+  async function projectMenuItems(g) {
+    // 状态与"是不是容器开发项目"都问**主进程**（唯一事实来源），不在渲染层猜
+    const state19 = await projectStateFor(g.id);
+    const blocked = !!(state19 && state19.stopped);
+    const dev = await loadContainerDevMap();
+    const isContainerProject = devEnvOf(dev, g.id) === 'container';
+    const items = [
+      blocked
+        ? {
+            label: t('ctx.projectEnable'),
+            onClick: async () => { await enableProjectFlow(g.id); },
+          }
+        : {
+            label: t('ctx.projectDisable'),
+            danger: true,
+            onClick: async () => { await disableProjectFlow(g.id); },
+          },
+    ];
+    // 只有"创建时选了容器开发的项目"才有切换容器的出口
+    if (isContainerProject) {
+      items.push({
+        label: t('ctx.projectSwitchContainer'),
+        onClick: async () => { await switchContainerDialog(g.id); },
+      });
+      /**
+       * 第十六批新增两个入口：
+       *  · 「设置项目目录」：把项目目录记进**项目记录**（成员据此解析"最近改动文件"）；
+       *  · 「锁定/解锁项目目录」：**文件系统级**那道防线（可一键撤销，见 container.fsGuard.*）。
+       */
+      items.push({
+        label: t('ctx.projectSetDir'),
+        onClick: async () => {
+          const r = await window.warmy.projectSetDirectory({ sessionId: g.id }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+          if (r && r.ok) {
+            await afterProjectStateChange(g.id);
+            const msg = $('project-state-msg');
+            if (msg) msg.textContent = fmtKey('container.project.dirSet', { dir: String(r.dir || '') });
+          } else if (r && !r.canceled) {
+            await uiAlert(fmtKey('container.project.dirSetFailed', { err: String((r && (r.error || r.code)) || 'unknown') }));
+          }
+        },
+      });
+      items.push({
+        label: t('ctx.projectLockDir'),
+        onClick: async () => { await lockDirFlow(g.id); },
+      });
+    }
+    return items;
+  }
+
+  /**
+   * 「锁定/解锁项目目录」入口（右键菜单）：先进状态，再决定是"锁"还是"撤"。
+   * 两个方向都**明确告知**：加锁改的是**文件系统 ACL**；撤销是一条命令、属主永远能自己改回来。
+   */
+  async function lockDirFlow(groupId) {
+    const st = await window.warmy.projectFsGuard({ sessionId: groupId, action: 'status' })
+      .catch((e) => ({ ok: false, code: 'ipc-failed', error: String((e && e.message) || e) }));
+    if (!st || !st.ok) {
+      const key = 'container.fsGuard.unavailable.' + String((st && st.code) || 'unknown');
+      const text = t(key);
+      await uiAlert(text === key ? fmtKey('container.project.enableFailed', { err: String((st && (st.error || st.code)) || 'unknown') }) : text, t('container.fsGuard.title'));
+      return false;
+    }
+    const wantLift = st.guarded === true;
+    const okGo = await uiConfirm(
+      wantLift ? t('container.fsGuard.confirmLiftBody') : t('container.fsGuard.confirmBody'),
+      t('container.fsGuard.confirmTitle')
+    );
+    if (!okGo) return false;
+    const r = await window.warmy.projectFsGuard({ sessionId: groupId, action: wantLift ? 'lift' : 'apply' })
+      .catch((e) => ({ ok: false, code: 'ipc-failed', error: String((e && e.message) || e) }));
+    if (!r || !r.ok) {
+      const key = 'container.fsGuard.failed.' + String((r && r.code) || 'unknown');
+      const text = t(key);
+      await uiAlert(text === key ? fmtKey('container.project.enableFailed', { err: String((r && (r.error || r.code)) || 'unknown') }) : text, t('container.fsGuard.title'));
+      return false;
+    }
+    await afterProjectStateChange(groupId);
+    return true;
+  }
+
+  /** 多选项弹窗（走项目既有 #modal-root；标题/正文/按钮文案全走 i18n） */
+  function uiChoice(titleText, bodyText, choices) {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = titleText || displayName();
+      $('modal-body').textContent = String(bodyText ?? '');
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; root.classList.add('hidden'); resolve(v); };
+      (choices || []).forEach((c) => {
+        const b = document.createElement('button');
+        b.className = c.primary ? 'btn-primary' : 'btn-mini';
+        b.textContent = c.label;
+        b.setAttribute('data-choice', c.key);
+        b.id = 'ctg-choice-' + c.key;
+        b.onclick = () => finish(c.key);
+        acts.appendChild(b);
+      });
+      root.classList.remove('hidden');
+      const first = acts.querySelector('button');
+      if (first) first.focus();
+    });
+  }
+
   // ── only-group 显示/隐藏 ──
   function updatePanelVisibility() {
     const isGroup = state.selectedChat && (state.selectedChat.kind === 'internal' || state.selectedChat.kind === 'extgroup');
     document.querySelectorAll('.only-group').forEach((el) => {
       el.classList.toggle('hidden', !isGroup);
     });
+    /**
+     * ADR 004 §一.7：容器相关区块**只在「项目」与「我的牛马」**出现 ——
+     * 联系人与群聊用不到容器，不显示（不是灰着占位）。
+     */
+    const kind = state.selectedChat && state.selectedChat.kind;
+    const showRunEnv = kind === 'single' || kind === 'internal';
+    document.querySelectorAll('[data-only="proj-single"]').forEach((el) => {
+      el.classList.toggle('hidden', !showRunEnv);
+    });
+    // 控制台（容器壳）只在「项目 / 我的牛马」出现 —— 与 ADR 004 §一.7 一致
+    const shellBtn = $('btn-container-shell');
+    if (shellBtn) shellBtn.classList.toggle('hidden', !showRunEnv);
+    if (!showRunEnv) $('ctg-shell-pane')?.classList.add('hidden');
+    // 容器项目停止态 ⇒ 开发入口（输入 + 发送）禁用 + 说明（成员侧与"创建者下线"一致）
+    void applyProjectDevGate();
+    void refreshContainerConsoleGate();
   }
 
   // ── 模型管理（会话右侧）──
@@ -4969,7 +7997,7 @@
         try {
           const p = (state.providers || []).find((x) => (x.models || []).includes(model));
           const t0 = performance.now();
-          const r = await window.ccarmy.listModels({ protocol: p && p.protocol, baseURL: p && p.baseURL, apiKey: p && p.apiKey });
+          const r = await window.warmy.listModels({ protocol: p && p.protocol, baseURL: p && p.baseURL, apiKey: p && p.apiKey });
           const ms = Math.round(performance.now() - t0);
           if (r && r.ok) {
             if (!state.modelLatency) state.modelLatency = {};
@@ -5031,7 +8059,7 @@
         btn.textContent = t('common.loading');
         const p = provs[Number($('mp-prov').value)] || {};
         try {
-          const r = await window.ccarmy.listModels({ protocol: p.protocol, baseURL: p.baseURL, apiKey: p.apiKey });
+          const r = await window.warmy.listModels({ protocol: p.protocol, baseURL: p.baseURL, apiKey: p.apiKey });
           if (r && r.ok && r.models && r.models.length) {
             p.models = [...new Set([...(p.models || []), ...r.models])];
           }
@@ -5081,7 +8109,7 @@
       timer = setTimeout(async () => {
         const q = inp.value.trim();
         if (!q) { $('search-popup-results').textContent = ''; return; }
-        const r = await window.ccarmy.searchMessages(q).catch(() => null);
+        const r = await window.warmy.searchMessages(q).catch(() => null);
         const hits = r?.hits || [];
         $('search-popup-results').innerHTML = hits.length
           ? hits.map((x) => '<div style="padding:4px 0;border-bottom:1px solid var(--line)">' + escapeHtml(x.snippet) + '</div>').join('')
@@ -5109,7 +8137,7 @@
     ok.onclick = async () => {
       if (!state.selectedChat) { root.classList.add('hidden'); return; }
       const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
-      const r = await window.ccarmy.exportSession({
+      const r = await window.warmy.exportSession({
         title: state.selectedChat.name,
         labels: { header: t('export.header'), me: t('export.me') },
         messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
@@ -5129,7 +8157,7 @@
   $('btn-send').addEventListener('click', () => send());
   $('btn-stop-all')?.addEventListener('click', () => stopAllAi());
   $('btn-attach').addEventListener('click', async () => {
-    const r = await window.ccarmy.pickFile();
+    const r = await window.warmy.pickFile();
     if (r?.ok) {
       const name = r.path.split(/[\\/]/).pop();
       state.attachments.push({ name, path: r.path });
@@ -5138,12 +8166,19 @@
   });
 
   bindResizer($('col-resizer'), '--list-w', 200, 420);
-  bindResizer($('panel-resizer'), '--panel-w', 220, 480);
+  // R3：聊天区 ↔ 右栏 —— 右栏在右边（dir:'right'），左侧聊天区保底 320px，宽度走 settings 里的 panelWidth
+  bindResizer($('panel-resizer'), '--panel-w', 220, 480, {
+    dir: 'right',
+    hostId: 'chat-layout',
+    minOther: 320,
+    persistKey: 'panelWidth',
+    resetWidth: 300,
+  });
 
   async function refreshCost() {
     const box = $('cost-box');
     if (!box) return;
-    const c = await window.ccarmy.costSummary().catch(() => null);
+    const c = await window.warmy.costSummary().catch(() => null);
     if (c?.ok) {
       box.textContent = '¥' + c.estCostCny + ' · ' + c.promptTokens + ' in / ' + c.completionTokens + ' out · cache ' + ((c.cacheHitRate||0)*100).toFixed(1) + '%';
     }
@@ -5154,10 +8189,10 @@
     const box = $('metrics-box');
     if (!box) return;
     try {
-      const m = await window.ccarmy.metricsSummary();
+      const m = await window.warmy.metricsSummary();
       if (!m?.ok) return;
       box.textContent = `turns=${m.turns} · cache=${((m.cacheHitRate || 0) * 100).toFixed(1)}% · ccr=${((m.ccrRatio || 1) * 100).toFixed(0)}% · avg=${m.avgDurationMs}ms`;
-      const cost = await window.ccarmy.costSummary().catch(() => null);
+      const cost = await window.warmy.costSummary().catch(() => null);
       if (cost?.ok) {
         box.textContent += ` · ¥${cost.estCostCny}`;
       }
@@ -5170,7 +8205,7 @@
   async function renderCostDash() {
     const box = $('cost-dash');
     if (!box) return;
-    const r = await window.ccarmy.metricsTurns().catch(() => null);
+    const r = await window.warmy.metricsTurns().catch(() => null);
     const turns = (r && r.turns) || [];
     if (!turns.length) {
       box.innerHTML = '<div class="muted">' + t('cost.empty') + '</div>';
@@ -5213,8 +8248,8 @@
         for (const [label, key] of [['session', 'sessionId'], ['model', 'model']]) {
           agg(key).forEach(([k, v]) => lines.push([label, esc(k), v.turns, v.tokens, v.cost.toFixed(6)].join(',')));
         }
-        const rr = await window.ccarmy.saveText({
-          defaultName: 'ccarmy-cost.csv',
+        const rr = await window.warmy.saveText({
+          defaultName: 'warmy-cost.csv',
           content: lines.join('\n'),
           filters: [{ name: 'CSV', extensions: ['csv'] }],
         });
@@ -5236,8 +8271,10 @@
     const box = $('cp-detail-list') || $('cp-list');
     const space = $('cp-space');
     if (!box) return;
-    const r = await window.ccarmy.checkpointList();
+    // ADR 004 §7.6：回退点 = **文件 + 环境指纹**（环境那一维由容器镜像/快照承担）
+    const r = await window.warmy.checkpointList({ sessionId: state.selectedChat ? state.selectedChat.id : '' });
     const list = r?.list || [];
+    const envByCp = (r && r.envByCheckpoint) || {};
     const maxMb = 50;
     const usedMb = Math.min(maxMb, list.length * 0.5);
     if (space) {
@@ -5254,10 +8291,25 @@
         const d = new Date(c.createdAt);
         const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const when = now - c.createdAt < 86400000 ? hm : d.toLocaleString();
-        return `<details class="cp-item" data-id="${escapeHtml(String(c.id))}">
+        const envRec = (envByCp || {})[String(c.id)] || null;
+        const cur = (r && r.currentEnv) || { active: false, runtimeId: '', revision: 'host' };
+        const rtName = (id) => (id ? t('container.rt.' + id + '.name') : t('container.current.none'));
+        const envLine = envRec
+          ? fmtKey('checkpoints.env.recorded', { runtime: rtName(envRec.runtimeId), revision: String(envRec.revision || '') })
+          : t('checkpoints.env.none');
+        const envDiff = envRec && String(envRec.revision || '') !== String(cur.revision || '')
+          ? '<div class="ctg-dim cp-env-changed" data-env-changed="1">' +
+            escapeHtml(fmtKey('checkpoints.env.changed', { was: String(envRec.revision || ''), now: String(cur.revision || '') })) + '</div>'
+          : '<div class="ctg-dim" data-env-changed="0">' + escapeHtml(t('checkpoints.env.same')) + '</div>';
+        return `<details class="cp-item" data-id="${escapeHtml(String(c.id))}" data-env-revision="${escapeHtml(String((envRec && envRec.revision) || ''))}">
           <summary>${escapeHtml(String(when))} · ${escapeHtml(String(c.phase || ''))} · ${escapeHtml(String(c.strategy || ''))}</summary>
           <div class="cp-body">
             <div>${t('checkpoints.tasks')}: ${escapeHtml(c.phase || '')}</div>
+            <div class="ctg-dim">${escapeHtml(t('checkpoints.env.title'))}</div>
+            <div class="ctg-dim" data-env-line="1">${escapeHtml(envLine)}</div>
+            <div class="ctg-dim">${escapeHtml(fmtKey('checkpoints.env.current', { runtime: rtName(cur.runtimeId), revision: String(cur.revision || '') }))}</div>
+            ${envDiff}
+            <div class="ctg-dim">${escapeHtml(t('checkpoints.env.layered'))}</div>
             <ul>
               <li>${t('checkpoints.changed')}: ${escapeHtml((c.filesChanged || []).map((f) => f.path).join(', ') || '—')}</li>
               <li>${t('checkpoints.created')}: ${escapeHtml((c.filesCreated || []).map((f) => f.path).join(', ') || c.dir)}</li>
@@ -5275,32 +8327,46 @@
       b.onclick = async () => {
         const ok = await uiConfirm(t('checkpoints.confirmBody'), t('checkpoints.confirmTitle'));
         if (!ok) return;
-        await window.ccarmy.checkpointRollback(b.dataset.load);
-        uiAlert(t('instances.saved'));
+        const rb = await window.warmy.checkpointRollback(b.dataset.load, { sessionId: state.selectedChat ? state.selectedChat.id : '' });
+        // 文件回退成功 ≠ 环境也回退了：环境变了就**如实说**（这正是"环境指纹"这条增益的用处）
+        if (rb && rb.env && rb.env.changed) {
+          await uiAlert(fmtKey('checkpoints.env.changed', {
+            was: String((rb.env.recorded && rb.env.recorded.revision) || ''),
+            now: String((rb.env.current && rb.env.current.revision) || ''),
+          }), t('checkpoints.title'));
+        } else {
+          uiAlert(t('instances.saved'));
+        }
         refreshCheckpoints();
       };
     });
   }
 
   $('btn-cp-start')?.addEventListener('click', async () => {
-    await window.ccarmy.checkpointCreate('round_start');
+    await window.warmy.checkpointCreate('round_start');
     refreshCheckpoints();
   });
   $('btn-cp-end')?.addEventListener('click', async () => {
-    await window.ccarmy.checkpointCreate('round_end');
+    await window.warmy.checkpointCreate('round_end');
     refreshCheckpoints();
   });
   $('btn-cp-list')?.addEventListener('click', refreshCheckpoints);
   async function refreshSessionBoard() {
     const box = $('board-sess-box');
     if (!box || !state.selectedChat) return;
-    const r = await window.ccarmy.boardSession(state.selectedChat.id).catch(() => null);
+    const r = await window.warmy.boardSession(state.selectedChat.id).catch(() => null);
     const tasks = r?.tasks || [];
     box.innerHTML = tasks.length
       ? tasks.map((t) => '<div>' + escapeHtml(t.title) + ' · ' + clampPercent(t.progress) + '% · ' + escapeHtml(String(t.status || '')) + '</div>').join('')
       : '—';
   }
-  /** 卡顿自检：主进程 CPU/事件循环延迟 + 渲染进程帧率 */
+  /**
+   * 数据卡片指标（**不是**卡顿自检）：把当前状态里的副本数、保留天数与字节估算
+   * 渲染进 #settings-data-metrics 的三个格子；数字先过 fmtDisp，渲染成
+   * `[object Object]` 的一律显示占位符「—」。由 bindDataMetricsOnly() 在设置页调用。
+   * ⚠️ 这里既不测主进程 CPU/事件循环延迟，也不测渲染进程帧率 —— 那是**已退休**的
+   * 卡顿自检（入口与采样逻辑整块移除），旧注释是历史残留。
+   */
   function renderDataMetrics() {
     const box = $('settings-data-metrics');
     if (!box) return;
@@ -5317,45 +8383,73 @@
     });
   }
 
-  function bindDiagnostics() {
+  /** 数据卡片指标（保留）。卡顿自检入口与采样逻辑已整块移除。 */
+  function bindDataMetricsOnly() {
     renderDataMetrics();
-    // 设置页每次重渲染都会产生新的按钮元素，必须每次都重新绑定
-    const btn = $('btn-diag-run');
-    if (!btn) return;
-    btn.onclick = async () => {
-      const out = $('diag-out');
-      if (!out) return;
-      out.textContent = t('diag.running');
-      // 渲染进程帧率：统计 500ms 内的 rAF 次数
-      const fps = await new Promise((resolve) => {
-        let frames = 0;
-        const t0 = performance.now();
-        const tick = () => {
-          frames += 1;
-          if (performance.now() - t0 < 500) requestAnimationFrame(tick);
-          else resolve(Math.round((frames * 1000) / (performance.now() - t0)));
-        };
-        requestAnimationFrame(tick);
-      });
-      const d = await window.ccarmy.diagnostics().catch(() => null);
-      if (!d || !d.ok) {
-        out.textContent = '—';
+  }
+
+  function bindSkillScanDirs() {
+    const addBtn = $('btn-skill-scan-add');
+    const inp = $('skill-scan-dir-input');
+    const msg = $('skill-scan-msg');
+    if (!addBtn || addBtn.dataset.bound === '1') return;
+    addBtn.dataset.bound = '1';
+    addBtn.onclick = async () => {
+      const v = String((inp && inp.value) || '').trim();
+      if (!v) {
+        if (msg) msg.textContent = t('settings.skillsScanInvalid');
         return;
       }
-      const heapMb = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null;
-      const cell = (k, v) => '<div class="diag-cell"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>';
-      const bad = d.cpuPercent > 60 || d.loopLagMs > 50 || fps < 30;
-      out.innerHTML =
-        '<div class="diag-grid">' +
-        cell(t('diag.mainCpu'), d.cpuPercent + '%') +
-        cell(t('diag.loopLag'), d.loopLagMs + ' ms') +
-        cell(t('diag.rss'), d.rssMb + ' MB') +
-        cell(t('diag.heap'), heapMb === null ? '—' : heapMb + ' MB') +
-        cell(t('diag.fps'), fps + ' fps') +
-        cell(t('diag.reqAnim'), d.handles + ' / ' + d.requests) +
-        cell(t('diag.uptime'), d.uptimeSec + ' s') +
-        '</div>' +
-        '<div class="diag-verdict' + (bad ? ' bad' : '') + '">' + t(bad ? 'diag.verdictBad' : 'diag.verdictOk') + '</div>';
+      const cur = await skillScanDirsGet();
+      const dirs = ((cur && cur.dirs) || []).slice();
+      const editRaw = inp && inp.getAttribute('data-edit-i');
+      const editing = editRaw !== null && editRaw !== undefined && editRaw !== '';
+      const MAX = 10;
+      if (!editing && dirs.length >= MAX) {
+        if (msg) msg.textContent = t('settings.skillsScanMax');
+        void uiAlert(t('settings.skillsScanMax'), t('settings.skillsScanTitle'));
+        return;
+      }
+      if (editing) {
+        const i = Number(editRaw);
+        if (Number.isInteger(i) && i >= 0 && i < dirs.length) dirs[i] = v;
+        else if (dirs.length < MAX) dirs.push(v);
+        else {
+          if (msg) msg.textContent = t('settings.skillsScanMax');
+          return;
+        }
+      } else {
+        if (dirs.indexOf(v) >= 0) {
+          if (msg) msg.textContent = t('settings.skillsScanInvalid');
+          return;
+        }
+        dirs.push(v);
+      }
+      if (dirs.length > MAX) {
+        if (msg) msg.textContent = t('settings.skillsScanMax');
+        void uiAlert(t('settings.skillsScanMax'), t('settings.skillsScanTitle'));
+        return;
+      }
+      const rr = await skillScanDirsSet(dirs);
+      if (rr && rr.ok === false) {
+        if (msg) msg.textContent = t('settings.skillsScanMax');
+        void uiAlert(t('settings.skillsScanMax'), t('settings.skillsScanTitle'));
+        return;
+      }
+      if (inp) {
+        inp.value = '';
+        inp.removeAttribute('data-edit-i');
+      }
+      addBtn.textContent = t('settings.skillsScanAdd');
+      await renderSkillScanDirs();
+      await renderSkillList();
+      const st = (window.__skillScanState && window.__skillScanState.scanDirs) || [];
+      const bad = st.filter((s) => s && s.ok === false);
+      if (msg) {
+        msg.textContent = bad.length
+          ? t('settings.skillsScanMissing') + ': ' + bad.map((s) => s.path).join(' · ')
+          : t('settings.skillsScanOk');
+      }
     };
   }
 
@@ -5366,7 +8460,7 @@
     if (importBtn && !importBtn.dataset.bound) {
       importBtn.dataset.bound = '1';
       importBtn.onclick = async () => {
-        const r = await window.ccarmy.skillsImport();
+        const r = await window.warmy.skillsImport();
         if (r && r.ok) {
           uiAlert(t('settings.skillsImported') + ': ' + r.id);
           renderSkillList();
@@ -5376,38 +8470,55 @@
       };
     }
     try {
-      const pr = await window.ccarmy.skillsPaths();
+      const pr = await window.warmy.skillsPaths();
+      const r0 = await window.warmy.skillsList().catch(() => null);
+      const scanDirs = (r0 && r0.scanDirs) || (pr && pr.scanDirs) || [];
+      const bad = scanDirs.filter((s) => s && s.ok === false);
       const pb = $('skill-paths');
-      if (pb) pb.textContent = t('settings.skillsPaths') + ': ' + ((pr && pr.paths) || []).join('  ·  ');
+      if (pb) {
+        let txt = t('settings.skillsPaths') + ': ' + ((pr && pr.paths) || []).join('  ·  ');
+        if (bad.length) txt += '  ·  ' + t('settings.skillsScanMissing') + ': ' + bad.map((s) => s.path).join(' · ');
+        pb.textContent = txt;
+      }
     } catch {
       /* noop */
     }
     try {
-      const r = await window.ccarmy.skillsList();
+      const r = await window.warmy.skillsList();
       const items = (r && r.skills) || [];
+      window.__skillsState = { items: items.slice(), scanDirs: (r && r.scanDirs) || [] };
       if (!items.length) {
         box.className = 'muted';
         box.textContent = t('settings.skillsEmpty');
         return;
       }
+      const srcLabel = (s) => {
+        if (s && s.source === 'discovered') return t('settings.skillSourceDiscovered');
+        return (s && s.source) || '';
+      };
       box.className = '';
       box.innerHTML = items
         .map(
-          (s) => `<div class="skill-row">
+          (s) => {
+            const discovered = s && s.source === 'discovered';
+            return `<div class="skill-row${discovered ? ' is-discovered' : ''}" data-skill-source="${escapeHtml((s && s.source) || '')}">
             <div class="skill-main">
               <div class="skill-name">${escapeHtml(s.name || s.id)}</div>
               <div class="muted skill-desc">${escapeHtml(s.description || '—')}</div>
-              <div class="muted skill-src">${t('settings.skillFrom')}: ${escapeHtml(s.source || '')}</div>
+              <div class="muted skill-src">${t('settings.skillFrom')}: ${escapeHtml(srcLabel(s))}</div>
             </div>
-            <button class="btn-danger" data-skill-del="${escapeHtml(s.id)}">${t('settings.skillRemove')}</button>
-          </div>`
+            ${discovered
+              ? '<span class="muted skill-discovered-badge">' + escapeHtml(t('settings.skillSourceDiscovered')) + '</span>'
+              : '<button class="btn-danger" data-skill-del="' + escapeHtml(s.id) + '">' + t('settings.skillRemove') + '</button>'}
+          </div>`;
+          }
         )
         .join('');
       box.querySelectorAll('[data-skill-del]').forEach((b) => {
         b.onclick = async () => {
           const id = b.dataset.skillDel;
           if (!(await uiConfirm(t('settings.skillRemove') + ': ' + id + '?'))) return;
-          const rr = await window.ccarmy.skillsRemove(id);
+          const rr = await window.warmy.skillsRemove(id);
           if (rr && rr.ok === false) uiAlert(String(rr.error || ''));
           renderSkillList();
         };
@@ -5420,9 +8531,24 @@
 
   async function refreshMembers() {
     const box = $('members-box');
-    if (!box || !state.selectedChat) return;
-    const r = await window.ccarmy.groupMembers(state.selectedChat.id).catch(() => null);
+    if (!state.selectedChat) return;
+    const r = await window.warmy.groupMembers(state.selectedChat.id).catch(() => null);
     const ms = (r && r.members) || [];
+    /* 成员表**回填进 state.groups**：
+       群记录（group-store 的 GroupRecord / warmy:group-list）里**没有**成员形状，
+       而「模型管理」面板与列表行的成员数都读 `g.members` —— 不回填的话这两个地方会
+       恒显示"暂无可管理的牛马 / 0 名成员"，明明群里有成员（实测：无组网巡检第 19 节）。
+       只在真的变了的时候才重渲染，避免每 15s 的定时刷新把用户正在编辑的卡片刷掉。 */
+    const group = (state.groups || []).find((x) => x.id === state.selectedChat.id);
+    if (group) {
+      const next = ms.map((x) => ({ id: x.id || x.name, name: x.name }));
+      if (JSON.stringify(group.members || []) !== JSON.stringify(next)) {
+        group.members = next;
+        renderModelMgr();
+        renderList();
+      }
+    }
+    if (!box) return;
     // R11 三态：在线正常 / 异地离线（灰 + 离线角标）/ 组网关闭（异地成员灰 + 异常角标）
     // R12：停用实例灰 + 名字删除线（灰色仍满足对比度 ≥ 3.0，见 --ink-dim）
     box.innerHTML = ms.length
@@ -5474,7 +8600,7 @@
       : '<div class="muted">' + t('group.memberEmpty') + '</div>';
     box.querySelectorAll('[data-mkick]').forEach((b) => {
       b.onclick = async () => {
-        await window.ccarmy.groupKick({ groupId: state.selectedChat.id, memberId: b.dataset.mkick });
+        await window.warmy.groupKick({ groupId: state.selectedChat.id, memberId: b.dataset.mkick });
         refreshMembers();
       };
     });
@@ -5520,8 +8646,8 @@
     }
     let snap = null;
     try {
-      if (window.ccarmy && typeof window.ccarmy.membershipList === 'function') {
-        snap = await window.ccarmy.membershipList({ groupId });
+      if (window.warmy && typeof window.warmy.membershipList === 'function') {
+        snap = await window.warmy.membershipList({ groupId });
       }
     } catch {
       snap = null;
@@ -5578,12 +8704,12 @@
       return;
     }
     try {
-      const r = await window.ccarmy.groupJoinInstance(state.selectedChat.id, instId);
+      const r = await window.warmy.groupJoinInstance(state.selectedChat.id, instId);
       if (r && r.ok === false) {
-        await window.ccarmy.groupInvite({ groupId: state.selectedChat.id, name: (inst && inst.name) || instId });
+        await window.warmy.groupInvite({ groupId: state.selectedChat.id, name: (inst && inst.name) || instId });
       }
     } catch {
-      await window.ccarmy.groupInvite({ groupId: state.selectedChat.id, name: (inst && inst.name) || instId });
+      await window.warmy.groupInvite({ groupId: state.selectedChat.id, name: (inst && inst.name) || instId });
     }
     refreshMembers();
   });
@@ -5591,15 +8717,15 @@
 
   // Q. 错误重试
   async function checkLastError() {
-    const r = await window.ccarmy.lastError().catch(() => null);
+    const r = await window.warmy.lastError().catch(() => null);
     if (r?.error) {
       // 简单提示 + 可重试
       const ok = await uiConfirm(t('common.error') + ': ' + r.error.message.slice(0, 80) + ' · ' + t('common.retry'), t('common.error'));
       if (ok && state.selectedChat) {
-        await window.ccarmy.clearError();
+        await window.warmy.clearError();
         send();
       } else {
-        await window.ccarmy.clearError();
+        await window.warmy.clearError();
       }
     }
   }
@@ -5612,8 +8738,7 @@
       $('modal-title').textContent = t('settings.language');
       $('modal-body').innerHTML =
         '<div class="field"><select id="setup-locale">' +
-        '<option value="zh-CN">' + t('settings.localeZh') + '</option>' +
-        '<option value="en-US">' + t('settings.localeEn') + '</option>' +
+        localeOptionsHtml(state.locale) +
         '</select></div>';
       const acts = $('modal-actions');
       acts.innerHTML = '';
@@ -5635,17 +8760,17 @@
   }
 
   async function maybeShowSetup() {
-    const st = await window.ccarmy.setupState().catch(() => null);
+    const st = await window.warmy.setupState().catch(() => null);
     if (!st || st.done) return;
     const pick = await pickOnboardingLocale();
     if (pick) {
-      await window.ccarmy.setupComplete({ locale: pick }).catch(() => {});
-      if (!state.locale.startsWith(String(pick).slice(0, 2))) {
-        try { await loadI18n(pick); } catch { /* noop */ }
+      await window.warmy.setupComplete({ locale: pick }).catch(() => {});
+      if (resolveLocalePack(state.locale) !== resolveLocalePack(pick)) {
+        try { await loadI18n(resolveLocalePack(pick)); } catch { /* noop */ }
       }
-      await window.ccarmy.settingsSave({ locale: pick }).catch(() => {});
+      await window.warmy.settingsSave({ locale: pick }).catch(() => {});
     } else {
-      await window.ccarmy.setupComplete({}).catch(() => {});
+      await window.warmy.setupComplete({}).catch(() => {});
     }
   }
   maybeShowSetup();
@@ -5653,7 +8778,7 @@
   async function refreshExecutors() {
     const box = $('exec-box');
     if (!box) return;
-    const r = await window.ccarmy.executorsStatus().catch(() => null);
+    const r = await window.warmy.executorsStatus().catch(() => null);
     const items = r?.items || [];
     box.innerHTML = items.length
       ? items.map((it) => '<div>' + escapeHtml(it.name) + ' · ' + escapeHtml(String(it.status || '')) + ' · ' + escapeHtml(String(it.durationMs ?? 0)) + 'ms</div>').join('')
@@ -5661,7 +8786,7 @@
   }
   $('btn-exec-run')?.addEventListener('click', async () => {
     const brief = state.selectedChat?.name || 'run task';
-    await window.ccarmy.executorsRunBrief({ brief, contextItems: [] });
+    await window.warmy.executorsRunBrief({ brief, contextItems: [] });
     refreshExecutors();
   });
   
@@ -5670,8 +8795,8 @@
   async function runKbQuery(q) {
     const out = $('kb-out');
     if (!out) return;
-    const r = await window.ccarmy.knowledgeQuery(q).catch(() => null);
-    const det = await window.ccarmy.kbDetail(q).catch(() => null);
+    const r = await window.warmy.knowledgeQuery(q).catch(() => null);
+    const det = await window.warmy.kbDetail(q).catch(() => null);
     const ents = (r && r.entities) || (det && det.entities) || [];
     const evs = (r && r.events) || [];
     const rows = [];
@@ -5711,7 +8836,7 @@
         const kind = b.dataset.kbdel;
         const id = b.dataset.kbid;
         if (!(await uiConfirm(t('knowledge.delete') + ': ' + id + '?'))) return;
-        const rr = await window.ccarmy.kbDelete({ kind, id }).catch(() => null);
+        const rr = await window.warmy.kbDelete({ kind, id }).catch(() => null);
         if (rr && rr.ok === false) uiAlert(String(rr.error || ''));
         runKbQuery(q);
       };
@@ -5723,18 +8848,463 @@
     if (q) void runKbQuery(q);
   });
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     扫**别人的**二维码（R16）：本机离线把一张图片解成加入链接，再喂给**同一条**加入路径
+     ---------------------------------------------------------------------------
+     反向链路（「我的二维码」是编码，这里是解码）：
+        选图 / 拖入 / 粘贴 → FileReader.readAsDataURL → Image → canvas → getImageData
+        → window.jsQR（vendored 经典脚本 vendor/jsqr-1.4.0.js）→ 载荷
+        → 链接语法校验 → 写回链接输入框（用户看得见）→ 与「确定」按钮**同一个**加入函数
+     纪律（踩过的坑都在这几句里）：
+       * **全程本机、零联网**：解码器是 vendored 文件（Apache-2.0，许可证在同目录），
+         不是 CDN、不是 npm 依赖、不是 Worker / WASM；
+       * 图片源用 data: URL 而不是 blob:/file: —— file:// 文档里那种图会把 canvas 变脏，
+         getImageData 会直接抛 SecurityError（data: URL 不污染 canvas）；
+       * 解不出来 / 读出来的不是加入链接 → **各自专用文案如实说**，绝不静默、绝不编造联系人；
+       * 大图（4000px 手机照片）按几个尺寸各试一遍；仍不中才换 90/180/270 三个角度重试
+         （EXIF 旋转正常由浏览器按 image-orientation:from-image 处理，这里只兜"EXIF 被抹掉"的图）。
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /** 解码器是否加载上了（拿不到就如实说"本机暂时无法识图"，不假装能扫） */
+  function qrDecoderAvailable() {
+    return typeof window !== 'undefined' && typeof window.jsQR === 'function';
+  }
+
+  /**
+   * 图片解码尝试计划（顺序即代价顺序）：
+   *   1) 最长边缩到 1400 —— 手机照片（常见 3000~4000px）缩完仍远高于 QR 采样需要，且快得多；
+   *   2) 最长边缩到 800  —— 更小的图更"平整"，有时反而比大图更容易被识别；
+   *   3) 1400 再来 90/180/270 —— 前置 0° 已在第 1 步试过，不重复。
+   * 只缩不放：小图不会被放大（放大只会插值出假模块）。
+   */
+  const QR_SCAN_STEPS = [
+    { maxDim: 1400, rotations: [0] },
+    { maxDim: 800, rotations: [0] },
+    { maxDim: 1400, rotations: [90, 180, 270] },
+  ];
+
+  /** File/Blob → data: URL（不污染 canvas 的那条路） */
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result || ''));
+      fr.onerror = () => reject(new Error('read-failed'));
+      fr.readAsDataURL(file);
+    });
+  }
+
+  /** data: URL → 已解码的图片元素 */
+  function loadImageElement(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image-failed'));
+      img.src = dataUrl;
+    });
+  }
+
+  /**
+   * 一次尝试：按 maxDim 缩放（只缩不放）+ 可选旋转 → 画到 canvas → 读像素 → jsQR。
+   * 命中返回 {text,width,height,maxDim,rotationDeg}，未命中返回 null。
+   */
+  function qrTryDecode(img, maxDim, rotationDeg) {
+    const w0 = Number(img.naturalWidth || img.width || 0);
+    const h0 = Number(img.naturalHeight || img.height || 0);
+    if (!w0 || !h0) return null;
+    const k = Math.min(1, maxDim / Math.max(w0, h0));
+    const w = Math.max(1, Math.round(w0 * k));
+    const h = Math.max(1, Math.round(h0 * k));
+    const swap = rotationDeg === 90 || rotationDeg === 270;
+    const cv = document.createElement('canvas');
+    cv.width = swap ? h : w;
+    cv.height = swap ? w : h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    // 透明 PNG 直接解会得到黑底像素 → 先铺白底（QR 规范要求浅色底，深色模块）
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.translate(cv.width / 2, cv.height / 2);
+    if (rotationDeg) ctx.rotate((rotationDeg * Math.PI) / 180);
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    const px = ctx.getImageData(0, 0, cv.width, cv.height);
+    const res = window.jsQR(px.data, cv.width, cv.height, { inversionAttempts: 'attemptBoth' });
+    if (!res || !res.data) return null;
+    return { text: String(res.data), width: cv.width, height: cv.height, maxDim, rotationDeg };
+  }
+
+  /**
+   * 图片 → 文本（本机离线）。
+   * @returns {Promise<{ok:true,text:string,attempts:number,via:object}
+   *                  |{ok:false,reason:string,attempts:number}>}
+   *   reason: no-decoder（解码器没加载）| image-failed（不是能解的图片）
+   *           | canvas-tainted（画布被污染，像素读不出来）| decode-error（解码器自己抛错）
+   *           | no-qr（图里没有可识别的二维码）
+   */
+  async function decodeQrImage(dataUrl) {
+    if (!qrDecoderAvailable()) return { ok: false, reason: 'no-decoder', attempts: 0 };
+    let img;
+    try {
+      img = await loadImageElement(dataUrl);
+    } catch {
+      return { ok: false, reason: 'image-failed', attempts: 0 };
+    }
+    let attempts = 0;
+    for (const step of QR_SCAN_STEPS) {
+      for (const rot of step.rotations) {
+        attempts++;
+        let hit = null;
+        try {
+          hit = qrTryDecode(img, step.maxDim, rot);
+        } catch (e) {
+          // 两种失败必须分清：画布被污染（SecurityError）与解码器自己抛错，
+          // 都是"读不出这张图"，但现场记录里要能看出是哪一种。
+          const name = String((e && e.name) || '');
+          return { ok: false, reason: name === 'SecurityError' ? 'canvas-tainted' : 'decode-error', attempts, detail: String((e && e.message) || e).slice(0, 80) };
+        }
+        if (hit) return { ok: true, text: hit.text, attempts, via: hit };
+      }
+    }
+    return { ok: false, reason: 'no-qr', attempts };
+  }
+
+  /** 命中：解出来的载荷是不是「加入链接」？不是就把具体原因与原文如实回给用户 */
+  function classifyJoinPayload(raw) {
+    const s = String(raw == null ? '' : raw).trim();
+    if (!s) return { ok: false, reason: 'empty' };
+    let query = '';
+    if (/^warmy:\/\/join\b/i.test(s)) {
+      const q = s.indexOf('?');
+      if (q < 0) return { ok: false, reason: 'no-params' };
+      query = s.slice(q + 1);
+    } else if (/^https?:\/\//i.test(s)) {
+      const m = /[?#]/.exec(s);
+      if (!m) return { ok: false, reason: 'no-params' };
+      const seg = s.slice(m.index + 1);
+      // 分享链接两种写法：直接带参数（?node=…&tok=…），或参数被包一层（?join=node%3D…&tok=…）
+      const wrapped = /(?:^|&)join=([^&]*)/.exec(seg);
+      if (wrapped) {
+        try { query = decodeURIComponent(wrapped[1]); } catch { query = wrapped[1]; }
+      } else {
+        query = seg;
+      }
+    } else if (s.indexOf('://') < 0 && !/\s/.test(s) && /^[A-Za-z0-9_%&=.+~-]+=/.test(s)) {
+      // 二维码里去掉 scheme 的裸查询串（复制粘贴时常见）
+      query = s.replace(/^[?#]/, '');
+    } else {
+      return { ok: false, reason: 'not-a-link' };
+    }
+    let params;
+    try {
+      params = new URLSearchParams(query);
+    } catch {
+      return { ok: false, reason: 'not-a-link' };
+    }
+    const ANCHORS = ['node', 'fp', 'fingerprint', 'alias', 'id', 'tok', 'token', 'invite'];
+    const anchors = ANCHORS.filter((k) => String(params.get(k) || '').trim().length > 0);
+    if (!anchors.length) return { ok: false, reason: 'no-anchor' };
+    // 喂给加入路径的**就是原样解出来的那串**（与粘贴链接完全同一条路；不做二次改写）
+    return { ok: true, link: s, anchors, kind: /^warmy:/i.test(s) ? 'warmy' : /^https?:/i.test(s) ? 'http' : 'query' };
+  }
+
+  /** 长载荷在提示里截断显示（完整的仍在链接输入框里） */
+  function scanPreviewText(s, n = 96) {
+    const t0 = String(s == null ? '' : s);
+    return t0.length > n ? t0.slice(0, n) + '…' : t0;
+  }
+
+  /** 扫码区块的 HTML（「加入项目/群聊」与「添加联系人」两个弹窗共用同一份） */
+  function qrScanBlockHtml(prefix) {
+    return (
+      '<div class="qr-scan" id="' + prefix + '-scan">' +
+      '<div class="qr-scan-row">' +
+      '<button type="button" class="btn-mini" id="' + prefix + '-pick">' + escapeHtml(t('join.pickImage')) + '</button>' +
+      '<span class="muted" id="' + prefix + '-hint">' + escapeHtml(t('join.dropHint')) + '</span>' +
+      '</div>' +
+      '<input type="file" id="' + prefix + '-file" accept="image/*" class="hidden"/>' +
+      '<div class="qr-scan-detail muted" id="' + prefix + '-detail"></div>' +
+      '</div>'
+    );
+  }
+
+  /** 只有一个全局粘贴监听：路由到**当前弹窗**那个扫码区块（弹窗关了就不处理） */
+  let qrScanActiveSink = null;
+  document.addEventListener('paste', (e) => {
+    if (typeof qrScanActiveSink !== 'function') return;
+    const files = (e.clipboardData && e.clipboardData.files) || [];
+    let img = null;
+    for (const f of files) {
+      if (String(f.type || '').startsWith('image/')) { img = f; break; }
+    }
+    if (!img) return; // 纯文本粘贴：照旧交给输入框自己处理
+    e.preventDefault();
+    e.stopPropagation();
+    void qrScanActiveSink(img);
+  });
+
+  /**
+   * 把扫码区块接上：选图 / 拖入 / 粘贴 → 解码 → 校验 → 调用**同一个**加入函数。
+   * @param prefix  区块前缀（join-qr / contact-qr）
+   * @param onJoin  解出合法链接后调用的加入函数（与弹窗「确定」按钮调用的是同一个）
+   * @param linkInput 链接输入框（解出来的链接会写进去，用户看得见、可核对）
+   */
+  function bindQrScan(prefix, onJoin, linkInput) {
+    const block = $(prefix + '-scan');
+    const file = $(prefix + '-file');
+    const pick = $(prefix + '-pick');
+    const detail = $(prefix + '-detail');
+    const hint = $(prefix + '-hint');
+    if (!block || !file || !detail) return;
+    const live = () => !!document.body.contains(detail) && !$('modal-root')?.classList.contains('hidden');
+    const say = (text, state) => {
+      if (!document.body.contains(detail)) return;
+      detail.textContent = text;
+      detail.setAttribute('data-scan-state', state || '');
+      block.setAttribute('data-scan-state', state || '');
+    };
+    async function handleImage(fileOrBlob) {
+      if (!fileOrBlob || !live()) return;
+      if (!String(fileOrBlob.type || '').startsWith('image/')) { say(t('join.scanNotImage'), 'not-image'); return; }
+      if (!qrDecoderAvailable()) { say(t('join.scanUnavailable'), 'no-decoder'); return; }
+      say(t('join.scanWorking'), 'working');
+      let dataUrl = '';
+      try {
+        dataUrl = await readFileAsDataUrl(fileOrBlob);
+      } catch {
+        say(t('join.scanReadFail'), 'read-fail');
+        return;
+      }
+      const dec = await decodeQrImage(dataUrl);
+      if (!live()) return; // 解码期间弹窗被关掉了：不贴提示、更不发起加入
+      if (!dec.ok) {
+        if (dec.reason === 'no-qr') say(fmtKey('join.scanNoQr', { n: dec.attempts }), 'no-qr');
+        else if (dec.reason === 'no-decoder') say(t('join.scanUnavailable'), 'no-decoder');
+        // canvas-tainted / decode-error / image-failed 都归到"读不出这张图片"这一句（如实，不编原因）
+        else say(t('join.scanReadFail'), dec.reason);
+        return;
+      }
+      const cls = classifyJoinPayload(dec.text);
+      if (!cls.ok) {
+        if (cls.reason === 'empty') say(t('join.scanEmpty'), 'empty');
+        else say(fmtKey('join.scanNotJoinLink', { payload: scanPreviewText(dec.text) }), 'not-join-link');
+        return;
+      }
+      if (linkInput) linkInput.value = cls.link;
+      // 现场留痕：命中是哪一次尝试（尺寸 + 旋转角度）。诊断"这张图为什么能/不能扫"全靠它。
+      block.setAttribute('data-scan-via', JSON.stringify({ maxDim: dec.via.maxDim, rotationDeg: dec.via.rotationDeg, width: dec.via.width, height: dec.via.height, attempts: dec.attempts }));
+      say(fmtKey('join.scanFound', { link: scanPreviewText(cls.link) }), 'found');
+      await onJoin(cls.link, { fromScan: true, attempts: dec.attempts, via: dec.via });
+    }
+    pick?.addEventListener('click', () => file.click());
+    file.addEventListener('change', () => { void handleImage(file.files && file.files[0]); });
+    block.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      block.classList.add('dropping');
+      if (hint) hint.textContent = t('join.scanDropRelease');
+    });
+    block.addEventListener('dragleave', () => {
+      block.classList.remove('dropping');
+      if (hint) hint.textContent = t('join.dropHint');
+    });
+    block.addEventListener('drop', (e) => {
+      e.preventDefault();
+      block.classList.remove('dropping');
+      if (hint) hint.textContent = t('join.dropHint');
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      void handleImage(f);
+    });
+    // 粘贴路由：只在**这个**弹窗可见时接管
+    qrScanActiveSink = (f) => { void handleImage(f); };
+    block.setAttribute('data-scan-ready', qrDecoderAvailable() ? '1' : '0');
+  }
+
   // 加入项目/群聊：扫码或粘贴链接
+  /** 加入项目/群聊的弹窗内容（扫码区块 + 粘贴链接 + 「对方将看到的名片」） */
+  function joinDialogBodyHtml(card) {
+    return (
+      '<div class="muted" style="margin-bottom:8px">' + escapeHtml(t('join.scanHint')) + '</div>' +
+      qrScanBlockHtml('join-qr') +
+      '<input id="join-link-input" placeholder="' + escapeHtml(t('join.pastePlaceholder')) + '" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px"/>' +
+      '<div class="muted" style="margin-top:10px">' + escapeHtml(t('card.peerWillSee')) + '</div>' + myCardHtml(card) +
+      '<div id="join-qr-msg" class="muted" style="margin-top:6px"></div>'
+    );
+  }
+
+  /**
+   * R4：我的联系方式。链接来自**真实**数据，缺什么就少什么：
+   *   node  ← meshStatus().nodeId（本机组网节点）
+   *   token ← inviteCreate().invite.token（本机邀请令牌）
+   *   port  ← 组网设置里当前配置的端口
+   * 连 node/身份都拿不到 → ok:false，界面如实说「拿不到」，不画假码。
+   */
+  async function ownInviteLink() {
+    let node = '';
+    let token = '';
+    let alias = '';
+    let fp = '';
+    try {
+      const st = await window.warmy.meshStatus();
+      node = String((st && st.nodeId) || '');
+    } catch {
+      /* 拿不到就留空 */
+    }
+    try {
+      const inv = await window.warmy.inviteCreate();
+      token = String((inv && inv.invite && inv.invite.token) || '');
+    } catch {
+      /* 拿不到就留空 */
+    }
+    try {
+      const r = await myIdentity();
+      const info = (r && r.identity) || {};
+      alias = String(info.alias || (r && r.alias) || '');
+      fp = String(info.fingerprint || (r && r.fingerprint) || '');
+    } catch {
+      /* 拿不到就留空 */
+    }
+    const who = node || fp || alias;
+    const parts = [];
+    if (who) parts.push('node=' + encodeURIComponent(who));
+    const port = Number(netState.addr && netState.addr.port) || 0;
+    if (port) parts.push('port=' + port);
+    if (token) parts.push('tok=' + encodeURIComponent(token));
+    return { ok: !!who, link: who ? 'warmy://join?' + parts.join('&') : '', node, token, alias, fingerprint: fp };
+  }
+
+  /**
+   * 左列：我的链接 + 我的二维码（真编码器：见 qrSvg 与 vendor/qrcode-generator-2.0.4.js）
+   */
+  async function ownLinkColumnHtml() {
+    const own = await ownInviteLink();
+    if (!own.ok) {
+      return { own, html: '<div class="own-qr-empty" id="contact-own-unavailable">' + escapeHtml(t('contact.mineUnavailable')) + '</div>' };
+    }
+    const html =
+      '<div class="own-link-row">' +
+      '<span class="own-link-text" id="contact-my-link">' + escapeHtml(own.link) + '</span>' +
+      '<button type="button" class="btn-mini" id="btn-my-link-copy">' + escapeHtml(t('contact.mineCopy')) + '</button>' +
+      '</div>' +
+      (own.alias || own.fingerprint
+        ? '<div class="own-id-line">' + escapeHtml(t('contact.ownId')) + ': ' + escapeHtml(own.alias || own.fingerprint) + '</div>'
+        : '') +
+      '<div id="contact-my-qr" data-link="' + escapeHtml(own.link) + '" aria-label="' + escapeHtml(t('contact.mineQr')) + '"></div>';
+    return { own, html };
+  }
+
+  /**
+   * 把左列的二维码画出来：**真** QR（版本自适应 + 纠错 M + 4 模块静区），屏幕宽度 168px。
+   * 编码器不可用时返回 false 并置一句如实话术 —— 宁可没有码，也不给扫不出来的假码。
+   */
+  function fillOwnQr(el, link, size = 168) {
+    if (!el) return false;
+    const svg = qrSvg(link, size);
+    if (svg) {
+      el.innerHTML = svg;
+      el.classList.remove('own-qr-empty');
+      el.setAttribute('data-qr-state', 'ok');
+      return true;
+    }
+    el.innerHTML = '';
+    el.classList.add('own-qr-empty');
+    el.setAttribute('data-qr-state', 'no-encoder');
+    el.textContent = t('contact.qrUnavailable');
+    return false;
+  }
+
   $('btn-join-qr')?.addEventListener('click', async () => {
     const root = $('modal-root');
+    // R4：联系人页的「添加联系人」弹窗 = 左列我的链接/二维码 + 右列添加对方。
+    // 项目/群聊页仍是原来的「扫码加入 / 申请加入」。
+    if (state.nav === 'externalChat') {
+      $('modal-title').textContent = t('contact.add');
+      const card = await myCard();
+      const mine = await ownLinkColumnHtml();
+      $('modal-body').innerHTML =
+        '<div class="add-contact-grid">' +
+        '<div class="add-contact-col" id="contact-own-panel">' +
+        '<h4>' + escapeHtml(t('contact.mine')) + '</h4>' +
+        '<p class="add-contact-hint">' + escapeHtml(t('contact.mineHint')) + '</p>' +
+        mine.html +
+        '</div>' +
+        '<div class="add-contact-col" id="add-contact-others">' +
+        '<h4>' + escapeHtml(t('contact.others')) + '</h4>' +
+        '<p class="add-contact-hint">' + escapeHtml(t('contact.othersHint')) + '</p>' +
+        '<input id="add-contact-name" placeholder="' + escapeHtml(t('contact.namePlaceholder')) + '" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;margin-bottom:8px"/>' +
+        '<div class="muted" style="margin-bottom:6px">' + escapeHtml(t('contact.scanHint')) + '</div>' +
+        qrScanBlockHtml('contact-qr') +
+        '<input id="join-link-input" placeholder="' + escapeHtml(t('join.pastePlaceholder')) + '" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;margin-top:8px"/>' +
+        '<div class="muted" style="margin-top:10px">' + escapeHtml(t('card.peerWillSee')) + '</div>' + myCardHtml(card) +
+        '<div id="join-qr-msg" class="muted" style="margin-top:6px"></div>' +
+        '</div></div>';
+      if (mine.own.ok) {
+        fillOwnQr($('contact-my-qr'), mine.own.link, 168);
+        const copy = $('btn-my-link-copy');
+        if (copy) {
+          copy.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(mine.own.link);
+              $('join-qr-msg').textContent = t('contact.mineCopied');
+            } catch {
+              $('join-qr-msg').textContent = t('contact.mineCopyFail');
+            }
+          };
+        }
+      }
+      const cActs = $('modal-actions');
+      cActs.innerHTML = '';
+      const cCancel = document.createElement('button');
+      cCancel.className = 'btn-mini';
+      cCancel.textContent = t('common.cancel');
+      cCancel.onclick = () => { root.classList.add('hidden'); };
+      const cOk = document.createElement('button');
+      cOk.className = 'btn-primary';
+      cOk.textContent = t('common.ok');
+      /**
+       * 添加联系人弹窗里「用链接加入」的**唯一**实现 ——
+       * 「确定」按钮（粘贴链接）与扫码区块（识别出的链接）都走这一个函数。
+       * 这里不新增第二条加入实现：扫码只是把载荷塞进同一个入参位置。
+       */
+      const submitContactJoin = async (link) => {
+        const r = await window.warmy.joinRequest({
+          name: state.profile.username || 'user',
+          kind: 'human',
+          target: link,
+          targetType: 'contact',
+          // 附六：加入动作即交换名片（邮箱/手机号为空也照发）
+          card: { email: card.email || '', phone: card.phone || '' },
+        }).catch(() => null);
+        const msg = $('join-qr-msg');
+        if (msg) msg.textContent = r?.ok ? t('join.ok') : t('join.fail');
+        return r;
+      };
+      cOk.onclick = async () => {
+        const name = String((($('add-contact-name') || {}).value) || '').trim();
+        const link = String((($('join-link-input') || {}).value) || '').trim();
+        if (name) {
+          // 「加对方」：原 addContactFlow 的流程（名片确认 → 落联系人）
+          const added = await createContactWithCard(name);
+          if (added) root.classList.add('hidden');
+          return;
+        }
+        if (!link) {
+          $('join-qr-msg').textContent = t('contact.needInput');
+          return;
+        }
+        await submitContactJoin(link);
+        setTimeout(() => root.classList.add('hidden'), 800);
+      };
+      cActs.append(cCancel, cOk);
+      // 扫别人的二维码：选图 / 拖入 / 粘贴 → 本机解码 → 走上面**同一个** submitContactJoin
+      bindQrScan('contact-qr', async (link) => {
+        const r = await submitContactJoin(link);
+        // 扫出来的链接加入成功才自动收窗；失败就留在弹窗里（让用户看到那句如实话术、可重试）
+        if (r?.ok) setTimeout(() => root.classList.add('hidden'), 800);
+      }, $('join-link-input'));
+      root.classList.remove('hidden');
+      return;
+    }
     $('modal-title').textContent = t('join.title');
     const card = await myCard();
-    $('modal-body').innerHTML =
-      '<div class="muted" style="margin-bottom:8px">' + t('join.dropHint') + '</div>' +
-      '<input type="file" id="join-qr-file" accept="image/*" style="margin-bottom:8px"/>' +
-      '<div class="muted" style="margin-bottom:8px">' + t('join.scanHint') + '</div>' +
-      '<input id="join-link-input" placeholder="' + t('join.pastePlaceholder') + '" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px"/>' +
-      '<div class="muted" style="margin-top:10px">' + escapeHtml(t('card.peerWillSee')) + '</div>' + myCardHtml(card) +
-      '<div id="join-qr-msg" class="muted" style="margin-top:6px"></div>';
+    $('modal-body').innerHTML = joinDialogBodyHtml(card);
     const acts = $('modal-actions');
     acts.innerHTML = '';
     const cancel = document.createElement('button');
@@ -5744,32 +9314,48 @@
     const ok = document.createElement('button');
     ok.className = 'btn-primary';
     ok.textContent = t('join.apply');
-    ok.onclick = async () => {
-      const link = $('join-link-input')?.value?.trim();
-      if (!link) { $('join-qr-msg').textContent = t('join.qrFail'); return; }
-      const r = await window.ccarmy.joinRequest({
+    /**
+     * 这个弹窗只有**一种**模式：用链接加入 —— 「申请加入」按钮下面的守卫要求必须有链接
+     * （没有链接直接如实报错、不发请求），扫码区块也只是把解出来的链接塞进同一个入参位置。
+     * 所以被提交的 target 就是**用户粘贴/扫到的那条链接本身**；绝不能拿"当前选中的会话名"顶替它
+     * （修前正是 `state.selectedChat?.name || link`：只要列表里有选中的会话，粘贴/扫码就全是摆设，
+     * 发出去的是一句会话名，而对面弹窗显示的是"想加入 xxx 项目"）。
+     * targetType 是**另一个维度**（要加入的是"项目"还是"群聊"），按打开弹窗时所在的入口取一次，
+     * 不跟 selectedChat 走（那边没选中会话时会误判成 group，见 setupListAction 的入口文案）。
+     */
+    const joinMode = state.nav === 'internalGroup' ? 'project' : 'group';
+    const submitProjectJoin = async (link) => {
+      const r = await window.warmy.joinRequest({
         name: state.profile.username || 'user',
         kind: 'human',
-        target: state.selectedChat?.name || link,
-        targetType: state.selectedChat?.kind === 'internal' ? 'project' : 'group',
+        target: link,
+        targetType: joinMode,
         // 附六：加入动作即交换名片（邮箱/手机号为空也照发，对方看到的是「未填写」而不是「被隐藏」）
         card: { email: card.email || '', phone: card.phone || '' },
       }).catch(() => null);
-      $('join-qr-msg').textContent = r?.ok ? t('join.ok') : t('join.fail');
+      const msg = $('join-qr-msg');
+      if (msg) msg.textContent = r?.ok ? t('join.ok') : t('join.fail');
+      return r;
+    };
+    ok.onclick = async () => {
+      const link = $('join-link-input')?.value?.trim();
+      if (!link) { $('join-qr-msg').textContent = t('join.qrFail'); return; }
+      await submitProjectJoin(link);
       setTimeout(() => root.classList.add('hidden'), 800);
     };
     acts.append(cancel, ok);
+    // 扫别人的二维码：选图 / 拖入 / 粘贴 → 本机解码 → 走上面**同一个** submitProjectJoin
+    bindQrScan('join-qr', async (link) => {
+      const r = await submitProjectJoin(link);
+      if (r?.ok) setTimeout(() => root.classList.add('hidden'), 800);
+    }, $('join-link-input'));
     root.classList.remove('hidden');
-    // 文件选择后提示（完整二维码识别需 jsQR，这里提示粘贴链接）
-    $('join-qr-file')?.addEventListener('change', () => {
-      $('join-qr-msg').textContent = t('join.scanHint');
-    });
   });
 
   $('btn-chat-search')?.addEventListener('click', async () => {
     const q = $('chat-search')?.value?.trim();
     if (!q) return;
-    const r = await window.ccarmy.searchMessages(q).catch(() => null);
+    const r = await window.warmy.searchMessages(q).catch(() => null);
     const hits = r?.hits || [];
     pushMsg(state.selectedChat?.id || 'search', 'them', hits.length ? hits.map((x) => x.snippet).join('\n') : t('list.empty'));
     renderChat();
@@ -5791,7 +9377,7 @@
   // W. 定向模式开关（聊天头）
   $('btn-open-win')?.addEventListener('click', () => {
     if (!state.selectedChat) return;
-    window.ccarmy.openChatWindow({
+    window.warmy.openChatWindow({
       id: state.selectedChat.id,
       title: state.selectedChat.name,
       kind: state.selectedChat.kind,
@@ -5799,20 +9385,20 @@
   });
   $('btn-directed')?.addEventListener('change', async (e) => {
     if (!state.selectedChat) return;
-    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: e.target.checked }).catch(() => {});
+    await window.warmy.groupDirected({ groupId: state.selectedChat.id, directed: e.target.checked }).catch(() => {});
   });
   $('btn-export')?.addEventListener('click', async () => {
     if (!state.selectedChat) return;
     const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
-    const r = await window.ccarmy.exportSession({
+    const r = await window.warmy.exportSession({
       title: state.selectedChat.name,
       messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
     });
     uiAlert(r?.ok ? r.path : t('common.error'));
   });
   // 托盘 + 热键
-  window.ccarmy.trayInit?.().catch(() => {});
-  window.ccarmy.registerHotkey?.('CommandOrControl+Shift+M').catch(() => {});
+  window.warmy.trayInit?.().catch(() => {});
+  window.warmy.registerHotkey?.('CommandOrControl+Shift+M').catch(() => {});
   // 从 URL 参数自动打开会话（多窗口）
   try {
     const q = new URLSearchParams(window.location.search);
@@ -5847,14 +9433,20 @@
 
   (async () => {
     try {
-      await loadI18n(navigator.language.startsWith('zh') ? 'zh-CN' : 'en-US');
+      // Prefer saved settings.locale; otherwise map navigator.language onto the full 10-locale set.
+      let bootLocale = resolveLocalePack(navigator.language);
+      try {
+        const s0 = await window.warmy.settingsGet();
+        if (s0?.settings?.locale) bootLocale = resolveLocalePack(s0.settings.locale);
+      } catch { /* keep navigator mapping */ }
+      await loadI18n(bootLocale);
     } catch {
       state.locale = 'zh-CN';
-      state.t = { 'app.zhName': '无限牛马', 'app.enName': 'CCArmy', 'app.subtitle': 'Corporate Cattle Army', 'app.displayName': '无限牛马' };
+      state.t = { 'app.zhName': '无限牛马', 'app.enName': 'WArmy', 'app.subtitle': 'Workhorse Army', 'app.displayName': '无限牛马', 'brand.name': '无限牛马', 'brand.sub': 'WArmy（Workhorse Army）', 'brand.tagline': '让AI成为你的无限牛马', 'about.tagline': '多智能体群聊桌面应用' };
       applyI18n();
     }
     try {
-      const s = await window.ccarmy.settingsGet();
+      const s = await window.warmy.settingsGet();
       if (s?.settings) {
         state.themeMode = s.settings.themeMode || 'system';
         state.theme = s.settings.accent || state.theme;
@@ -5863,9 +9455,21 @@
         state.emailOnRequest = !!s.settings.emailOnRequest;
         state.globalSecurity = s.settings.globalSecurity || 'normal';
         state.embedUseGpu = s.settings.embedUseGpu !== false;
+        // Re-apply persisted locale (settingsGet is also used above for boot; ensure UI state matches).
+        if (s.settings.locale && resolveLocalePack(s.settings.locale) !== state.locale) {
+          try { await loadI18n(resolveLocalePack(s.settings.locale)); } catch { /* noop */ }
+        }
         document.documentElement.style.setProperty('--accent', state.theme);
+        // R3：右栏宽度沿用上次拖到的值（没存过就吃 CSS 里的 300px 默认）
+        if (Number(s.settings.panelWidth) > 0) {
+          document.documentElement.style.setProperty('--panel-w', Math.round(Number(s.settings.panelWidth)) + 'px');
+        }
+        // R2：用户设过的快捷键（只覆盖存过的动作，没存过的仍走预置）
+        if (s.settings.shortcuts && typeof s.settings.shortcuts === 'object') {
+          state.shortcuts = Object.assign({}, s.settings.shortcuts);
+        }
       }
-      const p = await window.ccarmy.profileGet();
+      const p = await window.warmy.profileGet();
       if (p?.profile) {
         state.profile.username = p.profile.username || state.profile.username;
         state.profile.email = p.profile.email || '';
@@ -5878,12 +9482,14 @@
     applyThemeMode(state.themeMode);
     applyAvatar();
     try {
-      state.globalSecurity = (await window.ccarmy.securityMode()) || state.globalSecurity;
-      state.hardware = await window.ccarmy.hardware();
-      state.instances = (await window.ccarmy.listInstances()) || [];
+      state.globalSecurity = (await window.warmy.securityMode()) || state.globalSecurity;
+      state.hardware = await window.warmy.hardware();
+      state.instances = (await window.warmy.listInstances()) || [];
     } catch {
       /* noop */
     }
+    // 待执行队列：启动时从 userData/ui-queues.json 恢复（进程退出不丢 P2/P3）
+    try { await restoreUiQueuesOnce(); } catch { /* noop */ }
     if (!state.instances.length) {
       state.instances = [
         {
@@ -5909,7 +9515,7 @@
     });
     // E. 加载持久化状态
     try {
-      const st = await window.ccarmy.stateLoad();
+      const st = await window.warmy.stateLoad();
       if (st?.state) {
         if (Array.isArray(st.state.plugins) && st.state.plugins.length) state.plugins = st.state.plugins;
         if (Array.isArray(st.state.groups) && st.state.groups.length) state.groups = st.state.groups;
@@ -5943,7 +9549,7 @@
           instanceAvatars[i.id] = { avatarPreset: i.avatarPreset || 0, avatarDataUrl: i.avatarDataUrl || '' };
         }
       });
-      window.ccarmy.stateSave({
+      window.warmy.stateSave({
         plugins: state.plugins,
         groups: state.groups,
         chats: state.chats,

@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let zh = JSON.parse(fs.readFileSync(base + 'i18n/zh-CN.json', 'utf8'));
 let en = JSON.parse(fs.readFileSync(base + 'i18n/en-US.json', 'utf8'));
@@ -65,16 +65,16 @@ if (!j.includes('more-trigger')) {
   });
   $('mi-directed')?.addEventListener('change', async () => {
     if (!state.selectedChat) return;
-    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: true }).catch(() => {});
+    await window.warmy.groupDirected({ groupId: state.selectedChat.id, directed: true }).catch(() => {});
   });
   $('mi-open')?.addEventListener('click', () => {
     if (!state.selectedChat) return;
-    window.ccarmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind });
+    window.warmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind });
   });
   $('mi-export')?.addEventListener('click', async () => {
     if (!state.selectedChat) return;
     const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
-    const r = await window.ccarmy.exportSession({
+    const r = await window.warmy.exportSession({
       title: state.selectedChat.name,
       messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
     });

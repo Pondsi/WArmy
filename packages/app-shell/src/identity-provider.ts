@@ -5,7 +5,7 @@
  *
  *  1. **指纹推导对齐**（`fingerprintDerivationForAppShell`）
  *     身份层（`identity.ts`）的指纹 = `base32(sha256(SPKI DER))` 前 20 位 + 1 位校验 + 短横分组；
- *     组网层（`@ccarmy/sync-protocol`）默认指纹 = `base32(sha256(raw 32B))`。
+ *     组网层（`@warmy/sync-protocol`）默认指纹 = `base32(sha256(raw 32B))`。
  *     两者**不是同一个值** —— 握手时被叫方会用 `fingerprintDerivation` 从对端公钥重推指纹，
  *     不一致就会以 `fingerprint-mismatch` 拒掉**每一条合法连接**。
  *     所以组网层的每一个入口（server / client / handshake / DHT / announce）都必须注入这里给出的
@@ -60,7 +60,7 @@ import {
   type NormalizedIdentity,
   type RevocationList,
   type RevocationReason,
-} from '@ccarmy/sync-protocol';
+} from '@warmy/sync-protocol';
 import {
   DEFAULT_CLOCK_SKEW_MS,
   fingerprintFromPublicKey,
@@ -622,7 +622,7 @@ export function buildIdentityChangeEntries(
   const selfFingerprint = info?.fingerprint ?? '';
   if (info) {
     for (const d of store.declarations()) {
-      if (d.kind !== 'ccarmy.identity.rotation') continue;
+      if (d.kind !== 'warmy.identity.rotation') continue;
       const id = `self:${d.oldFingerprint}->${d.newFingerprint}`;
       // 旧名片 = 换证时刻之前、本机留存的最后一条（声明里没有联系方式）
       const prev = history.filter((h) => h.at <= d.issuedAt).slice(-1)[0]?.card ?? null;

@@ -1,4 +1,4 @@
-# CCArmy CI — typecheck + build + verify
+# WArmy CI — typecheck + build + verify
 name: ci
 on:
   push:

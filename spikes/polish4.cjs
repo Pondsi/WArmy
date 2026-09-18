@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 
 // 归档恢复按钮
@@ -8,7 +8,7 @@ if (!j.includes('archived-restore')) {
     `      async function refreshArchived() {
         const box = $('archived-box');
         if (!box) return;
-        const r = await window.ccarmy.archivedList().catch(() => null);
+        const r = await window.warmy.archivedList().catch(() => null);
         const items = r?.items || [];
         box.innerHTML = items.length
           ? items.map((a) => '<div>' + escapeHtml(a.name) + ' · ' + a.kind + '</div>').join('')
@@ -17,14 +17,14 @@ if (!j.includes('archived-restore')) {
     `      async function refreshArchived() {
         const box = $('archived-box');
         if (!box) return;
-        const r = await window.ccarmy.archivedList().catch(() => null);
+        const r = await window.warmy.archivedList().catch(() => null);
         const items = r?.items || [];
         box.innerHTML = items.length
           ? items.map((a) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(a.name) + ' · ' + a.kind + '</span><button class="btn-mini" data-restore="' + escapeHtml(a.id) + '">' + t('cp.rollback') + '</button></div>').join('')
           : '—';
         box.querySelectorAll('[data-restore]').forEach((b) => {
           b.onclick = async () => {
-            await window.ccarmy.archivedRestore(b.dataset.restore).catch(() => {});
+            await window.warmy.archivedRestore(b.dataset.restore).catch(() => {});
             refreshArchived();
             uiAlert(t('instances.saved'));
           };

@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
@@ -74,7 +74,7 @@ if (!m.includes("onApprove: async (req)")) {
       const id = 'ap-' + ++approvalSeq;
       return new Promise((resolve) => {
         pendingApprovals.set(id, { resolve: resolve as never });
-        win?.webContents.send('ccarmy:approval-request', { id, action: req.action, suggested: req.suggested });
+        win?.webContents.send('warmy:approval-request', { id, action: req.action, suggested: req.suggested });
         setTimeout(() => {
           const p = pendingApprovals.get(id);
           if (p) {
@@ -90,13 +90,13 @@ if (!m.includes("onApprove: async (req)")) {
 }
 
 // ── C. 多执行者并行展示 ──
-if (!m.includes('ccarmy:executors-status')) {
+if (!m.includes('warmy:executors-status')) {
   m += `
 
 // ── C. 执行者状态 ──
 const executorStatus: Array<{ id: string; name: string; taskId: string; brief: string; status: string; durationMs: number; ts: number }> = [];
-ipcMain.handle('ccarmy:executors-status', () => ({ ok: true, items: executorStatus.slice(-10) }));
-ipcMain.handle('ccarmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
+ipcMain.handle('warmy:executors-status', () => ({ ok: true, items: executorStatus.slice(-10) }));
+ipcMain.handle('warmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
   const ids = payload.executorIds?.length
     ? payload.executorIds
     : (p1?.instances.list() || []).filter((x) => x.status === 'running').map((x) => x.id).slice(0, 3);
@@ -121,18 +121,18 @@ ipcMain.handle('ccarmy:executors-run-brief', async (_e, payload: { brief: string
 }
 
 // ── E. 设置持久化：插件/实例/群 ──
-if (!m.includes('ccarmy:state-save')) {
+if (!m.includes('warmy:state-save')) {
   m += `
 
 // ── E. 会话状态持久化 ──
-ipcMain.handle('ccarmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unknown[]; groups?: unknown[]; chats?: unknown[] }) => {
+ipcMain.handle('warmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unknown[]; groups?: unknown[]; chats?: unknown[] }) => {
   if (!settingsStore) return { ok: false };
   const cur = settingsStore.load();
   const next = { ...cur, ...state } as never;
   settingsStore.save(next as never);
   return { ok: true };
 });
-ipcMain.handle('ccarmy:state-load', () => {
+ipcMain.handle('warmy:state-load', () => {
   const s = settingsStore?.load() as never;
   return { ok: true, state: s || {} };
 });

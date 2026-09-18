@@ -1,5 +1,5 @@
 /**
- * @ccarmy/knowledge-base — 名称驱动 + 事件驱动 + 证据锚点
+ * @warmy/knowledge-base — 名称驱动 + 事件驱动 + 证据锚点
  * 双向索引：实体↔事件；统一检索 knowledge_query
  */
 import fs from 'node:fs';

@@ -1,5 +1,5 @@
 {
-  "name": "@ccarmy/ccr-compressor",
+  "name": "@warmy/ccr-compressor",
   "version": "0.1.0",
   "private": true,
   "description": "写入侧 CCR 压缩网关（零 LLM）",

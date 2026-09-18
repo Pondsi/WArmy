@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * pre-receive —— CCArmy 仓库门禁钩子（**纯 Node，零第三方依赖**）
+ * pre-receive —— WArmy 仓库门禁钩子（**纯 Node，零第三方依赖**）
  *
  * 安装（幂等，只写这个仓库自己的 hook，不动全局 git config）：
  *   node packages/app-shell/scripts/git-hooks/pre-receive.mjs --install <repoDir>
@@ -9,8 +9,8 @@
  *   pre-receive.mjs
  *
  * 角色/成员从环境变量读，缺省当最严的 member：
- *   CCARMY_PUSHER_ROLE = member | admin | creator | duty
- *   CCARMY_PUSHER_ID   = 成员 id
+ *   WARMY_PUSHER_ROLE = member | admin | creator | duty
+ *   WARMY_PUSHER_ID   = 成员 id
  *
  * 退出码：0 = 放行；1 = 整批拒绝（逐条原因已打印）。
  * 校验逻辑在 `../dist/repo-hooks.js`（由 TS 编译；脚本本身只做 I/O 与退出码）。
@@ -35,7 +35,7 @@ async function loadImpl() {
       /* 继续找下一个 */
     }
   }
-  throw new Error(`repo-hooks.js not found（先跑 pnpm --filter @ccarmy/app-shell build）；找过：${candidates.join(' / ')}`);
+  throw new Error(`repo-hooks.js not found（先跑 pnpm --filter @warmy/app-shell build）；找过：${candidates.join(' / ')}`);
 }
 
 const argv = process.argv.slice(2);
@@ -62,11 +62,11 @@ function readStdin() {
 
 const { createGitRunner, formatPreReceiveOutput, runPreReceive } = await loadImpl();
 
-const role = (process.env.CCARMY_PUSHER_ROLE || 'member').trim();
-const memberId = (process.env.CCARMY_PUSHER_ID || '').trim();
+const role = (process.env.WARMY_PUSHER_ROLE || 'member').trim();
+const memberId = (process.env.WARMY_PUSHER_ID || '').trim();
 const allowedRoles = new Set(['member', 'admin', 'creator', 'duty']);
 if (!allowedRoles.has(role)) {
-  process.stdout.write(`[ccarmy repo-guard] CCARMY_PUSHER_ROLE 非法：${role}（允许 member/admin/creator/duty）→ 按最严的 member 处理\n`);
+  process.stdout.write(`[warmy repo-guard] WARMY_PUSHER_ROLE 非法：${role}（允许 member/admin/creator/duty）→ 按最严的 member 处理\n`);
 }
 
 const stdin = await readStdin();
@@ -75,8 +75,8 @@ const result = runPreReceive({
   stdin,
   role: (allowedRoles.has(role) ? role : 'member'),
   memberId,
-  assumeFastForward: process.env.CCARMY_GUARD_ASSUME_FF === '1',
-  allowForceByCreator: process.env.CCARMY_GUARD_ALLOW_CREATOR_FORCE === '1',
+  assumeFastForward: process.env.WARMY_GUARD_ASSUME_FF === '1',
+  allowForceByCreator: process.env.WARMY_GUARD_ALLOW_CREATOR_FORCE === '1',
 });
 
 for (const line of formatPreReceiveOutput(result)) process.stdout.write(line + '\n');

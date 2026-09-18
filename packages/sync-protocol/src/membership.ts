@@ -40,12 +40,12 @@ import {
 
 /* ────────────────────────────── 常量 / 类型 ────────────────────────────── */
 
-export const MEMBER_CERT_SCHEMA = 'ccarmy.member-cert.v1' as const;
-export const REVOCATION_LIST_SCHEMA = 'ccarmy.revocation-list.v1' as const;
+export const MEMBER_CERT_SCHEMA = 'warmy.member-cert.v1' as const;
+export const REVOCATION_LIST_SCHEMA = 'warmy.revocation-list.v1' as const;
 
 /** 域分隔：证书与吊销列表的签名域不同，跨用途不互串 */
-export const MEMBER_CERT_DOMAIN = 'ccarmy.member-cert.v1' as const;
-export const REVOCATION_LIST_DOMAIN = 'ccarmy.revocation-list.v1' as const;
+export const MEMBER_CERT_DOMAIN = 'warmy.member-cert.v1' as const;
+export const REVOCATION_LIST_DOMAIN = 'warmy.revocation-list.v1' as const;
 
 /**
  * 本地时间容差（与身份层 `DEFAULT_CLOCK_SKEW_MS` 同一个值）。

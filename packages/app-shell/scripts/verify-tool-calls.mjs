@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 工具调用验证（ADR 002 §9.4 待办 2）—— 可重跑：
  *   node packages/app-shell/scripts/verify-tool-calls.mjs [--no-electron]
  *
@@ -127,7 +127,7 @@ const toolMsgsOf = (body) => (body.messages || []).filter((m) => m.role === 'too
 // [0] 真记忆服务（MemoryClient 子进程）—— 工具执行器的真实后端
 // ══════════════════════════════════════════════════════════════
 console.log('[0] 真记忆服务子进程 + 真工具执行器（runMemoryTool）');
-const memAscii = path.join(os.tmpdir(), 'ccarmy-verify-tools-mem');
+const memAscii = path.join(os.tmpdir(), 'warmy-verify-tools-mem');
 fs.rmSync(memAscii, { recursive: true, force: true });
 fs.mkdirSync(path.join(memAscii, 'dist'), { recursive: true });
 const memPkg = path.join(repoRoot, 'packages', 'memory-os');
@@ -457,7 +457,7 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
 // ══════════════════════════════════════════════════════════════
 if (!SKIP_ELECTRON) {
   const electronPath = require('electron');
-  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-verify-tools-e2e-'));
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-verify-tools-e2e-'));
 
   /** 准备一份可启动的临时副本（与 verify-e2e 相同的最小 patch） */
   function makeCopy(tag, opts = {}) {
@@ -474,7 +474,7 @@ if (!SKIP_ELECTRON) {
       let seen = false;
       const out = [];
       for (const line of lines) {
-        if (line.includes("ipcMain.handle('ccarmy:clear-error'")) {
+        if (line.includes("ipcMain.handle('warmy:clear-error'")) {
           if (seen) continue;
           seen = true;
         }
@@ -483,7 +483,7 @@ if (!SKIP_ELECTRON) {
       fs.writeFileSync(mainFile, out.join('\n'), 'utf8');
     }
     // 工作区包 junction
-    const nmDir = path.join(appRoot, 'node_modules', '@ccarmy');
+    const nmDir = path.join(appRoot, 'node_modules', '@warmy');
     fs.mkdirSync(nmDir, { recursive: true });
     for (const pkg of ['contracts', 'providers', 'group-router', 'board', 'ccr-compressor', 'knowledge-base', 'sync-protocol', 'dsh-runtime', 'asset-governance']) {
       const target = path.join(repoRoot, 'packages', pkg);
@@ -494,13 +494,13 @@ if (!SKIP_ELECTRON) {
         /* 已存在 */
       }
     }
-    const distNm = path.join(appRoot, 'dist', 'node_modules', '@ccarmy');
+    const distNm = path.join(appRoot, 'dist', 'node_modules', '@warmy');
     fs.mkdirSync(distNm, { recursive: true });
     if (opts.brokenMemory) {
       // 故意坏掉的记忆服务：prepareMemoryRuntime 的第一候选是 <siteRoot>/memory-os/dist
       const broken = path.join(root, 'memory-os');
       fs.mkdirSync(path.join(broken, 'dist'), { recursive: true });
-      fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ name: '@ccarmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
+      fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ name: '@warmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
       fs.writeFileSync(
         path.join(broken, 'dist', 'ipc.js'),
         "process.stderr.write('memory service intentionally broken for degradation test\\n');\nprocess.exit(1);\n"
@@ -526,7 +526,7 @@ if (!SKIP_ELECTRON) {
     const child = spawn(electronPath, [mainFile, `--user-data-dir=${userData}`, '--remote-debugging-port=0'], {
       cwd: appRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { CCARM_NODE: bundledNode } : {}) },
+      env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) },
     });
     const logs = [];
     let devtoolsPort = 0;
@@ -588,14 +588,14 @@ if (!SKIP_ELECTRON) {
     const t3 = Date.now() + 45000;
     while (Date.now() < t3 && !ready) {
       try {
-        ready = await evaluate('(async () => { try { const r = await window.ccarmy.appInfo(); return !!(r && r.ok); } catch { return false; } })()');
+        ready = await evaluate('(async () => { try { const r = await window.warmy.appInfo(); return !!(r && r.ok); } catch { return false; } })()');
       } catch {
         /* 未就绪 */
       }
       if (!ready) await sleep(400);
     }
     const call = (api, ...args) =>
-      evaluate(`(async () => { try { return await window.ccarmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
+      evaluate(`(async () => { try { return await window.warmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
     return {
       child,
       call,
@@ -750,7 +750,7 @@ if (!SKIP_ELECTRON) {
     const audit = await app.call('auditLog', 200);
     const unavailable = (audit?.entries || []).find((e) => e.op === 'chat.tools.unavailable');
     check('[6] audit 记录不可用原因 memory-unavailable', unavailable?.detail?.reason === 'memory-unavailable', unavailable?.detail);
-    const bootLog = path.join(copy.userData, 'ccarmy-boot.log');
+    const bootLog = path.join(copy.userData, 'warmy-boot.log');
     if (fs.existsSync(bootLog)) {
       const lines = fs.readFileSync(bootLog, 'utf8').trim().split('\n').filter((l) => /memory|restore/i.test(l));
       for (const l of lines.slice(-4)) console.log('  boot: ' + l);

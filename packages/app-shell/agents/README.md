@@ -1,7 +1,7 @@
 # Agency Agents（UI 相关）
 
 来源：https://github.com/msitarzewski/agency-agents （MIT）
-本目录仅安装与 CCArmy 界面相关的角色，供实现与评审参考。
+本目录仅安装与 WArmy 界面相关的角色，供实现与评审参考。
 
 | 文件 | 用途 |
 |---|---|

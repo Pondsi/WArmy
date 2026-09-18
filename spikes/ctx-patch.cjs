@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 let h = fs.readFileSync(base + 'index.html', 'utf8');
 let c = fs.readFileSync(base + 'app.css', 'utf8');
@@ -91,11 +91,11 @@ if (!j.includes('function openContextMenu')) {
             }
             const ok = await uiConfirm(t('ctx.closeConfirm'));
             if (!ok) return;
-            await window.ccarmy.stopInstance(inst.id);
+            await window.warmy.stopInstance(inst.id);
             inst.status = 'stopped';
           } else {
             try {
-              await window.ccarmy.spawnInstance({ id: inst.id, name: inst.name, dutyEligible: true });
+              await window.warmy.spawnInstance({ id: inst.id, name: inst.name, dutyEligible: true });
               inst.status = 'running';
             } catch (e) {
               uiAlert(String(e.message || e));

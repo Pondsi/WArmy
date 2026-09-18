@@ -1,7 +1,7 @@
 /**
  * P7 资产治理：严格模式不注入持久资产；负反馈降权；生命周期扫描
  */
-import { AssetGovernor, type Asset } from '@ccarmy/asset-governance';
+import { AssetGovernor, type Asset } from '@warmy/asset-governance';
 
 let gov: AssetGovernor | null = null;
 

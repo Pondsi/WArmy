@@ -76,7 +76,7 @@ function check(id, name, expected, actual, pass, evidence) {
   return !!pass;
 }
 
-const scratch = path.join(os.tmpdir(), `ccarmy-spike08-${Date.now()}`);
+const scratch = path.join(os.tmpdir(), `warmy-spike08-${Date.now()}`);
 fs.mkdirSync(scratch, { recursive: true });
 const scratchBackups = path.join(scratch, 'backups');
 
@@ -159,7 +159,7 @@ const record = (id, name, expected, actual, pass, evidence) => {
 };
 
 // 3.1 行/记录校验
-const goodSpec = { ip: '127.0.0.1', hostname: 'ccarmy-spike08.local', comment: 'CCArmy spike-08 probe' };
+const goodSpec = { ip: '127.0.0.1', hostname: 'warmy-spike08.local', comment: 'WArmy spike-08 probe' };
 record('N-1', '合法记录通过校验', true, helper.validateHostEntrySpec(goodSpec).ok, helper.validateHostEntrySpec(goodSpec).ok);
 const badIp = helper.validateHostEntrySpec({ ip: '999.1.1.1', hostname: 'a.local' });
 record('N-2', '非法 IP 被拒', false, badIp.ok, !badIp.ok, badIp.reason);
@@ -174,7 +174,7 @@ record('N-6', '注入型主机名被拒（; / | / &）', false,
   ['a;b', 'a|b', 'a&b', 'a>b'].map((h) => helper.validateHostEntrySpec({ ip: '127.0.0.1', hostname: h }).ok));
 
 const rendered = helper.formatHostEntry(goodSpec);
-record('N-7', '渲染出的目标行格式正确', `127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe`, rendered, rendered === '127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe');
+record('N-7', '渲染出的目标行格式正确', `127.0.0.1 warmy-spike08.local # WArmy spike-08 probe`, rendered, rendered === '127.0.0.1 warmy-spike08.local # WArmy spike-08 probe');
 const selfParse = helper.analyzeHostsLine(rendered);
 record('N-8', '渲染结果能被自身解析器接受（不盲拼接）', 'entry', selfParse.kind, selfParse.kind === 'entry' && selfParse.ip === '127.0.0.1');
 
@@ -396,7 +396,7 @@ result.noHangSuite = hang;
 
 /* ───────── 5) 真 hosts 提权写入（非交互，观测并还原） ───────── */
 const hostsFile = helper.defaultHostsPath();
-const hostsSpec = { ip: '127.0.0.1', hostname: 'ccarmy-spike08.local', comment: 'CCArmy spike-08 helper probe (auto-removed)' };
+const hostsSpec = { ip: '127.0.0.1', hostname: 'warmy-spike08.local', comment: 'WArmy spike-08 helper probe (auto-removed)' };
 const hostsBaseline = helper.fingerprintFile(hostsFile, hostsSpec);
 let hostsStatBefore = null;
 try { hostsStatBefore = fs.statSync(hostsFile); } catch { /* noop */ }

@@ -12,7 +12,7 @@
  *       主分支保护 / 提案分支放行 / 非快进），含直接用 stdin 喂钩子的退出码
  *   [5] 租约：第二持有者被拒、过期后可获取、无租约写入被拒
  *
- * 依赖 dist（先 `pnpm --filter @ccarmy/app-shell build` 与 `--filter @ccarmy/sync-protocol build`）。
+ * 依赖 dist（先 `pnpm --filter @warmy/app-shell build` 与 `--filter @warmy/sync-protocol build`）。
  * 不联网要求：出站/公网回显若被网络策略挡住，只断言"如实降级"（不会因此判失败）。
  * 不碰用户机器上的全局 git config（临时仓库一律用 `-c user.*` 显式传作者）。
  */
@@ -69,7 +69,7 @@ import { ReplayGuard, ed25519RawFromSpkiDer, normalizeIdentity } from '../../syn
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const keep = process.argv.includes('--keep');
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-wiring-'));
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-wiring-'));
 const hookScript = path.join(selfDir, 'git-hooks', 'pre-receive.mjs');
 
 let pass = 0;
@@ -201,7 +201,7 @@ check('解锁后 signReady() === true（会话内免口令，私钥仍不出主�
 const gateOpen = requireSignableIdentity(idA.store);
 check('门控：解锁后 ok=true', gateOpen.ok === true && gateOpen.unlock?.signReady === true, gateOpen.unlock);
 
-const msg = Buffer.from('ccarmy-wiring-verify-message', 'utf8');
+const msg = Buffer.from('warmy-wiring-verify-message', 'utf8');
 const sig = await signerA.sign(msg);
 check('sign() 产 raw 64 字节 Ed25519 签名', Buffer.isBuffer(sig) && sig.length === 64, `${sig.length}B`);
 const privLoaded = idA.store.load();
@@ -251,8 +251,8 @@ check('视图的 previousCard 来自本机留存（就是刚记录的那张）',
 
 // 对端换证（本机侧记录；声明不携带任何联系方式）
 const fakeDecl = {
-  schema: 'ccarmy.identity.rotation.v1',
-  kind: 'ccarmy.identity.rotation',
+  schema: 'warmy.identity.rotation.v1',
+  kind: 'warmy.identity.rotation',
   version: 1,
   algo: 'Ed25519',
   oldFingerprint: String(infoB?.fingerprint),
@@ -512,7 +512,7 @@ check('NET_NOTES 只给 i18n key（主进程不拼句子）', Object.values(NET_
    ════════════════════════════════════════════════════════════════════════════ */
 section('4. pre-receive 钩子（真 git 仓库、真 push、真退出码）');
 
-const AUTHOR = ['-c', 'user.name=ccarmy-verify', '-c', 'user.email=verify@example.test'];
+const AUTHOR = ['-c', 'user.name=warmy-verify', '-c', 'user.email=verify@example.test'];
 const ZERO = '0'.repeat(40);
 
 const bare = path.join(tmpRoot, 'bare.git');
@@ -535,7 +535,7 @@ check('钩子安装 CLI 退出码 0', installRun.code === 0, installRun.stdout.t
 check('安装结果 ok=true 且给出 hookPath', installJson?.ok === true && !!installJson?.hookPath, installJson);
 check('钩子文件真的写到 <gitdir>/hooks/pre-receive', fs.existsSync(path.join(bare, 'hooks', 'pre-receive')));
 const installedHook = fs.readFileSync(path.join(bare, 'hooks', 'pre-receive'), 'utf8');
-check('钩子内容带受管标记（便于幂等识别）', installedHook.includes('CCARMY-REPO-GUARD-HOOK v1'), installedHook.split('\n')[1]);
+check('钩子内容带受管标记（便于幂等识别）', installedHook.includes('WARMY-REPO-GUARD-HOOK v1'), installedHook.split('\n')[1]);
 check('钩子内容是 sh 包装（exec "node" "pre-receive.mjs"）', installedHook.includes('exec "') && installedHook.includes('pre-receive.mjs'), installedHook.split('\n').pop());
 check('钩子包装脚本可生成（纯函数）', hookWrapperScript('/usr/bin/node', '/x/y.mjs').includes('exec "/usr/bin/node" "/x/y.mjs"'));
 check('findHookScript 能在 scripts/git-hooks 找到脚本', findHookScript(path.join(selfDir, '..')) === hookScript, findHookScript(path.join(selfDir, '..')));
@@ -597,7 +597,7 @@ function mkCraft(container) {
   };
   const commit = (tree, message, parent) => {
     seq += 1;
-    const args = ['-c', 'user.name=ccarmy-verify', '-c', 'user.email=verify@example.test', 'commit-tree', tree, '-m', message || `c${seq}`];
+    const args = ['-c', 'user.name=warmy-verify', '-c', 'user.email=verify@example.test', 'commit-tree', tree, '-m', message || `c${seq}`];
     if (parent) args.push('-p', parent);
     const r = raw(args, undefined);
     if (r.status !== 0) throw new Error(`commit-tree failed: ${r.stderr}`);
@@ -615,7 +615,7 @@ check('plumbing 在推送方仓库造出安全提交（真对象）', /^[0-9a-f]
 const nestedCommit = craftWork.commitWithFiles([{ path: 'a/.git/x', content: 'x\n' }], 'nested git dir');
 check('plumbing 能造出嵌套 a/.git/x 的真树（逐级建树）', /^[0-9a-f]{40}$/.test(nestedCommit), nestedCommit);
 
-const pushEnv = { CCARMY_PUSHER_ROLE: 'member' };
+const pushEnv = { WARMY_PUSHER_ROLE: 'member' };
 const push1 = git(work, ['push', bare, `${goodCommit}:refs/heads/proposals/ok`], { env: pushEnv });
 check('安全提交推到提案分支：放行（退出码 0）', push1.code === 0, (push1.stderr || '').trim().split('\n').filter(Boolean).slice(-1)[0]);
 check('放行时钩子打印 RESULT: pass', /RESULT: pass/.test(push1.stderr), /RESULT:.*/.exec(push1.stderr)?.[0]);
@@ -644,14 +644,14 @@ for (const c of dangerCases) {
 const mainPush = git(work, ['push', bare, `${goodCommit}:refs/heads/main`], { env: pushEnv });
 check('成员推 refs/heads/main 被拒（主分支保护）', mainPush.code !== 0 && /main-branch-protected/.test(mainPush.stderr), mainPush.code);
 check('主分支保护时给出可读原因（含提案分支提示）', /refs\/heads\/proposals\//.test(mainPush.stderr), (/\[ref\/[a-z-]+\][^\n]*/.exec(mainPush.stderr) || [''])[0].slice(0, 140));
-const creatorPush = git(work, ['push', bare, `${goodCommit}:refs/heads/main`], { env: { CCARMY_PUSHER_ROLE: 'creator' } });
+const creatorPush = git(work, ['push', bare, `${goodCommit}:refs/heads/main`], { env: { WARMY_PUSHER_ROLE: 'creator' } });
 check('creator 推 main 放行（角色确实被读进来了）', creatorPush.code === 0, (creatorPush.stderr || '').trim().split('\n').filter(Boolean).slice(-1)[0]);
 const mainAdvance = craftWork.commitWithFiles([{ path: 'ok.txt', content: 'hello again\n' }], 'advance main', goodCommit);
 const memberUpdate = git(work, ['push', bare, `${mainAdvance}:refs/heads/main`], { env: pushEnv });
 check('成员对已存在的 main 做更新（真正的新提交）仍被拒', memberUpdate.code !== 0 && /main-branch-protected/.test(memberUpdate.stderr), memberUpdate.code);
-const memberNamespace = git(work, ['push', bare, `${goodCommit}:refs/heads/members/m-verify/own`], { env: { CCARMY_PUSHER_ROLE: 'member', CCARMY_PUSHER_ID: 'm-verify' } });
+const memberNamespace = git(work, ['push', bare, `${goodCommit}:refs/heads/members/m-verify/own`], { env: { WARMY_PUSHER_ROLE: 'member', WARMY_PUSHER_ID: 'm-verify' } });
 check('成员可推自己的命名空间 refs/heads/members/<id>/**', memberNamespace.code === 0, (memberNamespace.stderr || '').trim().split('\n').filter(Boolean).slice(-1)[0]);
-const otherNamespace = git(work, ['push', bare, `${goodCommit}:refs/heads/members/someone-else/own`], { env: { CCARMY_PUSHER_ROLE: 'member', CCARMY_PUSHER_ID: 'm-verify' } });
+const otherNamespace = git(work, ['push', bare, `${goodCommit}:refs/heads/members/someone-else/own`], { env: { WARMY_PUSHER_ROLE: 'member', WARMY_PUSHER_ID: 'm-verify' } });
 check('成员推别人的命名空间被拒（成员 id 生效）', otherNamespace.code !== 0 && /ref-not-whitelisted/.test(otherNamespace.stderr), otherNamespace.code);
 
 const secondCommit = craftWork.commitWithFiles([{ path: 'ok2.txt', content: 'second\n' }], 'unrelated root');
@@ -672,8 +672,8 @@ const stdinMain = hookViaStdin(`${ZERO} ${goodCommit} refs/heads/main`);
 check('stdin 调用：成员推 main 退出码非 0', stdinMain.code !== 0 && /main-branch-protected/.test(stdinMain.stdout), `exit=${stdinMain.code}`);
 const stdinEmpty = hookViaStdin('');
 check('stdin 为空 → 整批拒绝（fail-closed，退出码非 0）', stdinEmpty.code !== 0 && /FATAL/.test(stdinEmpty.stdout), stdinEmpty.stdout.trim().split('\n')[1]);
-const stdinBadRole = hookViaStdin(`${ZERO} ${goodCommit} refs/heads/proposals/stdin-role`, { CCARMY_PUSHER_ROLE: 'superuser' });
-check('非法角色按最严的 member 处理（仍能正常判定）', stdinBadRole.code === 0 && /CCARMY_PUSHER_ROLE/.test(stdinBadRole.stdout), /CCARMY_PUSHER_ROLE[^\n]*/.exec(stdinBadRole.stdout)?.[0]?.slice(0, 90));
+const stdinBadRole = hookViaStdin(`${ZERO} ${goodCommit} refs/heads/proposals/stdin-role`, { WARMY_PUSHER_ROLE: 'superuser' });
+check('非法角色按最严的 member 处理（仍能正常判定）', stdinBadRole.code === 0 && /WARMY_PUSHER_ROLE/.test(stdinBadRole.stdout), /WARMY_PUSHER_ROLE[^\n]*/.exec(stdinBadRole.stdout)?.[0]?.slice(0, 90));
 
 // 纯函数层：同一实现的直接调用（证明 CLI 只是入口）
 const gitRunner = createGitRunner(bare);
@@ -718,7 +718,8 @@ const directPaths = validatePushPaths([{ path: '.git/config', mode: '100644' }],
 check('validatePushPaths 直调同样拒 .git/config', directPaths.allowed === false && directPaths.rejected[0].code === 'git-config', directPaths.rejected.map((r) => r.code));
 check('危险路径用例数 ≥ 5（本节覆盖度）', dangerCases.length >= 5, dangerCases.length);
 check('钩子没有改动全局 git config（只写目标仓库自己的 hooks/）', !/hooksPath/.test(git(work, ['config', '--global', '--get', 'core.hooksPath']).stdout) || git(work, ['config', '--global', '--get', 'core.hooksPath']).code !== 0, git(work, ['config', '--global', '--get', 'core.hooksPath']).stdout.trim() || '(unset)');
-/* ════════════════════════════════════════════════════════════════════════════
+
+/* ════════════════════════════════════════════════════════════════════════════
    [6] 身份变更横幅（identityChanges 的数据形状）+ IPC 接线一致性
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -744,8 +745,8 @@ check('没有 ack 时条目不带 ack 字段', selfEntry?.ack === undefined);
 
 // 对端换证：本机留存的 old/new 才是真相，声明里的 oldFingerprint **不得**被采用
 const lieDecl = {
-  schema: 'ccarmy.identity.rotation.v1',
-  kind: 'ccarmy.identity.rotation',
+  schema: 'warmy.identity.rotation.v1',
+  kind: 'warmy.identity.rotation',
   version: 1,
   algo: 'Ed25519',
   oldFingerprint: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ', // 攻击者可控数据：编一个"旧指纹"
@@ -779,36 +780,36 @@ const mainSrc = fs.readFileSync(path.join(selfDir, '..', 'src', 'electron-main.t
 const preloadSrc = fs.readFileSync(path.join(selfDir, '..', 'src', 'preload.cjs'), 'utf8');
 
 const CHANNELS = [
-  'ccarmy:identity-changes',
-  'ccarmy:identity-change-ack',
-  'ccarmy:identity-peers',
-  'ccarmy:net-status',
-  'ccarmy:net-probe',
-  'ccarmy:net-local-address',
-  'ccarmy:net-members-presence',
-  'ccarmy:net-mesh-enable',
-  'ccarmy:net-mesh-disable',
-  'ccarmy:lan-start',
-  'ccarmy:lan-stop',
-  'ccarmy:lan-send',
-  'ccarmy:lan-inbox',
-  'ccarmy:lan-status',
-  'ccarmy:lan-dual-smoke',
-  'ccarmy:mesh-start',
-  'ccarmy:mesh-stop',
-  'ccarmy:mesh-broadcast',
-  'ccarmy:mesh-inbox',
-  'ccarmy:mesh-status',
-  'ccarmy:repo-guard-check-ref',
-  'ccarmy:repo-guard-check-paths',
-  'ccarmy:repo-guard-pre-receive',
-  'ccarmy:repo-guard-install-hooks',
-  'ccarmy:lease-acquire',
-  'ccarmy:lease-release',
-  'ccarmy:lease-list',
-  'ccarmy:lease-check',
+  'warmy:identity-changes',
+  'warmy:identity-change-ack',
+  'warmy:identity-peers',
+  'warmy:net-status',
+  'warmy:net-probe',
+  'warmy:net-local-address',
+  'warmy:net-members-presence',
+  'warmy:net-mesh-enable',
+  'warmy:net-mesh-disable',
+  'warmy:lan-start',
+  'warmy:lan-stop',
+  'warmy:lan-send',
+  'warmy:lan-inbox',
+  'warmy:lan-status',
+  'warmy:lan-dual-smoke',
+  'warmy:mesh-start',
+  'warmy:mesh-stop',
+  'warmy:mesh-broadcast',
+  'warmy:mesh-inbox',
+  'warmy:mesh-status',
+  'warmy:repo-guard-check-ref',
+  'warmy:repo-guard-check-paths',
+  'warmy:repo-guard-pre-receive',
+  'warmy:repo-guard-install-hooks',
+  'warmy:lease-acquire',
+  'warmy:lease-release',
+  'warmy:lease-list',
+  'warmy:lease-check',
 ];
-// handleIpc 允许换行写法（handleIpc(\n  'ccarmy:x', ...）→ 只要通道字面量出现在主进程即可
+// handleIpc 允许换行写法（handleIpc(\n  'warmy:x', ...）→ 只要通道字面量出现在主进程即可
 const missingMain = CHANNELS.filter((c) => !mainSrc.includes(`'${c}'`));
 check('主进程至少注册了 28 个 handleIpc 调用', (mainSrc.match(/handleIpc\(/g) ?? []).length >= 28, (mainSrc.match(/handleIpc\(/g) ?? []).length);
 const missingPreload = CHANNELS.filter((c) => !preloadSrc.includes(`'${c}'`));
@@ -817,7 +818,7 @@ check('全部 28 条通道都在 preload 白名单里（否则渲染进程拿不
 
 const UI_API = ['identityChanges', 'identityChangeAcknowledge', 'identityPeers', 'netStatus', 'netProbe', 'netLocalAddress', 'netMembersPresence', 'meshEnable', 'meshDisable'];
 const missingApi = UI_API.filter((n) => !new RegExp(`\\b${n}: `).test(preloadSrc));
-check('UI 调用的 9 个 window.ccarmy 函数名都在 preload 里', missingApi.length === 0, missingApi);
+check('UI 调用的 9 个 window.warmy 函数名都在 preload 里', missingApi.length === 0, missingApi);
 check('UI 契约里的旧 API 一个都没删（meshStart/meshStop/meshStatus）', ['meshStart', 'meshStop', 'meshStatus', 'lanStart', 'lanDualSmoke'].every((n) => new RegExp(`\\b${n}: `).test(preloadSrc)));
 const mainNoComments = mainSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\/\/.*$/gm, '');
 check(

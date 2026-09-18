@@ -1,0 +1,89 @@
+# Sponsors
+
+> 复用模板：把 `发布规范\assets\alipay.jpg` 与 `wechat-pay.jpg` 复制到项目 `sponsors/` 目录。
+> 占位符 `<PROJECT>` 替换为项目名。
+
+---
+
+## English
+
+If you find `<PROJECT>` helpful, consider supporting its development. Your support helps maintain and improve this project. Thank you!
+
+- **PayPal**: https://paypal.me/pondsi
+- **WeChat Pay**: <img src="sponsors/wechat-pay.jpg" width="200" alt="WeChat Pay QR Code">
+- **Alipay**: <img src="sponsors/alipay.jpg" width="200" alt="Alipay QR Code">
+
+## 简体中文
+
+如果 `<PROJECT>` 对你有帮助，欢迎支持它的持续开发。你的支持会让这个项目维护得更好。谢谢！
+
+- **PayPal**：https://paypal.me/pondsi
+- **微信支付**：<img src="sponsors/wechat-pay.jpg" width="200" alt="微信支付收款码">
+- **支付宝**：<img src="sponsors/alipay.jpg" width="200" alt="支付宝收款码">
+
+## 繁體中文
+
+如果 `<PROJECT>` 對你有幫助，歡迎支持它的持續開發。你的支持會讓這個專案維護得更好。謝謝！
+
+- **PayPal**：https://paypal.me/pondsi
+- **微信支付**：<img src="sponsors/wechat-pay.jpg" width="200" alt="微信支付收款碼">
+- **支付寶**：<img src="sponsors/alipay.jpg" width="200" alt="支付寶收款碼">
+
+## 한국어
+
+`<PROJECT>`가 도움이 되셨다면 개발을 후원해 주시기 바랍니다. 여러분의 후원은 이 프로젝트를 더 잘 유지보수하는 데 힘이 됩니다. 감사합니다!
+
+- **PayPal**: https://paypal.me/pondsi
+- **위챗페이**: <img src="sponsors/wechat-pay.jpg" width="200" alt="위챗페이 QR 코드">
+- **알리페이**: <img src="sponsors/alipay.jpg" width="200" alt="알리페이 QR 코드">
+
+## Русский
+
+Если `<PROJECT>` оказался полезным, вы можете поддержать его разработку. Ваша поддержка помогает поддерживать и улучшать проект. Спасибо!
+
+- **PayPal**: https://paypal.me/pondsi
+- **WeChat Pay**: <img src="sponsors/wechat-pay.jpg" width="200" alt="QR-код WeChat Pay">
+- **Alipay**: <img src="sponsors/alipay.jpg" width="200" alt="QR-код Alipay">
+
+## 日本語
+
+`<PROJECT>` がお役に立てば、開発のご支援をいただけると幸いです。皆さまのご支援がこのプロジェクトの維持と改善につながります。ありがとうございます！
+
+- **PayPal**: https://paypal.me/pondsi
+- **WeChat Pay**: <img src="sponsors/wechat-pay.jpg" width="200" alt="WeChat Pay QR コード">
+- **Alipay**: <img src="sponsors/alipay.jpg" width="200" alt="Alipay QR コード">
+
+## Español
+
+Si `<PROJECT>` te resulta útil, considera apoyar su desarrollo. Tu apoyo ayuda a mantener y mejorar este proyecto. ¡Gracias!
+
+- **PayPal**: https://paypal.me/pondsi
+- **WeChat Pay**: <img src="sponsors/wechat-pay.jpg" width="200" alt="Código QR de WeChat Pay">
+- **Alipay**: <img src="sponsors/alipay.jpg" width="200" alt="Código QR de Alipay">
+
+## Français
+
+Si `<PROJECT>` vous est utile, vous pouvez soutenir son développement. Votre soutien aide à maintenir et à améliorer ce projet. Merci !
+
+- **PayPal** : https://paypal.me/pondsi
+- **WeChat Pay** : <img src="sponsors/wechat-pay.jpg" width="200" alt="Code QR WeChat Pay">
+- **Alipay** : <img src="sponsors/alipay.jpg" width="200" alt="Code QR Alipay">
+
+---
+
+## Other Ways to Support / 其他支持方式
+
+- ⭐ Star this repo — it helps others discover `<PROJECT>`
+- 🐛 Report issues or suggest features
+- 🔧 Submit patches or improvements
+- 📣 Share with friends and colleagues
+
+Thank you for your support! — Pondsi
+
+<!-- SIGNATURE: list ONLY the AI models that actually participated in THIS project.
+     If none participated, write just "Pondsi". Ask the owner if unsure. -->
+Pondsi (+<model1> +<model2> +<model3>) — automatically committed by OpenClaw
+
+---
+
+Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop

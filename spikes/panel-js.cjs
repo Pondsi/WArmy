@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 
 // ── 1) 进度折叠切换 ──
@@ -41,7 +41,7 @@ if (!j.includes('progress-toggle')) {
       timer = setTimeout(async () => {
         const q = inp.value.trim();
         if (!q) { $('search-popup-results').textContent = ''; return; }
-        const r = await window.ccarmy.searchMessages(q).catch(() => null);
+        const r = await window.warmy.searchMessages(q).catch(() => null);
         const hits = r?.hits || [];
         $('search-popup-results').innerHTML = hits.length
           ? hits.map((x) => '<div style="padding:4px 0;border-bottom:1px solid var(--line)">' + escapeHtml(x.snippet) + '</div>').join('')
@@ -69,7 +69,7 @@ if (!j.includes('progress-toggle')) {
     ok.onclick = async () => {
       if (!state.selectedChat) { root.classList.add('hidden'); return; }
       const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
-      const r = await window.ccarmy.exportSession({
+      const r = await window.warmy.exportSession({
         title: state.selectedChat.name,
         messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
       });
@@ -94,16 +94,16 @@ j = j.replace(
   });
   $('mi-directed')?.addEventListener('change', async () => {
     if (!state.selectedChat) return;
-    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: true }).catch(() => {});
+    await window.warmy.groupDirected({ groupId: state.selectedChat.id, directed: true }).catch(() => {});
   });
   $('mi-open')?.addEventListener('click', () => {
     if (!state.selectedChat) return;
-    window.ccarmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind });
+    window.warmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind });
   });
   $('mi-export')?.addEventListener('click', async () => {
     if (!state.selectedChat) return;
     const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
-    const r = await window.ccarmy.exportSession({
+    const r = await window.warmy.exportSession({
       title: state.selectedChat.name,
       messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
     });
@@ -115,13 +115,13 @@ j = j.replace(
   });
   $('mi-directed')?.addEventListener('change', async (e) => {
     if (!state.selectedChat) return;
-    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: e.target.checked }).catch(() => {});
+    await window.warmy.groupDirected({ groupId: state.selectedChat.id, directed: e.target.checked }).catch(() => {});
   });
   $('mi-open')?.addEventListener('click', () => {
     $('more-menu')?.classList.add('hidden');
     if (!state.selectedChat) return;
     // 子窗口：只有聊天+右栏
-    window.ccarmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind, mode: 'sub' });
+    window.warmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind, mode: 'sub' });
   });
   $('mi-export')?.addEventListener('click', () => {
     $('more-menu')?.classList.add('hidden');

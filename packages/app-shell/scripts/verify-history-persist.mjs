@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 会话历史持久化验证（ADR 002 §9.4 待办 4 / 不变量 #5）—— 可重跑：
  *   node packages/app-shell/scripts/verify-history-persist.mjs [--no-electron]
  *
@@ -92,7 +92,7 @@ if (SKIP_ELECTRON) {
 // Electron 脚手架（与 verify-e2e 相同的临时副本 + CDP 客户端）
 // ══════════════════════════════════════════════════════════════
 const electronPath = require('electron');
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-verify-persist-'));
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-verify-persist-'));
 
 function makeCopy(tag, opts = {}) {
   const root = path.join(tmpRoot, tag);
@@ -108,7 +108,7 @@ function makeCopy(tag, opts = {}) {
     let seen = false;
     const out = [];
     for (const line of lines) {
-      if (line.includes("ipcMain.handle('ccarmy:clear-error'")) {
+      if (line.includes("ipcMain.handle('warmy:clear-error'")) {
         if (seen) continue;
         seen = true;
       }
@@ -116,7 +116,7 @@ function makeCopy(tag, opts = {}) {
     }
     fs.writeFileSync(mainFile, out.join('\n'), 'utf8');
   }
-  const nmDir = path.join(appRoot, 'node_modules', '@ccarmy');
+  const nmDir = path.join(appRoot, 'node_modules', '@warmy');
   fs.mkdirSync(nmDir, { recursive: true });
   for (const pkg of ['contracts', 'providers', 'group-router', 'board', 'ccr-compressor', 'knowledge-base', 'sync-protocol', 'dsh-runtime', 'asset-governance']) {
     const target = path.join(repoRoot, 'packages', pkg);
@@ -127,12 +127,12 @@ function makeCopy(tag, opts = {}) {
       /* 已存在 */
     }
   }
-  const distNm = path.join(appRoot, 'dist', 'node_modules', '@ccarmy');
+  const distNm = path.join(appRoot, 'dist', 'node_modules', '@warmy');
   fs.mkdirSync(distNm, { recursive: true });
   if (opts.brokenMemory) {
     const broken = path.join(root, 'memory-os');
     fs.mkdirSync(path.join(broken, 'dist'), { recursive: true });
-    fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ name: '@ccarmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
+    fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ name: '@warmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
     fs.writeFileSync(path.join(broken, 'dist', 'ipc.js'), "process.stderr.write('broken memory (degradation test)\\n');\nprocess.exit(1);\n");
   } else {
     for (const dir of [distNm, nmDir]) {
@@ -152,7 +152,7 @@ async function launch({ appRoot, userData, mainFile }, tag) {
   const child = spawn(electronPath, [mainFile, `--user-data-dir=${userData}`, '--remote-debugging-port=0'], {
     cwd: appRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { CCARM_NODE: bundledNode } : {}) },
+    env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) },
   });
   const logs = [];
   let devtoolsPort = 0;
@@ -217,14 +217,14 @@ async function launch({ appRoot, userData, mainFile }, tag) {
   const t3 = Date.now() + 45000;
   while (Date.now() < t3 && !ready) {
     try {
-      ready = await evaluate('(async () => { try { const r = await window.ccarmy.appInfo(); return !!(r && r.ok); } catch { return false; } })()');
+      ready = await evaluate('(async () => { try { const r = await window.warmy.appInfo(); return !!(r && r.ok); } catch { return false; } })()');
     } catch {
       /* 未就绪 */
     }
     if (!ready) await sleep(400);
   }
   const call = (api, ...args) =>
-    evaluate(`(async () => { try { return await window.ccarmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
+    evaluate(`(async () => { try { return await window.warmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
   return {
     child,
     ready,
@@ -479,7 +479,7 @@ console.log('\n[3] 记忆服务不可用（故意坏掉）→ 降级：对话仍
     (logRes?.entries || []).map((e) => ({ seq: e.seq, role: e.role, recordId: e.recordId }))
   );
   check('[3] 手动触发重建也如实失败（幂等、不抛错）', (await app3.call('chatLogRestore'))?.ok === false);
-  const bootLog = path.join(copy3.userData, 'ccarmy-boot.log');
+  const bootLog = path.join(copy3.userData, 'warmy-boot.log');
   if (fs.existsSync(bootLog)) {
     const lines = fs.readFileSync(bootLog, 'utf8').trim().split('\n').filter((l) => /memory|restore/i.test(l));
     for (const l of lines.slice(-4)) console.log('  boot: ' + l);

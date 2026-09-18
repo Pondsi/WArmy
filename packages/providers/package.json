@@ -1,5 +1,5 @@
 {
-  "name": "@ccarmy/providers",
+  "name": "@warmy/providers",
   "version": "0.1.0",
   "private": true,
   "description": "多协议模型 Provider：OpenAI 兼容 / Anthropic / Ollama",
@@ -18,6 +18,6 @@
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@ccarmy/contracts": "workspace:*"
+    "@warmy/contracts": "workspace:*"
   }
 }

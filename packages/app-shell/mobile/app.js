@@ -1,4 +1,4 @@
-/* CCArmy 移动端 — 单列 + 底部 Tab + 下钻返回
+/* WArmy 移动端 — 单列 + 底部 Tab + 下钻返回
    规则：
    - 一级导航只走底部 Tab（会话 / 牛马 / 看板 / 我）
    - 二级、三级页面从右侧滑入，顶部一定有「‹ 返回」
@@ -13,14 +13,14 @@
   const I18N = window.__I18N__ || { locale: 'zh-CN', strings: {} };
   const D = {
     'brand.name': '无限牛马',
-    'brand.sub': 'CCArmy（Corporate Cattle Army）',
+    'brand.sub': 'WArmy（Workhorse Army）',
     'tab.sessions': '会话', 'tab.cattle': '牛马', 'tab.board': '看板', 'tab.me': '我',
     'sessions.title': '会话',
     'cattle.title': '牛马',
     'board.title': '看板', 'board.running': '进行中', 'board.done': '今日完成',
     'board.instances': '运行实例', 'board.queue': '排队', 'board.progress': '会话进展',
     'me.title': '我', 'me.settings': '设置', 'me.appearance': '外观', 'me.provider': '模型供应商',
-    'me.smtp': '邮箱 SMTP', 'me.mesh': '多节点组网', 'me.about': '关于',
+    'me.smtp': '邮箱 SMTP', 'me.mesh': '组网', 'me.about': '关于',
     'me.language': '语言', 'me.theme': '主题', 'me.accent': '主题色',
     'me.light': '浅色', 'me.dark': '深色', 'me.system': '跟随系统',
     'me.version': '版本', 'me.checkUpdate': '检查更新', 'me.opensource': '开源信息',
@@ -44,8 +44,8 @@
     'smtp.settings': '邮箱 SMTP 设置', 'smtp.hostLabel': 'SMTP 服务器', 'smtp.portLabel': '端口', 'smtp.userLabel': '用户名',
     'smtp.passLabel': '授权码', 'smtp.passPlaceholder': '输入授权码', 'smtp.fromLabel': '发件人名称', 'smtp.fromPlaceholder': '无限牛马通知', 'smtp.verifyBtn': '验证并保存',
     'notify.title': '邮件通知', 'notify.done': '完成通知', 'notify.req': '请求通知', 'notify.err': '错误通知',
-    'mesh.portLabel': '监听端口', 'mesh.stateLabel': '状态', 'mesh.peers': '已连接节点', 'mesh.start': '启动组网', 'mesh.stop': '停止组网',
-    'mesh.stopped': '未启动', 'mesh.invite': '邀请加入', 'mesh.genInvite': '生成邀请码', 'mesh.scanJoin': '扫码加入',
+    'mesh.portLabel': '监听端口', 'mesh.stateLabel': '组网开关', 'mesh.peers': '已知节点', 'mesh.start': '打开组网', 'mesh.stop': '关闭组网',
+    'mesh.stopped': '已关闭', 'mesh.invite': '邀请加入', 'mesh.genInvite': '生成邀请码', 'mesh.scanJoin': '扫码加入',
     'about.license': '许可证',
     'msg.initFailed': '移动端初始化失败：',
     'preview.settingsNotice': '以下设置仅为本机预览：改动不会保存，也不会同步到桌面端。', 'msg.smtpDesktopOnly': 'SMTP 验证需要桌面端配合，手机端仅作界面预览。', 'prompt.providerName': '供应商名称',
@@ -140,7 +140,7 @@
       { name: 'Ollama', url: '127.0.0.1:11434', key: '', configured: false },
     ],
     smtp: { host: '', port: '465', user: '', pass: '', from: '' },
-    mesh: { port: 7788, running: false, peers: 0 },
+    mesh: { port: 59599, running: false, peers: 0 },
     notifyDone: true,
     notifyReq: true,
     notifyErr: true,
@@ -324,6 +324,23 @@
       '</div><div class="hint">' + esc(t('board.readonlyHint')) + '</div></div>';
   }
 
+  /**
+   * 组网端口（真值来自 state.mesh，默认与桌面端 settings-store 的
+   * CCAARMY_DEFAULT_NET_PORT 对齐 = 59599）。
+   * ⚠️ 旧的 7788 是**已退休**的约定端口，不许再出现在移动端；
+   * 端口在桌面端「设置 → 组网」可改，手机端只是外观预览（不假装在监听）。
+   */
+  const MESH_DEFAULT_PORT = 59599;
+  function meshPort() {
+    const p = Number((state.mesh && state.mesh.port) || 0);
+    return Number.isFinite(p) && p > 0 ? p : MESH_DEFAULT_PORT;
+  }
+  /** 组网开关文案（与桌面端同一套键：net.switchOn/net.switchOff） */
+  function meshSwitchText() {
+    const on = !!(state.mesh && state.mesh.running);
+    return String(on ? t('net.switchOn') : t('net.switchOff')).replace('{port}', String(meshPort()));
+  }
+
   function renderMe() {
     return barHtml(t('me.title')) +
       '<div class="body">' +
@@ -334,13 +351,12 @@
       cellHtml(t('me.appearance'), '', 'set-appearance') +
       cellHtml(t('me.provider'), esc(t('provider.configured')), 'set-provider') +
       cellHtml(t('me.smtp'), esc(t('me.notConfiguredHint')), 'set-smtp') +
-      cellHtml(t('me.mesh'), String(state.mesh.port), 'set-mesh') +
+      cellHtml(t('me.mesh'), String(meshPort()), 'set-mesh') +
       cellHtml(t('me.about'), '0.1.0', 'set-about') +
       '</div>' +
       '<div class="card"><div class="card-title">' + esc(t('me.settings')) + '</div>' +
       cellHtml(t('me.models'), esc(t('me.desktopOnly')), 'act-models') +
       cellHtml(t('me.skills'), esc(t('me.desktopOnly')), 'act-skills') +
-      cellHtml(t('me.diagnostics'), esc(t('me.desktopOnly')), 'act-diag') +
       cellHtml(t('me.cleanup'), esc(t('me.desktopOnly')), 'act-cleanup') +
       cellHtml(t('me.updates'), esc(t('me.desktopOnly')), 'act-updates') +
       '</div></div>';
@@ -553,7 +569,8 @@
   }
 
   function openDesktopOnly(kind) {
-    const labelKey = { models: 'me.models', skills: 'me.skills', diag: 'me.diagnostics', cleanup: 'me.cleanup', updates: 'me.updates' }[kind] || 'me.settings';
+    // 'diag'（卡顿自检）已退休：桌面端入口整块移除，移动端这条悬空入口也随之删掉。
+    const labelKey = { models: 'me.models', skills: 'me.skills', cleanup: 'me.cleanup', updates: 'me.updates' }[kind] || 'me.settings';
     const inner = barHtml(t(labelKey), '', { back: true }) +
       '<div class="body"><div class="notice">' + esc(t('me.desktopOnly')) + '</div>' +
       '<div class="card">' + cellHtml(t(labelKey), esc(t('me.desktopOnly'))) + '</div></div>';
@@ -606,12 +623,14 @@
         cellHtml(t('notify.req'), state.notifyReq ? '✓' : '', 'notify-req') +
         cellHtml(t('notify.err'), state.notifyErr ? '✓' : '', 'notify-err') + '</div>';
     } else if (group === 'mesh') {
-      const mesh = state.mesh || { port: 7788, running: false, peers: 0 };
-      body = '<div class="card"><div class="card-title">' + esc(t('me.mesh')) + '</div>' +
-        cellHtml(t('mesh.portLabel'), String(mesh.port)) +
-        cellHtml(t('mesh.stateLabel'), mesh.running ? t('inst.status.running') : t('mesh.stopped')) +
+      // 组网（新概念）：沿用桌面端的键与语义 —— 组网开关 + 监听端口 + 已知节点 + 邀请入口。
+      // 旧「内网同步 / 多节点组网」块已退休：这里不再有 mesh.addPeer/remove/broadcast 那套多节点面板文案。
+      const mesh = state.mesh || { port: MESH_DEFAULT_PORT, running: false, peers: 0 };
+      body = '<div class="card"><div class="card-title">' + esc(t('mesh.title')) + '</div>' +
+        cellHtml(t('mesh.portLabel'), String(meshPort())) +
+        cellHtml(t('mesh.stateLabel'), esc(meshSwitchText())) +
         cellHtml(t('mesh.peers'), String(mesh.peers)) +
-        '<div style="padding:10px 14px 12px"><button data-act="toggle-mesh" style="width:100%;padding:10px;border:none;border-radius:8px;background:' + (mesh.running ? 'var(--danger)' : 'var(--accent)') + ';color:#fff;font:inherit;cursor:pointer">' + (mesh.running ? t('mesh.stop') : t('mesh.start')) + '</button></div>' +
+        '<div style="padding:10px 14px 12px"><button data-act="toggle-mesh" style="width:100%;padding:10px;border:none;border-radius:8px;background:' + (mesh.running ? 'var(--danger)' : 'var(--accent)') + ';color:#fff;font:inherit;cursor:pointer">' + (mesh.running ? esc(t('mesh.stop')) : esc(t('mesh.start'))) + '</button></div>' +
         '</div>' +
         '<div class="card"><div class="card-title">' + esc(t('mesh.invite')) + '</div>' +
         cellHtml(t('mesh.genInvite'), '', 'gen-invite') +

@@ -1,5 +1,5 @@
 /**
- * @ccarmy/asset-governance — 六分类 × 四层作用域 × 强/弱/背景 × 生命周期
+ * @warmy/asset-governance — 六分类 × 四层作用域 × 强/弱/背景 × 生命周期
  */
 import fs from 'node:fs';
 import path from 'node:path';

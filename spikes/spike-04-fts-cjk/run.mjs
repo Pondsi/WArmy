@@ -10,7 +10,7 @@ import fs from 'node:fs';
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
 
-const dbPath = path.join(os.tmpdir(), `ccarmy-spike4-${Date.now()}.db`);
+const dbPath = path.join(os.tmpdir(), `warmy-spike4-${Date.now()}.db`);
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 
@@ -39,7 +39,7 @@ const samples = [
   { id: 3, body: '进度报告已归档', kind: 'cjk' },
   { id: 4, body: '测试中文分词能力', kind: 'cjk' },
   { id: 5, body: 'error code EPIPE on socket', kind: 'ascii' },
-  { id: 6, body: 'path C:\\Users\\p\\CCArmy\\package.json', kind: 'ascii' },
+  { id: 6, body: 'path C:\\Users\\p\\WArmy\\package.json', kind: 'ascii' },
   { id: 7, body: 'better-sqlite3 version 13.0.3', kind: 'ascii' },
   { id: 8, body: '值班者状态机与队列编排', kind: 'cjk' },
   { id: 9, body: '马尔可夫毯上下文包', kind: 'cjk' },
@@ -108,7 +108,7 @@ const cases = [
   { q: 'IPC_DEAD', expectIds: [14], label: 'ascii-IPC_DEAD' },
   { q: 'better-sqlite3', expectIds: [7], label: 'ascii-hyphen-pkg' },
   { q: 'package.json', expectIds: [6], label: 'ascii-path-leaf' },
-  { q: 'CCArmy', expectIds: [6], label: 'ascii-path-seg' },
+  { q: 'WArmy', expectIds: [6], label: 'ascii-path-seg' },
 ];
 
 let passCount = 0;

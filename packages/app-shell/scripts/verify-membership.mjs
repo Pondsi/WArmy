@@ -21,7 +21,7 @@
  *  [13] 并发吊销不丢更新（读→签名→落盘 串行化；并发窗口真的存在过）
  *  [14] 阳性对照：去掉 runExclusive 就必须复现丢更新（证明 [13] 是锁在起作用）
  *
- * 依赖 dist（先 `pnpm --filter @ccarmy/sync-protocol build` 与 `--filter @ccarmy/app-shell build`）。
+ * 依赖 dist（先 `pnpm --filter @warmy/sync-protocol build` 与 `--filter @warmy/app-shell build`）。
  * 本脚本不联网、不起 Electron；用到的一次性口令只写进 %TEMP% 下的抛弃身份。
  */
 import fs from 'node:fs';
@@ -85,7 +85,7 @@ import {
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const keep = process.argv.includes('--keep');
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-membership-'));
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-membership-'));
 /** 一次性口令：只用于 %TEMP% 下的抛弃身份，绝不进仓库 */
 const PASS = 'membership-verify-ephemeral';
 
@@ -164,9 +164,9 @@ console.log(`node: ${process.execPath}`);
 
 section('0. 常量与落盘位置（容差必须复用身份层的 DEFAULT_CLOCK_SKEW_MS）');
 
-check('MEMBER_CERT_SCHEMA === "ccarmy.member-cert.v1"', MEMBER_CERT_SCHEMA === 'ccarmy.member-cert.v1', MEMBER_CERT_SCHEMA);
-check('REVOCATION_LIST_SCHEMA === "ccarmy.revocation-list.v1"', REVOCATION_LIST_SCHEMA === 'ccarmy.revocation-list.v1', REVOCATION_LIST_SCHEMA);
-check('MEMBERSHIP_FILE_SCHEMA 是独立的文件 schema', MEMBERSHIP_FILE_SCHEMA === 'ccarmy.membership.file.v1', MEMBERSHIP_FILE_SCHEMA);
+check('MEMBER_CERT_SCHEMA === "warmy.member-cert.v1"', MEMBER_CERT_SCHEMA === 'warmy.member-cert.v1', MEMBER_CERT_SCHEMA);
+check('REVOCATION_LIST_SCHEMA === "warmy.revocation-list.v1"', REVOCATION_LIST_SCHEMA === 'warmy.revocation-list.v1', REVOCATION_LIST_SCHEMA);
+check('MEMBERSHIP_FILE_SCHEMA 是独立的文件 schema', MEMBERSHIP_FILE_SCHEMA === 'warmy.membership.file.v1', MEMBERSHIP_FILE_SCHEMA);
 check(
   '本地时钟容差复用身份层 DEFAULT_CLOCK_SKEW_MS（同一个值）',
   MEMBERSHIP_CLOCK_SKEW_MS === DEFAULT_CLOCK_SKEW_MS,
@@ -409,10 +409,10 @@ check('MembershipStore.putCertificate 拒收攻击者签的证书（stored=false
 })(), creatorMembership.putCertificate(evilSignedForB, { expectIssuerFingerprint: infoCreator.fingerprint }).code);
 check('拒收后落盘里没有这张证书', readJson(membershipFileFor(creator.store)).groups[GROUP].certs.length === 1);
 check('换了签名域（用换证声明的域签证书载荷）→ bad-signature', (() => {
-  const payload = `ccarmy.identity.rotation.v1\n${canonicalMembershipJson({})}`;
+  const payload = `warmy.identity.rotation.v1\n${canonicalMembershipJson({})}`;
   void payload;
   const priv = keyObjectFromPrivateDer(creator.store.load().privateKeyDer);
-  const wrongDomain = crypto.sign(null, Buffer.from(`ccarmy.other.domain\n${canonicalMembershipJson({
+  const wrongDomain = crypto.sign(null, Buffer.from(`warmy.other.domain\n${canonicalMembershipJson({
     schema: bobCert.schema, certId: bobCert.certId, groupId: bobCert.groupId, memberFingerprint: bobCert.memberFingerprint,
     memberPublicKey: bobCert.memberPublicKey, displayName: 'bob', role: bobCert.role, permissions: bobCert.permissions,
     issuedAt: bobCert.issuedAt, expiresAt: bobCert.expiresAt, issuerFingerprint: bobCert.issuerFingerprint,
@@ -1050,13 +1050,13 @@ check('主进程 net-members-presence 已改用 buildMemberPresence', /net-membe
 check('主进程不再残留"成员表里只有 id/name/instanceId，没有指纹"的旧注释', !mainSrc.includes('成员表里只有 id/name/instanceId'));
 check('主进程 identity-changes 传入 directory（成员表）', /identity-changes[\s\S]{0,700}directory: groupStore/.test(mainSrc));
 const CHANNELS = [
-  'ccarmy:membership-list',
-  'ccarmy:membership-authorize',
-  'ccarmy:membership-issue',
-  'ccarmy:membership-rotate',
-  'ccarmy:membership-revoke',
-  'ccarmy:membership-receive-cert',
-  'ccarmy:membership-sync-revocation',
+  'warmy:membership-list',
+  'warmy:membership-authorize',
+  'warmy:membership-issue',
+  'warmy:membership-rotate',
+  'warmy:membership-revoke',
+  'warmy:membership-receive-cert',
+  'warmy:membership-sync-revocation',
 ];
 check('7 条成员证书 IPC 都在主进程注册', CHANNELS.every((c) => mainSrc.includes(`'${c}'`)), CHANNELS.filter((c) => !mainSrc.includes(`'${c}'`)));
 check('7 条成员证书 IPC 都在 preload 白名单里', CHANNELS.every((c) => preloadSrc.includes(`'${c}'`)), CHANNELS.filter((c) => !preloadSrc.includes(`'${c}'`)));

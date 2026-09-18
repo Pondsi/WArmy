@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 

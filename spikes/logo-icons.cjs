@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 
 // ── 1) 创建图标目录 ──
 const iconsDir = path.join(base, 'icons');

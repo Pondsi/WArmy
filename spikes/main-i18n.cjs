@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/';
 const p = base + 'src/electron-main.ts';
 let s = fs.readFileSync(p, 'utf8');
 
@@ -29,7 +29,7 @@ s = s.replace(
 
 // 值班者系统提示
 s = s.replace(
-  /'你是 CCArmy 内部群的值班者。请用简短中文回复用户，并在需要时使用看板指令格式：新建任务:\/完成\/进度 标题:百分比。',/,
+  /'你是 WArmy 内部群的值班者。请用简短中文回复用户，并在需要时使用看板指令格式：新建任务:\/完成\/进度 标题:百分比。',/,
   "tMain('llm.dutySystem'),"
 );
 

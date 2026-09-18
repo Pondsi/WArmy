@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 // 1) HTML: urgency labels + 去掉慎用 + 标题 tooltip i18n
 let h = fs.readFileSync(base + 'index.html', 'utf8');
 h = h.replace('data-i18n="chat.p1"', 'data-i18n="urgency.urgentLabel"');

@@ -8,7 +8,7 @@
  */
 import { fork, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import type { ToolCall, ToolSpec } from '@ccarmy/providers';
+import type { ToolCall, ToolSpec } from '@warmy/providers';
 
 export interface MemoryClientOptions {
   nodePath?: string;

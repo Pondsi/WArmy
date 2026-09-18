@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let c = fs.readFileSync(base + 'renderer/app.css', 'utf8');
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
@@ -36,14 +36,14 @@ if (!c.includes('.me-strip')) {
 }
 
 // 2) pickFile 支持 filters
-if (!m.includes("filters: ['md']") && m.includes("ipcMain.handle('ccarmy:pick-file'")) {
+if (!m.includes("filters: ['md']") && m.includes("ipcMain.handle('warmy:pick-file'")) {
   m = m.replace(
-    `ipcMain.handle('ccarmy:pick-file', async () => {
+    `ipcMain.handle('warmy:pick-file', async () => {
   if (!win) return { ok: false };
   const r = await dialog.showOpenDialog(win, {
     properties: ['openFile'],
   });`,
-    `ipcMain.handle('ccarmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
+    `ipcMain.handle('warmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
   if (!win) return { ok: false };
   const ext = opts?.filters?.length ? opts.filters : undefined;
   const r = await dialog.showOpenDialog(win, {
@@ -65,7 +65,7 @@ if (!j.includes('data-email-k')) {
         el.onchange = () => {
           state.emailNotify = state.emailNotify || { complete: false, request: true, error: true };
           state.emailNotify[el.dataset.emailK] = el.checked;
-          window.ccarmy.settingsSave({ emailNotify: state.emailNotify });
+          window.warmy.settingsSave({ emailNotify: state.emailNotify });
         };
       });`
   );
@@ -103,14 +103,14 @@ if (!j.includes('btn-join-copy')) {
     `      // SMTP`,
     `      // 邀请链接 / 二维码
       (async () => {
-        const st = await window.ccarmy.meshStatus();
+        const st = await window.warmy.meshStatus();
         const node = st?.nodeId || 'local';
-        const link = 'ccarmy://join?node=' + encodeURIComponent(node) + '&port=7788';
+        const link = 'warmy://join?node=' + encodeURIComponent(node) + '&port=7788';
         const lk = $('join-link');
         if (lk) lk.textContent = link;
         const qr = $('join-qr');
         if (qr) {
-          const inv = await window.ccarmy.inviteCreate().catch(() => null);
+          const inv = await window.warmy.inviteCreate().catch(() => null);
           const tok = inv?.invite?.token ? '&tok=' + inv.invite.token : '';
           const finalLink = link + tok;
           if (lk) lk.textContent = finalLink;
@@ -133,7 +133,7 @@ if (!j.includes('btn-join-copy')) {
       $('btn-join-accept').onclick = () => {
         const v = $('join-input').value.trim();
         if (!v) return;
-        $('join-msg').textContent = v.startsWith('ccarmy://') ? t('join.ok') : t('join.fail');
+        $('join-msg').textContent = v.startsWith('warmy://') ? t('join.ok') : t('join.fail');
       };
 
       // SMTP`

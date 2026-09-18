@@ -43,7 +43,7 @@ import {
   type RevocationEntry,
   type RevocationList,
   type RevocationListCode,
-} from '@ccarmy/sync-protocol';
+} from '@warmy/sync-protocol';
 import {
   IDENTITY_ALGO,
   IDENTITY_SCHEMA,
@@ -91,10 +91,10 @@ import {
   currentContactCard,
 } from './identity.js';
 
-export const IDENTITY_FILE_SCHEMA = 'ccarmy.identity.file.v1' as const;
-export const IDENTITY_BACKUP_SCHEMA = 'ccarmy.identity.backup.v1' as const;
+export const IDENTITY_FILE_SCHEMA = 'warmy.identity.file.v1' as const;
+export const IDENTITY_BACKUP_SCHEMA = 'warmy.identity.backup.v1' as const;
 /** 接收方侧的对端名片状态（本机各自判定；不用任何广播的标志） */
-export const PEER_CONTACTS_SCHEMA = 'ccarmy.peer-contacts.v1' as const;
+export const PEER_CONTACTS_SCHEMA = 'warmy.peer-contacts.v1' as const;
 
 /** scrypt 参数（约 40ms/次；只在上锁/解锁/导出时跑，不在启动热路径上） */
 const SCRYPT = { N: 16384, r: 8, p: 1, keyLen: 32, maxmem: 64 * 1024 * 1024 } as const;
@@ -408,7 +408,7 @@ export class IdentityStore {
   timeline(): Array<{ ts: number; op: string; detail: Record<string, unknown> }> {
     const out: Array<{ ts: number; op: string; detail: Record<string, unknown> }> = [];
     for (const d of this.declarations()) {
-      if (d.kind === 'ccarmy.identity.rotation') {
+      if (d.kind === 'warmy.identity.rotation') {
         out.push({
           ts: d.issuedAt,
           op: 'identity.rotate',
@@ -749,7 +749,7 @@ export class IdentityStore {
 
   /** 联系人侧：验别人发来的"旧的作废"声明 */
   acceptRevocation(decl: IdentityDeclaration): RevocationVerifyResult {
-    if (decl && (decl as { kind?: string }).kind === 'ccarmy.identity.revocation') {
+    if (decl && (decl as { kind?: string }).kind === 'warmy.identity.revocation') {
       return verifyRevocationDeclaration(decl as never);
     }
     return {
@@ -943,13 +943,13 @@ export class IdentityStore {
 /**
  * 群成员证书 + 吊销列表的本机副本（`<userData>/identity/membership.json`）。
  *
- * 协议与验签逻辑在 `@ccarmy/sync-protocol` 的 `membership.ts`（可单独单测）；
+ * 协议与验签逻辑在 `@warmy/sync-protocol` 的 `membership.ts`（可单独单测）；
  * 这里只负责**磁盘形态**、**单调合并**与**给名册/在线态的查询接口**。
  *
  * 为什么"过期证书也要存"：见 `putCertificate` 的注释 —— 如果过期证书被直接丢掉，
  * 名册就会退回 TOFU 放行，等于"过期证书反而更好用"。
  */
-export const MEMBERSHIP_FILE_SCHEMA = 'ccarmy.membership.file.v1' as const;
+export const MEMBERSHIP_FILE_SCHEMA = 'warmy.membership.file.v1' as const;
 
 /** 每个群最多保留多少张证书（超出时淘汰最老的"无人指涉"证书，保证 supersedes 链不断） */
 export const MEMBERSHIP_MAX_CERTS_PER_GROUP = 256;

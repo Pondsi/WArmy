@@ -80,7 +80,7 @@ export async function verifySmtp(cfg: SmtpConfig): Promise<SmtpVerifyResult> {
           return finish({ ok: false, step, message: banner.text.slice(0, 200), code: banner.code });
         }
         step = 'ehlo';
-        write(socket, 'EHLO ccarmy');
+        write(socket, 'EHLO warmy');
         const ehlo = await readReply(socket);
         if (ehlo.code !== 250) {
           return finish({ ok: false, step, message: ehlo.text.slice(0, 200), code: ehlo.code });

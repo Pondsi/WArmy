@@ -1,5 +1,5 @@
 {
-  "name": "@ccarmy/app-shell",
+  "name": "@warmy/app-shell",
   "version": "0.1.0",
   "private": true,
   "description": "Electron主/渲染进程壳（零原生模块）",
@@ -21,16 +21,16 @@
     "dev": "node scripts/dev-restart.mjs"
   },
   "dependencies": {
-    "@ccarmy/contracts": "workspace:*",
-    "@ccarmy/dsh-runtime": "workspace:*",
-    "@ccarmy/memory-os": "workspace:*",
-    "@ccarmy/providers": "workspace:*",
-    "@ccarmy/group-router": "workspace:*",
-    "@ccarmy/board": "workspace:*",
-    "@ccarmy/ccr-compressor": "workspace:*",
-    "@ccarmy/knowledge-base": "workspace:*",
-    "@ccarmy/sync-protocol": "workspace:*",
-    "@ccarmy/asset-governance": "workspace:*"
+    "@warmy/contracts": "workspace:*",
+    "@warmy/dsh-runtime": "workspace:*",
+    "@warmy/memory-os": "workspace:*",
+    "@warmy/providers": "workspace:*",
+    "@warmy/group-router": "workspace:*",
+    "@warmy/board": "workspace:*",
+    "@warmy/ccr-compressor": "workspace:*",
+    "@warmy/knowledge-base": "workspace:*",
+    "@warmy/sync-protocol": "workspace:*",
+    "@warmy/asset-governance": "workspace:*"
   },
   "devDependencies": {
     "electron": "33.2.0",

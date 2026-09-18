@@ -1,4 +1,4 @@
-appId: com.pondsi.ccarmy
+appId: com.pondsi.warmy
 productName: 无限牛马
 copyright: Copyright © Pondsi
 directories:
@@ -18,41 +18,41 @@ extraResources:
   - from: ../memory-os/package.json
     to: memory-os/package.json
   - from: ../providers/dist
-    to: ccarmy/providers/dist
+    to: warmy/providers/dist
   - from: ../providers/package.json
-    to: ccarmy/providers/package.json
+    to: warmy/providers/package.json
   - from: ../board/dist
-    to: ccarmy/board/dist
+    to: warmy/board/dist
   - from: ../board/package.json
-    to: ccarmy/board/package.json
+    to: warmy/board/package.json
   - from: ../group-router/dist
-    to: ccarmy/group-router/dist
+    to: warmy/group-router/dist
   - from: ../group-router/package.json
-    to: ccarmy/group-router/package.json
+    to: warmy/group-router/package.json
   - from: ../ccr-compressor/dist
-    to: ccarmy/ccr-compressor/dist
+    to: warmy/ccr-compressor/dist
   - from: ../ccr-compressor/package.json
-    to: ccarmy/ccr-compressor/package.json
+    to: warmy/ccr-compressor/package.json
   - from: ../knowledge-base/dist
-    to: ccarmy/knowledge-base/dist
+    to: warmy/knowledge-base/dist
   - from: ../knowledge-base/package.json
-    to: ccarmy/knowledge-base/package.json
+    to: warmy/knowledge-base/package.json
   - from: ../sync-protocol/dist
-    to: ccarmy/sync-protocol/dist
+    to: warmy/sync-protocol/dist
   - from: ../sync-protocol/package.json
-    to: ccarmy/sync-protocol/package.json
+    to: warmy/sync-protocol/package.json
   - from: ../asset-governance/dist
-    to: ccarmy/asset-governance/dist
+    to: warmy/asset-governance/dist
   - from: ../asset-governance/package.json
-    to: ccarmy/asset-governance/package.json
+    to: warmy/asset-governance/package.json
   - from: ../dsh-runtime/dist
-    to: ccarmy/dsh-runtime/dist
+    to: warmy/dsh-runtime/dist
   - from: ../dsh-runtime/package.json
-    to: ccarmy/dsh-runtime/package.json
+    to: warmy/dsh-runtime/package.json
   - from: ../contracts/dist
-    to: ccarmy/contracts/dist
+    to: warmy/contracts/dist
   - from: ../contracts/package.json
-    to: ccarmy/contracts/package.json
+    to: warmy/contracts/package.json
   - from: ../../node_modules/.pnpm
     to: pnpm-store
     filter:

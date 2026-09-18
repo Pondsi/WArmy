@@ -1,5 +1,5 @@
 {
-  "name": "@ccarmy/asset-governance",
+  "name": "@warmy/asset-governance",
   "version": "0.1.0",
   "private": true,
   "description": "资产治理：分类/作用域/生命周期",

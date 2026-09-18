@@ -10,7 +10,7 @@ import os from 'node:os';
 import { once } from 'node:events';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.join(os.tmpdir(), `ccarmy-spike10-${Date.now()}`);
+const root = path.join(os.tmpdir(), `warmy-spike10-${Date.now()}`);
 const dirA = path.join(root, 'nodeA');
 const dirB = path.join(root, 'nodeB');
 const bus = path.join(root, 'bus');

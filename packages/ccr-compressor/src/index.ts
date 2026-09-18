@@ -1,5 +1,5 @@
 /**
- * @ccarmy/ccr-compressor — 写入侧 CCR 压缩网关（零 LLM）
+ * @warmy/ccr-compressor — 写入侧 CCR 压缩网关（零 LLM）
  * 不变量：压缩在内容进入日志之前发生，日志本身是压缩态
  */
 

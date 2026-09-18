@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const root = path.resolve(import.meta.dirname, '../..');
-const ascii = path.join(os.tmpdir(), 'ccarmy-lan-pkg');
+const ascii = path.join(os.tmpdir(), 'warmy-lan-pkg');
 fs.rmSync(ascii, { recursive: true, force: true });
 fs.mkdirSync(path.join(ascii, 'dist'), { recursive: true });
 fs.copyFileSync(path.join(root, 'packages/sync-protocol/package.json'), path.join(ascii, 'package.json'));

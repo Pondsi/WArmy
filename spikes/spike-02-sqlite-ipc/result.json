@@ -8,7 +8,7 @@
     "platform": "win32",
     "arch": "x64"
   },
-  "dbPath": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike2-1789646821441.db",
+  "dbPath": "C:\\Users\\p\\AppData\\Local\\Temp\\warmy-spike2-1789646821441.db",
   "init": {
     "id": 1,
     "ok": true,

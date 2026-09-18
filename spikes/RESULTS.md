@@ -147,7 +147,7 @@
   1. **平台探测与工具选择**：win32→gsudo（含 `GSUDO_PATH`/Program Files/LOCALAPPDATA/chocolatey/`where` 五级探测）、
      darwin→SMAppService（`macHelperPlan()` 产出 launchd plist + 5 步注册流程）、其它平台→明确 `ELEVATION_UNSUPPORTED_PLATFORM`；
   2. **安全修改 hosts**：行格式校验（IP 用 `net.isIP`、主机名正则、注释禁 `#`/换行）→ 内容体检（NUL 等致命项直接拒写）→
-     **先备份**（写到 `~/.ccarmy/helper-backups`，回读校验 sha256）→ **幂等 upsert**（已存在不重复写）→ 写入 → **回读 sha256 校验** →
+     **先备份**（写到 `~/.warmy/helper-backups`，回读校验 sha256）→ **幂等 upsert**（已存在不重复写）→ 写入 → **回读 sha256 校验** →
      失败或校验不一致则**自动回滚**；
   3. **绝不挂住**：全部走非交互 `gsudo -n`（`stdio: stdin=ignore`，绝不弹无人应答的 UAC）；
      工具缺失/可执行文件不存在/不支持平台 → 立即返回明确错误码；提权挂起 → 超时杀进程树（实测 `ELEVATION_TIMEOUT`，无残留 gsudo 进程）。
@@ -158,7 +158,7 @@
   - 当前进程对 hosts **无写权限**（直接写 → `EPERM`），自动降级到提权路径；
   - `gsudo -n cmd /c <临时脚本>` 执行 `copy /y <暂存文件> C:\Windows\System32\drivers\etc\hosts`，
     内层 **exit=0**，原始输出 `已复制 1 个文件。`（GBK 已正确解码）；
-  - 追加行：`127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 helper probe (auto-removed)`；
+  - 追加行：`127.0.0.1 warmy-spike08.local # WArmy spike-08 helper probe (auto-removed)`；
   - 回读校验：sha256 与期望一致 → **写入成功**（DoD 在 Windows 上成立）；
   - 清理：移除探针行后 hosts 恢复 **原始 sha256 `b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7`**（2616B → 2538B 再回到 2538B）。
 - **6 条实测踩坑（已写进 helper-tool.ts 头部注释，P1 落地必须遵守）**：
@@ -237,7 +237,7 @@
 | 未启动 Electron 运行时 | 9、7（WebGPU） | 三段链路与 WebGPU 都需要 Electron 浏览器上下文 |
 | 非管理员 | 8 | 已通过 `gsudo -n` 绕过（实测可提权），但「无缓存凭据时应干净失败」这一分支**本机无法触发**（本机 gsudo -n 恰好可直接提权） |
 
-> 关于 hosts：探针行 `ccarmy-spike08.local` 写入后已移除，**当前 hosts 与本轮开始前的 sha256 完全一致**
+> 关于 hosts：探针行 `warmy-spike08.local` 写入后已移除，**当前 hosts 与本轮开始前的 sha256 完全一致**
 > （`b27b9adf…`，2538 字节，CRLF）。备份目录 `spikes/spike-08-helper/backups/` 保留了两份备份副本
 > （一份为原始 hosts，一份为含探针行的中间态），**含本机自定义 DNS 覆盖记录，注意不要外传**。
 

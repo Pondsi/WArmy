@@ -11,8 +11,8 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dshHome = path.join(os.tmpdir(), `ccarmy-dsh-home2-${Date.now()}`);
-const profileName = 'ccarmy-spike5';
+const dshHome = path.join(os.tmpdir(), `warmy-dsh-home2-${Date.now()}`);
+const profileName = 'warmy-spike5';
 const profileDir = path.join(dshHome, 'profiles', profileName);
 const pnpm = 'C:\\Users\\p\\AppData\\Local\\pnpm\\pnpm.cmd';
 const node = process.execPath;

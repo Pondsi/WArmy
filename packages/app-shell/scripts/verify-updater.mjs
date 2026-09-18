@@ -22,7 +22,7 @@ function check(label, cond, detail) {
 }
 
 // ── 本地更新源（真实 HTTP 服务器） ──
-const ARTIFACT = Buffer.from('CCArmy fake installer payload 无限牛马\n'.repeat(64), 'utf8');
+const ARTIFACT = Buffer.from('WArmy fake installer payload 无限牛马\n'.repeat(64), 'utf8');
 const ARTIFACT_SHA = crypto.createHash('sha256').update(ARTIFACT).digest('hex');
 const WRONG_SHA = 'deadbeef'.repeat(8);
 
@@ -64,7 +64,7 @@ const server = http.createServer(async (req, res) => {
       return json({
         tag_name: 'v3.0.0',
         body: 'github style release',
-        assets: [{ name: 'CCArmy-3.0.0.exe', browser_download_url: `http://127.0.0.1:${port}/artifact.bin`, size: ARTIFACT.length }],
+        assets: [{ name: 'WArmy-3.0.0.exe', browser_download_url: `http://127.0.0.1:${port}/artifact.bin`, size: ARTIFACT.length }],
       });
     case '/feed/github-draft.json':
       return json({ tag_name: 'v9.9.9', draft: true });
@@ -90,7 +90,7 @@ const base = `http://127.0.0.1:${port}`;
 console.log(`本地更新源: ${base}\n构件 ${ARTIFACT.length} 字节, sha256=${ARTIFACT_SHA}`);
 
 const CURRENT = '0.1.0';
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-updater-'));
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-updater-'));
 const downloadDir = path.join(tmpRoot, 'updates');
 
 const mk = (opts = {}) =>
@@ -171,8 +171,8 @@ check('assets[0].browser_download_url 作为下载地址', r7.downloadUrl === `$
 
 // ── 8. 环境变量作为更新源 ──
 console.log('\n[8] 环境变量更新源');
-const r8 = await mk({ env: { CCARMY_UPDATE_FEED_URL: `${base}/feed/latest.json` } }).check();
-check('settings 未配置时读 CCARMY_UPDATE_FEED_URL', r8.status === 'up-to-date' && r8.sourceOrigin === 'env', { status: r8.status, origin: r8.sourceOrigin });
+const r8 = await mk({ env: { WARMY_UPDATE_FEED_URL: `${base}/feed/latest.json` } }).check();
+check('settings 未配置时读 WARMY_UPDATE_FEED_URL', r8.status === 'up-to-date' && r8.sourceOrigin === 'env', { status: r8.status, origin: r8.sourceOrigin });
 
 // ── 9. 真实下载 + 校验 ──
 console.log('\n[9] 下载（真实落盘 + sha256/size 校验）');

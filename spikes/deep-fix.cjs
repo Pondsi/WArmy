@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
@@ -127,7 +127,7 @@ j = j.replace(
 j = j.replace(
   `        <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
-          <div class="muted">${t('about.version')} 0.1.0 · CCArmy · ${t('app.subtitle')}</div>
+          <div class="muted">${t('about.version')} 0.1.0 · WArmy · ${t('app.subtitle')}</div>
           <div style="margin-top:10px">
             <button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
             <span class="muted" id="about-upd"></span>
@@ -135,7 +135,7 @@ j = j.replace(
         </div>\`;`,
   `        <div class="set-section set-card">
           <h2>${t('settings.about')}</h2>
-          <div class="muted">${t('about.version')} 0.1.0 · CCArmy · ${t('app.subtitle')}</div>
+          <div class="muted">${t('about.version')} 0.1.0 · WArmy · ${t('app.subtitle')}</div>
           <div style="margin-top:10px">
             <button class="btn-mini" id="btn-about-update">${t('about.checkUpdate')}</button>
             <span class="muted" id="about-upd"></span>

@@ -283,7 +283,7 @@
     },
     {
       "label": "ascii-path-seg",
-      "q": "CCArmy",
+      "q": "WArmy",
       "expect": [
         6
       ],

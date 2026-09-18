@@ -14,34 +14,34 @@ importers:
 
   packages/app-shell:
     dependencies:
-      '@ccarmy/asset-governance':
+      '@warmy/asset-governance':
         specifier: workspace:*
         version: link:../asset-governance
-      '@ccarmy/board':
+      '@warmy/board':
         specifier: workspace:*
         version: link:../board
-      '@ccarmy/ccr-compressor':
+      '@warmy/ccr-compressor':
         specifier: workspace:*
         version: link:../ccr-compressor
-      '@ccarmy/contracts':
+      '@warmy/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@ccarmy/dsh-runtime':
+      '@warmy/dsh-runtime':
         specifier: workspace:*
         version: link:../dsh-runtime
-      '@ccarmy/group-router':
+      '@warmy/group-router':
         specifier: workspace:*
         version: link:../group-router
-      '@ccarmy/knowledge-base':
+      '@warmy/knowledge-base':
         specifier: workspace:*
         version: link:../knowledge-base
-      '@ccarmy/memory-os':
+      '@warmy/memory-os':
         specifier: workspace:*
         version: link:../memory-os
-      '@ccarmy/providers':
+      '@warmy/providers':
         specifier: workspace:*
         version: link:../providers
-      '@ccarmy/sync-protocol':
+      '@warmy/sync-protocol':
         specifier: workspace:*
         version: link:../sync-protocol
     devDependencies:
@@ -56,7 +56,7 @@ importers:
 
   packages/board:
     dependencies:
-      '@ccarmy/contracts':
+      '@warmy/contracts':
         specifier: workspace:*
         version: link:../contracts
 
@@ -66,13 +66,13 @@ importers:
 
   packages/dsh-runtime:
     dependencies:
-      '@ccarmy/contracts':
+      '@warmy/contracts':
         specifier: workspace:*
         version: link:../contracts
 
   packages/group-router:
     dependencies:
-      '@ccarmy/contracts':
+      '@warmy/contracts':
         specifier: workspace:*
         version: link:../contracts
 
@@ -80,7 +80,7 @@ importers:
 
   packages/memory-os:
     dependencies:
-      '@ccarmy/contracts':
+      '@warmy/contracts':
         specifier: workspace:*
         version: link:../contracts
       better-sqlite3:
@@ -96,7 +96,7 @@ importers:
 
   packages/providers:
     dependencies:
-      '@ccarmy/contracts':
+      '@warmy/contracts':
         specifier: workspace:*
         version: link:../contracts
 

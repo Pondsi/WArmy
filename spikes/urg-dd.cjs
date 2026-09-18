@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/app.js';
+const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.js';
 let j = fs.readFileSync(p, 'utf8');
 
 const oldBlock = j.match(/\s*\$\('urgency-bar'\)\?\.addEventListener\('click', async \(e\) => \{[\s\S]*?\n  \}\);/);

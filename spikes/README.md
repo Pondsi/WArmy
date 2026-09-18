@@ -1,4 +1,4 @@
-# CCArmy P0 Spikes
+# WArmy P0 Spikes
 
 对照 ADR 000 第四章 P0。每个 Spike 独立目录，结果写入 `RESULTS.md`。
 

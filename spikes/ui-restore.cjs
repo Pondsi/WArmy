@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/app.js';
+const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.js';
 let j = fs.readFileSync(p, 'utf8');
 
 // 1) 在 btn-voice 绑定前关闭 settings 分支与 renderPage
@@ -25,7 +25,7 @@ if (!j.includes('function createGroupFlow')) {
       const type = state.nav === 'internalGroup' ? 'internal' : 'external';
       const id = 'g-' + Date.now();
       try {
-        await window.ccarmy.groupCreate({ groupId: id, name, type, directedMode: false });
+        await window.warmy.groupCreate({ groupId: id, name, type, directedMode: false });
       } catch (e) {
         uiAlert(String(e.message || e));
         return;

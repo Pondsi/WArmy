@@ -14,13 +14,13 @@
  *     · 44 字节 SPKI DER（base64/b64url 字符串或 Buffer）—— 现有身份线
  *       `app-shell/src/identity.ts` 的线上形式；内部会自动剥前缀取 raw。
  *  2. `fingerprint` 必须能**由公钥推出**：默认实现
- *     `ccarmyFingerprint()` = base32(sha256(raw 32B))；
+ *     `warmyFingerprint()` = base32(sha256(raw 32B))；
  *     若身份层用别的方案（例如现身份线的「sha256(SPKI DER base64) → base32 前 20 位 + 1 位校验 +
  *     短横分组」），通过 `fingerprintDerivation` 注入即可 —— 关键点是**指纹由公钥推出**，
  *     这样"换了公钥但沿用旧指纹"必然失败。适配示例（写在 app-shell 侧）：
  *
  *     ```ts
- *     import { ed25519SpkiDerFromRaw } from '@ccarmy/sync-protocol';
+ *     import { ed25519SpkiDerFromRaw } from '@warmy/sync-protocol';
  *     import { fingerprintFromPublicKey } from './identity.js';
  *     const provider = {
  *       fingerprint: record.fingerprint,
@@ -61,7 +61,7 @@ export interface IdentityProvider {
 export type FingerprintDerivation = (publicKey: Buffer) => string;
 
 /** 默认指纹：base32(sha256(公钥))，52 字符 */
-export function ccarmyFingerprint(publicKey: Bytes): string {
+export function warmyFingerprint(publicKey: Bytes): string {
   return base32(sha256(publicKey));
 }
 
@@ -112,7 +112,7 @@ export async function normalizeIdentity(
   opts: NormalizeIdentityOptions = {}
 ): Promise<NormalizedIdentity> {
   if (isNormalizedIdentity(provider)) return provider;
-  const derivation = opts.fingerprintDerivation ?? ccarmyFingerprint;
+  const derivation = opts.fingerprintDerivation ?? warmyFingerprint;
   // 公钥接受两种常见表示：32 字节 raw，或 44 字节 SPKI DER（Ed25519）
   let publicKey: Buffer;
   try {
@@ -150,7 +150,7 @@ export async function normalizeIdentity(
 }
 
 /** sign → verify 往返自检：注入实现若不满足契约，这里就会暴露 */
-export async function selfTestIdentity(identity: NormalizedIdentity, context = 'ccarmy-sync self-test'): Promise<void> {
+export async function selfTestIdentity(identity: NormalizedIdentity, context = 'warmy-sync self-test'): Promise<void> {
   const probe = sha256(Buffer.from(context, 'utf8'));
   const sig = await identity.sign(probe);
   if (sig.length === 0) throw new IdentityContractError('identity.sign 返回空签名');
@@ -203,7 +203,7 @@ export function createEphemeralIdentity(seedLabel?: string): {
 } {
   const keys = generateEd25519();
   void seedLabel;
-  const fingerprint = ccarmyFingerprint(keys.publicKey);
+  const fingerprint = warmyFingerprint(keys.publicKey);
   const provider: IdentityProvider = {
     fingerprint,
     publicKey: keys.publicKey,

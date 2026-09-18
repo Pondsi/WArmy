@@ -1,12 +1,12 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 
 // 定向模式：改为按钮 + 勾/叉
 j = j.replace(
   `  $('mi-directed')?.addEventListener('change', async (e) => {
     if (!state.selectedChat) return;
-    await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: e.target.checked }).catch(() => {});
+    await window.warmy.groupDirected({ groupId: state.selectedChat.id, directed: e.target.checked }).catch(() => {});
   });`,
   `  let __directed = false;
   $('mi-directed')?.addEventListener('click', async () => {
@@ -14,7 +14,7 @@ j = j.replace(
     const mark = $('mi-directed-mark');
     if (mark) mark.textContent = __directed ? '✓' : '✕';
     if (state.selectedChat) {
-      await window.ccarmy.groupDirected({ groupId: state.selectedChat.id, directed: __directed }).catch(() => {});
+      await window.warmy.groupDirected({ groupId: state.selectedChat.id, directed: __directed }).catch(() => {});
     }
   });`
 );

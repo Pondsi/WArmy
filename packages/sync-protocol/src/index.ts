@@ -1,5 +1,5 @@
 /**
- * @ccarmy/sync-protocol — 节点注册 + 文件总线消息 + incognito 约定
+ * @warmy/sync-protocol — 节点注册 + 文件总线消息 + incognito 约定
  * 不变量 10/11：远程 AI 无痕；值班权仅本机
  */
 import fs from 'node:fs';
@@ -151,5 +151,5 @@ export * from './membership.js';
 
 /** 远程 AI 执行约定：本地零痕迹目录（临时，用完即删） */
 export function incognitoWorkDir(): string {
-  return path.join(os.tmpdir(), `ccarmy-incog-${crypto.randomBytes(6).toString('hex')}`);
+  return path.join(os.tmpdir(), `warmy-incog-${crypto.randomBytes(6).toString('hex')}`);
 }

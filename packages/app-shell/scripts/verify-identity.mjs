@@ -77,7 +77,7 @@ function section(title) {
 
 /** 替身 OS 钥匙串：真 safeStorage 是 DPAPI / Keychain（不可导出），这里用 AES-GCM 假 KMS 走同一条代码路径 */
 function fixtureProtector(tag = 'fixture-os') {
-  const key = crypto.createHash('sha256').update(`ccarmy-fixture-os|${tag}`).digest();
+  const key = crypto.createHash('sha256').update(`warmy-fixture-os|${tag}`).digest();
   const head = `${tag}|`;
   return {
     available: () => true,
@@ -155,7 +155,7 @@ if (argOf('--phase') === 'restart') {
 }
 
 // ── 主流程 ──
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-identity-'));
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-identity-'));
 const file = path.join(tmpRoot, 'identity', 'identity.json');
 console.log(`工作目录: ${tmpRoot}`);
 console.log(`身份文件: ${file}`);
@@ -223,7 +223,7 @@ const shortSig = verifyByFingerprint(fp, '把周报整理好 #1', sigBuf.subarra
 check('截断签名 → 明确报"应为 64 字节"', shortSig.ok === false && /64/.test(shortSig.detail || ''), shortSig.detail);
 check('换了钥匙（别人的密钥环）→ unknown-fingerprint', verifyByFingerprint(fp, '把周报整理好 #1', signed.signature, keyRing(other.identity)).reason === 'unknown-fingerprint');
 check('指纹形态非法 → malformed', verifyByFingerprint('NOT-A-FINGERPRINT', 'x', signed.signature, ring).reason === 'malformed');
-check('跨域签名不互认（域分隔生效）', verifyByFingerprint(fp, '把周报整理好 #1', signed.signature, ring, { domain: 'ccarmy.other.v1' }).ok === false);
+check('跨域签名不互认（域分隔生效）', verifyByFingerprint(fp, '把周报整理好 #1', signed.signature, ring, { domain: 'warmy.other.v1' }).ok === false);
 check('规范化是确定性的（同一对象两次序列化一致）', canonicalize({ b: [1, 2], a: 'x' }) === canonicalize({ a: 'x', b: [1, 2] }), canonicalize({ b: [1, 2], a: 'x' }));
 
 // ── [3] 身份名片 ──
@@ -452,7 +452,7 @@ section('[8] 代次规则（旧代次被拒；并实测"抢先换证"挡不住�
 function forgeRotation(oldPrivateDer, oldFingerprint, oldPublicKey, newFp, newPub, generation, previousGeneration) {
   const draft = {
     schema: ROTATION_SCHEMA,
-    kind: 'ccarmy.identity.rotation',
+    kind: 'warmy.identity.rotation',
     version: 1,
     algo: IDENTITY_ALGO,
     oldFingerprint,
@@ -493,7 +493,7 @@ const curDer = store.load(PASS).privateKeyDer;
 check('备份文件不含私钥明文', !backupText.includes(curDer.toString('base64')) && !backupText.includes(curDer.toString('hex')));
 check('备份记录了指纹与代次（恢复时可核对）', fingerprintMatches(exported.backup.fingerprint, info2.fingerprint) && exported.backup.generation === 2);
 check('备份带退役公钥（历史签名仍可验）', exported.backup.retiredKeys.length === 1);
-check('备份带声明时间线（声明里没有联系方式）', exported.backup.declarations.some((d) => d.kind === 'ccarmy.identity.rotation') && !exported.backup.declarations.some((d) => /contact|email|phone/i.test(JSON.stringify(d))));
+check('备份带声明时间线（声明里没有联系方式）', exported.backup.declarations.some((d) => d.kind === 'warmy.identity.rotation') && !exported.backup.declarations.some((d) => /contact|email|phone/i.test(JSON.stringify(d))));
 check('备份带本机名片历史（旧联系方式随备份走，横幅才有旧值）', Array.isArray(exported.backup.cardHistory) && exported.backup.cardHistory.some((v) => v.card.email === 'laowang@example.com'), exported.backup.cardHistory?.map((v) => v.card.email));
 const restoredFile = path.join(tmpRoot, 'restored', 'identity.json');
 const restored = new IdentityStore(restoredFile, { protector: nullProtector() });

@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 let h = fs.readFileSync(base + 'index.html', 'utf8');
 
@@ -21,7 +21,7 @@ if (!j.includes('refreshArchived')) {
     j = j.replace(anchor, `      async function refreshArchived() {
         const box = $('archived-box');
         if (!box) return;
-        const r = await window.ccarmy.archivedList().catch(() => null);
+        const r = await window.warmy.archivedList().catch(() => null);
         const items = r?.items || [];
         box.innerHTML = items.length
           ? items.map((a) => '<div>' + escapeHtml(a.name) + ' · ' + a.kind + '</div>').join('')
@@ -39,7 +39,7 @@ ${anchor}`);
 // KB 详情：当前是 textContent，改为带详情
 const oldKb = "    $('kb-out').textContent =\n      (r?.entities || []).map((e) => e.name).join(', ') +\n      ' | ' +\n      (r?.events || []).map((e) => e.title).join(', ');";
 if (j.includes(oldKb)) {
-  j = j.replace(oldKb, `    const det = await window.ccarmy.kbDetail(q).catch(() => null);
+  j = j.replace(oldKb, `    const det = await window.warmy.kbDetail(q).catch(() => null);
     $('kb-out').innerHTML =
       '<div>' + escapeHtml((r?.entities || []).map((e) => e.name).join(', ') || '—') + '</div>' +
       '<div>' + escapeHtml((r?.events || []).map((e) => e.title).join(' | ') || '—') + '</div>' +

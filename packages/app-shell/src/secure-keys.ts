@@ -10,7 +10,7 @@
  * 1. 用 `createRequire(import.meta.url)` 正确拿到 electron，safeStorage 真正生效；
  * 2. 落盘格式带**显式保护标记** `{ v: 2, protector, data }`，不再靠"猜"；
  * 3. **无 OS 保护时拒绝写明文**并抛出 `no-safe-storage`。只有显式设置
- *    `CCARMY_ALLOW_PLAINTEXT_KEYS=1`（仅供开发）才允许，且仍会打上 `plain` 标记，
+ *    `WARMY_ALLOW_PLAINTEXT_KEYS=1`（仅供开发）才允许，且仍会打上 `plain` 标记，
  *    读回时给出可识别的降级信号，便于 UI 提示与后续迁移。
  */
 import fs from 'node:fs';
@@ -43,7 +43,7 @@ function safeStorageOf(): { encryptString(s: string): Buffer; decryptString(b: B
 }
 
 function allowPlaintext(): boolean {
-  return process.env['CCARMY_ALLOW_PLAINTEXT_KEYS'] === '1';
+  return process.env['WARMY_ALLOW_PLAINTEXT_KEYS'] === '1';
 }
 
 export class SecureKeyStore {

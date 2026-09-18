@@ -84,7 +84,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 拉长固定前缀，确保超过 64-token 缓存门槛
 const LONG_SYSTEM =
-  '你是 CCArmy 多智能体群聊桌面应用的测试助手。' +
+  '你是 WArmy 多智能体群聊桌面应用的测试助手。' +
   '本产品支持多模型 Provider 抽象，DeepSeek 仅为参考运行时之一。'.repeat(8) +
   '回答尽量短，只输出数字。';
 

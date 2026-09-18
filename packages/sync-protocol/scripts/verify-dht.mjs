@@ -15,7 +15,7 @@
 import {
   DhtNode,
   GroupKeyRing,
-  ccarmyFingerprint,
+  warmyFingerprint,
   createEphemeralIdentity,
   ed25519FromSeed,
   hmacSha256,
@@ -48,7 +48,7 @@ const bob = mkIdentity('bob');
 const carol = mkIdentity('carol');
 const outsider = mkIdentity('outsider');
 /** 被宣告的"异地成员"（只有指纹，不需要真机） */
-const memberM = { fingerprint: ccarmyFingerprint(randomBytes(32)) };
+const memberM = { fingerprint: warmyFingerprint(randomBytes(32)) };
 
 function makeNode(identity, nodeId, tcpPort, opts = {}) {
   return new DhtNode({
@@ -247,7 +247,7 @@ async function main() {
     await P.start();
     await P.bootstrap([addrA, addrB, addrC]);
     // 用另一个成员指纹发布，避免与前面 identity 模式的同键记录打架
-    const member2 = ccarmyFingerprint(randomBytes(32));
+    const member2 = warmyFingerprint(randomBytes(32));
     const pub = await P.publish({ fingerprint: member2, signing: 'pseudonymous' });
     check('假名模式发布成功', !!pub.envelope, pub.seq);
     check('公共 DHT 上签名者 ≠ 真实指纹', pub.envelope.sg !== alice.fingerprint, pub.envelope.sg.slice(0, 12));
@@ -257,8 +257,8 @@ async function main() {
     check('无密钥者：签名合法但不知道是谁', vs.ok === true && vs.signer !== alice.fingerprint, vs.signer?.slice(0, 12));
 
     // 群成员：用群密钥可推出"这个假名就是 alice"
-    const seed = hmacSha256(GROUP_KEY, Buffer.from(`ccarmy-dht/1|pseudonym|${alice.fingerprint}`, 'utf8'));
-    const expectPseudonym = ccarmyFingerprint(ed25519FromSeed(seed).publicKey);
+    const seed = hmacSha256(GROUP_KEY, Buffer.from(`warmy-dht/1|pseudonym|${alice.fingerprint}`, 'utf8'));
+    const expectPseudonym = warmyFingerprint(ed25519FromSeed(seed).publicKey);
     check('群成员可反推假名归属', expectPseudonym === pub.envelope.sg, { expect: expectPseudonym.slice(0, 12), got: pub.envelope.sg.slice(0, 12) });
 
     // 群成员查询：能解出内容

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 上下文有界渲染器验证（ADR 002 §7）—— 可重跑：node scripts/verify-context-renderer.mjs
  *
  * 覆盖：
@@ -9,7 +9,9 @@
  *   3. 头尾保真：keepHead / keepTail 条在视图里逐字节等于原文。
  *   4. 退化预算：budgetChars=200（含 0/1/NaN 扫）仍产出可用视图、指针完整、不抛错。
  *   5. 值班者路径：orchestrateGroupMessage 复用同一个渲染器（真 HTTP mock provider）。
- *   6. 回归：spikes/verify-all/run-full.mjs 仍 210/0。
+ *   6. 回归：spikes/verify-all/run-full.mjs 必须跑完且 **零失败**（fail=0，pass ≥ 211）。
+ *      不钉死精确条数：套件合法增长（210 → 211 → …）不该让本验证变红；断崖式缩水或任何
+ *      真实失败（fail>0 / 套件跑不起来）仍然会红。
  *   7. 真 Electron 一轮对话：chat-send 注入的 prompt 实测有界 + metrics.viewBytes 恒定，
  *      且指针里的 recordId 能从真实记忆服务里取回逐字节原文。
  *
@@ -31,6 +33,9 @@ const require = createRequire(import.meta.url);
 const argv = process.argv.slice(2);
 const SKIP_ELECTRON = argv.includes('--no-electron');
 const SKIP_REGRESSION = argv.includes('--no-regression');
+// spikes/verify-all 的规模下限（不是精确条数）：套件合法增长（210→211→212…）不该让本验证变红，
+// 断崖式缩水（套件被裁）或任何 fail>0 仍然必须红。历史：210 → 211（一条退役 UI 断言拆成两条）。
+const REGRESSION_MIN_PASS = 211;
 
 let failures = 0;
 const failuresList = [];
@@ -59,7 +64,7 @@ console.log(`默认预算 budgetChars=${BUDGET}\n`);
 
 /** 确定性日志生成：每条长度固定（便于观察"恒定"），seq 单调 */
 function makeLog(count, charsPerEntry) {
-  const body = '牛马值班日志：项目 CCArmy 的上下文渲染条目。'.repeat(Math.ceil(charsPerEntry / 22));
+  const body = '牛马值班日志：项目 WArmy 的上下文渲染条目。'.repeat(Math.ceil(charsPerEntry / 22));
   const entries = [];
   for (let i = 0; i < count; i++) {
     entries.push({
@@ -135,7 +140,7 @@ check('所有行都注入了可执行指针', rows.every((r) => r.pointers >= 1 
 // 2. 不丢细节（真 MemoryService：写入 → 渲染 → 用指针取回）
 // ══════════════════════════════════════════════════════════════
 console.log('\n[2] 不丢细节：真记忆服务写入 + 指针解引用逐字节比对');
-const memAscii = path.join(os.tmpdir(), 'ccarmy-verify-ctx-mem');
+const memAscii = path.join(os.tmpdir(), 'warmy-verify-ctx-mem');
 fs.rmSync(memAscii, { recursive: true, force: true });
 fs.mkdirSync(path.join(memAscii, 'dist'), { recursive: true });
 const memPkg = path.join(repoRoot, 'packages', 'memory-os');
@@ -147,7 +152,7 @@ if (fs.existsSync(path.join(memPkg, 'node_modules'))) {
   fs.symlinkSync(path.join(memPkg, 'node_modules'), path.join(memAscii, 'node_modules'), 'junction');
 }
 const { MemoryService } = await import(pathToFileURL(path.join(memAscii, 'dist', 'index.js')).href);
-const memDir = path.join(os.tmpdir(), 'ccarmy-verify-ctx-data-' + Date.now());
+const memDir = path.join(os.tmpdir(), 'warmy-verify-ctx-data-' + Date.now());
 const mem = new MemoryService({ dataDir: memDir, vector: { enabled: false } });
 
 const N = 60; // 60 条真实记录，日志远大于预算 → 必然产生 elided
@@ -414,7 +419,7 @@ const mockBase = `http://127.0.0.1:${mockPort}/v1`;
     directedMode: false, members: [], permissions: DEFAULT_PERMISSIONS, checkpointLimit: 50,
   });
   router.join('g-ctx', { id: 'duty-1', name: '值班者', local: true, dutyEligible: true, status: 'idle' });
-  const boardDir = path.join(os.tmpdir(), 'ccarmy-verify-ctx-board-' + Date.now());
+  const boardDir = path.join(os.tmpdir(), 'warmy-verify-ctx-board-' + Date.now());
   const board = new BoardStore(boardDir);
 
   // 值班者会话日志：200 条，远大于预算
@@ -489,7 +494,17 @@ if (!SKIP_REGRESSION) {
     out = String(e.stdout || '') + String(e.stderr || '');
   }
   const m = out.match(/pass=(\d+) fail=(\d+)/);
-  check('verify-all 仍 210/0', code === 0 && m && m[1] === '210' && m[2] === '0', m ? `pass=${m[1]} fail=${m[2]} exit=${code}` : `无 SUMMARY，exit=${code}`);
+  const pass = m ? Number(m[1]) : null;
+  const fail = m ? Number(m[2]) : null;
+  // 判据 = 跑得起来（有 SUMMARY）+ 进程正常退出 + 零失败 + 规模不低于历史下限（防套件被悄悄裁掉）。
+  // 旧判据钉死 pass===210，套件把一条断言拆成两条（211/0）就误报——那是测试陈旧，不是产品回归。
+  check(
+    `verify-all 跑完且零失败（exit=0、fail=0、pass ≥ ${REGRESSION_MIN_PASS}）`,
+    code === 0 && m !== null && fail === 0 && pass >= REGRESSION_MIN_PASS,
+    m !== null
+      ? `pass=${pass} fail=${fail} exit=${code}（规模下限 ${REGRESSION_MIN_PASS}）`
+      : `无 SUMMARY（套件没跑起来 / 输出被截断），exit=${code}，tail=${JSON.stringify(out.slice(-200))}`
+  );
 } else {
   console.log('\n[6] 跳过回归（--no-regression）');
 }
@@ -500,7 +515,7 @@ if (!SKIP_REGRESSION) {
 if (!SKIP_ELECTRON) {
   console.log('\n[7] 真 Electron + 真 IPC：chat-send 走渲染器');
   const electronPath = require('electron');
-  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ccarmy-ctx-e2e-'));
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-ctx-e2e-'));
   const appRoot = path.join(tmpRoot, 'app');
   fs.mkdirSync(appRoot, { recursive: true });
   fs.cpSync(path.join(pkgRoot, 'dist'), path.join(appRoot, 'dist'), { recursive: true });
@@ -509,7 +524,7 @@ if (!SKIP_ELECTRON) {
   fs.mkdirSync(userData, { recursive: true });
 
   // 与 verify-e2e 相同的最小 patch（只改临时副本，不动源码）：
-  //  - 重复注册的 ccarmy:clear-error 会让 Electron 启动即抛
+  //  - 重复注册的 warmy:clear-error 会让 Electron 启动即抛
   //  - app.setAsDefaultProtocolClient 会改到本机注册表
   const mainFile = path.join(appRoot, 'dist', 'electron-main.js');
   {
@@ -517,7 +532,7 @@ if (!SKIP_ELECTRON) {
     let seen = false;
     const out = [];
     for (const line of lines) {
-      if (line.includes("ipcMain.handle('ccarmy:clear-error'")) {
+      if (line.includes("ipcMain.handle('warmy:clear-error'")) {
         if (seen) continue;
         seen = true;
       }
@@ -526,7 +541,7 @@ if (!SKIP_ELECTRON) {
     fs.writeFileSync(mainFile, out.join('\n'), 'utf8');
   }
   // 工作区包 + memory-os（让真记忆服务起得来）链进临时副本
-  const nmDir = path.join(appRoot, 'node_modules', '@ccarmy');
+  const nmDir = path.join(appRoot, 'node_modules', '@warmy');
   fs.mkdirSync(nmDir, { recursive: true });
   const linked = [];
   for (const pkg of ['contracts', 'providers', 'group-router', 'board', 'ccr-compressor', 'knowledge-base', 'sync-protocol', 'dsh-runtime', 'asset-governance', 'memory-os']) {
@@ -542,7 +557,7 @@ if (!SKIP_ELECTRON) {
   const bundledNodeDir = process.platform === 'win32' ? `win-${process.arch}` : `${process.platform}-${process.arch}`;
   const bundledNode = path.join(repoRoot, 'resources', 'node', bundledNodeDir, process.platform === 'win32' ? 'node.exe' : 'node');
   // prepareMemoryRuntime 的第二条候选路径挂在 app.getAppPath() 下（Electron 启动单文件时 = dist/）
-  const distNm = path.join(appRoot, 'dist', 'node_modules', '@ccarmy');
+  const distNm = path.join(appRoot, 'dist', 'node_modules', '@warmy');
   fs.mkdirSync(distNm, { recursive: true });
   try {
     fs.symlinkSync(path.join(repoRoot, 'packages', 'memory-os'), path.join(distNm, 'memory-os'), 'junction');
@@ -555,7 +570,7 @@ if (!SKIP_ELECTRON) {
   const child = spawn(electronPath, [mainFile, `--user-data-dir=${userData}`, '--remote-debugging-port=0'], {
     cwd: appRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { CCARM_NODE: bundledNode } : {}) },
+    env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) },
   });
   const logs = [];
   let devtoolsPort = 0;
@@ -622,7 +637,7 @@ if (!SKIP_ELECTRON) {
       let ready = false;
       while (Date.now() < readyDeadline && !ready) {
         try {
-          ready = await evaluate('(async () => { try { const r = await window.ccarmy.appInfo(); return !!(r && r.ok); } catch { return false; } })()');
+          ready = await evaluate('(async () => { try { const r = await window.warmy.appInfo(); return !!(r && r.ok); } catch { return false; } })()');
         } catch {
           /* 未就绪 */
         }
@@ -635,7 +650,7 @@ if (!SKIP_ELECTRON) {
   }
 
   const call = (api, ...args) =>
-    cdp.evaluate(`(async () => { try { return await window.ccarmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
+    cdp.evaluate(`(async () => { try { return await window.warmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
 
   if (cdp) {
     // 指向上面的 mock provider（真 HTTP，返回 OpenAI 兼容响应）
@@ -775,7 +790,7 @@ if (!SKIP_ELECTRON) {
     }
   }
   await sleep(1200);
-  const bootLog = path.join(userData, 'ccarmy-boot.log');
+  const bootLog = path.join(userData, 'warmy-boot.log');
   if (fs.existsSync(bootLog)) {
     const lines = fs.readFileSync(bootLog, 'utf8').trim().split('\n').filter((l) => /memory/.test(l));
     for (const l of lines.slice(-4)) console.log('  boot: ' + l);

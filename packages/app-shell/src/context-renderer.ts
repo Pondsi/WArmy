@@ -11,14 +11,14 @@
  *   1. `viewBytes ≤ budgetChars` 是函数内**硬断言**，任何预算下都不得越界；
  *   2. 任何预算下都**不抛错**：超预算就先截断压缩要点、再缩 keepTail、再缩 keepHead，
  *      指针本身在还能放下时永不被截断（指针必须完整可执行）；
- *   3. 纯函数、无副作用、零 LLM（默认压缩器复用 @ccarmy/ccr-compressor 的规则型压缩）。
+ *   3. 纯函数、无副作用、零 LLM（默认压缩器复用 @warmy/ccr-compressor 的规则型压缩）。
  *
  * 单位：viewBytes / logBytes / budgetChars 一律是**字符数**（UTF-16 code unit）。
  * ADR §8 明确"预算用字符近似 token"；而唯一的硬指标是 viewBytes ≤ budgetChars，
  * 只有两者同单位这条断言才自洽（若用 UTF-8 字节数，中文内容会被按 3 倍缩水）。
  * 需要字节数时由调用方另算（验证脚本会同时打印字符数与 UTF-8 字节数）。
  */
-import { compress as ccrCompress } from '@ccarmy/ccr-compressor';
+import { compress as ccrCompress } from '@warmy/ccr-compressor';
 
 export interface LogEntry {
   /** 日志内的单调序号（决定裁剪顺序） */

@@ -1,0 +1,27 @@
+name: Bug report
+description: Something in WArmy is broken
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Steps to reproduce, expected vs actual
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: "0.1.0"
+  - type: dropdown
+    id: locale
+    attributes:
+      label: UI language
+      options: [zh-CN, zh-TW, en-US, ja, ko, ru, es, fr, pt, eo]
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, container runtime if relevant (no secrets)

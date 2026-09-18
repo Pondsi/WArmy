@@ -78,7 +78,7 @@ async function main() {
       if (!phone) return ['no-phone'];
       const text = phone.innerText || '';
       const lines = text.split('\\n').map(function(s){return s.trim();}).filter(Boolean);
-      const allowExact = ['demo.agent','DeepSeek','Ollama','Electron','Chromium','Node.js','Markdown','MIT','CCArmy','ID','cache','ccr','avg','deepseek-chat','deepseek-reasoner','mimo-v2.5-pro','v0.1.0','SMTP','Base','URL','884024787','0.029','2400ms','32%','90%','65%','30%','40%','12:04','465','7788','10','0'];
+      const allowExact = ['demo.agent','DeepSeek','Ollama','Electron','Chromium','Node.js','Markdown','MIT','WArmy','ID','cache','ccr','avg','deepseek-chat','deepseek-reasoner','mimo-v2.5-pro','v0.1.0','SMTP','Base','URL','884024787','0.029','2400ms','32%','90%','65%','30%','40%','12:04','465','7788','10','0'];
       const bad = [];
       lines.forEach(function(line){
         if (!/[A-Za-z]{4,}/.test(line)) return;
@@ -258,7 +258,7 @@ async function main() {
       if (!CJS.test(line) && false) return;
       if (!/[\u4e00-\u9fff]/.test(line)) return;
       // allow product exceptions via keys rendered as Chinese in en? should be none except brand
-      if (/无限牛马/.test(line) && /CCArmy/.test(line)) return;
+      if (/无限牛马/.test(line) && /WArmy/.test(line)) return;
       if (/中文/.test(line)) return; // locale option
       bad.push(line);
     });
@@ -272,7 +272,7 @@ async function main() {
     lines.forEach(function(line){
       if (!/[\u4e00-\u9fff]/.test(line)) return;
       if (line.indexOf('中文') !== -1) return; // language option
-      if (line.indexOf('无限牛马') !== -1 && line.indexOf('CCArmy') !== -1) return;
+      if (line.indexOf('无限牛马') !== -1 && line.indexOf('WArmy') !== -1) return;
       bad.push(line);
     });
     return bad.slice(0,12);
@@ -285,7 +285,9 @@ async function main() {
   await sleep(350);
 
   // ── 6. 我的页行为项 → 桌面端说明（不静默）──
-  for (const act of ['act-models', 'act-skills', 'act-diag', 'act-cleanup', 'act-updates']) {
+  // ⚠️ act-diag 不在这里：卡顿自检是产品负责人退休掉的功能（桌面端入口整块移除），
+  //    移动端那条「诊断」行是**悬空入口**，已删除；它由下面那条反向断言守着（必须不存在）。
+  for (const act of ['act-models', 'act-skills', 'act-cleanup', 'act-updates']) {
     await touch('#tabs button[data-tab="me"]');
     await sleep(100);
     const tr = await touch(`.tab-page .cell[data-act="${act}"]`);
@@ -299,6 +301,25 @@ async function main() {
     await touch('#page-host .page:last-child [data-act="back"]');
     await sleep(180);
   }
+
+  // 退休功能「卡顿自检（诊断）」的悬空入口必须真的没了：
+  // 结构上（没有 data-act="act-diag" 的单元、行为项只剩 4 条）+ 文案上（该文案不再出现在「我」页）。
+  // 与上面那 4 条行为项检查一对一：少一条行为项，就补一条「已移除」的反向检查。
+  await touch('#tabs button[data-tab="me"]');
+  await sleep(150);
+  const dangling = await ev(`(function(){
+    const acts = Array.from(document.querySelectorAll('.tab-page .cell[data-act]'))
+      .map(function(c){ return c.getAttribute('data-act'); })
+      .filter(function(a){ return a.indexOf('act-') === 0; });
+    const cell = document.querySelector('.tab-page .cell[data-act="act-diag"]');
+    const zhPack = (window.__I18N_ALL__ && window.__I18N_ALL__['zh-CN']) || {};
+    const label = zhPack['me.diagnostics'];
+    const txt = (document.querySelector('#tabs-host')||{}).innerText || '';
+    return JSON.stringify({ hasCell: !!cell, acts: acts, labelRendered: !!label && txt.indexOf(label) !== -1 });
+  })()`);
+  const danglingObj = JSON.parse(dangling);
+  ok(danglingObj.hasCell === false && danglingObj.acts.length === 4 && danglingObj.acts.indexOf('act-diag') === -1 && danglingObj.labelRendered === false,
+    'A6 退休功能「诊断（卡顿自检）」在移动端没有悬空入口（无 act-diag 行、行为项只剩 4 条、文案也不再渲染）', dangling);
 
   // ── 7. 实例按钮状态真变 + 无裸字母 a ──
   await touch('#tabs button[data-tab="cattle"]');
@@ -433,6 +454,89 @@ async function main() {
   })()`);
   ok(!/未绑定|未设置/.test(meText), 'A13「我的」页无「未绑定/未设置」误导文案', meText.slice(0, 80));
   ok(/桌面/.test(meText) || /desktop/i.test(meText), 'A13 行为项显示可行动提示', meText.slice(0, 120));
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     14. T195：移动端不许再出现「多节点组网」与旧的 7788 端口
+     （桌面端契约：新概念是「组网」，默认端口 59599；旧的 LAN-sync/多节点块已退休）
+     这一节只**追加**断言，不动上面任何一条。
+     ══════════════════════════════════════════════════════════════════════════ */
+  await ev(`(function(){ if (window.__MOBILE__ && window.__MOBILE__.popAll) window.__MOBILE__.popAll(); return true; })()`);
+  await sleep(250);
+
+  const meshState = await ev(`(function(){
+    var st = (window.__MOBILE__ && window.__MOBILE__.state) || {};
+    return JSON.stringify({ port: st.mesh && st.mesh.port, running: !!(st.mesh && st.mesh.running) });
+  })()`);
+  const meshObj = JSON.parse(meshState);
+  ok(meshObj.port === 59599, 'T195-1 移动端组网端口默认 = 59599（与桌面端 CCAARMY_DEFAULT_NET_PORT 一致，不是旧的 7788）', meshState);
+
+  await touch('#tabs button[data-tab="me"]');
+  await sleep(200);
+  const meRowsText = await ev(`(function(){ return (document.querySelector('#tabs-host')||{}).innerText || ''; })()`);
+  ok(meRowsText.indexOf('59599') !== -1, 'T195-2 「我」页的组网行显示真实端口 59599', String(meRowsText).replace(/\s+/g, ' ').slice(0, 90));
+
+  await touch('.tab-page .cell[data-act="set-mesh"]');
+  await sleep(300);
+  const meshPage = await ev(`(function(){
+    var pages = document.querySelectorAll('#page-host .page');
+    var top = pages[pages.length - 1];
+    return JSON.stringify({ title: top ? (top.querySelector('.bar .title')||{}).textContent : null, text: top ? (top.innerText||'') : '' });
+  })()`);
+  const meshPageObj = JSON.parse(meshPage);
+  ok(meshPageObj.title && meshPageObj.title.indexOf('多节点') === -1 && /组网/.test(meshPageObj.title),
+    'T195-3 组网页标题是新概念「组网」，不含退休的「多节点」', JSON.stringify({ title: meshPageObj.title }));
+  ok(String(meshPageObj.text).indexOf('7788') === -1, 'T195-3 组网页里没有旧端口 7788', String(meshPageObj.text).replace(/\s+/g, ' ').slice(0, 90));
+  ok(/组网开关/.test(String(meshPageObj.text)), 'T195-3 状态行用桌面端同款措辞「组网开关」', String(meshPageObj.text).replace(/\s+/g, ' ').slice(0, 60));
+
+  // 打开组网开关 → 文案用桌面同一套键（net.switchOn 的「组网已开启（端口 …）」）
+  await touch('.page .cell[data-act="toggle-mesh"], .page button[data-act="toggle-mesh"]');
+  await sleep(320);
+  const meshOn = await ev(`(function(){
+    var pages = document.querySelectorAll('#page-host .page');
+    var top = pages[pages.length - 1];
+    return top ? (top.innerText||'') : '';
+  })()`);
+  ok(/组网已开启/.test(String(meshOn)) && !/多节点/.test(String(meshOn)),
+    'T195-4 打开后如实说「组网已开启（端口 59599）」（与桌面端同一套 i18n）', String(meshOn).replace(/\s+/g, ' ').slice(0, 90));
+  ok(/关闭组网/.test(String(meshOn)), 'T195-4 按钮文案是「关闭组网」（不是旧的「停止组网」）', String(meshOn).replace(/\s+/g, ' ').slice(0, 90));
+  await touch('.page button[data-act="toggle-mesh"], .page .cell[data-act="toggle-mesh"]');
+  await sleep(320);
+
+  // 英文界面下也不许出现旧的 "Multi-node mesh"
+  // 注意：setLocale() 内部会 openSetting('appearance')（重新本地化当前页），所以切完语言要再 popAll 一次
+  await ev(`(function(){ window.__MOBILE__.setLocale('en-US'); return true; })()`);
+  await sleep(400);
+  await ev(`(function(){ window.__MOBILE__.popAll(); return true; })()`);
+  await sleep(250);
+  await touch('#tabs button[data-tab="me"]');
+  await sleep(200);
+  await touch('.tab-page .cell[data-act="set-mesh"]');
+  await sleep(300);
+  const meshEn = await ev(`(function(){
+    var pages = document.querySelectorAll('#page-host .page');
+    var top = pages[pages.length - 1];
+    return top ? (top.innerText||'') : '';
+  })()`);
+  ok(String(meshEn).indexOf('Multi-node') === -1 && /Mesh/.test(String(meshEn)),
+    'T195-5 英文界面用新的「Mesh networking」措辞，不含退休的 "Multi-node"', String(meshEn).replace(/\s+/g, ' ').slice(0, 90));
+  ok(String(meshEn).indexOf('59599') !== -1, 'T195-5 英文界面同样显示真实端口 59599', String(meshEn).replace(/\s+/g, ' ').slice(0, 90));
+  await ev(`(function(){ window.__MOBILE__.setLocale('zh-CN'); return true; })()`);
+  await sleep(400);
+  await ev(`(function(){ window.__MOBILE__.popAll(); return true; })()`);
+  await sleep(250);
+
+  // 全站扫描：任何页面都不该再出现 7788 / 多节点组网
+  await touch('#tabs button[data-tab="me"]');
+  await sleep(200);
+  const legacy = await ev(`(function(){
+    var txt = (document.querySelector('#phone')||{}).innerText || '';
+    return JSON.stringify({ hasOldPort: txt.indexOf('7788') !== -1, hasMultiNode: txt.indexOf('多节点') !== -1 });
+  })()`);
+  ok(JSON.parse(legacy).hasOldPort === false && JSON.parse(legacy).hasMultiNode === false,
+    'T195-6 移动端界面里彻底没有 7788 / 「多节点」残留（全站可见文本扫描）', legacy);
+
+  const legacyErrs = c.errors().filter((e) => !/Electron Security Warning/i.test(e));
+  ok(legacyErrs.length === 0, 'T195 这一节全程无控制台异常', JSON.stringify(legacyErrs.slice(0, 3)).slice(0, 200));
 
   const pass = results.filter(Boolean).length;
   console.log('\nverify-mobile-ui: ' + pass + '/' + results.length + ' 通过');

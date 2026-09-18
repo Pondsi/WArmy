@@ -23,7 +23,7 @@ import {
   RelayTunnelListener,
   SecureSyncClient,
   SecureSyncServer,
-  ccarmyFingerprint,
+  warmyFingerprint,
   ed25519FromSeed,
   sha256,
   signEd25519Local,
@@ -31,14 +31,14 @@ import {
 } from '../dist/index.js';
 
 /** 明文中唯一标记：中继侧任何样本里**都不允许**出现它（证明中继只看到密文） */
-export const MARKER_SEND = 'CCARMY-RELAY-PLAINTEXT-MARKER-SEND-9f3a71';
-export const MARKER_REPLY = 'CCARMY-RELAY-PLAINTEXT-MARKER-REPLY-4c2b88';
+export const MARKER_SEND = 'WARMY-RELAY-PLAINTEXT-MARKER-SEND-9f3a71';
+export const MARKER_REPLY = 'WARMY-RELAY-PLAINTEXT-MARKER-REPLY-4c2b88';
 
 /** 由父进程给的随机 seed（32B hex）确定性派生本进程身份 —— 仓库里不留任何密钥材料 */
 function identityFromSeedHex(hex) {
   const seed = sha256(Buffer.from(String(hex), 'utf8'));
   const kp = ed25519FromSeed(seed);
-  const fingerprint = ccarmyFingerprint(kp.publicKey);
+  const fingerprint = warmyFingerprint(kp.publicKey);
   return {
     fingerprint,
     publicKey: kp.publicKey,

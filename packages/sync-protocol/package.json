@@ -1,5 +1,5 @@
 {
-  "name": "@ccarmy/sync-protocol",
+  "name": "@warmy/sync-protocol",
   "version": "0.1.0",
   "private": true,
   "description": "跨设备同步协议 + NodeRegistry",

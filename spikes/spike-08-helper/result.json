@@ -8,10 +8,10 @@
     "platform": "win32",
     "arch": "x64",
     "hostname": "DESKTOP-6N59TGI",
-    "repoRoot": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy"
+    "repoRoot": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy"
   },
   "subject": {
-    "module": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\packages\\app-shell\\src\\helper-tool.ts",
+    "module": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\packages\\app-shell\\src\\helper-tool.ts",
     "loadMode": "ts-type-strip",
     "loadError": null,
     "version": "0.1.0-p0-spike8"
@@ -140,8 +140,8 @@
       {
         "id": "N-7",
         "name": "渲染出的目标行格式正确",
-        "expected": "127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe",
-        "actual": "127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe",
+        "expected": "127.0.0.1 warmy-spike08.local # WArmy spike-08 probe",
+        "actual": "127.0.0.1 warmy-spike08.local # WArmy spike-08 probe",
         "pass": true,
         "evidence": null
       },
@@ -217,7 +217,7 @@
         "actual": true,
         "pass": true,
         "evidence": {
-          "appendedLine": "127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe"
+          "appendedLine": "127.0.0.1 warmy-spike08.local # WArmy spike-08 probe"
         }
       },
       {
@@ -227,7 +227,7 @@
         "actual": true,
         "pass": true,
         "evidence": {
-          "tail": "\"  \\r\\n127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 probe\\r\\n\""
+          "tail": "\"  \\r\\n127.0.0.1 warmy-spike08.local # WArmy spike-08 probe\\r\\n\""
         }
       },
       {
@@ -297,8 +297,8 @@
         "pass": true,
         "evidence": {
           "backup": {
-            "source": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\hosts-fake",
-            "path": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\backups\\hosts-fake.2026-09-17T12-10-03-947Z.bak",
+            "source": "C:\\Users\\p\\AppData\\Local\\Temp\\warmy-spike08-1789647003782\\hosts-fake",
+            "path": "C:\\Users\\p\\AppData\\Local\\Temp\\warmy-spike08-1789647003782\\backups\\hosts-fake.2026-09-17T12-10-03-947Z.bak",
             "bytes": 252,
             "sha256": "9d6bf416608c34a7adacc08f8949cf2822832f3003cb2a85f8751f34d40c3873",
             "createdAt": "2026-09-17T12:10:03.947Z"
@@ -327,7 +327,7 @@
         "expected": true,
         "actual": true,
         "pass": true,
-        "evidence": "幂等跳过：127.0.0.1 ccarmy-spike08.local 已存在（行 6）"
+        "evidence": "幂等跳过：127.0.0.1 warmy-spike08.local 已存在（行 6）"
       },
       {
         "id": "N-27",
@@ -375,7 +375,7 @@
         "expected": "HOSTS_TARGET_UNREADABLE",
         "actual": "HOSTS_TARGET_UNREADABLE",
         "pass": true,
-        "evidence": "无法读取 hosts：C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\nope\\hosts"
+        "evidence": "无法读取 hosts：C:\\Users\\p\\AppData\\Local\\Temp\\warmy-spike08-1789647003782\\nope\\hosts"
       },
       {
         "id": "N-33",
@@ -424,9 +424,9 @@
     ],
     "passCount": 37,
     "failCount": 0,
-    "scratchDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782",
-    "fakeHostsPath": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\hosts-fake",
-    "backupDirUsed": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\backups"
+    "scratchDir": "C:\\Users\\p\\AppData\\Local\\Temp\\warmy-spike08-1789647003782",
+    "fakeHostsPath": "C:\\Users\\p\\AppData\\Local\\Temp\\warmy-spike08-1789647003782\\hosts-fake",
+    "backupDirUsed": "C:\\Users\\p\\AppData\\Local\\Temp\\warmy-spike08-1789647003782\\backups"
   },
   "noHangSuite": {
     "items": [
@@ -524,7 +524,7 @@
         "pass": true,
         "evidence": {
           "wallMs": 1220,
-          "spawnError": "spawn C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-spike08-1789647003782\\not-exists-gsudo.exe ENOENT"
+          "spawnError": "spawn C:\\Users\\p\\AppData\\Local\\Temp\\warmy-spike08-1789647003782\\not-exists-gsudo.exe ENOENT"
         }
       },
       {
@@ -582,8 +582,8 @@
     "target": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
     "spec": {
       "ip": "127.0.0.1",
-      "hostname": "ccarmy-spike08.local",
-      "comment": "CCArmy spike-08 helper probe (auto-removed)"
+      "hostname": "warmy-spike08.local",
+      "comment": "WArmy spike-08 helper probe (auto-removed)"
     },
     "baseline": {
       "path": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
@@ -611,7 +611,7 @@
       "writeMethod": "elevated",
       "backup": {
         "source": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
-        "path": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak",
+        "path": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak",
         "bytes": 2538,
         "sha256": "b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
         "createdAt": "2026-09-17T12:10:15.002Z"
@@ -655,7 +655,7 @@
             "-n",
             "cmd",
             "/c",
-            "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-helper-stage\\elevated-10228-1789647015003-b288daee.cmd"
+            "C:\\Users\\p\\AppData\\Local\\Temp\\warmy-helper-stage\\elevated-10228-1789647015003-b288daee.cmd"
           ],
           "exitCode": 0,
           "signal": null,
@@ -674,7 +674,7 @@
         ]
       },
       "plan": {
-        "appendedLine": "127.0.0.1 ccarmy-spike08.local # CCArmy spike-08 helper probe (auto-removed)",
+        "appendedLine": "127.0.0.1 warmy-spike08.local # WArmy spike-08 helper probe (auto-removed)",
         "contentSha256": "411f8f91c2c20a697dcceb83ca628cf25c42e2bfd325285d1dbcd036a6f2c2ec",
         "bytesToWrite": 2616
       }
@@ -694,7 +694,7 @@
       "writeMethod": "elevated",
       "backup": {
         "source": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
-        "path": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-337Z.bak",
+        "path": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-337Z.bak",
         "bytes": 2616,
         "sha256": "411f8f91c2c20a697dcceb83ca628cf25c42e2bfd325285d1dbcd036a6f2c2ec",
         "createdAt": "2026-09-17T12:10:15.337Z"
@@ -738,7 +738,7 @@
             "-n",
             "cmd",
             "/c",
-            "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-helper-stage\\elevated-10228-1789647015338-f650ee80.cmd"
+            "C:\\Users\\p\\AppData\\Local\\Temp\\warmy-helper-stage\\elevated-10228-1789647015338-f650ee80.cmd"
           ],
           "exitCode": 0,
           "signal": null,
@@ -779,19 +779,19 @@
     },
     "restoredToOriginal": true,
     "observedOutcome": "success-elevated-write-verified",
-    "originalBackupPath": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak"
+    "originalBackupPath": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak"
   },
   "macosSuite": {
     "plan": {
       "tool": "smappservice",
-      "label": "com.ccarmy.helper",
-      "plistPath": "/Library/LaunchDaemons/com.ccarmy.helper.plist",
-      "helperExecutable": "\\Library\\PrivilegedHelperTools\\ccarmy-helper",
-      "plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>com.ccarmy.helper</string>\n  <key>ProgramArguments</key>\n  <array>\n    <string>\\Library\\PrivilegedHelperTools\\ccarmy-helper</string>\n    <string>--write-hosts</string>\n  </array>\n  <key>MachServices</key>\n  <dict>\n    <key>com.ccarmy.helper</key>\n    <dict><key>ResetAtClose</key><true/></dict>\n  </dict>\n  <key>RunAtLoad</key>\n  <false/>\n</dict>\n</plist>\n",
+      "label": "com.warmy.helper",
+      "plistPath": "/Library/LaunchDaemons/com.warmy.helper.plist",
+      "helperExecutable": "\\Library\\PrivilegedHelperTools\\warmy-helper",
+      "plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>com.warmy.helper</string>\n  <key>ProgramArguments</key>\n  <array>\n    <string>\\Library\\PrivilegedHelperTools\\warmy-helper</string>\n    <string>--write-hosts</string>\n  </array>\n  <key>MachServices</key>\n  <dict>\n    <key>com.warmy.helper</key>\n    <dict><key>ResetAtClose</key><true/></dict>\n  </dict>\n  <key>RunAtLoad</key>\n  <false/>\n</dict>\n</plist>\n",
       "registrationSteps": [
         "1. 在 Xcode 中为 helper target 打开 App Sandbox 之外的 \"Enable XPC Service / Privileged Helper\" 能力，并用同一 Team ID 签名（含 hardened runtime）。",
         "2. 主 App 内调用 ServiceManagement.SMAppService.daemon(plistName:) 或 launchd.plist(serviceName:) 注册；注册前把 plist 放进 App bundle 的 Contents/Library/LaunchDaemons/。",
-        "3. 注册目标路径（安装后）：/Library/LaunchDaemons/com.ccarmy.helper.plist；helper 可执行：\\Library\\PrivilegedHelperTools\\ccarmy-helper",
+        "3. 注册目标路径（安装后）：/Library/LaunchDaemons/com.warmy.helper.plist；helper 可执行：\\Library\\PrivilegedHelperTools\\warmy-helper",
         "4. 用户首次授权后由 launchd 拉活 XPC listener；主 App 通过 NSXPCConnection 调 write-hosts。",
         "5. macOS 26 已知 XPC 断言 fullPath is nil（bundle 未被正确签名/注册时出现），需校验 code signature 与 Team ID。"
       ],

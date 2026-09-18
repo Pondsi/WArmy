@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/app.js';
+const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.js';
 let j = fs.readFileSync(p, 'utf8');
 
 const anchor = `  bindResizer($('col-resizer'), '--list-w', 200, 420);`;
@@ -16,7 +16,7 @@ const globals = `  // ── 顶层交互绑定（必须全局执行一次） �
   $('btn-send').addEventListener('click', () => send());
   $('btn-stop-all').addEventListener('click', () => stopAllAi());
   $('btn-attach').addEventListener('click', async () => {
-    const r = await window.ccarmy.pickFile();
+    const r = await window.warmy.pickFile();
     if (r?.ok) {
       const name = r.path.split(/[\\\\/]/).pop();
       state.attachments.push({ name, path: r.path });

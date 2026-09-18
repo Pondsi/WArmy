@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/app.js';
+const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.js';
 let j = fs.readFileSync(p, 'utf8');
 
 const anchor = `      document.querySelectorAll('[data-clear]').forEach((b) => {
@@ -21,7 +21,7 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
 
       // ── SMTP 多账号（最多 10） ──
       async function renderSmtpList() {
-        const r = await window.ccarmy.smtpList();
+        const r = await window.warmy.smtpList();
         const accounts = r?.accounts || [];
         const n = $('smtp-n');
         if (n) n.textContent = String(accounts.length);
@@ -45,7 +45,7 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
           .join('');
         box.querySelectorAll('[data-x]').forEach((b) => {
           b.onclick = async () => {
-            await window.ccarmy.smtpRemove(b.dataset.x);
+            await window.warmy.smtpRemove(b.dataset.x);
             renderSmtpList();
           };
         });
@@ -58,7 +58,7 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
               return;
             }
             $('smtp-msg').textContent = t('common.loading');
-            const vr = await window.ccarmy.smtpVerify({ ...full, id });
+            const vr = await window.warmy.smtpVerify({ ...full, id });
             $('smtp-msg').textContent = vr?.ok ? t('smtp.ok') : t('smtp.fail') + ': ' + (vr?.message || '');
             renderSmtpList();
           };
@@ -79,7 +79,7 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
           $('smtp-msg').textContent = t('common.error');
           return;
         }
-        const r = await window.ccarmy.smtpAdd(acc);
+        const r = await window.warmy.smtpAdd(acc);
         if (r?.ok) {
           state.smtpFull = (state.smtpFull || []).concat([acc]);
           ['smtp-label', 'smtp-host', 'smtp-user', 'smtp-pass'].forEach((id) => {
@@ -119,7 +119,7 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
           inp.onchange = () => {
             pr[inp.dataset.k] = inp.value;
             if (inp.dataset.k === 'label') el.querySelector('.prov-head').textContent = inp.value;
-            window.ccarmy.setProvider({
+            window.warmy.setProvider({
               presetId: pr.id,
               apiKey: pr.apiKey,
               baseURL: pr.baseURL,
@@ -131,14 +131,14 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
         el.querySelector('[data-fetch]').onclick = async () => {
           const btn = el.querySelector('[data-fetch]');
           btn.textContent = t('common.loading');
-          await window.ccarmy.setProvider({
+          await window.warmy.setProvider({
             presetId: pr.id,
             apiKey: pr.apiKey,
             baseURL: pr.baseURL,
             protocol: pr.protocol,
             model: providerCfgModel(pr),
           });
-          const r = await window.ccarmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, apiKey: pr.apiKey });
+          const r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, apiKey: pr.apiKey });
           if (r?.ok && r.models?.length) {
             pr.models = [...new Set([...(pr.models || []), ...r.models])];
           }
@@ -154,7 +154,7 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
         el.querySelectorAll('.model-chip').forEach((chip) => {
           chip.onclick = async () => {
             pr.defaultModel = chip.dataset.m;
-            await window.ccarmy.setProvider({
+            await window.warmy.setProvider({
               presetId: pr.id,
               apiKey: pr.apiKey,
               baseURL: pr.baseURL,

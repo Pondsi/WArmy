@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
 let j = fs.readFileSync(base + 'app.js', 'utf8');
 
 // 1) 实例头像 + 认知注入绑定（插在模型配置绑定前）
@@ -36,7 +36,7 @@ if (j.includes(anchor) && !j.includes('i-cog-add')) {
       });
 
       $('i-cog-add')?.addEventListener('click', async () => {
-        const r = await window.ccarmy.pickFile({ filters: ['md'] });
+        const r = await window.warmy.pickFile({ filters: ['md'] });
         if (!r?.ok) return;
         const name = r.path.split(/[\\\\/]/).pop();
         inst.cognitionFiles.push({ name, path: r.path, size: 0 });

@@ -1,5 +1,5 @@
 /**
- * CCArmy 全量验证套件 — 从头跑一遍
+ * WArmy 全量验证套件 — 从头跑一遍
  * 覆盖：包构建产物、i18n、Provider、Security、Instance、Memory、Router、Board、UI 资源
  */
 import fs from 'node:fs';
@@ -29,7 +29,7 @@ function exists(...parts) {
   return fs.existsSync(path.join(root, ...parts));
 }
 
-console.log('=== CCArmy verify pass ===');
+console.log('=== WArmy verify pass ===');
 console.log('root', root);
 
 // 1. 仓库与快照
@@ -70,7 +70,7 @@ check('i18n key count match', zk.length === ek.length && zk.length > 100, { zh: 
 check('i18n no missing en', zk.every((k) => k in en), zk.filter((k) => !(k in en)).slice(0, 5));
 check('i18n no missing zh', ek.every((k) => k in zh), ek.filter((k) => !(k in zh)).slice(0, 5));
 check('displayName zh name', zh['app.zhName'] === '无限牛马');
-check('displayName en name', en['app.enName'] === 'CCArmy');
+check('displayName en name', en['app.enName'] === 'WArmy');
 for (const k of ['nav.settings', 'chat.send', 'dashboard.title', 'me.username', 'settings.providers', 'chat.stopAll']) {
   check(`i18n has ${k}`, typeof zh[k] === 'string' && typeof en[k] === 'string');
 }
@@ -96,13 +96,13 @@ check('resizer panel', html.includes('panel-resizer'));
 check('voice btn', html.includes('btn-voice'));
 check('attach btn', html.includes('btn-attach'));
 check('menu removed', mainTs.includes('Menu.setApplicationMenu(null)'));
-check('group create ipc', mainTs.includes('ccarmy:group-create'));
-check('board ipc', mainTs.includes('ccarmy:board-tasks'));
-check('list models ipc', mainTs.includes('ccarmy:list-models'));
-check('theme ipc', mainTs.includes('ccarmy:set-theme-source'));
+check('group create ipc', mainTs.includes('warmy:group-create'));
+check('board ipc', mainTs.includes('warmy:board-tasks'));
+check('list models ipc', mainTs.includes('warmy:list-models'));
+check('theme ipc', mainTs.includes('warmy:set-theme-source'));
 
 // 6. 动态加载已构建包
-const ascii = path.join(os.tmpdir(), 'ccarmy-verify-pkgs');
+const ascii = path.join(os.tmpdir(), 'warmy-verify-pkgs');
 fs.rmSync(ascii, { recursive: true, force: true });
 fs.mkdirSync(ascii, { recursive: true });
 for (const p of ['contracts', 'providers', 'group-router', 'board']) {
@@ -148,7 +148,7 @@ check('route dispatch', route.action === 'dispatch');
 const { BoardStore, parseBoardCommand } = await import(
   toImportUrl(path.join(ascii, 'board', 'dist', 'index.js'))
 );
-const boardDir = path.join(os.tmpdir(), 'ccarmy-verify-board-' + Date.now());
+const boardDir = path.join(os.tmpdir(), 'warmy-verify-board-' + Date.now());
 const board = new BoardStore(boardDir);
 check('board duty only', (() => {
   try {
@@ -167,7 +167,7 @@ fs.rmSync(boardDir, { recursive: true, force: true });
 
 // 7. memory-os 直接类（ASCII 拷贝）
 const memSrc = path.join(root, 'packages', 'memory-os');
-const memAscii = path.join(os.tmpdir(), 'ccarmy-verify-mem');
+const memAscii = path.join(os.tmpdir(), 'warmy-verify-mem');
 fs.rmSync(memAscii, { recursive: true, force: true });
 fs.mkdirSync(path.join(memAscii, 'dist'), { recursive: true });
 fs.copyFileSync(path.join(memSrc, 'package.json'), path.join(memAscii, 'package.json'));
@@ -177,7 +177,7 @@ for (const f of fs.readdirSync(path.join(memSrc, 'dist'))) {
 const nm = path.join(memSrc, 'node_modules');
 if (fs.existsSync(nm)) fs.symlinkSync(nm, path.join(memAscii, 'node_modules'), 'junction');
 const { MemoryService } = await import(toImportUrl(path.join(memAscii, 'dist', 'index.js')));
-const memDir = path.join(os.tmpdir(), 'ccarmy-verify-memdata-' + Date.now());
+const memDir = path.join(os.tmpdir(), 'warmy-verify-memdata-' + Date.now());
 const mem = new MemoryService({ dataDir: memDir });
 mem.append({ id: 'r1', sessionId: 's', kind: 'message', body: '无限牛马项目进度' }, 'duty');
 const cards = mem.recall('牛马');
@@ -209,7 +209,7 @@ check('ccr compresses', out.compressedBytes < out.originalBytes && (out.truncate
 });
 
 const { KnowledgeBase } = await import(toImportUrl(path.join(ascii, 'knowledge-base', 'dist', 'index.js')));
-const kbDir = path.join(os.tmpdir(), 'ccarmy-verify-kb-' + Date.now());
+const kbDir = path.join(os.tmpdir(), 'warmy-verify-kb-' + Date.now());
 const kb = new KnowledgeBase(kbDir);
 kb.upsertEntity({ id: 'e1', kind: 'person', name: '值班者A', attrs: { role: 'duty' }, anchors: [] });
 kb.addEvent({ id: 'ev1', title: '完成周报', entityIds: ['e1'], anchors: [], ts: Date.now() });
@@ -220,12 +220,12 @@ fs.rmSync(kbDir, { recursive: true, force: true });
 const { NodeRegistry, SyncBus, createInvite, consumeInvite, incognitoWorkDir } = await import(
   toImportUrl(path.join(ascii, 'sync-protocol', 'dist', 'index.js'))
 );
-const regFile = path.join(os.tmpdir(), 'ccarmy-verify-reg.json');
+const regFile = path.join(os.tmpdir(), 'warmy-verify-reg.json');
 const reg = new NodeRegistry(regFile);
 const local = reg.registerLocal('A');
 const remote = reg.pairRemote('node-b', 'B');
 check('registry local', reg.isLocal(local.nodeId) && !reg.isLocal(remote.nodeId));
-const busDir = path.join(os.tmpdir(), 'ccarmy-verify-bus');
+const busDir = path.join(os.tmpdir(), 'warmy-verify-bus');
 const bus = new SyncBus(busDir);
 bus.publish({ fromNode: local.nodeId, toNode: remote.nodeId, channel: 'group', payload: { text: 'hi' } });
 const incog = bus.publish({ fromNode: remote.nodeId, toNode: local.nodeId, channel: 'group', payload: { text: 'secret' }, incognito: true });
@@ -250,7 +250,7 @@ check('assets downrank', gov.list()[0]?.strength === 'weak');
 const { CheckpointStore } = await import(
   toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'checkpoint.js'))
 );
-const cpDir = path.join(os.tmpdir(), 'ccarmy-verify-cp-' + Date.now());
+const cpDir = path.join(os.tmpdir(), 'warmy-verify-cp-' + Date.now());
 const cps = new CheckpointStore(cpDir);
 const jsonl = path.join(cpDir, 'mem.jsonl');
 fs.writeFileSync(jsonl, '{"seq":1}\n');
@@ -261,22 +261,54 @@ check('checkpoint rollback', cps.rollback(cp.id, { jsonlPath: jsonl }) && fs.rea
 fs.rmSync(cpDir, { recursive: true, force: true });
 
 // main process chat IPC surface
-check('chat-send ipc', mainTs.includes('ccarmy:chat-send'));
-check('checkpoint ipc', mainTs.includes('ccarmy:checkpoint-create'));
-check('knowledge ipc', mainTs.includes('ccarmy:knowledge-query'));
-check('set-provider ipc', mainTs.includes('ccarmy:set-provider'));
+check('chat-send ipc', mainTs.includes('warmy:chat-send'));
+check('checkpoint ipc', mainTs.includes('warmy:checkpoint-create'));
+check('knowledge ipc', mainTs.includes('warmy:knowledge-query'));
+check('set-provider ipc', mainTs.includes('warmy:set-provider'));
 const appJs2 = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.js'), 'utf8');
-check('renderer uses chatSend', appJs2.includes('ccarmy.chatSend'));
-check('renderer setProvider', appJs2.includes('ccarmy.setProvider'));
+check('renderer uses chatSend', appJs2.includes('warmy.chatSend'));
+check('renderer setProvider', appJs2.includes('warmy.setProvider'));
 
 // 8. ADR / agents / lock
 check('ADR archived', exists('docs', 'ADR', '000-多智能体群聊桌面应用定稿方案.md'));
 check('UI agents installed', exists('packages', 'app-shell', 'agents', 'design-ui-designer.md'));
 check('pnpm lock', exists('pnpm-lock.yaml'));
-check('no mirror in npmrc', (() => {
-  const n = fs.readFileSync(path.join(root, '.npmrc'), 'utf8');
-  return !n.includes('registry.npmmirror') && n.includes('save-exact');
-})());
+// .npmrc：原意图（防"意外注册表抢占"——那会静默改变所有人装到的东西）**保留**，
+// 但打包流水线需要一个**二进制镜像**：github.com 在本机不可达，electron-builder 的
+// winCodeSign / nsis / nsis-resources 只能走 npmmirror（pnpm 把它导出成
+// npm_config_electron_builder_binaries_mirror，app-builder-lib 在 out/binDownload.js 里读）。
+// 因此从"一刀切禁止镜像"改成 **allowlist of one**：
+//  ① 不得设置通用包 registry（含 @scope:registry）——抢占注册表是最危险的那类改动；
+//  ② 凡 URL 形态的赋值只允许**恰好一条**，且必须正是那条 electron-builder-binaries 镜像；
+//  ③ 该镜像行**必须存在**（打包 NSIS 依赖它）；
+//  ④ 仍要 save-exact=true。
+// 换个镜像 URL、再加一条镜像（electron_mirror / disturl / node_mirror…）、或者加 registry=，
+// 都会真的 FAIL。
+const npmrcText = fs.readFileSync(path.join(root, '.npmrc'), 'utf8');
+const npmrcLines = npmrcText
+  .split(/\r?\n/)
+  .map((l) => l.trim())
+  .filter((l) => l && !l.startsWith('#') && !l.startsWith(';'));
+const npmrcApprovedMirror =
+  'electron_builder_binaries_mirror=https://registry.npmmirror.com/-/binary/electron-builder-binaries/';
+const npmrcRegistryHijack = npmrcLines.filter((l) => /(^|:)registry$/i.test(l.split('=')[0].trim()));
+const npmrcUrlSettings = npmrcLines.filter((l) => /^[^=]+=\s*https?:\/\//.test(l));
+const npmrcProblems = [
+  !npmrcLines.includes('save-exact=true') && 'missing save-exact=true（原意图：锁死依赖版本）',
+  npmrcRegistryHijack.length > 0 && `registry hijack: ${npmrcRegistryHijack.join(' | ')}`,
+  npmrcUrlSettings.length !== 1 &&
+    `expected exactly 1 url-valued setting (allowlist of one), got ${npmrcUrlSettings.length}: ${npmrcUrlSettings.join(' | ')}`,
+  npmrcUrlSettings.length === 1 &&
+    npmrcUrlSettings[0] !== npmrcApprovedMirror &&
+    `url-valued setting is not the approved mirror: ${npmrcUrlSettings[0]}`,
+  !npmrcLines.includes(npmrcApprovedMirror) &&
+    'missing required electron-builder binaries mirror（打包 NSIS 依赖这一行）',
+].filter(Boolean);
+check(
+  'npmrc: no registry hijack + exactly one approved mirror',
+  npmrcProblems.length === 0,
+  npmrcProblems.length ? { problems: npmrcProblems, npmrc: npmrcLines } : undefined
+);
 
 // 9. 后续交付项
 check('electron-builder config', exists('packages', 'app-shell', 'electron-builder.yml'));
@@ -284,11 +316,11 @@ check('ci workflow', exists('.github', 'workflows', 'ci.yml'));
 check('metrics module', exists('packages', 'app-shell', 'dist', 'metrics.js'));
 check('checkpoint cow', fs.readFileSync(path.join(root, 'packages/app-shell/src/checkpoint.ts'), 'utf8').includes('COPYFILE_FICLONE'));
 check('settings store', exists('packages', 'app-shell', 'dist', 'settings-store.js'));
-check('save-voice ipc', mainTs.includes('ccarmy:save-voice'));
-check('metrics ipc', mainTs.includes('ccarmy:metrics-summary'));
-check('nodes ipc', mainTs.includes('ccarmy:nodes-list'));
-check('profile login ipc', mainTs.includes('ccarmy:profile-login'));
-check('settings persist ipc', mainTs.includes('ccarmy:settings-save'));
+check('save-voice ipc', mainTs.includes('warmy:save-voice'));
+check('metrics ipc', mainTs.includes('warmy:metrics-summary'));
+check('nodes ipc', mainTs.includes('warmy:nodes-list'));
+check('profile login ipc', mainTs.includes('warmy:profile-login'));
+check('settings persist ipc', mainTs.includes('warmy:settings-save'));
 check('renderer metrics panel', html.includes('metrics-box'));
 check('renderer checkpoint panel', html.includes('cp-detail-list'));
 check('renderer knowledge', html.includes('btn-kb-go'));
@@ -298,14 +330,14 @@ check('i18n metrics keys', typeof zh['metrics.title'] === 'string' && typeof en[
 check('i18n cp keys', typeof zh['cp.rollback'] === 'string');
 check('executor module', exists('packages', 'app-shell', 'dist', 'executor.js'));
 check('asset-wire module', exists('packages', 'app-shell', 'dist', 'asset-wire.js'));
-check('executor ipc', mainTs.includes('ccarmy:executor-run'));
-check('assets ipc', mainTs.includes('ccarmy:assets-retrieve'));
-check('kb-from-chat ipc', mainTs.includes('ccarmy:kb-from-chat'));
+check('executor ipc', mainTs.includes('warmy:executor-run'));
+check('assets ipc', mainTs.includes('warmy:assets-retrieve'));
+check('kb-from-chat ipc', mainTs.includes('warmy:kb-from-chat'));
 check('preload executor', fs.readFileSync(path.join(root, 'packages/app-shell/src/preload.cjs'), 'utf8').includes('executorRun'));
 check('orchestrator module', exists('packages', 'app-shell', 'dist', 'orchestrator.js'));
-check('orchestrate ipc', mainTs.includes('ccarmy:group-orchestrate'));
-check('approval ipc', mainTs.includes('ccarmy:request-approval'));
-check('cost ipc', mainTs.includes('ccarmy:cost-summary'));
+check('orchestrate ipc', mainTs.includes('warmy:group-orchestrate'));
+check('approval ipc', mainTs.includes('warmy:request-approval'));
+check('cost ipc', mainTs.includes('warmy:cost-summary'));
 check('status card', fs.readFileSync(path.join(root, 'packages/app-shell/src/orchestrator.ts'), 'utf8').includes('buildStatusCard'));
 check('renderer approval modal', appJs.includes('showApprovalDialog'));
 check('renderer cost', appJs.includes('costSummary'));
@@ -313,36 +345,36 @@ check('renderer kb save', html.includes('btn-kb-save'));
 check('i18n approval keys', typeof zh['approval.once'] === 'string');
 check('checkpoint detail fields', fs.readFileSync(path.join(root, 'packages/app-shell/src/checkpoint.ts'), 'utf8').includes('filesChanged'));
 check('approval onApprove', mainTs.includes('onApprove'));
-check('executors-status ipc', mainTs.includes('ccarmy:executors-status'));
-check('asr ipc', mainTs.includes('ccarmy:asr-transcribe'));
-check('state-save ipc', mainTs.includes('ccarmy:state-save'));
+check('executors-status ipc', mainTs.includes('warmy:executors-status'));
+check('asr ipc', mainTs.includes('warmy:asr-transcribe'));
+check('state-save ipc', mainTs.includes('warmy:state-save'));
 check('renderer exec panel', html.includes('exec-box'));
 check('renderer asr', appJs.includes('asrTranscribe'));
 check('renderer stateSave', appJs.includes('stateSave'));
 check('provider delete', appJs.includes('data-prov-del'));
 check('model add/del', appJs.includes('i-del-model') && appJs.includes('i-add-model'));
-check('open-chat-window ipc', mainTs.includes('ccarmy:open-chat-window'));
-check('hotkey ipc', mainTs.includes('ccarmy:register-hotkey'));
-check('tray ipc', mainTs.includes('ccarmy:tray-init'));
-check('export ipc', mainTs.includes('ccarmy:export-session'));
-check('auto-update ipc', mainTs.includes('ccarmy:auto-update-check'));
+check('open-chat-window ipc', mainTs.includes('warmy:open-chat-window'));
+check('hotkey ipc', mainTs.includes('warmy:register-hotkey'));
+check('tray ipc', mainTs.includes('warmy:tray-init'));
+check('export ipc', mainTs.includes('warmy:export-session'));
+check('auto-update ipc', mainTs.includes('warmy:auto-update-check'));
 check('checkpoint mtime', fs.readFileSync(path.join(root, 'packages/app-shell/src/checkpoint.ts'), 'utf8').includes('mtimeMs'));
 check('renderer open window', appJs.includes('btn-open-win'));
 check('renderer export', appJs.includes('btn-export'));
 check('preload openChatWindow', fs.readFileSync(path.join(root, 'packages/app-shell/src/preload.cjs'), 'utf8').includes('openChatWindow'));
 check('i18n export keys', typeof zh['chat.export'] === 'string');
-check('group-members ipc', mainTs.includes('ccarmy:group-members'));
-check('board-session ipc', mainTs.includes('ccarmy:board-session'));
-check('ccr-tool ipc', mainTs.includes('ccarmy:ccr-tool-output'));
-check('kb-detail ipc', mainTs.includes('ccarmy:kb-detail'));
-check('last-error ipc', mainTs.includes('ccarmy:last-error'));
-check('setup ipc', mainTs.includes('ccarmy:setup-state'));
+check('group-members ipc', mainTs.includes('warmy:group-members'));
+check('board-session ipc', mainTs.includes('warmy:board-session'));
+check('ccr-tool ipc', mainTs.includes('warmy:ccr-tool-output'));
+check('kb-detail ipc', mainTs.includes('warmy:kb-detail'));
+check('last-error ipc', mainTs.includes('warmy:last-error'));
+check('setup ipc', mainTs.includes('warmy:setup-state'));
 check('renderer board sess', appJs.includes('refreshSessionBoard'));
 check('renderer setup', appJs.includes('maybeShowSetup'));
 check('i18n retry key', typeof zh['common.retry'] === 'string');
-check('search-messages ipc', mainTs.includes('ccarmy:search-messages'));
-check('plugin-install ipc', mainTs.includes('ccarmy:plugin-install'));
-check('archived ipc', mainTs.includes('ccarmy:archived-list'));
+check('search-messages ipc', mainTs.includes('warmy:search-messages'));
+check('plugin-install ipc', mainTs.includes('warmy:plugin-install'));
+check('archived ipc', mainTs.includes('warmy:archived-list'));
 check('renderer chat search', appJs.includes('btn-chat-search'));
 check('renderer directed', appJs.includes('btn-directed'));
 check('html directed', html.includes('mi-directed'));
@@ -359,13 +391,13 @@ check('model-roles module', exists('packages', 'app-shell', 'dist', 'model-roles
 check('memory-os migrate', exists('packages', 'memory-os', 'dist', 'migrate.js'));
 check('memory-os lock', exists('packages', 'memory-os', 'dist', 'lock.js'));
 check('memory-os vectors', exists('packages', 'memory-os', 'dist', 'vectors.js'));
-check('audit ipc', mainTs.includes('ccarmy:audit-log'));
-check('safeStorage ipc', mainTs.includes('ccarmy:secure-key-save'));
-check('archive ipc', mainTs.includes('ccarmy:archive-external'));
-check('cleanup ipc', mainTs.includes('ccarmy:cleanup-run'));
-check('role-models ipc', mainTs.includes('ccarmy:role-models-set'));
-check('dissolve ipc', mainTs.includes('ccarmy:group-dissolve'));
-check('export-allowlist ipc', mainTs.includes('ccarmy:export-allowlist'));
+check('audit ipc', mainTs.includes('warmy:audit-log'));
+check('safeStorage ipc', mainTs.includes('warmy:secure-key-save'));
+check('archive ipc', mainTs.includes('warmy:archive-external'));
+check('cleanup ipc', mainTs.includes('warmy:cleanup-run'));
+check('role-models ipc', mainTs.includes('warmy:role-models-set'));
+check('dissolve ipc', mainTs.includes('warmy:group-dissolve'));
+check('export-allowlist ipc', mainTs.includes('warmy:export-allowlist'));
 check('dsh-app protocol', mainTs.includes('dsh-app'));
 check('node binaries 5', [
   'node-v24.20.0-win-x64.zip',
@@ -377,24 +409,62 @@ check('node binaries 5', [
 check('rrf fusion', fs.readFileSync(path.join(root, 'packages/memory-os/src/vectors.ts'), 'utf8').includes('rrfFusion'));
 check('swmr lock', fs.readFileSync(path.join(root, 'packages/memory-os/src/lock.ts'), 'utf8').includes('JsonlLock'));
 check('session v3', fs.readFileSync(path.join(root, 'packages/memory-os/src/migrate.ts'), 'utf8').includes('migrateSessionV2ToV3'));
-check('import-openclaw ipc', mainTs.includes('ccarmy:import-openclaw'));
-check('special-models ipc', mainTs.includes('ccarmy:special-models-set'));
-check('ollama-asr ipc', mainTs.includes('ccarmy:asr-ollama'));
+check('import-openclaw ipc', mainTs.includes('warmy:import-openclaw'));
+check('special-models ipc', mainTs.includes('warmy:special-models-set'));
+check('ollama-asr ipc', mainTs.includes('warmy:asr-ollama'));
 check('renderer raf', appJs.includes('__rafThrottle'));
 check('renderer import btn', appJs.includes('btn-import-openclaw'));
 check('renderer special models', appJs.includes('btn-save-special'));
 check('i18n special models', typeof zh['settings.specialModels'] === 'string');
-check('dsh ipc', mainTs.includes('ccarmy:spawn-dsh-instance'));
-check('email ipc', mainTs.includes('ccarmy:email-queue'));
+check('dsh ipc', mainTs.includes('warmy:spawn-dsh-instance'));
+check('email ipc', mainTs.includes('warmy:email-queue'));
 check('external silent policy', mainTs.includes("type === 'external'"));
 check('builder extraResources', fs.readFileSync(path.join(root, 'packages/app-shell/electron-builder.yml'), 'utf8').includes('memory-os/dist'));
 check('renderer spawnDsh', appJs.includes('spawnDshInstance'));
-check('smtp verify ipc', mainTs.includes('ccarmy:smtp-verify'));
-check('lan start ipc', mainTs.includes('ccarmy:lan-start'));
-check('lan dual smoke', mainTs.includes('ccarmy:lan-dual-smoke'));
+check('smtp verify ipc', mainTs.includes('warmy:smtp-verify'));
+check('lan start ipc', mainTs.includes('warmy:lan-start'));
+check('lan dual smoke', mainTs.includes('warmy:lan-dual-smoke'));
 check('smtp not hardcoded', !mainTs.includes('smtp.qq.com') && !mainTs.includes('@gmail.com'));
 check('renderer smtp add btn', appJs.includes('btn-smtp-add') && appJs.includes('smtpAdd'));
-check('renderer lan start', appJs.includes('btn-lan-start'));
+// 内网同步 / 多节点组网：产品负责人**明确要求**把这两个设置块从 UI 移除（功能由下方
+// 「组网设置」卡片 id="net-card" 承接）；但底层 IPC 通道 warmy:lan-* / warmy:mesh-*
+// 仍是**产品契约**——删掉就是破坏契约变更。所以拆成一对，比原来单看一个 id 更严：
+//  ① 旧入口在渲染层**不存在**了（原区块的全部 DOM id 都查一遍），且替代入口（net-card）必须在
+//     ——否则"整段删掉什么都不过关"也能骗过纯否定断言；
+//  ② 通道**两边都还在**：主进程已注册（handleIpc）+ preload 已暴露（ipcRenderer.invoke）。
+const lanMeshRetiredUiIds = [
+  'btn-lan-start', 'btn-lan-stop', 'btn-lan-send', 'btn-lan-dual',
+  'lan-port', 'lan-host', 'lan-pport', 'lan-msg', 'lan-inbox',
+  'btn-mesh-start', 'btn-mesh-stop', 'btn-mesh-bcast',
+  'mesh-port', 'peer-name', 'peer-host', 'peer-port', 'btn-peer-add',
+  'mesh-msg', 'mesh-inbox',
+];
+const lanMeshUiProblems = [];
+for (const [file, src] of [['renderer/app.js', appJs], ['renderer/index.html', html]]) {
+  for (const id of lanMeshRetiredUiIds) {
+    if (src.includes(id)) lanMeshUiProblems.push(`retired lan/mesh UI entry still present: ${file}:${id}`);
+  }
+}
+if (!appJs.includes('id="net-card"')) {
+  lanMeshUiProblems.push('successor 组网设置 card (id="net-card") not found — 旧块不该靠"删干净"过关');
+}
+check('renderer lan/mesh settings blocks removed', lanMeshUiProblems.length === 0, lanMeshUiProblems);
+
+const lanMeshChannels = [
+  'warmy:lan-start', 'warmy:lan-stop', 'warmy:lan-send', 'warmy:lan-inbox', 'warmy:lan-status', 'warmy:lan-dual-smoke',
+  'warmy:mesh-start', 'warmy:mesh-stop', 'warmy:mesh-broadcast', 'warmy:mesh-inbox', 'warmy:mesh-status',
+];
+const preloadSrc = fs.readFileSync(path.join(root, 'packages/app-shell/src/preload.cjs'), 'utf8');
+const lanMeshContractMissing = lanMeshChannels.filter(
+  (ch) =>
+    !new RegExp(`handleIpc\\(\\s*'${ch}'`).test(mainTs) || // 主进程注册（handleIpc 实参允许换行）
+    !preloadSrc.includes(`invoke('${ch}'`), // preload 暴露
+);
+check(
+  'lan/mesh ipc contract intact (main + preload)',
+  lanMeshContractMissing.length === 0 && lanMeshChannels.length === 11,
+  lanMeshContractMissing
+);
 check('renderer webgpu test', appJs.includes('btn-webgpu'));
 
 const { dualMachineSmoke } = await import(
@@ -417,12 +487,12 @@ check('metrics cache rate', sum.cacheHitRate === 0.9 && sum.turns === 1, sum);
 const { LocalAccountStore, SettingsStore } = await import(
   toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'settings-store.js'))
 );
-const accFile = path.join(os.tmpdir(), 'ccarmy-verify-acc.json');
+const accFile = path.join(os.tmpdir(), 'warmy-verify-acc.json');
 const acc = new LocalAccountStore(accFile);
 acc.setPassword('secret123');
 check('local login', acc.loginLocal('secret123').ok === true && acc.loginLocal('wrong').ok === false);
 fs.rmSync(accFile, { force: true });
-const setFile = path.join(os.tmpdir(), 'ccarmy-verify-set.json');
+const setFile = path.join(os.tmpdir(), 'warmy-verify-set.json');
 const st = new SettingsStore(setFile);
 st.save({ themeMode: 'dark', accent: '#3d8bfd' });
 check('settings persist', st.load().themeMode === 'dark');

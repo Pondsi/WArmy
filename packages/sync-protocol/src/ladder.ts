@@ -30,7 +30,7 @@ import os from 'node:os';
 import type { DhtAddr } from './dht.js';
 import { type RelayCandidateRef, type RelayDecision, type RelayDecisionCode, decideRelay, relayTokenFor } from './relay.js';
 
-export const LAN_PROBE_MAGIC = 'CCARMY-LAN/1';
+export const LAN_PROBE_MAGIC = 'WARMY-LAN/1';
 export const DEFAULT_DISCOVERY_PORT = 7799;
 
 export interface LanPeer {

@@ -1,13 +1,13 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/';
+const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 
 // ── IPC ──
-if (!m.includes('ccarmy:import-openclaw')) {
+if (!m.includes('warmy:import-openclaw')) {
   m += '\n// ── 导入 openclaw.json 供应商配置 ──\n';
-  m += "ipcMain.handle('ccarmy:import-openclaw', () => {\n";
+  m += "ipcMain.handle('warmy:import-openclaw', () => {\n";
   m += "  try {\n";
   m += "    const ocPath = path.join(app.getPath('userData'), '..', 'openclaw.json');\n";
   m += "    if (!fs.existsSync(ocPath)) return { ok: false, error: 'openclaw.json not found' };\n";
@@ -32,18 +32,18 @@ if (!m.includes('ccarmy:import-openclaw')) {
   m += "    return { ok: false, error: String(e) };\n";
   m += "  }\n";
   m += "});\n\n";
-  m += "ipcMain.handle('ccarmy:special-models-set', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {\n";
+  m += "ipcMain.handle('warmy:special-models-set', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {\n";
   m += "  if (settingsStore) {\n";
   m += "    const cur = settingsStore.load() as Record<string, unknown>;\n";
   m += "    settingsStore.save({ ...cur, specialModels: cfg } as never);\n";
   m += "  }\n";
   m += "  return { ok: true };\n";
   m += "});\n\n";
-  m += "ipcMain.handle('ccarmy:special-models-get', () => {\n";
+  m += "ipcMain.handle('warmy:special-models-get', () => {\n";
   m += "  const s = settingsStore?.load() as Record<string, unknown>;\n";
   m += "  return { ok: true, specialModels: s?.specialModels || {} };\n";
   m += "});\n\n";
-  m += "ipcMain.handle('ccarmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {\n";
+  m += "ipcMain.handle('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {\n";
   m += "  try {\n";
   m += "    const res = await fetch('http://127.0.0.1:11434/api/generate', {\n";
   m += "      method: 'POST',\n";
@@ -60,12 +60,12 @@ if (!m.includes('ccarmy:import-openclaw')) {
 
 // preload
 if (!p.includes('importOpenclaw')) {
-  const anchor = "  exportAllowlist: () => ipcRenderer.invoke('ccarmy:export-allowlist'),";
+  const anchor = "  exportAllowlist: () => ipcRenderer.invoke('warmy:export-allowlist'),";
   p = p.replace(anchor, anchor + '\n' +
-    "  importOpenclaw: () => ipcRenderer.invoke('ccarmy:import-openclaw'),\n" +
-    "  specialModelsSet: (cfg) => ipcRenderer.invoke('ccarmy:special-models-set', cfg),\n" +
-    "  specialModelsGet: () => ipcRenderer.invoke('ccarmy:special-models-get'),\n" +
-    "  asrOllama: (payload) => ipcRenderer.invoke('ccarmy:asr-ollama', payload),");
+    "  importOpenclaw: () => ipcRenderer.invoke('warmy:import-openclaw'),\n" +
+    "  specialModelsSet: (cfg) => ipcRenderer.invoke('warmy:special-models-set', cfg),\n" +
+    "  specialModelsGet: () => ipcRenderer.invoke('warmy:special-models-get'),\n" +
+    "  asrOllama: (payload) => ipcRenderer.invoke('warmy:asr-ollama', payload),");
   fs.writeFileSync(base + 'preload.cjs', p);
   console.log('preload ok');
 }
@@ -138,7 +138,7 @@ if (!j.includes('btn-import-openclaw\')')) {
   if (j.includes(invite)) {
     j = j.replace(invite, `      $('btn-import-openclaw')?.addEventListener('click', async () => {
         $('import-msg').textContent = t('common.loading');
-        const r = await window.ccarmy.importOpenclaw().catch(() => null);
+        const r = await window.warmy.importOpenclaw().catch(() => null);
         if (r?.ok) {
           $('import-msg').textContent = t('instances.saved') + ' (' + r.providers.length + ')';
           state.providers = r.providers;
@@ -154,7 +154,7 @@ if (!j.includes('btn-import-openclaw\')')) {
           summary: { provider: 'deepseek', model: $('sm-summary')?.value || 'deepseek-flash' },
           organizer: { provider: 'deepseek', model: $('sm-organizer')?.value || 'deepseek-chat' },
         };
-        await window.ccarmy.specialModelsSet(cfg).catch(() => {});
+        await window.warmy.specialModelsSet(cfg).catch(() => {});
         $('sm-msg').textContent = t('instances.saved');
       });
 ${invite}`);
@@ -165,9 +165,9 @@ ${invite}`);
 fs.writeFileSync(base + 'electron-main.ts', m);
 fs.writeFileSync(base + 'renderer/app.js', j);
 console.log('done');
-console.log('  importOpenclaw:', m.includes('ccarmy:import-openclaw'));
-console.log('  specialModels:', m.includes('ccarmy:special-models-set'));
-console.log('  ollama asr:', m.includes('ccarmy:asr-ollama'));
+console.log('  importOpenclaw:', m.includes('warmy:import-openclaw'));
+console.log('  specialModels:', m.includes('warmy:special-models-set'));
+console.log('  ollama asr:', m.includes('warmy:asr-ollama'));
 console.log('  raf throttle:', j.includes('__rafThrottle'));
 console.log('  btn-import:', j.includes('btn-import-openclaw'));
 console.log('  btn-save-special:', j.includes('btn-save-special'));

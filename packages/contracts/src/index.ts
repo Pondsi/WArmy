@@ -1,5 +1,5 @@
 /**
- * @ccarmy/contracts — P0 冻结接口
+ * @warmy/contracts — P0 冻结接口
  *
  * 对应 ADR 000 的十二份契约：
  * ACP协议 / 编排Schema / recall+retrieve签名 / JSONL记录格式 /

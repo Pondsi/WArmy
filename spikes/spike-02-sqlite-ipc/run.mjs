@@ -20,7 +20,7 @@ import os from 'node:os';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const childPath = fileURLToPath(new URL('./child.mjs', import.meta.url));
-const dbPath = path.join(os.tmpdir(), `ccarmy-spike2-${Date.now()}.db`);
+const dbPath = path.join(os.tmpdir(), `warmy-spike2-${Date.now()}.db`);
 const RESULT_PATH = path.join(__dirname, 'result.json');
 
 function percentile(sorted, p) {

@@ -3,7 +3,7 @@
  *
  * 设计要点（对齐 ADR 003 §2.3 / R2 / R3）：
  *  - **身份认证**：双方用长期 Ed25519 身份签名，签名绑定 raw 公钥；
- *    指纹必须由公钥推出（`ccarmyFingerprint`），因此「换公钥不换指纹」必然失败。
+ *    指纹必须由公钥推出（`warmyFingerprint`），因此「换公钥不换指纹」必然失败。
  *  - **前向保密**：会话密钥来自 **X25519 ECDHE 临时密钥**（每次连接新生成），
  *    **不使用 RSA 密钥传输**；长期私钥泄露也解不开过去的流量。
  *  - **每连接一次**：会话密钥每个 TCP 连接协商一次，不做「每条消息重握手」；
@@ -36,13 +36,13 @@ import {
   type IdentityProvider,
   type NormalizedIdentity,
   IdentityContractError,
-  ccarmyFingerprint,
+  warmyFingerprint,
   normalizeIdentity,
   verifyPeerSignature,
 } from './identity.js';
 
 export const HANDSHAKE_VERSION = 1;
-export const HANDSHAKE_PROTOCOL = 'ccarmy-sync/1';
+export const HANDSHAKE_PROTOCOL = 'warmy-sync/1';
 export const DEFAULT_TIMESTAMP_TOLERANCE_MS = 120_000;
 export const DEFAULT_PHASE_TIMEOUT_MS = 15_000;
 export const HANDSHAKE_NONCE_BYTES = 16;
@@ -639,7 +639,7 @@ export class HandshakeDriver {
     if (claimedFp === this.identity.fingerprint) {
       throw this.fail('protocol-error', '对端声称与本机相同指纹（自反射攻击）', claimedFp);
     }
-    const derive = this.opts.fingerprintDerivation ?? ccarmyFingerprint;
+    const derive = this.opts.fingerprintDerivation ?? warmyFingerprint;
     const expected = derive(pk);
     if (expected !== claimedFp) {
       throw this.fail('fingerprint-mismatch', `指纹与公钥不符：声明 ${claimedFp}，由公钥推出 ${expected}`, claimedFp);
@@ -667,7 +667,7 @@ export class HandshakeDriver {
 
   private hs1Transcript(hs1: Hs1): string {
     return joinFields([
-      'CCARMY-HS1',
+      'WARMY-HS1',
       HANDSHAKE_VERSION,
       hs1.gid,
       hs1.eph,
@@ -682,7 +682,7 @@ export class HandshakeDriver {
 
   private hs2Transcript(hs2: Hs2, t1: string): string {
     return joinFields([
-      'CCARMY-HS2',
+      'WARMY-HS2',
       HANDSHAKE_VERSION,
       hs2.gid,
       hs2.eph,

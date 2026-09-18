@@ -25,6 +25,7 @@ fs.mkdirSync(outDir, { recursive: true });
 const i18nDir = path.join(pkg, 'src', 'i18n');
 const all = {};
 for (const f of fs.readdirSync(i18nDir)) {
+  if (!f.endsWith('.json')) continue; // skip locales.ts and any non-pack files
   all[f.replace('.json', '')] = JSON.parse(fs.readFileSync(path.join(i18nDir, f), 'utf8'));
 }
 const defaultLocale = all['zh-CN'] ? 'zh-CN' : Object.keys(all)[0];

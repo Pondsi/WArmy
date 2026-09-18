@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#0b0f14" />
+<title>WArmy · 无限牛马</title>
+<style>
+:root{
+  --bg:#0b0f14; --panel:#121820; --panel2:#18202b; --line:#243041;
+  --text:#e8eef7; --muted:#8b9bb0; --accent:#3ddc97; --warn:#f0b429; --danger:#ff6b6b;
+  --radius:14px; --pad:16px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI","Microsoft YaHei",sans-serif}
+#app{height:100%;display:flex;flex-direction:column;max-width:430px;margin:0 auto;
+  background:linear-gradient(180deg,#0e141c 0%,#0b0f14 100%);border-left:1px solid var(--line);border-right:1px solid var(--line)}
+header{padding:calc(12px + env(safe-area-inset-top,0px)) var(--pad) 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);background:rgba(18,24,32,.92);position:sticky;top:0;z-index:5;backdrop-filter:blur(8px)}
+.logo{width:36px;height:36px;border-radius:10px;background:#1a2433;display:grid;place-items:center;font-weight:700;color:var(--accent);border:1px solid var(--line)}
+.brand{flex:1;min-width:0}
+.brand h1{margin:0;font-size:17px;font-weight:650;letter-spacing:.02em}
+.brand p{margin:2px 0 0;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lang{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:12px}
+main{flex:1;overflow:auto;padding:var(--pad);padding-bottom:calc(72px + var(--safe-b))}
+.hero{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px}
+.hero h2{margin:0 0 8px;font-size:20px}
+.hero p{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{font-size:11px;padding:4px 10px;border-radius:999px;background:#152030;border:1px solid var(--line);color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 8px;font-size:14px;font-weight:600}
+.card p,.card li{margin:0;font-size:13px;color:var(--muted);line-height:1.55}
+.card ul{margin:8px 0 0;padding-left:18px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .t{font-size:13px}
+.row .s{font-size:11px;color:var(--muted);margin-top:2px}
+.badge{font-size:11px;padding:3px 8px;border-radius:8px;border:1px solid var(--line);color:var(--muted)}
+.badge.ok{color:var(--accent);border-color:rgba(61,220,151,.35);background:rgba(61,220,151,.08)}
+.badge.warn{color:var(--warn);border-color:rgba(240,180,41,.35);background:rgba(240,180,41,.08)}
+.lang-panel{display:none}
+.lang-panel.on{display:block}
+nav{position:fixed;left:0;right:0;bottom:0;max-width:430px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);
+  background:rgba(12,17,24,.96);border-top:1px solid var(--line);padding:8px 4px calc(8px + var(--safe-b));backdrop-filter:blur(10px);z-index:6}
+nav button{background:none;border:0;color:var(--muted);font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 2px;border-radius:10px}
+nav button.on{color:var(--accent)}
+nav button .ic{font-size:18px;line-height:1}
+.view{display:none}
+.view.on{display:block}
+footer.sig{margin-top:18px;font-size:10px;color:#5c6b7e;line-height:1.5;text-align:center}
+code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:#b7c7da;background:#101822;padding:1px 5px;border-radius:6px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">W</div>
+    <div class="brand">
+      <h1 id="appName">无限牛马</h1>
+      <p id="appSub">让AI成为你的无限牛马</p>
+    </div>
+    <select class="lang" id="localeSel" aria-label="Language"></select>
+  </header>
+
+  <main>
+    <!-- Home -->
+    <section class="view on" id="view-home" data-i18n-block="home">
+      <div class="hero">
+        <h2 data-k="heroTitle">无限牛马</h2>
+        <p data-k="heroBody">多智能体群聊桌面应用。本页是手机模拟器可运行的 WArmy 入口：浏览会话、牛马、看板与容器状态。</p>
+        <div class="chips">
+          <span class="chip" data-k="chipLocal">本地优先</span>
+          <span class="chip" data-k="chipLangs">10 种语言</span>
+          <span class="chip" data-k="chipContainer">容器开发项目</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 data-k="sessionsTitle">会话</h3>
+        <div class="row">
+          <div>
+            <div class="t" data-k="sess1">项目 · 接口联调</div>
+            <div class="s" data-k="sess1s">值班者运行中 · 队列 2</div>
+          </div>
+          <span class="badge ok" data-k="badgeRunning">运行中</span>
+        </div>
+        <div class="row">
+          <div>
+            <div class="t" data-k="sess2">项目 · 容器沙箱</div>
+            <div class="s" data-k="sess2s">容器未启动 · 历史可读</div>
+          </div>
+          <span class="badge warn" data-k="badgeStopped">已停止</span>
+        </div>
+        <div class="row">
+          <div>
+            <div class="t" data-k="sess3">我的牛马 · 写作助手</div>
+            <div class="s" data-k="sess3s">本机开发 · 空闲</div>
+          </div>
+          <span class="badge" data-k="badgeIdle">空闲</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 data-k="boardTitle">看板</h3>
+        <ul>
+          <li data-k="board1">整理周报结构 · 80%</li>
+          <li data-k="board2">补齐容器探测文案 · 100%</li>
+          <li data-k="board3">Router 队列持久化 · 100%</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Agents -->
+    <section class="view" id="view-agents">
+      <div class="card">
+        <h3 data-k="agentsTitle">我的牛马</h3>
+        <div class="row">
+          <div>
+            <div class="t" data-k="a1">值班 · 调度</div>
+            <div class="s" data-k="a1s">dutyEligible · 本机</div>
+          </div>
+          <span class="badge ok" data-k="badgeIdle">空闲</span>
+        </div>
+        <div class="row">
+          <div>
+            <div class="t" data-k="a2">执行 · 前端</div>
+            <div class="s" data-k="a2s">短命执行者池</div>
+          </div>
+          <span class="badge">P2</span>
+        </div>
+        <div class="row">
+          <div>
+            <div class="t" data-k="a3">执行 · 文档</div>
+            <div class="s" data-k="a3s">知识库写入</div>
+          </div>
+          <span class="badge">P3</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Container -->
+    <section class="view" id="view-container">
+      <div class="card">
+        <h3 data-k="ctTitle">容器</h3>
+        <p data-k="ctBody">开发环境（安全隔离）。原则上不用于项目测试。未就绪时控制台置灰，绝不静默降级到主机执行。</p>
+        <div class="row">
+          <div>
+            <div class="t" data-k="ct1">Docker</div>
+            <div class="s" data-k="ct1s">探测结果以本机真机为准</div>
+          </div>
+          <span class="badge warn" data-k="ct1b">未启动则停用项目</span>
+        </div>
+        <div class="row">
+          <div>
+            <div class="t" data-k="ct2">WSL</div>
+            <div class="s" data-k="ct2s">无 commit，固化能力如实声明</div>
+          </div>
+          <span class="badge" data-k="ct2b">export/import</span>
+        </div>
+        <div class="row">
+          <div>
+            <div class="t" data-k="ct3">控制台</div>
+            <div class="s" data-k="ct3s">仅容器内 shell · 本机人工输入</div>
+          </div>
+          <span class="badge ok" data-k="ct3b">契约已接线</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 data-k="portsTitle">默认端口</h3>
+        <p>生产 <code>59599</code> · 开发 <code>58588</code> · 测试 <code>62666</code></p>
+        <p data-k="portsNote" style="margin-top:8px">绑定失败会明确报错，并在设置里给出可点选候选端口；绝不静默换端口。</p>
+      </div>
+    </section>
+
+    <!-- About -->
+    <section class="view" id="view-about">
+      <div class="card">
+        <h3 data-k="aboutTitle">关于</h3>
+        <div class="row"><div class="t" data-k="aboutName">产品</div><div class="s">WArmy</div></div>
+        <div class="row"><div class="t" data-k="aboutFull">全名</div><div class="s">Workhorse Army</div></div>
+        <div class="row"><div class="t" data-k="aboutVer">版本</div><div class="s">0.1.0</div></div>
+        <div class="row"><div class="t" data-k="aboutAuthor">作者</div><div class="s">Pondsi</div></div>
+        <p style="margin-top:12px" data-k="aboutPrivacy">默认不收集、不上传对话与文件；本地数据仅保存在你的设备上。</p>
+      </div>
+      <div class="card">
+        <h3 data-k="langTitle">界面语言</h3>
+        <div id="localeList" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+    </section>
+
+    <footer class="sig" id="sigLine"></footer>
+  </main>
+
+  <nav>
+    <button class="on" data-view="home"><span class="ic">⌂</span><span data-k="navHome">首页</span></button>
+    <button data-view="agents"><span class="ic">☰</span><span data-k="navAgents">牛马</span></button>
+    <button data-view="container"><span class="ic">▣</span><span data-k="navCt">容器</span></button>
+    <button data-view="about"><span class="ic">ⓘ</span><span data-k="navAbout">关于</span></button>
+  </nav>
+</div>
+<script>
+const LOCALES = [
+  ['zh-CN','简体中文'],['zh-TW','繁體中文'],['en-US','English'],['ja','日本語'],
+  ['ko','한국어'],['ru','Русский'],['es','Español'],['fr','Français'],['pt','Português'],['eo','Esperanto']
+];
+const PACKS = {
+  'zh-CN': {
+    appName:'无限牛马', appSub:'让AI成为你的无限牛马',
+    heroTitle:'无限牛马', heroBody:'多智能体群聊桌面应用。本页是手机模拟器可运行的 WArmy 入口：浏览会话、牛马、看板与容器状态。',
+    chipLocal:'本地优先', chipLangs:'10 种语言', chipContainer:'容器开发项目',
+    sessionsTitle:'会话',
+    sess1:'项目 · 接口联调', sess1s:'值班者运行中 · 队列 2',
+    sess2:'项目 · 容器沙箱', sess2s:'容器未启动 · 历史可读',
+    sess3:'我的牛马 · 写作助手', sess3s:'本机开发 · 空闲',
+    badgeRunning:'运行中', badgeStopped:'已停止', badgeIdle:'空闲',
+    boardTitle:'看板', board1:'整理周报结构 · 80%', board2:'补齐容器探测文案 · 100%', board3:'Router 队列持久化 · 100%',
+    agentsTitle:'我的牛马', a1:'值班 · 调度', a1s:'dutyEligible · 本机', a2:'执行 · 前端', a2s:'短命执行者池', a3:'执行 · 文档', a3s:'知识库写入',
+    ctTitle:'容器', ctBody:'开发环境（安全隔离）。原则上不用于项目测试。未就绪时控制台置灰，绝不静默降级到主机执行。',
+    ct1:'Docker', ct1s:'探测结果以本机真机为准', ct1b:'未启动则停用项目',
+    ct2:'WSL', ct2s:'无 commit，固化能力如实声明', ct2b:'export/import',
+    ct3:'控制台', ct3s:'仅容器内 shell · 本机人工输入', ct3b:'契约已接线',
+    portsTitle:'默认端口', portsNote:'绑定失败会明确报错，并在设置里给出可点选候选端口；绝不静默换端口。',
+    aboutTitle:'关于', aboutName:'产品', aboutFull:'全名', aboutVer:'版本', aboutAuthor:'作者',
+    aboutPrivacy:'默认不收集、不上传对话与文件；本地数据仅保存在你的设备上。',
+    langTitle:'界面语言', navHome:'首页', navAgents:'牛马', navCt:'容器', navAbout:'关于',
+    sig:'Pondsi（+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）— 由 Xiaomi MiMo Desktop 自行提交'
+  },
+  'zh-TW': {
+    appName:'無限牛馬', appSub:'讓AI成為你的無限牛馬',
+    heroTitle:'無限牛馬', heroBody:'多智能體群聊桌面應用。本頁是手機模擬器可運行的 WArmy 入口。',
+    chipLocal:'本地優先', chipLangs:'10 種語言', chipContainer:'容器開發專案',
+    sessionsTitle:'會話',
+    sess1:'專案 · 介面聯調', sess1s:'值班者執行中 · 佇列 2',
+    sess2:'專案 · 容器沙箱', sess2s:'容器未啟動 · 歷史可讀',
+    sess3:'我的牛馬 · 寫作助手', sess3s:'本機開發 · 閒置',
+    badgeRunning:'執行中', badgeStopped:'已停止', badgeIdle:'閒置',
+    boardTitle:'看板', board1:'整理週報結構 · 80%', board2:'補齊容器探測文案 · 100%', board3:'Router 佇列持久化 · 100%',
+    agentsTitle:'我的牛馬', a1:'值班 · 調度', a1s:'dutyEligible · 本機', a2:'執行 · 前端', a2s:'短命執行者池', a3:'執行 · 文件', a3s:'知識庫寫入',
+    ctTitle:'容器', ctBody:'開發環境（安全隔離）。原則上不用於專案測試。未就緒時控制台置灰，絕不靜默降級。',
+    ct1:'Docker', ct1s:'探測結果以本機為準', ct1b:'未啟動則停用專案',
+    ct2:'WSL', ct2s:'無 commit，固化能力如實聲明', ct2b:'export/import',
+    ct3:'控制台', ct3s:'僅容器內 shell · 本機人工輸入', ct3b:'契約已接線',
+    portsTitle:'預設連接埠', portsNote:'繫結失敗會明確報錯，絕不靜默換連接埠。',
+    aboutTitle:'關於', aboutName:'產品', aboutFull:'全名', aboutVer:'版本', aboutAuthor:'作者',
+    aboutPrivacy:'預設不收集、不上传對話與檔案。',
+    langTitle:'介面語言', navHome:'首頁', navAgents:'牛馬', navCt:'容器', navAbout:'關於',
+    sig:'Pondsi（+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）— 由 Xiaomi MiMo Desktop 自行提交'
+  },
+  'en-US': {
+    appName:'WArmy', appSub:'An infinite army of AI workhorses working for you.',
+    heroTitle:'WArmy', heroBody:'Multi-agent group-chat desktop app. This page is a phone-simulator entry for WArmy.',
+    chipLocal:'Local-first', chipLangs:'10 languages', chipContainer:'Container-dev projects',
+    sessionsTitle:'Sessions',
+    sess1:'Project · API integration', sess1s:'Duty running · queue 2',
+    sess2:'Project · container sandbox', sess2s:'Container stopped · history readable',
+    sess3:'Workhorse · writing helper', sess3s:'Host-dev · idle',
+    badgeRunning:'Running', badgeStopped:'Stopped', badgeIdle:'Idle',
+    boardTitle:'Board', board1:'Weekly report outline · 80%', board2:'Container probe copy · 100%', board3:'Router queue persistence · 100%',
+    agentsTitle:'Workhorses', a1:'Duty · dispatcher', a1s:'dutyEligible · local', a2:'Executor · frontend', a2s:'short-lived pool', a3:'Executor · docs', a3s:'knowledge base writes',
+    ctTitle:'Containers', ctBody:'Development environment (security isolation). Not meant for project tests. Console greys out when not ready — no silent host fallback.',
+    ct1:'Docker', ct1s:'Status from real local probe', ct1b:'project disabled if not running',
+    ct2:'WSL', ct2s:'No commit; capability stated honestly', ct2b:'export/import',
+    ct3:'Console', ct3s:'In-container shell only · local human typed', ct3b:'contract wired',
+    portsTitle:'Default ports', portsNote:'Bind failure never silently changes the port; candidates are offered in Settings.',
+    aboutTitle:'About', aboutName:'Product', aboutFull:'Full name', aboutVer:'Version', aboutAuthor:'Author',
+    aboutPrivacy:'By default no conversations or files are collected or uploaded; data stays on your device.',
+    langTitle:'UI language', navHome:'Home', navAgents:'Agents', navCt:'Container', navAbout:'About',
+    sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
+  },
+  'ja': {
+    appName:'無限社畜', appSub:'AIがあなたの社畜になって、無限に働きます。',
+    heroTitle:'無限社畜', heroBody:'マルチエージェントのグループチャット卓上アプリ。これは電話シミュレータ用の WArmy 入口です。',
+    chipLocal:'ローカル優先', chipLangs:'10 言語', chipContainer:'コンテナ開発プロジェクト',
+    sessionsTitle:'セッション',
+    sess1:'プロジェクト · API 連携', sess1s:'当番実行中 · キュー 2',
+    sess2:'プロジェクト · コンテナ', sess2s:'停止中 · 履歴は読める',
+    sess3:'社畜 · 執筆', sess3s:'ホスト開発 · 待機',
+    badgeRunning:'実行中', badgeStopped:'停止', badgeIdle:'待機',
+    boardTitle:'ボード', board1:'週報の構成 · 80%', board2:'コンテナ探査文言 · 100%', board3:'Router キュー永続化 · 100%',
+    agentsTitle:'社畜', a1:'当番 · ディスパッチ', a1s:'dutyEligible · ローカル', a2:'実行 · フロント', a2s:'短命実行プール', a3:'実行 · 文書', a3s:'ナレッジ書き込み',
+    ctTitle:'コンテナ', ctBody:'開発環境（セキュリティ隔離）。原則としてプロジェクトテストには使いません。未準備ならコンソールは灰、ホストへ黙って落としません。',
+    ct1:'Docker', ct1s:'実機プローブ結果', ct1b:'未起動ならプロジェクト停止',
+    ct2:'WSL', ct2s:'commit なし。能力は正直に宣言', ct2b:'export/import',
+    ct3:'コンソール', ct3s:'コンテナ内 shell のみ · ローカル手入力', ct3b:'契約配線済',
+    portsTitle:'既定ポート', portsNote:'バインド失敗で黙ってポートを変えません。',
+    aboutTitle:'概要', aboutName:'製品', aboutFull:'正式名称', aboutVer:'版', aboutAuthor:'作者',
+    aboutPrivacy:'既定では会話もファイルも収集・アップロードしません。',
+    langTitle:'UI 言語', navHome:'ホーム', navAgents:'社畜', navCt:'コンテナ', navAbout:'概要',
+    sig:'Pondsi（+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）— 由 Xiaomi MiMo Desktop 自行提交'
+  },
+  'ko': {
+    appName:'무한 사축', appSub:'AI가 당신 대신 사축처럼 일해줍니다.',
+    heroTitle:'무한 사축', heroBody:'다중 에이전트 그룹 채팅 데스크톱 앱. 휴대폰 시뮬레이터용 WArmy 진입 페이지입니다.',
+    chipLocal:'로컬 우선', chipLangs:'10개 언어', chipContainer:'컨테이너 개발 프로젝트',
+    sessionsTitle:'세션',
+    sess1:'프로젝트 · API 연동', sess1s:'당번 실행 중 · 큐 2',
+    sess2:'프로젝트 · 컨테이너', sess2s:'중지됨 · 기록은 읽기 가능',
+    sess3:'사축 · 글쓰기', sess3s:'호스트 개발 · 대기',
+    badgeRunning:'실행 중', badgeStopped:'중지', badgeIdle:'대기',
+    boardTitle:'보드', board1:'주간 보고 구조 · 80%', board2:'컨테이너 탐지 문구 · 100%', board3:'Router 큐 영속화 · 100%',
+    agentsTitle:'사축', a1:'당번 · 디스패치', a1s:'dutyEligible · 로컬', a2:'실행 · 프론트', a2s:'단명 실행 풀', a3:'실행 · 문서', a3s:'지식베이스 기록',
+    ctTitle:'컨테이너', ctBody:'개발 환경(보안 격리). 원칙적으로 프로젝트 테스트에는 쓰지 않습니다. 준비 전 콘솔은 회색, 호스트로 조용히 내려가지 않습니다.',
+    ct1:'Docker', ct1s:'실기 프로브 결과', ct1b:'미실행이면 프로젝트 중지',
+    ct2:'WSL', ct2s:'commit 없음. 능력은 정직하게 선언', ct2b:'export/import',
+    ct3:'콘솔', ct3s:'컨테이너 내부 shell 만 · 로컬 수동 입력', ct3b:'계약 배선 완료',
+    portsTitle:'기본 포트', portsNote:'바인드 실패 시 포트를 몰래 바꾸지 않습니다.',
+    aboutTitle:'정보', aboutName:'제품', aboutFull:'전체 이름', aboutVer:'버전', aboutAuthor:'저자',
+    aboutPrivacy:'기본적으로 대화·파일을 수집·업로드하지 않습니다.',
+    langTitle:'UI 언어', navHome:'홈', navAgents:'사축', navCt:'컨테이너', navAbout:'정보',
+    sig:'Pondsi（+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）— 由 Xiaomi MiMo Desktop 自行提交'
+  },
+  'ru': {
+    appName:'WArmy', appSub:'An infinite army of AI workhorses working for you.',
+    heroTitle:'WArmy', heroBody:'Настольное приложение группового чата с несколькими ИИ-агентами. Вход для телефонного симулятора.',
+    chipLocal:'Local-first', chipLangs:'10 языков', chipContainer:'Проекты в контейнере',
+    sessionsTitle:'Сессии',
+    sess1:'Проект · интеграция API', sess1s:'Дежурный работает · очередь 2',
+    sess2:'Проект · контейнер', sess2s:'Остановлен · история читаема',
+    sess3:'Рабочая лошадь · тексты', sess3s:'Разработка на хосте · простой',
+    badgeRunning:'Работает', badgeStopped:'Остановлен', badgeIdle:'Простой',
+    boardTitle:'Доска', board1:'Структура отчёта · 80%', board2:'Тексты проба контейнера · 100%', board3:'Персистентность очереди Router · 100%',
+    agentsTitle:'Рабочие лошади', a1:'Дежурный · диспетчер', a1s:'dutyEligible · локально', a2:'Исполнитель · фронт', a2s:'пул коротких задач', a3:'Исполнитель · доки', a3s:'записи в базу знаний',
+    ctTitle:'Контейнеры', ctBody:'Среда разработки (изоляция). Не для тестов проекта. Если не готов — консоль серая, без тихого отката на хост.',
+    ct1:'Docker', ct1s:'Статус по реальному пробу', ct1b:'проект отключён, если не запущен',
+    ct2:'WSL', ct2s:'Без commit; возможности заявлены честно', ct2b:'export/import',
+    ct3:'Консоль', ct3s:'Только shell в контейнере · ввод человеком', ct3b:'контракт подключён',
+    portsTitle:'Порты по умолчанию', portsNote:'Ошибка bind никогда молча не меняет порт.',
+    aboutTitle:'О программе', aboutName:'Продукт', aboutFull:'Полное имя', aboutVer:'Версия', aboutAuthor:'Автор',
+    aboutPrivacy:'По умолчанию диалоги и файлы не собираются и не загружаются.',
+    langTitle:'Язык UI', navHome:'Главная', navAgents:'Агенты', navCt:'Контейнер', navAbout:'О программе',
+    sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
+  },
+  'es': {
+    appName:'WArmy', appSub:'An infinite army of AI workhorses working for you.',
+    heroTitle:'WArmy', heroBody:'Aplicación de escritorio de chat grupal multiagente. Entrada para el simulador de teléfono.',
+    chipLocal:'Local-first', chipLangs:'10 idiomas', chipContainer:'Proyectos en contenedor',
+    sessionsTitle:'Sesiones',
+    sess1:'Proyecto · integración API', sess1s:'De guardia en marcha · cola 2',
+    sess2:'Proyecto · contenedor', sess2s:'Detenido · historial legible',
+    sess3:'Caballo de trabajo · redacción', sess3s:'Desarrollo en host · inactivo',
+    badgeRunning:'En marcha', badgeStopped:'Detenido', badgeIdle:'Inactivo',
+    boardTitle:'Tablero', board1:'Esquema del informe · 80%', board2:'Texto de sonda de contenedor · 100%', board3:'Persistencia de cola Router · 100%',
+    agentsTitle:'Caballos de trabajo', a1:'De guardia · despacho', a1s:'dutyEligible · local', a2:'Ejecutor · front', a2s:'pool de corta vida', a3:'Ejecutor · docs', a3s:'escrituras en base de conocimiento',
+    ctTitle:'Contenedores', ctBody:'Entorno de desarrollo (aislamiento). No para pruebas del proyecto. Si no está listo, la consola se atenúa — sin caída silenciosa al host.',
+    ct1:'Docker', ct1s:'Estado por sonda real local', ct1b:'proyecto deshabilitado si no corre',
+    ct2:'WSL', ct2s:'Sin commit; capacidades declaradas con honestidad', ct2b:'export/import',
+    ct3:'Consola', ct3s:'Solo shell en contenedor · entrada humana local', ct3b:'contrato cableado',
+    portsTitle:'Puertos predeterminados', portsNote:'Un fallo de bind nunca cambia el puerto en silencio.',
+    aboutTitle:'Acerca de', aboutName:'Producto', aboutFull:'Nombre completo', aboutVer:'Versión', aboutAuthor:'Autor',
+    aboutPrivacy:'Por defecto no se recopilan ni suben conversaciones ni archivos.',
+    langTitle:'Idioma de la UI', navHome:'Inicio', navAgents:'Agentes', navCt:'Contenedor', navAbout:'Acerca de',
+    sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
+  },
+  'fr': {
+    appName:'WArmy', appSub:'An infinite army of AI workhorses working for you.',
+    heroTitle:'WArmy', heroBody:'Application de bureau de chat de groupe multi-agents. Entrée pour le simulateur mobile.',
+    chipLocal:'Local-first', chipLangs:'10 langues', chipContainer:'Projets en conteneur',
+    sessionsTitle:'Sessions',
+    sess1:'Projet · intégration API', sess1s:'Astreinte en cours · file 2',
+    sess2:'Projet · conteneur', sess2s:'Arrêté · historique lisible',
+    sess3:'Cheval de trait · rédaction', sess3s:'Dév hôte · inactif',
+    badgeRunning:'En cours', badgeStopped:'Arrêté', badgeIdle:'Inactif',
+    boardTitle:'Tableau', board1:'Plan du rapport · 80%', board2:'Texte sonde conteneur · 100%', board3:'Persistance file Router · 100%',
+    agentsTitle:'Chevaux de trait', a1:'Astreinte · répartiteur', a1s:'dutyEligible · local', a2:'Exécuteur · front', a2s:'pool court', a3:'Exécuteur · docs', a3s:'écritures base de connaissances',
+    ctTitle:'Conteneurs', ctBody:'Environnement de développement (isolation). Pas pour les tests projet. Si prêt absent, console grise — pas de repli silencieux hôte.',
+    ct1:'Docker', ct1s:'État via sonde locale réelle', ct1b:'projet désactivé si non lancé',
+    ct2:'WSL', ct2s:'Pas de commit ; capacités déclarées honnêtement', ct2b:'export/import',
+    ct3:'Console', ct3s:'Shell dans le conteneur uniquement · saisie humaine locale', ct3b:'contrat câblé',
+    portsTitle:'Ports par défaut', portsNote:'Un échec de bind ne change jamais le port en silence.',
+    aboutTitle:'À propos', aboutName:'Produit', aboutFull:'Nom complet', aboutVer:'Version', aboutAuthor:'Auteur',
+    aboutPrivacy:'Par défaut, ni conversations ni fichiers ne sont collectés ni téléversés.',
+    langTitle:'Langue UI', navHome:'Accueil', navAgents:'Agents', navCt:'Conteneur', navAbout:'À propos',
+    sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
+  },
+  'pt': {
+    appName:'WArmy', appSub:'An infinite army of AI workhorses working for you.',
+    heroTitle:'WArmy', heroBody:'Aplicativo desktop de chat em grupo multiagente. Entrada para o simulador de telefone.',
+    chipLocal:'Local-first', chipLangs:'10 idiomas', chipContainer:'Projetos em contêiner',
+    sessionsTitle:'Sessões',
+    sess1:'Projeto · integração de API', sess1s:'De plantão em execução · fila 2',
+    sess2:'Projeto · contêiner', sess2s:'Parado · histórico legível',
+    sess3:'Cavalo de trabalho · escrita', sess3s:'Dev no host · ocioso',
+    badgeRunning:'Executando', badgeStopped:'Parado', badgeIdle:'Ocioso',
+    boardTitle:'Quadro', board1:'Estrutura do relatório · 80%', board2:'Texto de sonda do contêiner · 100%', board3:'Persistência da fila Router · 100%',
+    agentsTitle:'Cavalos de trabalho', a1:'Plantão · despacho', a1s:'dutyEligible · local', a2:'Executor · front', a2s:'pool de vida curta', a3:'Executor · docs', a3s:'gravações na base de conhecimento',
+    ctTitle:'Contêineres', ctBody:'Ambiente de desenvolvimento (isolamento). Não para testes do projeto. Se não pronto, console acinzentado — sem queda silenciosa para o host.',
+    ct1:'Docker', ct1s:'Estado por sondagem real local', ct1b:'projeto desativado se não rodar',
+    ct2:'WSL', ct2s:'Sem commit; capacidades declaradas com honestidade', ct2b:'export/import',
+    ct3:'Console', ct3s:'Apenas shell no contêiner · entrada humana local', ct3b:'contrato conectado',
+    portsTitle:'Portas padrão', portsNote:'Falha de bind nunca muda a porta em silêncio.',
+    aboutTitle:'Sobre', aboutName:'Produto', aboutFull:'Nome completo', aboutVer:'Versão', aboutAuthor:'Autor',
+    aboutPrivacy:'Por padrão, conversas e arquivos não são coletados nem enviados.',
+    langTitle:'Idioma da UI', navHome:'Início', navAgents:'Agentes', navCt:'Contêiner', navAbout:'Sobre',
+    sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
+  },
+  'eo': {
+    appName:'WArmy', appSub:'An infinite army of AI workhorses working for you.',
+    heroTitle:'WArmy', heroBody:'Pluragenteca grupbreta programo. Enira paĝo por telefona simulilo.',
+    chipLocal:'Loka unue', chipLangs:'10 lingvoj', chipContainer:'Ujaj projektoj',
+    sessionsTitle:'Seancoj',
+    sess1:'Projekto · API-integrigo', sess1s:'Deĵoro ruliĝas · vico 2',
+    sess2:'Projekto · ujo', sess2s:'Haltita · historio legebla',
+    sess3:'Labro ĉevalo · skribado', sess3s:'Gastiga disvolvo · senokupe',
+    badgeRunning:'Ruliĝas', badgeStopped:'Haltita', badgeIdle:'Senokupe',
+    boardTitle:'Tabulo', board1:'Semajna raporto · 80%', board2:'Uja sondoteksto · 100%', board3:'Router-vica daŭremigo · 100%',
+    agentsTitle:'Labro ĉevaloj', a1:'Deĵoro · dissendo', a1s:'dutyEligible · loka', a2:'Plenumanto · front', a2s:'mallongviva baseno', a3:'Plenumanto · dok', a3s:'scio-bazaj skriboj',
+    ctTitle:'Ujoj', ctBody:'Disvolva medio (sekura izoliteco). Ne por projektaj testoj. Se ne preta, konzolo grizigas — neniun silencan falon al gastigo.',
+    ct1:'Docker', ct1s:'Stato per reala loka sondo', ct1b:'projekto malŝaltita se ne rulas',
+    ct2:'WSL', ct2s:'Neniu commit; kapabloj honeste deklaritaj', ct2b:'export/import',
+    ct3:'Konzolo', ct3s:'Nur uja shell · loka homa enigo', ct3b:'kontrakto konektita',
+    portsTitle:'Defaŭltaj portoj', portsNote:'Bind-malsukceso neniam silente ŝanĝas la porton.',
+    aboutTitle:'Pri', aboutName:'Produkto', aboutFull:'Plena nomo', aboutVer:'Versio', aboutAuthor:'Aŭtoro',
+    aboutPrivacy:'Defaŭlte konversacioj kaj dosieroj ne estas kolektataj nek alŝutataj.',
+    langTitle:'UI-lingvo', navHome:'Hejmo', navAgents:'Agentoj', navCt:'Ujo', navAbout:'Pri',
+    sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
+  }
+};
+function resolveLocale(raw){
+  if(!raw) return 'zh-CN';
+  const r=String(raw).trim();
+  if(LOCALES.some(x=>x[0]===r)) return r;
+  const l=r.toLowerCase().replace('_','-');
+  if(l.startsWith('zh-tw')||l.startsWith('zh-hant')||l==='zh-hk'||l==='zh-mo') return 'zh-TW';
+  if(l.startsWith('zh')) return 'zh-CN';
+  if(l.startsWith('ja')) return 'ja';
+  if(l.startsWith('ko')) return 'ko';
+  if(l.startsWith('ru')) return 'ru';
+  if(l.startsWith('es')) return 'es';
+  if(l.startsWith('fr')) return 'fr';
+  if(l.startsWith('pt')) return 'pt';
+  if(l.startsWith('eo')) return 'eo';
+  if(l.startsWith('en')) return 'en-US';
+  return 'zh-CN';
+}
+function applyLocale(loc){
+  const pack=PACKS[loc]||PACKS['zh-CN'];
+  document.documentElement.lang=loc;
+  document.querySelectorAll('[data-k]').forEach(el=>{
+    const k=el.getAttribute('data-k');
+    if(pack[k]!=null) el.textContent=pack[k];
+  });
+  document.getElementById('appName').textContent=pack.appName;
+  document.getElementById('appSub').textContent=pack.appSub;
+  document.getElementById('sigLine').textContent=pack.sig;
+  document.getElementById('localeSel').value=loc;
+  try{ localStorage.setItem('warmy.locale', loc);}catch(e){}
+  // prove pack switch: no leftover zh-CN keys when non-zh selected
+  if(loc!=='zh-CN' && loc!=='zh-TW'){
+    const sample=document.querySelector('[data-k="heroTitle"]');
+    if(sample && sample.textContent===PACKS['zh-CN'].heroTitle){
+      document.title='WArmy [i18n-fail]';
+    } else {
+      document.title=pack.appName+' · WArmy';
+    }
+  } else {
+    document.title=pack.appName+' · WArmy';
+  }
+}
+function initLocales(){
+  const sel=document.getElementById('localeSel');
+  sel.innerHTML=LOCALES.map(([c,n])=>`<option value="${c}">${n}</option>`).join('');
+  const list=document.getElementById('localeList');
+  list.innerHTML=LOCALES.map(([c,n])=>`<button class="chip" data-loc="${c}" style="cursor:pointer">${n}</button>`).join('');
+  list.addEventListener('click',e=>{
+    const b=e.target.closest('[data-loc]');
+    if(b) applyLocale(b.getAttribute('data-loc'));
+  });
+  sel.addEventListener('change',()=>applyLocale(sel.value));
+  let boot='zh-CN';
+  try{
+    const s=localStorage.getItem('warmy.locale');
+    boot=s?resolveLocale(s):resolveLocale(navigator.language);
+  }catch(e){ boot=resolveLocale(navigator.language); }
+  applyLocale(boot);
+}
+function initNav(){
+  const btns=[...document.querySelectorAll('nav button')];
+  btns.forEach(b=>b.addEventListener('click',()=>{
+    btns.forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    const v=b.getAttribute('data-view');
+    document.querySelectorAll('.view').forEach(s=>s.classList.remove('on'));
+    const el=document.getElementById('view-'+v);
+    if(el) el.classList.add('on');
+  }));
+}
+initLocales();
+initNav();
+</script>
+</body>
+</html>

@@ -39,12 +39,12 @@ import {
   type FingerprintDerivation,
   type IdentityProvider,
   type NormalizedIdentity,
-  ccarmyFingerprint,
+  warmyFingerprint,
   normalizeIdentity,
   verifyPeerSignature,
 } from './identity.js';
 
-export const DHT_PROTOCOL = 'ccarmy-dht/1';
+export const DHT_PROTOCOL = 'warmy-dht/1';
 export const DHT_ID_LENGTH = 32;
 export const DEFAULT_K = 8;
 export const DEFAULT_ALPHA = 3;
@@ -284,7 +284,7 @@ export async function signRecordEnvelope(opts: SignRecordOptions): Promise<DhtRe
     const derived = ed25519FromSeed(seed);
     pk = derived.publicKey;
     signKey = derived.privateKey;
-    sg = ccarmyFingerprint(pk);
+    sg = warmyFingerprint(pk);
   } else {
     pk = identity.publicKey;
     sg = identity.fingerprint;
@@ -371,7 +371,7 @@ export async function verifyRecordEnvelope(
     }
   })();
   if (!pk || pk.length !== 32) return { ok: false, reason: 'malformed', detail: '签名公钥长度非法' };
-  const derivation = opts.derivation ?? ccarmyFingerprint;
+  const derivation = opts.derivation ?? warmyFingerprint;
   const derivedSigner = derivation(pk);
   if (derivedSigner !== env.sg) {
     return { ok: false, reason: 'signer-mismatch', detail: `签名者指纹 ${env.sg} 与公钥推出 ${derivedSigner} 不符` };

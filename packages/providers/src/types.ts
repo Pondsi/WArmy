@@ -1,5 +1,5 @@
 /**
- * @ccarmy/providers — 多协议模型 Provider 抽象
+ * @warmy/providers — 多协议模型 Provider 抽象
  *
  * 协议覆盖：
  * 1. OpenAI 兼容 /v1/chat/completions

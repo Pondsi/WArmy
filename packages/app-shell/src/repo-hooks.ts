@@ -9,9 +9,9 @@
  * 本实现逐 ref 校验 + 逐 ref 路径校验 + **跨 ref 合并后的别名碰撞**校验（更严，fail-closed）。
  *
  * 角色/成员来自环境变量（缺省当最严的 `member`）：
- *   CCARMY_PUSHER_ROLE = member | admin | creator | duty
- *   CCARMY_PUSHER_ID   = 成员 id（用于 refs/heads/members/<id>/** 命名空间）
- *   CCARMY_GUARD_ASSUME_FF = 1 时允许"对象图不可用也放行快进"（默认禁止 = fail-closed）
+ *   WARMY_PUSHER_ROLE = member | admin | creator | duty
+ *   WARMY_PUSHER_ID   = 成员 id（用于 refs/heads/members/<id>/** 命名空间）
+ *   WARMY_GUARD_ASSUME_FF = 1 时允许"对象图不可用也放行快进"（默认禁止 = fail-closed）
  *
  * 明确不做的事：不改用户机器上的全局 git config（hooksPath 等）；不推送、不提交。
  */
@@ -270,7 +270,7 @@ export function runPreReceive(opts: RunPreReceiveOptions): PreReceiveResult {
  */
 export function formatPreReceiveOutput(r: PreReceiveResult): string[] {
   const out: string[] = [];
-  out.push('[ccarmy repo-guard] pre-receive');
+  out.push('[warmy repo-guard] pre-receive');
   out.push(`  role=${r.role} memberId=${r.memberId || '-'} refs=${r.refs.length}`);
   if (r.fatal) out.push(`  FATAL: ${r.fatal}（输入为空或全部非法 → 一律拒绝）`);
   for (const m of r.malformed) out.push(`  MALFORMED LINE: ${m}`);
@@ -300,13 +300,13 @@ export interface InstallHookResult {
   error?: string;
 }
 
-export const HOOK_MARKER = '# CCARMY-REPO-GUARD-HOOK v1';
+export const HOOK_MARKER = '# WARMY-REPO-GUARD-HOOK v1';
 
 /** 生成 `hooks/pre-receive` 的包装脚本（POSIX sh；Git for Windows 也用 sh 执行钩子） */
 export function hookWrapperScript(nodeBin: string, hookScript: string): string {
   const n = nodeBin.replace(/\\/g, '/');
   const h = hookScript.replace(/\\/g, '/');
-  return `#!/bin/sh\n${HOOK_MARKER}\n# 由 CCArmy 生成（幂等；不要手改）。校验逻辑见 packages/app-shell/src/repo-hooks.ts\nexec "${n}" "${h}"\n`;
+  return `#!/bin/sh\n${HOOK_MARKER}\n# 由 WArmy 生成（幂等；不要手改）。校验逻辑见 packages/app-shell/src/repo-hooks.ts\nexec "${n}" "${h}"\n`;
 }
 
 /**

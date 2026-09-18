@@ -1,5 +1,5 @@
 /**
- * @ccarmy/dsh-runtime — 用 bundled Node 拉起真实 dsh 实例
+ * @warmy/dsh-runtime — 用 bundled Node 拉起真实 dsh 实例
  *
  * InstanceManager 只负责进程生命周期；本包负责：
  * - 定位 dsh CLI / profile
@@ -126,7 +126,7 @@ export function writeDshInstanceEntry(outFile: string, opts: {
   profile: string;
 }): void {
   const entry = resolveDshEntry(opts.dshPackageDir);
-  const src = `// CCArmy dsh instance entry
+  const src = `// WArmy dsh instance entry
 import { spawn } from 'node:child_process';
 
 const entry = ${JSON.stringify(entry)};

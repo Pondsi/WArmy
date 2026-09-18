@@ -42,8 +42,77 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import crypto from 'node:crypto';
+import type { ProjectFileAccessEntry, ProjectFileAccessOp } from './group-store.js';
 
 export const HELPER_TOOL_VERSION = '0.1.0-p0-spike8';
+
+/* ══════════════════════════════════════════════════════════════════════════
+   工具文件访问台账（helper-tool 侧的**记录点**）
+   ---------------------------------------------------------------------------
+   产品主定稿（必须照做）：**「记录文件的改动应该是无限牛马的功能，不是本机的功能」**。
+   所以这里只负责"把真实发生过的文件读写**如实记下来**"，而**不负责存在哪里**：
+     · 记账的落点是**项目记录**（group-store 的项目台账，随项目同步给成员），
+       由主进程通过 `setFileAccessSink()` 接进来；
+     · 没接 sink ⇒ 什么都不记（**不落本机文件、不编**）—— 这条保证了它不会退回成"本机设置"。
+   之前的问题：`helper-tool` **只写文件、不记路径**，于是"最近改动文件"那块面板长期只能
+   如实空着（ADR 004 §8.3 的数据源缺口之一）。现在每一次真实读写都从这里过一道。
+
+   只记 **路径 / 操作 / 时间 / 结果 / 字节数**；
+   ⚠️ **绝不记文件内容**（台账要同步给成员，写内容就是泄露）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** 台账落点：由主进程接成"写进项目记录"（项目级、成员可见） */
+export type FileAccessSink = (sessionId: string, entry: ProjectFileAccessEntry) => void;
+
+let fileAccessSink: FileAccessSink | null = null;
+/** 当前记账作用域（= 项目/会话 id）；为空 ⇒ **不记**（宁可缺，也不要记到不属于它的项目上） */
+let fileAccessScope = '';
+
+export function setFileAccessSink(sink: FileAccessSink | null): void {
+  fileAccessSink = sink;
+}
+
+/**
+ * 设一个作用域跑一段代码（同步或异步都行），跑完恢复上一个作用域。
+ * ⚠️ 用"栈"而不是"覆盖"：嵌套调用（例如项目 A 的动作里又触发了项目 B）不会串账。
+ */
+export async function withFileAccessScope<T>(sessionId: string, fn: () => Promise<T> | T): Promise<T> {
+  const prev = fileAccessScope;
+  fileAccessScope = String(sessionId || '');
+  try {
+    return await fn();
+  } finally {
+    fileAccessScope = prev;
+  }
+}
+
+export function currentFileAccessScope(): string {
+  return fileAccessScope;
+}
+
+/** 记一条（内部用）。**没有作用域或没有 sink 就当没发生** —— 不落本机、不编。 */
+function noteFileAccess(op: ProjectFileAccessOp, file: string, extra: { ok?: boolean; bytes?: number; by?: string } = {}): void {
+  try {
+    if (!fileAccessSink || !fileAccessScope) return;
+    const entry: ProjectFileAccessEntry = {
+      op,
+      path: String(file),
+      ts: Date.now(),
+      ok: extra.ok !== false,
+      by: extra.by || 'helper-tool',
+    };
+    const b = Number(extra.bytes);
+    if (Number.isFinite(b) && b > 0) entry.bytes = Math.floor(b);
+    fileAccessSink(fileAccessScope, entry);
+  } catch {
+    /* 记账失败绝不能影响真实文件操作 */
+  }
+}
+
+/** 外层（主进程）也能直接记一条：例如容器里的命令改过的文件 */
+export function noteExternalFileAccess(op: ProjectFileAccessOp, file: string, extra: { ok?: boolean; bytes?: number; by?: string } = {}): void {
+  noteFileAccess(op, file, extra);
+}
 
 /* ────────────────────────── 类型 ────────────────────────── */
 
@@ -486,9 +555,9 @@ export interface MacHelperPlan {
 
 /** 生成 macOS privileged helper 的注册计划（真实可执行步骤，本机无法验证） */
 export function macHelperPlan(opts: { label?: string; helperDir?: string } = {}): MacHelperPlan {
-  const label = opts.label ?? 'com.ccarmy.helper';
+  const label = opts.label ?? 'com.warmy.helper';
   const helperDir = opts.helperDir ?? '/Library/PrivilegedHelperTools';
-  const helperExecutable = path.join(helperDir, 'ccarmy-helper');
+  const helperExecutable = path.join(helperDir, 'warmy-helper');
   const plistPath = `/Library/LaunchDaemons/${label}.plist`;
   const plist = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -687,15 +756,17 @@ export function sha256(text: string | Buffer): string {
 }
 
 export function defaultBackupDir(): string {
-  return path.join(os.homedir(), '.ccarmy', 'helper-backups');
+  return path.join(os.homedir(), '.warmy', 'helper-backups');
 }
 
 export function backupFile(source: string, backupDir = defaultBackupDir(), label = 'hosts'): BackupInfo {
   const buf = fs.readFileSync(source);
+  noteFileAccess('read', source, { bytes: buf.length });
   fs.mkdirSync(backupDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const target = path.join(backupDir, `${label}.${stamp}.bak`);
   fs.writeFileSync(target, buf);
+  noteFileAccess('backup', target, { bytes: buf.length });
   const readBack = fs.readFileSync(target);
   if (!readBack.equals(buf)) throw new Error(`备份校验失败：${target} 内容与源不一致`);
   return { source, path: target, bytes: buf.length, sha256: sha256(buf), createdAt: new Date().toISOString() };
@@ -704,6 +775,7 @@ export function backupFile(source: string, backupDir = defaultBackupDir(), label
 export function fingerprintFile(file: string, spec?: HostEntrySpec): FileFingerprint {
   try {
     const buf = fs.readFileSync(file);
+    noteFileAccess('read', file, { bytes: buf.length });
     const text = buf.toString('utf8');
     return {
       path: file,
@@ -720,7 +792,9 @@ export function fingerprintFile(file: string, spec?: HostEntrySpec): FileFingerp
 
 function readTextOrNull(file: string): string | null {
   try {
-    return fs.readFileSync(file, 'utf8');
+    const t = fs.readFileSync(file, 'utf8');
+    noteFileAccess('read', file, { bytes: Buffer.byteLength(t, 'utf8') });
+    return t;
   } catch {
     return null;
   }
@@ -729,7 +803,9 @@ function readTextOrNull(file: string): string | null {
 /** 读文件并按 Windows 控制台编码解码（标记文件是 cmd 写的，可能是 GBK） */
 function readDecodedOrNull(file: string): string | null {
   try {
-    return decodeConsoleOutput(fs.readFileSync(file));
+    const buf = fs.readFileSync(file);
+    noteFileAccess('read', file, { bytes: buf.length });
+    return decodeConsoleOutput(buf);
   } catch {
     return null;
   }
@@ -776,7 +852,7 @@ export async function verifyWrittenContent(
 /* ────────────────────────── 提权执行 ────────────────────────── */
 
 function stageDir(): string {
-  const dir = path.join(os.tmpdir(), 'ccarmy-helper-stage');
+  const dir = path.join(os.tmpdir(), 'warmy-helper-stage');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -988,17 +1064,33 @@ export async function writeFileWithFallback(opts: {
 }): Promise<WriteOutcome> {
   const mode = opts.mode ?? 'auto';
   const steps: string[] = [];
+  /**
+   * 台账要能区分「新建」与「改写」（产品要的 op 类型里有 create / edit 两档）：
+   * 写入**之前**探一次目标是否存在 —— 这是当时的事实，不是事后推测。
+   * ⚠️ 临时/暂存文件（os.tmpdir 下的 .warmy-tmp / payload-*）**刻意不记账**：
+   * 它们不是项目产物，记进去只会把台账淹掉（这点写在这里，免得被当成漏记）。
+   */
+  const existedBefore = (() => {
+    try {
+      return fs.existsSync(opts.target);
+    } catch {
+      return false;
+    }
+  })();
+  const writeOp: ProjectFileAccessOp = existedBefore ? 'edit' : 'create';
 
   if (mode === 'auto' || mode === 'direct') {
     try {
-      const tmp = `${opts.target}.ccarmy-tmp-${randomTag()}`;
+      const tmp = `${opts.target}.warmy-tmp-${randomTag()}`;
       fs.writeFileSync(tmp, opts.content, 'utf8');
       fs.renameSync(tmp, opts.target);
+      noteFileAccess(writeOp, opts.target, { bytes: Buffer.byteLength(opts.content, 'utf8') });
       return { ok: true, method: 'direct', errorCode: 'OK', message: '直接写入成功（进程有写权限）', raw: null };
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code ?? 'UNKNOWN';
       steps.push(`直接写入失败：${code}`);
       if (mode === 'direct') {
+        noteFileAccess(writeOp, opts.target, { ok: false, bytes: Buffer.byteLength(opts.content, 'utf8') });
         return {
           ok: false,
           method: null,
@@ -1029,6 +1121,11 @@ export async function writeFileWithFallback(opts: {
     attemptCount: elevated.raw.attemptCount ?? 1,
     attemptLog: elevated.raw.attemptLog ?? [],
   };
+  noteFileAccess(writeOp, opts.target, {
+    ok: elevated.ok,
+    bytes: Buffer.byteLength(opts.content, 'utf8'),
+    by: elevated.ok ? 'helper-tool:elevated' : 'helper-tool',
+  });
 
   return {
     ok: elevated.ok,
@@ -1071,6 +1168,8 @@ export async function restoreFromBackup(opts: {
   if (!v.match) {
     return { ok: false, errorCode: 'HOSTS_ROLLBACK_FAILED', message: '回滚后回读校验不一致', raw: w.raw };
   }
+  // 回滚也是一次**真实的文件改动**，台账里按 restore 记（与上面的 edit/create 分开）
+  noteFileAccess('restore', opts.target, { bytes: Buffer.byteLength(content, 'utf8') });
   return { ok: true, errorCode: 'OK', message: '已从备份回滚并校验通过', raw: w.raw };
 }
 

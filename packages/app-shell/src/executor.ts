@@ -1,7 +1,7 @@
 /**
  * P5 短命执行者协议：上下文 = O(任务规模)，完成即销毁，只回传蒸馏结论
  */
-import { createProviderFromPreset, type ChatMessage } from '@ccarmy/providers';
+import { createProviderFromPreset, type ChatMessage } from '@warmy/providers';
 
 export interface ExecutorTask {
   taskId: string;
@@ -38,7 +38,7 @@ export async function runShortLivedExecutor(
     {
       role: 'system',
       content:
-        '你是 CCArmy 的短命执行者。只根据给定上下文完成任务，输出精炼结论（≤200字），不要复述完整过程。',
+        '你是 WArmy 的短命执行者。只根据给定上下文完成任务，输出精炼结论（≤200字），不要复述完整过程。',
     },
     {
       role: 'user',

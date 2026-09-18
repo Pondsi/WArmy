@@ -41,7 +41,7 @@ export interface MeshMessage {
 }
 
 const DISCOVER_PORT = 7799;
-const HELLO = 'CCARMY-HELLO/1';
+const HELLO = 'WARMY-HELLO/1';
 
 export class PeerRegistry {
   private peers = new Map<string, PeerInfo>();

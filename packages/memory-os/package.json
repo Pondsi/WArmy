@@ -1,5 +1,5 @@
 {
-  "name": "@ccarmy/memory-os",
+  "name": "@warmy/memory-os",
   "version": "0.1.0",
   "private": true,
   "description": "L2 记忆服务：JSONL 只追加 + SQLite FTS 投影（长驻子进程）",
@@ -22,7 +22,7 @@
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@ccarmy/contracts": "workspace:*",
+    "@warmy/contracts": "workspace:*",
     "better-sqlite3": "13.0.3",
     "onnxruntime-web": "1.22.0"
   },

@@ -1,8 +1,8 @@
 {
-  "name": "ccarmy",
+  "name": "warmy",
   "version": "0.1.0",
   "private": true,
-  "description": "Corporate Cattle Army (CCArmy) - 多智能体群聊桌面应用",
+  "description": "Workhorse Army (WArmy) - 多智能体群聊桌面应用",
   "author": "Pondsi",
   "license": "MIT",
   "engines": {

@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const f = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/CCArmy/packages/app-shell/src/renderer/app.js';
+const f = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.js';
 let j = fs.readFileSync(f, 'utf8');
 const rep = [
   ["username: '主人'", "username: 'nav.avatar'"],
