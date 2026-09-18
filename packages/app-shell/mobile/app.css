@@ -10,6 +10,8 @@
   --card: #ffffff;
   --ink: #191919;
   --muted: #888888;
+  --ink-dim: #6e6e6e;
+  --bg2: #ffffff;
   --line: #e0e0e0;
   --me-bubble: #95ec69;
   --notice-bg: rgba(250, 176, 5, 0.14);
@@ -27,6 +29,8 @@
   --card: #252525;
   --ink: #e8e8e8;
   --muted: #9a9a9a;
+  --ink-dim: #a8a8a8;
+  --bg2: #252525;
   --line: #333333;
   --me-bubble: #3a6b45;
   --notice-bg: rgba(250, 176, 5, 0.18);
@@ -279,7 +283,9 @@ body {
 /* ── 二级/三级页面：从右侧滑入，覆盖整屏 ── */
 .page {
   position: absolute; inset: 0; z-index: 10;
-  background: var(--bg);
+  /* 完全不透底：亮/暗两套都给实色，不依赖半透明变量 */
+  background: #ededed;
+  background-color: var(--bg, #ededed);
   display: flex; flex-direction: column;
   transform: translateX(100%);
   transition: transform 0.22s ease;
@@ -315,3 +321,68 @@ body {
   body { background: #d5d5d5; }
   #phone { width: 390px; height: 844px; margin: 24px auto; border-radius: 26px; box-shadow: 0 12px 40px rgba(0,0,0,.22); }
 }
+
+
+/* 暗色下二级/三级页同样实底 */
+[data-theme='dark'] .page { background: #191919; background-color: var(--bg, #191919); }
+
+/* 状态圆点：绝不用裸字母兜底 */
+.status-dot, .av-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 6px; vertical-align: middle; background: var(--ink-dim);
+  flex-shrink: 0;
+}
+.status-dot[data-status='running'], .av-dot[data-status='running'] { background: var(--accent); }
+.status-dot[data-status='stopped'], .av-dot[data-status='stopped'] { background: var(--ink-dim); }
+.status-dot[data-status='restarting'], .av-dot[data-status='restarting'] { background: var(--notice-ink, #9a6100); }
+.av[data-has-img='0'] .av-dot {
+  width: 14px; height: 14px; margin: 0; background: var(--accent);
+}
+.row .mid .s { display: flex; align-items: center; gap: 0; }
+
+/* 底部面板：条目高度稳定，反馈就地变色，不跳格 */
+.sheet button {
+  min-height: 52px;
+  transition: background 0.12s ease;
+}
+.sheet button:active { background: var(--hover, rgba(0,0,0,0.06)); }
+
+/* 列表行紧凑但不拥挤 */
+.row { padding: 10px 14px; }
+.card { margin: 8px 0 0; }
+.cell { padding: 12px 14px; }
+.cell-compact { padding: 10px 14px; }
+
+/* 看板添加任务 */
+.board-add {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 10px 14px 8px;
+}
+.board-add input {
+  flex: 1 1 140px; min-width: 120px;
+  padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink); font: inherit;
+}
+.btn-accent, .btn-ghost, .btn-primary {
+  border: none; border-radius: 8px; padding: 9px 14px;
+  font: inherit; font-size: 14px; cursor: pointer;
+}
+.btn-accent { background: var(--accent); color: #fff; font-weight: 600; }
+.btn-ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.inst-actions {
+  display: flex; gap: 8px; padding: 12px 14px; flex-wrap: wrap;
+}
+
+/* toast：可见反馈 */
+.toast {
+  position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%) translateY(8px);
+  background: rgba(20,20,20,0.88); color: #fff; padding: 10px 14px; border-radius: 8px;
+  font-size: 13px; max-width: 86%; opacity: 0; pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease; z-index: 50;
+  line-height: 1.4;
+}
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* muted 文案对比度：用 ink-dim 而不是 muted（选中底上 muted 只有 2.51） */
+.hint, .empty, .cell .value, .card .card-title { color: var(--ink-dim); }
+.cell .chev { color: var(--ink-dim); }

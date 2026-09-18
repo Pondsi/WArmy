@@ -165,8 +165,16 @@ export async function attach(port, opts = {}) {
       const trail = [];
       let last = null;
       for (let i = 1; i <= tries; i++) {
-        last = await client.clickSelector(sel, o);
-        trail.push(`#${i} 点(${last.x},${last.y}) 命中=${last.hit}`);
+        try {
+          last = await client.clickSelector(sel, o);
+          trail.push(`#${i} 点(${last.x},${last.y}) 命中=${last.hit}`);
+        } catch (e) {
+          // 重渲染间隙元素可能短暂不可见：记轨迹后重试，不把整套验收打死
+          trail.push(`#${i} ${String(e.message).slice(0, 90)}`);
+          last = last || { ok: false };
+          await sleep(o.gap ?? 150);
+          continue;
+        }
         if (await client.waitForQuiet(cond, { timeout: perTry, poll: 50 })) return { ok: true, tries: i, trail, ...last };
         await sleep(o.gap ?? 150);
       }

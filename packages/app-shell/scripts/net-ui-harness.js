@@ -76,10 +76,32 @@
     netStatus: async function () {
       var s = net.samples.length ? net.samples[net.sampleIdx++ % net.samples.length] : null;
       net.lastSample = s;
-      var out = { ok: true, meshEnabled: net.meshEnabled, link: s === null ? {} : { reachable: s, lastError: s ? '' : 'probe-timeout' } };
+      var out = { ok: true, meshEnabled: net.meshEnabled, link: s === null ? { reachable: false, lastError: net.meshEnabled ? 'probe-timeout' : 'mesh-disabled', peers: [] } : { reachable: s, lastError: s ? '' : 'probe-timeout' } };
       // 与真实 MeshStatusResult 同形状：可达性提示 / 本机 IPv6 事实 / 活会话数
       if (net.reachability) out.reachability = net.reachability;
       if (net.ipv6) out.ipv6 = net.ipv6;
+      /* mesh-disabled-local-facts：关闭组网也回本机事实，但**剥掉 connectivity 结论**
+         （与 net-wiring 关闭分支一致：buildReachabilityHint 只报地址事实，不做现场探测结论） */
+      if (!net.meshEnabled) {
+        if (!out.ipv6) out.ipv6 = { hasGlobalUnicast: false, publicCandidate: null, ula: [], linkLocal: [], reason: 'harness-default' };
+        var r = out.reachability;
+        var hasConclusion = !!(r && typeof r === 'object' && (
+          r.bothUndialable === true ||
+          r.needsPublicRelayNotice === true ||
+          (r.relay && (r.relay.bothUndialable === true || r.relay.needsPublicRelayNotice === true))
+        ));
+        if (!r || hasConclusion) {
+          out.reachability = {
+            ipv6: out.ipv6,
+            naturalDialable: false,
+            dialableKind: 'undetermined',
+            dialableI18n: 'net.dialability.undetermined',
+            suggestedRung: 'public-direct',
+            needsPublicRelayNotice: false,
+            i18n: { rung: 'net.rung.publicDirect' },
+          };
+        }
+      }
       out.sessions = net.sessions || 0;
       return out;
     },

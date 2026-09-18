@@ -979,6 +979,9 @@ export class SecureMesh {
     const store = this.opts.store();
     const unlock = store ? requireSignableIdentity(store).unlock ?? this.unlockSnapshot : null;
     if (!this.enabled) {
+      // B5：组网关闭时仍返回**本机事实**（IPv6 / 可拨入性提示），这两项与开关无关。
+      // 同步 buildReachabilityHint：不发 socket，只报地址事实。
+      const ipv6 = inspectLocalIpv6();
       const value: MeshStatusResult = {
         ok: true,
         meshEnabled: false,
@@ -986,6 +989,14 @@ export class SecureMesh {
         nodeId: this.opts.nodeId,
         sessions: 0,
         unlock,
+        ipv6: {
+          hasGlobalUnicast: ipv6.hasGlobalUnicast,
+          publicCandidate: ipv6.publicCandidate,
+          ula: ipv6.ula,
+          linkLocal: ipv6.linkLocal,
+          reason: ipv6.reason,
+        },
+        reachability: this.buildReachabilityHint(),
       };
       this.lastStatusAt = now;
       this.lastStatusValue = value;

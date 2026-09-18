@@ -3,6 +3,7 @@
    - 一级导航只走底部 Tab（会话 / 牛马 / 看板 / 我）
    - 二级、三级页面从右侧滑入，顶部一定有「‹ 返回」
    - 聊天右侧的成员/模型/知识库/回退点/指标/导出，统一收进聊天顶部「…」的底部面板
+   - 界面文字一律走 t()；语言包缺失时回落中文兜底 D，再回落键名
 */
 (function () {
   const $ = (s, r) => (r || document).querySelector(s);
@@ -34,7 +35,6 @@
     'inst.persona': '写入更多', 'inst.group': '成员',
     'kb.hint': '输入关键词检索知识库', 'cp.empty': '暂无回退点', 'cp.rollback': '回退', 'cp.rollbackHint': '回退：将停止当前任务并回到该节点。',
     'metrics.turns': '轮次', 'metrics.cost': '成本(¥)',
-
     'common.yes': '是',
     'ui.type.single': '牛马', 'ui.type.internal': '项目', 'ui.type.contact': '联系人', 'ui.type.external': '群聊',
     'board.blocked': '阻塞', 'board.readonlyHint': '看板为只读聚合视图，修改请通过与值班者对话完成。',
@@ -53,47 +53,80 @@
   };
   const t = (k) => (I18N.strings && I18N.strings[k]) || D[k] || k;
   const brandName = () => t('brand.name');
+  /** 可见文字一律 esc(t(...))；对象/空值不直出 */
+  const disp = (v) => {
+    if (v === null || v === undefined || v === '') return '—';
+    if (typeof v === 'object') {
+      if (Array.isArray(v)) return v.map(disp).join(' · ');
+      return String(v.label || v.text || v.name || v.value || '—');
+    }
+    return String(v);
+  };
 
-  // ── 演示数据（单文件预览用）──
+  // ── 演示数据（单文件预览用；名称/文案走 i18n 键，避免中英界面串台）──
   const AV = (n) => {
     const set = window.__AVATARS__ || {};
     return set['preset-' + n] || null;
   };
+  const demoName = (key, fallback) => t(key) !== key ? t(key) : fallback;
   const INSTANCES = [
-    { id: 'demo-1', name: 'demo.agent', status: 'running', model: 'deepseek-chat', preset: 5,
+    { id: 'demo-1', nameKey: null, name: 'demo.agent', status: 'running', model: 'deepseek-chat', preset: 5,
       models: ['deepseek-chat', 'deepseek-reasoner', 'mimo-v2.5-pro'],
-      chain: ['deepseek-chat', 'deepseek-reasoner'], persona: '性格：沉稳可靠\n角色：值班执行者' },
-    { id: 'demo-2', name: '归档员', status: 'stopped', model: 'mimo-v2.5-pro', preset: 9,
-      models: ['mimo-v2.5-pro'], chain: ['mimo-v2.5-pro'], persona: '' },
+      chain: ['deepseek-chat', 'deepseek-reasoner'], personaKey: 'demo.persona' },
+    { id: 'demo-2', nameKey: 'demo.name.archiver', name: null, status: 'stopped', model: 'mimo-v2.5-pro', preset: 9,
+      models: ['mimo-v2.5-pro'], chain: ['mimo-v2.5-pro'], personaKey: null },
   ];
+  const instName = (i) => (i && (i.name || (i.nameKey ? t(i.nameKey) : ''))) || '?';
   const SESSIONS = [
-    { id: 'demo-1', name: 'demo.agent', kind: 'single', last: '好的，已安排周三评审', ts: '刚刚', unread: 1 },
-    { id: 'g-1', name: '项目推进群', kind: 'internal', last: '值班者：排期已同步', ts: '12:04', unread: 2 },
-    { id: 'g-2', name: '研发排期', kind: 'internal', last: '排期表已更新', ts: '昨天' },
-    { id: 'g-3', name: '客户对接群', kind: 'external', last: '仅 @ 时响应', ts: '周一' },
-    { id: 'c-1', name: '王工', kind: 'contact', last: '收到，周报我这边看过了', ts: '昨天' },
+    { id: 'demo-1', nameKey: null, name: 'demo.agent', kind: 'single', lastKey: 'demo.msg.scheduled', tsKey: null, ts: null, unread: 1 },
+    { id: 'g-1', nameKey: 'demo.sess.g1', name: null, kind: 'internal', lastKey: 'demo.msg.synced', ts: '12:04', unread: 2 },
+    { id: 'g-2', nameKey: 'demo.sess.g2', name: null, kind: 'internal', lastKey: 'demo.msg.rndUpdated', tsKey: null, ts: null },
+    { id: 'g-3', nameKey: 'demo.sess.g3', name: null, kind: 'external', lastKey: 'demo.msg.extSilent', ts: null },
+    { id: 'c-1', nameKey: 'demo.sess.c1', name: null, kind: 'contact', lastKey: 'demo.msg.weekly', ts: null },
   ];
-  const GROUP_MEMBERS = { 'g-1': ['demo.agent', '归档员'], 'g-2': ['demo.agent'], 'g-3': ['demo.agent'] };
+  // 时间戳也走 i18n：中文「刚刚/昨天/周一」在英文界面不能原样出现
+  const TIME_KEYS = {
+    '12:04': '12:04',
+  };
+  const sessionName = (s) => (s && (s.name || (s.nameKey ? t(s.nameKey) : ''))) || '?';
+  const sessionLast = (s) => (s && s.lastKey ? t(s.lastKey) : (s && s.last) || '');
+  const sessionTs = (s) => {
+    if (!s) return '';
+    if (s.ts) {
+      if (s.id === 'g-1') return '12:04';
+      return s.ts;
+    }
+    if (s.id === 'demo-1') return t('time.justNow') !== 'time.justNow' ? t('time.justNow') : (I18N.locale && I18N.locale.startsWith('en') ? 'Just now' : '刚刚');
+    if (s.id === 'g-2') return t('time.yesterday') !== 'time.yesterday' ? t('time.yesterday') : (I18N.locale && I18N.locale.startsWith('en') ? 'Yesterday' : '昨天');
+    if (s.id === 'g-3') return t('time.monday') !== 'time.monday' ? t('time.monday') : (I18N.locale && I18N.locale.startsWith('en') ? 'Mon' : '周一');
+    if (s.id === 'c-1') return t('time.yesterday') !== 'time.yesterday' ? t('time.yesterday') : (I18N.locale && I18N.locale.startsWith('en') ? 'Yesterday' : '昨天');
+    return '';
+  };
+  const GROUP_MEMBERS = { 'g-1': ['demo-agent', 'demo-2'], 'g-2': ['demo-agent'], 'g-3': ['demo-agent'] };
   const MSGS = {
     'demo-1': [
-      { who: 'them', text: '你好，我是无限牛马。手机端可查看会话、牛马与看板。' },
-      { who: 'me', text: '看一下今天的排期' },
-      { who: 'them', text: '已安排在周三评审，两位成员都收到通知了。' },
+      { who: 'them', key: 'demo.msg.hello' },
+      { who: 'me', key: 'demo.msg.schedule' },
+      { who: 'them', key: 'demo.msg.scheduled' },
     ],
     'g-1': [
-      { who: 'sys', text: '值班者：demo.agent 已接管本群' },
-      { who: 'them', text: '排期已同步到看板。' },
-      { who: 'me', text: '好，加急处理一下客户那条。' },
+      { who: 'sys', key: 'demo.msg.duty' },
+      { who: 'them', key: 'demo.msg.synced' },
+      { who: 'me', key: 'demo.msg.urgent' },
     ],
-    'g-2': [{ who: 'them', text: '排期表已更新。' }],
-    'g-3': [{ who: 'sys', text: '外部群默认静默，@ 后才回复' }],
+    'g-2': [{ who: 'them', key: 'demo.msg.rndUpdated' }],
+    'g-3': [{ who: 'sys', key: 'demo.msg.extSilent' }],
     'c-1': [
-      { who: 'them', text: '收到，周报我这边看过了' },
-      { who: 'me', text: '好的，有问题随时说' },
+      { who: 'them', key: 'demo.msg.weekly' },
+      { who: 'me', key: 'demo.msg.weeklyOk' },
     ],
   };
+  const KB_ENTRIES = [
+    { id: 'kb-1', nameKey: 'kb.entryOrg', kindKey: 'kb.kind.project', summaryKey: 'kb.detailHint' },
+    { id: 'kb-2', nameKey: 'kb.entryProject', kindKey: 'kb.kind.org', summaryKey: 'kb.detailHint' },
+  ];
   const sessionOf = (id) => SESSIONS.filter((s) => s.id === id)[0];
-  const instOf = (id) => INSTANCES.filter((i) => i.id === id || i.name === id)[0];
+  const instOf = (id) => INSTANCES.filter((i) => i.id === id || i.name === id || (i.nameKey && t(i.nameKey) === id))[0];
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const state = {
@@ -111,6 +144,10 @@
     notifyDone: true,
     notifyReq: true,
     notifyErr: true,
+    boardTasks: [
+      { id: 'bt-0', titleKey: 'panel.taskDemo.3', title: null, pct: 40 },
+    ],
+    lastToast: '',
   };
 
   // ── HSL 工具 ──
@@ -125,7 +162,6 @@
     return '#' + f(0) + f(8) + f(4);
   }
 
-  /** 相对亮度（WCAG） */
   function relLuminance(hex) {
     const ch = [1, 3, 5]
       .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
@@ -133,17 +169,10 @@
     return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
   }
 
-  /** 该颜色配白字的对比度 */
   function contrastWithWhite(hex) {
     return 1.05 / (relLuminance(hex) + 0.05);
   }
 
-  /**
-   * 主题色板：17 色相 × 3 明度 = 51 色（每行 17 个）。
-   * 与桌面端同一套算法：每列先向下搜索出「白字对比度 >= 3.0」的最亮明度作为上限，
-   * 再在 [上限, 上限-20] 区间内均分 3 档，因此没有看不清的颜色；
-   * 同一列越暗越饱和（+8%/档），相邻色相相差 20°，不会出现彼此接近的颜色。
-   */
   function accentPalette() {
     const HUES = [0, 20, 40, 60, 80, 100, 120, 150, 180, 200, 220, 240, 260, 280, 300, 320, 340];
     const ROWS = 3;
@@ -174,19 +203,27 @@
   }
 
   // ── 通用片段 ──
-  const avHtml = (name, preset, cls) => {
+  /** 头像：优先 preset SVG；无图时用 CSS 状态/首字点，绝不出现裸字母文本兜底 */
+  const avHtml = (name, preset, cls, status) => {
     const src = preset ? AV(preset) : null;
-    const inner = src ? '<img src="' + src + '" alt=""/>' : esc((name || '?').slice(0, 1));
-    return '<div class="av ' + (cls || '') + '">' + inner + '</div>';
+    const st = status || '';
+    let inner;
+    if (src) inner = '<img src="' + src + '" alt=""/>';
+    else inner = '<span class="av-dot" data-status="' + esc(st || 'idle') + '" aria-hidden="true"></span>';
+    return '<div class="av ' + (cls || '') + '" data-has-img="' + (src ? '1' : '0') + '">' + inner + '</div>';
   };
-  // 预览定位提示：手机端设置不落盘、不与桌面端通信，必须让用户一眼看到
+  const statusDotHtml = (status) =>
+    '<span class="status-dot" data-status="' + esc(status || 'stopped') + '" aria-hidden="true"></span>';
+
   const noticeHtml = (key) => '<div class="notice">' + esc(t(key || 'preview.settingsNotice')) + '</div>';
 
   const barHtml = (title, sub, opts) => {
     const o = opts || {};
-    const left = o.back ? '<button class="iconbtn back" data-act="back" aria-label="back">‹</button>' : '<div class="spacer"></div>';
+    const left = o.back
+      ? '<button class="iconbtn back" data-act="back" aria-label="' + esc(t('tip.back')) + '" title="' + esc(t('tip.back')) + '">‹</button>'
+      : '<div class="spacer"></div>';
     const right = o.more
-      ? '<button class="iconbtn" data-act="more" aria-label="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>'
+      ? '<button class="iconbtn" data-act="more" aria-label="' + esc(t('tip.more')) + '" title="' + esc(t('tip.more')) + '"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>'
       : '<div class="spacer"></div>';
     return '<div class="bar">' + left + '<div class="title">' + esc(title) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div>' + right + '</div>';
   };
@@ -197,17 +234,28 @@
       (act ? '<span class="chev">›</span>' : '') + '</div>';
   };
 
-  // ── PC 端左侧导航图标：内容逐字节照抄自 src/renderer/index.html 的左侧导航 ──
-  // 会话类型 -> PC 导航项：single=我的牛马 / internal=项目 / contact=联系人 / external=群聊
-  // 注意 PC 端这 4 个图标本身并不统一（project 没有 <g> 且两条 path 宽度不同），
-  // 所以这里按原样保存，不做任何归一化，便于与 PC 端做逐字节比对。
+  function toast(msg) {
+    state.lastToast = String(msg || '');
+    let el = $('#toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'toast';
+      el.className = 'toast';
+      document.body.appendChild(el);
+    }
+    el.textContent = state.lastToast;
+    el.classList.add('on');
+    clearTimeout(el.__timer);
+    el.__timer = setTimeout(() => el.classList.remove('on'), 2200);
+  }
+
+  // ── PC 端左侧导航图标 ──
   const NAV_INNER = {
     single: '<g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M14,78 C14,60 24,54 34,54 C40,54 45,56 49,60"/><rect x="58" y="26" width="24" height="24" rx="4"/><circle cx="70" cy="38" r="3" fill="currentColor"/><line x1="70" y1="26" x2="70" y2="18"/><circle cx="70" cy="16" r="3" fill="currentColor"/></g>',
     internal: '<path d="M50,14 A36,36 0 1,1 21,71" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M34,50 C30,38 42,38 50,50 C58,62 70,62 66,50 C62,38 50,38 50,50" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>',
     contact: '<g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><circle cx="42" cy="34" r="14"/><path d="M18,82 C18,62 30,56 42,56 C48,56 53,58 57,62"/><path d="M68,32 C74,38 74,50 68,56"/><path d="M78,24 C88,36 88,52 78,64"/></g>',
     external: '<g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M16,78 C16,62 24,54 34,54 C44,54 52,62 52,78"/><circle cx="66" cy="34" r="12"/><path d="M48,78 C48,62 56,54 66,54 C76,54 84,62 84,78"/></g>',
   };
-  // 群聊 / 项目：头像位直接放导航图标，不再用各自头像（同类共用同一张头像，靠名称区分）
   const UNIFIED_AVATAR = { internal: 1, external: 1 };
   function navSvg(kind, cls) {
     const inner = NAV_INNER[kind];
@@ -221,19 +269,18 @@
   function renderSessions() {
     const rows = SESSIONS.map((s) => {
       const inst = instOf(s.id);
+      const nm = sessionName(s);
       let avWrap;
       if (UNIFIED_AVATAR[s.kind]) {
-        // 群聊 / 项目：统一头像 = PC 导航图标
         avWrap = '<div class="av-wrap"><div class="av unified">' + navSvg(s.kind, 'nav-ic') + '</div></div>';
       } else {
-        // 牛马 / 联系人：自身头像 + 右下角角标；角标用负偏移压在头像裁剪区之外，无法被伪造的头像图片复刻
-        avWrap = '<div class="av-wrap">' + avHtml(s.name, inst ? inst.preset : 0) +
+        avWrap = '<div class="av-wrap">' + avHtml(nm, inst ? inst.preset : 0, '', inst ? inst.status : '') +
           '<span class="av-badge">' + navSvg(s.kind, 'badge-ic') + '</span></div>';
       }
       return '<div class="row" data-open="' + esc(s.id) + '">' + avWrap +
-        '<div class="mid"><div class="n">' + esc(s.name) + ' <span class="type-tag" data-kind="' + esc(s.kind) + '">' + esc(typeLabel(s.kind)) + '</span></div><div class="s">' + esc(s.last) + '</div></div>' +
-        '<div class="right"><div class="t">' + esc(s.ts) + '</div>' +
-        (s.unread ? '<div class="badge">' + s.unread + '</div>' : '') + '</div></div>';
+        '<div class="mid"><div class="n">' + esc(nm) + ' <span class="type-tag" data-kind="' + esc(s.kind) + '">' + esc(typeLabel(s.kind)) + '</span></div><div class="s">' + esc(sessionLast(s)) + '</div></div>' +
+        '<div class="right"><div class="t">' + esc(sessionTs(s)) + '</div>' +
+        (s.unread ? '<div class="badge" title="' + esc(t('chat.tipBadge')) + '" aria-label="' + esc(t('chat.tipBadge')) + '">' + s.unread + '</div>' : '') + '</div></div>';
     }).join('');
     return barHtml(brandName()) +
       '<div class="body">' + rows +
@@ -242,30 +289,42 @@
 
   function renderCattle() {
     const rows = INSTANCES.map((i) => {
-      return '<div class="row" data-inst="' + esc(i.id) + '">' + avHtml(i.name, i.preset) +
-        '<div class="mid"><div class="n">' + esc(i.name) + '</div>' +
-        '<div class="s">' + esc(t('inst.status.' + i.status)) + ' · ' + esc(i.model) + '</div></div>' +
-        '<div class="right"><span class="chev" style="color:#c8c8c8">›</span></div></div>';
+      return '<div class="row" data-inst="' + esc(i.id) + '">' + avHtml(instName(i), i.preset, '', i.status) +
+        '<div class="mid"><div class="n">' + esc(instName(i)) + '</div>' +
+        '<div class="s">' + statusDotHtml(i.status) + esc(t('inst.status.' + i.status)) + ' · ' + esc(i.model) + '</div></div>' +
+        '<div class="right"><span class="chev" style="color:var(--ink-dim)">›</span></div></div>';
     }).join('');
     return barHtml(t('cattle.title')) + '<div class="body">' + rows + '</div>';
   }
 
   function renderBoard() {
+    const tasks = state.boardTasks || [];
+    const queueN = tasks.length;
     const stat = (label, n) => '<div class="cellbox"><span>' + esc(label) + '</span><b>' + n + '</b></div>';
     const prog = (name, pct, note) =>
-      '<div class="cell"><span class="label">' + esc(name) + (note ? ' <span class="muted" style="color:var(--muted);font-size:12px">' + esc(note) + '</span>' : '') +
+      '<div class="cell cell-compact"><span class="label">' + esc(name) + (note ? ' <span class="muted" style="color:var(--ink-dim);font-size:12px">' + esc(note) + '</span>' : '') +
       '</span><span class="value">' + pct + '%</span></div>' +
-      '<div style="padding:0 14px 12px"><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
+      '<div style="padding:0 14px 8px"><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
+    const taskRows = tasks.map((task) => {
+      const title = task.title || (task.titleKey ? t(task.titleKey) : '');
+      return '<div class="cell cell-compact" data-task="' + esc(task.id) + '"><span class="label">' + esc(title) + '</span><span class="value">' + (task.pct || 0) + '%</span></div>';
+    }).join('');
     return barHtml(t('board.title')) +
       '<div class="body">' +
-      '<div class="stats">' + stat(t('board.running'), 3) + stat(t('board.done'), 1) + stat(t('board.instances'), 1) + stat(t('board.queue'), 0) + '</div>' +
+      '<div class="stats">' + stat(t('board.running'), 3) + stat(t('board.done'), 1) + stat(t('board.instances'), 1) + stat(t('board.queue'), queueN) + '</div>' +
+      '<div class="card"><div class="card-title">' + esc(t('board.addTask')) + '</div>' +
+      '<div class="board-add"><input id="board-task-input" placeholder="' + esc(t('board.taskTitle')) + '" />' +
+      '<button class="btn-accent" data-act="board-add">' + esc(t('board.addBtn')) + '</button>' +
+      '<button class="btn-ghost" data-act="board-ai">' + esc(t('board.aiGenerate')) + '</button></div>' +
+      '<div class="card-title">' + esc(t('board.queueList')) + '</div>' +
+      '<div id="board-task-list">' + (taskRows || '<div class="empty">' + esc(t('cp.empty')) + '</div>') + '</div>' +
+      '</div>' +
       '<div class="card"><div class="card-title">' + esc(t('board.progress')) + '</div>' +
-      prog('项目推进群', 65) + prog('研发排期', 30, t('board.blocked')) + prog('demo.agent', 40) +
+      prog(demoName('demo.sess.g1', '项目推进群'), 65) + prog(demoName('demo.sess.g2', '研发排期'), 30, t('board.blocked')) + prog('demo.agent', 40) +
       '</div><div class="hint">' + esc(t('board.readonlyHint')) + '</div></div>';
   }
 
   function renderMe() {
-    const inst = INSTANCES[0];
     return barHtml(t('me.title')) +
       '<div class="body">' +
       '<div class="me-head">' + avHtml(t('me.owner'), 1) +
@@ -273,10 +332,17 @@
       noticeHtml() +
       '<div class="card">' +
       cellHtml(t('me.appearance'), '', 'set-appearance') +
-      cellHtml(t('me.provider'), 'DeepSeek', 'set-provider') +
-      cellHtml(t('me.smtp'), '0 / 10', 'set-smtp') +
-      cellHtml(t('me.mesh'), '7788', 'set-mesh') +
+      cellHtml(t('me.provider'), esc(t('provider.configured')), 'set-provider') +
+      cellHtml(t('me.smtp'), esc(t('me.notConfiguredHint')), 'set-smtp') +
+      cellHtml(t('me.mesh'), String(state.mesh.port), 'set-mesh') +
       cellHtml(t('me.about'), '0.1.0', 'set-about') +
+      '</div>' +
+      '<div class="card"><div class="card-title">' + esc(t('me.settings')) + '</div>' +
+      cellHtml(t('me.models'), esc(t('me.desktopOnly')), 'act-models') +
+      cellHtml(t('me.skills'), esc(t('me.desktopOnly')), 'act-skills') +
+      cellHtml(t('me.diagnostics'), esc(t('me.desktopOnly')), 'act-diag') +
+      cellHtml(t('me.cleanup'), esc(t('me.desktopOnly')), 'act-cleanup') +
+      cellHtml(t('me.updates'), esc(t('me.desktopOnly')), 'act-updates') +
       '</div></div>';
   }
 
@@ -287,10 +353,12 @@
     { id: 'me', label: 'tab.me', svg: '<path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-5 0-8 2.5-8 5v1h16v-1c0-2.5-3-5-8-5z"/>' },
   ];
   function renderTabs() {
-    return TABS.map((x) =>
-      '<button data-tab="' + x.id + '" class="' + (state.tab === x.id ? 'on' : '') + '">' +
-      '<svg viewBox="0 0 24 24">' + x.svg + '</svg>' + esc(t(x.label)) + '</button>'
-    ).join('');
+    return TABS.map((x) => {
+      const label = t(x.label);
+      return '<button data-tab="' + x.id + '" class="' + (state.tab === x.id ? 'on' : '') + '"' +
+        ' aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + x.svg + '</svg>' + esc(label) + '</button>';
+    }).join('');
   }
 
   const TAB_RENDER = { sessions: renderSessions, cattle: renderCattle, board: renderBoard, me: renderMe };
@@ -334,16 +402,18 @@
   // 聊天页
   function openChat(id) {
     const s = sessionOf(id) || { id: id, name: id, kind: 'internal' };
+    const nm = sessionName(s);
     const msgs = MSGS[id] || [];
     const body = msgs.map((m) => {
-      if (m.who === 'sys') return '<div class="msg-row"><span class="sys">' + esc(m.text) + '</span></div>';
+      const text = m.key ? t(m.key) : m.text;
+      if (m.who === 'sys') return '<div class="msg-row"><span class="sys">' + esc(text) + '</span></div>';
       const me = m.who === 'me';
       const inst = me ? null : instOf(id);
-      const av = me ? avHtml(t('me.owner'), 1) : inst ? avHtml(inst.name, inst.preset) : avHtml(s.name, 0);
-      return '<div class="msg' + (me ? ' me' : '') + '">' + av + '<div class="bubble">' + esc(m.text) + '</div></div>';
+      const av = me ? avHtml(t('me.owner'), 1) : inst ? avHtml(instName(inst), inst.preset, '', inst.status) : avHtml(nm, 0);
+      return '<div class="msg' + (me ? ' me' : '') + '">' + av + '<div class="bubble">' + esc(text) + '</div></div>';
     }).join('');
     const inner =
-      barHtml(s.name, s.kind === 'single' ? t('chat.sub.single') : t('chat.sub.group'), { back: true, more: true }) +
+      barHtml(nm, s.kind === 'single' ? t('chat.sub.single') : t('chat.sub.group'), { back: true, more: true }) +
       '<div class="body chat-body"><div class="msgs" id="msgs">' + body + '</div></div>' +
       '<div class="composer"><textarea id="input" rows="1" placeholder="' + esc(t('m.chat.placeholder')) + '"></textarea>' +
       '<button class="send" id="send" disabled>' + esc(t('chat.send')) + '</button></div>';
@@ -374,54 +444,85 @@
     });
   }
 
-  // 实例详情（三级：从「牛马」或聊天「…」进入）
+  // 实例详情（含启动/停止/重启，状态真变）
   function openInstance(id) {
     const i = instOf(id);
     if (!i) return;
     const chip = (m) => '<span style="display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:3px 9px;margin:3px 6px 3px 0;font-size:12px">' + esc(m) + '</span>';
-    const inner = barHtml(i.name, t('inst.status.' + i.status), { back: true }) +
-      '<div class="body">' +
-      '<div class="me-head">' + avHtml(i.name, i.preset) +
-      '<div class="who"><div class="n">' + esc(i.name) + '</div><div class="m">' + esc(t('inst.status.' + i.status)) + '</div></div></div>' +
+    const persona = i.personaKey ? t(i.personaKey) : (i.persona || '');
+    const inner = barHtml(instName(i), t('inst.status.' + i.status), { back: true }) +
+      '<div class="body" data-inst-page="' + esc(i.id) + '">' +
+      '<div class="me-head">' + avHtml(instName(i), i.preset, '', i.status) +
+      '<div class="who"><div class="n">' + esc(instName(i)) + '</div><div class="m" data-inst-status>' + statusDotHtml(i.status) + esc(t('inst.status.' + i.status)) + '</div></div></div>' +
       '<div class="card"><div class="card-title">' + esc(t('inst.defaultModel')) + '</div>' +
-      cellHtml(i.model || '—') + '</div>' +
+      cellHtml(disp(i.model)) + '</div>' +
+      '<div class="card inst-actions">' +
+      '<button class="btn-accent" data-act="inst-start" data-id="' + esc(i.id) + '">' + esc(t('inst.start')) + '</button>' +
+      '<button class="btn-ghost" data-act="inst-stop" data-id="' + esc(i.id) + '">' + esc(t('inst.stop')) + '</button>' +
+      '<button class="btn-ghost" data-act="inst-restart" data-id="' + esc(i.id) + '">' + esc(t('inst.restart')) + '</button>' +
+      '</div>' +
       '<div class="card"><div class="card-title">' + esc(t('inst.models')) + '</div>' +
       '<div style="padding:10px 14px 14px">' + i.models.map(chip).join('') + '</div></div>' +
       '<div class="card"><div class="card-title">' + esc(t('inst.chain')) + '</div>' +
       i.chain.map((m, k) => cellHtml((k + 1) + '. ' + m)).join('') + '</div>' +
       '<div class="card"><div class="card-title">' + esc(t('inst.persona')) + '</div>' +
-      '<div style="padding:12px 14px;white-space:pre-wrap;font-size:14px">' + esc(i.persona || '—') + '</div></div>' +
+      '<div style="padding:12px 14px;white-space:pre-wrap;font-size:14px">' + esc(persona || '—') + '</div></div>' +
       '<div class="hint">' + esc(t('chat.systemNote')) + '</div></div>';
-    push(inner);
+    const el = push(inner);
+    wirePage(el, {
+      'inst-start': () => applyInstStatus(i, 'running'),
+      'inst-stop': () => applyInstStatus(i, 'stopped'),
+      'inst-restart': () => applyInstStatus(i, 'running', true),
+    });
+  }
+  function applyInstStatus(i, next, isRestart) {
+    i.status = next;
+    if (isRestart) toast(t('inst.status.restarting') + ' → ' + t('inst.status.' + next));
+    else toast(t('inst.actionDone') + ': ' + t('inst.status.' + next));
+    // 就地更新当前页状态文字/圆点，不整页重绘导致闪烁
+    const page = stack[stack.length - 1];
+    if (page) {
+      const slot = page.querySelector('[data-inst-status]');
+      if (slot) slot.innerHTML = statusDotHtml(next) + esc(t('inst.status.' + next));
+      const titleSub = page.querySelector('.bar .title small');
+      if (titleSub) titleSub.textContent = t('inst.status.' + next);
+    }
   }
 
   // 聊天「…」里的六个面板（三级）
   function openPanel(kind, id) {
-    const s = sessionOf(id) || { name: id };
+    const s = sessionOf(id) || { name: id, id: id };
+    const sName = sessionName(s);
     let title = '', bodyHtml = '';
     if (kind === 'members') {
       title = t('chat.members');
-      const names = GROUP_MEMBERS[id] || [s.name];
+      const names = (GROUP_MEMBERS[id] || [id]).map((mid) => {
+        const inst = instOf(mid);
+        return { name: inst ? instName(inst) : mid, inst: inst };
+      });
       bodyHtml = '<div class="card">' + names.map((n) => {
-        const inst = instOf(n);
-        return '<div class="row" data-inst="' + esc(inst ? inst.id : n) + '">' +
-          avHtml(n, inst ? inst.preset : 0) +
-          '<div class="mid"><div class="n">' + esc(n) + '</div><div class="s">' + esc(inst ? inst.model : '—') + '</div></div></div>';
+        const inst = n.inst;
+        return '<div class="row" data-inst="' + esc(inst ? inst.id : n.name) + '">' +
+          avHtml(n.name, inst ? inst.preset : 0, '', inst ? inst.status : '') +
+          '<div class="mid"><div class="n">' + esc(n.name) + '</div><div class="s">' + esc(inst ? disp(inst.model) : '—') + '</div></div></div>';
       }).join('') + '</div>';
     } else if (kind === 'model') {
       title = t('chat.model');
       const inst = instOf(id) || INSTANCES[0];
       const chip = (m) => '<span style="display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:3px 9px;margin:3px 6px 3px 0;font-size:12px">' + esc(m) + '</span>';
-      bodyHtml = '<div class="card"><div class="card-title">' + esc(t('inst.defaultModel')) + '</div>' + cellHtml(inst.model) + '</div>' +
+      bodyHtml = '<div class="card"><div class="card-title">' + esc(t('inst.defaultModel')) + '</div>' + cellHtml(disp(inst.model)) + '</div>' +
         '<div class="card"><div class="card-title">' + esc(t('inst.models')) + '</div><div style="padding:10px 14px 14px">' + inst.models.map(chip).join('') + '</div></div>' +
         '<div class="card"><div class="card-title">' + esc(t('inst.chain')) + '</div>' + inst.chain.map((m, k) => cellHtml((k + 1) + '. ' + m)).join('') + '</div>';
     } else if (kind === 'kb') {
       title = t('chat.kb');
-      bodyHtml = '<div class="card"><div style="padding:12px 14px"><input placeholder="' + esc(t('kb.hint')) + '" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit"/></div></div>' +
-        '<div class="card">' + cellHtml('无限牛马', 'project') + cellHtml('项目推进群', 'org') + '</div>';
+      const rows = KB_ENTRIES.map((e) =>
+        cellHtml(t(e.nameKey), esc(t(e.kindKey)), 'kb-open', ' data-kb="' + esc(e.id) + '"')
+      ).join('');
+      bodyHtml = '<div class="card"><div style="padding:12px 14px"><input id="kb-q" placeholder="' + esc(t('kb.hint')) + '" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit"/></div></div>' +
+        '<div class="card" id="kb-list">' + rows + '</div>';
     } else if (kind === 'cp') {
       title = t('chat.checkpoints');
-      bodyHtml = '<div class="card">' + cellHtml('今天 12:04 · round_end', '65%') + cellHtml('昨天 18:20 · round_start', '30%') + '</div>' +
+      bodyHtml = '<div class="card">' + cellHtml(t('time.justNow') !== 'time.justNow' ? t('time.justNow') : '12:04', '65%') + cellHtml(t('time.yesterday') !== 'time.yesterday' ? t('time.yesterday') : '18:20', '30%') + '</div>' +
         '<div class="hint">' + esc(t('cp.rollbackHint')) + '</div>';
     } else if (kind === 'metrics') {
       title = t('chat.metrics');
@@ -430,10 +531,33 @@
         '<div class="card">' + cellHtml('cache', '32%') + cellHtml('ccr', '90%') + cellHtml('avg', '2400ms') + '</div>';
     } else {
       title = t('chat.export');
-      bodyHtml = '<div class="card">' + cellHtml('Markdown', '.md') + cellHtml(t('export.hasTs'), t('common.yes')) + '</div>' +
+      bodyHtml = '<div class="card">' + cellHtml(t('export.markdown'), '.md') + cellHtml(t('export.hasTs'), t('common.yes')) + '</div>' +
         '<div class="hint">' + esc(t('export.hint')) + '</div>';
     }
-    push(barHtml(title, s.name, { back: true }) + '<div class="body">' + bodyHtml + '</div>');
+    const el = push(barHtml(title, sName, { back: true }) + '<div class="body" data-panel="' + esc(kind) + '">' + bodyHtml + '</div>');
+    if (kind === 'kb') {
+      wirePage(el, {
+        'kb-open': (b) => openKbDetail(b.dataset.kb),
+      });
+    }
+  }
+
+  function openKbDetail(kbId) {
+    const e = KB_ENTRIES.filter((x) => x.id === kbId)[0] || KB_ENTRIES[0];
+    const inner = barHtml(t(e.nameKey), t(e.kindKey), { back: true }) +
+      '<div class="body"><div class="card"><div class="card-title">' + esc(t('kb.detail')) + '</div>' +
+      cellHtml(t(e.nameKey), esc(t(e.kindKey))) +
+      '<div style="padding:12px 14px;font-size:14px;line-height:1.6">' + esc(t(e.summaryKey)) + '</div>' +
+      '</div><div class="hint">' + esc(t('chat.systemNote')) + '</div></div>';
+    push(inner);
+  }
+
+  function openDesktopOnly(kind) {
+    const labelKey = { models: 'me.models', skills: 'me.skills', diag: 'me.diagnostics', cleanup: 'me.cleanup', updates: 'me.updates' }[kind] || 'me.settings';
+    const inner = barHtml(t(labelKey), '', { back: true }) +
+      '<div class="body"><div class="notice">' + esc(t('me.desktopOnly')) + '</div>' +
+      '<div class="card">' + cellHtml(t(labelKey), esc(t('me.desktopOnly'))) + '</div></div>';
+    push(inner);
   }
 
   // 设置分组（三级）
@@ -446,7 +570,6 @@
       about: t('me.about'),
     };
     let body = '';
-    // ── 主题色板（17 色相 × 3 明度 = 51 色，对比度自适应与桌面端一致）──
     const flatColors = accentPalette();
     const swatchHtml = flatColors.map((c) => '<button data-color="' + c + '" style="width:100%;aspect-ratio:1;border-radius:50%;background:' + c + ';border:2px solid ' + (c === state.accent ? 'var(--ink)' : 'transparent') + ';cursor:pointer;padding:0"></button>').join('');
 
@@ -463,9 +586,9 @@
         '<div style="padding:0 14px 12px;text-align:center"><button data-act="custom-color" style="font-size:13px;color:var(--accent);background:none;border:none;cursor:pointer">' + esc(t('accent.custom')) + ' ›</button></div>' +
         '</div>';
     } else if (group === 'provider') {
-      const rows = state.providers || [{ name: 'DeepSeek', url: 'api.deepseek.com', key: '***', configured: true }, { name: 'Ollama', url: '127.0.0.1:11434', key: '', configured: false }];
+      const rows = state.providers || [];
       body = '<div class="card"><div class="card-title">' + esc(t('provider.list')) + '</div>' +
-        rows.map((p, i) => '<div class="cell" data-edit-prov="' + i + '"><span class="label">' + esc(p.name) + '</span><span class="value">' + (p.configured ? t('provider.configured') : t('provider.notConfigured')) + '</span><span class="chev">›</span></div>').join('') +
+        rows.map((p, i) => '<div class="cell" data-edit-prov="' + i + '"><span class="label">' + esc(p.name) + '</span><span class="value">' + esc(p.configured ? t('provider.configured') : t('provider.notConfigured')) + '</span><span class="chev">›</span></div>').join('') +
         '<div class="cell" data-act="add-provider"><span class="label" style="color:var(--accent)">' + esc(t('provider.add')) + '</span></div>' +
         '</div>';
     } else if (group === 'smtp') {
@@ -496,27 +619,27 @@
     } else {
       body = '<div class="card"><div class="card-title">' + esc(t('me.about')) + '</div>' +
         cellHtml(t('me.version'), 'v0.1.0') +
-        cellHtml(t('me.checkUpdate'), '检查更新', 'check-update') +
+        cellHtml(t('me.checkUpdate'), esc(t('me.checkUpdate')), 'check-update') +
         cellHtml('Electron', '33.2.0') +
         cellHtml('Chromium', '130.0.6723.191') +
         cellHtml('Node.js', '24.20.0') + '</div>' +
         '<div class="card"><div class="card-title">' + esc(t('about.opensource')) + '</div>' +
         cellHtml(t('about.license'), 'MIT') +
         cellHtml(t('about.author'), 'Pondsi') +
-        cellHtml(t('about.copyright'), '© 2026 Pondsi') +
+        cellHtml(t('me.copyright'), '© 2026 Pondsi') +
         cellHtml(t('me.deviceId'), '884024787') + '</div>';
     }
     const el = push(barHtml(map[group], '', { back: true }) + '<div class="body">' + noticeHtml() + body + '</div>');
-    // 色板点击
     el.querySelectorAll('[data-color]').forEach((b) => {
       b.addEventListener('click', () => {
         state.accent = b.dataset.color;
         document.documentElement.style.setProperty('--accent', state.accent);
         document.documentElement.style.setProperty('--me-bubble', state.accent);
-        openSetting('appearance');
+        // 就地刷新外观页（先弹掉再打开保持栈深度稳定）
+        pop();
+        setTimeout(() => openSetting('appearance'), 30);
       });
     });
-    // SMTP 输入保存
     ['smtp-host', 'smtp-port', 'smtp-user', 'smtp-pass', 'smtp-from'].forEach((id) => {
       const inp = el.querySelector('#' + id);
       if (inp) inp.addEventListener('change', () => {
@@ -533,31 +656,30 @@
       'custom-color': () => {
         const inp = document.createElement('input');
         inp.type = 'color'; inp.value = state.accent;
-        inp.onchange = () => { state.accent = inp.value; document.documentElement.style.setProperty('--accent', state.accent); document.documentElement.style.setProperty('--me-bubble', state.accent); openSetting('appearance'); };
+        inp.onchange = () => { state.accent = inp.value; document.documentElement.style.setProperty('--accent', state.accent); document.documentElement.style.setProperty('--me-bubble', state.accent); pop(); setTimeout(() => openSetting('appearance'), 30); };
         inp.click();
       },
-      'verify-smtp': () => {
-        alert(t('msg.smtpDesktopOnly'));
-      },
+      'verify-smtp': () => { toast(t('msg.smtpDesktopOnly')); },
       'toggle-mesh': () => {
         state.mesh.running = !state.mesh.running;
-        openSetting('mesh');
+        pop();
+        setTimeout(() => openSetting('mesh'), 30);
       },
-      'notify-done': () => { state.notifyDone = !state.notifyDone; openSetting('smtp'); },
-      'notify-req': () => { state.notifyReq = !state.notifyReq; openSetting('smtp'); },
-      'notify-err': () => { state.notifyErr = !state.notifyErr; openSetting('smtp'); },
+      'notify-done': () => { state.notifyDone = !state.notifyDone; pop(); setTimeout(() => openSetting('smtp'), 30); },
+      'notify-req': () => { state.notifyReq = !state.notifyReq; pop(); setTimeout(() => openSetting('smtp'), 30); },
+      'notify-err': () => { state.notifyErr = !state.notifyErr; pop(); setTimeout(() => openSetting('smtp'), 30); },
       'add-provider': () => {
         const name = prompt(t('prompt.providerName'));
         if (name) {
           state.providers.push({ name, url: '', key: '', configured: false });
-          openSetting('provider');
+          pop();
+          setTimeout(() => openSetting('provider'), 30);
         }
       },
-      'check-update': () => alert(t('msg.latest') + ' v0.1.0'),
-      'gen-invite': () => alert(t('msg.inviteCopied')),
-      'scan-invite': () => alert(t('msg.scanOnDesktop')),
+      'check-update': () => toast(t('msg.latest') + ' v0.1.0'),
+      'gen-invite': () => toast(t('msg.inviteCopied')),
+      'scan-invite': () => toast(t('msg.scanOnDesktop')),
     });
-    // 供应商编辑点击
     el.querySelectorAll('[data-edit-prov]').forEach((b) => {
       b.addEventListener('click', () => {
         const idx = parseInt(b.dataset.editProv);
@@ -565,45 +687,52 @@
         if (!p) return;
         const url = prompt('Base URL', p.url);
         if (url !== null) { p.url = url; p.configured = !!url; }
-        openSetting('provider');
+        pop();
+        setTimeout(() => openSetting('provider'), 30);
       });
     });
   }
 
   // ── 底部动作面板（「…」）──
-  let sheetEl = null;
   function openSheet(items) {
     closeSheet();
     const mask = $('#mask');
     const sheet = $('#sheet');
     sheet.innerHTML = '<div class="sheet-title">' + esc(brandName()) + '</div>' +
-      items.map((x) => '<button data-sheet="' + esc(x.act) + '" data-id="' + esc(x.id || '') + '">' + esc(x.label) + '</button>').join('') +
-      '<button class="cancel" data-sheet="__cancel">' + esc(t('chat.cancel')) + '</button>';
+      items.map((x) => '<button type="button" data-sheet="' + esc(x.act) + '" data-id="' + esc(x.id || '') + '">' + esc(x.label) + '</button>').join('') +
+      '<button type="button" class="cancel" data-sheet="__cancel">' + esc(t('chat.cancel')) + '</button>';
     mask.classList.add('on');
     requestAnimationFrame(() => sheet.classList.add('on'));
-    sheetEl = sheet;
     mask.onclick = closeSheet;
-    sheet.onclick = (e) => {
-      const b = e.target.closest('[data-sheet]');
-      if (!b) return;
-      const act = b.dataset.sheet;
-      const id = b.dataset.id;
-      closeSheet();
-      if (act === '__cancel') return;
-      if (act.indexOf('p-') === 0) {
+    // 每条单独绑，避免 closest 委托在部分触摸实现里 target 漂移
+    sheet.querySelectorAll('[data-sheet]').forEach((b) => {
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const act = b.dataset.sheet;
+        const id = b.dataset.id;
+        closeSheet();
+        if (act === '__cancel') return;
         const kind = { 'p-members': 'members', 'p-model': 'model', 'p-kb': 'kb', 'p-cp': 'cp', 'p-metrics': 'metrics', 'p-export': 'export' }[act];
-        setTimeout(() => openPanel(kind, id), 180);
-      }
-    };
+        if (kind) openPanel(kind, id);
+      });
+    });
   }
   function closeSheet() {
     const mask = $('#mask');
     const sheet = $('#sheet');
     if (mask) mask.classList.remove('on');
-    if (sheet) sheet.classList.remove('on');
+    if (sheet) {
+      sheet.classList.remove('on');
+      // 清空内容：否则切换语言后 sheet 里仍残留上一语言的 innerText（英文界面扫到中文）
+      sheet.innerHTML = '';
+    }
   }
 
   // ── 语言 / 主题 ──
+  function popAll() {
+    while (stack.length) pop();
+  }
   function setLocale(loc) {
     state.locale = loc;
     const pack = (window.__I18N_ALL__ || {})[loc];
@@ -613,9 +742,9 @@
     }
     document.documentElement.lang = loc;
     document.title = brandName() + ' ' + t('brand.sub');
-    while (stack.length) pop();
+    closeSheet();
+    popAll();
     renderTab();
-    // 与 setTheme 保持一致：切完语言仍停留在「外观」页，不把用户踢回一级 Tab
     openSetting('appearance');
   }
   function setTheme(mode) {
@@ -623,8 +752,16 @@
     const root = document.documentElement;
     if (mode === 'system') root.removeAttribute('data-theme');
     else root.setAttribute('data-theme', mode);
-    while (stack.length) pop();
+    closeSheet();
+    popAll();
     openSetting('appearance');
+  }
+
+  function boardAddTask(title) {
+    const v = String(title || '').trim();
+    if (!v) return false;
+    state.boardTasks.push({ id: 'bt-' + Date.now(), title: v, pct: 0 });
+    return true;
   }
 
   // ── 事件绑定（一级）──
@@ -634,7 +771,7 @@
       const tab = e.target.closest('[data-tab]');
       if (tab) {
         state.tab = tab.dataset.tab;
-        while (stack.length) pop();
+        popAll();
         closeSheet();
         renderTab();
         return;
@@ -647,8 +784,51 @@
       if (!b) return;
       const act = b.dataset.act;
       if (act.indexOf('set-') === 0) { openSetting(act.slice(4)); return; }
+      if (act.indexOf('act-') === 0) { openDesktopOnly(act.slice(4)); return; }
       if (act === 'back') { pop(); return; }
+      if (act === 'board-add') {
+        const inp = $('#board-task-input');
+        const ok = boardAddTask(inp ? inp.value : '');
+        if (ok) { toast(t('board.added')); renderTab(); }
+        return;
+      }
+      if (act === 'board-ai') {
+        toast(t('board.aiNotReady'));
+        return;
+      }
     });
+  }
+
+  /** 审计探针：__MOBILE_I18N_AUDIT__ — 供 verify-mobile-ui 读取 */
+  function collectAudit() {
+    const all = window.__I18N_ALL__ || {};
+    const zh = all['zh-CN'] || {};
+    const en = all['en-US'] || {};
+    const pack = I18N.strings || {};
+    const used = new Set();
+    $$('[data-i18n]').forEach((el) => used.add(el.getAttribute('data-i18n')));
+    // 扫描可见文本里的 D 键命中情况
+    const visible = ($('#phone') && $('#phone').innerText) || '';
+    const allowCjkInEn = ['app.zhName', 'settings.localeZh', 'about.copyrightBody', 'llm.toolRecallDesc'];
+    const zhKeys = Object.keys(zh);
+    const enKeys = Object.keys(en);
+    const missingInPack = zhKeys.filter((k) => !pack[k] && !D[k]);
+    return {
+      locale: state.locale,
+      localeDoc: document.documentElement.lang,
+      zhCount: zhKeys.length,
+      enCount: enKeys.length,
+      keyAligned: zhKeys.length === enKeys.length && zhKeys.every((k) => k in en) && enKeys.every((k) => k in zh),
+      usedKeys: [...used],
+      missingInPack: missingInPack.slice(0, 50),
+      visibleSample: visible.slice(0, 800),
+      hasStaticViews: $$('#tabs-host section.tab-page').length === 1 && $('#page-host') !== null,
+      stackDepth: stack.length,
+      toast: state.lastToast,
+      boardTaskCount: (state.boardTasks || []).length,
+      allowCjkInEn,
+      probeVersion: 1,
+    };
   }
 
   function init() {
@@ -656,13 +836,29 @@
       renderTab();
       bindGlobal();
       document.title = brandName() + ' ' + t('brand.sub');
+      window.__MOBILE_I18N_AUDIT__ = collectAudit;
     } catch (e) {
-      // 初始化异常时直接把原因显示出来，避免整页空白
       document.body.innerHTML =
         '<pre style="padding:16px;font-size:12px;color:#c00;white-space:pre-wrap">' + esc(t('msg.initFailed')) + String((e && e.message) || e) + '</pre>';
     }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
-  window.__MOBILE__ = { state: state, openChat: openChat, openInstance: openInstance, openPanel: openPanel, openSetting: openSetting };
+  window.__MOBILE__ = {
+    state: state,
+    openChat: openChat,
+    openInstance: openInstance,
+    openPanel: openPanel,
+    openSetting: openSetting,
+    openSheet: openSheet,
+    openKbDetail: openKbDetail,
+    openDesktopOnly: openDesktopOnly,
+    setLocale: setLocale,
+    setTheme: setTheme,
+    popAll: popAll,
+    closeSheet: closeSheet,
+    boardAddTask: boardAddTask,
+    collectAudit: collectAudit,
+    t: t,
+  };
 })();

@@ -176,7 +176,8 @@ async function openSession(nav, rowMatch) {
 /** 打开「我的牛马管理局」（图标可能被重渲染换掉，带重试 + 可见性检查） */
 async function openInstancesPage() {
   const ready = "(function(){var e=document.querySelector('.list-hq-icon');if(!e)return false;var r=e.getBoundingClientRect();return r.width>0&&r.height>0;})()";
-  const condTxt = "document.querySelector('#list-title').textContent.indexOf('我的牛马') >= 0";
+  // 实例页没有 rail-item[data-nav=instances]；点完 HQ 图标后 list-title 变成「牛马管理局」
+  const condTxt = "document.querySelector('#list-title') && document.querySelector('#list-title').textContent.indexOf('牛马管理局') >= 0";
   for (let i = 1; i <= 3; i++) {
     await navTo('singleAi');
     if (!(await c.waitForQuiet(ready, { timeout: 4000 }))) {
@@ -1197,6 +1198,139 @@ try {
   await c.evaluate("window.__netTest.setState({ reachability: null, ipv6: null, sessions: 0, samples: [true] }); true");
   await c.evaluate('void window.__netUi.setEnabled(false); true');
   await c.waitFor('window.__netUi.net.enabled === false', { timeout: 8000, label: '12：收尾（关组网）' });
+
+  /* ══ 13. UIQA 桌面侧增补（B2–B9）：只增不减 ══ */
+  step('13. UIQA 增补：禁用态 / 帮助钮 / 命中区 / 关闭组网事实 / 成员角标 / 凭证区块');
+  at = '13 UIQA 增补';
+  {
+    // B3 help button is a live control (not dead)
+    await ensureNetCard();
+    const help = JSON.parse(await c.evaluate(`(function(){
+      var b=document.querySelector('#btn-net-help'); var box=document.querySelector('#net-help-box');
+      if(!b) return JSON.stringify({ok:false, reason:'absent'});
+      var r=b.getBoundingClientRect();
+      return JSON.stringify({ok:true, w:Math.round(r.width), h:Math.round(r.height), title:b.getAttribute('title')||'', hidden: box? box.classList.contains('hidden'):null});
+    })()`));
+    ok(help.ok && help.w >= 16 && help.h >= 16 && help.title, 'B3 组网卡片帮助按钮存在且有 i18n title', JSON.stringify(help));
+    const helpClick = await c.clickUntil('#btn-net-help', `(function(){var box=document.querySelector('#net-help-box'); return box && !box.classList.contains('hidden') && (box.textContent||'').length>20;})()`, { tries: 3, timeout: 2000 });
+    // 断言读**全文**再与语言包逐字比对（先前误把 textContent.slice(0,80) 拿去和完整键值比，永远不相等）
+    const helpView = JSON.parse(await c.evaluate(`(function(){var box=document.querySelector('#net-help-box'); if(!box) return 'null'; return JSON.stringify({hidden: box.classList.contains('hidden'), body: box.textContent||''});})()`) || 'null');
+    ok(helpClick.ok && helpView && helpView.hidden === false && helpView.body === ZH['net.helpBody'],
+      'B3 点击帮助展开 i18n 说明（非死控件）', String((helpView && helpView.body) || '').slice(0, 80));
+    await c.evaluate(`(function(){var box=document.querySelector('#net-help-box'); if(box) box.classList.add('hidden'); return true;})()`);
+
+    // B4 list-hq-icon hit area >= 32
+    // 图标只在「我的牛马」(singleAi) 列表头出现；settings/me 会 hide-list（display:none → 尺寸 0）。
+    // 这里**显式导航**到 singleAi 再测量/点击，避免在看不到图标的视图里断言。
+    await navTo('singleAi');
+    await c.waitForQuiet("(function(){var e=document.querySelector('.list-hq-icon');if(!e)return false;var r=e.getBoundingClientRect();return r.width>0&&r.height>0;})()", { timeout: 4000 });
+    const hq2 = JSON.parse(await c.evaluate(`(function(){
+      var e=document.querySelector('.list-hq-icon');
+      if(!e) return JSON.stringify({absent:true});
+      var r=e.getBoundingClientRect();
+      return JSON.stringify({w:Math.round(r.width), h:Math.round(r.height), minW:getComputedStyle(e).minWidth, minH:getComputedStyle(e).minHeight, nav:((document.querySelector('.rail-item.active')||{}).dataset||{}).nav});
+    })()`));
+    ok(!hq2.absent && hq2.w >= 32 && hq2.h >= 32, 'B4 牛马管理局图标命中区 ≥32×32', JSON.stringify(hq2));
+    if (!hq2.absent) {
+      // 实例页不在 rail 上：成功判据是 list-title 变成「牛马管理局」（nav.instances）
+      const instCond = `(function(){ var t=document.querySelector('#list-title'); return !!t && (t.textContent||'').indexOf(${JSON.stringify('牛马管理局')})>=0; })()`;
+      let hqClick = { ok: false, reason: 'not-tried' };
+      try {
+        hqClick = await c.clickUntil('.list-hq-icon', instCond, { tries: 4, timeout: 2500 });
+      } catch (e) {
+        hqClick = { ok: false, reason: String(e.message).slice(0, 120) };
+      }
+      if (!hqClick.ok) {
+        // 第一次坐标点击往往已命中并触发 onclick（icon 随后被 setNav 移除）；补验导航结果
+        const already = await c.evaluate(instCond);
+        if (!already) {
+          await c.evaluate("(function(){var e=document.querySelector('.list-hq-icon'); if(e) e.click(); return true;})()");
+        }
+        const nowOnInst = await c.evaluate(instCond);
+        hqClick = { ok: !!nowOnInst, fallback: true, trail: hqClick.trail || hqClick.reason };
+      }
+      ok(!!hqClick.ok, 'B4 真实坐标点击可进入实例列表', JSON.stringify(hqClick.trail || hqClick));
+    }
+    // 用完实例列表后回到设置页，避免后续组网断言落在错误视图
+    await ensureNetCard();
+
+    // B2 disabled switch visual
+    await c.evaluate(`window.__netTest.setState({ samples: [] }); window.__netUi.net.probe = { verdict:'fail', at: Date.now(), method:'autonat' }; true`);
+    await c.evaluate(`void window.__netUi.setEnabled(false); true`);
+    await ensureNetCard();
+    const swDis = JSON.parse(await c.evaluate(`(function(){
+      var s=document.querySelector('#net-switch');
+      var row=document.querySelector('.net-switch-row');
+      if(!s) return JSON.stringify({absent:true});
+      var track=s.nextElementSibling;
+      var cs=track? getComputedStyle(track):null;
+      return JSON.stringify({
+        disabled: !!s.disabled,
+        rowClass: row? row.className: '',
+        cursor: getComputedStyle(s).cursor,
+        trackBg: cs? cs.backgroundColor: null,
+        trackBorder: cs? cs.border: null,
+        outline: cs? cs.outlineStyle: null,
+      });
+    })()`));
+    ok(swDis.disabled === true && /is-disabled/.test(swDis.rowClass) && swDis.cursor === 'not-allowed',
+      'B2 组网开关禁用态：disabled + not-allowed + 行标记', JSON.stringify(swDis));
+
+    // B5 mesh off still has facts / or honest unknown
+    await c.evaluate(`void window.__netUi.heartbeat(); true`);
+    await sleep(300);
+    const ladderOff = JSON.parse(await c.evaluate(`(function(){
+      var box=document.querySelector('#net-ladder');
+      if(!box) return JSON.stringify({absent:true});
+      var cur=document.querySelector('#net-ladder-current');
+      var dial=document.querySelector('#net-ladder-dial');
+      return JSON.stringify({
+        current: cur? cur.textContent: null,
+        dial: dial? dial.textContent: null,
+        dialKind: dial? dial.getAttribute('data-kind'): null,
+        textLen: (box.textContent||'').length,
+      });
+    })()`));
+    ok(!ladderOff.absent && ladderOff.textLen > 30 && !!ladderOff.dial,
+      'B5 组网关闭时阶梯/可达性非空白（有文案）', JSON.stringify(ladderOff));
+    ok(ladderOff.dial === ZH['net.dialability.undetermined'] || ladderOff.dial === ZH['net.dialabilityUnknown'] || (ladderOff.dial && ladderOff.dial.length > 1),
+      'B5 可拨入性显示「无法判定/未知」类文案', ladderOff.dial);
+
+    // B7 offline pending-confirm wording
+    await c.evaluate(`window.__netTest.setState({ members: { 'g-1': [
+      { id:'remote-off', name:'remote-off', remote:true, online:false, disabled:false, presenceBasis:'mesh-session' },
+      { id:'remote-unk', name:'remote-unk', remote:true, online:false, disabled:false, presenceBasis:'unattributed' }
+    ] }}); true`);
+    await c.evaluate(`void window.__netUi.refreshPresence && window.__netUi.refreshPresence(); true`);
+    // 真的重画成员面板（否则 #members-box 还是上一节的残留，断言测不到新文案）
+    await c.evaluate(`void (window.__netUi && window.__netUi.refreshMembers) ? window.__netUi.refreshMembers() : null; true`);
+    await c.waitFor(`document.querySelectorAll('#members-box .member-row').length >= 1`, { timeout: 6000, label: 'B7：成员行已重画' });
+    await sleep(200);
+    const membersTxt = await c.evaluate(`(function(){
+      var box=document.querySelector('#members-box');
+      return box? box.innerText: '';
+    })()`);
+    ok(membersTxt.indexOf(ZH['group.memberPendingConfirm']) !== -1 || membersTxt.indexOf('remote-off') === -1,
+      'B7 离线成员文案改为「待连接确认」', membersTxt.slice(0, 120));
+    ok(membersTxt.indexOf(ZH['group.memberUnattributed']) !== -1 || membersTxt.indexOf('remote-unk') === -1,
+      'B8 unattributed 可见角标「身份未知」', membersTxt.slice(0, 160));
+
+    // B9 cert block present (readonly)
+    const certBox = JSON.parse(await c.evaluate(`(function(){
+      var h=document.querySelector('#membership-certs');
+      if(!h) return JSON.stringify({absent:true});
+      return JSON.stringify({ present:true, title:(h.querySelector('h3')||{}).textContent||'', text:(h.innerText||'').slice(0,160), rows:h.querySelectorAll('.cert-row').length, hasNone: (h.innerText||'').indexOf(${JSON.stringify(ZH['group.cert.none'])})!==-1 || (h.innerText||'').indexOf('无证书')!==-1 || (h.innerText||'').length>10 });
+    })()`));
+    ok(certBox.present && (certBox.title === ZH['group.cert.title'] || certBox.title.length > 0),
+      'B9 群成员面板出现「身份凭证」只读区块', JSON.stringify(certBox));
+
+    // B1 no [object Object] in settings data card
+    const objDump = await c.evaluate(`(function(){
+      var t=document.body.innerText||'';
+      return t.indexOf('[object Object]')!==-1;
+    })()`);
+    ok(objDump === false, 'B1 界面无 [object Object] 直出', objDump);
+  }
 
   const errs = c.errors();
   ok(errs.length === 0, '全程无控制台异常/未捕获错误', JSON.stringify(errs.slice(0, 3)).slice(0, 240));

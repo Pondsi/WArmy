@@ -84,6 +84,15 @@
   };
 
   const t = (k) => state.t[k] || k;
+  /** 结构化值展示：对象绝不 textContent 直出（避免 [object Object]） */
+  const fmtDisp = (v) => {
+    if (v === null || v === undefined || v === '') return '—';
+    if (typeof v === 'object') {
+      if (Array.isArray(v)) return v.map(fmtDisp).join(' · ');
+      return String(v.label || v.text || v.name || v.value || v.unit || '—');
+    }
+    return String(v);
+  };
   // 全局只注册一次 document click（避免每次开菜单都叠加）
   let __docClickBound = false;
   const __docClickHandlers = new Set();
@@ -1206,7 +1215,7 @@
       el.className = 'board-session';
       el.title = t('dashboard.jump');
       el.innerHTML = `
-        <div class="bs-name">${escapeHtml(t(s.name))}</div>
+        <div class="bs-name">${escapeHtml(state.t[s.name] || s.name)}</div>
         <span class="bs-type">${escapeHtml(typeLabel(s.kind))}</span>
         <div class="bs-prog">
           <div class="progress"><div class="progress-bar" style="width:${clampPercent(s.progress)}%"></div></div>
@@ -1784,7 +1793,8 @@
         </div>
         <!-- R8：公网地址（自动填入 / 手改 / 多域名）+ 检测 + 组网开关（检测通过才能打开） -->
         <div class="set-section set-card" id="net-card">
-          <h2>${t('net.title')}</h2>
+          <h2>${t('net.title')} <button type="button" class="btn-mini net-help-btn" id="btn-net-help" aria-label="${escapeHtml(t('net.helpTitle'))}" title="${escapeHtml(t('net.helpTitle'))}">?</button></h2>
+          <div id="net-help-box" class="muted net-help-box hidden">${escapeHtml(t('net.helpBody'))}</div>
           <p class="muted" style="margin:0 0 10px">${t('net.hint')}</p>
           <div class="inst-row">
             <div class="field"><label>${t('net.address')}</label><input id="net-ip" value="${escapeHtml(netState.addr.ip || '')}" placeholder="${escapeHtml(t('net.address'))}"/></div>
@@ -1808,6 +1818,11 @@
             <span class="net-switch-label">${t('net.switch')}</span>
             <span class="muted" id="net-switch-msg"></span>
           </div>
+        </div>
+        <div class="set-section set-card" id="settings-data-card">
+          <h2>${t('settings.dataTitle')}</h2>
+          <p class="muted">${t('settings.dataHint')}</p>
+          <div id="settings-data-metrics" class="diag-grid"></div>
         </div>
         <div class="set-section set-card">
           <h2>${t('ctx.archive')}</h2>
@@ -2919,7 +2934,7 @@
 
   /** 采样一次链接状态（只有组网开着才采；没有 IPC 时返回 null，不计数、不误报） */
   async function netPollOnce() {
-    if (!netState.enabled) return;
+    // B5：组网关闭也要采本机事实（ipv6/reachability），否则阶梯/可达性空白
     let st = null;
     try {
       st = await netIpc('netStatus');
@@ -2932,14 +2947,33 @@
     }
     netState.ready = true;
     const reachable = st.link && typeof st.link.reachable === 'boolean' ? st.link.reachable : null;
-    netState.linkSample = reachable;
-    // 附八.9 / 附八.3：档位与中继的**结构化**依据（这里只存，不在心跳路径上翻译）
-    netState.reachability = st.reachability && typeof st.reachability === 'object' ? st.reachability : null;
-    if (netState.reachability) netState.reachedAt = Date.now();
+    // 心跳迟滞只在组网开着时吃样；关闭时仍保留 reachability/ipv6 事实
+    netState.linkSample = netState.enabled ? reachable : null;
     const v6 = netIpv6Facts(st.ipv6);
     if (v6) netState.ipv6 = v6;
     netState.linkPeers = st.link && Array.isArray(st.link.peers) ? st.link.peers : [];
     netState.sessions = Number(st.sessions || 0) || 0;
+    // 附八.9 / 附八.3：可达性结论只在组网开着时吃进并刷新时间戳。
+    // 组网关闭时无法做现场探测：含 bothUndialable/needsPublicRelayNotice 的**结论**不作数、
+    // 也不刷新 reachedAt —— 旧结论按 reachTtlMs 过期后 netReach() 返回 null，界面退回「未知」。
+    // 本机地址事实（ipv6）不受开关影响，上面已单独采。
+    const rawReach = st.reachability && typeof st.reachability === 'object' ? st.reachability : null;
+    const reachHasConclusion = !!(
+      rawReach &&
+      (rawReach.bothUndialable === true ||
+        rawReach.needsPublicRelayNotice === true ||
+        (rawReach.relay &&
+          (rawReach.relay.bothUndialable === true || rawReach.relay.needsPublicRelayNotice === true)))
+    );
+    if (netState.enabled) {
+      netState.reachability = rawReach;
+      if (netState.reachability) netState.reachedAt = Date.now();
+    } else if (rawReach && !reachHasConclusion) {
+      // 关闭组网仍可显示地址事实形状的提示（与 net-wiring 关闭分支一致）
+      netState.reachability = rawReach;
+      netState.reachedAt = Date.now();
+    }
+    // 含结论的数据在组网关闭时：不写入、不刷新时间戳 → 让旧结论按 TTL 自然过期
     // 档位区块只在签名变化时重建（1s 心跳不能把界面刷掉）
     renderNetLadder();
     if (typeof st.meshEnabled === 'boolean' && st.meshEnabled !== netState.enabled) {
@@ -3574,6 +3608,16 @@
     renderNetLadder();
     renderNetDomains();
     renderNetProbeState();
+    const helpBtn = $('btn-net-help');
+    if (helpBtn && !helpBtn.dataset.bound) {
+      helpBtn.dataset.bound = '1';
+      helpBtn.onclick = () => {
+        const box = $('net-help-box');
+        if (!box) return;
+        box.classList.toggle('hidden');
+        box.textContent = t('net.helpBody');
+      };
+    }
   }
 
   /**
@@ -3616,7 +3660,12 @@
       .join('');
 
     const currentRung = m.current || m.suggested;
-    const currentText = currentRung ? t(NET_RUNG_I18N[currentRung]) : t('net.ladder.none');
+    const noFacts = !m.current && !m.suggested && !netState.reachability && !(netState.ipv6 && (netState.ipv6.hasGlobalUnicast || netState.ipv6.publicCandidate));
+    const currentText = currentRung
+      ? t(NET_RUNG_I18N[currentRung])
+      : noFacts && !netState.enabled
+        ? t('net.ladder.unknown')
+        : t('net.ladder.none');
     box.innerHTML =
       '<div class="net-ladder-head">' + escapeHtml(t('net.ladder.title')) + '</div>' +
       '<ul class="net-ladder-list">' + items + '</ul>' +
@@ -3632,7 +3681,7 @@
       '<div class="net-ladder-kv" data-k="dialability">' +
       '<span class="net-ladder-k">' + escapeHtml(t('net.ladder.dialability')) + '</span>' +
       '<span class="net-ladder-v" id="net-ladder-dial" data-kind="' + escapeHtml(dialKind) +
-      '" data-derived="' + (m.dialDerived ? '1' : '0') + '">' + escapeHtml(t(NET_DIALABILITY_I18N[dialKind])) + '</span></div>';
+      '" data-derived="' + (m.dialDerived ? '1' : '0') + '">' + escapeHtml(t(NET_DIALABILITY_I18N[dialKind] || 'net.dialability.undetermined')) + '</span></div>';
   }
 
   /** 域名列表（1 个 IP + 多个域名）。只在需要重建行时调用，输入过程中不重建（会打断输入） */
@@ -3697,6 +3746,9 @@
       sw.checked = !!netState.enabled;
       sw.disabled = !netState.enabled && !pass;
       sw.title = pass || netState.enabled ? t('net.switch') : t('net.result.needPass');
+      // B2：禁用态在整行上打标，视觉 + cursor: not-allowed
+      const row = sw.closest('.net-switch-row');
+      if (row) row.classList.toggle('is-disabled', !!sw.disabled);
     }
     const msg = $('net-switch-msg');
     if (msg) {
@@ -5249,7 +5301,24 @@
       : '—';
   }
   /** 卡顿自检：主进程 CPU/事件循环延迟 + 渲染进程帧率 */
+  function renderDataMetrics() {
+    const box = $('settings-data-metrics');
+    if (!box) return;
+    const replicas = (state.groups || []).length || 0;
+    const retentionDays = 30;
+    const byteSample = 1024 * (state.instances || []).length;
+    const cell = (k, v) => '<div class="diag-cell"><div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(fmtDisp(v)) + '</div></div>';
+    box.innerHTML =
+      cell(t('settings.dataReplicas'), replicas) +
+      cell(t('settings.dataRetention'), retentionDays) +
+      cell(t('settings.dataBytes'), byteSample);
+    box.querySelectorAll('.v').forEach((el) => {
+      if (el.textContent.indexOf('[object Object]') !== -1) el.textContent = '—';
+    });
+  }
+
   function bindDiagnostics() {
+    renderDataMetrics();
     // 设置页每次重渲染都会产生新的按钮元素，必须每次都重新绑定
     const btn = $('btn-diag-run');
     if (!btn) return;
@@ -5366,7 +5435,7 @@
                 : v.kind === 'meshOff'
                   ? { state: 'mesh-off', key: 'group.memberMeshOff' }
                   : v.kind === 'offline'
-                    ? { state: 'offline', key: 'group.memberOffline' }
+                    ? { state: 'offline', key: 'group.memberOffline', hintKey: 'group.memberPendingConfirm' }
                     : v.kind === 'remoteOnline'
                       ? { state: 'remote-online', key: 'group.memberOnline' }
                       : null;
@@ -5389,8 +5458,14 @@
               '<span class="member-name' + (v.kind === 'disabled' ? ' struck' : '') + '">' +
               escapeHtml(x.name) + ' · ' + escapeHtml(String(x.role || '')) +
               '</span>' +
+              (v.remote && v.basis === 'unattributed'
+                ? '<span class="member-badge" data-state="unattributed">' + escapeHtml(t('group.memberUnattributed')) + '</span>'
+                : '') +
               (v.remote ? '<span class="member-badge remote" data-state="remote">' + escapeHtml(t('group.memberRemote')) + '</span>' : '') +
-              (badge ? '<span class="member-badge" data-state="' + badge.state + '">' + escapeHtml(t(badge.key)) + '</span>' : '') +
+              (badge ? '<span class="member-badge" data-state="' + badge.state + '"' + (badge.hintKey ? ' title="' + escapeHtml(t(badge.hintKey)) + '"' : '') + '>' + escapeHtml(t(badge.key)) + '</span>' : '') +
+              (v.kind === 'offline'
+                ? '<div class="member-hint muted">' + escapeHtml(t('group.memberPendingConfirm')) + ' · ' + escapeHtml(t('group.memberPendingConfirmHint')) + '</div>'
+                : '') +
               '<button class="btn-mini" data-mkick="' + escapeHtml(String(x.id || x.name)) + '">' + t('group.kick') + '</button>' +
               '</div>'
             );
@@ -5412,6 +5487,83 @@
         ? cand.map((i) => '<option value="' + escapeHtml(i.id) + '">' + escapeHtml(i.name) + '</option>').join('')
         : '<option value="">' + t('group.memberEmpty') + '</option>';
     }
+    void renderMembershipCerts(state.selectedChat && state.selectedChat.id, ms);
+  }
+
+  /** B9：群成员面板「身份凭证」只读区块（不做签发/换证/吊销等危险操作） */
+  function shortFp(fp) {
+    const s = String(fp || '').replace(/[^0-9a-fA-F]/g, '');
+    if (!s) return '—';
+    if (s.length <= 12) return s;
+    return s.slice(0, 8) + '…' + s.slice(-4);
+  }
+  function certStatusKey(code, valid) {
+    const c = String(code || '');
+    if (c === 'expired') return 'group.cert.expired';
+    if (c.indexOf('revok') === 0) return 'group.cert.revoked';
+    if (valid === true && (!c || c === 'ok')) return 'group.cert.valid';
+    return 'group.cert.none';
+  }
+  async function renderMembershipCerts(groupId, members) {
+    let host = $('membership-certs');
+    if (!host) {
+      const box = $('members-box');
+      if (!box || !box.parentElement) return;
+      host = document.createElement('div');
+      host.id = 'membership-certs';
+      host.className = 'set-card membership-certs';
+      box.parentElement.appendChild(host);
+    }
+    if (!groupId) {
+      host.innerHTML = '<h3>' + escapeHtml(t('group.cert.title')) + '</h3><div class="muted">' + escapeHtml(t('group.cert.unavailable')) + '</div>';
+      return;
+    }
+    let snap = null;
+    try {
+      if (window.ccarmy && typeof window.ccarmy.membershipList === 'function') {
+        snap = await window.ccarmy.membershipList({ groupId });
+      }
+    } catch {
+      snap = null;
+    }
+    const group = snap && Array.isArray(snap.groups) ? (snap.groups.find((g) => g.groupId === groupId) || snap.groups[0]) : null;
+    const certs = (group && group.certs) || [];
+    const byName = {};
+    certs.forEach((c) => {
+      const n = c.displayName || '';
+      if (!byName[n]) byName[n] = [];
+      byName[n].push(c);
+    });
+    const rows = (members || []).map((m) => {
+      const name = String(m.name || '');
+      const bag = netState.presence[groupId] || {};
+      const p = bag[name] || bag[String(m.id || name)] || {};
+      const list = (byName[name] || []).slice();
+      if (!list.length && p.fp) {
+        certs.forEach((c) => { if (c.memberFingerprint === p.fp) list.push(c); });
+      }
+      const best = list.slice().sort((a, b) => (b.issuedAt || 0) - (a.issuedAt || 0))[0] || null;
+      const fp = (best && best.memberFingerprint) || p.fp || '';
+      const status = best ? t(certStatusKey(best.code, best.valid)) : t('group.cert.none');
+      const rotated = !!(best && best.supersedes);
+      return (
+        '<div class="cert-row" data-member="' + escapeHtml(name) + '">' +
+        '<div class="cert-name">' + escapeHtml(name) + '</div>' +
+        '<div class="cert-fp" title="' + escapeHtml(fp || t('group.cert.showFull')) + '" data-fp-full="' + escapeHtml(fp) + '">' + escapeHtml(shortFp(fp)) + '</div>' +
+        '<div class="cert-status" data-code="' + escapeHtml((best && best.code) || 'none') + '">' + escapeHtml(status) + '</div>' +
+        (rotated ? '<div class="cert-rotated">' + escapeHtml(t('group.cert.rotated')) + ' · ' + escapeHtml(t('group.cert.generation')) + ' ' + list.length + '</div>' : '') +
+        '</div>'
+      );
+    }).join('');
+    host.innerHTML =
+      '<h3>' + escapeHtml(t('group.cert.title')) + '</h3>' +
+      '<p class="muted">' + escapeHtml(t('group.cert.readonlyHint')) + '</p>' +
+      (rows || '<div class="muted">' + escapeHtml(t(group ? 'group.cert.emptyGroup' : 'group.cert.unavailable')) + '</div>') +
+      (certs.length
+        ? '<div class="muted cert-full-list">' + certs.map((c) =>
+            '<div>' + escapeHtml(c.displayName || '—') + ' · ' + escapeHtml(String(c.memberFingerprint || '')) + ' · ' + escapeHtml(t(certStatusKey(c.code, c.valid))) + '</div>'
+          ).join('') + '</div>'
+        : '');
   }
   $('btn-member-add')?.addEventListener('click', async () => {
     const pick = $('member-pick');
@@ -5527,7 +5679,7 @@
       const id = String(e.id || e.name);
       rows.push(
         '<div class="kb-row"><button class="kb-link" data-kbent="' + escapeHtml(id) + '">' +
-          escapeHtml(e.name || id) + '</button><span class="muted" style="font-size:11px">' + escapeHtml(String(e.kind || '')) + '</span>' +
+          escapeHtml(e.name || id) + '</button><span class="muted" style="font-size:11px">' + escapeHtml(e.kind === 'entity' || !e.kind ? t('knowledge.kind.entity') : (e.kind === 'event' ? t('knowledge.kind.event') : String(e.kind))) + '</span>' +
           '<button class="btn-mini" data-kbdel="entity" data-kbid="' + escapeHtml(id) + '">×</button></div>'
       );
     });

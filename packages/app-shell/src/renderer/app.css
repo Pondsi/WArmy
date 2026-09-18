@@ -972,6 +972,12 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
   border: none; background: transparent; color: var(--muted);
   cursor: pointer; padding: 4px; margin-left: auto;
   display: inline-flex; align-items: center; border-radius: 6px;
+  /* B4：命中区 ≥32×32，视觉图标仍是 18px */
+  min-width: 32px; min-height: 32px; position: relative;
+}
+.list-hq-icon::after {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 36px; height: 36px; transform: translate(-50%, -50%);
 }
 .list-hq-icon:hover { background: var(--hover); color: var(--ink); }
 .enter-hq-wrap {
@@ -1386,8 +1392,14 @@ input.net-invalid { border-color: var(--danger) !important; }
 }
 .net-switch input:checked + .net-switch-track { background: var(--accent); }
 .net-switch input:checked + .net-switch-track::after { transform: translateX(20px); }
-.net-switch input:disabled + .net-switch-track { opacity: 0.5; }
+.net-switch input:disabled + .net-switch-track {
+  opacity: 1; background: var(--hover); border: 1px solid var(--line);
+  outline: 1px dashed var(--ink-dim);
+}
+.net-switch input:disabled + .net-switch-track::after { background: var(--ink-dim); }
 .net-switch input:disabled { cursor: not-allowed; }
+.net-switch-row.is-disabled .net-switch-label,
+.net-switch-row.is-disabled #net-switch-msg { color: var(--ink-dim); cursor: not-allowed; }
 .net-switch-label { font-weight: 600; }
 
 /* ── 连接阶梯（附八.9 / 附八.3）：六档全列 + 当前档 + 中继状态 + 本机可拨入性 ──
@@ -1414,3 +1426,26 @@ input.net-invalid { border-color: var(--danger) !important; }
 .net-ladder-v { color: var(--ink); font-weight: 600; }
 .net-ladder[data-terminal='1'] .net-ladder-v[data-terminal='1'] { color: var(--danger-fg); }
 
+
+
+/* B3 net help */
+.net-help-btn { margin-left: 8px; min-width: 22px; min-height: 22px; }
+.net-help-box { margin: 0 0 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; line-height: 1.5; }
+.net-help-box.hidden { display: none !important; }
+
+/* B7/B8 */
+.member-hint { font-size: var(--fs-xs); margin: 2px 0 4px; color: var(--ink-dim); }
+.member-badge[data-state='unattributed'] { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-line); }
+
+/* B9 */
+.membership-certs { margin-top: 12px; }
+.membership-certs h3 { margin: 0 0 6px; font-size: 13px; }
+.cert-row { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+.cert-row:last-child { border-bottom: none; }
+.cert-fp { font-family: var(--font-mono, Cascadia Code, Consolas, monospace); color: var(--ink-dim); cursor: pointer; }
+.cert-status { color: var(--ink); }
+.cert-rotated { grid-column: 1 / -1; color: var(--ink-dim); font-size: var(--fs-xs); }
+.cert-full-list { margin-top: 8px; font-size: var(--fs-xs); word-break: break-all; }
+
+/* A14 compact */
+.list-item { padding: 8px 8px; }
