@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-17T22:21:07.651Z",
+  "generatedAt": "2026-09-18T06:17:14.779Z",
   "host": {
     "node": "v24.20.0",
     "platform": "win32",
@@ -256,7 +256,7 @@
             "channel": "fts_uni",
             "used": false,
             "hits": 0,
-            "ms": 1,
+            "ms": 0,
             "skipped": "matched via LIKE fallback"
           },
           {
@@ -451,7 +451,7 @@
         "channel": "vector",
         "used": true,
         "hits": 1,
-        "ms": 1
+        "ms": 0
       }
     },
     {
@@ -833,7 +833,7 @@
       "ok": true,
       "detail": {
         "embedded": 14,
-        "ms": 170,
+        "ms": 175,
         "remaining": 0
       }
     },
@@ -1003,15 +1003,15 @@
       "ok": true,
       "detail": {
         "triIndexed": {
-          "medianMs": 0.238,
-          "minMs": 0.216,
-          "maxMs": 0.289,
+          "medianMs": 0.237,
+          "minMs": 0.213,
+          "maxMs": 0.33,
           "reps": 7
         },
         "recordsFullScan": {
-          "medianMs": 0.275,
-          "minMs": 0.271,
-          "maxMs": 0.302,
+          "medianMs": 0.285,
+          "minMs": 0.279,
+          "maxMs": 0.314,
           "reps": 7
         }
       }
@@ -1020,10 +1020,10 @@
       "name": "大语料上向量扫描可测（cosines>0）",
       "ok": true,
       "detail": {
-        "totalMs": 4622,
-        "hydrateMs": 4614,
-        "embedQueryMs": 6,
-        "uniMs": 1,
+        "totalMs": 4371,
+        "hydrateMs": 4364,
+        "embedQueryMs": 5,
+        "uniMs": 0,
         "triMs": 0,
         "vecMs": 1,
         "fuseMs": 0,
@@ -1193,7 +1193,7 @@
           "last_seq"
         ],
         "jsonl": {
-          "sha1Simple": "4af78ab7",
+          "sha1Simple": "a92606cd",
           "bytes": 604
         },
         "recordCount": 4
@@ -1261,7 +1261,7 @@
       "ok": true,
       "detail": {
         "before": {
-          "sha1Simple": "4af78ab7",
+          "sha1Simple": "a92606cd",
           "bytes": 604
         },
         "after": {
@@ -1429,7 +1429,7 @@
         "queryPrefix": "",
         "tokenizer": null,
         "modelCandidates": [
-          "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-env-1789683667656-c1elv\\models\\model_quantized.onnx",
+          "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-env-1789712234784-u6lpp\\models\\model_quantized.onnx",
           "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
         ]
       },
@@ -2061,7 +2061,7 @@
       "ortTried": [
         "require:onnxruntime-web"
       ],
-      "loadMs": 185,
+      "loadMs": 192,
       "embeds": 0,
       "embedTotalMs": 0,
       "lastEmbedMs": 0,
@@ -2086,7 +2086,7 @@
         "last_hidden_state"
       ],
       "modelCandidates": [
-        "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-main-1789683667714-2hfi6\\models\\model_quantized.onnx",
+        "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-main-1789712234843-s0lf2\\models\\model_quantized.onnx",
         "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\CCArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
       ]
     },
@@ -2159,8 +2159,8 @@
           "fused": 2
         },
         "timings": {
-          "totalMs": 181,
-          "hydrateMs": 177,
+          "totalMs": 183,
+          "hydrateMs": 176,
           "embedQueryMs": 3,
           "uniMs": 0,
           "triMs": 0,
@@ -2249,9 +2249,9 @@
           "fused": 2
         },
         "timings": {
-          "totalMs": 3,
+          "totalMs": 4,
           "hydrateMs": 0,
-          "embedQueryMs": 3,
+          "embedQueryMs": 4,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
@@ -2446,7 +2446,7 @@
             "channel": "vector",
             "used": true,
             "hits": 3,
-            "ms": 1
+            "ms": 0
           }
         ],
         "candidates": {
@@ -2461,7 +2461,7 @@
           "embedQueryMs": 4,
           "uniMs": 0,
           "triMs": 0,
-          "vecMs": 1,
+          "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -2646,7 +2646,7 @@
           "fused": 1
         },
         "timings": {
-          "totalMs": 4,
+          "totalMs": 5,
           "hydrateMs": 0,
           "embedQueryMs": 4,
           "uniMs": 0,
@@ -2861,13 +2861,13 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "fts_tri",
             "used": true,
             "hits": 1,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "vector",
@@ -2883,11 +2883,11 @@
           "fused": 2
         },
         "timings": {
-          "totalMs": 6,
+          "totalMs": 5,
           "hydrateMs": 0,
-          "embedQueryMs": 5,
-          "uniMs": 1,
-          "triMs": 0,
+          "embedQueryMs": 4,
+          "uniMs": 0,
+          "triMs": 1,
           "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
@@ -3003,19 +3003,19 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "fts_tri",
             "used": true,
             "hits": 1,
-            "ms": 1
+            "ms": 0
           },
           {
             "channel": "vector",
             "used": true,
             "hits": 5,
-            "ms": 1
+            "ms": 0
           }
         ],
         "candidates": {
@@ -3025,12 +3025,12 @@
           "fused": 5
         },
         "timings": {
-          "totalMs": 10,
+          "totalMs": 9,
           "hydrateMs": 0,
           "embedQueryMs": 7,
-          "uniMs": 0,
-          "triMs": 1,
-          "vecMs": 1,
+          "uniMs": 1,
+          "triMs": 0,
+          "vecMs": 0,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -3097,13 +3097,13 @@
           "fused": 1
         },
         "timings": {
-          "totalMs": 1,
+          "totalMs": 0,
           "hydrateMs": 0,
           "embedQueryMs": 0,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
-          "fuseMs": 1,
+          "fuseMs": 0,
           "cosines": 0,
           "hydrated": 0,
           "vectorBelowThreshold": 0,
@@ -3146,7 +3146,7 @@
             "channel": "fts_uni",
             "used": true,
             "hits": 1,
-            "ms": 0
+            "ms": 1
           },
           {
             "channel": "fts_tri",
@@ -3169,10 +3169,10 @@
           "fused": 1
         },
         "timings": {
-          "totalMs": 0,
+          "totalMs": 1,
           "hydrateMs": 0,
           "embedQueryMs": 0,
-          "uniMs": 0,
+          "uniMs": 1,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3322,7 +3322,7 @@
             "channel": "vector",
             "used": true,
             "hits": 2,
-            "ms": 0
+            "ms": 1
           }
         ],
         "candidates": {
@@ -3334,10 +3334,10 @@
         "timings": {
           "totalMs": 6,
           "hydrateMs": 0,
-          "embedQueryMs": 6,
+          "embedQueryMs": 5,
           "uniMs": 0,
           "triMs": 0,
-          "vecMs": 0,
+          "vecMs": 1,
           "fuseMs": 0,
           "cosines": 14,
           "hydrated": 0,
@@ -3434,7 +3434,7 @@
             "channel": "fts_uni",
             "used": false,
             "hits": 0,
-            "ms": 1,
+            "ms": 0,
             "skipped": "matched via LIKE fallback"
           },
           {
@@ -3467,8 +3467,8 @@
         "timings": {
           "totalMs": 6,
           "hydrateMs": 0,
-          "embedQueryMs": 5,
-          "uniMs": 1,
+          "embedQueryMs": 6,
+          "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3505,10 +3505,10 @@
           }
         ],
         "timings": {
-          "totalMs": 1,
+          "totalMs": 0,
           "hydrateMs": 0,
           "embedQueryMs": 0,
-          "uniMs": 1,
+          "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -3522,7 +3522,7 @@
             "channel": "fts_uni",
             "used": false,
             "hits": 0,
-            "ms": 1,
+            "ms": 0,
             "skipped": "matched via LIKE fallback"
           },
           {
@@ -3570,7 +3570,7 @@
           }
         ],
         "timings": {
-          "totalMs": 6,
+          "totalMs": 5,
           "hydrateMs": 0,
           "embedQueryMs": 5,
           "uniMs": 0,
@@ -3635,7 +3635,7 @@
           }
         ],
         "timings": {
-          "totalMs": 4,
+          "totalMs": 5,
           "hydrateMs": 0,
           "embedQueryMs": 4,
           "uniMs": 0,
@@ -3682,7 +3682,7 @@
         "query": "zzz_not_present_zzz",
         "cards": [],
         "timings": {
-          "totalMs": 0,
+          "totalMs": 1,
           "hydrateMs": 0,
           "embedQueryMs": 0,
           "uniMs": 0,
@@ -3706,9 +3706,9 @@
         "query": "今天中午吃什么比较好",
         "cards": [],
         "timings": {
-          "totalMs": 6,
+          "totalMs": 5,
           "hydrateMs": 0,
-          "embedQueryMs": 6,
+          "embedQueryMs": 5,
           "uniMs": 0,
           "triMs": 0,
           "vecMs": 0,
@@ -3730,10 +3730,10 @@
         "query": "量子纠缠与黑洞信息悖论",
         "cards": [],
         "timings": {
-          "totalMs": 6,
+          "totalMs": 7,
           "hydrateMs": 0,
           "embedQueryMs": 6,
-          "uniMs": 0,
+          "uniMs": 1,
           "triMs": 0,
           "vecMs": 0,
           "fuseMs": 0,
@@ -4102,8 +4102,8 @@
       "unrelatedInt8Cos": 0.254484,
       "blobBytes": 512,
       "float32Bytes": 2048,
-      "embedMsLast": 7,
-      "embedMsAvg": 9.255,
+      "embedMsLast": 6,
+      "embedMsAvg": 9.298,
       "embeds": 47
     },
     "semanticPairs": [
@@ -4261,7 +4261,7 @@
     },
     "latency": {
       "corpusRecords": 2000,
-      "buildMs": 859,
+      "buildMs": 903,
       "jsonlBytes": 397214,
       "indexed": {
         "ftsUniDocs": 2000,
@@ -4287,72 +4287,72 @@
           "len": 31,
           "hits": 220,
           "uni": {
-            "medianMs": 1.514,
-            "minMs": 1.462,
-            "maxMs": 1.606,
+            "medianMs": 1.526,
+            "minMs": 1.492,
+            "maxMs": 1.85,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.851,
-            "minMs": 0.778,
-            "maxMs": 0.918,
+            "medianMs": 0.795,
+            "minMs": 0.77,
+            "maxMs": 0.873,
             "reps": 7
           },
-          "speedupTriVsUni": 1.78
+          "speedupTriVsUni": 1.92
         },
         {
           "query": "E_MEMORY_CORRUPT",
           "len": 16,
           "hits": 212,
           "uni": {
-            "medianMs": 1.073,
-            "minMs": 1.057,
-            "maxMs": 1.167,
+            "medianMs": 1.146,
+            "minMs": 1.082,
+            "maxMs": 1.489,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.459,
-            "minMs": 0.444,
-            "maxMs": 0.489,
+            "medianMs": 0.441,
+            "minMs": 0.434,
+            "maxMs": 0.469,
             "reps": 7
           },
-          "speedupTriVsUni": 2.34
+          "speedupTriVsUni": 2.6
         },
         {
           "query": "CCA_ARMY_MEMORY_DIR",
           "len": 19,
           "hits": 205,
           "uni": {
-            "medianMs": 1.186,
-            "minMs": 1.154,
-            "maxMs": 1.253,
+            "medianMs": 1.211,
+            "minMs": 1.15,
+            "maxMs": 1.749,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.502,
-            "minMs": 0.491,
-            "maxMs": 0.614,
+            "medianMs": 0.528,
+            "minMs": 0.474,
+            "maxMs": 0.61,
             "reps": 7
           },
-          "speedupTriVsUni": 2.36
+          "speedupTriVsUni": 2.29
         },
         {
           "query": "多智能体群聊桌面应用",
           "len": 10,
           "hits": 0,
           "uni": {
-            "medianMs": 0.024,
-            "minMs": 0.022,
-            "maxMs": 0.028,
-            "reps": 7
-          },
-          "tri": {
             "medianMs": 0.023,
             "minMs": 0.022,
             "maxMs": 0.027,
             "reps": 7
           },
-          "speedupTriVsUni": 1.04
+          "tri": {
+            "medianMs": 0.02,
+            "minMs": 0.019,
+            "maxMs": 0.021,
+            "reps": 7
+          },
+          "speedupTriVsUni": 1.15
         },
         {
           "query": "值班者状态机在指定成员忙碌时",
@@ -4361,34 +4361,34 @@
           "uni": {
             "medianMs": 0.059,
             "minMs": 0.058,
-            "maxMs": 0.063,
+            "maxMs": 0.064,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.042,
-            "minMs": 0.041,
-            "maxMs": 0.048,
+            "medianMs": 0.04,
+            "minMs": 0.039,
+            "maxMs": 0.112,
             "reps": 7
           },
-          "speedupTriVsUni": 1.4
+          "speedupTriVsUni": 1.47
         },
         {
           "query": "记忆服务作为长驻子进程",
           "len": 11,
           "hits": 0,
           "uni": {
-            "medianMs": 0.046,
-            "minMs": 0.046,
-            "maxMs": 0.049,
+            "medianMs": 0.045,
+            "minMs": 0.045,
+            "maxMs": 0.057,
             "reps": 7
           },
           "tri": {
-            "medianMs": 0.03,
-            "minMs": 0.03,
+            "medianMs": 0.029,
+            "minMs": 0.029,
             "maxMs": 0.031,
             "reps": 7
           },
-          "speedupTriVsUni": 1.53
+          "speedupTriVsUni": 1.55
         }
       ],
       "likePlan": {
@@ -4404,33 +4404,33 @@
       },
       "likeBench": {
         "triIndexed": {
-          "medianMs": 0.238,
-          "minMs": 0.216,
-          "maxMs": 0.289,
+          "medianMs": 0.237,
+          "minMs": 0.213,
+          "maxMs": 0.33,
           "reps": 7
         },
         "recordsFullScan": {
-          "medianMs": 0.275,
-          "minMs": 0.271,
-          "maxMs": 0.302,
+          "medianMs": 0.285,
+          "minMs": 0.279,
+          "maxMs": 0.314,
           "reps": 7
         }
       },
-      "likeSpeedup": 1.16,
+      "likeSpeedup": 1.2,
       "triFasterCount": "6/6"
     },
     "vectorScanLarge": {
       "hydrated": {
         "embedded": 256,
-        "ms": 4517,
+        "ms": 4311,
         "remaining": 1744
       },
       "vecRows": 512,
       "timings": {
-        "totalMs": 4622,
-        "hydrateMs": 4614,
-        "embedQueryMs": 6,
-        "uniMs": 1,
+        "totalMs": 4371,
+        "hydrateMs": 4364,
+        "embedQueryMs": 5,
+        "uniMs": 0,
         "triMs": 0,
         "vecMs": 1,
         "fuseMs": 0,
@@ -4479,7 +4479,7 @@
       ]
     },
     "persistence": {
-      "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789683678667-i1n0w",
+      "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789712245398-nnqf4",
       "dir": "tmp",
       "phases": {
         "A_tail": 14,
@@ -4536,8 +4536,8 @@
             "embedQueryMs": 4,
             "uniMs": 1,
             "triMs": 0,
-            "vecMs": 1,
-            "fuseMs": 0,
+            "vecMs": 0,
+            "fuseMs": 1,
             "cosines": 14,
             "hydrated": 0,
             "vectorBelowThreshold": 12,
@@ -4561,12 +4561,12 @@
             ]
           ],
           "timings": {
-            "totalMs": 5,
+            "totalMs": 4,
             "hydrateMs": 0,
             "embedQueryMs": 4,
             "uniMs": 0,
             "triMs": 0,
-            "vecMs": 1,
+            "vecMs": 0,
             "fuseMs": 0,
             "cosines": 14,
             "hydrated": 0,
@@ -4680,8 +4680,8 @@
       },
       "readyA": {
         "type": "ready",
-        "pid": 39536,
-        "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789683678667-i1n0w",
+        "pid": 30732,
+        "dataDir": "C:\\Users\\p\\AppData\\Local\\Temp\\ccarmy-p2-persist-1789712245398-nnqf4",
         "schemaVersion": 2
       },
       "deletedDbFiles": [
@@ -4725,7 +4725,7 @@
           "last_seq"
         ],
         "jsonl": {
-          "sha1Simple": "4af78ab7",
+          "sha1Simple": "a92606cd",
           "bytes": 604
         },
         "recordCount": 4
@@ -4830,7 +4830,7 @@
   },
   "failures": [],
   "summary": {
-    "totalMs": 53285,
+    "totalMs": 52915,
     "checks": 97,
     "passed": 97,
     "failed": 0,
