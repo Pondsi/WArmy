@@ -47,7 +47,7 @@ import {
 import { runShortLivedExecutor, runExecutors } from './executor.js';
 import { initAssetGovernor, retrieveAssetsForChat, registerChatAsset, recordAssetUsage, sweepAssets } from './asset-wire.js';
 import { MetricsCollector } from './metrics.js';
-import { LocalAccountStore, SettingsStore, generateDeviceId, type AppSettings, CCAARMY_DEFAULT_NET_PORT, SKILL_SCAN_DIRS_MAX,} from './settings-store.js';
+import { LocalAccountStore, SettingsStore, generateDeviceId, type AppSettings, WARMY_DEFAULT_NET_PORT, SKILL_SCAN_DIRS_MAX,} from './settings-store.js';
 /**
  * 执行环境探测器（ADR 004）：探测本机**已有**的容器运行时 + 驱动其启停。
  * 纯 node 模块（不依赖 electron），因此可以被 scripts/verify-container-probe.mjs 在真机上直接断言。
@@ -5002,7 +5002,7 @@ function leaseHolder(): string {
  *
  * 端口：**只用调用方给的那一个**。绑不上就返回 `port-bind-failed` + 底层 errno
  * （`error` 字段）并**保持 requestedPort 不变** —— 不自动换端口、不改设置。
- * 用户由界面引导自己选（见 settings-store 的 CCAARMY_SUGGESTED_NET_PORTS）。
+ * 用户由界面引导自己选（见 settings-store 的 WARMY_SUGGESTED_NET_PORTS）。
  */
 async function startSecureMesh(port: number, opts: { discovery?: boolean; announce?: boolean } = {}) {
   refreshLocalNodeId();
@@ -5036,9 +5036,9 @@ async function startSecureMesh(port: number, opts: { discovery?: boolean; announ
   return r;
 }
 
-handleIpc('warmy:lan-start', async (_e, port = CCAARMY_DEFAULT_NET_PORT) => {
+handleIpc('warmy:lan-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   try {
-    const r = await startSecureMesh(Number(port) || CCAARMY_DEFAULT_NET_PORT, { discovery: false, announce: false });
+    const r = await startSecureMesh(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: false, announce: false });
     if (!r.ok) return r;
     return { ok: true, port: r.port, requestedPort: r.requestedPort, bind: r.bind, nodeId: r.nodeId };
   } catch (e) {
@@ -5130,9 +5130,9 @@ handleIpc('warmy:lan-dual-smoke', async (_e, opts: { localPort?: number; peerHos
 });
 
 // ── 多节点 mesh（同样走鉴权通道；UDP 只做地址发现，不传业务数据） ──
-handleIpc('warmy:mesh-start', async (_e, port = CCAARMY_DEFAULT_NET_PORT) => {
+handleIpc('warmy:mesh-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   try {
-    const r = await startSecureMesh(Number(port) || CCAARMY_DEFAULT_NET_PORT, { discovery: true, announce: true });
+    const r = await startSecureMesh(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: true, announce: true });
     if (!r.ok) return r;
     return { ok: true, port: r.port, requestedPort: r.requestedPort, bind: r.bind, nodeId: r.nodeId, notes: NET_NOTES };
   } catch (e) {
@@ -5305,7 +5305,7 @@ handleIpc('warmy:net-members-presence', (_e, payload: { groupId?: string } = {})
 
 handleIpc('warmy:net-mesh-enable', async (_e, input: { ip?: string; port?: number; domains?: string[]; publicAddresses?: string[] } = {}) => {
   try {
-    const port = Number(input.port) || CCAARMY_DEFAULT_NET_PORT;
+    const port = Number(input.port) || WARMY_DEFAULT_NET_PORT;
     const r = await startSecureMesh(port, { discovery: true, announce: true });
     return r.ok
       ? { ok: true, port: r.port, requestedPort: r.requestedPort, bind: r.bind, nodeId: r.nodeId, errorCode: r.errorCode }

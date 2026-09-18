@@ -468,7 +468,7 @@ async function main() {
     return JSON.stringify({ port: st.mesh && st.mesh.port, running: !!(st.mesh && st.mesh.running) });
   })()`);
   const meshObj = JSON.parse(meshState);
-  ok(meshObj.port === 59599, 'T195-1 移动端组网端口默认 = 59599（与桌面端 CCAARMY_DEFAULT_NET_PORT 一致，不是旧的 7788）', meshState);
+  ok(meshObj.port === 59599, 'T195-1 移动端组网端口默认 = 59599（与桌面端 WARMY_DEFAULT_NET_PORT 一致，不是旧的 7788）', meshState);
 
   await touch('#tabs button[data-tab="me"]');
   await sleep(200);

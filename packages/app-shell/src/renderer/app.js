@@ -600,6 +600,8 @@
     window.__refreshSecurity?.();
     applyI18n();
   }
+  /** 语言可达性：设置页/预览桥/巡检脚本统一走这一条（10 语言包，禁止塌缩） */
+  window.__warmyLoadI18n = loadI18n;
 
   function applyThemeMode(mode) {
     state.themeMode = mode;
@@ -2661,30 +2663,30 @@
    * Default mesh TCP port. 产品负责人**最终**决定：生产默认 59599。
    *
    * ⚠️ 渲染层不能用 import，只能**镜像**主进程那份常量：
-   *    packages/app-shell/src/settings-store.ts 的 `CCAARMY_DEFAULT_NET_PORT`
+   *    packages/app-shell/src/settings-store.ts 的 `WARMY_DEFAULT_NET_PORT`
    * 两处必须逐字一致（验证脚本会真的比对，不一致就红）。
    * LAN discovery UDP stays on 7799 (unchanged, elsewhere).
    *
    * 端口**不是**从用户视角硬编码的：下面这个值只是输入框的默认值，
    * 用户随时可以改成 1–65535 的任意值（parsePort 校验），不做任何"角色端口"限制。
    */
-  const CCAARMY_DEFAULT_NET_PORT = 59599;
+  const WARMY_DEFAULT_NET_PORT = 59599;
 
   /**
    * 开发/调试 与 测试 的**约定**端口（仅作提示；同样镜像 settings-store 的同名常量）。
    * 刻意**不**校验、不锁定：约定不是限制。
    */
-  const CCAARMY_DEV_NET_PORT = 58588;
-  const CCAARMY_TEST_NET_PORT = 62666;
+  const WARMY_DEV_NET_PORT = 58588;
+  const WARMY_TEST_NET_PORT = 62666;
 
-  // 注意：候选端口表**刻意不在渲染层镜像** —— 它由主进程的 `CCAARMY_SUGGESTED_NET_PORTS`
+  // 注意：候选端口表**刻意不在渲染层镜像** —— 它由主进程的 `WARMY_SUGGESTED_NET_PORTS`
   // 当"优先池"，再经 `warmy:net-port-candidates`（逐个**真 bind 实测**）后才可能出现在界面上。
   // 渲染层不自己拿静态表充建议：静态表"干净"不代表本机现在绑得上。
 
   const NET_DEFAULTS = {
-    port: CCAARMY_DEFAULT_NET_PORT,
-    devPort: CCAARMY_DEV_NET_PORT,
-    testPort: CCAARMY_TEST_NET_PORT,
+    port: WARMY_DEFAULT_NET_PORT,
+    devPort: WARMY_DEV_NET_PORT,
+    testPort: WARMY_TEST_NET_PORT,
     hysteresisFailures: 3, // 连续失败次数
     hysteresisSeconds: 30, // 且持续这么久
     retryRounds: 3, // 先重试几轮
@@ -4171,9 +4173,9 @@
     // 而签名没变 → 只靠签名的守卫会让提示永久空着。改成**按 DOM 实际值比对**：
     // 值相同就不写（不抖动），值不同就补上（重画后自愈）。
     if (hint) {
-      const wantConvention = 'dev:' + CCAARMY_DEV_NET_PORT + ',test:' + CCAARMY_TEST_NET_PORT;
+      const wantConvention = 'dev:' + WARMY_DEV_NET_PORT + ',test:' + WARMY_TEST_NET_PORT;
       if (hint.dataset.convention !== wantConvention) hint.dataset.convention = wantConvention;
-      const wantText = fmtKey('net.portConventionHint', { dev: CCAARMY_DEV_NET_PORT, test: CCAARMY_TEST_NET_PORT });
+      const wantText = fmtKey('net.portConventionHint', { dev: WARMY_DEV_NET_PORT, test: WARMY_TEST_NET_PORT });
       if (hint.textContent !== wantText) hint.textContent = wantText;
     }
     if (boundEl) {
@@ -9428,6 +9430,18 @@
     if (__loopTick % 6 === 0) raf(checkLastError);
     if (__loopTick % 8 === 0) raf(refreshJoinBadge);
     if (__loopTick % 15 === 0) raf(() => window.__saveState?.());
+    // 语言：设置被外部改过（IPC settingsSave / 另一窗口）也要跟上，不靠启动时读一次
+    if (__loopTick % 1 === 0) {
+      void (async () => {
+        try {
+          const s = await window.warmy.settingsGet();
+          const loc = s?.settings?.locale;
+          if (loc && resolveLocalePack(loc) !== state.locale) {
+            await loadI18n(resolveLocalePack(loc));
+          }
+        } catch { /* noop */ }
+      })();
+    }
   }, 5000);
   const __mainLoop = true;
 

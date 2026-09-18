@@ -30,9 +30,9 @@ import {
   EPHEMERAL_PORT_RANGE,
   PORT_CANDIDATE_MIN,
 } from '../dist/net-wiring.js';
-import { CCAARMY_SUGGESTED_NET_PORTS } from '../dist/settings-store.js';
+import { WARMY_SUGGESTED_NET_PORTS } from '../dist/settings-store.js';
 
-const SUGGESTED = [...CCAARMY_SUGGESTED_NET_PORTS];
+const SUGGESTED = [...WARMY_SUGGESTED_NET_PORTS];
 const checks = [];
 function check(name, pass, detail) {
   checks.push({ name, pass: !!pass, detail: detail === undefined ? null : detail });
@@ -143,7 +143,7 @@ try {
   );
   check('旧的建议端口 63888 已被剔除（它落在 Windows 保留段 63840–63939 里，永远绑不上）',
     !SUGGESTED.includes(63888), SUGGESTED.join(','));
-  check('候选端口常量不再叫 fallback（语义已改为"建议"，无自动回退）', true, 'CCAARMY_SUGGESTED_NET_PORTS');
+  check('候选端口常量不再叫 fallback（语义已改为"建议"，无自动回退）', true, 'WARMY_SUGGESTED_NET_PORTS');
 
   // ── 场景 1：**默认端口被占** → 必须失败，且绝不换端口 ──────────────────────
   await occupy(SUGGESTED[0]);

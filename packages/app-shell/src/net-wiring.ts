@@ -64,12 +64,12 @@ import {
   type SignerUnlockState,
 } from './identity-provider.js';
 import type { IdentityStore } from './identity-store.js';
-import { CCAARMY_SUGGESTED_NET_PORTS } from './settings-store.js';
+import { WARMY_SUGGESTED_NET_PORTS } from './settings-store.js';
 
 /* ══════════════════════════════════════════════════════════════════════════════
  * R13：候选端口的**实测**（只推荐"本机真的能绑上"的端口）
  *
- * 静态候选表（CCAARMY_SUGGESTED_NET_PORTS）只是**优先池**，**不能直接推给用户**：
+ * 静态候选表（WARMY_SUGGESTED_NET_PORTS）只是**优先池**，**不能直接推给用户**：
  * 它"干净"不代表本机现在绑得上（可能已被别的进程占用，也可能落在 OS 保留段里 EACCES）。
  * 所以推荐前逐个**真 bind 一次**（与组网监听同一个 host/协议），绑上立刻关闭、不泄漏句柄，
  * 三元结果如实回出（ok / occupied / no-permission）。
@@ -312,7 +312,7 @@ export interface PickPortCandidatesOptions {
   concurrency?: number;
   /** 总超时（默认 4000ms）——到点就停，绝不卡界面 */
   totalTimeoutMs?: number;
-  /** 优先池（默认 CCAARMY_SUGGESTED_NET_PORTS；测试可注入） */
+  /** 优先池（默认 WARMY_SUGGESTED_NET_PORTS；测试可注入） */
   pool?: readonly number[];
   /** 是否允许扩展到整个动态区间（默认 true） */
   allowExtended?: boolean;
@@ -337,7 +337,7 @@ export async function pickPortCandidates(opts: PickPortCandidatesOptions = {}): 
   const want = Math.min(PORT_CANDIDATE_MAX, Math.max(PORT_CANDIDATE_MIN, Number(opts.want) || PORT_CANDIDATE_WANT));
   const concurrency = Math.min(16, Math.max(1, Number(opts.concurrency) || 8));
   const totalTimeoutMs = Math.max(200, Number(opts.totalTimeoutMs) || 4000);
-  const pool = (opts.pool ?? CCAARMY_SUGGESTED_NET_PORTS).slice();
+  const pool = (opts.pool ?? WARMY_SUGGESTED_NET_PORTS).slice();
   const allowExtended = opts.allowExtended !== false;
   const skipReserved = opts.skipReservedRanges !== false;
   const random = opts.random ?? Math.random;
@@ -1156,7 +1156,7 @@ export class SecureMesh {
 
     await this.disable();
     // ⚠️ **只试用户要的那一个端口**。绑不上就**失败**：不换端口、不改内存里的值、
-    //    不写回设置、不"兜底顺延"。理由见 settings-store 的 CCAARMY_SUGGESTED_NET_PORTS
+    //    不写回设置、不"兜底顺延"。理由见 settings-store 的 WARMY_SUGGESTED_NET_PORTS
     //    注释：静默换端口会让防火墙/端口映射/对端配置全部对不上，而且用户无从发现。
     //    用户下一步由界面引导（明确告知 + 可点选的建议端口）。
     const server = new SecureSyncServer({

@@ -1769,9 +1769,9 @@ try {
     const srcApp = fs.readFileSync(path.join(SELF_DIR, '..', 'src', 'renderer', 'app.js'), 'utf8');
     const srcWiring = fs.readFileSync(path.join(SELF_DIR, '..', 'src', 'net-wiring.ts'), 'utf8');
     const srcMain = fs.readFileSync(path.join(SELF_DIR, '..', 'src', 'electron-main.ts'), 'utf8');
-    const mStore = srcStore.match(/export const CCAARMY_DEFAULT_NET_PORT = (\d+);/);
-    const mApp = srcApp.match(/const CCAARMY_DEFAULT_NET_PORT = (\d+);/);
-    ok(!!mStore && Number(mStore[1]) === EXPECT_DEFAULT_PORT, 'R13-1 主进程真值常量 CCAARMY_DEFAULT_NET_PORT = ' + EXPECT_DEFAULT_PORT, mStore ? mStore[1] : 'not-found');
+    const mStore = srcStore.match(/export const WARMY_DEFAULT_NET_PORT = (\d+);/);
+    const mApp = srcApp.match(/const WARMY_DEFAULT_NET_PORT = (\d+);/);
+    ok(!!mStore && Number(mStore[1]) === EXPECT_DEFAULT_PORT, 'R13-1 主进程真值常量 WARMY_DEFAULT_NET_PORT = ' + EXPECT_DEFAULT_PORT, mStore ? mStore[1] : 'not-found');
     ok(!!mApp && Number(mApp[1]) === EXPECT_DEFAULT_PORT, 'R13-1 渲染层镜像常量 = ' + EXPECT_DEFAULT_PORT + '（两处必须一起改，漂移即红）', mApp ? mApp[1] : 'not-found');
     ok(!!mStore && !!mApp && mStore[1] === mApp[1], 'R13-1 主进程与渲染层的默认端口逐字一致', (mStore ? mStore[1] : '?') + ' vs ' + (mApp ? mApp[1] : '?'));
 
@@ -1789,24 +1789,24 @@ try {
     const declaredPortTokens = new Set((codeOnly.match(/const\s+(CC\w*ARMY_[A-Z_]+)/g) || []).map((s) => s.replace(/const\s+/, '')));
     const undeclaredTokens = allPortTokens.filter((x) => !declaredPortTokens.has(x));
     ok(undeclaredTokens.length === 0,
-      'R13-1b 渲染层用到的 CCAARMY_* 常量都已声明（语法门禁抓不到未定义标识符，这里补上）',
+      'R13-1b 渲染层用到的 WARMY_* 常量都已声明（语法门禁抓不到未定义标识符，这里补上）',
       JSON.stringify(undeclaredTokens) + ' declared=' + JSON.stringify([...declaredPortTokens]));
 
     /* R13-2 建议端口：主进程里的**优先池** + 渲染层**不得**镜像它（否则会拿静态表充建议） */
-    const sugMatch = srcStore.match(/export const CCAARMY_SUGGESTED_NET_PORTS[^=]*=\s*\[([\s\S]*?)\];/);
+    const sugMatch = srcStore.match(/export const WARMY_SUGGESTED_NET_PORTS[^=]*=\s*\[([\s\S]*?)\];/);
     const sug = sugMatch ? (sugMatch[1].match(/\d+/g) || []).map(Number) : [];
     ok(JSON.stringify(sug) === JSON.stringify(EXPECT_SUGGESTED_PORTS), 'R13-2 优先池常量与产品负责人给定的 ' + EXPECT_SUGGESTED_PORTS.length + ' 档、顺序逐字一致', sug.join(','));
     ok(sug[0] === EXPECT_DEFAULT_PORT, 'R13-2 优先池首项 = 生产默认端口', sug[0]);
     ok(new Set(sug).size === sug.length, 'R13-2 优先池无重复项', sug.length);
-    ok(!/CCAARMY_SUGGESTED_NET_PORTS/.test(codeOnly),
+    ok(!/WARMY_SUGGESTED_NET_PORTS/.test(codeOnly),
       'R13-2 渲染层**不**镜像优先池（建议只能来自实测结果，不许拿静态表顶上）', 'renderer must not carry the static pool');
     ok(/netPortCandidates/.test(srcApp) && /netIpc\('netPortCandidates'/.test(srcApp),
       'R13-2 渲染层通过 netPortCandidates IPC 取"带实测结果的候选列表"', 'netPortCandidates wired');
 
     /* R13-3 约定端口常量（仅约定）+ 旧默认端口彻底清除 */
-    ok(/export const CCAARMY_DEV_NET_PORT = /.test(srcStore) && /const CCAARMY_DEV_NET_PORT = /.test(srcApp), 'R13-3 开发约定端口常量在两处都存在');
-    ok(/export const CCAARMY_TEST_NET_PORT = /.test(srcStore) && /const CCAARMY_TEST_NET_PORT = /.test(srcApp), 'R13-3 测试约定端口常量在两处都存在');
-    ok(new RegExp('CCAARMY_DEV_NET_PORT = ' + EXPECT_DEV_PORT + ';').test(srcStore) && new RegExp('CCAARMY_TEST_NET_PORT = ' + EXPECT_TEST_PORT + ';').test(srcStore),
+    ok(/export const WARMY_DEV_NET_PORT = /.test(srcStore) && /const WARMY_DEV_NET_PORT = /.test(srcApp), 'R13-3 开发约定端口常量在两处都存在');
+    ok(/export const WARMY_TEST_NET_PORT = /.test(srcStore) && /const WARMY_TEST_NET_PORT = /.test(srcApp), 'R13-3 测试约定端口常量在两处都存在');
+    ok(new RegExp('WARMY_DEV_NET_PORT = ' + EXPECT_DEV_PORT + ';').test(srcStore) && new RegExp('WARMY_TEST_NET_PORT = ' + EXPECT_TEST_PORT + ';').test(srcStore),
       'R13-3 约定端口 = 开发 ' + EXPECT_DEV_PORT + ' / 测试 ' + EXPECT_TEST_PORT, 'dev/test 常量已核对');
     const legacy = ['settings-store.ts', 'renderer/app.js', 'net-wiring.ts', 'electron-main.ts'].filter((f) =>
       fs.readFileSync(path.join(SELF_DIR, '..', 'src', f), 'utf8').includes('8765'));
@@ -1818,9 +1818,9 @@ try {
       'R13-4 enable() 里**没有**遍历候选端口的重试循环（只试用户要的那一个）', 'no candidate loop in enable()');
     ok(/errorCode: 'port-bind-failed'/.test(srcWiring), 'R13-4 绑定失败如实回 errorCode = port-bind-failed', 'port-bind-failed 存在');
     ok(/this\.requestedPort = port;/.test(enableBody), 'R13-4 失败时也把**用户要的端口**原样记下（供 UI 说清是哪个端口）', 'requestedPort preserved');
-    ok(!/CCAARMY_PORT_FALLBACK|PORT_FALLBACK_CHAIN|fallbackUsed|meshPortCandidates|net\.portFallback/.test(srcStore + srcApp + srcWiring + srcMain),
+    ok(!/WARMY_PORT_FALLBACK|PORT_FALLBACK_CHAIN|fallbackUsed|meshPortCandidates|net\.portFallback/.test(srcStore + srcApp + srcWiring + srcMain),
       'R13-4 源码里已无"兜底/回退换端口"的命名与实现残留（语义已改为"建议"）', 'no port-fallback tokens');
-    ok(!/CCAARMY_(DEV|TEST)_NET_PORT\s*(===|!==|==|!=)/.test(srcStore + srcApp + srcWiring),
+    ok(!/WARMY_(DEV|TEST)_NET_PORT\s*(===|!==|==|!=)/.test(srcStore + srcApp + srcWiring),
       'R13-4 没有任何"按角色端口做校验/禁用"的分支（用户可在任何环境用任何端口）', 'no role-based port comparisons');
     ok(!srcStore.includes('meshPortCandidates'), 'R13-4 旧的"候选端口自动顺延"函数已删除', 'meshPortCandidates gone');
 

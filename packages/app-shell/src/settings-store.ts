@@ -90,13 +90,13 @@ export interface SmtpAccount {
  * 用户在任何环境用任何端口都允许（本文件不做任何「角色端口」校验，也不禁止
  * 开发/测试机器使用生产端口或反之）。LAN 发现用的 UDP 7799 与此无关，仍在别处维护。
  */
-export const CCAARMY_DEFAULT_NET_PORT = 59599;
+export const WARMY_DEFAULT_NET_PORT = 59599;
 
 /** 开发/调试**约定**端口。只是约定：UI 把它当提示显示，**不**限制用户填写。 */
-export const CCAARMY_DEV_NET_PORT = 58588;
+export const WARMY_DEV_NET_PORT = 58588;
 
 /** 测试**约定**端口。只是约定：UI 把它当提示显示，**不**限制用户填写。 */
-export const CCAARMY_TEST_NET_PORT = 62666;
+export const WARMY_TEST_NET_PORT = 62666;
 
 /**
  * **建议**候选端口（顺序 = 推荐顺序；首项就是生产默认端口 59599）。
@@ -122,7 +122,7 @@ export const CCAARMY_TEST_NET_PORT = 62666;
  * 落在保留段里的端口**永远绑不上**（EACCES），留在建议表里只会让用户点一下、再失败一次。
  * 扩展搜索阶段同样会跳过系统保留段 —— 见 net-wiring.ts 的 `getOsReservedTcpRanges`。
  */
-export const CCAARMY_SUGGESTED_NET_PORTS: readonly number[] = [
+export const WARMY_SUGGESTED_NET_PORTS: readonly number[] = [
   59599, 57757, 52555, 55151, 55335, 55521, 55593, 56662, 57575, 58785,
   59993, 61888, 62026, 62526, 62826, 63236, 63636,
 ];

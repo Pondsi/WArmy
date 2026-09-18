@@ -326,7 +326,7 @@
 
   /**
    * 组网端口（真值来自 state.mesh，默认与桌面端 settings-store 的
-   * CCAARMY_DEFAULT_NET_PORT 对齐 = 59599）。
+   * WARMY_DEFAULT_NET_PORT 对齐 = 59599）。
    * ⚠️ 旧的 7788 是**已退休**的约定端口，不许再出现在移动端；
    * 端口在桌面端「设置 → 组网」可改，手机端只是外观预览（不假装在监听）。
    */
