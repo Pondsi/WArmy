@@ -165,6 +165,16 @@ export interface AppSettings {
    */
   skillScanDirs: string[];
   /**
+   * Per-skill runtime enable flag. Key = skill id (from skills-list).
+   * Missing key = enabled (default on). Persisted so pause survives restart.
+   */
+  skillEnabled?: Record<string, boolean>;
+  /**
+   * First-run onboarding: language picker shown until true.
+   * Installer/first launch must surface language selection immediately.
+   */
+  setupDone?: boolean;
+  /**
    * Networking config persisted from the 组网设置 card.
    * `publicAddresses` is a mixed list of IPs and domain names.
    * Legacy `ip` / `domains` are kept as mirrors for older readers.
@@ -370,6 +380,8 @@ function defaults(): AppSettings {
     globalSecurity: 'normal',
     smtpAccounts: [],
     skillScanDirs: [],
+    skillEnabled: {},
+    setupDone: false,
     embedUseGpu: true,
     emailNotify: { complete: true, request: true, error: true },
     /**

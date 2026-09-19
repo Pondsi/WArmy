@@ -1556,5 +1556,15 @@
   "memory.rebuildOk": "Projekcio rekonstruita el JSONL",
   "memory.records": "Projekciaj statistikoj",
   "memory.statusTitle": "Memorsistemo",
-  "memory.vector": "Vektora kanalo"
+  "memory.vector": "Vektora kanalo",
+  "settings.skillDeleteLocked": "Kapabloj el aŭtomalkovraj dosierujoj ne forigeblas",
+  "settings.skillEnabled": "Aktiva",
+  "settings.skillPaused": "Paŭzita",
+  "settings.skillSourceUserData": "Importita",
+  "settings.skillSourceWorkspace": "Laborejo",
+  "settings.skillsDiscoveredTitle": "Malkovritaj kapabloj",
+  "settings.skillsEnable": "Komenci",
+  "settings.skillsPause": "Paŭzi",
+  "setup.pickLanguage": "Elektu interfaccan lingvon (ŝanĝebla poste en Agordo)",
+  "setup.start": "Komenci"
 }

@@ -1556,5 +1556,15 @@
   "memory.rebuildOk": "Projeção reconstruída do JSONL",
   "memory.records": "Estatísticas da projeção",
   "memory.statusTitle": "Sistema de memória",
-  "memory.vector": "Canal vetorial"
+  "memory.vector": "Canal vetorial",
+  "settings.skillDeleteLocked": "Habilidades de diretórios de autodescoberta não podem ser excluídas",
+  "settings.skillEnabled": "Ativo",
+  "settings.skillPaused": "Pausado",
+  "settings.skillSourceUserData": "Importado",
+  "settings.skillSourceWorkspace": "Área de trabalho",
+  "settings.skillsDiscoveredTitle": "Habilidades descobertas",
+  "settings.skillsEnable": "Iniciar",
+  "settings.skillsPause": "Pausar",
+  "setup.pickLanguage": "Escolha o idioma da interface (pode mudar depois nas configurações)",
+  "setup.start": "Começar"
 }

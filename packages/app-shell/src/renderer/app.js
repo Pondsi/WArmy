@@ -2144,7 +2144,7 @@
           <h2>${t('join.blacklistTitle')}</h2>
           <div id="blacklist-box" class="muted">${t('join.blacklistEmpty')}</div>
         </div>
-        <div class="set-section set-card" id="skills-card">
+        <div class="set-section set-card" id="skills-card" data-sec="func">
           <h2>${t('settings.skills')}</h2>
           <p class="muted" style="margin:0 0 8px">${t('settings.skillsHint')}</p>
           <div style="margin-bottom:8px"><button class="btn-mini" id="btn-skill-import">${t('settings.skillsImport')}</button></div>
@@ -8503,9 +8503,19 @@
     };
   }
 
+  function skillSourceLabel(s) {
+    if (!s) return '';
+    if (s.source === 'discovered') return t('settings.skillSourceDiscovered');
+    if (s.source === 'userData') return t('settings.skillSourceUserData');
+    if (s.source === 'workspace') return t('settings.skillSourceWorkspace');
+    return String(s.source || '');
+  }
+
   async function renderSkillList() {
     const box = $('skill-list');
     if (!box) return;
+    // 无论是否已安装 skill，设置→功能 里始终展示管理面板
+    box.className = '';
     const importBtn = $('btn-skill-import');
     if (importBtn && !importBtn.dataset.bound) {
       importBtn.dataset.bound = '1';
@@ -8519,64 +8529,84 @@
         }
       };
     }
+    let items = [];
+    let scanDirs = [];
     try {
-      const pr = await window.warmy.skillsPaths();
+      const pr = await window.warmy.skillsPaths?.().catch(() => null);
       const r0 = await window.warmy.skillsList().catch(() => null);
-      const scanDirs = (r0 && r0.scanDirs) || (pr && pr.scanDirs) || [];
+      scanDirs = (r0 && r0.scanDirs) || (pr && pr.scanDirs) || [];
+      items = (r0 && r0.skills) || [];
       const bad = scanDirs.filter((s) => s && s.ok === false);
       const pb = $('skill-paths');
       if (pb) {
         let txt = t('settings.skillsPaths') + ': ' + ((pr && pr.paths) || []).join('  ·  ');
         if (bad.length) txt += '  ·  ' + t('settings.skillsScanMissing') + ': ' + bad.map((s) => s.path).join(' · ');
+        const max = (r0 && r0.maxScanDirs) || 10;
+        txt += '  ·  ' + t('settings.skillsScanTitle') + ` (${scanDirs.length}/${max})`;
         pb.textContent = txt;
       }
-    } catch {
-      /* noop */
+    } catch { /* keep going */ }
+
+    window.__skillsState = { items: items.slice(), scanDirs };
+
+    const head = '<div class="skill-list-head">' + escapeHtml(t('settings.skillsDiscoveredTitle')) +
+      ' <span class="muted">(' + items.length + ')</span></div>';
+
+    if (!items.length) {
+      box.innerHTML = head +
+        '<div class="muted">' + escapeHtml(t('settings.skillsEmpty')) + '</div>' +
+        '<div class="muted">' + escapeHtml(t('settings.skillsHint')) + '</div>';
+      return;
     }
-    try {
-      const r = await window.warmy.skillsList();
-      const items = (r && r.skills) || [];
-      window.__skillsState = { items: items.slice(), scanDirs: (r && r.scanDirs) || [] };
-      if (!items.length) {
-        box.className = 'muted';
-        box.textContent = t('settings.skillsEmpty');
-        return;
-      }
-      const srcLabel = (s) => {
-        if (s && s.source === 'discovered') return t('settings.skillSourceDiscovered');
-        return (s && s.source) || '';
-      };
-      box.className = '';
-      box.innerHTML = items
-        .map(
-          (s) => {
-            const discovered = s && s.source === 'discovered';
-            return `<div class="skill-row${discovered ? ' is-discovered' : ''}" data-skill-source="${escapeHtml((s && s.source) || '')}">
-            <div class="skill-main">
-              <div class="skill-name">${escapeHtml(s.name || s.id)}</div>
-              <div class="muted skill-desc">${escapeHtml(s.description || '—')}</div>
-              <div class="muted skill-src">${t('settings.skillFrom')}: ${escapeHtml(srcLabel(s))}</div>
-            </div>
-            ${discovered
-              ? '<span class="muted skill-discovered-badge">' + escapeHtml(t('settings.skillSourceDiscovered')) + '</span>'
-              : '<button class="btn-danger" data-skill-del="' + escapeHtml(s.id) + '">' + t('settings.skillRemove') + '</button>'}
-          </div>`;
-          }
-        )
+
+    box.innerHTML =
+      head +
+      items
+        .map((s) => {
+          const discovered = s && s.source === 'discovered';
+          const enabled = s && s.enabled !== false;
+          const removable = s && s.removable !== false && !discovered;
+          const id = escapeHtml(s.id || '');
+          return (
+            '<div class="skill-row' + (discovered ? ' is-discovered' : '') + '" data-skill-id="' + id + '" data-skill-source="' + escapeHtml((s && s.source) || '') + '">' +
+            '<div class="skill-main">' +
+            '<div class="skill-name">' + escapeHtml(s.name || s.id) +
+            ' <span class="skill-status ' + (enabled ? 'is-on' : 'is-off') + '">' + escapeHtml(enabled ? t('settings.skillEnabled') : t('settings.skillPaused')) + '</span></div>' +
+            '<div class="muted skill-desc">' + escapeHtml(s.description || '—') + '</div>' +
+            '<div class="muted skill-src">' + t('settings.skillFrom') + ': ' + escapeHtml(skillSourceLabel(s)) +
+            (discovered ? ' · ' + escapeHtml(t('settings.skillSourceDiscovered')) : '') + '</div>' +
+            '</div>' +
+            '<div class="skill-actions">' +
+            '<button class="btn-mini" data-skill-toggle="' + id + '" data-enabled="' + (enabled ? '1' : '0') + '">' +
+            escapeHtml(enabled ? t('settings.skillsPause') : t('settings.skillsEnable')) + '</button>' +
+            (removable
+              ? '<button class="btn-danger" data-skill-del="' + id + '">' + escapeHtml(t('settings.skillRemove')) + '</button>'
+              : '<button class="btn-danger" disabled title="' + escapeHtml(t('settings.skillDeleteLocked')) + '">' + escapeHtml(t('settings.skillRemove')) + '</button>') +
+            '</div>' +
+            '</div>'
+          );
+        })
         .join('');
-      box.querySelectorAll('[data-skill-del]').forEach((b) => {
-        b.onclick = async () => {
-          const id = b.dataset.skillDel;
-          if (!(await uiConfirm(t('settings.skillRemove') + ': ' + id + '?'))) return;
-          const rr = await window.warmy.skillsRemove(id);
-          if (rr && rr.ok === false) uiAlert(String(rr.error || ''));
-          renderSkillList();
-        };
-      });
-    } catch {
-      box.className = 'muted';
-      box.textContent = t('settings.skillsEmpty');
-    }
+
+    box.querySelectorAll('[data-skill-toggle]').forEach((b) => {
+      b.onclick = async () => {
+        const id = b.dataset.skillToggle;
+        const nowOn = b.dataset.enabled === '1';
+        const r = await window.warmy.skillsSetEnabled?.({ id, enabled: !nowOn }).catch(() => null);
+        if (r && r.ok === false) uiAlert(String(r.error || ''));
+        renderSkillList();
+      };
+    });
+    box.querySelectorAll('[data-skill-del]').forEach((b) => {
+      if (b.disabled) return;
+      b.onclick = async () => {
+        const id = b.dataset.skillDel;
+        if (!(await uiConfirm(t('settings.skillRemove') + ': ' + id + '?'))) return;
+        const rr = await window.warmy.skillsRemove(id);
+        if (rr && rr.ok === false) uiAlert(String(rr.error || ''));
+        renderSkillList();
+      };
+    });
   }
 
   async function refreshMembers() {
@@ -8785,26 +8815,36 @@
   function pickOnboardingLocale() {
     return new Promise((resolve) => {
       const root = $('modal-root');
-      $('modal-title').textContent = t('settings.language');
+      $('modal-title').textContent = t('setup.title') || t('settings.language');
       $('modal-body').innerHTML =
-        '<div class="field"><select id="setup-locale">' +
-        localeOptionsHtml(state.locale) +
-        '</select></div>';
+        '<div class="muted" style="margin-bottom:8px">' + escapeHtml(t('setup.pickLanguage') || t('settings.language')) + '</div>' +
+        '<div class="field"><label>' + escapeHtml(t('setup.locale') || t('settings.language')) + '</label>' +
+        '<select id="setup-locale">' + localeOptionsHtml(state.locale) + '</select></div>';
       const acts = $('modal-actions');
       acts.innerHTML = '';
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'btn-mini';
-      closeBtn.textContent = t('common.close');
-      closeBtn.onclick = () => { root.classList.add('hidden'); resolve(null); };
       const okBtn = document.createElement('button');
       okBtn.className = 'btn-primary';
-      okBtn.textContent = t('common.ok');
+      okBtn.textContent = t('setup.start') || t('common.ok');
+      const sel = () => $('setup-locale');
       okBtn.onclick = () => {
-        const v = $('setup-locale') ? $('setup-locale').value : 'zh-CN';
+        const v = sel() ? sel().value : 'zh-CN';
         root.classList.add('hidden');
         resolve(v);
       };
-      acts.append(closeBtn, okBtn);
+      // live preview when user changes language in the picker
+      if (sel()) {
+        sel().onchange = async () => {
+          const v = sel().value;
+          try { await loadI18n(resolveLocalePack(v)); } catch { /* noop */ }
+          $('modal-title').textContent = t('setup.title') || t('settings.language');
+          const hint = $('modal-body').querySelector('.muted');
+          if (hint) hint.textContent = t('setup.pickLanguage') || t('settings.language');
+          const lab = $('modal-body').querySelector('label');
+          if (lab) lab.textContent = t('setup.locale') || t('settings.language');
+          okBtn.textContent = t('setup.start') || t('common.ok');
+        };
+      }
+      acts.append(okBtn);
       root.classList.remove('hidden');
     });
   }
@@ -8823,7 +8863,8 @@
       await window.warmy.setupComplete({}).catch(() => {});
     }
   }
-  maybeShowSetup();
+  // 安装/首启：必须弹出语言选择（setupDone !== true）
+  void maybeShowSetup();
 
   async function refreshExecutors() {
     const box = $('exec-box');

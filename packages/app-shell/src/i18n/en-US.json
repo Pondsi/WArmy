@@ -1556,5 +1556,15 @@
   "memory.rebuildOk": "Projection rebuilt from JSONL",
   "memory.records": "Projection stats",
   "memory.statusTitle": "Memory system",
-  "memory.vector": "Vector channel"
+  "memory.vector": "Vector channel",
+  "settings.skillDeleteLocked": "Skills from auto-discovery directories cannot be deleted",
+  "settings.skillEnabled": "Enabled",
+  "settings.skillPaused": "Paused",
+  "settings.skillSourceUserData": "Imported",
+  "settings.skillSourceWorkspace": "Workspace",
+  "settings.skillsDiscoveredTitle": "Discovered skills",
+  "settings.skillsEnable": "Start",
+  "settings.skillsPause": "Pause",
+  "setup.pickLanguage": "Choose your interface language (you can change it later in Settings)",
+  "setup.start": "Get started"
 }

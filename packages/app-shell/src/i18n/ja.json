@@ -1556,5 +1556,15 @@
   "memory.rebuildOk": "JSONL から投影を再構築しました",
   "memory.records": "投影統計",
   "memory.statusTitle": "記憶システム",
-  "memory.vector": "ベクトル経路"
+  "memory.vector": "ベクトル経路",
+  "settings.skillDeleteLocked": "自動検出ディレクトリのスキルは削除できません",
+  "settings.skillEnabled": "実行中",
+  "settings.skillPaused": "停止中",
+  "settings.skillSourceUserData": "インポート済",
+  "settings.skillSourceWorkspace": "ワークスペース",
+  "settings.skillsDiscoveredTitle": "検出済みスキル",
+  "settings.skillsEnable": "起動",
+  "settings.skillsPause": "一時停止",
+  "setup.pickLanguage": "インターフェース言語を選択（後で設定から変更できます）",
+  "setup.start": "はじめる"
 }

@@ -1,0 +1,12 @@
+{
+  "version": "0.1.0",
+  "notes": "WArmy v0.1.0 — Workhorse Army / 无限牛马. Memory system, container-dev, 10 locales, duty orchestration.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.1.0/WArmy-Setup-0.1.0.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.1.0/WArmy-Setup-0.1.0.exe",
+  "sha256": "a9f4626ad6b135348a13d004ceccd3cb213174ee70699783d41b427a192340fa",
+  "size": 114908863,
+  "mandatory": false,
+  "publishedAt": "2026-09-19T00:00:00Z",
+  "repo": "https://github.com/Pondsi/WArmy",
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.1.0"
+}

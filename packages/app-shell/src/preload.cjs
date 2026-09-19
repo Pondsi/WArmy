@@ -95,6 +95,7 @@ contextBridge.exposeInMainWorld('warmy', {
   // Skill auto-discovery directories ride the EXISTING settings channel.
   skillsScanDirsGet: () => ipcRenderer.invoke('warmy:skills-scan-dirs-get'),
   skillsScanDirsSet: (dirs) => ipcRenderer.invoke('warmy:skills-scan-dirs-set', dirs),
+  skillsSetEnabled: (payload) => ipcRenderer.invoke('warmy:skills-set-enabled', payload),
   trayTooltip: (text) => ipcRenderer.invoke('warmy:tray-tooltip', text),
   profileSave: (p) => ipcRenderer.invoke('warmy:profile-save', p),
   // 身份层（ADR 003）：指纹 / 代次 / 名片 / 换证 / 备份导出

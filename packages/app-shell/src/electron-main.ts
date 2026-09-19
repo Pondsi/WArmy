@@ -3869,6 +3869,12 @@ function skillRoots(): Array<{ root: string; source: string }> {
 handleIpc('warmy:skills-list', () => {
   const skills: Array<Record<string, unknown>> = [];
   const scanDirStatus = skillScanStatus(loadSkillScanDirs());
+  const enabledMap = ((): Record<string, boolean> => {
+    try {
+      const s = settingsStore?.load() as { skillEnabled?: Record<string, boolean> } | undefined;
+      return s?.skillEnabled && typeof s.skillEnabled === 'object' ? { ...s.skillEnabled } : {};
+    } catch { return {}; }
+  })();
   for (const { root, source } of skillRoots()) {
     if (!fs.existsSync(root)) continue;
     const pushOne = (dirName: string, md: string) => {
@@ -3880,7 +3886,17 @@ handleIpc('warmy:skills-list', () => {
         /* 忽略 */
       }
       const id = source === 'discovered' ? 'discovered:' + path.basename(root) + ':' + dirName : dirName;
-      skills.push({ id, name: info.name || dirName, description: info.description, source, root, mtime });
+      const enabled = enabledMap[id] !== false;
+      skills.push({
+        id,
+        name: info.name || dirName,
+        description: info.description,
+        source,
+        root,
+        mtime,
+        enabled,
+        removable: source !== 'discovered',
+      });
     };
     // A discovered root may itself be a skill package (SKILL.md at the root)
     if (source === 'discovered') {
@@ -3900,7 +3916,7 @@ handleIpc('warmy:skills-list', () => {
     }
   }
   skills.sort((x, y) => Number(y.mtime || 0) - Number(x.mtime || 0));
-  return { ok: true, skills, scanDirs: scanDirStatus };
+  return { ok: true, skills, scanDirs: scanDirStatus, maxScanDirs: SKILL_SCAN_DIRS_MAX };
 });
 
 handleIpc('warmy:skills-scan-dirs-get', () => {
@@ -6214,7 +6230,8 @@ handleIpc('warmy:clear-error', () => { lastError = null; return { ok: true }; })
 handleIpc('warmy:setup-state', () => {
   try {
     const s = settingsStore?.load() as Record<string, unknown> | undefined;
-    return { ok: true, done: !!(s as { setupDone?: boolean })?.setupDone, locale: s?.locale || app.getLocale() };
+    // 首次运行/安装后首启：setupDone 非 true 一律弹语言选择
+    return { ok: true, done: (s as { setupDone?: boolean })?.setupDone === true, locale: s?.locale || app.getLocale() };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 handleIpc('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
@@ -6235,6 +6252,61 @@ handleIpc('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Re
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
+/** Skill enable/pause flags (default enabled when key missing) */
+function skillEnabledMap(): Record<string, boolean> {
+  try {
+    const s = settingsStore?.load() as { skillEnabled?: Record<string, boolean> } | undefined;
+    return (s && s.skillEnabled && typeof s.skillEnabled === 'object') ? { ...s.skillEnabled } : {};
+  } catch {
+    return {};
+  }
+}
+handleIpc('warmy:skills-set-enabled', (_e, payload: { id?: string; enabled?: boolean }) => {
+  try {
+    const id = String(payload?.id || '');
+    if (!id) return { ok: false, error: 'missing-id' };
+    const map = skillEnabledMap();
+    map[id] = payload?.enabled !== false;
+    settingsStore?.save({ skillEnabled: map } as never);
+    return { ok: true, id, enabled: map[id] };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+// patch skills-list to include enabled flag
+const _skillsListHandler = async () => {
+  const skills: Array<Record<string, unknown>> = [];
+  const scanDirStatus = skillScanStatus(loadSkillScanDirs());
+  const enabledMap = skillEnabledMap();
+  for (const { root, source } of skillRoots()) {
+    if (!fs.existsSync(root)) continue;
+    const pushOne = (dirName: string, md: string) => {
+      const info = skillMdInfo(md);
+      let mtime = 0;
+      try { mtime = fs.statSync(md).mtimeMs; } catch { /* ignore */ }
+      const id = source === 'discovered' ? 'discovered:' + path.basename(root) + ':' + dirName : dirName;
+      const enabled = enabledMap[id] !== false;
+      skills.push({ id, name: info.name || dirName, description: info.description, source, root, mtime, enabled, removable: source !== 'discovered' });
+    };
+    if (source === 'discovered') {
+      const selfMd = path.join(root, 'SKILL.md');
+      if (fs.existsSync(selfMd)) pushOne(path.basename(root), selfMd);
+    }
+    let dirs: string[] = [];
+    try {
+      dirs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    } catch { continue; }
+    for (const d of dirs) {
+      const md = path.join(root, d, 'SKILL.md');
+      if (!fs.existsSync(md)) continue;
+      pushOne(d, md);
+    }
+  }
+  skills.sort((x, y) => Number(y.mtime || 0) - Number(x.mtime || 0));
+  return { ok: true, skills, scanDirs: scanDirStatus, maxScanDirs: SKILL_SCAN_DIRS_MAX };
+};
+// re-register by replacing through handleIpc if it overwrites; electron handleIpc likely last-wins
+handleIpc('warmy:skills-list', () => _skillsListHandler());
 
 // ── S. 消息搜索（从 memory-os recall） ──
 handleIpc('warmy:search-messages', async (_e, q: string) => {

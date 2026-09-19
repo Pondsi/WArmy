@@ -837,3 +837,14 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 .more-dd { position: relative; display: inline-flex; }
 .urg-trigger .ico { width: 18px; height: 18px; fill: currentColor; }
+
+/* Skill management panel (always visible under Settings → Functions) */
+.skill-list-head { font-weight: 600; font-size: 13px; margin: 8px 0 6px; }
+.skill-row { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+.skill-row .skill-main { flex:1; min-width:0; }
+.skill-row .skill-actions { display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
+.skill-status { font-size:11px; margin-left:6px; padding:1px 6px; border-radius:8px; border:1px solid var(--line); }
+.skill-status.is-on { color:var(--accent); border-color:currentColor; }
+.skill-status.is-off { color:var(--muted); }
+.skill-row.is-discovered .btn-danger:disabled { opacity:0.45; cursor:not-allowed; }
+.skill-row .btn-danger:disabled { opacity:0.45; cursor:not-allowed; }

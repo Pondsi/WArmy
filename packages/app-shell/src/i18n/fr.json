@@ -1556,5 +1556,15 @@
   "memory.rebuildOk": "Projection reconstruite depuis JSONL",
   "memory.records": "Statistiques de projection",
   "memory.statusTitle": "Système de mémoire",
-  "memory.vector": "Canal vectoriel"
+  "memory.vector": "Canal vectoriel",
+  "settings.skillDeleteLocked": "Impossible de supprimer les compétences des répertoires de découverte auto",
+  "settings.skillEnabled": "Actif",
+  "settings.skillPaused": "En pause",
+  "settings.skillSourceUserData": "Importé",
+  "settings.skillSourceWorkspace": "Espace de travail",
+  "settings.skillsDiscoveredTitle": "Compétences détectées",
+  "settings.skillsEnable": "Démarrer",
+  "settings.skillsPause": "Pause",
+  "setup.pickLanguage": "Choisissez la langue de l’interface (modifiable plus tard dans les paramètres)",
+  "setup.start": "Commencer"
 }

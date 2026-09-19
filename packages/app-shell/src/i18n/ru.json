@@ -1556,5 +1556,15 @@
   "memory.rebuildOk": "Проекция пересобрана из JSONL",
   "memory.records": "Статистика проекции",
   "memory.statusTitle": "Система памяти",
-  "memory.vector": "Векторный канал"
+  "memory.vector": "Векторный канал",
+  "settings.skillDeleteLocked": "Навыки из каталогов автообнаружения удалять нельзя",
+  "settings.skillEnabled": "Включён",
+  "settings.skillPaused": "На паузе",
+  "settings.skillSourceUserData": "Импортировано",
+  "settings.skillSourceWorkspace": "Рабочая область",
+  "settings.skillsDiscoveredTitle": "Обнаруженные навыки",
+  "settings.skillsEnable": "Запустить",
+  "settings.skillsPause": "Пауза",
+  "setup.pickLanguage": "Выберите язык интерфейса (можно изменить позже в Настройках)",
+  "setup.start": "Начать"
 }

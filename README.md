@@ -23,9 +23,9 @@ Chinese product name: **无限牛马** (ja: 無限社畜 / ko: 무한 사축).
 
 ![UI preview](docs/screenshots/ui-home.png)
 
-| Home | Settings · Memory | Locale ja |
+| Home (English) | Settings · Functions / Skills | About / Memory |
 | --- | --- | --- |
-| ![home](docs/screenshots/ui-home.png) | ![about](docs/screenshots/ui-about.png) | ![ja](docs/screenshots/ui-locale-ja.png) |
+| ![home](docs/screenshots/ui-home.png) | ![skills](docs/screenshots/ui-skills.png) | ![about](docs/screenshots/ui-about.png) |
 
 ---
 

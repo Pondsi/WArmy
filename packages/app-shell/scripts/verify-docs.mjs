@@ -71,6 +71,14 @@ check('SECURITY expanded', fs.readFileSync(path.join(ROOT, '.github/SECURITY.md'
 check('mesh checklist', fs.existsSync(path.join(ROOT, 'docs/mesh-dual-machine.md')));
 check('release notes', fs.existsSync(path.join(ROOT, 'docs/RELEASE-NOTES-0.1.0.md')));
 check('fetch-node-runtime script', fs.existsSync(path.join(ROOT, 'scripts/fetch-node-runtime.mjs')));
+check('update feed docs', fs.existsSync(path.join(ROOT, 'docs/UPDATE-FEED.md')));
+check('container timings docs', fs.existsSync(path.join(ROOT, 'docs/CONTAINER-TIMINGS.md')));
+check('github update feed json', fs.existsSync(path.join(ROOT, 'feed/latest.json')));
+check('set-github-update-feed script', fs.existsSync(path.join(ROOT, 'scripts/set-github-update-feed.mjs')));
+check('launch-warmy vbs', fs.existsSync(path.join(ROOT, 'packages/app-shell/scripts/launch-warmy.vbs')));
+const feedJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'feed/latest.json'), 'utf8'));
+check('feed version is 0.1.0', feedJson.version === '0.1.0', feedJson.version);
+check('feed points to GitHub release asset', String(feedJson.url || feedJson.downloadUrl || '').includes('github.com/Pondsi/WArmy'), feedJson.url);
 
 // privacy on first-party docs
 const privacyPats = [

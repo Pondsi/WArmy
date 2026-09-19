@@ -1556,5 +1556,15 @@
   "memory.rebuildOk": "投影已从 JSONL 重建",
   "memory.records": "投影统计",
   "memory.statusTitle": "记忆系统",
-  "memory.vector": "向量通道"
+  "memory.vector": "向量通道",
+  "settings.skillDeleteLocked": "自动发现目录中的 Skill 不可删除",
+  "settings.skillEnabled": "运行中",
+  "settings.skillPaused": "已暂停",
+  "settings.skillSourceUserData": "已导入",
+  "settings.skillSourceWorkspace": "工作区",
+  "settings.skillsDiscoveredTitle": "已发现可用的 Skill",
+  "settings.skillsEnable": "启动",
+  "settings.skillsPause": "暂停",
+  "setup.pickLanguage": "请选择界面语言（可稍后在设置中修改）",
+  "setup.start": "开始使用"
 }
