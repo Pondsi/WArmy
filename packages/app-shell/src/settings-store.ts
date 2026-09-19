@@ -176,6 +176,15 @@ export interface AppSettings {
   setupDone?: boolean;
   /** 聊天自动滚动到最新（默认关） */
   autoScrollChat?: boolean;
+  /**
+   * 会话上下文注入总预算（百分比，相对所选模型的上下文窗口）。
+   * 10..90，默认 60（留余地）。群聊不暴露该设置，由后台自动收敛。
+   */
+  contextBudgetPercent?: number;
+  /** 空闲自动摘要（默认开） */
+  autoSummary?: boolean;
+  /** 预估用的模型上下文窗口（token）；拿不到就按默认 32768 */
+  modelContextTokens?: number;
   /** 更新源（GitHub Releases API / feed JSON）。空串 = 未配置 */
   updateFeedUrl?: string;
   updateChannel?: string;
@@ -388,6 +397,9 @@ function defaults(): AppSettings {
     skillEnabled: {},
     setupDone: false,
     autoScrollChat: false,
+    contextBudgetPercent: 60,
+    autoSummary: true,
+    modelContextTokens: 32768,
     /** 产品默认更新源：GitHub Releases API */
     updateFeedUrl: 'https://api.github.com/repos/Pondsi/WArmy/releases/latest',
     embedUseGpu: true,

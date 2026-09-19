@@ -1592,8 +1592,16 @@
   "chat.scrollToBottom": "跳到最新訊息",
   "chat.autoScroll": "自動捲動聊天記錄",
   "group.directedOnly": "僅@ai才發言",
-  "panel.kb.title": "知識庫",
+  "panel.kb.title": "本機知識庫",
   "panel.summary.title": "聊天摘要",
   "panel.summary.empty": "暫無摘要（由本會話知識庫/歸檔產生）",
-  "panel.summary.jump": "跳到原文"
+  "panel.summary.jump": "跳到原文",
+  "panel.kb.hint": "這是**你自己這台機器**上的知識庫（不是專案建立者的）",
+  "ctx.budget.title": "上下文預算",
+  "ctx.budget.tokens": "≈ {n} tokens",
+  "ctx.budget.hint": "建議選大一些：模型能看到更多歷史與專案記憶，回答更連貫。",
+  "ctx.budget.minHint": "最小 {n}%（確保模型能理解上下文）；這是總預算上限，不一定用滿。",
+  "panel.summary.gen": "產生本會話摘要",
+  "panel.summary.auto": "閒置自動摘要",
+  "panel.summary.done": "摘要已產生"
 }

@@ -25,7 +25,7 @@
     smtp: { host: '', port: 465, secure: true, user: '', pass: '' },
     smtpAccounts: [],
     embedUseGpu: true,
-    listWidth: 280,
+    listWidth: 220,
     panelWidth: 300,
     /**
      * R2：用户自己设的快捷键（动作 id → 组合键字符串）。
@@ -980,7 +980,7 @@
 
 
   /** 聊天：展示**完整真实**记录；DOM 只挂最近 N 条，上滑加载；新消息按策略滚动 */
-  const CHAT_VIEW_WINDOW = 40;
+  const CHAT_VIEW_WINDOW = 20;
   const chatViewVisible = {};
   /** 自动滚动（默认关）：由三点菜单勾选；持久化到 settings */
   let autoScrollChat = false;
@@ -1254,6 +1254,136 @@
     sc('sc-stop', 'stopAll');
     void isWork;
   }
+
+
+  // ── 上下文预算滑块 + 会话摘要（手动/自动） ──
+  const CTX_MIN_TOKENS = 2048;
+  const CTX_DEFAULT_WINDOW = 32768;
+  let ctxState = { percent: 60, maxTokens: CTX_DEFAULT_WINDOW };
+
+  function ctxMinPercent() {
+    return Math.min(90, Math.ceil((CTX_MIN_TOKENS / Math.max(4096, ctxState.maxTokens)) * 100));
+  }
+
+  function ctxRenderMeta() {
+    const pct = $('ctx-pct');
+    const tok = $('ctx-tokens');
+    const minP = ctxMinPercent();
+    if (pct) pct.textContent = `${ctxState.percent}%`;
+    if (tok) {
+      const t = Math.max(CTX_MIN_TOKENS, Math.round((ctxState.percent / 100) * ctxState.maxTokens));
+      tok.textContent = t('ctx.budget.tokens') ? fmtKey('ctx.budget.tokens', { n: String(t) }) : `≈ ${t} tokens`;
+    }
+    const s = $('ctx-slider');
+    if (s) { s.min = String(minP); s.value = String(ctxState.percent); }
+    const hint = document.querySelector('#ctx-popover .ctx-pop-min');
+    if (hint) hint.textContent = fmtKey('ctx.budget.minHint', { n: String(minP) });
+  }
+
+  function ctxVisibleFor(nav) {
+    // 群聊不暴露；联系人不涉及；项目/我的牛马可见
+    return nav === 'singleAi' || nav === 'internalGroup';
+  }
+
+  function bindCtxBudget() {
+    const btn = $('btn-ctx');
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const pop = $('ctx-popover');
+      if (!pop) return;
+      pop.classList.toggle('hidden');
+      btn.classList.toggle('on', !pop.classList.contains('hidden'));
+      ctxRenderMeta();
+    });
+    const slider = $('ctx-slider');
+    if (slider) {
+      slider.addEventListener('input', () => {
+        ctxState.percent = Number(slider.value) || ctxState.percent;
+        ctxRenderMeta();
+        // 落盘（合并式设置）
+        try { window.warmy.settingsSave({ contextBudgetPercent: ctxState.percent }); } catch { /* noop */ }
+      });
+    }
+    onDocClick((ev) => {
+      const pop = $('ctx-popover');
+      if (!pop || pop.classList.contains('hidden')) return;
+      if (ev.target && (ev.target.closest('#ctx-popover') || ev.target.closest('#btn-ctx'))) return;
+      pop.classList.add('hidden');
+      btn.classList.remove('on');
+    });
+  }
+
+  async function ctxLoad() {
+    try {
+      const s = await window.warmy.settingsGet();
+      const p = Number(s?.settings?.contextBudgetPercent);
+      if (Number.isFinite(p)) ctxState.percent = Math.min(90, Math.max(10, Math.round(p)));
+      const m = Number(s?.settings?.modelContextTokens);
+      if (Number.isFinite(m) && m >= 4096) ctxState.maxTokens = m;
+    } catch { /* 默认 */ }
+    // 牛马：按当前牛马模型；项目：按值班模型（暂用同一设置窗口）
+    ctxRenderMeta();
+  }
+
+  // ── 会话摘要：手动 + 空闲自动 ──
+  let autoSummaryOn = true;
+  let lastSummaryAt = 0;
+  async function genSessionSummary(auto) {
+    const gid = state.selectedChat && state.selectedChat.id;
+    if (!gid) return null;
+    const msg = $('summary-msg');
+    if (msg && !auto) msg.textContent = t('common.loading') || '';
+    try {
+      const r = await window.warmy.sessionSummary?.({ sessionId: gid, auto: !!auto });
+      if (msg && !auto) msg.textContent = r && r.ok ? (t('panel.summary.done') || 'OK') : String(r?.error || '');
+      lastSummaryAt = Date.now();
+      try { void renderPanelSummary(); } catch { /* noop */ }
+      return r;
+    } catch (e) {
+      if (msg && !auto) msg.textContent = String(e.message || e);
+      return null;
+    }
+  }
+
+  function bindSummaryControls() {
+    const btn = $('btn-gen-summary');
+    if (btn && btn.dataset.bound !== '1') {
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', () => { void genSessionSummary(false); });
+    }
+    const tg = $('auto-summary-toggle');
+    if (tg && tg.dataset.bound !== '1') {
+      tg.dataset.bound = '1';
+      tg.checked = autoSummaryOn;
+      tg.addEventListener('change', async () => {
+        autoSummaryOn = !!tg.checked;
+        try { await window.warmy.settingsSave({ autoSummary: autoSummaryOn }); } catch { /* noop */ }
+      });
+    }
+  }
+
+  async function loadSummaryPref() {
+    try {
+      const s = await window.warmy.settingsGet();
+      autoSummaryOn = s?.settings?.autoSummary !== false;
+      const tg = $('auto-summary-toggle');
+      if (tg) tg.checked = autoSummaryOn;
+    } catch { /* 默认开 */ }
+  }
+
+  /** 空闲自动摘要：每 10 分钟检查一次；有新消息且空闲才生成 */
+  setInterval(() => {
+    if (!autoSummaryOn || !state.selectedChat) return;
+    const gid = state.selectedChat.id;
+    const msgs = (window.__msgs && window.__msgs[gid]) || [];
+    if (!msgs.length) return;
+    const lastTs = msgs[msgs.length - 1] && msgs[msgs.length - 1].ts || 0;
+    const idle = Date.now() - lastTs > 3 * 60 * 1000;
+    const since = Date.now() - lastSummaryAt > 10 * 60 * 1000;
+    if (idle && since) void genSessionSummary(true);
+  }, 60 * 1000);
 
   // ── 聊天滚动：下箭头 / 新消息气泡 / 自动滚动 ──
   (function bindScrollUx() {
@@ -6131,7 +6261,7 @@
     { id: 'newSession', def: 'Ctrl+N', run: () => { const b = primaryAddButton(); if (b) b.click(); } },
     { id: 'focusSearch', def: 'Ctrl+F', run: () => { const i = $('list-search'); if (i) { i.focus(); i.select(); } } },
     { id: 'focusInput', def: '', run: () => { const i = $('input'); if (i) i.focus(); } },
-    { id: 'toggleConsole', def: '', run: () => { const b = $('btn-console'); if (b && !b.classList.contains('hidden')) b.click(); } },
+    { id: 'toggleConsole', def: '', run: () => { const b = $('diag-toggle') || $('btn-console'); if (b) b.click(); } },
     { id: 'stopAll', def: '', run: () => { const b = $('btn-stop-all'); if (b) b.click(); } },
     { id: 'openMe', def: '', run: () => setNav('me') },
     { id: 'openContacts', def: '', run: () => setNav('externalChat') },
@@ -8932,7 +9062,7 @@
     }
   });
 
-  bindResizer($('col-resizer'), '--list-w', 200, 420);
+  bindResizer($('col-resizer'), '--list-w', 200, 420, { persistKey: 'listWidth', resetWidth: 220 });
   // R3：聊天区 ↔ 右栏 —— 右栏在右边（dir:'right'），左侧聊天区保底 320px，宽度走 settings 里的 panelWidth
   bindResizer($('panel-resizer'), '--panel-w', 220, 480, {
     dir: 'right',
@@ -10227,6 +10357,7 @@
 
   // 主刷新循环：合并所有定时刷新，降低频率
   let __loopTick = 0;
+  try { bindCtxBudget(); bindSummaryControls(); void ctxLoad(); void loadSummaryPref(); } catch { /* noop */ }
   setInterval(() => {
     __loopTick++;
     if (__loopTick % 2 === 0) raf(refreshMetrics);
@@ -10283,6 +10414,9 @@
         }
         document.documentElement.style.setProperty('--accent', state.theme);
         // R3：右栏宽度沿用上次拖到的值（没存过就吃 CSS 里的 300px 默认）
+        if (Number(s.settings.listWidth) > 0) {
+          document.documentElement.style.setProperty('--list-w', Math.round(Number(s.settings.listWidth)) + 'px');
+        }
         if (Number(s.settings.panelWidth) > 0) {
           document.documentElement.style.setProperty('--panel-w', Math.round(Number(s.settings.panelWidth)) + 'px');
         }

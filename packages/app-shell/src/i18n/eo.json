@@ -1592,8 +1592,16 @@
   "chat.scrollToBottom": "Iri al lasta",
   "chat.autoScroll": "Aŭtomata rulumo",
   "group.directedOnly": "Respondi nur je @AI",
-  "panel.kb.title": "Scio",
+  "panel.kb.title": "Loka scio",
   "panel.summary.title": "Babilresumo",
   "panel.summary.empty": "Ankoraŭ neniu resumo",
-  "panel.summary.jump": "Iri al fonto"
+  "panel.summary.jump": "Iri al fonto",
+  "panel.kb.hint": "Ĉi tio estas la scio-bazo sur **via propra maŝino** (ne de la kreinto)",
+  "ctx.budget.title": "Kunteksta buĝeto",
+  "ctx.budget.tokens": "≈ {n} tokens",
+  "ctx.budget.hint": "Pli granda estas pli bona: la modelo vidas pli da historio kaj memoro.",
+  "ctx.budget.minHint": "Minimumo {n}% (por ke la modelo komprenu). Tio estas limo, ne kvoto.",
+  "panel.summary.gen": "Generi resumon",
+  "panel.summary.auto": "Aŭtomata resumo kiam senokupa",
+  "panel.summary.done": "Resumo generita"
 }

@@ -217,6 +217,7 @@ contextBridge.exposeInMainWorld('warmy', {
   secureKeyLoad: (id) => ipcRenderer.invoke('warmy:secure-key-load', id),
   archiveExternal: (payload) => ipcRenderer.invoke('warmy:archive-external', payload),
   archiveList: (groupId) => ipcRenderer.invoke('warmy:archive-list', groupId),
+  sessionSummary: (payload) => ipcRenderer.invoke('warmy:session-summary', payload),
   cleanupRun: (opts) => ipcRenderer.invoke('warmy:cleanup-run', opts),
   roleModelsSet: (roles) => ipcRenderer.invoke('warmy:role-models-set', roles),
   roleModelsGet: () => ipcRenderer.invoke('warmy:role-models-get'),

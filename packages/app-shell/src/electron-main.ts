@@ -686,9 +686,29 @@ async function runChatLoop(
 }
 
 /** 视图预算：SettingsStore 可配（ADR 002 要求"注入上下文有固定上限"且可调） */
+/** 由百分比 → 实际字符预算；并保证不低于最小可用 token（约 2048） */
+const MIN_CONTEXT_TOKENS = 2048;
+const CHARS_PER_TOKEN_EST = 1.6;
+function contextBudgetFromSettings(): { chars: number; percent: number; tokens: number; maxTokens: number; minPercent: number } {
+  let percent = 60;
+  let maxTokens = 32768;
+  try {
+    const s = settingsStore?.load();
+    const p = Number(s?.contextBudgetPercent);
+    if (Number.isFinite(p)) percent = Math.min(90, Math.max(10, Math.round(p)));
+    const m = Number(s?.modelContextTokens);
+    if (Number.isFinite(m) && m >= 4096) maxTokens = m;
+  } catch { /* 用默认 */ }
+  const minPercent = Math.min(90, Math.ceil((MIN_CONTEXT_TOKENS / maxTokens) * 100));
+  const effPercent = Math.max(percent, minPercent);
+  const tokens = Math.max(MIN_CONTEXT_TOKENS, Math.round((effPercent / 100) * maxTokens));
+  const chars = Math.max(200, Math.round(tokens * CHARS_PER_TOKEN_EST));
+  return { chars, percent: effPercent, tokens, maxTokens, minPercent };
+}
+
 function contextBudgetChars(): number {
   try {
-    const v = Number(settingsStore?.load()?.contextBudgetChars);
+    const v = Number(settingsStore?.load()?.contextBudgetChars) || contextBudgetFromSettings().chars;
     // 低于下限会让可执行指针放不下（下限 200 + 上限 20 万，防止误配出荒唐值）
     if (Number.isFinite(v)) {
       return Math.min(200000, Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.floor(v)));
@@ -1231,11 +1251,54 @@ function startMemoryAsync() {
 
 let forceQuit = false;
 
+function windowStateFile(): string {
+  try { return path.join(app.getPath('userData'), 'window-state.json'); } catch { return ''; }
+}
+function loadWindowState(): { width?: number; height?: number; x?: number; y?: number; maximized?: boolean } {
+  const f = windowStateFile();
+  if (!f) return {};
+  try {
+    const j = JSON.parse(fs.readFileSync(f, 'utf8')) || {};
+    const out: { width?: number; height?: number; x?: number; y?: number; maximized?: boolean } = {};
+    if (Number(j.width) >= 960) out.width = Math.round(Number(j.width));
+    if (Number(j.height) >= 600) out.height = Math.round(Number(j.height));
+    // 位置：只接受落在可见屏幕内的 x/y，避免显示器变更后窗口跑到屏幕外
+    if (Number.isFinite(Number(j.x)) && Number.isFinite(Number(j.y))) {
+      try {
+        const { screen } = require('electron');
+        const b = { x: Number(j.x), y: Number(j.y), width: out.width || 1280, height: out.height || 800 };
+        const area = screen.getDisplayMatching(b).workArea;
+        const visible = b.x < area.x + area.width - 40 && b.y < area.y + area.height - 40 && b.x + 80 > area.x && b.y + 40 > area.y;
+        if (visible) { out.x = Math.round(Number(j.x)); out.y = Math.round(Number(j.y)); }
+      } catch { /* 无 screen 时忽略位置 */ }
+    }
+    if (j.maximized === true) out.maximized = true;
+    return out;
+  } catch { return {}; }
+}
+let windowSaveTimer: NodeJS.Timeout | null = null;
+function saveWindowStateSoon(delay = 500): void {
+  if (windowSaveTimer) clearTimeout(windowSaveTimer);
+  windowSaveTimer = setTimeout(() => {
+    windowSaveTimer = null;
+    const f = windowStateFile();
+    if (!f || !win || win.isDestroyed()) return;
+    try {
+      const maximized = win.isMaximized();
+      const b = maximized ? (win as unknown as { getNormalBounds?: () => { x: number; y: number; width: number; height: number } }).getNormalBounds?.() || win.getBounds() : win.getBounds();
+      const out = { x: b.x, y: b.y, width: b.width, height: b.height, maximized };
+      writeJsonAtomicSafe(f, out);
+    } catch { /* 忽略 */ }
+  }, delay);
+}
+
 function createWindow() {
   const isMac = process.platform === 'darwin';
+  const ws = loadWindowState();
   win = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: ws.width || 1280,
+    height: ws.height || 800,
+    ...(Number.isFinite(ws.x as number) && Number.isFinite(ws.y as number) ? { x: ws.x, y: ws.y } : {}),
     minWidth: 960,
     minHeight: 600,
     title: '无限牛马',
@@ -1256,11 +1319,17 @@ function createWindow() {
   });
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('ready-to-show', () => {
+    if (ws.maximized) { try { win?.maximize(); } catch { /* noop */ } }
     win?.show();
     boot(`window ready platform=${process.platform}`);
   });
+  win.on('resize', () => saveWindowStateSoon());
+  win.on('move', () => saveWindowStateSoon());
+  win.on('maximize', () => saveWindowStateSoon(200));
+  win.on('unmaximize', () => saveWindowStateSoon(200));
   // 点击叉 = 最小化到托盘，不关闭窗口。只有托盘「下班」才真正退出。
   win.on('close', (e) => {
+    try { saveWindowStateSoon(0); } catch { /* noop */ }
     if (!forceQuit) {
       e.preventDefault();
       win?.hide();
@@ -2377,6 +2446,11 @@ function setProjectAttrsOf(
     availability?: 'available' | 'stopped' | 'not-ready' | 'not-installed' | 'not-chosen' | 'unknown';
     availabilityCode?: string;
     env?: { containerRef?: string; imageRef?: string; solidifiedAt?: number };
+    /** 门禁验收脚本（相对仓库根）；只在 complete/验收 时跑 */
+    gateVerify?: string[];
+    gateLast?: { at: number; pass: boolean; summary: string };
+    /** 项目 MEMORY（覆盖式 Markdown） */
+    memory?: string;
   }
 ): { ok: boolean; error?: string } {
   const gid = String(groupId || '');
@@ -6604,6 +6678,37 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
   }
   audit?.log('archive.external', { groupId: payload.groupId, prefs: extraction?.preferences?.length || 0 });
   return { ok: true, entry: r, extraction };
+});
+handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; auto?: boolean }) => {
+  try {
+    const gid = String(payload?.sessionId || '');
+    if (!gid) return { ok: false, error: 'sessionId required' };
+    const logs = chatLogs.get(gid) || [];
+    const recent = logs.slice(-30).map((l) => `${l.role}: ${String(l.content || '').slice(0, 160)}`).join('\n');
+    if (!recent.trim()) return { ok: false, error: 'no-history' };
+    const title = `${gid} 会话摘要 ${new Date().toLocaleString()}`;
+    const summary = recent.slice(0, 2000);
+    const entry = archiver?.archive({ id: 'arc-' + Date.now(), groupId: gid, title, summary, anchors: [] });
+    try {
+      const ex = extractKnowledgeFromArchive({ groupId: gid, title, summary });
+      if (knowledge) {
+        knowledge.upsertEntity({ id: `grp-${gid}`, kind: 'project', name: gid, attrs: {}, anchors: [] });
+        for (const e of ex.entities) {
+          const kindMap = ['person','org','material','place','concept','tool','project'] as const;
+          const kind = (kindMap as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof kindMap)[number]) : 'concept';
+          knowledge.upsertEntity({ id: e.id, kind, name: e.name, attrs: e.attrs || {}, anchors: [] });
+        }
+        for (const ev of ex.events) {
+          knowledge.addEvent({ id: ev.id, title: ev.title, result: ev.result || '', entityIds: [`grp-${gid}`], anchors: [], ts: Date.now() });
+        }
+      }
+      if (ex.preferences?.length) mergeUserPreferences(app.getPath('userData'), ex.preferences);
+    } catch { /* 提炼失败不影响摘要落盘 */ }
+    audit?.log('session.summary', { sessionId: gid, auto: !!payload?.auto });
+    return { ok: true, entry };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
 });
 handleIpc('warmy:archive-list', (_e, groupId?: string) => ({
   ok: true,

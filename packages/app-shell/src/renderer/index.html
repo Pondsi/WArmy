@@ -5,6 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: blob:" />
   <title>WArmy</title>
   <link rel="stylesheet" href="./app.css" />
+  <link rel="stylesheet" href="./renderer.css" />
 </head>
 <body>
   <div id="app">
@@ -130,13 +131,8 @@
                   <button type="button" id="mi-autoscroll" class="more-menu-btn"><span id="mi-autoscroll-mark" class="mark">✓</span><span data-i18n="chat.autoScroll"></span></button>
                   <button type="button" id="mi-open" class="more-menu-btn"><span class="mark"></span><span data-i18n="chat.openWindow"></span><span class="menu-sc" id="sc-open"></span></button>
                   <button type="button" id="mi-export" class="more-menu-btn"><span class="mark"></span><span data-i18n="chat.export"></span><span class="menu-sc" id="sc-export"></span></button>
-                  <button type="button" id="mi-stop" class="more-menu-btn"><span class="mark"></span><span data-i18n="chat.stopAll"></span><span class="menu-sc" id="sc-stop"></span></button>
                 </div>
               </div>
-                            <!-- 诊断事件流（排障，不是控制台）— 固定在动作区最右 -->
-              <button id="btn-console" class="btn-icon btn-diag" data-i18n-title="tip.console" aria-label="diagnostic event stream">
-                <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 28h64M18 50h64M18 72h40"/><circle cx="78" cy="72" r="6" fill="currentColor" stroke="none"/></g></svg>
-              </button>
               <button id="btn-stop-all" class="btn-stop-icon" data-i18n-title="chat.stopAllTip" aria-label="stop"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path fill-rule="evenodd" fill="currentColor" d="M12 21a9 9 0 110-18 9 9 0 010 18zM9 9h6v6H9z"/></svg></button>
             </div>
           </header>
@@ -148,10 +144,20 @@
         <div id="pm-box" class="pm-box"></div>
         <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" type="button"
                 data-i18n-title="chat.scrollToBottom" aria-label="scroll to bottom">
-          <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 22 L50 66 M32 50 L50 70 L68 50" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <button id="new-msg-bubble" class="new-msg-bubble hidden" type="button"></button>
-        <div id="queue-bar" class="queue-bar hidden">
+                  <div id="ctx-popover" class="ctx-popover hidden" role="dialog">
+            <div class="ctx-pop-head" data-i18n="ctx.budget.title"></div>
+            <input id="ctx-slider" class="ctx-slider" type="range" min="10" max="90" step="5" value="60"/>
+            <div class="ctx-pop-meta">
+              <span id="ctx-pct">60%</span>
+              <span id="ctx-tokens" class="muted"></span>
+            </div>
+            <div class="muted ctx-pop-hint" data-i18n="ctx.budget.hint"></div>
+            <div class="muted ctx-pop-min" data-i18n="ctx.budget.minHint"></div>
+          </div>
+          <div id="queue-bar" class="queue-bar hidden">
             <div class="queue-bar-head">
               <span data-i18n="chat.queueTitle"></span>
               <span class="muted" id="queue-count"></span>
@@ -193,6 +199,9 @@
                   </button>
                   <button class="btn-icon" id="btn-shot" data-i18n-title="chat.screenshotTip">
                     <svg viewBox="0 0 1024 1024" class="ico"><path d="M334 111.6c0-24.6-20-44.4-44.4-44.4s-44.4 20-44.4 44.4v89H111.6c-24.6 0-44.4 20-44.4 44.4s20 44.4 44.4 44.4h623V690h89V245c0-24.6-20-44.4-44.4-44.4H334V111.6zM245 334v445c0 24.6 20 44.4 44.4 44.4h445v89c0 24.6 20 44.4 44.4 44.4s44.4-20 44.4-44.4v-89h89c24.6 0 44.4-20 44.4-44.4s-20-44.4-44.4-44.4H334V334h-89z"/></svg>
+                  </button>
+                  <button class="btn-icon" id="btn-ctx" data-i18n-title="ctx.budget.title">
+                    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="3" y2="18"/><line x1="21" y1="6" x2="21" y2="18"/><path d="M7 12 H17" stroke-dasharray="1 3"/><path d="M9 10 L7 12 L9 14"/><path d="M15 10 L17 12 L15 14"/></svg>
                   </button>
                   <div class="urg-dd" id="urgency-dd">
                     <button class="urg-trigger" id="urg-trigger" type="button" data-i18n-title="chat.urgency">
@@ -250,12 +259,21 @@
           <!-- 聊天类会话（联系人/群聊）：本会话自己的知识库 -->
           <div class="panel-block" id="panel-kb-block" style="display:none">
             <h3 data-i18n="panel.kb.title"></h3>
+            <p class="muted" style="font-size:11px" data-i18n="panel.kb.hint"></p>
             <div id="panel-kb-box" class="muted">—</div>
           </div>
           <!-- 聊天类会话：聊天摘要 / 归档（可跳原文） -->
           <div class="panel-block" id="panel-summary-block" style="display:none">
             <h3 data-i18n="panel.summary.title"></h3>
             <div id="panel-summary-box" class="muted">—</div>
+            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <button class="btn-mini" id="btn-gen-summary" data-i18n="panel.summary.gen"></button>
+              <label class="muted" style="font-size:11px;display:flex;align-items:center;gap:4px">
+                <input type="checkbox" id="auto-summary-toggle" checked/>
+                <span data-i18n="panel.summary.auto"></span>
+              </label>
+              <span class="muted" id="summary-msg" style="font-size:11px"></span>
+            </div>
           </div>
 
           <!-- ADR 004 第七批新增三块（真实数据）：最近改动文件 / 其他文件 / 生成的产品。

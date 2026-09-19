@@ -1592,8 +1592,16 @@
   "chat.scrollToBottom": "最新へ移動",
   "chat.autoScroll": "チャットを自動スクロール",
   "group.directedOnly": "@AI のときだけ発言",
-  "panel.kb.title": "ナレッジ",
+  "panel.kb.title": "ローカル知識",
   "panel.summary.title": "チャット要約",
   "panel.summary.empty": "要約はまだありません",
-  "panel.summary.jump": "原文へ"
+  "panel.summary.jump": "原文へ",
+  "panel.kb.hint": "これは**あなたのマシン**上のナレッジです（作成者のものではありません）",
+  "ctx.budget.title": "コンテキスト予算",
+  "ctx.budget.tokens": "≈ {n} tokens",
+  "ctx.budget.hint": "大きめ推奨：より多くの履歴と記憶を参照でき、回答が一貫します。",
+  "ctx.budget.minHint": "最小 {n}%（モデルが理解できる下限）。上限であり、必ず使い切るわけではありません。",
+  "panel.summary.gen": "要約を生成",
+  "panel.summary.auto": "アイドル時に自動要約",
+  "panel.summary.done": "要約を生成しました"
 }

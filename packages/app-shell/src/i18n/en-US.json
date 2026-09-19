@@ -1592,8 +1592,16 @@
   "chat.scrollToBottom": "Jump to latest",
   "chat.autoScroll": "Auto-scroll chat",
   "group.directedOnly": "Reply only when @AI",
-  "panel.kb.title": "Knowledge",
+  "panel.kb.title": "Local knowledge",
   "panel.summary.title": "Chat summary",
   "panel.summary.empty": "No summary yet (generated from this session's knowledge/archive)",
-  "panel.summary.jump": "Jump to source"
+  "panel.summary.jump": "Jump to source",
+  "panel.kb.hint": "This is the knowledge base on **your own machine** (not the project creator's)",
+  "ctx.budget.title": "Context budget",
+  "ctx.budget.tokens": "≈ {n} tokens",
+  "ctx.budget.hint": "Larger is better: the model sees more history and project memory, so answers stay coherent.",
+  "ctx.budget.minHint": "Minimum {n}% (so the model can understand the context). This is a cap, not a quota.",
+  "panel.summary.gen": "Generate summary",
+  "panel.summary.auto": "Auto-summary when idle",
+  "panel.summary.done": "Summary generated"
 }

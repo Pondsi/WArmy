@@ -199,7 +199,7 @@ body.platform-darwin .tb-mac-extra {
 }
 #app-body {
   display: grid;
-  grid-template-columns: 64px var(--list-w, 280px) 1fr;
+  grid-template-columns: 64px var(--list-w, 220px) 1fr;
   height: calc(100vh - 40px);
   min-height: 0;
   overflow: hidden;
@@ -879,37 +879,6 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .prov-focus { outline: 1px solid var(--accent); border-radius: 8px; }
 .hk-pa code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
 
-/* ── 左侧第二列底部水印：与设置第二列**同一套** logo-color.svg ── */
-#list-col { position: relative; }
-.list-watermark {
-  flex-shrink: 0;
-  position: relative;
-  height: 176px;
-  pointer-events: none;
-  user-select: none;
-  overflow: hidden;
-}
-/* 与 .settings-nav::after 同源：logo-color.svg */
-.list-watermark::after {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; bottom: 40px;
-  height: 160px;
-  background: url('./icons/logo-color.svg') no-repeat center bottom / 168px auto;
-  opacity: 0.26;
-}
-/* 与 .settings-nav::before 同源：品牌名 */
-.list-watermark::before {
-  content: var(--brand-watermark, 'WARMY');
-  position: absolute;
-  left: 0; right: 0; bottom: 18px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  color: var(--ink);
-  opacity: 0.55;
-}
 #panel-col .panel-console,
 #console-pane.console-pane {
   /* 诊断事件流：与右侧栏其它面板一致，不用终端黑底 */
@@ -946,7 +915,7 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 /* ── 布局兜底：非 hide-list 时第一/第二列必须可见 ── */
 #app-body:not(.hide-list) {
-  grid-template-columns: 64px var(--list-w, 280px) 1fr !important;
+  grid-template-columns: 64px var(--list-w, 220px) 1fr !important;
 }
 #app-body:not(.hide-list) #rail {
   display: flex !important;
@@ -1024,3 +993,66 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .pk-row { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
 .pk-row:last-child { border-bottom: none; }
 .pk-row .btn-mini { margin-top: 4px; }
+
+/* ── 第二列底部水印：与「设置」第二列完全同一套（logo-color.svg + 品牌名） ── */
+#list-col { position: relative; }
+#list-col::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 52px;
+  height: 160px;
+  pointer-events: none;
+  background: url('./icons/logo-color.svg') no-repeat center bottom / 168px auto;
+  opacity: 0.26;
+}
+#list-col::before {
+  content: var(--brand-watermark, 'WARMY');
+  position: absolute;
+  left: 0; right: 0; bottom: 30px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--ink);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.list-watermark { display: none !important; }
+
+/* ── 下箭头：圆形、居中、细 chevron（对齐 MiMo Desktop 观感） ── */
+.scroll-bottom-btn {
+  left: 50%; right: auto;
+  transform: translateX(-50%);
+  bottom: 150px;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  display: grid; place-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  opacity: .96;
+}
+.scroll-bottom-btn svg { width: 16px; height: 16px; }
+.scroll-bottom-btn:hover { background: var(--hover); }
+/* 新消息气泡：贴在下箭头上方、同一中心 */
+.new-msg-bubble {
+  left: 50%; right: auto; transform: translateX(-50%);
+  bottom: 192px;
+  max-width: 70%;
+}
+
+/* ── 上下文预算：滑块弹层 ── */
+.ctx-popover {
+  position: absolute; right: 16px; bottom: 150px; z-index: 45;
+  width: 300px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); color: var(--ink);
+  box-shadow: 0 6px 24px rgba(0,0,0,.22);
+}
+.ctx-pop-head { font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+.ctx-slider { width: 100%; }
+.ctx-pop-meta { display: flex; justify-content: space-between; font-size: 12px; margin: 6px 0 8px; }
+.ctx-pop-hint { font-size: 11px; line-height: 1.5; margin-top: 4px; }
+#btn-ctx.on { color: var(--accent); }

@@ -1592,8 +1592,16 @@
   "chat.scrollToBottom": "Ir ao mais recente",
   "chat.autoScroll": "Rolagem automática",
   "group.directedOnly": "Responder só com @IA",
-  "panel.kb.title": "Conhecimento",
+  "panel.kb.title": "Conhecimento local",
   "panel.summary.title": "Resumo do chat",
   "panel.summary.empty": "Ainda sem resumo",
-  "panel.summary.jump": "Ir à origem"
+  "panel.summary.jump": "Ir à origem",
+  "panel.kb.hint": "É a base de conhecimento da **sua máquina** (não do criador)",
+  "ctx.budget.title": "Orçamento de contexto",
+  "ctx.budget.tokens": "≈ {n} tokens",
+  "ctx.budget.hint": "Maior é melhor: o modelo vê mais histórico e memória do projeto.",
+  "ctx.budget.minHint": "Mínimo {n}% (para o modelo entender). É um teto, não uma cota.",
+  "panel.summary.gen": "Gerar resumo",
+  "panel.summary.auto": "Resumo automático ocioso",
+  "panel.summary.done": "Resumo gerado"
 }

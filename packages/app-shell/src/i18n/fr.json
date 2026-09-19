@@ -1592,8 +1592,16 @@
   "chat.scrollToBottom": "Aller au dernier",
   "chat.autoScroll": "Défilement automatique",
   "group.directedOnly": "Répondre seulement sur @IA",
-  "panel.kb.title": "Connaissances",
+  "panel.kb.title": "Connaissances locales",
   "panel.summary.title": "Résumé du chat",
   "panel.summary.empty": "Pas encore de résumé",
-  "panel.summary.jump": "Aller à la source"
+  "panel.summary.jump": "Aller à la source",
+  "panel.kb.hint": "Base de connaissances de **votre machine** (pas celle du créateur)",
+  "ctx.budget.title": "Budget de contexte",
+  "ctx.budget.tokens": "≈ {n} tokens",
+  "ctx.budget.hint": "Plus grand, c’est mieux : le modèle voit plus d’historique et de mémoire.",
+  "ctx.budget.minHint": "Minimum {n} % (pour que le modèle comprenne). C’est un plafond, pas un quota.",
+  "panel.summary.gen": "Générer un résumé",
+  "panel.summary.auto": "Résumé auto au repos",
+  "panel.summary.done": "Résumé généré"
 }

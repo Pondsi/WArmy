@@ -1592,8 +1592,16 @@
   "chat.scrollToBottom": "최신으로 이동",
   "chat.autoScroll": "채팅 자동 스크롤",
   "group.directedOnly": "@AI일 때만 발언",
-  "panel.kb.title": "지식",
+  "panel.kb.title": "로컬 지식",
   "panel.summary.title": "채팅 요약",
   "panel.summary.empty": "요약이 아직 없습니다",
-  "panel.summary.jump": "원문으로"
+  "panel.summary.jump": "원문으로",
+  "panel.kb.hint": "이것은 **내 컴퓨터**의 지식입니다(생성자 것이 아님)",
+  "ctx.budget.title": "컨텍스트 예산",
+  "ctx.budget.tokens": "≈ {n} tokens",
+  "ctx.budget.hint": "크게 잡는 것이 좋습니다: 더 많은 기록과 기억을 참고해 답변이 일관됩니다.",
+  "ctx.budget.minHint": "최소 {n}%(모델이 이해할 수 있는 하한). 상한이며 항상 다 쓰는 것은 아닙니다.",
+  "panel.summary.gen": "요약 생성",
+  "panel.summary.auto": "유휴 시 자동 요약",
+  "panel.summary.done": "요약 생성됨"
 }

@@ -1592,8 +1592,16 @@
   "chat.scrollToBottom": "跳到最新消息",
   "chat.autoScroll": "自动滚动聊天记录",
   "group.directedOnly": "仅@ai才发言",
-  "panel.kb.title": "知识库",
+  "panel.kb.title": "本机知识库",
   "panel.summary.title": "聊天摘要",
   "panel.summary.empty": "暂无摘要（由本会话知识库/归档生成）",
-  "panel.summary.jump": "跳到原文"
+  "panel.summary.jump": "跳到原文",
+  "panel.kb.hint": "这是**你自己这台机器**上的知识库（不是项目创建者的）",
+  "ctx.budget.title": "上下文预算",
+  "ctx.budget.tokens": "≈ {n} tokens",
+  "ctx.budget.hint": "建议选大一些：模型能看到更多历史与项目记忆，回答更连贯、少丢细节。",
+  "ctx.budget.minHint": "最小 {n}%（保证模型能理解上下文）；这是注入总预算的上限，不是一定用满。",
+  "panel.summary.gen": "生成本会话摘要",
+  "panel.summary.auto": "空闲自动摘要",
+  "panel.summary.done": "摘要已生成"
 }
