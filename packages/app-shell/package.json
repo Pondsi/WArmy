@@ -33,6 +33,7 @@
     "@warmy/asset-governance": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "24.9.0",
     "electron": "40.10.6",
     "electron-builder": "25.1.8"
   },

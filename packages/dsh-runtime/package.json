@@ -19,5 +19,8 @@
   },
   "dependencies": {
     "@warmy/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.9.0"
   }
 }
