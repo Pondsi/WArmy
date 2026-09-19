@@ -1583,5 +1583,7 @@
   "model.editProvider": "Editar provedor",
   "settings.hotkey.apiTry": "Testar",
   "settings.hotkey.apiTryResult": "Resultado do teste da API",
-  "settings.hotkey.apiTryReadOnly": "Somente APIs somente leitura"
+  "settings.hotkey.apiTryReadOnly": "Somente APIs somente leitura",
+  "model.editProviderConfirm": "Ir para Configurações?",
+  "model.editProviderConfirmBody": "Este diálogo será fechado e abrirá Configurações → Modelos para editar o provedor. Os modelos escolhidos aqui serão perdidos. Continuar?"
 }

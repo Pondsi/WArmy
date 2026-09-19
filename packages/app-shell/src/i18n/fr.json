@@ -1583,5 +1583,7 @@
   "model.editProvider": "Modifier le fournisseur",
   "settings.hotkey.apiTry": "Essayer",
   "settings.hotkey.apiTryResult": "Résultat d’essai API",
-  "settings.hotkey.apiTryReadOnly": "Seules les API en lecture seule"
+  "settings.hotkey.apiTryReadOnly": "Seules les API en lecture seule",
+  "model.editProviderConfirm": "Aller aux paramètres ?",
+  "model.editProviderConfirmBody": "Cette boîte va se fermer et ouvrir Paramètres → Modèles pour modifier le fournisseur. Les modèles sélectionnés ici seront perdus. Continuer ?"
 }

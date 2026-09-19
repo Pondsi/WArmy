@@ -1583,5 +1583,7 @@
   "model.editProvider": "Redakti provizanton",
   "settings.hotkey.apiTry": "Provi",
   "settings.hotkey.apiTryResult": "API-prova rezulto",
-  "settings.hotkey.apiTryReadOnly": "Nur nurlegaj API-oj"
+  "settings.hotkey.apiTryReadOnly": "Nur nurlegaj API-oj",
+  "model.editProviderConfirm": "Iri al Agordo?",
+  "model.editProviderConfirmBody": "Ĉi tio fermos la dialogon kaj malfermos Agordo → Modelo por redakti la provizanton. Elektitaj modelo ĉi tie perdiĝos. Daŭrigi?"
 }

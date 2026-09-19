@@ -1583,5 +1583,7 @@
   "model.editProvider": "Edit provider",
   "settings.hotkey.apiTry": "Try",
   "settings.hotkey.apiTryResult": "API try-run result",
-  "settings.hotkey.apiTryReadOnly": "Only read-only APIs can be tried"
+  "settings.hotkey.apiTryReadOnly": "Only read-only APIs can be tried",
+  "model.editProviderConfirm": "Go to Settings?",
+  "model.editProviderConfirmBody": "This will close the dialog and open Settings → Models to edit the provider. Any models you selected here will be discarded. Continue?"
 }

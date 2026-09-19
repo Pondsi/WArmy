@@ -858,34 +858,7 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .aiq-input { flex:1; min-width:120px; }
 .pm-box { margin: 6px 0 10px; }
 
-/* 左侧第二列底部水印：与设置第二列同一套 logo-color.svg */
-.list-watermark {
-  flex-shrink: 0;
-  position: relative;
-  height: 120px;
-  pointer-events: none;
-  user-select: none;
-  border-top: 1px solid transparent;
-}
-.list-watermark::after {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; bottom: 28px;
-  height: 120px;
-  background: url('./icons/logo-color.svg') no-repeat center bottom / 140px auto;
-  opacity: 0.26;
-}
-.list-watermark::before {
-  content: var(--brand-watermark, 'WARMY');
-  position: absolute;
-  left: 0; right: 0; bottom: 12px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  color: var(--ink);
-  opacity: 0.55;
-}
+
 #panel-col .panel-console {
   max-height: 320px;
   min-height: 140px;
@@ -901,5 +874,47 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 }
 .messages.lazy { overflow-anchor: none; }
 
+.prov-focus { outline: 1px solid var(--accent); border-radius: 8px; }
+.hk-pa code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+
+/* ── 左侧第二列底部水印：与设置第二列**同一套** logo-color.svg ── */
+#list-col { position: relative; }
+.list-watermark {
+  flex-shrink: 0;
+  position: relative;
+  height: 176px;
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+}
+/* 与 .settings-nav::after 同源：logo-color.svg */
+.list-watermark::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 40px;
+  height: 160px;
+  background: url('./icons/logo-color.svg') no-repeat center bottom / 168px auto;
+  opacity: 0.26;
+}
+/* 与 .settings-nav::before 同源：品牌名 */
+.list-watermark::before {
+  content: var(--brand-watermark, 'WARMY');
+  position: absolute;
+  left: 0; right: 0; bottom: 18px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--ink);
+  opacity: 0.55;
+}
+#panel-col .panel-console {
+  max-height: 340px;
+  min-height: 160px;
+  margin: 0;
+}
+#diag-panel-block .panel-toggle { display:flex; align-items:center; gap:8px; cursor:pointer; }
+#diag-host.hidden { display:none; }
+.chat-actions .btn-diag { order: 99; margin-left: auto; }
 .prov-focus { outline: 1px solid var(--accent); border-radius: 8px; }
 .hk-pa code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }

@@ -1583,5 +1583,7 @@
   "model.editProvider": "공급자 편집",
   "settings.hotkey.apiTry": "실험",
   "settings.hotkey.apiTryResult": "API 시험 결과",
-  "settings.hotkey.apiTryReadOnly": "읽기 전용 API만 시험 가능"
+  "settings.hotkey.apiTryReadOnly": "읽기 전용 API만 시험 가능",
+  "model.editProviderConfirm": "설정으로 이동할까요?",
+  "model.editProviderConfirmBody": "이 대화 상자를 닫고 '설정 → 모델'로 이동해 공급자를 편집합니다. 여기서 고른 모델은 사라집니다. 계속할까요?"
 }

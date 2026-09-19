@@ -1583,5 +1583,7 @@
   "model.editProvider": "編輯供應商",
   "settings.hotkey.apiTry": "試執行",
   "settings.hotkey.apiTryResult": "介面試執行結果",
-  "settings.hotkey.apiTryReadOnly": "僅唯讀介面可試執行"
+  "settings.hotkey.apiTryReadOnly": "僅唯讀介面可試執行",
+  "model.editProviderConfirm": "跳轉到設定？",
+  "model.editProviderConfirmBody": "將關閉本彈窗並跳轉到「設定 → 模型」編輯供應商。添加模型時的勾選會丟失，確定繼續？"
 }

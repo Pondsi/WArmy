@@ -1583,5 +1583,7 @@
   "model.editProvider": "Изменить провайдера",
   "settings.hotkey.apiTry": "Проверить",
   "settings.hotkey.apiTryResult": "Результат проверки API",
-  "settings.hotkey.apiTryReadOnly": "Пробовать можно только read-only API"
+  "settings.hotkey.apiTryReadOnly": "Пробовать можно только read-only API",
+  "model.editProviderConfirm": "Перейти в настройки?",
+  "model.editProviderConfirmBody": "Диалог закроется, откроются Настройки → Модели для редактирования провайдера. Выбранные здесь модели будут потеряны. Продолжить?"
 }

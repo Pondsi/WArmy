@@ -1037,8 +1037,10 @@
   }
 
   function updateListWatermark() {
-    const b = $('lw-brand');
-    if (b) b.textContent = t('brand.name') || t('brand.sub') || '';
+    // 与设置第二列一致：品牌名走 CSS ::before + --brand-watermark
+    try {
+      document.documentElement.style.setProperty('--brand-watermark', `"${t('brand.name') || 'WARMY'}"`);
+    } catch { /* noop */ }
   }
 
 
@@ -5397,12 +5399,14 @@
   $('btn-console')?.addEventListener('click', () => {
     state.consoleOpen = !state.consoleOpen;
     $('btn-console')?.classList.toggle('tb-on', state.consoleOpen);
-    // 诊断事件流：显示在**右侧第四列**（panel-col），不是聊天顶部
+    // 诊断事件流在**右侧第四列**
     $('console-pane')?.classList.toggle('hidden', !state.consoleOpen);
     $('diag-host')?.classList.toggle('hidden', !state.consoleOpen);
-    const hint = $('diag-panel-hint');
-    if (hint) hint.textContent = state.consoleOpen ? (t('console.diag.note') || t('tip.console')) : '';
     try { renderConsole(); } catch { /* noop */ }
+  });
+  $('diag-toggle')?.addEventListener('click', () => {
+    const b = $('btn-console');
+    if (b) b.click();
   });
   $('console-clear')?.addEventListener('click', () => { consoleClear(); });
   (function bindConsoleResize() {
@@ -8483,19 +8487,23 @@
         btn.textContent = t('model.fetch');
         renderList();
       };
-      /** 跳到 设置 → 模型（供应商列表），可继续编辑 baseURL / API Key / 默认模型 */
-      const goEditProviders = () => {
+      /** 跳到 设置 → 模型：**先确认**（弹窗关闭不可回退，必须告知用户） */
+      const goEditProviders = async () => {
+        const okGo = await uiConfirm(
+          t('model.editProviderConfirmBody') ||
+            '将关闭本弹窗并跳转到「设置 → 模型」编辑供应商。添加模型的选择会丢失，确定继续？',
+          t('model.editProviderConfirm') || t('model.editProvider')
+        );
+        if (!okGo) return; // 取消：停留在添加模型弹窗
         root.classList.add('hidden');
         resolve(null);
         try {
           setNav('settings');
           const navBtn = document.querySelector('#settings-nav button[data-sec="model"]');
           if (navBtn) navBtn.click();
-          // 尽量滚到供应商卡片
           requestAnimationFrame(() => {
             const card = document.querySelector('#prov-list')?.closest('.set-section') || $('prov-list');
             if (card && card.scrollIntoView) card.scrollIntoView({ block: 'start' });
-            // 高亮当前选中的供应商行（按 label/id 匹配）
             const idx = Number($('mp-prov') ? $('mp-prov').value : -1);
             const want = provs[idx];
             if (want) {
@@ -8509,7 +8517,7 @@
         } catch { /* noop */ }
       };
       const editBtn = $('mp-edit-prov');
-      if (editBtn) editBtn.onclick = goEditProviders;
+      if (editBtn) editBtn.onclick = () => { void goEditProviders(); };
       const acts = $('modal-actions');
       acts.innerHTML = '';
       const cancel = document.createElement('button');
@@ -8519,7 +8527,7 @@
       const editProv = document.createElement('button');
       editProv.className = 'btn-mini';
       editProv.textContent = editProvLabel;
-      editProv.onclick = goEditProviders;
+      editProv.onclick = () => { void goEditProviders(); };
       const okAdd = document.createElement('button');
       okAdd.className = 'btn-primary';
       okAdd.textContent = t('model.addSelected');

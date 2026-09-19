@@ -74,8 +74,7 @@
         <input id="list-search" type="search" data-i18n-placeholder="list.search" data-i18n-title="list.search" />
       </div>
       <div id="list-body" class="list-body"></div>
-      <div id="list-watermark" class="list-watermark" aria-hidden="true">
-        <div class="lw-brand" id="lw-brand"></div>
+      <div id="list-watermark" class="list-watermark" aria-hidden="true"></div>
       </div>
       <div id="col-resizer" data-i18n-title="tip.dragWidth"></div>
     </aside>
@@ -156,14 +155,6 @@
           </div>
           <!-- 诊断事件流（T194）：**不是控制台**，是排障用的本机事件日志；
                标题与说明由 app.js 按 i18n 渲染（console.diag.*），与容器控制台面板分开。 -->
-          <div id="console-pane" class="console-pane hidden">
-            <div id="console-top-resizer" class="console-resizer"></div>
-            <div class="console-head">
-              <span id="console-hint" class="console-hint"></span>
-              <button type="button" id="console-clear" class="console-clear" data-i18n-title="console.clearTip"></button>
-            </div>
-            <pre id="console-out" class="console-out" role="log" aria-live="polite"></pre>
-          </div>
           <!-- 控制台 = **容器内的 shell**（ADR 004 P4 定稿）：与上面的诊断视图**分开**。
                价值是给主机带来安全性防护：AI 生成的命令跑在容器边界内，不在主机上跑。
                现在容器里还没有项目镜像，所以这里如实说明"为什么还开不了"，
@@ -224,6 +215,23 @@
           <div id="panel-resizer" data-i18n-title="tip.splitHint"></div>
         </section>
         <aside id="panel-col">
+          <!-- 诊断事件流：**右侧第四列**（不是聊天顶部） -->
+          <div class="panel-block" id="diag-panel-block">
+            <div class="panel-toggle" id="diag-toggle">
+              <span data-i18n="tip.console"></span>
+              <span class="chev">›</span>
+            </div>
+            <div id="diag-host" class="hidden">
+              <div id="console-pane" class="console-pane panel-console">
+                <div class="console-head">
+                  <span id="console-hint" class="console-hint"></span>
+                  <button type="button" id="console-clear" class="console-clear" data-i18n-title="console.clearTip"></button>
+                </div>
+                <pre id="console-out" class="console-out" role="log" aria-live="polite"></pre>
+              </div>
+            </div>
+          </div>
+
           <!-- ADR 004 第七批：右栏顶部**只有只读的项目状态**（动作都在项目右键菜单里）。
                产品主明确：**不要**把"切换容器"放在右侧顶部 —— 切换容器在项目的右键菜单里。
                只出现在「项目」与「我的牛马」（data-only="proj-single"）。 -->
