@@ -124,8 +124,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: linear-gradient(145deg, var(--accent), #2e2e2e);
-  color: #fff;
+  background: transparent;
+  color: var(--ink);
   display: grid;
   place-items: center;
   font-size: 12px;
@@ -199,7 +199,7 @@ body.platform-darwin .tb-mac-extra {
 }
 #app-body {
   display: grid;
-  grid-template-columns: 64px var(--list-w, 220px) 1fr;
+  grid-template-columns: 64px var(--list-w, 200px) 1fr;
   height: calc(100vh - 40px);
   min-height: 0;
   overflow: hidden;
@@ -333,11 +333,11 @@ body.platform-darwin .tb-mac-extra {
 .logo-mark { text-align: center; color: var(--logo-fg); user-select: none; }
 .logo-glyph {
   width: 96px; height: 96px; margin: 0 auto var(--sp-4);
-  border-radius: 24px;
-  background: linear-gradient(145deg, var(--accent), #2e2e2e);
-  color: #fff; display: grid; place-items: center;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink); display: grid; place-items: center;
   font-size: 48px; font-weight: 700;
-  box-shadow: 0 12px 40px rgba(7, 193, 96, 0.2);
+  box-shadow: none;
 }
 .logo-name { font-size: 22px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; }
 .logo-sub { font-size: var(--fs-sm); margin-top: 6px; letter-spacing: 0.1em; text-transform: uppercase; }
@@ -915,7 +915,7 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 /* ── 布局兜底：非 hide-list 时第一/第二列必须可见 ── */
 #app-body:not(.hide-list) {
-  grid-template-columns: 64px var(--list-w, 220px) 1fr !important;
+  grid-template-columns: 64px var(--list-w, 200px) 1fr !important;
 }
 #app-body:not(.hide-list) #rail {
   display: flex !important;
@@ -1045,7 +1045,7 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 /* ── 上下文预算：滑块弹层 ── */
 .ctx-popover {
-  position: absolute; right: 16px; bottom: 150px; z-index: 45;
+  position: fixed; z-index: 45; /* 位置由 JS 跟随 #btn-ctx */
   width: 300px; padding: 12px 14px;
   border: 1px solid var(--line); border-radius: 12px;
   background: var(--card); color: var(--ink);

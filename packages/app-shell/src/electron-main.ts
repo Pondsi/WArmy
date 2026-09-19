@@ -689,10 +689,30 @@ async function runChatLoop(
 /** 由百分比 → 实际字符预算；并保证不低于最小可用 token（约 2048） */
 const MIN_CONTEXT_TOKENS = 2048;
 const CHARS_PER_TOKEN_EST = 1.6;
-function contextBudgetFromSettings(): { chars: number; percent: number; tokens: number; maxTokens: number; minPercent: number } {
+/** 已知模型上下文窗口（token）；settings.modelContextTokens 可覆盖 */
+const MODEL_CTX_MAP: Record<string, number> = {
+  'deepseek-chat': 65536,
+  'deepseek-reasoner': 65536,
+  'mimo-v2.5-pro': 131072,
+  'mimo-v2.5': 131072,
+  'qwen3.7-max': 131072,
+  'qwen3.8-27b': 32768,
+  'gpt-4o': 128000,
+  'gpt-4o-mini': 128000,
+  'claude-3-5-sonnet': 200000,
+};
+function modelWindowTokens(modelId?: string): number | null {
+  if (!modelId) return null;
+  const m = String(modelId).trim();
+  return MODEL_CTX_MAP[m] || MODEL_CTX_MAP[m.split('/').pop() || ''] || null;
+}
+function contextBudgetFromSettings(modelId?: string): { chars: number; percent: number; tokens: number; maxTokens: number; minPercent: number } {
   let percent = 60;
   let maxTokens = 32768;
   try {
+    const mw = modelWindowTokens(modelId);
+    if (mw && mw >= 4096) maxTokens = mw;
+
     const s = settingsStore?.load();
     const p = Number(s?.contextBudgetPercent);
     if (Number.isFinite(p)) percent = Math.min(90, Math.max(10, Math.round(p)));
@@ -706,9 +726,49 @@ function contextBudgetFromSettings(): { chars: number; percent: number; tokens: 
   return { chars, percent: effPercent, tokens, maxTokens, minPercent };
 }
 
-function contextBudgetChars(): number {
+const CONTEXT_RETRY_STEPS = [1.0, 0.6, 0.35, 0.2];
+function isContextLengthError(err: unknown): boolean {
+  const s = String((err as Error)?.message || err || '');
+  return /context|token|too long|maximum length|context_length|maximum context/i.test(s);
+}
+function budgetCharsForStep(baseChars: number, step: number): number {
+  return Math.max(Math.round(MIN_CONTEXT_TOKENS * CHARS_PER_TOKEN_EST), Math.round(baseChars * step));
+}
+
+/**
+ * 上下文超限时自动收缩重试：100% → 60% → 35% → 20%（相对基础预算）。
+ * 群聊等无滑块场景由后台自动判断；到最小值仍失败则如实告知用户，不再无限重试。
+ */
+async function runWithContextRetry<T>(
+  baseChars: number,
+  fn: (budgetChars: number) => Promise<T>,
+  isCtxErr: (e: unknown) => boolean = isContextLengthError
+): Promise<{ result: T; usedBudget: number; retries: number; gaveUp?: string }> {
+  let lastErr: unknown;
+  let retries = 0;
+  for (let i = 0; i < CONTEXT_RETRY_STEPS.length; i++) {
+    const budget = budgetCharsForStep(baseChars, CONTEXT_RETRY_STEPS[i]!);
+    try {
+      const result = await fn(budget);
+      return { result, usedBudget: budget, retries };
+    } catch (e) {
+      lastErr = e;
+      if (!isCtxErr(e)) throw e;
+      retries += 1;
+    }
+  }
+  const msg = String((lastErr as Error)?.message || lastErr || 'context-too-small');
+  return {
+    result: { ok: false, error: msg, contextTooSmall: true, retries } as unknown as T,
+    usedBudget: budgetCharsForStep(baseChars, CONTEXT_RETRY_STEPS[CONTEXT_RETRY_STEPS.length - 1]!),
+    retries,
+    gaveUp: msg,
+  };
+}
+
+function contextBudgetChars(modelId?: string): number {
   try {
-    const v = Number(settingsStore?.load()?.contextBudgetChars) || contextBudgetFromSettings().chars;
+    const v = Number(settingsStore?.load()?.contextBudgetChars) || contextBudgetFromSettings(modelId).chars;
     // 低于下限会让可执行指针放不下（下限 200 + 上限 20 万，防止误配出荒唐值）
     if (Number.isFinite(v)) {
       return Math.min(200000, Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.floor(v)));
@@ -720,9 +780,9 @@ function contextBudgetChars(): number {
 }
 
 /** 统一的视图渲染入口：所有注入点都走这里，不许另写一份（不变量 #2） */
-function renderChatView(key: string, recallHint?: string) {
+function renderChatView(key: string, recallHint?: string, budgetCharsOverride?: number) {
   const view = renderBoundedView(chatLogs.get(key) || [], {
-    budgetChars: contextBudgetChars(),
+    budgetChars: Number.isFinite(budgetCharsOverride as number) ? Number(budgetCharsOverride) : contextBudgetChars(),
     keepHead: DEFAULT_KEEP_HEAD,
     keepTail: DEFAULT_KEEP_TAIL,
     recallHint,
@@ -1848,25 +1908,32 @@ handleIpc(
         // 见 appendChatLog —— 历史 bug 就是两处各自 push，重启后与 JSONL 脱节）
         // 不变量 #2：注入的是有界渲染视图（原来这里是 hist.slice(-20)，只按条数有界）。
         // 值班系统提示是**冻结头**，不随日志增长，作为固定前缀在预算之外（常数开销）。
-        const view = renderChatView(msg.groupId, msg.content);
-        // ADR 002 §9.4 待办 2：值班者路径也只走这一个循环入口（工具/降级/审计行为一致）
-        const loop = await runChatLoop(msg.groupId, provider, {
-          model: providerCfg.model,
-          messages: [
-            {
-              role: 'system',
-              content:
-                tMain('llm.dutySystem'),
-            },
-            ...(view.messages as ChatMessage[]),
-          ],
-          maxTokens: 512,
+        // 计划1/2：值班路径同样自动收敛重试
+        const dutyModel = providerCfg.model;
+        const dutyBase = contextBudgetChars(dutyModel);
+        const dutyRetried = await runWithContextRetry(dutyBase, async (budgetChars) => {
+          const view = renderChatView(msg.groupId, msg.content, budgetChars);
+          // ADR 002 §9.4 待办 2：值班者路径也只走这一个循环入口（工具/降级/审计行为一致）
+          const loop = await runChatLoop(msg.groupId, provider, {
+            model: dutyModel,
+            messages: [
+              { role: 'system', content: tMain('llm.dutySystem') },
+              ...(view.messages as ChatMessage[]),
+            ],
+            maxTokens: 512,
+          });
+          return { loop, budgetChars };
         });
-        llmReply = loop.response.choices[0]?.message?.content || '';
+        const loop = dutyRetried.result?.loop as Awaited<ReturnType<typeof runChatLoop>> | undefined;
+        if (!loop && dutyRetried.gaveUp) {
+          llmReply = tMain('chat.contextTooSmall', '该模型上下文太小，无法满足当前聊天需求（已自动收缩重试到最小值仍失败）');
+        } else if (loop) {
+          llmReply = loop.response.choices[0]?.message?.content || '';
+        }
         appendChatLog(msg.groupId, {
           seq: nextChatSeq(),
           role: 'assistant',
-          content: llmReply,
+          content: llmReply || '',
           recordId: newChatRecordId('a'),
           ts: Date.now(),
         });
@@ -2036,14 +2103,32 @@ handleIpc(
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL || undefined,
       });
-      // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）
-      const view = renderChatView(sessionId, msg.content);
-      // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
-      const loop = await runChatLoop(sessionId, provider, {
-        model: msg.model || providerCfg.model,
-        messages: view.messages as ChatMessage[],
-        maxTokens: 1024,
+      const modelId = msg.model || providerCfg.model;
+      const baseBudget = contextBudgetChars(modelId);
+      // 计划1/2：上下文超限自动收缩重试（100%→60%→35%→20%），到最小仍失败则如实停止
+      const retried = await runWithContextRetry(baseBudget, async (budgetChars) => {
+        // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）
+        const view = renderChatView(sessionId, msg.content, budgetChars);
+        // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
+        const loop = await runChatLoop(sessionId, provider, {
+          model: modelId,
+          messages: view.messages as ChatMessage[],
+          maxTokens: 1024,
+        });
+        return { view, loop, budgetChars };
       });
+      if (retried.gaveUp || !retried.result?.loop) {
+        const msgTxt = retried.gaveUp || 'context-too-small';
+        lastError = { ts: Date.now(), message: msgTxt, context: 'chat-send-context' };
+        return {
+          ok: false,
+          error: msgTxt,
+          contextTooSmall: true,
+          retries: retried.retries,
+          reply: tMain('chat.contextTooSmall', '该模型上下文太小，无法满足当前聊天需求（已自动收缩重试到最小值仍失败）'),
+        };
+      }
+      const { loop } = retried.result;
       const resp = loop.response;
       const reply = resp.choices[0]?.message?.content || '';
       metrics.recordTurn({
@@ -5742,7 +5827,7 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
       history: chatHistories,
       // 值班者输入与 chat-send 共享同一份日志 + 同一个渲染器（不变量 #2）
       logOf: (key: string) => chatLogs.get(key) || [],
-      contextBudgetChars,
+      contextBudgetChars: () => contextBudgetChars(providerCfg.model),
       // ADR 002 §9.4 待办 2：值班者路径共用同一套工具与限额（memory-client 是唯一实现）
       toolSpecs: () => (memory?.isReady && toolLimits().maxRounds > 0 ? memoryToolSpecs(toolLabels()) : undefined),
       toolLimits,

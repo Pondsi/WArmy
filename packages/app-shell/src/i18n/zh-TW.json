@@ -1603,5 +1603,6 @@
   "ctx.budget.minHint": "最小 {n}%（確保模型能理解上下文）；這是總預算上限，不一定用滿。",
   "panel.summary.gen": "產生本會話摘要",
   "panel.summary.auto": "閒置自動摘要",
-  "panel.summary.done": "摘要已產生"
+  "panel.summary.done": "摘要已產生",
+  "chat.contextTooSmall": "該模型上下文太小，無法滿足當前聊天需求（已自動收縮重試到最小值仍失敗）"
 }

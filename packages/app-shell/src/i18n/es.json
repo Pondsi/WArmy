@@ -1603,5 +1603,6 @@
   "ctx.budget.minHint": "Mínimo {n}% (para que el modelo entienda el contexto). Es un tope, no una cuota.",
   "panel.summary.gen": "Generar resumen",
   "panel.summary.auto": "Resumen automático al inactivo",
-  "panel.summary.done": "Resumen generado"
+  "panel.summary.done": "Resumen generado",
+  "chat.contextTooSmall": "El contexto de este modelo es demasiado pequeño para este chat"
 }

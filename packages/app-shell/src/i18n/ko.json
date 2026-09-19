@@ -1603,5 +1603,6 @@
   "ctx.budget.minHint": "최소 {n}%(모델이 이해할 수 있는 하한). 상한이며 항상 다 쓰는 것은 아닙니다.",
   "panel.summary.gen": "요약 생성",
   "panel.summary.auto": "유휴 시 자동 요약",
-  "panel.summary.done": "요약 생성됨"
+  "panel.summary.done": "요약 생성됨",
+  "chat.contextTooSmall": "이 모델의 컨텍스트가 이 채팅에 너무 작습니다(자동 축소 재시도 후에도 실패)"
 }

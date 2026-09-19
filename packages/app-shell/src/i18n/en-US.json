@@ -1603,5 +1603,6 @@
   "ctx.budget.minHint": "Minimum {n}% (so the model can understand the context). This is a cap, not a quota.",
   "panel.summary.gen": "Generate summary",
   "panel.summary.auto": "Auto-summary when idle",
-  "panel.summary.done": "Summary generated"
+  "panel.summary.done": "Summary generated",
+  "chat.contextTooSmall": "This model's context window is too small for this chat (auto-shrink retry reached the minimum and still failed)"
 }

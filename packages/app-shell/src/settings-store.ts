@@ -389,7 +389,7 @@ function defaults(): AppSettings {
     sound: { complete: true, request: true, error: true },
     soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,
-    listWidth: 280,
+    listWidth: 200,
     panelWidth: 300,
     globalSecurity: 'normal',
     smtpAccounts: [],

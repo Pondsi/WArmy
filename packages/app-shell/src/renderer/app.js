@@ -25,7 +25,7 @@
     smtp: { host: '', port: 465, secure: true, user: '', pass: '' },
     smtpAccounts: [],
     embedUseGpu: true,
-    listWidth: 220,
+    listWidth: 200,
     panelWidth: 300,
     /**
      * R2：用户自己设的快捷键（动作 id → 组合键字符串）。
@@ -1179,7 +1179,8 @@
     set('panel-progress-block', work);
     set('panel-model-mgr-block', work ? true : false);
     set('panel-directory-block', work && kind === 'internal');
-    set('panel-members-block', isGroup);
+    // 成员栏：项目/群聊才需要；我的牛马与联系人不需要
+    set('panel-members-block', kind === 'internal' || kind === 'external' || kind === 'externalGroup');
     // 聊天面板
     set('panel-kb-block', !work && chat);
     set('panel-summary-block', !work && chat);
@@ -1233,7 +1234,18 @@
           const anchor = item && item.anchors && item.anchors[0];
           if (anchor) {
             // 跳到原文：打开会话并定位（用现有搜索/日志能力）
-            try { window.warmy.searchMessages?.(String(anchor.recordId || ''))?.then(() => showSearchPopup?.()); } catch { /* noop */ }
+            try {
+              const q = String(anchor.recordId || anchor.seq || '');
+              if (q) void window.warmy.searchMessages?.(q).then((r) => {
+                const hits = (r && r.hits) || [];
+                if (hits.length) {
+                  const first = hits[0];
+                  const sid = first.sessionId || gid;
+                  openChat('single', sid, sid);
+                  setTimeout(() => { chatViewVisible[sid] = 999; renderChat(); }, 200);
+                }
+              });
+            } catch { /* noop */ }
           }
         };
       });
@@ -1282,7 +1294,7 @@
 
   function ctxVisibleFor(nav) {
     // 群聊不暴露；联系人不涉及；项目/我的牛马可见
-    return nav === 'singleAi' || nav === 'internalGroup';
+    return nav === 'singleAi' || nav === 'internalGroup'; // 群聊/联系人不显示，由后台自动收敛
   }
 
   function bindCtxBudget() {
@@ -1293,8 +1305,16 @@
       e.stopPropagation();
       const pop = $('ctx-popover');
       if (!pop) return;
+      const opening = pop.classList.contains('hidden');
       pop.classList.toggle('hidden');
-      btn.classList.toggle('on', !pop.classList.contains('hidden'));
+      btn.classList.toggle('on', opening);
+      if (opening) {
+        try {
+          const r = btn.getBoundingClientRect();
+          pop.style.left = Math.max(8, Math.min(r.left - 120, window.innerWidth - 320)) + 'px';
+          pop.style.top = Math.max(8, r.top - 8 - pop.offsetHeight) + 'px';
+        } catch { /* noop */ }
+      }
       ctxRenderMeta();
     });
     const slider = $('ctx-slider');
@@ -1315,6 +1335,37 @@
     });
   }
 
+  /** 已知模型 → 上下文窗口（token）；拿不到就用 settings.modelContextTokens */
+  const MODEL_CTX_MAP = {
+    'deepseek-chat': 65536,
+    'deepseek-reasoner': 65536,
+    'mimo-v2.5-pro': 131072,
+    'mimo-v2.5': 131072,
+    'qwen3.7-max': 131072,
+    'qwen3.8-27b': 32768,
+    'gpt-4o': 128000,
+    'gpt-4o-mini': 128000,
+    'claude-3-5-sonnet': 200000,
+  };
+  function modelContextTokensFor(nav) {
+    try {
+      let model = '';
+      if (nav === 'singleAi') {
+        const inst = state.selectedInstance || state.instances.find((x) => x.id === state.selectedChat?.id);
+        model = String(inst?.model || inst?.defaultModel || '');
+      } else if (nav === 'internalGroup') {
+        // 项目：按值班牛马所选模型
+        const gid = state.selectedChat && state.selectedChat.id;
+        const g = (state.groups || []).find((x) => x.id === gid);
+        const dutyId = g && (g.dutyInstanceId || g.dutyInstance);
+        const inst = state.instances.find((x) => x.id === dutyId) || state.instances.find((x) => x.dutyEligible);
+        model = String(inst?.model || inst?.defaultModel || '');
+      }
+      if (model && MODEL_CTX_MAP[model]) return MODEL_CTX_MAP[model];
+    } catch { /* noop */ }
+    return ctxState.maxTokens || CTX_DEFAULT_WINDOW;
+  }
+
   async function ctxLoad() {
     try {
       const s = await window.warmy.settingsGet();
@@ -1323,7 +1374,8 @@
       const m = Number(s?.settings?.modelContextTokens);
       if (Number.isFinite(m) && m >= 4096) ctxState.maxTokens = m;
     } catch { /* 默认 */ }
-    // 牛马：按当前牛马模型；项目：按值班模型（暂用同一设置窗口）
+    // 按当前会话所选/值班模型推算上下文窗口
+    ctxState.maxTokens = modelContextTokensFor(state.nav);
     ctxRenderMeta();
   }
 

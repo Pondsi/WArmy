@@ -1603,5 +1603,6 @@
   "ctx.budget.minHint": "Minimum {n} % (pour que le modèle comprenne). C’est un plafond, pas un quota.",
   "panel.summary.gen": "Générer un résumé",
   "panel.summary.auto": "Résumé auto au repos",
-  "panel.summary.done": "Résumé généré"
+  "panel.summary.done": "Résumé généré",
+  "chat.contextTooSmall": "Le contexte de ce modèle est trop petit pour cette conversation"
 }

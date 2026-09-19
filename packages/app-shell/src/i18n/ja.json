@@ -1603,5 +1603,6 @@
   "ctx.budget.minHint": "最小 {n}%（モデルが理解できる下限）。上限であり、必ず使い切るわけではありません。",
   "panel.summary.gen": "要約を生成",
   "panel.summary.auto": "アイドル時に自動要約",
-  "panel.summary.done": "要約を生成しました"
+  "panel.summary.done": "要約を生成しました",
+  "chat.contextTooSmall": "このモデルのコンテキストはこのチャットには小さすぎます（自動縮小リトライ後も失敗）"
 }

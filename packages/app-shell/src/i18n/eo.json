@@ -1603,5 +1603,6 @@
   "ctx.budget.minHint": "Minimumo {n}% (por ke la modelo komprenu). Tio estas limo, ne kvoto.",
   "panel.summary.gen": "Generi resumon",
   "panel.summary.auto": "Aŭtomata resumo kiam senokupa",
-  "panel.summary.done": "Resumo generita"
+  "panel.summary.done": "Resumo generita",
+  "chat.contextTooSmall": "La kunteksto de ĉi tiu modelo estas tro malgranda por ĉi tiu babilo"
 }

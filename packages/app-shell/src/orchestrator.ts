@@ -58,7 +58,8 @@ export interface OrchestratorDeps {
    */
   logOf?: (key: string) => LogEntry[];
   /** 视图预算（字符）；缺省用 context-renderer 的默认预算 */
-  contextBudgetChars?: () => number;
+  /** 视图预算（字符）；可选带模型 id 以便按模型窗口估算 */
+  contextBudgetChars?: (modelId?: string) => number;
   /**
    * 工具调用（ADR 002 §9.4 待办 2）：与 chat-send 共用同一套 recall/retrieve 工具与同一个循环。
    * 不给就等于"不暴露工具"（退回普通单轮对话）。
@@ -213,7 +214,7 @@ export async function orchestrateGroupMessage(
             content: typeof m.content === 'string' ? m.content : '',
           }));
       const view = renderBoundedView(entries, {
-        budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars() : DEFAULT_CONTEXT_BUDGET_CHARS,
+        budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars(cfg.model) : DEFAULT_CONTEXT_BUDGET_CHARS,
         keepHead: DEFAULT_KEEP_HEAD,
         keepTail: DEFAULT_KEEP_TAIL,
         recallHint: msg.content,
@@ -375,7 +376,7 @@ async function runOneDutyRound(
             content: typeof m.content === 'string' ? m.content : '',
           }));
       const view = renderBoundedView(entries, {
-        budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars() : DEFAULT_CONTEXT_BUDGET_CHARS,
+        budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars(cfg.model) : DEFAULT_CONTEXT_BUDGET_CHARS,
         keepHead: DEFAULT_KEEP_HEAD,
         keepTail: DEFAULT_KEEP_TAIL,
         recallHint: msg.content,
