@@ -94,8 +94,8 @@
   "chat.cancel": "취소",
   "chat.checkpoints": "롤백 지점",
   "chat.console": "콘솔",
-  "chat.export": "내보내기",
-  "chat.exportTip": "Markdown으로 내보내기",
+  "chat.export": "채팅 내보내기",
+  "chat.exportTip": "이 세션의 전체 채팅 기록 내보내기(Markdown)",
   "chat.file": "파일",
   "chat.filePh": "파일 선택",
   "chat.insert": "Insert",
@@ -104,7 +104,7 @@
   "chat.metrics": "지표",
   "chat.model": "Models",
   "chat.more": "More",
-  "chat.openWindow": "New window",
+  "chat.openWindow": "창에서 열기",
   "chat.openWindowTip": "Open this chat in a new window",
   "chat.p1": "긴급",
   "chat.p1ConfirmBody": "Urgent may interrupt or jump the queue:\n• Current steps may be aborted\n• Resources may be preempted\n• Queue will be reordered\n\nConfirm after 5 seconds.",
@@ -1588,5 +1588,12 @@
   "model.editProviderConfirmBody": "이 대화 상자를 닫고 '설정 → 모델'로 이동해 공급자를 편집합니다. 여기서 고른 모델은 사라집니다. 계속할까요?",
   "settings.hotkey.apiCopyOps": "AI操作가이드 복사",
   "settings.hotkey.apiCopied": "클립보드에 복사됨",
-  "settings.hotkey.apiCopyText": "WArmy를 조작하려면 먼저 운영 가이드를 읽으세요:"
+  "settings.hotkey.apiCopyText": "WArmy를 조작하려면 먼저 운영 가이드를 읽으세요:",
+  "chat.scrollToBottom": "최신으로 이동",
+  "chat.autoScroll": "채팅 자동 스크롤",
+  "group.directedOnly": "@AI일 때만 발언",
+  "panel.kb.title": "지식",
+  "panel.summary.title": "채팅 요약",
+  "panel.summary.empty": "요약이 아직 없습니다",
+  "panel.summary.jump": "원문으로"
 }

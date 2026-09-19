@@ -94,8 +94,8 @@
   "chat.cancel": "Отмена",
   "chat.checkpoints": "Точки отката",
   "chat.console": "Консоль",
-  "chat.export": "Экспорт",
-  "chat.exportTip": "Export as Markdown",
+  "chat.export": "Экспорт чата",
+  "chat.exportTip": "Экспорт полного лога сессии (Markdown)",
   "chat.file": "Файл",
   "chat.filePh": "Work email",
   "chat.insert": "Insert",
@@ -104,7 +104,7 @@
   "chat.metrics": "Метрики",
   "chat.model": "Models",
   "chat.more": "More",
-  "chat.openWindow": "New window",
+  "chat.openWindow": "Открыть в окне",
   "chat.openWindowTip": "Open this chat in a new window",
   "chat.p1": "Срочно",
   "chat.p1ConfirmBody": "Urgent may interrupt or jump the queue:\n• Current steps may be aborted\n• Resources may be preempted\n• Queue will be reordered\n\nConfirm after 5 seconds.",
@@ -1588,5 +1588,12 @@
   "model.editProviderConfirmBody": "Диалог закроется, откроются Настройки → Модели для редактирования провайдера. Выбранные здесь модели будут потеряны. Продолжить?",
   "settings.hotkey.apiCopyOps": "Скопировать гид для ИИ",
   "settings.hotkey.apiCopied": "Скопировано",
-  "settings.hotkey.apiCopyText": "Для работы с WArmy сначала прочитайте руководство:"
+  "settings.hotkey.apiCopyText": "Для работы с WArmy сначала прочитайте руководство:",
+  "chat.scrollToBottom": "К последнему",
+  "chat.autoScroll": "Автопрокрутка чата",
+  "group.directedOnly": "Отвечать только по @AI",
+  "panel.kb.title": "База знаний",
+  "panel.summary.title": "Сводка чата",
+  "panel.summary.empty": "Сводки пока нет",
+  "panel.summary.jump": "К источнику"
 }

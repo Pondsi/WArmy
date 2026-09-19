@@ -94,8 +94,8 @@
   "chat.cancel": "キャンセル",
   "chat.checkpoints": "ロールバックポイント",
   "chat.console": "コンソール",
-  "chat.export": "エクスポート",
-  "chat.exportTip": "Markdownとしてエクスポート",
+  "chat.export": "チャットを書き出す",
+  "chat.exportTip": "このセッションの完全なログを書き出す（Markdown）",
   "chat.file": "ファイル",
   "chat.filePh": "ファイルを選択",
   "chat.insert": "Insert",
@@ -104,7 +104,7 @@
   "chat.metrics": "メトリクス",
   "chat.model": "Models",
   "chat.more": "More",
-  "chat.openWindow": "New window",
+  "chat.openWindow": "ウィンドウで開く",
   "chat.openWindowTip": "Open this chat in a new window",
   "chat.p1": "加急",
   "chat.p1ConfirmBody": "Urgent may interrupt or jump the queue:\n• Current steps may be aborted\n• Resources may be preempted\n• Queue will be reordered\n\nConfirm after 5 seconds.",
@@ -1588,5 +1588,12 @@
   "model.editProviderConfirmBody": "このダイアログを閉じ、「設定 → モデル」でプロバイダーを編集します。ここで選んだモデルは失われます。続行しますか？",
   "settings.hotkey.apiCopyOps": "AI操作ガイドをコピー",
   "settings.hotkey.apiCopied": "クリップボードにコピーしました",
-  "settings.hotkey.apiCopyText": "WArmy を操作するには、まず操作ガイドを読んでください："
+  "settings.hotkey.apiCopyText": "WArmy を操作するには、まず操作ガイドを読んでください：",
+  "chat.scrollToBottom": "最新へ移動",
+  "chat.autoScroll": "チャットを自動スクロール",
+  "group.directedOnly": "@AI のときだけ発言",
+  "panel.kb.title": "ナレッジ",
+  "panel.summary.title": "チャット要約",
+  "panel.summary.empty": "要約はまだありません",
+  "panel.summary.jump": "原文へ"
 }

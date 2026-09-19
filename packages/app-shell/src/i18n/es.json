@@ -94,8 +94,8 @@
   "chat.cancel": "Cancelar",
   "chat.checkpoints": "Puntos de reversión",
   "chat.console": "Consola",
-  "chat.export": "Exportar",
-  "chat.exportTip": "Export as Markdown",
+  "chat.export": "Exportar chat",
+  "chat.exportTip": "Exportar el registro completo (Markdown)",
   "chat.file": "Archivo",
   "chat.filePh": "Work email",
   "chat.insert": "Insert",
@@ -104,7 +104,7 @@
   "chat.metrics": "Métricas",
   "chat.model": "Models",
   "chat.more": "More",
-  "chat.openWindow": "New window",
+  "chat.openWindow": "Abrir en ventana",
   "chat.openWindowTip": "Open this chat in a new window",
   "chat.p1": "Urgente",
   "chat.p1ConfirmBody": "Urgent may interrupt or jump the queue:\n• Current steps may be aborted\n• Resources may be preempted\n• Queue will be reordered\n\nConfirm after 5 seconds.",
@@ -1588,5 +1588,12 @@
   "model.editProviderConfirmBody": "Se cerrará este diálogo y se abrirá Ajustes → Modelos para editar el proveedor. Los modelos elegidos aquí se perderán. ¿Continuar?",
   "settings.hotkey.apiCopyOps": "Copiar guía IA",
   "settings.hotkey.apiCopied": "Copiado",
-  "settings.hotkey.apiCopyText": "Para operar WArmy, lea primero la guía:"
+  "settings.hotkey.apiCopyText": "Para operar WArmy, lea primero la guía:",
+  "chat.scrollToBottom": "Ir al último",
+  "chat.autoScroll": "Desplazamiento automático",
+  "group.directedOnly": "Responder solo con @IA",
+  "panel.kb.title": "Conocimiento",
+  "panel.summary.title": "Resumen del chat",
+  "panel.summary.empty": "Aún no hay resumen",
+  "panel.summary.jump": "Ir al origen"
 }

@@ -979,31 +979,70 @@
   }
 
 
-  /** 聊天 UI 懒加载：永远展示**完整真实**记录；DOM 只挂最近 N 条，上滑再挂历史 */
+  /** 聊天：展示**完整真实**记录；DOM 只挂最近 N 条，上滑加载；新消息按策略滚动 */
   const CHAT_VIEW_WINDOW = 40;
-  const chatViewVisible = {}; // chatId -> how many tail messages shown
+  const chatViewVisible = {};
+  /** 自动滚动（默认关）：由三点菜单勾选；持久化到 settings */
+  let autoScrollChat = false;
+  let pendingNewest = null; // { text, role }
 
   function msgsOf(chatId) {
     return (window.__msgs && window.__msgs[chatId]) || [];
   }
 
-  function renderChat() {
+  function isAtBottom(box) {
+    return box.scrollHeight - box.scrollTop - box.clientHeight < 12;
+  }
+
+  function updateScrollAffordances(box) {
+    const btn = $('scroll-bottom-btn');
+    const bub = $('new-msg-bubble');
+    const atBottom = box ? isAtBottom(box) : true;
+    if (btn) btn.classList.toggle('hidden', atBottom);
+    if (bub) {
+      if (atBottom || !pendingNewest) {
+        bub.classList.add('hidden');
+      } else {
+        bub.classList.remove('hidden');
+        bub.textContent = String(pendingNewest.text || '').slice(0, 120);
+      }
+    }
+  }
+
+  function scrollToBottom(smooth) {
     const box = $('messages');
     if (!box) return;
+    pendingNewest = null;
+    try { box.scrollTo({ top: box.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }); }
+    catch { box.scrollTop = box.scrollHeight; }
+    updateScrollAffordances(box);
+  }
+
+  /**
+   * 渲染聊天。滚动策略：
+   *  - 自动滚动开：总是滚到底（最后一条的最后一句可见）
+   *  - 自动滚动关（默认）：新内容滚到「能看见」为止；若新消息比视口高，
+   *    则把它的**顶部**对齐到视口顶部并不再继续滚动（从头展示），此时显示下箭头
+   */
+  function renderChat(opts) {
+    const box = $('messages');
+    if (!box) return;
+    const o = opts || {};
     const chatId = state.selectedChat && state.selectedChat.id;
     const msgs = chatId ? msgsOf(chatId) : [];
     const shown = Math.min(chatViewVisible[chatId] || CHAT_VIEW_WINDOW, msgs.length);
     chatViewVisible[chatId] = shown;
     const slice = msgs.slice(Math.max(0, msgs.length - shown));
+    const wasAtBottom = isAtBottom(box);
     box.innerHTML = '';
-    const hidden = msgs.length - slice.length;
-    if (hidden > 0) {
+    const hiddenCount = msgs.length - slice.length;
+    if (hiddenCount > 0) {
       const more = document.createElement('button');
       more.className = 'chat-load-more btn-mini';
-      more.textContent = `↑ ${t('chat.loadMore') || 'Load earlier'} (${hidden})`;
+      more.textContent = `↑ ${t('chat.loadMore') || 'Load earlier'} (${hiddenCount})`;
       more.onclick = () => {
         chatViewVisible[chatId] = (chatViewVisible[chatId] || CHAT_VIEW_WINDOW) + CHAT_VIEW_WINDOW;
-        renderChat();
+        renderChat({ keepScroll: true });
       };
       box.appendChild(more);
     }
@@ -1016,38 +1055,58 @@
       div.innerHTML = `${m.role === 'me' ? av : `<div class="av">${escapeHtml((state.selectedChat?.name || 'A')[0])}</div>`}<div class="bubble">${escapeHtml(m.text)}</div>`;
       box.appendChild(div);
     });
-    if (!(box.dataset.lazyBound === '1')) {
+    if (box.dataset.lazyBound !== '1') {
       box.dataset.lazyBound = '1';
       box.addEventListener('scroll', () => {
-        if (box.scrollTop < 40 && chatId) {
-          const total = msgsOf(chatId).length;
-          const vis = chatViewVisible[chatId] || CHAT_VIEW_WINDOW;
+        const id2 = state.selectedChat && state.selectedChat.id;
+        if (box.scrollTop < 40 && id2) {
+          const total = msgsOf(id2).length;
+          const vis = chatViewVisible[id2] || CHAT_VIEW_WINDOW;
           if (vis < total) {
-            chatViewVisible[chatId] = Math.min(total, vis + CHAT_VIEW_WINDOW);
-            renderChat();
+            chatViewVisible[id2] = Math.min(total, vis + CHAT_VIEW_WINDOW);
+            renderChat({ keepScroll: true });
             box.scrollTop = 80;
+            return;
           }
         }
+        if (isAtBottom(box)) pendingNewest = null;
+        updateScrollAffordances(box);
       });
     }
-    box.scrollTop = box.scrollHeight;
+    const last = box.lastElementChild;
+    if (o.keepScroll) {
+      // 加载历史：保持位置
+    } else if (autoScrollChat || wasAtBottom && !o.newContent) {
+      scrollToBottom(false);
+    } else if (last) {
+      const maxScroll = box.scrollHeight - box.clientHeight;
+      const lastTop = last.offsetTop;
+      const lastH = last.offsetHeight;
+      if (lastH <= box.clientHeight) {
+        // 放得下：滚到底展示
+        box.scrollTop = maxScroll;
+      } else {
+        // 比视口高：顶部对齐并停住（从头展示）
+        box.scrollTop = Math.min(lastTop, maxScroll);
+      }
+      updateScrollAffordances(box);
+    } else {
+      updateScrollAffordances(box);
+    }
     const duty = $('duty-info');
     if (duty) duty.textContent = state.selectedChat ? state.selectedChat.name : '—';
     updateListWatermark();
   }
 
-  function updateListWatermark() {
-    // 与设置第二列一致：品牌名走 CSS ::before + --brand-watermark
-    try {
-      document.documentElement.style.setProperty('--brand-watermark', `"${t('brand.name') || 'WARMY'}"`);
-    } catch { /* noop */ }
-  }
-
-
-  function pushMsg(chatId, role, text) {
+  function pushMsg(chatId, role, text, opts) {
     window.__msgs = window.__msgs || {};
     window.__msgs[chatId] = window.__msgs[chatId] || [];
-    window.__msgs[chatId].push({ role, text });
+    window.__msgs[chatId].push({ role, text, ts: Date.now() });
+    if (state.selectedChat && state.selectedChat.id === chatId) {
+      const box = $('messages');
+      const atBottom = box ? isAtBottom(box) : true;
+      if (!atBottom && !(opts && opts.self)) pendingNewest = { text, role };
+    }
   }
 
   function queueOf(chatId) {
@@ -1097,6 +1156,148 @@
     } catch { /* noop */ }
   }
 
+
+  /**
+   * 右栏分区：
+   *  - 干活（我的牛马 / 项目）：项目状态、文件/产物、进度、模型管理、目录、成员
+   *  - 聊天（联系人 / 群聊）：知识库（本会话自己的）、聊天摘要、群聊另有成员与模型
+   */
+  function applyPanelPartition(kind) {
+    const work = kind === 'single' || kind === 'internal';
+    const chat = kind === 'external' || kind === 'externalChat' || kind === 'externalGroup';
+    const isGroup = kind === 'internal' || kind === 'external' || kind === 'externalGroup';
+    const set = (id, on) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.setAttribute('data-panel-hidden', on ? '0' : '1');
+        el.style.display = on ? '' : 'none';
+      }
+    };
+    // 干活面板
+    set('project-state-block', work);
+    set('project-files-block', work);
+    set('panel-progress-block', work);
+    set('panel-model-mgr-block', work ? true : false);
+    set('panel-directory-block', work && kind === 'internal');
+    set('panel-members-block', isGroup);
+    // 聊天面板
+    set('panel-kb-block', !work && chat);
+    set('panel-summary-block', !work && chat);
+    // 群聊/联系人的模型管理：群聊要，联系人不要
+    if (!work && chat) {
+      set('panel-model-mgr-block', kind === 'external' || kind === 'externalGroup');
+    }
+    try { void renderPanelKnowledge(); void renderPanelSummary(); } catch { /* noop */ }
+  }
+
+  async function renderPanelKnowledge() {
+    const host = document.getElementById('panel-kb-box');
+    if (!host) return;
+    const gid = state.selectedChat && state.selectedChat.id;
+    if (!gid) { host.textContent = '—'; return; }
+    try {
+      const r = await window.warmy.knowledgeQuery?.(gid);
+      const ents = (r && r.entities) || [];
+      const evs = (r && r.events) || [];
+      host.innerHTML = (ents.length || evs.length)
+        ? [
+            ...ents.slice(0, 6).map((e) => `<div class="pk-row">${escapeHtml(e.name || e.id)}</div>`),
+            ...evs.slice(0, 6).map((e) => `<div class="pk-row muted">${escapeHtml(e.title || '')}</div>`),
+          ].join('')
+        : `<div class="muted">${escapeHtml(t('knowledge.empty') || '—')}</div>`;
+    } catch {
+      host.textContent = '—';
+    }
+  }
+
+  async function renderPanelSummary() {
+    const host = document.getElementById('panel-summary-box');
+    if (!host) return;
+    const gid = state.selectedChat && state.selectedChat.id;
+    if (!gid) { host.textContent = '—'; return; }
+    try {
+      const r = await window.warmy.archiveList?.(gid);
+      const list = (r && r.entries) || [];
+      host.innerHTML = list.length
+        ? list.slice(-5).reverse().map((e) => `
+            <div class="pk-row">
+              <div>${escapeHtml(e.title || '')}</div>
+              <div class="muted">${escapeHtml(String(e.summary || '').slice(0, 80))}</div>
+              <button class="btn-mini" data-jump-archive="${escapeHtml(e.id)}">${escapeHtml(t('panel.summary.jump') || 'Jump')}</button>
+            </div>`).join('')
+        : `<div class="muted">${escapeHtml(t('panel.summary.empty') || '—')}</div>`;
+      host.querySelectorAll('[data-jump-archive]').forEach((b) => {
+        b.onclick = () => {
+          const id = b.getAttribute('data-jump-archive');
+          const item = list.find((x) => x.id === id);
+          const anchor = item && item.anchors && item.anchors[0];
+          if (anchor) {
+            // 跳到原文：打开会话并定位（用现有搜索/日志能力）
+            try { window.warmy.searchMessages?.(String(anchor.recordId || ''))?.then(() => showSearchPopup?.()); } catch { /* noop */ }
+          }
+        };
+      });
+    } catch {
+      host.textContent = '—';
+    }
+  }
+
+  /** 三点菜单：按会话类型显示条目 + 快捷键提示 */
+  function renderMoreMenu() {
+    const nav = state.nav;
+    const isWork = nav === 'singleAi' || nav === 'internalGroup';
+    const isGroupChat = nav === 'internalGroup' || nav === 'externalGroup';
+    $('mi-directed')?.classList.toggle('hidden', !isGroupChat);
+    const sc = (id, key) => { const e = $(id); if (e) e.textContent = typeof SHORTCUT_LABEL === 'function' ? SHORTCUT_LABEL(key) : ''; };
+    sc('sc-open', 'openChatWindow');
+    sc('sc-export', 'exportSession');
+    sc('sc-stop', 'stopAll');
+    void isWork;
+  }
+
+  // ── 聊天滚动：下箭头 / 新消息气泡 / 自动滚动 ──
+  (function bindScrollUx() {
+    /* btn-scroll-bottom-bind */
+    $('scroll-bottom-btn')?.addEventListener('click', () => scrollToBottom(true));
+    $('new-msg-bubble')?.addEventListener('click', () => scrollToBottom(true));
+    const miAuto = $('mi-autoscroll');
+    const markAuto = $('mi-autoscroll-mark');
+    const syncAuto = () => {
+      if (markAuto) markAuto.style.visibility = autoScrollChat ? 'visible' : 'hidden';
+      if (miAuto) miAuto.setAttribute('aria-checked', autoScrollChat ? 'true' : 'false');
+    };
+    if (miAuto && !miAuto.dataset.bound) {
+      miAuto.dataset.bound = '1';
+      miAuto.addEventListener('click', async () => {
+        autoScrollChat = !autoScrollChat;
+        syncAuto();
+        try { await window.warmy.settingsSave({ autoScrollChat }); } catch { /* noop */ }
+        if (autoScrollChat) scrollToBottom(false);
+      });
+    }
+    // 恢复设置
+    void (async () => {
+      try {
+        const s = await window.warmy.settingsGet();
+        autoScrollChat = !!(s?.settings?.autoScrollChat);
+      } catch { /* noop */ }
+      syncAuto();
+    })();
+    // 输入字数
+    const input = $('input');
+    const counter = $('input-counter');
+    if (input && counter && !input.dataset.counterBound) {
+      input.dataset.counterBound = '1';
+      const MAX = Number(input.getAttribute('maxlength')) || 8000;
+      const upd = () => {
+        const n = input.value.length;
+        counter.textContent = n > MAX * 0.8 ? `${n} / ${MAX}` : '';
+        counter.classList.toggle('over', n >= MAX);
+      };
+      input.addEventListener('input', upd);
+      upd();
+    }
+  })();
 
   // ── AI 决策选项卡（会话中）+ 项目 MEMORY 编辑 ──
   function renderAiQuestions() {
@@ -5161,7 +5362,17 @@
     e.stopPropagation();
     const menu = $('more-menu');
     menu?.classList.toggle('hidden');
-    if (menu && !menu.classList.contains('hidden')) positionMenuFixed($('more-trigger'), menu);
+    if (menu && !menu.classList.contains('hidden')) {
+      try { renderMoreMenu(); } catch { /* noop */ }
+      // 同步「仅@ai才发言」勾选态（群聊默认勾选）
+      const g = (state.groups || []).find((x) => x.id === state.selectedChat?.id) || (state.chats || []).find((x) => x.id === state.selectedChat?.id);
+      __directed = !!(g && g.directedMode);
+      const m = $('mi-directed-mark');
+      if (m) { m.textContent = __directed ? '✓' : '✕'; }
+      const am = $('mi-autoscroll-mark');
+      if (am) am.style.visibility = autoScrollChat ? 'visible' : 'hidden';
+      positionMenuFixed($('more-trigger'), menu);
+    }
   });
   onDocClick(() => $('more-menu')?.classList.add('hidden'));
   $('mi-search')?.addEventListener('click', () => {
@@ -5675,7 +5886,8 @@
       const type = 'external';
       const id = 'g-' + Date.now();
       try {
-        await window.warmy.groupCreate({ groupId: id, name, type, directedMode: false });
+        // 群聊默认「仅@ai才发言」勾选
+        await window.warmy.groupCreate({ groupId: id, name, type, directedMode: true });
       } catch (e) {
         uiAlert(String(e.message || e));
         return;
@@ -5932,6 +6144,16 @@
     const j = $('btn-join-qr');
     if (j && !j.classList.contains('hidden')) return j;
     return null;
+  }
+
+  /** 给菜单用的快捷键文案（空则返回空串） */
+  function SHORTCUT_LABEL(id) {
+    try {
+      const b = shortcutBinding(id);
+      return b ? `(${b})` : '';
+    } catch {
+      return '';
+    }
   }
 
   function shortcutActionById(id) {

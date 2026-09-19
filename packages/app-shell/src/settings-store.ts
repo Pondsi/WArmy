@@ -174,6 +174,8 @@ export interface AppSettings {
    * Installer/first launch must surface language selection immediately.
    */
   setupDone?: boolean;
+  /** 聊天自动滚动到最新（默认关） */
+  autoScrollChat?: boolean;
   /** 更新源（GitHub Releases API / feed JSON）。空串 = 未配置 */
   updateFeedUrl?: string;
   updateChannel?: string;
@@ -385,6 +387,7 @@ function defaults(): AppSettings {
     skillScanDirs: [],
     skillEnabled: {},
     setupDone: false,
+    autoScrollChat: false,
     /** 产品默认更新源：GitHub Releases API */
     updateFeedUrl: 'https://api.github.com/repos/Pondsi/WArmy/releases/latest',
     embedUseGpu: true,

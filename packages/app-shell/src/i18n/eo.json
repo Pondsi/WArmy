@@ -94,8 +94,8 @@
   "chat.cancel": "Nuligi",
   "chat.checkpoints": "Retroiraj punktoj",
   "chat.console": "Konzolo",
-  "chat.export": "Elporti",
-  "chat.exportTip": "Export as Markdown",
+  "chat.export": "Eksporti babilon",
+  "chat.exportTip": "Eksporti plenan babilprotokolon (Markdown)",
   "chat.file": "Dosiero",
   "chat.filePh": "Work email",
   "chat.insert": "Insert",
@@ -104,7 +104,7 @@
   "chat.metrics": "Metrikoj",
   "chat.model": "Models",
   "chat.more": "More",
-  "chat.openWindow": "New window",
+  "chat.openWindow": "Malfermi en fenestro",
   "chat.openWindowTip": "Open this chat in a new window",
   "chat.p1": "Urĝa",
   "chat.p1ConfirmBody": "Urgent may interrupt or jump the queue:\n• Current steps may be aborted\n• Resources may be preempted\n• Queue will be reordered\n\nConfirm after 5 seconds.",
@@ -1588,5 +1588,12 @@
   "model.editProviderConfirmBody": "Ĉi tio fermos la dialogon kaj malfermos Agordo → Modelo por redakti la provizanton. Elektitaj modelo ĉi tie perdiĝos. Daŭrigi?",
   "settings.hotkey.apiCopyOps": "Kopii AI-gvidilon",
   "settings.hotkey.apiCopied": "Kopiita",
-  "settings.hotkey.apiCopyText": "Por operacii WArmy, unue legu la gvidilon:"
+  "settings.hotkey.apiCopyText": "Por operacii WArmy, unue legu la gvidilon:",
+  "chat.scrollToBottom": "Iri al lasta",
+  "chat.autoScroll": "Aŭtomata rulumo",
+  "group.directedOnly": "Respondi nur je @AI",
+  "panel.kb.title": "Scio",
+  "panel.summary.title": "Babilresumo",
+  "panel.summary.empty": "Ankoraŭ neniu resumo",
+  "panel.summary.jump": "Iri al fonto"
 }

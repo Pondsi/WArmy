@@ -94,8 +94,8 @@
   "chat.cancel": "取消",
   "chat.checkpoints": "回溯點",
   "chat.console": "主控台",
-  "chat.export": "匯出",
-  "chat.exportTip": "匯出為 Markdown",
+  "chat.export": "匯出聊天",
+  "chat.exportTip": "匯出目前會話的完整聊天記錄（Markdown）",
   "chat.file": "檔案",
   "chat.filePh": "選擇檔案",
   "chat.insert": "插入",
@@ -104,7 +104,7 @@
   "chat.metrics": "性能指標",
   "chat.model": "模型管理",
   "chat.more": "更多",
-  "chat.openWindow": "新視窗",
+  "chat.openWindow": "在視窗開啟",
   "chat.openWindowTip": "在新視窗開啟此工作階段",
   "chat.p1": "加急",
   "chat.p1ConfirmBody": "加急会尽量打断/插队当前任務，可能造成：\n• 正在執行的步骤被中…断或回滾風險升高\n• 多執行緒资源被抢占，响应更耗电/耗時\n• 佇列被清除重排\n\n請確認你了解風險。5 秒后才能確認。",
@@ -1588,5 +1588,12 @@
   "model.editProviderConfirmBody": "將關閉本彈窗並跳轉到「設定 → 模型」編輯供應商。添加模型時的勾選會丟失，確定繼續？",
   "settings.hotkey.apiCopyOps": "複製 AI 操作指引",
   "settings.hotkey.apiCopied": "已複製到剪貼簿",
-  "settings.hotkey.apiCopyText": "要操作 WArmy（無限牛馬）請先閱讀操作文檔："
+  "settings.hotkey.apiCopyText": "要操作 WArmy（無限牛馬）請先閱讀操作文檔：",
+  "chat.scrollToBottom": "跳到最新訊息",
+  "chat.autoScroll": "自動捲動聊天記錄",
+  "group.directedOnly": "僅@ai才發言",
+  "panel.kb.title": "知識庫",
+  "panel.summary.title": "聊天摘要",
+  "panel.summary.empty": "暫無摘要（由本會話知識庫/歸檔產生）",
+  "panel.summary.jump": "跳到原文"
 }

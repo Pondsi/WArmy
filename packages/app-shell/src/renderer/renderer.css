@@ -989,3 +989,38 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
   font-size: 12px !important;
 }
 #console-pane .console-clear { color: var(--muted); }
+
+/* ── 聊天滚动：下箭头 + 新消息气泡 ── */
+.scroll-bottom-btn {
+  position: absolute; right: 22px; bottom: 150px; z-index: 40;
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  display: grid; place-items: center; cursor: pointer;
+  box-shadow: var(--shadow-md, 0 2px 8px rgba(0,0,0,.15));
+}
+.scroll-bottom-btn svg { width: 18px; height: 18px; }
+.scroll-bottom-btn.hidden { display: none; }
+.new-msg-bubble {
+  position: absolute; right: 22px; bottom: 104px; z-index: 39;
+  max-width: 62%; text-align: left;
+  padding: 8px 12px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--accent); color: #fff;
+  font-size: 12px; line-height: 1.4; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: var(--shadow-md, 0 2px 8px rgba(0,0,0,.2));
+}
+.new-msg-bubble.hidden { display: none; }
+/* 三点菜单：勾/叉在文字前；快捷键靠右 */
+.more-menu-panel .more-menu-btn { display: flex; align-items: center; gap: 8px; width: 100%; }
+.more-menu-panel .mark { width: 16px; flex-shrink: 0; text-align: center; color: var(--accent); font-weight: 700; }
+.more-menu-panel .menu-sc { margin-left: auto; font-size: 11px; color: var(--muted); }
+.more-menu-panel .more-menu-btn.hidden { display: none; }
+/* 输入字数 */
+.input-counter { text-align: right; font-size: 11px; color: var(--muted); margin-top: 2px; min-height: 14px; }
+.input-counter.over { color: var(--danger); }
+/* 右栏分区：干活面板 vs 聊天面板 */
+.panel-block[data-panel-hidden="1"] { display: none !important; }
+
+.pk-row { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.pk-row:last-child { border-bottom: none; }
+.pk-row .btn-mini { margin-top: 4px; }

@@ -221,6 +221,12 @@ let win: BrowserWindow | null = null;
 let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
 let memory: MemoryClient | null = null;
 const aiQuestions = new AiQuestionHub();
+
+/** 新项目默认门禁（授权由产品主授予；只跑轻量文档/一致性检查，防过度执行） */
+const DEFAULT_GATE_VERIFY = [
+  'packages/app-shell/scripts/verify-docs.mjs',
+  'packages/app-shell/scripts/verify-i18n-locales.mjs',
+];
 const router = new GroupChatRouter({
   queueWhenFixedBusy: false,
   onQueueMutated: () => {
@@ -1654,6 +1660,7 @@ handleIpc(
         setProjectAttrsOf(cfg.groupId, {
           devEnv: cfg.devEnv,
           ...(cfg.directory && fs.existsSync(cfg.directory) ? { directory: cfg.directory, directorySource: 'creator-picked' as const } : {}),
+      gateVerify: DEFAULT_GATE_VERIFY,
         });
       }
       // 本机实例全部可值班（同时写入持久化成员表）

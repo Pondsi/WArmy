@@ -75,7 +75,6 @@
       </div>
       <div id="list-body" class="list-body"></div>
       <div id="list-watermark" class="list-watermark" aria-hidden="true"></div>
-      </div>
       <div id="col-resizer" data-i18n-title="tip.dragWidth"></div>
     </aside>
 
@@ -124,13 +123,14 @@
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
                 </button>
                 <div class="urg-menu more-menu-panel hidden" id="more-menu" role="menu">
-                  <button type="button" id="mi-search" data-i18n="list.search"></button>
-                  <!-- ADR 004 第七批：「在容器中开发」是**创建项目时**选的开发环境，不是菜单里能随时开关的选项；
-                       「运行/测试在容器中」这个选项已作废删除（容器 = 开发环境，测试/运行不在其职责内）。
-                       启用/停用项目与切换容器都在**项目右键菜单**里。 -->
-                  <button type="button" id="mi-directed" class="more-menu-btn"><span data-i18n="group.directed"></span><span id="mi-directed-mark" class="mark">✕</span></button>
-                  <button type="button" id="mi-open" data-i18n="chat.openWindow"></button>
-                  <button type="button" id="mi-export" data-i18n="chat.export"></button>
+                  <button type="button" id="mi-search" class="more-menu-btn"><span class="mark"></span><span data-i18n="list.search"></span></button>
+                  <!-- 「仅@ai才发言」：只在项目/群聊出现；群聊默认勾选 -->
+                  <button type="button" id="mi-directed" class="more-menu-btn"><span id="mi-directed-mark" class="mark">✓</span><span data-i18n="group.directedOnly"></span></button>
+                  <!-- 自动滚动聊天记录：默认不勾选 -->
+                  <button type="button" id="mi-autoscroll" class="more-menu-btn"><span id="mi-autoscroll-mark" class="mark">✓</span><span data-i18n="chat.autoScroll"></span></button>
+                  <button type="button" id="mi-open" class="more-menu-btn"><span class="mark"></span><span data-i18n="chat.openWindow"></span><span class="menu-sc" id="sc-open"></span></button>
+                  <button type="button" id="mi-export" class="more-menu-btn"><span class="mark"></span><span data-i18n="chat.export"></span><span class="menu-sc" id="sc-export"></span></button>
+                  <button type="button" id="mi-stop" class="more-menu-btn"><span class="mark"></span><span data-i18n="chat.stopAll"></span><span class="menu-sc" id="sc-stop"></span></button>
                 </div>
               </div>
                             <!-- 诊断事件流（排障，不是控制台）— 固定在动作区最右 -->
@@ -146,6 +146,11 @@
             <div id="approval-host" class="approval-host"></div>
           </div>
         <div id="pm-box" class="pm-box"></div>
+        <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" type="button"
+                data-i18n-title="chat.scrollToBottom" aria-label="scroll to bottom">
+          <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 22 L50 66 M32 50 L50 70 L68 50" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="new-msg-bubble" class="new-msg-bubble hidden" type="button"></button>
         <div id="queue-bar" class="queue-bar hidden">
             <div class="queue-bar-head">
               <span data-i18n="chat.queueTitle"></span>
@@ -179,7 +184,8 @@
           <footer class="composer">
             <div id="attach-list" class="hidden"></div>
             <div class="composer-main">
-              <textarea id="input" rows="3" data-i18n-placeholder="chat.placeholder" spellcheck="false"></textarea>
+              <textarea id="input" rows="3" maxlength="8000" data-i18n-placeholder="chat.placeholder" spellcheck="false"></textarea>
+              <div class="input-counter" id="input-counter"></div>
               <div class="composer-bar">
                 <div class="composer-left">
                   <button class="btn-icon" id="btn-attach" data-i18n-title="chat.attachTip">
@@ -241,6 +247,17 @@
             <div class="ctg-dim" id="project-state-msg"></div>
           </div>
 
+          <!-- 聊天类会话（联系人/群聊）：本会话自己的知识库 -->
+          <div class="panel-block" id="panel-kb-block" style="display:none">
+            <h3 data-i18n="panel.kb.title"></h3>
+            <div id="panel-kb-box" class="muted">—</div>
+          </div>
+          <!-- 聊天类会话：聊天摘要 / 归档（可跳原文） -->
+          <div class="panel-block" id="panel-summary-block" style="display:none">
+            <h3 data-i18n="panel.summary.title"></h3>
+            <div id="panel-summary-box" class="muted">—</div>
+          </div>
+
           <!-- ADR 004 第七批新增三块（真实数据）：最近改动文件 / 其他文件 / 生成的产品。
                数据来自主进程 warmy:project-files（checkpoint 明细 + 产物目录扫描）；
                拿不到就如实显示空态与原因，**绝不用演示数据充数**。 -->
@@ -250,7 +267,7 @@
           </div>
 
           <!-- 进度（折叠：百分比条；展开：任务列表） -->
-          <div class="panel-block">
+          <div class="panel-block" id="panel-progress-block">
             <div class="panel-toggle" id="progress-toggle">
               <span data-i18n="panel.progress"></span>
               <div class="progress" style="flex:1;margin:0 8px"><div id="progress-bar" class="progress-bar" style="width:0%"></div></div>
@@ -263,7 +280,7 @@
           </div>
 
           <!-- 模型管理（我的牛马 / 项目 / 群聊 都显示） -->
-          <div class="panel-block" id="model-mgr-block">
+          <div class="panel-block" id="panel-model-mgr-block">
             <h3 data-i18n="panel.modelMgr"></h3>
             <div id="model-mgr"></div>
           </div>
@@ -273,13 +290,13 @@
                入口已按产品主要求挪到聊天「…」菜单里；这里只保留"当前容器"下拉框（在右栏最上面）。 -->
 
           <!-- 项目目录（仅项目/群聊） -->
-          <div class="panel-block only-group">
+          <div class="panel-block only-group" id="panel-directory-block">
             <h3 data-i18n="panel.directory"></h3>
             <div id="dir-box" class="muted">—</div>
           </div>
 
           <!-- 成员（仅项目/群聊） -->
-          <div class="panel-block only-group">
+          <div class="panel-block only-group" id="panel-members-block">
             <h3 data-i18n="group.members"></h3>
             <div id="members-box" class="muted">—</div>
             <div style="margin-top:6px;display:flex;gap:6px">

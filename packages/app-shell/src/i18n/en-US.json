@@ -94,8 +94,8 @@
   "chat.cancel": "Cancel",
   "chat.checkpoints": "Rollback points",
   "chat.console": "Console",
-  "chat.export": "Export",
-  "chat.exportTip": "Export as Markdown",
+  "chat.export": "Export chat",
+  "chat.exportTip": "Export this session's full chat log (Markdown)",
   "chat.file": "File",
   "chat.filePh": "Work email",
   "chat.insert": "Insert",
@@ -104,7 +104,7 @@
   "chat.metrics": "Metrics",
   "chat.model": "Models",
   "chat.more": "More",
-  "chat.openWindow": "New window",
+  "chat.openWindow": "Open in window",
   "chat.openWindowTip": "Open this chat in a new window",
   "chat.p1": "Urgent",
   "chat.p1ConfirmBody": "Urgent may interrupt or jump the queue:\n• Current steps may be aborted\n• Resources may be preempted\n• Queue will be reordered\n\nConfirm after 5 seconds.",
@@ -1588,5 +1588,12 @@
   "model.editProviderConfirmBody": "This will close the dialog and open Settings → Models to edit the provider. Any models you selected here will be discarded. Continue?",
   "settings.hotkey.apiCopyOps": "Copy AI guide",
   "settings.hotkey.apiCopied": "Copied to clipboard",
-  "settings.hotkey.apiCopyText": "To operate WArmy, read the operations guide first:"
+  "settings.hotkey.apiCopyText": "To operate WArmy, read the operations guide first:",
+  "chat.scrollToBottom": "Jump to latest",
+  "chat.autoScroll": "Auto-scroll chat",
+  "group.directedOnly": "Reply only when @AI",
+  "panel.kb.title": "Knowledge",
+  "panel.summary.title": "Chat summary",
+  "panel.summary.empty": "No summary yet (generated from this session's knowledge/archive)",
+  "panel.summary.jump": "Jump to source"
 }
