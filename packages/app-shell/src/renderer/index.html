@@ -285,8 +285,8 @@
             <div id="project-files-box"></div>
           </div>
 
-          <!-- 进度（折叠：百分比条；展开：任务列表，限高可滚动，默认滚到最新） -->
-          <div class="panel-block" id="panel-progress-block">
+          <!-- 进度（折叠：百分比条；展开：任务列表，限高可滚动，默认滚到最新）——未选会话默认隐藏 -->
+          <div class="panel-block hidden" id="panel-progress-block">
             <div class="panel-toggle" id="progress-toggle">
               <span data-i18n="panel.progress">进度</span>
               <div class="progress" style="flex:1;margin:0 8px"><div id="progress-bar" class="progress-bar" style="width:0%"></div></div>
@@ -296,8 +296,8 @@
             <ul id="task-list" class="task-list hidden panel-scroll"></ul>
           </div>
 
-          <!-- 等待协助：AI 运行中需要人处理的事；默认折叠；未读红/黄点 -->
-          <div class="panel-block" id="panel-assist-block">
+          <!-- 等待协助：AI 运行中需要人处理的事；默认折叠；未读红/黄点。未选会话默认隐藏 -->
+          <div class="panel-block hidden" id="panel-assist-block">
             <div class="panel-toggle" id="assist-toggle">
               <span data-i18n="panel.assist.title">等待协助</span>
               <span id="assist-badge" class="assist-badge hidden" aria-hidden="true"></span>
@@ -306,8 +306,8 @@
             <ul id="assist-list" class="assist-list hidden panel-scroll"></ul>
           </div>
 
-          <!-- 模型管理（我的牛马 / 项目 / 群聊 都显示） -->
-          <div class="panel-block" id="panel-model-mgr-block">
+          <!-- 模型管理（我的牛马 / 项目 / 群聊 都显示）——未选会话默认隐藏 -->
+          <div class="panel-block hidden" id="panel-model-mgr-block">
             <h3 data-i18n="panel.modelMgr"></h3>
             <div id="model-mgr"></div>
           </div>
@@ -322,8 +322,8 @@
             <div id="dir-box" class="muted">—</div>
           </div>
 
-          <!-- 成员（仅项目/群聊） -->
-          <div class="panel-block only-group" id="panel-members-block">
+          <!-- 成员（仅项目/群聊）——默认隐藏：未选中会话前不得出现 -->
+          <div class="panel-block only-group hidden" id="panel-members-block">
             <h3 data-i18n="group.members"></h3>
             <div id="members-box" class="muted">—</div>
             <div style="margin-top:6px;display:flex;gap:6px">

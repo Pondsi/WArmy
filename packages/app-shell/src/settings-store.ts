@@ -184,6 +184,8 @@ export interface AppSettings {
    * Installer/first launch must surface language selection immediately.
    */
   setupDone?: boolean;
+  /** 全局横幅关闭记录（跨窗口/跨启动保持关闭） */
+  netBannerDismissed?: string[];
   /**
    * Privacy policy consent. Default false — first launch must show policy after language pick.
    * Revoke in About closes the app; next launch requires agree again.
@@ -413,6 +415,7 @@ function defaults(): AppSettings {
     pluginScanDirs: [],
     skillEnabled: {},
     setupDone: false,
+    netBannerDismissed: [],
     privacyConsent: false,
     autoScrollChat: false,
     contextBudgetPercent: 60,

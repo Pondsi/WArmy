@@ -819,8 +819,6 @@ details.ctg-collapse > .ctg-collapse-body {
   border: 1px solid var(--line); border-top: none;
   border-radius: 0 0 8px 8px; padding: 8px 10px; background: var(--card);
 }
-  width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
-}
 .theme-swatches button.on { border-color: var(--ink); }
 .theme-mode { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 .theme-mode button {
@@ -1141,19 +1139,34 @@ details.ctg-collapse > .ctg-collapse-body {
 .prov-focus { outline: 1px solid var(--accent); border-radius: 8px; }
 .hk-pa code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
 
-/* ── 布局兜底：非 hide-list 时第一/第二列必须可见 ── */
+/* ── 布局兜底：非 hide-list 时第一/第二列必须可见 ──
+   ⚠️ 必须排除**独立会话窗**（body.chat-window）：否则这条高特异性的 !important
+   会把子窗口的「只保留聊天+右栏」规则压过去（第一/第二列会出现在窗口顶部）。 */
 #app-body:not(.hide-list) {
   grid-template-columns: 64px var(--list-w, 200px) 1fr !important;
 }
-#app-body:not(.hide-list) #rail {
+body:not(.chat-window) #app-body:not(.hide-list) #rail {
   display: flex !important;
   visibility: visible !important;
   opacity: 1 !important;
 }
-#app-body:not(.hide-list) #list-col {
+body:not(.chat-window) #app-body:not(.hide-list) #list-col {
   display: flex !important;
   visibility: visible !important;
   opacity: 1 !important;
+}
+/* 独立会话窗：无条件隐藏第一/第二列（优先级高于上面的兜底规则，且互斥） */
+body.chat-window #app-body #rail,
+body.chat-window #app-body:not(.hide-list) #rail,
+body.chat-window #app-body #list-col,
+body.chat-window #app-body:not(.hide-list) #list-col {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+body.chat-window #app-body,
+body.chat-window #app-body:not(.hide-list) {
+  grid-template-columns: 1fr !important;
 }
 /* 设置/我的：保留第一列导航，第二列由 page-layout 内部承担 */
 #app-body.hide-list {
@@ -1337,3 +1350,8 @@ body.chat-window #chat-layout { width: 100% !important; height: 100% !important;
 body.chat-window #chat-col { height: 100% !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; }
 body.chat-window #panel-col { height: 100% !important; overflow: auto !important; }
 body.chat-window #page-layout, body.chat-window #empty-state, body.chat-window #inst-detail { display: none !important; }
+
+/* 第二列「+」菜单 */
+.list-plus-menu { position: absolute; right: 8px; top: 48px; min-width: 150px; z-index: 60; }
+.list-plus-menu button { width: 100%; text-align: left; }
+#p-email.invalid { border-color: var(--danger) !important; }

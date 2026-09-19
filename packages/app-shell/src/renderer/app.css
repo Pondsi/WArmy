@@ -1347,11 +1347,14 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
    纪律：.bn-row[data-kind="net"] 恒最多一行（断链与「组网关闭+异地成员」在
         netBannerModel() 里已合并）；身份变更行是另一类，允许与组网行各一行。
    ══════════════════════════════════════════════════════════════════════ */
+/* 横幅在**文档流内**（不是 absolute 覆盖）：内容自然排在其下方，
+   不会把聊天区顶到横幅底下造成"整体上移"。 */
 .net-banner {
-  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  position: relative; z-index: 6;
   display: flex; flex-direction: column;
+  flex-shrink: 0;
   font-size: var(--fs-base);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 #main-col.has-banner .chat-layout { height: calc(100% - var(--banner-h, 44px)); }
 #main-col.has-banner .empty-state { height: calc(100% - var(--banner-h, 44px)); }
@@ -1825,3 +1828,8 @@ body.chat-window #chat-layout { width: 100% !important; height: 100% !important;
 body.chat-window #chat-col { height: 100% !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; }
 body.chat-window #panel-col { height: 100% !important; overflow: auto !important; }
 body.chat-window #page-layout, body.chat-window #empty-state, body.chat-window #inst-detail { display: none !important; }
+
+/* 第二列「+」菜单 */
+.list-plus-menu { position: absolute; right: 8px; top: 48px; min-width: 150px; z-index: 60; }
+.list-plus-menu button { width: 100%; text-align: left; }
+#p-email.invalid { border-color: var(--danger) !important; }

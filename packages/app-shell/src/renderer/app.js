@@ -641,6 +641,8 @@
       el.classList.toggle('active', el.dataset.nav === nav);
     });
     hideMain();
+    // 切页即重算右栏：未选中会话时一律隐藏会话卡片（不再出现"成员/进度"空占位）
+    try { refreshPanelVisibility(); } catch { /* noop */ }
     // 顶部横幅依赖「会话是否可见」，等同步流程走完（本函数各分支的 return）再重算
     requestAnimationFrame(() => renderNetBanner());
 
@@ -759,10 +761,54 @@
     return false;
   }
 
+  /**
+   * 第二列顶部入口：项目/群聊 = 「+」（新建 / 加入）；联系人 = 「+」（添加联系人）。
+   * 旧实现把"新建"和"加入"拆成两个按钮，产品要求合并到一个加号菜单里。
+   */
   function setupListAction() {
     const btn = $('list-action');
     const joinBtn = $('btn-join-qr');
-    // 项目/群聊/联系人：右侧入口显示（联系人页它就是「添加联系人」本身）
+    const plusKinds = state.nav === 'internalGroup' || state.nav === 'externalGroup' || state.nav === 'externalChat';
+    if (plusKinds && btn) {
+      if (joinBtn) joinBtn.classList.add('hidden'); // 合并进「+」菜单，不再单独显示
+      btn.classList.remove('hidden');
+      btn.textContent = '+';
+      btn.title = t('list.addMore') || 'Add…';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const old = $('list-plus-menu');
+        if (old) { old.remove(); return; }
+        const m = document.createElement('div');
+        m.id = 'list-plus-menu';
+        m.className = 'urg-menu list-plus-menu';
+        const items = state.nav === 'externalChat'
+          ? [{ k: 'contact', label: t('contact.add') }]
+          : [
+              { k: 'create', label: state.nav === 'internalGroup' ? t('list.createProject') : t('list.createGroupChat') },
+              { k: 'join', label: state.nav === 'internalGroup' ? t('nav.addProject') : t('nav.addGroup') },
+            ];
+        m.innerHTML = items.map((it) => '<button type="button" data-lp="' + it.k + '">' + escapeHtml(it.label) + '</button>').join('');
+        btn.parentElement.appendChild(m);
+        m.querySelectorAll('button').forEach((b) => {
+          b.onclick = (ev) => {
+            ev.stopPropagation();
+            m.remove();
+            if (b.dataset.lp === 'create') createGroupFlow();
+            else if (b.dataset.lp === 'join') { const jb = $('btn-join-qr'); if (jb) { jb.classList.remove('hidden'); jb.click(); } }
+            else if (b.dataset.lp === 'contact') { const jb = $('btn-join-qr'); if (jb) { jb.classList.remove('hidden'); jb.click(); } }
+          };
+        });
+        onDocClick(() => m.remove(), { once: true });
+      };
+      return;
+    }
+    // 其它页面（我的牛马等）保留原逻辑
+    setupListActionLegacy();
+  }
+
+  function setupListActionLegacy() {
+    const btn = $('list-action');
+    const joinBtn = $('btn-join-qr');
     if (joinBtn) {
       const showJoin = state.nav === 'internalGroup' || state.nav === 'externalGroup' || state.nav === 'externalChat';
       joinBtn.classList.toggle('hidden', !showJoin);
@@ -838,7 +884,18 @@
     return rowEl;
   }
 
+  /**
+   * 列表渲染 = 选择状态的唯一驱动。右栏分区必须跟着它走：
+   * 之前只在 openChat 里调用分区函数，导致「自动选中会话」（启动恢复 / 同步群列表后
+   * 自动选第一项）这条路径**不更新右栏** —— 项目已选中却看不到「成员」卡片。
+   * 现在把分区刷新收口在 renderList 外层，所有路径都覆盖。
+   */
   function renderList() {
+    renderListInner();
+    try { refreshPanelVisibility(); } catch { /* 分区失败不影响列表 */ }
+  }
+
+  function renderListInner() {
     const q = ($('list-search').value || '').trim().toLowerCase();
     const box = $('list-body');
     box.innerHTML = '';
@@ -1096,7 +1153,26 @@
     }
     const duty = $('duty-info');
     if (duty) duty.textContent = state.selectedChat ? state.selectedChat.name : '—';
-    updateListWatermark();
+    try { updateListWatermark(); } catch { /* 水印失败不得中断聊天渲染 */ }
+  }
+
+  /**
+   * 第二列水印的品牌文字。
+   *
+   * ⚠️ 历史缺陷（真机才暴露）：这个函数被 `applyI18n` 与 `renderChat` **调用**，
+   * 却**从未定义**。`applyI18n` 里用了 `typeof === 'function'` 兜住，所以看不出问题；
+   * 但 `renderChat` 是直接调用 ⇒ 每次打开会话都抛
+   * `ReferenceError: updateListWatermark is not defined`，
+   * 直接中断 `openChat()` 后续流程（右栏分区、成员卡片、进度、模型管理全部不更新）。
+   * 静态 grep 检查源码完全查不出来 —— 只有真机跑一遍才会现形。
+   */
+  function updateListWatermark() {
+    try {
+      const name = (typeof t === 'function' && t('brand.name')) || 'WArmy';
+      document.documentElement.style.setProperty('--brand-watermark', `"${String(name)}"`);
+      const el = document.getElementById('list-watermark');
+      if (el) el.setAttribute('data-brand', String(name));
+    } catch { /* noop */ }
   }
 
   function pushMsg(chatId, role, text, opts) {
@@ -1163,36 +1239,81 @@
    *  - 干活（我的牛马 / 项目）：项目状态、文件/产物、进度、模型管理、目录、成员
    *  - 聊天（联系人 / 群聊）：知识库（本会话自己的）、聊天摘要、群聊另有成员与模型
    */
-  function applyPanelPartition(kind) {
+  /**
+   * 右栏分区（**唯一权威**：`applyPanelPartition` 与 `updatePanelVisibility` 都汇到这里）。
+   *
+   * 规则（产品要求）：
+   *  - **未选中会话**：所有会话相关卡片一律隐藏（不出现"空着占位"的成员/进度）
+   *  - 我的牛马(single)：项目状态/文件/进度/模型/等待协助；**无成员**、无知识库/摘要
+   *  - 项目(internal)：以上 + **成员** + 知识库 + 摘要 + 目录
+   *  - 群聊(extgroup/external)：**成员** + 知识库 + 摘要 + 模型 + 等待协助
+   *  - 联系人(extchat/externalChat)：知识库 + 摘要 + 等待协助；**无成员**、无模型管理
+   */
+  function panelVisibilityFor(kindRaw) {
+    const kind = String(kindRaw || '');
+    if (!kind || kind === 'none') {
+      return { state: false, files: false, progress: false, model: false, dir: false, members: false, kb: false, summary: false, assist: false };
+    }
     const work = kind === 'single' || kind === 'internal';
-    const chat = kind === 'external' || kind === 'externalChat' || kind === 'externalGroup';
-    const isGroup = kind === 'internal' || kind === 'external' || kind === 'externalGroup';
+    const chat = kind === 'external' || kind === 'externalChat' || kind === 'extGroup' || kind === 'extgroup' || kind === 'externalGroup';
+    const group = kind === 'internal' || kind === 'external' || kind === 'externalGroup' || kind === 'extgroup';
+    return {
+      state: work,
+      files: work,
+      progress: work,
+      model: work || group,
+      dir: kind === 'internal',
+      members: group,              // 仅项目/群聊；我的牛马与联系人**没有**
+      kb: kind === 'internal' || chat,
+      summary: kind === 'internal' || chat,
+      assist: work || chat,
+    };
+  }
+
+  function applyPanelVisibility(kindRaw) {
+    const v = panelVisibilityFor(kindRaw);
+    try {
+      window.__panelLog = window.__panelLog || [];
+      window.__panelLog.push({ f: 'apply', kind: String(kindRaw || ''), members: v.members, t: Date.now() });
+      if (window.__panelLog.length > 60) window.__panelLog.shift();
+    } catch { /* noop */ }
     const set = (id, on) => {
       const el = document.getElementById(id);
-      if (el) {
-        el.setAttribute('data-panel-hidden', on ? '0' : '1');
-        el.style.display = on ? '' : 'none';
-      }
+      if (!el) return;
+      el.classList.toggle('hidden', !on);
+      el.style.display = on ? '' : 'none';
+      el.setAttribute('data-panel-hidden', on ? '0' : '1');
     };
-    // 干活面板
-    set('project-state-block', work);
-    set('project-files-block', work);
-    set('panel-progress-block', work);
-    // 等待协助：干活/聊天都要看（AI 需要人处理的事）
-    set('panel-assist-block', true);
-    set('panel-model-mgr-block', work ? true : false);
-    set('panel-directory-block', work && kind === 'internal');
-    // 成员栏：项目/群聊才需要；我的牛马与联系人不需要
-    set('panel-members-block', kind === 'internal' || kind === 'external' || kind === 'externalGroup');
-    // 产品：我的牛马/联系人不显示「成员」
-    // 知识库：聊天 + 项目都展示（本机知识；项目侧也能看会话沉淀）
-    set('panel-kb-block', kind === 'internal' || chat);
-    // 摘要：项目 + 聊天都可用（项目侧会话同样可生成/展示结构化摘要）
-    set('panel-summary-block', kind === 'internal' || chat);
-    // 群聊/联系人的模型管理：群聊要，联系人不要
-    if (!work && chat) {
-      set('panel-model-mgr-block', kind === 'external' || kind === 'externalGroup');
-    }
+    set('project-state-block', v.state);
+    set('project-files-block', v.files);
+    set('panel-progress-block', v.progress);
+    set('panel-model-mgr-block', v.model);
+    set('panel-directory-block', v.dir);
+    set('panel-members-block', v.members);
+    set('panel-kb-block', v.kb);
+    set('panel-summary-block', v.summary);
+    set('panel-assist-block', v.assist);
+    return v;
+  }
+  window.__applyPanelVisibility = applyPanelVisibility;
+  /** 当前应显示的分区（按已选会话；没有会话 → 全隐藏） */
+  function currentPanelKind() {
+    return state.selectedChat ? String(state.selectedChat.kind || '') : 'none';
+  }
+  function refreshPanelVisibility() {
+    return applyPanelVisibility(currentPanelKind());
+  }
+  window.__refreshPanelVisibility = refreshPanelVisibility;
+  /** 验收脚本用：当前分区状态快照（只读，不改产品行为） */
+  window.__panelDebug = () => ({
+    selected: state.selectedChat ? { kind: state.selectedChat.kind, id: state.selectedChat.id } : null,
+    membersClass: (document.getElementById('panel-members-block') || {}).className || '',
+    membersHidden: !!document.getElementById('panel-members-block')?.classList.contains('hidden'),
+    nav: state.nav,
+  });
+
+  function applyPanelPartition(kind) {
+    applyPanelVisibility(kind);
     try {
       void renderPanelKnowledge();
       void renderPanelSummary();
@@ -2397,10 +2518,10 @@
                 <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
                 <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
               </div>
-              <button class="btn-mini" id="p-save">${t('me.saveProfile')}</button>
             </div>
-            <div class="field" style="margin:8px 0 0"><label>${t('me.username') || 'Name'}</label>
-              <input id="p-email" placeholder="${escapeHtml(t('me.email') || 'email')}" value="${escapeHtml(p.email || '')}"/>
+            <div class="field" style="margin:8px 0 0"><label>${escapeHtml(t('me.email'))}</label>
+              <input id="p-email" autocomplete="email" placeholder="name@example.com" value="${escapeHtml(p.email || '')}"/>
+              <div class="muted" id="p-email-msg" style="font-size:11px;margin-top:2px"></div>
             </div>
             <div class="field" style="margin-top:10px">
               <label>${t('me.credential')}</label>
@@ -2510,14 +2631,37 @@
         saveProfile();
         renderPage();
       };
-      $('p-save').onclick = () => {
-        const v = $('p-name').value.trim();
-        if (v) state.profile.username = v;
-        state.profile.email = $('p-email').value.trim();
-        applyAvatar();
-        saveProfile();
-        uiAlert(t('instances.saved'));
-      };
+      // 邮箱：格式正确即**即时保存**（不提供"保存资料"按钮）
+      (function bindEmailAutoSave() {
+        const inp = $('p-email');
+        const msg = $('p-email-msg');
+        if (!inp) return;
+        let lastSaved = state.profile.email || '';
+        const valid = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+        const sync = () => {
+          const v = String(inp.value || '').trim();
+          if (!v) {
+            if (msg) msg.textContent = '';
+            if (lastSaved) { state.profile.email = ''; saveProfile(); lastSaved = ''; }
+            return;
+          }
+          if (!valid(v)) {
+            if (msg) msg.textContent = t('me.emailInvalid') || 'Invalid email';
+            inp.classList.add('invalid');
+            return;
+          }
+          inp.classList.remove('invalid');
+          if (v !== lastSaved) {
+            state.profile.email = v;
+            saveProfile();
+            lastSaved = v;
+            if (msg) msg.textContent = t('me.emailSaved') || 'Saved';
+            setTimeout(() => { if (msg) msg.textContent = ''; }, 1500);
+          }
+        };
+        inp.addEventListener('input', sync);
+        inp.addEventListener('blur', sync);
+      })();
       renderDashboard($('dash-host'));
       return;
     }
@@ -4609,10 +4753,29 @@
   /* ── 顶部横幅：断链 / 组网关闭（合并成一条）+ 身份变更（附六） ── */
 
   /**
+   * 是否需要组网？（产品规则）
+   *
+   * 没有联系人、项目/群聊里也没有**其他设备的异地成员**时，本机根本不需要组网，
+   * 因此**任何**组网提醒都不该出现（包括"组网已关闭""地址不可达"这类）。
+   * 只有在存在异地对象时才提示。
+   */
+  function netNeedsMesh() {
+    try {
+      if (netRemoteCount() > 0) return true;
+      if ((state.chats || []).some((c) => c && (c.kind === 'extdm' || c.kind === 'extchat'))) return true;
+      if (Array.isArray(netState.peers) && netState.peers.length > 0) return true;
+    } catch { /* 任何异常都按"不需要"处理，宁可少提示 */ }
+    return false;
+  }
+  window.__netNeedsMesh = netNeedsMesh;
+
+  /**
    * R9 + R10 合并后的**单一**模型。返回 null = 不出组网横幅。
    * DOM 里恒只有一行 .bn-row[data-kind="net"]，所以不会同时出现两条。
    */
   function netBannerModel() {
+    // 产品规则：没有任何异地对象 ⇒ 组网提醒一律不出现（不是"关了才提醒"，是"用不上就不打扰"）
+    if (!netNeedsMesh()) return null;
     const tn = netTuning();
     const l = netState.link;
     const info = netState.autoOffInfo;
@@ -4959,6 +5122,9 @@
 
   /** 当前会话的身份变更行（三处：项目 / 群聊 / 联系人） */
   function idRowModel() {
+    // 同上：没有任何联系人/异地成员时，身份变更也无从谈起（不打扰）
+    if (!netNeedsMesh()) return null;
+
     const sel = state.selectedChat;
     if (!sel) return null;
     // 会话没显示出来时（例如在设置页）不出这条：列表行上的常驻标记仍然可见
@@ -5073,6 +5239,11 @@
       if (act === 'netDismiss') {
         netState.dismissed[btn.dataset.sig] = true;
         netState.renderedSig = '';
+        // 全局持久化：其它窗口/下次启动同样保持关闭（不再"新窗口又冒出来"）
+        try {
+          const sigs = Object.keys(netState.dismissed).slice(-50);
+          window.warmy.settingsSave({ netBannerDismissed: sigs });
+        } catch { /* noop */ }
         renderNetBanner();
         return;
       }
@@ -6475,6 +6646,8 @@
       return false;
     }
   }
+  /** 供自动化/外部触发刷新（建群、对端同步、验收脚本都走这一条） */
+  window.__syncGroups = () => syncGroupsFromStore();
 
   /**
    * 创建项目（ADR 004 P3）：**必须**先选开发环境（本机 / 容器）才能创建。
@@ -7985,7 +8158,11 @@
     pouch: { official: 'https://github.com/alibaba/pouch', install: 'https://github.com/alibaba/pouch/blob/master/INSTALL.md', download: 'https://github.com/alibaba/pouch/releases', support: 'https://github.com/alibaba/pouch/issues' },
     kata: { official: 'https://katacontainers.io/', install: 'https://github.com/kata-containers/kata-containers/blob/main/docs/install/README.md', download: 'https://github.com/kata-containers/kata-containers/releases', support: 'https://github.com/kata-containers/kata-containers/issues' },
   };
-  const CONTAINER_GUIDE_ORDER = ['podman', 'docker', 'wsl', 'nerdctl', 'rancher-desktop', 'colima', 'lima', 'windows-sandbox', 'lxd-incus', 'isulad', 'pouch', 'kata'];
+  /**
+   * 安装说明的条目顺序 = **字母序（按运行时 id）**。
+   * 产品要求：不做"推荐排序"，也不标注厂商/收费等营销信息，避免像广告。
+   */
+  const CONTAINER_GUIDE_ORDER = ['colima', 'docker', 'isulad', 'kata', 'lima', 'lxd-incus', 'nerdctl', 'podman', 'pouch', 'rancher-desktop', 'windows-sandbox', 'wsl'];
   /**
    * 「运行环境」的选项（第四批）：**实现方式**（容器 / 设备环境）是两条并列的路，不是同一层级。
    * 每条都给出「适合跑什么 / 需要什么 / 哪里不可用」，避免用户拿容器去跑安卓 App 然后失败。
@@ -8153,8 +8330,8 @@
         '<span class="ctg-guide-os ctg-dim" data-os="' + escapeHtml(id) + '">' + escapeHtml(t('container.rt.' + id + '.osShort')) + '</span>' +
         '</summary>' +
         '<div class="ctg-guide-body">' +
-        field('cost', 'container.guideCost') +
-        field('commercial', 'container.guideCommercial') +
+        // 只保留**中性事实**：支持系统 / 体积 / 官方与安装链接。
+        // 刻意不显示"收费/商用/厂商"等字段：那会被读成推荐或广告。
         field('os', 'container.guideOs') +
         field('size', 'container.guideSize') +
         '<div class="ctg-links">' + linkRows + '</div>' +
@@ -9365,9 +9542,16 @@
     });
   }
 
-  // ── only-group 显示/隐藏 ──
+  // ── only-group / 右栏分区 显示/隐藏（唯一权威见 applyPanelVisibility） ──
   function updatePanelVisibility() {
-    const isGroup = state.selectedChat && (state.selectedChat.kind === 'internal' || state.selectedChat.kind === 'extgroup');
+    const kind = currentPanelKind();
+    try {
+      window.__panelLog = window.__panelLog || [];
+      window.__panelLog.push({ f: 'update', kind, t: Date.now() });
+      if (window.__panelLog.length > 60) window.__panelLog.shift();
+    } catch { /* noop */ }
+    applyPanelVisibility(kind);
+    const isGroup = kind === 'internal' || kind === 'external' || kind === 'externalGroup' || kind === 'extgroup';
     document.querySelectorAll('.only-group').forEach((el) => {
       el.classList.toggle('hidden', !isGroup);
     });
@@ -9375,7 +9559,6 @@
      * ADR 004 §一.7：容器相关区块**只在「项目」与「我的牛马」**出现 ——
      * 联系人与群聊用不到容器，不显示（不是灰着占位）。
      */
-    const kind = state.selectedChat && state.selectedChat.kind;
     const showRunEnv = kind === 'single' || kind === 'internal';
     document.querySelectorAll('[data-only="proj-single"]').forEach((el) => {
       el.classList.toggle('hidden', !showRunEnv);
@@ -11211,6 +11394,15 @@
         state.soundFiles = s.settings.soundFiles || state.soundFiles;
         state.emailOnRequest = !!s.settings.emailOnRequest;
         state.globalSecurity = s.settings.globalSecurity || 'normal';
+        // 载入全局横幅关闭记录（多窗口一致）
+        try {
+          const dis = s.settings.netBannerDismissed;
+          if (Array.isArray(dis)) {
+            dis.forEach((k) => { if (typeof k === 'string' && k) netState.dismissed[k] = true; });
+            netState.renderedSig = '';
+            renderNetBanner();
+          }
+        } catch { /* noop */ }
         state.embedUseGpu = s.settings.embedUseGpu !== false;
         // Re-apply persisted locale (settingsGet is also used above for boot; ensure UI state matches).
         if (s.settings.locale && resolveLocalePack(s.settings.locale) !== state.locale) {
