@@ -2,7 +2,7 @@
   "name": "warmy",
   "version": "0.1.0",
   "private": true,
-  "description": "Workhorse Army (WArmy) - 多智能体群聊桌面应用",
+  "description": "Workhorse Army (WArmy / 无限牛马) — local-first multi-agent group-chat desktop app",
   "author": "Pondsi",
   "license": "MIT",
   "engines": {

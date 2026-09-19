@@ -182,7 +182,10 @@ code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;c
         <div class="row"><div class="t" data-k="aboutFull">全名</div><div class="s">Workhorse Army</div></div>
         <div class="row"><div class="t" data-k="aboutVer">版本</div><div class="s">0.1.0</div></div>
         <div class="row"><div class="t" data-k="aboutAuthor">作者</div><div class="s">Pondsi</div></div>
+        <div class="row"><div class="t" data-k="aboutRepo">仓库</div><div class="s"><a href="https://github.com/Pondsi/WArmy" style="color:var(--accent)">github.com/Pondsi/WArmy</a></div></div>
+        <div class="row"><div class="t" data-k="aboutRel">安装包</div><div class="s"><a href="https://github.com/Pondsi/WArmy/releases/tag/v0.1.0" style="color:var(--accent)">Releases v0.1.0</a></div></div>
         <p style="margin-top:12px" data-k="aboutPrivacy">默认不收集、不上传对话与文件；本地数据仅保存在你的设备上。</p>
+        <p style="margin-top:8px" data-k="aboutDiff">差异：项目群 + 值班编排 + 容器开发隔离 + 本地优先组网，不是单窗口聊天壳。</p>
       </div>
       <div class="card">
         <h3 data-k="langTitle">界面语言</h3>
@@ -223,7 +226,9 @@ const PACKS = {
     ct3:'控制台', ct3s:'仅容器内 shell · 本机人工输入', ct3b:'契约已接线',
     portsTitle:'默认端口', portsNote:'绑定失败会明确报错，并在设置里给出可点选候选端口；绝不静默换端口。',
     aboutTitle:'关于', aboutName:'产品', aboutFull:'全名', aboutVer:'版本', aboutAuthor:'作者',
+    aboutRepo:'仓库', aboutRel:'安装包',
     aboutPrivacy:'默认不收集、不上传对话与文件；本地数据仅保存在你的设备上。',
+    aboutDiff:'差异：项目群 + 值班编排 + 容器开发隔离 + 本地优先组网，不是单窗口聊天壳。',
     langTitle:'界面语言', navHome:'首页', navAgents:'牛马', navCt:'容器', navAbout:'关于',
     sig:'Pondsi（+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）— 由 Xiaomi MiMo Desktop 自行提交'
   },
@@ -243,7 +248,7 @@ const PACKS = {
     ct2:'WSL', ct2s:'無 commit，固化能力如實聲明', ct2b:'export/import',
     ct3:'控制台', ct3s:'僅容器內 shell · 本機人工輸入', ct3b:'契約已接線',
     portsTitle:'預設連接埠', portsNote:'繫結失敗會明確報錯，絕不靜默換連接埠。',
-    aboutTitle:'關於', aboutName:'產品', aboutFull:'全名', aboutVer:'版本', aboutAuthor:'作者',
+    aboutTitle:'關於', aboutName:'產品', aboutFull:'全名', aboutVer:'版本', aboutAuthor:'作者', aboutRepo:'儲存庫', aboutRel:'安裝包', aboutDiff:'差異：專案群 + 值班編排 + 容器開發隔離 + 本地優先組網，不是單窗口聊天殼。',
     aboutPrivacy:'預設不收集、不上传對話與檔案。',
     langTitle:'介面語言', navHome:'首頁', navAgents:'牛馬', navCt:'容器', navAbout:'關於',
     sig:'Pondsi（+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）— 由 Xiaomi MiMo Desktop 自行提交'
@@ -265,7 +270,9 @@ const PACKS = {
     ct3:'Console', ct3s:'In-container shell only · local human typed', ct3b:'contract wired',
     portsTitle:'Default ports', portsNote:'Bind failure never silently changes the port; candidates are offered in Settings.',
     aboutTitle:'About', aboutName:'Product', aboutFull:'Full name', aboutVer:'Version', aboutAuthor:'Author',
+    aboutRepo:'Repository', aboutRel:'Installer',
     aboutPrivacy:'By default no conversations or files are collected or uploaded; data stays on your device.',
+    aboutDiff:'Difference: project groups + duty orchestration + container-dev isolation + local-first mesh — not a single chat window shell.',
     langTitle:'UI language', navHome:'Home', navAgents:'Agents', navCt:'Container', navAbout:'About',
     sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
   },
@@ -285,7 +292,7 @@ const PACKS = {
     ct2:'WSL', ct2s:'commit なし。能力は正直に宣言', ct2b:'export/import',
     ct3:'コンソール', ct3s:'コンテナ内 shell のみ · ローカル手入力', ct3b:'契約配線済',
     portsTitle:'既定ポート', portsNote:'バインド失敗で黙ってポートを変えません。',
-    aboutTitle:'概要', aboutName:'製品', aboutFull:'正式名称', aboutVer:'版', aboutAuthor:'作者',
+    aboutTitle:'概要', aboutName:'製品', aboutFull:'正式名称', aboutVer:'版', aboutAuthor:'作者', aboutRepo:'リポジトリ', aboutRel:'インストーラ', aboutDiff:'違い：プロジェクト群 + 当番編成 + コンテナ開発隔離 + ローカル優先メッシュ。単一チャット殻ではありません。',
     aboutPrivacy:'既定では会話もファイルも収集・アップロードしません。',
     langTitle:'UI 言語', navHome:'ホーム', navAgents:'社畜', navCt:'コンテナ', navAbout:'概要',
     sig:'Pondsi（+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）— 由 Xiaomi MiMo Desktop 自行提交'
@@ -306,7 +313,7 @@ const PACKS = {
     ct2:'WSL', ct2s:'commit 없음. 능력은 정직하게 선언', ct2b:'export/import',
     ct3:'콘솔', ct3s:'컨테이너 내부 shell 만 · 로컬 수동 입력', ct3b:'계약 배선 완료',
     portsTitle:'기본 포트', portsNote:'바인드 실패 시 포트를 몰래 바꾸지 않습니다.',
-    aboutTitle:'정보', aboutName:'제품', aboutFull:'전체 이름', aboutVer:'버전', aboutAuthor:'저자',
+    aboutTitle:'정보', aboutName:'제품', aboutFull:'전체 이름', aboutVer:'버전', aboutAuthor:'저자', aboutRepo:'저장소', aboutRel:'설치 파일', aboutDiff:'차이: 프로젝트 그룹 + 당번 편성 + 컨테이너 개발 격리 + 로컬 우선 메시 — 단일 채팅 껍데기가 아닙니다.',
     aboutPrivacy:'기본적으로 대화·파일을 수집·업로드하지 않습니다.',
     langTitle:'UI 언어', navHome:'홈', navAgents:'사축', navCt:'컨테이너', navAbout:'정보',
     sig:'Pondsi（+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）— 由 Xiaomi MiMo Desktop 自行提交'
@@ -327,7 +334,7 @@ const PACKS = {
     ct2:'WSL', ct2s:'Без commit; возможности заявлены честно', ct2b:'export/import',
     ct3:'Консоль', ct3s:'Только shell в контейнере · ввод человеком', ct3b:'контракт подключён',
     portsTitle:'Порты по умолчанию', portsNote:'Ошибка bind никогда молча не меняет порт.',
-    aboutTitle:'О программе', aboutName:'Продукт', aboutFull:'Полное имя', aboutVer:'Версия', aboutAuthor:'Автор',
+    aboutTitle:'О программе', aboutName:'Продукт', aboutFull:'Полное имя', aboutVer:'Версия', aboutAuthor:'Автор', aboutRepo:'Репозиторий', aboutRel:'Установщик', aboutDiff:'Отличие: проектные группы + дежурство + изоляция разработки в контейнере + local-first mesh.',
     aboutPrivacy:'По умолчанию диалоги и файлы не собираются и не загружаются.',
     langTitle:'Язык UI', navHome:'Главная', navAgents:'Агенты', navCt:'Контейнер', navAbout:'О программе',
     sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
@@ -348,7 +355,7 @@ const PACKS = {
     ct2:'WSL', ct2s:'Sin commit; capacidades declaradas con honestidad', ct2b:'export/import',
     ct3:'Consola', ct3s:'Solo shell en contenedor · entrada humana local', ct3b:'contrato cableado',
     portsTitle:'Puertos predeterminados', portsNote:'Un fallo de bind nunca cambia el puerto en silencio.',
-    aboutTitle:'Acerca de', aboutName:'Producto', aboutFull:'Nombre completo', aboutVer:'Versión', aboutAuthor:'Autor',
+    aboutTitle:'Acerca de', aboutName:'Producto', aboutFull:'Nombre completo', aboutVer:'Versión', aboutAuthor:'Autor', aboutRepo:'Repositorio', aboutRel:'Instalador', aboutDiff:'Diferencia: grupos de proyecto + guardia + aislamiento de desarrollo en contenedor + mesh local-first.',
     aboutPrivacy:'Por defecto no se recopilan ni suben conversaciones ni archivos.',
     langTitle:'Idioma de la UI', navHome:'Inicio', navAgents:'Agentes', navCt:'Contenedor', navAbout:'Acerca de',
     sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
@@ -369,7 +376,7 @@ const PACKS = {
     ct2:'WSL', ct2s:'Pas de commit ; capacités déclarées honnêtement', ct2b:'export/import',
     ct3:'Console', ct3s:'Shell dans le conteneur uniquement · saisie humaine locale', ct3b:'contrat câblé',
     portsTitle:'Ports par défaut', portsNote:'Un échec de bind ne change jamais le port en silence.',
-    aboutTitle:'À propos', aboutName:'Produit', aboutFull:'Nom complet', aboutVer:'Version', aboutAuthor:'Auteur',
+    aboutTitle:'À propos', aboutName:'Produit', aboutFull:'Nom complet', aboutVer:'Version', aboutAuthor:'Auteur', aboutRepo:'Dépôt', aboutRel:'Installateur', aboutDiff:'Différence : groupes de projet + astreinte + isolation de développement en conteneur + mesh local-first.',
     aboutPrivacy:'Par défaut, ni conversations ni fichiers ne sont collectés ni téléversés.',
     langTitle:'Langue UI', navHome:'Accueil', navAgents:'Agents', navCt:'Conteneur', navAbout:'À propos',
     sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
@@ -390,7 +397,7 @@ const PACKS = {
     ct2:'WSL', ct2s:'Sem commit; capacidades declaradas com honestidade', ct2b:'export/import',
     ct3:'Console', ct3s:'Apenas shell no contêiner · entrada humana local', ct3b:'contrato conectado',
     portsTitle:'Portas padrão', portsNote:'Falha de bind nunca muda a porta em silêncio.',
-    aboutTitle:'Sobre', aboutName:'Produto', aboutFull:'Nome completo', aboutVer:'Versão', aboutAuthor:'Autor',
+    aboutTitle:'Sobre', aboutName:'Produto', aboutFull:'Nome completo', aboutVer:'Versão', aboutAuthor:'Autor', aboutRepo:'Repositório', aboutRel:'Instalador', aboutDiff:'Diferença: grupos de projeto + plantão + isolamento de desenvolvimento em contêiner + mesh local-first.',
     aboutPrivacy:'Por padrão, conversas e arquivos não são coletados nem enviados.',
     langTitle:'Idioma da UI', navHome:'Início', navAgents:'Agentes', navCt:'Contêiner', navAbout:'Sobre',
     sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
@@ -411,7 +418,7 @@ const PACKS = {
     ct2:'WSL', ct2s:'Neniu commit; kapabloj honeste deklaritaj', ct2b:'export/import',
     ct3:'Konzolo', ct3s:'Nur uja shell · loka homa enigo', ct3b:'kontrakto konektita',
     portsTitle:'Defaŭltaj portoj', portsNote:'Bind-malsukceso neniam silente ŝanĝas la porton.',
-    aboutTitle:'Pri', aboutName:'Produkto', aboutFull:'Plena nomo', aboutVer:'Versio', aboutAuthor:'Aŭtoro',
+    aboutTitle:'Pri', aboutName:'Produkto', aboutFull:'Plena nomo', aboutVer:'Versio', aboutAuthor:'Aŭtoro', aboutRepo:'Deponejo', aboutRel:'Instalilo', aboutDiff:'Difero: projektoj grupoj + deĵoro + uja disvolva izoliteco + loka-unua mesh.',
     aboutPrivacy:'Defaŭlte konversacioj kaj dosieroj ne estas kolektataj nek alŝutataj.',
     langTitle:'UI-lingvo', navHome:'Hejmo', navAgents:'Agentoj', navCt:'Ujo', navAbout:'Pri',
     sig:'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop'
