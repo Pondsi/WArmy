@@ -174,6 +174,9 @@ export interface AppSettings {
    * Installer/first launch must surface language selection immediately.
    */
   setupDone?: boolean;
+  /** 更新源（GitHub Releases API / feed JSON）。空串 = 未配置 */
+  updateFeedUrl?: string;
+  updateChannel?: string;
   /**
    * Networking config persisted from the 组网设置 card.
    * `publicAddresses` is a mixed list of IPs and domain names.
@@ -382,6 +385,8 @@ function defaults(): AppSettings {
     skillScanDirs: [],
     skillEnabled: {},
     setupDone: false,
+    /** 产品默认更新源：GitHub Releases API */
+    updateFeedUrl: 'https://api.github.com/repos/Pondsi/WArmy/releases/latest',
     embedUseGpu: true,
     emailNotify: { complete: true, request: true, error: true },
     /**

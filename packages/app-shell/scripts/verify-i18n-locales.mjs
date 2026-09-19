@@ -230,6 +230,15 @@ check("ja brand.sub === 'WArmy (Workhorse Army)'", packs['ja']['brand.sub'] === 
 check("ko brand.sub === 'WArmy (Workhorse Army)'", packs['ko']['brand.sub'] === 'WArmy (Workhorse Army)', packs['ko']['brand.sub']);
 check('ja settings.section.ui is インターフェース', packs['ja']['settings.section.ui'] === 'インターフェース', packs['ja']['settings.section.ui']);
 check('ko settings.section.ui is 인터페이스', packs['ko']['settings.section.ui'] === '인터페이스', packs['ko']['settings.section.ui']);
+// Workhorse product terms (nav)
+check('zh-CN nav.singleAi = 我的牛马', packs['zh-CN']['nav.singleAi'] === '我的牛马', packs['zh-CN']['nav.singleAi']);
+check('en-US nav.singleAi = My Workhorses', packs['en-US']['nav.singleAi'] === 'My Workhorses', packs['en-US']['nav.singleAi']);
+check('ja nav.singleAi = マイ社畜たち', packs['ja']['nav.singleAi'] === 'マイ社畜たち', packs['ja']['nav.singleAi']);
+check('ko nav.singleAi = 일꾼들', packs['ko']['nav.singleAi'] === '일꾼들', packs['ko']['nav.singleAi']);
+check('ja cattle.title = 社畜', packs['ja']['cattle.title'] === '社畜', packs['ja']['cattle.title']);
+check('en-US cattle.title = Workhorses', packs['en-US']['cattle.title'] === 'Workhorses', packs['en-US']['cattle.title']);
+check('en-US no My Agents in nav.singleAi', packs['en-US']['nav.singleAi'] !== 'My Agents');
+check('ja nav.singleAi not English My Agents', packs['ja']['nav.singleAi'] !== 'My Agents');
 
 console.log(`\n==== i18n self-check: ${pass} ok / ${fail} FAIL ====\n`);
 if (fail) {

@@ -2,6 +2,11 @@
 
 ## 0.1.0 — 2026-09-19
 
+### i18n / product naming
+- 「我的牛马」localized: ja `マイ社畜たち`, ko `일꾼들`, en/other `My Workhorses` (cattle.family)
+- High-visibility nav/chat/me/panel/dashboard strings filled for ja/ko/ru/es/fr/pt/eo
+- Default updateFeedUrl → GitHub Releases API
+
 ### Docs
 - Document memory system as a product feature (JSONL + FTS + vector + recall/retrieve).
 - README English primary; Chinese lives in 说明.md; single author signature line.

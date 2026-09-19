@@ -249,11 +249,16 @@ const call = (api, ...args) =>
 const info = await q('(async () => await window.warmy.appInfo())()');
 check('preload 暴露 appInfo（真实 IPC 通）', info?.ok === true, { version: info?.version, electron: info?.electron });
 
-console.log('\n[第一轮 A] check-update：未配置 / 有更新 / 网络失败 / 响应非法');
+console.log('\n[第一轮 A] check-update：默认 GitHub 源 / 清空后未配置 / 有更新 / 网络失败 / 响应非法');
 const s0 = await call('updateSourceGet');
-check('更新源初始未配置', s0.configured === false && s0.origin === 'none', s0);
+// 产品定稿：默认更新源 = GitHub Releases API
+check('默认更新源指向 GitHub', s0.configured === true && /github\.com/i.test(String(s0.url || '')), s0);
+const cDef = await call('checkUpdate');
+check('默认 GitHub 源可检查（明确状态）',
+  ['up-to-date', 'update-available', 'network-error', 'http-error', 'invalid-response'].includes(cDef.status), cDef);
+await call('updateSourceSet', { url: '' });
 const c0 = await call('checkUpdate');
-check('未配置时 status=not-configured（不是「已是最新」）', c0.status === 'not-configured' && c0.ok === false && c0.upToDate === false, { status: c0.status, ok: c0.ok, upToDate: c0.upToDate });
+check('清空后 status=not-configured（不是「已是最新」）', c0.status === 'not-configured' && c0.ok === false && c0.upToDate === false, { status: c0.status, ok: c0.ok, upToDate: c0.upToDate });
 
 const set1 = await call('updateSourceSet', { url: feedUrl });
 check('写入更新源（settings.json）', set1.ok === true && set1.configured === true, set1);

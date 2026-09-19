@@ -177,6 +177,8 @@ node packages/app-shell/scripts/verify-docs.mjs
 
 zh-CN · zh-TW · en-US · ja · ko · ru · es · fr · pt · eo — equal key sets.
 
+Product nav naming: zh `我的牛马` · ja `マイ社畜たち` · ko `일꾼들` · others `My Workhorses`. See [docs/i18n-naming.md](./docs/i18n-naming.md).
+
 ---
 
 ## Repository layout

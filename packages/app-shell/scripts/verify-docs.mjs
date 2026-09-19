@@ -74,6 +74,7 @@ check('fetch-node-runtime script', fs.existsSync(path.join(ROOT, 'scripts/fetch-
 check('update feed docs', fs.existsSync(path.join(ROOT, 'docs/UPDATE-FEED.md')));
 check('container timings docs', fs.existsSync(path.join(ROOT, 'docs/CONTAINER-TIMINGS.md')));
 check('github update feed json', fs.existsSync(path.join(ROOT, 'feed/latest.json')));
+check('i18n naming doc', fs.existsSync(path.join(ROOT, 'docs/i18n-naming.md')));
 check('set-github-update-feed script', fs.existsSync(path.join(ROOT, 'scripts/set-github-update-feed.mjs')));
 check('launch-warmy vbs', fs.existsSync(path.join(ROOT, 'packages/app-shell/scripts/launch-warmy.vbs')));
 const feedJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'feed/latest.json'), 'utf8'));
