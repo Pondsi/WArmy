@@ -569,10 +569,6 @@ packages:
   electron-publish@25.1.7:
     resolution: {integrity: sha512-+jbTkR9m39eDBMP4gfbqglDd6UvBC7RLh5Y0MhFSsc6UkGHj9Vj9TWobxevHYMMqmoujL11ZLjfPpMX+Pt6YEg==}
 
-  electron@40.10.6:
-    resolution: {integrity: sha512-TGjlkOU9Lg6K4KjDbsErywCWCIDaNgLh0q+xj0nlpRoQhevI7VBIxBTtJI/V30lypyLAaXMpnP9O9jui1/qRFw==}
-    engines: {node: '>= 22.12.0'}
-    hasBin: true
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
@@ -2019,13 +2015,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@40.10.6:
-    dependencies:
-      '@electron/get': 2.0.3
-      '@types/node': 20.19.43
-      extract-zip: 2.0.1
-    transitivePeerDependencies:
-      - supports-color
 
   emoji-regex@8.0.0: {}
 
