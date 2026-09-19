@@ -2201,6 +2201,15 @@
             <div class="muted" id="about-runtime">—</div>
             <div class="muted" id="about-device">—</div>
           </div>
+          <div class="about-block">
+            <h3>${t('memory.statusTitle')}</h3>
+            <p class="muted">${t('memory.desc')}</p>
+            <div class="muted" id="about-memory">—</div>
+            <div style="margin-top:8px">
+              <button class="btn-mini" id="btn-memory-rebuild">${t('memory.rebuild')}</button>
+              <span class="muted" id="about-memory-msg"></span>
+            </div>
+          </div>
           <div class="about-block"><h3>${t('about.opensource')}</h3><p class="muted">${t('about.opensourceBody')}</p></div>
           <div class="about-block"><h3>${t('about.techStack')}</h3><p class="muted">${t('about.techStackBody')}</p></div>
           <div class="about-block"><h3>${t('about.copyright')}</h3><p class="muted">${t('about.copyrightBody')}</p></div>
@@ -2233,6 +2242,45 @@
           if (dv) dv.textContent =
             `${t('me.userId')}: ${info.deviceId || '—'} ${info.deviceIdValid ? t('about.idVerified') : t('about.idRegenerated')}`;
         } catch { /* noop */ }
+      })();
+      // 记忆系统状态（产品重点：JSONL + FTS + 向量；未就绪如实显示）
+      (async () => {
+        const el = $('about-memory');
+        const msg = $('about-memory-msg');
+        const btn = $('btn-memory-rebuild');
+        const renderMem = (st) => {
+          if (!el) return;
+          const ready = !!st?.ready;
+          const line1 = ready ? t('memory.ready') : t('memory.notReady');
+          const vec = st?.vector?.vector || st?.vector || null;
+          let vecText = '—';
+          try {
+            if (vec && typeof vec === 'object') {
+              const ok = vec.ok !== false && (vec.available ?? vec.ready ?? true);
+              vecText = ok ? (vec.model || vec.status || 'ok') : (vec.reason || vec.error || 'n/a');
+            }
+          } catch { /* noop */ }
+          let recText = '—';
+          try {
+            const s = st?.stats?.stats || st?.stats || null;
+            if (s && typeof s === 'object') recText = JSON.stringify(s).slice(0, 120);
+          } catch { /* noop */ }
+          el.textContent = `${line1} · ${t('memory.vector')}: ${vecText} · ${t('memory.records')}: ${recText}`;
+        };
+        try {
+          const st = await window.warmy.memoryStatus?.();
+          renderMem(st);
+        } catch (e) {
+          if (el) el.textContent = t('memory.notReady');
+        }
+        if (btn) {
+          btn.onclick = async () => {
+            if (msg) msg.textContent = '';
+            const r = await window.warmy.memoryRebuild?.().catch((e) => ({ ok: false, error: String(e) }));
+            if (msg) msg.textContent = r?.ok ? t('memory.rebuildOk') : `${t('memory.rebuildFail')}${r?.error ? ' · ' + r.error : ''}`;
+            try { renderMem(await window.warmy.memoryStatus?.()); } catch { /* noop */ }
+          };
+        }
       })();
 
       // 设置：第二列是菜单，第三列只显示对应板块

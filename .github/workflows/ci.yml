@@ -19,4 +19,8 @@ jobs:
       - run: pnpm install
       - run: pnpm typecheck
       - run: pnpm build
+      - run: node packages/app-shell/scripts/verify-docs.mjs
+      - run: node packages/app-shell/scripts/verify-memory.mjs
+      - run: node packages/app-shell/scripts/verify-router-queue.mjs
+      - run: node packages/app-shell/scripts/verify-i18n-locales.mjs
       - run: node spikes/verify-all/run-full.mjs

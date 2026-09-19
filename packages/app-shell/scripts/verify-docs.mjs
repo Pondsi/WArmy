@@ -32,18 +32,22 @@ const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
 const shuoming = fs.readFileSync(path.join(ROOT, '说明.md'), 'utf8');
 const license = fs.readFileSync(path.join(ROOT, 'LICENSE'), 'utf8');
 
-const langHeads = ['## English', '## 简体中文'];
+const langHeads = ['## English'];
 for (const h of langHeads) {
-  check(`README has ${h}`, readme.includes(h), h);
+  check(`README has ${h}`, readme.includes(h) || !h.startsWith('## 简体中文'));
 }
-for (const alias of ['繁體中文', '한국어', 'Русский', '日本語', 'Español', 'Français', 'Português', 'Esperanto']) {
+check('README points Chinese readers to 说明.md', /说明\.md/.test(readme));
+check('README does NOT have ## 简体中文 main section', !/^## 简体中文$/m.test(readme));
+for (const alias of ['繁體中文', '한국어', 'Русский', '日本語', 'Español', 'Français', 'Português', 'Esperanto', 'Languages / 语言']) {
   check(`README mentions ${alias}`, readme.includes(alias));
 }
 
-const SIG = 'Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash)';
-const SIG_ZH_FULL = 'Pondsi（+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）';
-check('README signature models', readme.includes(SIG) || readme.includes(SIG_ZH_FULL));
-check('说明 signature models', shuoming.includes(SIG) || shuoming.includes(SIG_ZH_FULL));
+const SIG = 'Pondsi (+mimo-X-pro-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash)';
+const SIG_ZH_FULL = 'Pondsi（+mimo-X-pro-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）';
+check('README signature models (single style)', readme.includes(SIG));
+check('说明 signature models (single style)', shuoming.includes(SIG) || shuoming.includes(SIG_ZH_FULL));
+check('README has only one signature footer line', (readme.match(/automatically committed by Xiaomi MiMo Desktop/g) || []).length === 1);
+check('说明 has only one signature footer line', (shuoming.match(/由 Xiaomi MiMo Desktop 自行提交|automatically committed by Xiaomi MiMo Desktop/g) || []).length === 1);
 check('README signature Xiaomi MiMo Desktop', /Xiaomi MiMo Desktop/.test(readme));
 check('说明 signature Xiaomi MiMo Desktop', /Xiaomi MiMo Desktop/.test(shuoming));
 check('LICENSE mandates Pondsi attribution', /ATTRIBUTION TO PONDSI/i.test(license) && license.includes('Pondsi'));
@@ -56,12 +60,17 @@ check('README no CCArmy', !/CCArmy|Corporate Cattle/i.test(readme));
 check('说明 no CCArmy', !/CCArmy|Corporate Cattle/i.test(shuoming));
 
 // content pillars user asked for
-for (const k of ['What makes WArmy different', 'Compared with similar open-source', 'Install', 'How to use', 'Technical highlights', '59599']) {
+for (const k of ['What makes WArmy different', 'Compared with similar open-source', 'Install', 'How to use', 'Technical highlights', '59599', 'Memory system', '说明.md']) {
   check(`README section/keyword: ${k}`, readme.includes(k), k);
 }
-for (const k of ['优点', '同类产品', '安装方法', '使用方法', '技术要点', '59599']) {
+for (const k of ['优点', '同类产品', '安装方法', '使用方法', '技术要点', '59599', '记忆系统', 'recall', 'retrieve']) {
   check(`说明 section/keyword: ${k}`, shuoming.includes(k), k);
 }
+check('CONTRIBUTING exists', fs.existsSync(path.join(ROOT, 'CONTRIBUTING.md')));
+check('SECURITY expanded', fs.readFileSync(path.join(ROOT, '.github/SECURITY.md'), 'utf8').includes('vulnerability'));
+check('mesh checklist', fs.existsSync(path.join(ROOT, 'docs/mesh-dual-machine.md')));
+check('release notes', fs.existsSync(path.join(ROOT, 'docs/RELEASE-NOTES-0.1.0.md')));
+check('fetch-node-runtime script', fs.existsSync(path.join(ROOT, 'scripts/fetch-node-runtime.mjs')));
 
 // privacy on first-party docs
 const privacyPats = [

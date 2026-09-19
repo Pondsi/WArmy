@@ -1547,5 +1547,14 @@
   "webgpu.fail": "WebGPU unavailable, fallback WASM",
   "webgpu.ok": "WebGPU available",
   "webgpu.test": "Test WebGPU",
-  "webgpu.title": "WebGPU embed"
+  "webgpu.title": "WebGPU embed",
+  "memory.desc": "JSONL — источник истины; проекция SQLite (FTS + вектор). Модели используют recall / retrieve.",
+  "memory.notReady": "Сервис не готов (инструменты честно падают)",
+  "memory.ready": "Сервис готов",
+  "memory.rebuild": "Пересобрать проекцию",
+  "memory.rebuildFail": "Ошибка пересборки",
+  "memory.rebuildOk": "Проекция пересобрана из JSONL",
+  "memory.records": "Статистика проекции",
+  "memory.statusTitle": "Система памяти",
+  "memory.vector": "Векторный канал"
 }

@@ -1547,5 +1547,14 @@
   "webgpu.fail": "WebGPU unavailable, fallback WASM",
   "webgpu.ok": "WebGPU available",
   "webgpu.test": "Test WebGPU",
-  "webgpu.title": "WebGPU embed"
+  "webgpu.title": "WebGPU embed",
+  "memory.desc": "JSONL이 유일한 사실 원천. SQLite 투영 + FTS/벡터. 모델은 recall / retrieve 사용.",
+  "memory.notReady": "서비스 미준비(도구는 정직하게 실패)",
+  "memory.ready": "서비스 준비됨",
+  "memory.rebuild": "투영 재구축",
+  "memory.rebuildFail": "재구축 실패",
+  "memory.rebuildOk": "JSONL에서 투영을 재구축했습니다",
+  "memory.records": "투영 통계",
+  "memory.statusTitle": "기억 시스템",
+  "memory.vector": "벡터 채널"
 }

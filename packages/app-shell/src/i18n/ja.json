@@ -1547,5 +1547,14 @@
   "webgpu.fail": "WebGPU unavailable, fallback WASM",
   "webgpu.ok": "WebGPU available",
   "webgpu.test": "Test WebGPU",
-  "webgpu.title": "WebGPU embed"
+  "webgpu.title": "WebGPU embed",
+  "memory.desc": "JSONL が唯一の事実。SQLite 投影 + FTS/ベクトル。モデルは recall / retrieve で履歴を取得。",
+  "memory.notReady": "サービス未準備（ツールは正直に失敗）",
+  "memory.ready": "サービス準備完了",
+  "memory.rebuild": "投影を再構築",
+  "memory.rebuildFail": "再構築に失敗",
+  "memory.rebuildOk": "JSONL から投影を再構築しました",
+  "memory.records": "投影統計",
+  "memory.statusTitle": "記憶システム",
+  "memory.vector": "ベクトル経路"
 }

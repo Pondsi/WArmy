@@ -1444,9 +1444,13 @@ handleIpc(
     return p1?.security.getMode();
   }
 );
-handleIpc('warmy:memory-recall', async (_e, q: string) => {
+handleIpc('warmy:memory-recall', async (_e, payload?: string | { query?: string; limit?: number; scope?: Record<string, string> }) => {
   try {
-    return await memory?.recall(q);
+    if (!memory) return { cards: [], error: 'memory-unavailable' };
+    const q = typeof payload === 'string' ? payload : String(payload?.query || '');
+    const limit = typeof payload === 'object' && payload?.limit ? Number(payload.limit) : 10;
+    const scope = typeof payload === 'object' ? payload?.scope : undefined;
+    return await memory.recallScoped(q, limit, scope);
   } catch (e) {
     return { cards: [], error: sanitizeError(e) };
   }
@@ -1459,6 +1463,45 @@ handleIpc('warmy:memory-append', async (_e, body: string) => {
       kind: 'message',
       body,
     });
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+handleIpc('warmy:memory-retrieve', async (_e, payload?: { seq?: number; recordId?: string }) => {
+  try {
+    if (!memory) return { ok: false, error: 'memory-unavailable' };
+    return await memory.retrieve({ seq: payload?.seq, recordId: payload?.recordId });
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+handleIpc('warmy:memory-status', async () => {
+  try {
+    const ready = !!(memory?.isReady);
+    let vector: unknown = null;
+    let stats: unknown = null;
+    if (ready) {
+      try { vector = await memory!.vectorStatus(); } catch { vector = { ok: false }; }
+      try { stats = await memory!.stats(); } catch { stats = null; }
+    }
+    return {
+      ok: true,
+      ready,
+      dataDir: path.join(app.getPath('userData'), 'memory'),
+      jsonl: path.join(app.getPath('userData'), 'memory', 'fast-memory.jsonl'),
+      vector,
+      stats,
+      historyRestore,
+    };
+  } catch (e) {
+    return { ok: false, ready: false, error: sanitizeError(e) };
+  }
+});
+handleIpc('warmy:memory-rebuild', async () => {
+  try {
+    if (!memory?.isReady) return { ok: false, error: 'memory-unavailable' };
+    const r = await memory.rebuildProjection();
+    return { ok: true, ...r };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }

@@ -7,7 +7,7 @@ import os from 'node:os';
 import { startMemoryServiceIpc } from './index.js';
 
 const dataDir =
-  process.env.CCA_ARMY_MEMORY_DIR ||
+  process.env.WARMY_MEMORY_DIR || process.env.CCA_ARMY_MEMORY_DIR ||
   path.join(os.homedir(), '.warmy', 'memory');
 
 startMemoryServiceIpc(dataDir);

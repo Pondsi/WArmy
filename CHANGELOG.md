@@ -3,11 +3,22 @@
 ## 0.1.0 — 2026-09-19
 
 ### Docs
-- Rewrite `README.md`: advantages, comparison with similar open-source genres, install, usage, tech highlights, ports, security, i18n, verify gates (spec-compliant multi-language + Pondsi signature).
-- Expand Chinese manual `说明.md` with positioning, advantages, comparison, full install/usage/tech/limits.
+- Document memory system as a product feature (JSONL + FTS + vector + recall/retrieve).
+- README English primary; Chinese lives in 说明.md; single author signature line.
+- README top links to 说明.md（简体中文完整说明请点这里）.
+- Signature model corrected to `mimo-X-pro-Preview`.
+- Add CONTRIBUTING, mesh dual-machine checklist, multi-language release notes, node-runtime fetch script.
+- Add README screenshots under `docs/screenshots/`.
 - Add `references/ARCHITECTURE.md` short architecture map.
 - Add `packages/app-shell/scripts/verify-docs.mjs` docs compliance checker.
 - Installer asset published as `WArmy-Setup-0.1.0.exe` on GitHub Releases; `checksums.txt` lists both local and release names.
+
+### Memory system (product feature completed this line)
+- Env rename: `WARMY_MEMORY_DIR` (legacy `CCA_ARMY_MEMORY_DIR` accepted).
+- MemoryClient: `recallScoped` / `retrieve(opts)` / `rebuildProjection` / `vectorStatus` / `stats`.
+- IPC: `warmy:memory-status` / `warmy:memory-rebuild` / `warmy:memory-retrieve`; scoped recall.
+- Settings → About: memory status + rebuild button (10-locale i18n keys `memory.*`).
+- Live verify: `verify-memory.mjs` **20/0** (append/recall/retrieve/scope/writer/rebuild/fail-closed).
 
 ### Added (product 0.1.0)
 - Multi-agent group chat desktop shell (Electron, zero native modules in app logic)
@@ -32,5 +43,4 @@
 
 ---
 
-Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop
-
+Pondsi (+mimo-X-pro-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop

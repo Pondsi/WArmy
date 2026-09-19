@@ -38,7 +38,16 @@
 - Env knobs: `WARMY_*` (e.g. `WARMY_DEFAULT_NET_PORT` 59599).
 - Hook marker: `WARMY-REPO-GUARD-HOOK`.
 
+## Memory system
+
+- Truth: `fast-memory.jsonl` (append-only)
+- Projection: `memory.db` with `fts_uni` + `fts_tri` + optional vector index
+- Fusion: RRF → recall cards; retrieve by seq/recordId
+- Isolation: `better-sqlite3` only in memory child process
+- Env: `WARMY_MEMORY_DIR` (legacy `CCA_ARMY_MEMORY_DIR` accepted)
+
 ## Verification entry points
+
 
 | Script | Focus |
 | --- | --- |
@@ -47,8 +56,9 @@
 | `verify-wiring.mjs` | identity/membership/repo-guard wiring |
 | `verify-container-probe.mjs` | probe + project state + solidify policy |
 | `verify-container-exec.mjs` | shell security contract + ACL |
+| `verify-memory.mjs` | memory-os wiring + live append/recall/retrieve |
 | `ui-inspect-round.mjs` | CDP locale/brand/key-leak inspect |
 
 ---
 
-Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop
+Pondsi (+mimo-X-pro-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop

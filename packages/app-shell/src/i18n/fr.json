@@ -1547,5 +1547,14 @@
   "webgpu.fail": "WebGPU unavailable, fallback WASM",
   "webgpu.ok": "WebGPU available",
   "webgpu.test": "Test WebGPU",
-  "webgpu.title": "WebGPU embed"
+  "webgpu.title": "WebGPU embed",
+  "memory.desc": "JSONL est la source de vérité ; projection SQLite (FTS + vecteur). Les modèles utilisent recall / retrieve.",
+  "memory.notReady": "Service non prêt (les outils échouent honnêtement)",
+  "memory.ready": "Service prêt",
+  "memory.rebuild": "Reconstruire la projection",
+  "memory.rebuildFail": "Échec de reconstruction",
+  "memory.rebuildOk": "Projection reconstruite depuis JSONL",
+  "memory.records": "Statistiques de projection",
+  "memory.statusTitle": "Système de mémoire",
+  "memory.vector": "Canal vectoriel"
 }

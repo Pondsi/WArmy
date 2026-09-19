@@ -60,6 +60,8 @@ export class MemoryClient {
       execArgv: [],
       env: {
         ...process.env,
+        WARMY_MEMORY_DIR: this.opts.dataDir,
+        // legacy alias during rename window
         CCA_ARMY_MEMORY_DIR: this.opts.dataDir,
         ...(useElectronAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       },
@@ -141,8 +143,28 @@ export class MemoryClient {
     return this.call({ op: 'recall', query, limit });
   }
 
-  retrieve(anchor: { seq?: number; recordId?: string }) {
-    return this.call({ op: 'retrieve', anchor });
+  /** 带作用域的召回（权限先于相关性；scope 为空 = 不过滤） */
+  recallScoped(query: string, limit = 10, scope?: { sessionId?: string; groupId?: string; kind?: string; entityType?: string }) {
+    return this.call({ op: 'recall', query, limit, scope });
+  }
+
+  retrieve(anchor: { seq?: number; recordId?: string }, opts?: { fallback?: 'exact' | 'nearby' | 'fuzzy'; window?: number }) {
+    return this.call({ op: 'retrieve', anchor, opts });
+  }
+
+  /** 从 JSONL 全量重建 SQLite 投影（投影可丢弃） */
+  rebuildProjection() {
+    return this.call({ op: 'rebuild' }, 30_000);
+  }
+
+  /** 向量通道状态（模型路径 / 是否可用 / 失败原因） */
+  vectorStatus() {
+    return this.call({ op: 'vector_status' }, 15_000);
+  }
+
+  /** 记录统计（seq / 文件大小等，以服务端返回为准） */
+  stats() {
+    return this.call({ op: 'stats' }, 8_000);
   }
 
   async stop(): Promise<void> {

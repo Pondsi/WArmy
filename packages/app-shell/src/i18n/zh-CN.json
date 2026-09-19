@@ -1547,5 +1547,14 @@
   "webgpu.fail": "WebGPU 不可用，将回退 WASM",
   "webgpu.ok": "WebGPU 可用",
   "webgpu.test": "测试 WebGPU",
-  "webgpu.title": "WebGPU 嵌入"
+  "webgpu.title": "WebGPU 嵌入",
+  "memory.desc": "JSONL 唯一事实 + SQLite 投影（FTS 单字/三元 + 可选向量）；模型用 recall / retrieve 回取历史。",
+  "memory.notReady": "服务未就绪（工具将如实失败）",
+  "memory.ready": "服务已就绪",
+  "memory.rebuild": "重建投影",
+  "memory.rebuildFail": "重建失败",
+  "memory.rebuildOk": "投影已从 JSONL 重建",
+  "memory.records": "投影统计",
+  "memory.statusTitle": "记忆系统",
+  "memory.vector": "向量通道"
 }

@@ -435,7 +435,9 @@ export class InstanceManager extends EventEmitter {
       env: {
         ...process.env,
         ...this.opts.env,
+        WARMY_INSTANCE_ID: config.id,
         CCA_ARMY_INSTANCE_ID: config.id,
+        WARMY_WORKSPACE: ws,
         CCA_ARMY_WORKSPACE: ws,
         // 密钥不写入实例 env 日志路径；由主进程经 safeStorage 注入
       },
