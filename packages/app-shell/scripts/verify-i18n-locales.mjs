@@ -32,13 +32,13 @@ const EXPECTED_BRAND = {
     'brand.name': '無限社畜',
     'brand.tagline': 'AIがあなたの社畜になって、無限に働きます。',
     'app.displayName': '無限社畜',
-    'brand.sub': '無限社畜 / WArmy (Workhorse Army)',
+    'brand.sub': 'WArmy (Workhorse Army)',
   },
   ko: {
     'brand.name': '무한 사축',
     'brand.tagline': 'AI가 당신 대신 사축처럼 일해줍니다.',
     'app.displayName': '무한 사축',
-    'brand.sub': '무한 사축 / WArmy (Workhorse Army)',
+    'brand.sub': 'WArmy (Workhorse Army)',
   },
 };
 
@@ -192,7 +192,7 @@ for (const loc of ['en-US', 'ru', 'es', 'fr', 'pt', 'eo']) {
 check('zh-CN brand.sub === WArmy（Workhorse Army）', packs['zh-CN']['brand.sub'] === 'WArmy（Workhorse Army）', packs['zh-CN']['brand.sub']);
 check('zh-CN app.subtitle === Workhorse Army', packs['zh-CN']['app.subtitle'] === 'Workhorse Army', packs['zh-CN']['app.subtitle']);
 check('en-US app.subtitle === official tagline', packs['en-US']['app.subtitle'] === 'An infinite army of AI workhorses working for you.', packs['en-US']['app.subtitle']);
-check('en-US brand.tagline === official tagline', packs['en-US']['brand.tagline'] === 'An infinite army of AI workhorses working for you.', packs['en-US']['brand.tagline']);
+  check('en-US brand.tagline === official tagline', packs['en-US']['brand.tagline'] === 'An infinite army of AI workhorses working for you.', packs['en-US']['brand.tagline']);
 
 // no stale brand token in ANY pack value
 // (regex assembled so this self-check file itself contains no legacy brand literals)
@@ -221,6 +221,15 @@ for (const loc of LATIN_LOCALES) {
     check(`${loc} exception key present: ${k}`, typeof packs[loc][k] === 'string');
   }
 }
+
+
+for (const loc of ['en-US', 'ru', 'es', 'fr', 'pt', 'eo']) {
+  check(`${loc} brand.sub === Workhorse Army`, packs[loc]['brand.sub'] === 'Workhorse Army', packs[loc]['brand.sub']);
+}
+check("ja brand.sub === 'WArmy (Workhorse Army)'", packs['ja']['brand.sub'] === 'WArmy (Workhorse Army)', packs['ja']['brand.sub']);
+check("ko brand.sub === 'WArmy (Workhorse Army)'", packs['ko']['brand.sub'] === 'WArmy (Workhorse Army)', packs['ko']['brand.sub']);
+check('ja settings.section.ui is インターフェース', packs['ja']['settings.section.ui'] === 'インターフェース', packs['ja']['settings.section.ui']);
+check('ko settings.section.ui is 인터페이스', packs['ko']['settings.section.ui'] === '인터페이스', packs['ko']['settings.section.ui']);
 
 console.log(`\n==== i18n self-check: ${pass} ok / ${fail} FAIL ====\n`);
 if (fail) {

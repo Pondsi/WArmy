@@ -52,7 +52,7 @@ async function main() {
     const okStatuses = ['up-to-date', 'update-available'];
     check(`${f.id}: reachable parse (up-to-date|update-available)`, okStatuses.includes(r.status), { status: r.status, error: r.error, latest: r.latestVersion, source: r.source });
     if (r.status === 'up-to-date' || r.status === 'update-available') {
-      check(`${f.id}: source points to github`, /github\.com/i.test(String(r.source || f.url)), r.source);
+      check(`${f.id}: source points to github`, /githubusercontent\.com|github\.com/i.test(String(r.source || f.url)), r.source);
       check(`${f.id}: latestVersion looks like semver/tag`, !!r.latestVersion && /^v?\d+\.\d+\.\d+/.test(String(r.latestVersion)), r.latestVersion);
     }
     if (r.status === 'update-available') {
