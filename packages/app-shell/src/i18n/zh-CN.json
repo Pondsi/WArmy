@@ -1566,5 +1566,17 @@
   "settings.skillsEnable": "启动",
   "settings.skillsPause": "暂停",
   "setup.pickLanguage": "请选择界面语言（可稍后在设置中修改）",
-  "setup.start": "开始使用"
+  "setup.start": "开始使用",
+  "aiq.answered": "已决策",
+  "aiq.custom": "其他（自行输入）",
+  "aiq.empty": "暂无待决策项",
+  "aiq.pending": "待决策",
+  "aiq.submit": "提交决定",
+  "aiq.title": "需要你的决定",
+  "pm.empty": "尚未写入项目记忆",
+  "pm.hint": "当前有效的项目规矩/目标（覆盖式；不与会话流水记忆重复存储）",
+  "pm.readBackFail": "写入后读回不一致",
+  "pm.save": "保存项目记忆",
+  "pm.saved": "已保存并读回确认",
+  "pm.title": "项目记忆"
 }

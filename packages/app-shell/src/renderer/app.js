@@ -1047,6 +1047,94 @@
     } catch { /* noop */ }
   }
 
+
+  // ── AI 决策选项卡（会话中）+ 项目 MEMORY 编辑 ──
+  function renderAiQuestions() {
+    const host = $('aiq-host');
+    if (!host || !state.selectedChat) {
+      if (host) host.innerHTML = '';
+      return;
+    }
+    const gid = state.selectedChat.id;
+    void (async () => {
+      try {
+        const r = await window.warmy.aiQuestionList?.(gid);
+        const items = (r && r.items) || [];
+        const pending = items.filter((q) => q.status === 'pending');
+        if (!pending.length) {
+          host.innerHTML = '';
+          return;
+        }
+        host.innerHTML = pending.map((q) => {
+          const opts = (q.options || []).map((o) =>
+            `<button class="btn-mini" data-aiq="${escapeHtml(q.id)}" data-opt="${escapeHtml(o.id)}">${escapeHtml(o.label)}</button>`
+          ).join(' ');
+          return `<div class="aiq-card" data-qid="${escapeHtml(q.id)}">
+            <div class="aiq-title">${escapeHtml(t('aiq.title')||'')} · ${escapeHtml(q.title||'')}</div>
+            ${q.body ? `<div class="muted">${escapeHtml(q.body)}</div>` : ''}
+            <div class="aiq-opts">${opts}
+              <button class="btn-mini" data-aiq="${escapeHtml(q.id)}" data-opt="__custom__">${escapeHtml(t('aiq.custom')||'Other')}</button>
+            </div>
+            <div class="aiq-custom hidden"><input class="aiq-input" placeholder="${escapeHtml(t('aiq.custom')||'')}"/>
+              <button class="btn-primary" data-aiq-submit="${escapeHtml(q.id)}">${escapeHtml(t('aiq.submit')||'OK')}</button></div>
+          </div>`;
+        }).join('');
+        host.querySelectorAll('[data-aiq]').forEach((b) => {
+          b.onclick = async () => {
+            const id = b.getAttribute('data-aiq');
+            const opt = b.getAttribute('data-opt');
+            if (opt === '__custom__') {
+              const card = host.querySelector(`[data-qid="${CSS.escape(id)}"]`);
+              if (card) card.querySelector('.aiq-custom')?.classList.remove('hidden');
+              return;
+            }
+            const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: opt });
+            if (r2 && r2.ok === false) uiAlert(String(r2.error||''));
+            renderAiQuestions();
+          };
+        });
+        host.querySelectorAll('[data-aiq-submit]').forEach((b) => {
+          b.onclick = async () => {
+            const id = b.getAttribute('data-aiq-submit');
+            const card = host.querySelector(`[data-qid="${CSS.escape(id)}"]`);
+            const val = card ? (card.querySelector('.aiq-input')?.value || '') : '';
+            const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: '__custom__', customText: val });
+            if (r2 && r2.ok === false) uiAlert(String(r2.error||''));
+            renderAiQuestions();
+          };
+        });
+      } catch { host.innerHTML = ''; }
+    })();
+  }
+
+  async function renderProjectMemoryPanel() {
+    const box = $('pm-box');
+    if (!box || !state.selectedChat) {
+      if (box) box.innerHTML = '';
+      return;
+    }
+    const gid = state.selectedChat.id;
+    try {
+      const r = await window.warmy.projectMemoryGet?.({ sessionId: gid });
+      const mem = (r && r.memory) || '';
+      box.innerHTML = `<div class="muted">${escapeHtml(t('pm.hint')||'')}</div>
+        <textarea id="pm-text" rows="5" style="width:100%;margin-top:6px">${escapeHtml(mem)}</textarea>
+        <div style="margin-top:6px"><button class="btn-mini" id="btn-pm-save">${escapeHtml(t('pm.save')||'Save')}</button>
+        <span class="muted" id="pm-msg">${mem ? '' : escapeHtml(t('pm.empty')||'')}</span></div>`;
+      const btn = $('btn-pm-save');
+      if (btn) btn.onclick = async () => {
+        const val = $('pm-text') ? $('pm-text').value : '';
+        const rr = await window.warmy.projectMemorySet?.({ sessionId: gid, memory: val });
+        const msg = $('pm-msg');
+        if (msg) {
+          msg.textContent = rr && rr.ok ? t('pm.saved') : (rr?.error || t('pm.readBackFail'));
+        }
+      };
+    } catch {
+      box.innerHTML = '';
+    }
+  }
+
   function renderQueueBar() {
     const bar = $('queue-bar');
     const list = $('queue-items');
@@ -9517,6 +9605,8 @@
     if (__loopTick % 4 === 0) raf(refreshExecutors);
     if (__loopTick % 5 === 0) raf(() => { refreshSessionBoard(); refreshMembers(); });
     if (__loopTick % 6 === 0) raf(checkLastError);
+    if (__loopTick % 2 === 0) raf(renderAiQuestions);
+    if (__loopTick % 4 === 0) raf(renderProjectMemoryPanel);
     if (__loopTick % 8 === 0) raf(refreshJoinBadge);
     if (__loopTick % 15 === 0) raf(() => window.__saveState?.());
     // 语言：设置被外部改过（IPC settingsSave / 另一窗口）也要跟上，不靠启动时读一次

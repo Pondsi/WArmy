@@ -1566,5 +1566,17 @@
   "settings.skillsEnable": "起動",
   "settings.skillsPause": "一時停止",
   "setup.pickLanguage": "インターフェース言語を選択（後で設定から変更できます）",
-  "setup.start": "はじめる"
+  "setup.start": "はじめる",
+  "aiq.answered": "回答済み",
+  "aiq.custom": "その他（自分で入力）",
+  "aiq.empty": "保留中の決定はありません",
+  "aiq.pending": "保留中",
+  "aiq.submit": "決定を送信",
+  "aiq.title": "判断が必要です",
+  "pm.empty": "プロジェクト記憶は未設定",
+  "pm.hint": "現在有効な規則/目標（上書き式。会話ログ記憶と重複しません）",
+  "pm.readBackFail": "保存後の読み戻しが不一致",
+  "pm.save": "プロジェクト記憶を保存",
+  "pm.saved": "保存し読み戻し確認済み",
+  "pm.title": "プロジェクト記憶"
 }

@@ -107,6 +107,19 @@ export interface GroupProjectRecord {
   env?: { containerRef?: string; imageRef?: string; solidifiedAt?: number };
   /** 工具文件访问台账（**项目级、成员可见**；有界，只留最近 PROJECT_LEDGER_LIMIT 条） */
   ledger: ProjectFileAccessEntry[];
+  /**
+   * 项目 MEMORY（覆盖式 Markdown，**当前有效**规矩/目标）。
+   * 与 memory-os 流水**分工**：这里不是日志，不双写 JSONL。
+   * 注入值班上下文时从本字段读取（有界截断）。
+   */
+  memory?: string;
+  /**
+   * 门禁判停：验收脚本相对仓库根的路径列表（如 verify-i18n）。
+   * 仅在值班收到「完成/验收/门禁」类指令或 complete_task 时跑一次，不每次对话都跑。
+   */
+  gateVerify?: string[];
+  /** 门禁上次结果（只读事实，供 UI） */
+  gateLast?: { at: number; pass: boolean; summary: string };
 }
 
 /** 台账操作类型的合法集合（解析外来数据时用；不认识的**丢弃**，不是当成 write） */
@@ -334,6 +347,19 @@ export function normalizeProject(raw: unknown): GroupProjectRecord | undefined {
     if (e) row.ledger.push(e);
   }
   if (row.ledger.length > PROJECT_LEDGER_LIMIT) row.ledger = row.ledger.slice(-PROJECT_LEDGER_LIMIT);
+  const mem = asString(rec.memory);
+  if (mem) row.memory = mem.slice(0, 8000);
+  if (Array.isArray(rec.gateVerify)) {
+    row.gateVerify = rec.gateVerify.map((x) => asString(x)).filter(Boolean).slice(0, 8);
+  }
+  if (rec.gateLast && typeof rec.gateLast === 'object') {
+    const gl = rec.gateLast as { at?: unknown; pass?: unknown; summary?: unknown };
+    row.gateLast = {
+      at: asNumber(gl.at) || 0,
+      pass: gl.pass === true,
+      summary: asString(gl.summary).slice(0, 400),
+    };
+  }
   return row;
 }
 
@@ -401,11 +427,32 @@ export class GroupStore {
       next.env = { ...(next.env || {}), ...patch.env };
     }
     if (Array.isArray(patch.ledger)) next.ledger = patch.ledger.slice(-PROJECT_LEDGER_LIMIT);
+    if (typeof patch.memory === 'string') next.memory = patch.memory.slice(0, 8000);
+    if (Array.isArray(patch.gateVerify)) {
+      next.gateVerify = patch.gateVerify.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 8);
+    }
+    if (patch.gateLast && typeof patch.gateLast === 'object') {
+      next.gateLast = {
+        at: Number(patch.gateLast.at) || Date.now(),
+        pass: !!patch.gateLast.pass,
+        summary: String(patch.gateLast.summary || '').slice(0, 400),
+      };
+    }
     g.project = next;
     g.updatedAt = Date.now();
     const w = this.persist(state);
     if (!w.ok) return { ok: false, error: w.error };
     return { ok: true, project: next };
+  }
+
+  /**
+   * 项目 MEMORY 写入（覆盖式）。**唯一落点** = groups.json 的 project.memory。
+   * 不写第二份文件、不 append memory-os（避免与流水记忆重复）。
+   */
+  setProjectMemory(groupId: string, memory: string): { ok: boolean; project?: GroupProjectRecord; error?: string; chars: number } {
+    const text = String(memory ?? '').slice(0, 8000);
+    const r = this.setProjectAttrs(groupId, { memory: text });
+    return { ok: r.ok, project: r.project, error: r.error, chars: text.length };
   }
 
   /**

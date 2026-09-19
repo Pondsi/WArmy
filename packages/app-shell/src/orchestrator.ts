@@ -66,6 +66,12 @@ export interface OrchestratorDeps {
   toolSpecs?: () => ToolSpec[] | undefined;
   runTool?: (call: ToolCall, ctx: { round: number; maxResultChars: number }) => Promise<string> | string;
   toolLimits?: () => { maxRounds: number; maxResultChars: number; totalChars: number };
+  /** 项目 MEMORY（有界片段）；来自 group-store.project.memory，不来自 memory-os 流水 */
+  projectMemory?: (groupId: string) => string;
+  /** AI 求助选项卡的上下文片段 */
+  decisionContext?: (groupId: string) => string;
+  /** 门禁判停（仅 complete/验收指令时由主进程触发；此处可选回调） */
+  runProjectGate?: (groupId: string, reason: string) => Promise<{ pass: boolean; summary: string } | null>;
 }
 
 export interface OrchestrateResult {
@@ -143,23 +149,32 @@ export async function orchestrateGroupMessage(
 
   // 看板解析（仅 duty）
   let boardEvent: string | undefined;
+  let gateReason: string | null = null;
   const parsed = parseBoardCommand(msg.content, msg.groupId);
   if (parsed) {
     try {
       const ev = deps.board.append(parsed, 'duty');
       boardEvent = `${parsed.action}:${parsed.title}`;
       deps.addEvent?.(parsed.title, msg.content, msg.groupId);
+      if (parsed.action === 'complete_task') gateReason = 'complete_task';
     } catch {
       /* ignore */
     }
+  }
+  if (/(?:验收|门禁|verify|gate|read-?back)/i.test(msg.content)) {
+    gateReason = gateReason || 'user-verify';
   }
 
   // 派发执行者：优先用短命执行者，失败则值班者自己答
   let distilled = '';
   let usage: OrchestrateResult['usage'];
   const brief = route.decision?.taskBrief || msg.content;
+  const memSnip = deps.projectMemory ? deps.projectMemory(msg.groupId) : '';
+  const decSnip = deps.decisionContext ? deps.decisionContext(msg.groupId) : '';
   const contextItems = [
     card,
+    ...(memSnip ? [memSnip] : []),
+    ...(decSnip ? [decSnip] : []),
     `用户消息: ${msg.content}`,
     ...retrieveAssetsForChat({ scope: 'project', strict: false }).slice(0, 3).map((a) => a.body.slice(0, 200)),
   ];
@@ -181,7 +196,12 @@ export async function orchestrateGroupMessage(
       });
       const sys: ChatMessage = {
         role: 'system',
-        content: `你是 WArmy 项目「${msg.groupId}」的值班者。\n${card}\n请用简短中文回复。若需更新任务，使用指令：新建任务:/完成/进度 标题:百分比`,
+        content:
+          `你是 WArmy 项目「${msg.groupId}」的值班者。\n${card}\n` +
+          (memSnip ? memSnip + '\n' : '') +
+          (decSnip ? decSnip + '\n' : '') +
+          `请用简短中文回复。若需更新任务，使用指令：新建任务:/完成/进度 标题:百分比\n` +
+          `任务树：新建任务 父任务 / 子任务；需要人类点选时可用工具 askUser（永远含「其他」自定义）。`,
       };
       // 不变量 #2：值班者输入复用**同一个**有界渲染器（原来这里是 hist.slice(-12)，只按条数有界）。
       // 值班系统提示里已含状态卡片，保持冻结头；会话部分恒 ≤ 预算且与日志总长解耦。
@@ -274,9 +294,20 @@ export async function orchestrateGroupMessage(
     }
   }
 
+  // 门禁判停：仅 complete_task / 验收指令（防过度执行）
+  let gateLine = '';
+  if (gateReason && deps.runProjectGate) {
+    try {
+      const g = await deps.runProjectGate(msg.groupId, gateReason);
+      if (g) gateLine = g.pass ? `\n[门禁] 通过 · ${g.summary}` : `\n[门禁] 未通过 · ${g.summary}`;
+    } catch (e) {
+      gateLine = `\n[门禁] 执行失败 · ${String((e as Error)?.message || e).slice(0, 120)}`;
+    }
+  }
+
   return {
     action: 'dispatch',
-    reply: extraReplies.length ? `${distilled}\n\n[队列冲刷]\n${extraReplies.join('\n---\n')}` : distilled,
+    reply: (extraReplies.length ? `${distilled}\n\n[队列冲刷]\n${extraReplies.join('\n---\n')}` : distilled) + gateLine,
     dutyId: duty.id,
     executorIds: executors,
     boardEvent,

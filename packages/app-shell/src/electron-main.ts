@@ -37,6 +37,9 @@ import { SecureKeyStore } from './secure-keys.js';
 import { KnowledgeArchiver, CleanupManager } from './archive-cleanup.js';
 import { pickModelForUrgency, pickEmbeddingModel, type RoleModelConfig } from './model-roles.js';
 import { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';
+import { projectMemoryForContext, readProjectMemory, writeProjectMemory } from './project-memory.js';
+import { AiQuestionHub, AI_QUESTION_CUSTOM } from './ai-questions.js';
+import { withReadBack, dedupeByNorm, normPathKey } from './read-back.js';
 import {
   renderBoundedView,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -217,6 +220,7 @@ function tMain(k: string, fallback = ''): string {
 let win: BrowserWindow | null = null;
 let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
 let memory: MemoryClient | null = null;
+const aiQuestions = new AiQuestionHub();
 const router = new GroupChatRouter({
   queueWhenFixedBusy: false,
   onQueueMutated: () => {
@@ -5693,6 +5697,10 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
         return out.content;
       },
       listInstances: () => instList,
+      // 项目 MEMORY：从 group-store 读，**不**从 memory-os 流水复制（避免双源）
+      projectMemory: (gid) => projectMemoryForContext(groupStore, gid),
+      decisionContext: (gid) => aiQuestions.contextFor(gid),
+      runProjectGate: async (gid, reason) => runProjectGateOnce(gid, reason),
       addEvent: (title, body, groupId) => {
         knowledge?.upsertEntity({ id: 'grp-' + groupId, kind: 'project', name: groupId, attrs: {}, anchors: [] });
         knowledge?.addEvent({
@@ -6224,6 +6232,143 @@ handleIpc('warmy:kb-detail', (_e, q: string) => {
 // ── Q. 错误提示 ──
 handleIpc('warmy:last-error', () => safeHandle(() => ({ ok: true, error: lastError }), { ok: true, error: null }))
 handleIpc('warmy:clear-error', () => { lastError = null; return { ok: true }; });
+
+
+
+// ── 项目 MEMORY / AI 决策卡 / 门禁 / read-back / 去重 ──
+
+/** 项目 MEMORY：唯一落点 = groups.json project.memory */
+handleIpc('warmy:project-memory-get', (_e, payload?: { sessionId?: string }) => {
+  try {
+    const gid = String(payload?.sessionId || '');
+    const memory = readProjectMemory(groupStore, gid);
+    return { ok: true, groupId: gid, memory, chars: memory.length };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+handleIpc('warmy:project-memory-set', async (_e, payload?: { sessionId?: string; memory?: string }) => {
+  try {
+    const gid = String(payload?.sessionId || '');
+    const mem = String(payload?.memory ?? '');
+    const w = writeProjectMemory(groupStore, gid, mem);
+    if (!w.ok) return { ok: false, error: w.error };
+    // read-back：从存储读回再确认
+    const rb = await withReadBack(
+      () => mem,
+      () => readProjectMemory(groupStore, gid),
+      (saved, back) => String(saved).slice(0, 8000) === String(back).slice(0, 8000)
+    );
+    void publishProjectAttrs(gid);
+    return { ok: rb.confident, saved: w.chars, memory: rb.readBack || '', readBack: rb.match, error: rb.error };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/** AI 工作中求助选项卡（永远含「其他」自定义输入） */
+handleIpc('warmy:ai-question-open', (_e, payload?: { groupId?: string; sessionId?: string; title?: string; body?: string; options?: Array<{ id?: string; label: string; description?: string }> }) => {
+  try {
+    const q = aiQuestions.open({
+      groupId: String(payload?.groupId || payload?.sessionId || ''),
+      sessionId: payload?.sessionId,
+      title: String(payload?.title || '需要你的决定'),
+      body: payload?.body,
+      options: payload?.options || [],
+    });
+    emitConsole({ cat: 'system', code: 'ai.question.open', data: { id: q.id, groupId: q.groupId, title: q.title } });
+    return { ok: true, question: q };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+handleIpc('warmy:ai-question-list', (_e, groupId?: string) => {
+  try {
+    return { ok: true, items: aiQuestions.list(typeof groupId === 'string' ? groupId : undefined) };
+  } catch (e) {
+    return { ok: false, items: [], error: sanitizeError(e) };
+  }
+});
+handleIpc('warmy:ai-question-answer', (_e, payload?: { id?: string; optionId?: string; customText?: string }) => {
+  try {
+    const r = aiQuestions.answer(String(payload?.id || ''), String(payload?.optionId || AI_QUESTION_CUSTOM), payload?.customText);
+    return r;
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/** 门禁判停：仅项目配置了 gateVerify 时才可能跑；主进程串行防并发风暴 */
+const gateRuns = new Map<string, number>();
+async function runProjectGateOnce(groupId: string, reason: string): Promise<{ pass: boolean; summary: string } | null> {
+  try {
+    const proj = groupStore?.projectOf(groupId);
+    const gates = proj?.gateVerify || [];
+    if (!gates.length) return null;
+    const now = Date.now();
+    const last = gateRuns.get(groupId) || 0;
+    if (now - last < 3000) return { pass: !!proj?.gateLast?.pass, summary: '节流：3s 内不重复跑门禁' };
+    gateRuns.set(groupId, now);
+    const repo = path.resolve(__dirname, '..', '..', '..');
+    const lines: string[] = [];
+    let allPass = true;
+    for (const rel of gates.slice(0, 4)) {
+      const script = path.join(repo, rel);
+      if (!fs.existsSync(script)) {
+        allPass = false;
+        lines.push(`${rel}: missing`);
+        continue;
+      }
+      const out = await new Promise<{ code: number; tail: string }>((resolve) => {
+        const child = spawn(process.execPath, [script], { cwd: repo, env: process.env });
+        let buf = '';
+        child.stdout?.on('data', (d) => { buf += String(d); if (buf.length > 4000) buf = buf.slice(-2000); });
+        child.stderr?.on('data', (d) => { buf += String(d); if (buf.length > 4000) buf = buf.slice(-2000); });
+        child.on('close', (code) => resolve({ code: code ?? 1, tail: buf.split('\n').filter(Boolean).slice(-3).join(' | ') }));
+        child.on('error', () => resolve({ code: 1, tail: 'spawn-failed' }));
+      });
+      const pass = out.code === 0;
+      if (!pass) allPass = false;
+      lines.push(`${rel}: ${pass ? 'pass' : 'fail(rc=' + out.code + ')'} ${out.tail}`.slice(0, 160));
+    }
+    groupStore?.setProjectAttrs(groupId, { gateLast: { at: now, pass: allPass, summary: lines.join(' ; ') } });
+    return { pass: allPass, summary: lines.join(' ; ') || 'no gates' };
+  } catch (e) {
+    return { pass: false, summary: sanitizeError(e) };
+  }
+}
+
+/** skills-scan-dirs-set：路径去重 + read-back */
+const _skillsScanSet = handleIpc;
+handleIpc('warmy:skills-scan-dirs-set', (_e, dirs: unknown) => {
+  const raw = Array.isArray(dirs) ? dirs.map((d) => String(d || '').trim()).filter(Boolean) : [];
+  const { list, removed } = dedupeByNorm(raw, normPathKey);
+  if (list.length > SKILL_SCAN_DIRS_MAX) {
+    return { ok: false, error: 'too-many-dirs', max: SKILL_SCAN_DIRS_MAX, count: list.length };
+  }
+  try {
+    const next = settingsStore?.save({ skillScanDirs: list } as never);
+    const readBack = ((next as any)?.skillScanDirs || []) as string[];
+    const match = readBack.length === list.length && list.every((x, i) => normPathKey(readBack[i]) === normPathKey(x));
+    return { ok: true, dirs: list, scanDirs: skillScanStatus(list), settings: next, removedDups: removed, readBack: match, confident: match };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/** update-source-set：read-back */
+handleIpc('warmy:update-source-set', async (_e, payload?: { url?: string }) => {
+  try {
+    const url = String(payload?.url || '').trim();
+    const patch: Record<string, unknown> = { updateFeedUrl: url };
+    const saved = settingsStore?.save(patch as never);
+    const readBack = ((saved as any)?.updateFeedUrl || '') as string;
+    const match = readBack === url;
+    return { ok: true, configured: !!url, url: readBack, origin: url ? 'settings' : 'none', readBack: match, confident: match };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
 
 
 // ── R. 启动引导 ──

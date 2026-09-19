@@ -22,6 +22,12 @@ export interface BoardEvent {
   note?: string;
   /** 解析来源：值班者从自然语言解析 */
   parsedFrom: string;
+  /**
+   * 可选父任务 id（= 父任务 title）。用于**轻量任务树**：
+   * 不是第二套任务系统，只是看板任务的父子层级（进度条仍聚合 BoardTask）。
+   * 约定：`新建任务 父任务 / 子任务` 或 `新建任务 父任务 > 子任务`
+   */
+  parentId?: string;
 }
 
 export interface BoardTask {
@@ -32,6 +38,8 @@ export interface BoardTask {
   status: 'todo' | 'doing' | 'done' | 'blocked';
   notes: string[];
   updatedAt: number;
+  /** 父任务 id（无父 = 根任务） */
+  parentId?: string;
 }
 
 /** 写入者唯一：仅 duty */
@@ -74,7 +82,10 @@ export class BoardStore {
   }
 
   private apply(ev: BoardEvent): void {
+    if (!ev || !ev.action) return;
     if (ev.action === 'create_task') {
+      const parentFromNote = ev.note && String(ev.note).startsWith('parent:') ? String(ev.note).slice(7) : undefined;
+      const parentId = ev.parentId || parentFromNote;
       this.tasks.set(ev.title, {
         id: ev.title,
         groupId: ev.groupId,
@@ -83,10 +94,23 @@ export class BoardStore {
         status: 'todo',
         notes: [],
         updatedAt: ev.ts,
+        ...(parentId ? { parentId } : {}),
       });
+      // 父任务若不存在，占位创建，便于树形显示
+      if (parentId && !this.tasks.has(parentId)) {
+        this.tasks.set(parentId, {
+          id: parentId,
+          groupId: ev.groupId,
+          title: parentId,
+          progress: 0,
+          status: 'doing',
+          notes: [],
+          updatedAt: ev.ts,
+        });
+      }
       return;
     }
-    const task = this.tasks.get(ev.title) || this.tasks.get(ev.title.replace(/ →.*/, ''));
+    const task = this.tasks.get(ev.title) || this.tasks.get(String(ev.title || '').replace(/ →.*/, ''));
     if (!task) return;
     task.updatedAt = ev.ts;
     if (ev.action === 'update_progress') {
@@ -104,7 +128,7 @@ export class BoardStore {
   }
 
   listTasks(groupId?: string): BoardTask[] {
-    return [...this.tasks.values()].filter((t) => !groupId || t.groupId === groupId);
+    return withTreeAggregation([...this.tasks.values()].filter((t) => !groupId || t.groupId === groupId));
   }
 
   /** 外部聚合：按会话汇总进展 */
@@ -138,8 +162,19 @@ export class BoardStore {
 /** 值班者：自然语言 → BoardAction 简易解析（P6 雏形） */
 export function parseBoardCommand(text: string, groupId: string): Omit<BoardEvent, 'seq' | 'ts'> | null {
   const s = text.trim();
-  let m = s.match(/^(?:新建任务|创建任务|create task)[:：]\s*(.+)$/i);
-  if (m) return { groupId, action: 'create_task', title: m[1]!, parsedFrom: s };
+  let m = s.match(/^(?:新建任务|创建任务|create task)[:：\s]+(.+)$/i);
+  if (m) {
+    const raw = m[1]!.trim();
+    // 轻量任务树：父 / 子 或 父 > 子
+    const parts = raw.split(/\s*[/>／]\s*/).map((x) => x.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      const parent = parts[0]!;
+      const child = parts.slice(1).join(' / ');
+      // 先确保存在父任务（幂等：已存在则不覆盖进度）
+      return { groupId, action: 'create_task', title: child, parentId: parent, parsedFrom: s, note: `parent:${parent}` };
+    }
+    return { groupId, action: 'create_task', title: raw, parsedFrom: s };
+  }
   m = s.match(/^(?:完成|complete)\s*(.+)$/i);
   if (m) return { groupId, action: 'complete_task', title: m[1]!, parsedFrom: s };
   m = s.match(/^(?:阻塞|block)\s*(.+?)(?:[:：]\s*(.+))?$/i);
@@ -149,4 +184,28 @@ export function parseBoardCommand(text: string, groupId: string): Omit<BoardEven
   m = s.match(/^(?:进度|progress)\s*(.+?)[:：]?\s*(\d{1,3})%?$/i);
   if (m) return { groupId, action: 'update_progress', title: m[1]!, progress: Math.min(100, +m[2]!), parsedFrom: s };
   return null;
+}
+
+/** 聚合：父任务进度 = 子任务平均（无子则用自身）——进度条继续用同一数据源 */
+export function withTreeAggregation(tasks: BoardTask[]): BoardTask[] {
+  const byId = new Map(tasks.map((t) => [t.id, { ...t }]));
+  const children = new Map<string, BoardTask[]>();
+  for (const t of byId.values()) {
+    if (!t.parentId) continue;
+    const list = children.get(t.parentId) || [];
+    list.push(t);
+    children.set(t.parentId, list);
+  }
+  for (const [pid, kids] of children) {
+    const parent = byId.get(pid);
+    if (!parent) continue;
+    const avg = Math.round(kids.reduce((s, k) => s + k.progress, 0) / kids.length);
+    if (parent.status !== 'done') {
+      parent.progress = avg;
+      if (kids.every((k) => k.status === 'done')) parent.status = 'done';
+      else if (kids.some((k) => k.status === 'blocked')) parent.status = 'blocked';
+      else if (kids.some((k) => k.status === 'doing')) parent.status = 'doing';
+    }
+  }
+  return [...byId.values()];
 }

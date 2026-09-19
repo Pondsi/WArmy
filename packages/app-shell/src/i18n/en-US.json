@@ -1566,5 +1566,17 @@
   "settings.skillsEnable": "Start",
   "settings.skillsPause": "Pause",
   "setup.pickLanguage": "Choose your interface language (you can change it later in Settings)",
-  "setup.start": "Get started"
+  "setup.start": "Get started",
+  "aiq.answered": "Answered",
+  "aiq.custom": "Other (type your own)",
+  "aiq.empty": "No pending decisions",
+  "aiq.pending": "Pending",
+  "aiq.submit": "Submit decision",
+  "aiq.title": "Your decision needed",
+  "pm.empty": "No project memory yet",
+  "pm.hint": "Current project rules/goals (overwrite model; not duplicated with chat memory stream)",
+  "pm.readBackFail": "Read-back mismatch after save",
+  "pm.save": "Save project memory",
+  "pm.saved": "Saved and read-back confirmed",
+  "pm.title": "Project memory"
 }

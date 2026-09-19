@@ -1566,5 +1566,17 @@
   "settings.skillsEnable": "시작",
   "settings.skillsPause": "일시정지",
   "setup.pickLanguage": "인터페이스 언어를 선택하세요 (나중에 설정에서 변경 가능)",
-  "setup.start": "시작하기"
+  "setup.start": "시작하기",
+  "aiq.answered": "응답됨",
+  "aiq.custom": "기타 (직접 입력)",
+  "aiq.empty": "대기 중인 결정 없음",
+  "aiq.pending": "대기 중",
+  "aiq.submit": "결정 제출",
+  "aiq.title": "결정이 필요합니다",
+  "pm.empty": "프로젝트 기억 없음",
+  "pm.hint": "현재 유효한 규칙/목표(덮어쓰기; 채팅 기억 흐름과 중복 저장하지 않음)",
+  "pm.readBackFail": "저장 후 읽기 불일치",
+  "pm.save": "프로젝트 기억 저장",
+  "pm.saved": "저장 후 읽기 확인",
+  "pm.title": "프로젝트 기억"
 }

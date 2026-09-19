@@ -1566,5 +1566,17 @@
   "settings.skillsEnable": "啟動",
   "settings.skillsPause": "暫停",
   "setup.pickLanguage": "請選擇介面語言（可稍後在設定中修改）",
-  "setup.start": "開始使用"
+  "setup.start": "開始使用",
+  "aiq.answered": "已決策",
+  "aiq.custom": "其他（自行輸入）",
+  "aiq.empty": "暫無待決策項",
+  "aiq.pending": "待決策",
+  "aiq.submit": "提交決定",
+  "aiq.title": "需要你的決定",
+  "pm.empty": "尚未寫入專案記憶",
+  "pm.hint": "當前有效的專案規矩/目標（覆蓋式；不與會話流水記憶重複儲存）",
+  "pm.readBackFail": "寫入後讀回不一致",
+  "pm.save": "儲存專案記憶",
+  "pm.saved": "已儲存並讀回確認",
+  "pm.title": "專案記憶"
 }
