@@ -10417,6 +10417,7 @@
       id: state.selectedChat.id,
       title: state.selectedChat.name,
       kind: state.selectedChat.kind,
+      mode: 'sub',
     });
   });
   $('btn-directed')?.addEventListener('change', async (e) => {
@@ -10436,14 +10437,25 @@
   window.warmy.trayInit?.().catch(() => {});
   window.warmy.registerHotkey?.('CommandOrControl+Shift+M').catch(() => {});
   // 从 URL 参数自动打开会话（多窗口）
+  // 产品定稿：独立会话窗只保留 **聊天（第3列）+ 右侧事项（第4列）**；
+  // 顶栏 #titlebar **必须保留**（无边框窗口靠它拖动 + 窗控），任务栏图标由主进程 setIcon。
   try {
     const q = new URLSearchParams(window.location.search);
     const mode = q.get('mode');
-    if (mode === 'sub') {
-      document.getElementById('titlebar')?.classList.add('hidden');
+    const cid0 = q.get('chatId');
+    const title0 = q.get('chatTitle') || '';
+    if (mode === 'sub' || cid0) {
+      document.body.classList.add('chat-window');
       document.getElementById('rail')?.classList.add('hidden');
       document.getElementById('list-col')?.classList.add('hidden');
       document.getElementById('app-body')?.classList.add('hide-list');
+      // 空状态大 logo 在独立窗里显得像「完整主界面」——隐藏
+      document.getElementById('empty-state')?.classList.add('hidden');
+      if (title0) {
+        try { document.title = title0; } catch { /* noop */ }
+        const brand = document.getElementById('tb-brand');
+        if (brand) brand.textContent = title0;
+      }
     }
     const cid = q.get('chatId');
     if (cid) {

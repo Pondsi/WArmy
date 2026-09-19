@@ -334,8 +334,14 @@ devEnv=container
 2. **输入区**：无「输入框–按钮」分隔线；输入区更高；bar 更贴。  
 3. **列表列水印**：`logo-color.svg` + 品牌；logo 本身背景透明。  
 4. **诊断流**：右栏 `#console-pane`；容器终端用控制台按钮。  
-5. **列宽**：list 默认 200、panel 300，`bindResizer persistKey` 持久化。  
-6. **焦点**：composer 聚焦不改变边框颜色（产品要求）。
+5. **列宽**：list 默认 **160**（最小可读）、panel 300，`bindResizer persistKey` 持久化。  
+6. **焦点**：composer 聚焦不改变边框颜色（产品要求）。  
+7. **独立会话窗**（`warmy:open-chat-window`）：  
+   - 查询参数强制 `mode=sub` + `chatId`  
+   - 渲染层 `body.chat-window`：隐藏 rail/list/空状态，**只保留聊天列 + 右栏**  
+   - **不隐藏** `#titlebar`（无边框窗口靠它 `-webkit-app-region: drag` 拖动与窗控）  
+   - 主进程 `warmyWindowIcon()` + `BrowserWindow.icon`/`setIcon` + `app.setAppUserModelId('com.pondsi.warmy')`  
+   - 门禁：`verify-chat-window.mjs`
 
 ---
 

@@ -144,9 +144,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   height: 100%;
   overflow: hidden; /* 品牌名过长时省略，不许把右上角窗控顶出去 */
 }
-/* R1：logo 由 24/20 放大到 40/36（图片像素 +80% 面积），仍完整落在 40px 标题栏内，
-   也不越过 64px 的栏宽。注：标题栏高度刻意保持 40px —— 加高会让 #app-body 变矮 16px，
-   连带把「身份变更」横幅上的按钮推到弹窗卡片下（既有验收用例 7f 会挂），得不偿失。 */
+/* R1：logo 完整显示 —— 图片 object-fit contain，容器 40×40 与标题栏同高 */
 .tb-logo {
   width: 40px;
   height: 40px;
@@ -154,13 +152,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible;
+  background: transparent;
 }
 .tb-logo-img {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
+  object-position: center;
   display: block;
+  background: transparent;
 }
 .tb-brand {
   font-weight: 500;
@@ -253,6 +254,25 @@ body.platform-darwin .tb-mac-extra {
   grid-template-columns: 64px 1fr;
 }
 #app-body.hide-list #list-col { display: none; }
+/* 独立会话窗：只保留聊天（第3列）+ 右侧事项（#main-col 内 chat-layout 的第4列）。
+   #titlebar 不隐藏 —— 无边框窗口靠它拖动与窗控。 */
+body.chat-window #rail,
+body.chat-window #list-col,
+body.chat-window #col-resizer,
+body.chat-window #page-layout,
+body.chat-window #inst-detail,
+body.chat-window #empty-state {
+  display: none !important;
+}
+body.chat-window #app-body,
+body.chat-window #app-body.hide-list {
+  grid-template-columns: 1fr !important;
+  height: calc(100vh - 40px) !important;
+}
+body.chat-window .chat-layout {
+  grid-template-columns: 1fr var(--panel-w, 300px) !important;
+  height: 100%;
+}
 
 /* Rail — 占满 app-body 高度，底部设置/实例不裁切 */
 #rail {
@@ -767,8 +787,8 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 }
 .badge.off { background: var(--hover); color: var(--muted); }
 .plugin-desc { color: var(--muted); font-size: var(--fs-sm); margin-top: 4px; line-height: 1.4; }
-.theme-swatches { display: grid; grid-template-columns: repeat(17, 1fr); gap: 6px; width: 100%; }
-.theme-swatches button { width: 100%; aspect-ratio: 1; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.theme-swatches { display: grid; grid-template-columns: repeat(17, minmax(0, 1fr)); gap: 6px; width: 100%; }
+.theme-swatches button { width: 100%; aspect-ratio: 1; min-width: 0; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; box-sizing: border-box; }
 .theme-swatches button.on { border-color: var(--ink); }
 .theme-mode { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 .theme-mode button {
@@ -1229,8 +1249,8 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .queue-bar { margin: 0 12px 8px; }
 
 /* ── 标题栏 logo 加大（R1：26×26 的图看不清，改成 36px 图 / 40px 底） ── */
-.tb-logo { width: 40px; height: 40px; border-radius: 10px; }
-.tb-logo-img { width: 36px; height: 36px; }
+.tb-logo { width: 40px; height: 40px; border-radius: 10px; overflow: visible; }
+.tb-logo-img { width: 40px; height: 40px; object-fit: contain; }
 
 /* ── 我的页品牌条：图片 logo + 与文字垂直居中 ── */
 .brand-strip { display: flex; align-items: center; gap: 14px; padding: 6px 0 18px; }

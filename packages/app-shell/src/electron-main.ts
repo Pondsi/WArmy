@@ -222,6 +222,21 @@ let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
 let memory: MemoryClient | null = null;
 const aiQuestions = new AiQuestionHub();
 
+/** 窗口/托盘图标路径：产品 logo（app.ico → logo.ico → build/icon.ico → png） */
+function warmyWindowIcon(): string {
+  const candidates: string[] = [
+    path.join(__dirname, 'renderer', 'icons', 'app.ico'),
+    path.join(__dirname, 'renderer', 'icons', 'logo.ico'),
+    path.join(__dirname, 'build', 'icon.ico'),
+    path.join(__dirname, 'renderer', 'icons', 'app-256.png'),
+    path.join(__dirname, 'renderer', 'icons', 'logo-256.png'),
+  ];
+  for (const p of candidates) {
+    try { if (fs.existsSync(p)) return p; } catch { /* next */ }
+  }
+  return candidates[0] as string;
+}
+
 /** 按项目类型自动选择 gateVerify（授权由产品主授予；防过度执行） */
 function gateVerifyForProjectType(opts: { directory?: string; devEnv?: string; name?: string }): string[] {
   const dir = String(opts.directory || '').replace(/\\/g, '/');
@@ -1382,6 +1397,7 @@ function saveWindowStateSoon(delay = 500): void {
 function createWindow() {
   const isMac = process.platform === 'darwin';
   const ws = loadWindowState();
+  const iconPath = warmyWindowIcon();
   win = new BrowserWindow({
     width: ws.width || 1280,
     height: ws.height || 800,
@@ -1389,7 +1405,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 600,
     title: '无限牛马',
-    // macOS：系统原生标题栏与红绿灯；Windows/Linux：无边框 + 自定义窗控
+    // macOS：系统原生标题栏与红绿灯；Windows/Linux：无边框 + **渲染层 #titlebar 可拖动**
     frame: isMac,
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
     trafficLightPosition: isMac ? { x: 12, y: 10 } : undefined,
@@ -1402,8 +1418,9 @@ function createWindow() {
       backgroundThrottling: false,
       spellcheck: false,
     },
-    icon: path.join(__dirname, 'renderer', 'icons', 'app.ico'),
+    icon: iconPath,
   });
+  try { win.setIcon?.(nativeImage.createFromPath(iconPath)); } catch { /* noop */ }
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('ready-to-show', () => {
     if (ws.maximized) { try { win?.maximize(); } catch { /* noop */ } }
@@ -1514,6 +1531,15 @@ process.on('unhandledRejection', (reason) => {
 // 应用身份：影响任务栏悬停/右键菜单里显示的名称（默认会显示 Electron）
 app.setName('无限牛马');
 if (process.platform === 'win32') app.setAppUserModelId('com.pondsi.warmy');
+// 任务栏/窗口图标统一用产品 logo（app.ico 优先）
+try {
+  const __icon = warmyWindowIcon();
+  if (__icon && fs.existsSync(__icon)) {
+    app.whenReady().then(() => {
+      try { nativeImage.createFromPath(__icon); } catch { /* noop */ }
+    }).catch(() => {});
+  }
+} catch { /* noop */ }
 
 app
   .whenReady()
@@ -4159,6 +4185,127 @@ handleIpc('warmy:skills-import', async () => {
   }
 });
 
+/** 资源管理器选目录（技能/插件自动发现共用） */
+handleIpc('warmy:pick-directory', async () => {
+  if (!win) return { ok: false, error: 'no window' };
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+  return { ok: true, path: r.filePaths[0] };
+});
+
+/** 隐私政策同意/撤销 */
+handleIpc('warmy:privacy-consent-set', (_e, consent: boolean) => {
+  try {
+    const next = settingsStore?.save({ privacyConsent: !!consent } as never);
+    audit?.log('privacy.consent', { consent: !!consent });
+    return { ok: true, consent: !!consent, settings: next };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/** 拒绝隐私政策 / 撤销同意 → 关闭软件 */
+handleIpc('warmy:app-quit', (_e, reason?: string) => {
+  audit?.log('app.quit', { reason: String(reason || '') });
+  setTimeout(() => app.quit(), 80);
+  return { ok: true };
+});
+
+/** 唯一凭证：指纹（证明你是你）；私钥不落渲染层明文 */
+handleIpc('warmy:identity-credential', () =>
+  safeHandle(() => {
+    const info = identityStore?.info() ?? null;
+    return {
+      ok: true,
+      fingerprint: info?.fingerprint || '',
+      generation: info?.generation ?? 0,
+      alias: info?.alias || '',
+    };
+  }, { ok: true, fingerprint: '', generation: 0, alias: '' })
+);
+
+/** 切换身份：粘贴备份 JSON + 口令 → importBackup */
+handleIpc('warmy:identity-backup-import', (_e, payload: { backupJson?: string; passphrase?: string }) => {
+  try {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+    const raw = String(payload?.backupJson || '').trim();
+    if (!raw) return { ok: false, error: 'backup-required' };
+    let backup: unknown;
+    try { backup = JSON.parse(raw); } catch { return { ok: false, error: 'backup-invalid-json' }; }
+    const r = identityStore.importBackup(backup as never, { passphrase: String(payload?.passphrase || '') });
+    if (!r.ok) return { ok: false, error: r.error };
+    audit?.log('identity.backup.import', { fingerprint: r.info.fingerprint });
+    return { ok: true, identity: r.info, fingerprint: r.info.fingerprint };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+/** 插件自动发现目录扫描：目录下一层含 package.json 的子目录视为插件候选 */
+handleIpc('warmy:plugins-scan-dirs-get', () =>
+  safeHandle(() => {
+    const s = settingsStore?.load?.() || (settingsStore as { get?: () => unknown })?.get?.() || {};
+    const dirs = Array.isArray((s as { pluginScanDirs?: string[] }).pluginScanDirs)
+      ? (s as { pluginScanDirs: string[] }).pluginScanDirs
+      : [];
+    return { ok: true, dirs: dirs.map(String).slice(0, 10) };
+  }, { ok: true, dirs: [] })
+);
+handleIpc('warmy:plugins-scan-dirs-set', (_e, dirs: unknown) => {
+  try {
+    const list = (Array.isArray(dirs) ? dirs : [])
+      .map((x) => String(x || '').trim())
+      .filter(Boolean)
+      .slice(0, SKILL_SCAN_DIRS_MAX);
+    const next = settingsStore?.save({ pluginScanDirs: list } as never);
+    return { ok: true, dirs: list, settings: next };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+handleIpc('warmy:plugins-scan', () => {
+  try {
+    const s = (settingsStore?.load?.() || {}) as { pluginScanDirs?: string[] };
+    const dirs = Array.isArray(s.pluginScanDirs) ? s.pluginScanDirs.slice(0, 10) : [];
+    const found: Array<{ id: string; path: string; name: string; desc: string }> = [];
+    const skipped: Array<{ dir: string; reason: string }> = [];
+    for (const dir of dirs) {
+      try {
+        if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+          skipped.push({ dir, reason: 'not-a-directory' });
+          continue;
+        }
+        for (const name of fs.readdirSync(dir)) {
+          const p = path.join(dir, name);
+          try {
+            if (!fs.statSync(p).isDirectory()) continue;
+            const pkg = path.join(p, 'package.json');
+            const skill = path.join(p, 'SKILL.md');
+            if (!fs.existsSync(pkg) && !fs.existsSync(skill)) continue;
+            let pname = name;
+            let pdesc = '';
+            if (fs.existsSync(pkg)) {
+              try {
+                const j = JSON.parse(fs.readFileSync(pkg, 'utf8'));
+                pname = String(j.name || name);
+                pdesc = String(j.description || '');
+              } catch { /* keep folder name */ }
+            }
+            if (found.some((f) => f.id === pname)) continue;
+            found.push({ id: pname, path: p, name: pname, desc: pdesc });
+          } catch { /* skip entry */ }
+        }
+      } catch (e) {
+        skipped.push({ dir, reason: sanitizeError(e) });
+      }
+    }
+    audit?.log('plugins.scan', { dirs: dirs.length, found: found.length });
+    return { ok: true, found, skipped, scannedDirs: dirs };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
 handleIpc('warmy:skills-paths', () => safeHandle(() => ({ ok: true, paths: skillRoots().map((r) => r.root), scanDirs: skillScanStatus(loadSkillScanDirs()) }), { ok: true, paths: [], scanDirs: [] }))
 
 handleIpc('warmy:skills-remove', (_e, id: string) => {
@@ -6048,6 +6195,8 @@ handleIpc('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: s
 
 
 // ── H. 多窗口：在新窗口打开会话 ──
+// 产品定稿：独立会话窗 = **可拖动顶栏** + 聊天（第3列）+ 右侧事项（第4列）。
+// 不要再做成「完整主界面」；不要无边框导致无法拖动。
 const chatWindows = new Map<string, BrowserWindow>();
 handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string }) => {
   try {
@@ -6055,11 +6204,18 @@ handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; k
       chatWindows.get(payload.id)?.focus();
       return { ok: true };
     }
+    const iconPath = warmyWindowIcon();
     const w = new BrowserWindow({
-      width: 900,
-      height: 700,
+      width: 960,
+      height: 720,
+      minWidth: 640,
+      minHeight: 420,
       title: payload.title || 'WArmy',
+      // Windows/Linux：无系统边框，但渲染层保留 #titlebar（可拖动 + 窗控）
       frame: process.platform === 'darwin',
+      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+      backgroundColor: '#ededed',
+      icon: iconPath,
       webPreferences: {
         preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,
@@ -6067,8 +6223,15 @@ handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; k
         sandbox: true,
       },
     });
+    try { w.setIcon?.(nativeImage.createFromPath(iconPath)); } catch { /* noop */ }
+    // 独立会话窗一律 chat+panel 模式（不再展示完整主界面）
     void w.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
-      query: { chatId: payload.id, chatKind: payload.kind || 'single', chatTitle: payload.title || '', mode: payload.mode || 'full' },
+      query: {
+        chatId: payload.id,
+        chatKind: payload.kind || 'single',
+        chatTitle: payload.title || '',
+        mode: 'sub',
+      },
     });
     w.on('closed', () => chatWindows.delete(payload.id));
     chatWindows.set(payload.id, w);
@@ -6100,7 +6263,7 @@ let exportMeLabel = '我';
 function createTray() {
   if (tray) return;
   // 用真实 logo 生成托盘图标（16/32 均可，Windows 托盘实际显示 16px）
-  const iconPath = path.join(__dirname, 'renderer', 'icons', 'app.ico');
+  const iconPath = warmyWindowIcon();
   let img = nativeImage.createFromPath(iconPath);
   if (img.isEmpty()) {
     img = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'app-32.png'));

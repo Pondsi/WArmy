@@ -165,6 +165,11 @@ export interface AppSettings {
    */
   skillScanDirs: string[];
   /**
+   * Plugin auto-discovery directories (absolute paths). Max SKILL_SCAN_DIRS_MAX (10).
+   * "检查插件" scans these dirs and installs discovered plugins into the list.
+   */
+  pluginScanDirs?: string[];
+  /**
    * Per-skill runtime enable flag. Key = skill id (from skills-list).
    * Missing key = enabled (default on). Persisted so pause survives restart.
    */
@@ -174,6 +179,11 @@ export interface AppSettings {
    * Installer/first launch must surface language selection immediately.
    */
   setupDone?: boolean;
+  /**
+   * Privacy policy consent. Default false — first launch must show policy after language pick.
+   * Revoke in About closes the app; next launch requires agree again.
+   */
+  privacyConsent?: boolean;
   /** 聊天自动滚动到最新（默认关） */
   autoScrollChat?: boolean;
   /**
@@ -389,13 +399,16 @@ function defaults(): AppSettings {
     sound: { complete: true, request: true, error: true },
     soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,
-    listWidth: 200,
+    /** 第二列默认取最小可读宽度；用户拖动后 persistKey=listWidth 记住 */
+    listWidth: 160,
     panelWidth: 300,
     globalSecurity: 'normal',
     smtpAccounts: [],
     skillScanDirs: [],
+    pluginScanDirs: [],
     skillEnabled: {},
     setupDone: false,
+    privacyConsent: false,
     autoScrollChat: false,
     contextBudgetPercent: 60,
     autoSummary: true,
