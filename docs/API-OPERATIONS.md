@@ -131,6 +131,61 @@
 - **群聊**不暴露滑块，由后台自动判断；**联系人**不涉及。
 - 预算是**上限**，不是配额：有损压缩/截断/指针在预算充足时给更多余量，但**不把预算用满**。
 
+## 实测结果（CDP 真实 IPC）
+
+生成时间：2026-09-19T09:07:44.378Z · 通过 46/46
+
+| API | ok | ms | preview |
+| --- | --- | --- | --- |
+| `hardware` | ✅ | 2ms | {"cpus":32,"suggested":8,"max":8} |
+| `listInstances` | ✅ | 1ms | [] |
+| `securityMode` | ✅ | 0ms | "normal" |
+| `memoryStatus` | ✅ | 3ms | {"ok":true,"ready":true,"dataDir":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\memory","jsonl":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\memory\\fast-memory.jsonl"… |
+| `localeInfo` | ✅ | 0ms | {"system":"zh-CN","resolved":"zh-CN","isZh":true,"supported":["zh-CN","zh-TW","en-US","ja","ko","ru","es","fr","pt","eo"]} |
+| `themeInfo` | ✅ | 1ms | {"shouldUseDarkColors":false,"themeSource":"system"} |
+| `groupList` | ✅ | 0ms | {"ok":true,"groups":[],"count":0} |
+| `updateSourceGet` | ✅ | 1ms | {"ok":true,"configured":true,"url":"https://api.github.com/repos/Pondsi/WArmy/releases/latest","origin":"settings","channel":"","currentVersion":"0.1.0","lastCheck":null,"lastDownload":null} |
+| `boardEvents` | ✅ | 1ms | {"ok":true,"events":[]} |
+| `boardAggregate` | ✅ | 0ms | {"ok":true,"sessions":[]} |
+| `getProvider` | ✅ | 1ms | {"ok":true,"providerCfg":{"presetId":"deepseek","apiKey":"","baseURL":"","model":"deepseek-chat","protocol":"openai-compatible"},"hasKey":false} |
+| `checkpointList` | ✅ | 0ms | {"ok":true,"list":[],"space":{"maxBytes":536870912,"usedBytes":0,"count":0},"envByCheckpoint":{},"currentEnv":{"active":false,"runtimeId":"","revision":"host","at":1789808859510,"imageDigests":{}},"la… |
+| `knowledgeQuery` | ✅ | 1ms | {"ok":true,"entities":[],"events":[]} |
+| `metricsSummary` | ✅ | 1ms | {"ok":true,"turns":0,"avgDurationMs":0,"promptTokens":0,"completionTokens":0,"cacheHitRate":0,"cacheHitTokens":0,"cacheMissTokens":0,"ccrOriginalBytes":0,"ccrCompressedBytes":0,"ccrRatio":1,"viewSampl… |
+| `settingsGet` | ✅ | 0ms | {"ok":true,"settings":{"locale":"zh-CN","themeMode":"system","accent":"#07c160","sound":{"complete":true,"request":true,"error":true},"soundFiles":{"complete":"","request":"","error":""},"emailOnReque… |
+| `skillsList` | ✅ | 1ms | {"ok":true,"skills":[],"scanDirs":[],"maxScanDirs":10} |
+| `skillsPaths` | ✅ | 0ms | {"ok":true,"paths":["C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\skills"],"scanDirs":[]} |
+| `skillsScanDirsGet` | ✅ | 1ms | {"ok":true,"dirs":[],"scanDirs":[],"max":10} |
+| `uiQueuesGet` | ✅ | 0ms | {"ok":true,"queues":{}} |
+| `routerQueuesGet` | ✅ | 1ms | {"ok":true,"snapshot":{"version":1,"seq":0,"queues":{},"dutyState":{}},"file":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\router-queues.json"} |
+| `profileGet` | ✅ | 1ms | {"ok":true,"profile":{"username":"主人","avatarDataUrl":"","email":"","deviceId":"695968036","deviceIdSig":"525de7aa6133b2092722fff90343f979d71542b845cc1e78f33fe22eeed2af80"}} |
+| `appInfo` | ✅ | 1ms | {"ok":true,"name":"无限牛马","enName":"WArmy","version":"0.1.0","electron":"33.2.0","chrome":"130.0.6723.118","node":"20.18.0","platform":"win32","arch":"x64","deviceId":"695968036","deviceIdValid":true,"… |
+| `identityInfo` | ✅ | 1ms | {"ok":true,"identity":{"alias":"695968036","fingerprint":"XZDSM-SY9YH-XD93A-PEK7V","generation":1,"algo":"Ed25519","createdAt":1789808853227,"updatedAt":1789808853227,"contactCard":{"email":"","update… |
+| `identityPeers` | ✅ | 0ms | {"ok":true,"peers":[]} |
+| `netStatus` | ✅ | 8ms | {"ok":true,"meshEnabled":false,"link":{"reachable":false,"lastError":"mesh-disabled","peers":[]},"nodeId":"node-7d334a8b","sessions":0,"unlock":{"mode":"os","unlocked":true,"needsPassphrase":false,"si… |
+| `peersList` | ✅ | 0ms | {"ok":true,"peers":[],"notes":{"lan":"net.note.lan","wanManual":"net.note.wanManual","wanHard":"net.note.wanHard"}} |
+| `executorsStatus` | ✅ | 1ms | {"ok":true,"items":[]} |
+| `stateLoad` | ✅ | 0ms | {"ok":true,"state":{"locale":"zh-CN","themeMode":"system","accent":"#07c160","sound":{"complete":true,"request":true,"error":true},"soundFiles":{"complete":"","request":"","error":""},"emailOnRequest"… |
+| `lastError` | ✅ | 1ms | {"ok":true,"error":null} |
+| `setupState` | ✅ | 0ms | {"ok":true,"done":false,"locale":"zh-CN"} |
+| `lanStatus` | ✅ | 1ms | {"ok":true,"listening":false,"nodeId":"node-7d334a8b"} |
+| `meshStatus` | ✅ | 0ms | {"ok":true,"listening":false,"nodeId":"node-7d334a8b","peerCount":0,"sessions":0} |
+| `platformInfo` | ✅ | 2ms | {"ok":true,"platform":"win32","isMac":false,"isWin":true,"isLinux":false} |
+| `costSummary` | ✅ | 0ms | {"ok":true,"turns":0,"promptTokens":0,"completionTokens":0,"cacheHitRate":0,"avgDurationMs":0,"estCostCny":0} |
+| `memoryRecall` | ✅ | 7ms | {"id":4,"ok":true,"cards":[],"timings":{"totalMs":5,"hydrateMs":0,"embedQueryMs":4,"uniMs":0,"triMs":0,"vecMs":0,"fuseMs":0,"cosines":0,"hydrated":0,"vectorBelowThreshold":0,"vectorUnkRatio":0.5},"sco… |
+| `i18n` | ✅ | 9ms | {"locale":"zh-CN","strings":{"about.author":"作者","about.authorBody":"Pondsi","about.checkUpdate":"检查更新","about.checking":"检查中…","about.contact":"联系方式","about.contactBody":"作者：Pondsi　·　问题反馈与功能建议请通过项目仓库… |
+| `memoryRetrieve` | ✅ | 2ms | {"id":5,"ok":true,"result":null} |
+| `projectState` | ✅ | 1ms | {"ok":true,"state":{"devEnv":"host","containerOnly":false,"running":true,"stopped":false,"code":"host-dev","hostEditingRefused":false,"developmentAllowed":true,"developmentWhere":"host","testingAllowe… |
+| `projectMemoryGet` | ✅ | 1ms | {"ok":true,"groupId":"","memory":"","chars":0} |
+| `aiQuestionList` | ✅ | 1ms | {"ok":true,"items":[]} |
+| `archiveList` | ✅ | 0ms | {"ok":true,"entries":[]} |
+| `boardTasks` | ✅ | 1ms | {"ok":true,"tasks":[]} |
+| `groupMembers` | ✅ | 0ms | {"ok":true,"groupId":"","members":[],"localIsCreator":false} |
+| `containerProbe` | ✅ | 4815ms | {"ok":true,"report":{"ok":true,"platform":"win32","probedAt":1789808864369,"elapsedMs":4814,"cached":false,"runtimes":[{"id":"docker","engine":{"kind":"container","api":"docker"},"status":"installed-n… |
+| `netPortCandidates` | ✅ | 6ms | {"ok":true,"requestedPort":59599,"recommended":[{"port":57757,"status":"ok","latencyMs":4},{"port":52555,"status":"ok","latencyMs":4},{"port":55151,"status":"ok","latencyMs":4},{"port":55335,"status":… |
+| `chatLogRestore` | ✅ | 2ms | {"ok":true,"restore":{"done":true,"ok":true,"entries":0,"sessions":0,"maxSeq":0,"reason":"","trigger":"ipc","at":1789808864376},"sessions":[],"logSeq":0} |
+
+> 本节由 `packages/app-shell/scripts/verify-ipc-probe.mjs` 在真实 Electron 会话内生成。
+
 ## 实测说明
 
 开发机上通过 Electron IPC 对只读接口做过探测；结果见 `docs/API-OPERATIONS-RESULTS.json`（若存在）。

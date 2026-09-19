@@ -1,198 +1,283 @@
 {
-  "at": "2026-09-19T07:16:04.741962+00:00",
-  "note": "Signatures documented in docs/API-OPERATIONS.md; live IPC probe is environment-dependent (needs Electron GUI). Layout/UX fixes verified via check-syntax + docs gates.",
-  "documented_apis": 80,
-  "probe": {
-    "error": "main-load",
-    "message": "Error [ERR_REQUIRE_ESM]: require() of ES Module C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\packages\\app-shell\\dist\\electron-main.js from C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe.cjs not supported.\nInstead change the require of electron-main.js in C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe.cjs to a dynamic import() which is available in all CommonJS modules."
-  },
-  "readonly_plan": {
-    "readonly": [
-      [
-        "hardware",
-        "()",
-        "Read CPU/RAM suggestion for max instances"
-      ],
-      [
-        "listInstances",
-        "()",
-        "List local workhorse instances"
-      ],
-      [
-        "securityMode",
-        "()",
-        "Get global security mode (full/normal/strict)"
-      ],
-      [
-        "memoryStatus",
-        "()",
-        "Memory service readiness + data dir"
-      ],
-      [
-        "localeInfo",
-        "()",
-        "System/resolved locale packs"
-      ],
-      [
-        "themeInfo",
-        "()",
-        "Current theme source"
-      ],
-      [
-        "groupList",
-        "()",
-        "List project/group records"
-      ],
-      [
-        "updateSourceGet",
-        "()",
-        "Configured update feed URL/status"
-      ],
-      [
-        "boardEvents",
-        "()",
-        "Tail board events"
-      ],
-      [
-        "boardAggregate",
-        "()",
-        "Aggregate board progress per group"
-      ],
-      [
-        "getProvider",
-        "()",
-        "Current LLM provider config (secrets omitted in UI)"
-      ],
-      [
-        "checkpointList",
-        "()",
-        "List rollback points"
-      ],
-      [
-        "knowledgeQuery",
-        "WArmy",
-        "FTS/entity search on knowledge base"
-      ],
-      [
-        "metricsSummary",
-        "()",
-        "Chat/tool metrics summary"
-      ],
-      [
-        "settingsGet",
-        "()",
-        "App settings snapshot"
-      ],
-      [
-        "skillsList",
-        "()",
-        "Installed + discovered skills"
-      ],
-      [
-        "skillsPaths",
-        "()",
-        "Skill roots on disk"
-      ],
-      [
-        "skillsScanDirsGet",
-        "()",
-        "Auto-discovery directories (max 10)"
-      ],
-      [
-        "uiQueuesGet",
-        "()",
-        "Persisted P2/P3 UI queues"
-      ],
-      [
-        "routerQueuesGet",
-        "()",
-        "Router queue snapshot (read-only)"
-      ],
-      [
-        "profileGet",
-        "()",
-        "Local profile (name/avatar/deviceId)"
-      ],
-      [
-        "appInfo",
-        "()",
-        "App version / electron / platform"
-      ],
-      [
-        "identityInfo",
-        "()",
-        "Local identity fingerprint/card"
-      ],
-      [
-        "identityPeers",
-        "()",
-        "Confirmed peer identities"
-      ],
-      [
-        "netStatus",
-        "()",
-        "Mesh/dialability facts"
-      ],
-      [
-        "peersList",
-        "()",
-        "Known mesh peers"
-      ],
-      [
-        "executorsStatus",
-        "()",
-        "Executor pool status"
-      ],
-      [
-        "stateLoad",
-        "()",
-        "UI session state (groups/chats/sort)"
-      ],
-      [
-        "lastError",
-        "()",
-        "Last main-process error (if any)"
-      ],
-      [
-        "setupState",
-        "()",
-        "First-run setupDone flag"
-      ],
-      [
-        "lanStatus",
-        "()",
-        "LAN sync status"
-      ],
-      [
-        "meshStatus",
-        "()",
-        "Mesh enable/status"
-      ],
-      [
-        "platformInfo",
-        "()",
-        "OS platform flags"
-      ],
-      [
-        "costSummary",
-        "()",
-        "Cost rollup"
-      ],
-      [
-        "memoryRecall",
-        "WArmy",
-        "Semantic/FTS recall cards"
-      ],
-      [
-        "i18n",
-        "zh-CN",
-        "Load a locale pack"
-      ],
-      [
-        "chatLogRestore",
-        "()",
-        "Rebuild chat logs from memory JSONL"
-      ]
-    ]
-  }
+  "at": "2026-09-19T09:07:44.378Z",
+  "total": 46,
+  "ok": 46,
+  "results": [
+    {
+      "name": "hardware",
+      "ok": true,
+      "ms": 2,
+      "resultPreview": "{\"cpus\":32,\"suggested\":8,\"max\":8}"
+    },
+    {
+      "name": "listInstances",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "[]"
+    },
+    {
+      "name": "securityMode",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "\"normal\""
+    },
+    {
+      "name": "memoryStatus",
+      "ok": true,
+      "ms": 3,
+      "resultPreview": "{\"ok\":true,\"ready\":true,\"dataDir\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\",\"jsonl\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\\\\fast-memory.jsonl\"…"
+    },
+    {
+      "name": "localeInfo",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"system\":\"zh-CN\",\"resolved\":\"zh-CN\",\"isZh\":true,\"supported\":[\"zh-CN\",\"zh-TW\",\"en-US\",\"ja\",\"ko\",\"ru\",\"es\",\"fr\",\"pt\",\"eo\"]}"
+    },
+    {
+      "name": "themeInfo",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"shouldUseDarkColors\":false,\"themeSource\":\"system\"}"
+    },
+    {
+      "name": "groupList",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"groups\":[],\"count\":0}"
+    },
+    {
+      "name": "updateSourceGet",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"configured\":true,\"url\":\"https://api.github.com/repos/Pondsi/WArmy/releases/latest\",\"origin\":\"settings\",\"channel\":\"\",\"currentVersion\":\"0.1.0\",\"lastCheck\":null,\"lastDownload\":null}"
+    },
+    {
+      "name": "boardEvents",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"events\":[]}"
+    },
+    {
+      "name": "boardAggregate",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"sessions\":[]}"
+    },
+    {
+      "name": "getProvider",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"providerCfg\":{\"presetId\":\"deepseek\",\"apiKey\":\"\",\"baseURL\":\"\",\"model\":\"deepseek-chat\",\"protocol\":\"openai-compatible\"},\"hasKey\":false}"
+    },
+    {
+      "name": "checkpointList",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"list\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"active\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1789808859510,\"imageDigests\":{}},\"la…"
+    },
+    {
+      "name": "knowledgeQuery",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"entities\":[],\"events\":[]}"
+    },
+    {
+      "name": "metricsSummary",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"turns\":0,\"avgDurationMs\":0,\"promptTokens\":0,\"completionTokens\":0,\"cacheHitRate\":0,\"cacheHitTokens\":0,\"cacheMissTokens\":0,\"ccrOriginalBytes\":0,\"ccrCompressedBytes\":0,\"ccrRatio\":1,\"viewSampl…"
+    },
+    {
+      "name": "settingsGet",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"settings\":{\"locale\":\"zh-CN\",\"themeMode\":\"system\",\"accent\":\"#07c160\",\"sound\":{\"complete\":true,\"request\":true,\"error\":true},\"soundFiles\":{\"complete\":\"\",\"request\":\"\",\"error\":\"\"},\"emailOnReque…"
+    },
+    {
+      "name": "skillsList",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"skills\":[],\"scanDirs\":[],\"maxScanDirs\":10}"
+    },
+    {
+      "name": "skillsPaths",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"paths\":[\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\skills\"],\"scanDirs\":[]}"
+    },
+    {
+      "name": "skillsScanDirsGet",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"dirs\":[],\"scanDirs\":[],\"max\":10}"
+    },
+    {
+      "name": "uiQueuesGet",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"queues\":{}}"
+    },
+    {
+      "name": "routerQueuesGet",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"snapshot\":{\"version\":1,\"seq\":0,\"queues\":{},\"dutyState\":{}},\"file\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\router-queues.json\"}"
+    },
+    {
+      "name": "profileGet",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"profile\":{\"username\":\"主人\",\"avatarDataUrl\":\"\",\"email\":\"\",\"deviceId\":\"695968036\",\"deviceIdSig\":\"525de7aa6133b2092722fff90343f979d71542b845cc1e78f33fe22eeed2af80\"}}"
+    },
+    {
+      "name": "appInfo",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"name\":\"无限牛马\",\"enName\":\"WArmy\",\"version\":\"0.1.0\",\"electron\":\"33.2.0\",\"chrome\":\"130.0.6723.118\",\"node\":\"20.18.0\",\"platform\":\"win32\",\"arch\":\"x64\",\"deviceId\":\"695968036\",\"deviceIdValid\":true,\"…"
+    },
+    {
+      "name": "identityInfo",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"identity\":{\"alias\":\"695968036\",\"fingerprint\":\"XZDSM-SY9YH-XD93A-PEK7V\",\"generation\":1,\"algo\":\"Ed25519\",\"createdAt\":1789808853227,\"updatedAt\":1789808853227,\"contactCard\":{\"email\":\"\",\"update…"
+    },
+    {
+      "name": "identityPeers",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"peers\":[]}"
+    },
+    {
+      "name": "netStatus",
+      "ok": true,
+      "ms": 8,
+      "resultPreview": "{\"ok\":true,\"meshEnabled\":false,\"link\":{\"reachable\":false,\"lastError\":\"mesh-disabled\",\"peers\":[]},\"nodeId\":\"node-7d334a8b\",\"sessions\":0,\"unlock\":{\"mode\":\"os\",\"unlocked\":true,\"needsPassphrase\":false,\"si…"
+    },
+    {
+      "name": "peersList",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"peers\":[],\"notes\":{\"lan\":\"net.note.lan\",\"wanManual\":\"net.note.wanManual\",\"wanHard\":\"net.note.wanHard\"}}"
+    },
+    {
+      "name": "executorsStatus",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"items\":[]}"
+    },
+    {
+      "name": "stateLoad",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"state\":{\"locale\":\"zh-CN\",\"themeMode\":\"system\",\"accent\":\"#07c160\",\"sound\":{\"complete\":true,\"request\":true,\"error\":true},\"soundFiles\":{\"complete\":\"\",\"request\":\"\",\"error\":\"\"},\"emailOnRequest\"…"
+    },
+    {
+      "name": "lastError",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"error\":null}"
+    },
+    {
+      "name": "setupState",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"done\":false,\"locale\":\"zh-CN\"}"
+    },
+    {
+      "name": "lanStatus",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"listening\":false,\"nodeId\":\"node-7d334a8b\"}"
+    },
+    {
+      "name": "meshStatus",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"listening\":false,\"nodeId\":\"node-7d334a8b\",\"peerCount\":0,\"sessions\":0}"
+    },
+    {
+      "name": "platformInfo",
+      "ok": true,
+      "ms": 2,
+      "resultPreview": "{\"ok\":true,\"platform\":\"win32\",\"isMac\":false,\"isWin\":true,\"isLinux\":false}"
+    },
+    {
+      "name": "costSummary",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"turns\":0,\"promptTokens\":0,\"completionTokens\":0,\"cacheHitRate\":0,\"avgDurationMs\":0,\"estCostCny\":0}"
+    },
+    {
+      "name": "memoryRecall",
+      "ok": true,
+      "ms": 7,
+      "resultPreview": "{\"id\":4,\"ok\":true,\"cards\":[],\"timings\":{\"totalMs\":5,\"hydrateMs\":0,\"embedQueryMs\":4,\"uniMs\":0,\"triMs\":0,\"vecMs\":0,\"fuseMs\":0,\"cosines\":0,\"hydrated\":0,\"vectorBelowThreshold\":0,\"vectorUnkRatio\":0.5},\"sco…"
+    },
+    {
+      "name": "i18n",
+      "ok": true,
+      "ms": 9,
+      "resultPreview": "{\"locale\":\"zh-CN\",\"strings\":{\"about.author\":\"作者\",\"about.authorBody\":\"Pondsi\",\"about.checkUpdate\":\"检查更新\",\"about.checking\":\"检查中…\",\"about.contact\":\"联系方式\",\"about.contactBody\":\"作者：Pondsi　·　问题反馈与功能建议请通过项目仓库…"
+    },
+    {
+      "name": "memoryRetrieve",
+      "ok": true,
+      "ms": 2,
+      "resultPreview": "{\"id\":5,\"ok\":true,\"result\":null}"
+    },
+    {
+      "name": "projectState",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"state\":{\"devEnv\":\"host\",\"containerOnly\":false,\"running\":true,\"stopped\":false,\"code\":\"host-dev\",\"hostEditingRefused\":false,\"developmentAllowed\":true,\"developmentWhere\":\"host\",\"testingAllowe…"
+    },
+    {
+      "name": "projectMemoryGet",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"groupId\":\"\",\"memory\":\"\",\"chars\":0}"
+    },
+    {
+      "name": "aiQuestionList",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"items\":[]}"
+    },
+    {
+      "name": "archiveList",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"entries\":[]}"
+    },
+    {
+      "name": "boardTasks",
+      "ok": true,
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"tasks\":[]}"
+    },
+    {
+      "name": "groupMembers",
+      "ok": true,
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"groupId\":\"\",\"members\":[],\"localIsCreator\":false}"
+    },
+    {
+      "name": "containerProbe",
+      "ok": true,
+      "ms": 4815,
+      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1789808864369,\"elapsedMs\":4814,\"cached\":false,\"runtimes\":[{\"id\":\"docker\",\"engine\":{\"kind\":\"container\",\"api\":\"docker\"},\"status\":\"installed-n…"
+    },
+    {
+      "name": "netPortCandidates",
+      "ok": true,
+      "ms": 6,
+      "resultPreview": "{\"ok\":true,\"requestedPort\":59599,\"recommended\":[{\"port\":57757,\"status\":\"ok\",\"latencyMs\":4},{\"port\":52555,\"status\":\"ok\",\"latencyMs\":4},{\"port\":55151,\"status\":\"ok\",\"latencyMs\":4},{\"port\":55335,\"status\":…"
+    },
+    {
+      "name": "chatLogRestore",
+      "ok": true,
+      "ms": 2,
+      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1789808864376},\"sessions\":[],\"logSeq\":0}"
+    }
+  ]
 }
