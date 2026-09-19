@@ -50,7 +50,11 @@ function nativeSqliteAvailable() {
     // 必须**从 memory-os 的视角**解析：better-sqlite3 是它的依赖，
     // 不是 app-shell 的依赖（pnpm 隔离布局下从本脚本解析会永远失败）。
     const req = createRequire(path.join(ROOT, 'packages/memory-os/package.json'));
-    req.resolve('better-sqlite3');
+    const Database = req('better-sqlite3');
+    // 关键：能 require 到包 ≠ 原生绑定可用（CI 用 --ignore-scripts 跳过了编译，
+    // 包装好了但 .node 不在）。所以真正开一个内存库验证一次。
+    const db = new Database(':memory:');
+    db.close();
     return true;
   } catch {
     return false;
