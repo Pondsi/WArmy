@@ -1,0 +1,198 @@
+{
+  "at": "2026-09-19T07:16:04.741962+00:00",
+  "note": "Signatures documented in docs/API-OPERATIONS.md; live IPC probe is environment-dependent (needs Electron GUI). Layout/UX fixes verified via check-syntax + docs gates.",
+  "documented_apis": 80,
+  "probe": {
+    "error": "main-load",
+    "message": "Error [ERR_REQUIRE_ESM]: require() of ES Module C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\packages\\app-shell\\dist\\electron-main.js from C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe.cjs not supported.\nInstead change the require of electron-main.js in C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe.cjs to a dynamic import() which is available in all CommonJS modules."
+  },
+  "readonly_plan": {
+    "readonly": [
+      [
+        "hardware",
+        "()",
+        "Read CPU/RAM suggestion for max instances"
+      ],
+      [
+        "listInstances",
+        "()",
+        "List local workhorse instances"
+      ],
+      [
+        "securityMode",
+        "()",
+        "Get global security mode (full/normal/strict)"
+      ],
+      [
+        "memoryStatus",
+        "()",
+        "Memory service readiness + data dir"
+      ],
+      [
+        "localeInfo",
+        "()",
+        "System/resolved locale packs"
+      ],
+      [
+        "themeInfo",
+        "()",
+        "Current theme source"
+      ],
+      [
+        "groupList",
+        "()",
+        "List project/group records"
+      ],
+      [
+        "updateSourceGet",
+        "()",
+        "Configured update feed URL/status"
+      ],
+      [
+        "boardEvents",
+        "()",
+        "Tail board events"
+      ],
+      [
+        "boardAggregate",
+        "()",
+        "Aggregate board progress per group"
+      ],
+      [
+        "getProvider",
+        "()",
+        "Current LLM provider config (secrets omitted in UI)"
+      ],
+      [
+        "checkpointList",
+        "()",
+        "List rollback points"
+      ],
+      [
+        "knowledgeQuery",
+        "WArmy",
+        "FTS/entity search on knowledge base"
+      ],
+      [
+        "metricsSummary",
+        "()",
+        "Chat/tool metrics summary"
+      ],
+      [
+        "settingsGet",
+        "()",
+        "App settings snapshot"
+      ],
+      [
+        "skillsList",
+        "()",
+        "Installed + discovered skills"
+      ],
+      [
+        "skillsPaths",
+        "()",
+        "Skill roots on disk"
+      ],
+      [
+        "skillsScanDirsGet",
+        "()",
+        "Auto-discovery directories (max 10)"
+      ],
+      [
+        "uiQueuesGet",
+        "()",
+        "Persisted P2/P3 UI queues"
+      ],
+      [
+        "routerQueuesGet",
+        "()",
+        "Router queue snapshot (read-only)"
+      ],
+      [
+        "profileGet",
+        "()",
+        "Local profile (name/avatar/deviceId)"
+      ],
+      [
+        "appInfo",
+        "()",
+        "App version / electron / platform"
+      ],
+      [
+        "identityInfo",
+        "()",
+        "Local identity fingerprint/card"
+      ],
+      [
+        "identityPeers",
+        "()",
+        "Confirmed peer identities"
+      ],
+      [
+        "netStatus",
+        "()",
+        "Mesh/dialability facts"
+      ],
+      [
+        "peersList",
+        "()",
+        "Known mesh peers"
+      ],
+      [
+        "executorsStatus",
+        "()",
+        "Executor pool status"
+      ],
+      [
+        "stateLoad",
+        "()",
+        "UI session state (groups/chats/sort)"
+      ],
+      [
+        "lastError",
+        "()",
+        "Last main-process error (if any)"
+      ],
+      [
+        "setupState",
+        "()",
+        "First-run setupDone flag"
+      ],
+      [
+        "lanStatus",
+        "()",
+        "LAN sync status"
+      ],
+      [
+        "meshStatus",
+        "()",
+        "Mesh enable/status"
+      ],
+      [
+        "platformInfo",
+        "()",
+        "OS platform flags"
+      ],
+      [
+        "costSummary",
+        "()",
+        "Cost rollup"
+      ],
+      [
+        "memoryRecall",
+        "WArmy",
+        "Semantic/FTS recall cards"
+      ],
+      [
+        "i18n",
+        "zh-CN",
+        "Load a locale pack"
+      ],
+      [
+        "chatLogRestore",
+        "()",
+        "Rebuild chat logs from memory JSONL"
+      ]
+    ]
+  }
+}

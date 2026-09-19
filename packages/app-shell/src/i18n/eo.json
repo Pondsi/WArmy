@@ -1585,5 +1585,8 @@
   "settings.hotkey.apiTryResult": "API-prova rezulto",
   "settings.hotkey.apiTryReadOnly": "Nur nurlegaj API-oj",
   "model.editProviderConfirm": "Iri al Agordo?",
-  "model.editProviderConfirmBody": "Ĉi tio fermos la dialogon kaj malfermos Agordo → Modelo por redakti la provizanton. Elektitaj modelo ĉi tie perdiĝos. Daŭrigi?"
+  "model.editProviderConfirmBody": "Ĉi tio fermos la dialogon kaj malfermos Agordo → Modelo por redakti la provizanton. Elektitaj modelo ĉi tie perdiĝos. Daŭrigi?",
+  "settings.hotkey.apiCopyOps": "Kopii AI-gvidilon",
+  "settings.hotkey.apiCopied": "Kopiita",
+  "settings.hotkey.apiCopyText": "Por operacii WArmy, unue legu la gvidilon:"
 }

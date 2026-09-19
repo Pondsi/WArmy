@@ -1585,5 +1585,8 @@
   "settings.hotkey.apiTryResult": "API試行結果",
   "settings.hotkey.apiTryReadOnly": "読み取り専用APIのみ試行可",
   "model.editProviderConfirm": "設定へ移動しますか？",
-  "model.editProviderConfirmBody": "このダイアログを閉じ、「設定 → モデル」でプロバイダーを編集します。ここで選んだモデルは失われます。続行しますか？"
+  "model.editProviderConfirmBody": "このダイアログを閉じ、「設定 → モデル」でプロバイダーを編集します。ここで選んだモデルは失われます。続行しますか？",
+  "settings.hotkey.apiCopyOps": "AI操作ガイドをコピー",
+  "settings.hotkey.apiCopied": "クリップボードにコピーしました",
+  "settings.hotkey.apiCopyText": "WArmy を操作するには、まず操作ガイドを読んでください："
 }

@@ -1585,5 +1585,8 @@
   "settings.hotkey.apiTryResult": "介面試執行結果",
   "settings.hotkey.apiTryReadOnly": "僅唯讀介面可試執行",
   "model.editProviderConfirm": "跳轉到設定？",
-  "model.editProviderConfirmBody": "將關閉本彈窗並跳轉到「設定 → 模型」編輯供應商。添加模型時的勾選會丟失，確定繼續？"
+  "model.editProviderConfirmBody": "將關閉本彈窗並跳轉到「設定 → 模型」編輯供應商。添加模型時的勾選會丟失，確定繼續？",
+  "settings.hotkey.apiCopyOps": "複製 AI 操作指引",
+  "settings.hotkey.apiCopied": "已複製到剪貼簿",
+  "settings.hotkey.apiCopyText": "要操作 WArmy（無限牛馬）請先閱讀操作文檔："
 }

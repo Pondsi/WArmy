@@ -70,6 +70,7 @@ check('CONTRIBUTING exists', fs.existsSync(path.join(ROOT, 'CONTRIBUTING.md')));
 check('SECURITY expanded', fs.readFileSync(path.join(ROOT, '.github/SECURITY.md'), 'utf8').includes('vulnerability'));
 check('mesh checklist', fs.existsSync(path.join(ROOT, 'docs/mesh-dual-machine.md')));
 check('release notes', fs.existsSync(path.join(ROOT, 'docs/RELEASE-NOTES-0.1.0.md')));
+check('API-OPERATIONS.md', fs.existsSync(path.join(ROOT, 'docs/API-OPERATIONS.md')));
 check('fetch-node-runtime script', fs.existsSync(path.join(ROOT, 'scripts/fetch-node-runtime.mjs')));
 check('update feed docs', fs.existsSync(path.join(ROOT, 'docs/UPDATE-FEED.md')));
 check('container timings docs', fs.existsSync(path.join(ROOT, 'docs/CONTAINER-TIMINGS.md')));

@@ -1585,5 +1585,8 @@
   "settings.hotkey.apiTryResult": "Resultado do teste da API",
   "settings.hotkey.apiTryReadOnly": "Somente APIs somente leitura",
   "model.editProviderConfirm": "Ir para Configurações?",
-  "model.editProviderConfirmBody": "Este diálogo será fechado e abrirá Configurações → Modelos para editar o provedor. Os modelos escolhidos aqui serão perdidos. Continuar?"
+  "model.editProviderConfirmBody": "Este diálogo será fechado e abrirá Configurações → Modelos para editar o provedor. Os modelos escolhidos aqui serão perdidos. Continuar?",
+  "settings.hotkey.apiCopyOps": "Copiar guia da IA",
+  "settings.hotkey.apiCopied": "Copiado",
+  "settings.hotkey.apiCopyText": "Para operar o WArmy, leia primeiro o guia:"
 }

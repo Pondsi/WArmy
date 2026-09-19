@@ -1585,5 +1585,8 @@
   "settings.hotkey.apiTryResult": "Результат проверки API",
   "settings.hotkey.apiTryReadOnly": "Пробовать можно только read-only API",
   "model.editProviderConfirm": "Перейти в настройки?",
-  "model.editProviderConfirmBody": "Диалог закроется, откроются Настройки → Модели для редактирования провайдера. Выбранные здесь модели будут потеряны. Продолжить?"
+  "model.editProviderConfirmBody": "Диалог закроется, откроются Настройки → Модели для редактирования провайдера. Выбранные здесь модели будут потеряны. Продолжить?",
+  "settings.hotkey.apiCopyOps": "Скопировать гид для ИИ",
+  "settings.hotkey.apiCopied": "Скопировано",
+  "settings.hotkey.apiCopyText": "Для работы с WArmy сначала прочитайте руководство:"
 }

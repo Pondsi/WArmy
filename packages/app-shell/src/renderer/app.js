@@ -2315,6 +2315,10 @@
           <h2>${t('settings.hotkey.apiTitle')}</h2>
           <p class="hk-hint">${t('settings.hotkey.apiHint')}</p>
           <div class="hk-count" id="hk-api-count"></div>
+          <div style="margin:6px 0">
+            <button class="btn-mini" id="btn-copy-api-ops">${escapeHtml(t('settings.hotkey.apiCopyOps') || 'Copy AI guide')}</button>
+            <span class="muted" id="api-copy-msg"></span>
+          </div>
           <input class="hk-filter" id="hk-api-filter" placeholder="${escapeHtml(t('settings.hotkey.apiFilter'))}"/>
           <div id="hk-api-body"></div>
           <div class="hk-api-events" id="hk-api-events"></div>
@@ -6281,6 +6285,88 @@
     }
   }
 
+  /** API 中文说明（与 docs/API-OPERATIONS.md 同步） */
+  const WARMY_API_DOC_ZH = {
+    hardware: '读本机 CPU/内存，给出建议最大牛马数',
+    listInstances: '列出本机牛马实例',
+    spawnInstance: '启动一个牛马实例',
+    stopInstance: '停止指定实例',
+    securityMode: '读全局安全模式',
+    setSecurityMode: '写全局安全模式',
+    memoryRecall: '记忆检索（关键词/语义卡片）',
+    memoryAppend: '写入一条记忆',
+    memoryRetrieve: '按 seq/recordId 取回原文',
+    memoryStatus: '记忆服务就绪状态与数据目录',
+    memoryRebuild: '从 JSONL 重建 SQLite 投影',
+    i18n: '加载指定语言包',
+    localeInfo: '系统语言与已支持语言列表',
+    setThemeSource: '设置主题（system/dark/light）',
+    themeInfo: '读当前主题',
+    listModels: '按供应商拉取模型列表',
+    pickSound: '选择提示音文件',
+    checkUpdate: '检查更新（GitHub/自定义源）',
+    groupCreate: '创建项目/群聊',
+    groupList: '列出全部项目/群聊',
+    updateSourceGet: '读更新源配置',
+    updateSourceSet: '写更新源 URL',
+    groupMessage: '向群发一条消息',
+    groupOrchestrate: '值班编排闭环入口',
+    groupMembers: '读群成员',
+    boardTasks: '读某群看板任务',
+    boardEvents: '读看板事件尾部',
+    boardAggregate: '按群聚合看板进展',
+    setProvider: '设置模型供应商',
+    getProvider: '读当前供应商配置',
+    chatSend: '发送聊天消息',
+    chatLog: '读/写会话日志',
+    chatLogRestore: '从记忆 JSONL 恢复会话日志',
+    checkpointCreate: '创建回退点',
+    checkpointList: '列出回退点',
+    checkpointRollback: '回滚到指定点',
+    knowledgeQuery: '检索知识库',
+    knowledgeAddEvent: '向知识库添加事件',
+    metricsSummary: '指标汇总',
+    metricsTurns: '轮次指标',
+    metricsTools: '工具调用指标',
+    settingsGet: '读设置',
+    settingsSave: '合并保存设置',
+    containerProbe: '探测本机容器运行时',
+    containerAction: '启动/停止容器引擎',
+    containerShell: '容器内 shell（open/write/close/status）',
+    projectState: '项目可用性状态',
+    projectEnable: '启用项目',
+    projectDisable: '停用项目',
+    projectSetContainer: '切换项目容器运行时',
+    projectFiles: '项目文件/产物面板数据',
+    projectEnvStatus: '项目环境固化状态',
+    projectEnvSolidify: '固化当前容器环境',
+    projectEnvRollback: '回滚到固化镜像',
+    projectLedger: '项目文件访问台账',
+    projectMemoryGet: '读项目 MEMORY',
+    projectMemorySet: '写项目 MEMORY（read-back）',
+    aiQuestionOpen: '发起 AI 决策选项卡',
+    aiQuestionList: '列出决策卡',
+    aiQuestionAnswer: '回答决策卡（含自定义）',
+    skillsList: '列出技能',
+    skillsScanDirsGet: '读自动发现目录',
+    skillsScanDirsSet: '写自动发现目录（≤10，去重）',
+    uiQueuesGet: '读 UI 待执行队列',
+    uiQueuesSet: '写 UI 待执行队列',
+    routerQueuesGet: '读 Router 队列快照',
+    identityInfo: '本机身份信息',
+    netStatus: '组网状态',
+    netPortCandidates: '实测候选端口',
+    meshEnable: '启用组网',
+    meshDisable: '关闭组网',
+    executorsStatus: '执行者状态',
+    setupState: '首次启动 setupDone',
+    searchMessages: '搜索历史消息',
+    archiveList: '列归档',
+    archiveExternal: '归档并提炼知识/偏好',
+    platformInfo: '平台信息',
+    costSummary: '成本汇总',
+    exportSession: '导出会话 Markdown',
+  };
   function apiCatalogue() {
     const bridge = (typeof window !== 'undefined' && window.warmy) || null;
     const rows = [];
@@ -6341,13 +6427,10 @@
         list
           .map((r) => {
             const k = 'settings.hotkey.api.' + r.name;
-            const desc = state.t[k] ? t(k) : '';
-            const tryBtn = r.readonly
-              ? `<button class="btn-mini" data-api-try="${escapeHtml(r.name)}">${escapeHtml(t('settings.hotkey.apiTry') || 'Try')}</button>`
-              : '';
+            const desc = state.t[k] ? t(k) : (WARMY_API_DOC_ZH[r.name] || '');
             return (
               '<tr data-api-op="' + escapeHtml(r.name) + '">' +
-              '<td class="hk-op">' + escapeHtml(r.name) + ' ' + tryBtn + '</td>' +
+              '<td class="hk-op">' + escapeHtml(r.name) + '</td>' +
               '<td class="hk-ch">' + escapeHtml(r.channel || '—') + '</td>' +
               '<td class="hk-pa"><code>' + escapeHtml(r.params || '()') + '</code></td>' +
               '<td class="hk-desc' + (desc ? '' : ' none') + '">' + escapeHtml(desc || t('settings.hotkey.apiNoDesc')) + '</td>' +
@@ -6361,6 +6444,25 @@
   }
 
   function bindHotkeySection() {
+    const copyBtn = $('btn-copy-api-ops');
+    if (copyBtn && !copyBtn.dataset.bound) {
+      copyBtn.dataset.bound = '1';
+      copyBtn.onclick = async () => {
+        const rel = 'docs/API-OPERATIONS.md';
+        const abs = (window.warmy && window.warmy.__repoApiDoc) || rel;
+        const text =
+          t('settings.hotkey.apiCopyText') ||
+          ('How to operate WArmy APIs: open the file `docs/API-OPERATIONS.md` in the project root (or absolute path if provided). Read it before calling window.warmy.* / IPC.');
+        const payload = text + '\n\n' + abs + '\n\n' + rel;
+        try {
+          await navigator.clipboard.writeText(payload);
+          const msg = $('api-copy-msg');
+          if (msg) msg.textContent = t('settings.hotkey.apiCopied') || 'Copied';
+        } catch {
+          uiAlert(payload, t('settings.hotkey.apiCopyOps') || 'API guide');
+        }
+      };
+    }
     renderApiCatalogue();
     renderShortcuts();
     shortcutMsg('');
@@ -6371,16 +6473,6 @@
     }
   }
 
-  document.addEventListener('click', async (e) => {
-    const tEl = e.target && e.target.closest && e.target.closest('[data-api-try]');
-    if (!tEl) return;
-    const name = tEl.getAttribute('data-api-try');
-    tEl.disabled = true;
-    const r = await tryRunWarmyApi(name);
-    tEl.disabled = false;
-    const json = r.result !== undefined ? JSON.stringify(r.result) : (r.error || '');
-    await uiAlert(`${name}\n${String(json).slice(0, 400)}`, t('settings.hotkey.apiTryResult') || 'API result');
-  });
 
   // ── 右键菜单 ──
   // ── 3 权限审批：与决策卡同一通知区视觉整合 ──

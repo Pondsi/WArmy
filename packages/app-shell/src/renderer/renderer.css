@@ -771,8 +771,10 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 
 
 @media (max-width: 720px) {
-  #app-body { grid-template-columns: 56px 1fr; }
-  #list-col, #panel-col { display: none !important; }
+  /* 手机/极窄窗口才收起列表栏；桌面前览/主窗口不应走进这里 */
+  #app-body { grid-template-columns: 64px 1fr; }
+  #list-col { display: none !important; }
+  #panel-col { display: none !important; }
   .chat-layout { grid-template-columns: 1fr; }
   #col-resizer, #panel-resizer { display: none; }
 }
@@ -908,13 +910,82 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
   color: var(--ink);
   opacity: 0.55;
 }
-#panel-col .panel-console {
+#panel-col .panel-console,
+#console-pane.console-pane {
+  /* 诊断事件流：与右侧栏其它面板一致，不用终端黑底 */
+  background: var(--card, #fff);
+  color: var(--ink, #222);
+  border: 1px solid var(--line, #ddd);
+  border-radius: var(--radius, 8px);
   max-height: 340px;
   min-height: 160px;
   margin: 0;
+  font-family: inherit;
+}
+#panel-col .console-head,
+#console-pane .console-head {
+  color: var(--muted, #666);
+  border-bottom: 1px solid var(--line, #ddd);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#panel-col .console-out,
+#console-pane .console-out {
+  color: var(--ink, #222);
+  background: transparent;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: 12px;
 }
 #diag-panel-block .panel-toggle { display:flex; align-items:center; gap:8px; cursor:pointer; }
 #diag-host.hidden { display:none; }
 .chat-actions .btn-diag { order: 99; margin-left: auto; }
 .prov-focus { outline: 1px solid var(--accent); border-radius: 8px; }
 .hk-pa code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+
+/* ── 布局兜底：非 hide-list 时第一/第二列必须可见 ── */
+#app-body:not(.hide-list) {
+  grid-template-columns: 64px var(--list-w, 280px) 1fr !important;
+}
+#app-body:not(.hide-list) #rail {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+#app-body:not(.hide-list) #list-col {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+/* 设置/我的：保留第一列导航，第二列由 page-layout 内部承担 */
+#app-body.hide-list {
+  grid-template-columns: 64px 1fr !important;
+}
+#app-body.hide-list #rail {
+  display: flex !important;
+  visibility: visible !important;
+}
+/* 诊断事件流：与右栏其它块一致（浅色/主题色），不是终端黑底 */
+#console-pane.console-pane,
+#panel-col .panel-console {
+  background: var(--card) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  font-family: inherit !important;
+}
+#console-pane .console-head,
+#panel-col .console-head {
+  background: transparent !important;
+  color: var(--muted) !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+#console-pane .console-out,
+#panel-col .console-out {
+  background: transparent !important;
+  color: var(--ink) !important;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace) !important;
+  font-size: 12px !important;
+}
+#console-pane .console-clear { color: var(--muted); }

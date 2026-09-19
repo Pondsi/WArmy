@@ -1585,5 +1585,8 @@
   "settings.hotkey.apiTryResult": "API try-run result",
   "settings.hotkey.apiTryReadOnly": "Only read-only APIs can be tried",
   "model.editProviderConfirm": "Go to Settings?",
-  "model.editProviderConfirmBody": "This will close the dialog and open Settings → Models to edit the provider. Any models you selected here will be discarded. Continue?"
+  "model.editProviderConfirmBody": "This will close the dialog and open Settings → Models to edit the provider. Any models you selected here will be discarded. Continue?",
+  "settings.hotkey.apiCopyOps": "Copy AI guide",
+  "settings.hotkey.apiCopied": "Copied to clipboard",
+  "settings.hotkey.apiCopyText": "To operate WArmy, read the operations guide first:"
 }

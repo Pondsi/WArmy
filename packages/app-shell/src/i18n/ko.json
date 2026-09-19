@@ -1585,5 +1585,8 @@
   "settings.hotkey.apiTryResult": "API 시험 결과",
   "settings.hotkey.apiTryReadOnly": "읽기 전용 API만 시험 가능",
   "model.editProviderConfirm": "설정으로 이동할까요?",
-  "model.editProviderConfirmBody": "이 대화 상자를 닫고 '설정 → 모델'로 이동해 공급자를 편집합니다. 여기서 고른 모델은 사라집니다. 계속할까요?"
+  "model.editProviderConfirmBody": "이 대화 상자를 닫고 '설정 → 모델'로 이동해 공급자를 편집합니다. 여기서 고른 모델은 사라집니다. 계속할까요?",
+  "settings.hotkey.apiCopyOps": "AI操作가이드 복사",
+  "settings.hotkey.apiCopied": "클립보드에 복사됨",
+  "settings.hotkey.apiCopyText": "WArmy를 조작하려면 먼저 운영 가이드를 읽으세요:"
 }
