@@ -526,16 +526,60 @@ export class MemoryService {
   // 三路召回通道
   // ─────────────────────────────────────────────
 
-  private channelUni(query: string, limit: number, scopeStats: ScopeStats): { ids: string[]; scoreById: Map<string, number> } {
+  /**
+   * 多词查询的**逐词回退表达式**（短语查不到时用）。
+   *
+   * 为什么需要：`toPhrase()` 把整条查询当成一个**短语**（`"a b c"`），
+   * 只有正文里**连续同序**出现才命中。实测：单词/双词正常，三词
+   * "ALPHA-7799 memory verify" 命中 0（文档其实已在 FTS 里，见 stats.ftsUniDocs），
+   * 只能靠向量腿救回；**没有嵌入模型的机器上就等于完全召不回**（CI 就是这样暴露的）。
+   *
+   * 两种索引的token 粒度不同，不能用同一套表达式：
+   *  - fts_uni 是**单字**索引（CJK 逐字、ASCII 逐字符），所以词要写成 `"m e m o r y"`；
+   *  - fts_tri 是 trigram，词保持原样 `"memory"`；
+   * 先试 **AND**（所有词都在，精确），再试 **OR**（部分词命中，宽松）。
+   */
+  private termwiseFallbacks(q: string, mode: 'chars' | 'raw'): string[] {
+    const terms = String(q || '')
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+    if (terms.length < 2) return [];
+    const quoted = terms.map((t) => {
+      const body = mode === 'chars' ? spaceChars(t) : t;
+      return `"${body.replace(/"/g, '""')}"`;
+    });
+    return [quoted.join(' AND '), quoted.join(' OR ')];
+  }
+
+  /** 依次尝试回退表达式，返回第一个有结果的（顺序即优先级） */
+  private tryFallbacks<T>(exprs: string[], run: (matchExpr: string) => T[]): { rows: T[]; used?: string } {
+    for (const [i, expr] of exprs.entries()) {
+      try {
+        const rows = run(expr);
+        if (rows.length) return { rows, used: i === 0 ? 'termwise AND fallback' : 'termwise OR fallback' };
+      } catch { /* 表达式语法问题：继续下一个 */ }
+    }
+    return { rows: [] };
+  }
+
+  private channelUni(query: string, limit: number, scopeStats: ScopeStats): { ids: string[]; scoreById: Map<string, number>; skipped?: string } {
     const ids: string[] = [];
     const scoreById = new Map<string, number>();
     const join = this.scopeJoin(scopeStats, 'f');
-    const rows = this.db
-      .prepare(
-        `SELECT f.rowid AS seq, bm25(fts_uni) AS s FROM fts_uni f ${join}
-         WHERE fts_uni MATCH ? ORDER BY rank LIMIT ?`
-      )
-      .all(toPhrase(query), limit) as Array<{ seq: number; s: number }>;
+    const stmt = this.db.prepare(
+      `SELECT f.rowid AS seq, bm25(fts_uni) AS s FROM fts_uni f ${join}
+       WHERE fts_uni MATCH ? ORDER BY rank LIMIT ?`
+    );
+    let rows = stmt.all(toPhrase(query), limit) as Array<{ seq: number; s: number }>;
+    let skipped: string | undefined;
+    if (rows.length === 0) {
+      const retry = this.tryFallbacks(this.termwiseFallbacks(query, 'chars'), (m) => stmt.all(m, limit) as Array<{ seq: number; s: number }>);
+      if (retry.rows.length) {
+        rows = retry.rows;
+        skipped = retry.used;
+      }
+    }
     for (const r of rows) {
       const id = String(r.seq);
       if (!scoreById.has(id)) {
@@ -543,7 +587,7 @@ export class MemoryService {
         scoreById.set(id, -Number(r.s));
       }
     }
-    return { ids, scoreById };
+    return { ids, scoreById, ...(skipped ? { skipped } : {}) };
   }
 
   private channelTri(query: string, limit: number, scopeStats: ScopeStats): { ids: string[]; scoreById: Map<string, number>; skipped?: string } {
@@ -551,12 +595,19 @@ export class MemoryService {
     const scoreById = new Map<string, number>();
     if (!triQueryable(query)) return { ids, scoreById, skipped: 'query<3chars' };
     const join = this.scopeJoin(scopeStats, 'f');
-    const rows = this.db
-      .prepare(
-        `SELECT f.rowid AS seq, bm25(fts_tri) AS s FROM fts_tri f ${join}
-         WHERE fts_tri MATCH ? ORDER BY rank LIMIT ?`
-      )
-      .all(toTriPhrase(query.trim()), limit) as Array<{ seq: number; s: number }>;
+    const stmt = this.db.prepare(
+      `SELECT f.rowid AS seq, bm25(fts_tri) AS s FROM fts_tri f ${join}
+       WHERE fts_tri MATCH ? ORDER BY rank LIMIT ?`
+    );
+    let rows = stmt.all(toTriPhrase(query.trim()), limit) as Array<{ seq: number; s: number }>;
+    let skipped: string | undefined;
+    if (rows.length === 0) {
+      const retry = this.tryFallbacks(this.termwiseFallbacks(query.trim(), 'raw'), (m) => stmt.all(m, limit) as Array<{ seq: number; s: number }>);
+      if (retry.rows.length) {
+        rows = retry.rows;
+        skipped = retry.used;
+      }
+    }
     for (const r of rows) {
       const id = String(r.seq);
       if (!scoreById.has(id)) {
@@ -564,7 +615,7 @@ export class MemoryService {
         scoreById.set(id, -Number(r.s));
       }
     }
-    return { ids, scoreById };
+    return { ids, scoreById, ...(skipped ? { skipped } : {}) };
   }
 
   /** LIKE 兜底：1–2 字 CJK 与 trigram 停用时的语义保持不变（历史上是 recall 的兜底路径） */
