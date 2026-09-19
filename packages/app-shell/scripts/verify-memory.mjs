@@ -37,8 +37,30 @@ check('README mentions memory', fs.readFileSync(path.join(ROOT, 'README.md'), 'u
 
 // live test
 const distIndex = path.join(ROOT, 'packages/memory-os/dist/index.js');
+/**
+ * 原生依赖可用性：memory-os 的 FTS/向量层依赖 better-sqlite3（原生模块）。
+ * CI runner 没有 Visual Studio，安装时用 --ignore-scripts 跳过了原生构建，
+ * 因此**动态**检索在这里必然拿不到结果。
+ * 这时如实**跳过**动态段（并说明原因），而不是把它报成"检索坏了"——
+ * 产品原则：状态必须诚实，不能把环境缺失误报成功能缺陷。
+ * 本地有原生模块时，动态段照常执行。
+ */
+function nativeSqliteAvailable() {
+  try {
+    // 必须**从 memory-os 的视角**解析：better-sqlite3 是它的依赖，
+    // 不是 app-shell 的依赖（pnpm 隔离布局下从本脚本解析会永远失败）。
+    const req = createRequire(path.join(ROOT, 'packages/memory-os/package.json'));
+    req.resolve('better-sqlite3');
+    return true;
+  } catch {
+    return false;
+  }
+}
+const liveOk = fs.existsSync(distIndex) && nativeSqliteAvailable();
 if (!fs.existsSync(distIndex)) {
   console.log('  skip live memory test (dist missing) — build packages/memory-os first');
+} else if (!liveOk) {
+  console.log('  skip live memory test (better-sqlite3 native module not built here — e.g. CI without Visual Studio; dynamically skipped, NOT a product failure)');
 } else {
   const dataDir = path.join(os.tmpdir(), 'warmy-memory-verify-' + Date.now());
   fs.mkdirSync(dataDir, { recursive: true });
