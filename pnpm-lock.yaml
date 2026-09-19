@@ -125,6 +125,10 @@ importers:
       '@warmy/contracts':
         specifier: workspace:*
         version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: 24.9.0
+        version: 24.9.0
 
   packages/sync-protocol:
     devDependencies:
