@@ -6816,12 +6816,16 @@ handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; au
         structured.risks.length ? `## 风险\n${structured.risks.map((d) => '- ' + d).join('\n')}` : '',
         `## 要点\n${structured.bullets.map((d) => '- ' + d).join('\n')}`,
       ].filter(Boolean).join('\n\n').slice(0, 4000);
+    // 尽量带上锚点：用最近日志的 seq（便于右栏「跳到原文」）
+    const anchors = logs.slice(-5)
+      .filter((l) => l && l.seq != null)
+      .map((l) => ({ file: 'chat-log', seq: Number(l.seq || 0), recordId: `seq:${l.seq}` }));
     const entry = archiver?.archive({
       id: 'arc-' + Date.now(),
       groupId: gid,
       title,
       summary,
-      anchors: [],
+      anchors,
       structured: {
         bullets: structured.bullets,
         decisions: structured.decisions,

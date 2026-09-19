@@ -18,15 +18,18 @@
 
 - 上下文预算滑块与模型窗口映射
 - 群聊上下文自动收敛 + 超限重试（到最小值仍失败则如实告知）
-- 会话摘要跳转原文（按 recordId/seq）
+- 会话摘要跳转原文（anchors 优先；无锚点回退结构化文本/标题搜索）
 - 真实 UI 断言脚本 `verify-ui-layout.mjs`
 - 文档 `docs/API-OPERATIONS.md`、`docs/CONTEXT-KNOWLEDGE-GATE.md`
-- **结构化会话摘要**：`extractStructuredSummary` + 归档条目落盘 `structured` + 知识库事件
+- **完整需求文档** `docs/REQUIREMENTS.md`（目标/理念/功能/安全/验收/开发纪律）
+- **完整技术文档** `docs/TECHNICAL.md`（架构/模块含义/**命名规范**/门禁/数据落盘/接手路径）
+- **结构化会话摘要**：`extractStructuredSummary` + 归档条目落盘 `structured` + 知识库事件 + seq 锚点
 - **gateVerify 按项目类型自动选择**：创建时始终写入（代码/文档/默认三档）
-- **项目侧右栏**也展示知识库与聊天摘要（原先仅联系人/群聊）
-- **高可见 i18n 批量翻译**（约 190 键 × 8 语言）+ zh-CN 补齐 7 个缺失键
-- `container.snapshot.noClaim` 英文补齐 `will **not**`（probe 17-4）
-- 全量门禁 **连续 3 轮全绿**；提交 `0fc7405` 已推送 GitHub
+- **项目侧右栏**也展示知识库与聊天摘要
+- **聊天输入区**：去掉输入框与按钮间分隔线；输入区更高；按钮更贴近
+- **变量/环境变量命名规范**写入 TECHNICAL §3；`verify-naming.mjs` 全库检查 23/0
+- 高可见 + 长文 i18n 批量翻译；zh-CN 缺失键已补齐
+- wiring 238/0 · e2e 全过 · protocol verify-all 0 失败 · docs 84/0 · summary-quality 24/0
 
 ---
 

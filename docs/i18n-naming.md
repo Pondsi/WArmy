@@ -1,5 +1,7 @@
 # i18n product naming (WArmy)
 
+> 代码/环境变量命名规范见 `docs/TECHNICAL.md` §3（`WARMY_*`、IPC `warmy:`、线协议 `CCARMY-*` 勿改）。
+
 | Locale | Product name (`brand.name` / `app.displayName`) | Nav「我的牛马」 (`nav.singleAi`) | Workhorse term |
 | --- | --- | --- | --- |
 | zh-CN | 无限牛马 | 我的牛马 | 牛马 |
@@ -15,7 +17,7 @@
 
 `brand.sub`:
 - zh: `WArmy（Workhorse Army）`
-- ja/ko: `WARMY (Workhorse Army)` wait → **`WArmy (Workhorse Army)`**
+- ja/ko: `WArmy (Workhorse Army)`
 - other non-CJK: **`Workhorse Army`**
 
 Interface section labels:

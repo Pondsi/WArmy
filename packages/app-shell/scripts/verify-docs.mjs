@@ -74,6 +74,16 @@ check('API-OPERATIONS.md', fs.existsSync(path.join(ROOT, 'docs/API-OPERATIONS.md
 check('API-OPERATIONS-RESULTS.json', fs.existsSync(path.join(ROOT, 'docs/API-OPERATIONS-RESULTS.json')));
 check('WSL-AND-PENDING.md', fs.existsSync(path.join(ROOT, 'docs/WSL-AND-PENDING.md')));
 check('CONTEXT-KNOWLEDGE-GATE.md', fs.existsSync(path.join(ROOT, 'docs/CONTEXT-KNOWLEDGE-GATE.md')));
+check('REQUIREMENTS.md', fs.existsSync(path.join(ROOT, 'docs/REQUIREMENTS.md')));
+check('TECHNICAL.md', fs.existsSync(path.join(ROOT, 'docs/TECHNICAL.md')));
+check('verify-naming script', fs.existsSync(path.join(ROOT, 'packages/app-shell/scripts/verify-naming.mjs')));
+check('verify-summary-quality script', fs.existsSync(path.join(ROOT, 'packages/app-shell/scripts/verify-summary-quality.mjs')));
+const reqDoc = fs.existsSync(path.join(ROOT, 'docs/REQUIREMENTS.md')) ? fs.readFileSync(path.join(ROOT, 'docs/REQUIREMENTS.md'), 'utf8') : '';
+const techDoc = fs.existsSync(path.join(ROOT, 'docs/TECHNICAL.md')) ? fs.readFileSync(path.join(ROOT, 'docs/TECHNICAL.md'), 'utf8') : '';
+check('REQUIREMENTS has goals+security+ports', /产品定位|核心承诺/.test(reqDoc) && /完全授权/.test(reqDoc) && /59599/.test(reqDoc));
+check('TECHNICAL has naming+architecture+gates', /命名规范|WARMY_/.test(techDoc) && /架构/.test(techDoc) && /verify-naming/.test(techDoc));
+check('TECHNICAL signature', techDoc.includes(SIG));
+check('REQUIREMENTS signature', reqDoc.includes(SIG));
 check('fetch-node-runtime script', fs.existsSync(path.join(ROOT, 'scripts/fetch-node-runtime.mjs')));
 check('update feed docs', fs.existsSync(path.join(ROOT, 'docs/UPDATE-FEED.md')));
 check('container timings docs', fs.existsSync(path.join(ROOT, 'docs/CONTAINER-TIMINGS.md')));

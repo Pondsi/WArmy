@@ -388,11 +388,15 @@ body.platform-darwin .tb-mac-extra {
 .msg.me .bubble { background: var(--me-bubble); color: #111; }
 [data-theme="dark"] .msg.me .bubble { color: #e8ffe8; }
 
+/* composer：与 app.css 对齐（微信风整块输入区）。
+   覆盖原因：renderer.css 在 app.css 之后加载，若此处给 #input 画边框/给 bar 加 margin，
+   会在「输入框与按钮之间」多出一条线，并压缩输入区高度。 */
 .composer {
-  background: var(--list-bg); border-top: 1px solid var(--line);
-  padding: 8px 12px 12px;
+  background: transparent;
+  border-top: none;
+  padding: 4px 12px 10px;
 }
-.composer-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.composer-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
 .urgency { display: flex; gap: 6px; flex-wrap: wrap; }
 .urgency button, .btn-tool, .btn-ghost, .btn-mini, .btn-primary, .btn-stop {
   border: none; border-radius: var(--radius-sm); cursor: pointer;
@@ -412,18 +416,48 @@ body.platform-darwin .tb-mac-extra {
 .btn-stop { background: var(--danger); color: #fff; font-weight: 600; padding: 8px 14px; font-size: var(--fs-base); }
 .btn-stop:hover { filter: brightness(1.08); }
 .btn-danger { background: var(--danger); color: #fff; border: none; border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; }
+/* 输入区：无内边框；焦点/未焦点一致，输入框与按钮之间不画线 */
+.composer-main {
+  background: var(--card);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.12s;
+}
 #input {
-  width: 100%; resize: none; border: 1px solid var(--input-border); border-radius: var(--radius-sm);
-  padding: 10px; font: inherit; outline: none; background: var(--input-bg);
+  width: 100%; resize: none;
+  border: none !important; outline: none;
+  box-shadow: none !important;
+  background: transparent;
+  caret-color: var(--ink);
+  padding: 12px 12px 4px;
+  font: inherit; font-size: var(--fs-base);
+  line-height: 1.65;
+  min-height: 96px; max-height: 280px;
+  color: var(--ink);
+}
+.composer-main:focus-within { border-color: var(--input-border); }
+#input:focus, #input:focus-visible {
+  outline: none; box-shadow: none; border: none; background: transparent;
+}
+.input-counter {
+  text-align: right; font-size: 11px; color: var(--muted);
+  margin: 0; padding: 0 10px; min-height: 0; line-height: 1.2;
+  border: none !important; background: transparent;
 }
 .composer-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 0;
+  padding: 2px 8px 4px;
+  border: none !important;
+  background: transparent;
 }
-.composer-left { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.composer-left { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .btn-icon {
   width: 36px; height: 36px;
   border: none; border-radius: 8px;
@@ -985,7 +1019,7 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .more-menu-panel .menu-sc { margin-left: auto; font-size: 11px; color: var(--muted); }
 .more-menu-panel .more-menu-btn.hidden { display: none; }
 /* 输入字数 */
-.input-counter { text-align: right; font-size: 11px; color: var(--muted); margin-top: 2px; min-height: 14px; }
+.input-counter { text-align: right; font-size: 11px; color: var(--muted); margin: 0; padding: 0 10px; min-height: 0; line-height: 1.2; border: none; background: transparent; }
 .input-counter.over { color: var(--danger); }
 /* 右栏分区：干活面板 vs 聊天面板 */
 .panel-block[data-panel-hidden="1"] { display: none !important; }

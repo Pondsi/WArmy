@@ -474,7 +474,8 @@ body.platform-darwin .tb-mac-extra {
 .btn-stop-icon .ico { width: 32px; height: 32px; }
 .btn-stop-icon { padding: 3px 4px; }
 .btn-danger { background: var(--danger); color: #fff; border: none; border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; }
-/* 输入框：仿微信 —— 整块白底圆角框，文本框无边框，工具条在框内 */
+/* 输入框：仿微信 —— 整块白底圆角框，文本框无边框，工具条在框内。
+   产品要求：输入区更大；按钮紧贴输入区；两者之间**不出现**分隔线（焦点与否都一样）。 */
 .composer-main {
   background: var(--card);
   border: 1px solid var(--input-border);
@@ -489,23 +490,30 @@ body.platform-darwin .tb-mac-extra {
   border: none; outline: none;
   background: transparent;
   caret-color: var(--ink);
-  padding: 10px 12px 2px;
+  padding: 12px 12px 4px;
   font: inherit; font-size: var(--fs-base);
-  line-height: 1.6;
-  min-height: 62px; max-height: 220px;
+  line-height: 1.65;
+  min-height: 96px; max-height: 280px;
   color: var(--ink);
 }
-/* 聚焦与未聚焦外观完全一致：不要外框变色、不要绿色发光 */
+/* 聚焦与未聚焦外观完全一致：不要外框变色、不要绿色发光、不要内部分隔线 */
 .composer-main:focus-within { border-color: var(--input-border); }
 #input:focus, #input:focus-visible {
   outline: none; box-shadow: none; border: none; background: transparent;
 }
+.input-counter {
+  text-align: right; font-size: 11px; color: var(--muted);
+  margin: 0; padding: 0 10px; min-height: 0; border: none; background: transparent;
+}
 .composer-bar {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 8px;
-  padding: 2px 8px 6px;
+  gap: 6px;
+  padding: 2px 8px 4px;
+  margin-top: 0;
+  border: none;
+  background: transparent;
 }
-.composer-left { display: flex; align-items: center; gap: 2px; }
+.composer-left { display: flex; align-items: center; gap: 4px; }
 .btn-icon {
   width: 30px; height: 30px;
   border: none; border-radius: 6px;

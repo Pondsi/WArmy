@@ -1225,7 +1225,7 @@
       const st = last && last.structured;
       let extra = '';
       if (st) {
-        const sec = (arr, key) => (arr && arr.length ? `<div class="pk-sec"><b>${escapeHtml(t(key))}</b>${arr.map((x) => `<div class="pk-row">${escapeHtml(x)}</div>`).join('')}</div>` : '');
+        const sec = (arr, key) => (arr && arr.length ? `<div class="pk-sec"><b>${escapeHtml(t(key))}</b>${arr.map((x) => `<div class="pk-row"><button class="btn-mini" data-jump-st="${escapeHtml(String(x).slice(0, 80))}">${escapeHtml(x)}</button></div>`).join('')}</div>` : '');
         extra = sec(st.decisions, 'panel.summary.decisions') + sec(st.todos, 'panel.summary.todos') + sec(st.risks, 'panel.summary.risks') + sec(st.bullets, 'panel.summary.bullets');
       }
       host.innerHTML = extra + (list.length
@@ -1240,22 +1240,59 @@
         b.onclick = () => {
           const id = b.getAttribute('data-jump-archive');
           const item = list.find((x) => x.id === id);
+          const st = item && item.structured;
           const anchor = item && item.anchors && item.anchors[0];
-          if (anchor) {
-            // 跳到原文：打开会话并定位（用现有搜索/日志能力）
+          const jumpQuery = () => {
+            if (anchor && (anchor.recordId || anchor.seq != null)) return String(anchor.recordId || anchor.seq);
+            // 无锚点时：优先用结构化决策/要点原文，其次标题
+            const stFirst = st && ((st.decisions && st.decisions[0]) || (st.bullets && st.bullets[0]));
+            return String(stFirst || (item && item.title) || '');
+          };
+          const q = jumpQuery();
+          if (!q) {
             try {
-              const q = String(anchor.recordId || anchor.seq || '');
-              if (q) void window.warmy.searchMessages?.(q).then((r) => {
-                const hits = (r && r.hits) || [];
-                if (hits.length) {
-                  const first = hits[0];
-                  const sid = first.sessionId || gid;
-                  openChat('single', sid, sid);
-                  setTimeout(() => { chatViewVisible[sid] = 999; renderChat(); }, 200);
-                }
-              });
+              const sid = gid;
+              openChat(state.selectedChat?.kind || 'single', sid, sid);
+              setTimeout(() => { chatViewVisible[sid] = 999; renderChat(); }, 200);
+            } catch { /* noop */ }
+            return;
+          }
+          try {
+            void window.warmy.searchMessages?.(q).then((r) => {
+              const hits = (r && r.hits) || [];
+              if (hits.length) {
+                const first = hits[0];
+                const sid = first.sessionId || gid;
+                openChat(state.selectedChat?.kind || 'single', sid, sid);
+                setTimeout(() => { chatViewVisible[sid] = 999; renderChat(); }, 200);
+              } else {
+                const sid = gid;
+                openChat(state.selectedChat?.kind || 'single', sid, sid);
+                setTimeout(() => { chatViewVisible[sid] = 999; renderChat(); }, 200);
+              }
+            });
+          } catch {
+            try {
+              const sid = gid;
+              openChat(state.selectedChat?.kind || 'single', sid, sid);
+              setTimeout(() => { chatViewVisible[sid] = 999; renderChat(); }, 200);
             } catch { /* noop */ }
           }
+        };
+      });
+      // 结构化行也可点击跳转
+      host.querySelectorAll('[data-jump-st]').forEach((b) => {
+        b.onclick = () => {
+          const q = b.getAttribute('data-jump-st') || '';
+          if (!q) return;
+          try {
+            void window.warmy.searchMessages?.(q).then((r) => {
+              const hits = (r && r.hits) || [];
+              const sid = (hits[0] && hits[0].sessionId) || gid;
+              openChat(state.selectedChat?.kind || 'single', sid, sid);
+              setTimeout(() => { chatViewVisible[sid] = 999; renderChat(); }, 200);
+            });
+          } catch { /* noop */ }
         };
       });
     } catch {
