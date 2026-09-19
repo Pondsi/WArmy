@@ -87,6 +87,7 @@
     ],
   };
 
+  const __CONSOLE_CAP_EARLY = 200;
   const t = (k) => state.t[k] || k;
   /** 结构化值展示：对象绝不 textContent 直出（避免 [object Object]） */
   const fmtDisp = (v) => {
@@ -1183,6 +1184,7 @@
     set('panel-directory-block', work && kind === 'internal');
     // 成员栏：项目/群聊才需要；我的牛马与联系人不需要
     set('panel-members-block', kind === 'internal' || kind === 'external' || kind === 'externalGroup');
+    // 产品：我的牛马/联系人不显示「成员」
     // 知识库：聊天 + 项目都展示（本机知识；项目侧也能看会话沉淀）
     set('panel-kb-block', kind === 'internal' || chat);
     // 摘要：项目 + 聊天都可用（项目侧会话同样可生成/展示结构化摘要）
@@ -2380,14 +2382,20 @@
       const avHtml = `<img class="avatar-img big" src="${personAvatarSrc(p)}" alt=""/>`;
       box.innerHTML = `
         <div class="me-top">
-          <img class="brand-logo" src="./icons/logo-tight.png" alt="${escapeHtml(t('brand.name'))}"/>
-          <div class="me-strip" style="flex:1;min-width:240px;margin:0">
+          <div class="me-brand">
+            <img class="brand-logo" src="./icons/logo-tight.png" alt="${escapeHtml(t('brand.name'))}"/>
+            <div class="me-brand-text">
+              <div class="me-brand-name">${escapeHtml(t('brand.name'))}</div>
+              <div class="me-brand-sub">${escapeHtml(t('brand.sub'))}</div>
+              <div class="muted me-brand-tag">${escapeHtml(t('brand.tagline') || '')}</div>
+            </div>
+          </div>
+          <div class="me-strip" style="flex:1;min-width:260px;margin:0">
             <div class="profile-head">
               <button id="p-av-btn" class="av-btn" aria-label="${escapeHtml(t('me.avatar'))}">${avHtml}</button>
               <div style="min-width:0;flex:1">
                 <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
                 <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
-                <div class="muted" style="margin-top:4px">${escapeHtml(t('brand.name'))} · ${escapeHtml(t('brand.sub'))}</div>
               </div>
               <button class="btn-mini" id="p-save">${t('me.saveProfile')}</button>
             </div>
@@ -2568,24 +2576,11 @@
             <div class="inst-row"><input id="sf-error" value="${escapeHtml(state.soundFiles.error)}" readonly/>
             <button class="btn-mini" data-pick="error">${t('settings.soundPick')}</button>
             <button class="btn-mini" data-clear="error">${t('settings.soundClear')}</button></div></div>
-          <div style="margin-top:12px">
-            <div class="field" style="margin-top:10px"><label>${t('smtp.title')}</label>
-              <div id="smtp-email-notify" style="margin:6px 0 8px">
-                <div style="font-weight:600;font-size:13px;margin-bottom:6px">${t('settings.emailNotify')}</div>
-                ${['complete', 'request', 'error']
-                  .map(
-                    (k) =>
-                      '<label style="margin-right:14px"><input type="checkbox" data-email-k="' + k + '" ' +
-                      (state.emailNotify && state.emailNotify[k] ? 'checked' : '') + '/> ' + t('settings.sound' + k.charAt(0).toUpperCase() + k.slice(1)) + '</label>'
-                  )
-                  .join('')}
-                <div class="muted">${t('settings.emailHint')}</div>
-              </div>
-            </div>
-          </div>
         </div>
                 <div class="set-section set-card" id="notify-email-card">
-          <h2>${t('smtp.title')} <span class="muted">(${t('smtp.count')} <span id="smtp-n">0</span>/10 · ${t('smtp.max10')})</span></h2>
+          <h2>${t('settings.emailNotify')}</h2>
+          <p class="muted">${t('settings.emailNotifyHint')}</p>
+          <h3 style="font-size:13px;margin:10px 0 4px">${t('smtp.title')} <span class="muted">(${t('smtp.count')} <span id="smtp-n">0</span>/10 · ${t('smtp.max10')})</span></h3>
           <p class="muted">${t('smtp.hint')}</p>
           <div id="smtp-accounts"></div>
           <div class="inst-row" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:10px">
@@ -2689,6 +2684,9 @@
             <div class="ctg-dim">${t('container.image.stack.moreLater')}</div>
             <div id="container-image-stacks" class="ctg-list"></div>
           </div>
+          <details class="ctg-collapse" id="container-guide-collapse">
+            <summary>${t('container.guideCollapse')}</summary>
+            <div class="ctg-collapse-body">
           <div class="ctg-hint-box" id="container-env-install">
             <div class="ctg-hint-title">${t('container.env.install.title')}</div>
             <div class="ctg-dim">${t('container.env.install.body')}</div>
@@ -2721,17 +2719,14 @@
           <div class="ctg-guide-head">${t('container.guideTitle')}</div>
           <div class="ctg-dim">${t('container.guideHint')}</div>
           <div id="container-guide" class="ctg-guide"></div>
+            </div>
+          </details>
         </div>
         <div class="set-section set-card" data-sec="func">
           <h2>${t('settings.plugins')}</h2>
           <div id="plug-list" class="plugin-list"></div>
-          <div class="inst-row" style="margin-top:8px;align-items:center">
-            <select id="plug-pick" style="flex:1;min-width:140px"></select>
-            <button class="btn-mini" id="btn-plug-add">${t('settings.pluginAddPick')}</button>
-          </div>
           <div class="inst-row" style="margin-top:6px;align-items:center">
-            <input id="plug-path" placeholder="package or path" style="flex:1;min-width:120px"/>
-            <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button>
+            <button class="btn-mini" id="btn-plug-install-folder">${t('settings.pluginInstallBrowse')}</button>
           </div>
           <div class="skill-scan-block" style="margin-top:10px">
             <div class="skill-scan-title">${t('settings.pluginScanTitle')}</div>
@@ -2802,23 +2797,15 @@
           <p class="muted">${t('settings.specialModelsHint')}</p>
           <div class="field" style="margin-bottom:8px">
             <label>${t('settings.asrModel')}</label>
-            <select id="sm-asr">
-              <option value="ollama">Ollama (whisper-tiny)</option>
-              <option value="whisper-cpp">whisper.cpp (local)</option>
-              <option value="openai">OpenAI Whisper API</option>
-            </select>
+            <select id="sm-asr" data-special="asr"></select>
           </div>
           <div class="field" style="margin-bottom:8px">
             <label>${t('settings.embeddingModel')}</label>
-            <select id="sm-embed">
-              <option value="onnx">ONNX (bge-small-zh)</option>
-              <option value="ollama">Ollama embedding</option>
-              <option value="api">API embedding</option>
-            </select>
+            <select id="sm-embed" data-special="embed"></select>
           </div>
           <div class="field" style="margin-bottom:8px">
             <label>${t('settings.organizerModel')}</label>
-            <input id="sm-organizer" placeholder="deepseek-chat"/>
+            <select id="sm-organizer" data-special="organizer"></select>
           </div>
           <div style="margin-top:8px"><button class="btn-mini" id="btn-webgpu">${t('webgpu.test')}</button> <span class="muted" id="webgpu-msg"></span></div>
           <button class="btn-mini" id="btn-save-special">${t('common.save')}</button>
@@ -3165,6 +3152,172 @@
         } catch { /* noop */ }
         renderPluginList();
       })();
+
+
+      // 特殊模型：只允许选择「供应商里已存在的模型」
+      async function fillSpecialModelSelects() {
+        const locals = [];
+        try {
+          const pl = await window.warmy.providersList?.().catch(() => null);
+          const providers = (pl && (pl.providers || pl.items)) || [];
+          for (const p of providers) {
+            const models = (p && (p.models || p.modelList)) || [];
+            models.forEach((m) => {
+              const id = String(typeof m === 'string' ? m : (m.id || m.name || ''));
+              if (id) locals.push({ id, provider: p.name || p.id || '', label: id + (p.name ? ' · ' + p.name : '') });
+            });
+          }
+        } catch { /* noop */ }
+        if (!locals.length) {
+          try {
+            const st = await window.warmy.settingsGet?.();
+            const provs = (st && st.settings && st.settings.providers) || [];
+            provs.forEach((p) => {
+              (p.models || []).forEach((m) => {
+                const id = String(typeof m === 'string' ? m : (m.id || ''));
+                if (id) locals.push({ id, provider: p.name || p.id || '', label: id + (p.name ? ' · ' + p.name : '') });
+              });
+            });
+          } catch { /* noop */ }
+        }
+        document.querySelectorAll('select[data-special]').forEach((sel) => {
+          const cur = sel.value;
+          sel.innerHTML = locals.length
+            ? locals.map((m) => '<option value="' + escapeHtml(m.id) + '">' + escapeHtml(m.label) + '</option>').join('')
+            : '<option value="">—</option>';
+          if (cur) sel.value = cur;
+        });
+        const msg = $('sm-msg');
+        if (msg && !locals.length) msg.textContent = t('settings.specialModelsHint');
+      }
+      window.__fillSpecialModelSelects = fillSpecialModelSelects;
+      fillSpecialModelSelects();
+
+      // 插件：从文件夹安装（资源管理器）
+      $('btn-plug-install-folder')?.addEventListener('click', async () => {
+        const r = await window.warmy.pickDirectory?.().catch(() => null);
+        if (!r?.ok || !r.path) return;
+        // 目录名作为插件 id；若 IPC 支持 skills-import 同类安装则复用
+        const id = String(r.path).split(/[\\/]/).filter(Boolean).pop() || 'plugin';
+        if (!state.plugins.some((p) => p.id === id)) {
+          state.plugins.push({ id, name: id, desc: r.path, enabled: true, source: 'folder' });
+        }
+        if (typeof window.__renderPluginList === 'function') window.__renderPluginList();
+        else setNav('settings');
+      });
+      $('btn-plug-add')?.addEventListener('click', () => { /* 已移除假下拉添加 */ });
+
+      // 自定义主题色：行内取色（非弹窗套弹窗）+ 全屏 EyeDropper
+      (function bindInlineAccent() {
+        const host = document.getElementById('theme-custom-row') || document.querySelector('.theme-custom-row');
+        if (!host) return;
+        let panel = document.getElementById('theme-custom-panel');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.id = 'theme-custom-panel';
+          panel.className = 'theme-custom-panel hidden';
+          panel.innerHTML = `
+            <div class="tcp-row">
+              <input type="color" id="tcp-color" value="${escapeHtml(state.theme || '#07c160')}"/>
+              <input type="text" id="tcp-hex" placeholder="#07c160" style="width:110px"/>
+              <button type="button" class="btn-mini" id="tcp-eyedrop">${escapeHtml(t('settings.pickScreenColor'))}</button>
+            </div>
+            <div class="muted" style="margin-top:4px">${escapeHtml(t('settings.hexOrRgb'))}</div>
+            <div class="tcp-row" style="margin-top:8px">
+              <span class="theme-custom-preview" id="tcp-preview"></span>
+              <button type="button" class="btn-mini" id="tcp-cancel">${escapeHtml(t('settings.notifyCancel'))}</button>
+              <button type="button" class="btn-primary" id="tcp-ok">${escapeHtml(t('settings.notifyApply'))}</button>
+            </div>`;
+          host.appendChild(panel);
+        }
+        const btnCustom = document.getElementById('btn-theme-custom');
+        const color = () => document.getElementById('tcp-color');
+        const hex = () => document.getElementById('tcp-hex');
+        const prev = () => document.getElementById('tcp-preview');
+        const sync = (v) => {
+          if (!v) return;
+          if (color()) color().value = v;
+          if (hex()) hex().value = v;
+          if (prev()) prev().style.background = v;
+        };
+        btnCustom?.addEventListener('click', () => {
+          panel.classList.toggle('hidden');
+          sync(state.theme || '#07c160');
+        });
+        color()?.addEventListener('input', () => sync(color().value));
+        hex()?.addEventListener('change', () => {
+          let v = String(hex().value || '').trim();
+          if (/^[\d,\s]+$/.test(v)) {
+            const p = v.split(/[\s,]+/).filter(Boolean).map(Number);
+            if (p.length >= 3) {
+              const to2 = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
+              v = '#' + to2(p[0]) + to2(p[1]) + to2(p[2]);
+            }
+          }
+          if (/^#[0-9a-fA-F]{6}$/.test(v)) sync(v.toLowerCase());
+        });
+        document.getElementById('tcp-cancel')?.addEventListener('click', () => panel.classList.add('hidden'));
+        document.getElementById('tcp-ok')?.addEventListener('click', () => {
+          const v = (color() && color().value) || '';
+          if (/^#[0-9a-fA-F]{6}$/.test(v)) applyAccent(v);
+          panel.classList.add('hidden');
+        });
+        document.getElementById('tcp-eyedrop')?.addEventListener('click', async () => {
+          try {
+            if (window.EyeDropper) {
+              const ed = new window.EyeDropper();
+              const res = await ed.open();
+              if (res && res.sRGBHex) sync(res.sRGBHex);
+            } else {
+              uiAlert(t('settings.pickScreenColor') + ' · unsupported');
+            }
+          } catch { /* user cancel */ }
+        });
+      })();
+
+      // 第二列顶部「+」：项目/群聊=新建+加入；联系人=添加联系人
+      window.__setupListPlusMenu = function setupListPlusMenu(kind) {
+        const action = $('list-action');
+        const qr = $('btn-join-qr');
+        if (!action) return;
+        if (kind === 'externalChat') {
+          if (qr) qr.classList.add('hidden');
+          action.classList.remove('hidden');
+          action.textContent = '+';
+          action.title = t('list.addContact') || t('contact.add');
+          action.onclick = () => { const b = $('btn-join-qr'); if (b) b.click(); };
+          return;
+        }
+        if (kind === 'internal' || kind === 'extgroup' || kind === 'externalGroup') {
+          if (qr) qr.classList.add('hidden');
+          action.classList.remove('hidden');
+          action.textContent = '+';
+          action.title = t('list.addMore');
+          action.onclick = (e) => {
+            e.stopPropagation();
+            const menu = $('list-add-menu');
+            if (menu) { menu.classList.toggle('hidden'); return; }
+            const m = document.createElement('div');
+            m.id = 'list-add-menu';
+            m.className = 'urg-menu';
+            m.style.zIndex = '50';
+            m.innerHTML =
+              '<button type="button" data-la="create">' + escapeHtml(t('list.addMenuCreate') || t('list.createGroup')) + '</button>' +
+              '<button type="button" data-la="join">' + escapeHtml(t('list.addMenuJoin') || t('join.apply')) + '</button>';
+            action.parentElement?.appendChild(m);
+            m.querySelectorAll('button').forEach((b) => {
+              b.onclick = () => {
+                m.classList.add('hidden');
+                if (b.dataset.la === 'join') { $('btn-join-qr')?.classList.remove('hidden'); $('btn-join-qr')?.click(); }
+                else $('list-action-trigger-create')?.click();
+                // 兼容：直接触发原 list-action 语义
+                if (b.dataset.la === 'create' && typeof window.__listCreate === 'function') window.__listCreate();
+                if (b.dataset.la === 'join' && typeof window.__listJoin === 'function') window.__listJoin();
+              };
+            });
+          };
+        }
+      };
 
       $('sel-locale').onchange = async (e) => {
         await loadI18n(e.target.value);
@@ -6072,7 +6225,8 @@
       const line = consoleLineText(ev);
       if (!line) return null;
       consoleLines.push(line);
-      while (consoleLines.length > CONSOLE_CAP) consoleLines.shift();
+      const __cap = (typeof CONSOLE_CAP === 'number' ? CONSOLE_CAP : __CONSOLE_CAP_EARLY);
+      while (consoleLines.length > __cap) consoleLines.shift();
       renderConsole();
       return line;
     } catch {
@@ -6088,7 +6242,7 @@
    */
   function renderConsole() {
     const hint = $('console-hint');
-    if (hint) hint.textContent = fmtKey('console.hint', { n: CONSOLE_CAP });
+    if (hint) hint.textContent = fmtKey('console.hint', { n: (typeof CONSOLE_CAP === 'number' ? CONSOLE_CAP : __CONSOLE_CAP_EARLY) });
     const btn = $('console-clear');
     if (btn) btn.textContent = t('console.clear');
     const out = $('console-out');

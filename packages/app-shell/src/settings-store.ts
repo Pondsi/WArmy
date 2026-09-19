@@ -47,14 +47,19 @@ function collectEntropy(): string {
 }
 
 export function generateDeviceId(): string {
-  const digest = crypto.createHash('sha256').update(collectEntropy()).digest('hex');
-  const n = BigInt('0x' + digest.slice(0, 16)) % 900000000n;
-  return String(n + 100000000n);   // 恒为 9 位
+  // 17 位：首位非 0，降低本机/跨机撞号概率；首次生成后写入 profile，此后永久复用
+  const digest = crypto
+    .createHash('sha256')
+    .update(collectEntropy() + '|' + Date.now() + '|' + Math.random() + '|' + process.pid)
+    .digest('hex');
+  // 17 位十进制空间：[10^16, 10^17)
+  const n = BigInt('0x' + digest.slice(0, 24)) % 90000000000000000n;
+  return String(n + 10000000000000000n);
 }
 
-/** 仅接受「9 位且首位非 0」的形态 */
+/** 仅接受「17 位且首位非 0」的形态 */
 export function isValidDeviceId(v: unknown): v is string {
-  return typeof v === 'string' && /^[1-9][0-9]{8}$/.test(v);
+  return typeof v === 'string' && /^[1-9][0-9]{16}$/.test(v);
 }
 
 /** 设备 ID 的 HMAC 签名：ID 被手改一位，签名就对不上 */

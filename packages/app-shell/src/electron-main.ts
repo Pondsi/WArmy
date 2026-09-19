@@ -5957,7 +5957,34 @@ handleIpc('warmy:win-maximize', () => {
     else win.maximize();
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:win-close', () => safeHandle(() => win?.close(), null))
+// 窗口按钮：作用于**发送 IPC 的那个窗口**（独立会话窗点关闭只关自己，不关主界面）
+handleIpc('warmy:win-close', (e) => safeHandle(() => {
+  const sender = BrowserWindow.fromWebContents(e.sender);
+  if (sender && !sender.isDestroyed()) {
+    if (win && sender.id === win.id) {
+      // 主窗口：点叉 = 隐藏到托盘（产品语义）
+      win.close();
+    } else {
+      // 独立会话窗：真正关闭本窗
+      try { sender.destroy(); } catch { sender.close(); }
+    }
+    return true;
+  }
+  win?.close();
+  return true;
+}, null));
+handleIpc('warmy:win-minimize', (e) => safeHandle(() => {
+  const sender = BrowserWindow.fromWebContents(e.sender) || win;
+  sender?.minimize();
+  return true;
+}, null));
+handleIpc('warmy:win-maximize', (e) => safeHandle(() => {
+  const sender = BrowserWindow.fromWebContents(e.sender) || win;
+  if (!sender) return false;
+  if (sender.isMaximized()) sender.unmaximize();
+  else sender.maximize();
+  return true;
+}, null));
 handleIpc('warmy:win-reload', () => {
   try {
     if (!win) return { ok: false };

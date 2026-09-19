@@ -1809,3 +1809,19 @@ body.chat-window .page-layout { display: none !important; }
 .dash-badge { width: 8px; height: 8px; border-radius: 50%; background: #f5a524; flex-shrink: 0; }
 .dash-detail { border-left: 3px solid var(--accent); margin: 0 0 8px 12px; padding: 8px 10px; background: var(--card); border-radius: 8px; font-size: 12px; }
 .plugin-list .ctg-row { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 6px; }
+
+.me-brand { display: flex; align-items: center; gap: 12px; min-width: 200px; }
+.me-brand-text { min-width: 0; }
+.me-brand-name { font-weight: 700; font-size: 18px; }
+.me-brand-sub { font-size: 12px; color: var(--muted); }
+.me-brand-tag { font-size: 11px; margin-top: 2px; }
+.theme-custom-panel { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.theme-custom-panel.hidden { display: none !important; }
+.tcp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+body.chat-window #rail, body.chat-window #list-col { display: none !important; }
+body.chat-window #app-body { grid-template-columns: 1fr !important; }
+body.chat-window #main-col { width: 100% !important; }
+body.chat-window #chat-layout { width: 100% !important; height: 100% !important; display: grid !important; grid-template-columns: 1fr var(--panel-w, 300px) !important; }
+body.chat-window #chat-col { height: 100% !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; }
+body.chat-window #panel-col { height: 100% !important; overflow: auto !important; }
+body.chat-window #page-layout, body.chat-window #empty-state, body.chat-window #inst-detail { display: none !important; }
