@@ -144,24 +144,25 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   height: 100%;
   overflow: hidden; /* 品牌名过长时省略，不许把右上角窗控顶出去 */
 }
-/* R1：logo 完整显示 —— 图片 object-fit contain，容器 40×40 与标题栏同高 */
+/* R1：logo 完整显示 —— 透明 SVG，无白底；容器 40×40 与标题栏同高 */
 .tb-logo {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: 0;
   display: grid;
   place-items: center;
   flex-shrink: 0;
   overflow: visible;
-  background: transparent;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 .tb-logo-img {
   width: 40px;
-  height: 40px;
+  height: 28px;
   object-fit: contain;
   object-position: center;
   display: block;
-  background: transparent;
+  background: transparent !important;
 }
 .tb-brand {
   font-weight: 500;

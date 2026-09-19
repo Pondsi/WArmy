@@ -1177,6 +1177,8 @@
     set('project-state-block', work);
     set('project-files-block', work);
     set('panel-progress-block', work);
+    // 等待协助：干活/聊天都要看（AI 需要人处理的事）
+    set('panel-assist-block', true);
     set('panel-model-mgr-block', work ? true : false);
     set('panel-directory-block', work && kind === 'internal');
     // 成员栏：项目/群聊才需要；我的牛马与联系人不需要
@@ -1189,7 +1191,12 @@
     if (!work && chat) {
       set('panel-model-mgr-block', kind === 'external' || kind === 'externalGroup');
     }
-    try { void renderPanelKnowledge(); void renderPanelSummary(); } catch { /* noop */ }
+    try {
+      void renderPanelKnowledge();
+      void renderPanelSummary();
+      void renderProgressTasks();
+      void renderAssistList({ scrollBottom: false });
+    } catch { /* noop */ }
   }
 
   async function renderPanelKnowledge() {
@@ -5839,18 +5846,29 @@
   // ADR 004 P4：容器控制台（只在容器就绪 + 本会话开启容器运行时可用）
   $('btn-container-shell')?.addEventListener('click', () => { void openContainerShell(); });
   $('ctg-shell-close')?.addEventListener('click', () => { $('ctg-shell-pane')?.classList.add('hidden'); });
-  $('btn-console')?.addEventListener('click', () => {
-    state.consoleOpen = !state.consoleOpen;
-    $('btn-console')?.classList.toggle('tb-on', state.consoleOpen);
-    // 诊断事件流在**右侧第四列**
-    $('console-pane')?.classList.toggle('hidden', !state.consoleOpen);
-    $('diag-host')?.classList.toggle('hidden', !state.consoleOpen);
-    try { renderConsole(); } catch { /* noop */ }
-  });
-  $('diag-toggle')?.addEventListener('click', () => {
-    const b = $('btn-console');
-    if (b) b.click();
-  });
+  // 诊断事件流：**自己展开/收起**（不再依赖已从聊天头移除的 #btn-console）
+  function toggleDiagPanel(forceOpen) {
+    const host = $('diag-host');
+    const chev = $('diag-chev');
+    const open = forceOpen === true ? true : forceOpen === false ? false : !(host && !host.classList.contains('hidden'));
+    state.consoleOpen = !!open;
+    host?.classList.toggle('hidden', !open);
+    $('console-pane')?.classList.toggle('hidden', !open);
+    if (chev) chev.textContent = open ? '⌄' : '›';
+    $('btn-console')?.classList.toggle('tb-on', open);
+    if (open) {
+      try { renderConsole(); } catch { /* noop */ }
+      const hint = $('console-hint');
+      if (hint && !hint.textContent) {
+        try {
+          hint.innerHTML = escapeHtml(fmtKey('console.hint', { n: '200' })).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+        } catch { hint.textContent = t('console.hint'); }
+      }
+    }
+  }
+  window.__toggleDiagPanel = toggleDiagPanel;
+  $('btn-console')?.addEventListener('click', () => { toggleDiagPanel(); });
+  $('diag-toggle')?.addEventListener('click', () => { toggleDiagPanel(); });
   $('console-clear')?.addEventListener('click', () => { consoleClear(); });
   (function bindConsoleResize() {
     const el = $('console-resizer');
@@ -7290,19 +7308,135 @@
     });
   });
 
-  // ── 进度折叠 ──
+  // ── 进度 / 等待协助 折叠 ──
+  function fmtWhen(ts) {
+    try {
+      if (!ts) return '—';
+      return new Date(ts).toLocaleString();
+    } catch { return '—'; }
+  }
+
   $('progress-toggle')?.addEventListener('click', () => {
     $('progress-toggle')?.classList.toggle('open');
-    $('task-list')?.classList.toggle('hidden');
+    const list = $('task-list');
+    list?.classList.toggle('hidden');
+    if (list && !list.classList.contains('hidden')) {
+      requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+    }
+  });
+
+  $('assist-toggle')?.addEventListener('click', () => {
+    $('assist-toggle')?.classList.toggle('open');
+    const list = $('assist-list');
+    list?.classList.toggle('hidden');
+    if (list && !list.classList.contains('hidden')) {
+      void renderAssistList({ scrollBottom: true });
+    }
   });
 
   /**
-   * 右栏「进度」区块 = **真任务**（值班者编排产生的看板任务），没有就如实说"暂无任务"。
-   *
-   * 背景（本轮巡检发现的"看起来在跑其实没跑"）：这一块以前是 index.html 里写死的 5 行演示任务
-   * （整理周报 / 接口对接 / 值班编排 / 知识库归档 / 旧方案验证）+ 写死的 0% 进度条 ——
-   * 界面上像是真实任务状态。现在：任务来自 `warmy:board-tasks`（真看板），
-   * 一条都没有时显示一句如实话术（i18n），进度条按"完成数/总数"算真比例。
+   * 等待协助：AI 运行中需要人处理的事。
+   * open=黄点 · urgent open=红点 · done=绿勾 · stale=灰+删除线（不删除）
+   * 排序：红垫底（当最新）→ 其余按时间正序（越下越新）；展开默认滚到底。
+   */
+  async function renderAssistList(opts) {
+    const list = $('assist-list');
+    const badge = $('assist-badge');
+    if (!list) return;
+    let items = [];
+    try {
+      const r = await window.warmy.assistList?.(state.selectedChat?.id);
+      items = (r && r.items) || [];
+    } catch { items = []; }
+
+    const openN = items.filter((x) => x.status === 'open').length;
+    const urgentN = items.filter((x) => x.status === 'open' && x.priority === 'urgent').length;
+    if (badge) {
+      if (urgentN > 0) {
+        badge.className = 'assist-badge urgent';
+        badge.classList.remove('hidden');
+        badge.hidden = false;
+      } else if (openN > 0) {
+        badge.className = 'assist-badge open';
+        badge.classList.remove('hidden');
+        badge.hidden = false;
+      } else {
+        badge.className = 'assist-badge hidden';
+        badge.hidden = true;
+      }
+    }
+
+    const rank = (x) => {
+      if (x.status === 'open' && x.priority === 'urgent') return 3;
+      if (x.status === 'open') return 2;
+      if (x.status === 'done') return 1;
+      return 0;
+    };
+    items = items.slice().sort((a, b) => {
+      const ra = rank(a); const rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      return (a.createdAt || 0) - (b.createdAt || 0);
+    });
+
+    if (!items.length) {
+      list.innerHTML = '<li class="task-empty muted">' + escapeHtml(t('panel.assist.empty') || '—') + '</li>';
+      return;
+    }
+    list.innerHTML = items.map((it) => {
+      const st = String(it.status || 'open');
+      const pri = String(it.priority || 'normal');
+      let mark = '<span class="assist-dot open"></span>';
+      let cls = 'assist-row';
+      if (st === 'done') { mark = '<span class="assist-dot done" title="' + escapeHtml(t('panel.assist.done') || '') + '">✓</span>'; cls += ' is-done'; }
+      else if (st === 'stale') { mark = '<span class="assist-dot none"></span>'; cls += ' is-stale'; }
+      else if (pri === 'urgent') { mark = '<span class="assist-dot urgent" title="' + escapeHtml(t('panel.assist.urgent') || '') + '"></span>'; cls += ' is-urgent'; }
+      return (
+        '<li class="' + cls + '" data-assist-id="' + escapeHtml(String(it.id)) + '">' +
+        mark +
+        '<div class="assist-body">' +
+        '<div class="assist-title">' + escapeHtml(String(it.title || '')) + '</div>' +
+        (it.body ? '<div class="assist-desc muted">' + escapeHtml(String(it.body).slice(0, 120)) + '</div>' : '') +
+        '<div class="assist-time muted">' + escapeHtml(fmtWhen(it.createdAt)) +
+        (it.updatedAt && it.updatedAt !== it.createdAt ? ' · ' + escapeHtml(fmtWhen(it.updatedAt)) : '') +
+        '</div></div>' +
+        ((st === 'stale' || st === 'done') ? '' :
+          '<div class="assist-actions">' +
+          '<button type="button" class="btn-mini" data-assist-act="done" title="' + escapeHtml(t('panel.assist.markDone') || 'done') + '">✓</button>' +
+          '<button type="button" class="btn-mini" data-assist-act="urgent" title="' + escapeHtml(t('panel.assist.markUrgent') || 'urgent') + '">!</button>' +
+          '<button type="button" class="btn-mini" data-assist-act="stale" title="' + escapeHtml(t('panel.assist.markStale') || 'stale') + '">×</button>' +
+          '</div>') +
+        '</li>'
+      );
+    }).join('');
+
+    list.querySelectorAll('[data-assist-act]').forEach((b) => {
+      b.onclick = async (e) => {
+        e.stopPropagation();
+        const row = b.closest('[data-assist-id]');
+        const id = row && row.getAttribute('data-assist-id');
+        if (!id) return;
+        const act = b.getAttribute('data-assist-act');
+        const payload = {
+          id,
+          sessionId: state.selectedChat?.id,
+          title: row.querySelector('.assist-title')?.textContent || '',
+        };
+        if (act === 'done') { payload.status = 'done'; payload.priority = 'normal'; }
+        else if (act === 'stale') { payload.status = 'stale'; payload.priority = 'normal'; }
+        else if (act === 'urgent') { payload.status = 'open'; payload.priority = 'urgent'; }
+        try { await window.warmy.assistUpsert?.(payload); } catch { /* noop */ }
+        void renderAssistList({ scrollBottom: false });
+      };
+    });
+
+    if (opts && opts.scrollBottom) {
+      requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+    }
+  }
+  window.__renderAssistList = renderAssistList;
+
+  /**
+   * 右栏「进度」= 真看板任务；限高滚动；每条带日期时间；越下越新。
    */
   function setProgressPct(pct) {
     const p = clampPercent(pct);
@@ -7316,8 +7450,9 @@
     const list = $('task-list');
     if (!list) return;
     const sel = state.selectedChat;
-    const isGroup = !!(sel && (sel.kind === 'internal' || sel.kind === 'extgroup'));
+    const isGroup = !!(sel && (sel.kind === 'internal' || sel.kind === 'extgroup' || sel.kind === 'single'));
     let tasks = [];
+    const eventsByTitle = Object.create(null);
     if (isGroup) {
       try {
         const r = await window.warmy.boardTasks(sel.id);
@@ -7325,6 +7460,15 @@
       } catch {
         tasks = [];
       }
+      try {
+        const ev = await window.warmy.boardEvents(sel.id);
+        const evs = (ev && ev.events) || [];
+        for (const e of evs) {
+          const key = String(e.title || '').replace(/\s*→\s*\d+%$/, '');
+          if (!key) continue;
+          if (!eventsByTitle[key] || (e.ts || 0) > eventsByTitle[key]) eventsByTitle[key] = e.ts || 0;
+        }
+      } catch { /* noop */ }
     }
     if (!tasks.length) {
       list.innerHTML = '<li class="task-empty">' + escapeHtml(t('panel.progressEmpty')) + '</li>';
@@ -7332,15 +7476,22 @@
       return;
     }
     const DOT = { done: 'done', failed: 'fail', blocked: 'fail', doing: 'active', todo: '' };
-    list.innerHTML = tasks
-      .map((task) => {
-        const status = String((task && task.status) || '').toLowerCase();
+    const rows = tasks.map((task, idx) => {
+      const title = String((task && (task.title || task.name)) || '');
+      const status = String((task && task.status) || '').toLowerCase();
+      const ts = Number(task.updatedAt || task.ts || task.createdAt || eventsByTitle[title] || 0) || 0;
+      return { task, title, status, ts, idx };
+    });
+    rows.sort((a, b) => (a.ts - b.ts) || (a.idx - b.idx));
+    list.innerHTML = rows
+      .map(({ task, title, status, ts }) => {
         const dot = DOT[status] !== undefined ? DOT[status] : '';
         const pct = task && task.progress != null ? clampPercent(task.progress) : null;
         return (
           '<li class="task-' + escapeHtml(status || 'todo') + '">' +
-          '<span>' + escapeHtml(String((task && (task.title || task.name)) || '')) +
+          '<span class="task-main">' + escapeHtml(title) +
           (pct === null ? '' : ' · ' + pct + '%') +
+          '<span class="task-time muted">' + escapeHtml(fmtWhen(ts)) + '</span>' +
           '</span>' +
           '<span class="dot ' + dot + '"></span>' +
           '</li>'
@@ -7349,6 +7500,9 @@
       .join('');
     const done = tasks.filter((x) => String((x && x.status) || '').toLowerCase() === 'done').length;
     setProgressPct(Math.round((done / tasks.length) * 100));
+    if (!list.classList.contains('hidden')) {
+      requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+    }
   }
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -8271,7 +8425,13 @@
     }
     const kindLabel = (k) => t('projectFiles.kind.' + (k || 'changed'));
     const sourceLabel = (s) => t('projectFiles.source.' + (s || 'unknown'));
-    const when = (ts) => (ts ? new Date(ts).toLocaleString() : '—');
+    const when = (ts) => {
+      if (!ts) return '—';
+      try {
+        const d = new Date(ts);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+      } catch { return '—'; }
+    };
     const rowOf = (f, extra) =>
       '<div class="ctg-row pf-row" data-path="' + escapeHtml(f.path) + '" data-kind="' + escapeHtml(f.kind) + '"' +
       (f.op ? ' data-op="' + escapeHtml(f.op) + '"' : '') +

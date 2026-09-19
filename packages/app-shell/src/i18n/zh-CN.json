@@ -1615,5 +1615,13 @@
   "container.project.reason.stopped-by-creator": "已被创建者停止",
   "container.project.devBlocked": "该容器开发项目不可用（容器未就绪或已被创建者停止）。历史记录仍可阅读。",
   "net.peers": "已知节点",
-  "net.meshTitle": "组网"
+  "net.meshTitle": "组网",
+  "panel.diagWhat": "排障用",
+  "panel.assist.title": "等待协助",
+  "panel.assist.empty": "当前没有需要你协助的事项。",
+  "panel.assist.markDone": "标记完成",
+  "panel.assist.markUrgent": "标记紧急",
+  "panel.assist.markStale": "不再需要",
+  "panel.assist.done": "已完成",
+  "panel.assist.urgent": "紧急"
 }

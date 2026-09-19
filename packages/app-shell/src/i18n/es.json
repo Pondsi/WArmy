@@ -1615,5 +1615,13 @@
   "panel.summary.decisions": "Decisiones",
   "panel.summary.todos": "Pendientes",
   "panel.summary.risks": "Riesgos / notas",
-  "panel.summary.bullets": "Puntos clave"
+  "panel.summary.bullets": "Puntos clave",
+  "panel.diagWhat": "para depurar",
+  "panel.assist.title": "Esperando tu ayuda",
+  "panel.assist.empty": "Ahora no hay nada que requiera tu ayuda.",
+  "panel.assist.markDone": "Marcar hecho",
+  "panel.assist.markUrgent": "Marcar urgente",
+  "panel.assist.markStale": "Ya no hace falta",
+  "panel.assist.done": "hecho",
+  "panel.assist.urgent": "urgente"
 }

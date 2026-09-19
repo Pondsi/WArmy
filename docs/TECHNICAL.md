@@ -330,18 +330,19 @@ devEnv=container
 
 ## 8. UI/样式约定
 
-1. **双 CSS 加载**：`index.html` 必须 `app.css` 然后 `renderer.css`。改覆盖层时两处语义要一致。  
-2. **输入区**：无「输入框–按钮」分隔线；输入区更高；bar 更贴。  
-3. **列表列水印**：`logo-color.svg` + 品牌；logo 本身背景透明。  
-4. **诊断流**：右栏 `#console-pane`；容器终端用控制台按钮。  
-5. **列宽**：list 默认 **160**（最小可读）、panel 300，`bindResizer persistKey` 持久化。  
-6. **焦点**：composer 聚焦不改变边框颜色（产品要求）。  
-7. **独立会话窗**（`warmy:open-chat-window`）：  
-   - 查询参数强制 `mode=sub` + `chatId`  
-   - 渲染层 `body.chat-window`：隐藏 rail/list/空状态，**只保留聊天列 + 右栏**  
-   - **不隐藏** `#titlebar`（无边框窗口靠它 `-webkit-app-region: drag` 拖动与窗控）  
-   - 主进程 `warmyWindowIcon()` + `BrowserWindow.icon`/`setIcon` + `app.setAppUserModelId('com.pondsi.warmy')`  
-   - 门禁：`verify-chat-window.mjs`
+1. **双 CSS 加载**：`index.html` 必须 `app.css` 然后 `renderer.css`。  
+2. **单实例（禁止多开）**：`app.requestSingleInstanceLock()`；重复启动只调用 `focusMainWindowCentered()`（restore → 居中 → focus），**不**新建托盘/窗口。  
+3. **真正退出必须 `quitApp()`**：置 `forceQuit=true` + `tray.destroy()` + 关窗 + `app.quit()`。  
+   否则 `win.on('close')` 在 `!forceQuit` 时 `preventDefault` 并 `hide`（点叉=最小化），托盘「下班」会看起来关不掉。  
+4. **诊断事件流**：右栏 `#diag-toggle` **自己**展开/收起（不依赖聊天头按钮）；标题旁「排障用」说明用途（工具/组网/错误日志，**不是**容器终端）。  
+5. **进度 / 等待协助**：`.panel-scroll` 限高可滚；列表**越下越新**，展开滚到底；每条带日期时间。  
+   等待协助：open=黄点，urgent=红点（排序垫底），done=绿勾，stale=灰+删除线（不删）。数据：`warmy:assist-list/upsert` + AI 决策卡同步。  
+6. **项目文件**：每行显示 `日期 + 时间`。  
+7. **Logo**：标题栏用透明 `logo-color.svg`；`app-*.png`/`app.ico` 已去白底。  
+8. **独立会话窗**：`mode=sub` + `body.chat-window` 只保留聊天+右栏；保留 `#titlebar` 可拖。  
+9. **列宽**：list 默认 160、panel 300，可持久化。  
+
+门禁：`verify-tray-quit.mjs`、`verify-chat-window.mjs`、`verify-naming.mjs`。
 
 ---
 

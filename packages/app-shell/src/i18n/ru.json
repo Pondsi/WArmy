@@ -1615,5 +1615,13 @@
   "panel.summary.decisions": "Решения",
   "panel.summary.todos": "Задачи",
   "panel.summary.risks": "Риски / внимание",
-  "panel.summary.bullets": "Ключевые моменты"
+  "panel.summary.bullets": "Ключевые моменты",
+  "panel.diagWhat": "для отладки",
+  "panel.assist.title": "Ждёт вас",
+  "panel.assist.empty": "Сейчас ничего не требует вашей помощи.",
+  "panel.assist.markDone": "Отметить выполненным",
+  "panel.assist.markUrgent": "Отметить срочным",
+  "panel.assist.markStale": "Больше не нужно",
+  "panel.assist.done": "готово",
+  "panel.assist.urgent": "срочно"
 }

@@ -99,6 +99,8 @@ contextBridge.exposeInMainWorld('warmy', {
   pluginsScanDirsGet: () => ipcRenderer.invoke('warmy:plugins-scan-dirs-get'),
   pluginsScanDirsSet: (dirs) => ipcRenderer.invoke('warmy:plugins-scan-dirs-set', dirs),
   pluginsScan: () => ipcRenderer.invoke('warmy:plugins-scan'),
+  assistList: (sessionId) => ipcRenderer.invoke('warmy:assist-list', sessionId),
+  assistUpsert: (payload) => ipcRenderer.invoke('warmy:assist-upsert', payload),
   skillsPaths: () => ipcRenderer.invoke('warmy:skills-paths'),
   // Skill auto-discovery directories ride the EXISTING settings channel.
   skillsScanDirsGet: () => ipcRenderer.invoke('warmy:skills-scan-dirs-get'),

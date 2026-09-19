@@ -1615,5 +1615,13 @@
   "panel.summary.decisions": "Decidoj",
   "panel.summary.todos": "Fari",
   "panel.summary.risks": "Riskoj / notoj",
-  "panel.summary.bullets": "Ŝlosilaj punktoj"
+  "panel.summary.bullets": "Ŝlosilaj punktoj",
+  "panel.diagWhat": "por sencimigo",
+  "panel.assist.title": "Atendas vin",
+  "panel.assist.empty": "Nenio atendas vian helpon nun.",
+  "panel.assist.markDone": "Marki farita",
+  "panel.assist.markUrgent": "Marki urĝa",
+  "panel.assist.markStale": "Ne plu bezonata",
+  "panel.assist.done": "farita",
+  "panel.assist.urgent": "urĝa"
 }

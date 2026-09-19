@@ -2,7 +2,7 @@
  * Electron 主进程 — 零原生模块
  * 注意：Windows 中文路径下 fork 子进程可能乱码，memory ipc 先拷到 userData（ASCII）
  */
-import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut, screen } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { execFile, execFileSync, spawn } from 'node:child_process';
@@ -1352,6 +1352,67 @@ function startMemoryAsync() {
 }
 
 let forceQuit = false;
+/** 托盘实例：全应用只允许一个；退出时必须 destroy，否则通知区残留 */
+let tray: import('electron').Tray | null = null;
+
+/**
+ * 禁止多开后的行为：重复启动不新建实例，只把**已运行**主窗口
+ * 恢复 → 移到屏幕中央 → 获得焦点。
+ */
+function focusMainWindowCentered(): void {
+  try {
+    if (!win || win.isDestroyed()) {
+      createWindow();
+      return;
+    }
+    if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.show();
+    // 居中到窗口当前所在显示器的工作区（无窗口时用主显示器）
+    try {
+      const b0 = win.getBounds();
+      const display = screen.getDisplayMatching(b0) || screen.getPrimaryDisplay();
+      const wa = display.workArea;
+      const w = b0.width || wa.width;
+      const h = b0.height || wa.height;
+      win.setBounds({
+        x: Math.round(wa.x + (wa.width - w) / 2),
+        y: Math.round(wa.y + (wa.height - h) / 2),
+        width: w,
+        height: h,
+      });
+    } catch { /* 居中失败不影响聚焦 */ }
+    win.focus();
+    try { win.moveTop(); } catch { /* noop */ }
+  } catch {
+    try { createWindow(); } catch { /* noop */ }
+  }
+}
+
+/**
+ * 真正退出：托盘「下班」/ 隐私撤销 / IPC app-quit 统一走这里。
+ *
+ * 根因修复：窗口 close 在 !forceQuit 时 preventDefault 并 hide（点叉=最小化到托盘）。
+ * 若只调 app.quit() 而不置 forceQuit，close 会被拦掉，进程和托盘都还在 ——
+ * 表现为「右键下班点了关不掉」。
+ */
+function quitApp(reason?: string): void {
+  forceQuit = true;
+  try { audit?.log('app.quit', { reason: String(reason || 'quit') }); } catch { /* noop */ }
+  try { tray?.destroy(); } catch { /* noop */ }
+  tray = null;
+  try {
+    for (const w of BrowserWindow.getAllWindows()) {
+      try {
+        if (!w.isDestroyed()) w.destroy();
+      } catch { /* noop */ }
+    }
+  } catch { /* noop */ }
+  try { app.quit(); } catch { /* noop */ }
+  // 兜底：若仍有钩子拖住进程，强制退出（托盘/子进程清理已在 before-quit 尽力执行）
+  setTimeout(() => {
+    try { app.exit(0); } catch { try { process.exit(0); } catch { /* noop */ } }
+  }, 1500);
+}
 
 function windowStateFile(): string {
   try { return path.join(app.getPath('userData'), 'window-state.json'); } catch { return ''; }
@@ -1531,6 +1592,22 @@ process.on('unhandledRejection', (reason) => {
 // 应用身份：影响任务栏悬停/右键菜单里显示的名称（默认会显示 Electron）
 app.setName('无限牛马');
 if (process.platform === 'win32') app.setAppUserModelId('com.pondsi.warmy');
+
+/**
+ * 单实例（产品定稿）：**禁止多开**。
+ * 重复启动不会新开进程/托盘，只把已运行主窗口**移到屏幕中央并获得焦点**。
+ */
+const gotSingleLock = app.requestSingleInstanceLock();
+if (!gotSingleLock) {
+  // 第二实例：不初始化托盘/窗口，尽快退出
+  try { app.quit(); } catch { /* noop */ }
+  setTimeout(() => process.exit(0), 30);
+} else {
+  app.on('second-instance', () => {
+    focusMainWindowCentered();
+  });
+}
+
 // 任务栏/窗口图标统一用产品 logo（app.ico 优先）
 try {
   const __icon = warmyWindowIcon();
@@ -1541,28 +1618,34 @@ try {
   }
 } catch { /* noop */ }
 
-app
-  .whenReady()
-  .then(async () => {
-    boot('whenReady');
-    createWindow();
-    boot('window created');
-    await bootstrap();
-    startMemoryAsync();
-    try { createTray(); boot('tray ready'); } catch (e) { boot(`tray fail ${String(e)}`); }
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (gotSingleLock) {
+  app
+    .whenReady()
+    .then(async () => {
+      boot('whenReady');
+      createWindow();
+      boot('window created');
+      await bootstrap();
+      startMemoryAsync();
+      try { createTray(); boot('tray ready'); } catch (e) { boot(`tray fail ${String(e)}`); }
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      });
+    })
+    .catch((e) => {
+      boot(`whenReady error ${String(e)}`);
     });
-  })
-  .catch((e) => {
-    boot(`whenReady error ${String(e)}`);
-  });
+}
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') quitApp('window-all-closed');
 });
 
 app.on('before-quit', () => {
+  forceQuit = true;
+  // 托盘必须销毁，否则任务栏/通知区残留图标
+  try { tray?.destroy(); } catch { /* noop */ }
+  tray = null;
   // 退出前再落一次盘，避免内存变更没跟上文件
   try {
     persistRouterQueues();
@@ -4193,6 +4276,100 @@ handleIpc('warmy:pick-directory', async () => {
   return { ok: true, path: r.filePaths[0] };
 });
 
+/** 等待协助：userData/assist.json —— AI 运行中需要人处理的事项（项目级会话可见） */
+type AssistStatus = 'open' | 'done' | 'stale';
+type AssistPriority = 'normal' | 'urgent';
+interface AssistItem {
+  id: string;
+  sessionId: string;
+  title: string;
+  body?: string;
+  status: AssistStatus;
+  priority: AssistPriority;
+  createdAt: number;
+  updatedAt: number;
+}
+function assistFile(): string {
+  return path.join(app.getPath('userData'), 'assist.json');
+}
+function loadAssistItems(): AssistItem[] {
+  try {
+    const raw = readJsonFile<{ items?: AssistItem[] } | null>(assistFile(), null);
+    return Array.isArray(raw?.items) ? raw!.items! : [];
+  } catch { return []; }
+}
+function saveAssistItems(items: AssistItem[]): void {
+  try { writeJsonAtomicSafe(assistFile(), { version: 1, items }); } catch { /* noop */ }
+}
+handleIpc('warmy:assist-list', (_e, sessionId?: string) => {
+  try {
+    let items = loadAssistItems();
+    const sid = typeof sessionId === 'string' && sessionId ? sessionId : '';
+    // 合并 AI 决策卡（pending=open / answered=done）
+    try {
+      const qs = aiQuestions.list(sid || undefined);
+      for (const q of qs) {
+        const id = 'q-' + q.id;
+        const exists = items.find((x) => x.id === id);
+        const mapped: AssistItem = {
+          id,
+          sessionId: q.groupId || sid,
+          title: q.title,
+          body: q.body || '',
+          status: q.status === 'pending' ? 'open' : q.status === 'answered' ? 'done' : 'stale',
+          priority: 'normal',
+          createdAt: q.createdAt,
+          updatedAt: (q.answer && q.answer.answeredAt) || q.createdAt,
+        };
+        if (exists) {
+          // 人工标记优先于自动状态；仅在仍为 open 时跟随决策卡
+          if (exists.status === 'open' && mapped.status === 'done') {
+            exists.status = 'done';
+            exists.updatedAt = mapped.updatedAt;
+          }
+        } else {
+          items.push(mapped);
+        }
+      }
+      saveAssistItems(items);
+    } catch { /* noop */ }
+    if (sid) items = items.filter((x) => !x.sessionId || x.sessionId === sid);
+    // 有界：每会话最多保留 200 条
+    if (items.length > 200) items = items.slice(-200);
+    return { ok: true, items };
+  } catch (e) {
+    return { ok: false, items: [], error: sanitizeError(e) };
+  }
+});
+handleIpc('warmy:assist-upsert', (_e, payload: Partial<AssistItem> & { id?: string }) => {
+  try {
+    const id = String(payload?.id || '').trim();
+    if (!id) return { ok: false, error: 'missing-id' };
+    const items = loadAssistItems();
+    const now = Date.now();
+    const i = items.findIndex((x) => x.id === id);
+    const prev = i >= 0 ? items[i] : null;
+    const next: AssistItem = {
+      id,
+      sessionId: String(payload.sessionId || prev?.sessionId || ''),
+      title: String(payload.title || prev?.title || '').slice(0, 200),
+      body: String(payload.body || prev?.body || '').slice(0, 500),
+      status: (payload.status as AssistStatus) || prev?.status || 'open',
+      priority: (payload.priority as AssistPriority) || prev?.priority || 'normal',
+      createdAt: prev?.createdAt || Number(payload.createdAt) || now,
+      updatedAt: now,
+    };
+    if (next.status === 'done' || next.status === 'stale') next.priority = 'normal';
+    if (i >= 0) items[i] = next;
+    else items.push(next);
+    saveAssistItems(items);
+    audit?.log('assist.upsert', { id, status: next.status, priority: next.priority });
+    return { ok: true, item: next };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
 /** 隐私政策同意/撤销 */
 handleIpc('warmy:privacy-consent-set', (_e, consent: boolean) => {
   try {
@@ -4204,10 +4381,9 @@ handleIpc('warmy:privacy-consent-set', (_e, consent: boolean) => {
   }
 });
 
-/** 拒绝隐私政策 / 撤销同意 → 关闭软件 */
+/** 拒绝隐私政策 / 撤销同意 / 主动退出 → 统一 quitApp（会置 forceQuit，否则 close 会拦截） */
 handleIpc('warmy:app-quit', (_e, reason?: string) => {
-  audit?.log('app.quit', { reason: String(reason || '') });
-  setTimeout(() => app.quit(), 80);
+  setTimeout(() => quitApp(String(reason || 'ipc')), 40);
   return { ok: true };
 });
 
@@ -6256,34 +6432,31 @@ handleIpc('warmy:register-hotkey', (_e, accel: string) => {
 });
 
 // ── J. 托盘 ──
-let tray: import('electron').Tray | null = null;
 let trayOffWorkLabel = '下班';
 let exportHeaderLabel = '导出自';
 let exportMeLabel = '我';
 function createTray() {
   if (tray) return;
-  // 用真实 logo 生成托盘图标（16/32 均可，Windows 托盘实际显示 16px）
   const iconPath = warmyWindowIcon();
   let img = nativeImage.createFromPath(iconPath);
+  if (img.isEmpty()) {
+    img = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'logo-32.png'));
+  }
   if (img.isEmpty()) {
     img = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'app-32.png'));
   }
   if (img.isEmpty()) {
-    // 回退：16x16 占位
     img = nativeImage.createFromBuffer(
       Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKklEQVQ4y2NgGAWjYBSMglEwCkbBKBgFo2AUjIJRMApGwSgYBaNgFIwCAAgQAAF/lPurAAAAAElFTkSuQmCC', 'base64')
     );
   }
   const t = new Tray(img);
   t.setToolTip('无限牛马 WArmy');
-  // 托盘菜单：只有一个「下班」（= 退出）
-  t.setContextMenu(Menu.buildFromTemplate([{ label: trayOffWorkLabel, click: () => { app.quit(); } }]));
-  t.on('double-click', () => {
-    if (!win) { createWindow(); return; }
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-  });
+  // 下班 = 真正退出（必须走 quitApp：置 forceQuit + 毁托盘，否则 close 会把退出拦成隐藏）
+  t.setContextMenu(Menu.buildFromTemplate([
+    { label: trayOffWorkLabel, click: () => { quitApp('tray-off-work'); } },
+  ]));
+  t.on('double-click', () => { focusMainWindowCentered(); });
   tray = t;
 }
 handleIpc('warmy:tray-init', () => {
@@ -6303,8 +6476,9 @@ handleIpc('warmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?
     if (p.text) tray?.setToolTip(String(p.text).slice(0, 120));
     if (p.offWork && p.offWork !== trayOffWorkLabel) {
       trayOffWorkLabel = String(p.offWork);
-      const { Menu } = require('electron');
-      tray?.setContextMenu(Menu.buildFromTemplate([{ label: trayOffWorkLabel, click: () => { app.quit(); } }]));
+      tray?.setContextMenu(Menu.buildFromTemplate([
+        { label: trayOffWorkLabel, click: () => { quitApp('tray-off-work'); } },
+      ]));
     }
     if (p.header) exportHeaderLabel = String(p.header);
     if (p.me) exportMeLabel = String(p.me);

@@ -1615,5 +1615,13 @@
   "panel.summary.decisions": "決策",
   "panel.summary.todos": "待辦",
   "panel.summary.risks": "風險/注意",
-  "panel.summary.bullets": "要點"
+  "panel.summary.bullets": "要點",
+  "panel.diagWhat": "排障用",
+  "panel.assist.title": "等待協助",
+  "panel.assist.empty": "目前沒有需要你協助的事項。",
+  "panel.assist.markDone": "標記完成",
+  "panel.assist.markUrgent": "標記緊急",
+  "panel.assist.markStale": "不再需要",
+  "panel.assist.done": "已完成",
+  "panel.assist.urgent": "緊急"
 }

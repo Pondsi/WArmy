@@ -11,7 +11,7 @@
   <div id="app">
     <div id="titlebar">
       <div class="tb-drag">
-        <div class="tb-logo" id="tb-logo" aria-hidden="true"><img src="./icons/app-64.png" alt="" class="tb-logo-img"/></div>
+        <div class="tb-logo" id="tb-logo" aria-hidden="true"><img src="./icons/logo-color.svg" alt="" class="tb-logo-img"/></div>
         <!-- Owner rule: this titlebar line is logo + tagline ONLY (app.js fills #tb-brand with brand.tagline). -->
         <span class="tb-brand" id="tb-brand"></span>
       </div>
@@ -230,11 +230,12 @@
           <div id="panel-resizer" data-i18n-title="tip.splitHint"></div>
         </section>
         <aside id="panel-col">
-          <!-- 诊断事件流：**右侧第四列**（不是聊天顶部） -->
+          <!-- 诊断事件流：**右侧第四列**（不是聊天顶部）。点击标题即可展开/收起。 -->
           <div class="panel-block" id="diag-panel-block">
-            <div class="panel-toggle" id="diag-toggle">
-              <span data-i18n="tip.console"></span>
-              <span class="chev">›</span>
+            <div class="panel-toggle" id="diag-toggle" title="诊断事件流：本机真实事件日志（工具调用/组网/错误），不是容器终端">
+              <span id="diag-toggle-title" data-i18n="console.title">诊断事件流</span>
+              <span class="muted diag-what" data-i18n="panel.diagWhat">排障用</span>
+              <span class="chev" id="diag-chev">›</span>
             </div>
             <div id="diag-host" class="hidden">
               <div id="console-pane" class="console-pane panel-console">
@@ -284,17 +285,25 @@
             <div id="project-files-box"></div>
           </div>
 
-          <!-- 进度（折叠：百分比条；展开：任务列表） -->
+          <!-- 进度（折叠：百分比条；展开：任务列表，限高可滚动，默认滚到最新） -->
           <div class="panel-block" id="panel-progress-block">
             <div class="panel-toggle" id="progress-toggle">
-              <span data-i18n="panel.progress"></span>
+              <span data-i18n="panel.progress">进度</span>
               <div class="progress" style="flex:1;margin:0 8px"><div id="progress-bar" class="progress-bar" style="width:0%"></div></div>
               <span id="progress-text" class="muted">0%</span>
               <span class="chev">›</span>
             </div>
-            <!-- 任务列表内容由 app.js 的 renderProgressTasks() 填**真任务**（看板任务）；
-                 这里不再放写死的演示任务 —— 那会让人以为"任务真的在跑"。 -->
-            <ul id="task-list" class="task-list hidden"></ul>
+            <ul id="task-list" class="task-list hidden panel-scroll"></ul>
+          </div>
+
+          <!-- 等待协助：AI 运行中需要人处理的事；默认折叠；未读红/黄点 -->
+          <div class="panel-block" id="panel-assist-block">
+            <div class="panel-toggle" id="assist-toggle">
+              <span data-i18n="panel.assist.title">等待协助</span>
+              <span id="assist-badge" class="assist-badge hidden" aria-hidden="true"></span>
+              <span class="chev">›</span>
+            </div>
+            <ul id="assist-list" class="assist-list hidden panel-scroll"></ul>
           </div>
 
           <!-- 模型管理（我的牛马 / 项目 / 群聊 都显示） -->

@@ -1615,5 +1615,13 @@
   "panel.summary.decisions": "決定",
   "panel.summary.todos": "やること",
   "panel.summary.risks": "リスク/注意",
-  "panel.summary.bullets": "要点"
+  "panel.summary.bullets": "要点",
+  "panel.diagWhat": "デバッグ用",
+  "panel.assist.title": "人間の対応待ち",
+  "panel.assist.empty": "いま人間の対応が必要な項目はありません。",
+  "panel.assist.markDone": "完了にする",
+  "panel.assist.markUrgent": "緊急にする",
+  "panel.assist.markStale": "不要になった",
+  "panel.assist.done": "完了",
+  "panel.assist.urgent": "緊急"
 }

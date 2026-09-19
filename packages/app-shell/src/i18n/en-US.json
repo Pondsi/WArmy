@@ -1615,5 +1615,13 @@
   "panel.summary.decisions": "Decisions",
   "panel.summary.todos": "To-do",
   "panel.summary.risks": "Risks / notes",
-  "panel.summary.bullets": "Key points"
+  "panel.summary.bullets": "Key points",
+  "panel.diagWhat": "for debugging",
+  "panel.assist.title": "Waiting on you",
+  "panel.assist.empty": "Nothing waiting on you right now.",
+  "panel.assist.markDone": "Mark done",
+  "panel.assist.markUrgent": "Mark urgent",
+  "panel.assist.markStale": "No longer needed",
+  "panel.assist.done": "done",
+  "panel.assist.urgent": "urgent"
 }
