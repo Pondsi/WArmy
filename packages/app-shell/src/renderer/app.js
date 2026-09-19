@@ -1928,113 +1928,132 @@
     flushQueue(id); // 本轮结束 → 冲刷队列（真的发，不再只回显）
   }
 
+  /**
+   * 总看板（我的页底部）：
+   * 顶部三卡：进行中项目 / 运行中实例 / 等待决策总数
+   * 下方按 我的牛马 / 项目 / 联系人 / 群聊 分类折叠会话；
+   * 折叠：名称 + 一句话最新 + 有等待决策时黄点；双击进入；
+   * 展开：完整名、创建时间、耗时、摘要、等待决策列表。
+   */
   async function renderDashboard(host) {
-    let sessions = state.board.sessions;
-    let events = state.board.events;
+    if (!host) return;
+    // 收集会话列表（真实数据优先）
+    let groups = [];
     try {
-      const agg = await window.warmy.boardAggregate();
-      const ev = await window.warmy.boardEvents();
-      if (agg?.ok && agg.sessions?.length) {
-        sessions = agg.sessions.map((s) => ({
-          id: s.groupId,
-          kind: 'internal',
-          name: s.groupId,
-          progress: s.avgProgress,
-          status: 'doing',
-          blocked: false,
-          taskCount: s.taskCount,
-          done: s.done,
-        }));
-      }
-      if (ev?.ok && ev.events?.length) {
-        events = ev.events.map((e) => ({
-          id: String(e.seq),
-          ts: e.ts,
-          action: e.action,
-          title: e.title + (typeof e.progress === 'number' ? ` → ${e.progress}%` : ''),
-          session: e.groupId,
-        }));
-      }
-    } catch {
-      /* fallback demo */
-    }
+      const gl = await window.warmy.groupList();
+      if (gl?.ok && Array.isArray(gl.groups)) groups = gl.groups;
+    } catch { groups = state.groups || []; }
+    if (!groups.length) groups = state.groups || [];
 
-    const running = state.instances.filter((i) => i.status === 'running').length;
-    const queued = Object.values(state.queues).reduce((n, q) => n + q.length, 0);
-    const doing = sessions.filter((x) => x.status !== 'done').length;
-    const done = events.filter((e) => e.action === 'complete_task').length;
-    const typeLabel = (k) =>
-      k === 'internal' ? t('group.type.internal') : k === 'extgroup' ? t('group.type.external') : t('nav.singleAi');
-    const evLabel = (a) =>
-      ({
-        create_task: t('board.create_task'),
-        update_progress: t('board.update_progress'),
-        complete_task: t('board.complete_task'),
-        add_note: t('board.add_note'),
-        block: t('board.block'),
-      })[a] || a;
+    // 等待协助 / 决策总数
+    let assistAll = [];
+    try {
+      const r = await window.warmy.assistList?.();
+      assistAll = (r && r.items) || [];
+    } catch { assistAll = []; }
+    const pendingCount = assistAll.filter((x) => x.status === 'open').length;
+
+    const running = (state.instances || []).filter((i) => i.status === 'running').length;
+    const inProgressProjects = groups.filter((g) => g.type === 'internal').length;
+
+    // 会话元数据
+    const now = Date.now();
+    const sessions = groups.map((g) => {
+      const kind = g.type === 'internal' ? 'internal'
+        : g.type === 'external' || g.type === 'externalGroup' ? 'external'
+        : g.type === 'externalChat' ? 'contact'
+        : 'single';
+      const chatKind = g.type === 'externalGroup' ? 'extgroup' : g.type === 'externalChat' ? 'extchat' : g.type;
+      const created = Number(g.createdAt || 0);
+      const hours = created ? Math.max(0, Math.round((now - created) / 3600000)) : null;
+      const assists = assistAll.filter((a) => !a.sessionId || a.sessionId === g.id);
+      const pend = assists.filter((a) => a.status === 'open');
+      const lastEv = (() => {
+        try {
+          const evs = (state.board && state.board.events) || [];
+          const hit = evs.find((e) => e.session === g.id);
+          return hit ? String(hit.title || '').slice(0, 80) : '';
+        } catch { return ''; }
+      })();
+      const oneline = lastEv || (pend[0] ? String(pend[0].title).slice(0, 60) : t('dashboard.emptyLine'));
+      const summary = (g.memory || lastEv || oneline || '').slice(0, 120);
+      return {
+        id: g.id,
+        kind,
+        chatKind: chatKind === 'single' ? 'single' : g.type,
+        name: g.name || g.id,
+        created,
+        hours,
+        oneline,
+        summary,
+        pend,
+        createdAtLabel: created ? new Date(created).toLocaleString() : '—',
+      };
+    });
+
+    const cats = [
+      { key: 'single', label: t('dashboard.cat.single'), items: sessions.filter((s) => s.kind === 'single') },
+      { key: 'internal', label: t('dashboard.cat.internal'), items: sessions.filter((s) => s.kind === 'internal') },
+      { key: 'contact', label: t('dashboard.cat.contact'), items: sessions.filter((s) => s.kind === 'contact') },
+      { key: 'external', label: t('dashboard.cat.external'), items: sessions.filter((s) => s.kind === 'external') },
+    ];
 
     host.innerHTML = `
       <h1>${t('dashboard.title')}</h1>
-      <p class="board-hint">${t('dashboard.readOnlyHint')}</p>
-      <div class="dash-grid">
-        <div class="dash-card"><div class="muted">${t('dashboard.tasks')}</div><div class="stat">${escapeHtml(String(doing ?? 0))}</div></div>
-        <div class="dash-card"><div class="muted">${t('dashboard.done')}</div><div class="stat">${escapeHtml(String(done ?? 0))}</div></div>
-        <div class="dash-card"><div class="muted">${t('dashboard.agents')}</div><div class="stat">${escapeHtml(String(running ?? 0))}</div></div>
-        <div class="dash-card"><div class="muted">${t('dashboard.queue')}</div><div class="stat">${escapeHtml(String(queued ?? 0))}</div></div>
+      <div class="dash-stats">
+        <div class="dash-card"><div class="muted">${t('dashboard.inProgressProjects')}</div><div class="stat">${escapeHtml(String(inProgressProjects))}</div></div>
+        <div class="dash-card"><div class="muted">${t('dashboard.runningInstances')}</div><div class="stat">${escapeHtml(String(running))}</div></div>
+        <div class="dash-card"><div class="muted">${t('dashboard.pendingDecisions')}</div><div class="stat">${escapeHtml(String(pendingCount))}</div></div>
       </div>
-      <div class="set-card" style="margin-bottom:16px">
-        <h2 style="margin:0 0 10px;font-size:14px">${t('dashboard.sessions')}</h2>
-        <div id="board-sessions"></div>
-      </div>
-      <div class="set-card">
-        <h2 style="margin:0 0 10px;font-size:14px">${t('panel.board')} · ${t('dashboard.recent')}</h2>
-        <div id="board-events"></div>
-      </div>`;
+      <div id="dash-sessions"></div>`;
+    const box = $('dash-sessions');
+    if (!box) return;
 
-    const sess = $('board-sessions');
-    if (!sessions.length) {
-      // 如实话术：没有真数据就说没有（不摆演示数据）
-      sess.innerHTML = '<div class="board-empty">' + escapeHtml(t('dashboard.emptySessions')) + '</div>';
-    }
-    sessions.forEach((s) => {
-      const el = document.createElement('div');
-      el.className = 'board-session';
-      el.title = t('dashboard.jump');
-      el.innerHTML = `
-        <div class="bs-name">${escapeHtml(state.t[s.name] || s.name)}</div>
-        <span class="bs-type">${escapeHtml(typeLabel(s.kind))}</span>
-        <div class="bs-prog">
-          <div class="progress"><div class="progress-bar" style="width:${clampPercent(s.progress)}%"></div></div>
-          <div class="muted" style="margin-top:2px">${t('dashboard.progressLabel')} ${clampPercent(s.progress)}%${s.blocked ? ' · ' + t('dashboard.blocked') : ''}</div>
-        </div>
-        <span class="bs-status">${t('dashboard.jump')} →</span>`;
-      el.onclick = () => {
-        const kind = s.kind === 'single' ? 'single' : s.kind === 'internal' ? 'internal' : 'extgroup';
-        const nav = kind === 'single' ? 'singleAi' : kind === 'internal' ? 'internalGroup' : 'externalGroup';
-        if (kind !== 'single' && !state.groups.find((g) => g.id === s.id)) {
-          state.groups.push({ id: s.id, name: t(s.name), type: kind, members: [] });
-        }
-        setNav(nav);
-        openChat(kind, s.id, t(s.name));
-      };
-      sess.appendChild(el);
-    });
-
-    const evBox = $('board-events');
-    if (!events.length) {
-      evBox.innerHTML = '<div class="board-empty">' + escapeHtml(t('dashboard.emptyEvents')) + '</div>';
-    }
-    [...events]
-      .sort((a, b) => b.ts - a.ts)
-      .forEach((e) => {
-        const d = document.createElement('div');
-        d.className = 'board-event';
-        d.innerHTML = `<span class="ev-tag">${escapeHtml(evLabel(e.action))}</span>
-          <div><div>${escapeHtml(t(e.title))}</div>
-          <div class="muted">${escapeHtml(t(e.session))} · ${new Date(e.ts).toLocaleString()}</div></div>`;
-        evBox.appendChild(d);
+    cats.forEach((cat) => {
+      if (!cat.items.length) return;
+      const head = document.createElement('div');
+      head.className = 'dash-cat';
+      head.textContent = cat.label;
+      box.appendChild(head);
+      cat.items.forEach((s) => {
+        const row = document.createElement('div');
+        row.className = 'dash-row';
+        row.title = t('dashboard.jump') || '';
+        row.innerHTML =
+          (s.pend.length ? '<span class="dash-badge" title="' + escapeHtml(t('dashboard.pendingBadge') || '') + '"></span>' : '<span style="width:8px"></span>') +
+          '<div class="dash-name">' + escapeHtml(s.name) + '</div>' +
+          '<div class="dash-oneline">' + escapeHtml(s.oneline) + '</div>' +
+          (s.hours != null ? '<div class="muted" style="font-size:11px;flex-shrink:0">' + escapeHtml(fmtKey('dashboard.hoursAgo', { h: String(s.hours) })) + '</div>' : '');
+        const detail = document.createElement('div');
+        detail.className = 'dash-detail hidden';
+        detail.innerHTML =
+          '<div class="dd-line"><b>' + escapeHtml(s.name) + '</b></div>' +
+          '<div class="dd-line muted">' + escapeHtml(t('dashboard.createdAt') || 'Created') + '：' + escapeHtml(s.createdAtLabel) + '</div>' +
+          '<div class="dd-line muted">' + escapeHtml(t('dashboard.hoursAgo', { h: String(s.hours ?? '—') })) + '</div>' +
+          '<div class="dd-line">' + escapeHtml(s.summary) + '</div>' +
+          '<div class="dd-line"><b>' + escapeHtml(t('dashboard.pendingDecisions')) + '</b></div>' +
+          (s.pend.length
+            ? s.pend.slice(0, 8).map((p) => '<div class="dd-line">· ' + escapeHtml(String(p.title || '')) + ' <span class="muted">' + escapeHtml(p.priority === 'urgent' ? t('panel.assist.urgent') : '') + '</span></div>').join('')
+            : '<div class="dd-line muted">—</div>');
+        const enter = () => {
+          const kind = s.chatKind || s.kind;
+          const openKind = kind === 'extgroup' ? 'extgroup' : kind === 'extchat' ? 'extchat' : kind === 'internal' ? 'internal' : 'single';
+          const nav = openKind === 'single' ? 'singleAi' : openKind === 'internal' ? 'internalGroup' : openKind === 'extgroup' ? 'externalGroup' : 'externalChat';
+          setNav(nav);
+          openChat(openKind, s.id, s.name);
+        };
+        row.ondblclick = enter;
+        row.onclick = () => {
+          detail.classList.toggle('hidden');
+          if (!detail.classList.contains('hidden')) detail.scrollIntoView({ block: 'nearest' });
+        };
+        box.appendChild(row);
+        box.appendChild(detail);
       });
+    });
+    if (!sessions.length) {
+      box.innerHTML = '<div class="board-empty">' + escapeHtml(t('dashboard.emptySessions')) + '</div>';
+    }
   }
 
   function renderInstanceDetail() {
@@ -2360,37 +2379,95 @@
       const p = state.profile;
       const avHtml = `<img class="avatar-img big" src="${personAvatarSrc(p)}" alt=""/>`;
       box.innerHTML = `
-        <div class="brand-strip">
+        <div class="me-top">
           <img class="brand-logo" src="./icons/logo-tight.png" alt="${escapeHtml(t('brand.name'))}"/>
-          <div class="brand-text">
-            <div class="brand-name">${escapeHtml(t('brand.name'))}</div>
-            <div class="brand-sub">${escapeHtml(t('brand.sub'))}</div>
-          </div>
-        </div>
-        <div class="me-strip">
-          <div class="profile-head">
-            <button id="p-av-btn" class="av-btn" aria-label="${escapeHtml(t('me.avatar'))}">${avHtml}</button>
-            <div>
-              <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
-              <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
-              <div class="muted">${p.loggedIn ? escapeHtml(p.email || '') : t('me.notLoggedIn')}</div>
-              <div class="muted me-hint">${t('me.userId')}: ${escapeHtml(p.deviceId || '—')}</div>
-              <div style="margin-top:8px;display:flex;gap:8px">
-                <button class="btn-mini" id="p-login">${t('me.login')}</button>
-                <button class="btn-mini" id="p-reg">${t('me.register')}</button>
+          <div class="me-strip" style="flex:1;min-width:240px;margin:0">
+            <div class="profile-head">
+              <button id="p-av-btn" class="av-btn" aria-label="${escapeHtml(t('me.avatar'))}">${avHtml}</button>
+              <div style="min-width:0;flex:1">
+                <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
+                <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
+                <div class="muted" style="margin-top:4px">${escapeHtml(t('brand.name'))} · ${escapeHtml(t('brand.sub'))}</div>
               </div>
+              <button class="btn-mini" id="p-save">${t('me.saveProfile')}</button>
+            </div>
+            <div class="field" style="margin:8px 0 0"><label>${t('me.username') || 'Name'}</label>
+              <input id="p-email" placeholder="${escapeHtml(t('me.email') || 'email')}" value="${escapeHtml(p.email || '')}"/>
+            </div>
+            <div class="field" style="margin-top:10px">
+              <label>${t('me.credential')}</label>
+              <div class="me-cred-box">
+                <span class="me-cred-val" id="me-cred-val">—</span>
+                <button class="btn-mini" id="btn-me-cred-copy">${t('me.copy')}</button>
+                <button class="btn-mini" id="btn-me-cred-rotate">${t('me.changeCred')}</button>
+                <button class="btn-mini" id="btn-me-cred-switch">${t('me.switchIdentity')}</button>
+              </div>
+              <div class="muted me-hint" style="margin-top:4px">${t('me.credentialHint')}</div>
             </div>
           </div>
-          <div class="field" style="margin-bottom:10px"><label>${t('me.email')}</label><input id="p-email" type="email" value="${escapeHtml(p.email)}"/></div>
-          <div class="field" style="margin-bottom:14px"><label>${t('me.changePassword')}</label>
-            <input id="p-pw" type="password" placeholder="${escapeHtml(t('me.newPassword'))}"/>
-            <input id="p-pw2" type="password" placeholder="${escapeHtml(t('me.confirmPassword'))}" style="margin-top:6px"/>
-          </div>
-          <button class="btn-primary" id="p-save">${t('me.saveProfile')}</button>
         </div>
         <div id="dash-host"></div>`;
-      $('p-login').onclick = () => uiAlert(t('me.notAvailable'));
-      $('p-reg').onclick = () => uiAlert(t('me.notAvailable'));
+      // 唯一凭证：指纹（私钥不落渲染层）
+      (async () => {
+        try {
+          const cred = await window.warmy.identityCredential?.();
+          const el = $('me-cred-val');
+          if (el && cred?.ok) {
+            el.textContent = cred.fingerprint || '—';
+            el.dataset.fp = cred.fingerprint || '';
+          }
+        } catch { /* noop */ }
+      })();
+      $('btn-me-cred-copy')?.addEventListener('click', async () => {
+        const v = $('me-cred-val')?.dataset.fp || $('me-cred-val')?.textContent || '';
+        try { await navigator.clipboard.writeText(v); uiAlert(t('contact.mineCopied')); } catch { uiAlert(t('contact.mineCopyFail')); }
+      });
+      $('btn-me-cred-rotate')?.addEventListener('click', async () => {
+        if (!(await uiConfirm(t('me.changeCred') + '?'))) return;
+        const r = await window.warmy.identityRotate?.({ reason: 'me-page-rotate' }).catch(() => null);
+        if (r?.ok && r.identity?.fingerprint) {
+          const el = $('me-cred-val');
+          if (el) { el.textContent = r.identity.fingerprint; el.dataset.fp = r.identity.fingerprint; }
+        } else {
+          uiAlert(String(r?.error || 'fail'));
+        }
+      });
+      $('btn-me-cred-switch')?.addEventListener('click', () => {
+        const root = $('modal-root');
+        $('modal-title').textContent = t('me.switchIdentity');
+        $('modal-body').innerHTML =
+          '<div class="muted" style="margin-bottom:8px">' + escapeHtml(t('me.switchHint')) + '</div>' +
+          '<div class="field"><label>' + escapeHtml(t('me.backupJson')) + '</label>' +
+          '<textarea id="me-backup-json" rows="5" style="width:100%"></textarea></div>' +
+          '<div class="field" style="margin-top:8px"><label>' + escapeHtml(t('me.passphrase')) + '</label>' +
+          '<input id="me-backup-pass" type="password"/></div>' +
+          '<div class="muted" id="me-switch-msg" style="margin-top:6px"></div>';
+        const acts = $('modal-actions');
+        acts.innerHTML = '';
+        const cancel = document.createElement('button');
+        cancel.className = 'btn-mini';
+        cancel.textContent = t('common.cancel') || 'Cancel';
+        cancel.onclick = () => root.classList.add('hidden');
+        const okBtn = document.createElement('button');
+        okBtn.className = 'btn-primary';
+        okBtn.textContent = t('common.ok') || 'OK';
+        okBtn.onclick = async () => {
+          const backupJson = $('me-backup-json')?.value || '';
+          const passphrase = $('me-backup-pass')?.value || '';
+          const r = await window.warmy.identityBackupImport?.({ backupJson, passphrase }).catch(() => null);
+          const msg = $('me-switch-msg');
+          if (r?.ok) {
+            if (msg) msg.textContent = (t('me.switchIdentity') || '') + ' OK · ' + (r.fingerprint || '');
+            const el = $('me-cred-val');
+            if (el && r.fingerprint) { el.textContent = r.fingerprint; el.dataset.fp = r.fingerprint; }
+            setTimeout(() => root.classList.add('hidden'), 600);
+          } else if (msg) {
+            msg.textContent = String(r?.error || 'fail');
+          }
+        };
+        acts.append(cancel, okBtn);
+        root.classList.remove('hidden');
+      });
       // click name -> edit
       const nameDisp = $('p-name-display');
       const nameInp = $('p-name');
@@ -2492,18 +2569,22 @@
             <button class="btn-mini" data-pick="error">${t('settings.soundPick')}</button>
             <button class="btn-mini" data-clear="error">${t('settings.soundClear')}</button></div></div>
           <div style="margin-top:12px">
-            <div style="font-weight:600;font-size:13px;margin-bottom:6px">${t('settings.emailNotify')}</div>
-            ${['complete', 'request', 'error']
-            .map(
-              (k) =>
-                '<label style="margin-right:14px"><input type="checkbox" data-email-k="' + k + '" ' +
-                (state.emailNotify && state.emailNotify[k] ? 'checked' : '') + '/> ' + t('settings.sound' + k.charAt(0).toUpperCase() + k.slice(1)) + '</label>'
-            )
-            .join('')}
-            <div class="muted">${t('settings.emailHint')}</div>
+            <div class="field" style="margin-top:10px"><label>${t('smtp.title')}</label>
+              <div id="smtp-email-notify" style="margin:6px 0 8px">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px">${t('settings.emailNotify')}</div>
+                ${['complete', 'request', 'error']
+                  .map(
+                    (k) =>
+                      '<label style="margin-right:14px"><input type="checkbox" data-email-k="' + k + '" ' +
+                      (state.emailNotify && state.emailNotify[k] ? 'checked' : '') + '/> ' + t('settings.sound' + k.charAt(0).toUpperCase() + k.slice(1)) + '</label>'
+                  )
+                  .join('')}
+                <div class="muted">${t('settings.emailHint')}</div>
+              </div>
+            </div>
           </div>
         </div>
-                <div class="set-section set-card">
+                <div class="set-section set-card" id="notify-email-card">
           <h2>${t('smtp.title')} <span class="muted">(${t('smtp.count')} <span id="smtp-n">0</span>/10 · ${t('smtp.max10')})</span></h2>
           <p class="muted">${t('smtp.hint')}</p>
           <div id="smtp-accounts"></div>
@@ -2517,6 +2598,22 @@
             <div class="field"><label>${t('smtp.user')}</label><input id="smtp-user"/></div>
             <div class="field"><label>${t('smtp.pass')}</label><input id="smtp-pass" type="password"/></div>
             <button class="btn-mini" id="btn-smtp-add">${t('smtp.add')}</button>
+          </div>
+          <div style="font-weight:600;font-size:13px;margin:12px 0 6px">${t('settings.emailNotify')}</div>
+          <div id="smtp-email-notify2">
+            ${['complete', 'request', 'error']
+              .map(
+                (k) =>
+                  '<label style="margin-right:14px"><input type="checkbox" data-email-k="' + k + '" ' +
+                  (state.emailNotify && state.emailNotify[k] ? 'checked' : '') + '/> ' + t('settings.sound' + k.charAt(0).toUpperCase() + k.slice(1)) + '</label>'
+              )
+              .join('')}
+            <div class="muted">${t('settings.emailHint')}</div>
+          </div>
+          <div class="notify-apply-bar">
+            <button class="btn-mini" id="btn-notify-cancel">${t('settings.notifyCancel')}</button>
+            <button class="btn-primary" id="btn-notify-apply">${t('settings.notifyApply')}</button>
+            <span class="muted" id="notify-apply-msg"></span>
           </div>
           <span class="muted" id="smtp-msg"></span>
         </div>
@@ -2625,14 +2722,28 @@
           <div class="ctg-dim">${t('container.guideHint')}</div>
           <div id="container-guide" class="ctg-guide"></div>
         </div>
-        <div class="set-section set-card">
+        <div class="set-section set-card" data-sec="func">
           <h2>${t('settings.plugins')}</h2>
-          <table class="plugins">
-            <thead><tr><th>${t('settings.pluginId')}</th><th>${t('settings.pluginDesc')}</th><th>${t('settings.pluginStatus')}</th><th>${t('settings.pluginActions')}</th></tr></thead>
-            <tbody id="plug-body"></tbody>
-          </table>
-          <div style="margin-top:8px"><input id="plug-path" placeholder="package or path" style="width:55%"/>
-            <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button></div>
+          <div id="plug-list" class="plugin-list"></div>
+          <div class="inst-row" style="margin-top:8px;align-items:center">
+            <select id="plug-pick" style="flex:1;min-width:140px"></select>
+            <button class="btn-mini" id="btn-plug-add">${t('settings.pluginAddPick')}</button>
+          </div>
+          <div class="inst-row" style="margin-top:6px;align-items:center">
+            <input id="plug-path" placeholder="package or path" style="flex:1;min-width:120px"/>
+            <button class="btn-mini" id="btn-plug-install">${t('settings.pluginInstall')}</button>
+          </div>
+          <div class="skill-scan-block" style="margin-top:10px">
+            <div class="skill-scan-title">${t('settings.pluginScanTitle')}</div>
+            <div id="plug-scan-dirs"></div>
+            <div class="inst-row" style="margin-top:6px;align-items:center">
+              <input id="plug-scan-dir-input" style="flex:1;min-width:120px" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}"/>
+              <button class="btn-mini" id="btn-plug-scan-browse">${t('settings.pickFolder')}</button>
+              <button class="btn-mini" id="btn-plug-scan-add">${t('settings.skillsScanAdd')}</button>
+            </div>
+            <div style="margin-top:6px"><button class="btn-mini" id="btn-plug-scan-check">${t('settings.pluginScanCheck')}</button></div>
+            <div class="muted" id="plug-scan-msg"></div>
+          </div>
         </div>
         <!-- 内网同步 / 多节点组网 旧设置块已移除：功能由下方「组网设置」卡片承接。
              底层 IPC 通道 warmy:lan-* / warmy:mesh-* 保留为产品契约，仅去掉 UI 与死渲染代码。 -->
@@ -2686,7 +2797,7 @@
           <p class="muted">${t('archive.hint')}</p>
           <div id="archived-box" class="muted">—</div>
         </div>
-        <div class="set-section set-card">
+        <div class="set-section set-card" data-sec="model">
           <h2>${t('settings.specialModels')}</h2>
           <p class="muted">${t('settings.specialModelsHint')}</p>
           <div class="field" style="margin-bottom:8px">
@@ -2728,7 +2839,11 @@
             <div id="skill-scan-dirs"></div>
             <div class="inst-row" style="margin-top:6px;align-items:center">
               <input id="skill-scan-dir-input" class="skill-scan-input" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}" style="flex:1;min-width:120px"/>
+              <button class="btn-mini" id="btn-skill-scan-browse">${t('settings.pickFolder')}</button>
               <button class="btn-mini" id="btn-skill-scan-add">${t('settings.skillsScanAdd')}</button>
+            </div>
+            <div style="margin-top:6px">
+              <button class="btn-mini" id="btn-skill-scan-check">${t('settings.skillsScanCheck')}</button>
             </div>
             <div class="muted" id="skill-scan-msg"></div>
           </div>
@@ -2787,6 +2902,15 @@
               <button class="btn-mini" id="btn-memory-rebuild">${t('memory.rebuild')}</button>
               <span class="muted" id="about-memory-msg"></span>
             </div>
+            <p class="muted" style="margin-top:6px">${t('memory.rebuildWhy')}</p>
+          </div>
+          <div class="about-block">
+            <h3>${t('privacy.viewTitle')}</h3>
+            <div class="privacy-view" id="about-privacy-view">${escapeHtml(t('privacy.body'))}</div>
+            <div style="margin-top:8px">
+              <button class="btn-mini" id="btn-privacy-revoke">${t('privacy.revoke')}</button>
+              <span class="muted" id="privacy-revoke-msg"></span>
+            </div>
           </div>
           <div class="about-block"><h3>${t('about.opensource')}</h3><p class="muted">${t('about.opensourceBody')}</p></div>
           <div class="about-block"><h3>${t('about.techStack')}</h3><p class="muted">${t('about.techStackBody')}</p></div>
@@ -2817,8 +2941,8 @@
           if (rt) rt.textContent =
             `Electron ${info.electron} · Chromium ${info.chrome} · Node ${info.node} · ${info.platform}/${info.arch}`;
           const dv = $('about-device');
-          if (dv) dv.textContent =
-            `${t('me.userId')}: ${info.deviceId || '—'} ${info.deviceIdValid ? t('about.idVerified') : t('about.idRegenerated')}`;
+          // 产品要求：关于-版本信息**不显示设备 ID**
+          if (dv) dv.textContent = `${t('about.version')} ${info.version || ''} · ${info.platform || ''}/${info.arch || ''}`;
         } catch { /* noop */ }
       })();
       // 记忆系统状态（产品重点：JSONL + FTS + 向量；未就绪如实显示）
@@ -2881,6 +3005,167 @@
         navBtns.forEach((btn) => { btn.onclick = () => showSec(btn.dataset.sec); });
         showSec('ui');
       })();
+
+      // 通知+邮箱：确定生效 / 取消恢复
+      (function bindNotifyApply() {
+        const snap = () => ({
+          sound: { ...(state.sound || {}) },
+          soundFiles: { ...(state.soundFiles || {}) },
+          emailNotify: { ...(state.emailNotify || {}) },
+        });
+        let backup = snap();
+        const readForm = () => {
+          const emailNotify = { complete: false, request: false, error: false };
+          document.querySelectorAll('#notify-email-card [data-email-k], #smtp-email-notify2 [data-email-k]').forEach((el) => {
+            emailNotify[el.dataset.emailK] = !!el.checked;
+          });
+          // sound checkboxes
+          const sound = {
+            complete: !!$('s-complete')?.checked,
+            request: !!$('s-request')?.checked,
+            error: !!$('s-error')?.checked,
+          };
+          return { emailNotify, sound };
+        };
+        $('btn-notify-apply')?.addEventListener('click', async () => {
+          const f = readForm();
+          state.emailNotify = f.emailNotify;
+          state.sound = f.sound;
+          await window.warmy.settingsSave({ emailNotify: f.emailNotify, sound: f.sound }).catch(() => {});
+          backup = snap();
+          const m = $('notify-apply-msg');
+          if (m) m.textContent = t('settings.notifyApplied');
+        });
+        $('btn-notify-cancel')?.addEventListener('click', () => {
+          state.sound = backup.sound;
+          state.soundFiles = backup.soundFiles;
+          state.emailNotify = backup.emailNotify;
+          if ($('s-complete')) $('s-complete').checked = !!backup.sound.complete;
+          if ($('s-request')) $('s-request').checked = !!backup.sound.request;
+          if ($('s-error')) $('s-error').checked = !!backup.sound.error;
+          document.querySelectorAll('[data-email-k]').forEach((el) => {
+            el.checked = !!(backup.emailNotify && backup.emailNotify[el.dataset.emailK]);
+          });
+          window.warmy.settingsSave({ emailNotify: backup.emailNotify, sound: backup.sound }).catch(() => {});
+          const m = $('notify-apply-msg');
+          if (m) m.textContent = '';
+        });
+        // 打开设置页时备份当前生效值
+        backup = snap();
+      })();
+
+      // 隐私政策：关于页撤销
+      $('btn-privacy-revoke')?.addEventListener('click', async () => {
+        if (!(await uiConfirm(t('privacy.revokeConfirm')))) return;
+        await window.warmy.privacyConsentSet?.(false).catch(() => {});
+        await window.warmy.appQuit?.('privacy-revoke').catch(() => {});
+      });
+
+      // 技能目录：资源管理器选择 + 检查扫描
+      $('btn-skill-scan-browse')?.addEventListener('click', async () => {
+        const r = await window.warmy.pickDirectory?.().catch(() => null);
+        if (r?.ok && r.path && $('skill-scan-dir-input')) $('skill-scan-dir-input').value = r.path;
+      });
+      $('btn-skill-scan-check')?.addEventListener('click', async () => {
+        const msg = $('skill-scan-msg');
+        if (msg) msg.textContent = '…';
+        try {
+          await window.warmy.skillsList?.();
+          const r = await window.warmy.skillsList?.();
+          if (msg) msg.textContent = t('settings.skillsScanCheck') + ' · ' + String((r && (r.skills || r.items) || []).length || 0);
+          if (typeof window.__refreshSkills === 'function') window.__refreshSkills();
+          else setNav('settings');
+        } catch (e) {
+          if (msg) msg.textContent = String(e);
+        }
+      });
+
+      // 插件目录浏览 / 检查
+      $('btn-plug-scan-browse')?.addEventListener('click', async () => {
+        const r = await window.warmy.pickDirectory?.().catch(() => null);
+        if (r?.ok && r.path && $('plug-scan-dir-input')) $('plug-scan-dir-input').value = r.path;
+      });
+      $('btn-plug-scan-add')?.addEventListener('click', async () => {
+        const input = $('plug-scan-dir-input');
+        const dir = (input && input.value || '').trim();
+        if (!dir) return;
+        let dirs = [];
+        try {
+          const r = await window.warmy.pluginsScanDirsGet?.();
+          dirs = (r && r.dirs) || [];
+        } catch { dirs = []; }
+        if (dirs.includes(dir) || dirs.length >= 10) return;
+        dirs.push(dir);
+        await window.warmy.pluginsScanDirsSet?.(dirs.slice(0, 10)).catch(() => {});
+        if (input) input.value = '';
+        renderPluginScanDirs(dirs);
+      });
+      $('btn-plug-scan-check')?.addEventListener('click', async () => {
+        const msg = $('plug-scan-msg');
+        if (msg) msg.textContent = '…';
+        const r = await window.warmy.pluginsScan?.().catch(() => null);
+        if (!r?.ok) { if (msg) msg.textContent = String(r?.error || 'fail'); return; }
+        const found = r.found || [];
+        found.forEach((f) => {
+          if (!state.plugins.some((p) => p.id === f.id)) {
+            state.plugins.push({ id: f.id, name: f.name, desc: f.desc || f.path, enabled: true, source: 'discovered' });
+          }
+        });
+        if (msg) msg.textContent = (t('settings.pluginScanCheck') || '') + ' · ' + found.length;
+        renderPluginList();
+      });
+      $('btn-plug-add')?.addEventListener('click', () => {
+        const sel = $('plug-pick');
+        const id = sel && sel.value;
+        if (!id) return;
+        if (!state.plugins.some((p) => p.id === id)) {
+          state.plugins.push({ id, name: id, desc: '', enabled: true, source: 'builtin' });
+        }
+        renderPluginList();
+      });
+
+      function renderPluginScanDirs(dirs) {
+        const box = $('plug-scan-dirs');
+        if (!box) return;
+        box.innerHTML = (dirs || []).map((d) => '<div class="ctg-row">' + escapeHtml(d) + '</div>').join('') || '<div class="muted">—</div>';
+      }
+      function renderPluginList() {
+        const box = $('plug-list');
+        if (!box) return;
+        const known = ['dsh-agent-teams', 'dsh-memory-plus', 'warmy-board-tools'];
+        const pick = $('plug-pick');
+        if (pick) {
+          pick.innerHTML = known.map((k) => '<option value="' + escapeHtml(k) + '">' + escapeHtml(k) + '</option>').join('');
+        }
+        box.innerHTML = (state.plugins || []).map((p, idx) => {
+          return '<div class="ctg-row" data-plugin-idx="' + idx + '">' +
+            '<div style="font-weight:600">' + escapeHtml(p.name || p.id) + '</div>' +
+            '<div class="muted">' + escapeHtml(p.desc || '') + '</div>' +
+            '<div style="margin-top:4px;display:flex;gap:6px">' +
+            '<button class="btn-mini" data-plug-act="toggle" data-idx="' + idx + '">' + (p.enabled === false ? escapeHtml(t('settings.pluginEnable')) : escapeHtml(t('settings.pluginDisable'))) + '</button>' +
+            '<button class="btn-mini" data-plug-act="del" data-idx="' + idx + '">' + escapeHtml(t('settings.pluginDelete')) + '</button>' +
+            '</div></div>';
+        }).join('') || '<div class="muted">' + escapeHtml(t('settings.skillsEmpty') || '—') + '</div>';
+        box.querySelectorAll('[data-plug-act]').forEach((b) => {
+          b.onclick = () => {
+            const idx = Number(b.getAttribute('data-idx'));
+            const act = b.getAttribute('data-plug-act');
+            if (!state.plugins[idx]) return;
+            if (act === 'toggle') state.plugins[idx].enabled = state.plugins[idx].enabled === false;
+            if (act === 'del') state.plugins.splice(idx, 1);
+            renderPluginList();
+          };
+        });
+      }
+      window.__renderPluginList = renderPluginList;
+      (async () => {
+        try {
+          const r = await window.warmy.pluginsScanDirsGet?.();
+          renderPluginScanDirs((r && r.dirs) || []);
+        } catch { /* noop */ }
+        renderPluginList();
+      })();
+
       $('sel-locale').onchange = async (e) => {
         await loadI18n(e.target.value);
         window.warmy.settingsSave({ locale: e.target.value });
@@ -5625,11 +5910,18 @@
   });
   // ADR 004 第七批：「运行/测试在容器中」这个菜单项**已删除**（容器 = 开发环境，测试/运行不在其职责内）。
   // 开发环境在**创建项目时**选定；启用/停用项目与切换容器都在**项目右键菜单**里。
-  $('mi-open')?.addEventListener('click', () => {
+  $('mi-open')?.addEventListener('click', async () => {
     $('more-menu')?.classList.add('hidden');
     if (!state.selectedChat) return;
-    // 子窗口：只有聊天+右栏
-    window.warmy.openChatWindow({ id: state.selectedChat.id, title: state.selectedChat.name, kind: state.selectedChat.kind, mode: 'sub' });
+    // 子窗口：只有聊天+右栏；任务栏图标 = 该会话头像
+    const iconDataUrl = await chatAvatarDataUrl();
+    window.warmy.openChatWindow({
+      id: state.selectedChat.id,
+      title: state.selectedChat.name,
+      kind: state.selectedChat.kind,
+      mode: 'sub',
+      iconDataUrl,
+    });
   });
   $('mi-export')?.addEventListener('click', () => {
     $('more-menu')?.classList.add('hidden');
@@ -9954,9 +10246,67 @@
     });
   }
 
+  function showPrivacyPolicyModal() {
+    return new Promise((resolve) => {
+      const root = $('modal-root');
+      $('modal-title').textContent = t('privacy.title');
+      $('modal-body').innerHTML =
+        '<div class="privacy-view" id="privacy-modal-body" style="max-height:260px">' + escapeHtml(t('privacy.body')) + '</div>' +
+        '<div class="muted" id="privacy-hint" style="margin-top:8px">' + escapeHtml(t('privacy.scrollHint')) + ' · ' + escapeHtml(t('privacy.waitHint')) + '</div>';
+      const acts = $('modal-actions');
+      acts.innerHTML = '';
+      const no = document.createElement('button');
+      no.className = 'btn-mini';
+      no.textContent = t('privacy.disagree');
+      no.onclick = async () => {
+        root.classList.add('hidden');
+        await window.warmy.privacyConsentSet?.(false).catch(() => {});
+        await window.warmy.appQuit?.('privacy-disagree').catch(() => {});
+        resolve(false);
+      };
+      const yes = document.createElement('button');
+      yes.className = 'btn-primary';
+      yes.textContent = t('privacy.agree');
+      yes.disabled = true;
+      let scrolledEnd = false;
+      let openedAt = Date.now();
+      const box = () => $('privacy-modal-body');
+      const sync = () => {
+        const el = box();
+        if (el) {
+          const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+          if (atEnd) scrolledEnd = true;
+        }
+        const longEnough = Date.now() - openedAt >= 3000;
+        yes.disabled = !(scrolledEnd && longEnough);
+        yes.style.opacity = yes.disabled ? '0.5' : '1';
+      };
+      box()?.addEventListener('scroll', sync);
+      const timer = setInterval(sync, 200);
+      yes.onclick = async () => {
+        clearInterval(timer);
+        root.classList.add('hidden');
+        await window.warmy.privacyConsentSet?.(true).catch(() => {});
+        resolve(true);
+      };
+      acts.append(no, yes);
+      root.classList.remove('hidden');
+      openedAt = Date.now();
+      sync();
+    });
+  }
   async function maybeShowSetup() {
     const st = await window.warmy.setupState().catch(() => null);
-    if (!st || st.done) return;
+    const settings = await window.warmy.settingsGet?.().catch(() => null);
+    const consented = !!(settings && settings.settings && settings.settings.privacyConsent);
+    if (!st || st.done) {
+      // 已完成语言选择但未同意隐私：再次打开也要先弹隐私政策
+      if (!consented) {
+        const okp = await showPrivacyPolicyModal();
+        if (!okp) return;
+      }
+      return;
+    }
     const pick = await pickOnboardingLocale();
     if (pick) {
       await window.warmy.setupComplete({ locale: pick }).catch(() => {});
@@ -9967,6 +10317,7 @@
     } else {
       await window.warmy.setupComplete({}).catch(() => {});
     }
+    await showPrivacyPolicyModal();
   }
   // 安装/首启：必须弹出语言选择（setupDone !== true）
   void maybeShowSetup();
@@ -10571,13 +10922,31 @@
     ]);
   });
   // W. 定向模式开关（聊天头）
-  $('btn-open-win')?.addEventListener('click', () => {
+  async function chatAvatarDataUrl() {
+    try {
+      const src = personAvatarSrc({ avatarPreset: state.selectedChat?.avatarPreset, avatarDataUrl: state.selectedChat?.avatarDataUrl }) || '';
+      if (!src) return '';
+      if (src.startsWith('data:')) return src;
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 64;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, 64, 64);
+      ctx.drawImage(img, 0, 0, 64, 64);
+      return c.toDataURL('image/png');
+    } catch { return ''; }
+  }
+  $('btn-open-win')?.addEventListener('click', async () => {
     if (!state.selectedChat) return;
+    const iconDataUrl = await chatAvatarDataUrl();
     window.warmy.openChatWindow({
       id: state.selectedChat.id,
       title: state.selectedChat.name,
       kind: state.selectedChat.kind,
       mode: 'sub',
+      iconDataUrl,
     });
   });
   $('btn-directed')?.addEventListener('change', async (e) => {
@@ -10609,8 +10978,19 @@
       document.getElementById('rail')?.classList.add('hidden');
       document.getElementById('list-col')?.classList.add('hidden');
       document.getElementById('app-body')?.classList.add('hide-list');
-      // 空状态大 logo 在独立窗里显得像「完整主界面」——隐藏
       document.getElementById('empty-state')?.classList.add('hidden');
+      document.getElementById('page-layout')?.classList.add('hidden');
+      document.getElementById('inst-detail')?.classList.add('hidden');
+      const cl = document.getElementById('chat-layout');
+      if (cl) {
+        cl.classList.remove('hidden');
+        cl.style.display = 'grid';
+        cl.style.height = '100%';
+      }
+      const mc = document.getElementById('main-col');
+      if (mc) { mc.style.height = '100%'; mc.style.minHeight = '0'; }
+      const pc = document.getElementById('panel-col');
+      if (pc) { pc.style.display = 'flex'; pc.style.height = '100%'; pc.style.overflow = 'auto'; }
       if (title0) {
         try { document.title = title0; } catch { /* noop */ }
         const brand = document.getElementById('tb-brand');

@@ -1284,3 +1284,40 @@ details.ctg-collapse > .ctg-collapse-body {
 .ctx-pop-meta { display: flex; justify-content: space-between; font-size: 12px; margin: 6px 0 8px; }
 .ctx-pop-hint { font-size: 11px; line-height: 1.5; margin-top: 4px; }
 #btn-ctx.on { color: var(--accent); }
+
+/* 独立会话窗布局加固：聊天 + 右栏铺满，不出现错位 */
+body.chat-window #main-col {
+  display: block !important;
+  height: calc(100vh - 40px) !important;
+  overflow: hidden !important;
+}
+body.chat-window #chat-layout {
+  display: grid !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  grid-template-columns: 1fr var(--panel-w, 300px) !important;
+}
+body.chat-window #chat-col {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+body.chat-window #messages { flex: 1; min-height: 0; overflow: auto; }
+body.chat-window #panel-col {
+  min-width: 0 !important;
+  height: 100% !important;
+  overflow: auto !important;
+  display: block !important;
+}
+body.chat-window #panel-resizer { z-index: 30; }
+body.chat-window .page-layout { display: none !important; }
+.me-top { display: flex; align-items: center; gap: 20px; margin-bottom: 12px; flex-wrap: wrap; }
+.me-top .brand-logo { width: 72px; height: 72px; object-fit: contain; background: transparent; }
+.dash-stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin: 12px 0 16px; }
+.dash-row { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
+.dash-badge { width: 8px; height: 8px; border-radius: 50%; background: #f5a524; flex-shrink: 0; }
+.dash-detail { border-left: 3px solid var(--accent); margin: 0 0 8px 12px; padding: 8px 10px; background: var(--card); border-radius: 8px; font-size: 12px; }
+.plugin-list .ctg-row { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 6px; }

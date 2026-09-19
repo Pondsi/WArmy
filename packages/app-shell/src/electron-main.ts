@@ -6374,13 +6374,20 @@ handleIpc('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: s
 // 产品定稿：独立会话窗 = **可拖动顶栏** + 聊天（第3列）+ 右侧事项（第4列）。
 // 不要再做成「完整主界面」；不要无边框导致无法拖动。
 const chatWindows = new Map<string, BrowserWindow>();
-handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string }) => {
+handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string; iconDataUrl?: string }) => {
   try {
     if (chatWindows.has(payload.id)) {
       chatWindows.get(payload.id)?.focus();
       return { ok: true };
     }
     const iconPath = warmyWindowIcon();
+    let winIcon = nativeImage.createFromPath(iconPath);
+    try {
+      if (payload.iconDataUrl && String(payload.iconDataUrl).startsWith('data:image')) {
+        const fromChat = nativeImage.createFromDataURL(String(payload.iconDataUrl));
+        if (!fromChat.isEmpty()) winIcon = fromChat;
+      }
+    } catch { /* fallback logo */ }
     const w = new BrowserWindow({
       width: 960,
       height: 720,
@@ -6399,7 +6406,7 @@ handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; k
         sandbox: true,
       },
     });
-    try { w.setIcon?.(nativeImage.createFromPath(iconPath)); } catch { /* noop */ }
+    try { if (!winIcon.isEmpty()) w.setIcon(winIcon); } catch { /* noop */ }
     // 独立会话窗一律 chat+panel 模式（不再展示完整主界面）
     void w.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
       query: {
