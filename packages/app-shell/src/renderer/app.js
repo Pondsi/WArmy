@@ -1181,9 +1181,10 @@
     set('panel-directory-block', work && kind === 'internal');
     // 成员栏：项目/群聊才需要；我的牛马与联系人不需要
     set('panel-members-block', kind === 'internal' || kind === 'external' || kind === 'externalGroup');
-    // 聊天面板
-    set('panel-kb-block', !work && chat);
-    set('panel-summary-block', !work && chat);
+    // 知识库：聊天 + 项目都展示（本机知识；项目侧也能看会话沉淀）
+    set('panel-kb-block', kind === 'internal' || chat);
+    // 摘要：项目 + 聊天都可用（项目侧会话同样可生成/展示结构化摘要）
+    set('panel-summary-block', kind === 'internal' || chat);
     // 群聊/联系人的模型管理：群聊要，联系人不要
     if (!work && chat) {
       set('panel-model-mgr-block', kind === 'external' || kind === 'externalGroup');
@@ -1219,14 +1220,22 @@
     try {
       const r = await window.warmy.archiveList?.(gid);
       const list = (r && r.entries) || [];
-      host.innerHTML = list.length
+      // 最新一条若带 structured，则优先展示要点/决策/待办/风险
+      const last = list[list.length - 1];
+      const st = last && last.structured;
+      let extra = '';
+      if (st) {
+        const sec = (arr, key) => (arr && arr.length ? `<div class="pk-sec"><b>${escapeHtml(t(key))}</b>${arr.map((x) => `<div class="pk-row">${escapeHtml(x)}</div>`).join('')}</div>` : '');
+        extra = sec(st.decisions, 'panel.summary.decisions') + sec(st.todos, 'panel.summary.todos') + sec(st.risks, 'panel.summary.risks') + sec(st.bullets, 'panel.summary.bullets');
+      }
+      host.innerHTML = extra + (list.length
         ? list.slice(-5).reverse().map((e) => `
             <div class="pk-row">
               <div>${escapeHtml(e.title || '')}</div>
               <div class="muted">${escapeHtml(String(e.summary || '').slice(0, 80))}</div>
               <button class="btn-mini" data-jump-archive="${escapeHtml(e.id)}">${escapeHtml(t('panel.summary.jump') || 'Jump')}</button>
             </div>`).join('')
-        : `<div class="muted">${escapeHtml(t('panel.summary.empty') || '—')}</div>`;
+        : `<div class="muted">${escapeHtml(t('panel.summary.empty') || '—')}</div>`);
       host.querySelectorAll('[data-jump-archive]').forEach((b) => {
         b.onclick = () => {
           const id = b.getAttribute('data-jump-archive');

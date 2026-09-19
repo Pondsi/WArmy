@@ -114,8 +114,9 @@
 | `setupState` | `()` | 首启 setupDone | R |
 | `setupComplete` | `(payload: {locale?})` | 完成首启语言选择 | W |
 | `searchMessages` | `(q: string)` | 搜索消息 | R |
-| `archiveList` | `(groupId?: string)` | 归档列表 | R |
-| `archiveExternal` | `(payload: {groupId,title,summary,anchors?})` | 归档+提炼知识/偏好 | W |
+| `archiveList` | `(groupId?: string)` | 归档列表（条目可含 `structured:{bullets,decisions,todos,risks}`） | R |
+| `archiveExternal` | `(payload: {groupId,title,summary,anchors?})` | 归档+提炼知识/偏好；返回 `{ok,entry,extraction,structured}` | W |
+| `sessionSummary` | `(payload: {sessionId, auto?})` | 生成本会话结构化摘要并归档；返回 `{ok,entry,structured}` | W |
 | `lastError` | `()` | 最近主进程错误 | R |
 | `clearError` | `()` | 清除错误 | W |
 | `platformInfo` | `()` | 平台信息 | R |

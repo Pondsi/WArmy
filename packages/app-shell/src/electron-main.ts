@@ -34,7 +34,7 @@ import { KnowledgeBase } from '@warmy/knowledge-base';
 import { CheckpointStore } from './checkpoint.js';
 import { AuditLogger } from './audit.js';
 import { SecureKeyStore } from './secure-keys.js';
-import { KnowledgeArchiver, CleanupManager, extractKnowledgeFromArchive, mergeUserPreferences } from './archive-cleanup.js';
+import { KnowledgeArchiver, CleanupManager, extractKnowledgeFromArchive, mergeUserPreferences, extractStructuredSummary } from './archive-cleanup.js';
 import { pickModelForUrgency, pickEmbeddingModel, type RoleModelConfig } from './model-roles.js';
 import { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';
 import { projectMemoryForContext, readProjectMemory, writeProjectMemory } from './project-memory.js';
@@ -221,6 +221,33 @@ let win: BrowserWindow | null = null;
 let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
 let memory: MemoryClient | null = null;
 const aiQuestions = new AiQuestionHub();
+
+/** 按项目类型自动选择 gateVerify（授权由产品主授予；防过度执行） */
+function gateVerifyForProjectType(opts: { directory?: string; devEnv?: string; name?: string }): string[] {
+  const dir = String(opts.directory || '').replace(/\\/g, '/');
+  const name = String(opts.name || '');
+  const hay = `${name} ${dir}`.toLowerCase();
+  const isDocsOnly = /(^|[^a-z])(docs?|说明|readme|spec|adr|手册|guide)([^a-z]|$)/i.test(hay) &&
+    !/(packages\/|src\/|node_modules|\.ts$|\.js$|\.py$|api|backend|frontend)/i.test(hay);
+  const isCode =
+    /package\.json|tsconfig|pyproject|cargo\.toml|go\.mod|pom\.xml|build\.gradle/i.test(dir) ||
+    /(packages\/|src\/|backend|frontend|server|client|api|repo|monorepo)/i.test(hay) ||
+    /code|开发|dev[-_]?env|工程/i.test(name) ||
+    /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|cs|cpp|c|h)$/i.test(dir);
+  const base = [
+    'packages/app-shell/scripts/verify-docs.mjs',
+    'packages/app-shell/scripts/verify-i18n-locales.mjs',
+  ];
+  if (isDocsOnly) return ['packages/app-shell/scripts/verify-docs.mjs'];
+  if (isCode) {
+    return [
+      ...base,
+      'packages/app-shell/scripts/verify-router-queue.mjs',
+      'packages/app-shell/scripts/verify-memory.mjs',
+    ];
+  }
+  return base;
+}
 
 /** 新项目默认门禁（授权由产品主授予；只跑轻量文档/一致性检查，防过度执行） */
 const DEFAULT_GATE_VERIFY = [
@@ -1785,13 +1812,12 @@ handleIpc(
        * "这是一个容器开发项目"（产品主指出的正是这件事）。
        * 这里还顺手把创建者的身份指纹记为**上报者**，成员侧据此判断"这是创建者说的"。
        */
-      if (cfg.devEnv === 'container' || cfg.devEnv === 'host') {
-        setProjectAttrsOf(cfg.groupId, {
-          devEnv: cfg.devEnv,
-          ...(cfg.directory && fs.existsSync(cfg.directory) ? { directory: cfg.directory, directorySource: 'creator-picked' as const } : {}),
-      gateVerify: DEFAULT_GATE_VERIFY,
-        });
-      }
+      // 项目属性：开发环境/目录/gateVerify 一律在创建时写入（不依赖 devEnv 是否填了）
+      setProjectAttrsOf(cfg.groupId, {
+        ...(cfg.devEnv === 'container' || cfg.devEnv === 'host' ? { devEnv: cfg.devEnv } : {}),
+        ...(cfg.directory && fs.existsSync(cfg.directory) ? { directory: cfg.directory, directorySource: 'creator-picked' as const } : {}),
+        gateVerify: gateVerifyForProjectType({ directory: cfg.directory, devEnv: cfg.devEnv, name: cfg.name }),
+      });
       // 本机实例全部可值班（同时写入持久化成员表）
       joinLocalInstances(cfg.groupId);
       audit?.log('group.create', { groupId: cfg.groupId, type: cfg.type, devEnv: cfg.devEnv === 'container' ? 'container' : 'host' });
@@ -6715,22 +6741,39 @@ handleIpc('warmy:secure-key-load', async (_e, providerId: string) => {
 
 // ── KnowledgeArchiver ──
 handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: string; summary: string; anchors?: Array<{ file: string; seq: number }> }) => {
-  const r = archiver?.archive({
-    id: 'arc-' + Date.now(),
-    groupId: payload.groupId,
-    title: payload.title,
-    summary: payload.summary,
-    anchors: payload.anchors || [],
-  });
-  // 归档触发整理：摘要 → 知识库实体/事件 + 使用者偏好（持久跨会话）
-  let extraction = null;
+  let extraction = null as null | ReturnType<typeof extractKnowledgeFromArchive> | { error?: string };
+  let structured = null as null | ReturnType<typeof extractStructuredSummary>;
   try {
     extraction = extractKnowledgeFromArchive({
       groupId: String(payload.groupId || ''),
       title: String(payload.title || ''),
       summary: String(payload.summary || ''),
     });
-    if (knowledge && extraction) {
+    structured = extractStructuredSummary({
+      groupId: String(payload.groupId || ''),
+      title: String(payload.title || ''),
+      text: String(payload.summary || ''),
+    });
+  } catch (e) {
+    extraction = { error: sanitizeError(e) };
+  }
+  const r = archiver?.archive({
+    id: 'arc-' + Date.now(),
+    groupId: payload.groupId,
+    title: payload.title,
+    summary: payload.summary,
+    anchors: payload.anchors || [],
+    ...(structured ? { structured: { bullets: structured.bullets, decisions: structured.decisions, todos: structured.todos, risks: structured.risks } } : {}),
+  });
+  // 归档触发整理：摘要 → 知识库实体/事件 + 使用者偏好（持久跨会话）
+  try {
+    if (knowledge && extraction && !(extraction as { error?: string }).error) {
+      const ex = extraction as ReturnType<typeof extractKnowledgeFromArchive>;
+      for (const e of ex.entities) {
+        const kindMap = ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] as const;
+        const kind = (kindMap as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof kindMap)[number]) : 'concept';
+        knowledge.upsertEntity({ id: e.id, kind, name: e.name, attrs: e.attrs || {}, anchors: [] });
+      }
       knowledge.upsertEntity({
         id: `grp-${payload.groupId}`,
         kind: 'project',
@@ -6738,12 +6781,7 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
         attrs: {},
         anchors: (payload.anchors || []).map((a) => ({ file: a.file, seq: a.seq, recordId: `seq:${a.seq}` })),
       });
-      for (const e of extraction.entities) {
-        const kindMap = ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] as const;
-        const kind = (kindMap as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof kindMap)[number]) : 'concept';
-        knowledge.upsertEntity({ id: e.id, kind, name: e.name, attrs: e.attrs || {}, anchors: [] });
-      }
-      for (const ev of extraction.events) {
+      for (const ev of ex.events) {
         knowledge.addEvent({
           id: ev.id,
           title: ev.title,
@@ -6753,16 +6791,13 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
           ts: Date.now(),
         });
       }
-    }
-    if (extraction?.preferences?.length) {
-      const userDataDir = app.getPath('userData');
-      mergeUserPreferences(userDataDir, extraction.preferences);
+      if (ex.preferences?.length) mergeUserPreferences(app.getPath('userData'), ex.preferences);
     }
   } catch (e) {
     extraction = { error: sanitizeError(e) };
   }
-  audit?.log('archive.external', { groupId: payload.groupId, prefs: extraction?.preferences?.length || 0 });
-  return { ok: true, entry: r, extraction };
+  audit?.log('archive.external', { groupId: payload.groupId, prefs: (extraction as { preferences?: unknown[] } | null)?.preferences?.length || 0 });
+  return { ok: true, entry: r, extraction, structured };
 });
 handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; auto?: boolean }) => {
   try {
@@ -6772,8 +6807,28 @@ handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; au
     const recent = logs.slice(-30).map((l) => `${l.role}: ${String(l.content || '').slice(0, 160)}`).join('\n');
     if (!recent.trim()) return { ok: false, error: 'no-history' };
     const title = `${gid} 会话摘要 ${new Date().toLocaleString()}`;
-    const summary = recent.slice(0, 2000);
-    const entry = archiver?.archive({ id: 'arc-' + Date.now(), groupId: gid, title, summary, anchors: [] });
+    const structured = extractStructuredSummary({ groupId: gid, title, text: recent });
+    const summary =
+      [
+        `# ${title}`,
+        structured.decisions.length ? `## 决策\n${structured.decisions.map((d) => '- ' + d).join('\n')}` : '',
+        structured.todos.length ? `## 待办\n${structured.todos.map((d) => '- ' + d).join('\n')}` : '',
+        structured.risks.length ? `## 风险\n${structured.risks.map((d) => '- ' + d).join('\n')}` : '',
+        `## 要点\n${structured.bullets.map((d) => '- ' + d).join('\n')}`,
+      ].filter(Boolean).join('\n\n').slice(0, 4000);
+    const entry = archiver?.archive({
+      id: 'arc-' + Date.now(),
+      groupId: gid,
+      title,
+      summary,
+      anchors: [],
+      structured: {
+        bullets: structured.bullets,
+        decisions: structured.decisions,
+        todos: structured.todos,
+        risks: structured.risks,
+      },
+    });
     try {
       const ex = extractKnowledgeFromArchive({ groupId: gid, title, summary });
       if (knowledge) {
@@ -6790,7 +6845,7 @@ handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; au
       if (ex.preferences?.length) mergeUserPreferences(app.getPath('userData'), ex.preferences);
     } catch { /* 提炼失败不影响摘要落盘 */ }
     audit?.log('session.summary', { sessionId: gid, auto: !!payload?.auto });
-    return { ok: true, entry };
+    return { ok: true, entry, structured };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }

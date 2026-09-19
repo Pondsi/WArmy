@@ -25,11 +25,21 @@
 
 归档提炼实现：`archive-cleanup.ts` → `extractKnowledgeFromArchive` + `mergeUserPreferences`。
 
+## 会话摘要：结构化提炼
+
+- `extractStructuredSummary()`：从近期日志提炼 **决策 / 待办 / 风险 / 要点**（不编造；只从文本模式匹配）。
+- `warmy:session-summary` 返回 `{ ok, entry, structured }`；归档时同样写入知识库 + 用户偏好。
+- 右栏摘要面板优先展示结构化区块，其次列出最近归档。
+
 ## gateVerify 是什么
 
 - 项目属性里的**验收脚本路径列表**（相对仓库根，最多 4 条）
 - **何时跑**：值班收到「完成」看板指令，或消息含「验收/门禁/verify」
 - **防过度**：同项目 3 秒节流；空列表则完全不跑
+- **自动选择**：`gateVerifyForProjectType()` 按项目类型自动选脚本；创建时**始终**写入项目记录：
+  - 代码类（含 packages/src、package.json、backend/frontend 等）：docs + i18n + router-queue + memory
+  - 文档类（名称/路径明确为 docs/说明/spec/adr 且非代码仓）：仅 `verify-docs.mjs`
+  - 其他：docs + i18n（默认）
 - **建议默认值**（新项目可配置）：
   - `packages/app-shell/scripts/verify-docs.mjs`
   - `packages/app-shell/scripts/verify-i18n-locales.mjs`

@@ -35,10 +35,17 @@ check('main wires runProjectGate', /runProjectGate:\s*async \(gid, reason\)/.tes
 check('main wires projectMemory', /projectMemory:\s*\(gid\)/.test(main));
 check('main wires decisionContext', /decisionContext:\s*\(gid\)/.test(main));
 check('main DEFAULT_GATE_VERIFY', /DEFAULT_GATE_VERIFY/.test(main));
-check('main passes gateVerify on group create', /gateVerify:\s*DEFAULT_GATE_VERIFY/.test(main));
+check('main gateVerifyForProjectType', /function gateVerifyForProjectType/.test(main));
+check('main passes gateVerify on group create', /gateVerify:\s*gateVerifyForProjectType/.test(main));
 check('main context-too-small message', /contextTooSmall/.test(main));
 check('runProjectGateOnce exists', /function runProjectGateOnce/.test(main));
 check('gate throttle 3s', /gateRuns/.test(main) && /3000/.test(main));
+const archiveSrc = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/archive-cleanup.ts'), 'utf8');
+check('extractStructuredSummary exists', /export function extractStructuredSummary/.test(archiveSrc));
+check('ArchiveEntry has structured', /structured\?: ArchiveStructured/.test(archiveSrc));
+check('session-summary stores structured', /structured:\s*\{[\s\S]*bullets:/.test(main));
+check('extractKnowledge uses structured events', /structured\.decisions\[0\]/.test(archiveSrc));
+check('panel summary shown for projects', /panel-summary-block',\s*kind === 'internal' \|\| chat/.test(app));
 
 // ── 项目侧摘要 ──
 check('session-summary IPC', /warmy:session-summary/.test(main));

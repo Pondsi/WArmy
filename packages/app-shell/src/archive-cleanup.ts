@@ -5,6 +5,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+export interface ArchiveStructured {
+  bullets: string[];
+  decisions: string[];
+  todos: string[];
+  risks: string[];
+}
+
 export interface ArchiveEntry {
   id: string;
   groupId: string;
@@ -12,6 +19,7 @@ export interface ArchiveEntry {
   summary: string;
   ts: number;
   anchors: Array<{ file: string; seq: number }>;
+  structured?: ArchiveStructured;
 }
 
 export class KnowledgeArchiver {
@@ -25,6 +33,7 @@ export class KnowledgeArchiver {
 
   archive(entry: Omit<ArchiveEntry, 'ts'>): ArchiveEntry {
     const full: ArchiveEntry = { ...entry, ts: Date.now() };
+    if (!full.structured) delete full.structured;
     fs.appendFileSync(this.file, JSON.stringify(full) + '\n', 'utf8');
     return full;
   }
@@ -145,13 +154,30 @@ export function extractKnowledgeFromArchive(input: {
     }
   }
 
-  // 事件：归档标题 + 摘要首句
+  // 结构化提炼：决策/待办/风险/要点（不编造，只从文本模式匹配）
+  const structured = extractStructuredSummary({
+    groupId: input.groupId,
+    title: input.title,
+    text: input.summary,
+  });
   const firstLine = input.summary.split(/\n|\r/).map((s) => s.trim()).filter(Boolean)[0] || input.title;
+  const primaryResult = (structured.decisions[0] || structured.bullets[0] || firstLine).slice(0, 160);
   events.push({
     id: `ev-arc-${Date.now()}`,
     title: input.title.slice(0, 100),
-    result: firstLine.slice(0, 160),
+    result: primaryResult,
   });
+  // 决策/待办进知识库事件（有界，避免爆炸）
+  let extra = 0;
+  for (const d of [...structured.decisions, ...structured.todos].slice(0, 4)) {
+    if (d === primaryResult) continue;
+    events.push({
+      id: `ev-arc-${Date.now()}-${extra}`,
+      title: d.slice(0, 80),
+      result: d.slice(0, 160),
+    });
+    extra += 1;
+  }
 
   return { entities, events, preferences };
 }
@@ -186,4 +212,50 @@ export function mergeUserPreferences(
   } catch {
     return { ok: false, count: 0, file };
   }
+}
+
+
+/** 结构化会话摘要：要点/决策/待办/风险（从近期日志文本提炼，不编造） */
+export interface StructuredSummary {
+  title: string;
+  bullets: string[];
+  decisions: string[];
+  todos: string[];
+  risks: string[];
+  anchors: Array<{ file: string; seq: number }>;
+}
+
+export function extractStructuredSummary(input: {
+  groupId: string;
+  title: string;
+  text: string;
+  anchors?: Array<{ file: string; seq: number }>;
+}): StructuredSummary {
+  const lines = String(input.text || '')
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const bullets: string[] = [];
+  const decisions: string[] = [];
+  const todos: string[] = [];
+  const risks: string[] = [];
+  const DECID = /^(决定|定稿|结论|decision|decided|conclu|заключ|결정|決定)/i;
+  const TODO = /^(待办|todo|next|下一步|задача|할 일|やること|待ち)/i;
+  const RISK = /^(风险|注意|警告|risk|warning|注意|risk|рис|위험|注意)/i;
+  for (const ln of lines.slice(-80)) {
+    const body = ln.replace(/^(user|assistant|system|me|ai)\s*[:：]\s*/i, '').trim();
+    if (!body) continue;
+    if (DECID.test(body)) decisions.push(body.slice(0, 200));
+    else if (TODO.test(body)) todos.push(body.slice(0, 200));
+    else if (RISK.test(body)) risks.push(body.slice(0, 200));
+    else if (bullets.length < 8) bullets.push(body.slice(0, 180));
+  }
+  return {
+    title: String(input.title || '').slice(0, 100),
+    bullets,
+    decisions: decisions.slice(0, 6),
+    todos: todos.slice(0, 6),
+    risks: risks.slice(0, 4),
+    anchors: input.anchors || [],
+  };
 }
