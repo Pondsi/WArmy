@@ -1037,10 +1037,8 @@
   }
 
   function updateListWatermark() {
-    const n = $('lw-name');
-    const s = $('lw-sub');
-    if (n) n.textContent = t('brand.name') || '';
-    if (s) s.textContent = t('brand.sub') || '';
+    const b = $('lw-brand');
+    if (b) b.textContent = t('brand.name') || t('brand.sub') || '';
   }
 
 
@@ -5399,9 +5397,12 @@
   $('btn-console')?.addEventListener('click', () => {
     state.consoleOpen = !state.consoleOpen;
     $('btn-console')?.classList.toggle('tb-on', state.consoleOpen);
+    // 诊断事件流：显示在**右侧第四列**（panel-col），不是聊天顶部
     $('console-pane')?.classList.toggle('hidden', !state.consoleOpen);
-    // 打开：把 buffer 快照画一次（不新增事件、因此不会刷屏也不会重复）
-    renderConsole();
+    $('diag-host')?.classList.toggle('hidden', !state.consoleOpen);
+    const hint = $('diag-panel-hint');
+    if (hint) hint.textContent = state.consoleOpen ? (t('console.diag.note') || t('tip.console')) : '';
+    try { renderConsole(); } catch { /* noop */ }
   });
   $('console-clear')?.addEventListener('click', () => { consoleClear(); });
   (function bindConsoleResize() {

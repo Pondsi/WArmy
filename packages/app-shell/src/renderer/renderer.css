@@ -858,19 +858,41 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .aiq-input { flex:1; min-width:120px; }
 .pm-box { margin: 6px 0 10px; }
 
-/* 左侧第二列底部水印：所有导航页统一显示（设置以外同样有） */
+/* 左侧第二列底部水印：与设置第二列同一套 logo-color.svg */
 .list-watermark {
   flex-shrink: 0;
-  padding: 10px 12px 14px;
-  border-top: 1px solid var(--line);
-  text-align: center;
-  opacity: 0.55;
-  user-select: none;
+  position: relative;
+  height: 120px;
   pointer-events: none;
+  user-select: none;
+  border-top: 1px solid transparent;
 }
-.list-watermark .lw-logo img { width: 28px; height: 28px; border-radius: 6px; }
-.list-watermark .lw-name { margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--muted); }
-.list-watermark .lw-sub { margin-top: 2px; font-size: 10px; color: var(--muted); opacity: 0.85; }
+.list-watermark::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 28px;
+  height: 120px;
+  background: url('./icons/logo-color.svg') no-repeat center bottom / 140px auto;
+  opacity: 0.26;
+}
+.list-watermark::before {
+  content: var(--brand-watermark, 'WARMY');
+  position: absolute;
+  left: 0; right: 0; bottom: 12px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--ink);
+  opacity: 0.55;
+}
+#panel-col .panel-console {
+  max-height: 320px;
+  min-height: 140px;
+  margin: 0 0 8px;
+}
+#diag-panel-block .panel-toggle { cursor: pointer; display:flex; align-items:center; gap:8px; }
+#diag-panel-block.hidden, #diag-host.hidden { display:none; }
 .chat-actions .btn-diag { order: 99; margin-left: auto; }
 .notify-zone { margin: 6px var(--sp-3) 0; }
 .notify-zone .aiq-card, .notify-zone .approval-card {
