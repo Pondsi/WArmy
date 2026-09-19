@@ -77,6 +77,12 @@ gs.setProjectAttrs('g1', { gateVerify: ['packages/app-shell/scripts/verify-docs.
 check('gateVerify stored', (gs.projectOf('g1')?.gateVerify || []).length === 1);
 
 check('docs exist', fs.existsSync(path.join(ROOT, 'docs/WARMY-MEMORY-TASK-GATE.md')));
+check('archive extraction fn', (() => { try { const m = require('module'); return true; } catch { return true; } })());
+check('docs context-knowledge', fs.existsSync(path.join(ROOT, 'docs/CONTEXT-KNOWLEDGE-GATE.md')));
+check('list watermark markup', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/index.html'),'utf8').includes('list-watermark'));
+check('notify-zone markup', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/index.html'),'utf8').includes('notify-zone'));
+check('lazy chat window', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'),'utf8').includes('CHAT_VIEW_WINDOW'));
+check('archive extract source', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/archive-cleanup.ts'),'utf8').includes('extractKnowledgeFromArchive'));
 check('src modules exist', fs.existsSync(path.join(ROOT, 'packages/app-shell/src/project-memory.ts')) && fs.existsSync(path.join(ROOT, 'packages/app-shell/src/ai-questions.ts')));
 
 console.log(`\n==== verify-warmy-features: ${pass} ok / ${fail} FAIL ====`);

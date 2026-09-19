@@ -97,3 +97,93 @@ export class CleanupManager {
     return n;
   }
 }
+
+
+/**
+ * 归档时提炼：知识库实体/事件 + 使用者行为偏好（持久、跨会话）。
+ * 产品原则：归档不只是 summary+anchors 存档，还要**进知识**与**进偏好**。
+ */
+export interface ArchiveExtraction {
+  entities: Array<{ id: string; name: string; kind: string; attrs?: Record<string, string> }>;
+  events: Array<{ id: string; title: string; result?: string }>;
+  preferences: Array<{ key: string; value: string; source: string }>;
+}
+
+export function extractKnowledgeFromArchive(input: {
+  groupId: string;
+  title: string;
+  summary: string;
+}): ArchiveExtraction {
+  const text = `${input.title}\n${input.summary}`.slice(0, 4000);
+  const entities: ArchiveExtraction['entities'] = [];
+  const events: ArchiveExtraction['events'] = [];
+  const preferences: ArchiveExtraction['preferences'] = [];
+
+  // 实体：标题本身作为会话/主题实体
+  entities.push({
+    id: `arc-topic-${input.groupId}-${Date.now()}`,
+    name: input.title.slice(0, 80),
+    kind: 'concept',
+    attrs: { groupId: input.groupId },
+  });
+
+  // 从摘要里抓简单要点（中英文关键词）
+  const prefPatterns: Array<[RegExp, string]> = [
+    [/(?:用户|我)(?:偏好|希望|想要|倾向)[：: ]*(.{2,60})/g, 'preference.stated'],
+    [/(?:always|prefer|user likes)\s+(.{3,60})/gi, 'preference.stated'],
+    [/(?:端口|port)\s*[=:：]?\s*(\d{2,5})/gi, 'preference.port'],
+    [/(?:语言|locale|language)\s*[=:：]?\s*([a-zA-Z-]{2,8})/gi, 'preference.language'],
+  ];
+  for (const [re, key] of prefPatterns) {
+    let m: RegExpExecArray | null;
+    re.lastIndex = 0;
+    while ((m = re.exec(text))) {
+      const val = String(m[1] || '').trim();
+      if (!val) continue;
+      preferences.push({ key, value: val.slice(0, 120), source: `archive:${input.groupId}` });
+      if (preferences.length >= 8) break;
+    }
+  }
+
+  // 事件：归档标题 + 摘要首句
+  const firstLine = input.summary.split(/\n|\r/).map((s) => s.trim()).filter(Boolean)[0] || input.title;
+  events.push({
+    id: `ev-arc-${Date.now()}`,
+    title: input.title.slice(0, 100),
+    result: firstLine.slice(0, 160),
+  });
+
+  return { entities, events, preferences };
+}
+
+/** 使用者偏好：userData/user-preferences.json（覆盖式 + 去重 key） */
+export function mergeUserPreferences(
+  userData: string,
+  prefs: Array<{ key: string; value: string; source: string }>
+): { ok: boolean; count: number; file: string } {
+  const file = path.join(userData, 'user-preferences.json');
+  try {
+    fs.mkdirSync(userData, { recursive: true });
+    let map: Record<string, { value: string; source: string; updatedAt: number }> = {};
+    try {
+      map = JSON.parse(fs.readFileSync(file, 'utf8')) || {};
+    } catch { map = {}; }
+    let n = 0;
+    for (const p of prefs) {
+      const k = `${p.key}:${p.value}`.slice(0, 160);
+      if (!map[k]) n += 1;
+      map[k] = { value: p.value, source: p.source, updatedAt: Date.now() };
+    }
+    // 有界：最多 200 条偏好
+    const keys = Object.keys(map).sort((a, b) => ((map[b] && map[b]!.updatedAt) || 0) - ((map[a] && map[a]!.updatedAt) || 0));
+    const keep: typeof map = {};
+    for (const k of keys.slice(0, 200)) {
+      const v = map[k];
+      if (v) keep[k] = v;
+    }
+    fs.writeFileSync(file, JSON.stringify(keep, null, 2), 'utf8');
+    return { ok: true, count: n, file };
+  } catch {
+    return { ok: false, count: 0, file };
+  }
+}

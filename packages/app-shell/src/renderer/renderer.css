@@ -116,7 +116,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tb-drag {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
   min-width: 0;
   height: 100%;
 }
@@ -132,7 +132,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-weight: 700;
   flex-shrink: 0;
 }
-.tb-brand { font-weight: 600; font-size: 13px; white-space: nowrap; }
+.tb-brand { font-weight: 600; font-size: 13px; white-space: nowrap; margin-left: 10px; }
 .tb-actions {
   display: flex;
   align-items: center;
@@ -857,3 +857,27 @@ table.plugins th, table.plugins td { text-align: left; padding: 8px; border-bott
 .aiq-custom.hidden { display:none; }
 .aiq-input { flex:1; min-width:120px; }
 .pm-box { margin: 6px 0 10px; }
+
+/* 左侧第二列底部水印：所有导航页统一显示（设置以外同样有） */
+.list-watermark {
+  flex-shrink: 0;
+  padding: 10px 12px 14px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+  opacity: 0.55;
+  user-select: none;
+  pointer-events: none;
+}
+.list-watermark .lw-logo img { width: 28px; height: 28px; border-radius: 6px; }
+.list-watermark .lw-name { margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.list-watermark .lw-sub { margin-top: 2px; font-size: 10px; color: var(--muted); opacity: 0.85; }
+.chat-actions .btn-diag { order: 99; margin-left: auto; }
+.notify-zone { margin: 6px var(--sp-3) 0; }
+.notify-zone .aiq-card, .notify-zone .approval-card {
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px;
+  background: var(--panel, var(--card));
+}
+.messages.lazy { overflow-anchor: none; }
+
+.prov-focus { outline: 1px solid var(--accent); border-radius: 8px; }
+.hk-pa code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }

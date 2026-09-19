@@ -584,6 +584,7 @@
     $('logo-sub').textContent = t('brand.sub');
     // Owner rule: top-left titlebar line = logo + tagline ONLY (no product name on that line).
     if ($('tb-brand')) $('tb-brand').textContent = t('brand.tagline') || t('about.tagline');
+    if (typeof updateListWatermark === 'function') updateListWatermark();
         applyAvatar();
     document.title = displayName();
     syncTrayText();
@@ -977,11 +978,36 @@
     void renderProgressTasks();
   }
 
+
+  /** 聊天 UI 懒加载：永远展示**完整真实**记录；DOM 只挂最近 N 条，上滑再挂历史 */
+  const CHAT_VIEW_WINDOW = 40;
+  const chatViewVisible = {}; // chatId -> how many tail messages shown
+
+  function msgsOf(chatId) {
+    return (window.__msgs && window.__msgs[chatId]) || [];
+  }
+
   function renderChat() {
     const box = $('messages');
+    if (!box) return;
+    const chatId = state.selectedChat && state.selectedChat.id;
+    const msgs = chatId ? msgsOf(chatId) : [];
+    const shown = Math.min(chatViewVisible[chatId] || CHAT_VIEW_WINDOW, msgs.length);
+    chatViewVisible[chatId] = shown;
+    const slice = msgs.slice(Math.max(0, msgs.length - shown));
     box.innerHTML = '';
-    const msgs = (state.selectedChat && window.__msgs && window.__msgs[state.selectedChat.id]) || [];
-    msgs.forEach((m) => {
+    const hidden = msgs.length - slice.length;
+    if (hidden > 0) {
+      const more = document.createElement('button');
+      more.className = 'chat-load-more btn-mini';
+      more.textContent = `↑ ${t('chat.loadMore') || 'Load earlier'} (${hidden})`;
+      more.onclick = () => {
+        chatViewVisible[chatId] = (chatViewVisible[chatId] || CHAT_VIEW_WINDOW) + CHAT_VIEW_WINDOW;
+        renderChat();
+      };
+      box.appendChild(more);
+    }
+    slice.forEach((m) => {
       const div = document.createElement('div');
       div.className = 'msg' + (m.role === 'me' ? ' me' : '');
       const av = state.profile.avatarDataUrl
@@ -990,9 +1016,33 @@
       div.innerHTML = `${m.role === 'me' ? av : `<div class="av">${escapeHtml((state.selectedChat?.name || 'A')[0])}</div>`}<div class="bubble">${escapeHtml(m.text)}</div>`;
       box.appendChild(div);
     });
+    if (!(box.dataset.lazyBound === '1')) {
+      box.dataset.lazyBound = '1';
+      box.addEventListener('scroll', () => {
+        if (box.scrollTop < 40 && chatId) {
+          const total = msgsOf(chatId).length;
+          const vis = chatViewVisible[chatId] || CHAT_VIEW_WINDOW;
+          if (vis < total) {
+            chatViewVisible[chatId] = Math.min(total, vis + CHAT_VIEW_WINDOW);
+            renderChat();
+            box.scrollTop = 80;
+          }
+        }
+      });
+    }
     box.scrollTop = box.scrollHeight;
-    $('duty-info').textContent = state.selectedChat ? state.selectedChat.name : '—';
+    const duty = $('duty-info');
+    if (duty) duty.textContent = state.selectedChat ? state.selectedChat.name : '—';
+    updateListWatermark();
   }
+
+  function updateListWatermark() {
+    const n = $('lw-name');
+    const s = $('lw-sub');
+    if (n) n.textContent = t('brand.name') || '';
+    if (s) s.textContent = t('brand.sub') || '';
+  }
+
 
   function pushMsg(chatId, role, text) {
     window.__msgs = window.__msgs || {};
@@ -2249,16 +2299,8 @@
           <div id="skill-list" class="muted">${t('settings.skillsEmpty')}</div>
           <div class="muted skill-paths" id="skill-paths"></div>
         </div>
-        <!-- R2「快捷」：上半给其他智能体看本机 API 表面，下半给人设键盘快捷键 -->
+        <!-- R2「快捷」：**键盘快捷键在前**，AI/IPC 接口目录在后 -->
         <div class="set-section" data-sec="hotkey"><h2 style="color:var(--accent)">${t('settings.section.hotkey')}</h2></div>
-        <div class="set-section set-card" id="hk-api-card">
-          <h2>${t('settings.hotkey.apiTitle')}</h2>
-          <p class="hk-hint">${t('settings.hotkey.apiHint')}</p>
-          <div class="hk-count" id="hk-api-count"></div>
-          <input class="hk-filter" id="hk-api-filter" placeholder="${escapeHtml(t('settings.hotkey.apiFilter'))}"/>
-          <div id="hk-api-body"></div>
-          <div class="hk-api-events" id="hk-api-events"></div>
-        </div>
         <div class="set-section set-card" id="hk-keys-card">
           <h2>${t('settings.hotkey.keyTitle')}</h2>
           <p class="hk-hint">${t('settings.hotkey.keyHint')}</p>
@@ -2268,6 +2310,14 @@
             <tbody id="hk-keys-body"></tbody>
           </table>
           <div class="hk-msg" id="hk-keys-msg"></div>
+        </div>
+        <div class="set-section set-card" id="hk-api-card">
+          <h2>${t('settings.hotkey.apiTitle')}</h2>
+          <p class="hk-hint">${t('settings.hotkey.apiHint')}</p>
+          <div class="hk-count" id="hk-api-count"></div>
+          <input class="hk-filter" id="hk-api-filter" placeholder="${escapeHtml(t('settings.hotkey.apiFilter'))}"/>
+          <div id="hk-api-body"></div>
+          <div class="hk-api-events" id="hk-api-events"></div>
         </div>
         <div class="set-section" data-sec="about"><h2 style="color:var(--accent)">${t('settings.section.about')}</h2></div>
         <div class="set-section set-card about-card">
@@ -6047,6 +6097,185 @@
     return out;
   }
 
+
+  /**
+   * window.warmy API 形参表（preload 白名单的**产品文档**，与实现一致）。
+   * 目录页用它展示形参；只读类操作可「试运行」。
+   */
+  const WARMY_API_SIGNATURES = {
+    hardware: '()',
+    listInstances: '()',
+    spawnInstance: '(cfg: {id,name,dutyEligible?})',
+    stopInstance: '(id: string)',
+    securityMode: '()',
+    setSecurityMode: "(mode: 'full'|'normal'|'strict')",
+    memoryRecall: '(q: string | {query,limit?,scope?})',
+    memoryAppend: '(body: string)',
+    memoryRetrieve: '(payload: {seq?, recordId?})',
+    memoryStatus: '()',
+    memoryRebuild: '()',
+    i18n: "(locale: string)",
+    localeInfo: '()',
+    setThemeSource: "(s: 'system'|'dark'|'light')",
+    themeInfo: '()',
+    listModels: '(cfg: {protocol,baseURL?,apiKey?})',
+    pickSound: '()',
+    checkUpdate: '()',
+    pickFile: '()',
+    groupCreate: '(cfg: {name,type?,directedMode?,devEnv?,directory?})',
+    groupList: '()',
+    updateSourceGet: '()',
+    updateSourceSet: '(payload: {url: string})',
+    groupMessage: '(msg: {groupId,content,urgency?,userId?})',
+    groupJoinInstance: '(groupId, instanceId)',
+    boardTasks: '(groupId?: string)',
+    boardEvents: '()',
+    boardAggregate: '()',
+    setProvider: '(cfg: {presetId,apiKey?,baseURL?,model?})',
+    getProvider: '()',
+    chatSend: '(msg: {sessionId,content,urgency?,attachments?})',
+    checkpointCreate: '(phase?: string)',
+    checkpointList: '()',
+    checkpointRollback: '(id: string)',
+    knowledgeQuery: '(q: string)',
+    knowledgeAddEvent: '(ev: {title,body?,groupId?})',
+    setInsertMode: "(sessionId, mode)",
+    getInsertMode: '(sessionId)',
+    metricsSummary: '()',
+    metricsTurns: '()',
+    metricsTools: '()',
+    chatLog: '(payload: {sessionId,mode?,limit?})',
+    chatLogRestore: '()',
+    settingsGet: '()',
+    settingsSave: '(partial: Partial<AppSettings>)',
+    containerProbe: '(opts?: {force?: boolean})',
+    containerAction: '(payload: {id,action:"start"|"stop"})',
+    containerShell: '(payload: {runtimeId,action:"open"|"write"|"close"|"status",sessionId?,data?})',
+    projectState: '(payload: {sessionId})',
+    projectEnable: '(payload: {sessionId})',
+    projectDisable: '(payload: {sessionId})',
+    projectSetContainer: '(payload: {sessionId,runtimeId})',
+    projectFiles: '(payload: {sessionId})',
+    projectEnvStatus: '(payload: {sessionId})',
+    projectEnvSolidify: '(payload: {sessionId,explicit?,beforeDestroy?})',
+    projectEnvRollback: '(payload: {sessionId,imageRef?})',
+    projectExec: '(payload: {sessionId,cmd: enum})',
+    projectLedger: '(payload: {sessionId,limit?})',
+    projectSetDirectory: '(payload: {sessionId})',
+    projectFsGuard: '(payload: {sessionId,op:"status"|"lock"|"unlock"})',
+    productRun: '(payload: {sessionId})',
+    uiQueuesGet: '()',
+    uiQueuesSet: '(queues: Record<chatId, item[]>)',
+    routerQueuesGet: '()',
+    profileGet: '()',
+    appInfo: '()',
+    skillsList: '()',
+    skillsRemove: '(id: string)',
+    skillsImport: '()',
+    skillsPaths: '()',
+    skillsScanDirsGet: '()',
+    skillsScanDirsSet: '(dirs: string[] /* max 10, deduped */)',
+    skillsSetEnabled: '(payload: {id,enabled:boolean})',
+    projectMemoryGet: '(payload: {sessionId})',
+    projectMemorySet: '(payload: {sessionId,memory: string})',
+    aiQuestionOpen: '(payload: {groupId,title,body?,options[]})',
+    aiQuestionList: '(groupId?: string)',
+    aiQuestionAnswer: '(payload: {id,optionId,customText?})',
+    identityInfo: '()',
+    identityPeers: '()',
+    membershipList: '(payload?: {groupId?})',
+    meshEnable: '(payload: {port?: number})',
+    meshDisable: '()',
+    netStatus: '()',
+    netPortCandidates: '(payload: {requestedPort?,want?})',
+    peersList: '()',
+    peersAdd: '(p: {host,port,name?})',
+    inviteCreate: '(groupId: string)',
+    executorsStatus: '()',
+    executorsRunBrief: '(payload: {brief,contextItems?,executorIds?})',
+    stateLoad: '()',
+    stateSave: '(s: object)',
+    lastError: '()',
+    clearError: '()',
+    setupState: '()',
+    setupComplete: '(payload: {locale?})',
+    searchMessages: '(q: string)',
+    archiveList: '(groupId?: string)',
+    archiveExternal: '(payload: {groupId,title,summary,anchors?})',
+    cleanupRun: '(opts?: {checkpoints?: number})',
+    boardSession: '(groupId: string)',
+    groupMembers: '(groupId: string)',
+    smtpList: '()',
+    lanStatus: '()',
+    meshStatus: '()',
+    platformInfo: '()',
+    costSummary: '()',
+  };
+
+  /** 可「试运行」的只读接口（不改系统状态；缺失参数时用最小合法样例） */
+  const WARMY_API_READONLY = new Set([
+    'hardware', 'listInstances', 'securityMode', 'memoryStatus', 'localeInfo', 'themeInfo',
+    'groupList', 'updateSourceGet', 'boardTasks', 'boardEvents', 'boardAggregate',
+    'getProvider', 'checkpointList', 'knowledgeQuery', 'metricsSummary', 'metricsTurns',
+    'metricsTools', 'chatLogRestore', 'settingsGet', 'containerProbe', 'projectState',
+    'projectFiles', 'projectEnvStatus', 'projectLedger', 'uiQueuesGet', 'routerQueuesGet',
+    'profileGet', 'appInfo', 'skillsList', 'skillsPaths', 'skillsScanDirsGet',
+    'projectMemoryGet', 'aiQuestionList', 'identityInfo', 'identityPeers', 'membershipList',
+    'netStatus', 'netPortCandidates', 'peersList', 'executorsStatus', 'stateLoad',
+    'lastError', 'setupState', 'searchMessages', 'archiveList', 'boardSession',
+    'groupMembers', 'smtpList', 'lanStatus', 'meshStatus', 'platformInfo', 'costSummary',
+    'memoryRecall', 'i18n',
+  ]);
+
+  function warmySampleArgs(name, bridge) {
+    switch (name) {
+      case 'memoryRecall':
+        return ['warmy'];
+      case 'i18n':
+        return [state.locale || 'zh-CN'];
+      case 'boardTasks':
+      case 'archiveList':
+        return state.selectedChat ? [state.selectedChat.id] : [];
+      case 'boardSession':
+      case 'groupMembers':
+      case 'projectState':
+      case 'projectFiles':
+      case 'projectEnvStatus':
+      case 'projectLedger':
+      case 'projectMemoryGet':
+        return state.selectedChat ? [{ sessionId: state.selectedChat.id }] : [];
+      case 'aiQuestionList':
+        return state.selectedChat ? [state.selectedChat.id] : [];
+      case 'knowledgeQuery':
+        return ['WArmy'];
+      case 'searchMessages':
+        return ['测试'];
+      case 'containerProbe':
+        return [{ force: false }];
+      case 'netPortCandidates':
+        return [{ requestedPort: 59599 }];
+      case 'membershipList':
+        return [];
+      default:
+        return [];
+    }
+  }
+
+  async function tryRunWarmyApi(name) {
+    const bridge = window.warmy;
+    if (!bridge || typeof bridge[name] !== 'function') return { ok: false, error: 'missing-api' };
+    if (!WARMY_API_READONLY.has(name)) {
+      return { ok: false, error: t('settings.hotkey.apiTryReadOnly') || 'read-only only' };
+    }
+    const args = warmySampleArgs(name, bridge);
+    try {
+      const r = await bridge[name](...args);
+      return { ok: true, args, result: r };
+    } catch (e) {
+      return { ok: false, args, error: String(e && e.message || e) };
+    }
+  }
+
   function apiCatalogue() {
     const bridge = (typeof window !== 'undefined' && window.warmy) || null;
     const rows = [];
@@ -6065,7 +6294,9 @@
         return;
       }
       const face = apiFaceOf(fn);
-      rows.push({ name, group: apiGroupOf(name), channel: face.channel, params: face.params });
+      const params = WARMY_API_SIGNATURES[name] || face.params || '()';
+      const channel = face.channel || `warmy:${name.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}`;
+      rows.push({ name, group: apiGroupOf(name), channel, params, readonly: WARMY_API_READONLY.has(name) });
     });
     return { rows, events, available: true };
   }
@@ -6104,14 +6335,16 @@
         '<table class="hk-api">' + head + '<tbody>' +
         list
           .map((r) => {
-            // 说明：只对**我们确实知道**的操作写了文案；其余如实标「未收录说明」，不编
             const k = 'settings.hotkey.api.' + r.name;
             const desc = state.t[k] ? t(k) : '';
+            const tryBtn = r.readonly
+              ? `<button class="btn-mini" data-api-try="${escapeHtml(r.name)}">${escapeHtml(t('settings.hotkey.apiTry') || 'Try')}</button>`
+              : '';
             return (
               '<tr data-api-op="' + escapeHtml(r.name) + '">' +
-              '<td class="hk-op">' + escapeHtml(r.name) + '</td>' +
+              '<td class="hk-op">' + escapeHtml(r.name) + ' ' + tryBtn + '</td>' +
               '<td class="hk-ch">' + escapeHtml(r.channel || '—') + '</td>' +
-              '<td class="hk-pa">' + escapeHtml(r.params || '—') + '</td>' +
+              '<td class="hk-pa"><code>' + escapeHtml(r.params || '()') + '</code></td>' +
               '<td class="hk-desc' + (desc ? '' : ' none') + '">' + escapeHtml(desc || t('settings.hotkey.apiNoDesc')) + '</td>' +
               '</tr>'
             );
@@ -6133,10 +6366,51 @@
     }
   }
 
+  document.addEventListener('click', async (e) => {
+    const tEl = e.target && e.target.closest && e.target.closest('[data-api-try]');
+    if (!tEl) return;
+    const name = tEl.getAttribute('data-api-try');
+    tEl.disabled = true;
+    const r = await tryRunWarmyApi(name);
+    tEl.disabled = false;
+    const json = r.result !== undefined ? JSON.stringify(r.result) : (r.error || '');
+    await uiAlert(`${name}\n${String(json).slice(0, 400)}`, t('settings.hotkey.apiTryResult') || 'API result');
+  });
+
   // ── 右键菜单 ──
-  // ── 3 权限审批弹窗 ──
+  // ── 3 权限审批：与决策卡同一通知区视觉整合 ──
   function showApprovalDialog(payload) {
     return new Promise((resolve) => {
+      const finish = async (allowed, scope) => {
+        const host = $('approval-host');
+        if (host) host.innerHTML = '';
+        $('modal-root')?.classList.add('hidden');
+        resolve({ allowed, scope });
+      };
+      // 通知区内联卡片（与 aiq-card 同构）
+      const host = $('approval-host');
+      if (host) {
+        host.innerHTML = `<div class="approval-card" data-approval="1">
+          <div class="aiq-title">${escapeHtml(t('approval.title') || '')} · ${escapeHtml(payload.action || '')}</div>
+          <div class="muted">${escapeHtml(t('approval.hint') || '')}</div>
+          <div class="aiq-opts">
+            <button class="btn-mini" data-ap="deny">${escapeHtml(t('approval.deny'))}</button>
+            <button class="btn-primary" data-ap="once">${escapeHtml(t('approval.once'))}</button>
+            <button class="btn-mini" data-ap="project">${escapeHtml(t('approval.project'))}</button>
+            <button class="btn-mini" data-ap="global">${escapeHtml(t('approval.global'))}</button>
+          </div>
+        </div>`;
+        host.querySelectorAll('[data-ap]').forEach((b) => {
+          b.onclick = () => {
+            const k = b.getAttribute('data-ap');
+            if (k === 'once') void finish(true, 'once');
+            else if (k === 'project') void finish(true, 'project');
+            else if (k === 'global') void finish(true, 'global');
+            else void finish(false, 'deny');
+          };
+        });
+      }
+      // 兼容：仍用 modal 作为兜底（通知区不在当前视图时）
       const root = $('modal-root');
       $('modal-title').textContent = t('approval.title');
       $('modal-body').innerHTML =
@@ -6154,11 +6428,10 @@
         };
         acts.appendChild(b);
       };
-      mk(t('common.cancel'), 'btn-mini', () => resolve({ allowed: false, scope: 'deny' }));
-      mk(t('approval.deny'), 'btn-mini', () => resolve({ allowed: false, scope: 'deny' }));
-      mk(t('approval.once'), 'btn-primary', () => resolve({ allowed: true, scope: 'once' }));
-      mk(t('approval.project'), 'btn-mini', () => resolve({ allowed: true, scope: 'project' }));
-      mk(t('approval.global'), 'btn-mini', () => resolve({ allowed: true, scope: 'global' }));
+      mk(t('approval.deny'), 'btn-mini', () => finish(false, 'deny'));
+      mk(t('approval.once'), 'btn-primary', () => finish(true, 'once'));
+      mk(t('approval.project'), 'btn-mini', () => finish(true, 'project'));
+      mk(t('approval.global'), 'btn-mini', () => finish(true, 'global'));
       root.classList.remove('hidden');
     });
   }
@@ -8165,18 +8438,20 @@
     });
   }
 
-  /** 添加模型：选供应商 → 拉取 → 勾选 */
+  /** 添加模型：选供应商 → 拉取 → 勾选；入口含「编辑供应商」跳设置-模型 */
   function pickModelsToAdd(inst) {
     return new Promise((resolve) => {
       const root = $('modal-root');
       $('modal-title').textContent = t('model.addTitle');
       const body = $('modal-body');
       const provs = state.providers || [];
+      const editProvLabel = t('model.editProvider') || t('settings.providers');
       body.innerHTML = `<div class="field">
           <label>${t('model.pickProvider')}</label>
-          <div style="display:flex;gap:6px">
+          <div style="display:flex;gap:6px;align-items:center">
             <select id="mp-prov" style="flex:1">${provs.map((p, i) => `<option value="${i}">${escapeHtml(p.label || p.id)}</option>`).join('')}</select>
             <button class="btn-mini" id="mp-fetch">${t('model.fetch')}</button>
+            <button class="btn-mini" id="mp-edit-prov" title="${escapeHtml(editProvLabel)}">${escapeHtml(editProvLabel)}</button>
           </div>
         </div>
         <div class="muted" style="font-size:12px">${t('model.fetchHint')}</div>
@@ -8207,12 +8482,43 @@
         btn.textContent = t('model.fetch');
         renderList();
       };
+      /** 跳到 设置 → 模型（供应商列表），可继续编辑 baseURL / API Key / 默认模型 */
+      const goEditProviders = () => {
+        root.classList.add('hidden');
+        resolve(null);
+        try {
+          setNav('settings');
+          const navBtn = document.querySelector('#settings-nav button[data-sec="model"]');
+          if (navBtn) navBtn.click();
+          // 尽量滚到供应商卡片
+          requestAnimationFrame(() => {
+            const card = document.querySelector('#prov-list')?.closest('.set-section') || $('prov-list');
+            if (card && card.scrollIntoView) card.scrollIntoView({ block: 'start' });
+            // 高亮当前选中的供应商行（按 label/id 匹配）
+            const idx = Number($('mp-prov') ? $('mp-prov').value : -1);
+            const want = provs[idx];
+            if (want) {
+              const rows = document.querySelectorAll('#prov-list .prov-row, #prov-list > div');
+              rows.forEach((el) => {
+                const txt = el.textContent || '';
+                if (txt.includes(want.label || want.id || '')) el.classList.add('prov-focus');
+              });
+            }
+          });
+        } catch { /* noop */ }
+      };
+      const editBtn = $('mp-edit-prov');
+      if (editBtn) editBtn.onclick = goEditProviders;
       const acts = $('modal-actions');
       acts.innerHTML = '';
       const cancel = document.createElement('button');
       cancel.className = 'btn-mini';
       cancel.textContent = t('common.cancel');
       cancel.onclick = () => { root.classList.add('hidden'); resolve(null); };
+      const editProv = document.createElement('button');
+      editProv.className = 'btn-mini';
+      editProv.textContent = editProvLabel;
+      editProv.onclick = goEditProviders;
       const okAdd = document.createElement('button');
       okAdd.className = 'btn-primary';
       okAdd.textContent = t('model.addSelected');
@@ -8221,7 +8527,7 @@
         root.classList.add('hidden');
         resolve(picked);
       };
-      acts.append(cancel, okAdd);
+      acts.append(editProv, cancel, okAdd);
       root.classList.remove('hidden');
     });
   }

@@ -1578,5 +1578,10 @@
   "pm.readBackFail": "저장 후 읽기 불일치",
   "pm.save": "프로젝트 기억 저장",
   "pm.saved": "저장 후 읽기 확인",
-  "pm.title": "프로젝트 기억"
+  "pm.title": "프로젝트 기억",
+  "chat.loadMore": "이전 메시지 불러오기",
+  "model.editProvider": "공급자 편집",
+  "settings.hotkey.apiTry": "실험",
+  "settings.hotkey.apiTryResult": "API 시험 결과",
+  "settings.hotkey.apiTryReadOnly": "읽기 전용 API만 시험 가능"
 }

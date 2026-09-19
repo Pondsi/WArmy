@@ -1578,5 +1578,10 @@
   "pm.readBackFail": "写入后读回不一致",
   "pm.save": "保存项目记忆",
   "pm.saved": "已保存并读回确认",
-  "pm.title": "项目记忆"
+  "pm.title": "项目记忆",
+  "chat.loadMore": "加载更早的消息",
+  "model.editProvider": "编辑供应商",
+  "settings.hotkey.apiTry": "试运行",
+  "settings.hotkey.apiTryResult": "接口试运行结果",
+  "settings.hotkey.apiTryReadOnly": "仅只读接口可试运行"
 }

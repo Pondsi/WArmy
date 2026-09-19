@@ -1578,5 +1578,10 @@
   "pm.readBackFail": "寫入後讀回不一致",
   "pm.save": "儲存專案記憶",
   "pm.saved": "已儲存並讀回確認",
-  "pm.title": "專案記憶"
+  "pm.title": "專案記憶",
+  "chat.loadMore": "載入更早的訊息",
+  "model.editProvider": "編輯供應商",
+  "settings.hotkey.apiTry": "試執行",
+  "settings.hotkey.apiTryResult": "介面試執行結果",
+  "settings.hotkey.apiTryReadOnly": "僅唯讀介面可試執行"
 }

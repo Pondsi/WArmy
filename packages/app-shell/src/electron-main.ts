@@ -34,7 +34,7 @@ import { KnowledgeBase } from '@warmy/knowledge-base';
 import { CheckpointStore } from './checkpoint.js';
 import { AuditLogger } from './audit.js';
 import { SecureKeyStore } from './secure-keys.js';
-import { KnowledgeArchiver, CleanupManager } from './archive-cleanup.js';
+import { KnowledgeArchiver, CleanupManager, extractKnowledgeFromArchive, mergeUserPreferences } from './archive-cleanup.js';
 import { pickModelForUrgency, pickEmbeddingModel, type RoleModelConfig } from './model-roles.js';
 import { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';
 import { projectMemoryForContext, readProjectMemory, writeProjectMemory } from './project-memory.js';
@@ -6556,8 +6556,47 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
     summary: payload.summary,
     anchors: payload.anchors || [],
   });
-  audit?.log('archive.external', { groupId: payload.groupId });
-  return { ok: true, entry: r };
+  // 归档触发整理：摘要 → 知识库实体/事件 + 使用者偏好（持久跨会话）
+  let extraction = null;
+  try {
+    extraction = extractKnowledgeFromArchive({
+      groupId: String(payload.groupId || ''),
+      title: String(payload.title || ''),
+      summary: String(payload.summary || ''),
+    });
+    if (knowledge && extraction) {
+      knowledge.upsertEntity({
+        id: `grp-${payload.groupId}`,
+        kind: 'project',
+        name: String(payload.groupId),
+        attrs: {},
+        anchors: (payload.anchors || []).map((a) => ({ file: a.file, seq: a.seq, recordId: `seq:${a.seq}` })),
+      });
+      for (const e of extraction.entities) {
+        const kindMap = ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] as const;
+        const kind = (kindMap as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof kindMap)[number]) : 'concept';
+        knowledge.upsertEntity({ id: e.id, kind, name: e.name, attrs: e.attrs || {}, anchors: [] });
+      }
+      for (const ev of extraction.events) {
+        knowledge.addEvent({
+          id: ev.id,
+          title: ev.title,
+          result: ev.result || '',
+          entityIds: [`grp-${payload.groupId}`],
+          anchors: (payload.anchors || []).map((a) => ({ file: a.file, seq: a.seq, recordId: `seq:${a.seq}` })),
+          ts: Date.now(),
+        });
+      }
+    }
+    if (extraction?.preferences?.length) {
+      const userDataDir = app.getPath('userData');
+      mergeUserPreferences(userDataDir, extraction.preferences);
+    }
+  } catch (e) {
+    extraction = { error: sanitizeError(e) };
+  }
+  audit?.log('archive.external', { groupId: payload.groupId, prefs: extraction?.preferences?.length || 0 });
+  return { ok: true, entry: r, extraction };
 });
 handleIpc('warmy:archive-list', (_e, groupId?: string) => ({
   ok: true,

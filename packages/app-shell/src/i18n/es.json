@@ -1578,5 +1578,10 @@
   "pm.readBackFail": "Read-back mismatch after save",
   "pm.save": "Save project memory",
   "pm.saved": "Saved and read-back confirmed",
-  "pm.title": "Project memory"
+  "pm.title": "Project memory",
+  "chat.loadMore": "Cargar mensajes anteriores",
+  "model.editProvider": "Editar proveedor",
+  "settings.hotkey.apiTry": "Probar",
+  "settings.hotkey.apiTryResult": "Resultado de prueba API",
+  "settings.hotkey.apiTryReadOnly": "Solo APIs de solo lectura"
 }

@@ -74,6 +74,11 @@
         <input id="list-search" type="search" data-i18n-placeholder="list.search" data-i18n-title="list.search" />
       </div>
       <div id="list-body" class="list-body"></div>
+      <div id="list-watermark" class="list-watermark" aria-hidden="true">
+        <div class="lw-logo"><img src="./icons/logo-64.png" alt=""/></div>
+        <div class="lw-name" id="lw-name"></div>
+        <div class="lw-sub" id="lw-sub"></div>
+      </div>
       <div id="col-resizer" data-i18n-title="tip.dragWidth"></div>
     </aside>
 
@@ -98,9 +103,7 @@
             <div class="chat-actions">
               <!-- 诊断事件流（T194，**已降级为独立的排障视图**）：这是本机事件日志，
                    不是控制台。控制台 = 容器内的 shell（右边的 btn-container-shell）。 -->
-              <button id="btn-console" class="btn-icon" data-i18n-title="tip.console" aria-label="diagnostic event stream">
-                <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="16" width="80" height="68" rx="6"/><polyline points="28,40 42,52 28,64"/><line x1="50" y1="64" x2="72" y2="64"/></g></svg>
-              </button>
+
               <!-- ADR 004 P4 定稿：**控制台就是容器内的控制台**（其价值是给主机带来安全性防护）。
                    硬约束：只在「项目 / 我的牛马」里、且容器真的就绪时才可用；否则置灰并给出
                    诚实原因（见 app.js 的 refreshContainerConsoleGate / openContainerShell）。 -->
@@ -133,11 +136,18 @@
                   <button type="button" id="mi-export" data-i18n="chat.export"></button>
                 </div>
               </div>
+                            <!-- 诊断事件流（排障，不是控制台）— 固定在动作区最右 -->
+              <button id="btn-console" class="btn-icon btn-diag" data-i18n-title="tip.console" aria-label="diagnostic event stream">
+                <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 28h64M18 50h64M18 72h40"/><circle cx="78" cy="72" r="6" fill="currentColor" stroke="none"/></g></svg>
+              </button>
               <button id="btn-stop-all" class="btn-stop-icon" data-i18n-title="chat.stopAllTip" aria-label="stop"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path fill-rule="evenodd" fill="currentColor" d="M12 21a9 9 0 110-18 9 9 0 010 18zM9 9h6v6H9z"/></svg></button>
             </div>
           </header>
           <div id="messages" class="messages"></div>
-          <div id="aiq-host" class="aiq-host"></div>
+          <div id="notify-zone" class="notify-zone">
+            <div id="aiq-host" class="aiq-host"></div>
+            <div id="approval-host" class="approval-host"></div>
+          </div>
         <div id="pm-box" class="pm-box"></div>
         <div id="queue-bar" class="queue-bar hidden">
             <div class="queue-bar-head">

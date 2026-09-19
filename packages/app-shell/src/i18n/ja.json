@@ -1578,5 +1578,10 @@
   "pm.readBackFail": "保存後の読み戻しが不一致",
   "pm.save": "プロジェクト記憶を保存",
   "pm.saved": "保存し読み戻し確認済み",
-  "pm.title": "プロジェクト記憶"
+  "pm.title": "プロジェクト記憶",
+  "chat.loadMore": "過去のメッセージを読み込む",
+  "model.editProvider": "プロバイダーを編集",
+  "settings.hotkey.apiTry": "試行",
+  "settings.hotkey.apiTryResult": "API試行結果",
+  "settings.hotkey.apiTryReadOnly": "読み取り専用APIのみ試行可"
 }
