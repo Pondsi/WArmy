@@ -15,6 +15,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 拉全历史与 tag：spikes/verify-all 会检查版本 tag（默认浅克隆没有 tag）
+          fetch-depth: 0
+          fetch-tags: true
       - uses: pnpm/action-setup@v4          # 不传 version：由 package.json#packageManager 决定
       - uses: actions/setup-node@v4
         with:

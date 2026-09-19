@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { fork } from 'node:child_process';
+import { fork, execSync } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../..');
@@ -34,10 +34,24 @@ console.log('root', root);
 
 // 1. 仓库与快照
 check('git repo', exists('.git'));
-const tags = fs.existsSync(path.join(root, '.git', 'refs', 'tags'))
-  ? fs.readdirSync(path.join(root, '.git', 'refs', 'tags'))
-  : [];
-check('has snapshot tags', tags.some((t) => t.startsWith('snapshot-')), tags);
+/**
+ * 版本 tag：早期读 `.git/refs/tags` 目录且只认 `snapshot-*`（spike 时期命名）。
+ * 现在有两处不成立：① clone 会把 ref 打包到 .git/packed-refs，目录可能是空的；
+ * ② 发布用的是 `vX.Y.Z`（如 v0.1.0）。所以改用 `git tag` 并同时接受两种命名。
+ */
+function listTags() {
+  try {
+    const out = execSync('git tag', { cwd: root, encoding: 'utf8' });
+    return out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  } catch {
+    try {
+      const dir = path.join(root, '.git', 'refs', 'tags');
+      return fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+    } catch { return []; }
+  }
+}
+const tags = listTags();
+check('has a release tag (v*) or snapshot tag', tags.some((t) => t.startsWith('snapshot-') || /^v\d/.test(t)), tags);
 
 // 2. 包结构
 const pkgs = [
