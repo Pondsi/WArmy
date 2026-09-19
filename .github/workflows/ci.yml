@@ -20,7 +20,13 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # 注意：本仓库的 pnpm-lock.yaml 在**没有 pnpm 的机器**上被手工同步过
+      # （Electron 33 → 40 升级）。--frozen-lockfile 会因此判定"锁文件与
+      # package.json 不一致"而直接失败。等有 pnpm 的机器执行一次
+      #   pnpm install --lockfile-only
+      # 重新生成锁文件后，可改回 --frozen-lockfile。
+      # 本项目零原生模块，非冻结安装不会引入编译差异。
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm build
       # 静态/一致性门禁（快、稳）
