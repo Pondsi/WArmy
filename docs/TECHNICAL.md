@@ -421,16 +421,37 @@ Set-Location packages\app-shell
 
 | 项 | 值 |
 |----|-----|
-| Node | `C:\Program Files\nodejs\node.exe` |
+| 系统 Node（构建/CI） | **24.20.0**（`engines: node >= 24`，CI `node-version: 24`） |
+| 应用内 Node（渲染/主进程） | **24 LTS** —— 由 Electron 40 提供（见下表） |
+| Electron | **40.10.6**（Chromium 140 级） |
+| 捆绑 Node（dsh/实例子进程） | `scripts/fetch-node-runtime.mjs` 默认 **24.20.0** |
 | Python | `$env:MIMO_PYTHON`（勿用 `python -c` 传中文复杂引号，写 .py 文件） |
-| Electron | `packages/app-shell/node_modules/electron/dist/electron.exe` |
+| Electron 可执行 | `packages/app-shell/node_modules/electron/dist/electron.exe` |
 | 主入口 | `packages/app-shell/dist/electron-main.js` |
 | GitHub 令牌 | 本地 `github的令牌.txt` 中 `ghp_` 段；**永不打印/入库** |
 | 记忆全局 | `C:\Users\p\.local\share\mimocode\memory\global\MEMORY.md` |
 
+**为什么必须 Electron 40+**（权威映射，来自 `releases.electronjs.org/releases.json`）：
+
+| Electron | 自带 Node |
+|----------|-----------|
+| 33 | 20.18.3 |
+| 34 | 20.19.1 |
+| 35–39 | 22.16 – 22.22 |
+| **40** | **24.15.0** ✅ |
+| 41–44 | 24.18 – 24.21 |
+
+⇒ 想让**应用内**也是 Node 24 LTS，唯一途径是升到 Electron ≥ 40。  
+门禁：`verify-live-ui.mjs` 断言 `appInfo().node >= 24 && electron >= 40`。  
+安装 Electron 时若 npm 官方源慢，用镜像：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`。
+
 **PowerShell 教训**：含中文/`${}`/嵌套引号的 `node -e`/`python -c` 极易失败 → 写脚本文件再执行。
 
 **Electron 启动教训**：非交互 shell 下 `Start-Process`/`wscript` 可能挂起 → Python `Popen(DETACHED_PROCESS)` + `pop ELECTRON_RUN_AS_NODE`。
+
+**"调用了未定义函数"类缺陷**（`updateListWatermark` 事故）：静态检查与 grep 都查不出，
+但在真机里会**中断整条流程**（openChat 后续全不执行）。因此必须有
+`verify-runtime-errors.mjs`（真机跑一遍常见交互 + 断言无未捕获异常）。
 
 ---
 

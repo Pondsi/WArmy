@@ -65,8 +65,14 @@ check('mergeUserPreferences ok', pref.ok === true && pref.count >= 0);
 const app = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'), 'utf8');
 const main = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/electron-main.ts'), 'utf8');
 const archiveSrc = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/archive-cleanup.ts'), 'utf8');
-check('panel summary for internal projects', /panel-summary-block',\s*kind === 'internal' \|\| chat/.test(app));
-check('panel knowledge for internal projects', /panel-kb-block',\s*kind === 'internal' \|\| chat/.test(app));
+// 右栏分区：唯一权威是 applyPanelVisibility（按会话类型给每个卡片开关）。
+// 历史写法（kind === 'internal' || chat）已重构 —— 断言改为规则本身，避免再次被重构打脸。
+check('panel 分区函数唯一权威 (applyPanelVisibility)', /function applyPanelVisibility/.test(app));
+check('panelVisibilityFor: 项目/聊天显示摘要', /summary:\s*kind === 'internal' \|\| chat/.test(app));
+check('panelVisibilityFor: 项目/聊天显示知识库', /kb:\s*kind === 'internal' \|\| chat/.test(app));
+check('panelVisibilityFor: 成员仅项目/群聊', /members:\s*group/.test(app));
+check('panel 未选会话时全隐藏', /if \(!kind \|\| kind === 'none'\)/.test(app));
+check('renderList 收口刷新分区', /function renderList\(\)\s*\{[\s\S]{0,120}refreshPanelVisibility/.test(app));
 check('structured rows clickable jump', /data-jump-st/.test(app));
 check('jump fallback uses structured text', /st\.decisions && st\.decisions\[0\]/.test(app));
 check('jump fallback opens chat when no hit', /hits\.length[\s\S]*openChat/.test(app));

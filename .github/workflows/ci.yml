@@ -1,4 +1,10 @@
 # WArmy CI — typecheck + build + verify
+#
+# 注意（曾经导致 CI 全红）：根 package.json 里有
+#   "packageManager": "pnpm@10.23.0"
+# 而 pnpm/action-setup 若再传 version: 10，会报
+#   ERR_PNPM_BAD_PM_VERSION (Multiple versions of pnpm specified)
+# ⇒ **不要**在这里传 version，让 action 读 packageManager 字段（单一来源）。
 name: ci
 on:
   push:
@@ -9,18 +15,34 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+      - uses: pnpm/action-setup@v4          # 不传 version：由 package.json#packageManager 决定
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm build
-      - run: node packages/app-shell/scripts/verify-docs.mjs
-      - run: node packages/app-shell/scripts/verify-memory.mjs
-      - run: node packages/app-shell/scripts/verify-router-queue.mjs
-      - run: node packages/app-shell/scripts/verify-i18n-locales.mjs
+      # 静态/一致性门禁（快、稳）
+      - name: verify docs
+        run: node packages/app-shell/scripts/verify-docs.mjs
+      - name: verify i18n locales
+        run: node packages/app-shell/scripts/verify-i18n-locales.mjs
+      - name: verify naming (含 CSS 大括号平衡 / 品牌 / 端口常量)
+        run: node packages/app-shell/scripts/verify-naming.mjs
+      - name: verify memory
+        run: node packages/app-shell/scripts/verify-memory.mjs
+      - name: verify router queue
+        run: node packages/app-shell/scripts/verify-router-queue.mjs
+      - name: verify tray/single-instance
+        run: node packages/app-shell/scripts/verify-tray-quit.mjs
+      - name: verify chat window
+        run: node packages/app-shell/scripts/verify-chat-window.mjs
+      - name: verify summary quality
+        run: node packages/app-shell/scripts/verify-summary-quality.mjs
+      # 真机（Electron + CDP）门禁：静态检查查不出「调用了未定义函数会中断整条流程」这类缺陷
+      - name: verify runtime errors (real DOM)
+        run: node packages/app-shell/scripts/verify-runtime-errors.mjs
+      - name: verify live UI (real DOM)
+        run: node packages/app-shell/scripts/verify-live-ui.mjs
       - run: node spikes/verify-all/run-full.mjs

@@ -33,7 +33,7 @@
     "@warmy/asset-governance": "workspace:*"
   },
   "devDependencies": {
-    "electron": "33.2.0",
+    "electron": "40.10.6",
     "electron-builder": "25.1.8"
   },
   "author": "Pondsi"

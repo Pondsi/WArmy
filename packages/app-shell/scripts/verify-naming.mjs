@@ -109,5 +109,31 @@ check('index.html loads both app.css and renderer.css', (() => {
   return /app\.css/.test(html) && /renderer\.css/.test(html);
 })());
 
+/* ── CSS 大括号平衡（曾经漏掉一段导致后续规则被解析器丢弃：真机 UI 才看得出） ──
+   任何一次 `{`/`}` 不平衡都会让**后面的规则整段失效**，静态 grep 查不出来。 */
+for (const f of ['app.css', 'renderer.css']) {
+  const css = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer', f), 'utf8');
+  const open = (css.match(/\{/g) || []).length;
+  const close = (css.match(/\}/g) || []).length;
+  check(`${f} braces balanced (${open}/${close})`, open === close, { open, close });
+}
+
+/* ── 关键 UI 契约：横幅在文档流内（不得 absolute 覆盖聊天区） ── */
+check('net-banner is in flow (not absolute overlay)',
+  /\.net-banner\s*\{[^}]*position:\s*relative/.test(acss) && !/\.net-banner\s*\{[^}]*position:\s*absolute/.test(acss));
+
+/* ── 右栏分区唯一权威 + 会话卡片默认隐藏 ── */
+const idxHtml = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/index.html'), 'utf8');
+check('panel members block hidden by default', /id="panel-members-block"[^>]*class="[^"]*hidden|class="panel-block only-group hidden"[^>]*id="panel-members-block"/.test(idxHtml));
+check('panel progress/assist/model default hidden',
+  /class="panel-block hidden" id="panel-progress-block"/.test(idxHtml) &&
+  /class="panel-block hidden" id="panel-assist-block"/.test(idxHtml) &&
+  /class="panel-block hidden" id="panel-model-mgr-block"/.test(idxHtml));
+const appjs2 = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'), 'utf8');
+check('applyPanelVisibility exists and is authoritative', /function applyPanelVisibility/.test(appjs2));
+check('refreshPanelVisibility called on nav change', /hideMain\(\);[\s\S]{0,200}refreshPanelVisibility\(\)/.test(appjs2));
+check('panelVisibilityFor: members only group kinds',
+  /members:\s*group/.test(appjs2) && /const group = kind === 'internal' \|\| kind === 'external' \|\| kind === 'externalGroup' \|\| kind === 'extgroup'/.test(appjs2));
+
 console.log(`\n==== verify-naming: ${pass} ok / ${fail} FAIL ====`);
 process.exit(fail === 0 ? 0 : 1);

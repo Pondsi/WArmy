@@ -23,7 +23,8 @@ const ss = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/settings-stor
 const idx = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/index.html'), 'utf8');
 
 // ── 1. 列宽：第二列默认 200，右栏 300 ──
-check('settings listWidth default 200', /listWidth:\s*200/.test(ss), ss.match(/listWidth:\s*\d+/)?.[0]);
+// 产品规则：第二列默认取**最小可读宽度**（160），用户拖动后持久化
+check('settings listWidth default 160 (min readable)', /listWidth:\s*160/.test(ss), ss.match(/listWidth:\s*\d+/)?.[0]);
 check('settings panelWidth default 300', /panelWidth:\s*300/.test(ss), ss.match(/panelWidth:\s*\d+/)?.[0]);
 check('renderer.css list-w 200', rcss.includes('--list-w, 200px'), rcss.match(/--list-w[^;)]*/)?.[0]);
 check('app.css list-w 200', acss.includes('--list-w, 200px') || acss.includes('--list-w: 200px'), acss.match(/--list-w[^;)]*/)?.[0]);

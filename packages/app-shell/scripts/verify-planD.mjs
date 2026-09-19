@@ -45,7 +45,7 @@ check('extractStructuredSummary exists', /export function extractStructuredSumma
 check('ArchiveEntry has structured', /structured\?: ArchiveStructured/.test(archiveSrc));
 check('session-summary stores structured', /structured:\s*\{[\s\S]*bullets:/.test(main));
 check('extractKnowledge uses structured events', /structured\.decisions\[0\]/.test(archiveSrc));
-check('panel summary shown for projects', /panel-summary-block',\s*kind === 'internal' \|\| chat/.test(app));
+check('panel summary shown for projects (via panelVisibilityFor)', /summary:\s*kind === 'internal' \|\| chat/.test(app));
 
 // ── 项目侧摘要 ──
 check('session-summary IPC', /warmy:session-summary/.test(main));
