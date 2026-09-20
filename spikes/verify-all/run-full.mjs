@@ -159,11 +159,11 @@ const route = router.route({
 });
 check('route dispatch', route.action === 'dispatch');
 
-const { BoardStore, parseBoardCommand } = await import(
+const { KanbanCang, JieLing } = await import(
   toImportUrl(path.join(ascii, 'board', 'dist', 'index.js'))
 );
 const boardDir = path.join(os.tmpdir(), 'warmy-verify-board-' + Date.now());
-const board = new BoardStore(boardDir);
+const board = new KanbanCang(boardDir);
 check('board duty only', (() => {
   try {
     board.append({ groupId: 'g', action: 'create_task', title: 't', parsedFrom: 'x' }, 'router');
@@ -176,7 +176,7 @@ board.append({ groupId: 'g1', action: 'create_task', title: '整理周报', pars
 board.append({ groupId: 'g1', action: 'update_progress', title: '整理周报', progress: 50, parsedFrom: 'x' }, 'duty');
 const tasks = board.listTasks('g1');
 check('board task progress', tasks[0]?.progress === 50 && tasks[0]?.status === 'doing', tasks[0]);
-check('parse board cmd', parseBoardCommand('新建任务: 测试', 'g')?.action === 'create_task');
+check('parse board cmd', JieLing('新建任务: 测试', 'g')?.action === 'create_task');
 fs.rmSync(boardDir, { recursive: true, force: true });
 
 // 7. memory-os 直接类（ASCII 拷贝）

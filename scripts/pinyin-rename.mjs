@@ -172,7 +172,17 @@ function walk(dir, acc = []) {
   }
   return acc;
 }
-const allRepoFiles = () => walk(path.join(ROOT, 'packages'));
+/**
+ * global 映射的扫描范围 = **全仓库可执行代码**：packages/ + spikes/ + scripts/。
+ * 曾经只扫 packages/，结果 spikes/verify-all 里仍写着旧名（`BoardStore is not a
+ * constructor`）—— 导出名一改，所有引用处（含验证/spike 脚本）都必须同步。
+ */
+const REPO_CODE_ROOTS = ['packages', 'spikes', 'scripts'];
+const allRepoFiles = () => {
+  const acc = [];
+  for (const r of REPO_CODE_ROOTS) walk(path.join(ROOT, r), acc);
+  return acc;
+};
 const targetFiles = () => {
   const out = files.map((f) => path.resolve(ROOT, f));
   for (const p of pkgs) out.push(...walk(path.join(ROOT, 'packages', p, 'src')));
