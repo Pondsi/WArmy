@@ -226,6 +226,34 @@ function runLocal(targets) {
   return total;
 }
 
+/**
+ * 重名检查（产品规范的三级兜底：全拼 → 全拼_作用域 → 全拼_作用域_英文名）。
+ * 映射表里两个不同的源名落到同一个拼音 = 会撞名，必须按梯子升级命名。
+ */
+function checkCollisions() {
+  const byTarget = new Map();
+  for (const [src, dst] of Object.entries({ ...GLOBAL, ...LOCAL })) {
+    const arr = byTarget.get(dst) || [];
+    arr.push(src);
+    byTarget.set(dst, arr);
+  }
+  const dups = [...byTarget.entries()].filter(([, arr]) => arr.length > 1);
+  if (!dups.length) {
+    console.log('collision-check: 映射表无重名（当前不需要 全拼_作用域 后缀）');
+    return 0;
+  }
+  console.log('collision-check: 发现重名，需要按梯子升级（全拼_作用域 / 全拼_作用域_英文名）：');
+  for (const [dst, arr] of dups) {
+    console.log(`  ${dst}  <=  ${arr.join(' , ')}   建议：${arr.map((s) => `${dst}_${s}`).join(' / ')}`);
+  }
+  return dups.length;
+}
+
+if (args.includes('--check-collisions')) {
+  const n = checkCollisions();
+  process.exit(n ? 1 : 0);
+}
+
 let sum = 0;
 if (!localOnly) sum += run('global', allRepoFiles(), GLOBAL);
 if (!globalOnly) sum += runLocal(targetFiles());

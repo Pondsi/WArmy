@@ -98,6 +98,26 @@ if (fs.existsSync(req)) {
   check('REQUIREMENTS documents ports/update/WSL', /59599|GitHub|WSL/.test(r));
 }
 
+/* ── 命名规范（全拼 + 三级重名兜底 + 明确哪些不改）必须写在技术文档里 ── */
+if (fs.existsSync(tech)) {
+  const t = fs.readFileSync(tech, 'utf8');
+  check('TECHNICAL: pinyin naming rule present', /全拼/.test(t) && /汉语拼音/.test(t));
+  check('TECHNICAL: three-level collision ladder documented',
+    /全拼_作用域_英文名/.test(t) && /所有重名者/.test(t));
+  check('TECHNICAL: additive requirements stated (not conflicting with pinyin)',
+    /追加要求/.test(t) && /不与"全拼"冲突|不与全拼冲突/.test(t));
+  check('TECHNICAL: forbidden-to-rename list present',
+    /IPC 通道名/.test(t) && /i18n 键/.test(t) && /线协议标记/.test(t));
+}
+const mapFile = path.join(ROOT, 'docs/PINYIN-MAP.json');
+check('PINYIN-MAP.json exists', fs.existsSync(mapFile));
+if (fs.existsSync(mapFile)) {
+  const m = JSON.parse(fs.readFileSync(mapFile, 'utf8'));
+  check('PINYIN-MAP declares collision ladder',
+    Array.isArray(m._collision_ladder) && m._collision_ladder.length === 3);
+  check('PINYIN-MAP has global + local scopes', !!m.global && !!m.local);
+}
+
 // renderer composer：输入框与按钮之间不得有分隔线
 const rcss = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/renderer.css'), 'utf8');
 const acss = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.css'), 'utf8');
