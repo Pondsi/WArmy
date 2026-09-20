@@ -5,24 +5,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export interface ArchiveStructured {
+export interface GuiDangJieGou {
   bullets: string[];
   decisions: string[];
   todos: string[];
   risks: string[];
 }
 
-export interface ArchiveEntry {
+export interface GuiDangTiaoMu {
   id: string;
   groupId: string;
   title: string;
   summary: string;
   ts: number;
   anchors: Array<{ file: string; seq: number }>;
-  structured?: ArchiveStructured;
+  structured?: GuiDangJieGou;
 }
 
-export class KnowledgeArchiver {
+export class ZhiShiGuiDangQi {
   private file: string;
 
   constructor(userData: string) {
@@ -31,14 +31,14 @@ export class KnowledgeArchiver {
     this.file = path.join(dir, 'archives.jsonl');
   }
 
-  archive(entry: Omit<ArchiveEntry, 'ts'>): ArchiveEntry {
-    const full: ArchiveEntry = { ...entry, ts: Date.now() };
+  archive(entry: Omit<GuiDangTiaoMu, 'ts'>): GuiDangTiaoMu {
+    const full: GuiDangTiaoMu = { ...entry, ts: Date.now() };
     if (!full.structured) delete full.structured;
     fs.appendFileSync(this.file, JSON.stringify(full) + '\n', 'utf8');
     return full;
   }
 
-  list(groupId?: string): ArchiveEntry[] {
+  list(groupId?: string): GuiDangTiaoMu[] {
     try {
       if (!fs.existsSync(this.file)) return [];
       return fs
@@ -56,7 +56,7 @@ export class KnowledgeArchiver {
 /**
  * CleanupManager：手动清理机制
  */
-export class CleanupManager {
+export class QingLiGuanLiQi {
   constructor(private userData: string) {}
 
   /** 清理旧检查点（保留最近 N 个） */
@@ -112,21 +112,21 @@ export class CleanupManager {
  * 归档时提炼：知识库实体/事件 + 使用者行为偏好（持久、跨会话）。
  * 产品原则：归档不只是 summary+anchors 存档，还要**进知识**与**进偏好**。
  */
-export interface ArchiveExtraction {
+export interface GuiDangTiQu {
   entities: Array<{ id: string; name: string; kind: string; attrs?: Record<string, string> }>;
   events: Array<{ id: string; title: string; result?: string }>;
   preferences: Array<{ key: string; value: string; source: string }>;
 }
 
-export function extractKnowledgeFromArchive(input: {
+export function congGuiDangTiQuZhiShi(input: {
   groupId: string;
   title: string;
   summary: string;
-}): ArchiveExtraction {
+}): GuiDangTiQu {
   const text = `${input.title}\n${input.summary}`.slice(0, 4000);
-  const entities: ArchiveExtraction['entities'] = [];
-  const events: ArchiveExtraction['events'] = [];
-  const preferences: ArchiveExtraction['preferences'] = [];
+  const entities: GuiDangTiQu['entities'] = [];
+  const events: GuiDangTiQu['events'] = [];
+  const preferences: GuiDangTiQu['preferences'] = [];
 
   // 实体：标题本身作为会话/主题实体
   entities.push({
@@ -147,30 +147,30 @@ export function extractKnowledgeFromArchive(input: {
     let m: RegExpExecArray | null;
     re.lastIndex = 0;
     while ((m = re.exec(text))) {
-      const val = String(m[1] || '').trim();
-      if (!val) continue;
-      preferences.push({ key, value: val.slice(0, 120), source: `archive:${input.groupId}` });
+      const zhi = String(m[1] || '').trim();
+      if (!zhi) continue;
+      preferences.push({ key, value: zhi.slice(0, 120), source: `archive:${input.groupId}` });
       if (preferences.length >= 8) break;
     }
   }
 
   // 结构化提炼：决策/待办/风险/要点（不编造，只从文本模式匹配）
-  const structured = extractStructuredSummary({
+  const structured = tiQuJieGouHuaZhaiYao({
     groupId: input.groupId,
     title: input.title,
     text: input.summary,
   });
-  const firstLine = input.summary.split(/\n|\r/).map((s) => s.trim()).filter(Boolean)[0] || input.title;
-  const primaryResult = (structured.decisions[0] || structured.bullets[0] || firstLine).slice(0, 160);
+  const shouHang = input.summary.split(/\n|\r/).map((s) => s.trim()).filter(Boolean)[0] || input.title;
+  const zhuJieguo = (structured.decisions[0] || structured.bullets[0] || shouHang).slice(0, 160);
   events.push({
     id: `ev-arc-${Date.now()}`,
     title: input.title.slice(0, 100),
-    result: primaryResult,
+    result: zhuJieguo,
   });
   // 决策/待办进知识库事件（有界，避免爆炸）
   let extra = 0;
   for (const d of [...structured.decisions, ...structured.todos].slice(0, 4)) {
-    if (d === primaryResult) continue;
+    if (d === zhuJieguo) continue;
     events.push({
       id: `ev-arc-${Date.now()}-${extra}`,
       title: d.slice(0, 80),
@@ -183,7 +183,7 @@ export function extractKnowledgeFromArchive(input: {
 }
 
 /** 使用者偏好：userData/user-preferences.json（覆盖式 + 去重 key） */
-export function mergeUserPreferences(
+export function heBingYongHuPianHao(
   userData: string,
   prefs: Array<{ key: string; value: string; source: string }>
 ): { ok: boolean; count: number; file: string } {
@@ -216,7 +216,7 @@ export function mergeUserPreferences(
 
 
 /** 结构化会话摘要：要点/决策/待办/风险（从近期日志文本提炼，不编造） */
-export interface StructuredSummary {
+export interface JieGouHuaZhaiYao {
   title: string;
   bullets: string[];
   decisions: string[];
@@ -225,12 +225,12 @@ export interface StructuredSummary {
   anchors: Array<{ file: string; seq: number }>;
 }
 
-export function extractStructuredSummary(input: {
+export function tiQuJieGouHuaZhaiYao(input: {
   groupId: string;
   title: string;
   text: string;
   anchors?: Array<{ file: string; seq: number }>;
-}): StructuredSummary {
+}): JieGouHuaZhaiYao {
   const lines = String(input.text || '')
     .split(/\r?\n/)
     .map((s) => s.trim())

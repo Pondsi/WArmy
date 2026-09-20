@@ -106,8 +106,8 @@ export class MetricsCollector {
   summary() {
     const t = this.turns;
     const hit = t.reduce((s, x) => s + x.cacheHitTokens, 0);
-    const miss = t.reduce((s, x) => s + x.cacheMissTokens, 0);
-    const total = hit + miss;
+    const weiMingZhong = t.reduce((s, x) => s + x.cacheMissTokens, 0);
+    const total = hit + weiMingZhong;
     const ccrIn = this.ccr.reduce((s, x) => s + x.originalBytes, 0);
     const ccrOut = this.ccr.reduce((s, x) => s + x.compressedBytes, 0);
     // 有界视图哨兵：最近一次 + 观测区间内的极值（恒定性证据）
@@ -120,7 +120,7 @@ export class MetricsCollector {
       completionTokens: t.reduce((s, x) => s + x.completionTokens, 0),
       cacheHitRate: total ? +(hit / total).toFixed(4) : 0,
       cacheHitTokens: hit,
-      cacheMissTokens: miss,
+      cacheMissTokens: weiMingZhong,
       ccrOriginalBytes: ccrIn,
       ccrCompressedBytes: ccrOut,
       ccrRatio: ccrIn ? +(ccrOut / ccrIn).toFixed(4) : 1,

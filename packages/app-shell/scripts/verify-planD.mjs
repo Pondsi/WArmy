@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { GroupStore } from '../dist/group-store.js';
-import { AiQuestionHub, AI_QUESTION_CUSTOM } from '../dist/ai-questions.js';
+import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from '../dist/ai-questions.js';
 import { withReadBack, dedupeByNorm, normPathKey } from '../dist/read-back.js';
 import { JieLing, JuShu, KanbanCang } from '../../board/dist/index.js';
 
@@ -41,8 +41,8 @@ check('main context-too-small message', /contextTooSmall/.test(main));
 check('runProjectGateOnce exists', /function runProjectGateOnce/.test(main));
 check('gate throttle 3s', /gateRuns/.test(main) && /3000/.test(main));
 const archiveSrc = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/archive-cleanup.ts'), 'utf8');
-check('extractStructuredSummary exists', /export function extractStructuredSummary/.test(archiveSrc));
-check('ArchiveEntry has structured', /structured\?: ArchiveStructured/.test(archiveSrc));
+check('extractStructuredSummary exists', /export function tiQuJieGouHuaZhaiYao/.test(archiveSrc));
+check('档案条目有可选 structured 字段（ArchiveEntry.structured?: ArchiveStructured）', /structured\?: GuiDangJieGou/.test(archiveSrc));
 check('session-summary stores structured', /structured:\s*\{[\s\S]*bullets:/.test(main));
 check('extractKnowledge uses structured events', /structured\.decisions\[0\]/.test(archiveSrc));
 check('panel summary shown for projects (via panelVisibilityFor)', /summary:\s*kind === 'internal' \|\| chat/.test(app));
@@ -50,14 +50,14 @@ check('panel summary shown for projects (via panelVisibilityFor)', /summary:\s*k
 // ── 项目侧摘要 ──
 check('session-summary IPC', /warmy:session-summary/.test(main));
 check('session-summary uses archiver', /archiver\?\.archive/.test(main));
-check('session-summary extracts knowledge', /extractKnowledgeFromArchive/.test(main));
-check('session-summary merges user prefs', /mergeUserPreferences/.test(main));
+check('会话摘要会提炼知识（改名后：extractKnowledgeFromArchive）', /congGuiDangTiQuZhiShi/.test(main));
+check('会话摘要会合并用户偏好（改名后：mergeUserPreferences）', /heBingYongHuPianHao/.test(main));
 check('summary button in renderer', /btn-gen-summary/.test(app));
 check('auto-summary toggle in renderer', /auto-summary-toggle/.test(app));
 check('autoSummary default on in settings', /autoSummary:\s*true/.test(fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/settings-store.ts'), 'utf8')));
 
 // ── 决策卡 ──
-const hub = new AiQuestionHub();
+const hub = new AiWenTiZhongXin();
 const q = hub.open({ groupId: 'g1', title: '是否容器中开发？', options: [{ label: '容器' }, { label: '本机' }] });
 check('ai question allowCustom', q.allowCustom === true);
 // 去重：同标题且仍 pending 时应返回同一张卡
@@ -87,8 +87,8 @@ check('board parent aggregated progress', parent && parent.progress === 80, pare
 
 // ── 项目记忆 + 门禁 (group-store) ──
 const dir = path.join(os.tmpdir(), 'warmy-planD-gs-' + Date.now());
-const { writeJsonAtomicSafe } = await import('../dist/atomic-json.js');
-writeJsonAtomicSafe(path.join(dir, 'groups.json'), {
+const { anQuanYuanZiXieJson } = await import('../dist/atomic-json.js');
+anQuanYuanZiXieJson(path.join(dir, 'groups.json'), {
   version: 1,
   groups: [{ groupId: 'g1', name: 'P', type: 'internal', directedMode: false, dutyInstanceId: null, createdAt: Date.now(), updatedAt: Date.now(), origin: 'ipc' }],
   members: {},

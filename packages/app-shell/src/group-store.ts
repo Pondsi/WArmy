@@ -10,7 +10,7 @@
  * - 单群成员上限与旧实现一致：50
  * - 只做本地存储，不引入任何 electron 依赖，便于脱离主进程直接跑验证脚本
  */
-import { readJsonFileQuarantine, writeJsonAtomicSafe } from './atomic-json.js';
+import { duJsonWenJianGeLi, anQuanYuanZiXieJson } from './atomic-json.js';
 
 /** 与旧实现保持一致的成员上限 */
 export const GROUP_MEMBER_LIMIT = 50;
@@ -19,7 +19,7 @@ export type QunLei = 'internal' | 'external';
 export type GroupMemberRole = 'creator' | 'admin' | 'member';
 export type GroupMemberSource = 'instance' | 'invite' | 'migrated';
 
-export interface GroupRecord {
+export interface qunJilu {
   groupId: string;
   name: string;
   type: QunLei;
@@ -165,7 +165,7 @@ export interface GroupMemberRecord {
 
 export interface GroupStoreState {
   version: 1;
-  groups: GroupRecord[];
+  groups: qunJilu[];
   members: Record<string, GroupMemberRecord[]>;
   /** 旧版会话状态（settings.json 的 state.groups）是否已回填过；只回填一次，避免解散后又被加回来 */
   uiStateMigrated?: boolean;
@@ -174,7 +174,7 @@ export interface GroupStoreState {
 /** IPC 返回形状（显式写出来，配合 safeHandle<T> 的兜底值保持类型一致） */
 export interface GroupListResult {
   ok: boolean;
-  groups: Array<GroupRecord & { memberCount: number; active: boolean }>;
+  groups: Array<qunJilu & { memberCount: number; active: boolean }>;
   count: number;
   error?: string;
 }
@@ -219,14 +219,14 @@ function normalizeType(v: unknown): QunLei {
  * `packages/app-shell/scripts/verify-membership.mjs` 里对两者的对照断言。
  */
 export function sameFingerprintText(a: string, b: string): boolean {
-  const norm = (s: string): string =>
+  const guiFanHua = (s: string): string =>
     String(s || '')
       .toUpperCase()
       .replace(/[^0-9A-Z]/g, '')
       .replace(/[IL]/g, '1')
       .replace(/O/g, '0');
-  const na = norm(a);
-  return na.length > 0 && na === norm(b);
+  const na = guiFanHua(a);
+  return na.length > 0 && na === guiFanHua(b);
 }
 
 /** 把磁盘上的（可能被手改坏的）数据收敛成合法结构 */
@@ -238,11 +238,11 @@ function normalize(raw: unknown): GroupStoreState {
   const seen = new Set<string>();
   for (const g of Array.isArray(src.groups) ? src.groups : []) {
     if (!g || typeof g !== 'object') continue;
-    const rec = g as Partial<GroupRecord>;
+    const rec = g as Partial<qunJilu>;
     const groupId = asString(rec.groupId);
     if (!groupId || seen.has(groupId)) continue;
     seen.add(groupId);
-    const row: GroupRecord = {
+    const row: qunJilu = {
       groupId,
       name: asString(rec.name) || groupId,
       type: normalizeType(rec.type),
@@ -253,11 +253,11 @@ function normalize(raw: unknown): GroupStoreState {
       origin: rec.origin === 'migrated' ? 'migrated' : 'ipc',
     };
     // 旧记录没有 creatorFingerprint → 保持缺失（不编造）
-    const creatorFp = asString(rec.creatorFingerprint);
-    if (creatorFp) row.creatorFingerprint = creatorFp;
+    const chuangJianZheZhiWen = asString(rec.creatorFingerprint);
+    if (chuangJianZheZhiWen) row.creatorFingerprint = chuangJianZheZhiWen;
     // 旧记录没有项目属性 → 保持缺失（上层回退到本机设置的兼容路径，见 projectOf）
-    const proj = normalizeProject(rec.project);
-    if (proj) row.project = proj;
+    const xiangMu = normalizeProject(rec.project);
+    if (xiangMu) row.project = xiangMu;
     out.groups.push(row);
   }
   const membersSrc = src.members && typeof src.members === 'object' ? src.members : {};
@@ -325,9 +325,9 @@ export function normalizeProject(raw: unknown): GroupProjectRecord | undefined {
     const src = asString(rec.directorySource);
     row.directorySource = src === 'creator-picked' ? 'creator-picked' : 'checkpoint-workspace';
   }
-  const avail = asString(rec.availability);
-  row.availability = (['available', 'stopped', 'not-ready', 'not-installed', 'not-chosen'] as const).includes(avail as never)
-    ? (avail as ProjectAvailability)
+  const keYong = asString(rec.availability);
+  row.availability = (['available', 'stopped', 'not-ready', 'not-installed', 'not-chosen'] as const).includes(keYong as never)
+    ? (keYong as ProjectAvailability)
     : 'unknown';
   row.availabilityCode = asString(rec.availabilityCode);
   row.availabilityAt = asNumber(rec.availabilityAt);
@@ -347,17 +347,17 @@ export function normalizeProject(raw: unknown): GroupProjectRecord | undefined {
     if (e) row.ledger.push(e);
   }
   if (row.ledger.length > PROJECT_LEDGER_LIMIT) row.ledger = row.ledger.slice(-PROJECT_LEDGER_LIMIT);
-  const mem = asString(rec.memory);
-  if (mem) row.memory = mem.slice(0, 8000);
+  const jiYi = asString(rec.memory);
+  if (jiYi) row.memory = jiYi.slice(0, 8000);
   if (Array.isArray(rec.gateVerify)) {
     row.gateVerify = rec.gateVerify.map((x) => asString(x)).filter(Boolean).slice(0, 8);
   }
   if (rec.gateLast && typeof rec.gateLast === 'object') {
-    const gl = rec.gateLast as { at?: unknown; pass?: unknown; summary?: unknown };
+    const quanJu = rec.gateLast as { at?: unknown; pass?: unknown; summary?: unknown };
     row.gateLast = {
-      at: asNumber(gl.at) || 0,
-      pass: gl.pass === true,
-      summary: asString(gl.summary).slice(0, 400),
+      at: asNumber(quanJu.at) || 0,
+      pass: quanJu.pass === true,
+      summary: asString(quanJu.summary).slice(0, 400),
     };
   }
   return row;
@@ -371,14 +371,14 @@ export class GroupStore {
 
   /** 一次读盘拿到完整快照（group-list 需要「组 + 成员数」，避免 N 次读文件） */
   snapshot(): GroupStoreState {
-    return normalize(readJsonFileQuarantine<unknown>(this.file, EMPTY));
+    return normalize(duJsonWenJianGeLi<unknown>(this.file, EMPTY));
   }
 
-  listGroups(): GroupRecord[] {
+  listGroups(): qunJilu[] {
     return this.snapshot().groups.slice().sort((a, b) => a.createdAt - b.createdAt);
   }
 
-  getGroup(groupId: string): GroupRecord | undefined {
+  getGroup(groupId: string): qunJilu | undefined {
     return this.snapshot().groups.find((g) => g.groupId === groupId);
   }
 
@@ -470,11 +470,11 @@ export class GroupStore {
     const state = this.snapshot();
     const g = state.groups.find((x) => x.groupId === gid);
     if (!g) return { ok: false, error: 'group not found' };
-    const proj = g.project || emptyProjectRecord();
-    const list = (proj.ledger || []).filter((x) => !(x.path === e.path && x.op === e.op));
+    const xiangMu = g.project || emptyProjectRecord();
+    const list = (xiangMu.ledger || []).filter((x) => !(x.path === e.path && x.op === e.op));
     list.push(e);
-    proj.ledger = list.length > PROJECT_LEDGER_LIMIT ? list.slice(-PROJECT_LEDGER_LIMIT) : list;
-    g.project = proj;
+    xiangMu.ledger = list.length > PROJECT_LEDGER_LIMIT ? list.slice(-PROJECT_LEDGER_LIMIT) : list;
+    g.project = xiangMu;
     g.updatedAt = Date.now();
     const w = this.persist(state);
     if (!w.ok) return { ok: false, error: w.error };
@@ -483,8 +483,8 @@ export class GroupStore {
 
   /** 台账读取（按时间倒序；`limit` 有上限，避免一次把大台账全推给渲染层） */
   listFileAccess(groupId: string, limit = PROJECT_LEDGER_LIMIT): ProjectFileAccessEntry[] {
-    const proj = this.projectOf(groupId);
-    const list = (proj && proj.ledger) || [];
+    const xiangMu = this.projectOf(groupId);
+    const list = (xiangMu && xiangMu.ledger) || [];
     const n = Math.max(1, Math.min(Math.floor(limit) || PROJECT_LEDGER_LIMIT, PROJECT_LEDGER_LIMIT));
     return list.slice().sort((a, b) => b.ts - a.ts).slice(0, n);
   }
@@ -503,7 +503,7 @@ export class GroupStore {
       /** 对端（创建者）的指纹：只在本地还不知道创建者时补上 */
       creatorFingerprint?: string;
     }
-  ): { ok: boolean; group?: GroupRecord; error?: string } {
+  ): { ok: boolean; group?: qunJilu; error?: string } {
     const gid = asString(groupId);
     if (!gid) return { ok: false, error: 'groupId required' };
     // 先确保有这条群记录（成员第一次收到同步时本地可能还没有）
@@ -543,20 +543,20 @@ export class GroupStore {
     origin?: 'ipc' | 'migrated';
     /** 建群者（本机身份）指纹；不确定就**不要传**（留空 = 未知） */
     creatorFingerprint?: string;
-  }): { ok: boolean; group?: GroupRecord; error?: string } {
+  }): { ok: boolean; group?: qunJilu; error?: string } {
     const groupId = asString(input.groupId);
     if (!groupId) return { ok: false, error: 'groupId required' };
     const state = this.snapshot();
     const now = Date.now();
     const existing = state.groups.find((g) => g.groupId === groupId);
-    let group: GroupRecord;
+    let group: qunJilu;
     if (existing) {
       existing.name = asString(input.name) || existing.name;
       existing.type = normalizeType(input.type);
       if (typeof input.directedMode === 'boolean') existing.directedMode = input.directedMode;
       // 只在"本来不知道"时补写，绝不覆盖已知的创建者
-      const creatorFp = asString(input.creatorFingerprint);
-      if (creatorFp && !existing.creatorFingerprint) existing.creatorFingerprint = creatorFp;
+      const chuangJianZheZhiWen = asString(input.creatorFingerprint);
+      if (chuangJianZheZhiWen && !existing.creatorFingerprint) existing.creatorFingerprint = chuangJianZheZhiWen;
       existing.updatedAt = now;
       group = existing;
     } else {
@@ -570,8 +570,8 @@ export class GroupStore {
         updatedAt: now,
         origin: input.origin === 'migrated' ? 'migrated' : 'ipc',
       };
-      const creatorFp = asString(input.creatorFingerprint);
-      if (creatorFp) group.creatorFingerprint = creatorFp;
+      const chuangJianZheZhiWen = asString(input.creatorFingerprint);
+      if (chuangJianZheZhiWen) group.creatorFingerprint = chuangJianZheZhiWen;
       state.groups.push(group);
     }
     if (!state.members[groupId]) state.members[groupId] = [];
@@ -814,7 +814,7 @@ export class GroupStore {
   }
 
   private persist(state: GroupStoreState): { ok: boolean; error?: string } {
-    const r = writeJsonAtomicSafe(this.file, state);
+    const r = anQuanYuanZiXieJson(this.file, state);
     this.lastWriteError = r.ok ? null : r.error || 'write failed';
     return r;
   }

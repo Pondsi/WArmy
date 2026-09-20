@@ -156,21 +156,21 @@
     }
   }
   /** 把下拉菜单 fixed 定位到触发按钮下方，避免被 overflow 裁切 */
-  function positionMenuFixed(trigger, menu) {
-    if (!trigger || !menu) return;
+  function positionMenuFixed(trigger, caiDan) {
+    if (!trigger || !caiDan) return;
     const r = trigger.getBoundingClientRect();
-    menu.style.position = 'fixed';
+    caiDan.style.position = 'fixed';
     // .urg-menu 的 CSS 带 bottom:calc(100% + 6px)，不清掉会与 top 冲突、菜单被拉出视口
-    menu.style.bottom = 'auto';
-    menu.style.right = 'auto';
-    menu.style.zIndex = '500';
-    const mw = menu.offsetWidth || 170;
-    const mh = menu.offsetHeight || 150;
+    caiDan.style.bottom = 'auto';
+    caiDan.style.right = 'auto';
+    caiDan.style.zIndex = '500';
+    const mw = caiDan.offsetWidth || 170;
+    const mh = caiDan.offsetHeight || 150;
     const left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8));
     const below = r.bottom + 4;
     const top = below + mh > window.innerHeight - 8 ? Math.max(8, r.top - 4 - mh) : below;
-    menu.style.left = left + 'px';
-    menu.style.top = top + 'px';
+    caiDan.style.left = left + 'px';
+    caiDan.style.top = top + 'px';
   }
   let __rafThrottle = false;
   function raf(fn) {
@@ -395,8 +395,8 @@
       $('modal-title').textContent = t('avatar.pickTitle');
       const body = $('modal-body');
       body.innerHTML = '';
-      const grid = document.createElement('div');
-      grid.className = 'avatar-grid';
+      const wangGe = document.createElement('div');
+      wangGe.className = 'avatar-grid';
       list.forEach((src, i) => {
         const b = document.createElement('button');
         b.type = 'button';
@@ -410,9 +410,9 @@
           root.classList.add('hidden');
           resolve({ type: 'preset', preset: i + 1 });
         };
-        grid.appendChild(b);
+        wangGe.appendChild(b);
       });
-      body.appendChild(grid);
+      body.appendChild(wangGe);
       const acts = $('modal-actions');
       acts.innerHTML = '';
       const localBtn = document.createElement('button');
@@ -435,18 +435,18 @@
   }
 
   function applyAvatar() {
-    const img = $('selfAvatarImg');
-    const span = $('selfAvatar');
+    const tuPian = $('selfAvatarImg');
+    const kuaDu = $('selfAvatar');
     const src = personAvatarSrc(state.profile);
     if (src) {
-      img.src = src;
-      img.classList.remove('hidden');
-      span.classList.add('hidden');
+      tuPian.src = src;
+      tuPian.classList.remove('hidden');
+      kuaDu.classList.add('hidden');
     } else {
-      img.classList.add('hidden');
-      img.removeAttribute('src');
-      span.classList.remove('hidden');
-      span.textContent = (state.profile.username || t('nav.avatar')).slice(0, 1);
+      tuPian.classList.add('hidden');
+      tuPian.removeAttribute('src');
+      kuaDu.classList.remove('hidden');
+      kuaDu.textContent = (state.profile.username || t('nav.avatar')).slice(0, 1);
     }
   }
 
@@ -461,16 +461,16 @@
   }
 
   /** 相对亮度（WCAG） */
-  function relLuminance(hex) {
+  function relLuminance(shiLiuJin) {
     const ch = [1, 3, 5]
-      .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((i) => parseInt(shiLiuJin.slice(i, i + 2), 16) / 255)
       .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
     return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
   }
 
   /** 该颜色配白字的对比度 */
-  function contrastWithWhite(hex) {
-    return 1.05 / (relLuminance(hex) + 0.05);
+  function contrastWithWhite(shiLiuJin) {
+    return 1.05 / (relLuminance(shiLiuJin) + 0.05);
   }
 
   /**
@@ -489,27 +489,27 @@
     const SAT_TOP = 58;
     const SAT_STEP = 8;
     const FLOOR = 22;
-    const SPAN = 20;
-    const TARGET = 3.0;
+    const kuadu = 20;
+    const mubiao = 3.0;
     const maxLight = (hue, sat) => {
       let l = 64;
-      while (l > 12 && contrastWithWhite(hslToHex(hue, sat, l)) < TARGET) l -= 1;
+      while (l > 12 && contrastWithWhite(hslToHex(hue, sat, l)) < mubiao) l -= 1;
       return l;
     };
-    const cols = [];
+    const lieJi = [];
     for (const h of HUES) {
       const lmax = maxLight(h, SAT_TOP);
-      const lmin = Math.max(FLOOR, lmax - SPAN);
+      const lmin = Math.max(FLOOR, lmax - kuadu);
       const col = [];
       for (let k = 0; k < ROWS; k++) {
         const l = lmax - k * ((lmax - lmin) / (ROWS - 1));
         col.push(hslToHex(h, Math.min(96, SAT_TOP + k * SAT_STEP), l));
       }
-      cols.push(col);
+      lieJi.push(col);
     }
-    const grid = [];
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < HUES.length; c++) grid.push(cols[c][r]);
-    return grid;
+    const wangGe = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < HUES.length; c++) wangGe.push(lieJi[c][r]);
+    return wangGe;
   }
 
   /** 应用主题色（色板与自定义入口共用） */
@@ -537,8 +537,8 @@
       </div>`;
       const input = $('theme-picker-input');
       const swatch = $('theme-picker-swatch');
-      const hex = $('theme-picker-hex');
-      const sync = () => {
+      const shiLiuJin = $('theme-picker-hex');
+      const tongBu = () => {
         if (!input) return;
         const v = String(input.value || '#000000');
         swatch.style.background = v;
@@ -546,13 +546,13 @@
         const r = (n >> 16) & 255;
         const g = (n >> 8) & 255;
         const b = n & 255;
-        hex.textContent = v.toUpperCase() + '   rgb(' + r + ', ' + g + ', ' + b + ')';
+        shiLiuJin.textContent = v.toUpperCase() + '   rgb(' + r + ', ' + g + ', ' + b + ')';
       };
       if (input) {
-        input.oninput = sync;
-        input.onchange = sync;
+        input.oninput = tongBu;
+        input.onchange = tongBu;
       }
-      sync();
+      tongBu();
       // 打开弹窗即直接弹出系统调色板，不需要再点一次色块
       if (input) {
         setTimeout(() => {
@@ -617,14 +617,14 @@
   }
 
   function applyI18n() {
-    document.querySelectorAll('[data-i18n]').forEach((el) => {
-      el.textContent = t(el.getAttribute('data-i18n'));
+    document.querySelectorAll('[data-i18n]').forEach((yuanSu) => {
+      yuanSu.textContent = t(yuanSu.getAttribute('data-i18n'));
     });
-    document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
-      el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((yuanSu) => {
+      yuanSu.placeholder = t(yuanSu.getAttribute('data-i18n-placeholder'));
     });
-    document.querySelectorAll('[data-i18n-title]').forEach((el) => {
-      el.title = t(el.getAttribute('data-i18n-title'));
+    document.querySelectorAll('[data-i18n-title]').forEach((yuanSu) => {
+      yuanSu.title = t(yuanSu.getAttribute('data-i18n-title'));
     });
     $('logo-name').textContent = displayName();
     $('logo-sub').textContent = t('brand.sub');
@@ -703,8 +703,8 @@
 
   function setNav(nav) {
     state.nav = nav;
-    document.querySelectorAll('.rail-item').forEach((el) => {
-      el.classList.toggle('active', el.dataset.nav === nav);
+    document.querySelectorAll('.rail-item').forEach((yuanSu) => {
+      yuanSu.classList.toggle('active', yuanSu.dataset.nav === nav);
     });
     hideMain();
     // 切页即重算右栏：未选中会话时一律隐藏会话卡片（不再出现"成员/进度"空占位）
@@ -756,14 +756,14 @@
     if (nav === 'singleAi' || nav === 'internalGroup' || nav === 'externalGroup' || nav === 'externalChat') {
       const items = listItemsFor(nav);
       const cur = state.selectedChat;
-      const stillHere = !!cur && matchNav(cur, nav) && items.some((c) => c.id === cur.id);
+      const stillHere = !!cur && pipeiDaohang(cur, nav) && items.some((c) => c.id === cur.id);
       if (!stillHere && items.length) {
         openChat(items[0].kind, items[0].id, items[0].name);
         return;
       }
     }
 
-    if (!state.selectedChat || !matchNav(state.selectedChat, nav)) {
+    if (!state.selectedChat || !pipeiDaohang(state.selectedChat, nav)) {
       state.selectedChat = null;
       $('chat-layout').classList.add('hidden');
       $('empty-state').classList.remove('hidden');
@@ -818,7 +818,7 @@
       .map((g) => ({ id: g.id, name: g.name, kind: g.type === 'internal' ? 'internal' : 'extgroup' }));
   }
 
-  function matchNav(sel, nav) {
+  function pipeiDaohang(sel, nav) {
     if (!sel) return false;
     if (nav === 'singleAi') return sel.kind === 'single';
     if (nav === 'internalGroup') return sel.kind === 'internal';
@@ -833,10 +833,10 @@
    */
   function setupListAction() {
     const btn = $('list-action');
-    const joinBtn = $('btn-join-qr');
+    const jiaRuAnNiu = $('btn-join-qr');
     const plusKinds = state.nav === 'internalGroup' || state.nav === 'externalGroup' || state.nav === 'externalChat';
     if (plusKinds && btn) {
-      if (joinBtn) joinBtn.classList.add('hidden'); // 合并进「+」菜单，不再单独显示
+      if (jiaRuAnNiu) jiaRuAnNiu.classList.add('hidden'); // 合并进「+」菜单，不再单独显示
       btn.classList.remove('hidden');
       btn.textContent = '+';
       btn.title = t('list.addMore') || 'Add…';
@@ -874,17 +874,17 @@
 
   function setupListActionLegacy() {
     const btn = $('list-action');
-    const joinBtn = $('btn-join-qr');
-    if (joinBtn) {
+    const jiaRuAnNiu = $('btn-join-qr');
+    if (jiaRuAnNiu) {
       const showJoin = state.nav === 'internalGroup' || state.nav === 'externalGroup' || state.nav === 'externalChat';
-      joinBtn.classList.toggle('hidden', !showJoin);
-      joinBtn.title = t('join.qrHint');
-      if (state.nav === 'internalGroup') joinBtn.textContent = t('nav.addProject');
-      else if (state.nav === 'externalGroup') joinBtn.textContent = t('nav.addGroup');
+      jiaRuAnNiu.classList.toggle('hidden', !showJoin);
+      jiaRuAnNiu.title = t('join.qrHint');
+      if (state.nav === 'internalGroup') jiaRuAnNiu.textContent = t('nav.addProject');
+      else if (state.nav === 'externalGroup') jiaRuAnNiu.textContent = t('nav.addGroup');
       else if (state.nav === 'externalChat') {
         // R4：联系人页**只留这一个**添加按钮——右手那个 #list-action 原本同名同位（已知缺陷）。
-        joinBtn.textContent = t('contact.add');
-        joinBtn.title = t('contact.add');
+        jiaRuAnNiu.textContent = t('contact.add');
+        jiaRuAnNiu.title = t('contact.add');
       }
     }
     if (state.nav === 'internalGroup' || state.nav === 'externalGroup') {
@@ -909,45 +909,45 @@
   }
 
   function row(name, sub, ch, onClick, active, avatarSrc) {
-    const el = document.createElement('div');
-    el.className = 'list-item' + (active ? ' active' : '');
-    if (avatarSrc) el.dataset.av = '1';
-    el.innerHTML = `${avatarSrc ? `<img class="av-img" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}<div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
-    el.title = `${name}\n${sub}`;
-    el.onclick = onClick;
-    return el;
+    const yuanSu = document.createElement('div');
+    yuanSu.className = 'list-item' + (active ? ' active' : '');
+    if (avatarSrc) yuanSu.dataset.av = '1';
+    yuanSu.innerHTML = `${avatarSrc ? `<tuPian class="av-tuPian" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}<div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
+    yuanSu.title = `${name}\n${sub}`;
+    yuanSu.onclick = onClick;
+    return yuanSu;
   }
 
   /** 列表行上的「身份变更待核实」常驻标记（附六：三个入口都能看到） */
-  function attachIdChangeMark(rowEl) {
-    if (!rowEl || rowEl.querySelector('.id-change-mark')) return rowEl;
+  function attachIdChangeMark(hangYuanSu) {
+    if (!hangYuanSu || hangYuanSu.querySelector('.id-change-mark')) return hangYuanSu;
     const m = document.createElement('span');
     m.className = 'id-change-mark';
     m.setAttribute('data-idchg-mark', '1');
     m.textContent = '! ' + t('idchg.pending');
     m.title = t('idchg.title') + ' · ' + t('idchg.marker');
-    rowEl.appendChild(m);
-    return rowEl;
+    hangYuanSu.appendChild(m);
+    return hangYuanSu;
   }
 
   /**
    * R12：停用（stopped）的牛马实例 → 整行灰 + 名字删除线（灰仍须可读，见 --ink-dim）。
    * R11 在成员列表里，列表行这里只处理实例自身的停用态。
    */
-  function applyInstanceRowState(rowEl, inst, sessionKind) {
-    if (!rowEl || !inst) return rowEl;
+  function applyInstanceRowState(hangYuanSu, inst, sessionKind) {
+    if (!hangYuanSu || !inst) return hangYuanSu;
     if (inst.status === 'stopped') {
-      rowEl.classList.add('is-disabled');
-      const nm = rowEl.querySelector('.name');
-      if (nm) nm.classList.add('struck');
+      hangYuanSu.classList.add('is-disabled');
+      const mingCheng = hangYuanSu.querySelector('.name');
+      if (mingCheng) mingCheng.classList.add('struck');
       const b = document.createElement('span');
       b.className = 'row-badge off';
       b.setAttribute('data-state', 'disabled');
       b.textContent = t('group.memberDisabled');
-      rowEl.appendChild(b);
+      hangYuanSu.appendChild(b);
     }
-    if (sessionKind && hasPendingIdChange(sessionKind, inst.id)) attachIdChangeMark(rowEl);
-    return rowEl;
+    if (sessionKind && hasPendingIdChange(sessionKind, inst.id)) attachIdChangeMark(hangYuanSu);
+    return hangYuanSu;
   }
 
   /**
@@ -978,7 +978,7 @@
       state.instances
         .filter((i) => !q || (i.name || '').toLowerCase().includes(q))
         .forEach((inst) => {
-          const rowEl = row(
+          const hangYuanSu = row(
             inst.name || inst.id,
             inst.status === 'running' ? t('instances.running') : t('instances.stopped'),
             (inst.name || 'A')[0],
@@ -993,12 +993,12 @@
             instanceAvatarSrc(inst)
           );
           // 双击实例：跳到「我的牛马」并打开该实例的聊天
-          rowEl.ondblclick = () => {
+          hangYuanSu.ondblclick = () => {
             setNav('singleAi');
             openChat('single', inst.id, inst.name);
           };
-          applyInstanceRowState(rowEl, inst, 'single');
-          box.appendChild(rowEl);
+          applyInstanceRowState(hangYuanSu, inst, 'single');
+          box.appendChild(hangYuanSu);
         });
       return;
     }
@@ -1024,7 +1024,7 @@
       }
       source.forEach((c) => {
         const inst = state.instances.find((x) => x.id === c.id);
-        const rowEl = row(
+        const hangYuanSu = row(
           c.name,
           c.lastPreview || t('list.noReply'),
           c.name[0],
@@ -1033,9 +1033,9 @@
           inst ? instanceAvatarSrc(inst) : null
         );
         const menuInst = inst || { id: c.id, name: c.name, status: 'stopped', notify: true };
-        bindRowContext(rowEl, () => agentMenu(menuInst, rowEl));
-        applyInstanceRowState(rowEl, inst, 'single');
-        box.appendChild(rowEl);
+        bindRowContext(hangYuanSu, () => agentMenu(menuInst, hangYuanSu));
+        applyInstanceRowState(hangYuanSu, inst, 'single');
+        box.appendChild(hangYuanSu);
       });
       return;
     }
@@ -1048,16 +1048,16 @@
         return;
       }
       items.forEach((g) => {
-        const rowEl = row(
+        const hangYuanSu = row(
           g.name,
           `${t('group.type.' + g.type)} · ${g.members?.length || 0}`,
           g.name[0],
           () => openChat(g.type === 'internal' ? 'internal' : 'extgroup', g.id, g.name),
           state.selectedChat?.id === g.id
         );
-        bindRowContext(rowEl, () => groupMenu(g, rowEl));
-        if (hasPendingIdChange(g.type === 'internal' ? 'internal' : 'extgroup', g.id)) attachIdChangeMark(rowEl);
-        box.appendChild(rowEl);
+        bindRowContext(hangYuanSu, () => qunCaidan(g, hangYuanSu));
+        if (hasPendingIdChange(g.type === 'internal' ? 'internal' : 'extgroup', g.id)) attachIdChangeMark(hangYuanSu);
+        box.appendChild(hangYuanSu);
       });
       return;
     }
@@ -1069,9 +1069,9 @@
         return;
       }
       items.forEach((c) => {
-        const rowEl = row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('extdm', c.id, c.name), state.selectedChat?.id === c.id);
-        if (hasPendingIdChange('extdm', c.id)) attachIdChangeMark(rowEl);
-        box.appendChild(rowEl);
+        const hangYuanSu = row(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('extdm', c.id, c.name), state.selectedChat?.id === c.id);
+        if (hasPendingIdChange('extdm', c.id)) attachIdChangeMark(hangYuanSu);
+        box.appendChild(hangYuanSu);
       });
     }
   }
@@ -1085,7 +1085,7 @@
       kind === 'internal' ? t('group.type.internal') : kind.includes('ext') ? t('group.type.external') : t('nav.singleAi');
         window.__refreshSecurity?.();
     state.attachments = [];
-    renderAttach();
+    xuanranFujian();
     renderChat();
     renderQueueBar();
     renderList();
@@ -1163,10 +1163,10 @@
   function updateScrollAffordances(box) {
     const btn = $('scroll-bottom-btn');
     const bub = $('new-msg-bubble');
-    const atBottom = box ? isAtBottom(box) : true;
-    if (btn) btn.classList.toggle('hidden', atBottom);
+    const zaiDiBu = box ? isAtBottom(box) : true;
+    if (btn) btn.classList.toggle('hidden', zaiDiBu);
     if (bub) {
-      if (atBottom || !pendingNewest) {
+      if (zaiDiBu || !pendingNewest) {
         bub.classList.add('hidden');
       } else {
         bub.classList.remove('hidden');
@@ -1278,19 +1278,19 @@
     try {
       const name = (typeof t === 'function' && t('brand.name')) || 'WArmy';
       document.documentElement.style.setProperty('--brand-watermark', `"${String(name)}"`);
-      const el = document.getElementById('list-watermark');
-      if (el) el.setAttribute('data-brand', String(name));
+      const yuanSu = document.getElementById('list-watermark');
+      if (yuanSu) yuanSu.setAttribute('data-brand', String(name));
     } catch { /* noop */ }
   }
 
-  function pushMsg(chatId, role, text, opts) {
+  function tuisongXiaoxi(chatId, role, text, opts) {
     window.__msgs = window.__msgs || {};
     window.__msgs[chatId] = window.__msgs[chatId] || [];
     window.__msgs[chatId].push({ role, text, ts: Date.now() });
     if (state.selectedChat && state.selectedChat.id === chatId) {
       const box = $('messages');
-      const atBottom = box ? isAtBottom(box) : true;
-      if (!atBottom && !(opts && opts.self)) pendingNewest = { text, role };
+      const zaiDiBu = box ? isAtBottom(box) : true;
+      if (!zaiDiBu && !(opts && opts.self)) pendingNewest = { text, role };
     }
   }
 
@@ -1386,11 +1386,11 @@
       if (window.__panelLog.length > 60) window.__panelLog.shift();
     } catch { /* noop */ }
     const set = (id, on) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.classList.toggle('hidden', !on);
-      el.style.display = on ? '' : 'none';
-      el.setAttribute('data-panel-hidden', on ? '0' : '1');
+      const yuanSu = document.getElementById(id);
+      if (!yuanSu) return;
+      yuanSu.classList.toggle('hidden', !on);
+      yuanSu.style.display = on ? '' : 'none';
+      yuanSu.setAttribute('data-panel-hidden', on ? '0' : '1');
     };
     set('project-state-block', v.state);
     set('project-files-block', v.files);
@@ -1539,7 +1539,7 @@
   }
 
   /** 三点菜单：按会话类型显示条目 + 快捷键提示 */
-  function renderMoreMenu() {
+  function xuanranGengduoCaidan() {
     const nav = state.nav;
     const isWork = nav === 'singleAi' || nav === 'internalGroup';
     const isGroupChat = nav === 'internalGroup' || nav === 'externalGroup';
@@ -1819,8 +1819,8 @@
           b.onclick = async () => {
             const id = b.getAttribute('data-aiq-submit');
             const card = host.querySelector(`[data-qid="${CSS.escape(id)}"]`);
-            const val = card ? (card.querySelector('.aiq-input')?.value || '') : '';
-            const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: '__custom__', customText: val });
+            const zhi = card ? (card.querySelector('.aiq-input')?.value || '') : '';
+            const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: '__custom__', customText: zhi });
             if (r2 && r2.ok === false) uiAlert(String(r2.error||''));
             renderAiQuestions();
           };
@@ -1838,18 +1838,18 @@
     const gid = state.selectedChat.id;
     try {
       const r = await window.warmy.projectMemoryGet?.({ sessionId: gid });
-      const mem = (r && r.memory) || '';
+      const jiYi = (r && r.memory) || '';
       box.innerHTML = `<div class="muted">${escapeHtml(t('pm.hint')||'')}</div>
-        <textarea id="pm-text" rows="5" style="width:100%;margin-top:6px">${escapeHtml(mem)}</textarea>
+        <textarea id="pm-text" rows="5" style="width:100%;margin-top:6px">${escapeHtml(jiYi)}</textarea>
         <div style="margin-top:6px"><button class="btn-mini" id="btn-pm-save">${escapeHtml(t('pm.save')||'Save')}</button>
-        <span class="muted" id="pm-msg">${mem ? '' : escapeHtml(t('pm.empty')||'')}</span></div>`;
+        <span class="muted" id="pm-msg">${jiYi ? '' : escapeHtml(t('pm.empty')||'')}</span></div>`;
       const btn = $('btn-pm-save');
       if (btn) btn.onclick = async () => {
-        const val = $('pm-text') ? $('pm-text').value : '';
-        const rr = await window.warmy.projectMemorySet?.({ sessionId: gid, memory: val });
+        const zhi = $('pm-text') ? $('pm-text').value : '';
+        const yunXingJieGuo = await window.warmy.projectMemorySet?.({ sessionId: gid, memory: zhi });
         const msg = $('pm-msg');
         if (msg) {
-          msg.textContent = rr && rr.ok ? t('pm.saved') : (rr?.error || t('pm.readBackFail'));
+          msg.textContent = yunXingJieGuo && yunXingJieGuo.ok ? t('pm.saved') : (yunXingJieGuo?.error || t('pm.readBackFail'));
         }
       };
     } catch {
@@ -1899,9 +1899,9 @@
         };
         li.append(ta, save, del);
       } else {
-        const span = document.createElement('div');
-        span.className = 'q-text';
-        span.textContent = item.text;
+        const kuaDu = document.createElement('div');
+        kuaDu.className = 'q-text';
+        kuaDu.textContent = item.text;
         const edit = document.createElement('button');
         edit.className = 'btn-mini';
         edit.textContent = t('chat.queueEdit');
@@ -1917,30 +1917,30 @@
           renderQueueBar();
           persistUiQueuesSoon();
         };
-        li.append(span, edit, del);
+        li.append(kuaDu, edit, del);
       }
       list.appendChild(li);
     });
   }
 
-  function renderAttach() {
-    const el = $('attach-list');
+  function xuanranFujian() {
+    const yuanSu = $('attach-list');
     if (!state.attachments.length) {
-      el.classList.add('hidden');
-      el.innerHTML = '';
+      yuanSu.classList.add('hidden');
+      yuanSu.innerHTML = '';
       return;
     }
-    el.classList.remove('hidden');
-    el.innerHTML = state.attachments
+    yuanSu.classList.remove('hidden');
+    yuanSu.innerHTML = state.attachments
       .map(
         (a, i) =>
           `<span class="attach-chip">${escapeHtml(a.name)} <button data-i="${i}" title="${escapeHtml(t('chat.queueDelete'))}">×</button></span>`
       )
       .join(' ');
-    el.querySelectorAll('button').forEach((b) => {
+    yuanSu.querySelectorAll('button').forEach((b) => {
       b.onclick = () => {
         state.attachments.splice(Number(b.dataset.i), 1);
-        renderAttach();
+        xuanranFujian();
       };
     });
   }
@@ -1960,7 +1960,7 @@
       queueOf(state.selectedChat.id).forEach((item) => {
         item.editing = false;
       });
-      pushMsg(state.selectedChat.id, 'them', t('chat.stopAll'));
+      tuisongXiaoxi(state.selectedChat.id, 'them', t('chat.stopAll'));
     }
     renderList();
     if (state.nav === 'instances' && state.selectedInstance) renderInstanceDetail();
@@ -1992,14 +1992,14 @@
         try {
           const r = await window.warmy.groupOrchestrate({ groupId: chatId, content: text, urgency: u });
           const reply = r?.reply || `[${u}] ${r?.action || 'ok'}`;
-          pushMsg(chatId, 'them', reply);
+          tuisongXiaoxi(chatId, 'them', reply);
           if (r?.boardEvent) {
             state.board = state.board || { sessions: [], events: [], recent: [] };
             state.board.events = state.board.events || [];
             state.board.events.unshift({ id: 'e' + Date.now(), ts: Date.now(), action: r.boardEvent.split(':')[0], title: r.boardEvent, session: chatId });
           }
         } catch (e) {
-          pushMsg(chatId, 'them', String(e.message || e));
+          tuisongXiaoxi(chatId, 'them', String(e.message || e));
         }
         return;
       }
@@ -2011,19 +2011,19 @@
           insertMode: u === 'P1' ? 'inner' : 'outer',
         });
         if (r?.needsKey) {
-          pushMsg(chatId, 'them', r.reply);
+          tuisongXiaoxi(chatId, 'them', r.reply);
         } else if (r?.ok) {
-          pushMsg(chatId, 'them', r.reply);
+          tuisongXiaoxi(chatId, 'them', r.reply);
           const c = state.chats.find((x) => x.id === chatId);
           if (c) {
             c.lastTs = Date.now();
             c.lastPreview = (r.reply || text).slice(0, 30);
           }
         } else {
-          pushMsg(chatId, 'them', r?.error || t('common.error'));
+          tuisongXiaoxi(chatId, 'them', r?.error || t('common.error'));
         }
       } catch (e) {
-        pushMsg(chatId, 'them', String(e.message || e));
+        tuisongXiaoxi(chatId, 'them', String(e.message || e));
       }
     } finally {
       queueRounds[chatId] = false;
@@ -2104,7 +2104,7 @@
         const item = q.shift();
         persistUiQueuesSoon();
         renderQueueBar();
-        pushMsg(chatId, 'me', item.text);
+        tuisongXiaoxi(chatId, 'me', item.text);
         renderChat();
         if (CHAT_NAVS.has(state.nav)) renderList();
         await deliver(chatId, item.text, item.u);
@@ -2129,7 +2129,7 @@
      * （等同创建者下线）⇒ **拒绝在宿主侧派发这一轮**，而不是静默地在本机编辑项目文件。
      * 这不是"少一个功能"，而是这条安全承诺的全部意义所在（主进程还会再拒一次）。
      */
-    const blocked = await projectDevBlock(id);
+    const blocked = await xiangMuKaiFaKuai(id);
     if (blocked) {
       await uiAlert(fmtKey('container.project.devBlocked', { reason: blocked }), t('container.devEnv.title'));
       return;
@@ -2144,7 +2144,7 @@
       queueOf(id).push({ id: 'q-' + Date.now(), text: full, u, editing: false });
       $('input').value = '';
       state.attachments = [];
-      renderAttach();
+      xuanranFujian();
       renderQueueBar();
       persistUiQueuesSoon();
       if (CHAT_NAVS.has(state.nav)) renderList();
@@ -2153,10 +2153,10 @@
     }
 
     // P0（停止，见 stopAllAi）/ P1（加急）：立即插入 —— 直接派发
-    pushMsg(id, 'me', full);
+    tuisongXiaoxi(id, 'me', full);
     $('input').value = '';
     state.attachments = [];
-    renderAttach();
+    xuanranFujian();
     renderChat();
 
     await deliver(id, text, u);
@@ -2176,8 +2176,8 @@
     // 收集会话列表（真实数据优先）
     let groups = [];
     try {
-      const gl = await window.warmy.groupList();
-      if (gl?.ok && Array.isArray(gl.groups)) groups = gl.groups;
+      const quanJu = await window.warmy.groupList();
+      if (quanJu?.ok && Array.isArray(quanJu.groups)) groups = quanJu.groups;
     } catch { groups = state.groups || []; }
     if (!groups.length) groups = state.groups || [];
 
@@ -2528,11 +2528,11 @@
       function updateAddDelState() {
         const full = selectedFull();
         const inChain = full && (inst2.chain || []).includes(full);
-        const addBtn = $('i-add-model');
+        const tianJiaAnNiu = $('i-add-model');
         const delBtn = $('i-del-model');
-        if (addBtn) {
-          addBtn.disabled = !full || inChain;
-          addBtn.style.opacity = addBtn.disabled ? 0.45 : 1;
+        if (tianJiaAnNiu) {
+          tianJiaAnNiu.disabled = !full || inChain;
+          tianJiaAnNiu.style.opacity = tianJiaAnNiu.disabled ? 0.45 : 1;
         }
         if (delBtn) {
           delBtn.disabled = !full || !inChain;
@@ -2610,23 +2610,23 @@
   }
 
   /**
-   * 凭证的**遮蔽显示**：只露前三后三，中间用**等长的「牛马」**填满。
+   * 凭证的**遮蔽显示**：只露前三后三，中间每一组都用「牛马」两个字写满。
    *
-   * 为什么要遮：凭证就是私钥，屏幕上把它完整摆着，旁边有人看一眼/截个图就等于泄露；
-   * 为什么用等长填充：长度本身也是信息（眼睛不点开也能看出"这是一串 51 位凭证"），
-   * 而且遮罩长度一致 ⇒ 点开前后**排版不跳**。
+   * 为什么要遮：凭证就是私钥，屏幕上把它完整摆着，旁边有人看一眼/截个图就等于泄露。
+   * 遮蔽的形状（产品主定稿）：**按原有分组来**，每个 `-` 之间就是「牛马」**两个字**
+   *（不是"凑够三个字"）—— 所以遮住时整串比全貌短，但**组数与分隔位置完全一致**：
+   * 一眼能看出"这是一串 17 组、51 位的凭证"，又能看出哪些组被遮住了。
    */
   function maskCredential(value) {
-    const s = String(value || '').replace(/[\s-]+/g, '');
-    if (s.length <= 6) return s || '—';
-    const hidden = s.length - 6;
-    const unit = '牛马';
-    const masked = unit.repeat(Math.ceil(hidden / unit.length)).slice(0, hidden);
-    const raw = s.slice(0, 3) + masked + s.slice(-3);
-    // 与全貌使用**同一套分组**（每 3 位一组），点开前后宽度稳定
+    const s = String(value || '');
+    if (!s) return '—';
+    // 允许传"已分组的字符串"或"原始串"：先按 3 位切组，与 formatCredential 的分组口径一致
+    const raw = s.replace(/[\s-]+/g, '');
+    if (raw.length <= 6) return s;
     const parts = [];
     for (let i = 0; i < raw.length; i += 3) parts.push(raw.slice(i, i + 3));
-    return parts.join('-');
+    if (parts.length <= 2) return parts.join('-');
+    return [parts[0], ...parts.slice(1, -1).map(() => '牛马'), parts[parts.length - 1]].join('-');
   }
 
   /** 小眼睛图标（内联 SVG，不依赖字体/emoji） */
@@ -2718,22 +2718,22 @@
        * 拿不到就什么都不改（宁可不动，也不显示半截凭证）。
        */
       $('btn-me-id-eye')?.addEventListener('click', async () => {
-        const el = $('me-id-val');
-        if (!el) return;
-        if (!el.dataset.full || !el.dataset.raw) {
+        const yuanSu = $('me-id-val');
+        if (!yuanSu) return;
+        if (!yuanSu.dataset.full || !yuanSu.dataset.raw) {
           try {
             const info = await window.warmy.credentialInfo?.();
             if (info?.ok && info.credential) {
-              el.dataset.raw = info.credential;
-              el.dataset.full = info.formatted || info.credential;
-              el.textContent = maskCredential(info.credential);
+              yuanSu.dataset.raw = info.credential;
+              yuanSu.dataset.full = info.formatted || info.credential;
+              yuanSu.textContent = maskCredential(info.credential);
             }
           } catch { /* noop */ }
         }
-        if (!el.dataset.full && !el.dataset.raw) return;
-        const shown = el.dataset.shown === '1';
-        el.dataset.shown = shown ? '0' : '1';
-        el.textContent = shown ? maskCredential(el.dataset.raw || '') : (el.dataset.full || el.dataset.raw || '');
+        if (!yuanSu.dataset.full && !yuanSu.dataset.raw) return;
+        const shown = yuanSu.dataset.shown === '1';
+        yuanSu.dataset.shown = shown ? '0' : '1';
+        yuanSu.textContent = shown ? maskCredential(yuanSu.dataset.raw || '') : (yuanSu.dataset.full || yuanSu.dataset.raw || '');
         const btn = $('btn-me-id-eye');
         if (btn) {
           const label = shown ? t('me.showFull') : t('me.hideFull');
@@ -2743,13 +2743,13 @@
         }
       });
       $('btn-me-id-copy')?.addEventListener('click', async () => {
-        const el = $('me-id-val');
-        const v = (el && el.dataset.raw) || (el && el.textContent) || '';
+        const yuanSu = $('me-id-val');
+        const v = (yuanSu && yuanSu.dataset.raw) || (yuanSu && yuanSu.textContent) || '';
         try { await navigator.clipboard.writeText(v); uiAlert(t('contact.mineCopied')); } catch { uiAlert(t('contact.mineCopyFail')); }
       });
       $('btn-me-cred-copy')?.addEventListener('click', async () => {
-        const el = $('me-id-val');
-        const v = (el && el.dataset.raw) || (el && el.textContent) || '';
+        const yuanSu = $('me-id-val');
+        const v = (yuanSu && yuanSu.dataset.raw) || (yuanSu && yuanSu.textContent) || '';
         try { await navigator.clipboard.writeText(v); uiAlert(t('contact.mineCopied')); } catch { uiAlert(t('contact.mineCopyFail')); }
       });
       /**
@@ -2761,8 +2761,8 @@
         if (!(await uiConfirm(t('me.changeCred') + '?'))) return;
         const r = await window.warmy.credentialRotate?.().catch(() => null);
         if (r?.ok && r.credential) {
-          const el = $('me-id-val');
-          if (el) { el.textContent = r.formatted || r.credential; el.dataset.raw = r.credential; }
+          const yuanSu = $('me-id-val');
+          if (yuanSu) { yuanSu.textContent = r.formatted || r.credential; yuanSu.dataset.raw = r.credential; }
           uiAlert(t('me.credRotated'));
         } else {
           uiAlert(String(r?.error || 'fail'));
@@ -2784,10 +2784,10 @@
         cancel.className = 'btn-mini';
         cancel.textContent = t('common.cancel') || 'Cancel';
         cancel.onclick = () => root.classList.add('hidden');
-        const okBtn = document.createElement('button');
-        okBtn.className = 'btn-primary';
-        okBtn.textContent = t('common.ok') || 'OK';
-        okBtn.onclick = async () => {
+        const QueDingAnNiu = document.createElement('button');
+        QueDingAnNiu.className = 'btn-primary';
+        QueDingAnNiu.textContent = t('common.ok') || 'OK';
+        QueDingAnNiu.onclick = async () => {
           const backupJson = $('me-backup-json')?.value || '';
           const passphrase = $('me-backup-pass')?.value || '';
           const r = await window.warmy.identityBackupImport?.({ backupJson, passphrase }).catch(() => null);
@@ -2799,14 +2799,14 @@
              * 主进程会从恢复出来的私钥**反推出对应的凭证**并写回配置，这里直接读回来显示。
              */
             const info = await window.warmy.credentialInfo?.().catch(() => null);
-            const el = $('me-id-val');
-            if (el && info?.ok && info.credential) { el.textContent = info.formatted || info.credential; el.dataset.raw = info.credential; }
+            const yuanSu = $('me-id-val');
+            if (yuanSu && info?.ok && info.credential) { yuanSu.textContent = info.formatted || info.credential; yuanSu.dataset.raw = info.credential; }
             setTimeout(() => root.classList.add('hidden'), 600);
           } else if (msg) {
             msg.textContent = String(r?.error || 'fail');
           }
         };
-        acts.append(cancel, okBtn);
+        acts.append(cancel, QueDingAnNiu);
         root.classList.remove('hidden');
       });
       // click name -> edit
@@ -2845,13 +2845,13 @@
       };
       // 邮箱：格式正确即**即时保存**（不提供"保存资料"按钮）
       (function bindEmailAutoSave() {
-        const inp = $('p-email');
+        const shuRu = $('p-email');
         const msg = $('p-email-msg');
-        if (!inp) return;
+        if (!shuRu) return;
         let lastSaved = state.profile.email || '';
         const valid = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
-        const sync = () => {
-          const v = String(inp.value || '').trim();
+        const tongBu = () => {
+          const v = String(shuRu.value || '').trim();
           if (!v) {
             if (msg) msg.textContent = '';
             if (lastSaved) { state.profile.email = ''; saveProfile(); lastSaved = ''; }
@@ -2859,10 +2859,10 @@
           }
           if (!valid(v)) {
             if (msg) msg.textContent = t('me.emailInvalid') || 'Invalid email';
-            inp.classList.add('invalid');
+            shuRu.classList.add('invalid');
             return;
           }
-          inp.classList.remove('invalid');
+          shuRu.classList.remove('invalid');
           if (v !== lastSaved) {
             state.profile.email = v;
             saveProfile();
@@ -2871,8 +2871,8 @@
             setTimeout(() => { if (msg) msg.textContent = ''; }, 1500);
           }
         };
-        inp.addEventListener('input', sync);
-        inp.addEventListener('blur', sync);
+        shuRu.addEventListener('input', tongBu);
+        shuRu.addEventListener('blur', tongBu);
       })();
       renderDashboard($('dash-host'));
       return;
@@ -3288,12 +3288,12 @@
       // 可由 settings.json / 环境变量 WARMY_UPDATE_FEED_URL / IPC updateSourceSet 写入。
       // 这里不再渲染入口，也不再调用 updateSourceGet/Set。
       $('btn-about-update').onclick = async () => {
-        const el = $('about-upd');
-        if (el) el.textContent = t('about.checking');
+        const yuanSu = $('about-upd');
+        if (yuanSu) yuanSu.textContent = t('about.checking');
         // 主进程会区分「未配置 / 网络失败 / HTTP 错误 / 格式非法 / 已最新 / 有更新」，
         // 不能只看 upToDate —— 那会把「未配置」误报成「发现新版本」。
         const r = await window.warmy.checkUpdate().catch(() => null);
-        if (el) el.textContent = updateStatusText(r);
+        if (yuanSu) yuanSu.textContent = updateStatusText(r);
       };
       (async () => {
         try {
@@ -3311,11 +3311,11 @@
       })();
       // 记忆系统状态（产品重点：JSONL + FTS + 向量；未就绪如实显示）
       (async () => {
-        const el = $('about-memory');
+        const yuanSu = $('about-memory');
         const msg = $('about-memory-msg');
         const btn = $('btn-memory-rebuild');
-        const renderMem = (st) => {
-          if (!el) return;
+        const xuanranJiyi = (st) => {
+          if (!yuanSu) return;
           const ready = !!st?.ready;
           const line1 = ready ? t('memory.ready') : t('memory.notReady');
           const vec = st?.vector?.vector || st?.vector || null;
@@ -3331,40 +3331,40 @@
             const s = st?.stats?.stats || st?.stats || null;
             if (s && typeof s === 'object') recText = JSON.stringify(s).slice(0, 120);
           } catch { /* noop */ }
-          el.textContent = `${line1} · ${t('memory.vector')}: ${vecText} · ${t('memory.records')}: ${recText}`;
+          yuanSu.textContent = `${line1} · ${t('memory.vector')}: ${vecText} · ${t('memory.records')}: ${recText}`;
         };
         try {
           const st = await window.warmy.memoryStatus?.();
-          renderMem(st);
+          xuanranJiyi(st);
         } catch (e) {
-          if (el) el.textContent = t('memory.notReady');
+          if (yuanSu) yuanSu.textContent = t('memory.notReady');
         }
         if (btn) {
           btn.onclick = async () => {
             if (msg) msg.textContent = '';
             const r = await window.warmy.memoryRebuild?.().catch((e) => ({ ok: false, error: String(e) }));
             if (msg) msg.textContent = r?.ok ? t('memory.rebuildOk') : `${t('memory.rebuildFail')}${r?.error ? ' · ' + r.error : ''}`;
-            try { renderMem(await window.warmy.memoryStatus?.()); } catch { /* noop */ }
+            try { xuanranJiyi(await window.warmy.memoryStatus?.()); } catch { /* noop */ }
           };
         }
       })();
 
       // 设置：第二列是菜单，第三列只显示对应板块
       (function bindSettingsMenu() {
-        const contentEl = $('settings-content');
-        if (!contentEl) return;
+        const neirongYuansu = $('settings-content');
+        if (!neirongYuansu) return;
         const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'plugin', 'hotkey', 'about'];
         const groups = { ui: [], notify: [], model: [], func: [], skill: [], plugin: [], hotkey: [], about: [] };
         let curSec = 'ui';
-        Array.from(contentEl.children).forEach((el) => {
-          const ds = el.getAttribute && el.getAttribute('data-sec');
+        Array.from(neirongYuansu.children).forEach((yuanSu) => {
+          const ds = yuanSu.getAttribute && yuanSu.getAttribute('data-sec');
           if (ds) curSec = ds;
-          if (groups[curSec]) groups[curSec].push(el);
+          if (groups[curSec]) groups[curSec].push(yuanSu);
         });
         const navBtns = Array.from(document.querySelectorAll('#settings-nav button'));
         const showSec = (s) => {
           settingsSection = s;   // 记住当前分区：renderPage() 后要回到这里
-          secIds.forEach((k) => groups[k].forEach((el) => { el.style.display = k === s ? '' : 'none'; }));
+          secIds.forEach((k) => groups[k].forEach((yuanSu) => { yuanSu.style.display = k === s ? '' : 'none'; }));
           navBtns.forEach((b) => b.classList.toggle('on', b.dataset.sec === s));
         };
         navBtns.forEach((btn) => { btn.onclick = () => showSec(btn.dataset.sec); });
@@ -3387,8 +3387,8 @@
         let backup = snap();
         const readForm = () => {
           const emailNotify = { complete: false, request: false, error: false };
-          document.querySelectorAll('#notify-email-card [data-email-k], #smtp-email-notify2 [data-email-k]').forEach((el) => {
-            emailNotify[el.dataset.emailK] = !!el.checked;
+          document.querySelectorAll('#notify-email-card [data-email-k], #smtp-email-notify2 [data-email-k]').forEach((yuanSu) => {
+            emailNotify[yuanSu.dataset.emailK] = !!yuanSu.checked;
           });
           // sound checkboxes
           const sound = {
@@ -3414,8 +3414,8 @@
           if ($('s-complete')) $('s-complete').checked = !!backup.sound.complete;
           if ($('s-request')) $('s-request').checked = !!backup.sound.request;
           if ($('s-error')) $('s-error').checked = !!backup.sound.error;
-          document.querySelectorAll('[data-email-k]').forEach((el) => {
-            el.checked = !!(backup.emailNotify && backup.emailNotify[el.dataset.emailK]);
+          document.querySelectorAll('[data-email-k]').forEach((yuanSu) => {
+            yuanSu.checked = !!(backup.emailNotify && backup.emailNotify[yuanSu.dataset.emailK]);
           });
           window.warmy.settingsSave({ emailNotify: backup.emailNotify, sound: backup.sound }).catch(() => {});
           const m = $('notify-apply-msg');
@@ -3503,10 +3503,10 @@
       function renderPluginList() {
         const box = $('plug-list');
         if (!box) return;
-        const known = ['dsh-agent-teams', 'dsh-memory-plus', 'warmy-board-tools'];
+        const yiZhi = ['dsh-agent-teams', 'dsh-memory-plus', 'warmy-board-tools'];
         const pick = $('plug-pick');
         if (pick) {
-          pick.innerHTML = known.map((k) => '<option value="' + escapeHtml(k) + '">' + escapeHtml(k) + '</option>').join('');
+          pick.innerHTML = yiZhi.map((k) => '<option value="' + escapeHtml(k) + '">' + escapeHtml(k) + '</option>').join('');
         }
         box.innerHTML = (state.plugins || []).map((p, idx) => {
           return '<div class="ctg-row" data-plugin-idx="' + idx + '">' +
@@ -3605,21 +3605,21 @@
         }
         const btnCustom = document.getElementById('btn-theme-custom');
         const color = () => document.getElementById('tcp-color');
-        const hex = () => document.getElementById('tcp-hex');
+        const shiLiuJin = () => document.getElementById('tcp-hex');
         const prev = () => document.getElementById('tcp-preview');
-        const sync = (v) => {
+        const tongBu = (v) => {
           if (!v) return;
           if (color()) color().value = v;
-          if (hex()) hex().value = v;
+          if (shiLiuJin()) shiLiuJin().value = v;
           if (prev()) prev().style.background = v;
         };
         btnCustom?.addEventListener('click', () => {
           panel.classList.toggle('hidden');
-          sync(state.theme || '#07c160');
+          tongBu(state.theme || '#07c160');
         });
-        color()?.addEventListener('input', () => sync(color().value));
-        hex()?.addEventListener('change', () => {
-          let v = String(hex().value || '').trim();
+        color()?.addEventListener('input', () => tongBu(color().value));
+        shiLiuJin()?.addEventListener('change', () => {
+          let v = String(shiLiuJin().value || '').trim();
           if (/^[\d,\s]+$/.test(v)) {
             const p = v.split(/[\s,]+/).filter(Boolean).map(Number);
             if (p.length >= 3) {
@@ -3627,7 +3627,7 @@
               v = '#' + to2(p[0]) + to2(p[1]) + to2(p[2]);
             }
           }
-          if (/^#[0-9a-fA-F]{6}$/.test(v)) sync(v.toLowerCase());
+          if (/^#[0-9a-fA-F]{6}$/.test(v)) tongBu(v.toLowerCase());
         });
         document.getElementById('tcp-cancel')?.addEventListener('click', () => panel.classList.add('hidden'));
         document.getElementById('tcp-ok')?.addEventListener('click', () => {
@@ -3640,7 +3640,7 @@
             if (window.EyeDropper) {
               const ed = new window.EyeDropper();
               const res = await ed.open();
-              if (res && res.sRGBHex) sync(res.sRGBHex);
+              if (res && res.sRGBHex) tongBu(res.sRGBHex);
             } else {
               uiAlert(t('settings.pickScreenColor') + ' · unsupported');
             }
@@ -3668,8 +3668,8 @@
           action.title = t('list.addMore');
           action.onclick = (e) => {
             e.stopPropagation();
-            const menu = $('list-add-menu');
-            if (menu) { menu.classList.toggle('hidden'); return; }
+            const caiDan = $('list-add-menu');
+            if (caiDan) { caiDan.classList.toggle('hidden'); return; }
             const m = document.createElement('div');
             m.id = 'list-add-menu';
             m.className = 'urg-menu';
@@ -3783,8 +3783,8 @@
       $('sel-sec').onchange = async (e) => {
         const next = e.target.value;
         if (next === 'full') {
-          const okGo = await uiConfirmCountdown(t('sec.confirmBody'), t('sec.confirmTitle'), 5);
-          if (!okGo) {
+          const keZhiXing = await uiConfirmCountdown(t('sec.confirmBody'), t('sec.confirmTitle'), 5);
+          if (!keZhiXing) {
             e.target.value = state.globalSecurity;
             syncSecDesc();
             return;
@@ -3803,10 +3803,10 @@
           state.sound[k] = e.target.checked;
         };
       });
-      document.querySelectorAll('[data-email-k]').forEach((el) => {
-        el.onchange = () => {
+      document.querySelectorAll('[data-email-k]').forEach((yuanSu) => {
+        yuanSu.onchange = () => {
           state.emailNotify = state.emailNotify || { complete: false, request: true, error: true };
-          state.emailNotify[el.dataset.emailK] = el.checked;
+          state.emailNotify[yuanSu.dataset.emailK] = yuanSu.checked;
           window.warmy.settingsSave({ emailNotify: state.emailNotify });
         };
       });
@@ -3999,8 +3999,8 @@
         if (r?.ok) {
           state.smtpFull = (state.smtpFull || []).concat([acc]);
           ['smtp-label', 'smtp-host', 'smtp-user', 'smtp-pass'].forEach((id) => {
-            const el = $(id);
-            if (el) el.value = '';
+            const yuanSu = $(id);
+            if (yuanSu) yuanSu.value = '';
           });
           $('smtp-msg').textContent = t('instances.saved');
         } else {
@@ -4016,11 +4016,11 @@
        * 用户刚加完一个供应商就能在第一个看到它，不用往下翻。
        */
       [...state.providers].reverse().forEach((pr) => {
-        const el = document.createElement('div');
-        el.className = 'prov-card';
+        const yuanSu = document.createElement('div');
+        yuanSu.className = 'prov-card';
         // 名称重复 ⇒ 这张卡片整体不可用：输入框与它下面的模型一起标红并给出原因
         const nameDup = providerLabelDupCount(pr.label, pr.id) > 0;
-        el.innerHTML =
+        yuanSu.innerHTML =
           '<div class="prov-head" style="display:flex;justify-content:space-between;align-items:center">' +
           '<span>' + escapeHtml(pr.label) + '</span>' +
           '<button class="btn-mini" data-prov-del="' + escapeHtml(pr.id) + '" title="' + t('settings.pluginUninstall') + '">' + t('settings.pluginUninstall') + '</button>' +
@@ -4036,17 +4036,17 @@
             .map((m) => {
               const usedBy = modelUsageCache.get(m) || [];
               const inUse = usedBy.length > 0;
-              const stale = !!(pr.staleModels && pr.staleModels[m]);
+              const GuoQi = !!(pr.staleModels && pr.staleModels[m]);
               const dup = nameDup;
               /**
                * 悬停必须说清**为什么红**：重名 > 需重新拉取 > 正在被谁占用（可叠加）。
                */
               const tips = [];
               if (dup) tips.push(t('settings.providerNameDup'));
-              if (stale) tips.push(fmtKey('settings.modelStaleTip', {}));
+              if (GuoQi) tips.push(fmtKey('settings.modelStaleTip', {}));
               if (inUse) tips.push(fmtKey('settings.modelInUseTip', { who: usedBy.join(' / ') }));
               if (!tips.length) tips.push(t('settings.modelSetDefault'));
-              return '<span class="model-chip' + ((inUse || stale || dup) ? ' in-use' : '') + '" data-m="' + escapeHtml(m) + '" title="' + escapeHtml(tips.join(' · ')) + '">' +
+              return '<span class="model-chip' + ((inUse || GuoQi || dup) ? ' in-use' : '') + '" data-m="' + escapeHtml(m) + '" title="' + escapeHtml(tips.join(' · ')) + '">' +
                 escapeHtml(m) +
                 '<button class="x" data-del="' + escapeHtml(m) + '" title="' + t('settings.removeModel') + '">×</button></span>';
             })
@@ -4054,12 +4054,12 @@
           '</div>' +
           '<div class="muted" data-models-note style="font-size:11px">' +
           (nameDup ? escapeHtml(t('settings.providerNameDup')) : '') + '</div>';
-        el.querySelectorAll('input[data-k]').forEach((inp) => {
-          inp.onchange = async () => {
-            const key = inp.dataset.k;
+        yuanSu.querySelectorAll('input[data-k]').forEach((shuRu) => {
+          shuRu.onchange = async () => {
+            const key = shuRu.dataset.k;
             const before = pr[key];
-            pr[key] = inp.value;
-            if (before === inp.value) return;
+            pr[key] = shuRu.value;
+            if (before === shuRu.value) return;
             /**
              * 产品规则（本轮修正）：改**名称 / 接口地址 / 密钥**任何一项，
              * 该供应商下的模型**全部不删**，而是先标红（stale）＝"可能无法正常使用，
@@ -4079,15 +4079,15 @@
                * 密钥**只进安全存储**（safeStorage），并且界面读不回明文。
                * 主进程拒绝写明文时（no-safe-storage）如实告诉用户，不假装保存成功。
                */
-              const typed = inp.value;
-              const r = await window.warmy.providerKeySet?.({ providerId: pr.id, apiKey: typed });
+              const yiLeiXing = shuRu.value;
+              const r = await window.warmy.providerKeySet?.({ providerId: pr.id, apiKey: yiLeiXing });
               if (r?.ok) {
                 pr.hasKey = true;
                 pr.apiKey = '';
-                inp.value = '';
-                inp.placeholder = t('settings.keySaved');
+                shuRu.value = '';
+                shuRu.placeholder = t('settings.keySaved');
               } else {
-                const note = el.querySelector('[data-models-note]');
+                const note = yuanSu.querySelector('[data-models-note]');
                 if (note) note.textContent = fmtKey('settings.keySaveFailed', { err: String(r?.error || '') });
               }
             }
@@ -4099,10 +4099,10 @@
             renderPage();
           };
         });
-        el.querySelector('[data-fetch]').onclick = async () => {
-          const btn = el.querySelector('[data-fetch]');
+        yuanSu.querySelector('[data-fetch]').onclick = async () => {
+          const btn = yuanSu.querySelector('[data-fetch]');
           btn.textContent = t('common.loading');
-          const note0 = el.querySelector('[data-models-note]');
+          const note0 = yuanSu.querySelector('[data-models-note]');
           // 当前生效的供应商（离开这个卡片时拉取也要用对端点/密钥）——密钥由主进程按 id 解出
           await window.warmy.setProvider({
             presetId: pr.id,
@@ -4115,16 +4115,16 @@
             const fetched = new Set(r.models);
             const prev = pr.models || [];
             // 又被拉到的模型 ⇒ 恢复正常
-            const stale = { ...(pr.staleModels || {}) };
-            fetched.forEach((m) => { delete stale[m]; });
+            const GuoQi = { ...(pr.staleModels || {}) };
+            fetched.forEach((m) => { delete GuoQi[m]; });
             // 没被拉到：**没人在用就删除**；正在被使用则保留（继续标红，悬停显示占用位置）
             modelUsageCache = await collectModelUsage();
             const kept = prev.filter((m) => fetched.has(m) || modelUsageCache.has(m));
-            kept.forEach((m) => { if (!fetched.has(m)) stale[m] = true; });
+            kept.forEach((m) => { if (!fetched.has(m)) GuoQi[m] = true; });
             pr.models = [...new Set([...kept, ...r.models])];
-            pr.staleModels = stale;
+            pr.staleModels = GuoQi;
             const droppedN = prev.filter((m) => !kept.includes(m)).length;
-            const stillStale = pr.models.filter((m) => stale[m]).length;
+            const stillStale = pr.models.filter((m) => GuoQi[m]).length;
             if (note0) {
               note0.textContent = [
                 droppedN ? fmtKey('settings.modelsDropped', { n: String(droppedN) }) : '',
@@ -4138,7 +4138,7 @@
           await saveProviders();
           renderPage();
         };
-        el.querySelectorAll('[data-del]').forEach((btn) => {
+        yuanSu.querySelectorAll('[data-del]').forEach((btn) => {
           btn.onclick = async (e) => {
             e.stopPropagation();
             pr.models = (pr.models || []).filter((m) => m !== btn.dataset.del);
@@ -4146,7 +4146,7 @@
             renderPage();
           };
         });
-        el.querySelector('[data-prov-del]')?.addEventListener('click', async (e) => {
+        yuanSu.querySelector('[data-prov-del]')?.addEventListener('click', async (e) => {
           e.stopPropagation();
           state.providers = state.providers.filter((x) => x.id !== pr.id);
           // 供应商删掉 ⇒ 它那把密钥也不再留：安全存储里一并清掉
@@ -4154,7 +4154,7 @@
           await saveProviders();
           renderPage();
         });
-        el.querySelectorAll('.model-chip').forEach((chip) => {
+        yuanSu.querySelectorAll('.model-chip').forEach((chip) => {
           chip.onclick = async () => {
             pr.defaultModel = chip.dataset.m;
             await window.warmy.setProvider({
@@ -4167,7 +4167,7 @@
             renderPage();
           };
         });
-        prov.appendChild(el);
+        prov.appendChild(yuanSu);
       });
       // ── 供应商预设（常用 10 家 + 其他）──
       const PROVIDER_PRESETS = [
@@ -4230,12 +4230,12 @@
           usage.set(k, cur);
         };
         (state.instances || []).forEach((inst) => {
-          const nm = inst.name || inst.id;
-          add(inst.model, t('instances.model') + ' · ' + nm);
-          add(inst.defaultModel, t('instances.defaultModel') + ' · ' + nm);
+          const mingCheng = inst.name || inst.id;
+          add(inst.model, t('instances.model') + ' · ' + mingCheng);
+          add(inst.defaultModel, t('instances.defaultModel') + ' · ' + mingCheng);
           const mc = inst.modelConfig || {};
-          add(mc.model, t('instances.model') + ' · ' + nm);
-          (mc.chain || inst.fallbackChain || []).forEach((m) => add(typeof m === 'string' ? m : m && m.model, t('instances.fallbackChain') + ' · ' + nm));
+          add(mc.model, t('instances.model') + ' · ' + mingCheng);
+          (mc.chain || inst.fallbackChain || []).forEach((m) => add(typeof m === 'string' ? m : m && m.model, t('instances.fallbackChain') + ' · ' + mingCheng));
         });
         try {
           const sp = await window.warmy.specialModelsGet?.();
@@ -4253,8 +4253,8 @@
       void collectModelUsage().then((u) => { modelUsageCache = u; });
 
       function provCount() {
-        const el = $('prov-count');
-        if (el) el.textContent = `${state.providers.length}/${PROVIDER_MAX}`;
+        const yuanSu = $('prov-count');
+        if (yuanSu) yuanSu.textContent = `${state.providers.length}/${PROVIDER_MAX}`;
       }
 
       (function bindPresetSelect() {
@@ -4398,9 +4398,9 @@
 
   /** 组网层 IPC：桩优先，其次真实 IPC，都没有则 null（= 未就绪） */
   function netIpc(name, ...args) {
-    const stub = window.__warmyNetStub;
-    if (stub && typeof stub[name] === 'function') {
-      try { return Promise.resolve(stub[name](...args)); } catch (e) { return Promise.reject(e); }
+    const zhuang = window.__warmyNetStub;
+    if (zhuang && typeof zhuang[name] === 'function') {
+      try { return Promise.resolve(zhuang[name](...args)); } catch (e) { return Promise.reject(e); }
     }
     const api = window.warmy && window.warmy[name];
     if (typeof api === 'function') {
@@ -4411,9 +4411,9 @@
 
   /** 身份层 IPC：同上（window.warmy.identity*） */
   function idIpc(name, ...args) {
-    const stub = window.__warmyIdentityStub;
-    if (stub && typeof stub[name] === 'function') {
-      try { return Promise.resolve(stub[name](...args)); } catch (e) { return Promise.reject(e); }
+    const zhuang = window.__warmyIdentityStub;
+    if (zhuang && typeof zhuang[name] === 'function') {
+      try { return Promise.resolve(zhuang[name](...args)); } catch (e) { return Promise.reject(e); }
     }
     const api = window.warmy && window.warmy[name];
     if (typeof api === 'function') {
@@ -4765,14 +4765,14 @@
   /** 本地实例（成员可能是邀请来的人，没有实例） */
   function localInstanceOf(member) {
     const id = String(member.instanceId || member.id || member.name || '');
-    const nm = String(member.name || '');
-    return (state.instances || []).find((i) => i.id === id || i.name === nm) || null;
+    const mingCheng = String(member.name || '');
+    return (state.instances || []).find((i) => i.id === id || i.name === mingCheng) || null;
   }
 
   /** 成员三态 + 停用（R11/R12）：disabled 优先，其次组网关闭，再次异地离线 */
   function memberVisual(groupId, member) {
-    const bag = netState.presence[groupId] || {};
-    const p = bag[String(member.id || member.name)] || bag[String(member.name)] || null;
+    const bao = netState.presence[groupId] || {};
+    const p = bao[String(member.id || member.name)] || bao[String(member.name)] || null;
     const local = localInstanceOf(member);
     const remote = !!(p && p.remote);
     const localStopped = !!local && local.status === 'stopped';
@@ -4794,12 +4794,12 @@
   function instanceIsRemote(inst) {
     if (!inst) return false;
     if (inst.remote === true) return true;
-    const stub = window.__warmyNetStub;
-    if (stub && Array.isArray(stub.remoteInstanceIds) && stub.remoteInstanceIds.includes(inst.id)) return true;
+    const zhuang = window.__warmyNetStub;
+    if (zhuang && Array.isArray(zhuang.remoteInstanceIds) && zhuang.remoteInstanceIds.includes(inst.id)) return true;
     for (const gid of Object.keys(netState.presence)) {
-      const bag = netState.presence[gid] || {};
-      for (const k of Object.keys(bag)) {
-        const rec = bag[k];
+      const bao = netState.presence[gid] || {};
+      for (const k of Object.keys(bao)) {
+        const rec = bao[k];
         if (rec && rec.remote && (k === inst.id || k === inst.name)) return true;
       }
     }
@@ -4807,7 +4807,7 @@
   }
 
   /** 地址格式校验（IP 或域名） */
-  function isValidHost(v) {
+  function shiFouHeFaZhuJi(v) {
     const s = String(v || '').trim();
     if (!s || /\s/.test(s)) return false;
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) return s.split('.').every((x) => Number(x) >= 0 && Number(x) <= 255);
@@ -4963,7 +4963,7 @@
     const results = [];
     let lastR = null;
     for (const entry of entries) {
-      if (!isValidHost(entry)) {
+      if (!shiFouHeFaZhuJi(entry)) {
         results.push({ entry, verdict: 'fail', code: 'invalid-entry' });
         continue;
       }
@@ -5192,11 +5192,11 @@
         r = null;
       }
       if (!r || typeof r !== 'object' || !Array.isArray(r.members)) continue;
-      const bag = {};
+      const bao = {};
       r.members.forEach((m) => {
         const key = String(m.id || m.name || '');
         if (!key) return;
-        bag[key] = {
+        bao[key] = {
           remote: !!m.remote,
           online: m.online !== false,
           disabled: !!m.disabled,
@@ -5206,16 +5206,16 @@
           basis: String(m.presenceBasis || ''),
           fp: String(m.fingerprint || ''),
         };
-        if (m.name) bag[String(m.name)] = bag[key]; // 成员表里 id 与显示名都可能被用来查
+        if (m.name) bao[String(m.name)] = bao[key]; // 成员表里 id 与显示名都可能被用来查
       });
-      netState.presence[gid] = bag;
+      netState.presence[gid] = bao;
     }
     // 去重：同一个异地成员可能同时以 id 与 name 存在 bag 里，只算一次
     const remoteKeys = new Set();
     Object.keys(netState.presence).forEach((gid) => {
-      const bag = netState.presence[gid] || {};
-      Object.keys(bag).forEach((k) => {
-        if (!bag[k] || !bag[k].remote) return;
+      const bao = netState.presence[gid] || {};
+      Object.keys(bao).forEach((k) => {
+        if (!bao[k] || !bao[k].remote) return;
         const inst = (state.instances || []).find((i) => i.id === k || i.name === k);
         remoteKeys.add(inst ? inst.id : k);
       });
@@ -5260,15 +5260,15 @@
       const sig = 'meshoff:' + netState.meshOffSeq;
       if (netState.dismissed[sig]) return null;
       const affected = netState.remoteCount;
-      const impact = affected > 0 ? fmtKey('net.banner.meshOffBody', { n: affected }) : '';
+      const yingXiang = affected > 0 ? fmtKey('net.banner.meshOffBody', { n: affected }) : '';
       return {
         sig,
         tone: info ? 'danger' : 'warn',
         title: info ? fmtKey('net.banner.mergedTitle', { n: affected }) : t('net.banner.meshOffTitle'),
         body: [
           ...(info
-            ? [fmtKey('net.banner.mergedBody', { fails: info.fails, secs: info.secs, rounds: info.rounds }), impact]
-            : [impact]),
+            ? [fmtKey('net.banner.mergedBody', { fails: info.fails, secs: info.secs, rounds: info.rounds }), yingXiang]
+            : [yingXiang]),
           gap ? t(gap.key) : '',
         ]
           .filter(Boolean)
@@ -5300,7 +5300,7 @@
       if (netState.dismissed[sig]) return null;
       const secs = Math.max(0, Math.round((Date.now() - (l.downSince || Date.now())) / 1000));
       const after = Math.max(0, Math.round(((l.nextRetryAt || Date.now()) - Date.now()) / 1000));
-      const impact = netState.remoteCount > 0 ? fmtKey('net.banner.meshOffBody', { n: netState.remoteCount }) : '';
+      const yingXiang = netState.remoteCount > 0 ? fmtKey('net.banner.meshOffBody', { n: netState.remoteCount }) : '';
       return {
         sig,
         tone: 'warn',
@@ -5313,7 +5313,7 @@
             rounds: tn.rounds,
             after,
           }),
-          impact,
+          yingXiang,
         ]
           .filter(Boolean)
           .join(' '),
@@ -5493,16 +5493,16 @@
    *  - 两者不一致 → 明确提示「联系方式已变化，请自行核实」。
    */
   function idContactCardsHtml(c) {
-    const hist = idHistoryCard(c);
+    const liShi = idHistoryCard(c);
     const nw = idNewCard(c);
     const dec = idContactDecision(c);
-    const histHtml = hist
+    const histHtml = liShi
       ? '<div class="id-card" data-card="history">' +
         '<div class="id-card-h">' + escapeHtml(t('idchg.histTitle')) + idTagHtml('idchg.cardHistoryTag', 'hist') + '</div>' +
         '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.email')) + '</span>' + cardValue(hist.email) + '</div>' +
         '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.phone')) + '</span>' + cardValue(hist.phone) + '</div>' +
-        (hist.capturedAt
-          ? '<div class="bn-hint">' + escapeHtml(fmtKey('idchg.historyCapturedAt', { t: new Date(hist.capturedAt).toLocaleString() })) + '</div>'
+        (liShi.capturedAt
+          ? '<div class="bn-hint">' + escapeHtml(fmtKey('idchg.historyCapturedAt', { t: new Date(liShi.capturedAt).toLocaleString() })) + '</div>'
           : '') +
         '</div>'
       : '<div class="id-card" data-card="history" data-empty-history="1">' +
@@ -5522,7 +5522,7 @@
       (nwEmpty ? '<div class="bn-hint">' + escapeHtml(t('idchg.newEmptyHint')) + '</div>' : '') +
       '</div>';
     const changed =
-      !!hist && !!nw && (String(hist.email || '') !== String(nw.email || '') || String(hist.phone || '') !== String(nw.phone || ''));
+      !!liShi && !!nw && (String(liShi.email || '') !== String(nw.email || '') || String(liShi.phone || '') !== String(nw.phone || ''));
     const days = Math.floor(dec.msLeft / 86400000);
     const hours = Math.floor((dec.msLeft % 86400000) / 3600000);
     const freezeText = dec.adopted
@@ -5530,8 +5530,8 @@
       : dec.frozen
         ? fmtKey('idchg.freeze', { days, hours })
         : t('idchg.freezeOver');
-    const nowText = hist
-      ? fmtKey('idchg.contactNowIs', { v: [hist.email, hist.phone].filter((x) => String(x || '').trim()).join(' / ') || t('idchg.empty') })
+    const nowText = liShi
+      ? fmtKey('idchg.contactNowIs', { v: [liShi.email, liShi.phone].filter((x) => String(x || '').trim()).join(' / ') || t('idchg.empty') })
       : '';
     return (
       '<div class="id-cards">' + histHtml + newHtml + '</div>' +
@@ -5548,12 +5548,12 @@
     const collapsed = !!idchgState.collapsed[String(c.id)];
     const at = c.ts ? new Date(c.ts).toLocaleString() : '—';
     const reasonKey = c.reason === 'compromised' ? 'idchg.reason.compromised' : c.reason === 'rotate' ? 'idchg.reason.rotate' : '';
-    const hist = idHistoryCard(c);
+    const liShi = idHistoryCard(c);
     const dec = idContactDecision(c);
     // 折叠时只留常驻标记 + 一行历史值摘要（历史留存值才是本机当前认的那份）
     const summary =
-      t('idchg.oldEmail') + ' ' + (hist ? String(hist.email || '').trim() || t('idchg.empty') : t('idchg.noHistory')) + ' · ' +
-      t('idchg.oldPhone') + ' ' + (hist ? String(hist.phone || '').trim() || t('idchg.empty') : t('idchg.noHistory'));
+      t('idchg.oldEmail') + ' ' + (liShi ? String(liShi.email || '').trim() || t('idchg.empty') : t('idchg.noHistory')) + ' · ' +
+      t('idchg.oldPhone') + ' ' + (liShi ? String(liShi.phone || '').trim() || t('idchg.empty') : t('idchg.noHistory'));
     return (
       '<div class="id-item' + (collapsed ? ' is-collapsed' : '') + '" data-cid="' + cid + '"' +
       ' data-scope-basis="' + escapeHtml(String(c.scopeBasis || '')) + '">' +
@@ -5952,8 +5952,8 @@
       '<div class="muted net-conflict-hint">' + escapeHtml(t('net.portSuggestHint')) + '</div>' +
       '<div><button type="button" class="btn-mini" id="btn-net-port-suggest-refresh">' + escapeHtml(t('net.portSuggestRefresh')) + '</button></div>';
 
-    const refreshBtn = $('btn-net-port-suggest-refresh');
-    if (refreshBtn) refreshBtn.onclick = () => void netFetchPortCandidates();
+    const shuaxinAnniu = $('btn-net-port-suggest-refresh');
+    if (shuaxinAnniu) shuaxinAnniu.onclick = () => void netFetchPortCandidates();
 
     const suggestBox = $('net-port-suggest');
     if (suggestBox) {
@@ -6083,15 +6083,15 @@
         renderNetCard();
       };
     });
-    box.querySelectorAll('input.net-domain-input').forEach((inp) => {
-      inp.onchange = () => {
-        const i = Number(inp.dataset.di);
-        const v = String(inp.value || '').trim();
-        if (!v || !isValidHost(v)) {
-          inp.classList.add('net-invalid');
+    box.querySelectorAll('input.net-domain-input').forEach((shuRu) => {
+      shuRu.onchange = () => {
+        const i = Number(shuRu.dataset.di);
+        const v = String(shuRu.value || '').trim();
+        if (!v || !shiFouHeFaZhuJi(v)) {
+          shuRu.classList.add('net-invalid');
           return;
         }
-        inp.classList.remove('net-invalid');
+        shuRu.classList.remove('net-invalid');
         if (!netState.addr.publicAddresses) netState.addr.publicAddresses = [];
         netState.addr.publicAddresses[i] = v;
         netPersist();
@@ -6243,13 +6243,13 @@
         const i = Number(b.dataset.scanDel);
         const next = dirs.slice();
         next.splice(i, 1);
-        const rr = await skillScanDirsSet(next);
-        if (rr && rr.ok === false) {
+        const yunXingJieGuo = await skillScanDirsSet(next);
+        if (yunXingJieGuo && yunXingJieGuo.ok === false) {
           if (msg) msg.textContent = t('settings.skillsScanMax');
           return;
         }
-        const inp = $('skill-scan-dir-input');
-        if (inp) inp.removeAttribute('data-edit-i');
+        const shuRu = $('skill-scan-dir-input');
+        if (shuRu) shuRu.removeAttribute('data-edit-i');
         const btn = $('btn-skill-scan-add');
         if (btn) btn.textContent = t('settings.skillsScanAdd');
         await renderSkillScanDirs();
@@ -6259,11 +6259,11 @@
     box.querySelectorAll('[data-scan-edit]').forEach((b) => {
       b.onclick = () => {
         const i = Number(b.dataset.scanEdit);
-        const inp = $('skill-scan-dir-input');
+        const shuRu = $('skill-scan-dir-input');
         const btn = $('btn-skill-scan-add');
-        if (inp) {
-          inp.value = dirs[i] || '';
-          inp.setAttribute('data-edit-i', String(i));
+        if (shuRu) {
+          shuRu.value = dirs[i] || '';
+          shuRu.setAttribute('data-edit-i', String(i));
         }
         if (btn) btn.textContent = t('settings.skillsScanSave');
         if (msg) msg.textContent = '';
@@ -6284,8 +6284,8 @@
   /** 打开设置并定位到组网卡片（横幅 / 加成员提示的「去设置打开」都走这里） */
   function gotoNetSettings() {
     setNav('settings');
-    const navBtn = document.querySelector('#settings-nav button[data-sec="func"]');
-    if (navBtn) navBtn.click();
+    const DaoHangAnNiu = document.querySelector('#settings-nav button[data-sec="func"]');
+    if (DaoHangAnNiu) DaoHangAnNiu.click();
     const card = $('net-card');
     if (card && card.scrollIntoView) card.scrollIntoView({ block: 'center' });
     // R13：进组网设置页时**重新实测**一次候选端口（端口占用状况随时在变，不用旧结论）
@@ -6293,8 +6293,8 @@
     const focusEl = $('net-domains') && $('net-domains').querySelector('input.net-domain-input');
     if (focusEl) focusEl.focus();
     else {
-      const addBtn = $('btn-net-domain-add');
-      if (addBtn) addBtn.focus();
+      const tianJiaAnNiu = $('btn-net-domain-add');
+      if (tianJiaAnNiu) tianJiaAnNiu.focus();
     }
   }
 
@@ -6353,8 +6353,8 @@
       sw.dataset.bound = '1';
       sw.onchange = async () => {
         const want = !!sw.checked;
-        const okGo = await netSetEnabled(want);
-        if (!okGo) renderNetCard();
+        const keZhiXing = await netSetEnabled(want);
+        if (!keZhiXing) renderNetCard();
       };
     }
     renderNetCard();
@@ -6595,7 +6595,7 @@
           // 尝试 ASR 转文字
           const asr = await window.warmy.asrTranscribe({ dataUrl, ext: 'webm' }).catch(() => null);
           const text = asr?.ok && asr.text ? asr.text : `[${t('chat.voice')}] ${r.path.split(/[\\/]/).pop()}`;
-          pushMsg(state.selectedChat.id, 'me', text);
+          tuisongXiaoxi(state.selectedChat.id, 'me', text);
           renderChat();
         } else {
           uiAlert(t('chat.voiceUnsupported'));
@@ -6633,10 +6633,10 @@
   // 紧急度下拉：悬停显框，点击展开
   (function bindUrgency() {
     const trigger = $('urg-trigger');
-    const menu = $('urg-menu');
+    const caiDan = $('urg-menu');
     const dd = $('urgency-dd');
     const label = $('urg-label');
-    if (!trigger || !menu || !dd) return;
+    if (!trigger || !caiDan || !dd) return;
 
     const LABELS = { P1: 'urgency.urgentLabel', P2: 'urgency.insertLabel', P3: 'urgency.queueLabel' };
 
@@ -6645,30 +6645,30 @@
       dd.classList.toggle('urgent', state.urgency === 'P1');
       const icon = dd.querySelector('.urgent-i');
       if (icon) icon.classList.toggle('hidden', state.urgency !== 'P1');
-      menu.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.u === state.urgency));
+      caiDan.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.u === state.urgency));
     }
     refresh();
 
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      menu.classList.toggle('hidden');
-      if (!menu.classList.contains('hidden')) positionMenuFixed(trigger, menu);
+      caiDan.classList.toggle('hidden');
+      if (!caiDan.classList.contains('hidden')) positionMenuFixed(trigger, caiDan);
     });
-    onDocClick(() => menu?.classList.add('hidden'));
+    onDocClick(() => caiDan?.classList.add('hidden'));
 
-    menu.addEventListener('click', async (e) => {
+    caiDan.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-u]');
       if (!b) return;
       const u = b.dataset.u;
       if (u === 'P1') {
         const ok = await uiConfirmCountdown(t('urgency.confirmBody'), t('urgency.confirmTitle'), 5);
         if (!ok) {
-          menu.classList.add('hidden');
+          caiDan.classList.add('hidden');
           return;
         }
       }
       state.urgency = u;
-      menu.classList.add('hidden');
+      caiDan.classList.add('hidden');
       refresh();
     });
 
@@ -6678,10 +6678,10 @@
   // 「…」更多菜单
   $('more-trigger')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    const menu = $('more-menu');
-    menu?.classList.toggle('hidden');
-    if (menu && !menu.classList.contains('hidden')) {
-      try { renderMoreMenu(); } catch { /* noop */ }
+    const caiDan = $('more-menu');
+    caiDan?.classList.toggle('hidden');
+    if (caiDan && !caiDan.classList.contains('hidden')) {
+      try { xuanranGengduoCaidan(); } catch { /* noop */ }
       // 同步「仅@ai才发言」勾选态（群聊默认勾选）
       const g = (state.groups || []).find((x) => x.id === state.selectedChat?.id) || (state.chats || []).find((x) => x.id === state.selectedChat?.id);
       __directed = !!(g && g.directedMode);
@@ -6689,7 +6689,7 @@
       if (m) { m.textContent = __directed ? '✓' : '✕'; }
       const am = $('mi-autoscroll-mark');
       if (am) am.style.visibility = autoScrollChat ? 'visible' : 'hidden';
-      positionMenuFixed($('more-trigger'), menu);
+      positionMenuFixed($('more-trigger'), caiDan);
     }
   });
   onDocClick(() => $('more-menu')?.classList.add('hidden'));
@@ -6734,33 +6734,33 @@
      ══════════════════════════════════════════════════════════════════════════ */
 
   /** 返回"被拒绝的原因文案"，null = 放行 */
-  async function projectDevBlock(sessionId) {
+  async function xiangMuKaiFaKuai(sessionId) {
     const id = String(sessionId || '');
     if (!id) return null;
-    const pstate = await projectStateFor(id);
-    if (!pstate || pstate.devEnv !== 'container' || pstate.developmentAllowed) return null;
-    return t(PROJECT_STOP_REASON(pstate.code, pstate.reasonKey));
+    const xiangMuTai = await quXiangMuTai(id);
+    if (!xiangMuTai || xiangMuTai.devEnv !== 'container' || xiangMuTai.developmentAllowed) return null;
+    return t(PROJECT_STOP_REASON(xiangMuTai.code, xiangMuTai.reasonKey));
   }
 
   /**
    * 把停止态落到**开发入口**上（输入框 / 发送按钮）+ 给聊天区挂一个可断言的标志位。
    * 只在「项目」里生效：「我的牛马」恒为本机开发，不受影响。
    */
-  async function applyProjectDevGate() {
+  async function yingYongXiangMuKaiFaMen() {
     const sel = state.selectedChat;
     const input = $('input');
     const col = $('chat-col');
-    const pstate = sel && sel.kind === 'internal' ? await projectStateFor(sel.id) : null;
-    const stopped = !!(pstate && pstate.stopped);
+    const xiangMuTai = sel && sel.kind === 'internal' ? await quXiangMuTai(sel.id) : null;
+    const stopped = !!(xiangMuTai && xiangMuTai.stopped);
     if (col) {
-      col.dataset.projectState = pstate ? (stopped ? 'stopped' : 'running') : 'none';
-      col.dataset.projectCode = pstate ? String(pstate.code) : '';
+      col.dataset.projectState = xiangMuTai ? (stopped ? 'stopped' : 'running') : 'none';
+      col.dataset.projectCode = xiangMuTai ? String(xiangMuTai.code) : '';
     }
     if (input) {
       input.dataset.devBlocked = stopped ? '1' : '0';
       input.disabled = stopped;
       input.title = stopped
-        ? fmtKey('container.project.devBlocked', { reason: t(PROJECT_STOP_REASON(pstate ? pstate.code : 'container-not-ready', pstate ? pstate.reasonKey : '')) })
+        ? fmtKey('container.project.devBlocked', { reason: t(PROJECT_STOP_REASON(xiangMuTai ? xiangMuTai.code : 'container-not-ready', xiangMuTai ? xiangMuTai.reasonKey : '')) })
         : '';
     }
     const btn = $('btn-send');
@@ -6848,15 +6848,15 @@
     const catLabel = fmtKey('console.cat.' + cat);
     const catText = catLabel === 'console.cat.' + cat ? cat : catLabel;
     const key = 'console.' + code;
-    const known = t(key) !== key;
-    const body = known
+    const yiZhi = t(key) !== key;
+    const body = yiZhi
       ? fmtKey(key, d)
       : fmtKey('console.unknown', { code: code || '?' }) + (consoleDataText(d) ? ' ' + consoleDataText(d) : '');
     const ts = new Date(Number((ev && ev.ts) || Date.now()) || Date.now());
     const hh = String(ts.getHours()).padStart(2, '0');
     const mm = String(ts.getMinutes()).padStart(2, '0');
-    const ss = String(ts.getSeconds()).padStart(2, '0');
-    return consoleRedact('[' + hh + ':' + mm + ':' + ss + '] [' + catText + '] ' + body);
+    const anQuanCang = String(ts.getSeconds()).padStart(2, '0');
+    return consoleRedact('[' + hh + ':' + mm + ':' + anQuanCang + '] [' + catText + '] ' + body);
   }
 
   /** 一条事件进面板：格式化 → 打码 → 入队 → 超上限丢最旧 → （面板开着才）重画 */
@@ -6870,8 +6870,8 @@
       const line = consoleLineText(ev);
       if (!line) return null;
       consoleLines.push(line);
-      const __cap = (typeof CONSOLE_CAP === 'number' ? CONSOLE_CAP : __CONSOLE_CAP_EARLY);
-      while (consoleLines.length > __cap) consoleLines.shift();
+      const shangxian = (typeof CONSOLE_CAP === 'number' ? CONSOLE_CAP : __CONSOLE_CAP_EARLY);
+      while (consoleLines.length > shangxian) consoleLines.shift();
       renderConsole();
       return line;
     } catch {
@@ -6962,19 +6962,19 @@
   $('diag-toggle')?.addEventListener('click', () => { toggleDiagPanel(); });
   $('console-clear')?.addEventListener('click', () => { consoleClear(); });
   (function bindConsoleResize() {
-    const el = $('console-resizer');
-    const pane = $('console-pane');
-    if (!el || !pane) return;
+    const yuanSu = $('console-resizer');
+    const mianBan = $('console-pane');
+    if (!yuanSu || !mianBan) return;
     let y0 = 0, h0 = 0, drag = false;
     const onMove = (e) => {
       if (!drag) return;
       const h = Math.min(360, Math.max(80, h0 + (y0 - e.clientY)));
-      pane.style.maxHeight = h + 'px';
-      pane.style.height = h + 'px';
+      mianBan.style.maxHeight = h + 'px';
+      mianBan.style.height = h + 'px';
     };
     const onUp = () => { drag = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    el.addEventListener('mousedown', (e) => {
-      drag = true; y0 = e.clientY; h0 = pane.getBoundingClientRect().height;
+    yuanSu.addEventListener('mousedown', (e) => {
+      drag = true; y0 = e.clientY; h0 = mianBan.getBoundingClientRect().height;
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
       e.preventDefault();
@@ -6984,10 +6984,10 @@
   // 本会话安全模式：同紧急度的下拉样式
   (function bindSecurityDropdown() {
     const trigger = $('sec-trigger');
-    const menu = $('sec-menu');
+    const caiDan = $('sec-menu');
     const dd = $('sec-dd');
     const label = $('sec-label');
-    if (!trigger || !menu || !dd) return;
+    if (!trigger || !caiDan || !dd) return;
 
     const LABELS = {
       normal: 'chat.securityNormal',
@@ -7004,30 +7004,30 @@
       dd.classList.toggle('urgent', mode === 'full');
       const warn = dd.querySelector('.sec-warn');
       if (warn) warn.classList.toggle('hidden', mode !== 'full');
-      menu.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.s === mode));
+      caiDan.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.s === mode));
     }
     window.__refreshSecurity = refresh;
     refresh();
 
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      menu.classList.toggle('hidden');
-      if (!menu.classList.contains('hidden')) positionMenuFixed(trigger, menu);
+      caiDan.classList.toggle('hidden');
+      if (!caiDan.classList.contains('hidden')) positionMenuFixed(trigger, caiDan);
     });
-    onDocClick(() => menu?.classList.add('hidden'));
+    onDocClick(() => caiDan?.classList.add('hidden'));
 
-    menu.addEventListener('click', async (e) => {
+    caiDan.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-s]');
       if (!b) return;
       const mode = b.dataset.s;
       if (mode === 'full') {
         const ok = await uiConfirmCountdown(t('sec.confirmBody'), t('sec.confirmTitle'), 5);
         if (!ok) {
-          menu.classList.add('hidden');
+          caiDan.classList.add('hidden');
           return;
         }
       }
-      menu.classList.add('hidden');
+      caiDan.classList.add('hidden');
       if (state.selectedChat) {
         state.sessionSecurity[state.selectedChat.id] = mode;
       } else {
@@ -7147,28 +7147,28 @@
       input.id = 'project-name-input';
       input.style.cssText = 'width:100%;margin:6px 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--input-bg);color:var(--ink);font:inherit';
       input.placeholder = t('placeholder.groupName');
-      const devRow = document.createElement('div');
-      devRow.id = 'project-dev-env';
-      devRow.className = 'ctg-seg';
-      devRow.dataset.chosen = '';
-      const mk = (val, labelKey) => {
+      const kaifaHang = document.createElement('div');
+      kaifaHang.id = 'project-dev-env';
+      kaifaHang.className = 'ctg-seg';
+      kaifaHang.dataset.chosen = '';
+      const zao = (zhi, labelKey) => {
         const b = document.createElement('button');
         b.type = 'button';
-        b.dataset.devEnvPick = val;
-        b.id = 'project-dev-env-' + val;
+        b.dataset.devEnvPick = zhi;
+        b.id = 'project-dev-env-' + zhi;
         b.textContent = t(labelKey);
         b.onclick = () => {
-          devRow.dataset.chosen = val;
-          Array.from(devRow.querySelectorAll('[data-dev-env-pick]')).forEach((x) => x.classList.toggle('on', x.dataset.devEnvPick === val));
+          kaifaHang.dataset.chosen = zhi;
+          Array.from(kaifaHang.querySelectorAll('[data-dev-env-pick]')).forEach((x) => x.classList.toggle('on', x.dataset.devEnvPick === zhi));
           ok.disabled = false;
         };
         return b;
       };
-      devRow.append(mk('host', 'container.devEnv.host'), mk('container', 'container.devEnv.container'));
+      kaifaHang.append(zao('host', 'container.devEnv.host'), zao('container', 'container.devEnv.container'));
       const note = document.createElement('div');
       note.className = 'ctg-dim';
       note.textContent = t('container.devEnv.note');
-      body.append(p1, nameLabel, input, devRow, note);
+      body.append(p1, nameLabel, input, kaifaHang, note);
       const acts = $('modal-actions');
       acts.innerHTML = '';
       const cancel = document.createElement('button');
@@ -7182,11 +7182,11 @@
       // **没选开发环境就不让创建**（这正是 P3 的要求：创建时必须选）
       ok.disabled = true;
       ok.onclick = () => {
-        if (!devRow.dataset.chosen) return;
+        if (!kaifaHang.dataset.chosen) return;
         const name = String(input.value || '').trim();
         if (!name) { input.focus(); return; }
         root.classList.add('hidden');
-        resolve({ name, devEnv: devRow.dataset.chosen });
+        resolve({ name, devEnv: kaifaHang.dataset.chosen });
       };
       acts.append(cancel, ok);
       root.classList.remove('hidden');
@@ -7242,12 +7242,12 @@
    * 返回 true = 真的加上了。
    */
   async function createContactWithCard(name) {
-    const nm = String(name || '').trim();
-    if (!nm) return false;
+    const mingCheng = String(name || '').trim();
+    if (!mingCheng) return false;
     const card = await myCard();
     const go = await shareCardConfirm(card, 'contact.add');
     if (!go) return false;
-    state.chats.push({ id: 'c-' + Date.now(), name: nm, kind: 'extdm', lastPreview: t('list.noReply'), notify: true, card });
+    state.chats.push({ id: 'c-' + Date.now(), name: mingCheng, kind: 'extdm', lastPreview: t('list.noReply'), notify: true, card });
     renderList();
     window.__saveState?.();
     return true;
@@ -7285,8 +7285,8 @@
    *   opts.persistKey：松手 / 双击复位后把宽度写回**既有 settings 通道**（不新开存储文件）。
    *   opts.resetWidth：双击恢复的默认宽度。
    */
-  function bindResizer(el, cssVar, min, max, opts) {
-    if (!el) return;
+  function bindResizer(yuanSu, cssVar, min, max, opts) {
+    if (!yuanSu) return;
     const o = opts || {};
     const dir = o.dir === 'right' ? -1 : 1;
     const resetWidth = Number(o.resetWidth) || min;
@@ -7297,8 +7297,8 @@
       let cap = max;
       const host = o.hostId ? $(o.hostId) : null;
       if (host && minOther) {
-        const avail = host.getBoundingClientRect().width - minOther;
-        if (avail > min) cap = Math.min(cap, Math.floor(avail));
+        const keYong = host.getBoundingClientRect().width - minOther;
+        if (keYong > min) cap = Math.min(cap, Math.floor(keYong));
       }
       return cap;
     };
@@ -7325,14 +7325,14 @@
     const onUp = () => {
       if (!dragging) return;
       dragging = false;
-      el.classList.remove('dragging');
+      yuanSu.classList.remove('dragging');
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       persist(lastW);
     };
-    el.addEventListener('mousedown', (e) => {
+    yuanSu.addEventListener('mousedown', (e) => {
       dragging = true;
-      el.classList.add('dragging');
+      yuanSu.classList.add('dragging');
       startX = e.clientX;
       startW = curW();
       lastW = startW;
@@ -7341,7 +7341,7 @@
       e.preventDefault();
     });
     // 双击复位：被拖到极限后也能一步回到默认布局
-    el.addEventListener('dblclick', (e) => {
+    yuanSu.addEventListener('dblclick', (e) => {
       e.preventDefault();
       lastW = setW(resetWidth);
       persist(lastW);
@@ -7349,9 +7349,9 @@
   }
 
   function bindVerticalResizer(handleId, targetId, dir) {
-    const el = $(handleId);
+    const yuanSu = $(handleId);
     const target = $(targetId);
-    if (!el || !target) return;
+    if (!yuanSu || !target) return;
     let y0 = 0, h0 = 0, drag = false;
     const onMove = (e) => {
       if (!drag) return;
@@ -7366,7 +7366,7 @@
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-    el.addEventListener('mousedown', (e) => {
+    yuanSu.addEventListener('mousedown', (e) => {
       drag = true; y0 = e.clientY; h0 = target.getBoundingClientRect().height;
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
@@ -7519,8 +7519,8 @@
   let shortcutCapturing = null;
 
   function shortcutMsg(text) {
-    const el = $('hk-keys-msg');
-    if (el) el.textContent = text || '';
+    const yuanSu = $('hk-keys-msg');
+    if (yuanSu) yuanSu.textContent = text || '';
   }
 
   function stopShortcutCapture() {
@@ -7797,7 +7797,7 @@
     'memoryRecall', 'i18n',
   ]);
 
-  function warmySampleArgs(name, bridge) {
+  function warmySampleArgs(name, qiaoJie) {
     switch (name) {
       case 'memoryRecall':
         return ['warmy'];
@@ -7832,14 +7832,14 @@
   }
 
   async function tryRunWarmyApi(name) {
-    const bridge = window.warmy;
-    if (!bridge || typeof bridge[name] !== 'function') return { ok: false, error: 'missing-api' };
+    const qiaoJie = window.warmy;
+    if (!qiaoJie || typeof qiaoJie[name] !== 'function') return { ok: false, error: 'missing-api' };
     if (!WARMY_API_READONLY.has(name)) {
       return { ok: false, error: t('settings.hotkey.apiTryReadOnly') || 'read-only only' };
     }
-    const args = warmySampleArgs(name, bridge);
+    const args = warmySampleArgs(name, qiaoJie);
     try {
-      const r = await bridge[name](...args);
+      const r = await qiaoJie[name](...args);
       return { ok: true, args, result: r };
     } catch (e) {
       return { ok: false, args, error: String(e && e.message || e) };
@@ -7929,14 +7929,14 @@
     exportSession: '导出会话 Markdown',
   };
   function apiCatalogue() {
-    const bridge = (typeof window !== 'undefined' && window.warmy) || null;
+    const qiaoJie = (typeof window !== 'undefined' && window.warmy) || null;
     const rows = [];
     const events = [];
-    if (!bridge) return { rows, events, available: false };
-    Object.keys(bridge).sort().forEach((name) => {
+    if (!qiaoJie) return { rows, events, available: false };
+    Object.keys(qiaoJie).sort().forEach((name) => {
       let fn = null;
       try {
-        fn = bridge[name];
+        fn = qiaoJie[name];
       } catch {
         fn = null;
       }
@@ -8009,12 +8009,12 @@
     if (copyBtn && !copyBtn.dataset.bound) {
       copyBtn.dataset.bound = '1';
       copyBtn.onclick = async () => {
-        const rel = 'docs/API-OPERATIONS.md';
-        const abs = (window.warmy && window.warmy.__repoApiDoc) || rel;
+        const xiangDuiLu = 'docs/API-OPERATIONS.md';
+        const abs = (window.warmy && window.warmy.__repoApiDoc) || xiangDuiLu;
         const text =
           t('settings.hotkey.apiCopyText') ||
           ('How to operate WArmy APIs: open the file `docs/API-OPERATIONS.md` in the project root (or absolute path if provided). Read it before calling window.warmy.* / IPC.');
-        const payload = text + '\n\n' + abs + '\n\n' + rel;
+        const payload = text + '\n\n' + abs + '\n\n' + xiangDuiLu;
         try {
           await navigator.clipboard.writeText(payload);
           const msg = $('api-copy-msg');
@@ -8076,7 +8076,7 @@
         '<div class="muted">' + t('approval.hint') + '</div>';
       const acts = $('modal-actions');
       acts.innerHTML = '';
-      const mk = (label, cls, fn) => {
+      const zao = (label, cls, fn) => {
         const b = document.createElement('button');
         b.className = cls;
         b.textContent = label;
@@ -8086,10 +8086,10 @@
         };
         acts.appendChild(b);
       };
-      mk(t('approval.deny'), 'btn-mini', () => finish(false, 'deny'));
-      mk(t('approval.once'), 'btn-primary', () => finish(true, 'once'));
-      mk(t('approval.project'), 'btn-mini', () => finish(true, 'project'));
-      mk(t('approval.global'), 'btn-mini', () => finish(true, 'global'));
+      zao(t('approval.deny'), 'btn-mini', () => finish(false, 'deny'));
+      zao(t('approval.once'), 'btn-primary', () => finish(true, 'once'));
+      zao(t('approval.project'), 'btn-mini', () => finish(true, 'project'));
+      zao(t('approval.global'), 'btn-mini', () => finish(true, 'global'));
       root.classList.remove('hidden');
     });
   }
@@ -8100,15 +8100,15 @@
 
   function openContextMenu(x, y, items) {
     closeContextMenu();
-    const el = document.createElement('div');
-    el.className = 'ctx-menu';
-    el.id = 'ctx-menu';
+    const yuanSu = document.createElement('div');
+    yuanSu.className = 'ctx-menu';
+    yuanSu.id = 'ctx-menu';
     items.forEach((it) => {
       if (!it) return;
       if (it.sep) {
         const s = document.createElement('div');
         s.className = 'ctx-sep';
-        el.appendChild(s);
+        yuanSu.appendChild(s);
         return;
       }
       const b = document.createElement('button');
@@ -8120,11 +8120,11 @@
         closeContextMenu();
         await it.onClick?.();
       };
-      el.appendChild(b);
+      yuanSu.appendChild(b);
     });
-    el.style.left = Math.min(x, window.innerWidth - 200) + 'px';
-    el.style.top = Math.min(y, window.innerHeight - 220) + 'px';
-    document.body.appendChild(el);
+    yuanSu.style.left = Math.min(x, window.innerWidth - 200) + 'px';
+    yuanSu.style.top = Math.min(y, window.innerHeight - 220) + 'px';
+    document.body.appendChild(yuanSu);
     setTimeout(() => {
       document.addEventListener('click', closeContextMenu, { once: true });
       document.addEventListener('keydown', onCtxKey, { once: true });
@@ -8171,10 +8171,10 @@
     return q.some((x) => x.status !== 'done' && x.status !== 'cancelled');
   }
 
-  function agentMenu(inst, rowEl) {
+  function agentMenu(inst, hangYuanSu) {
     const running = inst.status === 'running';
     const blocked = running || sessionHasBlockingTasks(inst.id);
-    const rect = rowEl.getBoundingClientRect();
+    const rect = hangYuanSu.getBoundingClientRect();
     return [
       {
         label: running ? t('ctx.close') : t('ctx.enable'),
@@ -8250,15 +8250,15 @@
     ];
   }
 
-  async function groupMenu(g, rowEl) {
+  async function qunCaidan(g, hangYuanSu) {
     const blocked = sessionHasBlockingTasks(g.id);
-    const joined = !g.joinedByOther;
+    const yiJiaRu = !g.joinedByOther;
     /**
      * ADR 004 第七批：「启用/停用项目」与「切换容器…」都在**项目的右键菜单**里。
      * 前者任何项目都有（与容器无关）；后者只有"创建时选了容器开发的项目"才有。
      */
     const projectItems = g.type === 'internal' ? await projectMenuItems(g) : [];
-    void rowEl;
+    void hangYuanSu;
     return projectItems.concat([
       {
         label: t('ctx.rename'),
@@ -8269,7 +8269,7 @@
           renderList();
         },
       },
-      joined
+      yiJiaRu
         ? {
             label: t('ctx.delete'),
             danger: true,
@@ -8324,8 +8324,8 @@
     ].filter(Boolean));
   }
 
-  function bindRowContext(rowEl, getItems) {
-    rowEl.addEventListener('contextmenu', (e) => {
+  function bindRowContext(hangYuanSu, getItems) {
+    hangYuanSu.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       // 菜单构造可以是 async（例如"只有容器开发项目才有切换容器"要先读设置）：
       // 先把坐标固定下来，再等构造完成才弹菜单，避免异步期间鼠标已经移走。
@@ -8374,22 +8374,22 @@
         '<div>' + t('join.expireTime') + ': ' + new Date(req.expireAt).toLocaleString() + '</div>';
       const acts = $('modal-actions');
       acts.innerHTML = '';
-      const mk = (label, cls, fn) => {
+      const zao = (label, cls, fn) => {
         const b = document.createElement('button');
         b.className = cls;
         b.textContent = label;
         b.onclick = async () => { root.classList.add('hidden'); await fn(); };
         acts.appendChild(b);
       };
-      mk(t('join.reject'), 'btn-mini', () => resolve('reject'));
-      mk(t('join.blacklist'), 'btn-danger', () => resolve('block'));
-      mk(t('join.agree'), 'btn-primary', () => resolve('agree'));
+      zao(t('join.reject'), 'btn-mini', () => resolve('reject'));
+      zao(t('join.blacklist'), 'btn-danger', () => resolve('block'));
+      zao(t('join.agree'), 'btn-primary', () => resolve('agree'));
       root.classList.remove('hidden');
     });
   }
 
-  document.querySelectorAll('[data-nav="instances"]').forEach((el) => {
-    el.addEventListener('click', async () => {
+  document.querySelectorAll('[data-nav="instances"]').forEach((yuanSu) => {
+    yuanSu.addEventListener('click', async () => {
       const r = await window.warmy.joinPending().catch(() => null);
       if (r?.items?.length) {
         const req = r.items[0];
@@ -8543,10 +8543,10 @@
     const list = $('task-list');
     if (!list) return;
     const sel = state.selectedChat;
-    const isGroup = !!(sel && (sel.kind === 'internal' || sel.kind === 'extgroup' || sel.kind === 'single'));
+    const shiQun = !!(sel && (sel.kind === 'internal' || sel.kind === 'extgroup' || sel.kind === 'single'));
     let tasks = [];
     const eventsByTitle = Object.create(null);
-    if (isGroup) {
+    if (shiQun) {
       try {
         const r = await window.warmy.boardTasks(sel.id);
         if (r && Array.isArray(r.tasks)) tasks = r.tasks;
@@ -8720,8 +8720,8 @@
       error: ['container.run.error', 'danger'],
       unsupported: ['container.run.unsupported', 'dim'],
     };
-    const pair = map[entry.run] || ['container.run.notRunning', 'dim'];
-    return '<span class="ctg-badge" data-run="' + escapeHtml(entry.run) + '" data-tone="' + pair[1] + '">' + escapeHtml(t(pair[0])) + '</span>';
+    const peiDui = map[entry.run] || ['container.run.notRunning', 'dim'];
+    return '<span class="ctg-badge" data-run="' + escapeHtml(entry.run) + '" data-tone="' + peiDui[1] + '">' + escapeHtml(t(peiDui[0])) + '</span>';
   }
 
   function containerCapabilityText(entry) {
@@ -8874,14 +8874,14 @@
   function renderContainerList() {
     const box = $('container-list');
     const note = $('container-missing-note');
-    const sum = $('container-summary');
+    const heJi = $('container-summary');
     if (!box) return;
     const rep = containerUi.report;
     if (!rep) {
       box.dataset.probe = 'none';
       box.innerHTML = '';
       if (note) note.textContent = '';
-      if (sum) { sum.textContent = ''; sum.dataset.summary = 'none'; }
+      if (heJi) { heJi.textContent = ''; heJi.dataset.summary = 'none'; }
       return;
     }
     /**
@@ -8904,9 +8904,9 @@
     // 折叠块标题里带上数量：收起时也知道里面有几条（不用展开去数）
     const inline = $('container-count-inline');
     if (inline) inline.textContent = listed.length ? fmtKey('container.listCountInline', { n: String(listed.length) }) : '';
-    if (sum) {
-      sum.dataset.summary = String(rep.usableIds ? rep.usableIds.length : 0);
-      sum.textContent = fmtKey('container.probeSummary', {
+    if (heJi) {
+      heJi.dataset.summary = String(rep.usableIds ? rep.usableIds.length : 0);
+      heJi.textContent = fmtKey('container.probeSummary', {
         n: String(listed.length),
         ready: String((rep.usableIds || []).length),
         attention: String((rep.attentionIds || []).length),
@@ -9130,11 +9130,11 @@
     /* 第十七批：**不再渲染"环境类型"** —— 环境就是具体实例。
        原来那段（envTypes → Linux/Windows/Android 三选一的说明与徽章）整块删除：
        它既不是用户能选的运行环境（真正跑起来的是某个具体实例），又和"实例"重复。 */
-    const imgBox = $('container-images');
-    if (imgBox) {
-      const imgs = (containerUi.report && containerUi.report.images) || [];
-      imgBox.innerHTML = imgs.length
-        ? imgs.map((x) => {
+    const tupianHe = $('container-images');
+    if (tupianHe) {
+      const tuPianJi = (containerUi.report && containerUi.report.images) || [];
+      tupianHe.innerHTML = tuPianJi.length
+        ? tuPianJi.map((x) => {
             const pinned = !!x.digest;
             return '<div class="ctg-row" data-image="' + escapeHtml(x.id) + '" data-digest="' + (pinned ? '1' : '0') + '">' +
               '<div class="ctg-row-head"><span class="ctg-name">' + escapeHtml(x.ref) + '</span>' +
@@ -9151,11 +9151,11 @@
     // 第八/九批：镜像**按项目技术栈**分档（最小 / 带 Node）+ 每档"适合什么项目"
     const stackBox = $('container-image-stacks');
     if (stackBox) {
-      const imgs = (containerUi.report && containerUi.report.images) || [];
+      const tuPianJi = (containerUi.report && containerUi.report.images) || [];
       const stacks = ['minimal', 'node'];
       stackBox.innerHTML = stacks
         .map((st) => {
-          const rows = imgs.filter((x) => x.stack === st);
+          const rows = tuPianJi.filter((x) => x.stack === st);
           const title = t(st === 'minimal' ? 'container.image.stack.minimal' : 'container.image.stack.node');
           const detail = rows.length
             ? rows.map((x) => '<div class="ctg-dim" data-fits="' + escapeHtml(x.id) + '">' + escapeHtml(x.ref) + ' · ' +
@@ -9257,7 +9257,7 @@
    * 返回 null = 这个会话不是"项目"（牛马/联系人/群聊），也就完全不受容器影响。
    * 主进程拿不到时走**保守兜底**：只要不是"明确可用"，一律当不可用（宁可不给，也不乐观放开）。
    */
-  async function projectStateFor(sessionId) {
+  async function quXiangMuTai(sessionId) {
     const id = String(sessionId || '');
     if (!id) return null;
     try {
@@ -9286,10 +9286,10 @@
     }
     const dev = await loadContainerDevMap();
     const devEnv = devEnvOf(dev, id);
-    const disabledMap = await loadProjectDisabledMap();
+    const jinyongBiao = await loadProjectDisabledMap();
     const rtMap = await loadProjectRuntimeMap();
     const runtimeId = String(rtMap[id] || '');
-    if (devEnv !== 'container' && !disabledMap[id]) return null; // 本机项目没被停用 ⇒ 与容器无关
+    if (devEnv !== 'container' && !jinyongBiao[id]) return null; // 本机项目没被停用 ⇒ 与容器无关
     if (devEnv === 'host') {
       return {
         devEnv: 'host', containerOnly: false, running: false, stopped: true, code: 'disabled-by-owner',
@@ -9302,7 +9302,7 @@
     await probeContainers(false);
     const row = runtimeId ? containerEntry(runtimeId) : null;
     const ready = !!(row && row.status === 'ready');
-    const disabled = !!disabledMap[id];
+    const disabled = !!jinyongBiao[id];
     const code = disabled ? 'disabled-by-owner' : !runtimeId ? 'container-not-chosen' : ready ? 'ok' : 'container-not-ready';
     const stopped = code !== 'ok';
     return {
@@ -9319,30 +9319,30 @@
   }
 
   /** 不可用时的原因文案（走 i18n） */
-  const projectReasonText = (pstate) => t(PROJECT_REASON(pstate ? pstate.code : 'container-not-ready'));
+  const projectReasonText = (xiangMuTai) => t(PROJECT_REASON(xiangMuTai ? xiangMuTai.code : 'container-not-ready'));
 
   /** 返回"不可用的原因文案"，null = 放行（发送前调用；主进程还会再拒一次） */
-  async function projectDevBlock(sessionId) {
-    const pstate = await projectStateFor(sessionId);
-    if (!pstate || pstate.running) return null;
-    return projectReasonText(pstate);
+  async function xiangMuKaiFaKuai(sessionId) {
+    const xiangMuTai = await quXiangMuTai(sessionId);
+    if (!xiangMuTai || xiangMuTai.running) return null;
+    return projectReasonText(xiangMuTai);
   }
 
   /**
    * 把"不可用"落到界面：**开发与功能入口禁用**，但**历史照常可读**（绝不能把整块灰掉）。
    * 只在 `kind === 'internal'`（项目）上生效：「我的牛马」恒为本机开发，不受容器影响。
    */
-  async function applyProjectDevGate() {
+  async function yingYongXiangMuKaiFaMen() {
     const sel = state.selectedChat;
     const input = $('input');
     const col = $('chat-col');
-    const pstate = sel && sel.kind === 'internal' ? await projectStateFor(sel.id) : null;
-    const blocked = !!(pstate && pstate.stopped);
-    const reason = blocked ? projectReasonText(pstate) : '';
+    const xiangMuTai = sel && sel.kind === 'internal' ? await quXiangMuTai(sel.id) : null;
+    const blocked = !!(xiangMuTai && xiangMuTai.stopped);
+    const reason = blocked ? projectReasonText(xiangMuTai) : '';
     if (col) {
-      col.dataset.projectState = pstate ? (blocked ? 'unavailable' : 'available') : 'none';
-      col.dataset.projectCode = pstate ? String(pstate.code) : '';
-      col.dataset.historyReadable = pstate ? '1' : '0';
+      col.dataset.projectState = xiangMuTai ? (blocked ? 'unavailable' : 'available') : 'none';
+      col.dataset.projectCode = xiangMuTai ? String(xiangMuTai.code) : '';
+      col.dataset.historyReadable = xiangMuTai ? '1' : '0';
     }
     if (input) {
       input.dataset.devBlocked = blocked ? '1' : '0';
@@ -9353,7 +9353,7 @@
     if (btn) btn.title = blocked ? (input ? input.title : '') : '';
     // 项目功能入口：不可用时禁用（跑执行者=在项目里干活；控制台另有自己的门禁）
     const exec = $('btn-exec-run');
-    if (exec && pstate) {
+    if (exec && xiangMuTai) {
       exec.disabled = blocked;
       exec.title = blocked ? fmtKey('container.project.blockedNotice', { reason }) : '';
     }
@@ -9372,20 +9372,20 @@
     if (!sel || sel.kind !== 'internal') { box.innerHTML = ''; return; }
     const dev = await loadContainerDevMap();
     const devEnv = devEnvOf(dev, sel.id);
-    const pstate = await projectStateFor(sel.id);
-    if (!pstate) { box.innerHTML = ''; return; }
+    const xiangMuTai = await quXiangMuTai(sel.id);
+    if (!xiangMuTai) { box.innerHTML = ''; return; }
     // 环境事实（当前容器 / 引擎系统模式 / 固化能力 / 上次固化）——来自主进程，不假定 Linux
     let envInfo = null;
     try { envInfo = await window.warmy.projectEnvStatus({ sessionId: sel.id }); } catch { envInfo = null; }
-    const blocked = pstate.stopped;
-    const rt = pstate.runtimeId ? t('container.rt.' + pstate.runtimeId + '.name') : t('container.project.none');
-    const offline = pstate.memberFaceKey ? t(pstate.memberFaceKey) : '';
+    const blocked = xiangMuTai.stopped;
+    const rt = xiangMuTai.runtimeId ? t('container.rt.' + xiangMuTai.runtimeId + '.name') : t('container.project.none');
+    const offline = xiangMuTai.memberFaceKey ? t(xiangMuTai.memberFaceKey) : '';
     const html = [];
     html.push('<div class="ctg-project-state" id="project-state" data-project-state="' + escapeHtml(blocked ? 'unavailable' : 'available') + '"' +
-      ' data-project-code="' + escapeHtml(pstate.code) + '"' +
-      ' data-member-face="' + escapeHtml(pstate.memberFace || '') + '"' +
-      ' data-host-editing="' + (pstate.hostEditingRefused ? 'refused' : 'allowed') + '"' +
-      ' data-history-readable="' + (pstate.historyReadable ? '1' : '0') + '">');
+      ' data-project-code="' + escapeHtml(xiangMuTai.code) + '"' +
+      ' data-member-face="' + escapeHtml(xiangMuTai.memberFace || '') + '"' +
+      ' data-host-editing="' + (xiangMuTai.hostEditingRefused ? 'refused' : 'allowed') + '"' +
+      ' data-history-readable="' + (xiangMuTai.historyReadable ? '1' : '0') + '">');
     if (blocked) {
       html.push('<div class="ctg-dim ctg-badge-line"><span class="ctg-badge" data-tone="danger" data-offline="' + escapeHtml(offline) + '">' + escapeHtml(offline) + '</span>' +
         '<span class="ctg-stopped-title">' + escapeHtml(t('container.project.unavailable')) + '</span></div>');
@@ -9394,15 +9394,15 @@
     }
     html.push('<div class="ctg-dim" data-dev-env="' + escapeHtml(devEnv) + '">' + escapeHtml(t('container.devEnv.title')) + '：' +
       escapeHtml(devEnv === 'container' ? t('container.devEnv.container') : t('container.devEnv.host')) + '</div>');
-    html.push('<div class="ctg-dim" data-project-runtime="' + escapeHtml(pstate.runtimeId || '') + '">' +
+    html.push('<div class="ctg-dim" data-project-runtime="' + escapeHtml(xiangMuTai.runtimeId || '') + '">' +
       escapeHtml(t('container.project.usingContainer')) + '：' + escapeHtml(rt) + '</div>');
-    html.push('<div class="ctg-dim" data-project-reason="' + escapeHtml(pstate.reasonKey || '') + '">' +
-      escapeHtml(fmtKey('container.project.reasonBody', { reason: projectReasonText(pstate) })) + '</div>');
+    html.push('<div class="ctg-dim" data-project-reason="' + escapeHtml(xiangMuTai.reasonKey || '') + '">' +
+      escapeHtml(fmtKey('container.project.reasonBody', { reason: projectReasonText(xiangMuTai) })) + '</div>');
     if (blocked) {
-      html.push('<div class="ctg-dim" data-project-fix="' + escapeHtml(pstate.fix) + '">' + escapeHtml(t('container.project.fix.' + pstate.fix)) + '</div>');
+      html.push('<div class="ctg-dim" data-project-fix="' + escapeHtml(xiangMuTai.fix) + '">' + escapeHtml(t('container.project.fix.' + xiangMuTai.fix)) + '</div>');
       html.push('<div class="ctg-dim" data-project-history="1">' + escapeHtml(t('container.project.historyStillReadable')) + '</div>');
       // 需要先启动/选容器时才给跳转（走与之前一致的引导流）
-      if (pstate.fix === 'start-container' || pstate.fix === 'install-container' || pstate.fix === 'choose-container') {
+      if (xiangMuTai.fix === 'start-container' || xiangMuTai.fix === 'install-container' || xiangMuTai.fix === 'choose-container') {
         html.push('<div><button type="button" class="btn-mini" id="btn-project-goto-container">' + escapeHtml(t('container.console.gotoInstall')) + '</button></div>');
       }
     }
@@ -9412,17 +9412,17 @@
      * 这一行是给成员的解释：为什么我这台机器上找不到这个容器，却依然显示"已停止"。
      * 复用同一句「创建者离线」文案，不新造第三种状态。
      */
-    if (pstate.projectSource === 'creator-signal') {
+    if (xiangMuTai.projectSource === 'creator-signal') {
       html.push('<div class="ctg-dim" data-project-source="creator-signal">' + escapeHtml(t('container.project.remoteNotice')) + '</div>');
-      if (pstate.projectReportedAt) {
-        html.push('<div class="ctg-dim" data-project-reported-at="' + String(pstate.projectReportedAt) + '">' +
-          escapeHtml(fmtKey('container.project.remoteReportedAt', { time: new Date(pstate.projectReportedAt).toLocaleString() })) + '</div>');
+      if (xiangMuTai.projectReportedAt) {
+        html.push('<div class="ctg-dim" data-project-reported-at="' + String(xiangMuTai.projectReportedAt) + '">' +
+          escapeHtml(fmtKey('container.project.remoteReportedAt', { time: new Date(xiangMuTai.projectReportedAt).toLocaleString() })) + '</div>');
       }
     }
     // 项目目录（**产品级事实**：成员也能看到这个项目挂的是哪个目录）
-    if (pstate.projectDir) {
-      html.push('<div class="ctg-dim" data-project-dir="' + escapeHtml(pstate.projectDir) + '">' +
-        escapeHtml(fmtKey('container.project.dirBody', { dir: pstate.projectDir })) + '</div>');
+    if (xiangMuTai.projectDir) {
+      html.push('<div class="ctg-dim" data-project-dir="' + escapeHtml(xiangMuTai.projectDir) + '">' +
+        escapeHtml(fmtKey('container.project.dirBody', { dir: xiangMuTai.projectDir })) + '</div>');
     } else if (devEnv === 'container') {
       html.push('<div class="ctg-dim" data-project-dir-missing="1">' + escapeHtml(t('container.project.dirNotRecorded')) + '</div>');
     }
@@ -9489,7 +9489,7 @@
         '<div class="ctg-dim">' + escapeHtml(t('container.fsGuard.undo')) + '</div>' +
         '<div class="ctg-dim">' + escapeHtml(t('container.fsGuard.limits')) + '</div>' +
         '<div class="ctg-actions-row">' +
-        '<button type="button" class="btn-mini" id="btn-fs-guard"' + (guard && guard.platformSupported && pstate.localIsCreator ? '' : ' disabled') + '>' +
+        '<button type="button" class="btn-mini" id="btn-fs-guard"' + (guard && guard.platformSupported && xiangMuTai.localIsCreator ? '' : ' disabled') + '>' +
         escapeHtml(guard && guard.guarded ? t('container.fsGuard.unlock') : t('container.fsGuard.lock')) + '</button>' +
         '<span class="ctg-dim" id="fs-guard-msg"></span></div></div>');
     }
@@ -9582,12 +9582,12 @@
       guardBtn.onclick = async () => {
         const msg = $('fs-guard-msg');
         const box2 = $('fs-guard-box');
-        const wantLift = box2 && box2.dataset.guardActive === '1';
-        if (!wantLift) {
+        const xiangJieChu = box2 && box2.dataset.guardActive === '1';
+        if (!xiangJieChu) {
           const go3 = await uiConfirm(t('container.fsGuard.confirmBody'), t('container.fsGuard.confirmTitle'));
           if (!go3) return null;
         }
-        const r = await window.warmy.projectFsGuard({ sessionId: sel.id, action: wantLift ? 'lift' : 'apply' })
+        const r = await window.warmy.projectFsGuard({ sessionId: sel.id, action: xiangJieChu ? 'lift' : 'apply' })
           .catch((e) => ({ ok: false, code: 'ipc-failed', error: String((e && e.message) || e) }));
         // 先重渲染（状态块要换成"已锁定/未锁定"），再写消息
         await renderProjectStateBlock();
@@ -9596,7 +9596,7 @@
           const key = 'container.fsGuard.failed.' + String((r && r.code) || 'unknown');
           const text = t(key);
           msg2.textContent = r && r.ok
-            ? (wantLift ? t('container.fsGuard.lifted') : t('container.fsGuard.applied'))
+            ? (xiangJieChu ? t('container.fsGuard.lifted') : t('container.fsGuard.applied'))
             : (text === key ? fmtKey('container.project.enableFailed', { err: String((r && (r.error || r.code)) || 'unknown') }) : text);
         }
         return r;
@@ -9620,15 +9620,15 @@
     if (!box) return;
     const sel = state.selectedChat;
     if (!sel || sel.kind !== 'internal') { box.innerHTML = ''; return; }
-    let facts = null;
-    try { facts = await window.warmy.projectFiles({ sessionId: sel.id }); } catch { facts = null; }
-    if (!facts || !facts.ok) {
+    let shiShi = null;
+    try { shiShi = await window.warmy.projectFiles({ sessionId: sel.id }); } catch { shiShi = null; }
+    if (!shiShi || !shiShi.ok) {
       box.innerHTML = '<div class="ctg-dim" data-files-empty="load-failed">' + escapeHtml(t('projectFiles.loadFailed')) + '</div>';
       return;
     }
-    const kindLabel = (k) => t('projectFiles.kind.' + (k || 'changed'));
+    const LeiXingMing = (k) => t('projectFiles.kind.' + (k || 'changed'));
     const sourceLabel = (s) => t('projectFiles.source.' + (s || 'unknown'));
-    const when = (ts) => {
+    const faShengShiJian = (ts) => {
       if (!ts) return '—';
       try {
         const d = new Date(ts);
@@ -9639,24 +9639,24 @@
       '<div class="ctg-row pf-row" data-path="' + escapeHtml(f.path) + '" data-kind="' + escapeHtml(f.kind) + '"' +
       (f.op ? ' data-op="' + escapeHtml(f.op) + '"' : '') +
       (f.source ? ' data-source="' + escapeHtml(f.source) + '"' : '') + '>' +
-      '<div class="ctg-row-head"><span class="pf-kind" data-kind="' + escapeHtml(f.kind) + '">' + escapeHtml(kindLabel(f.kind)) + '</span>' +
-      '<span class="ctg-dim">' + escapeHtml(when(f.ts)) + '</span></div>' +
+      '<div class="ctg-row-head"><span class="pf-kind" data-kind="' + escapeHtml(f.kind) + '">' + escapeHtml(LeiXingMing(f.kind)) + '</span>' +
+      '<span class="ctg-dim">' + escapeHtml(faShengShiJian(f.ts)) + '</span></div>' +
       '<div class="pf-path">' + escapeHtml(f.path) + '</div>' +
       (extra ? '<div class="ctg-dim">' + escapeHtml(extra) + '</div>' : '') +
       '</div>';
     const html = [];
     // ① 最近改动文件
     html.push('<div class="pf-head" data-pf="changed">' + escapeHtml(t('projectFiles.changedTitle')) + '</div>');
-    html.push(facts.changed && facts.changed.length
-      ? facts.changed.slice(0, 20).map((f) => rowOf(f, f.source ? sourceLabel(f.source) : '')).join('')
-      : '<div class="ctg-dim" data-empty="changed">' + escapeHtml(t('projectFiles.empty.' + (facts.projectDirReason === 'not-recorded' ? 'noProjectDir' : 'changed'))) + '</div>');
+    html.push(shiShi.changed && shiShi.changed.length
+      ? shiShi.changed.slice(0, 20).map((f) => rowOf(f, f.source ? sourceLabel(f.source) : '')).join('')
+      : '<div class="ctg-dim" data-empty="changed">' + escapeHtml(t('projectFiles.empty.' + (shiShi.projectDirReason === 'not-recorded' ? 'noProjectDir' : 'changed'))) + '</div>');
     // ② 其他文件（非项目内的）
     html.push('<div class="pf-head" data-pf="other">' + escapeHtml(t('projectFiles.otherTitle')) + '</div>');
-    html.push(facts.other && facts.other.length
-      ? facts.other.slice(0, 20).map((f) => rowOf(f, sourceLabel(f.source))).join('')
+    html.push(shiShi.other && shiShi.other.length
+      ? shiShi.other.slice(0, 20).map((f) => rowOf(f, sourceLabel(f.source))).join('')
       : '<div class="ctg-dim" data-empty="other">' + escapeHtml(t('projectFiles.empty.other')) + '</div>');
     // ③ 生成的产品
-    const p = facts.product || {};
+    const p = shiShi.product || {};
     html.push('<div class="pf-head" data-pf="product">' + escapeHtml(t('projectFiles.productTitle')) + '</div>');
     html.push('<div class="ctg-row" id="product-card" data-product-kind="' + escapeHtml(p.kind || 'none') + '"' +
       ' data-product-dir-exists="' + (p.dirExists ? '1' : '0') + '" data-entry-runnable="' + (p.entryHostRunnable ? '1' : '0') + '">' +
@@ -9665,7 +9665,7 @@
       (p.dirExists ? '' : ' · ' + escapeHtml(t('projectFiles.productDirPlanned'))) + '</div>');
     if (p.entry) {
       html.push('<div class="pf-path" data-product-entry="' + escapeHtml(p.entry) + '">' + escapeHtml(p.entry) + '</div>');
-      html.push('<div class="ctg-dim">' + escapeHtml(kindLabel(p.kind === 'program' ? 'program' : 'file')) + '</div>');
+      html.push('<div class="ctg-dim">' + escapeHtml(LeiXingMing(p.kind === 'program' ? 'program' : 'file')) + '</div>');
     } else {
       html.push('<div class="ctg-dim" data-product-none="' + escapeHtml(p.entryReason || 'none') + '">' + escapeHtml(t('projectFiles.entry.' + (p.entryReason || 'none'))) + '</div>');
     }
@@ -9678,16 +9678,16 @@
      * 台账本身也如实摆一行出来（**项目级、成员可见**）：有多少条、什么来源。
      * 这样"记录文件的改动是产品功能"这件事在界面上是**看得见**的，而不是只写在文档里。
      */
-    const ledgerRows = facts.ledger || [];
-    html.push('<div class="ctg-dim" data-ledger-count="' + String(ledgerRows.length) + '" data-ledger-scope="project">' +
-      escapeHtml(fmtKey('projectFiles.ledgerCount', { n: String(ledgerRows.length) })) + '</div>');
-    if (facts.projectSource === 'creator-signal') {
+    const zhangBenHang = shiShi.ledger || [];
+    html.push('<div class="ctg-dim" data-ledger-count="' + String(zhangBenHang.length) + '" data-ledger-scope="project">' +
+      escapeHtml(fmtKey('projectFiles.ledgerCount', { n: String(zhangBenHang.length) })) + '</div>');
+    if (shiShi.projectSource === 'creator-signal') {
       html.push('<div class="ctg-dim" data-project-source="creator-signal">' +
         escapeHtml(t('projectFiles.fromCreatorSignal')) + '</div>');
     }
-    if (facts.missingSources && facts.missingSources.length) {
-      html.push('<div class="ctg-dim" data-missing-sources="' + escapeHtml(facts.missingSources.join(',')) + '">' +
-        escapeHtml(fmtKey('projectFiles.missingHint', { n: String(facts.missingSources.length) })) + '</div>');
+    if (shiShi.missingSources && shiShi.missingSources.length) {
+      html.push('<div class="ctg-dim" data-missing-sources="' + escapeHtml(shiShi.missingSources.join(',')) + '">' +
+        escapeHtml(fmtKey('projectFiles.missingHint', { n: String(shiShi.missingSources.length) })) + '</div>');
     }
     html.push('</div>');
     box.innerHTML = html.join('');
@@ -9724,8 +9724,8 @@
     btn.dataset.gateReason = gate.reason;
     btn.dataset.shellExecutable = gate.available ? '1' : '0';
     btn.title = gate.openable ? t('container.console.tip') : t('container.console.' + gate.reason);
-    const pane = $('ctg-shell-pane');
-    if (pane && !pane.classList.contains('hidden')) applyShellAvailability(gate);
+    const mianBan = $('ctg-shell-pane');
+    if (mianBan && !mianBan.classList.contains('hidden')) applyShellAvailability(gate);
     return btn.dataset.gate;
   }
 
@@ -9753,11 +9753,11 @@
   }
 
   async function openContainerShell() {
-    const pane = $('ctg-shell-pane');
-    if (!pane) return false;
+    const mianBan = $('ctg-shell-pane');
+    if (!mianBan) return false;
     const gate = await currentShellGate();
     if (!gate.openable) return false;
-    pane.classList.remove('hidden');
+    mianBan.classList.remove('hidden');
     const hint = $('ctg-shell-hint');
     if (hint) hint.textContent = t('container.console.title');
     const out = $('ctg-shell-out');
@@ -9769,22 +9769,22 @@
      * 并在任何未就绪的情况下如实拒绝（`executed: false`）—— 也就是**一条命令都没执行**。
      * 参数形状只有 { runtimeId, action }（action 是枚举）——**没有任何命令字符串**。
      */
-    let resp = null;
+    let xiangYing = null;
     try {
-      resp = await window.warmy.containerShell({ runtimeId: String(rec.runtimeId || ''), action: 'open', sessionId: sel ? sel.id : '' });
+      xiangYing = await window.warmy.containerShell({ runtimeId: String(rec.runtimeId || ''), action: 'open', sessionId: sel ? sel.id : '' });
     } catch (e) {
-      resp = { ok: false, code: 'ipc-failed', reasonKey: 'notReady', security: null, error: String((e && e.message) || e) };
+      xiangYing = { ok: false, code: 'ipc-failed', reasonKey: 'notReady', security: null, error: String((e && e.message) || e) };
     }
     const lines = [
       t('container.console.intro'),
       '',
       fmtKey('container.console.stateLine', {
-        code: String((resp && resp.code) || 'unknown'),
-        why: t('container.console.' + ((resp && resp.reasonKey) || 'notReady')),
+        code: String((xiangYing && xiangYing.code) || 'unknown'),
+        why: t('container.console.' + ((xiangYing && xiangYing.reasonKey) || 'notReady')),
       }),
       '',
     ];
-    if (!resp || !resp.ok) {
+    if (!xiangYing || !xiangYing.ok) {
       lines.push(t('container.console.needsImage'));
       lines.push('');
       lines.push(t('container.console.linuxNode'));
@@ -9796,16 +9796,16 @@
        * 第十六批：门禁通过 ⇒ **真的在容器里开了一条 shell**（`insideContainer:true` 是主进程
        * 回给我们的**事实**）。这里如实说明容器名与"容器是新起的还是原本就在"。
        */
-      lines.push(fmtKey('container.console.openedInContainer', { container: String(resp.containerRef || '') }));
+      lines.push(fmtKey('container.console.openedInContainer', { container: String(xiangYing.containerRef || '') }));
       lines.push('');
-      lines.push(resp.containerCreated ? t('container.console.containerCreated') : t('container.console.containerReused'));
+      lines.push(xiangYing.containerCreated ? t('container.console.containerCreated') : t('container.console.containerReused'));
       lines.push('');
     }
     lines.push(t('container.console.security'));
     lines.push(fmtKey('container.console.securityDetail', {
-      remote: String((resp && resp.security && resp.security.remoteInjectPaths) ?? 0),
-      auto: (resp && resp.security && resp.security.autoRun) === true ? '1' : '0',
-      secretEnv: (resp && resp.security && resp.security.forwardsSecretEnv) === true ? '1' : '0',
+      remote: String((xiangYing && xiangYing.security && xiangYing.security.remoteInjectPaths) ?? 0),
+      auto: (xiangYing && xiangYing.security && xiangYing.security.autoRun) === true ? '1' : '0',
+      secretEnv: (xiangYing && xiangYing.security && xiangYing.security.forwardsSecretEnv) === true ? '1' : '0',
     }));
     if (out) out.textContent = lines.join('\n') + '\n';
     applyShellAvailability(gate);
@@ -9818,13 +9818,13 @@
     const inChat = !!sel && (sel.kind === 'single' || sel.kind === 'internal');
     if (!inChat) return { available: false, openable: false, code: 'not-in-chat', reason: 'onlyInChat', needsInstall: false };
     await probeContainers(false);
-    const pstate = sel.kind === 'internal' ? await projectStateFor(sel.id) : null;
+    const xiangMuTai = sel.kind === 'internal' ? await quXiangMuTai(sel.id) : null;
     // 控制台只属于**容器开发**的项目：「运行/测试在容器中」那个选项已作废删除
-    const runInContainer = !!(pstate && pstate.devEnv === 'container');
+    const runInContainer = !!(xiangMuTai && xiangMuTai.devEnv === 'container');
     // 运行时来自项目状态（containerProjectRuntime），不再有会话级的容器记录
-    const rec = { runtimeId: (pstate && pstate.runtimeId) || '' };
+    const rec = { runtimeId: (xiangMuTai && xiangMuTai.runtimeId) || '' };
     if (!runInContainer) return { available: false, openable: false, code: 'not-enabled', reason: 'notEnabled', needsInstall: false };
-    if (pstate && pstate.stopped) return { available: false, openable: false, code: 'project-stopped', reason: 'projectStopped', needsInstall: false };
+    if (xiangMuTai && xiangMuTai.stopped) return { available: false, openable: false, code: 'project-stopped', reason: 'projectStopped', needsInstall: false };
     const row = rec.runtimeId ? containerEntry(rec.runtimeId) : null;
     if (!row || row.status !== 'ready') return { available: false, openable: false, code: 'container-not-ready', reason: 'notReady', needsInstall: true };
     /**
@@ -9856,24 +9856,24 @@
     const sel = state.selectedChat;
     const conn2 = sel ? await window.warmy.projectState({ sessionId: sel.id }).catch(() => null) : null;
     const rec = { runtimeId: (conn2 && conn2.ok && conn2.state && conn2.state.runtimeId) || '' };
-    let resp = null;
+    let xiangYing = null;
     try {
-      resp = await window.warmy.containerShell({ runtimeId: String(rec.runtimeId || ''), action: 'write', sessionId: sel ? sel.id : '', data: line });
+      xiangYing = await window.warmy.containerShell({ runtimeId: String(rec.runtimeId || ''), action: 'write', sessionId: sel ? sel.id : '', data: line });
     } catch (e) {
-      resp = { ok: false, code: 'ipc-failed', reasonKey: 'notReady', executed: false, error: String((e && e.message) || e) };
+      xiangYing = { ok: false, code: 'ipc-failed', reasonKey: 'notReady', executed: false, error: String((e && e.message) || e) };
     }
-    const executed = !!(resp && resp.ok && resp.executed !== false);
+    const executed = !!(xiangYing && xiangYing.ok && xiangYing.executed !== false);
     if (out) {
       out.textContent += (executed ? t('container.console.sent') : t('container.console.refused') + ' ') + line + '\n';
-      if (!executed) out.textContent += t('container.console.' + ((resp && resp.reasonKey) || 'notReady')) + '\n';
+      if (!executed) out.textContent += t('container.console.' + ((xiangYing && xiangYing.reasonKey) || 'notReady')) + '\n';
       /**
        * 第十六批：**容器里的真实输出**原样贴出来（这是"真的在容器里跑"最直接的证据）。
        * 没有输出就什么都不加（不编一句"没有输出"以外的内容）。
        */
-      if (executed && resp && resp.output) out.textContent += String(resp.output);
-      if (executed && resp && resp.autoSolidify && resp.autoSolidify.done) {
+      if (executed && xiangYing && xiangYing.output) out.textContent += String(xiangYing.output);
+      if (executed && xiangYing && xiangYing.autoSolidify && xiangYing.autoSolidify.done) {
         out.textContent += '\n' + fmtKey('container.env.solidify.done', {
-          time: new Date().toLocaleString(), image: String(resp.autoSolidify.imageRef || ''), id: '',
+          time: new Date().toLocaleString(), image: String(xiangYing.autoSolidify.imageRef || ''), id: '',
         });
       }
       out.scrollTop = out.scrollHeight;
@@ -9935,7 +9935,7 @@
       await renderProjectStateBlock();
       await renderProjectFilesBlock();
     }
-    await applyProjectDevGate();
+    await yingYongXiangMuKaiFaMen();
     await refreshContainerConsoleGate();
   }
 
@@ -10018,7 +10018,7 @@
   /** 项目右键菜单条目（追加到既有的 groupMenu 上；只在 internal 项目里出现） */
   async function projectMenuItems(g) {
     // 状态与"是不是容器开发项目"都问**主进程**（唯一事实来源），不在渲染层猜
-    const state19 = await projectStateFor(g.id);
+    const state19 = await quXiangMuTai(g.id);
     const blocked = !!(state19 && state19.stopped);
     const dev = await loadContainerDevMap();
     const isContainerProject = devEnvOf(dev, g.id) === 'container';
@@ -10079,13 +10079,13 @@
       await uiAlert(text === key ? fmtKey('container.project.enableFailed', { err: String((st && (st.error || st.code)) || 'unknown') }) : text, t('container.fsGuard.title'));
       return false;
     }
-    const wantLift = st.guarded === true;
-    const okGo = await uiConfirm(
-      wantLift ? t('container.fsGuard.confirmLiftBody') : t('container.fsGuard.confirmBody'),
+    const xiangJieChu = st.guarded === true;
+    const keZhiXing = await uiConfirm(
+      xiangJieChu ? t('container.fsGuard.confirmLiftBody') : t('container.fsGuard.confirmBody'),
       t('container.fsGuard.confirmTitle')
     );
-    if (!okGo) return false;
-    const r = await window.warmy.projectFsGuard({ sessionId: groupId, action: wantLift ? 'lift' : 'apply' })
+    if (!keZhiXing) return false;
+    const r = await window.warmy.projectFsGuard({ sessionId: groupId, action: xiangJieChu ? 'lift' : 'apply' })
       .catch((e) => ({ ok: false, code: 'ipc-failed', error: String((e && e.message) || e) }));
     if (!r || !r.ok) {
       const key = 'container.fsGuard.failed.' + String((r && r.code) || 'unknown');
@@ -10131,24 +10131,24 @@
       if (window.__panelLog.length > 60) window.__panelLog.shift();
     } catch { /* noop */ }
     applyPanelVisibility(kind);
-    const isGroup = kind === 'internal' || kind === 'external' || kind === 'externalGroup' || kind === 'extgroup';
-    document.querySelectorAll('.only-group').forEach((el) => {
-      el.classList.toggle('hidden', !isGroup);
+    const shiQun = kind === 'internal' || kind === 'external' || kind === 'externalGroup' || kind === 'extgroup';
+    document.querySelectorAll('.only-group').forEach((yuanSu) => {
+      yuanSu.classList.toggle('hidden', !shiQun);
     });
     /**
      * ADR 004 §一.7：容器相关区块**只在「项目」与「我的牛马」**出现 ——
      * 联系人与群聊用不到容器，不显示（不是灰着占位）。
      */
     const showRunEnv = kind === 'single' || kind === 'internal';
-    document.querySelectorAll('[data-only="proj-single"]').forEach((el) => {
-      el.classList.toggle('hidden', !showRunEnv);
+    document.querySelectorAll('[data-only="proj-single"]').forEach((yuanSu) => {
+      yuanSu.classList.toggle('hidden', !showRunEnv);
     });
     // 控制台（容器壳）只在「项目 / 我的牛马」出现 —— 与 ADR 004 §一.7 一致
     const shellBtn = $('btn-container-shell');
     if (shellBtn) shellBtn.classList.toggle('hidden', !showRunEnv);
     if (!showRunEnv) $('ctg-shell-pane')?.classList.add('hidden');
     // 容器项目停止态 ⇒ 开发入口（输入 + 发送）禁用 + 说明（成员侧与"创建者下线"一致）
-    void applyProjectDevGate();
+    void yingYongXiangMuKaiFaMen();
     void refreshContainerConsoleGate();
   }
 
@@ -10162,17 +10162,17 @@
       box.innerHTML = '<div class="muted">' + t('panel.modelMgrEmpty') + '</div>';
       return;
     }
-    const isGroup = sel.kind === 'internal' || sel.kind === 'extgroup';
+    const shiQun = sel.kind === 'internal' || sel.kind === 'extgroup';
     let entries = [];
-    if (isGroup) {
+    if (shiQun) {
       const g = state.groups.find((x) => x.id === sel.id);
       const members = (g && g.members) || [];
       entries = members.map((m) => {
-        const nm = typeof m === 'string' ? m : (m && (m.name || m.id)) || '';
-        const local = state.instances.find((i) => i.name === nm || i.id === nm);
+        const mingCheng = typeof m === 'string' ? m : (m && (m.name || m.id)) || '';
+        const local = state.instances.find((i) => i.name === mingCheng || i.id === mingCheng);
         return local
           ? { inst: local, editable: true }
-          : { inst: { name: nm, availableModels: [], chain: [], defaultModel: '' }, editable: false };
+          : { inst: { name: mingCheng, availableModels: [], chain: [], defaultModel: '' }, editable: false };
       });
     } else {
       const local =
@@ -10211,7 +10211,7 @@
       <summary>
         <img class="av-img small" src="${escapeHtml(instanceAvatarSrc(inst))}" alt=""/>
         <span class="mgr-name">${escapeHtml(inst.name || inst.id || '')}</span>
-        ${editable ? '' : '<span class="mgr-ro">' + t('panel.modelMgrReadonly') + '</span>'}
+        ${editable ? '' : '<kuaDu class="mgr-ro">' + t('panel.modelMgrReadonly') + '</kuaDu>'}
       </summary>
       <div class="mgr-body">
         <label class="mgr-lb">${t('instances.defaultModel')}</label>
@@ -10222,17 +10222,17 @@
         <label class="mgr-lb">${t('instances.availableModels')}</label>
         <div class="mgr-models">${
           models.length
-            ? models.map((m) => `<span class="model-chip">${escapeHtml(m)}${
+            ? models.map((m) => `<kuaDu class="model-chip">${escapeHtml(m)}${
                 editable ? `<button class="x" data-mgdel="${idx}" data-m="${escapeHtml(m)}" title="${t('settings.removeModel')}">×</button>` : ''
-              }</span>`).join('')
-            : '<span class="muted">' + t('settings.modelsEmpty') + '</span>'
+              }</kuaDu>`).join('')
+            : '<kuaDu class="muted">' + t('settings.modelsEmpty') + '</kuaDu>'
         }</div>
         <label class="mgr-lb">${t('instances.fallbackChain')}</label>
         <ol class="mgr-chain">${
           chain.length
             ? chain.map((m, k) => `<li data-chain="${idx}" data-k="${k}"${editable ? ' draggable="true"' : ''}>
-                <span class="mgr-chain-name">${escapeHtml(m)}</span>
-                <span class="mgr-chain-meta">${escapeHtml(providerLabelOf(m))} · ${escapeHtml(latencyText(m))}</span>
+                <kuaDu class="mgr-chain-name">${escapeHtml(m)}</kuaDu>
+                <kuaDu class="mgr-chain-meta">${escapeHtml(providerLabelOf(m))} · ${escapeHtml(latencyText(m))}</kuaDu>
                 ${editable ? `<button class="btn-mini" data-mgtest="${idx}" data-m="${escapeHtml(m)}" title="${t('model.test')}">⚡</button>` : ''}
               </li>`).join('')
             : '<li class="muted">—</li>'
@@ -10360,12 +10360,12 @@
       const root = $('modal-root');
       $('modal-title').textContent = t('model.addTitle');
       const body = $('modal-body');
-      const provs = state.providers || [];
+      const gongYingShangJi = state.providers || [];
       const editProvLabel = t('model.editProvider') || t('settings.providers');
       body.innerHTML = `<div class="field">
           <label>${t('model.pickProvider')}</label>
           <div style="display:flex;gap:6px;align-items:center">
-            <select id="mp-prov" style="flex:1">${provs.map((p, i) => `<option value="${i}">${escapeHtml(p.label || p.id)}</option>`).join('')}</select>
+            <select id="mp-prov" style="flex:1">${gongYingShangJi.map((p, i) => `<option value="${i}">${escapeHtml(p.label || p.id)}</option>`).join('')}</select>
             <button class="btn-mini" id="mp-fetch">${t('model.fetch')}</button>
             <button class="btn-mini" id="mp-edit-prov" title="${escapeHtml(editProvLabel)}">${escapeHtml(editProvLabel)}</button>
           </div>
@@ -10374,9 +10374,9 @@
         <div class="model-pick-list" id="mp-list"></div>`;
       const listBox = $('mp-list');
       const renderList = () => {
-        const p = provs[Number($('mp-prov').value)] || {};
-        const have = new Set(inst.availableModels || []);
-        const cand = (p.models || []).filter((m) => !have.has(m));
+        const p = gongYingShangJi[Number($('mp-prov').value)] || {};
+        const yiYou = new Set(inst.availableModels || []);
+        const cand = (p.models || []).filter((m) => !yiYou.has(m));
         listBox.innerHTML = cand.length
           ? cand.map((m) => `<label><input type="checkbox" value="${escapeHtml(m)}"/> ${escapeHtml(m)}</label>`).join('')
           : `<div class="muted">${t('model.noneAvailable')}</div>`;
@@ -10386,7 +10386,7 @@
       $('mp-fetch').onclick = async () => {
         const btn = $('mp-fetch');
         btn.textContent = t('common.loading');
-        const p = provs[Number($('mp-prov').value)] || {};
+        const p = gongYingShangJi[Number($('mp-prov').value)] || {};
         try {
           const r = await window.warmy.listModels({ protocol: p.protocol, baseURL: p.baseURL, apiKey: p.apiKey });
           if (r && r.ok && r.models && r.models.length) {
@@ -10400,28 +10400,28 @@
       };
       /** 跳到 设置 → 模型：**先确认**（弹窗关闭不可回退，必须告知用户） */
       const goEditProviders = async () => {
-        const okGo = await uiConfirm(
+        const keZhiXing = await uiConfirm(
           t('model.editProviderConfirmBody') ||
             '将关闭本弹窗并跳转到「设置 → 模型」编辑供应商。添加模型的选择会丢失，确定继续？',
           t('model.editProviderConfirm') || t('model.editProvider')
         );
-        if (!okGo) return; // 取消：停留在添加模型弹窗
+        if (!keZhiXing) return; // 取消：停留在添加模型弹窗
         root.classList.add('hidden');
         resolve(null);
         try {
           setNav('settings');
-          const navBtn = document.querySelector('#settings-nav button[data-sec="model"]');
-          if (navBtn) navBtn.click();
+          const DaoHangAnNiu = document.querySelector('#settings-nav button[data-sec="model"]');
+          if (DaoHangAnNiu) DaoHangAnNiu.click();
           requestAnimationFrame(() => {
             const card = document.querySelector('#prov-list')?.closest('.set-section') || $('prov-list');
             if (card && card.scrollIntoView) card.scrollIntoView({ block: 'start' });
             const idx = Number($('mp-prov') ? $('mp-prov').value : -1);
-            const want = provs[idx];
+            const want = gongYingShangJi[idx];
             if (want) {
               const rows = document.querySelectorAll('#prov-list .prov-row, #prov-list > div');
-              rows.forEach((el) => {
-                const txt = el.textContent || '';
-                if (txt.includes(want.label || want.id || '')) el.classList.add('prov-focus');
+              rows.forEach((yuanSu) => {
+                const txt = yuanSu.textContent || '';
+                if (txt.includes(want.label || want.id || '')) yuanSu.classList.add('prov-focus');
               });
             }
           });
@@ -10465,13 +10465,13 @@
     close.onclick = () => { root.classList.add('hidden'); };
     acts.appendChild(close);
     root.classList.remove('hidden');
-    const inp = $('search-popup-input');
-    inp?.focus();
+    const shuRu = $('search-popup-input');
+    shuRu?.focus();
     let timer = null;
-    inp?.addEventListener('input', () => {
+    shuRu?.addEventListener('input', () => {
       clearTimeout(timer);
       timer = setTimeout(async () => {
-        const q = inp.value.trim();
+        const q = shuRu.value.trim();
         if (!q) { $('search-popup-results').textContent = ''; return; }
         const r = await window.warmy.searchMessages(q).catch(() => null);
         const hits = r?.hits || [];
@@ -10514,8 +10514,8 @@
   }
 
   // ── 顶层交互绑定（必须全局执行一次） ──
-  document.querySelectorAll('.rail-item').forEach((el) => {
-    el.onclick = () => setNav(el.dataset.nav);
+  document.querySelectorAll('.rail-item').forEach((yuanSu) => {
+    yuanSu.onclick = () => setNav(yuanSu.dataset.nav);
   });
   $('list-search').addEventListener('input', () => renderList());
   $('btn-send').addEventListener('click', () => send());
@@ -10525,7 +10525,7 @@
     if (r?.ok) {
       const name = r.path.split(/[\\/]/).pop();
       state.attachments.push({ name, path: r.path });
-      renderAttach();
+      xuanranFujian();
     }
   });
 
@@ -10612,13 +10612,13 @@
         for (const [label, key] of [['session', 'sessionId'], ['model', 'model']]) {
           agg(key).forEach(([k, v]) => lines.push([label, esc(k), v.turns, v.tokens, v.cost.toFixed(6)].join(',')));
         }
-        const rr = await window.warmy.saveText({
+        const yunXingJieGuo = await window.warmy.saveText({
           defaultName: 'warmy-cost.csv',
           content: lines.join('\n'),
           filters: [{ name: 'CSV', extensions: ['csv'] }],
         });
-        if (rr && rr.ok) uiAlert(t('instances.saved'));
-        else if (rr && rr.error) uiAlert(String(rr.error));
+        if (yunXingJieGuo && yunXingJieGuo.ok) uiAlert(t('instances.saved'));
+        else if (yunXingJieGuo && yunXingJieGuo.error) uiAlert(String(yunXingJieGuo.error));
       };
     }
   }
@@ -10654,7 +10654,7 @@
       .map((c) => {
         const d = new Date(c.createdAt);
         const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const when = now - c.createdAt < 86400000 ? hm : d.toLocaleString();
+        const faShengShiJian = now - c.createdAt < 86400000 ? hm : d.toLocaleString();
         const envRec = (envByCp || {})[String(c.id)] || null;
         const cur = (r && r.currentEnv) || { active: false, runtimeId: '', revision: 'host' };
         const rtName = (id) => (id ? t('container.rt.' + id + '.name') : t('container.current.none'));
@@ -10666,7 +10666,7 @@
             escapeHtml(fmtKey('checkpoints.env.changed', { was: String(envRec.revision || ''), now: String(cur.revision || '') })) + '</div>'
           : '<div class="ctg-dim" data-env-changed="0">' + escapeHtml(t('checkpoints.env.same')) + '</div>';
         return `<details class="cp-item" data-id="${escapeHtml(String(c.id))}" data-env-revision="${escapeHtml(String((envRec && envRec.revision) || ''))}">
-          <summary>${escapeHtml(String(when))} · ${escapeHtml(String(c.phase || ''))} · ${escapeHtml(String(c.strategy || ''))}</summary>
+          <summary>${escapeHtml(String(faShengShiJian))} · ${escapeHtml(String(c.phase || ''))} · ${escapeHtml(String(c.strategy || ''))}</summary>
           <div class="cp-body">
             <div>${t('checkpoints.tasks')}: ${escapeHtml(c.phase || '')}</div>
             <div class="ctg-dim">${escapeHtml(t('checkpoints.env.title'))}</div>
@@ -10737,13 +10737,13 @@
     const replicas = (state.groups || []).length || 0;
     const retentionDays = 30;
     const byteSample = 1024 * (state.instances || []).length;
-    const cell = (k, v) => '<div class="diag-cell"><div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(fmtDisp(v)) + '</div></div>';
+    const ge = (k, v) => '<div class="diag-cell"><div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(fmtDisp(v)) + '</div></div>';
     box.innerHTML =
-      cell(t('settings.dataReplicas'), replicas) +
-      cell(t('settings.dataRetention'), retentionDays) +
-      cell(t('settings.dataBytes'), byteSample);
-    box.querySelectorAll('.v').forEach((el) => {
-      if (el.textContent.indexOf('[object Object]') !== -1) el.textContent = '—';
+      ge(t('settings.dataReplicas'), replicas) +
+      ge(t('settings.dataRetention'), retentionDays) +
+      ge(t('settings.dataBytes'), byteSample);
+    box.querySelectorAll('.v').forEach((yuanSu) => {
+      if (yuanSu.textContent.indexOf('[object Object]') !== -1) yuanSu.textContent = '—';
     });
   }
 
@@ -10753,20 +10753,20 @@
   }
 
   function bindSkillScanDirs() {
-    const addBtn = $('btn-skill-scan-add');
-    const inp = $('skill-scan-dir-input');
+    const tianJiaAnNiu = $('btn-skill-scan-add');
+    const shuRu = $('skill-scan-dir-input');
     const msg = $('skill-scan-msg');
-    if (!addBtn || addBtn.dataset.bound === '1') return;
-    addBtn.dataset.bound = '1';
-    addBtn.onclick = async () => {
-      const v = String((inp && inp.value) || '').trim();
+    if (!tianJiaAnNiu || tianJiaAnNiu.dataset.bound === '1') return;
+    tianJiaAnNiu.dataset.bound = '1';
+    tianJiaAnNiu.onclick = async () => {
+      const v = String((shuRu && shuRu.value) || '').trim();
       if (!v) {
         if (msg) msg.textContent = t('settings.skillsScanInvalid');
         return;
       }
       const cur = await skillScanDirsGet();
       const dirs = ((cur && cur.dirs) || []).slice();
-      const editRaw = inp && inp.getAttribute('data-edit-i');
+      const editRaw = shuRu && shuRu.getAttribute('data-edit-i');
       const editing = editRaw !== null && editRaw !== undefined && editRaw !== '';
       const MAX = 10;
       if (!editing && dirs.length >= MAX) {
@@ -10794,17 +10794,17 @@
         void uiAlert(t('settings.skillsScanMax'), t('settings.skillsScanTitle'));
         return;
       }
-      const rr = await skillScanDirsSet(dirs);
-      if (rr && rr.ok === false) {
+      const yunXingJieGuo = await skillScanDirsSet(dirs);
+      if (yunXingJieGuo && yunXingJieGuo.ok === false) {
         if (msg) msg.textContent = t('settings.skillsScanMax');
         void uiAlert(t('settings.skillsScanMax'), t('settings.skillsScanTitle'));
         return;
       }
-      if (inp) {
-        inp.value = '';
-        inp.removeAttribute('data-edit-i');
+      if (shuRu) {
+        shuRu.value = '';
+        shuRu.removeAttribute('data-edit-i');
       }
-      addBtn.textContent = t('settings.skillsScanAdd');
+      tianJiaAnNiu.textContent = t('settings.skillsScanAdd');
       await renderSkillScanDirs();
       await renderSkillList();
       const st = (window.__skillScanState && window.__skillScanState.scanDirs) || [];
@@ -10916,8 +10916,8 @@
       b.onclick = async () => {
         const id = b.dataset.skillDel;
         if (!(await uiConfirm(t('settings.skillRemove') + ': ' + id + '?'))) return;
-        const rr = await window.warmy.skillsRemove(id);
-        if (rr && rr.ok === false) uiAlert(String(rr.error || ''));
+        const yunXingJieGuo = await window.warmy.skillsRemove(id);
+        if (yunXingJieGuo && yunXingJieGuo.ok === false) uiAlert(String(yunXingJieGuo.error || ''));
         renderSkillList();
       };
     });
@@ -11056,8 +11056,8 @@
     });
     const rows = (members || []).map((m) => {
       const name = String(m.name || '');
-      const bag = netState.presence[groupId] || {};
-      const p = bag[name] || bag[String(m.id || name)] || {};
+      const bao = netState.presence[groupId] || {};
+      const p = bao[name] || bao[String(m.id || name)] || {};
       const list = (byName[name] || []).slice();
       if (!list.length && p.fp) {
         certs.forEach((c) => { if (c.memberFingerprint === p.fp) list.push(c); });
@@ -11136,11 +11136,11 @@
         '<select id="setup-locale">' + localeOptionsHtml(state.locale) + '</select></div>';
       const acts = $('modal-actions');
       acts.innerHTML = '';
-      const okBtn = document.createElement('button');
-      okBtn.className = 'btn-primary';
-      okBtn.textContent = t('setup.start') || t('common.ok');
+      const QueDingAnNiu = document.createElement('button');
+      QueDingAnNiu.className = 'btn-primary';
+      QueDingAnNiu.textContent = t('setup.start') || t('common.ok');
       const sel = () => $('setup-locale');
-      okBtn.onclick = () => {
+      QueDingAnNiu.onclick = () => {
         const v = sel() ? sel().value : 'zh-CN';
         root.classList.add('hidden');
         resolve(v);
@@ -11155,10 +11155,10 @@
           if (hint) hint.textContent = t('setup.pickLanguage') || t('settings.language');
           const lab = $('modal-body').querySelector('label');
           if (lab) lab.textContent = t('setup.locale') || t('settings.language');
-          okBtn.textContent = t('setup.start') || t('common.ok');
+          QueDingAnNiu.textContent = t('setup.start') || t('common.ok');
         };
       }
-      acts.append(okBtn);
+      acts.append(QueDingAnNiu);
       root.classList.remove('hidden');
     });
   }
@@ -11188,18 +11188,18 @@
       let scrolledEnd = false;
       let openedAt = Date.now();
       const box = () => $('privacy-modal-body');
-      const sync = () => {
-        const el = box();
-        if (el) {
-          const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+      const tongBu = () => {
+        const yuanSu = box();
+        if (yuanSu) {
+          const atEnd = yuanSu.scrollTop + yuanSu.clientHeight >= yuanSu.scrollHeight - 4;
           if (atEnd) scrolledEnd = true;
         }
         const longEnough = Date.now() - openedAt >= 3000;
         yes.disabled = !(scrolledEnd && longEnough);
         yes.style.opacity = yes.disabled ? '0.5' : '1';
       };
-      box()?.addEventListener('scroll', sync);
-      const timer = setInterval(sync, 200);
+      box()?.addEventListener('scroll', tongBu);
+      const timer = setInterval(tongBu, 200);
       yes.onclick = async () => {
         clearInterval(timer);
         root.classList.add('hidden');
@@ -11209,7 +11209,7 @@
       acts.append(no, yes);
       root.classList.remove('hidden');
       openedAt = Date.now();
-      sync();
+      tongBu();
     });
   }
   async function maybeShowSetup() {
@@ -11239,7 +11239,7 @@
   // 安装/首启：必须弹出语言选择（setupDone !== true）
   void maybeShowSetup();
 
-  async function refreshExecutors() {
+  async function shuaxinZhixingqiji() {
     const box = $('exec-box');
     if (!box) return;
     const r = await window.warmy.executorsStatus().catch(() => null);
@@ -11251,7 +11251,7 @@
   $('btn-exec-run')?.addEventListener('click', async () => {
     const brief = state.selectedChat?.name || 'run task';
     await window.warmy.executorsRunBrief({ brief, contextItems: [] });
-    refreshExecutors();
+    shuaxinZhixingqiji();
   });
   
 
@@ -11287,10 +11287,10 @@
         const kw = b.textContent || '';
         showSearchPopup();
         setTimeout(() => {
-          const inp = $('search-popup-input');
-          if (!inp) return;
-          inp.value = kw;
-          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          const shuRu = $('search-popup-input');
+          if (!shuRu) return;
+          shuRu.value = kw;
+          shuRu.dispatchEvent(new Event('input', { bubbles: true }));
         }, 80);
       };
     });
@@ -11300,8 +11300,8 @@
         const kind = b.dataset.kbdel;
         const id = b.dataset.kbid;
         if (!(await uiConfirm(t('knowledge.delete') + ': ' + id + '?'))) return;
-        const rr = await window.warmy.kbDelete({ kind, id }).catch(() => null);
-        if (rr && rr.ok === false) uiAlert(String(rr.error || ''));
+        const yunXingJieGuo = await window.warmy.kbDelete({ kind, id }).catch(() => null);
+        if (yunXingJieGuo && yunXingJieGuo.ok === false) uiAlert(String(yunXingJieGuo.error || ''));
         runKbQuery(q);
       };
     });
@@ -11360,10 +11360,10 @@
   /** data: URL → 已解码的图片元素 */
   function loadImageElement(dataUrl) {
     return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('image-failed'));
-      img.src = dataUrl;
+      const tuPian = new Image();
+      tuPian.onload = () => resolve(tuPian);
+      tuPian.onerror = () => reject(new Error('image-failed'));
+      tuPian.src = dataUrl;
     });
   }
 
@@ -11371,9 +11371,9 @@
    * 一次尝试：按 maxDim 缩放（只缩不放）+ 可选旋转 → 画到 canvas → 读像素 → jsQR。
    * 命中返回 {text,width,height,maxDim,rotationDeg}，未命中返回 null。
    */
-  function qrTryDecode(img, maxDim, rotationDeg) {
-    const w0 = Number(img.naturalWidth || img.width || 0);
-    const h0 = Number(img.naturalHeight || img.height || 0);
+  function qrTryDecode(tuPian, maxDim, rotationDeg) {
+    const w0 = Number(tuPian.naturalWidth || tuPian.width || 0);
+    const h0 = Number(tuPian.naturalHeight || tuPian.height || 0);
     if (!w0 || !h0) return null;
     const k = Math.min(1, maxDim / Math.max(w0, h0));
     const w = Math.max(1, Math.round(w0 * k));
@@ -11389,7 +11389,7 @@
     ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.translate(cv.width / 2, cv.height / 2);
     if (rotationDeg) ctx.rotate((rotationDeg * Math.PI) / 180);
-    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    ctx.drawImage(tuPian, -w / 2, -h / 2, w, h);
     const px = ctx.getImageData(0, 0, cv.width, cv.height);
     const res = window.jsQR(px.data, cv.width, cv.height, { inversionAttempts: 'attemptBoth' });
     if (!res || !res.data) return null;
@@ -11406,9 +11406,9 @@
    */
   async function decodeQrImage(dataUrl) {
     if (!qrDecoderAvailable()) return { ok: false, reason: 'no-decoder', attempts: 0 };
-    let img;
+    let tuPian;
     try {
-      img = await loadImageElement(dataUrl);
+      tuPian = await loadImageElement(dataUrl);
     } catch {
       return { ok: false, reason: 'image-failed', attempts: 0 };
     }
@@ -11418,7 +11418,7 @@
         attempts++;
         let hit = null;
         try {
-          hit = qrTryDecode(img, step.maxDim, rot);
+          hit = qrTryDecode(tuPian, step.maxDim, rot);
         } catch (e) {
           // 两种失败必须分清：画布被污染（SecurityError）与解码器自己抛错，
           // 都是"读不出这张图"，但现场记录里要能看出是哪一种。
@@ -11443,13 +11443,13 @@
     } else if (/^https?:\/\//i.test(s)) {
       const m = /[?#]/.exec(s);
       if (!m) return { ok: false, reason: 'no-params' };
-      const seg = s.slice(m.index + 1);
+      const Duan = s.slice(m.index + 1);
       // 分享链接两种写法：直接带参数（?node=…&tok=…），或参数被包一层（?join=node%3D…&tok=…）
-      const wrapped = /(?:^|&)join=([^&]*)/.exec(seg);
+      const wrapped = /(?:^|&)join=([^&]*)/.exec(Duan);
       if (wrapped) {
         try { query = decodeURIComponent(wrapped[1]); } catch { query = wrapped[1]; }
       } else {
-        query = seg;
+        query = Duan;
       }
     } else if (s.indexOf('://') < 0 && !/\s/.test(s) && /^[A-Za-z0-9_%&=.+~-]+=/.test(s)) {
       // 二维码里去掉 scheme 的裸查询串（复制粘贴时常见）
@@ -11495,14 +11495,14 @@
   document.addEventListener('paste', (e) => {
     if (typeof qrScanActiveSink !== 'function') return;
     const files = (e.clipboardData && e.clipboardData.files) || [];
-    let img = null;
+    let tuPian = null;
     for (const f of files) {
-      if (String(f.type || '').startsWith('image/')) { img = f; break; }
+      if (String(f.type || '').startsWith('image/')) { tuPian = f; break; }
     }
-    if (!img) return; // 纯文本粘贴：照旧交给输入框自己处理
+    if (!tuPian) return; // 纯文本粘贴：照旧交给输入框自己处理
     e.preventDefault();
     e.stopPropagation();
-    void qrScanActiveSink(img);
+    void qrScanActiveSink(tuPian);
   });
 
   /**
@@ -11658,19 +11658,19 @@
    * 把左列的二维码画出来：**真** QR（版本自适应 + 纠错 M + 4 模块静区），屏幕宽度 168px。
    * 编码器不可用时返回 false 并置一句如实话术 —— 宁可没有码，也不给扫不出来的假码。
    */
-  function fillOwnQr(el, link, size = 168) {
-    if (!el) return false;
+  function fillOwnQr(yuanSu, link, size = 168) {
+    if (!yuanSu) return false;
     const svg = qrSvg(link, size);
     if (svg) {
-      el.innerHTML = svg;
-      el.classList.remove('own-qr-empty');
-      el.setAttribute('data-qr-state', 'ok');
+      yuanSu.innerHTML = svg;
+      yuanSu.classList.remove('own-qr-empty');
+      yuanSu.setAttribute('data-qr-state', 'ok');
       return true;
     }
-    el.innerHTML = '';
-    el.classList.add('own-qr-empty');
-    el.setAttribute('data-qr-state', 'no-encoder');
-    el.textContent = t('contact.qrUnavailable');
+    yuanSu.innerHTML = '';
+    yuanSu.classList.add('own-qr-empty');
+    yuanSu.setAttribute('data-qr-state', 'no-encoder');
+    yuanSu.textContent = t('contact.qrUnavailable');
     return false;
   }
 
@@ -11821,7 +11821,7 @@
     if (!q) return;
     const r = await window.warmy.searchMessages(q).catch(() => null);
     const hits = r?.hits || [];
-    pushMsg(state.selectedChat?.id || 'search', 'them', hits.length ? hits.map((x) => x.snippet).join('\n') : t('list.empty'));
+    tuisongXiaoxi(state.selectedChat?.id || 'search', 'them', hits.length ? hits.map((x) => x.snippet).join('\n') : t('list.empty'));
     renderChat();
   });
   // T. 消息右键：复制/引用
@@ -11833,8 +11833,8 @@
     openContextMenu(e.clientX, e.clientY, [
       { label: t('common.copy'), onClick: () => { navigator.clipboard?.writeText(text); } },
       { label: t('common.quote'), onClick: () => {
-          const inp = $('input');
-          if (inp) inp.value = '> ' + text.slice(0, 120) + '\n' + inp.value;
+          const shuRu = $('input');
+          if (shuRu) shuRu.value = '> ' + text.slice(0, 120) + '\n' + shuRu.value;
         } },
     ]);
   });
@@ -11882,10 +11882,10 @@
       ctx.clearRect(0, 0, 64, 64);
       if (src.kind === 'image' && src.src) {
         if (src.src.startsWith('data:')) return src.src;
-        const img = new Image();
-        img.src = src.src;
-        await img.decode();
-        ctx.drawImage(img, 0, 0, 64, 64);
+        const tuPian = new Image();
+        tuPian.src = src.src;
+        await tuPian.decode();
+        ctx.drawImage(tuPian, 0, 0, 64, 64);
         return c.toDataURL('image/png');
       }
       if (src.kind === 'letter') {
@@ -11896,7 +11896,7 @@
         const r = 64 * (6 / 40);
         ctx.fillStyle = bg;
         ctx.beginPath();
-        const rr = (x, y, w, h, rad) => {
+        const yunXingJieGuo = (x, y, w, h, rad) => {
           ctx.moveTo(x + rad, y);
           ctx.arcTo(x + w, y, x + w, y + h, rad);
           ctx.arcTo(x + w, y + h, x, y + h, rad);
@@ -11904,7 +11904,7 @@
           ctx.arcTo(x, y, x + w, y, rad);
           ctx.closePath();
         };
-        rr(0, 0, 64, 64, r);
+        yunXingJieGuo(0, 0, 64, 64, r);
         ctx.fill();
         ctx.fillStyle = fg;
         ctx.font = '600 34px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
@@ -12044,7 +12044,7 @@
     __loopTick++;
     if (__loopTick % 2 === 0) raf(refreshMetrics);
     if (__loopTick % 3 === 0) raf(refreshCost);
-    if (__loopTick % 4 === 0) raf(refreshExecutors);
+    if (__loopTick % 4 === 0) raf(shuaxinZhixingqiji);
     if (__loopTick % 5 === 0) raf(() => { refreshSessionBoard(); refreshMembers(); });
     if (__loopTick % 6 === 0) raf(checkLastError);
     if (__loopTick % 2 === 0) raf(renderAiQuestions);
@@ -12215,6 +12215,6 @@
       if (first) openChat('single', first.id, first.name);
     }, 100);
     refreshMetrics();
-    refreshExecutors();
+    shuaxinZhixingqiji();
   })();
 })();

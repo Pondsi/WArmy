@@ -140,7 +140,7 @@ export function fingerprintFromPublicKey(publicKeyB64: string): string {
  * 联系资料。**字段全部可选**，但展示时必须给占位（附六第 2 条：
  * "不可隐藏但可以不写" —— 不能让人以为"他隐藏了联系方式"，否则这条防线就没意义）。
  */
-export interface ContactCard {
+export interface LianXiKa {
   email?: string;
   phone?: string;
   /** 可选其它联系方式（例如备用邮箱 / 即时通讯），名字由用户自己起 */
@@ -183,8 +183,8 @@ export interface ContactCardView {
   alwaysVisibleNote: string;
 }
 
-export function cloneContactCard(card: ContactCard | undefined): ContactCard {
-  const out: ContactCard = {};
+export function cloneContactCard(card: LianXiKa | undefined): LianXiKa {
+  const out: LianXiKa = {};
   if (!card) return out;
   if (typeof card.email === 'string') out.email = card.email;
   if (typeof card.phone === 'string') out.phone = card.phone;
@@ -198,7 +198,7 @@ export function cloneContactCard(card: ContactCard | undefined): ContactCard {
 }
 
 /** 是否一个字段都没有填（不用于展示，只用于内部判断） */
-export function isContactCardEmpty(card: ContactCard | undefined): boolean {
+export function isContactCardEmpty(card: LianXiKa | undefined): boolean {
   const c = cloneContactCard(card);
   const hasEmail = typeof c.email === 'string' && c.email.trim().length > 0;
   const hasPhone = typeof c.phone === 'string' && c.phone.trim().length > 0;
@@ -247,7 +247,7 @@ export function contactFreezeState(contactFreezeUntil: number | undefined, now: 
 
 /** 本机留存的名片版本（append-only）：换证横幅要展示的"旧联系方式"就来自这里 */
 export interface ContactCardVersion {
-  card: ContactCard;
+  card: LianXiKa;
   at: number;
   note: 'created' | 'updated' | 'rotation' | 'imported';
 }
@@ -259,7 +259,7 @@ export function contactCardHistory(identity: IdentityRecord): ContactCardVersion
 }
 
 /** 最近一次改名片之前的留存值（UI 要"旧/新并列展示"时取旧的） */
-export function previousLocalContactCard(identity: IdentityRecord): ContactCard | null {
+export function previousLocalContactCard(identity: IdentityRecord): LianXiKa | null {
   const h = contactCardHistory(identity);
   // 末尾一条是当前值，倒数第二条才是"旧的"；若只有创建这一条则没有旧的
   if (h.length < 2) return null;
@@ -277,9 +277,9 @@ export function previousLocalContactCard(identity: IdentityRecord): ContactCard 
  */
 export interface PeerContactState {
   fingerprint: string;
-  storedCard: ContactCard;
+  storedCard: LianXiKa;
   storedAt: number;
-  pendingCard: ContactCard | null;
+  pendingCard: LianXiKa | null;
   pendingAt: number;
   receivedAt: number;
   contactFreezeUntil: number;
@@ -289,14 +289,14 @@ export interface PeerContactState {
   generation: number;
 }
 
-export interface PeerContactView {
+export interface DuiDuanLianXiShiTu {
   fingerprint: string;
   /** UI 要**并列展示**的两个字段之一：本机历史留存的名片（旧） */
-  previousCard: ContactCard;
+  previousCard: LianXiKa;
   /** 与（若已收到）对方新提交的名片；冻结期内不被采用；没有则为 null */
-  pendingCard: ContactCard | null;
+  pendingCard: LianXiKa | null;
   /** 当前应展示/使用的名片：冻结期内恒等于 previousCard */
-  effectiveCard: ContactCard;
+  effectiveCard: LianXiKa;
   contactFreezeUntil: number;
   frozen: boolean;
   remainingMs: number;
@@ -312,7 +312,7 @@ export interface PeerContactView {
 }
 
 /** 首次加入：**不受冻结限制**（否则新人根本填不了联系方式） */
-export function createPeerContact(fingerprint: string, card: ContactCard | undefined, now: number = Date.now()): PeerContactState {
+export function createPeerContact(fingerprint: string, card: LianXiKa | undefined, now: number = Date.now()): PeerContactState {
   return {
     fingerprint,
     storedCard: cloneContactCard(card),
@@ -345,7 +345,7 @@ export function peerContactOnRotation(
  *  - 不在冻结期 → 直接采用（首次加入走这条）；
  *  - 在冻结期 → 只记为 pendingCard，冻结期满前 effectiveCard 仍是本机留存值。
  */
-export function peerContactOnCard(state: PeerContactState, card: ContactCard | undefined, now: number = Date.now()): PeerContactState {
+export function peerContactOnCard(state: PeerContactState, card: LianXiKa | undefined, now: number = Date.now()): PeerContactState {
   const next = cloneContactCard(card);
   if (state.contactFreezeUntil > now) {
     return { ...state, pendingCard: next, pendingAt: now };
@@ -396,7 +396,7 @@ export function peerContactConfirm(state: PeerContactState, now: number = Date.n
 }
 
 /** 对端名片视图：两个字段（旧/新）并列，外加冻结状态 */
-export function peerContactView(state: PeerContactState, now: number = Date.now()): PeerContactView {
+export function peerContactView(state: PeerContactState, now: number = Date.now()): DuiDuanLianXiShiTu {
   const wasFrozen = state.contactFreezeUntil > now;
   const settled = peerContactSettle(state, now);
   const freeze = contactFreezeState(settled.contactFreezeUntil, now);
@@ -421,7 +421,7 @@ export function peerContactView(state: PeerContactState, now: number = Date.now(
  * 名片视图：**空字段渲染成占位**，而不是删掉这一行。
  * 这是附六第 2 条的落地：字段可空，但界面必须展示占位。
  */
-export function contactCardView(card: ContactCard | undefined, t: Translate = (k) => k): ContactCardView {
+export function contactCardView(card: LianXiKa | undefined, t: Translate = (k) => k): ContactCardView {
   const c = cloneContactCard(card);
   const unfilled = t(CONTACT_CARD_I18N.unfilled);
   const fields: ContactFieldView[] = [];
@@ -480,7 +480,7 @@ export interface IdentityRecord {
   createdAt: number;
   updatedAt: number;
   /** 本机当前名片（对外展示、加入时交换；换证声明里**不含**它） */
-  contactCard: ContactCard;
+  contactCard: LianXiKa;
   /**
    * 本机的名片历史（append-only）。**换证横幅要展示的"旧联系方式"取自这里**，
    * 不取自任何（可被攻击者生成的）换证声明 —— 见文件头第 3 条。
@@ -499,14 +499,14 @@ export interface IdentityRecord {
 }
 
 /** 密钥环条目：当前公钥 + 全部退役公钥（验签用） */
-export interface KeyRingEntry {
+export interface YaoShiHuanTiaoMu {
   fingerprint: string;
   publicKey: string;
   generation: number;
   current: boolean;
 }
 
-export function keyRing(identity: IdentityRecord): KeyRingEntry[] {
+export function keyRing(identity: IdentityRecord): YaoShiHuanTiaoMu[] {
   return [
     { fingerprint: identity.fingerprint, publicKey: identity.publicKey, generation: identity.generation, current: true },
     ...identity.retiredKeys.map((r) => ({
@@ -518,7 +518,7 @@ export function keyRing(identity: IdentityRecord): KeyRingEntry[] {
   ];
 }
 
-export function currentContactCard(identity: IdentityRecord): ContactCard {
+export function currentContactCard(identity: IdentityRecord): LianXiKa {
   return cloneContactCard(identity.contactCard);
 }
 
@@ -581,7 +581,7 @@ export function keyObjectFromPublicB64(b64: string): KeyObject | null {
 export interface CreateIdentityOptions {
   /** 人读别名（旧的 9 位 deviceId 或自定义短码） */
   alias: string;
-  contactCard?: ContactCard;
+  contactCard?: LianXiKa;
   /** 允许导入既有密钥（备份恢复 / 迁移） */
   keyPair?: GeneratedKeyPair;
   generation?: number;
@@ -598,7 +598,7 @@ export function createIdentity(opts: CreateIdentityOptions): CreateIdentityResul
   const keyPair = opts.keyPair || generateIdentityKeyPair();
   const now = opts.now ?? Date.now();
   const generation = opts.generation && opts.generation > 0 ? opts.generation : 1;
-  const initialCard: ContactCard = { ...cloneContactCard(opts.contactCard), updatedAt: now };
+  const initialCard: LianXiKa = { ...cloneContactCard(opts.contactCard), updatedAt: now };
   const identity: IdentityRecord = {
     schema: IDENTITY_SCHEMA,
     algo: IDENTITY_ALGO,
@@ -690,7 +690,7 @@ export type VerifyReason =
   | 'fingerprint-mismatch'
   | 'payload-mismatch';
 
-export interface VerifyResult {
+export interface yanzhengJieguo {
   ok: boolean;
   reason: VerifyReason;
   fingerprint: string;
@@ -710,9 +710,9 @@ export function verifyByFingerprint(
   fingerprint: string,
   payload: string,
   signatureB64: string,
-  keys: KeyRingEntry[],
+  keys: YaoShiHuanTiaoMu[],
   opts: { domain?: string } = {},
-): VerifyResult {
+): yanzhengJieguo {
   const domain = opts.domain || DOMAIN_STATEMENT;
   if (!isValidFingerprint(fingerprint)) {
     return { ok: false, reason: 'malformed', fingerprint: String(fingerprint || ''), detail: 'fingerprint 形态/校验位不合法' };
@@ -724,9 +724,9 @@ export function verifyByFingerprint(
   return verifyWithEntry(entry, payload, signatureB64, domain);
 }
 
-function verifyWithEntry(entry: KeyRingEntry, payload: string, signatureB64: string, domain: string): VerifyResult {
+function verifyWithEntry(entry: YaoShiHuanTiaoMu, payload: string, signatureB64: string, domain: string): yanzhengJieguo {
   const pub = keyObjectFromPublicB64(entry.publicKey);
-  const base: VerifyResult = {
+  const base: yanzhengJieguo = {
     ok: false,
     reason: 'bad-signature',
     fingerprint: entry.fingerprint,
@@ -750,7 +750,7 @@ function verifyWithEntry(entry: KeyRingEntry, payload: string, signatureB64: str
 }
 
 /** 验自描述信封：先按信封里声明的指纹找钥匙，再验签名与载荷一致性 */
-export function verifySignedPayload(env: SignedPayload, keys: KeyRingEntry[]): VerifyResult {
+export function verifySignedPayload(env: SignedPayload, keys: YaoShiHuanTiaoMu[]): yanzhengJieguo {
   if (!env || typeof env !== 'object' || env.schema !== SIGNED_PAYLOAD_SCHEMA || typeof env.signature !== 'string') {
     return { ok: false, reason: 'malformed', fingerprint: String(env?.fingerprint || ''), detail: '信封结构不合法' };
   }
@@ -768,7 +768,7 @@ export function verifySignedPayload(env: SignedPayload, keys: KeyRingEntry[]): V
  * 所以旧联系方式一律由**接收方本机已存的那一份**提供（见 PeerContactState / contactCardHistory）。
  * `verifyRotationDeclaration` 会显式拒绝携带联系方式的声明（reason: 'contact-not-allowed'）。
  */
-export interface RotationDeclaration {
+export interface LunHuanShengMing {
   schema: typeof ROTATION_SCHEMA;
   kind: 'warmy.identity.rotation';
   version: 1;
@@ -811,10 +811,10 @@ export interface RevocationDeclaration {
   signature: string;
 }
 
-export type IdentityDeclaration = RotationDeclaration | RevocationDeclaration;
+export type IdentityDeclaration = LunHuanShengMing | RevocationDeclaration;
 
 /** 迁移声明的签名载荷（去掉 signature 字段后规范化） */
-export function rotationSigningPayload(decl: RotationDeclaration): Record<string, unknown> {
+export function rotationSigningPayload(decl: LunHuanShengMing): Record<string, unknown> {
   const { signature: _sig, ...rest } = decl;
   return rest as unknown as Record<string, unknown>;
 }
@@ -836,10 +836,10 @@ export interface RotateOutput {
   /** 新的身份记录（代次 +1，旧公钥进 retiredKeys，联系资料冻结 7 天） */
   identity: IdentityRecord;
   keyPair: GeneratedKeyPair;
-  declaration: RotationDeclaration;
+  declaration: LunHuanShengMing;
   revocation: RevocationDeclaration;
   /** 换证前的名片（**取自本机留存历史**，不是声明）—— 供横幅展示"旧联系方式" */
-  previousCard: ContactCard;
+  previousCard: LianXiKa;
   contactFreezeUntil: number;
 }
 
@@ -860,7 +860,7 @@ export function rotateIdentity(args: RotateArgs): RotateOutput {
   const previousCard = cloneContactCard(identity.contactCard);
   const contactFreezeUntil = now + CONTACT_FREEZE_MS;
 
-  const declarationDraft: Omit<RotationDeclaration, 'signature'> = {
+  const declarationDraft: Omit<LunHuanShengMing, 'signature'> = {
     schema: ROTATION_SCHEMA,
     kind: 'warmy.identity.rotation',
     version: 1,
@@ -875,7 +875,7 @@ export function rotateIdentity(args: RotateArgs): RotateOutput {
     ...(args.reason ? { reason: args.reason } : {}),
     signerFingerprint: previousFingerprint,
   };
-  const declaration: RotationDeclaration = {
+  const declaration: LunHuanShengMing = {
     ...declarationDraft,
     signature: crypto
       .sign(null, signingBytes(ROTATION_SCHEMA, declarationDraft as unknown as Record<string, unknown>), privateKey)
@@ -943,14 +943,14 @@ export type RotationRejectReason =
 
 export interface RotationVerifyOptions {
   /** 已知的旧密钥（该联系人的密钥环）；用于确认"这确实是他用过的密钥" */
-  knownKeys?: KeyRingEntry[];
+  knownKeys?: YaoShiHuanTiaoMu[];
   /** 已知该身份的最高代次（联系人本地记录） */
   currentGeneration?: number;
   now?: number;
   clockSkewMs?: number;
 }
 
-export interface RotationVerifyResult {
+export interface LunHuanYanZhengJieGuo {
   accepted: boolean;
   reason: RotationRejectReason;
   oldFingerprint: string;
@@ -973,12 +973,12 @@ export interface RotationVerifyResult {
  * 攻击者持有旧私钥时，他也能签出"合法且代次更高"的声明，规则会照样接受（见 GENERATION_RULE_NOTE）。
  */
 export function verifyRotationDeclaration(
-  decl: RotationDeclaration,
+  decl: LunHuanShengMing,
   opts: RotationVerifyOptions = {},
-): RotationVerifyResult {
+): LunHuanYanZhengJieGuo {
   const now = opts.now ?? Date.now();
   const skew = opts.clockSkewMs ?? DEFAULT_CLOCK_SKEW_MS;
-  const base: RotationVerifyResult = {
+  const base: LunHuanYanZhengJieGuo = {
     accepted: false,
     reason: 'malformed',
     oldFingerprint: String(decl?.oldFingerprint || ''),
@@ -1011,7 +1011,7 @@ export function verifyRotationDeclaration(
     return { ...base, reason: 'fingerprint-mismatch', detail: 'signerFingerprint 与旧指纹不一致（声明只能由旧密钥自签）' };
   }
   // ① 签名必须由**旧公钥**验过
-  const oldEntry: KeyRingEntry = {
+  const oldEntry: YaoShiHuanTiaoMu = {
     fingerprint: decl.oldFingerprint,
     publicKey: decl.oldPublicKey,
     generation: decl.previousGeneration,
@@ -1103,7 +1103,7 @@ export function verifyRevocationDeclaration(decl: RevocationDeclaration): Revoca
   if (!fingerprintMatches(fingerprintFromPublicKey(decl.publicKey), decl.fingerprint)) {
     return { ...base, reason: 'fingerprint-mismatch', detail: '公钥与指纹不一致' };
   }
-  const entry: KeyRingEntry = {
+  const entry: YaoShiHuanTiaoMu = {
     fingerprint: decl.fingerprint,
     publicKey: decl.publicKey,
     generation: decl.generation,
@@ -1118,7 +1118,7 @@ export function verifyRevocationDeclaration(decl: RevocationDeclaration): Revoca
 
 // ── 身份名片（附六第 1 条：加入动作即交换名片） ──
 
-export interface IdentityCard {
+export interface ShenFenKa {
   schema: typeof IDENTITY_CARD_SCHEMA;
   kind: 'warmy.identity-card';
   version: 1;
@@ -1126,12 +1126,12 @@ export interface IdentityCard {
   alias: string;
   generation: number;
   publicKey: string;
-  contactCard: ContactCard;
+  contactCard: LianXiKa;
   issuedAt: number;
   signature: string;
 }
 
-export function exportIdentityCard(identity: IdentityRecord, privateKey: KeyObject, now = Date.now()): IdentityCard {
+export function exportIdentityCard(identity: IdentityRecord, privateKey: KeyObject, now = Date.now()): ShenFenKa {
   const draft = {
     schema: IDENTITY_CARD_SCHEMA,
     kind: 'warmy.identity-card' as const,
@@ -1150,7 +1150,7 @@ export function exportIdentityCard(identity: IdentityRecord, privateKey: KeyObje
 }
 
 /** 验名片：自签 + 指纹自洽（确认"这张名片确实是该指纹的持有者发出的"） */
-export function verifyIdentityCard(card: IdentityCard): VerifyResult {
+export function verifyIdentityCard(card: ShenFenKa): yanzhengJieguo {
   if (!card || typeof card !== 'object' || card.schema !== IDENTITY_CARD_SCHEMA || typeof card.signature !== 'string') {
     return { ok: false, reason: 'malformed', fingerprint: String(card?.fingerprint || ''), detail: '名片结构不合法' };
   }
@@ -1160,7 +1160,7 @@ export function verifyIdentityCard(card: IdentityCard): VerifyResult {
   if (!fingerprintMatches(fingerprintFromPublicKey(card.publicKey), card.fingerprint)) {
     return { ok: false, reason: 'fingerprint-mismatch', fingerprint: card.fingerprint, detail: '公钥与指纹不一致' };
   }
-  const entry: KeyRingEntry = { fingerprint: card.fingerprint, publicKey: card.publicKey, generation: card.generation, current: true };
+  const entry: YaoShiHuanTiaoMu = { fingerprint: card.fingerprint, publicKey: card.publicKey, generation: card.generation, current: true };
   const { signature: _s, ...draft } = card;
   return verifyWithEntry(entry, canonicalize(draft), card.signature, DOMAIN_CARD);
 }

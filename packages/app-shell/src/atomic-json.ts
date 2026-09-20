@@ -12,7 +12,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 /** 读取并解析 JSON；文件缺失 / 空 / 非法 JSON 时返回 fallback，绝不抛出 */
-export function readJsonFile<T>(file: string, fallback: T): T {
+export function duJsonWenJian<T>(file: string, fallback: T): T {
   try {
     const raw = fs.readFileSync(file, 'utf8');
     if (!raw.trim()) return fallback;
@@ -28,7 +28,7 @@ export function readJsonFile<T>(file: string, fallback: T): T {
  * 读取 JSON；解析失败时把损坏文件改名隔离（file.corrupt-<ts>），
  * 便于排查而不是静默丢掉用户数据。
  */
-export function readJsonFileQuarantine<T>(file: string, fallback: T): T {
+export function duJsonWenJianGeLi<T>(file: string, fallback: T): T {
   let raw = '';
   try {
     raw = fs.readFileSync(file, 'utf8');
@@ -41,13 +41,13 @@ export function readJsonFileQuarantine<T>(file: string, fallback: T): T {
     if (parsed === null || typeof parsed !== 'object') return fallback;
     return parsed;
   } catch {
-    quarantine(file);
+    geLiWenJian(file);
     return fallback;
   }
 }
 
 /** 把损坏文件改名为 *.corrupt-<timestamp>（失败即忽略） */
-export function quarantine(file: string): void {
+export function geLiWenJian(file: string): void {
   try {
     if (!fs.existsSync(file)) return;
     fs.renameSync(file, `${file}.corrupt-${Date.now()}`);
@@ -57,7 +57,7 @@ export function quarantine(file: string): void {
 }
 
 /** 原子写 JSON：同目录临时文件 + rename，失败抛异常（调用方决定是否吞掉） */
-export function writeJsonAtomic(file: string, data: unknown): void {
+export function yuanZiXieJson(file: string, data: unknown): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}-${crypto.randomBytes(4).toString('hex')}.tmp`;
   try {
@@ -74,9 +74,9 @@ export function writeJsonAtomic(file: string, data: unknown): void {
 }
 
 /** 原子写 JSON 的安全版本：把失败收敛成 { ok:false, error }，不抛 */
-export function writeJsonAtomicSafe(file: string, data: unknown): { ok: boolean; error?: string } {
+export function anQuanYuanZiXieJson(file: string, data: unknown): { ok: boolean; error?: string } {
   try {
-    writeJsonAtomic(file, data);
+    yuanZiXieJson(file, data);
     return { ok: true };
   } catch (e) {
     // 只回错误类型，不带完整路径/堆栈（渲染进程不应看到内部路径）
@@ -85,7 +85,7 @@ export function writeJsonAtomicSafe(file: string, data: unknown): { ok: boolean;
 }
 
 /** 清掉本次进程残留的 .tmp 文件（启动时调用一次，防止极端退出后堆积） */
-export function sweepTempFiles(dir: string, keepMs = 24 * 3600_000): void {
+export function qingLiLinShiWenJian(dir: string, keepMs = 24 * 3600_000): void {
   try {
     if (!fs.existsSync(dir)) return;
     const now = Date.now();

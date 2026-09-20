@@ -47,9 +47,9 @@ function signDeviceId(id: string): string {
 
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+  let chaYi = 0;
+  for (let i = 0; i < a.length; i++) chaYi |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return chaYi === 0;
 }
 
 export interface SmtpAccount {
@@ -73,7 +73,7 @@ export interface SmtpAccount {
  * 见 secure-keys.ts）。本记录只保存**可公开的元数据**，`hasKey` 只说明"有一把密钥"，
  * 读回界面时密钥用密文占位，绝不回明文。
  */
-export interface ProviderRecord {
+export interface gongyingshangJilu {
   id: string;
   label: string;
   protocol: 'openai-compatible' | 'anthropic' | 'ollama';
@@ -225,7 +225,7 @@ export interface AppSettings {
    * 模型供应商列表（设置 → 模型）。空数组 = 还没落盘过：
    * 界面首次打开时会用内置预设（DeepSeek / Ollama 本地）初始化一次并保存。
    */
-  providers?: ProviderRecord[];
+  providers?: gongyingshangJilu[];
   /**
    * **当前生效的供应商**（真正用于聊天的那一个）。密钥不在里面，按 id 从 SecureKeyStore 取。
    * 以前它只活在主进程内存里 ⇒ 重启后"配好的供应商"就没了，这里落盘修掉。

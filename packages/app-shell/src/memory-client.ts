@@ -420,8 +420,8 @@ export async function runMemoryTool(
       const out = res?.result ?? res;
       const raw = typeof out?.raw === 'string' ? out.raw : '';
       if (!raw) {
-        const miss = `retrieve(${recordId ? `recordId="${recordId}"` : `seq=${seq}`}) 没找到记录。可改用 recall("关键词") 按语义检索，或用指针里的 seq 范围换个序号。`;
-        return fail(miss, 'not-found');
+        const weiMingZhong = `retrieve(${recordId ? `recordId="${recordId}"` : `seq=${seq}`}) 没找到记录。可改用 recall("关键词") 按语义检索，或用指针里的 seq 范围换个序号。`;
+        return fail(weiMingZhong, 'not-found');
       }
       meta.hitLevel = typeof out?.hitLevel === 'string' ? out.hitLevel : undefined;
       meta.totalChars = raw.length;

@@ -9,7 +9,7 @@ export type AssetScope = 'session' | 'project' | 'user' | 'global';
 export type AssetStrength = 'strong' | 'weak' | 'background';
 export type AssetStatus = 'active' | 'deprecated' | 'archived' | 'revoked';
 
-export interface Asset {
+export interface ZiChan {
   id: string;
   category: AssetCategory;
   scope: AssetScope;
@@ -24,7 +24,7 @@ export interface Asset {
 }
 
 export class AssetGovernor {
-  private assets = new Map<string, Asset>();
+  private assets = new Map<string, ZiChan>();
 
   constructor(private persistPath?: string) {
     if (persistPath) {
@@ -43,21 +43,21 @@ export class AssetGovernor {
     fs.writeFileSync(this.persistPath, JSON.stringify({ assets: [...this.assets.values()] }, null, 2));
   }
 
-  register(a: Omit<Asset, 'createdAt' | 'updatedAt' | 'negativeScore' | 'status'> & Partial<Asset>): Asset {
-    const full: Asset = {
+  register(a: Omit<ZiChan, 'createdAt' | 'updatedAt' | 'negativeScore' | 'status'> & Partial<ZiChan>): ZiChan {
+    const full: ZiChan = {
       status: 'active',
       negativeScore: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       ...a,
-    } as Asset;
+    } as ZiChan;
     this.assets.set(full.id, full);
     this.save();
     return full;
   }
 
   /** 权限过滤先于相关性检索：严格模式不注入持久资产 */
-  retrieve(opts: { category?: AssetCategory; scope?: AssetScope; strict?: boolean }): Asset[] {
+  retrieve(opts: { category?: AssetCategory; scope?: AssetScope; strict?: boolean }): ZiChan[] {
     if (opts.strict) return [];
     return [...this.assets.values()].filter(
       (a) =>
@@ -92,7 +92,7 @@ export class AssetGovernor {
     return n;
   }
 
-  list(): Asset[] {
+  list(): ZiChan[] {
     return [...this.assets.values()];
   }
 }

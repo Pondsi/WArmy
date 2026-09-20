@@ -51,7 +51,7 @@ export const LEGACY_CREDENTIAL_ALPHABET = '0123456789ABCDEFGHJKLMNPQRSTUVWXYabcd
 export const LEGACY_CREDENTIAL_LENGTH = 45;
 
 const SEP = '-';
-const GROUP = 3;
+const qun = 3;
 
 /** 认得出这是哪一版凭证（现行 51 位 / 上一版 45 位） */
 export function credentialKind(text: string): 'current' | 'legacy' | null {
@@ -86,8 +86,8 @@ export function decodeWith(text: string, alphabet: string, length: number): Buff
     if (idx < 0) throw new Error(`credential: 非法字符 ${ch}`);
     n = n * base + BigInt(idx);
   }
-  const hex = n.toString(16).padStart(64, '0').slice(-64);
-  return Buffer.from(hex, 'hex');
+  const shiLiuJin = n.toString(16).padStart(64, '0').slice(-64);
+  return Buffer.from(shiLiuJin, 'hex');
 }
 
 /** 现行格式：32 字节 → 51 位大写凭证 */
@@ -113,7 +113,7 @@ export function isValidCredential(text: string): boolean {
 export function formatCredential(text: string): string {
   const s = normalizeCredential(text);
   const parts: string[] = [];
-  for (let i = 0; i < s.length; i += GROUP) parts.push(s.slice(i, i + GROUP));
+  for (let i = 0; i < s.length; i += qun) parts.push(s.slice(i, i + qun));
   return parts.join(SEP);
 }
 

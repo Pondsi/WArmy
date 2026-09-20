@@ -31,7 +31,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** 三态 + 两个如实单列的状态 */
-export type ContainerProbeStatus =
+export type RongQiTanCeZhuangTai =
   | 'not-installed'
   | 'installed-not-running'
   | 'ready'
@@ -45,22 +45,22 @@ export type ContainerProbeStatus =
   | 'not-probed';
 
 /** 列表里的运行态（两态为主，另外两个单列，不强归） */
-export type ContainerRunState = 'running' | 'not-running' | 'error' | 'unsupported';
+export type RongQiYunXingTai = 'running' | 'not-running' | 'error' | 'unsupported';
 
 /**
  * 引擎类别。ADR 只列了 container / linux-vm / system-container 三种，
  * 这里加 `disposable-vm`：Windows Sandbox 是**一次性** VM，硬塞进前三种都会误导。
  */
-export type ContainerEngineKind = 'container' | 'linux-vm' | 'system-container' | 'disposable-vm';
+export type RongQiYinQingLei = 'container' | 'linux-vm' | 'system-container' | 'disposable-vm';
 
-export interface ContainerCapability {
+export interface RongQiNengLi {
   runCommand: boolean;
   interactiveShell: boolean;
   mountHostDir: boolean;
 }
 
 /** 为什么不给启停按钮（用户可见文案走 i18n：container.reason.<code>） */
-export type ContainerLifecycleReason =
+export type RongQiShengMingYuanYin =
   | 'ok'
   | 'one-shot-vm'
   | 'vm-not-engine'
@@ -73,20 +73,20 @@ export type ContainerLifecycleReason =
   | 'not-installed'
   | 'unsupported-platform';
 
-export interface ContainerLifecycle {
+export interface RongQiShengMing {
   /** 是否提供「一键启动」按钮 */
   startable: boolean;
   /** 是否提供「停止」按钮 */
   stoppable: boolean;
   /** 没有按钮时，如实说明原因（有按钮时为 'ok'） */
-  reason: ContainerLifecycleReason;
+  reason: RongQiShengMingYuanYin;
   /** 过渡态最长观察窗口（毫秒）：超时如实报"未就绪/未停止" */
   waitMs: number;
   /** 启动/停止后是否需要等守护进程真的就绪（而不是"点了就完事"） */
   awaitReady: boolean;
 }
 
-export interface ContainerActionResult {
+export interface RongQiDongZuoJieGuo {
   kind: 'start' | 'stop';
   ok: boolean;
   code: number | null;
@@ -108,7 +108,7 @@ export interface ContainerActionResult {
  *   · `✗ Failed to start Docker Desktop`
  *   · `starting Docker Desktop: getting launcher path: cannot find registry key "SOFTWARE\Docker Inc.\Docker Desktop"`
  */
-export function classifyActionResult(kind: 'start' | 'stop', ok: boolean, output: string, exitCode: number | null): string {
+export function guiLeiDongZuoJieGuo(kind: 'start' | 'stop', ok: boolean, output: string, exitCode: number | null): string {
   if (ok) return 'ok';
   const text = String(output || '').toLowerCase();
   if (/cannot find registry key|getting launcher path|getting backend binary path|install incomplete|no such file or directory.*docker desktop/.test(text)) {
@@ -121,41 +121,41 @@ export function classifyActionResult(kind: 'start' | 'stop', ok: boolean, output
 }
 
 /** 原因码是否需要"安装不完整"那条更具体的文案（渲染层用它选更精确的提示） */
-export function actionNeedsInstallHint(reasonCode: string): boolean {
+export function dongZuoXuAnZhuang(reasonCode: string): boolean {
   return String(reasonCode || '') === 'install-incomplete';
 }
 
-export interface ContainerActionState {
+export interface RongQiDongZuoTai {
   kind: 'start' | 'stop';
   startedAt: number;
   /** 子进程还在跑 = 过渡态 */
   pending: boolean;
-  result?: ContainerActionResult;
+  result?: RongQiDongZuoJieGuo;
 }
 
-export interface ContainerRuntimeEntry {
+export interface RongQiYunXingTiaoMu {
   id: string;
-  status: ContainerProbeStatus;
-  run: ContainerRunState;
+  status: RongQiTanCeZhuangTai;
+  run: RongQiYunXingTai;
   version?: string;
-  engine: { kind: ContainerEngineKind; api: string };
-  capability: ContainerCapability;
-  lifecycle: ContainerLifecycle;
+  engine: { kind: RongQiYinQingLei; api: string };
+  capability: RongQiNengLi;
+  lifecycle: RongQiShengMing;
   /** 机器可读的原因码（不是文案） */
   detail: string;
   /** 原始证据（错误输出首行；不翻译） */
   evidence?: string;
   probeMs: number;
-  action?: ContainerActionState;
+  action?: RongQiDongZuoTai;
 }
 
-export interface ContainerProbeReport {
+export interface RongQiTanCeBaoGao {
   ok: true;
   platform: string;
   probedAt: number;
   elapsedMs: number;
   cached: boolean;
-  runtimes: ContainerRuntimeEntry[];
+  runtimes: RongQiYunXingTiaoMu[];
   /** 真的可用（ready 且能执行命令）的运行时 id —— 可供「项目 / 我的牛马」选择 */
   usableIds: string[];
   /** 其中**真正的容器引擎**（不含 Linux VM / 一次性沙箱） */
@@ -171,16 +171,16 @@ export interface ContainerProbeReport {
   /** 基础镜像表（公开免费开源；**已按 digest 钉死**，取数方式见 CONTAINER_BASE_IMAGES 注释） */
   images: ContainerBaseImage[];
   /** 实测耗时（启动/停止/容器内跑命令） */
-  timings: ContainerTimings;
+  timings: RongQiHaoShi;
   /**
    * 「环境固化」能力的**证据与代价**（与 `envSolidifyCapability` 互补：
    * 那个说"能不能"，这个说"我们验到哪一步、代价多大"）。
    * UI 声明固化能力时必须连**证据等级**一起显示，不能只说"支持"。
    */
-  freezeEvidence: ContainerFreezeEvidenceSpec[];
+  freezeEvidence: RongQiGuHuaZhengJuGuiGe[];
 }
 
-export interface ContainerProbeOptions {
+export interface RongQiTanCeXuanXiang {
   /** 覆盖平台（测试用；默认 process.platform） */
   platform?: string;
   /** 复用多久内的结果（毫秒，默认 8000；<=0 = 总是重探） */
@@ -295,7 +295,7 @@ export const CONTAINER_ENV_TYPES: readonly ContainerEnvTypeSpec[] = [
   },
 ];
 
-export function containerEnvTypeSpec(id: string): ContainerEnvTypeSpec | undefined {
+export function rongQiHuanJingLeiGuiGe(id: string): ContainerEnvTypeSpec | undefined {
   return CONTAINER_ENV_TYPES.find((x) => x.id === id);
 }
 
@@ -494,7 +494,7 @@ export function envSolidifyCapability(runtimeId: string): EnvSolidifyCapability 
  * Docker 的 `docker info --format {{.OSType}}` 会回 `linux` / `windows`；
  * 其它引擎按各自 detail 取值，取不到就如实回 `unknown`（**不猜**）。
  */
-export function engineOsModeOf(report: ContainerProbeReport | null | undefined, runtimeId: string): string {
+export function quYinQingXiTongMoShi(report: RongQiTanCeBaoGao | null | undefined, runtimeId: string): string {
   if (!report || !runtimeId) return 'unknown';
   const row = (report.runtimes || []).find((x) => x.id === runtimeId);
   if (!row) return 'unknown';
@@ -574,13 +574,13 @@ export function shouldSolidifyAt(input: SolidifyDecisionInput = {}): SolidifyDec
 }
 
 /** 固化镜像的保留列表（只留最近 N 个；返回要**保留**的与要**清理**的） */
-export function solidifyRetention(
+export function guHuaBaoLiu(
   list: Array<{ imageRef: string; at: number }>,
   keep = SOLIDIFY_KEEP
 ): { keep: Array<{ imageRef: string; at: number }>; prune: Array<{ imageRef: string; at: number }> } {
-  const sorted = [...(list || [])].sort((a, b) => (b.at || 0) - (a.at || 0));
+  const yiPaiXu = [...(list || [])].sort((a, b) => (b.at || 0) - (a.at || 0));
   const n = Math.max(1, Math.floor(keep));
-  return { keep: sorted.slice(0, n), prune: sorted.slice(n) };
+  return { keep: yiPaiXu.slice(0, n), prune: yiPaiXu.slice(n) };
 }
 
 
@@ -609,7 +609,7 @@ export function solidifyRetention(
      否则 UI 应当如实显示"暂无实测数据"。
    ══════════════════════════════════════════════════════════════════════════ */
 
-export interface ContainerTimings {
+export interface RongQiHaoShi {
   /** 启动引擎 → 守护进程真的就绪（毫秒） */
   engineStartMs?: number;
   /** 停止引擎 → 真的停下去（毫秒） */
@@ -621,9 +621,9 @@ export interface ContainerTimings {
   note?: string;
 }
 
-let timings: ContainerTimings = {};
+let timings: RongQiHaoShi = {};
 
-export function recordContainerTiming(kind: 'start' | 'stop' | 'run', ms: number, note?: string): ContainerTimings {
+export function jiLuRongQiHaoShi(kind: 'start' | 'stop' | 'run', ms: number, note?: string): RongQiHaoShi {
   const n = Math.max(0, Math.round(ms));
   if (kind === 'start') timings.engineStartMs = n;
   else if (kind === 'stop') timings.engineStopMs = n;
@@ -633,7 +633,7 @@ export function recordContainerTiming(kind: 'start' | 'stop' | 'run', ms: number
   return { ...timings };
 }
 
-export function containerTimings(): ContainerTimings {
+export function containerTimings(): RongQiHaoShi {
   return { ...timings };
 }
 
@@ -645,17 +645,17 @@ const WIN = 'win32';
 const MAC_LINUX = ['darwin', 'linux'];
 const LINUX_ONLY = ['linux'];
 
-export interface ContainerRuntimeSpec {
+export interface RongQiYunXingGuiGe {
   id: string;
-  engineKind: ContainerEngineKind;
+  engineKind: RongQiYinQingLei;
   api: string;
   /** 该运行时的目标系统；不在其中 = unsupported-platform（探测直接跳过并说明） */
   platforms: string[];
   /** 静态启停能力；具体是否给按钮还要看探测结果（例如 podman 需要恰好一个 machine） */
-  lifecycle: { startable: boolean; stoppable: boolean; reason: ContainerLifecycleReason; waitMs: number };
+  lifecycle: { startable: boolean; stoppable: boolean; reason: RongQiShengMingYuanYin; waitMs: number };
 }
 
-export const CONTAINER_RUNTIME_SPECS: readonly ContainerRuntimeSpec[] = [
+export const CONTAINER_RUNTIME_SPECS: readonly RongQiYunXingGuiGe[] = [
   {
     id: 'docker',
     engineKind: 'container',
@@ -754,7 +754,7 @@ export const CONTAINER_RUNTIME_SPECS: readonly ContainerRuntimeSpec[] = [
   },
 ];
 
-export function containerRuntimeSpec(id: string): ContainerRuntimeSpec | undefined {
+export function rongQiYunXingGuiGeOf(id: string): RongQiYunXingGuiGe | undefined {
   return CONTAINER_RUNTIME_SPECS.find((s) => s.id === id);
 }
 
@@ -785,7 +785,7 @@ export function containerRuntimeSpec(id: string): ContainerRuntimeSpec | undefin
      · podman / nerdctl / isulad / pouch / incus / rdctl / colima / limactl / kata-runtime / wsb：本机都没有 CLI。
    ══════════════════════════════════════════════════════════════════════════ */
 
-export type ContainerFreezeEvidence =
+export type RongQiGuHuaZhengJu =
   | 'measured'
   | 'cli-verified'
   | 'engine-unavailable'
@@ -793,12 +793,12 @@ export type ContainerFreezeEvidence =
   | 'documented'
   | 'not-applicable';
 
-export interface ContainerFreezeEvidenceSpec {
+export interface RongQiGuHuaZhengJuGuiGe {
   runtimeId: string;
   /** 固化方式（与 EnvSolidifyKind 同义，便于 UI 直接拿） */
   kind: 'commit' | 'export-import' | 'unsupported';
   /** 本机验证到哪一步 */
-  evidence: ContainerFreezeEvidence;
+  evidence: RongQiGuHuaZhengJu;
   /** 命令形态（固定参数；UI 展示 / 后续实现参考） */
   commands: readonly string[];
   /** 产物是什么（机器可读码） */
@@ -814,7 +814,7 @@ export interface ContainerFreezeEvidenceSpec {
   notes: readonly string[];
 }
 
-export const CONTAINER_FREEZE_EVIDENCE: readonly ContainerFreezeEvidenceSpec[] = [
+export const CONTAINER_FREEZE_EVIDENCE: readonly RongQiGuHuaZhengJuGuiGe[] = [
   {
     runtimeId: 'docker',
     kind: 'commit',
@@ -941,7 +941,7 @@ export const CONTAINER_FREEZE_EVIDENCE: readonly ContainerFreezeEvidenceSpec[] =
   },
 ];
 
-export function containerFreezeEvidence(runtimeId: string): ContainerFreezeEvidenceSpec | undefined {
+export function rongQiGuHuaZhengJu(runtimeId: string): RongQiGuHuaZhengJuGuiGe | undefined {
   return CONTAINER_FREEZE_EVIDENCE.find((x) => x.runtimeId === runtimeId);
 }
 
@@ -984,7 +984,7 @@ function compact(text: string, max = 300): string {
   return String(text || '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
-function execProbe(file: string, args: string[], timeoutMs: number): Promise<ExecOutcome> {
+function zhiXingTanCe(file: string, args: string[], timeoutMs: number): Promise<ExecOutcome> {
   return new Promise((resolve) => {
     const t0 = Date.now();
     let done = false;
@@ -1008,17 +1008,17 @@ function execProbe(file: string, args: string[], timeoutMs: number): Promise<Exe
             finish({ ok: true, code: 0, out, err });
             return;
           }
-          const anyErr = error as NodeJS.ErrnoException & { code?: string | number; killed?: boolean };
-          const missing = anyErr.code === 'ENOENT';
-          const timedOut = anyErr.killed === true || String(anyErr.code) === 'ETIMEDOUT';
-          const numCode = typeof anyErr.code === 'number' ? anyErr.code : null;
+          const renYiCuoWu = error as NodeJS.ErrnoException & { code?: string | number; killed?: boolean };
+          const missing = renYiCuoWu.code === 'ENOENT';
+          const timedOut = renYiCuoWu.killed === true || String(renYiCuoWu.code) === 'ETIMEDOUT';
+          const numCode = typeof renYiCuoWu.code === 'number' ? renYiCuoWu.code : null;
           finish({
             ok: false,
             missing,
             code: numCode,
             timedOut,
             out,
-            err: err || (missing ? '' : compact(String(anyErr.message || ''))),
+            err: err || (missing ? '' : compact(String(renYiCuoWu.message || ''))),
           });
         }
       );
@@ -1027,14 +1027,14 @@ function execProbe(file: string, args: string[], timeoutMs: number): Promise<Exe
       return;
     }
     child.on('error', (e) => {
-      const anyErr = e as NodeJS.ErrnoException;
-      finish({ missing: anyErr.code === 'ENOENT', err: compact(String(e.message || e)) });
+      const renYiCuoWu = e as NodeJS.ErrnoException;
+      finish({ missing: renYiCuoWu.code === 'ENOENT', err: compact(String(e.message || e)) });
     });
   });
 }
 
 /** 有并发上限的 map（避免 12 个候选同时 spawn 把机器压住） */
-async function mapBound<T, R>(items: readonly T[], limit: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
+async function bingFaYingShe<T, R>(items: readonly T[], limit: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;
   const worker = async (): Promise<void> => {
@@ -1072,17 +1072,17 @@ const DAEMON_DOWN_PATTERNS = [
   'the connection to the server localhost',
 ];
 
-function classifyEngineFailure(evidence: string): 'installed-not-running' | 'engine-error' {
+function guiLeiYinQingShiBai(evidence: string): 'installed-not-running' | 'engine-error' {
   const e = String(evidence || '').toLowerCase();
   for (const p of DAEMON_DOWN_PATTERNS) if (e.includes(p)) return 'installed-not-running';
   // 拿不到证据时保守地报"没运行"（比"坏了"更可能，且不会吓到用户）——evidence 仍原样展示
   return evidence ? 'engine-error' : 'installed-not-running';
 }
 
-const CAP_NONE: ContainerCapability = { runCommand: false, interactiveShell: false, mountHostDir: false };
+const CAP_NONE: RongQiNengLi = { runCommand: false, interactiveShell: false, mountHostDir: false };
 
 /** 就绪时的能力（按引擎类别诚实区分） */
-function capabilityFor(kind: ContainerEngineKind, id: string): ContainerCapability {
+function quNengLi(kind: RongQiYinQingLei, id: string): RongQiNengLi {
   if (kind === 'disposable-vm') {
     // 一次性 VM：我们**不驱动**它（要交互式启动，且用完即毁）
     return { ...CAP_NONE };
@@ -1094,7 +1094,7 @@ function capabilityFor(kind: ContainerEngineKind, id: string): ContainerCapabili
   return { runCommand: true, interactiveShell: true, mountHostDir: true };
 }
 
-function runStateOf(status: ContainerProbeStatus): ContainerRunState {
+function runStateOf(status: RongQiTanCeZhuangTai): RongQiYunXingTai {
   if (status === 'ready') return 'running';
   if (status === 'installed-not-running') return 'not-running';
   if (status === 'unsupported-platform') return 'unsupported';
@@ -1108,15 +1108,15 @@ function runStateOf(status: ContainerProbeStatus): ContainerRunState {
    ══════════════════════════════════════════════════════════════════════════ */
 
 interface ProbeOutcome {
-  status: ContainerProbeStatus;
+  status: RongQiTanCeZhuangTai;
   version?: string;
   detail: string;
   evidence?: string;
   /** 动态启停能力（覆盖静态 spec） */
-  lifecycle?: Partial<ContainerLifecycle>;
+  lifecycle?: Partial<RongQiShengMing>;
 }
 
-function firstVersion(text: string, re: RegExp): string {
+function shouGeBanBen(text: string, re: RegExp): string {
   const m = String(text || '').match(re);
   return m && m[1] ? String(m[1]).trim() : '';
 }
@@ -1133,27 +1133,27 @@ const VER_GENERIC = /(?:Version|version)[:：]?\s*([0-9]+\.[0-9]+[0-9.\-a-zA-Z]*
 
 /** docker：`docker --version` + `docker info`（后者失败 = 守护进程没起） */
 async function probeDocker(timeout: number): Promise<ProbeOutcome> {
-  const cli = await execProbe('docker', ['--version'], timeout);
+  const cli = await zhiXingTanCe('docker', ['--version'], timeout);
   if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
   if (!cli.ok && !cli.out) {
     return { status: 'engine-error', detail: 'cli-exec-failed', evidence: compact(cli.err) };
   }
-  const version = firstVersion(cli.out || cli.err, VER_DOCKER) || compact(cli.out || cli.err, 60);
+  const version = shouGeBanBen(cli.out || cli.err, VER_DOCKER) || compact(cli.out || cli.err, 60);
   // ServerVersion|OSType：一次调用同时拿到版本与**当前 OS 模式**（linux / windows）
-  const info = await execProbe('docker', ['info', '--format', '{{.ServerVersion}}|{{.OSType}}'], timeout);
+  const info = await zhiXingTanCe('docker', ['info', '--format', '{{.ServerVersion}}|{{.OSType}}'], timeout);
   if (info.ok) {
     const lc = await dockerLifecycle();
     const osMode = (String(info.out).split('|')[1] || '').trim();
     return {
       status: 'ready',
-      version: firstVersion(info.out, VER_GENERIC) || version,
+      version: shouGeBanBen(info.out, VER_GENERIC) || version,
       detail: osMode ? `daemon-reachable:${osMode}` : 'daemon-reachable',
       lifecycle: lc,
     };
   }
   const evidence = compact(`${info.err} ${info.out}`);
   if (info.timedOut) return { status: 'installed-not-running', version, detail: 'daemon-probe-timeout', evidence: evidence || 'probe timed out' };
-  const st = classifyEngineFailure(evidence);
+  const st = guiLeiYinQingShiBai(evidence);
   // 守护进程没起时，"能不能拉起来"取决于有没有程序化启停通道；有就给按钮，没有就如实说
   const lc = await dockerLifecycle();
   return { status: st, version, detail: st === 'installed-not-running' ? 'daemon-not-running' : 'engine-error', evidence, lifecycle: lc };
@@ -1170,7 +1170,7 @@ let dockerDesktopCliCache: { at: number; path: string } | null = null;
 async function dockerDesktopCli(): Promise<string> {
   if (dockerDesktopCliCache && Date.now() - dockerDesktopCliCache.at < 120000) return dockerDesktopCliCache.path;
   let found = '';
-  const found2 = await execProbe('docker', ['desktop', 'version'], 4000);
+  const found2 = await zhiXingTanCe('docker', ['desktop', 'version'], 4000);
   if (found2.ok) found = 'docker';
   if (!found) {
     const candidates = process.platform === WIN
@@ -1192,7 +1192,7 @@ async function dockerDesktopCli(): Promise<string> {
   return found;
 }
 
-async function dockerLifecycle(): Promise<Partial<ContainerLifecycle>> {
+async function dockerLifecycle(): Promise<Partial<RongQiShengMing>> {
   const cli = await dockerDesktopCli();
   if (cli) return { startable: true, stoppable: true, reason: 'ok' };
   // 没有 Docker Desktop（例如 Linux 上只有引擎）：引擎是系统服务，启停要 root —— 不给按钮
@@ -1201,18 +1201,18 @@ async function dockerLifecycle(): Promise<Partial<ContainerLifecycle>> {
 
 /** podman：`podman --version` + `podman info`；Windows 上靠 podman machine */
 async function probePodman(timeout: number): Promise<ProbeOutcome> {
-  const cli = await execProbe('podman', ['--version'], timeout);
+  const cli = await zhiXingTanCe('podman', ['--version'], timeout);
   if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
-  const version = firstVersion(`${cli.out} ${cli.err}`, VER_PODMAN) || compact(cli.out, 40);
-  const info = await execProbe('podman', ['info', '--format', '{{.Version.Version}}'], timeout);
+  const version = shouGeBanBen(`${cli.out} ${cli.err}`, VER_PODMAN) || compact(cli.out, 40);
+  const info = await zhiXingTanCe('podman', ['info', '--format', '{{.Version.Version}}'], timeout);
   if (info.ok) {
     const lc = await podmanLifecycle();
-    return { status: 'ready', version: firstVersion(info.out, VER_GENERIC) || version, detail: 'daemon-reachable', lifecycle: lc };
+    return { status: 'ready', version: shouGeBanBen(info.out, VER_GENERIC) || version, detail: 'daemon-reachable', lifecycle: lc };
   }
   const evidence = compact(`${info.err} ${info.out}`);
   const lc = await podmanLifecycle();
   if (info.timedOut) return { status: 'installed-not-running', version, detail: 'daemon-probe-timeout', evidence, lifecycle: lc };
-  const st = classifyEngineFailure(evidence);
+  const st = guiLeiYinQingShiBai(evidence);
   return {
     status: st,
     version,
@@ -1227,7 +1227,7 @@ async function probePodman(timeout: number): Promise<ProbeOutcome> {
  * 恰好一个 machine 才给按钮（多个 = 歧义，宁可不给；零个 = 还没 init，属安装步骤）。
  * Linux 上 podman 是 daemonless，没有"引擎启停"这回事。
  */
-async function podmanLifecycle(): Promise<Partial<ContainerLifecycle>> {
+async function podmanLifecycle(): Promise<Partial<RongQiShengMing>> {
   if (process.platform !== WIN) {
     return { startable: false, stoppable: false, reason: 'vm-not-engine' };
   }
@@ -1238,7 +1238,7 @@ async function podmanLifecycle(): Promise<Partial<ContainerLifecycle>> {
 }
 
 async function podmanMachineNames(): Promise<string[]> {
-  const r = await execProbe('podman', ['machine', 'list', '--format', 'json'], 6000);
+  const r = await zhiXingTanCe('podman', ['machine', 'list', '--format', 'json'], 6000);
   if (!r.ok && !r.out) return [];
   try {
     const arr = JSON.parse(r.out) as Array<Record<string, unknown>>;
@@ -1251,15 +1251,15 @@ async function podmanMachineNames(): Promise<string[]> {
 
 /** WSL：`wsl.exe -l -v`（有无发行版）+ `wsl.exe --version`；输出是 UTF-16LE */
 async function probeWsl(timeout: number, deep: boolean): Promise<ProbeOutcome> {
-  const ver = await execProbe('wsl.exe', ['--version'], timeout);
+  const ver = await zhiXingTanCe('wsl.exe', ['--version'], timeout);
   if (ver.missing) return { status: 'not-installed', detail: 'cli-not-found' };
-  const version = firstVersion(`${ver.out} ${ver.err}`, VER_WSL) || compact(ver.out, 30);
+  const version = shouGeBanBen(`${ver.out} ${ver.err}`, VER_WSL) || compact(ver.out, 30);
   // 无发行版时 -l -v 返回非 0 退出码 + 一段说明文字（本机实测就是这条）
-  const list = await execProbe('wsl.exe', ['-l', '-v'], timeout);
+  const list = await zhiXingTanCe('wsl.exe', ['-l', '-v'], timeout);
   const text = `${list.out}\n${list.err}`;
   const noDistro = /没有已安装的分发|no installed distributions|WSL_E_DISTRO_NOT_FOUND/i.test(text);
   const distros = parseWslDistros(list.out);
-  const lifecycle: Partial<ContainerLifecycle> = { startable: false, stoppable: false, reason: 'vm-shutdown-affects-all' };
+  const lifecycle: Partial<RongQiShengMing> = { startable: false, stoppable: false, reason: 'vm-shutdown-affects-all' };
   if (noDistro || distros.length === 0) {
     return {
       status: 'installed-not-running',
@@ -1292,7 +1292,7 @@ async function probeWsl(timeout: number, deep: boolean): Promise<ProbeOutcome> {
       lifecycle,
     };
   }
-  const probe = await execProbe('wsl.exe', ['-d', first, '--', 'true'], Math.max(timeout, 8000));
+  const probe = await zhiXingTanCe('wsl.exe', ['-d', first, '--', 'true'], Math.max(timeout, 8000));
   if (probe.ok) {
     return { status: 'ready', version, detail: `distro=${first}`, lifecycle };
   }
@@ -1312,10 +1312,10 @@ export function parseWslDistroStates(out: string): Array<{ name: string; running
     const line = raw.replace(/\u0000/g, '').trim();
     if (!line || /^NAME\s+STATE\s+VERSION/i.test(line)) continue;
     if (/没有已安装的分发|no installed distributions/i.test(line)) continue;
-    const cols = line.split(/\s{2,}|\t/).map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
-    if (cols.length < 2) continue;
-    const name = cols[0] as string;
-    const state = String(cols[1] || '');
+    const lieJi = line.split(/\s{2,}|\t/).map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
+    if (lieJi.length < 2) continue;
+    const name = lieJi[0] as string;
+    const state = String(lieJi[1] || '');
     if (!name || /^NAME$/i.test(name)) continue;
     rows.push({ name, running: /running/i.test(state), raw: state });
   }
@@ -1331,43 +1331,43 @@ function parseWslDistros(out: string): string[] {
     if (!line) continue;
     if (/^NAME\s+STATE\s+VERSION/i.test(line)) continue;
     if (/没有已安装的分发|no installed distributions/i.test(line)) continue;
-    const cols = line.split(/\s{2,}|\t/).map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
-    if (cols.length < 2) continue;
-    const nm = cols[0] as string;
-    if (!nm || /^NAME$/i.test(nm)) continue;
-    names.push(nm);
+    const lieJi = line.split(/\s{2,}|\t/).map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
+    if (lieJi.length < 2) continue;
+    const mingCheng = lieJi[0] as string;
+    if (!mingCheng || /^NAME$/i.test(mingCheng)) continue;
+    names.push(mingCheng);
   }
   return names;
 }
 
 async function probeNerdctl(timeout: number): Promise<ProbeOutcome> {
-  const cli = await execProbe('nerdctl', ['--version'], timeout);
+  const cli = await zhiXingTanCe('nerdctl', ['--version'], timeout);
   if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
-  const version = firstVersion(`${cli.out} ${cli.err}`, VER_NERDCTL) || compact(cli.out, 40);
-  const info = await execProbe('nerdctl', ['info'], timeout);
+  const version = shouGeBanBen(`${cli.out} ${cli.err}`, VER_NERDCTL) || compact(cli.out, 40);
+  const info = await zhiXingTanCe('nerdctl', ['info'], timeout);
   if (info.ok) return { status: 'ready', version, detail: 'daemon-reachable' };
   const evidence = compact(`${info.err} ${info.out}`);
-  const st = info.timedOut ? 'installed-not-running' : classifyEngineFailure(evidence);
+  const st = info.timedOut ? 'installed-not-running' : guiLeiYinQingShiBai(evidence);
   return { status: st, version, detail: st === 'installed-not-running' ? 'daemon-not-running' : 'engine-error', evidence };
 }
 
 async function probeRancherDesktop(timeout: number): Promise<ProbeOutcome> {
-  const cli = await execProbe('rdctl', ['version'], timeout);
+  const cli = await zhiXingTanCe('rdctl', ['version'], timeout);
   if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
-  const version = firstVersion(`${cli.out}`, VER_RDCTL) || compact(cli.out, 40);
-  const settings = await execProbe('rdctl', ['list-settings'], timeout);
+  const version = shouGeBanBen(`${cli.out}`, VER_RDCTL) || compact(cli.out, 40);
+  const settings = await zhiXingTanCe('rdctl', ['list-settings'], timeout);
   if (settings.ok) return { status: 'ready', version, detail: 'backend-reachable' };
   const evidence = compact(`${settings.err} ${settings.out}`);
-  const st = settings.timedOut ? 'installed-not-running' : classifyEngineFailure(evidence);
+  const st = settings.timedOut ? 'installed-not-running' : guiLeiYinQingShiBai(evidence);
   return { status: st, version, detail: st === 'installed-not-running' ? 'backend-not-running' : 'engine-error', evidence };
 }
 
 async function probeColima(timeout: number): Promise<ProbeOutcome> {
-  const st = await execProbe('colima', ['status'], Math.max(timeout, 8000));
+  const st = await zhiXingTanCe('colima', ['status'], Math.max(timeout, 8000));
   if (st.missing) return { status: 'not-installed', detail: 'cli-not-found' };
   const text = `${st.out} ${st.err}`;
-  const version = await execProbe('colima', ['version'], timeout);
-  const v = firstVersion(`${version.out}`, VER_COLIMA) || compact(version.out, 30);
+  const version = await zhiXingTanCe('colima', ['version'], timeout);
+  const v = shouGeBanBen(`${version.out}`, VER_COLIMA) || compact(version.out, 30);
   if (/is running/i.test(text) && st.ok) return { status: 'ready', version: v, detail: 'vm-running' };
   if (/not running|is not running|no instance/i.test(text) || !st.ok) {
     return {
@@ -1382,12 +1382,12 @@ async function probeColima(timeout: number): Promise<ProbeOutcome> {
 }
 
 async function probeLima(timeout: number): Promise<ProbeOutcome> {
-  const cli = await execProbe('limactl', ['--version'], timeout);
+  const cli = await zhiXingTanCe('limactl', ['--version'], timeout);
   if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
-  const version = firstVersion(`${cli.out} ${cli.err}`, VER_LIMA) || compact(cli.out, 30);
-  const list = await execProbe('limactl', ['list', '--json'], Math.max(timeout, 8000));
+  const version = shouGeBanBen(`${cli.out} ${cli.err}`, VER_LIMA) || compact(cli.out, 30);
+  const list = await zhiXingTanCe('limactl', ['list', '--json'], Math.max(timeout, 8000));
   const names = parseLimaInstances(list.out);
-  const lifecycle: Partial<ContainerLifecycle> =
+  const lifecycle: Partial<RongQiShengMing> =
     names.length === 1
       ? { startable: true, stoppable: true, reason: 'ok' }
       : { startable: false, stoppable: false, reason: names.length === 0 ? 'vm-not-engine' : 'ambiguous-instances' };
@@ -1430,8 +1430,8 @@ function parseLimaInstances(out: string): string[] {
  * 需要提权的 `dism /online /get-featureinfo` **不跑**（本产品不代跑提权命令）。
  */
 async function probeWindowsSandbox(timeout: number): Promise<ProbeOutcome> {
-  const reg = await execProbe('reg.exe', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion', '/v', 'EditionID'], timeout);
-  const edition = firstVersion(reg.out, /EditionID\s+REG_SZ\s+(\S+)/) || '';
+  const reg = await zhiXingTanCe('reg.exe', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion', '/v', 'EditionID'], timeout);
+  const edition = shouGeBanBen(reg.out, /EditionID\s+REG_SZ\s+(\S+)/) || '';
   if (/Home/i.test(edition)) {
     return { status: 'unsupported-platform', detail: 'windows-home-edition', evidence: `EditionID=${edition}` };
   }
@@ -1449,51 +1449,51 @@ async function probeWindowsSandbox(timeout: number): Promise<ProbeOutcome> {
 }
 
 async function probeLxdIncus(timeout: number): Promise<ProbeOutcome> {
-  const incus = await execProbe('incus', ['version'], timeout);
+  const incus = await zhiXingTanCe('incus', ['version'], timeout);
   if (!incus.missing) {
-    const version = firstVersion(incus.out, VER_CLIENT) || compact(incus.out, 30);
-    const info = await execProbe('incus', ['info'], timeout);
+    const version = shouGeBanBen(incus.out, VER_CLIENT) || compact(incus.out, 30);
+    const info = await zhiXingTanCe('incus', ['info'], timeout);
     if (info.ok) return { status: 'ready', version, detail: 'daemon-reachable' };
     const evidence = compact(`${info.err} ${info.out}`);
-    const st = info.timedOut ? 'installed-not-running' : classifyEngineFailure(evidence);
+    const st = info.timedOut ? 'installed-not-running' : guiLeiYinQingShiBai(evidence);
     return { status: st, version, detail: st === 'installed-not-running' ? 'daemon-not-running' : 'engine-error', evidence };
   }
-  const lxc = await execProbe('lxc', ['version'], timeout);
+  const lxc = await zhiXingTanCe('lxc', ['version'], timeout);
   if (lxc.missing) return { status: 'not-installed', detail: 'cli-not-found' };
-  const version = firstVersion(lxc.out, VER_CLIENT) || compact(lxc.out, 30);
-  const info = await execProbe('lxc', ['info'], timeout);
+  const version = shouGeBanBen(lxc.out, VER_CLIENT) || compact(lxc.out, 30);
+  const info = await zhiXingTanCe('lxc', ['info'], timeout);
   if (info.ok) return { status: 'ready', version, detail: 'daemon-reachable' };
   const evidence = compact(`${info.err} ${info.out}`);
-  const st = info.timedOut ? 'installed-not-running' : classifyEngineFailure(evidence);
+  const st = info.timedOut ? 'installed-not-running' : guiLeiYinQingShiBai(evidence);
   return { status: st, version, detail: st === 'installed-not-running' ? 'daemon-not-running' : 'engine-error', evidence };
 }
 
 async function probeIsulad(timeout: number): Promise<ProbeOutcome> {
-  const cli = await execProbe('isula', ['version'], timeout);
+  const cli = await zhiXingTanCe('isula', ['version'], timeout);
   if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
-  const version = firstVersion(`${cli.out}`, VER_GENERIC) || compact(cli.out, 30);
-  const info = await execProbe('isula', ['info'], timeout);
+  const version = shouGeBanBen(`${cli.out}`, VER_GENERIC) || compact(cli.out, 30);
+  const info = await zhiXingTanCe('isula', ['info'], timeout);
   if (info.ok) return { status: 'ready', version, detail: 'daemon-reachable' };
   const evidence = compact(`${info.err} ${info.out}`);
-  const st = info.timedOut ? 'installed-not-running' : classifyEngineFailure(evidence);
+  const st = info.timedOut ? 'installed-not-running' : guiLeiYinQingShiBai(evidence);
   return { status: st, version, detail: st === 'installed-not-running' ? 'daemon-not-running' : 'engine-error', evidence };
 }
 
 async function probePouch(timeout: number): Promise<ProbeOutcome> {
-  const cli = await execProbe('pouch', ['version'], timeout);
+  const cli = await zhiXingTanCe('pouch', ['version'], timeout);
   if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
-  const version = firstVersion(`${cli.out}`, VER_GENERIC) || compact(cli.out, 30);
-  const info = await execProbe('pouch', ['info'], timeout);
+  const version = shouGeBanBen(`${cli.out}`, VER_GENERIC) || compact(cli.out, 30);
+  const info = await zhiXingTanCe('pouch', ['info'], timeout);
   if (info.ok) return { status: 'ready', version, detail: 'daemon-reachable' };
   const evidence = compact(`${info.err} ${info.out}`);
-  const st = info.timedOut ? 'installed-not-running' : classifyEngineFailure(evidence);
+  const st = info.timedOut ? 'installed-not-running' : guiLeiYinQingShiBai(evidence);
   return { status: st, version, detail: st === 'installed-not-running' ? 'daemon-not-running' : 'engine-error', evidence };
 }
 
 async function probeKata(timeout: number): Promise<ProbeOutcome> {
-  const cli = await execProbe('kata-runtime', ['--version'], timeout);
+  const cli = await zhiXingTanCe('kata-runtime', ['--version'], timeout);
   if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
-  const version = firstVersion(`${cli.out} ${cli.err}`, /version\s+([^\s]+)/i) || compact(cli.out, 30);
+  const version = shouGeBanBen(`${cli.out} ${cli.err}`, /version\s+([^\s]+)/i) || compact(cli.out, 30);
   // 命令能用 ≠ 能跑容器：kata 是隔离级别，必须挂在 docker/containerd 下面。
   return { status: 'ready', version, detail: 'isolation-level-only', evidence: '不是独立引擎：需配合 docker / containerd 使用' };
 }
@@ -1517,17 +1517,17 @@ const PROBES: Record<string, (timeout: number, deep: boolean) => Promise<ProbeOu
    探测报告
    ══════════════════════════════════════════════════════════════════════════ */
 
-let cache: { at: number; report: ContainerProbeReport } | null = null;
+let cache: { at: number; report: RongQiTanCeBaoGao } | null = null;
 
-export function invalidateContainerProbeCache(): void {
+export function qingRongQiTanCeHuanCun(): void {
   cache = null;
 }
 
-export function lastContainerProbeReport(): ContainerProbeReport | null {
+export function zuiHouRongQiTanCeBaoGao(): RongQiTanCeBaoGao | null {
   return cache ? cache.report : null;
 }
 
-export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): Promise<ContainerProbeReport> {
+export async function probeContainerRuntimes(opts: RongQiTanCeXuanXiang = {}): Promise<RongQiTanCeBaoGao> {
   const platform = opts.platform || process.platform;
   const cacheMs = typeof opts.cacheMs === 'number' ? opts.cacheMs : 8000;
   const onlyList = Array.isArray(opts.only) && opts.only.length ? opts.only.map((x) => String(x)) : null;
@@ -1536,7 +1536,7 @@ export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): 
    * 上一次可能只探了 docker，现在要 wsl —— 那份报告里 wsl 是 `not-probed`，
    * 直接复用会把它当成"未运行"，那是**拿"没探"冒充"事实"**。
    */
-  const cacheCovers = (rep: ContainerProbeReport): boolean => {
+  const cacheCovers = (rep: RongQiTanCeBaoGao): boolean => {
     if (!onlyList) return true;
     const rows = rep.runtimes || [];
     return onlyList.every((id) => {
@@ -1553,7 +1553,7 @@ export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): 
   const onlySet = Array.isArray(opts.only) && opts.only.length ? new Set(opts.only.map((x) => String(x))) : null;
   const deep = opts.deep === true;
 
-  const entries = await mapBound(CONTAINER_RUNTIME_SPECS, concurrency, async (spec): Promise<ContainerRuntimeEntry> => {
+  const entries = await bingFaYingShe(CONTAINER_RUNTIME_SPECS, concurrency, async (spec): Promise<RongQiYunXingTiaoMu> => {
     const started = Date.now();
     const base = {
       id: spec.id,
@@ -1594,7 +1594,7 @@ export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): 
       // 探测器自己出错也必须如实报（不能静默变成"未安装"）
       outcome = { status: 'engine-error', detail: 'probe-threw', evidence: compact(String((e as Error)?.message || e)) };
     }
-    const lc: ContainerLifecycle = {
+    const lc: RongQiShengMing = {
       startable: outcome.lifecycle?.startable ?? spec.lifecycle.startable,
       stoppable: outcome.lifecycle?.stoppable ?? spec.lifecycle.stoppable,
       reason: outcome.lifecycle?.reason ?? spec.lifecycle.reason,
@@ -1608,7 +1608,7 @@ export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): 
       lc.stoppable = false;
       lc.reason = 'not-installed';
     }
-    const capability = outcome.status === 'ready' ? capabilityFor(spec.engineKind, spec.id) : { ...CAP_NONE };
+    const capability = outcome.status === 'ready' ? quNengLi(spec.engineKind, spec.id) : { ...CAP_NONE };
     return {
       ...base,
       status: outcome.status,
@@ -1624,7 +1624,7 @@ export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): 
   });
 
   const usableIds = entries.filter((e) => e.status === 'ready' && e.capability.runCommand).map((e) => e.id);
-  const report: ContainerProbeReport = {
+  const report: RongQiTanCeBaoGao = {
     ok: true,
     platform,
     probedAt: Date.now(),
@@ -1654,14 +1654,14 @@ export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): 
 export type ContainerActionName = 'start' | 'stop';
 export const CONTAINER_ACTION_NAMES: readonly ContainerActionName[] = ['start', 'stop'];
 
-interface InternalAction extends ContainerActionState {
+interface InternalAction extends RongQiDongZuoTai {
   child?: ChildProcess;
   output: string;
 }
 
 const actions = new Map<string, InternalAction>();
 
-function publicAction(a: InternalAction): ContainerActionState {
+function publicAction(a: InternalAction): RongQiDongZuoTai {
   return {
     kind: a.kind,
     startedAt: a.startedAt,
@@ -1708,7 +1708,7 @@ async function actionCommand(id: string, action: ContainerActionName): Promise<{
   }
   if (id === 'lima') {
     if (process.platform === WIN) return { code: 'unsupported-platform', error: 'lima is not applicable on this platform' };
-    const list = await execProbe('limactl', ['list', '--json'], 8000);
+    const list = await zhiXingTanCe('limactl', ['list', '--json'], 8000);
     const names = parseLimaInstances(list.out);
     if (names.length !== 1) return { code: 'no-unique-instance', error: `lima instance count=${names.length}` };
     return { file: 'limactl', args: [action, names[0] as string], timeoutMs: 180000 };
@@ -1723,7 +1723,7 @@ async function actionCommand(id: string, action: ContainerActionName): Promise<{
 export async function runContainerAction(input: { id?: unknown; action?: unknown }): Promise<ContainerActionResponse> {
   const id = String(input?.id ?? '');
   const action = String(input?.action ?? '') as ContainerActionName;
-  const spec = containerRuntimeSpec(id);
+  const spec = rongQiYunXingGuiGeOf(id);
   if (!spec) return { ok: false, code: 'unknown-runtime', error: `unknown runtime id: ${id}` };
   if (!CONTAINER_ACTION_NAMES.includes(action)) {
     return { ok: false, code: 'bad-action', error: `action must be one of ${CONTAINER_ACTION_NAMES.join('|')}` };
@@ -1757,9 +1757,9 @@ export async function runContainerAction(input: { id?: unknown; action?: unknown
          * 【产品 bug 修复】**进程派生了 ≠ 成功**：这里把"为什么没起来"如实归类成原因码，
          * 由探测报告一路带到 UI（渲染层按 container.action.reason.<code> 出文案 + 原始输出行）。
          */
-        reasonCode: classifyActionResult(action, code === 0, outText, code),
+        reasonCode: guiLeiDongZuoJieGuo(action, code === 0, outText, code),
       };
-      invalidateContainerProbeCache();
+      qingRongQiTanCeHuanCun();
     };
     child.on('error', (e) => settle(null, String(e.message || e)));
     child.on('close', (code) => settle(typeof code === 'number' ? code : null));
@@ -1775,17 +1775,17 @@ export async function runContainerAction(input: { id?: unknown; action?: unknown
       at: Date.now(),
       reasonCode: 'spawn-failed',
     };
-    invalidateContainerProbeCache();
+    qingRongQiTanCeHuanCun();
     return { ok: false, code: 'spawn-failed', error: compact(String((e as Error)?.message || e)) };
   }
-  invalidateContainerProbeCache();
+  qingRongQiTanCeHuanCun();
   return { ok: true, accepted: true, id, action };
 }
 
 /** 测试与排障用：清掉启停状态台账（不杀任何子进程） */
 export function resetContainerActionState(): void {
   actions.clear();
-  invalidateContainerProbeCache();
+  qingRongQiTanCeHuanCun();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1841,7 +1841,7 @@ export interface ContainerProjectStateInput {
    * 该运行时在**最近一次真探测**里的状态。
    * `null` / `undefined` = 还没探过 ⇒ **按未就绪处理**（宁可不给开发，也不乐观地放开）。
    */
-  runtimeStatus?: ContainerProbeStatus | null;
+  runtimeStatus?: RongQiTanCeZhuangTai | null;
   /** 创建者是否在右键菜单里**停用**了这个项目（settings.projectDisabled[groupId]） */
   disabledByOwner?: boolean;
 }
@@ -1877,7 +1877,7 @@ export interface ContainerProjectState {
 }
 
 /** 把状态码映射到用户可见原因（i18n 键名在渲染层拼：container.project.reason.<suffix>） */
-export function projectReasonKey(code: ContainerProjectCode): string {
+export function xiangMuYuanYinJian(code: ContainerProjectCode): string {
   if (code === 'disabled-by-owner') return 'disabledByOwner';
   if (code === 'container-not-installed') return 'notInstalled';
   if (code === 'container-not-chosen') return 'notChosen';
@@ -2002,7 +2002,7 @@ export function projectUnavailableRefusal(state: ContainerProjectState): Contain
     ok: false,
     code: 'project-unavailable',
     projectCode: state.code,
-    reasonKey: projectReasonKey(state.code),
+    reasonKey: xiangMuYuanYinJian(state.code),
     memberFace: 'creator-offline',
     hostExecutionRefused: true,
     historyReadable: true,
@@ -2014,9 +2014,9 @@ export function projectUnavailableRefusal(state: ContainerProjectState): Contain
 export const projectDevelopmentRefusal = projectUnavailableRefusal;
 
 /** 兼容旧名：上一轮叫 deriveContainerProjectState */
-export const deriveContainerProjectState = deriveProjectState;
+export const tuiDaoRongQiXiangMuTai = deriveProjectState;
 /** 兼容旧名：上一轮叫 containerProjectReasonKey */
-export const containerProjectReasonKey = projectReasonKey;
+export const containerProjectReasonKey = xiangMuYuanYinJian;
 
 /* ══════════════════════════════════════════════════════════════════════════
    容器内控制台（P4）—— **控制台就是容器里的控制台**
@@ -2058,7 +2058,7 @@ export const CONTAINER_SHELL_SECURITY = {
   hostFallback: false,
 } as const;
 
-export interface ContainerShellRequest {
+export interface RongQiKongZhiTaiQingQiu {
   runtimeId: string;
   action: ContainerShellAction;
   sessionId: string;
@@ -2076,14 +2076,14 @@ export interface ContainerShellBadRequest {
  * 参数校验（**唯一入口**）。除了白名单里的四个字段，其余字段一律忽略，
  * 所以 `{ cmd: 'rm -rf /' }` 这类载荷**不可能**变成一条命令。
  */
-export function normalizeContainerShellRequest(input: unknown): { ok: true; req: ContainerShellRequest } | ContainerShellBadRequest {
+export function guiFanKongZhiTaiQingQiu(input: unknown): { ok: true; req: RongQiKongZhiTaiQingQiu } | ContainerShellBadRequest {
   const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   const action = String(raw['action'] ?? '');
   if (!CONTAINER_SHELL_ACTIONS.includes(action as ContainerShellAction)) {
     return { ok: false, code: 'bad-action', error: `action must be one of ${CONTAINER_SHELL_ACTIONS.join('|')}` };
   }
   const runtimeId = String(raw['runtimeId'] ?? '').trim();
-  if (runtimeId && !containerRuntimeSpec(runtimeId)) {
+  if (runtimeId && !rongQiYunXingGuiGeOf(runtimeId)) {
     return { ok: false, code: 'unknown-runtime', error: `unknown runtime id: ${runtimeId}` };
   }
   const rawData = raw['data'];
@@ -2106,7 +2106,7 @@ export type ContainerShellGateCode =
   | 'container-not-ready'
   | 'no-image';
 
-export interface ContainerShellGateInput {
+export interface RongQiKongZhiTaiMenJinShuRu {
   /** 只在「项目」与「我的牛马」的聊天里有控制台 */
   inProjectOrCattle?: boolean;
   /** 该会话是否开启了"运行/测试在容器中" */
@@ -2115,12 +2115,12 @@ export interface ContainerShellGateInput {
   projectStopped?: boolean;
   runtimeId?: string;
   /** 所选运行时的真实状态（null = 没探过 ⇒ 按未就绪） */
-  runtimeStatus?: ContainerProbeStatus | null;
+  runtimeStatus?: RongQiTanCeZhuangTai | null;
   /** 项目容器镜像是否已定（现在是 false —— 镜像来源待产品主决定） */
   imageReady?: boolean;
 }
 
-export interface ContainerShellGate {
+export interface RongQiKongZhiTaiMenJin {
   /** 能不能**真的跑命令**（只有引擎就绪 + 镜像就绪才 true） */
   available: boolean;
   /**
@@ -2140,7 +2140,7 @@ export interface ContainerShellGate {
  * 再判"项目是否停止"，最后才判"容器就绪 + 有没有镜像"。
  * 任何一条不满足都**不执行**任何命令（调用方据此如实拒绝）。
  */
-export function containerShellGate(input: ContainerShellGateInput = {}): ContainerShellGate {
+export function rongQiKongZhiTaiMenJin(input: RongQiKongZhiTaiMenJinShuRu = {}): RongQiKongZhiTaiMenJin {
   if (input.inProjectOrCattle !== true) {
     return { available: false, openable: false, code: 'not-in-chat', needsInstall: false, reason: 'onlyInChat' };
   }
@@ -2203,7 +2203,7 @@ export function isAllowedImageRef(ref: unknown): boolean {
   const r = String(ref || '');
   if (!r) return false;
   if (SOLIDIFIED_IMAGE_RE.test(r)) return true;
-  return CONTAINER_BASE_IMAGES.some((img) => !!img.digest && `${img.ref}@${img.digest}` === r);
+  return CONTAINER_BASE_IMAGES.some((tuPian) => !!tuPian.digest && `${tuPian.ref}@${tuPian.digest}` === r);
 }
 
 /** 固定命令表：**argv 只能来自这里**（键是产品自己的枚举，值才是 argv） */
@@ -2251,7 +2251,7 @@ export const CONTAINER_EXEC_BINS: Record<string, string> = {
   nerdctl: 'nerdctl',
   'rancher-desktop': 'nerdctl',
 };
-export function containerExecBin(runtimeId: string): string | null {
+export function rongQiZhiXingChengXu(runtimeId: string): string | null {
   return CONTAINER_EXEC_BINS[String(runtimeId || '')] || null;
 }
 
@@ -2321,7 +2321,7 @@ const SAFE_LABEL_RE = /^[A-Za-z0-9._:@/-]{1,120}$/;
  */
 export function containerExecPlan(runtimeId: string, op: string, params: ContainerExecParams = {}): ContainerExecPlanResult {
   const id = String(runtimeId || '');
-  const bin = containerExecBin(id);
+  const bin = rongQiZhiXingChengXu(id);
   if (!bin) return { ok: false, code: 'runtime-not-executable', error: `runtime '${id}' has no executable CLI in our whitelist` };
   if (!CONTAINER_EXEC_OPS.includes(op as ContainerExecOp)) {
     return { ok: false, code: 'bad-op', error: `op must be one of ${CONTAINER_EXEC_OPS.join('|')}` };
@@ -2454,14 +2454,14 @@ export async function runContainerExec(
           const out = decodeBuffer(stdout as unknown as Buffer).trim();
           const err = decodeBuffer(stderr as unknown as Buffer).trim();
           if (!error) return finish({ code: 0, out, err, timedOut: false });
-          const anyErr = error as NodeJS.ErrnoException & { code?: string | number; killed?: boolean };
-          const timedOut = anyErr.killed === true || String(anyErr.code) === 'ETIMEDOUT';
+          const renYiCuoWu = error as NodeJS.ErrnoException & { code?: string | number; killed?: boolean };
+          const timedOut = renYiCuoWu.killed === true || String(renYiCuoWu.code) === 'ETIMEDOUT';
           finish({
-            code: typeof anyErr.code === 'number' ? anyErr.code : null,
+            code: typeof renYiCuoWu.code === 'number' ? renYiCuoWu.code : null,
             out,
-            err: err || compact(String(anyErr.message || '')),
+            err: err || compact(String(renYiCuoWu.message || '')),
             timedOut,
-            ...(anyErr.code === 'ENOENT' ? { spawnErr: 'engine-cli-not-found' } : {}),
+            ...(renYiCuoWu.code === 'ENOENT' ? { spawnErr: 'engine-cli-not-found' } : {}),
           });
         }
       );
@@ -2609,13 +2609,13 @@ export async function writeContainerShellSession(
   const quietMs = Math.max(40, Math.min(opts.quietMs ?? 180, 1000));
   const t0 = Date.now();
   let lastLen = -1;
-  let lastChange = Date.now();
+  let zuihouBiangeng = Date.now();
   for (;;) {
     if (s.buffer.length !== lastLen) {
       lastLen = s.buffer.length;
-      lastChange = Date.now();
+      zuihouBiangeng = Date.now();
     }
-    if (s.buffer.length > 0 && Date.now() - lastChange >= quietMs) break;
+    if (s.buffer.length > 0 && Date.now() - zuihouBiangeng >= quietMs) break;
     if (Date.now() - t0 >= settleMs) break;
     if (!s.alive) break;
     await new Promise((r) => setTimeout(r, 40));

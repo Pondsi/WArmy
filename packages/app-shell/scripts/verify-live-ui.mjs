@@ -445,8 +445,12 @@ async function main() {
     check('排布：用户名在头像下面', !!meDom.layout && meDom.layout.nameBelowAvatar === true, meDom.layout);
     check('排布：邮箱在用户名右侧', !!meDom.layout && meDom.layout.mailRightOfName === true, meDom.layout);
     check('排布：凭证在用户名下面', !!meDom.layout && meDom.layout.credBelowName === true, meDom.layout);
-    check('凭证默认只露前三后三（中间是等长的「牛马」遮蔽）',
-      /^.{3}-牛马/.test(String(meDom.credText).trim()) && /牛马/.test(String(meDom.credText)), String(meDom.credText).slice(0, 40));
+    /**
+     * 遮蔽形状（产品主定稿）：按**原有分组**来，每个 `-` 之间就是「牛马」**两个字**
+     *（不是凑够三个字）。所以遮住时整串比全貌短，但组数与分隔位置完全一致。
+     */
+    const maskShape = /^[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}(-牛马)+-[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}$/.test(String(meDom.credText).trim());
+    check('凭证默认只露前三后三（中间每组都是「牛马」两个字）', maskShape, String(meDom.credText));
     // 小眼睛：点一下看全貌，再点一下遮回去（前后长度一致，排版不跳）
     const eye = await c.evaluate(`(async function(){
       const el = document.querySelector('#me-id-val');
@@ -474,8 +478,7 @@ async function main() {
     // 用区间写很容易漏（此前把 U 也排除掉了，导致正确值被判失败）。
     check('点小眼睛显示完整凭证（51 位、无小写、无 I/O/Z）',
       /^[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}(-[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}){16}$/.test(String(eye.shown || '').trim()), eye);
-    check('再点一次遮回去（遮蔽长度与全貌一致，排版不跳）',
-      eye.back === eye.masked && Math.abs(eye.shownLen - eye.maskedLen) === 0, { masked: eye.maskedLen, shown: eye.shownLen });
+    check('再点一次遮回去（与初始遮蔽完全一致）', eye.back === eye.masked, { back: eye.back, masked: eye.masked });
     check('ID 行明说"凭证即私钥 + 没有服务器能挂失"（不让用户误以为能找回）',
       /私钥|private key/i.test(meDom.idWarn) && /挂失|revoke|找回|recover/i.test(meDom.idWarn), String(meDom.idWarn).slice(0, 80));
 

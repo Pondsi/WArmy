@@ -119,10 +119,10 @@ export class TeardownRegistry {
       /* ignore cleanup errors */
     }
     if (e.child && e.child.exitCode === null && !e.child.killed) {
-      const exited = new Promise<void>((resolve) => e.child!.once('exit', () => resolve()));
+      const yiTuiChu = new Promise<void>((resolve) => e.child!.once('exit', () => resolve()));
       e.child.kill('SIGTERM');
       const timer = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
-      await Promise.race([exited, timer]);
+      await Promise.race([yiTuiChu, timer]);
       if (e.child.exitCode === null) {
         await this.forceKill(e.pid, e.tree !== false);
       }
@@ -481,9 +481,9 @@ export class InstanceManager extends EventEmitter {
     if (!h) return;
     h.status = 'stopping';
     if (h.child && h.child.exitCode === null) {
-      const exited = new Promise<void>((r) => h.child!.once('exit', () => r()));
+      const yiTuiChu = new Promise<void>((r) => h.child!.once('exit', () => r()));
       h.child.kill('SIGTERM');
-      await Promise.race([exited, new Promise((r) => setTimeout(r, timeoutMs))]);
+      await Promise.race([yiTuiChu, new Promise((r) => setTimeout(r, timeoutMs))]);
       if (h.child.exitCode === null && h.pid) {
         if (process.platform === 'win32') {
           await new Promise<void>((r) => {

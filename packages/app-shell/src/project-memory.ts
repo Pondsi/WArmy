@@ -25,8 +25,8 @@ export interface ProjectMemoryView {
 export function readProjectMemory(groupStore: GroupStore | null, groupId: string): string {
   try {
     const p = groupStore?.projectOf?.(groupId) || (groupStore as any)?.projectOf?.(groupId);
-    const mem = p && typeof p.memory === 'string' ? p.memory : '';
-    return mem.slice(0, PROJECT_MEMORY_MAX_CHARS);
+    const jiYi = p && typeof p.memory === 'string' ? p.memory : '';
+    return jiYi.slice(0, PROJECT_MEMORY_MAX_CHARS);
   } catch {
     return '';
   }

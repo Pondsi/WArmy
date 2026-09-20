@@ -11,19 +11,19 @@ import crypto from 'node:crypto';
 
 export const AI_QUESTION_CUSTOM = '__custom__';
 
-export interface AiQuestionOption {
+export interface AiWenTiXuanXiang {
   id: string;
   label: string;
   description?: string;
 }
 
-export interface AiQuestion {
+export interface AiWenTi {
   id: string;
   groupId: string;
   sessionId?: string;
   title: string;
   body?: string;
-  options: AiQuestionOption[];
+  options: AiWenTiXuanXiang[];
   /** 恒 true：产品要求永远提供「其他，用户自行输入」 */
   allowCustom: true;
   createdAt: number;
@@ -31,8 +31,8 @@ export interface AiQuestion {
   answer?: { optionId: string; label: string; customText?: string; answeredAt: number };
 }
 
-export class AiQuestionHub {
-  private items = new Map<string, AiQuestion>();
+export class AiWenTiZhongXin {
+  private items = new Map<string, AiWenTi>();
 
   open(input: {
     groupId: string;
@@ -41,7 +41,7 @@ export class AiQuestionHub {
     body?: string;
     options: Array<{ id?: string; label: string; description?: string }>;
     dedupe?: boolean;
-  }): AiQuestion {
+  }): AiWenTi {
     const groupId = String(input.groupId || '');
     const title = String(input.title || '').trim();
     if (input.dedupe !== false) {
@@ -56,7 +56,7 @@ export class AiQuestionHub {
         label: String(o.label).trim(),
         ...(o.description ? { description: String(o.description) } : {}),
       }));
-    const q: AiQuestion = {
+    const q: AiWenTi = {
       id: 'q-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'),
       groupId,
       sessionId: input.sessionId,
@@ -71,7 +71,7 @@ export class AiQuestionHub {
     return q;
   }
 
-  answer(id: string, optionId: string, customText?: string): { ok: boolean; question?: AiQuestion; inject?: string; error?: string } {
+  answer(id: string, optionId: string, customText?: string): { ok: boolean; question?: AiWenTi; inject?: string; error?: string } {
     const q = this.items.get(String(id || ''));
     if (!q) return { ok: false, error: 'not-found' };
     if (q.status === 'answered') {
@@ -91,19 +91,19 @@ export class AiQuestionHub {
     return { ok: true, question: q, inject: this.injectLine(q) };
   }
 
-  injectLine(q: AiQuestion): string {
+  injectLine(q: AiWenTi): string {
     if (!q.answer) return '';
     const extra = q.answer.customText ? `（自定义）${q.answer.customText}` : '';
     return `[人类决策] ${q.title} → ${q.answer.label}${extra}`;
   }
 
-  list(groupId?: string): AiQuestion[] {
+  list(groupId?: string): AiWenTi[] {
     return [...this.items.values()]
       .filter((q) => !groupId || q.groupId === groupId)
       .sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  pending(groupId?: string): AiQuestion[] {
+  pending(groupId?: string): AiWenTi[] {
     return this.list(groupId).filter((q) => q.status === 'pending');
   }
 

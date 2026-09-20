@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 /** 与 index.html 里引入的必须是同一个文件 */
 export const QR_VENDOR_FILE = 'vendor/qrcode-generator-2.0.4.js';
 export const QR_ECC = 'M'; // 纠错等级 M（产品要求）
-export const QR_QUIET = 4; // 静区 4 个模块（ISO/IEC 18004 要求 ≥4）
+export const erweimaAnjing = 4; // 静区 4 个模块（ISO/IEC 18004 要求 ≥4）
 
 const VENDOR_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'vendor', 'qrcode-generator-2.0.4.js');
 
@@ -89,7 +89,7 @@ export function qrSvg(text, size = 168, ecc = QR_ECC, label = '') {
   const data = String(text == null ? '' : text);
   if (!data) return '';
   const { modules: n, matrix } = qrMatrix(data, ecc);
-  const quiet = QR_QUIET;
+  const quiet = erweimaAnjing;
   const total = n + quiet * 2;
   const unit = size / total;
   const rects = [];

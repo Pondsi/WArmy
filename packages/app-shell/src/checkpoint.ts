@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-export interface CheckpointDetail {
+export interface JianChaDianXiangQing {
   tasks: string[];
   filesChanged: Array<{ path: string; ts: number }>;
   filesCreated: Array<{ path: string; ts: number }>;
@@ -24,11 +24,11 @@ export interface Checkpoint {
   strategy: 'cow' | 'shadow';
   /** 人读摘要：几点几分、大致进行到哪一步 */
   summary: string;
-  detail: CheckpointDetail;
+  detail: JianChaDianXiangQing;
   bytes: number;
 }
 
-export interface CheckpointSpaceInfo {
+export interface JianChaDianKongJian {
   maxBytes: number;
   usedBytes: number;
   count: number;
@@ -36,7 +36,7 @@ export interface CheckpointSpaceInfo {
 
 const FICLONE = 2; // fs.constants.COPYFILE_FICLONE
 
-function cowCopy(src: string, dest: string): 'cow' | 'shadow' {
+function kaoBeiZhi(src: string, dest: string): 'cow' | 'shadow' {
   try {
     fs.copyFileSync(src, dest, FICLONE);
     return 'cow';
@@ -50,7 +50,7 @@ function cowCopy(src: string, dest: string): 'cow' | 'shadow' {
   }
 }
 
-function cowCopyDir(src: string, dest: string): 'cow' | 'shadow' {
+function kaoBeiMuLu(src: string, dest: string): 'cow' | 'shadow' {
   let mode: 'cow' | 'shadow' = 'cow';
   fs.mkdirSync(dest, { recursive: true });
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
@@ -58,13 +58,13 @@ function cowCopyDir(src: string, dest: string): 'cow' | 'shadow' {
     const s = path.join(src, e.name);
     const d = path.join(dest, e.name);
     if (e.isDirectory()) {
-      if (cowCopyDir(s, d) === 'shadow') mode = 'shadow';
-    } else if (cowCopy(s, d) === 'shadow') mode = 'shadow';
+      if (kaoBeiMuLu(s, d) === 'shadow') mode = 'shadow';
+    } else if (kaoBeiZhi(s, d) === 'shadow') mode = 'shadow';
   }
   return mode;
 }
 
-export class CheckpointStore {
+export class JianChaDianCang {
   private items: Checkpoint[] = [];
 
   constructor(private root: string) {
@@ -96,7 +96,7 @@ export class CheckpointStore {
     limit?: number;
     maxBytes?: number;
     summary?: string;
-    detail?: Partial<CheckpointDetail>;
+    detail?: Partial<JianChaDianXiangQing>;
   }): Checkpoint {
     const id = `cp-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
     const dir = path.join('shadows', id);
@@ -104,12 +104,12 @@ export class CheckpointStore {
     fs.mkdirSync(abs, { recursive: true });
     let strategy: 'cow' | 'shadow' = 'cow';
     if (opts.jsonlPath && fs.existsSync(opts.jsonlPath)) {
-      if (cowCopy(opts.jsonlPath, path.join(abs, 'fast-memory.jsonl')) === 'shadow') strategy = 'shadow';
+      if (kaoBeiZhi(opts.jsonlPath, path.join(abs, 'fast-memory.jsonl')) === 'shadow') strategy = 'shadow';
     }
     if (opts.workspace && fs.existsSync(opts.workspace)) {
-      if (cowCopyDir(opts.workspace, path.join(abs, 'workspace')) === 'shadow') strategy = 'shadow';
+      if (kaoBeiMuLu(opts.workspace, path.join(abs, 'workspace')) === 'shadow') strategy = 'shadow';
     }
-    const bytes = dirSize(abs);
+    const bytes = muLuDaXiao(abs);
     const now = Date.now();
     // G. 真实文件时间戳
     const filesChanged: Array<{ path: string; ts: number }> = [];
@@ -176,7 +176,7 @@ export class CheckpointStore {
     return cp;
   }
 
-  space(maxBytes = 512 * 1024 * 1024): CheckpointSpaceInfo {
+  space(maxBytes = 512 * 1024 * 1024): JianChaDianKongJian {
     const usedBytes = this.items.reduce((s, c) => s + (c.bytes || 0), 0);
     return { maxBytes, usedBytes, count: this.items.length };
   }
@@ -197,19 +197,19 @@ export class CheckpointStore {
       const src = path.join(abs, 'workspace');
       if (fs.existsSync(src)) {
         fs.rmSync(targets.workspace, { recursive: true, force: true });
-        cowCopyDir(src, targets.workspace);
+        kaoBeiMuLu(src, targets.workspace);
       }
     }
     return true;
   }
 }
 
-function dirSize(dir: string): number {
+function muLuDaXiao(dir: string): number {
   let n = 0;
   try {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory()) n += dirSize(p);
+      if (e.isDirectory()) n += muLuDaXiao(p);
       else n += fs.statSync(p).size;
     }
   } catch {

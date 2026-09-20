@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GroupStore } from '../dist/group-store.js';
-import { AiQuestionHub, AI_QUESTION_CUSTOM } from '../dist/ai-questions.js';
+import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from '../dist/ai-questions.js';
 import { withReadBack, dedupeByNorm, normPathKey } from '../dist/read-back.js';
 import { KanbanCang, JieLing, JuShu } from '../../board/dist/index.js';
 
@@ -24,8 +24,8 @@ gs.createGroup?.({ groupId: 'g1', name: 'P', type: 'internal', directedMode: fal
 // createGroup API may differ — use snapshot write via list
 if (!gs.getGroup('g1')) {
   // fallback: use internal persist through setProjectAttrs after manual create
-  const { writeJsonAtomicSafe } = await import('../dist/atomic-json.js');
-  writeJsonAtomicSafe(path.join(dir, 'groups.json'), {
+  const { anQuanYuanZiXieJson } = await import('../dist/atomic-json.js');
+  anQuanYuanZiXieJson(path.join(dir, 'groups.json'), {
     version: 1,
     groups: [{ groupId: 'g1', name: 'P', type: 'internal', directedMode: false, dutyInstanceId: null, createdAt: Date.now(), updatedAt: Date.now(), origin: 'ipc' }],
     members: {},
@@ -41,7 +41,7 @@ check('projectMemoryForContext bounded', projectMemoryForContext(gs, 'g1').inclu
 check('empty group memory empty', readProjectMemory(gs, 'nope') === '');
 
 // questions
-const hub = new AiQuestionHub();
+const hub = new AiWenTiZhongXin();
 const q = hub.open({ groupId: 'g1', title: '是否容器中开发？', options: [{ label: '容器' }, { label: '本机' }] });
 check('question open', !!q.id && q.allowCustom === true);
 const q2 = hub.open({ groupId: 'g1', title: '是否容器中开发？', options: [{ label: '容器' }] });
@@ -82,7 +82,7 @@ check('docs context-knowledge', fs.existsSync(path.join(ROOT, 'docs/CONTEXT-KNOW
 check('list watermark markup', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/index.html'),'utf8').includes('list-watermark'));
 check('notify-zone markup', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/index.html'),'utf8').includes('notify-zone'));
 check('lazy chat window', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'),'utf8').includes('CHAT_VIEW_WINDOW'));
-check('archive extract source', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/archive-cleanup.ts'),'utf8').includes('extractKnowledgeFromArchive'));
+check('archive extract source', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/archive-cleanup.ts'),'utf8').includes('congGuiDangTiQuZhiShi'));
 check('src modules exist', fs.existsSync(path.join(ROOT, 'packages/app-shell/src/project-memory.ts')) && fs.existsSync(path.join(ROOT, 'packages/app-shell/src/ai-questions.ts')));
 
 console.log(`\n==== verify-warmy-features: pass ok / fail FAIL ====`);

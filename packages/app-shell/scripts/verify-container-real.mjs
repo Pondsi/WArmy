@@ -32,7 +32,7 @@ if (!fs.existsSync(dist)) {
   process.exit(3);
 }
 const mod = await import(new URL('file://' + dist.replace(/\\/g, '/')).href);
-const { probeContainerRuntimes, runContainerAction, recordContainerTiming, containerTimings, CONTAINER_BASE_IMAGES } = mod;
+const { probeContainerRuntimes, runContainerAction, jiLuRongQiHaoShi, containerTimings, CONTAINER_BASE_IMAGES } = mod;
 
 const KEEP = process.argv.includes('--keep-running');
 const START_TIMEOUT_MS = Number(process.env.WARMY_START_TIMEOUT_MS || 420000);
@@ -176,7 +176,7 @@ if (wasRunning) {
     await sleep(3000);
   }
   startMs = Date.now() - t0;
-  recordContainerTiming('start', startMs, 'Docker Desktop（' + startVia + '）');
+  jiLuRongQiHaoShi('start', startMs, 'Docker Desktop（' + startVia + '）');
   engineStartOk = ready;
   ok(ready, '1-2 守护进程**真的**就绪了（轮询 docker info，不是"点了就完事"）', last);
   console.log('     实测启动耗时 = ' + (startMs / 1000).toFixed(1) + ' 秒（' + polls + ' 次轮询；方式=' + startVia + '）');
@@ -220,7 +220,7 @@ if (dockerAfter.status === 'ready') {
   measured.pullAlpineMs = pull0.ms;
   console.log('     docker pull ' + IMAGE + ' rc=' + pull0.code + ' 实测 ' + pull0.ms + 'ms  ' + JSON.stringify(pull0.out.split(/\r?\n/).slice(-1)[0] || pull0.err.slice(0, 120)));
   const gv = await run('docker', ['run', '--rm', IMAGE, 'echo', 'ok'], 240000);
-  recordContainerTiming('run', gv.ms, 'docker run --rm ' + IMAGE + ' echo ok');
+  jiLuRongQiHaoShi('run', gv.ms, 'docker run --rm ' + IMAGE + ' echo ok');
   measured.runAlpineMs = gv.ms;
   console.log('     docker run --rm ' + IMAGE + ' echo ok  rc=' + gv.code + ' 实测 ' + gv.ms + 'ms');
   console.log('     stdout=' + JSON.stringify(gv.out.slice(0, 120)) + ' stderr=' + JSON.stringify(gv.err.slice(0, 200)));
@@ -243,7 +243,7 @@ if (dockerAfter.status === 'ready') {
   console.log('     docker pull ' + NODE_REF + ' rc=' + npull.code + ' 实测 ' + npull.ms + 'ms');
   const nv = await run('docker', ['run', '--rm', NODE_REF, 'node', '-e', 'console.log(process.version)'], 240000);
   measured.runNodeMs = nv.ms;
-  recordContainerTiming('run', nv.ms, 'docker run --rm node -e console.log(process.version)');
+  jiLuRongQiHaoShi('run', nv.ms, 'docker run --rm node -e console.log(process.version)');
   nodeOk = nv.code === 0 && /^v\d+\./.test(nv.out.trim());
   console.log('     docker run --rm ' + NODE_REF + ' node -e "console.log(process.version)"  rc=' + nv.code + ' 实测 ' + nv.ms + 'ms  stdout=' + JSON.stringify(nv.out.trim()) + ' stderr=' + JSON.stringify(nv.err.slice(0, 200)));
   ok(nodeOk, '2-4 【核心】容器内的 **Linux 版 Node** 真的能跑（容器自带 Node，未依赖主机）', nv.out.trim() || nv.err.slice(0, 200));
@@ -341,7 +341,7 @@ if (!wasRunning && (dockerAfter.status === 'ready' || engineStartOk)) {
   }
   stopMs = Date.now() - t0;
   downOk = down;
-  recordContainerTiming('stop', stopMs, 'Docker Desktop');
+  jiLuRongQiHaoShi('stop', stopMs, 'Docker Desktop');
   console.log('     实测停止耗时 = ' + (stopMs / 1000).toFixed(1) + ' 秒（' + polls + ' 次轮询）');
   ok(down, '4-2 【核心】引擎真的停下去了（不是只发了命令）', (stopMs / 1000).toFixed(1) + 's');
   const afterStop = await probeContainerRuntimes({ cacheMs: 0 });

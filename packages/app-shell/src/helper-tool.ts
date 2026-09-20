@@ -670,18 +670,18 @@ export function analyzeHostsContent(content: string): HostsContentAnalysis {
   return { ok: fatal.length === 0, fatal, warnings, stats };
 }
 
-export function detectEol(content: string): '\r\n' | '\n' {
+export function tanceHangwei(content: string): '\r\n' | '\n' {
   return content.includes('\r\n') ? '\r\n' : '\n';
 }
 
 /** 判断某条 (ip, hostname) 是否已存在 */
 export function findHostEntry(content: string, spec: HostEntrySpec): { present: boolean; lineNumbers: number[] } {
   const target = spec.hostname.trim().toLowerCase();
-  const targetIp = spec.ip.trim();
+  const muBiaoIp = spec.ip.trim();
   const lineNumbers: number[] = [];
   content.split(/\r?\n/).forEach((line, i) => {
     const a = analyzeHostsLine(line);
-    if (a.kind !== 'entry' || a.ip !== targetIp) return;
+    if (a.kind !== 'entry' || a.ip !== muBiaoIp) return;
     const names = (a.hostnames ?? []).map((h) => h.toLowerCase());
     if (names.includes(target)) lineNumbers.push(i + 1);
   });
@@ -715,9 +715,9 @@ export function upsertHostEntry(
     return { ok: false, content, changed: false, alreadyPresent: false, reason: '渲染结果未包含目标主机名' };
   }
 
-  const eol = detectEol(content);
-  const base = content.endsWith('\n') ? content : content + eol;
-  return { ok: true, content: base + line + eol, changed: true, alreadyPresent: false, appendedLine: line };
+  const hangWei = tanceHangwei(content);
+  const base = content.endsWith('\n') ? content : content + hangWei;
+  return { ok: true, content: base + line + hangWei, changed: true, alreadyPresent: false, appendedLine: line };
 }
 
 /** 精确移除（回滚/清理用）：只删 ip+hostname 完全匹配的行 */
@@ -728,15 +728,15 @@ export function removeHostEntry(
   const v = validateHostEntrySpec(spec);
   if (!v.ok) return { ok: false, content, changed: false, removedCount: 0, reason: v.reason };
   const target = spec.hostname.trim().toLowerCase();
-  const targetIp = spec.ip.trim();
-  const eol = detectEol(content);
+  const muBiaoIp = spec.ip.trim();
+  const hangWei = tanceHangwei(content);
   let removed = 0;
   const kept: string[] = [];
   for (const line of content.split(/\r?\n/)) {
     const a = analyzeHostsLine(line);
     if (
       a.kind === 'entry' &&
-      a.ip === targetIp &&
+      a.ip === muBiaoIp &&
       (a.hostnames ?? []).map((h) => h.toLowerCase()).includes(target) &&
       (a.hostnames ?? []).length === 1
     ) {
@@ -746,7 +746,7 @@ export function removeHostEntry(
     kept.push(line);
   }
   if (removed === 0) return { ok: true, content, changed: false, removedCount: 0 };
-  return { ok: true, content: kept.join(eol), changed: true, removedCount: removed };
+  return { ok: true, content: kept.join(hangWei), changed: true, removedCount: removed };
 }
 
 /* ────────────────────────── 备份 / 指纹 / 回读校验 ────────────────────────── */
@@ -1103,15 +1103,15 @@ export async function writeFileWithFallback(opts: {
   }
 
   // 提权路径（重试策略在 runElevatedArgs 内部：默认 2 次重试）
-  const stage = path.join(stageDir(), `payload-${randomTag()}.tmp`);
-  fs.writeFileSync(stage, opts.content, 'utf8');
-  const elevated = await runElevatedArgs(['copy', '/y', stage, opts.target], opts.tool, {
+  const jieDuan = path.join(stageDir(), `payload-${randomTag()}.tmp`);
+  fs.writeFileSync(jieDuan, opts.content, 'utf8');
+  const elevated = await runElevatedArgs(['copy', '/y', jieDuan, opts.target], opts.tool, {
     timeoutMs: opts.timeoutMs ?? 30000,
-    commandLine: `copy /y "${stage}" "${opts.target}"`,
+    commandLine: `copy /y "${jieDuan}" "${opts.target}"`,
     retries: opts.retries,
   });
   try {
-    fs.rmSync(stage, { force: true });
+    fs.rmSync(jieDuan, { force: true });
   } catch {
     /* noop */
   }

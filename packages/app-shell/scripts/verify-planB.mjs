@@ -80,8 +80,8 @@ check('ctx popover not fixed bottom', !/ctx-popover\s*\{[^}]*bottom:\s*150px/.te
 // ── 8. 真实 group-store 项目记忆/门禁 ──
 const os = await import('node:os');
 const dir = path.join(os.tmpdir(), 'warmy-planB-' + Date.now());
-const { writeJsonAtomicSafe } = await import('../dist/atomic-json.js');
-writeJsonAtomicSafe(path.join(dir, 'groups.json'), {
+const { anQuanYuanZiXieJson } = await import('../dist/atomic-json.js');
+anQuanYuanZiXieJson(path.join(dir, 'groups.json'), {
   version: 1,
   groups: [{ groupId: 'g1', name: 'P', type: 'internal', directedMode: false, dutyInstanceId: null, createdAt: Date.now(), updatedAt: Date.now(), origin: 'ipc' }],
   members: {},

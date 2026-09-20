@@ -181,11 +181,11 @@ function defaultCompress(entries: LogEntry[]): string {
     picked.push(`… [样本省略 ${entries.length - half * 2} 条] …`);
     for (const e of entries.slice(-half)) picked.push(sampleLine(e));
   }
-  const joined = picked.join('\n');
+  const yiJiaRu = picked.join('\n');
   try {
-    return ccrCompress({ kind: 'message', content: joined }, CCR_SAMPLE_BUDGET).content;
+    return ccrCompress({ kind: 'message', content: yiJiaRu }, CCR_SAMPLE_BUDGET).content;
   } catch {
-    return joined; // 压缩器抛错不能连累视图
+    return yiJiaRu; // 压缩器抛错不能连累视图
   }
 }
 

@@ -17,7 +17,7 @@
  */
 import { execFile } from 'node:child_process';
 
-export interface ContainerInstance {
+export interface RongQiShiLi {
   name: string;
   image?: string;
   state: 'running' | 'stopped' | 'unknown';
@@ -27,14 +27,14 @@ export interface ContainerInstance {
   ours?: boolean;
 }
 
-export interface ContainerInstanceList {
+export interface RongQiShiLiLieBiao {
   ok: boolean;
   id: string;
   /** 该引擎是否支持实例列表 */
   supported: boolean;
   /** 该引擎的实例能否由我们**单独**启动/停止（wsl 发行版由系统按需启动，为 false） */
   controllable: boolean;
-  instances: ContainerInstance[];
+  instances: RongQiShiLi[];
   /** 不支持 / 失败原因码 */
   reason?: string;
   /** 原始输出首行（证据，不翻译） */
@@ -47,7 +47,7 @@ const TIMEOUT_MS = 12000;
 const MAX_OUTPUT = 200_000;
 
 /** Windows 上 wsl.exe 输出是 UTF-16LE：拿 NUL 字节判一下就转码，否则按 UTF-8 */
-function decodeMaybeUtf16(buf: Buffer): string {
+function jieMaKeNengUtf16(buf: Buffer): string {
   if (buf.length > 2 && buf[1] === 0 && buf[3] === 0) return buf.toString('utf16le');
   return buf.toString('utf8');
 }
@@ -59,8 +59,8 @@ function run(cmd: string, args: string[]): Promise<ExecResult> {
       args,
       { timeout: TIMEOUT_MS, maxBuffer: MAX_OUTPUT, windowsHide: true },
       (err, stdout, stderr) => {
-        const out = decodeMaybeUtf16(Buffer.from(String(stdout || ''), 'binary'));
-        const errOut = decodeMaybeUtf16(Buffer.from(String(stderr || ''), 'binary'));
+        const out = jieMaKeNengUtf16(Buffer.from(String(stdout || ''), 'binary'));
+        const errOut = jieMaKeNengUtf16(Buffer.from(String(stderr || ''), 'binary'));
         if (err) {
           const code = typeof (err as { code?: unknown }).code === 'number' ? (err as { code: number }).code : null;
           resolve({ ok: false, stdout: out, stderr: errOut, code, error: String((err as Error).message || err) });
@@ -88,14 +88,14 @@ const INSTANCE_CONTROL: Record<string, boolean> = {
   wsl: false,
 };
 
-export function instanceControlSupported(id: string): boolean {
+export function shiLiKeKongZhi(id: string): boolean {
   return !!INSTANCE_CONTROL[id];
 }
 
 /** 实例名只允许引擎自己的合法字符；任何可疑字符一律拒绝（不做转义尝试，直接不执行） */
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 
-function splitRows(stdout: string): string[][] {
+function fenHang(stdout: string): string[][] {
   return stdout
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -103,9 +103,9 @@ function splitRows(stdout: string): string[][] {
     .map((l) => l.split('\t').map((x) => x.trim()));
 }
 
-function dockerLike(stdout: string): ContainerInstance[] {
-  return splitRows(stdout).map((cols) => {
-    const [name = '', image = '', state = '', status = ''] = cols;
+function dockerLike(stdout: string): RongQiShiLi[] {
+  return fenHang(stdout).map((lieJi) => {
+    const [name = '', image = '', state = '', status = ''] = lieJi;
     const running = /^running$/i.test(state);
     return {
       name,
@@ -113,43 +113,43 @@ function dockerLike(stdout: string): ContainerInstance[] {
       state: running ? 'running' : 'stopped',
       rawStatus: status || state,
       ours: /^warmy-/.test(name),
-    } satisfies ContainerInstance;
+    } satisfies RongQiShiLi;
   }).filter((x) => !!x.name);
 }
 
-function wslList(stdout: string): ContainerInstance[] {
-  return splitRows(stdout).map((cols) => {
-    const [name = '', state = '', version = ''] = cols;
+function wslList(stdout: string): RongQiShiLi[] {
+  return fenHang(stdout).map((lieJi) => {
+    const [name = '', state = '', version = ''] = lieJi;
     const running = /running/i.test(state);
     return {
       name: name.replace(/^\*/, '').trim(),
       state: running ? 'running' : 'stopped',
       rawStatus: [state, version ? `v${version}` : ''].filter(Boolean).join(' '),
-    } satisfies ContainerInstance;
+    } satisfies RongQiShiLi;
   }).filter((x) => !!x.name);
 }
 
 /** 列出某个运行时的实例；不支持时 `supported:false` + 原因，绝不编造空列表当成功 */
-export async function listRuntimeInstances(id: string): Promise<ContainerInstanceList> {
-  const controllable = instanceControlSupported(id);
+export async function lieYunXingShiLi(id: string): Promise<RongQiShiLiLieBiao> {
+  const controllable = shiLiKeKongZhi(id);
   const spec = LIST_COMMANDS[id];
   if (!spec) {
     return { ok: false, id, supported: false, controllable: false, instances: [], reason: 'no-instance-cli' };
   }
   const r = await run(spec.cmd, spec.args);
-  const firstLine = (r.stderr || r.stdout || r.error || '').split(/\r?\n/).find((l) => l.trim()) || '';
+  const shouHang = (r.stderr || r.stdout || r.error || '').split(/\r?\n/).find((l) => l.trim()) || '';
   if (!r.ok) {
     return {
       ok: false, id, supported: true, controllable, instances: [],
       reason: r.code === null ? 'spawn-failed' : 'command-failed',
-      evidence: firstLine.slice(0, 240),
+      evidence: shouHang.slice(0, 240),
     };
   }
   const instances = id === 'wsl' ? wslList(r.stdout) : dockerLike(r.stdout);
-  return { ok: true, id, supported: true, controllable, instances, ...(firstLine ? { evidence: firstLine.slice(0, 240) } : {}) };
+  return { ok: true, id, supported: true, controllable, instances, ...(shouHang ? { evidence: shouHang.slice(0, 240) } : {}) };
 }
 
-export interface InstanceActionResult {
+export interface ShiLiDongZuoJieGuo {
   ok: boolean;
   id: string;
   action: 'start' | 'stop';
@@ -162,17 +162,17 @@ export interface InstanceActionResult {
  * 启动/停止**单个实例**。命令参数固定为 `start|stop <name>`，
  * 名字先过白名单正则（不合规直接拒绝执行，不做任何转义尝试）。
  */
-export async function runInstanceAction(id: string, action: 'start' | 'stop', name: string): Promise<InstanceActionResult> {
-  const base: InstanceActionResult = { ok: false, id, action, instance: name };
+export async function yunXingShiLiDongZuo(id: string, action: 'start' | 'stop', name: string): Promise<ShiLiDongZuoJieGuo> {
+  const base: ShiLiDongZuoJieGuo = { ok: false, id, action, instance: name };
   if (!LIST_COMMANDS[id]) return { ...base, error: 'no-instance-cli' };
   if (!INSTANCE_CONTROL[id]) return { ...base, error: 'instance-control-unsupported' };
   if (!SAFE_NAME.test(String(name || ''))) return { ...base, error: 'bad-instance-name' };
   const r = await run(id, [action, name]);
-  const firstLine = (r.stderr || r.stdout || r.error || '').split(/\r?\n/).find((l) => l.trim()) || '';
+  const shouHang = (r.stderr || r.stdout || r.error || '').split(/\r?\n/).find((l) => l.trim()) || '';
   if (!r.ok) {
-    return { ...base, error: r.code === null ? 'spawn-failed' : 'command-failed', evidence: firstLine.slice(0, 240) };
+    return { ...base, error: r.code === null ? 'spawn-failed' : 'command-failed', evidence: shouHang.slice(0, 240) };
   }
-  return { ok: true, id, action, instance: name, ...(firstLine ? { evidence: firstLine.slice(0, 240) } : {}) };
+  return { ok: true, id, action, instance: name, ...(shouHang ? { evidence: shouHang.slice(0, 240) } : {}) };
 }
 
 /**
@@ -187,7 +187,7 @@ const GUI_LAUNCHERS: Record<string, { cmd: string; args: string[] }> = {
   'rancher-desktop': { cmd: 'Rancher Desktop', args: [] },
 };
 
-export interface OpenAppResult {
+export interface DaKaiYingYongJieGuo {
   ok: boolean;
   id: string;
   opened: boolean;
@@ -195,11 +195,11 @@ export interface OpenAppResult {
   evidence?: string;
 }
 
-export async function openRuntimeApp(id: string): Promise<OpenAppResult> {
+export async function daKaiYunXingYingYong(id: string): Promise<DaKaiYingYongJieGuo> {
   const spec = GUI_LAUNCHERS[id];
   if (!spec) return { ok: false, id, opened: false, reason: 'no-known-gui' };
   const r = await run(spec.cmd, spec.args);
-  const firstLine = (r.stderr || r.error || '').split(/\r?\n/).find((l) => l.trim()) || '';
-  if (!r.ok) return { ok: false, id, opened: false, reason: 'spawn-failed', evidence: firstLine.slice(0, 240) };
+  const shouHang = (r.stderr || r.error || '').split(/\r?\n/).find((l) => l.trim()) || '';
+  if (!r.ok) return { ok: false, id, opened: false, reason: 'spawn-failed', evidence: shouHang.slice(0, 240) };
   return { ok: true, id, opened: true };
 }

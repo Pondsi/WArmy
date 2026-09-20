@@ -31,15 +31,15 @@ import {
 } from '@warmy/providers';
 import { CcrGateway } from '@warmy/ccr-compressor';
 import { KnowledgeBase } from '@warmy/knowledge-base';
-import { CheckpointStore } from './checkpoint.js';
-import { AuditLogger } from './audit.js';
+import { JianChaDianCang } from './checkpoint.js';
+import { ShenJiRiZhi } from './audit.js';
 import { SecureKeyStore } from './secure-keys.js';
 import * as credentialModule from './credential.js';
-import { KnowledgeArchiver, CleanupManager, extractKnowledgeFromArchive, mergeUserPreferences, extractStructuredSummary } from './archive-cleanup.js';
+import { ZhiShiGuiDangQi, QingLiGuanLiQi, congGuiDangTiQuZhiShi, heBingYongHuPianHao, tiQuJieGouHuaZhaiYao } from './archive-cleanup.js';
 import { pickModelForUrgency, pickEmbeddingModel, type RoleModelConfig } from './model-roles.js';
 import { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';
 import { projectMemoryForContext, readProjectMemory, writeProjectMemory } from './project-memory.js';
-import { AiQuestionHub, AI_QUESTION_CUSTOM } from './ai-questions.js';
+import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from './ai-questions.js';
 import { withReadBack, dedupeByNorm, normPathKey } from './read-back.js';
 import {
   renderBoundedView,
@@ -49,7 +49,7 @@ import {
   type LogEntry,
 } from './context-renderer.js';
 import { runShortLivedExecutor, runExecutors } from './executor.js';
-import { initAssetGovernor, retrieveAssetsForChat, registerChatAsset, recordAssetUsage, sweepAssets } from './asset-wire.js';
+import { chuShiZiChanGuanLi, retrieveAssetsForChat, zhuCeLiaoTianZiChan, jiLuZiChanShiYong, qingLiZiChan } from './asset-wire.js';
 import { MetricsCollector } from './metrics.js';
 import { LocalAccountStore, SettingsStore, generateDeviceId, type AppSettings, WARMY_DEFAULT_NET_PORT, SKILL_SCAN_DIRS_MAX,} from './settings-store.js';
 /**
@@ -59,18 +59,18 @@ import { LocalAccountStore, SettingsStore, generateDeviceId, type AppSettings, W
 import {
   probeContainerRuntimes,
   runContainerAction,
-  lastContainerProbeReport,
-  containerRuntimeSpec,
+  zuiHouRongQiTanCeBaoGao,
+  rongQiYunXingGuiGeOf,
   CONTAINER_SHELL_SECURITY,
-  containerShellGate,
-  normalizeContainerShellRequest,
-  projectReasonKey,
+  rongQiKongZhiTaiMenJin,
+  guiFanKongZhiTaiQingQiu,
+  xiangMuYuanYinJian,
   projectUnavailableRefusal,
   deriveProjectState,
   envSolidifyCapability,
-  engineOsModeOf,
+  quYinQingXiTongMoShi,
   shouldSolidifyAt,
-  solidifyRetention,
+  guHuaBaoLiu,
   SOLIDIFY_KEEP,
   SOLIDIFY_COALESCE_MS,
   CONTAINER_BASE_IMAGES,
@@ -94,7 +94,7 @@ import {
   type ContainerFixedCommandId,
   type ContainerProjectState,
 } from './container-probe.js';
-import { listRuntimeInstances, runInstanceAction, openRuntimeApp } from './container-instances.js';
+import { lieYunXingShiLi, yunXingShiLiDongZuo, daKaiYunXingYingYong } from './container-instances.js';
 import { IdentityStore, type MembershipStore } from './identity-store.js';
 import {
   CONTACT_CARD_I18N,
@@ -105,11 +105,11 @@ import {
   verifyIdentityCard,
   verifyRevocationDeclaration,
   verifyRotationDeclaration,
-  type ContactCard,
-  type IdentityCard,
+  type LianXiKa,
+  type ShenFenKa,
   type IdentityDeclaration,
-  type KeyRingEntry,
-  type RotationDeclaration,
+  type YaoShiHuanTiaoMu,
+  type LunHuanShengMing,
 } from './identity.js';
 import { GroupStore, type GroupListResult, type GroupMembersResult } from './group-store.js';
 import {
@@ -121,7 +121,7 @@ import {
   type UpdateDownloadResult,
   type UpdateSourceInfo,
 } from './updater.js';
-import { readJsonFile, sweepTempFiles, writeJsonAtomicSafe } from './atomic-json.js';
+import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomic-json.js';
 /**
  * ADR 004 第十六批：**工具文件访问台账**的接线。
  * helper-tool 之前**只写文件、不记路径** —— 这就是"最近改动文件"那块面板长期空态的原因之一。
@@ -179,7 +179,7 @@ import {
   rotateMemberCertificate,
 } from './identity-provider.js';
 // 本体协作层：ref/路径门禁 + 租约（写操作前 acquire、写完 release）
-import { validatePushPaths, validateRefUpdate, type PushPathEntry } from './repo-guard.js';
+import { validatePushPaths, validateRefUpdate, type TuiSongLuJingTiaoMu } from './repo-guard.js';
 import { LeaseRegistry, type AcquireRequest, type LeaseRefRequest } from './lease.js';
 import {
   createGitRunner,
@@ -222,7 +222,7 @@ function tMain(k: string, fallback = ''): string {
 let win: BrowserWindow | null = null;
 let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
 let memory: MemoryClient | null = null;
-const aiQuestions = new AiQuestionHub();
+const aiQuestions = new AiWenTiZhongXin();
 
 /** 窗口/托盘图标路径：产品 logo（app.ico → logo.ico → build/icon.ico → png） */
 function warmyWindowIcon(): string {
@@ -294,7 +294,7 @@ function persistRouterQueues(): void {
   const file = routerQueuesFile();
   if (!file) return;
   try {
-    writeJsonAtomicSafe(file, router.serializeState());
+    anQuanYuanZiXieJson(file, router.serializeState());
   } catch {
     /* 落盘失败不影响运行 */
   }
@@ -303,7 +303,7 @@ function restoreRouterQueues(): void {
   const file = routerQueuesFile();
   if (!file) return;
   try {
-    const snap = readJsonFile<{ version?: number } | null>(file, null);
+    const snap = duJsonWenJian<{ version?: number } | null>(file, null);
     if (snap && (snap as { version?: number }).version === ROUTER_QUEUES_VERSION) {
       router.restoreState(snap as never);
     }
@@ -324,7 +324,7 @@ function persistUiQueues(queues: Record<string, unknown>): void {
   const file = uiQueuesFile();
   if (!file) return;
   try {
-    writeJsonAtomicSafe(file, { version: 1, savedAt: Date.now(), queues });
+    anQuanYuanZiXieJson(file, { version: 1, savedAt: Date.now(), queues });
   } catch {
     /* ignore */
   }
@@ -333,7 +333,7 @@ function restoreUiQueues(): Record<string, unknown> {
   const file = uiQueuesFile();
   if (!file) return {};
   try {
-    const snap = readJsonFile<{ version?: number; queues?: Record<string, unknown> } | null>(file, null);
+    const snap = duJsonWenJian<{ version?: number; queues?: Record<string, unknown> } | null>(file, null);
     if (snap && snap.version === 1 && snap.queues && typeof snap.queues === 'object') return snap.queues;
   } catch { /* ignore */ }
   return {};
@@ -341,12 +341,12 @@ function restoreUiQueues(): Record<string, unknown> {
 let board: KanbanCang | null = null;
 const ccr = new CcrGateway(4000);
 let knowledge: KnowledgeBase | null = null;
-let checkpoints: CheckpointStore | null = null;
+let checkpoints: JianChaDianCang | null = null;
 const metrics = new MetricsCollector();
-let audit: AuditLogger | null = null;
+let audit: ShenJiRiZhi | null = null;
 let secureKeys: SecureKeyStore | null = null;
-let archiver: KnowledgeArchiver | null = null;
-let cleanup: CleanupManager | null = null;
+let archiver: ZhiShiGuiDangQi | null = null;
+let cleanup: QingLiGuanLiQi | null = null;
 let roleModels: RoleModelConfig = {};
 let accountStore: LocalAccountStore | null = null;
 let settingsStore: SettingsStore | null = null;
@@ -537,8 +537,8 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
     const asc = [...records]
       .filter((r) => r && typeof r === 'object')
       .sort((a, b) => Number(a['seq'] ?? 0) - Number(b['seq'] ?? 0));
-    const have = new Map<string, Set<number>>();
-    for (const [k, arr] of chatLogs) have.set(k, new Set(arr.map((e) => e.seq)));
+    const yiYou = new Map<string, Set<number>>();
+    for (const [k, arr] of chatLogs) yiYou.set(k, new Set(arr.map((e) => e.seq)));
     const sessions = new Set<string>();
     let chars = 0;
     for (const r of asc) {
@@ -547,11 +547,11 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
       const seq = Number(r['seq']);
       const body = typeof r['body'] === 'string' ? r['body'] : '';
       if (!key || !Number.isFinite(seq) || seq <= 0) continue;
-      const seen = have.get(key) ?? new Set<number>();
+      const seen = yiYou.get(key) ?? new Set<number>();
       if (seen.has(seq)) continue;
       if (chars + body.length > HISTORY_RESTORE_MAX_CHARS) continue;
       seen.add(seq);
-      have.set(key, seen);
+      yiYou.set(key, seen);
       chars += body.length;
       const rid = String(r['id'] ?? '');
       appendChatLog(key, {
@@ -912,8 +912,8 @@ function restoreActiveProvider(): void {
  *  · 否则按 id 从 SecureKeyStore 解出（这样重启后无需重输）。
  */
 async function resolveProviderKey(presetId: string, entered?: string): Promise<string> {
-  const typed = String(entered || '');
-  if (typed) return typed;
+  const yiLeiXing = String(entered || '');
+  if (yiLeiXing) return yiLeiXing;
   try {
     return (await secureKeys?.load(presetId)) || '';
   } catch {
@@ -993,7 +993,7 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
   //   - existsSync 对**空目录**也返回 true，包目录一度是空壳时就会链到空目录；
   //   - 链接一旦存在就不再重建，即使依赖后来补齐也修不回来；
   //   结果子进程报 `Cannot find module 'better-sqlite3'`，记忆服务永远启动超时（L2 实际从未起来）。
-  const memPkgDir = path.dirname(src);
+  const jiyiBaoMulu = path.dirname(src);
   const nmDst = path.join(runtimeDir, 'node_modules');
   const nativeName = process.platform + '-' + process.arch + '.node';
   /** 目录里是否有**可用**的 better-sqlite3（含本平台原生二进制） */
@@ -1022,7 +1022,7 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
     }
   })();
   const sqliteCandidates = [
-    path.join(memPkgDir, 'node_modules', 'better-sqlite3'),                                   // 开发态：包内 junction
+    path.join(jiyiBaoMulu, 'node_modules', 'better-sqlite3'),                                   // 开发态：包内 junction
     path.join(RES_ROOT, 'pnpm-store', 'better-sqlite3@' + sqliteVer,
       'node_modules', 'better-sqlite3'),                                                      // 打包态
     path.join(RES_ROOT, 'pnpm-store', 'better-sqlite3'),                    // 打包态（扁平）
@@ -1089,7 +1089,7 @@ async function bootstrap() {
   const userData = app.getPath('userData');
   board = new KanbanCang(path.join(userData, 'board'));
   knowledge = new KnowledgeBase(path.join(userData, 'knowledge'));
-  checkpoints = new CheckpointStore(path.join(userData, 'checkpoints'));
+  checkpoints = new JianChaDianCang(path.join(userData, 'checkpoints'));
   accountStore = new LocalAccountStore(path.join(userData, 'profile.json'));
   settingsStore = new SettingsStore(path.join(userData, 'settings.json'));
   secureKeys = new SecureKeyStore(userData);
@@ -1119,7 +1119,7 @@ async function bootstrap() {
     userAgent: `WArmy/appVersion() (process.platform; process.arch)`,
     log: (msg) => boot(`updater: msg`),
   });
-  sweepTempFiles(path.join(userData, 'updates'));
+  qingLiLinShiWenJian(path.join(userData, 'updates'));
   restoreGroups();
   // 群骨架恢复之后再灌队列快照（否则 createGroup 会把 queues Map 清空）
   restoreRouterQueues();
@@ -1131,11 +1131,11 @@ async function bootstrap() {
     nodeReg.registerLocal('local');
   }
   localNodeId = nodeReg.list().find((n) => n.isLocal)?.nodeId || 'node-local';
-  initAssetGovernor(path.join(userData, 'assets.json'));
-  audit = new AuditLogger(userData);
+  chuShiZiChanGuanLi(path.join(userData, 'assets.json'));
+  audit = new ShenJiRiZhi(userData);
   secureKeys = new SecureKeyStore(userData);
-  archiver = new KnowledgeArchiver(userData);
-  cleanup = new CleanupManager(userData);
+  archiver = new ZhiShiGuiDangQi(userData);
+  cleanup = new QingLiGuanLiQi(userData);
   // ── 身份层：首次运行即生成（ADR 003 附三 C6「首次运行即生成唯一 ID 与凭证」）──
   // 私钥用 safeStorage 包裹的 DEK 加密后落盘；启用口令后连同一台机器也不够（附五.1 第一层）。
   identityStore = new IdentityStore(path.join(userData, 'identity', 'identity.json'), {
@@ -1204,8 +1204,8 @@ async function bootstrap() {
   // 证书签发/拒收、吊销应用/拒绝都会落到审计日志（audit 已在上面初始化）。
   {
     const ms = membershipStoreFor(identityStore, { onAudit: (op, detail) => audit?.log(op, detail) });
-    const sum = ms?.summary();
-    if (sum) boot(`membership ready groups=sum.groupCount certs=sum.certCount revoked=sum.revokedCount`);
+    const heJi = ms?.summary();
+    if (heJi) boot(`membership ready groups=sum.groupCount certs=sum.certCount revoked=sum.revokedCount`);
   }
   // ── 租约表（本体协作层）：写操作的唯一仲裁者 ──
   leases = new LeaseRegistry({ idPrefix: 'warmy' });
@@ -1262,7 +1262,7 @@ async function bootstrap() {
             creatorFingerprint: msg.peerFingerprint,
           });
           // 台账尾部：**项目级、成员可见**（去重由 store 负责；只记路径/操作/时间）
-          let ledgerAdded = 0;
+          let zhangbenYitianjia = 0;
           if (apply && apply.ok && Array.isArray(v.ledgerTail) && groupStore) {
             for (const e2 of v.ledgerTail) {
               if (!e2.path || !e2.op) continue;
@@ -1271,7 +1271,7 @@ async function bootstrap() {
                 path: e2.path, ts: e2.ts || Date.now(), ok: e2.ok !== false, by: e2.by || 'remote',
                 ...(e2.bytes ? { bytes: e2.bytes } : {}),
               });
-              if (r.ok) ledgerAdded++;
+              if (r.ok) zhangbenYitianjia++;
             }
           }
           /**
@@ -1280,13 +1280,13 @@ async function bootstrap() {
            */
           if (!projectAttrsAreRemote(v.groupId)) {
             // 本机就是创建者：自己的信号回声，忽略（不要用对端的值覆盖本机事实）
-            audit?.log('project.attrs.inbound', { groupId: v.groupId, ok: true, echo: true, ledgerAdded });
+            audit?.log('project.attrs.inbound', { groupId: v.groupId, ok: true, echo: true, zhangbenYitianjia });
           } else {
             const gate = projectInboundGate({
               running: v.availability.availability === 'available' && v.project.disabledAt === 0,
               code: v.project.disabledAt > 0 ? 'disabled-by-owner' : (v.availability.code || 'container-not-ready'),
             });
-            audit?.log('project.attrs.inbound', { groupId: v.groupId, ok: true, queue: gate.queue, ledgerAdded });
+            audit?.log('project.attrs.inbound', { groupId: v.groupId, ok: true, queue: gate.queue, zhangbenYitianjia });
             if (!gate.allow) {
               emitConsole({ cat: 'net', code: 'project.inbound.queued', data: { groupId: v.groupId, projectCode: gate.projectCode, memberFaceKey: gate.memberFaceKey } });
             }
@@ -1560,7 +1560,7 @@ function saveWindowStateSoon(delay = 500): void {
       const maximized = win.isMaximized();
       const b = maximized ? (win as unknown as { getNormalBounds?: () => { x: number; y: number; width: number; height: number } }).getNormalBounds?.() || win.getBounds() : win.getBounds();
       const out = { x: b.x, y: b.y, width: b.width, height: b.height, maximized };
-      writeJsonAtomicSafe(f, out);
+      anQuanYuanZiXieJson(f, out);
     } catch { /* 忽略 */ }
   }, delay);
 }
@@ -1568,7 +1568,7 @@ function saveWindowStateSoon(delay = 500): void {
 function createWindow() {
   const isMac = process.platform === 'darwin';
   const ws = loadWindowState();
-  const iconPath = warmyWindowIcon();
+  const tuBiaoLuJing = warmyWindowIcon();
   win = new BrowserWindow({
     width: ws.width || 1280,
     height: ws.height || 800,
@@ -1589,9 +1589,9 @@ function createWindow() {
       backgroundThrottling: false,
       spellcheck: false,
     },
-    icon: iconPath,
+    icon: tuBiaoLuJing,
   });
-  try { win.setIcon?.(nativeImage.createFromPath(iconPath)); } catch { /* noop */ }
+  try { win.setIcon?.(nativeImage.createFromPath(tuBiaoLuJing)); } catch { /* noop */ }
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('ready-to-show', () => {
     if (ws.maximized) { try { win?.maximize(); } catch { /* noop */ } }
@@ -1630,12 +1630,12 @@ const __ipcRegistered = new Set<string>();
 function sanitizeError(e: unknown): string {
   const raw = e instanceof Error ? (e.message || e.name) : String(e);
   // noUncheckedIndexedAccess：split(..)[0] 的类型是 string | undefined，必须兜一下
-  const firstLine = String(raw ?? '').split('\n')[0] ?? '';
-  const cleaned = firstLine
+  const shouHang = String(raw ?? '').split('\n')[0] ?? '';
+  const yiQingLi = shouHang
     .replace(/[A-Za-z]:\\[^\s"'<>|]+/g, '<path>')                        // Windows 绝对路径
     .replace(/\/(?:Users|home|var|tmp|opt|mnt)\/[^\s"'<>|]*/g, '<path>')  // POSIX 绝对路径
     .slice(0, 200);
-  return cleaned || 'unknown error';
+  return yiQingLi || 'unknown error';
 }
 function handleIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any): void {
   if (__ipcRegistered.has(channel)) {
@@ -1720,10 +1720,10 @@ if (!gotSingleLock) {
 
 // 任务栏/窗口图标统一用产品 logo（app.ico 优先）
 try {
-  const __icon = warmyWindowIcon();
-  if (__icon && fs.existsSync(__icon)) {
+  const tubiao = warmyWindowIcon();
+  if (tubiao && fs.existsSync(tubiao)) {
     app.whenReady().then(() => {
-      try { nativeImage.createFromPath(__icon); } catch { /* noop */ }
+      try { nativeImage.createFromPath(tubiao); } catch { /* noop */ }
     }).catch(() => {});
   }
 } catch { /* noop */ }
@@ -2339,15 +2339,15 @@ handleIpc(
      *  - **本机开发且未被停用**的项目、以及「我的牛马」⇒ 直接放行（含探测都不做，不误伤）。
      * 历史记录仍然可读（`historyReadable: true` 一并回给渲染层）。
      */
-    const devRefusal = await projectUnavailableFor(sessionId);
-    if (devRefusal) {
-      emitConsole({ cat: 'system', code: 'container.project.unavailable', data: { sessionId, projectCode: devRefusal.projectCode } });
+    const KaiFaJuJue = await projectUnavailableFor(sessionId);
+    if (KaiFaJuJue) {
+      emitConsole({ cat: 'system', code: 'container.project.unavailable', data: { sessionId, projectCode: KaiFaJuJue.projectCode } });
       return {
         ok: false,
-        code: devRefusal.code,
-        projectCode: devRefusal.projectCode,
-        reasonKey: devRefusal.reasonKey,
-        fix: devRefusal.fix,
+        code: KaiFaJuJue.code,
+        projectCode: KaiFaJuJue.projectCode,
+        reasonKey: KaiFaJuJue.reasonKey,
+        fix: KaiFaJuJue.fix,
         // 成员侧看到的就是"创建者下线"那一套（同一个文案键）
         memberFaceKey: 'group.memberOffline',
         hostExecutionRefused: true,
@@ -2356,12 +2356,12 @@ handleIpc(
     }
 
     // 写入侧 CCR
-    const compressed = ccr.beforeLog({ kind: 'message', content: msg.content });
+    const yiYaSuo = ccr.beforeLog({ kind: 'message', content: msg.content });
     metrics.recordCcr({
       ts: Date.now(),
       kind: 'message',
-      originalBytes: compressed.originalBytes,
-      compressedBytes: compressed.compressedBytes,
+      originalBytes: yiYaSuo.originalBytes,
+      compressedBytes: yiYaSuo.compressedBytes,
     });
     // 日志只追加（不变量 #1）：先写入记忆服务，拿到**真实 recordId + seq** 再落日志，
     // 这样指针里的 retrieve(recordId=…)/retrieve(seq=…) 真的能回到这条原文。
@@ -2378,7 +2378,7 @@ handleIpc(
             // role 一并落 JSONL（SQLite 投影查不到它，但 JSONL 才是事实来源；
             // 重建时先用 recordId 前缀，将来有读 JSONL 的 IPC 就能直接用这个字段）
             role: 'user',
-            body: compressed.content,
+            body: yiYaSuo.content,
           },
           'duty'
         )
@@ -2389,7 +2389,7 @@ handleIpc(
     appendChatLog(sessionId, {
       seq: nextChatSeq(userMemSeq),
       role: 'user',
-      content: compressed.content,
+      content: yiYaSuo.content,
       recordId: userMemSeq !== undefined ? userRecordId : undefined,
       ts: Date.now(),
     });
@@ -2439,15 +2439,15 @@ handleIpc(
         };
       }
       const { loop } = retried.result;
-      const resp = loop.response;
-      const reply = resp.choices[0]?.message?.content || '';
+      const xiangYing = loop.response;
+      const reply = xiangYing.choices[0]?.message?.content || '';
       metrics.recordTurn({
         sessionId,
         ts: Date.now(),
-        promptTokens: resp.usage.promptTokens,
-        completionTokens: resp.usage.completionTokens,
-        cacheHitTokens: resp.usage.cacheHitTokens,
-        cacheMissTokens: resp.usage.cacheMissTokens,
+        promptTokens: xiangYing.usage.promptTokens,
+        completionTokens: xiangYing.usage.completionTokens,
+        cacheHitTokens: xiangYing.usage.cacheHitTokens,
+        cacheMissTokens: xiangYing.usage.cacheMissTokens,
         durationMs: Date.now() - t0,
         providerId: providerCfg.presetId,
         model: msg.model || providerCfg.model,
@@ -2485,7 +2485,7 @@ handleIpc(
       return {
         ok: true,
         reply,
-        usage: resp.usage,
+        usage: xiangYing.usage,
         needsKey: false,
         /** 工具调用观测（渲染层可据此展示"本轮调用了 retrieve/recall"） */
         tools: {
@@ -2521,7 +2521,7 @@ function currentEnvFingerprint(groupId: string): { active: boolean; runtimeId: s
   const runtimeId = gid ? projectRuntimeOf(gid) : '';
   const isContainer = !!gid && projectDevEnvOf(gid) === 'container' && !!runtimeId;
   const imageDigests: Record<string, string> = {};
-  for (const img of CONTAINER_BASE_IMAGES) if (img.digest) imageDigests[img.ref] = img.digest;
+  for (const tuPian of CONTAINER_BASE_IMAGES) if (tuPian.digest) imageDigests[tuPian.ref] = tuPian.digest;
   if (!isContainer) return { active: false, runtimeId: '', revision: 'host', at: Date.now(), imageDigests: {} };
   const revision = crypto.createHash('sha256').update(JSON.stringify({ runtimeId, imageDigests })).digest('hex').slice(0, 12);
   return { active: true, runtimeId, revision, at: Date.now(), imageDigests };
@@ -2542,8 +2542,8 @@ function recordCheckpointEnv(cpId: string, groupId?: string): void {
 handleIpc('warmy:checkpoint-create', (_e, phase: 'round_start' | 'round_end', groupId?: string) => {
   try {
     if (!checkpoints) return { ok: false };
-    const memDir = path.join(app.getPath('userData'), 'memory');
-    const jsonl = path.join(memDir, 'fast-memory.jsonl');
+    const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
+    const jsonl = path.join(jiYiMuLu, 'fast-memory.jsonl');
     const cp = checkpoints.create({ phase, logSeq: Date.now(), jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined });
     recordCheckpointEnv(String((cp && cp.id) || ''), groupId);
     return { ok: true, checkpoint: cp, list: checkpoints.list(), env: currentEnvFingerprint(String(groupId || '')) };
@@ -2572,8 +2572,8 @@ handleIpc('warmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: boo
     if (opts?.stopFirst) {
       void p1?.instances.stopAll();
     }
-    const memDir = path.join(app.getPath('userData'), 'memory');
-    const jsonl = path.join(memDir, 'fast-memory.jsonl');
+    const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
+    const jsonl = path.join(jiYiMuLu, 'fast-memory.jsonl');
     const ok = checkpoints.rollback(id, { jsonlPath: jsonl });
     // 回退后**如实对比环境**：环境变了就提前告知（文件回退了、环境回不去）
     const recorded = (settingsStore?.load()?.checkpointEnv || {})[String(id)] || null;
@@ -2727,7 +2727,7 @@ handleIpc('warmy:container-probe', async (_e, opts?: { force?: boolean; cacheMs?
     });
     return { ok: true, report };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e), report: lastContainerProbeReport() };
+    return { ok: false, error: sanitizeError(e), report: zuiHouRongQiTanCeBaoGao() };
   }
 });
 handleIpc('warmy:container-action', async (_e, payload?: { id?: string; action?: string }) => {
@@ -2744,7 +2744,7 @@ handleIpc('warmy:container-action', async (_e, payload?: { id?: string; action?:
  */
 handleIpc('warmy:container-instances', async (_e, payload?: { id?: string }) => {
   try {
-    return await listRuntimeInstances(String(payload?.id || ''));
+    return await lieYunXingShiLi(String(payload?.id || ''));
   } catch (e) {
     return { ok: false, id: String(payload?.id || ''), supported: false, instances: [], reason: 'unexpected', evidence: sanitizeError(e) };
   }
@@ -2752,12 +2752,12 @@ handleIpc('warmy:container-instances', async (_e, payload?: { id?: string }) => 
 handleIpc('warmy:container-instance-action', async (_e, payload?: { id?: string; action?: string; instance?: string }) => {
   const action = payload?.action === 'stop' ? 'stop' : payload?.action === 'start' ? 'start' : null;
   if (!action) return { ok: false, id: String(payload?.id || ''), action: 'start', instance: '', error: 'bad-action' };
-  return runInstanceAction(String(payload?.id || ''), action, String(payload?.instance || ''));
+  return yunXingShiLiDongZuo(String(payload?.id || ''), action, String(payload?.instance || ''));
 });
 /** 打开容器产品自己的界面：创建实例由用户在那边做（各引擎造法不同，我们不代造） */
 handleIpc('warmy:container-app-open', async (_e, payload?: { id?: string }) => {
   try {
-    return await openRuntimeApp(String(payload?.id || ''));
+    return await daKaiYunXingYingYong(String(payload?.id || ''));
   } catch (e) {
     return { ok: false, id: String(payload?.id || ''), opened: false, reason: 'unexpected', evidence: sanitizeError(e) };
   }
@@ -2832,18 +2832,18 @@ function projectAttrsOf(groupId: string): ProjectAttrsView {
       source: 'legacy-local-settings',
     };
   };
-  const proj = groupStore?.projectOf(gid);
-  if (!proj) return legacy();
+  const xiangMu = groupStore?.projectOf(gid);
+  if (!xiangMu) return legacy();
   return {
-    devEnv: proj.devEnv === 'container' ? 'container' : 'host',
-    runtimeId: String(proj.runtimeId || ''),
-    disabledAt: Number(proj.disabledAt) > 0 ? Number(proj.disabledAt) : 0,
-    directory: String(proj.directory || ''),
-    directorySource: proj.directory ? (proj.directorySource || 'creator-picked') : 'not-recorded',
-    availability: String(proj.availability || 'unknown'),
-    availabilityCode: String(proj.availabilityCode || ''),
-    availabilityAt: Number(proj.availabilityAt) || 0,
-    reportedBy: String(proj.reportedBy || ''),
+    devEnv: xiangMu.devEnv === 'container' ? 'container' : 'host',
+    runtimeId: String(xiangMu.runtimeId || ''),
+    disabledAt: Number(xiangMu.disabledAt) > 0 ? Number(xiangMu.disabledAt) : 0,
+    directory: String(xiangMu.directory || ''),
+    directorySource: xiangMu.directory ? (xiangMu.directorySource || 'creator-picked') : 'not-recorded',
+    availability: String(xiangMu.availability || 'unknown'),
+    availabilityCode: String(xiangMu.availabilityCode || ''),
+    availabilityAt: Number(xiangMu.availabilityAt) || 0,
+    reportedBy: String(xiangMu.reportedBy || ''),
     source: 'project-record',
   };
 }
@@ -2856,8 +2856,8 @@ function projectAttrsAreRemote(groupId: string): boolean {
   const reportedBy = view.reportedBy;
   if (!reportedBy) return false;
   try {
-    const localFp = String(identityStore?.info()?.fingerprint || '');
-    return !!localFp && !fingerprintMatches(reportedBy, localFp);
+    const benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
+    return !!benJiZhiWen && !fingerprintMatches(reportedBy, benJiZhiWen);
   } catch {
     return false;
   }
@@ -2974,7 +2974,7 @@ async function publishProjectAttrs(groupId: string): Promise<{ ok: boolean; sent
 /** 未就绪时顺手探一次（主进程侧有短缓存）。探不到 ⇒ null ⇒ 按未就绪处理（不乐观放开） */
 async function containerStatusOf(runtimeId: string): Promise<string | null> {
   if (!runtimeId) return null;
-  let report = lastContainerProbeReport();
+  let report = zuiHouRongQiTanCeBaoGao();
   const cachedRow = report ? (report.runtimes || []).find((x) => x.id === runtimeId) : undefined;
   if (!cachedRow) {
     try {
@@ -3006,9 +3006,9 @@ function localIsProjectCreator(groupId: string): boolean {
   try {
     const gid = String(groupId || '');
     if (!groupStore || !gid) return false;
-    const creatorFp = String(groupStore.getGroup(gid)?.creatorFingerprint || '');
-    const localFp = String(identityStore?.info()?.fingerprint || '');
-    return !!creatorFp && !!localFp && fingerprintMatches(creatorFp, localFp);
+    const chuangJianZheZhiWen = String(groupStore.getGroup(gid)?.creatorFingerprint || '');
+    const benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
+    return !!chuangJianZheZhiWen && !!benJiZhiWen && fingerprintMatches(chuangJianZheZhiWen, benJiZhiWen);
   } catch {
     return false;
   }
@@ -3025,12 +3025,12 @@ function localIsProjectCreator(groupId: string): boolean {
  *     于是成员看到的是"创建者那边现在不可用 + 具体原因"，而不是"我这台机器上没有这个容器"。
  *     这正好落在既有的「创建者离线」语义上（同一份 deriveProjectState ⇒ 同一个 memberFace）。
  */
-async function projectStateFor(sessionId: string, opts: { probe?: boolean } = {}): Promise<ContainerProjectState> {
+async function quXiangMuTai(sessionId: string, opts: { probe?: boolean } = {}): Promise<ContainerProjectState> {
   const id = String(sessionId || '');
   const attrs = projectAttrsOf(id);
   const remote = projectAttrsAreRemote(id);
   if (remote) {
-    const facts = projectAttrsToStateInput({
+    const shiShi = projectAttrsToStateInput({
       project: {
         devEnv: attrs.devEnv,
         runtimeId: attrs.runtimeId,
@@ -3045,17 +3045,17 @@ async function projectStateFor(sessionId: string, opts: { probe?: boolean } = {}
       },
     });
     return deriveProjectState({
-      devEnv: facts.devEnv,
-      runtimeId: facts.runtimeId,
-      runtimeStatus: facts.runtimeStatus as never,
-      disabledByOwner: facts.disabledByOwner,
+      devEnv: shiShi.devEnv,
+      runtimeId: shiShi.runtimeId,
+      runtimeStatus: shiShi.runtimeStatus as never,
+      disabledByOwner: shiShi.disabledByOwner,
     });
   }
   const devEnv = attrs.devEnv;
   const runtimeId = attrs.runtimeId;
   let status: string | null = null;
   if (devEnv === 'container' && runtimeId) {
-    const cached = lastContainerProbeReport();
+    const cached = zuiHouRongQiTanCeBaoGao();
     const row = cached ? (cached.runtimes || []).find((x) => x.id === runtimeId) : undefined;
     status = row ? String(row.status) : opts.probe === false ? null : await containerStatusOf(runtimeId);
   }
@@ -3087,17 +3087,17 @@ function recordLocalAvailability(groupId: string, code: string): void {
           : code === 'container-not-chosen' ? 'not-chosen'
             : 'not-ready';
   if (cur.availability === availability && cur.availabilityCode === code) return;
-  let localFp = '';
+  let benJiZhiWen = '';
   try {
-    localFp = String(identityStore?.info()?.fingerprint || '');
+    benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
   } catch {
-    localFp = '';
+    benJiZhiWen = '';
   }
   const r = groupStore.setProjectAttrs(gid, {
     availability,
     availabilityCode: code,
     availabilityAt: Date.now(),
-    ...(localFp ? { reportedBy: localFp } : {}),
+    ...(benJiZhiWen ? { reportedBy: benJiZhiWen } : {}),
   });
   if (r.ok) void publishProjectAttrs(gid);
 }
@@ -3108,21 +3108,21 @@ async function projectUnavailableFor(sessionId: string): Promise<ReturnType<type
   const devEnv = projectDevEnvOf(id);
   // 本机开发 + 未被停用：与容器毫无关系 ⇒ 直接放行，连探测都不做（不误伤）
   if (devEnv !== 'container' && projectDisabledAt(id) === 0) return null;
-  return projectUnavailableRefusal(await projectStateFor(id));
+  return projectUnavailableRefusal(await quXiangMuTai(id));
 }
 
 /** 项目可用性状态（渲染层**唯一**的事实来源；含"历史仍可读"这条事实） */
 handleIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => {
   try {
     const sessionId = String(payload?.sessionId || '');
-    const state = await projectStateFor(sessionId);
+    const state = await quXiangMuTai(sessionId);
     const attrs = projectAttrsOf(sessionId);
     const remote = projectAttrsAreRemote(sessionId);
     // 本机是项目主 ⇒ 把**现场算出来的可用性**记进项目属性并广播（成员据此看到原因）
     if (!remote) recordLocalAvailability(sessionId, state.code);
     return {
       ok: true,
-      state: { ...state, reasonKey: projectReasonKey(state.code), runtimeId: attrs.runtimeId },
+      state: { ...state, reasonKey: xiangMuYuanYinJian(state.code), runtimeId: attrs.runtimeId },
       /**
        * 与"创建者下线"同一套表现（渲染层据此用同一个文案键，而不是新造第三种状态）。
        * ⚠️ 成员侧也一样：项目不可用时**入站流量按创建者离线处理**（见 projectInboundGate）。
@@ -3167,14 +3167,14 @@ handleIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) =
       const w = setProjectAttrsOf(id, { disabledAt: 0 });
       if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
     }
-    const after = await projectStateFor(id);
+    const after = await quXiangMuTai(id);
     if (!after.running) {
       // 不静默降级：容器没起就说容器没起，并给出下一步该做什么
       return {
         ok: false,
         code: after.code === 'container-not-chosen' ? 'container-not-chosen' : 'container-not-ready',
         projectCode: after.code,
-        reasonKey: projectReasonKey(after.code),
+        reasonKey: xiangMuYuanYinJian(after.code),
         fix: after.fix,
         needsContainer: true,
         state: after,
@@ -3206,7 +3206,7 @@ handleIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) 
     const at = Date.now();
     const w = setProjectAttrsOf(id, { disabledAt: at });
     if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
-    const state = await projectStateFor(id);
+    const state = await quXiangMuTai(id);
     audit?.log('container.project-disable', { sessionId: id, memberFace: state.memberFace });
     emitConsole({ cat: 'system', code: 'container.project.disabled', data: { sessionId: id } });
     // 项目属性也是"这个实体的属性"：另一处视图（独立窗/主界面）要立刻反映"已停用"
@@ -3232,12 +3232,12 @@ handleIpc('warmy:project-set-container', async (_e, payload?: { sessionId?: stri
     if (projectDevEnvOf(id) !== 'container') {
       return { ok: false, code: 'not-container-project', error: 'this project does not develop in a container' };
     }
-    if (!containerRuntimeSpec(runtimeId)) {
+    if (!rongQiYunXingGuiGeOf(runtimeId)) {
       return { ok: false, code: 'unknown-runtime', error: `unknown runtime id: runtimeId` };
     }
     const w = setProjectAttrsOf(id, { runtimeId });
     if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
-    const state = await projectStateFor(id);
+    const state = await quXiangMuTai(id);
     audit?.log('container.project-set-container', { sessionId: id, runtimeId });
     return {
       ok: true,
@@ -3315,11 +3315,11 @@ async function projectFilesFor(sessionId: string): Promise<{
     /* 拿不到就保持空 */
   }
   // ③ **工具文件访问台账**（项目级、成员可见；真实发生过才在）
-  const ledgerRows = (groupStore?.listFileAccess(id, 200) || []).map((e2) => {
+  const zhangBenHang = (groupStore?.listFileAccess(id, 200) || []).map((e2) => {
     const inProject = !!projectDir && path.resolve(e2.path).startsWith(path.resolve(projectDir) + path.sep);
     return { path: e2.path, op: e2.op, ts: e2.ts, ok: e2.ok, by: e2.by, ...(e2.bytes ? { bytes: e2.bytes } : {}), scope: inProject ? 'project' : 'other' };
   });
-  for (const e2 of ledgerRows) {
+  for (const e2 of zhangBenHang) {
     // 台账里的 read 不进"最近改动文件"（**读不是改动**），但写/改/删/建/备份/回滚都进
     if (e2.op === 'read') continue;
     changed.push({ path: e2.path, ts: e2.ts, kind: e2.op === 'delete' ? 'deleted' : e2.op === 'create' ? 'created' : 'changed', scope: e2.scope, source: 'tool-file-access-ledger' });
@@ -3337,16 +3337,16 @@ async function projectFilesFor(sessionId: string): Promise<{
         } catch {
           return;
         }
-        for (const ent of entries) {
+        for (const tiaoMu of entries) {
           if (seen.length >= 400) return;
-          if (ent.name.startsWith('.') && ent.name !== '.env') continue;
-          const fp = path.join(dir, ent.name);
-          if (ent.isDirectory()) {
-            if (skip.has(ent.name)) continue;
+          if (tiaoMu.name.startsWith('.') && tiaoMu.name !== '.env') continue;
+          const fp = path.join(dir, tiaoMu.name);
+          if (tiaoMu.isDirectory()) {
+            if (skip.has(tiaoMu.name)) continue;
             walk(fp, depth + 1);
             continue;
           }
-          if (!ent.isFile()) continue;
+          if (!tiaoMu.isFile()) continue;
           try {
             const st = fs.statSync(fp);
             seen.push({ path: fp, ts: st.mtimeMs });
@@ -3446,7 +3446,7 @@ async function projectFilesFor(sessionId: string): Promise<{
     projectSource: remote ? 'creator-signal' : 'local',
     changed: own,
     other,
-    ledger: ledgerRows,
+    ledger: zhangBenHang,
     missingSources,
     product: {
       dir: prodDir,
@@ -3477,8 +3477,8 @@ handleIpc('warmy:project-files', async (_e, payload?: { sessionId?: string }) =>
 handleIpc('warmy:product-run', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
-    const facts = await projectFilesFor(id);
-    const p = facts.product;
+    const shiShi = await projectFilesFor(id);
+    const p = shiShi.product;
     if (!p.entry || p.kind !== 'program') return { ok: false, code: 'no-entry', reason: p.entryReason, executed: false };
     if (!p.entryHostRunnable) return { ok: false, code: p.entryReason, executed: false, entry: p.entry };
     // 归一化后再校验：必须落在产物目录里（防路径穿越/软链逃逸）
@@ -3536,9 +3536,9 @@ function writeProjectEnvLedger(
     if (patch.imageRef && patch.solidifiedAt) {
       next.lastImageRef = patch.imageRef;
       next.lastSolidifiedAt = patch.solidifiedAt;
-      const hist = [...(cur.solidifyHistory || []), { imageRef: patch.imageRef, at: patch.solidifiedAt }];
+      const liShi = [...(cur.solidifyHistory || []), { imageRef: patch.imageRef, at: patch.solidifiedAt }];
       // 只留最近 N 个（与 ADR 的保留策略一致）；被裁掉的**只报告不删**（删镜像要用户明确同意）
-      next.solidifyHistory = solidifyRetention(hist).keep;
+      next.solidifyHistory = guHuaBaoLiu(liShi).keep;
     }
     all[gid] = next;
     settingsStore.save({ projectEnv: all } as never);
@@ -3580,9 +3580,9 @@ async function ensureProjectContainer(
   if (!image) {
     if (ledger.lastImageRef && isAllowedImageRef(ledger.lastImageRef)) image = ledger.lastImageRef;
     else {
-      const nodeImg = CONTAINER_BASE_IMAGES.find((x) => x.id === 'node-24-slim');
+      const jiedianTupian = CONTAINER_BASE_IMAGES.find((x) => x.id === 'node-24-slim');
       const minimal = CONTAINER_BASE_IMAGES.find((x) => x.id === 'alpine-3.20');
-      const pick = nodeImg || minimal;
+      const pick = jiedianTupian || minimal;
       image = pick && pick.digest ? `pick.ref@pick.digest` : '';
     }
   }
@@ -3614,11 +3614,11 @@ function compactText(s: string, max = 300): string {
 handleIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
-    const state = await projectStateFor(id);
+    const state = await quXiangMuTai(id);
     const runtimeId = projectRuntimeOf(id);
     const cap = envSolidifyCapability(runtimeId);
     const ledger = projectEnvLedgerOf(id);
-    const mode = engineOsModeOf(lastContainerProbeReport(), runtimeId);
+    const mode = quYinQingXiTongMoShi(zuiHouRongQiTanCeBaoGao(), runtimeId);
     const container = state.devEnv === 'container' && runtimeId && state.running
       ? await projectContainerStatusOf(id, runtimeId)
       : { running: false, exists: false, containerRef: '', raw: '' };
@@ -3627,7 +3627,7 @@ handleIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string 
       dirty: container.exists,
       programmatic: cap.programmatic,
     });
-    const hist = ledger.solidifyHistory || [];
+    const liShi = ledger.solidifyHistory || [];
     return {
       ok: true,
       sessionId: id,
@@ -3641,9 +3641,9 @@ handleIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string 
         why: cap.reason,
         lastImageRef: ledger.lastImageRef || '',
         lastSolidifiedAt: ledger.lastSolidifiedAt || 0,
-        history: solidifyRetention(hist).keep,
+        history: guHuaBaoLiu(liShi).keep,
         /** 保留策略：要**留着**的与可以手动清理的（我们不自作主张删镜像） */
-        pruneCandidates: solidifyRetention(hist).prune,
+        pruneCandidates: guHuaBaoLiu(liShi).prune,
         /** 现在该不该固化（节流 + 时机） */
         decision,
         keep: SOLIDIFY_KEEP,
@@ -3731,7 +3731,7 @@ handleIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: strin
     writeProjectEnvLedger(id, { runtimeId, containerRef: container.containerRef, imageRef, solidifiedAt: at });
     audit?.log('container.project-solidify', { sessionId: id, runtimeId, imageRef });
     emitConsole({ cat: 'system', code: 'container.project.solidified', data: { sessionId: id, imageRef } });
-    const hist = projectEnvLedgerOf(id).solidifyHistory || [];
+    const liShi = projectEnvLedgerOf(id).solidifyHistory || [];
     return {
       ok: true,
       executed: true,
@@ -3742,8 +3742,8 @@ handleIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: strin
       ms: commit.ms,
       containerRef: container.containerRef,
       solidifiedAt: at,
-      history: solidifyRetention(hist).keep,
-      pruneCandidates: solidifyRetention(hist).prune,
+      history: guHuaBaoLiu(liShi).keep,
+      pruneCandidates: guHuaBaoLiu(liShi).prune,
       /** 安全提醒：这次固化把当时的**整个文件系统**一起冻进去了（可能含密钥/缓存） */
       security,
       securityNotice: 'whole-filesystem-frozen',
@@ -3772,7 +3772,7 @@ handleIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: strin
     if (!want || !isAllowedImageRef(want)) {
       return { ok: false, code: 'no-solidified-point', executed: false, evidence: 'refused' as const, detail: 'no solidified image recorded for this project' };
     }
-    const state = await projectStateFor(id);
+    const state = await quXiangMuTai(id);
     if (!state.running) {
       // 项目不可用 ⇒ 不越权起容器（那正是"等同创建者下线"要拦的事）
       return { ok: false, code: 'project-unavailable', projectCode: state.code, executed: false, evidence: 'refused' as const };
@@ -3790,9 +3790,9 @@ handleIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: strin
         const at = Date.now();
         const ref = solidifiedImageRef(id, at);
         const c = await runContainerExec(runtimeId, 'commit', { name, imageRef: ref }, 600000);
-        const ins = c.ok ? await runContainerExec(runtimeId, 'image-inspect', { image: ref }, 60000) : null;
-        const imgId = ins && ins.ok ? String(ins.out.split('|')[0] || '').trim() : '';
-        if (c.ok && imgId) {
+        const shiLi = c.ok ? await runContainerExec(runtimeId, 'image-inspect', { image: ref }, 60000) : null;
+        const JingXiangId = shiLi && shiLi.ok ? String(shiLi.out.split('|')[0] || '').trim() : '';
+        if (c.ok && JingXiangId) {
           writeProjectEnvLedger(id, { runtimeId, containerRef: name, imageRef: ref, solidifiedAt: at });
           preSolidify = { ok: true, code: 'before-destroy', imageRef: ref };
         } else {
@@ -3856,16 +3856,16 @@ handleIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: strin
  *   不自动执行；不把本机密钥类环境变量带进容器；**未就绪 ⇒ 一条命令都不执行**。
  */
 handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; action?: string; sessionId?: string; data?: string }) => {
-  const norm = normalizeContainerShellRequest(payload);
-  if (!norm.ok) {
-    emitConsole({ cat: 'error', code: 'container.console.rejected', data: { code: norm.code } });
-    return { ok: false, code: norm.code, error: norm.error, security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY };
+  const guiFanHua = guiFanKongZhiTaiQingQiu(payload);
+  if (!guiFanHua.ok) {
+    emitConsole({ cat: 'error', code: 'container.console.rejected', data: { code: guiFanHua.code } });
+    return { ok: false, code: guiFanHua.code, error: guiFanHua.error, security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY };
   }
-  const { req } = norm;
-  const state = await projectStateFor(req.sessionId);
+  const { req } = guiFanHua;
+  const state = await quXiangMuTai(req.sessionId);
   const runtimeId = req.runtimeId || projectRuntimeOf(req.sessionId);
   const status = runtimeId ? await containerStatusOf(runtimeId) : null;
-  const gate = containerShellGate({
+  const gate = rongQiKongZhiTaiMenJin({
     inProjectOrCattle: true,
     // 控制台只属于**容器开发**的项目（"运行/测试在容器中"那个选项已作废删除）
     runInContainer: state.devEnv === 'container',
@@ -3906,32 +3906,32 @@ handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; ac
     };
   }
   if (req.action === 'open') {
-    const ensured = await ensureProjectContainer(req.sessionId, runtimeId);
-    if (!ensured.ok) {
-      emitConsole({ cat: 'error', code: 'container.console.refused', data: { code: ensured.code, action: 'open' } });
+    const yiBaoZhang = await ensureProjectContainer(req.sessionId, runtimeId);
+    if (!yiBaoZhang.ok) {
+      emitConsole({ cat: 'error', code: 'container.console.refused', data: { code: yiBaoZhang.code, action: 'open' } });
       return {
-        ok: false, code: ensured.code, reasonKey: ensured.code === 'no-image' ? 'needsImage' : 'notReady',
-        executed: false, runtimeId, containerRef: ensured.containerRef, rawOutput: ensured.raw,
+        ok: false, code: yiBaoZhang.code, reasonKey: yiBaoZhang.code === 'no-image' ? 'needsImage' : 'notReady',
+        executed: false, runtimeId, containerRef: yiBaoZhang.containerRef, rawOutput: yiBaoZhang.raw,
         projectCode: state.code, security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
       };
     }
     // **解锁**宿主目录（如果这个项目被加过锁）：容器要在同一份 bind mount 上写，
     // 让锁和正在运行的容器同时存在会互相打脸（这条在 fsGuard 那边也写着）
     liftFsGuardIfAny(req.sessionId, 'container-started');
-    const opened = openContainerShellSession({ groupId: req.sessionId, runtimeId, containerName: ensured.containerRef });
+    const opened = openContainerShellSession({ groupId: req.sessionId, runtimeId, containerName: yiBaoZhang.containerRef });
     if (!opened.ok) {
       emitConsole({ cat: 'error', code: 'container.console.refused', data: { code: opened.code, action: 'open' } });
       return {
         ok: false, code: opened.code || 'spawn-failed', reasonKey: 'notReady', executed: false,
-        runtimeId, containerRef: ensured.containerRef, error: opened.error,
+        runtimeId, containerRef: yiBaoZhang.containerRef, error: opened.error,
         security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
       };
     }
-    emitConsole({ cat: 'system', code: 'container.console.opened', data: { sessionId: req.sessionId, containerRef: ensured.containerRef } });
+    emitConsole({ cat: 'system', code: 'container.console.opened', data: { sessionId: req.sessionId, containerRef: yiBaoZhang.containerRef } });
     return {
-      ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId, containerRef: ensured.containerRef,
+      ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId, containerRef: yiBaoZhang.containerRef,
       sessionId: opened.sessionId, /** 真的是容器里的 shell（不是宿主 shell、不是事件日志） */
-      insideContainer: true, containerCreated: ensured.created,
+      insideContainer: true, containerCreated: yiBaoZhang.created,
       security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
     };
   }
@@ -3978,9 +3978,9 @@ handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; ac
 
 /** 默认项目镜像引用（镜像表里带 Node 的那个；取不到就退回最小镜像） */
 function defaultProjectImageRef(): string {
-  const nodeImg = CONTAINER_BASE_IMAGES.find((x) => x.id === 'node-24-slim' && x.digest);
+  const jiedianTupian = CONTAINER_BASE_IMAGES.find((x) => x.id === 'node-24-slim' && x.digest);
   const min = CONTAINER_BASE_IMAGES.find((x) => x.digest);
-  const pick = nodeImg || min;
+  const pick = jiedianTupian || min;
   return pick && pick.digest ? `pick.ref@pick.digest` : '';
 }
 
@@ -4016,9 +4016,9 @@ async function maybeSolidifyAfterConsole(
     const ref = solidifiedImageRef(groupId, at);
     const c = await runContainerExec(runtimeId, 'commit', { name, imageRef: ref }, 600000);
     if (!c.ok) return { attempted: true, done: false, code: c.codeReason || 'commit-failed' };
-    const ins = await runContainerExec(runtimeId, 'image-inspect', { image: ref }, 60000);
-    const imgId = ins.ok ? String(ins.out.split('|')[0] || '').trim() : '';
-    if (!imgId) return { attempted: true, done: false, code: 'commit-unverified' };
+    const shiLi = await runContainerExec(runtimeId, 'image-inspect', { image: ref }, 60000);
+    const JingXiangId = shiLi.ok ? String(shiLi.out.split('|')[0] || '').trim() : '';
+    if (!JingXiangId) return { attempted: true, done: false, code: 'commit-unverified' };
     writeProjectEnvLedger(groupId, { runtimeId, containerRef: name, imageRef: ref, solidifiedAt: at });
     emitConsole({ cat: 'system', code: 'container.project.solidified', data: { sessionId: groupId, imageRef: ref, trigger: 'after-console' } });
     return { attempted: true, done: true, code: 'after-console', imageRef: ref };
@@ -4039,7 +4039,7 @@ handleIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comma
     if (!CONTAINER_FIXED_COMMAND_IDS.includes(command as ContainerFixedCommandId)) {
       return { ok: false, code: 'bad-command', executed: false, error: `command must be one of CONTAINER_FIXED_COMMAND_IDS.join('|')` };
     }
-    const state = await projectStateFor(id);
+    const state = await quXiangMuTai(id);
     const runtimeId = projectRuntimeOf(id);
     if (state.devEnv !== 'container' || state.stopped || !runtimeId) {
       // **绝不静默退回宿主执行**：项目不可用 ⇒ 直接拒绝（这就是那条硬纪律）
@@ -4047,10 +4047,10 @@ handleIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comma
     }
     const status = await containerStatusOf(runtimeId);
     if (status !== 'ready') return { ok: false, code: 'container-not-ready', executed: false, needsInstall: true };
-    const ensured = await ensureProjectContainer(id, runtimeId);
-    if (!ensured.ok) return { ok: false, code: ensured.code, executed: false, containerRef: ensured.containerRef, rawOutput: ensured.raw };
+    const yiBaoZhang = await ensureProjectContainer(id, runtimeId);
+    if (!yiBaoZhang.ok) return { ok: false, code: yiBaoZhang.code, executed: false, containerRef: yiBaoZhang.containerRef, rawOutput: yiBaoZhang.raw };
     liftFsGuardIfAny(id, 'container-started');
-    const r = await runContainerExec(runtimeId, 'exec-capture', { name: ensured.containerRef, command }, 120000);
+    const r = await runContainerExec(runtimeId, 'exec-capture', { name: yiBaoZhang.containerRef, command }, 120000);
     emitConsole({ cat: 'tool', code: 'container.project.exec', data: { sessionId: id, command, ok: r.ok } });
     return {
       ok: r.ok,
@@ -4058,7 +4058,7 @@ handleIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comma
       /** 结果**来自容器**（`insideContainer:true` 是事实，不是文案） */
       insideContainer: true,
       command,
-      containerRef: ensured.containerRef,
+      containerRef: yiBaoZhang.containerRef,
       code: r.code,
       output: r.out,
       error: r.err,
@@ -4099,8 +4099,8 @@ handleIpc('warmy:project-set-directory', async (_e, payload?: { sessionId?: stri
     const w = setProjectAttrsOf(id, { directory: dir, directorySource: 'creator-picked' });
     if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
     audit?.log('container.project-set-directory', { sessionId: id });
-    const facts = await projectFilesFor(id);
-    return { ok: true, dir, projectDirReason: facts.projectDirReason, projectSource: facts.projectSource };
+    const shiShi = await projectFilesFor(id);
+    return { ok: true, dir, projectDirReason: shiShi.projectDirReason, projectSource: shiShi.projectSource };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
@@ -4333,9 +4333,9 @@ function skillMdInfo(file: string): { name: string; description: string } {
     const fm = raw.match(/^---\s*\n([\s\S]*?)\n---/);
     const head = fm && fm[1] ? fm[1] : '';
     if (head) {
-      const nm = head.match(/^\s*name\s*:\s*(.+)$/m);
+      const mingCheng = head.match(/^\s*name\s*:\s*(.+)$/m);
       const dm = head.match(/^\s*description\s*:\s*(.+)$/m);
-      if (nm && nm[1]) name = nm[1].trim().replace(/^["']|["']$/g, '');
+      if (mingCheng && mingCheng[1]) name = mingCheng[1].trim().replace(/^["']|["']$/g, '');
       if (dm && dm[1]) description = dm[1].trim().replace(/^["']|["']$/g, '');
     }
     if (!name) {
@@ -4416,8 +4416,8 @@ function skillRoots(): Array<{ root: string; source: string }> {
 
 handleIpc('warmy:skills-list', () => {
   const skills: Array<Record<string, unknown>> = [];
-  const scanDirStatus = skillScanStatus(loadSkillScanDirs());
-  const enabledMap = ((): Record<string, boolean> => {
+  const saoMiaoMuluZhuangtai = skillScanStatus(loadSkillScanDirs());
+  const QiYongBiao = ((): Record<string, boolean> => {
     try {
       const s = settingsStore?.load() as { skillEnabled?: Record<string, boolean> } | undefined;
       return s?.skillEnabled && typeof s.skillEnabled === 'object' ? { ...s.skillEnabled } : {};
@@ -4425,7 +4425,7 @@ handleIpc('warmy:skills-list', () => {
   })();
   for (const { root, source } of skillRoots()) {
     if (!fs.existsSync(root)) continue;
-    const pushOne = (dirName: string, md: string) => {
+    const tuiSongYiTiao = (dirName: string, md: string) => {
       const info = skillMdInfo(md);
       let mtime = 0;
       try {
@@ -4434,7 +4434,7 @@ handleIpc('warmy:skills-list', () => {
         /* 忽略 */
       }
       const id = source === 'discovered' ? 'discovered:' + path.basename(root) + ':' + dirName : dirName;
-      const enabled = enabledMap[id] !== false;
+      const enabled = QiYongBiao[id] !== false;
       skills.push({
         id,
         name: info.name || dirName,
@@ -4448,8 +4448,8 @@ handleIpc('warmy:skills-list', () => {
     };
     // A discovered root may itself be a skill package (SKILL.md at the root)
     if (source === 'discovered') {
-      const selfMd = path.join(root, 'SKILL.md');
-      if (fs.existsSync(selfMd)) pushOne(path.basename(root), selfMd);
+      const benJiMiaoShu = path.join(root, 'SKILL.md');
+      if (fs.existsSync(benJiMiaoShu)) tuiSongYiTiao(path.basename(root), benJiMiaoShu);
     }
     let dirs: string[] = [];
     try {
@@ -4460,11 +4460,11 @@ handleIpc('warmy:skills-list', () => {
     for (const d of dirs) {
       const md = path.join(root, d, 'SKILL.md');
       if (!fs.existsSync(md)) continue;
-      pushOne(d, md);
+      tuiSongYiTiao(d, md);
     }
   }
   skills.sort((x, y) => Number(y.mtime || 0) - Number(x.mtime || 0));
-  return { ok: true, skills, scanDirs: scanDirStatus, maxScanDirs: SKILL_SCAN_DIRS_MAX };
+  return { ok: true, skills, scanDirs: saoMiaoMuluZhuangtai, maxScanDirs: SKILL_SCAN_DIRS_MAX };
 });
 
 handleIpc('warmy:skills-scan-dirs-get', () => {
@@ -4652,12 +4652,12 @@ function assistFile(): string {
 }
 function loadAssistItems(): AssistItem[] {
   try {
-    const raw = readJsonFile<{ items?: AssistItem[] } | null>(assistFile(), null);
+    const raw = duJsonWenJian<{ items?: AssistItem[] } | null>(assistFile(), null);
     return Array.isArray(raw?.items) ? raw!.items! : [];
   } catch { return []; }
 }
 function saveAssistItems(items: AssistItem[]): void {
-  try { writeJsonAtomicSafe(assistFile(), { version: 1, items }); } catch { /* noop */ }
+  try { anQuanYuanZiXieJson(assistFile(), { version: 1, items }); } catch { /* noop */ }
 }
 handleIpc('warmy:assist-list', (_e, sessionId?: string) => {
   try {
@@ -4995,11 +4995,11 @@ handleIpc('warmy:identity-card-history', () =>
  * 接收方侧：记录对方的名片（加入时交换 / 换证后补发）。
  * 首次加入直接留存、**不冻结**；处于冻结期则只记为 pending，展示继续用本机留存值。
  */
-handleIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card?: ContactCard; signedCard?: IdentityCard } = {}) => {
+handleIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card?: LianXiKa; signedCard?: ShenFenKa } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     let fingerprint = payload?.fingerprint || '';
-    let card = payload?.card as ContactCard | undefined;
+    let card = payload?.card as LianXiKa | undefined;
     if (payload?.signedCard) {
       // 带签名的名片先验签（自签 + 指纹自洽），再决定是否留存
       const v = verifyIdentityCard(payload.signedCard);
@@ -5020,7 +5020,7 @@ handleIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card
  */
 handleIpc(
   'warmy:identity-peer-rotation',
-  (_e, payload: { declaration?: RotationDeclaration; knownKeys?: KeyRingEntry[]; currentGeneration?: number } = {}) => {
+  (_e, payload: { declaration?: LunHuanShengMing; knownKeys?: YaoShiHuanTiaoMu[]; currentGeneration?: number } = {}) => {
     try {
       if (!identityStore) return { ok: false, error: 'identity-unavailable' };
       const d = payload?.declaration;
@@ -5162,9 +5162,9 @@ handleIpc('warmy:identity-set-passphrase', (_e, payload: { passphrase?: string; 
     const passphrase = payload?.passphrase || '';
     if (!identityStore.exists()) {
       const profile = accountStore?.loadProfile();
-      const made = identityStore.ensureIdentity(profile?.deviceId || generateDeviceId(), { email: profile?.email || '' }, { passphrase });
-      if (!made.ok) return { ok: false, error: made.error };
-      return { ok: true, created: made.created, identity: made.info, timeline: identityStore.timeline() };
+      const yiChuangJian = identityStore.ensureIdentity(profile?.deviceId || generateDeviceId(), { email: profile?.email || '' }, { passphrase });
+      if (!yiChuangJian.ok) return { ok: false, error: yiChuangJian.error };
+      return { ok: true, created: yiChuangJian.created, identity: yiChuangJian.info, timeline: identityStore.timeline() };
     }
     const r = identityStore.setPassphrase(passphrase, {
       ...(payload?.currentPassphrase ? { currentPassphrase: payload.currentPassphrase } : {}),
@@ -5182,7 +5182,7 @@ handleIpc('warmy:identity-set-passphrase', (_e, payload: { passphrase?: string; 
  */
 handleIpc(
   'warmy:identity-verify-rotation',
-  (_e, payload: { declaration?: IdentityDeclaration; knownKeys?: KeyRingEntry[]; currentGeneration?: number } = {}) => {
+  (_e, payload: { declaration?: IdentityDeclaration; knownKeys?: YaoShiHuanTiaoMu[]; currentGeneration?: number } = {}) => {
     try {
       const d = payload?.declaration;
       if (!d) return { ok: false, error: 'declaration-required' };
@@ -5190,7 +5190,7 @@ handleIpc(
         const r = verifyRevocationDeclaration(d);
         return { ok: true, kind: d.kind, accepted: r.accepted, reason: r.reason, warnings: r.warnings, honestNote: r.honestNote, detail: r.detail ?? '' };
       }
-      const r = verifyRotationDeclaration(d as RotationDeclaration, {
+      const r = verifyRotationDeclaration(d as LunHuanShengMing, {
         ...(payload?.knownKeys ? { knownKeys: payload.knownKeys } : {}),
         ...(typeof payload?.currentGeneration === 'number' ? { currentGeneration: payload.currentGeneration } : {}),
       });
@@ -5236,18 +5236,18 @@ handleIpc('warmy:nodes-pair', (_e, nodeId: string, name: string) => ({
 
 // ── D. 身份变更横幅（UI 已经按这个形状写完：identityChanges / identityChangeAcknowledge / identityPeers） ──
 
-interface ChangeAckRecord {
+interface biangengQuerenJilu {
   level: 'dismiss' | 'verified';
   at: number;
   auditId: string;
 }
 
-function readChangeAcks(): Record<string, ChangeAckRecord> {
-  return readJsonFile<Record<string, ChangeAckRecord>>(changeAckFile, {});
+function readChangeAcks(): Record<string, biangengQuerenJilu> {
+  return duJsonWenJian<Record<string, biangengQuerenJilu>>(changeAckFile, {});
 }
 
-function writeChangeAcks(map: Record<string, ChangeAckRecord>): { ok: boolean; error?: string } {
-  return writeJsonAtomicSafe(changeAckFile, map);
+function writeChangeAcks(map: Record<string, biangengQuerenJilu>): { ok: boolean; error?: string } {
+  return anQuanYuanZiXieJson(changeAckFile, map);
 }
 
 /**
@@ -5284,7 +5284,7 @@ handleIpc('warmy:identity-change-ack', (_e, payload: { changeId?: string; level?
     if (!audit) return { ok: false, error: 'audit-unavailable' };
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const changeId = String(payload.changeId || '');
-    const level: ChangeAckRecord['level'] | '' = payload.level === 'verified' ? 'verified' : payload.level === 'dismiss' ? 'dismiss' : '';
+    const level: biangengQuerenJilu['level'] | '' = payload.level === 'verified' ? 'verified' : payload.level === 'dismiss' ? 'dismiss' : '';
     if (!changeId || !level) return { ok: false, error: 'invalid-request' };
     const auditId = `idchg-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
     audit.log('identity.change.ack', { changeId, level, auditId });
@@ -5711,7 +5711,7 @@ handleIpc('warmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as 
   }
 });
 
-handleIpc('warmy:repo-guard-check-paths', (_e, payload: { paths?: Array<string | PushPathEntry> | string; base?: 'worktree' | 'gitdir' } = {}) => {
+handleIpc('warmy:repo-guard-check-paths', (_e, payload: { paths?: Array<string | TuiSongLuJingTiaoMu> | string; base?: 'worktree' | 'gitdir' } = {}) => {
   try {
     const validation = validatePushPaths(payload.paths ?? [], {
       base: payload.base === 'gitdir' ? 'gitdir' : 'worktree',
@@ -6221,9 +6221,9 @@ async function netReachabilityCached(): Promise<ReachabilityHint | null> {
   if (now - netReachCache.at < NET_REACH_TTL_MS) return netReachCache.value;
   let value: ReachabilityHint | null = null;
   try {
-    const localFp = identityStore?.info()?.fingerprint;
+    const benJiZhiWen = identityStore?.info()?.fingerprint;
     const peers = secureMesh?.presence() ?? [];
-    const peer = peers.find((p) => !!p.fingerprint && p.fingerprint !== localFp);
+    const peer = peers.find((p) => !!p.fingerprint && p.fingerprint !== benJiZhiWen);
     if (secureMesh && peer?.fingerprint) {
       value = await secureMesh.reachabilityFor(peer.fingerprint, peer.online === true);
     }
@@ -6479,14 +6479,14 @@ handleIpc('warmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: boolea
 
 handleIpc('warmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
   try {
-    registerChatAsset({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
+    zhuCeLiaoTianZiChan({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 handleIpc('warmy:assets-feedback', (_e, id: string, good: boolean) => {
   try {
-    recordAssetUsage(id, good);
+    jiLuZiChanShiYong(id, good);
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
@@ -6512,7 +6512,7 @@ handleIpc('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string
       anchors: [],
       ts: Date.now(),
     });
-    registerChatAsset({
+    zhuCeLiaoTianZiChan({
       id: evId,
       title: payload.title,
       body: payload.body,
@@ -6556,8 +6556,8 @@ handleIpc('warmy:approval-respond', (_e, id: string, allowed: boolean, scope: st
 handleIpc('warmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
   try {
     if (!checkpoints) return { ok: false };
-    const memDir = path.join(app.getPath('userData'), 'memory');
-    const jsonl = path.join(memDir, 'fast-memory.jsonl');
+    const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
+    const jsonl = path.join(jiYiMuLu, 'fast-memory.jsonl');
     const cp = checkpoints.create({
       phase,
       logSeq: logSeq || Date.now(),
@@ -6591,16 +6591,16 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
    * （**不**退到主机上跑）。启用/停用与切换容器的入口在**项目右键菜单**：
    * `warmy:project-enable` / `warmy:project-disable` / `warmy:project-set-container`。
    */
-  const devRefusal = await projectUnavailableFor(String(msg?.groupId || ''));
-  if (devRefusal) {
-    emitConsole({ cat: 'system', code: 'container.project.unavailable', data: { sessionId: msg?.groupId, projectCode: devRefusal.projectCode } });
+  const KaiFaJuJue = await projectUnavailableFor(String(msg?.groupId || ''));
+  if (KaiFaJuJue) {
+    emitConsole({ cat: 'system', code: 'container.project.unavailable', data: { sessionId: msg?.groupId, projectCode: KaiFaJuJue.projectCode } });
     return {
       ok: false,
       action: 'error',
-      code: devRefusal.code,
-      projectCode: devRefusal.projectCode,
-      reasonKey: devRefusal.reasonKey,
-      fix: devRefusal.fix,
+      code: KaiFaJuJue.code,
+      projectCode: KaiFaJuJue.projectCode,
+      reasonKey: KaiFaJuJue.reasonKey,
+      fix: KaiFaJuJue.fix,
       memberFaceKey: 'group.memberOffline',
       hostExecutionRefused: true,
       historyReadable: true,
@@ -6702,8 +6702,8 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
   }
 
   try {
-    const memDir = path.join(app.getPath('userData'), 'memory');
-    const jsonl = path.join(memDir, 'fast-memory.jsonl');
+    const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
+    const jsonl = path.join(jiYiMuLu, 'fast-memory.jsonl');
     checkpoints?.create({
       phase: 'round_end',
       logSeq: Date.now(),
@@ -6826,8 +6826,8 @@ handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; k
       chatWindows.get(payload.id)?.focus();
       return { ok: true };
     }
-    const iconPath = warmyWindowIcon();
-    let winIcon = nativeImage.createFromPath(iconPath);
+    const tuBiaoLuJing = warmyWindowIcon();
+    let winIcon = nativeImage.createFromPath(tuBiaoLuJing);
     try {
       if (payload.iconDataUrl && String(payload.iconDataUrl).startsWith('data:image')) {
         const fromChat = nativeImage.createFromDataURL(String(payload.iconDataUrl));
@@ -6844,7 +6844,7 @@ handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; k
       frame: process.platform === 'darwin',
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       backgroundColor: '#ededed',
-      icon: iconPath,
+      icon: tuBiaoLuJing,
       webPreferences: {
         preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,
@@ -6890,20 +6890,20 @@ let exportHeaderLabel = '导出自';
 let exportMeLabel = '我';
 function createTray() {
   if (tray) return;
-  const iconPath = warmyWindowIcon();
-  let img = nativeImage.createFromPath(iconPath);
-  if (img.isEmpty()) {
-    img = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'logo-32.png'));
+  const tuBiaoLuJing = warmyWindowIcon();
+  let tuPian = nativeImage.createFromPath(tuBiaoLuJing);
+  if (tuPian.isEmpty()) {
+    tuPian = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'logo-32.png'));
   }
-  if (img.isEmpty()) {
-    img = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'app-32.png'));
+  if (tuPian.isEmpty()) {
+    tuPian = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'app-32.png'));
   }
-  if (img.isEmpty()) {
-    img = nativeImage.createFromBuffer(
+  if (tuPian.isEmpty()) {
+    tuPian = nativeImage.createFromBuffer(
       Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKklEQVQ4y2NgGAWjYBSMglEwCkbBKBgFo2AUjIJRMApGwSgYBaNgFIwCAAgQAAF/lPurAAAAAElFTkSuQmCC', 'base64')
     );
   }
-  const t = new Tray(img);
+  const t = new Tray(tuPian);
   t.setToolTip('无限牛马 WArmy');
   // 下班 = 真正退出（必须走 quitApp：置 forceQuit + 毁托盘，否则 close 会把退出拦成隐藏）
   t.setContextMenu(Menu.buildFromTemplate([
@@ -7042,9 +7042,9 @@ handleIpc('warmy:group-members', (_e, groupId: string) =>
        * 与本机当前身份指纹是否相等 —— 不在渲染层猜、也不新增一套"谁是创建者"的定义。
        * 拿不到指纹时如实回 false（宁可少一个按钮，也不要给错人权限）。
        */
-      const creatorFp = String(groupStore.getGroup(gid)?.creatorFingerprint || '');
-      const localFp = String(identityStore?.info()?.fingerprint || '');
-      const localIsCreator = !!creatorFp && !!localFp && fingerprintMatches(creatorFp, localFp);
+      const chuangJianZheZhiWen = String(groupStore.getGroup(gid)?.creatorFingerprint || '');
+      const benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
+      const localIsCreator = !!chuangJianZheZhiWen && !!benJiZhiWen && fingerprintMatches(chuangJianZheZhiWen, benJiZhiWen);
       return { ok: true, groupId: gid, members, localIsCreator };
     },
     { ok: false, members: [], error: 'group store unavailable' }
@@ -7251,12 +7251,12 @@ handleIpc('warmy:project-memory-get', (_e, payload?: { sessionId?: string }) => 
 handleIpc('warmy:project-memory-set', async (_e, payload?: { sessionId?: string; memory?: string }) => {
   try {
     const gid = String(payload?.sessionId || '');
-    const mem = String(payload?.memory ?? '');
-    const w = writeProjectMemory(groupStore, gid, mem);
+    const jiYi = String(payload?.memory ?? '');
+    const w = writeProjectMemory(groupStore, gid, jiYi);
     if (!w.ok) return { ok: false, error: w.error };
     // read-back：从存储读回再确认
     const rb = await withReadBack(
-      () => mem,
+      () => jiYi,
       () => readProjectMemory(groupStore, gid),
       (saved, back) => String(saved).slice(0, 8000) === String(back).slice(0, 8000)
     );
@@ -7303,21 +7303,21 @@ handleIpc('warmy:ai-question-answer', (_e, payload?: { id?: string; optionId?: s
 const gateRuns = new Map<string, number>();
 async function runProjectGateOnce(groupId: string, reason: string): Promise<{ pass: boolean; summary: string } | null> {
   try {
-    const proj = groupStore?.projectOf(groupId);
-    const gates = proj?.gateVerify || [];
+    const xiangMu = groupStore?.projectOf(groupId);
+    const gates = xiangMu?.gateVerify || [];
     if (!gates.length) return null;
     const now = Date.now();
     const last = gateRuns.get(groupId) || 0;
-    if (now - last < 3000) return { pass: !!proj?.gateLast?.pass, summary: '节流：3s 内不重复跑门禁' };
+    if (now - last < 3000) return { pass: !!xiangMu?.gateLast?.pass, summary: '节流：3s 内不重复跑门禁' };
     gateRuns.set(groupId, now);
     const repo = path.resolve(__dirname, '..', '..', '..');
     const lines: string[] = [];
     let allPass = true;
-    for (const rel of gates.slice(0, 4)) {
-      const script = path.join(repo, rel);
+    for (const xiangDuiLu of gates.slice(0, 4)) {
+      const script = path.join(repo, xiangDuiLu);
       if (!fs.existsSync(script)) {
         allPass = false;
-        lines.push(`${rel}: missing`);
+        lines.push(`${xiangDuiLu}: missing`);
         continue;
       }
       const out = await new Promise<{ code: number; tail: string }>((resolve) => {
@@ -7331,7 +7331,7 @@ async function runProjectGateOnce(groupId: string, reason: string): Promise<{ pa
       });
       const pass = out.code === 0;
       if (!pass) allPass = false;
-      lines.push(`${rel}: ${pass ? 'pass' : 'fail(rc=' + out.code + ')'} ${out.tail}`.slice(0, 160));
+      lines.push(`${xiangDuiLu}: ${pass ? 'pass' : 'fail(rc=' + out.code + ')'} ${out.tail}`.slice(0, 160));
     }
     groupStore?.setProjectAttrs(groupId, { gateLast: { at: now, pass: allPass, summary: lines.join(' ; ') } });
     return { pass: allPass, summary: lines.join(' ; ') || 'no gates' };
@@ -7423,21 +7423,21 @@ handleIpc('warmy:skills-set-enabled', (_e, payload: { id?: string; enabled?: boo
 // patch skills-list to include enabled flag
 const _skillsListHandler = async () => {
   const skills: Array<Record<string, unknown>> = [];
-  const scanDirStatus = skillScanStatus(loadSkillScanDirs());
-  const enabledMap = skillEnabledMap();
+  const saoMiaoMuluZhuangtai = skillScanStatus(loadSkillScanDirs());
+  const QiYongBiao = skillEnabledMap();
   for (const { root, source } of skillRoots()) {
     if (!fs.existsSync(root)) continue;
-    const pushOne = (dirName: string, md: string) => {
+    const tuiSongYiTiao = (dirName: string, md: string) => {
       const info = skillMdInfo(md);
       let mtime = 0;
       try { mtime = fs.statSync(md).mtimeMs; } catch { /* ignore */ }
       const id = source === 'discovered' ? 'discovered:' + path.basename(root) + ':' + dirName : dirName;
-      const enabled = enabledMap[id] !== false;
+      const enabled = QiYongBiao[id] !== false;
       skills.push({ id, name: info.name || dirName, description: info.description, source, root, mtime, enabled, removable: source !== 'discovered' });
     };
     if (source === 'discovered') {
-      const selfMd = path.join(root, 'SKILL.md');
-      if (fs.existsSync(selfMd)) pushOne(path.basename(root), selfMd);
+      const benJiMiaoShu = path.join(root, 'SKILL.md');
+      if (fs.existsSync(benJiMiaoShu)) tuiSongYiTiao(path.basename(root), benJiMiaoShu);
     }
     let dirs: string[] = [];
     try {
@@ -7446,11 +7446,11 @@ const _skillsListHandler = async () => {
     for (const d of dirs) {
       const md = path.join(root, d, 'SKILL.md');
       if (!fs.existsSync(md)) continue;
-      pushOne(d, md);
+      tuiSongYiTiao(d, md);
     }
   }
   skills.sort((x, y) => Number(y.mtime || 0) - Number(x.mtime || 0));
-  return { ok: true, skills, scanDirs: scanDirStatus, maxScanDirs: SKILL_SCAN_DIRS_MAX };
+  return { ok: true, skills, scanDirs: saoMiaoMuluZhuangtai, maxScanDirs: SKILL_SCAN_DIRS_MAX };
 };
 // re-register by replacing through handleIpc if it overwrites; electron handleIpc likely last-wins
 handleIpc('warmy:skills-list', () => _skillsListHandler());
@@ -7474,14 +7474,14 @@ handleIpc('warmy:plugin-install', (_e, pkg: string) => {
     // 用 pnpm 安装到 profile
     const profileDir = path.join(dshHome, 'profiles', profile);
     fs.mkdirSync(profileDir, { recursive: true });
-    const pkgJson = path.join(profileDir, 'package.json');
-    if (!fs.existsSync(pkgJson)) {
-      fs.writeFileSync(pkgJson, JSON.stringify({ name: 'dsh-profile-warmy', private: true, dependencies: {} }, null, 2));
+    const BaoJson = path.join(profileDir, 'package.json');
+    if (!fs.existsSync(BaoJson)) {
+      fs.writeFileSync(BaoJson, JSON.stringify({ name: 'dsh-profile-warmy', private: true, dependencies: {} }, null, 2));
     }
-    const pj = JSON.parse(fs.readFileSync(pkgJson, 'utf8'));
-    pj.dependencies = pj.dependencies || {};
-    pj.dependencies[pkg] = 'latest';
-    fs.writeFileSync(pkgJson, JSON.stringify(pj, null, 2));
+    const xiangMuPeiZhi = JSON.parse(fs.readFileSync(BaoJson, 'utf8'));
+    xiangMuPeiZhi.dependencies = xiangMuPeiZhi.dependencies || {};
+    xiangMuPeiZhi.dependencies[pkg] = 'latest';
+    fs.writeFileSync(BaoJson, JSON.stringify(xiangMuPeiZhi, null, 2));
     return { ok: true, profileDir, pkg };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
@@ -7490,11 +7490,11 @@ handleIpc('warmy:plugin-install', (_e, pkg: string) => {
 handleIpc('warmy:plugin-uninstall', (_e, pkg: string) => {
   try {
     const dshHome = path.join(app.getPath('userData'), 'dsh-home');
-    const pkgJson = path.join(dshHome, 'profiles', 'warmy', 'package.json');
-    if (fs.existsSync(pkgJson)) {
-      const pj = JSON.parse(fs.readFileSync(pkgJson, 'utf8'));
-      if (pj.dependencies) delete pj.dependencies[pkg];
-      fs.writeFileSync(pkgJson, JSON.stringify(pj, null, 2));
+    const BaoJson = path.join(dshHome, 'profiles', 'warmy', 'package.json');
+    if (fs.existsSync(BaoJson)) {
+      const xiangMuPeiZhi = JSON.parse(fs.readFileSync(BaoJson, 'utf8'));
+      if (xiangMuPeiZhi.dependencies) delete xiangMuPeiZhi.dependencies[pkg];
+      fs.writeFileSync(BaoJson, JSON.stringify(xiangMuPeiZhi, null, 2));
     }
     return { ok: true };
   } catch (e) {
@@ -7551,15 +7551,15 @@ handleIpc('warmy:secure-key-load', async (_e, providerId: string) => {
 
 // ── KnowledgeArchiver ──
 handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: string; summary: string; anchors?: Array<{ file: string; seq: number }> }) => {
-  let extraction = null as null | ReturnType<typeof extractKnowledgeFromArchive> | { error?: string };
-  let structured = null as null | ReturnType<typeof extractStructuredSummary>;
+  let extraction = null as null | ReturnType<typeof congGuiDangTiQuZhiShi> | { error?: string };
+  let structured = null as null | ReturnType<typeof tiQuJieGouHuaZhaiYao>;
   try {
-    extraction = extractKnowledgeFromArchive({
+    extraction = congGuiDangTiQuZhiShi({
       groupId: String(payload.groupId || ''),
       title: String(payload.title || ''),
       summary: String(payload.summary || ''),
     });
-    structured = extractStructuredSummary({
+    structured = tiQuJieGouHuaZhaiYao({
       groupId: String(payload.groupId || ''),
       title: String(payload.title || ''),
       text: String(payload.summary || ''),
@@ -7578,10 +7578,10 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
   // 归档触发整理：摘要 → 知识库实体/事件 + 使用者偏好（持久跨会话）
   try {
     if (knowledge && extraction && !(extraction as { error?: string }).error) {
-      const ex = extraction as ReturnType<typeof extractKnowledgeFromArchive>;
-      for (const e of ex.entities) {
-        const kindMap = ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] as const;
-        const kind = (kindMap as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof kindMap)[number]) : 'concept';
+      const liWai = extraction as ReturnType<typeof congGuiDangTiQuZhiShi>;
+      for (const e of liWai.entities) {
+        const LeiXingBiao = ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] as const;
+        const kind = (LeiXingBiao as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof LeiXingBiao)[number]) : 'concept';
         knowledge.upsertEntity({ id: e.id, kind, name: e.name, attrs: e.attrs || {}, anchors: [] });
       }
       knowledge.upsertEntity({
@@ -7591,7 +7591,7 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
         attrs: {},
         anchors: (payload.anchors || []).map((a) => ({ file: a.file, seq: a.seq, recordId: `seq:${a.seq}` })),
       });
-      for (const ev of ex.events) {
+      for (const ev of liWai.events) {
         knowledge.addEvent({
           id: ev.id,
           title: ev.title,
@@ -7601,7 +7601,7 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
           ts: Date.now(),
         });
       }
-      if (ex.preferences?.length) mergeUserPreferences(app.getPath('userData'), ex.preferences);
+      if (liWai.preferences?.length) heBingYongHuPianHao(app.getPath('userData'), liWai.preferences);
     }
   } catch (e) {
     extraction = { error: sanitizeError(e) };
@@ -7617,7 +7617,7 @@ handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; au
     const recent = logs.slice(-30).map((l) => `${l.role}: ${String(l.content || '').slice(0, 160)}`).join('\n');
     if (!recent.trim()) return { ok: false, error: 'no-history' };
     const title = `${gid} 会话摘要 ${new Date().toLocaleString()}`;
-    const structured = extractStructuredSummary({ groupId: gid, title, text: recent });
+    const structured = tiQuJieGouHuaZhaiYao({ groupId: gid, title, text: recent });
     const summary =
       [
         `# ${title}`,
@@ -7644,19 +7644,19 @@ handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; au
       },
     });
     try {
-      const ex = extractKnowledgeFromArchive({ groupId: gid, title, summary });
+      const liWai = congGuiDangTiQuZhiShi({ groupId: gid, title, summary });
       if (knowledge) {
         knowledge.upsertEntity({ id: `grp-${gid}`, kind: 'project', name: gid, attrs: {}, anchors: [] });
-        for (const e of ex.entities) {
-          const kindMap = ['person','org','material','place','concept','tool','project'] as const;
-          const kind = (kindMap as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof kindMap)[number]) : 'concept';
+        for (const e of liWai.entities) {
+          const LeiXingBiao = ['person','org','material','place','concept','tool','project'] as const;
+          const kind = (LeiXingBiao as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof LeiXingBiao)[number]) : 'concept';
           knowledge.upsertEntity({ id: e.id, kind, name: e.name, attrs: e.attrs || {}, anchors: [] });
         }
-        for (const ev of ex.events) {
+        for (const ev of liWai.events) {
           knowledge.addEvent({ id: ev.id, title: ev.title, result: ev.result || '', entityIds: [`grp-${gid}`], anchors: [], ts: Date.now() });
         }
       }
-      if (ex.preferences?.length) mergeUserPreferences(app.getPath('userData'), ex.preferences);
+      if (liWai.preferences?.length) heBingYongHuPianHao(app.getPath('userData'), liWai.preferences);
     } catch { /* 提炼失败不影响摘要落盘 */ }
     audit?.log('session.summary', { sessionId: gid, auto: !!payload?.auto });
     return { ok: true, entry, structured };
@@ -7735,7 +7735,7 @@ handleIpc('warmy:import-openclaw', () => {
     const ocPath = path.join(app.getPath('userData'), '..', 'openclaw.json');
     if (!fs.existsSync(ocPath)) return { ok: false, error: 'openclaw.json not found' };
     const j = JSON.parse(fs.readFileSync(ocPath, 'utf8'));
-    const provs = Object.entries(j.models?.providers || {}).map(([id, pv]) => {
+    const gongYingShangJi = Object.entries(j.models?.providers || {}).map(([id, pv]) => {
       const p = pv as { baseURL?: string; baseUrl?: string; apiKey?: string; api?: string; models?: Array<{ name?: string; id?: string }> };
       return {
         id, label: id, protocol: 'openai-compatible' as const,
@@ -7747,10 +7747,10 @@ handleIpc('warmy:import-openclaw', () => {
     });
     if (settingsStore) {
       const cur = settingsStore.load() as unknown as Record<string, unknown>;
-      settingsStore.save({ ...cur, importedProviders: provs } as never);
+      settingsStore.save({ ...cur, importedProviders: gongYingShangJi } as never);
     }
-    audit?.log('providers.import', { count: provs.length });
-    return { ok: true, providers: provs };
+    audit?.log('providers.import', { count: gongYingShangJi.length });
+    return { ok: true, providers: gongYingShangJi };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }

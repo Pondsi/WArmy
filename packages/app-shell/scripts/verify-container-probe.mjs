@@ -33,25 +33,25 @@ const {
   probeContainerRuntimes,
   runContainerAction,
   CONTAINER_RUNTIME_SPECS,
-  containerRuntimeSpec,
+  rongQiYunXingGuiGeOf,
   CONTAINER_SHELL_ACTIONS,
   CONTAINER_SHELL_MAX_DATA,
   CONTAINER_SHELL_SECURITY,
-  containerShellGate,
-  projectReasonKey,
+  rongQiKongZhiTaiMenJin,
+  xiangMuYuanYinJian,
   deriveProjectState,
-  normalizeContainerShellRequest,
+  guiFanKongZhiTaiQingQiu,
   projectUnavailableRefusal,
   CONTAINER_BASE_IMAGES,
   CONTAINER_NODE_NEEDED_CASES,
   CONTAINER_EXECUTOR_LOCATION,
   CONTAINER_IMAGE_STACKS,
-  classifyActionResult,
-  actionNeedsInstallHint,
+  guiLeiDongZuoJieGuo,
+  dongZuoXuAnZhuang,
   envSolidifyCapability,
-  engineOsModeOf,
+  quYinQingXiTongMoShi,
   shouldSolidifyAt,
-  solidifyRetention,
+  guHuaBaoLiu,
   SOLIDIFY_COALESCE_MS,
   SOLIDIFY_KEEP,
 } = mod;
@@ -167,7 +167,7 @@ ok(kinds.colima === 'linux-vm' && kinds.lima === 'linux-vm', '4-3 Colima / Lima 
 ok(kinds['lxd-incus'] === 'system-container', '4-4 LXD/Incus 是系统容器', kinds['lxd-incus']);
 ok(kinds.docker === 'container' && kinds.podman === 'container' && kinds.nerdctl === 'container',
   '4-5 Docker / Podman / nerdctl 是容器引擎', kinds.docker + '/' + kinds.podman + '/' + kinds.nerdctl);
-const kataSpec = containerRuntimeSpec('kata');
+const kataSpec = rongQiYunXingGuiGeOf('kata');
 ok(!!kataSpec && kataSpec.lifecycle.reason === 'not-standalone-engine',
   '4-6 Kata 被如实标为"隔离级别、不是独立引擎"（ready 也不给 runCommand）', kataSpec && kataSpec.lifecycle.reason);
 ok(report.runtimes.every((r) => (r.status === 'ready' ? true : r.capability.runCommand === false && r.capability.interactiveShell === false && r.capability.mountHostDir === false)),
@@ -326,23 +326,23 @@ ok(translatedEvidence.length === 0, '9-3b evidence 没有被 i18n 渲染过（�
 
 /* ── 10. 控制台 = 容器内的 shell：参数形状与门禁（ADR 004 P4 定稿）── */
 section('10. 控制台（容器内 shell）的参数形状：只有 runtimeId + 动作枚举');
-const badCmd = normalizeContainerShellRequest({ runtimeId: 'docker', action: 'open', sessionId: 's1', cmd: 'rm -rf /', command: 'curl evil' });
+const badCmd = guiFanKongZhiTaiQingQiu({ runtimeId: 'docker', action: 'open', sessionId: 's1', cmd: 'rm -rf /', command: 'curl evil' });
 ok(badCmd.ok === true && !('cmd' in badCmd.req) && !('command' in badCmd.req),
   '10-1 【核心】载荷里的 `cmd` / `command` 等字段**根本不被采纳**（白名单外的字段一律忽略）',
   JSON.stringify(Object.keys(badCmd.ok ? badCmd.req : {})));
 ok(badCmd.ok === true && badCmd.req.action === 'open' && badCmd.req.runtimeId === 'docker',
   '10-2 采纳的字段只有 { runtimeId, action, sessionId, data }', JSON.stringify(badCmd.ok ? badCmd.req : null));
-const badAct = normalizeContainerShellRequest({ action: 'exec', runtimeId: 'docker' });
+const badAct = guiFanKongZhiTaiQingQiu({ action: 'exec', runtimeId: 'docker' });
 ok(badAct.ok === false && badAct.code === 'bad-action',
   '10-3 动作是**枚举**（' + CONTAINER_SHELL_ACTIONS.join('/') + '）：`exec` 这种即被拒',
   JSON.stringify(badAct));
-ok(normalizeContainerShellRequest({ action: 'open', runtimeId: 'docker; rm -rf /' }).code === 'unknown-runtime',
+ok(guiFanKongZhiTaiQingQiu({ action: 'open', runtimeId: 'docker; rm -rf /' }).code === 'unknown-runtime',
   '10-4 【核心】运行时 id 必须是预定义清单里的（命令字符串不可能出现在 id 里）');
-ok(normalizeContainerShellRequest({ action: 'write', data: 'x'.repeat(CONTAINER_SHELL_MAX_DATA + 1) }).code === 'data-too-long',
+ok(guiFanKongZhiTaiQingQiu({ action: 'write', data: 'x'.repeat(CONTAINER_SHELL_MAX_DATA + 1) }).code === 'data-too-long',
   '10-5 写入有长度上限（' + CONTAINER_SHELL_MAX_DATA + ' 字符），拿它当大数据通道会被拒');
-ok(normalizeContainerShellRequest({ action: 'write', data: 'echo\u0000hi' }).code === 'bad-data',
+ok(guiFanKongZhiTaiQingQiu({ action: 'write', data: 'echo\u0000hi' }).code === 'bad-data',
   '10-6 含 NUL 的写入被拒（不把二进制/截断技巧带进 shell）');
-ok(normalizeContainerShellRequest({ action: 'close', data: 'echo hi' }).code === 'unexpected-data',
+ok(guiFanKongZhiTaiQingQiu({ action: 'close', data: 'echo hi' }).code === 'unexpected-data',
   '10-7 不该带数据的动作带上 data 也被拒（形状收紧，不留模糊地带）');
 ok(CONTAINER_SHELL_ACTIONS.length === 4 && CONTAINER_SHELL_ACTIONS.includes('write'),
   '10-8 动作清单就是这 4 个（open/write/close/status）', JSON.stringify(CONTAINER_SHELL_ACTIONS));
@@ -359,25 +359,25 @@ ok(CONTAINER_SHELL_SECURITY.hostFallback === false,
 ok(CONTAINER_SHELL_SECURITY.typedBy === 'local-human-only', '10b-6 只有本机的人手动输入才会执行');
 
 section('11. 控制台门禁：未就绪 ⇒ 一条命令都不执行（顺序与主进程一致）');
-const gateNotInChat = containerShellGate({ inProjectOrCattle: false, runInContainer: true, imageReady: true });
+const gateNotInChat = rongQiKongZhiTaiMenJin({ inProjectOrCattle: false, runInContainer: true, imageReady: true });
 ok(gateNotInChat.available === false && gateNotInChat.code === 'not-in-chat' && gateNotInChat.reason === 'onlyInChat',
   '11-1 联系人/群聊里没有控制台（不是"灰着占位"）', JSON.stringify(gateNotInChat));
-const gateNotEnabled = containerShellGate({ inProjectOrCattle: true, runInContainer: false });
+const gateNotEnabled = rongQiKongZhiTaiMenJin({ inProjectOrCattle: true, runInContainer: false });
 ok(gateNotEnabled.available === false && gateNotEnabled.code === 'not-enabled', '11-2 没开启"运行/测试在容器中" ⇒ 不可用', JSON.stringify(gateNotEnabled));
-const gateStopped = containerShellGate({ inProjectOrCattle: true, runInContainer: true, projectStopped: true, runtimeId: 'docker', runtimeStatus: 'ready', imageReady: true });
+const gateStopped = rongQiKongZhiTaiMenJin({ inProjectOrCattle: true, runInContainer: true, projectStopped: true, runtimeId: 'docker', runtimeStatus: 'ready', imageReady: true });
 ok(gateStopped.available === false && gateStopped.code === 'project-stopped',
   '11-3 【核心】项目已停止（等同创建者下线）⇒ 控制台也不可用', JSON.stringify(gateStopped));
-const gateNotReady = containerShellGate({ inProjectOrCattle: true, runInContainer: true, runtimeId: 'docker', runtimeStatus: 'installed-not-running' });
+const gateNotReady = rongQiKongZhiTaiMenJin({ inProjectOrCattle: true, runInContainer: true, runtimeId: 'docker', runtimeStatus: 'installed-not-running' });
 ok(gateNotReady.available === false && gateNotReady.code === 'container-not-ready' && gateNotReady.needsInstall === true,
   '11-4 【核心】容器未就绪（本机真实状态）⇒ 置灰 + needsInstall（走 §3.3 引导流）', JSON.stringify(gateNotReady));
-const gateNoProbe = containerShellGate({ inProjectOrCattle: true, runInContainer: true, runtimeId: 'docker', runtimeStatus: null });
+const gateNoProbe = rongQiKongZhiTaiMenJin({ inProjectOrCattle: true, runInContainer: true, runtimeId: 'docker', runtimeStatus: null });
 ok(gateNoProbe.available === false,
   '11-5 【核心】**没探过**（runtimeStatus=null）也算未就绪 —— 不许乐观放开', JSON.stringify(gateNoProbe));
-const gateNoImage = containerShellGate({ inProjectOrCattle: true, runInContainer: true, runtimeId: 'docker', runtimeStatus: 'ready', imageReady: false });
+const gateNoImage = rongQiKongZhiTaiMenJin({ inProjectOrCattle: true, runInContainer: true, runtimeId: 'docker', runtimeStatus: 'ready', imageReady: false });
 ok(gateNoImage.available === false && gateNoImage.openable === true && gateNoImage.code === 'no-image',
   '11-6 引擎就绪、但项目容器镜像未定：面板能开（openable）、但**一条命令都跑不了**（available=false）——今天就是这一档',
   JSON.stringify(gateNoImage));
-const gateOk = containerShellGate({ inProjectOrCattle: true, runInContainer: true, runtimeId: 'docker', runtimeStatus: 'ready', imageReady: true });
+const gateOk = rongQiKongZhiTaiMenJin({ inProjectOrCattle: true, runInContainer: true, runtimeId: 'docker', runtimeStatus: 'ready', imageReady: true });
 ok(gateOk.available === true && gateOk.openable === true && gateOk.code === 'ok',
   '11-7 引擎就绪 + 镜像就绪 ⇒ 才真的可用（本机现在达不到，如实）', JSON.stringify(gateOk));
 ok([gateNotInChat, gateNotEnabled, gateStopped, gateNotReady, gateNoProbe].every((g) => g.openable === false),
@@ -404,7 +404,7 @@ ok(downProject.stopped === true && downProject.running === false && downProject.
 ok(downProject.memberFace === 'creator-offline',
   '12-7 【核心】对成员的可见效果 = **与「创建者下线」完全一致**（复用既有语义，不新造一套"停止"）',
   String(downProject.memberFace));
-ok(downProject.code === 'container-not-ready' && projectReasonKey(downProject.code) === 'containerDown',
+ok(downProject.code === 'container-not-ready' && xiangMuYuanYinJian(downProject.code) === 'containerDown',
   '12-8 原因码是机器可读的（文案走 i18n）', downProject.code);
 const refusal = projectUnavailableRefusal(downProject);
 ok(!!refusal && refusal.code === 'project-unavailable' && refusal.hostExecutionRefused === true && refusal.memberFace === 'creator-offline',
@@ -415,7 +415,7 @@ const creatorStopped = deriveProjectState({ devEnv: 'container', runtimeId: 'doc
 ok(creatorStopped.code === 'disabled-by-owner' && creatorStopped.stopped === true,
   '12-12 【核心】创建者点了「停止项目」⇒ 即使引擎还开着，项目也是停止态（"停止 = 不可开发"）',
   JSON.stringify({ code: creatorStopped.code, stopped: creatorStopped.stopped }));
-ok(creatorStopped.memberFace === 'creator-offline' && projectReasonKey(creatorStopped.code) === 'disabledByOwner',
+ok(creatorStopped.memberFace === 'creator-offline' && xiangMuYuanYinJian(creatorStopped.code) === 'disabledByOwner',
   '12-13 创建者停用 ⇒ 成员看到的还是"创建者下线"那一套 + 可区分的原因码');
 const noProbe = deriveProjectState({ devEnv: 'container', runtimeId: 'docker', runtimeStatus: null });
 ok(noProbe.stopped === true && noProbe.code === 'container-not-ready',
@@ -489,17 +489,17 @@ ok(!!ZH['container.image.stack.minimal'] && !!ZH['container.image.stack.node'] &
 /* ── 14. 第十批：进程派生了 ≠ 成功（原因码要能从真实输出里认出来）── */
 section('14. 启停失败的原因码（"假成功"修复的判据）');
 const realDesktopErr = '✗ Failed to start Docker Desktop | starting Docker Desktop: getting launcher path: cannot find registry key "SOFTWARE\\Docker Inc.\\Docker Desktop"';
-ok(classifyActionResult('start', false, realDesktopErr, 1) === 'install-incomplete',
+ok(guiLeiDongZuoJieGuo('start', false, realDesktopErr, 1) === 'install-incomplete',
   '14-1 【核心】真机实测那条错误（找不到注册表键）被判成 install-incomplete（安装不完整或未能启动）',
-  classifyActionResult('start', false, realDesktopErr, 1));
-ok(actionNeedsInstallHint('install-incomplete') === true && actionNeedsInstallHint('engine-start-failed') === false,
+  guiLeiDongZuoJieGuo('start', false, realDesktopErr, 1));
+ok(dongZuoXuAnZhuang('install-incomplete') === true && dongZuoXuAnZhuang('engine-start-failed') === false,
   '14-2 UI 能据此选更精确的提示（"安装不完整" vs 一般"启动失败"）');
-ok(classifyActionResult('start', false, 'failed to start Docker Desktop', 1) === 'engine-start-failed',
+ok(guiLeiDongZuoJieGuo('start', false, 'failed to start Docker Desktop', 1) === 'engine-start-failed',
   '14-3 一般的启动失败仍归到 engine-start-failed（不硬套安装问题）');
-ok(classifyActionResult('stop', false, 'access is denied', 5) === 'engine-stop-failed', '14-4 停止失败单独一档');
-ok(classifyActionResult('start', false, '', null) === 'no-exit-code',
+ok(guiLeiDongZuoJieGuo('stop', false, 'access is denied', 5) === 'engine-stop-failed', '14-4 停止失败单独一档');
+ok(guiLeiDongZuoJieGuo('start', false, '', null) === 'no-exit-code',
   '14-5 没有退出码时不假装有原因（如实 no-exit-code）');
-ok(classifyActionResult('start', true, 'whatever', 0) === 'ok',
+ok(guiLeiDongZuoJieGuo('start', true, 'whatever', 0) === 'ok',
   '14-6 【核心】成功只在真的成功时才报 ok（失败**永不**被当成功）');
 ok(!!ZH['container.action.reason.install-incomplete'] && ZH['container.action.reason.install-incomplete'].indexOf('安装不完整') >= 0,
   '14-7 新增原因码有对应中文文案（说清"容器引擎安装不完整或未能启动"）',
@@ -531,13 +531,13 @@ const modeRow = (id, detail) => ({ ok: true, platform: 'win32', probedAt: 0, ela
   runtimes: [{ id, status: 'ready', run: 'running', engine: { kind: 'container', api: 'docker' }, capability: { runCommand: true, interactiveShell: true, mountHostDir: true },
     lifecycle: { startable: true, stoppable: true, reason: 'ok', waitMs: 0, awaitReady: true }, detail, probeMs: 0 }],
   usableIds: [id], containerEngineIds: [id], attentionIds: [], notInstalledCount: 0, pendingActions: [], envTypes: [], images: [], timings: {} });
-ok(engineOsModeOf(modeRow('docker', 'daemon-reachable:windows'), 'docker') === 'windows',
+ok(quYinQingXiTongMoShi(modeRow('docker', 'daemon-reachable:windows'), 'docker') === 'windows',
   '15-7 【核心】引擎系统模式从**真探测**读：docker 报 windows 就显示 windows（**不把 Linux 当常量**）');
-ok(engineOsModeOf(modeRow('docker', 'daemon-reachable:linux'), 'docker') === 'linux', '15-8 报 linux 就显示 linux（是读来的，不是写死的）');
-ok(engineOsModeOf(modeRow('wsl', 'distro=Ubuntu'), 'wsl') === 'distro:Ubuntu', '15-9 WSL 显示发行版名（它的"模式"就是发行版）');
-ok(engineOsModeOf(modeRow('docker', 'daemon-not-running'), 'docker') === 'unknown',
+ok(quYinQingXiTongMoShi(modeRow('docker', 'daemon-reachable:linux'), 'docker') === 'linux', '15-8 报 linux 就显示 linux（是读来的，不是写死的）');
+ok(quYinQingXiTongMoShi(modeRow('wsl', 'distro=Ubuntu'), 'wsl') === 'distro:Ubuntu', '15-9 WSL 显示发行版名（它的"模式"就是发行版）');
+ok(quYinQingXiTongMoShi(modeRow('docker', 'daemon-not-running'), 'docker') === 'unknown',
   '15-10 读不到就如实 unknown（不猜一个模式出来）');
-ok(engineOsModeOf(null, 'docker') === 'unknown', '15-11 没有报告时同样 unknown');
+ok(quYinQingXiTongMoShi(null, 'docker') === 'unknown', '15-11 没有报告时同样 unknown');
 ok(!/Linux 容器/.test(ZH['container.env.mode.body']) && !/Linux 容器/.test(EN['container.env.mode.body']),
   '15-12 UI 文案里不写"Linux 容器"，改说"你选择的容器 / 运行环境"');
 
@@ -558,7 +558,7 @@ ok(shouldSolidifyAt({ dirty: false, beforeDestroy: true, programmatic: true }).c
 ok(shouldSolidifyAt({ explicit: true, dirty: false, programmatic: true }).solidify === true, '16-6 用户显式点按钮 ⇒ 固化');
 ok(shouldSolidifyAt({ explicit: true, dirty: true, programmatic: false }).code === 'runtime-cannot-solidify',
   '16-7 【核心】能力不支持时**连显式请求也不执行**（如实说不能，而不是点了假装成功）');
-const ret = solidifyRetention([{ imageRef: 'a', at: 1 }, { imageRef: 'b', at: 5 }, { imageRef: 'c', at: 3 }, { imageRef: 'd', at: 9 }]);
+const ret = guHuaBaoLiu([{ imageRef: 'a', at: 1 }, { imageRef: 'b', at: 5 }, { imageRef: 'c', at: 3 }, { imageRef: 'd', at: 9 }]);
 ok(ret.keep.length === SOLIDIFY_KEEP && ret.keep[0].imageRef === 'd' && ret.prune.length === 1 && ret.prune[0].imageRef === 'a',
   '16-8 保留策略：只留最近 N 个（默认 ' + SOLIDIFY_KEEP + '）+ 明确哪些该清理', JSON.stringify(ret.keep.map((x) => x.imageRef)));
 ok(!!ZH['container.env.solidify.security'] && ZH['container.env.solidify.security'].indexOf('密钥') >= 0,

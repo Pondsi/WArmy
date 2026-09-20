@@ -31,12 +31,12 @@ type RawFile = Record<string, Entry | string>;
 function safeStorageOf(): { encryptString(s: string): Buffer; decryptString(b: Buffer): string; isEncryptionAvailable(): boolean } | null {
   try {
     const electron = require('electron') as typeof import('electron');
-    const ss = electron?.safeStorage;
-    if (!ss) return null;
+    const anQuanCang = electron?.safeStorage;
+    if (!anQuanCang) return null;
     // 在非 Electron 环境（纯 node 跑测试）下这两项可能不存在
-    if (typeof ss.encryptString !== 'function' || typeof ss.decryptString !== 'function') return null;
-    if (typeof ss.isEncryptionAvailable === 'function' && !ss.isEncryptionAvailable()) return null;
-    return ss as never;
+    if (typeof anQuanCang.encryptString !== 'function' || typeof anQuanCang.decryptString !== 'function') return null;
+    if (typeof anQuanCang.isEncryptionAvailable === 'function' && !anQuanCang.isEncryptionAvailable()) return null;
+    return anQuanCang as never;
   } catch {
     return null;
   }
@@ -57,10 +57,10 @@ export class SecureKeyStore {
 
   /** 加密保存。没有 OS 级保护时**拒绝写明文**（除非显式开发开关）。 */
   async save(providerId: string, apiKey: string): Promise<void> {
-    const ss = safeStorageOf();
+    const anQuanCang = safeStorageOf();
     let entry: Entry;
-    if (ss) {
-      entry = { v: 2, protector: 'os', data: ss.encryptString(apiKey).toString('base64') };
+    if (anQuanCang) {
+      entry = { v: 2, protector: 'os', data: anQuanCang.encryptString(apiKey).toString('base64') };
     } else if (allowPlaintext()) {
       // 仅供开发：明文但**明确标记**，不冒充加密
       entry = { v: 2, protector: 'plain', data: Buffer.from(apiKey, 'utf8').toString('base64') };
@@ -81,10 +81,10 @@ export class SecureKeyStore {
     // v1 遗留：裸 base64 字符串，无法区分"密文"还是"明文"
     if (typeof raw === 'string') {
       const buf = Buffer.from(raw, 'base64');
-      const ss = safeStorageOf();
-      if (ss) {
+      const anQuanCang = safeStorageOf();
+      if (anQuanCang) {
         try {
-          return ss.decryptString(buf);
+          return anQuanCang.decryptString(buf);
         } catch {
           /* 不是 OS 密文 → 当遗留明文处理 */
         }
@@ -93,10 +93,10 @@ export class SecureKeyStore {
     }
 
     if (raw.protector === 'os') {
-      const ss = safeStorageOf();
-      if (!ss) return null; // 现在解不开，不要返回乱码
+      const anQuanCang = safeStorageOf();
+      if (!anQuanCang) return null; // 现在解不开，不要返回乱码
       try {
-        return ss.decryptString(Buffer.from(raw.data, 'base64'));
+        return anQuanCang.decryptString(Buffer.from(raw.data, 'base64'));
       } catch {
         return null;
       }

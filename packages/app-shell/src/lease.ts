@@ -165,7 +165,7 @@ function fmtRemaining(ms: number): string {
   return `${h} 小时 ${m % 60} 分钟`;
 }
 
-function kindLabel(kind: LeaseKind): string {
+function LeiXingMing(kind: LeaseKind): string {
   if (kind === 'file') return '文件级';
   if (kind === 'task') return '任务级';
   return '目录级';
@@ -273,7 +273,7 @@ export class LeaseRegistry {
     if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
       return { ok: false, error: { code: 'ttl-invalid', reason: `租约时长必须为正数毫秒：${String(req.ttlMs)}` } };
     }
-    const ttl = Math.min(Math.floor(ttlMs), this.maxTtlMs);
+    const youXiaoQi = Math.min(Math.floor(ttlMs), this.maxTtlMs);
 
     const candidate: Lease = {
       id: '',
@@ -281,9 +281,9 @@ export class LeaseRegistry {
       kind,
       scope: req.scope?.trim() || paths[0] || holder,
       paths,
-      ttlMs: ttl,
+      ttlMs: youXiaoQi,
       createdAt: now,
-      expiresAt: now + ttl,
+      expiresAt: now + youXiaoQi,
       ...(req.taskId ? { taskId: req.taskId } : {}),
       ...(req.note ? { note: req.note } : {}),
     };
@@ -314,7 +314,7 @@ export class LeaseRegistry {
         error: {
           code: 'held-by-other',
           reason:
-            `写入范围与「${first.holder}」的${kindLabel(first.kind)}租约冲突（范围 ${first.scope}，覆盖 ${where}，` +
+            `写入范围与「${first.holder}」的${LeiXingMing(first.kind)}租约冲突（范围 ${first.scope}，覆盖 ${where}，` +
             `${fmtTime(first.expiresAt)} 到期，剩余 ${fmtRemaining(first.expiresAt - now)}）。` +
             `请等它释放/过期，或让值班者重新划分范围。`,
         },
@@ -335,7 +335,7 @@ export class LeaseRegistry {
       // 所以宁可多挡：绝不留下"自己以为自己有租约、实际漏挡"的窟窿。
       if (base.kind === 'file' && candidate.kind !== 'file') base.kind = candidate.kind;
       base.expiresAt = Math.max(base.expiresAt, candidate.expiresAt);
-      base.ttlMs = Math.max(base.ttlMs, ttl);
+      base.ttlMs = Math.max(base.ttlMs, youXiaoQi);
       if (req.note) base.note = req.note;
       if (req.taskId) base.taskId = req.taskId;
       return { ok: true, lease: this.copy(base), merged: true };
@@ -365,12 +365,12 @@ export class LeaseRegistry {
     const found = this.find(req);
     if (found.kind === 'error') return { ok: false, error: found.error };
     const lease = found.lease;
-    const ttl = Math.min(Math.floor(ttlMs === undefined ? lease.ttlMs : ttlMs), this.maxTtlMs);
-    if (!Number.isFinite(ttl) || ttl <= 0) {
+    const youXiaoQi = Math.min(Math.floor(ttlMs === undefined ? lease.ttlMs : ttlMs), this.maxTtlMs);
+    if (!Number.isFinite(youXiaoQi) || youXiaoQi <= 0) {
       return { ok: false, error: { code: 'ttl-invalid', reason: `续租时长必须为正数毫秒：${String(ttlMs)}` } };
     }
-    lease.ttlMs = ttl;
-    lease.expiresAt = now + ttl;
+    lease.ttlMs = youXiaoQi;
+    lease.expiresAt = now + youXiaoQi;
     return { ok: true, lease: this.copy(lease) };
   }
 
@@ -427,7 +427,7 @@ export class LeaseRegistry {
           allowed: true,
           holder: who,
           path: n.normalized,
-          reason: `允许写入（命中你自己的${kindLabel(live.kind)}租约 ${live.scope}，${fmtTime(live.expiresAt)} 到期，剩余 ${fmtRemaining(live.expiresAt - now)}）`,
+          reason: `允许写入（命中你自己的${LeiXingMing(live.kind)}租约 ${live.scope}，${fmtTime(live.expiresAt)} 到期，剩余 ${fmtRemaining(live.expiresAt - now)}）`,
           lease: this.copy(live),
         };
       }
@@ -441,7 +441,7 @@ export class LeaseRegistry {
           path: n.normalized,
           code: 'held-by-other',
           reason:
-            `${n.normalized} 当前被「${live.holder}」持有（${kindLabel(live.kind)}租约，范围 ${live.scope}，` +
+            `${n.normalized} 当前被「${live.holder}」持有（${LeiXingMing(live.kind)}租约，范围 ${live.scope}，` +
             `${fmtTime(live.expiresAt)} 到期，剩余 ${fmtRemaining(live.expiresAt - now)}）。` +
             `直接写会静默覆盖对方的改动（工作区内容 git 救不回来）。请等它释放/过期，或找值班者仲裁。`,
           lease: this.copy(live),
@@ -506,7 +506,7 @@ export class LeaseRegistry {
         holder: live.holder,
         lease: this.copy(live),
         expiresAt: live.expiresAt,
-        reason: `「${live.holder}」的${kindLabel(live.kind)}租约覆盖该路径（范围 ${live.scope}，${fmtTime(live.expiresAt)} 到期，剩余 ${fmtRemaining(live.expiresAt - now)}）`,
+        reason: `「${live.holder}」的${LeiXingMing(live.kind)}租约覆盖该路径（范围 ${live.scope}，${fmtTime(live.expiresAt)} 到期，剩余 ${fmtRemaining(live.expiresAt - now)}）`,
       });
     }
     if (!out.length) {

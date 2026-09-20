@@ -21,14 +21,14 @@ import path from 'node:path';
 import {
   validatePushPaths,
   validateRefUpdate,
-  type PushPathEntry,
-  type PushPathRejection,
-  type RefAction,
+  type TuiSongLuJingTiaoMu,
+  type TuiSongLuJingJuJue,
+  type YinYongDongZuo,
   type RefRejection,
-  type RefUpdateOptions,
+  type YinYongGengXinXuanXiang,
 } from './repo-guard.js';
 
-export type GuardRole = NonNullable<RefUpdateOptions['role']>;
+export type GuardRole = NonNullable<YinYongGengXinXuanXiang['role']>;
 
 export interface GitRunResult {
   code: number;
@@ -109,21 +109,21 @@ function includeStatus(status: string): boolean {
 export function collectPushEntries(
   git: GitRunner,
   ref: PreReceiveRef
-): { entries: PushPathEntry[]; errors: string[]; deleted: boolean } {
+): { entries: TuiSongLuJingTiaoMu[]; errors: string[]; deleted: boolean } {
   const errors: string[] = [];
   if (isZeroSha(ref.newSha)) return { entries: [], errors, deleted: true };
 
   const args = isZeroSha(ref.oldSha)
     ? ['diff-tree', '-r', '--no-commit-id', '--name-status', '-z', '--root', ref.newSha]
     : ['diff-tree', '-r', '--no-commit-id', '--name-status', '-z', ref.oldSha, ref.newSha];
-  const diff = git(args);
-  if (diff.code !== 0) {
+  const chaYi = git(args);
+  if (chaYi.code !== 0) {
     // 枚举不出来 → fail-closed（不能"看不见就当没事"）
-    return { entries: [], errors: [`diff-tree 失败（exit ${diff.code}）：${(diff.stderr || '').trim().slice(0, 200)}`], deleted: false };
+    return { entries: [], errors: [`diff-tree 失败（exit ${chaYi.code}）：${(chaYi.stderr || '').trim().slice(0, 200)}`], deleted: false };
   }
 
   // -z 输出：`status\0path\0`（R/C 为 `status\0old\0new\0`）
-  const fields = diff.stdout.split('\0');
+  const fields = chaYi.stdout.split('\0');
   const changes: { status: string; path: string }[] = [];
   for (let i = 0; i < fields.length; i++) {
     const status = fields[i];
@@ -141,10 +141,10 @@ export function collectPushEntries(
     i += 1;
   }
 
-  const entries: PushPathEntry[] = [];
+  const entries: TuiSongLuJingTiaoMu[] = [];
   for (const c of changes) {
     if (!includeStatus(c.status)) continue;
-    const entry: PushPathEntry = { path: c.path };
+    const entry: TuiSongLuJingTiaoMu = { path: c.path };
     const ls = git(['ls-tree', '-z', ref.newSha, '--', `:(literal)${c.path}`]);
     if (ls.code === 0 && ls.stdout.trim()) {
       const rec = ls.stdout.split('\0')[0] ?? '';
@@ -171,11 +171,11 @@ export function collectPushEntries(
 
 export interface PreReceiveRefResult {
   ref: string;
-  action: RefAction;
+  action: YinYongDongZuo;
   allowed: boolean;
   rejections: RefRejection[];
   warnings: string[];
-  pathRejected: PushPathRejection[];
+  pathRejected: TuiSongLuJingJuJue[];
   pathWarnings: string[];
   entries: number;
   enumerationErrors: string[];
@@ -187,7 +187,7 @@ export interface PreReceiveResult {
   memberId: string;
   refs: PreReceiveRefResult[];
   /** 跨 ref 合并后的别名碰撞校验（更严：不同 ref 里推 A.txt / a.txt 也会撞） */
-  union: { allowed: boolean; rejected: PushPathRejection[]; warnings: string[]; entries: number } | null;
+  union: { allowed: boolean; rejected: TuiSongLuJingJuJue[]; warnings: string[]; entries: number } | null;
   malformed: string[];
   fatal?: string;
 }
@@ -211,11 +211,11 @@ export function runPreReceive(opts: RunPreReceiveOptions): PreReceiveResult {
   const fatal = parsed.refs.length === 0 ? (parsed.malformed.length ? 'no-valid-refs' : 'empty-stdin') : undefined;
 
   const refResults: PreReceiveRefResult[] = [];
-  const unionEntries: PushPathEntry[] = [];
+  const unionEntries: TuiSongLuJingTiaoMu[] = [];
 
   for (const ref of parsed.refs) {
-    const known = opts.git(['rev-parse', '--verify', '--quiet', ref.ref]);
-    const knownSha = known.code === 0 ? known.stdout.trim() : '';
+    const yiZhi = opts.git(['rev-parse', '--verify', '--quiet', ref.ref]);
+    const knownSha = yiZhi.code === 0 ? yiZhi.stdout.trim() : '';
 
     const ancestorCache = new Map<string, boolean | undefined>();
     const isAncestor = (a: string, d: string): boolean | undefined => {

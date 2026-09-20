@@ -56,9 +56,27 @@ detail = `distro-not-running:Ubuntu`；`only: ['docker']` 时 wsl = `not-probed`
 
 ## 未完成（如实记录）
 
-- **全拼改名**：已完成 global 契约名两批（board/contracts/group-router/providers 的导出名 + sync-protocol 与 memory-os 的核心导出名，共 122 项映射）+ providers、memory-os 两包的包内局部名；`packages/app-shell` 的 12,430 处声明点尚未改（体量最大，需逐批走"映射 → 改 → 11 包 tsc → 16 门禁"）。工具已加固到能自己拦住坏档（括号/换行/长度/NUL 自检 + 保留字守卫 + 成员名守卫），后续每批可安全推进。
-- **`container.envType.*` / `container.runEnv.*` 的 i18n 文案**：设置页已不再渲染"环境类型"（环境 = 具体实例），但探测报告仍在返回 `envTypes`、门禁仍在断言这批文案。要彻底清掉需要同时改 `container-probe.ts` 与 `verify-container-probe.mjs`，属于独立清理，未在本轮做（**用户可见界面已经不含环境类型**）。
-- **`renderer.css` 与 `app.css` 两份样式文件**：两份内容高度重叠（后加载的 renderer.css 覆盖前者）。本轮新增样式**两份都加了**以免踩坑，但合并成一份是独立重构。
+- **全拼改名**：映射表现有 **global 286 / local 193** 项。已完成 board / contracts / group-router /
+  providers / memory-os 的包内名 + sync-protocol 与 app-shell 的核心契约名（身份、组网、容器、检查点、
+  资产、归档…）。**仍剩约 2,100 个一次性的短局部名**（`rr`/`jb`/`tg`/`dd` 这类）——它们无法靠词表推断
+  语义，必须逐个读用法才能起出不丢信息的中文名；硬猜会产出无意义的拼音，所以**没有硬猜**。
+  工具本轮又修掉四个会写坏代码的缺陷（都加了守卫，见下），后续可按批继续推进。
+- **`container.envType.*` / `container.runEnv.*` 的 i18n 文案**：设置页已不再渲染"环境类型"
+  （环境 = 具体实例），但探测报告仍在返回 `envTypes`、门禁仍在断言这批文案。要彻底清掉需要同时改
+  `container-probe.ts` 与 `verify-container-probe.mjs`，属于独立清理，未在本轮做
+  （**用户可见界面已经不含环境类型**）。
+- **`renderer.css` 与 `app.css` 两份样式文件**：两份内容高度重叠（后加载的 renderer.css 覆盖前者）。
+  本轮新增样式**两份都加了**以免踩坑，但合并成一份是独立重构。
+
+### 改名工具的四个新守卫（本轮踩到就修）
+
+| 症状 | 根因 | 现在怎么拦 |
+| --- | --- | --- |
+| `'shiLiuJin' is not assignable to BufferEncoding` | 模板插值 `${...}` 被整段当代码，里面的**字符串**也被改名 | 插值内部**递归分段**，字符串/注释/正则照旧受保护 |
+| 整个文件该改的都没改（`TS2304 Cannot find name`） | 正则字面量里的引号被当成字符串开头，分段从此错位 | 扫描器识别正则字面量；另有"未闭合 keep 段"检查 |
+| 断言里 `#list-col` 变成 `#list-lie` | 一次范围过宽的"正则字面量批量替换"碰了 DOM id/CSS 类名 | 已全部回退；规则重申：**DOM id / CSS 类名 / i18n key / 协议字段一律不改** |
+| 门禁脚本 `ReferenceError: ss is not defined` | 把包内 `scripts/`（普通 JS、无类型检查）也纳入改名 | 包内改名范围**只限 `src/`**；门禁脚本要跟着改时**手工改** |
+
 
 ## 已由我完成
 

@@ -5,7 +5,7 @@ let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 
 // ── A. 检查点详情：真实文件变更 ──
-// CheckpointStore.create 记录 filesChanged/filesCreated
+// JianChaDianCang.create 记录 filesChanged/filesCreated
 let ck = fs.readFileSync(base + 'checkpoint.ts', 'utf8');
 if (!ck.includes('filesChanged')) {
   ck = ck.replace(

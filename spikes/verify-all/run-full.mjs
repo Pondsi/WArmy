@@ -261,11 +261,11 @@ gov.negativeFeedback('a1', 6);
 check('assets downrank', gov.list()[0]?.strength === 'weak');
 
 // checkpoint
-const { CheckpointStore } = await import(
+const { JianChaDianCang } = await import(
   toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'checkpoint.js'))
 );
 const cpDir = path.join(os.tmpdir(), 'warmy-verify-cp-' + Date.now());
-const cps = new CheckpointStore(cpDir);
+const cps = new JianChaDianCang(cpDir);
 const jsonl = path.join(cpDir, 'mem.jsonl');
 fs.writeFileSync(jsonl, '{"seq":1}\n');
 const cp = cps.create({ phase: 'round_end', logSeq: 1, jsonlPath: jsonl });

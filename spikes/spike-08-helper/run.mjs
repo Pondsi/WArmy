@@ -555,7 +555,7 @@ log(`结果已写入：${RESULT_PATH}`);
 // 清理临时目录（保留 backups/，那是证据）
 try { fs.rmSync(scratch, { recursive: true, force: true }); } catch { /* noop */ }
 
-console.log(`\n[spike-08] 检查项 ${result.summary.passed}/${result.summary.totalChecks} 通过；非提权套件 ${nsuite.passCount}/${nsuite.items.length}；不挂住套件 ${hang.passCount}/${hang.items.length}`);
+console.log(`\n[spike-08] 检查项 ${result.summary.passed}/${result.summary.totalChecks} 通过；非提权套件 ${nsuite.passCount}/${nsuite.items.length}；不挂住套件 ${row.passCount}/${hang.items.length}`);
 console.log(`[spike-08] hosts 写入：${hostsWrite.observedOutcome ?? 'skipped'}；已还原=${hostsWrite.restoredToOriginal}`);
 console.log(`[spike-08] 判定：${result.summary.status}`);
 process.exit(failCount > 0 ? 1 : hostsWriteOk ? 0 : 3);

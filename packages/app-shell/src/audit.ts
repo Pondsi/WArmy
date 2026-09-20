@@ -4,14 +4,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export interface AuditEntry {
+export interface ShenJiTiaoMu {
   ts: number;
   op: string;
   detail?: unknown;
   user?: string;
 }
 
-export class AuditLogger {
+export class ShenJiRiZhi {
   private file: string;
   private seq = 0;
 
@@ -22,7 +22,7 @@ export class AuditLogger {
   }
 
   log(op: string, detail?: unknown, user?: string): void {
-    const entry: AuditEntry = { ts: Date.now(), op, detail, user };
+    const entry: ShenJiTiaoMu = { ts: Date.now(), op, detail, user };
     try {
       fs.appendFileSync(this.file, JSON.stringify(entry) + '\n', 'utf8');
     } catch {
@@ -30,7 +30,7 @@ export class AuditLogger {
     }
   }
 
-  read(limit = 100): AuditEntry[] {
+  read(limit = 100): ShenJiTiaoMu[] {
     try {
       if (!fs.existsSync(this.file)) return [];
       return fs

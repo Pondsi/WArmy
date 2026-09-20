@@ -73,8 +73,8 @@ const flip = (m) => Object.fromEntries(Object.entries(m || {}).map(([k, v]) => [
 
 /**
  * **绝不能改的名字**：JS/TS 保留字与内建全局。
- * 实测事故：local 表里有 `never`（TypeScript 的类型关键字），被改成 `yongBu` 后
- * 直接报 `TS2749: 'yongBu' refers to a value, but is being used as a type here` ——
+ * 实测事故：local 表里把 TypeScript 的类型关键字 never 也列进了映射，
+ * 改完之后直接报 `TS2749: refers to a value, but is being used as a type here` ——
  * 这类词不是我们的标识符，是语言本身的一部分，任何情况下都不许动。
  */
 const RESERVED = new Set([
@@ -242,7 +242,15 @@ function segment(src, base = 0) {
             }
             k += 1;
           }
-          segs.push({ code: true, text: src.slice(j + 2, k) });
+          /**
+           * 插值内部**递归分段**，而不是整段当代码。
+           *
+           * 为什么：整段当代码时，插值里的**字符串**也会被当标识符改掉 ——
+           * 实测把 `` `${x.toString('hex')}` `` 改成了 `'hex'`，
+           * 直接破坏 Node API 调用（`TS2345: '"hex"' is not assignable to BufferEncoding`）。
+           * 递归一遍即可让插值里的字符串/注释/正则照旧受保护。
+           */
+          for (const inner of segment(src.slice(j + 2, k))) segs.push(inner);
           segs.push({ code: false, text: '}' });
           j = k + 1;
           lit = '';
@@ -363,6 +371,16 @@ const allRepoFiles = () => {
 };
 const targetFiles = () => {
   const out = files.map((f) => path.resolve(ROOT, f));
+  /**
+   * 包内改名的范围 = **只改 `src/`**。
+   *
+   * 曾经把该包自己的 `scripts/`（门禁/工具脚本）也纳进来 —— 那是错的：
+   *  1. 那些脚本的局部变量**不是产品面**，改了没有任何收益；
+   *  2. 它们是**普通 JS**（没有类型检查兜底），一旦改名不一致（声明在解构里、
+   *     用法在别处）就直接 `ReferenceError`（实测把 verify-planB / verify-naming 打挂）；
+   *  3. 断言里写死的 DOM id / CSS 类名也被波及过（那是命名规范明令不许改的东西）。
+   * 结论：工具只改产品源码；门禁脚本要跟着改时，**手工改**（并保留其断言语义）。
+   */
   for (const p of pkgs) out.push(...walk(path.join(ROOT, 'packages', p, 'src')));
   return out;
 };
@@ -407,7 +425,7 @@ function run(label, list, map, opts = {}) {
  * ⚠️ 点号守卫必须按**整包并集**判断，不能只看单个文件：
  * 字段名常常"声明在这个文件、用在那个文件"。只看单文件时，声明处（types.ts）因为
  * 别处有 `.toolCalls` 被跳过，而使用处（base.ts 的对象字面量）却被改掉 ——
- * 实测 `TS2561: 'toolCalls' does not exist in type 'LiaoTianXiaoXi'`。
+ * 实测 `TS2561: 'toolCalls' does not exist in type 'ChatMessage'`。
  * 规则改成：**只要这个名字在本包任何一个文件里以 `.name` 出现过，整包不改它。**
  */
 function runLocal(targets) {

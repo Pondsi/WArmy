@@ -11,7 +11,7 @@ export interface ExecutorTask {
   budgetTokens?: number;
 }
 
-export interface ExecutorResult {
+export interface zhixingqiJieguo {
   taskId: string;
   distilled: string;
   stats: { durationMs: number; promptTokens: number; completionTokens: number };
@@ -32,7 +32,7 @@ export interface ExecutorProviderCfg {
 export async function runShortLivedExecutor(
   task: ExecutorTask,
   cfg: ExecutorProviderCfg
-): Promise<ExecutorResult> {
+): Promise<zhixingqiJieguo> {
   const t0 = Date.now();
   const messages: LiaoTianXiaoXi[] = [
     {
@@ -50,18 +50,18 @@ export async function runShortLivedExecutor(
       apiKey: cfg.apiKey,
       baseURL: cfg.baseURL || undefined,
     });
-    const resp = await provider.chat({
+    const xiangYing = await provider.chat({
       model: cfg.model || 'deepseek-chat',
       messages,
       maxTokens: Math.min(512, task.budgetTokens || 512),
     });
     return {
       taskId: task.taskId,
-      distilled: resp.choices[0]?.message?.content || '',
+      distilled: xiangYing.choices[0]?.message?.content || '',
       stats: {
         durationMs: Date.now() - t0,
-        promptTokens: resp.usage.promptTokens,
-        completionTokens: resp.usage.completionTokens,
+        promptTokens: xiangYing.usage.promptTokens,
+        completionTokens: xiangYing.usage.completionTokens,
       },
     };
   } catch (e) {
@@ -78,6 +78,6 @@ export async function runShortLivedExecutor(
 export async function runExecutors(
   tasks: ExecutorTask[],
   cfg: ExecutorProviderCfg
-): Promise<ExecutorResult[]> {
+): Promise<zhixingqiJieguo[]> {
   return Promise.all(tasks.map((t) => runShortLivedExecutor(t, cfg)));
 }

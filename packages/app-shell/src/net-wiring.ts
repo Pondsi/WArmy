@@ -61,7 +61,7 @@ import {
   createRosterChecker,
   fingerprintDerivationForAppShell,
   requireSignableIdentity,
-  type SignerUnlockState,
+  type QianMingZheJieSuoTai,
 } from './identity-provider.js';
 import type { IdentityStore } from './identity-store.js';
 import { WARMY_SUGGESTED_NET_PORTS } from './settings-store.js';
@@ -550,8 +550,8 @@ export function pickLocalAddress(all: string[]): string {
     if (guiLeiDiZhi(a) === 'public') return 4;
     return 5;
   };
-  const sorted = [...all].sort((a, b) => rank(a) - rank(b));
-  if (sorted.length > 0) return sorted[0] as string;
+  const yiPaiXu = [...all].sort((a, b) => rank(a) - rank(b));
+  if (yiPaiXu.length > 0) return yiPaiXu[0] as string;
   return '127.0.0.1';
 }
 
@@ -758,7 +758,7 @@ export interface ProbeNetResult {
   };
 }
 
-function isValidHost(v: string): boolean {
+function shiFouHeFaZhuJi(v: string): boolean {
   if (isIpv4(v)) return true;
   if (/^[0-9a-f:]+$/i.test(v) && v.includes(':')) return true; // IPv6
   // 域名或单标签主机名（localhost / 内网 NetBIOS 名都合法）
@@ -779,7 +779,7 @@ function isValidHost(v: string): boolean {
 export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<ProbeNetResult> {
   const ip = String(input?.ip ?? '').trim();
   const port = Number(input?.port);
-  if (!ip || !isValidHost(ip)) {
+  if (!ip || !shiFouHeFaZhuJi(ip)) {
     return { ok: false, isPublic: false, outboundOk: false, errorCode: 'invalid-ip', inboundVerified: false };
   }
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
@@ -789,8 +789,8 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
   const { all, publicOnes } = listLocalAddresses();
   const scope = guiLeiDiZhi(ip);
   const ipv6 = inspectLocalIpv6();
-  const targetHost = normalizeHostLiteral(ip);
-  const isIPv6Target = targetHost.includes(':') && ipv6ScopeOrNull(targetHost) !== null;
+  const mubiaoZhuji = normalizeHostLiteral(ip);
+  const isIPv6Target = mubiaoZhuji.includes(':') && ipv6ScopeOrNull(mubiaoZhuji) !== null;
   const resolvedIpv4: string[] = [];
   const dnsErrors: string[] = [];
   const hosts = [ip, ...(Array.isArray(input.domains) ? input.domains : []).map((d) => String(d ?? '').trim()).filter(Boolean)];
@@ -877,7 +877,7 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
     ...(errorCode ? { errorCode } : {}),
     inboundVerified: false,
     naturallyDialable: ipv6.hasGlobalUnicast,
-    ...(isIPv6Target ? { targetIpv6Scope: guiLeiIpv6ZuoYongYu(targetHost) } : {}),
+    ...(isIPv6Target ? { targetIpv6Scope: guiLeiIpv6ZuoYongYu(mubiaoZhuji) } : {}),
     details,
   };
 }
@@ -940,7 +940,7 @@ export interface MeshEnableResult {
    * · `identity-locked` / `identity-missing` —— 身份门控没过
    */
   errorCode?: string;
-  unlock?: SignerUnlockState | null;
+  unlock?: QianMingZheJieSuoTai | null;
   error?: string;
   notes?: typeof NET_NOTES;
   /** 便捷字段：= bind.requestedPort */
@@ -970,7 +970,7 @@ export interface MeshStatusResult {
   nodeId?: string;
   sessions?: number;
   handshakeRejections?: Record<string, number>;
-  unlock?: SignerUnlockState | null;
+  unlock?: QianMingZheJieSuoTai | null;
   /** 附八.9：本机 IPv6 事实（有全局单播 = 天然可拨入候选，阶梯第一档就是 IPv6 直连） */
   ipv6?: { hasGlobalUnicast: boolean; publicCandidate: string | null; ula: string[]; linkLocal: string[]; reason: string };
   /** 附八.9/附八.3：可达性提示（结构化，含"需中继"状态与 i18n key） */
@@ -1017,7 +1017,7 @@ export class SecureMesh {
   private lastStatusAt = 0;
   private lastStatusValue: MeshStatusResult | null = null;
   private lastPeerProbes: { at: number; peers: NonNullable<MeshStatusResult['link']['peers']> } | null = null;
-  private unlockSnapshot: SignerUnlockState | null = null;
+  private unlockSnapshot: QianMingZheJieSuoTai | null = null;
   readonly handshakeFailures: HandshakeFailureRecord[] = [];
   private announceCount = 0;
 

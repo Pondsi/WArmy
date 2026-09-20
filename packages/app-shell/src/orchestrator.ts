@@ -13,7 +13,7 @@ import {
   DEFAULT_KEEP_TAIL,
   type LogEntry,
 } from './context-renderer.js';
-import { retrieveAssetsForChat, registerChatAsset } from './asset-wire.js';
+import { retrieveAssetsForChat, zhuCeLiaoTianZiChan } from './asset-wire.js';
 import { liaoTianDaiGongJu, type LiaoTianXiaoXi, type GongJuDiaoYong, type GongJuGuiGe } from '@warmy/providers';
 
 export interface DutyProviderCfg {
@@ -121,7 +121,7 @@ export async function orchestrateGroupMessage(
   }
 
   const duty = route.duty;
-  const executors = (route.decision?.executorIds || []).filter((id) => id !== duty.id);
+  const zhiXingQiJi = (route.decision?.executorIds || []).filter((id) => id !== duty.id);
   const queueLen = deps.router.listQueue(msg.groupId).length;
 
   // 状态卡片：有日志时以日志为准（不变量 #5：日志是唯一事实来源），否则退回历史镜像
@@ -130,7 +130,7 @@ export async function orchestrateGroupMessage(
     groupId: msg.groupId,
     dutyId: duty.id,
     queueLength: queueLen,
-    runningTasks: executors.map((id) => deps.listInstances().find((x) => x.id === id)?.name || id),
+    runningTasks: zhiXingQiJi.map((id) => deps.listInstances().find((x) => x.id === id)?.name || id),
     recent: (logEntries ?? (deps.history.get(msg.groupId) || []))
       .slice(-6)
       .map((m) => String(m.content ?? '').slice(0, 40)),
@@ -138,14 +138,14 @@ export async function orchestrateGroupMessage(
   });
 
   // CCR 压缩用户输入
-  const compressed = deps.ccr.beforeLog({ kind: 'message', content: msg.content });
+  const yiYaSuo = deps.ccr.beforeLog({ kind: 'message', content: msg.content });
 
   // 值班者历史：有 logOf 时**不写** history —— 那份日志由主进程 appendChatLog 统一维护，
   // 这里再 push 一份就是第二份真相（重启后与 JSONL 脱节）。
-  const hist = deps.history.get(msg.groupId) || [];
+  const liShi = deps.history.get(msg.groupId) || [];
   if (!deps.logOf) {
-    hist.push({ role: 'user', content: compressed.content });
-    deps.history.set(msg.groupId, hist);
+    liShi.push({ role: 'user', content: yiYaSuo.content });
+    deps.history.set(msg.groupId, liShi);
   }
 
   // 看板解析（仅 duty）
@@ -182,7 +182,7 @@ export async function orchestrateGroupMessage(
 
   if (cfg.apiKey || cfg.presetId === 'ollama') {
     // 执行者（短命）
-    if (executors.length) {
+    if (zhiXingQiJi.length) {
       const r = await runShortLivedExecutor(
         { taskId: 't-' + Date.now(), brief, contextItems },
         cfg
@@ -208,7 +208,7 @@ export async function orchestrateGroupMessage(
       // 值班系统提示里已含状态卡片，保持冻结头；会话部分恒 ≤ 预算且与日志总长解耦。
       const entries: LogEntry[] = deps.logOf
         ? deps.logOf(msg.groupId)
-        : hist.map((m, i) => ({
+        : liShi.map((m, i) => ({
             seq: i + 1,
             role: (m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user') as LogEntry['role'],
             content: typeof m.content === 'string' ? m.content : '',
@@ -235,12 +235,12 @@ export async function orchestrateGroupMessage(
             maxToolResultChars: limits.totalChars,
           })
         : null;
-      const resp = loop ? loop.response : await provider.chat(req);
-      distilled = resp.choices[0]?.message?.content || '';
+      const xiangYing = loop ? loop.response : await provider.chat(req);
+      distilled = xiangYing.choices[0]?.message?.content || '';
       usage = {
-        promptTokens: resp.usage.promptTokens,
-        completionTokens: resp.usage.completionTokens,
-        cacheHitTokens: resp.usage.cacheHitTokens,
+        promptTokens: xiangYing.usage.promptTokens,
+        completionTokens: xiangYing.usage.completionTokens,
+        cacheHitTokens: xiangYing.usage.cacheHitTokens,
       };
     }
   } else {
@@ -248,8 +248,8 @@ export async function orchestrateGroupMessage(
   }
 
   if (!deps.logOf) {
-    hist.push({ role: 'assistant', content: distilled });
-    deps.history.set(msg.groupId, hist);
+    liShi.push({ role: 'assistant', content: distilled });
+    deps.history.set(msg.groupId, liShi);
   }
 
   /**
@@ -310,7 +310,7 @@ export async function orchestrateGroupMessage(
     action: 'dispatch',
     reply: (extraReplies.length ? `distilled\n\n[队列冲刷]\nextraReplies.join('\n---\n')` : distilled) + gateLine,
     dutyId: duty.id,
-    executorIds: executors,
+    executorIds: zhiXingQiJi,
     boardEvent,
     queueLength: deps.router.listQueue(msg.groupId).length,
     usage,
@@ -342,13 +342,13 @@ async function runOneDutyRound(
     return { action: 'silent', reply: '', queueLength: deps.router.listQueue(msg.groupId).length };
   }
   const duty = route.duty;
-  const executors = (route.decision?.executorIds || []).filter((id) => id !== duty.id);
+  const zhiXingQiJi = (route.decision?.executorIds || []).filter((id) => id !== duty.id);
   const logEntries: LogEntry[] | null = deps.logOf ? deps.logOf(msg.groupId) : null;
   const card = buildStatusCard({
     groupId: msg.groupId,
     dutyId: duty.id,
     queueLength: deps.router.listQueue(msg.groupId).length,
-    runningTasks: executors.map((id) => deps.listInstances().find((x) => x.id === id)?.name || id),
+    runningTasks: zhiXingQiJi.map((id) => deps.listInstances().find((x) => x.id === id)?.name || id),
     recent: (logEntries ?? (deps.history.get(msg.groupId) || []))
       .slice(-6)
       .map((m) => String(m.content ?? '').slice(0, 40)),
@@ -358,7 +358,7 @@ async function runOneDutyRound(
   let usage: OrchestrateResult['usage'];
   const brief = route.decision?.taskBrief || msg.content;
   if (cfg.apiKey || cfg.presetId === 'ollama') {
-    if (executors.length) {
+    if (zhiXingQiJi.length) {
       const r = await runShortLivedExecutor({ taskId: 't-' + Date.now(), brief, contextItems: [card, `用户消息: msg.content`] }, cfg);
       distilled = r.distilled;
     } else {
@@ -396,12 +396,12 @@ async function runOneDutyRound(
             maxToolResultChars: limits.totalChars,
           })
         : null;
-      const resp = loop ? loop.response : await provider.chat(req);
-      distilled = resp.choices[0]?.message?.content || '';
+      const xiangYing = loop ? loop.response : await provider.chat(req);
+      distilled = xiangYing.choices[0]?.message?.content || '';
       usage = {
-        promptTokens: resp.usage.promptTokens,
-        completionTokens: resp.usage.completionTokens,
-        cacheHitTokens: resp.usage.cacheHitTokens,
+        promptTokens: xiangYing.usage.promptTokens,
+        completionTokens: xiangYing.usage.completionTokens,
+        cacheHitTokens: xiangYing.usage.cacheHitTokens,
       };
     }
   } else {
@@ -411,7 +411,7 @@ async function runOneDutyRound(
     action: 'dispatch',
     reply: distilled,
     dutyId: duty.id,
-    executorIds: executors,
+    executorIds: zhiXingQiJi,
     queueLength: deps.router.listQueue(msg.groupId).length,
     usage,
   };

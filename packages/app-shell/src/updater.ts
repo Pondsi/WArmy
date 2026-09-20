@@ -26,7 +26,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { readJsonFileQuarantine, writeJsonAtomicSafe } from './atomic-json.js';
+import { duJsonWenJianGeLi, anQuanYuanZiXieJson } from './atomic-json.js';
 
 export type UpdateStatus =
   | 'not-configured'
@@ -283,7 +283,7 @@ function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
-function num(v: unknown): number | undefined {
+function shuZhi(v: unknown): number | undefined {
   if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
   if (typeof v === 'string' && /^\d+$/.test(v.trim())) return Number(v.trim());
   return undefined;
@@ -347,7 +347,7 @@ export function normalizeManifest(
     const u = str(rec['browser_download_url']) || str(rec['url']);
     if (u) {
       assetUrl = u;
-      assetSize = num(rec['size']);
+      assetSize = shuZhi(rec['size']);
       break;
     }
   }
@@ -365,11 +365,11 @@ export function normalizeManifest(
   const rawHash = str(obj['sha256']) || str(obj['checksum']) || str(obj['hash']) || str(obj['shasum']);
   let sha256: string | undefined;
   if (rawHash) {
-    const cleaned = rawHash.replace(/^sha256[-:]/i, '').trim().toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(cleaned)) return { ok: false, reason: 'bad-checksum' };
-    sha256 = cleaned;
+    const yiQingLi = rawHash.replace(/^sha256[-:]/i, '').trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(yiQingLi)) return { ok: false, reason: 'bad-checksum' };
+    sha256 = yiQingLi;
   }
-  const size = num(obj['size']) ?? num(obj['sizeBytes']) ?? num(obj['bytes']) ?? assetSize;
+  const size = shuZhi(obj['size']) ?? shuZhi(obj['sizeBytes']) ?? shuZhi(obj['bytes']) ?? assetSize;
   if (size !== undefined && size <= 0) return { ok: false, reason: 'bad-size' };
 
   const manifest: UpdateManifest = { version };
@@ -416,8 +416,8 @@ export function classifyFetchError(e: unknown): { reason: string; message: strin
 }
 
 function sanitizeSegment(s: string): string {
-  const cleaned = String(s || '').replace(/[\\/:*?"<>|\s]/g, '_').replace(/\.+$/, '');
-  return cleaned.slice(0, 64) || 'latest';
+  const yiQingLi = String(s || '').replace(/[\\/:*?"<>|\s]/g, '_').replace(/\.+$/, '');
+  return yiQingLi.slice(0, 64) || 'latest';
 }
 
 /**
@@ -569,13 +569,13 @@ export class Updater {
     extra: Partial<UpdateDownloadResult> & { durationMs: number }
   ): UpdateDownloadResult {
     const base = status in I18N_KEY ? I18N_KEY[status as UpdateStatus] : 'update.download.failed';
-    const fallbackMsg = status in DEFAULT_MESSAGE ? DEFAULT_MESSAGE[status as UpdateStatus] : 'update download failed';
+    const huituiXiaoxi = status in DEFAULT_MESSAGE ? DEFAULT_MESSAGE[status as UpdateStatus] : 'update download failed';
     const installNotes =
       'automatic installation is not implemented: the verified artifact is kept on disk for a manual install';
     return {
       ok: status === 'downloaded',
       status,
-      message: fallbackMsg,
+      message: huituiXiaoxi,
       i18nKey: base,
       verification: 'none',
       verified: false,
@@ -676,18 +676,18 @@ export class Updater {
       return r;
     }
 
-    const norm = normalizeManifest(parsed);
-    if (!norm.ok) {
+    const guiFanHua = normalizeManifest(parsed);
+    if (!guiFanHua.ok) {
       const r = this.result('invalid-response', {
         durationMs: Date.now() - started,
-        reason: norm.reason,
-        message: `update check failed: feed manifest is not usable (${norm.reason})`,
+        reason: guiFanHua.reason,
+        message: `update check failed: feed manifest is not usable (${guiFanHua.reason})`,
       });
       this.persistCheck(r);
       return r;
     }
 
-    const { manifest } = norm;
+    const { manifest } = guiFanHua;
     const cmp = compareVersions(manifest.version, this.currentVersion);
     if (cmp === null) {
       const r = this.result('invalid-response', {
@@ -768,8 +768,8 @@ export class Updater {
       });
     }
 
-    const targetDir = path.join(this.downloadDir, sanitizeSegment(version));
-    const finalPath = path.join(targetDir, fileNameFromUrl(v.url, version));
+    const mubiaoMulu = path.join(this.downloadDir, sanitizeSegment(version));
+    const finalPath = path.join(mubiaoMulu, fileNameFromUrl(v.url, version));
     const root = path.resolve(this.downloadDir) + path.sep;
     if (!path.resolve(finalPath).startsWith(root)) {
       return this.dlResult('io-error', {
@@ -781,7 +781,7 @@ export class Updater {
     }
     const partPath = `${finalPath}.part`;
     try {
-      fs.mkdirSync(targetDir, { recursive: true });
+      fs.mkdirSync(mubiaoMulu, { recursive: true });
     } catch {
       return this.dlResult('io-error', {
         durationMs: Date.now() - started,
@@ -974,18 +974,18 @@ export class Updater {
   // ── 状态文件（诊断用，落盘失败不影响主流程） ──
 
   readState(): PersistedState {
-    const st = readJsonFileQuarantine<PersistedState>(this.stateFile, { version: 1 });
+    const st = duJsonWenJianGeLi<PersistedState>(this.stateFile, { version: 1 });
     return st && typeof st === 'object' ? st : { version: 1 };
   }
 
   private persistCheck(r: UpdateCheckResult): void {
     const prev = this.readState();
-    writeJsonAtomicSafe(this.stateFile, { version: 1, lastCheck: r, ...(prev.lastDownload ? { lastDownload: prev.lastDownload } : {}) });
+    anQuanYuanZiXieJson(this.stateFile, { version: 1, lastCheck: r, ...(prev.lastDownload ? { lastDownload: prev.lastDownload } : {}) });
   }
 
   private persistDownload(r: UpdateDownloadResult): void {
     const prev = this.readState();
-    writeJsonAtomicSafe(this.stateFile, { version: 1, ...(prev.lastCheck ? { lastCheck: prev.lastCheck } : {}), lastDownload: r });
+    anQuanYuanZiXieJson(this.stateFile, { version: 1, ...(prev.lastCheck ? { lastCheck: prev.lastCheck } : {}), lastDownload: r });
   }
 }
 
