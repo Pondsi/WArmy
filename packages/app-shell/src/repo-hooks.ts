@@ -24,7 +24,7 @@ import {
   type TuiSongLuJingTiaoMu,
   type TuiSongLuJingJuJue,
   type YinYongDongZuo,
-  type RefRejection,
+  type YinyongJujue,
   type YinYongGengXinXuanXiang,
 } from './repo-guard.js';
 
@@ -93,7 +93,7 @@ export function parsePreReceiveStdin(text: string): { refs: PreReceiveRef[]; mal
 }
 
 /** 变更类型 → 只关心"新增/修改"（删除的路径不需要做危险路径校验） */
-function includeStatus(status: string): boolean {
+function baohanZhuangtai(status: string): boolean {
   return /^[AMCT]$/.test(status[0] ?? '');
 }
 
@@ -106,7 +106,7 @@ function includeStatus(status: string): boolean {
  *   · 取 mode：`git ls-tree -z <new> -- ":(literal)<path>"`
  *   · 取内容（符号链接目标 / .gitattributes 文本）：`git cat-file -p <new>:<path>`
  */
-export function collectPushEntries(
+export function shoujiTuisongTiaomu(
   git: GitRunner,
   ref: PreReceiveRef
 ): { entries: TuiSongLuJingTiaoMu[]; errors: string[]; deleted: boolean } {
@@ -143,7 +143,7 @@ export function collectPushEntries(
 
   const entries: TuiSongLuJingTiaoMu[] = [];
   for (const c of changes) {
-    if (!includeStatus(c.status)) continue;
+    if (!baohanZhuangtai(c.status)) continue;
     const entry: TuiSongLuJingTiaoMu = { path: c.path };
     const ls = git(['ls-tree', '-z', ref.newSha, '--', `:(literal)${c.path}`]);
     if (ls.code === 0 && ls.stdout.trim()) {
@@ -154,8 +154,8 @@ export function collectPushEntries(
       errors.push(`ls-tree 取不到 mode：${c.path}`);
     }
     const basename = c.path.split('/').pop() ?? '';
-    const needsContent = entry.mode === '120000' || basename === '.gitattributes';
-    if (needsContent) {
+    const xuyaoNeirong = entry.mode === '120000' || basename === '.gitattributes';
+    if (xuyaoNeirong) {
       const cat = git(['cat-file', '-p', `${ref.newSha}:${c.path}`]);
       if (cat.code === 0) {
         if (entry.mode === '120000') entry.symlinkTarget = cat.stdout;
@@ -173,7 +173,7 @@ export interface PreReceiveRefResult {
   ref: string;
   action: YinYongDongZuo;
   allowed: boolean;
-  rejections: RefRejection[];
+  rejections: YinyongJujue[];
   warnings: string[];
   pathRejected: TuiSongLuJingJuJue[];
   pathWarnings: string[];
@@ -236,7 +236,7 @@ export function runPreReceive(opts: RunPreReceiveOptions): PreReceiveResult {
       ...(opts.allowForceByCreator === true ? { allowForceByCreator: true } : {}),
     });
 
-    const collected = collectPushEntries(opts.git, ref);
+    const collected = shoujiTuisongTiaomu(opts.git, ref);
     const pathCheck = validatePushPaths(collected.entries, { base: 'worktree' });
     if (!collected.deleted) unionEntries.push(...collected.entries);
 
@@ -292,7 +292,7 @@ export function formatPreReceiveOutput(r: PreReceiveResult): string[] {
 
 /* ────────────────────────────── 钩子安装 ────────────────────────────── */
 
-export interface InstallHookResult {
+export interface AnzhuangGouziJieguo {
   ok: boolean;
   hookPath?: string;
   gitDir?: string;
@@ -300,13 +300,13 @@ export interface InstallHookResult {
   error?: string;
 }
 
-export const HOOK_MARKER = '# WARMY-REPO-GUARD-HOOK v1';
+export const GOUZI_BIAOZHI = '# WARMY-REPO-GUARD-HOOK v1';
 
 /** 生成 `hooks/pre-receive` 的包装脚本（POSIX sh；Git for Windows 也用 sh 执行钩子） */
-export function hookWrapperScript(nodeBin: string, hookScript: string): string {
+export function gouziBaozhuangJiaoben(nodeBin: string, hookScript: string): string {
   const n = nodeBin.replace(/\\/g, '/');
   const h = hookScript.replace(/\\/g, '/');
-  return `#!/bin/sh\n${HOOK_MARKER}\n# 由 WArmy 生成（幂等；不要手改）。校验逻辑见 packages/app-shell/src/repo-hooks.ts\nexec "${n}" "${h}"\n`;
+  return `#!/bin/sh\n${GOUZI_BIAOZHI}\n# 由 WArmy 生成（幂等；不要手改）。校验逻辑见 packages/app-shell/src/repo-hooks.ts\nexec "${n}" "${h}"\n`;
 }
 
 /**
@@ -320,7 +320,7 @@ export function installPreReceiveHook(opts: {
   nodeBin?: string;
   force?: boolean;
   git?: GitRunner;
-}): InstallHookResult {
+}): AnzhuangGouziJieguo {
   const git = opts.git ?? createGitRunner(opts.repoDir);
   const gitDirRes = git(['rev-parse', '--absolute-git-dir']);
   if (gitDirRes.code !== 0) {
@@ -341,13 +341,13 @@ export function installPreReceiveHook(opts: {
     } catch {
       current = '';
     }
-    if (current.includes(HOOK_MARKER)) {
+    if (current.includes(GOUZI_BIAOZHI)) {
       return { ok: true, hookPath, gitDir, alreadyInstalled: true };
     }
     if (opts.force !== true) return { ok: false, hookPath, gitDir, error: 'hook-exists' };
   }
   try {
-    fs.writeFileSync(hookPath, hookWrapperScript(opts.nodeBin ?? process.execPath, opts.hookScript), 'utf8');
+    fs.writeFileSync(hookPath, gouziBaozhuangJiaoben(opts.nodeBin ?? process.execPath, opts.hookScript), 'utf8');
     fs.chmodSync(hookPath, 0o755);
     return { ok: true, hookPath, gitDir, alreadyInstalled: false };
   } catch (e) {
@@ -356,7 +356,7 @@ export function installPreReceiveHook(opts: {
 }
 
 /** 钩子脚本的候选路径（开发态 scripts/git-hooks、打包态 dist/git-hooks） */
-export function hookScriptCandidates(appRoot: string): string[] {
+export function gouziJiaobenHouxuan(appRoot: string): string[] {
   return [
     path.join(appRoot, 'scripts', 'git-hooks', 'pre-receive.mjs'),
     path.join(appRoot, 'git-hooks', 'pre-receive.mjs'),
@@ -366,7 +366,7 @@ export function hookScriptCandidates(appRoot: string): string[] {
 
 /** 找到第一个存在的钩子脚本；都没有则返回 null（**不要**假装装好了） */
 export function findHookScript(appRoot: string): string | null {
-  for (const p of hookScriptCandidates(appRoot)) {
+  for (const p of gouziJiaobenHouxuan(appRoot)) {
     try {
       if (fs.existsSync(p)) return p;
     } catch {

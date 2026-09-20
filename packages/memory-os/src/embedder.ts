@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { BertWordPieceFenCiQi, type TokenizerConfigEcho } from './tokenizer.js';
+import { BertWordPieceFenCiQi, type FenciqiPeizhiHuixian } from './tokenizer.js';
 
 const require = createRequire(import.meta.url);
 
@@ -38,7 +38,7 @@ export function tanCeWasmSimd(): boolean {
   }
 }
 
-export interface EmbedderOptions {
+export interface QianruqiXuanxiang {
   /** model_quantized.onnx 路径 */
   modelPath: string;
   /** tokenizer.json 路径；默认与 modelPath 同目录下的 tokenizer.json */
@@ -53,7 +53,7 @@ export interface EmbedderOptions {
   queryPrefix?: string;
 }
 
-export interface VectorStatus {
+export interface XiangliangZhuangtai {
   ready: boolean;
   reason: string;
   backend: 'wasm-simd' | 'wasm-basic' | 'none';
@@ -71,17 +71,17 @@ export interface VectorStatus {
   lastEmbedMs: number;
   maxLength: number;
   queryPrefix: string;
-  tokenizer: TokenizerConfigEcho | null;
+  tokenizer: FenciqiPeizhiHuixian | null;
 }
 
-export interface OrtHandle {
+export interface OrtChuli {
   ort: any;
   main: string;
   tried: string[];
 }
 
 /** 逐级解析 onnxruntime-web：先常规 require，再按显式搜索目录 require */
-export function loadOnnxRuntime(searchPaths: string[] = []): OrtHandle {
+export function loadOnnxRuntime(searchPaths: string[] = []): OrtChuli {
   const tried: string[] = [];
   try {
     const main = require.resolve('onnxruntime-web');
@@ -103,15 +103,15 @@ export function loadOnnxRuntime(searchPaths: string[] = []): OrtHandle {
   throw Object.assign(new Error(`onnxruntime-web 不可用（尝试：${tried.join(' | ')}）`), { code: 'ORT_MISSING' });
 }
 
-export class OnnxEmbedder {
-  readonly status: VectorStatus;
+export class OnnxQianruqi {
+  readonly status: XiangliangZhuangtai;
   private ort: any;
   private session: any;
   private tokenizer: BertWordPieceFenCiQi;
   private maxLength: number;
   private queryPrefix: string;
 
-  private constructor(ort: any, session: any, tokenizer: BertWordPieceFenCiQi, status: VectorStatus, opts: EmbedderOptions) {
+  private constructor(ort: any, session: any, tokenizer: BertWordPieceFenCiQi, status: XiangliangZhuangtai, opts: QianruqiXuanxiang) {
     this.ort = ort;
     this.session = session;
     this.tokenizer = tokenizer;
@@ -120,10 +120,10 @@ export class OnnxEmbedder {
     this.queryPrefix = opts.queryPrefix ?? '';
   }
 
-  static async create(opts: EmbedderOptions): Promise<OnnxEmbedder> {
+  static async create(opts: QianruqiXuanxiang): Promise<OnnxQianruqi> {
     const tokenizerPath = opts.tokenizerPath ?? path.join(path.dirname(opts.modelPath), 'tokenizer.json');
     const t0 = Date.now();
-    const status: VectorStatus = {
+    const status: XiangliangZhuangtai = {
       ready: false,
       reason: '',
       backend: 'none',
@@ -157,7 +157,7 @@ export class OnnxEmbedder {
     const tokenizer = BertWordPieceFenCiQi.fromFile(tokenizerPath);
     status.tokenizer = tokenizer.config;
 
-    let handle: OrtHandle;
+    let handle: OrtChuli;
     try {
       handle = loadOnnxRuntime(opts.ortSearchPaths ?? []);
     } catch (e: any) {
@@ -171,7 +171,7 @@ export class OnnxEmbedder {
 
     // wasmPaths 必须是 file:// URL（onnxruntime-web 内部走 ESM 动态 import，
     // Windows 盘符路径会被 ESM loader 拒绝：ERR_UNSUPPORTED_ESM_URL_SCHEME）
-    const wasmDir = path.dirname(handle.main) + path.sep;
+    const wasmMulu = path.dirname(handle.main) + path.sep;
     const attempts: Array<{ name: 'wasm-simd' | 'wasm-basic'; simd: boolean; setPaths: boolean }> = [
       { name: 'wasm-simd', simd: true, setPaths: true },
       { name: 'wasm-simd', simd: true, setPaths: false },
@@ -183,7 +183,7 @@ export class OnnxEmbedder {
     for (const at of attempts) {
       if (at.simd && !status.simdSupported) continue;
       try {
-        if (at.setPaths) ort.env.wasm.wasmPaths = pathToFileURL(wasmDir).href;
+        if (at.setPaths) ort.env.wasm.wasmPaths = pathToFileURL(wasmMulu).href;
         else delete (ort.env.wasm as any).wasmPaths;
         ort.env.wasm.simd = at.simd;
         ort.env.wasm.numThreads = status.threads;
@@ -200,7 +200,7 @@ export class OnnxEmbedder {
         status.reason = `ok(wasmPaths=${at.setPaths ? 'file-url' : 'default'})`;
         status.loadMs = Date.now() - t0;
         const outputs = session.outputNames;
-        const emb = new OnnxEmbedder(ort, session, tokenizer, status, opts);
+        const emb = new OnnxQianruqi(ort, session, tokenizer, status, opts);
         const probe = await emb.embed('维度探测', { raw: true });
         status.dim = probe.length;
         status.embeds = 0;
@@ -222,7 +222,7 @@ export class OnnxEmbedder {
     return this.status.dim;
   }
 
-  get tokenizerConfig(): TokenizerConfigEcho {
+  get tokenizerConfig(): FenciqiPeizhiHuixian {
     return this.tokenizer.config;
   }
 
@@ -232,12 +232,12 @@ export class OnnxEmbedder {
     const enc = this.tokenizer.encode(input, { maxLength: this.maxLength });
     const ids = BigInt64Array.from(enc.ids.map((v) => BigInt(v)));
     const mask = BigInt64Array.from(enc.attentionMask.map((v) => BigInt(v)));
-    const types = BigInt64Array.from(enc.tokenTypeIds.map((v) => BigInt(v)));
+    const leixing = BigInt64Array.from(enc.tokenTypeIds.map((v) => BigInt(v)));
     const n = enc.ids.length;
     const feeds: Record<string, any> = {
       input_ids: new this.ort.Tensor('int64', ids, [1, n]),
       attention_mask: new this.ort.Tensor('int64', mask, [1, n]),
-      token_type_ids: new this.ort.Tensor('int64', types, [1, n]),
+      token_type_ids: new this.ort.Tensor('int64', leixing, [1, n]),
     };
     const t0 = Date.now();
     const out = await this.session.run(feeds);
@@ -246,15 +246,15 @@ export class OnnxEmbedder {
     const dim = lhs.dims[2] as number;
     const data = lhs.data as Float32Array;
     const vec = new Float32Array(dim);
-    let norm = 0;
+    let guiFanHua = 0;
     for (let i = 0; i < dim; i++) {
       const v = data[i] ?? 0; // CLS = 第 0 个 token
       vec[i] = v;
-      norm += v * v;
+      guiFanHua += v * v;
     }
-    norm = Math.sqrt(norm);
-    if (norm > 0) {
-      for (let i = 0; i < dim; i++) vec[i] = (vec[i] as number) / norm;
+    guiFanHua = Math.sqrt(guiFanHua);
+    if (guiFanHua > 0) {
+      for (let i = 0; i < dim; i++) vec[i] = (vec[i] as number) / guiFanHua;
     }
     const dt = Date.now() - t0;
     this.status.embeds += 1;
@@ -269,7 +269,7 @@ export class OnnxEmbedder {
 }
 
 /** 默认模型搜索路径：显式配置 → 环境变量 → 本仓库 spike 资产 → dataDir/models */
-export function defaultModelCandidates(dataDir?: string, env = process.env): Array<{ modelPath: string; tokenizerPath: string; from: string }> {
+export function morenMoxingHouxuan(dataDir?: string, env = process.env): Array<{ modelPath: string; tokenizerPath: string; from: string }> {
   const out: Array<{ modelPath: string; tokenizerPath: string; from: string }> = [];
   if (env.CCA_ONNX_MODEL) {
     out.push({

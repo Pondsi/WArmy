@@ -2,12 +2,12 @@
  * Spike 10: 跨设备同步 — 本机双节点
  * DoD：消息互通；远程 incognito 零痕迹；值班权仅创建者节点
  */
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { once } from 'node:events';
+import {once} from 'node:events';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(os.tmpdir(), `warmy-spike10-${Date.now()}`);

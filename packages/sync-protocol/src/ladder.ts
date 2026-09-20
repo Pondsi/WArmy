@@ -33,7 +33,7 @@ import { type ZhongJiHouXuanYinYong, type ZhongJiJueDing, type ZhongJiJueDingMa,
 export const LAN_PROBE_MAGIC = 'WARMY-LAN/1';
 export const DEFAULT_DISCOVERY_PORT = 7799;
 
-export interface LanPeer {
+export interface NeiwangDuiduan {
   nodeId: string;
   fingerprint: string;
   host: string;
@@ -49,15 +49,15 @@ export interface LanProbeOptions {
   /** 探测端口；默认 7799（与 LanDiscovery 一致，便于多机同网广播） */
   discoveryPort?: number;
   listenHost?: string;
-  onPeer?: (p: LanPeer) => void;
+  onPeer?: (p: NeiwangDuiduan) => void;
 }
 
 export class LanProbe {
   private sock: dgram.Socket | null = null;
   private boundPort = 0;
-  private peers = new Map<string, LanPeer>();
+  private peers = new Map<string, NeiwangDuiduan>();
   private pending = new Map<string, () => void>();
-  private responses = new Map<string, LanPeer[]>();
+  private responses = new Map<string, NeiwangDuiduan[]>();
   private readonly discoveryPort: number;
 
   constructor(private readonly opts: LanProbeOptions) {
@@ -85,7 +85,7 @@ export class LanProbe {
   get port(): number {
     return this.boundPort;
   }
-  get knownPeers(): LanPeer[] {
+  get knownPeers(): NeiwangDuiduan[] {
     return [...this.peers.values()];
   }
 
@@ -99,7 +99,7 @@ export class LanProbe {
   }
 
   /** 主动探测：单播给 targets +（可选）广播到指定端口列表 */
-  query(opts: { targets?: { host: string; port: number }[]; broadcastPorts?: number[]; timeoutMs?: number } = {}): Promise<LanPeer[]> {
+  query(opts: { targets?: { host: string; port: number }[]; broadcastPorts?: number[]; timeoutMs?: number } = {}): Promise<NeiwangDuiduan[]> {
     const timeoutMs = opts.timeoutMs ?? 600;
     const req = `${Math.random().toString(36).slice(2, 10)}`;
     const payload = Buffer.from(
@@ -112,9 +112,9 @@ export class LanProbe {
       }),
       'utf8'
     );
-    const wire = Buffer.concat([Buffer.from(`${LAN_PROBE_MAGIC} `, 'utf8'), payload]);
-    const collected = new Map<string, LanPeer>();
-    return new Promise<LanPeer[]>((resolve) => {
+    const xianshang = Buffer.concat([Buffer.from(`${LAN_PROBE_MAGIC} `, 'utf8'), payload]);
+    const collected = new Map<string, NeiwangDuiduan>();
+    return new Promise<NeiwangDuiduan[]>((resolve) => {
       this.pending.set(req, () => {
         for (const p of this.responses.get(req) ?? []) collected.set(`${p.fingerprint}@${p.host}:${p.port}`, p);
         this.responses.delete(req);
@@ -123,7 +123,7 @@ export class LanProbe {
       this.responses.set(req, []);
       for (const t of opts.targets ?? []) {
         try {
-          this.sock?.send(wire, t.port, t.host);
+          this.sock?.send(xianshang, t.port, t.host);
         } catch {
           /* ignore */
         }
@@ -131,7 +131,7 @@ export class LanProbe {
       for (const port of opts.broadcastPorts ?? []) {
         for (const addr of ['255.255.255.255', '127.255.255.255']) {
           try {
-            this.sock?.send(wire, port, addr);
+            this.sock?.send(xianshang, port, addr);
           } catch {
             /* ignore */
           }
@@ -153,10 +153,10 @@ export class LanProbe {
       JSON.stringify({ v: 1, req: 'bcast', nodeId: this.opts.nodeId, fingerprint: this.opts.fingerprint, tcpPort: this.opts.tcpPort }),
       'utf8'
     );
-    const wire = Buffer.concat([Buffer.from(`${LAN_PROBE_MAGIC} `, 'utf8'), payload]);
+    const xianshang = Buffer.concat([Buffer.from(`${LAN_PROBE_MAGIC} `, 'utf8'), payload]);
     for (const addr of ['255.255.255.255', '127.255.255.255']) {
       try {
-        this.sock?.send(wire, port, addr);
+        this.sock?.send(xianshang, port, addr);
       } catch {
         /* ignore */
       }
@@ -175,7 +175,7 @@ export class LanProbe {
     if (j.res) {
       const list = this.responses.get(j.res);
       if (!list) return;
-      const peer: LanPeer = {
+      const peer: NeiwangDuiduan = {
         nodeId: j.nodeId ?? 'unknown',
         fingerprint: j.fingerprint ?? '',
         host,
@@ -207,7 +207,7 @@ export class LanProbe {
     } catch {
       /* ignore */
     }
-    const peer: LanPeer = { nodeId: j.nodeId ?? 'unknown', fingerprint: j.fingerprint ?? '', host, port: j.tcpPort ?? 0, seenAt: Date.now() };
+    const peer: NeiwangDuiduan = { nodeId: j.nodeId ?? 'unknown', fingerprint: j.fingerprint ?? '', host, port: j.tcpPort ?? 0, seenAt: Date.now() };
     this.peers.set(peer.fingerprint || `${host}:${port}`, peer);
     this.opts.onPeer?.(peer);
   }
@@ -223,10 +223,10 @@ export class LanProbe {
  *  · `::1`       回环 → **不算**
  *  · `ff00::/8`  组播 / `::` 未指定 → **不算**
  */
-export type Ipv6Scope = 'global' | 'ula' | 'link-local' | 'loopback' | 'unspecified' | 'multicast' | 'ipv4-mapped' | 'invalid';
+export type Ipv6Zuoyongyu = 'global' | 'ula' | 'link-local' | 'loopback' | 'unspecified' | 'multicast' | 'ipv4-mapped' | 'invalid';
 
 /** 2001:db8::/32 是**文档用**地址段：形式上属 2000::/3，但绝不能当成"公网可达候选" */
-export const IPV6_DOCUMENTATION_PREFIX = '2001:0db8';
+export const IPV6_WENDANG_QIANZHUI = '2001:0db8';
 
 /** 去掉方括号与 zone id（`fe80::1%eth0` / `%12`）—— 客户端拨号必须去掉 zone */
 export function normalizeHostLiteral(host: string): string {
@@ -308,7 +308,7 @@ export function ipFamilyOfHost(host: string): 4 | 6 | 0 {
   return 0;
 }
 
-export function guiLeiIpv6ZuoYongYu(host: string): Ipv6Scope {
+export function guiLeiIpv6ZuoYongYu(host: string): Ipv6Zuoyongyu {
   const b = parseIpv6(host);
   if (!b) return 'invalid';
   const allZero = b.every((x) => x === 0);
@@ -352,17 +352,17 @@ export function normalizeInterfaceFamily(family: unknown): 'IPv4' | 'IPv6' | 'ot
   return 'other';
 }
 
-export interface LocalIpv6Entry {
+export interface BenjiIpv6Tiaomu {
   interfaceName: string;
   address: string;
-  scope: Ipv6Scope;
+  scope: Ipv6Zuoyongyu;
   /** 原始 family 值（用于自证兼容点：字符串 'IPv6' 与数字 6 都出现过） */
   familyRaw: string | number;
   internal: boolean;
   documentation: boolean;
 }
 
-export interface Ipv6Report {
+export interface Ipv6Baogao {
   /** 至少一个全局单播（非文档段）地址 → IPv6 天然可拨入候选（无 NAT ⇒ 无需打洞） */
   hasGlobalUnicast: boolean;
   /** 首选候选（供宣告/DHT 记录/入站提示使用） */
@@ -373,7 +373,7 @@ export interface Ipv6Report {
   linkLocal: string[];
   loopback: string[];
   documentation: string[];
-  entries: LocalIpv6Entry[];
+  entries: BenjiIpv6Tiaomu[];
   /** 枚举时实际见到的 family 写法（证明两种形式都被处理过） */
   familyFormsSeen: (string | number)[];
   reason: string;
@@ -382,7 +382,7 @@ export interface Ipv6Report {
 const VIRTUAL_IFACE_RE = /vEthernet|hyper-?v|wsl|docker|vmware|virtualbox|loopback|virtual|vethernet|tap|tun|npcap|bluetooth/i;
 
 /** 接口名打分：越小越优先（真实物理网卡优先于虚拟网卡） */
-function ifaceRank(name: string): number {
+function jiekouPaiming(name: string): number {
   return VIRTUAL_IFACE_RE.test(name) ? 1 : 0;
 }
 
@@ -390,10 +390,10 @@ function ifaceRank(name: string): number {
  * 本机 IPv6 地址分类（真实现：`os.networkInterfaces()`）。
  * 传入 `nics` 参数是为了**可注入**（验证脚本用构造数据锁住分类矩阵与 `family` 兼容点）。
  */
-export function listLocalIpv6Candidates(nics: ReturnType<typeof os.networkInterfaces> = os.networkInterfaces()): LocalIpv6Entry[] {
-  const out: LocalIpv6Entry[] = [];
-  for (const [iface, addrs] of Object.entries(nics)) {
-    for (const a of addrs ?? []) {
+export function listLocalIpv6Candidates(nics: ReturnType<typeof os.networkInterfaces> = os.networkInterfaces()): BenjiIpv6Tiaomu[] {
+  const out: BenjiIpv6Tiaomu[] = [];
+  for (const [iface, dizhi] of Object.entries(nics)) {
+    for (const a of dizhi ?? []) {
       if (normalizeInterfaceFamily(a.family) !== 'IPv6') continue;
       const host = normalizeHostLiteral(a.address);
       const scope = guiLeiIpv6ZuoYongYu(host);
@@ -412,16 +412,16 @@ export function listLocalIpv6Candidates(nics: ReturnType<typeof os.networkInterf
 }
 
 /** 首选 IPv6 全局地址：全局单播、非文档段、非回环、物理网卡优先 */
-export function pickLocalIpv6Address(entries: LocalIpv6Entry[] = listLocalIpv6Candidates()): string | null {
+export function pickLocalIpv6Address(entries: BenjiIpv6Tiaomu[] = listLocalIpv6Candidates()): string | null {
   const cands = entries.filter((e) => e.scope === 'global' && !e.documentation);
   if (cands.length === 0) return null;
-  const sorted = [...cands].sort((a, b) => ifaceRank(a.interfaceName) - ifaceRank(b.interfaceName));
-  return sorted[0]?.address ?? null;
+  const yiPaiXu = [...cands].sort((a, b) => jiekouPaiming(a.interfaceName) - jiekouPaiming(b.interfaceName));
+  return yiPaiXu[0]?.address ?? null;
 }
 
-export function inspectLocalIpv6(nics: ReturnType<typeof os.networkInterfaces> = os.networkInterfaces()): Ipv6Report {
+export function jianchaBenjiIpv6(nics: ReturnType<typeof os.networkInterfaces> = os.networkInterfaces()): Ipv6Baogao {
   const entries = listLocalIpv6Candidates(nics);
-  const group = (s: Ipv6Scope): string[] => entries.filter((e) => e.scope === s).map((e) => e.address);
+  const group = (s: Ipv6Zuoyongyu): string[] => entries.filter((e) => e.scope === s).map((e) => e.address);
   const documentation = entries.filter((e) => e.documentation).map((e) => e.address);
   const publicCandidates = entries.filter((e) => e.scope === 'global' && !e.documentation).map((e) => e.address);
   const publicCandidate = pickLocalIpv6Address(entries);
@@ -445,7 +445,7 @@ export function inspectLocalIpv6(nics: ReturnType<typeof os.networkInterfaces> =
 
 /* ────────────────────────────── 真实拨号（带地址族） ────────────────────────────── */
 
-export interface DialDetail {
+export interface BoHaoXiangqing {
   ok: boolean;
   detail?: string;
   /** socket 自报的地址族（'IPv6'/'IPv4'）—— 证明**真的**走了该族 */
@@ -460,14 +460,14 @@ export interface DialDetail {
  * `family` 用于"客户端在指定地址族下真连上"：域名时 Node 只查对应族的记录；
  * 字面地址时由字面本身决定族，`remoteFamily` 会如实回报实际用的族。
  */
-export function boTcpXiangQing(host: string, port: number, timeoutMs: number, family?: 4 | 6): Promise<DialDetail> {
+export function boTcpXiangQing(host: string, port: number, timeoutMs: number, family?: 4 | 6): Promise<BoHaoXiangqing> {
   return new Promise((resolve) => {
     const started = Date.now();
     const target = normalizeHostLiteral(host);
     const opts: net.NetConnectOpts = family ? { host: target, port, family } : { host: target, port };
     const sock = net.connect(opts);
     let settled = false;
-    const done = (r: DialDetail): void => {
+    const done = (r: BoHaoXiangqing): void => {
       if (settled) return;
       settled = true;
       try {
@@ -494,12 +494,12 @@ export function boTcpXiangQing(host: string, port: number, timeoutMs: number, fa
 
 /* ────────────────────────────── 连接阶梯 ────────────────────────────── */
 
-export type LadderRung = 'ipv6-direct' | 'public-direct' | 'upnp' | 'holepunch' | 'relay' | 'lan';
+export type TiziDangwei = 'ipv6-direct' | 'public-direct' | 'upnp' | 'holepunch' | 'relay' | 'lan';
 
 /** 附八.9 定的顺序：IPv6 公网直连 → IPv4 公网直连 → 端口映射 → 打洞 → 中继 → 局域网 */
-export const DEFAULT_LADDER_ORDER: LadderRung[] = ['ipv6-direct', 'public-direct', 'upnp', 'holepunch', 'relay', 'lan'];
+export const DEFAULT_LADDER_ORDER: TiziDangwei[] = ['ipv6-direct', 'public-direct', 'upnp', 'holepunch', 'relay', 'lan'];
 
-export const LADDER_LABELS: Record<LadderRung, string> = {
+export const LADDER_LABELS: Record<TiziDangwei, string> = {
   'ipv6-direct': 'IPv6 公网直连',
   'public-direct': 'IPv4 公网直连',
   upnp: '路由器自动映射（UPnP/NAT-PMP/PCP）',
@@ -509,7 +509,7 @@ export const LADDER_LABELS: Record<LadderRung, string> = {
 };
 
 /** 阶梯档位 → i18n key（UI 文案由主代理统一加；这里只给 key，不拼句子） */
-export const LADDER_RUNG_I18N: Record<LadderRung, string> = {
+export const LADDER_RUNG_I18N: Record<TiziDangwei, string> = {
   'ipv6-direct': 'net.rung.ipv6Direct',
   'public-direct': 'net.rung.publicDirect',
   upnp: 'net.rung.upnp',
@@ -518,16 +518,16 @@ export const LADDER_RUNG_I18N: Record<LadderRung, string> = {
   lan: 'net.rung.lan',
 };
 
-export interface LadderAddress {
+export interface TiziDizhi {
   host: string;
   port: number;
   source: 'dht' | 'lan' | 'manual';
 }
 
-export interface LadderTarget {
+export interface TiziMubiao {
   fingerprint: string;
   nodeId?: string;
-  addresses: LadderAddress[];
+  addresses: TiziDizhi[];
   /**
    * 对端报告的"本机是否可拨入"（对端自己的 DialabilityProbe 结论）。
    * `undefined` = 未收到报告 → 阶梯**不猜**（附八.3 第 3 条：可检测就可明确表达）。
@@ -535,10 +535,10 @@ export interface LadderTarget {
   peerDialable?: boolean;
 }
 
-export type RungStatus = 'ok' | 'failed' | 'unsupported' | 'skipped';
+export type DangweiZhuangtai = 'ok' | 'failed' | 'unsupported' | 'skipped';
 
 /** 中继档选中后的细节（供 UI 显示"经中继（更慢，但可用）"） */
-export interface RelayRungInfo {
+export interface ZhongjiDangweiXinxi {
   /** 中继节点地址 */
   relay: { host: string; port: number };
   /** 两端共享的配对 token（确定性推导；不是凭据） */
@@ -547,10 +547,10 @@ export interface RelayRungInfo {
   slowerButUsable: true;
 }
 
-export interface RungAttempt {
-  rung: LadderRung;
+export interface DangweiChangshi {
+  rung: TiziDangwei;
   label: string;
-  status: RungStatus;
+  status: DangweiZhuangtai;
   ms: number;
   detail?: string;
   address?: { host: string; port: number };
@@ -558,14 +558,14 @@ export interface RungAttempt {
   family?: 4 | 6;
   /** 结构化结论码（不拼文案，UI 可据此选 key） */
   code?: string;
-  relay?: RelayRungInfo;
+  relay?: ZhongjiDangweiXinxi;
 }
 
-export interface LadderResult {
+export interface TiziJieguo {
   ok: boolean;
-  rung: LadderRung | null;
+  rung: TiziDangwei | null;
   address?: { host: string; port: number };
-  attempts: RungAttempt[];
+  attempts: DangweiChangshi[];
   /** 全部失败时的结论文案（UI 可直接用） */
   summary: string;
   /** 结构化结论码（'ok' / 'no-relay-available' / 'all-failed' / 'no-address' …） */
@@ -575,11 +575,11 @@ export interface LadderResult {
   /** 中继档的结构化结论（含"无可用中继 → 需要一台有公网地址的机器做中继"） */
   relayDecision?: ZhongJiJueDing;
   /** 可达性汇总（UI 判断要显示哪条文案） */
-  reachability?: ReachabilitySummary;
+  reachability?: KedaxingZhaiyao;
 }
 
 /** 可达性汇总：**结构化**给出"该显示哪条文案"的依据 */
-export interface ReachabilitySummary {
+export interface KedaxingZhaiyao {
   selfDialable?: boolean;
   peerDialable?: boolean;
   /** 双方各自报告"本机不可拨入" —— 附八.3 的死锁状态 */
@@ -592,10 +592,10 @@ export interface ReachabilitySummary {
   i18n: { rung?: string; relay?: string };
 }
 
-export interface RungContext {
-  target: LadderTarget;
+export interface DangweiShangxiawen {
+  target: TiziMubiao;
   timeoutMs: number;
-  dialTcp: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<DialDetail | { ok: boolean; detail?: string }>;
+  dialTcp: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<BoHaoXiangqing | { ok: boolean; detail?: string }>;
   log: (msg: string) => void;
   /** 本机是否可拨入（来自 DialabilityProbe；undefined = 未知） */
   selfDialable?: boolean;
@@ -609,20 +609,20 @@ export interface RungOutcome {
   address?: { host: string; port: number };
   family?: 4 | 6;
   code?: string;
-  relay?: RelayRungInfo;
+  relay?: ZhongjiDangweiXinxi;
   /** 本档"不适用/不需要"（≠ 失败）：如实记为 skipped，不伪装成试过 */
   skip?: boolean;
   relayDecision?: ZhongJiJueDing;
 }
 
-export interface LadderStrategy {
-  rung: LadderRung;
+export interface TiziCelue {
+  rung: TiziDangwei;
   supported: boolean;
   unsupportedReason?: string;
-  attempt(ctx: RungContext): Promise<RungOutcome>;
+  attempt(ctx: DangweiShangxiawen): Promise<RungOutcome>;
 }
 
-function unsupportedStrategy(rung: LadderRung, reason: string): LadderStrategy {
+function buzhichiCelue(rung: TiziDangwei, reason: string): TiziCelue {
   return {
     rung,
     supported: false,
@@ -633,7 +633,7 @@ function unsupportedStrategy(rung: LadderRung, reason: string): LadderStrategy {
   };
 }
 
-export interface RelayRungOptions {
+export interface ZhongjiDangweiXuanxiang {
   /** 中继候选（可达节点 = 有公网地址的那台机器） */
   relays: () => ZhongJiHouXuanYinYong[];
   /** 本机是否可拨入（DialabilityProbe 结论；undefined = 未知） */
@@ -645,19 +645,19 @@ export interface RelayRungOptions {
 }
 
 export interface LianJieTiZiXuanXiang {
-  strategies?: Partial<Record<LadderRung, LadderStrategy>>;
-  order?: LadderRung[];
+  strategies?: Partial<Record<TiziDangwei, TiziCelue>>;
+  order?: TiziDangwei[];
   perRungTimeoutMs?: number;
-  dialTcp?: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<DialDetail | { ok: boolean; detail?: string }>;
+  dialTcp?: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<BoHaoXiangqing | { ok: boolean; detail?: string }>;
   /** LAN 探测提供者（默认用注入的 LanProbe） */
   lanProbe?: LanProbe;
   lanTargets?: () => { host: string; port: number }[];
   lanBroadcastPorts?: number[];
   /** 中继档配置（不配置时：若两端都不可拨入，仍会**如实报缺口**而不是静默失败） */
-  relay?: RelayRungOptions;
+  relay?: ZhongjiDangweiXuanxiang;
   /** 本机 IPv6 报告（默认真实枚举本机网卡） */
-  ipv6Report?: () => Ipv6Report;
-  onRung?: (a: RungAttempt) => void;
+  ipv6Report?: () => Ipv6Baogao;
+  onRung?: (a: DangweiChangshi) => void;
   now?: () => number;
 }
 
@@ -665,19 +665,19 @@ export interface LianJieTiZiXuanXiang {
  * 默认 TCP 拨号：真实 net.connect（第 4 个参数可强制地址族）。
  * 这里只判断"能不能连上"，**不在此处做握手**（握手由 SecureSyncClient 负责）。
  */
-export async function boTcpMoRen(host: string, port: number, timeoutMs: number, family?: 4 | 6): Promise<DialDetail> {
+export async function boTcpMoRen(host: string, port: number, timeoutMs: number, family?: 4 | 6): Promise<BoHaoXiangqing> {
   return boTcpXiangQing(host, port, timeoutMs, family);
 }
 
 export class LianJieTiZi {
-  private readonly order: LadderRung[];
+  private readonly order: TiziDangwei[];
   private readonly perRungTimeoutMs: number;
-  private readonly dialTcp: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<DialDetail | { ok: boolean; detail?: string }>;
-  private readonly strategies = new Map<LadderRung, LadderStrategy>();
+  private readonly dialTcp: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<BoHaoXiangqing | { ok: boolean; detail?: string }>;
+  private readonly strategies = new Map<TiziDangwei, TiziCelue>();
   private readonly now: () => number;
   private lastRelayDecision?: ZhongJiJueDing;
   /** 每一级的尝试历史（可观测性） */
-  readonly history: RungAttempt[] = [];
+  readonly history: DangweiChangshi[] = [];
 
   constructor(private readonly opts: LianJieTiZiXuanXiang = {}) {
     this.order = opts.order ?? DEFAULT_LADDER_ORDER;
@@ -690,15 +690,15 @@ export class LianJieTiZi {
      * 只拨"目标的**全局单播** IPv6 地址"；link-local / ULA / 回环 / 文档段**不算**候选，
      * 并把这些被排除的地址原样写进 detail（可解释，不静默跳过）。
      */
-    const ipv6Direct: LadderStrategy = {
+    const ipv6Direct: TiziCelue = {
       rung: 'ipv6-direct',
       supported: true,
       async attempt(ctx) {
         const all = ctx.target.addresses;
         const v6 = all.filter((a) => ipFamilyOfHost(a.host) === 6);
         const candidates = v6.filter((a) => isPublicDialCandidate(a.host));
-        const excluded = v6.filter((a) => !isPublicDialCandidate(a.host));
-        const label = (a: LadderAddress): string => `${a.host}(${guiLeiIpv6ZuoYongYu(a.host)}${isIpv6DocumentationAddress(a.host) ? '·文档段' : ''})`;
+        const paichu = v6.filter((a) => !isPublicDialCandidate(a.host));
+        const label = (a: TiziDizhi): string => `${a.host}(${guiLeiIpv6ZuoYongYu(a.host)}${isIpv6DocumentationAddress(a.host) ? '·文档段' : ''})`;
         if (candidates.length === 0) {
           return {
             ok: false,
@@ -706,8 +706,8 @@ export class LianJieTiZi {
             detail:
               all.length === 0
                 ? '没有可用地址（DHT 未宣告 / 未提供）→ IPv6 档不适用'
-                : excluded.length > 0
-                  ? `目标有 ${excluded.length} 个 IPv6 地址但不是公网候选（链路本地/ULA/回环/文档段，IPv6 无 NAT 只对全局单播成立）：${excluded.map(label).join('、')}`
+                : paichu.length > 0
+                  ? `目标有 ${paichu.length} 个 IPv6 地址但不是公网候选（链路本地/ULA/回环/文档段，IPv6 无 NAT 只对全局单播成立）：${paichu.map(label).join('、')}`
                   : '目标没有 IPv6 地址（只有 IPv4）→ IPv6 档不适用，交给下一档',
           };
         }
@@ -716,7 +716,7 @@ export class LianJieTiZi {
           // 显式指定 family=6：证明这一档**真的**用 IPv6 拨号（socket 会回报 remoteFamily）
           const r = await ctx.dialTcp(addr.host, addr.port, ctx.timeoutMs, 6);
           if (r.ok) {
-            const fam = (r as DialDetail).remoteFamily;
+            const fam = (r as BoHaoXiangqing).remoteFamily;
             return {
               ok: true,
               address: { host: addr.host, port: addr.port },
@@ -731,7 +731,7 @@ export class LianJieTiZi {
       },
     };
 
-    const publicDirect: LadderStrategy = {
+    const publicDirect: TiziCelue = {
       rung: 'public-direct',
       supported: true,
       async attempt(ctx) {
@@ -740,7 +740,7 @@ export class LianJieTiZi {
         for (const addr of ctx.target.addresses) {
           const r = await ctx.dialTcp(addr.host, addr.port, ctx.timeoutMs);
           if (r.ok) {
-            const fam = (r as DialDetail).remoteFamily;
+            const fam = (r as BoHaoXiangqing).remoteFamily;
             return {
               ok: true,
               address: { host: addr.host, port: addr.port },
@@ -762,7 +762,7 @@ export class LianJieTiZi {
      *  · `relay-none-configured` —— 两端不可拨入且没有中继 ⇒ 明确报缺口（不转圈、不静默）；
      *  · `relay-unreachable`     —— 配了中继但都连不上 ⇒ 同样明确报缺口。
      */
-    const relay: LadderStrategy = {
+    const relay: TiziCelue = {
       rung: 'relay',
       supported: true,
       async attempt(ctx) {
@@ -779,7 +779,7 @@ export class LianJieTiZi {
           }
         );
         if (decision.selected && decision.relay && decision.token) {
-          const info: RelayRungInfo = {
+          const info: ZhongjiDangweiXinxi = {
             relay: { host: decision.relay.host, port: decision.relay.port },
             token: decision.token,
             slowerButUsable: true,
@@ -802,7 +802,7 @@ export class LianJieTiZi {
       },
     };
 
-    const lan: LadderStrategy = {
+    const lan: TiziCelue = {
       rung: 'lan',
       supported: true,
       async attempt(ctx) {
@@ -837,17 +837,17 @@ export class LianJieTiZi {
     this.strategies.set(
       'upnp',
       opts.strategies?.upnp ??
-        unsupportedStrategy('upnp', '未实现：UPnP/SSDP 与 NAT-PMP/PCP 需要额外依赖或原生模块（本项目零依赖约束）')
+        buzhichiCelue('upnp', '未实现：UPnP/SSDP 与 NAT-PMP/PCP 需要额外依赖或原生模块（本项目零依赖约束）')
     );
     this.strategies.set(
       'holepunch',
-      opts.strategies?.holepunch ?? unsupportedStrategy('holepunch', '未实现：真实 STUN 服务器与同时打洞需要公网对端，本仓库无 STUN 客户端')
+      opts.strategies?.holepunch ?? buzhichiCelue('holepunch', '未实现：真实 STUN 服务器与同时打洞需要公网对端，本仓库无 STUN 客户端')
     );
     // 中继档**已实现**（relay.ts）：未配置中继候选时也不是 unsupported —— 会如实报"缺中继"这个状态
     this.strategies.set('relay', opts.strategies?.relay ?? relay);
   }
 
-  strategyFor(rung: LadderRung): LadderStrategy | undefined {
+  strategyFor(rung: TiziDangwei): TiziCelue | undefined {
     return this.strategies.get(rung);
   }
 
@@ -857,9 +857,9 @@ export class LianJieTiZi {
   }
 
   /** 逐级降级：命中即停；未实现的级标注 unsupported 并继续下一级 */
-  async connect(target: LadderTarget): Promise<LadderResult> {
-    const attempts: RungAttempt[] = [];
-    const localIpv6 = (this.opts.ipv6Report ?? inspectLocalIpv6)();
+  async connect(target: TiziMubiao): Promise<TiziJieguo> {
+    const attempts: DangweiChangshi[] = [];
+    const localIpv6 = (this.opts.ipv6Report ?? jianchaBenjiIpv6)();
     const selfDialable = this.opts.relay?.selfDialable ? this.opts.relay.selfDialable() : undefined;
     for (const rung of this.order) {
       const strat = this.strategies.get(rung);
@@ -869,7 +869,7 @@ export class LianJieTiZi {
         continue;
       }
       if (!strat.supported) {
-        const a: RungAttempt = {
+        const a: DangweiChangshi = {
           rung,
           label: LADDER_LABELS[rung],
           status: 'unsupported',
@@ -881,7 +881,7 @@ export class LianJieTiZi {
         this.opts.onRung?.(a);
         continue;
       }
-      const ctx: RungContext = {
+      const ctx: DangweiShangxiawen = {
         target,
         timeoutMs: this.perRungTimeoutMs,
         dialTcp: this.dialTcp,
@@ -896,7 +896,7 @@ export class LianJieTiZi {
         outcome = { ok: false, detail: `策略异常：${(e as Error).message ?? String(e)}`, code: 'rung-threw' };
       }
       if (outcome.relayDecision) this.lastRelayDecision = outcome.relayDecision;
-      const a: RungAttempt = {
+      const a: DangweiChangshi = {
         rung,
         label: LADDER_LABELS[rung],
         status: outcome.ok ? 'ok' : outcome.skip ? 'skipped' : 'failed',
@@ -934,7 +934,7 @@ export class LianJieTiZi {
       }
     }
     const missing = attempts.filter((a) => a.status === 'unsupported').map((a) => LADDER_LABELS[a.rung]);
-    const relayAttempt = attempts.find((a) => a.rung === 'relay');
+    const zhongjiChangshi = attempts.find((a) => a.rung === 'relay');
     const relayDecision = this.lastRelayDecision;
     const parts: string[] = ['全部可用方式均失败'];
     if (relayDecision?.needsPublicRelayNotice) {
@@ -960,7 +960,7 @@ export class LianJieTiZi {
         peerDialable: target.peerDialable,
         bothUndialable: relayDecision?.bothUndialable === true,
         needsPublicRelayNotice: relayDecision?.needsPublicRelayNotice === true,
-        relayCode: (relayAttempt?.code as ZhongJiJueDingMa | undefined) ?? 'not-attempted',
+        relayCode: (zhongjiChangshi?.code as ZhongJiJueDingMa | undefined) ?? 'not-attempted',
         localIpv6: { hasGlobalUnicast: localIpv6.hasGlobalUnicast, publicCandidate: localIpv6.publicCandidate },
         i18n: relayDecision?.needsPublicRelayNotice ? { relay: 'net.relay.missing.needsPublicRelay' } : {},
       },

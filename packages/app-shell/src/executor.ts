@@ -3,7 +3,7 @@
  */
 import { congYuSheChuangJian, type LiaoTianXiaoXi } from '@warmy/providers';
 
-export interface ExecutorTask {
+export interface ZhixingqiRenwu {
   taskId: string;
   brief: string;
   /** 仅任务相关上下文（马尔可夫毯） */
@@ -18,7 +18,7 @@ export interface zhixingqiJieguo {
   error?: string;
 }
 
-export interface ExecutorProviderCfg {
+export interface ZhixingqiGongyingshangPeizhi {
   presetId: string;
   apiKey?: string;
   baseURL?: string;
@@ -29,9 +29,9 @@ export interface ExecutorProviderCfg {
  * 执行者：独立短命会话，不继承值班者历史
  * 蒸馏返回：只给结论，不给完整对话
  */
-export async function runShortLivedExecutor(
-  task: ExecutorTask,
-  cfg: ExecutorProviderCfg
+export async function yunxingDuanCunhuoZhixingqi(
+  task: ZhixingqiRenwu,
+  cfg: ZhixingqiGongyingshangPeizhi
 ): Promise<zhixingqiJieguo> {
   const t0 = Date.now();
   const messages: LiaoTianXiaoXi[] = [
@@ -76,8 +76,8 @@ export async function runShortLivedExecutor(
 
 /** 批量派发：多个执行者并行，各自短命 */
 export async function runExecutors(
-  tasks: ExecutorTask[],
-  cfg: ExecutorProviderCfg
+  tasks: ZhixingqiRenwu[],
+  cfg: ZhixingqiGongyingshangPeizhi
 ): Promise<zhixingqiJieguo[]> {
-  return Promise.all(tasks.map((t) => runShortLivedExecutor(t, cfg)));
+  return Promise.all(tasks.map((t) => yunxingDuanCunhuoZhixingqi(t, cfg)));
 }

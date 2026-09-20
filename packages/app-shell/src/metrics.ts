@@ -2,7 +2,7 @@
  * 运行指标：对话轮次、CCR 压缩比、Provider 用量（缓存命中等）
  * 对应 ADR 6.5 性能监控埋点
  */
-export interface TurnMetric {
+export interface LunciZhibiao {
   sessionId: string;
   ts: number;
   promptTokens: number;
@@ -26,7 +26,7 @@ export interface CcrMetric {
  * viewBytes 恒定 ≤ budgetChars 且不随 logBytes 上涨，是「不变量 #2 是否退化」的哨兵。
  * 单位是字符（与 context-renderer 的 budgetChars 同单位）。
  */
-export interface ViewMetric {
+export interface ShituZhibiao {
   ts: number;
   sessionId: string;
   logEntries: number;
@@ -40,7 +40,7 @@ export interface ViewMetric {
  * 工具调用指标（ADR 002 §9.4 待办 2）。
  * 观测面：模型是否真的在解引用被省略的历史、有没有越界、有没有降级。
  */
-export interface ToolCallMetric {
+export interface GongjuDiaoyongZhibiao {
   ts: number;
   sessionId: string;
   round: number;
@@ -52,7 +52,7 @@ export interface ToolCallMetric {
 }
 
 /** 一次 chat-send 的工具循环总体结果 */
-export interface ToolLoopMetric {
+export interface GongjuXunhuanZhibiao {
   ts: number;
   sessionId: string;
   requests: number;
@@ -64,13 +64,13 @@ export interface ToolLoopMetric {
 }
 
 export class MetricsCollector {
-  private turns: TurnMetric[] = [];
+  private turns: LunciZhibiao[] = [];
   private ccr: CcrMetric[] = [];
-  private views: ViewMetric[] = [];
-  private toolCallsLog: ToolCallMetric[] = [];
-  private toolLoops: ToolLoopMetric[] = [];
+  private views: ShituZhibiao[] = [];
+  private toolCallsLog: GongjuDiaoyongZhibiao[] = [];
+  private toolLoops: GongjuXunhuanZhibiao[] = [];
 
-  recordTurn(m: TurnMetric): void {
+  recordTurn(m: LunciZhibiao): void {
     this.turns.push(m);
     if (this.turns.length > 500) this.turns.shift();
   }
@@ -80,26 +80,26 @@ export class MetricsCollector {
     if (this.ccr.length > 500) this.ccr.shift();
   }
 
-  recordView(m: ViewMetric): void {
+  recordView(m: ShituZhibiao): void {
     this.views.push(m);
     if (this.views.length > 500) this.views.shift();
   }
 
-  recordToolCall(m: ToolCallMetric): void {
+  recordToolCall(m: GongjuDiaoyongZhibiao): void {
     this.toolCallsLog.push(m);
     if (this.toolCallsLog.length > 500) this.toolCallsLog.shift();
   }
 
-  recordToolLoop(m: ToolLoopMetric): void {
+  recordToolLoop(m: GongjuXunhuanZhibiao): void {
     this.toolLoops.push(m);
     if (this.toolLoops.length > 500) this.toolLoops.shift();
   }
 
-  lastViews(n = 20): ViewMetric[] {
+  lastViews(n = 20): ShituZhibiao[] {
     return this.views.slice(-n);
   }
 
-  lastToolCalls(n = 20): ToolCallMetric[] {
+  lastToolCalls(n = 20): GongjuDiaoyongZhibiao[] {
     return this.toolCallsLog.slice(-n);
   }
 

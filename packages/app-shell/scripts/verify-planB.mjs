@@ -4,8 +4,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { GroupStore } from '../dist/group-store.js';
+import {fileURLToPath} from 'node:url';
+import {GroupStore} from '../dist/group-store.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -36,14 +36,14 @@ check('boot applies panelWidth', app.includes('s.settings.panelWidth'));
 // ── 2. 窗口几何持久化 ──
 check('window-state.json path', main.includes('window-state.json'));
 check('loadWindowState exists', /function loadWindowState/.test(main));
-check('saveWindowStateSoon exists', /function saveWindowStateSoon/.test(main));
+check('窗口状态延迟保存函数存在（baocunChuangkouZhuangtaiJiukuai）', /function baocunChuangkouZhuangtaiJiukuai/.test(main));
 check('window resize/move hooks', /win\.on\('resize'/.test(main) && /win\.on\('move'/.test(main));
 check('window maximize restore', /ws\.maximized/.test(main) || /maximized/.test(main));
 
 // ── 3. 上下文预算 + 重试 ──
 check('contextBudgetFromSettings exists', /function contextBudgetFromSettings/.test(main));
 check('runWithContextRetry exists', /function runWithContextRetry/.test(main));
-check('retry steps 100/60/35/20', /CONTEXT_RETRY_STEPS\s*=\s*\[1\.0,\s*0\.6,\s*0\.35,\s*0\.2\]/.test(main));
+check('上下文重试档位 100/60/35/20', /SHANGXIAWEN_CHONGSHI_BUZHOU\s*=\s*\[1\.0,\s*0\.6,\s*0\.35,\s*0\.2\]/.test(main));
 check('min tokens 2048', /MIN_CONTEXT_TOKENS\s*=\s*2048/.test(main));
 check('model ctx map exists', /MODEL_CTX_MAP/.test(main) && /deepseek-chat/.test(main));
 check('isContextLengthError exists', /function isContextLengthError/.test(main));
@@ -80,7 +80,7 @@ check('ctx popover not fixed bottom', !/ctx-popover\s*\{[^}]*bottom:\s*150px/.te
 // ── 8. 真实 group-store 项目记忆/门禁 ──
 const os = await import('node:os');
 const dir = path.join(os.tmpdir(), 'warmy-planB-' + Date.now());
-const { anQuanYuanZiXieJson } = await import('../dist/atomic-json.js');
+const {anQuanYuanZiXieJson} = await import('../dist/atomic-json.js');
 anQuanYuanZiXieJson(path.join(dir, 'groups.json'), {
   version: 1,
   groups: [{ groupId: 'g1', name: 'P', type: 'internal', directedMode: false, dutyInstanceId: null, createdAt: Date.now(), updatedAt: Date.now(), origin: 'ipc' }],

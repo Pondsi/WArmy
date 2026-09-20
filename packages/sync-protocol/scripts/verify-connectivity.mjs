@@ -9,7 +9,7 @@
  *   [2] 本机 IPv6 枚举（真网卡）+ ULA/链路本地**不算公网候选**
  *   [3] IPv6 **真监听 + 真连上**：::1 / 本机全局单播地址 / 双栈 `::`；并且真的跑一次 SecureSyncServer/Client
  *   [4] 阶梯顺序（附八.9）：IPv6 公网直连 → IPv4 公网直连 → … → 中继 → 局域网；含"IPv6 档不适用"的如实降级
- *   [5] 中继档判定 decideRelay：6 种结构化结论码 + token 两端确定性一致
+ *   [5] 中继档判定 jueDingZhongJi：6 种结构化结论码 + token 两端确定性一致
  *   [6] 中继**真转发**：A→中继→B 内容真到达；中继样本里**看不到明文标记**
  *   [7] 中继引入的攻击面：重放 / 篡改 / 重排 / 冒充对端 —— **都被拒**
  *   [8] 没有可用中继时**如实报缺口**（不转圈、不静默）
@@ -28,40 +28,9 @@ import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import {
-  LianJieTiZi,
-  DEFAULT_LADDER_ORDER,
-  KeBoRuTanCe,
-  LADDER_LABELS,
-  LADDER_RUNG_I18N,
-  ReplayGuard,
-  ZhongJiJieDian,
-  ZhongJiSuiDaoBoHao,
-  ZhongJiSuiDaoJianTing,
-  SecureSyncClient,
-  SecureSyncServer,
-  guiLeiDiZhi,
-  guiLeiIpv6ZuoYongYu,
-  warmyFingerprint,
-  chuangjianLinShiShenFen,
-  jueDingZhongJi,
-  boTcpXiangQing,
-  ed25519FromSeed,
-  inspectLocalIpv6,
-  isGlobalUnicastIpv6,
-  isIpv6DocumentationAddress,
-  isPublicDialCandidate,
-  listLocalIpv6Candidates,
-  normalizeHostLiteral,
-  normalizeInterfaceFamily,
-  parseIpv6,
-  pickLocalIpv6Address,
-  randomBytes,
-  quZhongJiLingPai,
-  sha256,
-} from '../dist/index.js';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {LianJieTiZi, DEFAULT_LADDER_ORDER, KeBoRuTanCe, LADDER_LABELS, LADDER_RUNG_I18N, ReplayGuard, ZhongJiJieDian, ZhongJiSuiDaoBoHao, ZhongJiSuiDaoJianTing, SecureSyncClient, SecureSyncServer, guiLeiDiZhi, guiLeiIpv6ZuoYongYu, warmyFingerprint, chuangjianLinShiShenFen, jueDingZhongJi, boTcpXiangQing, ed25519FromSeed, jianchaBenjiIpv6, isGlobalUnicastIpv6, isIpv6DocumentationAddress, isPublicDialCandidate, listLocalIpv6Candidates, normalizeHostLiteral, normalizeInterfaceFamily, parseIpv6, pickLocalIpv6Address, randomBytes, quZhongJiLingPai, sha256, } from '../dist/index.js';
 
 let passes = 0;
 let failures = 0;
@@ -267,7 +236,7 @@ async function main() {
   console.log(`node ${process.version} | 平台 ${process.platform}`);
 
   const v6Global = pickLocalIpv6Address();
-  const v6Report = inspectLocalIpv6();
+  const v6Report = jianchaBenjiIpv6();
   console.log(`本机全局单播 IPv6 首选：${v6Global ?? '（无）'}`);
 
   /* ══════════════ [1] IPv6 地址分类矩阵 ══════════════ */
@@ -347,7 +316,7 @@ async function main() {
       entries.some((e) => e.address === 'fe80::117f:559c:8262:8b1d' && e.scope === 'link-local') && entries.some((e) => e.address === 'fd12:3456:789a::7' && e.scope === 'ula'),
       entries.map((e) => [e.address, e.scope])
     );
-    const rep = inspectLocalIpv6(fakeNics(form));
+    const rep = jianchaBenjiIpv6(fakeNics(form));
     check(`family=${form}：只有全局单播进 publicCandidates`, rep.publicCandidates.length === 1 && rep.publicCandidates[0].startsWith('240e:'), rep.publicCandidates);
     check(`family=${form}：ULA/链路本地/回环被分到各自桶里`, rep.ula.length === 1 && rep.linkLocal.length === 1 && rep.loopback.length === 1, {
       ula: rep.ula,
@@ -359,14 +328,14 @@ async function main() {
 
   /* ══════════════ [2] 本机 IPv6 真实枚举 ══════════════ */
   group('[2] 本机 IPv6 真枚举（os.networkInterfaces）');
-  check('inspectLocalIpv6 返回结构化报告', typeof v6Report.hasGlobalUnicast === 'boolean' && Array.isArray(v6Report.entries), Object.keys(v6Report));
+  check('jianchaBenjiIpv6 返回结构化报告', typeof v6Report.hasGlobalUnicast === 'boolean' && Array.isArray(v6Report.entries), Object.keys(v6Report));
   check(
     '每个条目都带地址与作用域（枚举没空转）',
     v6Report.entries.length >= 1 && v6Report.entries.every((e) => typeof e.address === 'string' && typeof e.scope === 'string'),
     v6Report.entries.map((e) => `${e.address}|${e.scope}`)
   );
   check(
-    '报告里的分类与 classifyIpv6Scope 一致（无自相矛盾）',
+    '报告里的分类与 guiLeiIpv6ZuoYongYu 一致（无自相矛盾）',
     v6Report.entries.every((e) => guiLeiIpv6ZuoYongYu(e.address) === e.scope),
     v6Report.entries.filter((e) => guiLeiIpv6ZuoYongYu(e.address) !== e.scope)
   );
@@ -393,7 +362,7 @@ async function main() {
     const l6 = await listenTcp('::1');
     check('能在 ::1 上真监听', l6.ok === true, l6.ok ? l6.port : l6.error);
     const d6 = await boTcpXiangQing('::1', l6.port, 2000, 6);
-    check('dialTcpDetailed(::1, family=6) 连上', d6.ok === true, d6);
+    check('boTcpXiangQing(::1, family=6) 连上', d6.ok === true, d6);
     check("socket 自报 remoteFamily='IPv6'（证明真走 IPv6）", d6.remoteFamily === 'IPv6', d6.remoteFamily);
     check('本地地址族也是 IPv6', String(d6.localAddress ?? '').includes('::'), d6.localAddress);
     const d6bracket = await boTcpXiangQing('[::1]', l6.port, 2000, 6);
@@ -517,7 +486,7 @@ async function main() {
   }
 
   /* ══════════════ [5] 中继档判定 ══════════════ */
-  group('[5] 中继档判定 decideRelay（附八.3：可检测 + 可解释，6 种结构化结论码）');
+  group('[5] 中继档判定 jueDingZhongJi（附八.3：可检测 + 可解释，6 种结构化结论码）');
   {
     const relay = new ZhongJiJieDian({ port: 0, host: '127.0.0.1', pairTimeoutMs: 800 });
     const relayPort = await relay.start();
@@ -711,7 +680,7 @@ async function main() {
     check('冒充者一侧也没有建立会话', xServer.srv.sessionList.length === 0, xServer.srv.sessionList.length);
     const rejected = Object.keys(xServer.srv.rejectionCounts);
     check('冒充者一侧留下拒绝原因（可审计）', rejected.length >= 1, xServer.srv.rejectionCounts);
-    check('拒因与指纹/授权相关', rejected.some((k) => /fingerprint|authoriz|pin|confirm|bad-group/i.test(k)), rejected);
+    check('拒因与指纹/授权相关', rejected.some((k) => /valWen|authoriz|pin|confirm|bad-group/i.test(k)), rejected);
     client.close('done');
     await dialer.stop();
     await xTunnel.stop();
@@ -767,7 +736,7 @@ async function main() {
     check('两端都不可拨入 + 真可达中继 → 阶梯选中 relay 档', res3.ok === true && res3.rung === 'relay', { rung: res3.rung, summary: res3.summary });
     const rung3 = res3.attempts.find((a) => a.rung === 'relay');
     check('relay 档命中时带中继地址 + 配对 token + "更慢但可用"标记', rung3?.relay?.relay?.port === rp && typeof rung3?.relay?.token === 'string' && rung3?.relay?.slowerButUsable === true, rung3?.relay);
-    check('relay 档的 token = relayTokenFor(本机, 对端, 中继)（两端可复算）', rung3?.relay?.token === quZhongJiLingPai('fp-self', 'fp-peer', { host: '127.0.0.1', port: rp }), rung3?.relay?.token);
+    check('relay 档的 token = quZhongJiLingPai(本机, 对端, 中继)（两端可复算）', rung3?.relay?.token === quZhongJiLingPai('fp-self', 'fp-peer', { host: '127.0.0.1', port: rp }), rung3?.relay?.token);
     check('档位顺序：relay 在 lan 之前被尝试（附八.9 顺序）', res3.attempts.map((a) => a.rung).indexOf('relay') < (res3.attempts.map((a) => a.rung).indexOf('lan') === -1 ? 99 : res3.attempts.map((a) => a.rung).indexOf('lan')), res3.attempts.map((a) => `${a.rung}:${a.status}`));
     check('两端的 token 对称（各自算得出同一个值）', (await jueDingZhongJi({ fingerprint: 'fp-peer' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token === (await jueDingZhongJi({ fingerprint: 'fp-self' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-peer', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token, {});
     await relay.stop();
@@ -915,7 +884,7 @@ async function main() {
     });
     const mpRes = await ladderMP.connect({ fingerprint: FP_B, addresses: [{ host: '100.64.10.21', port: 7892, source: 'dht' }], peerDialable: false });
     check('多进程：阶梯在"双方都不可拨入"时选中 relay 档（真探测到中继进程）', mpRes.ok === true && mpRes.rung === 'relay', { rung: mpRes.rung, summary: mpRes.summary });
-    check('多进程：relay 档 token = relayTokenFor(A, B, 中继)（与子进程用的一致）', mpRes.attempts.find((a) => a.rung === 'relay')?.relay?.token === token, mpRes.attempts.find((a) => a.rung === 'relay')?.relay?.token);
+    check('多进程：relay 档 token = quZhongJiLingPai(A, B, 中继)（与子进程用的一致）', mpRes.attempts.find((a) => a.rung === 'relay')?.relay?.token === token, mpRes.attempts.find((a) => a.rung === 'relay')?.relay?.token);
     check('多进程：relay 档之前的直连档都如实失败（CGNAT 地址真拨不通）', mpRes.attempts.filter((a) => a.rung === 'public-direct')[0]?.status === 'failed', mpRes.attempts.map((a) => `${a.rung}:${a.status}`));
 
     for (const c of children) {

@@ -12,17 +12,17 @@
 //   * 等条件成立而不是等秒表；真实坐标点击失败会重试并记录轨迹；
 //   * 桩（组网层/身份层）通过 Page.addScriptToEvaluateOnNewDocument 在文档脚本之前注入，
 //     状态存 localStorage —— 于是「下次启动」= Page.reload 之后仍然一致。
-import { execFileSync } from 'node:child_process';
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { fileURLToPath } from 'node:url';
-import { attach, sleep, reporter } from './cdp-lib.mjs';
+import {fileURLToPath} from 'node:url';
+import {attach, sleep, reporter} from './cdp-lib.mjs';
 // R4 的二维码真值：弹窗里的 SVG 要与仓库里那份**真**编码器的输出逐字节/逐模块一致。
 // qr.js 现在是 Node 侧参考实现（加载 src/renderer/vendor/qrcode-generator-2.0.4.js），
 // 渲染层不再加载它（ESM 在 file:// + CSP 下不可用，见 qr.js 头部说明）。
-import { qrSvg as QRSVG, qrMatrix as QRMATRIX, stripAriaLabel as QRSTRIP, QR_ECC, QR_QUIET, QR_VENDOR_FILE } from '../src/renderer/qr.js';
+import {qrSvg as QRSVG, qrMatrix as QRMATRIX, stripAriaLabel as QRSTRIP, QR_ECC, erweimaAnjing, QR_VENDOR_FILE} from '../src/renderer/qr.js';
 
 const PORT = Number(process.env.PORT || 9555);
 // 产物目录可注入（统一验证器会指到临时目录，避免污染仓库）；harness 与脚本同级，跟着仓库走。
@@ -191,7 +191,7 @@ const decodeGray = (gray, side) => {
 /** 用 DOM 反解出来的矩阵自己栅格化（8 px/模块 + 静区），再交给独立解码器 */
 function decodeMatrixRows(rows) {
   const n = rows.length;
-  const quiet = QR_QUIET;
+  const quiet = erweimaAnjing;
   const modulePx = 8;
   const side = (n + quiet * 2) * modulePx;
   const gray = new Uint8Array(side * side).fill(255);
@@ -2376,7 +2376,7 @@ try {
     );
     const qa = dom.attrs || {};
     ok(
-      qa.ecc === QR_ECC && qa.quiet === QR_QUIET && qa.modules === libRows.length && qa.modules === 4 * qa.version + 17,
+      qa.ecc === QR_ECC && qa.quiet === erweimaAnjing && qa.modules === libRows.length && qa.modules === 4 * qa.version + 17,
       'R4-9b 纠错等级 M、静区 4 个模块、模块数 = 4×版本+17（都不是随手填的）',
       JSON.stringify(qa)
     );
@@ -4040,7 +4040,7 @@ try {
     '20-9 二维码内容不是加入链接 → 如实回显**读到的原文**，不发起加入（不编造联系人）', String(badLink.detail).slice(0, 70));
 
   await openScanDialog();
-  await c.evaluate(`(async function(){ await window.__scanProbe.feed('#contact-qr-file', new File([new Blob(['x'], {type:'text/plain'})], 'a.txt', {type:'text/plain'})); return true; })()`);
+  await c.evaluate(`(async function(){ await window.__scanProbe.feed('#contact-qr-file', new File([new Blob(['x'], {type:'text/plain'})], 'a.txt', {type:'text/chunWenBen'})); return true; })()`);
   const notImg = await scanState('contact-qr', 'not-image', 12000);
   ok(notImg.detail === ZH['join.scanNotImage'] && notImg.joins === 0,
     '20-10 选进来不是图片 → 如实说"这不是图片文件"', String(notImg.detail).slice(0, 60));

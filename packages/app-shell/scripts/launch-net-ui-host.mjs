@@ -1,8 +1,8 @@
 // 启动预览壳 + CDP，供 verify-net-ui.mjs 连接
-import { spawn } from 'node:child_process';
+import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(selfDir, '..');

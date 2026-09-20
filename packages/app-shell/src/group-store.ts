@@ -13,11 +13,11 @@
 import { duJsonWenJianGeLi, anQuanYuanZiXieJson } from './atomic-json.js';
 
 /** 与旧实现保持一致的成员上限 */
-export const GROUP_MEMBER_LIMIT = 50;
+export const QUN_CHENGYUAN_SHANGXIAN = 50;
 
 export type QunLei = 'internal' | 'external';
-export type GroupMemberRole = 'creator' | 'admin' | 'member';
-export type GroupMemberSource = 'instance' | 'invite' | 'migrated';
+export type QunChengyuanJuese = 'creator' | 'admin' | 'member';
+export type QunChengyuanLaiyuan = 'instance' | 'invite' | 'migrated';
 
 export interface qunJilu {
   groupId: string;
@@ -49,7 +49,7 @@ export interface qunJilu {
    * 旧记录没有这一层 ⇒ 读进来就是 `undefined`（**不猜、不伪造、不改写旧文件**），
    * 上层会自动回退到兼容路径（本机设置里的旧映射），见 GroupStore.projectOf 的注释。
    */
-  project?: GroupProjectRecord;
+  project?: QunXiangmuJilu;
 }
 
 /* ── ADR 004：项目级属性（**随项目走**，不是本机设置） ─────────────────────── */
@@ -62,7 +62,7 @@ export type ProjectDevEnv = 'host' | 'container';
  * 这是**每次现场探测得到的本机事实**，所以它随时间变、只作为"信号"同步，
  * 而不是写死进项目属性里。
  */
-export type ProjectAvailability = 'available' | 'stopped' | 'not-ready' | 'not-installed' | 'not-chosen' | 'unknown';
+export type XiangmuKeyongxing = 'available' | 'stopped' | 'not-ready' | 'not-installed' | 'not-chosen' | 'unknown';
 
 /** 工具文件访问操作类型（"记录文件的改动"是产品功能 ⇒ 操作类型必须机器可读） */
 export type ProjectFileAccessOp = 'read' | 'write' | 'edit' | 'create' | 'delete' | 'backup' | 'restore';
@@ -71,7 +71,7 @@ export type ProjectFileAccessOp = 'read' | 'write' | 'edit' | 'create' | 'delete
  * 工具文件访问台账的一条（**只记路径 + 操作 + 时间 + 结果**，
  * ⚠️ **绝不记文件内容**：台账要同步给成员，写进内容就是泄露）。
  */
-export interface ProjectFileAccessEntry {
+export interface XiangmuWenjianFangwenTiaomu {
   op: ProjectFileAccessOp;
   /** 绝对路径（由记录方保证；解析根在 UI/主进程侧） */
   path: string;
@@ -85,7 +85,7 @@ export interface ProjectFileAccessEntry {
 /** 台账条数上限（项目级，随项目同步 ⇒ 必须有界，超出丢最旧的） */
 export const PROJECT_LEDGER_LIMIT = 200;
 
-export interface GroupProjectRecord {
+export interface QunXiangmuJilu {
   /** 开发环境：创建项目时必选 */
   devEnv: ProjectDevEnv;
   /** 容器开发项目选定的运行时 id（没选 = 空串） */
@@ -97,7 +97,7 @@ export interface GroupProjectRecord {
   /** 目录是怎么定下来的（不编：creator-picked = 创建者选的；checkpoint-workspace = 回退点里记的） */
   directorySource?: 'creator-picked' | 'checkpoint-workspace';
   /** 创建者节点最近一次上报的可用性（本机事实） */
-  availability: ProjectAvailability;
+  availability: XiangmuKeyongxing;
   /** 与可用性配套的**机器可读原因码**（ok / container-not-ready / disabled-by-owner / …） */
   availabilityCode: string;
   availabilityAt: number;
@@ -106,7 +106,7 @@ export interface GroupProjectRecord {
   /** 环境记录：记住这个项目用哪个容器 / 上次固化在哪一层（没真发生过就不写） */
   env?: { containerRef?: string; imageRef?: string; solidifiedAt?: number };
   /** 工具文件访问台账（**项目级、成员可见**；有界，只留最近 PROJECT_LEDGER_LIMIT 条） */
-  ledger: ProjectFileAccessEntry[];
+  ledger: XiangmuWenjianFangwenTiaomu[];
   /**
    * 项目 MEMORY（覆盖式 Markdown，**当前有效**规矩/目标）。
    * 与 memory-os 流水**分工**：这里不是日志，不双写 JSONL。
@@ -130,7 +130,7 @@ export function isFileAccessOp(v: unknown): v is ProjectFileAccessOp {
 }
 
 /** 空的项目属性（devEnv 按 host —— 与"旧项目一律按本机"一致，绝不乐观放开容器） */
-export function emptyProjectRecord(): GroupProjectRecord {
+export function kongXiangmuJilu(): QunXiangmuJilu {
   return {
     devEnv: 'host',
     runtimeId: '',
@@ -142,12 +142,12 @@ export function emptyProjectRecord(): GroupProjectRecord {
   };
 }
 
-export interface GroupMemberRecord {
+export interface QunChengyuanJilu {
   id: string;
   name: string;
-  role: GroupMemberRole;
+  role: QunChengyuanJuese;
   joinedAt: number;
-  source: GroupMemberSource;
+  source: QunChengyuanLaiyuan;
   /** 本机牛马实例 ID（source=instance 时有值） */
   instanceId?: string;
   /**
@@ -166,7 +166,7 @@ export interface GroupMemberRecord {
 export interface GroupStoreState {
   version: 1;
   groups: qunJilu[];
-  members: Record<string, GroupMemberRecord[]>;
+  members: Record<string, QunChengyuanJilu[]>;
   /** 旧版会话状态（settings.json 的 state.groups）是否已回填过；只回填一次，避免解散后又被加回来 */
   uiStateMigrated?: boolean;
 }
@@ -182,13 +182,13 @@ export interface GroupListResult {
 export interface GroupMembersResult {
   ok: boolean;
   groupId?: string;
-  members: GroupMemberRecord[];
+  members: QunChengyuanJilu[];
   error?: string;
 }
 
 const EMPTY: GroupStoreState = { version: 1, groups: [], members: {} };
 
-function emptyState(): GroupStoreState {
+function kongZhuangtai(): GroupStoreState {
   return { version: 1, groups: [], members: {} };
 }
 
@@ -200,11 +200,11 @@ function asNumber(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 }
 
-function normalizeRole(v: unknown): GroupMemberRole {
+function normalizeRole(v: unknown): QunChengyuanJuese {
   return v === 'creator' || v === 'admin' ? v : 'member';
 }
 
-function normalizeSource(v: unknown): GroupMemberSource {
+function normalizeSource(v: unknown): QunChengyuanLaiyuan {
   return v === 'instance' || v === 'migrated' ? v : 'invite';
 }
 
@@ -231,9 +231,9 @@ export function sameFingerprintText(a: string, b: string): boolean {
 
 /** 把磁盘上的（可能被手改坏的）数据收敛成合法结构 */
 function normalize(raw: unknown): GroupStoreState {
-  if (!raw || typeof raw !== 'object') return emptyState();
+  if (!raw || typeof raw !== 'object') return kongZhuangtai();
   const src = raw as Partial<GroupStoreState>;
-  const out = emptyState();
+  const out = kongZhuangtai();
   if (src.uiStateMigrated === true) out.uiStateMigrated = true;
   const seen = new Set<string>();
   for (const g of Array.isArray(src.groups) ? src.groups : []) {
@@ -264,15 +264,15 @@ function normalize(raw: unknown): GroupStoreState {
   for (const key of Object.keys(membersSrc)) {
     const list = (membersSrc as Record<string, unknown>)[key];
     if (!Array.isArray(list)) continue;
-    const out2: GroupMemberRecord[] = [];
+    const out2: QunChengyuanJilu[] = [];
     const ids = new Set<string>();
     for (const m of list) {
       if (!m || typeof m !== 'object') continue;
-      const rec = m as Partial<GroupMemberRecord>;
+      const rec = m as Partial<QunChengyuanJilu>;
       const id = asString(rec.id);
       if (!id || ids.has(id)) continue;
       ids.add(id);
-      const row: GroupMemberRecord = {
+      const row: QunChengyuanJilu = {
         id,
         name: asString(rec.name) || id,
         role: normalizeRole(rec.role),
@@ -293,13 +293,13 @@ function normalize(raw: unknown): GroupStoreState {
 }
 
 /** 校验台账里的一条（外来数据：不认识的 op 直接丢，别把"未知"当 write 记下来） */
-function normalizeLedgerEntry(raw: unknown): ProjectFileAccessEntry | null {
+function normalizeLedgerEntry(raw: unknown): XiangmuWenjianFangwenTiaomu | null {
   if (!raw || typeof raw !== 'object') return null;
-  const rec = raw as Partial<ProjectFileAccessEntry>;
+  const rec = raw as Partial<XiangmuWenjianFangwenTiaomu>;
   if (!isFileAccessOp(rec.op)) return null;
   const p = asString(rec.path);
   if (!p) return null;
-  const row: ProjectFileAccessEntry = {
+  const row: XiangmuWenjianFangwenTiaomu = {
     op: rec.op,
     path: p,
     ts: asNumber(rec.ts) || Date.now(),
@@ -312,10 +312,10 @@ function normalizeLedgerEntry(raw: unknown): ProjectFileAccessEntry | null {
 }
 
 /** 把（可能来自磁盘或网络对端的）项目属性收敛成合法结构；什么都没有则返回 undefined */
-export function normalizeProject(raw: unknown): GroupProjectRecord | undefined {
+export function normalizeProject(raw: unknown): QunXiangmuJilu | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
-  const rec = raw as Partial<GroupProjectRecord>;
-  const row = emptyProjectRecord();
+  const rec = raw as Partial<QunXiangmuJilu>;
+  const row = kongXiangmuJilu();
   row.devEnv = rec.devEnv === 'container' ? 'container' : 'host';
   row.runtimeId = asString(rec.runtimeId);
   row.disabledAt = Math.max(0, asNumber(rec.disabledAt));
@@ -327,7 +327,7 @@ export function normalizeProject(raw: unknown): GroupProjectRecord | undefined {
   }
   const keYong = asString(rec.availability);
   row.availability = (['available', 'stopped', 'not-ready', 'not-installed', 'not-chosen'] as const).includes(keYong as never)
-    ? (keYong as ProjectAvailability)
+    ? (keYong as XiangmuKeyongxing)
     : 'unknown';
   row.availabilityCode = asString(rec.availabilityCode);
   row.availabilityAt = asNumber(rec.availabilityAt);
@@ -335,7 +335,7 @@ export function normalizeProject(raw: unknown): GroupProjectRecord | undefined {
   if (by) row.reportedBy = by;
   if (rec.env && typeof rec.env === 'object') {
     const e = rec.env as { containerRef?: unknown; imageRef?: unknown; solidifiedAt?: unknown };
-    const env: NonNullable<GroupProjectRecord['env']> = {};
+    const env: NonNullable<QunXiangmuJilu['env']> = {};
     if (asString(e.containerRef)) env.containerRef = asString(e.containerRef);
     if (asString(e.imageRef)) env.imageRef = asString(e.imageRef);
     if (asNumber(e.solidifiedAt) > 0) env.solidifiedAt = asNumber(e.solidifiedAt);
@@ -388,7 +388,7 @@ export class GroupStore {
    * ⚠️ 调用方必须**原样回退到本机旧设置**（兼容路径），**不要**在这里替它猜一个：
    * "没有项目属性"与"项目属性说它是本机项目"是两件事。
    */
-  projectOf(groupId: string): GroupProjectRecord | undefined {
+  projectOf(groupId: string): QunXiangmuJilu | undefined {
     const g = this.getGroup(String(groupId || ''));
     return g && g.project ? g.project : undefined;
   }
@@ -402,16 +402,16 @@ export class GroupStore {
    */
   setProjectAttrs(
     groupId: string,
-    patch: Partial<Omit<GroupProjectRecord, 'ledger'>> & { ledger?: ProjectFileAccessEntry[] }
-  ): { ok: boolean; project?: GroupProjectRecord; error?: string } {
+    patch: Partial<Omit<QunXiangmuJilu, 'ledger'>> & { ledger?: XiangmuWenjianFangwenTiaomu[] }
+  ): { ok: boolean; project?: QunXiangmuJilu; error?: string } {
     const gid = asString(groupId);
     if (!gid) return { ok: false, error: 'groupId required' };
     const state = this.snapshot();
     const g = state.groups.find((x) => x.groupId === gid);
     // 群记录不存在时不偷偷建一条（群名/类型都不知道，编出来比没有更糟）
     if (!g) return { ok: false, error: 'group not found' };
-    const cur = g.project || emptyProjectRecord();
-    const next: GroupProjectRecord = { ...cur, ledger: (cur.ledger || []).slice() };
+    const cur = g.project || kongXiangmuJilu();
+    const next: QunXiangmuJilu = { ...cur, ledger: (cur.ledger || []).slice() };
     if (patch.devEnv === 'container' || patch.devEnv === 'host') next.devEnv = patch.devEnv;
     if (typeof patch.runtimeId === 'string') next.runtimeId = patch.runtimeId;
     if (typeof patch.disabledAt === 'number' && Number.isFinite(patch.disabledAt)) next.disabledAt = Math.max(0, patch.disabledAt);
@@ -449,7 +449,7 @@ export class GroupStore {
    * 项目 MEMORY 写入（覆盖式）。**唯一落点** = groups.json 的 project.memory。
    * 不写第二份文件、不 append memory-os（避免与流水记忆重复）。
    */
-  setProjectMemory(groupId: string, memory: string): { ok: boolean; project?: GroupProjectRecord; error?: string; chars: number } {
+  setProjectMemory(groupId: string, memory: string): { ok: boolean; project?: QunXiangmuJilu; error?: string; chars: number } {
     const text = String(memory ?? '').slice(0, 8000);
     const r = this.setProjectAttrs(groupId, { memory: text });
     return { ok: r.ok, project: r.project, error: r.error, chars: text.length };
@@ -461,8 +461,8 @@ export class GroupStore {
    */
   recordFileAccess(
     groupId: string,
-    entry: ProjectFileAccessEntry
-  ): { ok: boolean; entry?: ProjectFileAccessEntry; error?: string } {
+    entry: XiangmuWenjianFangwenTiaomu
+  ): { ok: boolean; entry?: XiangmuWenjianFangwenTiaomu; error?: string } {
     const gid = asString(groupId);
     if (!gid) return { ok: false, error: 'groupId required' };
     const e = normalizeLedgerEntry(entry);
@@ -470,7 +470,7 @@ export class GroupStore {
     const state = this.snapshot();
     const g = state.groups.find((x) => x.groupId === gid);
     if (!g) return { ok: false, error: 'group not found' };
-    const xiangMu = g.project || emptyProjectRecord();
+    const xiangMu = g.project || kongXiangmuJilu();
     const list = (xiangMu.ledger || []).filter((x) => !(x.path === e.path && x.op === e.op));
     list.push(e);
     xiangMu.ledger = list.length > PROJECT_LEDGER_LIMIT ? list.slice(-PROJECT_LEDGER_LIMIT) : list;
@@ -482,7 +482,7 @@ export class GroupStore {
   }
 
   /** 台账读取（按时间倒序；`limit` 有上限，避免一次把大台账全推给渲染层） */
-  listFileAccess(groupId: string, limit = PROJECT_LEDGER_LIMIT): ProjectFileAccessEntry[] {
+  listFileAccess(groupId: string, limit = PROJECT_LEDGER_LIMIT): XiangmuWenjianFangwenTiaomu[] {
     const xiangMu = this.projectOf(groupId);
     const list = (xiangMu && xiangMu.ledger) || [];
     const n = Math.max(1, Math.min(Math.floor(limit) || PROJECT_LEDGER_LIMIT, PROJECT_LEDGER_LIMIT));
@@ -499,7 +499,7 @@ export class GroupStore {
     payload: {
       name?: string;
       type?: QunLei;
-      project: Partial<Omit<GroupProjectRecord, 'ledger'>>;
+      project: Partial<Omit<QunXiangmuJilu, 'ledger'>>;
       /** 对端（创建者）的指纹：只在本地还不知道创建者时补上 */
       creatorFingerprint?: string;
     }
@@ -507,8 +507,8 @@ export class GroupStore {
     const gid = asString(groupId);
     if (!gid) return { ok: false, error: 'groupId required' };
     // 先确保有这条群记录（成员第一次收到同步时本地可能还没有）
-    const existing = this.getGroup(gid);
-    if (!existing) {
+    const cunzai = this.getGroup(gid);
+    if (!cunzai) {
       const created = this.upsertGroup({
         groupId: gid,
         name: asString(payload.name) || gid,
@@ -516,12 +516,12 @@ export class GroupStore {
         ...(asString(payload.creatorFingerprint) ? { creatorFingerprint: asString(payload.creatorFingerprint) } : {}),
       });
       if (!created.ok) return { ok: false, error: created.error };
-    } else if (asString(payload.creatorFingerprint) && !existing.creatorFingerprint) {
+    } else if (asString(payload.creatorFingerprint) && !cunzai.creatorFingerprint) {
       // 只在本地不知道时补；已知创建者绝不被对端覆盖（避免"谁都能自称群主"）
       this.upsertGroup({
         groupId: gid,
-        name: existing.name,
-        type: existing.type,
+        name: cunzai.name,
+        type: cunzai.type,
         creatorFingerprint: asString(payload.creatorFingerprint),
       });
     }
@@ -548,17 +548,17 @@ export class GroupStore {
     if (!groupId) return { ok: false, error: 'groupId required' };
     const state = this.snapshot();
     const now = Date.now();
-    const existing = state.groups.find((g) => g.groupId === groupId);
+    const cunzai = state.groups.find((g) => g.groupId === groupId);
     let group: qunJilu;
-    if (existing) {
-      existing.name = asString(input.name) || existing.name;
-      existing.type = normalizeType(input.type);
-      if (typeof input.directedMode === 'boolean') existing.directedMode = input.directedMode;
+    if (cunzai) {
+      cunzai.name = asString(input.name) || cunzai.name;
+      cunzai.type = normalizeType(input.type);
+      if (typeof input.directedMode === 'boolean') cunzai.directedMode = input.directedMode;
       // 只在"本来不知道"时补写，绝不覆盖已知的创建者
       const chuangJianZheZhiWen = asString(input.creatorFingerprint);
-      if (chuangJianZheZhiWen && !existing.creatorFingerprint) existing.creatorFingerprint = chuangJianZheZhiWen;
-      existing.updatedAt = now;
-      group = existing;
+      if (chuangJianZheZhiWen && !cunzai.creatorFingerprint) cunzai.creatorFingerprint = chuangJianZheZhiWen;
+      cunzai.updatedAt = now;
+      group = cunzai;
     } else {
       group = {
         groupId,
@@ -592,7 +592,7 @@ export class GroupStore {
     return { ok: true, removed: true };
   }
 
-  listMembers(groupId: string): GroupMemberRecord[] {
+  listMembers(groupId: string): QunChengyuanJilu[] {
     return (this.snapshot().members[groupId] || []).slice().sort((a, b) => a.joinedAt - b.joinedAt);
   }
 
@@ -605,8 +605,8 @@ export class GroupStore {
     groupId: string,
     input: {
       name: string;
-      role?: GroupMemberRole;
-      source?: GroupMemberSource;
+      role?: QunChengyuanJuese;
+      source?: QunChengyuanLaiyuan;
       instanceId?: string;
       id?: string;
       fingerprint?: string;
@@ -620,10 +620,10 @@ export class GroupStore {
     const instId = asString(input.instanceId);
     const dup = list.find((m) => (instId ? m.instanceId === instId : m.name === name));
     if (dup) return { ok: true, groupId, members: list.slice() };
-    if (list.length >= GROUP_MEMBER_LIMIT) {
+    if (list.length >= QUN_CHENGYUAN_SHANGXIAN) {
       return { ok: false, groupId, members: list.slice(), error: `max GROUP_MEMBER_LIMIT` };
     }
-    const row: GroupMemberRecord = {
+    const row: QunChengyuanJilu = {
       id: asString(input.id) || (instId ? `inst:instId` : `m-Date.now().toString(36)-list.length`),
       name,
       role: normalizeRole(input.role),
@@ -655,8 +655,8 @@ export class GroupStore {
     groupId: string,
     input: {
       name: string;
-      role?: GroupMemberRole;
-      source?: GroupMemberSource;
+      role?: QunChengyuanJuese;
+      source?: QunChengyuanLaiyuan;
       instanceId?: string;
       id?: string;
       fingerprint?: string;
@@ -704,7 +704,7 @@ export class GroupStore {
    * 传空指纹 = 不改（**没有"清空指纹"这条路径**：指纹一旦绑定就是审计事实，
    * 要"解绑"应该走换证/吊销，而不是抹掉记录）。
    */
-  setMemberFingerprint(groupId: string, memberId: string, fingerprint: string): { ok: boolean; changed: boolean; members: GroupMemberRecord[]; error?: string } {
+  setMemberFingerprint(groupId: string, memberId: string, fingerprint: string): { ok: boolean; changed: boolean; members: QunChengyuanJilu[]; error?: string } {
     const fp = asString(fingerprint).trim();
     if (!fp) return { ok: false, changed: false, members: [], error: 'fingerprint required' };
     const state = this.snapshot();

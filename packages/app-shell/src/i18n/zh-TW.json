@@ -1718,6 +1718,6 @@
   "container.section.existing": "本機已有容器",
   "container.section.images": "映像",
   "me.showFull": "顯示憑證全貌",
-  "me.hideFull": "隱藏憑證（只露前三後三）",
+  "me.hideFull": "隱藏憑證（只露前後各兩組）",
   "me.credRotated": "已更換憑證（身份同步更新，舊身份已備份）"
 }

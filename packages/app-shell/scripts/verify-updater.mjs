@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { Updater, compareVersions, parseVersion } from '../dist/updater.js';
+import {Gengxinqi, bijiaoBanben, parseVersion} from '../dist/updater.js';
 
 let failures = 0;
 function check(label, cond, detail) {
@@ -94,7 +94,7 @@ const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-updater-'));
 const downloadDir = path.join(tmpRoot, 'updates');
 
 const mk = (opts = {}) =>
-  new Updater({
+  new Gengxinqi({
     currentVersion: CURRENT,
     downloadDir: opts.downloadDir || downloadDir,
     getSettings: opts.getSettings || (() => ({})),
@@ -217,11 +217,11 @@ check('getSourceInfo 报告已配置 + 上次结果', info.configured === true &
 
 // ── 13. 版本比较工具 ──
 console.log('\n[13] 版本比较');
-check('1.0.0 < 1.0.1', compareVersions('1.0.0', '1.0.1') === -1);
-check('v2.0.0 > 1.9.9', compareVersions('v2.0.0', '1.9.9') === 1);
-check('1.0.0 == v1.0.0', compareVersions('1.0.0', 'v1.0.0') === 0);
-check('1.0.0 > 1.0.0-beta.1', compareVersions('1.0.0', '1.0.0-beta.1') === 1);
-check('非法版本返回 null', compareVersions('abc', '1.0.0') === null && parseVersion('abc') === null);
+check('1.0.0 < 1.0.1', bijiaoBanben('1.0.0', '1.0.1') === -1);
+check('v2.0.0 > 1.9.9', bijiaoBanben('v2.0.0', '1.9.9') === 1);
+check('1.0.0 == v1.0.0', bijiaoBanben('1.0.0', 'v1.0.0') === 0);
+check('1.0.0 > 1.0.0-beta.1', bijiaoBanben('1.0.0', '1.0.0-beta.1') === 1);
+check('非法版本返回 null', bijiaoBanben('abc', '1.0.0') === null && parseVersion('abc') === null);
 
 server.close();
 console.log(`\n结论: ${failures === 0 ? '全部通过' : `${failures} 项失败`}`);

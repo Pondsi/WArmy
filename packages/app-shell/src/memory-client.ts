@@ -184,7 +184,7 @@ export class MemoryClient {
 // ─────────────────────────────────────────────
 
 /** 工具名（与指针文本里的写法保持一致：`recall(…)` / `retrieve(…)`） */
-export const MEMORY_TOOL_NAMES = { recall: 'recall', retrieve: 'retrieve' } as const;
+export const JIYICANG_GONGJU_MINGCHENG = { recall: 'recall', retrieve: 'retrieve' } as const;
 
 /** 单次工具结果上限（字符）；与视图预算同量级，防止"取回原文"把上下文撑成无界 */
 export const MEMORY_TOOL_RESULT_CHARS = 4000;
@@ -236,7 +236,7 @@ export function memoryToolSpecs(labels: Partial<MemoryToolLabels> = {}): GongJuG
     {
       type: 'function',
       function: {
-        name: MEMORY_TOOL_NAMES.recall,
+        name: JIYICANG_GONGJU_MINGCHENG.recall,
         description: L.recall,
         parameters: {
           type: 'object',
@@ -256,7 +256,7 @@ export function memoryToolSpecs(labels: Partial<MemoryToolLabels> = {}): GongJuG
     {
       type: 'function',
       function: {
-        name: MEMORY_TOOL_NAMES.retrieve,
+        name: JIYICANG_GONGJU_MINGCHENG.retrieve,
         description: L.retrieve,
         parameters: {
           type: 'object',
@@ -279,7 +279,7 @@ export function memoryToolSpecs(labels: Partial<MemoryToolLabels> = {}): GongJuG
   ];
 }
 
-export interface MemoryToolMeta {
+export interface JiyiCangGongjuYuanshuju {
   tool: string;
   ok: boolean;
   /** 回给模型的文本长度（字符） */
@@ -302,7 +302,7 @@ export interface MemoryToolOutcome {
   /** 直接作为 tool 消息回给模型的文本 */
   content: string;
   chars: number;
-  meta: MemoryToolMeta;
+  meta: JiyiCangGongjuYuanshuju;
 }
 
 function qianZhiZhengShu(v: unknown, lo: number, hi: number, dflt: number): number {
@@ -349,7 +349,7 @@ function sanitize(e: unknown): string {
  * **绝不抛错**：任何异常都变成 ok:false + 可读文本回给模型
  * （模型据此改换锚点/放弃，而不是把整轮对话打成 error）。
  */
-export async function runMemoryTool(
+export async function yunxingJiyiCangGongju(
   client: MemoryClient | null,
   call: GongJuDiaoYong,
   opts: { maxChars?: number } = {}
@@ -357,7 +357,7 @@ export async function runMemoryTool(
   const name = call?.function?.name || '';
   const args = parseArgs(call?.function?.arguments);
   const cap = qianZhiZhengShu(opts.maxChars, 64, MEMORY_TOOL_MAX_RETRIEVE_CHARS, MEMORY_TOOL_RESULT_CHARS);
-  const meta: MemoryToolMeta = { tool: name, ok: false, chars: 0 };
+  const meta: JiyiCangGongjuYuanshuju = { tool: name, ok: false, chars: 0 };
   const fail = (msg: string, error?: string): MemoryToolOutcome => {
     meta.ok = false;
     meta.chars = msg.length;
@@ -369,7 +369,7 @@ export async function runMemoryTool(
     if (!client) return fail('记忆服务不可用：当前会话没有可解引用的历史，请直接基于已有上下文作答。', 'memory-client-missing');
     if (!client.isReady) return fail('记忆服务尚未就绪（正在启动或已退出）：无法取回被省略的历史，请直接基于已有上下文作答。', 'memory-not-ready');
 
-    if (name === MEMORY_TOOL_NAMES.recall) {
+    if (name === JIYICANG_GONGJU_MINGCHENG.recall) {
       const query = String(args['query'] ?? '').replace(/\s+/g, ' ').trim();
       meta.queryChars = query.length;
       if (!query) return fail('recall 需要 query 参数（检索串），例：recall("值班者状态机")。', 'bad-args');
@@ -404,11 +404,11 @@ export async function runMemoryTool(
       return { ok: true, content: text, chars: text.length, meta };
     }
 
-    if (name === MEMORY_TOOL_NAMES.retrieve) {
+    if (name === JIYICANG_GONGJU_MINGCHENG.retrieve) {
       const ridRaw = args['recordId'];
       const recordId = typeof ridRaw === 'string' && ridRaw.trim() ? ridRaw.trim() : undefined;
-      const seqNum = Number(args['seq']);
-      const seq = Number.isFinite(seqNum) ? Math.floor(seqNum) : undefined;
+      const xulieShuliang = Number(args['seq']);
+      const seq = Number.isFinite(xulieShuliang) ? Math.floor(xulieShuliang) : undefined;
       if (!recordId && seq === undefined) {
         return fail('retrieve 需要 recordId 或 seq 之一，例：retrieve(seq=12) / retrieve(recordId="m-…")。', 'bad-args');
       }
@@ -464,7 +464,7 @@ export async function runMemoryTool(
 }
 
 /** 内容摘要（重启历史校验用：不落正文，只落长度与哈希） */
-export function contentDigest(s: string): string {
+export function neirongZhaiyao(s: string): string {
   return createHash('sha256').update(String(s ?? ''), 'utf8').digest('hex').slice(0, 16);
 }
 

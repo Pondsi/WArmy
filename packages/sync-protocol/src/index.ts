@@ -15,7 +15,7 @@ export interface JieDianXinXi {
   revoked?: boolean;
 }
 
-export interface SyncEnvelope {
+export interface TongbuFeng {
   id: string;
   fromNode: string;
   toNode: string | '*';
@@ -83,7 +83,7 @@ export class JieDianMingCe {
   }
 }
 
-export class SyncBus {
+export class TongbuZongxian {
   private seq = 0;
 
   constructor(private busDir: string) {
@@ -94,8 +94,8 @@ export class SyncBus {
     return path.join(this.busDir, 'messages.jsonl');
   }
 
-  publish(env: Omit<SyncEnvelope, 'id' | 'ts'>): SyncEnvelope {
-    const full: SyncEnvelope = {
+  publish(env: Omit<TongbuFeng, 'id' | 'ts'>): TongbuFeng {
+    const full: TongbuFeng = {
       ...env,
       id: `m-${++this.seq}-${Date.now().toString(36)}`,
       ts: Date.now(),
@@ -108,13 +108,13 @@ export class SyncBus {
     return full;
   }
 
-  pull(nodeId: string): SyncEnvelope[] {
+  pull(nodeId: string): TongbuFeng[] {
     if (!fs.existsSync(this.file)) return [];
     return fs
       .readFileSync(this.file, 'utf8')
       .split('\n')
       .filter(Boolean)
-      .map((l) => JSON.parse(l) as SyncEnvelope)
+      .map((l) => JSON.parse(l) as TongbuFeng)
       .filter((m) => m.toNode === nodeId || m.toNode === '*');
   }
 }

@@ -15,14 +15,14 @@
  *   - 去掉重复注册的 warmy:clear-error（Electron 会因重复注册抛异常）
  *   - 去掉 app.setAsDefaultProtocolClient（避免改到本机注册表）
  */
-import { execFileSync, spawn } from 'node:child_process';
+import {execFileSync, spawn} from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.join(here, '..');
@@ -131,7 +131,7 @@ async function connect(devtoolsPort, appPrefix) {
   let target = null;
   while (Date.now() < deadline) {
     try {
-      const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`)).json();
+      const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/LieBiao`)).json();
       // 只认自己这个副本的页面，避免误连到本机其它 Electron 实例
       target = list.find(
         (t) => t.type === 'page' && t.webSocketDebuggerUrl && String(t.url || '').toLowerCase().includes(appPrefix)

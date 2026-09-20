@@ -4,17 +4,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export type AssetCategory = 'skill' | 'rule' | 'memory' | 'prompt' | 'tool' | 'file';
-export type AssetScope = 'session' | 'project' | 'user' | 'global';
-export type AssetStrength = 'strong' | 'weak' | 'background';
-export type AssetStatus = 'active' | 'deprecated' | 'archived' | 'revoked';
+export type ZichanLeibie = 'skill' | 'rule' | 'memory' | 'prompt' | 'tool' | 'file';
+export type ZichanZuoyongyu = 'session' | 'project' | 'user' | 'global';
+export type ZichanQiangdu = 'strong' | 'weak' | 'background';
+export type ZichanZhuangtai = 'active' | 'deprecated' | 'archived' | 'revoked';
 
 export interface ZiChan {
   id: string;
-  category: AssetCategory;
-  scope: AssetScope;
-  strength: AssetStrength;
-  status: AssetStatus;
+  category: ZichanLeibie;
+  scope: ZichanZuoyongyu;
+  strength: ZichanQiangdu;
+  status: ZichanZhuangtai;
   title: string;
   body: string;
   negativeScore: number;
@@ -23,7 +23,7 @@ export interface ZiChan {
   lastUsedAt?: number;
 }
 
-export class AssetGovernor {
+export class ZichanGuanliqi {
   private assets = new Map<string, ZiChan>();
 
   constructor(private persistPath?: string) {
@@ -57,7 +57,7 @@ export class AssetGovernor {
   }
 
   /** 权限过滤先于相关性检索：严格模式不注入持久资产 */
-  retrieve(opts: { category?: AssetCategory; scope?: AssetScope; strict?: boolean }): ZiChan[] {
+  retrieve(opts: { category?: ZichanLeibie; scope?: ZichanZuoyongyu; strict?: boolean }): ZiChan[] {
     if (opts.strict) return [];
     return [...this.assets.values()].filter(
       (a) =>

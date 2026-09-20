@@ -14,10 +14,10 @@
  *
  *   node scripts/check-syntax.mjs
  */
-import { execFileSync } from 'node:child_process';
+import {execFileSync} from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync } from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {existsSync, readFileSync} from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appjs = path.join(here, '..', 'src', 'renderer', 'app.js');

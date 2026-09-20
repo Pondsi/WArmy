@@ -2,16 +2,16 @@ const fs = require('node:fs');
 const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/electron-main.ts';
 let s = fs.readFileSync(p, 'utf8');
 
-if (!s.includes('runShortLivedExecutor')) {
+if (!s.includes('yunxingDuanCunhuoZhixingqi')) {
   s = s.replace(
-    "import { CheckpointStore } from './checkpoint.js';",
-    "import { CheckpointStore } from './checkpoint.js';\nimport { runShortLivedExecutor, runExecutors } from './executor.js';\nimport { initAssetGovernor, retrieveAssetsForChat, registerChatAsset, recordAssetUsage, sweepAssets } from './asset-wire.js';"
+    "import {JianChaDianCang} from './checkpoint.js';",
+    "import {JianChaDianCang} from './checkpoint.js';\nimport {yunxingDuanCunhuoZhixingqi, runExecutors} from './executor.js';\nimport {chuShiZiChanGuanLi, retrieveAssetsForChat, zhuCeLiaoTianZiChan, jiLuZiChanShiYong, qingLiZiChan} from './asset-wire.js';"
   );
 
   // bootstrap: init asset governor
   s = s.replace(
     "boot('board/knowledge/checkpoints/account/settings/sync/mesh ready');",
-    "initAssetGovernor(path.join(userData, 'assets.json'));\n  boot('board/knowledge/checkpoints/account/sync/mesh/assets ready');"
+    "chuShiZiChanGuanLi(path.join(userData, 'assets.json'));\n  boot('board/knowledge/checkpoints/account/sync/mesh/assets ready');"
   );
 
   // IPC: executor + assets + knowledge-from-chat
@@ -21,7 +21,7 @@ ipcMain.handle('warmy:executor-run', async (_e, task: { taskId?: string; brief: 
   if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
     return { ok: false, error: 'no key' };
   }
-  const r = await runShortLivedExecutor(
+  const r = await yunxingDuanCunhuoZhixingqi(
     {
       taskId: task.taskId || 'x-' + Date.now(),
       brief: task.brief,
@@ -60,16 +60,16 @@ ipcMain.handle('warmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: b
 }));
 
 ipcMain.handle('warmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
-  registerChatAsset({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
+  zhuCeLiaoTianZiChan({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
   return { ok: true };
 });
 
 ipcMain.handle('warmy:assets-feedback', (_e, id: string, good: boolean) => {
-  recordAssetUsage(id, good);
+  jiLuZiChanShiYong(id, good);
   return { ok: true };
 });
 
-ipcMain.handle('warmy:assets-sweep', () => ({ ok: true, n: sweepAssets() }));
+ipcMain.handle('warmy:assets-sweep', () => ({ ok: true, n: qingLiZiChan() }));
 
 // ── P6 知识库：从对话写入 ──
 ipcMain.handle('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
@@ -89,7 +89,7 @@ ipcMain.handle('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: s
     anchors: [],
     ts: Date.now(),
   });
-  registerChatAsset({
+  zhuCeLiaoTianZiChan({
     id: evId,
     title: payload.title,
     body: payload.body,

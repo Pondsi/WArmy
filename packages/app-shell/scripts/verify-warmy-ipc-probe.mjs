@@ -6,8 +6,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(selfDir, '..');

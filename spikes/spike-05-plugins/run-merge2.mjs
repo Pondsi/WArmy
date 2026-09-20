@@ -4,11 +4,11 @@
  * 2) 用绝对路径 pnpm install
  * 3) dump-config 检查两 bundle 是否共存
  */
-import { spawn } from 'node:child_process';
+import {spawn} from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dshHome = path.join(os.tmpdir(), `warmy-dsh-home2-${Date.now()}`);

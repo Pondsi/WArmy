@@ -36,7 +36,7 @@ export const LOCALE_NATIVE_NAMES: Record<SupportedLocale, string> = {
  * Resolve an arbitrary locale tag to a supported pack id.
  * Maps language prefixes to the full product set — never collapses to only zh-CN/en-US.
  */
-export function resolveLocale(locale: string | undefined | null): SupportedLocale {
+export function jiexiYuyan(locale: string | undefined | null): SupportedLocale {
   if (!locale) return 'zh-CN';
   const raw = String(locale).trim();
   if ((SUPPORTED_LOCALES as readonly string[]).includes(raw)) {

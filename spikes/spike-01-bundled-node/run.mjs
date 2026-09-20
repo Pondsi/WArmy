@@ -2,8 +2,8 @@
  * Spike 1（本机部分）: 系统 Node 24 能否加载 @deepseek-ai/dsh 与 node-pty prebuild
  * 完整 5 平台 bundled Node 验证需后续 CI / extraResources
  */
-import { createRequire } from 'node:module';
-import { execFileSync } from 'node:child_process';
+import {createRequire} from 'node:module';
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 

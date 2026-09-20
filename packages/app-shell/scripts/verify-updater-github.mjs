@@ -1,5 +1,5 @@
 /**
- * 真机：把更新源指到 GitHub 仓库，并实测 Updater 能否正确解析。
+ * 真机：把更新源指到 GitHub 仓库，并实测 Gengxinqi 能否正确解析。
  * 不启动 Electron UI；直接 import dist/updater.js。
  *
  * 默认源（产品定稿）：
@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Updater } from '../dist/updater.js';
+import {Gengxinqi} from '../dist/updater.js';
 
 const FEEDS = [
   {
@@ -52,7 +52,7 @@ async function main() {
   let apiOk = false;
   for (const f of FEEDS) {
     console.log('\n=== feed', f.id, f.url);
-    const r = await checkWithRetry(() => new Updater({
+    const r = await checkWithRetry(() => new Gengxinqi({
       currentVersion: '0.1.0',
       downloadDir: dir,
       getSettings: () => ({ updateFeedUrl: f.url }),
@@ -83,7 +83,7 @@ async function main() {
   // extra: prove update-available path against real GitHub by pretending older currentVersion
   console.log('\n=== feed github-api-latest as current=0.0.1 (expect update-available) ===');
   {
-    const r = await checkWithRetry(() => new Updater({
+    const r = await checkWithRetry(() => new Gengxinqi({
       currentVersion: '0.0.1',
       downloadDir: dir,
       getSettings: () => ({ updateFeedUrl: 'https://api.github.com/repos/Pondsi/WArmy/releases/latest' }),

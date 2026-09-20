@@ -4,7 +4,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import {pathToFileURL} from 'node:url';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const ascii = path.join(os.tmpdir(), 'warmy-lan-pkg');

@@ -2,7 +2,7 @@
  * Spike 4: FTS5 单字索引 + 中文短语/边界查询
  * DoD: 2字词命中率 100%；覆盖 1字/2字/3字/英文标识符/路径/错误码
  */
-import { createRequire } from 'node:module';
+import {createRequire} from 'node:module';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';

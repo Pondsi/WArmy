@@ -2,12 +2,12 @@
  * 自包含 UI 巡检：build-preview → spawn Electron host → CDP 断言 → 切语言 → 截图 → 汇总
  * 不依赖外部长驻 Start-Process（避免工具壳杀掉子进程）。
  */
-import { spawn } from 'node:child_process';
+import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { attach, sleep, reporter, BOOT_DONE } from './cdp-lib.mjs';
+import {fileURLToPath} from 'node:url';
+import {attach, sleep, reporter, BOOT_DONE} from './cdp-lib.mjs';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(selfDir, '..');
@@ -81,7 +81,7 @@ function spawnSyncNode(args) {
 }
 
 async function buildPreviewAsync() {
-  const { spawnSync } = await import('node:child_process');
+  const {spawnSync} = await import('node:child_process');
   const r = spawnSync(process.execPath, [path.join(selfDir, 'build-preview.mjs'), '--out', OUT], {
     encoding: 'utf8',
     cwd: repoRoot,

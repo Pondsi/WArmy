@@ -4,8 +4,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tiQuJieGouHuaZhaiYao, congGuiDangTiQuZhiShi, ZhiShiGuiDangQi, heBingYongHuPianHao } from '../dist/archive-cleanup.js';
+import {fileURLToPath} from 'node:url';
+import {tiQuJieGouHuaZhaiYao, congGuiDangTiQuZhiShi, ZhiShiGuiDangQi, heBingYongHuPianHao} from '../dist/archive-cleanup.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -15,7 +15,7 @@ function check(l, ok, d) {
   else { fail++; console.log('  FAIL ' + l, d ?? ''); }
 }
 
-// ── 1. extractStructuredSummary 模式匹配 ──
+// ── 1. tiQuJieGouHuaZhaiYao 模式匹配 ──
 const text = [
   'user: 我们决定使用端口 59599',
   'assistant: 决定：先做文档门禁',
@@ -31,7 +31,7 @@ check('structured has risks', st.risks.some((d) => /风险/.test(d)), st.risks);
 check('structured has bullets', Array.isArray(st.bullets) && st.bullets.length >= 1);
 check('structured title bounded', st.title.length <= 100);
 
-// ── 2. extractKnowledgeFromArchive 用结构化事件 ──
+// ── 2. congGuiDangTiQuZhiShi 用结构化事件 ──
 const ex = congGuiDangTiQuZhiShi({
   groupId: 'g1',
   title: '发布准备',
@@ -41,7 +41,7 @@ check('extraction entities', ex.entities.length >= 1);
 check('extraction events from structured', ex.events.length >= 1 && ex.events.some((e) => /决定|验证|docs|推送|GitHub|发布/.test((e.title || '') + (e.result || ''))), ex.events);
 check('extraction event result non-empty', !!ex.events[0]?.result);
 
-// ── 3. KnowledgeArchiver 持久化 structured ──
+// ── 3. ZhiShiGuiDangQi 持久化 structured ──
 const tmp = path.join(os.tmpdir(), 'warmy-summary-q-' + Date.now());
 const arch = new ZhiShiGuiDangQi(tmp);
 const entry = arch.archive({
@@ -59,7 +59,7 @@ check('archive entry has anchors for jump', Array.isArray(entry.anchors) && entr
 
 // ── 4. 用户偏好合并 ──
 const pref = heBingYongHuPianHao(tmp, [{ key: 'preference.port', value: '59599', source: 'archive:g1' }]);
-check('mergeUserPreferences ok', pref.ok === true && pref.count >= 0);
+check('heBingYongHuPianHao ok', pref.ok === true && pref.count >= 0);
 
 // ── 5. 源码断言：项目侧面板 + 跳转回退 + session-summary 锚点 ──
 const app = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'), 'utf8');

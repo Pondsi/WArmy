@@ -17,18 +17,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  ZhongJiJieDian,
-  ZhongJiSuiDaoBoHao,
-  ZhongJiSuiDaoJianTing,
-  SecureSyncClient,
-  SecureSyncServer,
-  warmyFingerprint,
-  ed25519FromSeed,
-  sha256,
-  signEd25519Local,
-  verifyEd25519Local,
-} from '../dist/index.js';
+import {ZhongJiJieDian, ZhongJiSuiDaoBoHao, ZhongJiSuiDaoJianTing, SecureSyncClient, SecureSyncServer, warmyFingerprint, ed25519FromSeed, sha256, signEd25519Local, verifyEd25519Local, } from '../dist/index.js';
 
 /** 明文中唯一标记：中继侧任何样本里**都不允许**出现它（证明中继只看到密文） */
 export const MARKER_SEND = 'WARMY-RELAY-PLAINTEXT-MARKER-SEND-9f3a71';

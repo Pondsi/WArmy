@@ -2,7 +2,7 @@
  * Spike 2 child: 长驻 better-sqlite3 子进程
  * .node 仅在本进程加载，满足「零原生模块」主进程边界
  */
-import { createRequire } from 'node:module';
+import {createRequire} from 'node:module';
 
 const require = createRequire(import.meta.url);
 

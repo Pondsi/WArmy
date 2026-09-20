@@ -2,11 +2,11 @@
  * Spike 5 运行时：在同一 dsh profile 挂 agent-teams + memory-bundle
  * DoD：composed profile tree 同时含两个 bundle id；无 fatal 冲突
  */
-import { spawn } from 'node:child_process';
+import {spawn} from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dshHome = path.join(os.tmpdir(), `warmy-dsh-home-${Date.now()}`);

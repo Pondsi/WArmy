@@ -12,7 +12,7 @@
  *       主分支保护 / 提案分支放行 / 非快进），含直接用 stdin 喂钩子的退出码
  *   [5] 租约：第二持有者被拒、过期后可获取、无租约写入被拒
  *
- * 依赖 dist（先 `pnpm --filter @warmy/app-shell build` 与 `--filter @warmy/sync-protocol build`）。
+ * 依赖 dist（先 `pnpm --filter @warmy/app-shell build` 与 `--filter @warmy/bucketBu-protocol build`）。
  * 不联网要求：出站/公网回显若被网络策略挡住，只断言"如实降级"（不会因此判失败）。
  * 不碰用户机器上的全局 git config（临时仓库一律用 `-c user.*` 显式传作者）。
  */
@@ -21,51 +21,17 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 
-import {
-  IdentityUnavailableError,
-  assertDerivationMatches,
-  createIdentityProvider,
-  createIdentitySigner,
-  buildIdentityChangeEntries,
-  createRosterChecker,
-  fingerprintDerivationForAppShell,
-  knownContactFingerprints,
-  listPeerContactViews,
-  peerContactKeys,
-  requireSignableIdentity,
-} from '../dist/identity-provider.js';
-import { IdentityStore, nullProtector } from '../dist/identity-store.js';
-import { fingerprintFromPublicKey, isValidFingerprint, keyObjectFromPrivateDer, publicKeyOfPrivate, publicKeyToB64 } from '../dist/identity.js';
-import {
-  NET_NOTES,
-  SecureMesh,
-  checkOutbound,
-  discoverPublicIp,
-  ensureNetDir,
-  listLocalAddresses,
-  localAddressInfo,
-  pickLocalAddress,
-  probeNet,
-  secureLoopbackSmoke,
-  summarizeProbe,
-  tcpProbe,
-} from '../dist/net-wiring.js';
-import {
-  collectPushEntries,
-  createGitRunner,
-  findHookScript,
-  formatPreReceiveOutput,
-  hookWrapperScript,
-  installPreReceiveHook,
-  parsePreReceiveStdin,
-  runPreReceive,
-} from '../dist/repo-hooks.js';
-import { validatePushPaths, validateRefUpdate } from '../dist/repo-guard.js';
-import { LeaseRegistry } from '../dist/lease.js';
-import { ReplayGuard, ed25519RawFromSpkiDer, normalizeIdentity } from '../../sync-protocol/dist/index.js';
+import {IdentityUnavailableError, duanyanTuidaoPipei, chuangjianShenfenGongyingshang, chuangjianShenfenQianmingzhe, buildIdentityChangeEntries, createRosterChecker, fingerprintDerivationForAppShell, knownContactFingerprints, listPeerContactViews, peerContactKeys, requireSignableIdentity, } from '../dist/identity-provider.js';
+import {IdentityStore, nullProtector} from '../dist/identity-store.js';
+import {fingerprintFromPublicKey, isValidFingerprint, keyObjectFromPrivateDer, publicKeyOfPrivate, publicKeyToB64} from '../dist/identity.js';
+import {NET_NOTES, SecureMesh, checkOutbound, discoverPublicIp, ensureNetDir, listLocalAddresses, benjiDizhiXinxi, pickLocalAddress, probeNet, secureLoopbackSmoke, summarizeProbe, tcpProbe, } from '../dist/net-wiring.js';
+import {shoujiTuisongTiaomu, createGitRunner, findHookScript, formatPreReceiveOutput, gouziBaozhuangJiaoben, installPreReceiveHook, parsePreReceiveStdin, runPreReceive, } from '../dist/repo-hooks.js';
+import {validatePushPaths, validateRefUpdate} from '../dist/repo-guard.js';
+import {LeaseRegistry} from '../dist/lease.js';
+import {ReplayGuard, ed25519RawFromSpkiDer, normalizeIdentity} from '../../bucketBu-protocol/dist/index.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const keep = process.argv.includes('--keep');
@@ -156,21 +122,21 @@ check(
   deriv(rawA) === fingerprintFromPublicKey(String(infoA?.publicKey)),
 );
 
-const checkA = assertDerivationMatches(idA.store);
-check('assertDerivationMatches(A) 返回指纹', checkA.fingerprint === infoA?.fingerprint, checkA.fingerprint);
-check('assertDerivationMatches 报告 raw 长度=32', checkA.publicKeyRawBytes === 32, checkA.publicKeyRawBytes);
+const checkA = duanyanTuidaoPipei(idA.store);
+check('duanyanTuidaoPipei(A) 返回指纹', checkA.fingerprint === infoA?.fingerprint, checkA.fingerprint);
+check('duanyanTuidaoPipei 报告 raw 长度=32', checkA.publicKeyRawBytes === 32, checkA.publicKeyRawBytes);
 
 // 反例：把"别的公钥 + 另一个指纹"喂进去必须抛（含期望/实际）
 let mismatch = null;
 try {
-  assertDerivationMatches({
+  duanyanTuidaoPipei({
     info: () => ({ publicKey: String(infoB?.publicKey), fingerprint: String(infoA?.fingerprint) }),
     path: () => path.join(tmpRoot, 'fake'),
   });
 } catch (e) {
   mismatch = e;
 }
-check('指纹与公钥不符时 assertDerivationMatches 抛错', !!mismatch, mismatch?.name);
+check('指纹与公钥不符时 duanyanTuidaoPipei 抛错', !!mismatch, mismatch?.name);
 check(
   '抛错信息里同时带期望值与实际值',
   !!mismatch && mismatch.message.includes(String(infoA?.fingerprint)) && mismatch.message.includes(String(infoB?.fingerprint)),
@@ -178,7 +144,7 @@ check(
 );
 
 // 签名者：口令模式未解锁 → 不可后台签名（**不许静默失败**）
-const signerA = createIdentitySigner(idA.store);
+const signerA = chuangjianShenfenQianmingzhe(idA.store);
 check('未 unlock 时 signReady() === false', signerA.signReady() === false);
 check('未 unlock 时 unlockState() 报 needsPassphrase', signerA.unlockState()?.needsPassphrase === true, signerA.unlockState());
 check('signer.publicKey === info.publicKey（SPKI DER base64）', signerA.publicKey === infoA?.publicKey);
@@ -220,8 +186,8 @@ check('signer.verify(msg, sig, SPKI b64) === true', signerA.verify(msg, sig, Str
 check('signer.verify(改过的 msg, sig) === false', signerA.verify(Buffer.from('tampered'), sig, String(infoA?.publicKey)) === false);
 check('signer.verify 无法解释的公钥 → null（"没验过"，不是"验过了"）', signerA.verify(msg, sig, Buffer.from([1, 2, 3])) === null);
 
-const provider = createIdentityProvider(idA.store);
-check('createIdentityProvider 四字段齐备', typeof provider.sign === 'function' && typeof provider.verify === 'function' && !!provider.fingerprint && !!provider.publicKey);
+const provider = chuangjianShenfenGongyingshang(idA.store);
+check('chuangjianShenfenGongyingshang 四字段齐备', typeof provider.sign === 'function' && typeof provider.verify === 'function' && !!provider.fingerprint && !!provider.publicKey);
 const providerSig = await provider.sign(msg);
 check('provider.sign 经组网层契约返回 64 字节签名', Buffer.isBuffer(providerSig) && providerSig.length === 64, `${providerSig.length}B`);
 check('provider.verify 通过', provider.verify(msg, providerSig, String(infoA?.publicKey)) === true);
@@ -493,10 +459,10 @@ if (outbound.ok) {
   check('出站失败时给出逐端点原因（不空口说"不通"）', String(outbound.error).length > 0, outbound.error);
 }
 
-const localInfo = await localAddressInfo({ port: livePort, timeoutMs: 2500 });
-check('localAddressInfo 给出本机地址', typeof localInfo.localIp === 'string' && localInfo.localIp.length > 0, localInfo.localIp);
-check('localAddressInfo 的端口自测通过', localInfo.tcp?.ok === true, localInfo.tcp);
-check('localAddressInfo 判定 NAT 与否有依据（behindNat 或有公网网卡）', typeof localInfo.behindNat === 'boolean', { behindNat: localInfo.behindNat, publicIfaces: localInfo.hasPublicInterface });
+const localInfo = await benjiDizhiXinxi({ port: livePort, timeoutMs: 2500 });
+check('benjiDizhiXinxi 给出本机地址', typeof localInfo.localIp === 'string' && localInfo.localIp.length > 0, localInfo.localIp);
+check('benjiDizhiXinxi 的端口自测通过', localInfo.tcp?.ok === true, localInfo.tcp);
+check('benjiDizhiXinxi 判定 NAT 与否有依据（behindNat 或有公网网卡）', typeof localInfo.behindNat === 'boolean', { behindNat: localInfo.behindNat, publicIfaces: localInfo.hasPublicInterface });
 const pubIp = await discoverPublicIp(2500);
 if (pubIp.ok) {
   check('公网地址回显成功且不是私网地址', !/^(10\.|127\.|192\.168\.|169\.254\.)/.test(String(pubIp.ip)), `${pubIp.ip} via ${pubIp.source}`);
@@ -537,7 +503,7 @@ check('钩子文件真的写到 <gitdir>/hooks/pre-receive', fs.existsSync(path.
 const installedHook = fs.readFileSync(path.join(bare, 'hooks', 'pre-receive'), 'utf8');
 check('钩子内容带受管标记（便于幂等识别）', installedHook.includes('WARMY-REPO-GUARD-HOOK v1'), installedHook.split('\n')[1]);
 check('钩子内容是 sh 包装（exec "node" "pre-receive.mjs"）', installedHook.includes('exec "') && installedHook.includes('pre-receive.mjs'), installedHook.split('\n').pop());
-check('钩子包装脚本可生成（纯函数）', hookWrapperScript('/usr/bin/node', '/x/y.mjs').includes('exec "/usr/bin/node" "/x/y.mjs"'));
+check('钩子包装脚本可生成（纯函数）', gouziBaozhuangJiaoben('/usr/bin/node', '/x/y.mjs').includes('exec "/usr/bin/node" "/x/y.mjs"'));
 check('findHookScript 能在 scripts/git-hooks 找到脚本', findHookScript(path.join(selfDir, '..')) === hookScript, findHookScript(path.join(selfDir, '..')));
 
 // 幂等 + 不覆盖别人的钩子
@@ -680,9 +646,9 @@ const gitRunner = createGitRunner(bare);
 const parsed = parsePreReceiveStdin(`  ${ZERO}   ${goodCommit}\t refs/heads/proposals/p \n\nbadline\n`);
 check('parsePreReceiveStdin 解析三列并挑出坏行', parsed.refs.length === 1 && parsed.refs[0].ref === 'refs/heads/proposals/p' && parsed.malformed.length === 1, parsed);
 const goodInBare = craftBare.commitWithFiles([{ path: 'ok.txt', content: 'hello\n' }], 'bare safe');
-const collectedGood = collectPushEntries(gitRunner, { oldSha: ZERO, newSha: goodInBare, ref: 'refs/heads/proposals/p' });
-check('collectPushEntries 用真 git 枚举出路径与 mode', collectedGood.entries.length === 1 && collectedGood.entries[0].path === 'ok.txt' && collectedGood.entries[0].mode === '100644', collectedGood.entries);
-check('collectPushEntries 对删除 ref 不枚举路径', collectPushEntries(gitRunner, { oldSha: goodInBare, newSha: ZERO, ref: 'x' }).deleted === true);
+const collectedGood = shoujiTuisongTiaomu(gitRunner, { oldSha: ZERO, newSha: goodInBare, ref: 'refs/heads/proposals/p' });
+check('shoujiTuisongTiaomu 用真 git 枚举出路径与 mode', collectedGood.entries.length === 1 && collectedGood.entries[0].path === 'ok.txt' && collectedGood.entries[0].mode === '100644', collectedGood.entries);
+check('shoujiTuisongTiaomu 对删除 ref 不枚举路径', shoujiTuisongTiaomu(gitRunner, { oldSha: goodInBare, newSha: ZERO, ref: 'x' }).deleted === true);
 const dangerPkg = craftBare.commitWithFiles(
   [
     { path: '.gitattributes', content: '*.txt filter=evil\n' },
@@ -691,11 +657,11 @@ const dangerPkg = craftBare.commitWithFiles(
   ],
   'attrs+symlink+hook',
 );
-const collectedDanger = collectPushEntries(gitRunner, { oldSha: ZERO, newSha: dangerPkg, ref: 'refs/heads/proposals/p' });
+const collectedDanger = shoujiTuisongTiaomu(gitRunner, { oldSha: ZERO, newSha: dangerPkg, ref: 'refs/heads/proposals/p' });
 const attrsEntry = collectedDanger.entries.find((e) => e.path === '.gitattributes');
 const linkEntry = collectedDanger.entries.find((e) => e.path === 'link');
-check('collectPushEntries 读了 .gitattributes 内容（cat-file 真读）', attrsEntry?.content === '*.txt filter=evil\n', attrsEntry?.content);
-check('collectPushEntries 读了符号链接目标与 mode=120000', linkEntry?.mode === '120000' && linkEntry?.symlinkTarget === '/etc/passwd', linkEntry);
+check('shoujiTuisongTiaomu 读了 .gitattributes 内容（cat-file 真读）', attrsEntry?.content === '*.txt filter=evil\n', attrsEntry?.content);
+check('shoujiTuisongTiaomu 读了符号链接目标与 mode=120000', linkEntry?.mode === '120000' && linkEntry?.symlinkTarget === '/etc/passwd', linkEntry);
 const pureResult = runPreReceive({ git: gitRunner, stdin: `${ZERO} ${dangerPkg} refs/heads/proposals/pure\n`, role: 'member', memberId: 'm1' });
 check('runPreReceive（纯函数）整批拒绝', pureResult.ok === false, formatPreReceiveOutput(pureResult).filter(Boolean).slice(-1)[0]);
 check(

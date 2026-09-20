@@ -12,18 +12,7 @@
  *   [6] 垃圾记录（高 seq 但内容不可解）不遮蔽合法记录
  *   [7] 假名签名模式：公共 DHT 看不到真实指纹，群成员可反推
  */
-import {
-  DhtJieDian,
-  GroupKeyRing,
-  warmyFingerprint,
-  chuangjianLinShiShenFen,
-  ed25519FromSeed,
-  hmacSha256,
-  randomBytes,
-  recordKeyForFingerprint,
-  signRecordEnvelope,
-  verifyRecordEnvelope,
-} from '../dist/index.js';
+import {DhtJieDian, QunMiyaoHuan, warmyFingerprint, chuangjianLinShiShenFen, ed25519FromSeed, hmacSha256, randomBytes, recordKeyForFingerprint, signRecordEnvelope, verifyRecordEnvelope, } from '../dist/index.js';
 
 let failures = 0;
 let passes = 0;
@@ -60,7 +49,7 @@ function makeNode(identity, nodeId, tcpPort, opts = {}) {
     k: 8,
     alpha: 3,
     rpcTimeoutMs: 800,
-    groupKeys: opts.groupKeys ?? new GroupKeyRing([GROUP_KEY]),
+    groupKeys: opts.groupKeys ?? new QunMiyaoHuan([GROUP_KEY]),
     signing: opts.signing,
     onRecord: opts.onRecord,
   });
@@ -111,11 +100,11 @@ async function main() {
   {
     const tampered = { ...published.envelope, sl: Buffer.from(published.envelope.sl, 'base64url') };
     tampered.sl[3] = tampered.sl[3] ^ 0x01;
-    const res = await verifyRecordEnvelope({ ...tampered, sl: tampered.sl.toString('base64url') }, { expectKey: published.key, groupKeys: new GroupKeyRing([GROUP_KEY]) });
+    const res = await verifyRecordEnvelope({ ...tampered, sl: tampered.sl.toString('base64url') }, { expectKey: published.key, groupKeys: new QunMiyaoHuan([GROUP_KEY]) });
     check('篡改密文（sl）→ 验签失败', res.ok === false && res.reason === 'signature-invalid', res.reason ?? res.detail);
   }
   {
-    const res = await verifyRecordEnvelope({ ...published.envelope, sg: outsider.fingerprint }, { expectKey: published.key, groupKeys: new GroupKeyRing([GROUP_KEY]) });
+    const res = await verifyRecordEnvelope({ ...published.envelope, sg: outsider.fingerprint }, { expectKey: published.key, groupKeys: new QunMiyaoHuan([GROUP_KEY]) });
     check('篡改签名者指纹 → signer-mismatch', res.ok === false && res.reason === 'signer-mismatch', res.reason);
   }
   {
@@ -133,7 +122,7 @@ async function main() {
       nodeId: 'node-d',
       host: '127.0.0.1',
       port: 0,
-      groupKeys: new GroupKeyRing([GROUP_KEY_WRONG]),
+      groupKeys: new QunMiyaoHuan([GROUP_KEY_WRONG]),
       rpcTimeoutMs: 800,
     });
     await D.start();
@@ -141,7 +130,7 @@ async function main() {
     const dq = await D.query(memberM.fingerprint);
     check('无正确群密钥 → 查询拿不到内容', dq.ok === false, dq.ok ? JSON.stringify(dq.record) : 'ok=false');
     check('拒绝原因 = decrypt-failed', dq.rejected.some((x) => x.reason === 'decrypt-failed'), dq.rejected.map((x) => x.reason));
-    const soft = await verifyRecordEnvelope(published.envelope, { expectKey: published.key, groupKeys: new GroupKeyRing([GROUP_KEY_WRONG]), requireDecrypt: false });
+    const soft = await verifyRecordEnvelope(published.envelope, { expectKey: published.key, groupKeys: new QunMiyaoHuan([GROUP_KEY_WRONG]), requireDecrypt: false });
     check('宽松模式：签名通过但 record 为空（读不到内容）', soft.ok === true && soft.record === undefined, soft.ok);
     check('（记录到报告的元数据泄露）无密钥者仍能看到发布者指纹', soft.signer === alice.fingerprint, soft.signer?.slice(0, 12));
     await D.stop();
@@ -168,7 +157,7 @@ async function main() {
     const local = A.localRecord(published.key);
     check('旧 seq 记录被 store 拒绝（自环 RPC 也走真实验签）', storeErr.includes('stale-seq'), storeErr);
     check('本机记录仍是最新 seq', local.s === published.seq, { now: local?.s, published: published.seq });
-    const vres = await verifyRecordEnvelope(stale, { expectKey: published.key, lastSeq: published.seq, groupKeys: new GroupKeyRing([GROUP_KEY]) });
+    const vres = await verifyRecordEnvelope(stale, { expectKey: published.key, lastSeq: published.seq, groupKeys: new QunMiyaoHuan([GROUP_KEY]) });
     check('verifyRecordEnvelope 判定 stale-seq', vres.ok === false && vres.reason === 'stale-seq', vres.reason);
   }
 
@@ -218,7 +207,7 @@ async function main() {
       nodeId: 'node-hostile',
       host: '127.0.0.1',
       port: 0,
-      groupKeys: new GroupKeyRing([attackerKey]),
+      groupKeys: new QunMiyaoHuan([attackerKey]),
       rpcTimeoutMs: 800,
     });
     const addrHostile = await HOSTILE.start();
@@ -253,7 +242,7 @@ async function main() {
     check('公共 DHT 上签名者 ≠ 真实指纹', pub.envelope.sg !== alice.fingerprint, pub.envelope.sg.slice(0, 12));
 
     // 无群密钥者：验签通过但认不出是谁
-    const vs = await verifyRecordEnvelope(pub.envelope, { groupKeys: new GroupKeyRing([GROUP_KEY_WRONG]), requireDecrypt: false });
+    const vs = await verifyRecordEnvelope(pub.envelope, { groupKeys: new QunMiyaoHuan([GROUP_KEY_WRONG]), requireDecrypt: false });
     check('无密钥者：签名合法但不知道是谁', vs.ok === true && vs.signer !== alice.fingerprint, vs.signer?.slice(0, 12));
 
     // 群成员：用群密钥可推出"这个假名就是 alice"
@@ -267,7 +256,7 @@ async function main() {
       nodeId: 'node-c2',
       host: '127.0.0.1',
       port: 0,
-      groupKeys: new GroupKeyRing([GROUP_KEY]),
+      groupKeys: new QunMiyaoHuan([GROUP_KEY]),
       rpcTimeoutMs: 800,
     });
     await P2.start();
@@ -294,11 +283,11 @@ async function main() {
       seq: 100000,
       ts: now,
     });
-    const okNow = await verifyRecordEnvelope(fresh, { expectKey: fresh.k, groupKeys: new GroupKeyRing([GROUP_KEY]), now: () => now, tsToleranceMs: 30 * 60_000 });
+    const okNow = await verifyRecordEnvelope(fresh, { expectKey: fresh.k, groupKeys: new QunMiyaoHuan([GROUP_KEY]), now: () => now, tsToleranceMs: 30 * 60_000 });
     check('刚发布的记录有效', okNow.ok === true, okNow.reason);
-    const tooOld = await verifyRecordEnvelope(fresh, { expectKey: fresh.k, groupKeys: new GroupKeyRing([GROUP_KEY]), now: () => now + 45 * 60_000, tsToleranceMs: 30 * 60_000 });
+    const tooOld = await verifyRecordEnvelope(fresh, { expectKey: fresh.k, groupKeys: new QunMiyaoHuan([GROUP_KEY]), now: () => now + 45 * 60_000, tsToleranceMs: 30 * 60_000 });
     check('超过 TTL（30 分钟）的记录被拒', tooOld.ok === false && /时间戳/.test(tooOld.detail ?? ''), tooOld.detail);
-    const longerTtl = await verifyRecordEnvelope(fresh, { expectKey: fresh.k, groupKeys: new GroupKeyRing([GROUP_KEY]), now: () => now + 45 * 60_000, tsToleranceMs: 60 * 60_000 });
+    const longerTtl = await verifyRecordEnvelope(fresh, { expectKey: fresh.k, groupKeys: new QunMiyaoHuan([GROUP_KEY]), now: () => now + 45 * 60_000, tsToleranceMs: 60 * 60_000 });
     check('TTL 可配置（放宽后同一记录有效）', longerTtl.ok === true, longerTtl.reason);
   }
 

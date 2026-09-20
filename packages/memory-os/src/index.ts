@@ -17,22 +17,22 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
-import { bianMaXiangLiang, yuXianInt8, normalizeCosine, rrfFusionRanked, unpackInt8 } from './vectors.js';
-import type { RankedList, FusedHit } from './vectors.js';
-import { OnnxEmbedder, defaultModelCandidates, ortSearchCandidates } from './embedder.js';
-import type { VectorStatus } from './embedder.js';
+import { bianMaXiangLiang, yuXianInt8, normalizeCosine, rrfRonghePaixu, unpackInt8 } from './vectors.js';
+import type { RankedList, RongheMingzhong } from './vectors.js';
+import { OnnxQianruqi, morenMoxingHouxuan, ortSearchCandidates } from './embedder.js';
+import type { XiangliangZhuangtai } from './embedder.js';
 
 const require = createRequire(import.meta.url);
 
-export type Writer = 'duty' | 'router' | 'memory-service' | 'executor';
+export type XieRuQi = 'duty' | 'router' | 'memory-service' | 'executor';
 
 /** 投影 schema 版本：2 = 增加 fts_tri + vec_index + 作用域列 */
-export const SCHEMA_VERSION = 2;
+export const MOSHI_BANBEN = 2;
 
 /** fts_tri（trigram）最小可查长度（FTS5 trigram 需要 ≥3 个字符） */
 export const TRI_MIN_CHARS = 3;
 
-export interface JsonlRecord {
+export interface JsonlJilu {
   seq: number;
   ts: number;
   sessionId: string;
@@ -41,9 +41,9 @@ export interface JsonlRecord {
   [k: string]: unknown;
 }
 
-export type RecallSource = 'fts_uni' | 'fts_tri' | 'vector' | 'fused';
+export type HuisuoLaiyuan = 'fts_uni' | 'fts_tri' | 'vector' | 'fused';
 
-export interface RecallScope {
+export interface HuisuoZuoyongyu {
   sessionId?: string;
   groupId?: string;
   entityType?: string;
@@ -55,22 +55,22 @@ export interface RecallCard {
   recordId: string;
   snippet: string;
   score: number;
-  source: RecallSource;
+  source: HuisuoLaiyuan;
   /** 命中该证据的通道列表（RRF 融合前） */
-  sources: RecallSource[];
+  sources: HuisuoLaiyuan[];
   /** 各通道内排名（1-based） */
-  ranks: Partial<Record<RecallSource, number>>;
+  ranks: Partial<Record<HuisuoLaiyuan, number>>;
   /** 该卡片的主命中级别（=source，便于 UI 直读） */
-  hitLevel: RecallSource;
+  hitLevel: HuisuoLaiyuan;
   /** RRF 原始分 */
   rrfScore: number;
   /** 向量通道命中的余弦（未命中向量通道则缺省） */
   cosine?: number;
   /** 可回原文的证据锚点 */
-  anchor: EvidenceAnchor;
+  anchor: ZhengjuMaodian;
 }
 
-export interface EvidenceAnchor {
+export interface ZhengjuMaodian {
   /** JSONL 文件名（相对 dataDir） */
   file: string;
   seq: number;
@@ -80,12 +80,12 @@ export interface EvidenceAnchor {
 
 export interface QueryLike {
   query: string;
-  scope?: RecallScope;
+  scope?: HuisuoZuoyongyu;
   limit?: number;
 }
 
-export interface RecallOptions {
-  scope?: RecallScope;
+export interface HuisuoXuanxiang {
+  scope?: HuisuoZuoyongyu;
   limit?: number;
   /** 每通道候选数，默认 max(limit*3, 20) */
   perChannel?: number;
@@ -111,7 +111,7 @@ export interface ScopeStats {
   deniedRecords: number;
 }
 
-export interface RecallTimings {
+export interface HuisuoHaoshi {
   totalMs: number;
   hydrateMs: number;
   embedQueryMs: number;
@@ -129,7 +129,7 @@ export interface RecallTimings {
   vectorUnkRatio?: number | null;
 }
 
-export interface ChannelReport {
+export interface TongdaoBaogao {
   channel: 'fts_uni' | 'fts_tri' | 'vector' | 'like';
   used: boolean;
   skipped?: string;
@@ -137,17 +137,17 @@ export interface ChannelReport {
   ms: number;
 }
 
-export interface RecallDetail {
+export interface HuisuoXiangqing {
   cards: RecallCard[];
-  timings: RecallTimings;
+  timings: HuisuoHaoshi;
   scopeStats: ScopeStats;
-  channels: ChannelReport[];
+  channels: TongdaoBaogao[];
   /** 用到的命中级别集合 */
-  levels: RecallSource[];
+  levels: HuisuoLaiyuan[];
   candidates: { uni: number; tri: number; vector: number; fused: number };
 }
 
-export interface RetrieveLevel {
+export interface JiansuoJibie {
   hitLevel: 'exact' | 'nearby' | 'fuzzy';
 }
 
@@ -160,12 +160,12 @@ export interface RetrieveOutcome {
   hitLevel: 'exact' | 'nearby' | 'fuzzy';
   /** 具体命中方式 */
   via: string;
-  anchor: EvidenceAnchor;
+  anchor: ZhengjuMaodian;
   /** 人类可读说明（分级回退时记录了上一级为何失败） */
   note?: string;
 }
 
-export interface RetrieveOptions {
+export interface JiansuoXuanxiang {
   fallback?: 'exact' | 'nearby' | 'fuzzy';
   /** nearby 级别的 seq 邻域半径，默认 5 */
   window?: number;
@@ -173,7 +173,7 @@ export interface RetrieveOptions {
   query?: string;
 }
 
-export interface VectorOptions {
+export interface XiangliangXuanxiang {
   enabled?: boolean;
   modelPath?: string;
   tokenizerPath?: string;
@@ -199,10 +199,10 @@ export interface MemoryOsOptions {
   /** JSONL 日志文件名，默认 fast-memory.jsonl */
   jsonlName?: string;
   /** 向量/嵌入配置 */
-  vector?: VectorOptions;
+  vector?: XiangliangXuanxiang;
 }
 
-export interface UpgradeReport {
+export interface ShengjiBaogao {
   schemaVersionBefore: number;
   schemaVersionAfter: number;
   hadFtsUni: boolean;
@@ -236,7 +236,7 @@ export function triQueryable(q: string): boolean {
   return Array.from(q.trim()).length >= TRI_MIN_CHARS;
 }
 
-const SQL_RECORDS = `
+const SQL_JILU = `
   CREATE TABLE IF NOT EXISTS records (
     seq INTEGER PRIMARY KEY,
     id TEXT UNIQUE NOT NULL,
@@ -264,26 +264,26 @@ export class MemoryService {
   private seq = 0;
   readonly jsonlPath: string;
   readonly dbPath: string;
-  readonly upgrade: UpgradeReport;
+  readonly upgrade: ShengjiBaogao;
   /** 冷启动重建报告（DB 丢了但 JSONL 还在 → 全量重建投影，不变量 #5） */
   readonly coldStart: { rebuilt: boolean; lines: number; reason: string };
 
   private vectorPromise: Promise<void>;
-  private embedder: OnnxEmbedder | null = null;
+  private embedder: OnnxQianruqi | null = null;
   private vectorInitError = '';
   private vectorTried: string[] = [];
   private queryVecCache = new Map<string, Float32Array>();
   private closed = false;
-  private jsonlIndex: JsonlIndex | null = null;
+  private jsonlIndex: JsonlSuoyin | null = null;
 
   constructor(private opts: MemoryOsOptions) {
     fs.mkdirSync(opts.dataDir, { recursive: true });
     this.jsonlPath = path.join(opts.dataDir, opts.jsonlName || 'fast-memory.jsonl');
     this.dbPath = path.join(opts.dataDir, 'memory.db');
-    const Database = require('better-sqlite3');
-    this.db = new Database(this.dbPath);
+    const Shujuku = require('better-sqlite3');
+    this.db = new Shujuku(this.dbPath);
     this.db.pragma('journal_mode = WAL');
-    this.db.exec(SQL_RECORDS);
+    this.db.exec(SQL_JILU);
     this.upgrade = this.ensureSchema();
     const row = this.db.prepare("SELECT v FROM meta WHERE k='last_seq'").get();
     this.seq = row ? Number(row.v) : 0;
@@ -315,9 +315,9 @@ export class MemoryService {
    * 建表与升级。老库（只有 fts_uni）在这里平滑加上 fts_tri / vec_index / 作用域列，
    * 不改 JSONL、不删数据（不变量 #5：投影可丢弃、可重建）。
    */
-  private ensureSchema(): UpgradeReport {
-    const metaRow = this.tableExists('meta') ? (this.db.prepare("SELECT v FROM meta WHERE k='schema_version'").get() as { v?: string } | undefined) : undefined;
-    const schemaVersionBefore = metaRow?.v ? Number(metaRow.v) : 0;
+  private ensureSchema(): ShengjiBaogao {
+    const yuanshujuHang = this.tableExists('meta') ? (this.db.prepare("SELECT v FROM meta WHERE k='schema_version'").get() as { v?: string } | undefined) : undefined;
+    const schemaVersionBefore = yuanshujuHang?.v ? Number(yuanshujuHang.v) : 0;
 
     const hadFtsUni = this.tableExists('fts_uni');
     const hadFtsTri = this.tableExists('fts_tri');
@@ -334,11 +334,11 @@ export class MemoryService {
       CREATE INDEX IF NOT EXISTS idx_records_kind ON records(kind);
       CREATE INDEX IF NOT EXISTS idx_records_group ON records(group_id);
     `);
-    this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
+    this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('schema_version', ?)").run(String(MOSHI_BANBEN));
 
     return {
       schemaVersionBefore,
-      schemaVersionAfter: SCHEMA_VERSION,
+      schemaVersionAfter: MOSHI_BANBEN,
       hadFtsUni,
       hadFtsTri,
       createdFtsTri: !hadFtsTri,
@@ -354,7 +354,7 @@ export class MemoryService {
    *
    * 注意：不能拿 fts_*_data 的行数判断"索引是否为空"——空 fts5 表也有结构行。
    */
-  private backfillFtsFromRecords(up: UpgradeReport): void {
+  private backfillFtsFromRecords(up: ShengjiBaogao): void {
     const recN = (this.db.prepare('SELECT COUNT(*) AS n FROM records').get() as { n: number }).n;
     if (!recN) return;
     const needUni = !up.hadFtsUni || this.indexedDocs('fts_uni') === 0;
@@ -363,22 +363,22 @@ export class MemoryService {
 
     const rows = this.db.prepare('SELECT seq, body FROM records').all() as Array<{ seq: number; body: string }>;
     if (needUni) {
-      const ins = this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, body) VALUES (?, ?)');
-      const tx = this.db.transaction(() => {
-        for (const row of rows) ins.run(row.seq, spaceChars(String(row.body)));
+      const shiLi = this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, body) VALUES (?, ?)');
+      const shiwu = this.db.transaction(() => {
+        for (const row of rows) shiLi.run(row.seq, spaceChars(String(row.body)));
       });
-      tx();
+      shiwu();
       up.backfilledUniRows = rows.length;
     }
     if (needTri) {
-      const ins = this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, body) VALUES (?, ?)');
-      const tx = this.db.transaction(() => {
-        for (const row of rows) ins.run(row.seq, String(row.body));
+      const shiLi = this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, body) VALUES (?, ?)');
+      const shiwu = this.db.transaction(() => {
+        for (const row of rows) shiLi.run(row.seq, String(row.body));
       });
-      tx();
+      shiwu();
       up.backfilledTriRows = rows.length;
     }
-    this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
+    this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('schema_version', ?)").run(String(MOSHI_BANBEN));
   }
 
   /**
@@ -402,8 +402,8 @@ export class MemoryService {
   /** 只追加写入 JSONL + 投影到 SQLite */
   append(
     record: { id: string; sessionId: string; kind: string; [k: string]: unknown },
-    writer: Writer
-  ): JsonlRecord {
+    writer: XieRuQi
+  ): JsonlJilu {
     // 写入者唯一约束（简化：duty 写 message；router 写 queue；其余拒绝）
     if (record.kind === 'queue' && writer !== 'router') {
       throw Object.assign(new Error('queue.jsonl writer must be router'), { code: 'WRITER' });
@@ -414,7 +414,7 @@ export class MemoryService {
     }
 
     const seq = ++this.seq;
-    const full: JsonlRecord = {
+    const full: JsonlJilu = {
       ...record,
       seq,
       ts: Date.now(),
@@ -448,7 +448,7 @@ export class MemoryService {
     return full;
   }
 
-  tail(limit = 50): JsonlRecord[] {
+  tail(limit = 50): JsonlJilu[] {
     const rows = this.db
       .prepare('SELECT * FROM records ORDER BY seq DESC LIMIT ?')
       .all(limit) as Array<{ seq: number; ts: number; session_id: string; kind: string; id: string; body: string }>;
@@ -466,7 +466,7 @@ export class MemoryService {
   // 权限过滤先于相关性检索（不变量 #9）
   // ─────────────────────────────────────────────
 
-  private scopePredicate(scope?: RecallScope): { active: boolean; predicate: string; params: any[] } {
+  private scopePredicate(scope?: HuisuoZuoyongyu): { active: boolean; predicate: string; params: any[] } {
     const preds: string[] = [];
     const params: any[] = [];
     if (scope?.sessionId) {
@@ -496,7 +496,7 @@ export class MemoryService {
    * 不会出现 A 查询的 await 期间被 B 查询覆盖作用域的情况（同一作用域共用一张表，
    * 内容由同一条谓词算出，重建幂等）。
    */
-  private buildScopeFilter(scope?: RecallScope): ScopeStats {
+  private buildScopeFilter(scope?: HuisuoZuoyongyu): ScopeStats {
     const total = (this.db.prepare('SELECT COUNT(*) AS n FROM records').get() as { n: number }).n;
     const sp = this.scopePredicate(scope);
     if (!sp.active) {
@@ -540,12 +540,12 @@ export class MemoryService {
    * 先试 **AND**（所有词都在，精确），再试 **OR**（部分词命中，宽松）。
    */
   private termwiseFallbacks(q: string, mode: 'chars' | 'raw'): string[] {
-    const terms = String(q || '')
+    const cixiang = String(q || '')
       .split(/\s+/)
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
-    if (terms.length < 2) return [];
-    const quoted = terms.map((t) => {
+    if (cixiang.length < 2) return [];
+    const quoted = cixiang.map((t) => {
       const body = mode === 'chars' ? spaceChars(t) : t;
       return `"${body.replace(/"/g, '""')}"`;
     });
@@ -567,14 +567,14 @@ export class MemoryService {
     const ids: string[] = [];
     const scoreById = new Map<string, number>();
     const join = this.scopeJoin(scopeStats, 'f');
-    const stmt = this.db.prepare(
+    const yuju = this.db.prepare(
       `SELECT f.rowid AS seq, bm25(fts_uni) AS s FROM fts_uni f ${join}
        WHERE fts_uni MATCH ? ORDER BY rank LIMIT ?`
     );
-    let rows = stmt.all(toPhrase(query), limit) as Array<{ seq: number; s: number }>;
+    let rows = yuju.all(toPhrase(query), limit) as Array<{ seq: number; s: number }>;
     let skipped: string | undefined;
     if (rows.length === 0) {
-      const retry = this.tryFallbacks(this.termwiseFallbacks(query, 'chars'), (m) => stmt.all(m, limit) as Array<{ seq: number; s: number }>);
+      const retry = this.tryFallbacks(this.termwiseFallbacks(query, 'chars'), (m) => yuju.all(m, limit) as Array<{ seq: number; s: number }>);
       if (retry.rows.length) {
         rows = retry.rows;
         skipped = retry.used;
@@ -595,14 +595,14 @@ export class MemoryService {
     const scoreById = new Map<string, number>();
     if (!triQueryable(query)) return { ids, scoreById, skipped: 'query<3chars' };
     const join = this.scopeJoin(scopeStats, 'f');
-    const stmt = this.db.prepare(
+    const yuju = this.db.prepare(
       `SELECT f.rowid AS seq, bm25(fts_tri) AS s FROM fts_tri f ${join}
        WHERE fts_tri MATCH ? ORDER BY rank LIMIT ?`
     );
-    let rows = stmt.all(toTriPhrase(query.trim()), limit) as Array<{ seq: number; s: number }>;
+    let rows = yuju.all(toTriPhrase(query.trim()), limit) as Array<{ seq: number; s: number }>;
     let skipped: string | undefined;
     if (rows.length === 0) {
-      const retry = this.tryFallbacks(this.termwiseFallbacks(query.trim(), 'raw'), (m) => stmt.all(m, limit) as Array<{ seq: number; s: number }>);
+      const retry = this.tryFallbacks(this.termwiseFallbacks(query.trim(), 'raw'), (m) => yuju.all(m, limit) as Array<{ seq: number; s: number }>);
       if (retry.rows.length) {
         rows = retry.rows;
         skipped = retry.used;
@@ -682,28 +682,28 @@ export class MemoryService {
   // ─────────────────────────────────────────────
 
   /** 同步 recall：fts_uni ∪ fts_tri（+ 已缓存的查询向量）→ RRF → 索引卡 */
-  recall(query: string | QueryLike, limit = 10, opts: RecallOptions = {}): RecallCard[] {
+  recall(query: string | QueryLike, limit = 10, opts: HuisuoXuanxiang = {}): RecallCard[] {
     return this.searchSync(normalizeQueryArgs(query, limit, opts)).cards;
   }
 
   /** 异步 recall：先补齐缺失向量、再嵌入查询，然后三路 RRF */
-  async recallAsync(query: string | QueryLike, limit = 10, opts: RecallOptions = {}): Promise<RecallCard[]> {
+  async recallAsync(query: string | QueryLike, limit = 10, opts: HuisuoXuanxiang = {}): Promise<RecallCard[]> {
     return (await this.recallDetailed(query, limit, opts)).cards;
   }
 
-  recallDetailedSync(query: string | QueryLike, limit = 10, opts: RecallOptions = {}): RecallDetail {
+  recallDetailedSync(query: string | QueryLike, limit = 10, opts: HuisuoXuanxiang = {}): HuisuoXiangqing {
     return this.searchSync(normalizeQueryArgs(query, limit, opts));
   }
 
-  async recallDetailed(query: string | QueryLike, limit = 10, opts: RecallOptions = {}): Promise<RecallDetail> {
+  async recallDetailed(query: string | QueryLike, limit = 10, opts: HuisuoXuanxiang = {}): Promise<HuisuoXiangqing> {
     const o = normalizeQueryArgs(query, limit, opts);
     const t0 = Date.now();
     const scopeStats = this.buildScopeFilter(o.scope);
     const perChannel = o.perChannel ?? Math.max(o.limit * 3, 20);
-    const channels: ChannelReport[] = [];
+    const channels: TongdaoBaogao[] = [];
     const lists: RankedList[] = [];
     const scoreById = new Map<string, { uni?: number; tri?: number; vector?: number }>();
-    const timings: RecallTimings = {
+    const timings: HuisuoHaoshi = {
       totalMs: 0,
       hydrateMs: 0,
       embedQueryMs: 0,
@@ -718,7 +718,7 @@ export class MemoryService {
     let uniT = Date.now();
     const uni = this.channelUni(o.query, perChannel, scopeStats);
     timings.uniMs = Date.now() - uniT;
-    let likeReport: ChannelReport | null = null;
+    let likeReport: TongdaoBaogao | null = null;
     if (uni.ids.length) {
       lists.push({ source: 'fts_uni', ids: uni.ids });
       for (const id of uni.ids) scoreById.set(id, { ...(scoreById.get(id) ?? {}), uni: uni.scoreById.get(id) });
@@ -744,9 +744,9 @@ export class MemoryService {
     channels.push({ channel: 'fts_tri', used: tri.ids.length > 0, hits: tri.ids.length, ms: timings.triMs, skipped: tri.skipped });
 
     // ── 向量通道（异步：补齐 → 嵌入查询 → 授权集合内算余弦）
-    let vecUsed = false;
+    let vecShiyong = false;
     let vecSkipped: string | undefined;
-    let vecBelowThreshold = 0;
+    let vecYixiaYuzhi = 0;
     let vecUnkRatio: number | null = null;
     if (o.useVector === false) vecSkipped = 'disabled by option';
     else {
@@ -772,29 +772,29 @@ export class MemoryService {
           const vec = this.channelVector(qvec, perChannel, scopeStats, o.minCosine ?? vo.minCosine ?? 0.5);
           timings.vecMs = Date.now() - vT;
           timings.cosines = vec.cosines;
-          vecBelowThreshold = vec.belowThreshold;
-          vecUsed = vec.ids.length > 0;
+          vecYixiaYuzhi = vec.belowThreshold;
+          vecShiyong = vec.ids.length > 0;
           if (vec.ids.length) {
             lists.push({ source: 'vector', ids: vec.ids });
             for (const id of vec.ids) scoreById.set(id, { ...(scoreById.get(id) ?? {}), vector: vec.scoreById.get(id) });
           }
-          if (!vecUsed) vecSkipped = `all ${vec.cosines} cosines below minCosine ${o.minCosine ?? vo.minCosine ?? 0.5}`;
+          if (!vecShiyong) vecSkipped = `all ${vec.cosines} cosines below minCosine ${o.minCosine ?? vo.minCosine ?? 0.5}`;
         }
       }
     }
     channels.push({
       channel: 'vector',
-      used: vecUsed,
-      hits: vecUsed ? (lists.find((l) => l.source === 'vector')?.ids.length ?? 0) : 0,
+      used: vecShiyong,
+      hits: vecShiyong ? (lists.find((l) => l.source === 'vector')?.ids.length ?? 0) : 0,
       ms: timings.vecMs,
       skipped: vecSkipped,
     });
-    timings.vectorBelowThreshold = vecBelowThreshold;
+    timings.vectorBelowThreshold = vecYixiaYuzhi;
     timings.vectorUnkRatio = vecUnkRatio;
     if (likeReport) channels.push(likeReport);
 
     const fuseT = Date.now();
-    const fused: FusedHit[] = rrfFusionRanked(lists, o.k ?? 60);
+    const fused: RongheMingzhong[] = rrfRonghePaixu(lists, o.k ?? 60);
     timings.fuseMs = Date.now() - fuseT;
 
     const cards = this.buildCards(fused.slice(0, o.limit), scoreById, scopeStats);
@@ -814,14 +814,14 @@ export class MemoryService {
     };
   }
 
-  private searchSync(o: Required<Pick<RecallOptions, 'limit'>> & RecallOptions & { query: string }): RecallDetail {
+  private searchSync(o: Required<Pick<HuisuoXuanxiang, 'limit'>> & HuisuoXuanxiang & { query: string }): HuisuoXiangqing {
     const t0 = Date.now();
     const scopeStats = this.buildScopeFilter(o.scope);
     const perChannel = o.perChannel ?? Math.max(o.limit * 3, 20);
     const lists: RankedList[] = [];
     const scoreById = new Map<string, { uni?: number; tri?: number; vector?: number }>();
-    const channels: ChannelReport[] = [];
-    const timings: RecallTimings = {
+    const channels: TongdaoBaogao[] = [];
+    const timings: HuisuoHaoshi = {
       totalMs: 0,
       hydrateMs: 0,
       embedQueryMs: 0,
@@ -881,7 +881,7 @@ export class MemoryService {
     if (vecSkipped) channels.push({ channel: 'vector', used: false, hits: 0, ms: 0, skipped: vecSkipped });
 
     const fT = Date.now();
-    const fused = rrfFusionRanked(lists, o.k ?? 60);
+    const fused = rrfRonghePaixu(lists, o.k ?? 60);
     timings.fuseMs = Date.now() - fT;
     const cards = this.buildCards(fused.slice(0, o.limit), scoreById as any, scopeStats);
     timings.totalMs = Date.now() - t0;
@@ -896,16 +896,16 @@ export class MemoryService {
   }
 
   private buildCards(
-    fused: FusedHit[],
+    fused: RongheMingzhong[],
     scoreById: Map<string, { uni?: number; tri?: number; vector?: number }>,
     scopeStats: ScopeStats
   ): RecallCard[] {
     if (!fused.length) return [];
     const seqs = fused.map((f) => Number(f.id));
-    const placeholders = seqs.map(() => '?').join(',');
+    const zhanwei = seqs.map(() => '?').join(',');
     const join = scopeStats.scopeActive && scopeStats.table ? `JOIN ${scopeStats.table} sf ON sf.seq = r.seq` : '';
     const rows = this.db
-      .prepare(`SELECT r.seq, r.id, r.body, r.session_id FROM records r ${join} WHERE r.seq IN (${placeholders})`)
+      .prepare(`SELECT r.seq, r.id, r.body, r.session_id FROM records r ${join} WHERE r.seq IN (${zhanwei})`)
       .all(...seqs) as Array<{ seq: number; id: string; body: string; session_id: string }>;
     const bySeq = new Map(rows.map((r) => [r.seq, r]));
     const out: RecallCard[] = [];
@@ -913,7 +913,7 @@ export class MemoryService {
       const seq = Number(f.id);
       const row = bySeq.get(seq);
       if (!row) continue; // 越权行会被 scope join 挡掉（防御性二次校验）
-      const source: RecallSource = f.sources.length > 1 ? 'fused' : ((f.sources[0] as RecallSource) ?? 'fts_uni');
+      const source: HuisuoLaiyuan = f.sources.length > 1 ? 'fused' : ((f.sources[0] as HuisuoLaiyuan) ?? 'fts_uni');
       const sc = scoreById.get(f.id) ?? {};
       out.push({
         seq,
@@ -922,8 +922,8 @@ export class MemoryService {
         score: sc.vector ?? sc.tri ?? sc.uni ?? f.rrfScore,
         source,
         hitLevel: source,
-        sources: f.sources as RecallSource[],
-        ranks: f.ranks as Partial<Record<RecallSource, number>>,
+        sources: f.sources as HuisuoLaiyuan[],
+        ranks: f.ranks as Partial<Record<HuisuoLaiyuan, number>>,
         rrfScore: f.rrfScore,
         cosine: f.ranks.vector ? sc.vector : undefined,
         anchor: { file: path.basename(this.jsonlPath), seq, recordId: row.id },
@@ -936,9 +936,9 @@ export class MemoryService {
   // retrieve（解引用，三级回退 exact → nearby → fuzzy）
   // ─────────────────────────────────────────────
 
-  retrieve(input: RetrieveAnchorInput | { anchor: RetrieveAnchorInput; fallback?: RetrieveOptions['fallback'] }, opts: RetrieveOptions = {}): RetrieveOutcome | null {
-    const req = (input ?? {}) as { anchor?: RetrieveAnchorInput; fallback?: RetrieveOptions['fallback'] };
-    const anchor: RetrieveAnchorInput = req.anchor ?? (input as RetrieveAnchorInput);
+  retrieve(input: JiansuoMaodianShuru | { anchor: JiansuoMaodianShuru; fallback?: JiansuoXuanxiang['fallback'] }, opts: JiansuoXuanxiang = {}): RetrieveOutcome | null {
+    const req = (input ?? {}) as { anchor?: JiansuoMaodianShuru; fallback?: JiansuoXuanxiang['fallback'] };
+    const anchor: JiansuoMaodianShuru = req.anchor ?? (input as JiansuoMaodianShuru);
     const maxLevel = opts.fallback ?? req.fallback ?? 'fuzzy';
     const order: Array<'exact' | 'nearby' | 'fuzzy'> = ['exact', 'nearby', 'fuzzy'];
     const allowed = order.slice(0, order.indexOf(maxLevel) + 1);
@@ -968,7 +968,7 @@ export class MemoryService {
   }
 
   /** exact：SQLite 主键/唯键直取；SQLite 缺行时回 JSONL（JSONL 才是唯一事实来源） */
-  private retrieveExact(anchor: RetrieveAnchorInput): RawHit | null {
+  private retrieveExact(anchor: JiansuoMaodianShuru): YuanwenMingzhong | null {
     if (anchor.recordId) {
       const row = this.db.prepare('SELECT seq, id, body FROM records WHERE id = ?').get(anchor.recordId);
       if (row) return { raw: String(row.body), seq: Number(row.seq), recordId: String(row.id), via: 'sqlite:id' };
@@ -995,7 +995,7 @@ export class MemoryService {
   }
 
   /** nearby：seq 邻域 / 去掉后缀的 id / id 长前缀 / 字节偏移最近的行走近一步 */
-  private retrieveNearby(anchor: RetrieveAnchorInput, window: number): RawHit | null {
+  private retrieveNearby(anchor: JiansuoMaodianShuru, window: number): YuanwenMingzhong | null {
     if (anchor.seq !== undefined && anchor.seq !== null) {
       const row = this.db
         .prepare('SELECT seq, id, body FROM records WHERE seq BETWEEN ? AND ? ORDER BY ABS(seq - ?) LIMIT 1')
@@ -1020,14 +1020,14 @@ export class MemoryService {
       }
       const idx = this.jsonlIndexOrBuild();
       const cand2 = idx.entries
-        .map((e) => ({ e, lcp: commonPrefixLen(e.id, String(anchor.recordId)) }))
+        .map((e) => ({ e, lcp: gongyongQianzhuiChangdu(e.id, String(anchor.recordId)) }))
         .filter((x) => x.lcp >= 8)
         .sort((a, b) => b.lcp - a.lcp)[0];
       if (cand2) return { raw: cand2.e.body, seq: cand2.e.seq, recordId: cand2.e.id, via: 'jsonl:id-prefix' };
     }
     if (anchor.byteOffset !== undefined) {
       const idx = this.jsonlIndexOrBuild();
-      let best: JsonlIndexEntry | null = null;
+      let best: JsonlSuoyinTiaomu | null = null;
       for (const e of idx.entries) {
         if (!best || Math.abs(e.start - anchor.byteOffset) < Math.abs(best.start - anchor.byteOffset)) best = e;
       }
@@ -1037,7 +1037,7 @@ export class MemoryService {
   }
 
   /** fuzzy：先按 anchor/query 做 FTS，再退到 id LIKE，最后退到最新一条 */
-  private retrieveFuzzy(anchor: RetrieveAnchorInput, query?: string): RawHit | null {
+  private retrieveFuzzy(anchor: JiansuoMaodianShuru, query?: string): YuanwenMingzhong | null {
     const q = (query ?? anchor.recordId ?? '').trim();
     if (q) {
       const scopeStats = this.buildScopeFilter(undefined);
@@ -1055,8 +1055,8 @@ export class MemoryService {
         .get(`%${q}%`);
       if (row) return { raw: String(row.body), seq: Number(row.seq), recordId: String(row.id), via: 'like:id' };
     }
-    const newest = this.db.prepare('SELECT seq, id, body FROM records ORDER BY seq DESC LIMIT 1').get();
-    if (newest) return { raw: String(newest.body), seq: Number(newest.seq), recordId: String(newest.id), via: 'sqlite:newest' };
+    const zuixin = this.db.prepare('SELECT seq, id, body FROM records ORDER BY seq DESC LIMIT 1').get();
+    if (zuixin) return { raw: String(zuixin.body), seq: Number(zuixin.seq), recordId: String(zuixin.id), via: 'sqlite:newest' };
     // SQLite 空投影 → 回 JSONL 最后一行
     const idx = this.jsonlIndexOrBuild();
     const last = idx.entries[idx.entries.length - 1];
@@ -1068,7 +1068,7 @@ export class MemoryService {
   // JSONL 行索引（byteOffset 锚点 + 事实源兜底）
   // ─────────────────────────────────────────────
 
-  private jsonlIndexOrBuild(): JsonlIndex {
+  private jsonlIndexOrBuild(): JsonlSuoyin {
     if (this.jsonlIndex) {
       try {
         const st = fs.statSync(this.jsonlPath);
@@ -1085,7 +1085,7 @@ export class MemoryService {
   // 向量：初始化 / 被动水合 / 查询嵌入
   // ─────────────────────────────────────────────
 
-  private vectorOpts(): VectorOptions {
+  private vectorOpts(): XiangliangXuanxiang {
     return { enabled: true, ...(this.opts.vector ?? {}) };
   }
 
@@ -1099,7 +1099,7 @@ export class MemoryService {
     if (vo.modelPath) {
       candidates.push({ modelPath: vo.modelPath, tokenizerPath: vo.tokenizerPath ?? path.join(path.dirname(vo.modelPath), 'tokenizer.json'), from: 'explicit' });
     }
-    for (const c of defaultModelCandidates(this.opts.dataDir)) candidates.push(c);
+    for (const c of morenMoxingHouxuan(this.opts.dataDir)) candidates.push(c);
     this.vectorTried = candidates.map((c) => `${c.from}:${c.modelPath}`);
     const found = candidates.find((c) => fs.existsSync(c.modelPath));
     if (!found) {
@@ -1108,7 +1108,7 @@ export class MemoryService {
     }
     const ortPaths = [...(vo.ortSearchPaths ?? []), ...ortSearchCandidates()];
     try {
-      const emb = await OnnxEmbedder.create({
+      const emb = await OnnxQianruqi.create({
         modelPath: found.modelPath,
         tokenizerPath: found.tokenizerPath,
         ortSearchPaths: ortPaths,
@@ -1129,7 +1129,7 @@ export class MemoryService {
     await this.vectorPromise;
   }
 
-  vectorStatus(): VectorStatus & { error?: string; modelCandidates: string[] } {
+  vectorStatus(): XiangliangZhuangtai & { error?: string; modelCandidates: string[] } {
     const base = this.embedder?.status;
     if (base) return { ...base, modelCandidates: this.vectorTried };
     return {
@@ -1184,14 +1184,14 @@ export class MemoryService {
       )
       .all(Math.max(0, budget)) as Array<{ seq: number; body: string }>;
     if (!rows.length) return { embedded: 0, ms: Date.now() - t0, remaining: 0 };
-    const ins = this.db.prepare('INSERT OR REPLACE INTO vec_index (seq, dim, scale, data) VALUES (?,?,?,?)');
+    const shiLi = this.db.prepare('INSERT OR REPLACE INTO vec_index (seq, dim, scale, data) VALUES (?,?,?,?)');
     let n = 0;
     for (const row of rows) {
       if (this.closed) break;
       const text = String(row.body).slice(0, maxChars);
       const vec = await this.embedder.embed(text);
       const enc = bianMaXiangLiang(vec);
-      ins.run(row.seq, enc.dim, enc.scale, enc.blob);
+      shiLi.run(row.seq, enc.dim, enc.scale, enc.blob);
       n += 1;
     }
     const rest = (this.db
@@ -1222,24 +1222,24 @@ export class MemoryService {
       return 0;
     }
     const lines = fs.readFileSync(this.jsonlPath, 'utf8').split('\n').filter(Boolean);
-    const ins = this.db.prepare(
+    const shiLi = this.db.prepare(
       'INSERT OR REPLACE INTO records (seq, id, session_id, kind, ts, body, group_id, entity_type) VALUES (?,?,?,?,?,?,?,?)'
     );
     const insU = this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, body) VALUES (?, ?)');
     const insT = this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, body) VALUES (?, ?)');
-    const tx = this.db.transaction(() => {
+    const shiwu = this.db.transaction(() => {
       for (const line of lines) {
-        const r = JSON.parse(line) as JsonlRecord;
+        const r = JSON.parse(line) as JsonlJilu;
         const body = String(r.body ?? r.content ?? r.text ?? line);
-        ins.run(r.seq, r.id, r.sessionId, r.kind, r.ts, body, (r.groupId as string) ?? null, (r.entityType as string) ?? null);
+        shiLi.run(r.seq, r.id, r.sessionId, r.kind, r.ts, body, (r.groupId as string) ?? null, (r.entityType as string) ?? null);
         insU.run(r.seq, spaceChars(body));
         insT.run(r.seq, body);
         if (r.seq > this.seq) this.seq = r.seq;
       }
     });
-    tx();
+    shiwu();
     this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('last_seq', ?)").run(String(this.seq));
-    this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
+    this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('schema_version', ?)").run(String(MOSHI_BANBEN));
     this.jsonlIndex = null;
     return lines.length;
   }
@@ -1271,9 +1271,9 @@ export class MemoryService {
     jsonlBytes: number;
     dbPath: string;
     jsonlPath: string;
-    upgrade: UpgradeReport;
+    upgrade: ShengjiBaogao;
     coldStart: { rebuilt: boolean; lines: number; reason: string };
-    vector: VectorStatus & { error?: string; modelCandidates: string[] };
+    vector: XiangliangZhuangtai & { error?: string; modelCandidates: string[] };
   } {
     const n = (sql: string) => (this.db.prepare(sql).get() as { n: number }).n;
     const idx = this.jsonlIndexOrBuild();
@@ -1319,21 +1319,21 @@ export class MemoryService {
 // 内部工具
 // ─────────────────────────────────────────────
 
-export interface RetrieveAnchorInput {
+export interface JiansuoMaodianShuru {
   seq?: number;
   recordId?: string;
   file?: string;
   byteOffset?: number;
 }
 
-interface RawHit {
+interface YuanwenMingzhong {
   raw: string;
   seq: number;
   recordId: string;
   via: string;
 }
 
-interface JsonlIndexEntry {
+interface JsonlSuoyinTiaomu {
   start: number;
   end: number;
   seq: number;
@@ -1341,26 +1341,26 @@ interface JsonlIndexEntry {
   body: string;
 }
 
-interface JsonlIndex {
+interface JsonlSuoyin {
   size: number;
   mtimeMs: number;
-  entries: JsonlIndexEntry[];
+  entries: JsonlSuoyinTiaomu[];
 }
 
 /** 扫描 JSONL 一次，记录每行的字节区间与关键字段（证据锚点 byteOffset 的真实落点） */
-export function gouJianJsonlSuoYin(jsonlPath: string): JsonlIndex {
-  const empty: JsonlIndex = { size: 0, mtimeMs: 0, entries: [] };
+export function gouJianJsonlSuoYin(jsonlPath: string): JsonlSuoyin {
+  const empty: JsonlSuoyin = { size: 0, mtimeMs: 0, entries: [] };
   if (!fs.existsSync(jsonlPath)) return empty;
   const st = fs.statSync(jsonlPath);
   const buf = fs.readFileSync(jsonlPath);
-  const entries: JsonlIndexEntry[] = [];
+  const entries: JsonlSuoyinTiaomu[] = [];
   let start = 0;
   for (let i = 0; i < buf.length; i++) {
     if (buf[i] !== 0x0a) continue;
-    const lineBuf = buf.subarray(start, i);
+    const hangHuanchong = buf.subarray(start, i);
     start = i + 1;
-    if (!lineBuf.length) continue;
-    const line = lineBuf.toString('utf8').trim();
+    if (!hangHuanchong.length) continue;
+    const line = hangHuanchong.toString('utf8').trim();
     if (!line) continue;
     let parsed: any = null;
     try {
@@ -1370,7 +1370,7 @@ export function gouJianJsonlSuoYin(jsonlPath: string): JsonlIndex {
     }
     const body = String(parsed.body ?? parsed.content ?? parsed.text ?? line);
     entries.push({
-      start: i - lineBuf.length,
+      start: i - hangHuanchong.length,
       end: i,
       seq: Number(parsed.seq ?? entries.length + 1),
       id: String(parsed.id ?? ''),
@@ -1380,7 +1380,7 @@ export function gouJianJsonlSuoYin(jsonlPath: string): JsonlIndex {
   return { size: st.size, mtimeMs: st.mtimeMs, entries };
 }
 
-function commonPrefixLen(a: string, b: string): number {
+function gongyongQianzhuiChangdu(a: string, b: string): number {
   const n = Math.min(a.length, b.length);
   let i = 0;
   while (i < n && a[i] === b[i]) i += 1;
@@ -1400,8 +1400,8 @@ function fnv1a(s: string): string {
 function normalizeQueryArgs(
   query: string | QueryLike,
   limit: number,
-  opts: RecallOptions
-): { query: string; limit: number } & RecallOptions {
+  opts: HuisuoXuanxiang
+): { query: string; limit: number } & HuisuoXuanxiang {
   if (typeof query === 'string') return { ...opts, query, limit: opts.limit ?? limit };
   return {
     ...opts,
@@ -1428,8 +1428,8 @@ function encodeVectorToInt8ForQuery(vec: Float32Array): { data: Int8Array; scale
 // ─────────────────────────────────────────────
 
 /** IPC 子进程入口（pnpm --filter @warmy/memory-os start） */
-export function startMemoryServiceIpc(dataDir: string): MemoryService {
-  const svc = new MemoryService({ dataDir });
+export function qishiJiyiCangFuwuIpc(dataDir: string): MemoryService {
+  const fuwu = new MemoryService({ dataDir });
   const send = (msg: any) => {
     try {
       process.send?.(msg);
@@ -1437,38 +1437,38 @@ export function startMemoryServiceIpc(dataDir: string): MemoryService {
       /* noop */
     }
   };
-  send({ type: 'ready', pid: process.pid, dataDir, schemaVersion: SCHEMA_VERSION });
+  send({ type: 'ready', pid: process.pid, dataDir, schemaVersion: MOSHI_BANBEN });
 
   const handlers: Record<string, (msg: any) => Promise<any> | any> = {
     append: (msg) => {
-      const rec = svc.append(msg.record, msg.writer || 'memory-service');
+      const rec = fuwu.append(msg.record, msg.writer || 'memory-service');
       return { ok: true, seq: rec.seq };
     },
-    tail: (msg) => ({ ok: true, records: svc.tail(msg.limit) }),
+    tail: (msg) => ({ ok: true, records: fuwu.tail(msg.limit) }),
     /** 完整三路 recall（fts_uni ∪ fts_tri ∪ 向量 → RRF），返回卡片 + 计时 + 作用域统计 */
     recall: async (msg) => {
-      const detail = await svc.recallDetailed({ query: msg.query, scope: msg.scope, limit: msg.limit });
+      const detail = await fuwu.recallDetailed({ query: msg.query, scope: msg.scope, limit: msg.limit });
       return { ok: true, cards: detail.cards, timings: detail.timings, scopeStats: detail.scopeStats, channels: detail.channels, candidates: detail.candidates };
     },
     /** 同步 recall（不含异步向量水合），保持历史语义 */
     recall_sync: (msg) => {
-      const detail = svc.recallDetailedSync({ query: msg.query, scope: msg.scope, limit: msg.limit });
+      const detail = fuwu.recallDetailedSync({ query: msg.query, scope: msg.scope, limit: msg.limit });
       return { ok: true, cards: detail.cards, timings: detail.timings, scopeStats: detail.scopeStats, channels: detail.channels };
     },
-    retrieve: (msg) => ({ ok: true, result: svc.retrieve(msg.anchor ?? msg.request ?? {}, msg.opts ?? {}) }),
-    rebuild: (msg) => ({ ok: true, count: svc.rebuildProjection() }),
+    retrieve: (msg) => ({ ok: true, result: fuwu.retrieve(msg.anchor ?? msg.request ?? {}, msg.opts ?? {}) }),
+    rebuild: (msg) => ({ ok: true, count: fuwu.rebuildProjection() }),
     vector_status: async () => {
-      await svc.waitVectorReady();
-      return { ok: true, vector: svc.vectorStatus() };
+      await fuwu.waitVectorReady();
+      return { ok: true, vector: fuwu.vectorStatus() };
     },
-    hydrate: async (msg) => ({ ok: true, result: await svc.hydrateVectors(msg.budget ?? 256) }),
-    stats: () => ({ ok: true, stats: svc.stats() }),
+    hydrate: async (msg) => ({ ok: true, result: await fuwu.hydrateVectors(msg.budget ?? 256) }),
+    stats: () => ({ ok: true, stats: fuwu.stats() }),
     embed: async (msg) => {
-      const v = await svc.embedText(msg.text);
+      const v = await fuwu.embedText(msg.text);
       return { ok: true, dim: v?.length ?? 0, vector: v ? Array.from(v) : null };
     },
     shutdown: (msg) => {
-      svc.close();
+      fuwu.close();
       setTimeout(() => process.exit(0), 20);
       return { ok: true };
     },
@@ -1488,7 +1488,7 @@ export function startMemoryServiceIpc(dataDir: string): MemoryService {
       })
       .catch((e: any) => send({ id, error: String(e?.message || e), code: e?.code }));
   });
-  return svc;
+  return fuwu;
 }
 
 export * from './migrate.js';

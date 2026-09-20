@@ -7,9 +7,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { attach, sleep } from './cdp-lib.mjs';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {attach, sleep} from './cdp-lib.mjs';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(selfDir, '..');
@@ -446,11 +446,17 @@ async function main() {
     check('排布：邮箱在用户名右侧', !!meDom.layout && meDom.layout.mailRightOfName === true, meDom.layout);
     check('排布：凭证在用户名下面', !!meDom.layout && meDom.layout.credBelowName === true, meDom.layout);
     /**
-     * 遮蔽形状（产品主定稿）：按**原有分组**来，每个 `-` 之间就是「牛马」**两个字**
-     *（不是凑够三个字）。所以遮住时整串比全貌短，但组数与分隔位置完全一致。
+     * 遮蔽形状（产品主定稿，两轮收紧）：按**原有分组**来，每个 `-` 之间就是「牛马」**两个字**；
+     * 可见范围是**前后各 2 组**（51 位 = 17 组 ⇒ 中间 13 个「牛马」）。
      */
-    const maskShape = /^[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}(-牛马)+-[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}$/.test(String(meDom.credText).trim());
-    check('凭证默认只露前三后三（中间每组都是「牛马」两个字）', maskShape, String(meDom.credText));
+    const maskText = String(meDom.credText).trim();
+    const maskParts = maskText.split('-');
+    // 形状：前 2 组明文 + 13 个「牛马」组 + 末 2 组明文（2+13+2 = 17 组，与 51 位的分组一致）
+    const CH3 = '[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}';
+    const maskShape = new RegExp('^(' + CH3 + '-){2}(牛马-){13}' + CH3 + '-' + CH3 + '$').test(maskText);
+    const maskCounts = { groups: maskParts.length, niuma: (maskText.match(/牛马/g) || []).length };
+    check('凭证默认只露前后各两组（每组「牛马」两个字，共 17 组 / 13 个牛马）',
+      maskShape && maskCounts.groups === 17 && maskCounts.niuma === 13, maskCounts);
     // 小眼睛：点一下看全貌，再点一下遮回去（前后长度一致，排版不跳）
     const eye = await c.evaluate(`(async function(){
       const el = document.querySelector('#me-id-val');

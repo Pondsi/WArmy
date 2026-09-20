@@ -68,7 +68,7 @@ export interface TanCeJiLu {
   detail?: string;
 }
 
-export interface SweepResult {
+export interface QingliJieguo {
   /** 本轮真正发起探测的成员（只会是 pendingProbe 的子集） */
   probed: string[];
   /** 本轮判定离线的成员 */
@@ -79,7 +79,7 @@ export interface SweepResult {
   canDialBasis: CanDialResolution['basis'];
 }
 
-interface MemberState {
+interface ChengyuanZhuangtai {
   fingerprint: string;
   connections: Map<string, HuoXingLianJie>;
   since: number;
@@ -101,7 +101,7 @@ const UNKNOWN: ChengYuanHuoXing = {
 };
 
 export class LianJieHuoXing {
-  private members = new Map<string, MemberState>();
+  private members = new Map<string, ChengyuanZhuangtai>();
   private pendingProbe = new Set<string>();
   private dialableFlag = false;
   /** 对端真的拨回来过（已验证）——与 naturalDialableFlag **刻意分开**（附八.9） */
@@ -159,7 +159,7 @@ export class LianJieHuoXing {
     return [...this.pendingProbe];
   }
 
-  private state(fp: string): MemberState {
+  private state(fp: string): ChengyuanZhuangtai {
     let s = this.members.get(fp);
     if (!s) {
       s = {
@@ -290,11 +290,11 @@ export class LianJieHuoXing {
     if (!s.online) return false;
     if (s.connections.size > 0) return false;
     const since = s.offlineSince ?? nowMs;
-    const elapsed = nowMs - since;
-    if (s.misses >= this.offlineFailures && elapsed >= this.offlineAfterMs) {
+    const yijingguo = nowMs - since;
+    if (s.misses >= this.offlineFailures && yijingguo >= this.offlineAfterMs) {
       s.online = false;
       s.via = 'none';
-      this.opts.onOffline?.(fp, { misses: s.misses, lastSeenAt: s.lastSeenAt, reason: `连续 ${s.misses} 次心跳失败且持续 ${elapsed}ms` });
+      this.opts.onOffline?.(fp, { misses: s.misses, lastSeenAt: s.lastSeenAt, reason: `连续 ${s.misses} 次心跳失败且持续 ${yijingguo}ms` });
       return true;
     }
     return false;
@@ -304,7 +304,7 @@ export class LianJieHuoXing {
    * 巡检一轮：**只做本地计时 + 对 pendingProbe 且可拨入的成员探测一次**。
    * 绝不遍历全部成员去 ping。
    */
-  async sweep(at = this.now()): Promise<SweepResult> {
+  async sweep(at = this.now()): Promise<QingliJieguo> {
     const markedOffline: string[] = [];
     for (const fp of [...this.members.keys()]) {
       if (this.judge(fp, at)) markedOffline.push(fp);

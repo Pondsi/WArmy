@@ -1,24 +1,15 @@
 /**
  * Provider + P1 冒烟（对 dist 产物）
  */
-import {
-  chuangjianGongYing,
-  congYuSheChuangJian,
-  PROVIDER_PRESETS,
-} from '@warmy/providers';
-import {
-  createP1Runtime,
-  SecurityManager,
-  MemorySecurityStore,
-  suggestMaxInstances,
-} from '@warmy/app-shell';
+import {chuangjianGongYing, congYuSheChuangJian, GONGYING_YUSHE, } from '@warmy/providers';
+import {createP1Runtime, AnquanGuanliqi, MemorySecurityStore, suggestMaxInstances, } from '@warmy/app-shell';
 
 const report = {};
 
-report.presets = PROVIDER_PRESETS.map((p) => ({ id: p.id, protocol: p.protocol }));
-report.hasOpenAI = PROVIDER_PRESETS.some((p) => p.protocol === 'openai-compatible');
-report.hasAnthropic = PROVIDER_PRESETS.some((p) => p.protocol === 'anthropic');
-report.hasOllama = PROVIDER_PRESETS.some((p) => p.protocol === 'ollama');
+report.presets = GONGYING_YUSHE.map((p) => ({ id: p.id, protocol: p.protocol }));
+report.hasOpenAI = GONGYING_YUSHE.some((p) => p.protocol === 'openai-compatible');
+report.hasAnthropic = GONGYING_YUSHE.some((p) => p.protocol === 'anthropic');
+report.hasOllama = GONGYING_YUSHE.some((p) => p.protocol === 'ollama');
 
 const ds = congYuSheChuangJian('deepseek', { apiKey: 'sk-test' });
 const an = chuangjianGongYing('anthropic', { apiKey: 'sk-ant-test' });
@@ -35,7 +26,7 @@ try {
   report.ollamaPing = { ok: false, err: String(e) };
 }
 
-const sec = new SecurityManager(new MemorySecurityStore());
+const sec = new AnquanGuanliqi(new MemorySecurityStore());
 await sec.init();
 await sec.setMode('normal');
 const d1 = await sec.requestToolCall('tool:fs.read');

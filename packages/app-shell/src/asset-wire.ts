@@ -1,17 +1,17 @@
 /**
  * P7 资产治理：严格模式不注入持久资产；负反馈降权；生命周期扫描
  */
-import { AssetGovernor, type ZiChan } from '@warmy/asset-governance';
+import { ZichanGuanliqi, type ZiChan } from '@warmy/asset-governance';
 
-let gov: AssetGovernor | null = null;
+let gov: ZichanGuanliqi | null = null;
 
-export function chuShiZiChanGuanLi(persistPath?: string): AssetGovernor {
-  gov = new AssetGovernor(persistPath);
+export function chuShiZiChanGuanLi(persistPath?: string): ZichanGuanliqi {
+  gov = new ZichanGuanliqi(persistPath);
   return gov;
 }
 
-export function quZiChanGuanLi(): AssetGovernor {
-  if (!gov) gov = new AssetGovernor();
+export function quZiChanGuanLi(): ZichanGuanliqi {
+  if (!gov) gov = new ZichanGuanliqi();
   return gov;
 }
 

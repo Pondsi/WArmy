@@ -9,7 +9,7 @@
  *  5. onQueueMutated 在入队/弹出/删除时被调用（主进程据此落盘）
  */
 import assert from 'node:assert/strict';
-import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@warmy/group-router';
+import {GroupChatRouter, DEFAULT_PERMISSIONS} from '@warmy/group-router';
 
 let pass = 0;
 let fail = 0;

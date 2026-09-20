@@ -1718,6 +1718,6 @@
   "container.section.existing": "Containers on this machine",
   "container.section.images": "Images",
   "me.showFull": "Show the full credential",
-  "me.hideFull": "Hide it (first and last three only)",
+  "me.hideFull": "Hide it (only the first and last two groups stay visible)",
   "me.credRotated": "Credential replaced (identity updated too; the old one was backed up)"
 }

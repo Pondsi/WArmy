@@ -2,20 +2,8 @@
  * 全面回归：Provider / Security / Instance / 契约一致性
  * 不依赖外网（除可选 DEEPSEEK_API_KEY）
  */
-import {
-  chuangjianGongYing,
-  congYuSheChuangJian,
-  PROVIDER_PRESETS,
-  guiFanYongLiang,
-} from '@warmy/providers';
-import {
-  createP1Runtime,
-  SecurityManager,
-  MemorySecurityStore,
-  FileSecurityStore,
-  TeardownRegistry,
-  suggestMaxInstances,
-} from '@warmy/app-shell';
+import {chuangjianGongYing, congYuSheChuangJian, GONGYING_YUSHE, guiFanYongLiang, } from '@warmy/providers';
+import {createP1Runtime, AnquanGuanliqi, MemorySecurityStore, FileSecurityStore, ChaixieMingce, suggestMaxInstances, } from '@warmy/app-shell';
 
 const fails = [];
 function check(name, cond, detail) {
@@ -24,11 +12,11 @@ function check(name, cond, detail) {
 }
 
 // ── Provider ──
-check('presets>=7', PROVIDER_PRESETS.length >= 7, { n: PROVIDER_PRESETS.length });
+check('presets>=7', GONGYING_YUSHE.length >= 7, { n: GONGYING_YUSHE.length });
 check(
   '3 protocols',
-  new Set(PROVIDER_PRESETS.map((p) => p.protocol)).size === 3,
-  { protocols: [...new Set(PROVIDER_PRESETS.map((p) => p.protocol))] }
+  new Set(GONGYING_YUSHE.map((p) => p.protocol)).size === 3,
+  { protocols: [...new Set(GONGYING_YUSHE.map((p) => p.protocol))] }
 );
 const ds = congYuSheChuangJian('deepseek', { apiKey: 'sk-x' });
 check('deepseek baseURL', ds.baseURL === 'https://api.deepseek.com', { b: ds.baseURL });
@@ -59,7 +47,7 @@ const oU = guiFanYongLiang({ prompt_eval_count: 20, eval_count: 3 }, 'ollama');
 check('ollama usage normalize', oU.promptTokens === 20 && oU.cacheHitTokens === 0 && oU.source === 'estimated', oU);
 
 // ── Security fail-closed ──
-const sec1 = new SecurityManager(new MemorySecurityStore());
+const sec1 = new AnquanGuanliqi(new MemorySecurityStore());
 await sec1.init();
 await sec1.setMode('strict');
 const r1 = await sec1.requestToolCall('tool:dangerous');
@@ -73,7 +61,7 @@ check('full allows', r3.allowed === true, r3);
 
 // normal + onApprove + 持久允许
 let asked = 0;
-const sec2 = new SecurityManager(new MemorySecurityStore(), async () => {
+const sec2 = new AnquanGuanliqi(new MemorySecurityStore(), async () => {
   asked++;
   return { action: 'tool:fs', scope: 'global', allowed: true };
 });
@@ -84,7 +72,7 @@ const r4 = await sec2.requestToolCall('tool:fs.write');
 check('allowlist persists', asked === 1 && r4.allowed && r4.scope === 'global', { asked, r4 });
 
 // strict 不落库
-const sec3 = new SecurityManager(new MemorySecurityStore(), async () => ({
+const sec3 = new AnquanGuanliqi(new MemorySecurityStore(), async () => ({
   action: 'x',
   scope: 'project',
   allowed: true,
@@ -95,7 +83,7 @@ await sec3.requestToolCall('tool:y');
 check('strict no persist', sec3.listAllowlist().length === 0, { n: sec3.listAllowlist().length });
 
 // 边界写
-const sec4 = new SecurityManager(new MemorySecurityStore());
+const sec4 = new AnquanGuanliqi(new MemorySecurityStore());
 await sec4.init();
 await sec4.setMode('normal');
 const inside = await sec4.requestBoundaryWrite('C:\\ws\\a.txt', 'C:\\ws');

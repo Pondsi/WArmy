@@ -82,7 +82,7 @@ export interface AcquireRequest {
   note?: string;
 }
 
-export interface AcquireResult {
+export interface HuoquJieguo {
   ok: boolean;
   lease?: Lease;
   /** 复用/合并了自己已有的租约 */
@@ -97,7 +97,7 @@ export interface LeaseRefRequest {
   scope?: string;
 }
 
-export interface ReleaseResult {
+export interface ShifangJieguo {
   ok: boolean;
   released: boolean;
   lease?: Lease;
@@ -119,7 +119,7 @@ export interface CheckWriteResult {
   expiresAt?: number | null;
 }
 
-export interface HolderInfo {
+export interface ChiyouzheXinxi {
   path: string;
   /** 当前持有者；无人持有为 null */
   holder: string | null;
@@ -149,13 +149,13 @@ export interface LeaseRegistryOptions {
   idPrefix?: string;
 }
 
-function fmtTime(ms: number): string {
+function geshiShijian(ms: number): string {
   const d = new Date(ms);
   const p = (n: number): string => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-function fmtRemaining(ms: number): string {
+function geshiShengyu(ms: number): string {
   if (ms <= 0) return '已过期';
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s} 秒`;
@@ -201,7 +201,7 @@ function overlapPaths(
   });
 }
 
-function leasesOverlap(a: Lease, b: Lease): boolean {
+function zuyueChongdie(a: Lease, b: Lease): boolean {
   return overlapPaths(a.kind, a.paths, b.kind, b.paths).length > 0;
 }
 
@@ -233,7 +233,7 @@ export class LeaseRegistry {
   }
 
   /** 申请租约。范围被别人占住 → 拒绝并给出可读原因；自己已占 → 合并（幂等） */
-  acquire(req: AcquireRequest): AcquireResult {
+  acquire(req: AcquireRequest): HuoquJieguo {
     const now = this.clock();
     this.prune(now);
 
@@ -293,9 +293,9 @@ export class LeaseRegistry {
     let sharedPaths: string[] = [];
     for (const live of this.leases.values()) {
       if (live.holder === holder) continue;
-      const overlap = overlapPaths(candidate.kind, candidate.paths, live.kind, live.paths);
-      if (!overlap.length) continue;
-      if (!sharedPaths.length) sharedPaths = overlap;
+      const chongdie = overlapPaths(candidate.kind, candidate.paths, live.kind, live.paths);
+      if (!chongdie.length) continue;
+      if (!sharedPaths.length) sharedPaths = chongdie;
       conflicts.push({
         leaseId: live.id,
         holder: live.holder,
@@ -315,14 +315,14 @@ export class LeaseRegistry {
           code: 'held-by-other',
           reason:
             `写入范围与「${first.holder}」的${LeiXingMing(first.kind)}租约冲突（范围 ${first.scope}，覆盖 ${where}，` +
-            `${fmtTime(first.expiresAt)} 到期，剩余 ${fmtRemaining(first.expiresAt - now)}）。` +
+            `${geshiShijian(first.expiresAt)} 到期，剩余 ${geshiShengyu(first.expiresAt - now)}）。` +
             `请等它释放/过期，或让值班者重新划分范围。`,
         },
       };
     }
 
     // 2) 自己已有重叠租约 → 合并（幂等，避免自己跟自己抢）
-    const own = [...this.leases.values()].filter((l) => l.holder === holder && leasesOverlap(l, candidate));
+    const own = [...this.leases.values()].filter((l) => l.holder === holder && zuyueChongdie(l, candidate));
     const base = own[0];
     if (base) {
       for (const p of candidate.paths) if (!base.paths.includes(p)) base.paths.push(p);
@@ -359,7 +359,7 @@ export class LeaseRegistry {
   }
 
   /** 续租（只有持有者本人；已过期的租约不许续，必须重新申请） */
-  extend(req: LeaseRefRequest, ttlMs?: number): AcquireResult {
+  extend(req: LeaseRefRequest, ttlMs?: number): HuoquJieguo {
     const now = this.clock();
     this.prune(now);
     const found = this.find(req);
@@ -375,7 +375,7 @@ export class LeaseRegistry {
   }
 
   /** 释放（只有持有者本人；非本人 → holder-mismatch）。已过期 = 已自动失效，不算失败 */
-  release(req: LeaseRefRequest): ReleaseResult {
+  release(req: LeaseRefRequest): ShifangJieguo {
     const now = this.clock();
     this.prune(now);
     const found = this.find(req);
@@ -427,7 +427,7 @@ export class LeaseRegistry {
           allowed: true,
           holder: who,
           path: n.normalized,
-          reason: `允许写入（命中你自己的${LeiXingMing(live.kind)}租约 ${live.scope}，${fmtTime(live.expiresAt)} 到期，剩余 ${fmtRemaining(live.expiresAt - now)}）`,
+          reason: `允许写入（命中你自己的${LeiXingMing(live.kind)}租约 ${live.scope}，${geshiShijian(live.expiresAt)} 到期，剩余 ${geshiShengyu(live.expiresAt - now)}）`,
           lease: this.copy(live),
         };
       }
@@ -442,7 +442,7 @@ export class LeaseRegistry {
           code: 'held-by-other',
           reason:
             `${n.normalized} 当前被「${live.holder}」持有（${LeiXingMing(live.kind)}租约，范围 ${live.scope}，` +
-            `${fmtTime(live.expiresAt)} 到期，剩余 ${fmtRemaining(live.expiresAt - now)}）。` +
+            `${geshiShijian(live.expiresAt)} 到期，剩余 ${geshiShengyu(live.expiresAt - now)}）。` +
             `直接写会静默覆盖对方的改动（工作区内容 git 救不回来）。请等它释放/过期，或找值班者仲裁。`,
           lease: this.copy(live),
           heldBy: live.holder,
@@ -459,7 +459,7 @@ export class LeaseRegistry {
           holder: who,
           path: n.normalized,
           code: 'expired',
-          reason: `你对 ${n.normalized} 的租约已于 ${fmtTime(old.expiresAt)} 过期（原时长 ${Math.round(old.ttlMs / 60_000)} 分钟），已自动失效，请重新申请`,
+          reason: `你对 ${n.normalized} 的租约已于 ${geshiShijian(old.expiresAt)} 过期（原时长 ${Math.round(old.ttlMs / 60_000)} 分钟），已自动失效，请重新申请`,
           heldBy: null,
           expiresAt: null,
         };
@@ -488,7 +488,7 @@ export class LeaseRegistry {
   }
 
   /** 某路径当前被谁持有 */
-  holdersOf(p: string): HolderInfo[] {
+  holdersOf(p: string): ChiyouzheXinxi[] {
     const now = this.clock();
     this.prune(now);
     const n = normalizeRepoPath(typeof p === 'string' ? p : '');
@@ -498,7 +498,7 @@ export class LeaseRegistry {
       ];
     }
     const key = this.caseInsensitive ? n.key : n.normalized;
-    const out: HolderInfo[] = [];
+    const out: ChiyouzheXinxi[] = [];
     for (const live of this.leases.values()) {
       if (!leaseCovers(live, key)) continue;
       out.push({
@@ -506,7 +506,7 @@ export class LeaseRegistry {
         holder: live.holder,
         lease: this.copy(live),
         expiresAt: live.expiresAt,
-        reason: `「${live.holder}」的${LeiXingMing(live.kind)}租约覆盖该路径（范围 ${live.scope}，${fmtTime(live.expiresAt)} 到期，剩余 ${fmtRemaining(live.expiresAt - now)}）`,
+        reason: `「${live.holder}」的${LeiXingMing(live.kind)}租约覆盖该路径（范围 ${live.scope}，${geshiShijian(live.expiresAt)} 到期，剩余 ${geshiShengyu(live.expiresAt - now)}）`,
       });
     }
     if (!out.length) {
@@ -603,7 +603,7 @@ export class LeaseRegistry {
         kind: 'error',
         error: {
           code: 'expired',
-          reason: `租约 ${expired.id}（${expired.scope}）已于 ${fmtTime(expired.expiresAt)} 过期，已自动失效`,
+          reason: `租约 ${expired.id}（${expired.scope}）已于 ${geshiShijian(expired.expiresAt)} 过期，已自动失效`,
         },
       };
     }

@@ -17,14 +17,14 @@
  *
  * 参数：--no-electron 跳过 7；--no-regression 跳过 6。
  */
-import { execFileSync, spawn } from 'node:child_process';
+import {execFileSync, spawn} from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import {createRequire} from 'node:module';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.join(here, '..');            // packages/app-shell
@@ -596,7 +596,7 @@ if (!SKIP_ELECTRON) {
     let target = null;
     while (Date.now() < deadline && !target) {
       try {
-        const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`)).json();
+        const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/LieBiao`)).json();
         target = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && String(t.url || '').toLowerCase().includes(appPrefix));
       } catch {
         /* 还没起来 */

@@ -1,7 +1,7 @@
 /**
  * group-router 集成测试
  */
-import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@warmy/group-router';
+import {GroupChatRouter, DEFAULT_PERMISSIONS} from '@warmy/group-router';
 
 const fails = [];
 const check = (n, c, d) => {

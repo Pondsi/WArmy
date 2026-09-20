@@ -13,7 +13,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const i18nDir = path.join(selfDir, '..', 'src', 'i18n');

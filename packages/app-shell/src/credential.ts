@@ -37,27 +37,27 @@ import { privateKeyToDer } from './identity.js';
  * **33 个符号：数字 + 大写字母，去掉易混的 I / O / Z**（无小写）。
  * 顺序固定，编码/解码都以此表为准。
  */
-export const CREDENTIAL_ALPHABET = '0123456789ABCDEFGHJKLMNPQRSTUVWXY';
+export const PINGZHENG_ZIFUBIAO = '0123456789ABCDEFGHJKLMNPQRSTUVWXY';
 
 /** 现行长度：256 bit / 5.044 bit ≈ 50.75 ⇒ 51 位（17 组 × 3） */
-export const CREDENTIAL_LENGTH = 51;
+export const PINGZHENG_CHANGDU = 51;
 
 /**
  * 上一版的字母表与长度（56 符号、45 位、含小写）。
  * 只做**读取兼容**：已经发出去的凭证不能被判无效（那等于把人锁在自己机器外）。
  * 新生成的凭证一律用现行格式。
  */
-export const LEGACY_CREDENTIAL_ALPHABET = '0123456789ABCDEFGHJKLMNPQRSTUVWXYabcdefghjklmnpqrstuvwxy';
-export const LEGACY_CREDENTIAL_LENGTH = 45;
+export const YICHAN_PINGZHENG_ZIFUBIAO = '0123456789ABCDEFGHJKLMNPQRSTUVWXYabcdefghjklmnpqrstuvwxy';
+export const YICHAN_PINGZHENG_CHANGDU = 45;
 
-const SEP = '-';
+const FENFU = '-';
 const qun = 3;
 
 /** 认得出这是哪一版凭证（现行 51 位 / 上一版 45 位） */
-export function credentialKind(text: string): 'current' | 'legacy' | null {
+export function pingzhengLeixing(text: string): 'current' | 'legacy' | null {
   const s = normalizeCredential(text);
-  if (s.length === CREDENTIAL_LENGTH && [...s].every((c) => CREDENTIAL_ALPHABET.includes(c))) return 'current';
-  if (s.length === LEGACY_CREDENTIAL_LENGTH && [...s].every((c) => LEGACY_CREDENTIAL_ALPHABET.includes(c))) return 'legacy';
+  if (s.length === PINGZHENG_CHANGDU && [...s].every((c) => PINGZHENG_ZIFUBIAO.includes(c))) return 'current';
+  if (s.length === YICHAN_PINGZHENG_CHANGDU && [...s].every((c) => YICHAN_PINGZHENG_ZIFUBIAO.includes(c))) return 'legacy';
   return null;
 }
 
@@ -91,13 +91,13 @@ export function decodeWith(text: string, alphabet: string, length: number): Buff
 }
 
 /** 现行格式：32 字节 → 51 位大写凭证 */
-export function encodeCredential(bytes: Buffer): string {
-  return encodeWith(bytes, CREDENTIAL_ALPHABET, CREDENTIAL_LENGTH);
+export function bianmaPingzheng(bytes: Buffer): string {
+  return encodeWith(bytes, PINGZHENG_ZIFUBIAO, PINGZHENG_CHANGDU);
 }
 
 /** 现行格式 → 32 字节 */
-export function decodeCredential(text: string): Buffer {
-  return decodeWith(text, CREDENTIAL_ALPHABET, CREDENTIAL_LENGTH);
+export function jiemaPingzheng(text: string): Buffer {
+  return decodeWith(text, PINGZHENG_ZIFUBIAO, PINGZHENG_CHANGDU);
 }
 
 /** 去掉分隔符/空白（不再需要处理大小写：现在只有大写一种形式） */
@@ -106,7 +106,7 @@ export function normalizeCredential(text: string): string {
 }
 
 export function isValidCredential(text: string): boolean {
-  return credentialKind(text) !== null;
+  return pingzhengLeixing(text) !== null;
 }
 
 /** 51 位 → 17 组 × 3 位（便于人眼抄写与核对） */
@@ -114,7 +114,7 @@ export function formatCredential(text: string): string {
   const s = normalizeCredential(text);
   const parts: string[] = [];
   for (let i = 0; i < s.length; i += qun) parts.push(s.slice(i, i + qun));
-  return parts.join(SEP);
+  return parts.join(FENFU);
 }
 
 /**
@@ -124,8 +124,8 @@ export function formatCredential(text: string): string {
  * 任何人本地生成的都是他自己那把私钥；**猜中别人那把**需要枚举 2^256，
  * 与"生成了多少个 ID"无关 —— 撞号概率 ~ n²/2^257，n = 10^12 时约 10^-53。
  */
-export function generateCredential(): string {
-  return encodeCredential(crypto.randomBytes(32));
+export function shengchengPingzheng(): string {
+  return bianmaPingzheng(crypto.randomBytes(32));
 }
 
 export interface DerivedKeyPair {
@@ -143,11 +143,11 @@ export interface DerivedKeyPair {
  * 也避免为找回身份而引入第二套秘密。
  */
 export function keyPairFromCredential(credential: string): DerivedKeyPair {
-  const kind = credentialKind(credential);
+  const kind = pingzhengLeixing(credential);
   if (!kind) throw new Error('credential: 形态不认识（既不是 51 位大写凭证，也不是上一版 45 位）');
   const seed = kind === 'current'
-    ? decodeCredential(credential)
-    : decodeWith(credential, LEGACY_CREDENTIAL_ALPHABET, LEGACY_CREDENTIAL_LENGTH);
+    ? jiemaPingzheng(credential)
+    : decodeWith(credential, YICHAN_PINGZHENG_ZIFUBIAO, YICHAN_PINGZHENG_CHANGDU);
   const raw = ed25519FromSeed(seed);
   const privateKey = ed25519PrivateKeyObject(raw.privateKey);
   return {

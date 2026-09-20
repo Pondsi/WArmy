@@ -5,25 +5,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export type EntityKind = 'person' | 'org' | 'material' | 'place' | 'concept' | 'tool' | 'project';
+export type ShitiLeixing = 'person' | 'org' | 'material' | 'place' | 'concept' | 'tool' | 'project';
 
-export interface EvidenceAnchor {
+export interface ZhengjuMaodian {
   file: string;
   seq: number;
   recordId: string;
 }
 
-export interface Entity {
+export interface Shiti {
   id: string;
-  kind: EntityKind;
+  kind: ShitiLeixing;
   name: string;
   attrs: Record<string, string>;
   eventIds: string[];
-  anchors: EvidenceAnchor[];
+  anchors: ZhengjuMaodian[];
   updatedAt: number;
 }
 
-export interface KnowledgeEvent {
+export interface ZhishiShijian {
   id: string;
   title: string;
   tool?: string;
@@ -31,13 +31,13 @@ export interface KnowledgeEvent {
   result?: string;
   expected?: string;
   entityIds: string[];
-  anchors: EvidenceAnchor[];
+  anchors: ZhengjuMaodian[];
   ts: number;
 }
 
 export class KnowledgeBase {
-  private entities = new Map<string, Entity>();
-  private events = new Map<string, KnowledgeEvent>();
+  private entities = new Map<string, Shiti>();
+  private events = new Map<string, ZhishiShijian>();
 
   constructor(private dataDir: string) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -66,9 +66,9 @@ export class KnowledgeBase {
     );
   }
 
-  upsertEntity(partial: Omit<Entity, 'updatedAt' | 'eventIds'> & { eventIds?: string[] }): Entity {
+  upsertEntity(partial: Omit<Shiti, 'updatedAt' | 'eventIds'> & { eventIds?: string[] }): Shiti {
     const prev = this.entities.get(partial.id);
-    const e: Entity = {
+    const e: Shiti = {
       ...prev,
       ...partial,
       eventIds: partial.eventIds || prev?.eventIds || [],
@@ -96,21 +96,21 @@ export class KnowledgeBase {
   removeEvent(id: string): boolean {
     if (!this.events.has(id)) return false;
     this.events.delete(id);
-    for (const ent of this.entities.values()) {
-      const i = ent.eventIds.indexOf(id);
-      if (i >= 0) ent.eventIds.splice(i, 1);
+    for (const tiaoMu of this.entities.values()) {
+      const i = tiaoMu.eventIds.indexOf(id);
+      if (i >= 0) tiaoMu.eventIds.splice(i, 1);
     }
     this.save();
     return true;
   }
 
-  addEvent(ev: KnowledgeEvent): KnowledgeEvent {
+  addEvent(ev: ZhishiShijian): ZhishiShijian {
     this.events.set(ev.id, ev);
-    for (const eid of ev.entityIds) {
-      const ent = this.entities.get(eid);
-      if (ent && !ent.eventIds.includes(ev.id)) {
-        ent.eventIds.push(ev.id);
-        ent.updatedAt = Date.now();
+    for (const shitiId of ev.entityIds) {
+      const tiaoMu = this.entities.get(shitiId);
+      if (tiaoMu && !tiaoMu.eventIds.includes(ev.id)) {
+        tiaoMu.eventIds.push(ev.id);
+        tiaoMu.updatedAt = Date.now();
       }
     }
     this.save();
@@ -118,21 +118,21 @@ export class KnowledgeBase {
   }
 
   /** 实体 → 事件 */
-  eventsOfEntity(entityId: string): KnowledgeEvent[] {
+  eventsOfEntity(entityId: string): ZhishiShijian[] {
     const e = this.entities.get(entityId);
     if (!e) return [];
-    return e.eventIds.map((id) => this.events.get(id)).filter(Boolean) as KnowledgeEvent[];
+    return e.eventIds.map((id) => this.events.get(id)).filter(Boolean) as ZhishiShijian[];
   }
 
   /** 事件 → 实体 */
-  entitiesOfEvent(eventId: string): Entity[] {
+  entitiesOfEvent(eventId: string): Shiti[] {
     const ev = this.events.get(eventId);
     if (!ev) return [];
-    return ev.entityIds.map((id) => this.entities.get(id)).filter(Boolean) as Entity[];
+    return ev.entityIds.map((id) => this.entities.get(id)).filter(Boolean) as Shiti[];
   }
 
   /** 统一检索入口 */
-  query(q: string): { entities: Entity[]; events: KnowledgeEvent[] } {
+  query(q: string): { entities: Shiti[]; events: ZhishiShijian[] } {
     const s = q.trim().toLowerCase();
     const entities = [...this.entities.values()].filter(
       (e) => e.name.toLowerCase().includes(s) || JSON.stringify(e.attrs).toLowerCase().includes(s)
@@ -146,7 +146,7 @@ export class KnowledgeBase {
     return { entities, events };
   }
 
-  listEntities(kind?: EntityKind): Entity[] {
+  listEntities(kind?: ShitiLeixing): Shiti[] {
     return [...this.entities.values()].filter((e) => !kind || e.kind === kind);
   }
 }

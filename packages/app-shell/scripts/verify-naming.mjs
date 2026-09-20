@@ -11,7 +11,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -187,6 +187,22 @@ for (const f of spawnFiles) {
 }
 check(`所有子进程调用都隐藏了控制台窗口（发现 ${consoleOffenders.length} 处未隐藏）`,
   consoleOffenders.length === 0, consoleOffenders.slice(0, 6));
+
+/* ── 任务栏/托盘图标必须有**白底版**，且只有这两处用它 ── */
+{
+  const iconDir = path.join(ROOT, 'packages/app-shell/src/renderer/icons');
+  const need = ['app-white.ico', 'app-white-256.png', 'app-white-64.png', 'app-white-16.png'];
+  const missing = need.filter((n) => !fs.existsSync(path.join(iconDir, n)));
+  check(`白底图标资产齐备（${need.length} 个，缺 ${missing.length}）`, missing.length === 0, missing);
+  const mainSrc = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/electron-main.ts'), 'utf8');
+  check('任务栏窗口与系统托盘用白底图标（warmyTaskbarIcon 用在 createWindow / 独立窗 / createTray）',
+    /warmyTaskbarIcon\(\)/.test(mainSrc) && (mainSrc.match(/warmyTaskbarIcon\(\)/g) || []).length >= 3);
+  // 其它地方（渲染层 logo / 标题栏 / 我的页 / 关于页）**不许**换成白底版
+  const appjsIcons = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'), 'utf8');
+  check('渲染层的 logo 不被换成白底版（只有任务栏/托盘用白底）', !/app-white/i.test(appjsIcons));
+  check('独立窗的任务栏头像图标也合成白底（chatAvatarDataUrl 里先铺白底）',
+    /puBaiDi\(\)/.test(appjsIcons) && /fillStyle = '#ffffff'/.test(appjsIcons));
+}
 
 console.log(`\n==== verify-naming: ${pass} ok / ${fail} FAIL ====`);
 process.exit(fail === 0 ? 0 : 1);

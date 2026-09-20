@@ -57,8 +57,8 @@ export function yuXianXiangSiDu(a: Float32Array, b: Float32Array): number {
 
 /** Int8Array → 可直接塞进 better-sqlite3 BLOB 的 Buffer（拷贝一份，避免共享底层 ArrayBuffer） */
 export function packInt8(data: Int8Array): Buffer {
-  const view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-  return Buffer.from(view); // Buffer.from(typedArray) 会拷贝
+  const shitu = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  return Buffer.from(shitu); // Buffer.from(typedArray) 会拷贝
 }
 
 /** SQLite BLOB → Int8Array（同样做边界安全的视图） */
@@ -107,14 +107,14 @@ export function normalizeCosine(c: number): number {
 // ─────────────────────────────────────────────
 
 /** RRF 融合：fts_uni ∪ fts_tri ∪ 向量 */
-export interface RrfSource {
+export interface RrfLaiyuan {
   id: string;
   score: number;
   source: 'fts_uni' | 'fts_tri' | 'vector';
 }
 
 /** 兼容旧签名（用 score 近似 rank）；新代码请用 rrfFusionRanked */
-export function rrfFusion(sources: RrfSource[], k = 60): Array<{ id: string; rrfScore: number; sources: string[] }> {
+export function rrfRonghe(sources: RrfLaiyuan[], k = 60): Array<{ id: string; rrfScore: number; sources: string[] }> {
   const map = new Map<string, { rrfScore: number; sources: Set<string> }>();
   for (const s of sources) {
     const cur = map.get(s.id) || { rrfScore: 0, sources: new Set<string>() };
@@ -135,7 +135,7 @@ export interface RankedList {
   ids: string[];
 }
 
-export interface FusedHit {
+export interface RongheMingzhong {
   id: string;
   rrfScore: number;
   sources: string[];
@@ -147,7 +147,7 @@ export interface FusedHit {
  * 标准 RRF：score = Σ 1/(k + rank_i(d))，k 默认 60。
  * 与 rrfFusion 的区别是这里用真实排名，而不是从 score 反推的伪排名。
  */
-export function rrfFusionRanked(lists: RankedList[], k = 60): FusedHit[] {
+export function rrfRonghePaixu(lists: RankedList[], k = 60): RongheMingzhong[] {
   const map = new Map<string, { rrfScore: number; sources: Set<string>; ranks: Record<string, number> }>();
   for (const list of lists) {
     for (let i = 0; i < list.ids.length; i++) {

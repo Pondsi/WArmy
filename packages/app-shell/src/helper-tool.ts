@@ -42,7 +42,7 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import crypto from 'node:crypto';
-import type { ProjectFileAccessEntry, ProjectFileAccessOp } from './group-store.js';
+import type { XiangmuWenjianFangwenTiaomu, ProjectFileAccessOp } from './group-store.js';
 
 export const HELPER_TOOL_VERSION = '0.1.0-p0-spike8';
 
@@ -62,13 +62,13 @@ export const HELPER_TOOL_VERSION = '0.1.0-p0-spike8';
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** 台账落点：由主进程接成"写进项目记录"（项目级、成员可见） */
-export type FileAccessSink = (sessionId: string, entry: ProjectFileAccessEntry) => void;
+export type WenjianFangwenShuikou = (sessionId: string, entry: XiangmuWenjianFangwenTiaomu) => void;
 
-let fileAccessSink: FileAccessSink | null = null;
+let fileAccessSink: WenjianFangwenShuikou | null = null;
 /** 当前记账作用域（= 项目/会话 id）；为空 ⇒ **不记**（宁可缺，也不要记到不属于它的项目上） */
-let fileAccessScope = '';
+let wenjianFangwenZuoyongyu = '';
 
-export function setFileAccessSink(sink: FileAccessSink | null): void {
+export function setFileAccessSink(sink: WenjianFangwenShuikou | null): void {
   fileAccessSink = sink;
 }
 
@@ -77,24 +77,24 @@ export function setFileAccessSink(sink: FileAccessSink | null): void {
  * ⚠️ 用"栈"而不是"覆盖"：嵌套调用（例如项目 A 的动作里又触发了项目 B）不会串账。
  */
 export async function withFileAccessScope<T>(sessionId: string, fn: () => Promise<T> | T): Promise<T> {
-  const prev = fileAccessScope;
-  fileAccessScope = String(sessionId || '');
+  const prev = wenjianFangwenZuoyongyu;
+  wenjianFangwenZuoyongyu = String(sessionId || '');
   try {
     return await fn();
   } finally {
-    fileAccessScope = prev;
+    wenjianFangwenZuoyongyu = prev;
   }
 }
 
-export function currentFileAccessScope(): string {
-  return fileAccessScope;
+export function dangqianWenjianFangwenZuoyongyu(): string {
+  return wenjianFangwenZuoyongyu;
 }
 
 /** 记一条（内部用）。**没有作用域或没有 sink 就当没发生** —— 不落本机、不编。 */
-function noteFileAccess(op: ProjectFileAccessOp, file: string, extra: { ok?: boolean; bytes?: number; by?: string } = {}): void {
+function beizhuWenjianFangwen(op: ProjectFileAccessOp, file: string, extra: { ok?: boolean; bytes?: number; by?: string } = {}): void {
   try {
-    if (!fileAccessSink || !fileAccessScope) return;
-    const entry: ProjectFileAccessEntry = {
+    if (!fileAccessSink || !wenjianFangwenZuoyongyu) return;
+    const entry: XiangmuWenjianFangwenTiaomu = {
       op,
       path: String(file),
       ts: Date.now(),
@@ -103,7 +103,7 @@ function noteFileAccess(op: ProjectFileAccessOp, file: string, extra: { ok?: boo
     };
     const b = Number(extra.bytes);
     if (Number.isFinite(b) && b > 0) entry.bytes = Math.floor(b);
-    fileAccessSink(fileAccessScope, entry);
+    fileAccessSink(wenjianFangwenZuoyongyu, entry);
   } catch {
     /* 记账失败绝不能影响真实文件操作 */
   }
@@ -111,17 +111,17 @@ function noteFileAccess(op: ProjectFileAccessOp, file: string, extra: { ok?: boo
 
 /** 外层（主进程）也能直接记一条：例如容器里的命令改过的文件 */
 export function noteExternalFileAccess(op: ProjectFileAccessOp, file: string, extra: { ok?: boolean; bytes?: number; by?: string } = {}): void {
-  noteFileAccess(op, file, extra);
+  beizhuWenjianFangwen(op, file, extra);
 }
 
 /* ────────────────────────── 类型 ────────────────────────── */
 
-export type HelperPlatform = 'win32' | 'darwin' | 'linux' | 'unsupported';
+export type ZhushouPingtai = 'win32' | 'darwin' | 'linux' | 'unsupported';
 
 /** 提权工具种类：Windows 用 gsudo，macOS 用 SMAppService，其它平台明确不支持 */
-export type ElevationToolKind = 'gsudo' | 'smappservice' | 'none';
+export type TiquanGongjuLeixing = 'gsudo' | 'smappservice' | 'none';
 
-export type HelperErrorCode =
+export type ZhushouCuowuDaima =
   | 'OK'
   | 'ELEVATION_UNSUPPORTED_PLATFORM'
   | 'ELEVATION_TOOL_MISSING'
@@ -137,9 +137,9 @@ export type HelperErrorCode =
   | 'HOSTS_VERIFY_FAILED'
   | 'HOSTS_ROLLBACK_FAILED';
 
-export interface ElevationToolInfo {
-  platform: HelperPlatform;
-  tool: ElevationToolKind;
+export interface TiquanGongjuXinxi {
+  platform: ZhushouPingtai;
+  tool: TiquanGongjuLeixing;
   available: boolean;
   executable: string | null;
   version: string | null;
@@ -150,7 +150,7 @@ export interface ElevationToolInfo {
   unverified: string[];
 }
 
-export interface CommandResult {
+export interface MinglingJieguo {
   exe: string;
   args: string[];
   exitCode: number | null;
@@ -162,13 +162,13 @@ export interface CommandResult {
   elapsedMs: number;
 }
 
-export interface HostEntrySpec {
+export interface ZhujiTiaomuGuige {
   ip: string;
   hostname: string;
   comment?: string;
 }
 
-export interface ValidationResult {
+export interface JiaoyanJieguo {
   ok: boolean;
   reason?: string;
 }
@@ -188,7 +188,7 @@ export interface HostsContentAnalysis {
   stats: { lines: number; entries: number; comments: number; blanks: number };
 }
 
-export interface BackupInfo {
+export interface BeifenXinxi {
   source: string;
   path: string;
   bytes: number;
@@ -196,7 +196,7 @@ export interface BackupInfo {
   createdAt: string;
 }
 
-export interface FileFingerprint {
+export interface WenjianZhiwen {
   path: string;
   exists: boolean;
   bytes: number;
@@ -205,9 +205,9 @@ export interface FileFingerprint {
   entryPresent: boolean;
 }
 
-export interface ElevationRawEvidence {
+export interface TiquanYuanwenZhengju {
   /** 提权命令（gsudo -n cmd /c <脚本>）本身的原始输出 */
-  outer: CommandResult | null;
+  outer: MinglingJieguo | null;
   /** 提权 shell 内层命令的原始输出（从标记文件读回） */
   innerExitCode: number | null;
   innerOutput: string | null;
@@ -220,13 +220,13 @@ export interface ElevationRawEvidence {
 export interface WriteOutcome {
   ok: boolean;
   method: 'direct' | 'elevated' | null;
-  errorCode: HelperErrorCode;
+  errorCode: ZhushouCuowuDaima;
   message: string;
-  raw: ElevationRawEvidence | null;
+  raw: TiquanYuanwenZhengju | null;
 }
 
 export interface HostsOpOptions {
-  spec: HostEntrySpec;
+  spec: ZhujiTiaomuGuige;
   /** 'upsert' 追加/确认；'remove' 精确移除（回滚用） */
   op?: 'upsert' | 'remove';
   hostsFile?: string;
@@ -238,7 +238,7 @@ export interface HostsOpOptions {
   verifyTimeoutMs?: number;
   /** 提权写入的重试次数（默认 2 次重试；实测 hosts 会被其它进程短暂占用） */
   retries?: number;
-  toolInfo?: ElevationToolInfo;
+  toolInfo?: TiquanGongjuXinxi;
   /** 提权前先确认 targets 目录可写性检查，仅用于报告 */
   dryRun?: boolean;
 }
@@ -248,28 +248,28 @@ export interface HostsOpResult {
   changed: boolean;
   alreadyPresent: boolean;
   removedCount: number;
-  errorCode: HelperErrorCode;
+  errorCode: ZhushouCuowuDaima;
   message: string;
   hostsFile: string;
   writeMethod: 'direct' | 'elevated' | null;
-  backup: BackupInfo | null;
-  before: FileFingerprint;
-  after: FileFingerprint;
+  backup: BeifenXinxi | null;
+  before: WenjianZhiwen;
+  after: WenjianZhiwen;
   verified: boolean;
   rolledBack: boolean;
   warnings: string[];
-  tool: ElevationToolInfo;
-  raw: ElevationRawEvidence | null;
+  tool: TiquanGongjuXinxi;
+  raw: TiquanYuanwenZhengju | null;
   plan: { appendedLine: string | null; contentSha256: string | null; bytesToWrite: number };
 }
 
-export interface HelperStatus {
+export interface ZhushouZhuangtai {
   version: string;
-  platform: HelperPlatform;
+  platform: ZhushouPingtai;
   isAdmin: boolean;
   hostsFile: string;
   hostsWritableByCurrentProcess: boolean;
-  tool: ElevationToolInfo;
+  tool: TiquanGongjuXinxi;
   credentialCache: { queried: boolean; available: boolean | null; raw: string | null; note: string };
   /** 本机（当前平台）尚无法验证的部分，UI 需据此降级展示 */
   unverified: string[];
@@ -277,12 +277,12 @@ export interface HelperStatus {
 
 /* ────────────────────────── 平台与工具探测 ────────────────────────── */
 
-export function detectHelperPlatform(platform: string = process.platform): HelperPlatform {
+export function detectHelperPlatform(platform: string = process.platform): ZhushouPingtai {
   if (platform === 'win32' || platform === 'darwin' || platform === 'linux') return platform;
   return 'unsupported';
 }
 
-export function defaultHostsPath(platform: HelperPlatform = detectHelperPlatform()): string {
+export function defaultHostsPath(platform: ZhushouPingtai = detectHelperPlatform()): string {
   if (platform === 'win32') {
     const root = process.env['SystemRoot'] ?? process.env['windir'] ?? 'C:\\Windows';
     return path.join(root, 'System32', 'drivers', 'etc', 'hosts');
@@ -295,14 +295,14 @@ export function gsudoCandidatePaths(env: NodeJS.ProcessEnv = process.env): strin
   const pf = env['ProgramFiles'] ?? 'C:\\Program Files';
   const pfx86 = env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
   const local = env['LOCALAPPDATA'] ?? '';
-  const programData = env['ProgramData'] ?? 'C:\\ProgramData';
+  const chengxuShuju = env['ProgramData'] ?? 'C:\\ProgramData';
   const out: string[] = [];
-  const pushed = env['GSUDO_PATH'] ?? env['GsudoPath'];
-  if (pushed) out.push(pushed);
+  const tuisong = env['GSUDO_PATH'] ?? env['GsudoPath'];
+  if (tuisong) out.push(tuisong);
   out.push(path.join(pf, 'gsudo', 'Current', 'gsudo.exe'));
   out.push(path.join(pfx86, 'gsudo', 'Current', 'gsudo.exe'));
   if (local) out.push(path.join(local, 'Programs', 'gsudo', 'Current', 'gsudo.exe'));
-  out.push(path.join(programData, 'chocolatey', 'bin', 'gsudo.exe'));
+  out.push(path.join(chengxuShuju, 'chocolatey', 'bin', 'gsudo.exe'));
   return out;
 }
 
@@ -321,19 +321,19 @@ export function decodeConsoleOutput(buf: Buffer): string {
   }
 }
 
-function delay(ms: number): Promise<void> {
+function yanchi(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 /** 通用子进程执行：非交互（stdin=ignore）、可超时、超时杀进程树 */
-export async function runProcess(
+export async function yunxingJincheng(
   exe: string,
   args: string[],
   opts: { timeoutMs?: number; env?: NodeJS.ProcessEnv; cwd?: string } = {}
-): Promise<CommandResult> {
+): Promise<MinglingJieguo> {
   const timeoutMs = opts.timeoutMs ?? 15000;
   const started = Date.now();
-  return new Promise<CommandResult>((resolve) => {
+  return new Promise<MinglingJieguo>((resolve) => {
     let child: ReturnType<typeof spawn>;
     try {
       child = spawn(exe, args, {
@@ -358,21 +358,21 @@ export async function runProcess(
       return;
     }
 
-    let stdoutBuf = Buffer.alloc(0);
-    let stderrBuf = Buffer.alloc(0);
+    let biaozhunShuchuHuanchong = Buffer.alloc(0);
+    let biaozhunCuowuHuanchong = Buffer.alloc(0);
     let timedOut = false;
     const cap = 64 * 1024; // 只留证据，不吞内存
     child.stdout?.on('data', (d: Buffer) => {
-      if (stdoutBuf.length < cap) stdoutBuf = Buffer.concat([stdoutBuf, d]);
+      if (biaozhunShuchuHuanchong.length < cap) biaozhunShuchuHuanchong = Buffer.concat([biaozhunShuchuHuanchong, d]);
     });
     child.stderr?.on('data', (d: Buffer) => {
-      if (stderrBuf.length < cap) stderrBuf = Buffer.concat([stderrBuf, d]);
+      if (biaozhunCuowuHuanchong.length < cap) biaozhunCuowuHuanchong = Buffer.concat([biaozhunCuowuHuanchong, d]);
     });
-    const decode = () => ({ stdout: decodeConsoleOutput(stdoutBuf), stderr: decodeConsoleOutput(stderrBuf) });
+    const decode = () => ({ stdout: decodeConsoleOutput(biaozhunShuchuHuanchong), stderr: decodeConsoleOutput(biaozhunCuowuHuanchong) });
 
     const timer = setTimeout(() => {
       timedOut = true;
-      killTree(child.pid);
+      zhongzhiShu(child.pid);
     }, timeoutMs);
 
     child.on('error', (e) => {
@@ -409,7 +409,7 @@ export async function runProcess(
   });
 }
 
-function killTree(pid: number | undefined): void {
+function zhongzhiShu(pid: number | undefined): void {
   if (!pid) return;
   if (process.platform === 'win32') {
     // 杀掉整棵树，避免留下孤儿提权进程
@@ -427,14 +427,14 @@ function killTree(pid: number | undefined): void {
 }
 
 /** where.exe gsudo（仅在候选路径都没命中时才用） */
-async function whichGsudo(): Promise<string | null> {
-  const r = await runProcess(process.platform === 'win32' ? 'where.exe' : 'which', ['gsudo'], { timeoutMs: 5000 });
+async function naYiGeGsudo(): Promise<string | null> {
+  const r = await yunxingJincheng(process.platform === 'win32' ? 'where.exe' : 'which', ['gsudo'], { timeoutMs: 5000 });
   if (r.exitCode !== 0) return null;
   const first = r.stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)[0];
   return first ?? null;
 }
 
-export async function resolveGsudoExecutable(env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+export async function jiexiGsudoKezhixing(env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
   for (const p of gsudoCandidatePaths(env)) {
     try {
       if (p && fs.existsSync(p)) return p;
@@ -442,12 +442,12 @@ export async function resolveGsudoExecutable(env: NodeJS.ProcessEnv = process.en
       /* noop */
     }
   }
-  return whichGsudo();
+  return naYiGeGsudo();
 }
 
 /** gsudo --version（不需要提权） */
-export async function probeGsudo(executable: string): Promise<{ version: string | null; raw: CommandResult }> {
-  const raw = await runProcess(executable, ['--version'], { timeoutMs: 10000 });
+export async function probeGsudo(executable: string): Promise<{ version: string | null; raw: MinglingJieguo }> {
+  const raw = await yunxingJincheng(executable, ['--version'], { timeoutMs: 10000 });
   const m = raw.stdout.match(/gsudo\s+v?([\w.\-]+)/i);
   return { version: m?.[1] ?? null, raw };
 }
@@ -458,8 +458,8 @@ export async function probeGsudo(executable: string): Promise<{ version: string 
  */
 export async function queryGsudoCredentialCache(
   executable: string
-): Promise<{ available: boolean | null; raw: CommandResult }> {
-  const raw = await runProcess(executable, ['-n', 'status'], { timeoutMs: 15000 });
+): Promise<{ available: boolean | null; raw: MinglingJieguo }> {
+  const raw = await yunxingJincheng(executable, ['-n', 'status'], { timeoutMs: 15000 });
   const text = `${raw.stdout}\n${raw.stderr}`;
   let available: boolean | null = null;
   const m = text.match(/Available for this process:\s*(True|False)/i);
@@ -473,11 +473,11 @@ export async function queryGsudoCredentialCache(
  * 选择提权工具。Windows → gsudo；macOS → SMAppService；其它 → 不支持（明确返回原因）。
  * 注意：macOS 的 SMAppService 只能在 macOS 上真正验证；此处如实标注 unverified。
  */
-export async function selectElevationTool(): Promise<ElevationToolInfo> {
+export async function selectElevationTool(): Promise<TiquanGongjuXinxi> {
   const platform = detectHelperPlatform();
 
   if (platform === 'win32') {
-    const exe = await resolveGsudoExecutable();
+    const exe = await jiexiGsudoKezhixing();
     if (!exe) {
       return {
         platform,
@@ -605,7 +605,7 @@ export function macHelperPlan(opts: { label?: string; helperDir?: string } = {})
 
 const HOSTNAME_RE = /^[A-Za-z0-9]([A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$/;
 
-export function validateHostEntrySpec(spec: HostEntrySpec): ValidationResult {
+export function validateHostEntrySpec(spec: ZhujiTiaomuGuige): JiaoyanJieguo {
   if (!spec || typeof spec.ip !== 'string' || typeof spec.hostname !== 'string') {
     return { ok: false, reason: 'ip/hostname 必须是字符串' };
   }
@@ -623,7 +623,7 @@ export function validateHostEntrySpec(spec: HostEntrySpec): ValidationResult {
 }
 
 /** 渲染成一行 hosts 记录；此处就是「写入前校验目标行格式」的产物 */
-export function formatHostEntry(spec: HostEntrySpec): string {
+export function formatHostEntry(spec: ZhujiTiaomuGuige): string {
   const base = `${spec.ip.trim()} ${spec.hostname.trim()}`;
   return spec.comment ? `${base} # ${spec.comment}` : base;
 }
@@ -675,7 +675,7 @@ export function tanceHangwei(content: string): '\r\n' | '\n' {
 }
 
 /** 判断某条 (ip, hostname) 是否已存在 */
-export function findHostEntry(content: string, spec: HostEntrySpec): { present: boolean; lineNumbers: number[] } {
+export function findHostEntry(content: string, spec: ZhujiTiaomuGuige): { present: boolean; lineNumbers: number[] } {
   const target = spec.hostname.trim().toLowerCase();
   const muBiaoIp = spec.ip.trim();
   const lineNumbers: number[] = [];
@@ -691,7 +691,7 @@ export function findHostEntry(content: string, spec: HostEntrySpec): { present: 
 /** 幂等 upsert：已存在不改，末尾按原 EOL 追加校验过的一行 */
 export function upsertHostEntry(
   content: string,
-  spec: HostEntrySpec
+  spec: ZhujiTiaomuGuige
 ): { ok: boolean; content: string; changed: boolean; alreadyPresent: boolean; reason?: string; appendedLine?: string } {
   const v = validateHostEntrySpec(spec);
   if (!v.ok) return { ok: false, content, changed: false, alreadyPresent: false, reason: v.reason };
@@ -723,7 +723,7 @@ export function upsertHostEntry(
 /** 精确移除（回滚/清理用）：只删 ip+hostname 完全匹配的行 */
 export function removeHostEntry(
   content: string,
-  spec: HostEntrySpec
+  spec: ZhujiTiaomuGuige
 ): { ok: boolean; content: string; changed: boolean; removedCount: number; reason?: string } {
   const v = validateHostEntrySpec(spec);
   if (!v.ok) return { ok: false, content, changed: false, removedCount: 0, reason: v.reason };
@@ -755,27 +755,27 @@ export function sha256(text: string | Buffer): string {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
 
-export function defaultBackupDir(): string {
+export function morenBeifenMulu(): string {
   return path.join(os.homedir(), '.warmy', 'helper-backups');
 }
 
-export function backupFile(source: string, backupDir = defaultBackupDir(), label = 'hosts'): BackupInfo {
+export function backupFile(source: string, backupDir = morenBeifenMulu(), label = 'hosts'): BeifenXinxi {
   const buf = fs.readFileSync(source);
-  noteFileAccess('read', source, { bytes: buf.length });
+  beizhuWenjianFangwen('read', source, { bytes: buf.length });
   fs.mkdirSync(backupDir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const target = path.join(backupDir, `${label}.${stamp}.bak`);
+  const shijianchuo = new Date().toISOString().replace(/[:.]/g, '-');
+  const target = path.join(backupDir, `${label}.${shijianchuo}.bak`);
   fs.writeFileSync(target, buf);
-  noteFileAccess('backup', target, { bytes: buf.length });
+  beizhuWenjianFangwen('backup', target, { bytes: buf.length });
   const readBack = fs.readFileSync(target);
   if (!readBack.equals(buf)) throw new Error(`备份校验失败：${target} 内容与源不一致`);
   return { source, path: target, bytes: buf.length, sha256: sha256(buf), createdAt: new Date().toISOString() };
 }
 
-export function fingerprintFile(file: string, spec?: HostEntrySpec): FileFingerprint {
+export function fingerprintFile(file: string, spec?: ZhujiTiaomuGuige): WenjianZhiwen {
   try {
     const buf = fs.readFileSync(file);
-    noteFileAccess('read', file, { bytes: buf.length });
+    beizhuWenjianFangwen('read', file, { bytes: buf.length });
     const text = buf.toString('utf8');
     return {
       path: file,
@@ -793,7 +793,7 @@ export function fingerprintFile(file: string, spec?: HostEntrySpec): FileFingerp
 function readTextOrNull(file: string): string | null {
   try {
     const t = fs.readFileSync(file, 'utf8');
-    noteFileAccess('read', file, { bytes: Buffer.byteLength(t, 'utf8') });
+    beizhuWenjianFangwen('read', file, { bytes: Buffer.byteLength(t, 'utf8') });
     return t;
   } catch {
     return null;
@@ -804,7 +804,7 @@ function readTextOrNull(file: string): string | null {
 function readDecodedOrNull(file: string): string | null {
   try {
     const buf = fs.readFileSync(file);
-    noteFileAccess('read', file, { bytes: buf.length });
+    beizhuWenjianFangwen('read', file, { bytes: buf.length });
     return decodeConsoleOutput(buf);
   } catch {
     return null;
@@ -851,13 +851,13 @@ export async function verifyWrittenContent(
 
 /* ────────────────────────── 提权执行 ────────────────────────── */
 
-function stageDir(): string {
+function jieduanMulu(): string {
   const dir = path.join(os.tmpdir(), 'warmy-helper-stage');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 
-function randomTag(): string {
+function suijiBiaoqian(): string {
   return `${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 }
 
@@ -875,19 +875,19 @@ function randomTag(): string {
  */
 export type ElevatedAttempt = {
   ok: boolean;
-  errorCode: HelperErrorCode;
+  errorCode: ZhushouCuowuDaima;
   message: string;
-  raw: ElevationRawEvidence;
+  raw: TiquanYuanwenZhengju;
 };
 
 export async function runElevatedArgs(
   args: string[],
-  tool: ElevationToolInfo,
+  tool: TiquanGongjuXinxi,
   opts: { timeoutMs?: number; commandLine?: string; retries?: number } = {}
 ): Promise<ElevatedAttempt> {
   const timeoutMs = opts.timeoutMs ?? 30000;
   const maxAttempts = Math.max(1, (opts.retries ?? 2) + 1);
-  const emptyRaw: ElevationRawEvidence = { outer: null, innerExitCode: null, innerOutput: null, markerFiles: null };
+  const emptyRaw: TiquanYuanwenZhengju = { outer: null, innerExitCode: null, innerOutput: null, markerFiles: null };
 
   if (!tool.available || !tool.executable) {
     return {
@@ -919,7 +919,7 @@ export async function runElevatedArgs(
     );
     if (r.ok) break;
     if (!isRetryableElevationFailure(r.errorCode) || i === maxAttempts) break;
-    await delay(400 * i);
+    await yanchi(400 * i);
   }
   if (!last) {
     return { ok: false, errorCode: 'ELEVATION_FAILED', message: '提权命令未执行', raw: emptyRaw };
@@ -929,19 +929,19 @@ export async function runElevatedArgs(
 
 async function runElevatedOnce(
   args: string[],
-  tool: ElevationToolInfo,
+  tool: TiquanGongjuXinxi,
   opts: { timeoutMs: number; commandLine?: string }
 ): Promise<ElevatedAttempt> {
   const timeoutMs = opts.timeoutMs;
   const executable = tool.executable;
   if (!executable) {
-    return { ok: false, errorCode: 'ELEVATION_TOOL_MISSING', message: tool.reason, raw: emptyRawEvidence() };
+    return { ok: false, errorCode: 'ELEVATION_TOOL_MISSING', message: tool.reason, raw: kongYuanwenZhengju() };
   }
-  const tag = randomTag();
-  const dir = stageDir();
-  const scriptPath = path.join(dir, `elevated-${tag}.cmd`);
+  const tag = suijiBiaoqian();
+  const dir = jieduanMulu();
+  const jiaobenLujing = path.join(dir, `elevated-${tag}.cmd`);
   const logPath = path.join(dir, `elevated-${tag}.log`);
-  const donePath = path.join(dir, `elevated-${tag}.done`);
+  const wanchengLujing = path.join(dir, `elevated-${tag}.done`);
 
   const commandLine =
     opts.commandLine ??
@@ -954,46 +954,46 @@ async function runElevatedOnce(
     'setlocal',
     `${commandLine} > "${logPath}" 2>&1`,
     'set CCRMY_RC=%errorlevel%',
-    `> "${donePath}" echo %CCRMY_RC%`,
+    `> "${wanchengLujing}" echo %CCRMY_RC%`,
     'endlocal',
     '',
   ].join('\r\n');
-  fs.writeFileSync(scriptPath, script, 'utf8');
+  fs.writeFileSync(jiaobenLujing, script, 'utf8');
   const scriptSha = sha256(script);
 
-  const outer = await runProcess(executable, [...tool.nonInteractiveArgs, 'cmd', '/c', scriptPath], {
+  const outer = await yunxingJincheng(executable, [...tool.nonInteractiveArgs, 'cmd', '/c', jiaobenLujing], {
     timeoutMs,
   });
 
   // 等标记文件（提权进程可能略晚于 gsudo 返回）；但进程根本没起来/已超时就不必等
   if (!outer.timedOut && !outer.spawnError) {
-    const waited = Date.now();
-    while (!fs.existsSync(donePath) && Date.now() - waited < Math.min(timeoutMs, 8000)) {
-      await delay(120);
+    const dengdai = Date.now();
+    while (!fs.existsSync(wanchengLujing) && Date.now() - dengdai < Math.min(timeoutMs, 8000)) {
+      await yanchi(120);
     }
   }
 
-  const innerRaw = readDecodedOrNull(donePath);
+  const neicengYuanwen = readDecodedOrNull(wanchengLujing);
   const innerOutput = readDecodedOrNull(logPath);
-  const innerExitCode = innerRaw === null ? null : Number(innerRaw.trim());
+  const innerExitCode = neicengYuanwen === null ? null : Number(neicengYuanwen.trim());
 
   // 执行后校验脚本未被篡改（TOCTOU 缓解）
   let afterSha: string | null = null;
   try {
-    afterSha = sha256(fs.readFileSync(scriptPath, 'utf8'));
+    afterSha = sha256(fs.readFileSync(jiaobenLujing, 'utf8'));
   } catch {
     afterSha = null;
   }
 
-  const raw: ElevationRawEvidence = {
+  const raw: TiquanYuanwenZhengju = {
     outer,
     innerExitCode: Number.isFinite(innerExitCode) ? (innerExitCode as number) : null,
     innerOutput,
-    markerFiles: { script: scriptPath, log: logPath, done: donePath },
+    markerFiles: { script: jiaobenLujing, log: logPath, done: wanchengLujing },
   };
 
   // 清理临时文件
-  for (const f of [scriptPath, logPath, donePath]) {
+  for (const f of [jiaobenLujing, logPath, wanchengLujing]) {
     try {
       fs.rmSync(f, { force: true });
     } catch {
@@ -1039,12 +1039,12 @@ async function runElevatedOnce(
   return { ok: true, errorCode: 'OK', message: '提权命令执行完成', raw };
 }
 
-function emptyRawEvidence(): ElevationRawEvidence {
+function kongYuanwenZhengju(): TiquanYuanwenZhengju {
   return { outer: null, innerExitCode: null, innerOutput: null, markerFiles: null };
 }
 
 /** 提权失败是否值得重试：提权本身成功、只是被占位/共享冲突（实测 hosts 会被其它进程短暂持有） */
-export function isRetryableElevationFailure(code: HelperErrorCode): boolean {
+export function isRetryableElevationFailure(code: ZhushouCuowuDaima): boolean {
   return code === 'ELEVATION_DENIED' || code === 'ELEVATION_FAILED' || code === 'HOSTS_WRITE_FAILED';
 }
 
@@ -1058,7 +1058,7 @@ export async function writeFileWithFallback(opts: {
   target: string;
   content: string;
   mode?: 'auto' | 'direct' | 'elevated';
-  tool: ElevationToolInfo;
+  tool: TiquanGongjuXinxi;
   timeoutMs?: number;
   retries?: number;
 }): Promise<WriteOutcome> {
@@ -1070,27 +1070,27 @@ export async function writeFileWithFallback(opts: {
    * ⚠️ 临时/暂存文件（os.tmpdir 下的 .warmy-tmp / payload-*）**刻意不记账**：
    * 它们不是项目产物，记进去只会把台账淹掉（这点写在这里，免得被当成漏记）。
    */
-  const existedBefore = (() => {
+  const cunzaiZhiqian = (() => {
     try {
       return fs.existsSync(opts.target);
     } catch {
       return false;
     }
   })();
-  const writeOp: ProjectFileAccessOp = existedBefore ? 'edit' : 'create';
+  const writeOp: ProjectFileAccessOp = cunzaiZhiqian ? 'edit' : 'create';
 
   if (mode === 'auto' || mode === 'direct') {
     try {
-      const tmp = `${opts.target}.warmy-tmp-${randomTag()}`;
+      const tmp = `${opts.target}.warmy-tmp-${suijiBiaoqian()}`;
       fs.writeFileSync(tmp, opts.content, 'utf8');
       fs.renameSync(tmp, opts.target);
-      noteFileAccess(writeOp, opts.target, { bytes: Buffer.byteLength(opts.content, 'utf8') });
+      beizhuWenjianFangwen(writeOp, opts.target, { bytes: Buffer.byteLength(opts.content, 'utf8') });
       return { ok: true, method: 'direct', errorCode: 'OK', message: '直接写入成功（进程有写权限）', raw: null };
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code ?? 'UNKNOWN';
       steps.push(`直接写入失败：${code}`);
       if (mode === 'direct') {
-        noteFileAccess(writeOp, opts.target, { ok: false, bytes: Buffer.byteLength(opts.content, 'utf8') });
+        beizhuWenjianFangwen(writeOp, opts.target, { ok: false, bytes: Buffer.byteLength(opts.content, 'utf8') });
         return {
           ok: false,
           method: null,
@@ -1103,7 +1103,7 @@ export async function writeFileWithFallback(opts: {
   }
 
   // 提权路径（重试策略在 runElevatedArgs 内部：默认 2 次重试）
-  const jieDuan = path.join(stageDir(), `payload-${randomTag()}.tmp`);
+  const jieDuan = path.join(jieduanMulu(), `payload-${suijiBiaoqian()}.tmp`);
   fs.writeFileSync(jieDuan, opts.content, 'utf8');
   const elevated = await runElevatedArgs(['copy', '/y', jieDuan, opts.target], opts.tool, {
     timeoutMs: opts.timeoutMs ?? 30000,
@@ -1116,12 +1116,12 @@ export async function writeFileWithFallback(opts: {
     /* noop */
   }
 
-  const raw: ElevationRawEvidence = {
+  const raw: TiquanYuanwenZhengju = {
     ...elevated.raw,
     attemptCount: elevated.raw.attemptCount ?? 1,
     attemptLog: elevated.raw.attemptLog ?? [],
   };
-  noteFileAccess(writeOp, opts.target, {
+  beizhuWenjianFangwen(writeOp, opts.target, {
     ok: elevated.ok,
     bytes: Buffer.byteLength(opts.content, 'utf8'),
     by: elevated.ok ? 'helper-tool:elevated' : 'helper-tool',
@@ -1144,11 +1144,11 @@ export async function writeFileWithFallback(opts: {
 export async function restoreFromBackup(opts: {
   target: string;
   backupPath: string;
-  tool: ElevationToolInfo;
+  tool: TiquanGongjuXinxi;
   mode?: 'auto' | 'direct' | 'elevated';
   timeoutMs?: number;
   retries?: number;
-}): Promise<{ ok: boolean; errorCode: HelperErrorCode; message: string; raw: ElevationRawEvidence | null }> {
+}): Promise<{ ok: boolean; errorCode: ZhushouCuowuDaima; message: string; raw: TiquanYuanwenZhengju | null }> {
   const content = readTextOrNull(opts.backupPath);
   if (content === null) {
     return { ok: false, errorCode: 'HOSTS_ROLLBACK_FAILED', message: `备份不可读：${opts.backupPath}`, raw: null };
@@ -1169,7 +1169,7 @@ export async function restoreFromBackup(opts: {
     return { ok: false, errorCode: 'HOSTS_ROLLBACK_FAILED', message: '回滚后回读校验不一致', raw: w.raw };
   }
   // 回滚也是一次**真实的文件改动**，台账里按 restore 记（与上面的 edit/create 分开）
-  noteFileAccess('restore', opts.target, { bytes: Buffer.byteLength(content, 'utf8') });
+  beizhuWenjianFangwen('restore', opts.target, { bytes: Buffer.byteLength(content, 'utf8') });
   return { ok: true, errorCode: 'OK', message: '已从备份回滚并校验通过', raw: w.raw };
 }
 
@@ -1182,12 +1182,12 @@ export async function restoreFromBackup(opts: {
 export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResult> {
   const op = opts.op ?? 'upsert';
   const hostsFile = opts.hostsFile ?? defaultHostsPath();
-  const backupDir = opts.backupDir ?? defaultBackupDir();
+  const backupDir = opts.backupDir ?? morenBeifenMulu();
   const tool = opts.toolInfo ?? (await selectElevationTool());
   const warnings: string[] = [];
 
   const before = fingerprintFile(hostsFile, opts.spec);
-  const emptyPlan = { appendedLine: null, contentSha256: null, bytesToWrite: 0 };
+  const kongJihua = { appendedLine: null, contentSha256: null, bytesToWrite: 0 };
 
   const specCheck = validateHostEntrySpec(opts.spec);
   if (!specCheck.ok) {
@@ -1208,7 +1208,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       warnings,
       tool,
       raw: null,
-      plan: emptyPlan,
+      plan: kongJihua,
     };
   }
 
@@ -1231,7 +1231,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       warnings,
       tool,
       raw: null,
-      plan: emptyPlan,
+      plan: kongJihua,
     };
   }
 
@@ -1255,20 +1255,20 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       warnings,
       tool,
       raw: null,
-      plan: emptyPlan,
+      plan: kongJihua,
     };
   }
 
-  const mutated =
+  const biangeng =
     op === 'upsert' ? upsertHostEntry(current, opts.spec) : removeHostEntry(current, opts.spec);
-  if (!mutated.ok) {
+  if (!biangeng.ok) {
     return {
       ok: false,
       changed: false,
       alreadyPresent: false,
       removedCount: 0,
       errorCode: 'HOSTS_CONTENT_INVALID',
-      message: `变更计算失败：${mutated.reason ?? '未知'}`,
+      message: `变更计算失败：${biangeng.reason ?? '未知'}`,
       hostsFile,
       writeMethod: null,
       backup: null,
@@ -1279,17 +1279,17 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       warnings,
       tool,
       raw: null,
-      plan: emptyPlan,
+      plan: kongJihua,
     };
   }
 
-  const appendedLine = 'appendedLine' in mutated ? (mutated.appendedLine ?? null) : null;
-  const removedCount = 'removedCount' in mutated ? mutated.removedCount : 0;
-  const alreadyPresent = 'alreadyPresent' in mutated ? mutated.alreadyPresent : false;
+  const appendedLine = 'appendedLine' in biangeng ? (biangeng.appendedLine ?? null) : null;
+  const removedCount = 'removedCount' in biangeng ? biangeng.removedCount : 0;
+  const alreadyPresent = 'alreadyPresent' in biangeng ? biangeng.alreadyPresent : false;
   const plan = {
     appendedLine,
-    contentSha256: mutated.changed ? sha256(mutated.content) : null,
-    bytesToWrite: Buffer.byteLength(mutated.content, 'utf8'),
+    contentSha256: biangeng.changed ? sha256(biangeng.content) : null,
+    bytesToWrite: Buffer.byteLength(biangeng.content, 'utf8'),
   };
 
   const base: HostsOpResult = {
@@ -1313,7 +1313,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
   };
 
   // 幂等：已存在（upsert）或无可删行（remove）→ 不写盘
-  if (!mutated.changed) {
+  if (!biangeng.changed) {
     return {
       ...base,
       ok: true,
@@ -1331,7 +1331,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
   }
 
   // 先备份（读 hosts 不需要提权）
-  let backup: BackupInfo | null = null;
+  let backup: BeifenXinxi | null = null;
   if (opts.createBackup !== false) {
     try {
       backup = backupFile(hostsFile, backupDir, path.basename(hostsFile));
@@ -1346,14 +1346,14 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
 
   const write = await writeFileWithFallback({
     target: hostsFile,
-    content: mutated.content,
+    content: biangeng.content,
     mode: opts.mode ?? 'auto',
     tool,
     timeoutMs: opts.timeoutMs ?? 30000,
     retries: opts.retries,
   });
 
-  const verify = await verifyWrittenContent(hostsFile, mutated.content, {
+  const verify = await verifyWrittenContent(hostsFile, biangeng.content, {
     timeoutMs: opts.verifyTimeoutMs ?? 5000,
   });
 
@@ -1375,7 +1375,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
 
   // 失败 → 回滚
   let rolledBack = false;
-  let rollbackMsg = '';
+  let huigunXiaoxi = '';
   if (backup) {
     const rb = await restoreFromBackup({
       target: hostsFile,
@@ -1386,11 +1386,11 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       retries: opts.retries,
     });
     rolledBack = rb.ok;
-    rollbackMsg = rb.message;
+    huigunXiaoxi = rb.message;
   } else {
-    rollbackMsg = '未创建备份，无法回滚';
+    huigunXiaoxi = '未创建备份，无法回滚';
   }
-  const finalFingerprint = fingerprintFile(hostsFile, opts.spec);
+  const zuizhongZhiwen = fingerprintFile(hostsFile, opts.spec);
 
   return {
     ...base,
@@ -1398,7 +1398,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
     changed: false,
     writeMethod: write.method,
     backup,
-    after: finalFingerprint,
+    after: zuizhongZhiwen,
     verified: false,
     rolledBack,
     raw: write.raw,
@@ -1406,19 +1406,19 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
     message:
       `写入/校验失败：${write.message}；回读校验 ${verify.match ? '通过' : '不通过'}` +
       `（期望 sha256=${verify.expectedSha256}，实际=${verify.actualSha256 ?? 'n/a'}，轮询 ${verify.attempts} 次/${verify.elapsedMs}ms）；` +
-      `回滚：${rollbackMsg}`,
+      `回滚：${huigunXiaoxi}`,
   };
 }
 
 /* ────────────────────────── 状态汇总（给 UI/IPC 用） ────────────────────────── */
 
-export async function getHelperStatus(): Promise<HelperStatus> {
+export async function getHelperStatus(): Promise<ZhushouZhuangtai> {
   const platform = detectHelperPlatform();
   const tool = await selectElevationTool();
   const hostsFile = defaultHostsPath(platform);
   const unverified: string[] = [...tool.unverified];
 
-  let credentialCache: HelperStatus['credentialCache'] = {
+  let credentialCache: ZhushouZhuangtai['credentialCache'] = {
     queried: false,
     available: null,
     raw: null,
@@ -1454,6 +1454,6 @@ export async function detectIsAdmin(): Promise<boolean> {
   if (process.platform !== 'win32') {
     return typeof process.getuid === 'function' ? process.getuid() === 0 : false;
   }
-  const r = await runProcess('net', ['session'], { timeoutMs: 8000 });
+  const r = await yunxingJincheng('net', ['session'], { timeoutMs: 8000 });
   return r.exitCode === 0;
 }

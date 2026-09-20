@@ -912,7 +912,7 @@
     const yuanSu = document.createElement('div');
     yuanSu.className = 'list-item' + (active ? ' active' : '');
     if (avatarSrc) yuanSu.dataset.av = '1';
-    yuanSu.innerHTML = `${avatarSrc ? `<tuPian class="av-tuPian" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}<div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
+    yuanSu.innerHTML = `${avatarSrc ? `<img class="av-tuPian" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}<div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
     yuanSu.title = `${name}\n${sub}`;
     yuanSu.onclick = onClick;
     return yuanSu;
@@ -1721,9 +1721,9 @@
     const msgs = (window.__msgs && window.__msgs[gid]) || [];
     if (!msgs.length) return;
     const lastTs = msgs[msgs.length - 1] && msgs[msgs.length - 1].ts || 0;
-    const idle = Date.now() - lastTs > 3 * 60 * 1000;
+    const kongxian = Date.now() - lastTs > 3 * 60 * 1000;
     const since = Date.now() - lastSummaryAt > 10 * 60 * 1000;
-    if (idle && since) void genSessionSummary(true);
+    if (kongxian && since) void genSessionSummary(true);
   }, 60 * 1000);
 
   // ── 聊天滚动：下箭头 / 新消息气泡 / 自动滚动 ──
@@ -2610,23 +2610,29 @@
   }
 
   /**
-   * 凭证的**遮蔽显示**：只露前三后三，中间每一组都用「牛马」两个字写满。
+   * 凭证的**遮蔽显示**：露**前后各两组**，中间每一组都用「牛马」两个字写满。
    *
    * 为什么要遮：凭证就是私钥，屏幕上把它完整摆着，旁边有人看一眼/截个图就等于泄露。
-   * 遮蔽的形状（产品主定稿）：**按原有分组来**，每个 `-` 之间就是「牛马」**两个字**
-   *（不是"凑够三个字"）—— 所以遮住时整串比全貌短，但**组数与分隔位置完全一致**：
-   * 一眼能看出"这是一串 17 组、51 位的凭证"，又能看出哪些组被遮住了。
+   * 遮蔽的形状（产品主定稿，两轮收紧过）：**按原有分组来**，每个 `-` 之间就是「牛马」**两个字**
+   *（不是"凑够三个字"）；可见范围是**前后各 2 组**，所以 51 位（17 组）遮住时为
+   * `2B5-09V-牛马-…-牛马-0KP-T3Q`（中间 13 个「牛马」）。
    */
+  const CRED_HEAD_GROUPS = 2;
+  const CRED_TAIL_GROUPS = 2;
   function maskCredential(value) {
     const s = String(value || '');
     if (!s) return '—';
-    // 允许传"已分组的字符串"或"原始串"：先按 3 位切组，与 formatCredential 的分组口径一致
     const raw = s.replace(/[\s-]+/g, '');
     if (raw.length <= 6) return s;
     const parts = [];
     for (let i = 0; i < raw.length; i += 3) parts.push(raw.slice(i, i + 3));
-    if (parts.length <= 2) return parts.join('-');
-    return [parts[0], ...parts.slice(1, -1).map(() => '牛马'), parts[parts.length - 1]].join('-');
+    if (parts.length <= CRED_HEAD_GROUPS + CRED_TAIL_GROUPS) return parts.join('-');
+    const hidden = parts.length - CRED_HEAD_GROUPS - CRED_TAIL_GROUPS;
+    return [
+      ...parts.slice(0, CRED_HEAD_GROUPS),
+      ...Array(hidden).fill('牛马'),
+      ...parts.slice(-CRED_TAIL_GROUPS),
+    ].join('-');
   }
 
   /** 小眼睛图标（内联 SVG，不依赖字体/emoji） */
@@ -5499,8 +5505,8 @@
     const histHtml = liShi
       ? '<div class="id-card" data-card="history">' +
         '<div class="id-card-h">' + escapeHtml(t('idchg.histTitle')) + idTagHtml('idchg.cardHistoryTag', 'hist') + '</div>' +
-        '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.email')) + '</span>' + cardValue(hist.email) + '</div>' +
-        '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.phone')) + '</span>' + cardValue(hist.phone) + '</div>' +
+        '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.email')) + '</span>' + cardValue(liShi.email) + '</div>' +
+        '<div class="id-field"><span class="id-k">' + escapeHtml(t('card.phone')) + '</span>' + cardValue(liShi.phone) + '</div>' +
         (liShi.capturedAt
           ? '<div class="bn-hint">' + escapeHtml(fmtKey('idchg.historyCapturedAt', { t: new Date(liShi.capturedAt).toLocaleString() })) + '</div>'
           : '') +
@@ -10211,7 +10217,7 @@
       <summary>
         <img class="av-img small" src="${escapeHtml(instanceAvatarSrc(inst))}" alt=""/>
         <span class="mgr-name">${escapeHtml(inst.name || inst.id || '')}</span>
-        ${editable ? '' : '<kuaDu class="mgr-ro">' + t('panel.modelMgrReadonly') + '</kuaDu>'}
+        ${editable ? '' : '<span class="mgr-ro">' + t('panel.modelMgrReadonly') + '</span>'}
       </summary>
       <div class="mgr-body">
         <label class="mgr-lb">${t('instances.defaultModel')}</label>
@@ -10222,17 +10228,17 @@
         <label class="mgr-lb">${t('instances.availableModels')}</label>
         <div class="mgr-models">${
           models.length
-            ? models.map((m) => `<kuaDu class="model-chip">${escapeHtml(m)}${
+            ? models.map((m) => `<span class="model-chip">${escapeHtml(m)}${
                 editable ? `<button class="x" data-mgdel="${idx}" data-m="${escapeHtml(m)}" title="${t('settings.removeModel')}">×</button>` : ''
-              }</kuaDu>`).join('')
-            : '<kuaDu class="muted">' + t('settings.modelsEmpty') + '</kuaDu>'
+              }</span>`).join('')
+            : '<span class="muted">' + t('settings.modelsEmpty') + '</span>'
         }</div>
         <label class="mgr-lb">${t('instances.fallbackChain')}</label>
         <ol class="mgr-chain">${
           chain.length
             ? chain.map((m, k) => `<li data-chain="${idx}" data-k="${k}"${editable ? ' draggable="true"' : ''}>
-                <kuaDu class="mgr-chain-name">${escapeHtml(m)}</kuaDu>
-                <kuaDu class="mgr-chain-meta">${escapeHtml(providerLabelOf(m))} · ${escapeHtml(latencyText(m))}</kuaDu>
+                <span class="mgr-chain-name">${escapeHtml(m)}</span>
+                <span class="mgr-chain-meta">${escapeHtml(providerLabelOf(m))} · ${escapeHtml(latencyText(m))}</span>
                 ${editable ? `<button class="btn-mini" data-mgtest="${idx}" data-m="${escapeHtml(m)}" title="${t('model.test')}">⚡</button>` : ''}
               </li>`).join('')
             : '<li class="muted">—</li>'
@@ -11880,12 +11886,41 @@
       c.width = 64; c.height = 64;
       const ctx = c.getContext('2d');
       ctx.clearRect(0, 0, 64, 64);
+      /**
+       * **任务栏图标要白底**（产品主）：任务栏深浅不一，透明底的头像/首字块在深色任务栏上
+       * 几乎看不见。所以这里先铺一块白色圆角底，再把头像/首字块画上去。
+       * （其它位置的图标不变：这一份只用于窗口图标 = 任务栏。）
+       */
+      const yuanJiaoJuXing = (x, y, w, h, rad) => {
+        ctx.moveTo(x + rad, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rad);
+        ctx.arcTo(x + w, y + h, x, y + h, rad);
+        ctx.arcTo(x, y + h, x, y, rad);
+        ctx.arcTo(x, y, x + w, y, rad);
+        ctx.closePath();
+      };
+      const puBaiDi = () => {
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        yuanJiaoJuXing(0, 0, 64, 64, 12);
+        ctx.fill();
+        ctx.restore();
+      };
       if (src.kind === 'image' && src.src) {
-        if (src.src.startsWith('data:')) return src.src;
+        ctx.clearRect(0, 0, 64, 64);
+        puBaiDi();
         const tuPian = new Image();
         tuPian.src = src.src;
         await tuPian.decode();
-        ctx.drawImage(tuPian, 0, 0, 64, 64);
+        // 白底上留一圈内边距，头像不至于顶到边
+        const inset = 6;
+        ctx.save();
+        ctx.beginPath();
+        yuanJiaoJuXing(inset, inset, 64 - inset * 2, 64 - inset * 2, 9);
+        ctx.clip();
+        ctx.drawImage(tuPian, inset, inset, 64 - inset * 2, 64 - inset * 2);
+        ctx.restore();
         return c.toDataURL('image/png');
       }
       if (src.kind === 'letter') {
@@ -11893,24 +11928,19 @@
         const cs = getComputedStyle(document.documentElement);
         const bg = (cs.getPropertyValue('--line') || '#e5e5e5').trim() || '#e5e5e5';
         const fg = (cs.getPropertyValue('--muted') || '#888').trim() || '#888';
-        const r = 64 * (6 / 40);
+        puBaiDi();
+        const inset = 5;
+        const size = 64 - inset * 2;
+        const r = size * (6 / 40);
         ctx.fillStyle = bg;
         ctx.beginPath();
-        const yunXingJieGuo = (x, y, w, h, rad) => {
-          ctx.moveTo(x + rad, y);
-          ctx.arcTo(x + w, y, x + w, y + h, rad);
-          ctx.arcTo(x + w, y + h, x, y + h, rad);
-          ctx.arcTo(x, y + h, x, y, rad);
-          ctx.arcTo(x, y, x + w, y, rad);
-          ctx.closePath();
-        };
-        yunXingJieGuo(0, 0, 64, 64, r);
+        yuanJiaoJuXing(inset, inset, size, size, r);
         ctx.fill();
         ctx.fillStyle = fg;
-        ctx.font = '600 34px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+        ctx.font = '600 30px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(src.text || '?'), 32, 34);
+        ctx.fillText(String(src.text || '?'), 32, 33);
         return c.toDataURL('image/png');
       }
       return '';

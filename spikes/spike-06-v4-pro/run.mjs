@@ -33,7 +33,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

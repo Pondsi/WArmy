@@ -41,7 +41,7 @@ export interface WangZhuangXiaoXi {
 }
 
 const DISCOVER_PORT = 7799;
-const HELLO = 'WARMY-HELLO/1';
+const WENHOU = 'WARMY-HELLO/1';
 
 export class DuiDuanMingCe {
   private peers = new Map<string, DuiDuanXinXi>();
@@ -110,9 +110,9 @@ export class NeiWangFaXian {
       this.sock.on('error', reject);
       this.sock.on('message', (msg, rinfo) => {
         const s = msg.toString('utf8');
-        if (!s.startsWith(HELLO)) return;
+        if (!s.startsWith(WENHOU)) return;
         try {
-          const j = JSON.parse(s.slice(HELLO.length + 1));
+          const j = JSON.parse(s.slice(WENHOU.length + 1));
           if (j.nodeId === this.nodeId) return;
           this.onPeer({
             nodeId: j.nodeId,
@@ -138,7 +138,7 @@ export class NeiWangFaXian {
   broadcast(): void {
     if (!this.sock) return;
     const payload = Buffer.from(
-      `${HELLO} ${JSON.stringify({ nodeId: this.nodeId, name: this.name, port: this.tcpPort })}`,
+      `${WENHOU} ${JSON.stringify({ nodeId: this.nodeId, name: this.name, port: this.tcpPort })}`,
       'utf8'
     );
     try {

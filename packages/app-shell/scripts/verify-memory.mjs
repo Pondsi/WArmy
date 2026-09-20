@@ -6,8 +6,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
+import {fileURLToPath, pathToFileURL} from 'node:url';
+import {createRequire} from 'node:module';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -29,7 +29,7 @@ check('memory-os mentions fts_uni + fts_tri + vector/RRF', /fts_uni/.test(memSrc
 check('JSONL is source of truth', /fast-memory\.jsonl/.test(memSrc) && /唯一事实|source of truth|可丢弃/.test(memSrc));
 check('IPC env prefers WARMY_MEMORY_DIR', /WARMY_MEMORY_DIR/.test(ipcSrc));
 check('MemoryClient sets WARMY_MEMORY_DIR', /WARMY_MEMORY_DIR/.test(clientSrc));
-check('MemoryClient exposes recall/retrieve tools', /MEMORY_TOOL_NAMES/.test(clientSrc) && /recall/.test(clientSrc) && /retrieve/.test(clientSrc));
+check('MemoryClient exposes recall/retrieve tools', /JIYICANG_GONGJU_MINGCHENG/.test(clientSrc) && /recall/.test(clientSrc) && /retrieve/.test(clientSrc));
 check('main restores chat logs from memory', /restoreChatLogsFromMemory/.test(mainSrc));
 check('context renderer emits retrieve pointers', /retrieve|已省略/.test(ctxSrc) || /pointer|seq/.test(ctxSrc));
 check('docs mention memory feature', fs.readFileSync(path.join(ROOT, '说明.md'), 'utf8').includes('记忆系统'));

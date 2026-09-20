@@ -9,29 +9,29 @@ if (s.includes('warmy:audit-log')) {
 
 // imports
 s = s.replace(
-  "import { CheckpointStore } from './checkpoint.js';",
-  "import { CheckpointStore } from './checkpoint.js';\nimport { AuditLogger } from './audit.js';\nimport { SecureKeyStore } from './secure-keys.js';\nimport { KnowledgeArchiver, CleanupManager } from './archive-cleanup.js';\nimport { pickModelForUrgency, pickEmbeddingModel, type RoleModelConfig } from './model-roles.js';"
+  "import {JianChaDianCang} from './checkpoint.js';",
+  "import {JianChaDianCang} from './checkpoint.js';\nimport {ShenJiRiZhi} from './audit.js';\nimport {SecureKeyStore} from './secure-keys.js';\nimport {ZhiShiGuiDangQi, QingLiGuanLiQi} from './archive-cleanup.js';\nimport {pickModelForUrgency, pickEmbeddingModel, type JueseMoxingPeizhi} from './model-roles.js';"
 );
 
 // instances
 s = s.replace(
   "const metrics = new MetricsCollector();",
   `const metrics = new MetricsCollector();
-let audit: AuditLogger | null = null;
+let audit: ShenJiRiZhi | null = null;
 let secureKeys: SecureKeyStore | null = null;
-let archiver: KnowledgeArchiver | null = null;
-let cleanup: CleanupManager | null = null;
-let roleModels: RoleModelConfig = {};`
+let archiver: ZhiShiGuiDangQi | null = null;
+let cleanup: QingLiGuanLiQi | null = null;
+let roleModels: JueseMoxingPeizhi = {};`
 );
 
 // bootstrap init
 s = s.replace(
   "initAssetGovernor(path.join(userData, 'assets.json'));",
   `initAssetGovernor(path.join(userData, 'assets.json'));
-  audit = new AuditLogger(userData);
+  audit = new ShenJiRiZhi(userData);
   secureKeys = new SecureKeyStore(userData);
-  archiver = new KnowledgeArchiver(userData);
-  cleanup = new CleanupManager(userData);
+  archiver = new ZhiShiGuiDangQi(userData);
+  cleanup = new QingLiGuanLiQi(userData);
   audit.log('app.start', { platform: process.platform });`
 );
 
@@ -59,7 +59,7 @@ ipcMain.handle('warmy:secure-key-load', async (_e, providerId: string) => {
   return { ok: !!key, key: key || null };
 });
 
-// ── KnowledgeArchiver ──
+// ── ZhiShiGuiDangQi ──
 ipcMain.handle('warmy:archive-external', (_e, payload: { groupId: string; title: string; summary: string; anchors?: unknown[] }) => {
   const r = archiver?.archive({
     id: 'arc-' + Date.now(),
@@ -76,7 +76,7 @@ ipcMain.handle('warmy:archive-list', (_e, groupId?: string) => ({
   entries: archiver?.list(groupId) || [],
 }));
 
-// ── CleanupManager ──
+// ── QingLiGuanLiQi ──
 ipcMain.handle('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
   const n = cleanup?.cleanCheckpoints(opts?.checkpoints || 20) || 0;
   const v = cleanup?.cleanVoice() || 0;
@@ -85,7 +85,7 @@ ipcMain.handle('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
 });
 
 // ── 模型角色分配 ──
-ipcMain.handle('warmy:role-models-set', (_e, roles: RoleModelConfig) => {
+ipcMain.handle('warmy:role-models-set', (_e, roles: JueseMoxingPeizhi) => {
   roleModels = { ...roleModels, ...roles };
   audit?.log('roles.set', roles);
   return { ok: true, roles: roleModels };

@@ -12,10 +12,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import https from 'node:https';
-import { createWriteStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
-import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import {createWriteStream} from 'node:fs';
+import {pipeline} from 'node:stream/promises';
+import {fileURLToPath} from 'node:url';
+import {execFileSync} from 'node:child_process';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION = process.env.NODE_VERSION || '24.20.0';

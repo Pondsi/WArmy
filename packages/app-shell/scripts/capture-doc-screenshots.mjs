@@ -3,12 +3,12 @@
  * Capture CDP screenshots for README docs/screenshots/
  * Uses Electron preview host (self-contained, same as ui-inspect).
  */
-import { spawn } from 'node:child_process';
+import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { attach, sleep, BOOT_DONE } from './cdp-lib.mjs';
+import {fileURLToPath} from 'node:url';
+import {attach, sleep, BOOT_DONE} from './cdp-lib.mjs';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(selfDir, '..');

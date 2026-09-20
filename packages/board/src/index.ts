@@ -199,9 +199,9 @@ export function JuShu(tasks: KanbanRenwu[]): KanbanRenwu[] {
   for (const [pid, kids] of ZhiJi) {
     const parent = byId.get(pid);
     if (!parent) continue;
-    const avg = Math.round(kids.reduce((s, k) => s + k.progress, 0) / kids.length);
+    const junzhi = Math.round(kids.reduce((s, k) => s + k.progress, 0) / kids.length);
     if (parent.status !== 'done') {
-      parent.progress = avg;
+      parent.progress = junzhi;
       if (kids.every((k) => k.status === 'done')) parent.status = 'done';
       else if (kids.some((k) => k.status === 'blocked')) parent.status = 'blocked';
       else if (kids.some((k) => k.status === 'doing')) parent.status = 'doing';

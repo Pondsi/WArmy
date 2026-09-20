@@ -7,8 +7,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fork } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import {fork} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 
 export const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const P2_DIR = path.dirname(__dirname);

@@ -18,15 +18,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomHex } from './codec.js';
 import {
-  type HandshakeEvent,
+  type WoshouShijian,
   type HandshakeFailureReason,
   type HandshakeFailureRecord,
   type HsFrame,
   HandshakeDriver,
-  HandshakeError,
+  WoshouCuowu,
   ReplayGuard,
 } from './handshake.js';
-import { type IdentityProvider, type NormalizedIdentity, type ZhiWenTuiDao } from './identity.js';
+import { type ShenfenGongyingshang, type GuifanShenfen, type ZhiWenTuiDao } from './identity.js';
 import { AnQuanTongDao, AnQuanTongDaoCuoWu } from './secure-channel.js';
 
 /** 对端回包里的 reason 白名单（只信任已知枚举，避免把任意字符串当成原因） */
@@ -47,7 +47,7 @@ const KNOWN_HANDSHAKE_REASONS = new Set<string>([
   'state-error',
 ]);
 
-export interface SyncMessage {
+export interface TongbuXiaoxi {
   id: string;
   from: string;
   to: string | '*';
@@ -77,9 +77,9 @@ export interface SecureSessionInfo {
 export interface SecureSessionOptions {
   /** 本节点别名（放进消息的 from 字段） */
   nodeId: string;
-  onMessage?: (msg: SyncMessage, session: SecureSession) => void;
+  onMessage?: (msg: TongbuXiaoxi, session: SecureSession) => void;
   onClose?: (session: SecureSession, reason: string) => void;
-  onEvent?: (e: HandshakeEvent) => void;
+  onEvent?: (e: WoshouShijian) => void;
   /** 保活间隔（毫秒）；0 = 关闭。成员侧保持轻量保活即可（ADR C1） */
   heartbeatMs?: number;
   logFile?: string;
@@ -87,7 +87,7 @@ export interface SecureSessionOptions {
 }
 
 /** 缓冲区：握手阶段按行读，切到记录层时把剩余字节整体交出去 */
-class SwitchBuffer {
+class QiehuanHuanchongqu {
   private buf: Buffer = Buffer.alloc(0);
   push(chunk: Buffer): void {
     this.buf = this.buf.length === 0 ? chunk : Buffer.concat([this.buf, chunk]);
@@ -112,7 +112,7 @@ class SwitchBuffer {
 export class SecureSession {
   private readonly channel: AnQuanTongDao;
   private phase: 'handshake' | 'records' | 'closed' = 'handshake';
-  private buffer = new SwitchBuffer();
+  private buffer = new QiehuanHuanchongqu();
   private heartbeatTimer?: NodeJS.Timeout;
   private readonly now: () => number;
   private lastInboundAt: number;
@@ -188,9 +188,9 @@ export class SecureSession {
     }
   }
 
-  send(msg: Omit<SyncMessage, 'id' | 'ts' | 'from'> & { from?: string; ts?: number }): SyncMessage {
+  send(msg: Omit<TongbuXiaoxi, 'id' | 'ts' | 'from'> & { from?: string; ts?: number }): TongbuXiaoxi {
     if (!this.alive) throw new Error('session 未建立或已关闭');
-    const full: SyncMessage = {
+    const full: TongbuXiaoxi = {
       ...msg,
       from: msg.from ?? this.opts.nodeId,
       id: `m-${randomHex(6)}`,
@@ -243,9 +243,9 @@ export class SecureSession {
     this.lastInboundAt = this.now();
     for (const p of plaintexts) {
       this.counters.received += 1;
-      let msg: SyncMessage;
+      let msg: TongbuXiaoxi;
       try {
-        msg = JSON.parse(p.toString('utf8')) as SyncMessage;
+        msg = JSON.parse(p.toString('utf8')) as TongbuXiaoxi;
       } catch {
         continue;
       }
@@ -288,7 +288,7 @@ export class SecureSession {
 /* ────────────────────────────── 服务端 ────────────────────────────── */
 
 export interface SecureSyncServerOptions {
-  identity: IdentityProvider | NormalizedIdentity;
+  identity: ShenfenGongyingshang | GuifanShenfen;
   nodeId: string;
   port: number;
   host?: string;
@@ -310,9 +310,9 @@ export interface SecureSyncServerOptions {
   heartbeatMs?: number;
   logFile?: string;
   onSession?: (session: SecureSession) => void;
-  onMessage?: (msg: SyncMessage, session: SecureSession) => void;
+  onMessage?: (msg: TongbuXiaoxi, session: SecureSession) => void;
   onClose?: (session: SecureSession, reason: string) => void;
-  onHandshakeEvent?: (e: HandshakeEvent) => void;
+  onHandshakeEvent?: (e: WoshouShijian) => void;
   now?: () => number;
 }
 
@@ -377,7 +377,7 @@ export class SecureSyncServer {
       now: this.opts.now,
       onEvent: this.opts.onHandshakeEvent,
     });
-    const buffer = new SwitchBuffer();
+    const buffer = new QiehuanHuanchongqu();
     let phase: 'handshake' | 'records' | 'done' = 'handshake';
     const remoteAddress = sock.remoteAddress ?? undefined;
     const remotePort = sock.remotePort ?? undefined;
@@ -390,8 +390,8 @@ export class SecureSyncServer {
     );
     timer.unref?.();
 
-    const failHandshake = (err: unknown): void => {
-      const reason = err instanceof HandshakeError ? err.reason : 'protocol-error';
+    const shibaiWoshou = (err: unknown): void => {
+      const reason = err instanceof WoshouCuowu ? err.reason : 'protocol-error';
       const detail = err instanceof Error ? err.message : String(err);
       this.failures.push({ reason, detail, role: 'responder', at: now(), remoteAddress });
       this.rejectionCounts[reason] = (this.rejectionCounts[reason] ?? 0) + 1;
@@ -416,7 +416,7 @@ export class SecureSyncServer {
       void reason;
     };
 
-    const handleRecords = (chunk: Buffer): void => {
+    const chuliJilu = (chunk: Buffer): void => {
       const session = sessionRef;
       if (!session) return;
       session.handleData(chunk);
@@ -443,10 +443,10 @@ export class SecureSyncServer {
               try {
                 frame = JSON.parse(line) as HsFrame | { t: 'error'; reason?: string; detail?: string };
               } catch {
-                throw new HandshakeError('malformed', '握手帧不是合法 JSON');
+                throw new WoshouCuowu('malformed', '握手帧不是合法 JSON');
               }
               if (frame.t === 'error') {
-                throw new HandshakeError('protocol-error', `对端拒绝握手：${JSON.stringify(frame)}`);
+                throw new WoshouCuowu('protocol-error', `对端拒绝握手：${JSON.stringify(frame)}`);
               }
               const res = await driver.step(frame as HsFrame);
               for (const out of res.out) sock.write(JSON.stringify(out) + '\n');
@@ -493,14 +493,14 @@ export class SecureSyncServer {
               }
             }
           } catch (err) {
-            failHandshake(err);
+            shibaiWoshou(err);
           } finally {
             pumping = false;
           }
         })();
         return;
       }
-      handleRecords(chunk);
+      chuliJilu(chunk);
     });
 
     sock.on('error', () => finish('socket-error'));
@@ -514,7 +514,7 @@ export class SecureSyncServer {
 /* ────────────────────────────── 客户端 ────────────────────────────── */
 
 export interface SecureSyncClientOptions {
-  identity: IdentityProvider | NormalizedIdentity;
+  identity: ShenfenGongyingshang | GuifanShenfen;
   nodeId: string;
   host: string;
   port: number;
@@ -527,9 +527,9 @@ export interface SecureSyncClientOptions {
   replayGuard?: ReplayGuard;
   handshakeTimeoutMs?: number;
   heartbeatMs?: number;
-  onMessage?: (msg: SyncMessage, session: SecureSession) => void;
+  onMessage?: (msg: TongbuXiaoxi, session: SecureSession) => void;
   onClose?: (session: SecureSession, reason: string) => void;
-  onHandshakeEvent?: (e: HandshakeEvent) => void;
+  onHandshakeEvent?: (e: WoshouShijian) => void;
   now?: () => number;
 }
 
@@ -561,7 +561,7 @@ export class SecureSyncClient {
     const sock = net.connect({ host: this.opts.host, port: this.opts.port });
     const result = await new Promise<LianJieJieGuo>((resolve) => {
       let settled = false;
-      const settle = (r: LianJieJieGuo): void => {
+      const jiesuan = (r: LianJieJieGuo): void => {
         if (settled) return;
         settled = true;
         resolve(r);
@@ -572,7 +572,7 @@ export class SecureSyncClient {
         } catch {
           /* ignore */
         }
-        settle({ ok: false, reason, handshakeFailure: failure, remoteAddress: sock.remoteAddress ?? undefined });
+        jiesuan({ ok: false, reason, handshakeFailure: failure, remoteAddress: sock.remoteAddress ?? undefined });
       };
       const timer = setTimeout(() => fail(`TCP 连接超时 ${timeoutMs}ms`), timeoutMs);
       timer.unref?.();
@@ -588,7 +588,7 @@ export class SecureSyncClient {
         now: this.opts.now,
         onEvent: this.opts.onHandshakeEvent,
       });
-      const buffer = new SwitchBuffer();
+      const buffer = new QiehuanHuanchongqu();
       let phase: 'connect' | 'handshake' | 'records' | 'done' = 'connect';
       let session: SecureSession | null = null;
       let pumping = false;
@@ -624,7 +624,7 @@ export class SecureSyncClient {
                   const reason = KNOWN_HANDSHAKE_REASONS.has(String(frame.reason))
                     ? (frame.reason as HandshakeFailureReason)
                     : 'protocol-error';
-                  throw new HandshakeError(reason, `对端拒绝握手：${frame.reason ?? ''} ${frame.detail ?? ''}`.trim());
+                  throw new WoshouCuowu(reason, `对端拒绝握手：${frame.reason ?? ''} ${frame.detail ?? ''}`.trim());
                 }
                 const res = await driver.step(frame as HsFrame);
                 for (const out of res.out) sock.write(JSON.stringify(out) + '\n');
@@ -664,11 +664,11 @@ export class SecureSyncClient {
                   this.sessionRef = session;
                   phase = 'records';
                   session.enterRecordPhase();
-                  settle({ ok: true, session, remoteAddress: sock.remoteAddress ?? undefined });
+                  jiesuan({ ok: true, session, remoteAddress: sock.remoteAddress ?? undefined });
                 }
               }
             } catch (err) {
-              const reason = err instanceof HandshakeError ? err.reason : 'protocol-error';
+              const reason = err instanceof WoshouCuowu ? err.reason : 'protocol-error';
               fail(`握手失败 ${reason}: ${err instanceof Error ? err.message : String(err)}`, {
                 reason,
                 detail: err instanceof Error ? err.message : String(err),
@@ -698,11 +698,11 @@ export class SecureSyncClient {
   }
 }
 
-export function isValidSyncMessage(v: unknown): v is SyncMessage {
+export function isValidSyncMessage(v: unknown): v is TongbuXiaoxi {
   if (typeof v !== 'object' || v === null) return false;
-  const m = v as Partial<SyncMessage>;
+  const m = v as Partial<TongbuXiaoxi>;
   return typeof m.id === 'string' && typeof m.channel === 'string' && typeof m.ts === 'number';
 }
 
-export { HandshakeError, HandshakeDriver, ReplayGuard };
-export type { HandshakeFailureRecord, HandshakeEvent };
+export { WoshouCuowu, HandshakeDriver, ReplayGuard };
+export type { HandshakeFailureRecord, WoshouShijian };

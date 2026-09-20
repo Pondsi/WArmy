@@ -13,20 +13,7 @@
  *   [7] 可拨入检测（autonat 思路）：对端真拨回 → dialable=true；端口错 → false
  *   [8] 地址（端口）变化 → 重新宣告 → 对端能查到新地址
  */
-import {
-  AddressWatcher,
-  LianJieTiZi,
-  DhtJieDian,
-  KeBoRuTanCe,
-  GroupKeyRing,
-  LanProbe,
-  SecureSyncClient,
-  SecureSyncServer,
-  chuangjianLinShiShenFen,
-  randomBytes,
-  recordKeyForFingerprint,
-  boTcpMoRen,
-} from '../dist/index.js';
+import {DizhiJiantingqi, LianJieTiZi, DhtJieDian, KeBoRuTanCe, QunMiyaoHuan, LanProbe, SecureSyncClient, SecureSyncServer, chuangjianLinShiShenFen, randomBytes, recordKeyForFingerprint, boTcpMoRen, } from '../dist/index.js';
 
 let failures = 0;
 let passes = 0;
@@ -81,7 +68,7 @@ async function main() {
     host: '127.0.0.1',
     port: 0,
     tcpPort: creatorTcpPort,
-    groupKeys: new GroupKeyRing([GROUP_KEY]),
+    groupKeys: new QunMiyaoHuan([GROUP_KEY]),
     rpcTimeoutMs: 800,
   });
   const memberDht = new DhtJieDian({
@@ -90,7 +77,7 @@ async function main() {
     host: '127.0.0.1',
     port: 0,
     tcpPort: memberTcpPort,
-    groupKeys: new GroupKeyRing([GROUP_KEY]),
+    groupKeys: new QunMiyaoHuan([GROUP_KEY]),
     rpcTimeoutMs: 800,
   });
   const creatorDhtAddr = await creatorDht.start();
@@ -131,7 +118,7 @@ async function main() {
   const creatorLadder = new LianJieTiZi({ perRungTimeoutMs: 2000 });
   const memberLadder = new LianJieTiZi({ perRungTimeoutMs: 2000 });
 
-  const { GuangBoFuWu } = await import('../dist/index.js');
+  const {GuangBoFuWu} = await import('../dist/index.js');
 
   const creatorAnnounce = new GuangBoFuWu({
     nodeId: 'creator',
@@ -195,7 +182,7 @@ async function main() {
       host: '127.0.0.1',
       port: 0,
       tcpPort: 59999,
-      groupKeys: new GroupKeyRing([GROUP_KEY]),
+      groupKeys: new QunMiyaoHuan([GROUP_KEY]),
       rpcTimeoutMs: 500,
     });
     await ghostDht.start();
@@ -232,7 +219,7 @@ async function main() {
       host: '127.0.0.1',
       port: 0,
       tcpPort: 12345,
-      groupKeys: new GroupKeyRing([GROUP_KEY]), // 假设他偷到了群密钥：仍应被名册挡住
+      groupKeys: new QunMiyaoHuan([GROUP_KEY]), // 假设他偷到了群密钥：仍应被名册挡住
       rpcTimeoutMs: 500,
     });
     await strangerDht.start();
@@ -254,7 +241,7 @@ async function main() {
       nodeId: 'wrongkey',
       host: '127.0.0.1',
       port: 0,
-      groupKeys: new GroupKeyRing([randomBytes(32)]),
+      groupKeys: new QunMiyaoHuan([randomBytes(32)]),
       rpcTimeoutMs: 500,
     });
     await wrongKeyDht.start();
@@ -276,7 +263,7 @@ async function main() {
       host: '127.0.0.1',
       port: 0,
       tcpPort: memberTcpPort,
-      groupKeys: new GroupKeyRing([GROUP_KEY]),
+      groupKeys: new QunMiyaoHuan([GROUP_KEY]),
       rpcTimeoutMs: 500,
     });
     await passiveDht.start();
@@ -466,7 +453,7 @@ async function main() {
   group('[8] 端口变化 → 检测到 → 重新宣告 → 对端可查到');
   {
     let announces = 0;
-    const watcher = new AddressWatcher({
+    const watcher = new DizhiJiantingqi({
       sample: () => `127.0.0.1:${memberAdvertisedPort}`,
       onChange: () => {
         announces += 1;
@@ -496,7 +483,7 @@ async function main() {
       host: '127.0.0.1',
       port: 0,
       tcpPort: creatorTcpPort,
-      groupKeys: new GroupKeyRing([GROUP_KEY]),
+      groupKeys: new QunMiyaoHuan([GROUP_KEY]),
       rpcTimeoutMs: 500,
     });
     await refreshDht.start();

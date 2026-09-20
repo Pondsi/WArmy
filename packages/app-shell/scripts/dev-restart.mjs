@@ -4,10 +4,10 @@
  *
  *   node scripts/dev-restart.mjs
  */
-import { execFileSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import {execFileSync, spawn} from 'node:child_process';
+import {existsSync} from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.join(here, '..');

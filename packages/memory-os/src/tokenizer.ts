@@ -65,14 +65,14 @@ export interface BianMaXuanXiang {
   addSpecialTokens?: boolean;
 }
 
-export interface Encoded {
+export interface Bianma {
   ids: number[];
   attentionMask: number[];
   tokenTypeIds: number[];
   tokens: string[];
 }
 
-export interface TokenizerConfigEcho {
+export interface FenciqiPeizhiHuixian {
   type: string;
   lowercasing: boolean;
   stripAccents: boolean;
@@ -105,7 +105,7 @@ export class BertWordPieceFenCiQi {
   readonly sepId: number;
   readonly padId: number;
   readonly maskId: number;
-  readonly config: TokenizerConfigEcho;
+  readonly config: FenciqiPeizhiHuixian;
 
   private lowercase: boolean;
   private stripAccents: boolean;
@@ -123,16 +123,16 @@ export class BertWordPieceFenCiQi {
     this.continuingPrefix = model.continuing_subword_prefix ?? '##';
     this.maxInputCharsPerWord = model.max_input_chars_per_word ?? 100;
 
-    const norm = json.normalizer ?? {};
-    this.lowercase = norm.lowercase === true;
+    const guiFanHua = json.normalizer ?? {};
+    this.lowercase = guiFanHua.lowercase === true;
     // HF：strip_accents 为 null 时取 lowercase 的值
-    this.stripAccents = norm.strip_accents === null || norm.strip_accents === undefined ? this.lowercase : norm.strip_accents === true;
-    this.cleanText = norm.clean_text !== false;
-    this.handleChinese = norm.handle_chinese_chars !== false;
+    this.stripAccents = guiFanHua.strip_accents === null || guiFanHua.strip_accents === undefined ? this.lowercase : guiFanHua.strip_accents === true;
+    this.cleanText = guiFanHua.clean_text !== false;
+    this.handleChinese = guiFanHua.handle_chinese_chars !== false;
 
-    const post = json.post_processor;
-    if (post?.type === 'TemplateProcessing') this.postKind = 'template';
-    else if (post?.type === 'BertProcessing') this.postKind = 'bert-pair';
+    const tijiao = json.post_processor;
+    if (tijiao?.type === 'TemplateProcessing') this.postKind = 'template';
+    else if (tijiao?.type === 'BertProcessing') this.postKind = 'bert-pair';
     else this.postKind = 'none';
 
     this.truncationCfg = json.truncation ?? null;
@@ -145,9 +145,9 @@ export class BertWordPieceFenCiQi {
     this.maskId = this.vocab.get(this.maskToken) ?? 103;
 
     // 具体 token id 以 post_processor 声明为准（若声明了）
-    const specials = post?.special_tokens;
-    if (specials?.[this.clsToken]?.ids?.[0] != null) (this as any).clsId = specials[this.clsToken].ids[0];
-    if (specials?.[this.sepToken]?.ids?.[0] != null) (this as any).sepId = specials[this.sepToken].ids[0];
+    const teshu = tijiao?.special_tokens;
+    if (teshu?.[this.clsToken]?.ids?.[0] != null) (this as any).clsId = teshu[this.clsToken].ids[0];
+    if (teshu?.[this.sepToken]?.ids?.[0] != null) (this as any).sepId = teshu[this.sepToken].ids[0];
 
     this.config = {
       type: model.type ?? 'WordPiece',
@@ -156,7 +156,7 @@ export class BertWordPieceFenCiQi {
       handleChineseChars: this.handleChinese,
       cleanText: this.cleanText,
       preTokenizer: json.pre_tokenizer?.type ?? 'none',
-      postProcessor: post?.type ?? 'none',
+      postProcessor: tijiao?.type ?? 'none',
       vocabSize: this.vocab.size,
       unkToken: this.unkToken,
       continuingSubwordPrefix: this.continuingPrefix,
@@ -257,9 +257,9 @@ export class BertWordPieceFenCiQi {
     return toks;
   }
 
-  encode(text: string, opts: BianMaXuanXiang = {}): Encoded {
+  encode(text: string, opts: BianMaXuanXiang = {}): Bianma {
     const maxLength = opts.maxLength ?? 512;
-    const addSpecial = opts.addSpecialTokens !== false;
+    const tianjiaTeshu = opts.addSpecialTokens !== false;
     const toks: string[] = [];
     const body: number[] = [];
     for (const t of this.preTokenize(this.normalize(text))) this.wordpiece(t, toks, body);
@@ -267,7 +267,7 @@ export class BertWordPieceFenCiQi {
     let ids: number[];
     let tokens: string[];
     let typeIds: number[];
-    if (addSpecial && this.postKind !== 'none') {
+    if (tianjiaTeshu && this.postKind !== 'none') {
       const budget = Math.max(0, maxLength - 2);
       if (body.length > budget) {
         body.length = budget;

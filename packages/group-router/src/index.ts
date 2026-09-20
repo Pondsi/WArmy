@@ -18,7 +18,7 @@ import type {
   Jinji,
 } from '@warmy/contracts';
 
-export interface RouterInstance {
+export interface LuyouqiShili {
   id: string;
   name: string;
   /** 进群序号（小号优先值班） */
@@ -33,7 +33,7 @@ export interface RouterInstance {
   pureDispatcher?: boolean;
 }
 
-export interface QueueItem {
+export interface DuilieTiaomu {
   id: string;
   groupId: string;
   urgency: Jinji;
@@ -51,17 +51,17 @@ export interface GroupChatRouterOptions {
 }
 
 /** 队列/值班态快照（持久化用；只含 Router 自己拥有的状态） */
-export interface RouterQueueSnapshot {
+export interface LuyouqiDuilieKuaizhao {
   version: 1;
   seq: number;
-  queues: Record<string, QueueItem[]>;
+  queues: Record<string, DuilieTiaomu[]>;
   dutyState: Record<string, ZhibanTai>;
 }
 
 export class GroupChatRouter {
   private groups = new Map<string, QunPeizhi>();
-  private members = new Map<string, RouterInstance[]>();
-  private queues = new Map<string, QueueItem[]>();
+  private members = new Map<string, LuyouqiShili[]>();
+  private queues = new Map<string, DuilieTiaomu[]>();
   private dutyState = new Map<string, ZhibanTai>();
   private seq = 0;
 
@@ -76,8 +76,8 @@ export class GroupChatRouter {
   }
 
   /** 导出队列 + 值班态（主进程写 userData/router-queues.json） */
-  serializeState(): RouterQueueSnapshot {
-    const queues: Record<string, QueueItem[]> = {};
+  serializeState(): LuyouqiDuilieKuaizhao {
+    const queues: Record<string, DuilieTiaomu[]> = {};
     for (const [gid, q] of this.queues) {
       queues[gid] = q.map((x) => ({ ...x, request: { ...x.request } }));
     }
@@ -87,7 +87,7 @@ export class GroupChatRouter {
   }
 
   /** 从快照恢复（启动时调用；只恢复队列/值班态，不覆盖成员与群配置） */
-  restoreState(snap: RouterQueueSnapshot | null | undefined): void {
+  restoreState(snap: LuyouqiDuilieKuaizhao | null | undefined): void {
     if (!snap || snap.version !== 1) return;
     this.seq = Number(snap.seq) || 0;
     this.queues.clear();
@@ -103,7 +103,7 @@ export class GroupChatRouter {
             urgency: (x.urgency as Jinji) || 'P2',
             request: { ...x.request },
             enqueuedAt: Number(x.enqueuedAt) || Date.now(),
-            status: (x.status as QueueItem['status']) || 'queued',
+            status: (x.status as DuilieTiaomu['status']) || 'queued',
           }))
       );
     }
@@ -130,11 +130,11 @@ export class GroupChatRouter {
   }
 
   /** 按进群顺序排列；远程 AI 永不可值班 */
-  join(groupId: string, inst: Omit<RouterInstance, 'order'>): RouterInstance {
+  join(groupId: string, inst: Omit<LuyouqiShili, 'order'>): LuyouqiShili {
     const list = this.members.get(groupId);
     if (!list) throw new Error('group not found');
     const order = list.length + 1;
-    const row: RouterInstance = {
+    const row: LuyouqiShili = {
       ...inst,
       order,
       dutyEligible: inst.dutyEligible && inst.local,
@@ -152,11 +152,11 @@ export class GroupChatRouter {
     if (i >= 0) list.splice(i, 1);
   }
 
-  listMembers(groupId: string): RouterInstance[] {
+  listMembers(groupId: string): LuyouqiShili[] {
     return [...(this.members.get(groupId) || [])];
   }
 
-  setStatus(groupId: string, instanceId: string, status: RouterInstance['status']): void {
+  setStatus(groupId: string, instanceId: string, status: LuyouqiShili['status']): void {
     const m = this.members.get(groupId)?.find((x) => x.id === instanceId);
     if (m) m.status = status;
   }
@@ -174,26 +174,26 @@ export class GroupChatRouter {
    * 2. 否则：序号最小的空闲、本机、dutyEligible
    * 3. 都忙：返回 null → 调用方应排队或用兜底小模型
    */
-  selectDuty(groupId: string): RouterInstance | null {
+  selectDuty(groupId: string): LuyouqiShili | null {
     const list = this.members.get(groupId) || [];
-    const eligible = list.filter((m) => m.local && m.dutyEligible && m.status !== 'dead' && m.status !== 'offline');
+    const fuhe = list.filter((m) => m.local && m.dutyEligible && m.status !== 'dead' && m.status !== 'offline');
 
-    const fixed = eligible.find((m) => m.fixedDuty);
+    const fixed = fuhe.find((m) => m.fixedDuty);
     if (fixed) {
       if (fixed.status === 'idle') return fixed;
       if (this.opts.queueWhenFixedBusy) return null;
       // 顺延 +1
-      const next = eligible
+      const next = fuhe
         .filter((m) => m.order > fixed.order && m.status === 'idle')
         .sort((a, b) => a.order - b.order)[0];
-      return next || eligible.filter((m) => m.status === 'idle').sort((a, b) => a.order - b.order)[0] || null;
+      return next || fuhe.filter((m) => m.status === 'idle').sort((a, b) => a.order - b.order)[0] || null;
     }
 
-    const idle = eligible.filter((m) => m.status === 'idle').sort((a, b) => a.order - b.order);
-    return idle[0] || null;
+    const kongxian = fuhe.filter((m) => m.status === 'idle').sort((a, b) => a.order - b.order);
+    return kongxian[0] || null;
   }
 
-  duty(groupId: string): { state: ZhibanTai; instance: RouterInstance | null } {
+  duty(groupId: string): { state: ZhibanTai; instance: LuyouqiShili | null } {
     return {
       state: this.dutyState.get(groupId) || 'idle',
       instance: this.selectDuty(groupId),
@@ -202,8 +202,8 @@ export class GroupChatRouter {
 
   // ── 队列（仅 Router 写入） ──
 
-  enqueue(request: OrchestrationRequest): QueueItem {
-    const item: QueueItem = {
+  enqueue(request: OrchestrationRequest): DuilieTiaomu {
+    const item: DuilieTiaomu = {
       id: `q-${++this.seq}-${Date.now().toString(36)}`,
       groupId: request.groupId,
       urgency: request.urgency,
@@ -230,12 +230,12 @@ export class GroupChatRouter {
     });
   }
 
-  listQueue(groupId: string): QueueItem[] {
+  listQueue(groupId: string): DuilieTiaomu[] {
     return [...(this.queues.get(groupId) || [])];
   }
 
   /** 排队消息可编辑 / 删除 / 排序 */
-  updateQueueItem(groupId: string, id: string, patch: Partial<Pick<QueueItem, 'urgency' | 'status'>> & { request?: OrchestrationRequest }): boolean {
+  updateQueueItem(groupId: string, id: string, patch: Partial<Pick<DuilieTiaomu, 'urgency' | 'status'>> & { request?: OrchestrationRequest }): boolean {
     const item = (this.queues.get(groupId) || []).find((x) => x.id === id);
     if (!item || item.status !== 'queued') return false;
     if (patch.urgency) item.urgency = patch.urgency;
@@ -259,7 +259,7 @@ export class GroupChatRouter {
   }
 
   /** P0：停止当前并插队到最前 */
-  insertUrgent(request: OrchestrationRequest): QueueItem {
+  insertUrgent(request: OrchestrationRequest): DuilieTiaomu {
     const item = this.enqueue(request);
     const q = this.queues.get(request.groupId)!;
     const i = q.findIndex((x) => x.id === item.id);
@@ -281,7 +281,7 @@ export class GroupChatRouter {
   route(req: OrchestrationRequest): {
     action: 'silent' | 'queue' | 'dispatch';
     decision?: OrchestrationDecision;
-    duty?: RouterInstance;
+    duty?: LuyouqiShili;
     reason?: string;
     /** action==='queue' 时为 true：本方法**已经**入队，调用方不要重复 enqueue */
     queued?: boolean;
@@ -303,7 +303,7 @@ export class GroupChatRouter {
       }
       const targets = req.mentionIds
         .map((id) => (this.members.get(req.groupId) || []).find((m) => m.id === id))
-        .filter(Boolean) as RouterInstance[];
+        .filter(Boolean) as LuyouqiShili[];
       if (!targets.length) return { action: 'silent', reason: 'mentions-not-found' };
       return {
         action: 'dispatch',
@@ -327,18 +327,18 @@ export class GroupChatRouter {
     }
 
     this.dutyState.set(req.groupId, 'orchestrating');
-    const executors = (this.members.get(req.groupId) || [])
+    const zhiXingQiJi = (this.members.get(req.groupId) || [])
       .filter((m) => m.id !== duty.id && m.status === 'idle' && !m.pureDispatcher)
       .slice(0, 3)
       .map((m) => m.id);
 
     // 值班者本身也可执行（非 pureDispatcher）
-    if (!executors.length && !duty.pureDispatcher) {
-      executors.push(duty.id);
+    if (!zhiXingQiJi.length && !duty.pureDispatcher) {
+      zhiXingQiJi.push(duty.id);
     }
 
     const decision: OrchestrationDecision = {
-      executorIds: executors,
+      executorIds: zhiXingQiJi,
       taskBrief: req.content.slice(0, 500),
       contextBudget: 2000,
       shouldQueue: false,
@@ -361,7 +361,7 @@ export class GroupChatRouter {
    * 真正弹出下一条排队项：从队列**移除**并返回，调用方必须处理。
    * 处理失败时调用方应 `requeue` 放回，绝不静默丢掉。
    */
-  dequeueNext(groupId: string): QueueItem | null {
+  dequeueNext(groupId: string): DuilieTiaomu | null {
     const q = this.queues.get(groupId) || [];
     const i = q.findIndex((x) => x.status === 'queued');
     if (i < 0) return null;
@@ -373,9 +373,9 @@ export class GroupChatRouter {
   }
 
   /** 处理失败时把项放回队列（保持原 urgency/时间，重新排序） */
-  requeue(item: QueueItem): QueueItem {
+  requeue(item: DuilieTiaomu): DuilieTiaomu {
     const q = this.queues.get(item.groupId);
-    const restored: QueueItem = { ...item, status: 'queued' };
+    const restored: DuilieTiaomu = { ...item, status: 'queued' };
     if (!q) {
       this.queues.set(item.groupId, [restored]);
     } else {

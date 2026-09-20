@@ -5,8 +5,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { fork, execSync } from 'node:child_process';
+import {fileURLToPath, pathToFileURL} from 'node:url';
+import {fork, execSync} from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../..');

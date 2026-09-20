@@ -11,9 +11,9 @@ import { createP1Runtime } from './runtime.js';
 import {
   MemoryClient,
   memoryToolSpecs,
-  runMemoryTool,
+  yunxingJiyiCangGongju,
   chatRoleOfRecordId,
-  contentDigest,
+  neirongZhaiyao,
   DEFAULT_MEMORY_TOOL_LABELS,
   type MemoryToolLabels,
 } from './memory-client.js';
@@ -36,19 +36,19 @@ import { ShenJiRiZhi } from './audit.js';
 import { SecureKeyStore } from './secure-keys.js';
 import * as credentialModule from './credential.js';
 import { ZhiShiGuiDangQi, QingLiGuanLiQi, congGuiDangTiQuZhiShi, heBingYongHuPianHao, tiQuJieGouHuaZhaiYao } from './archive-cleanup.js';
-import { pickModelForUrgency, pickEmbeddingModel, type RoleModelConfig } from './model-roles.js';
-import { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';
+import { pickModelForUrgency, pickEmbeddingModel, type JueseMoxingPeizhi } from './model-roles.js';
+import { xietiaoQunXiaoxi, buildStatusCard } from './orchestrator.js';
 import { projectMemoryForContext, readProjectMemory, writeProjectMemory } from './project-memory.js';
 import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from './ai-questions.js';
-import { withReadBack, dedupeByNorm, normPathKey } from './read-back.js';
+import { withReadBack, dedupeByNorm, guifanLujingMiyao } from './read-back.js';
 import {
-  renderBoundedView,
+  xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
   DEFAULT_KEEP_HEAD,
   DEFAULT_KEEP_TAIL,
   type LogEntry,
 } from './context-renderer.js';
-import { runShortLivedExecutor, runExecutors } from './executor.js';
+import { yunxingDuanCunhuoZhixingqi, runExecutors } from './executor.js';
 import { chuShiZiChanGuanLi, retrieveAssetsForChat, zhuCeLiaoTianZiChan, jiLuZiChanShiYong, qingLiZiChan } from './asset-wire.js';
 import { MetricsCollector } from './metrics.js';
 import { LocalAccountStore, SettingsStore, generateDeviceId, type AppSettings, WARMY_DEFAULT_NET_PORT, SKILL_SCAN_DIRS_MAX,} from './settings-store.js';
@@ -58,7 +58,7 @@ import { LocalAccountStore, SettingsStore, generateDeviceId, type AppSettings, W
  */
 import {
   probeContainerRuntimes,
-  runContainerAction,
+  yunxingRongqiDongzuo,
   zuiHouRongQiTanCeBaoGao,
   rongQiYunXingGuiGeOf,
   CONTAINER_SHELL_SECURITY,
@@ -92,31 +92,31 @@ import {
   HOST_DIR_GUARD_SECURITY,
   isUserSid,
   type ContainerFixedCommandId,
-  type ContainerProjectState,
+  type RongqiXiangmuZhuangtai,
 } from './container-probe.js';
 import { lieYunXingShiLi, yunXingShiLiDongZuo, daKaiYunXingYingYong } from './container-instances.js';
 import { IdentityStore, type MembershipStore } from './identity-store.js';
 import {
   CONTACT_CARD_I18N,
   CONTACT_FREEZE_NOTE,
-  GENERATION_RULE_NOTE,
-  fingerprintMatches,
+  DAISHU_GUIZE_BEIZHU,
+  zhiwenPipei,
   isValidFingerprint,
   verifyIdentityCard,
   verifyRevocationDeclaration,
   verifyRotationDeclaration,
   type LianXiKa,
   type ShenFenKa,
-  type IdentityDeclaration,
+  type ShenfenShengming,
   type YaoShiHuanTiaoMu,
   type LunHuanShengMing,
 } from './identity.js';
 import { GroupStore, type GroupListResult, type GroupMembersResult } from './group-store.js';
 import {
-  Updater,
+  Gengxinqi,
   updaterUnavailableCheck,
   updaterUnavailableDownload,
-  validateFeedUrl,
+  jiaoyanGengxinyuanUrl,
   type UpdateCheckResult,
   type UpdateDownloadResult,
   type UpdateSourceInfo,
@@ -128,8 +128,8 @@ import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomi
  * 现在它的每一次真实读写都通过 sink 落到**项目记录**里（项目级、成员可见），
  * **不是**落到本机设置里（产品主：记录文件的改动是无限牛马的功能，不是本机的功能）。
  */
-import { setFileAccessSink, withFileAccessScope, currentFileAccessScope } from './helper-tool.js';
-import { JieDianMingCe, SyncBus, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
+import { setFileAccessSink, withFileAccessScope, dangqianWenjianFangwenZuoyongyu } from './helper-tool.js';
+import { JieDianMingCe, TongbuZongxian, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@warmy/dsh-runtime';
 // 组网：**鉴权通道**（SecureSyncServer/Client + 名册 + 持久化重放防护），旧 lan.ts/mesh.ts 只留数据层 PeerRegistry
 import { DuiDuanMingCe } from '@warmy/sync-protocol';
@@ -139,7 +139,7 @@ import {
   discoverPublicIp,
   ensureNetDir,
   listLocalAddresses,
-  localAddressInfo,
+  benjiDizhiXinxi,
   pickPortCandidates,
   probeNet,
   secureLoopbackSmoke,
@@ -151,23 +151,23 @@ import {
   parseProjectAttrsMessage,
   projectAttrsToStateInput,
   projectInboundGate,
-  type MeshPeerRef,
-  type MeshStatusResult,
-  type ReachabilityHint,
+  type WangzhuangDuiduanYinyong,
+  type WangzhuangZhuangtaiJieguo,
+  type KedaxingTishi,
   type SecureInboundMessage,
 } from './net-wiring.js';
 // 身份 ↔ 组网的唯一接缝：指纹推导 + 签名者注入 + 「能否后台签名」的门控
 import {
   IdentityUnavailableError,
   applyInboundRevocationUpdate,
-  assertDerivationMatches,
+  duanyanTuidaoPipei,
   buildIdentityChangeEntries,
-  buildMemberPresence,
-  createIdentityProvider,
+  goujianChengyuanZaichang,
+  chuangjianShenfenGongyingshang,
   createIdentitySigner,
   explainRosterDecision,
   fingerprintDerivationForAppShell,
-  issueMemberCertificate,
+  wentiChengyuanZhengshu,
   knownContactFingerprints,
   listPeerContactViews,
   membershipFileFor,
@@ -175,7 +175,7 @@ import {
   membershipStoreFor,
   peerContactKeys,
   requireSignableIdentity,
-  revokeMemberCertificate,
+  chexiaoChengyuanZhengshu,
   rotateMemberCertificate,
 } from './identity-provider.js';
 // 本体协作层：ref/路径门禁 + 租约（写操作前 acquire、写完 release）
@@ -188,26 +188,26 @@ import {
   runPreReceive,
   type PreReceiveResult,
 } from './repo-hooks.js';
-import { verifySmtp, type SmtpConfig } from './smtp-verify.js';
-import { resolveLocale, SUPPORTED_LOCALES } from './i18n/locales.js';
+import { verifySmtp, type SmtpPeizhi } from './smtp-verify.js';
+import { jiexiYuyan, SUPPORTED_LOCALES } from './i18n/locales.js';
 import crypto from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bootLog = path.join(app.getPath('userData'), 'warmy-boot.log');
 
-function boot(msg: string) {
+function qidong(msg: string) {
   try {
     fs.appendFileSync(bootLog, `new Date().toISOString() msg\n`);
   } catch {
     /* ignore */
   }
 }
-boot(`main loaded dir=__dirname`);
+qidong(`main loaded dir=__dirname`);
 // 去掉 File/Edit/View/Window/Help 应用菜单
 Menu.setApplicationMenu(null);
 
 function loadMainStrings(locale: string | undefined): Record<string, string> {
-  const f = resolveLocale(locale);
+  const f = jiexiYuyan(locale);
   try {
     return JSON.parse(fs.readFileSync(path.join(__dirname, 'i18n', `f.json`), 'utf8'));
   } catch {
@@ -223,6 +223,26 @@ let win: BrowserWindow | null = null;
 let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
 let memory: MemoryClient | null = null;
 const aiQuestions = new AiWenTiZhongXin();
+
+/**
+ * **任务栏 / 系统托盘专用图标**：白底版。
+ *
+ * 为什么单独一套：原图标是**透明底 + 棕色牛马标记**，放到深色任务栏/托盘上几乎看不清
+ * （产品主："任务栏的图标和系统托盘的图标要有白色的底"）。白底版由
+ * `packages/app-shell/scripts/gen-taskbar-icons.py` 生成（裁出墨迹 → 居中放在白色圆角方块上）。
+ * **其它位置（标题栏/我的页/关于页）继续用原来的透明底图标**，不做改动。
+ */
+function warmyTaskbarIcon(): string {
+  const candidates: string[] = [
+    path.join(__dirname, 'renderer', 'icons', 'app-white.ico'),
+    path.join(__dirname, 'renderer', 'icons', 'app-white-256.png'),
+    path.join(__dirname, 'renderer', 'icons', 'app-white-64.png'),
+  ];
+  for (const p of candidates) {
+    try { if (fs.existsSync(p)) return p; } catch { /* next */ }
+  }
+  return warmyWindowIcon();
+}
 
 /** 窗口/托盘图标路径：产品 logo（app.ico → logo.ico → build/icon.ico → png） */
 function warmyWindowIcon(): string {
@@ -243,12 +263,12 @@ function warmyWindowIcon(): string {
 function gateVerifyForProjectType(opts: { directory?: string; devEnv?: string; name?: string }): string[] {
   const dir = String(opts.directory || '').replace(/\\/g, '/');
   const name = String(opts.name || '');
-  const hay = `name dir`.toLowerCase();
-  const isDocsOnly = /(^|[^a-z])(docs?|说明|readme|spec|adr|手册|guide)([^a-z]|$)/i.test(hay) &&
-    !/(packages\/|src\/|node_modules|\.ts$|\.js$|\.py$|api|backend|frontend)/i.test(hay);
+  const suoyinwen = `name dir`.toLowerCase();
+  const isDocsOnly = /(^|[^a-z])(docs?|说明|readme|spec|adr|手册|guide)([^a-z]|$)/i.test(suoyinwen) &&
+    !/(packages\/|src\/|node_modules|\.ts$|\.js$|\.py$|api|backend|frontend)/i.test(suoyinwen);
   const isCode =
     /package\.json|tsconfig|pyproject|cargo\.toml|go\.mod|pom\.xml|build\.gradle/i.test(dir) ||
-    /(packages\/|src\/|backend|frontend|server|client|api|repo|monorepo)/i.test(hay) ||
+    /(packages\/|src\/|backend|frontend|server|client|api|repo|monorepo)/i.test(suoyinwen) ||
     /code|开发|dev[-_]?env|工程/i.test(name) ||
     /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|cs|cpp|c|h)$/i.test(dir);
   const base = [
@@ -347,7 +367,7 @@ let audit: ShenJiRiZhi | null = null;
 let secureKeys: SecureKeyStore | null = null;
 let archiver: ZhiShiGuiDangQi | null = null;
 let cleanup: QingLiGuanLiQi | null = null;
-let roleModels: RoleModelConfig = {};
+let roleModels: JueseMoxingPeizhi = {};
 let accountStore: LocalAccountStore | null = null;
 let settingsStore: SettingsStore | null = null;
 /**
@@ -358,13 +378,13 @@ let identityStore: IdentityStore | null = null;
 /** 群列表 / 群成员的真实持久化（userData/groups.json） */
 let groupStore: GroupStore | null = null;
 /** 自动更新（真实查询 + 真实下载校验；安装未实现） */
-let updater: Updater | null = null;
+let updater: Gengxinqi | null = null;
 let nodeReg: JieDianMingCe | null = null;
-let syncBus: SyncBus | null = null;
+let syncBus: TongbuZongxian | null = null;
 const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
 let lastError: { ts: number; message: string; context?: string } | null = null;
-let pendingApprovals = new Map<string, { resolve: (d: { allowed: boolean; scope: string }) => void }>();
-let approvalSeq = 0;
+let dengdaiPizhun = new Map<string, { resolve: (d: { allowed: boolean; scope: string }) => void }>();
+let pizhunXulie = 0;
 /**
  * 组网服务（**鉴权通道**）：一台 SecureSyncServer + 出站 SecureSyncClient。
  * 取代原先的 `LanSyncServer` / `MeshNode`（明文 JSONL、无握手、无身份）——
@@ -379,7 +399,7 @@ let peerReg: DuiDuanMingCe | null = null;
  */
 let leases: LeaseRegistry | null = null;
 /** 换证横幅「已核实 / 已关闭」的本地留痕（审计是硬要求，落盘失败即拒绝关闭） */
-let changeAckFile = '';
+let biangengQuerenWenjian = '';
 /** 会话消息历史（主进程侧）—— 日志的镜像（不变量 #1/#5），视图由 chatLogs 渲染而来 */
 const chatHistories = new Map<string, LiaoTianXiaoXi[]>();
 /**
@@ -527,21 +547,21 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
   if (!memory || !memory.isReady) {
     report.reason = 'memory-unavailable';
     historyRestore = report;
-    boot(`chat log restore skipped (trigger): memory unavailable`);
+    qidong(`chat log restore skipped (trigger): memory unavailable`);
     return report;
   }
   try {
     const res = await memory.tail(HISTORY_RESTORE_LIMIT);
     const records: Array<Record<string, unknown>> = Array.isArray(res?.records) ? res.records : [];
     // tail() 是 seq 倒序（最近的在前），重建要按 seq 升序灌入
-    const asc = [...records]
+    const shengxu = [...records]
       .filter((r) => r && typeof r === 'object')
       .sort((a, b) => Number(a['seq'] ?? 0) - Number(b['seq'] ?? 0));
     const yiYou = new Map<string, Set<number>>();
     for (const [k, arr] of chatLogs) yiYou.set(k, new Set(arr.map((e) => e.seq)));
     const sessions = new Set<string>();
     let chars = 0;
-    for (const r of asc) {
+    for (const r of shengxu) {
       if (String(r['kind'] ?? '') !== 'message') continue;
       const key = String(r['sessionId'] ?? '');
       const seq = Number(r['seq']);
@@ -571,7 +591,7 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
     report.ok = true;
     report.sessions = sessions.size;
     historyRestore = report;
-    boot(
+    qidong(
       `chat log restored (trigger): report.entries 条 / report.sessions 会话 / maxSeq=report.maxSeq`
     );
     audit?.log('chat.history.restore', {
@@ -585,7 +605,7 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
   } catch (e) {
     report.reason = `restore-failed: sanitizeError(e)`;
     historyRestore = report;
-    boot(`chat log restore failed (trigger): report.reason`);
+    qidong(`chat log restore failed (trigger): report.reason`);
     return report;
   }
 }
@@ -594,7 +614,7 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
  * 记忆服务可用性（工具暴露 + 历史重建的前提）。
  * 不可用一律**不报错**：撤回工具、跳过重建，对话继续用进程内日志发出去。
  */
-async function ensureMemoryReady(): Promise<boolean> {
+async function baozhangJiyiCangJiuxu(): Promise<boolean> {
   if (!memory) return false;
   if (memory.isReady) return true;
   const now = Date.now();
@@ -602,11 +622,11 @@ async function ensureMemoryReady(): Promise<boolean> {
   memoryEnsureAt = now;
   try {
     await memory.start();
-    boot('memory ready (re-start)');
+    qidong('memory ready (re-start)');
     void restoreChatLogsFromMemory('memory-restart');
     return memory.isReady;
   } catch (e) {
-    boot(`memory re-start fail String(e)`);
+    qidong(`memory re-start fail String(e)`);
     return false;
   }
 }
@@ -663,14 +683,14 @@ async function runChatLoop(
   req: LiaoTianQingQiu
 ): Promise<GongJuXunHuanGuo & { tooled: boolean }> {
   const limits = toolLimits();
-  const memReady = await ensureMemoryReady();
+  const jiyiJiuxu = await baozhangJiyiCangJiuxu();
   const tools: GongJuGuiGe[] | undefined =
-    memReady && limits.maxRounds > 0 ? memoryToolSpecs(toolLabels()) : undefined;
+    jiyiJiuxu && limits.maxRounds > 0 ? memoryToolSpecs(toolLabels()) : undefined;
   const supported = gongYingZhiChiGongJu(provider);
 
   audit?.log('chat.tools.decide', {
     sessionId,
-    memoryReady: memReady,
+    memoryReady: jiyiJiuxu,
     supported,
     exposed: !!tools,
     maxRounds: limits.maxRounds,
@@ -682,7 +702,7 @@ async function runChatLoop(
   } else {
     audit?.log('chat.tools.unavailable', {
       sessionId,
-      reason: !memReady ? 'memory-unavailable' : 'disabled-by-settings',
+      reason: !jiyiJiuxu ? 'memory-unavailable' : 'disabled-by-settings',
     });
   }
 
@@ -693,9 +713,9 @@ async function runChatLoop(
       const t1 = Date.now();
       // T194：工具调用开始（只给工具名/轮次/会话 —— 不给参数与结果正文）
       const toolName = String((call && call.function && call.function.name) || 'tool');
-      emitConsole({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId } });
+      fachuKongzhitai({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId } });
       // 工具里对文件做过的真实读写都记到**这个项目**的台账上（scope = 会话 id）
-      const out = await withFileAccessScope(sessionId, () => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }));
+      const out = await withFileAccessScope(sessionId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.maxResultChars }));
       metrics.recordToolCall({
         ts: Date.now(),
         sessionId,
@@ -706,7 +726,7 @@ async function runChatLoop(
         ms: Date.now() - t1,
       });
       // T194：工具调用结束（结论 + 字节数 + 耗时）
-      emitConsole({
+      fachuKongzhitai({
         cat: 'tool',
         code: 'tool.finish',
         data: { tool: out.meta.tool || toolName, round: ctx.round, sessionId, ok: out.ok, chars: out.chars, ms: Date.now() - t1 },
@@ -800,7 +820,7 @@ function contextBudgetFromSettings(modelId?: string): { chars: number; percent: 
   return { chars, percent: effPercent, tokens, maxTokens, minPercent };
 }
 
-const CONTEXT_RETRY_STEPS = [1.0, 0.6, 0.35, 0.2];
+const SHANGXIAWEN_CHONGSHI_BUZHOU = [1.0, 0.6, 0.35, 0.2];
 function isContextLengthError(err: unknown): boolean {
   const s = String((err as Error)?.message || err || '');
   return /context|token|too long|maximum length|context_length|maximum context/i.test(s);
@@ -820,8 +840,8 @@ async function runWithContextRetry<T>(
 ): Promise<{ result: T; usedBudget: number; retries: number; gaveUp?: string }> {
   let lastErr: unknown;
   let retries = 0;
-  for (let i = 0; i < CONTEXT_RETRY_STEPS.length; i++) {
-    const budget = budgetCharsForStep(baseChars, CONTEXT_RETRY_STEPS[i]!);
+  for (let i = 0; i < SHANGXIAWEN_CHONGSHI_BUZHOU.length; i++) {
+    const budget = budgetCharsForStep(baseChars, SHANGXIAWEN_CHONGSHI_BUZHOU[i]!);
     try {
       const result = await fn(budget);
       return { result, usedBudget: budget, retries };
@@ -834,7 +854,7 @@ async function runWithContextRetry<T>(
   const msg = String((lastErr as Error)?.message || lastErr || 'context-too-small');
   return {
     result: { ok: false, error: msg, contextTooSmall: true, retries } as unknown as T,
-    usedBudget: budgetCharsForStep(baseChars, CONTEXT_RETRY_STEPS[CONTEXT_RETRY_STEPS.length - 1]!),
+    usedBudget: budgetCharsForStep(baseChars, SHANGXIAWEN_CHONGSHI_BUZHOU[SHANGXIAWEN_CHONGSHI_BUZHOU.length - 1]!),
     retries,
     gaveUp: msg,
   };
@@ -855,7 +875,7 @@ function contextBudgetChars(modelId?: string): number {
 
 /** 统一的视图渲染入口：所有注入点都走这里，不许另写一份（不变量 #2） */
 function renderChatView(key: string, recallHint?: string, budgetCharsOverride?: number) {
-  const view = renderBoundedView(chatLogs.get(key) || [], {
+  const shitu = xuanranYoujieShitu(chatLogs.get(key) || [], {
     budgetChars: Number.isFinite(budgetCharsOverride as number) ? Number(budgetCharsOverride) : contextBudgetChars(),
     keepHead: DEFAULT_KEEP_HEAD,
     keepTail: DEFAULT_KEEP_TAIL,
@@ -864,13 +884,13 @@ function renderChatView(key: string, recallHint?: string, budgetCharsOverride?: 
   metrics.recordView({
     ts: Date.now(),
     sessionId: key,
-    logEntries: view.stats.logEntries,
-    logBytes: view.stats.logBytes,
-    viewBytes: view.stats.viewBytes,
-    budgetChars: view.stats.budgetChars,
-    pointers: view.stats.pointers,
+    logEntries: shitu.stats.logEntries,
+    logBytes: shitu.stats.logBytes,
+    viewBytes: shitu.stats.viewBytes,
+    budgetChars: shitu.stats.budgetChars,
+    pointers: shitu.stats.pointers,
   });
-  return view;
+  return shitu;
 }
 
 /** 运行中的插入指令级别 */
@@ -911,8 +931,8 @@ function restoreActiveProvider(): void {
  *  · 界面上刚输入的明文优先；
  *  · 否则按 id 从 SecureKeyStore 解出（这样重启后无需重输）。
  */
-async function resolveProviderKey(presetId: string, entered?: string): Promise<string> {
-  const yiLeiXing = String(entered || '');
+async function jiexiGongyingshangMiyao(presetId: string, shuru?: string): Promise<string> {
+  const yiLeiXing = String(shuru || '');
   if (yiLeiXing) return yiLeiXing;
   try {
     return (await secureKeys?.load(presetId)) || '';
@@ -925,14 +945,14 @@ async function resolveProviderKey(presetId: string, entered?: string): Promise<s
  * 聊天/拉取模型前调用：内存里没有密钥就按 id 从 SecureKeyStore 解出来。
  * 解不出来时**保持没有**（调用方照旧如实报"没有密钥"），不编也不假装。
  */
-async function ensureProviderKey(): Promise<void> {
+async function baozhangGongyingshangMiyao(): Promise<void> {
   if (providerCfg.apiKey || providerCfg.protocol === 'ollama') return;
-  const k = await resolveProviderKey(providerCfg.presetId);
+  const k = await jiexiGongyingshangMiyao(providerCfg.presetId);
   if (k) providerCfg.apiKey = k;
 }
 
 /** 打包态资源根目录；开发态下 Electron 也会给值，兜底空串便于拼路径 */
-const RES_ROOT = process.resourcesPath || '';
+const JIEGUO_GEN = process.resourcesPath || '';
 
 /**
  * 解析记忆服务要用的 Node 运行时。
@@ -941,18 +961,18 @@ const RES_ROOT = process.resourcesPath || '';
  * 而且那条路径还额外要求 ELECTRON_RUN_AS_NODE。
  * 顺序：捆绑 Node → 环境变量 → Electron 兜底。
  */
-function resolveNodeRuntime(): { path: string; source: string } {
+function jiexiJiedianYunxingShi(): { path: string; source: string } {
   const isWin = process.platform === 'win32';
   const exe = isWin ? 'node.exe' : 'node';
   // 仓库里的 Node 压缩包按 win-x64 / darwin-arm64 / linux-x64 命名，
   // 与 process.platform（win32）不同名，两种目录名都要认。
-  const platDirs = [isWin ? 'win-' + process.arch : process.platform + '-' + process.arch,
+  const pingtaiMulu = [isWin ? 'win-' + process.arch : process.platform + '-' + process.arch,
                     process.platform + '-' + process.arch];
   const roots = [process.resourcesPath || '',
                  path.join(__dirname, '..', '..', '..', 'resources')];
   const candidates: Array<{ p: string; source: string }> = [];
   for (const r of roots) {
-    for (const d of platDirs) {
+    for (const d of pingtaiMulu) {
       candidates.push({ p: path.join(r, 'node', d, exe), source: 'bundled:' + path.join('node', d) });
     }
     candidates.push({ p: path.join(r, 'node', exe), source: 'bundled:node/' + exe });
@@ -964,29 +984,29 @@ function resolveNodeRuntime(): { path: string; source: string } {
   return { path: process.execPath, source: 'electron-fallback(不推荐)' };
 }
 
-function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
+function zhunbeiJiyiCangYunxingShi(): { ipcEntry: string; dataDir: string } {
   const userData = app.getPath('userData');
   const dataDir = path.join(userData, 'memory');
-  const runtimeDir = path.join(userData, 'memory-runtime');
+  const yunxingShiMulu = path.join(userData, 'memory-runtime');
   const srcCandidates = [
     path.join(__dirname, '..', '..', 'memory-os', 'dist'),
     path.join(app.getAppPath(), 'node_modules', '@warmy', 'memory-os', 'dist'),
   ];
   const src = srcCandidates.find((d) => fs.existsSync(path.join(d, 'ipc.js')));
   if (!src) {
-    boot(`memory ipc source missing among srcCandidates.join(' | ')`);
+    qidong(`memory ipc source missing among srcCandidates.join(' | ')`);
     throw new Error('memory-os dist not found');
   }
-  fs.mkdirSync(runtimeDir, { recursive: true });
+  fs.mkdirSync(yunxingShiMulu, { recursive: true });
   // 拷贝 dist 下全部 js（ipc + index + map 可选）
   for (const f of fs.readdirSync(src)) {
     if (!f.endsWith('.js') && !f.endsWith('.js.map')) continue;
-    fs.copyFileSync(path.join(src, f), path.join(runtimeDir, f));
+    fs.copyFileSync(path.join(src, f), path.join(yunxingShiMulu, f));
   }
   // 复制 package.json 便于 Node 解析 type=module
   const srcPkg = path.join(src, '..', 'package.json');
   if (fs.existsSync(srcPkg)) {
-    fs.copyFileSync(srcPkg, path.join(runtimeDir, 'package.json'));
+    fs.copyFileSync(srcPkg, path.join(yunxingShiMulu, 'package.json'));
   }
   // 链接 better-sqlite3：开发态与打包态布局不同，而且旧链接可能是坏的，必须校验 + 可修复。
   // 历史教训：这里原本只做 `existsSync(nmSrc) && !existsSync(nmDst)`。
@@ -994,26 +1014,26 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
   //   - 链接一旦存在就不再重建，即使依赖后来补齐也修不回来；
   //   结果子进程报 `Cannot find module 'better-sqlite3'`，记忆服务永远启动超时（L2 实际从未起来）。
   const jiyiBaoMulu = path.dirname(src);
-  const nmDst = path.join(runtimeDir, 'node_modules');
-  const nativeName = process.platform + '-' + process.arch + '.node';
+  const mingchengMubiao = path.join(yunxingShiMulu, 'node_modules');
+  const yuanshengMing = process.platform + '-' + process.arch + '.node';
   /** 目录里是否有**可用**的 better-sqlite3（含本平台原生二进制） */
-  const sqliteUsable = (dir: string): boolean => {
+  const sqliteKeyong = (dir: string): boolean => {
     if (!fs.existsSync(path.join(dir, 'package.json'))) return false;
     try {
       // v13 用 prebuilds/<platform>-<arch>.node；旧版走 build/Release
-      const lib = fs.readFileSync(path.join(dir, 'lib', 'binding.js'), 'utf8');
-      if (lib.includes('prebuilds')) return fs.existsSync(path.join(dir, 'prebuilds', nativeName));
+      const ku = fs.readFileSync(path.join(dir, 'lib', 'binding.js'), 'utf8');
+      if (ku.includes('prebuilds')) return fs.existsSync(path.join(dir, 'prebuilds', yuanshengMing));
     } catch {
       /* 读不到就退回通用判断 */
     }
     return (
-      fs.existsSync(path.join(dir, 'prebuilds', nativeName)) ||
+      fs.existsSync(path.join(dir, 'prebuilds', yuanshengMing)) ||
       fs.existsSync(path.join(dir, 'build', 'Release', 'better_sqlite3.node'))
     );
   };
   const sqliteVer = (() => {
     try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(runtimeDir, 'package.json'), 'utf8')) as {
+      const pkg = JSON.parse(fs.readFileSync(path.join(yunxingShiMulu, 'package.json'), 'utf8')) as {
         dependencies?: Record<string, string>;
       };
       return pkg.dependencies?.['better-sqlite3'] || '13.0.3';
@@ -1021,47 +1041,47 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
       return '13.0.3';
     }
   })();
-  const sqliteCandidates = [
+  const sqliteHouxuan = [
     path.join(jiyiBaoMulu, 'node_modules', 'better-sqlite3'),                                   // 开发态：包内 junction
-    path.join(RES_ROOT, 'pnpm-store', 'better-sqlite3@' + sqliteVer,
+    path.join(JIEGUO_GEN, 'pnpm-store', 'better-sqlite3@' + sqliteVer,
       'node_modules', 'better-sqlite3'),                                                      // 打包态
-    path.join(RES_ROOT, 'pnpm-store', 'better-sqlite3'),                    // 打包态（扁平）
+    path.join(JIEGUO_GEN, 'pnpm-store', 'better-sqlite3'),                    // 打包态（扁平）
   ].filter((p) => p && !p.startsWith(path.sep + 'pnpm-store'));
 
-  const srcSqlite = sqliteCandidates.find(sqliteUsable);
-  const dstSqlite = path.join(nmDst, 'better-sqlite3');
-  if (srcSqlite && !sqliteUsable(dstSqlite)) {
+  const srcSqlite = sqliteHouxuan.find(sqliteKeyong);
+  const mubiaoSqlite = path.join(mingchengMubiao, 'better-sqlite3');
+  if (srcSqlite && !sqliteKeyong(mubiaoSqlite)) {
     // 只拆链接/空目录，绝不递归删除（junction 递归删会连带删掉目标内容）
     try {
-      fs.unlinkSync(nmDst);
+      fs.unlinkSync(mingchengMubiao);
     } catch {
       try {
-        fs.rmdirSync(nmDst);
+        fs.rmdirSync(mingchengMubiao);
       } catch {
         /* 目标不存在或非空目录，交给下面的 mkdir 报错 */
       }
     }
-    fs.mkdirSync(nmDst, { recursive: true });
+    fs.mkdirSync(mingchengMubiao, { recursive: true });
     try {
-      fs.unlinkSync(dstSqlite);
+      fs.unlinkSync(mubiaoSqlite);
     } catch {
       /* 不存在就算了 */
     }
     try {
-      fs.symlinkSync(srcSqlite, dstSqlite, 'junction');
-      boot('memory sqlite linked: ' + srcSqlite);
+      fs.symlinkSync(srcSqlite, mubiaoSqlite, 'junction');
+      qidong('memory sqlite linked: ' + srcSqlite);
     } catch {
       try {
-        fs.cpSync(srcSqlite, dstSqlite, { recursive: true });
-        boot('memory sqlite copied: ' + srcSqlite);
+        fs.cpSync(srcSqlite, mubiaoSqlite, { recursive: true });
+        qidong('memory sqlite copied: ' + srcSqlite);
       } catch (e) {
-        boot('memory sqlite link failed ' + String(e));
+        qidong('memory sqlite link failed ' + String(e));
       }
     }
   } else if (!srcSqlite) {
-    boot('memory sqlite not found in ' + sqliteCandidates.join(' | '));
+    qidong('memory sqlite not found in ' + sqliteHouxuan.join(' | '));
   }
-  return { ipcEntry: path.join(runtimeDir, 'ipc.js'), dataDir };
+  return { ipcEntry: path.join(yunxingShiMulu, 'ipc.js'), dataDir };
 }
 
 async function bootstrap() {
@@ -1071,21 +1091,21 @@ async function bootstrap() {
       // 安全模式 full 时自动放行；normal/strict 向渲染进程请求审批
       const mode = p1?.security.getMode();
       if (mode === 'full') return { action: req.action, scope: 'once', allowed: true };
-      const id = 'ap-' + ++approvalSeq;
+      const id = 'ap-' + ++pizhunXulie;
       return new Promise((resolve) => {
-        pendingApprovals.set(id, { resolve: resolve as never });
+        dengdaiPizhun.set(id, { resolve: resolve as never });
         win?.webContents.send('warmy:approval-request', { id, action: req.action, suggested: req.suggested });
         setTimeout(() => {
-          const p = pendingApprovals.get(id);
+          const p = dengdaiPizhun.get(id);
           if (p) {
-            pendingApprovals.delete(id);
+            dengdaiPizhun.delete(id);
             (p.resolve as (d: unknown) => void)({ allowed: false, scope: 'deny' });
           }
         }, 30000);
       });
     },
   });
-  boot('p1 ready');
+  qidong('p1 ready');
   const userData = app.getPath('userData');
   board = new KanbanCang(path.join(userData, 'board'));
   knowledge = new KnowledgeBase(path.join(userData, 'knowledge'));
@@ -1111,21 +1131,21 @@ async function bootstrap() {
       /* 记账失败不影响真实文件操作 */
     }
   });
-  updater = new Updater({
-    currentVersion: appVersion(),
+  updater = new Gengxinqi({
+    currentVersion: yingyongBanben(),
     downloadDir: path.join(userData, 'updates'),
     getSettings: () => settingsStore?.load() ?? null,
     env: process.env,
     userAgent: `WArmy/appVersion() (process.platform; process.arch)`,
-    log: (msg) => boot(`updater: msg`),
+    log: (msg) => qidong(`updater: msg`),
   });
   qingLiLinShiWenJian(path.join(userData, 'updates'));
   restoreGroups();
   // 群骨架恢复之后再灌队列快照（否则 createGroup 会把 queues Map 清空）
   restoreRouterQueues();
-  boot(`router queues restored file=routerQueuesFile() || 'n/a'`);
+  qidong(`router queues restored file=routerQueuesFile() || 'n/a'`);
   nodeReg = new JieDianMingCe(path.join(userData, 'nodes.json'));
-  syncBus = new SyncBus(path.join(userData, 'bus'));
+  syncBus = new TongbuZongxian(path.join(userData, 'bus'));
   peerReg = new DuiDuanMingCe(path.join(userData, 'peers.json'));
   if (!nodeReg.list().some((n) => n.isLocal)) {
     nodeReg.registerLocal('local');
@@ -1151,14 +1171,14 @@ async function bootstrap() {
      * 这里就要把身份**按新凭证重建**（旧身份文件先备份，绝不静默丢弃），
      * 否则会出现"ID 与身份不是同一把密钥"——那等于产品承诺的"ID 即私钥"不成立。
      */
-    const bootCredential = profile.deviceId || generateDeviceId();
+    const qidongPingzheng = profile.deviceId || generateDeviceId();
     const upgradedFrom = String(profile.deviceIdUpgradedFrom || '');
-    const idInit = identityStore.ensureIdentity(bootCredential, {
+    const idInit = identityStore.ensureIdentity(qidongPingzheng, {
       email: profile.email || '',
-    }, { credential: bootCredential });
+    }, { credential: qidongPingzheng });
     if (idInit.ok && upgradedFrom) {
       try {
-        const rebuilt = identityStore.restoreFromCredential(bootCredential, profile.username || undefined);
+        const rebuilt = identityStore.restoreFromCredential(qidongPingzheng, profile.username || undefined);
         if (rebuilt.ok) {
           /**
            * 升级**只做一次**：清掉标记并落盘，否则每次启动都会重建身份 + 多一个备份文件。
@@ -1168,34 +1188,34 @@ async function bootstrap() {
             accountStore.saveProfile(rest as never);
           } catch { /* 清标记失败不致命：最多下次再重建一次（身份内容相同、不会漂移） */ }
           audit?.log('identity.credential.upgraded', { from: 'legacy-numeric-or-uuid', to: 'credential-51', fingerprint: rebuilt.info.fingerprint, backup: rebuilt.backupFile || '' });
-          boot(`identity upgraded to credential-51 fp=rebuilt.info.fingerprint backup=rebuilt.backupFile || 'none'`);
+          qidong(`identity upgraded to credential-51 fp=rebuilt.info.fingerprint backup=rebuilt.backupFile || 'none'`);
         } else {
-          boot(`identity upgrade failed（保留原身份）: rebuilt.error`);
+          qidong(`identity upgrade failed（保留原身份）: rebuilt.error`);
         }
       } catch (e) {
-        boot(`identity upgrade threw: sanitizeError(e)`);
+        qidong(`identity upgrade threw: sanitizeError(e)`);
       }
     }
     if (idInit.ok) {
-      boot(
+      qidong(
         `identity idInit.created ? 'created' : 'loaded' fp=idInit.info.fingerprint gen=idInit.info.generation alias=idInit.info.alias protection=
           idInit.info.passphraseProtected ? 'passphrase' : idInit.info.osProtected ? idInit.info.osLabel : 'none'
         `,
       );
     } else {
       // 绝不静默重建：文件损坏时保留证据（已隔离为 .corrupt-*），由用户走"导入备份"恢复
-      boot(`identity init fail: idInit.error`);
+      qidong(`identity init fail: idInit.error`);
       lastError = { ts: Date.now(), message: `身份初始化失败：idInit.error`, context: 'identity' };
     }
   } catch (e) {
-    boot(`identity init fail String(e)`);
+    qidong(`identity init fail String(e)`);
   }
   // 启动时结算一次对端冻结期：到期则把"待采用的新名片"提升为本机留存值（纯本地判定，无定时器）
   try {
     const settled = identityStore.settlePeerContacts();
-    boot(`identity peer-contacts settled promoted=settled.promoted/settled.total`);
+    qidong(`identity peer-contacts settled promoted=settled.promoted/settled.total`);
   } catch (e) {
-    boot(`identity peer settle fail String(e)`);
+    qidong(`identity peer settle fail String(e)`);
   }
   audit.log('app.start', { platform: process.platform });
   // ── 成员证书 / 吊销列表（ADR §附八.8）：先"热身"建好带审计回调的实例 ──
@@ -1205,31 +1225,31 @@ async function bootstrap() {
   {
     const ms = membershipStoreFor(identityStore, { onAudit: (op, detail) => audit?.log(op, detail) });
     const heJi = ms?.summary();
-    if (heJi) boot(`membership ready groups=sum.groupCount certs=sum.certCount revoked=sum.revokedCount`);
+    if (heJi) qidong(`membership ready groups=sum.groupCount certs=sum.certCount revoked=sum.revokedCount`);
   }
   // ── 租约表（本体协作层）：写操作的唯一仲裁者 ──
   leases = new LeaseRegistry({ idPrefix: 'warmy' });
   // ── 换证横幅的确认留痕（「已核实 / 已关闭」）；审计写不进去时拒绝关闭，见 IPC ──
-  changeAckFile = path.join(userData, 'identity', 'change-acks.json');
+  biangengQuerenWenjian = path.join(userData, 'identity', 'change-acks.json');
   // ── 组网（鉴权通道）：**门控在前**，身份拿不到签名能力就不起监听、不发宣告 ──
   const netDir = ensureNetDir(userData);
-  if (!netDir.ok) boot(`net dir unavailable: netDir.error`);
+  if (!netDir.ok) qidong(`net dir unavailable: netDir.error`);
   try {
     // 启动自检：身份层指纹必须能由身份文件里的公钥推出；不一致则整条组网线不可用
-    const check = assertDerivationMatches(identityStore);
-    boot(`identity derivation ok fp=check.fingerprint raw=check.publicKeyRawBytesB`);
+    const check = duanyanTuidaoPipei(identityStore);
+    qidong(`identity derivation ok fp=check.fingerprint raw=check.publicKeyRawBytesB`);
   } catch (e) {
     const err = e as IdentityUnavailableError;
-    boot(`identity derivation FAILED: err.name: err.message`);
+    qidong(`identity derivation FAILED: err.name: err.message`);
     lastError = { ts: Date.now(), message: err.message, context: 'identity-derivation' };
   }
   secureMesh = new SecureMesh({
     userDataDir: userData,
     nodeId: localNodeId,
     store: () => identityStore,
-    peers: () => peerRefs(),
+    peers: () => duiduanYinyong(),
     onInbound: (msg) => {
-      boot(`mesh inbound msg.channel from msg.peerFingerprint.slice(0, 12)`);
+      qidong(`mesh inbound msg.channel from msg.peerFingerprint.slice(0, 12)`);
       // 成员证书 / 吊销列表的**同步落点**：对端指纹来自握手（msg.peerFingerprint），
       // 不是消息体自称 —— 只有本群创建者发来的吊销列表才会被接受。
       const payload = msg.payload as { type?: string; groupId?: string; list?: unknown } | null;
@@ -1244,7 +1264,7 @@ async function bootstrap() {
         const parsed = parseProjectAttrsMessage(msg.payload);
         if (!parsed.ok) {
           audit?.log('project.attrs.inbound', { ok: false, code: parsed.error });
-          boot(`project attrs inbound rejected: parsed.error`);
+          qidong(`project attrs inbound rejected: parsed.error`);
         } else {
           const v = parsed.value;
           // 指纹用**握手**得到的那个（消息体自称的不采信），只在本地还不知道创建者时补上
@@ -1288,11 +1308,11 @@ async function bootstrap() {
             });
             audit?.log('project.attrs.inbound', { groupId: v.groupId, ok: true, queue: gate.queue, zhangbenYitianjia });
             if (!gate.allow) {
-              emitConsole({ cat: 'net', code: 'project.inbound.queued', data: { groupId: v.groupId, projectCode: gate.projectCode, memberFaceKey: gate.memberFaceKey } });
+              fachuKongzhitai({ cat: 'net', code: 'project.inbound.queued', data: { groupId: v.groupId, projectCode: gate.projectCode, memberFaceKey: gate.memberFaceKey } });
             }
-            boot(`project attrs inbound v.groupId allow=gate.allow code=gate.projectCode ledger+ledgerAdded`);
+            qidong(`project attrs inbound v.groupId allow=gate.allow code=gate.projectCode ledger+ledgerAdded`);
           }
-          emitConsole({ cat: 'system', code: 'project.attrs.applied', data: { groupId: v.groupId, devEnv: v.project.devEnv } });
+          fachuKongzhitai({ cat: 'system', code: 'project.attrs.applied', data: { groupId: v.groupId, devEnv: v.project.devEnv } });
         }
       }
       if (payload && payload.type === 'warmy.membership.revocation') {
@@ -1307,40 +1327,40 @@ async function bootstrap() {
           ...(expect ? { expectedIssuerFingerprint: expect } : {}),
         });
         audit?.log('membership.revocation.inbound', { groupId: gid, ok: r.ok, code: r.code, changed: r.changed ?? false });
-        boot(`membership revocation inbound ok=r.ok code=r.code`);
+        qidong(`membership revocation inbound ok=r.ok code=r.code`);
       }
     },
     onEvent: (ev) => {
-      if (ev.type === 'handshake-ok' || ev.type === 'offline') boot(`mesh ev.type ev.peer ?? ''`);
+      if (ev.type === 'handshake-ok' || ev.type === 'offline') qidong(`mesh ev.type ev.peer ?? ''`);
       // T194：对端会话上下线 / 握手 / 局域网发现 —— 组网层的**真实**事件，直接进控制台。
       // 这里**只**推手指纹（peer）与方向/原因（detail），不推消息正文。
       switch (ev.type) {
         case 'session':
-          emitConsole({ cat: 'net', code: 'net.peer-up', data: { peer: ev.peer, detail: ev.detail } });
+          fachuKongzhitai({ cat: 'net', code: 'net.peer-up', data: { peer: ev.peer, detail: ev.detail } });
           break;
         case 'online':
-          emitConsole({ cat: 'net', code: 'net.peer-online', data: { peer: ev.peer } });
+          fachuKongzhitai({ cat: 'net', code: 'net.peer-online', data: { peer: ev.peer } });
           break;
         case 'offline':
-          emitConsole({ cat: 'net', code: 'net.peer-down', data: { peer: ev.peer, detail: ev.detail } });
+          fachuKongzhitai({ cat: 'net', code: 'net.peer-down', data: { peer: ev.peer, detail: ev.detail } });
           break;
         case 'handshake-ok':
-          emitConsole({ cat: 'net', code: 'net.handshake-ok', data: { peer: ev.peer } });
+          fachuKongzhitai({ cat: 'net', code: 'net.handshake-ok', data: { peer: ev.peer } });
           break;
         case 'discovered':
-          emitConsole({ cat: 'net', code: 'net.discovered', data: { peer: ev.peer, detail: ev.detail } });
+          fachuKongzhitai({ cat: 'net', code: 'net.discovered', data: { peer: ev.peer, detail: ev.detail } });
           break;
         default:
-          emitConsole({ cat: 'net', code: 'net.event', data: { type: String(ev.type || ''), detail: ev.detail } });
+          fachuKongzhitai({ cat: 'net', code: 'net.event', data: { type: String(ev.type || ''), detail: ev.detail } });
           break;
       }
     },
   });
   {
     const gate = requireSignableIdentity(identityStore);
-    boot(`net gate signReady=gate.ok mode=gate.unlock?.mode ?? 'none' error=gate.errorCode ?? '-'`);
+    qidong(`net gate signReady=gate.ok mode=gate.unlock?.mode ?? 'none' error=gate.errorCode ?? '-'`);
   }
-  boot('board/knowledge/checkpoints/account/sync/mesh/assets ready');
+  qidong('board/knowledge/checkpoints/account/sync/mesh/assets ready');
 }
 
 // ── 群路由 / 群成员：持久化与重启恢复 ──
@@ -1392,7 +1412,7 @@ function restoreGroups(): void {
     const s = settingsStore?.load() as unknown as { groups?: unknown } | undefined;
     const uiGroups = Array.isArray(s?.groups) ? (s?.groups as Array<{ id?: unknown; name?: unknown; type?: unknown }>) : [];
     const migrated = groupStore.migrateFrom(uiGroups);
-    if (migrated) boot(`groups migrated from ui state: migrated`);
+    if (migrated) qidong(`groups migrated from ui state: migrated`);
     for (const g of groupStore.listGroups()) {
       if (!router.getGroup(g.groupId)) {
         try {
@@ -1412,28 +1432,28 @@ function restoreGroups(): void {
       }
       joinLocalInstances(g.groupId);
     }
-    boot(`groups restored: groupStore.listGroups().length`);
+    qidong(`groups restored: groupStore.listGroups().length`);
   } catch {
-    boot('groups restore failed');
+    qidong('groups restore failed');
   }
 }
 
-function startMemoryAsync() {
+function qishiJiyiCangYibu() {
   try {
-    const { ipcEntry, dataDir } = prepareMemoryRuntime();
-    boot(`memory ipc=ipcEntry`);
-    const nodeRt = resolveNodeRuntime();
-    boot(`memory node=nodeRt.path (nodeRt.source)`);
+    const { ipcEntry, dataDir } = zhunbeiJiyiCangYunxingShi();
+    qidong(`memory ipc=ipcEntry`);
+    const nodeRt = jiexiJiedianYunxingShi();
+    qidong(`memory node=nodeRt.path (nodeRt.source)`);
     memory = new MemoryClient({ nodePath: nodeRt.path, ipcEntry, dataDir });
     memory
       .start()
       .then(() => {
-        boot('memory ready');
+        qidong('memory ready');
         // 不变量 #5：记忆服务的 JSONL 是唯一事实来源 → 启动即重建会话日志（ADR 002 §9.4 待办 4）
         return restoreChatLogsFromMemory('boot');
       })
       .catch((e) => {
-        boot(`memory start fail String(e)`);
+        qidong(`memory start fail String(e)`);
         // 降级路径的可观测信号：记忆服务没起来，重建被跳过（对话仍可发送）
         historyRestore = {
           done: true,
@@ -1447,7 +1467,7 @@ function startMemoryAsync() {
         };
       });
   } catch (e) {
-    boot(`memory prepare fail String(e)`);
+    qidong(`memory prepare fail String(e)`);
     historyRestore = {
       done: true,
       ok: false,
@@ -1461,7 +1481,7 @@ function startMemoryAsync() {
   }
 }
 
-let forceQuit = false;
+let qiangzhiTuichu = false;
 /** 托盘实例：全应用只允许一个；退出时必须 destroy，否则通知区残留 */
 let tray: import('electron').Tray | null = null;
 
@@ -1472,7 +1492,7 @@ let tray: import('electron').Tray | null = null;
 function focusMainWindowCentered(): void {
   try {
     if (!win || win.isDestroyed()) {
-      createWindow();
+      chuangjianChuangkou();
       return;
     }
     if (win.isMinimized()) win.restore();
@@ -1494,7 +1514,7 @@ function focusMainWindowCentered(): void {
     win.focus();
     try { win.moveTop(); } catch { /* noop */ }
   } catch {
-    try { createWindow(); } catch { /* noop */ }
+    try { chuangjianChuangkou(); } catch { /* noop */ }
   }
 }
 
@@ -1505,8 +1525,8 @@ function focusMainWindowCentered(): void {
  * 若只调 app.quit() 而不置 forceQuit，close 会被拦掉，进程和托盘都还在 ——
  * 表现为「右键下班点了关不掉」。
  */
-function quitApp(reason?: string): void {
-  forceQuit = true;
+function tuichuYingyong(reason?: string): void {
+  qiangzhiTuichu = true;
   try { audit?.log('app.quit', { reason: String(reason || 'quit') }); } catch { /* noop */ }
   try { tray?.destroy(); } catch { /* noop */ }
   tray = null;
@@ -1524,11 +1544,11 @@ function quitApp(reason?: string): void {
   }, 1500);
 }
 
-function windowStateFile(): string {
+function chuangkouZhuangtaiWenjian(): string {
   try { return path.join(app.getPath('userData'), 'window-state.json'); } catch { return ''; }
 }
 function loadWindowState(): { width?: number; height?: number; x?: number; y?: number; maximized?: boolean } {
-  const f = windowStateFile();
+  const f = chuangkouZhuangtaiWenjian();
   if (!f) return {};
   try {
     const j = JSON.parse(fs.readFileSync(f, 'utf8')) || {};
@@ -1540,8 +1560,8 @@ function loadWindowState(): { width?: number; height?: number; x?: number; y?: n
       try {
         const { screen } = require('electron');
         const b = { x: Number(j.x), y: Number(j.y), width: out.width || 1280, height: out.height || 800 };
-        const area = screen.getDisplayMatching(b).workArea;
-        const visible = b.x < area.x + area.width - 40 && b.y < area.y + area.height - 40 && b.x + 80 > area.x && b.y + 40 > area.y;
+        const quyu = screen.getDisplayMatching(b).workArea;
+        const visible = b.x < quyu.x + quyu.width - 40 && b.y < quyu.y + quyu.height - 40 && b.x + 80 > quyu.x && b.y + 40 > quyu.y;
         if (visible) { out.x = Math.round(Number(j.x)); out.y = Math.round(Number(j.y)); }
       } catch { /* 无 screen 时忽略位置 */ }
     }
@@ -1550,11 +1570,11 @@ function loadWindowState(): { width?: number; height?: number; x?: number; y?: n
   } catch { return {}; }
 }
 let windowSaveTimer: NodeJS.Timeout | null = null;
-function saveWindowStateSoon(delay = 500): void {
+function baocunChuangkouZhuangtaiJiukuai(yanchi = 500): void {
   if (windowSaveTimer) clearTimeout(windowSaveTimer);
   windowSaveTimer = setTimeout(() => {
     windowSaveTimer = null;
-    const f = windowStateFile();
+    const f = chuangkouZhuangtaiWenjian();
     if (!f || !win || win.isDestroyed()) return;
     try {
       const maximized = win.isMaximized();
@@ -1562,13 +1582,14 @@ function saveWindowStateSoon(delay = 500): void {
       const out = { x: b.x, y: b.y, width: b.width, height: b.height, maximized };
       anQuanYuanZiXieJson(f, out);
     } catch { /* 忽略 */ }
-  }, delay);
+  }, yanchi);
 }
 
-function createWindow() {
+function chuangjianChuangkou() {
   const isMac = process.platform === 'darwin';
   const ws = loadWindowState();
-  const tuBiaoLuJing = warmyWindowIcon();
+  // 任务栏图标：**白底版**（深色任务栏上棕色标记才看得清）
+  const tuBiaoLuJing = warmyTaskbarIcon();
   win = new BrowserWindow({
     width: ws.width || 1280,
     height: ws.height || 800,
@@ -1596,16 +1617,16 @@ function createWindow() {
   win.on('ready-to-show', () => {
     if (ws.maximized) { try { win?.maximize(); } catch { /* noop */ } }
     win?.show();
-    boot(`window ready platform=process.platform`);
+    qidong(`window ready platform=process.platform`);
   });
-  win.on('resize', () => saveWindowStateSoon());
-  win.on('move', () => saveWindowStateSoon());
-  win.on('maximize', () => saveWindowStateSoon(200));
-  win.on('unmaximize', () => saveWindowStateSoon(200));
+  win.on('resize', () => baocunChuangkouZhuangtaiJiukuai());
+  win.on('move', () => baocunChuangkouZhuangtaiJiukuai());
+  win.on('maximize', () => baocunChuangkouZhuangtaiJiukuai(200));
+  win.on('unmaximize', () => baocunChuangkouZhuangtaiJiukuai(200));
   // 点击叉 = 最小化到托盘，不关闭窗口。只有托盘「下班」才真正退出。
   win.on('close', (e) => {
-    try { saveWindowStateSoon(0); } catch { /* noop */ }
-    if (!forceQuit) {
+    try { baocunChuangkouZhuangtaiJiukuai(0); } catch { /* noop */ }
+    if (!qiangzhiTuichu) {
       e.preventDefault();
       win?.hide();
     }
@@ -1626,7 +1647,7 @@ async function safeHandleAsync<T>(fn: () => Promise<T>, fallback: T): Promise<T>
  *      不含绝对路径 / 堆栈 / 凭据片段；
  *   3) 重复通道保护 —— 重复注册只记日志并跳过，而不是让 Electron 抛异常把主进程带崩。
  */
-const __ipcRegistered = new Set<string>();
+const ipcZhuce = new Set<string>();
 function sanitizeError(e: unknown): string {
   const raw = e instanceof Error ? (e.message || e.name) : String(e);
   // noUncheckedIndexedAccess：split(..)[0] 的类型是 string | undefined，必须兜一下
@@ -1637,19 +1658,19 @@ function sanitizeError(e: unknown): string {
     .slice(0, 200);
   return yiQingLi || 'unknown error';
 }
-function handleIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any): void {
-  if (__ipcRegistered.has(channel)) {
+function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any): void {
+  if (ipcZhuce.has(channel)) {
     console.error('[ipc] duplicate channel registration ignored: ' + channel);
     return;
   }
-  __ipcRegistered.add(channel);
+  ipcZhuce.add(channel);
   ipcMain.handle(channel, async (event, ...args) => {
     try {
       return await fn(event, ...args);
     } catch (e) {
       console.error('[ipc] ' + channel + ' failed:', e);
       // T194：IPC 处理器抛出的异常 = "已处理失败"里最典型的一类，推进控制台（只推频道名 + 脱敏摘要）
-      emitConsole({ cat: 'error', code: 'err.ipc', data: { channel, message: sanitizeError(e) } });
+      fachuKongzhitai({ cat: 'error', code: 'err.ipc', data: { channel, message: sanitizeError(e) } });
       throw new Error(sanitizeError(e));
     }
   });
@@ -1666,10 +1687,10 @@ function handleIpc(channel: string, fn: (event: import('electron').IpcMainInvoke
          **不带** API Key / token / 消息正文 / 文件路径；渲染层还会再打一遍码（双保险）。
    seq 单调递增：渲染层据此去重（窗口重建/重复投递不会刷屏）。
    ══════════════════════════════════════════════════════════════════════════ */
-let consoleSeq = 0;
-function emitConsole(ev: { cat: 'tool' | 'net' | 'error' | 'system'; code: string; data?: Record<string, unknown> }): void {
+let kongzhitaiXulie = 0;
+function fachuKongzhitai(ev: { cat: 'tool' | 'net' | 'error' | 'system'; code: string; data?: Record<string, unknown> }): void {
   try {
-    const payload = { seq: ++consoleSeq, ts: Date.now(), cat: ev.cat, code: ev.code, data: ev.data || {} };
+    const payload = { seq: ++kongzhitaiXulie, ts: Date.now(), cat: ev.cat, code: ev.code, data: ev.data || {} };
     for (const w of BrowserWindow.getAllWindows()) {
       try {
         if (!w.isDestroyed()) w.webContents.send('warmy:console-event', payload);
@@ -1685,14 +1706,14 @@ function emitConsole(ev: { cat: 'tool' | 'net' | 'error' | 'system'; code: strin
 /** 未捕获异常 / 未处理的 Promise 拒绝：如实进控制台。用 Monitor 版本，**不**改变默认崩溃语义。 */
 process.on('uncaughtExceptionMonitor', (err) => {
   try {
-    emitConsole({ cat: 'error', code: 'err.uncaught', data: { message: sanitizeError(err) } });
+    fachuKongzhitai({ cat: 'error', code: 'err.uncaught', data: { message: sanitizeError(err) } });
   } catch {
     /* noop */
   }
 });
 process.on('unhandledRejection', (reason) => {
   try {
-    emitConsole({ cat: 'error', code: 'err.unhandled-rejection', data: { message: sanitizeError(reason) } });
+    fachuKongzhitai({ cat: 'error', code: 'err.unhandled-rejection', data: { message: sanitizeError(reason) } });
   } catch {
     /* noop */
   }
@@ -1707,8 +1728,8 @@ if (process.platform === 'win32') app.setAppUserModelId('com.pondsi.warmy');
  * 单实例（产品定稿）：**禁止多开**。
  * 重复启动不会新开进程/托盘，只把已运行主窗口**移到屏幕中央并获得焦点**。
  */
-const gotSingleLock = app.requestSingleInstanceLock();
-if (!gotSingleLock) {
+const dedaoDangeSuo = app.requestSingleInstanceLock();
+if (!dedaoDangeSuo) {
   // 第二实例：不初始化托盘/窗口，尽快退出
   try { app.quit(); } catch { /* noop */ }
   setTimeout(() => process.exit(0), 30);
@@ -1728,31 +1749,31 @@ try {
   }
 } catch { /* noop */ }
 
-if (gotSingleLock) {
+if (dedaoDangeSuo) {
   app
     .whenReady()
     .then(async () => {
-      boot('whenReady');
-      createWindow();
-      boot('window created');
+      qidong('whenReady');
+      chuangjianChuangkou();
+      qidong('window created');
       await bootstrap();
-      startMemoryAsync();
-      try { createTray(); boot('tray ready'); } catch (e) { boot(`tray fail ${String(e)}`); }
+      qishiJiyiCangYibu();
+      try { chuangjianTuopan(); qidong('tray ready'); } catch (e) { qidong(`tray fail ${String(e)}`); }
       app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        if (BrowserWindow.getAllWindows().length === 0) chuangjianChuangkou();
       });
     })
     .catch((e) => {
-      boot(`whenReady error ${String(e)}`);
+      qidong(`whenReady error ${String(e)}`);
     });
 }
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') quitApp('window-all-closed');
+  if (process.platform !== 'darwin') tuichuYingyong('window-all-closed');
 });
 
 app.on('before-quit', () => {
-  forceQuit = true;
+  qiangzhiTuichu = true;
   // 托盘必须销毁，否则任务栏/通知区残留图标
   try { tray?.destroy(); } catch { /* noop */ }
   tray = null;
@@ -1772,14 +1793,14 @@ app.on('before-quit', () => {
 });
 
 /** 渲染层「待执行队列」持久化 IPC（重启后不丢 P2/P3 待办） */
-handleIpc('warmy:ui-queues-get', async () => {
+chuliIpc('warmy:ui-queues-get', async () => {
   try {
     return { ok: true, queues: restoreUiQueues() };
   } catch (e) {
     return { ok: false, error: sanitizeError(e), queues: {} };
   }
 });
-handleIpc('warmy:ui-queues-set', async (_e, payload?: { queues?: Record<string, unknown> }) => {
+chuliIpc('warmy:ui-queues-set', async (_e, payload?: { queues?: Record<string, unknown> }) => {
   try {
     const q = payload?.queues;
     if (!q || typeof q !== 'object') return { ok: false, error: 'queues must be an object' };
@@ -1790,7 +1811,7 @@ handleIpc('warmy:ui-queues-set', async (_e, payload?: { queues?: Record<string, 
   }
 });
 /** Router 队列只读快照（诊断/巡检用） */
-handleIpc('warmy:router-queues-get', async () => {
+chuliIpc('warmy:router-queues-get', async () => {
   try {
     persistRouterQueues();
     return { ok: true, snapshot: router.serializeState(), file: routerQueuesFile() };
@@ -1799,9 +1820,9 @@ handleIpc('warmy:router-queues-get', async () => {
   }
 });
 
-handleIpc('warmy:hardware', () => safeHandle(() => p1?.instances.hardwareAdvice(), null));
-handleIpc('warmy:list-instances', () => safeHandle(() => p1?.instances.list() ?? [], []));
-handleIpc(
+chuliIpc('warmy:hardware', () => safeHandle(() => p1?.instances.hardwareAdvice(), null));
+chuliIpc('warmy:list-instances', () => safeHandle(() => p1?.instances.list() ?? [], []));
+chuliIpc(
   'warmy:spawn-instance',
   async (_e, cfg: { id: string; name: string; dutyEligible?: boolean }) => {
     if (!p1) throw new Error('runtime not ready');
@@ -1815,21 +1836,21 @@ handleIpc(
     });
   }
 );
-handleIpc('warmy:stop-instance', async (_e, id: string) => {
+chuliIpc('warmy:stop-instance', async (_e, id: string) => {
   try {
     await p1?.instances.stop(id);
     return true;
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:security-mode', () => safeHandle(() => p1?.security.getMode(), 'normal'));
-handleIpc(
+chuliIpc('warmy:security-mode', () => safeHandle(() => p1?.security.getMode(), 'normal'));
+chuliIpc(
   'warmy:set-security-mode',
   async (_e, mode: 'full' | 'normal' | 'strict') => {
     await p1?.security.setMode(mode);
     return p1?.security.getMode();
   }
 );
-handleIpc('warmy:memory-recall', async (_e, payload?: string | { query?: string; limit?: number; scope?: Record<string, string> }) => {
+chuliIpc('warmy:memory-recall', async (_e, payload?: string | { query?: string; limit?: number; scope?: Record<string, string> }) => {
   try {
     if (!memory) return { cards: [], error: 'memory-unavailable' };
     const q = typeof payload === 'string' ? payload : String(payload?.query || '');
@@ -1840,7 +1861,7 @@ handleIpc('warmy:memory-recall', async (_e, payload?: string | { query?: string;
     return { cards: [], error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:memory-append', async (_e, body: string) => {
+chuliIpc('warmy:memory-append', async (_e, body: string) => {
   try {
     return await memory?.append({
       id: `m-${Date.now()}`,
@@ -1852,7 +1873,7 @@ handleIpc('warmy:memory-append', async (_e, body: string) => {
     return { ok: false, error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:memory-retrieve', async (_e, payload?: { seq?: number; recordId?: string }) => {
+chuliIpc('warmy:memory-retrieve', async (_e, payload?: { seq?: number; recordId?: string }) => {
   try {
     if (!memory) return { ok: false, error: 'memory-unavailable' };
     return await memory.retrieve({ seq: payload?.seq, recordId: payload?.recordId });
@@ -1860,7 +1881,7 @@ handleIpc('warmy:memory-retrieve', async (_e, payload?: { seq?: number; recordId
     return { ok: false, error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:memory-status', async () => {
+chuliIpc('warmy:memory-status', async () => {
   try {
     const ready = !!(memory?.isReady);
     let vector: unknown = null;
@@ -1882,7 +1903,7 @@ handleIpc('warmy:memory-status', async () => {
     return { ok: false, ready: false, error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:memory-rebuild', async () => {
+chuliIpc('warmy:memory-rebuild', async () => {
   try {
     if (!memory?.isReady) return { ok: false, error: 'memory-unavailable' };
     const r = await memory.rebuildProjection();
@@ -1902,9 +1923,9 @@ function i18nDir(): string {
   return found ?? candidates[0]!;
 }
 
-handleIpc('warmy:i18n', (_e, locale: string) => {
+chuliIpc('warmy:i18n', (_e, locale: string) => {
   // Resolve to any of the 10 supported packs — never collapse to zh-CN/en-US only.
-  const loc = resolveLocale(locale);
+  const loc = jiexiYuyan(locale);
   const file = path.join(i18nDir(), `${loc}.json`);
   let strings: Record<string, string> = {};
   try {
@@ -1923,27 +1944,27 @@ handleIpc('warmy:i18n', (_e, locale: string) => {
   return { locale: loc, strings, displayName: strings['app.displayName'], supported: SUPPORTED_LOCALES };
 });
 
-handleIpc('warmy:locale-info', () =>
+chuliIpc('warmy:locale-info', () =>
   safeHandle(
     () => {
       const sys = app.getLocale();
-      return { system: sys, resolved: resolveLocale(sys), isZh: sys.startsWith('zh'), supported: SUPPORTED_LOCALES };
+      return { system: sys, resolved: jiexiYuyan(sys), isZh: sys.startsWith('zh'), supported: SUPPORTED_LOCALES };
     },
     { system: 'zh-CN', resolved: 'zh-CN', isZh: true, supported: SUPPORTED_LOCALES },
   ),
 );
 
 // ── 主题 ──
-handleIpc('warmy:set-theme-source', (_e, source: 'system' | 'light' | 'dark') => {
+chuliIpc('warmy:set-theme-source', (_e, source: 'system' | 'light' | 'dark') => {
   try {
     nativeTheme.themeSource = source === 'system' ? 'system' : source;
     return { shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:theme-info', () => safeHandle(() => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource }), { shouldUseDarkColors: false, themeSource: 'system' }));
+chuliIpc('warmy:theme-info', () => safeHandle(() => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource }), { shouldUseDarkColors: false, themeSource: 'system' }));
 
 // ── 拉取供应商模型列表（OpenAI 兼容 /models） ──
-handleIpc(
+chuliIpc(
   'warmy:list-models',
   async (_e, cfg: { protocol: string; baseURL: string; apiKey?: string; providerId?: string }) => {
     try {
@@ -1952,7 +1973,7 @@ handleIpc(
        * 密钥来源：界面刚输入的明文优先，否则按供应商 id 从安全存储解出。
        * 界面**从不**回传已保存的密钥（读不回），所以"重新拉取"必须能自己取到它。
        */
-      const key = await resolveProviderKey(String(cfg.providerId || providerCfg.presetId || ''), cfg.apiKey);
+      const key = await jiexiGongyingshangMiyao(String(cfg.providerId || providerCfg.presetId || ''), cfg.apiKey);
       const p = chuangjianGongYing(
         (cfg.protocol as 'openai-compatible' | 'anthropic' | 'ollama') || 'openai-compatible',
         { baseURL: cfg.baseURL, apiKey: key }
@@ -1966,7 +1987,7 @@ handleIpc(
 );
 
 // ── 选择本地提示音文件 ──
-handleIpc('warmy:pick-sound', async () => {
+chuliIpc('warmy:pick-sound', async () => {
   try {
     if (!win) return { ok: false };
     const r = await dialog.showOpenDialog(win, {
@@ -1980,15 +2001,15 @@ handleIpc('warmy:pick-sound', async () => {
 });
 
 // ── 检查更新：真实网络查询，状态可区分（不再恒定返回 upToDate:true） ──
-handleIpc('warmy:check-update', async () =>
+chuliIpc('warmy:check-update', async () =>
   safeHandleAsync<UpdateCheckResult>(
-    async () => (updater ? await updater.check() : updaterUnavailableCheck(appVersion())),
-    updaterUnavailableCheck(appVersion())
+    async () => (updater ? await updater.check() : updaterUnavailableCheck(yingyongBanben())),
+    updaterUnavailableCheck(yingyongBanben())
   )
 );
 
 // ── 选择附件文件 ──
-handleIpc('warmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
+chuliIpc('warmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
   try {
     if (!win) return { ok: false };
     const ext = opts?.filters?.length ? opts.filters : undefined;
@@ -2002,7 +2023,7 @@ handleIpc('warmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
 });
 
 // ── 群聊编排 + 看板 ──
-handleIpc(
+chuliIpc(
   'warmy:group-create',
   (_e, cfg: { groupId: string; name: string; type: 'internal' | 'external'; directedMode?: boolean; devEnv?: 'host' | 'container'; directory?: string }) => {
     try {
@@ -2053,7 +2074,7 @@ handleIpc(
 );
 
 // ── 群列表：来自 userData/groups.json（真实存储），不是空数组 / 演示数据 ──
-handleIpc('warmy:group-list', () =>
+chuliIpc('warmy:group-list', () =>
   safeHandle<GroupListResult>(
     () => {
       if (!groupStore) return { ok: false, groups: [], count: 0, error: 'group store unavailable' };
@@ -2072,7 +2093,7 @@ handleIpc('warmy:group-list', () =>
   )
 );
 
-handleIpc(
+chuliIpc(
   'warmy:group-message',
   async (
     _e,
@@ -2159,23 +2180,23 @@ handleIpc(
         // 不变量 #2：注入的是有界渲染视图（原来这里是 hist.slice(-20)，只按条数有界）。
         // 值班系统提示是**冻结头**，不随日志增长，作为固定前缀在预算之外（常数开销）。
         // 计划1/2：值班路径同样自动收敛重试
-        const dutyModel = providerCfg.model;
-        const dutyBase = contextBudgetChars(dutyModel);
-        const dutyRetried = await runWithContextRetry(dutyBase, async (budgetChars) => {
-          const view = renderChatView(msg.groupId, msg.content, budgetChars);
+        const zhibanMoxing = providerCfg.model;
+        const dutyBase = contextBudgetChars(zhibanMoxing);
+        const zhibanChongshi = await runWithContextRetry(dutyBase, async (budgetChars) => {
+          const shitu = renderChatView(msg.groupId, msg.content, budgetChars);
           // ADR 002 §9.4 待办 2：值班者路径也只走这一个循环入口（工具/降级/审计行为一致）
           const loop = await runChatLoop(msg.groupId, provider, {
-            model: dutyModel,
+            model: zhibanMoxing,
             messages: [
               { role: 'system', content: tMain('llm.dutySystem') },
-              ...(view.messages as LiaoTianXiaoXi[]),
+              ...(shitu.messages as LiaoTianXiaoXi[]),
             ],
             maxTokens: 512,
           });
           return { loop, budgetChars };
         });
-        const loop = dutyRetried.result?.loop as Awaited<ReturnType<typeof runChatLoop>> | undefined;
-        if (!loop && dutyRetried.gaveUp) {
+        const loop = zhibanChongshi.result?.loop as Awaited<ReturnType<typeof runChatLoop>> | undefined;
+        if (!loop && zhibanChongshi.gaveUp) {
           llmReply = tMain('chat.contextTooSmall', '该模型上下文太小，无法满足当前聊天需求（已自动收缩重试到最小值仍失败）');
         } else if (loop) {
           llmReply = loop.response.choices[0]?.message?.content || '';
@@ -2204,25 +2225,25 @@ handleIpc(
   }
 );
 
-handleIpc('warmy:board-tasks', (_e, groupId?: string) => {
+chuliIpc('warmy:board-tasks', (_e, groupId?: string) => {
   try {
     return { ok: true, tasks: board?.listTasks(groupId) || [] };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:board-events', () => {
+chuliIpc('warmy:board-events', () => {
   try {
     return { ok: true, events: board?.tailEvents(30) || [] };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:board-aggregate', () => {
+chuliIpc('warmy:board-aggregate', () => {
   try {
     return { ok: true, sessions: board?.aggregateByGroup() || [] };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:group-join-instance', (_e, groupId: string, instanceId: string) => {
+chuliIpc('warmy:group-join-instance', (_e, groupId: string, instanceId: string) => {
   try {
     const inst = p1?.instances.list().find((x) => x.id === instanceId);
     if (!inst) return { ok: false };
@@ -2244,16 +2265,16 @@ handleIpc('warmy:group-join-instance', (_e, groupId: string, instanceId: string)
 });
 
 // ── 真 LLM 对话 ──
-handleIpc('warmy:set-provider', async (_e, cfg: Partial<typeof providerCfg>) => {
+chuliIpc('warmy:set-provider', async (_e, cfg: Partial<typeof providerCfg>) => {
   try {
-    const entered = cfg.apiKey;
+    const shuru = cfg.apiKey;
     providerCfg = { ...providerCfg, ...cfg };
     /**
      * 界面不再回传明文密钥（密钥只在输入那一刻进 SecureKeyStore）。
      * 这里按 id 把密钥解出来放进内存，保证聊天路径和以前一样可用。
      */
-    if (!providerCfg.apiKey || !entered) {
-      const k = await resolveProviderKey(providerCfg.presetId, entered);
+    if (!providerCfg.apiKey || !shuru) {
+      const k = await jiexiGongyingshangMiyao(providerCfg.presetId, shuru);
       if (k) providerCfg.apiKey = k;
     }
     /**
@@ -2279,7 +2300,7 @@ handleIpc('warmy:set-provider', async (_e, cfg: Partial<typeof providerCfg>) => 
  * 明确拒绝在没有 OS 保护时写明文（`no-safe-storage`），并把这个结果**如实**回给界面，
  * 由界面告诉用户"这台机器上没有可用的加密存储"，绝不静默降级。
  */
-handleIpc('warmy:provider-key-set', async (_e, payload: { providerId?: string; apiKey?: string }) => {
+chuliIpc('warmy:provider-key-set', async (_e, payload: { providerId?: string; apiKey?: string }) => {
   const id = String(payload?.providerId || '');
   const key = String(payload?.apiKey || '');
   if (!id) return { ok: false, error: 'bad-provider-id' };
@@ -2293,7 +2314,7 @@ handleIpc('warmy:provider-key-set', async (_e, payload: { providerId?: string; a
   }
 });
 
-handleIpc('warmy:provider-key-has', async (_e, payload: { providerIds?: string[] } = {}) => {
+chuliIpc('warmy:provider-key-has', async (_e, payload: { providerIds?: string[] } = {}) => {
   const ids = Array.isArray(payload.providerIds) ? payload.providerIds.map((x) => String(x)) : [];
   const has: Record<string, boolean> = {};
   for (const id of ids) {
@@ -2302,7 +2323,7 @@ handleIpc('warmy:provider-key-has', async (_e, payload: { providerIds?: string[]
   return { ok: true, has };
 });
 
-handleIpc('warmy:provider-key-clear', (_e, payload: { providerId?: string } = {}) => {
+chuliIpc('warmy:provider-key-clear', (_e, payload: { providerId?: string } = {}) => {
   try {
     const id = String(payload?.providerId || '');
     if (id && secureKeys) secureKeys.delete(id);
@@ -2310,13 +2331,13 @@ handleIpc('warmy:provider-key-clear', (_e, payload: { providerId?: string } = {}
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:get-provider', () => ({
+chuliIpc('warmy:get-provider', () => ({
   ok: true,
   providerCfg: { ...providerCfg, apiKey: providerCfg.apiKey ? '***' : '' },
   hasKey: !!providerCfg.apiKey || providerCfg.protocol === 'ollama',
 }));
 
-handleIpc(
+chuliIpc(
   'warmy:chat-send',
   async (
     _e,
@@ -2341,7 +2362,7 @@ handleIpc(
      */
     const KaiFaJuJue = await projectUnavailableFor(sessionId);
     if (KaiFaJuJue) {
-      emitConsole({ cat: 'system', code: 'container.project.unavailable', data: { sessionId, projectCode: KaiFaJuJue.projectCode } });
+      fachuKongzhitai({ cat: 'system', code: 'container.project.unavailable', data: { sessionId, projectCode: KaiFaJuJue.projectCode } });
       return {
         ok: false,
         code: KaiFaJuJue.code,
@@ -2394,7 +2415,7 @@ handleIpc(
       ts: Date.now(),
     });
 
-    await ensureProviderKey();
+    await baozhangGongyingshangMiyao();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       const reply = tMain('llm.noKey') + msg.content.slice(0, 80);
       appendChatLog(sessionId, {
@@ -2416,29 +2437,29 @@ handleIpc(
       const modelId = msg.model || providerCfg.model;
       const baseBudget = contextBudgetChars(modelId);
       // 计划1/2：上下文超限自动收缩重试（100%→60%→35%→20%），到最小仍失败则如实停止
-      const retried = await runWithContextRetry(baseBudget, async (budgetChars) => {
+      const chongshi = await runWithContextRetry(baseBudget, async (budgetChars) => {
         // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）
-        const view = renderChatView(sessionId, msg.content, budgetChars);
+        const shitu = renderChatView(sessionId, msg.content, budgetChars);
         // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
         const loop = await runChatLoop(sessionId, provider, {
           model: modelId,
-          messages: view.messages as LiaoTianXiaoXi[],
+          messages: shitu.messages as LiaoTianXiaoXi[],
           maxTokens: 1024,
         });
-        return { view, loop, budgetChars };
+        return { shitu, loop, budgetChars };
       });
-      if (retried.gaveUp || !retried.result?.loop) {
-        const msgTxt = retried.gaveUp || 'context-too-small';
+      if (chongshi.gaveUp || !chongshi.result?.loop) {
+        const msgTxt = chongshi.gaveUp || 'context-too-small';
         lastError = { ts: Date.now(), message: msgTxt, context: 'chat-send-context' };
         return {
           ok: false,
           error: msgTxt,
           contextTooSmall: true,
-          retries: retried.retries,
+          retries: chongshi.retries,
           reply: tMain('chat.contextTooSmall', '该模型上下文太小，无法满足当前聊天需求（已自动收缩重试到最小值仍失败）'),
         };
       }
-      const { loop } = retried.result;
+      const { loop } = chongshi.result;
       const xiangYing = loop.response;
       const reply = xiangYing.choices[0]?.message?.content || '';
       metrics.recordTurn({
@@ -2501,7 +2522,7 @@ handleIpc(
       const err = sanitizeError(e);
       lastError = { ts: Date.now(), message: err, context: 'chat-send' };
       // T194：这条是"**已处理**失败"（聊天链路自己吞掉并回 retry），也要进控制台
-      emitConsole({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: err } });
+      fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: err } });
       return { ok: false, reply: '', error: err, needsKey: false, retry: true };
     }
   }
@@ -2539,7 +2560,7 @@ function recordCheckpointEnv(cpId: string, groupId?: string): void {
     /* 记不上就不记（宁可缺，也不编） */
   }
 }
-handleIpc('warmy:checkpoint-create', (_e, phase: 'round_start' | 'round_end', groupId?: string) => {
+chuliIpc('warmy:checkpoint-create', (_e, phase: 'round_start' | 'round_end', groupId?: string) => {
   try {
     if (!checkpoints) return { ok: false };
     const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
@@ -2550,7 +2571,7 @@ handleIpc('warmy:checkpoint-create', (_e, phase: 'round_start' | 'round_end', gr
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:checkpoint-list', (_e, payload?: { sessionId?: string }) => ({
+chuliIpc('warmy:checkpoint-list', (_e, payload?: { sessionId?: string }) => ({
   ok: true,
   list: checkpoints?.list() || [],
   space: checkpoints?.space() || { maxBytes: 512 * 1024 * 1024, usedBytes: 0, count: 0 },
@@ -2566,7 +2587,7 @@ handleIpc('warmy:checkpoint-list', (_e, payload?: { sessionId?: string }) => ({
   layering: { fileRollbackIndependent: true, snapshotCoversProjectFiles: false, envRollbackNeedsRuntime: true },
 }));
 
-handleIpc('warmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: boolean; sessionId?: string }) => {
+chuliIpc('warmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: boolean; sessionId?: string }) => {
   try {
     if (!checkpoints) return { ok: false };
     if (opts?.stopFirst) {
@@ -2589,13 +2610,13 @@ handleIpc('warmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: boo
 });
 
 // ── 知识库 ──
-handleIpc('warmy:knowledge-query', (_e, q: string) => {
+chuliIpc('warmy:knowledge-query', (_e, q: string) => {
   try {
     return { ok: true, ...(knowledge?.query(q) || { entities: [], events: [] }) };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc(
+chuliIpc(
   'warmy:knowledge-add-event',
   (_e, ev: { id: string; title: string; entityIds?: string[]; result?: string }) => {
     knowledge?.upsertEntity({
@@ -2618,21 +2639,21 @@ handleIpc(
 );
 
 // ── 指令插入级别 ──
-handleIpc('warmy:set-insert-mode', (_e, sessionId: string, mode: 'outer' | 'inner') => {
+chuliIpc('warmy:set-insert-mode', (_e, sessionId: string, mode: 'outer' | 'inner') => {
   try {
     insertMode.set(sessionId, mode);
     return { ok: true, mode };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:get-insert-mode', (_e, sessionId: string) => ({
+chuliIpc('warmy:get-insert-mode', (_e, sessionId: string) => ({
   ok: true,
   mode: insertMode.get(sessionId) || 'outer',
 }));
 
 // ── 指标 ──
-handleIpc('warmy:metrics-summary', () => safeHandle(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true, toolCalls: 0, toolCallsOk: 0, toolChars: 0, toolTurns: 0, toolDegradedTurns: 0, toolStopReasons: {}, toolLoopBounded: true }))
-handleIpc('warmy:metrics-turns', () => safeHandle(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
-handleIpc('warmy:metrics-tools', () => safeHandle(() => ({ ok: true, calls: metrics.lastToolCalls(50) }), { ok: true, calls: [] }))
+chuliIpc('warmy:metrics-summary', () => safeHandle(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true, toolCalls: 0, toolCallsOk: 0, toolChars: 0, toolTurns: 0, toolDegradedTurns: 0, toolStopReasons: {}, toolLoopBounded: true }))
+chuliIpc('warmy:metrics-turns', () => safeHandle(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
+chuliIpc('warmy:metrics-tools', () => safeHandle(() => ({ ok: true, calls: metrics.lastToolCalls(50) }), { ok: true, calls: [] }))
 
 /**
  * 会话日志（只追加）的只读视图 —— ADR 002 §9.4 待办 4 的观测面。
@@ -2644,7 +2665,7 @@ handleIpc('warmy:metrics-tools', () => safeHandle(() => ({ ok: true, calls: metr
  * 新窗口打开一片空白，这就是"新窗口和主界面记录不同步"的根因。
  * 内容一律从主进程的日志取（唯一事实来源），渲染层不自造第二份。
  */
-handleIpc('warmy:chat-messages', (_e, payload?: { sessionId?: string; limit?: number }) => {
+chuliIpc('warmy:chat-messages', (_e, payload?: { sessionId?: string; limit?: number }) => {
   try {
     const sessionId = String(payload?.sessionId || '');
     if (!sessionId) return { ok: false, sessionId, messages: [] };
@@ -2661,7 +2682,7 @@ handleIpc('warmy:chat-messages', (_e, payload?: { sessionId?: string; limit?: nu
   }
 });
 
-handleIpc('warmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number }) => {
+chuliIpc('warmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number }) => {
   try {
     const sessionId = String(payload?.sessionId ?? '');
     const limit = Math.min(500, Math.max(1, Math.floor(Number(payload?.limit)) || 200));
@@ -2675,7 +2696,7 @@ handleIpc('warmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number 
         role: e.role,
         chars: e.content.length,
         recordId: e.recordId || null,
-        digest: contentDigest(e.content),
+        digest: neirongZhaiyao(e.content),
         ts: e.ts ?? null,
       })),
       stats: {
@@ -2692,14 +2713,14 @@ handleIpc('warmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number 
 });
 
 /** 手动触发一次历史重建（排障/验证用；与启动路径同一函数） */
-handleIpc('warmy:chat-log-restore', async () => {
+chuliIpc('warmy:chat-log-restore', async () => {
   const report = await restoreChatLogsFromMemory('ipc');
   return { ok: report.ok, restore: report, sessions: [...chatLogs.keys()], logSeq: chatLogSeq };
 });
 
 // ── 设置持久化 ──
-handleIpc('warmy:settings-get', () => safeHandle(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
-handleIpc('warmy:settings-save', (e, partial: Record<string, unknown>) => {
+chuliIpc('warmy:settings-get', () => safeHandle(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
+chuliIpc('warmy:settings-save', (e, partial: Record<string, unknown>) => {
   const next = settingsStore?.save(partial as never);
   /**
    * **设置改动要播给其它窗口**：主界面和独立会话窗都从同一份设置渲染，
@@ -2720,7 +2741,7 @@ handleIpc('warmy:settings-save', (e, partial: Record<string, unknown>) => {
    · 启停**只能由本机用户点击触发**：没有任何网络/群成员/智能体路径会调用它；
    · 任何失败都如实回原始输出与退出码，**不当作成功**。
    ══════════════════════════════════════════════════════════════════════════ */
-handleIpc('warmy:container-probe', async (_e, opts?: { force?: boolean; cacheMs?: number }) => {
+chuliIpc('warmy:container-probe', async (_e, opts?: { force?: boolean; cacheMs?: number }) => {
   try {
     const report = await probeContainerRuntimes({
       cacheMs: opts?.force ? 0 : (typeof opts?.cacheMs === 'number' ? opts.cacheMs : 8000),
@@ -2730,11 +2751,11 @@ handleIpc('warmy:container-probe', async (_e, opts?: { force?: boolean; cacheMs?
     return { ok: false, error: sanitizeError(e), report: zuiHouRongQiTanCeBaoGao() };
   }
 });
-handleIpc('warmy:container-action', async (_e, payload?: { id?: string; action?: string }) => {
+chuliIpc('warmy:container-action', async (_e, payload?: { id?: string; action?: string }) => {
   // 参数形状**只**认 { id, action }：多余字段一律忽略，也不会被拼进命令
-  const r = await runContainerAction({ id: payload?.id, action: payload?.action });
-  if (r.ok) emitConsole({ cat: 'system', code: 'container.action.accepted', data: { id: r.id, action: r.action } });
-  else emitConsole({ cat: 'error', code: 'container.action.rejected', data: { code: r.code, error: r.error } });
+  const r = await yunxingRongqiDongzuo({ id: payload?.id, action: payload?.action });
+  if (r.ok) fachuKongzhitai({ cat: 'system', code: 'container.action.accepted', data: { id: r.id, action: r.action } });
+  else fachuKongzhitai({ cat: 'error', code: 'container.action.rejected', data: { code: r.code, error: r.error } });
   return r;
 });
 
@@ -2742,20 +2763,20 @@ handleIpc('warmy:container-action', async (_e, payload?: { id?: string; action?:
  * 容器**实例**：环境类型不再是抽象选项，**具体实例就是环境**。
  * 列表按引擎自己的 CLI 现问现答；不支持的引擎如实返回 supported:false。
  */
-handleIpc('warmy:container-instances', async (_e, payload?: { id?: string }) => {
+chuliIpc('warmy:container-instances', async (_e, payload?: { id?: string }) => {
   try {
     return await lieYunXingShiLi(String(payload?.id || ''));
   } catch (e) {
     return { ok: false, id: String(payload?.id || ''), supported: false, instances: [], reason: 'unexpected', evidence: sanitizeError(e) };
   }
 });
-handleIpc('warmy:container-instance-action', async (_e, payload?: { id?: string; action?: string; instance?: string }) => {
+chuliIpc('warmy:container-instance-action', async (_e, payload?: { id?: string; action?: string; instance?: string }) => {
   const action = payload?.action === 'stop' ? 'stop' : payload?.action === 'start' ? 'start' : null;
   if (!action) return { ok: false, id: String(payload?.id || ''), action: 'start', instance: '', error: 'bad-action' };
   return yunXingShiLiDongZuo(String(payload?.id || ''), action, String(payload?.instance || ''));
 });
 /** 打开容器产品自己的界面：创建实例由用户在那边做（各引擎造法不同，我们不代造） */
-handleIpc('warmy:container-app-open', async (_e, payload?: { id?: string }) => {
+chuliIpc('warmy:container-app-open', async (_e, payload?: { id?: string }) => {
   try {
     return await daKaiYunXingYingYong(String(payload?.id || ''));
   } catch (e) {
@@ -2794,7 +2815,7 @@ handleIpc('warmy:container-app-open', async (_e, payload?: { id?: string }) => {
  *   · `local`           = 本机就是项目主，属性是本机自己写的；
  *   · `creator-signal`  = 属性来自**创建者节点同步过来的信号**（异地的成员就是这样看到状态的）。
  */
-interface ProjectAttrsView {
+interface XiangmuShuxingShitu {
   devEnv: 'host' | 'container';
   runtimeId: string;
   disabledAt: number;
@@ -2807,9 +2828,9 @@ interface ProjectAttrsView {
   source: 'project-record' | 'legacy-local-settings';
 }
 
-function projectAttrsOf(groupId: string): ProjectAttrsView {
+function projectAttrsOf(groupId: string): XiangmuShuxingShitu {
   const gid = String(groupId || '');
-  const legacy = (): ProjectAttrsView => {
+  const legacy = (): XiangmuShuxingShitu => {
     let devEnv: 'host' | 'container' = 'host';
     let runtimeId = '';
     let disabledAt = 0;
@@ -2851,13 +2872,13 @@ function projectAttrsOf(groupId: string): ProjectAttrsView {
 /** 这个项目的属性是不是**别人的节点同步过来的**（= 本机不是项目主） */
 function projectAttrsAreRemote(groupId: string): boolean {
   const gid = String(groupId || '');
-  const view = projectAttrsOf(gid);
-  if (view.source !== 'project-record') return false;
-  const reportedBy = view.reportedBy;
+  const shitu = projectAttrsOf(gid);
+  if (shitu.source !== 'project-record') return false;
+  const reportedBy = shitu.reportedBy;
   if (!reportedBy) return false;
   try {
     const benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
-    return !!benJiZhiWen && !fingerprintMatches(reportedBy, benJiZhiWen);
+    return !!benJiZhiWen && !zhiwenPipei(reportedBy, benJiZhiWen);
   } catch {
     return false;
   }
@@ -2932,7 +2953,7 @@ function setProjectAttrsOf(
 async function publishProjectAttrs(groupId: string): Promise<{ ok: boolean; sent: boolean; reason?: string }> {
   const gid = String(groupId || '');
   if (!gid) return { ok: false, sent: false, reason: 'no-group-id' };
-  const view = projectAttrsOf(gid);
+  const shitu = projectAttrsOf(gid);
   const g = groupStore?.getGroup(gid);
   const ledger = (groupStore?.listFileAccess(gid, 30) || []).map((e) => ({ op: e.op, path: e.path, ts: e.ts, ok: e.ok, by: e.by, ...(e.bytes ? { bytes: e.bytes } : {}) }));
   let creatorFingerprint = '';
@@ -2941,23 +2962,23 @@ async function publishProjectAttrs(groupId: string): Promise<{ ok: boolean; sent
   } catch {
     creatorFingerprint = String(g?.creatorFingerprint || '');
   }
-  const availabilityCode = view.availabilityCode || view.availability || 'unknown';
+  const availabilityCode = shitu.availabilityCode || shitu.availability || 'unknown';
   const payload = projectAttrsMessage({
     groupId: gid,
     ...(g?.name ? { name: g.name } : {}),
     ...(g ? { type: g.type } : {}),
     project: {
-      devEnv: view.devEnv,
-      runtimeId: view.runtimeId,
-      disabledAt: view.disabledAt,
-      ...(view.directory ? { directory: view.directory, directorySource: view.directorySource === 'checkpoint-workspace' ? 'checkpoint-workspace' as const : 'creator-picked' as const } : {}),
+      devEnv: shitu.devEnv,
+      runtimeId: shitu.runtimeId,
+      disabledAt: shitu.disabledAt,
+      ...(shitu.directory ? { directory: shitu.directory, directorySource: shitu.directorySource === 'checkpoint-workspace' ? 'checkpoint-workspace' as const : 'creator-picked' as const } : {}),
     },
     availability: {
-      availability: (['available', 'stopped', 'not-ready', 'not-installed', 'not-chosen'] as const).includes(view.availability as never)
-        ? (view.availability as 'available' | 'stopped' | 'not-ready' | 'not-installed' | 'not-chosen')
+      availability: (['available', 'stopped', 'not-ready', 'not-installed', 'not-chosen'] as const).includes(shitu.availability as never)
+        ? (shitu.availability as 'available' | 'stopped' | 'not-ready' | 'not-installed' | 'not-chosen')
         : 'unknown',
       code: availabilityCode,
-      at: view.availabilityAt || Date.now(),
+      at: shitu.availabilityAt || Date.now(),
     },
     ...(creatorFingerprint ? { creatorFingerprint } : {}),
     ledger,
@@ -2975,8 +2996,8 @@ async function publishProjectAttrs(groupId: string): Promise<{ ok: boolean; sent
 async function containerStatusOf(runtimeId: string): Promise<string | null> {
   if (!runtimeId) return null;
   let report = zuiHouRongQiTanCeBaoGao();
-  const cachedRow = report ? (report.runtimes || []).find((x) => x.id === runtimeId) : undefined;
-  if (!cachedRow) {
+  const huanchunHang = report ? (report.runtimes || []).find((x) => x.id === runtimeId) : undefined;
+  if (!huanchunHang) {
     try {
       /**
        * **只探这个项目真正在用的运行时**（`only`），并且**不深探**。
@@ -3008,7 +3029,7 @@ function localIsProjectCreator(groupId: string): boolean {
     if (!groupStore || !gid) return false;
     const chuangJianZheZhiWen = String(groupStore.getGroup(gid)?.creatorFingerprint || '');
     const benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
-    return !!chuangJianZheZhiWen && !!benJiZhiWen && fingerprintMatches(chuangJianZheZhiWen, benJiZhiWen);
+    return !!chuangJianZheZhiWen && !!benJiZhiWen && zhiwenPipei(chuangJianZheZhiWen, benJiZhiWen);
   } catch {
     return false;
   }
@@ -3025,7 +3046,7 @@ function localIsProjectCreator(groupId: string): boolean {
  *     于是成员看到的是"创建者那边现在不可用 + 具体原因"，而不是"我这台机器上没有这个容器"。
  *     这正好落在既有的「创建者离线」语义上（同一份 deriveProjectState ⇒ 同一个 memberFace）。
  */
-async function quXiangMuTai(sessionId: string, opts: { probe?: boolean } = {}): Promise<ContainerProjectState> {
+async function quXiangMuTai(sessionId: string, opts: { probe?: boolean } = {}): Promise<RongqiXiangmuZhuangtai> {
   const id = String(sessionId || '');
   const attrs = projectAttrsOf(id);
   const remote = projectAttrsAreRemote(id);
@@ -3075,7 +3096,7 @@ async function quXiangMuTai(sessionId: string, opts: { probe?: boolean } = {}): 
  * 所以在这里落一次 —— 写进项目记录（成员可见）并走 `project-attrs` 频道播出去。
  * ⚠️ 写入失败/无变化一律静默（不能因为"状态记不下来"就把渲染层卡住）。
  */
-function recordLocalAvailability(groupId: string, code: string): void {
+function jiluBenjiKeyongxing(groupId: string, code: string): void {
   const gid = String(groupId || '');
   if (!gid || !groupStore) return;
   const cur = groupStore.projectOf(gid);
@@ -3112,14 +3133,14 @@ async function projectUnavailableFor(sessionId: string): Promise<ReturnType<type
 }
 
 /** 项目可用性状态（渲染层**唯一**的事实来源；含"历史仍可读"这条事实） */
-handleIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => {
   try {
     const sessionId = String(payload?.sessionId || '');
     const state = await quXiangMuTai(sessionId);
     const attrs = projectAttrsOf(sessionId);
     const remote = projectAttrsAreRemote(sessionId);
     // 本机是项目主 ⇒ 把**现场算出来的可用性**记进项目属性并广播（成员据此看到原因）
-    if (!remote) recordLocalAvailability(sessionId, state.code);
+    if (!remote) jiluBenjiKeyongxing(sessionId, state.code);
     return {
       ok: true,
       state: { ...state, reasonKey: xiangMuYuanYinJian(state.code), runtimeId: attrs.runtimeId },
@@ -3156,7 +3177,7 @@ handleIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) =>
  * 「启用项目」（右键菜单）：**只有创建者**能启用。
  * 容器开发项目**必须先有就绪的容器** —— 否则如实拒绝并给"去设置启动容器"的引导，**不假装启用**。
  */
-handleIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     if (!localIsProjectCreator(id)) {
@@ -3181,8 +3202,8 @@ handleIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) =
       };
     }
     audit?.log('container.project-enable', { sessionId: id });
-    emitConsole({ cat: 'system', code: 'container.project.enabled', data: { sessionId: id } });
-    notifyEntityChanged(id, 'project');
+    fachuKongzhitai({ cat: 'system', code: 'container.project.enabled', data: { sessionId: id } });
+    tongzhiShitiBiangeng(id, 'project');
     return { ok: true, running: true, enabledAt: Date.now(), state: after };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
@@ -3197,7 +3218,7 @@ handleIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) =
  * 第十六批：停用时间戳写进**项目记录**（项目级）并广播出去 —— 否则异地的成员看到的
  * 还是一台"普通的本机项目"（这正是产品主要修的那件事）。
  */
-handleIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     if (!localIsProjectCreator(id)) {
@@ -3208,9 +3229,9 @@ handleIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) 
     if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
     const state = await quXiangMuTai(id);
     audit?.log('container.project-disable', { sessionId: id, memberFace: state.memberFace });
-    emitConsole({ cat: 'system', code: 'container.project.disabled', data: { sessionId: id } });
+    fachuKongzhitai({ cat: 'system', code: 'container.project.disabled', data: { sessionId: id } });
     // 项目属性也是"这个实体的属性"：另一处视图（独立窗/主界面）要立刻反映"已停用"
-    notifyEntityChanged(id, 'project');
+    tongzhiShitiBiangeng(id, 'project');
     return { ok: true, disabled: true, disabledAt: at, state, historyReadable: true };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
@@ -3222,7 +3243,7 @@ handleIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) 
  * 只接受设置里已探测到的运行时 id（`{ sessionId, runtimeId }`）；
  * **不接受任何命令字符串**（运行时 id 必须在预定义清单里，否则拒绝）。
  */
-handleIpc('warmy:project-set-container', async (_e, payload?: { sessionId?: string; runtimeId?: string }) => {
+chuliIpc('warmy:project-set-container', async (_e, payload?: { sessionId?: string; runtimeId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const runtimeId = String(payload?.runtimeId || '');
@@ -3390,18 +3411,18 @@ async function projectFilesFor(sessionId: string): Promise<{
   if (remote && !attrs.availabilityAt) missingSources.push('creator-availability-signal');
 
   // 产物目录（我们计划的存放位置；不存在也如实显示"即将存放"）
-  const prodDir = path.join(app.getPath('userData'), 'products', id || 'default');
+  const shengchanMulu = path.join(app.getPath('userData'), 'products', id || 'default');
   let dirExists = false;
   let files: Array<{ path: string; name: string; bytes: number; ts: number }> = [];
   try {
-    dirExists = fs.existsSync(prodDir) && fs.statSync(prodDir).isDirectory();
+    dirExists = fs.existsSync(shengchanMulu) && fs.statSync(shengchanMulu).isDirectory();
     if (dirExists) {
       files = fs
-        .readdirSync(prodDir, { withFileTypes: true })
+        .readdirSync(shengchanMulu, { withFileTypes: true })
         .filter((e) => e.isFile())
         .slice(0, 50)
         .map((e) => {
-          const fp = path.join(prodDir, e.name);
+          const fp = path.join(shengchanMulu, e.name);
           let bytes = 0;
           let ts = 0;
           try {
@@ -3428,13 +3449,13 @@ async function projectFilesFor(sessionId: string): Promise<{
   const e = entryOf(files);
   // "能不能在主机上跑"：只有**本机开发的项目** + 宿主原生扩展 才可点；其余一律置灰并说明原因
   const devEnv = projectDevEnvOf(id);
-  const hostNative = !!e.entry && /\.(exe|cmd|bat|js|mjs|cjs)$/i.test(path.basename(e.entry));
-  const entryHostRunnable = e.kind === 'program' && hostNative && devEnv === 'host';
+  const zhujiYuansheng = !!e.entry && /\.(exe|cmd|bat|js|mjs|cjs)$/i.test(path.basename(e.entry));
+  const entryHostRunnable = e.kind === 'program' && zhujiYuansheng && devEnv === 'host';
   const entryReason = e.kind !== 'program'
     ? e.reason
     : devEnv !== 'host'
       ? 'container-built'
-      : hostNative
+      : zhujiYuansheng
         ? 'host-native'
         : 'no-host-runtime';
   return {
@@ -3449,7 +3470,7 @@ async function projectFilesFor(sessionId: string): Promise<{
     ledger: zhangBenHang,
     missingSources,
     product: {
-      dir: prodDir,
+      dir: shengchanMulu,
       dirExists,
       dirKind: dirExists ? 'existing' : 'planned',
       kind: e.kind,
@@ -3461,7 +3482,7 @@ async function projectFilesFor(sessionId: string): Promise<{
   };
 }
 
-handleIpc('warmy:project-files', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:project-files', async (_e, payload?: { sessionId?: string }) => {
   try {
     return await projectFilesFor(String(payload?.sessionId || ''));
   } catch (e) {
@@ -3474,7 +3495,7 @@ handleIpc('warmy:project-files', async (_e, payload?: { sessionId?: string }) =>
  * 安全：入口路径**由主进程自己解析**（渲染层只给 sessionId，**不接受任何路径/命令字符串**），
  * 且必须满足 `entryHostRunnable`（本机开发 + 宿主原生扩展）才允许；不满足就如实拒绝。
  */
-handleIpc('warmy:product-run', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:product-run', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const shiShi = await projectFilesFor(id);
@@ -3483,8 +3504,8 @@ handleIpc('warmy:product-run', async (_e, payload?: { sessionId?: string }) => {
     if (!p.entryHostRunnable) return { ok: false, code: p.entryReason, executed: false, entry: p.entry };
     // 归一化后再校验：必须落在产物目录里（防路径穿越/软链逃逸）
     const real = fs.realpathSync(p.entry);
-    const realDir = fs.realpathSync(p.dir);
-    if (!real.startsWith(realDir + path.sep)) return { ok: false, code: 'outside-product-dir', executed: false };
+    const zhenshiMulu = fs.realpathSync(p.dir);
+    if (!real.startsWith(zhenshiMulu + path.sep)) return { ok: false, code: 'outside-product-dir', executed: false };
     const ext = path.extname(real).toLowerCase();
     let file = real;
     let args: string[] = [];
@@ -3494,10 +3515,10 @@ handleIpc('warmy:product-run', async (_e, payload?: { sessionId?: string }) => {
       file = fs.existsSync(bundled) ? bundled : 'node';
       args = [real];
     }
-    const child = spawn(file, args, { cwd: realDir, detached: true, stdio: 'ignore', windowsHide: false });
+    const child = spawn(file, args, { cwd: zhenshiMulu, detached: true, stdio: 'ignore', windowsHide: false });
     child.unref();
     audit?.log('product.run', { sessionId: id, entry: real });
-    emitConsole({ cat: 'system', code: 'product.run.started', data: { sessionId: id } });
+    fachuKongzhitai({ cat: 'system', code: 'product.run.started', data: { sessionId: id } });
     return { ok: true, executed: true, pid: child.pid || 0, entry: real };
   } catch (e) {
     return { ok: false, code: 'spawn-failed', error: sanitizeError(e), executed: false };
@@ -3566,7 +3587,7 @@ async function projectContainerStatusOf(groupId: string, runtimeId: string): Pro
 }
 
 /** 确保项目容器存在（不存在就按项目镜像起一个，**默认不删** ⇒ 保留可写层） */
-async function ensureProjectContainer(
+async function baozhangXiangmuRongqi(
   groupId: string,
   runtimeId: string,
   opts: { image?: string; hostDir?: string } = {}
@@ -3581,8 +3602,8 @@ async function ensureProjectContainer(
     if (ledger.lastImageRef && isAllowedImageRef(ledger.lastImageRef)) image = ledger.lastImageRef;
     else {
       const jiedianTupian = CONTAINER_BASE_IMAGES.find((x) => x.id === 'node-24-slim');
-      const minimal = CONTAINER_BASE_IMAGES.find((x) => x.id === 'alpine-3.20');
-      const pick = jiedianTupian || minimal;
+      const zuixiao = CONTAINER_BASE_IMAGES.find((x) => x.id === 'alpine-3.20');
+      const pick = jiedianTupian || zuixiao;
       image = pick && pick.digest ? `pick.ref@pick.digest` : '';
     }
   }
@@ -3595,13 +3616,13 @@ async function ensureProjectContainer(
     projectLabel: groupId,
   }, 180000);
   if (!r.ok) {
-    return { ok: false, code: r.codeReason || 'run-failed', containerRef: name, created: false, raw: compactText(`r.out r.err`, 300) };
+    return { ok: false, code: r.codeReason || 'run-failed', containerRef: name, created: false, raw: jinyaoWenben(`r.out r.err`, 300) };
   }
   writeProjectEnvLedger(groupId, { runtimeId, containerRef: name, ...(image ? {} : {}) });
   return { ok: true, code: 'created', containerRef: name, created: true, raw: r.out };
 }
 
-function compactText(s: string, max = 300): string {
+function jinyaoWenben(s: string, max = 300): string {
   return String(s || '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
@@ -3611,7 +3632,7 @@ function compactText(s: string, max = 300): string {
  * 全部来自真实事实：运行时的固化能力（按运行时区分，**不假定 Linux 容器**）、
  * 真探测里的**引擎系统模式**、以及**真发生过的**固化记录（没发生过就不写）。
  */
-handleIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const state = await quXiangMuTai(id);
@@ -3676,7 +3697,7 @@ handleIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string 
  *   · WSL / 系统服务 / 一次性沙箱 ⇒ 如实说"做不到"（能力表说了算）；
  *   · **安全提醒**随响应回传（commit 会把整个文件系统、可能包括密钥一起固化）。
  */
-handleIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: string; explicit?: boolean; beforeDestroy?: boolean }) => {
+chuliIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: string; explicit?: boolean; beforeDestroy?: boolean }) => {
   try {
     const id = String(payload?.sessionId || '');
     const runtimeId = projectRuntimeOf(id);
@@ -3714,7 +3735,7 @@ handleIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: strin
       return {
         ok: false, code: 'commit-failed', executed: true, evidence: 'refused', decision,
         detail: commit.codeReason || 'commit failed',
-        rawOutput: compactText(`commit.out commit.err`, 400),
+        rawOutput: jinyaoWenben(`commit.out commit.err`, 400),
         imageRef, security,
       };
     }
@@ -3725,12 +3746,12 @@ handleIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: strin
       return {
         ok: false, code: 'commit-unverified', executed: true, evidence: 'refused', decision, imageRef,
         detail: 'commit returned success but the image could not be read back',
-        rawOutput: compactText(`inspect.out inspect.err`, 300), security,
+        rawOutput: jinyaoWenben(`inspect.out inspect.err`, 300), security,
       };
     }
     writeProjectEnvLedger(id, { runtimeId, containerRef: container.containerRef, imageRef, solidifiedAt: at });
     audit?.log('container.project-solidify', { sessionId: id, runtimeId, imageRef });
-    emitConsole({ cat: 'system', code: 'container.project.solidified', data: { sessionId: id, imageRef } });
+    fachuKongzhitai({ cat: 'system', code: 'container.project.solidified', data: { sessionId: id, imageRef } });
     const liShi = projectEnvLedgerOf(id).solidifyHistory || [];
     return {
       ok: true,
@@ -3760,7 +3781,7 @@ handleIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: strin
  * **bind mount 的项目文件不在里面** —— 所以响应里把这条事实一起回给渲染层，别让用户误解。
  * 步骤：确保容器在（不在就按镜像起）→ 用指定/最近的固化镜像重建 → 回读容器 id。
  */
-handleIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string; imageRef?: string }) => {
+chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string; imageRef?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const runtimeId = projectRuntimeOf(id);
@@ -3809,12 +3830,12 @@ handleIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: strin
     if (!run.ok) {
       return {
         ok: false, code: run.codeReason || 'run-failed', executed: true, evidence: 'refused' as const,
-        imageRef: want, rawOutput: compactText(`run.out run.err`, 400), preSolidify,
+        imageRef: want, rawOutput: jinyaoWenben(`run.out run.err`, 400), preSolidify,
       };
     }
     const after = await projectContainerStatusOf(id, runtimeId);
     audit?.log('container.project-rollback', { sessionId: id, runtimeId, imageRef: want });
-    emitConsole({ cat: 'system', code: 'container.project.rolledback', data: { sessionId: id, imageRef: want } });
+    fachuKongzhitai({ cat: 'system', code: 'container.project.rolledback', data: { sessionId: id, imageRef: want } });
     return {
       ok: true,
       executed: true,
@@ -3855,10 +3876,10 @@ handleIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: strin
  *   只有本机的人手动输入才会执行；远程/群成员/智能体/网络内容没有注入路径；
  *   不自动执行；不把本机密钥类环境变量带进容器；**未就绪 ⇒ 一条命令都不执行**。
  */
-handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; action?: string; sessionId?: string; data?: string }) => {
+chuliIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; action?: string; sessionId?: string; data?: string }) => {
   const guiFanHua = guiFanKongZhiTaiQingQiu(payload);
   if (!guiFanHua.ok) {
-    emitConsole({ cat: 'error', code: 'container.console.rejected', data: { code: guiFanHua.code } });
+    fachuKongzhitai({ cat: 'error', code: 'container.console.rejected', data: { code: guiFanHua.code } });
     return { ok: false, code: guiFanHua.code, error: guiFanHua.error, security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY };
   }
   const { req } = guiFanHua;
@@ -3880,7 +3901,7 @@ handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; ac
   });
   if (!gate.available) {
     if (req.action === 'write' || req.action === 'open') {
-      emitConsole({ cat: 'error', code: 'container.console.refused', data: { code: gate.code, reasonKey: gate.reason, action: req.action } });
+      fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: gate.code, reasonKey: gate.reason, action: req.action } });
     }
     return {
       ok: false,
@@ -3906,9 +3927,9 @@ handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; ac
     };
   }
   if (req.action === 'open') {
-    const yiBaoZhang = await ensureProjectContainer(req.sessionId, runtimeId);
+    const yiBaoZhang = await baozhangXiangmuRongqi(req.sessionId, runtimeId);
     if (!yiBaoZhang.ok) {
-      emitConsole({ cat: 'error', code: 'container.console.refused', data: { code: yiBaoZhang.code, action: 'open' } });
+      fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: yiBaoZhang.code, action: 'open' } });
       return {
         ok: false, code: yiBaoZhang.code, reasonKey: yiBaoZhang.code === 'no-image' ? 'needsImage' : 'notReady',
         executed: false, runtimeId, containerRef: yiBaoZhang.containerRef, rawOutput: yiBaoZhang.raw,
@@ -3920,14 +3941,14 @@ handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; ac
     liftFsGuardIfAny(req.sessionId, 'container-started');
     const opened = openContainerShellSession({ groupId: req.sessionId, runtimeId, containerName: yiBaoZhang.containerRef });
     if (!opened.ok) {
-      emitConsole({ cat: 'error', code: 'container.console.refused', data: { code: opened.code, action: 'open' } });
+      fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: opened.code, action: 'open' } });
       return {
         ok: false, code: opened.code || 'spawn-failed', reasonKey: 'notReady', executed: false,
         runtimeId, containerRef: yiBaoZhang.containerRef, error: opened.error,
         security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
       };
     }
-    emitConsole({ cat: 'system', code: 'container.console.opened', data: { sessionId: req.sessionId, containerRef: yiBaoZhang.containerRef } });
+    fachuKongzhitai({ cat: 'system', code: 'container.console.opened', data: { sessionId: req.sessionId, containerRef: yiBaoZhang.containerRef } });
     return {
       ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId, containerRef: yiBaoZhang.containerRef,
       sessionId: opened.sessionId, /** 真的是容器里的 shell（不是宿主 shell、不是事件日志） */
@@ -3944,16 +3965,16 @@ handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; ac
     };
   }
   // write：真的写进那个 shell 的 stdin
-  const wrote = await writeContainerShellSession(req.sessionId, req.data);
-  if (!wrote.ok) {
+  const xieru = await writeContainerShellSession(req.sessionId, req.data);
+  if (!xieru.ok) {
     // 会话没了 ⇒ 如实说"得先打开"，**不**偷偷开一条新的（那会绕过用户的重启意图）
     return {
-      ok: false, code: wrote.code || 'no-session', reasonKey: 'notReady', executed: false,
-      runtimeId, containerRef: name, error: wrote.error, output: '',
+      ok: false, code: xieru.code || 'no-session', reasonKey: 'notReady', executed: false,
+      runtimeId, containerRef: name, error: xieru.error, output: '',
       security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
     };
   }
-  emitConsole({ cat: 'tool', code: 'container.console.exec', data: { sessionId: req.sessionId, bytes: req.data.length } });
+  fachuKongzhitai({ cat: 'tool', code: 'container.console.exec', data: { sessionId: req.sessionId, bytes: req.data.length } });
   /**
    * 「一条控制台命令之后」这个固化时机（ADR §8.6 的时机表之一）：
    * 只在**节流窗口外**且确实该固化时才真的 commit（45s 合并，避免"敲一行就固化一个镜像"）。
@@ -3967,11 +3988,11 @@ handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; ac
    */
   const dir = projectDirectoryOf(req.sessionId).dir;
   if (dir) {
-    noteExternalFileAccessReq(req.sessionId, 'write', `dirpath.sepCONTAINER_PROJECT_MOUNT.replace(/^\//, '')`, { by: 'container-shell' });
+    beizhuWaibuWenjianFangwenQiu(req.sessionId, 'write', `dirpath.sepCONTAINER_PROJECT_MOUNT.replace(/^\//, '')`, { by: 'container-shell' });
   }
   return {
     ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId, containerRef: name,
-    output: wrote.output || '', autoSolidify,
+    output: xieru.output || '', autoSolidify,
     security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
   };
 });
@@ -3985,7 +4006,7 @@ function defaultProjectImageRef(): string {
 }
 
 /** 记一条外部（容器侧）文件访问到项目台账 */
-function noteExternalFileAccessReq(groupId: string, op: 'write' | 'edit' | 'create' | 'delete' | 'read', file: string, extra: { by?: string } = {}): void {
+function beizhuWaibuWenjianFangwenQiu(groupId: string, op: 'write' | 'edit' | 'create' | 'delete' | 'read', file: string, extra: { by?: string } = {}): void {
   try {
     const gid = String(groupId || '');
     if (!groupStore || !gid) return;
@@ -4020,7 +4041,7 @@ async function maybeSolidifyAfterConsole(
     const JingXiangId = shiLi.ok ? String(shiLi.out.split('|')[0] || '').trim() : '';
     if (!JingXiangId) return { attempted: true, done: false, code: 'commit-unverified' };
     writeProjectEnvLedger(groupId, { runtimeId, containerRef: name, imageRef: ref, solidifiedAt: at });
-    emitConsole({ cat: 'system', code: 'container.project.solidified', data: { sessionId: groupId, imageRef: ref, trigger: 'after-console' } });
+    fachuKongzhitai({ cat: 'system', code: 'container.project.solidified', data: { sessionId: groupId, imageRef: ref, trigger: 'after-console' } });
     return { attempted: true, done: true, code: 'after-console', imageRef: ref };
   } catch (e) {
     return { attempted: true, done: false, code: 'error:' + sanitizeError(e) };
@@ -4032,7 +4053,7 @@ async function maybeSolidifyAfterConsole(
  * 用于环境探测 / 证明工具调用真的跑在容器里。
  * ⚠️ 参数里**没有命令字符串**：`command` 只能取 `CONTAINER_FIXED_COMMAND_IDS` 里的 id。
  */
-handleIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; command?: string }) => {
+chuliIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; command?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const command = String(payload?.command || 'env-probe');
@@ -4047,11 +4068,11 @@ handleIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comma
     }
     const status = await containerStatusOf(runtimeId);
     if (status !== 'ready') return { ok: false, code: 'container-not-ready', executed: false, needsInstall: true };
-    const yiBaoZhang = await ensureProjectContainer(id, runtimeId);
+    const yiBaoZhang = await baozhangXiangmuRongqi(id, runtimeId);
     if (!yiBaoZhang.ok) return { ok: false, code: yiBaoZhang.code, executed: false, containerRef: yiBaoZhang.containerRef, rawOutput: yiBaoZhang.raw };
     liftFsGuardIfAny(id, 'container-started');
     const r = await runContainerExec(runtimeId, 'exec-capture', { name: yiBaoZhang.containerRef, command }, 120000);
-    emitConsole({ cat: 'tool', code: 'container.project.exec', data: { sessionId: id, command, ok: r.ok } });
+    fachuKongzhitai({ cat: 'tool', code: 'container.project.exec', data: { sessionId: id, command, ok: r.ok } });
     return {
       ok: r.ok,
       executed: r.executed,
@@ -4080,7 +4101,7 @@ handleIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comma
  * 记录进项目记录并同步给成员 —— 成员那边也能按同一个根解析。
  * 安全：只接受 `{ sessionId }`，目录**由主进程弹系统对话框选**（渲染层给不了任意路径）。
  */
-handleIpc('warmy:project-set-directory', async (_e, payload?: { sessionId?: string; dir?: string }) => {
+chuliIpc('warmy:project-set-directory', async (_e, payload?: { sessionId?: string; dir?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     if (!localIsProjectCreator(id)) {
@@ -4111,7 +4132,7 @@ handleIpc('warmy:project-set-directory', async (_e, payload?: { sessionId?: stri
  * 产品主的原话：**「记录文件的改动应该是无限牛马的功能，不是本机的功能」**
  * ⇒ 台账存在项目记录里、会随项目同步给成员，所以成员也能看到"谁改了什么、什么时候改的"。
  */
-handleIpc('warmy:project-ledger', (_e, payload?: { sessionId?: string; limit?: number }) => {
+chuliIpc('warmy:project-ledger', (_e, payload?: { sessionId?: string; limit?: number }) => {
   try {
     const id = String(payload?.sessionId || '');
     const rows = groupStore?.listFileAccess(id, Number(payload?.limit) || 200) || [];
@@ -4153,7 +4174,7 @@ handleIpc('warmy:project-ledger', (_e, payload?: { sessionId?: string; limit?: n
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** 当前用户的 SID（`whoami /user` 的真实输出；拿不到就不给加锁入口） */
-async function currentUserSid(): Promise<string> {
+async function dangqianYonghuHuihuaId(): Promise<string> {
   if (process.platform !== 'win32') return '';
   return new Promise((resolve) => {
     try {
@@ -4215,7 +4236,7 @@ function liftFsGuardIfAny(groupId: string, reason: string): { lifted: boolean; d
     if (!r.ok) return { lifted: false };
     writeFsGuardRecord(groupId, { ...rec, liftedAt: Date.now() });
     audit?.log('container.fs-guard.lift', { sessionId: groupId, reason });
-    emitConsole({ cat: 'system', code: 'container.fsGuard.lifted', data: { sessionId: groupId, reason } });
+    fachuKongzhitai({ cat: 'system', code: 'container.fsGuard.lifted', data: { sessionId: groupId, reason } });
     return { lifted: true, dir: rec.dir };
   } catch {
     return { lifted: false };
@@ -4238,7 +4259,7 @@ function runIcaclsSync(plan: { file: string; args: string[] }): { ok: boolean; e
  *   · `apply`  = 真的加锁（一条继承式 deny ACE）；
  *   · `lift`   = 真的撤销（一条 `/remove:d`）—— **永远给出还原路径**。
  */
-handleIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; action?: string }) => {
+chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; action?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const action = String(payload?.action || 'status');
@@ -4249,7 +4270,7 @@ handleIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; a
     const attrs = projectAttrsOf(id);
     const dir = attrs.directory;
     const rec = fsGuardRecordOf(id);
-    const sid = await currentUserSid();
+    const sid = await dangqianYonghuHuihuaId();
     const base = {
       ok: true,
       sessionId: id,
@@ -4280,14 +4301,14 @@ handleIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; a
       const denies = String(r.out || '')
         .split(/\r?\n/)
         .filter((l) => /\(DENY\)/i.test(l))
-        .map((l) => compactText(l, 200));
+        .map((l) => jinyaoWenben(l, 200));
       return {
         ...base,
         ok: true,
         /** 文件系统层面**现在**是不是锁着（读真实 ACL，不看我们的记录） */
         guarded: r.ok && denies.length > 0,
         denyEntries: denies.slice(0, 5),
-        raw: compactText(r.out || r.err, 500),
+        raw: jinyaoWenben(r.out || r.err, 500),
         /**
          * 记录与事实不一致时**如实标出来**（例如用户自己在应用外改了 ACL）：
          * 这是我们"不假装锁着"的判据。
@@ -4301,10 +4322,10 @@ handleIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; a
       const plan = hostDirGuardPlan({ action: 'apply', dir, sid });
       if (!plan.ok) return { ...base, ok: false, code: plan.code, error: plan.error };
       const r = await runIcacls(plan.plan);
-      if (!r.ok) return { ...base, ok: false, code: 'icacls-failed', error: compactText(r.err, 300) };
+      if (!r.ok) return { ...base, ok: false, code: 'icacls-failed', error: jinyaoWenben(r.err, 300) };
       writeFsGuardRecord(id, { dir, sid, appliedAt: Date.now() });
       audit?.log('container.fs-guard.apply', { sessionId: id });
-      emitConsole({ cat: 'system', code: 'container.fsGuard.applied', data: { sessionId: id } });
+      fachuKongzhitai({ cat: 'system', code: 'container.fsGuard.applied', data: { sessionId: id } });
       return { ...base, ok: true, guarded: true, appliedAt: Date.now(), denies: plan.plan.denies };
     }
 
@@ -4312,10 +4333,10 @@ handleIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; a
     const plan = hostDirGuardPlan({ action: 'lift', dir, sid });
     if (!plan.ok) return { ...base, ok: false, code: plan.code, error: plan.error };
     const r = await runIcacls(plan.plan);
-    if (!r.ok) return { ...base, ok: false, code: 'icacls-failed', error: compactText(r.err, 300) };
+    if (!r.ok) return { ...base, ok: false, code: 'icacls-failed', error: jinyaoWenben(r.err, 300) };
     writeFsGuardRecord(id, { dir, sid, appliedAt: rec ? rec.appliedAt : Date.now(), liftedAt: Date.now() });
     audit?.log('container.fs-guard.lift', { sessionId: id, reason: 'user' });
-    emitConsole({ cat: 'system', code: 'container.fsGuard.lifted', data: { sessionId: id, reason: 'user' } });
+    fachuKongzhitai({ cat: 'system', code: 'container.fsGuard.lifted', data: { sessionId: id, reason: 'user' } });
     return { ...base, ok: true, guarded: false, liftedAt: Date.now() };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
@@ -4364,7 +4385,7 @@ function loadSkillScanDirs(): string[] {
 }
 
 /** Honest per-directory status: missing / not-a-directory / read-failed are reported, never silently ignored. */
-function skillScanStatus(dirs: string[]): Array<{ path: string; ok: boolean; error: string | null; skillCount: number }> {
+function jinengSaomiaoZhuangtai(dirs: string[]): Array<{ path: string; ok: boolean; error: string | null; skillCount: number }> {
   return dirs.map((p) => {
     const abs = path.resolve(p);
     if (!fs.existsSync(abs)) return { path: p, ok: false, error: 'missing', skillCount: 0 };
@@ -4379,8 +4400,8 @@ function skillScanStatus(dirs: string[]): Array<{ path: string; ok: boolean; err
     try {
       // Directory itself may be a skill (contains SKILL.md)
       if (fs.existsSync(path.join(abs, 'SKILL.md'))) skillCount += 1;
-      const subs = fs.readdirSync(abs, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
-      for (const d of subs) {
+      const zixiang = fs.readdirSync(abs, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+      for (const d of zixiang) {
         if (fs.existsSync(path.join(abs, d, 'SKILL.md'))) skillCount += 1;
       }
     } catch {
@@ -4390,7 +4411,7 @@ function skillScanStatus(dirs: string[]): Array<{ path: string; ok: boolean; err
   });
 }
 
-function skillRoots(): Array<{ root: string; source: string }> {
+function jinengGen(): Array<{ root: string; source: string }> {
   const roots: Array<{ root: string; source: string }> = [];
   try {
     roots.push({ root: path.join(app.getPath('userData'), 'skills'), source: 'userData' });
@@ -4414,16 +4435,16 @@ function skillRoots(): Array<{ root: string; source: string }> {
   return roots;
 }
 
-handleIpc('warmy:skills-list', () => {
+chuliIpc('warmy:skills-list', () => {
   const skills: Array<Record<string, unknown>> = [];
-  const saoMiaoMuluZhuangtai = skillScanStatus(loadSkillScanDirs());
+  const saoMiaoMuluZhuangtai = jinengSaomiaoZhuangtai(loadSkillScanDirs());
   const QiYongBiao = ((): Record<string, boolean> => {
     try {
       const s = settingsStore?.load() as { skillEnabled?: Record<string, boolean> } | undefined;
       return s?.skillEnabled && typeof s.skillEnabled === 'object' ? { ...s.skillEnabled } : {};
     } catch { return {}; }
   })();
-  for (const { root, source } of skillRoots()) {
+  for (const { root, source } of jinengGen()) {
     if (!fs.existsSync(root)) continue;
     const tuiSongYiTiao = (dirName: string, md: string) => {
       const info = skillMdInfo(md);
@@ -4467,26 +4488,26 @@ handleIpc('warmy:skills-list', () => {
   return { ok: true, skills, scanDirs: saoMiaoMuluZhuangtai, maxScanDirs: SKILL_SCAN_DIRS_MAX };
 });
 
-handleIpc('warmy:skills-scan-dirs-get', () => {
+chuliIpc('warmy:skills-scan-dirs-get', () => {
   const dirs = loadSkillScanDirs();
-  return { ok: true, dirs, scanDirs: skillScanStatus(dirs), max: SKILL_SCAN_DIRS_MAX };
+  return { ok: true, dirs, scanDirs: jinengSaomiaoZhuangtai(dirs), max: SKILL_SCAN_DIRS_MAX };
 });
 
-handleIpc('warmy:skills-scan-dirs-set', (_e, dirs: unknown) => {
+chuliIpc('warmy:skills-scan-dirs-set', (_e, dirs: unknown) => {
   const list = Array.isArray(dirs) ? dirs.map((d) => String(d || '').trim()).filter(Boolean) : [];
   if (list.length > SKILL_SCAN_DIRS_MAX) {
     return { ok: false, error: 'too-many-dirs', max: SKILL_SCAN_DIRS_MAX, count: list.length };
   }
   try {
     const next = settingsStore?.save({ skillScanDirs: list } as never);
-    return { ok: true, dirs: list, scanDirs: skillScanStatus(list), settings: next };
+    return { ok: true, dirs: list, scanDirs: jinengSaomiaoZhuangtai(list), settings: next };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
 });
 
 
-handleIpc('warmy:skills-import', async () => {
+chuliIpc('warmy:skills-import', async () => {
   if (!win) return { ok: false, error: 'no window' };
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
@@ -4524,15 +4545,15 @@ handleIpc('warmy:skills-import', async () => {
  *   - 插件标记：目录内含 `package.json`，且包名/字段与 warmy|plugin 相关
  * 返回结构含 `bound` 段，UI 据此如实展示"为什么会提前结束"。
  */
-const MACHINE_SCAN_LIMITS = { maxDepth: 6, maxDirs: 40000, budgetMs: 25000, maxResults: 300 };
-const MACHINE_SCAN_PRUNE = new Set([
+const JIQI_SAOMIAO_XIANZHI = { maxDepth: 6, maxDirs: 40000, budgetMs: 25000, maxResults: 300 };
+const JIQI_SAOMIAO_JIANZHI = new Set([
   'windows', 'winnt', '$recycle.bin', 'system volume information', 'program files',
   'program files (x86)', 'programdata', 'node_modules', '.git', 'dist', 'build', 'out',
   'temp', 'tmp', 'cache', 'caches', '.cache', '.npm', '.pnpm-store', '.pnpm', 'appdata',
   'library', 'perflogs', 'recovery', '$windows.~ws', '.vscode', '.idea', 'coverage',
 ]);
 
-function machineScanRoots(): string[] {
+function jiqiSaomiaoGen(): string[] {
   const roots: string[] = [];
   if (process.platform === 'win32') {
     for (let c = 65; c <= 90; c++) {
@@ -4550,33 +4571,33 @@ function looksLikeWarmyPlugin(pkgPath: string): { ok: boolean; name?: string; de
     const j = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as Record<string, unknown>;
     const name = String(j.name || '');
     const deps = { ...(j.dependencies as Record<string, string> | undefined), ...(j.devDependencies as Record<string, string> | undefined) };
-    const depHit = Object.keys(deps || {}).some((k) => /warmy|plugin/i.test(k));
-    const fieldHit = 'warmy' in j || 'warmyPlugin' in j || Array.isArray((j.keywords as unknown[])) && (j.keywords as string[]).some((k) => /warmy|plugin/i.test(String(k)));
-    const nameHit = /warmy|plugin/i.test(name);
-    return { ok: nameHit || depHit || fieldHit, name, desc: String(j.description || '') };
+    const yilaiMingzhong = Object.keys(deps || {}).some((k) => /warmy|plugin/i.test(k));
+    const ziduanMingzhong = 'warmy' in j || 'warmyPlugin' in j || Array.isArray((j.keywords as unknown[])) && (j.keywords as string[]).some((k) => /warmy|plugin/i.test(String(k)));
+    const mingMingzhong = /warmy|plugin/i.test(name);
+    return { ok: mingMingzhong || yilaiMingzhong || ziduanMingzhong, name, desc: String(j.description || '') };
   } catch { return { ok: false }; }
 }
 
 async function scanMachineFor(kind: 'skills' | 'plugins') {
   const t0 = Date.now();
-  const roots = machineScanRoots();
+  const roots = jiqiSaomiaoGen();
   const found: Array<{ id: string; name: string; path: string; desc?: string; root: string }> = [];
   const pruned: Array<{ dir: string; reason: string }> = [];
-  let visited = 0;
+  let fangwen = 0;
   let stoppedBy: string | null = null;
 
   const queue: Array<{ dir: string; depth: number; root: string }> = roots.map((r) => ({ dir: r, depth: 0, root: r }));
   while (queue.length) {
-    if (Date.now() - t0 > MACHINE_SCAN_LIMITS.budgetMs) { stoppedBy = 'time-budget'; break; }
-    if (visited >= MACHINE_SCAN_LIMITS.maxDirs) { stoppedBy = 'max-dirs'; break; }
-    if (found.length >= MACHINE_SCAN_LIMITS.maxResults) { stoppedBy = 'max-results'; break; }
+    if (Date.now() - t0 > JIQI_SAOMIAO_XIANZHI.budgetMs) { stoppedBy = 'time-budget'; break; }
+    if (fangwen >= JIQI_SAOMIAO_XIANZHI.maxDirs) { stoppedBy = 'max-dirs'; break; }
+    if (found.length >= JIQI_SAOMIAO_XIANZHI.maxResults) { stoppedBy = 'max-results'; break; }
     const cur = queue.shift()!;
-    visited += 1;
+    fangwen += 1;
     // 命中标记：先把当前目录判定一次
     try {
-      const skillFile = path.join(cur.dir, 'SKILL.md');
+      const jinengWenjian = path.join(cur.dir, 'SKILL.md');
       if (kind === 'skills') {
-        if (fs.existsSync(skillFile)) {
+        if (fs.existsSync(jinengWenjian)) {
           const id = `machine:${path.basename(cur.dir)}`;
           if (!found.some((f) => f.path === cur.dir)) {
             found.push({ id, name: path.basename(cur.dir), path: cur.dir, root: cur.root });
@@ -4595,30 +4616,30 @@ async function scanMachineFor(kind: 'skills' | 'plugins') {
       }
     } catch { /* 单个目录失败不影响整轮 */ }
 
-    if (cur.depth >= MACHINE_SCAN_LIMITS.maxDepth) { pruned.push({ dir: cur.dir, reason: 'max-depth' }); continue; }
+    if (cur.depth >= JIQI_SAOMIAO_XIANZHI.maxDepth) { pruned.push({ dir: cur.dir, reason: 'max-depth' }); continue; }
     let entries: fs.Dirent[] = [];
     try { entries = fs.readdirSync(cur.dir, { withFileTypes: true }); } catch { continue; }
     for (const e of entries) {
       if (!e.isDirectory()) continue;
-      const low = e.name.toLowerCase();
-      if (MACHINE_SCAN_PRUNE.has(low)) { pruned.push({ dir: path.join(cur.dir, e.name), reason: 'pruned-system-dir' }); continue; }
-      if (low.startsWith('.')) { pruned.push({ dir: path.join(cur.dir, e.name), reason: 'hidden-dir' }); continue; }
+      const di = e.name.toLowerCase();
+      if (JIQI_SAOMIAO_JIANZHI.has(di)) { pruned.push({ dir: path.join(cur.dir, e.name), reason: 'pruned-system-dir' }); continue; }
+      if (di.startsWith('.')) { pruned.push({ dir: path.join(cur.dir, e.name), reason: 'hidden-dir' }); continue; }
       queue.push({ dir: path.join(cur.dir, e.name), depth: cur.depth + 1, root: cur.root });
     }
   }
   const bound = {
     roots: roots.length,
-    dirsVisited: visited,
+    dirsVisited: fangwen,
     dirsPruned: pruned.length,
     prunedSample: pruned.slice(0, 12),
     stoppedBy,
     elapsedMs: Date.now() - t0,
-    limits: MACHINE_SCAN_LIMITS,
+    limits: JIQI_SAOMIAO_XIANZHI,
   };
-  audit?.log('machine.scan', { kind, found: found.length, dirs: visited, stoppedBy });
+  audit?.log('machine.scan', { kind, found: found.length, dirs: fangwen, stoppedBy });
   return { ok: true, kind, found, bound, scannedRoots: roots };
 }
-handleIpc('warmy:scan-machine', async (_e, kind?: string) => {
+chuliIpc('warmy:scan-machine', async (_e, kind?: string) => {
   try {
     const k = kind === 'plugins' ? 'plugins' : 'skills';
     return await scanMachineFor(k);
@@ -4627,7 +4648,7 @@ handleIpc('warmy:scan-machine', async (_e, kind?: string) => {
   }
 });
 
-handleIpc('warmy:pick-directory', async () => {
+chuliIpc('warmy:pick-directory', async () => {
   if (!win) return { ok: false, error: 'no window' };
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
@@ -4659,7 +4680,7 @@ function loadAssistItems(): AssistItem[] {
 function saveAssistItems(items: AssistItem[]): void {
   try { anQuanYuanZiXieJson(assistFile(), { version: 1, items }); } catch { /* noop */ }
 }
-handleIpc('warmy:assist-list', (_e, sessionId?: string) => {
+chuliIpc('warmy:assist-list', (_e, sessionId?: string) => {
   try {
     let items = loadAssistItems();
     const sid = typeof sessionId === 'string' && sessionId ? sessionId : '';
@@ -4699,7 +4720,7 @@ handleIpc('warmy:assist-list', (_e, sessionId?: string) => {
     return { ok: false, items: [], error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:assist-upsert', (_e, payload: Partial<AssistItem> & { id?: string }) => {
+chuliIpc('warmy:assist-upsert', (_e, payload: Partial<AssistItem> & { id?: string }) => {
   try {
     const id = String(payload?.id || '').trim();
     if (!id) return { ok: false, error: 'missing-id' };
@@ -4729,7 +4750,7 @@ handleIpc('warmy:assist-upsert', (_e, payload: Partial<AssistItem> & { id?: stri
 });
 
 /** 隐私政策同意/撤销 */
-handleIpc('warmy:privacy-consent-set', (_e, consent: boolean) => {
+chuliIpc('warmy:privacy-consent-set', (_e, consent: boolean) => {
   try {
     const next = settingsStore?.save({ privacyConsent: !!consent } as never);
     audit?.log('privacy.consent', { consent: !!consent });
@@ -4740,13 +4761,13 @@ handleIpc('warmy:privacy-consent-set', (_e, consent: boolean) => {
 });
 
 /** 拒绝隐私政策 / 撤销同意 / 主动退出 → 统一 quitApp（会置 forceQuit，否则 close 会拦截） */
-handleIpc('warmy:app-quit', (_e, reason?: string) => {
-  setTimeout(() => quitApp(String(reason || 'ipc')), 40);
+chuliIpc('warmy:app-quit', (_e, reason?: string) => {
+  setTimeout(() => tuichuYingyong(String(reason || 'ipc')), 40);
   return { ok: true };
 });
 
 /** 唯一凭证：指纹（证明你是你）；私钥不落渲染层明文 */
-handleIpc('warmy:identity-credential', () =>
+chuliIpc('warmy:identity-credential', () =>
   safeHandle(() => {
     const info = identityStore?.info() ?? null;
     return {
@@ -4759,7 +4780,7 @@ handleIpc('warmy:identity-credential', () =>
 );
 
 /** 切换身份：粘贴备份 JSON + 口令 → importBackup */
-handleIpc('warmy:identity-backup-import', (_e, payload: { backupJson?: string; passphrase?: string }) => {
+chuliIpc('warmy:identity-backup-import', (_e, payload: { backupJson?: string; passphrase?: string }) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const raw = String(payload?.backupJson || '').trim();
@@ -4776,7 +4797,7 @@ handleIpc('warmy:identity-backup-import', (_e, payload: { backupJson?: string; p
 });
 
 /** 插件自动发现目录扫描：目录下一层含 package.json 的子目录视为插件候选 */
-handleIpc('warmy:plugins-scan-dirs-get', () =>
+chuliIpc('warmy:plugins-scan-dirs-get', () =>
   safeHandle(() => {
     const s = settingsStore?.load?.() || (settingsStore as { get?: () => unknown })?.get?.() || {};
     const dirs = Array.isArray((s as { pluginScanDirs?: string[] }).pluginScanDirs)
@@ -4785,7 +4806,7 @@ handleIpc('warmy:plugins-scan-dirs-get', () =>
     return { ok: true, dirs: dirs.map(String).slice(0, 10) };
   }, { ok: true, dirs: [] })
 );
-handleIpc('warmy:plugins-scan-dirs-set', (_e, dirs: unknown) => {
+chuliIpc('warmy:plugins-scan-dirs-set', (_e, dirs: unknown) => {
   try {
     const list = (Array.isArray(dirs) ? dirs : [])
       .map((x) => String(x || '').trim())
@@ -4797,7 +4818,7 @@ handleIpc('warmy:plugins-scan-dirs-set', (_e, dirs: unknown) => {
     return { ok: false, error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:plugins-scan', () => {
+chuliIpc('warmy:plugins-scan', () => {
   try {
     const s = (settingsStore?.load?.() || {}) as { pluginScanDirs?: string[] };
     const dirs = Array.isArray(s.pluginScanDirs) ? s.pluginScanDirs.slice(0, 10) : [];
@@ -4816,17 +4837,17 @@ handleIpc('warmy:plugins-scan', () => {
             const pkg = path.join(p, 'package.json');
             const skill = path.join(p, 'SKILL.md');
             if (!fs.existsSync(pkg) && !fs.existsSync(skill)) continue;
-            let pname = name;
-            let pdesc = '';
+            let xiangmuMing = name;
+            let xiangmuShuoming = '';
             if (fs.existsSync(pkg)) {
               try {
                 const j = JSON.parse(fs.readFileSync(pkg, 'utf8'));
-                pname = String(j.name || name);
-                pdesc = String(j.description || '');
+                xiangmuMing = String(j.name || name);
+                xiangmuShuoming = String(j.description || '');
               } catch { /* keep folder name */ }
             }
-            if (found.some((f) => f.id === pname)) continue;
-            found.push({ id: pname, path: p, name: pname, desc: pdesc });
+            if (found.some((f) => f.id === xiangmuMing)) continue;
+            found.push({ id: xiangmuMing, path: p, name: xiangmuMing, desc: xiangmuShuoming });
           } catch { /* skip entry */ }
         }
       } catch (e) {
@@ -4840,9 +4861,9 @@ handleIpc('warmy:plugins-scan', () => {
   }
 });
 
-handleIpc('warmy:skills-paths', () => safeHandle(() => ({ ok: true, paths: skillRoots().map((r) => r.root), scanDirs: skillScanStatus(loadSkillScanDirs()) }), { ok: true, paths: [], scanDirs: [] }))
+chuliIpc('warmy:skills-paths', () => safeHandle(() => ({ ok: true, paths: jinengGen().map((r) => r.root), scanDirs: jinengSaomiaoZhuangtai(loadSkillScanDirs()) }), { ok: true, paths: [], scanDirs: [] }))
 
-handleIpc('warmy:skills-remove', (_e, id: string) => {
+chuliIpc('warmy:skills-remove', (_e, id: string) => {
   try {
     // 删除也是写操作：与导入共用同一把租约（否则导入中途被删 = 半个目录）
     // Discovered skills live in user-owned auto-discovery directories — never delete those sources.
@@ -4850,7 +4871,7 @@ handleIpc('warmy:skills-remove', (_e, id: string) => {
       return { ok: false, error: 'discovered-skill-not-removable' };
     }
     const guarded = withLease('skills', ['skills'], () => {
-      for (const { root, source } of skillRoots()) {
+      for (const { root, source } of jinengGen()) {
         if (source === 'discovered') continue;
         const dir = path.resolve(root, String(id || ''));
         // 防目录穿越：必须仍在该 root 之下
@@ -4868,9 +4889,9 @@ handleIpc('warmy:skills-remove', (_e, id: string) => {
   }
 });
 
-handleIpc('warmy:profile-get', () => safeHandle(() => ({ ok: true, profile: accountStore?.loadProfile() }), { ok: true, profile: undefined }))
+chuliIpc('warmy:profile-get', () => safeHandle(() => ({ ok: true, profile: accountStore?.loadProfile() }), { ok: true, profile: undefined }))
 // 读自家 package.json 的版本；dev 下 app.getVersion() 返回的是 Electron 版本，不可用
-function appVersion(): string {
+function yingyongBanben(): string {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
     if (pkg && pkg.version) return String(pkg.version);
@@ -4881,14 +4902,14 @@ function appVersion(): string {
 }
 
 // 关于页：版本 / 运行时 / 平台 / 用户 ID 及其签名校验状态
-handleIpc('warmy:app-info', () => {
+chuliIpc('warmy:app-info', () => {
   try {
     const st = accountStore?.idStatus();
     return {
       ok: true,
       name: '无限牛马',
       enName: 'WArmy',
-      version: appVersion(),
+      version: yingyongBanben(),
       electron: process.versions.electron,
       chrome: process.versions.chrome,
       node: process.versions.node,
@@ -4902,20 +4923,20 @@ handleIpc('warmy:app-info', () => {
     };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:profile-save', (_e, p: { username: string; email: string; avatarDataUrl?: string }) => {
+chuliIpc('warmy:profile-save', (_e, p: { username: string; email: string; avatarDataUrl?: string }) => {
   try {
     const prev = accountStore?.loadProfile();
     const next = { ...prev!, ...p };
     return { ok: true, profile: accountStore?.saveProfile(next) };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:profile-set-password', (_e, pw: string) => {
+chuliIpc('warmy:profile-set-password', (_e, pw: string) => {
   try {
     accountStore?.setPassword(pw);
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:profile-login', (_e, pw: string) => {
+chuliIpc('warmy:profile-login', (_e, pw: string) => {
   try {
     const r = accountStore?.loginLocal(pw) || { ok: false };
     return r;
@@ -4927,7 +4948,7 @@ handleIpc('warmy:profile-login', (_e, pw: string) => {
  * 身份公开信息。**只给公开部分**：指纹 / 公钥 / 代次 / 名片 / 退役公钥 / 时间线。
  * 私钥永远不出主进程（导出也只能是加密备份）。
  */
-handleIpc('warmy:identity-info', () =>
+chuliIpc('warmy:identity-info', () =>
   safeHandle(
     () => ({
       ok: true,
@@ -4936,7 +4957,7 @@ handleIpc('warmy:identity-info', () =>
       /** 换证 / 作废时间线（含**旧名片快照**，供附六的横幅展示旧联系方式） */
       timeline: identityStore?.timeline() ?? [],
       /** ⚠️ 代次规则的诚实说明，UI 文案必须照此写：只防回滚，不防抢占（附五.1） */
-      generationRuleNote: GENERATION_RULE_NOTE,
+      generationRuleNote: DAISHU_GUIZE_BEIZHU,
       /** 名片占位/标签所需 i18n 键：渲染层自己 t()，主进程不拼中文 */
       contactI18n: CONTACT_CARD_I18N,
       /** 7 天联系信息冻结期的说明（含"从本机收到通知起算"） */
@@ -4949,7 +4970,7 @@ handleIpc('warmy:identity-info', () =>
       identity: null,
       unlock: null,
       timeline: [],
-      generationRuleNote: GENERATION_RULE_NOTE,
+      generationRuleNote: DAISHU_GUIZE_BEIZHU,
       contactI18n: CONTACT_CARD_I18N,
       contactFreezeNote: CONTACT_FREEZE_NOTE,
       passphraseMinLength: 8,
@@ -4962,7 +4983,7 @@ handleIpc('warmy:identity-info', () =>
  * 与"旧的作废"声明，代次 +1，旧公钥进退役列表（保公钥丢私钥），并开启 7 天联系信息冻结期。
  * `previousCard` 取自**本机留存历史**（不是声明）—— 横幅展示旧联系方式用它。
  */
-handleIpc('warmy:identity-rotate', (_e, payload: { reason?: string; passphrase?: string } = {}) => {
+chuliIpc('warmy:identity-rotate', (_e, payload: { reason?: string; passphrase?: string } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const r = identityStore.rotate(payload || {});
@@ -4978,7 +4999,7 @@ handleIpc('warmy:identity-rotate', (_e, payload: { reason?: string; passphrase?:
       previousCard: r.previousCard,
       contactFreezeUntil: r.contactFreezeUntil,
       timeline: identityStore.timeline(),
-      generationRuleNote: GENERATION_RULE_NOTE,
+      generationRuleNote: DAISHU_GUIZE_BEIZHU,
       contactFreezeNote: CONTACT_FREEZE_NOTE,
     };
   } catch (e) {
@@ -4987,7 +5008,7 @@ handleIpc('warmy:identity-rotate', (_e, payload: { reason?: string; passphrase?:
 });
 
 /** 本机的名片历史（旧值留存；换证横幅的"旧联系方式"取自这里） */
-handleIpc('warmy:identity-card-history', () =>
+chuliIpc('warmy:identity-card-history', () =>
   safeHandle(() => ({ ok: true, history: identityStore?.contactCardHistory() ?? [], freeze: identityStore?.contactFreeze() ?? null }), { ok: true, history: [], freeze: null }),
 );
 
@@ -4995,7 +5016,7 @@ handleIpc('warmy:identity-card-history', () =>
  * 接收方侧：记录对方的名片（加入时交换 / 换证后补发）。
  * 首次加入直接留存、**不冻结**；处于冻结期则只记为 pending，展示继续用本机留存值。
  */
-handleIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card?: LianXiKa; signedCard?: ShenFenKa } = {}) => {
+chuliIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card?: LianXiKa; signedCard?: ShenFenKa } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     let fingerprint = payload?.fingerprint || '';
@@ -5018,7 +5039,7 @@ handleIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card
  * 接收方侧：记录"收到换证通知"并**从本机此刻**起算 7 天冻结（不用声明里的时间戳）。
  * 先验签 + 走代次规则，规则不过就不落地。
  */
-handleIpc(
+chuliIpc(
   'warmy:identity-peer-rotation',
   (_e, payload: { declaration?: LunHuanShengMing; knownKeys?: YaoShiHuanTiaoMu[]; currentGeneration?: number } = {}) => {
     try {
@@ -5039,7 +5060,7 @@ handleIpc(
 );
 
 /** 接收方侧：取某指纹的对端名片视图（旧/新两个字段并列 + 冻结状态） */
-handleIpc('warmy:identity-peer-contact', (_e, fingerprint: string) =>
+chuliIpc('warmy:identity-peer-contact', (_e, fingerprint: string) =>
   safeHandle(() => ({ ok: true, peer: fingerprint ? identityStore?.peerContact(fingerprint) ?? null : null }), { ok: true, peer: null }),
 );
 
@@ -5047,7 +5068,7 @@ handleIpc('warmy:identity-peer-contact', (_e, fingerprint: string) =>
  * 接收方侧：**手动确认**采用对方的新名片（冻结期结束后才生效）。
  * 对应 UI 文案「冻结期已结束，但不会自动采用新值——需要你手动确认」。
  */
-handleIpc('warmy:identity-peer-confirm', (_e, fingerprint: string) => {
+chuliIpc('warmy:identity-peer-confirm', (_e, fingerprint: string) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     if (!fingerprint) return { ok: false, error: 'fingerprint-required' };
@@ -5064,11 +5085,11 @@ handleIpc('warmy:identity-peer-confirm', (_e, fingerprint: string) => {
  * **永远是加密文件**：不存在"明文导出私钥"这条路径（附五：默认不显示明文）。
  */
 /** 凭证：当前本机 ID（= 私钥凭证）。界面只展示给本人，复制即备份。 */
-handleIpc('warmy:credential-info', () =>
+chuliIpc('warmy:credential-info', () =>
   safeHandle(() => {
     const p = accountStore?.loadProfile?.() as { deviceId?: string } | undefined;
-    const cred = String(p?.deviceId || '');
-    return { ok: true, credential: cred, valid: credentialModule.isValidCredential(cred), formatted: cred ? credentialModule.formatCredential(cred) : '' };
+    const pingzheng = String(p?.deviceId || '');
+    return { ok: true, credential: pingzheng, valid: credentialModule.isValidCredential(pingzheng), formatted: pingzheng ? credentialModule.formatCredential(pingzheng) : '' };
   }, { ok: true, credential: '', valid: false, formatted: '' })
 );
 
@@ -5080,7 +5101,7 @@ handleIpc('warmy:credential-info', () =>
  *   3) 用它派生出新身份；
  *   4) 把新凭证写回 profile。
  */
-handleIpc('warmy:credential-rotate', () => {
+chuliIpc('warmy:credential-rotate', () => {
   try {
     if (!identityStore || !accountStore) return { ok: false, error: 'identity-unavailable' };
     const fresh = generateDeviceId();
@@ -5104,7 +5125,7 @@ handleIpc('warmy:credential-rotate', () => {
 });
 
 /** 用凭证恢复身份（换机 / 误删配置）：只凭这一串即可找回同一身份与指纹 */
-handleIpc('warmy:credential-restore', (_e, credential: string) => {
+chuliIpc('warmy:credential-restore', (_e, credential: string) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const r = identityStore.restoreFromCredential(String(credential || ''));
@@ -5121,7 +5142,7 @@ handleIpc('warmy:credential-restore', (_e, credential: string) => {
   }
 });
 
-handleIpc('warmy:identity-backup-export', (_e, payload: { passphrase?: string; writeFile?: boolean } = {}) => {
+chuliIpc('warmy:identity-backup-export', (_e, payload: { passphrase?: string; writeFile?: boolean } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const passphrase = payload?.passphrase || '';
@@ -5156,7 +5177,7 @@ handleIpc('warmy:identity-backup-export', (_e, payload: { passphrase?: string; w
  *   ② 已有身份（OS 模式）—— 升级成口令模式：此后"文件 + 同一台机器"都不够，必须知道口令。
  * ⚠️ 代价必须对用户讲清：口令忘了 = 身份没了（产品无服务器，不存在找回/补发）。
  */
-handleIpc('warmy:identity-set-passphrase', (_e, payload: { passphrase?: string; currentPassphrase?: string } = {}) => {
+chuliIpc('warmy:identity-set-passphrase', (_e, payload: { passphrase?: string; currentPassphrase?: string } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const passphrase = payload?.passphrase || '';
@@ -5180,9 +5201,9 @@ handleIpc('warmy:identity-set-passphrase', (_e, payload: { passphrase?: string; 
  * 联系人侧：验一条换证 / 作废声明并应用**单调代次规则**（横幅分支与信任更新用）。
  * 返回值里的 generationRuleNote 必须一路带到 UI —— 它明确写了"不防抢先"。
  */
-handleIpc(
+chuliIpc(
   'warmy:identity-verify-rotation',
-  (_e, payload: { declaration?: IdentityDeclaration; knownKeys?: YaoShiHuanTiaoMu[]; currentGeneration?: number } = {}) => {
+  (_e, payload: { declaration?: ShenfenShengming; knownKeys?: YaoShiHuanTiaoMu[]; currentGeneration?: number } = {}) => {
     try {
       const d = payload?.declaration;
       if (!d) return { ok: false, error: 'declaration-required' };
@@ -5213,7 +5234,7 @@ handleIpc(
 );
 
 // ── 语音保存 ──
-handleIpc('warmy:save-voice', async (_e, data: { dataUrl: string; ext?: string }) => {
+chuliIpc('warmy:save-voice', async (_e, data: { dataUrl: string; ext?: string }) => {
   try {
     const dir = path.join(app.getPath('userData'), 'voice');
     fs.mkdirSync(dir, { recursive: true });
@@ -5228,8 +5249,8 @@ handleIpc('warmy:save-voice', async (_e, data: { dataUrl: string; ext?: string }
 });
 
 // ── 节点 / 邀请 ──
-handleIpc('warmy:nodes-list', () => safeHandle(() => ({ ok: true, nodes: nodeReg?.list() || [] }), { ok: true, nodes: [] }))
-handleIpc('warmy:nodes-pair', (_e, nodeId: string, name: string) => ({
+chuliIpc('warmy:nodes-list', () => safeHandle(() => ({ ok: true, nodes: nodeReg?.list() || [] }), { ok: true, nodes: [] }))
+chuliIpc('warmy:nodes-pair', (_e, nodeId: string, name: string) => ({
   ok: true,
   node: nodeReg?.pairRemote(nodeId, name),
 }));
@@ -5243,11 +5264,11 @@ interface biangengQuerenJilu {
 }
 
 function readChangeAcks(): Record<string, biangengQuerenJilu> {
-  return duJsonWenJian<Record<string, biangengQuerenJilu>>(changeAckFile, {});
+  return duJsonWenJian<Record<string, biangengQuerenJilu>>(biangengQuerenWenjian, {});
 }
 
 function writeChangeAcks(map: Record<string, biangengQuerenJilu>): { ok: boolean; error?: string } {
-  return anQuanYuanZiXieJson(changeAckFile, map);
+  return anQuanYuanZiXieJson(biangengQuerenWenjian, map);
 }
 
 /**
@@ -5256,7 +5277,7 @@ function writeChangeAcks(map: Record<string, biangengQuerenJilu>): { ok: boolean
  * 这里只负责「读确认留痕 → 交给它 → 返回 UI 契约形状」。
  * ⚠️ previousCard **只从本机留存历史取**：换证声明是攻击者可控数据。
  */
-handleIpc('warmy:identity-changes', (_e, payload: { scope?: string } = {}) => {
+chuliIpc('warmy:identity-changes', (_e, payload: { scope?: string } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable', changes: [] };
     void payload;
@@ -5279,7 +5300,7 @@ handleIpc('warmy:identity-changes', (_e, payload: { scope?: string } = {}) => {
  * （UI 明确依赖这一点：`{ok:false}` 时不会把横幅消掉）。
  * auditId 同时写进审计日志与本地留痕，便于事后对账。
  */
-handleIpc('warmy:identity-change-ack', (_e, payload: { changeId?: string; level?: 'dismiss' | 'verified' } = {}) => {
+chuliIpc('warmy:identity-change-ack', (_e, payload: { changeId?: string; level?: 'dismiss' | 'verified' } = {}) => {
   try {
     if (!audit) return { ok: false, error: 'audit-unavailable' };
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
@@ -5290,9 +5311,9 @@ handleIpc('warmy:identity-change-ack', (_e, payload: { changeId?: string; level?
     audit.log('identity.change.ack', { changeId, level, auditId });
     // 审计真的落地了吗？AuditLogger.log 会吞掉写失败 → 读回来确认（不确认就等于假装记过了）
     const last = audit.read(1)[0];
-    const landed =
+    const luodi =
       !!last && last.op === 'identity.change.ack' && (last.detail as { auditId?: string } | undefined)?.auditId === auditId;
-    if (!landed) return { ok: false, error: 'audit-write-failed' };
+    if (!luodi) return { ok: false, error: 'audit-write-failed' };
     const acks = readChangeAcks();
     acks[changeId] = { level, at: Date.now(), auditId };
     const w = writeChangeAcks(acks);
@@ -5333,12 +5354,12 @@ async function issueMemberCertForGroup(
   if (!membership || !identityStore) return { ok: false, code: 'identity-missing' };
   const signer = createIdentitySigner(identityStore);
   const expect = expectedIssuerFor(groupId);
-  if (expect && !fingerprintMatches(expect, signer.fingerprint)) {
+  if (expect && !zhiwenPipei(expect, signer.fingerprint)) {
     // 本机不是该群的创建者 → 无权签发（星型拓扑里只有群主能发证书）
     // 诊断串用 ASCII（主进程不拼面向用户的文字；界面文案一律走 i18n）
     return { ok: false, code: 'not-the-creator', detail: `issuer=${expect} local=${signer.fingerprint}` };
   }
-  const r = await issueMemberCertificate({
+  const r = await wentiChengyuanZhengshu({
     signer,
     membership,
     groupId,
@@ -5387,7 +5408,7 @@ async function broadcastRevocationList(groupId: string, list: unknown): Promise<
  * 收到成员证书（例如刚入群时对端送来一张）。
  * 签发者必须是**本群创建者**：群记录里有创建者指纹就按它校验，否则按本机已钉住的那个。
  */
-handleIpc('warmy:membership-receive-cert', (_e, payload: { groupId?: string; cert?: unknown } = {}) => {
+chuliIpc('warmy:membership-receive-cert', (_e, payload: { groupId?: string; cert?: unknown } = {}) => {
   try {
     const membership = membershipStoreFor(identityStore);
     if (!membership) return { ok: false, code: 'identity-missing' };
@@ -5402,7 +5423,7 @@ handleIpc('warmy:membership-receive-cert', (_e, payload: { groupId?: string; cer
 });
 
 /** 同步（收到）一份吊销列表：验签 + 单调合并（回滚 / 条目变少一律拒绝） */
-handleIpc('warmy:membership-sync-revocation', (_e, payload: { groupId?: string; list?: unknown } = {}) => {
+chuliIpc('warmy:membership-sync-revocation', (_e, payload: { groupId?: string; list?: unknown } = {}) => {
   try {
     const membership = membershipStoreFor(identityStore);
     if (!membership) return { ok: false, code: 'identity-missing' };
@@ -5424,7 +5445,7 @@ handleIpc('warmy:membership-sync-revocation', (_e, payload: { groupId?: string; 
 });
 
 /** 成员证书与吊销列表的结构化快照（UI 只读；含本地时钟判定结果） */
-handleIpc('warmy:membership-list', (_e, payload: { groupId?: string } = {}) => {
+chuliIpc('warmy:membership-list', (_e, payload: { groupId?: string } = {}) => {
   try {
     const membership = membershipStoreFor(identityStore);
     if (!membership) return { ok: false, schema: 'warmy.membership.file.v1', groups: [] };
@@ -5437,7 +5458,7 @@ handleIpc('warmy:membership-list', (_e, payload: { groupId?: string } = {}) => {
 });
 
 /** 名册判定（含依据）：给 UI/排障用的只读通道，不改任何状态 */
-handleIpc(
+chuliIpc(
   'warmy:membership-authorize',
   (_e, payload: { fingerprint?: string; groupId?: string; requireCertificate?: boolean } = {}) => {
     try {
@@ -5456,7 +5477,7 @@ handleIpc(
 );
 
 /** 签发成员证书（创建者；身份锁着就如实回 identity-locked） */
-handleIpc(
+chuliIpc(
   'warmy:membership-issue',
   async (
     _e,
@@ -5492,7 +5513,7 @@ handleIpc(
  * 需要：本机有该成员的旧证书 + 成员用旧私钥签的换证声明。
  * 成功后旧证书进吊销列表（rotation），新指纹持有 `supersedes` 链 → "新指纹 = 原成员"。
  */
-handleIpc(
+chuliIpc(
   'warmy:membership-rotate',
   async (
     _e,
@@ -5513,7 +5534,7 @@ handleIpc(
       }
       const expect = expectedIssuerFor(groupId);
       const signer = createIdentitySigner(identityStore);
-      if (expect && !fingerprintMatches(expect, signer.fingerprint)) {
+      if (expect && !zhiwenPipei(expect, signer.fingerprint)) {
         return { ok: false, code: 'not-the-creator' };
       }
       const r = await rotateMemberCertificate({
@@ -5532,11 +5553,11 @@ handleIpc(
       // 这样横幅（scopes）与在线态映射立刻跟着新指纹走，不用等下次加入。
       const member = groupStore
         ?.listMembers(groupId)
-        .find((m) => m.fingerprint && fingerprintMatches(m.fingerprint, String(r.verification?.oldFingerprint || '')));
+        .find((m) => m.fingerprint && zhiwenPipei(m.fingerprint, String(r.verification?.oldFingerprint || '')));
       let memberPatched: string | null = null;
       if (member && groupStore) {
-        const patched = groupStore.setMemberFingerprint(groupId, member.id, r.cert.memberFingerprint);
-        memberPatched = patched.ok && patched.changed ? member.id : null;
+        const dabuding = groupStore.setMemberFingerprint(groupId, member.id, r.cert.memberFingerprint);
+        memberPatched = dabuding.ok && dabuding.changed ? member.id : null;
       }
       void broadcastRevocationList(groupId, r.revocation);
       audit?.log('membership.cert.rotated', {
@@ -5566,7 +5587,7 @@ handleIpc(
 );
 
 /** 主动吊销（踢人之外的场景：私钥泄漏 / 管理员处置） */
-handleIpc(
+chuliIpc(
   'warmy:membership-revoke',
   async (_e, payload: { groupId?: string; certId?: string; memberFingerprint?: string; reason?: string } = {}) => {
     try {
@@ -5582,8 +5603,8 @@ handleIpc(
       if (!cert) return { ok: false, code: 'no-certificate' };
       const expect = expectedIssuerFor(groupId);
       const signer = createIdentitySigner(identityStore);
-      if (expect && !fingerprintMatches(expect, signer.fingerprint)) return { ok: false, code: 'not-the-creator' };
-      const r = await revokeMemberCertificate({
+      if (expect && !zhiwenPipei(expect, signer.fingerprint)) return { ok: false, code: 'not-the-creator' };
+      const r = await chexiaoChengyuanZhengshu({
         signer,
         membership,
         groupId,
@@ -5601,7 +5622,7 @@ handleIpc(
   }
 );
 
-handleIpc('warmy:identity-peers', () => {
+chuliIpc('warmy:identity-peers', () => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable', peers: [] };
     return { ok: true, peers: listPeerContactViews(identityStore) };
@@ -5664,7 +5685,7 @@ function withLease<T>(  scope: string,
   }
 }
 
-handleIpc('warmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as RepoGuardRefInput) => {
+chuliIpc('warmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as RepoGuardRefInput) => {
   try {
     const ref = String(payload.ref || '');
     const oldSha = String(payload.oldSha || '');
@@ -5711,19 +5732,19 @@ handleIpc('warmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as 
   }
 });
 
-handleIpc('warmy:repo-guard-check-paths', (_e, payload: { paths?: Array<string | TuiSongLuJingTiaoMu> | string; base?: 'worktree' | 'gitdir' } = {}) => {
+chuliIpc('warmy:repo-guard-check-paths', (_e, payload: { paths?: Array<string | TuiSongLuJingTiaoMu> | string; base?: 'worktree' | 'gitdir' } = {}) => {
   try {
-    const validation = validatePushPaths(payload.paths ?? [], {
+    const jiaoyan = validatePushPaths(payload.paths ?? [], {
       base: payload.base === 'gitdir' ? 'gitdir' : 'worktree',
     });
-    return { ok: true, validation };
+    return { ok: true, jiaoyan };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
 });
 
 /** 真跑一遍 pre-receive 逻辑（stdin 三列格式）；UI / 验证脚本 / 钩子共用同一实现 */
-handleIpc(
+chuliIpc(
   'warmy:repo-guard-pre-receive',
   (_e, payload: { stdin?: string; role?: string; memberId?: string; repoDir?: string; assumeFastForward?: boolean } = {}) => {
     try {
@@ -5743,7 +5764,7 @@ handleIpc(
 );
 
 /** 给仓库初始化（安装）pre-receive 钩子；找不到钩子脚本时如实报错，不假装装好了 */
-handleIpc('warmy:repo-guard-install-hooks', (_e, payload: { repoDir?: string; force?: boolean } = {}) => {
+chuliIpc('warmy:repo-guard-install-hooks', (_e, payload: { repoDir?: string; force?: boolean } = {}) => {
   try {
     const repoDir = String(payload.repoDir || '');
     if (!repoDir) return { ok: false, error: 'repo-dir-required' };
@@ -5763,7 +5784,7 @@ handleIpc('warmy:repo-guard-install-hooks', (_e, payload: { repoDir?: string; fo
   }
 });
 
-handleIpc('warmy:repo-guard-status', () =>
+chuliIpc('warmy:repo-guard-status', () =>
   safeHandle(
     () => ({
       ok: true,
@@ -5776,7 +5797,7 @@ handleIpc('warmy:repo-guard-status', () =>
   )
 );
 
-handleIpc('warmy:lease-acquire', (_e, req: AcquireRequest = {} as AcquireRequest) => {
+chuliIpc('warmy:lease-acquire', (_e, req: AcquireRequest = {} as AcquireRequest) => {
   try {
     if (!leases) return { ok: false, error: { code: 'no-registry', reason: 'lease-registry-unavailable' }, leases: [] };
     const r = leases.acquire({ ...req, holder: req.holder || leaseHolder() });
@@ -5787,7 +5808,7 @@ handleIpc('warmy:lease-acquire', (_e, req: AcquireRequest = {} as AcquireRequest
   }
 });
 
-handleIpc('warmy:lease-release', (_e, req: LeaseRefRequest = {} as LeaseRefRequest) => {
+chuliIpc('warmy:lease-release', (_e, req: LeaseRefRequest = {} as LeaseRefRequest) => {
   try {
     if (!leases) return { ok: false, released: false, error: { code: 'no-registry', reason: 'lease-registry-unavailable' } };
     const r = leases.release({ ...req, ...(req.holder || req.leaseId ? {} : { holder: leaseHolder() }) });
@@ -5798,7 +5819,7 @@ handleIpc('warmy:lease-release', (_e, req: LeaseRefRequest = {} as LeaseRefReque
   }
 });
 
-handleIpc('warmy:lease-list', () =>
+chuliIpc('warmy:lease-list', () =>
   safeHandle(
     () => ({
       ok: true,
@@ -5811,7 +5832,7 @@ handleIpc('warmy:lease-list', () =>
   )
 );
 
-handleIpc('warmy:lease-check', (_e, payload: { holder?: string; path?: string; paths?: string[] } = {}) => {
+chuliIpc('warmy:lease-check', (_e, payload: { holder?: string; path?: string; paths?: string[] } = {}) => {
   try {
     if (!leases) return { ok: false, errorCode: 'no-registry', results: [] };
     const holder = payload.holder || leaseHolder();
@@ -5822,24 +5843,24 @@ handleIpc('warmy:lease-check', (_e, payload: { holder?: string; path?: string; p
     return { ok: false, errorCode: sanitizeError(e), results: [] };
   }
 });
-handleIpc('warmy:nodes-revoke', (_e, nodeId: string) => {
+chuliIpc('warmy:nodes-revoke', (_e, nodeId: string) => {
   try {
     nodeReg?.revoke(nodeId);
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:invite-create', (_e, groupId?: string) => safeHandle(() => ({ ok: true, invite: chuangjianYaoQing(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
-handleIpc('warmy:invite-use', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
+chuliIpc('warmy:invite-create', (_e, groupId?: string) => safeHandle(() => ({ ok: true, invite: chuangjianYaoQing(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
+chuliIpc('warmy:invite-use', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
   ok: shiYongYaoQing(tok),
 }));
-handleIpc('warmy:sync-publish', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => ({
+chuliIpc('warmy:sync-publish', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => ({
   ok: true,
   envelope: syncBus?.publish(env as never),
 }));
-handleIpc('warmy:sync-pull', (_e, nodeId: string) => safeHandle(() => ({ ok: true, messages: syncBus?.pull(nodeId) || [] }), { ok: true, messages: [] }))
+chuliIpc('warmy:sync-pull', (_e, nodeId: string) => safeHandle(() => ({ ok: true, messages: syncBus?.pull(nodeId) || [] }), { ok: true, messages: [] }))
 
 // ── dsh 实例入口（可选） ──
-handleIpc('warmy:dsh-available', () => {
+chuliIpc('warmy:dsh-available', () => {
   try {
     const dir = findDshPackageDir([
       path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
@@ -5849,7 +5870,7 @@ handleIpc('warmy:dsh-available', () => {
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: string }) => {
+chuliIpc('warmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: string }) => {
   const dshDir = findDshPackageDir([
     path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
     path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
@@ -5878,16 +5899,16 @@ handleIpc('warmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: string
 });
 
 // ── 邮件提醒（队列占位，功能待接 SMTP） ──
-handleIpc('warmy:email-queue', (_e, mail: { to: string; subject: string; body: string }) => {
+chuliIpc('warmy:email-queue', (_e, mail: { to: string; subject: string; body: string }) => {
   try {
     emailQueue.push({ ...mail, ts: Date.now() });
     return { ok: true, pending: emailQueue.length };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:email-list', () => safeHandle(() => ({ ok: true, items: emailQueue }), { ok: true, items: [] }))
+chuliIpc('warmy:email-list', () => safeHandle(() => ({ ok: true, items: emailQueue }), { ok: true, items: [] }))
 
 // ── SMTP 验证（用户设置，非写死） ──
-handleIpc('warmy:smtp-verify', async (_e, cfg: SmtpConfig & { id?: string }) => {
+chuliIpc('warmy:smtp-verify', async (_e, cfg: SmtpPeizhi & { id?: string }) => {
   try {
     const r = await verifySmtp(cfg);
     if (r.ok && cfg.id && settingsStore) {
@@ -5903,7 +5924,7 @@ handleIpc('warmy:smtp-verify', async (_e, cfg: SmtpConfig & { id?: string }) => 
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:smtp-list', () => {
+chuliIpc('warmy:smtp-list', () => {
   try {
     const s = settingsStore?.load();
     const accounts = (s?.smtpAccounts || []).map((a) => ({
@@ -5914,7 +5935,7 @@ handleIpc('warmy:smtp-list', () => {
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:smtp-add', (_e, acc: { label: string; host: string; port: number; secure: boolean; user: string; pass: string }) => {
+chuliIpc('warmy:smtp-add', (_e, acc: { label: string; host: string; port: number; secure: boolean; user: string; pass: string }) => {
   try {
     const s = settingsStore!.load();
     const list = s.smtpAccounts || [];
@@ -5934,7 +5955,7 @@ handleIpc('warmy:smtp-add', (_e, acc: { label: string; host: string; port: numbe
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:smtp-remove', (_e, id: string) => {
+chuliIpc('warmy:smtp-remove', (_e, id: string) => {
   try {
     const s = settingsStore!.load();
     const list = (s.smtpAccounts || []).filter((a) => a.id !== id);
@@ -5943,7 +5964,7 @@ handleIpc('warmy:smtp-remove', (_e, id: string) => {
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; host: string; port: number; secure: boolean; user: string; pass: string }>) => {
+chuliIpc('warmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; host: string; port: number; secure: boolean; user: string; pass: string }>) => {
   try {
     const s = settingsStore!.load();
     const list = s.smtpAccounts || [];
@@ -5965,7 +5986,7 @@ handleIpc('warmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; 
 // `PeerRegistry` 仍然保留，但它只当**地址簿**用（没有任何鉴权语义）：能不能通信由握手 + 名册决定。
 
 /** PeerRegistry（地址簿）→ 组网层要的对端列表 */
-function peerRefs(): MeshPeerRef[] {
+function duiduanYinyong(): WangzhuangDuiduanYinyong[] {
   return (peerReg?.list() ?? [])
     .filter((p) => !!p && typeof p.host === 'string' && Number(p.port) > 0)
     .map((p) => ({
@@ -6001,7 +6022,7 @@ function leaseHolder(): string {
 async function startSecureMesh(port: number, opts: { discovery?: boolean; announce?: boolean } = {}) {
   refreshLocalNodeId();
   if (!secureMesh) {
-    emitConsole({ cat: 'net', code: 'net.unavailable' });
+    fachuKongzhitai({ cat: 'net', code: 'net.unavailable' });
     return { ok: false as const, errorCode: 'net-unavailable', error: 'net-wiring-unavailable' };
   }
   const r = await secureMesh.enable(port, opts);
@@ -6012,7 +6033,7 @@ async function startSecureMesh(port: number, opts: { discovery?: boolean; announ
       errno: r.error,
     });
     // T194：组网开启失败 —— 端口绑不上是最要紧的一类（要能一眼看出是哪个端口、什么 errno）
-    emitConsole({
+    fachuKongzhitai({
       cat: 'net',
       code: r.errorCode === 'port-bind-failed' ? 'net.bind-failed' : 'net.enable-failed',
       data: { port, requestedPort: (r as { requestedPort?: number }).requestedPort ?? port, errorCode: r.errorCode, error: r.error },
@@ -6026,11 +6047,11 @@ async function startSecureMesh(port: number, opts: { discovery?: boolean; announ
     discovery: opts.discovery === true,
     announce: opts.announce === true,
   });
-  emitConsole({ cat: 'net', code: 'net.enable-ok', data: { port: r.port, requestedPort: r.requestedPort, nodeId: r.nodeId } });
+  fachuKongzhitai({ cat: 'net', code: 'net.enable-ok', data: { port: r.port, requestedPort: r.requestedPort, nodeId: r.nodeId } });
   return r;
 }
 
-handleIpc('warmy:lan-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
+chuliIpc('warmy:lan-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   try {
     const r = await startSecureMesh(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: false, announce: false });
     if (!r.ok) return r;
@@ -6040,17 +6061,17 @@ handleIpc('warmy:lan-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   }
 });
 
-handleIpc('warmy:lan-stop', async () => {
+chuliIpc('warmy:lan-stop', async () => {
   try {
     await secureMesh?.disable();
-    emitConsole({ cat: 'net', code: 'net.disable', data: { reason: 'lan-stop' } });
+    fachuKongzhitai({ cat: 'net', code: 'net.disable', data: { reason: 'lan-stop' } });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
 });
 
-handleIpc(
+chuliIpc(
   'warmy:lan-send',
   async (
     _e,
@@ -6085,9 +6106,9 @@ handleIpc(
   }
 );
 
-handleIpc('warmy:lan-inbox', () => safeHandle(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
+chuliIpc('warmy:lan-inbox', () => safeHandle(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
 
-handleIpc('warmy:lan-status', () =>
+chuliIpc('warmy:lan-status', () =>
   safeHandle(
     () => ({
       ok: true,
@@ -6101,7 +6122,7 @@ handleIpc('warmy:lan-status', () =>
   )
 );
 
-handleIpc('warmy:lan-dual-smoke', async (_e, opts: { localPort?: number; peerHost?: string; peerPort?: number } = {}) => {
+chuliIpc('warmy:lan-dual-smoke', async (_e, opts: { localPort?: number; peerHost?: string; peerPort?: number } = {}) => {
   try {
     refreshLocalNodeId();
     // 回环冒烟用**一次性**身份：握手层拒绝"对端指纹 == 本机指纹"（自反射），
@@ -6124,7 +6145,7 @@ handleIpc('warmy:lan-dual-smoke', async (_e, opts: { localPort?: number; peerHos
 });
 
 // ── 多节点 mesh（同样走鉴权通道；UDP 只做地址发现，不传业务数据） ──
-handleIpc('warmy:mesh-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
+chuliIpc('warmy:mesh-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   try {
     const r = await startSecureMesh(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: true, announce: true });
     if (!r.ok) return r;
@@ -6134,23 +6155,23 @@ handleIpc('warmy:mesh-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   }
 });
 
-handleIpc('warmy:mesh-stop', async () => {
+chuliIpc('warmy:mesh-stop', async () => {
   try {
     await secureMesh?.disable();
-    emitConsole({ cat: 'net', code: 'net.disable', data: { reason: 'mesh-stop' } });
+    fachuKongzhitai({ cat: 'net', code: 'net.disable', data: { reason: 'mesh-stop' } });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
 });
 
-handleIpc('warmy:peers-list', () => ({
+chuliIpc('warmy:peers-list', () => ({
   ok: true,
   peers: peerReg?.list() || [],
   notes: NET_NOTES,
 }));
 
-handleIpc(
+chuliIpc(
   'warmy:peers-add',
   (_e, p: { nodeId?: string; name: string; host: string; port: number; kind?: 'lan' | 'wan' }) => {
     const nodeId = p.nodeId || `peer-${p.host}-${p.port}`;
@@ -6159,14 +6180,14 @@ handleIpc(
   }
 );
 
-handleIpc('warmy:peers-remove', (_e, nodeId: string) => {
+chuliIpc('warmy:peers-remove', (_e, nodeId: string) => {
   try {
     peerReg?.revoke(nodeId);
     return { ok: true, peers: peerReg?.list() || [] };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) => {
+chuliIpc('warmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) => {
   try {
     if (!secureMesh?.enabled) return { ok: false, error: 'mesh not started' };
     const r = await secureMesh.broadcast({
@@ -6179,9 +6200,9 @@ handleIpc('warmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string)
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:mesh-inbox', () => safeHandle(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
+chuliIpc('warmy:mesh-inbox', () => safeHandle(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
 
-handleIpc('warmy:mesh-status', () =>
+chuliIpc('warmy:mesh-status', () =>
   safeHandle(
     () => ({
       ok: true,
@@ -6213,13 +6234,13 @@ handleIpc('warmy:mesh-status', () =>
  * TTL(20s) < UI 侧保鲜期(30s)，保证 UI 不会拿到"已过期却还没刷新"的结论。
  * ⚠️ 判定必须有**一个对端**：没有已知对端指纹时如实返回 null（不编造中继结论）。
  */
-let netReachCache: { at: number; value: ReachabilityHint | null } = { at: 0, value: null };
+let netReachCache: { at: number; value: KedaxingTishi | null } = { at: 0, value: null };
 const NET_REACH_TTL_MS = 20_000;
 
-async function netReachabilityCached(): Promise<ReachabilityHint | null> {
+async function netReachabilityCached(): Promise<KedaxingTishi | null> {
   const now = Date.now();
   if (now - netReachCache.at < NET_REACH_TTL_MS) return netReachCache.value;
-  let value: ReachabilityHint | null = null;
+  let value: KedaxingTishi | null = null;
   try {
     const benJiZhiWen = identityStore?.info()?.fingerprint;
     const peers = secureMesh?.presence() ?? [];
@@ -6234,24 +6255,24 @@ async function netReachabilityCached(): Promise<ReachabilityHint | null> {
   return value;
 }
 
-handleIpc('warmy:net-status', async () => {
-  const fallback: MeshStatusResult = {
+chuliIpc('warmy:net-status', async () => {
+  const fallback: WangzhuangZhuangtaiJieguo = {
     ok: true,
     meshEnabled: false,
     link: { reachable: false, lastError: 'net-unavailable', peers: [] },
     unlock: identityStore ? requireSignableIdentity(identityStore).unlock ?? null : null,
   };
-  return await safeHandleAsync<MeshStatusResult>(async () => {
+  return await safeHandleAsync<WangzhuangZhuangtaiJieguo>(async () => {
     const base = (await secureMesh?.status()) ?? fallback;
     // status() 里的 reachability 是**同步且刻意保守**的（needsPublicRelayNotice 恒 false）。
     // 终态能力在异步的 reachabilityFor() 里，必须在这里合并出去，否则 UI 的终态横幅
     // 在真实应用里永远不会出现（只有异步路径才敢说"两端都拨不进来、而且没有中继"）。
-    const reach = await netReachabilityCached();
-    return reach ? { ...base, reachability: reach } : base;
+    const dada = await netReachabilityCached();
+    return dada ? { ...base, reachability: dada } : base;
   }, fallback);
 });
 
-handleIpc('warmy:net-probe', async (_e, input: { ip?: string; port?: number; domains?: string[] } = {}) => {
+chuliIpc('warmy:net-probe', async (_e, input: { ip?: string; port?: number; domains?: string[] } = {}) => {
   try {
     return await probeNet({
       ip: String(input.ip ?? ''),
@@ -6263,15 +6284,15 @@ handleIpc('warmy:net-probe', async (_e, input: { ip?: string; port?: number; dom
   }
 });
 
-handleIpc('warmy:net-local-address', async () => {
+chuliIpc('warmy:net-local-address', async () => {
   const port = secureMesh?.enabled ? secureMesh.boundPort : undefined;
   return await safeHandleAsync(
-    async () => await localAddressInfo(port ? { port } : {}),
+    async () => await benjiDizhiXinxi(port ? { port } : {}),
     { ok: true, localIp: '127.0.0.1', interfaces: [], hasPublicInterface: false, behindNat: true }
   );
 });
 
-handleIpc('warmy:net-members-presence', (_e, payload: { groupId?: string } = {}) => {
+chuliIpc('warmy:net-members-presence', (_e, payload: { groupId?: string } = {}) => {
   try {
     const groupId = String(payload.groupId || '');
     const members = groupId ? groupStore?.listMembers(groupId) ?? [] : [];
@@ -6284,7 +6305,7 @@ handleIpc('warmy:net-members-presence', (_e, payload: { groupId?: string } = {})
     //  · **有指纹**的异地成员 → 用活连接集合（SecureMesh / ConnectionLiveness）按指纹判
     //    （presenceBasis: 'mesh-session'：没有活连接就是不在线，不假装知道）；
     //  · **没指纹**的异地成员 → presenceBasis: 'unattributed'，如实**不给** online。
-    const rows = buildMemberPresence({ members, instances, liveness, meshEnabled });
+    const rows = goujianChengyuanZaichang({ members, instances, liveness, meshEnabled });
     return {
       ok: true,
       meshEnabled,
@@ -6297,7 +6318,7 @@ handleIpc('warmy:net-members-presence', (_e, payload: { groupId?: string } = {})
   }
 });
 
-handleIpc('warmy:net-mesh-enable', async (_e, input: { ip?: string; port?: number; domains?: string[]; publicAddresses?: string[] } = {}) => {
+chuliIpc('warmy:net-mesh-enable', async (_e, input: { ip?: string; port?: number; domains?: string[]; publicAddresses?: string[] } = {}) => {
   try {
     const port = Number(input.port) || WARMY_DEFAULT_NET_PORT;
     const r = await startSecureMesh(port, { discovery: true, announce: true });
@@ -6319,7 +6340,7 @@ handleIpc('warmy:net-mesh-enable', async (_e, input: { ip?: string; port?: numbe
  * 语义约束：**只读、只探测** —— 不绑定、不改配置、不替用户做主。
  * 探测并发有上限、总超时 4s，绝不让界面卡住。
  */
-handleIpc('warmy:net-port-candidates', async (_e, input: { requestedPort?: number; want?: number } = {}) => {
+chuliIpc('warmy:net-port-candidates', async (_e, input: { requestedPort?: number; want?: number } = {}) => {
   try {
     const requestedPort = Number(input.requestedPort);
     return {
@@ -6345,17 +6366,17 @@ handleIpc('warmy:net-port-candidates', async (_e, input: { requestedPort?: numbe
   }
 });
 
-handleIpc('warmy:net-mesh-disable', async () => {
+chuliIpc('warmy:net-mesh-disable', async () => {
   try {
     await secureMesh?.disable();
-    emitConsole({ cat: 'net', code: 'net.disable', data: { reason: 'net-mesh-disable' } });
+    fachuKongzhitai({ cat: 'net', code: 'net.disable', data: { reason: 'net-mesh-disable' } });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
 });
 
-handleIpc('warmy:net-mesh-announce', async (_e, reason: 'startup' | 'address-changed' | 'manual' = 'manual') => {
+chuliIpc('warmy:net-mesh-announce', async (_e, reason: 'startup' | 'address-changed' | 'manual' = 'manual') => {
   try {
     if (!secureMesh?.enabled) return { ok: false, errorCode: 'mesh-disabled' };
     return await secureMesh.announce(reason);
@@ -6365,8 +6386,8 @@ handleIpc('warmy:net-mesh-announce', async (_e, reason: 'startup' | 'address-cha
 });
 
 // ── 窗口控制（自定义标题栏） ──
-handleIpc('warmy:win-minimize', () => safeHandle(() => win?.minimize(), null))
-handleIpc('warmy:win-maximize', () => {
+chuliIpc('warmy:win-minimize', () => safeHandle(() => win?.minimize(), null))
+chuliIpc('warmy:win-maximize', () => {
   try {
     if (!win) return;
     if (win.isMaximized()) win.unmaximize();
@@ -6374,7 +6395,7 @@ handleIpc('warmy:win-maximize', () => {
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 // 窗口按钮：作用于**发送 IPC 的那个窗口**（独立会话窗点关闭只关自己，不关主界面）
-handleIpc('warmy:win-close', (e) => safeHandle(() => {
+chuliIpc('warmy:win-close', (e) => safeHandle(() => {
   const sender = BrowserWindow.fromWebContents(e.sender);
   if (sender && !sender.isDestroyed()) {
     if (win && sender.id === win.id) {
@@ -6389,29 +6410,29 @@ handleIpc('warmy:win-close', (e) => safeHandle(() => {
   win?.close();
   return true;
 }, null));
-handleIpc('warmy:win-minimize', (e) => safeHandle(() => {
+chuliIpc('warmy:win-minimize', (e) => safeHandle(() => {
   const sender = BrowserWindow.fromWebContents(e.sender) || win;
   sender?.minimize();
   return true;
 }, null));
-handleIpc('warmy:win-maximize', (e) => safeHandle(() => {
+chuliIpc('warmy:win-maximize', (e) => safeHandle(() => {
   const sender = BrowserWindow.fromWebContents(e.sender) || win;
   if (!sender) return false;
   if (sender.isMaximized()) sender.unmaximize();
   else sender.maximize();
   return true;
 }, null));
-handleIpc('warmy:win-reload', () => {
+chuliIpc('warmy:win-reload', () => {
   try {
     if (!win) return { ok: false };
     // 清 HTTP 缓存后重载，避免旧 JS/CSS 残留
-    const ses = win.webContents.session;
-    ses.clearCache().catch(() => {});
+    const huihua = win.webContents.session;
+    huihua.clearCache().catch(() => {});
     win.webContents.reloadIgnoringCache();
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:win-always-on-top', (_e, on?: boolean) => {
+chuliIpc('warmy:win-always-on-top', (_e, on?: boolean) => {
   try {
     if (!win) return { ok: false };
     const next = typeof on === 'boolean' ? on : !win.isAlwaysOnTop();
@@ -6419,7 +6440,7 @@ handleIpc('warmy:win-always-on-top', (_e, on?: boolean) => {
     return { ok: true, alwaysOnTop: next };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:platform', () => ({
+chuliIpc('warmy:platform', () => ({
   ok: true,
   platform: process.platform,
   isMac: process.platform === 'darwin',
@@ -6429,13 +6450,13 @@ handleIpc('warmy:platform', () => ({
 
 
 // ── P5 短命执行者 ──
-handleIpc('warmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
+chuliIpc('warmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
   try {
-    await ensureProviderKey();
+    await baozhangGongyingshangMiyao();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       return { ok: false, error: 'no key' };
     }
-    const r = await runShortLivedExecutor(
+    const r = await yunxingDuanCunhuoZhixingqi(
       {
         taskId: task.taskId || 'x-' + Date.now(),
         brief: task.brief,
@@ -6452,9 +6473,9 @@ handleIpc('warmy:executor-run', async (_e, task: { taskId?: string; brief: strin
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
+chuliIpc('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
   try {
-    await ensureProviderKey();
+    await baozhangGongyingshangMiyao();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       return { ok: false, error: 'no key' };
     }
@@ -6472,29 +6493,29 @@ handleIpc('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; bri
 });
 
 // ── P7 资产治理 ──
-handleIpc('warmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: boolean }) => ({
+chuliIpc('warmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: boolean }) => ({
   ok: true,
   assets: retrieveAssetsForChat({ scope: opts?.scope as never, strict: opts?.strict }),
 }));
 
-handleIpc('warmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
+chuliIpc('warmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
   try {
     zhuCeLiaoTianZiChan({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:assets-feedback', (_e, id: string, good: boolean) => {
+chuliIpc('warmy:assets-feedback', (_e, id: string, good: boolean) => {
   try {
     jiLuZiChanShiYong(id, good);
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:assets-sweep', () => safeHandle(() => ({ ok: true, n: 0 }), { ok: true, n: 0 }))
+chuliIpc('warmy:assets-sweep', () => safeHandle(() => ({ ok: true, n: 0 }), { ok: true, n: 0 }))
 
 // ── P6 知识库：从对话写入 ──
-handleIpc('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
+chuliIpc('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
   try {
     knowledge?.upsertEntity({
       id: 'sess-' + payload.sessionId,
@@ -6525,16 +6546,16 @@ handleIpc('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string
 
 
 // ── 3 权限审批弹窗 ──
-handleIpc('warmy:request-approval', (_e, req: { action: string; suggested?: string }) => {
+chuliIpc('warmy:request-approval', (_e, req: { action: string; suggested?: string }) => {
   try {
-    const id = 'ap-' + ++approvalSeq;
+    const id = 'ap-' + ++pizhunXulie;
     return new Promise((resolve) => {
-      pendingApprovals.set(id, { resolve });
+      dengdaiPizhun.set(id, { resolve });
       win?.webContents.send('warmy:approval-request', { id, action: req.action, suggested: req.suggested || 'once' });
       setTimeout(() => {
-        const p = pendingApprovals.get(id);
+        const p = dengdaiPizhun.get(id);
         if (p) {
-          pendingApprovals.delete(id);
+          dengdaiPizhun.delete(id);
           p.resolve({ allowed: false, scope: 'deny' });
         }
       }, 30000);
@@ -6542,18 +6563,18 @@ handleIpc('warmy:request-approval', (_e, req: { action: string; suggested?: stri
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:approval-respond', (_e, id: string, allowed: boolean, scope: string) => {
+chuliIpc('warmy:approval-respond', (_e, id: string, allowed: boolean, scope: string) => {
   try {
-    const p = pendingApprovals.get(id);
+    const p = dengdaiPizhun.get(id);
     if (!p) return { ok: false };
-    pendingApprovals.delete(id);
+    dengdaiPizhun.delete(id);
     p.resolve({ allowed, scope });
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
 // ── 4 自动检查点 ──
-handleIpc('warmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
+chuliIpc('warmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
   try {
     if (!checkpoints) return { ok: false };
     const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
@@ -6568,7 +6589,7 @@ handleIpc('warmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logS
 });
 
 // ── 6 成本仪表盘 ──
-handleIpc('warmy:cost-summary', () => {
+chuliIpc('warmy:cost-summary', () => {
   try {
     const m = metrics.summary();
     const estCost = ((m.promptTokens + m.completionTokens) / 1000) * 0.002;
@@ -6585,7 +6606,7 @@ handleIpc('warmy:cost-summary', () => {
 });
 
 // ── 1 值班编排闭环 ──
-handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: string; urgency?: string; userId?: string }) => {
+chuliIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: string; urgency?: string; userId?: string }) => {
   /**
    * ADR 004 第七批定稿：项目不可用（容器开发项目 + 容器没起，或被创建者停用）⇒ 拒绝派发
    * （**不**退到主机上跑）。启用/停用与切换容器的入口在**项目右键菜单**：
@@ -6593,7 +6614,7 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
    */
   const KaiFaJuJue = await projectUnavailableFor(String(msg?.groupId || ''));
   if (KaiFaJuJue) {
-    emitConsole({ cat: 'system', code: 'container.project.unavailable', data: { sessionId: msg?.groupId, projectCode: KaiFaJuJue.projectCode } });
+    fachuKongzhitai({ cat: 'system', code: 'container.project.unavailable', data: { sessionId: msg?.groupId, projectCode: KaiFaJuJue.projectCode } });
     return {
       ok: false,
       action: 'error',
@@ -6613,7 +6634,7 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
     dutyEligible: x.dutyEligible,
   }));
 
-  const result = await orchestrateGroupMessage(
+  const result = await xietiaoQunXiaoxi(
     {
       router,
       board: board!,
@@ -6628,9 +6649,9 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
       runTool: async (call, ctx) => {
         const t1 = Date.now();
         const toolName = String((call && call.function && call.function.name) || 'tool');
-        emitConsole({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId: msg.groupId } });
+        fachuKongzhitai({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId: msg.groupId } });
         // 工具里对文件做过的真实读写都记到**这个项目**的台账上（scope = 会话 id）
-        const out = await withFileAccessScope(msg.groupId, () => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }));
+        const out = await withFileAccessScope(msg.groupId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.maxResultChars }));
         metrics.recordToolCall({
           ts: Date.now(),
           sessionId: msg.groupId,
@@ -6640,7 +6661,7 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
           chars: out.chars,
           ms: Date.now() - t1,
         });
-        emitConsole({
+        fachuKongzhitai({
           cat: 'tool',
           code: 'tool.finish',
           data: { tool: out.meta.tool || toolName, round: ctx.round, sessionId: msg.groupId, ok: out.ok, chars: out.chars, ms: Date.now() - t1 },
@@ -6660,7 +6681,7 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
       // 项目 MEMORY：从 group-store 读，**不**从 memory-os 流水复制（避免双源）
       projectMemory: (gid) => projectMemoryForContext(groupStore, gid),
       decisionContext: (gid) => aiQuestions.contextFor(gid),
-      runProjectGate: async (gid, reason) => runProjectGateOnce(gid, reason),
+      runProjectGate: async (gid, reason) => yunxingXiangmuMenjinYici(gid, reason),
       addEvent: (title, body, groupId) => {
         knowledge?.upsertEntity({ id: 'grp-' + groupId, kind: 'project', name: groupId, attrs: {}, anchors: [] });
         knowledge?.addEvent({
@@ -6717,8 +6738,8 @@ handleIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content:
 
 // ── C. 执行者状态 ──
 const executorStatus: Array<{ id: string; name: string; taskId: string; brief: string; status: string; durationMs: number; ts: number }> = [];
-handleIpc('warmy:executors-status', () => safeHandle(() => ({ ok: true, items: executorStatus.slice(-10) }), { ok: true, items: [] }))
-handleIpc('warmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
+chuliIpc('warmy:executors-status', () => safeHandle(() => ({ ok: true, items: executorStatus.slice(-10) }), { ok: true, items: [] }))
+chuliIpc('warmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
   try {
     const ids = payload.executorIds?.length
       ? payload.executorIds
@@ -6728,7 +6749,7 @@ handleIpc('warmy:executors-run-brief', async (_e, payload: { brief: string; cont
       ids.map(async (id) => {
         const item = { id, name: id, taskId: 't-' + Date.now(), brief: payload.brief, status: 'running', durationMs: 0, ts: Date.now() };
         executorStatus.push(item);
-        const r = await runShortLivedExecutor(
+        const r = await yunxingDuanCunhuoZhixingqi(
           { taskId: item.taskId, brief: payload.brief, contextItems: payload.contextItems || [] },
           { presetId: providerCfg.presetId, apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL || undefined, model: providerCfg.model }
         );
@@ -6743,7 +6764,7 @@ handleIpc('warmy:executors-run-brief', async (_e, payload: { brief: string; cont
 
 
 // ── E. 会话状态持久化 ──
-handleIpc('warmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unknown[]; groups?: unknown[]; chats?: unknown[] }) => {
+chuliIpc('warmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unknown[]; groups?: unknown[]; chats?: unknown[] }) => {
   try {
     if (!settingsStore) return { ok: false };
     const cur = settingsStore.load();
@@ -6752,7 +6773,7 @@ handleIpc('warmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unk
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:state-load', () => {
+chuliIpc('warmy:state-load', () => {
   try {
     const s = settingsStore?.load() as never;
     return { ok: true, state: s || {} };
@@ -6762,7 +6783,7 @@ handleIpc('warmy:state-load', () => {
 
 
 // ── 知识库删除 ──
-handleIpc('warmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: string }) => {
+chuliIpc('warmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: string }) => {
   try {
     if (!knowledge) return { ok: false, error: 'kb not ready' };
     const removed = payload?.kind === 'event' ? knowledge.removeEvent(payload.id) : knowledge.removeEntity(payload.id);
@@ -6773,7 +6794,7 @@ handleIpc('warmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: strin
 });
 
 // ── 通用：把文本保存到文件（CSV / Markdown 等）──
-handleIpc('warmy:save-text', async (_e, payload: { defaultName?: string; content: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
+chuliIpc('warmy:save-text', async (_e, payload: { defaultName?: string; content: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
   try {
     if (!win) return { ok: false, error: 'no window' };
     const r = await dialog.showSaveDialog(win, {
@@ -6791,21 +6812,21 @@ handleIpc('warmy:save-text', async (_e, payload: { defaultName?: string; content
 // ── 卡顿自检（diagnostics IPC）已下线：功能整块移除，IPC 通道不再注册 ──
 
 // ── D. ASR 语音转文字（调用 DeepSeek 兼容接口的 audio 端点；失败返回 null） ──
-handleIpc('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
+chuliIpc('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
   try {
-    await ensureProviderKey();
+    await baozhangGongyingshangMiyao();
     if (!providerCfg.apiKey) return { ok: false, error: 'no key' };
     // 优先走用户配置的 ASR 端点（若支持）；否则尝试 /audio/transcriptions
     const base = (providerCfg.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '');
     const b64 = String(payload.dataUrl).replace(/^data:[^,]+,/, '');
     const buf = Buffer.from(b64, 'base64');
-    const form = new FormData();
-    form.append('file', new Blob([buf], { type: 'audio/webm' }), 'voice.webm');
-    form.append('model', 'whisper-1');
+    const biaodan = new FormData();
+    biaodan.append('file', new Blob([buf], { type: 'audio/webm' }), 'voice.webm');
+    biaodan.append('model', 'whisper-1');
     const res = await fetch(base + '/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + providerCfg.apiKey },
-      body: form,
+      body: biaodan,
     });
     if (!res.ok) return { ok: false, error: 'http ' + res.status };
     const data = (await res.json()) as { text?: string };
@@ -6820,18 +6841,19 @@ handleIpc('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: s
 // 产品定稿：独立会话窗 = **可拖动顶栏** + 聊天（第3列）+ 右侧事项（第4列）。
 // 不要再做成「完整主界面」；不要无边框导致无法拖动。
 const chatWindows = new Map<string, BrowserWindow>();
-handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string; iconDataUrl?: string }) => {
+chuliIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string; iconDataUrl?: string }) => {
   try {
     if (chatWindows.has(payload.id)) {
       chatWindows.get(payload.id)?.focus();
       return { ok: true };
     }
-    const tuBiaoLuJing = warmyWindowIcon();
-    let winIcon = nativeImage.createFromPath(tuBiaoLuJing);
+    // 独立会话窗同样是任务栏窗口：图标也用白底版（随后被聊天对象头像覆盖，那份也已合成白底）
+    const tuBiaoLuJing = warmyTaskbarIcon();
+    let winTubiao = nativeImage.createFromPath(tuBiaoLuJing);
     try {
       if (payload.iconDataUrl && String(payload.iconDataUrl).startsWith('data:image')) {
         const fromChat = nativeImage.createFromDataURL(String(payload.iconDataUrl));
-        if (!fromChat.isEmpty()) winIcon = fromChat;
+        if (!fromChat.isEmpty()) winTubiao = fromChat;
       }
     } catch { /* fallback logo */ }
     const w = new BrowserWindow({
@@ -6852,7 +6874,7 @@ handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; k
         sandbox: true,
       },
     });
-    try { if (!winIcon.isEmpty()) w.setIcon(winIcon); } catch { /* noop */ }
+    try { if (!winTubiao.isEmpty()) w.setIcon(winTubiao); } catch { /* noop */ }
     // 独立会话窗一律 chat+panel 模式（不再展示完整主界面）
     void w.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
       query: {
@@ -6869,7 +6891,7 @@ handleIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; k
 });
 
 // ── I. 全局热键 ──
-handleIpc('warmy:register-hotkey', (_e, accel: string) => {
+chuliIpc('warmy:register-hotkey', (_e, accel: string) => {
   try {
     globalShortcut.unregister(accel);
     const ok = globalShortcut.register(accel, () => {
@@ -6885,12 +6907,13 @@ handleIpc('warmy:register-hotkey', (_e, accel: string) => {
 });
 
 // ── J. 托盘 ──
-let trayOffWorkLabel = '下班';
-let exportHeaderLabel = '导出自';
+let tuopanGuanGongzuoBiaoqian = '下班';
+let daochuTouBiaoqian = '导出自';
 let exportMeLabel = '我';
-function createTray() {
+function chuangjianTuopan() {
   if (tray) return;
-  const tuBiaoLuJing = warmyWindowIcon();
+  // 系统托盘：白底版
+  const tuBiaoLuJing = warmyTaskbarIcon();
   let tuPian = nativeImage.createFromPath(tuBiaoLuJing);
   if (tuPian.isEmpty()) {
     tuPian = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', 'logo-32.png'));
@@ -6907,14 +6930,14 @@ function createTray() {
   t.setToolTip('无限牛马 WArmy');
   // 下班 = 真正退出（必须走 quitApp：置 forceQuit + 毁托盘，否则 close 会把退出拦成隐藏）
   t.setContextMenu(Menu.buildFromTemplate([
-    { label: trayOffWorkLabel, click: () => { quitApp('tray-off-work'); } },
+    { label: tuopanGuanGongzuoBiaoqian, click: () => { tuichuYingyong('tray-off-work'); } },
   ]));
   t.on('double-click', () => { focusMainWindowCentered(); });
   tray = t;
 }
-handleIpc('warmy:tray-init', () => {
+chuliIpc('warmy:tray-init', () => {
   try {
-    createTray();
+    chuangjianTuopan();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
@@ -6923,17 +6946,17 @@ handleIpc('warmy:tray-init', () => {
 
 
 // 托盘提示语由渲染层按当前语言下发（logo 文案随语言变化）
-handleIpc('warmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?: string; header?: string; me?: string }) => {
+chuliIpc('warmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?: string; header?: string; me?: string }) => {
   try {
     const p = typeof payload === 'string' ? { text: payload } : payload || {};
     if (p.text) tray?.setToolTip(String(p.text).slice(0, 120));
-    if (p.offWork && p.offWork !== trayOffWorkLabel) {
-      trayOffWorkLabel = String(p.offWork);
+    if (p.offWork && p.offWork !== tuopanGuanGongzuoBiaoqian) {
+      tuopanGuanGongzuoBiaoqian = String(p.offWork);
       tray?.setContextMenu(Menu.buildFromTemplate([
-        { label: trayOffWorkLabel, click: () => { quitApp('tray-off-work'); } },
+        { label: tuopanGuanGongzuoBiaoqian, click: () => { tuichuYingyong('tray-off-work'); } },
       ]));
     }
-    if (p.header) exportHeaderLabel = String(p.header);
+    if (p.header) daochuTouBiaoqian = String(p.header);
     if (p.me) exportMeLabel = String(p.me);
     return { ok: true };
   } catch (e) {
@@ -6942,7 +6965,7 @@ handleIpc('warmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?
 });
 
 // ── K. 会话导出 Markdown ──
-handleIpc('warmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
+chuliIpc('warmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
   try {
     const dir = path.join(app.getPath('userData'), 'exports');
     // 写操作门禁：导出目录是共享产物，先拿租约再写
@@ -6951,7 +6974,7 @@ handleIpc('warmy:export-session', (_e, payload: { title: string; messages: Array
       const lines = [
         '# ' + payload.title,
         '',
-        '> ' + exportHeaderLabel + ' WArmy · ' + new Date().toLocaleString(),
+        '> ' + daochuTouBiaoqian + ' WArmy · ' + new Date().toLocaleString(),
         '',
       ];
       for (const msg of payload.messages) {
@@ -6976,16 +6999,16 @@ handleIpc('warmy:export-session', (_e, payload: { title: string; messages: Array
 });
 
 // ── L. 自动更新（真实查询 + 真实下载校验；自动安装未实现，明确标记） ──
-handleIpc('warmy:auto-update-check', async () =>
+chuliIpc('warmy:auto-update-check', async () =>
   safeHandleAsync<UpdateCheckResult>(
-    async () => (updater ? await updater.check() : updaterUnavailableCheck(appVersion())),
-    updaterUnavailableCheck(appVersion())
+    async () => (updater ? await updater.check() : updaterUnavailableCheck(yingyongBanben())),
+    updaterUnavailableCheck(yingyongBanben())
   )
 );
-handleIpc('warmy:auto-update-download', async () =>
+chuliIpc('warmy:auto-update-download', async () =>
   safeHandleAsync<UpdateDownloadResult>(
-    async () => (updater ? await updater.download() : updaterUnavailableDownload(appVersion())),
-    updaterUnavailableDownload(appVersion())
+    async () => (updater ? await updater.download() : updaterUnavailableDownload(yingyongBanben())),
+    updaterUnavailableDownload(yingyongBanben())
   )
 );
 
@@ -6999,18 +7022,18 @@ function updateSourceSnapshot(): UpdateSourceInfo & { ok: boolean } {
     url: null,
     origin: 'none',
     channel: '',
-    currentVersion: appVersion(),
+    currentVersion: yingyongBanben(),
     error: 'updater unavailable',
   };
 }
-handleIpc('warmy:update-source-get', () => safeHandle(() => updateSourceSnapshot(), updateSourceSnapshot()));
-handleIpc('warmy:update-source-set', (_e, payload: { url?: string; channel?: string }) => {
+chuliIpc('warmy:update-source-get', () => safeHandle(() => updateSourceSnapshot(), updateSourceSnapshot()));
+chuliIpc('warmy:update-source-set', (_e, payload: { url?: string; channel?: string }) => {
   try {
     if (!settingsStore) return { ok: false, error: 'settings not ready' };
     const patch: Record<string, unknown> = {};
     const url = typeof payload?.url === 'string' ? payload.url.trim() : '';
     if (url) {
-      const v = validateFeedUrl(url);
+      const v = jiaoyanGengxinyuanUrl(url);
       if (!v.ok) return { ok: false, error: v.error }; // 校验信息是给用户看的，不含内部路径
       patch['updateFeedUrl'] = v.url;
     } else {
@@ -7028,7 +7051,7 @@ handleIpc('warmy:update-source-set', (_e, payload: { url?: string; channel?: str
 
 
 // ── M. 群成员管理（真实持久化：userData/groups.json） ──
-handleIpc('warmy:group-members', (_e, groupId: string) =>
+chuliIpc('warmy:group-members', (_e, groupId: string) =>
   safeHandle<GroupMembersResult & { localIsCreator?: boolean }>(
     () => {
       const gid = String(groupId || '');
@@ -7044,7 +7067,7 @@ handleIpc('warmy:group-members', (_e, groupId: string) =>
        */
       const chuangJianZheZhiWen = String(groupStore.getGroup(gid)?.creatorFingerprint || '');
       const benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
-      const localIsCreator = !!chuangJianZheZhiWen && !!benJiZhiWen && fingerprintMatches(chuangJianZheZhiWen, benJiZhiWen);
+      const localIsCreator = !!chuangJianZheZhiWen && !!benJiZhiWen && zhiwenPipei(chuangJianZheZhiWen, benJiZhiWen);
       return { ok: true, groupId: gid, members, localIsCreator };
     },
     { ok: false, members: [], error: 'group store unavailable' }
@@ -7055,7 +7078,7 @@ handleIpc('warmy:group-members', (_e, groupId: string) =>
  * （ADR §2.3 第 6 条：成员加入时由项目主签发）。
  * 拿不到名片也照常加入，但**指纹留空**并记一条审计 —— 不猜、不伪造。
  */
-handleIpc(
+chuliIpc(
   'warmy:group-invite',
   async (
     _e,
@@ -7104,7 +7127,7 @@ handleIpc(
  * 踢人 —— **同时吊销他的成员证书**（reason: 'departed'），并把新版吊销列表广播给在线成员。
  * 这是"吊销后拿旧证书重连必须被拒"的真实入口：证书先在本地吊销，再同步出去。
  */
-handleIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: string }) => {
+chuliIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: string }) => {
   try {
     if (!groupStore) return { ok: false, error: 'group store unavailable' };
     const gid = String(payload?.groupId || '');
@@ -7113,8 +7136,8 @@ handleIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: s
     const r = groupStore.removeMember(gid, mid);
     if (!r.ok) return { ok: false, error: r.error || 'kick failed', members: r.members };
     // 本机实例被踢时同步退出路由值班池
-    const kicked = router.listMembers(gid).find((m) => m.id === mid || `inst:${m.id}` === mid);
-    if (kicked) router.leave(gid, kicked.id);
+    const ti = router.listMembers(gid).find((m) => m.id === mid || `inst:${m.id}` === mid);
+    if (ti) router.leave(gid, ti.id);
     audit?.log('group.kick', { groupId: gid });
     let revoked: { certId: string; listVersion: number } | null = null;
     let revokeError: string | null = null;
@@ -7128,7 +7151,7 @@ handleIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: s
       } else if (!signer) {
         revokeError = 'identity-missing';
       } else {
-        const rv = await revokeMemberCertificate({
+        const rv = await chexiaoChengyuanZhengshu({
           signer,
           membership,
           groupId: gid,
@@ -7157,7 +7180,7 @@ handleIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: s
     return { ok: false, error: 'kick failed' };
   }
 });
-handleIpc('warmy:group-set-admin', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
+chuliIpc('warmy:group-set-admin', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
   try {
     if (!groupStore) return { ok: false, error: 'group store unavailable' };
     const gid = String(payload?.groupId || '');
@@ -7177,13 +7200,13 @@ handleIpc('warmy:group-set-admin', (_e, payload: { groupId: string; memberId: st
  * 实体状态只存在主进程这一处（群定向、项目属性、成员、禁用…都改了这里），
  * 改完只发一条**变化通知**，两个窗口各自按同一份事实重新渲染自己的那处视图。
  */
-function notifyEntityChanged(id: string, kind: string, exceptId?: number): void {
+function tongzhiShitiBiangeng(id: string, kind: string, exceptId?: number): void {
   const key = String(id || '');
   if (!key) return;
   try { broadcastToWindows('warmy:entity-updated', { id: key, kind, ts: Date.now() }, exceptId); } catch { /* noop */ }
 }
 
-handleIpc('warmy:group-directed', (e, payload: { groupId: string; directed: boolean }) => {
+chuliIpc('warmy:group-directed', (e, payload: { groupId: string; directed: boolean }) => {
   try {
     const g = router.getGroup(payload.groupId);
     if (!g) return { ok: false, error: 'no group' };
@@ -7193,14 +7216,14 @@ handleIpc('warmy:group-directed', (e, payload: { groupId: string; directed: bool
      * 实体级状态（"只回我"开关）也是**同一个实体的属性**：另一个窗口若正看着这个群，
      * 它的开关必须跟着变 —— 两个窗口是同一实体的两处视图，不是两份各自的状态。
      */
-    notifyEntityChanged(payload.groupId, 'group', e?.sender?.id);
+    tongzhiShitiBiangeng(payload.groupId, 'group', e?.sender?.id);
     return { ok: true, directedMode: g.directedMode };
   } catch (e2) { return { ok: false, error: 'directed mode failed' }; }
 });
 
 
 // ── N. 会话内嵌看板 ──
-handleIpc('warmy:board-session', (_e, groupId: string) => ({
+chuliIpc('warmy:board-session', (_e, groupId: string) => ({
   ok: true,
   tasks: board?.listTasks(groupId) || [],
   events: (board?.tailEvents(20) || []).filter((e) => e.groupId === groupId),
@@ -7208,7 +7231,7 @@ handleIpc('warmy:board-session', (_e, groupId: string) => ({
 
 
 // ── O. CCR 工具输出压缩 ──
-handleIpc('warmy:ccr-tool-output', (_e, payload: { toolName?: string; content: string }) => {
+chuliIpc('warmy:ccr-tool-output', (_e, payload: { toolName?: string; content: string }) => {
   try {
     const r = ccr.beforeLog({ kind: 'tool_result', content: payload.content, toolName: payload.toolName });
     metrics.recordCcr({ ts: Date.now(), kind: 'tool_result', originalBytes: r.originalBytes, compressedBytes: r.compressedBytes });
@@ -7218,7 +7241,7 @@ handleIpc('warmy:ccr-tool-output', (_e, payload: { toolName?: string; content: s
 
 
 // ── P. 知识库详情 ──
-handleIpc('warmy:kb-detail', (_e, q: string) => {
+chuliIpc('warmy:kb-detail', (_e, q: string) => {
   try {
     const r = knowledge?.query(q) || { entities: [], events: [] };
     return {
@@ -7231,15 +7254,15 @@ handleIpc('warmy:kb-detail', (_e, q: string) => {
 
 
 // ── Q. 错误提示 ──
-handleIpc('warmy:last-error', () => safeHandle(() => ({ ok: true, error: lastError }), { ok: true, error: null }))
-handleIpc('warmy:clear-error', () => { lastError = null; return { ok: true }; });
+chuliIpc('warmy:last-error', () => safeHandle(() => ({ ok: true, error: lastError }), { ok: true, error: null }))
+chuliIpc('warmy:clear-error', () => { lastError = null; return { ok: true }; });
 
 
 
 // ── 项目 MEMORY / AI 决策卡 / 门禁 / read-back / 去重 ──
 
 /** 项目 MEMORY：唯一落点 = groups.json project.memory */
-handleIpc('warmy:project-memory-get', (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:project-memory-get', (_e, payload?: { sessionId?: string }) => {
   try {
     const gid = String(payload?.sessionId || '');
     const memory = readProjectMemory(groupStore, gid);
@@ -7248,7 +7271,7 @@ handleIpc('warmy:project-memory-get', (_e, payload?: { sessionId?: string }) => 
     return { ok: false, error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:project-memory-set', async (_e, payload?: { sessionId?: string; memory?: string }) => {
+chuliIpc('warmy:project-memory-set', async (_e, payload?: { sessionId?: string; memory?: string }) => {
   try {
     const gid = String(payload?.sessionId || '');
     const jiYi = String(payload?.memory ?? '');
@@ -7268,7 +7291,7 @@ handleIpc('warmy:project-memory-set', async (_e, payload?: { sessionId?: string;
 });
 
 /** AI 工作中求助选项卡（永远含「其他」自定义输入） */
-handleIpc('warmy:ai-question-open', (_e, payload?: { groupId?: string; sessionId?: string; title?: string; body?: string; options?: Array<{ id?: string; label: string; description?: string }> }) => {
+chuliIpc('warmy:ai-question-open', (_e, payload?: { groupId?: string; sessionId?: string; title?: string; body?: string; options?: Array<{ id?: string; label: string; description?: string }> }) => {
   try {
     const q = aiQuestions.open({
       groupId: String(payload?.groupId || payload?.sessionId || ''),
@@ -7277,20 +7300,20 @@ handleIpc('warmy:ai-question-open', (_e, payload?: { groupId?: string; sessionId
       body: payload?.body,
       options: payload?.options || [],
     });
-    emitConsole({ cat: 'system', code: 'ai.question.open', data: { id: q.id, groupId: q.groupId, title: q.title } });
+    fachuKongzhitai({ cat: 'system', code: 'ai.question.open', data: { id: q.id, groupId: q.groupId, title: q.title } });
     return { ok: true, question: q };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:ai-question-list', (_e, groupId?: string) => {
+chuliIpc('warmy:ai-question-list', (_e, groupId?: string) => {
   try {
     return { ok: true, items: aiQuestions.list(typeof groupId === 'string' ? groupId : undefined) };
   } catch (e) {
     return { ok: false, items: [], error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:ai-question-answer', (_e, payload?: { id?: string; optionId?: string; customText?: string }) => {
+chuliIpc('warmy:ai-question-answer', (_e, payload?: { id?: string; optionId?: string; customText?: string }) => {
   try {
     const r = aiQuestions.answer(String(payload?.id || ''), String(payload?.optionId || AI_QUESTION_CUSTOM), payload?.customText);
     return r;
@@ -7300,16 +7323,16 @@ handleIpc('warmy:ai-question-answer', (_e, payload?: { id?: string; optionId?: s
 });
 
 /** 门禁判停：仅项目配置了 gateVerify 时才可能跑；主进程串行防并发风暴 */
-const gateRuns = new Map<string, number>();
-async function runProjectGateOnce(groupId: string, reason: string): Promise<{ pass: boolean; summary: string } | null> {
+const menjinYunxing = new Map<string, number>();
+async function yunxingXiangmuMenjinYici(groupId: string, reason: string): Promise<{ pass: boolean; summary: string } | null> {
   try {
     const xiangMu = groupStore?.projectOf(groupId);
     const gates = xiangMu?.gateVerify || [];
     if (!gates.length) return null;
     const now = Date.now();
-    const last = gateRuns.get(groupId) || 0;
+    const last = menjinYunxing.get(groupId) || 0;
     if (now - last < 3000) return { pass: !!xiangMu?.gateLast?.pass, summary: '节流：3s 内不重复跑门禁' };
-    gateRuns.set(groupId, now);
+    menjinYunxing.set(groupId, now);
     const repo = path.resolve(__dirname, '..', '..', '..');
     const lines: string[] = [];
     let allPass = true;
@@ -7341,25 +7364,25 @@ async function runProjectGateOnce(groupId: string, reason: string): Promise<{ pa
 }
 
 /** skills-scan-dirs-set：路径去重 + read-back */
-const _skillsScanSet = handleIpc;
-handleIpc('warmy:skills-scan-dirs-set', (_e, dirs: unknown) => {
+const _skillsScanSet = chuliIpc;
+chuliIpc('warmy:skills-scan-dirs-set', (_e, dirs: unknown) => {
   const raw = Array.isArray(dirs) ? dirs.map((d) => String(d || '').trim()).filter(Boolean) : [];
-  const { list, removed } = dedupeByNorm(raw, normPathKey);
+  const { list, removed } = dedupeByNorm(raw, guifanLujingMiyao);
   if (list.length > SKILL_SCAN_DIRS_MAX) {
     return { ok: false, error: 'too-many-dirs', max: SKILL_SCAN_DIRS_MAX, count: list.length };
   }
   try {
     const next = settingsStore?.save({ skillScanDirs: list } as never);
     const readBack = ((next as any)?.skillScanDirs || []) as string[];
-    const match = readBack.length === list.length && list.every((x, i) => normPathKey(readBack[i]) === normPathKey(x));
-    return { ok: true, dirs: list, scanDirs: skillScanStatus(list), settings: next, removedDups: removed, readBack: match, confident: match };
+    const match = readBack.length === list.length && list.every((x, i) => guifanLujingMiyao(readBack[i]) === guifanLujingMiyao(x));
+    return { ok: true, dirs: list, scanDirs: jinengSaomiaoZhuangtai(list), settings: next, removedDups: removed, readBack: match, confident: match };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
   }
 });
 
 /** update-source-set：read-back */
-handleIpc('warmy:update-source-set', async (_e, payload?: { url?: string }) => {
+chuliIpc('warmy:update-source-set', async (_e, payload?: { url?: string }) => {
   try {
     const url = String(payload?.url || '').trim();
     const patch: Record<string, unknown> = { updateFeedUrl: url };
@@ -7374,14 +7397,14 @@ handleIpc('warmy:update-source-set', async (_e, payload?: { url?: string }) => {
 
 
 // ── R. 启动引导 ──
-handleIpc('warmy:setup-state', () => {
+chuliIpc('warmy:setup-state', () => {
   try {
     const s = settingsStore?.load() as Record<string, unknown> | undefined;
     // 首次运行/安装后首启：setupDone 非 true 一律弹语言选择
     return { ok: true, done: (s as { setupDone?: boolean })?.setupDone === true, locale: s?.locale || app.getLocale() };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
+chuliIpc('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
   try {
     if (payload.locale) settingsStore?.save({ locale: payload.locale } as never);
     if (payload.provider) {
@@ -7400,7 +7423,7 @@ handleIpc('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Re
 });
 
 /** Skill enable/pause flags (default enabled when key missing) */
-function skillEnabledMap(): Record<string, boolean> {
+function jinengQiyongYingShe(): Record<string, boolean> {
   try {
     const s = settingsStore?.load() as { skillEnabled?: Record<string, boolean> } | undefined;
     return (s && s.skillEnabled && typeof s.skillEnabled === 'object') ? { ...s.skillEnabled } : {};
@@ -7408,11 +7431,11 @@ function skillEnabledMap(): Record<string, boolean> {
     return {};
   }
 }
-handleIpc('warmy:skills-set-enabled', (_e, payload: { id?: string; enabled?: boolean }) => {
+chuliIpc('warmy:skills-set-enabled', (_e, payload: { id?: string; enabled?: boolean }) => {
   try {
     const id = String(payload?.id || '');
     if (!id) return { ok: false, error: 'missing-id' };
-    const map = skillEnabledMap();
+    const map = jinengQiyongYingShe();
     map[id] = payload?.enabled !== false;
     settingsStore?.save({ skillEnabled: map } as never);
     return { ok: true, id, enabled: map[id] };
@@ -7423,9 +7446,9 @@ handleIpc('warmy:skills-set-enabled', (_e, payload: { id?: string; enabled?: boo
 // patch skills-list to include enabled flag
 const _skillsListHandler = async () => {
   const skills: Array<Record<string, unknown>> = [];
-  const saoMiaoMuluZhuangtai = skillScanStatus(loadSkillScanDirs());
-  const QiYongBiao = skillEnabledMap();
-  for (const { root, source } of skillRoots()) {
+  const saoMiaoMuluZhuangtai = jinengSaomiaoZhuangtai(loadSkillScanDirs());
+  const QiYongBiao = jinengQiyongYingShe();
+  for (const { root, source } of jinengGen()) {
     if (!fs.existsSync(root)) continue;
     const tuiSongYiTiao = (dirName: string, md: string) => {
       const info = skillMdInfo(md);
@@ -7453,10 +7476,10 @@ const _skillsListHandler = async () => {
   return { ok: true, skills, scanDirs: saoMiaoMuluZhuangtai, maxScanDirs: SKILL_SCAN_DIRS_MAX };
 };
 // re-register by replacing through handleIpc if it overwrites; electron handleIpc likely last-wins
-handleIpc('warmy:skills-list', () => _skillsListHandler());
+chuliIpc('warmy:skills-list', () => _skillsListHandler());
 
 // ── S. 消息搜索（从 memory-os recall） ──
-handleIpc('warmy:search-messages', async (_e, q: string) => {
+chuliIpc('warmy:search-messages', async (_e, q: string) => {
   try {
     const r = await memory?.recall(q, 20);
     return { ok: true, hits: r?.cards || [] };
@@ -7467,7 +7490,7 @@ handleIpc('warmy:search-messages', async (_e, q: string) => {
 
 
 // ── V. 插件真实安装/卸载 ──
-handleIpc('warmy:plugin-install', (_e, pkg: string) => {
+chuliIpc('warmy:plugin-install', (_e, pkg: string) => {
   try {
     const dshHome = path.join(app.getPath('userData'), 'dsh-home');
     const profile = 'warmy';
@@ -7487,7 +7510,7 @@ handleIpc('warmy:plugin-install', (_e, pkg: string) => {
     return { ok: false, error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:plugin-uninstall', (_e, pkg: string) => {
+chuliIpc('warmy:plugin-uninstall', (_e, pkg: string) => {
   try {
     const dshHome = path.join(app.getPath('userData'), 'dsh-home');
     const BaoJson = path.join(dshHome, 'profiles', 'warmy', 'package.json');
@@ -7505,14 +7528,14 @@ handleIpc('warmy:plugin-uninstall', (_e, pkg: string) => {
 
 // ── X. 归档列表 ──
 const archived: Array<{ id: string; name: string; kind: string; ts: number }> = [];
-handleIpc('warmy:archived-list', () => safeHandle(() => ({ ok: true, items: archived }), { ok: true, items: [] }))
-handleIpc('warmy:archived-add', (_e, payload: { id: string; name: string; kind: string }) => {
+chuliIpc('warmy:archived-list', () => safeHandle(() => ({ ok: true, items: archived }), { ok: true, items: [] }))
+chuliIpc('warmy:archived-add', (_e, payload: { id: string; name: string; kind: string }) => {
   try {
     archived.push({ ...payload, ts: Date.now() });
     return { ok: true, items: archived };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:archived-restore', (_e, id: string) => {
+chuliIpc('warmy:archived-restore', (_e, id: string) => {
   try {
     const idx = archived.findIndex((x) => x.id === id);
     if (idx < 0) return { ok: false };
@@ -7523,11 +7546,11 @@ handleIpc('warmy:archived-restore', (_e, id: string) => {
 
 
 // ── 审计日志 ──
-handleIpc('warmy:audit-log', (_e, limit?: number) => ({
+chuliIpc('warmy:audit-log', (_e, limit?: number) => ({
   ok: true,
   entries: audit?.read(limit || 50) || [],
 }));
-handleIpc('warmy:audit-clear', () => {
+chuliIpc('warmy:audit-clear', () => {
   try {
     audit?.clear();
     return { ok: true };
@@ -7535,14 +7558,14 @@ handleIpc('warmy:audit-clear', () => {
 });
 
 // ── SafeStorage 密钥 ──
-handleIpc('warmy:secure-key-save', async (_e, payload: { providerId: string; apiKey: string }) => {
+chuliIpc('warmy:secure-key-save', async (_e, payload: { providerId: string; apiKey: string }) => {
   try {
     await secureKeys?.save(payload.providerId, payload.apiKey);
     audit?.log('key.save', { providerId: payload.providerId });
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:secure-key-load', async (_e, providerId: string) => {
+chuliIpc('warmy:secure-key-load', async (_e, providerId: string) => {
   try {
     const key = await secureKeys?.load(providerId);
     return { ok: !!key, key: key || null };
@@ -7550,11 +7573,11 @@ handleIpc('warmy:secure-key-load', async (_e, providerId: string) => {
 });
 
 // ── KnowledgeArchiver ──
-handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: string; summary: string; anchors?: Array<{ file: string; seq: number }> }) => {
-  let extraction = null as null | ReturnType<typeof congGuiDangTiQuZhiShi> | { error?: string };
+chuliIpc('warmy:archive-external', (_e, payload: { groupId: string; title: string; summary: string; anchors?: Array<{ file: string; seq: number }> }) => {
+  let tiqu = null as null | ReturnType<typeof congGuiDangTiQuZhiShi> | { error?: string };
   let structured = null as null | ReturnType<typeof tiQuJieGouHuaZhaiYao>;
   try {
-    extraction = congGuiDangTiQuZhiShi({
+    tiqu = congGuiDangTiQuZhiShi({
       groupId: String(payload.groupId || ''),
       title: String(payload.title || ''),
       summary: String(payload.summary || ''),
@@ -7565,7 +7588,7 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
       text: String(payload.summary || ''),
     });
   } catch (e) {
-    extraction = { error: sanitizeError(e) };
+    tiqu = { error: sanitizeError(e) };
   }
   const r = archiver?.archive({
     id: 'arc-' + Date.now(),
@@ -7577,8 +7600,8 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
   });
   // 归档触发整理：摘要 → 知识库实体/事件 + 使用者偏好（持久跨会话）
   try {
-    if (knowledge && extraction && !(extraction as { error?: string }).error) {
-      const liWai = extraction as ReturnType<typeof congGuiDangTiQuZhiShi>;
+    if (knowledge && tiqu && !(tiqu as { error?: string }).error) {
+      const liWai = tiqu as ReturnType<typeof congGuiDangTiQuZhiShi>;
       for (const e of liWai.entities) {
         const LeiXingBiao = ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] as const;
         const kind = (LeiXingBiao as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof LeiXingBiao)[number]) : 'concept';
@@ -7604,17 +7627,17 @@ handleIpc('warmy:archive-external', (_e, payload: { groupId: string; title: stri
       if (liWai.preferences?.length) heBingYongHuPianHao(app.getPath('userData'), liWai.preferences);
     }
   } catch (e) {
-    extraction = { error: sanitizeError(e) };
+    tiqu = { error: sanitizeError(e) };
   }
-  audit?.log('archive.external', { groupId: payload.groupId, prefs: (extraction as { preferences?: unknown[] } | null)?.preferences?.length || 0 });
-  return { ok: true, entry: r, extraction, structured };
+  audit?.log('archive.external', { groupId: payload.groupId, prefs: (tiqu as { preferences?: unknown[] } | null)?.preferences?.length || 0 });
+  return { ok: true, entry: r, tiqu, structured };
 });
-handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; auto?: boolean }) => {
+chuliIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; auto?: boolean }) => {
   try {
     const gid = String(payload?.sessionId || '');
     if (!gid) return { ok: false, error: 'sessionId required' };
-    const logs = chatLogs.get(gid) || [];
-    const recent = logs.slice(-30).map((l) => `${l.role}: ${String(l.content || '').slice(0, 160)}`).join('\n');
+    const rizhi = chatLogs.get(gid) || [];
+    const recent = rizhi.slice(-30).map((l) => `${l.role}: ${String(l.content || '').slice(0, 160)}`).join('\n');
     if (!recent.trim()) return { ok: false, error: 'no-history' };
     const title = `${gid} 会话摘要 ${new Date().toLocaleString()}`;
     const structured = tiQuJieGouHuaZhaiYao({ groupId: gid, title, text: recent });
@@ -7627,7 +7650,7 @@ handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; au
         `## 要点\n${structured.bullets.map((d) => '- ' + d).join('\n')}`,
       ].filter(Boolean).join('\n\n').slice(0, 4000);
     // 尽量带上锚点：用最近日志的 seq（便于右栏「跳到原文」）
-    const anchors = logs.slice(-5)
+    const anchors = rizhi.slice(-5)
       .filter((l) => l && l.seq != null)
       .map((l) => ({ file: 'chat-log', seq: Number(l.seq || 0), recordId: `seq:${l.seq}` }));
     const entry = archiver?.archive({
@@ -7664,13 +7687,13 @@ handleIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; au
     return { ok: false, error: sanitizeError(e) };
   }
 });
-handleIpc('warmy:archive-list', (_e, groupId?: string) => ({
+chuliIpc('warmy:archive-list', (_e, groupId?: string) => ({
   ok: true,
   entries: archiver?.list(groupId) || [],
 }));
 
 // ── CleanupManager ──
-handleIpc('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
+chuliIpc('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
   try {
     const n = cleanup?.cleanCheckpoints(opts?.checkpoints || 20) || 0;
     const v = cleanup?.cleanVoice() || 0;
@@ -7680,17 +7703,17 @@ handleIpc('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
 });
 
 // ── 模型角色分配 ──
-handleIpc('warmy:role-models-set', (_e, roles: RoleModelConfig) => {
+chuliIpc('warmy:role-models-set', (_e, roles: JueseMoxingPeizhi) => {
   try {
     roleModels = { ...roleModels, ...roles };
     audit?.log('roles.set', roles);
     return { ok: true, roles: roleModels };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:role-models-get', () => safeHandle(() => ({ ok: true, roles: roleModels }), { ok: true, roles: {} }))
+chuliIpc('warmy:role-models-get', () => safeHandle(() => ({ ok: true, roles: roleModels }), { ok: true, roles: {} }))
 
 // ── 解散群组 ──
-handleIpc('warmy:group-dissolve', (_e, groupId: string) => {
+chuliIpc('warmy:group-dissolve', (_e, groupId: string) => {
   try {
     // 只有创建者可解散（简化：本机节点）
     const g = router.getGroup(groupId);
@@ -7709,7 +7732,7 @@ handleIpc('warmy:group-dissolve', (_e, groupId: string) => {
 });
 
 // ── 允许库导出 ──
-handleIpc('warmy:export-allowlist', () => {
+chuliIpc('warmy:export-allowlist', () => {
   try {
     const list = p1?.security.listAllowlist() || [];
     const dir = path.join(app.getPath('userData'), 'permissions');
@@ -7730,11 +7753,11 @@ try {
 }
 
 // ── 导入 openclaw.json 供应商配置 ──
-handleIpc('warmy:import-openclaw', () => {
+chuliIpc('warmy:import-openclaw', () => {
   try {
-    const ocPath = path.join(app.getPath('userData'), '..', 'openclaw.json');
-    if (!fs.existsSync(ocPath)) return { ok: false, error: 'openclaw.json not found' };
-    const j = JSON.parse(fs.readFileSync(ocPath, 'utf8'));
+    const ocLujing = path.join(app.getPath('userData'), '..', 'openclaw.json');
+    if (!fs.existsSync(ocLujing)) return { ok: false, error: 'openclaw.json not found' };
+    const j = JSON.parse(fs.readFileSync(ocLujing, 'utf8'));
     const gongYingShangJi = Object.entries(j.models?.providers || {}).map(([id, pv]) => {
       const p = pv as { baseURL?: string; baseUrl?: string; apiKey?: string; api?: string; models?: Array<{ name?: string; id?: string }> };
       return {
@@ -7756,7 +7779,7 @@ handleIpc('warmy:import-openclaw', () => {
   }
 });
 
-handleIpc('warmy:special-models-set', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {
+chuliIpc('warmy:special-models-set', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {
   try {
     if (settingsStore) {
       const cur = settingsStore.load() as unknown as Record<string, unknown>;
@@ -7766,14 +7789,14 @@ handleIpc('warmy:special-models-set', (_e, cfg: { asr?: { provider: string }; em
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:special-models-get', () => {
+chuliIpc('warmy:special-models-get', () => {
   try {
     const s = settingsStore?.load() as unknown as Record<string, unknown>;
     return { ok: true, specialModels: s?.specialModels || {} };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
-handleIpc('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
+chuliIpc('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
   try {
     const res = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
@@ -7789,7 +7812,7 @@ handleIpc('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?:
 // ── 加入请求 / 黑名单 ──
 const joinRequests: Array<{ id: string; name: string; kind: string; target: string; targetType: string; ts: number; expireAt: number }> = [];
 const blacklist: Array<{ id: string; name: string; blockedAt: number; target: string }> = [];
-handleIpc('warmy:join-request', (_e, payload: { name: string; kind: string; target: string; targetType: string }) => {
+chuliIpc('warmy:join-request', (_e, payload: { name: string; kind: string; target: string; targetType: string }) => {
   try {
     const id = "jr-" + Date.now();
     const ts = Date.now();
@@ -7798,14 +7821,14 @@ handleIpc('warmy:join-request', (_e, payload: { name: string; kind: string; targ
     return { ok: true, id };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:join-pending', () => {
+chuliIpc('warmy:join-pending', () => {
   try {
     const now = Date.now();
     const valid = joinRequests.filter((r) => r.expireAt > now);
     return { ok: true, items: valid, count: valid.length };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
+chuliIpc('warmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
   try {
     const idx = joinRequests.findIndex((r) => r.id === payload.id);
     if (idx < 0) return { ok: false };
@@ -7819,8 +7842,8 @@ handleIpc('warmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'r
     return { ok: true, remaining: joinRequests.filter((r) => r.expireAt > Date.now()).length };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:blacklist-list', () => safeHandle(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
-handleIpc('warmy:blacklist-remove', (_e, id: string) => {
+chuliIpc('warmy:blacklist-list', () => safeHandle(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
+chuliIpc('warmy:blacklist-remove', (_e, id: string) => {
   try {
     const i = blacklist.findIndex((b) => b.id === id);
     if (i >= 0) blacklist.splice(i, 1);

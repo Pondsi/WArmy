@@ -20,7 +20,7 @@
  */
 import dgram from 'node:dgram';
 import {
-  type Bytes,
+  type Zijie,
   b64u,
   ed25519FromSeed,
   fromB64u,
@@ -28,7 +28,7 @@ import {
   joinFields,
   open,
   randomHex,
-  seal,
+  fengyin,
   sha256,
   sha256Hex,
   signEd25519Local,
@@ -37,8 +37,8 @@ import {
 } from './codec.js';
 import {
   type ZhiWenTuiDao,
-  type IdentityProvider,
-  type NormalizedIdentity,
+  type ShenfenGongyingshang,
+  type GuifanShenfen,
   warmyFingerprint,
   normalizeIdentity,
   verifyPeerSignature,
@@ -49,7 +49,7 @@ export const DHT_ID_LENGTH = 32;
 export const DEFAULT_K = 8;
 export const DEFAULT_ALPHA = 3;
 export const DEFAULT_RPC_TIMEOUT_MS = 1500;
-export const RECORD_VERSION = 1;
+export const JILU_BANBEN = 1;
 /**
  * 记录新鲜度上限（毫秒）：超过这个年龄的记录视为过期，不再接受（store）也不再返回（query）。
  * 为什么必须有：DHT 记录的 ts 是签名覆盖的，若无限期接受，攻击者可以把很久以前的
@@ -84,7 +84,7 @@ export function recordKeyForFingerprint(fingerprint: string): string {
   return sha256Hex(Buffer.from(`${DHT_PROTOCOL}|record|${fingerprint}`, 'utf8'));
 }
 
-export function xorDistance(a: Bytes, b: Bytes): Buffer {
+export function xorDistance(a: Zijie, b: Zijie): Buffer {
   const ba = toBuf(a);
   const bb = toBuf(b);
   const out = Buffer.alloc(Math.min(ba.length, bb.length));
@@ -93,26 +93,26 @@ export function xorDistance(a: Bytes, b: Bytes): Buffer {
 }
 
 /** common prefix length（0..256），用于 k 桶划分 */
-export function gongGongQianZhuiChangDu(a: Bytes, b: Bytes): number {
+export function gongGongQianZhuiChangDu(a: Zijie, b: Zijie): number {
   const ba = toBuf(a);
   const bb = toBuf(b);
-  let bits = 0;
+  let wei = 0;
   for (let i = 0; i < Math.min(ba.length, bb.length); i += 1) {
     const x = (ba[i] as number) ^ (bb[i] as number);
     if (x === 0) {
-      bits += 8;
+      wei += 8;
       continue;
     }
     for (let bit = 7; bit >= 0; bit -= 1) {
-      if ((x >> bit) & 1) return bits + (7 - bit);
+      if ((x >> bit) & 1) return wei + (7 - bit);
     }
   }
-  return bits;
+  return wei;
 }
 
 /* ────────────────────────────── 路由表（k-bucket） ────────────────────────────── */
 
-export class RoutingTable {
+export class LuyouBiao {
   private buckets = new Map<number, DhtLianXi[]>();
 
   constructor(
@@ -134,36 +134,36 @@ export class RoutingTable {
   add(contact: DhtLianXi): void {
     if (contact.id.equals(this.selfId)) return;
     const idx = gongGongQianZhuiChangDu(this.selfId, contact.id);
-    let bucket = this.buckets.get(idx);
-    if (!bucket) {
-      bucket = [];
-      this.buckets.set(idx, bucket);
+    let tong = this.buckets.get(idx);
+    if (!tong) {
+      tong = [];
+      this.buckets.set(idx, tong);
     }
-    const existing = bucket.find((c) => c.id.equals(contact.id));
-    if (existing) {
-      existing.host = contact.host;
-      existing.port = contact.port;
-      existing.lastSeen = contact.lastSeen;
-      if (contact.fingerprint) existing.fingerprint = contact.fingerprint;
+    const cunzai = tong.find((c) => c.id.equals(contact.id));
+    if (cunzai) {
+      cunzai.host = contact.host;
+      cunzai.port = contact.port;
+      cunzai.lastSeen = contact.lastSeen;
+      if (contact.fingerprint) cunzai.fingerprint = contact.fingerprint;
       return;
     }
-    if (bucket.length >= this.k) {
-      bucket.sort((a, b) => a.lastSeen - b.lastSeen);
-      bucket.shift();
+    if (tong.length >= this.k) {
+      tong.sort((a, b) => a.lastSeen - b.lastSeen);
+      tong.shift();
     }
-    bucket.push({ ...contact });
+    tong.push({ ...contact });
   }
 
   remove(id: Buffer): void {
     const idx = gongGongQianZhuiChangDu(this.selfId, id);
-    const bucket = this.buckets.get(idx);
-    if (!bucket) return;
-    const next = bucket.filter((c) => !c.id.equals(id));
+    const tong = this.buckets.get(idx);
+    if (!tong) return;
+    const next = tong.filter((c) => !c.id.equals(id));
     this.buckets.set(idx, next);
   }
 
   /** 距离 target 最近的 n 个联系人（含未验证过的） */
-  closest(target: Bytes, n = this.k): DhtLianXi[] {
+  closest(target: Zijie, n = this.k): DhtLianXi[] {
     return this.list()
       .sort((a, b) => Buffer.compare(xorDistance(a.id, target), xorDistance(b.id, target)))
       .slice(0, n);
@@ -173,7 +173,7 @@ export class RoutingTable {
 /* ────────────────────────────── 记录（签名 + 群密钥加密） ────────────────────────────── */
 
 /** 宣告内容（明文，只有持有群密钥的人能解） */
-export interface PeerAddressRecord {
+export interface DuiduanDizhiJilu {
   /** 被宣告者的身份指纹 */
   fp: string;
   /** 当前可达地址（IP 或域名） */
@@ -205,13 +205,13 @@ export interface DhtJiLuFeng {
   sig: string;
 }
 
-export type RecordSigningMode = 'identity' | 'pseudonymous';
+export type JiluQianmingMoshi = 'identity' | 'pseudonymous';
 
-export function recordSignatureTranscript(env: DhtJiLuFeng): string {
+export function jiluQianmingJiaoyi(env: DhtJiLuFeng): string {
   return joinFields([DHT_PROTOCOL, 'RECORD', env.v, env.k, env.s, env.t, env.sg, env.pk, env.sl]);
 }
 
-export function recordAad(env: Pick<DhtJiLuFeng, 'v' | 'k' | 's' | 't' | 'sg' | 'pk'>): Buffer {
+export function jiluAad(env: Pick<DhtJiLuFeng, 'v' | 'k' | 's' | 't' | 'sg' | 'pk'>): Buffer {
   return Buffer.from(joinFields([DHT_PROTOCOL, 'RECORD-AAD', env.v, env.k, env.s, env.t, env.sg, env.pk]), 'utf8');
 }
 
@@ -219,14 +219,14 @@ export function recordAad(env: Pick<DhtJiLuFeng, 'v' | 'k' | 's' | 't' | 'sg' | 
  * 群组密钥环：允许同时存在多把（轮换期）。
  * **没有密钥就读不到记录内容** —— 这是记录加密的全部意义。
  */
-export class GroupKeyRing {
+export class QunMiyaoHuan {
   private keys: Buffer[] = [];
 
-  constructor(keys: Array<Bytes> = []) {
+  constructor(keys: Array<Zijie> = []) {
     for (const k of keys) this.add(k);
   }
 
-  add(key: Bytes, makeActive = true): void {
+  add(key: Zijie, makeActive = true): void {
     const k = toBuf(key);
     if (k.length !== 32) throw new Error(`群组密钥必须 32 字节（AES-256），实际 ${k.length}`);
     if (makeActive) this.keys.unshift(k);
@@ -243,11 +243,11 @@ export class GroupKeyRing {
   }
 
   /** 依次尝试所有密钥；全部失败返回 null（无密钥 / 被篡改） */
-  tryOpen(env: DhtJiLuFeng): PeerAddressRecord | null {
+  tryOpen(env: DhtJiLuFeng): DuiduanDizhiJilu | null {
     for (const key of this.keys) {
       try {
-        const plain = open(key, { iv: fromB64u(env.sl).subarray(0, 12), ct: fromB64u(env.sl).subarray(12) }, recordAad(env));
-        const rec = JSON.parse(plain.toString('utf8')) as PeerAddressRecord;
+        const plain = open(key, { iv: fromB64u(env.sl).subarray(0, 12), ct: fromB64u(env.sl).subarray(12) }, jiluAad(env));
+        const rec = JSON.parse(plain.toString('utf8')) as DuiduanDizhiJilu;
         if (rec && typeof rec.fp === 'string' && typeof rec.host === 'string') return rec;
       } catch {
         /* 试下一把 */
@@ -258,13 +258,13 @@ export class GroupKeyRing {
 }
 
 export interface SignRecordOptions {
-  identity: IdentityProvider | NormalizedIdentity;
-  groupKey: Bytes;
+  identity: ShenfenGongyingshang | GuifanShenfen;
+  groupKey: Zijie;
   key: string;
-  record: PeerAddressRecord;
+  record: DuiduanDizhiJilu;
   seq: number;
   ts?: number;
-  signing?: RecordSigningMode;
+  signing?: JiluQianmingMoshi;
 }
 
 /** 组装记录信封：内容加密（群密钥）+ 头部签名（身份密钥或假名密钥） */
@@ -291,7 +291,7 @@ export async function signRecordEnvelope(opts: SignRecordOptions): Promise<DhtJi
   }
 
   const head: DhtJiLuFeng = {
-    v: RECORD_VERSION,
+    v: JILU_BANBEN,
     k: opts.key,
     s: opts.seq,
     t: ts,
@@ -300,14 +300,14 @@ export async function signRecordEnvelope(opts: SignRecordOptions): Promise<DhtJi
     sl: '',
     sig: '',
   };
-  const sealed = seal(groupKey, Buffer.from(JSON.stringify(opts.record), 'utf8'), recordAad(head));
+  const sealed = fengyin(groupKey, Buffer.from(JSON.stringify(opts.record), 'utf8'), jiluAad(head));
   head.sl = b64u(Buffer.concat([sealed.iv, sealed.ct]));
-  const transcript = Buffer.from(recordSignatureTranscript(head), 'utf8');
+  const transcript = Buffer.from(jiluQianmingJiaoyi(head), 'utf8');
   head.sig = b64u(signKey ? signEd25519Local(transcript, signKey) : await identity.sign(transcript));
   return head;
 }
 
-export type RecordRejectReason =
+export type JiluJujueYuanyin =
   | 'bad-version'
   | 'key-mismatch'
   | 'signer-mismatch'
@@ -318,11 +318,11 @@ export type RecordRejectReason =
 
 export interface VerifyRecordResult {
   ok: boolean;
-  reason?: RecordRejectReason;
+  reason?: JiluJujueYuanyin;
   detail?: string;
   /** 签名者指纹（假名模式下也是假名指纹） */
   signer?: string;
-  record?: PeerAddressRecord;
+  record?: DuiduanDizhiJilu;
   /** 解不开内容时的信封（签名合法但无密钥） */
   envelope?: DhtJiLuFeng;
 }
@@ -331,13 +331,13 @@ export interface VerifyRecordOptions {
   /** 校验公钥/指纹的推导函数（默认 base32(sha256(pub))） */
   derivation?: ZhiWenTuiDao;
   /** 注入验签实现（可选；假名模式必须传，因为本地只有公钥） */
-  verifier?: ((message: Bytes, signature: Bytes, publicKey: Bytes) => Promise<boolean>) | null;
+  verifier?: ((message: Zijie, signature: Zijie, publicKey: Zijie) => Promise<boolean>) | null;
   /** 期望的记录键（防"把别的键的记录塞进来"） */
   expectKey?: string;
   /** 同一键已见最大 seq（防回滚/重放旧记录） */
   lastSeq?: number;
   /** 群组密钥环：无 → 内容读不到，但签名仍可校验 */
-  groupKeys?: GroupKeyRing | null;
+  groupKeys?: QunMiyaoHuan | null;
   /** 不接受早于这个时间之前发布的记录（可选，默认与 now 比，容差 10 分钟） */
   tsToleranceMs?: number;
   now?: () => number;
@@ -355,7 +355,7 @@ export async function verifyRecordEnvelope(
 ): Promise<VerifyRecordResult> {
   const now = opts.now ?? (() => Date.now());
   if (!env || typeof env !== 'object') return { ok: false, reason: 'malformed', detail: '信封不是对象' };
-  if (env.v !== RECORD_VERSION) return { ok: false, reason: 'bad-version', detail: `版本 ${env.v}` };
+  if (env.v !== JILU_BANBEN) return { ok: false, reason: 'bad-version', detail: `版本 ${env.v}` };
   if (typeof env.k !== 'string' || typeof env.sl !== 'string' || typeof env.sig !== 'string') {
     return { ok: false, reason: 'malformed', detail: '缺少必要字段' };
   }
@@ -372,11 +372,11 @@ export async function verifyRecordEnvelope(
   })();
   if (!pk || pk.length !== 32) return { ok: false, reason: 'malformed', detail: '签名公钥长度非法' };
   const derivation = opts.derivation ?? warmyFingerprint;
-  const derivedSigner = derivation(pk);
-  if (derivedSigner !== env.sg) {
-    return { ok: false, reason: 'signer-mismatch', detail: `签名者指纹 ${env.sg} 与公钥推出 ${derivedSigner} 不符` };
+  const tuidaoQianmingzhe = derivation(pk);
+  if (tuidaoQianmingzhe !== env.sg) {
+    return { ok: false, reason: 'signer-mismatch', detail: `签名者指纹 ${env.sg} 与公钥推出 ${tuidaoQianmingzhe} 不符` };
   }
-  const transcript = Buffer.from(recordSignatureTranscript(env), 'utf8');
+  const transcript = Buffer.from(jiluQianmingJiaoyi(env), 'utf8');
   const sig = fromB64u(env.sig);
   const sigOk = await verifyPeerSignature(
     opts.verifier
@@ -406,8 +406,8 @@ export async function verifyRecordEnvelope(
       signer: env.sg,
     };
   }
-  const tolerance = opts.tsToleranceMs ?? 10 * 60_000;
-  if (Math.abs(now() - env.t) > tolerance) {
+  const rongcha = opts.tsToleranceMs ?? 10 * 60_000;
+  if (Math.abs(now() - env.t) > rongcha) {
     return { ok: false, reason: 'malformed', detail: `记录时间戳超出容差：${env.t}`, signer: env.sg };
   }
   const rec = opts.groupKeys ? opts.groupKeys.tryOpen(env) : null;
@@ -430,7 +430,7 @@ export interface DhtShiJian {
 }
 
 export interface DhtJieDianXuanXiang {
-  identity: IdentityProvider | NormalizedIdentity;
+  identity: ShenfenGongyingshang | GuifanShenfen;
   /** 节点别名（人读用；路由身份是 id） */
   nodeId: string;
   /** 覆盖节点 ID（默认由身份指纹推出） */
@@ -447,16 +447,16 @@ export interface DhtJieDianXuanXiang {
   /** 记录新鲜度上限（默认 30 分钟，见 DEFAULT_RECORD_TTL_MS） */
   recordTtlMs?: number;
   /** 群组密钥环（发布用 active，读取时逐个尝试） */
-  groupKeys?: GroupKeyRing;
+  groupKeys?: QunMiyaoHuan;
   /** 记录签名模式（默认 identity；pseudonymous 可隐藏身份） */
-  signing?: RecordSigningMode;
+  signing?: JiluQianmingMoshi;
   now?: () => number;
   onEvent?: (e: DhtShiJian) => void;
   /** 收到记录（store RPC 或本机发布）时的回调 —— 事件驱动宣告的入口 */
   onRecord?: (env: DhtJiLuFeng, from: DhtDiZhi | null) => void;
 }
 
-interface PendingRpc {
+interface DengdaiRpc {
   resolve: (v: Record<string, unknown>) => void;
   reject: (e: Error) => void;
   timer: NodeJS.Timeout;
@@ -468,8 +468,8 @@ interface PendingRpc {
 export class DhtJieDian {
   id: Buffer;
   private socket: dgram.Socket | null = null;
-  private table: RoutingTable;
-  private identity!: NormalizedIdentity;
+  private table: LuyouBiao;
+  private identity!: GuifanShenfen;
   private readonly ready: Promise<void>;
   private readonly k: number;
   private readonly alpha: number;
@@ -481,7 +481,7 @@ export class DhtJieDian {
   private store = new Map<string, DhtJiLuFeng>();
   private seqSeen = new Map<string, number>();
   private seqLocal = new Map<string, number>();
-  private pending = new Map<string, PendingRpc>();
+  private pending = new Map<string, DengdaiRpc>();
   private rpcHandlers = new Map<string, (msg: Record<string, unknown>, from: DhtLianXi) => Promise<Record<string, unknown> | null>>();
   private watchers = new Map<string, ((env: DhtJiLuFeng, from: DhtDiZhi | null) => void)[]>();
   private readonly stats = {
@@ -503,7 +503,7 @@ export class DhtJieDian {
     this.now = opts.now ?? (() => Date.now());
     this.tcpPort = opts.tcpPort ?? 0;
     this.id = opts.id ?? Buffer.alloc(DHT_ID_LENGTH);
-    this.table = new RoutingTable(this.id, this.k);
+    this.table = new LuyouBiao(this.id, this.k);
     this.ready = this.init();
     this.ready.catch(() => {});
   }
@@ -513,7 +513,7 @@ export class DhtJieDian {
     if (this.opts.id && this.opts.id.length !== DHT_ID_LENGTH) throw new Error('DhtNode.id 必须 32 字节');
     const derivedId = this.opts.id ?? youZhiWenQuDhtId(this.identity.fingerprint);
     this.id = derivedId;
-    this.table = new RoutingTable(derivedId, this.k);
+    this.table = new LuyouBiao(derivedId, this.k);
   }
 
   get fingerprint(): string {
@@ -531,8 +531,8 @@ export class DhtJieDian {
   get statsSnapshot(): typeof this.stats {
     return { ...this.stats };
   }
-  get groupKeys(): GroupKeyRing {
-    if (!this.opts.groupKeys) this.opts.groupKeys = new GroupKeyRing();
+  get groupKeys(): QunMiyaoHuan {
+    if (!this.opts.groupKeys) this.opts.groupKeys = new QunMiyaoHuan();
     return this.opts.groupKeys;
   }
 
@@ -701,18 +701,18 @@ export class DhtJieDian {
     const shortlist = new Map<string, DhtLianXi>();
     const queried = new Set<string>();
     for (const c of this.table.closest(target, this.k)) shortlist.set(b64u(c.id), c);
-    let rpcCount = 0;
+    let rpcJishu = 0;
 
     for (;;) {
       const candidates = [...shortlist.values()]
         .filter((c) => !queried.has(b64u(c.id)))
         .sort((a, b) => Buffer.compare(xorDistance(a.id, target), xorDistance(b.id, target)))
         .slice(0, this.alpha);
-      if (candidates.length === 0 || rpcCount >= maxRpc) break;
+      if (candidates.length === 0 || rpcJishu >= maxRpc) break;
       const results = await Promise.all(
         candidates.map(async (c) => {
           queried.add(b64u(c.id));
-          rpcCount += 1;
+          rpcJishu += 1;
           try {
             return await this.findNode({ host: c.host, port: c.port }, target);
           } catch {
@@ -753,7 +753,7 @@ export class DhtJieDian {
   }
 
   /** 发布：内容加密 + 签名 → 本机存一份 → PUT 给距离最近的 k 个节点 */
-  async publish(args: { fingerprint: string; record?: PeerAddressRecord; seq?: number; signing?: RecordSigningMode }): Promise<{
+  async publish(args: { fingerprint: string; record?: DuiduanDizhiJilu; seq?: number; signing?: JiluQianmingMoshi }): Promise<{
     key: string;
     seq: number;
     storedOn: DhtDiZhi[];
@@ -763,7 +763,7 @@ export class DhtJieDian {
     const key = recordKeyForFingerprint(args.fingerprint);
     const groupKey = this.groupKeys.active;
     if (!groupKey) throw new Error('发布记录需要群组密钥（groupKeys.active）');
-    const record: PeerAddressRecord =
+    const record: DuiduanDizhiJilu =
       args.record ??
       ({
         fp: args.fingerprint,
@@ -772,7 +772,7 @@ export class DhtJieDian {
         scope: 'lan',
         announcedAt: this.now(),
         alias: this.opts.nodeId,
-      } satisfies PeerAddressRecord);
+      } satisfies DuiduanDizhiJilu);
     const seq = args.seq ?? this.nextSeq(key);
     const env = await signRecordEnvelope({
       identity: this.identity,
@@ -810,7 +810,7 @@ export class DhtJieDian {
   ): Promise<{
     ok: boolean;
     key: string;
-    record?: PeerAddressRecord;
+    record?: DuiduanDizhiJilu;
     envelope?: DhtJiLuFeng;
     signer?: string;
     from?: DhtDiZhi;
@@ -823,9 +823,9 @@ export class DhtJieDian {
     const rejected: { addr: DhtDiZhi; reason: string; detail?: string }[] = [];
     const target = youZhiWenQuDhtId(fingerprint);
     const candidates = await this.iterativeLookup(target);
-    const best = { env: null as DhtJiLuFeng | null, record: undefined as PeerAddressRecord | undefined, signer: undefined as string | undefined, from: undefined as DhtDiZhi | undefined, seq: 0 };
+    const best = { env: null as DhtJiLuFeng | null, record: undefined as DuiduanDizhiJilu | undefined, signer: undefined as string | undefined, from: undefined as DhtDiZhi | undefined, seq: 0 };
 
-    const consider = async (env: DhtJiLuFeng, addr: DhtDiZhi): Promise<void> => {
+    const kaoLv = async (env: DhtJiLuFeng, addr: DhtDiZhi): Promise<void> => {
       const result = await verifyRecordEnvelope(env, {
         expectKey: key,
         groupKeys: this.groupKeys,
@@ -849,7 +849,7 @@ export class DhtJieDian {
 
     // 本机副本先算候选
     const local = this.store.get(key);
-    if (local) await consider(local, { host: this.bound.host, port: this.bound.port });
+    if (local) await kaoLv(local, { host: this.bound.host, port: this.bound.port });
 
     for (const c of candidates) {
       const addr = { host: c.host, port: c.port };
@@ -861,7 +861,7 @@ export class DhtJieDian {
           attempts.push({ addr, status: 'empty' });
           continue;
         }
-        for (const env of envs) await consider(env, addr);
+        for (const env of envs) await kaoLv(env, addr);
       } catch (e) {
         attempts.push({ addr, status: 'rpc-failed', reason: String((e as Error).message ?? e) });
         this.table.remove(c.id);
@@ -1035,7 +1035,7 @@ export class DhtJieDian {
   }
 
   /** 通用：把一条原始报文喂给节点（测试 / 自定义传输用） */
-  async feedDatagram(raw: Bytes, host: string, port: number): Promise<void> {
+  async feedDatagram(raw: Zijie, host: string, port: number): Promise<void> {
     await this.handleDatagram(toBuf(raw), host, port);
   }
 }

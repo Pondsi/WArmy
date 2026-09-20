@@ -22,8 +22,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import {execFile} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(selfDir, '..', 'dist', 'container-probe.js');

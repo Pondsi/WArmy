@@ -4,10 +4,10 @@
  */
 import path from 'node:path';
 import os from 'node:os';
-import { startMemoryServiceIpc } from './index.js';
+import { qishiJiyiCangFuwuIpc } from './index.js';
 
 const dataDir =
   process.env.WARMY_MEMORY_DIR || process.env.CCA_ARMY_MEMORY_DIR ||
   path.join(os.homedir(), '.warmy', 'memory');
 
-startMemoryServiceIpc(dataDir);
+qishiJiyiCangFuwuIpc(dataDir);

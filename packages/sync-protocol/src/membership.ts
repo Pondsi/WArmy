@@ -28,7 +28,7 @@
  * 它**不碰磁盘、不碰 Electron**，因此可以被纯 Node 验证脚本直接驱动。
  */
 import {
-  type Bytes,
+  type Zijie,
   b64u,
   base32,
   ed25519SpkiDerFromRaw,
@@ -40,11 +40,11 @@ import {
 
 /* ────────────────────────────── 常量 / 类型 ────────────────────────────── */
 
-export const MEMBER_CERT_SCHEMA = 'warmy.member-cert.v1' as const;
+export const CHENGYUAN_ZHENGSHU_MOSHI = 'warmy.member-cert.v1' as const;
 export const REVOCATION_LIST_SCHEMA = 'warmy.revocation-list.v1' as const;
 
 /** 域分隔：证书与吊销列表的签名域不同，跨用途不互串 */
-export const MEMBER_CERT_DOMAIN = 'warmy.member-cert.v1' as const;
+export const CHENGYUAN_ZHENGSHU_YUMING = 'warmy.member-cert.v1' as const;
 export const REVOCATION_LIST_DOMAIN = 'warmy.revocation-list.v1' as const;
 
 /**
@@ -74,7 +74,7 @@ export const REVOCATION_REASONS: readonly CheXiaoYuanYin[] = ['rotation', 'compr
  *    与"证书链"能对上；缺失时以证书链根 `certId` 充当成员标识。
  */
 export interface ChengYuanZhengShu {
-  schema: typeof MEMBER_CERT_SCHEMA;
+  schema: typeof CHENGYUAN_ZHENGSHU_MOSHI;
   certId: string;
   groupId: string;
   memberFingerprint: string;
@@ -231,7 +231,7 @@ export function zhengShuQianMingZaiHe(cert: ChengYuanZhengShu): Record<string, u
 }
 
 export function zhengShuQianMingZiJie(cert: ChengYuanZhengShu): Buffer {
-  return chengYuanQianMingZiJie(MEMBER_CERT_DOMAIN, zhengShuQianMingZaiHe(cert));
+  return chengYuanQianMingZiJie(CHENGYUAN_ZHENGSHU_YUMING, zhengShuQianMingZaiHe(cert));
 }
 
 export function cheXiaoQianMingZaiHe(list: CheXiaoBiao): Record<string, unknown> {
@@ -274,7 +274,7 @@ export interface GouJianChengYuanZhengShuShuRu {
 }
 
 /** 由公钥 raw 32B 生成 SPKI DER base64（与身份层线上表示一致） */
-export function spkiB64FromRaw(raw: Bytes): string {
+export function spkiB64FromRaw(raw: Zijie): string {
   return ed25519SpkiDerFromRaw(raw).toString('base64');
 }
 
@@ -295,7 +295,7 @@ export function gouJianChengYuanZhengShu(
     : 'member';
   const permissions = [...new Set((input.permissions ?? []).map((p) => String(p)).filter((p) => p.length > 0))].sort();
   const cert: ChengYuanZhengShu = {
-    schema: MEMBER_CERT_SCHEMA,
+    schema: CHENGYUAN_ZHENGSHU_MOSHI,
     certId: String(input.certId),
     groupId: String(input.groupId),
     memberFingerprint: String(input.memberFingerprint),
@@ -317,7 +317,7 @@ export function gouJianChengYuanZhengShu(
 /** 用签名器（`sign(bytes) → raw 64B`）把未签名证书变成已签名证书 */
 export async function signMemberCertificate(
   cert: ChengYuanZhengShu,
-  sign: (bytes: Buffer) => Promise<Bytes> | Bytes
+  sign: (bytes: Buffer) => Promise<Zijie> | Zijie
 ): Promise<ChengYuanZhengShu> {
   const sig = toBuf(await sign(zhengShuQianMingZiJie(cert)));
   if (sig.length !== 64) throw new Error(`member cert 签名长度异常：${sig.length}（应为 64）`);
@@ -362,7 +362,7 @@ export function gouJianCheXiaoBiao(input: GouJianCheXiaoBiaoShuRu, opts: { now?:
 
 export async function signRevocationList(
   list: CheXiaoBiao,
-  sign: (bytes: Buffer) => Promise<Bytes> | Bytes
+  sign: (bytes: Buffer) => Promise<Zijie> | Zijie
 ): Promise<CheXiaoBiao> {
   const sig = toBuf(await sign(cheXiaoQianMingZiJie(list)));
   if (sig.length !== 64) throw new Error(`revocation list 签名长度异常：${sig.length}（应为 64）`);
@@ -414,7 +414,7 @@ export function verifyMemberCertificate(
   opts: ChengYuanYanZhengXuanXiang = {}
 ): ChengYuanZhengShuYanZhengGuo {
   const now = opts.now ?? Date.now();
-  const skew = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
+  const pianyi = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
   const fingerprintOf = opts.fingerprintOf ?? moRenChengYuanZhiWen;
   const base: ChengYuanZhengShuYanZhengGuo = {
     ok: false,
@@ -427,7 +427,7 @@ export function verifyMemberCertificate(
     expiresAt: isFiniteNumber(cert?.expiresAt) ? cert.expiresAt : 0,
   };
   if (!cert || typeof cert !== 'object') return { ...base, detail: '证书不是对象' };
-  if (cert.schema !== MEMBER_CERT_SCHEMA) {
+  if (cert.schema !== CHENGYUAN_ZHENGSHU_MOSHI) {
     return { ...base, code: 'unknown-schema', detail: `schema=${String(cert.schema)}` };
   }
   if (!isNonEmptyString(cert.certId) || !isNonEmptyString(cert.groupId)) return { ...base, detail: 'certId/groupId 缺失' };
@@ -472,10 +472,10 @@ export function verifyMemberCertificate(
     return { ...base, code: 'wrong-group', detail: `群不符：期望 ${opts.expectGroupId}，实际 ${cert.groupId}` };
   }
   // 时间：只用本地时钟。声明里的时间戳只用来挡"荒谬的未来时间"。
-  if (cert.expiresAt <= now - skew) {
+  if (cert.expiresAt <= now - pianyi) {
     return { ...base, code: 'expired', detail: `已过期（本地 now=${now} > expiresAt=${cert.expiresAt}）` };
   }
-  if (cert.issuedAt > now + skew) {
+  if (cert.issuedAt > now + pianyi) {
     return { ...base, code: 'not-yet-valid', detail: `issuedAt 比本地时间超前 ${Math.round((cert.issuedAt - now) / 1000)}s` };
   }
   if (cert.expiresAt <= cert.issuedAt) return { ...base, detail: 'expiresAt <= issuedAt' };
@@ -498,7 +498,7 @@ export function verifyRevocationList(
   opts: ChengYuanYanZhengXuanXiang = {}
 ): { ok: boolean; code: CheXiaoBiaoMa; listVersion: number; entryCount: number; now: number; detail?: string } {
   const now = opts.now ?? Date.now();
-  const skew = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
+  const pianyi = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
   const fingerprintOf = opts.fingerprintOf ?? moRenChengYuanZhiWen;
   const base = {
     ok: false,
@@ -543,7 +543,7 @@ export function verifyRevocationList(
   if (opts.expectGroupId && opts.expectGroupId !== list.groupId) {
     return { ...base, code: 'wrong-group', detail: `群不符：期望 ${opts.expectGroupId}，实际 ${list.groupId}` };
   }
-  if (list.issuedAt > now + skew) {
+  if (list.issuedAt > now + pianyi) {
     return { ...base, code: 'not-yet-valid', detail: `issuedAt 比本地时间超前 ${Math.round((list.issuedAt - now) / 1000)}s` };
   }
   if (!verifySig(cheXiaoQianMingZiJie(list), list.issuerSignature, list.issuerPublicKey, opts)) {
@@ -554,7 +554,7 @@ export function verifyRevocationList(
 
 /* ────────────────────────────── 单调合并（拒绝回滚 / 拒绝偷偷解吊销） ────────────────────────────── */
 
-function entrySignature(list: CheXiaoBiao): string {
+function tiaomuQianming(list: CheXiaoBiao): string {
   return `${list.listVersion}|${list.entries.map((e) => e.certId).join(',')}|${list.issuedAt}|${list.issuerSignature}`;
 }
 
@@ -597,7 +597,7 @@ export function applyRevocationList(
     };
   }
   if (incoming.listVersion === current.listVersion) {
-    if (entrySignature(incoming) === entrySignature(current)) {
+    if (tiaomuQianming(incoming) === tiaomuQianming(current)) {
       return {
         ok: true,
         code: 'ok',
@@ -619,8 +619,8 @@ export function applyRevocationList(
     };
   }
   const incomingIds = new Set(incoming.entries.map((e) => e.certId));
-  const dropped = current.entries.filter((e) => !incomingIds.has(e.certId)).map((e) => e.certId);
-  if (dropped.length) {
+  const diushi = current.entries.filter((e) => !incomingIds.has(e.certId)).map((e) => e.certId);
+  if (diushi.length) {
     return {
       ok: false,
       code: 'entries-dropped',
@@ -628,7 +628,7 @@ export function applyRevocationList(
       listVersion: incoming.listVersion,
       previousVersion,
       entryCount: incoming.entries.length,
-      detail: `新列表少了已吊销项（${dropped.slice(0, 3).join(',')}…）：吊销只增不减`,
+      detail: `新列表少了已吊销项（${diushi.slice(0, 3).join(',')}…）：吊销只增不减`,
     };
   }
   return {
@@ -711,7 +711,7 @@ function indexById(certs: readonly ChengYuanZhengShu[]): Map<string, ChengYuanZh
 }
 
 /** 沿 `supersedes` 往回走到根，得到完整的变更链 */
-export function walkCertChain(certs: readonly ChengYuanZhengShu[], certId: string): ZhengShuLian {
+export function bianliZhengshuLian(certs: readonly ChengYuanZhengShu[], certId: string): ZhengShuLian {
   const byId = indexById(certs);
   const start = byId.get(certId);
   if (!start) {
@@ -752,7 +752,7 @@ export function walkCertChain(certs: readonly ChengYuanZhengShu[], certId: strin
 
 /** supersedes 链的**根** certId（成员身份 id，跨换证不变） */
 export function lianGenZhengShuId(certs: readonly ChengYuanZhengShu[], certId: string): string {
-  return walkCertChain(certs, certId).rootCertId;
+  return bianliZhengshuLian(certs, certId).rootCertId;
 }
 
 /**
@@ -764,20 +764,20 @@ export function lianShiZhiWen(certs: readonly ChengYuanZhengShu[], fingerprint: 
   const own = certs.filter((c) => c.memberFingerprint === fingerprint);
   const out = new Set<string>([fingerprint]);
   for (const c of own) {
-    const chain = walkCertChain(certs, c.certId);
+    const chain = bianliZhengshuLian(certs, c.certId);
     if (chain.cycle) continue; // 环 = 链不可信，不用它做归属
     for (const fp of chain.fingerprints) out.add(fp);
   }
   // 反向：别的证书 supersedes 到"我这一环"（例如本机只有旧证书）
-  let grew = true;
-  while (grew) {
-    grew = false;
+  let zengzhang = true;
+  while (zengzhang) {
+    zengzhang = false;
     for (const c of certs) {
       if (!c.supersedes) continue;
       if (out.has(c.memberFingerprint)) continue;
       if (out.has(c.supersedes)) {
         out.add(c.memberFingerprint);
-        grew = true;
+        zengzhang = true;
       }
     }
   }

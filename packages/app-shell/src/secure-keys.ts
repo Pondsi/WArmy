@@ -20,13 +20,13 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
-interface Entry {
+interface Tiaomu {
   v: 2;
   protector: 'os' | 'plain';
   data: string;
 }
 
-type RawFile = Record<string, Entry | string>;
+type YuanwenWenjian = Record<string, Tiaomu | string>;
 
 function safeStorageOf(): { encryptString(s: string): Buffer; decryptString(b: Buffer): string; isEncryptionAvailable(): boolean } | null {
   try {
@@ -42,7 +42,7 @@ function safeStorageOf(): { encryptString(s: string): Buffer; decryptString(b: B
   }
 }
 
-function allowPlaintext(): boolean {
+function yunxuMingwen(): boolean {
   return process.env['WARMY_ALLOW_PLAINTEXT_KEYS'] === '1';
 }
 
@@ -58,10 +58,10 @@ export class SecureKeyStore {
   /** 加密保存。没有 OS 级保护时**拒绝写明文**（除非显式开发开关）。 */
   async save(providerId: string, apiKey: string): Promise<void> {
     const anQuanCang = safeStorageOf();
-    let entry: Entry;
+    let entry: Tiaomu;
     if (anQuanCang) {
       entry = { v: 2, protector: 'os', data: anQuanCang.encryptString(apiKey).toString('base64') };
-    } else if (allowPlaintext()) {
+    } else if (yunxuMingwen()) {
       // 仅供开发：明文但**明确标记**，不冒充加密
       entry = { v: 2, protector: 'plain', data: Buffer.from(apiKey, 'utf8').toString('base64') };
     } else {
@@ -118,9 +118,9 @@ export class SecureKeyStore {
     fs.writeFileSync(this.file, JSON.stringify(all), { encoding: 'utf8', mode: 0o600 });
   }
 
-  private loadRaw(): RawFile {
+  private loadRaw(): YuanwenWenjian {
     try {
-      const parsed = JSON.parse(fs.readFileSync(this.file, 'utf8')) as RawFile;
+      const parsed = JSON.parse(fs.readFileSync(this.file, 'utf8')) as YuanwenWenjian;
       return parsed && typeof parsed === 'object' ? parsed : {};
     } catch {
       return {};

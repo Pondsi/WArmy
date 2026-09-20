@@ -2,8 +2,8 @@
  * Spike 9: 本地回环 — 主进程 spawn 子进程，完整生命周期，停止后进程树归零
  * DoD: 无死锁；停止后子进程退出
  */
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 

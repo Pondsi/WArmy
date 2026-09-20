@@ -6,9 +6,9 @@
  * 用子进程顺序执行，互不干扰（每个脚本自己起真实 UDP/TCP 监听、跑完自己清理）。
  * 退出码：任一脚本失败 → 1。
  */
-import { execFileSync } from 'node:child_process';
+import {execFileSync} from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const scripts = [

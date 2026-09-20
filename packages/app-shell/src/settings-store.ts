@@ -5,9 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DEFAULT_CONTEXT_BUDGET_CHARS } from './context-renderer.js';
-import { generateCredential, isValidCredential, credentialKind } from './credential.js';
+import { shengchengPingzheng, isValidCredential, pingzhengLeixing } from './credential.js';
 
-export interface LocalProfile {
+export interface BenjiZiliao {
   username: string;
   avatarDataUrl: string;
   email: string;
@@ -29,7 +29,7 @@ export interface LocalProfile {
  * 见 credential.ts —— ID 即私钥，公钥指纹才是给别人的东西）。
  */
 export function generateDeviceId(): string {
-  return generateCredential();
+  return shengchengPingzheng();
 }
 
 /** 凭证（现行 51 位大写 / 兼容上一版 45 位）——除此之外一律不算有效 ID */
@@ -52,7 +52,7 @@ function safeEqual(a: string, b: string): boolean {
   return chaYi === 0;
 }
 
-export interface SmtpAccount {
+export interface SmtpZhanghao {
   id: string;
   label: string;
   host: string;
@@ -164,7 +164,7 @@ export interface AppSettings {
   panelWidth: number;
   globalSecurity: 'full' | 'normal' | 'strict';
   /** 最多 10 个 SMTP 账号 */
-  smtpAccounts: SmtpAccount[];
+  smtpAccounts: SmtpZhanghao[];
   /**
    * Skill auto-discovery directories (absolute paths). Persisted through the
    * existing settings channel — no separate storage file.
@@ -335,8 +335,8 @@ function hash(pw: string) {
 export class LocalAccountStore {
   constructor(private file: string) {}
 
-  loadProfile(): LocalProfile {
-    let p: LocalProfile;
+  loadProfile(): BenjiZiliao {
+    let p: BenjiZiliao;
     try {
       p = JSON.parse(fs.readFileSync(this.file, 'utf8'));
     } catch {
@@ -360,20 +360,20 @@ export class LocalAccountStore {
      *  · 形态是现役凭证但**签名对不上**（被手改）⇒ 只能重新生成一把（旧的那把已经不可信）。
      * 签名判定只对现役凭证有意义：老形态本来就不该通过校验，那是"该升级"而不是"被篡改"。
      */
-    const unknownShape = credentialKind(before) === null;
-    const tamperedCredential = !unknownShape && !signedOk;
-    if (unknownShape || tamperedCredential) {
+    const weizhiXingzhuang = pingzhengLeixing(before) === null;
+    const beigaIPingzheng = !weizhiXingzhuang && !signedOk;
+    if (weizhiXingzhuang || beigaIPingzheng) {
       p.deviceId = generateDeviceId();
       p.deviceIdSig = signDeviceId(p.deviceId);
-      if (unknownShape && before) p.deviceIdUpgradedFrom = before;
-      if (tamperedCredential) p.deviceIdUpgradedFrom = `tampered:${before.slice(0, 6)}…`;
+      if (weizhiXingzhuang && before) p.deviceIdUpgradedFrom = before;
+      if (beigaIPingzheng) p.deviceIdUpgradedFrom = `tampered:${before.slice(0, 6)}…`;
       try { this.saveProfile(p); } catch { /* 只读目录时忽略 */ }
     }
     return p;
   }
 
   /** 校验 ID 形态与 HMAC 签名；不触碰文件、不重新生成 */
-  verifyIdFields(p: Partial<LocalProfile>): boolean {
+  verifyIdFields(p: Partial<BenjiZiliao>): boolean {
     if (!isValidDeviceId(p.deviceId)) return false;
     if (typeof p.deviceIdSig !== 'string' || !p.deviceIdSig) return false;
     return safeEqual(signDeviceId(p.deviceId), p.deviceIdSig);
@@ -381,7 +381,7 @@ export class LocalAccountStore {
 
   /** 供界面展示：当前 ID 与校验状态（只读，不修复） */
   idStatus(): { id: string; valid: boolean } {
-    let raw: Partial<LocalProfile>;
+    let raw: Partial<BenjiZiliao>;
     try {
       raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
     } catch {
@@ -390,11 +390,11 @@ export class LocalAccountStore {
     return { id: raw.deviceId || '', valid: this.verifyIdFields(raw) };
   }
 
-  saveProfile(p: LocalProfile): LocalProfile {
+  saveProfile(p: BenjiZiliao): BenjiZiliao {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const { passwordHash: _drop, ...rest } = p;
     fs.writeFileSync(this.file, JSON.stringify(rest, null, 2));
-    return rest as LocalProfile;
+    return rest as BenjiZiliao;
   }
 
   /** 登录功能占位：本地密码校验 */
@@ -411,7 +411,7 @@ export class LocalAccountStore {
     return p.passwordHash === hash(pw);
   }
 
-  loginLocal(pw: string): { ok: boolean; profile?: LocalProfile } {
+  loginLocal(pw: string): { ok: boolean; profile?: BenjiZiliao } {
     if (!this.verifyPassword(pw)) return { ok: false };
     const p = this.loadProfile();
     return { ok: true, profile: { username: p.username, avatarDataUrl: p.avatarDataUrl, email: p.email } };

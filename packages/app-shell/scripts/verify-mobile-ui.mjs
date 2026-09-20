@@ -4,8 +4,8 @@
 // 判定一律基于真实 DOM 度量与触摸命中结果，不用 typeof x==='function' 占位。
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { attach, sleep, PORTS } from './cdp-lib.mjs';
+import {fileURLToPath} from 'node:url';
+import {attach, sleep, PORTS} from './cdp-lib.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkg = path.join(here, '..');

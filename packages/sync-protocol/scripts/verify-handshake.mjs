@@ -14,16 +14,7 @@
  */
 import crypto from 'node:crypto';
 import path from 'node:path';
-import {
-  HandshakeDriver,
-  IdentityContractError,
-  ReplayGuard,
-  AnQuanTongDao,
-  SecureSyncClient,
-  SecureSyncServer,
-  chuangjianLinShiShenFen,
-  normalizeIdentity,
-} from '../dist/index.js';
+import {HandshakeDriver, ShenfenQiyueCuowu, ReplayGuard, AnQuanTongDao, SecureSyncClient, SecureSyncServer, chuangjianLinShiShenFen, normalizeIdentity, } from '../dist/index.js';
 
 let failures = 0;
 let passes = 0;
@@ -369,9 +360,9 @@ async function main() {
     try {
       await normalizeIdentity({ ...A.provider, fingerprint: 'NOT-A-REAL-FINGERPRINT' });
     } catch (e) {
-      err = e instanceof IdentityContractError ? 'IdentityContractError' : String(e.message);
+      err = e instanceof ShenfenQiyueCuowu ? 'ShenfenQiyueCuowu' : String(e.message);
     }
-    check('指纹与公钥不符 → IdentityContractError', err === 'IdentityContractError', err);
+    check('指纹与公钥不符 → ShenfenQiyueCuowu', err === 'IdentityContractError', err);
   }
   {
     const stubIdentity = { fingerprint: A.fingerprint, publicKey: A.provider.publicKey, sign: A.provider.sign, verify: () => true };
@@ -521,9 +512,9 @@ async function main() {
     try {
       await normalizeIdentity({ fingerprint: adapterA.fingerprint, publicKey: Buffer.alloc(7), sign: adapterA.sign, verify: adapterA.verify });
     } catch (e) {
-      badKey = e instanceof IdentityContractError ? 'IdentityContractError' : String(e.message);
+      badKey = e instanceof ShenfenQiyueCuowu ? 'ShenfenQiyueCuowu' : String(e.message);
     }
-    check('非法公钥长度 → IdentityContractError', badKey === 'IdentityContractError', badKey);
+    check('非法公钥长度 → ShenfenQiyueCuowu', badKey === 'IdentityContractError', badKey);
   }
 
   console.log(`\n=== verify-handshake 结果：${passes} 通过 / ${failures} 失败 ===`);

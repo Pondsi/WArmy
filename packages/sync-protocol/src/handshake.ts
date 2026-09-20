@@ -26,28 +26,28 @@ import {
   joinFields,
   open,
   randomB64u,
-  seal,
+  fengyin,
   sha256,
   sha256Hex,
   x25519SharedSecret,
 } from './codec.js';
 import {
   type ZhiWenTuiDao,
-  type IdentityProvider,
-  type NormalizedIdentity,
-  IdentityContractError,
+  type ShenfenGongyingshang,
+  type GuifanShenfen,
+  ShenfenQiyueCuowu,
   warmyFingerprint,
   normalizeIdentity,
   verifyPeerSignature,
 } from './identity.js';
 
-export const HANDSHAKE_VERSION = 1;
-export const HANDSHAKE_PROTOCOL = 'warmy-sync/1';
+export const WOSHOU_BANBEN = 1;
+export const WOSHOU_XIEYI = 'warmy-sync/1';
 export const DEFAULT_TIMESTAMP_TOLERANCE_MS = 120_000;
 export const DEFAULT_PHASE_TIMEOUT_MS = 15_000;
-export const HANDSHAKE_NONCE_BYTES = 16;
+export const WOSHOU_NONCE_ZIJIE = 16;
 
-export type HandshakeRole = 'initiator' | 'responder';
+export type WoshouJuese = 'initiator' | 'responder';
 
 /* ────────────────────────────── 帧 ────────────────────────────── */
 
@@ -124,7 +124,7 @@ export type HandshakeFailureReason =
   | 'phase-timeout'
   | 'state-error';
 
-export class HandshakeError extends Error {
+export class WoshouCuowu extends Error {
   constructor(
     public readonly reason: HandshakeFailureReason,
     message: string,
@@ -135,10 +135,10 @@ export class HandshakeError extends Error {
   }
 }
 
-export interface HandshakeEvent {
+export interface WoshouShijian {
   type: 'sent' | 'received' | 'rejected' | 'established';
   flight: 1 | 2 | 3 | 4;
-  role: HandshakeRole;
+  role: WoshouJuese;
   peer?: string;
   detail?: string;
   ts: number;
@@ -149,7 +149,7 @@ export interface HandshakeFailureRecord {
   reason: HandshakeFailureReason;
   detail: string;
   peer?: string;
-  role: HandshakeRole;
+  role: WoshouJuese;
   at: number;
 }
 
@@ -161,7 +161,7 @@ export interface ReplayCheck {
   detail?: string;
 }
 
-interface PeerReplayState {
+interface DuiduanChongfangZhuangtai {
   maxCounter: number;
   nonces: Map<string, number>;
   lastSeenAt: number;
@@ -193,7 +193,7 @@ const MAX_TRACKED_NONCES = 8192;
  * 才 commit，否则攻击者可以用伪造帧把合法对端的计数顶掉。
  */
 export class ReplayGuard {
-  private peers = new Map<string, PeerReplayState>();
+  private peers = new Map<string, DuiduanChongfangZhuangtai>();
   private localCounterValue = 0;
   private readonly toleranceMs: number;
   private readonly nonceWindowMs: number;
@@ -221,7 +221,7 @@ export class ReplayGuard {
     return this.localCounterValue;
   }
 
-  get tolerance(): number {
+  get rongcha(): number {
     return this.toleranceMs;
   }
 
@@ -263,20 +263,20 @@ export class ReplayGuard {
     this.prune(s, nowMs);
     s.nonces.set(args.nonce, nowMs);
     if (s.nonces.size > MAX_TRACKED_NONCES) {
-      const oldest = [...s.nonces.entries()].sort((a, b) => a[1] - b[1])[0];
-      if (oldest) s.nonces.delete(oldest[0]);
+      const zuijiu = [...s.nonces.entries()].sort((a, b) => a[1] - b[1])[0];
+      if (zuijiu) s.nonces.delete(zuijiu[0]);
     }
     if (args.counter > s.maxCounter) s.maxCounter = args.counter;
     s.lastSeenAt = nowMs;
     this.save();
   }
 
-  private state(peer: string): PeerReplayState {
+  private state(peer: string): DuiduanChongfangZhuangtai {
     let s = this.peers.get(peer);
     if (!s) {
       if (this.peers.size >= MAX_TRACKED_PEERS) {
-        const oldest = [...this.peers.entries()].sort((a, b) => a[1].lastSeenAt - b[1].lastSeenAt)[0];
-        if (oldest) this.peers.delete(oldest[0]);
+        const zuijiu = [...this.peers.entries()].sort((a, b) => a[1].lastSeenAt - b[1].lastSeenAt)[0];
+        if (zuijiu) this.peers.delete(zuijiu[0]);
       }
       s = { maxCounter: 0, nonces: new Map(), lastSeenAt: this.now() };
       this.peers.set(peer, s);
@@ -284,7 +284,7 @@ export class ReplayGuard {
     return s;
   }
 
-  private prune(s: PeerReplayState, nowMs: number): void {
+  private prune(s: DuiduanChongfangZhuangtai, nowMs: number): void {
     for (const [nonce, at] of s.nonces) {
       if (nowMs - at > this.nonceWindowMs) s.nonces.delete(nonce);
     }
@@ -329,7 +329,7 @@ export interface SessionKeys {
   /** sha256(transcript) 全量 hex */
   handshakeId: string;
   transcriptHash: Buffer;
-  role: HandshakeRole;
+  role: WoshouJuese;
   groupId: string | null;
   peerFingerprint: string;
   peerPublicKey: Buffer;
@@ -352,9 +352,9 @@ export interface SessionKeys {
 
 /* ────────────────────────────── 握手驱动 ────────────────────────────── */
 
-export interface HandshakeOptions {
-  identity: IdentityProvider | NormalizedIdentity;
-  role: HandshakeRole;
+export interface WoshouXuanxiang {
+  identity: ShenfenGongyingshang | GuifanShenfen;
+  role: WoshouJuese;
   /** 已知/名册内的对端指纹；null = TOFU 首次接触（不做 pin 校验） */
   peerFingerprint?: string | null;
   /** 名册校验：返回 false 即判定为未授权成员 */
@@ -367,10 +367,10 @@ export interface HandshakeOptions {
   enforceLocalEd25519?: boolean;
   requireInjectedVerify?: boolean;
   now?: () => number;
-  onEvent?: (e: HandshakeEvent) => void;
+  onEvent?: (e: WoshouShijian) => void;
 }
 
-interface TranscriptState {
+interface JiaoyiZhuangtai {
   t1?: string;
   t2?: string;
   hs1?: Hs1;
@@ -378,22 +378,22 @@ interface TranscriptState {
 }
 
 export class HandshakeDriver {
-  private identity!: NormalizedIdentity;
+  private identity!: GuifanShenfen;
   private readonly ready: Promise<void>;
   private ephPrivateKey!: Buffer;
   private ephPublicKey!: Buffer;
   private localNonce = '';
   private localCounter = 0;
-  private transcript: TranscriptState = {};
+  private transcript: JiaoyiZhuangtai = {};
   private state: 'init' | 'awaiting-hs2' | 'awaiting-hs3' | 'awaiting-hs4' | 'established' | 'failed' = 'init';
   private sessionKeys: SessionKeys | null = null;
-  private failure: HandshakeError | null = null;
+  private failure: WoshouCuowu | null = null;
   private lastFrameAt = 0;
   private readonly guard: ReplayGuard;
   private readonly now: () => number;
   private readonly phaseTimeoutMs: number;
 
-  constructor(private readonly opts: HandshakeOptions) {
+  constructor(private readonly opts: WoshouXuanxiang) {
     this.guard = opts.replayGuard ?? new ReplayGuard({ toleranceMs: opts.timestampToleranceMs });
     this.now = opts.now ?? (() => Date.now());
     this.phaseTimeoutMs = opts.phaseTimeoutMs ?? DEFAULT_PHASE_TIMEOUT_MS;
@@ -409,17 +409,17 @@ export class HandshakeDriver {
       requireInjectedVerify: this.opts.requireInjectedVerify,
     });
     if (this.opts.peerFingerprint && this.opts.peerFingerprint === this.identity.fingerprint) {
-      throw new IdentityContractError('握手配置错误：peerFingerprint 不能等于本机指纹');
+      throw new ShenfenQiyueCuowu('握手配置错误：peerFingerprint 不能等于本机指纹');
     }
     const eph = generateX25519();
     this.ephPrivateKey = eph.privateKey;
     this.ephPublicKey = eph.publicKey;
-    this.localNonce = randomB64u(HANDSHAKE_NONCE_BYTES);
+    this.localNonce = randomB64u(WOSHOU_NONCE_ZIJIE);
     this.localCounter = this.guard.nextLocalCounter();
     this.lastFrameAt = this.now();
   }
 
-  get role(): HandshakeRole {
+  get role(): WoshouJuese {
     return this.opts.role;
   }
   get localFingerprint(): string {
@@ -431,7 +431,7 @@ export class HandshakeDriver {
   get session(): SessionKeys | null {
     return this.sessionKeys;
   }
-  get error(): HandshakeError | null {
+  get error(): WoshouCuowu | null {
     return this.failure;
   }
   get phase(): string {
@@ -444,12 +444,12 @@ export class HandshakeDriver {
     return { nonce: this.localNonce, counter: this.localCounter, ephemeralPublicKey: b64u(this.ephPublicKey) };
   }
 
-  private emit(e: Omit<HandshakeEvent, 'ts' | 'role'>): void {
+  private emit(e: Omit<WoshouShijian, 'ts' | 'role'>): void {
     this.opts.onEvent?.({ ...e, role: this.opts.role, ts: this.now() });
   }
 
-  private fail(reason: HandshakeFailureReason, message: string, peer?: string): HandshakeError {
-    const err = new HandshakeError(reason, message, peer);
+  private fail(reason: HandshakeFailureReason, message: string, peer?: string): WoshouCuowu {
+    const err = new WoshouCuowu(reason, message, peer);
     this.failure = err;
     if (this.state !== 'established') this.state = 'failed';
     this.emit({ type: 'rejected', flight: 1, peer, detail: `${reason}: ${message}` });
@@ -463,7 +463,7 @@ export class HandshakeDriver {
     if (this.state !== 'init') throw this.fail('state-error', `start() 状态非法：${this.state}`);
     const hs1: Hs1 = {
       t: 'hs1',
-      v: HANDSHAKE_VERSION,
+      v: WOSHOU_BANBEN,
       gid: this.opts.groupId ?? null,
       eph: b64u(this.ephPublicKey),
       fp: this.identity.fingerprint,
@@ -519,7 +519,7 @@ export class HandshakeDriver {
 
   /* ── 被叫方处理 HS1，产出 HS2 ── */
   private async onHs1(hs1: Hs1): Promise<Hs2> {
-    if (hs1.v !== HANDSHAKE_VERSION) throw this.fail('bad-version', `不支持的握手版本 ${hs1.v}`, hs1.fp);
+    if (hs1.v !== WOSHOU_BANBEN) throw this.fail('bad-version', `不支持的握手版本 ${hs1.v}`, hs1.fp);
     if ((hs1.gid ?? null) !== (this.opts.groupId ?? null)) {
       throw this.fail('bad-group', `群 ID 不匹配：对端 ${hs1.gid}，本端 ${this.opts.groupId ?? null}`, hs1.fp);
     }
@@ -541,7 +541,7 @@ export class HandshakeDriver {
 
     const hs2: Hs2 = {
       t: 'hs2',
-      v: HANDSHAKE_VERSION,
+      v: WOSHOU_BANBEN,
       gid: this.opts.groupId ?? null,
       eph: b64u(this.ephPublicKey),
       fp: this.identity.fingerprint,
@@ -563,7 +563,7 @@ export class HandshakeDriver {
 
   /* ── 发起方处理 HS2，产出 HS3 ── */
   private async onHs2(hs2: Hs2): Promise<Hs3> {
-    if (hs2.v !== HANDSHAKE_VERSION) throw this.fail('bad-version', `不支持的握手版本 ${hs2.v}`, hs2.fp);
+    if (hs2.v !== WOSHOU_BANBEN) throw this.fail('bad-version', `不支持的握手版本 ${hs2.v}`, hs2.fp);
     if ((hs2.gid ?? null) !== (this.opts.groupId ?? null)) throw this.fail('bad-group', `群 ID 不匹配：对端 ${hs2.gid}`, hs2.fp);
     const t1 = this.transcript.t1;
     const hs1 = this.transcript.hs1;
@@ -584,7 +584,7 @@ export class HandshakeDriver {
 
     const session = this.sessionKeys as SessionKeys;
     const th = session.transcriptHash;
-    const sealed = seal(session.c2sMaterial, th, Buffer.concat([Buffer.from('HS3'), th]));
+    const sealed = fengyin(session.c2sMaterial, th, Buffer.concat([Buffer.from('HS3'), th]));
     this.state = 'awaiting-hs4';
     this.emit({ type: 'sent', flight: 3, peer: hs2.fp });
     return { t: 'hs3', id: session.handshakeId.slice(0, 16), iv: b64u(sealed.iv), tag: b64u(sealed.ct) };
@@ -606,7 +606,7 @@ export class HandshakeDriver {
       throw this.fail('confirm-failed', 'HS3 解密失败：对端未持有同一会话密钥', session.peerFingerprint);
     }
     if (!plain.equals(th)) throw this.fail('confirm-failed', 'HS3 transcript 校验值不符', session.peerFingerprint);
-    const sealed = seal(session.s2cMaterial, th, Buffer.concat([Buffer.from('HS4'), th]));
+    const sealed = fengyin(session.s2cMaterial, th, Buffer.concat([Buffer.from('HS4'), th]));
     this.state = 'established';
     this.emit({ type: 'sent', flight: 4, peer: session.peerFingerprint });
     this.emit({ type: 'established', flight: 4, peer: session.peerFingerprint, detail: session.keyFingerprint.slice(0, 16) });
@@ -639,8 +639,8 @@ export class HandshakeDriver {
     if (claimedFp === this.identity.fingerprint) {
       throw this.fail('protocol-error', '对端声称与本机相同指纹（自反射攻击）', claimedFp);
     }
-    const derive = this.opts.fingerprintDerivation ?? warmyFingerprint;
-    const expected = derive(pk);
+    const tuidao = this.opts.fingerprintDerivation ?? warmyFingerprint;
+    const expected = tuidao(pk);
     if (expected !== claimedFp) {
       throw this.fail('fingerprint-mismatch', `指纹与公钥不符：声明 ${claimedFp}，由公钥推出 ${expected}`, claimedFp);
     }
@@ -668,7 +668,7 @@ export class HandshakeDriver {
   private hs1Transcript(hs1: Hs1): string {
     return joinFields([
       'WARMY-HS1',
-      HANDSHAKE_VERSION,
+      WOSHOU_BANBEN,
       hs1.gid,
       hs1.eph,
       hs1.fp,
@@ -683,7 +683,7 @@ export class HandshakeDriver {
   private hs2Transcript(hs2: Hs2, t1: string): string {
     return joinFields([
       'WARMY-HS2',
-      HANDSHAKE_VERSION,
+      WOSHOU_BANBEN,
       hs2.gid,
       hs2.eph,
       hs2.fp,
@@ -697,13 +697,13 @@ export class HandshakeDriver {
 
   private deriveSession(hs1: Hs1, hs2: Hs2): void {
     // ECDHE：对端临时公钥对发起方是 hs2.eph，对被叫方是 hs1.eph（别拿自己的公钥去算）
-    const peerEphemeral = this.opts.role === 'initiator' ? hs2.eph : hs1.eph;
-    const shared = x25519SharedSecret(this.ephPrivateKey, fromB64u(peerEphemeral));
+    const duiduanLinshi = this.opts.role === 'initiator' ? hs2.eph : hs1.eph;
+    const shared = x25519SharedSecret(this.ephPrivateKey, fromB64u(duiduanLinshi));
     const t1 = this.transcript.t1 ?? this.hs1Transcript(hs1);
     const t2 = this.transcript.t2 ?? this.hs2Transcript(hs2, t1);
     const transcriptHash = sha256(Buffer.from(t1, 'utf8'), Buffer.from('|', 'utf8'), Buffer.from(t2, 'utf8'));
-    const c2sMaterial = hkdf(shared, transcriptHash, `${HANDSHAKE_PROTOCOL} initiator-to-responder`, 32);
-    const s2cMaterial = hkdf(shared, transcriptHash, `${HANDSHAKE_PROTOCOL} responder-to-initiator`, 32);
+    const c2sMaterial = hkdf(shared, transcriptHash, `${WOSHOU_XIEYI} initiator-to-responder`, 32);
+    const s2cMaterial = hkdf(shared, transcriptHash, `${WOSHOU_XIEYI} responder-to-initiator`, 32);
     const peerIsInitiator = hs1.fp !== this.identity.fingerprint;
     this.sessionKeys = {
       handshakeId: transcriptHash.toString('hex'),
@@ -736,7 +736,7 @@ function safeFromB64u(s: unknown): Buffer | null {
 }
 
 /** 便捷函数：在两个驱动之间跑完握手（内存内自检 / 测试用） */
-export async function runHandshake(initiator: HandshakeDriver, responder: HandshakeDriver): Promise<SessionKeys> {
+export async function yunxingWoshou(initiator: HandshakeDriver, responder: HandshakeDriver): Promise<SessionKeys> {
   const hs1 = await initiator.start();
   if (!hs1) throw new Error('initiator.start() 未返回 HS1');
   let cur: HsFrame = hs1;

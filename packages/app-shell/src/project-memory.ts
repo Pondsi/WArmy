@@ -13,7 +13,7 @@ import type { GroupStore } from './group-store.js';
 export const PROJECT_MEMORY_INJECT_CHARS = 1200;
 export const PROJECT_MEMORY_MAX_CHARS = 8000;
 
-export interface ProjectMemoryView {
+export interface XiangmuJiyiCangShitu {
   ok: true;
   groupId: string;
   memory: string;

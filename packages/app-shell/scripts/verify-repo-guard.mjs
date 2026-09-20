@@ -16,9 +16,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { validatePushPaths, validateRefUpdate, scanPublishableExport, normalizeRepoPath } from '../dist/repo-guard.js';
-import { LeaseRegistry } from '../dist/lease.js';
+import {fileURLToPath} from 'node:url';
+import {validatePushPaths, validateRefUpdate, saomiaoKeFabucDaochu, normalizeRepoPath} from '../dist/repo-guard.js';
+import {LeaseRegistry} from '../dist/lease.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const keep = process.argv.includes('--keep');
@@ -203,7 +203,7 @@ check(
   uniCollision.allowed === false && uniCollision.rejected.length === 2,
   `rejected=${JSON.stringify(uniCollision.rejected.map((r) => [r.path, r.code]))}`
 );
-const dup = validatePushPaths(['src/dup.ts', 'src/dup.ts']);
+const dup = validatePushPaths(['src/dup.ts', 'src/zhongFu.ts']);
 check('完全重复路径 = 只收一条 + 告警（不算绕过）', dup.allowed === true && dup.accepted.length === 1 && dup.warnings.length > 0, dup.warnings[0]);
 
 const norm = normalizeRepoPath('．/／src/../src\\app.ts ');
@@ -314,7 +314,7 @@ const refNoop = validateRefUpdate('refs/heads/proposals/fix-1', A, A, { role: 'm
 check('无变化的 no-op → 放行但给告警', refNoop.allowed === true && refNoop.action === 'noop' && refNoop.warnings.length > 0, refNoop.warnings[0]);
 
 // ─────────────────────────────────────────────────────────────────────────────
-section('4. 公开目录发布门禁（scanPublishableExport）');
+section('4. 公开目录发布门禁（saomiaoKeFabucDaochu）');
 // ─────────────────────────────────────────────────────────────────────────────
 
 const cleanDir = path.join(tmpRoot, 'clean-public');
@@ -323,7 +323,7 @@ fs.mkdirSync(path.join(cleanDir, 'docs'), { recursive: true });
 fs.writeFileSync(path.join(cleanDir, 'README.md'), '# 公开目录\n本目录的内容会被导出并发布到公开位置。\n', 'utf8');
 fs.writeFileSync(path.join(cleanDir, 'src', 'app.ts'), 'export const hello = (): string => "hi";\n', 'utf8');
 fs.writeFileSync(path.join(cleanDir, 'docs', 'notes.md'), '联系示例（占位邮箱，允许）：alice@example.com\n', 'utf8');
-const cleanScan = scanPublishableExport(cleanDir);
+const cleanScan = saomiaoKeFabucDaochu(cleanDir);
 check(
   '干净目录 → 允许发布',
   cleanScan.allowed === true && cleanScan.files === 3 && cleanScan.violations.length === 0,
@@ -375,7 +375,7 @@ try {
   }
 }
 
-const dirtyScan = scanPublishableExport(dirtyDir);
+const dirtyScan = saomiaoKeFabucDaochu(dirtyDir);
 const dirtyCodes = new Set(dirtyScan.violations.map((v) => v.code));
 check('含聊天日志/邮箱/密钥/名册/本机路径的目录 → 拒绝发布', dirtyScan.allowed === false, `violations=${dirtyScan.violations.length}`);
 for (const code of ['chat-log', 'member-roster', 'email', 'secret-key', 'local-abs-path', 'env-file']) {
@@ -395,20 +395,20 @@ check(
   dirtyScan.violations[0]?.reason
 );
 
-const chatOnly = scanPublishableExport([{ path: 'public/聊天记录.md', content: '# 聊天记录\n' }]);
+const chatOnly = saomiaoKeFabucDaochu([{ path: 'public/聊天记录.md', content: '# 聊天记录\n' }]);
 check('数组入参：文件名带聊天记录 → 拒', chatOnly.allowed === false && codes(chatOnly).includes('chat-log'), codes(chatOnly));
-const emailOnly = scanPublishableExport([{ path: 'public/contact.txt', content: '邮箱：carol@team.example.cn\n' }]);
+const emailOnly = saomiaoKeFabucDaochu([{ path: 'public/contact.txt', content: '邮箱：carol@team.example.cn\n' }]);
 check('数组入参：内容含真实邮箱 → 拒', emailOnly.allowed === false && codes(emailOnly).includes('email'), codes(emailOnly));
-const keyOnly = scanPublishableExport([{ path: 'public/config.md', content: `key = "sk-${'z'.repeat(24)}"\n` }]);
+const keyOnly = saomiaoKeFabucDaochu([{ path: 'public/config.md', content: `key = "sk-${'z'.repeat(24)}"\n` }]);
 check('数组入参：内容含 API Key → 拒', keyOnly.allowed === false && codes(keyOnly).includes('secret-key'), codes(keyOnly));
-const cleanArray = scanPublishableExport([
+const cleanArray = saomiaoKeFabucDaochu([
   { path: 'public/index.html', content: '<!doctype html><title>ok</title>\n' },
   { path: 'public/style.css', content: 'body { color: #333; }\n' },
 ]);
 check('数组入参：干净的两条 → 允许', cleanArray.allowed === true && cleanArray.files === 2, JSON.stringify(cleanArray.violations));
-const placeholder = scanPublishableExport([{ path: 'public/a.md', content: 'demo@example.org\n' }]);
+const placeholder = saomiaoKeFabucDaochu([{ path: 'public/a.md', content: 'demo@example.org\n' }]);
 check('数组入参：占位邮箱放行', placeholder.allowed === true, codes(placeholder));
-const allowListed = scanPublishableExport([{ path: 'public/内部.md', content: '聊天记录\n' }], { allowPathPatterns: ['内部'] });
+const allowListed = saomiaoKeFabucDaochu([{ path: 'public/内部.md', content: '聊天记录\n' }], { allowPathPatterns: ['内部'] });
 check('allowPathPatterns 可以显式放行（要留审计）', allowListed.allowed === true && allowListed.warnings.length > 0, allowListed.warnings[0]);
 
 // ─────────────────────────────────────────────────────────────────────────────

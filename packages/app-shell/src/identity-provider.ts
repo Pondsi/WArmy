@@ -52,19 +52,19 @@ import {
   signRevocationList,
   verifyMemberCertificate,
   type ZhiWenTuiDao,
-  type IdentityProvider,
+  type ShenfenGongyingshang,
   type ChengYuanZhengShuMa,
   type ChengYuanZhengShuJueSe,
   type ChengYuanZhengShu,
   type quChengYuanZhiWen,
-  type NormalizedIdentity,
+  type GuifanShenfen,
   type CheXiaoBiao,
   type CheXiaoYuanYin,
 } from '@warmy/sync-protocol';
 import {
   DEFAULT_CLOCK_SKEW_MS,
   fingerprintFromPublicKey,
-  fingerprintMatches,
+  zhiwenPipei,
   keyObjectFromPrivateDer,
   verifyRotationDeclaration,
   type LianXiKa,
@@ -87,11 +87,11 @@ export function fingerprintDerivationForAppShell(): ZhiWenTuiDao {
 }
 
 /** 无法签名时的类型化错误（**不允许**静默返回空签名） */
-export type IdentitySignerErrorCode = 'identity-locked' | 'identity-missing' | 'identity-unusable';
+export type ShenfenQianmingzheCuowuDaima = 'identity-locked' | 'identity-missing' | 'identity-unusable';
 
 export class IdentityUnavailableError extends Error {
-  readonly code: IdentitySignerErrorCode;
-  constructor(code: IdentitySignerErrorCode, message?: string) {
+  readonly code: ShenfenQianmingzheCuowuDaima;
+  constructor(code: ShenfenQianmingzheCuowuDaima, message?: string) {
     super(message ?? code);
     // name 直接用 code：调用方可以只判 `e.name === 'identity-locked'`
     this.name = code;
@@ -110,7 +110,7 @@ export interface DerivationCheck {
  * 不等（或公钥不是 Ed25519 SPKI）就抛错，并带上期望/实际值 —— 这种情况下一旦启动组网，
  * 结果是"所有合法握手都被拒"，比直接失败更难排查。
  */
-export function assertDerivationMatches(store: IdentityStore): DerivationCheck {
+export function duanyanTuidaoPipei(store: IdentityStore): DerivationCheck {
   const info = store.info();
   if (!info) {
     throw new IdentityUnavailableError('identity-missing', '本机身份不存在，无法校验指纹推导');
@@ -142,7 +142,7 @@ export interface QianMingZheJieSuoTai {
   signReady: boolean;
 }
 
-export interface IdentitySigner {
+export interface ShenfenQianmingzhe {
   /** 身份层指纹（线上表示） */
   readonly fingerprint: string;
   /** SPKI DER base64（公开信息，可直接给渲染进程） */
@@ -156,7 +156,7 @@ export interface IdentitySigner {
   verify(msg: Buffer, sig: Buffer, pub: Buffer | string | Uint8Array): boolean | null;
 }
 
-export function createIdentitySigner(store: IdentityStore): IdentitySigner {
+export function createIdentitySigner(store: IdentityStore): ShenfenQianmingzhe {
   const info = store.info();
   if (!info) {
     throw new IdentityUnavailableError('identity-missing', '本机身份不存在，无法构造签名者');
@@ -164,7 +164,7 @@ export function createIdentitySigner(store: IdentityStore): IdentitySigner {
   const fingerprint = info.fingerprint;
   const publicKey = info.publicKey;
 
-  const signer: IdentitySigner = {
+  const signer: ShenfenQianmingzhe = {
     fingerprint,
     publicKey,
 
@@ -245,7 +245,7 @@ export function createIdentitySigner(store: IdentityStore): IdentitySigner {
 }
 
 /** 组装成组网层要的四字段 `IdentityProvider`（server / client / handshake / DHT 都吃这个） */
-export function createIdentityProvider(store: IdentityStore | IdentitySigner): IdentityProvider {
+export function chuangjianShenfenGongyingshang(store: IdentityStore | ShenfenQianmingzhe): ShenfenGongyingshang {
   const signer = isSigner(store) ? store : createIdentitySigner(store);
   return {
     fingerprint: signer.fingerprint,
@@ -257,14 +257,14 @@ export function createIdentityProvider(store: IdentityStore | IdentitySigner): I
   };
 }
 
-function isSigner(v: IdentityStore | IdentitySigner): v is IdentitySigner {
-  return typeof (v as IdentitySigner).signReady === 'function';
+function isSigner(v: IdentityStore | ShenfenQianmingzhe): v is ShenfenQianmingzhe {
+  return typeof (v as ShenfenQianmingzhe).signReady === 'function';
 }
 
 /** 组网层启动/宣告前的门控结果 */
 export interface SignableGate {
   ok: boolean;
-  errorCode?: IdentitySignerErrorCode;
+  errorCode?: ShenfenQianmingzheCuowuDaima;
   /** 拿不到签名能力时，UI 就是靠这个提示"身份未解锁" */
   unlock?: QianMingZheJieSuoTai | null;
   reason?: string;
@@ -282,7 +282,7 @@ export function requireSignableIdentity(store: IdentityStore | null): SignableGa
     if (!u || !u.signReady) {
       return { ok: false, errorCode: 'identity-locked', unlock: u, reason: 'identity-not-unlocked' };
     }
-    assertDerivationMatches(store);
+    duanyanTuidaoPipei(store);
     return { ok: true, unlock: u };
   } catch (e) {
     const code = (e as IdentityUnavailableError).code ?? 'identity-unusable';
@@ -413,7 +413,7 @@ export function explainRosterDecision(
 } {
   const membership = opts.membership !== undefined ? opts.membership : membershipStoreFor(store);
   const extra = opts.extra ?? [];
-  if (extra.some((fp) => fingerprintMatches(fp, fingerprint))) {
+  if (extra.some((fp) => zhiwenPipei(fp, fingerprint))) {
     return { allowed: true, basis: 'pin', code: 'pinned' };
   }
   if (membership) {
@@ -429,7 +429,7 @@ export function explainRosterDecision(
       };
     }
   }
-  if (!opts.requireCertificate && knownContactFingerprints(store).some((fp) => fingerprintMatches(fp, fingerprint))) {
+  if (!opts.requireCertificate && knownContactFingerprints(store).some((fp) => zhiwenPipei(fp, fingerprint))) {
     return { allowed: true, basis: 'tofu', code: 'known-contact' };
   }
   return { allowed: false, basis: 'none', code: 'unknown-fingerprint' };
@@ -439,8 +439,8 @@ export function explainRosterDecision(
 export function listPeerContactViews(store: IdentityStore | null, now: number = Date.now()): DuiDuanLianXiShiTu[] {
   const out: DuiDuanLianXiShiTu[] = [];
   for (const fp of peerContactKeys(store)) {
-    const view = store?.peerContact(fp, now) ?? null;
-    if (view) out.push(view);
+    const shitu = store?.peerContact(fp, now) ?? null;
+    if (shitu) out.push(shitu);
   }
   return out;
 }
@@ -466,14 +466,14 @@ export interface biangengQuerenJilu {
  *  · `self-all`     —— 这是**本机自己**的换证：与"本机在哪些地方出现"全都相关，
  *                      给 `all` 是真实结论，不是降级。
  */
-export type ChangeScopeBasis = 'membership' | 'fallback-all' | 'self-all';
+export type BiangengZuoyongyuYiju = 'membership' | 'fallback-all' | 'self-all';
 
-export interface ChangeScope {
+export interface BiangengZuoyongyu {
   kind: 'internal' | 'external' | 'extdm' | 'all';
   id?: string;
 }
 
-export interface IdentityChangeEntry {
+export interface ShenfenBiangengTiaomu {
   id: string;
   ts: number;
   subjectId: string;
@@ -490,9 +490,9 @@ export interface IdentityChangeEntry {
   frozen?: boolean;
   remainingMs?: number;
   /** 该在哪些地方出现横幅（精确到具体群/项目；拿不到映射时如实给 all） */
-  scopes: ChangeScope[];
+  scopes: BiangengZuoyongyu[];
   /** `scopes` 的来历（见 ChangeScopeBasis 的三条说明） */
-  scopeBasis: ChangeScopeBasis;
+  scopeBasis: BiangengZuoyongyuYiju;
   ack?: { dismissedAt?: number; verifiedAt?: number };
 }
 
@@ -501,7 +501,7 @@ export interface IdentityChangeEntry {
  * 用接口而不是直接依赖 GroupStore：验证脚本可以喂真 GroupStore，也可以喂一个受控替身，
  * 而 identity-provider 不必知道 groups.json 的存在。
  */
-export interface MemberDirectory {
+export interface ChengyuanMulu {
   listGroups(): Array<{ groupId: string; type: 'internal' | 'external' }>;
   listMembers(groupId: string): Array<{ id: string; name: string; fingerprint?: string }>;
 }
@@ -509,7 +509,7 @@ export interface MemberDirectory {
 export interface ComputeScopesInput {
   /** 变更链上的指纹（旧 + 新；通常由 `chainFingerprintsFor` 扩展过） */
   fingerprints: string[];
-  directory?: MemberDirectory | null;
+  directory?: ChengyuanMulu | null;
   /** 本机已知联系人指纹（peer-contacts.json 的键） */
   contacts?: string[];
   /** 本机自己的指纹：命中它 → 本机的换证，`scopes = [{kind:'all'}]` */
@@ -517,8 +517,8 @@ export interface ComputeScopesInput {
 }
 
 export interface ComputeScopesResult {
-  scopes: ChangeScope[];
-  scopeBasis: ChangeScopeBasis;
+  scopes: BiangengZuoyongyu[];
+  scopeBasis: BiangengZuoyongyuYiju;
   matchedGroups: Array<{ groupId: string; type: 'internal' | 'external'; memberId: string; memberName: string }>;
   matchedContacts: string[];
 }
@@ -534,22 +534,22 @@ export function computeChangeScopes(input: ComputeScopesInput): ComputeScopesRes
   const fps = [...new Set((input.fingerprints ?? []).map((f) => String(f || '')).filter((f) => f.length > 0))];
   const matchedGroups: ComputeScopesResult['matchedGroups'] = [];
   const matchedContacts: string[] = [];
-  if (input.selfFingerprint && fps.some((fp) => fingerprintMatches(fp, String(input.selfFingerprint)))) {
+  if (input.selfFingerprint && fps.some((fp) => zhiwenPipei(fp, String(input.selfFingerprint)))) {
     return { scopes: [{ kind: 'all' }], scopeBasis: 'self-all', matchedGroups, matchedContacts };
   }
-  const scopes: ChangeScope[] = [];
+  const scopes: BiangengZuoyongyu[] = [];
   const seen = new Set<string>();
-  const push = (kind: ChangeScope['kind'], id?: string): void => {
+  const push = (kind: BiangengZuoyongyu['kind'], id?: string): void => {
     const key = `${kind}:${id ?? ''}`;
     if (seen.has(key)) return;
     seen.add(key);
     scopes.push(id ? { kind, id } : { kind });
   };
   const hit = (fp: string | undefined): boolean =>
-    !!fp && fps.some((target) => fingerprintMatches(fp, target));
+    !!fp && fps.some((target) => zhiwenPipei(fp, target));
   if (input.directory) {
     for (const g of input.directory.listGroups()) {
-      const kind: ChangeScope['kind'] = g.type === 'external' ? 'external' : 'internal';
+      const kind: BiangengZuoyongyu['kind'] = g.type === 'external' ? 'external' : 'internal';
       for (const m of input.directory.listMembers(g.groupId)) {
         if (!hit(m.fingerprint)) continue;
         matchedGroups.push({ groupId: g.groupId, type: g.type, memberId: m.id, memberName: m.name });
@@ -589,10 +589,10 @@ export function buildIdentityChangeEntries(
     now?: number;
     acks?: Record<string, biangengQuerenJilu>;
     membership?: MembershipStore | null;
-    directory?: MemberDirectory | null;
+    directory?: ChengyuanMulu | null;
     contacts?: string[];
   } = {}
-): IdentityChangeEntry[] {
+): ShenfenBiangengTiaomu[] {
   if (!store) return [];
   const now = opts.now ?? Date.now();
   const acks = opts.acks ?? {};
@@ -608,12 +608,12 @@ export function buildIdentityChangeEntries(
     }
     return [...out];
   };
-  const mkAck = (id: string): IdentityChangeEntry['ack'] => {
+  const mkAck = (id: string): ShenfenBiangengTiaomu['ack'] => {
     const a = acks[id];
     if (!a) return undefined;
     return a.level === 'verified' ? { verifiedAt: a.at } : { dismissedAt: a.at };
   };
-  const changes: IdentityChangeEntry[] = [];
+  const changes: ShenfenBiangengTiaomu[] = [];
 
   // ① 本机换证
   const info = store.info();
@@ -633,7 +633,7 @@ export function buildIdentityChangeEntries(
         // 本机自己的换证：三处都该看到（真实结论，不是降级）
         selfFingerprint: selfFingerprint || d.newFingerprint,
       });
-      const entry: IdentityChangeEntry = {
+      const entry: ShenfenBiangengTiaomu = {
         id,
         ts: d.issuedAt,
         subjectId: info.fingerprint,
@@ -658,34 +658,34 @@ export function buildIdentityChangeEntries(
 
   // ② 对端换证
   const views = listPeerContactViews(store, now);
-  for (const view of views) {
-    if (!view.receivedAt) continue;
-    const peiDui = views.filter((v) => v.receivedAt === view.receivedAt);
-    let newest = view;
-    for (const v of peiDui) if (v.generation > newest.generation) newest = v;
-    if (newest !== view) continue; // 旧条目不再单独出横幅
-    const oldest = peiDui.find((v) => v !== newest);
-    const id = `peer:${newest.fingerprint}:${newest.receivedAt}`;
+  for (const shitu of views) {
+    if (!shitu.receivedAt) continue;
+    const peiDui = views.filter((v) => v.receivedAt === shitu.receivedAt);
+    let zuixin = shitu;
+    for (const v of peiDui) if (v.generation > zuixin.generation) zuixin = v;
+    if (zuixin !== shitu) continue; // 旧条目不再单独出横幅
+    const zuijiu = peiDui.find((v) => v !== zuixin);
+    const id = `peer:${zuixin.fingerprint}:${zuixin.receivedAt}`;
     const yiZuoYongYu = computeChangeScopes({
-      fingerprints: chainOf([oldest?.fingerprint ?? '', newest.fingerprint]),
+      fingerprints: chainOf([zuijiu?.fingerprint ?? '', zuixin.fingerprint]),
       directory: opts.directory ?? null,
       contacts,
     });
-    const entry: IdentityChangeEntry = {
+    const entry: ShenfenBiangengTiaomu = {
       id,
-      ts: newest.receivedAt,
-      subjectId: newest.fingerprint,
+      ts: zuixin.receivedAt,
+      subjectId: zuixin.fingerprint,
       subjectName: '',
       // 旧指纹来自本机留存条目（不是声明）
-      oldFingerprint: oldest?.fingerprint ?? '',
-      newFingerprint: newest.fingerprint,
-      generation: newest.generation,
+      oldFingerprint: zuijiu?.fingerprint ?? '',
+      newFingerprint: zuixin.fingerprint,
+      generation: zuixin.generation,
       reason: 'rotate',
-      previousCard: newest.previousCard ?? null,
-      pendingCard: newest.pendingCard ?? null,
-      contactFreezeUntil: newest.contactFreezeUntil,
-      frozen: newest.frozen,
-      remainingMs: newest.remainingMs,
+      previousCard: zuixin.previousCard ?? null,
+      pendingCard: zuixin.pendingCard ?? null,
+      contactFreezeUntil: zuixin.contactFreezeUntil,
+      frozen: zuixin.frozen,
+      remainingMs: zuixin.remainingMs,
       scopes: yiZuoYongYu.scopes,
       scopeBasis: yiZuoYongYu.scopeBasis,
     };
@@ -699,9 +699,9 @@ export function buildIdentityChangeEntries(
 
 /* ────────────── 成员在线态：用**活连接集合**按指纹判定（T179） ────────────── */
 
-export type PresenceBasis = 'local-instance' | 'mesh-session' | 'unattributed';
+export type ZaichangYiju = 'local-instance' | 'mesh-session' | 'unattributed';
 
-export interface MemberPresenceRow {
+export interface ChengyuanZaichangHang {
   id: string;
   name: string;
   /** 异地成员（不在本机实例列表里） */
@@ -711,7 +711,7 @@ export interface MemberPresenceRow {
   /** 只有"知道是谁"时才给这一项（`local-instance` / `mesh-session`）；unattributed 时**不给** */
   online?: boolean;
   disabled?: boolean;
-  presenceBasis: PresenceBasis;
+  presenceBasis: ZaichangYiju;
   /** 在线判据的细节：命中哪条活连接（`creator-probe` 是弱证据，会被迟滞判回离线） */
   presenceVia?: 'member-connection' | 'creator-probe' | 'none';
 }
@@ -722,7 +722,7 @@ export interface LivenessLike {
   via?: string;
 }
 
-export interface BuildMemberPresenceInput {
+export interface GoujianChengyuanZaichangShuru {
   members: Array<{ id: string; name: string; source?: string; instanceId?: string; fingerprint?: string }>;
   instances: Array<{ id: string; name?: string; status?: string }>;
   /** 活连接集合（`SecureMesh.presence()` / `ConnectionLiveness.list()` 的原样输出） */
@@ -743,7 +743,7 @@ export interface BuildMemberPresenceInput {
  *      不假装知道、也不假装在线）；
  *  - 没指纹的异地成员 → `unattributed`，**不给 `online`**（宁可不给，也不编）。
  */
-export function buildMemberPresence(input: BuildMemberPresenceInput): MemberPresenceRow[] {
+export function goujianChengyuanZaichang(input: GoujianChengyuanZaichangShuru): ChengyuanZaichangHang[] {
   const disabled = new Set(input.disabledInstanceIds ?? []);
   const liveByFp = new Map<string, LivenessLike>();
   for (const l of input.liveness ?? []) {
@@ -752,7 +752,7 @@ export function buildMemberPresence(input: BuildMemberPresenceInput): MemberPres
   const findLive = (fp: string): LivenessLike | null => {
     const exact = liveByFp.get(fp);
     if (exact) return exact;
-    for (const [k, v] of liveByFp) if (fingerprintMatches(k, fp)) return v;
+    for (const [k, v] of liveByFp) if (zhiwenPipei(k, fp)) return v;
     return null;
   };
   return (input.members ?? []).map((m) => {
@@ -762,7 +762,7 @@ export function buildMemberPresence(input: BuildMemberPresenceInput): MemberPres
       : input.instances.find((h) => h.id === id || (h.name && h.name === m.name));
     const isLocal = !!inst || m.source === 'instance';
     if (isLocal) {
-      const row: MemberPresenceRow = {
+      const row: ChengyuanZaichangHang = {
         id,
         name: String(m.name || id),
         remote: false,
@@ -775,14 +775,14 @@ export function buildMemberPresence(input: BuildMemberPresenceInput): MemberPres
     const fp = String(m.fingerprint || '');
     if (fp) {
       const live = findLive(fp);
-      const row: MemberPresenceRow = {
+      const row: ChengyuanZaichangHang = {
         id,
         name: String(m.name || id),
         remote: true,
         fingerprint: fp,
         online: input.meshEnabled ? live?.online === true : false,
         presenceBasis: 'mesh-session',
-        presenceVia: (live?.via as MemberPresenceRow['presenceVia']) ?? 'none',
+        presenceVia: (live?.via as ChengyuanZaichangHang['presenceVia']) ?? 'none',
       };
       return row;
     }
@@ -808,8 +808,8 @@ export function buildMemberPresence(input: BuildMemberPresenceInput): MemberPres
  */
 
 /** 签发一张成员证书（创建者视角）。`signer` 必须是**已解锁**的本机身份。 */
-export interface IssueMemberCertInput {
-  signer: IdentitySigner;
+export interface WentiChengyuanZhengshuShuru {
+  signer: ShenfenQianmingzhe;
   membership: MembershipStore;
   groupId: string;
   /** 成员的指纹与公钥（SPKI DER base64）：两者必须自洽，否则签发直接失败 */
@@ -830,7 +830,7 @@ export interface IssueMemberCertInput {
   expectIssuerFingerprint?: string;
 }
 
-export interface IssueMemberCertResult {
+export interface WentiChengyuanZhengshuJieguo {
   ok: boolean;
   code: string;
   cert?: ChengYuanZhengShu;
@@ -842,11 +842,11 @@ export interface IssueMemberCertResult {
  * 串行化包装：见 `MembershipStore.runExclusive`。
  * 内层实现不拿锁，所以 rotate / reissue 里嵌套调用它不会死锁。
  */
-export function issueMemberCertificate(input: IssueMemberCertInput): Promise<IssueMemberCertResult> {
-  return input.membership.runExclusive(() => issueMemberCertificateImpl(input));
+export function wentiChengyuanZhengshu(input: WentiChengyuanZhengshuShuru): Promise<WentiChengyuanZhengshuJieguo> {
+  return input.membership.runExclusive(() => wentiChengyuanZhengshuShixian(input));
 }
 
-async function issueMemberCertificateImpl(input: IssueMemberCertInput): Promise<IssueMemberCertResult> {
+async function wentiChengyuanZhengshuShixian(input: WentiChengyuanZhengshuShuru): Promise<WentiChengyuanZhengshuJieguo> {
   const signer = input.signer;
   if (!signer) return { ok: false, code: 'identity-missing' };
   if (!signer.signReady()) {
@@ -895,7 +895,7 @@ async function issueMemberCertificateImpl(input: IssueMemberCertInput): Promise<
 
 /** 生成下一版吊销列表（在**本机当前列表**基础上追加条目；版本单调 +1） */
 async function appendRevocationEntries(input: {
-  signer: IdentitySigner;
+  signer: ShenfenQianmingzhe;
   membership: MembershipStore;
   groupId: string;
   add: Array<{ certId: string; memberFingerprint: string; reason: CheXiaoYuanYin }>;
@@ -935,8 +935,8 @@ async function appendRevocationEntries(input: {
  * 吊销某个成员（踢人 / 私钥泄漏 / 换证的旧证书）。
  * 结果是一份**新的、已签名、版本 +1** 的吊销列表，并落到本机存储。
  */
-export function revokeMemberCertificate(input: {
-  signer: IdentitySigner;
+export function chexiaoChengyuanZhengshu(input: {
+  signer: ShenfenQianmingzhe;
   membership: MembershipStore;
   groupId: string;
   certId: string;
@@ -945,11 +945,11 @@ export function revokeMemberCertificate(input: {
   now?: number;
   expectation?: string;
 }): Promise<{ ok: boolean; code: string; list?: CheXiaoBiao; listVersion?: number; previousVersion?: number; detail?: string }> {
-  return input.membership.runExclusive(() => revokeMemberCertificateImpl(input));
+  return input.membership.runExclusive(() => chexiaoChengyuanZhengshuShixian(input));
 }
 
-async function revokeMemberCertificateImpl(input: {
-  signer: IdentitySigner;
+async function chexiaoChengyuanZhengshuShixian(input: {
+  signer: ShenfenQianmingzhe;
   membership: MembershipStore;
   groupId: string;
   certId: string;
@@ -959,24 +959,24 @@ async function revokeMemberCertificateImpl(input: {
   expectation?: string;
 }): Promise<{ ok: boolean; code: string; list?: CheXiaoBiao; listVersion?: number; previousVersion?: number; detail?: string }> {
   if (!REVOCATION_REASONS.includes(input.reason)) return { ok: false, code: 'bad-reason' };
-  const built = await appendRevocationEntries({
+  const goujian = await appendRevocationEntries({
     signer: input.signer,
     membership: input.membership,
     groupId: input.groupId,
     add: [{ certId: input.certId, memberFingerprint: input.memberFingerprint, reason: input.reason }],
     ...(typeof input.now === 'number' ? { now: input.now } : {}),
   });
-  if (!built.ok) return built;
-  const applied = input.membership.applyRevocationList(input.groupId, built.list, {
+  if (!goujian.ok) return goujian;
+  const applied = input.membership.applyRevocationList(input.groupId, goujian.list, {
     ...(input.expectation ? { expectIssuerFingerprint: input.expectation } : {}),
   });
   if (!applied.ok) return { ok: false, code: applied.code, detail: applied.detail };
   return {
     ok: true,
     code: 'ok',
-    list: built.list,
-    listVersion: built.list.listVersion,
-    previousVersion: built.previousVersion,
+    list: goujian.list,
+    listVersion: goujian.list.listVersion,
+    previousVersion: goujian.previousVersion,
   };
 }
 
@@ -1006,7 +1006,7 @@ export interface RotateMemberCertResult {
  * 由调用方从**本机留存**（对端名片 / 密钥环）给出，不能从声明里读。
  */
 export function rotateMemberCertificate(input: {
-  signer: IdentitySigner;
+  signer: ShenfenQianmingzhe;
   membership: MembershipStore;
   groupId: string;
   declaration: LunHuanShengMing;
@@ -1022,7 +1022,7 @@ export function rotateMemberCertificate(input: {
 }
 
 async function rotateMemberCertificateImpl(input: {
-  signer: IdentitySigner;
+  signer: ShenfenQianmingzhe;
   membership: MembershipStore;
   groupId: string;
   declaration: LunHuanShengMing;
@@ -1054,7 +1054,7 @@ async function rotateMemberCertificateImpl(input: {
   if (!verification.accepted) {
     return { ok: false, code: `declaration:${verification.reason}`, verification, detail: verification.detail };
   }
-  const issued = await issueMemberCertificateImpl({
+  const issued = await wentiChengyuanZhengshuShixian({
     signer: input.signer,
     membership: input.membership,
     groupId: input.groupId,
@@ -1070,7 +1070,7 @@ async function rotateMemberCertificateImpl(input: {
     ...(typeof input.now === 'number' ? { now: input.now } : {}),
   });
   if (!issued.ok || !issued.cert) return { ok: false, code: `issue:${issued.code}`, verification, detail: issued.detail };
-  const revoked = await revokeMemberCertificateImpl({
+  const revoked = await chexiaoChengyuanZhengshuShixian({
     signer: input.signer,
     membership: input.membership,
     groupId: input.groupId,
@@ -1092,7 +1092,7 @@ async function rotateMemberCertificateImpl(input: {
  * 与"恢复原成员身份"无关 —— 这时返回 `code: 'not-linked'` 让调用方确认自己知道后果。
  */
 export function reissueMemberCertificateForRecovery(input: {
-  signer: IdentitySigner;
+  signer: ShenfenQianmingzhe;
   membership: MembershipStore;
   groupId: string;
   oldFingerprint: string;
@@ -1109,7 +1109,7 @@ export function reissueMemberCertificateForRecovery(input: {
 }
 
 async function reissueMemberCertificateForRecoveryImpl(input: {
-  signer: IdentitySigner;
+  signer: ShenfenQianmingzhe;
   membership: MembershipStore;
   groupId: string;
   oldFingerprint: string;
@@ -1129,7 +1129,7 @@ async function reissueMemberCertificateForRecoveryImpl(input: {
   if (requireLink && !jiuZhengShu.memberId && !jiuZhengShu.certId) {
     return { ok: false, code: 'not-linked', detail: '旧证书没有可用于延续的成员标识' };
   }
-  const issued = await issueMemberCertificateImpl({
+  const issued = await wentiChengyuanZhengshuShixian({
     signer: input.signer,
     membership: input.membership,
     groupId: input.groupId,
@@ -1147,7 +1147,7 @@ async function reissueMemberCertificateForRecoveryImpl(input: {
   if (!issued.ok || !issued.cert) return { ok: false, code: `issue:${issued.code}`, detail: issued.detail };
   let revocation: CheXiaoBiao | undefined;
   if (input.revokeOld !== false) {
-    const revoked = await revokeMemberCertificateImpl({
+    const revoked = await chexiaoChengyuanZhengshuShixian({
       signer: input.signer,
       membership: input.membership,
       groupId: input.groupId,
@@ -1181,7 +1181,7 @@ export function applyInboundRevocationUpdate(input: {
   if (!expected) {
     return { ok: false, code: 'unknown-issuer', detail: '本机不知道该群的创建者，无法判断这份吊销列表的来路' };
   }
-  if (!fingerprintMatches(input.fromFingerprint, expected)) {
+  if (!zhiwenPipei(input.fromFingerprint, expected)) {
     return {
       ok: false,
       code: 'not-issuer',
@@ -1234,12 +1234,12 @@ export function membershipSnapshot(
   const ids = opts.groupId ? [opts.groupId] : membership.listGroups();
   const groups = ids.map((groupId) => {
     const st = membership.groupState(groupId);
-    const rev = st?.revocation ?? null;
+    const xiuding = st?.revocation ?? null;
     return {
       groupId,
       issuerFingerprint: st?.issuerFingerprint ?? '',
-      revocationListVersion: rev?.listVersion ?? 0,
-      revokedCount: rev?.entries.length ?? 0,
+      revocationListVersion: xiuding?.listVersion ?? 0,
+      revokedCount: xiuding?.entries.length ?? 0,
       certs: (st?.certs ?? []).map((c) => {
         const v = verifyMemberCertificate(c, {
           fingerprintOf: fingerprintFromPublicKey,

@@ -8,12 +8,12 @@
  *   [2] 子进程（全新 node 进程）重新读同一个文件，断言值还在
  *   [3] 子进程里再改一次（踢人），父进程重新读，断言改动也落盘
  */
-import { execFileSync } from 'node:child_process';
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { GroupStore, GROUP_MEMBER_LIMIT } from '../dist/group-store.js';
+import {fileURLToPath} from 'node:url';
+import {GroupStore, QUN_CHENGYUAN_SHANGXIAN} from '../dist/group-store.js';
 
 const self = fileURLToPath(import.meta.url);
 const argOf = (name) => {
@@ -102,9 +102,9 @@ check('踢不存在的成员返回错误', kickMissing.ok === false, kickMissing
 const capFile = path.join(tmpRoot, 'cap.json');
 const capStore = new GroupStore(capFile);
 capStore.upsertGroup({ groupId: 'g-cap', name: 'cap', type: 'internal' });
-for (let i = 0; i < GROUP_MEMBER_LIMIT; i++) capStore.addMember('g-cap', { name: `m${i}`, source: 'invite' });
+for (let i = 0; i < QUN_CHENGYUAN_SHANGXIAN; i++) capStore.addMember('g-cap', { name: `m${i}`, source: 'invite' });
 const over = capStore.addMember('g-cap', { name: 'overflow', source: 'invite' });
-check(`成员上限 ${GROUP_MEMBER_LIMIT} 生效`, over.ok === false && over.error === `max ${GROUP_MEMBER_LIMIT}`, over.error);
+check(`成员上限 ${QUN_CHENGYUAN_SHANGXIAN} 生效`, over.ok === false && over.error === `max ${QUN_CHENGYUAN_SHANGXIAN}`, over.error);
 
 // 旧版会话状态回填
 const migrated = store.migrateFrom([

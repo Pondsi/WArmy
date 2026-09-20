@@ -16,16 +16,16 @@
  */
 import { randomHex } from './codec.js';
 import type { DhtDiZhi } from './dht.js';
-import { type Ipv6Scope, type Ipv6Report, guiLeiIpv6ZuoYongYu, inspectLocalIpv6, ipFamilyOfHost, normalizeHostLiteral, parseIpv4Bytes } from './ladder.js';
+import { type Ipv6Zuoyongyu, type Ipv6Baogao, guiLeiIpv6ZuoYongYu, jianchaBenjiIpv6, ipFamilyOfHost, normalizeHostLiteral, parseIpv4Bytes } from './ladder.js';
 
-export type AddressScope = 'loopback' | 'private' | 'link-local' | 'public' | 'hostname' | 'unknown';
+export type DizhiZuoyongyu = 'loopback' | 'private' | 'link-local' | 'public' | 'hostname' | 'unknown';
 
 /**
  * 地址性质判定（IPv4 + IPv6 都按**数值范围**判，不靠字符串前缀猜）。
  * IPv6：全局单播 `2000::/3` → public；ULA `fc00::/7` → private；`fe80::/10` → link-local；
  * `::1` → loopback；组播/未指定/非法 → unknown；`::ffff:a.b.c.d` 按内嵌 IPv4 判。
  */
-export function guiLeiDiZhi(host: string): AddressScope {
+export function guiLeiDiZhi(host: string): DizhiZuoyongyu {
   const h = normalizeHostLiteral(host);
   if (h === 'localhost' || h === '') return h === '' ? 'unknown' : 'loopback';
   const v4 = parseIpv4Bytes(h);
@@ -42,7 +42,7 @@ export function guiLeiDiZhi(host: string): AddressScope {
     return 'public';
   }
   if (ipFamilyOfHost(h) !== 6) return 'hostname';
-  const scope: Ipv6Scope = guiLeiIpv6ZuoYongYu(h);
+  const scope: Ipv6Zuoyongyu = guiLeiIpv6ZuoYongYu(h);
   if (scope === 'global') return 'public';
   if (scope === 'ula') return 'private';
   if (scope === 'link-local') return 'link-local';
@@ -107,7 +107,7 @@ export interface KeBoRuJieGuo {
   /** 至少有一个对端成功拨回本机宣告的地址 */
   dialable: boolean;
   /** 宣告地址的性质 */
-  scope: AddressScope;
+  scope: DizhiZuoyongyu;
   advertised: DhtDiZhi;
   /** 成功拨回的对端指纹 */
   verifiedBy: string[];
@@ -144,7 +144,7 @@ export interface KeBoRuTanCeXuanXiang {
   timeoutMs?: number;
   maxPeers?: number;
   /** 本机 IPv6 事实（默认真实枚举网卡；可注入以便验证分类矩阵） */
-  localIpv6?: () => Ipv6Report;
+  localIpv6?: () => Ipv6Baogao;
   now?: () => number;
 }
 
@@ -208,7 +208,7 @@ export class KeBoRuTanCe {
     }
     const dialable = verifiedBy.length > 0;
     // 附八.9：IPv6 可达性是**独立的一档**，且是"天然可拨入候选"（IPv6 无 NAT）
-    const v6: Ipv6Report = (this.opts.localIpv6 ?? inspectLocalIpv6)();
+    const v6: Ipv6Baogao = (this.opts.localIpv6 ?? jianchaBenjiIpv6)();
     const ipv6: KeBoRuIpv6XinXi = {
       hasGlobalUnicast: v6.hasGlobalUnicast,
       publicCandidate: v6.publicCandidate,
@@ -230,10 +230,10 @@ export class KeBoRuTanCe {
       : peers.length === 0
         ? '没有可用探测对端（路由表为空）→ 无法判定'
         : `全部 ${attempts.length} 个对端拨入失败（${attempts.map((a) => a.error).filter(Boolean).slice(0, 3).join(' / ')}）→ 判定为不可拨入`;
-    const ipv6Note = ipv6.hasGlobalUnicast
+    const ipv6Beizhu = ipv6.hasGlobalUnicast
       ? `；另：本机有全局单播 IPv6 ${ipv6.publicCandidate ?? ''}（IPv6 无 NAT）→ **天然可拨入候选，无需打洞**（仅地址事实，不等于已验证公网可达）`
       : '；本机没有全局单播 IPv6（IPv6 档不适用）';
-    const reason = `${baseReason}${ipv6Note}`;
+    const reason = `${baseReason}${ipv6Beizhu}`;
     const dialableKind: KeBoRuZhongLei = dialable
       ? 'peer-verified'
       : ipv6.naturalDialableCandidate

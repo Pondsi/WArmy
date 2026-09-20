@@ -14,23 +14,15 @@
 //
 // 用法：node packages/app-shell/scripts/net-port-bind-probe.mjs
 // 输出：一行 JSON（{ok, checks:[{name,pass,detail}], suggested:[...]}），rc=0 全通过 / 1 有失败。
-import { execFileSync } from 'node:child_process';
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-import { IdentityStore, nullProtector } from '../dist/identity-store.js';
-import {
-  SecureMesh,
-  pickPortCandidates,
-  probePortAvailability,
-  getOsReservedTcpRanges,
-  parseExcludedPortRanges,
-  EPHEMERAL_PORT_RANGE,
-  PORT_CANDIDATE_MIN,
-} from '../dist/net-wiring.js';
-import { WARMY_SUGGESTED_NET_PORTS } from '../dist/settings-store.js';
+import {IdentityStore, nullProtector} from '../dist/identity-store.js';
+import {SecureMesh, pickPortCandidates, probePortAvailability, getOsReservedTcpRanges, parseExcludedPortRanges, EPHEMERAL_PORT_RANGE, PORT_CANDIDATE_MIN, } from '../dist/net-wiring.js';
+import {WARMY_SUGGESTED_NET_PORTS} from '../dist/settings-store.js';
 
 const SUGGESTED = [...WARMY_SUGGESTED_NET_PORTS];
 const checks = [];

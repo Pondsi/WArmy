@@ -55,6 +55,6 @@ export function dedupeByNorm<T>(items: T[], keyOf: (x: T) => string): { list: T[
   return { list, removed };
 }
 
-export function normPathKey(p: unknown): string {
+export function guifanLujingMiyao(p: unknown): string {
   return String(p || '').trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }

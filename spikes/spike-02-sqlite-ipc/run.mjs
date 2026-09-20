@@ -12,8 +12,8 @@
  * 用法：node spikes/spike-02-sqlite-ipc/run.mjs
  * 原始输出落盘：spikes/spike-02-sqlite-ipc/result.json
  */
-import { fork } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import {fork} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';

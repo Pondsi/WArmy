@@ -27,7 +27,7 @@ import { duJsonWenJianGeLi, anQuanYuanZiXieJson } from './atomic-json.js';
 import { keyPairFromCredential, isValidCredential } from './credential.js';
 import {
   MEMBER_CERT_ROLES,
-  MEMBER_CERT_SCHEMA,
+  CHENGYUAN_ZHENGSHU_MOSHI,
   MEMBERSHIP_CLOCK_SKEW_MS,
   REVOCATION_LIST_SCHEMA,
   REVOCATION_REASONS,
@@ -46,39 +46,39 @@ import {
   type CheXiaoBiaoMa,
 } from '@warmy/sync-protocol';
 import {
-  IDENTITY_ALGO,
-  IDENTITY_SCHEMA,
+  SHENFEN_SUANFA,
+  SHENFEN_MOSHI,
   YaoShiHuanTiaoMu,
   LianXiKa,
   ContactCardVersion,
   ContactFreezeState,
-  IdentityDeclaration,
-  IdentityRecord,
-  PeerContactState,
+  ShenfenShengming,
+  ShenfenJilu,
+  DuiduanLianxiZhuangtai,
   DuiDuanLianXiShiTu,
-  RetiredKey,
+  TuiyiMiyao,
   LunHuanShengMing,
   RotationVerifyOptions,
   LunHuanYanZhengJieGuo,
   RevocationVerifyResult,
-  SignedPayload,
+  YiQianmingZaihe,
   yanzhengJieguo,
   cloneContactCard,
   contactCardHistory,
   contactFreezeState,
-  createIdentity,
-  createPeerContact,
+  chuangjianShenfen,
+  chuangjianDuiduanLianxi,
   fingerprintFromPublicKey,
-  fingerprintMatches,
+  zhiwenPipei,
   normalizeFingerprint,
   keyObjectFromPublicB64,
   keyObjectFromPrivateDer,
   keyRing,
   peerContactOnCard,
   peerContactOnRotation,
-  peerContactConfirm,
-  peerContactSettle,
-  peerContactView,
+  duiduanLianxiQueren,
+  duiduanLianxiJiesuan,
+  duiduanLianxiShitu,
   privateKeyToDer,
   publicKeyOfPrivate,
   publicKeyToB64,
@@ -88,21 +88,21 @@ import {
   verifyRotationDeclaration,
   verifyByFingerprint,
   verifySignedPayload,
-  GENERATION_RULE_NOTE,
+  DAISHU_GUIZE_BEIZHU,
   currentContactCard,
 } from './identity.js';
 
-export const IDENTITY_FILE_SCHEMA = 'warmy.identity.file.v1' as const;
-export const IDENTITY_BACKUP_SCHEMA = 'warmy.identity.backup.v1' as const;
+export const SHENFEN_WENJIAN_MOSHI = 'warmy.identity.file.v1' as const;
+export const SHENFEN_BEIFEN_MOSHI = 'warmy.identity.backup.v1' as const;
 /** 接收方侧的对端名片状态（本机各自判定；不用任何广播的标志） */
-export const PEER_CONTACTS_SCHEMA = 'warmy.peer-contacts.v1' as const;
+export const DUIDUAN_LIANXI_MOSHI = 'warmy.peer-contacts.v1' as const;
 
 /** scrypt 参数（约 40ms/次；只在上锁/解锁/导出时跑，不在启动热路径上） */
 const SCRYPT = { N: 16384, r: 8, p: 1, keyLen: 32, maxmem: 64 * 1024 * 1024 } as const;
 
 // ── 加解密原语 ──
 
-interface EncryptedBlob {
+interface JiamiErjinzhiKuai {
   v: 1;
   alg: 'aes-256-gcm';
   iv: string;
@@ -114,7 +114,7 @@ function b64(b: Buffer): string {
   return b.toString('base64');
 }
 
-function aesGcmEncrypt(key: Buffer, plain: Buffer): EncryptedBlob {
+function aesGcmJiami(key: Buffer, plain: Buffer): JiamiErjinzhiKuai {
   const iv = crypto.randomBytes(12);
   const c = crypto.createCipheriv('aes-256-gcm', key, iv);
   const ct = Buffer.concat([c.update(plain), c.final()]);
@@ -122,17 +122,17 @@ function aesGcmEncrypt(key: Buffer, plain: Buffer): EncryptedBlob {
 }
 
 /** 认证失败（口令错 / 数据被改）→ 抛错，调用方翻成 bad-passphrase */
-function aesGcmDecrypt(key: Buffer, blob: EncryptedBlob): Buffer {
+function aesGcmJiemi(key: Buffer, blob: JiamiErjinzhiKuai): Buffer {
   const d = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(blob.iv, 'base64'));
   d.setAuthTag(Buffer.from(blob.tag, 'base64'));
   return Buffer.concat([d.update(Buffer.from(blob.ct, 'base64')), d.final()]);
 }
 
-function scryptKey(passphrase: string, salt: Buffer): Buffer {
+function scryptMiyao(passphrase: string, salt: Buffer): Buffer {
   return crypto.scryptSync(passphrase, salt, SCRYPT.keyLen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, maxmem: SCRYPT.maxmem });
 }
 
-interface DekWrapPass {
+interface DekBaozhuangTongguo {
   v: 1;
   kdf: 'scrypt';
   salt: string;
@@ -140,23 +140,23 @@ interface DekWrapPass {
   r: number;
   p: number;
   keyLen: number;
-  blob: EncryptedBlob;
+  blob: JiamiErjinzhiKuai;
 }
 
-function wrapDekWithPassphrase(dek: Buffer, passphrase: string): DekWrapPass {
+function wrapDekWithPassphrase(dek: Buffer, passphrase: string): DekBaozhuangTongguo {
   const salt = crypto.randomBytes(16);
-  const zhuMiYao = scryptKey(passphrase, salt);
-  return { v: 1, kdf: 'scrypt', salt: b64(salt), N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, keyLen: SCRYPT.keyLen, blob: aesGcmEncrypt(zhuMiYao, dek) };
+  const zhuMiYao = scryptMiyao(passphrase, salt);
+  return { v: 1, kdf: 'scrypt', salt: b64(salt), N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, keyLen: SCRYPT.keyLen, blob: aesGcmJiami(zhuMiYao, dek) };
 }
 
-function unwrapDekWithPassphrase(wrap: DekWrapPass, passphrase: string): Buffer {
+function unwrapDekWithPassphrase(wrap: DekBaozhuangTongguo, passphrase: string): Buffer {
   const zhuMiYao = crypto.scryptSync(passphrase, Buffer.from(wrap.salt, 'base64'), wrap.keyLen || SCRYPT.keyLen, {
     N: wrap.N || SCRYPT.N,
     r: wrap.r || SCRYPT.r,
     p: wrap.p || SCRYPT.p,
     maxmem: SCRYPT.maxmem,
   });
-  return aesGcmDecrypt(zhuMiYao, wrap.blob);
+  return aesGcmJiemi(zhuMiYao, wrap.blob);
 }
 
 // ── OS 钥匙串 ──
@@ -242,16 +242,16 @@ export function nullProtector(): OsKeyProtector {
 
 // ── 文件结构 ──
 
-interface IdentityFile {
-  schema: typeof IDENTITY_FILE_SCHEMA;
-  identity: IdentityRecord;
+interface ShenfenWenjian {
+  schema: typeof SHENFEN_WENJIAN_MOSHI;
+  identity: ShenfenJilu;
   protection: { os: boolean; passphrase: boolean; osLabel: string };
   keys: {
-    privateKey: EncryptedBlob;
+    privateKey: JiamiErjinzhiKuai;
     /** safeStorage 包裹的 DEK（base64）；启用口令时为 null */
     dekOs: string | null;
     /** 口令包裹的 DEK；未启用口令时为 null */
-    dekPass: DekWrapPass | null;
+    dekPass: DekBaozhuangTongguo | null;
   };
   updatedAt: number;
 }
@@ -266,11 +266,11 @@ export type IdentityLoadError =
   | 'unlock-failed'
   | 'key-mismatch';
 
-export interface IdentityInfo {
+export interface ShenfenXinxi {
   alias: string;
   fingerprint: string;
   generation: number;
-  algo: typeof IDENTITY_ALGO;
+  algo: typeof SHENFEN_SUANFA;
   createdAt: number;
   updatedAt: number;
   contactCard: LianXiKa;
@@ -281,7 +281,7 @@ export interface IdentityInfo {
   contactFrozen: boolean;
   /** SPKI DER base64（公开信息，可以给渲染进程） */
   publicKey: string;
-  retiredKeys: RetiredKey[];
+  retiredKeys: TuiyiMiyao[];
   declarationCount: number;
   /** 口令保护是否已启用 */
   passphraseProtected: boolean;
@@ -338,17 +338,17 @@ export class IdentityStore {
     }
   }
 
-  private readFile(): { file: IdentityFile | null; corrupt: boolean } {
+  private readFile(): { file: ShenfenWenjian | null; corrupt: boolean } {
     if (!this.exists()) return { file: null, corrupt: false };
-    const parsed = duJsonWenJianGeLi<IdentityFile | null>(this.file, null);
+    const parsed = duJsonWenJianGeLi<ShenfenWenjian | null>(this.file, null);
     if (!parsed || typeof parsed !== 'object') return { file: null, corrupt: true };
-    if (parsed.schema !== IDENTITY_FILE_SCHEMA || !parsed.identity || !parsed.keys) return { file: null, corrupt: true };
+    if (parsed.schema !== SHENFEN_WENJIAN_MOSHI || !parsed.identity || !parsed.keys) return { file: null, corrupt: true };
     return { file: parsed, corrupt: false };
   }
 
   // ── 只读信息（不需要私钥；渲染进程随时可看） ──
 
-  info(): IdentityInfo | null {
+  info(): ShenfenXinxi | null {
     const { file } = this.readFile();
     if (!file) return null;
     const i = file.identity;
@@ -396,7 +396,7 @@ export class IdentityStore {
     return file ? keyRing(file.identity) : [];
   }
 
-  declarations(): IdentityDeclaration[] {
+  declarations(): ShenfenShengming[] {
     const { file } = this.readFile();
     return file ? [...file.identity.declarations] : [];
   }
@@ -462,7 +462,7 @@ export class IdentityStore {
     alias: string,
     contactCard?: LianXiKa,
     opts: { passphrase?: string; credential?: string } = {},
-  ): { ok: true; created: boolean; info: IdentityInfo } | Err {
+  ): { ok: true; created: boolean; info: ShenfenXinxi } | Err {
     const { file, corrupt } = this.readFile();
     if (file) return { ok: true, created: false, info: this.info()! };
     if (corrupt) {
@@ -489,11 +489,11 @@ export class IdentityStore {
     if (credential && isValidCredential(credential)) {
       try { derived = keyPairFromCredential(credential); } catch { derived = null; }
     }
-    const { identity, keyPair } = createIdentity({ alias, contactCard, ...(derived ? { keyPair: derived } : {}) });
+    const { identity, keyPair } = chuangjianShenfen({ alias, contactCard, ...(derived ? { keyPair: derived } : {}) });
     const dek = crypto.randomBytes(32);
     const privateKey = keyPair.privateKeyDer;
-    const keys: IdentityFile['keys'] = {
-      privateKey: aesGcmEncrypt(dek, privateKey),
+    const keys: ShenfenWenjian['keys'] = {
+      privateKey: aesGcmJiami(dek, privateKey),
       dekOs: null,
       dekPass: null,
     };
@@ -515,8 +515,8 @@ export class IdentityStore {
         message: 'OS 钥匙串不可用且未设置口令：拒绝以明文形式落盘身份私钥，请先设置口令',
       };
     }
-    const file: IdentityFile = {
-      schema: IDENTITY_FILE_SCHEMA,
+    const file: ShenfenWenjian = {
+      schema: SHENFEN_WENJIAN_MOSHI,
       identity,
       protection: { os: osProtected, passphrase: !!passphrase, osLabel: this.protector.label() },
       keys,
@@ -574,12 +574,12 @@ export class IdentityStore {
     this.sessionDek = null;
   }
 
-  private loadWith(dek: Buffer): { ok: true; identity: IdentityRecord; privateKeyDer: Buffer } | { ok: false; error: IdentityLoadError; message?: string } {
+  private loadWith(dek: Buffer): { ok: true; identity: ShenfenJilu; privateKeyDer: Buffer } | { ok: false; error: IdentityLoadError; message?: string } {
     const { file } = this.readFile();
     if (!file) return { ok: false, error: 'not-found' };
     let der: Buffer;
     try {
-      der = aesGcmDecrypt(dek, file.keys.privateKey);
+      der = aesGcmJiemi(dek, file.keys.privateKey);
     } catch {
       return { ok: false, error: 'unlock-failed', message: '私钥密文解不开（DEK 不对或文件被改）' };
     }
@@ -598,7 +598,7 @@ export class IdentityStore {
   /**
    * 加载私钥（**只在主进程内存里**；渲染进程永远拿不到私钥，见 identity-backup-export）。
    */
-  load(passphrase?: string): { ok: true; identity: IdentityRecord; privateKeyDer: Buffer } | { ok: false; error: IdentityLoadError; message?: string } {
+  load(passphrase?: string): { ok: true; identity: ShenfenJilu; privateKeyDer: Buffer } | { ok: false; error: IdentityLoadError; message?: string } {
     const r = this.resolveDek(passphrase);
     if (!r.ok) return r;
     const loaded = this.loadWith(r.dek);
@@ -608,7 +608,7 @@ export class IdentityStore {
 
   // ── 签名 / 验签 ──
 
-  sign(payload: string, opts: { domain?: string; passphrase?: string } = {}): { ok: true; signed: SignedPayload } | { ok: false; error: string } {
+  sign(payload: string, opts: { domain?: string; passphrase?: string } = {}): { ok: true; signed: YiQianmingZaihe } | { ok: false; error: string } {
     const loaded = this.load(opts.passphrase);
     if (!loaded.ok) return { ok: false, error: loaded.error };
     const siYao = keyObjectFromPrivateDer(loaded.privateKeyDer);
@@ -624,7 +624,7 @@ export class IdentityStore {
     return verifyByFingerprint(fp, payload, signature, keyRing(file.identity));
   }
 
-  verifySigned(signed: SignedPayload): yanzhengJieguo {
+  verifySigned(signed: YiQianmingZaihe): yanzhengJieguo {
     const { file } = this.readFile();
     if (!file) return { ok: false, reason: 'malformed', fingerprint: '', detail: '本机身份不存在' };
     return verifySignedPayload(signed, keyRing(file.identity));
@@ -640,7 +640,7 @@ export class IdentityStore {
   setContactCard(
     card: LianXiKa,
     opts: { passphrase?: string; now?: number } = {},
-  ): { ok: true; info: IdentityInfo } | { ok: false; error: string; contactFreezeUntil?: number; remainingMs?: number } {
+  ): { ok: true; info: ShenfenXinxi } | { ok: false; error: string; contactFreezeUntil?: number; remainingMs?: number } {
     const { file } = this.readFile();
     if (!file) return { ok: false, error: 'not-found' };
     const now = opts.now ?? Date.now();
@@ -657,7 +657,7 @@ export class IdentityStore {
     const loaded = this.load(opts.passphrase); // 需要解开私钥才能重写文件里的密文段；顺带确认身份可用
     if (!loaded.ok) return { ok: false, error: loaded.error };
     const nextCard: LianXiKa = { ...cloneContactCard(card), updatedAt: now };
-    const next: IdentityFile = {
+    const next: ShenfenWenjian = {
       ...file,
       identity: {
         ...file.identity,
@@ -687,13 +687,13 @@ export class IdentityStore {
    * 启用口令保护：给 DEK 加口令包裹，并**丢掉 OS 包裹**（这样"偷到文件"不够，
    * 必须知道口令 —— 附五.1 第一层）。代价：口令忘了就找不回来，必须提前告知用户。
    */
-  setPassphrase(passphrase: string, opts: { currentPassphrase?: string } = {}): { ok: true; info: IdentityInfo } | { ok: false; error: string } {
+  setPassphrase(passphrase: string, opts: { currentPassphrase?: string } = {}): { ok: true; info: ShenfenXinxi } | { ok: false; error: string } {
     if (!passphrase || passphrase.length < 8) return { ok: false, error: 'passphrase-too-short(>=8)' };
     const { file } = this.readFile();
     if (!file) return { ok: false, error: 'not-found' };
     const r = this.resolveDek(opts.currentPassphrase);
     if (!r.ok) return { ok: false, error: r.error };
-    const next: IdentityFile = {
+    const next: ShenfenWenjian = {
       ...file,
       protection: { os: false, passphrase: true, osLabel: this.protector.label() },
       keys: { ...file.keys, dekOs: null, dekPass: wrapDekWithPassphrase(r.dek, passphrase) },
@@ -714,7 +714,7 @@ export class IdentityStore {
    * 返回的 `previousCard` 取自**本机留存历史**（横幅展示旧联系方式用，不从声明读）。
    */
   rotate(payload: { reason?: string; passphrase?: string; now?: number } = {}):
-    | { ok: true; info: IdentityInfo; declaration: LunHuanShengMing; revocation: IdentityDeclaration; previousCard: LianXiKa; contactFreezeUntil: number }
+    | { ok: true; info: ShenfenXinxi; declaration: LunHuanShengMing; revocation: ShenfenShengming; previousCard: LianXiKa; contactFreezeUntil: number }
     | { ok: false; error: string } {
     const { file } = this.readFile();
     if (!file) return { ok: false, error: 'not-found' };
@@ -730,10 +730,10 @@ export class IdentityStore {
     const dek = this.sessionDek;
     if (!dek) return { ok: false, error: 'unlock-required' };
     const now = payload.now ?? Date.now();
-    const next: IdentityFile = {
+    const next: ShenfenWenjian = {
       ...file,
       identity: out.identity,
-      keys: { ...file.keys, privateKey: aesGcmEncrypt(dek, privateKeyToDer(out.keyPair.privateKey)) },
+      keys: { ...file.keys, privateKey: aesGcmJiami(dek, privateKeyToDer(out.keyPair.privateKey)) },
       updatedAt: now,
     };
     const w = anQuanYuanZiXieJson(this.file, next);
@@ -751,7 +751,7 @@ export class IdentityStore {
       ok: true,
       info: this.info()!,
       declaration: out.declaration,
-      revocation: out.revocation as IdentityDeclaration,
+      revocation: out.revocation as ShenfenShengming,
       previousCard: out.previousCard,
       contactFreezeUntil: out.contactFreezeUntil,
     };
@@ -763,7 +763,7 @@ export class IdentityStore {
   }
 
   /** 联系人侧：验别人发来的"旧的作废"声明 */
-  acceptRevocation(decl: IdentityDeclaration): RevocationVerifyResult {
+  acceptRevocation(decl: ShenfenShengming): RevocationVerifyResult {
     if (decl && (decl as { kind?: string }).kind === 'warmy.identity.revocation') {
       return verifyRevocationDeclaration(decl as never);
     }
@@ -773,7 +773,7 @@ export class IdentityStore {
       fingerprint: '',
       generation: 0,
       warnings: [],
-      honestNote: GENERATION_RULE_NOTE,
+      honestNote: DAISHU_GUIZE_BEIZHU,
       detail: '不是作废声明',
     };
   }
@@ -785,14 +785,14 @@ export class IdentityStore {
     return path.join(path.dirname(this.file), 'peer-contacts.json');
   }
 
-  private readPeers(): Record<string, PeerContactState> {
-    const raw = duJsonWenJianGeLi<{ peers?: Record<string, PeerContactState> }>(this.peerFile(), {});
+  private readPeers(): Record<string, DuiduanLianxiZhuangtai> {
+    const raw = duJsonWenJianGeLi<{ peers?: Record<string, DuiduanLianxiZhuangtai> }>(this.peerFile(), {});
     const peers = raw && typeof raw === 'object' && raw.peers && typeof raw.peers === 'object' ? raw.peers : {};
     return peers;
   }
 
-  private writePeers(peers: Record<string, PeerContactState>): void {
-    const w = anQuanYuanZiXieJson(this.peerFile(), { schema: PEER_CONTACTS_SCHEMA, peers });
+  private writePeers(peers: Record<string, DuiduanLianxiZhuangtai>): void {
+    const w = anQuanYuanZiXieJson(this.peerFile(), { schema: DUIDUAN_LIANXI_MOSHI, peers });
     if (!w.ok) this.onAudit('identity.peers.write.failed', { error: w.error });
   }
 
@@ -813,16 +813,16 @@ export class IdentityStore {
    */
   peerContact(fingerprint: string, now: number = Date.now()): DuiDuanLianXiShiTu | null {
     const peers = this.readPeers();
-    const key = Object.keys(peers).find((k) => fingerprintMatches(k, fingerprint));
+    const key = Object.keys(peers).find((k) => zhiwenPipei(k, fingerprint));
     if (!key) return null;
     const cur = peers[key];
     if (!cur) return null;
-    const settled = peerContactSettle(cur, now);
+    const settled = duiduanLianxiJiesuan(cur, now);
     if (settled !== cur) {
       peers[key] = settled;
       this.writePeers(peers);
     }
-    return peerContactView(settled, now);
+    return duiduanLianxiShitu(settled, now);
   }
 
   /**
@@ -832,13 +832,13 @@ export class IdentityStore {
    */
   recordPeerCard(fingerprint: string, card: LianXiKa, now: number = Date.now()): DuiDuanLianXiShiTu {
     const peers = this.readPeers();
-    const key = Object.keys(peers).find((k) => fingerprintMatches(k, fingerprint)) || fingerprint;
+    const key = Object.keys(peers).find((k) => zhiwenPipei(k, fingerprint)) || fingerprint;
     const cur = peers[key];
-    const next = cur ? peerContactOnCard(cur, card, now) : createPeerContact(fingerprint, card, now);
+    const next = cur ? peerContactOnCard(cur, card, now) : chuangjianDuiduanLianxi(fingerprint, card, now);
     peers[key] = next;
     this.writePeers(peers);
     this.onAudit('identity.peer.card', { fingerprint, first: !cur, frozen: next.contactFreezeUntil > now });
-    return peerContactView(next, now);
+    return duiduanLianxiShitu(next, now);
   }
 
   /**
@@ -850,7 +850,7 @@ export class IdentityStore {
     const peers = this.readPeers();
     const key = decl.newFingerprint;
     const cur = peers[key] || peers[decl.oldFingerprint];
-    const base = cur ? { ...cur, fingerprint: decl.newFingerprint } : createPeerContact(decl.newFingerprint, {}, now);
+    const base = cur ? { ...cur, fingerprint: decl.newFingerprint } : chuangjianDuiduanLianxi(decl.newFingerprint, {}, now);
     const next = peerContactOnRotation(base, now, decl.generation);
     peers[key] = next;
     const oldEntry = peers[decl.oldFingerprint];
@@ -868,7 +868,7 @@ export class IdentityStore {
       /** 旧名片来自本机留存（声明里没有，也不该有） */
       previousCardSource: 'local-history',
     });
-    return peerContactView(next, now);
+    return duiduanLianxiShitu(next, now);
   }
 
   /**
@@ -877,20 +877,20 @@ export class IdentityStore {
    */
   confirmPeerCard(fingerprint: string, now: number = Date.now()): DuiDuanLianXiShiTu | null {
     const peers = this.readPeers();
-    const key = Object.keys(peers).find((k) => fingerprintMatches(k, fingerprint));
+    const key = Object.keys(peers).find((k) => zhiwenPipei(k, fingerprint));
     if (!key) return null;
     const cur = peers[key];
     if (!cur) return null;
     if (cur.contactFreezeUntil > now) {
       // 冻结期内不生效：如实回绝（UI 要说明"还没到期"）
       this.onAudit('identity.peer.confirm.rejected', { fingerprint, until: cur.contactFreezeUntil, reason: 'still-frozen' });
-      return peerContactView(cur, now);
+      return duiduanLianxiShitu(cur, now);
     }
-    const next = peerContactConfirm(cur, now);
+    const next = duiduanLianxiQueren(cur, now);
     peers[key] = next;
     this.writePeers(peers);
     this.onAudit('identity.peer.confirm', { fingerprint, adopted: !!next.storedCard.email || !!next.storedCard.phone });
-    return peerContactView(next, now);
+    return duiduanLianxiShitu(next, now);
   }
 
   /** 结算所有对端冻结期（启动时调一次即可；**不自动采用新值**，只清标记 + 置 awaitingConfirmation） */
@@ -899,7 +899,7 @@ export class IdentityStore {
     let promoted = 0;
     for (const [k, v] of Object.entries(peers)) {
       if (!v) continue;
-      const s = peerContactSettle(v, now);
+      const s = duiduanLianxiJiesuan(v, now);
       if (s !== v) {
         peers[k] = s;
         promoted++;
@@ -919,7 +919,7 @@ export class IdentityStore {
    * 从凭证恢复身份：备份当前身份文件 → 用凭证派生密钥重建 → 返回新身份信息。
    * 产品语义：凭证就是私钥；换机 / 误删配置后，只凭这一串即可找回同一个身份与指纹。
    */
-  restoreFromCredential(credential: string, alias?: string): { ok: true; info: IdentityInfo; backupFile?: string } | Err {
+  restoreFromCredential(credential: string, alias?: string): { ok: true; info: ShenfenXinxi; backupFile?: string } | Err {
     if (!isValidCredential(credential)) return { ok: false, error: 'bad-credential' };
     let backupFile: string | undefined;
     try {
@@ -935,13 +935,13 @@ export class IdentityStore {
     return { ok: true, info: this.info()!, ...(backupFile ? { backupFile } : {}) };
   }
 
-  exportBackup(payload: { passphrase: string }): { ok: true; backup: IdentityBackup } | { ok: false; error: string } {
+  exportBackup(payload: { passphrase: string }): { ok: true; backup: ShenfenBeifen } | { ok: false; error: string } {
     if (!payload?.passphrase || payload.passphrase.length < 8) return { ok: false, error: 'passphrase-too-short(>=8)' };
     const { file } = this.readFile();
     if (!file) return { ok: false, error: 'not-found' };
     const loaded = this.load();
     if (!loaded.ok) return { ok: false, error: loaded.error };
-    const backup = buildBackup(loaded.identity, loaded.privateKeyDer, payload.passphrase);
+    const backup = goujianBeifen(loaded.identity, loaded.privateKeyDer, payload.passphrase);
     this.onAudit('identity.backup.export', { fingerprint: loaded.identity.fingerprint, generation: loaded.identity.generation });
     return { ok: true, backup };
   }
@@ -950,16 +950,16 @@ export class IdentityStore {
    * 导入备份（换机器 / 恢复）。导入后身份指纹与代次与备份一致，
    * 并且**只能**用备份口令解锁（新机器上没有旧机器的 DPAPI 包裹）。
    */
-  importBackup(backup: IdentityBackup, payload: { passphrase: string }): { ok: true; info: IdentityInfo } | { ok: false; error: string } {
+  importBackup(backup: ShenfenBeifen, payload: { passphrase: string }): { ok: true; info: ShenfenXinxi } | { ok: false; error: string } {
     const opened = openBackup(backup, payload?.passphrase || '');
     if (!opened.ok) return { ok: false, error: opened.error };
     const dek = crypto.randomBytes(32);
-    const next: IdentityFile = {
-      schema: IDENTITY_FILE_SCHEMA,
+    const next: ShenfenWenjian = {
+      schema: SHENFEN_WENJIAN_MOSHI,
       identity: opened.identity,
       protection: { os: false, passphrase: true, osLabel: this.protector.label() },
       keys: {
-        privateKey: aesGcmEncrypt(dek, opened.privateKeyDer),
+        privateKey: aesGcmJiami(dek, opened.privateKeyDer),
         dekOs: null,
         dekPass: wrapDekWithPassphrase(dek, payload.passphrase),
       },
@@ -1030,7 +1030,7 @@ function emptyMembershipFile(): MembershipFile {
   return { schema: MEMBERSHIP_FILE_SCHEMA, groups: {}, updatedAt: Date.now() };
 }
 
-function copyCert(c: ChengYuanZhengShu): ChengYuanZhengShu {
+function fuzhiZhengshu(c: ChengYuanZhengShu): ChengYuanZhengShu {
   return { ...c, permissions: [...(c.permissions ?? [])] };
 }
 
@@ -1051,7 +1051,7 @@ function revocationHit(
   if (!list || !Array.isArray(list.entries)) return null;
   for (const e of list.entries) {
     if (q.certId && e.certId === q.certId) return e;
-    if (q.memberFingerprint && fingerprintMatches(e.memberFingerprint, q.memberFingerprint)) return e;
+    if (q.memberFingerprint && zhiwenPipei(e.memberFingerprint, q.memberFingerprint)) return e;
   }
   return null;
 }
@@ -1076,7 +1076,7 @@ function normalizeMembership(raw: unknown): MembershipFile {
     for (const c of Array.isArray(rec.certs) ? rec.certs : []) {
       if (!c || typeof c !== 'object') continue;
       const cr = c as Partial<ChengYuanZhengShu>;
-      if (cr.schema !== MEMBER_CERT_SCHEMA) continue;
+      if (cr.schema !== CHENGYUAN_ZHENGSHU_MOSHI) continue;
       if (typeof cr.certId !== 'string' || !cr.certId || certIds.has(cr.certId)) continue;
       if (typeof cr.memberFingerprint !== 'string' || !cr.memberFingerprint) continue;
       if (typeof cr.memberPublicKey !== 'string' || !cr.memberPublicKey) continue;
@@ -1087,7 +1087,7 @@ function normalizeMembership(raw: unknown): MembershipFile {
       if (typeof cr.issuedAt !== 'number' || typeof cr.expiresAt !== 'number') continue;
       certIds.add(cr.certId);
       const row: ChengYuanZhengShu = {
-        schema: MEMBER_CERT_SCHEMA,
+        schema: CHENGYUAN_ZHENGSHU_MOSHI,
         certId: cr.certId,
         groupId: typeof cr.groupId === 'string' && cr.groupId ? cr.groupId : groupId,
         memberFingerprint: cr.memberFingerprint,
@@ -1153,7 +1153,7 @@ function normalizeMembership(raw: unknown): MembershipFile {
 
 export type MemberCertStoreCode = ChengYuanZhengShuMa | 'issuer-changed' | 'write-failed';
 
-export interface PutCertificateResult {
+export interface FangzhiZhengshuJieguo {
   ok: boolean;
   code: MemberCertStoreCode;
   /** 是否**落盘**了这张证书（过期证书也会落盘 —— 见 putCertificate 注释） */
@@ -1258,7 +1258,7 @@ export class MembershipStore {
     return {
       groupId: g.groupId,
       issuerFingerprint: g.issuerFingerprint,
-      certs: g.certs.map(copyCert),
+      certs: g.certs.map(fuzhiZhengshu),
       revocation: copyRevocation(g.revocation),
       updatedAt: g.updatedAt,
     };
@@ -1280,31 +1280,31 @@ export class MembershipStore {
 
   /** 某个群里的全部证书（副本） */
   listCertificates(groupId: string): ChengYuanZhengShu[] {
-    return (this.snapshot().groups[groupId]?.certs ?? []).map(copyCert);
+    return (this.snapshot().groups[groupId]?.certs ?? []).map(fuzhiZhengshu);
   }
 
   /** 全部群的证书（副本）+ 所属群 id */
   allCertificates(): Array<{ groupId: string; cert: ChengYuanZhengShu }> {
     const out: Array<{ groupId: string; cert: ChengYuanZhengShu }> = [];
     for (const [groupId, g] of Object.entries(this.snapshot().groups)) {
-      for (const c of g.certs) out.push({ groupId, cert: copyCert(c) });
+      for (const c of g.certs) out.push({ groupId, cert: fuzhiZhengshu(c) });
     }
     return out;
   }
 
   certificateById(groupId: string, certId: string): ChengYuanZhengShu | null {
     const c = this.snapshot().groups[groupId]?.certs.find((x) => x.certId === certId);
-    return c ? copyCert(c) : null;
+    return c ? fuzhiZhengshu(c) : null;
   }
 
   /** 该指纹在该群的**最新**一张证书（按 issuedAt，其次按链长） */
   certificateForFingerprint(groupId: string, fingerprint: string): ChengYuanZhengShu | null {
     const list = (this.snapshot().groups[groupId]?.certs ?? []).filter((c) =>
-      fingerprintMatches(c.memberFingerprint, fingerprint)
+      zhiwenPipei(c.memberFingerprint, fingerprint)
     );
     if (!list.length) return null;
     const yiPaiXu = list.slice().sort((a, b) => b.issuedAt - a.issuedAt);
-    return copyCert(yiPaiXu[0] as ChengYuanZhengShu);
+    return fuzhiZhengshu(yiPaiXu[0] as ChengYuanZhengShu);
   }
 
   /**
@@ -1315,9 +1315,9 @@ export class MembershipStore {
    * 结构 / 指纹绑定 / 签发者 / 签名不通过的一律**不入库**（`stored=false`），
    * 因为那种证书连"这是谁签的"都不可信，留着只会污染判定。
    */
-  putCertificate(cert: ChengYuanZhengShu, opts: { expectIssuerFingerprint?: string } = {}): PutCertificateResult {
+  putCertificate(cert: ChengYuanZhengShu, opts: { expectIssuerFingerprint?: string } = {}): FangzhiZhengshuJieguo {
     const groupId = String(cert?.groupId || '');
-    const base: PutCertificateResult = {
+    const base: FangzhiZhengshuJieguo = {
       ok: false,
       code: 'malformed',
       stored: false,
@@ -1325,10 +1325,10 @@ export class MembershipStore {
       groupId,
     };
     const file = this.snapshot();
-    const existing = file.groups[groupId];
-    const pinned = opts.expectIssuerFingerprint || existing?.issuerFingerprint || '';
+    const cunzai = file.groups[groupId];
+    const pinned = opts.expectIssuerFingerprint || cunzai?.issuerFingerprint || '';
     // ① 签发者必须还是本机钉住的那一个（换签发者 = 换群主，本机不接受替身）
-    if (pinned && !fingerprintMatches(pinned, cert?.issuerFingerprint || '')) {
+    if (pinned && !zhiwenPipei(pinned, cert?.issuerFingerprint || '')) {
       this.onAudit('membership.cert.issuer-changed', {
         groupId,
         certId: base.certId,
@@ -1356,7 +1356,7 @@ export class MembershipStore {
       this.onAudit('membership.issuer.pinned', { groupId, issuer: cert.issuerFingerprint, certId: cert.certId });
     }
     const idx = g.certs.findIndex((c) => c.certId === cert.certId);
-    const stored: ChengYuanZhengShu = copyCert(cert);
+    const stored: ChengYuanZhengShu = fuzhiZhengshu(cert);
     if (idx >= 0) {
       // 同一 certId 再送来：内容必须完全一致（否则就是有人想用同 id 覆盖已有的证书）
       const prev = g.certs[idx] as ChengYuanZhengShu;
@@ -1386,14 +1386,14 @@ export class MembershipStore {
   /** 证书数量上限：淘汰最老的"没有任何证书 supersedes 指向它"的那张，保证换证链不断 */
   private evictOverflow(g: GroupMembershipState): void {
     if (g.certs.length <= MEMBERSHIP_MAX_CERTS_PER_GROUP) return;
-    const referenced = new Set(g.certs.map((c) => c.supersedes).filter((v): v is string => typeof v === 'string' && v.length > 0));
+    const yinyong = new Set(g.certs.map((c) => c.supersedes).filter((v): v is string => typeof v === 'string' && v.length > 0));
     const yiPaiXu = g.certs.slice().sort((a, b) => a.issuedAt - b.issuedAt);
     const keep = new Set(g.certs.map((c) => c.certId));
     while (keep.size > MEMBERSHIP_MAX_CERTS_PER_GROUP) {
-      const victim = yiPaiXu.find((c) => keep.has(c.certId) && !referenced.has(c.certId));
-      if (!victim) break;
-      keep.delete(victim.certId);
-      this.onAudit('membership.cert.evicted', { groupId: g.groupId, certId: victim.certId, reason: 'overflow' });
+      const shouhaizhe = yiPaiXu.find((c) => keep.has(c.certId) && !yinyong.has(c.certId));
+      if (!shouhaizhe) break;
+      keep.delete(shouhaizhe.certId);
+      this.onAudit('membership.cert.evicted', { groupId: g.groupId, certId: shouhaizhe.certId, reason: 'overflow' });
     }
     g.certs = g.certs.filter((c) => keep.has(c.certId));
   }
@@ -1413,9 +1413,9 @@ export class MembershipStore {
     opts: { expectIssuerFingerprint?: string } = {}
   ): CheXiaoYingYongJieGuo & { stored: boolean } {
     const file = this.snapshot();
-    const existing = file.groups[groupId];
-    const pinned = opts.expectIssuerFingerprint || existing?.issuerFingerprint || '';
-    const current = existing?.revocation ?? null;
+    const cunzai = file.groups[groupId];
+    const pinned = opts.expectIssuerFingerprint || cunzai?.issuerFingerprint || '';
+    const current = cunzai?.revocation ?? null;
     const res = verifyAndApplyRevocationList(
       current,
       list,
@@ -1482,14 +1482,14 @@ export class MembershipStore {
       }
     }
     // ② 再找有效证书：任一"有效且未被吊销"的证书 → 放行
-    let sawCert = false;
+    let kandaoZhengshu = false;
     let firstReject: MembershipAuthorizeResult | null = null;
     for (const groupId of groupIds) {
       const g = file.groups[groupId];
       if (!g) continue;
-      const certs = g.certs.filter((c) => fingerprintMatches(c.memberFingerprint, fp));
+      const certs = g.certs.filter((c) => zhiwenPipei(c.memberFingerprint, fp));
       if (!certs.length) continue;
-      sawCert = true;
+      kandaoZhengshu = true;
       for (const cert of certs) {
         const v = verifyMemberCertificate(
           cert,
@@ -1500,8 +1500,8 @@ export class MembershipStore {
           })
         );
         // 该证书自身被点名吊销（certId 命中）→ 即使是"另一条"证书被吊销也不放行这一张
-        const certRevoked = revocationHit(g.revocation, { certId: cert.certId });
-        if (v.ok && !certRevoked) {
+        const zhengshuChexiao = revocationHit(g.revocation, { certId: cert.certId });
+        if (v.ok && !zhengshuChexiao) {
           return { decided: true, ok: true, code: 'ok', groupId, certId: cert.certId };
         }
         const code = v.ok ? 'revoked' : v.code;
@@ -1517,7 +1517,7 @@ export class MembershipStore {
         }
       }
     }
-    if (sawCert && firstReject) return firstReject;
+    if (kandaoZhengshu && firstReject) return firstReject;
     return { decided: false, ok: false, code: 'unknown-fingerprint' };
   }
 
@@ -1542,7 +1542,7 @@ export class MembershipStore {
   groupsContaining(fingerprints: readonly string[]): string[] {
     const out: string[] = [];
     for (const [groupId, g] of Object.entries(this.snapshot().groups)) {
-      if (g.certs.some((c) => fingerprints.some((fp) => fingerprintMatches(c.memberFingerprint, fp)))) out.push(groupId);
+      if (g.certs.some((c) => fingerprints.some((fp) => zhiwenPipei(c.memberFingerprint, fp)))) out.push(groupId);
     }
     return out;
   }
@@ -1593,10 +1593,10 @@ export interface LoadIdentityOptions {
   createIfMissing?: { alias: string; contactCard?: LianXiKa };
 }
 
-export interface LoadedIdentity {
+export interface JiazaiShenfen {
   /** 需要后续操作（签发/换证/导出）时用这个句柄 */
   store: IdentityStore;
-  identity: IdentityRecord;
+  identity: ShenfenJilu;
   /** PKCS8 DER：**只在内存里**，调用方不得落盘、不得回给渲染进程 */
   privateKeyDer: Buffer;
 }
@@ -1609,7 +1609,7 @@ export interface LoadedIdentity {
 export function loadIdentity(
   file: string,
   opts: LoadIdentityOptions = {},
-): ({ ok: true } & LoadedIdentity) | { ok: false; error: string } {
+): ({ ok: true } & JiazaiShenfen) | { ok: false; error: string } {
   const store = new IdentityStore(file, {
     ...(opts.protector ? { protector: opts.protector } : {}),
     ...(opts.onAudit ? { onAudit: opts.onAudit } : {}),
@@ -1623,10 +1623,10 @@ export function loadIdentity(
   return { ok: true, store, identity: r.identity, privateKeyDer: r.privateKeyDer };
 }
 
-export interface IdentityBackup {
-  schema: typeof IDENTITY_BACKUP_SCHEMA;
+export interface ShenfenBeifen {
+  schema: typeof SHENFEN_BEIFEN_MOSHI;
   exportedAt: number;
-  algo: typeof IDENTITY_ALGO;
+  algo: typeof SHENFEN_SUANFA;
   /** 公开部分（恢复时可直接核对指纹） */
   alias: string;
   /** 身份创建时间（恢复后保持原值，便于时间线对齐） */
@@ -1639,20 +1639,20 @@ export interface IdentityBackup {
   cardHistory?: ContactCardVersion[];
   /** 联系信息冻结期（0 = 未冻结） */
   contactFreezeUntil?: number;
-  retiredKeys: RetiredKey[];
-  declarations: IdentityDeclaration[];
+  retiredKeys: TuiyiMiyao[];
+  declarations: ShenfenShengming[];
   kdf: { name: 'scrypt'; salt: string; N: number; r: number; p: number; keyLen: number };
   /** AES-256-GCM(scrypt(passphrase)) 包裹的 PKCS8 DER */
-  blob: EncryptedBlob;
+  blob: JiamiErjinzhiKuai;
 }
 
-function buildBackup(identity: IdentityRecord, privateKeyDer: Buffer, passphrase: string): IdentityBackup {
+function goujianBeifen(identity: ShenfenJilu, privateKeyDer: Buffer, passphrase: string): ShenfenBeifen {
   const salt = crypto.randomBytes(16);
-  const zhuMiYao = scryptKey(passphrase, salt);
+  const zhuMiYao = scryptMiyao(passphrase, salt);
   return {
-    schema: IDENTITY_BACKUP_SCHEMA,
+    schema: SHENFEN_BEIFEN_MOSHI,
     exportedAt: Date.now(),
-    algo: IDENTITY_ALGO,
+    algo: SHENFEN_SUANFA,
     alias: identity.alias,
     createdAt: identity.createdAt,
     fingerprint: identity.fingerprint,
@@ -1664,15 +1664,15 @@ function buildBackup(identity: IdentityRecord, privateKeyDer: Buffer, passphrase
     retiredKeys: identity.retiredKeys.map((r) => ({ ...r })),
     declarations: [...identity.declarations],
     kdf: { name: 'scrypt', salt: b64(salt), N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, keyLen: SCRYPT.keyLen },
-    blob: aesGcmEncrypt(zhuMiYao, privateKeyDer),
+    blob: aesGcmJiami(zhuMiYao, privateKeyDer),
   };
 }
 
 function openBackup(
-  backup: IdentityBackup,
+  backup: ShenfenBeifen,
   passphrase: string,
-): { ok: true; identity: IdentityRecord; privateKeyDer: Buffer } | { ok: false; error: string } {
-  if (!backup || backup.schema !== IDENTITY_BACKUP_SCHEMA || !backup.blob || !backup.kdf) return { ok: false, error: 'corrupt' };
+): { ok: true; identity: ShenfenJilu; privateKeyDer: Buffer } | { ok: false; error: string } {
+  if (!backup || backup.schema !== SHENFEN_BEIFEN_MOSHI || !backup.blob || !backup.kdf) return { ok: false, error: 'corrupt' };
   if (!passphrase) return { ok: false, error: 'passphrase-required' };
   let der: Buffer;
   try {
@@ -1682,7 +1682,7 @@ function openBackup(
       p: backup.kdf.p || SCRYPT.p,
       maxmem: SCRYPT.maxmem,
     });
-    der = aesGcmDecrypt(zhuMiYao, backup.blob);
+    der = aesGcmJiemi(zhuMiYao, backup.blob);
   } catch {
     return { ok: false, error: 'bad-passphrase' };
   }
@@ -1695,9 +1695,9 @@ function openBackup(
   const pubB64 = publicKeyToB64(publicKeyOfPrivate(siYao));
   if (fingerprintFromPublicKey(pubB64) !== backup.fingerprint) return { ok: false, error: 'key-mismatch' };
   if (!keyObjectFromPublicB64(backup.publicKey)) return { ok: false, error: 'corrupt' };
-  const identity: IdentityRecord = {
-    schema: IDENTITY_SCHEMA,
-    algo: IDENTITY_ALGO,
+  const identity: ShenfenJilu = {
+    schema: SHENFEN_MOSHI,
+    algo: SHENFEN_SUANFA,
     alias: backup.alias,
     fingerprint: backup.fingerprint,
     generation: backup.generation,

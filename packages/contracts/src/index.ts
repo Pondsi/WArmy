@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────
 
 /** 数据面：带版本二进制帧，单帧 ≤ 64KiB */
-export interface AcpFrameHeader {
+export interface AcpZhenTou {
   version: 1;
   /** 帧类型：控制/数据/心跳/取消 */
   kind: 'control' | 'data' | 'heartbeat' | 'cancel';
@@ -23,13 +23,13 @@ export interface AcpFrameHeader {
 }
 
 /** 控制面：Node IPC 仅三类消息 */
-export type AcpControlMessage =
+export type AcpKongzhiXiaoxi =
   | { type: 'ready'; pid: number; version: string }
   | { type: 'fatal'; code: string; message: string }
   | { type: 'shutdown'; reason?: string };
 
 /** 记忆服务经 UDS/NamedPipe 调用时的 per-session token */
-export interface AcpSessionToken {
+export interface AcpHuihuaLingpai {
   sessionId: string;
   token: string;
   /** 目录权限 0700 */
@@ -80,7 +80,7 @@ export interface OrchestrationDecision {
 // ─────────────────────────────────────────────
 
 /** recall：发现 → 索引卡 */
-export interface RecallQuery {
+export interface HuisuoChaxun {
   query: string;
   /** 作用域预过滤 */
   scope?: {
@@ -93,7 +93,7 @@ export interface RecallQuery {
 
 export interface RecallCard {
   /** 指向 JSONL 的证据锚点 */
-  anchor: EvidenceAnchor;
+  anchor: ZhengjuMaodian;
   /** 摘要/索引片段 */
   snippet: string;
   score: number;
@@ -102,15 +102,15 @@ export interface RecallCard {
 
 /** retrieve：解引用，三级回退 */
 export interface RetrieveRequest {
-  anchor: EvidenceAnchor;
+  anchor: ZhengjuMaodian;
   /** 回退策略：exact → nearby → fuzzy */
   fallback?: 'exact' | 'nearby' | 'fuzzy';
 }
 
-export interface RetrieveResult {
+export interface JiansuoJieguo {
   /** 原文（逐字节） */
   YuanWen: string;
-  anchor: EvidenceAnchor;
+  anchor: ZhengjuMaodian;
   /** 命中级别 */
   hitLevel: 'exact' | 'nearby' | 'fuzzy';
 }
@@ -119,7 +119,7 @@ export interface RetrieveResult {
 // 4. JSONL 记录格式（只追加，唯一事实来源）
 // ─────────────────────────────────────────────
 
-export type JsonlRecordKind =
+export type JsonlJiluLeixing =
   | 'message'
   | 'tool_call'
   | 'tool_result'
@@ -135,12 +135,12 @@ export interface JsonlRecordBase {
   seq: number;
   ts: number;
   sessionId: string;
-  kind: JsonlRecordKind;
+  kind: JsonlJiluLeixing;
   /** 本记录唯一 ID */
   id: string;
 }
 
-export interface MessageRecord extends JsonlRecordBase {
+export interface XiaoxiJilu extends JsonlRecordBase {
   kind: 'message';
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -148,7 +148,7 @@ export interface MessageRecord extends JsonlRecordBase {
   compressedFrom?: string;
 }
 
-export interface ToolCallRecord extends JsonlRecordBase {
+export interface GongjuDiaoyongJilu extends JsonlRecordBase {
   kind: 'tool_call';
   toolName: string;
   args: unknown;
@@ -156,7 +156,7 @@ export interface ToolCallRecord extends JsonlRecordBase {
   approval: 'auto' | 'once' | 'project' | 'global' | 'denied';
 }
 
-export interface ToolResultRecord extends JsonlRecordBase {
+export interface GongjuJieguoJilu extends JsonlRecordBase {
   kind: 'tool_result';
   toolCallId: string;
   /** 压缩后的输出 */
@@ -172,13 +172,13 @@ export interface CompressedMarkerRecord extends JsonlRecordBase {
   /** 压缩摘要 */
   summary: string;
   /** 可 recall 回原文的锚点列表 */
-  anchors: EvidenceAnchor[];
+  anchors: ZhengjuMaodian[];
 }
 
-export type JsonlRecord =
-  | MessageRecord
-  | ToolCallRecord
-  | ToolResultRecord
+export type JsonlJilu =
+  | XiaoxiJilu
+  | GongjuDiaoyongJilu
+  | GongjuJieguoJilu
   | CompressedMarkerRecord
   | (JsonlRecordBase & {
       kind: 'system' | 'checkpoint' | 'board' | 'queue';
@@ -201,12 +201,12 @@ export interface MemoryStoreWriteOptions {
 
 export interface MemoryStore {
   /** 只追加写入 JSONL */
-  append(record: JsonlRecord, Xuan: MemoryStoreWriteOptions): Promise<void>;
+  append(record: JsonlJilu, Xuan: MemoryStoreWriteOptions): Promise<void>;
   /** 极速层读取（最近 N 条） */
-  tail(limit: number): Promise<JsonlRecord[]>;
+  tail(limit: number): Promise<JsonlJilu[]>;
   /** 深度层检索 */
-  recall(query: RecallQuery): Promise<RecallCard[]>;
-  retrieve(Qiu: RetrieveRequest): Promise<RetrieveResult>;
+  recall(query: HuisuoChaxun): Promise<RecallCard[]>;
+  retrieve(Qiu: RetrieveRequest): Promise<JiansuoJieguo>;
   /** 投影重建：从 JSONL 全量重建 SQLite */
   rebuildProjection(): Promise<void>;
 }
@@ -215,7 +215,7 @@ export interface MemoryStore {
 // 6. 错误分类表
 // ─────────────────────────────────────────────
 
-export type ErrorCategory =
+export type CuowuLeibie =
   | 'PERMISSION_DENIED'
   | 'BOUNDARY_VIOLATION'
   | 'PROTO_FRAME'
@@ -228,8 +228,8 @@ export type ErrorCategory =
   | 'CONTEXT_OVERFLOW'
   | 'UNKNOWN';
 
-export interface ClassifiedError {
-  category: ErrorCategory;
+export interface GuileiCuowu {
+  category: CuowuLeibie;
   code: string;
   message: string;
   /** 可恢复性 */
@@ -241,7 +241,7 @@ export interface ClassifiedError {
 // 7. WorkerResult（短命执行者返回）
 // ─────────────────────────────────────────────
 
-export interface WorkerTaskInput {
+export interface GongzuozheRenwuShuru {
   taskId: string;
   brief: string;
   /** 上下文 = O(任务规模) */
@@ -249,7 +249,7 @@ export interface WorkerTaskInput {
   budgetTokens: number;
 }
 
-export interface WorkerResult {
+export interface GongzuozheJieguo {
   taskId: string;
   /** 蒸馏结论（不是原始对话） */
   distilled: string;
@@ -262,14 +262,14 @@ export interface WorkerResult {
     completionTokens: number;
   };
   /** 错误时非空 */
-  error?: ClassifiedError;
+  error?: GuileiCuowu;
 }
 
 // ─────────────────────────────────────────────
 // 8. 状态差分（检查点/回退）
 // ─────────────────────────────────────────────
 
-export interface CheckpointDelta {
+export interface JianchadianZengliang {
   checkpointId: string;
   /** 轮起 / 轮末 */
   phase: 'round_start' | 'round_end';
@@ -292,7 +292,7 @@ export interface CheckpointDelta {
  * 2. 只追加历史（经 CCR 压缩后的有界视图）
  * 3. 状态卡片（≤ 2000 token）
  */
-export interface ContextRenderLayers {
+export interface ShangxiawenXuanranCeng {
   inHistorySystemPrompt: string;
   appendedHistoryView: string;
   statusCard: string;
@@ -304,7 +304,7 @@ export interface ContextRenderLayers {
 // 10. EvidenceAnchor（证据锚点）
 // ─────────────────────────────────────────────
 
-export interface EvidenceAnchor {
+export interface ZhengjuMaodian {
   /** JSONL 文件路径（相对 userData） */
   file: string;
   /** 记录 seq */
@@ -343,7 +343,7 @@ export type QunLei = 'internal' | 'external' | 'direct';
 
 export type QunJuese = 'creator' | 'admin' | 'member' | 'external_member';
 
-export type PermissionKey =
+export type QuanxianMiyao =
   | 'dissolve_group'
   | 'modify_settings'
   | 'appoint_admin'
@@ -356,9 +356,9 @@ export type PermissionKey =
   | 'view_board';
 
 /** 权限矩阵：角色 × 权限项 → boolean 或 'readonly' */
-export type PermissionMatrix = Record<
+export type QuanxianJuzhen = Record<
   QunJuese,
-  Record<PermissionKey, boolean | 'readonly'>
+  Record<QuanxianMiyao, boolean | 'readonly'>
 >;
 
 export interface QunYuan {
@@ -381,7 +381,7 @@ export interface QunPeizhi {
   /** 定向模式：必须 @ 才响应 */
   directedMode: boolean;
   members: QunYuan[];
-  permissions: PermissionMatrix;
+  permissions: QuanxianJuzhen;
   /** 检查点上限，默认 50 */
   checkpointLimit: number;
 }

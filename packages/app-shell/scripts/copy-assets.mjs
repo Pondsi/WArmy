@@ -1,6 +1,6 @@
-import { copyFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import {copyFileSync, mkdirSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const src = path.join(root, '..', 'src');

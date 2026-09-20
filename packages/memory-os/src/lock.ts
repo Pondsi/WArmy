@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export class JsonlLock {
+export class JsonlSuo {
   private lockFile: string;
   private pid: number;
   private heartbeat: NodeJS.Timeout | null = null;

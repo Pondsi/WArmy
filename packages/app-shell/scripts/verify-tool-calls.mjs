@@ -18,14 +18,14 @@
  *       settings.contextToolMaxRounds=0 时退回现状（请求体无 tools）。
  *   [6] 真 Electron + 记忆服务坏掉：对话仍能发（工具撤销、重建跳过、不报错）。
  */
-import { execFileSync, spawn } from 'node:child_process';
+import {execFileSync, spawn} from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import {createRequire} from 'node:module';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.join(here, '..');
@@ -549,7 +549,7 @@ if (!SKIP_ELECTRON) {
     const t2 = Date.now() + 45000;
     while (Date.now() < t2 && !target) {
       try {
-        const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`)).json();
+        const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/LieBiao`)).json();
         target = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && String(t.url || '').toLowerCase().includes(appPrefix));
       } catch {
         /* 还没起来 */

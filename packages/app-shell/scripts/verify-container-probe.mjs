@@ -9,7 +9,7 @@
  *   · 平台不适用 / 一次性 VM / 隔离级别 的能力声明必须诚实（不许把 VM 说成容器引擎）；
  *   · 启停能力必须与事实一致（WSL / Windows Sandbox **不给**启停按钮）；
  *   · 探测必须便宜（不挂住 UI）、有并发上限、可缓存；
- *   · `runContainerAction` **只接受预定义 id + 'start'|'stop'**（不接受任意命令字符串）。
+ *   · `yunxingRongqiDongzuo` **只接受预定义 id + 'start'|'stop'**（不接受任意命令字符串）。
  *
  * ⚠️ 本脚本**不会**真的启动/停止任何容器引擎（那会改变用户环境）。
  *    它只验证"按钮出现所依赖的事实、参数校验、二次确认文案键"，真实启停标为未验证。
@@ -18,7 +18,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const distFile = path.join(selfDir, '..', 'dist', 'container-probe.js');
@@ -31,7 +31,7 @@ if (!fs.existsSync(distFile)) {
 const mod = await import(new URL('file://' + distFile.replace(/\\/g, '/')).href);
 const {
   probeContainerRuntimes,
-  runContainerAction,
+  yunxingRongqiDongzuo,
   CONTAINER_RUNTIME_SPECS,
   rongQiYunXingGuiGeOf,
   CONTAINER_SHELL_ACTIONS,
@@ -44,7 +44,7 @@ const {
   projectUnavailableRefusal,
   CONTAINER_BASE_IMAGES,
   CONTAINER_NODE_NEEDED_CASES,
-  CONTAINER_EXECUTOR_LOCATION,
+  RONGQI_ZHIXINGQI_WEIZHI,
   CONTAINER_IMAGE_STACKS,
   guiLeiDongZuoJieGuo,
   dongZuoXuAnZhuang,
@@ -194,16 +194,16 @@ ok(fresh.cached === false, '6-2 force 时真的重探（cached=false）');
 
 /* ── 7. 启停入口的**参数校验**（不接受任意命令）── */
 section('7. 启停入口只接受预定义 id + 动作枚举');
-const bad1 = await runContainerAction({ id: 'docker; rm -rf /', action: 'start' });
+const bad1 = await yunxingRongqiDongzuo({ id: 'docker; rm -rf /', action: 'start' });
 ok(bad1.ok === false && bad1.code === 'unknown-runtime', '7-1 未知运行时 id 被拒（命令字符串不可能被拼进 spawn）', JSON.stringify(bad1));
-const bad2 = await runContainerAction({ id: 'docker', action: 'restart' });
+const bad2 = await yunxingRongqiDongzuo({ id: 'docker', action: 'restart' });
 ok(bad2.ok === false && bad2.code === 'bad-action', '7-2 动作只允许 start / stop', JSON.stringify(bad2));
-const bad3 = await runContainerAction({ id: 'wsl', action: 'start' });
+const bad3 = await yunxingRongqiDongzuo({ id: 'wsl', action: 'start' });
 ok(bad3.ok === false && bad3.code === 'not-controllable',
   '7-3 【核心】WSL 没有可程序化启停的路径 → 即使被直接调用也拒绝（不给语义不对的按钮）', JSON.stringify(bad3));
-const bad4 = await runContainerAction({ id: 'windows-sandbox', action: 'start' });
+const bad4 = await yunxingRongqiDongzuo({ id: 'windows-sandbox', action: 'start' });
 ok(bad4.ok === false && bad4.code === 'not-controllable', '7-4 Windows Sandbox 同样被拒（一次性沙箱无常驻状态）', JSON.stringify(bad4));
-const bad5 = await runContainerAction({ id: 'nerdctl', action: 'stop' });
+const bad5 = await yunxingRongqiDongzuo({ id: 'nerdctl', action: 'stop' });
 ok(bad5.ok === false && bad5.code === 'not-controllable', '7-5 containerd/nerdctl 由系统服务托管 → 拒绝（需 root，不代跑提权）', JSON.stringify(bad5));
 
 /* ── 8. i18n：安装说明与启停文案必须齐（中英键集相等、英文无中文）── */
@@ -463,8 +463,8 @@ ok(downProject.fix === 'start-container' && notChosen.fix === 'choose-container'
 ok(!downProject.restrictions.includes('history') && !disabledHost.restrictions.includes('history'),
   '12c-7 restrictions 里**永远不含 history** —— 历史不在被限制的范围内（这条是硬约束）');
 
-ok(CONTAINER_EXECUTOR_LOCATION === 'host',
-  '12c-8 【架构】AI 执行器**留在主机**（只把用户项目的命令执行送进容器）', CONTAINER_EXECUTOR_LOCATION);
+ok(RONGQI_ZHIXINGQI_WEIZHI === 'host',
+  '12c-8 【架构】AI 执行器**留在主机**（只把用户项目的命令执行送进容器）', RONGQI_ZHIXINGQI_WEIZHI);
 ok(CONTAINER_NODE_NEEDED_CASES.length === 2 && CONTAINER_NODE_NEEDED_CASES.includes('project-is-node-stack') && CONTAINER_NODE_NEEDED_CASES.includes('executor-moved-into-container'),
   '12c-9 【更正】"Node 只在两种情况需要"写成可断言的事实（项目本身是 Node 栈 / 执行器也搬进容器）',
   JSON.stringify(CONTAINER_NODE_NEEDED_CASES));

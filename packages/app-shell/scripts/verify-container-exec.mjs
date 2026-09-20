@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const appPkg = path.resolve(selfDir, '..');
@@ -112,7 +112,7 @@ ok(lift.ok === true && lift.plan.args.join(' ') === 'C:\\proj /remove:d *S-1-5-2
   lift.ok ? lift.plan.args.join(' ') : JSON.stringify(lift));
 const badSid = P.hostDirGuardPlan({ action: 'apply', dir: 'C:\\proj', sid: 'Administrator', platform: 'win32' });
 ok(badSid.ok === false && badSid.code === 'bad-sid', '3-3 只接受 SID 文本（账号名有本地化歧义 ⇒ 拒绝）', JSON.stringify(badSid));
-const posix = P.hostDirGuardPlan({ action: 'apply', dir: '/tmp/proj', sid: 'S-1-5-21-1-2-3-1001', platform: 'linux' });
+const posix = P.hostDirGuardPlan({ action: 'apply', dir: '/tmp/xiangMu', sid: 'S-1-5-21-1-2-3-1001', platform: 'linux' });
 ok(posix.ok === false && posix.code === 'platform-not-supported',
   '3-4 非 Windows 如实拒绝（不做半套：POSIX 改 mode 位的侵入性更大）', JSON.stringify(posix));
 ok(P.HOST_DIR_GUARD_SECURITY.userInitiatedOnly === true && P.HOST_DIR_GUARD_SECURITY.autoApply === false &&
@@ -346,7 +346,7 @@ ok(d1.solidify === false && d1.code === 'coalesced' && d2.solidify === true && d
 
 /* ══ 9. 宿主目录加锁：在**临时目录**上真跑一次 icacls，并证明能撤销 ══ */
 section('9. 宿主目录加锁：真的改 ACL，也真的能撤销（只在临时目录上做）');
-const { execFile } = await import('node:child_process');
+const {execFile} = await import('node:child_process');
 const runCmd = (file, args, timeoutMs = 60000) =>
   new Promise((resolve) => {
     execFile(file, args, { timeout: timeoutMs, windowsHide: true, encoding: 'utf8', maxBuffer: 1 << 22 }, (err, stdout, stderr) => {

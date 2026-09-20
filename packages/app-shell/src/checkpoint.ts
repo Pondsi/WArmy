@@ -15,7 +15,7 @@ export interface JianChaDianXiangQing {
   assets: string[];
 }
 
-export interface Checkpoint {
+export interface Jianchadian {
   id: string;
   phase: 'round_start' | 'round_end';
   logSeq: number;
@@ -65,7 +65,7 @@ function kaoBeiMuLu(src: string, dest: string): 'cow' | 'shadow' {
 }
 
 export class JianChaDianCang {
-  private items: Checkpoint[] = [];
+  private items: Jianchadian[] = [];
 
   constructor(private root: string) {
     fs.mkdirSync(path.join(root, 'shadows'), { recursive: true });
@@ -97,7 +97,7 @@ export class JianChaDianCang {
     maxBytes?: number;
     summary?: string;
     detail?: Partial<JianChaDianXiangQing>;
-  }): Checkpoint {
+  }): Jianchadian {
     const id = `cp-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
     const dir = path.join('shadows', id);
     const abs = path.join(this.root, dir);
@@ -140,7 +140,7 @@ export class JianChaDianCang {
         /* noop */
       }
     }
-    const cp: Checkpoint = {
+    const cp: Jianchadian = {
       id,
       phase: opts.phase,
       logSeq: opts.logSeq,
@@ -181,7 +181,7 @@ export class JianChaDianCang {
     return { maxBytes, usedBytes, count: this.items.length };
   }
 
-  list(): Checkpoint[] {
+  list(): Jianchadian[] {
     return [...this.items].reverse();
   }
 

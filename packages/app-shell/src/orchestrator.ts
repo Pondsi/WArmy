@@ -4,10 +4,10 @@
  */
 import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@warmy/group-router';
 import { KanbanCang, JieLing } from '@warmy/board';
-import { runShortLivedExecutor } from './executor.js';
+import { yunxingDuanCunhuoZhixingqi } from './executor.js';
 import { CcrGateway } from '@warmy/ccr-compressor';
 import {
-  renderBoundedView,
+  xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
   DEFAULT_KEEP_HEAD,
   DEFAULT_KEEP_TAIL,
@@ -16,7 +16,7 @@ import {
 import { retrieveAssetsForChat, zhuCeLiaoTianZiChan } from './asset-wire.js';
 import { liaoTianDaiGongJu, type LiaoTianXiaoXi, type GongJuDiaoYong, type GongJuGuiGe } from '@warmy/providers';
 
-export interface DutyProviderCfg {
+export interface ZhibanGongyingshangPeizhi {
   presetId: string;
   apiKey?: string;
   baseURL?: string;
@@ -43,7 +43,7 @@ export function buildStatusCard(card: StatusCard): string {
   return text.length > 1800 ? text.slice(0, 1800) + '…' : text;
 }
 
-export interface OrchestratorDeps {
+export interface XietiaoqiYilai {
   router: GroupChatRouter;
   board: KanbanCang;
   ccr: CcrGateway;
@@ -75,7 +75,7 @@ export interface OrchestratorDeps {
   runProjectGate?: (groupId: string, reason: string) => Promise<{ pass: boolean; summary: string } | null>;
 }
 
-export interface OrchestrateResult {
+export interface XietiaoJieguo {
   action: 'silent' | 'queue' | 'dispatch' | 'error';
   reply: string;
   dutyId?: string;
@@ -88,11 +88,11 @@ export interface OrchestrateResult {
 /**
  * 完整闭环：路由 → 卡片 → 执行者 → 看板/知识库 → 蒸馏回复
  */
-export async function orchestrateGroupMessage(
-  deps: OrchestratorDeps,
-  cfg: DutyProviderCfg,
+export async function xietiaoQunXiaoxi(
+  deps: XietiaoqiYilai,
+  cfg: ZhibanGongyingshangPeizhi,
   msg: { groupId: string; userId?: string; content: string; urgency?: 'P0'|'P1'|'P2'|'P3'; mentionIds?: string[] }
-): Promise<OrchestrateResult> {
+): Promise<XietiaoJieguo> {
   const urgency = msg.urgency || 'P2';
   const route = deps.router.route({
     groupId: msg.groupId,
@@ -112,11 +112,11 @@ export async function orchestrateGroupMessage(
      * route() 在无空闲值班时**已经** enqueue 过（group-router.route 内部）。
      * 这里绝不能再次 enqueue —— 那会双写同一条消息。
      */
-    const qlen = deps.router.listQueue(msg.groupId).length;
+    const duilieChangdu = deps.router.listQueue(msg.groupId).length;
     return {
       action: 'queue',
       reply: `[排队] 队列长度 qlen`,
-      queueLength: qlen,
+      queueLength: duilieChangdu,
     };
   }
 
@@ -168,7 +168,7 @@ export async function orchestrateGroupMessage(
 
   // 派发执行者：优先用短命执行者，失败则值班者自己答
   let distilled = '';
-  let usage: OrchestrateResult['usage'];
+  let usage: XietiaoJieguo['usage'];
   const brief = route.decision?.taskBrief || msg.content;
   const memSnip = deps.projectMemory ? deps.projectMemory(msg.groupId) : '';
   const decSnip = deps.decisionContext ? deps.decisionContext(msg.groupId) : '';
@@ -183,7 +183,7 @@ export async function orchestrateGroupMessage(
   if (cfg.apiKey || cfg.presetId === 'ollama') {
     // 执行者（短命）
     if (zhiXingQiJi.length) {
-      const r = await runShortLivedExecutor(
+      const r = await yunxingDuanCunhuoZhixingqi(
         { taskId: 't-' + Date.now(), brief, contextItems },
         cfg
       );
@@ -213,7 +213,7 @@ export async function orchestrateGroupMessage(
             role: (m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user') as LogEntry['role'],
             content: typeof m.content === 'string' ? m.content : '',
           }));
-      const view = renderBoundedView(entries, {
+      const shitu = xuanranYoujieShitu(entries, {
         budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars(cfg.model) : DEFAULT_CONTEXT_BUDGET_CHARS,
         keepHead: DEFAULT_KEEP_HEAD,
         keepTail: DEFAULT_KEEP_TAIL,
@@ -224,7 +224,7 @@ export async function orchestrateGroupMessage(
       const tools: GongJuGuiGe[] | undefined = deps.toolSpecs?.();
       const req: Parameters<typeof liaoTianDaiGongJu>[1] = {
         model: cfg.model || 'deepseek-chat',
-        messages: [sys, ...(view.messages as LiaoTianXiaoXi[])],
+        messages: [sys, ...(shitu.messages as LiaoTianXiaoXi[])],
         maxTokens: 512,
         tools,
       };
@@ -258,33 +258,33 @@ export async function orchestrateGroupMessage(
    * 深度上限防止同一条故障消息无限循环。
    */
   deps.router.complete(msg.groupId);
-  let drainDepth = 0;
+  let paidiaoShendu = 0;
   const DRAIN_MAX = 5;
   let extraReplies: string[] = [];
-  while (drainDepth < DRAIN_MAX) {
-    drainDepth += 1;
+  while (paidiaoShendu < DRAIN_MAX) {
+    paidiaoShendu += 1;
     const next = deps.router.dequeueNext(msg.groupId);
     if (!next) break;
     try {
-      const nextRes = await runOneDutyRound(deps, cfg, {
+      const xiayiJieguo = await runOneDutyRound(deps, cfg, {
         groupId: next.request.groupId || msg.groupId,
         userId: next.request.userId || 'local-user',
         content: next.request.content,
         urgency: next.urgency || 'P2',
         mentionIds: next.request.mentionIds || [],
       });
-      if (nextRes.action === 'queue') {
+      if (xiayiJieguo.action === 'queue') {
         // route() 在无值班时已重新入队 —— 不要再 requeue 一次
         break;
       }
-      if (nextRes.action === 'silent') {
+      if (xiayiJieguo.action === 'silent') {
         // 静默规则挡下：放回队列，等条件满足；绝不丢
         try {
           deps.router.requeue(next);
         } catch { /* ignore */ }
         break;
       }
-      if (nextRes.reply) extraReplies.push(nextRes.reply);
+      if (xiayiJieguo.reply) extraReplies.push(xiayiJieguo.reply);
       deps.router.complete(msg.groupId);
     } catch {
       // 处理失败 ⇒ 放回队列，留给下一轮；**不丢**
@@ -296,19 +296,19 @@ export async function orchestrateGroupMessage(
   }
 
   // 门禁判停：仅 complete_task / 验收指令（防过度执行）
-  let gateLine = '';
+  let menjinHang = '';
   if (gateReason && deps.runProjectGate) {
     try {
       const g = await deps.runProjectGate(msg.groupId, gateReason);
-      if (g) gateLine = g.pass ? `\n[门禁] 通过 · g.summary` : `\n[门禁] 未通过 · g.summary`;
+      if (g) menjinHang = g.pass ? `\n[门禁] 通过 · g.summary` : `\n[门禁] 未通过 · g.summary`;
     } catch (e) {
-      gateLine = `\n[门禁] 执行失败 · String((e as Error)?.message || e).slice(0, 120)`;
+      menjinHang = `\n[门禁] 执行失败 · String((e as Error)?.message || e).slice(0, 120)`;
     }
   }
 
   return {
     action: 'dispatch',
-    reply: (extraReplies.length ? `distilled\n\n[队列冲刷]\nextraReplies.join('\n---\n')` : distilled) + gateLine,
+    reply: (extraReplies.length ? `distilled\n\n[队列冲刷]\nextraReplies.join('\n---\n')` : distilled) + menjinHang,
     dutyId: duty.id,
     executorIds: zhiXingQiJi,
     boardEvent,
@@ -319,10 +319,10 @@ export async function orchestrateGroupMessage(
 
 /** 队列冲刷用的一轮：与主路径同一套卡片/工具预算，但不再递归冲刷自己的队列 */
 async function runOneDutyRound(
-  deps: OrchestratorDeps,
-  cfg: DutyProviderCfg,
+  deps: XietiaoqiYilai,
+  cfg: ZhibanGongyingshangPeizhi,
   msg: { groupId: string; userId: string; content: string; urgency: 'P0'|'P1'|'P2'|'P3'; mentionIds: string[] }
-): Promise<OrchestrateResult> {
+): Promise<XietiaoJieguo> {
   const route = deps.router.route({
     groupId: msg.groupId,
     userId: msg.userId,
@@ -355,11 +355,11 @@ async function runOneDutyRound(
     tokenBudget: 2000,
   });
   let distilled = '';
-  let usage: OrchestrateResult['usage'];
+  let usage: XietiaoJieguo['usage'];
   const brief = route.decision?.taskBrief || msg.content;
   if (cfg.apiKey || cfg.presetId === 'ollama') {
     if (zhiXingQiJi.length) {
-      const r = await runShortLivedExecutor({ taskId: 't-' + Date.now(), brief, contextItems: [card, `用户消息: msg.content`] }, cfg);
+      const r = await yunxingDuanCunhuoZhixingqi({ taskId: 't-' + Date.now(), brief, contextItems: [card, `用户消息: msg.content`] }, cfg);
       distilled = r.distilled;
     } else {
       const { congYuSheChuangJian } = await import('@warmy/providers');
@@ -375,7 +375,7 @@ async function runOneDutyRound(
             role: (m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user') as LogEntry['role'],
             content: typeof m.content === 'string' ? m.content : '',
           }));
-      const view = renderBoundedView(entries, {
+      const shitu = xuanranYoujieShitu(entries, {
         budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars(cfg.model) : DEFAULT_CONTEXT_BUDGET_CHARS,
         keepHead: DEFAULT_KEEP_HEAD,
         keepTail: DEFAULT_KEEP_TAIL,
@@ -385,7 +385,7 @@ async function runOneDutyRound(
       const tools: GongJuGuiGe[] | undefined = deps.toolSpecs?.();
       const req: Parameters<typeof liaoTianDaiGongJu>[1] = {
         model: cfg.model || 'deepseek-chat',
-        messages: [sys, ...(view.messages as LiaoTianXiaoXi[])],
+        messages: [sys, ...(shitu.messages as LiaoTianXiaoXi[])],
         maxTokens: 512,
         tools,
       };

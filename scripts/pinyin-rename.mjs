@@ -21,7 +21,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..');
@@ -96,6 +96,37 @@ const RESERVED = new Set([
   'WeakSet', 'console', 'document', 'exports', 'globalThis', 'navigator', 'process', 'setInterval',
   'setTimeout', 'clearInterval', 'clearTimeout', 'window',
 ]);
+
+/**
+ * **外部 API 名守卫**：从**非本仓库模块** import 进来的名字一律不改。
+ *
+ * 为什么：`import {ChildProcess} from 'node:child_process'` 里的 `ChildProcess` 是
+ * Node 的类型，不是我们的标识符 —— 实测被改名成 `ChildProcess` 后直接
+ * `TS2305: Module 'node:child_process' has no exported member 'ChildProcess'`。
+ * 规则：`from 'node:*'` / 裸包名 / `electron` 等 ⇒ 名字保留；
+ * 相对路径（`./x`）与自家包（`@warmy/*`）不算外部 —— 那些用映射表统一改。
+ */
+function externalImportNames(fileList) {
+  const names = new Set();
+  const IMPORT_RE = /import\s+(?:type\s+)?(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*['"]([^'"]+)['"]/g;
+  for (const f of fileList) {
+    if (isThirdParty(f)) continue;
+    let src;
+    try { src = fs.readFileSync(f, 'utf8'); } catch { continue; }
+    let m;
+    while ((m = IMPORT_RE.exec(src))) {
+      const mod = m[3] || '';
+      const isOurCode = mod.startsWith('.') || mod.startsWith('@warmy/') || mod.startsWith('/');
+      if (isOurCode) continue;
+      if (m[1]) names.add(m[1]);
+      for (const part of String(m[2] || '').split(',')) {
+        const nm = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/).pop()?.trim();
+        if (nm && /^[A-Za-z_$][\w$]*$/.test(nm)) names.add(nm);
+      }
+    }
+  }
+  return names;
+}
 
 /** 过滤掉保留字/内建的映射（并**明确报出来**，不静默） */
 function safeMap(map) {
@@ -397,9 +428,10 @@ function run(label, list, map, opts = {}) {
    */
   if (!invert && !opts.skipNames) {
     const { dot, key } = memberNames(allRepoFiles());
-    const skip = new Set([...dot, ...key]);
+    const external = externalImportNames(allRepoFiles());
+    const skip = new Set([...dot, ...key, ...external]);
     const hit = Object.keys(map).filter((n) => skip.has(n));
-    if (hit.length) console.log(`[${label}] 成员名守卫跳过 ${hit.length} 个（声明与访问点必须一起改）：${hit.join(' , ')}`);
+    if (hit.length) console.log(`[${label}] 成员名/外部 API 名守卫跳过 ${hit.length} 个（声明与访问点必须一起改 / 是外部 API）：${hit.join(' , ')}`);
     opts = { ...opts, skipNames: skip };
   }
   for (const f of list) {
@@ -437,9 +469,10 @@ function runLocal(targets) {
     if (isThirdParty(f)) { skipped += 1; continue; }
     pkgFiles.push(f);
   }
-  const skip = invert ? new Set() : new Set([...memberNames(allRepoFiles()).dot, ...memberNames(allRepoFiles()).key]);
+  const mnames = invert ? { dot: new Set(), key: new Set() } : memberNames(allRepoFiles());
+  const skip = invert ? new Set() : new Set([...mnames.dot, ...mnames.key, ...externalImportNames(allRepoFiles())]);
   const guarded = Object.keys(LOCAL).filter((n) => skip.has(n));
-  if (guarded.length) console.log(`[local] 因点号用法整包跳过 ${guarded.length} 个名字：${guarded.join(' , ')}`);
+  if (guarded.length) console.log(`[local] 因点号/键名/外部 API 用法整包跳过 ${guarded.length} 个名字（前 40 个）：${guarded.slice(0, 40).join(' , ')}`);
   for (const f of pkgFiles) {
     const src = fs.readFileSync(f, 'utf8');
     const { text, changed, delta } = applyMap(src, LOCAL, { skipNames: skip });

@@ -30,7 +30,7 @@ export interface LogEntry {
   ts?: number;
 }
 
-export interface RenderOptions {
+export interface XuanranXuanxiang {
   /** 视图总预算（字符）。与日志总长无关，这是"有界"的落点 */
   budgetChars: number;
   /** 头部逐字保留条数（系统提示等） */
@@ -54,7 +54,7 @@ export interface ElidedRange {
   recordIds: string[];
 }
 
-export interface BoundedView {
+export interface YoujieShitu {
   messages: Array<{ role: string; content: string }>;
   elided: ElidedRange[];
   stats: {
@@ -110,16 +110,16 @@ export const MAX_RANGE_RECORD_IDS = 8;
 const RANGE_ID_HEAD = 4;
 const RANGE_ID_TAIL = MAX_RANGE_RECORD_IDS - RANGE_ID_HEAD;
 
-type Tier = 'full' | 'compact' | 'min';
-const TIERS: Tier[] = ['full', 'compact', 'min'];
+type Dangwei = 'full' | 'compact' | 'min';
+const TIERS: Dangwei[] = ['full', 'compact', 'min'];
 
-interface RangeDraft extends ElidedRange {
+interface FanweiCaogao extends ElidedRange {
   lastSeq: number;
   /** 段尾采样的环形缓冲（长度 ≤ RANGE_ID_TAIL） */
   tailIds: string[];
 }
 
-function coerceText(v: unknown): string {
+function qiangzhuanWenben(v: unknown): string {
   if (typeof v === 'string') return v;
   if (v === null || v === undefined) return '';
   try {
@@ -153,12 +153,12 @@ function jieWeiAnQuan(s: string, max: number): string {
   return out;
 }
 
-function fmtNum(n: number): string {
+function geshiShuliang(n: number): string {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 /** 中段单条样本行 */
-function sampleLine(e: LogEntry): string {
+function yangbenHang(e: LogEntry): string {
   const body =
     e.content.length > ENTRY_SAMPLE_CHARS ? e.content.slice(0, ENTRY_SAMPLE_CHARS) + '…' : e.content;
   return `#${e.seq} ${e.role}: ${body}`;
@@ -175,11 +175,11 @@ function defaultCompress(entries: LogEntry[]): string {
   const half = Math.floor(ENTRY_SAMPLE_MAX / 2);
   const picked: string[] = [];
   if (entries.length <= ENTRY_SAMPLE_MAX) {
-    for (const e of entries) picked.push(sampleLine(e));
+    for (const e of entries) picked.push(yangbenHang(e));
   } else {
-    for (const e of entries.slice(0, half)) picked.push(sampleLine(e));
+    for (const e of entries.slice(0, half)) picked.push(yangbenHang(e));
     picked.push(`… [样本省略 ${entries.length - half * 2} 条] …`);
-    for (const e of entries.slice(-half)) picked.push(sampleLine(e));
+    for (const e of entries.slice(-half)) picked.push(yangbenHang(e));
   }
   const yiJiaRu = picked.join('\n');
   try {
@@ -194,8 +194,8 @@ function defaultCompress(entries: LogEntry[]): string {
  * 时间与内存都是 O(日志) 的常数因子：只存段首/段尾各几个 id，不再把段内全部 id 堆起来。
  */
 function rangesOf(log: LogEntry[], from: number, to: number): ElidedRange[] {
-  const drafts: RangeDraft[] = [];
-  let cur: RangeDraft | null = null;
+  const drafts: FanweiCaogao[] = [];
+  let cur: FanweiCaogao | null = null;
   for (let i = from; i < to; i++) {
     const e = log[i]!;
     if (cur && e.seq !== cur.lastSeq + 1) cur = null;
@@ -234,7 +234,7 @@ function rangesOf(log: LogEntry[], from: number, to: number): ElidedRange[] {
   });
 }
 
-function rangeText(ranges: ElidedRange[]): string {
+function fanweiWenben(ranges: ElidedRange[]): string {
   const shown = ranges.slice(0, MAX_POINTER_RANGES).map((r) => `${r.fromSeq}..${r.toSeq}`);
   const tail = ranges.length > MAX_POINTER_RANGES ? ',…' : '';
   return `seq ${shown.join(',')}${tail}`;
@@ -246,7 +246,7 @@ function rangeText(ranges: ElidedRange[]): string {
  * recordId 是**有界采样**（每段最多 MAX_RANGE_RECORD_IDS 个），所以这里不再声称
  * "还有 +N 个 id"，只列出来的这几条；完整覆盖靠 seq 范围与 recall（ADR §9.4 待办 3）。
  */
-function anchorText(ranges: ElidedRange[], hint: string, maxIds: number): string {
+function maodianWenben(ranges: ElidedRange[], hint: string, maxIds: number): string {
   const parts: string[] = [];
   if (ranges.length) parts.push(`retrieve(seq=${ranges[0]!.fromSeq})`);
   const ids: string[] = [];
@@ -270,41 +270,41 @@ function anchorText(ranges: ElidedRange[], hint: string, maxIds: number): string
  * 三级冗余：full（完整可读）→ compact（紧凑）→ min（极简，仅可执行线索）。
  * 指针正文永远先于头尾被牺牲，所以只要还放得下，指针就是完整的。
  */
-function pointerPrefix(tier: Tier, ranges: ElidedRange[], hint: string, elidedChars: number): string {
+function zhizhenQianzhui(tier: Dangwei, ranges: ElidedRange[], hint: string, elidedChars: number): string {
   const count = ranges.reduce((s, r) => s + r.count, 0);
-  const rt = rangeText(ranges);
+  const rt = fanweiWenben(ranges);
   if (tier === 'full') {
     return (
-      `[已省略 ${count} 条历史，${rt}，共 ${fmtNum(elidedChars)} 字]\n` +
-      `如需原文，可调用 ${anchorText(ranges, hint, MAX_POINTER_IDS)} 取回逐字节内容（如本会话提供这两个工具，可直接调用）。\n` +
+      `[已省略 ${count} 条历史，${rt}，共 ${geshiShuliang(elidedChars)} 字]\n` +
+      `如需原文，可调用 ${maodianWenben(ranges, hint, MAX_POINTER_IDS)} 取回逐字节内容（如本会话提供这两个工具，可直接调用）。\n` +
       `以下是被压缩的要点：\n`
     );
   }
   if (tier === 'compact') {
     return (
-      `[已省略 ${count} 条，${rt}，共 ${fmtNum(elidedChars)} 字] ` +
-      `${anchorText(ranges, hint, 1)} 取回逐字节原文。要点：\n`
+      `[已省略 ${count} 条，${rt}，共 ${geshiShuliang(elidedChars)} 字] ` +
+      `${maodianWenben(ranges, hint, 1)} 取回逐字节原文。要点：\n`
     );
   }
-  return `[省略 ${count} 条 ${rt}] ${anchorText(ranges, hint, 1)} 取回原文。`;
+  return `[省略 ${count} 条 ${rt}] ${maodianWenben(ranges, hint, 1)} 取回原文。`;
 }
 
 /** 极端预算下的兜底：无论如何都要 viewBytes ≤ budgetChars */
-function hardClamp(
+function yingQianzhi(
   msgs: Array<{ role: string; content: string }>,
   budget: number
 ): Array<{ role: string; content: string }> {
   const out: Array<{ role: string; content: string }> = [];
   let used = 0;
   for (const m of msgs) {
-    const room = budget - used;
-    if (room <= 0) break;
-    if (m.content.length <= room) {
+    const yudi = budget - used;
+    if (yudi <= 0) break;
+    if (m.content.length <= yudi) {
       out.push({ role: m.role, content: m.content });
       used += m.content.length;
     } else {
-      const cut = jieWeiAnQuan(m.content, room);
-      if (cut) out.push({ role: m.role, content: cut });
+      const qieduan = jieWeiAnQuan(m.content, yudi);
+      if (qieduan) out.push({ role: m.role, content: qieduan });
       break;
     }
   }
@@ -315,7 +315,7 @@ function hardClamp(
  * 渲染有界视图（ADR §4）。
  * 纯函数：不读写任何外部状态，同一个 (entries, opts) 永远给出同一个结果。
  */
-export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): BoundedView {
+export function xuanranYoujieShitu(entries: LogEntry[], opts: XuanranXuanxiang): YoujieShitu {
   // ── 0. 输入清洗：任何输入（含脏数据）都不抛错 ──
   const rawIn = Array.isArray(entries) ? entries : [];
   const log: LogEntry[] = [];
@@ -331,7 +331,7 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
     log.push({
       seq: Number.isFinite(seqRaw) ? seqRaw : i + 1,
       role,
-      content: coerceText(e['content']),
+      content: qiangzhuanWenben(e['content']),
       recordId: typeof rid === 'string' && rid.length > 0 ? rid : undefined,
       ts: Number.isFinite(tsRaw) ? tsRaw : undefined,
     });
@@ -344,10 +344,10 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
   for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i]! + log[i]!.content.length;
   const logBytes = prefix[n]!;
 
-  const o = (opts && typeof opts === 'object' ? opts : {}) as RenderOptions;
-  const budgetNum = Number(o.budgetChars);
-  const budgetChars = Number.isFinite(budgetNum)
-    ? Math.max(0, Math.floor(budgetNum))
+  const o = (opts && typeof opts === 'object' ? opts : {}) as XuanranXuanxiang;
+  const yusuanShuliang = Number(o.budgetChars);
+  const budgetChars = Number.isFinite(yusuanShuliang)
+    ? Math.max(0, Math.floor(yusuanShuliang))
     : DEFAULT_CONTEXT_BUDGET_CHARS;
 
   const headWant = qianZhiZhengShu(o.keepHead, 0, n, Math.min(DEFAULT_KEEP_HEAD, n));
@@ -357,7 +357,7 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
     Math.max(0, n - headWant),
     Math.min(DEFAULT_KEEP_TAIL, Math.max(0, n - headWant))
   );
-  const hint = coerceText(o.recallHint).replace(/\s+/g, ' ').trim().slice(0, HINT_MAX_CHARS);
+  const hint = qiangzhuanWenben(o.recallHint).replace(/\s+/g, ' ').trim().slice(0, HINT_MAX_CHARS);
   const compressFn = typeof o.compress === 'function' ? o.compress : defaultCompress;
 
   const mkStats = (viewBytes: number, pointers: number) => ({
@@ -388,7 +388,7 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
     const mid = log.slice(headN, n - tailN);
     if (mid.length) {
       try {
-        out = coerceText(compressFn(mid));
+        out = qiangzhuanWenben(compressFn(mid));
       } catch {
         out = ''; // 压缩器抛错不能连累视图
       }
@@ -419,17 +419,17 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
         const tailMsgs = log.slice(n - t).map((e) => ({ role: e.role as string, content: e.content }));
         const headTailChars = prefix[h]! + (prefix[n]! - prefix[n - t]!);
 
-        const omitted = h + t < n;
-        const ranges = omitted ? rangesOf(log, h, n - t) : [];
-        const elidedChars = omitted ? logBytes - headTailChars : 0;
-        const pre = omitted ? pointerPrefix(tier, ranges, hint, elidedChars) : '';
+        const shenglue = h + t < n;
+        const ranges = shenglue ? rangesOf(log, h, n - t) : [];
+        const elidedChars = shenglue ? logBytes - headTailChars : 0;
+        const pre = shenglue ? zhizhenQianzhui(tier, ranges, hint, elidedChars) : '';
         const cap = budgetChars - headTailChars - pre.length;
         if (cap < 0) continue; // 连指针都放不下 → 继续缩头尾 / 降级指针
         // 有省略、且该档要点有正文时，才要求要点拿到份额
-        if (enforceDigestShare && omitted && hasBody && cap < minDigest) continue;
+        if (enforceDigestShare && shenglue && hasBody && cap < minDigest) continue;
 
-        const body = omitted && hasBody ? jieWeiAnQuan(digestOf(h, t), cap) : '';
-        const msgs = omitted
+        const body = shenglue && hasBody ? jieWeiAnQuan(digestOf(h, t), cap) : '';
+        const msgs = shenglue
           ? [...headMsgs, { role: 'system', content: pre + body }, ...tailMsgs]
           : [...headMsgs, ...tailMsgs];
         if (countChars(msgs) > budgetChars) continue; // 双保险：绝不超过预算
@@ -447,7 +447,7 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
   // ── 2. 兜底：连最小指针都放不下（极端预算）——截断指针而不是抛错 ──
   if (!satisfied) {
     elided = rangesOf(log, 0, n);
-    const minText = pointerPrefix('min', elided, hint, logBytes);
+    const minText = zhizhenQianzhui('min', elided, hint, logBytes);
     const text = jieWeiAnQuan(minText, budgetChars);
     messages = text ? [{ role: 'system', content: text }] : [];
     pointers = 0; // 指针被截断 → 不可执行，如实记 0 条
@@ -456,7 +456,7 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
   // ── 3. 硬指标：viewBytes ≤ budgetChars（不允许抛错，所以用裁剪而非 throw 落地）──
   let viewBytes = countChars(messages);
   if (viewBytes > budgetChars) {
-    messages = hardClamp(messages, budgetChars);
+    messages = yingQianzhi(messages, budgetChars);
     viewBytes = countChars(messages);
   }
 

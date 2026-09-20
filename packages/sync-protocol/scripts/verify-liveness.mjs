@@ -13,14 +13,7 @@
  *   [7] heartbeat / misses 语义正确
  *   [8] 与真实鉴权连接联动：成员拨入建立 SecureSession → online；断开 → 迟滞后 offline
  */
-import {
-  LianJieHuoXing,
-  GroupKeyRing,
-  SecureSyncClient,
-  SecureSyncServer,
-  chuangjianLinShiShenFen,
-  randomBytes,
-} from '../dist/index.js';
+import {LianJieHuoXing, QunMiyaoHuan, SecureSyncClient, SecureSyncServer, chuangjianLinShiShenFen, randomBytes, } from '../dist/index.js';
 
 let failures = 0;
 let passes = 0;
@@ -214,7 +207,7 @@ async function main() {
   }
 
   /* ── 群密钥无用例（占位，确保 import 生效） ── */
-  void GroupKeyRing;
+  void QunMiyaoHuan;
   void randomBytes;
 
   console.log(`\n=== verify-liveness 结果：${passes} 通过 / ${failures} 失败 ===`);

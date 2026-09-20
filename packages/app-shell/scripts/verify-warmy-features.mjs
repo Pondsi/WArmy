@@ -4,11 +4,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { GroupStore } from '../dist/group-store.js';
-import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from '../dist/ai-questions.js';
-import { withReadBack, dedupeByNorm, normPathKey } from '../dist/read-back.js';
-import { KanbanCang, JieLing, JuShu } from '../../board/dist/index.js';
+import {fileURLToPath} from 'node:url';
+import {GroupStore} from '../dist/group-store.js';
+import {AiWenTiZhongXin, AI_QUESTION_CUSTOM} from '../dist/ai-questions.js';
+import {withReadBack, dedupeByNorm, guifanLujingMiyao} from '../dist/read-back.js';
+import {KanbanCang, JieLing, JuShu} from '../../board/dist/index.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -24,7 +24,7 @@ gs.createGroup?.({ groupId: 'g1', name: 'P', type: 'internal', directedMode: fal
 // createGroup API may differ — use snapshot write via list
 if (!gs.getGroup('g1')) {
   // fallback: use internal persist through setProjectAttrs after manual create
-  const { anQuanYuanZiXieJson } = await import('../dist/atomic-json.js');
+  const {anQuanYuanZiXieJson} = await import('../dist/atomic-json.js');
   anQuanYuanZiXieJson(path.join(dir, 'groups.json'), {
     version: 1,
     groups: [{ groupId: 'g1', name: 'P', type: 'internal', directedMode: false, dutyInstanceId: null, createdAt: Date.now(), updatedAt: Date.now(), origin: 'ipc' }],
@@ -36,7 +36,7 @@ const wm = gs.setProjectMemory('g1', '## Rules\n- 端口 59599\n- 容器项目�
 check('setProjectMemory ok', wm.ok === true, wm);
 const mem = gs.projectOf('g1')?.memory || '';
 check('memory stored on project record', mem.includes('59599'), mem.slice(0, 80));
-const { projectMemoryForContext, readProjectMemory } = await import('../dist/project-memory.js');
+const {projectMemoryForContext, readProjectMemory} = await import('../dist/project-memory.js');
 check('projectMemoryForContext bounded', projectMemoryForContext(gs, 'g1').includes('[项目记忆]'));
 check('empty group memory empty', readProjectMemory(gs, 'nope') === '');
 
@@ -58,7 +58,7 @@ const rb2 = await withReadBack(() => 'abc', () => 'xyz', (a, b) => a === b);
 check('withReadBack mismatch not confident', rb2.ok && rb2.confident === false);
 
 // dedupe paths
-const d = dedupeByNorm(['C:/A/b', 'c:/a/b/', 'D:\\c'], normPathKey);
+const d = dedupeByNorm(['C:/A/b', 'c:/a/b/', 'D:\\c'], guifanLujingMiyao);
 check('path dedupe', d.list.length === 2 && d.removed === 1, d);
 
 // board tree

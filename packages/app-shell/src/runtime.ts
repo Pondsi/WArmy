@@ -17,11 +17,11 @@ import os from 'node:os';
 // 类型
 // ─────────────────────────────────────────────
 
-export type InstanceStatus = 'created' | 'starting' | 'running' | 'stopping' | 'stopped' | 'dead';
+export type ShiliZhuangtai = 'created' | 'starting' | 'running' | 'stopping' | 'stopped' | 'dead';
 
-export type SecurityMode = 'full' | 'normal' | 'strict';
+export type AnquanMoshi = 'full' | 'normal' | 'strict';
 
-export interface InstanceConfig {
+export interface ShiliPeizhi {
   id: string;
   name: string;
   /** 独立 dshHome / workspace */
@@ -38,17 +38,17 @@ export interface InstanceConfig {
   };
 }
 
-export interface InstanceHandle {
+export interface ShiliChuli {
   id: string;
   name: string;
-  status: InstanceStatus;
+  status: ShiliZhuangtai;
   pid?: number;
   workspace: string;
   dutyEligible: boolean;
   startedAt?: number;
 }
 
-export interface PermissionDecision {
+export interface QuanxianJuece {
   action: string;
   scope: 'once' | 'project' | 'global';
   allowed: boolean;
@@ -58,7 +58,7 @@ export interface PermissionDecision {
 // TeardownRegistry — 保证进程树归零
 // ─────────────────────────────────────────────
 
-interface TeardownEntry {
+interface ChaixieTiaomu {
   label: string;
   pid: number;
   child?: ChildProcess;
@@ -68,11 +68,11 @@ interface TeardownEntry {
   tree?: boolean;
 }
 
-export class TeardownRegistry {
-  private entries = new Map<string, TeardownEntry>();
+export class ChaixieMingce {
+  private entries = new Map<string, ChaixieTiaomu>();
   private shuttingDown = false;
 
-  register(id: string, entry: TeardownEntry): void {
+  register(id: string, entry: ChaixieTiaomu): void {
     this.entries.set(id, entry);
     entry.child?.once('exit', () => {
       this.entries.delete(id);
@@ -99,7 +99,7 @@ export class TeardownRegistry {
     if (this.shuttingDown) return { killed: 0, failed: [] };
     this.shuttingDown = true;
     const failed: string[] = [];
-    const jobs = [...this.entries.entries()].map(async ([id, e]) => {
+    const renwu = [...this.entries.entries()].map(async ([id, e]) => {
       try {
         await this.killEntry(e, timeoutMs);
         this.entries.delete(id);
@@ -107,12 +107,12 @@ export class TeardownRegistry {
         failed.push(id);
       }
     });
-    await Promise.all(jobs);
+    await Promise.all(renwu);
     this.shuttingDown = false;
-    return { killed: jobs.length - failed.length, failed };
+    return { killed: renwu.length - failed.length, failed };
   }
 
-  private async killEntry(e: TeardownEntry, timeoutMs: number): Promise<void> {
+  private async killEntry(e: ChaixieTiaomu, timeoutMs: number): Promise<void> {
     try {
       await e.cleanup?.();
     } catch {
@@ -155,7 +155,7 @@ export class TeardownRegistry {
 // SecurityManager — 三级模式 + 持久允许库
 // ─────────────────────────────────────────────
 
-export interface AllowlistEntry {
+export interface XukemingdanTiaomu {
   /** 工具/脚本标识，如 tool:fs.write 或 script:npm */
   key: string;
   scope: 'project' | 'global';
@@ -165,17 +165,17 @@ export interface AllowlistEntry {
 }
 
 export interface SecurityStore {
-  load(): Promise<{ mode: SecurityMode; allowlist: AllowlistEntry[] }>;
-  save(state: { mode: SecurityMode; allowlist: AllowlistEntry[] }): Promise<void>;
+  load(): Promise<{ mode: AnquanMoshi; allowlist: XukemingdanTiaomu[] }>;
+  save(state: { mode: AnquanMoshi; allowlist: XukemingdanTiaomu[] }): Promise<void>;
 }
 
 export class MemorySecurityStore implements SecurityStore {
-  private mode: SecurityMode = 'normal';
-  private allowlist: AllowlistEntry[] = [];
+  private mode: AnquanMoshi = 'normal';
+  private allowlist: XukemingdanTiaomu[] = [];
   async load() {
     return { mode: this.mode, allowlist: [...this.allowlist] };
   }
-  async save(state: { mode: SecurityMode; allowlist: AllowlistEntry[] }) {
+  async save(state: { mode: AnquanMoshi; allowlist: XukemingdanTiaomu[] }) {
     this.mode = state.mode;
     this.allowlist = [...state.allowlist];
   }
@@ -188,37 +188,37 @@ export class FileSecurityStore implements SecurityStore {
       const raw = await fs.promises.readFile(this.file, 'utf8');
       const j = JSON.parse(raw);
       return {
-        mode: (j.mode as SecurityMode) || 'normal',
-        allowlist: (j.allowlist as AllowlistEntry[]) || [],
+        mode: (j.mode as AnquanMoshi) || 'normal',
+        allowlist: (j.allowlist as XukemingdanTiaomu[]) || [],
       };
     } catch {
-      return { mode: 'normal' as SecurityMode, allowlist: [] };
+      return { mode: 'normal' as AnquanMoshi, allowlist: [] };
     }
   }
-  async save(state: { mode: SecurityMode; allowlist: AllowlistEntry[] }) {
+  async save(state: { mode: AnquanMoshi; allowlist: XukemingdanTiaomu[] }) {
     await fs.promises.mkdir(path.dirname(this.file), { recursive: true });
     await fs.promises.writeFile(this.file, JSON.stringify(state, null, 2), 'utf8');
   }
 }
 
-export type ApprovalHandler = (req: {
+export type PizhunChuliqi = (req: {
   action: string;
-  mode: SecurityMode;
+  mode: AnquanMoshi;
   suggested: 'once' | 'project' | 'global' | 'deny';
-}) => Promise<PermissionDecision>;
+}) => Promise<QuanxianJuece>;
 
 /**
  * 权限过滤先于相关性检索（不变量 9）
  * 完全授权 / 常规 / 严格
  */
-export class SecurityManager {
-  private mode: SecurityMode = 'normal';
-  private allowlist = new Map<string, AllowlistEntry>();
-  private audit: Array<{ ts: number; action: string; decision: string; mode: SecurityMode }> = [];
+export class AnquanGuanliqi {
+  private mode: AnquanMoshi = 'normal';
+  private allowlist = new Map<string, XukemingdanTiaomu>();
+  private audit: Array<{ ts: number; action: string; decision: string; mode: AnquanMoshi }> = [];
 
   constructor(
     private store: SecurityStore = new MemorySecurityStore(),
-    private onApprove?: ApprovalHandler
+    private onApprove?: PizhunChuliqi
   ) {}
 
   async init(): Promise<void> {
@@ -228,11 +228,11 @@ export class SecurityManager {
     for (const e of s.allowlist) this.allowlist.set(this.key(e.scope, e.key), e);
   }
 
-  getMode(): SecurityMode {
+  getMode(): AnquanMoshi {
     return this.mode;
   }
 
-  async setMode(mode: SecurityMode): Promise<void> {
+  async setMode(mode: AnquanMoshi): Promise<void> {
     this.mode = mode;
     await this.persist();
   }
@@ -250,7 +250,7 @@ export class SecurityManager {
   async requestToolCall(
     action: string,
     opts: { projectKey?: string } = {}
-  ): Promise<PermissionDecision> {
+  ): Promise<QuanxianJuece> {
     if (this.mode === 'full') {
       return this.record(action, { action, scope: 'once', allowed: true });
     }
@@ -284,11 +284,11 @@ export class SecurityManager {
   }
 
   /** 工作区外文件写入 */
-  async requestBoundaryWrite(targetPath: string, workspace: string): Promise<PermissionDecision> {
+  async requestBoundaryWrite(targetPath: string, workspace: string): Promise<QuanxianJuece> {
     const abs = path.resolve(targetPath);
     const root = path.resolve(workspace);
-    const inside = abs === root || abs.startsWith(root + path.sep);
-    if (inside) return { action: `write:${abs}`, scope: 'once', allowed: true };
+    const neibu = abs === root || abs.startsWith(root + path.sep);
+    if (neibu) return { action: `write:${abs}`, scope: 'once', allowed: true };
 
     if (this.mode === 'full') {
       return this.record(`write:${abs}`, { action: `write:${abs}`, scope: 'once', allowed: true });
@@ -306,7 +306,7 @@ export class SecurityManager {
     return this.record(`write:${abs}`, d);
   }
 
-  listAllowlist(): AllowlistEntry[] {
+  listAllowlist(): XukemingdanTiaomu[] {
     return [...this.allowlist.values()];
   }
 
@@ -328,7 +328,7 @@ export class SecurityManager {
     this.audit = [];
   }
 
-  private record(action: string, d: PermissionDecision): PermissionDecision {
+  private record(action: string, d: QuanxianJuece): QuanxianJuece {
     this.audit.push({ ts: Date.now(), action, decision: d.allowed ? `allow:${d.scope}` : 'deny', mode: this.mode });
     return d;
   }
@@ -345,21 +345,21 @@ export class SecurityManager {
 // InstanceManager — spawn bundled Node × N
 // ─────────────────────────────────────────────
 
-export interface InstanceManagerOptions {
+export interface ShiliGuanliqiXuanxiang {
   /** 捆绑 Node 路径；缺省用 process.execPath（开发期） */
   nodePath?: string;
   /** 实例工作区根目录 */
   instancesRoot: string;
   /** 硬件建议最大实例数；默认按 CPU */
   maxInstances?: number;
-  teardown: TeardownRegistry;
-  security: SecurityManager;
+  teardown: ChaixieMingce;
+  security: AnquanGuanliqi;
   /** 启动时注入的环境变量（不含密钥明文到日志） */
   env?: Record<string, string>;
 }
 
-export interface SpawnInstanceOptions {
-  config: InstanceConfig;
+export interface PaishengShiliXuanxiang {
+  config: ShiliPeizhi;
   /** 子进程入口脚本（dsh 或 stub） */
   entryScript?: string;
   /** 额外 argv */
@@ -371,10 +371,10 @@ export function suggestMaxInstances(cpuCount = os.cpus().length): number {
   return Math.max(1, Math.min(8, Math.floor(cpuCount / 2)));
 }
 
-export class InstanceManager extends EventEmitter {
-  private instances = new Map<string, InstanceHandle & { child?: ChildProcess }>();
+export class ShiliGuanliqi extends EventEmitter {
+  private instances = new Map<string, ShiliChuli & { child?: ChildProcess }>();
 
-  constructor(private opts: InstanceManagerOptions) {
+  constructor(private opts: ShiliGuanliqiXuanxiang) {
     super();
   }
 
@@ -382,11 +382,11 @@ export class InstanceManager extends EventEmitter {
     return this.opts.maxInstances ?? suggestMaxInstances();
   }
 
-  list(): InstanceHandle[] {
+  list(): ShiliChuli[] {
     return [...this.instances.values()].map(({ child: _c, ...h }) => h);
   }
 
-  get(id: string): InstanceHandle | undefined {
+  get(id: string): ShiliChuli | undefined {
     const h = this.instances.get(id);
     if (!h) return undefined;
     const { child: _c, ...rest } = h;
@@ -397,7 +397,7 @@ export class InstanceManager extends EventEmitter {
     return this.opts.nodePath || process.execPath;
   }
 
-  async spawn(opts: SpawnInstanceOptions): Promise<InstanceHandle> {
+  async spawn(opts: PaishengShiliXuanxiang): Promise<ShiliChuli> {
     const { config } = opts;
     if (this.instances.has(config.id)) {
       throw new Error(`instance exists: ${config.id}`);
@@ -421,7 +421,7 @@ export class InstanceManager extends EventEmitter {
       );
     }
 
-    const handle: InstanceHandle & { child?: ChildProcess } = {
+    const handle: ShiliChuli & { child?: ChildProcess } = {
       id: config.id,
       name: config.name,
       status: 'starting',
@@ -524,12 +524,12 @@ export async function createP1Runtime(opts?: {
   maxInstances?: number;
   env?: Record<string, string>;
   store?: SecurityStore;
-  onApprove?: ApprovalHandler;
+  onApprove?: PizhunChuliqi;
 }) {
-  const teardown = new TeardownRegistry();
-  const security = new SecurityManager(opts?.store ?? new MemorySecurityStore(), opts?.onApprove);
+  const teardown = new ChaixieMingce();
+  const security = new AnquanGuanliqi(opts?.store ?? new MemorySecurityStore(), opts?.onApprove);
   await security.init();
-  const instances = new InstanceManager({
+  const instances = new ShiliGuanliqi({
     instancesRoot: opts?.instancesRoot || path.join(os.tmpdir(), 'warmy-instances'),
     teardown,
     security,

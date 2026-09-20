@@ -40,7 +40,7 @@ export type UpdateStatus =
 /** electron-updater 风格状态，保留给 warmy:auto-update-check */
 export type AutoUpdateStatus = 'available' | 'not-available' | 'error' | 'not-configured' | 'unavailable';
 
-export type DownloadStatus =
+export type XiazaiZhuangtai =
   | UpdateStatus
   | 'downloaded'
   | 'no-download-url'
@@ -49,7 +49,7 @@ export type DownloadStatus =
   | 'too-large'
   | 'io-error';
 
-export type VerificationMode = 'sha256+size' | 'sha256' | 'size' | 'none';
+export type YanzhengMoshi = 'sha256+size' | 'sha256' | 'size' | 'none';
 
 export interface UpdateManifest {
   version: string;
@@ -95,7 +95,7 @@ export interface UpdateCheckResult {
 
 export interface UpdateDownloadResult {
   ok: boolean;
-  status: DownloadStatus;
+  status: XiazaiZhuangtai;
   message: string;
   i18nKey: string;
   version?: string;
@@ -104,7 +104,7 @@ export interface UpdateDownloadResult {
   sha256?: string;
   expectedSha256?: string;
   expectedSize?: number;
-  verification: VerificationMode;
+  verification: YanzhengMoshi;
   verified: boolean;
   warning?: string;
   /** 安装路径未实现：显式标记，避免看起来可用 */
@@ -123,10 +123,10 @@ export interface UpdateSourceInfo {
   currentVersion: string;
   error?: string;
   lastCheck?: { status: UpdateStatus; latestVersion?: string; checkedAt: number } | null;
-  lastDownload?: { status: DownloadStatus; version?: string; verified?: boolean; checkedAt: number } | null;
+  lastDownload?: { status: XiazaiZhuangtai; version?: string; verified?: boolean; checkedAt: number } | null;
 }
 
-export interface UpdaterOptions {
+export interface GengxinqiXuanxiang {
   currentVersion: string;
   /** 下载落盘目录（主进程传 userData/updates） */
   downloadDir: string;
@@ -146,7 +146,7 @@ export interface UpdaterOptions {
   log?: (msg: string) => void;
 }
 
-interface PersistedState {
+interface LuopanZhuangtai {
   version: 1;
   lastCheck?: UpdateCheckResult;
   lastDownload?: UpdateDownloadResult;
@@ -200,7 +200,7 @@ export function parseVersion(input: string): { nums: number[]; pre: string[] } |
 }
 
 /** a>b 返回 1，a<b 返回 -1，相等 0，无法解析返回 null */
-export function compareVersions(a: string, b: string): number | null {
+export function bijiaoBanben(a: string, b: string): number | null {
   const va = parseVersion(a);
   const vb = parseVersion(b);
   if (!va || !vb) return null;
@@ -230,7 +230,7 @@ export function compareVersions(a: string, b: string): number | null {
 }
 
 /** 更新源地址校验：只接受 http(s)，不接受内嵌凭据 */
-export function validateFeedUrl(raw: string): { ok: true; url: string } | { ok: false; error: string } {
+export function jiaoyanGengxinyuanUrl(raw: string): { ok: true; url: string } | { ok: false; error: string } {
   const s = String(raw || '').trim();
   if (!s) return { ok: false, error: 'feed url is empty' };
   let u: URL;
@@ -248,7 +248,7 @@ export function validateFeedUrl(raw: string): { ok: true; url: string } | { ok: 
 }
 
 /** 展示用：去掉凭据 / 查询串，只留 origin + pathname */
-export function displayUrl(raw: string): string {
+export function xianshiUrl(raw: string): string {
   try {
     const u = new URL(raw);
     return `${u.origin}${u.pathname}`;
@@ -279,7 +279,7 @@ function settingsFeed(settings: unknown): { url: string; channel: string } | nul
   return null;
 }
 
-function str(v: unknown): string | undefined {
+function zifuchuan(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
@@ -289,7 +289,7 @@ function shuZhi(v: unknown): number | undefined {
   return undefined;
 }
 
-function bool(v: unknown): boolean | undefined {
+function buer(v: unknown): boolean | undefined {
   if (typeof v === 'boolean') return v;
   if (v === 'true' || v === 1) return true;
   if (v === 'false' || v === 0) return false;
@@ -306,9 +306,9 @@ function firstObjectIn(raw: unknown): Record<string, unknown> | null {
   if (raw && typeof raw === 'object') {
     const o = raw as Record<string, unknown>;
     for (const key of ['releases', 'items', 'updates', 'data']) {
-      const inner = o[key];
-      if (Array.isArray(inner)) {
-        const found = firstObjectIn(inner);
+      const neiceng = o[key];
+      if (Array.isArray(neiceng)) {
+        const found = firstObjectIn(neiceng);
         if (found) return found;
       }
     }
@@ -330,11 +330,11 @@ export function normalizeManifest(
     return { ok: false, reason: obj['draft'] === true ? 'draft-entry' : 'prerelease-entry' };
   }
   const version =
-    str(obj['version']) ||
-    str(obj['latest']) ||
-    str(obj['latestVersion']) ||
-    str(obj['tag_name']) ||
-    str(obj['tag']);
+    zifuchuan(obj['version']) ||
+    zifuchuan(obj['latest']) ||
+    zifuchuan(obj['latestVersion']) ||
+    zifuchuan(obj['tag_name']) ||
+    zifuchuan(obj['tag']);
   if (!version) return { ok: false, reason: 'missing-version' };
   if (!parseVersion(version)) return { ok: false, reason: 'bad-version' };
 
@@ -344,7 +344,7 @@ export function normalizeManifest(
   for (const a of assets) {
     if (!a || typeof a !== 'object') continue;
     const rec = a as Record<string, unknown>;
-    const u = str(rec['browser_download_url']) || str(rec['url']);
+    const u = zifuchuan(rec['browser_download_url']) || zifuchuan(rec['url']);
     if (u) {
       assetUrl = u;
       assetSize = shuZhi(rec['size']);
@@ -352,20 +352,20 @@ export function normalizeManifest(
     }
   }
   const downloadUrl =
-    str(obj['url']) ||
-    str(obj['downloadUrl']) ||
-    str(obj['download_url']) ||
-    str(obj['browser_download_url']) ||
-    str(obj['file']) ||
-    str(obj['asset']) ||
+    zifuchuan(obj['url']) ||
+    zifuchuan(obj['downloadUrl']) ||
+    zifuchuan(obj['download_url']) ||
+    zifuchuan(obj['browser_download_url']) ||
+    zifuchuan(obj['file']) ||
+    zifuchuan(obj['asset']) ||
     assetUrl ||
     // GitHub 兜底：没有构建产物时退回 release 页面（仅查询可用，下载会判 no-download-url）
-    str(obj['html_url']);
+    zifuchuan(obj['html_url']);
 
-  const rawHash = str(obj['sha256']) || str(obj['checksum']) || str(obj['hash']) || str(obj['shasum']);
+  const yuanwenSanlie = zifuchuan(obj['sha256']) || zifuchuan(obj['checksum']) || zifuchuan(obj['hash']) || zifuchuan(obj['shasum']);
   let sha256: string | undefined;
-  if (rawHash) {
-    const yiQingLi = rawHash.replace(/^sha256[-:]/i, '').trim().toLowerCase();
+  if (yuanwenSanlie) {
+    const yiQingLi = yuanwenSanlie.replace(/^sha256[-:]/i, '').trim().toLowerCase();
     if (!/^[0-9a-f]{64}$/.test(yiQingLi)) return { ok: false, reason: 'bad-checksum' };
     sha256 = yiQingLi;
   }
@@ -373,20 +373,20 @@ export function normalizeManifest(
   if (size !== undefined && size <= 0) return { ok: false, reason: 'bad-size' };
 
   const manifest: UpdateManifest = { version };
-  const notes = str(obj['notes']) || str(obj['releaseNotes']) || str(obj['body']) || str(obj['changelog']);
+  const notes = zifuchuan(obj['notes']) || zifuchuan(obj['releaseNotes']) || zifuchuan(obj['body']) || zifuchuan(obj['changelog']);
   if (notes) manifest.notes = notes.slice(0, 4000);
   if (downloadUrl) manifest.downloadUrl = downloadUrl;
   if (sha256) manifest.sha256 = sha256;
   if (size !== undefined) manifest.size = size;
-  const mandatory = bool(obj['mandatory']) ?? bool(obj['force']) ?? bool(obj['required']);
+  const mandatory = buer(obj['mandatory']) ?? buer(obj['force']) ?? buer(obj['required']);
   if (mandatory !== undefined) manifest.mandatory = mandatory;
-  const publishedAt = str(obj['publishedAt']) || str(obj['published_at']) || str(obj['date']) || str(obj['created_at']);
+  const publishedAt = zifuchuan(obj['publishedAt']) || zifuchuan(obj['published_at']) || zifuchuan(obj['date']) || zifuchuan(obj['created_at']);
   if (publishedAt) manifest.publishedAt = publishedAt;
   return { ok: true, manifest };
 }
 
 /** 网络错误 → 粗粒度、无敏感信息的描述 */
-export function classifyFetchError(e: unknown): { reason: string; message: string } {
+export function guileiHuoquCuowu(e: unknown): { reason: string; message: string } {
   const code = (() => {
     const anyE = e as { code?: unknown; cause?: { code?: unknown } } | null;
     const c1 = anyE && typeof anyE.code === 'string' ? anyE.code : '';
@@ -424,7 +424,7 @@ function sanitizeSegment(s: string): string {
  * 丢弃半成品：先释放文件句柄（Windows 下未释放就删不掉），再删文件。
  * 全部失败也不抛：调用方已经要返回错误状态了。
  */
-async function discardPartial(ws: fs.WriteStream, file: string): Promise<void> {
+async function diuqiBufen(ws: fs.WriteStream, file: string): Promise<void> {
   const alreadyDown = ws.destroyed;
   try {
     if (!alreadyDown) ws.destroy();
@@ -462,7 +462,7 @@ function fileNameFromUrl(raw: string, version: string): string {
   return `warmy-${sanitizeSegment(version)}-update.bin`;
 }
 
-export class Updater {
+export class Gengxinqi {
   private readonly currentVersion: string;
   private readonly downloadDir: string;
   private readonly stateFile: string;
@@ -475,7 +475,7 @@ export class Updater {
   private readonly userAgent: string;
   private readonly log: (msg: string) => void;
 
-  constructor(opts: UpdaterOptions) {
+  constructor(opts: GengxinqiXuanxiang) {
     this.currentVersion = opts.currentVersion || '0.0.0';
     this.downloadDir = opts.downloadDir;
     this.stateFile = opts.stateFile || path.join(opts.downloadDir, 'update-state.json');
@@ -500,13 +500,13 @@ export class Updater {
     }
     const fromSettings = settingsFeed(settingsRaw);
     if (fromSettings) {
-      const v = validateFeedUrl(fromSettings.url);
+      const v = jiaoyanGengxinyuanUrl(fromSettings.url);
       if (!v.ok) return { url: null, origin: 'settings', channel: fromSettings.channel, error: v.error };
       return { url: v.url, origin: 'settings', channel: fromSettings.channel };
     }
-    const fromEnv = str(this.env['WARMY_UPDATE_FEED_URL']);
+    const fromEnv = zifuchuan(this.env['WARMY_UPDATE_FEED_URL']);
     if (fromEnv) {
-      const v = validateFeedUrl(fromEnv);
+      const v = jiaoyanGengxinyuanUrl(fromEnv);
       if (!v.ok) return { url: null, origin: 'env', channel: '', error: v.error };
       return { url: v.url, origin: 'env', channel: '' };
     }
@@ -518,7 +518,7 @@ export class Updater {
     const st = this.readState();
     return {
       configured: !!s.url,
-      url: s.url ? displayUrl(s.url) : null,
+      url: s.url ? xianshiUrl(s.url) : null,
       origin: s.origin,
       channel: s.channel,
       currentVersion: this.currentVersion,
@@ -544,10 +544,10 @@ export class Updater {
   // ── 结果构造 ──
 
   private result(status: UpdateStatus, extra: Partial<UpdateCheckResult> = {}): UpdateCheckResult {
-    const definite = status === 'up-to-date' || status === 'update-available';
+    const mingque = status === 'up-to-date' || status === 'update-available';
     const src = this.resolveSource();
     return {
-      ok: definite,
+      ok: mingque,
       status,
       autoUpdateStatus: AUTO_STATUS[status],
       currentVersion: this.currentVersion,
@@ -558,14 +558,14 @@ export class Updater {
       checkedAt: Date.now(),
       durationMs: 0,
       sourceOrigin: src.origin,
-      ...(src.url ? { source: displayUrl(src.url) } : {}),
+      ...(src.url ? { source: xianshiUrl(src.url) } : {}),
       ...(src.channel ? { channel: src.channel } : {}),
       ...extra,
     };
   }
 
   private dlResult(
-    status: DownloadStatus,
+    status: XiazaiZhuangtai,
     extra: Partial<UpdateDownloadResult> & { durationMs: number }
   ): UpdateDownloadResult {
     const base = status in I18N_KEY ? I18N_KEY[status as UpdateStatus] : 'update.download.failed';
@@ -614,7 +614,7 @@ export class Updater {
       });
     } catch (e) {
       clearTimeout(timer);
-      const c = classifyFetchError(e);
+      const c = guileiHuoquCuowu(e);
       this.log(`update check network fail: ${c.reason}`);
       const r = this.result('network-error', {
         durationMs: Date.now() - started,
@@ -637,8 +637,8 @@ export class Updater {
       return r;
     }
 
-    const declaredLen = Number(res.headers.get('content-length') || '0');
-    if (Number.isFinite(declaredLen) && declaredLen > MANIFEST_MAX_BYTES) {
+    const shengmingChangdu = Number(res.headers.get('content-length') || '0');
+    if (Number.isFinite(shengmingChangdu) && shengmingChangdu > MANIFEST_MAX_BYTES) {
       const r = this.result('invalid-response', {
         durationMs: Date.now() - started,
         reason: 'manifest-too-large',
@@ -652,7 +652,7 @@ export class Updater {
     try {
       text = await res.text();
     } catch (e) {
-      const c = classifyFetchError(e);
+      const c = guileiHuoquCuowu(e);
       const r = this.result('network-error', {
         durationMs: Date.now() - started,
         reason: c.reason,
@@ -688,7 +688,7 @@ export class Updater {
     }
 
     const { manifest } = guiFanHua;
-    const cmp = compareVersions(manifest.version, this.currentVersion);
+    const cmp = bijiaoBanben(manifest.version, this.currentVersion);
     if (cmp === null) {
       const r = this.result('invalid-response', {
         durationMs: Date.now() - started,
@@ -757,7 +757,7 @@ export class Updater {
         i18nKey: 'update.download.noUrl',
       });
     }
-    const v = validateFeedUrl(chk.downloadUrl);
+    const v = jiaoyanGengxinyuanUrl(chk.downloadUrl);
     if (!v.ok) {
       return this.dlResult('invalid-response', {
         durationMs: Date.now() - started,
@@ -769,9 +769,9 @@ export class Updater {
     }
 
     const mubiaoMulu = path.join(this.downloadDir, sanitizeSegment(version));
-    const finalPath = path.join(mubiaoMulu, fileNameFromUrl(v.url, version));
+    const zuizhongLujing = path.join(mubiaoMulu, fileNameFromUrl(v.url, version));
     const root = path.resolve(this.downloadDir) + path.sep;
-    if (!path.resolve(finalPath).startsWith(root)) {
+    if (!path.resolve(zuizhongLujing).startsWith(root)) {
       return this.dlResult('io-error', {
         durationMs: Date.now() - started,
         version,
@@ -779,7 +779,7 @@ export class Updater {
         message: 'download target path rejected',
       });
     }
-    const partPath = `${finalPath}.part`;
+    const bufenLujing = `${zuizhongLujing}.part`;
     try {
       fs.mkdirSync(mubiaoMulu, { recursive: true });
     } catch {
@@ -806,7 +806,7 @@ export class Updater {
       });
     } catch (e) {
       clearTimeout(timer);
-      const c = classifyFetchError(e);
+      const c = guileiHuoquCuowu(e);
       this.log(`update download network fail: ${c.reason}`);
       return this.dlResult('network-error', {
         durationMs: Date.now() - started,
@@ -826,8 +826,8 @@ export class Updater {
       });
     }
 
-    const declared = Number(res.headers.get('content-length') || '0');
-    if (Number.isFinite(declared) && declared > this.maxBytes) {
+    const shengming = Number(res.headers.get('content-length') || '0');
+    if (Number.isFinite(shengming) && shengming > this.maxBytes) {
       clearTimeout(timer);
       ac.abort();
       return this.dlResult('too-large', {
@@ -841,7 +841,7 @@ export class Updater {
     const hash = crypto.createHash('sha256');
     let bytes = 0;
     let tooLarge = false;
-    const ws = fs.createWriteStream(partPath);
+    const ws = fs.createWriteStream(bufenLujing);
     try {
       const body = res.body as unknown as AsyncIterable<Uint8Array> | null;
       if (!body) throw new Error('empty body');
@@ -873,8 +873,8 @@ export class Updater {
       if (!tooLarge) await new Promise<void>((resolve, reject) => ws.end(() => resolve()).once('error', reject));
     } catch (e) {
       clearTimeout(timer);
-      await discardPartial(ws, partPath);
-      const c = classifyFetchError(e);
+      await diuqiBufen(ws, bufenLujing);
+      const c = guileiHuoquCuowu(e);
       this.log(`update download aborted: ${c.reason}`);
       return this.dlResult(bytes > 0 ? 'io-error' : 'network-error', {
         durationMs: Date.now() - started,
@@ -886,7 +886,7 @@ export class Updater {
     clearTimeout(timer);
 
     if (tooLarge) {
-      await discardPartial(ws, partPath);
+      await diuqiBufen(ws, bufenLujing);
       return this.dlResult('too-large', {
         durationMs: Date.now() - started,
         version,
@@ -897,7 +897,7 @@ export class Updater {
     }
 
     const actualSha256 = hash.digest('hex');
-    const verification: VerificationMode =
+    const verification: YanzhengMoshi =
       expectedSha256 && expectedSize !== undefined
         ? 'sha256+size'
         : expectedSha256
@@ -907,7 +907,7 @@ export class Updater {
             : 'none';
 
     if (expectedSha256 && actualSha256 !== expectedSha256) {
-      await discardPartial(ws, partPath);
+      await diuqiBufen(ws, bufenLujing);
       return this.dlResult('checksum-mismatch', {
         durationMs: Date.now() - started,
         version,
@@ -921,7 +921,7 @@ export class Updater {
       });
     }
     if (expectedSize !== undefined && bytes !== expectedSize) {
-      await discardPartial(ws, partPath);
+      await diuqiBufen(ws, bufenLujing);
       return this.dlResult('size-mismatch', {
         durationMs: Date.now() - started,
         version,
@@ -937,9 +937,9 @@ export class Updater {
     }
 
     try {
-      fs.renameSync(partPath, finalPath);
+      fs.renameSync(bufenLujing, zuizhongLujing);
     } catch {
-      await discardPartial(ws, partPath);
+      await diuqiBufen(ws, bufenLujing);
       return this.dlResult('io-error', {
         durationMs: Date.now() - started,
         version,
@@ -952,7 +952,7 @@ export class Updater {
     const out: UpdateDownloadResult = this.dlResult('downloaded', {
       durationMs: Date.now() - started,
       version,
-      filePath: finalPath,
+      filePath: zuizhongLujing,
       bytes,
       sha256: actualSha256,
       ...(expectedSha256 ? { expectedSha256 } : {}),
@@ -973,8 +973,8 @@ export class Updater {
 
   // ── 状态文件（诊断用，落盘失败不影响主流程） ──
 
-  readState(): PersistedState {
-    const st = duJsonWenJianGeLi<PersistedState>(this.stateFile, { version: 1 });
+  readState(): LuopanZhuangtai {
+    const st = duJsonWenJianGeLi<LuopanZhuangtai>(this.stateFile, { version: 1 });
     return st && typeof st === 'object' ? st : { version: 1 };
   }
 

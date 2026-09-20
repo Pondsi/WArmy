@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(selfDir, '..', '..', '..');
@@ -57,7 +57,7 @@ const IMAGE = process.env.WARMY_TEST_IMAGE
 const NODE_REF = NODE_IMAGE && NODE_IMAGE.digest ? `${NODE_IMAGE.ref}@${NODE_IMAGE.digest}` : 'node:24-slim';
 const HOST_NODE_EXE = path.join(repoRoot, 'resources', 'node', 'win-x64', 'node.exe');
 
-const { execFile, spawn } = await import('node:child_process');
+const {execFile, spawn} = await import('node:child_process');
 const results = [];
 let failures = 0;
 function ok(cond, label, detail) {

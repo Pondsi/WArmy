@@ -38,7 +38,7 @@
  * 本模块不做私钥存储、不做身份文件、不做 generation —— 那些属于身份层。
  */
 import {
-  type Bytes,
+  type Zijie,
   base32,
   b64u,
   shengChengEd25519,
@@ -50,22 +50,22 @@ import {
 } from './codec.js';
 
 /** 身份提供方（身份层注入） */
-export interface IdentityProvider {
+export interface ShenfenGongyingshang {
   readonly fingerprint: string;
-  readonly publicKey: Bytes | string;
-  sign(message: Uint8Array): Bytes | string | Promise<Bytes | string>;
-  verify(message: Uint8Array, signature: Bytes | string, publicKey: Bytes | string): boolean | Promise<boolean>;
+  readonly publicKey: Zijie | string;
+  sign(message: Uint8Array): Zijie | string | Promise<Zijie | string>;
+  verify(message: Uint8Array, signature: Zijie | string, publicKey: Zijie | string): boolean | Promise<boolean>;
 }
 
 /** 指纹推导函数：公钥 → 指纹 */
 export type ZhiWenTuiDao = (publicKey: Buffer) => string;
 
 /** 默认指纹：base32(sha256(公钥))，52 字符 */
-export function warmyFingerprint(publicKey: Bytes): string {
+export function warmyFingerprint(publicKey: Zijie): string {
   return base32(sha256(publicKey));
 }
 
-export class IdentityContractError extends Error {
+export class ShenfenQiyueCuowu extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'IdentityContractError';
@@ -73,13 +73,13 @@ export class IdentityContractError extends Error {
 }
 
 /** 归一化后的身份：签名 / 验签一律走注入实现，公钥与指纹已被校验 */
-export interface NormalizedIdentity {
+export interface GuifanShenfen {
   /** 显式标记，避免"鸭子类型"把裸 provider 误当成已校验身份（校验会被跳过） */
   readonly normalizedIdentity: true;
   fingerprint: string;
   publicKey: Buffer;
-  sign(message: Bytes): Promise<Buffer>;
-  verify(message: Bytes, signature: Bytes, publicKey: Bytes): Promise<boolean>;
+  sign(message: Zijie): Promise<Buffer>;
+  verify(message: Zijie, signature: Zijie, publicKey: Zijie): Promise<boolean>;
   /** 是否启用"本地 Ed25519 复核"（默认 true，见 verifyPeerSignature） */
   enforceLocalEd25519: boolean;
   /** 是否强制同时通过注入的 verify（默认 false） */
@@ -96,21 +96,21 @@ export interface NormalizeIdentityOptions {
   selfTest?: boolean;
 }
 
-export function isNormalizedIdentity(v: unknown): v is NormalizedIdentity {
+export function isNormalizedIdentity(v: unknown): v is GuifanShenfen {
   return (
     typeof v === 'object' &&
     v !== null &&
-    (v as NormalizedIdentity).normalizedIdentity === true &&
-    typeof (v as NormalizedIdentity).sign === 'function' &&
-    typeof (v as NormalizedIdentity).verify === 'function' &&
-    Buffer.isBuffer((v as NormalizedIdentity).publicKey)
+    (v as GuifanShenfen).normalizedIdentity === true &&
+    typeof (v as GuifanShenfen).sign === 'function' &&
+    typeof (v as GuifanShenfen).verify === 'function' &&
+    Buffer.isBuffer((v as GuifanShenfen).publicKey)
   );
 }
 
 export async function normalizeIdentity(
-  provider: IdentityProvider | NormalizedIdentity,
+  provider: ShenfenGongyingshang | GuifanShenfen,
   opts: NormalizeIdentityOptions = {}
-): Promise<NormalizedIdentity> {
+): Promise<GuifanShenfen> {
   if (isNormalizedIdentity(provider)) return provider;
   const derivation = opts.fingerprintDerivation ?? warmyFingerprint;
   // 公钥接受两种常见表示：32 字节 raw，或 44 字节 SPKI DER（Ed25519）
@@ -118,24 +118,24 @@ export async function normalizeIdentity(
   try {
     publicKey = normalizeEd25519PublicKey(provider.publicKey);
   } catch (e) {
-    throw new IdentityContractError(
+    throw new ShenfenQiyueCuowu(
       `identity.publicKey 非法：${(e as Error).message}。` +
         '可用 `normalizeEd25519PublicKey()` / `ed25519SpkiDerFromRaw()` 做转换。'
     );
   }
   if (typeof provider.fingerprint !== 'string' || provider.fingerprint.length === 0) {
-    throw new IdentityContractError('identity.fingerprint 缺失');
+    throw new ShenfenQiyueCuowu('identity.fingerprint 缺失');
   }
   const derived = derivation(publicKey);
   if (derived !== provider.fingerprint) {
-    throw new IdentityContractError(
+    throw new ShenfenQiyueCuowu(
       `identity.fingerprint 与公钥不匹配：期望 ${derived}（由 fingerprintDerivation 推出），实际 ${provider.fingerprint}`
     );
   }
   if (typeof provider.sign !== 'function' || typeof provider.verify !== 'function') {
-    throw new IdentityContractError('identity.sign / identity.verify 必须是函数');
+    throw new ShenfenQiyueCuowu('identity.sign / identity.verify 必须是函数');
   }
-  const normalized: NormalizedIdentity = {
+  const normalized: GuifanShenfen = {
     normalizedIdentity: true,
     fingerprint: provider.fingerprint,
     publicKey,
@@ -150,17 +150,17 @@ export async function normalizeIdentity(
 }
 
 /** sign → verify 往返自检：注入实现若不满足契约，这里就会暴露 */
-export async function selfTestIdentity(identity: NormalizedIdentity, context = 'warmy-sync self-test'): Promise<void> {
+export async function selfTestIdentity(identity: GuifanShenfen, context = 'warmy-sync self-test'): Promise<void> {
   const probe = sha256(Buffer.from(context, 'utf8'));
   const sig = await identity.sign(probe);
-  if (sig.length === 0) throw new IdentityContractError('identity.sign 返回空签名');
-  const viaInjected = await identity.verify(probe, sig, identity.publicKey);
-  const viaLocal = verifyEd25519Local(probe, sig, identity.publicKey);
-  if (!viaInjected && viaLocal !== true) {
-    throw new IdentityContractError('identity 自检失败：sign 产出的签名既不被注入 verify 接受，也不被本地 Ed25519 复核接受');
+  if (sig.length === 0) throw new ShenfenQiyueCuowu('identity.sign 返回空签名');
+  const jingyouZhuru = await identity.verify(probe, sig, identity.publicKey);
+  const jingyouBenji = verifyEd25519Local(probe, sig, identity.publicKey);
+  if (!jingyouZhuru && jingyouBenji !== true) {
+    throw new ShenfenQiyueCuowu('identity 自检失败：sign 产出的签名既不被注入 verify 接受，也不被本地 Ed25519 复核接受');
   }
-  if (viaLocal === false && viaInjected) {
-    throw new IdentityContractError(
+  if (jingyouBenji === false && jingyouZhuru) {
+    throw new ShenfenQiyueCuowu(
       'identity 自检失败：注入 verify 接受，但本地 Ed25519 复核拒绝 —— 公钥/签名算法不是 Ed25519，或 verify 实现有误'
     );
   }
@@ -177,10 +177,10 @@ export async function selfTestIdentity(identity: NormalizedIdentity, context = '
  * 这样"注入的 verify 被桩实现成恒真"也不会让篡改签名通过。
  */
 export async function verifyPeerSignature(
-  identity: NormalizedIdentity | null,
-  message: Bytes,
-  signature: Bytes,
-  publicKey: Bytes
+  identity: GuifanShenfen | null,
+  message: Zijie,
+  signature: Zijie,
+  publicKey: Zijie
 ): Promise<{ ok: boolean; via: 'local-ed25519' | 'injected' | 'both' | 'none' }> {
   const local = identity?.enforceLocalEd25519 === false ? null : verifyEd25519Local(message, signature, publicKey);
   if (local !== null) {
@@ -197,14 +197,14 @@ export async function verifyPeerSignature(
 
 /** 测试 / 身份层参考实现：内存里的 Ed25519 身份（私钥不经任何持久化） */
 export function chuangjianLinShiShenFen(seedLabel?: string): {
-  provider: IdentityProvider;
+  provider: ShenfenGongyingshang;
   privateKey: Buffer;
   fingerprint: string;
 } {
   const keys = shengChengEd25519();
   void seedLabel;
   const fingerprint = warmyFingerprint(keys.publicKey);
-  const provider: IdentityProvider = {
+  const provider: ShenfenGongyingshang = {
     fingerprint,
     publicKey: keys.publicKey,
     sign: (message) => signEd25519Local(message, keys.privateKey),
@@ -215,6 +215,6 @@ export function chuangjianLinShiShenFen(seedLabel?: string): {
 }
 
 /** 便于测试断言：返回身份的公开描述（不含私钥） */
-export function shuoMingShenFen(identity: NormalizedIdentity | IdentityProvider): { fingerprint: string; publicKey: string } {
+export function shuoMingShenFen(identity: GuifanShenfen | ShenfenGongyingshang): { fingerprint: string; publicKey: string } {
   return { fingerprint: identity.fingerprint, publicKey: b64u(toBuf(identity.publicKey)) };
 }

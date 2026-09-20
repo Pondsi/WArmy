@@ -15,14 +15,14 @@
  *
  * 参数：--no-electron 只做静态断言（文件/契约检查），不启动 Electron。
  */
-import { execFileSync, spawn } from 'node:child_process';
+import {execFileSync, spawn} from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import {createRequire} from 'node:module';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.join(here, '..');
@@ -178,7 +178,7 @@ async function launch({ appRoot, userData, mainFile }, tag) {
   const t2 = Date.now() + 45000;
   while (Date.now() < t2 && !target) {
     try {
-      const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`)).json();
+      const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/LieBiao`)).json();
       target = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && String(t.url || '').toLowerCase().includes(appPrefix));
     } catch {
       /* 还没起来 */

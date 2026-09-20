@@ -5,7 +5,7 @@
 import net from 'node:net';
 import tls from 'node:tls';
 
-export interface SmtpConfig {
+export interface SmtpPeizhi {
   host: string;
   port: number;
   secure: boolean;
@@ -52,7 +52,7 @@ function write(socket: net.Socket, line: string) {
 }
 
 /** AUTH LOGIN 流程 */
-export async function verifySmtp(cfg: SmtpConfig): Promise<SmtpVerifyResult> {
+export async function verifySmtp(cfg: SmtpPeizhi): Promise<SmtpVerifyResult> {
   return new Promise((resolve) => {
     let step = 'connect';
     const finish = (r: SmtpVerifyResult) => {

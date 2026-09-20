@@ -25,8 +25,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import {fileURLToPath, pathToFileURL} from 'node:url';
+import {spawnSync} from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -291,12 +291,12 @@ record('N-37', 'cmd 的 GBK 输出能被正确解码（不再乱码）', '已复
 result.nonElevatedSuite = { ...nsuite, scratchDir: scratch, fakeHostsPath: fakeHosts, backupDirUsed: scratchBackups };
 
 /* ───────── 4) 绝不挂住 / 内层退出码捕获 ───────── */
-const hang = { items: [], passCount: 0, failCount: 0 };
+const row = { items: [], passCount: 0, failCount: 0 };
 const recordHang = (id, name, expected, actual, pass, evidence) => {
   const ok = check(id, name, expected, actual, pass, evidence);
-  hang.items.push({ id, name, expected, actual, pass: ok, evidence: evidence ?? null });
-  if (ok) hang.passCount += 1;
-  else hang.failCount += 1;
+  row.items.push({ id, name, expected, actual, pass: ok, evidence: evidence ?? null });
+  if (ok) row.passCount += 1;
+  else row.failCount += 1;
   return ok;
 };
 
@@ -392,7 +392,7 @@ recordHang('H-11', '超时后的残留进程观测（ping.exe，仅记录不判�
 recordHang('H-12', '提权调用实际尝试次数（证据项）', 'evidence',  { innerFail: innerFail.raw.attemptCount, innerOk: innerOk.raw.attemptCount, timeoutRun: timeoutRun.raw.attemptCount },
   true, { attemptLog: { innerFail: innerFail.raw.attemptLog, innerOk: innerOk.raw.attemptLog } });
 
-result.noHangSuite = hang;
+result.noHangSuite = row;
 
 /* ───────── 5) 真 hosts 提权写入（非交互，观测并还原） ───────── */
 const hostsFile = helper.defaultHostsPath();
@@ -535,7 +535,7 @@ result.summary = {
   failedIds: all.filter((i) => !i.pass).map((i) => i.id),
   all: all.map((i) => ({ id: i.id, name: i.name, pass: i.pass })),
   nonElevatedAllPass: nsuite.failCount === 0,
-  noHangAllPass: hang.failCount === 0,
+  noHangAllPass: row.failCount === 0,
   hostsWriteSucceeded: hostsWriteOk,
   hostsRestored: hostsWrite.restoredToOriginal,
   dodMet: hostsWriteOk,
@@ -555,7 +555,7 @@ log(`结果已写入：${RESULT_PATH}`);
 // 清理临时目录（保留 backups/，那是证据）
 try { fs.rmSync(scratch, { recursive: true, force: true }); } catch { /* noop */ }
 
-console.log(`\n[spike-08] 检查项 ${result.summary.passed}/${result.summary.totalChecks} 通过；非提权套件 ${nsuite.passCount}/${nsuite.items.length}；不挂住套件 ${row.passCount}/${hang.items.length}`);
+console.log(`\n[spike-08] 检查项 ${result.summary.passed}/${result.summary.totalChecks} 通过；非提权套件 ${nsuite.passCount}/${nsuite.items.length}；不挂住套件 ${row.passCount}/${row.items.length}`);
 console.log(`[spike-08] hosts 写入：${hostsWrite.observedOutcome ?? 'skipped'}；已还原=${hostsWrite.restoredToOriginal}`);
 console.log(`[spike-08] 判定：${result.summary.status}`);
 process.exit(failCount > 0 ? 1 : hostsWriteOk ? 0 : 3);

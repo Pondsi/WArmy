@@ -31,9 +31,9 @@ import net from 'node:net';
 import { sha256Hex } from './codec.js';
 import type { DhtDiZhi } from './dht.js';
 
-export const RELAY_PROTOCOL = 'warmy-relay/1';
+export const ZHONGJI_XIEYI = 'warmy-relay/1';
 export const DEFAULT_RELAY_PAIR_TIMEOUT_MS = 10_000;
-export const DEFAULT_RELAY_SAMPLE_BYTES = 64;
+export const MOREN_ZHONGJI_YANGBEN_ZIJIE = 64;
 const RELAY_MAX_LINE = 8 * 1024;
 const RELAY_MAX_SAMPLES = 256;
 
@@ -99,7 +99,7 @@ export interface ZhongJiJieDianXuanXiang {
   now?: () => number;
 }
 
-class LineReader {
+class HangDuquqi {
   private buf: Buffer = Buffer.alloc(0);
 
   push(chunk: Buffer): void {
@@ -130,16 +130,16 @@ class LineReader {
   }
 }
 
-interface Half {
+interface Yiban {
   token: string;
   role: ZhongJiJueSe;
   sock: net.Socket;
-  reader: LineReader;
+  reader: HangDuquqi;
   paired: boolean;
   closed: boolean;
   bytesIn: number;
   bytesOut: number;
-  peer?: Half;
+  peer?: Yiban;
   timer?: NodeJS.Timeout;
 }
 
@@ -152,7 +152,7 @@ function writeLine(sock: net.Socket, obj: ZhongJiYiZhuCe | ZhongJiJiuXu | Record
 }
 
 /** 端点侧：一次到中继的连接（已握手控制行，进入透明管道阶段） */
-interface RelayConn {
+interface ZhongjiLianjie {
   ok: boolean;
   sock?: net.Socket;
   /** 控制行之外多读到的字节（配对时缓冲下来的），要原样交给本地侧 */
@@ -165,9 +165,9 @@ interface RelayConn {
 
 export class ZhongJiJieDian {
   private server: net.Server | null = null;
-  private readonly slots = new Map<string, { listener?: Half; dialer?: Half }>();
+  private readonly slots = new Map<string, { listener?: Yiban; dialer?: Yiban }>();
   private readonly sampleLog: ZhongJiYangBen[] = [];
-  private readonly pairs = new Set<Half>();
+  private readonly pairs = new Set<Yiban>();
   private registered = 0;
   private rejected = 0;
   private pairCount = 0;
@@ -235,9 +235,9 @@ export class ZhongJiJieDian {
   stop(): Promise<void> {
     return new Promise((resolve) => {
       for (const half of this.pairs) this.destroy(half, 'relay-stop');
-      for (const slot of this.slots.values()) {
-        if (slot.listener) this.destroy(slot.listener, 'relay-stop');
-        if (slot.dialer) this.destroy(slot.dialer, 'relay-stop');
+      for (const caowei of this.slots.values()) {
+        if (caowei.listener) this.destroy(caowei.listener, 'relay-stop');
+        if (caowei.dialer) this.destroy(caowei.dialer, 'relay-stop');
       }
       this.slots.clear();
       this.pairs.clear();
@@ -265,8 +265,8 @@ export class ZhongJiJieDian {
     sock.on('error', () => {
       /* 对端断开/重置：不抛到进程外 */
     });
-    const reader = new LineReader();
-    let half: Half | null = null;
+    const reader = new HangDuquqi();
+    let half: Yiban | null = null;
     let state: 'hello' | 'piped' = 'hello';
 
     const onData = (chunk: Buffer): void => {
@@ -319,15 +319,15 @@ export class ZhongJiJieDian {
       sock.removeListener('data', onData);
       this.emit({ type: 'register', token, detail: role });
       writeLine(sock, { t: 'relay-registered', v: 1, token, role });
-      const slot = this.slots.get(token) ?? {};
+      const caowei = this.slots.get(token) ?? {};
       if (role === 'listener') {
-        if (slot.listener) this.destroy(slot.listener, 'replaced-by-new-listener');
-        slot.listener = half;
+        if (caowei.listener) this.destroy(caowei.listener, 'replaced-by-new-listener');
+        caowei.listener = half;
       } else {
-        if (slot.dialer) this.destroy(slot.dialer, 'replaced-by-new-dialer');
-        slot.dialer = half;
+        if (caowei.dialer) this.destroy(caowei.dialer, 'replaced-by-new-dialer');
+        caowei.dialer = half;
       }
-      this.slots.set(token, slot);
+      this.slots.set(token, caowei);
       // 配对前到达的数据先缓冲（正常情况下端点会等 relay-ready 再发）
       sock.on('data', (c: Buffer) => {
         if (half) half.bytesIn += c.length;
@@ -358,9 +358,9 @@ export class ZhongJiJieDian {
   }
 
   private tryPair(token: string): void {
-    const slot = this.slots.get(token);
-    if (!slot || !slot.listener || !slot.dialer) return;
-    const { listener, dialer } = slot;
+    const caowei = this.slots.get(token);
+    if (!caowei || !caowei.listener || !caowei.dialer) return;
+    const { listener, dialer } = caowei;
     this.slots.delete(token);
     this.pairCount += 1;
     if (listener.timer) clearTimeout(listener.timer);
@@ -383,7 +383,7 @@ export class ZhongJiJieDian {
     if (listenerPre.length > 0) this.forward(listener, dialer, listenerPre, 'listener->dialer');
   }
 
-  private pipe(from: Half, to: Half, direction: ZhongJiFangXiang): void {
+  private pipe(from: Yiban, to: Yiban, direction: ZhongJiFangXiang): void {
     from.sock.on('data', (chunk: Buffer) => {
       from.bytesIn += chunk.length;
       this.forward(from, to, chunk, direction);
@@ -394,8 +394,8 @@ export class ZhongJiJieDian {
    * 真正的转发（**唯一**的字节路径）。三种攻击模式只对**第一个**分片生效一次，
    * 之后回到老实转发 —— 这样"篡改/重排/重放被拒"的断言不会被后续流量掩盖。
    */
-  private forward(from: Half, to: Half, chunk: Buffer, direction: ZhongJiFangXiang): void {
-    const sample = chunk.subarray(0, this.opts.sampleBytes ?? DEFAULT_RELAY_SAMPLE_BYTES);
+  private forward(from: Yiban, to: Yiban, chunk: Buffer, direction: ZhongJiFangXiang): void {
+    const sample = chunk.subarray(0, this.opts.sampleBytes ?? MOREN_ZHONGJI_YANGBEN_ZIJIE);
     if (this.sampleLog.length < RELAY_MAX_SAMPLES) {
       this.sampleLog.push({
         token: from.token,
@@ -454,7 +454,7 @@ export class ZhongJiJieDian {
     }
   }
 
-  private destroy(half: Half, reason: string): void {
+  private destroy(half: Yiban, reason: string): void {
     if (half.closed) return;
     half.closed = true;
     if (half.timer) clearTimeout(half.timer);
@@ -504,13 +504,13 @@ export interface ZhongJiSuiDaoXuanXiang {
 }
 
 /** 打开一条到中继的连接并完成控制行握手 */
-async function openRelayConn(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJueSe): Promise<RelayConn> {
+async function openRelayConn(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJueSe): Promise<ZhongjiLianjie> {
   const timeoutMs = opts.readyTimeoutMs ?? DEFAULT_RELAY_PAIR_TIMEOUT_MS;
   const sock = net.connect({ host: opts.relay.host, port: opts.relay.port });
-  const reader = new LineReader();
-  return new Promise<RelayConn>((resolve) => {
+  const reader = new HangDuquqi();
+  return new Promise<ZhongjiLianjie>((resolve) => {
     let settled = false;
-    const done = (r: RelayConn): void => {
+    const done = (r: ZhongjiLianjie): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -531,7 +531,7 @@ async function openRelayConn(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJueSe): 
     let registered = false;
     /** 非控制行（= 真实数据，可能是对端握手帧）**原样保留**，绝不当作无关行丢掉 */
     const pendingLines: Buffer[] = [];
-    const takeRest = (): Buffer => Buffer.concat([...pendingLines.splice(0), reader.takeAll()]);
+    const quzouQiyu = (): Buffer => Buffer.concat([...pendingLines.splice(0), reader.takeAll()]);
     sock.on('data', (chunk: Buffer) => {
       reader.push(chunk);
       for (;;) {
@@ -554,7 +554,7 @@ async function openRelayConn(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJueSe): 
         if (msg.t === 'relay-registered') {
           registered = true;
           if (role === 'listener') {
-            done({ ok: true, sock, rest: takeRest(), paired: false });
+            done({ ok: true, sock, rest: quzouQiyu(), paired: false });
             return;
           }
           continue;
@@ -566,7 +566,7 @@ async function openRelayConn(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJueSe): 
             done({ ok: false, reason: ready.reason ?? '中继未能配对到对端', paired: false });
             return;
           }
-          done({ ok: true, sock, rest: takeRest(), paired: true });
+          done({ ok: true, sock, rest: quzouQiyu(), paired: true });
           return;
         }
         pendingLines.push(raw);
@@ -661,9 +661,9 @@ export class ZhongJiSuiDaoBoHao {
   }
 
   private settlePair(r: { ok: boolean; reason?: string }): void {
-    const waiters = this.pairWaiters;
+    const dengdaizhe = this.pairWaiters;
     this.pairWaiters = [];
-    for (const w of waiters) {
+    for (const w of dengdaizhe) {
       clearTimeout(w.timer);
       w.resolve(r);
     }
@@ -740,7 +740,7 @@ export class ZhongJiSuiDaoBoHao {
       token,
       direction,
       bytes: chunk.length,
-      firstBytesHex: chunk.subarray(0, this.opts.sampleBytes ?? DEFAULT_RELAY_SAMPLE_BYTES).toString('hex'),
+      firstBytesHex: chunk.subarray(0, this.opts.sampleBytes ?? MOREN_ZHONGJI_YANGBEN_ZIJIE).toString('hex'),
       at: this.now(),
     });
   }
@@ -812,9 +812,9 @@ export class ZhongJiSuiDaoJianTing {
      *     等 localSink 就绪后按序补发。
      * 否则表现为"中继说转发成功、端点却一个字节没收到"（静默丢包）。
      */
-    const reader = new LineReader();
+    const reader = new HangDuquqi();
     if (conn.rest) reader.push(conn.rest);
-    const pump = (): void => {
+    const beng = (): void => {
       for (;;) {
         const raw = reader.readLineRaw();
         if (raw === null) break;
@@ -832,8 +832,8 @@ export class ZhongJiSuiDaoJianTing {
         this.feedLocal(raw); // 非控制行 = 真实数据，原样保留（含换行）
       }
       if (this.pairedFired) {
-        const leftover = reader.takeAll();
-        if (leftover.length > 0) this.feedLocal(leftover);
+        const shengyu = reader.takeAll();
+        if (shengyu.length > 0) this.feedLocal(shengyu);
         this.stats.paired = true;
         if (!this.stats.pairedAt) {
           this.stats.pairedAt = this.now();
@@ -847,9 +847,9 @@ export class ZhongJiSuiDaoJianTing {
         return;
       }
       reader.push(c);
-      pump();
+      beng();
     });
-    pump();
+    beng();
     void this.awaitRelayReady();
     return { ok: true, registered: true };
   }
@@ -936,8 +936,8 @@ export class ZhongJiSuiDaoJianTing {
     // **先挂 sink，再排空缓冲**：配对与"本地服务连上"之间到达的字节必须先缓存再按序补发，
     // 否则会出现"中继说转发成功、端点却一个字节没收到"的静默丢包（本仓库实测踩过）。
     this.localSink = local;
-    const drain = this.sinkPending.splice(0);
-    for (const b of drain) {
+    const paidiao = this.sinkPending.splice(0);
+    for (const b of paidiao) {
       this.stats.bytesFromRelay += b.length;
       local.write(b);
     }
@@ -991,7 +991,7 @@ export class ZhongJiSuiDaoJianTing {
       token,
       direction,
       bytes: chunk.length,
-      firstBytesHex: chunk.subarray(0, this.opts.sampleBytes ?? DEFAULT_RELAY_SAMPLE_BYTES).toString('hex'),
+      firstBytesHex: chunk.subarray(0, this.opts.sampleBytes ?? MOREN_ZHONGJI_YANGBEN_ZIJIE).toString('hex'),
       at: this.now(),
     });
   }
@@ -1065,11 +1065,11 @@ export interface ZhongJiJueDingXuanXiang {
  * 刻意不含时间因素：换窗口会导致"两端窗口不一致就配不上"；重放风险由端到端加密与单调计数兜住。
  */
 export function quZhongJiLingPai(fingerprintA: string, fingerprintB: string, relay: DhtDiZhi): string {
-  const pair = [fingerprintA, fingerprintB].sort().join('|');
-  return sha256Hex(Buffer.from(`${RELAY_PROTOCOL}|token|${pair}|${relay.host}:${relay.port}`, 'utf8')).slice(0, 32);
+  const peiDui = [fingerprintA, fingerprintB].sort().join('|');
+  return sha256Hex(Buffer.from(`${ZHONGJI_XIEYI}|token|${peiDui}|${relay.host}:${relay.port}`, 'utf8')).slice(0, 32);
 }
 
-async function defaultDial(host: string, port: number, timeoutMs: number): Promise<{ ok: boolean; detail?: string }> {
+async function morenBoHao(host: string, port: number, timeoutMs: number): Promise<{ ok: boolean; detail?: string }> {
   return new Promise((resolve) => {
     const sock = net.connect({ host, port });
     const done = (ok: boolean, detail?: string): void => {
@@ -1102,7 +1102,7 @@ export async function jueDingZhongJi(
 ): Promise<ZhongJiJueDing> {
   const now = opts.now ?? (() => Date.now());
   const timeoutMs = opts.timeoutMs ?? 2000;
-  const dial = opts.dialTcp ?? defaultDial;
+  const dial = opts.dialTcp ?? morenBoHao;
   const selfDialable = opts.selfDialable;
   const peerDialable = opts.peerDialable;
   const tokenSymmetric = typeof opts.selfFingerprint === 'string' && opts.selfFingerprint.length > 0;

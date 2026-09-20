@@ -20,9 +20,9 @@
  *  - 计数器写进 AAD，篡改计数器等同于破坏 tag。
  */
 import {
-  type Bytes,
+  type Zijie,
   ZhenJieMa,
-  GCM_TAG_LENGTH,
+  GCM_BIAOQIAN_CHANGDU,
   frame,
   hkdf,
   open,
@@ -32,7 +32,7 @@ import {
   u32be,
   u64be,
 } from './codec.js';
-import type { HandshakeRole, SessionKeys } from './handshake.js';
+import type { WoshouJuese, SessionKeys } from './handshake.js';
 
 export const RECORD_TYPE_APP = 1;
 export const RECORD_TYPE_KEY_UPDATE = 2;
@@ -76,7 +76,7 @@ export interface SecureChannelOptions {
   onEvent?: (e: SecureChannelEvent) => void;
 }
 
-interface DirectionState {
+interface FangxiangZhuangtai {
   material: Buffer;
   key: Buffer;
   ivSalt: Buffer;
@@ -100,8 +100,8 @@ export interface SecureChannelStats {
  *  - responder：相反
  */
 export class AnQuanTongDao {
-  private sendState: DirectionState;
-  private recvState: DirectionState;
+  private sendState: FangxiangZhuangtai;
+  private recvState: FangxiangZhuangtai;
   private readonly decoder: ZhenJieMa;
   private closed = false;
   private readonly autoKeyUpdateAfter: number;
@@ -121,21 +121,21 @@ export class AnQuanTongDao {
 
   constructor(
     private readonly session: SessionKeys,
-    role: HandshakeRole = session.role,
+    role: WoshouJuese = session.role,
     opts: SecureChannelOptions = {}
   ) {
     this.opts = opts;
     this.autoKeyUpdateAfter = opts.autoKeyUpdateAfter ?? 2 ** 20;
     this.now = opts.now ?? (() => Date.now());
     this.decoder = new ZhenJieMa(opts.maxRecordBytes ?? 16 * 1024 * 1024);
-    const sendMaterial = role === 'initiator' ? session.c2sMaterial : session.s2cMaterial;
-    const recvMaterial = role === 'initiator' ? session.s2cMaterial : session.c2sMaterial;
-    this.sendState = this.buildDirection(sendMaterial, 0);
-    this.recvState = this.buildDirection(recvMaterial, 0);
+    const fasongCailiao = role === 'initiator' ? session.c2sMaterial : session.s2cMaterial;
+    const jieshouCailiao = role === 'initiator' ? session.s2cMaterial : session.c2sMaterial;
+    this.sendState = this.buildDirection(fasongCailiao, 0);
+    this.recvState = this.buildDirection(jieshouCailiao, 0);
     this.keyHistory.push({ generation: 0, fingerprint: this.sendFingerprint });
   }
 
-  private buildDirection(material: Buffer, generation: number): DirectionState {
+  private buildDirection(material: Buffer, generation: number): FangxiangZhuangtai {
     const m = Buffer.from(material);
     return {
       material: m,
@@ -146,10 +146,10 @@ export class AnQuanTongDao {
     };
   }
 
-  private deriveNext(state: DirectionState): DirectionState {
+  private deriveNext(state: FangxiangZhuangtai): FangxiangZhuangtai {
     const gen = state.generation + 1;
-    const nextMaterial = hkdf(state.material, this.session.transcriptHash, `next|${gen}`, 32);
-    return this.buildDirection(nextMaterial, gen);
+    const xiayiCailiao = hkdf(state.material, this.session.transcriptHash, `next|${gen}`, 32);
+    return this.buildDirection(xiayiCailiao, gen);
   }
 
   /* ── 只读信息 ── */
@@ -189,7 +189,7 @@ export class AnQuanTongDao {
   /* ── 发送 ── */
 
   /** 加密一条应用记录，返回可直接写 socket 的字节 */
-  sealRecord(payload: Bytes): Buffer {
+  sealRecord(payload: Zijie): Buffer {
     if (this.closed) throw new AnQuanTongDaoCuoWu('peer-closed', 'channel 已关闭');
     const body = this.encrypt(RECORD_TYPE_APP, toBuf(payload));
     this.stats.recordsSent += 1;
@@ -218,7 +218,7 @@ export class AnQuanTongDao {
   /* ── 接收 ── */
 
   /** 解密来自 socket 的字节流，返回已解出的应用层载荷（0 条 / 多条） */
-  openRecords(chunk: Bytes): Buffer[] {
+  openRecords(chunk: Zijie): Buffer[] {
     if (this.closed) throw new AnQuanTongDaoCuoWu('peer-closed', 'channel 已关闭');
     let records: Buffer[];
     try {
@@ -228,7 +228,7 @@ export class AnQuanTongDao {
     }
     const out: Buffer[] = [];
     for (const rec of records) {
-      if (rec.length < 1 + GCM_TAG_LENGTH) {
+      if (rec.length < 1 + GCM_BIAOQIAN_CHANGDU) {
         throw new AnQuanTongDaoCuoWu('malformed-record', `记录过短：${rec.length}`);
       }
       const type = rec.readUInt8(0);

@@ -17,14 +17,14 @@
  *
  * 顺带证明：控制台把那把（桩用的）假密钥打码了 —— 密钥类内容不能出现在界面上。
  */
-import { execFileSync, spawn } from 'node:child_process';
+import {execFileSync, spawn} from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import { attach, reporter, sleep } from './cdp-lib.mjs';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+import {attach, reporter, sleep} from './cdp-lib.mjs';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));

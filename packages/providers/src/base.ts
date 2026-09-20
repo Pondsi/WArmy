@@ -25,11 +25,11 @@ export function guiFanYongLiang(
       shuZhi(raw?.prompt_cache_hit_tokens) || shuZhi(details?.cached_tokens);
     const weiMingZhong = shuZhi(raw?.prompt_cache_miss_tokens);
     const prompt = shuZhi(raw?.prompt_tokens);
-    const completion = shuZhi(raw?.completion_tokens);
+    const wancheng = shuZhi(raw?.completion_tokens);
     return {
       promptTokens: prompt,
-      completionTokens: completion,
-      totalTokens: shuZhi(raw?.total_tokens) || prompt + completion,
+      completionTokens: wancheng,
+      totalTokens: shuZhi(raw?.total_tokens) || prompt + wancheng,
       cacheHitTokens: hit,
       cacheMissTokens: weiMingZhong || Math.max(0, prompt - hit),
       source: hit > 0 || weiMingZhong > 0 || details ? 'native' : prompt ? 'estimated' : 'none',
@@ -53,14 +53,14 @@ export function guiFanYongLiang(
 
   // ollama: prompt_eval_count / eval_count；无缓存字段
   const prompt = shuZhi(raw?.prompt_eval_count);
-  const completion = shuZhi(raw?.eval_count);
+  const wancheng = shuZhi(raw?.eval_count);
   return {
     promptTokens: prompt,
-    completionTokens: completion,
-    totalTokens: prompt + completion,
+    completionTokens: wancheng,
+    totalTokens: prompt + wancheng,
     cacheHitTokens: 0,
     cacheMissTokens: prompt,
-    source: prompt || completion ? 'estimated' : 'none',
+    source: prompt || wancheng ? 'estimated' : 'none',
   };
 }
 

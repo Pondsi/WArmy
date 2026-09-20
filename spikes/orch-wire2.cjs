@@ -10,8 +10,8 @@ if (s.includes('warmy:group-orchestrate')) {
 // 1) import
 if (!s.includes("from './orchestrator.js'")) {
   s = s.replace(
-    "import { CheckpointStore } from './checkpoint.js';",
-    "import { CheckpointStore } from './checkpoint.js';\nimport { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';"
+    "import {JianChaDianCang} from './checkpoint.js';",
+    "import {JianChaDianCang} from './checkpoint.js';\nimport {xietiaoQunXiaoxi, buildStatusCard} from './orchestrator.js';"
   );
   console.log('import added');
 }
@@ -92,7 +92,7 @@ ipcMain.handle('warmy:group-orchestrate', async (_e, msg: { groupId: string; con
     dutyEligible: x.dutyEligible,
   }));
 
-  const result = await orchestrateGroupMessage(
+  const result = await xietiaoQunXiaoxi(
     {
       router,
       board: board!,

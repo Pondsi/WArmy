@@ -18,14 +18,14 @@ export interface SessionV3Record extends SessionV2Record {
 }
 
 /** 检测是否需要迁移 */
-export function needsMigration(sessionDir: string): boolean {
+export function xuyaoQianyi(sessionDir: string): boolean {
   const marker = path.join(sessionDir, '.format-v3');
   return !fs.existsSync(marker);
 }
 
 /** 执行 V2→V3 迁移，保留原文件 */
 export function migrateSessionV2ToV3(sessionDir: string): { migrated: boolean; count: number } {
-  if (!needsMigration(sessionDir)) return { migrated: false, count: 0 };
+  if (!xuyaoQianyi(sessionDir)) return { migrated: false, count: 0 };
 
   const jsonl = path.join(sessionDir, 'fast-memory.jsonl');
   if (!fs.existsSync(jsonl)) {

@@ -2,22 +2,22 @@ const fs = require('node:fs');
 const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/electron-main.ts';
 let s = fs.readFileSync(p, 'utf8');
 
-if (s.includes('orchestrateGroupMessage')) {
+if (s.includes('xietiaoQunXiaoxi')) {
   console.log('already wired');
   process.exit(0);
 }
 
 // import orchestrator
 s = s.replace(
-  "import { runShortLivedExecutor, runExecutors } from './executor.js';",
-  "import { runShortLivedExecutor, runExecutors } from './executor.js';\nimport { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';\nimport { MetricsCollector } from './metrics.js';"
+  "import {yunxingDuanCunhuoZhixingqi, runExecutors} from './executor.js';",
+  "import {yunxingDuanCunhuoZhixingqi, runExecutors} from './executor.js';\nimport {xietiaoQunXiaoxi, buildStatusCard} from './orchestrator.js';\nimport {MetricsCollector} from './metrics.js';"
 );
 
 // 已有 metrics 变量，不要重复声明
-s = s.replace("import { MetricsCollector } from './metrics.js';\n", "");
+s = s.replace("import {MetricsCollector} from './metrics.js';\n", "");
 s = s.replace(
-  "import { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';\nimport { MetricsCollector } from './metrics.js';",
-  "import { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';"
+  "import {xietiaoQunXiaoxi, buildStatusCard} from './orchestrator.js';\nimport {MetricsCollector} from './metrics.js';",
+  "import {xietiaoQunXiaoxi, buildStatusCard} from './orchestrator.js';"
 );
 
 // 审批弹窗：pending approvals
@@ -94,7 +94,7 @@ ipcMain.handle('warmy:group-orchestrate', async (_e, msg: { groupId: string; con
     dutyEligible: x.dutyEligible,
   })) || [];
 
-  const result = await orchestrateGroupMessage(
+  const result = await xietiaoQunXiaoxi(
     {
       router,
       board: board!,

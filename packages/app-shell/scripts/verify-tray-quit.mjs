@@ -3,7 +3,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -22,11 +22,11 @@ const preload = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/preload.
 check('single instance lock', /requestSingleInstanceLock/.test(main));
 check('second-instance centers+focusses', /second-instance[\s\S]{0,200}focusMainWindowCentered/.test(main));
 check('focusMainWindowCentered centers bounds', /workArea[\s\S]{0,200}setBounds/.test(main));
-check('quitApp sets forceQuit', /function quitApp[\s\S]{0,200}forceQuit = true/.test(main));
-check('tray off-work uses quitApp not bare app.quit', /tray-off-work[\s\S]{0,80}quitApp|quitApp\('tray-off-work'\)/.test(main));
+check('退出函数置强制退出标志（tuichuYingyong / forceQuit）', /function tuichuYingyong[\s\S]{0,200}qiangzhiTuichu = true/.test(main));
+check('托盘下班走统一退出函数（不是裸 app.quit）', /tray-off-work[\s\S]{0,80}tuichuYingyong|tuichuYingyong\('tray-off-work'\)/.test(main));
 check('no tray menu app.quit()', !/setContextMenu\(Menu\.buildFromTemplate\(\[\{ label: trayOffWorkLabel, click: \(\) => \{ app\.quit\(\); \}/.test(main));
-check('app-quit IPC uses quitApp', /warmy:app-quit[\s\S]{0,200}quitApp/.test(main));
-check('close only hide when !forceQuit', /if \(!forceQuit\)[\s\S]{0,80}preventDefault/.test(main));
+check('退出 IPC 走统一退出函数', /warmy:app-quit[\s\S]{0,200}tuichuYingyong/.test(main));
+check('未强制退出时才拦成隐藏', /if \(!qiangzhiTuichu\)[\s\S]{0,80}preventDefault/.test(main));
 check('before-quit destroys tray', /before-quit[\s\S]{0,200}tray\?\.destroy/.test(main));
 check('assist IPC list/upsert', /warmy:assist-list/.test(main) && /warmy:assist-upsert/.test(main));
 check('preload assist APIs', /assistList/.test(preload) && /assistUpsert/.test(preload));

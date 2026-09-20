@@ -15,7 +15,7 @@
  * 退出码：0 = 放行；1 = 整批拒绝（逐条原因已打印）。
  * 校验逻辑在 `../dist/repo-hooks.js`（由 TS 编译；脚本本身只做 I/O 与退出码）。
  */
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import process from 'node:process';

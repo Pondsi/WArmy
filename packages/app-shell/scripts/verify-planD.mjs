@@ -4,11 +4,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { GroupStore } from '../dist/group-store.js';
-import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from '../dist/ai-questions.js';
-import { withReadBack, dedupeByNorm, normPathKey } from '../dist/read-back.js';
-import { JieLing, JuShu, KanbanCang } from '../../board/dist/index.js';
+import {fileURLToPath} from 'node:url';
+import {GroupStore} from '../dist/group-store.js';
+import {AiWenTiZhongXin, AI_QUESTION_CUSTOM} from '../dist/ai-questions.js';
+import {withReadBack, dedupeByNorm, guifanLujingMiyao} from '../dist/read-back.js';
+import {JieLing, JuShu, KanbanCang} from '../../board/dist/index.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -38,11 +38,11 @@ check('main DEFAULT_GATE_VERIFY', /DEFAULT_GATE_VERIFY/.test(main));
 check('main gateVerifyForProjectType', /function gateVerifyForProjectType/.test(main));
 check('main passes gateVerify on group create', /gateVerify:\s*gateVerifyForProjectType/.test(main));
 check('main context-too-small message', /contextTooSmall/.test(main));
-check('runProjectGateOnce exists', /function runProjectGateOnce/.test(main));
-check('gate throttle 3s', /gateRuns/.test(main) && /3000/.test(main));
+check('yunxingXiangmuMenjinYici exists', /function yunxingXiangmuMenjinYici/.test(main));
+check('门禁节流 3s（运行记录 + 3000ms 窗口）', /3000/.test(main) && /Menjin|menjin/.test(main));
 const archiveSrc = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/archive-cleanup.ts'), 'utf8');
-check('extractStructuredSummary exists', /export function tiQuJieGouHuaZhaiYao/.test(archiveSrc));
-check('档案条目有可选 structured 字段（ArchiveEntry.structured?: ArchiveStructured）', /structured\?: GuiDangJieGou/.test(archiveSrc));
+check('tiQuJieGouHuaZhaiYao exists', /export function tiQuJieGouHuaZhaiYao/.test(archiveSrc));
+check('档案条目有可选 structured 字段（ArchiveEntry.structured?: GuiDangJieGou）', /structured\?: GuiDangJieGou/.test(archiveSrc));
 check('session-summary stores structured', /structured:\s*\{[\s\S]*bullets:/.test(main));
 check('extractKnowledge uses structured events', /structured\.decisions\[0\]/.test(archiveSrc));
 check('panel summary shown for projects (via panelVisibilityFor)', /summary:\s*kind === 'internal' \|\| chat/.test(app));
@@ -72,7 +72,7 @@ check('ai question new after answered', q3.id !== q.id, q3.id);
 // ── read-back / dedupe ──
 const rb = await withReadBack(() => 'x', () => 'x', (a, b) => a === b);
 check('read-back confident match', rb.confident === true);
-const d = dedupeByNorm(['C:/a/b', 'c:/a/b/'], normPathKey);
+const d = dedupeByNorm(['C:/a/b', 'c:/a/b/'], guifanLujingMiyao);
 check('path dedupe', d.list.length === 1 && d.removed === 1, d);
 
 // ── board tree ──
@@ -87,7 +87,7 @@ check('board parent aggregated progress', parent && parent.progress === 80, pare
 
 // ── 项目记忆 + 门禁 (group-store) ──
 const dir = path.join(os.tmpdir(), 'warmy-planD-gs-' + Date.now());
-const { anQuanYuanZiXieJson } = await import('../dist/atomic-json.js');
+const {anQuanYuanZiXieJson} = await import('../dist/atomic-json.js');
 anQuanYuanZiXieJson(path.join(dir, 'groups.json'), {
   version: 1,
   groups: [{ groupId: 'g1', name: 'P', type: 'internal', directedMode: false, dutyInstanceId: null, createdAt: Date.now(), updatedAt: Date.now(), origin: 'ipc' }],

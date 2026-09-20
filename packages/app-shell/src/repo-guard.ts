@@ -29,7 +29,7 @@ import path from 'node:path';
 
 export type lujingBiemingLeixing = 'case' | 'unicode' | 'separator';
 
-export type PushPathRejectCode =
+export type TuisongLujingJujueDaima =
   | 'empty-path'
   | 'abs-path'
   | 'parent-escape'
@@ -43,11 +43,11 @@ export type PushPathRejectCode =
   | 'symlink-escape'
   | 'collision';
 
-export interface RepoPathNormalization {
+export interface CangkuLujingGuifan {
   /** 调用方给的原始字符串 */
   raw: string;
   ok: boolean;
-  code?: PushPathRejectCode;
+  code?: TuisongLujingJujueDaima;
   reason?: string;
   /** NFKC + 统一分隔符 + 去掉 `.` / 折叠 `..` 后的仓库内相对路径（`/` 分隔） */
   normalized: string;
@@ -80,8 +80,8 @@ const DRIVE_OR_UNC_RE = /^[A-Za-z]:/;
  * 归一化顺序：NFKC → 去零宽 → 统一分隔符（`\` 视为 `/`）→ 逐段去末尾空格/点 →
  * 折叠 `.` 与 `..`（记录是否越界）→ casefold 得 `key`。
  */
-export function normalizeRepoPath(raw: string): RepoPathNormalization {
-  const out: RepoPathNormalization = {
+export function normalizeRepoPath(raw: string): CangkuLujingGuifan {
+  const out: CangkuLujingGuifan = {
     raw,
     ok: true,
     normalized: '',
@@ -105,29 +105,29 @@ export function normalizeRepoPath(raw: string): RepoPathNormalization {
     return out;
   }
   // 别名按种类去重记录（审计时只关心"发生了哪类归一化"）
-  const addAlias = (kind: lujingBiemingLeixing): void => {
+  const tianjiaBieming = (kind: lujingBiemingLeixing): void => {
     if (!out.aliases.includes(kind)) out.aliases.push(kind);
   };
   const nfkc = raw.normalize('NFKC');
-  if (nfkc !== raw || ZERO_WIDTH_PROBE.test(raw)) addAlias('unicode');
-  if (/\\/.test(raw)) addAlias('separator');
-  if (raw !== raw.toLowerCase()) addAlias('case');
+  if (nfkc !== raw || ZERO_WIDTH_PROBE.test(raw)) tianjiaBieming('unicode');
+  if (/\\/.test(raw)) tianjiaBieming('separator');
+  if (raw !== raw.toLowerCase()) tianjiaBieming('case');
 
-  const stripped = nfkc.replace(ZERO_WIDTH_RE, '');
+  const quchu = nfkc.replace(ZERO_WIDTH_RE, '');
   // 分隔符别名：NFKC 之后**新出现**的 `/`（例如全角 `／`）会把路径重新分段，
   // 这是绕过"只看字面量"的黑名单的经典手法，直接判死。
-  if (stripped !== raw && stripped.split('/').length !== raw.split('/').length) addAlias('separator');
+  if (quchu !== raw && quchu.split('/').length !== raw.split('/').length) tianjiaBieming('separator');
 
   out.absolute =
-    stripped.startsWith('/') ||
-    stripped.startsWith('\\') ||
-    DRIVE_OR_UNC_RE.test(stripped) ||
-    stripped === '~' ||
-    stripped.startsWith('~/') ||
-    stripped.startsWith('~\\');
+    quchu.startsWith('/') ||
+    quchu.startsWith('\\') ||
+    DRIVE_OR_UNC_RE.test(quchu) ||
+    quchu === '~' ||
+    quchu.startsWith('~/') ||
+    quchu.startsWith('~\\');
 
   const segments: string[] = [];
-  for (const piece of stripped.split(/[/\\]+/)) {
+  for (const piece of quchu.split(/[/\\]+/)) {
     if (piece === '' || piece === '.') continue;
     if (piece === '..') {
       if (segments.length === 0) out.escaped = true;
@@ -165,12 +165,12 @@ export function normalizeRepoPath(raw: string): RepoPathNormalization {
 }
 
 /** 比较用键：NFKC + casefold（Windows/macOS 会折叠大小写与 Unicode 形式） */
-export function repoPathKey(raw: string): string {
+export function cangkuLujingMiyao(raw: string): string {
   return normalizeRepoPath(raw).key;
 }
 
 /** 把相对路径按 `baseSegs` 解析；返回是否越出仓库根 */
-function resolveRelative(baseSegs: string[], relSegs: string[]): { segments: string[]; escaped: boolean } {
+function jiexiXiangdui(baseSegs: string[], relSegs: string[]): { segments: string[]; escaped: boolean } {
   const out = baseSegs.slice();
   let escaped = false;
   for (const s of relSegs) {
@@ -189,11 +189,11 @@ function resolveRelative(baseSegs: string[], relSegs: string[]): { segments: str
 // ────────────────────────────────────────────────────────────────────────────
 
 /** git 对象模式；120000=符号链接，160000=gitlink（子模块） */
-export type PushPathMode = string;
+export type TuisongLujingMoshi = string;
 
 export interface TuiSongLuJingTiaoMu {
   path: string;
-  mode?: PushPathMode;
+  mode?: TuisongLujingMoshi;
   /** 符号链接目标（mode=120000 时）。缺省时回退到 content */
   symlinkTarget?: string;
   /**
@@ -203,7 +203,7 @@ export interface TuiSongLuJingTiaoMu {
   content?: string;
 }
 
-export interface PushPathOptions {
+export interface TuisongLujingXuanxiang {
   /**
    * `worktree`（默认）：路径相对工作区，`.git/**` 是危险路径；
    * `gitdir`：路径相对 git 目录本身（bare 仓库 / `.git` 内直投），`hooks/**`、`config` 直接命中。
@@ -218,7 +218,7 @@ export interface PushPathOptions {
 export interface TuiSongLuJingJuJue {
   /** 调用方给的原始路径 */
   path: string;
-  code: PushPathRejectCode;
+  code: TuisongLujingJujueDaima;
   reason: string;
   /** 归一化后的仓库内路径（便于审计） */
   normalized?: string;
@@ -227,7 +227,7 @@ export interface TuiSongLuJingJuJue {
   conflictsWith?: string;
 }
 
-export interface PushPathValidation {
+export interface TuisongLujingJiaoyan {
   allowed: boolean;
   /** 归一化后的可接受路径（去重、保持输入顺序） */
   accepted: string[];
@@ -235,13 +235,13 @@ export interface PushPathValidation {
   warnings: string[];
 }
 
-interface DangerHit {
-  code: PushPathRejectCode;
+interface WeixianMingzhong {
+  code: TuisongLujingJujueDaima;
   reason: string;
 }
 
 /** 判定"这个 key 落在 git 目录里"，并给出**具体**的危险类型 */
-function dangerInGitDir(restKey: string[], restDisp: string[]): DangerHit | null {
+function dangerInGitDir(restKey: string[], restDisp: string[]): WeixianMingzhong | null {
   const label = `.git` + (restDisp.length ? `/${restDisp.join('/')}` : '');
   if (restKey.length === 0) {
     return { code: 'git-internal', reason: `${label} 是 git 目录本体，成员不得写入` };
@@ -263,7 +263,7 @@ function dangerInGitDir(restKey: string[], restDisp: string[]): DangerHit | null
 }
 
 /** 危险路径判定：`.git/**`（含任意层级嵌套 .git），key 已 casefold */
-function dangerousPushPath(key: string, base: 'worktree' | 'gitdir'): DangerHit | null {
+function weixianTuisongLujing(key: string, base: 'worktree' | 'gitdir'): WeixianMingzhong | null {
   const keySegs = key.split('/');
   if (base === 'gitdir') {
     // 路径相对 git 目录：必要时剥掉显式的前缀 `.git/`
@@ -283,7 +283,7 @@ const ATTR_DRIVER_RE = /(^|\s)(?:filter|diff)\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/;
 const ATTR_BARE_FILTER_RE = /(^|\s)filter(?=\s|$)/;
 
 /** 扫 `.gitattributes` 内容；返回命中的危险写法（无则 null） */
-function scanGitAttributesContent(content: string): { code: PushPathRejectCode; reason: string } | null {
+function scanGitAttributesContent(content: string): { code: TuisongLujingJujueDaima; reason: string } | null {
   const lines = content.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = (lines[i] ?? '').trim();
@@ -310,8 +310,8 @@ function toEntry(input: string | TuiSongLuJingTiaoMu): TuiSongLuJingTiaoMu {
  */
 export function validatePushPaths(
   paths: Array<string | TuiSongLuJingTiaoMu> | string,
-  opts: PushPathOptions = {}
-): PushPathValidation {
+  opts: TuisongLujingXuanxiang = {}
+): TuisongLujingJiaoyan {
   const base = opts.base ?? 'worktree';
   const requireAttributesContent = opts.requireAttributesContent !== false;
   const rejectAliasCollisions = opts.rejectAliasCollisions !== false;
@@ -327,7 +327,7 @@ export function validatePushPaths(
   for (const entry of list) {
     const raw = typeof entry.path === 'string' ? entry.path : '';
     const n = normalizeRepoPath(raw);
-    const reject = (code: PushPathRejectCode, reason: string, extra: Partial<TuiSongLuJingJuJue> = {}): void => {
+    const reject = (code: TuisongLujingJujueDaima, reason: string, extra: Partial<TuiSongLuJingJuJue> = {}): void => {
       rejected.push({
         path: raw,
         code,
@@ -342,7 +342,7 @@ export function validatePushPaths(
       reject(n.code ?? 'empty-path', n.reason ?? '路径非法');
       continue;
     }
-    const danger = dangerousPushPath(n.key, base);
+    const danger = weixianTuisongLujing(n.key, base);
     if (danger) {
       reject(danger.code, danger.reason);
       continue;
@@ -373,15 +373,15 @@ export function validatePushPaths(
         continue;
       }
       const dirSegs = n.segments.slice(0, -1);
-      const resolved = resolveRelative(dirSegs, t.segments);
+      const resolved = jiexiXiangdui(dirSegs, t.segments);
       if (resolved.escaped || t.escaped) {
         reject('symlink-escape', `符号链接逃出仓库根：${n.normalized} → ${target.slice(0, 80)}`);
         continue;
       }
-      const targetKey = resolved.segments.join('/').toLowerCase();
-      const viaLink = dangerousPushPath(targetKey, base);
-      if (viaLink) {
-        reject('symlink-escape', `符号链接指向 git 内部（${targetKey}）：${viaLink.reason}`);
+      const mubiaoMiyao = resolved.segments.join('/').toLowerCase();
+      const jingyouLianjie = weixianTuisongLujing(mubiaoMiyao, base);
+      if (jingyouLianjie) {
+        reject('symlink-escape', `符号链接指向 git 内部（${mubiaoMiyao}）：${jingyouLianjie.reason}`);
         continue;
       }
       warnings.push(`符号链接（指向仓库内）：${n.normalized} → ${target.slice(0, 80)}`);
@@ -411,12 +411,12 @@ export function validatePushPaths(
     }
 
     // 批次内别名碰撞：`A.ts` 与 `a.ts`、NFC 与 NFD 的 cafe 在多数文件系统上是同一个文件
-    const prior = seen.get(n.key);
-    if (prior === undefined) {
+    const xianqian = seen.get(n.key);
+    if (xianqian === undefined) {
       seen.set(n.key, raw);
-    } else if (rejectAliasCollisions && prior !== raw) {
-      reject('collision', `与同批次路径「${prior}」在大小写/Unicode 归一化后是同一个文件`, {
-        conflictsWith: prior,
+    } else if (rejectAliasCollisions && xianqian !== raw) {
+      reject('collision', `与同批次路径「${xianqian}」在大小写/Unicode 归一化后是同一个文件`, {
+        conflictsWith: xianqian,
       });
       continue;
     } else {
@@ -425,7 +425,7 @@ export function validatePushPaths(
 
     // 同时把先前那条也标成碰撞（否则一条被拒、另一条被放行，语义含糊）
     if (rejectAliasCollisions) {
-      const twin = list.find(
+      const shuangzi = list.find(
         (e) =>
           e !== entry &&
           typeof e.path === 'string' &&
@@ -433,9 +433,9 @@ export function validatePushPaths(
           normalizeRepoPath(e.path).ok &&
           normalizeRepoPath(e.path).key === n.key
       );
-      if (twin) {
-        reject('collision', `与同批次路径「${twin.path}」在大小写/Unicode 归一化后是同一个文件`, {
-          conflictsWith: twin.path,
+      if (shuangzi) {
+        reject('collision', `与同批次路径「${shuangzi.path}」在大小写/Unicode 归一化后是同一个文件`, {
+          conflictsWith: shuangzi.path,
         });
         continue;
       }
@@ -456,7 +456,7 @@ export function validatePushPaths(
 // 三、ref 更新校验 validateRefUpdate
 // ────────────────────────────────────────────────────────────────────────────
 
-export type RefRejectCode =
+export type YinyongJujueDaima =
   | 'ref-invalid'
   | 'ref-not-whitelisted'
   | 'ref-blocked'
@@ -505,8 +505,8 @@ export interface YinYongGengXinXuanXiang {
   allowDeleteByCreator?: boolean;
 }
 
-export interface RefRejection {
-  code: RefRejectCode;
+export interface YinyongJujue {
+  code: YinyongJujueDaima;
   reason: string;
 }
 
@@ -517,7 +517,7 @@ export interface RefUpdateResult {
   oldSha: string;
   newSha: string;
   role: 'member' | 'admin' | 'creator' | 'duty';
-  rejections: RefRejection[];
+  rejections: YinyongJujue[];
   warnings: string[];
 }
 
@@ -526,7 +526,7 @@ const SHA_RE = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/;
 /** git check-ref-format 的关键约束（宽松版：只挡真正危险与解析歧义的写法） */
 const REF_BAD_CHARS_RE = /[\u0000-\u001f\u007f ~^:?*[\\]/;
 
-function invalidRefReason(ref: string): string | null {
+function wuxiaoYinyongYuanyin(ref: string): string | null {
   if (!ref.startsWith('refs/')) return '必须以 refs/ 开头';
   if (ref.length < 6) return 'ref 名太短';
   if (ref.endsWith('/')) return '不能以 / 结尾';
@@ -558,9 +558,9 @@ export function validateRefUpdate(
   const protectedRefWriters = opts.protectedRefWriters ?? ['creator'];
   const envRefWriters = opts.envRefWriters ?? ['creator', 'admin'];
 
-  const rejections: RefRejection[] = [];
+  const rejections: YinyongJujue[] = [];
   const warnings: string[] = [];
-  const reject = (code: RefRejectCode, reason: string): void => {
+  const reject = (code: YinyongJujueDaima, reason: string): void => {
     rejections.push({ code, reason });
   };
 
@@ -572,7 +572,7 @@ export function validateRefUpdate(
   const isCreate = ZERO_SHA.test(oldS) ? true : false;
   const action: YinYongDongZuo = isDelete ? 'delete' : isCreate ? 'create' : newS === oldS ? 'noop' : 'update';
 
-  const badRef = invalidRefReason(safeRef);
+  const badRef = wuxiaoYinyongYuanyin(safeRef);
   if (badRef) reject('ref-invalid', `ref 名非法（${badRef}）：${safeRef || '(空)'}`);
   if (!SHA_RE.test(oldS) && !ZERO_SHA.test(oldS)) reject('sha-invalid', `oldSha 不是合法对象名：${oldSha}`);
   if (!SHA_RE.test(newS) && !ZERO_SHA.test(newS)) reject('sha-invalid', `newSha 不是合法对象名：${newSha}`);
@@ -722,14 +722,14 @@ export interface PublishScanOptions {
   statBytes?: boolean;
 }
 
-interface NameRule {
+interface MingGuize {
   code: PublishViolationCode;
   label: string;
   re: RegExp;
 }
 
 /** 文件名级规则：名字本身就说明它是"绝不能公开"的东西 */
-const NAME_RULES: NameRule[] = [
+const NAME_RULES: MingGuize[] = [
   {
     code: 'chat-log',
     label: '聊天日志',
@@ -750,7 +750,7 @@ const NAME_RULES: NameRule[] = [
   { code: 'env-file', label: '环境变量文件', re: /(^|\/)\.env(\.[\w-]+)?$|(^|\/)\.npmrc$|(^|\/)\.pypirc$/i },
 ];
 
-interface ContentRule {
+interface NeirongGuize {
   code: PublishViolationCode;
   label: string;
   re: RegExp;
@@ -761,7 +761,7 @@ interface ContentRule {
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/;
 const PLACEHOLDER_EMAIL_RE = /@(?:example\.(?:com|org|net)|invalid|test|localhost)$/i;
 
-const CONTENT_RULES: ContentRule[] = [
+const CONTENT_RULES: NeirongGuize[] = [
   { code: 'secret-key', label: '私钥块', re: /-----BEGIN[^-]{0,40}PRIVATE KEY-----/ },
   {
     code: 'secret-key',
@@ -800,7 +800,7 @@ function lineOf(text: string, index: number): number {
   return line;
 }
 
-function matchesFor(rule: ContentRule, text: string, opts: PublishScanOptions): { index: number; matched: string }[] {
+function matchesFor(rule: NeirongGuize, text: string, opts: PublishScanOptions): { index: number; matched: string }[] {
   const re = new RegExp(rule.re.source, rule.re.flags.includes('g') ? rule.re.flags : `${rule.re.flags}g`);
   const out: { index: number; matched: string }[] = [];
   let m: RegExpExecArray | null;
@@ -856,8 +856,8 @@ function scanOneFile(
 
   // 本机绝对路径：直接拿当前机器的家目录/用户名做高置信匹配
   const jiamulu = os.homedir();
-  const homeVariants = [jiamulu, jiamulu.replace(/\\/g, '/'), jiamulu.replace(/\//g, '\\')].filter(Boolean);
-  for (const h of homeVariants) {
+  const jiaBianti = [jiamulu, jiamulu.replace(/\\/g, '/'), jiamulu.replace(/\//g, '\\')].filter(Boolean);
+  for (const h of jiaBianti) {
     const at = text.toLowerCase().indexOf(h.toLowerCase());
     if (at >= 0 && h.length > 4) {
       violations.push({
@@ -900,7 +900,7 @@ function scanOneFile(
  *
  * ⚠️ 这是"模式匹配门禁"，不是 DLP。已知漏检项见文件末尾「已知缺口」。
  */
-export function scanPublishableExport(
+export function saomiaoKeFabucDaochu(
   files: PublishScanFile[] | string,
   opts: PublishScanOptions = {}
 ): PublishScanResult {

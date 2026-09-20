@@ -18,14 +18,14 @@
  * 事实与断言都来自**真 Chromium**：CDP 读 DOM、读 window 上的真对象、读 getImageData 结果。
  * 纪律：每个 CDP 调用都有超时（cdp-lib）；只杀自己 user-data-dir 起的 electron；不碰别的进程。
  */
-import { execFileSync, spawn } from 'node:child_process';
+import {execFileSync, spawn} from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import { attach, reporter, sleep } from './cdp-lib.mjs';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+import {attach, reporter, sleep} from './cdp-lib.mjs';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -373,7 +373,7 @@ window.__qrScanTest = (function () {
     },
     /** 不是图片的文件（例如一个 .txt） */
     fileOfTextPlain: function () {
-      return new File([new Blob(['this is not an image'], { type: 'text/plain' })], 'not-image.txt', { type: 'text/plain' });
+      return new File([new Blob(['this is not an image'], { type: 'text/plain' })], 'not-image.txt', { type: 'text/chunWenBen' });
     },
     /** 把 File 塞进 <input type=file> 并派发 change —— 走的就是用户点选文件那条 DOM 监听 */
     async feedInput(inputSel, file) {

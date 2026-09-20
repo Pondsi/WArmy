@@ -3,7 +3,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -21,8 +21,9 @@ const html = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/in
 
 check('open-chat-window forces mode=sub', /mode:\s*'sub'/.test(main) && /open-chat-window/.test(main));
 check('open-chat-window sets window icon', /w\.setIcon|icon:\s*iconPath/.test(main));
-check('warmyWindowIcon helper exists', /function warmyWindowIcon/.test(main));
-check('main window uses warmyWindowIcon', /createWindow[\s\S]{0,400}warmyWindowIcon/.test(main));
+check('warmyTaskbarIcon helper exists', /function warmyTaskbarIcon/.test(main));
+// 主窗口图标 = **任务栏用的白底版**（产品主：任务栏/托盘要有白底）
+check('main window uses 白底任务栏图标', /chuangjianChuangkou[\s\S]{0,400}warmyTaskbarIcon/.test(main));
 check('AppUserModelId set on win32', /setAppUserModelId\('com\.pondsi\.warmy'\)/.test(main));
 check('chat-window CSS hides rail+list', /body\.chat-window #rail/.test(appCss) && /body\.chat-window #list-col/.test(appCss));
 check('chat-window CSS keeps chat+panel grid', /body\.chat-window \.chat-layout/.test(appCss) || /body\.chat-window \.chat-layout/.test(rCss));

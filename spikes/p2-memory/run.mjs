@@ -12,10 +12,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { pathToFileURL } from 'node:url';
-import { CORPUS, QUERIES, EXPECTED_HITS, SEMANTIC_PAIRS, VECTOR_ONLY_QUERIES, NOISE_QUERIES } from './corpus.mjs';
-import { MEM_PKG, MODEL_DIR, REPO_ROOT, P2_DIR, startChild, tmpDir, median } from './lib/service.mjs';
-import { makeLegacyDb, hashFile } from './make-legacy-db.mjs';
+import {pathToFileURL} from 'node:url';
+import {CORPUS, QUERIES, EXPECTED_HITS, SEMANTIC_PAIRS, VECTOR_ONLY_QUERIES, NOISE_QUERIES} from './corpus.mjs';
+import {MEM_PKG, MODEL_DIR, REPO_ROOT, P2_DIR, startChild, tmpDir, median} from './lib/service.mjs';
+import {makeLegacyDb, hashFile} from './make-legacy-db.mjs';
 
 const DIST = path.join(MEM_PKG, 'dist', 'index.js');
 const LARGE_N = Number(process.env.P2_LARGE_N ?? 2000);
