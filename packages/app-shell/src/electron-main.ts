@@ -7171,7 +7171,8 @@ async function runProjectGateOnce(groupId: string, reason: string): Promise<{ pa
         continue;
       }
       const out = await new Promise<{ code: number; tail: string }>((resolve) => {
-        const child = spawn(process.execPath, [script], { cwd: repo, env: process.env });
+        // windowsHide：仓库钩子脚本是后台跑的，不该在桌面上弹控制台窗口
+        const child = spawn(process.execPath, [script], { cwd: repo, env: process.env, windowsHide: true });
         let buf = '';
         child.stdout?.on('data', (d) => { buf += String(d); if (buf.length > 4000) buf = buf.slice(-2000); });
         child.stderr?.on('data', (d) => { buf += String(d); if (buf.length > 4000) buf = buf.slice(-2000); });

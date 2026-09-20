@@ -137,7 +137,8 @@ export class TeardownRegistry {
         // /T = 杀进程树，满足「停止后进程树归零」
         const args = tree ? ['/PID', String(pid), '/T', '/F'] : ['/PID', String(pid), '/F'];
         await new Promise<void>((resolve) => {
-          const p = spawn('taskkill', args, { stdio: 'ignore' });
+          // windowsHide：否则每杀一次就会在桌面上闪一个控制台窗口（进程结束后窗口还会留着）
+          const p = spawn('taskkill', args, { stdio: 'ignore', windowsHide: true });
           p.once('exit', () => resolve());
           p.once('error', () => resolve());
         });
@@ -432,6 +433,12 @@ export class InstanceManager extends EventEmitter {
     const child = spawn(this.nodeBin, [entry, ...(opts.args || [])], {
       cwd: ws,
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      /**
+       * windowsHide：Windows 上不加这一项，**每个实例都会多出一个控制台窗口**，
+       * 而且杀掉进程后窗口仍然留在桌面上（用户实测："桌面上堆积很多无用的控制台窗口"）。
+       * 我们的实例日志已经通过 stdio 管道回收，不需要可见的控制台。
+       */
+      windowsHide: true,
       env: {
         ...process.env,
         ...this.opts.env,
@@ -480,7 +487,7 @@ export class InstanceManager extends EventEmitter {
       if (h.child.exitCode === null && h.pid) {
         if (process.platform === 'win32') {
           await new Promise<void>((r) => {
-            const p = spawn('taskkill', ['/PID', String(h.pid!), '/T', '/F'], { stdio: 'ignore' });
+            const p = spawn('taskkill', ['/PID', String(h.pid!), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
             p.once('exit', () => r());
             p.once('error', () => r());
           });

@@ -155,5 +155,38 @@ check('refreshPanelVisibility called on nav change', /hideMain\(\);[\s\S]{0,200}
 check('panelVisibilityFor: members only group kinds',
   /members:\s*group/.test(appjs2) && /const group = kind === 'internal' \|\| kind === 'external' \|\| kind === 'externalGroup' \|\| kind === 'extgroup'/.test(appjs2));
 
+/* ── 子进程一律隐藏控制台窗口（Windows 上否则会往桌面堆窗口） ──
+ * 用户实测：桌面上堆积了大量无用的控制台窗口 —— 根因是 spawn/execFile 没有
+ * `windowsHide: true`：每派生子进程就多一个控制台窗口，杀掉进程后窗口仍留在桌面上。
+ * 这是**静态可查**的约定，所以放进本门禁：新写子进程调用忘了加就红。 */
+const spawnFiles = [];
+(function walkSrc(dir) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { if (!['node_modules', 'dist', 'vendor'].includes(e.name)) walkSrc(p); continue; }
+    if (/\.(ts|js|mjs|cjs)$/.test(e.name)) spawnFiles.push(p);
+  }
+})(path.join(ROOT, 'packages/app-shell/src'));
+const consoleOffenders = [];
+for (const f of spawnFiles) {
+  const src = fs.readFileSync(f, 'utf8');
+  // 只看真正的子进程调用：spawn( / execFile( / execSync?（不含正则 .exec(）
+  const rx = /(?:^|[^.\w])(spawn|execFile|execFileSync|spawnSync)\s*\(/g;
+  let m;
+  while ((m = rx.exec(src))) {
+    const lineStart = src.lastIndexOf('\n', m.index) + 1;
+    const line = src.slice(lineStart, src.indexOf('\n', m.index) < 0 ? src.length : src.indexOf('\n', m.index));
+    // 跳过**方法声明**（例如 runtime 里自己的 `async spawn(opts)`）：那不是子进程调用
+    if (/^\s*(?:async\s+)?(?:public\s+|private\s+|protected\s+|static\s+)*spawn\s*\(/.test(line)) continue;
+    // 取该调用到下一个空行前的片段，判断有没有 windowsHide
+    const seg = src.slice(m.index, m.index + 1200);
+    if (!/windowsHide/.test(seg)) {
+      consoleOffenders.push(`${path.relative(ROOT, f)}:${src.slice(0, m.index).split('\n').length}`);
+    }
+  }
+}
+check(`所有子进程调用都隐藏了控制台窗口（发现 ${consoleOffenders.length} 处未隐藏）`,
+  consoleOffenders.length === 0, consoleOffenders.slice(0, 6));
+
 console.log(`\n==== verify-naming: ${pass} ok / ${fail} FAIL ====`);
 process.exit(fail === 0 ? 0 : 1);

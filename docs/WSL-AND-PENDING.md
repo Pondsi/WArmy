@@ -5,6 +5,24 @@
 - **平时不启动 WSL**；只在容器/引擎真需要时启动。
 - 用完必须关闭控制台窗口：`wsl --terminate docker-desktop` / `wsl --shutdown`。
 - 不要把 WSL 控制台窗口留在桌面上。
+- **"关窗口"不是"杀进程"**（产品主反复强调）：结束 `wsl.exe` / `bash` 进程并不会带走它的
+  控制台窗口 —— 窗口属于 `conhost.exe`，会一直留在桌面上堆积。正确做法是**关掉窗口本身**
+  （`CloseMainWindow()` / 用户手动关），或从一开始就**别让窗口出现**：任何派生子进程都必须
+  带 `windowsHide: true`。
+
+### 已修的根因（本轮）
+
+桌面上堆积控制台窗口的真凶不是 WSL 本身，而是我们自己的三处子进程调用**没隐藏窗口**：
+
+| 位置 | 症状 |
+| --- | --- |
+| `packages/app-shell/src/runtime.ts` 实例 spawn | 每个「牛马实例」多一个控制台窗口，实例被杀后窗口仍留着 |
+| `runtime.ts` 两处 `taskkill` | 每停一次实例闪一个窗口 |
+| `electron-main.ts` 仓库钩子脚本 spawn | 后台跑钩子脚本也弹窗口 |
+
+现在三处都加了 `windowsHide: true`，并且加了**静态门禁**：`verify-naming.mjs` 会扫描
+`packages/app-shell/src` 下所有 `spawn/execFile/spawnSync/execFileSync` 调用，
+没带 `windowsHide` 就红（当前 39/0）。这样以后新写的子进程调用不会再把窗口漏到桌面上。
 
 ## 需要用户协助（待办）
 
