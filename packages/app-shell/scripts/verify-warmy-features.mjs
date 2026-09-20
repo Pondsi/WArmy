@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { GroupStore } from '../dist/group-store.js';
 import { AiQuestionHub, AI_QUESTION_CUSTOM } from '../dist/ai-questions.js';
 import { withReadBack, dedupeByNorm, normPathKey } from '../dist/read-back.js';
-import { BoardStore, parseBoardCommand, withTreeAggregation } from '../../board/dist/index.js';
+import { KanbanCang, JieLing, JuShu } from '../../board/dist/index.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -62,8 +62,8 @@ const d = dedupeByNorm(['C:/A/b', 'c:/a/b/', 'D:\\c'], normPathKey);
 check('path dedupe', d.list.length === 2 && d.removed === 1, d);
 
 // board tree
-const board = new BoardStore(path.join(dir, 'board'));
-const ev = parseBoardCommand('新建任务 发布 / 校验文档', 'g1');
+const board = new KanbanCang(path.join(dir, 'board'));
+const ev = JieLing('新建任务 发布 / 校验文档', 'g1');
 check('parse parent/child', ev && ev.parentId === '发布', ev);
 board.append(ev, 'duty');
 board.append({ groupId: 'g1', action: 'create_task', title: '发布', parsedFrom: 'x' }, 'duty');
@@ -85,5 +85,5 @@ check('lazy chat window', fs.readFileSync(path.join(ROOT, 'packages/app-shell/sr
 check('archive extract source', fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/archive-cleanup.ts'),'utf8').includes('extractKnowledgeFromArchive'));
 check('src modules exist', fs.existsSync(path.join(ROOT, 'packages/app-shell/src/project-memory.ts')) && fs.existsSync(path.join(ROOT, 'packages/app-shell/src/ai-questions.ts')));
 
-console.log(`\n==== verify-warmy-features: ${pass} ok / ${fail} FAIL ====`);
+console.log(`\n==== verify-warmy-features: pass ok / fail FAIL ====`);
 process.exit(fail === 0 ? 0 : 1);

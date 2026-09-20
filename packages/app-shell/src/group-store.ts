@@ -15,14 +15,14 @@ import { readJsonFileQuarantine, writeJsonAtomicSafe } from './atomic-json.js';
 /** 与旧实现保持一致的成员上限 */
 export const GROUP_MEMBER_LIMIT = 50;
 
-export type GroupType = 'internal' | 'external';
+export type QunLei = 'internal' | 'external';
 export type GroupMemberRole = 'creator' | 'admin' | 'member';
 export type GroupMemberSource = 'instance' | 'invite' | 'migrated';
 
 export interface GroupRecord {
   groupId: string;
   name: string;
-  type: GroupType;
+  type: QunLei;
   directedMode: boolean;
   /** 固定值班实例（可为空） */
   dutyInstanceId: string | null;
@@ -208,7 +208,7 @@ function normalizeSource(v: unknown): GroupMemberSource {
   return v === 'instance' || v === 'migrated' ? v : 'invite';
 }
 
-function normalizeType(v: unknown): GroupType {
+function normalizeType(v: unknown): QunLei {
   return v === 'external' ? 'external' : 'internal';
 }
 
@@ -498,7 +498,7 @@ export class GroupStore {
     groupId: string,
     payload: {
       name?: string;
-      type?: GroupType;
+      type?: QunLei;
       project: Partial<Omit<GroupProjectRecord, 'ledger'>>;
       /** 对端（创建者）的指纹：只在本地还不知道创建者时补上 */
       creatorFingerprint?: string;
@@ -538,7 +538,7 @@ export class GroupStore {
   upsertGroup(input: {
     groupId: string;
     name: string;
-    type: GroupType;
+    type: QunLei;
     directedMode?: boolean;
     origin?: 'ipc' | 'migrated';
     /** 建群者（本机身份）指纹；不确定就**不要传**（留空 = 未知） */
@@ -621,10 +621,10 @@ export class GroupStore {
     const dup = list.find((m) => (instId ? m.instanceId === instId : m.name === name));
     if (dup) return { ok: true, groupId, members: list.slice() };
     if (list.length >= GROUP_MEMBER_LIMIT) {
-      return { ok: false, groupId, members: list.slice(), error: `max ${GROUP_MEMBER_LIMIT}` };
+      return { ok: false, groupId, members: list.slice(), error: `max GROUP_MEMBER_LIMIT` };
     }
     const row: GroupMemberRecord = {
-      id: asString(input.id) || (instId ? `inst:${instId}` : `m-${Date.now().toString(36)}-${list.length}`),
+      id: asString(input.id) || (instId ? `inst:instId` : `m-Date.now().toString(36)-list.length`),
       name,
       role: normalizeRole(input.role),
       joinedAt: Date.now(),

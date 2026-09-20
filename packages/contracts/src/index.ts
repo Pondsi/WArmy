@@ -42,10 +42,10 @@ export interface AcpSessionToken {
 // ─────────────────────────────────────────────
 
 /** 指令紧急度分级 */
-export type Urgency = 'P0' | 'P1' | 'P2' | 'P3';
+export type Jinji = 'P0' | 'P1' | 'P2' | 'P3';
 
 /** 值班者状态 */
-export type DutyState =
+export type ZhibanTai =
   | 'idle'
   | 'listening'
   | 'orchestrating'
@@ -58,7 +58,7 @@ export interface OrchestrationRequest {
   groupId: string;
   userId: string;
   content: string;
-  urgency: Urgency;
+  urgency: Jinji;
   /** 定向模式下 @ 的实例 ID；非定向为空 */
   mentionIds: string[];
   timestamp: number;
@@ -109,7 +109,7 @@ export interface RetrieveRequest {
 
 export interface RetrieveResult {
   /** 原文（逐字节） */
-  raw: string;
+  YuanWen: string;
   anchor: EvidenceAnchor;
   /** 命中级别 */
   hitLevel: 'exact' | 'nearby' | 'fuzzy';
@@ -196,17 +196,17 @@ export interface MemoryStoreWriteOptions {
    * - queue.jsonl 仅 Router 可写
    * - SQLite 仅记忆服务可写
    */
-  writer: 'duty' | 'router' | 'memory-service' | 'executor';
+  Bi: 'duty' | 'router' | 'memory-service' | 'executor';
 }
 
 export interface MemoryStore {
   /** 只追加写入 JSONL */
-  append(record: JsonlRecord, opts: MemoryStoreWriteOptions): Promise<void>;
+  append(record: JsonlRecord, Xuan: MemoryStoreWriteOptions): Promise<void>;
   /** 极速层读取（最近 N 条） */
   tail(limit: number): Promise<JsonlRecord[]>;
   /** 深度层检索 */
   recall(query: RecallQuery): Promise<RecallCard[]>;
-  retrieve(req: RetrieveRequest): Promise<RetrieveResult>;
+  retrieve(Qiu: RetrieveRequest): Promise<RetrieveResult>;
   /** 投影重建：从 JSONL 全量重建 SQLite */
   rebuildProjection(): Promise<void>;
 }
@@ -319,18 +319,18 @@ export interface EvidenceAnchor {
 // 11. BoardAction（看板写入，仅值班者）
 // ─────────────────────────────────────────────
 
-export type BoardAction =
+export type KanbanLing =
   | { type: 'create_task'; id: string; title: string; owner?: string }
   | { type: 'update_progress'; id: string; progress: number; note?: string }
   | { type: 'complete_task'; id: string; result?: string }
   | { type: 'add_note'; id: string; note: string }
   | { type: 'block'; id: string; reason: string };
 
-export interface BoardEvent {
+export interface KanbanShi {
   seq: number;
   ts: number;
   groupId: string;
-  action: BoardAction;
+  action: KanbanLing;
   /** 解析来源：值班者从自然语言解析 */
   parsedFrom: string;
 }
@@ -339,9 +339,9 @@ export interface BoardEvent {
 // 12. GroupConfig（群类型与权限）
 // ─────────────────────────────────────────────
 
-export type GroupType = 'internal' | 'external' | 'direct';
+export type QunLei = 'internal' | 'external' | 'direct';
 
-export type GroupRole = 'creator' | 'admin' | 'member' | 'external_member';
+export type QunJuese = 'creator' | 'admin' | 'member' | 'external_member';
 
 export type PermissionKey =
   | 'dissolve_group'
@@ -357,30 +357,30 @@ export type PermissionKey =
 
 /** 权限矩阵：角色 × 权限项 → boolean 或 'readonly' */
 export type PermissionMatrix = Record<
-  GroupRole,
+  QunJuese,
   Record<PermissionKey, boolean | 'readonly'>
 >;
 
-export interface GroupMember {
+export interface QunYuan {
   id: string;
   /** 人或 AI 实例 */
   kind: 'human' | 'ai';
-  role: GroupRole;
+  role: QunJuese;
   /** 远程 AI：incognito，无痕执行 */
   isRemote: boolean;
   /** 远程 AI 所属节点 ID */
   nodeId?: string;
 }
 
-export interface GroupConfig {
+export interface QunPeizhi {
   groupId: string;
   name: string;
-  type: GroupType;
+  type: QunLei;
   /** 值班者实例 ID（仅本机实例可成为值班者） */
   dutyInstanceId: string | null;
   /** 定向模式：必须 @ 才响应 */
   directedMode: boolean;
-  members: GroupMember[];
+  members: QunYuan[];
   permissions: PermissionMatrix;
   /** 检查点上限，默认 50 */
   checkpointLimit: number;

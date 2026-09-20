@@ -605,6 +605,27 @@
   /** 语言可达性：设置页/预览桥/巡检脚本统一走这一条（10 语言包，禁止塌缩） */
   window.__warmyLoadI18n = loadI18n;
 
+
+  /**
+   * 隐私政策渲染：把 `【小节】正文` 形态的文本渲染成**分节卡片**，
+   * 而不是一整块 pre-wrap 文本 —— 一整块看起来"和以前没区别"，也不像正式文档。
+   */
+  function privacyHtml(text) {
+    const raw = String(text || '');
+    return raw
+      .split(/\n\s*\n/)
+      .map((para) => {
+        const p = para.trim();
+        if (!p) return '';
+        const m = p.match(/^【(.+?)】([\s\S]*)$/);
+        if (m) {
+          return '<section class="pv-sec"><h4>' + escapeHtml(m[1]) + '</h4><p>' + escapeHtml(m[2].trim()) + '</p></section>';
+        }
+        return '<p>' + escapeHtml(p) + '</p>';
+      })
+      .join('');
+  }
+
   function applyThemeMode(mode) {
     state.themeMode = mode;
     const root = document.documentElement;
@@ -2511,27 +2532,37 @@
               <div class="muted me-brand-tag">${escapeHtml(t('brand.tagline') || '')}</div>
             </div>
           </div>
-          <div class="me-strip" style="flex:1;min-width:260px;margin:0">
-            <div class="profile-head">
+          <div class="me-strip" style="flex:1;min-width:300px;margin:0">
+            <!-- 左：头像 + **邮箱紧跟其下**（腾出横向空间）；右：名称与凭证 -->
+            <div class="me-avatar-col">
               <button id="p-av-btn" class="av-btn" aria-label="${escapeHtml(t('me.avatar'))}">${avHtml}</button>
-              <div style="min-width:0;flex:1">
-                <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
-                <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
+              <div class="field" style="margin:10px 0 0;min-width:150px;width:100%">
+                <label style="font-size:12px">${escapeHtml(t('me.email'))}</label>
+                <input id="p-email" autocomplete="email" placeholder="name@example.com" value="${escapeHtml(p.email || '')}"/>
+                <div class="muted" id="p-email-msg" style="font-size:11px;margin-top:2px"></div>
               </div>
             </div>
-            <div class="field" style="margin:8px 0 0"><label>${escapeHtml(t('me.email'))}</label>
-              <input id="p-email" autocomplete="email" placeholder="name@example.com" value="${escapeHtml(p.email || '')}"/>
-              <div class="muted" id="p-email-msg" style="font-size:11px;margin-top:2px"></div>
-            </div>
-            <div class="field" style="margin-top:10px">
-              <label>${t('me.credential')}</label>
-              <div class="me-cred-box">
-                <span class="me-cred-val" id="me-cred-val">—</span>
-                <button class="btn-mini" id="btn-me-cred-copy">${t('me.copy')}</button>
-                <button class="btn-mini" id="btn-me-cred-rotate">${t('me.changeCred')}</button>
-                <button class="btn-mini" id="btn-me-cred-switch">${t('me.switchIdentity')}</button>
+            <div class="me-info-col">
+              <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
+              <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
+              <div class="field" style="margin-top:12px">
+                <label>${escapeHtml(t('me.userId'))}</label>
+                <div class="me-cred-box">
+                  <span class="me-cred-val" id="me-id-val">${escapeHtml(p.deviceId || '—')}</span>
+                  <button class="btn-mini" id="btn-me-id-copy">${t('me.copy')}</button>
+                </div>
+                <div class="muted me-hint" style="margin-top:4px">${escapeHtml(t('me.idHint'))}</div>
               </div>
-              <div class="muted me-hint" style="margin-top:4px">${t('me.credentialHint')}</div>
+              <div class="field" style="margin-top:12px">
+                <label>${t('me.credential')}</label>
+                <div class="me-cred-box">
+                  <span class="me-cred-val" id="me-cred-val">—</span>
+                  <button class="btn-mini" id="btn-me-cred-copy">${t('me.copy')}</button>
+                  <button class="btn-mini" id="btn-me-cred-rotate">${t('me.changeCred')}</button>
+                  <button class="btn-mini" id="btn-me-cred-switch">${t('me.switchIdentity')}</button>
+                </div>
+                <div class="muted me-hint" style="margin-top:4px">${t('me.credentialHint')}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -2547,6 +2578,10 @@
           }
         } catch { /* noop */ }
       })();
+      $('btn-me-id-copy')?.addEventListener('click', async () => {
+        const v = $('me-id-val')?.textContent || '';
+        try { await navigator.clipboard.writeText(v); uiAlert(t('contact.mineCopied')); } catch { uiAlert(t('contact.mineCopyFail')); }
+      });
       $('btn-me-cred-copy')?.addEventListener('click', async () => {
         const v = $('me-cred-val')?.dataset.fp || $('me-cred-val')?.textContent || '';
         try { await navigator.clipboard.writeText(v); uiAlert(t('contact.mineCopied')); } catch { uiAlert(t('contact.mineCopyFail')); }
@@ -2758,9 +2793,15 @@
         </div>
         <div class="set-section" data-sec="model"><h2 style="color:var(--accent)">${t('settings.section.model')}</h2></div>
         <div class="set-section set-card">
-          <h2>${t('settings.providers')}</h2>
+          <h2>${t('settings.providers')} <span class="muted" id="prov-count"></span></h2>
+          <div class="inst-row" style="align-items:flex-end;margin-bottom:10px">
+            <div class="field" style="max-width:220px">
+              <label>${t('settings.providerPreset')}</label>
+              <select id="prov-preset"></select>
+            </div>
+            <button class="btn-primary" id="btn-add-prov">${t('settings.addProvider')}</button>
+          </div>
           <div id="prov-list"></div>
-          <button class="btn-mini" id="btn-add-prov">${t('settings.addProvider')}</button>
         </div>
         <div class="set-section" data-sec="func"><h2 style="color:var(--accent)">${t('settings.section.func')}</h2></div>
         <div class="set-section set-card">
@@ -2880,7 +2921,10 @@
               <button class="btn-mini" id="btn-plug-scan-browse">${t('settings.pickFolder')}</button>
               <button class="btn-mini" id="btn-plug-scan-add">${t('settings.skillsScanAdd')}</button>
             </div>
-            <div style="margin-top:6px"><button class="btn-mini" id="btn-plug-scan-check">${t('settings.pluginScanCheck')}</button></div>
+            <div style="margin-top:6px">
+              <button class="btn-mini" id="btn-plug-scan-check">${t('settings.pluginScanCheck')}</button>
+              <button class="btn-mini" id="btn-plug-scan-machine">${t('settings.scanMachine')}</button>
+            </div>
             <div class="muted" id="plug-scan-msg"></div>
           </div>
         </div>
@@ -2975,6 +3019,7 @@
             </div>
             <div style="margin-top:6px">
               <button class="btn-mini" id="btn-skill-scan-check">${t('settings.skillsScanCheck')}</button>
+              <button class="btn-mini" id="btn-skill-scan-machine">${t('settings.scanMachine')}</button>
             </div>
             <div class="muted" id="skill-scan-msg"></div>
           </div>
@@ -3037,7 +3082,7 @@
           </div>
           <div class="about-block">
             <h3>${t('privacy.viewTitle')}</h3>
-            <div class="privacy-view" id="about-privacy-view">${escapeHtml(t('privacy.body'))}</div>
+            <div class="privacy-view" id="about-privacy-view">${privacyHtml(t('privacy.body'))}</div>
             <div style="margin-top:8px">
               <button class="btn-mini" id="btn-privacy-revoke">${t('privacy.revoke')}</button>
               <span class="muted" id="privacy-revoke-msg"></span>
@@ -3300,29 +3345,18 @@
 
       // 特殊模型：只允许选择「供应商里已存在的模型」
       async function fillSpecialModelSelects() {
+        /**
+         * 第 8 条：特殊模型**只能**从「模型供应商」里已添加的模型里选。
+         * 之前这里先问 `window.warmy.providersList`（不存在的接口）再退到 settings.providers
+         * （也没这份数据），于是即使供应商下一片空白，特殊模型仍能选到东西 —— 用户看到的正是这个。
+         * 现在唯一来源 = 界面上的 state.providers（供应商卡片里有几个模型，就只能选这几个）。
+         */
         const locals = [];
-        try {
-          const pl = await window.warmy.providersList?.().catch(() => null);
-          const providers = (pl && (pl.providers || pl.items)) || [];
-          for (const p of providers) {
-            const models = (p && (p.models || p.modelList)) || [];
-            models.forEach((m) => {
-              const id = String(typeof m === 'string' ? m : (m.id || m.name || ''));
-              if (id) locals.push({ id, provider: p.name || p.id || '', label: id + (p.name ? ' · ' + p.name : '') });
-            });
-          }
-        } catch { /* noop */ }
-        if (!locals.length) {
-          try {
-            const st = await window.warmy.settingsGet?.();
-            const provs = (st && st.settings && st.settings.providers) || [];
-            provs.forEach((p) => {
-              (p.models || []).forEach((m) => {
-                const id = String(typeof m === 'string' ? m : (m.id || ''));
-                if (id) locals.push({ id, provider: p.name || p.id || '', label: id + (p.name ? ' · ' + p.name : '') });
-              });
-            });
-          } catch { /* noop */ }
+        for (const p of (state.providers || [])) {
+          (p.models || []).forEach((m) => {
+            const id = String(typeof m === 'string' ? m : (m.id || m.name || ''));
+            if (id) locals.push({ id, provider: p.label || p.id || '', label: id + (p.label ? ' · ' + p.label : '') });
+          });
         }
         document.querySelectorAll('select[data-special]').forEach((sel) => {
           const cur = sel.value;
@@ -3462,6 +3496,43 @@
           };
         }
       };
+
+
+      // 「检查所有硬盘」：整机扫描（有界；结果与边界都如实显示）
+      async function runMachineScan(kind) {
+        const msgId = kind === 'plugins' ? 'plug-scan-msg' : 'skill-scan-msg';
+        const msg = $(msgId);
+        if (msg) msg.textContent = t('settings.scanRunning');
+        const r = await window.warmy.scanMachine?.(kind).catch(() => null);
+        if (!r || !r.ok) {
+          if (msg) msg.textContent = String(r?.error || t('common.error'));
+          return;
+        }
+        const found = r.found || [];
+        if (kind === 'skills') {
+          found.forEach((f) => {
+            if (!(state.skills || []).some((s) => s.id === f.id)) {
+              state.skills = state.skills || [];
+              state.skills.push({ id: f.id, name: f.name, path: f.path, source: 'machine' });
+            }
+          });
+        } else {
+          found.forEach((f) => {
+            if (!state.plugins.some((p) => p.id === f.id)) {
+              state.plugins.push({ id: f.id, name: f.name, desc: f.desc || f.path, enabled: true, source: 'machine' });
+            }
+          });
+          if (typeof window.__renderPluginList === 'function') window.__renderPluginList();
+        }
+        if (msg) {
+          const b = r.bound || {};
+          const why = b.stoppedBy ? ' · ' + fmtKey('settings.scanStopped', { why: String(b.stoppedBy) }) : '';
+          msg.textContent = fmtKey('settings.scanDone', { n: String(found.length), dirs: String(b.dirsVisited || 0) }) + why;
+        }
+        try { renderPage(); } catch { /* noop */ }
+      }
+      $('btn-skill-scan-machine')?.addEventListener('click', () => { void runMachineScan('skills'); });
+      $('btn-plug-scan-machine')?.addEventListener('click', () => { void runMachineScan('plugins'); });
 
       $('sel-locale').onchange = async (e) => {
         await loadI18n(e.target.value);
@@ -3761,17 +3832,40 @@
           '<div class="prov-actions"><button class="btn-mini" data-fetch>' + t('settings.fetchModels') + '</button></div>' +
           '<div class="model-row">' +
           (((pr.models || [])
-            .map(
-              (m) =>
-                '<span class="model-chip" data-m="' + escapeHtml(m) + '">' + escapeHtml(m) +
-                '<button class="x" data-del="' + escapeHtml(m) + '" title="' + t('settings.removeModel') + '">×</button></span>'
-            )
+            .map((m) => {
+              const usedBy = modelUsageCache.get(m) || [];
+              const inUse = usedBy.length > 0;
+              const tip = inUse ? fmtKey('settings.modelInUseTip', { who: usedBy.join(' / ') }) : t('settings.modelSetDefault');
+              return '<span class="model-chip' + (inUse ? ' in-use' : '') + '" data-m="' + escapeHtml(m) + '" title="' + escapeHtml(tip) + '">' +
+                escapeHtml(m) +
+                '<button class="x" data-del="' + escapeHtml(m) + '" title="' + t('settings.removeModel') + '">×</button></span>';
+            })
             .join('')) || '<span class="muted">' + t('settings.modelsEmpty') + '</span>') +
-          '</div>';
+          '</div>' +
+          '<div class="muted" data-models-note style="font-size:11px"></div>';
         el.querySelectorAll('input[data-k]').forEach((inp) => {
           inp.onchange = () => {
-            pr[inp.dataset.k] = inp.value;
-            if (inp.dataset.k === 'label') el.querySelector('.prov-head').textContent = inp.value;
+            const key = inp.dataset.k;
+            const before = pr[key];
+            pr[key] = inp.value;
+            if (before !== inp.value) {
+              /**
+               * 产品规则：已有模型的供应商，只要改了**名称 / 接口地址 / 密钥**任一项，
+               * 其下的模型就"丢失"（因为端点/凭据变了，旧模型列表不再可信）。
+               * 但**正在被使用的**模型不能凭空消失：保留并标红，悬停说明谁在用；
+               * 重新拉取到同一模型后恢复正常。
+               */
+              const all = pr.models || [];
+              const kept = all.filter((m) => modelUsageCache.has(m));
+              const dropped = all.filter((m) => !modelUsageCache.has(m));
+              pr.models = kept;
+              pr.inUseModels = kept;
+              if (dropped.length) {
+                const note = el.querySelector('[data-models-note]');
+                if (note) note.textContent = fmtKey('settings.modelsDropped', { n: String(dropped.length) });
+              }
+            }
+            if (key === 'label') el.querySelector('.prov-head').textContent = inp.value;
             window.warmy.setProvider({
               presetId: pr.id,
               apiKey: pr.apiKey,
@@ -3779,6 +3873,8 @@
               model: providerCfgModel(pr),
               protocol: pr.protocol,
             });
+            // 变更后重渲染：标红与提示都反映最新占用情况
+            renderPage();
           };
         });
         el.querySelector('[data-fetch]').onclick = async () => {
@@ -3794,6 +3890,8 @@
           const r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, apiKey: pr.apiKey });
           if (r?.ok && r.models?.length) {
             pr.models = [...new Set([...(pr.models || []), ...r.models])];
+            // 重新拉取覆盖到同一模型 ⇒ 标红自动恢复正常（占用表重新计算）
+            modelUsageCache = await collectModelUsage();
           }
           renderPage();
         };
@@ -3824,12 +3922,84 @@
         });
         prov.appendChild(el);
       });
+      // ── 供应商预设（常用 10 家 + 其他）──
+      const PROVIDER_PRESETS = [
+        { id: 'deepseek', label: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com/v1' },
+        { id: 'openai', label: 'OpenAI', protocol: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
+        { id: 'moonshot', label: 'Moonshot (Kimi)', protocol: 'openai-compatible', baseURL: 'https://api.moonshot.cn/v1' },
+        { id: 'zhipu', label: '智谱 GLM', protocol: 'openai-compatible', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
+        { id: 'dashscope', label: '通义千问', protocol: 'openai-compatible', baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+        { id: 'siliconflow', label: 'SiliconFlow', protocol: 'openai-compatible', baseURL: 'https://api.siliconflow.cn/v1' },
+        { id: 'openrouter', label: 'OpenRouter', protocol: 'openai-compatible', baseURL: 'https://openrouter.ai/api/v1' },
+        { id: 'anthropic', label: 'Anthropic (Claude)', protocol: 'anthropic', baseURL: 'https://api.anthropic.com' },
+        { id: 'gemini', label: 'Google Gemini', protocol: 'openai-compatible', baseURL: 'https://generativelanguage.googleapis.com/v1beta' },
+        { id: 'ollama', label: 'Ollama (本地)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434/v1' },
+        { id: '__other__', label: t('settings.providerOther'), protocol: 'openai-compatible', baseURL: '' },
+      ];
+      const PROVIDER_MAX = 50;
+
+      /**
+       * **模型占用表**：某个模型被谁在用。
+       * 用途（产品第 9 条）：改供应商的名称/接口地址/密钥 ⇒ 该供应商下的模型要"丢失"，
+       * 但**正在被使用的模型不能消失**，而是标红并在悬停时说明"谁在用"。
+       */
+      async function collectModelUsage() {
+        const usage = new Map();   // modelId -> [who]
+        const add = (id, who) => {
+          const k = String(id || '').trim();
+          if (!k) return;
+          const cur = usage.get(k) || [];
+          if (!cur.includes(who)) cur.push(who);
+          usage.set(k, cur);
+        };
+        (state.instances || []).forEach((inst) => {
+          const nm = inst.name || inst.id;
+          add(inst.model, t('instances.model') + ' · ' + nm);
+          add(inst.defaultModel, t('instances.defaultModel') + ' · ' + nm);
+          const mc = inst.modelConfig || {};
+          add(mc.model, t('instances.model') + ' · ' + nm);
+          (mc.chain || inst.fallbackChain || []).forEach((m) => add(typeof m === 'string' ? m : m && m.model, t('instances.fallbackChain') + ' · ' + nm));
+        });
+        try {
+          const sp = await window.warmy.specialModelsGet?.();
+          const sm = (sp && sp.specialModels) || {};
+          Object.keys(sm).forEach((k) => {
+            const v = sm[k] || {};
+            add(v.model, (t('settings.specialModels') || 'special') + ' · ' + k);
+            add(v.provider, null);
+          });
+        } catch { /* noop */ }
+        return usage;
+      }
+
+      let modelUsageCache = new Map();
+      void collectModelUsage().then((u) => { modelUsageCache = u; });
+
+      function provCount() {
+        const el = $('prov-count');
+        if (el) el.textContent = `${state.providers.length}/${PROVIDER_MAX}`;
+      }
+
+      (function bindPresetSelect() {
+        const sel = $('prov-preset');
+        if (!sel) return;
+        sel.innerHTML = PROVIDER_PRESETS.map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</option>').join('');
+      })();
+
+      provCount();
       $('btn-add-prov').onclick = () => {
+        if (state.providers.length >= PROVIDER_MAX) {
+          uiAlert(fmtKey('settings.providerMax', { n: String(PROVIDER_MAX) }));
+          return;
+        }
+        const sel = $('prov-preset');
+        const preset = PROVIDER_PRESETS.find((p) => p.id === (sel && sel.value)) || PROVIDER_PRESETS[PROVIDER_PRESETS.length - 1];
+        const isOther = preset.id === '__other__';
         state.providers.push({
-          id: 'custom-' + Date.now(),
-          label: 'Custom',
-          protocol: 'openai-compatible',
-          baseURL: '',
+          id: (isOther ? 'custom-' : preset.id + '-') + Date.now(),
+          label: isOther ? '' : preset.label,
+          protocol: preset.protocol,
+          baseURL: isOther ? '' : preset.baseURL,
           defaultModel: '',
           apiKey: '',
           models: [],
@@ -10588,7 +10758,7 @@
       const root = $('modal-root');
       $('modal-title').textContent = t('privacy.title');
       $('modal-body').innerHTML =
-        '<div class="privacy-view" id="privacy-modal-body" style="max-height:260px">' + escapeHtml(t('privacy.body')) + '</div>' +
+        '<div class="privacy-view" id="privacy-modal-body" style="max-height:300px">' + privacyHtml(t('privacy.body')) + '</div>' +
         '<div class="muted" id="privacy-hint" style="margin-top:8px">' + escapeHtml(t('privacy.scrollHint')) + ' · ' + escapeHtml(t('privacy.waitHint')) + '</div>';
       const acts = $('modal-actions');
       acts.innerHTML = '';
@@ -11259,20 +11429,81 @@
     ]);
   });
   // W. 定向模式开关（聊天头）
+  /**
+   * 独立窗的任务栏图标 = **这个聊天对象在第二列里显示的头像**。
+   *
+   * 之前写错了：用的是 `personAvatarSrc()`（那是「我」的头像），
+   * 于是任何会话的任务栏图标都变成用户自己的头像。正确来源按会话类型分：
+   *  - 我的牛马（single）：该牛马实例的头像（自定义图片 > 预设 svg）
+   *  - 项目 / 群聊：群组头像（若有），否则与第二列一致的首字块
+   *  - 联系人：联系人头像（若有），否则首字块
+   * 首字块要和 `.list-item .av` 视觉一致：圆角方块 + 浅底 + 首字。
+   */
+  function chatPartnerAvatarSrc() {
+    const sel = state.selectedChat;
+    if (!sel) return { kind: 'none' };
+    const kind = String(sel.kind || '');
+    if (kind === 'single') {
+      const inst = (state.instances || []).find((x) => x.id === sel.id || x.name === sel.name);
+      if (inst) return { kind: 'image', src: instanceAvatarSrc(inst) };
+      const chat = (state.chats || []).find((c) => c.id === sel.id);
+      if (chat && (chat.avatarDataUrl || chat.avatarPreset)) {
+        return { kind: 'image', src: inst ? instanceAvatarSrc(chat) : (chat.avatarDataUrl || '') };
+      }
+      return { kind: 'letter', text: String(sel.name || '?')[0] };
+    }
+    if (kind === 'internal' || kind === 'extgroup' || kind === 'externalGroup' || kind === 'external') {
+      const g = (state.groups || []).find((x) => x.id === sel.id);
+      if (g && (g.avatarDataUrl || g.avatarPreset)) return { kind: 'image', src: g.avatarDataUrl || '' };
+      return { kind: 'letter', text: String(sel.name || g?.name || '?')[0] };
+    }
+    // 联系人 / 其他
+    const c = (state.chats || []).find((x) => x.id === sel.id);
+    if (c && c.avatarDataUrl) return { kind: 'image', src: c.avatarDataUrl };
+    return { kind: 'letter', text: String(sel.name || c?.name || '?')[0] };
+  }
+
   async function chatAvatarDataUrl() {
     try {
-      const src = personAvatarSrc({ avatarPreset: state.selectedChat?.avatarPreset, avatarDataUrl: state.selectedChat?.avatarDataUrl }) || '';
-      if (!src) return '';
-      if (src.startsWith('data:')) return src;
-      const img = new Image();
-      img.src = src;
-      await img.decode();
+      const src = chatPartnerAvatarSrc();
       const c = document.createElement('canvas');
       c.width = 64; c.height = 64;
       const ctx = c.getContext('2d');
       ctx.clearRect(0, 0, 64, 64);
-      ctx.drawImage(img, 0, 0, 64, 64);
-      return c.toDataURL('image/png');
+      if (src.kind === 'image' && src.src) {
+        if (src.src.startsWith('data:')) return src.src;
+        const img = new Image();
+        img.src = src.src;
+        await img.decode();
+        ctx.drawImage(img, 0, 0, 64, 64);
+        return c.toDataURL('image/png');
+      }
+      if (src.kind === 'letter') {
+        // 与第二列 `.list-item .av` 同款：6/40 圆角比例、浅底、居中首字
+        const cs = getComputedStyle(document.documentElement);
+        const bg = (cs.getPropertyValue('--line') || '#e5e5e5').trim() || '#e5e5e5';
+        const fg = (cs.getPropertyValue('--muted') || '#888').trim() || '#888';
+        const r = 64 * (6 / 40);
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        const rr = (x, y, w, h, rad) => {
+          ctx.moveTo(x + rad, y);
+          ctx.arcTo(x + w, y, x + w, y + h, rad);
+          ctx.arcTo(x + w, y + h, x, y + h, rad);
+          ctx.arcTo(x, y + h, x, y, rad);
+          ctx.arcTo(x, y, x + w, y, rad);
+          ctx.closePath();
+        };
+        rr(0, 0, 64, 64, r);
+        ctx.fill();
+        ctx.fillStyle = fg;
+        ctx.font = '600 34px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(src.text || '?'), 32, 34);
+        return c.toDataURL('image/png');
+      }
+      return '';
     } catch { return ''; }
   }
   $('btn-open-win')?.addEventListener('click', async () => {

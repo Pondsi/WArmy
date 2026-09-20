@@ -10,12 +10,12 @@
  */
 
 import type {
-  DutyState,
-  GroupConfig,
-  GroupType,
+  ZhibanTai,
+  QunPeizhi,
+  QunLei,
   OrchestrationDecision,
   OrchestrationRequest,
-  Urgency,
+  Jinji,
 } from '@warmy/contracts';
 
 export interface RouterInstance {
@@ -36,7 +36,7 @@ export interface RouterInstance {
 export interface QueueItem {
   id: string;
   groupId: string;
-  urgency: Urgency;
+  urgency: Jinji;
   request: OrchestrationRequest;
   enqueuedAt: number;
   /** 可编辑/删除/排序 */
@@ -55,14 +55,14 @@ export interface RouterQueueSnapshot {
   version: 1;
   seq: number;
   queues: Record<string, QueueItem[]>;
-  dutyState: Record<string, DutyState>;
+  dutyState: Record<string, ZhibanTai>;
 }
 
 export class GroupChatRouter {
-  private groups = new Map<string, GroupConfig>();
+  private groups = new Map<string, QunPeizhi>();
   private members = new Map<string, RouterInstance[]>();
   private queues = new Map<string, QueueItem[]>();
-  private dutyState = new Map<string, DutyState>();
+  private dutyState = new Map<string, ZhibanTai>();
   private seq = 0;
 
   constructor(private opts: GroupChatRouterOptions = {}) {}
@@ -81,7 +81,7 @@ export class GroupChatRouter {
     for (const [gid, q] of this.queues) {
       queues[gid] = q.map((x) => ({ ...x, request: { ...x.request } }));
     }
-    const dutyState: Record<string, DutyState> = {};
+    const dutyState: Record<string, ZhibanTai> = {};
     for (const [gid, s] of this.dutyState) dutyState[gid] = s;
     return { version: 1, seq: this.seq, queues, dutyState };
   }
@@ -100,7 +100,7 @@ export class GroupChatRouter {
           .map((x) => ({
             id: String(x.id),
             groupId: String(x.groupId || gid),
-            urgency: (x.urgency as Urgency) || 'P2',
+            urgency: (x.urgency as Jinji) || 'P2',
             request: { ...x.request },
             enqueuedAt: Number(x.enqueuedAt) || Date.now(),
             status: (x.status as QueueItem['status']) || 'queued',
@@ -109,13 +109,13 @@ export class GroupChatRouter {
     }
     this.dutyState.clear();
     for (const [gid, s] of Object.entries(snap.dutyState || {})) {
-      this.dutyState.set(gid, s as DutyState);
+      this.dutyState.set(gid, s as ZhibanTai);
     }
   }
 
   // ── 群与成员 ──
 
-  createGroup(cfg: GroupConfig): GroupConfig {
+  createGroup(cfg: QunPeizhi): QunPeizhi {
     if (this.groups.has(cfg.groupId)) throw new Error('group exists');
     this.groups.set(cfg.groupId, { ...cfg });
     this.members.set(cfg.groupId, []);
@@ -125,7 +125,7 @@ export class GroupChatRouter {
     return this.groups.get(cfg.groupId)!;
   }
 
-  getGroup(groupId: string): GroupConfig | undefined {
+  getGroup(groupId: string): QunPeizhi | undefined {
     return this.groups.get(groupId);
   }
 
@@ -193,7 +193,7 @@ export class GroupChatRouter {
     return idle[0] || null;
   }
 
-  duty(groupId: string): { state: DutyState; instance: RouterInstance | null } {
+  duty(groupId: string): { state: ZhibanTai; instance: RouterInstance | null } {
     return {
       state: this.dutyState.get(groupId) || 'idle',
       instance: this.selectDuty(groupId),
@@ -220,7 +220,7 @@ export class GroupChatRouter {
   }
 
   private sortQueue(groupId: string): void {
-    const rank: Record<Urgency, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
+    const rank: Record<Jinji, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
     const q = this.queues.get(groupId);
     if (!q) return;
     q.sort((a, b) => {

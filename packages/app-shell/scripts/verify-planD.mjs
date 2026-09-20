@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { GroupStore } from '../dist/group-store.js';
 import { AiQuestionHub, AI_QUESTION_CUSTOM } from '../dist/ai-questions.js';
 import { withReadBack, dedupeByNorm, normPathKey } from '../dist/read-back.js';
-import { parseBoardCommand, withTreeAggregation, BoardStore } from '../../board/dist/index.js';
+import { JieLing, JuShu, KanbanCang } from '../../board/dist/index.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -76,8 +76,8 @@ const d = dedupeByNorm(['C:/a/b', 'c:/a/b/'], normPathKey);
 check('path dedupe', d.list.length === 1 && d.removed === 1, d);
 
 // ── board tree ──
-const board = new BoardStore(path.join(os.tmpdir(), 'warmy-planD-' + Date.now()));
-const ev = parseBoardCommand('新建任务 发布 / 校验文档', 'g1');
+const board = new KanbanCang(path.join(os.tmpdir(), 'warmy-planD-' + Date.now()));
+const ev = JieLing('新建任务 发布 / 校验文档', 'g1');
 check('board parse parent/child', ev && ev.parentId === '发布', ev);
 board.append(ev, 'duty');
 board.append({ groupId: 'g1', action: 'update_progress', title: '校验文档', progress: 80, parsedFrom: 'x' }, 'duty');
@@ -101,5 +101,5 @@ check('project memory in group-store', p?.memory?.includes('59599'));
 check('gateVerify two scripts', Array.isArray(p?.gateVerify) && p.gateVerify.length === 2, p?.gateVerify);
 check('normalizeProject preserves memory', gs.projectOf('g1')?.memory?.includes('59599'));
 
-console.log(`\n==== verify-planD: ${pass} ok / ${fail} FAIL ====`);
+console.log(`\n==== verify-planD: pass ok / fail FAIL ====`);
 process.exit(fail === 0 ? 0 : 1);

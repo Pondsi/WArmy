@@ -18,7 +18,7 @@ import {
   type MemoryToolLabels,
 } from './memory-client.js';
 import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@warmy/group-router';
-import { BoardStore, parseBoardCommand } from '@warmy/board';
+import { KanbanCang, JieLing } from '@warmy/board';
 import {
   createProviderFromPreset,
   chatWithTools,
@@ -195,19 +195,19 @@ const bootLog = path.join(app.getPath('userData'), 'warmy-boot.log');
 
 function boot(msg: string) {
   try {
-    fs.appendFileSync(bootLog, `${new Date().toISOString()} ${msg}\n`);
+    fs.appendFileSync(bootLog, `new Date().toISOString() msg\n`);
   } catch {
     /* ignore */
   }
 }
-boot(`main loaded dir=${__dirname}`);
+boot(`main loaded dir=__dirname`);
 // 去掉 File/Edit/View/Window/Help 应用菜单
 Menu.setApplicationMenu(null);
 
 function loadMainStrings(locale: string | undefined): Record<string, string> {
   const f = resolveLocale(locale);
   try {
-    return JSON.parse(fs.readFileSync(path.join(__dirname, 'i18n', `${f}.json`), 'utf8'));
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'i18n', `f.json`), 'utf8'));
   } catch {
     return {};
   }
@@ -241,7 +241,7 @@ function warmyWindowIcon(): string {
 function gateVerifyForProjectType(opts: { directory?: string; devEnv?: string; name?: string }): string[] {
   const dir = String(opts.directory || '').replace(/\\/g, '/');
   const name = String(opts.name || '');
-  const hay = `${name} ${dir}`.toLowerCase();
+  const hay = `name dir`.toLowerCase();
   const isDocsOnly = /(^|[^a-z])(docs?|说明|readme|spec|adr|手册|guide)([^a-z]|$)/i.test(hay) &&
     !/(packages\/|src\/|node_modules|\.ts$|\.js$|\.py$|api|backend|frontend)/i.test(hay);
   const isCode =
@@ -336,7 +336,7 @@ function restoreUiQueues(): Record<string, unknown> {
   } catch { /* ignore */ }
   return {};
 }
-let board: BoardStore | null = null;
+let board: KanbanCang | null = null;
 const ccr = new CcrGateway(4000);
 let knowledge: KnowledgeBase | null = null;
 let checkpoints: CheckpointStore | null = null;
@@ -432,7 +432,7 @@ function nextChatSeq(memSeq?: number): number {
 
 function newChatRecordId(prefix: 'm' | 'a' | 'g'): string {
   chatLogIdSeq += 1;
-  return `${prefix}-${Date.now()}-${chatLogIdSeq}`;
+  return `prefix-Date.now()-chatLogIdSeq`;
 }
 
 /** 记忆服务 IPC 的 append 回包是 { ok, seq }；兼容直接返回记录对象的实现 */
@@ -495,7 +495,7 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
   if (!memory || !memory.isReady) {
     report.reason = 'memory-unavailable';
     historyRestore = report;
-    boot(`chat log restore skipped (${trigger}): memory unavailable`);
+    boot(`chat log restore skipped (trigger): memory unavailable`);
     return report;
   }
   try {
@@ -540,7 +540,7 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
     report.sessions = sessions.size;
     historyRestore = report;
     boot(
-      `chat log restored (${trigger}): ${report.entries} 条 / ${report.sessions} 会话 / maxSeq=${report.maxSeq}`
+      `chat log restored (trigger): report.entries 条 / report.sessions 会话 / maxSeq=report.maxSeq`
     );
     audit?.log('chat.history.restore', {
       trigger,
@@ -551,9 +551,9 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
     });
     return report;
   } catch (e) {
-    report.reason = `restore-failed: ${sanitizeError(e)}`;
+    report.reason = `restore-failed: sanitizeError(e)`;
     historyRestore = report;
-    boot(`chat log restore failed (${trigger}): ${report.reason}`);
+    boot(`chat log restore failed (trigger): report.reason`);
     return report;
   }
 }
@@ -574,7 +574,7 @@ async function ensureMemoryReady(): Promise<boolean> {
     void restoreChatLogsFromMemory('memory-restart');
     return memory.isReady;
   } catch (e) {
-    boot(`memory re-start fail ${String(e)}`);
+    boot(`memory re-start fail String(e)`);
     return false;
   }
 }
@@ -895,7 +895,7 @@ function prepareMemoryRuntime(): { ipcEntry: string; dataDir: string } {
   ];
   const src = srcCandidates.find((d) => fs.existsSync(path.join(d, 'ipc.js')));
   if (!src) {
-    boot(`memory ipc source missing among ${srcCandidates.join(' | ')}`);
+    boot(`memory ipc source missing among srcCandidates.join(' | ')`);
     throw new Error('memory-os dist not found');
   }
   fs.mkdirSync(runtimeDir, { recursive: true });
@@ -1008,7 +1008,7 @@ async function bootstrap() {
   });
   boot('p1 ready');
   const userData = app.getPath('userData');
-  board = new BoardStore(path.join(userData, 'board'));
+  board = new KanbanCang(path.join(userData, 'board'));
   knowledge = new KnowledgeBase(path.join(userData, 'knowledge'));
   checkpoints = new CheckpointStore(path.join(userData, 'checkpoints'));
   accountStore = new LocalAccountStore(path.join(userData, 'profile.json'));
@@ -1035,14 +1035,14 @@ async function bootstrap() {
     downloadDir: path.join(userData, 'updates'),
     getSettings: () => settingsStore?.load() ?? null,
     env: process.env,
-    userAgent: `WArmy/${appVersion()} (${process.platform}; ${process.arch})`,
-    log: (msg) => boot(`updater: ${msg}`),
+    userAgent: `WArmy/appVersion() (process.platform; process.arch)`,
+    log: (msg) => boot(`updater: msg`),
   });
   sweepTempFiles(path.join(userData, 'updates'));
   restoreGroups();
   // 群骨架恢复之后再灌队列快照（否则 createGroup 会把 queues Map 清空）
   restoreRouterQueues();
-  boot(`router queues restored file=${routerQueuesFile() || 'n/a'}`);
+  boot(`router queues restored file=routerQueuesFile() || 'n/a'`);
   nodeReg = new NodeRegistry(path.join(userData, 'nodes.json'));
   syncBus = new SyncBus(path.join(userData, 'bus'));
   peerReg = new PeerRegistry(path.join(userData, 'peers.json'));
@@ -1068,24 +1068,24 @@ async function bootstrap() {
     });
     if (idInit.ok) {
       boot(
-        `identity ${idInit.created ? 'created' : 'loaded'} fp=${idInit.info.fingerprint} gen=${idInit.info.generation} alias=${idInit.info.alias} protection=${
+        `identity idInit.created ? 'created' : 'loaded' fp=idInit.info.fingerprint gen=idInit.info.generation alias=idInit.info.alias protection=
           idInit.info.passphraseProtected ? 'passphrase' : idInit.info.osProtected ? idInit.info.osLabel : 'none'
-        }`,
+        `,
       );
     } else {
       // 绝不静默重建：文件损坏时保留证据（已隔离为 .corrupt-*），由用户走"导入备份"恢复
-      boot(`identity init fail: ${idInit.error}`);
-      lastError = { ts: Date.now(), message: `身份初始化失败：${idInit.error}`, context: 'identity' };
+      boot(`identity init fail: idInit.error`);
+      lastError = { ts: Date.now(), message: `身份初始化失败：idInit.error`, context: 'identity' };
     }
   } catch (e) {
-    boot(`identity init fail ${String(e)}`);
+    boot(`identity init fail String(e)`);
   }
   // 启动时结算一次对端冻结期：到期则把"待采用的新名片"提升为本机留存值（纯本地判定，无定时器）
   try {
     const settled = identityStore.settlePeerContacts();
-    boot(`identity peer-contacts settled promoted=${settled.promoted}/${settled.total}`);
+    boot(`identity peer-contacts settled promoted=settled.promoted/settled.total`);
   } catch (e) {
-    boot(`identity peer settle fail ${String(e)}`);
+    boot(`identity peer settle fail String(e)`);
   }
   audit.log('app.start', { platform: process.platform });
   // ── 成员证书 / 吊销列表（ADR §附八.8）：先"热身"建好带审计回调的实例 ──
@@ -1095,7 +1095,7 @@ async function bootstrap() {
   {
     const ms = membershipStoreFor(identityStore, { onAudit: (op, detail) => audit?.log(op, detail) });
     const sum = ms?.summary();
-    if (sum) boot(`membership ready groups=${sum.groupCount} certs=${sum.certCount} revoked=${sum.revokedCount}`);
+    if (sum) boot(`membership ready groups=sum.groupCount certs=sum.certCount revoked=sum.revokedCount`);
   }
   // ── 租约表（本体协作层）：写操作的唯一仲裁者 ──
   leases = new LeaseRegistry({ idPrefix: 'warmy' });
@@ -1103,14 +1103,14 @@ async function bootstrap() {
   changeAckFile = path.join(userData, 'identity', 'change-acks.json');
   // ── 组网（鉴权通道）：**门控在前**，身份拿不到签名能力就不起监听、不发宣告 ──
   const netDir = ensureNetDir(userData);
-  if (!netDir.ok) boot(`net dir unavailable: ${netDir.error}`);
+  if (!netDir.ok) boot(`net dir unavailable: netDir.error`);
   try {
     // 启动自检：身份层指纹必须能由身份文件里的公钥推出；不一致则整条组网线不可用
     const check = assertDerivationMatches(identityStore);
-    boot(`identity derivation ok fp=${check.fingerprint} raw=${check.publicKeyRawBytes}B`);
+    boot(`identity derivation ok fp=check.fingerprint raw=check.publicKeyRawBytesB`);
   } catch (e) {
     const err = e as IdentityUnavailableError;
-    boot(`identity derivation FAILED: ${err.name}: ${err.message}`);
+    boot(`identity derivation FAILED: err.name: err.message`);
     lastError = { ts: Date.now(), message: err.message, context: 'identity-derivation' };
   }
   secureMesh = new SecureMesh({
@@ -1119,7 +1119,7 @@ async function bootstrap() {
     store: () => identityStore,
     peers: () => peerRefs(),
     onInbound: (msg) => {
-      boot(`mesh inbound ${msg.channel} from ${msg.peerFingerprint.slice(0, 12)}`);
+      boot(`mesh inbound msg.channel from msg.peerFingerprint.slice(0, 12)`);
       // 成员证书 / 吊销列表的**同步落点**：对端指纹来自握手（msg.peerFingerprint），
       // 不是消息体自称 —— 只有本群创建者发来的吊销列表才会被接受。
       const payload = msg.payload as { type?: string; groupId?: string; list?: unknown } | null;
@@ -1134,7 +1134,7 @@ async function bootstrap() {
         const parsed = parseProjectAttrsMessage(msg.payload);
         if (!parsed.ok) {
           audit?.log('project.attrs.inbound', { ok: false, code: parsed.error });
-          boot(`project attrs inbound rejected: ${parsed.error}`);
+          boot(`project attrs inbound rejected: parsed.error`);
         } else {
           const v = parsed.value;
           // 指纹用**握手**得到的那个（消息体自称的不采信），只在本地还不知道创建者时补上
@@ -1180,7 +1180,7 @@ async function bootstrap() {
             if (!gate.allow) {
               emitConsole({ cat: 'net', code: 'project.inbound.queued', data: { groupId: v.groupId, projectCode: gate.projectCode, memberFaceKey: gate.memberFaceKey } });
             }
-            boot(`project attrs inbound ${v.groupId} allow=${gate.allow} code=${gate.projectCode} ledger+${ledgerAdded}`);
+            boot(`project attrs inbound v.groupId allow=gate.allow code=gate.projectCode ledger+ledgerAdded`);
           }
           emitConsole({ cat: 'system', code: 'project.attrs.applied', data: { groupId: v.groupId, devEnv: v.project.devEnv } });
         }
@@ -1197,11 +1197,11 @@ async function bootstrap() {
           ...(expect ? { expectedIssuerFingerprint: expect } : {}),
         });
         audit?.log('membership.revocation.inbound', { groupId: gid, ok: r.ok, code: r.code, changed: r.changed ?? false });
-        boot(`membership revocation inbound ok=${r.ok} code=${r.code}`);
+        boot(`membership revocation inbound ok=r.ok code=r.code`);
       }
     },
     onEvent: (ev) => {
-      if (ev.type === 'handshake-ok' || ev.type === 'offline') boot(`mesh ${ev.type} ${ev.peer ?? ''}`);
+      if (ev.type === 'handshake-ok' || ev.type === 'offline') boot(`mesh ev.type ev.peer ?? ''`);
       // T194：对端会话上下线 / 握手 / 局域网发现 —— 组网层的**真实**事件，直接进控制台。
       // 这里**只**推手指纹（peer）与方向/原因（detail），不推消息正文。
       switch (ev.type) {
@@ -1228,7 +1228,7 @@ async function bootstrap() {
   });
   {
     const gate = requireSignableIdentity(identityStore);
-    boot(`net gate signReady=${gate.ok} mode=${gate.unlock?.mode ?? 'none'} error=${gate.errorCode ?? '-'}`);
+    boot(`net gate signReady=gate.ok mode=gate.unlock?.mode ?? 'none' error=gate.errorCode ?? '-'`);
   }
   boot('board/knowledge/checkpoints/account/sync/mesh/assets ready');
 }
@@ -1282,7 +1282,7 @@ function restoreGroups(): void {
     const s = settingsStore?.load() as unknown as { groups?: unknown } | undefined;
     const uiGroups = Array.isArray(s?.groups) ? (s?.groups as Array<{ id?: unknown; name?: unknown; type?: unknown }>) : [];
     const migrated = groupStore.migrateFrom(uiGroups);
-    if (migrated) boot(`groups migrated from ui state: ${migrated}`);
+    if (migrated) boot(`groups migrated from ui state: migrated`);
     for (const g of groupStore.listGroups()) {
       if (!router.getGroup(g.groupId)) {
         try {
@@ -1302,7 +1302,7 @@ function restoreGroups(): void {
       }
       joinLocalInstances(g.groupId);
     }
-    boot(`groups restored: ${groupStore.listGroups().length}`);
+    boot(`groups restored: groupStore.listGroups().length`);
   } catch {
     boot('groups restore failed');
   }
@@ -1311,9 +1311,9 @@ function restoreGroups(): void {
 function startMemoryAsync() {
   try {
     const { ipcEntry, dataDir } = prepareMemoryRuntime();
-    boot(`memory ipc=${ipcEntry}`);
+    boot(`memory ipc=ipcEntry`);
     const nodeRt = resolveNodeRuntime();
-    boot(`memory node=${nodeRt.path} (${nodeRt.source})`);
+    boot(`memory node=nodeRt.path (nodeRt.source)`);
     memory = new MemoryClient({ nodePath: nodeRt.path, ipcEntry, dataDir });
     memory
       .start()
@@ -1323,7 +1323,7 @@ function startMemoryAsync() {
         return restoreChatLogsFromMemory('boot');
       })
       .catch((e) => {
-        boot(`memory start fail ${String(e)}`);
+        boot(`memory start fail String(e)`);
         // 降级路径的可观测信号：记忆服务没起来，重建被跳过（对话仍可发送）
         historyRestore = {
           done: true,
@@ -1337,7 +1337,7 @@ function startMemoryAsync() {
         };
       });
   } catch (e) {
-    boot(`memory prepare fail ${String(e)}`);
+    boot(`memory prepare fail String(e)`);
     historyRestore = {
       done: true,
       ok: false,
@@ -1486,7 +1486,7 @@ function createWindow() {
   win.on('ready-to-show', () => {
     if (ws.maximized) { try { win?.maximize(); } catch { /* noop */ } }
     win?.show();
-    boot(`window ready platform=${process.platform}`);
+    boot(`window ready platform=process.platform`);
   });
   win.on('resize', () => saveWindowStateSoon());
   win.on('move', () => saveWindowStateSoon());
@@ -1981,7 +1981,7 @@ handleIpc(
 
     // 值班者看板解析（仅 duty 写入）
     if (board && route.action !== 'silent') {
-      const parsed = parseBoardCommand(msg.content, msg.groupId);
+      const parsed = JieLing(msg.content, msg.groupId);
       if (parsed) {
         try {
           board.append(parsed, 'duty');
@@ -2000,7 +2000,7 @@ handleIpc(
       if (profile?.email) {
         emailQueue.push({
           to: profile.email,
-          subject: `WArmy request ${msg.groupId}`,
+          subject: `WArmy request msg.groupId`,
           body: msg.content.slice(0, 500),
           ts: Date.now(),
         });
@@ -2073,7 +2073,7 @@ handleIpc(
           ts: Date.now(),
         });
       } catch (e) {
-        llmReply = `LLM error: ${sanitizeError(e).slice(0, 160)}`;
+        llmReply = `LLM error: sanitizeError(e).slice(0, 160)`;
       }
     }
 
@@ -2990,7 +2990,7 @@ handleIpc('warmy:project-set-container', async (_e, payload?: { sessionId?: stri
       return { ok: false, code: 'not-container-project', error: 'this project does not develop in a container' };
     }
     if (!containerRuntimeSpec(runtimeId)) {
-      return { ok: false, code: 'unknown-runtime', error: `unknown runtime id: ${runtimeId}` };
+      return { ok: false, code: 'unknown-runtime', error: `unknown runtime id: runtimeId` };
     }
     const w = setProjectAttrsOf(id, { runtimeId });
     if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
@@ -3340,7 +3340,7 @@ async function ensureProjectContainer(
       const nodeImg = CONTAINER_BASE_IMAGES.find((x) => x.id === 'node-24-slim');
       const minimal = CONTAINER_BASE_IMAGES.find((x) => x.id === 'alpine-3.20');
       const pick = nodeImg || minimal;
-      image = pick && pick.digest ? `${pick.ref}@${pick.digest}` : '';
+      image = pick && pick.digest ? `pick.ref@pick.digest` : '';
     }
   }
   if (!isAllowedImageRef(image)) return { ok: false, code: 'no-image', containerRef: name, created: false, raw: 'no allowed image reference available' };
@@ -3352,7 +3352,7 @@ async function ensureProjectContainer(
     projectLabel: groupId,
   }, 180000);
   if (!r.ok) {
-    return { ok: false, code: r.codeReason || 'run-failed', containerRef: name, created: false, raw: compactText(`${r.out} ${r.err}`, 300) };
+    return { ok: false, code: r.codeReason || 'run-failed', containerRef: name, created: false, raw: compactText(`r.out r.err`, 300) };
   }
   writeProjectEnvLedger(groupId, { runtimeId, containerRef: name, ...(image ? {} : {}) });
   return { ok: true, code: 'created', containerRef: name, created: true, raw: r.out };
@@ -3471,7 +3471,7 @@ handleIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: strin
       return {
         ok: false, code: 'commit-failed', executed: true, evidence: 'refused', decision,
         detail: commit.codeReason || 'commit failed',
-        rawOutput: compactText(`${commit.out} ${commit.err}`, 400),
+        rawOutput: compactText(`commit.out commit.err`, 400),
         imageRef, security,
       };
     }
@@ -3482,7 +3482,7 @@ handleIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: strin
       return {
         ok: false, code: 'commit-unverified', executed: true, evidence: 'refused', decision, imageRef,
         detail: 'commit returned success but the image could not be read back',
-        rawOutput: compactText(`${inspect.out} ${inspect.err}`, 300), security,
+        rawOutput: compactText(`inspect.out inspect.err`, 300), security,
       };
     }
     writeProjectEnvLedger(id, { runtimeId, containerRef: container.containerRef, imageRef, solidifiedAt: at });
@@ -3566,7 +3566,7 @@ handleIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: strin
     if (!run.ok) {
       return {
         ok: false, code: run.codeReason || 'run-failed', executed: true, evidence: 'refused' as const,
-        imageRef: want, rawOutput: compactText(`${run.out} ${run.err}`, 400), preSolidify,
+        imageRef: want, rawOutput: compactText(`run.out run.err`, 400), preSolidify,
       };
     }
     const after = await projectContainerStatusOf(id, runtimeId);
@@ -3724,7 +3724,7 @@ handleIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; ac
    */
   const dir = projectDirectoryOf(req.sessionId).dir;
   if (dir) {
-    noteExternalFileAccessReq(req.sessionId, 'write', `${dir}${path.sep}${CONTAINER_PROJECT_MOUNT.replace(/^\//, '')}`, { by: 'container-shell' });
+    noteExternalFileAccessReq(req.sessionId, 'write', `dirpath.sepCONTAINER_PROJECT_MOUNT.replace(/^\//, '')`, { by: 'container-shell' });
   }
   return {
     ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId, containerRef: name,
@@ -3738,7 +3738,7 @@ function defaultProjectImageRef(): string {
   const nodeImg = CONTAINER_BASE_IMAGES.find((x) => x.id === 'node-24-slim' && x.digest);
   const min = CONTAINER_BASE_IMAGES.find((x) => x.digest);
   const pick = nodeImg || min;
-  return pick && pick.digest ? `${pick.ref}@${pick.digest}` : '';
+  return pick && pick.digest ? `pick.ref@pick.digest` : '';
 }
 
 /** 记一条外部（容器侧）文件访问到项目台账 */
@@ -3794,7 +3794,7 @@ handleIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comma
     const id = String(payload?.sessionId || '');
     const command = String(payload?.command || 'env-probe');
     if (!CONTAINER_FIXED_COMMAND_IDS.includes(command as ContainerFixedCommandId)) {
-      return { ok: false, code: 'bad-command', executed: false, error: `command must be one of ${CONTAINER_FIXED_COMMAND_IDS.join('|')}` };
+      return { ok: false, code: 'bad-command', executed: false, error: `command must be one of CONTAINER_FIXED_COMMAND_IDS.join('|')` };
     }
     const state = await projectStateFor(id);
     const runtimeId = projectRuntimeOf(id);
@@ -4269,6 +4269,121 @@ handleIpc('warmy:skills-import', async () => {
 });
 
 /** 资源管理器选目录（技能/插件自动发现共用） */
+/**
+ * 「检查所有硬盘」：整机扫描技能 / 插件。
+ *
+ * 产品要求是"检测整机所有位置"，但**不能无限跑**：真实机器上百万级目录会挂住 UI。
+ * 因此实现为**有界扫描**并**如实报告边界**（扫了哪些盘、剪掉了哪些目录、是否因预算提前停）：
+ *   - 盘：枚举 A–Z 中真实存在的固定盘（Windows）；其它平台从 `/` 开始
+ *   - 深度上限、目录数上限、时间预算（默认 25s）、结果上限，任一触顶即停止并说明
+ *   - 剪枝：系统/缓存/包管理目录（Windows、Program Files、node_modules、.git、dist、Temp…）
+ *   - 技能标记：目录内含 `SKILL.md`
+ *   - 插件标记：目录内含 `package.json`，且包名/字段与 warmy|plugin 相关
+ * 返回结构含 `bound` 段，UI 据此如实展示"为什么会提前结束"。
+ */
+const MACHINE_SCAN_LIMITS = { maxDepth: 6, maxDirs: 40000, budgetMs: 25000, maxResults: 300 };
+const MACHINE_SCAN_PRUNE = new Set([
+  'windows', 'winnt', '$recycle.bin', 'system volume information', 'program files',
+  'program files (x86)', 'programdata', 'node_modules', '.git', 'dist', 'build', 'out',
+  'temp', 'tmp', 'cache', 'caches', '.cache', '.npm', '.pnpm-store', '.pnpm', 'appdata',
+  'library', 'perflogs', 'recovery', '$windows.~ws', '.vscode', '.idea', 'coverage',
+]);
+
+function machineScanRoots(): string[] {
+  const roots: string[] = [];
+  if (process.platform === 'win32') {
+    for (let c = 65; c <= 90; c++) {
+      const p = String.fromCharCode(c) + ':\\';
+      try { if (fs.existsSync(p)) roots.push(p); } catch { /* 无权限的盘直接跳过 */ }
+    }
+  } else {
+    roots.push('/');
+  }
+  return roots;
+}
+
+function looksLikeWarmyPlugin(pkgPath: string): { ok: boolean; name?: string; desc?: string } {
+  try {
+    const j = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as Record<string, unknown>;
+    const name = String(j.name || '');
+    const deps = { ...(j.dependencies as Record<string, string> | undefined), ...(j.devDependencies as Record<string, string> | undefined) };
+    const depHit = Object.keys(deps || {}).some((k) => /warmy|plugin/i.test(k));
+    const fieldHit = 'warmy' in j || 'warmyPlugin' in j || Array.isArray((j.keywords as unknown[])) && (j.keywords as string[]).some((k) => /warmy|plugin/i.test(String(k)));
+    const nameHit = /warmy|plugin/i.test(name);
+    return { ok: nameHit || depHit || fieldHit, name, desc: String(j.description || '') };
+  } catch { return { ok: false }; }
+}
+
+async function scanMachineFor(kind: 'skills' | 'plugins') {
+  const t0 = Date.now();
+  const roots = machineScanRoots();
+  const found: Array<{ id: string; name: string; path: string; desc?: string; root: string }> = [];
+  const pruned: Array<{ dir: string; reason: string }> = [];
+  let visited = 0;
+  let stoppedBy: string | null = null;
+
+  const queue: Array<{ dir: string; depth: number; root: string }> = roots.map((r) => ({ dir: r, depth: 0, root: r }));
+  while (queue.length) {
+    if (Date.now() - t0 > MACHINE_SCAN_LIMITS.budgetMs) { stoppedBy = 'time-budget'; break; }
+    if (visited >= MACHINE_SCAN_LIMITS.maxDirs) { stoppedBy = 'max-dirs'; break; }
+    if (found.length >= MACHINE_SCAN_LIMITS.maxResults) { stoppedBy = 'max-results'; break; }
+    const cur = queue.shift()!;
+    visited += 1;
+    // 命中标记：先把当前目录判定一次
+    try {
+      const skillFile = path.join(cur.dir, 'SKILL.md');
+      if (kind === 'skills') {
+        if (fs.existsSync(skillFile)) {
+          const id = `machine:${path.basename(cur.dir)}`;
+          if (!found.some((f) => f.path === cur.dir)) {
+            found.push({ id, name: path.basename(cur.dir), path: cur.dir, root: cur.root });
+          }
+          continue; // 技能目录内部不再下钻
+        }
+      } else {
+        const pkg = path.join(cur.dir, 'package.json');
+        if (fs.existsSync(pkg)) {
+          const hit = looksLikeWarmyPlugin(pkg);
+          if (hit.ok) {
+            found.push({ id: hit.name || path.basename(cur.dir), name: hit.name || path.basename(cur.dir), path: cur.dir, desc: hit.desc, root: cur.root });
+            continue;
+          }
+        }
+      }
+    } catch { /* 单个目录失败不影响整轮 */ }
+
+    if (cur.depth >= MACHINE_SCAN_LIMITS.maxDepth) { pruned.push({ dir: cur.dir, reason: 'max-depth' }); continue; }
+    let entries: fs.Dirent[] = [];
+    try { entries = fs.readdirSync(cur.dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const low = e.name.toLowerCase();
+      if (MACHINE_SCAN_PRUNE.has(low)) { pruned.push({ dir: path.join(cur.dir, e.name), reason: 'pruned-system-dir' }); continue; }
+      if (low.startsWith('.')) { pruned.push({ dir: path.join(cur.dir, e.name), reason: 'hidden-dir' }); continue; }
+      queue.push({ dir: path.join(cur.dir, e.name), depth: cur.depth + 1, root: cur.root });
+    }
+  }
+  const bound = {
+    roots: roots.length,
+    dirsVisited: visited,
+    dirsPruned: pruned.length,
+    prunedSample: pruned.slice(0, 12),
+    stoppedBy,
+    elapsedMs: Date.now() - t0,
+    limits: MACHINE_SCAN_LIMITS,
+  };
+  audit?.log('machine.scan', { kind, found: found.length, dirs: visited, stoppedBy });
+  return { ok: true, kind, found, bound, scannedRoots: roots };
+}
+handleIpc('warmy:scan-machine', async (_e, kind?: string) => {
+  try {
+    const k = kind === 'plugins' ? 'plugins' : 'skills';
+    return await scanMachineFor(k);
+  } catch (e) {
+    return { ok: false, found: [], error: sanitizeError(e) };
+  }
+});
+
 handleIpc('warmy:pick-directory', async () => {
   if (!win) return { ok: false, error: 'no window' };
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });

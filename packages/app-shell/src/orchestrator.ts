@@ -3,7 +3,7 @@
  * 用户消息 → 选值班 → 组装状态卡片 → 派发执行者 → 回写看板/知识库 → 返回聊天
  */
 import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@warmy/group-router';
-import { BoardStore, parseBoardCommand } from '@warmy/board';
+import { KanbanCang, JieLing } from '@warmy/board';
 import { runShortLivedExecutor } from './executor.js';
 import { CcrGateway } from '@warmy/ccr-compressor';
 import {
@@ -35,9 +35,9 @@ export interface StatusCard {
 /** 状态卡片：≤2000 token 的紧凑视图 */
 export function buildStatusCard(card: StatusCard): string {
   const lines = [
-    `[状态卡片] 群=${card.groupId} 值班=${card.dutyId} 队列=${card.queueLength}`,
-    `运行中: ${card.runningTasks.slice(0, 5).join(' | ') || '无'}`,
-    `最近: ${card.recent.slice(0, 6).join(' / ')}`,
+    `[状态卡片] 群=card.groupId 值班=card.dutyId 队列=card.queueLength`,
+    `运行中: card.runningTasks.slice(0, 5).join(' | ') || '无'`,
+    `最近: card.recent.slice(0, 6).join(' / ')`,
   ];
   const text = lines.join('\n');
   return text.length > 1800 ? text.slice(0, 1800) + '…' : text;
@@ -45,7 +45,7 @@ export function buildStatusCard(card: StatusCard): string {
 
 export interface OrchestratorDeps {
   router: GroupChatRouter;
-  board: BoardStore;
+  board: KanbanCang;
   ccr: CcrGateway;
   history: Map<string, ChatMessage[]>;
   /** 知识库写入（可选） */
@@ -115,7 +115,7 @@ export async function orchestrateGroupMessage(
     const qlen = deps.router.listQueue(msg.groupId).length;
     return {
       action: 'queue',
-      reply: `[排队] 队列长度 ${qlen}`,
+      reply: `[排队] 队列长度 qlen`,
       queueLength: qlen,
     };
   }
@@ -151,11 +151,11 @@ export async function orchestrateGroupMessage(
   // 看板解析（仅 duty）
   let boardEvent: string | undefined;
   let gateReason: string | null = null;
-  const parsed = parseBoardCommand(msg.content, msg.groupId);
+  const parsed = JieLing(msg.content, msg.groupId);
   if (parsed) {
     try {
       const ev = deps.board.append(parsed, 'duty');
-      boardEvent = `${parsed.action}:${parsed.title}`;
+      boardEvent = `parsed.action:parsed.title`;
       deps.addEvent?.(parsed.title, msg.content, msg.groupId);
       if (parsed.action === 'complete_task') gateReason = 'complete_task';
     } catch {
@@ -176,7 +176,7 @@ export async function orchestrateGroupMessage(
     card,
     ...(memSnip ? [memSnip] : []),
     ...(decSnip ? [decSnip] : []),
-    `用户消息: ${msg.content}`,
+    `用户消息: msg.content`,
     ...retrieveAssetsForChat({ scope: 'project', strict: false }).slice(0, 3).map((a) => a.body.slice(0, 200)),
   ];
 
@@ -198,7 +198,7 @@ export async function orchestrateGroupMessage(
       const sys: ChatMessage = {
         role: 'system',
         content:
-          `你是 WArmy 项目「${msg.groupId}」的值班者。\n${card}\n` +
+          `你是 WArmy 项目「msg.groupId」的值班者。\ncard\n` +
           (memSnip ? memSnip + '\n' : '') +
           (decSnip ? decSnip + '\n' : '') +
           `请用简短中文回复。若需更新任务，使用指令：新建任务:/完成/进度 标题:百分比\n` +
@@ -244,7 +244,7 @@ export async function orchestrateGroupMessage(
       };
     }
   } else {
-    distilled = `[未配置 Key] 值班=${duty.name} 执行者=${executors.join(',') || '无'} 卡片已生成`;
+    distilled = `[未配置 Key] 值班=duty.name 执行者=executors.join(',') || '无' 卡片已生成`;
   }
 
   if (!deps.logOf) {
@@ -300,15 +300,15 @@ export async function orchestrateGroupMessage(
   if (gateReason && deps.runProjectGate) {
     try {
       const g = await deps.runProjectGate(msg.groupId, gateReason);
-      if (g) gateLine = g.pass ? `\n[门禁] 通过 · ${g.summary}` : `\n[门禁] 未通过 · ${g.summary}`;
+      if (g) gateLine = g.pass ? `\n[门禁] 通过 · g.summary` : `\n[门禁] 未通过 · g.summary`;
     } catch (e) {
-      gateLine = `\n[门禁] 执行失败 · ${String((e as Error)?.message || e).slice(0, 120)}`;
+      gateLine = `\n[门禁] 执行失败 · String((e as Error)?.message || e).slice(0, 120)`;
     }
   }
 
   return {
     action: 'dispatch',
-    reply: (extraReplies.length ? `${distilled}\n\n[队列冲刷]\n${extraReplies.join('\n---\n')}` : distilled) + gateLine,
+    reply: (extraReplies.length ? `distilled\n\n[队列冲刷]\nextraReplies.join('\n---\n')` : distilled) + gateLine,
     dutyId: duty.id,
     executorIds: executors,
     boardEvent,
@@ -359,14 +359,14 @@ async function runOneDutyRound(
   const brief = route.decision?.taskBrief || msg.content;
   if (cfg.apiKey || cfg.presetId === 'ollama') {
     if (executors.length) {
-      const r = await runShortLivedExecutor({ taskId: 't-' + Date.now(), brief, contextItems: [card, `用户消息: ${msg.content}`] }, cfg);
+      const r = await runShortLivedExecutor({ taskId: 't-' + Date.now(), brief, contextItems: [card, `用户消息: msg.content`] }, cfg);
       distilled = r.distilled;
     } else {
       const { createProviderFromPreset } = await import('@warmy/providers');
       const provider = createProviderFromPreset(cfg.presetId, { apiKey: cfg.apiKey, baseURL: cfg.baseURL || undefined });
       const sys: ChatMessage = {
         role: 'system',
-        content: `你是 WArmy 项目「${msg.groupId}」的值班者。\n${card}\n请用简短中文回复。`,
+        content: `你是 WArmy 项目「msg.groupId」的值班者。\ncard\n请用简短中文回复。`,
       };
       const entries: LogEntry[] = deps.logOf
         ? deps.logOf(msg.groupId)
@@ -405,7 +405,7 @@ async function runOneDutyRound(
       };
     }
   } else {
-    distilled = `[未配置 Key] 队列项已处理 duty=${duty.name}`;
+    distilled = `[未配置 Key] 队列项已处理 duty=duty.name`;
   }
   return {
     action: 'dispatch',

@@ -269,9 +269,13 @@ ok(Object.keys(ZH).length === Object.keys(EN).length, '8-4 中英键数量相等
   Object.keys(ZH).length + '/' + Object.keys(EN).length);
 const sameText = REQUIRED.filter((k) => k.endsWith('.name') === false && ZH[k] === EN[k]);
 ok(sameText.length === 0, '8-5 必需键里的**说明性文案**中英不相同（不是漏翻/复制粘贴）', JSON.stringify(sameText));
-// 名字是专有名词，允许本来就一样（Colima / Lima / Rancher Desktop …），但至少要有名字被真翻译过
-const translatedNames = REQUIRED.filter((k) => k.endsWith('.name') && ZH[k] !== EN[k]);
-ok(translatedNames.length >= 2, '8-5b 名字该翻的也翻了（不是整表照抄）', JSON.stringify(translatedNames.slice(0, 4)));
+// 名字是专有名词，允许本来就一样（Colima / Lima / Rancher Desktop …）。
+// 产品要求：名字里**不许**出现"推荐/优先"等广告性措辞，也不许挂厂商括注。
+const promo = REQUIRED.filter((k) => {
+  if (!k.endsWith('.name')) return false;
+  return /推荐|優先|优先|recommended|preferred|厂商|公司/i.test(`${ZH[k] || ''}${EN[k] || ''}`);
+});
+ok(promo.length === 0, '8-5b 运行时名字不含"推荐/优先/厂商"等广告性措辞', JSON.stringify(promo.slice(0, 4)));
 // 授权事实必须在文案里如实体现（已核实的许可硬事实，不许被改写掉）
 ok(/Apache-2\.0/.test(ZH['container.rt.podman.cost']) && /没有付费/.test(ZH['container.rt.podman.cost']),
   '8-6 Podman = Apache-2.0 无付费档（文案如实）', ZH['container.rt.podman.cost']);

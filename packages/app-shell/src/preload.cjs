@@ -92,6 +92,7 @@ contextBridge.exposeInMainWorld('warmy', {
   skillsRemove: (id) => ipcRenderer.invoke('warmy:skills-remove', id),
   skillsImport: () => ipcRenderer.invoke('warmy:skills-import'),
   pickDirectory: () => ipcRenderer.invoke('warmy:pick-directory'),
+  scanMachine: (kind) => ipcRenderer.invoke('warmy:scan-machine', kind),
   privacyConsentSet: (consent) => ipcRenderer.invoke('warmy:privacy-consent-set', consent),
   appQuit: (reason) => ipcRenderer.invoke('warmy:app-quit', reason),
   identityCredential: () => ipcRenderer.invoke('warmy:identity-credential'),

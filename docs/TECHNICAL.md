@@ -195,18 +195,83 @@ L1 模型/容器 providers / container-probe / dsh 进程
 
 ### 3.3 代码标识符约定
 
-| 类别 | 约定 | 示例 |
+**产品规范（由产品主定义，本文件为准）**
+
+#### 3.3.1 命名要求
+
+> 说明：**"见名知意 / 简洁 / 可引经据典" 是追加要求，不与"全拼"冲突**。
+> 名称**必须**全拼；在此前提下再去挑**简洁、准确、最好带点古典味道**的词素。
+> 重名规则不变：**半角下划线 + 作用域后缀，且一旦重名，所有重名者都加后缀**。
+
+| 要求 | 说明 | 例子 |
 |------|------|------|
-| 导出常量（模块级） | `WARMY_` + SCREAMING_SNAKE | `WARMY_DEFAULT_NET_PORT` |
-| TypeScript 局部/函数 | camelCase | `gateVerifyForProjectType` |
-| 类型/接口 | PascalCase | `ArchiveEntry` |
-| 源文件名 | kebab-case | `archive-cleanup.ts`、`memory-client.ts` |
-| IPC 通道 | `warmy:` + kebab-case | `warmy:session-summary` |
-| preload API | `warmy.<camelCase>` | `warmy.sessionSummary`（以 preload 实际为准） |
-| i18n 键 | `namespace.camelCase` | `panel.summary.decisions` |
-| CSS 类 | kebab-case | `composer-bar`、`panel-summary-box` |
-| DOM id | kebab-case | `#btn-send`、`#panel-col` |
-| 测试/门禁脚本 | `verify-*.mjs` | `verify-naming.mjs` |
+| **全拼**（硬要求） | 用汉语拼音全拼，不用英文、不用缩写（专有名词除外） | `KanbanRenwu`、`JieLing` |
+| **见名知意**（追加） | 读名字就知道它是什么；宁可保留清晰的长名，也不为短而含糊 | 保 `KanbanRenwu`，不要 `Ren` |
+| **简洁**（追加） | 在"全拼"前提下，能用 1–2 个词素就别堆 4–5 个 | `jiexiKanbanZhiling` → `JieLing`；`withTreeAggregation` → `JuShu` |
+| **可引经据典 / 成语俗语**（追加） | 用古典或成语式词素，既短又准（仍是全拼） | 令（指令）、事（事件）、仓（存储）、笔（写入者）、枝（子节点）、求（请求）、片（片段） |
+| **词素一致** | 同一概念全仓库用同一个词素 | 任务=`Renwu`、群=`Qun`、看板=`Kanban` |
+| **大小写** | 类/接口/类型/枚举 = 大驼峰；变量/函数/方法/字段 = 小驼峰 | `KanbanLing` / `jieLing` |
+| **重名**（不变） | 加半角下划线 + 作用域后缀；**且一旦重名，所有重名者都加后缀** | `liebiao_qun` / `liebiao_renwu` |
+
+#### 3.3.2 命名对照（第一阶段已落地，可作后续范本）
+
+| 原英文 | 拼音（简洁/古典） | 词素依据 |
+|--------|------------------|----------|
+| `BoardAction` | `KanbanLing` | 令 = 指令 |
+| `BoardActionType` | `KanbanLingLei` | 类 |
+| `BoardEvent` | `KanbanShi` | 事 = 事件 |
+| `BoardStore` | `KanbanCang` | 仓 = 存储 |
+| `BoardTask` | `KanbanRenwu` | 务（保留清晰名，不缩写） |
+| `BoardWriter` | `KanbanBi` | 笔 = 写入者（史笔） |
+| `DutyState` | `ZhibanTai` | 态 |
+| `GroupMember` | `QunYuan` | 员 |
+| `GroupType` | `QunLei` | 类 |
+| `Urgency` | `Jinji` | 急 |
+| `parseBoardCommand` | `JieLing` | 解令 = 解出指令 |
+| `withTreeAggregation` | `JuShu` | 聚树 = 聚合任务树 |
+| `child` / `children` | `Zhi` / `ZhiJi` | 树干—树枝 |
+| `raw` | `YuanWen` | 原文 |
+| `req` | `Qiu` | 求 = 请求 |
+| `parts` | `Pian` | 片 |
+| `map`（局部） | `Biao` | 表 |
+| `opts`（局部） | `Xuan` | 选 |
+| `dataDir` | `CangLu` | 藏路 = 存储路径 |
+
+#### 3.3.3 不改名的例外（硬规则）
+
+1. **字符串契约**：IPC 通道名、环境变量名、i18n 键、线协议标记（`CCARMY-*`）、文件路径、CSS 类名、DOM id —— 跨进程/跨版本契约，改了就是破坏性变更。
+2. **专有名词**：ACP、JSONL、Ed25519、WARMY、Docker、Podman、Colima、Lima…
+3. **与外部接口对齐的字段**：`baseURL`、`apiKey`、`model`、`messages`、`role`、`content` 等。
+4. **主流库惯用短名**：`fs`、`path`、`os`；局部循环可用 `i`/`j`。
+5. **源文件名**仍用 kebab-case（`archive-cleanup.ts`）；**门禁脚本**仍用 `verify-*.mjs`。
+
+#### 3.3.4 执行工具与纪律
+
+```powershell
+# 映射表（可评审、可回滚）：docs/PINYIN-MAP.json
+# global = 导出/契约名（全仓库一起改）；local = 包内局部名（只在 --pkg 内改）
+node scripts/pinyin-rename.mjs --pkg board --pkg contracts --dry     # 预演
+node scripts/pinyin-rename.mjs --pkg board --pkg contracts           # 应用
+node scripts/pinyin-rename.mjs --pkg board --pkg contracts --invert  # 回滚
+```
+
+工具内置四条硬保护（每条都是实测踩出来的）：
+
+| 保护 | 为什么 |
+|------|--------|
+| 扫描分段（注释 / 字符串 / 模板**字面量**不改） | 否则会改坏 i18n 键、IPC 名、路径 |
+| 模板串 `${}`：字面量与分隔符保留、**内部按代码**改 | 早期版本漏掉 `${`/`}`，`` `q-${++this.seq}` `` 被写成 `` `q-++this.seq` `` |
+| 名字只要出现过 `.name` 就整体跳过 | 类字段/对象属性是跨包契约，只改声明会 `TS2339` |
+| 写入前断言无残留 `\u0000` | 占位符方案会在文件里留 NUL，git 视为二进制 |
+
+**迁移状态**：已完成 `board` + `contracts`（类型/函数名全仓库同步 + 包内局部名），
+`tsc -b` 与全量门禁通过。其余包（app-shell 12,430 处、sync-protocol 1,865、memory-os 450、
+providers 285…）按同一流程逐包推进；**每包完成必须 tsc + 全量门禁通过再进下一个**。
+
+### 3.4 代码内注释应说明什么（交接标准）
+
+新代码注释只写 **WHY**（约束、不变量、踩坑），不写复述代码的 WHAT。  
+对外文档（本文/REQUIREMENTS）解释模块职责与数据流。
 
 ### 3.4 禁止与例外
 

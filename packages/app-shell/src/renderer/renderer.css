@@ -1352,6 +1352,60 @@ body.chat-window #panel-col { height: 100% !important; overflow: auto !important
 body.chat-window #page-layout, body.chat-window #empty-state, body.chat-window #inst-detail { display: none !important; }
 
 /* 第二列「+」菜单 */
-.list-plus-menu { position: absolute; right: 8px; top: 48px; min-width: 150px; z-index: 60; }
-.list-plus-menu button { width: 100%; text-align: left; }
+/* 第二列「+」菜单
+   ⚠️ 它复用了 .urg-menu 基类，而基类带 `bottom: calc(100% + 6px)`；
+   只覆盖 top 而不清掉 bottom，会让菜单被拉成整列高（看起来"样式不对"）。
+   这里把四条边都显式定死，并锚在按钮右下方。 */
+.list-head-actions { position: relative; }
+.list-plus-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  bottom: auto;
+  min-width: 168px;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  z-index: 80;
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.16));
+}
+.list-plus-menu button {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.list-plus-menu button:hover { background: var(--hover); }
 #p-email.invalid { border-color: var(--danger) !important; }
+
+/* 我的页两列：左=头像+邮箱（竖排，省横向空间）；右=名称与凭证 */
+.me-strip { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.me-avatar-col { display: flex; flex-direction: column; align-items: center; min-width: 160px; }
+.me-avatar-col .av-btn { align-self: center; }
+.me-info-col { flex: 1; min-width: 260px; }
+
+/* 供应商：正在被使用的模型——外框变红、悬停显示占用位置 */
+.model-chip.in-use {
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+  background: transparent !important;
+}
+.model-chip.in-use::after {
+  content: '!';
+  margin-left: 4px;
+  font-weight: 700;
+}
+
+/* 隐私政策：分节渲染 */
+.privacy-view { max-height: 300px; overflow: auto; }
+.privacy-view .pv-sec { margin: 0 0 10px; }
+.privacy-view .pv-sec h4 {
+  margin: 0 0 3px; font-size: 13px; font-weight: 600; color: var(--ink);
+  padding-left: 8px; border-left: 3px solid var(--accent);
+}
+.privacy-view .pv-sec p { margin: 0 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--ink-dim); }
+.privacy-view > p { margin: 0 0 8px; }

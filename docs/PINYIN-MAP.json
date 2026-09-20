@@ -1,0 +1,54 @@
+{
+  "_rule": "自定义名称一律用汉语拼音全拼，并且必须**见名知意、简洁**：优先用单字/双字的古典或成语式词素（如 令/事/仓/笔/枝/求/片/聚树/解令），不要冗长的直译串；类/接口/类型用大驼峰，变量/函数/方法/字段用小驼峰。重名时加半角下划线 + 作用域后缀，并且**一旦出现重名，所有重名者都加后缀**（不是只给后来的加）。",
+  "_principles": [
+    "见名知意：读名字就知道它是什么（宁可保留 KanbanRenwu 这类清晰名，也不为短而用含糊的 Ren）",
+    "简洁：能用 1-2 个词素就不要堆 4-5 个（jiexiKanbanZhiling → JieLing；withTreeAggregation → JuShu）",
+    "引经据典/成语俗语可用：令、事、仓、笔、枝、求、片、聚树、解令 —— 既短又准",
+    "同一概念全仓库用同一个词素（任务=Renwu、群=Qun、看板=Kanban），不要一会儿 Ren 一会儿 Wu"
+  ],
+  "_exceptions": [
+    "协议/品牌/标准等专有名词保留原文（ACP、JSONL、Ed25519、WARMY、Docker、Podman…）",
+    "字符串契约一律不动：IPC 通道名、环境变量名、i18n 键、线协议标记、文件路径、CSS 类名、DOM id",
+    "与外部接口对齐的字段名保留（baseURL/apiKey/model/messages/role/content 等）",
+    "主流库惯用短名保留（fs/path/os、循环用 i/j）"
+  ],
+  "_scopes": {
+    "global": "导出/契约名：跨包引用，必须全仓库一起改",
+    "local": "包内局部名：只在 --pkg 指定包内改（同名跨包可能含义不同）"
+  },
+  "_danger": "对象字段名不要放进 local：字段是跨包结构契约，只改一侧会让 tsc 报 Property does not exist。",
+  "global": {
+    "BoardAction": "KanbanLing",
+    "BoardActionType": "KanbanLingLei",
+    "BoardEvent": "KanbanShi",
+    "BoardStore": "KanbanCang",
+    "BoardTask": "KanbanRenwu",
+    "BoardWriter": "KanbanBi",
+    "DutyState": "ZhibanTai",
+    "GroupConfig": "QunPeizhi",
+    "GroupMember": "QunYuan",
+    "GroupRole": "QunJuese",
+    "GroupType": "QunLei",
+    "Urgency": "Jinji",
+    "parseBoardCommand": "JieLing",
+    "withTreeAggregation": "JuShu"
+  },
+  "local": {
+    "byId": "Suoyin",
+    "child": "Zhi",
+    "children": "ZhiJi",
+    "dataDir": "CangLu",
+    "ev": "Shi",
+    "full": "Quan",
+    "line": "Hang",
+    "lines": "HangJi",
+    "list": "LieBiao",
+    "map": "Biao",
+    "opts": "Xuan",
+    "parts": "Pian",
+    "raw": "YuanWen",
+    "req": "Qiu",
+    "tasks": "RenwuJi",
+    "writer": "Bi"
+  }
+}

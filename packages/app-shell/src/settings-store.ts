@@ -47,20 +47,36 @@ function collectEntropy(): string {
 }
 
 export function generateDeviceId(): string {
-  // 17 位：首位非 0，降低本机/跨机撞号概率；首次生成后写入 profile，此后永久复用
-  const digest = crypto
-    .createHash('sha256')
-    .update(collectEntropy() + '|' + Date.now() + '|' + Math.random() + '|' + process.pid)
-    .digest('hex');
-  // 17 位十进制空间：[10^16, 10^17)
-  const n = BigInt('0x' + digest.slice(0, 24)) % 90000000000000000n;
-  return String(n + 10000000000000000n);
+  /**
+   * 设备 ID：**128 位随机（UUIDv4）**。
+   *
+   * 为什么不再用 17 位十进制：生日碰撞概率 ≈ n²/(2N)。
+   * 按"30 亿人 × 人均 5 台 × 平均换 10 次（含生成后即丢弃）= 1.5e11 个 ID"估算：
+   *   17 位（9e16）  ≈ 1（几乎必然撞号）
+   *   20 位（9e19）  ≈ 0.99
+   *   31 位（9e30）  ≈ 1e-10   ← 十进制要达到这个量级才够
+   *   128 位（2^128）≈ 3e-17   ← 业界标准（UUID），实际等同于永不撞号
+   * 因此选 128 位随机；同时保留对旧 ID（9/17 位数字）的兼容校验，
+   * 老配置继续可用、不会被判为无效而重新生成。
+   */
+  try {
+    const uuid = crypto.randomUUID();
+    if (uuid) return uuid;
+  } catch { /* 老 Node 没有 randomUUID 时退回手工拼装 */ }
+  const b = crypto.randomBytes(16);
+  b[6] = ((b[6] ?? 0) & 0x0f) | 0x40;   // version 4
+  b[8] = ((b[8] ?? 0) & 0x3f) | 0x80;   // variant 10xx
+  const hex = b.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/** 仅接受「17 位且首位非 0」的形态 */
+/** UUIDv4（新）或历史 9/17 位数字（旧配置兼容） */
 export function isValidDeviceId(v: unknown): v is string {
-  return typeof v === 'string' && /^[1-9][0-9]{16}$/.test(v);
+  if (typeof v !== 'string') return false;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)) return true;
+  return /^[1-9][0-9]{8}$/.test(v) || /^[1-9][0-9]{16}$/.test(v);
 }
+
 
 /** 设备 ID 的 HMAC 签名：ID 被手改一位，签名就对不上 */
 function signDeviceId(id: string): string {

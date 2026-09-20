@@ -142,12 +142,16 @@ async function main() {
       const top = g('.me-top');
       const brand = g('.me-brand-name');
       const prof = g('.me-strip');
+      // 品牌与资料"同一行"：用几何判据（左右并排 + 垂直有重叠），
+      // 不写死 80px 容差 —— 布局改成卡片后会误判。
       let sameRow = false;
-      if (top && brand && prof) {
-        const rb = brand.getBoundingClientRect();
-        const rp = prof.getBoundingClientRect();
-        sameRow = Math.abs(rb.top - rp.top) < 80 && rp.left > rb.left;
-      }
+      try {
+        const brandBox = (g('.me-brand') || brand).getBoundingClientRect();
+        const profBox = (prof || brand).getBoundingClientRect();
+        const sideBySide = profBox.left >= brandBox.right - 4;
+        const vOverlap = Math.min(brandBox.bottom, profBox.bottom) - Math.max(brandBox.top, profBox.top);
+        sameRow = sideBySide && vOverlap > 20;
+      } catch { sameRow = false; }
       return {
         hasSaveBtn: !!g('#p-save'),
         hasEmail: !!mail,
@@ -272,9 +276,11 @@ async function main() {
     check('独立窗：保留可拖标题栏', subDom.titlebar === 'visible', subDom);
     check('独立窗：不显示整页(设置/看板)', subDom.pageLayout !== 'visible', subDom);
 
-    // ── 7. 设备 ID 17 位 ──
+    // ── 7. 设备 ID：128 位随机（UUIDv4）——17 位十进制在十亿量级会撞号，已弃用 ──
     const idInfo = await c.evaluate(`(async function(){ try { const r = await window.warmy.appInfo(); return { deviceId: r && r.deviceId, valid: r && r.deviceIdValid }; } catch(e) { return { err: String(e) }; } })()`);
-    check('设备 ID 为 17 位且校验通过', !!idInfo && /^\d{17}$/.test(String(idInfo.deviceId || '')) && idInfo.valid === true, idInfo);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String((idInfo && idInfo.deviceId) || ''));
+    const isLegacy = /^[1-9][0-9]{8}$/.test(String((idInfo && idInfo.deviceId) || '')) || /^[1-9][0-9]{16}$/.test(String((idInfo && idInfo.deviceId) || ''));
+    check('设备 ID 为 UUIDv4(128 位) 或兼容的旧格式，且校验通过', (isUuid || isLegacy) && !!idInfo && idInfo.valid === true, idInfo);
 
     // ── 8. 运行时版本：应用内 Node 必须 >= 24 LTS（Electron 40+ 才自带 Node 24） ──
     const ver = await c.evaluate(`(async function(){ try { const r = await window.warmy.appInfo(); return { node: r && r.node, electron: r && r.electron, chrome: r && r.chrome }; } catch(e) { return { err: String(e) }; } })()`);
