@@ -2,8 +2,8 @@
  * Provider + P1 冒烟（对 dist 产物）
  */
 import {
-  createProvider,
-  createProviderFromPreset,
+  chuangjianGongYing,
+  congYuSheChuangJian,
   PROVIDER_PRESETS,
 } from '@warmy/providers';
 import {
@@ -20,9 +20,9 @@ report.hasOpenAI = PROVIDER_PRESETS.some((p) => p.protocol === 'openai-compatibl
 report.hasAnthropic = PROVIDER_PRESETS.some((p) => p.protocol === 'anthropic');
 report.hasOllama = PROVIDER_PRESETS.some((p) => p.protocol === 'ollama');
 
-const ds = createProviderFromPreset('deepseek', { apiKey: 'sk-test' });
-const an = createProvider('anthropic', { apiKey: 'sk-ant-test' });
-const ol = createProvider('ollama', {});
+const ds = congYuSheChuangJian('deepseek', { apiKey: 'sk-test' });
+const an = chuangjianGongYing('anthropic', { apiKey: 'sk-ant-test' });
+const ol = chuangjianGongYing('ollama', {});
 report.providers = {
   deepseek: { id: ds.id, protocol: ds.protocol, base: ds.baseURL },
   anthropic: { id: an.id, protocol: an.protocol, base: an.baseURL },
@@ -65,7 +65,7 @@ report.suggest = suggestMaxInstances();
 
 // 可选：DeepSeek 实网
 if (process.env.DEEPSEEK_API_KEY) {
-  const live = createProviderFromPreset('deepseek', { apiKey: process.env.DEEPSEEK_API_KEY });
+  const live = congYuSheChuangJian('deepseek', { apiKey: process.env.DEEPSEEK_API_KEY });
   try {
     const r = await live.chat({
       model: 'deepseek-chat',

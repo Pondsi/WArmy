@@ -135,7 +135,30 @@ if (argOf('--phase') === 'restart') {
   const info = store.info();
   check('新进程读到身份', !!info, info && info.fingerprint);
   check('指纹与上次一致（认得出自己）', !!info && fingerprintMatches(info.fingerprint, expectFp), info?.fingerprint);
-  check('人读别名保留（9 位 deviceId 兼容）', info?.alias === expectAlias, { got: info?.alias, want: expectAlias });
+  check('别名可以沿用历史的 9 位数字（**只是人读别名**，不再是身份）', info?.alias === expectAlias, { got: info?.alias, want: expectAlias });
+/**
+ * 产品主定稿：**9 位 ID 不再兼容**。
+ * 身份由「45 位凭证（= 私钥种子）」派生；9 位数字只允许当**人读别名**，
+ * 绝不能因为"像个 ID"就被当成有效设备 ID（那会让身份退回可猜测的空间）。
+ */
+{
+  const { isValidDeviceId } = await import('../dist/settings-store.js');
+  check('9 位数字不再被判为有效设备 ID', isValidDeviceId('375102948') === false, { got: isValidDeviceId('375102948') });
+  check('17 位十进制仍被接受（老配置不被判无效而重新生成身份）', isValidDeviceId('12345678901234567') === true, {});
+  const { generateCredential, isValidCredential, formatCredential } = await import('../dist/credential.js');
+  const cred = generateCredential();
+  check('新凭证 = 45 位且不含易混字符 I/O/Z', cred.length === 45 && isValidCredential(cred) && !/[IOZioz]/.test(cred), { len: cred.length, sample: formatCredential(cred).slice(0, 14) + '…' });
+  const { keyPairFromCredential } = await import('../dist/credential.js');
+  const k1 = keyPairFromCredential(cred);
+  const k2 = keyPairFromCredential(cred);
+  check('同一凭证在任何时候派生出同一把公钥（无中心服务器也能恢复身份）',
+    Buffer.from(k1.publicKey.export({ type: 'spki', format: 'der' })).toString('base64') ===
+    Buffer.from(k2.publicKey.export({ type: 'spki', format: 'der' })).toString('base64'), {});
+  const other = keyPairFromCredential(generateCredential());
+  check('不同凭证派生出的公钥不同（唯一性来自密钥空间，不靠服务器登记）',
+    Buffer.from(k1.publicKey.export({ type: 'spki', format: 'der' })).toString('base64') !==
+    Buffer.from(other.publicKey.export({ type: 'spki', format: 'der' })).toString('base64'), {});
+}
   check('代次保留', info?.generation === expectGen, info?.generation);
   check('名片保留', info?.contactCard?.email === expectEmail, info?.contactCard);
   const lk = store.load(pass);

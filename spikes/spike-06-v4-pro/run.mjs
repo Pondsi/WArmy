@@ -103,7 +103,7 @@ async function httpOnce(method, url, { headers = {}, body = null, timeoutMs = 20
       statusText: res.statusText,
       elapsedMs: Date.now() - started,
       bodyText: text,
-      body: safeJson(text),
+      body: anQuanJson(text),
     };
   } catch (e) {
     return {
@@ -115,7 +115,7 @@ async function httpOnce(method, url, { headers = {}, body = null, timeoutMs = 20
   }
 }
 
-function safeJson(text) {
+function anQuanJson(text) {
   try {
     return JSON.parse(text);
   } catch {

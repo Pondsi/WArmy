@@ -8,7 +8,7 @@
  */
 import { fork, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import type { ToolCall, ToolSpec } from '@warmy/providers';
+import type { GongJuDiaoYong, GongJuGuiGe } from '@warmy/providers';
 
 export interface MemoryClientOptions {
   nodePath?: string;
@@ -230,7 +230,7 @@ export const DEFAULT_MEMORY_TOOL_LABELS: MemoryToolLabels = {
 };
 
 /** 给模型看的工具清单（function calling） */
-export function memoryToolSpecs(labels: Partial<MemoryToolLabels> = {}): ToolSpec[] {
+export function memoryToolSpecs(labels: Partial<MemoryToolLabels> = {}): GongJuGuiGe[] {
   const L: MemoryToolLabels = { ...DEFAULT_MEMORY_TOOL_LABELS, ...(labels || {}) };
   return [
     {
@@ -305,7 +305,7 @@ export interface MemoryToolOutcome {
   meta: MemoryToolMeta;
 }
 
-function clampInt(v: unknown, lo: number, hi: number, dflt: number): number {
+function qianZhiZhengShu(v: unknown, lo: number, hi: number, dflt: number): number {
   const n = typeof v === 'number' ? v : Number(v);
   if (!Number.isFinite(n)) return dflt;
   const i = Math.floor(n);
@@ -351,12 +351,12 @@ function sanitize(e: unknown): string {
  */
 export async function runMemoryTool(
   client: MemoryClient | null,
-  call: ToolCall,
+  call: GongJuDiaoYong,
   opts: { maxChars?: number } = {}
 ): Promise<MemoryToolOutcome> {
   const name = call?.function?.name || '';
   const args = parseArgs(call?.function?.arguments);
-  const cap = clampInt(opts.maxChars, 64, MEMORY_TOOL_MAX_RETRIEVE_CHARS, MEMORY_TOOL_RESULT_CHARS);
+  const cap = qianZhiZhengShu(opts.maxChars, 64, MEMORY_TOOL_MAX_RETRIEVE_CHARS, MEMORY_TOOL_RESULT_CHARS);
   const meta: MemoryToolMeta = { tool: name, ok: false, chars: 0 };
   const fail = (msg: string, error?: string): MemoryToolOutcome => {
     meta.ok = false;
@@ -373,7 +373,7 @@ export async function runMemoryTool(
       const query = String(args['query'] ?? '').replace(/\s+/g, ' ').trim();
       meta.queryChars = query.length;
       if (!query) return fail('recall 需要 query 参数（检索串），例：recall("值班者状态机")。', 'bad-args');
-      const limit = clampInt(args['limit'], 1, MEMORY_TOOL_MAX_CARDS, 5);
+      const limit = qianZhiZhengShu(args['limit'], 1, MEMORY_TOOL_MAX_CARDS, 5);
       const res = await client.recall(query, limit);
       const cards: Array<{ seq?: number; recordId?: string; snippet?: string; score?: number; source?: string; sources?: string[] }> =
         Array.isArray(res?.cards) ? res.cards : [];
@@ -412,8 +412,8 @@ export async function runMemoryTool(
       if (!recordId && seq === undefined) {
         return fail('retrieve 需要 recordId 或 seq 之一，例：retrieve(seq=12) / retrieve(recordId="m-…")。', 'bad-args');
       }
-      const offset = clampInt(args['offset'], 0, 100_000_000, 0);
-      const want = clampInt(args['maxChars'], 1, MEMORY_TOOL_MAX_RETRIEVE_CHARS, cap);
+      const offset = qianZhiZhengShu(args['offset'], 0, 100_000_000, 0);
+      const want = qianZhiZhengShu(args['maxChars'], 1, MEMORY_TOOL_MAX_RETRIEVE_CHARS, cap);
       const limit = Math.min(want, cap, MEMORY_TOOL_MAX_RETRIEVE_CHARS);
       meta.anchor = { seq, recordId, offset };
       const res = await client.retrieve(recordId ? { recordId } : { seq: seq! });

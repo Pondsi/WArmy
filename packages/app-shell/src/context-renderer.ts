@@ -129,7 +129,7 @@ function coerceText(v: unknown): string {
   }
 }
 
-function clampInt(v: unknown, lo: number, hi: number, dflt: number): number {
+function qianZhiZhengShu(v: unknown, lo: number, hi: number, dflt: number): number {
   const n = typeof v === 'number' ? v : Number(v);
   if (!Number.isFinite(n)) return dflt;
   const i = Math.floor(n);
@@ -139,17 +139,17 @@ function clampInt(v: unknown, lo: number, hi: number, dflt: number): number {
 }
 
 /** 不建议按字符切断代理对（会产出半个 emoji） */
-function isHighSurrogate(ch: string | undefined): boolean {
+function shiGaoWeiDaiYuan(ch: string | undefined): boolean {
   if (!ch) return false;
   const c = ch.charCodeAt(0);
   return c >= 0xd800 && c <= 0xdbff;
 }
 
-function clipTailSafe(s: string, max: number): string {
+function jieWeiAnQuan(s: string, max: number): string {
   if (max <= 0) return '';
   if (s.length <= max) return s;
   let out = s.slice(0, max);
-  if (isHighSurrogate(out[out.length - 1])) out = out.slice(0, -1);
+  if (shiGaoWeiDaiYuan(out[out.length - 1])) out = out.slice(0, -1);
   return out;
 }
 
@@ -303,7 +303,7 @@ function hardClamp(
       out.push({ role: m.role, content: m.content });
       used += m.content.length;
     } else {
-      const cut = clipTailSafe(m.content, room);
+      const cut = jieWeiAnQuan(m.content, room);
       if (cut) out.push({ role: m.role, content: cut });
       break;
     }
@@ -350,8 +350,8 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
     ? Math.max(0, Math.floor(budgetNum))
     : DEFAULT_CONTEXT_BUDGET_CHARS;
 
-  const headWant = clampInt(o.keepHead, 0, n, Math.min(DEFAULT_KEEP_HEAD, n));
-  const tailWant = clampInt(
+  const headWant = qianZhiZhengShu(o.keepHead, 0, n, Math.min(DEFAULT_KEEP_HEAD, n));
+  const tailWant = qianZhiZhengShu(
     o.keepTail,
     0,
     Math.max(0, n - headWant),
@@ -428,7 +428,7 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
         // 有省略、且该档要点有正文时，才要求要点拿到份额
         if (enforceDigestShare && omitted && hasBody && cap < minDigest) continue;
 
-        const body = omitted && hasBody ? clipTailSafe(digestOf(h, t), cap) : '';
+        const body = omitted && hasBody ? jieWeiAnQuan(digestOf(h, t), cap) : '';
         const msgs = omitted
           ? [...headMsgs, { role: 'system', content: pre + body }, ...tailMsgs]
           : [...headMsgs, ...tailMsgs];
@@ -448,7 +448,7 @@ export function renderBoundedView(entries: LogEntry[], opts: RenderOptions): Bou
   if (!satisfied) {
     elided = rangesOf(log, 0, n);
     const minText = pointerPrefix('min', elided, hint, logBytes);
-    const text = clipTailSafe(minText, budgetChars);
+    const text = jieWeiAnQuan(minText, budgetChars);
     messages = text ? [{ role: 'system', content: text }] : [];
     pointers = 0; // 指针被截断 → 不可执行，如实记 0 条
   }

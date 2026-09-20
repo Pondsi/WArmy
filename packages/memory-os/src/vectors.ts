@@ -27,7 +27,7 @@ export function quantizeToInt8(vec: number[] | Float32Array): { data: Int8Array;
   return { data, scale };
 }
 
-export function dequantizeFromInt8(data: Int8Array, scale: number): Float32Array {
+export function congInt8FanLiangHua(data: Int8Array, scale: number): Float32Array {
   const out = new Float32Array(data.length);
   for (let i = 0; i < data.length; i++) {
     out[i] = (data[i] ?? 0) * scale;
@@ -35,7 +35,7 @@ export function dequantizeFromInt8(data: Int8Array, scale: number): Float32Array
   return out;
 }
 
-export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+export function yuXianXiangSiDu(a: Float32Array, b: Float32Array): number {
   let dot = 0;
   let na = 0;
   let nb = 0;
@@ -68,7 +68,7 @@ export function unpackInt8(blob: Buffer | Uint8Array): Int8Array {
 }
 
 /** 量化 + 打包一站式：float 向量 → {blob, scale, dim} */
-export function encodeVector(vec: Float32Array | number[]): { blob: Buffer; scale: number; dim: number } {
+export function bianMaXiangLiang(vec: Float32Array | number[]): { blob: Buffer; scale: number; dim: number } {
   const { data, scale } = quantizeToInt8(vec);
   return { blob: packInt8(data), scale, dim: data.length };
 }
@@ -77,7 +77,7 @@ export function encodeVector(vec: Float32Array | number[]): { blob: Buffer; scal
  * int8 上的余弦相似度：完全不反量化。
  * 与 float 版的结果差异只来自量化误差（实测 <1e-2），但快 3–4 倍。
  */
-export function cosineInt8(a: Int8Array, aScale: number, b: Int8Array, bScale: number): number {
+export function yuXianInt8(a: Int8Array, aScale: number, b: Int8Array, bScale: number): number {
   const len = Math.min(a.length, b.length);
   let dot = 0;
   let na = 0;

@@ -14,7 +14,7 @@ import {
   type LogEntry,
 } from './context-renderer.js';
 import { retrieveAssetsForChat, registerChatAsset } from './asset-wire.js';
-import { chatWithTools, type ChatMessage, type ToolCall, type ToolSpec } from '@warmy/providers';
+import { liaoTianDaiGongJu, type LiaoTianXiaoXi, type GongJuDiaoYong, type GongJuGuiGe } from '@warmy/providers';
 
 export interface DutyProviderCfg {
   presetId: string;
@@ -47,7 +47,7 @@ export interface OrchestratorDeps {
   router: GroupChatRouter;
   board: KanbanCang;
   ccr: CcrGateway;
-  history: Map<string, ChatMessage[]>;
+  history: Map<string, LiaoTianXiaoXi[]>;
   /** 知识库写入（可选） */
   addEvent?: (title: string, body: string, groupId: string) => void;
   /** 取本机实例 ID 列表 */
@@ -64,8 +64,8 @@ export interface OrchestratorDeps {
    * 工具调用（ADR 002 §9.4 待办 2）：与 chat-send 共用同一套 recall/retrieve 工具与同一个循环。
    * 不给就等于"不暴露工具"（退回普通单轮对话）。
    */
-  toolSpecs?: () => ToolSpec[] | undefined;
-  runTool?: (call: ToolCall, ctx: { round: number; maxResultChars: number }) => Promise<string> | string;
+  toolSpecs?: () => GongJuGuiGe[] | undefined;
+  runTool?: (call: GongJuDiaoYong, ctx: { round: number; maxResultChars: number }) => Promise<string> | string;
   toolLimits?: () => { maxRounds: number; maxResultChars: number; totalChars: number };
   /** 项目 MEMORY（有界片段）；来自 group-store.project.memory，不来自 memory-os 流水 */
   projectMemory?: (groupId: string) => string;
@@ -190,12 +190,12 @@ export async function orchestrateGroupMessage(
       distilled = r.distilled;
     } else {
       // 无空闲执行者 → 值班者自己（带卡片）
-      const { createProviderFromPreset } = await import('@warmy/providers');
-      const provider = createProviderFromPreset(cfg.presetId, {
+      const { congYuSheChuangJian } = await import('@warmy/providers');
+      const provider = congYuSheChuangJian(cfg.presetId, {
         apiKey: cfg.apiKey,
         baseURL: cfg.baseURL || undefined,
       });
-      const sys: ChatMessage = {
+      const sys: LiaoTianXiaoXi = {
         role: 'system',
         content:
           `你是 WArmy 项目「msg.groupId」的值班者。\ncard\n` +
@@ -221,15 +221,15 @@ export async function orchestrateGroupMessage(
       });
       // ADR 002 §9.4 待办 2：值班者路径同样可以用 recall/retrieve 解引用被省略的历史
       const limits = deps.toolLimits?.() ?? { maxRounds: 3, maxResultChars: 4000, totalChars: 12000 };
-      const tools: ToolSpec[] | undefined = deps.toolSpecs?.();
-      const req: Parameters<typeof chatWithTools>[1] = {
+      const tools: GongJuGuiGe[] | undefined = deps.toolSpecs?.();
+      const req: Parameters<typeof liaoTianDaiGongJu>[1] = {
         model: cfg.model || 'deepseek-chat',
-        messages: [sys, ...(view.messages as ChatMessage[])],
+        messages: [sys, ...(view.messages as LiaoTianXiaoXi[])],
         maxTokens: 512,
         tools,
       };
       const loop = deps.runTool
-        ? await chatWithTools(provider, req, deps.runTool, {
+        ? await liaoTianDaiGongJu(provider, req, deps.runTool, {
             maxRounds: limits.maxRounds,
             maxResultChars: limits.maxResultChars,
             maxToolResultChars: limits.totalChars,
@@ -362,9 +362,9 @@ async function runOneDutyRound(
       const r = await runShortLivedExecutor({ taskId: 't-' + Date.now(), brief, contextItems: [card, `用户消息: msg.content`] }, cfg);
       distilled = r.distilled;
     } else {
-      const { createProviderFromPreset } = await import('@warmy/providers');
-      const provider = createProviderFromPreset(cfg.presetId, { apiKey: cfg.apiKey, baseURL: cfg.baseURL || undefined });
-      const sys: ChatMessage = {
+      const { congYuSheChuangJian } = await import('@warmy/providers');
+      const provider = congYuSheChuangJian(cfg.presetId, { apiKey: cfg.apiKey, baseURL: cfg.baseURL || undefined });
+      const sys: LiaoTianXiaoXi = {
         role: 'system',
         content: `你是 WArmy 项目「msg.groupId」的值班者。\ncard\n请用简短中文回复。`,
       };
@@ -382,15 +382,15 @@ async function runOneDutyRound(
         recallHint: msg.content,
       });
       const limits = deps.toolLimits?.() ?? { maxRounds: 3, maxResultChars: 4000, totalChars: 12000 };
-      const tools: ToolSpec[] | undefined = deps.toolSpecs?.();
-      const req: Parameters<typeof chatWithTools>[1] = {
+      const tools: GongJuGuiGe[] | undefined = deps.toolSpecs?.();
+      const req: Parameters<typeof liaoTianDaiGongJu>[1] = {
         model: cfg.model || 'deepseek-chat',
-        messages: [sys, ...(view.messages as ChatMessage[])],
+        messages: [sys, ...(view.messages as LiaoTianXiaoXi[])],
         maxTokens: 512,
         tools,
       };
       const loop = deps.runTool
-        ? await chatWithTools(provider, req, deps.runTool, {
+        ? await liaoTianDaiGongJu(provider, req, deps.runTool, {
             maxRounds: limits.maxRounds,
             maxResultChars: limits.maxResultChars,
             maxToolResultChars: limits.totalChars,

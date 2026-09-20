@@ -175,7 +175,7 @@ export function signEd25519Local(message: Bytes, privateKeyRaw: Bytes): Buffer {
   return crypto.sign(null, toBuf(message), ed25519PrivateKeyObject(privateKeyRaw));
 }
 
-export function generateEd25519(): { publicKey: Buffer; privateKey: Buffer } {
+export function shengChengEd25519(): { publicKey: Buffer; privateKey: Buffer } {
   const kp = crypto.generateKeyPairSync('ed25519');
   return { publicKey: rawPublicKey(kp.publicKey), privateKey: rawPrivateKey(kp.privateKey) };
 }
@@ -273,7 +273,7 @@ export function u32be(n: number): Buffer {
 }
 
 /** 大端长度前缀的分帧读取器（TCP 粘包用） */
-export class FrameDecoder {
+export class ZhenJieMa {
   private buf: Buffer = Buffer.alloc(0);
 
   constructor(private maxFrame = 16 * 1024 * 1024) {}

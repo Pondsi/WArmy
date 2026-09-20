@@ -409,7 +409,7 @@ const mockBase = `http://127.0.0.1:${mockPort}/v1`;
   const { GroupChatRouter, DEFAULT_PERMISSIONS } = await import(
     pathToFileURL(path.join(repoRoot, 'packages', 'group-router', 'dist', 'index.js')).href
   );
-  const { BoardStore } = await import(pathToFileURL(path.join(repoRoot, 'packages', 'board', 'dist', 'index.js')).href);
+  const { KanbanCang } = await import(pathToFileURL(path.join(repoRoot, 'packages', 'board', 'dist', 'index.js')).href);
   const { CcrGateway } = await import(
     pathToFileURL(path.join(repoRoot, 'packages', 'ccr-compressor', 'dist', 'index.js')).href
   );
@@ -420,7 +420,7 @@ const mockBase = `http://127.0.0.1:${mockPort}/v1`;
   });
   router.join('g-ctx', { id: 'duty-1', name: '值班者', local: true, dutyEligible: true, status: 'idle' });
   const boardDir = path.join(os.tmpdir(), 'warmy-verify-ctx-board-' + Date.now());
-  const board = new BoardStore(boardDir);
+  const board = new KanbanCang(boardDir);
 
   // 值班者会话日志：200 条，远大于预算
   const dutyLog = [];

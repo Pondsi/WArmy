@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { BertWordPieceTokenizer, type TokenizerConfigEcho } from './tokenizer.js';
+import { BertWordPieceFenCiQi, type TokenizerConfigEcho } from './tokenizer.js';
 
 const require = createRequire(import.meta.url);
 
@@ -27,7 +27,7 @@ const SIMD_PROBE = new Uint8Array([
   0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11,
 ]);
 
-export function detectWasmSimd(): boolean {
+export function tanCeWasmSimd(): boolean {
   try {
     // lib 里没有 DOM，WebAssembly 走 globalThis 取（运行时由 Node 提供）
     const WA = (globalThis as any).WebAssembly;
@@ -107,11 +107,11 @@ export class OnnxEmbedder {
   readonly status: VectorStatus;
   private ort: any;
   private session: any;
-  private tokenizer: BertWordPieceTokenizer;
+  private tokenizer: BertWordPieceFenCiQi;
   private maxLength: number;
   private queryPrefix: string;
 
-  private constructor(ort: any, session: any, tokenizer: BertWordPieceTokenizer, status: VectorStatus, opts: EmbedderOptions) {
+  private constructor(ort: any, session: any, tokenizer: BertWordPieceFenCiQi, status: VectorStatus, opts: EmbedderOptions) {
     this.ort = ort;
     this.session = session;
     this.tokenizer = tokenizer;
@@ -128,7 +128,7 @@ export class OnnxEmbedder {
       reason: '',
       backend: 'none',
       dim: 0,
-      simdSupported: detectWasmSimd(),
+      simdSupported: tanCeWasmSimd(),
       threads: opts.threads ?? 1,
       modelPath: opts.modelPath,
       tokenizerPath,
@@ -154,7 +154,7 @@ export class OnnxEmbedder {
     }
     status.modelBytes = fs.statSync(opts.modelPath).size;
 
-    const tokenizer = BertWordPieceTokenizer.fromFile(tokenizerPath);
+    const tokenizer = BertWordPieceFenCiQi.fromFile(tokenizerPath);
     status.tokenizer = tokenizer.config;
 
     let handle: OrtHandle;

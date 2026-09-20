@@ -29,7 +29,7 @@
  */
 import net from 'node:net';
 import { sha256Hex } from './codec.js';
-import type { DhtAddr } from './dht.js';
+import type { DhtDiZhi } from './dht.js';
 
 export const RELAY_PROTOCOL = 'warmy-relay/1';
 export const DEFAULT_RELAY_PAIR_TIMEOUT_MS = 10_000;
@@ -185,7 +185,7 @@ export class RelayNode {
   get boundPort(): number {
     return this.port;
   }
-  get address(): DhtAddr {
+  get address(): DhtDiZhi {
     return { host: this.opts.host ?? '127.0.0.1', port: this.boundPort };
   }
   get stats(): {
@@ -477,7 +477,7 @@ export class RelayNode {
 export interface RelayTunnelStats {
   role: RelayRole;
   token: string;
-  relay: DhtAddr;
+  relay: DhtDiZhi;
   /** 中继已确认注册 */
   registered: boolean;
   /** 已与对端配对 */
@@ -491,7 +491,7 @@ export interface RelayTunnelStats {
 
 export interface RelayTunnelOptions {
   /** 中继地址（有公网地址的那台机器） */
-  relay: DhtAddr;
+  relay: DhtDiZhi;
   /** 配对标签（两端必须算出**同一个**值；见 relayTokenFor） */
   token: string;
   /** 本端指纹（只作为 hello 的自称） */
@@ -752,7 +752,7 @@ export class RelayTunnelDialer {
  * 这样本机根本不需要接受任何入站连接 —— 正是双 CGNAT 场景需要的。
  */
 export class RelayTunnelListener {
-  private readonly opts: RelayTunnelOptions & { localTarget: DhtAddr };
+  private readonly opts: RelayTunnelOptions & { localTarget: DhtDiZhi };
   private readonly stats: RelayTunnelStats;
   private readonly sampleLog: RelaySample[] = [];
   private readonly now: () => number;
@@ -763,7 +763,7 @@ export class RelayTunnelListener {
   private readonly sinkPending: Buffer[] = [];
   private pairedFired = false;
 
-  constructor(opts: RelayTunnelOptions & { localTarget: DhtAddr }) {
+  constructor(opts: RelayTunnelOptions & { localTarget: DhtDiZhi }) {
     this.opts = opts;
     this.now = opts.now ?? (() => Date.now());
     this.stats = {
@@ -1017,7 +1017,7 @@ export interface RelayCandidateRef {
   fingerprint?: string;
   nodeId?: string;
   /** 中继节点的地址（真实部署时 = 有公网地址的那台机器） */
-  addr: DhtAddr;
+  addr: DhtDiZhi;
 }
 
 export interface RelayDecision {
@@ -1031,7 +1031,7 @@ export interface RelayDecision {
   peerDialable?: boolean;
   bothUndialable: boolean;
   /** 中继地址 */
-  relay?: DhtAddr;
+  relay?: DhtDiZhi;
   /**
    * 两端共享的配对 token（两端各自确定性算出同一个值）。
    * **只有给了 `selfFingerprint` 才算得出来** —— 否则为 undefined 且 `tokenSymmetric=false`（诚实标注）。
@@ -1039,7 +1039,7 @@ export interface RelayDecision {
   token?: string;
   /** token 是否"两端对称"（= 双方各用自己+对方指纹都能算出同一个值） */
   tokenSymmetric: boolean;
-  attempts: { addr: DhtAddr; ok: boolean; detail?: string; ms: number }[];
+  attempts: { addr: DhtDiZhi; ok: boolean; detail?: string; ms: number }[];
   /**
    * 是否需要向用户**明确告知**："你的网络两端都无法直连，需要一台有公网地址的机器做中继"。
    * 这正是附八.3 第 2 条要的状态（可检测 ⇒ 可明确表达 ⇒ 不必一直转圈）。
@@ -1064,7 +1064,7 @@ export interface RelayDecisionOptions {
  * 配对 token：**两端确定性算出同一个值**（无带外通道）。
  * 刻意不含时间因素：换窗口会导致"两端窗口不一致就配不上"；重放风险由端到端加密与单调计数兜住。
  */
-export function relayTokenFor(fingerprintA: string, fingerprintB: string, relay: DhtAddr): string {
+export function relayTokenFor(fingerprintA: string, fingerprintB: string, relay: DhtDiZhi): string {
   const pair = [fingerprintA, fingerprintB].sort().join('|');
   return sha256Hex(Buffer.from(`${RELAY_PROTOCOL}|token|${pair}|${relay.host}:${relay.port}`, 'utf8')).slice(0, 32);
 }
@@ -1096,7 +1096,7 @@ async function defaultDial(host: string, port: number, timeoutMs: number): Promi
  *     一个都没有 → `relay-none-configured`；都连不上 → `relay-unreachable`（两者都 `needsPublicRelayNotice`）。
  *  4. 对端可拨入性未知 → 如实标 `dialability-unknown`（不猜）。
  */
-export async function decideRelay(
+export async function jueDingZhongJi(
   target: { fingerprint: string; nodeId?: string },
   opts: RelayDecisionOptions
 ): Promise<RelayDecision> {

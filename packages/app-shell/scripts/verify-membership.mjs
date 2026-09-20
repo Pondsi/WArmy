@@ -31,20 +31,20 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import {
-  ConnectionLiveness,
+  LianJieHuoXing,
   DEFAULT_MEMBER_CERT_TTL_MS,
   MEMBERSHIP_CLOCK_SKEW_MS,
   MEMBER_CERT_SCHEMA,
   REVOCATION_LIST_SCHEMA,
   applyRevocationList,
-  buildMemberCertificate,
-  buildRevocationList,
-  canonicalMembershipJson,
-  chainFingerprintsFor,
-  chainRootCertId,
-  describeMemberCertificate,
-  findRevocationEntry,
-  generateEd25519,
+  gouJianChengYuanZhengShu,
+  gouJianCheXiaoBiao,
+  guiFanChengYuanJson,
+  lianShiZhiWen,
+  lianGenZhengShuId,
+  shuoMingChengYuanZhengShu,
+  chaZhaoCheXiaoTiaoMu,
+  shengChengEd25519,
   isRevoked,
   isSameMember,
   memberCertSigningBytes,
@@ -185,9 +185,9 @@ check('指纹形态合法（Crockford base32 + 校验位）', isValidFingerprint
 check('公钥 → 指纹可由身份层实现复算（与证书绑定用的推导一致）', fingerprintFromPublicKey(infoB.publicKey) === infoB.fingerprint, infoB.fingerprint);
 check('membershipStoreFor 对同一 IdentityStore 返回同一实例（进程内一致）', membershipStoreFor(creator.store) === membershipStoreFor(creator.store));
 check('membershipStoreFor(null) 返回 null（不抛）', membershipStoreFor(null) === null);
-check('canonicalMembershipJson 键序无关（同值同串）', canonicalMembershipJson({ b: 1, a: 2 }) === canonicalMembershipJson({ a: 2, b: 1 }), canonicalMembershipJson({ b: 1, a: 2 }));
-check('canonicalMembershipJson 丢 undefined 字段', canonicalMembershipJson({ a: 1, b: undefined }) === canonicalMembershipJson({ a: 1 }));
-check('未签名证书（issuerSignature 为空）必须被拒', verifyMemberCertificate(buildMemberCertificate({
+check('canonicalMembershipJson 键序无关（同值同串）', guiFanChengYuanJson({ b: 1, a: 2 }) === guiFanChengYuanJson({ a: 2, b: 1 }), guiFanChengYuanJson({ b: 1, a: 2 }));
+check('canonicalMembershipJson 丢 undefined 字段', guiFanChengYuanJson({ a: 1, b: undefined }) === guiFanChengYuanJson({ a: 1 }));
+check('未签名证书（issuerSignature 为空）必须被拒', verifyMemberCertificate(gouJianChengYuanZhengShu({
   certId: 'mc-unsigned', groupId: GROUP, memberFingerprint: infoB.fingerprint, memberPublicKey: infoB.publicKey,
   issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey,
 }), { ...VOPT0 }).code === 'bad-signature');
@@ -233,7 +233,7 @@ check('本包验签通过（code=ok）', vBob.ok === true && vBob.code === 'ok',
 check('node:crypto 独立复核：签名覆盖的字节确实由创建者私钥签出', independentVerifyCert(bobCert) === true);
 check('指纹推导用错实现时也一致（默认 base32(sha256(raw)) 与身份层推导不同，故必须注入）', verifyMemberCertificate(bobCert).ok === false, verifyMemberCertificate(bobCert).code);
 
-const described = describeMemberCertificate(bobCert);
+const described = shuoMingChengYuanZhengShu(bobCert);
 check('describeMemberCertificate 给出 32 字节 raw 公钥（b64url）', Buffer.from(described.memberPublicKeyRawB64u, 'base64url').length === 32, described.memberPublicKeyRawB64u.length);
 check('describeMemberCertificate 不含任何私钥字段', !JSON.stringify(described).toLowerCase().includes('private'));
 
@@ -316,7 +316,7 @@ check('成对换掉"公钥 + 指纹"（自洽的攻击者公钥）→ 也失败�
   return r.ok === false;
 })());
 check('把 issuerSignature 换成"用别的私钥对同一载荷重签的合法签名" → 仍失败（验签用的是 issuerPublicKey）', (() => {
-  const evilKeys = generateEd25519();
+  const evilKeys = shengChengEd25519();
   const evilPkcs8 = Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), evilKeys.privateKey]);
   const resigned = independentSignCert(bobCert, evilPkcs8);
   const r = verifyMemberCertificate(resigned, VOPT);
@@ -337,7 +337,7 @@ section('3. 过期判定只用**本地时钟**（声明里的时间戳不作数�
 const nowMs = Date.now();
 /** 明确"已过期"= 早于 now - 容差（容差是 5 分钟，所以"刚过 1 秒"仍然算有效） */
 const EXPIRED_AT = nowMs - DEFAULT_CLOCK_SKEW_MS - 60_000;
-const shortCertBase = buildMemberCertificate(
+const shortCertBase = gouJianChengYuanZhengShu(
   {
     certId: 'mc-short', groupId: GROUP, memberFingerprint: infoC.fingerprint, memberPublicKey: infoC.publicKey,
     issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey,
@@ -386,7 +386,7 @@ check('容差内的 issuedAt（+1min）仍有效（容差确实生效）', verif
 section('4. 签发者必须是本群创建者');
 
 const evilSignedForB = independentSignCert(
-  buildMemberCertificate(
+  gouJianChengYuanZhengShu(
     {
       certId: 'mc-bob-evil', groupId: GROUP, memberFingerprint: infoB.fingerprint, memberPublicKey: infoB.publicKey,
       issuerFingerprint: infoEvil.fingerprint, issuerPublicKey: infoEvil.publicKey,
@@ -409,10 +409,10 @@ check('MembershipStore.putCertificate 拒收攻击者签的证书（stored=false
 })(), creatorMembership.putCertificate(evilSignedForB, { expectIssuerFingerprint: infoCreator.fingerprint }).code);
 check('拒收后落盘里没有这张证书', readJson(membershipFileFor(creator.store)).groups[GROUP].certs.length === 1);
 check('换了签名域（用换证声明的域签证书载荷）→ bad-signature', (() => {
-  const payload = `warmy.identity.rotation.v1\n${canonicalMembershipJson({})}`;
+  const payload = `warmy.identity.rotation.v1\n${guiFanChengYuanJson({})}`;
   void payload;
   const priv = keyObjectFromPrivateDer(creator.store.load().privateKeyDer);
-  const wrongDomain = crypto.sign(null, Buffer.from(`warmy.other.domain\n${canonicalMembershipJson({
+  const wrongDomain = crypto.sign(null, Buffer.from(`warmy.other.domain\n${guiFanChengYuanJson({
     schema: bobCert.schema, certId: bobCert.certId, groupId: bobCert.groupId, memberFingerprint: bobCert.memberFingerprint,
     memberPublicKey: bobCert.memberPublicKey, displayName: 'bob', role: bobCert.role, permissions: bobCert.permissions,
     issuedAt: bobCert.issuedAt, expiresAt: bobCert.expiresAt, issuerFingerprint: bobCert.issuerFingerprint,
@@ -450,13 +450,13 @@ check('吊销条目记录 certId 与 memberFingerprint', revokeCarol.list?.entri
 const carolVerdict = creatorMembership.authorizeFingerprint(infoC.fingerprint);
 check('吊销后 carol 名册判定：decided=true 且拒（revoked）', carolVerdict.decided === true && carolVerdict.ok === false && carolVerdict.code === 'revoked', carolVerdict);
 check('吊销判定给出 certId（可追责）', carolVerdict.certId === 'mc-carol-1', carolVerdict.certId);
-check('findRevocationEntry 命中成员指纹', !!findRevocationEntry(creatorMembership.revocation(GROUP), { memberFingerprint: infoC.fingerprint }));
+check('findRevocationEntry 命中成员指纹', !!chaZhaoCheXiaoTiaoMu(creatorMembership.revocation(GROUP), { memberFingerprint: infoC.fingerprint }));
 check('isRevoked 命中 certId', isRevoked(creatorMembership.revocation(GROUP), { certId: 'mc-carol-1' }) === true);
 check('被吊销者即使证书本身**完全有效**也判拒（证书有效性与吊销是两个判据）', verifyMemberCertificate(carolIssued.cert, VOPT).ok === true && carolVerdict.ok === false);
 check('吊销条目 revokedAt 被改成"一年后"依然吊销（不看时间戳）', (() => {
   const cur = creatorMembership.revocation(GROUP);
   const tampered = { ...cur, entries: cur.entries.map((e) => ({ ...e, revokedAt: Date.now() + 365 * 86_400_000 })) };
-  return isRevoked(tampered, { certId: 'mc-carol-1' }) === true && !!findRevocationEntry(tampered, { memberFingerprint: infoC.fingerprint });
+  return isRevoked(tampered, { certId: 'mc-carol-1' }) === true && !!chaZhaoCheXiaoTiaoMu(tampered, { memberFingerprint: infoC.fingerprint });
 })());
 check('吊销列表落盘（membership.json 里有 listVersion 与 entries）', (() => {
   const f = readJson(membershipFileFor(creator.store));
@@ -474,7 +474,7 @@ section('6. 吊销列表：回滚、同版本不同内容、条目变少 全部�
 
 const curList = creatorMembership.revocation(GROUP);
 const v2 = await signRevocationList(
-  buildRevocationList({ groupId: GROUP, listVersion: 2, entries: [...curList.entries], issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey }),
+  gouJianCheXiaoBiao({ groupId: GROUP, listVersion: 2, entries: [...curList.entries], issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey }),
   (b) => signerCreator.sign(b)
 );
 const applied2 = creatorMembership.applyRevocationList(GROUP, v2);
@@ -485,7 +485,7 @@ check('回滚（再送 v1）→ code=rollback 且被拒', rollback.ok === false 
 check('回滚被拒后本机列表仍是 v2（没被降级）', creatorMembership.revocation(GROUP).listVersion === 2);
 check('纯 applyRevocationList(v2, v1) 也报 rollback（协议层同样挡）', applyRevocationList(v2, curList).code === 'rollback');
 const sameVersionDifferent = await signRevocationList(
-  buildRevocationList({ groupId: GROUP, listVersion: 2, entries: [], issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey, issuedAt: v2.issuedAt + 5000 }),
+  gouJianCheXiaoBiao({ groupId: GROUP, listVersion: 2, entries: [], issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey, issuedAt: v2.issuedAt + 5000 }),
   (b) => signerCreator.sign(b)
 );
 const replayRes = creatorMembership.applyRevocationList(GROUP, sameVersionDifferent);
@@ -495,7 +495,7 @@ check('同版本(v2)且内容相同 → 幂等接受（changed=false）', (() =>
   return r.ok === true && r.changed === false;
 })());
 const v3Dropped = await signRevocationList(
-  buildRevocationList({ groupId: GROUP, listVersion: 3, entries: [], issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey }),
+  gouJianCheXiaoBiao({ groupId: GROUP, listVersion: 3, entries: [], issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey }),
   (b) => signerCreator.sign(b)
 );
 const dropped = creatorMembership.applyRevocationList(GROUP, v3Dropped);
@@ -513,7 +513,7 @@ check('伪造 issuerFingerprint（签名仍是创建者的）→ 被拒', (() =>
   return r.ok === false;
 })(), verifyRevocationList({ ...v2, issuerFingerprint: infoEvil.fingerprint }, VOPT).code);
 const evilList = await signRevocationList(
-  buildRevocationList({ groupId: GROUP, listVersion: 9, entries: [{ certId: 'mc-bob-1', memberFingerprint: infoB.fingerprint, reason: 'admin', revokedAt: nowMs }], issuerFingerprint: infoEvil.fingerprint, issuerPublicKey: infoEvil.publicKey }),
+  gouJianCheXiaoBiao({ groupId: GROUP, listVersion: 9, entries: [{ certId: 'mc-bob-1', memberFingerprint: infoB.fingerprint, reason: 'admin', revokedAt: nowMs }], issuerFingerprint: infoEvil.fingerprint, issuerPublicKey: infoEvil.publicKey }),
   (b) => signerCreator.sign(b) // 用创建者的密钥签，但 issuer 字段写攻击者 → 验签必须失败
 );
 check('attacker 自称签发者但签名不是他的 → bad-signature', verifyRevocationList(evilList, VOPT).code === 'bad-signature');
@@ -618,7 +618,7 @@ check('chainFingerprintsFor 覆盖链上两个指纹', (() => {
   const fps = creatorMembership.chainFingerprints(bobInfoAfter.fingerprint);
   return fps.includes(bobInfoBefore.fingerprint) && fps.includes(bobInfoAfter.fingerprint);
 })(), creatorMembership.chainFingerprints(bobInfoAfter.fingerprint).length);
-check('chainRootCertId 指向链根（旧 certId）', chainRootCertId(creatorMembership.listCertificates(GROUP), 'mc-bob-2') === CREATOR_CERT_ID, chainRootCertId(creatorMembership.listCertificates(GROUP), 'mc-bob-2'));
+check('chainRootCertId 指向链根（旧 certId）', lianGenZhengShuId(creatorMembership.listCertificates(GROUP), 'mc-bob-2') === CREATOR_CERT_ID, lianGenZhengShuId(creatorMembership.listCertificates(GROUP), 'mc-bob-2'));
 check('walkCertChain 给出 旧→新 的顺序', (() => {
   const c = walkCertChain(creatorMembership.listCertificates(GROUP), 'mc-bob-2');
   return c.certIds.length === 2 && c.certIds[0] === CREATOR_CERT_ID && c.fingerprints[1] === bobInfoAfter.fingerprint;
@@ -638,7 +638,7 @@ check('无关指纹的链根不同（理由里给出两个根）', (() => {
   return r.rootA !== r.rootB && /≠/.test(r.reason);
 })(), isSameMember(creatorMembership.listCertificates(GROUP), bobInfoAfter.fingerprint, infoC.fingerprint));
 check('完全没有证书的新指纹 → isSameMember false（理由：没有成员证书）', isSameMember(creatorMembership.listCertificates(GROUP), bobInfoAfter.fingerprint, infoEvil.fingerprint).reason.includes('没有成员证书'));
-check('carol 的证书链根是她自己（无 supersedes）', chainRootCertId(creatorMembership.listCertificates(GROUP), 'mc-carol-1') === 'mc-carol-1');
+check('carol 的证书链根是她自己（无 supersedes）', lianGenZhengShuId(creatorMembership.listCertificates(GROUP), 'mc-carol-1') === 'mc-carol-1');
 check('链断裂（supersedes 指向本机没有的证书）→ broken=true 但不崩', (() => {
   const certs = [...creatorMembership.listCertificates(GROUP), { ...bobCert, certId: 'mc-orphan', supersedes: 'mc-missing', memberFingerprint: 'AAAA-BBBB-CCCC-DDDD-EEEE' }];
   const c = walkCertChain(certs, 'mc-orphan');
@@ -739,7 +739,7 @@ check('证书记录优先于 TOFU：被吊销者即使在本机联系人表里�
 check('过期证书也要落盘（stored=true）→ 名册因此明确拒，而不是退回 TOFU', (() => {
   const m = new MembershipStore(path.join(tmpRoot, 'expired-store.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS, now: () => nowMs });
   const expired = independentSignCert(
-    buildMemberCertificate(
+    gouJianChengYuanZhengShu(
       { certId: 'mc-expired', groupId: 'g-exp', memberFingerprint: infoC.fingerprint, memberPublicKey: infoC.publicKey,
         issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey, issuedAt: EXPIRED_AT - 3_600_000, expiresAt: EXPIRED_AT },
       { now: nowMs }
@@ -752,7 +752,7 @@ check('过期证书也要落盘（stored=true）→ 名册因此明确拒，而�
 })(), (() => {
   const m = new MembershipStore(path.join(tmpRoot, 'expired-store-probe.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS, now: () => nowMs });
   const expired = independentSignCert(
-    buildMemberCertificate(
+    gouJianChengYuanZhengShu(
       { certId: 'mc-expired-p', groupId: 'g-exp', memberFingerprint: infoC.fingerprint, memberPublicKey: infoC.publicKey,
         issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey, issuedAt: EXPIRED_AT - 3_600_000, expiresAt: EXPIRED_AT },
       { now: nowMs }
@@ -971,7 +971,7 @@ check('entries 仍是数组且按时间倒序', Array.isArray(entries) && entrie
 section('11. 成员在线态：活连接按指纹判定；拿不到指纹如实 unattributed');
 
 let livenessClock = 1_000_000;
-const liveness = new ConnectionLiveness({ now: () => livenessClock, offlineFailures: 2, offlineAfterMs: 30_000 });
+const liveness = new LianJieHuoXing({ now: () => livenessClock, offlineFailures: 2, offlineAfterMs: 30_000 });
 const liveB = liveness.registerConnection(bobInfoAfter.fingerprint, { id: 'conn-1', kind: 'member-initiated' });
 check('真活连接注册后该指纹在线（member-connection）', liveB.online === true && liveB.via === 'member-connection', liveB);
 const presenceMembers = [
@@ -1109,7 +1109,7 @@ check('两个实例（不同进程视角）看到同一真相', (() => {
 
 // 缓存刷新：另一实例写入后，本实例应看到（按 mtime+size 判定）
 const vNext = await signRevocationList(
-  buildRevocationList({
+  gouJianCheXiaoBiao({
     groupId: GROUP, listVersion: reopened.revocation(GROUP).listVersion + 1,
     entries: [...reopened.revocation(GROUP).entries, { certId: 'mc-evil-x', memberFingerprint: infoEvil.fingerprint, reason: 'compromise', revokedAt: Date.now() }],
     issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey,
@@ -1151,7 +1151,7 @@ check('membershipSnapshot 结构化输出可用（逐证书带 valid/code）', (
 check('membershipSnapshot 对"已过期"的证书给出 valid=false + code=expired', (() => {
   const m = new MembershipStore(path.join(tmpRoot, 'snap-expired.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
   const expired = independentSignCert(
-    buildMemberCertificate(
+    gouJianChengYuanZhengShu(
       { certId: 'mc-snap-exp', groupId: 'g-snap', memberFingerprint: infoC.fingerprint, memberPublicKey: infoC.publicKey,
         issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey, issuedAt: nowMs - 60_000, expiresAt: nowMs + 1000 },
       { now: nowMs }
@@ -1177,7 +1177,7 @@ check('跨群一致性：吊销与"有效证书"并存时**与写入顺序无关
     const revokeGroup = 'g-revokes';
     const validGroup = 'g-valid';
     const revocationList = await signRevocationList(
-      buildRevocationList({
+      gouJianCheXiaoBiao({
         groupId: revokeGroup, listVersion: 1,
         entries: [{ certId: 'mc-someone', memberFingerprint: infoRevived.fingerprint, reason: 'departed', revokedAt: Date.now() }],
         issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey,

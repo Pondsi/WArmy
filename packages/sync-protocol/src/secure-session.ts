@@ -26,7 +26,7 @@ import {
   HandshakeError,
   ReplayGuard,
 } from './handshake.js';
-import { type IdentityProvider, type NormalizedIdentity, type FingerprintDerivation } from './identity.js';
+import { type IdentityProvider, type NormalizedIdentity, type ZhiWenTuiDao } from './identity.js';
 import { SecureChannel, SecureChannelError } from './secure-channel.js';
 
 /** 对端回包里的 reason 白名单（只信任已知枚举，避免把任意字符串当成原因） */
@@ -303,7 +303,7 @@ export interface SecureSyncServerOptions {
    * 「sha256(SPKI DER) → base32 前 20 位 + 校验位」—— 不注入会让**每一条**合法连接
    * 在 `normalizeIdentity()` / `checkPeerIdentity()` 处以 fingerprint-mismatch 被拒。
    */
-  fingerprintDerivation?: FingerprintDerivation;
+  fingerprintDerivation?: ZhiWenTuiDao;
   replayGuard?: ReplayGuard;
   phaseTimeoutMs?: number;
   handshakeTimeoutMs?: number;
@@ -523,7 +523,7 @@ export interface SecureSyncClientOptions {
   peerFingerprint?: string | null;
   roster?: (fingerprint: string) => boolean;
   /** 指纹推导（公钥 → 指纹）；必须与身份层一致，理由见 SecureSyncServerOptions */
-  fingerprintDerivation?: FingerprintDerivation;
+  fingerprintDerivation?: ZhiWenTuiDao;
   replayGuard?: ReplayGuard;
   handshakeTimeoutMs?: number;
   heartbeatMs?: number;
@@ -533,7 +533,7 @@ export interface SecureSyncClientOptions {
   now?: () => number;
 }
 
-export interface ConnectResult {
+export interface LianJieJieGuo {
   ok: boolean;
   session?: SecureSession;
   /** 失败原因（握手拒绝 / TCP 不通） */
@@ -556,12 +556,12 @@ export class SecureSyncClient {
     return this.sessionRef;
   }
 
-  async connect(timeoutMs = 8000): Promise<ConnectResult> {
+  async connect(timeoutMs = 8000): Promise<LianJieJieGuo> {
     const now = this.opts.now ?? (() => Date.now());
     const sock = net.connect({ host: this.opts.host, port: this.opts.port });
-    const result = await new Promise<ConnectResult>((resolve) => {
+    const result = await new Promise<LianJieJieGuo>((resolve) => {
       let settled = false;
-      const settle = (r: ConnectResult): void => {
+      const settle = (r: LianJieJieGuo): void => {
         if (settled) return;
         settled = true;
         resolve(r);

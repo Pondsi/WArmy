@@ -132,14 +132,14 @@ function toImportUrl(p) {
   return pathToFileURL(p).href;
 }
 
-const { createProviderFromPreset, PROVIDER_PRESETS, normalizeUsage } = await import(
+const { congYuSheChuangJian, PROVIDER_PRESETS, guiFanYongLiang } = await import(
   toImportUrl(path.join(ascii, 'providers', 'dist', 'index.js'))
 );
 check('presets>=7', PROVIDER_PRESETS.length >= 7);
 check('3 protocols', new Set(PROVIDER_PRESETS.map((p) => p.protocol)).size === 3);
-const ds = createProviderFromPreset('deepseek', { apiKey: 'sk-x' });
+const ds = congYuSheChuangJian('deepseek', { apiKey: 'sk-x' });
 check('deepseek base', ds.baseURL === 'https://api.deepseek.com');
-const u = normalizeUsage({ prompt_cache_hit_tokens: 64, prompt_tokens: 100, completion_tokens: 5 }, 'openai-compatible');
+const u = guiFanYongLiang({ prompt_cache_hit_tokens: 64, prompt_tokens: 100, completion_tokens: 5 }, 'openai-compatible');
 check('cache normalize', u.cacheHitTokens === 64);
 
 const { GroupChatRouter, DEFAULT_PERMISSIONS } = await import(
@@ -231,7 +231,7 @@ check('kb bidirectional', kb.eventsOfEntity('e1').length === 1 && kb.entitiesOfE
 check('kb query', kb.query('周报').events.length === 1);
 fs.rmSync(kbDir, { recursive: true, force: true });
 
-const { NodeRegistry, SyncBus, createInvite, consumeInvite, incognitoWorkDir } = await import(
+const { NodeRegistry, SyncBus, chuangjianYaoQing, shiYongYaoQing, incognitoWorkDir } = await import(
   toImportUrl(path.join(ascii, 'sync-protocol', 'dist', 'index.js'))
 );
 const regFile = path.join(os.tmpdir(), 'warmy-verify-reg.json');
@@ -246,8 +246,8 @@ const incog = bus.publish({ fromNode: remote.nodeId, toNode: local.nodeId, chann
 const pulled = bus.pull(remote.nodeId);
 check('sync bus deliver', pulled.some((m) => (m.payload)?.text === 'hi'));
 check('incognito not persisted', !bus.pull(local.nodeId).some((m) => m.id === incog.id));
-const inv = createInvite(1000, 'g1');
-check('invite once', consumeInvite(inv) && !consumeInvite(inv));
+const inv = chuangjianYaoQing(1000, 'g1');
+check('invite once', shiYongYaoQing(inv) && !shiYongYaoQing(inv));
 check('incog dir', incognitoWorkDir().includes('incog'));
 fs.rmSync(busDir, { recursive: true, force: true });
 fs.rmSync(regFile, { force: true });

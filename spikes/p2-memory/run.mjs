@@ -53,7 +53,7 @@ const newTmp = (tag) => {
 };
 
 const mem = await import(pathToFileURL(DIST).href);
-const { MemoryService, spaceChars, toPhrase, toTriPhrase, cosineSimilarity, cosineInt8, quantizeToInt8, dequantizeFromInt8, packInt8, unpackInt8, rrfFusionRanked, BertWordPieceTokenizer } = mem;
+const { MemoryService, spaceChars, toPhrase, toTriPhrase, yuXianXiangSiDu, yuXianInt8, quantizeToInt8, congInt8FanLiangHua, packInt8, unpackInt8, rrfFusionRanked, BertWordPieceFenCiQi } = mem;
 console.log('memory-os exports:', Object.keys(mem).sort().join(','));
 
 /** 子进程要显式给出模型路径（cwd 在 tmp，找不到仓库内资产） */
@@ -93,7 +93,7 @@ const t0All = Date.now();
 // ─────────────────────────────────────────────────────────────
 {
   const tokPath = path.join(MODEL_DIR, 'tokenizer.json');
-  const tokenizer = new BertWordPieceTokenizer(JSON.parse(fs.readFileSync(tokPath, 'utf8')));
+  const tokenizer = new BertWordPieceFenCiQi(JSON.parse(fs.readFileSync(tokPath, 'utf8')));
   const samples = [
     '无限牛马多智能体群聊桌面应用',
     'packages/memory-os/src/index.ts',
@@ -456,10 +456,10 @@ let seqMap = {};
     const qc = quantizeToInt8(c);
     const blob = packInt8(qa.data);
     const back = unpackInt8(blob);
-    const f32same = cosineSimilarity(dequantizeFromInt8(qa.data, qa.scale), dequantizeFromInt8(qb.data, qb.scale));
-    const i8same = cosineInt8(back, qa.scale, qb.data, qb.scale);
-    const f32diff = cosineSimilarity(a, c);
-    const i8diff = cosineInt8(qa.data, qa.scale, qc.data, qc.scale);
+    const f32same = yuXianXiangSiDu(congInt8FanLiangHua(qa.data, qa.scale), congInt8FanLiangHua(qb.data, qb.scale));
+    const i8same = yuXianInt8(back, qa.scale, qb.data, qb.scale);
+    const f32diff = yuXianXiangSiDu(a, c);
+    const i8diff = yuXianInt8(qa.data, qa.scale, qc.data, qc.scale);
     result.sections.vectorMath = {
       dim: a.length,
       normOfEmbedding: Number(Math.hypot(...a).toFixed(6)),
@@ -485,7 +485,7 @@ let seqMap = {};
     const va = await svc.embedText(p.a);
     const vb = await svc.embedText(p.b);
     if (!va || !vb) break;
-    pairs.push({ ...p, cosine: Number(cosineSimilarity(va, vb).toFixed(4)) });
+    pairs.push({ ...p, cosine: Number(yuXianXiangSiDu(va, vb).toFixed(4)) });
   }
   result.sections.semanticPairs = pairs;
   const para = pairs.filter((p) => p.label.startsWith('paraphrase'));

@@ -27,8 +27,8 @@
 import dgram from 'node:dgram';
 import net from 'node:net';
 import os from 'node:os';
-import type { DhtAddr } from './dht.js';
-import { type RelayCandidateRef, type RelayDecision, type RelayDecisionCode, decideRelay, relayTokenFor } from './relay.js';
+import type { DhtDiZhi } from './dht.js';
+import { type RelayCandidateRef, type RelayDecision, type RelayDecisionCode, jueDingZhongJi, relayTokenFor } from './relay.js';
 
 export const LAN_PROBE_MAGIC = 'WARMY-LAN/1';
 export const DEFAULT_DISCOVERY_PORT = 7799;
@@ -308,7 +308,7 @@ export function ipFamilyOfHost(host: string): 4 | 6 | 0 {
   return 0;
 }
 
-export function classifyIpv6Scope(host: string): Ipv6Scope {
+export function guiLeiIpv6ZuoYongYu(host: string): Ipv6Scope {
   const b = parseIpv6(host);
   if (!b) return 'invalid';
   const allZero = b.every((x) => x === 0);
@@ -324,7 +324,7 @@ export function classifyIpv6Scope(host: string): Ipv6Scope {
 
 /** 是否属于 2000::/3 全局单播（注意：文档段 2001:db8::/32 也在其中，见 isPublicDialCandidate） */
 export function isGlobalUnicastIpv6(host: string): boolean {
-  return classifyIpv6Scope(host) === 'global';
+  return guiLeiIpv6ZuoYongYu(host) === 'global';
 }
 
 export function isIpv6DocumentationAddress(host: string): boolean {
@@ -396,7 +396,7 @@ export function listLocalIpv6Candidates(nics: ReturnType<typeof os.networkInterf
     for (const a of addrs ?? []) {
       if (normalizeInterfaceFamily(a.family) !== 'IPv6') continue;
       const host = normalizeHostLiteral(a.address);
-      const scope = classifyIpv6Scope(host);
+      const scope = guiLeiIpv6ZuoYongYu(host);
       if (scope === 'invalid') continue;
       out.push({
         interfaceName: iface,
@@ -460,7 +460,7 @@ export interface DialDetail {
  * `family` 用于"客户端在指定地址族下真连上"：域名时 Node 只查对应族的记录；
  * 字面地址时由字面本身决定族，`remoteFamily` 会如实回报实际用的族。
  */
-export function dialTcpDetailed(host: string, port: number, timeoutMs: number, family?: 4 | 6): Promise<DialDetail> {
+export function boTcpXiangQing(host: string, port: number, timeoutMs: number, family?: 4 | 6): Promise<DialDetail> {
   return new Promise((resolve) => {
     const started = Date.now();
     const target = normalizeHostLiteral(host);
@@ -644,7 +644,7 @@ export interface RelayRungOptions {
   dialTcp?: (host: string, port: number, timeoutMs: number) => Promise<{ ok: boolean; detail?: string }>;
 }
 
-export interface ConnectionLadderOptions {
+export interface LianJieTiZiXuanXiang {
   strategies?: Partial<Record<LadderRung, LadderStrategy>>;
   order?: LadderRung[];
   perRungTimeoutMs?: number;
@@ -665,11 +665,11 @@ export interface ConnectionLadderOptions {
  * 默认 TCP 拨号：真实 net.connect（第 4 个参数可强制地址族）。
  * 这里只判断"能不能连上"，**不在此处做握手**（握手由 SecureSyncClient 负责）。
  */
-export async function dialTcpDefault(host: string, port: number, timeoutMs: number, family?: 4 | 6): Promise<DialDetail> {
-  return dialTcpDetailed(host, port, timeoutMs, family);
+export async function boTcpMoRen(host: string, port: number, timeoutMs: number, family?: 4 | 6): Promise<DialDetail> {
+  return boTcpXiangQing(host, port, timeoutMs, family);
 }
 
-export class ConnectionLadder {
+export class LianJieTiZi {
   private readonly order: LadderRung[];
   private readonly perRungTimeoutMs: number;
   private readonly dialTcp: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<DialDetail | { ok: boolean; detail?: string }>;
@@ -679,10 +679,10 @@ export class ConnectionLadder {
   /** 每一级的尝试历史（可观测性） */
   readonly history: RungAttempt[] = [];
 
-  constructor(private readonly opts: ConnectionLadderOptions = {}) {
+  constructor(private readonly opts: LianJieTiZiXuanXiang = {}) {
     this.order = opts.order ?? DEFAULT_LADDER_ORDER;
     this.perRungTimeoutMs = opts.perRungTimeoutMs ?? 3000;
-    this.dialTcp = opts.dialTcp ?? dialTcpDefault;
+    this.dialTcp = opts.dialTcp ?? boTcpMoRen;
     this.now = opts.now ?? (() => Date.now());
 
     /**
@@ -698,7 +698,7 @@ export class ConnectionLadder {
         const v6 = all.filter((a) => ipFamilyOfHost(a.host) === 6);
         const candidates = v6.filter((a) => isPublicDialCandidate(a.host));
         const excluded = v6.filter((a) => !isPublicDialCandidate(a.host));
-        const label = (a: LadderAddress): string => `${a.host}(${classifyIpv6Scope(a.host)}${isIpv6DocumentationAddress(a.host) ? '·文档段' : ''})`;
+        const label = (a: LadderAddress): string => `${a.host}(${guiLeiIpv6ZuoYongYu(a.host)}${isIpv6DocumentationAddress(a.host) ? '·文档段' : ''})`;
         if (candidates.length === 0) {
           return {
             ok: false,
@@ -766,7 +766,7 @@ export class ConnectionLadder {
       rung: 'relay',
       supported: true,
       async attempt(ctx) {
-        const decision = await decideRelay(
+        const decision = await jueDingZhongJi(
           { fingerprint: ctx.target.fingerprint, nodeId: ctx.target.nodeId },
           {
             selfDialable: ctx.selfDialable,

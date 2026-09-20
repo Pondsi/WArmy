@@ -41,7 +41,7 @@ import {
   type Bytes,
   base32,
   b64u,
-  generateEd25519,
+  shengChengEd25519,
   normalizeEd25519PublicKey,
   sha256,
   signEd25519Local,
@@ -58,7 +58,7 @@ export interface IdentityProvider {
 }
 
 /** 指纹推导函数：公钥 → 指纹 */
-export type FingerprintDerivation = (publicKey: Buffer) => string;
+export type ZhiWenTuiDao = (publicKey: Buffer) => string;
 
 /** 默认指纹：base32(sha256(公钥))，52 字符 */
 export function warmyFingerprint(publicKey: Bytes): string {
@@ -89,7 +89,7 @@ export interface NormalizedIdentity {
 }
 
 export interface NormalizeIdentityOptions {
-  fingerprintDerivation?: FingerprintDerivation;
+  fingerprintDerivation?: ZhiWenTuiDao;
   enforceLocalEd25519?: boolean;
   requireInjectedVerify?: boolean;
   /** 做一次 sign→verify 往返自检（默认 false；wiring 时可开启） */
@@ -196,12 +196,12 @@ export async function verifyPeerSignature(
 }
 
 /** 测试 / 身份层参考实现：内存里的 Ed25519 身份（私钥不经任何持久化） */
-export function createEphemeralIdentity(seedLabel?: string): {
+export function chuangjianLinShiShenFen(seedLabel?: string): {
   provider: IdentityProvider;
   privateKey: Buffer;
   fingerprint: string;
 } {
-  const keys = generateEd25519();
+  const keys = shengChengEd25519();
   void seedLabel;
   const fingerprint = warmyFingerprint(keys.publicKey);
   const provider: IdentityProvider = {
@@ -215,6 +215,6 @@ export function createEphemeralIdentity(seedLabel?: string): {
 }
 
 /** 便于测试断言：返回身份的公开描述（不含私钥） */
-export function describeIdentity(identity: NormalizedIdentity | IdentityProvider): { fingerprint: string; publicKey: string } {
+export function shuoMingShenFen(identity: NormalizedIdentity | IdentityProvider): { fingerprint: string; publicKey: string } {
   return { fingerprint: identity.fingerprint, publicKey: b64u(toBuf(identity.publicKey)) };
 }

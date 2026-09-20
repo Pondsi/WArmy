@@ -175,6 +175,133 @@ async function main() {
       Array.isArray(contNames) && !contNames.some((n) => /推荐|优先|recommended|preferred|厂商|公司/i.test(n)),
       contNames.slice(0, 6));
 
+    // ── 3d. 设置分区：技能/插件独立 + 黑名单归「功能」+ 不会被按钮弹回首页 ──
+    const secDom = await c.evaluate(`(function(){
+      const navs = Array.from(document.querySelectorAll('#settings-nav button')).map((b) => b.dataset.sec);
+      const go = (sec) => {
+        const b = document.querySelector('#settings-nav button[data-sec="' + sec + '"]');
+        if (b) b.click();
+        return !!b;
+      };
+      const visible = (sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return null;
+        /**
+         * 只看 offsetParent：元素被祖先 display:none 隐藏时 offsetParent 为 null。
+         * 早先写成「offsetParent !== null || display !== 'none'」—— 被祖先藏起来的
+         * 内层元素 display 仍是 block，于是"藏了也判成可见"（门禁假通过）。
+         */
+        return el.offsetParent !== null;
+      };
+      // ① 技能/插件是独立层级
+      const hasSkill = go('skill');
+      const skillCardVisible = visible('#skills-card');
+      const pluginVisible = visible('#container-card'); // 技能分区里不该看到容器卡
+      go('plugin');
+      const pluginCardVisible = !!(document.querySelector('#settings-nav button[data-sec="plugin"]'));
+      // ② 黑名单属于「功能」：在功能里可见、在模型里不可见
+      go('func');
+      const blInFunc = visible('#blacklist-box');
+      go('model');
+      const blInModel = visible('#blacklist-box');
+      // ③ 点「添加供应商」后**分区不被弹回首页**（这是用户报的 bug）
+      const add = document.querySelector('#btn-add-prov');
+      if (add) add.click();
+      return { navs, hasSkill, skillCardVisible, pluginVisible, pluginCardVisible, blInFunc, blInModel };
+    })()`);
+    check('设置分区：技能/插件是独立层级（导航里有 skill / plugin）',
+      Array.isArray(secDom.navs) && secDom.navs.includes('skill') && secDom.navs.includes('plugin'), secDom.navs);
+    check('设置分区：选中「技能」时技能卡片可见、容器卡片不可见',
+      secDom.hasSkill === true && secDom.skillCardVisible === true && secDom.pluginVisible === false, secDom);
+    check('黑名单管理在「功能」里可见、在「模型」里不可见（不再挂在模型下）',
+      secDom.blInFunc === true && secDom.blInModel === false, { inFunc: secDom.blInFunc, inModel: secDom.blInModel });
+    await sleep(900);
+    const secAfter = await c.evaluate(`(function(){
+      const on = document.querySelector('#settings-nav button.on');
+      const cards = document.querySelectorAll('#prov-list .prov-card').length;
+      return { active: on ? on.dataset.sec : null, cards };
+    })()`);
+    check('点「添加供应商」后仍停在「模型」分区（不被弹回设置首页）', secAfter.active === 'model', secAfter);
+
+    // ── 3e. 供应商：新加的排最上面 + 真的落盘（且**密钥不在设置文件里**） ──
+    const orderDom = await c.evaluate(`(function(){
+      const cards = Array.from(document.querySelectorAll('#prov-list .prov-card'));
+      const first = cards[0] ? (cards[0].querySelector('.prov-head') || {}).textContent : '';
+      const labels = cards.map((x) => { const h = x.querySelector('.prov-head'); return h ? h.textContent.trim() : ''; });
+      return { count: cards.length, first: String(first || '').trim(), labels };
+    })()`);
+    check('供应商：新添加的排在最上面（列表倒序）',
+      orderDom.count > 0 && orderDom.first === orderDom.labels[0] && /_\\d+$|DeepSeek/i.test(orderDom.first),
+      orderDom.labels.slice(0, 4));
+    const persisted = await c.evaluate(`(async function(){
+      try {
+        const r = await window.warmy.settingsGet();
+        const ps = (r && r.settings && r.settings.providers) || [];
+        return {
+          count: ps.length,
+          hasApiKeyField: ps.some((p) => Object.prototype.hasOwnProperty.call(p, 'apiKey') && String(p.apiKey || '')),
+          seeded: !!(r && r.settings && r.settings.providersSeeded),
+          keys: Object.keys(ps[0] || {}),
+        };
+      } catch (e) { return { err: String(e) }; }
+    })()`);
+    check('供应商列表已落盘到设置（providersSeeded 已置位）', persisted.seeded === true && persisted.count > 0, persisted);
+    check('设置文件里**不含** API Key（密钥只进 safeStorage）', persisted.hasApiKeyField === false, persisted.keys);
+
+    // ── 3f. 改「接口地址」⇒ 该供应商模型全部标红（stale），而不是删除 ──
+    const staleDom = await c.evaluate(`(async function(){
+      // 灌一份"有模型"的供应商，再按真实路径重画
+      await window.warmy.settingsSave({
+        providers: [{ id: 'gate-prov', label: 'GateProv', protocol: 'openai-compatible', baseURL: 'https://a.example/v1', models: ['gate-model-a'], staleModels: {}, hasKey: true }],
+        providersSeeded: true,
+      });
+      await window.__warmyReloadProviders();
+      window.__warmyRenderPage();
+      const nav = document.querySelector('#settings-nav button[data-sec="model"]');
+      if (nav) nav.click();
+      await new Promise((r) => setTimeout(r, 200));
+      const before = document.querySelector('#prov-list [data-m="gate-model-a"]');
+      const beforeRed = !!before && before.classList.contains('in-use');
+      // 改接口地址（真实的 onchange 路径）
+      const input = document.querySelector('#prov-list input[data-k="baseURL"]');
+      if (input) { input.value = 'https://b.example/v1'; input.dispatchEvent(new Event('change')); }
+      await new Promise((r) => setTimeout(r, 400));
+      const chip = document.querySelector('#prov-list [data-m="gate-model-a"]');
+      return {
+        beforeRed,
+        stillThere: !!chip,
+        afterRed: !!chip && chip.classList.contains('in-use'),
+        tip: chip ? String(chip.getAttribute('title') || '') : '',
+        note: (document.querySelector('#prov-list [data-models-note]') || {}).textContent || '',
+      };
+    })()`);
+    check('改接口地址 ⇒ 模型**保留**（不删除）', staleDom.stillThere === true, staleDom);
+    check('改接口地址 ⇒ 模型**标红**（stale）', staleDom.afterRed === true && staleDom.beforeRed === false, staleDom);
+    check('标红模型的悬停提示写明"需重新拉取"', /重新拉取|re-fetch/i.test(staleDom.tip) || /重新拉取/.test(staleDom.note), { tip: staleDom.tip, note: staleDom.note });
+
+    // 清理：把门禁灌进去的供应商删掉，恢复默认列表
+    await c.evaluate(`(async function(){
+      const btns = document.querySelectorAll('#prov-list [data-prov-del]');
+      for (const b of Array.from(btns)) b.click();
+      await new Promise((r) => setTimeout(r, 300));
+      return true;
+    })()`);
+    await sleep(600);
+
+    // ── 3g. 容器实例区：引擎没启动 ⇒ 不可展开、不可创建（灰且 disabled） ──
+    const instDom = await c.evaluate(`(function(){
+      const blocks = Array.from(document.querySelectorAll('#container-list .ctg-inst'));
+      const disabled = blocks.filter((b) => b.dataset.instEnabled === '0');
+      const bad = disabled.filter((b) => {
+        const t = b.querySelector('[data-inst-toggle]');
+        const c2 = b.querySelector('[data-inst-create]');
+        return !(t && t.disabled) || !(c2 && c2.disabled);
+      });
+      return { blocks: blocks.length, disabled: disabled.length, bad: bad.length };
+    })()`);
+    check('容器实例区：引擎未启动时「查看/创建」按钮为 disabled（点不动）',
+      instDom.bad === 0, instDom);
+
     // ── 4. 我的页：无保存按钮、邮箱输入存在 ──
     await c.evaluate(`(function(){ try { document.querySelector('#rail [data-nav="me"]').click(); } catch(e){} return true; })()`);
     await sleep(1400);
@@ -206,6 +333,8 @@ async function main() {
         hasCopy: !!g('#btn-me-cred-copy'),
         hasRotate: !!g('#btn-me-cred-rotate'),
         hasSwitch: !!g('#btn-me-cred-switch'),
+        // ID = 私钥：必须**明说**泄露后果与"没有服务器能挂失"
+        idWarn: (document.querySelector('.me-hint-warn') || {}).textContent || '',
       };
     })()`);
     check('我的页不再有「保存资料」按钮', meDom.hasSaveBtn === false, meDom);
@@ -214,6 +343,8 @@ async function main() {
     check('品牌与个人资料同一行（左品牌/右资料）', meDom.sameRow === true, meDom);
     check('我的页显示唯一凭证+复制/更换/切换', meDom.hasCred && meDom.hasCopy && meDom.hasRotate && meDom.hasSwitch, meDom);
     check('凭证是 17 位或指纹形态', /^[A-Z0-9-]{8,}$|^\d{17}$/.test(String(meDom.credText).trim()) || meDom.credText === '—', meDom.credText);
+    check('ID 行明说"ID 即私钥 + 没有服务器能挂失"（不让用户误以为能找回）',
+      /私钥|private key/i.test(meDom.idWarn) && /挂失|revoke|找回|recover/i.test(meDom.idWarn), String(meDom.idWarn).slice(0, 80));
 
     // ── 5. 成员卡片按会话类型显隐 + 第二列「+」 ──
     // 规则：**必须选中对应会话**才显示成员 —— 没有选中会话时任何会话卡片都不该出现。

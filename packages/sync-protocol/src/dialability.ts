@@ -15,8 +15,8 @@
  *  - UPnP 映射成功的判定需要真实路由器 → **未实现**。
  */
 import { randomHex } from './codec.js';
-import type { DhtAddr } from './dht.js';
-import { type Ipv6Scope, type Ipv6Report, classifyIpv6Scope, inspectLocalIpv6, ipFamilyOfHost, normalizeHostLiteral, parseIpv4Bytes } from './ladder.js';
+import type { DhtDiZhi } from './dht.js';
+import { type Ipv6Scope, type Ipv6Report, guiLeiIpv6ZuoYongYu, inspectLocalIpv6, ipFamilyOfHost, normalizeHostLiteral, parseIpv4Bytes } from './ladder.js';
 
 export type AddressScope = 'loopback' | 'private' | 'link-local' | 'public' | 'hostname' | 'unknown';
 
@@ -25,7 +25,7 @@ export type AddressScope = 'loopback' | 'private' | 'link-local' | 'public' | 'h
  * IPv6：全局单播 `2000::/3` → public；ULA `fc00::/7` → private；`fe80::/10` → link-local；
  * `::1` → loopback；组播/未指定/非法 → unknown；`::ffff:a.b.c.d` 按内嵌 IPv4 判。
  */
-export function classifyAddress(host: string): AddressScope {
+export function guiLeiDiZhi(host: string): AddressScope {
   const h = normalizeHostLiteral(host);
   if (h === 'localhost' || h === '') return h === '' ? 'unknown' : 'loopback';
   const v4 = parseIpv4Bytes(h);
@@ -42,20 +42,20 @@ export function classifyAddress(host: string): AddressScope {
     return 'public';
   }
   if (ipFamilyOfHost(h) !== 6) return 'hostname';
-  const scope: Ipv6Scope = classifyIpv6Scope(h);
+  const scope: Ipv6Scope = guiLeiIpv6ZuoYongYu(h);
   if (scope === 'global') return 'public';
   if (scope === 'ula') return 'private';
   if (scope === 'link-local') return 'link-local';
   if (scope === 'loopback') return 'loopback';
   if (scope === 'ipv4-mapped') {
     const tail = h.split(':').slice(-1)[0] as string;
-    return parseIpv4Bytes(tail) ? classifyAddress(tail) : 'unknown';
+    return parseIpv4Bytes(tail) ? guiLeiDiZhi(tail) : 'unknown';
   }
   return 'unknown';
 }
 
 /** 本机 IPv6 事实（附八.9：IPv6 无 NAT ⇒ 有全局单播地址就是天然可拨入候选，无需打洞） */
-export interface DialabilityIpv6Info {
+export interface KeBoRuIpv6XinXi {
   hasGlobalUnicast: boolean;
   publicCandidate: string | null;
   global: string[];
@@ -71,7 +71,7 @@ export interface DialabilityIpv6Info {
 }
 
 /** 可拨入性结论的**结构化类型**（UI/接线方按它选文案，不靠解析句子） */
-export type DialableKind =
+export type KeBoRuZhongLei =
   /** 有对端真的拨回来了（最强证据） */
   | 'peer-verified'
   /** 本机有全局单播 IPv6 ⇒ 天然可拨入候选（无 NAT；尚未被对端验证） */
@@ -81,64 +81,64 @@ export type DialableKind =
   /** 有对端但全部拨入失败 → 判定不可拨入 */
   | 'undialable';
 
-export const DIALABILITY_I18N: Record<DialableKind, string> = {
+export const DIALABILITY_I18N: Record<KeBoRuZhongLei, string> = {
   'peer-verified': 'net.dialability.peerVerified',
   'ipv6-global-natural': 'net.dialability.ipv6Natural',
   undetermined: 'net.dialability.undetermined',
   undialable: 'net.dialability.undialable',
 };
 
-export interface DialabilityPeer {
+export interface KeBoRuDuiDuan {
   fingerprint: string;
   nodeId?: string;
-  addr: DhtAddr;
+  addr: DhtDiZhi;
 }
 
-export interface DialBackAttempt {
+export interface BoHuiChangShi {
   peer: string;
-  peerAddr: DhtAddr;
+  peerAddr: DhtDiZhi;
   ok: boolean;
   /** 对端报告：它用什么本地地址连上的（用于诊断，不等于公网映射） */
   observed?: string;
   error?: string;
 }
 
-export interface DialabilityResult {
+export interface KeBoRuJieGuo {
   /** 至少有一个对端成功拨回本机宣告的地址 */
   dialable: boolean;
   /** 宣告地址的性质 */
   scope: AddressScope;
-  advertised: DhtAddr;
+  advertised: DhtDiZhi;
   /** 成功拨回的对端指纹 */
   verifiedBy: string[];
-  attempts: DialBackAttempt[];
+  attempts: BoHuiChangShi[];
   /** 这次结论能覆盖的范围（诚实标注） */
   verifiedFrom: 'loopback' | 'lan-peers' | 'public-peers' | 'none';
   reason: string;
   checkedAt: number;
   /** 结构化结论类型（见 DialableKind） */
-  dialableKind: DialableKind;
+  dialableKind: KeBoRuZhongLei;
   /** 本机有全局单播 IPv6 ⇒ 天然可拨入候选，无需打洞（附八.9） */
   naturalDialable: boolean;
   /** 本机 IPv6 事实细节 */
-  ipv6: DialabilityIpv6Info;
+  ipv6: KeBoRuIpv6XinXi;
   /** i18n key 建议（主代理接文案用） */
   i18n: string;
 }
 
-export function dialBackMessage(token: string, addr: DhtAddr): Record<string, unknown> {
+export function boHuiXiaoXi(token: string, addr: DhtDiZhi): Record<string, unknown> {
   return { t: 'dial_me', reply: 'dial_result', token, addr: { host: addr.host, port: addr.port } };
 }
 
-export interface DialabilityProbeOptions {
+export interface KeBoRuTanCeXuanXiang {
   fingerprint: string;
   nodeId: string;
   /** 本机 TCP 监听地址（我们希望别人拨进来的那个） */
-  advertised: () => DhtAddr;
+  advertised: () => DhtDiZhi;
   /** 可用的探测对端（来自 DHT 路由表 / 群名册） */
-  peers: () => DialabilityPeer[];
+  peers: () => KeBoRuDuiDuan[];
   /** 发送 RPC（通常接 DhtNode.call） */
-  sendRpc: (addr: DhtAddr, msg: Record<string, unknown>, replyType: string, timeoutMs?: number) => Promise<Record<string, unknown>>;
+  sendRpc: (addr: DhtDiZhi, msg: Record<string, unknown>, replyType: string, timeoutMs?: number) => Promise<Record<string, unknown>>;
   /** 每次探测的 token 生成器（防重放/串用） */
   token?: () => string;
   timeoutMs?: number;
@@ -148,8 +148,8 @@ export interface DialabilityProbeOptions {
   now?: () => number;
 }
 
-export class DialabilityProbe {
-  constructor(private readonly opts: DialabilityProbeOptions) {}
+export class KeBoRuTanCe {
+  constructor(private readonly opts: KeBoRuTanCeXuanXiang) {}
 
   /** 注册到 DHT 上的「拨回」处理器（被请求方 = 真的去连一次） */
   static handler(ctx: {
@@ -173,18 +173,18 @@ export class DialabilityProbe {
   }
 
   /** 发起检测：请若干对端拨回本机宣告的地址 */
-  async probe(): Promise<DialabilityResult> {
+  async probe(): Promise<KeBoRuJieGuo> {
     const now = this.opts.now ?? (() => Date.now());
     const advertised = this.opts.advertised();
-    const scope = classifyAddress(advertised.host);
+    const scope = guiLeiDiZhi(advertised.host);
     const peers = this.opts.peers().slice(0, this.opts.maxPeers ?? 5);
-    const attempts: DialBackAttempt[] = [];
+    const attempts: BoHuiChangShi[] = [];
     const verifiedBy: string[] = [];
 
     for (const peer of peers) {
       const token = (this.opts.token ?? (() => randomHex(8)))();
       try {
-        const res = await this.opts.sendRpc(peer.addr, dialBackMessage(token, advertised), 'dial_result', this.opts.timeoutMs ?? 4000);
+        const res = await this.opts.sendRpc(peer.addr, boHuiXiaoXi(token, advertised), 'dial_result', this.opts.timeoutMs ?? 4000);
         const ok = res['ok'] === true && (res['token'] === undefined || res['token'] === token);
         attempts.push({
           peer: peer.fingerprint,
@@ -199,8 +199,8 @@ export class DialabilityProbe {
       }
     }
 
-    const peerScopes = peers.map((p) => classifyAddress(p.addr.host));
-    let verifiedFrom: DialabilityResult['verifiedFrom'] = 'none';
+    const peerScopes = peers.map((p) => guiLeiDiZhi(p.addr.host));
+    let verifiedFrom: KeBoRuJieGuo['verifiedFrom'] = 'none';
     if (verifiedBy.length > 0) {
       if (peerScopes.some((s) => s === 'public' || s === 'hostname')) verifiedFrom = 'public-peers';
       else if (peerScopes.some((s) => s === 'private')) verifiedFrom = 'lan-peers';
@@ -209,7 +209,7 @@ export class DialabilityProbe {
     const dialable = verifiedBy.length > 0;
     // 附八.9：IPv6 可达性是**独立的一档**，且是"天然可拨入候选"（IPv6 无 NAT）
     const v6: Ipv6Report = (this.opts.localIpv6 ?? inspectLocalIpv6)();
-    const ipv6: DialabilityIpv6Info = {
+    const ipv6: KeBoRuIpv6XinXi = {
       hasGlobalUnicast: v6.hasGlobalUnicast,
       publicCandidate: v6.publicCandidate,
       global: v6.global,
@@ -234,7 +234,7 @@ export class DialabilityProbe {
       ? `；另：本机有全局单播 IPv6 ${ipv6.publicCandidate ?? ''}（IPv6 无 NAT）→ **天然可拨入候选，无需打洞**（仅地址事实，不等于已验证公网可达）`
       : '；本机没有全局单播 IPv6（IPv6 档不适用）';
     const reason = `${baseReason}${ipv6Note}`;
-    const dialableKind: DialableKind = dialable
+    const dialableKind: KeBoRuZhongLei = dialable
       ? 'peer-verified'
       : ipv6.naturalDialableCandidate
         ? 'ipv6-global-natural'

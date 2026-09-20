@@ -32,7 +32,7 @@ import {
   x25519SharedSecret,
 } from './codec.js';
 import {
-  type FingerprintDerivation,
+  type ZhiWenTuiDao,
   type IdentityProvider,
   type NormalizedIdentity,
   IdentityContractError,
@@ -363,7 +363,7 @@ export interface HandshakeOptions {
   replayGuard?: ReplayGuard;
   timestampToleranceMs?: number;
   phaseTimeoutMs?: number;
-  fingerprintDerivation?: FingerprintDerivation;
+  fingerprintDerivation?: ZhiWenTuiDao;
   enforceLocalEd25519?: boolean;
   requireInjectedVerify?: boolean;
   now?: () => number;

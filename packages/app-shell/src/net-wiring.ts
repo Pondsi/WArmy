@@ -29,15 +29,15 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  ConnectionLiveness,
+  LianJieHuoXing,
   LanProbe,
   ReplayGuard,
   SecureSyncClient,
   SecureSyncServer,
   SecureSession,
-  classifyAddress,
-  classifyIpv6Scope,
-  decideRelay,
+  guiLeiDiZhi,
+  guiLeiIpv6ZuoYongYu,
+  jueDingZhongJi,
   inspectLocalIpv6,
   isPublicDialCandidate,
   DIALABILITY_I18N,
@@ -47,7 +47,7 @@ import {
   resolveCanDial,
   type CanDialResolution,
   type CanDialSignals,
-  type DialableKind,
+  type KeBoRuZhongLei,
   type HandshakeFailureRecord,
   type Ipv6Report,
   type LadderRung,
@@ -529,7 +529,7 @@ export function listLocalAddresses(): { all: string[]; publicOnes: string[] } {
         if (a.family !== 'IPv4' || a.internal) continue;
         if (!isIpv4(a.address)) continue;
         if (!all.includes(a.address)) all.push(a.address);
-        if (classifyAddress(a.address) === 'public') publicOnes.push(a.address);
+        if (guiLeiDiZhi(a.address) === 'public') publicOnes.push(a.address);
       }
     }
   } catch {
@@ -546,8 +546,8 @@ export function pickLocalAddress(all: string[]): string {
     if (/^192\.168\./.test(a)) return 0;
     if (/^10\./.test(a)) return 1;
     if (/^172\.(1[6-9]|2\d|3[01])\./.test(a)) return 2;
-    if (classifyAddress(a) === 'private') return 3;
-    if (classifyAddress(a) === 'public') return 4;
+    if (guiLeiDiZhi(a) === 'private') return 3;
+    if (guiLeiDiZhi(a) === 'public') return 4;
     return 5;
   };
   const sorted = [...all].sort((a, b) => rank(a) - rank(b));
@@ -578,7 +578,7 @@ export function hasNaturalIpv6Reachability(): boolean {
  * 单独一个函数的理由：UI 与日志都要能区分"验证过"和"只是地址事实"，
  * 所以这里只产出**类型**，不产出布尔（附八.9）。
  */
-export function dialableKindOf(selfDialable: boolean | undefined, hasGlobalIpv6: boolean): DialableKind {
+export function dialableKindOf(selfDialable: boolean | undefined, hasGlobalIpv6: boolean): KeBoRuZhongLei {
   if (selfDialable === true) return 'peer-verified';
   if (hasGlobalIpv6) return 'ipv6-global-natural';
   return selfDialable === false ? 'undialable' : 'undetermined';
@@ -602,7 +602,7 @@ export interface ReachabilityHint {
    */
   naturalDialable?: boolean;
   /** 可拨入性的**结构化类型**（协议层 DialableKind；UI 按它选 i18n key，不解析句子） */
-  dialableKind?: DialableKind;
+  dialableKind?: KeBoRuZhongLei;
   /** 与 `dialableKind` 对应的 i18n key（`net.dialability.*`） */
   dialableI18n?: string;
   /** 中继判定（附八.3；结构化，含"需要一台有公网地址的机器做中继"这个状态） */
@@ -787,7 +787,7 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
   }
 
   const { all, publicOnes } = listLocalAddresses();
-  const scope = classifyAddress(ip);
+  const scope = guiLeiDiZhi(ip);
   const ipv6 = inspectLocalIpv6();
   const targetHost = normalizeHostLiteral(ip);
   const isIPv6Target = targetHost.includes(':') && ipv6ScopeOrNull(targetHost) !== null;
@@ -809,13 +809,13 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
   }
 
   const onLocalNic = all.includes(ip) || publicOnes.includes(ip);
-  const scopes = [scope, ...resolvedIpv4.map((a) => classifyAddress(a))];
+  const scopes = [scope, ...resolvedIpv4.map((a) => guiLeiDiZhi(a))];
   const anyPublic = scopes.includes('public');
   const allPrivateLike = scopes.every((s) => s === 'private' || s === 'loopback' || s === 'link-local');
   // isPublic **只由地址事实推出**（私网/回环/链路本地/CGNAT 一律 false），绝不硬编码；
   // "是否真的能被别人拨进来"属于入站可达性 → inboundVerified 恒 false（本机无法验证）。
   const isPublic = anyPublic;
-  const lanOnly = allPrivateLike || (onLocalNic && classifyAddress(ip) !== 'public');
+  const lanOnly = allPrivateLike || (onLocalNic && guiLeiDiZhi(ip) !== 'public');
 
   const outbound = await checkOutbound(timeoutMs);
 
@@ -877,14 +877,14 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
     ...(errorCode ? { errorCode } : {}),
     inboundVerified: false,
     naturallyDialable: ipv6.hasGlobalUnicast,
-    ...(isIPv6Target ? { targetIpv6Scope: classifyIpv6Scope(targetHost) } : {}),
+    ...(isIPv6Target ? { targetIpv6Scope: guiLeiIpv6ZuoYongYu(targetHost) } : {}),
     details,
   };
 }
 
 /** 只是语法糖：把"是不是 IPv6 字面量"的判断收敛到一处（非法返回 null → 不算 IPv6） */
 function ipv6ScopeOrNull(host: string): string | null {
-  const s = classifyIpv6Scope(host);
+  const s = guiLeiIpv6ZuoYongYu(host);
   return s === 'invalid' ? null : s;
 }
 
@@ -1011,7 +1011,7 @@ export class SecureMesh {
   private bindError: string | null = null;
   private readonly clients = new Map<string, SecureSyncClient>();
   private readonly inbox: SecureInboundMessage[] = [];
-  private readonly liveness: ConnectionLiveness;
+  private readonly liveness: LianJieHuoXing;
   private probe: LanProbe | null = null;
   private readonly guard: ReplayGuard;
   private lastStatusAt = 0;
@@ -1026,7 +1026,7 @@ export class SecureMesh {
     this.guard = new ReplayGuard({ persistFile: path.join(opts.userDataDir, 'net', 'replay-guard.json') });
     // 在线判据：事件驱动（连接建立/关闭），不轮询名册。
     // offlineFailures=1 / offlineAfterMs=0：连接断了就判离线（这里的迟滞会变成"谎报在线"）
-    this.liveness = new ConnectionLiveness({
+    this.liveness = new LianJieHuoXing({
       offlineFailures: 1,
       offlineAfterMs: 0,
       onOnline: (fp) => this.opts.onEvent?.({ type: 'online', peer: fp, ts: this.now() }),
@@ -1595,7 +1595,7 @@ export class SecureMesh {
     // 注意：传给 decideRelay 的 selfDialable **仍然只用已验证的那个信号**。
     // 刻意不把 naturalDialable 塞进去：本地有全局 IPv6 只说明"我这条路可能通"，
     // 对端未必有 IPv6（IPv4-only 对端照样拨不进来），据此宣布"不需要中继"会漏掉应有的兜底。
-    const decision = await decideRelay(
+    const decision = await jueDingZhongJi(
       { fingerprint: peerFingerprint },
       {
         selfDialable,
@@ -1663,9 +1663,9 @@ export async function secureLoopbackSmoke(opts: {
     failure?: string;
   };
 }> {
-  const { createEphemeralIdentity } = await import('@warmy/sync-protocol');
-  const serverId = createEphemeralIdentity('smoke-server');
-  const clientId = createEphemeralIdentity('smoke-client');
+  const { chuangjianLinShiShenFen } = await import('@warmy/sync-protocol');
+  const serverId = chuangjianLinShiShenFen('smoke-server');
+  const clientId = chuangjianLinShiShenFen('smoke-client');
 
   let received: SyncMessage | null = null;
   const server = new SecureSyncServer({

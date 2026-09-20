@@ -118,7 +118,7 @@ export interface RevocationList {
 /** 指纹推导注入点（与 identity.ts 同款做法）：默认 base32(sha256(raw32)) */
 export type MemberFingerprintOf = (publicKeySpkiB64: string) => string;
 
-export function defaultMemberFingerprintOf(publicKeySpkiB64: string): string {
+export function moRenChengYuanZhiWen(publicKeySpkiB64: string): string {
   const der = Buffer.from(String(publicKeySpkiB64 || ''), 'base64');
   const raw = normalizeEd25519PublicKey(der);
   return base32(sha256(raw));
@@ -187,24 +187,24 @@ export interface RevocationApplyResult {
 /* ────────────────────────────── 规范化 / 签名载荷 ────────────────────────────── */
 
 /** 确定性序列化：键排序 + 丢 undefined（两端必须算出同一串字节） */
-export function canonicalMembershipJson(value: unknown): string {
+export function guiFanChengYuanJson(value: unknown): string {
   if (value === null) return 'null';
   const t = typeof value;
   if (t === 'number' || t === 'boolean' || t === 'string') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((v) => canonicalMembershipJson(v)).join(',')}]`;
+  if (Array.isArray(value)) return `[${value.map((v) => guiFanChengYuanJson(v)).join(',')}]`;
   if (t === 'object') {
     const o = value as Record<string, unknown>;
     const keys = Object.keys(o)
       .filter((k) => o[k] !== undefined)
       .sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalMembershipJson(o[k])}`).join(',')}}`;
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${guiFanChengYuanJson(o[k])}`).join(',')}}`;
   }
   return 'null';
 }
 
 /** 域分隔 + 规范化载荷 */
 export function membershipSigningBytes(domain: string, payload: unknown): Buffer {
-  return Buffer.from(`${domain}\n${canonicalMembershipJson(payload)}`, 'utf8');
+  return Buffer.from(`${domain}\n${guiFanChengYuanJson(payload)}`, 'utf8');
 }
 
 /**
@@ -257,7 +257,7 @@ export function revocationListSigningBytes(list: RevocationList): Buffer {
 
 /* ────────────────────────────── 构造（不含签名 / 含签名） ────────────────────────────── */
 
-export interface BuildMemberCertInput {
+export interface GouJianChengYuanZhengShuShuRu {
   certId: string;
   groupId: string;
   memberFingerprint: string;
@@ -279,8 +279,8 @@ export function spkiB64FromRaw(raw: Bytes): string {
 }
 
 /** 构造一张**未签名**的证书（字段归一化：权限去重排序、时间必须自洽） */
-export function buildMemberCertificate(
-  input: BuildMemberCertInput,
+export function gouJianChengYuanZhengShu(
+  input: GouJianChengYuanZhengShuShuRu,
   opts: { now?: number; ttlMs?: number } = {}
 ): MemberCertificate {
   const now = opts.now ?? Date.now();
@@ -324,7 +324,7 @@ export async function signMemberCertificate(
   return { ...cert, issuerSignature: sig.toString('base64') };
 }
 
-export interface BuildRevocationListInput {
+export interface GouJianCheXiaoBiaoShuRu {
   groupId: string;
   listVersion: number;
   entries: RevocationEntry[];
@@ -333,7 +333,7 @@ export interface BuildRevocationListInput {
   issuerPublicKey: string;
 }
 
-export function buildRevocationList(input: BuildRevocationListInput, opts: { now?: number } = {}): RevocationList {
+export function gouJianCheXiaoBiao(input: GouJianCheXiaoBiaoShuRu, opts: { now?: number } = {}): RevocationList {
   const now = opts.now ?? Date.now();
   const seen = new Set<string>();
   const entries: RevocationEntry[] = [];
@@ -415,7 +415,7 @@ export function verifyMemberCertificate(
 ): MemberCertVerifyResult {
   const now = opts.now ?? Date.now();
   const skew = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
-  const fingerprintOf = opts.fingerprintOf ?? defaultMemberFingerprintOf;
+  const fingerprintOf = opts.fingerprintOf ?? moRenChengYuanZhiWen;
   const base: MemberCertVerifyResult = {
     ok: false,
     code: 'malformed',
@@ -499,7 +499,7 @@ export function verifyRevocationList(
 ): { ok: boolean; code: RevocationListCode; listVersion: number; entryCount: number; now: number; detail?: string } {
   const now = opts.now ?? Date.now();
   const skew = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
-  const fingerprintOf = opts.fingerprintOf ?? defaultMemberFingerprintOf;
+  const fingerprintOf = opts.fingerprintOf ?? moRenChengYuanZhiWen;
   const base = {
     ok: false,
     code: 'malformed' as RevocationListCode,
@@ -676,7 +676,7 @@ export interface RevocationQuery {
  * 理由：revokedAt 是可被签发者写成任意值（甚至未来）的字段；若用它做判定，
  * 攻击者只要把时间往后调就能"撤销对自己的吊销"。
  */
-export function findRevocationEntry(list: RevocationList | null, q: RevocationQuery): RevocationEntry | null {
+export function chaZhaoCheXiaoTiaoMu(list: RevocationList | null, q: RevocationQuery): RevocationEntry | null {
   if (!list || !Array.isArray(list.entries)) return null;
   for (const e of list.entries) {
     if (q.certId && e.certId === q.certId) return e;
@@ -686,12 +686,12 @@ export function findRevocationEntry(list: RevocationList | null, q: RevocationQu
 }
 
 export function isRevoked(list: RevocationList | null, q: RevocationQuery): boolean {
-  return findRevocationEntry(list, q) !== null;
+  return chaZhaoCheXiaoTiaoMu(list, q) !== null;
 }
 
 /* ────────────────────────────── 变更链（supersedes）＝ 群内身份恢复 ────────────────────────────── */
 
-export interface CertChain {
+export interface ZhengShuLian {
   /** 链根证书 id（换证链上最早那一张）；成员身份就绑在它上面 */
   rootCertId: string;
   /** 从根到该证书的 certId 序列 */
@@ -711,7 +711,7 @@ function indexById(certs: readonly MemberCertificate[]): Map<string, MemberCerti
 }
 
 /** 沿 `supersedes` 往回走到根，得到完整的变更链 */
-export function walkCertChain(certs: readonly MemberCertificate[], certId: string): CertChain {
+export function walkCertChain(certs: readonly MemberCertificate[], certId: string): ZhengShuLian {
   const byId = indexById(certs);
   const start = byId.get(certId);
   if (!start) {
@@ -751,7 +751,7 @@ export function walkCertChain(certs: readonly MemberCertificate[], certId: strin
 }
 
 /** supersedes 链的**根** certId（成员身份 id，跨换证不变） */
-export function chainRootCertId(certs: readonly MemberCertificate[], certId: string): string {
+export function lianGenZhengShuId(certs: readonly MemberCertificate[], certId: string): string {
   return walkCertChain(certs, certId).rootCertId;
 }
 
@@ -760,7 +760,7 @@ export function chainRootCertId(certs: readonly MemberCertificate[], certId: str
  * 本机不知道这个指纹（没有任何证书）时返回 `[fingerprint]` 本身 —— "只为查找用"，
  * **不代表认定它是成员**。是否成员由证书验签结论决定。
  */
-export function chainFingerprintsFor(certs: readonly MemberCertificate[], fingerprint: string): string[] {
+export function lianShiZhiWen(certs: readonly MemberCertificate[], fingerprint: string): string[] {
   const own = certs.filter((c) => c.memberFingerprint === fingerprint);
   const out = new Set<string>([fingerprint]);
   for (const c of own) {
@@ -803,8 +803,8 @@ export function isSameMember(
   if (!certsA.length || !certsB.length) {
     return { ...empty, reason: !certsA.length ? 'A 没有成员证书' : 'B 没有成员证书' };
   }
-  const rootsA = certsA.map((c) => chainRootCertId(certs, c.certId)).filter((r) => r.length > 0);
-  const rootsB = certsB.map((c) => chainRootCertId(certs, c.certId)).filter((r) => r.length > 0);
+  const rootsA = certsA.map((c) => lianGenZhengShuId(certs, c.certId)).filter((r) => r.length > 0);
+  const rootsB = certsB.map((c) => lianGenZhengShuId(certs, c.certId)).filter((r) => r.length > 0);
   const rootA = rootsA[0] ?? '';
   const rootB = rootsB[0] ?? '';
   const shared = rootsA.some((r) => rootsB.includes(r));
@@ -827,7 +827,7 @@ export function isSameMember(
 /* ────────────────────────────── 便于断言 / 展示 ────────────────────────────── */
 
 /** 公开描述（不含任何私钥材料；证书本来就只有公钥） */
-export function describeMemberCertificate(cert: MemberCertificate): {
+export function shuoMingChengYuanZhengShu(cert: MemberCertificate): {
   certId: string;
   groupId: string;
   memberFingerprint: string;
@@ -864,6 +864,6 @@ export function describeMemberCertificate(cert: MemberCertificate): {
 /** 群内成员身份 id：优先 `memberId`，否则用变更链根 certId */
 export function memberIdentityOf(certs: readonly MemberCertificate[], cert: MemberCertificate): string {
   if (cert.memberId) return `member:${cert.memberId}`;
-  const root = chainRootCertId(certs, cert.certId);
+  const root = lianGenZhengShuId(certs, cert.certId);
   return root ? `chain:${root}` : '';
 }

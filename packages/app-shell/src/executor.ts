@@ -1,7 +1,7 @@
 /**
  * P5 短命执行者协议：上下文 = O(任务规模)，完成即销毁，只回传蒸馏结论
  */
-import { createProviderFromPreset, type ChatMessage } from '@warmy/providers';
+import { congYuSheChuangJian, type LiaoTianXiaoXi } from '@warmy/providers';
 
 export interface ExecutorTask {
   taskId: string;
@@ -34,7 +34,7 @@ export async function runShortLivedExecutor(
   cfg: ExecutorProviderCfg
 ): Promise<ExecutorResult> {
   const t0 = Date.now();
-  const messages: ChatMessage[] = [
+  const messages: LiaoTianXiaoXi[] = [
     {
       role: 'system',
       content:
@@ -46,7 +46,7 @@ export async function runShortLivedExecutor(
     },
   ];
   try {
-    const provider = createProviderFromPreset(cfg.presetId, {
+    const provider = congYuSheChuangJian(cfg.presetId, {
       apiKey: cfg.apiKey,
       baseURL: cfg.baseURL || undefined,
     });

@@ -15,17 +15,17 @@
  */
 import {
   AddressWatcher,
-  ConnectionLadder,
-  DhtNode,
-  DialabilityProbe,
+  LianJieTiZi,
+  DhtJieDian,
+  KeBoRuTanCe,
   GroupKeyRing,
   LanProbe,
   SecureSyncClient,
   SecureSyncServer,
-  createEphemeralIdentity,
+  chuangjianLinShiShenFen,
   randomBytes,
   recordKeyForFingerprint,
-  dialTcpDefault,
+  boTcpMoRen,
 } from '../dist/index.js';
 
 let failures = 0;
@@ -41,7 +41,7 @@ function group(title) {
   console.log(`\n${title}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const mk = (label) => createEphemeralIdentity(label);
+const mk = (label) => chuangjianLinShiShenFen(label);
 
 const GROUP = 'grp-announce-1';
 const GROUP_KEY = randomBytes(32);
@@ -75,7 +75,7 @@ async function main() {
   const creatorTcpPort = await creatorTcp.start();
   const memberTcpPort = await memberTcp.start();
 
-  const creatorDht = new DhtNode({
+  const creatorDht = new DhtJieDian({
     identity: creatorId.provider,
     nodeId: 'creator',
     host: '127.0.0.1',
@@ -84,7 +84,7 @@ async function main() {
     groupKeys: new GroupKeyRing([GROUP_KEY]),
     rpcTimeoutMs: 800,
   });
-  const memberDht = new DhtNode({
+  const memberDht = new DhtJieDian({
     identity: memberId.provider,
     nodeId: 'member',
     host: '127.0.0.1',
@@ -128,12 +128,12 @@ async function main() {
     };
   }
 
-  const creatorLadder = new ConnectionLadder({ perRungTimeoutMs: 2000 });
-  const memberLadder = new ConnectionLadder({ perRungTimeoutMs: 2000 });
+  const creatorLadder = new LianJieTiZi({ perRungTimeoutMs: 2000 });
+  const memberLadder = new LianJieTiZi({ perRungTimeoutMs: 2000 });
 
-  const { AnnounceService } = await import('../dist/index.js');
+  const { GuangBoFuWu } = await import('../dist/index.js');
 
-  const creatorAnnounce = new AnnounceService({
+  const creatorAnnounce = new GuangBoFuWu({
     nodeId: 'creator',
     identity: creatorId.provider,
     groupId: GROUP,
@@ -146,7 +146,7 @@ async function main() {
     canDial: () => true,
     connect: (member, addresses) => connectViaLadder(creatorId, 'creator', member, addresses, creatorLadder),
   });
-  const memberAnnounce = new AnnounceService({
+  const memberAnnounce = new GuangBoFuWu({
     nodeId: 'member',
     identity: memberId.provider,
     groupId: GROUP,
@@ -189,7 +189,7 @@ async function main() {
   /* ── [3] 宣告失败不重试 ── */
   group('[3] 宣告失败即放弃（retries 恒为 0，且无后台重试）');
   {
-    const ghostDht = new DhtNode({
+    const ghostDht = new DhtJieDian({
       identity: ghostId.provider,
       nodeId: 'ghost',
       host: '127.0.0.1',
@@ -199,13 +199,13 @@ async function main() {
       rpcTimeoutMs: 500,
     });
     await ghostDht.start();
-    const ghostSvc = new AnnounceService({
+    const ghostSvc = new GuangBoFuWu({
       nodeId: 'ghost',
       identity: ghostId.provider,
       groupId: GROUP,
       groupKey: GROUP_KEY,
       dht: ghostDht,
-      ladder: new ConnectionLadder({ perRungTimeoutMs: 600 }),
+      ladder: new LianJieTiZi({ perRungTimeoutMs: 600 }),
       // ghost 的名册里有一个"永远连不上"的成员（端口未监听）
       roster: () => memberRoster,
       listenAddr: () => ({ host: '127.0.0.1', port: 59999 }),
@@ -226,7 +226,7 @@ async function main() {
   /* ── [4] 名册外拒绝 ── */
   group('[4] 名册外成员的宣告被拒');
   {
-    const strangerDht = new DhtNode({
+    const strangerDht = new DhtJieDian({
       identity: strangerId.provider,
       nodeId: 'stranger',
       host: '127.0.0.1',
@@ -249,7 +249,7 @@ async function main() {
     check('名册外成员没有被建连', !creatorAnnounce.inboundAccepted.some((a) => a.fingerprint === strangerId.fingerprint));
     check('拒绝也留痕（可观测）', creatorAnnounce.inboundRejected.length >= 1, creatorAnnounce.inboundRejected.length);
     // 用错密钥的宣告：连内容都读不到
-    const wrongKeyDht = new DhtNode({
+    const wrongKeyDht = new DhtJieDian({
       identity: mk('wrongkey').provider,
       nodeId: 'wrongkey',
       host: '127.0.0.1',
@@ -270,7 +270,7 @@ async function main() {
   /* ── [5] C1：不可拨入时不主动拨 ── */
   group('[5] C1：canDial=false → 只登记地址，不主动拨');
   {
-    const passiveDht = new DhtNode({
+    const passiveDht = new DhtJieDian({
       identity: memberId.provider,
       nodeId: 'passive-member',
       host: '127.0.0.1',
@@ -282,7 +282,7 @@ async function main() {
     await passiveDht.start();
     await passiveDht.bootstrap([creatorDhtAddr]);
     let dialed = 0;
-    const passive = new AnnounceService({
+    const passive = new GuangBoFuWu({
       nodeId: 'member',
       identity: memberId.provider,
       groupId: GROUP,
@@ -324,7 +324,7 @@ async function main() {
     const bcast = await probeA.query({ broadcastPorts: [portB], timeoutMs: 700 });
     check('广播探测（发送已实现，同机回环可收到）', bcast.length >= 1, bcast.length === 0 ? '本机未回环（需两台真机验证）' : bcast);
 
-    const ladderWithLan = new ConnectionLadder({
+    const ladderWithLan = new LianJieTiZi({
       perRungTimeoutMs: 1500,
       lanProbe: probeA,
       lanTargets: () => [{ host: '127.0.0.1', port: portB }],
@@ -363,7 +363,7 @@ async function main() {
     check('unsupported 级给出原因（含"未实现"）', fallback.attempts.every((a) => a.status !== 'unsupported' || (a.detail ?? '').includes('未实现')), fallback.attempts.filter((a) => a.status === 'unsupported').map((a) => a.detail));
 
     // 6.5 全失败
-    const allFail = await new ConnectionLadder({ perRungTimeoutMs: 800 }).connect({
+    const allFail = await new LianJieTiZi({ perRungTimeoutMs: 800 }).connect({
       fingerprint: memberId.fingerprint,
       addresses: [{ host: '127.0.0.1', port: 1, source: 'dht' }],
     });
@@ -371,7 +371,7 @@ async function main() {
     check('summary 明确写出未实现的降级路径', /未实现的降级路径/.test(allFail.summary), allFail.summary);
 
     // 6.6 无地址（用不带 LAN 探测的阶梯，否则 LAN 级会兜住）
-    const noAddr = await new ConnectionLadder({ perRungTimeoutMs: 800 }).connect({ fingerprint: memberId.fingerprint, addresses: [] });
+    const noAddr = await new LianJieTiZi({ perRungTimeoutMs: 800 }).connect({ fingerprint: memberId.fingerprint, addresses: [] });
     // 附八.9 之后第一档是 IPv6：无地址时它必须如实说"档不适用"，第二档 public-direct 说"没有可用地址"
     check('无地址时 IPv6 档如实判"无候选"（不假装试过）', noAddr.attempts[0]?.rung === 'ipv6-direct' && noAddr.attempts[0]?.code === 'no-ipv6-candidate', noAddr.attempts[0]?.detail);
     check(
@@ -400,7 +400,7 @@ async function main() {
     // 拨回处理器装在被请求方（成员）的 DHT 上
     memberDht.onRpc(
       'dial_me',
-      DialabilityProbe.handler({
+      KeBoRuTanCe.handler({
         timeoutMs: 1500,
         dialTcp: async (host, port, timeoutMs) => {
           const net = await import('node:net');
@@ -425,7 +425,7 @@ async function main() {
       })
     );
 
-    const okProbe = new DialabilityProbe({
+    const okProbe = new KeBoRuTanCe({
       fingerprint: creatorId.fingerprint,
       nodeId: 'creator',
       advertised: () => ({ host: '127.0.0.1', port: creatorTcpPort }),
@@ -439,7 +439,7 @@ async function main() {
     check('说明里明确"公网可达性未验证"', /未验证/.test(res.reason), res.reason);
     check('拨回尝试有明细', res.attempts.length === 1 && res.attempts[0].ok === true, res.attempts);
 
-    const badProbe = new DialabilityProbe({
+    const badProbe = new KeBoRuTanCe({
       fingerprint: creatorId.fingerprint,
       nodeId: 'creator',
       advertised: () => ({ host: '127.0.0.1', port: 1 }),
@@ -450,7 +450,7 @@ async function main() {
     check('端口错 → dialable=false', bad.dialable === false, bad.reason);
     check('失败原因来自对端实测', /拨入失败|TCP/.test(bad.attempts[0]?.error ?? ''), bad.attempts[0]?.error);
 
-    const emptyProbe = new DialabilityProbe({
+    const emptyProbe = new KeBoRuTanCe({
       fingerprint: creatorId.fingerprint,
       nodeId: 'creator',
       advertised: () => ({ host: '127.0.0.1', port: creatorTcpPort }),
@@ -459,7 +459,7 @@ async function main() {
     });
     const empty = await emptyProbe.probe();
     check('无对端 → 判定"无法判定"而不是"不可拨入"', empty.dialable === false && /无法判定/.test(empty.reason), empty.reason);
-    void dialTcpDefault;
+    void boTcpMoRen;
   }
 
   /* ── [8] 地址变化重新宣告 ── */
@@ -490,7 +490,7 @@ async function main() {
   /* ── [9] 记录保活刷新（默认关闭，显式开启） ── */
   group('[9] DHT 记录保活刷新（TTL 缺口）');
   {
-    const refreshDht = new DhtNode({
+    const refreshDht = new DhtJieDian({
       identity: creatorId.provider,
       nodeId: 'creator-refresh',
       host: '127.0.0.1',
@@ -501,7 +501,7 @@ async function main() {
     });
     await refreshDht.start();
     await refreshDht.bootstrap([memberDht.address]);
-    const svc = new AnnounceService({
+    const svc = new GuangBoFuWu({
       nodeId: 'creator-refresh',
       identity: creatorId.provider,
       groupId: GROUP,

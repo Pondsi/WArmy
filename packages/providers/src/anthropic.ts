@@ -1,7 +1,7 @@
-import { BaseProvider, emptyUsage, httpJson, joinUrl, normalizeUsage } from './base.js';
-import type { ChatChunk, ChatMessage, ChatRequest, ChatResponse, ProviderAuth } from './types.js';
+import { JichuGongYing, kongYongLiang, qingQiuJson, pinJieUrl, guiFanYongLiang } from './base.js';
+import type { LiaoTianPian, LiaoTianXiaoXi, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
 
-function splitSystem(messages: ChatMessage[]): { system?: string; rest: ChatMessage[] } {
+function chaiXiTong(messages: LiaoTianXiaoXi[]): { system?: string; rest: LiaoTianXiaoXi[] } {
   const sys = messages
     .filter((m) => m.role === 'system')
     .map((m) => m.content)
@@ -11,7 +11,7 @@ function splitSystem(messages: ChatMessage[]): { system?: string; rest: ChatMess
 }
 
 /** tool_call.arguments 是字符串（OpenAI 形状）；脏参数不能让整个请求 400 */
-function safeJson(s: string | undefined): unknown {
+function anQuanJson(s: string | undefined): unknown {
   try {
     const v = JSON.parse(s || '{}');
     return v && typeof v === 'object' ? v : {};
@@ -24,11 +24,11 @@ function safeJson(s: string | undefined): unknown {
  * Anthropic Messages API
  * https://docs.anthropic.com/en/api/messages
  */
-export class AnthropicProvider extends BaseProvider {
+export class AnthropicGongYing extends JichuGongYing {
   readonly id: string;
   readonly protocol = 'anthropic' as const;
 
-  constructor(auth: ProviderAuth, opts: { id?: string; defaultBase?: string } = {}) {
+  constructor(auth: GongYingRenZheng, opts: { id?: string; defaultBase?: string } = {}) {
     super(auth, opts.defaultBase || 'https://api.anthropic.com');
     this.id = opts.id || 'anthropic';
   }
@@ -40,8 +40,8 @@ export class AnthropicProvider extends BaseProvider {
     };
   }
 
-  private body(req: ChatRequest): Record<string, unknown> {
-    const { system, rest } = splitSystem(req.messages);
+  private body(req: LiaoTianQingQiu): Record<string, unknown> {
+    const { system, rest } = chaiXiTong(req.messages);
     const contents: Array<{ role: string; content: unknown }> = [];
     for (const m of rest) {
       if (m.role === 'assistant' && m.toolCalls?.length) {
@@ -53,7 +53,7 @@ export class AnthropicProvider extends BaseProvider {
               type: 'tool_use',
               id: t.id,
               name: t.function.name,
-              input: safeJson(t.function.arguments),
+              input: anQuanJson(t.function.arguments),
             })),
           ],
         });
@@ -68,9 +68,9 @@ export class AnthropicProvider extends BaseProvider {
           content: m.content,
         };
         const prev = contents[contents.length - 1];
-        const prevBlocks = prev?.role === 'user' ? (prev.content as Array<{ type?: string }>) : null;
-        if (prevBlocks && Array.isArray(prevBlocks) && prevBlocks.every((b) => b?.type === 'tool_result')) {
-          prevBlocks.push(block);
+        const qianYiKuai = prev?.role === 'user' ? (prev.content as Array<{ type?: string }>) : null;
+        if (qianYiKuai && Array.isArray(qianYiKuai) && qianYiKuai.every((b) => b?.type === 'tool_result')) {
+          qianYiKuai.push(block);
         } else {
           contents.push({ role: 'user', content: [block] });
         }
@@ -96,15 +96,15 @@ export class AnthropicProvider extends BaseProvider {
     };
   }
 
-  async chat(req: ChatRequest, signal?: AbortSignal): Promise<ChatResponse> {
-    const json = await httpJson<{
+  async chat(req: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
+    const json = await qingQiuJson<{
       id: string;
       model: string;
       content: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>;
       stop_reason: string;
       usage: Record<string, number>;
     }>(
-      joinUrl(this.baseURL, 'v1/messages'),
+      pinJieUrl(this.baseURL, 'v1/messages'),
       {
         method: 'POST',
         body: JSON.stringify(this.body(req)),
@@ -148,13 +148,13 @@ export class AnthropicProvider extends BaseProvider {
                 : 'stop',
         },
       ],
-      usage: normalizeUsage(json.usage, 'anthropic'),
+      usage: guiFanYongLiang(json.usage, 'anthropic'),
       raw: json,
     };
   }
 
-  async *chatStream(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatChunk> {
-    const res = await fetch(joinUrl(this.baseURL, 'v1/messages'), {
+  async *chatStream(req: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
+    const res = await fetch(pinJieUrl(this.baseURL, 'v1/messages'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -205,8 +205,8 @@ export class AnthropicProvider extends BaseProvider {
 
   async listModels(signal?: AbortSignal): Promise<string[]> {
     try {
-      const json = await httpJson<{ data?: Array<{ id: string }> }>(
-        joinUrl(this.baseURL, 'v1/models'),
+      const json = await qingQiuJson<{ data?: Array<{ id: string }> }>(
+        pinJieUrl(this.baseURL, 'v1/models'),
         { method: 'GET', signal, headers: this.headers() },
         this.auth
       );

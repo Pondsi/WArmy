@@ -28,11 +28,11 @@
 
 import { type CanDialResolution, type CanDialSignals, resolveCanDial } from './announce.js';
 
-export type ConnectionKind = 'member-initiated' | 'creator-probe';
+export type LianJieZhongLei = 'member-initiated' | 'creator-probe';
 
 export interface LivenessConnection {
   id: string;
-  kind: ConnectionKind;
+  kind: LianJieZhongLei;
   /** 关闭该连接（断开时调用） */
   close?: () => void;
 }
@@ -100,7 +100,7 @@ const UNKNOWN: MemberLiveness = {
   connections: 0,
 };
 
-export class ConnectionLiveness {
+export class LianJieHuoXing {
   private members = new Map<string, MemberState>();
   private pendingProbe = new Set<string>();
   private dialableFlag = false;

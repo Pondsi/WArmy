@@ -1423,3 +1423,6 @@ body.chat-window #page-layout, body.chat-window #empty-state, body.chat-window #
 .ctg-inst-name { font-weight: 600; }
 .ctg-inst[data-inst-enabled="0"] .ctg-inst-head { opacity: .55; }
 .ctg-inst .ctg-spacer { flex: 1; }
+
+/* 「ID 即私钥」的诚实提示：用警示色，但比错误色轻（它是事实陈述，不是报错） */
+.me-hint-warn { color: var(--danger-fg, #c0392b); line-height: 1.5; }

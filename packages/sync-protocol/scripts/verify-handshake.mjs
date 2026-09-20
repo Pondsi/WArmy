@@ -21,7 +21,7 @@ import {
   SecureChannel,
   SecureSyncClient,
   SecureSyncServer,
-  createEphemeralIdentity,
+  chuangjianLinShiShenFen,
   normalizeIdentity,
 } from '../dist/index.js';
 
@@ -40,7 +40,7 @@ function group(title) {
 }
 
 function mkIdentity(label) {
-  const i = createEphemeralIdentity(label);
+  const i = chuangjianLinShiShenFen(label);
   return { provider: i.provider, privateKey: i.privateKey, fingerprint: i.fingerprint };
 }
 

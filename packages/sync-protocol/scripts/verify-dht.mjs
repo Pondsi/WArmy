@@ -13,10 +13,10 @@
  *   [7] 假名签名模式：公共 DHT 看不到真实指纹，群成员可反推
  */
 import {
-  DhtNode,
+  DhtJieDian,
   GroupKeyRing,
   warmyFingerprint,
-  createEphemeralIdentity,
+  chuangjianLinShiShenFen,
   ed25519FromSeed,
   hmacSha256,
   randomBytes,
@@ -38,7 +38,7 @@ function group(title) {
   console.log(`\n${title}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const mkIdentity = (label) => createEphemeralIdentity(label).provider;
+const mkIdentity = (label) => chuangjianLinShiShenFen(label).provider;
 
 const GROUP_KEY = randomBytes(32);
 const GROUP_KEY_WRONG = randomBytes(32);
@@ -51,7 +51,7 @@ const outsider = mkIdentity('outsider');
 const memberM = { fingerprint: warmyFingerprint(randomBytes(32)) };
 
 function makeNode(identity, nodeId, tcpPort, opts = {}) {
-  return new DhtNode({
+  return new DhtJieDian({
     identity,
     nodeId,
     host: '127.0.0.1',
@@ -128,7 +128,7 @@ async function main() {
   }
   {
     // 无群密钥的节点：签名仍合法（可确认"有记录存在 / 谁发的"），但内容读不到
-    const D = new DhtNode({
+    const D = new DhtJieDian({
       identity: outsider,
       nodeId: 'node-d',
       host: '127.0.0.1',
@@ -213,7 +213,7 @@ async function main() {
       seq: 9999,
       ts: Date.now(),
     });
-    const HOSTILE = new DhtNode({
+    const HOSTILE = new DhtJieDian({
       identity: mkIdentity('hostile'),
       nodeId: 'node-hostile',
       host: '127.0.0.1',
@@ -262,7 +262,7 @@ async function main() {
     check('群成员可反推假名归属', expectPseudonym === pub.envelope.sg, { expect: expectPseudonym.slice(0, 12), got: pub.envelope.sg.slice(0, 12) });
 
     // 群成员查询：能解出内容
-    const P2 = new DhtNode({
+    const P2 = new DhtJieDian({
       identity: carol,
       nodeId: 'node-c2',
       host: '127.0.0.1',

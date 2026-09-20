@@ -17,7 +17,7 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
-import { encodeVector, cosineInt8, normalizeCosine, rrfFusionRanked, unpackInt8 } from './vectors.js';
+import { bianMaXiangLiang, yuXianInt8, normalizeCosine, rrfFusionRanked, unpackInt8 } from './vectors.js';
 import type { RankedList, FusedHit } from './vectors.js';
 import { OnnxEmbedder, defaultModelCandidates, ortSearchCandidates } from './embedder.js';
 import type { VectorStatus } from './embedder.js';
@@ -657,7 +657,7 @@ export class MemoryService {
     const { data: q8, scale: qs } = encodeVectorToInt8ForQuery(qvec);
     for (const r of rows) {
       const v8 = unpackInt8(r.data);
-      const cos = cosineInt8(q8, qs, v8, Number(r.scale));
+      const cos = yuXianInt8(q8, qs, v8, Number(r.scale));
       scored.push({ seq: r.seq, cos });
     }
     scored.sort((a, b) => b.cos - a.cos);
@@ -1077,7 +1077,7 @@ export class MemoryService {
         /* 文件消失则重建 */
       }
     }
-    this.jsonlIndex = buildJsonlIndex(this.jsonlPath);
+    this.jsonlIndex = gouJianJsonlSuoYin(this.jsonlPath);
     return this.jsonlIndex;
   }
 
@@ -1190,7 +1190,7 @@ export class MemoryService {
       if (this.closed) break;
       const text = String(row.body).slice(0, maxChars);
       const vec = await this.embedder.embed(text);
-      const enc = encodeVector(vec);
+      const enc = bianMaXiangLiang(vec);
       ins.run(row.seq, enc.dim, enc.scale, enc.blob);
       n += 1;
     }
@@ -1348,7 +1348,7 @@ interface JsonlIndex {
 }
 
 /** 扫描 JSONL 一次，记录每行的字节区间与关键字段（证据锚点 byteOffset 的真实落点） */
-export function buildJsonlIndex(jsonlPath: string): JsonlIndex {
+export function gouJianJsonlSuoYin(jsonlPath: string): JsonlIndex {
   const empty: JsonlIndex = { size: 0, mtimeMs: 0, entries: [] };
   if (!fs.existsSync(jsonlPath)) return empty;
   const st = fs.statSync(jsonlPath);

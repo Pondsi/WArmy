@@ -14,24 +14,24 @@
 // 通用消息与用量
 // ─────────────────────────────────────────────
 
-export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
+export type LiaoTianJueSe = 'system' | 'user' | 'assistant' | 'tool';
 
-export interface ChatMessage {
-  role: ChatRole;
+export interface LiaoTianXiaoXi {
+  role: LiaoTianJueSe;
   content: string;
   /** tool_calls 时由 assistant 侧携带 */
-  toolCalls?: ToolCall[];
+  toolCalls?: GongJuDiaoYong[];
   toolCallId?: string;
   name?: string;
 }
 
-export interface ToolCall {
+export interface GongJuDiaoYong {
   id: string;
   type: 'function';
   function: { name: string; arguments: string };
 }
 
-export interface ToolSpec {
+export interface GongJuGuiGe {
   type: 'function';
   function: {
     name: string;
@@ -41,7 +41,7 @@ export interface ToolSpec {
 }
 
 /** 统一缓存/用量指标（各厂字段不同，Provider 层归一） */
-export interface CacheUsage {
+export interface HuanCunYongLiang {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -53,46 +53,46 @@ export interface CacheUsage {
   source: 'native' | 'estimated' | 'none';
 }
 
-export interface ChatRequest {
+export interface LiaoTianQingQiu {
   model: string;
-  messages: ChatMessage[];
+  messages: LiaoTianXiaoXi[];
   maxTokens?: number;
   temperature?: number;
   topP?: number;
   stop?: string[];
-  tools?: ToolSpec[];
+  tools?: GongJuGuiGe[];
   toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
   /** 透传给具体协议的扩展字段 */
   extra?: Record<string, unknown>;
 }
 
-export interface ChatChoice {
+export interface LiaoTianXuanXiang {
   index: number;
-  message: ChatMessage;
+  message: LiaoTianXiaoXi;
   finishReason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | string | null;
 }
 
-export interface ChatResponse {
+export interface LiaoTianXiangYing {
   id: string;
   model: string;
-  choices: ChatChoice[];
-  usage: CacheUsage;
+  choices: LiaoTianXuanXiang[];
+  usage: HuanCunYongLiang;
   /** 原始协议响应体，便于调试，不入业务逻辑 */
   raw?: unknown;
 }
 
-export interface ChatChunkDelta {
+export interface LiaoTianPianZengLiang {
   content?: string;
-  toolCalls?: ToolCall[];
-  role?: ChatRole;
+  toolCalls?: GongJuDiaoYong[];
+  role?: LiaoTianJueSe;
 }
 
-export interface ChatChunk {
+export interface LiaoTianPian {
   id: string;
   model: string;
   choices: Array<{
     index: number;
-    delta: ChatChunkDelta;
+    delta: LiaoTianPianZengLiang;
     finishReason: string | null;
   }>;
 }
@@ -101,9 +101,9 @@ export interface ChatChunk {
 // Provider 接口
 // ─────────────────────────────────────────────
 
-export type ProviderProtocol = 'openai-compatible' | 'anthropic' | 'ollama';
+export type GongYingXieYi = 'openai-compatible' | 'anthropic' | 'ollama';
 
-export interface ProviderAuth {
+export interface GongYingRenZheng {
   /** API Key；Ollama 可为空 */
   apiKey?: string;
   /** 覆盖 baseURL（用户自定义中转） */
@@ -114,10 +114,10 @@ export interface ProviderAuth {
   timeoutMs?: number;
 }
 
-export interface ProviderPreset {
+export interface GongYingYuShe {
   id: string;
   label: string;
-  protocol: ProviderProtocol;
+  protocol: GongYingXieYi;
   /** 默认 baseURL */
   baseURL: string;
   /** 建议默认模型 */
@@ -127,9 +127,9 @@ export interface ProviderPreset {
   docs?: string;
 }
 
-export interface ModelProvider {
+export interface MoxingGongYing {
   readonly id: string;
-  readonly protocol: ProviderProtocol;
+  readonly protocol: GongYingXieYi;
   readonly baseURL: string;
   /**
    * 是否支持 function calling（ADR 002 §9.4 待办 2）。
@@ -139,10 +139,10 @@ export interface ModelProvider {
   readonly supportsTools?: boolean;
 
   /** 同步对话 */
-  chat(req: ChatRequest, signal?: AbortSignal): Promise<ChatResponse>;
+  chat(req: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing>;
 
   /** 流式对话 */
-  chatStream(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatChunk>;
+  chatStream(req: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian>;
 
   /** 列模型（协议支持时） */
   listModels(signal?: AbortSignal): Promise<string[]>;
@@ -155,7 +155,7 @@ export interface ModelProvider {
 // 内置预设（用户可改 baseURL / key / 模型）
 // ─────────────────────────────────────────────
 
-export const PROVIDER_PRESETS: ProviderPreset[] = [
+export const PROVIDER_PRESETS: GongYingYuShe[] = [
   {
     id: 'deepseek',
     label: 'DeepSeek',

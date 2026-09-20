@@ -3,10 +3,10 @@
  * 不依赖外网（除可选 DEEPSEEK_API_KEY）
  */
 import {
-  createProvider,
-  createProviderFromPreset,
+  chuangjianGongYing,
+  congYuSheChuangJian,
   PROVIDER_PRESETS,
-  normalizeUsage,
+  guiFanYongLiang,
 } from '@warmy/providers';
 import {
   createP1Runtime,
@@ -30,32 +30,32 @@ check(
   new Set(PROVIDER_PRESETS.map((p) => p.protocol)).size === 3,
   { protocols: [...new Set(PROVIDER_PRESETS.map((p) => p.protocol))] }
 );
-const ds = createProviderFromPreset('deepseek', { apiKey: 'sk-x' });
+const ds = congYuSheChuangJian('deepseek', { apiKey: 'sk-x' });
 check('deepseek baseURL', ds.baseURL === 'https://api.deepseek.com', { b: ds.baseURL });
-const openai = createProvider('openai-compatible', { baseURL: 'https://api.example.com/v1' }, 'x');
+const openai = chuangjianGongYing('openai-compatible', { baseURL: 'https://api.example.com/v1' }, 'x');
 check('custom baseURL', openai.baseURL === 'https://api.example.com/v1', { b: openai.baseURL });
-const ant = createProvider('anthropic', {});
+const ant = chuangjianGongYing('anthropic', {});
 check('anthropic base', ant.baseURL === 'https://api.anthropic.com', { b: ant.baseURL });
-const ol = createProvider('ollama', {});
+const ol = chuangjianGongYing('ollama', {});
 check('ollama base', ol.baseURL === 'http://127.0.0.1:11434', { b: ol.baseURL });
 
 // usage 归一化
-const dsU = normalizeUsage(
+const dsU = guiFanYongLiang(
   { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110, prompt_cache_hit_tokens: 64, prompt_cache_miss_tokens: 36 },
   'openai-compatible'
 );
 check('deepseek cache normalize', dsU.cacheHitTokens === 64 && dsU.source === 'native', dsU);
-const oaU = normalizeUsage(
+const oaU = guiFanYongLiang(
   { prompt_tokens: 100, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 80 } },
   'openai-compatible'
 );
 check('openai cached_tokens normalize', oaU.cacheHitTokens === 80, oaU);
-const anU = normalizeUsage(
+const anU = guiFanYongLiang(
   { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 40, cache_creation_input_tokens: 20 },
   'anthropic'
 );
 check('anthropic cache normalize', anU.cacheHitTokens === 40 && anU.promptTokens === 70, anU);
-const oU = normalizeUsage({ prompt_eval_count: 20, eval_count: 3 }, 'ollama');
+const oU = guiFanYongLiang({ prompt_eval_count: 20, eval_count: 3 }, 'ollama');
 check('ollama usage normalize', oU.promptTokens === 20 && oU.cacheHitTokens === 0 && oU.source === 'estimated', oU);
 
 // ── Security fail-closed ──
@@ -143,7 +143,7 @@ await tr2.shutdownAll();
 
 // ── 可选 DeepSeek ──
 if (process.env.DEEPSEEK_API_KEY) {
-  const live = createProviderFromPreset('deepseek', { apiKey: process.env.DEEPSEEK_API_KEY });
+  const live = congYuSheChuangJian('deepseek', { apiKey: process.env.DEEPSEEK_API_KEY });
   const r = await live.chat({
     model: 'deepseek-chat',
     messages: [{ role: 'user', content: '只回：ok' }],

@@ -36,7 +36,7 @@ import {
   verifyEd25519Local,
 } from './codec.js';
 import {
-  type FingerprintDerivation,
+  type ZhiWenTuiDao,
   type IdentityProvider,
   type NormalizedIdentity,
   warmyFingerprint,
@@ -60,12 +60,12 @@ export const RECORD_VERSION = 1;
  */
 export const DEFAULT_RECORD_TTL_MS = 30 * 60_000;
 
-export interface DhtAddr {
+export interface DhtDiZhi {
   host: string;
   port: number;
 }
 
-export interface DhtContact extends DhtAddr {
+export interface DhtLianXi extends DhtDiZhi {
   id: Buffer;
   lastSeen: number;
   /** 对端身份指纹（若宣告过） */
@@ -75,7 +75,7 @@ export interface DhtContact extends DhtAddr {
 /* ────────────────────────────── 键空间 ────────────────────────────── */
 
 /** 节点 ID 由指纹推出（身份即路由身份） */
-export function dhtIdFromFingerprint(fingerprint: string): Buffer {
+export function youZhiWenQuDhtId(fingerprint: string): Buffer {
   return sha256(Buffer.from(`${DHT_PROTOCOL}|node-id|${fingerprint}`, 'utf8'));
 }
 
@@ -93,7 +93,7 @@ export function xorDistance(a: Bytes, b: Bytes): Buffer {
 }
 
 /** common prefix length（0..256），用于 k 桶划分 */
-export function commonPrefixLength(a: Bytes, b: Bytes): number {
+export function gongGongQianZhuiChangDu(a: Bytes, b: Bytes): number {
   const ba = toBuf(a);
   const bb = toBuf(b);
   let bits = 0;
@@ -113,7 +113,7 @@ export function commonPrefixLength(a: Bytes, b: Bytes): number {
 /* ────────────────────────────── 路由表（k-bucket） ────────────────────────────── */
 
 export class RoutingTable {
-  private buckets = new Map<number, DhtContact[]>();
+  private buckets = new Map<number, DhtLianXi[]>();
 
   constructor(
     private readonly selfId: Buffer,
@@ -126,14 +126,14 @@ export class RoutingTable {
     return n;
   }
 
-  list(): DhtContact[] {
+  list(): DhtLianXi[] {
     return [...this.buckets.values()].flat();
   }
 
   /** 加入/更新；桶满时淘汰最久未见（LRU） */
-  add(contact: DhtContact): void {
+  add(contact: DhtLianXi): void {
     if (contact.id.equals(this.selfId)) return;
-    const idx = commonPrefixLength(this.selfId, contact.id);
+    const idx = gongGongQianZhuiChangDu(this.selfId, contact.id);
     let bucket = this.buckets.get(idx);
     if (!bucket) {
       bucket = [];
@@ -155,7 +155,7 @@ export class RoutingTable {
   }
 
   remove(id: Buffer): void {
-    const idx = commonPrefixLength(this.selfId, id);
+    const idx = gongGongQianZhuiChangDu(this.selfId, id);
     const bucket = this.buckets.get(idx);
     if (!bucket) return;
     const next = bucket.filter((c) => !c.id.equals(id));
@@ -163,7 +163,7 @@ export class RoutingTable {
   }
 
   /** 距离 target 最近的 n 个联系人（含未验证过的） */
-  closest(target: Bytes, n = this.k): DhtContact[] {
+  closest(target: Bytes, n = this.k): DhtLianXi[] {
     return this.list()
       .sort((a, b) => Buffer.compare(xorDistance(a.id, target), xorDistance(b.id, target)))
       .slice(0, n);
@@ -187,7 +187,7 @@ export interface PeerAddressRecord {
   extra?: Record<string, unknown>;
 }
 
-export interface DhtRecordEnvelope {
+export interface DhtJiLuFeng {
   v: number;
   /** 记录键 hex */
   k: string;
@@ -207,11 +207,11 @@ export interface DhtRecordEnvelope {
 
 export type RecordSigningMode = 'identity' | 'pseudonymous';
 
-export function recordSignatureTranscript(env: DhtRecordEnvelope): string {
+export function recordSignatureTranscript(env: DhtJiLuFeng): string {
   return joinFields([DHT_PROTOCOL, 'RECORD', env.v, env.k, env.s, env.t, env.sg, env.pk, env.sl]);
 }
 
-export function recordAad(env: Pick<DhtRecordEnvelope, 'v' | 'k' | 's' | 't' | 'sg' | 'pk'>): Buffer {
+export function recordAad(env: Pick<DhtJiLuFeng, 'v' | 'k' | 's' | 't' | 'sg' | 'pk'>): Buffer {
   return Buffer.from(joinFields([DHT_PROTOCOL, 'RECORD-AAD', env.v, env.k, env.s, env.t, env.sg, env.pk]), 'utf8');
 }
 
@@ -243,7 +243,7 @@ export class GroupKeyRing {
   }
 
   /** 依次尝试所有密钥；全部失败返回 null（无密钥 / 被篡改） */
-  tryOpen(env: DhtRecordEnvelope): PeerAddressRecord | null {
+  tryOpen(env: DhtJiLuFeng): PeerAddressRecord | null {
     for (const key of this.keys) {
       try {
         const plain = open(key, { iv: fromB64u(env.sl).subarray(0, 12), ct: fromB64u(env.sl).subarray(12) }, recordAad(env));
@@ -268,7 +268,7 @@ export interface SignRecordOptions {
 }
 
 /** 组装记录信封：内容加密（群密钥）+ 头部签名（身份密钥或假名密钥） */
-export async function signRecordEnvelope(opts: SignRecordOptions): Promise<DhtRecordEnvelope> {
+export async function signRecordEnvelope(opts: SignRecordOptions): Promise<DhtJiLuFeng> {
   const identity = await normalizeIdentity(opts.identity);
   const groupKey = toBuf(opts.groupKey);
   const ts = opts.ts ?? Date.now();
@@ -290,7 +290,7 @@ export async function signRecordEnvelope(opts: SignRecordOptions): Promise<DhtRe
     sg = identity.fingerprint;
   }
 
-  const head: DhtRecordEnvelope = {
+  const head: DhtJiLuFeng = {
     v: RECORD_VERSION,
     k: opts.key,
     s: opts.seq,
@@ -324,12 +324,12 @@ export interface VerifyRecordResult {
   signer?: string;
   record?: PeerAddressRecord;
   /** 解不开内容时的信封（签名合法但无密钥） */
-  envelope?: DhtRecordEnvelope;
+  envelope?: DhtJiLuFeng;
 }
 
 export interface VerifyRecordOptions {
   /** 校验公钥/指纹的推导函数（默认 base32(sha256(pub))） */
-  derivation?: FingerprintDerivation;
+  derivation?: ZhiWenTuiDao;
   /** 注入验签实现（可选；假名模式必须传，因为本地只有公钥） */
   verifier?: ((message: Bytes, signature: Bytes, publicKey: Bytes) => Promise<boolean>) | null;
   /** 期望的记录键（防"把别的键的记录塞进来"） */
@@ -350,7 +350,7 @@ export interface VerifyRecordOptions {
  * 任一步失败都会给出**具体原因**（便于审计与测试断言）。
  */
 export async function verifyRecordEnvelope(
-  env: DhtRecordEnvelope,
+  env: DhtJiLuFeng,
   opts: VerifyRecordOptions = {}
 ): Promise<VerifyRecordResult> {
   const now = opts.now ?? (() => Date.now());
@@ -422,14 +422,14 @@ export async function verifyRecordEnvelope(
 
 /* ────────────────────────────── 节点 ────────────────────────────── */
 
-export interface DhtEvent {
+export interface DhtShiJian {
   type: 'rpc-sent' | 'rpc-recv' | 'rpc-failed' | 'stored' | 'record-received' | 'error';
   detail?: string;
   peer?: string;
   ts: number;
 }
 
-export interface DhtNodeOptions {
+export interface DhtJieDianXuanXiang {
   identity: IdentityProvider | NormalizedIdentity;
   /** 节点别名（人读用；路由身份是 id） */
   nodeId: string;
@@ -451,9 +451,9 @@ export interface DhtNodeOptions {
   /** 记录签名模式（默认 identity；pseudonymous 可隐藏身份） */
   signing?: RecordSigningMode;
   now?: () => number;
-  onEvent?: (e: DhtEvent) => void;
+  onEvent?: (e: DhtShiJian) => void;
   /** 收到记录（store RPC 或本机发布）时的回调 —— 事件驱动宣告的入口 */
-  onRecord?: (env: DhtRecordEnvelope, from: DhtAddr | null) => void;
+  onRecord?: (env: DhtJiLuFeng, from: DhtDiZhi | null) => void;
 }
 
 interface PendingRpc {
@@ -462,10 +462,10 @@ interface PendingRpc {
   timer: NodeJS.Timeout;
   replyType: string;
   /** 只接受来自该地址的回包（否则"自己给自己发 RPC"会被误判成回包） */
-  target: DhtAddr;
+  target: DhtDiZhi;
 }
 
-export class DhtNode {
+export class DhtJieDian {
   id: Buffer;
   private socket: dgram.Socket | null = null;
   private table: RoutingTable;
@@ -476,14 +476,14 @@ export class DhtNode {
   private readonly rpcTimeoutMs: number;
   private readonly recordTtlMs: number;
   private readonly now: () => number;
-  private bound: DhtAddr = { host: '127.0.0.1', port: 0 };
+  private bound: DhtDiZhi = { host: '127.0.0.1', port: 0 };
   private tcpPort: number;
-  private store = new Map<string, DhtRecordEnvelope>();
+  private store = new Map<string, DhtJiLuFeng>();
   private seqSeen = new Map<string, number>();
   private seqLocal = new Map<string, number>();
   private pending = new Map<string, PendingRpc>();
-  private rpcHandlers = new Map<string, (msg: Record<string, unknown>, from: DhtContact) => Promise<Record<string, unknown> | null>>();
-  private watchers = new Map<string, ((env: DhtRecordEnvelope, from: DhtAddr | null) => void)[]>();
+  private rpcHandlers = new Map<string, (msg: Record<string, unknown>, from: DhtLianXi) => Promise<Record<string, unknown> | null>>();
+  private watchers = new Map<string, ((env: DhtJiLuFeng, from: DhtDiZhi | null) => void)[]>();
   private readonly stats = {
     rpcSent: 0,
     rpcRecv: 0,
@@ -495,7 +495,7 @@ export class DhtNode {
     recordsStored: 0,
   };
 
-  constructor(private readonly opts: DhtNodeOptions) {
+  constructor(private readonly opts: DhtJieDianXuanXiang) {
     this.k = opts.k ?? DEFAULT_K;
     this.alpha = opts.alpha ?? DEFAULT_ALPHA;
     this.rpcTimeoutMs = opts.rpcTimeoutMs ?? DEFAULT_RPC_TIMEOUT_MS;
@@ -511,7 +511,7 @@ export class DhtNode {
   private async init(): Promise<void> {
     this.identity = await normalizeIdentity(this.opts.identity);
     if (this.opts.id && this.opts.id.length !== DHT_ID_LENGTH) throw new Error('DhtNode.id 必须 32 字节');
-    const derivedId = this.opts.id ?? dhtIdFromFingerprint(this.identity.fingerprint);
+    const derivedId = this.opts.id ?? youZhiWenQuDhtId(this.identity.fingerprint);
     this.id = derivedId;
     this.table = new RoutingTable(derivedId, this.k);
   }
@@ -519,7 +519,7 @@ export class DhtNode {
   get fingerprint(): string {
     return this.identity.fingerprint;
   }
-  get address(): DhtAddr {
+  get address(): DhtDiZhi {
     return { ...this.bound };
   }
   get listening(): boolean {
@@ -544,12 +544,12 @@ export class DhtNode {
   }
 
   /** 注册自定义 RPC（例如 autonat 式拨回探测） */
-  onRpc(type: string, handler: (msg: Record<string, unknown>, from: DhtContact) => Promise<Record<string, unknown> | null>): void {
+  onRpc(type: string, handler: (msg: Record<string, unknown>, from: DhtLianXi) => Promise<Record<string, unknown> | null>): void {
     this.rpcHandlers.set(type, handler);
   }
 
   /** 订阅某个记录键（hex）；'*' 订阅全部 —— 事件驱动，无轮询 */
-  watch(keyHex: string, cb: (env: DhtRecordEnvelope, from: DhtAddr | null) => void): () => void {
+  watch(keyHex: string, cb: (env: DhtJiLuFeng, from: DhtDiZhi | null) => void): () => void {
     const list = this.watchers.get(keyHex) ?? [];
     list.push(cb);
     this.watchers.set(keyHex, list);
@@ -562,7 +562,7 @@ export class DhtNode {
     };
   }
 
-  start(): Promise<DhtAddr> {
+  start(): Promise<DhtDiZhi> {
     return new Promise((resolve, reject) => {
       void this.ready.then(() => {
         const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
@@ -598,7 +598,7 @@ export class DhtNode {
   }
 
   /** 引导：PING + FIND_NODE(self) 播种路由表 */
-  async bootstrap(seeds: DhtAddr[]): Promise<{ ok: number; failed: number }> {
+  async bootstrap(seeds: DhtDiZhi[]): Promise<{ ok: number; failed: number }> {
     let ok = 0;
     let failed = 0;
     for (const seed of seeds) {
@@ -615,11 +615,11 @@ export class DhtNode {
 
   /* ── 基础 RPC ── */
 
-  private contactOf(from: DhtContact): Record<string, unknown> {
+  private contactOf(from: DhtLianXi): Record<string, unknown> {
     return { id: b64u(from.id), host: from.host, port: from.port };
   }
 
-  contactFromWire(v: unknown): DhtContact | null {
+  contactFromWire(v: unknown): DhtLianXi | null {
     if (typeof v !== 'object' || v === null) return null;
     const o = v as { id?: string; host?: string; port?: number; fp?: string };
     if (typeof o.id !== 'string' || typeof o.port !== 'number') return null;
@@ -640,7 +640,7 @@ export class DhtNode {
   }
 
   /** 发送一条 RPC 并等待回复（单次，超时即失败；**不重试**） */
-  async call(addr: DhtAddr, msg: Record<string, unknown>, replyType: string, timeoutMs = this.rpcTimeoutMs): Promise<Record<string, unknown>> {
+  async call(addr: DhtDiZhi, msg: Record<string, unknown>, replyType: string, timeoutMs = this.rpcTimeoutMs): Promise<Record<string, unknown>> {
     if (!this.socket) throw new Error('DhtNode 未启动');
     const rid = randomHex(6);
     const payload = Buffer.from(JSON.stringify({ ...msg, id: b64u(this.id), rid, reply: replyType }), 'utf8');
@@ -667,16 +667,16 @@ export class DhtNode {
     });
   }
 
-  async ping(addr: DhtAddr): Promise<DhtContact | null> {
+  async ping(addr: DhtDiZhi): Promise<DhtLianXi | null> {
     const res = await this.call(addr, { t: 'ping' }, 'pong');
     const from = this.contactFromWire(res['from']);
     if (from) this.learn(from, addr);
     return from;
   }
 
-  async findNode(addr: DhtAddr, target: Buffer): Promise<DhtContact[]> {
+  async findNode(addr: DhtDiZhi, target: Buffer): Promise<DhtLianXi[]> {
     const res = await this.call(addr, { t: 'find_node', target: b64u(target) }, 'nodes');
-    const out: DhtContact[] = [];
+    const out: DhtLianXi[] = [];
     const arr = Array.isArray(res['nodes']) ? (res['nodes'] as unknown[]) : [];
     for (const n of arr) {
       const c = this.contactFromWire(n);
@@ -688,7 +688,7 @@ export class DhtNode {
     return out;
   }
 
-  private learn(contact: DhtContact, observedAddr: DhtAddr): void {
+  private learn(contact: DhtLianXi, observedAddr: DhtDiZhi): void {
     const before = this.table.size;
     // 观察到的地址（rinfo）优先于自报地址；自报 host 为空时用观察值
     const host = contact.host && contact.host !== '0.0.0.0' ? contact.host : observedAddr.host;
@@ -697,8 +697,8 @@ export class DhtNode {
   }
 
   /** 迭代 FIND_NODE（alpha 并行，非阻塞收敛） */
-  async iterativeLookup(target: Buffer, maxRpc = 48): Promise<DhtContact[]> {
-    const shortlist = new Map<string, DhtContact>();
+  async iterativeLookup(target: Buffer, maxRpc = 48): Promise<DhtLianXi[]> {
+    const shortlist = new Map<string, DhtLianXi>();
     const queried = new Set<string>();
     for (const c of this.table.closest(target, this.k)) shortlist.set(b64u(c.id), c);
     let rpcCount = 0;
@@ -717,7 +717,7 @@ export class DhtNode {
             return await this.findNode({ host: c.host, port: c.port }, target);
           } catch {
             this.table.remove(c.id);
-            return [] as DhtContact[];
+            return [] as DhtLianXi[];
           }
         })
       );
@@ -736,7 +736,7 @@ export class DhtNode {
   /* ── 发布 / 查询 ── */
 
   /** 本地已有的记录（含自己发布的） */
-  localRecord(keyHex: string): DhtRecordEnvelope | null {
+  localRecord(keyHex: string): DhtJiLuFeng | null {
     return this.store.get(keyHex) ?? null;
   }
 
@@ -756,8 +756,8 @@ export class DhtNode {
   async publish(args: { fingerprint: string; record?: PeerAddressRecord; seq?: number; signing?: RecordSigningMode }): Promise<{
     key: string;
     seq: number;
-    storedOn: DhtAddr[];
-    envelope: DhtRecordEnvelope;
+    storedOn: DhtDiZhi[];
+    envelope: DhtJiLuFeng;
   }> {
     await this.ready;
     const key = recordKeyForFingerprint(args.fingerprint);
@@ -785,9 +785,9 @@ export class DhtNode {
     });
     this.acceptRecord(env, null);
 
-    const target = dhtIdFromFingerprint(args.fingerprint);
+    const target = youZhiWenQuDhtId(args.fingerprint);
     const closest = (await this.iterativeLookup(target)).filter((c) => !c.id.equals(this.id));
-    const storedOn: DhtAddr[] = [];
+    const storedOn: DhtDiZhi[] = [];
     for (const c of closest.slice(0, this.k)) {
       try {
         await this.call({ host: c.host, port: c.port }, { t: 'store', key, env }, 'stored');
@@ -811,21 +811,21 @@ export class DhtNode {
     ok: boolean;
     key: string;
     record?: PeerAddressRecord;
-    envelope?: DhtRecordEnvelope;
+    envelope?: DhtJiLuFeng;
     signer?: string;
-    from?: DhtAddr;
-    attempts: { addr: DhtAddr; status: 'ok' | 'empty' | 'reject' | 'rpc-failed'; reason?: string; seq?: number }[];
-    rejected: { addr: DhtAddr; reason: string; detail?: string }[];
+    from?: DhtDiZhi;
+    attempts: { addr: DhtDiZhi; status: 'ok' | 'empty' | 'reject' | 'rpc-failed'; reason?: string; seq?: number }[];
+    rejected: { addr: DhtDiZhi; reason: string; detail?: string }[];
   }> {
     await this.ready;
     const key = recordKeyForFingerprint(fingerprint);
-    const attempts: { addr: DhtAddr; status: 'ok' | 'empty' | 'reject' | 'rpc-failed'; reason?: string; seq?: number }[] = [];
-    const rejected: { addr: DhtAddr; reason: string; detail?: string }[] = [];
-    const target = dhtIdFromFingerprint(fingerprint);
+    const attempts: { addr: DhtDiZhi; status: 'ok' | 'empty' | 'reject' | 'rpc-failed'; reason?: string; seq?: number }[] = [];
+    const rejected: { addr: DhtDiZhi; reason: string; detail?: string }[] = [];
+    const target = youZhiWenQuDhtId(fingerprint);
     const candidates = await this.iterativeLookup(target);
-    const best = { env: null as DhtRecordEnvelope | null, record: undefined as PeerAddressRecord | undefined, signer: undefined as string | undefined, from: undefined as DhtAddr | undefined, seq: 0 };
+    const best = { env: null as DhtJiLuFeng | null, record: undefined as PeerAddressRecord | undefined, signer: undefined as string | undefined, from: undefined as DhtDiZhi | undefined, seq: 0 };
 
-    const consider = async (env: DhtRecordEnvelope, addr: DhtAddr): Promise<void> => {
+    const consider = async (env: DhtJiLuFeng, addr: DhtDiZhi): Promise<void> => {
       const result = await verifyRecordEnvelope(env, {
         expectKey: key,
         groupKeys: this.groupKeys,
@@ -856,7 +856,7 @@ export class DhtNode {
       if (c.id.equals(this.id)) continue;
       try {
         const res = await this.call(addr, { t: 'get', key }, 'found');
-        const envs = Array.isArray(res['envs']) ? (res['envs'] as DhtRecordEnvelope[]) : [];
+        const envs = Array.isArray(res['envs']) ? (res['envs'] as DhtJiLuFeng[]) : [];
         if (envs.length === 0) {
           attempts.push({ addr, status: 'empty' });
           continue;
@@ -879,7 +879,7 @@ export class DhtNode {
   }
 
   /** 接受一条记录（来自网络或本机）：验签 + 防回滚，然后回调订阅者 */
-  acceptRecord(env: DhtRecordEnvelope, from: DhtAddr | null): { accepted: boolean; reason?: string } {
+  acceptRecord(env: DhtJiLuFeng, from: DhtDiZhi | null): { accepted: boolean; reason?: string } {
     const seen = this.seqSeen.get(env.k) ?? 0;
     if (env.s <= seen) {
       this.stats.storesRejected += 1;
@@ -895,7 +895,7 @@ export class DhtNode {
     return { accepted: true };
   }
 
-  private notifyWatchers(env: DhtRecordEnvelope, from: DhtAddr | null): void {
+  private notifyWatchers(env: DhtJiLuFeng, from: DhtDiZhi | null): void {
     for (const [key, list] of this.watchers) {
       if (key !== '*' && key !== env.k) continue;
       for (const cb of list) {
@@ -965,7 +965,7 @@ export class DhtNode {
         return;
       }
       case 'store': {
-        const env = msg['env'] as DhtRecordEnvelope | undefined;
+        const env = msg['env'] as DhtJiLuFeng | undefined;
         if (!env || typeof env !== 'object') {
           this.reply(port, host, rid, 'error', { reason: 'malformed' });
           return;
@@ -1017,7 +1017,7 @@ export class DhtNode {
     }
   }
 
-  private emit(type: DhtEvent['type'], detail?: string, peer?: string): void {
+  private emit(type: DhtShiJian['type'], detail?: string, peer?: string): void {
     this.opts.onEvent?.({ type, detail, peer, ts: this.now() });
   }
 
@@ -1043,6 +1043,6 @@ export class DhtNode {
 /* ────────────────────────────── 便捷函数 ────────────────────────────── */
 
 /** 判断记录里的地址是否与本地地址相同（用于"地址变了要重新宣告"判定） */
-export function sameAddress(a: DhtAddr, b: DhtAddr): boolean {
+export function sameAddress(a: DhtDiZhi, b: DhtDiZhi): boolean {
   return a.host === b.host && a.port === b.port;
 }

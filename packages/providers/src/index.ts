@@ -1,40 +1,40 @@
-import { AnthropicProvider } from './anthropic.js';
-import { OllamaProvider } from './ollama.js';
-import { OpenAICompatibleProvider } from './openai.js';
+import { AnthropicGongYing } from './anthropic.js';
+import { OllamaGongYing } from './ollama.js';
+import { JianrongOpenAIGongYing } from './openai.js';
 import { PROVIDER_PRESETS } from './types.js';
-import type { ModelProvider, ProviderAuth, ProviderProtocol } from './types.js';
+import type { MoxingGongYing, GongYingRenZheng, GongYingXieYi } from './types.js';
 
 export * from './types.js';
 export * from './base.js';
 export * from './tools.js';
 export * from './util.js';
-export { OpenAICompatibleProvider, createDeepSeekProvider } from './openai.js';
-export { AnthropicProvider } from './anthropic.js';
-export { OllamaProvider } from './ollama.js';
+export { JianrongOpenAIGongYing, chuangjianDeepSeek } from './openai.js';
+export { AnthropicGongYing } from './anthropic.js';
+export { OllamaGongYing } from './ollama.js';
 
-const DEFAULT_BASE: Record<ProviderProtocol, string> = {
+const DEFAULT_BASE: Record<GongYingXieYi, string> = {
   'openai-compatible': 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com',
   ollama: 'http://127.0.0.1:11434',
 };
 
-const PRESET_MAP = Object.fromEntries(PROVIDER_PRESETS.map((p) => [p.id, p]));
+const YUSHE_BIAO = Object.fromEntries(PROVIDER_PRESETS.map((p) => [p.id, p]));
 
-export function createProvider(
-  protocol: ProviderProtocol,
-  auth: ProviderAuth = {},
+export function chuangjianGongYing(
+  protocol: GongYingXieYi,
+  auth: GongYingRenZheng = {},
   id?: string
-): ModelProvider {
+): MoxingGongYing {
   switch (protocol) {
     case 'openai-compatible':
-      return new OpenAICompatibleProvider(auth, {
+      return new JianrongOpenAIGongYing(auth, {
         id,
         defaultBase: auth.baseURL || DEFAULT_BASE['openai-compatible'],
       });
     case 'anthropic':
-      return new AnthropicProvider(auth, { id, defaultBase: auth.baseURL });
+      return new AnthropicGongYing(auth, { id, defaultBase: auth.baseURL });
     case 'ollama':
-      return new OllamaProvider(auth, { id, defaultBase: auth.baseURL });
+      return new OllamaGongYing(auth, { id, defaultBase: auth.baseURL });
     default: {
       const never: never = protocol;
       throw new Error(`unknown protocol ${String(never)}`);
@@ -43,22 +43,22 @@ export function createProvider(
 }
 
 /** 按预设 id + 用户覆盖项创建 Provider */
-export function createProviderFromPreset(
+export function congYuSheChuangJian(
   presetId: string,
-  auth: ProviderAuth = {},
-  overrideProtocol?: ProviderProtocol
-): ModelProvider {
-  const p = PRESET_MAP[presetId];
+  auth: GongYingRenZheng = {},
+  overrideProtocol?: GongYingXieYi
+): MoxingGongYing {
+  const p = YUSHE_BIAO[presetId];
   if (!p) {
-    return createProvider(overrideProtocol || 'openai-compatible', auth, presetId);
+    return chuangjianGongYing(overrideProtocol || 'openai-compatible', auth, presetId);
   }
-  return createProvider(
+  return chuangjianGongYing(
     overrideProtocol || p.protocol,
     { ...auth, baseURL: auth.baseURL || p.baseURL },
     presetId
   );
 }
 
-export function getProviderPreset(presetId: string) {
-  return PRESET_MAP[presetId];
+export function quGongYingYuShe(presetId: string) {
+  return YUSHE_BIAO[presetId];
 }

@@ -126,6 +126,13 @@
     } catch { /* 问不到就当没有：界面会显示"未设置密钥" */ }
   }
   window.__warmyReloadProviders = loadProvidersFromSettings;
+  /**
+   * 给**自动化门禁**用的两个钩子（真人从来不点这个）：
+   *  · `__warmyRenderPage`：门禁要能"灌一份设置 → 立即按真实渲染路径重画"，
+   *    否则只能靠静态文本断言（历史上正是这种弱断言把"没跑过"当成了"过了"）；
+   *  · `__warmyProviders`：读回渲染层当前持有的供应商数组（只读快照）。
+   */
+  window.__warmyRenderPage = () => renderPage();
   const t = (k) => state.t[k] || k;
   /** 结构化值展示：对象绝不 textContent 直出（避免 [object Object]） */
   const fmtDisp = (v) => {
@@ -2557,6 +2564,17 @@
 
   function renderPage() {
     const box = $('page-body');
+    /**
+     * **模型占用表**（模型 → 谁在用）。
+     *
+     * ⚠️ 声明必须放在这里（而不是供应商那段代码的中间）：`let` 有 TDZ，
+     * 供应商卡片在渲染时会读它，一旦某个供应商**已经有模型**，读取就发生在声明之前 ⇒
+     * `ReferenceError: Cannot access 'modelUsageCache' before initialization`，
+     * 整页设置渲染中断（表现为"点了按钮像是跳回设置首页"）。
+     * 以前每个供应商的 models 都是空的（回调不执行）所以没暴露出来。
+     * 真实数据一来必炸 —— 门禁灌了"有模型的供应商"后当场复现。
+     */
+    let modelUsageCache = new Map();
     if (state.nav === 'me') {
       const p = state.profile;
       const avHtml = `<img class="avatar-img big" src="${personAvatarSrc(p)}" alt=""/>`;
@@ -2590,6 +2608,8 @@
                   <button class="btn-mini" id="btn-me-id-copy">${t('me.copy')}</button>
                 </div>
                 <div class="muted me-hint" style="margin-top:4px">${escapeHtml(t('me.idHint'))}</div>
+                <!-- 诚实告知：ID 就是私钥，泄露 = 身份被接管；没有服务器能替你找回 -->
+                <div class="me-hint me-hint-warn" style="margin-top:4px">${escapeHtml(t('me.idWarn'))}</div>
               </div>
               <div class="field" style="margin-top:12px">
                 <label>${t('me.credential')}</label>
@@ -4100,7 +4120,7 @@
         return usage;
       }
 
-      let modelUsageCache = new Map();
+      // 占用表在 renderPage() 顶部已声明（避免 TDZ）；这里先按内存里的实例算一遍
       void collectModelUsage().then((u) => { modelUsageCache = u; });
 
       function provCount() {

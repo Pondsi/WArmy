@@ -21,7 +21,7 @@
  */
 import {
   type Bytes,
-  FrameDecoder,
+  ZhenJieMa,
   GCM_TAG_LENGTH,
   frame,
   hkdf,
@@ -102,7 +102,7 @@ export interface SecureChannelStats {
 export class SecureChannel {
   private sendState: DirectionState;
   private recvState: DirectionState;
-  private readonly decoder: FrameDecoder;
+  private readonly decoder: ZhenJieMa;
   private closed = false;
   private readonly autoKeyUpdateAfter: number;
   private readonly now: () => number;
@@ -127,7 +127,7 @@ export class SecureChannel {
     this.opts = opts;
     this.autoKeyUpdateAfter = opts.autoKeyUpdateAfter ?? 2 ** 20;
     this.now = opts.now ?? (() => Date.now());
-    this.decoder = new FrameDecoder(opts.maxRecordBytes ?? 16 * 1024 * 1024);
+    this.decoder = new ZhenJieMa(opts.maxRecordBytes ?? 16 * 1024 * 1024);
     const sendMaterial = role === 'initiator' ? session.c2sMaterial : session.s2cMaterial;
     const recvMaterial = role === 'initiator' ? session.s2cMaterial : session.c2sMaterial;
     this.sendState = this.buildDirection(sendMaterial, 0);

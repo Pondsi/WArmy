@@ -41,8 +41,8 @@ import path from 'node:path';
 import {
   MEMBERSHIP_CLOCK_SKEW_MS,
   REVOCATION_REASONS,
-  buildMemberCertificate,
-  buildRevocationList,
+  gouJianChengYuanZhengShu,
+  gouJianCheXiaoBiao,
   ed25519PublicKeyObject,
   ed25519RawFromSpkiDer,
   ed25519SpkiDerFromRaw,
@@ -51,7 +51,7 @@ import {
   signMemberCertificate,
   signRevocationList,
   verifyMemberCertificate,
-  type FingerprintDerivation,
+  type ZhiWenTuiDao,
   type IdentityProvider,
   type MemberCertCode,
   type MemberCertRole,
@@ -81,7 +81,7 @@ import {
 } from './identity-store.js';
 
 /** 组网层用的指纹推导：raw 32B Ed25519 公钥 → 身份层指纹 */
-export function fingerprintDerivationForAppShell(): FingerprintDerivation {
+export function fingerprintDerivationForAppShell(): ZhiWenTuiDao {
   return (raw32: Buffer): string =>
     fingerprintFromPublicKey(ed25519SpkiDerFromRaw(raw32).toString('base64'));
 }
@@ -857,7 +857,7 @@ async function issueMemberCertificateImpl(input: IssueMemberCertInput): Promise<
   const certId = input.certId || `mc-${randomHex(8)}`;
   let cert: MemberCertificate;
   try {
-    cert = buildMemberCertificate(
+    cert = gouJianChengYuanZhengShu(
       {
         certId,
         groupId: input.groupId,
@@ -912,7 +912,7 @@ async function appendRevocationEntries(input: {
     else entries.push(row);
   }
   const listVersion = (current?.listVersion ?? 0) + 1;
-  let list = buildRevocationList(
+  let list = gouJianCheXiaoBiao(
     {
       groupId: input.groupId,
       listVersion,

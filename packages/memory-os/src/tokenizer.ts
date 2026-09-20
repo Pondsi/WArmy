@@ -58,7 +58,7 @@ export function isPunctuation(ch: string): boolean {
   return P_RE.test(ch);
 }
 
-export interface EncodeOptions {
+export interface BianMaXuanXiang {
   /** 含特殊 token 的最大长度，默认 512 */
   maxLength?: number;
   /** 是否加 [CLS]/[SEP]，默认 true */
@@ -91,7 +91,7 @@ export interface TokenizerConfigEcho {
 /**
  * tokenizer.json 驱动的 BERT WordPiece 分词器。
  */
-export class BertWordPieceTokenizer {
+export class BertWordPieceFenCiQi {
   readonly vocab: Map<string, number>;
   readonly unkToken: string;
   readonly unkId: number;
@@ -166,8 +166,8 @@ export class BertWordPieceTokenizer {
     };
   }
 
-  static fromFile(tokenizerPath: string): BertWordPieceTokenizer {
-    return new BertWordPieceTokenizer(JSON.parse(fs.readFileSync(tokenizerPath, 'utf8')));
+  static fromFile(tokenizerPath: string): BertWordPieceFenCiQi {
+    return new BertWordPieceFenCiQi(JSON.parse(fs.readFileSync(tokenizerPath, 'utf8')));
   }
 
   /** BertNormalizer：clean_text → handle_chinese_chars → lowercase → strip_accents */
@@ -257,7 +257,7 @@ export class BertWordPieceTokenizer {
     return toks;
   }
 
-  encode(text: string, opts: EncodeOptions = {}): Encoded {
+  encode(text: string, opts: BianMaXuanXiang = {}): Encoded {
     const maxLength = opts.maxLength ?? 512;
     const addSpecial = opts.addSpecialTokens !== false;
     const toks: string[] = [];

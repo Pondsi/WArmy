@@ -119,7 +119,7 @@ export class SyncBus {
   }
 }
 
-export function createInvite(ttlMs = 15 * 60_000, groupId?: string): InviteToken {
+export function chuangjianYaoQing(ttlMs = 15 * 60_000, groupId?: string): InviteToken {
   return {
     token: crypto.randomBytes(16).toString('hex'),
     expiresAt: Date.now() + ttlMs,
@@ -128,7 +128,7 @@ export function createInvite(ttlMs = 15 * 60_000, groupId?: string): InviteToken
   };
 }
 
-export function consumeInvite(tok: InviteToken): boolean {
+export function shiYongYaoQing(tok: InviteToken): boolean {
   if (tok.used || Date.now() > tok.expiresAt) return false;
   tok.used = true;
   return true;

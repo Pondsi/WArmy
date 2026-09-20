@@ -14,11 +14,11 @@
  *   [8] 与真实鉴权连接联动：成员拨入建立 SecureSession → online；断开 → 迟滞后 offline
  */
 import {
-  ConnectionLiveness,
+  LianJieHuoXing,
   GroupKeyRing,
   SecureSyncClient,
   SecureSyncServer,
-  createEphemeralIdentity,
+  chuangjianLinShiShenFen,
   randomBytes,
 } from '../dist/index.js';
 
@@ -46,7 +46,7 @@ async function main() {
     let fakeNow = 1_000_000;
     const probed = [];
     const offlineEvents = [];
-    const lv = new ConnectionLiveness({
+    const lv = new LianJieHuoXing({
       offlineFailures: 2,
       offlineAfterMs: 100,
       now: () => fakeNow,
@@ -120,7 +120,7 @@ async function main() {
     check('待探测成员每轮最多拨一次（本轮拨了 1 次）', s7.probed.length === 1, s7.probed);
   }
   {
-    const lv = new ConnectionLiveness({
+    const lv = new LianJieHuoXing({
       offlineFailures: 1,
       offlineAfterMs: 0,
       now: () => 5_000_000,
@@ -136,8 +136,8 @@ async function main() {
   /* ── [8] 与真实鉴权连接联动 ── */
   group('[8] 与真实鉴权连接联动（SecureSession 存活 = 在线）');
   {
-    const creatorId = createEphemeralIdentity('creator-lv');
-    const memberId = createEphemeralIdentity('member-lv');
+    const creatorId = chuangjianLinShiShenFen('creator-lv');
+    const memberId = chuangjianLinShiShenFen('member-lv');
     const GROUP = 'grp-lv';
     const closedReasons = [];
     const server = new SecureSyncServer({
@@ -151,7 +151,7 @@ async function main() {
     const port = await server.start();
 
     let onlineEvents = 0;
-    const lv = new ConnectionLiveness({
+    const lv = new LianJieHuoXing({
       offlineFailures: 1,
       offlineAfterMs: 0,
       onOnline: () => {

@@ -31,8 +31,8 @@ import {
   MEMBERSHIP_CLOCK_SKEW_MS,
   REVOCATION_LIST_SCHEMA,
   REVOCATION_REASONS,
-  chainFingerprintsFor,
-  defaultMemberFingerprintOf,
+  lianShiZhiWen,
+  moRenChengYuanZhiWen,
   isSameMember,
   verifyAndApplyRevocationList,
   verifyMemberCertificate,
@@ -1184,7 +1184,7 @@ export class MembershipStore {
   constructor(private file: string, opts: MembershipStoreOptions = {}) {
     this.onAudit = opts.onAudit || (() => undefined);
     this.now = opts.now || (() => Date.now());
-    this.fingerprintOf = opts.fingerprintOf || defaultMemberFingerprintOf;
+    this.fingerprintOf = opts.fingerprintOf || moRenChengYuanZhiWen;
     this.clockSkewMs = typeof opts.clockSkewMs === 'number' ? opts.clockSkewMs : MEMBERSHIP_CLOCK_SKEW_MS;
     if (opts.verifySignature) this.verifySignature = opts.verifySignature;
   }
@@ -1525,7 +1525,7 @@ export class MembershipStore {
   chainFingerprints(fingerprint: string): string[] {
     const out = new Set<string>([String(fingerprint || '')]);
     for (const g of Object.values(this.snapshot().groups)) {
-      for (const fp of chainFingerprintsFor(g.certs, fingerprint)) out.add(fp);
+      for (const fp of lianShiZhiWen(g.certs, fingerprint)) out.add(fp);
     }
     return [...out].filter((v) => v.length > 0);
   }

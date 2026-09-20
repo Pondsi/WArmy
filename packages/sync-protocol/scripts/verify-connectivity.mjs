@@ -31,9 +31,9 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  ConnectionLadder,
+  LianJieTiZi,
   DEFAULT_LADDER_ORDER,
-  DialabilityProbe,
+  KeBoRuTanCe,
   LADDER_LABELS,
   LADDER_RUNG_I18N,
   ReplayGuard,
@@ -42,12 +42,12 @@ import {
   RelayTunnelListener,
   SecureSyncClient,
   SecureSyncServer,
-  classifyAddress,
-  classifyIpv6Scope,
+  guiLeiDiZhi,
+  guiLeiIpv6ZuoYongYu,
   warmyFingerprint,
-  createEphemeralIdentity,
-  decideRelay,
-  dialTcpDetailed,
+  chuangjianLinShiShenFen,
+  jueDingZhongJi,
+  boTcpXiangQing,
   ed25519FromSeed,
   inspectLocalIpv6,
   isGlobalUnicastIpv6,
@@ -148,8 +148,8 @@ async function relaySession(opts = {}) {
   });
   const relayPort = await relay.start();
   const relayAddr = { host: '127.0.0.1', port: relayPort };
-  const A = createEphemeralIdentity('verify-A');
-  const B = createEphemeralIdentity('verify-B');
+  const A = chuangjianLinShiShenFen('verify-A');
+  const B = chuangjianLinShiShenFen('verify-B');
   const token = opts.token ?? relayTokenFor(A.fingerprint, B.fingerprint, relayAddr);
   const server = await mkSecureServer({
     id: B,
@@ -280,11 +280,11 @@ async function main() {
     parseIpv6('240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7')?.[0] === 0x24 && parseIpv6('240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7')?.[1] === 0x0e,
     [...(parseIpv6('240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7') ?? [])].slice(0, 4).join(',')
   );
-  check('解析带 zone id 的链路本地（fe80::1%eth0）', classifyIpv6Scope('fe80::1%eth0') === 'link-local', classifyIpv6Scope('fe80::1%eth0'));
-  check('解析方括号形式 [2001:4860:4860::8888]', classifyIpv6Scope('[2001:4860:4860::8888]') === 'global', classifyIpv6Scope('[2001:4860:4860::8888]'));
+  check('解析带 zone id 的链路本地（fe80::1%eth0）', guiLeiIpv6ZuoYongYu('fe80::1%eth0') === 'link-local', guiLeiIpv6ZuoYongYu('fe80::1%eth0'));
+  check('解析方括号形式 [2001:4860:4860::8888]', guiLeiIpv6ZuoYongYu('[2001:4860:4860::8888]') === 'global', guiLeiIpv6ZuoYongYu('[2001:4860:4860::8888]'));
   check('规范化：去方括号 + 去 zone', normalizeHostLiteral('[fe80::1%12]') === 'fe80::1', normalizeHostLiteral('[fe80::1%12]'));
-  check('内嵌 IPv4（::ffff:127.0.0.1）被判为 ipv4-mapped', classifyIpv6Scope('::ffff:127.0.0.1') === 'ipv4-mapped', classifyIpv6Scope('::ffff:127.0.0.1'));
-  check('IPv4 字面不是 IPv6（返回 invalid）', classifyIpv6Scope('192.168.1.1') === 'invalid', classifyIpv6Scope('192.168.1.1'));
+  check('内嵌 IPv4（::ffff:127.0.0.1）被判为 ipv4-mapped', guiLeiIpv6ZuoYongYu('::ffff:127.0.0.1') === 'ipv4-mapped', guiLeiIpv6ZuoYongYu('::ffff:127.0.0.1'));
+  check('IPv4 字面不是 IPv6（返回 invalid）', guiLeiIpv6ZuoYongYu('192.168.1.1') === 'invalid', guiLeiIpv6ZuoYongYu('192.168.1.1'));
   check('非法 IPv6（组数不够）返回 null', parseIpv6('1:2:3') === null, String(parseIpv6('1:2:3')));
   check('非法 IPv6（两个 ::）返回 null', parseIpv6('1::2::3') === null, String(parseIpv6('1::2::3')));
   check('非法 IPv6（组数过多）返回 null', parseIpv6('1:2:3:4:5:6:7:8:9') === null, String(parseIpv6('1:2:3:4:5:6:7:8:9')));
@@ -305,7 +305,7 @@ async function main() {
     ['::ffff:192.168.1.6', 'ipv4-mapped', false],
   ];
   for (const [addr, scope, dialable] of matrix) {
-    check(`分类 ${addr} → ${scope}`, classifyIpv6Scope(addr) === scope, classifyIpv6Scope(addr));
+    check(`分类 ${addr} → ${scope}`, guiLeiIpv6ZuoYongYu(addr) === scope, guiLeiIpv6ZuoYongYu(addr));
     check(
       `是否公网拨号候选 ${addr} → ${dialable}`,
       isPublicDialCandidate(addr) === dialable,
@@ -367,8 +367,8 @@ async function main() {
   );
   check(
     '报告里的分类与 classifyIpv6Scope 一致（无自相矛盾）',
-    v6Report.entries.every((e) => classifyIpv6Scope(e.address) === e.scope),
-    v6Report.entries.filter((e) => classifyIpv6Scope(e.address) !== e.scope)
+    v6Report.entries.every((e) => guiLeiIpv6ZuoYongYu(e.address) === e.scope),
+    v6Report.entries.filter((e) => guiLeiIpv6ZuoYongYu(e.address) !== e.scope)
   );
   check(
     'ULA / 链路本地 / 回环**绝不**出现在 publicCandidates（附八.9）',
@@ -392,20 +392,20 @@ async function main() {
   {
     const l6 = await listenTcp('::1');
     check('能在 ::1 上真监听', l6.ok === true, l6.ok ? l6.port : l6.error);
-    const d6 = await dialTcpDetailed('::1', l6.port, 2000, 6);
+    const d6 = await boTcpXiangQing('::1', l6.port, 2000, 6);
     check('dialTcpDetailed(::1, family=6) 连上', d6.ok === true, d6);
     check("socket 自报 remoteFamily='IPv6'（证明真走 IPv6）", d6.remoteFamily === 'IPv6', d6.remoteFamily);
     check('本地地址族也是 IPv6', String(d6.localAddress ?? '').includes('::'), d6.localAddress);
-    const d6bracket = await dialTcpDetailed('[::1]', l6.port, 2000, 6);
+    const d6bracket = await boTcpXiangQing('[::1]', l6.port, 2000, 6);
     check('方括号字面量 [::1] 也能连（客户端兼容）', d6bracket.ok === true && d6bracket.remoteFamily === 'IPv6', d6bracket);
-    const d4to6 = await dialTcpDetailed('127.0.0.1', l6.port, 1200);
+    const d4to6 = await boTcpXiangQing('127.0.0.1', l6.port, 1200);
     check('IPv4 回环连 IPv6-only 监听**如实失败**（不谎报通）', d4to6.ok === false, d4to6.detail);
     await closeSrv(l6.srv);
 
     const dual = await listenTcp('::');
     check('能在 :: 上真监听（双栈）', dual.ok === true, dual.ok ? dual.port : dual.error);
-    const viaV6 = await dialTcpDetailed('::1', dual.port, 2000, 6);
-    const viaV4 = await dialTcpDetailed('127.0.0.1', dual.port, 2000, 4);
+    const viaV6 = await boTcpXiangQing('::1', dual.port, 2000, 6);
+    const viaV4 = await boTcpXiangQing('127.0.0.1', dual.port, 2000, 4);
     check('双栈监听从 IPv6 侧连上（family=IPv6）', viaV6.ok === true && viaV6.remoteFamily === 'IPv6', viaV6);
     check('双栈监听从 IPv4 侧连上（family=IPv4）', viaV4.ok === true && viaV4.remoteFamily === 'IPv4', viaV4);
     await closeSrv(dual.srv);
@@ -413,14 +413,14 @@ async function main() {
     if (v6Global) {
       const g = await listenTcp(v6Global);
       check(`能在本机全局单播 IPv6（${v6Global}）上真监听`, g.ok === true, g.ok ? g.port : g.error);
-      const dg = await dialTcpDetailed(v6Global, g.port, 2000, 6);
+      const dg = await boTcpXiangQing(v6Global, g.port, 2000, 6);
       check('真的拨通本机全局单播 IPv6（附八.9「成本最低的一档」真实可跑）', dg.ok === true, dg);
       check('全局 IPv6 拨号 socket 自报 IPv6', dg.remoteFamily === 'IPv6', dg.remoteFamily);
       await closeSrv(g.srv);
 
       // 真的跑一次鉴权会话：SecureSyncServer 监听 IPv6，SecureSyncClient 从 IPv6 连
-      const idS = createEphemeralIdentity('v6-server');
-      const idC = createEphemeralIdentity('v6-client');
+      const idS = chuangjianLinShiShenFen('v6-server');
+      const idC = chuangjianLinShiShenFen('v6-client');
       const srv6 = await mkSecureServer({ id: idS, peerFp: idC.fingerprint, host: v6Global });
       const cli6 = new SecureSyncClient({
         identity: idC.provider,
@@ -461,7 +461,7 @@ async function main() {
   check('每一档都有中文 label', DEFAULT_LADDER_ORDER.every((r) => typeof LADDER_LABELS[r] === 'string' && LADDER_LABELS[r].length > 0), DEFAULT_LADDER_ORDER.map((r) => LADDER_LABELS[r]));
   check('每一档都有 i18n key（net.rung.*）', DEFAULT_LADDER_ORDER.every((r) => String(LADDER_RUNG_I18N[r]).startsWith('net.rung.')), LADDER_RUNG_I18N);
   {
-    const l = new ConnectionLadder();
+    const l = new LianJieTiZi();
     check('relay 档已实现（supported=true，不再是 unsupported）', l.strategyFor('relay')?.supported === true, l.strategyFor('relay')?.unsupportedReason);
     check('upnp 档仍**如实**标未实现', l.strategyFor('upnp')?.supported === false && /未实现/.test(l.strategyFor('upnp')?.unsupportedReason ?? ''), l.strategyFor('upnp')?.unsupportedReason);
     check('holepunch 档仍**如实**标未实现', l.strategyFor('holepunch')?.supported === false && /未实现/.test(l.strategyFor('holepunch')?.unsupportedReason ?? ''), l.strategyFor('holepunch')?.unsupportedReason);
@@ -470,7 +470,7 @@ async function main() {
 
   if (v6Global) {
     const g = await listenTcp(v6Global);
-    const ladder = new ConnectionLadder({ perRungTimeoutMs: 1500 });
+    const ladder = new LianJieTiZi({ perRungTimeoutMs: 1500 });
     const res = await ladder.connect({ fingerprint: 'peer-ipv6', addresses: [{ host: v6Global, port: g.port, source: 'dht' }] });
     check('IPv6 目标 → 第一档 ipv6-direct 命中（这是"成本最低的一档"）', res.ok === true && res.rung === 'ipv6-direct', { rung: res.rung, detail: res.attempts[0]?.detail });
     check('命中即停（只试了 1 档）', res.attempts.length === 1, res.attempts.map((a) => a.rung));
@@ -500,7 +500,7 @@ async function main() {
 
   {
     // IPv6 但**不是**公网候选（链路本地/ULA/文档段）→ 必须如实判"无候选"并列出被排除的地址
-    const ladder = new ConnectionLadder({ perRungTimeoutMs: 600 });
+    const ladder = new LianJieTiZi({ perRungTimeoutMs: 600 });
     const res = await ladder.connect({
       fingerprint: 'peer-ula',
       addresses: [
@@ -524,33 +524,33 @@ async function main() {
     const relayAddr = { host: '127.0.0.1', port: relayPort };
     const target = { fingerprint: 'peer-relay-1', nodeId: 'node-relay-1' };
 
-    const notNeeded1 = await decideRelay(target, { selfDialable: false, peerDialable: true, candidates: [] });
+    const notNeeded1 = await jueDingZhongJi(target, { selfDialable: false, peerDialable: true, candidates: [] });
     check('对端可拨入 → 不需要中继（直连即可）', notNeeded1.needed === false && notNeeded1.code === 'relay-not-needed-peer-dialable', notNeeded1);
 
-    const notNeeded2 = await decideRelay(target, { selfDialable: true, peerDialable: false, candidates: [] });
+    const notNeeded2 = await jueDingZhongJi(target, { selfDialable: true, peerDialable: false, candidates: [] });
     check('本机可拨入、对端不可拨入 → 不需要中继（等对端拨入，C1）', notNeeded2.needed === false && notNeeded2.code === 'relay-not-needed-inbound-expected', notNeeded2);
 
-    const unknown = await decideRelay(target, { candidates: [] });
+    const unknown = await jueDingZhongJi(target, { candidates: [] });
     check('可拨入性未知 → 如实标 dialability-unknown（不猜）', unknown.code === 'dialability-unknown' && unknown.needed === true, unknown.reason);
 
-    const none = await decideRelay(target, { selfDialable: false, peerDialable: false, candidates: [] });
+    const none = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, candidates: [] });
     check('两端都不可拨入 + 无中继候选 → relay-none-configured', none.code === 'relay-none-configured' && none.selected === false, none);
     check('该状态要求 UI 明确告知（needsPublicRelayNotice=true）', none.needsPublicRelayNotice === true, none.needsPublicRelayNotice);
     check('reason 明确写出"需要一台有公网地址的机器做中继"', /需要一台有公网地址的机器做中继/.test(none.reason), none.reason);
     check('bothUndialable=true（双方各自报告不可拨入）', none.bothUndialable === true, none);
 
-    const badCandidate = await decideRelay(target, { selfDialable: false, peerDialable: false, candidates: [{ fingerprint: 'relay-dead', addr: { host: '203.0.113.1', port: 9 } }], timeoutMs: 700 });
+    const badCandidate = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, candidates: [{ fingerprint: 'relay-dead', addr: { host: '203.0.113.1', port: 9 } }], timeoutMs: 700 });
     check('配了中继候选但连不上 → relay-unreachable', badCandidate.code === 'relay-unreachable' && badCandidate.selected === false, badCandidate.reason);
     check('不可达中继的**真实探测结果**被留痕（ok=false + 耗时）', badCandidate.attempts.length === 1 && badCandidate.attempts[0].ok === false && typeof badCandidate.attempts[0].ms === 'number', badCandidate.attempts);
     check('relay-unreachable 同样要求 UI 明确告知', badCandidate.needsPublicRelayNotice === true, badCandidate.needsPublicRelayNotice);
 
-    const good = await decideRelay(target, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ fingerprint: 'relay-good', addr: relayAddr }], timeoutMs: 1500 });
+    const good = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ fingerprint: 'relay-good', addr: relayAddr }], timeoutMs: 1500 });
     check('两端都不可拨入 + 真可达中继 → relay-selected', good.code === 'relay-selected' && good.selected === true && good.needed === true, good.reason);
     check('选中继后带地址与配对 token', good.relay?.port === relayPort && typeof good.token === 'string' && good.token.length === 32, { relay: good.relay, token: good.token });
     check('选中继的探测结果也是真实 TCP 成功', good.attempts[0]?.ok === true, good.attempts);
     check('reason 提示"经中继：更慢，但可用"', /更慢，但可用/.test(good.reason), good.reason);
 
-    const noSelfFp = await decideRelay(target, { selfDialable: false, peerDialable: false, candidates: [{ fingerprint: 'relay-good', addr: relayAddr }], timeoutMs: 1500 });
+    const noSelfFp = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, candidates: [{ fingerprint: 'relay-good', addr: relayAddr }], timeoutMs: 1500 });
     check('没给本机指纹时**不编** token（token 缺失 + tokenSymmetric=false，诚实）', noSelfFp.token === undefined && noSelfFp.tokenSymmetric === false, { token: noSelfFp.token, sym: noSelfFp.tokenSymmetric });
 
     const t1 = relayTokenFor('fp-A', 'fp-B', relayAddr);
@@ -687,9 +687,9 @@ async function main() {
     const relay = new RelayNode({ port: 0, host: '127.0.0.1', pairTimeoutMs: 900 });
     const relayPort = await relay.start();
     const relayAddr = { host: '127.0.0.1', port: relayPort };
-    const A = createEphemeralIdentity('imp-A');
-    const B = createEphemeralIdentity('imp-B');
-    const X = createEphemeralIdentity('imp-stranger');
+    const A = chuangjianLinShiShenFen('imp-A');
+    const B = chuangjianLinShiShenFen('imp-B');
+    const X = chuangjianLinShiShenFen('imp-stranger');
     const token = relayTokenFor(A.fingerprint, B.fingerprint, relayAddr);
     const xServer = await mkSecureServer({ id: X, peerFp: A.fingerprint });
     const xTunnel = new RelayTunnelListener({ relay: relayAddr, token, localTarget: { host: '127.0.0.1', port: xServer.port }, readyTimeoutMs: 4000 });
@@ -722,11 +722,11 @@ async function main() {
   /* ══════════════ [8] 没有可用中继时如实报缺口 ══════════════ */
   group('[8] 双 CGNAT + 无中继：如实报缺口（不转圈、不静默）');
   {
-    const cgnatA = await dialTcpDetailed('100.64.10.20', 7891, 700);
-    const cgnatB = await dialTcpDetailed('100.64.10.21', 7892, 700);
+    const cgnatA = await boTcpXiangQing('100.64.10.20', 7891, 700);
+    const cgnatB = await boTcpXiangQing('100.64.10.21', 7892, 700);
     check('CGNAT 宣告地址（100.64/10）真的拨不通 → "不可拨入"是被测出来的', cgnatA.ok === false && cgnatB.ok === false, { a: cgnatA.detail, b: cgnatB.detail });
 
-    const ladder = new ConnectionLadder({ perRungTimeoutMs: 900, relay: { relays: () => [], selfDialable: () => false, selfFingerprint: () => 'fp-self' } });
+    const ladder = new LianJieTiZi({ perRungTimeoutMs: 900, relay: { relays: () => [], selfDialable: () => false, selfFingerprint: () => 'fp-self' } });
     const res = await ladder.connect({
       fingerprint: 'fp-peer',
       addresses: [{ host: '100.64.10.21', port: 7892, source: 'dht' }],
@@ -745,7 +745,7 @@ async function main() {
     check('relayDecision.tokenSymmetric = true（给了本机指纹就能两端算出同一个 token）', res.relayDecision?.tokenSymmetric === true, res.relayDecision?.tokenSymmetric);
 
     // 配了中继但都连不上
-    const ladder2 = new ConnectionLadder({
+    const ladder2 = new LianJieTiZi({
       perRungTimeoutMs: 800,
       relay: { relays: () => [{ fingerprint: 'relay-dead', addr: { host: '203.0.113.1', port: 9 } }], selfDialable: () => false, selfFingerprint: () => 'fp-self' },
     });
@@ -759,7 +759,7 @@ async function main() {
     // 两端都不可拨入 + 真可达中继 → 阶梯选中继档
     const relay = new RelayNode({ port: 0, host: '127.0.0.1', pairTimeoutMs: 800 });
     const rp = await relay.start();
-    const ladder3 = new ConnectionLadder({
+    const ladder3 = new LianJieTiZi({
       perRungTimeoutMs: 900,
       relay: { relays: () => [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }], selfDialable: () => false, selfFingerprint: () => 'fp-self' },
     });
@@ -769,7 +769,7 @@ async function main() {
     check('relay 档命中时带中继地址 + 配对 token + "更慢但可用"标记', rung3?.relay?.relay?.port === rp && typeof rung3?.relay?.token === 'string' && rung3?.relay?.slowerButUsable === true, rung3?.relay);
     check('relay 档的 token = relayTokenFor(本机, 对端, 中继)（两端可复算）', rung3?.relay?.token === relayTokenFor('fp-self', 'fp-peer', { host: '127.0.0.1', port: rp }), rung3?.relay?.token);
     check('档位顺序：relay 在 lan 之前被尝试（附八.9 顺序）', res3.attempts.map((a) => a.rung).indexOf('relay') < (res3.attempts.map((a) => a.rung).indexOf('lan') === -1 ? 99 : res3.attempts.map((a) => a.rung).indexOf('lan')), res3.attempts.map((a) => `${a.rung}:${a.status}`));
-    check('两端的 token 对称（各自算得出同一个值）', (await decideRelay({ fingerprint: 'fp-peer' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token === (await decideRelay({ fingerprint: 'fp-self' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-peer', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token, {});
+    check('两端的 token 对称（各自算得出同一个值）', (await jueDingZhongJi({ fingerprint: 'fp-peer' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token === (await jueDingZhongJi({ fingerprint: 'fp-self' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-peer', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token, {});
     await relay.stop();
   }
 
@@ -840,8 +840,8 @@ async function main() {
     check('多进程[1/3]：中继进程真的起来了（真 socket 监听端口）', relayUp?.port > 0, { port: relayUp?.port, phase: relayUp?.phase });
 
     // 两个端点都"不可拨入"：宣告地址是 CGNAT 段，并用**真实 TCP 拨号**证明拨不通
-    const cgnatA = await dialTcpDetailed('100.64.10.20', 7891, 800);
-    const cgnatB = await dialTcpDetailed('100.64.10.21', 7892, 800);
+    const cgnatA = await boTcpXiangQing('100.64.10.20', 7891, 800);
+    const cgnatB = await boTcpXiangQing('100.64.10.21', 7892, 800);
     check('多进程：端点 A 宣告的 CGNAT 地址真的拨不通（不可拨入有实测证据）', cgnatA.ok === false, cgnatA.detail);
     check('多进程：端点 B 宣告的 CGNAT 地址真的拨不通（不可拨入有实测证据）', cgnatB.ok === false, cgnatB.detail);
 
@@ -909,7 +909,7 @@ async function main() {
     check('多进程：中继双向都转发过（两个方向都有样本）', new Set(mpSamples.map((s) => s.direction)).size === 2, [...new Set(mpSamples.map((s) => s.direction))]);
 
     // 阶梯在"两端都不可拨入 + 有真中继进程"时选中继档
-    const ladderMP = new ConnectionLadder({
+    const ladderMP = new LianJieTiZi({
       perRungTimeoutMs: 1000,
       relay: { relays: () => [{ fingerprint: 'relay-child', addr: { host: '127.0.0.1', port: relayUp.port } }], selfDialable: () => false, selfFingerprint: () => FP_A },
     });

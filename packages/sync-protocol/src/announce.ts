@@ -24,17 +24,17 @@
  */
 import type { IdentityProvider, NormalizedIdentity } from './identity.js';
 import {
-  type DhtAddr,
-  type DhtRecordEnvelope,
+  type DhtDiZhi,
+  type DhtJiLuFeng,
   type PeerAddressRecord,
   type RecordSigningMode,
-  DhtNode,
+  DhtJieDian,
   recordKeyForFingerprint,
   verifyRecordEnvelope,
 } from './dht.js';
-import type { ConnectionLadder, LadderRung } from './ladder.js';
+import type { LianJieTiZi, LadderRung } from './ladder.js';
 
-export type AnnounceReason = 'startup' | 'address-changed' | 'creator-online' | 'manual';
+export type GuangBoYuanYin = 'startup' | 'address-changed' | 'creator-online' | 'manual';
 
 /**
  * 「能不能主动拨出」的**两个独立信号**（附八.9）。
@@ -91,7 +91,7 @@ export interface RosterMember {
   addresses?: { host: string; port: number; source?: 'dht' | 'lan' | 'manual' }[];
 }
 
-export interface AnnounceAttempt {
+export interface GuangBoChangShi {
   /** 哪个成员 */
   fingerprint: string;
   kind: 'dial';
@@ -115,12 +115,12 @@ export interface UnreachableMember {
   canDialBasis?: CanDialResolution['basis'];
 }
 
-export interface AnnounceReport {
-  reason: AnnounceReason;
+export interface GuangBoBaoGao {
+  reason: GuangBoYuanYin;
   /** 自己的记录发布结果 */
-  published: { key: string; seq: number; storedOn: DhtAddr[]; address: DhtAddr };
+  published: { key: string; seq: number; storedOn: DhtDiZhi[]; address: DhtDiZhi };
   /** 本次对名册成员的**单次**尝试（无重试） */
-  attempts: AnnounceAttempt[];
+  attempts: GuangBoChangShi[];
   connected: string[];
   unreachable: UnreachableMember[];
   /** 因本机不可拨入而跳过的主动连接 */
@@ -134,7 +134,7 @@ export interface AnnounceReport {
 export interface InboundAnnouncement {
   ok: boolean;
   fingerprint?: string;
-  address?: DhtAddr;
+  address?: DhtDiZhi;
   duplicate?: boolean;
   /** 是否在本群名册内 */
   authorized?: boolean;
@@ -153,17 +153,17 @@ export interface InboundAnnouncement {
  * 因此提供一个**显式的、可关闭的**保活刷新：默认关闭，接线方按 TTL/2 左右开启。
  * 这与「宣告失败即放弃」不冲突：那是"不为失败重试"，这是"记录保活"。
  */
-export interface AnnounceServiceOptions {
+export interface GuangBoFuWuXuanXiang {
   nodeId: string;
   identity: IdentityProvider | NormalizedIdentity;
   groupId: string;
   groupKey: Buffer;
-  dht: DhtNode;
-  ladder?: ConnectionLadder;
+  dht: DhtJieDian;
+  ladder?: LianJieTiZi;
   /** 本群名册（宣告与授权都用它） */
   roster: () => RosterMember[];
   /** 本机 TCP 监听地址（写进宣告记录） */
-  listenAddr: () => DhtAddr;
+  listenAddr: () => DhtDiZhi;
   /** 地址性质 */
   scope?: () => PeerAddressRecord['scope'];
   signing?: RecordSigningMode;
@@ -175,16 +175,16 @@ export interface AnnounceServiceOptions {
   canDial?: () => CanDialSignals | boolean;
   /** 自定义建连（默认走阶梯）；返回 ok 表示已建立 */
   connect?: (member: RosterMember, addresses: { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[]) => Promise<{ ok: boolean; rung?: LadderRung | null; detail?: string }>;
-  onPeerAnnouncement?: (a: InboundAnnouncement, env: DhtRecordEnvelope, from: DhtAddr | null) => void;
-  onConnectResult?: (a: AnnounceAttempt) => void;
+  onPeerAnnouncement?: (a: InboundAnnouncement, env: DhtJiLuFeng, from: DhtDiZhi | null) => void;
+  onConnectResult?: (a: GuangBoChangShi) => void;
   onUnreachable?: (u: UnreachableMember) => void;
   /** DHT 记录保活间隔（默认 0 = 关闭，只在上线/地址变化时宣告） */
   refreshMs?: number;
   now?: () => number;
 }
 
-export class AnnounceService {
-  private readonly attemptsLog: AnnounceAttempt[] = [];
+export class GuangBoFuWu {
+  private readonly attemptsLog: GuangBoChangShi[] = [];
   private readonly unreachableLog: UnreachableMember[] = [];
   private readonly inboundAcceptedLog: InboundAnnouncement[] = [];
   private readonly inboundRejectedLog: InboundAnnouncement[] = [];
@@ -194,11 +194,11 @@ export class AnnounceService {
   private refreshTimer?: NodeJS.Timeout;
   private readonly selfFingerprint: string;
 
-  constructor(private readonly opts: AnnounceServiceOptions) {
+  constructor(private readonly opts: GuangBoFuWuXuanXiang) {
     this.selfFingerprint = typeof opts.identity.fingerprint === 'string' ? opts.identity.fingerprint : '';
   }
 
-  get attempts(): readonly AnnounceAttempt[] {
+  get attempts(): readonly GuangBoChangShi[] {
     return this.attemptsLog;
   }
   get unreachable(): readonly UnreachableMember[] {
@@ -233,7 +233,7 @@ export class AnnounceService {
    * 上线宣告：① 发布/更新自己的 DHT 记录 ② 对名册成员各尝试**一次**连线。
    * 失败即放弃 → 记入 `unreachable`（fallback: wait-for-peer-announce）。
    */
-  async announce(reason: AnnounceReason = 'startup'): Promise<AnnounceReport> {
+  async announce(reason: GuangBoYuanYin = 'startup'): Promise<GuangBoBaoGao> {
     this.announceCalls += 1;
     const startedAt = this.now();
     const myFingerprint = this.selfFingerprint;
@@ -254,7 +254,7 @@ export class AnnounceService {
     });
 
     // ② 对名册成员尝试一次（跳过自己）
-    const attempts: AnnounceAttempt[] = [];
+    const attempts: GuangBoChangShi[] = [];
     const connected: string[] = [];
     const unreachable: UnreachableMember[] = [];
     const skippedNotDialable: string[] = [];
@@ -287,7 +287,7 @@ export class AnnounceService {
         /* 查不到就用手工地址 */
       }
       const addresses = this.addressCandidates(member, resolved);
-      const attempt: AnnounceAttempt = {
+      const attempt: GuangBoChangShi = {
         fingerprint: member.fingerprint,
         kind: 'dial',
         ok: false,
@@ -323,8 +323,8 @@ export class AnnounceService {
   private async connectTo(
     member: RosterMember,
     addresses: { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[],
-    attempt: AnnounceAttempt
-  ): Promise<AnnounceAttempt> {
+    attempt: GuangBoChangShi
+  ): Promise<GuangBoChangShi> {
     try {
       let r: { ok: boolean; rung?: LadderRung | null; detail?: string };
       if (this.opts.connect) {
@@ -345,7 +345,7 @@ export class AnnounceService {
     }
   }
 
-  private finishAttempt(attempt: AnnounceAttempt, unreachable: UnreachableMember[]): void {
+  private finishAttempt(attempt: GuangBoChangShi, unreachable: UnreachableMember[]): void {
     this.opts.onConnectResult?.(attempt);
     if (!attempt.ok) {
       const u: UnreachableMember = {
@@ -397,7 +397,7 @@ export class AnnounceService {
   }
 
   /** 收到他人宣告：验签 + 名册授权 + （可拨入时）建连 */
-  async handleAnnouncement(env: DhtRecordEnvelope, from: DhtAddr | null = null): Promise<InboundAnnouncement> {
+  async handleAnnouncement(env: DhtJiLuFeng, from: DhtDiZhi | null = null): Promise<InboundAnnouncement> {
     const key = env.k;
     const dedupeKey = `${key}:${env.s}`;
     const duplicate = this.seenAnnouncements.has(dedupeKey);
@@ -471,7 +471,7 @@ export class AnnounceService {
     }
 
     const addresses = this.addressCandidates(member, record);
-    const attempt: AnnounceAttempt = { fingerprint: record.fp, kind: 'dial', ok: false, retries: 0, at: this.now() };
+    const attempt: GuangBoChangShi = { fingerprint: record.fp, kind: 'dial', ok: false, retries: 0, at: this.now() };
     const result = await this.connectTo(member, addresses, attempt);
     this.attemptsLog.push(result);
     this.opts.onConnectResult?.(result);

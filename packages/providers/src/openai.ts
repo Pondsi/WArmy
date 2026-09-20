@@ -1,21 +1,21 @@
 import {
-  BaseProvider,
-  httpJson,
-  joinUrl,
-  messagesToOpenAI,
-  parseOpenAIResponse,
+  JichuGongYing,
+  qingQiuJson,
+  pinJieUrl,
+  zhuanHuanOpenAI,
+  jieXiOpenAIXiangYing,
 } from './base.js';
-import type { ChatChunk, ChatRequest, ChatResponse, ProviderAuth } from './types.js';
+import type { LiaoTianPian, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
 
 /**
  * OpenAI 兼容协议
  * 覆盖：DeepSeek / OpenAI / SiliconFlow / Moonshot / GLM / Groq / 自定义中转
  */
-export class OpenAICompatibleProvider extends BaseProvider {
+export class JianrongOpenAIGongYing extends JichuGongYing {
   readonly id: string;
   readonly protocol = 'openai-compatible' as const;
 
-  constructor(auth: ProviderAuth, opts: { id?: string; defaultBase: string }) {
+  constructor(auth: GongYingRenZheng, opts: { id?: string; defaultBase: string }) {
     super(auth, opts.defaultBase);
     this.id = opts.id || 'openai-compatible';
   }
@@ -31,10 +31,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
     return h;
   }
 
-  private body(req: ChatRequest, stream: boolean): Record<string, unknown> {
+  private body(req: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
     return {
       model: req.model,
-      messages: messagesToOpenAI(req.messages),
+      messages: zhuanHuanOpenAI(req.messages),
       max_tokens: req.maxTokens,
       temperature: req.temperature,
       top_p: req.topP,
@@ -46,17 +46,17 @@ export class OpenAICompatibleProvider extends BaseProvider {
     };
   }
 
-  async chat(req: ChatRequest, signal?: AbortSignal): Promise<ChatResponse> {
-    const json = await httpJson<Parameters<typeof parseOpenAIResponse>[0]>(
-      joinUrl(this.baseURL, 'chat/completions'),
+  async chat(req: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
+    const json = await qingQiuJson<Parameters<typeof jieXiOpenAIXiangYing>[0]>(
+      pinJieUrl(this.baseURL, 'chat/completions'),
       { method: 'POST', body: JSON.stringify(this.body(req, false)), signal, headers: this.headers() },
       this.auth
     );
-    return parseOpenAIResponse(json);
+    return jieXiOpenAIXiangYing(json);
   }
 
-  async *chatStream(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatChunk> {
-    const res = await fetch(joinUrl(this.baseURL, 'chat/completions'), {
+  async *chatStream(req: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
+    const res = await fetch(pinJieUrl(this.baseURL, 'chat/completions'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -110,8 +110,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
   async listModels(signal?: AbortSignal): Promise<string[]> {
     try {
-      const json = await httpJson<{ data?: Array<{ id: string }> }>(
-        joinUrl(this.baseURL, 'models'),
+      const json = await qingQiuJson<{ data?: Array<{ id: string }> }>(
+        pinJieUrl(this.baseURL, 'models'),
         { method: 'GET', signal, headers: this.headers() },
         this.auth
       );
@@ -124,8 +124,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
 }
 
 /** DeepSeek 预设工厂（OpenAI 兼容） */
-export function createDeepSeekProvider(auth: ProviderAuth): OpenAICompatibleProvider {
-  return new OpenAICompatibleProvider(auth, {
+export function chuangjianDeepSeek(auth: GongYingRenZheng): JianrongOpenAIGongYing {
+  return new JianrongOpenAIGongYing(auth, {
     id: 'deepseek',
     defaultBase: 'https://api.deepseek.com',
   });

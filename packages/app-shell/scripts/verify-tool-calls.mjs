@@ -58,7 +58,7 @@ for (const f of [distProviders, distRenderer, distMemoryClient]) {
   }
 }
 const providers = await import(pathToFileURL(distProviders).href);
-const { chatWithTools, createProviderFromPreset, OllamaProvider, OpenAICompatibleProvider } = providers;
+const { liaoTianDaiGongJu, congYuSheChuangJian, OllamaGongYing, JianrongOpenAIGongYing } = providers;
 const { renderBoundedView } = await import(pathToFileURL(distRenderer).href);
 const { MemoryClient, memoryToolSpecs, runMemoryTool } = await import(pathToFileURL(distMemoryClient).href);
 
@@ -216,8 +216,8 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
     state.receivedChars = raw.length;
     return textResponse(`FINAL: 已取回 ${raw.length} 字符，sha16=${sha16(raw)}`);
   });
-  const provider = createProviderFromPreset('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
-  const loop = await chatWithTools(
+  const provider = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
+  const loop = await liaoTianDaiGongJu(
     provider,
     { model: 'mock', messages: view.messages, maxTokens: 256, tools: specs },
     (call, ctx) => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }).then((r) => r.content),
@@ -330,8 +330,8 @@ console.log('\n[2] 最大轮数生效（模型一直要工具）');
     const n = toolMsgsOf(body).length;
     return toolCallResponse(`call-${n + 1}`, 'retrieve', { seq: markerSeq });
   });
-  const provider = createProviderFromPreset('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
-  const loop = await chatWithTools(
+  const provider = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
+  const loop = await liaoTianDaiGongJu(
     provider,
     { model: 'mock', messages: view.messages, maxTokens: 64, tools: specs },
     (call, ctx) => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }).then((r) => r.content),
@@ -355,10 +355,10 @@ console.log('\n[3] 工具结果总预算生效');
     const n = toolMsgsOf(body).length;
     return toolCallResponse(`call-b${n + 1}`, 'retrieve', { seq: markerSeq, maxChars: 4000 });
   });
-  const provider = createProviderFromPreset('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
+  const provider = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
   const TOTAL = 500;
   const PER = 200;
-  const loop = await chatWithTools(
+  const loop = await liaoTianDaiGongJu(
     provider,
     { model: 'mock', messages: view.messages, maxTokens: 64, tools: specs },
     (call, ctx) => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }).then((r) => r.content),
@@ -388,10 +388,10 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
     prompt_eval_count: 10,
     eval_count: 5,
   }));
-  const ollama = new OllamaProvider({ baseURL: mock.ollamaBase }, { id: 'ollama' });
+  const ollama = new OllamaGongYing({ baseURL: mock.ollamaBase }, { id: 'ollama' });
   check('OllamaProvider.supportsTools=false（协议表）', ollama.supportsTools === false, ollama.supportsTools);
   let executorCalls = 0;
-  const loop = await chatWithTools(
+  const loop = await liaoTianDaiGongJu(
     ollama,
     { model: 'ollama-mock', messages: view.messages, maxTokens: 64, tools: specs },
     () => {
@@ -421,8 +421,8 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
     }
     return textResponse('中转不吃 tools，这是降级后的回答');
   });
-  const p2 = new OpenAICompatibleProvider({ apiKey: 'sk-mock', baseURL: mock2.base }, { id: 'relay', defaultBase: mock2.base });
-  const loop2 = await chatWithTools(
+  const p2 = new JianrongOpenAIGongYing({ apiKey: 'sk-mock', baseURL: mock2.base }, { id: 'relay', defaultBase: mock2.base });
+  const loop2 = await liaoTianDaiGongJu(
     p2,
     { model: 'mock', messages: view.messages, maxTokens: 64, tools: specs },
     () => 'never',
@@ -442,8 +442,8 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
 
   // (c) 调用方根本不给 tools：普通对话，不算降级
   const mock3 = await startModelServer(() => textResponse('普通回答'));
-  const p3 = createProviderFromPreset('deepseek', { apiKey: 'sk-mock', baseURL: mock3.base, model: 'mock' });
-  const loop3 = await chatWithTools(p3, { model: 'mock', messages: view.messages, maxTokens: 32 }, () => 'never', {});
+  const p3 = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock3.base, model: 'mock' });
+  const loop3 = await liaoTianDaiGongJu(p3, { model: 'mock', messages: view.messages, maxTokens: 32 }, () => 'never', {});
   check('没有 tools 时就是普通对话（degraded=false，不误报降级）', loop3.degraded === false && loop3.requests === 1 && loop3.stopReason === 'stop', {
     degraded: loop3.degraded,
     requests: loop3.requests,

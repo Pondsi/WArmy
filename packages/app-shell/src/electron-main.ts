@@ -20,14 +20,14 @@ import {
 import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@warmy/group-router';
 import { KanbanCang, JieLing } from '@warmy/board';
 import {
-  createProviderFromPreset,
-  chatWithTools,
-  providerSupportsTools,
-  type ChatMessage,
-  type ChatRequest,
-  type ModelProvider,
-  type ToolLoopResult,
-  type ToolSpec,
+  congYuSheChuangJian,
+  liaoTianDaiGongJu,
+  gongYingZhiChiGongJu,
+  type LiaoTianXiaoXi,
+  type LiaoTianQingQiu,
+  type MoxingGongYing,
+  type GongJuXunHuanGuo,
+  type GongJuGuiGe,
 } from '@warmy/providers';
 import { CcrGateway } from '@warmy/ccr-compressor';
 import { KnowledgeBase } from '@warmy/knowledge-base';
@@ -129,7 +129,7 @@ import { readJsonFile, sweepTempFiles, writeJsonAtomicSafe } from './atomic-json
  * **不是**落到本机设置里（产品主：记录文件的改动是无限牛马的功能，不是本机的功能）。
  */
 import { setFileAccessSink, withFileAccessScope, currentFileAccessScope } from './helper-tool.js';
-import { NodeRegistry, SyncBus, createInvite, consumeInvite } from '@warmy/sync-protocol';
+import { NodeRegistry, SyncBus, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@warmy/dsh-runtime';
 // 组网：**鉴权通道**（SecureSyncServer/Client + 名册 + 持久化重放防护），旧 lan.ts/mesh.ts 只留数据层 PeerRegistry
 import { PeerRegistry } from '@warmy/sync-protocol';
@@ -381,7 +381,7 @@ let leases: LeaseRegistry | null = null;
 /** 换证横幅「已核实 / 已关闭」的本地留痕（审计是硬要求，落盘失败即拒绝关闭） */
 let changeAckFile = '';
 /** 会话消息历史（主进程侧）—— 日志的镜像（不变量 #1/#5），视图由 chatLogs 渲染而来 */
-const chatHistories = new Map<string, ChatMessage[]>();
+const chatHistories = new Map<string, LiaoTianXiaoXi[]>();
 /**
  * 会话日志（只追加，ADR 002 / 不变量 #1）：不变量 #2 的"日志"侧。
  * chat-send、群消息、值班者输入共用这一份；注入模型的是 renderBoundedView 的有界视图。
@@ -446,7 +446,7 @@ function memSeqOf(res: unknown): number | undefined {
 }
 
 /** 会话日志 → 模型消息数组（chatHistories 只是它的派生镜像，见下） */
-function chatMessagesOf(key: string): ChatMessage[] {
+function chatMessagesOf(key: string): LiaoTianXiaoXi[] {
   return (chatLogs.get(key) || []).map((e) => ({ role: e.role, content: e.content }));
 }
 
@@ -465,7 +465,7 @@ function appendChatLog(key: string, entry: LogEntry): void {
 }
 
 /** 读会话历史（缺镜像时按需从日志派生，绝不返回第二份真相） */
-function historyOf(key: string): ChatMessage[] {
+function historyOf(key: string): LiaoTianXiaoXi[] {
   const cached = chatHistories.get(key);
   if (cached) return cached;
   const derived = chatMessagesOf(key);
@@ -629,14 +629,14 @@ function toolLimits(): { maxRounds: number; maxResultChars: number; totalChars: 
  */
 async function runChatLoop(
   sessionId: string,
-  provider: ModelProvider,
-  req: ChatRequest
-): Promise<ToolLoopResult & { tooled: boolean }> {
+  provider: MoxingGongYing,
+  req: LiaoTianQingQiu
+): Promise<GongJuXunHuanGuo & { tooled: boolean }> {
   const limits = toolLimits();
   const memReady = await ensureMemoryReady();
-  const tools: ToolSpec[] | undefined =
+  const tools: GongJuGuiGe[] | undefined =
     memReady && limits.maxRounds > 0 ? memoryToolSpecs(toolLabels()) : undefined;
-  const supported = providerSupportsTools(provider);
+  const supported = gongYingZhiChiGongJu(provider);
 
   audit?.log('chat.tools.decide', {
     sessionId,
@@ -656,7 +656,7 @@ async function runChatLoop(
     });
   }
 
-  const loop = await chatWithTools(
+  const loop = await liaoTianDaiGongJu(
     provider,
     { ...req, tools },
     async (call, ctx) => {
@@ -1890,13 +1890,13 @@ handleIpc(
   'warmy:list-models',
   async (_e, cfg: { protocol: string; baseURL: string; apiKey?: string; providerId?: string }) => {
     try {
-      const { createProvider } = await import('@warmy/providers');
+      const { chuangjianGongYing } = await import('@warmy/providers');
       /**
        * 密钥来源：界面刚输入的明文优先，否则按供应商 id 从安全存储解出。
        * 界面**从不**回传已保存的密钥（读不回），所以"重新拉取"必须能自己取到它。
        */
       const key = await resolveProviderKey(String(cfg.providerId || providerCfg.presetId || ''), cfg.apiKey);
-      const p = createProvider(
+      const p = chuangjianGongYing(
         (cfg.protocol as 'openai-compatible' | 'anthropic' | 'ollama') || 'openai-compatible',
         { baseURL: cfg.baseURL, apiKey: key }
       );
@@ -2093,7 +2093,7 @@ handleIpc(
     let llmReply: string | null = null;
     if (providerCfg.apiKey || providerCfg.protocol === 'ollama') {
       try {
-        const provider = createProviderFromPreset(providerCfg.presetId, {
+        const provider = congYuSheChuangJian(providerCfg.presetId, {
           apiKey: providerCfg.apiKey,
           baseURL: providerCfg.baseURL || undefined,
         });
@@ -2111,7 +2111,7 @@ handleIpc(
             model: dutyModel,
             messages: [
               { role: 'system', content: tMain('llm.dutySystem') },
-              ...(view.messages as ChatMessage[]),
+              ...(view.messages as LiaoTianXiaoXi[]),
             ],
             maxTokens: 512,
           });
@@ -2352,7 +2352,7 @@ handleIpc(
 
     const t0 = Date.now();
     try {
-      const provider = createProviderFromPreset(providerCfg.presetId, {
+      const provider = congYuSheChuangJian(providerCfg.presetId, {
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL || undefined,
       });
@@ -2365,7 +2365,7 @@ handleIpc(
         // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
         const loop = await runChatLoop(sessionId, provider, {
           model: modelId,
-          messages: view.messages as ChatMessage[],
+          messages: view.messages as LiaoTianXiaoXi[],
           maxTokens: 1024,
         });
         return { view, loop, budgetChars };
@@ -5697,9 +5697,9 @@ handleIpc('warmy:nodes-revoke', (_e, nodeId: string) => {
     return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
-handleIpc('warmy:invite-create', (_e, groupId?: string) => safeHandle(() => ({ ok: true, invite: createInvite(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
+handleIpc('warmy:invite-create', (_e, groupId?: string) => safeHandle(() => ({ ok: true, invite: chuangjianYaoQing(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
 handleIpc('warmy:invite-use', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
-  ok: consumeInvite(tok),
+  ok: shiYongYaoQing(tok),
 }));
 handleIpc('warmy:sync-publish', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => ({
   ok: true,
