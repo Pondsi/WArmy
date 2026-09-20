@@ -142,12 +142,28 @@ if (argOf('--phase') === 'restart') {
  * 绝不能因为"像个 ID"就被当成有效设备 ID（那会让身份退回可猜测的空间）。
  */
 {
-  const { isValidDeviceId } = await import('../dist/settings-store.js');
+  const { isValidDeviceId, LocalAccountStore } = await import('../dist/settings-store.js');
   check('9 位数字不再被判为有效设备 ID', isValidDeviceId('375102948') === false, { got: isValidDeviceId('375102948') });
-  check('17 位十进制仍被接受（老配置不被判无效而重新生成身份）', isValidDeviceId('12345678901234567') === true, {});
-  const { generateCredential, isValidCredential, formatCredential } = await import('../dist/credential.js');
+  check('17 位十进制同样不再被判为有效设备 ID（历史形态一律升级）', isValidDeviceId('12345678901234567') === false, {});
+  const { generateCredential, isValidCredential, formatCredential, credentialKind, CREDENTIAL_ALPHABET } = await import('../dist/credential.js');
   const cred = generateCredential();
-  check('新凭证 = 45 位且不含易混字符 I/O/Z', cred.length === 45 && isValidCredential(cred) && !/[IOZioz]/.test(cred), { len: cred.length, sample: formatCredential(cred).slice(0, 14) + '…' });
+  check('新凭证 = 51 位、全大写、不含 I/O/Z（256 bit）',
+    cred.length === 51 && isValidCredential(cred) && !/[a-zIOZ]/.test(cred) && CREDENTIAL_ALPHABET.length === 33,
+    { len: cred.length, sample: formatCredential(cred).slice(0, 14) + '…', alphabet: CREDENTIAL_ALPHABET });
+  check('上一版 45 位凭证仍可识别（已发出的凭证不能被判无效）',
+    credentialKind('0KwGtm8f2brYXbKEWNGbHjlG5MWKdxfN50jVF87raQGEM') === 'legacy', {});
+  // 历史 ID 会被**落盘升级**成凭证（不是判无效后重新生成一个不明来历的数字）
+  const os2 = await import('node:os');
+  const fsp = await import('node:fs');
+  const path2 = await import('node:path');
+  const tmpDir = fsp.mkdtempSync(path2.join(os2.tmpdir(), 'warmy-idup-'));
+  const file = path2.join(tmpDir, 'profile.json');
+  fsp.writeFileSync(file, JSON.stringify({ username: 'u', avatarDataUrl: '', email: '', deviceId: '12345678901234567' }));
+  const store = new LocalAccountStore(file);
+  const prof = store.loadProfile();
+  check('历史 17 位 ID 在读取时被升级为 51 位凭证，并记下原值',
+    isValidCredential(String(prof.deviceId)) && String(prof.deviceId).length === 51 && prof.deviceIdUpgradedFrom === '12345678901234567',
+    { len: String(prof.deviceId).length, from: prof.deviceIdUpgradedFrom });
   const { keyPairFromCredential } = await import('../dist/credential.js');
   const k1 = keyPairFromCredential(cred);
   const k2 = keyPairFromCredential(cred);
@@ -158,6 +174,7 @@ if (argOf('--phase') === 'restart') {
   check('不同凭证派生出的公钥不同（唯一性来自密钥空间，不靠服务器登记）',
     Buffer.from(k1.publicKey.export({ type: 'spki', format: 'der' })).toString('base64') !==
     Buffer.from(other.publicKey.export({ type: 'spki', format: 'der' })).toString('base64'), {});
+  fsp.rmSync(tmpDir, { recursive: true, force: true });
 }
   check('代次保留', info?.generation === expectGen, info?.generation);
   check('名片保留', info?.contactCard?.email === expectEmail, info?.contactCard);

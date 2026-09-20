@@ -5,17 +5,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DEFAULT_CONTEXT_BUDGET_CHARS } from './context-renderer.js';
-import { generateCredential, isValidCredential } from './credential.js';
+import { generateCredential, isValidCredential, credentialKind } from './credential.js';
 
 export interface LocalProfile {
   username: string;
   avatarDataUrl: string;
   email: string;
   passwordHash?: string;
-  /** 本机唯一 ID = **身份凭证**（base56、45 位；见 credential.ts），首次生成后写入配置文件 */
+  /**
+   * 本机唯一 ID = **身份凭证**（51 位大写，见 credential.ts）。
+   * 历史形态（9/17 位数字、UUID）在读取时会被**升级**成凭证，
+   * 升级前的值留在 `deviceIdUpgradedFrom` 里备查。
+   */
   deviceId?: string;
   /** deviceId 的 HMAC 签名，用于检测配置文件被手改 */
   deviceIdSig?: string;
+  /** 若本机 ID 是从历史形态升级来的，这里留下升级前的值（只作备查，不参与任何判定） */
+  deviceIdUpgradedFrom?: string;
 }
 
 /**
@@ -26,12 +32,10 @@ export function generateDeviceId(): string {
   return generateCredential();
 }
 
-/** 凭证（新）或历史 UUID/17 位数字（仅保证老配置不被判无效而重新生成） */
+/** 凭证（现行 51 位大写 / 兼容上一版 45 位）——除此之外一律不算有效 ID */
 export function isValidDeviceId(v: unknown): v is string {
   if (typeof v !== 'string') return false;
-  if (isValidCredential(v)) return true;
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)) return true;
-  return /^[1-9][0-9]{16}$/.test(v);
+  return isValidCredential(v);
 }
 
 
@@ -338,10 +342,31 @@ export class LocalAccountStore {
     } catch {
       p = { username: '主人', avatarDataUrl: '', email: '' };
     }
-    // 首次访问即生成 9 位 ID 并落盘；若 ID 或签名被改动/缺失，则重新生成
-    if (!this.verifyIdFields(p)) {
+    /**
+     * ID = 凭证（51 位大写，见 credential.ts）。
+     *
+     * 两种必须落盘修正的情况：
+     *  1) 缺失/被手改（HMAC 对不上）⇒ 重新生成；
+     *  2) **是历史形态**（9 位/17 位数字、UUID）⇒ 升级成凭证 ——
+     *     老形态**不是密钥种子**，"ID 即私钥"这条产品承诺在它们身上不成立。
+     *     这里只负责**换掉 ID 并落盘**；"由此派生的身份"由主进程在启动时按
+     *     `identityCredentialMigrated` 标记重建（旧身份文件先备份），见 electron-main。
+     */
+    const before = String(p.deviceId || '');
+    const signedOk = this.verifyIdFields(p);
+    /**
+     * 两种必须落盘修正的情况，语义不同：
+     *  · **形态不认识**（9/17 位数字、UUID、空）⇒ 一律**升级**成凭证（老形态不是密钥种子）；
+     *  · 形态是现役凭证但**签名对不上**（被手改）⇒ 只能重新生成一把（旧的那把已经不可信）。
+     * 签名判定只对现役凭证有意义：老形态本来就不该通过校验，那是"该升级"而不是"被篡改"。
+     */
+    const unknownShape = credentialKind(before) === null;
+    const tamperedCredential = !unknownShape && !signedOk;
+    if (unknownShape || tamperedCredential) {
       p.deviceId = generateDeviceId();
       p.deviceIdSig = signDeviceId(p.deviceId);
+      if (unknownShape && before) p.deviceIdUpgradedFrom = before;
+      if (tamperedCredential) p.deviceIdUpgradedFrom = `tampered:${before.slice(0, 6)}…`;
       try { this.saveProfile(p); } catch { /* 只读目录时忽略 */ }
     }
     return p;

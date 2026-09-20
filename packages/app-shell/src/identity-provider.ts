@@ -53,13 +53,13 @@ import {
   verifyMemberCertificate,
   type ZhiWenTuiDao,
   type IdentityProvider,
-  type MemberCertCode,
-  type MemberCertRole,
-  type MemberCertificate,
-  type MemberFingerprintOf,
+  type ChengYuanZhengShuMa,
+  type ChengYuanZhengShuJueSe,
+  type ChengYuanZhengShu,
+  type quChengYuanZhiWen,
   type NormalizedIdentity,
-  type RevocationList,
-  type RevocationReason,
+  type CheXiaoBiao,
+  type CheXiaoYuanYin,
 } from '@warmy/sync-protocol';
 import {
   DEFAULT_CLOCK_SKEW_MS,
@@ -816,7 +816,7 @@ export interface IssueMemberCertInput {
   memberFingerprint: string;
   memberPublicKey: string;
   displayName?: string;
-  role?: MemberCertRole;
+  role?: ChengYuanZhengShuJueSe;
   permissions?: string[];
   /** 创建者分配的**稳定成员标识**：换证后沿用同一个值，链就断不了 */
   memberId?: string;
@@ -833,7 +833,7 @@ export interface IssueMemberCertInput {
 export interface IssueMemberCertResult {
   ok: boolean;
   code: string;
-  cert?: MemberCertificate;
+  cert?: ChengYuanZhengShu;
   stored?: boolean;
   detail?: string;
 }
@@ -855,7 +855,7 @@ async function issueMemberCertificateImpl(input: IssueMemberCertInput): Promise<
   }
   const now = input.now ?? Date.now();
   const certId = input.certId || `mc-${randomHex(8)}`;
-  let cert: MemberCertificate;
+  let cert: ChengYuanZhengShu;
   try {
     cert = gouJianChengYuanZhengShu(
       {
@@ -898,9 +898,9 @@ async function appendRevocationEntries(input: {
   signer: IdentitySigner;
   membership: MembershipStore;
   groupId: string;
-  add: Array<{ certId: string; memberFingerprint: string; reason: RevocationReason }>;
+  add: Array<{ certId: string; memberFingerprint: string; reason: CheXiaoYuanYin }>;
   now?: number;
-}): Promise<{ ok: true; list: RevocationList; previousVersion: number } | { ok: false; code: string; detail?: string }> {
+}): Promise<{ ok: true; list: CheXiaoBiao; previousVersion: number } | { ok: false; code: string; detail?: string }> {
   const now = input.now ?? Date.now();
   if (!input.signer.signReady()) return { ok: false, code: 'identity-locked', detail: '身份未解锁：不能签发吊销列表' };
   const current = input.membership.revocation(input.groupId);
@@ -941,10 +941,10 @@ export function revokeMemberCertificate(input: {
   groupId: string;
   certId: string;
   memberFingerprint: string;
-  reason: RevocationReason;
+  reason: CheXiaoYuanYin;
   now?: number;
   expectation?: string;
-}): Promise<{ ok: boolean; code: string; list?: RevocationList; listVersion?: number; previousVersion?: number; detail?: string }> {
+}): Promise<{ ok: boolean; code: string; list?: CheXiaoBiao; listVersion?: number; previousVersion?: number; detail?: string }> {
   return input.membership.runExclusive(() => revokeMemberCertificateImpl(input));
 }
 
@@ -954,10 +954,10 @@ async function revokeMemberCertificateImpl(input: {
   groupId: string;
   certId: string;
   memberFingerprint: string;
-  reason: RevocationReason;
+  reason: CheXiaoYuanYin;
   now?: number;
   expectation?: string;
-}): Promise<{ ok: boolean; code: string; list?: RevocationList; listVersion?: number; previousVersion?: number; detail?: string }> {
+}): Promise<{ ok: boolean; code: string; list?: CheXiaoBiao; listVersion?: number; previousVersion?: number; detail?: string }> {
   if (!REVOCATION_REASONS.includes(input.reason)) return { ok: false, code: 'bad-reason' };
   const built = await appendRevocationEntries({
     signer: input.signer,
@@ -983,8 +983,8 @@ async function revokeMemberCertificateImpl(input: {
 export interface RotateMemberCertResult {
   ok: boolean;
   code: string;
-  cert?: MemberCertificate;
-  revocation?: RevocationList;
+  cert?: ChengYuanZhengShu;
+  revocation?: CheXiaoBiao;
   verification?: RotationVerifyResult;
   detail?: string;
 }
@@ -1145,7 +1145,7 @@ async function reissueMemberCertificateForRecoveryImpl(input: {
     ...(typeof input.now === 'number' ? { now: input.now } : {}),
   });
   if (!issued.ok || !issued.cert) return { ok: false, code: `issue:${issued.code}`, detail: issued.detail };
-  let revocation: RevocationList | undefined;
+  let revocation: CheXiaoBiao | undefined;
   if (input.revokeOld !== false) {
     const revoked = await revokeMemberCertificateImpl({
       signer: input.signer,
@@ -1172,7 +1172,7 @@ async function reissueMemberCertificateForRecoveryImpl(input: {
 export function applyInboundRevocationUpdate(input: {
   membership: MembershipStore;
   groupId: string;
-  list: RevocationList;
+  list: CheXiaoBiao;
   fromFingerprint: string;
   /** 本机已知的群主（创建者）指纹；给定就要求 `fromFingerprint` 必须是他 */
   expectedIssuerFingerprint?: string;
@@ -1216,7 +1216,7 @@ export function membershipSnapshot(
       certId: string;
       memberFingerprint: string;
       displayName: string;
-      role: MemberCertRole;
+      role: ChengYuanZhengShuJueSe;
       permissions: string[];
       issuedAt: number;
       expiresAt: number;
@@ -1224,7 +1224,7 @@ export function membershipSnapshot(
       memberId: string;
       /** 本地时钟判定结果（不是证书自称） */
       valid: boolean;
-      code: MemberCertCode;
+      code: ChengYuanZhengShuMa;
       detail?: string;
     }>;
   }>;

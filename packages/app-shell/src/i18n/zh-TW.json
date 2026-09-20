@@ -1712,5 +1712,9 @@
   "container.inst.openAppFailed": "無法開啟容器產品介面（{reason}）。",
   "container.inst.createHint": "建立實例請在該容器產品自己的介面/控制台進行：各產品建立方式不同，還要按需拉映像，我們不代替它建立。",
   "container.listHidden": "已隱藏 {n} 個不可用、也不可啟動的容器",
-  "me.idWarn": "這串 ID 就是你的私鑰：**只有你能看**。誰拿到它誰就是「你」，而且沒有中心伺服器能替你掛失 —— 請自行妥善保存；給別人加好友/入群時，給出的是由它衍生的公鑰（指紋），不是這串。"
+  "me.idWarn": "這串 ID 就是你的私鑰：**只有你能看**。誰拿到它誰就是「你」，而且沒有中心伺服器能替你掛失 —— 請自行妥善保存；給別人加好友/入群時，給出的是由它衍生的公鑰（指紋），不是這串。",
+  "settings.providerPickHint": "選擇要新增的供應商",
+  "settings.providerPickFirst": "請先選擇一家要新增的供應商",
+  "container.section.existing": "本機已有容器",
+  "container.section.images": "映像"
 }

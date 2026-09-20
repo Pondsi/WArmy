@@ -51,9 +51,9 @@ import {
   type HandshakeFailureRecord,
   type Ipv6Report,
   type LadderRung,
-  type MemberLiveness,
-  type RelayCandidateRef,
-  type RelayDecision,
+  type ChengYuanHuoXing,
+  type ZhongJiHouXuanYinYong,
+  type ZhongJiJueDing,
   type SyncMessage,
 } from '@warmy/sync-protocol';
 import {
@@ -606,7 +606,7 @@ export interface ReachabilityHint {
   /** 与 `dialableKind` 对应的 i18n key（`net.dialability.*`） */
   dialableI18n?: string;
   /** 中继判定（附八.3；结构化，含"需要一台有公网地址的机器做中继"这个状态） */
-  relay?: RelayDecision;
+  relay?: ZhongJiJueDing;
   /** 需要 UI 明确告知"两端都无法直连，需要中继" */
   needsPublicRelayNotice: boolean;
   /** i18n key（net.rung.* / net.relay.*） */
@@ -993,7 +993,7 @@ export interface SecureMeshOptions {
    */
   selfDialable?: () => boolean | undefined;
   /** 中继候选（有公网地址、能转发的节点）——附八.3 双 CGNAT 的唯一出路 */
-  relays?: () => RelayCandidateRef[];
+  relays?: () => ZhongJiHouXuanYinYong[];
   now?: () => number;
 }
 
@@ -1303,11 +1303,11 @@ export class SecureMesh {
   }
 
   /** 成员在线状态（真判据：**已建立的鉴权连接** + 心跳；没有连接就是不在线） */
-  presence(): MemberLiveness[] {
+  presence(): ChengYuanHuoXing[] {
     return this.liveness.list();
   }
 
-  presenceOf(fingerprint: string): MemberLiveness {
+  presenceOf(fingerprint: string): ChengYuanHuoXing {
     return this.liveness.status(fingerprint);
   }
 

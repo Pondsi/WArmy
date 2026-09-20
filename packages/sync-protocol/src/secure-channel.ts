@@ -39,7 +39,7 @@ export const RECORD_TYPE_KEY_UPDATE = 2;
 /** 单代次最多容纳的记录数（2^32-1），超过就必须换密钥（TLS 1.3 同量级） */
 export const MAX_RECORDS_PER_GENERATION = 2 ** 32 - 1;
 
-export type ChannelDirection = 'initiator-to-responder' | 'responder-to-initiator';
+export type TongDaoFangXiang = 'initiator-to-responder' | 'responder-to-initiator';
 
 export type SecureChannelErrorCode =
   | 'not-authorized-tag'
@@ -49,7 +49,7 @@ export type SecureChannelErrorCode =
   | 'malformed-record'
   | 'counter-exhausted';
 
-export class SecureChannelError extends Error {
+export class AnQuanTongDaoCuoWu extends Error {
   constructor(
     public readonly code: SecureChannelErrorCode,
     message: string
@@ -62,7 +62,7 @@ export class SecureChannelError extends Error {
 export interface SecureChannelEvent {
   type: 'send' | 'receive' | 'key-update';
   generation: number;
-  direction: ChannelDirection;
+  direction: TongDaoFangXiang;
   bytes?: number;
   detail?: string;
   ts: number;
@@ -99,7 +99,7 @@ export interface SecureChannelStats {
  *  - initiator：发送用 c2s 材料，接收用 s2c 材料
  *  - responder：相反
  */
-export class SecureChannel {
+export class AnQuanTongDao {
   private sendState: DirectionState;
   private recvState: DirectionState;
   private readonly decoder: ZhenJieMa;
@@ -190,7 +190,7 @@ export class SecureChannel {
 
   /** 加密一条应用记录，返回可直接写 socket 的字节 */
   sealRecord(payload: Bytes): Buffer {
-    if (this.closed) throw new SecureChannelError('peer-closed', 'channel 已关闭');
+    if (this.closed) throw new AnQuanTongDaoCuoWu('peer-closed', 'channel 已关闭');
     const body = this.encrypt(RECORD_TYPE_APP, toBuf(payload));
     this.stats.recordsSent += 1;
     this.stats.bytesSent += body.length;
@@ -205,7 +205,7 @@ export class SecureChannel {
    * 发送方发完即换；接收方处理完该帧才换）。
    */
   requestKeyUpdate(): Buffer {
-    if (this.closed) throw new SecureChannelError('peer-closed', 'channel 已关闭');
+    if (this.closed) throw new AnQuanTongDaoCuoWu('peer-closed', 'channel 已关闭');
     const rec = this.encrypt(RECORD_TYPE_KEY_UPDATE, Buffer.from('key-update', 'utf8'));
     this.sendState = this.deriveNext(this.sendState);
     this.stats.keyUpdates += 1;
@@ -219,24 +219,24 @@ export class SecureChannel {
 
   /** 解密来自 socket 的字节流，返回已解出的应用层载荷（0 条 / 多条） */
   openRecords(chunk: Bytes): Buffer[] {
-    if (this.closed) throw new SecureChannelError('peer-closed', 'channel 已关闭');
+    if (this.closed) throw new AnQuanTongDaoCuoWu('peer-closed', 'channel 已关闭');
     let records: Buffer[];
     try {
       records = this.decoder.push(chunk);
     } catch (e) {
-      throw new SecureChannelError('record-too-large', String((e as Error).message ?? e));
+      throw new AnQuanTongDaoCuoWu('record-too-large', String((e as Error).message ?? e));
     }
     const out: Buffer[] = [];
     for (const rec of records) {
       if (rec.length < 1 + GCM_TAG_LENGTH) {
-        throw new SecureChannelError('malformed-record', `记录过短：${rec.length}`);
+        throw new AnQuanTongDaoCuoWu('malformed-record', `记录过短：${rec.length}`);
       }
       const type = rec.readUInt8(0);
       const ct = rec.subarray(1);
       const st = this.recvState;
       const counter = st.counter;
       if (counter > MAX_RECORDS_PER_GENERATION) {
-        throw new SecureChannelError('counter-exhausted', '记录计数达到上限，必须先换密钥');
+        throw new AnQuanTongDaoCuoWu('counter-exhausted', '记录计数达到上限，必须先换密钥');
       }
       const iv = Buffer.concat([st.ivSalt, u64be(counter)]);
       const aad = Buffer.concat([Buffer.from([type]), u32be(st.generation), u64be(counter)]);
@@ -244,7 +244,7 @@ export class SecureChannel {
       try {
         plain = open(st.key, { iv, ct }, aad);
       } catch {
-        throw new SecureChannelError(
+        throw new AnQuanTongDaoCuoWu(
           'not-authorized-tag',
           `记录认证失败（gen=${st.generation} counter=${counter}）：密钥不符或被篡改`
         );
@@ -260,7 +260,7 @@ export class SecureChannel {
         this.stats.keyUpdates += 1;
         this.emit('key-update', rec.length, 'recv-direction updated');
       } else {
-        throw new SecureChannelError('malformed-record', `未知记录类型 ${type}`);
+        throw new AnQuanTongDaoCuoWu('malformed-record', `未知记录类型 ${type}`);
       }
     }
     return out;
@@ -284,7 +284,7 @@ export class SecureChannel {
   private encrypt(type: number, plaintext: Buffer): Buffer {
     const st = this.sendState;
     if (st.counter > MAX_RECORDS_PER_GENERATION) {
-      throw new SecureChannelError('counter-exhausted', '记录计数达到上限，必须先换密钥');
+      throw new AnQuanTongDaoCuoWu('counter-exhausted', '记录计数达到上限，必须先换密钥');
     }
     const counter = st.counter;
     st.counter += 1;

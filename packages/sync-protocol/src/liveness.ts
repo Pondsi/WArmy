@@ -30,14 +30,14 @@ import { type CanDialResolution, type CanDialSignals, resolveCanDial } from './a
 
 export type LianJieZhongLei = 'member-initiated' | 'creator-probe';
 
-export interface LivenessConnection {
+export interface HuoXingLianJie {
   id: string;
   kind: LianJieZhongLei;
   /** 关闭该连接（断开时调用） */
   close?: () => void;
 }
 
-export interface MemberLiveness {
+export interface ChengYuanHuoXing {
   fingerprint: string;
   online: boolean;
   /** 在线是依据什么得出的 */
@@ -49,19 +49,19 @@ export interface MemberLiveness {
   connections: number;
 }
 
-export interface LivenessOptions {
+export interface HuoXingXuanXiang {
   /** 迟滞：连续多少次心跳失败（默认 3） */
   offlineFailures?: number;
   /** 迟滞：且持续多少毫秒（默认 30_000） */
   offlineAfterMs?: number;
   now?: () => number;
-  onOnline?: (fp: string, via: MemberLiveness['via']) => void;
+  onOnline?: (fp: string, via: ChengYuanHuoXing['via']) => void;
   onOffline?: (fp: string, info: { misses: number; lastSeenAt: number; reason: string }) => void;
   /** 探测执行器（由调用方注入，通常是连接阶梯 + 握手） */
   probe?: (fp: string) => Promise<{ ok: boolean; detail?: string; rung?: string | null }>;
 }
 
-export interface ProbeRecord {
+export interface TanCeJiLu {
   fingerprint: string;
   at: number;
   ok: boolean;
@@ -81,16 +81,16 @@ export interface SweepResult {
 
 interface MemberState {
   fingerprint: string;
-  connections: Map<string, LivenessConnection>;
+  connections: Map<string, HuoXingLianJie>;
   since: number;
   lastSeenAt: number;
   misses: number;
   offlineSince: number | null;
-  via: MemberLiveness['via'];
+  via: ChengYuanHuoXing['via'];
   online: boolean;
 }
 
-const UNKNOWN: MemberLiveness = {
+const UNKNOWN: ChengYuanHuoXing = {
   fingerprint: '',
   online: false,
   via: 'none',
@@ -113,10 +113,10 @@ export class LianJieHuoXing {
   private readonly offlineAfterMs: number;
   private readonly now: () => number;
   /** 每次真实探测都留痕（可观测性 / 断言"不轮询"） */
-  readonly probeLog: ProbeRecord[] = [];
+  readonly probeLog: TanCeJiLu[] = [];
   readonly probeCallCount = { total: 0, bySweep: 0 };
 
-  constructor(private readonly opts: LivenessOptions = {}) {
+  constructor(private readonly opts: HuoXingXuanXiang = {}) {
     this.offlineFailures = opts.offlineFailures ?? 3;
     this.offlineAfterMs = opts.offlineAfterMs ?? 30_000;
     this.now = opts.now ?? (() => Date.now());
@@ -178,7 +178,7 @@ export class LianJieHuoXing {
   }
 
   /** 成员发起的持久连接建立 → 立即判定在线（这是 C1 的主判据） */
-  registerConnection(fp: string, conn: LivenessConnection, at = this.now()): MemberLiveness {
+  registerConnection(fp: string, conn: HuoXingLianJie, at = this.now()): ChengYuanHuoXing {
     const s = this.state(fp);
     const wasOnline = s.online;
     s.connections.set(conn.id, conn);
@@ -197,7 +197,7 @@ export class LianJieHuoXing {
   }
 
   /** 连接断开 → 进入迟滞，不立即判离线 */
-  closeConnection(fp: string, connId: string, at = this.now()): MemberLiveness {
+  closeConnection(fp: string, connId: string, at = this.now()): ChengYuanHuoXing {
     const s = this.members.get(fp);
     if (!s) return { ...UNKNOWN, fingerprint: fp };
     s.connections.delete(connId);
@@ -209,7 +209,7 @@ export class LianJieHuoXing {
   }
 
   /** 心跳（成员侧保活 / 应用层 ping）；成功即刷新 lastSeen 并清零失败计数 */
-  heartbeat(fp: string, at = this.now()): MemberLiveness {
+  heartbeat(fp: string, at = this.now()): ChengYuanHuoXing {
     const s = this.state(fp);
     s.lastSeenAt = at;
     s.misses = 0;
@@ -223,7 +223,7 @@ export class LianJieHuoXing {
   }
 
   /** 记录一次心跳失败（半开连接场景） */
-  markMiss(fp: string, at = this.now()): MemberLiveness {
+  markMiss(fp: string, at = this.now()): ChengYuanHuoXing {
     const s = this.state(fp);
     s.misses += 1;
     s.lastSeenAt = at;
@@ -250,7 +250,7 @@ export class LianJieHuoXing {
     return all;
   }
 
-  status(fp: string): MemberLiveness {
+  status(fp: string): ChengYuanHuoXing {
     const s = this.members.get(fp);
     if (!s) return { ...UNKNOWN, fingerprint: fp };
     return {
@@ -264,12 +264,12 @@ export class LianJieHuoXing {
     };
   }
 
-  list(): MemberLiveness[] {
+  list(): ChengYuanHuoXing[] {
     return [...this.members.keys()].map((fp) => this.status(fp));
   }
 
   /** 探测成功 → 记为 creator-probe 在线（弱证据；无后续心跳会被迟滞判回离线） */
-  private markProbeOnline(fp: string, at = this.now()): MemberLiveness {
+  private markProbeOnline(fp: string, at = this.now()): ChengYuanHuoXing {
     const s = this.state(fp);
     const wasOnline = s.online;
     s.online = true;

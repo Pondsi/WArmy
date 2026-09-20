@@ -27,7 +27,7 @@ import {
   ReplayGuard,
 } from './handshake.js';
 import { type IdentityProvider, type NormalizedIdentity, type ZhiWenTuiDao } from './identity.js';
-import { SecureChannel, SecureChannelError } from './secure-channel.js';
+import { AnQuanTongDao, AnQuanTongDaoCuoWu } from './secure-channel.js';
 
 /** 对端回包里的 reason 白名单（只信任已知枚举，避免把任意字符串当成原因） */
 const KNOWN_HANDSHAKE_REASONS = new Set<string>([
@@ -110,7 +110,7 @@ class SwitchBuffer {
 }
 
 export class SecureSession {
-  private readonly channel: SecureChannel;
+  private readonly channel: AnQuanTongDao;
   private phase: 'handshake' | 'records' | 'closed' = 'handshake';
   private buffer = new SwitchBuffer();
   private heartbeatTimer?: NodeJS.Timeout;
@@ -122,7 +122,7 @@ export class SecureSession {
 
   constructor(
     private readonly socket: net.Socket,
-    channel: SecureChannel,
+    channel: AnQuanTongDao,
     private readonly driver: HandshakeDriver,
     info: Omit<SecureSessionInfo, 'keyFingerprint' | 'handshakeId' | 'sessionId' | 'localFingerprint'> & {
       keyFingerprint?: string;
@@ -224,10 +224,10 @@ export class SecureSession {
   }
 
   /** 握手完成后的收尾：把 channel 从 driver 的会话密钥建起来 */
-  static buildChannel(driver: HandshakeDriver, sessionRole: 'initiator' | 'responder'): SecureChannel {
+  static buildChannel(driver: HandshakeDriver, sessionRole: 'initiator' | 'responder'): AnQuanTongDao {
     const keys = driver.session;
     if (!keys) throw new Error('握手尚未完成，无法建立会话密钥');
-    return new SecureChannel(keys, sessionRole);
+    return new AnQuanTongDao(keys, sessionRole);
   }
 
   private consumeRecords(chunk: Buffer): void {
@@ -237,7 +237,7 @@ export class SecureSession {
     } catch (e) {
       // 认证失败 = 密钥不符 / 被篡改 / 重放 → 直接断连，绝不"跳过继续读"
       this.counters.handshakeFailures += 1;
-      this.close(e instanceof SecureChannelError ? e.code : 'record-error');
+      this.close(e instanceof AnQuanTongDaoCuoWu ? e.code : 'record-error');
       return;
     }
     this.lastInboundAt = this.now();

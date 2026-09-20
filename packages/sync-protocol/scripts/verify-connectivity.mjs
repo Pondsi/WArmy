@@ -37,9 +37,9 @@ import {
   LADDER_LABELS,
   LADDER_RUNG_I18N,
   ReplayGuard,
-  RelayNode,
-  RelayTunnelDialer,
-  RelayTunnelListener,
+  ZhongJiJieDian,
+  ZhongJiSuiDaoBoHao,
+  ZhongJiSuiDaoJianTing,
   SecureSyncClient,
   SecureSyncServer,
   guiLeiDiZhi,
@@ -59,7 +59,7 @@ import {
   parseIpv6,
   pickLocalIpv6Address,
   randomBytes,
-  relayTokenFor,
+  quZhongJiLingPai,
   sha256,
 } from '../dist/index.js';
 
@@ -139,7 +139,7 @@ async function mkSecureServer(opts) {
 
 /** 在**本机回环**上起一个真中继 + 两个端点：A 经中继连 B（B 不接受任何外部入站） */
 async function relaySession(opts = {}) {
-  const relay = new RelayNode({
+  const relay = new ZhongJiJieDian({
     port: 0,
     host: '127.0.0.1',
     pairTimeoutMs: opts.pairTimeoutMs ?? 900,
@@ -150,14 +150,14 @@ async function relaySession(opts = {}) {
   const relayAddr = { host: '127.0.0.1', port: relayPort };
   const A = chuangjianLinShiShenFen('verify-A');
   const B = chuangjianLinShiShenFen('verify-B');
-  const token = opts.token ?? relayTokenFor(A.fingerprint, B.fingerprint, relayAddr);
+  const token = opts.token ?? quZhongJiLingPai(A.fingerprint, B.fingerprint, relayAddr);
   const server = await mkSecureServer({
     id: B,
     peerFp: A.fingerprint,
     handshakeTimeoutMs: opts.handshakeTimeoutMs ?? 6000,
     ...(opts.replayGuard ? { replayGuard: opts.replayGuard } : {}),
   });
-  const listener = new RelayTunnelListener({
+  const listener = new ZhongJiSuiDaoJianTing({
     relay: relayAddr,
     token,
     from: B.fingerprint,
@@ -166,7 +166,7 @@ async function relaySession(opts = {}) {
     sampleBytes: 4096,
   });
   const registration = await listener.start();
-  const dialer = new RelayTunnelDialer({
+  const dialer = new ZhongJiSuiDaoBoHao({
     relay: relayAddr,
     token,
     from: A.fingerprint,
@@ -519,7 +519,7 @@ async function main() {
   /* ══════════════ [5] 中继档判定 ══════════════ */
   group('[5] 中继档判定 decideRelay（附八.3：可检测 + 可解释，6 种结构化结论码）');
   {
-    const relay = new RelayNode({ port: 0, host: '127.0.0.1', pairTimeoutMs: 800 });
+    const relay = new ZhongJiJieDian({ port: 0, host: '127.0.0.1', pairTimeoutMs: 800 });
     const relayPort = await relay.start();
     const relayAddr = { host: '127.0.0.1', port: relayPort };
     const target = { fingerprint: 'peer-relay-1', nodeId: 'node-relay-1' };
@@ -553,10 +553,10 @@ async function main() {
     const noSelfFp = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, candidates: [{ fingerprint: 'relay-good', addr: relayAddr }], timeoutMs: 1500 });
     check('没给本机指纹时**不编** token（token 缺失 + tokenSymmetric=false，诚实）', noSelfFp.token === undefined && noSelfFp.tokenSymmetric === false, { token: noSelfFp.token, sym: noSelfFp.tokenSymmetric });
 
-    const t1 = relayTokenFor('fp-A', 'fp-B', relayAddr);
-    const t2 = relayTokenFor('fp-B', 'fp-A', relayAddr);
-    const t3 = relayTokenFor('fp-A', 'fp-C', relayAddr);
-    const t4 = relayTokenFor('fp-A', 'fp-B', { host: '127.0.0.1', port: relayPort + 1 });
+    const t1 = quZhongJiLingPai('fp-A', 'fp-B', relayAddr);
+    const t2 = quZhongJiLingPai('fp-B', 'fp-A', relayAddr);
+    const t3 = quZhongJiLingPai('fp-A', 'fp-C', relayAddr);
+    const t4 = quZhongJiLingPai('fp-A', 'fp-B', { host: '127.0.0.1', port: relayPort + 1 });
     check('配对 token 两端对称（各自算得出同一个值）', t1 === t2 && t1.length === 32, { t1, t2 });
     check('不同对端/不同中继 → 不同 token（不会串台）', t1 !== t3 && t1 !== t4, { t3, t4 });
     await relay.stop();
@@ -684,17 +684,17 @@ async function main() {
 
   {
     // 冒充对端：第三方拿到配对 token 抢占 listener 槽位 → 握手层必须按指纹拒掉
-    const relay = new RelayNode({ port: 0, host: '127.0.0.1', pairTimeoutMs: 900 });
+    const relay = new ZhongJiJieDian({ port: 0, host: '127.0.0.1', pairTimeoutMs: 900 });
     const relayPort = await relay.start();
     const relayAddr = { host: '127.0.0.1', port: relayPort };
     const A = chuangjianLinShiShenFen('imp-A');
     const B = chuangjianLinShiShenFen('imp-B');
     const X = chuangjianLinShiShenFen('imp-stranger');
-    const token = relayTokenFor(A.fingerprint, B.fingerprint, relayAddr);
+    const token = quZhongJiLingPai(A.fingerprint, B.fingerprint, relayAddr);
     const xServer = await mkSecureServer({ id: X, peerFp: A.fingerprint });
-    const xTunnel = new RelayTunnelListener({ relay: relayAddr, token, localTarget: { host: '127.0.0.1', port: xServer.port }, readyTimeoutMs: 4000 });
+    const xTunnel = new ZhongJiSuiDaoJianTing({ relay: relayAddr, token, localTarget: { host: '127.0.0.1', port: xServer.port }, readyTimeoutMs: 4000 });
     await xTunnel.start();
-    const dialer = new RelayTunnelDialer({ relay: relayAddr, token, readyTimeoutMs: 4000 });
+    const dialer = new ZhongJiSuiDaoBoHao({ relay: relayAddr, token, readyTimeoutMs: 4000 });
     const localPort = await dialer.start();
     const client = new SecureSyncClient({
       identity: A.provider,
@@ -757,7 +757,7 @@ async function main() {
     check('没配置中继时不写 tokenSymmetric=false 的假结论（诚实）', res2.relayDecision?.tokenSymmetric === true, res2.relayDecision?.tokenSymmetric);
 
     // 两端都不可拨入 + 真可达中继 → 阶梯选中继档
-    const relay = new RelayNode({ port: 0, host: '127.0.0.1', pairTimeoutMs: 800 });
+    const relay = new ZhongJiJieDian({ port: 0, host: '127.0.0.1', pairTimeoutMs: 800 });
     const rp = await relay.start();
     const ladder3 = new LianJieTiZi({
       perRungTimeoutMs: 900,
@@ -767,7 +767,7 @@ async function main() {
     check('两端都不可拨入 + 真可达中继 → 阶梯选中 relay 档', res3.ok === true && res3.rung === 'relay', { rung: res3.rung, summary: res3.summary });
     const rung3 = res3.attempts.find((a) => a.rung === 'relay');
     check('relay 档命中时带中继地址 + 配对 token + "更慢但可用"标记', rung3?.relay?.relay?.port === rp && typeof rung3?.relay?.token === 'string' && rung3?.relay?.slowerButUsable === true, rung3?.relay);
-    check('relay 档的 token = relayTokenFor(本机, 对端, 中继)（两端可复算）', rung3?.relay?.token === relayTokenFor('fp-self', 'fp-peer', { host: '127.0.0.1', port: rp }), rung3?.relay?.token);
+    check('relay 档的 token = relayTokenFor(本机, 对端, 中继)（两端可复算）', rung3?.relay?.token === quZhongJiLingPai('fp-self', 'fp-peer', { host: '127.0.0.1', port: rp }), rung3?.relay?.token);
     check('档位顺序：relay 在 lan 之前被尝试（附八.9 顺序）', res3.attempts.map((a) => a.rung).indexOf('relay') < (res3.attempts.map((a) => a.rung).indexOf('lan') === -1 ? 99 : res3.attempts.map((a) => a.rung).indexOf('lan')), res3.attempts.map((a) => `${a.rung}:${a.status}`));
     check('两端的 token 对称（各自算得出同一个值）', (await jueDingZhongJi({ fingerprint: 'fp-peer' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token === (await jueDingZhongJi({ fingerprint: 'fp-self' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-peer', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token, {});
     await relay.stop();
@@ -845,7 +845,7 @@ async function main() {
     check('多进程：端点 A 宣告的 CGNAT 地址真的拨不通（不可拨入有实测证据）', cgnatA.ok === false, cgnatA.detail);
     check('多进程：端点 B 宣告的 CGNAT 地址真的拨不通（不可拨入有实测证据）', cgnatB.ok === false, cgnatB.detail);
 
-    const token = relayTokenFor(FP_A, FP_B, { host: '127.0.0.1', port: relayUp.port });
+    const token = quZhongJiLingPai(FP_A, FP_B, { host: '127.0.0.1', port: relayUp.port });
     const listenerC = spawnChild('listener', [
       '--relay-port',
       String(relayUp.port),

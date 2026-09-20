@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export interface PeerInfo {
+export interface DuiDuanXinXi {
   nodeId: string;
   name: string;
   /** IPv4 / 主机名 */
@@ -27,7 +27,7 @@ export interface PeerInfo {
   revoked?: boolean;
 }
 
-export interface MeshMessage {
+export interface WangZhuangXiaoXi {
   id: string;
   from: string;
   to: string | '*';
@@ -43,8 +43,8 @@ export interface MeshMessage {
 const DISCOVER_PORT = 7799;
 const HELLO = 'WARMY-HELLO/1';
 
-export class PeerRegistry {
-  private peers = new Map<string, PeerInfo>();
+export class DuiDuanMingCe {
+  private peers = new Map<string, DuiDuanXinXi>();
 
   constructor(private file: string) {
     try {
@@ -60,7 +60,7 @@ export class PeerRegistry {
     fs.writeFileSync(this.file, JSON.stringify({ peers: [...this.peers.values()] }, null, 2));
   }
 
-  upsert(p: PeerInfo): PeerInfo {
+  upsert(p: DuiDuanXinXi): DuiDuanXinXi {
     const prev = this.peers.get(p.nodeId);
     const full = { ...prev, ...p, lastSeen: Date.now() };
     this.peers.set(full.nodeId, full);
@@ -68,7 +68,7 @@ export class PeerRegistry {
     return full;
   }
 
-  addManual(nodeId: string, name: string, host: string, port: number, kind: 'lan' | 'wan' = 'wan'): PeerInfo {
+  addManual(nodeId: string, name: string, host: string, port: number, kind: 'lan' | 'wan' = 'wan'): DuiDuanXinXi {
     return this.upsert({ nodeId, name, host, port, kind, lastSeen: Date.now() });
   }
 
@@ -80,7 +80,7 @@ export class PeerRegistry {
     }
   }
 
-  list(includeRevoked = false): PeerInfo[] {
+  list(includeRevoked = false): DuiDuanXinXi[] {
     return [...this.peers.values()].filter((p) => includeRevoked || !p.revoked);
   }
 
@@ -94,7 +94,7 @@ export class PeerRegistry {
 }
 
 /** UDP 局域网发现 */
-export class LanDiscovery {
+export class NeiWangFaXian {
   private sock: dgram.Socket | null = null;
 
   constructor(
@@ -160,14 +160,14 @@ export class LanDiscovery {
 }
 
 /** TCP mesh 服务：收消息 + 可向任意 peer 直发 */
-export class MeshNode {
+export class WangZhuangJieDian {
   private server: net.Server | null = null;
-  private inbox: MeshMessage[] = [];
+  private inbox: WangZhuangXiaoXi[] = [];
 
   constructor(
     public nodeId: string,
     public tcpPort: number,
-    private peers: PeerRegistry,
+    private peers: DuiDuanMingCe,
     private logFile?: string
   ) {}
 
@@ -183,7 +183,7 @@ export class MeshNode {
             buf = buf.slice(i + 1);
             if (!line) continue;
             try {
-              const msg = JSON.parse(line) as MeshMessage;
+              const msg = JSON.parse(line) as WangZhuangXiaoXi;
               this.receive(msg);
               sock.write(JSON.stringify({ ack: true, id: msg.id }) + '\n');
             } catch {
@@ -198,7 +198,7 @@ export class MeshNode {
     });
   }
 
-  private receive(msg: MeshMessage) {
+  private receive(msg: WangZhuangXiaoXi) {
     if (msg.incognito) return;
     this.inbox.push(msg);
     if (this.logFile) {
@@ -215,7 +215,7 @@ export class MeshNode {
     }
   }
 
-  private sendToPeer(p: PeerInfo, msg: MeshMessage): Promise<boolean> {
+  private sendToPeer(p: DuiDuanXinXi, msg: WangZhuangXiaoXi): Promise<boolean> {
     return new Promise((resolve) => {
       const sock = net.connect({ host: p.host, port: p.port }, () => {
         sock.write(JSON.stringify(msg) + '\n');
@@ -230,8 +230,8 @@ export class MeshNode {
     });
   }
 
-  async sendToAll(msg: Omit<MeshMessage, 'id' | 'ts' | 'from' | 'hops'>): Promise<{ sent: number; failed: number }> {
-    const full: MeshMessage = {
+  async sendToAll(msg: Omit<WangZhuangXiaoXi, 'id' | 'ts' | 'from' | 'hops'>): Promise<{ sent: number; failed: number }> {
+    const full: WangZhuangXiaoXi = {
       ...msg,
       from: this.nodeId,
       id: `m-${crypto.randomBytes(6).toString('hex')}`,
@@ -249,10 +249,10 @@ export class MeshNode {
     return { sent, failed };
   }
 
-  async sendTo(nodeId: string, msg: Omit<MeshMessage, 'id' | 'ts' | 'from' | 'hops'>): Promise<boolean> {
+  async sendTo(nodeId: string, msg: Omit<WangZhuangXiaoXi, 'id' | 'ts' | 'from' | 'hops'>): Promise<boolean> {
     const p = this.peers.list().find((x) => x.nodeId === nodeId);
     if (!p) return false;
-    const full: MeshMessage = {
+    const full: WangZhuangXiaoXi = {
       ...msg,
       from: this.nodeId,
       id: `m-${crypto.randomBytes(6).toString('hex')}`,
@@ -262,7 +262,7 @@ export class MeshNode {
     return this.sendToPeer(p, full);
   }
 
-  inboxOf(): MeshMessage[] {
+  inboxOf(): WangZhuangXiaoXi[] {
     return [...this.inbox];
   }
 

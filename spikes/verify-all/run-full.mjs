@@ -231,11 +231,11 @@ check('kb bidirectional', kb.eventsOfEntity('e1').length === 1 && kb.entitiesOfE
 check('kb query', kb.query('周报').events.length === 1);
 fs.rmSync(kbDir, { recursive: true, force: true });
 
-const { NodeRegistry, SyncBus, chuangjianYaoQing, shiYongYaoQing, incognitoWorkDir } = await import(
+const { JieDianMingCe, SyncBus, chuangjianYaoQing, shiYongYaoQing, niMingGongZuoMuLu } = await import(
   toImportUrl(path.join(ascii, 'sync-protocol', 'dist', 'index.js'))
 );
 const regFile = path.join(os.tmpdir(), 'warmy-verify-reg.json');
-const reg = new NodeRegistry(regFile);
+const reg = new JieDianMingCe(regFile);
 const local = reg.registerLocal('A');
 const remote = reg.pairRemote('node-b', 'B');
 check('registry local', reg.isLocal(local.nodeId) && !reg.isLocal(remote.nodeId));
@@ -248,7 +248,7 @@ check('sync bus deliver', pulled.some((m) => (m.payload)?.text === 'hi'));
 check('incognito not persisted', !bus.pull(local.nodeId).some((m) => m.id === incog.id));
 const inv = chuangjianYaoQing(1000, 'g1');
 check('invite once', shiYongYaoQing(inv) && !shiYongYaoQing(inv));
-check('incog dir', incognitoWorkDir().includes('incog'));
+check('incog dir', niMingGongZuoMuLu().includes('incog'));
 fs.rmSync(busDir, { recursive: true, force: true });
 fs.rmSync(regFile, { force: true });
 

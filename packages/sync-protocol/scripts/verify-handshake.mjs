@@ -18,7 +18,7 @@ import {
   HandshakeDriver,
   IdentityContractError,
   ReplayGuard,
-  SecureChannel,
+  AnQuanTongDao,
   SecureSyncClient,
   SecureSyncServer,
   chuangjianLinShiShenFen,
@@ -296,8 +296,8 @@ async function main() {
     check('KeyUpdate 全程只握手一次', establishedEvents === 2, establishedEvents);
 
     /* ── [6] 无密钥无法解包 ── */
-    const stranger = new SecureChannel(second.session, 'initiator');
-    const victim = new SecureChannel(first.session, 'initiator');
+    const stranger = new AnQuanTongDao(second.session, 'initiator');
+    const victim = new AnQuanTongDao(first.session, 'initiator');
     const victimRecord = victim.sealRecord(Buffer.from('top-secret', 'utf8'));
     let foreignErr = 'no-error';
     try {
@@ -307,8 +307,8 @@ async function main() {
     }
     check('陌生通道解不开他人记录（无会话密钥）', foreignErr === 'not-authorized-tag', foreignErr);
 
-    const chA = new SecureChannel(first.session, 'initiator');
-    const chB = new SecureChannel(first.session, 'responder');
+    const chA = new AnQuanTongDao(first.session, 'initiator');
+    const chB = new AnQuanTongDao(first.session, 'responder');
     const gen0 = chA.sealRecord(Buffer.from('gen0-msg', 'utf8'));
     check('gen0 记录正常解出', chB.openRecords(gen0).toString('utf8') === 'gen0-msg');
     chB.openRecords(chA.requestKeyUpdate());

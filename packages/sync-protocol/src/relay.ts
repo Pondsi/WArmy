@@ -37,28 +37,28 @@ export const DEFAULT_RELAY_SAMPLE_BYTES = 64;
 const RELAY_MAX_LINE = 8 * 1024;
 const RELAY_MAX_SAMPLES = 256;
 
-export type RelayRole = 'listener' | 'dialer';
+export type ZhongJiJueSe = 'listener' | 'dialer';
 /** 'forward' = 老实转发；其余三种是**攻击面验证**用的恶意中继模式 */
-export type RelayMode = 'forward' | 'replay-once' | 'tamper-once' | 'swap-once';
-export type RelayDirection = 'dialer->listener' | 'listener->dialer';
+export type ZhongJiMoShi = 'forward' | 'replay-once' | 'tamper-once' | 'swap-once';
+export type ZhongJiFangXiang = 'dialer->listener' | 'listener->dialer';
 
-export interface RelayHello {
+export interface ZhongJiWenHou {
   t: 'relay-hello';
   v: 1;
   token: string;
-  role: RelayRole;
+  role: ZhongJiJueSe;
   /** 自称的节点指纹：仅用于日志/统计，中继**不据此做任何信任决策** */
   from?: string;
 }
 
-export interface RelayRegistered {
+export interface ZhongJiYiZhuCe {
   t: 'relay-registered';
   v: 1;
   token: string;
-  role: RelayRole;
+  role: ZhongJiJueSe;
 }
 
-export interface RelayReady {
+export interface ZhongJiJiuXu {
   t: 'relay-ready';
   v: 1;
   token: string;
@@ -67,15 +67,15 @@ export interface RelayReady {
 }
 
 /** 中继**看到**的字节样本（十六进制前缀）。用于证明"经中继的只有密文" */
-export interface RelaySample {
+export interface ZhongJiYangBen {
   token: string;
-  direction: RelayDirection;
+  direction: ZhongJiFangXiang;
   bytes: number;
   firstBytesHex: string;
   at: number;
 }
 
-export interface RelayEvent {
+export interface ZhongJiShiJian {
   type: 'register' | 'paired' | 'forward' | 'reject' | 'attack' | 'close';
   token?: string;
   detail?: string;
@@ -83,19 +83,19 @@ export interface RelayEvent {
   ts: number;
 }
 
-export interface RelayNodeOptions {
+export interface ZhongJiJieDianXuanXiang {
   /** 监听端口（0 = 随机） */
   port: number;
   /** 默认 127.0.0.1；真实部署时是"有公网地址的那台机器"的地址 */
   host?: string;
   /** token 授权钩子（默认接受任意非空 token；生产应校验） */
-  authorizeToken?: (token: string, role: RelayRole) => boolean;
+  authorizeToken?: (token: string, role: ZhongJiJueSe) => boolean;
   /** 等待对端配对的上限（超时后向等待方如实回 `paired:false`） */
   pairTimeoutMs?: number;
-  mode?: RelayMode;
+  mode?: ZhongJiMoShi;
   sampleBytes?: number;
   maxPairs?: number;
-  onEvent?: (e: RelayEvent) => void;
+  onEvent?: (e: ZhongJiShiJian) => void;
   now?: () => number;
 }
 
@@ -132,7 +132,7 @@ class LineReader {
 
 interface Half {
   token: string;
-  role: RelayRole;
+  role: ZhongJiJueSe;
   sock: net.Socket;
   reader: LineReader;
   paired: boolean;
@@ -143,7 +143,7 @@ interface Half {
   timer?: NodeJS.Timeout;
 }
 
-function writeLine(sock: net.Socket, obj: RelayRegistered | RelayReady | Record<string, unknown>): void {
+function writeLine(sock: net.Socket, obj: ZhongJiYiZhuCe | ZhongJiJiuXu | Record<string, unknown>): void {
   try {
     sock.write(Buffer.from(`${JSON.stringify(obj)}\n`, 'utf8'));
   } catch {
@@ -163,21 +163,21 @@ interface RelayConn {
 
 /* ────────────────────────────── 中继节点 ────────────────────────────── */
 
-export class RelayNode {
+export class ZhongJiJieDian {
   private server: net.Server | null = null;
   private readonly slots = new Map<string, { listener?: Half; dialer?: Half }>();
-  private readonly sampleLog: RelaySample[] = [];
+  private readonly sampleLog: ZhongJiYangBen[] = [];
   private readonly pairs = new Set<Half>();
   private registered = 0;
   private rejected = 0;
   private pairCount = 0;
   private bytesForwarded = 0;
-  private mode: RelayMode;
+  private mode: ZhongJiMoShi;
   private attackArmed = false;
   private port = 0;
   private readonly now: () => number;
 
-  constructor(private readonly opts: RelayNodeOptions) {
+  constructor(private readonly opts: ZhongJiJieDianXuanXiang) {
     this.mode = opts.mode ?? 'forward';
     this.now = opts.now ?? (() => Date.now());
   }
@@ -206,7 +206,7 @@ export class RelayNode {
     };
   }
   /** 中继"看到"的字节（十六进制前缀）—— 用于断言中继只见到密文 */
-  get samples(): RelaySample[] {
+  get samples(): ZhongJiYangBen[] {
     return this.sampleLog.map((s) => ({ ...s }));
   }
   get allForwardedBytes(): number {
@@ -214,7 +214,7 @@ export class RelayNode {
   }
 
   /** 切换恶意中继模式（攻击面验证用；默认 'forward'） */
-  setMode(mode: RelayMode): void {
+  setMode(mode: ZhongJiMoShi): void {
     this.mode = mode;
     this.attackArmed = false;
   }
@@ -253,7 +253,7 @@ export class RelayNode {
    * 注意：`socket.write()` 返回 false 只表示超过高水位（背压），数据**仍会写出**，
    * 所以这里不能把 false 当成"没写成功"。
    */
-  inject(token: string, direction: RelayDirection, bytes: Buffer): number {
+  inject(token: string, direction: ZhongJiFangXiang, bytes: Buffer): number {
     const target = [...this.pairs].find((h) => h.token === token && h.role === (direction === 'dialer->listener' ? 'listener' : 'dialer'));
     if (!target || target.sock.destroyed) return 0;
     target.sock.write(bytes);
@@ -283,9 +283,9 @@ export class RelayNode {
         return;
       }
       if (line === null) return;
-      let hello: RelayHello;
+      let hello: ZhongJiWenHou;
       try {
-        hello = JSON.parse(line) as RelayHello;
+        hello = JSON.parse(line) as ZhongJiWenHou;
       } catch {
         this.rejectHalf(sock, 'bad-hello-json');
         return;
@@ -383,7 +383,7 @@ export class RelayNode {
     if (listenerPre.length > 0) this.forward(listener, dialer, listenerPre, 'listener->dialer');
   }
 
-  private pipe(from: Half, to: Half, direction: RelayDirection): void {
+  private pipe(from: Half, to: Half, direction: ZhongJiFangXiang): void {
     from.sock.on('data', (chunk: Buffer) => {
       from.bytesIn += chunk.length;
       this.forward(from, to, chunk, direction);
@@ -394,7 +394,7 @@ export class RelayNode {
    * 真正的转发（**唯一**的字节路径）。三种攻击模式只对**第一个**分片生效一次，
    * 之后回到老实转发 —— 这样"篡改/重排/重放被拒"的断言不会被后续流量掩盖。
    */
-  private forward(from: Half, to: Half, chunk: Buffer, direction: RelayDirection): void {
+  private forward(from: Half, to: Half, chunk: Buffer, direction: ZhongJiFangXiang): void {
     const sample = chunk.subarray(0, this.opts.sampleBytes ?? DEFAULT_RELAY_SAMPLE_BYTES);
     if (this.sampleLog.length < RELAY_MAX_SAMPLES) {
       this.sampleLog.push({
@@ -467,15 +467,15 @@ export class RelayNode {
     void reason;
   }
 
-  private emit(e: Omit<RelayEvent, 'ts'> & { ts?: number }): void {
+  private emit(e: Omit<ZhongJiShiJian, 'ts'> & { ts?: number }): void {
     this.opts.onEvent?.({ ...e, ts: e.ts ?? this.now() });
   }
 }
 
 /* ────────────────────────────── 端点侧适配器 ────────────────────────────── */
 
-export interface RelayTunnelStats {
-  role: RelayRole;
+export interface ZhongJiSuiDaoTongJi {
+  role: ZhongJiJueSe;
   token: string;
   relay: DhtDiZhi;
   /** 中继已确认注册 */
@@ -489,7 +489,7 @@ export interface RelayTunnelStats {
   pairedAt?: number;
 }
 
-export interface RelayTunnelOptions {
+export interface ZhongJiSuiDaoXuanXiang {
   /** 中继地址（有公网地址的那台机器） */
   relay: DhtDiZhi;
   /** 配对标签（两端必须算出**同一个**值；见 relayTokenFor） */
@@ -499,12 +499,12 @@ export interface RelayTunnelOptions {
   /** 等中继配对的上限 */
   readyTimeoutMs?: number;
   sampleBytes?: number;
-  onEvent?: (e: RelayEvent) => void;
+  onEvent?: (e: ZhongJiShiJian) => void;
   now?: () => number;
 }
 
 /** 打开一条到中继的连接并完成控制行握手 */
-async function openRelayConn(opts: RelayTunnelOptions, role: RelayRole): Promise<RelayConn> {
+async function openRelayConn(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJueSe): Promise<RelayConn> {
   const timeoutMs = opts.readyTimeoutMs ?? DEFAULT_RELAY_PAIR_TIMEOUT_MS;
   const sock = net.connect({ host: opts.relay.host, port: opts.relay.port });
   const reader = new LineReader();
@@ -544,9 +544,9 @@ async function openRelayConn(opts: RelayTunnelOptions, role: RelayRole): Promise
           return;
         }
         if (raw === null) return;
-        let msg: RelayRegistered | RelayReady | { t?: string };
+        let msg: ZhongJiYiZhuCe | ZhongJiJiuXu | { t?: string };
         try {
-          msg = JSON.parse(raw.subarray(0, raw.length - 1).toString('utf8')) as RelayRegistered | RelayReady | { t?: string };
+          msg = JSON.parse(raw.subarray(0, raw.length - 1).toString('utf8')) as ZhongJiYiZhuCe | ZhongJiJiuXu | { t?: string };
         } catch {
           pendingLines.push(raw);
           continue;
@@ -560,7 +560,7 @@ async function openRelayConn(opts: RelayTunnelOptions, role: RelayRole): Promise
           continue;
         }
         if (msg.t === 'relay-ready') {
-          const ready = msg as RelayReady;
+          const ready = msg as ZhongJiJiuXu;
           if (!ready.paired) {
             sock.destroy();
             done({ ok: false, reason: ready.reason ?? '中继未能配对到对端', paired: false });
@@ -573,7 +573,7 @@ async function openRelayConn(opts: RelayTunnelOptions, role: RelayRole): Promise
       }
     });
     sock.once('connect', () => {
-      const hello: RelayHello = { t: 'relay-hello', v: 1, token: opts.token, role, ...(opts.from ? { from: opts.from } : {}) };
+      const hello: ZhongJiWenHou = { t: 'relay-hello', v: 1, token: opts.token, role, ...(opts.from ? { from: opts.from } : {}) };
       sock.write(Buffer.from(`${JSON.stringify(hello)}\n`, 'utf8'));
     });
     sock.once('close', () => {
@@ -587,16 +587,16 @@ async function openRelayConn(opts: RelayTunnelOptions, role: RelayRole): Promise
  * 适配器就把这条本地连接**经中继**接到对端（对端是已注册的 listener）。
  * 用途：A 要连 B，但 B 不可拨入（双 CGNAT）→ A 也拨不了 B，只能各自出站到中继。
  */
-export class RelayTunnelDialer {
+export class ZhongJiSuiDaoBoHao {
   private server: net.Server | null = null;
   private localPort = 0;
-  private readonly opts: RelayTunnelOptions;
-  private readonly stats: RelayTunnelStats;
+  private readonly opts: ZhongJiSuiDaoXuanXiang;
+  private readonly stats: ZhongJiSuiDaoTongJi;
   private pairWaiters: { resolve: (v: { ok: boolean; reason?: string }) => void; timer: NodeJS.Timeout }[] = [];
-  private readonly sampleLog: RelaySample[] = [];
+  private readonly sampleLog: ZhongJiYangBen[] = [];
   private readonly now: () => number;
 
-  constructor(opts: RelayTunnelOptions) {
+  constructor(opts: ZhongJiSuiDaoXuanXiang) {
     this.opts = opts;
     this.now = opts.now ?? (() => Date.now());
     this.stats = {
@@ -614,10 +614,10 @@ export class RelayTunnelDialer {
   get port(): number {
     return this.localPort;
   }
-  get tunnelStats(): RelayTunnelStats {
+  get tunnelStats(): ZhongJiSuiDaoTongJi {
     return { ...this.stats };
   }
-  get samples(): RelaySample[] {
+  get samples(): ZhongJiYangBen[] {
     return this.sampleLog.map((s) => ({ ...s }));
   }
 
@@ -734,7 +734,7 @@ export class RelayTunnelDialer {
     relaySock.once('close', shutdown);
   }
 
-  private recordSample(token: string, direction: RelayDirection, chunk: Buffer): void {
+  private recordSample(token: string, direction: ZhongJiFangXiang, chunk: Buffer): void {
     if (this.sampleLog.length >= RELAY_MAX_SAMPLES) return;
     this.sampleLog.push({
       token,
@@ -751,10 +751,10 @@ export class RelayTunnelDialer {
  * 配对成功后由适配器**主动拨本机服务**（`localTarget`），然后双向对拷。
  * 这样本机根本不需要接受任何入站连接 —— 正是双 CGNAT 场景需要的。
  */
-export class RelayTunnelListener {
-  private readonly opts: RelayTunnelOptions & { localTarget: DhtDiZhi };
-  private readonly stats: RelayTunnelStats;
-  private readonly sampleLog: RelaySample[] = [];
+export class ZhongJiSuiDaoJianTing {
+  private readonly opts: ZhongJiSuiDaoXuanXiang & { localTarget: DhtDiZhi };
+  private readonly stats: ZhongJiSuiDaoTongJi;
+  private readonly sampleLog: ZhongJiYangBen[] = [];
   private readonly now: () => number;
   private relaySock: net.Socket | null = null;
   private stopped = false;
@@ -763,7 +763,7 @@ export class RelayTunnelListener {
   private readonly sinkPending: Buffer[] = [];
   private pairedFired = false;
 
-  constructor(opts: RelayTunnelOptions & { localTarget: DhtDiZhi }) {
+  constructor(opts: ZhongJiSuiDaoXuanXiang & { localTarget: DhtDiZhi }) {
     this.opts = opts;
     this.now = opts.now ?? (() => Date.now());
     this.stats = {
@@ -778,10 +778,10 @@ export class RelayTunnelListener {
     };
   }
 
-  get tunnelStats(): RelayTunnelStats {
+  get tunnelStats(): ZhongJiSuiDaoTongJi {
     return { ...this.stats };
   }
-  get samples(): RelaySample[] {
+  get samples(): ZhongJiYangBen[] {
     return this.sampleLog.map((s) => ({ ...s }));
   }
 
@@ -818,14 +818,14 @@ export class RelayTunnelListener {
       for (;;) {
         const raw = reader.readLineRaw();
         if (raw === null) break;
-        let msg: RelayReady | { t?: string } | null = null;
+        let msg: ZhongJiJiuXu | { t?: string } | null = null;
         try {
-          msg = JSON.parse(raw.toString('utf8')) as RelayReady | { t?: string };
+          msg = JSON.parse(raw.toString('utf8')) as ZhongJiJiuXu | { t?: string };
         } catch {
           msg = null;
         }
         if (msg && msg.t === 'relay-ready') {
-          if ((msg as RelayReady).paired === true) this.pairedFired = true;
+          if ((msg as ZhongJiJiuXu).paired === true) this.pairedFired = true;
           continue;
         }
         if (msg && (msg.t === 'relay-registered' || msg.t === 'relay-hello')) continue;
@@ -985,7 +985,7 @@ export class RelayTunnelListener {
     });
   }
 
-  private recordSample(token: string, direction: RelayDirection, chunk: Buffer): void {
+  private recordSample(token: string, direction: ZhongJiFangXiang, chunk: Buffer): void {
     if (this.sampleLog.length >= RELAY_MAX_SAMPLES) return;
     this.sampleLog.push({
       token,
@@ -999,7 +999,7 @@ export class RelayTunnelListener {
 
 /* ────────────────────────────── 中继档的判定（阶梯用） ────────────────────────────── */
 
-export type RelayDecisionCode =
+export type ZhongJiJueDingMa =
   /** 对端可拨入 → 直连即可，不需要中继 */
   | 'relay-not-needed-peer-dialable'
   /** 本机可拨入 → 对端能拨进来，不需要中继 */
@@ -1013,19 +1013,19 @@ export type RelayDecisionCode =
   /** 对端可拨入性未知（未收到对端报告）→ 无法判定是否需中继 */
   | 'dialability-unknown';
 
-export interface RelayCandidateRef {
+export interface ZhongJiHouXuanYinYong {
   fingerprint?: string;
   nodeId?: string;
   /** 中继节点的地址（真实部署时 = 有公网地址的那台机器） */
   addr: DhtDiZhi;
 }
 
-export interface RelayDecision {
+export interface ZhongJiJueDing {
   /** 是否"需要中继才算出路"（两端都不可拨入 / 对端可拨入性未知） */
   needed: boolean;
   /** 是否真的选中并**验证到**可用中继 */
   selected: boolean;
-  code: RelayDecisionCode;
+  code: ZhongJiJueDingMa;
   reason: string;
   selfDialable?: boolean;
   peerDialable?: boolean;
@@ -1047,14 +1047,14 @@ export interface RelayDecision {
   needsPublicRelayNotice: boolean;
 }
 
-export interface RelayDecisionOptions {
+export interface ZhongJiJueDingXuanXiang {
   /** 本机可拨入？（来自 DialabilityProbe；undefined = 未知） */
   selfDialable?: boolean;
   /** 对端可拨入？（对端报告的；undefined = 未知） */
   peerDialable?: boolean;
   /** **本机指纹**：配对 token 必须由"双方指纹 + 中继地址"推出，缺了它两端算不出同一个值 */
   selfFingerprint?: string;
-  candidates: RelayCandidateRef[];
+  candidates: ZhongJiHouXuanYinYong[];
   dialTcp?: (host: string, port: number, timeoutMs: number) => Promise<{ ok: boolean; detail?: string }>;
   timeoutMs?: number;
   now?: () => number;
@@ -1064,7 +1064,7 @@ export interface RelayDecisionOptions {
  * 配对 token：**两端确定性算出同一个值**（无带外通道）。
  * 刻意不含时间因素：换窗口会导致"两端窗口不一致就配不上"；重放风险由端到端加密与单调计数兜住。
  */
-export function relayTokenFor(fingerprintA: string, fingerprintB: string, relay: DhtDiZhi): string {
+export function quZhongJiLingPai(fingerprintA: string, fingerprintB: string, relay: DhtDiZhi): string {
   const pair = [fingerprintA, fingerprintB].sort().join('|');
   return sha256Hex(Buffer.from(`${RELAY_PROTOCOL}|token|${pair}|${relay.host}:${relay.port}`, 'utf8')).slice(0, 32);
 }
@@ -1098,8 +1098,8 @@ async function defaultDial(host: string, port: number, timeoutMs: number): Promi
  */
 export async function jueDingZhongJi(
   target: { fingerprint: string; nodeId?: string },
-  opts: RelayDecisionOptions
-): Promise<RelayDecision> {
+  opts: ZhongJiJueDingXuanXiang
+): Promise<ZhongJiJueDing> {
   const now = opts.now ?? (() => Date.now());
   const timeoutMs = opts.timeoutMs ?? 2000;
   const dial = opts.dialTcp ?? defaultDial;
@@ -1112,7 +1112,7 @@ export async function jueDingZhongJi(
     peerDialable,
     bothUndialable,
     tokenSymmetric,
-    attempts: [] as RelayDecision['attempts'],
+    attempts: [] as ZhongJiJueDing['attempts'],
     needsPublicRelayNotice: false,
   };
 
@@ -1178,7 +1178,7 @@ export async function jueDingZhongJi(
         code: 'relay-selected',
         relay: c.addr,
         // 两端各用「自己指纹 + 对方指纹 + 中继地址」算，因 relayTokenFor 内部排序 ⇒ 两端必得同一个值
-        ...(tokenSymmetric ? { token: relayTokenFor(opts.selfFingerprint as string, target.fingerprint, c.addr) } : {}),
+        ...(tokenSymmetric ? { token: quZhongJiLingPai(opts.selfFingerprint as string, target.fingerprint, c.addr) } : {}),
         reason: `两端都不可拨入，已选中继 ${c.addr.host}:${c.addr.port}（经中继：更慢，但可用）`,
       };
     }
@@ -1194,7 +1194,7 @@ export async function jueDingZhongJi(
 }
 
 /** 给上层（阶梯/UI）用的可读结论码 → i18n key 建议（不拼文案，只给 key） */
-export const RELAY_STATUS_I18N: Record<RelayDecisionCode, string> = {
+export const RELAY_STATUS_I18N: Record<ZhongJiJueDingMa, string> = {
   'relay-not-needed-peer-dialable': 'net.relay.notNeeded.peerDialable',
   'relay-not-needed-inbound-expected': 'net.relay.notNeeded.inboundExpected',
   'relay-selected': 'net.relay.selected',

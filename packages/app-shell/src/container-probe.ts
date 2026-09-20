@@ -36,7 +36,13 @@ export type ContainerProbeStatus =
   | 'installed-not-running'
   | 'ready'
   | 'engine-error'
-  | 'unsupported-platform';
+  | 'unsupported-platform'
+  /**
+   * **本轮没探它**（调用方用 `only` 指定了范围）。存在的意义：探测有副作用
+   * （WSL 那一步会启动发行版），所以"没探"必须是一个**显式状态**，
+   * 而不是伪装成"未安装/未运行" —— 那两种说法都是**关于事实的断言**，没探就不配说。
+   */
+  | 'not-probed';
 
 /** 列表里的运行态（两态为主，另外两个单列，不强归） */
 export type ContainerRunState = 'running' | 'not-running' | 'error' | 'unsupported';
@@ -183,6 +189,21 @@ export interface ContainerProbeOptions {
   perProbeTimeoutMs?: number;
   /** 并发上限（默认 4） */
   concurrency?: number;
+  /**
+   * **只探这些运行时**（缺省 = 全探）。
+   *
+   * 为什么必须要有它：探测是**有副作用**的 —— 例如 WSL 的探测要 `wsl -d <发行版> -- true`，
+   * 那一步会**把发行版真的启动起来**。于是"打开一个项目会话 → 查容器是否就绪"这种动作
+   * 会顺带把 WSL 拉起来（用户实测："打开新窗口为什么会触发打开 WSL"）。
+   * 现在只探**这个项目真正在用的那个运行时**，别的都不碰。
+   */
+  only?: string[];
+  /**
+   * **允许启动发行版/引擎的深探测**。缺省 false：
+   *  - WSL 发行版处于 Stopped 时，只如实报告"未运行"，**不代为启动**；
+   *  - 只有用户显式点「查看本机已有容器」这类动作才传 true（那是他要求的，代价他知情）。
+   */
+  deep?: boolean;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1077,6 +1098,8 @@ function runStateOf(status: ContainerProbeStatus): ContainerRunState {
   if (status === 'ready') return 'running';
   if (status === 'installed-not-running') return 'not-running';
   if (status === 'unsupported-platform') return 'unsupported';
+  // 没探过 ⇒ 既不能说"在跑"也不能说"出错"，归到 unsupported（UI 会显示"未探测"）
+  if (status === 'not-probed') return 'unsupported';
   return 'error'; // not-installed 不会进列表；engine-error 单独标
 }
 
@@ -1227,7 +1250,7 @@ async function podmanMachineNames(): Promise<string[]> {
 }
 
 /** WSL：`wsl.exe -l -v`（有无发行版）+ `wsl.exe --version`；输出是 UTF-16LE */
-async function probeWsl(timeout: number): Promise<ProbeOutcome> {
+async function probeWsl(timeout: number, deep: boolean): Promise<ProbeOutcome> {
   const ver = await execProbe('wsl.exe', ['--version'], timeout);
   if (ver.missing) return { status: 'not-installed', detail: 'cli-not-found' };
   const version = firstVersion(`${ver.out} ${ver.err}`, VER_WSL) || compact(ver.out, 30);
@@ -1246,10 +1269,32 @@ async function probeWsl(timeout: number): Promise<ProbeOutcome> {
       lifecycle,
     };
   }
-  // 有发行版：真的进去跑一句 `true`（只读、不改任何东西）才算"可用"
-  const probe = await execProbe('wsl.exe', ['-d', distros[0] as string, '--', 'true'], Math.max(timeout, 8000));
+  /**
+   * **绝不"为了探测"把发行版启动起来**（用户实测的问题："打开新窗口为什么会触发打开 WSL"）。
+   *
+   * 以前这里无条件跑 `wsl -d <发行版> -- true` —— 那一步会真的启动发行版（连带 WSL 服务/虚拟机）。
+   * 现在改成**先看 `-l -v` 里的真实状态**：
+   *   · 已经在 Running ⇒ 可以顺手用 `-- true` 复核（此时启动代价为 0，它本来就活着）；
+   *   · 是 Stopped ⇒ 如实报"未运行"，**不代启动**；只有调用方显式 `deep: true`
+   *     （用户自己点了"探测"这类动作）才进去跑那一句。
+   * 结论：**看状态不等于启动它**。
+   */
+  const states = parseWslDistroStates(list.out);
+  const first = distros[0] as string;
+  const firstState = states.find((d) => d.name === first);
+  const running = !!firstState?.running;
+  if (!running && !deep) {
+    return {
+      status: 'installed-not-running',
+      version,
+      detail: `distro-not-running:${first}`,
+      evidence: compact(`wsl -l -v ⇒ ${first} ${firstState ? (firstState.raw || 'Stopped') : 'unknown'}；未代为启动（避免无谓启动 WSL）`),
+      lifecycle,
+    };
+  }
+  const probe = await execProbe('wsl.exe', ['-d', first, '--', 'true'], Math.max(timeout, 8000));
   if (probe.ok) {
-    return { status: 'ready', version, detail: `distro=${distros[0]}`, lifecycle };
+    return { status: 'ready', version, detail: `distro=${first}`, lifecycle };
   }
   return {
     status: 'installed-not-running',
@@ -1258,6 +1303,23 @@ async function probeWsl(timeout: number): Promise<ProbeOutcome> {
     evidence: compact(`${probe.err} ${probe.out}`) || 'wsl distro did not start',
     lifecycle,
   };
+}
+
+/** 从 `wsl -l -v` 的输出里解析每个发行版的**真实状态**（Running / Stopped），不启动任何东西 */
+export function parseWslDistroStates(out: string): Array<{ name: string; running: boolean; raw: string }> {
+  const rows: Array<{ name: string; running: boolean; raw: string }> = [];
+  for (const raw of String(out || '').split(/\r?\n/)) {
+    const line = raw.replace(/\u0000/g, '').trim();
+    if (!line || /^NAME\s+STATE\s+VERSION/i.test(line)) continue;
+    if (/没有已安装的分发|no installed distributions/i.test(line)) continue;
+    const cols = line.split(/\s{2,}|\t/).map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
+    if (cols.length < 2) continue;
+    const name = cols[0] as string;
+    const state = String(cols[1] || '');
+    if (!name || /^NAME$/i.test(name)) continue;
+    rows.push({ name, running: /running/i.test(state), raw: state });
+  }
+  return rows;
 }
 
 /** `wsl -l -v` 的表格：NAME STATE VERSION（第一列是名字，*, 前缀表示默认发行版） */
@@ -1436,7 +1498,7 @@ async function probeKata(timeout: number): Promise<ProbeOutcome> {
   return { status: 'ready', version, detail: 'isolation-level-only', evidence: '不是独立引擎：需配合 docker / containerd 使用' };
 }
 
-const PROBES: Record<string, (timeout: number) => Promise<ProbeOutcome>> = {
+const PROBES: Record<string, (timeout: number, deep: boolean) => Promise<ProbeOutcome>> = {
   docker: probeDocker,
   podman: probePodman,
   wsl: probeWsl,
@@ -1468,12 +1530,28 @@ export function lastContainerProbeReport(): ContainerProbeReport | null {
 export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): Promise<ContainerProbeReport> {
   const platform = opts.platform || process.platform;
   const cacheMs = typeof opts.cacheMs === 'number' ? opts.cacheMs : 8000;
-  if (cacheMs > 0 && cache && cache.report.platform === platform && Date.now() - cache.at < cacheMs) {
+  const onlyList = Array.isArray(opts.only) && opts.only.length ? opts.only.map((x) => String(x)) : null;
+  /**
+   * 缓存只有在**覆盖了本次要求的范围**时才能复用：
+   * 上一次可能只探了 docker，现在要 wsl —— 那份报告里 wsl 是 `not-probed`，
+   * 直接复用会把它当成"未运行"，那是**拿"没探"冒充"事实"**。
+   */
+  const cacheCovers = (rep: ContainerProbeReport): boolean => {
+    if (!onlyList) return true;
+    const rows = rep.runtimes || [];
+    return onlyList.every((id) => {
+      const r = rows.find((x) => x.id === id);
+      return !!r && r.status !== 'not-probed';
+    });
+  };
+  if (cacheMs > 0 && cache && cache.report.platform === platform && Date.now() - cache.at < cacheMs && cacheCovers(cache.report)) {
     return { ...cache.report, cached: true, pendingActions: pendingActionList() };
   }
   const timeout = Math.max(1000, Math.min(opts.perProbeTimeoutMs ?? 5000, 30000));
   const concurrency = Math.max(1, Math.min(opts.concurrency ?? 4, CONTAINER_RUNTIME_SPECS.length));
   const t0 = Date.now();
+  const onlySet = Array.isArray(opts.only) && opts.only.length ? new Set(opts.only.map((x) => String(x))) : null;
+  const deep = opts.deep === true;
 
   const entries = await mapBound(CONTAINER_RUNTIME_SPECS, concurrency, async (spec): Promise<ContainerRuntimeEntry> => {
     const started = Date.now();
@@ -1481,6 +1559,21 @@ export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): 
       id: spec.id,
       engine: { kind: spec.engineKind, api: spec.api },
     };
+    /**
+     * `only` 之外的运行时**不探**：如实标成 `not-probed`，
+     * 绝不为了"报告完整"去跑一个会启动引擎/发行版的命令。
+     */
+    if (onlySet && !onlySet.has(spec.id)) {
+      return {
+        ...base,
+        status: 'not-probed',
+        run: 'unsupported',
+        detail: 'not-probed:not-requested',
+        capability: { ...CAP_NONE },
+        lifecycle: { startable: false, stoppable: false, reason: 'unsupported-platform', waitMs: 0, awaitReady: false },
+        probeMs: 0,
+      };
+    }
     // 平台不适用：**直接跳过探测并说明**（不 spawn，省成本）
     if (!spec.platforms.includes(platform)) {
       return {
@@ -1496,7 +1589,7 @@ export async function probeContainerRuntimes(opts: ContainerProbeOptions = {}): 
     const fn = PROBES[spec.id];
     let outcome: ProbeOutcome;
     try {
-      outcome = fn ? await fn(timeout) : { status: 'not-installed', detail: 'no-probe' };
+      outcome = fn ? await fn(timeout, deep) : { status: 'not-installed', detail: 'no-probe' };
     } catch (e) {
       // 探测器自己出错也必须如实报（不能静默变成"未安装"）
       outcome = { status: 'engine-error', detail: 'probe-threw', evidence: compact(String((e as Error)?.message || e)) };

@@ -117,8 +117,13 @@ const wsl = by.wsl;
 ok(!!wsl, '2-2 有 wsl 一行');
 ok(DOCKER_STATES.includes(wsl.status),
   '2-2a 【核心】wsl 同样只允许「已安装未运行」或「可用」两态（命令在就不许报 no-distro 之外的第三种）', wsl.status);
-ok(/no-distro|distro-start|^distro=/.test(String(wsl.detail)),
-  '2-2b 原因码说明到底是"没有发行版"还是"发行版可用"（不是"命令不在"）', wsl.detail);
+/**
+ * 第十七批修正：WSL 的探测**不再为了探测而启动发行版**（用户实测"打开新窗口会拉起 WSL"）。
+ * 所以原因码多了 `distro-not-running:<name>` —— 它如实说明"发行版存在但没在跑，
+ * 我们没有替你启动它"，而不是含糊的"命令不在"或假装"启动失败"。
+ */
+ok(/no-distro|distro-start|distro-not-running|^distro=/.test(String(wsl.detail)),
+  '2-2b 原因码说明到底是"没有发行版"还是"发行版可用/未运行"（不是"命令不在"）', wsl.detail);
 ok(wsl.engine.kind === 'linux-vm', '2-2c 【诚实】wsl 的能力类别是 linux-vm（**不是**容器引擎）', wsl.engine.kind);
 ok(wsl.capability.runCommand === (wsl.status === 'ready'),
   '2-2d 【核心】能力声明与就绪状态**严格一致**（ready ⇒ 真能跑；没就绪 ⇒ 一律 false，不吹牛）',

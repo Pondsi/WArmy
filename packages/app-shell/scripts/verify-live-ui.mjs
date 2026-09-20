@@ -137,24 +137,58 @@ async function main() {
       const g = (s) => document.querySelector(s);
       const sel = g('#prov-preset');
       const opts = sel ? Array.from(sel.options).map((o) => o.textContent.trim()) : [];
+      const values = sel ? Array.from(sel.options).map((o) => o.value) : [];
       const add = g('#btn-add-prov');
       const before = document.querySelectorAll('#prov-list .prov-card').length;
-      if (add) add.click();
-      return { presetExists: !!sel, optionCount: opts.length, options: opts, before, hasCount: !!g('#prov-count') };
+      return { presetExists: !!sel, optionCount: opts.length, options: opts, values, before, hasCount: !!g('#prov-count'),
+        placeholder: values[0] === '', firstReal: values[1], secondReal: values[2] };
     })()`);
-    check('供应商：有预设下拉且含 ≥10 项', provDom.presetExists && provDom.optionCount >= 10, provDom);
+    check('供应商：有预设下拉且含 ≥10 项', provDom.presetExists && provDom.optionCount >= 11, provDom);
     check('供应商：有计数显示（n/50）', provDom.hasCount === true, provDom);
-    await sleep(900);
-    const provAfter = await c.evaluate(`(function(){
+    // 下拉形态（产品要求）：**首项是占位提示**、DeepSeek 排第一、其余按名称排序
+    check('供应商下拉：首项是"选择要添加的供应商"占位项', provDom.options[0] === '选择要添加的供应商', provDom.options.slice(0, 3));
+    check('供应商下拉：DeepSeek 固定第一（占位项之后）', provDom.firstReal === 'deepseek', provDom.values.slice(0, 4));
+    const restLabels = provDom.options.slice(2).filter((x) => x && !x.startsWith('其他'));
+    /**
+     * 排序按**界面语言**的排序规则（中文界面 ⇒ 中文按拼音、拉丁按字母）。
+     * 这里在**页面里**用同一条比较函数算一次期望顺序再比对 ——
+     * 跨引擎（Node 的 ICU vs Chromium）对中文/拉丁混排的细节可能不同，
+     * 用同一个引擎才有意义，否则是拿两把尺子量同一件事。
+     */
+    const orderOk = await c.evaluate(`(function(){
+      const sel = document.querySelector('#prov-preset');
+      if (!sel) return null;
+      const labels = Array.from(sel.options).map((o) => o.textContent.trim()).slice(2).filter((x) => x && !x.startsWith('其他'));
+      const sorted = labels.slice().sort((a, b) => a.localeCompare(b, 'zh-CN'));
+      return { ok: labels.join('\\u0001') === sorted.join('\\u0001'), labels: labels.slice(0, 4), sorted: sorted.slice(0, 4) };
+    })()`).catch(() => null);
+    check('供应商下拉：其余项按名称升序（按界面语言的排序规则，页内同口径比对）',
+      !!orderOk && orderOk.ok === true, orderOk || restLabels.slice(0, 4));
+    // 未选择时点「添加」⇒ 只提示、不加卡片（占位项不是选择）
+    const noPick = await c.evaluate(`(function(){
+      const g = (s) => document.querySelector(s);
+      const before = document.querySelectorAll('#prov-list .prov-card').length;
+      g('#btn-add-prov')?.click();
+      return { before, after: document.querySelectorAll('#prov-list .prov-card').length, alertVisible: !!document.querySelector('.modal, .dlg, [data-ui-alert]') };
+    })()`);
+    await sleep(500);
+    check('供应商：没选供应商就点「添加」⇒ 不加卡片（先让用户选）', noPick.after === noPick.before, noPick);
+    // 选一家再加：卡片 +1，且下拉复位到占位项
+    const provAfter = await c.evaluate(`(async function(){
+      const g = (s) => document.querySelector(s);
+      const sel = g('#prov-preset');
+      if (sel) { sel.value = 'groq'; sel.dispatchEvent(new Event('change')); }
+      g('#btn-add-prov')?.click();
+      await new Promise((r) => setTimeout(r, 400));
       const cards = document.querySelectorAll('#prov-list .prov-card').length;
       const count = (document.querySelector('#prov-count') || {}).textContent || '';
-      // 特殊模型只能选供应商里已存在的模型：没有模型时只能是占位项
       const sm = document.querySelector('select[data-special]');
       const smOpts = sm ? Array.from(sm.options).map((o) => o.value).filter((v) => v !== '') : [];
-      return { cards, count, smOptions: smOpts };
+      return { cards, count, smOptions: smOpts, presetValue: (g('#prov-preset') || {}).value };
     })()`);
     check('供应商：点「添加」后卡片数 +1', provAfter.cards > provDom.before, { before: provDom.before, after: provAfter.cards });
     check('供应商：计数随卡片更新', String(provAfter.count).includes('/50'), provAfter.count);
+    check('供应商：添加成功后下拉**复位**到占位项', provAfter.presetValue === '', provAfter.presetValue);
     check('特殊模型：供应商无模型时不给可选项（第 8 条）', provAfter.smOptions.length === 0, provAfter);
 
     // 清理：把刚加的空供应商删掉，避免影响后续断言
@@ -230,9 +264,9 @@ async function main() {
       const labels = cards.map((x) => { const h = x.querySelector('.prov-head'); return h ? h.textContent.trim() : ''; });
       return { count: cards.length, first: String(first || '').trim(), labels };
     })()`);
+    // 刚加的是 Groq ⇒ 它必须排在最上面（列表倒序：新添加的在上）
     check('供应商：新添加的排在最上面（列表倒序）',
-      orderDom.count > 0 && orderDom.first === orderDom.labels[0] && /_\\d+$|DeepSeek/i.test(orderDom.first),
-      orderDom.labels.slice(0, 4));
+      orderDom.count > 0 && /^Groq/.test(String(orderDom.first || '')), orderDom.labels.slice(0, 3));
     const persisted = await c.evaluate(`(async function(){
       try {
         const r = await window.warmy.settingsGet();
@@ -301,6 +335,52 @@ async function main() {
     })()`);
     check('容器实例区：引擎未启动时「查看/创建」按钮为 disabled（点不动）',
       instDom.bad === 0, instDom);
+
+    // ── 3h. 容器三块都是**折叠**（本机已有容器 / 镜像 / 常用容器安装说明），且用箭头指示 ──
+    const folds = await c.evaluate(`(function(){
+      const ids = ['container-existing-collapse', 'container-images-collapse', 'container-guide-collapse'];
+      const out = {};
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        const sum = el ? el.querySelector('summary') : null;
+        out[id] = {
+          details: !!el && el.tagName.toLowerCase() === 'details',
+          caret: !!(sum && sum.querySelector('.ctg-caret')),
+          titleNotEmpty: !!(sum && (sum.textContent || '').trim().length > 0),
+        };
+      }
+      return out;
+    })()`);
+    const foldIds = Object.keys(folds);
+    check('容器：三块（本机已有容器 / 镜像 / 安装说明）都是折叠块且标题非空',
+      foldIds.every((k) => folds[k].details && folds[k].titleNotEmpty), folds);
+    check('容器：折叠块用**箭头**（.ctg-caret），不是文字提示',
+      foldIds.every((k) => folds[k].caret), folds);
+    const caretCss = await c.evaluate(`(function(){
+      const hit = Array.from(document.styleSheets).some((ss) => {
+        try { return Array.from(ss.cssRules).some((r) => r.cssText && r.cssText.includes('.ctg-caret') && r.cssText.includes('rotate')); } catch (e) { return false; }
+      });
+      return { rotate: hit };
+    })()`);
+    check('容器：展开后箭头会翻转（CSS 有 [open] 旋转规则）', caretCss.rotate === true, caretCss);
+
+    // ── 3i. 我的页：品牌 logo 与名称**上下排列**、用户资料**一列** ──
+    await c.evaluate(`(function(){ document.querySelector('#rail [data-nav="me"]')?.click(); return true; })()`);
+    await sleep(900);
+    const meLayout = await c.evaluate(`(function(){
+      const logo = document.querySelector('.me-brand .brand-logo');
+      const txt = document.querySelector('.me-brand .me-brand-text');
+      const strip = document.querySelector('.me-strip');
+      const lb = logo ? logo.getBoundingClientRect() : null;
+      const tb = txt ? txt.getBoundingClientRect() : null;
+      const stacked = !!(lb && tb && tb.top >= lb.bottom - 4);
+      const stripCol = !!strip && getComputedStyle(strip).flexDirection === 'column';
+      const big = !!(lb && lb.width >= 110 && lb.height >= 110);
+      return { stacked, stripCol, big, logoW: lb ? Math.round(lb.width) : 0 };
+    })()`);
+    check('我的页：logo 与名称上下排列', meLayout.stacked === true, meLayout);
+    check('我的页：logo 比原来大（≥110px）', meLayout.big === true, meLayout);
+    check('我的页：用户资料是一列（不再是两列）', meLayout.stripCol === true, meLayout);
 
     // ── 4. 我的页：无保存按钮、邮箱输入存在 ──
     await c.evaluate(`(function(){ try { document.querySelector('#rail [data-nav="me"]').click(); } catch(e){} return true; })()`);
@@ -449,18 +529,44 @@ async function main() {
     check('独立窗：右栏可见', subDom.panelCol === 'visible', subDom);
     check('独立窗：保留可拖标题栏', subDom.titlebar === 'visible', subDom);
     check('独立窗：不显示整页(设置/看板)', subDom.pageLayout !== 'visible', subDom);
+    /**
+     * 产品要求：独立会话窗里**不该再有「在新窗口打开」** ——
+     * 这个窗口本来就是"该会话的窗口"，再开一个只会得到重复视图。
+     */
+    const subMenu = await c.evaluate(`(function(){
+      const mi = document.getElementById('mi-open');
+      if (!mi) return { exists: false };
+      const hidden = mi.classList.contains('hidden') || mi.offsetParent === null;
+      const txt = (mi.textContent || '').trim();
+      return { exists: true, hidden, txt };
+    })()`);
+    check('独立窗：⋯ 菜单里「在新窗口打开」已隐藏（该窗口本身就是这个会话）',
+      subMenu.exists === true && subMenu.hidden === true, subMenu);
 
-    // ── 7. 设备 ID = **身份凭证**（base56、45 位、256 bit）——
-    //      ID 即私钥、公钥指纹才是给别人的；旧 9 位数字已不再兼容（产品主定稿） ──
+    /**
+     * 同一会话：两个窗口必须能从**主进程**读到同一份消息（那里是唯一事实来源），
+     * 并且必须有"日志一变就通知其它窗口"的推送通道（否则新窗口永远看不到后续消息）。
+     */
+    const sameLog = await c.evaluate(`(async function(){
+      try {
+        const r = await window.warmy.chatMessages({ sessionId: '${gid}' });
+        const push = typeof window.warmy.onChatUpdated === 'function' && typeof window.warmy.onSettingsChanged === 'function';
+        return { ok: !!(r && r.ok), sid: r && r.sessionId, push };
+      } catch (e) { return { err: String(e) }; }
+    })()`).catch(() => null);
+    check('独立窗：消息通道可用（打开即从主进程读到同一份记录）',
+      !!sameLog && sameLog.ok === true && sameLog.sid === gid, sameLog);
+    check('独立窗：有跨窗口推送通道（日志变化 / 设置变化都会通知其它窗口）',
+      !!sameLog && sameLog.push === true, sameLog);
+
+    // ── 7. 设备 ID = **身份凭证**（51 位、数字+**大写**字母、去掉 I/O/Z、256 bit）──
+    //      ID 即私钥、公钥指纹才是给别人的；历史 9/17 位数字与 UUID 会在启动时被升级掉
     const idInfo = await c.evaluate(`(async function(){ try { const r = await window.warmy.appInfo(); return { deviceId: r && r.deviceId, valid: r && r.deviceIdValid }; } catch(e) { return { err: String(e) }; } })()`);
     const idStr = String((idInfo && idInfo.deviceId) || '');
-    // 去掉易混的 I/O/Z（含小写）后的 56 个符号，定长 45 位
-    const isCredential = /^[0-9ABCDEFGHJKLMNPQRSTUVWXYabcdefghjklmnpqrstuvwxy]{45}$/.test(idStr);
-    // 兼容：上一版 UUIDv4 与更早的 17 位十进制（老配置不会被判无效而重新生成身份）
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idStr);
-    const isLegacy17 = /^[1-9][0-9]{16}$/.test(idStr);
-    check('设备 ID 为 45 位凭证(base56 去 I/O/Z，即私钥) 或兼容的旧格式，且校验通过', (isCredential || isUuid || isLegacy17) && !!idInfo && idInfo.valid === true, idInfo);
-    check('凭证不含易混字符 I / O / Z', !/[IOZioz]/.test(idStr) || isUuid || isLegacy17, idStr);
+    const isCredential = /^[0-9ABCDEFGHJKLMNPQRSTUVWXY]{51}$/.test(idStr);
+    check('设备 ID 为 51 位凭证（数字+大写字母，去掉 I/O/Z）', isCredential, { len: idStr.length });
+    check('凭证里没有小写字母，也没有易混的 I / O / Z', !/[a-zIOZ]/.test(idStr), idStr.slice(0, 12) + '…');
+    check('设备 ID 校验通过（ID 即私钥，格式必须严格）', !!idInfo && idInfo.valid === true, idInfo.valid);
 
     // ── 8. 运行时版本：应用内 Node 必须 >= 24 LTS（Electron 40+ 才自带 Node 24） ──
     const ver = await c.evaluate(`(async function(){ try { const r = await window.warmy.appInfo(); return { node: r && r.node, electron: r && r.electron, chrome: r && r.chrome }; } catch(e) { return { err: String(e) }; } })()`);

@@ -129,10 +129,10 @@ import { readJsonFile, sweepTempFiles, writeJsonAtomicSafe } from './atomic-json
  * **不是**落到本机设置里（产品主：记录文件的改动是无限牛马的功能，不是本机的功能）。
  */
 import { setFileAccessSink, withFileAccessScope, currentFileAccessScope } from './helper-tool.js';
-import { NodeRegistry, SyncBus, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
+import { JieDianMingCe, SyncBus, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@warmy/dsh-runtime';
 // 组网：**鉴权通道**（SecureSyncServer/Client + 名册 + 持久化重放防护），旧 lan.ts/mesh.ts 只留数据层 PeerRegistry
-import { PeerRegistry } from '@warmy/sync-protocol';
+import { DuiDuanMingCe } from '@warmy/sync-protocol';
 import {
   NET_NOTES,
   SecureMesh,
@@ -359,7 +359,7 @@ let identityStore: IdentityStore | null = null;
 let groupStore: GroupStore | null = null;
 /** 自动更新（真实查询 + 真实下载校验；安装未实现） */
 let updater: Updater | null = null;
-let nodeReg: NodeRegistry | null = null;
+let nodeReg: JieDianMingCe | null = null;
 let syncBus: SyncBus | null = null;
 const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
 let lastError: { ts: number; message: string; context?: string } | null = null;
@@ -372,7 +372,7 @@ let approvalSeq = 0;
  */
 let secureMesh: SecureMesh | null = null;
 let localNodeId = 'node-local';
-let peerReg: PeerRegistry | null = null;
+let peerReg: DuiDuanMingCe | null = null;
 /**
  * 本体协作层：任务/目录/文件租约（进程内唯一权威实例）。
  * 只保护"写入前的声明"：拿到租约才能写；写完释放。见 `lease.ts` 的接线说明。
@@ -455,6 +455,28 @@ function chatMessagesOf(key: string): LiaoTianXiaoXi[] {
  * **唯一写入点**：只有这样，"chatHistories 与 chatLogs 是同一份东西"才是结构性成立的，
  * 而不是靠每个调用点自觉（历史 bug 就是两处各自 push，重启后一起清零、与 JSONL 脱节）。
  */
+/**
+ * **跨窗口广播**：主窗口与独立会话窗是同一份数据的两个视图，
+ * 必须都收到同一份变化通知（否则"在新窗口里发的消息，主界面看不到"）。
+ *
+ * `exceptId` = 发起方自己的 webContents.id：跳过它，避免自己触发自己再渲染一遍。
+ */
+function broadcastToWindows(channel: string, payload: unknown, exceptId?: number): void {
+  try {
+    for (const w of BrowserWindow.getAllWindows()) {
+      try {
+        if (w.isDestroyed()) continue;
+        if (exceptId !== undefined && w.webContents.id === exceptId) continue;
+        w.webContents.send(channel, payload);
+      } catch {
+        /* 窗口正在销毁：丢一条通知不影响主流程 */
+      }
+    }
+  } catch {
+    /* 广播绝不冒泡到调用方 */
+  }
+}
+
 function appendChatLog(key: string, entry: LogEntry): void {
   const arr = chatLogs.get(key);
   if (arr) arr.push(entry);
@@ -462,6 +484,14 @@ function appendChatLog(key: string, entry: LogEntry): void {
   const mirror = chatHistories.get(key);
   if (mirror) mirror.push({ role: entry.role, content: entry.content });
   else chatHistories.set(key, [{ role: entry.role, content: entry.content }]);
+  /**
+   * 日志一写就**播给所有窗口**：对方（另一个窗口）据此重新拉一次该会话的日志。
+   * 只带 sessionId 与 seq，不带正文 —— 正文仍由渲染层按既有通道回读，
+   * 保证"看到的就是日志里那份"，不会出现第二个真相。
+   */
+  try {
+    broadcastToWindows('warmy:chat-updated', { sessionId: key, seq: (entry as { seq?: number }).seq ?? null, ts: Date.now() });
+  } catch { /* noop */ }
 }
 
 /** 读会话历史（缺镜像时按需从日志派生，绝不返回第二份真相） */
@@ -1094,9 +1124,9 @@ async function bootstrap() {
   // 群骨架恢复之后再灌队列快照（否则 createGroup 会把 queues Map 清空）
   restoreRouterQueues();
   boot(`router queues restored file=routerQueuesFile() || 'n/a'`);
-  nodeReg = new NodeRegistry(path.join(userData, 'nodes.json'));
+  nodeReg = new JieDianMingCe(path.join(userData, 'nodes.json'));
   syncBus = new SyncBus(path.join(userData, 'bus'));
-  peerReg = new PeerRegistry(path.join(userData, 'peers.json'));
+  peerReg = new DuiDuanMingCe(path.join(userData, 'peers.json'));
   if (!nodeReg.list().some((n) => n.isLocal)) {
     nodeReg.registerLocal('local');
   }
@@ -1113,12 +1143,39 @@ async function bootstrap() {
   });
   try {
     const profile = accountStore.loadProfile();
-    // 旧 9 位 deviceId 降级为**人读别名**（附 ADR §2.2：ID 不再是身份，身份是指纹）
-    // 凭证即私钥：新身份由 profile 里的凭证派生（老身份文件已存在则原样加载）
+    /**
+     * 凭证即私钥：身份由 profile 里的凭证派生（老身份文件已存在则原样加载）。
+     *
+     * **历史 ID 升级**：`loadProfile()` 会把 9 位 / 17 位数字、UUID 这类**不是密钥种子**的
+     * 老 ID 换成真凭证（并记下 `deviceIdUpgradedFrom`）。既然身份必须由凭证派生，
+     * 这里就要把身份**按新凭证重建**（旧身份文件先备份，绝不静默丢弃），
+     * 否则会出现"ID 与身份不是同一把密钥"——那等于产品承诺的"ID 即私钥"不成立。
+     */
     const bootCredential = profile.deviceId || generateDeviceId();
+    const upgradedFrom = String(profile.deviceIdUpgradedFrom || '');
     const idInit = identityStore.ensureIdentity(bootCredential, {
       email: profile.email || '',
     }, { credential: bootCredential });
+    if (idInit.ok && upgradedFrom) {
+      try {
+        const rebuilt = identityStore.restoreFromCredential(bootCredential, profile.username || undefined);
+        if (rebuilt.ok) {
+          /**
+           * 升级**只做一次**：清掉标记并落盘，否则每次启动都会重建身份 + 多一个备份文件。
+           */
+          try {
+            const { deviceIdUpgradedFrom: _done, ...rest } = profile;
+            accountStore.saveProfile(rest as never);
+          } catch { /* 清标记失败不致命：最多下次再重建一次（身份内容相同、不会漂移） */ }
+          audit?.log('identity.credential.upgraded', { from: 'legacy-numeric-or-uuid', to: 'credential-51', fingerprint: rebuilt.info.fingerprint, backup: rebuilt.backupFile || '' });
+          boot(`identity upgraded to credential-51 fp=rebuilt.info.fingerprint backup=rebuilt.backupFile || 'none'`);
+        } else {
+          boot(`identity upgrade failed（保留原身份）: rebuilt.error`);
+        }
+      } catch (e) {
+        boot(`identity upgrade threw: sanitizeError(e)`);
+      }
+    }
     if (idInit.ok) {
       boot(
         `identity idInit.created ? 'created' : 'loaded' fp=idInit.info.fingerprint gen=idInit.info.generation alias=idInit.info.alias protection=
@@ -2581,6 +2638,29 @@ handleIpc('warmy:metrics-tools', () => safeHandle(() => ({ ok: true, calls: metr
  * 会话日志（只追加）的只读视图 —— ADR 002 §9.4 待办 4 的观测面。
  * 只回 seq / 角色 / 长度 / 摘要，不回正文（正文在记忆服务里，靠 retrieve 取）。
  */
+/**
+ * **会话消息正文**（跨窗口同步用）：独立会话窗与主窗口是同一个会话的两个视图，
+ * 打开时都必须能读到**同一份**内容 —— 以前渲染层只有自己的内存副本，
+ * 新窗口打开一片空白，这就是"新窗口和主界面记录不同步"的根因。
+ * 内容一律从主进程的日志取（唯一事实来源），渲染层不自造第二份。
+ */
+handleIpc('warmy:chat-messages', (_e, payload?: { sessionId?: string; limit?: number }) => {
+  try {
+    const sessionId = String(payload?.sessionId || '');
+    if (!sessionId) return { ok: false, sessionId, messages: [] };
+    const limit = Math.min(1000, Math.max(1, Math.floor(Number(payload?.limit)) || 500));
+    const all = chatLogs.get(sessionId) || [];
+    return {
+      ok: true,
+      sessionId,
+      count: all.length,
+      messages: all.slice(-limit).map((e) => ({ role: e.role, text: e.content, ts: e.ts ?? null })),
+    };
+  } catch (e2) {
+    return { ok: false, sessionId: String(payload?.sessionId || ''), messages: [], error: sanitizeError(e2) };
+  }
+});
+
 handleIpc('warmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number }) => {
   try {
     const sessionId = String(payload?.sessionId ?? '');
@@ -2619,10 +2699,16 @@ handleIpc('warmy:chat-log-restore', async () => {
 
 // ── 设置持久化 ──
 handleIpc('warmy:settings-get', () => safeHandle(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
-handleIpc('warmy:settings-save', (_e, partial: Record<string, unknown>) => ({
-  ok: true,
-  settings: settingsStore?.save(partial as never),
-}));
+handleIpc('warmy:settings-save', (e, partial: Record<string, unknown>) => {
+  const next = settingsStore?.save(partial as never);
+  /**
+   * **设置改动要播给其它窗口**：主界面和独立会话窗都从同一份设置渲染，
+   * 一边改了主题/语言/供应商，另一边必须跟着变（"它们的选项等都应该同步"）。
+   * 跳过发起方自己（它已经渲染过了）。
+   */
+  try { broadcastToWindows('warmy:settings-changed', { keys: Object.keys(partial || {}) }, e?.sender?.id); } catch { /* noop */ }
+  return { ok: true, settings: next };
+});
 
 /* ══════════════════════════════════════════════════════════════════════════
    ADR 004 P1：执行环境探测 / 启停（设置 → 功能 → 容器）
@@ -2889,15 +2975,26 @@ async function publishProjectAttrs(groupId: string): Promise<{ ok: boolean; sent
 async function containerStatusOf(runtimeId: string): Promise<string | null> {
   if (!runtimeId) return null;
   let report = lastContainerProbeReport();
-  if (!report) {
+  const cachedRow = report ? (report.runtimes || []).find((x) => x.id === runtimeId) : undefined;
+  if (!cachedRow) {
     try {
-      report = await probeContainerRuntimes({ cacheMs: 8000 });
+      /**
+       * **只探这个项目真正在用的运行时**（`only`），并且**不深探**。
+       *
+       * 为什么（用户实测的问题："打开新窗口为什么会触发打开 WSL"）：
+       * 全量探测会把 12 个运行时挨个跑一遍，其中 WSL 那一步是 `wsl -d <发行版> -- true` ——
+       * **那会把发行版真的启动起来**。于是"打开一个项目会话 → 查容器就绪没"就顺手拉起了 WSL。
+       * 现在：只探需要的那一个、且不允许代为启动发行版。
+       */
+      report = await probeContainerRuntimes({ cacheMs: 8000, only: [runtimeId] });
     } catch {
       return null;
     }
   }
-  const row = (report.runtimes || []).find((x) => x.id === runtimeId);
-  return row ? String(row.status) : null;
+  const row = (report?.runtimes || []).find((x) => x.id === runtimeId);
+  if (!row) return null;
+  // `not-probed` 不是事实断言（只是"本轮没探它"）：如实返回 null，由调用方按未就绪处理
+  return row.status === 'not-probed' ? null : String(row.status);
 }
 
 /**

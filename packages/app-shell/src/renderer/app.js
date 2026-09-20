@@ -1100,6 +1100,28 @@
     void idRefreshForChat();
     // 右栏「进度」按当前会话拉真任务（没有就如实说"暂无任务"）
     void renderProgressTasks();
+    /**
+     * 从**主进程日志**补齐内容：主窗口与独立会话窗是同一个会话的两个视图，
+     * 谁打开都读到同一份（新窗口以前是空白的，这是"记录不同步"的根因）。
+     */
+    void loadSessionMessages(id);
+  }
+
+  /**
+   * 拉取某会话的正文并替换本地镜像（主进程日志是唯一事实来源）。
+   * 主进程那边没有内容（例如刚建、或记忆服务未回灌）时**保留本地已有**，绝不因此清空界面。
+   */
+  async function loadSessionMessages(id) {
+    const sid = String(id || '');
+    if (!sid) return;
+    try {
+      const r = await window.warmy.chatMessages?.({ sessionId: sid, limit: 500 });
+      if (!r || !r.ok || !Array.isArray(r.messages) || !r.messages.length) return;
+      window.__msgs = window.__msgs || {};
+      window.__msgs[sid] = r.messages.map((m) => ({ role: m.role, text: m.text, ts: m.ts || Date.now() }));
+      if (state.selectedChat && state.selectedChat.id === sid) renderChat();
+      renderList();
+    } catch { /* 读不到就保持本地视图，不清空 */ }
   }
 
 
@@ -1502,6 +1524,11 @@
     const isWork = nav === 'singleAi' || nav === 'internalGroup';
     const isGroupChat = nav === 'internalGroup' || nav === 'externalGroup';
     $('mi-directed')?.classList.toggle('hidden', !isGroupChat);
+    /**
+     * 独立会话窗里**不再提供「在新窗口打开」**：那个窗口本来就是"这个会话的窗口"，
+     * 再开只会得到重复视图（用户明确要求去掉）。
+     */
+    $('mi-open')?.classList.toggle('hidden', document.body.classList.contains('chat-window'));
     const sc = (id, key) => { const e = $(id); if (e) e.textContent = typeof SHORTCUT_LABEL === 'function' ? SHORTCUT_LABEL(key) : ''; };
     sc('sc-open', 'openChatWindow');
     sc('sc-export', 'exportSession');
@@ -2580,16 +2607,17 @@
       const avHtml = `<img class="avatar-img big" src="${personAvatarSrc(p)}" alt=""/>`;
       box.innerHTML = `
         <div class="me-top">
-          <div class="me-brand">
-            <img class="brand-logo" src="./icons/logo-tight.png" alt="${escapeHtml(t('brand.name'))}"/>
+          <!-- 品牌块：**logo 与名称上下排列**（不再左右挤在一起）⇒ logo 可以更大 -->
+          <div class="me-brand me-brand-stack">
+            <img class="brand-logo brand-logo-xl" src="./icons/logo-tight.png" alt="${escapeHtml(t('brand.name'))}"/>
             <div class="me-brand-text">
               <div class="me-brand-name">${escapeHtml(t('brand.name'))}</div>
               <div class="me-brand-sub">${escapeHtml(t('brand.sub'))}</div>
               <div class="muted me-brand-tag">${escapeHtml(t('brand.tagline') || '')}</div>
             </div>
           </div>
-          <div class="me-strip" style="flex:1;min-width:300px;margin:0">
-            <!-- 左：头像 + **邮箱紧跟其下**（腾出横向空间）；右：名称与凭证 -->
+          <!-- 用户资料：**一列**（原来是头像列 + 信息列两列） -->
+          <div class="me-strip me-strip-col" style="flex:1;min-width:300px;margin:0">
             <div class="me-avatar-col">
               <button id="p-av-btn" class="av-btn" aria-label="${escapeHtml(t('me.avatar'))}">${avHtml}</button>
               <div class="field" style="margin:10px 0 0;min-width:150px;width:100%">
@@ -2898,21 +2926,35 @@
           </div>
           <div id="container-cta" class="ctg-cta hidden">${t('container.guideFirstStep')}</div>
           <div class="ctg-summary" id="container-summary" data-summary="none"></div>
-          <div class="ctg-list-head">
-            <span>${t('container.listTitle')}</span>
-            <span class="ctg-dim">${t('container.listTitleHint')}</span>
-          </div>
-          <div id="container-list" class="ctg-list" data-probe="none"></div>
-          <div class="ctg-dim" id="container-missing-note"></div>
-          <!-- 第十七批：**删掉"环境类型"** —— 环境就是具体实例（见下方「实例」）； -->
-          <!-- 再加一层抽象（Linux 真容器 / Windows 受限 …）只会让用户多选一次而信息更少。 -->
-          <div class="ctg-hint-box" id="container-target-note">
+          <!-- 第十七批：**本机已有容器**与**镜像**也做成折叠块（与"常用容器安装说明"一致）：
+               折叠时只有标题 + 一个箭头；展开后箭头翻转朝下，一眼看出能收起。 -->
+          <details class="ctg-collapse ctg-fold" id="container-existing-collapse">
+            <summary class="ctg-fold-summary">
+              <span class="ctg-caret" aria-hidden="true"></span>
+              <span class="ctg-fold-title">${t('container.section.existing')}</span>
+              <span class="ctg-dim" id="container-count-inline"></span>
+              <span class="ctg-dim">${t('container.listTitleHint')}</span>
+            </summary>
+            <div class="ctg-collapse-body">
+              <div class="ctg-list-head"><span>${t('container.listTitle')}</span></div>
+              <div id="container-list" class="ctg-list" data-probe="none"></div>
+              <div class="ctg-dim" id="container-missing-note"></div>
+              <div class="ctg-hint-box" id="container-target-note">
             <div class="ctg-hint-title">${t('container.target.title')}</div>
             <div class="ctg-dim">${t('container.target.hint')}</div>
             <div class="ctg-hint-title">${t('container.mount.title')}</div>
             <div class="ctg-dim">${t('container.mount.body')}</div>
             <div class="ctg-dim">${t('container.mount.perf')}</div>
           </div>
+            </div>
+          </details>
+          <!-- 镜像：同样折叠（标题 + 箭头） -->
+          <details class="ctg-collapse ctg-fold" id="container-images-collapse">
+            <summary class="ctg-fold-summary">
+              <span class="ctg-caret" aria-hidden="true"></span>
+              <span class="ctg-fold-title">${t('container.section.images')}</span>
+            </summary>
+            <div class="ctg-collapse-body">
           <div class="ctg-guide-head">${t('container.image.title')}</div>
           <div class="ctg-dim">${t('container.image.why')}</div>
           <div class="ctg-dim">${t('container.image.node')}</div>
@@ -2926,8 +2968,13 @@
             <div class="ctg-dim">${t('container.image.stack.moreLater')}</div>
             <div id="container-image-stacks" class="ctg-list"></div>
           </div>
-          <details class="ctg-collapse" id="container-guide-collapse">
-            <summary>${t('container.guideCollapse')}</summary>
+            </div>
+          </details>
+          <details class="ctg-collapse ctg-fold" id="container-guide-collapse">
+            <summary class="ctg-fold-summary">
+              <span class="ctg-caret" aria-hidden="true"></span>
+              <span class="ctg-fold-title">${t('container.guideCollapse')}</span>
+            </summary>
             <div class="ctg-collapse-body">
           <div class="ctg-hint-box" id="container-env-install">
             <div class="ctg-hint-title">${t('container.env.install.title')}</div>
@@ -4131,7 +4178,21 @@
       (function bindPresetSelect() {
         const sel = $('prov-preset');
         if (!sel) return;
-        sel.innerHTML = PROVIDER_PRESETS.map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</option>').join('');
+        /**
+         * 下拉的构成（产品要求）：
+         *  · **默认项**是占位提示「选择要添加的供应商」（空值、不可提交）——
+         *    添加成功后回到这一项，避免"上一次选的那家"被误当成当前选择；
+         *  · **DeepSeek 固定第一**（最常用），其余按名称排序。
+         */
+        const rest = PROVIDER_PRESETS
+          .filter((p) => p.id !== 'deepseek' && p.id !== '__other__')
+          .slice()
+          .sort((a, b) => String(a.label).localeCompare(String(b.label), state.locale || 'zh-CN'));
+        const other = PROVIDER_PRESETS.filter((p) => p.id === '__other__');
+        const first = PROVIDER_PRESETS.filter((p) => p.id === 'deepseek');
+        sel.innerHTML =
+          '<option value="" selected>' + escapeHtml(t('settings.providerPickHint')) + '</option>' +
+          [...first, ...rest, ...other].map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</option>').join('');
       })();
 
       provCount();
@@ -4141,7 +4202,10 @@
           return;
         }
         const sel = $('prov-preset');
-        const preset = PROVIDER_PRESETS.find((p) => p.id === (sel && sel.value)) || PROVIDER_PRESETS[PROVIDER_PRESETS.length - 1];
+        const picked = sel ? PROVIDER_PRESETS.find((p) => p.id === sel.value) : null;
+        // 占位项（"选择要添加的供应商"）不是选择：先让用户选一家，别默默给他加个不明的
+        if (!picked) { uiAlert(t('settings.providerPickFirst')); return; }
+        const preset = picked;
         const isOther = preset.id === '__other__';
         const baseLabel = isOther ? '' : preset.label;
         /**
@@ -4160,6 +4224,8 @@
           staleModels: {},
         });
         await saveProviders();
+        // 添加成功后把下拉复位到占位项（产品要求：下次进来默认还是"选择要添加的供应商"）
+        if (sel) sel.value = '';
         renderPage();
       };
     }
@@ -8753,6 +8819,9 @@
     if (rep.notInstalledCount) notes.push(fmtKey('container.notInstalledNote', { n: String(rep.notInstalledCount) }));
     if (hiddenN) notes.push(fmtKey('container.listHidden', { n: String(hiddenN) }));
     if (note) note.textContent = notes.join(' · ');
+    // 折叠块标题里带上数量：收起时也知道里面有几条（不用展开去数）
+    const inline = $('container-count-inline');
+    if (inline) inline.textContent = listed.length ? fmtKey('container.listCountInline', { n: String(listed.length) }) : '';
     if (sum) {
       sum.dataset.summary = String(rep.usableIds ? rep.usableIds.length : 0);
       sum.textContent = fmtKey('container.probeSummary', {
@@ -11830,6 +11899,48 @@
       const kind = q.get('chatKind') || 'single';
       setTimeout(() => openChat(kind, cid, title), 300);
     }
+  } catch { /* noop */ }
+
+  /* ══════════════════════════════════════════════════════════════════════
+   * 跨窗口同步（产品要求：新窗口与主界面是**同一个**会话，记录/信息/选项都要同步）
+   * ----------------------------------------------------------------------
+   * 以前两个窗口各存各的内存副本，且**没有任何推送通道** —— 所以新开的窗口是空白的、
+   * 一边改设置另一边不变。现在：
+   *  · 主进程写日志时广播 `chat-updated` ⇒ 正在看该会话的窗口重新拉正文；
+   *  · 任一窗口改设置时广播 `settings-changed` ⇒ 其它窗口重新应用并重画。
+   * 两条都只发"变化通知"，正文/设置本身仍旧从主进程读，避免出现第二个真相。
+   * ══════════════════════════════════════════════════════════════════════ */
+  try {
+    window.warmy.onChatUpdated?.((d) => {
+      const sid = String((d && d.sessionId) || '');
+      if (!sid) return;
+      void loadSessionMessages(sid);
+    });
+    window.warmy.onSettingsChanged?.((d) => {
+      void (async () => {
+        try {
+          const r = await window.warmy.settingsGet();
+          const s = r && r.settings;
+          if (!s) return;
+          const keys = Array.isArray(d && d.keys) ? d.keys : [];
+          // 主题/强调色/语言：立刻应用（跨窗口看到的必须是同一套外观）
+          if (!keys.length || keys.includes('themeMode') || keys.includes('accent')) {
+            state.themeMode = s.themeMode || state.themeMode;
+            state.theme = s.accent || state.theme;
+            applyThemeMode?.(state.themeMode);
+            document.documentElement.style.setProperty('--accent', state.theme);
+          }
+          if (keys.includes('locale') && s.locale && resolveLocalePack(s.locale) !== state.locale) {
+            await loadI18n(resolveLocalePack(s.locale));
+          }
+          // 供应商/模型：重新从设置读一遍并重画（别一边加了供应商另一边看不到）
+          if (!keys.length || keys.some((k) => String(k).startsWith('provider'))) {
+            await loadProvidersFromSettings?.();
+          }
+          try { renderPage(); } catch { /* 不在设置页时忽略 */ }
+        } catch { /* noop */ }
+      })();
+    });
   } catch { /* noop */ }
 
   // 主刷新循环：合并所有定时刷新，降低频率

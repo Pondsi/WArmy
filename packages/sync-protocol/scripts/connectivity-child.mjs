@@ -18,9 +18,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  RelayNode,
-  RelayTunnelDialer,
-  RelayTunnelListener,
+  ZhongJiJieDian,
+  ZhongJiSuiDaoBoHao,
+  ZhongJiSuiDaoJianTing,
   SecureSyncClient,
   SecureSyncServer,
   warmyFingerprint,
@@ -81,7 +81,7 @@ function writeState(patch) {
 async function roleRelay() {
   const port = Number(args.port ?? 0);
   const mode = args.mode ?? 'forward';
-  const relay = new RelayNode({
+  const relay = new ZhongJiJieDian({
     port,
     host: '127.0.0.1',
     pairTimeoutMs: Number(args.pairTimeoutMs ?? 8000),
@@ -141,7 +141,7 @@ async function roleListener() {
   const serverPort = await server.start();
   writeState({ phase: 'server-up', serverPort, fingerprint: id.fingerprint });
 
-  const tunnel = new RelayTunnelListener({
+  const tunnel = new ZhongJiSuiDaoJianTing({
     relay: { host: '127.0.0.1', port: relayPort },
     token,
     from: id.fingerprint,
@@ -177,7 +177,7 @@ async function roleDialer() {
   const id = identityFromSeedHex(args['seed-self']);
   const peer = String(args['peer-fp']);
 
-  const tunnel = new RelayTunnelDialer({
+  const tunnel = new ZhongJiSuiDaoBoHao({
     relay: { host: '127.0.0.1', port: relayPort },
     token,
     from: id.fingerprint,

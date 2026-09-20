@@ -22,7 +22,27 @@
 
 现在三处都加了 `windowsHide: true`，并且加了**静态门禁**：`verify-naming.mjs` 会扫描
 `packages/app-shell/src` 下所有 `spawn/execFile/spawnSync/execFileSync` 调用，
-没带 `windowsHide` 就红（当前 39/0）。这样以后新写的子进程调用不会再把窗口漏到桌面上。
+没带 `windowsHide` 就红。这样以后新写的子进程调用不会再把窗口漏到桌面上。
+
+### 另一个更隐蔽的"拉起 WSL"（本轮修掉，已实测）
+
+用户问："打开新窗口为什么会触发打开 WSL？" —— 根因**不是**窗口，而是**探测本身有副作用**：
+
+- `container-probe.ts` 的 `probeWsl()` 以前无条件跑 `wsl -d <发行版> -- true` 来判定"可用"，
+  **那一步会真的把发行版启动起来**（连带 WSL 服务/虚拟机）；
+- 而"打开一个项目会话 → 查容器是否就绪"会走 `containerStatusOf()` → **全量探测**，
+  于是一次普通的打开窗口就把 WSL 拉起来了。
+
+修法（两条一起）：
+1. **只看状态，不启动它**：改为解析 `wsl -l -v` 里发行版的真实 STATE（Running/Stopped）；
+   只有已经 Running 才顺手 `-- true` 复核；Stopped 就如实报 `distro-not-running:<名字>`
+   并写明"未代为启动"。只有调用方显式 `deep: true`（用户自己点探测）才允许进去跑那一句。
+2. **按需只探一个**：`probeContainerRuntimes({ only: [runtimeId] })` —— 项目用 docker
+   就只探 docker，其余标成**显式状态 `not-probed`**（"本轮没探它"），
+   绝不用"未安装/未运行"这种**关于事实的断言**去冒充"没探过"。
+
+实测（`dist/container-probe.js` 直接跑）：全量探测后 `wsl -l -v` 里 Ubuntu **仍是 Stopped**，
+detail = `distro-not-running:Ubuntu`；`only: ['docker']` 时 wsl = `not-probed`。
 
 ## 需要用户协助（待办）
 

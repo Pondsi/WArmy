@@ -28,7 +28,7 @@ import dgram from 'node:dgram';
 import net from 'node:net';
 import os from 'node:os';
 import type { DhtDiZhi } from './dht.js';
-import { type RelayCandidateRef, type RelayDecision, type RelayDecisionCode, jueDingZhongJi, relayTokenFor } from './relay.js';
+import { type ZhongJiHouXuanYinYong, type ZhongJiJueDing, type ZhongJiJueDingMa, jueDingZhongJi, quZhongJiLingPai } from './relay.js';
 
 export const LAN_PROBE_MAGIC = 'WARMY-LAN/1';
 export const DEFAULT_DISCOVERY_PORT = 7799;
@@ -573,7 +573,7 @@ export interface LadderResult {
   /** 选中的档位走的是哪个地址族（IPv6 档命中时 = 6） */
   family?: 4 | 6;
   /** 中继档的结构化结论（含"无可用中继 → 需要一台有公网地址的机器做中继"） */
-  relayDecision?: RelayDecision;
+  relayDecision?: ZhongJiJueDing;
   /** 可达性汇总（UI 判断要显示哪条文案） */
   reachability?: ReachabilitySummary;
 }
@@ -586,7 +586,7 @@ export interface ReachabilitySummary {
   bothUndialable: boolean;
   /** 需要用户看到"两端都无法直连，需要一台有公网地址的机器做中继" */
   needsPublicRelayNotice: boolean;
-  relayCode: RelayDecisionCode | 'not-attempted';
+  relayCode: ZhongJiJueDingMa | 'not-attempted';
   localIpv6: { hasGlobalUnicast: boolean; publicCandidate: string | null };
   /** i18n key 建议（主代理接文案用） */
   i18n: { rung?: string; relay?: string };
@@ -600,7 +600,7 @@ export interface RungContext {
   /** 本机是否可拨入（来自 DialabilityProbe；undefined = 未知） */
   selfDialable?: boolean;
   /** 中继候选（有公网地址的机器） */
-  relays: RelayCandidateRef[];
+  relays: ZhongJiHouXuanYinYong[];
 }
 
 export interface RungOutcome {
@@ -612,7 +612,7 @@ export interface RungOutcome {
   relay?: RelayRungInfo;
   /** 本档"不适用/不需要"（≠ 失败）：如实记为 skipped，不伪装成试过 */
   skip?: boolean;
-  relayDecision?: RelayDecision;
+  relayDecision?: ZhongJiJueDing;
 }
 
 export interface LadderStrategy {
@@ -635,7 +635,7 @@ function unsupportedStrategy(rung: LadderRung, reason: string): LadderStrategy {
 
 export interface RelayRungOptions {
   /** 中继候选（可达节点 = 有公网地址的那台机器） */
-  relays: () => RelayCandidateRef[];
+  relays: () => ZhongJiHouXuanYinYong[];
   /** 本机是否可拨入（DialabilityProbe 结论；undefined = 未知） */
   selfDialable?: () => boolean | undefined;
   /** 本机指纹（配对 token 必须由"双方指纹 + 中继地址"推出，两端才算得出同一个值） */
@@ -675,7 +675,7 @@ export class LianJieTiZi {
   private readonly dialTcp: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<DialDetail | { ok: boolean; detail?: string }>;
   private readonly strategies = new Map<LadderRung, LadderStrategy>();
   private readonly now: () => number;
-  private lastRelayDecision?: RelayDecision;
+  private lastRelayDecision?: ZhongJiJueDing;
   /** 每一级的尝试历史（可观测性） */
   readonly history: RungAttempt[] = [];
 
@@ -852,7 +852,7 @@ export class LianJieTiZi {
   }
 
   /** 最近一次中继档的结构化结论（UI 可在 connect() 之外直接读） */
-  get relayDecision(): RelayDecision | undefined {
+  get relayDecision(): ZhongJiJueDing | undefined {
     return this.lastRelayDecision;
   }
 
@@ -911,7 +911,7 @@ export class LianJieTiZi {
       this.history.push(a);
       this.opts.onRung?.(a);
       if (outcome.ok) {
-        const relayCode = attempts.find((x) => x.rung === 'relay')?.code as RelayDecisionCode | undefined;
+        const relayCode = attempts.find((x) => x.rung === 'relay')?.code as ZhongJiJueDingMa | undefined;
         return {
           ok: true,
           rung,
@@ -960,7 +960,7 @@ export class LianJieTiZi {
         peerDialable: target.peerDialable,
         bothUndialable: relayDecision?.bothUndialable === true,
         needsPublicRelayNotice: relayDecision?.needsPublicRelayNotice === true,
-        relayCode: (relayAttempt?.code as RelayDecisionCode | undefined) ?? 'not-attempted',
+        relayCode: (relayAttempt?.code as ZhongJiJueDingMa | undefined) ?? 'not-attempted',
         localIpv6: { hasGlobalUnicast: localIpv6.hasGlobalUnicast, publicCandidate: localIpv6.publicCandidate },
         i18n: relayDecision?.needsPublicRelayNotice ? { relay: 'net.relay.missing.needsPublicRelay' } : {},
       },

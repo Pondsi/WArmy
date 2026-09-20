@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export interface LanMessage {
+export interface NeiWangXiaoXi {
   id: string;
   from: string;
   to: string | '*';
@@ -18,10 +18,10 @@ export interface LanMessage {
   incognito?: boolean;
 }
 
-export class LanSyncServer {
+export class NeiWangTongBuFuWu {
   private server: net.Server | null = null;
   private clients = new Set<net.Socket>();
-  private inbox: LanMessage[] = [];
+  private inbox: NeiWangXiaoXi[] = [];
 
   constructor(
     private nodeId: string,
@@ -42,7 +42,7 @@ export class LanSyncServer {
             buf = buf.slice(idx + 1);
             if (!line) continue;
             try {
-              const msg = JSON.parse(line) as LanMessage;
+              const msg = JSON.parse(line) as NeiWangXiaoXi;
               if (!msg.incognito) {
                 this.inbox.push(msg);
                 if (this.logFile) {
@@ -67,7 +67,7 @@ export class LanSyncServer {
     });
   }
 
-  inboxOf(nodeId?: string): LanMessage[] {
+  inboxOf(nodeId?: string): NeiWangXiaoXi[] {
     return this.inbox.filter((m) => !nodeId || m.to === nodeId || m.to === '*');
   }
 
@@ -86,13 +86,13 @@ export class LanSyncServer {
   }
 }
 
-export class LanSyncClient {
+export class NeiWangTongBuKeHu {
   constructor(private nodeId: string) {}
 
-  send(host: string, port: number, msg: Omit<LanMessage, 'id' | 'ts' | 'from'>): Promise<{ ok: boolean; error?: string }> {
+  send(host: string, port: number, msg: Omit<NeiWangXiaoXi, 'id' | 'ts' | 'from'>): Promise<{ ok: boolean; error?: string }> {
     return new Promise((resolve) => {
       const sock = net.connect({ host, port }, () => {
-        const full: LanMessage = {
+        const full: NeiWangXiaoXi = {
           ...msg,
           from: this.nodeId,
           id: `m-${crypto.randomBytes(6).toString('hex')}`,
@@ -124,9 +124,9 @@ export async function dualMachineSmoke(opts: {
   peerOk: boolean;
   peerError?: string;
 }> {
-  const srv = new LanSyncServer(opts.localId, opts.localPort);
+  const srv = new NeiWangTongBuFuWu(opts.localId, opts.localPort);
   const serverPort = await srv.start();
-  const client = new LanSyncClient(opts.localId + '-client');
+  const client = new NeiWangTongBuKeHu(opts.localId + '-client');
 
   const loop = await client.send('127.0.0.1', serverPort, {
     to: '*',

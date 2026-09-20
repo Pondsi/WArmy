@@ -1712,5 +1712,9 @@
   "container.inst.openAppFailed": "无法打开容器产品界面（{reason}）。",
   "container.inst.createHint": "创建实例请在该容器产品自己的界面/控制台里进行：各产品的创建方式不同，还要按需拉镜像，我们不代替它创建。",
   "container.listHidden": "已隐藏 {n} 个不可用、也不可启动的容器",
-  "me.idWarn": "这串 ID 就是你的私钥：**只有你能看**。谁拿到它谁就是\"你\"，而且没有中心服务器能替你挂失 —— 请自己妥善保存；给别人加好友/入群时，给出的是由它派生的公钥（指纹），不是这串。"
+  "me.idWarn": "这串 ID 就是你的私钥：**只有你能看**。谁拿到它谁就是\"你\"，而且没有中心服务器能替你挂失 —— 请自己妥善保存；给别人加好友/入群时，给出的是由它派生的公钥（指纹），不是这串。",
+  "settings.providerPickHint": "选择要添加的供应商",
+  "settings.providerPickFirst": "请先选择一家要添加的供应商",
+  "container.section.existing": "本机已有容器",
+  "container.section.images": "镜像"
 }

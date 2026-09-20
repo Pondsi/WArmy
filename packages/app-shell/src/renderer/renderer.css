@@ -1426,3 +1426,22 @@ body.chat-window #page-layout, body.chat-window #empty-state, body.chat-window #
 
 /* 「ID 即私钥」的诚实提示：用警示色，但比错误色轻（它是事实陈述，不是报错） */
 .me-hint-warn { color: var(--danger-fg, #c0392b); line-height: 1.5; }
+
+/* ── 折叠块统一形态（第十七批）：标题 + **箭头**，展开后箭头翻转朝下 ──────── */
+.ctg-fold > .ctg-fold-summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; }
+.ctg-fold > .ctg-fold-summary::-webkit-details-marker { display: none; }
+.ctg-fold .ctg-fold-title { font-weight: 600; }
+.ctg-caret { width: 0; height: 0; border-left: 6px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; transition: transform .15s ease; transform: rotate(0deg); }
+/* 展开 ⇒ 箭头朝下（用户一眼看出"点一下能收起"） */
+.ctg-fold[open] > .ctg-fold-summary .ctg-caret { transform: rotate(90deg); }
+.ctg-fold > .ctg-collapse-body { margin-top: 6px; }
+
+/* ── 我的页：品牌 logo 与名称上下排列（logo 因此可以更大）───────────────── */
+.me-brand-stack { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+.me-brand-stack .me-brand-text { align-items: center; text-align: center; }
+/* 必须比 `.me-top .brand-logo`(0,2,0) 更具体，否则旧的 72px 会赢 */
+.me-top .brand-logo-xl { width: 140px; height: 140px; max-width: none; }
+/* 用户资料改成**一列**：头像 → 邮箱 → 名称 → ID → 凭证，全部纵向排 */
+.me-strip-col { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+.me-strip-col .me-avatar-col { display: flex; flex-direction: column; align-items: center; }
+.me-strip-col .me-info-col { width: 100%; }

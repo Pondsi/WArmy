@@ -7,7 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 
-export interface NodeInfo {
+export interface JieDianXinXi {
   nodeId: string;
   name: string;
   isLocal: boolean;
@@ -27,15 +27,15 @@ export interface SyncEnvelope {
   incognito?: boolean;
 }
 
-export interface InviteToken {
+export interface YaoQingLingPai {
   token: string;
   expiresAt: number;
   used: boolean;
   groupId?: string;
 }
 
-export class NodeRegistry {
-  private nodes = new Map<string, NodeInfo>();
+export class JieDianMingCe {
+  private nodes = new Map<string, JieDianXinXi>();
 
   constructor(private file: string) {
     try {
@@ -51,16 +51,16 @@ export class NodeRegistry {
     fs.writeFileSync(this.file, JSON.stringify({ nodes: [...this.nodes.values()] }, null, 2));
   }
 
-  registerLocal(name: string): NodeInfo {
+  registerLocal(name: string): JieDianXinXi {
     const id = 'node-' + crypto.randomBytes(4).toString('hex');
-    const info: NodeInfo = { nodeId: id, name, isLocal: true, pairedAt: Date.now() };
+    const info: JieDianXinXi = { nodeId: id, name, isLocal: true, pairedAt: Date.now() };
     this.nodes.set(id, info);
     this.save();
     return info;
   }
 
-  pairRemote(nodeId: string, name: string): NodeInfo {
-    const info: NodeInfo = { nodeId, name, isLocal: false, pairedAt: Date.now() };
+  pairRemote(nodeId: string, name: string): JieDianXinXi {
+    const info: JieDianXinXi = { nodeId, name, isLocal: false, pairedAt: Date.now() };
     this.nodes.set(nodeId, info);
     this.save();
     return info;
@@ -74,7 +74,7 @@ export class NodeRegistry {
     }
   }
 
-  list(): NodeInfo[] {
+  list(): JieDianXinXi[] {
     return [...this.nodes.values()].filter((n) => !n.revoked);
   }
 
@@ -119,7 +119,7 @@ export class SyncBus {
   }
 }
 
-export function chuangjianYaoQing(ttlMs = 15 * 60_000, groupId?: string): InviteToken {
+export function chuangjianYaoQing(ttlMs = 15 * 60_000, groupId?: string): YaoQingLingPai {
   return {
     token: crypto.randomBytes(16).toString('hex'),
     expiresAt: Date.now() + ttlMs,
@@ -128,7 +128,7 @@ export function chuangjianYaoQing(ttlMs = 15 * 60_000, groupId?: string): Invite
   };
 }
 
-export function shiYongYaoQing(tok: InviteToken): boolean {
+export function shiYongYaoQing(tok: YaoQingLingPai): boolean {
   if (tok.used || Date.now() > tok.expiresAt) return false;
   tok.used = true;
   return true;
@@ -150,6 +150,6 @@ export * from './liveness.js';
 export * from './membership.js';
 
 /** 远程 AI 执行约定：本地零痕迹目录（临时，用完即删） */
-export function incognitoWorkDir(): string {
+export function niMingGongZuoMuLu(): string {
   return path.join(os.tmpdir(), `warmy-incog-${crypto.randomBytes(6).toString('hex')}`);
 }

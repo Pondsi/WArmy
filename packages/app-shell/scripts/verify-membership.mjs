@@ -45,10 +45,10 @@ import {
   shuoMingChengYuanZhengShu,
   chaZhaoCheXiaoTiaoMu,
   shengChengEd25519,
-  isRevoked,
+  yiCheXiao,
   isSameMember,
-  memberCertSigningBytes,
-  memberIdentityOf,
+  zhengShuQianMingZiJie,
+  quChengYuanShenFen,
   signMemberCertificate,
   signRevocationList,
   verifyAndApplyRevocationList,
@@ -127,11 +127,11 @@ function readJson(file) {
 /** 用 node:crypto **独立**复核一张证书的签名（不走本包的验签实现） */
 function independentVerifyCert(cert) {
   const pub = crypto.createPublicKey({ key: Buffer.from(cert.issuerPublicKey, 'base64'), format: 'der', type: 'spki' });
-  return crypto.verify(null, memberCertSigningBytes(cert), pub, Buffer.from(cert.issuerSignature, 'base64'));
+  return crypto.verify(null, zhengShuQianMingZiJie(cert), pub, Buffer.from(cert.issuerSignature, 'base64'));
 }
 function independentSignCert(cert, privateKeyDer) {
   const priv = crypto.createPrivateKey({ key: privateKeyDer, format: 'der', type: 'pkcs8' });
-  return { ...cert, issuerSignature: crypto.sign(null, memberCertSigningBytes(cert), priv).toString('base64') };
+  return { ...cert, issuerSignature: crypto.sign(null, zhengShuQianMingZiJie(cert), priv).toString('base64') };
 }
 
 const creator = mkIdentity('creator', PASS);
@@ -451,12 +451,12 @@ const carolVerdict = creatorMembership.authorizeFingerprint(infoC.fingerprint);
 check('吊销后 carol 名册判定：decided=true 且拒（revoked）', carolVerdict.decided === true && carolVerdict.ok === false && carolVerdict.code === 'revoked', carolVerdict);
 check('吊销判定给出 certId（可追责）', carolVerdict.certId === 'mc-carol-1', carolVerdict.certId);
 check('findRevocationEntry 命中成员指纹', !!chaZhaoCheXiaoTiaoMu(creatorMembership.revocation(GROUP), { memberFingerprint: infoC.fingerprint }));
-check('isRevoked 命中 certId', isRevoked(creatorMembership.revocation(GROUP), { certId: 'mc-carol-1' }) === true);
+check('isRevoked 命中 certId', yiCheXiao(creatorMembership.revocation(GROUP), { certId: 'mc-carol-1' }) === true);
 check('被吊销者即使证书本身**完全有效**也判拒（证书有效性与吊销是两个判据）', verifyMemberCertificate(carolIssued.cert, VOPT).ok === true && carolVerdict.ok === false);
 check('吊销条目 revokedAt 被改成"一年后"依然吊销（不看时间戳）', (() => {
   const cur = creatorMembership.revocation(GROUP);
   const tampered = { ...cur, entries: cur.entries.map((e) => ({ ...e, revokedAt: Date.now() + 365 * 86_400_000 })) };
-  return isRevoked(tampered, { certId: 'mc-carol-1' }) === true && !!chaZhaoCheXiaoTiaoMu(tampered, { memberFingerprint: infoC.fingerprint });
+  return yiCheXiao(tampered, { certId: 'mc-carol-1' }) === true && !!chaZhaoCheXiaoTiaoMu(tampered, { memberFingerprint: infoC.fingerprint });
 })());
 check('吊销列表落盘（membership.json 里有 listVersion 与 entries）', (() => {
   const f = readJson(membershipFileFor(creator.store));
@@ -625,8 +625,8 @@ check('walkCertChain 给出 旧→新 的顺序', (() => {
 })());
 check('memberIdentityOf 在链上是同一 id（换证不换成员身份）', (() => {
   const certs = creatorMembership.listCertificates(GROUP);
-  const a = memberIdentityOf(certs, certs.find((c) => c.certId === CREATOR_CERT_ID));
-  const b = memberIdentityOf(certs, certs.find((c) => c.certId === 'mc-bob-2'));
+  const a = quChengYuanShenFen(certs, certs.find((c) => c.certId === CREATOR_CERT_ID));
+  const b = quChengYuanShenFen(certs, certs.find((c) => c.certId === 'mc-bob-2'));
   return a === b && a.length > 0;
 })());
 

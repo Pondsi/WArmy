@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('warmy', {
   metricsTurns: () => ipcRenderer.invoke('warmy:metrics-turns'),
   metricsTools: () => ipcRenderer.invoke('warmy:metrics-tools'),
   chatLog: (payload) => ipcRenderer.invoke('warmy:chat-log', payload),
+  // 会话消息正文：多窗口共用同一份（主进程日志 = 唯一事实来源）
+  chatMessages: (payload) => ipcRenderer.invoke('warmy:chat-messages', payload),
   chatLogRestore: () => ipcRenderer.invoke('warmy:chat-log-restore'),
   settingsGet: () => ipcRenderer.invoke('warmy:settings-get'),
   settingsSave: (partial) => ipcRenderer.invoke('warmy:settings-save', partial),
@@ -212,6 +214,22 @@ contextBridge.exposeInMainWorld('warmy', {
   requestApproval: (req) => ipcRenderer.invoke('warmy:request-approval', req),
   approvalRespond: (id, allowed, scope) => ipcRenderer.invoke('warmy:approval-respond', id, allowed, scope),
   onApprovalRequest: (cb) => ipcRenderer.on('warmy:approval-request', (_e, d) => cb(d)),
+  /**
+   * 跨窗口同步：主窗口与独立会话窗是同一份数据的两个视图。
+   *  · chatUpdated：某个会话的日志被追加过 → 正在看它的窗口重新拉一次；
+   *  · settingsChanged：设置被另一个窗口改过 → 重新应用（主题/语言/供应商等）。
+   * 都返回一个取消订阅函数，避免窗口内重复注册。
+   */
+  onChatUpdated: (cb) => {
+    const h = (_e, d) => cb(d);
+    ipcRenderer.on('warmy:chat-updated', h);
+    return () => ipcRenderer.removeListener('warmy:chat-updated', h);
+  },
+  onSettingsChanged: (cb) => {
+    const h = (_e, d) => cb(d);
+    ipcRenderer.on('warmy:settings-changed', h);
+    return () => ipcRenderer.removeListener('warmy:settings-changed', h);
+  },
   // T194 控制台：主进程**推送**真实事件（工具调用开始/结束、组网事件、错误）。
   // 只推结构化事实（cat/code/data），文案与打码都在渲染层 —— preload 不做业务判断。
   // 返回退订函数，便于重复注册时干净解绑。

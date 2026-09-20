@@ -36,14 +36,14 @@ import {
   isSameMember,
   verifyAndApplyRevocationList,
   verifyMemberCertificate,
-  type MemberCertCode,
-  type MemberCertificate,
-  type MemberFingerprintOf,
-  type MembershipVerifyOptions,
-  type RevocationApplyResult,
-  type RevocationEntry,
-  type RevocationList,
-  type RevocationListCode,
+  type ChengYuanZhengShuMa,
+  type ChengYuanZhengShu,
+  type quChengYuanZhiWen,
+  type ChengYuanYanZhengXuanXiang,
+  type CheXiaoYingYongJieGuo,
+  type CheXiaoTiaoMu,
+  type CheXiaoBiao,
+  type CheXiaoBiaoMa,
 } from '@warmy/sync-protocol';
 import {
   IDENTITY_ALGO,
@@ -993,9 +993,9 @@ export interface GroupMembershipState {
   groupId: string;
   /** 本机认可的该群创建者（群主）指纹；首次接受证书时钉住（或由调用方显式给出） */
   issuerFingerprint: string;
-  certs: MemberCertificate[];
+  certs: ChengYuanZhengShu[];
   /** 已同步到的吊销列表（null = 还没同步过） */
-  revocation: RevocationList | null;
+  revocation: CheXiaoBiao | null;
   updatedAt: number;
 }
 
@@ -1009,7 +1009,7 @@ export interface MembershipStoreOptions {
   onAudit?: (op: string, detail?: unknown) => void;
   now?: () => number;
   /** 指纹推导（app-shell 传身份层的 fingerprintFromPublicKey） */
-  fingerprintOf?: MemberFingerprintOf;
+  fingerprintOf?: quChengYuanZhiWen;
   /** 本地时钟容差（app-shell 传身份层的 DEFAULT_CLOCK_SKEW_MS） */
   clockSkewMs?: number;
   /** 独立验签实现（默认本地 Ed25519 复核） */
@@ -1020,7 +1020,7 @@ export interface MembershipAuthorizeResult {
   /** true = 本机对"这个指纹是不是群成员"**有明确结论**（不论结论是放行还是拒绝） */
   decided: boolean;
   ok: boolean;
-  code: MemberCertCode | 'revoked' | 'unknown-fingerprint';
+  code: ChengYuanZhengShuMa | 'revoked' | 'unknown-fingerprint';
   groupId?: string;
   certId?: string;
   detail?: string;
@@ -1030,11 +1030,11 @@ function emptyMembershipFile(): MembershipFile {
   return { schema: MEMBERSHIP_FILE_SCHEMA, groups: {}, updatedAt: Date.now() };
 }
 
-function copyCert(c: MemberCertificate): MemberCertificate {
+function copyCert(c: ChengYuanZhengShu): ChengYuanZhengShu {
   return { ...c, permissions: [...(c.permissions ?? [])] };
 }
 
-function copyRevocation(l: RevocationList | null): RevocationList | null {
+function copyRevocation(l: CheXiaoBiao | null): CheXiaoBiao | null {
   if (!l) return null;
   return { ...l, entries: (l.entries ?? []).map((e) => ({ ...e })) };
 }
@@ -1045,9 +1045,9 @@ function copyRevocation(l: RevocationList | null): RevocationList | null {
  * 这里包一层是因为本层的指纹来自 UI / 名片，用户抄录与展示形式都可能有差异。
  */
 function revocationHit(
-  list: RevocationList | null,
+  list: CheXiaoBiao | null,
   q: { certId?: string; memberFingerprint?: string }
-): RevocationEntry | null {
+): CheXiaoTiaoMu | null {
   if (!list || !Array.isArray(list.entries)) return null;
   for (const e of list.entries) {
     if (q.certId && e.certId === q.certId) return e;
@@ -1071,11 +1071,11 @@ function normalizeMembership(raw: unknown): MembershipFile {
     const rec = g as Partial<GroupMembershipState>;
     const groupId = typeof rec.groupId === 'string' && rec.groupId ? rec.groupId : key;
     if (!groupId) continue;
-    const certs: MemberCertificate[] = [];
+    const certs: ChengYuanZhengShu[] = [];
     const certIds = new Set<string>();
     for (const c of Array.isArray(rec.certs) ? rec.certs : []) {
       if (!c || typeof c !== 'object') continue;
-      const cr = c as Partial<MemberCertificate>;
+      const cr = c as Partial<ChengYuanZhengShu>;
       if (cr.schema !== MEMBER_CERT_SCHEMA) continue;
       if (typeof cr.certId !== 'string' || !cr.certId || certIds.has(cr.certId)) continue;
       if (typeof cr.memberFingerprint !== 'string' || !cr.memberFingerprint) continue;
@@ -1086,13 +1086,13 @@ function normalizeMembership(raw: unknown): MembershipFile {
       if (!CERT_ROLE_SET.includes(String(cr.role))) continue;
       if (typeof cr.issuedAt !== 'number' || typeof cr.expiresAt !== 'number') continue;
       certIds.add(cr.certId);
-      const row: MemberCertificate = {
+      const row: ChengYuanZhengShu = {
         schema: MEMBER_CERT_SCHEMA,
         certId: cr.certId,
         groupId: typeof cr.groupId === 'string' && cr.groupId ? cr.groupId : groupId,
         memberFingerprint: cr.memberFingerprint,
         memberPublicKey: cr.memberPublicKey,
-        role: cr.role as MemberCertificate['role'],
+        role: cr.role as ChengYuanZhengShu['role'],
         permissions: Array.isArray(cr.permissions) ? cr.permissions.filter((p): p is string => typeof p === 'string') : [],
         issuedAt: cr.issuedAt,
         expiresAt: cr.expiresAt,
@@ -1105,10 +1105,10 @@ function normalizeMembership(raw: unknown): MembershipFile {
       if (typeof cr.memberId === 'string' && cr.memberId) row.memberId = cr.memberId;
       certs.push(row);
     }
-    let revocation: RevocationList | null = null;
+    let revocation: CheXiaoBiao | null = null;
     const rl = rec.revocation;
     if (rl && typeof rl === 'object' && rl.schema === REVOCATION_LIST_SCHEMA && typeof rl.issuerSignature === 'string') {
-      const entries: RevocationEntry[] = [];
+      const entries: CheXiaoTiaoMu[] = [];
       const seen = new Set<string>();
       for (const e of Array.isArray(rl.entries) ? rl.entries : []) {
         if (!e || typeof e !== 'object') continue;
@@ -1119,7 +1119,7 @@ function normalizeMembership(raw: unknown): MembershipFile {
         entries.push({
           certId: e.certId,
           memberFingerprint: typeof e.memberFingerprint === 'string' ? e.memberFingerprint : '',
-          reason: e.reason as RevocationEntry['reason'],
+          reason: e.reason as CheXiaoTiaoMu['reason'],
           revokedAt: e.revokedAt,
         });
       }
@@ -1151,7 +1151,7 @@ function normalizeMembership(raw: unknown): MembershipFile {
   return out;
 }
 
-export type MemberCertStoreCode = MemberCertCode | 'issuer-changed' | 'write-failed';
+export type MemberCertStoreCode = ChengYuanZhengShuMa | 'issuer-changed' | 'write-failed';
 
 export interface PutCertificateResult {
   ok: boolean;
@@ -1175,7 +1175,7 @@ export interface PutCertificateResult {
 export class MembershipStore {
   private readonly onAudit: (op: string, detail?: unknown) => void;
   private readonly now: () => number;
-  private readonly fingerprintOf: MemberFingerprintOf;
+  private readonly fingerprintOf: quChengYuanZhiWen;
   private readonly clockSkewMs: number;
   private readonly verifySignature?: (message: Buffer, signature: Buffer, publicKeySpkiB64: string) => boolean | null;
   /** mtime+size 缓存：同一个进程里的多个调用点（名册每次握手都会查）不必反复读盘 */
@@ -1243,7 +1243,7 @@ export class MembershipStore {
     return next;
   }
 
-  private verifyOpts(extra: MembershipVerifyOptions = {}): MembershipVerifyOptions {
+  private verifyOpts(extra: ChengYuanYanZhengXuanXiang = {}): ChengYuanYanZhengXuanXiang {
     return { fingerprintOf: this.fingerprintOf, clockSkewMs: this.clockSkewMs, now: this.now(), ...extra };
   }
 
@@ -1279,32 +1279,32 @@ export class MembershipStore {
   }
 
   /** 某个群里的全部证书（副本） */
-  listCertificates(groupId: string): MemberCertificate[] {
+  listCertificates(groupId: string): ChengYuanZhengShu[] {
     return (this.snapshot().groups[groupId]?.certs ?? []).map(copyCert);
   }
 
   /** 全部群的证书（副本）+ 所属群 id */
-  allCertificates(): Array<{ groupId: string; cert: MemberCertificate }> {
-    const out: Array<{ groupId: string; cert: MemberCertificate }> = [];
+  allCertificates(): Array<{ groupId: string; cert: ChengYuanZhengShu }> {
+    const out: Array<{ groupId: string; cert: ChengYuanZhengShu }> = [];
     for (const [groupId, g] of Object.entries(this.snapshot().groups)) {
       for (const c of g.certs) out.push({ groupId, cert: copyCert(c) });
     }
     return out;
   }
 
-  certificateById(groupId: string, certId: string): MemberCertificate | null {
+  certificateById(groupId: string, certId: string): ChengYuanZhengShu | null {
     const c = this.snapshot().groups[groupId]?.certs.find((x) => x.certId === certId);
     return c ? copyCert(c) : null;
   }
 
   /** 该指纹在该群的**最新**一张证书（按 issuedAt，其次按链长） */
-  certificateForFingerprint(groupId: string, fingerprint: string): MemberCertificate | null {
+  certificateForFingerprint(groupId: string, fingerprint: string): ChengYuanZhengShu | null {
     const list = (this.snapshot().groups[groupId]?.certs ?? []).filter((c) =>
       fingerprintMatches(c.memberFingerprint, fingerprint)
     );
     if (!list.length) return null;
     const sorted = list.slice().sort((a, b) => b.issuedAt - a.issuedAt);
-    return copyCert(sorted[0] as MemberCertificate);
+    return copyCert(sorted[0] as ChengYuanZhengShu);
   }
 
   /**
@@ -1315,7 +1315,7 @@ export class MembershipStore {
    * 结构 / 指纹绑定 / 签发者 / 签名不通过的一律**不入库**（`stored=false`），
    * 因为那种证书连"这是谁签的"都不可信，留着只会污染判定。
    */
-  putCertificate(cert: MemberCertificate, opts: { expectIssuerFingerprint?: string } = {}): PutCertificateResult {
+  putCertificate(cert: ChengYuanZhengShu, opts: { expectIssuerFingerprint?: string } = {}): PutCertificateResult {
     const groupId = String(cert?.groupId || '');
     const base: PutCertificateResult = {
       ok: false,
@@ -1356,10 +1356,10 @@ export class MembershipStore {
       this.onAudit('membership.issuer.pinned', { groupId, issuer: cert.issuerFingerprint, certId: cert.certId });
     }
     const idx = g.certs.findIndex((c) => c.certId === cert.certId);
-    const stored: MemberCertificate = copyCert(cert);
+    const stored: ChengYuanZhengShu = copyCert(cert);
     if (idx >= 0) {
       // 同一 certId 再送来：内容必须完全一致（否则就是有人想用同 id 覆盖已有的证书）
-      const prev = g.certs[idx] as MemberCertificate;
+      const prev = g.certs[idx] as ChengYuanZhengShu;
       if (prev.issuerSignature !== stored.issuerSignature || prev.memberPublicKey !== stored.memberPublicKey) {
         this.onAudit('membership.cert.conflict', { groupId, certId: stored.certId });
         return { ...base, code: 'malformed', detail: '同一 certId 已存在但内容不同（拒绝覆盖）' };
@@ -1399,7 +1399,7 @@ export class MembershipStore {
   }
 
   /** 当前吊销列表（副本） */
-  revocation(groupId: string): RevocationList | null {
+  revocation(groupId: string): CheXiaoBiao | null {
     return copyRevocation(this.snapshot().groups[groupId]?.revocation ?? null);
   }
 
@@ -1409,9 +1409,9 @@ export class MembershipStore {
    */
   applyRevocationList(
     groupId: string,
-    list: RevocationList,
+    list: CheXiaoBiao,
     opts: { expectIssuerFingerprint?: string } = {}
-  ): RevocationApplyResult & { stored: boolean } {
+  ): CheXiaoYingYongJieGuo & { stored: boolean } {
     const file = this.snapshot();
     const existing = file.groups[groupId];
     const pinned = opts.expectIssuerFingerprint || existing?.issuerFingerprint || '';
@@ -1439,7 +1439,7 @@ export class MembershipStore {
     g.revocation = copyRevocation(list);
     g.updatedAt = this.now();
     const w = this.persist(file);
-    if (!w.ok) return { ...res, ok: false, code: 'write-failed' as RevocationListCode, stored: false };
+    if (!w.ok) return { ...res, ok: false, code: 'write-failed' as CheXiaoBiaoMa, stored: false };
     this.onAudit('membership.revocation.applied', {
       groupId,
       from: res.previousVersion,

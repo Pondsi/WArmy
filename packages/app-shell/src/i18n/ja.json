@@ -1712,5 +1712,9 @@
   "container.inst.openAppFailed": "Could not open the container product’s UI ({reason}).",
   "container.inst.createHint": "Create instances in that container product’s own UI/console: methods differ and images may need pulling, so we do not create it for you.",
   "container.listHidden": "{n} unusable and non-startable container(s) hidden",
-  "me.idWarn": "This ID **is** your private key: only you should see it. Whoever holds it is you, and no server can revoke it for you — keep it safe. When you add a friend or join a group, what you hand out is the public key (fingerprint) derived from it, never this string."
+  "me.idWarn": "This ID **is** your private key: only you should see it. Whoever holds it is you, and no server can revoke it for you — keep it safe. When you add a friend or join a group, what you hand out is the public key (fingerprint) derived from it, never this string.",
+  "settings.providerPickHint": "Choose a provider to add",
+  "settings.providerPickFirst": "Pick a provider first",
+  "container.section.existing": "Containers on this machine",
+  "container.section.images": "Images"
 }
