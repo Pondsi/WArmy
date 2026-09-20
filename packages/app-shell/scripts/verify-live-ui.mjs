@@ -132,6 +132,49 @@ async function main() {
     check('技能区有「浏览…」+「检查技能」', settingsDom.skillBrowse && settingsDom.skillCheck, settingsDom);
     check('容器说明已折叠(details)', settingsDom.containerGuideCollapse === true, settingsDom);
 
+    // ── 3b. 供应商（第 8/9 条）真机断言 ──
+    const provDom = await c.evaluate(`(function(){
+      const g = (s) => document.querySelector(s);
+      const sel = g('#prov-preset');
+      const opts = sel ? Array.from(sel.options).map((o) => o.textContent.trim()) : [];
+      const add = g('#btn-add-prov');
+      const before = document.querySelectorAll('#prov-list .prov-card').length;
+      if (add) add.click();
+      return { presetExists: !!sel, optionCount: opts.length, options: opts, before, hasCount: !!g('#prov-count') };
+    })()`);
+    check('供应商：有预设下拉且含 ≥10 项', provDom.presetExists && provDom.optionCount >= 10, provDom);
+    check('供应商：有计数显示（n/50）', provDom.hasCount === true, provDom);
+    await sleep(900);
+    const provAfter = await c.evaluate(`(function(){
+      const cards = document.querySelectorAll('#prov-list .prov-card').length;
+      const count = (document.querySelector('#prov-count') || {}).textContent || '';
+      // 特殊模型只能选供应商里已存在的模型：没有模型时只能是占位项
+      const sm = document.querySelector('select[data-special]');
+      const smOpts = sm ? Array.from(sm.options).map((o) => o.value).filter((v) => v !== '') : [];
+      return { cards, count, smOptions: smOpts };
+    })()`);
+    check('供应商：点「添加」后卡片数 +1', provAfter.cards > provDom.before, { before: provDom.before, after: provAfter.cards });
+    check('供应商：计数随卡片更新', String(provAfter.count).includes('/50'), provAfter.count);
+    check('特殊模型：供应商无模型时不给可选项（第 8 条）', provAfter.smOptions.length === 0, provAfter);
+
+    // 清理：把刚加的空供应商删掉，避免影响后续断言
+    await c.evaluate(`(function(){
+      const btns = document.querySelectorAll('#prov-list [data-prov-del]');
+      if (btns.length) btns[btns.length - 1].click();
+      return true;
+    })()`);
+    await sleep(600);
+
+    // ── 3c. 容器运行时名字不得含"推荐/厂商"等广告性措辞 ──
+    const contNames = await c.evaluate(`(function(){
+      const out = [];
+      document.querySelectorAll('#container-guide .ctg-guide-name, #container-guide [data-name]').forEach((el) => out.push((el.textContent || '').trim()));
+      return out;
+    })()`);
+    check('容器说明：运行时名字无"推荐/厂商"字样',
+      Array.isArray(contNames) && !contNames.some((n) => /推荐|优先|recommended|preferred|厂商|公司/i.test(n)),
+      contNames.slice(0, 6));
+
     // ── 4. 我的页：无保存按钮、邮箱输入存在 ──
     await c.evaluate(`(function(){ try { document.querySelector('#rail [data-nav="me"]').click(); } catch(e){} return true; })()`);
     await sleep(1400);
