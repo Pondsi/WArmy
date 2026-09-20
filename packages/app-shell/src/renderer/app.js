@@ -2,6 +2,16 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   let pendingAvatarTarget = null;
+  /**
+   * 供应商列表的**出厂预设**（只在从来没有落盘过时用一次）。
+   * 真正生效的列表一律以设置文件为准 —— 用户加过的供应商、拉到的模型、标红状态
+   * 都写在 `settings.providers` 里（**密钥不在这里**：密钥走 safeStorage，见主进程）。
+   */
+  const PROVIDER_DEFAULTS = [
+    { id: 'deepseek', label: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat', models: [] },
+    { id: 'ollama', label: 'Ollama (本机)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434/v1', defaultModel: 'qwen2.5:7b', models: [] },
+  ];
+  const PROVIDER_PROTOCOLS = ['openai-compatible', 'anthropic', 'ollama'];
   const state = {
     nav: 'singleAi',
     locale: 'zh-CN',
@@ -65,29 +75,57 @@
         desc: 'plugin.memory.desc',
       },
     ],
-    providers: [
-      {
-        id: 'deepseek',
-        label: 'DeepSeek',
-        protocol: 'openai-compatible',
-        baseURL: 'https://api.deepseek.com',
-        defaultModel: 'deepseek-chat',
-        apiKey: '',
-        models: [],
-      },
-      {
-        id: 'ollama',
-        label: 'Ollama',
-        protocol: 'ollama',
-        baseURL: 'http://127.0.0.1:11434',
-        defaultModel: 'qwen2.5:7b',
-        apiKey: '',
-        models: [],
-      },
-    ],
+    providers: PROVIDER_DEFAULTS.map((p) => ({ ...p, models: [] })),
   };
 
   const __CONSOLE_CAP_EARLY = 200;
+  /** 设置页当前分区（跨 renderPage 保留，见 bindSettingsMenu） */
+  let settingsSection = 'ui';
+
+  /* ── 供应商列表的落盘（设置 → 模型） ────────────────────────────────
+   * 事实来源 = 设置文件里的 `providers`；**密钥不在里面**（走 safeStorage）。
+   * 这里只做三件事：读回来、写回去、把密钥存在与否问出来（永远读不回明文）。 */
+  function providerRecordOf(p) {
+    return {
+      id: String(p.id || ''),
+      label: String(p.label || ''),
+      protocol: PROVIDER_PROTOCOLS.includes(p.protocol) ? p.protocol : 'openai-compatible',
+      baseURL: String(p.baseURL || ''),
+      defaultModel: String(p.defaultModel || ''),
+      models: Array.isArray(p.models) ? p.models.map((m) => String(m)) : [],
+      staleModels: (p.staleModels && typeof p.staleModels === 'object') ? { ...p.staleModels } : {},
+      hasKey: !!p.hasKey,
+    };
+  }
+  async function saveProviders() {
+    try {
+      await window.warmy.settingsSave({
+        providers: state.providers.map(providerRecordOf),
+        providersSeeded: true,
+      });
+    } catch { /* 写失败不影响本次界面；下次改动会再试 */ }
+  }
+  async function loadProvidersFromSettings() {
+    let seeded = false;
+    try {
+      const r = await window.warmy.settingsGet?.();
+      const saved = r?.settings?.providers;
+      seeded = !!r?.settings?.providersSeeded;
+      if (Array.isArray(saved) && (saved.length || seeded)) {
+        state.providers = saved.map((p) => providerRecordOf(p));
+      } else {
+        // 从来没落盘过：用出厂预设初始化一次（之后一律以落盘为准，删光了也不会自己回来）
+        state.providers = PROVIDER_DEFAULTS.map((p) => providerRecordOf({ ...p, models: [] }));
+        await saveProviders();
+      }
+    } catch { /* 读不到就用内置预设顶着 */ }
+    try {
+      const ids = state.providers.map((p) => p.id);
+      const h = await window.warmy.providerKeyHas?.({ providerIds: ids });
+      if (h?.ok) state.providers.forEach((p) => { p.hasKey = !!h.has[p.id]; });
+    } catch { /* 问不到就当没有：界面会显示"未设置密钥" */ }
+  }
+  window.__warmyReloadProviders = loadProvidersFromSettings;
   const t = (k) => state.t[k] || k;
   /** 结构化值展示：对象绝不 textContent 直出（避免 [object Object]） */
   const fmtDisp = (v) => {
@@ -2570,16 +2608,25 @@
       // 唯一凭证：指纹（私钥不落渲染层）
       (async () => {
         try {
+          // 唯一凭证 = 身份指纹（公钥的短标识，给别人的东西）
           const cred = await window.warmy.identityCredential?.();
           const el = $('me-cred-val');
           if (el && cred?.ok) {
             el.textContent = cred.fingerprint || '—';
             el.dataset.fp = cred.fingerprint || '';
           }
+          // 本机 ID = 私密凭证（base59，45 位）：只展示给本人，复制即备份
+          const info = await window.warmy.credentialInfo?.();
+          const idEl = $('me-id-val');
+          if (idEl && info?.ok && info.credential) {
+            idEl.textContent = info.formatted || info.credential;
+            idEl.dataset.raw = info.credential;
+          }
         } catch { /* noop */ }
       })();
       $('btn-me-id-copy')?.addEventListener('click', async () => {
-        const v = $('me-id-val')?.textContent || '';
+        const el = $('me-id-val');
+        const v = (el && el.dataset.raw) || (el && el.textContent) || '';
         try { await navigator.clipboard.writeText(v); uiAlert(t('contact.mineCopied')); } catch { uiAlert(t('contact.mineCopyFail')); }
       });
       $('btn-me-cred-copy')?.addEventListener('click', async () => {
@@ -2709,6 +2756,8 @@
           <button data-sec="notify">${t('settings.section.notify')}</button>
           <button data-sec="model">${t('settings.section.model')}</button>
           <button data-sec="func">${t('settings.section.func')}</button>
+          <button data-sec="skill">${t('settings.tabSkills')}</button>
+          <button data-sec="plugin">${t('settings.tabPlugins')}</button>
           <button data-sec="hotkey">${t('settings.section.hotkey')}</button>
           <button data-sec="about">${t('settings.section.about')}</button>
         </div>
@@ -2835,20 +2884,8 @@
           </div>
           <div id="container-list" class="ctg-list" data-probe="none"></div>
           <div class="ctg-dim" id="container-missing-note"></div>
-          <!-- 第三批：环境类型（Linux 真容器 / Windows 受限 / Android 非容器）+ 镜像（digest）+ 实测耗时 -->
-          <div class="ctg-hint-box" id="container-dev-isolation">
-            <div class="ctg-hint-title">${t('container.runEnv.title')}</div>
-            <div class="ctg-dim">${t('container.devIsolation')}</div>
-            <div class="ctg-dim">${t('container.devIsolationTest')}</div>
-          </div>
-          <div class="ctg-guide-head">${t('container.envType.title')}</div>
-          <div class="ctg-dim">${t('container.envType.hint')}</div>
-          <div class="ctg-dim">${t('container.envType.onlyLinux')}</div>
-          <div id="container-env-types" class="ctg-list"></div>
-          <div class="ctg-hint-box" id="container-os-mode-note">
-            <div class="ctg-hint-title">${t('container.envType.title')}</div>
-            <div class="ctg-dim">${t('container.envType.modeHint')}</div>
-          </div>
+          <!-- 第十七批：**删掉"环境类型"** —— 环境就是具体实例（见下方「实例」）； -->
+          <!-- 再加一层抽象（Linux 真容器 / Windows 受限 …）只会让用户多选一次而信息更少。 -->
           <div class="ctg-hint-box" id="container-target-note">
             <div class="ctg-hint-title">${t('container.target.title')}</div>
             <div class="ctg-dim">${t('container.target.hint')}</div>
@@ -2907,7 +2944,8 @@
             </div>
           </details>
         </div>
-        <div class="set-section set-card" data-sec="func">
+        <div class="set-section" data-sec="plugin"><h2 style="color:var(--accent)">${t('settings.tabPlugins')}</h2></div>
+        <div class="set-section set-card">
           <h2>${t('settings.plugins')}</h2>
           <div id="plug-list" class="plugin-list"></div>
           <div class="inst-row" style="margin-top:6px;align-items:center">
@@ -2931,7 +2969,7 @@
         <!-- 内网同步 / 多节点组网 旧设置块已移除：功能由下方「组网设置」卡片承接。
              底层 IPC 通道 warmy:lan-* / warmy:mesh-* 保留为产品契约，仅去掉 UI 与死渲染代码。 -->
         <!-- R8：组网设置：混合公网地址列表（IP + 域名）+ 刷新本机/公网地址 + 逐条检测 + 开关（检测通过才能打开） -->
-        <div class="set-section set-card" id="net-card">
+        <div class="set-section set-card" id="net-card" data-sec="func">
           <h2>${t('net.title')} <button type="button" class="btn-mini net-help-btn" id="btn-net-help" aria-label="${escapeHtml(t('net.helpTitle'))}" title="${escapeHtml(t('net.helpTitle'))}">?</button></h2>
           <div id="net-help-box" class="muted net-help-box hidden">${escapeHtml(t('net.helpBody'))}</div>
           <p class="muted" style="margin:0 0 10px">${t('net.hint')}</p>
@@ -2970,12 +3008,12 @@
             <span class="muted" id="net-switch-msg"></span>
           </div>
         </div>
-        <div class="set-section set-card" id="settings-data-card">
+        <div class="set-section set-card" id="settings-data-card" data-sec="func">
           <h2>${t('settings.dataTitle')}</h2>
           <p class="muted">${t('settings.dataHint')}</p>
           <div id="settings-data-metrics" class="diag-grid"></div>
         </div>
-        <div class="set-section set-card">
+        <div class="set-section set-card" data-sec="func">
           <h2>${t('ctx.archive')}</h2>
           <p class="muted">${t('archive.hint')}</p>
           <div id="archived-box" class="muted">—</div>
@@ -3000,11 +3038,12 @@
           <span class="muted" id="sm-msg"></span>
         </div>
         
-        <div class="set-section set-card">
+        <div class="set-section set-card" data-sec="func">
           <h2>${t('join.blacklistTitle')}</h2>
           <div id="blacklist-box" class="muted">${t('join.blacklistEmpty')}</div>
         </div>
-        <div class="set-section set-card" id="skills-card" data-sec="func">
+        <div class="set-section" data-sec="skill"><h2 style="color:var(--accent)">${t('settings.tabSkills')}</h2></div>
+        <div class="set-section set-card" id="skills-card">
           <h2>${t('settings.skills')}</h2>
           <p class="muted" style="margin:0 0 8px">${t('settings.skillsHint')}</p>
           <div style="margin-bottom:8px"><button class="btn-mini" id="btn-skill-import">${t('settings.skillsImport')}</button></div>
@@ -3165,8 +3204,8 @@
       (function bindSettingsMenu() {
         const contentEl = $('settings-content');
         if (!contentEl) return;
-        const secIds = ['ui', 'notify', 'model', 'func', 'hotkey', 'about'];
-        const groups = { ui: [], notify: [], model: [], func: [], hotkey: [], about: [] };
+        const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'plugin', 'hotkey', 'about'];
+        const groups = { ui: [], notify: [], model: [], func: [], skill: [], plugin: [], hotkey: [], about: [] };
         let curSec = 'ui';
         Array.from(contentEl.children).forEach((el) => {
           const ds = el.getAttribute && el.getAttribute('data-sec');
@@ -3175,11 +3214,18 @@
         });
         const navBtns = Array.from(document.querySelectorAll('#settings-nav button'));
         const showSec = (s) => {
+          settingsSection = s;   // 记住当前分区：renderPage() 后要回到这里
           secIds.forEach((k) => groups[k].forEach((el) => { el.style.display = k === s ? '' : 'none'; }));
           navBtns.forEach((b) => b.classList.toggle('on', b.dataset.sec === s));
         };
         navBtns.forEach((btn) => { btn.onclick = () => showSec(btn.dataset.sec); });
-        showSec('ui');
+        /**
+         * 以前这里写死 showSec('ui')：只要点了「添加供应商 / 拉取模型」之类的按钮，
+         * 处理函数内部会 renderPage() 整页重渲染 ⇒ 分区被打回 'ui'，
+         * 用户看到的就是"点一下就被弹回设置首页"。
+         * 现在改为恢复到用户当前所在分区（点击导航栏时记录）。
+         */
+        showSec(settingsSection);
       })();
 
       // 通知+邮箱：确定生效 / 取消恢复
@@ -3816,18 +3862,24 @@
 
       // ── 模型供应商（含拉取模型/删除/默认模型） ──
       const prov = $('prov-list');
-      state.providers.forEach((pr) => {
+      /**
+       * 顺序：**新添加的排在最上面**（列表是追加进 state 的，所以这里倒着渲染）。
+       * 用户刚加完一个供应商就能在第一个看到它，不用往下翻。
+       */
+      [...state.providers].reverse().forEach((pr) => {
         const el = document.createElement('div');
         el.className = 'prov-card';
+        // 名称重复 ⇒ 这张卡片整体不可用：输入框与它下面的模型一起标红并给出原因
+        const nameDup = providerLabelDupCount(pr.label, pr.id) > 0;
         el.innerHTML =
           '<div class="prov-head" style="display:flex;justify-content:space-between;align-items:center">' +
           '<span>' + escapeHtml(pr.label) + '</span>' +
           '<button class="btn-mini" data-prov-del="' + escapeHtml(pr.id) + '" title="' + t('settings.pluginUninstall') + '">' + t('settings.pluginUninstall') + '</button>' +
           '</div>' +
           '<div class="inst-row">' +
-          '<div class="field"><label>' + t('settings.providerName') + '</label><input data-k="label" value="' + escapeHtml(pr.label) + '"/></div>' +
+          '<div class="field"><label>' + t('settings.providerName') + '</label><input data-k="label" class="' + (nameDup ? 'dup' : '') + '" value="' + escapeHtml(pr.label) + '" title="' + (nameDup ? escapeHtml(t('settings.providerNameDup')) : '') + '"/></div>' +
           '<div class="field"><label>' + t('settings.baseUrl') + '</label><input data-k="baseURL" value="' + escapeHtml(pr.baseURL) + '"/></div>' +
-          '<div class="field"><label>' + t('settings.apiKey') + '</label><input data-k="apiKey" type="password" value="' + escapeHtml(pr.apiKey || '') + '"/></div>' +
+          '<div class="field"><label>' + t('settings.apiKey') + '</label><input data-k="apiKey" type="password" value="" placeholder="' + escapeHtml(pr.hasKey ? t('settings.keySaved') : t('settings.keyEmpty')) + '"/></div>' +
           '</div>' +
           '<div class="prov-actions"><button class="btn-mini" data-fetch>' + t('settings.fetchModels') + '</button></div>' +
           '<div class="model-row">' +
@@ -3835,76 +3887,122 @@
             .map((m) => {
               const usedBy = modelUsageCache.get(m) || [];
               const inUse = usedBy.length > 0;
-              const tip = inUse ? fmtKey('settings.modelInUseTip', { who: usedBy.join(' / ') }) : t('settings.modelSetDefault');
-              return '<span class="model-chip' + (inUse ? ' in-use' : '') + '" data-m="' + escapeHtml(m) + '" title="' + escapeHtml(tip) + '">' +
+              const stale = !!(pr.staleModels && pr.staleModels[m]);
+              const dup = nameDup;
+              /**
+               * 悬停必须说清**为什么红**：重名 > 需重新拉取 > 正在被谁占用（可叠加）。
+               */
+              const tips = [];
+              if (dup) tips.push(t('settings.providerNameDup'));
+              if (stale) tips.push(fmtKey('settings.modelStaleTip', {}));
+              if (inUse) tips.push(fmtKey('settings.modelInUseTip', { who: usedBy.join(' / ') }));
+              if (!tips.length) tips.push(t('settings.modelSetDefault'));
+              return '<span class="model-chip' + ((inUse || stale || dup) ? ' in-use' : '') + '" data-m="' + escapeHtml(m) + '" title="' + escapeHtml(tips.join(' · ')) + '">' +
                 escapeHtml(m) +
                 '<button class="x" data-del="' + escapeHtml(m) + '" title="' + t('settings.removeModel') + '">×</button></span>';
             })
             .join('')) || '<span class="muted">' + t('settings.modelsEmpty') + '</span>') +
           '</div>' +
-          '<div class="muted" data-models-note style="font-size:11px"></div>';
+          '<div class="muted" data-models-note style="font-size:11px">' +
+          (nameDup ? escapeHtml(t('settings.providerNameDup')) : '') + '</div>';
         el.querySelectorAll('input[data-k]').forEach((inp) => {
-          inp.onchange = () => {
+          inp.onchange = async () => {
             const key = inp.dataset.k;
             const before = pr[key];
             pr[key] = inp.value;
-            if (before !== inp.value) {
-              /**
-               * 产品规则：已有模型的供应商，只要改了**名称 / 接口地址 / 密钥**任一项，
-               * 其下的模型就"丢失"（因为端点/凭据变了，旧模型列表不再可信）。
-               * 但**正在被使用的**模型不能凭空消失：保留并标红，悬停说明谁在用；
-               * 重新拉取到同一模型后恢复正常。
-               */
-              const all = pr.models || [];
-              const kept = all.filter((m) => modelUsageCache.has(m));
-              const dropped = all.filter((m) => !modelUsageCache.has(m));
-              pr.models = kept;
-              pr.inUseModels = kept;
-              if (dropped.length) {
-                const note = el.querySelector('[data-models-note]');
-                if (note) note.textContent = fmtKey('settings.modelsDropped', { n: String(dropped.length) });
+            if (before === inp.value) return;
+            /**
+             * 产品规则（本轮修正）：改**名称 / 接口地址 / 密钥**任何一项，
+             * 该供应商下的模型**全部不删**，而是先标红（stale）＝"可能无法正常使用，
+             * 需要重新拉取模型"。重新拉取之后才做取舍：
+             *   · 又被拉到的模型 → 恢复正常
+             *   · 没被拉到且**没人在用** → 直接删除
+             *   · 没被拉到但**正在被使用** → 保留并保持标红，悬停显示占用位置
+             */
+            if (key === 'label' || key === 'baseURL' || key === 'apiKey') {
+              const models = pr.models || [];
+              if (models.length) {
+                models.forEach((m) => { pr.staleModels = { ...(pr.staleModels || {}), [m]: true }; });
               }
             }
-            if (key === 'label') el.querySelector('.prov-head').textContent = inp.value;
-            window.warmy.setProvider({
-              presetId: pr.id,
-              apiKey: pr.apiKey,
-              baseURL: pr.baseURL,
-              model: providerCfgModel(pr),
-              protocol: pr.protocol,
-            });
-            // 变更后重渲染：标红与提示都反映最新占用情况
+            if (key === 'apiKey') {
+              /**
+               * 密钥**只进安全存储**（safeStorage），并且界面读不回明文。
+               * 主进程拒绝写明文时（no-safe-storage）如实告诉用户，不假装保存成功。
+               */
+              const typed = inp.value;
+              const r = await window.warmy.providerKeySet?.({ providerId: pr.id, apiKey: typed });
+              if (r?.ok) {
+                pr.hasKey = true;
+                pr.apiKey = '';
+                inp.value = '';
+                inp.placeholder = t('settings.keySaved');
+              } else {
+                const note = el.querySelector('[data-models-note]');
+                if (note) note.textContent = fmtKey('settings.keySaveFailed', { err: String(r?.error || '') });
+              }
+            }
+            // 当前生效的供应商：把改动同步给主进程（密钥由主进程自己按 id 取，不回传明文）
+            const cfg = { presetId: pr.id, baseURL: pr.baseURL, model: providerCfgModel(pr), protocol: pr.protocol };
+            await window.warmy.setProvider(cfg);
+            await saveProviders();
+            // 变更后重渲染：标红与提示都反映最新状态
             renderPage();
           };
         });
         el.querySelector('[data-fetch]').onclick = async () => {
           const btn = el.querySelector('[data-fetch]');
           btn.textContent = t('common.loading');
+          const note0 = el.querySelector('[data-models-note]');
+          // 当前生效的供应商（离开这个卡片时拉取也要用对端点/密钥）——密钥由主进程按 id 解出
           await window.warmy.setProvider({
             presetId: pr.id,
-            apiKey: pr.apiKey,
             baseURL: pr.baseURL,
             protocol: pr.protocol,
             model: providerCfgModel(pr),
           });
-          const r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, apiKey: pr.apiKey });
+          const r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, providerId: pr.id });
           if (r?.ok && r.models?.length) {
-            pr.models = [...new Set([...(pr.models || []), ...r.models])];
-            // 重新拉取覆盖到同一模型 ⇒ 标红自动恢复正常（占用表重新计算）
+            const fetched = new Set(r.models);
+            const prev = pr.models || [];
+            // 又被拉到的模型 ⇒ 恢复正常
+            const stale = { ...(pr.staleModels || {}) };
+            fetched.forEach((m) => { delete stale[m]; });
+            // 没被拉到：**没人在用就删除**；正在被使用则保留（继续标红，悬停显示占用位置）
             modelUsageCache = await collectModelUsage();
+            const kept = prev.filter((m) => fetched.has(m) || modelUsageCache.has(m));
+            kept.forEach((m) => { if (!fetched.has(m)) stale[m] = true; });
+            pr.models = [...new Set([...kept, ...r.models])];
+            pr.staleModels = stale;
+            const droppedN = prev.filter((m) => !kept.includes(m)).length;
+            const stillStale = pr.models.filter((m) => stale[m]).length;
+            if (note0) {
+              note0.textContent = [
+                droppedN ? fmtKey('settings.modelsDropped', { n: String(droppedN) }) : '',
+                stillStale ? fmtKey('settings.modelsStale', { n: String(stillStale) }) : '',
+              ].filter(Boolean).join(' · ');
+            }
+          } else if (note0) {
+            // 拉取失败**照实说**：不清空已有模型，也不假装成功（标红状态保持原样）
+            note0.textContent = fmtKey('settings.modelsFetchFailed', { err: String(r?.error || t('common.error')) });
           }
+          await saveProviders();
           renderPage();
         };
         el.querySelectorAll('[data-del]').forEach((btn) => {
-          btn.onclick = (e) => {
+          btn.onclick = async (e) => {
             e.stopPropagation();
             pr.models = (pr.models || []).filter((m) => m !== btn.dataset.del);
+            await saveProviders();
             renderPage();
           };
         });
-        el.querySelector('[data-prov-del]')?.addEventListener('click', (e) => {
+        el.querySelector('[data-prov-del]')?.addEventListener('click', async (e) => {
           e.stopPropagation();
           state.providers = state.providers.filter((x) => x.id !== pr.id);
+          // 供应商删掉 ⇒ 它那把密钥也不再留：安全存储里一并清掉
+          try { await window.warmy.providerKeyClear?.({ providerId: pr.id }); } catch { /* noop */ }
+          await saveProviders();
           renderPage();
         });
         el.querySelectorAll('.model-chip').forEach((chip) => {
@@ -3912,11 +4010,11 @@
             pr.defaultModel = chip.dataset.m;
             await window.warmy.setProvider({
               presetId: pr.id,
-              apiKey: pr.apiKey,
               baseURL: pr.baseURL,
               model: pr.defaultModel,
               protocol: pr.protocol,
             });
+            await saveProviders();
             renderPage();
           };
         });
@@ -3934,6 +4032,12 @@
         { id: 'anthropic', label: 'Anthropic (Claude)', protocol: 'anthropic', baseURL: 'https://api.anthropic.com' },
         { id: 'gemini', label: 'Google Gemini', protocol: 'openai-compatible', baseURL: 'https://generativelanguage.googleapis.com/v1beta' },
         { id: 'ollama', label: 'Ollama (本地)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434/v1' },
+        { id: 'ollama-remote', label: 'Ollama (远程/在线)', protocol: 'ollama', baseURL: 'http://<host>:11434/v1' },
+        { id: 'groq', label: 'Groq', protocol: 'openai-compatible', baseURL: 'https://api.groq.com/openai/v1' },
+        { id: 'mistral', label: 'Mistral', protocol: 'openai-compatible', baseURL: 'https://api.mistral.ai/v1' },
+        { id: 'together', label: 'Together AI', protocol: 'openai-compatible', baseURL: 'https://api.together.xyz/v1' },
+        { id: 'fireworks', label: 'Fireworks AI', protocol: 'openai-compatible', baseURL: 'https://api.fireworks.ai/inference/v1' },
+        { id: 'perplexity', label: 'Perplexity', protocol: 'openai-compatible', baseURL: 'https://api.perplexity.ai' },
         { id: '__other__', label: t('settings.providerOther'), protocol: 'openai-compatible', baseURL: '' },
       ];
       const PROVIDER_MAX = 50;
@@ -3943,6 +4047,30 @@
        * 用途（产品第 9 条）：改供应商的名称/接口地址/密钥 ⇒ 该供应商下的模型要"丢失"，
        * 但**正在被使用的模型不能消失**，而是标红并在悬停时说明"谁在用"。
        */
+      /** 去掉首尾空白后比较，忽略大小写 */
+      function normProvLabel(s) {
+        return String(s || '').trim().toLowerCase();
+      }
+      /** 该名字已被几个供应商占用（用于查重提示） */
+      function providerLabelDupCount(label, selfId) {
+        const n = normProvLabel(label);
+        if (!n) return 0;
+        return (state.providers || []).filter((p) => p.id !== selfId && normProvLabel(p.label) === n).length;
+      }
+      /** 预设名重复时自动加 _2 / _3 …（用户仍可自行改名） */
+      function uniqueProviderLabel(label) {
+        const base = String(label || '').trim();
+        if (!base) return '';
+        let i = 1;
+        let candidate = base;
+        const taken = new Set((state.providers || []).map((p) => normProvLabel(p.label)));
+        while (taken.has(normProvLabel(candidate))) {
+          i += 1;
+          candidate = `${base}_${i}`;
+        }
+        return candidate;
+      }
+
       async function collectModelUsage() {
         const usage = new Map();   // modelId -> [who]
         const add = (id, who) => {
@@ -3987,7 +4115,7 @@
       })();
 
       provCount();
-      $('btn-add-prov').onclick = () => {
+      $('btn-add-prov').onclick = async () => {
         if (state.providers.length >= PROVIDER_MAX) {
           uiAlert(fmtKey('settings.providerMax', { n: String(PROVIDER_MAX) }));
           return;
@@ -3995,15 +4123,23 @@
         const sel = $('prov-preset');
         const preset = PROVIDER_PRESETS.find((p) => p.id === (sel && sel.value)) || PROVIDER_PRESETS[PROVIDER_PRESETS.length - 1];
         const isOther = preset.id === '__other__';
+        const baseLabel = isOther ? '' : preset.label;
+        /**
+         * 名称唯一：预设名重复时自动加序号后缀（用户可以再改）。
+         * 产品要求：例如已经有一个 DeepSeek，再添加一个就叫 DeepSeek_2。
+         */
         state.providers.push({
           id: (isOther ? 'custom-' : preset.id + '-') + Date.now(),
-          label: isOther ? '' : preset.label,
+          label: uniqueProviderLabel(baseLabel),
           protocol: preset.protocol,
           baseURL: isOther ? '' : preset.baseURL,
           defaultModel: '',
           apiKey: '',
+          hasKey: false,
           models: [],
+          staleModels: {},
         });
+        await saveProviders();
         renderPage();
       };
     }
@@ -8334,24 +8470,10 @@
    */
   const CONTAINER_GUIDE_ORDER = ['colima', 'docker', 'isulad', 'kata', 'lima', 'lxd-incus', 'nerdctl', 'podman', 'pouch', 'rancher-desktop', 'windows-sandbox', 'wsl'];
   /**
-   * 「运行环境」的选项（第四批）：**实现方式**（容器 / 设备环境）是两条并列的路，不是同一层级。
-   * 每条都给出「适合跑什么 / 需要什么 / 哪里不可用」，避免用户拿容器去跑安卓 App 然后失败。
-   * 只有 `container-linux` 在本批真的落地；其余四项如实列出、**不假装支持**。
-   */
-  const RUN_ENV_OPTIONS = [
-    { key: 'container-linux', kind: 'container', envType: 'linux', implemented: true },
-    { key: 'container-windows', kind: 'container', envType: 'windows', implemented: false },
-    { key: 'device-android', kind: 'device', envType: 'android', implemented: false },
-    { key: 'device-ios', kind: 'device', envType: 'ios', implemented: false },
-    { key: 'device-windows-desktop', kind: 'device', envType: 'windows-desktop', implemented: false },
-  ];
-  const CONTAINER_ENV_TYPE_IDS = RUN_ENV_OPTIONS.map((x) => x.envType);
-  /**
    * 「运行 / 预览目标」（第五批）——**与"构建/测试在哪"是两个维度**。
    * 容器是 Linux 的，提供不了 Windows / macOS 的图形界面：这是物理约束，不是"还没做"。
    * 每个目标都如实写清"界面在哪里预览"，免得用户以为容器能把 Windows 界面送出来。
    */
-  const RUN_TARGETS = ['linux-service', 'web', 'windows-desktop', 'macos', 'android', 'ios'];
   const CONTAINER_LINK_KEYS = ['official', 'install', 'download', 'support'];
 
   /** 渲染层侧的执行环境状态（**事实来自主进程探测**，这里只缓存最近一次报告） */
@@ -8364,6 +8486,15 @@
     cameFromGuidance: false,
     /** 进行中的轮询计时器 */
     pollTimer: null,
+    /**
+     * 实例缓存：runtimeId → `warmy:container-instances` 的结果。
+     * 引擎没启动时**不拉取也不展开**（灰），启动后才允许查看。
+     */
+    instances: {},
+    /** 哪些运行时的实例区是展开的 */
+    instOpen: {},
+    /** 正在读实例 / 正在起停实例的 runtimeId */
+    instBusy: {},
   };
 
   const containerEntry = (id) => ((containerUi.report && containerUi.report.runtimes) || []).find((x) => x.id === id) || null;
@@ -8477,6 +8608,63 @@
       '</div>' +
       '<div class="ctg-dim ctg-cap">' + escapeHtml(t('container.capLabel')) + '：' + escapeHtml(containerCapabilityText(entry)) + '</div>' +
       reasonNote + transition + errLine +
+      containerInstancesHtml(entry) +
+      '</div>';
+  }
+
+  /**
+   * **实例**区（第十七批）：环境 = 具体实例。
+   *
+   * 规则（产品定稿）：
+   *  · 引擎**没启动** ⇒ 整块禁用并置灰，点了也不发请求（没有守护进程时问了也是错的）；
+   *  · 引擎启动了 ⇒ 可以展开，列出该引擎下**所有实例**，每个实例可单独启动/停止；
+   *  · **创建实例**不替用户在引擎里造（各引擎造法不同、还要拉镜像），而是打开该容器产品
+   *    自己的界面/控制台，让用户在那里自行创建；
+   *  · 引擎没有稳定的实例列表命令 ⇒ 如实说"该产品没有可用的实例列表接口"，不给假列表。
+   */
+  function containerInstancesHtml(entry) {
+    if (entry.status === 'not-installed' || entry.status === 'unsupported-platform') return '';
+    const running = entry.run === 'running';
+    const open = !!containerUi.instOpen[entry.id];
+    const busy = !!containerUi.instBusy[entry.id];
+    const data = containerUi.instances[entry.id];
+    let body = '';
+    if (open && running) {
+      if (busy) body = '<div class="ctg-dim">' + escapeHtml(t('container.inst.loading')) + '</div>';
+      else if (!data) body = '<div class="ctg-dim">' + escapeHtml(t('container.inst.empty')) + '</div>';
+      else if (!data.supported) body = '<div class="ctg-dim" data-inst-unsupported="' + escapeHtml(String(data.reason || '')) + '">' + escapeHtml(fmtKey('container.inst.unsupported', { reason: String(data.reason || '') })) + '</div>';
+      else if (!data.ok) body = '<div class="ctg-err" data-inst-error="' + escapeHtml(String(data.reason || 'command-failed')) + '">' + escapeHtml(fmtKey('container.inst.listFailed', { err: String(data.evidence || data.reason || '') })) + '</div>';
+      else if (!data.instances.length) body = '<div class="ctg-dim" data-inst-count="0">' + escapeHtml(t('container.inst.none')) + '</div>';
+      else {
+        body = data.instances.map((x) => {
+          const on = x.state === 'running';
+          const controllable = !!data.controllable;
+          return '<div class="ctg-inst-row" data-inst-name="' + escapeHtml(x.name) + '" data-inst-state="' + escapeHtml(x.state) + '">' +
+            '<span class="ctg-inst-name">' + escapeHtml(x.name) + '</span>' +
+            (x.ours ? '<span class="ctg-badge" data-tone="ok">' + escapeHtml(t('container.inst.ours')) + '</span>' : '') +
+            '<span class="ctg-dim">' + escapeHtml(x.image || '') + '</span>' +
+            '<span class="ctg-badge" data-tone="' + (on ? 'ok' : 'dim') + '">' + escapeHtml(on ? t('container.inst.running') : t('container.inst.stopped')) + '</span>' +
+            '<span class="ctg-spacer"></span>' +
+            (controllable && !on
+              ? '<button type="button" class="btn-mini" data-inst-act="start" data-inst-id="' + escapeHtml(entry.id) + '" data-inst-name="' + escapeHtml(x.name) + '"' + (busy ? ' disabled' : '') + '>' + escapeHtml(t('container.inst.start')) + '</button>'
+              : '') +
+            (controllable && on
+              ? '<button type="button" class="btn-mini ctg-danger" data-inst-act="stop" data-inst-id="' + escapeHtml(entry.id) + '" data-inst-name="' + escapeHtml(x.name) + '"' + (busy ? ' disabled' : '') + '>' + escapeHtml(t('container.inst.stop')) + '</button>'
+              : '') +
+            '</div>';
+        }).join('');
+      }
+    }
+    const toggleLabel = open ? t('container.inst.collapse') : t('container.inst.view');
+    return '<div class="ctg-inst" data-inst-for="' + escapeHtml(entry.id) + '" data-inst-enabled="' + (running ? '1' : '0') + '">' +
+      '<div class="ctg-inst-head">' +
+      '<button type="button" class="btn-mini" data-inst-toggle="' + escapeHtml(entry.id) + '"' + (running ? '' : ' disabled') + '>' +
+      escapeHtml(toggleLabel) + '</button>' +
+      '<button type="button" class="btn-mini" data-inst-create="' + escapeHtml(entry.id) + '"' + (running ? '' : ' disabled') + '>' +
+      escapeHtml(t('container.inst.create')) + '</button>' +
+      '<span class="ctg-dim">' + escapeHtml(running ? t('container.inst.hintReady') : t('container.inst.hintStopped')) + '</span>' +
+      '</div>' +
+      (open && running ? '<div class="ctg-inst-body">' + body + '</div>' : '') +
       '</div>';
   }
 
@@ -8502,6 +8690,8 @@
         '<div class="ctg-guide-body">' +
         // 只保留**中性事实**：支持系统 / 体积 / 官方与安装链接。
         // 刻意不显示"收费/商用/厂商"等字段：那会被读成推荐或广告。
+        // 只陈述可核对的事实（许可/是否收费）；**不做比较、不发表观点**
+        field('cost', 'container.guideCost') +
         field('os', 'container.guideOs') +
         field('size', 'container.guideSize') +
         '<div class="ctg-links">' + linkRows + '</div>' +
@@ -8526,10 +8716,23 @@
       if (sum) { sum.textContent = ''; sum.dataset.summary = 'none'; }
       return;
     }
-    const listed = (rep.runtimes || []).filter((r) => r.status !== 'not-installed');
+    /**
+     * 列表**只列"本机可以用的 / 可以启动的"**（第十七批）。
+     *   · ready（能用）与 installed-not-running 且**真能启动**的（一键启动/关闭都在行内）；
+     *   · `engine-error` / `unsupported-platform` **不进列表**：它们既不能用、也没有可用的
+     *     操作按钮，列出来只会让用户以为"有东西可以用"。有多少条被隐藏会**如实说**。
+     *   · `not-installed` 本来就不进列表（只进下面的安装说明）。
+     */
+    const all = (rep.runtimes || []).filter((r) => r.status !== 'not-installed');
+    const listed = all.filter((r) => r.status === 'ready' || (r.lifecycle && r.lifecycle.startable));
+    const hiddenN = all.length - listed.length;
     box.dataset.probe = 'done';
     box.innerHTML = listed.length ? listed.map(containerRowHtml).join('') : '<div class="ctg-dim">' + escapeHtml(t('container.listEmpty')) + '</div>';
-    if (note) note.textContent = rep.notInstalledCount ? fmtKey('container.notInstalledNote', { n: String(rep.notInstalledCount) }) : '';
+    bindContainerInstanceEvents();
+    const notes = [];
+    if (rep.notInstalledCount) notes.push(fmtKey('container.notInstalledNote', { n: String(rep.notInstalledCount) }));
+    if (hiddenN) notes.push(fmtKey('container.listHidden', { n: String(hiddenN) }));
+    if (note) note.textContent = notes.join(' · ');
     if (sum) {
       sum.dataset.summary = String(rep.usableIds ? rep.usableIds.length : 0);
       sum.textContent = fmtKey('container.probeSummary', {
@@ -8539,6 +8742,64 @@
         missing: String(rep.notInstalledCount || 0),
       });
     }
+  }
+
+  /**
+   * 实例区的交互绑定（每次重渲染列表后绑一次）：
+   *  · 展开/收起 —— 展开时按需拉一次实例（**引擎没启动的按钮是 disabled，点不动**）；
+   *  · 启动/停止单个实例 —— 干完**重新拉一次列表**（状态来自引擎，不靠本地猜）；
+   *  · 创建实例 —— 打开该容器产品自己的界面；打不开就**照实说**并给官方链接。
+   */
+  function bindContainerInstanceEvents() {
+    document.querySelectorAll('[data-inst-toggle]').forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.dataset.instToggle;
+        containerUi.instOpen[id] = !containerUi.instOpen[id];
+        if (containerUi.instOpen[id] && !containerUi.instances[id]) {
+          containerUi.instBusy[id] = true;
+          renderContainerList();
+          try {
+            containerUi.instances[id] = await window.warmy.containerInstances({ id });
+          } catch (e) {
+            containerUi.instances[id] = { ok: false, id, supported: true, controllable: false, instances: [], reason: 'unexpected', evidence: String(e && e.message ? e.message : e) };
+          }
+          containerUi.instBusy[id] = false;
+        }
+        renderContainerList();
+      };
+    });
+    document.querySelectorAll('[data-inst-act]').forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.dataset.instId;
+        const name = btn.dataset.instName;
+        const action = btn.dataset.instAct;
+        containerUi.instBusy[id] = true;
+        renderContainerList();
+        const r = await window.warmy.containerInstanceAction({ id, action, instance: name })
+          .catch((e) => ({ ok: false, error: String(e && e.message ? e.message : e) }));
+        containerUi.instBusy[id] = false;
+        if (!r || !r.ok) {
+          await uiAlert(fmtKey('container.inst.actFailed', { err: String((r && (r.error || r.evidence)) || 'unknown') }));
+        }
+        // 状态**重新问引擎**：不看本地缓存
+        delete containerUi.instances[id];
+        containerUi.instances[id] = await window.warmy.containerInstances({ id }).catch(() => null);
+        renderContainerList();
+      };
+    });
+    document.querySelectorAll('[data-inst-create]').forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.dataset.instCreate;
+        const r = await window.warmy.containerAppOpen({ id }).catch((e) => ({ ok: false, opened: false, reason: String(e && e.message ? e.message : e) }));
+        if (!r || !r.opened) {
+          /**
+           * 打不开就**说实话**，并把该产品官方链接给出去（用户自己建实例）。
+           * 不假装"已跳转"，也不替用户在引擎里造容器。
+           */
+          await uiAlert(fmtKey('container.inst.openAppFailed', { reason: String((r && r.reason) || 'unknown') }) + '\n' + t('container.inst.createHint'));
+        }
+      };
+    });
   }
 
   async function probeContainers(force) {
@@ -8695,31 +8956,9 @@
 
   /** 环境类型 / 镜像 / 实测耗时三段：数据全部来自探测报告，未获取就如实说"未获取" */
   function renderContainerFacts() {
-    const etBox = $('container-env-types');
-    if (etBox) {
-      const list = (containerUi.report && containerUi.report.envTypes) || [];
-      // 键名要按"运行环境选项"的 id 取（envType -> opt key），否则会渲染成裸 key
-      const optKeyOf = (envId) => {
-        const hit = RUN_ENV_OPTIONS.find((o) => o.envType === envId);
-        return hit ? hit.key : envId;
-      };
-      etBox.innerHTML = list.length
-        ? list.map((x) => {
-            const k = optKeyOf(x.id);
-            const facts = t('container.runEnv.opt.' + k + '.needs') + '\n' + t('container.runEnv.opt.' + k + '.blocked') + '\n' + t('container.runEnv.opt.' + k + '.impl');
-            return '<div class="ctg-row" data-env-type="' + escapeHtml(x.id) + '" data-opt="' + escapeHtml(k) + '" data-implemented="' + (x.implemented ? '1' : '0') + '" data-real="' + (x.realContainer ? '1' : '0') + '">' +
-              '<div class="ctg-row-head"><span class="ctg-name">' + escapeHtml(t('container.runEnv.opt.' + k + '.title')) + '</span>' +
-              '<span class="ctg-badge" data-tone="' + (x.implemented ? 'ok' : 'dim') + '">' +
-              escapeHtml(x.realContainer ? (x.implemented ? t('container.status.ready') : t('container.envType.limited')) : t('container.envType.notContainer')) +
-              '</span></div>' +
-              '<div class="ctg-dim">' + escapeHtml(t('container.runEnv.opt.' + k + '.fits')) + '</div>' +
-              '<div class="ctg-dim">' + escapeHtml(t('container.runEnv.needsLabel')) + '：' + escapeHtml(t('container.runEnv.opt.' + k + '.needs')) + '</div>' +
-              '<div class="ctg-dim">' + escapeHtml(t('container.runEnv.blockedLabel')) + '：' + escapeHtml(t('container.runEnv.opt.' + k + '.blocked')) + '</div>' +
-              '<div class="ctg-dim" data-facts="' + escapeHtml(k) + '">' + escapeHtml(facts.replace(/\n/g, ' ')) + '</div>' +
-              '</div>';
-          }).join('')
-        : '<div class="ctg-dim">' + escapeHtml(t('container.probing')) + '</div>';
-    }
+    /* 第十七批：**不再渲染"环境类型"** —— 环境就是具体实例。
+       原来那段（envTypes → Linux/Windows/Android 三选一的说明与徽章）整块删除：
+       它既不是用户能选的运行环境（真正跑起来的是某个具体实例），又和"实例"重复。 */
     const imgBox = $('container-images');
     if (imgBox) {
       const imgs = (containerUi.report && containerUi.report.images) || [];
@@ -11635,6 +11874,8 @@
           }
         } catch { /* noop */ }
         state.embedUseGpu = s.settings.embedUseGpu !== false;
+        // 供应商列表落盘读回（密钥只问"有没有"，读不回明文）
+        await loadProvidersFromSettings();
         // Re-apply persisted locale (settingsGet is also used above for boot; ensure UI state matches).
         if (s.settings.locale && resolveLocalePack(s.settings.locale) !== state.locale) {
           try { await loadI18n(resolveLocalePack(s.settings.locale)); } catch { /* noop */ }

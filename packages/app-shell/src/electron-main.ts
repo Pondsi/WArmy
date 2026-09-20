@@ -34,6 +34,7 @@ import { KnowledgeBase } from '@warmy/knowledge-base';
 import { CheckpointStore } from './checkpoint.js';
 import { AuditLogger } from './audit.js';
 import { SecureKeyStore } from './secure-keys.js';
+import * as credentialModule from './credential.js';
 import { KnowledgeArchiver, CleanupManager, extractKnowledgeFromArchive, mergeUserPreferences, extractStructuredSummary } from './archive-cleanup.js';
 import { pickModelForUrgency, pickEmbeddingModel, type RoleModelConfig } from './model-roles.js';
 import { orchestrateGroupMessage, buildStatusCard } from './orchestrator.js';
@@ -93,6 +94,7 @@ import {
   type ContainerFixedCommandId,
   type ContainerProjectState,
 } from './container-probe.js';
+import { listRuntimeInstances, runInstanceAction, openRuntimeApp } from './container-instances.js';
 import { IdentityStore, type MembershipStore } from './identity-store.js';
 import {
   CONTACT_CARD_I18N,
@@ -843,7 +845,11 @@ function renderChatView(key: string, recallHint?: string, budgetCharsOverride?: 
 
 /** 运行中的插入指令级别 */
 const insertMode = new Map<string, 'outer' | 'inner'>();
-/** Provider 配置（由设置 UI 写入） */
+/**
+ * Provider 配置（由设置 UI 写入）。
+ * **落盘**：元数据进 settings.json 的 `activeProvider`，密钥进 SecureKeyStore，
+ * 所以重启后"配好的供应商"还在（以前只活在内存里，重启即丢）。
+ */
 let providerCfg = {
   presetId: 'deepseek',
   apiKey: '',
@@ -851,6 +857,49 @@ let providerCfg = {
   model: 'deepseek-chat',
   protocol: 'openai-compatible' as 'openai-compatible' | 'anthropic' | 'ollama',
 };
+
+// 密钥存储实例见上方 `let secureKeys`（同一份；这里不再重复声明）
+
+/** 启动时把「当前生效的供应商」从设置读回内存，密钥按 id 从 SecureKeyStore 解出 */
+function restoreActiveProvider(): void {
+  try {
+    const s = settingsStore?.load();
+    const a = s?.activeProvider;
+    if (!a?.presetId) return;
+    providerCfg = {
+      presetId: a.presetId,
+      apiKey: '',
+      baseURL: a.baseURL || '',
+      model: a.model || providerCfg.model,
+      protocol: a.protocol || 'openai-compatible',
+    };
+  } catch { /* 读不回就保持默认；界面里能重新配 */ }
+}
+
+/**
+ * 取某个供应商的密钥：
+ *  · 界面上刚输入的明文优先；
+ *  · 否则按 id 从 SecureKeyStore 解出（这样重启后无需重输）。
+ */
+async function resolveProviderKey(presetId: string, entered?: string): Promise<string> {
+  const typed = String(entered || '');
+  if (typed) return typed;
+  try {
+    return (await secureKeys?.load(presetId)) || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 聊天/拉取模型前调用：内存里没有密钥就按 id 从 SecureKeyStore 解出来。
+ * 解不出来时**保持没有**（调用方照旧如实报"没有密钥"），不编也不假装。
+ */
+async function ensureProviderKey(): Promise<void> {
+  if (providerCfg.apiKey || providerCfg.protocol === 'ollama') return;
+  const k = await resolveProviderKey(providerCfg.presetId);
+  if (k) providerCfg.apiKey = k;
+}
 
 /** 打包态资源根目录；开发态下 Electron 也会给值，兜底空串便于拼路径 */
 const RES_ROOT = process.resourcesPath || '';
@@ -1013,6 +1062,8 @@ async function bootstrap() {
   checkpoints = new CheckpointStore(path.join(userData, 'checkpoints'));
   accountStore = new LocalAccountStore(path.join(userData, 'profile.json'));
   settingsStore = new SettingsStore(path.join(userData, 'settings.json'));
+  secureKeys = new SecureKeyStore(userData);
+  restoreActiveProvider();
   groupStore = new GroupStore(path.join(userData, 'groups.json'));
   /**
    * ADR 004 第十六批：把 helper-tool 的文件访问记录接到**项目台账**上。
@@ -1063,9 +1114,11 @@ async function bootstrap() {
   try {
     const profile = accountStore.loadProfile();
     // 旧 9 位 deviceId 降级为**人读别名**（附 ADR §2.2：ID 不再是身份，身份是指纹）
-    const idInit = identityStore.ensureIdentity(profile.deviceId || generateDeviceId(), {
+    // 凭证即私钥：新身份由 profile 里的凭证派生（老身份文件已存在则原样加载）
+    const bootCredential = profile.deviceId || generateDeviceId();
+    const idInit = identityStore.ensureIdentity(bootCredential, {
       email: profile.email || '',
-    });
+    }, { credential: bootCredential });
     if (idInit.ok) {
       boot(
         `identity idInit.created ? 'created' : 'loaded' fp=idInit.info.fingerprint gen=idInit.info.generation alias=idInit.info.alias protection=
@@ -1835,12 +1888,17 @@ handleIpc('warmy:theme-info', () => safeHandle(() => ({ shouldUseDarkColors: nat
 // ── 拉取供应商模型列表（OpenAI 兼容 /models） ──
 handleIpc(
   'warmy:list-models',
-  async (_e, cfg: { protocol: string; baseURL: string; apiKey?: string }) => {
+  async (_e, cfg: { protocol: string; baseURL: string; apiKey?: string; providerId?: string }) => {
     try {
       const { createProvider } = await import('@warmy/providers');
+      /**
+       * 密钥来源：界面刚输入的明文优先，否则按供应商 id 从安全存储解出。
+       * 界面**从不**回传已保存的密钥（读不回），所以"重新拉取"必须能自己取到它。
+       */
+      const key = await resolveProviderKey(String(cfg.providerId || providerCfg.presetId || ''), cfg.apiKey);
       const p = createProvider(
         (cfg.protocol as 'openai-compatible' | 'anthropic' | 'ollama') || 'openai-compatible',
-        { baseURL: cfg.baseURL, apiKey: cfg.apiKey }
+        { baseURL: cfg.baseURL, apiKey: key }
       );
       const models = await p.listModels();
       return { ok: true, models };
@@ -2129,10 +2187,69 @@ handleIpc('warmy:group-join-instance', (_e, groupId: string, instanceId: string)
 });
 
 // ── 真 LLM 对话 ──
-handleIpc('warmy:set-provider', (_e, cfg: Partial<typeof providerCfg>) => {
+handleIpc('warmy:set-provider', async (_e, cfg: Partial<typeof providerCfg>) => {
   try {
+    const entered = cfg.apiKey;
     providerCfg = { ...providerCfg, ...cfg };
+    /**
+     * 界面不再回传明文密钥（密钥只在输入那一刻进 SecureKeyStore）。
+     * 这里按 id 把密钥解出来放进内存，保证聊天路径和以前一样可用。
+     */
+    if (!providerCfg.apiKey || !entered) {
+      const k = await resolveProviderKey(providerCfg.presetId, entered);
+      if (k) providerCfg.apiKey = k;
+    }
+    /**
+     * 落盘：只写**可公开的元数据**，密钥一个字节都不进设置文件。
+     * 有了它，重启后组网/聊天才知道该用哪个供应商、哪个模型。
+     */
+    try {
+      settingsStore?.save({
+        activeProvider: {
+          presetId: providerCfg.presetId,
+          baseURL: providerCfg.baseURL || '',
+          model: providerCfg.model || '',
+          protocol: providerCfg.protocol,
+        },
+      } as never);
+    } catch { /* 设置写失败不影响本次生效 */ }
     return { ok: true, providerCfg: { ...providerCfg, apiKey: providerCfg.apiKey ? '***' : '' } };
+  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+});
+
+/**
+ * 供应商密钥：**只进 SecureKeyStore**（safeStorage）。
+ * 明确拒绝在没有 OS 保护时写明文（`no-safe-storage`），并把这个结果**如实**回给界面，
+ * 由界面告诉用户"这台机器上没有可用的加密存储"，绝不静默降级。
+ */
+handleIpc('warmy:provider-key-set', async (_e, payload: { providerId?: string; apiKey?: string }) => {
+  const id = String(payload?.providerId || '');
+  const key = String(payload?.apiKey || '');
+  if (!id) return { ok: false, error: 'bad-provider-id' };
+  if (!key) return { ok: false, error: 'empty-key' };
+  try {
+    if (!secureKeys) return { ok: false, error: 'secure-store-unavailable' };
+    await secureKeys.save(id, key);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
+handleIpc('warmy:provider-key-has', async (_e, payload: { providerIds?: string[] } = {}) => {
+  const ids = Array.isArray(payload.providerIds) ? payload.providerIds.map((x) => String(x)) : [];
+  const has: Record<string, boolean> = {};
+  for (const id of ids) {
+    try { has[id] = !!(await secureKeys?.load(id)); } catch { has[id] = false; }
+  }
+  return { ok: true, has };
+});
+
+handleIpc('warmy:provider-key-clear', (_e, payload: { providerId?: string } = {}) => {
+  try {
+    const id = String(payload?.providerId || '');
+    if (id && secureKeys) secureKeys.delete(id);
+    return { ok: true };
   } catch (e) { return { ok: false, error: sanitizeError(e) }; }
 });
 
@@ -2220,6 +2337,7 @@ handleIpc(
       ts: Date.now(),
     });
 
+    await ensureProviderKey();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       const reply = tMain('llm.noKey') + msg.content.slice(0, 80);
       appendChatLog(sessionId, {
@@ -2532,6 +2650,31 @@ handleIpc('warmy:container-action', async (_e, payload?: { id?: string; action?:
   if (r.ok) emitConsole({ cat: 'system', code: 'container.action.accepted', data: { id: r.id, action: r.action } });
   else emitConsole({ cat: 'error', code: 'container.action.rejected', data: { code: r.code, error: r.error } });
   return r;
+});
+
+/**
+ * 容器**实例**：环境类型不再是抽象选项，**具体实例就是环境**。
+ * 列表按引擎自己的 CLI 现问现答；不支持的引擎如实返回 supported:false。
+ */
+handleIpc('warmy:container-instances', async (_e, payload?: { id?: string }) => {
+  try {
+    return await listRuntimeInstances(String(payload?.id || ''));
+  } catch (e) {
+    return { ok: false, id: String(payload?.id || ''), supported: false, instances: [], reason: 'unexpected', evidence: sanitizeError(e) };
+  }
+});
+handleIpc('warmy:container-instance-action', async (_e, payload?: { id?: string; action?: string; instance?: string }) => {
+  const action = payload?.action === 'stop' ? 'stop' : payload?.action === 'start' ? 'start' : null;
+  if (!action) return { ok: false, id: String(payload?.id || ''), action: 'start', instance: '', error: 'bad-action' };
+  return runInstanceAction(String(payload?.id || ''), action, String(payload?.instance || ''));
+});
+/** 打开容器产品自己的界面：创建实例由用户在那边做（各引擎造法不同，我们不代造） */
+handleIpc('warmy:container-app-open', async (_e, payload?: { id?: string }) => {
+  try {
+    return await openRuntimeApp(String(payload?.id || ''));
+  } catch (e) {
+    return { ok: false, id: String(payload?.id || ''), opened: false, reason: 'unexpected', evidence: sanitizeError(e) };
+  }
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -4820,6 +4963,33 @@ handleIpc('warmy:identity-peer-confirm', (_e, fingerprint: string) => {
  * 导出身份凭证备份（附三 C6：产品无服务器，凭证必须用户自持）。
  * **永远是加密文件**：不存在"明文导出私钥"这条路径（附五：默认不显示明文）。
  */
+/** 凭证：当前本机 ID（= 私钥凭证）。界面只展示给本人，复制即备份。 */
+handleIpc('warmy:credential-info', () =>
+  safeHandle(() => {
+    const p = accountStore?.loadProfile?.() as { deviceId?: string } | undefined;
+    const cred = String(p?.deviceId || '');
+    return { ok: true, credential: cred, valid: credentialModule.isValidCredential(cred), formatted: cred ? credentialModule.formatCredential(cred) : '' };
+  }, { ok: true, credential: '', valid: false, formatted: '' })
+);
+
+/** 用凭证恢复身份（换机 / 误删配置）：只凭这一串即可找回同一身份与指纹 */
+handleIpc('warmy:credential-restore', (_e, credential: string) => {
+  try {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+    const r = identityStore.restoreFromCredential(String(credential || ''));
+    if (!r.ok) return { ok: false, error: r.error };
+    // 同步写回 profile：ID 与身份保持一致
+    try {
+      const raw = accountStore?.loadProfile?.() as Record<string, unknown> | undefined;
+      if (raw) accountStore?.saveProfile?.({ ...raw, deviceId: String(credential || '') } as never);
+    } catch { /* profile 写失败不影响身份本身 */ }
+    audit?.log('identity.restore.credential', { fingerprint: r.info.fingerprint });
+    return { ok: true, identity: r.info, fingerprint: r.info.fingerprint, backupFile: r.backupFile || null };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
+
 handleIpc('warmy:identity-backup-export', (_e, payload: { passphrase?: string; writeFile?: boolean } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
@@ -6130,6 +6300,7 @@ handleIpc('warmy:platform', () => ({
 // ── P5 短命执行者 ──
 handleIpc('warmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
   try {
+    await ensureProviderKey();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       return { ok: false, error: 'no key' };
     }
@@ -6152,6 +6323,7 @@ handleIpc('warmy:executor-run', async (_e, task: { taskId?: string; brief: strin
 
 handleIpc('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
   try {
+    await ensureProviderKey();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       return { ok: false, error: 'no key' };
     }
@@ -6490,6 +6662,7 @@ handleIpc('warmy:save-text', async (_e, payload: { defaultName?: string; content
 // ── D. ASR 语音转文字（调用 DeepSeek 兼容接口的 audio 端点；失败返回 null） ──
 handleIpc('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
   try {
+    await ensureProviderKey();
     if (!providerCfg.apiKey) return { ok: false, error: 'no key' };
     // 优先走用户配置的 ASR 端点（若支持）；否则尝试 /audio/transcriptions
     const base = (providerCfg.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '');

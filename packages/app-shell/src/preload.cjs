@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('warmy', {
   boardAggregate: () => ipcRenderer.invoke('warmy:board-aggregate'),
   setProvider: (cfg) => ipcRenderer.invoke('warmy:set-provider', cfg),
   getProvider: () => ipcRenderer.invoke('warmy:get-provider'),
+  // 供应商密钥只进安全存储（safeStorage）；界面永远读不回明文
+  providerKeySet: (payload) => ipcRenderer.invoke('warmy:provider-key-set', payload),
+  providerKeyHas: (payload) => ipcRenderer.invoke('warmy:provider-key-has', payload),
+  providerKeyClear: (payload) => ipcRenderer.invoke('warmy:provider-key-clear', payload),
   chatSend: (msg) => ipcRenderer.invoke('warmy:chat-send', msg),
   checkpointCreate: (phase) => ipcRenderer.invoke('warmy:checkpoint-create', phase),
   checkpointList: () => ipcRenderer.invoke('warmy:checkpoint-list'),
@@ -52,6 +56,10 @@ contextBridge.exposeInMainWorld('warmy', {
   // ADR 004：执行环境探测（只探测，不安装不下载不提权）与启停（只接受预定义 id + 'start'|'stop'）
   containerProbe: (opts) => ipcRenderer.invoke('warmy:container-probe', opts),
   containerAction: (payload) => ipcRenderer.invoke('warmy:container-action', payload),
+  // 容器实例（具体容器/发行版）：列出来、起停单个、以及打开容器产品自己的界面
+  containerInstances: (payload) => ipcRenderer.invoke('warmy:container-instances', payload),
+  containerInstanceAction: (payload) => ipcRenderer.invoke('warmy:container-instance-action', payload),
+  containerAppOpen: (payload) => ipcRenderer.invoke('warmy:container-app-open', payload),
   // 容器内 shell（P4，= 控制台本体）：只接受 { runtimeId, action, sessionId, data }；
   // action 是**枚举**（open/write/close/status），**不接受任何命令字符串**。
   containerShell: (payload) => ipcRenderer.invoke('warmy:container-shell', payload),
@@ -96,6 +104,8 @@ contextBridge.exposeInMainWorld('warmy', {
   privacyConsentSet: (consent) => ipcRenderer.invoke('warmy:privacy-consent-set', consent),
   appQuit: (reason) => ipcRenderer.invoke('warmy:app-quit', reason),
   identityCredential: () => ipcRenderer.invoke('warmy:identity-credential'),
+  credentialInfo: () => ipcRenderer.invoke('warmy:credential-info'),
+  credentialRestore: (credential) => ipcRenderer.invoke('warmy:credential-restore', credential),
   identityBackupImport: (payload) => ipcRenderer.invoke('warmy:identity-backup-import', payload),
   pluginsScanDirsGet: () => ipcRenderer.invoke('warmy:plugins-scan-dirs-get'),
   pluginsScanDirsSet: (dirs) => ipcRenderer.invoke('warmy:plugins-scan-dirs-set', dirs),

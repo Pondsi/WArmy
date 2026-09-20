@@ -1409,3 +1409,17 @@ body.chat-window #page-layout, body.chat-window #empty-state, body.chat-window #
 }
 .privacy-view .pv-sec p { margin: 0 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--ink-dim); }
 .privacy-view > p { margin: 0 0 8px; }
+
+/* 供应商名称重名：输入框与该供应商模型都标红（＝不可用） */
+.prov-card input[data-k="label"].dup { border-color: var(--danger) !important; color: var(--danger) !important; }
+.model-chip.in-use { border-color: var(--danger) !important; color: var(--danger) !important; background: transparent !important; }
+.model-chip.in-use::after { content: '!'; margin-left: 4px; font-weight: 700; }
+
+/* ── 容器实例（第十七批）：环境 = 具体实例 ───────────────────────── */
+.ctg-inst { margin-top: 6px; border-top: 1px dashed var(--line, #333); padding-top: 6px; }
+.ctg-inst-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ctg-inst-body { margin-top: 6px; }
+.ctg-inst-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; flex-wrap: wrap; }
+.ctg-inst-name { font-weight: 600; }
+.ctg-inst[data-inst-enabled="0"] .ctg-inst-head { opacity: .55; }
+.ctg-inst .ctg-spacer { flex: 1; }

@@ -4,78 +4,36 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import os from 'node:os';
 import { DEFAULT_CONTEXT_BUDGET_CHARS } from './context-renderer.js';
+import { generateCredential, isValidCredential } from './credential.js';
 
 export interface LocalProfile {
   username: string;
   avatarDataUrl: string;
   email: string;
   passwordHash?: string;
-  /** 本机唯一 ID：9 位数字，首次生成后写入配置文件 */
+  /** 本机唯一 ID = **身份凭证**（base56、45 位；见 credential.ts），首次生成后写入配置文件 */
   deviceId?: string;
   /** deviceId 的 HMAC 签名，用于检测配置文件被手改 */
   deviceIdSig?: string;
 }
 
 /**
- * 采集本机熵源（网络 / 硬件 / IP / 13 位时间戳），
- * 哈希后折算成 9 位十进制数字（100000000–999999999），几乎不会重复。
+ * 生成新凭证当本机 ID（**不再**采集硬件熵拼数字：凭证本身就是 256 bit 随机，
+ * 见 credential.ts —— ID 即私钥，公钥指纹才是给别人的东西）。
  */
-function collectEntropy(): string {
-  const parts: string[] = [];
-  parts.push(String(Date.now()));                 // 13 位毫秒时间戳
-  parts.push(`${process.platform}-${process.arch}`);
-  try { parts.push(os.hostname()); } catch { /* 忽略 */ }
-  try { parts.push(os.userInfo().username); } catch { /* 忽略 */ }
-  try {
-    const cpus = os.cpus();
-    const first = cpus[0];
-    if (first) parts.push(`${first.model}#${cpus.length}`);
-  } catch { /* 忽略 */ }
-  try { parts.push(String(os.totalmem())); } catch { /* 忽略 */ }
-  try {
-    const nets = os.networkInterfaces();
-    for (const name of Object.keys(nets).sort()) {
-      for (const a of nets[name] || []) {
-        if (a.internal) continue;
-        parts.push(`${name}/${a.family}/${a.mac}/${a.address}`);  // MAC + 局域网 IP
-      }
-    }
-  } catch { /* 忽略 */ }
-  return parts.join('|');
-}
-
 export function generateDeviceId(): string {
-  /**
-   * 设备 ID：**128 位随机（UUIDv4）**。
-   *
-   * 为什么不再用 17 位十进制：生日碰撞概率 ≈ n²/(2N)。
-   * 按"30 亿人 × 人均 5 台 × 平均换 10 次（含生成后即丢弃）= 1.5e11 个 ID"估算：
-   *   17 位（9e16）  ≈ 1（几乎必然撞号）
-   *   20 位（9e19）  ≈ 0.99
-   *   31 位（9e30）  ≈ 1e-10   ← 十进制要达到这个量级才够
-   *   128 位（2^128）≈ 3e-17   ← 业界标准（UUID），实际等同于永不撞号
-   * 因此选 128 位随机；同时保留对旧 ID（9/17 位数字）的兼容校验，
-   * 老配置继续可用、不会被判为无效而重新生成。
-   */
-  try {
-    const uuid = crypto.randomUUID();
-    if (uuid) return uuid;
-  } catch { /* 老 Node 没有 randomUUID 时退回手工拼装 */ }
-  const b = crypto.randomBytes(16);
-  b[6] = ((b[6] ?? 0) & 0x0f) | 0x40;   // version 4
-  b[8] = ((b[8] ?? 0) & 0x3f) | 0x80;   // variant 10xx
-  const hex = b.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return generateCredential();
 }
 
-/** UUIDv4（新）或历史 9/17 位数字（旧配置兼容） */
+/** 凭证（新）或历史 UUID/17 位数字（仅保证老配置不被判无效而重新生成） */
 export function isValidDeviceId(v: unknown): v is string {
   if (typeof v !== 'string') return false;
+  if (isValidCredential(v)) return true;
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)) return true;
-  return /^[1-9][0-9]{8}$/.test(v) || /^[1-9][0-9]{16}$/.test(v);
+  return /^[1-9][0-9]{16}$/.test(v);
 }
+
 
 
 /** 设备 ID 的 HMAC 签名：ID 被手改一位，签名就对不上 */
@@ -102,6 +60,31 @@ export interface SmtpAccount {
   /** 验证结果缓存 */
   verified?: boolean;
   lastVerifyAt?: number;
+}
+
+/**
+ * 模型供应商（设置 → 模型）。
+ *
+ * ⚠️ **这里不存 API Key**：密钥一律走 SecureKeyStore（safeStorage 加密落盘，
+ * 见 secure-keys.ts）。本记录只保存**可公开的元数据**，`hasKey` 只说明"有一把密钥"，
+ * 读回界面时密钥用密文占位，绝不回明文。
+ */
+export interface ProviderRecord {
+  id: string;
+  label: string;
+  protocol: 'openai-compatible' | 'anthropic' | 'ollama';
+  baseURL: string;
+  defaultModel?: string;
+  /** 已拉取到的模型列表 */
+  models: string[];
+  /**
+   * **需要重新拉取的模型**（改过名称/接口/密钥之后）：true = 可能无法正常使用。
+   * 重新拉取到同一模型后清掉；没拉到、又没人在用的模型直接删除，
+   * 没拉到但**正在被使用**的模型保留并继续标红（悬停显示占用位置）。
+   */
+  staleModels?: Record<string, boolean>;
+  /** 是否已存有密钥（密钥本体在 SecureKeyStore） */
+  hasKey?: boolean;
 }
 
 /**
@@ -234,6 +217,21 @@ export interface AppSettings {
   };
   /** 嵌入是否使用 GPU（WebGPU）；false=WASM/CPU */
   embedUseGpu: boolean;
+  /**
+   * 模型供应商列表（设置 → 模型）。空数组 = 还没落盘过：
+   * 界面首次打开时会用内置预设（DeepSeek / Ollama 本地）初始化一次并保存。
+   */
+  providers?: ProviderRecord[];
+  /**
+   * **当前生效的供应商**（真正用于聊天的那一个）。密钥不在里面，按 id 从 SecureKeyStore 取。
+   * 以前它只活在主进程内存里 ⇒ 重启后"配好的供应商"就没了，这里落盘修掉。
+   */
+  activeProvider?: {
+    presetId: string;
+    baseURL?: string;
+    model?: string;
+    protocol: 'openai-compatible' | 'anthropic' | 'ollama';
+  };
   /** 邮件通知：完成/请求/错误 */
   emailNotify: { complete: boolean; request: boolean; error: boolean };
   /**
@@ -440,6 +438,8 @@ function defaults(): AppSettings {
     /** 产品默认更新源：GitHub Releases API */
     updateFeedUrl: 'https://api.github.com/repos/Pondsi/WArmy/releases/latest',
     embedUseGpu: true,
+    /** 还没落盘过供应商列表：界面首帧用内置预设初始化（并立刻保存一次） */
+    providers: [],
     emailNotify: { complete: true, request: true, error: true },
     /**
      * 默认 4000 字符（= context-renderer 的 DEFAULT_CONTEXT_BUDGET_CHARS，单一来源）。

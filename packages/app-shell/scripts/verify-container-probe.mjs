@@ -276,11 +276,19 @@ const promo = REQUIRED.filter((k) => {
   return /推荐|優先|优先|recommended|preferred|厂商|公司/i.test(`${ZH[k] || ''}${EN[k] || ''}`);
 });
 ok(promo.length === 0, '8-5b 运行时名字不含"推荐/优先/厂商"等广告性措辞', JSON.stringify(promo.slice(0, 4)));
-// 授权事实必须在文案里如实体现（已核实的许可硬事实，不许被改写掉）
-ok(/Apache-2\.0/.test(ZH['container.rt.podman.cost']) && /没有付费/.test(ZH['container.rt.podman.cost']),
-  '8-6 Podman = Apache-2.0 无付费档（文案如实）', ZH['container.rt.podman.cost']);
-ok(/不是开源/.test(ZH['container.rt.docker.cost']) && /\$5/.test(ZH['container.rt.docker.cost']),
-  '8-7 Docker Desktop = 不是开源 + 较大组织商用约 $5/用户/月起（文案如实）', ZH['container.rt.docker.cost']);
+/**
+ * 授权事实必须在文案里如实体现（已核实的许可硬事实，不许被改写掉）。
+ * 第十七批定稿：**只陈述"是否收费 + 许可"**，不抄价目表、不做比较、不写厂商来源。
+ */
+ok(/Apache-2\.0/.test(ZH['container.rt.podman.cost']) && /免费/.test(ZH['container.rt.podman.cost']),
+  '8-6 Podman 文案写明免费 + Apache-2.0 许可（文案如实）', ZH['container.rt.podman.cost']);
+ok(/免费/.test(ZH['container.rt.docker.cost']) && /商业许可/.test(ZH['container.rt.docker.cost']) && !/\$/.test(ZH['container.rt.docker.cost']),
+  '8-7 Docker 文案写明引擎免费、桌面版为商业许可；**不抄价格、不比较**', ZH['container.rt.docker.cost']);
+// 12 个运行时**每一个**都必须回答"是否收费"（这是产品明确要求的字段）
+const noCost = Object.keys(ZH).filter((k) => /^container\.rt\.[^.]+\.cost$/.test(k)).filter((k) => !/免费|收费|商业|随 Windows/.test(String(ZH[k])));
+ok(noCost.length === 0, '8-7b 每个运行时都回答了"是否收费"（没有含糊其辞）', JSON.stringify(noCost));
+ok(!/推荐|优先|首选|优于|替代|国内|阿里|华为/.test(String(ZH['container.rt.podman.cost']) + String(ZH['container.rt.docker.cost'])),
+  '8-7c 收费文案里没有比较性措辞与厂商来源暗示', '');
 ok(/家庭版没有/.test(ZH['container.rt.windows-sandbox.os']), '8-8 Windows Sandbox 家庭版没有（文案如实）', ZH['container.rt.windows-sandbox.os']);
 
 /* ── 9. 报告形状：给 UI 的契约字段 ── */

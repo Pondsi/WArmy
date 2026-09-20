@@ -319,11 +319,17 @@ async function main() {
     check('独立窗：保留可拖标题栏', subDom.titlebar === 'visible', subDom);
     check('独立窗：不显示整页(设置/看板)', subDom.pageLayout !== 'visible', subDom);
 
-    // ── 7. 设备 ID：128 位随机（UUIDv4）——17 位十进制在十亿量级会撞号，已弃用 ──
+    // ── 7. 设备 ID = **身份凭证**（base56、45 位、256 bit）——
+    //      ID 即私钥、公钥指纹才是给别人的；旧 9 位数字已不再兼容（产品主定稿） ──
     const idInfo = await c.evaluate(`(async function(){ try { const r = await window.warmy.appInfo(); return { deviceId: r && r.deviceId, valid: r && r.deviceIdValid }; } catch(e) { return { err: String(e) }; } })()`);
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String((idInfo && idInfo.deviceId) || ''));
-    const isLegacy = /^[1-9][0-9]{8}$/.test(String((idInfo && idInfo.deviceId) || '')) || /^[1-9][0-9]{16}$/.test(String((idInfo && idInfo.deviceId) || ''));
-    check('设备 ID 为 UUIDv4(128 位) 或兼容的旧格式，且校验通过', (isUuid || isLegacy) && !!idInfo && idInfo.valid === true, idInfo);
+    const idStr = String((idInfo && idInfo.deviceId) || '');
+    // 去掉易混的 I/O/Z（含小写）后的 56 个符号，定长 45 位
+    const isCredential = /^[0-9ABCDEFGHJKLMNPQRSTUVWXYabcdefghjklmnpqrstuvwxy]{45}$/.test(idStr);
+    // 兼容：上一版 UUIDv4 与更早的 17 位十进制（老配置不会被判无效而重新生成身份）
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idStr);
+    const isLegacy17 = /^[1-9][0-9]{16}$/.test(idStr);
+    check('设备 ID 为 45 位凭证(base56 去 I/O/Z，即私钥) 或兼容的旧格式，且校验通过', (isCredential || isUuid || isLegacy17) && !!idInfo && idInfo.valid === true, idInfo);
+    check('凭证不含易混字符 I / O / Z', !/[IOZioz]/.test(idStr) || isUuid || isLegacy17, idStr);
 
     // ── 8. 运行时版本：应用内 Node 必须 >= 24 LTS（Electron 40+ 才自带 Node 24） ──
     const ver = await c.evaluate(`(async function(){ try { const r = await window.warmy.appInfo(); return { node: r && r.node, electron: r && r.electron, chrome: r && r.chrome }; } catch(e) { return { err: String(e) }; } })()`);

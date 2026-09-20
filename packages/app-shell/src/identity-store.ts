@@ -24,6 +24,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { readJsonFileQuarantine, writeJsonAtomicSafe } from './atomic-json.js';
+import { keyPairFromCredential, isValidCredential } from './credential.js';
 import {
   MEMBER_CERT_ROLES,
   MEMBER_CERT_SCHEMA,
@@ -460,21 +461,35 @@ export class IdentityStore {
   ensureIdentity(
     alias: string,
     contactCard?: ContactCard,
-    opts: { passphrase?: string } = {},
+    opts: { passphrase?: string; credential?: string } = {},
   ): { ok: true; created: boolean; info: IdentityInfo } | Err {
     const { file, corrupt } = this.readFile();
     if (file) return { ok: true, created: false, info: this.info()! };
     if (corrupt) {
       return { ok: false, error: 'corrupt', message: '身份文件存在但无法解析；为免静默换掉身份，此处不覆盖重建（文件已隔离为 .corrupt-*）' };
     }
-    const created = this.createWith(alias, contactCard, opts.passphrase);
+    const created = this.createWith(alias, contactCard, opts.passphrase, opts.credential);
     if (!created.ok) return created;
     return { ok: true, created: true, info: this.info()! };
   }
 
   /** 真正落地一个新身份（内部；不做存在性检查，用于恢复/导入） */
-  private createWith(alias: string, contactCard: ContactCard | undefined, passphrase?: string): Ok<object> | Err {
-    const { identity, keyPair } = createIdentity({ alias, contactCard });
+  private createWith(
+    alias: string,
+    contactCard: ContactCard | undefined,
+    passphrase?: string,
+    credential?: string,
+  ): Ok<object> | Err {
+    /**
+     * 有凭证 ⇒ **由凭证派生**密钥对（同一凭证在任何设备得到同一身份，见 credential.ts）；
+     * 没有凭证 ⇒ 老路径（本机随机生成）。这样"ID 即私钥、公钥即身份"成立，
+     * 且不影响已存在的旧身份（它们不会走这里）。
+     */
+    let derived: ReturnType<typeof keyPairFromCredential> | null = null;
+    if (credential && isValidCredential(credential)) {
+      try { derived = keyPairFromCredential(credential); } catch { derived = null; }
+    }
+    const { identity, keyPair } = createIdentity({ alias, contactCard, ...(derived ? { keyPair: derived } : {}) });
     const dek = crypto.randomBytes(32);
     const privateKey = keyPair.privateKeyDer;
     const keys: IdentityFile['keys'] = {
@@ -900,6 +915,26 @@ export class IdentityStore {
    * 导出加密备份。**永远加密** —— 不允许"明文导出私钥"这条路径
    * （附五"默认不显示明文、导出走二次确认并优先加密文件"）。
    */
+  /**
+   * 从凭证恢复身份：备份当前身份文件 → 用凭证派生密钥重建 → 返回新身份信息。
+   * 产品语义：凭证就是私钥；换机 / 误删配置后，只凭这一串即可找回同一个身份与指纹。
+   */
+  restoreFromCredential(credential: string, alias?: string): { ok: true; info: IdentityInfo; backupFile?: string } | Err {
+    if (!isValidCredential(credential)) return { ok: false, error: 'bad-credential' };
+    let backupFile: string | undefined;
+    try {
+      if (fs.existsSync(this.file)) {
+        backupFile = `${this.file}.replaced-${Date.now()}`;
+        fs.copyFileSync(this.file, backupFile);
+      }
+      fs.rmSync(this.file, { force: true });
+    } catch { /* 备份失败不阻断恢复 */ }
+    const created = this.createWith(alias || 'restored', undefined, undefined, credential);
+    if (!created.ok) return created as Err;
+    this.onAudit('identity.restore.credential', { fingerprint: this.info()?.fingerprint || '' });
+    return { ok: true, info: this.info()!, ...(backupFile ? { backupFile } : {}) };
+  }
+
   exportBackup(payload: { passphrase: string }): { ok: true; backup: IdentityBackup } | { ok: false; error: string } {
     if (!payload?.passphrase || payload.passphrase.length < 8) return { ok: false, error: 'passphrase-too-short(>=8)' };
     const { file } = this.readFile();
