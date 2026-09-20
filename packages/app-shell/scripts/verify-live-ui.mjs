@@ -408,22 +408,75 @@ async function main() {
         emailType: mail ? mail.getAttribute('type') || mail.tagName : null,
         brandText: brand ? brand.textContent.trim() : null,
         sameRow,
-        hasCred: !!g('#me-cred-val'),
-        credText: (g('#me-cred-val') || {}).textContent || '',
-        hasCopy: !!g('#btn-me-cred-copy'),
+        hasCred: !!g('#me-id-val'),
+        credText: (g('#me-id-val') || {}).textContent || '',
+        hasCopy: !!g('#btn-me-id-copy'),
         hasRotate: !!g('#btn-me-cred-rotate'),
         hasSwitch: !!g('#btn-me-cred-switch'),
+        // 指纹那一块已删（与"凭证"重复）：必须**不再存在**
+        dupCredBlock: !!g('#me-cred-val'),
         // ID = 私钥：必须**明说**泄露后果与"没有服务器能挂失"
         idWarn: (document.querySelector('.me-hint-warn') || {}).textContent || '',
+        /* 排布：头像 → 下面用户名（邮箱在用户名**右侧**）→ 再下面凭证 */
+        layout: (function () {
+          const av = g('#p-av-btn');
+          const name = g('#p-name-display');
+          const mail = g('#p-email');
+          const cred = g('#me-id-val');
+          if (!av || !name || !mail || !cred) return null;
+          const a = av.getBoundingClientRect();
+          const n = name.getBoundingClientRect();
+          const m = mail.getBoundingClientRect();
+          const c = cred.getBoundingClientRect();
+          return {
+            nameBelowAvatar: n.top >= a.bottom - 6,
+            mailRightOfName: m.left >= n.right - 8,
+            credBelowName: c.top >= n.bottom - 8,
+          };
+        })(),
       };
     })()`);
     check('我的页不再有「保存资料」按钮', meDom.hasSaveBtn === false, meDom);
     check('我的页有邮箱输入（即时保存）', meDom.hasEmail === true, meDom);
     check('品牌名按语言显示且非空', !!meDom.brandText && meDom.brandText.length > 0, meDom);
     check('品牌与个人资料同一行（左品牌/右资料）', meDom.sameRow === true, meDom);
-    check('我的页显示唯一凭证+复制/更换/切换', meDom.hasCred && meDom.hasCopy && meDom.hasRotate && meDom.hasSwitch, meDom);
-    check('凭证是 17 位或指纹形态', /^[A-Z0-9-]{8,}$|^\d{17}$/.test(String(meDom.credText).trim()) || meDom.credText === '—', meDom.credText);
-    check('ID 行明说"ID 即私钥 + 没有服务器能挂失"（不让用户误以为能找回）',
+    check('我的页显示凭证 + 复制/更换凭证/切换身份', meDom.hasCred && meDom.hasCopy && meDom.hasRotate && meDom.hasSwitch, meDom);
+    check('重复的「唯一凭证（指纹）」一块已删除', meDom.dupCredBlock === false, meDom);
+    check('排布：用户名在头像下面', !!meDom.layout && meDom.layout.nameBelowAvatar === true, meDom.layout);
+    check('排布：邮箱在用户名右侧', !!meDom.layout && meDom.layout.mailRightOfName === true, meDom.layout);
+    check('排布：凭证在用户名下面', !!meDom.layout && meDom.layout.credBelowName === true, meDom.layout);
+    check('凭证默认只露前三后三（中间是等长的「牛马」遮蔽）',
+      /^.{3}-牛马/.test(String(meDom.credText).trim()) && /牛马/.test(String(meDom.credText)), String(meDom.credText).slice(0, 40));
+    // 小眼睛：点一下看全貌，再点一下遮回去（前后长度一致，排版不跳）
+    const eye = await c.evaluate(`(async function(){
+      const el = document.querySelector('#me-id-val');
+      const btn = document.querySelector('#btn-me-id-eye');
+      if (!el || !btn) return { exists: false };
+      // 事实核对：主进程到底给了什么（避免把"DOM 里拿到的字符串"当成事实）
+      let facts = {};
+      try {
+        const info = await window.warmy.credentialInfo();
+        const ai = await window.warmy.appInfo();
+        facts = { infoLen: String((info && info.credential) || '').length, fmtLen: String((info && info.formatted) || '').length, appIdLen: String((ai && ai.deviceId) || '').length };
+      } catch (e) { facts = { err: String(e) }; }
+      const masked = el.textContent;
+      const maskedLen = masked.length;
+      btn.click();
+      await new Promise((r) => setTimeout(r, 120));
+      const shown = el.textContent;
+      btn.click();
+      const back = el.textContent;
+      return { exists: true, masked, shown, back, maskedLen, shownLen: shown.length, facts,
+        raw: el.dataset.raw || '', full: el.dataset.full || '', shownFlag: el.dataset.shown || '' };
+    })()`);
+    check('凭证有小眼睛图标（点击看全貌）', eye.exists === true, eye);
+    // 字母表必须**逐个写清**：0-9 + A B C D E F G H J K L M N P Q R S T U V W X Y（去 I/O/Z）。
+    // 用区间写很容易漏（此前把 U 也排除掉了，导致正确值被判失败）。
+    check('点小眼睛显示完整凭证（51 位、无小写、无 I/O/Z）',
+      /^[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}(-[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}){16}$/.test(String(eye.shown || '').trim()), eye);
+    check('再点一次遮回去（遮蔽长度与全貌一致，排版不跳）',
+      eye.back === eye.masked && Math.abs(eye.shownLen - eye.maskedLen) === 0, { masked: eye.maskedLen, shown: eye.shownLen });
+    check('ID 行明说"凭证即私钥 + 没有服务器能挂失"（不让用户误以为能找回）',
       /私钥|private key/i.test(meDom.idWarn) && /挂失|revoke|找回|recover/i.test(meDom.idWarn), String(meDom.idWarn).slice(0, 80));
 
     // ── 5. 成员卡片按会话类型显隐 + 第二列「+」 ──
@@ -550,13 +603,14 @@ async function main() {
     const sameLog = await c.evaluate(`(async function(){
       try {
         const r = await window.warmy.chatMessages({ sessionId: '${gid}' });
-        const push = typeof window.warmy.onChatUpdated === 'function' && typeof window.warmy.onSettingsChanged === 'function';
+        const push = typeof window.warmy.onChatUpdated === 'function' && typeof window.warmy.onSettingsChanged === 'function'
+          && typeof window.warmy.onEntityUpdated === 'function';
         return { ok: !!(r && r.ok), sid: r && r.sessionId, push };
       } catch (e) { return { err: String(e) }; }
     })()`).catch(() => null);
     check('独立窗：消息通道可用（打开即从主进程读到同一份记录）',
       !!sameLog && sameLog.ok === true && sameLog.sid === gid, sameLog);
-    check('独立窗：有跨窗口推送通道（日志变化 / 设置变化都会通知其它窗口）',
+    check('独立窗：有跨窗口推送通道（日志 / 设置 / 实体状态都会通知其它窗口）',
       !!sameLog && sameLog.push === true, sameLog);
 
     // ── 7. 设备 ID = **身份凭证**（51 位、数字+**大写**字母、去掉 I/O/Z、256 bit）──

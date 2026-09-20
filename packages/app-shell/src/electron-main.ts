@@ -3182,6 +3182,7 @@ handleIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) =
     }
     audit?.log('container.project-enable', { sessionId: id });
     emitConsole({ cat: 'system', code: 'container.project.enabled', data: { sessionId: id } });
+    notifyEntityChanged(id, 'project');
     return { ok: true, running: true, enabledAt: Date.now(), state: after };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
@@ -3208,6 +3209,8 @@ handleIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) 
     const state = await projectStateFor(id);
     audit?.log('container.project-disable', { sessionId: id, memberFace: state.memberFace });
     emitConsole({ cat: 'system', code: 'container.project.disabled', data: { sessionId: id } });
+    // 项目属性也是"这个实体的属性"：另一处视图（独立窗/主界面）要立刻反映"已停用"
+    notifyEntityChanged(id, 'project');
     return { ok: true, disabled: true, disabledAt: at, state, historyReadable: true };
   } catch (e) {
     return { ok: false, error: sanitizeError(e) };
@@ -5068,6 +5071,37 @@ handleIpc('warmy:credential-info', () =>
     return { ok: true, credential: cred, valid: credentialModule.isValidCredential(cred), formatted: cred ? credentialModule.formatCredential(cred) : '' };
   }, { ok: true, credential: '', valid: false, formatted: '' })
 );
+
+/**
+ * **更换凭证**：因为"ID 就是私钥"，换凭证与换身份必须是**同一个动作** ——
+ * 只换一个会留下"两把不同的密钥"，产品承诺当场失效。这里：
+ *   1) 备份当前身份文件（restoreFromCredential 内部做）；
+ *   2) 生成新凭证；
+ *   3) 用它派生出新身份；
+ *   4) 把新凭证写回 profile。
+ */
+handleIpc('warmy:credential-rotate', () => {
+  try {
+    if (!identityStore || !accountStore) return { ok: false, error: 'identity-unavailable' };
+    const fresh = generateDeviceId();
+    const r = identityStore.restoreFromCredential(fresh);
+    if (!r.ok) return { ok: false, error: r.error };
+    try {
+      const raw = accountStore.loadProfile() as unknown as Record<string, unknown>;
+      accountStore.saveProfile({ ...raw, deviceId: fresh } as never);
+    } catch { /* profile 写失败不影响身份本身 */ }
+    audit?.log('identity.credential.rotated', { fingerprint: r.info.fingerprint, backup: r.backupFile || '' });
+    return {
+      ok: true,
+      credential: fresh,
+      formatted: credentialModule.formatCredential(fresh),
+      fingerprint: r.info.fingerprint,
+      backupFile: r.backupFile || null,
+    };
+  } catch (e) {
+    return { ok: false, error: sanitizeError(e) };
+  }
+});
 
 /** 用凭证恢复身份（换机 / 误删配置）：只凭这一串即可找回同一身份与指纹 */
 handleIpc('warmy:credential-restore', (_e, credential: string) => {
@@ -7135,14 +7169,33 @@ handleIpc('warmy:group-set-admin', (_e, payload: { groupId: string; memberId: st
     return { ok: false, error: 'set admin failed' };
   }
 });
-handleIpc('warmy:group-directed', (_e, payload: { groupId: string; directed: boolean }) => {
+/**
+ * **实体级状态变了**：同一个会话/群/项目/联系人的**两处视图**都要跟着变。
+ *
+ * 产品主的表述很准："主界面的窗口和新窗口是同一个实体……就是它们本窗口、2 处显示"。
+ * 所以这里既不是"把新窗口的内容发给主界面"，也不是各存一份状态，而是：
+ * 实体状态只存在主进程这一处（群定向、项目属性、成员、禁用…都改了这里），
+ * 改完只发一条**变化通知**，两个窗口各自按同一份事实重新渲染自己的那处视图。
+ */
+function notifyEntityChanged(id: string, kind: string, exceptId?: number): void {
+  const key = String(id || '');
+  if (!key) return;
+  try { broadcastToWindows('warmy:entity-updated', { id: key, kind, ts: Date.now() }, exceptId); } catch { /* noop */ }
+}
+
+handleIpc('warmy:group-directed', (e, payload: { groupId: string; directed: boolean }) => {
   try {
     const g = router.getGroup(payload.groupId);
     if (!g) return { ok: false, error: 'no group' };
     g.directedMode = !!payload.directed;
     groupStore?.setDirected(payload.groupId, g.directedMode);
+    /**
+     * 实体级状态（"只回我"开关）也是**同一个实体的属性**：另一个窗口若正看着这个群，
+     * 它的开关必须跟着变 —— 两个窗口是同一实体的两处视图，不是两份各自的状态。
+     */
+    notifyEntityChanged(payload.groupId, 'group', e?.sender?.id);
     return { ok: true, directedMode: g.directedMode };
-  } catch (e) { return { ok: false, error: 'directed mode failed' }; }
+  } catch (e2) { return { ok: false, error: 'directed mode failed' }; }
 });
 
 

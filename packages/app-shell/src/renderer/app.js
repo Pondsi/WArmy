@@ -1109,7 +1109,10 @@
 
   /**
    * 拉取某会话的正文并替换本地镜像（主进程日志是唯一事实来源）。
-   * 主进程那边没有内容（例如刚建、或记忆服务未回灌）时**保留本地已有**，绝不因此清空界面。
+   *
+   * 主进程那边没有内容（例如刚建、或记忆服务未回灌）时**保留本地已有**，绝不因此清空界面；
+   * 本地那些"只给用户看的提示"（停止全部、报错、搜索结果）主进程日志里没有，
+   * 因此做**合并**：以主进程的顺序为准，再把本地独有的几条按原顺序接在后面。
    */
   async function loadSessionMessages(id) {
     const sid = String(id || '');
@@ -1117,11 +1120,28 @@
     try {
       const r = await window.warmy.chatMessages?.({ sessionId: sid, limit: 500 });
       if (!r || !r.ok || !Array.isArray(r.messages) || !r.messages.length) return;
+      const fromMain = r.messages.map((m) => ({ role: m.role, text: m.text, ts: m.ts || Date.now() }));
+      const local = (window.__msgs && window.__msgs[sid]) || [];
+      const sig = (m) => String(m.role) + '\u0001' + String(m.text);
+      const mainSigs = new Set(fromMain.map(sig));
+      const localOnly = local.filter((m) => !mainSigs.has(sig(m)));
       window.__msgs = window.__msgs || {};
-      window.__msgs[sid] = r.messages.map((m) => ({ role: m.role, text: m.text, ts: m.ts || Date.now() }));
+      window.__msgs[sid] = [...fromMain, ...localOnly];
       if (state.selectedChat && state.selectedChat.id === sid) renderChat();
       renderList();
     } catch { /* 读不到就保持本地视图，不清空 */ }
+  }
+
+  /** 实体级状态变了：把本窗口这一处视图按最新事实重画（不搬内容，也不动另一处） */
+  async function refreshEntityView(id) {
+    try {
+      const s = await window.warmy.projectState?.({ sessionId: id }).catch(() => null);
+      if (s && s.ok && s.state) state.selectedChatProject = s.state;
+    } catch { /* noop */ }
+    try { renderChat(); } catch { /* noop */ }
+    try { void renderProjectStateBlock?.(); } catch { /* noop */ }
+    try { renderList(); } catch { /* noop */ }
+    try { refreshContainerConsoleGate?.(); } catch { /* noop */ }
   }
 
 
@@ -2589,6 +2609,29 @@
     };
   }
 
+  /**
+   * 凭证的**遮蔽显示**：只露前三后三，中间用**等长的「牛马」**填满。
+   *
+   * 为什么要遮：凭证就是私钥，屏幕上把它完整摆着，旁边有人看一眼/截个图就等于泄露；
+   * 为什么用等长填充：长度本身也是信息（眼睛不点开也能看出"这是一串 51 位凭证"），
+   * 而且遮罩长度一致 ⇒ 点开前后**排版不跳**。
+   */
+  function maskCredential(value) {
+    const s = String(value || '').replace(/[\s-]+/g, '');
+    if (s.length <= 6) return s || '—';
+    const hidden = s.length - 6;
+    const unit = '牛马';
+    const masked = unit.repeat(Math.ceil(hidden / unit.length)).slice(0, hidden);
+    const raw = s.slice(0, 3) + masked + s.slice(-3);
+    // 与全貌使用**同一套分组**（每 3 位一组），点开前后宽度稳定
+    const parts = [];
+    for (let i = 0; i < raw.length; i += 3) parts.push(raw.slice(i, i + 3));
+    return parts.join('-');
+  }
+
+  /** 小眼睛图标（内联 SVG，不依赖字体/emoji） */
+  const EYE_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 5.5 12 5.5 22.5 12 22.5 12 18.5 18.5 12 18.5 1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3.2"/></svg>';
+
   function renderPage() {
     const box = $('page-body');
     /**
@@ -2616,77 +2659,111 @@
               <div class="muted me-brand-tag">${escapeHtml(t('brand.tagline') || '')}</div>
             </div>
           </div>
-          <!-- 用户资料：**一列**（原来是头像列 + 信息列两列） -->
+          <!-- 用户资料：**一列**。
+               排布按产品主要求：头像 → 下面用户名（邮箱在用户名**右侧**）→ 再下面凭证。
+               指纹那一块删掉了：它与"凭证"是同一件东西的两种显示（产品主："这2个重复了"）。 -->
           <div class="me-strip me-strip-col" style="flex:1;min-width:300px;margin:0">
             <div class="me-avatar-col">
               <button id="p-av-btn" class="av-btn" aria-label="${escapeHtml(t('me.avatar'))}">${avHtml}</button>
-              <div class="field" style="margin:10px 0 0;min-width:150px;width:100%">
-                <label style="font-size:12px">${escapeHtml(t('me.email'))}</label>
-                <input id="p-email" autocomplete="email" placeholder="name@example.com" value="${escapeHtml(p.email || '')}"/>
-                <div class="muted" id="p-email-msg" style="font-size:11px;margin-top:2px"></div>
+              <!-- 用户名在头像下面；邮箱在用户名右侧；名称可点击就地编辑 -->
+              <div class="me-name-row">
+                <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
+                <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
+                <span class="me-email-inline">
+                  <input id="p-email" autocomplete="email" placeholder="name@example.com" value="${escapeHtml(p.email || '')}" title="${escapeHtml(t('me.email'))}"/>
+                </span>
+                <span class="muted" id="p-email-msg" style="font-size:11px"></span>
               </div>
             </div>
             <div class="me-info-col">
-              <span id="p-name-display" class="username-display" title="${escapeHtml(t('me.username'))}">${escapeHtml(p.username || t('nav.avatar'))}</span>
-              <input id="p-name" class="username-input hidden" value="${escapeHtml(p.username)}"/>
-              <div class="field" style="margin-top:12px">
-                <label>${escapeHtml(t('me.userId'))}</label>
+              <div class="field">
+                <label>${escapeHtml(t('me.credential'))}</label>
                 <div class="me-cred-box">
-                  <span class="me-cred-val" id="me-id-val">${escapeHtml(p.deviceId || '—')}</span>
+                  <!-- 默认只露**前三后三**，中间用等长的「牛马」遮住；小眼睛点击后看全貌 -->
+                  <span class="me-cred-val" id="me-id-val" data-shown="0">${escapeHtml(maskCredential(p.deviceId || ''))}</span>
+                  <button class="btn-mini me-eye" id="btn-me-id-eye" type="button"
+                          aria-label="${escapeHtml(t('me.showFull'))}" title="${escapeHtml(t('me.showFull'))}">
+                    <span class="me-eye-off" aria-hidden="true">${EYE_SVG}</span>
+                  </button>
                   <button class="btn-mini" id="btn-me-id-copy">${t('me.copy')}</button>
-                </div>
-                <div class="muted me-hint" style="margin-top:4px">${escapeHtml(t('me.idHint'))}</div>
-                <!-- 诚实告知：ID 就是私钥，泄露 = 身份被接管；没有服务器能替你找回 -->
-                <div class="me-hint me-hint-warn" style="margin-top:4px">${escapeHtml(t('me.idWarn'))}</div>
-              </div>
-              <div class="field" style="margin-top:12px">
-                <label>${t('me.credential')}</label>
-                <div class="me-cred-box">
-                  <span class="me-cred-val" id="me-cred-val">—</span>
-                  <button class="btn-mini" id="btn-me-cred-copy">${t('me.copy')}</button>
                   <button class="btn-mini" id="btn-me-cred-rotate">${t('me.changeCred')}</button>
                   <button class="btn-mini" id="btn-me-cred-switch">${t('me.switchIdentity')}</button>
                 </div>
-                <div class="muted me-hint" style="margin-top:4px">${t('me.credentialHint')}</div>
+                <div class="muted me-hint" style="margin-top:4px">${escapeHtml(t('me.idHint'))}</div>
+                <!-- 诚实告知：凭证就是私钥，泄露 = 身份被接管；没有服务器能替你找回 -->
+                <div class="me-hint me-hint-warn" style="margin-top:4px">${escapeHtml(t('me.idWarn'))}</div>
               </div>
             </div>
           </div>
         </div>
         <div id="dash-host"></div>`;
-      // 唯一凭证：指纹（私钥不落渲染层）
+      // 凭证 = ID = 私钥（只展示给本人；指纹不再单独显示，避免与它重复）
       (async () => {
         try {
-          // 唯一凭证 = 身份指纹（公钥的短标识，给别人的东西）
-          const cred = await window.warmy.identityCredential?.();
-          const el = $('me-cred-val');
-          if (el && cred?.ok) {
-            el.textContent = cred.fingerprint || '—';
-            el.dataset.fp = cred.fingerprint || '';
-          }
-          // 本机 ID = 私密凭证（base59，45 位）：只展示给本人，复制即备份
           const info = await window.warmy.credentialInfo?.();
           const idEl = $('me-id-val');
           if (idEl && info?.ok && info.credential) {
-            idEl.textContent = info.formatted || info.credential;
             idEl.dataset.raw = info.credential;
+            idEl.dataset.full = info.formatted || info.credential;
+            idEl.textContent = idEl.dataset.shown === '1' ? idEl.dataset.full : maskCredential(info.credential);
           }
         } catch { /* noop */ }
       })();
+      /**
+       * 小眼睛：在"遮蔽"与"全貌"之间切换（按钮图标与 aria 也跟着变）。
+       *
+       * ⚠️ 必须容忍"异步还没回来就点"：`credentialInfo()` 是异步的，用户完全可能
+       * 在它返回前就点眼睛。以前这里直接读 dataset，读不到就退化成把**当前文本**
+       * 当全貌显示（门禁实测抓到：显示出一段不完整的值）。现在读不到就**当场补一次**，
+       * 拿不到就什么都不改（宁可不动，也不显示半截凭证）。
+       */
+      $('btn-me-id-eye')?.addEventListener('click', async () => {
+        const el = $('me-id-val');
+        if (!el) return;
+        if (!el.dataset.full || !el.dataset.raw) {
+          try {
+            const info = await window.warmy.credentialInfo?.();
+            if (info?.ok && info.credential) {
+              el.dataset.raw = info.credential;
+              el.dataset.full = info.formatted || info.credential;
+              el.textContent = maskCredential(info.credential);
+            }
+          } catch { /* noop */ }
+        }
+        if (!el.dataset.full && !el.dataset.raw) return;
+        const shown = el.dataset.shown === '1';
+        el.dataset.shown = shown ? '0' : '1';
+        el.textContent = shown ? maskCredential(el.dataset.raw || '') : (el.dataset.full || el.dataset.raw || '');
+        const btn = $('btn-me-id-eye');
+        if (btn) {
+          const label = shown ? t('me.showFull') : t('me.hideFull');
+          btn.setAttribute('aria-label', label);
+          btn.setAttribute('title', label);
+          btn.classList.toggle('on', !shown);
+        }
+      });
       $('btn-me-id-copy')?.addEventListener('click', async () => {
         const el = $('me-id-val');
         const v = (el && el.dataset.raw) || (el && el.textContent) || '';
         try { await navigator.clipboard.writeText(v); uiAlert(t('contact.mineCopied')); } catch { uiAlert(t('contact.mineCopyFail')); }
       });
       $('btn-me-cred-copy')?.addEventListener('click', async () => {
-        const v = $('me-cred-val')?.dataset.fp || $('me-cred-val')?.textContent || '';
+        const el = $('me-id-val');
+        const v = (el && el.dataset.raw) || (el && el.textContent) || '';
         try { await navigator.clipboard.writeText(v); uiAlert(t('contact.mineCopied')); } catch { uiAlert(t('contact.mineCopyFail')); }
       });
+      /**
+       * 更换凭证：**ID 与身份必须同时换**。
+       * 因为"ID 就是私钥"，只换身份而不换 ID 会留下"两把不同的密钥"这个矛盾；
+       * 主进程的 credential-rotate 会：备份旧身份 → 生成新凭证 → 用它派生出新身份 → 写回配置。
+       */
       $('btn-me-cred-rotate')?.addEventListener('click', async () => {
         if (!(await uiConfirm(t('me.changeCred') + '?'))) return;
-        const r = await window.warmy.identityRotate?.({ reason: 'me-page-rotate' }).catch(() => null);
-        if (r?.ok && r.identity?.fingerprint) {
-          const el = $('me-cred-val');
-          if (el) { el.textContent = r.identity.fingerprint; el.dataset.fp = r.identity.fingerprint; }
+        const r = await window.warmy.credentialRotate?.().catch(() => null);
+        if (r?.ok && r.credential) {
+          const el = $('me-id-val');
+          if (el) { el.textContent = r.formatted || r.credential; el.dataset.raw = r.credential; }
+          uiAlert(t('me.credRotated'));
         } else {
           uiAlert(String(r?.error || 'fail'));
         }
@@ -2717,8 +2794,13 @@
           const msg = $('me-switch-msg');
           if (r?.ok) {
             if (msg) msg.textContent = (t('me.switchIdentity') || '') + ' OK · ' + (r.fingerprint || '');
-            const el = $('me-cred-val');
-            if (el && r.fingerprint) { el.textContent = r.fingerprint; el.dataset.fp = r.fingerprint; }
+            /**
+             * 恢复进来的身份也要与"凭证 = 私钥"这条不变量一致：
+             * 主进程会从恢复出来的私钥**反推出对应的凭证**并写回配置，这里直接读回来显示。
+             */
+            const info = await window.warmy.credentialInfo?.().catch(() => null);
+            const el = $('me-id-val');
+            if (el && info?.ok && info.credential) { el.textContent = info.formatted || info.credential; el.dataset.raw = info.credential; }
             setTimeout(() => root.classList.add('hidden'), 600);
           } else if (msg) {
             msg.textContent = String(r?.error || 'fail');
@@ -11915,6 +11997,18 @@
       const sid = String((d && d.sessionId) || '');
       if (!sid) return;
       void loadSessionMessages(sid);
+    });
+    /**
+     * 实体级状态变化（群定向 / 项目启用停用 / 项目属性）：
+     * 若变化的正是本窗口正在看的那个实体 ⇒ 按主进程那份事实重画自己的视图。
+     * 注意：**不搬内容**，只是让两处视图都跟着同一份状态走。
+     */
+    window.warmy.onEntityUpdated?.((d) => {
+      const id = String((d && d.id) || '');
+      if (!id) return;
+      if (state.selectedChat && state.selectedChat.id === id) {
+        void refreshEntityView(id);
+      }
     });
     window.warmy.onSettingsChanged?.((d) => {
       void (async () => {

@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('warmy', {
   boardAggregate: () => ipcRenderer.invoke('warmy:board-aggregate'),
   setProvider: (cfg) => ipcRenderer.invoke('warmy:set-provider', cfg),
   getProvider: () => ipcRenderer.invoke('warmy:get-provider'),
+  // 凭证：ID 就是私钥；更换凭证会**同时**换身份（保证"ID = 私钥"不被打破）
+  credentialRotate: () => ipcRenderer.invoke('warmy:credential-rotate'),
   // 供应商密钥只进安全存储（safeStorage）；界面永远读不回明文
   providerKeySet: (payload) => ipcRenderer.invoke('warmy:provider-key-set', payload),
   providerKeyHas: (payload) => ipcRenderer.invoke('warmy:provider-key-has', payload),
@@ -229,6 +231,15 @@ contextBridge.exposeInMainWorld('warmy', {
     const h = (_e, d) => cb(d);
     ipcRenderer.on('warmy:settings-changed', h);
     return () => ipcRenderer.removeListener('warmy:settings-changed', h);
+  },
+  /**
+   * **实体级状态变了**（群定向开关 / 项目启用停用 / 项目属性）。
+   * 同一个会话在"主界面"和"独立窗口"两处显示 —— 两边都要按同一份事实重画。
+   */
+  onEntityUpdated: (cb) => {
+    const h = (_e, d) => cb(d);
+    ipcRenderer.on('warmy:entity-updated', h);
+    return () => ipcRenderer.removeListener('warmy:entity-updated', h);
   },
   // T194 控制台：主进程**推送**真实事件（工具调用开始/结束、组网事件、错误）。
   // 只推结构化事实（cat/code/data），文案与打码都在渲染层 —— preload 不做业务判断。

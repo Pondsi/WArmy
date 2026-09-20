@@ -1445,3 +1445,14 @@ body.chat-window #page-layout, body.chat-window #empty-state, body.chat-window #
 .me-strip-col { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
 .me-strip-col .me-avatar-col { display: flex; flex-direction: column; align-items: center; }
 .me-strip-col .me-info-col { width: 100%; }
+
+/* ── 我的页：用户名在头像下、邮箱在用户名右侧、凭证带小眼睛 ─────────────── */
+.me-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+.me-name-row .username-display { font-size: 20px; font-weight: 600; }
+.me-email-inline { display: inline-flex; align-items: center; }
+.me-email-inline input { min-width: 200px; }
+/* 小眼睛：低调的图标按钮，开启时高亮 */
+.me-eye { display: inline-flex; align-items: center; justify-content: center; padding: 3px 6px; }
+.me-eye.on { border-color: var(--accent); color: var(--accent); }
+/* 凭证用等宽字体，点开/遮住时宽度稳定 */
+.me-cred-val { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .5px; }
