@@ -231,7 +231,7 @@ check('kb bidirectional', kb.eventsOfEntity('e1').length === 1 && kb.entitiesOfE
 check('kb query', kb.query('周报').events.length === 1);
 fs.rmSync(kbDir, { recursive: true, force: true });
 
-const { JieDianMingCe, SyncBus, chuangjianYaoQing, shiYongYaoQing, niMingGongZuoMuLu } = await import(
+const { JieDianMingCe, TongbuZongxian, chuangjianYaoQing, shiYongYaoQing, niMingGongZuoMuLu } = await import(
   toImportUrl(path.join(ascii, 'sync-protocol', 'dist', 'index.js'))
 );
 const regFile = path.join(os.tmpdir(), 'warmy-verify-reg.json');
@@ -240,7 +240,7 @@ const local = reg.registerLocal('A');
 const remote = reg.pairRemote('node-b', 'B');
 check('registry local', reg.isLocal(local.nodeId) && !reg.isLocal(remote.nodeId));
 const busDir = path.join(os.tmpdir(), 'warmy-verify-bus');
-const bus = new SyncBus(busDir);
+const bus = new TongbuZongxian(busDir);
 bus.publish({ fromNode: local.nodeId, toNode: remote.nodeId, channel: 'group', payload: { text: 'hi' } });
 const incog = bus.publish({ fromNode: remote.nodeId, toNode: local.nodeId, channel: 'group', payload: { text: 'secret' }, incognito: true });
 const pulled = bus.pull(remote.nodeId);
@@ -252,8 +252,8 @@ check('incog dir', niMingGongZuoMuLu().includes('incog'));
 fs.rmSync(busDir, { recursive: true, force: true });
 fs.rmSync(regFile, { force: true });
 
-const { AssetGovernor } = await import(toImportUrl(path.join(ascii, 'asset-governance', 'dist', 'index.js')));
-const gov = new AssetGovernor();
+const { ZichanGuanliqi } = await import(toImportUrl(path.join(ascii, 'asset-governance', 'dist', 'index.js')));
+const gov = new ZichanGuanliqi();
 gov.register({ id: 'a1', category: 'rule', scope: 'project', strength: 'strong', title: 'r', body: 'b' });
 check('assets strict empty', gov.retrieve({ strict: true }).length === 0);
 check('assets normal has', gov.retrieve({}).length === 1);
@@ -420,8 +420,8 @@ check('node binaries 5', [
   'node-v24.20.0-darwin-arm64.tar.gz',
   'node-v24.20.0-linux-x64.tar.xz',
 ].every((f) => exists('resources', 'node', f)));
-check('rrf fusion', fs.readFileSync(path.join(root, 'packages/memory-os/src/vectors.ts'), 'utf8').includes('rrfFusion'));
-check('swmr lock', fs.readFileSync(path.join(root, 'packages/memory-os/src/lock.ts'), 'utf8').includes('JsonlLock'));
+check('rrf fusion', fs.readFileSync(path.join(root, 'packages/memory-os/src/vectors.ts'), 'utf8').includes('rrfRonghe'));
+check('swmr lock', fs.readFileSync(path.join(root, 'packages/memory-os/src/lock.ts'), 'utf8').includes('JsonlSuo'));
 check('session v3', fs.readFileSync(path.join(root, 'packages/memory-os/src/migrate.ts'), 'utf8').includes('migrateSessionV2ToV3'));
 check('import-openclaw ipc', mainTs.includes('warmy:import-openclaw'));
 check('special-models ipc', mainTs.includes('warmy:special-models-set'));
@@ -471,7 +471,7 @@ const lanMeshChannels = [
 const preloadSrc = fs.readFileSync(path.join(root, 'packages/app-shell/src/preload.cjs'), 'utf8');
 const lanMeshContractMissing = lanMeshChannels.filter(
   (ch) =>
-    !new RegExp(`handleIpc\\(\\s*'${ch}'`).test(mainTs) || // 主进程注册（handleIpc 实参允许换行）
+    !new RegExp(`(?:handleIpc|chuliIpc)\\(\\s*'${ch}'`).test(mainTs) || // 主进程注册（handleIpc 实参允许换行）
     !preloadSrc.includes(`invoke('${ch}'`), // preload 暴露
 );
 check(
