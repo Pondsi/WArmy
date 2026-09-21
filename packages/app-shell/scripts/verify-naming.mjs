@@ -57,7 +57,7 @@ for (const f of files) {
   const badPort = src.match(/\b(CCAARMY_|CCARMY_|CCARM_)[A-Z_]*PORT[A-Z_]*\b/g);
   if (badPort) offenders.portConst.push(`${rel}: ${badPort.join(',')}`);
   // 3) IPC 通道必须 warmy:
-  const badIpc = src.match(/\b(ipcMain\.(handle|on)|ipcRenderer\.(invoke|on)|handleIpc)\(\s*['"](?!warmy:)[a-z0-9:-]+['"]/g);
+  const badIpc = src.match(/\b(ipcMain\.(handle|on)|ipcRenderer\.(invoke|on)|chuliIpc)\(\s*['"](?!warmy:)[a-z0-9:-]+['"]/g);
   if (badIpc && !/node_modules/.test(rel)) offenders.ipc.push(`${rel}: ${badIpc.slice(0, 3).join(' | ')}`);
   // 4) 新代码禁止再引入 CCAARMY_* 环境变量名（legacy 读取除外）
   const badEnv = src.match(/process\.env\[['"]CCAARMY_[^'"]+['"]\]|process\.env\.CCAARMY_[A-Z_]+/g);
@@ -211,6 +211,18 @@ check(`所有子进程调用都隐藏了控制台窗口（发现 ${consoleOffend
     /async function refreshEntityView[\s\S]{0,600}shiDangQian/.test(appJs2), '跨窗口刷新必须校验当前会话');
   check('列表头像 class 未被改名破坏（仍是 av-img）',
     /class="av-img"/.test(appJs2) && !/av-tuPian/.test(appJs2), 'class 名还原检查');
+}
+
+/* ── WSL：例行路径绝不为了探测而启动它（用户两次反馈"开新窗口触发打开 WSL"） ── */
+{
+  const probeSrc = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/container-probe.ts'), 'utf8');
+  const mainSrc2 = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/electron-main.ts'), 'utf8');
+  check('例行探测默认静默：probeWsl 在 !deep 时不 spawn 任何 wsl.exe',
+    /async function tanCeWsl[\s\S]{0,900}status: 'not-probed'/.test(probeSrc) && /wsl-not-probed/.test(probeSrc), '例行探测默认静默');
+  check('项目状态查询不传 deep（不会启动 WSL）',
+    /probeContainerRuntimes\(\{ cacheMs: 8000, only: \[runtimeId\] \}\)/.test(mainSrc2) && !/probeContainerRuntimes\(\{ cacheMs: 8000, only: \[runtimeId\], deep/.test(mainSrc2), '项目状态查询不传 deep');
+  check('显式探测（容器卡片按钮）才允许 deep',
+    /warmy:container-probe/.test(mainSrc2) && /opts\?\.deep === true/.test(mainSrc2), '显式探测才允许 deep');
 }
 
 console.log(`\n==== verify-naming: ${pass} ok / ${fail} FAIL ====`);

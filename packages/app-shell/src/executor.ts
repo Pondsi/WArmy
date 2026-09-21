@@ -75,7 +75,7 @@ export async function yunxingDuanCunhuoZhixingqi(
 }
 
 /** 批量派发：多个执行者并行，各自短命 */
-export async function runExecutors(
+export async function yunXingZhiXingQiJi(
   tasks: ZhixingqiRenwu[],
   cfg: ZhixingqiGongyingshangPeizhi
 ): Promise<zhixingqiJieguo[]> {

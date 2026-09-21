@@ -164,12 +164,12 @@ export interface XukemingdanTiaomu {
   note?: string;
 }
 
-export interface SecurityStore {
+export interface AnQuanCang {
   load(): Promise<{ mode: AnquanMoshi; allowlist: XukemingdanTiaomu[] }>;
   save(state: { mode: AnquanMoshi; allowlist: XukemingdanTiaomu[] }): Promise<void>;
 }
 
-export class MemorySecurityStore implements SecurityStore {
+export class JiYiNeiAnQuanCang implements AnQuanCang {
   private mode: AnquanMoshi = 'normal';
   private allowlist: XukemingdanTiaomu[] = [];
   async load() {
@@ -181,7 +181,7 @@ export class MemorySecurityStore implements SecurityStore {
   }
 }
 
-export class FileSecurityStore implements SecurityStore {
+export class WenJianAnQuanCang implements AnQuanCang {
   constructor(private file: string) {}
   async load() {
     try {
@@ -217,7 +217,7 @@ export class AnquanGuanliqi {
   private audit: Array<{ ts: number; action: string; decision: string; mode: AnquanMoshi }> = [];
 
   constructor(
-    private store: SecurityStore = new MemorySecurityStore(),
+    private store: AnQuanCang = new JiYiNeiAnQuanCang(),
     private onApprove?: PizhunChuliqi
   ) {}
 
@@ -367,7 +367,7 @@ export interface PaishengShiliXuanxiang {
 }
 
 /** 硬件建议：CPU 核数/2，夹在 1..8 */
-export function suggestMaxInstances(cpuCount = os.cpus().length): number {
+export function jianYiZuiDaShiLiShu(cpuCount = os.cpus().length): number {
   return Math.max(1, Math.min(8, Math.floor(cpuCount / 2)));
 }
 
@@ -379,7 +379,7 @@ export class ShiliGuanliqi extends EventEmitter {
   }
 
   maxInstances(): number {
-    return this.opts.maxInstances ?? suggestMaxInstances();
+    return this.opts.maxInstances ?? jianYiZuiDaShiLiShu();
   }
 
   list(): ShiliChuli[] {
@@ -513,21 +513,21 @@ export class ShiliGuanliqi extends EventEmitter {
   /** 硬件建议文案（UI 用） */
   hardwareAdvice(): { cpus: number; suggested: number; max: number } {
     const cpus = os.cpus().length;
-    const suggested = suggestMaxInstances(cpus);
+    const suggested = jianYiZuiDaShiLiShu(cpus);
     return { cpus, suggested, max: this.maxInstances() };
   }
 }
 
-export async function createP1Runtime(opts?: {
+export async function chuangJianP1YunXingShi(opts?: {
   instancesRoot?: string;
   nodePath?: string;
   maxInstances?: number;
   env?: Record<string, string>;
-  store?: SecurityStore;
+  store?: AnQuanCang;
   onApprove?: PizhunChuliqi;
 }) {
   const teardown = new ChaixieMingce();
-  const security = new AnquanGuanliqi(opts?.store ?? new MemorySecurityStore(), opts?.onApprove);
+  const security = new AnquanGuanliqi(opts?.store ?? new JiYiNeiAnQuanCang(), opts?.onApprove);
   await security.init();
   const instances = new ShiliGuanliqi({
     instancesRoot: opts?.instancesRoot || path.join(os.tmpdir(), 'warmy-instances'),

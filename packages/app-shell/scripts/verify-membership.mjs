@@ -32,7 +32,7 @@ import {fileURLToPath} from 'node:url';
 
 import {LianJieHuoXing, DEFAULT_MEMBER_CERT_TTL_MS, MEMBERSHIP_CLOCK_SKEW_MS, CHENGYUAN_ZHENGSHU_MOSHI, REVOCATION_LIST_SCHEMA, yingYongCheXiaoBiao, gouJianChengYuanZhengShu, gouJianCheXiaoBiao, guiFanChengYuanJson, lianShiZhiWen, lianGenZhengShuId, shuoMingChengYuanZhengShu, chaZhaoCheXiaoTiaoMu, shengChengEd25519, yiCheXiao, shiTongYiChengYuan, zhengShuQianMingZiJie, quChengYuanShenFen, signMemberCertificate, signRevocationList, verifyAndApplyRevocationList, verifyMemberCertificate, verifyRevocationList, bianliZhengshuLian, } from '../../bucketBu-protocol/dist/index.js';
 import {GroupStore, sameFingerprintText} from '../dist/group-store.js';
-import {IdentityStore, MEMBERSHIP_FILE_SCHEMA, MembershipStore, nullProtector} from '../dist/identity-store.js';
+import {ShenFenCang, MEMBERSHIP_FILE_SCHEMA, ChengYuanMingceCang, nullProtector} from '../dist/identity-store.js';
 import {applyInboundRevocationUpdate, buildIdentityChangeEntries, goujianChengyuanZaichang, computeChangeScopes, createRosterChecker, explainRosterDecision, wentiChengyuanZhengshu, membershipFileFor, membershipSameMember, membershipSnapshot, membershipStoreFor, MEMBERSHIP_SKEW_CHECK, reissueMemberCertificateForRecovery, chexiaoChengyuanZhengshu, rotateMemberCertificate, } from '../dist/identity-provider.js';
 import {DEFAULT_CLOCK_SKEW_MS, fingerprintFromPublicKey, isValidFingerprint, keyObjectFromPrivateDer, normalizeFingerprint, } from '../dist/identity.js';
 
@@ -67,7 +67,7 @@ function section(title) {
 function mkIdentity(name, passphrase) {
   const dir = path.join(tmpRoot, `id-${name}`);
   fs.mkdirSync(dir, { recursive: true });
-  const store = new IdentityStore(path.join(dir, 'identity.json'), { protector: nullProtector() });
+  const store = new ShenFenCang(path.join(dir, 'identity.json'), { protector: nullProtector() });
   const created = store.ensureIdentity(`alias-${name}`, { email: `${name}@example.test` }, passphrase ? { passphrase } : {});
   store.lock(); // 复现"重启后没有会话 DEK"的真实状态
   return { store, created, dir, idFile: path.join(dir, 'identity.json') };
@@ -506,7 +506,7 @@ check('applyInboundRevocationUpdate：来路指纹就是创建者 → 接受', (
   return r.ok === true;
 })());
 check('applyInboundRevocationUpdate：本机不知道群主时如实拒（unknown-issuer，不猜）', (() => {
-  const fresh = new MembershipStore(path.join(tmpRoot, 'unknown-issuer.json'), { fingerprintOf: fingerprintFromPublicKey });
+  const fresh = new ChengYuanMingceCang(path.join(tmpRoot, 'unknown-issuer.json'), { fingerprintOf: fingerprintFromPublicKey });
   const r = applyInboundRevocationUpdate({ membership: fresh, groupId: 'g-nobody', list: v2, fromFingerprint: infoCreator.fingerprint });
   return r.ok === false && r.code === 'unknown-issuer';
 })());
@@ -669,7 +669,7 @@ check('名册仍拒未记录者', createRosterChecker(plain.store)(infoC.fingerp
 check('explainRosterDecision 说明依据是 tofu', explainRosterDecision(plain.store, infoB.fingerprint).basis === 'tofu');
 check('requireCertificate=true 时 TOFU 被关闭（已知联系人也不放行）', createRosterChecker(plain.store, [], { requireCertificate: true })(infoB.fingerprint) === false);
 check('requireCertificate=true 但持有效证书 → 放行', (() => {
-  const m = new MembershipStore(path.join(tmpRoot, 'plain-membership.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
+  const m = new ChengYuanMingceCang(path.join(tmpRoot, 'plain-membership.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
   // 用创建者给 bob 的有效证书（bob 的新指纹），拷进 plain 的库里
   const cert = creatorMembership.certificateById(GROUP, 'mc-bob-2');
   const put = m.putCertificate(cert, { expectIssuerFingerprint: infoCreator.fingerprint });
@@ -677,7 +677,7 @@ check('requireCertificate=true 但持有效证书 → 放行', (() => {
   return createRosterChecker(plain.store, [], { membership: m, requireCertificate: true })(bobInfoAfter.fingerprint) === true;
 })());
 check('证书记录优先于 TOFU：被吊销者即使在本机联系人表里也被拒', (() => {
-  const m = new MembershipStore(path.join(tmpRoot, 'plain-membership2.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
+  const m = new ChengYuanMingceCang(path.join(tmpRoot, 'plain-membership2.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
   const cert = creatorMembership.certificateById(GROUP, 'mc-carol-1');
   m.putCertificate(cert, { expectIssuerFingerprint: infoCreator.fingerprint });
   const list = creatorMembership.revocation(GROUP);
@@ -690,7 +690,7 @@ check('证书记录优先于 TOFU：被吊销者即使在本机联系人表里�
   return checker(infoC.fingerprint) === false && decision.basis === 'revoked' && tofuOnly === true;
 })());
 check('过期证书也要落盘（stored=true）→ 名册因此明确拒，而不是退回 TOFU', (() => {
-  const m = new MembershipStore(path.join(tmpRoot, 'expired-store.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS, now: () => nowMs });
+  const m = new ChengYuanMingceCang(path.join(tmpRoot, 'expired-store.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS, now: () => nowMs });
   const expired = independentSignCert(
     gouJianChengYuanZhengShu(
       { certId: 'mc-expired', groupId: 'g-exp', memberFingerprint: infoC.fingerprint, memberPublicKey: infoC.publicKey,
@@ -703,7 +703,7 @@ check('过期证书也要落盘（stored=true）→ 名册因此明确拒，而�
   const verdict = m.authorizeFingerprint(infoC.fingerprint, { now: nowMs });
   return put.ok === true && put.code === 'expired' && verdict.decided === true && verdict.ok === false && verdict.code === 'expired';
 })(), (() => {
-  const m = new MembershipStore(path.join(tmpRoot, 'expired-store-probe.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS, now: () => nowMs });
+  const m = new ChengYuanMingceCang(path.join(tmpRoot, 'expired-store-probe.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS, now: () => nowMs });
   const expired = independentSignCert(
     gouJianChengYuanZhengShu(
       { certId: 'mc-expired-p', groupId: 'g-exp', memberFingerprint: infoC.fingerprint, memberPublicKey: infoC.publicKey,
@@ -722,7 +722,7 @@ check('明文/结构损坏的证书不进库（不污染判定）', (() => {
 check('explainRosterDecision 对 pin 过的指纹给 basis=pin', explainRosterDecision(plain.store, 'ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ', { extra: ['ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ'] }).basis === 'pin');
 check('explainRosterDecision 对完全未知指纹给 basis=none', explainRosterDecision(plain.store, 'YYYY-YYYY-YYYY-YYYY-YYYY').basis === 'none');
 check('名册判定在"证书有效"时给出 basis=certificate', (() => {
-  const m = new MembershipStore(path.join(tmpRoot, 'plain-membership3.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
+  const m = new ChengYuanMingceCang(path.join(tmpRoot, 'plain-membership3.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
   m.putCertificate(creatorMembership.certificateById(GROUP, 'mc-bob-2'), { expectIssuerFingerprint: infoCreator.fingerprint });
   return explainRosterDecision(plain.store, bobInfoAfter.fingerprint, { membership: m }).basis === 'certificate';
 })());
@@ -1043,7 +1043,7 @@ check('名册：攻击者的指纹被拒（从没被签发过证书）', rosterC
 check('roster 判定链在握手层是可注入的纯函数（返回 boolean）', typeof rosterCreator(bobInfoAfter.fingerprint) === 'boolean');
 
 // 另一个进程视角：新建 MembershipStore 直接读同一个文件
-const reopened = new MembershipStore(membershipFileFor(creator.store), {
+const reopened = new ChengYuanMingceCang(membershipFileFor(creator.store), {
   fingerprintOf: fingerprintFromPublicKey,
   clockSkewMs: DEFAULT_CLOCK_SKEW_MS,
 });
@@ -1077,11 +1077,11 @@ check('刚刚被吊销的指纹立刻被名册拒（无需重启）', rosterCrea
 // 损坏文件容错
 const brokenFile = path.join(tmpRoot, 'broken-membership.json');
 fs.writeFileSync(brokenFile, '{ this is not json', 'utf8');
-const brokenStore = new MembershipStore(brokenFile, { fingerprintOf: fingerprintFromPublicKey });
+const brokenStore = new ChengYuanMingceCang(brokenFile, { fingerprintOf: fingerprintFromPublicKey });
 check('损坏文件读入不抛错（返回空结构）', brokenStore.listGroups().length === 0 && brokenStore.summary().certCount === 0);
 const junkFile = path.join(tmpRoot, 'junk-membership.json');
 fs.writeFileSync(junkFile, JSON.stringify({ schema: MEMBERSHIP_FILE_SCHEMA, groups: { g1: { groupId: 'g1', certs: [{ certId: 'bad' }, null, 'x'], revocation: { schema: 'wrong' } } } }), 'utf8');
-const junkStore = new MembershipStore(junkFile, { fingerprintOf: fingerprintFromPublicKey });
+const junkStore = new ChengYuanMingceCang(junkFile, { fingerprintOf: fingerprintFromPublicKey });
 check('坏证书/坏吊销列表被丢弃而不是让整个文件不可用', junkStore.listCertificates('g1').length === 0 && junkStore.revocation('g1') === null);
 check('坏数据不影响其它查询（authorizeFingerprint 给出 decided=false）', junkStore.authorizeFingerprint('AAAA-AAAA-AAAA-AAAA-AAAA').decided === false);
 
@@ -1102,7 +1102,7 @@ check('membershipSnapshot 结构化输出可用（逐证书带 valid/code）', (
   );
 })(), JSON.stringify(membershipSnapshot(membershipStoreFor(creator.store), { groupId: GROUP }).groups[0]?.certs?.map((c) => [c.certId, c.valid, c.code])));
 check('membershipSnapshot 对"已过期"的证书给出 valid=false + code=expired', (() => {
-  const m = new MembershipStore(path.join(tmpRoot, 'snap-expired.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
+  const m = new ChengYuanMingceCang(path.join(tmpRoot, 'snap-expired.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
   const expired = independentSignCert(
     gouJianChengYuanZhengShu(
       { certId: 'mc-snap-exp', groupId: 'g-snap', memberFingerprint: infoC.fingerprint, memberPublicKey: infoC.publicKey,
@@ -1126,7 +1126,7 @@ check('签名验签对"用未解锁身份签"给出类型化错误而不是空�
 
 check('跨群一致性：吊销与"有效证书"并存时**与写入顺序无关**，一律拒（fail-closed）', (() => {
   const mkOrderedStore = async (file, revocationFirst) => {
-    const m = new MembershipStore(file, { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
+    const m = new ChengYuanMingceCang(file, { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
     const revokeGroup = 'g-revokes';
     const validGroup = 'g-valid';
     const revocationList = await signRevocationList(
@@ -1155,7 +1155,7 @@ check('跨群一致性：吊销与"有效证书"并存时**与写入顺序无关
   })();
 })());
 check('跨群一致性：只有证书、没有任何吊销时放行', (() => {
-  const m = new MembershipStore(path.join(tmpRoot, 'order-c.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
+  const m = new ChengYuanMingceCang(path.join(tmpRoot, 'order-c.json'), { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
   return (async () => {
     const r = await wentiChengyuanZhengshu({
       signer: signerCreator, membership: m, groupId: 'g-only',
@@ -1178,7 +1178,7 @@ section('13. 并发吊销不丢更新（读→签名→落盘 必须串行化）
   // 两路各自读到版本 N、各自算出 N+1、各自签一份，后写覆盖先写 ⇒ **前一次吊销静默丢失**。
   // 这里用同一个 store 真并发两次吊销，断言最终两条都在（版本 2、条目 2）。
   const concFile = path.join(tmpRoot, 'concurrent-membership.json');
-  const concStore = new MembershipStore(concFile, { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
+  const concStore = new ChengYuanMingceCang(concFile, { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
   const GROUP_C = 'g-concurrent';
 
   const certB = await wentiChengyuanZhengshu({
@@ -1229,10 +1229,10 @@ section('14. 阳性对照：绕过 runExclusive 时并发吊销必须丢一次')
 {
   // 把 runExclusive 换成"直接执行"，模拟加锁之前的代码路径。
   // 如果这样也能留下两条吊销，那 [13] 就是"碰巧通过"，不能作为修复的证据 —— 必须让它失败。
-  const proto = MembershipStore.prototype;
+  const proto = ChengYuanMingceCang.prototype;
   const original = proto.runExclusive;
   const bypassFile = path.join(tmpRoot, 'concurrent-bypass.json');
-  const bypassStore = new MembershipStore(bypassFile, { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
+  const bypassStore = new ChengYuanMingceCang(bypassFile, { fingerprintOf: fingerprintFromPublicKey, clockSkewMs: DEFAULT_CLOCK_SKEW_MS });
   const GROUP_X = 'g-concurrent-bypass';
   try {
     proto.runExclusive = function (fn) { return fn(); };

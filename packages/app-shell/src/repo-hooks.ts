@@ -19,8 +19,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  validatePushPaths,
-  validateRefUpdate,
+  jiaoYanTuiSongLuJing,
+  jiaoYanYinYongGengXin,
   type TuiSongLuJingTiaoMu,
   type TuiSongLuJingJuJue,
   type YinYongDongZuo,
@@ -46,7 +46,7 @@ export type GitRunner = (args: string[], opts?: { cwd?: string }) => GitRunResul
  * spawnSync 给的是 `{ status, signal, output, stdout… }`，直接 cast 会让 `r.code` 永远是 undefined，
  * 于是每一次判定都当成"git 失败"（这个坑在 verify-wiring 里被真跑抓出来过）。
  */
-export function createGitRunner(cwd?: string): GitRunner {
+export function chuangJianGitYunXingQi(cwd?: string): GitRunner {
   return (args, opts) => {
     const r = spawnSync('git', args, {
       cwd: opts?.cwd ?? cwd,
@@ -76,7 +76,7 @@ export function isZeroSha(sha: string): boolean {
 }
 
 /** 解析 pre-receive 的 stdin（容忍 CRLF / 空行 / 多余空格） */
-export function parsePreReceiveStdin(text: string): { refs: PreReceiveRef[]; malformed: string[] } {
+export function jieXiYuXianJieShuRu(text: string): { refs: PreReceiveRef[]; malformed: string[] } {
   const refs: PreReceiveRef[] = [];
   const malformed: string[] = [];
   for (const raw of String(text ?? '').split(/\r?\n/)) {
@@ -181,7 +181,7 @@ export interface PreReceiveRefResult {
   enumerationErrors: string[];
 }
 
-export interface PreReceiveResult {
+export interface YuXianJieShouJieGuo {
   ok: boolean;
   role: GuardRole;
   memberId: string;
@@ -204,10 +204,10 @@ export interface RunPreReceiveOptions {
 }
 
 /** 纯逻辑入口（验证脚本直接调它，不用起子进程） */
-export function runPreReceive(opts: RunPreReceiveOptions): PreReceiveResult {
+export function yunXingYuXianJieShou(opts: RunPreReceiveOptions): YuXianJieShouJieGuo {
   const role: GuardRole = opts.role ?? 'member';
   const memberId = opts.memberId ?? '';
-  const parsed = parsePreReceiveStdin(opts.stdin);
+  const parsed = jieXiYuXianJieShuRu(opts.stdin);
   const fatal = parsed.refs.length === 0 ? (parsed.malformed.length ? 'no-valid-refs' : 'empty-stdin') : undefined;
 
   const refResults: PreReceiveRefResult[] = [];
@@ -227,7 +227,7 @@ export function runPreReceive(opts: RunPreReceiveOptions): PreReceiveResult {
       return v;
     };
 
-    const refCheck = validateRefUpdate(ref.ref, ref.oldSha, ref.newSha, {
+    const refCheck = jiaoYanYinYongGengXin(ref.ref, ref.oldSha, ref.newSha, {
       role,
       memberId,
       knownSha,
@@ -237,7 +237,7 @@ export function runPreReceive(opts: RunPreReceiveOptions): PreReceiveResult {
     });
 
     const collected = shoujiTuisongTiaomu(opts.git, ref);
-    const pathCheck = validatePushPaths(collected.entries, { base: 'worktree' });
+    const pathCheck = jiaoYanTuiSongLuJing(collected.entries, { base: 'worktree' });
     if (!collected.deleted) unionEntries.push(...collected.entries);
 
     refResults.push({
@@ -253,9 +253,9 @@ export function runPreReceive(opts: RunPreReceiveOptions): PreReceiveResult {
     });
   }
 
-  let union: PreReceiveResult['union'] = null;
+  let union: YuXianJieShouJieGuo['union'] = null;
   if (unionEntries.length > 0) {
-    const u = validatePushPaths(unionEntries, { base: 'worktree' });
+    const u = jiaoYanTuiSongLuJing(unionEntries, { base: 'worktree' });
     union = { allowed: u.allowed, rejected: u.rejected, warnings: u.warnings, entries: unionEntries.length };
   }
 
@@ -268,7 +268,7 @@ export function runPreReceive(opts: RunPreReceiveOptions): PreReceiveResult {
  * 标题行是 ASCII（hook 输出是开发者面向的，不进 UI，也不进 i18n）；
  * 逐条 reason 直接来自 repo-guard 的结构化输出，**不重写、不裁剪**。
  */
-export function formatPreReceiveOutput(r: PreReceiveResult): string[] {
+export function formatPreReceiveOutput(r: YuXianJieShouJieGuo): string[] {
   const out: string[] = [];
   out.push('[warmy repo-guard] pre-receive');
   out.push(`  role=${r.role} memberId=${r.memberId || '-'} refs=${r.refs.length}`);
@@ -314,14 +314,14 @@ export function gouziBaozhuangJiaoben(nodeBin: string, hookScript: string): stri
  * **不动全局 git config**（不设 core.hooksPath）：只写这个仓库自己的 `<gitdir>/hooks/pre-receive`。
  * 已有别人的钩子且不是我们装的 → 拒绝覆盖（返回 error: hook-exists），需要 force。
  */
-export function installPreReceiveHook(opts: {
+export function anzhuangYuXianJieShouGouZi(opts: {
   repoDir: string;
   hookScript: string;
   nodeBin?: string;
   force?: boolean;
   git?: GitRunner;
 }): AnzhuangGouziJieguo {
-  const git = opts.git ?? createGitRunner(opts.repoDir);
+  const git = opts.git ?? chuangJianGitYunXingQi(opts.repoDir);
   const gitDirRes = git(['rev-parse', '--absolute-git-dir']);
   if (gitDirRes.code !== 0) {
     return { ok: false, error: `not-a-git-repo:${(gitDirRes.stderr || '').trim().slice(0, 120)}` };
@@ -365,7 +365,7 @@ export function gouziJiaobenHouxuan(appRoot: string): string[] {
 }
 
 /** 找到第一个存在的钩子脚本；都没有则返回 null（**不要**假装装好了） */
-export function findHookScript(appRoot: string): string | null {
+export function chaZhaoGouZiJiaoBen(appRoot: string): string | null {
   for (const p of gouziJiaobenHouxuan(appRoot)) {
     try {
       if (fs.existsSync(p)) return p;

@@ -55,14 +55,14 @@ const qun = 3;
 
 /** 认得出这是哪一版凭证（现行 51 位 / 上一版 45 位） */
 export function pingzhengLeixing(text: string): 'current' | 'legacy' | null {
-  const s = normalizeCredential(text);
+  const s = guiFanHuaPingZheng(text);
   if (s.length === PINGZHENG_CHANGDU && [...s].every((c) => PINGZHENG_ZIFUBIAO.includes(c))) return 'current';
   if (s.length === YICHAN_PINGZHENG_CHANGDU && [...s].every((c) => YICHAN_PINGZHENG_ZIFUBIAO.includes(c))) return 'legacy';
   return null;
 }
 
 /** 32 字节 → 定长凭证字符串（按字母表进制转换，高位补 0） */
-export function encodeWith(bytes: Buffer, alphabet: string, length: number): string {
+export function bianMaYong(bytes: Buffer, alphabet: string, length: number): string {
   const base = BigInt(alphabet.length);
   let n = BigInt('0x' + bytes.toString('hex'));
   const out: string[] = [];
@@ -76,8 +76,8 @@ export function encodeWith(bytes: Buffer, alphabet: string, length: number): str
 }
 
 /** 定长凭证字符串 → 32 字节（不足补 0，超出取低 256 bit） */
-export function decodeWith(text: string, alphabet: string, length: number): Buffer {
-  const s = normalizeCredential(text);
+export function jieMaYong(text: string, alphabet: string, length: number): Buffer {
+  const s = guiFanHuaPingZheng(text);
   if (s.length !== length) throw new Error(`credential: 需要 ${length} 位，实际 ${s.length}`);
   const base = BigInt(alphabet.length);
   let n = 0n;
@@ -92,16 +92,16 @@ export function decodeWith(text: string, alphabet: string, length: number): Buff
 
 /** 现行格式：32 字节 → 51 位大写凭证 */
 export function bianmaPingzheng(bytes: Buffer): string {
-  return encodeWith(bytes, PINGZHENG_ZIFUBIAO, PINGZHENG_CHANGDU);
+  return bianMaYong(bytes, PINGZHENG_ZIFUBIAO, PINGZHENG_CHANGDU);
 }
 
 /** 现行格式 → 32 字节 */
 export function jiemaPingzheng(text: string): Buffer {
-  return decodeWith(text, PINGZHENG_ZIFUBIAO, PINGZHENG_CHANGDU);
+  return jieMaYong(text, PINGZHENG_ZIFUBIAO, PINGZHENG_CHANGDU);
 }
 
 /** 去掉分隔符/空白（不再需要处理大小写：现在只有大写一种形式） */
-export function normalizeCredential(text: string): string {
+export function guiFanHuaPingZheng(text: string): string {
   return String(text || '').replace(/[\s-]+/g, '');
 }
 
@@ -111,7 +111,7 @@ export function isValidCredential(text: string): boolean {
 
 /** 51 位 → 17 组 × 3 位（便于人眼抄写与核对） */
 export function formatCredential(text: string): string {
-  const s = normalizeCredential(text);
+  const s = guiFanHuaPingZheng(text);
   const parts: string[] = [];
   for (let i = 0; i < s.length; i += qun) parts.push(s.slice(i, i + qun));
   return parts.join(FENFU);
@@ -128,7 +128,7 @@ export function shengchengPingzheng(): string {
   return bianmaPingzheng(crypto.randomBytes(32));
 }
 
-export interface DerivedKeyPair {
+export interface TuiDaoMiyaoDui {
   publicKey: crypto.KeyObject;
   privateKey: crypto.KeyObject;
   publicKeyB64: string;
@@ -142,12 +142,12 @@ export interface DerivedKeyPair {
  * 直接当 Ed25519 种子即可；这样「凭证 = 私钥」在数学上是同一件事，
  * 也避免为找回身份而引入第二套秘密。
  */
-export function keyPairFromCredential(credential: string): DerivedKeyPair {
+export function youPingZhengQuMiyaoDui(credential: string): TuiDaoMiyaoDui {
   const kind = pingzhengLeixing(credential);
   if (!kind) throw new Error('credential: 形态不认识（既不是 51 位大写凭证，也不是上一版 45 位）');
   const seed = kind === 'current'
     ? jiemaPingzheng(credential)
-    : decodeWith(credential, YICHAN_PINGZHENG_ZIFUBIAO, YICHAN_PINGZHENG_CHANGDU);
+    : jieMaYong(credential, YICHAN_PINGZHENG_ZIFUBIAO, YICHAN_PINGZHENG_CHANGDU);
   const raw = ed25519FromSeed(seed);
   const privateKey = ed25519PrivateKeyObject(raw.privateKey);
   return {

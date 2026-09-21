@@ -58,12 +58,12 @@ import {
 } from '@warmy/sync-protocol';
 import {
   chuangjianShenfenGongyingshang,
-  createRosterChecker,
-  fingerprintDerivationForAppShell,
-  requireSignableIdentity,
+  chuangJianMingCeJianChaQi,
+  yingYongCengZhiWenTuiDao,
+  yaoQiuKeQianMingShenFen,
   type QianMingZheJieSuoTai,
 } from './identity-provider.js';
-import type { IdentityStore } from './identity-store.js';
+import type { ShenFenCang } from './identity-store.js';
 import { WARMY_SUGGESTED_NET_PORTS } from './settings-store.js';
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -174,7 +174,7 @@ const WANGLUO_PAICHU_FANWEI_MINGLING = 'netsh int ipv4 show excludedportrange pr
  * `* - Administered port exclusions.` 之类的说明行天然不匹配 —— 所以中文 Windows 的
  * 本地化表头（GBK 下解码成乱码也一样）不影响解析，数字是 ASCII 的。
  */
-export function parseExcludedPortRanges(text: string): Array<readonly [number, number]> {
+export function jieXiPaiChuDuanKouFanWei(text: string): Array<readonly [number, number]> {
   const out: Array<readonly [number, number]> = [];
   for (const line of String(text ?? '').split(/\r?\n/)) {
     const m = /^\s*(\d{1,5})\s+(\d{1,5})\s*\*?\s*$/.exec(line);
@@ -191,7 +191,7 @@ export function parseExcludedPortRanges(text: string): Array<readonly [number, n
 /** 进程内缓存：排除段是系统级稳定事实（不像端口占用那样随时在变），读一次就够 */
 let osReservedRangesCache: Promise<OsReservedRanges> | null = null;
 
-async function readOsReservedTcpRanges(): Promise<OsReservedRanges> {
+async function duXiTongBaoLiuDuanKou(): Promise<OsReservedRanges> {
   return new Promise<OsReservedRanges>((resolve) => {
     if (process.platform !== 'win32') {
       // 非 Windows 没有"排除段"这回事：如实回报不支持（空列表 = 不跳过任何端口）
@@ -220,7 +220,7 @@ async function readOsReservedTcpRanges(): Promise<OsReservedRanges> {
             });
             return;
           }
-          done({ supported: true, source: WANGLUO_PAICHU_FANWEI_MINGLING, ranges: parseExcludedPortRanges(String(stdout)) });
+          done({ supported: true, source: WANGLUO_PAICHU_FANWEI_MINGLING, ranges: jieXiPaiChuDuanKouFanWei(String(stdout)) });
         },
       );
     } catch (e) {
@@ -230,18 +230,18 @@ async function readOsReservedTcpRanges(): Promise<OsReservedRanges> {
 }
 
 /** 读本机 OS 保留的 TCP 段（按进程缓存一次；失败也如实回报，绝不抛错打断候选生成） */
-export function getOsReservedTcpRanges(): Promise<OsReservedRanges> {
-  if (!osReservedRangesCache) osReservedRangesCache = readOsReservedTcpRanges();
+export function quXiTongBaoLiuDuanKou(): Promise<OsReservedRanges> {
+  if (!osReservedRangesCache) osReservedRangesCache = duXiTongBaoLiuDuanKou();
   return osReservedRangesCache;
 }
 
 /** 仅供验证/诊断：清掉进程内缓存，强制下次重新读系统事实 */
-export function resetOsReservedRangesCache(): void {
+export function qingXiTongBaoLiuHuanCun(): void {
   osReservedRangesCache = null;
 }
 
 /** 测试注入的保留段：给数组 = "读到的保留段"；给完整对象可连 source/error 一起注入 */
-function normalizeInjectedReservedRanges(
+function guiFanZhuRuBaoLiuFanWei(
   v: readonly (readonly [number, number])[] | OsReservedRanges | undefined,
 ): OsReservedRanges | null {
   if (v === undefined) return null;
@@ -253,7 +253,7 @@ function normalizeInjectedReservedRanges(
 }
 
 /** errno → 三元结论（非 EADDRINUSE 一律记 no-permission，但 errno 仍原样带在 errorCode 里） */
-function classifyBindProbe(code: string | undefined): PortProbeStatus {
+function guiLeiBangDingTanCe(code: string | undefined): PortProbeStatus {
   return code === 'EADDRINUSE' ? 'occupied' : 'no-permission';
 }
 
@@ -261,7 +261,7 @@ function classifyBindProbe(code: string | undefined): PortProbeStatus {
  * 真的 bind 一次看能不能绑上；**绑上立刻关闭**（绝不泄漏监听句柄）。
  * 与组网监听用同一个 host（默认 0.0.0.0），否则结论不可信（0.0.0.0 与 127.0.0.1 的占用面不同）。
  */
-export function probePortAvailability(port: number, host = '0.0.0.0', timeoutMs = 400): Promise<PortProbeEntry> {
+export function tanCeDuanKouKeYongXing(port: number, host = '0.0.0.0', timeoutMs = 400): Promise<PortProbeEntry> {
   return new Promise<PortProbeEntry>((resolve) => {
     const started = Date.now();
     let settled = false;
@@ -278,7 +278,7 @@ export function probePortAvailability(port: number, host = '0.0.0.0', timeoutMs 
       }
       resolve({ port, status, ...(errorCode ? { errorCode } : {}), latencyMs: Date.now() - started });
     };
-    s.once('error', (e: NodeJS.ErrnoException) => done(classifyBindProbe(e.code), e.code ?? 'probe-error'));
+    s.once('error', (e: NodeJS.ErrnoException) => done(guiLeiBangDingTanCe(e.code), e.code ?? 'probe-error'));
     s.once('listening', () => {
       // 等 close 回调再回结论：这样"探测完不留句柄"是可以被验证的
       s.close(() => done('ok'));
@@ -296,7 +296,7 @@ export function probePortAvailability(port: number, host = '0.0.0.0', timeoutMs 
       s.listen(port, host);
     } catch (e) {
       clearTimeout(guard);
-      done(classifyBindProbe((e as NodeJS.ErrnoException).code), (e as NodeJS.ErrnoException).code ?? 'probe-throw');
+      done(guiLeiBangDingTanCe((e as NodeJS.ErrnoException).code), (e as NodeJS.ErrnoException).code ?? 'probe-throw');
       return;
     }
   });
@@ -331,7 +331,7 @@ export interface PickPortCandidatesOptions {
  * 顺序：优先池 → （不够时）同号段相邻值 → （还不够时）动态区间随机样本 → 到点即停。
  * 扩展搜索时**先剔除**本机 OS 保留段里的端口（跳过而不是探测），被跳过的端口记在 `skipped` 里。
  */
-export async function pickPortCandidates(opts: PickPortCandidatesOptions = {}): Promise<PortCandidateReport> {
+export async function xuanDuanKouHouXuan(opts: PickPortCandidatesOptions = {}): Promise<PortCandidateReport> {
   const host = opts.host ?? '0.0.0.0';
   const requestedPort = Number.isInteger(opts.requestedPort) ? Number(opts.requestedPort) : 0;
   const want = Math.min(PORT_CANDIDATE_MAX, Math.max(PORT_CANDIDATE_MIN, Number(opts.want) || PORT_CANDIDATE_WANT));
@@ -341,7 +341,7 @@ export async function pickPortCandidates(opts: PickPortCandidatesOptions = {}): 
   const allowExtended = opts.allowExtended !== false;
   const tiaoguoBaoliu = opts.skipReservedRanges !== false;
   const random = opts.random ?? Math.random;
-  const probeFn = opts.probe ?? probePortAvailability;
+  const probeFn = opts.probe ?? tanCeDuanKouKeYongXing;
   const [lo, hi] = EPHEMERAL_PORT_RANGE;
 
   const started = Date.now();
@@ -393,11 +393,11 @@ export async function pickPortCandidates(opts: PickPortCandidatesOptions = {}): 
      *     这些端口连 bind 都不允许（EACCES），既浪费时间又可能把探测预算耗在"永远不可用"的号上。
      * 读不到（非 Windows / netsh 跑失败）→ ranges 为空 → 不跳过任何端口，并如实回报 source/error。
      */
-    const injected = normalizeInjectedReservedRanges(opts.reservedRanges);
+    const injected = guiFanZhuRuBaoLiuFanWei(opts.reservedRanges);
     osReserved =
       injected ??
       (tiaoguoBaoliu
-        ? await getOsReservedTcpRanges()
+        ? await quXiTongBaoLiuDuanKou()
         : { supported: process.platform === 'win32', source: 'disabled', ranges: [] });
     const inReservedRange = (p: number): readonly [number, number] | undefined =>
       osReserved.ranges.find(([start, end]) => p >= start && p <= end);
@@ -519,7 +519,7 @@ function isIpv4(v: string): boolean {
 }
 
 /** 枚举非回环 IPv4（真实现：os.networkInterfaces） */
-export function listLocalAddresses(): { all: string[]; publicOnes: string[] } {
+export function lieBenJiDiZhi(): { all: string[]; publicOnes: string[] } {
   const all: string[] = [];
   const publicOnes: string[] = [];
   try {
@@ -539,7 +539,7 @@ export function listLocalAddresses(): { all: string[]; publicOnes: string[] } {
 }
 
 /** 私网优先的"本机地址"（局域网对端最可能需要这个） */
-export function pickLocalAddress(all: string[]): string {
+export function xuanBenJiDiZhi(all: string[]): string {
   // 多网卡机器上（Hyper-V/WSL 的 172.16-31 虚拟网卡、Docker 网桥…）排序很关键：
   // 家用/办公局域网一般是 192.168.*，其次是 10.*，172.16-31 往往是虚拟网卡 → 排最后。
   const rank = (a: string): number => {
@@ -562,12 +562,12 @@ export function pickLocalAddress(all: string[]): string {
  * 附八.9：**有全局单播 IPv6 = 天然可拨入候选**（IPv6 无 NAT）⇒ 阶梯第一档就是 IPv6 直连，
  * 有 IPv6 的用户不该被误判成"非公网、不可组网"而白走打洞/中继。
  */
-export function listLocalIpv6(): Ipv6Baogao {
+export function lieBenJiIpv6(): Ipv6Baogao {
   return jianchaBenjiIpv6();
 }
 
 /** 本机 IPv6 是否构成"天然可拨入候选"（不含"已验证公网可达"的意思） */
-export function hasNaturalIpv6Reachability(): boolean {
+export function youZiRanIpv6KeDaXing(): boolean {
   return jianchaBenjiIpv6().hasGlobalUnicast;
 }
 
@@ -578,7 +578,7 @@ export function hasNaturalIpv6Reachability(): boolean {
  * 单独一个函数的理由：UI 与日志都要能区分"验证过"和"只是地址事实"，
  * 所以这里只产出**类型**，不产出布尔（附八.9）。
  */
-export function dialableKindOf(selfDialable: boolean | undefined, hasGlobalIpv6: boolean): KeBoRuZhongLei {
+export function quKeBoRuZhongLei(selfDialable: boolean | undefined, hasGlobalIpv6: boolean): KeBoRuZhongLei {
   if (selfDialable === true) return 'peer-verified';
   if (hasGlobalIpv6) return 'ipv6-global-natural';
   return selfDialable === false ? 'undialable' : 'undetermined';
@@ -628,7 +628,7 @@ export interface PublicIpResult {
   latencyMs?: number;
 }
 
-export async function discoverPublicIp(timeoutMs = 4000): Promise<PublicIpResult> {
+export async function faxianGongWangIp(timeoutMs = 4000): Promise<PublicIpResult> {
   const started = Date.now();
   const errors: string[] = [];
   for (const fuwu of PUBLIC_IP_SERVICES) {
@@ -664,7 +664,7 @@ export interface ChuXiangJieguo {
   attempts: { label: string; ok: boolean; error?: string; latencyMs?: number }[];
 }
 
-export async function checkOutbound(timeoutMs = 2500, targets = OUTBOUND_TARGETS): Promise<ChuXiangJieguo> {
+export async function jianChaChuXiang(timeoutMs = 2500, targets = OUTBOUND_TARGETS): Promise<ChuXiangJieguo> {
   const attempts: ChuXiangJieguo['attempts'] = [];
   for (const t of targets) {
     const r = await tcpProbe(t.host, t.port, timeoutMs);
@@ -681,8 +681,8 @@ export async function checkOutbound(timeoutMs = 2500, targets = OUTBOUND_TARGETS
 
 /** 本机地址信息（不联网也有结果；公网地址尽力而为） */
 export async function benjiDizhiXinxi(opts: { port?: number; timeoutMs?: number } = {}): Promise<BenjiDizhiXinxi> {
-  const { all, publicOnes } = listLocalAddresses();
-  const localIp = pickLocalAddress(all);
+  const { all, publicOnes } = lieBenJiDiZhi();
+  const localIp = xuanBenJiDiZhi(all);
   const base: BenjiDizhiXinxi = {
     ok: true,
     localIp,
@@ -702,7 +702,7 @@ export async function benjiDizhiXinxi(opts: { port?: number; timeoutMs?: number 
     };
   }
   if (opts.port) base.tcp = await tcpProbe('127.0.0.1', opts.port, 1200);
-  const pub = await discoverPublicIp(opts.timeoutMs ?? 4000);
+  const pub = await faxianGongWangIp(opts.timeoutMs ?? 4000);
   if (pub.ok && pub.ip) {
     base.publicIp = pub.ip;
     base.publicIpSource = pub.source;
@@ -776,7 +776,7 @@ function shiFouHeFaZhuJi(v: string): boolean {
  *  · 域名 → 真的 DNS 解析；解析结果里有公网地址才算 `isPublic`，全是私网则 `lanOnly`；
  *  · 端口可达性：只对本机地址/回环做**真实 TCP 连接**；对非本机地址不做任何"假装可达"的结论。
  */
-export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<ProbeNetResult> {
+export async function tanCeWangLuo(input: ProbeNetInput, timeoutMs = 3000): Promise<ProbeNetResult> {
   const ip = String(input?.ip ?? '').trim();
   const port = Number(input?.port);
   if (!ip || !shiFouHeFaZhuJi(ip)) {
@@ -786,7 +786,7 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
     return { ok: false, isPublic: false, outboundOk: false, errorCode: 'invalid-port', inboundVerified: false };
   }
 
-  const { all, publicOnes } = listLocalAddresses();
+  const { all, publicOnes } = lieBenJiDiZhi();
   const scope = guiLeiDiZhi(ip);
   const ipv6 = jianchaBenjiIpv6();
   const mubiaoZhuji = guiFanZhuJiZiMian(ip);
@@ -817,10 +817,10 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
   const isPublic = anyPublic;
   const lanOnly = allPrivateLike || (onLocalNic && guiLeiDiZhi(ip) !== 'public');
 
-  const chuXiang = await checkOutbound(timeoutMs);
+  const chuXiang = await jianChaChuXiang(timeoutMs);
 
   // 公网地址 + NAT 判定：真的问一次回显服务（失败就如实缺字段）
-  const pub = await discoverPublicIp(Math.min(timeoutMs, 3000));
+  const pub = await faxianGongWangIp(Math.min(timeoutMs, 3000));
   const behindNat = publicOnes.length === 0 && (!pub.ok || !all.includes(pub.ip as string));
 
   // 端口：只对本机地址/回环做真实连接
@@ -899,7 +899,7 @@ export interface WangzhuangDuiduanYinyong {
   lastSeen?: number;
 }
 
-export interface SecureInboundMessage {
+export interface AnQuanRuXiangXiaoXi {
   id: string;
   from: string;
   to: string | '*';
@@ -981,11 +981,11 @@ export interface SecureMeshOptions {
   userDataDir: string;
   nodeId: string;
   /** 取本机身份（延迟取：启动早期可能还没有） */
-  store: () => IdentityStore | null;
+  store: () => ShenFenCang | null;
   /** 已知对端（peerReg：手工添加 / 发现到的） */
   peers: () => WangzhuangDuiduanYinyong[];
   /** 收到对端消息（IPC 层转渲染进程） */
-  onInbound?: (msg: SecureInboundMessage) => void;
+  onInbound?: (msg: AnQuanRuXiangXiaoXi) => void;
   onEvent?: (e: { type: string; detail?: string; peer?: string; ts: number }) => void;
   /**
    * 本机是否可拨入（来自 DialabilityProbe / autonat 结论；`undefined` = 还没测过）。
@@ -1010,7 +1010,7 @@ export class SecureMesh {
   /** 最近一次绑定失败的底层错误码（成功就清掉）——UI 据此说清"为什么绑不上" */
   private bindError: string | null = null;
   private readonly clients = new Map<string, AnQuanTongBuKeHu>();
-  private readonly inbox: SecureInboundMessage[] = [];
+  private readonly inbox: AnQuanRuXiangXiaoXi[] = [];
   private readonly liveness: LianJieHuoXing;
   private probe: NeiWangTanCe | null = null;
   private readonly guard: ChongfangFangYu;
@@ -1082,7 +1082,7 @@ export class SecureMesh {
     const dialable = this.opts.selfDialable?.();
     return {
       ...(dialable === undefined ? {} : { dialable }),
-      naturalDialable: hasNaturalIpv6Reachability(),
+      naturalDialable: youZiRanIpv6KeDaXing(),
     };
   }
 
@@ -1116,7 +1116,7 @@ export class SecureMesh {
 
   /** 名册（= 本机已知联系人 + 显式 pin 过的指纹） */
   private rosterFor(extra: string[] = []): (fp: string) => boolean {
-    return createRosterChecker(this.opts.store(), extra);
+    return chuangJianMingCeJianChaQi(this.opts.store(), extra);
   }
 
   /**
@@ -1126,7 +1126,7 @@ export class SecureMesh {
    */
   async enable(port: number, opts: { discovery?: boolean; announce?: boolean } = {}): Promise<WangzhuangQiyongJieguo> {
     const store = this.opts.store();
-    const gate = requireSignableIdentity(store);
+    const gate = yaoQiuKeQianMingShenFen(store);
     this.unlockSnapshot = gate.unlock ?? null;
     if (!gate.ok || !store) {
       return {
@@ -1139,7 +1139,7 @@ export class SecureMesh {
     const identity = chuangjianShenfenGongyingshang(store);
     // 指纹推导**必须**是身份层那一套：默认 base32(sha256(raw)) 与身份层指纹不同，
     // 不注入的话握手层会把每一条合法连接都判成 fingerprint-mismatch。
-    const derivation = fingerprintDerivationForAppShell();
+    const derivation = yingYongCengZhiWenTuiDao();
 
     if (this.server?.listening && this.requestedPort === port) {
       if (opts.discovery) await this.startDiscovery();
@@ -1282,7 +1282,7 @@ export class SecureMesh {
     const fp = session.info.peerFingerprint;
     this.liveness.heartbeat(fp, this.now());
     if (msg.incognito) return; // 无痕：不留在 inbox（与旧实现一致）
-    const entry: SecureInboundMessage = {
+    const entry: AnQuanRuXiangXiaoXi = {
       id: msg.id,
       from: msg.from,
       to: msg.to,
@@ -1298,7 +1298,7 @@ export class SecureMesh {
     this.opts.onInbound?.(entry);
   }
 
-  inboxOf(): SecureInboundMessage[] {
+  inboxOf(): AnQuanRuXiangXiaoXi[] {
     return [...this.inbox];
   }
 
@@ -1319,7 +1319,7 @@ export class SecureMesh {
     opts: { pin?: string; timeoutMs?: number; keepOpen?: boolean } = {}
   ): Promise<{ ok: boolean; error?: string; peerFingerprint?: string; latencyMs?: number }> {
     const store = this.opts.store();
-    const gate = requireSignableIdentity(store);
+    const gate = yaoQiuKeQianMingShenFen(store);
     if (!gate.ok || !store) return { ok: false, error: gate.errorCode ?? 'identity-missing' };
     const key = `${host}:${port}`;
     const cunzai = this.clients.get(key);
@@ -1338,7 +1338,7 @@ export class SecureMesh {
       host,
       port,
       groupId: null,
-      fingerprintDerivation: fingerprintDerivationForAppShell(),
+      fingerprintDerivation: yingYongCengZhiWenTuiDao(),
       peerFingerprint: opts.pin ?? null,
       roster: this.rosterFor(opts.pin ? [opts.pin] : []),
       replayGuard: this.guard,
@@ -1396,7 +1396,7 @@ export class SecureMesh {
     errors: string[];
     errorCode?: string;
   }> {
-    const gate = requireSignableIdentity(this.opts.store());
+    const gate = yaoQiuKeQianMingShenFen(this.opts.store());
     this.unlockSnapshot = gate.unlock ?? this.unlockSnapshot;
     if (!gate.ok) {
       return {
@@ -1410,8 +1410,8 @@ export class SecureMesh {
       };
     }
     const info = this.opts.store()?.info();
-    const { all } = listLocalAddresses();
-    const host = pickLocalAddress(all);
+    const { all } = lieBenJiDiZhi();
+    const host = xuanBenJiDiZhi(all);
     const payload = {
       type: 'announce',
       reason,
@@ -1439,7 +1439,7 @@ export class SecureMesh {
     const now = this.now();
     if (this.lastStatusValue && now - this.lastStatusAt < ttlMs) return this.lastStatusValue;
     const store = this.opts.store();
-    const unlock = store ? requireSignableIdentity(store).unlock ?? this.unlockSnapshot : null;
+    const unlock = store ? yaoQiuKeQianMingShenFen(store).unlock ?? this.unlockSnapshot : null;
     if (!this.enabled) {
       // B5：组网关闭时仍返回**本机事实**（IPv6 / 可拨入性提示），这两项与开关无关。
       // 同步 buildReachabilityHint：不发 socket，只报地址事实。
@@ -1495,8 +1495,8 @@ export class SecureMesh {
       this.lastPeerProbes = { at: now, peers: out };
     }
 
-    const { all, publicOnes } = listLocalAddresses();
-    const localIp = pickLocalAddress(all);
+    const { all, publicOnes } = lieBenJiDiZhi();
+    const localIp = xuanBenJiDiZhi(all);
     const ipv6 = jianchaBenjiIpv6();
     const sessions = this.sessionCount;
     const reachable = self.ok && (duiduanTance.length === 0 || sessions > 0 || duiduanTance.some((p) => p.reachable));
@@ -1575,8 +1575,8 @@ export class SecureMesh {
       ...(selfDialable === undefined ? {} : { selfDialable }),
       // 附八.9：地址事实（有全局 IPv6 ⇒ 无 NAT ⇒ 天然可拨入候选）与"已验证可拨入"分开给
       naturalDialable: v6.hasGlobalUnicast,
-      dialableKind: dialableKindOf(selfDialable, v6.hasGlobalUnicast),
-      dialableI18n: DIALABILITY_I18N[dialableKindOf(selfDialable, v6.hasGlobalUnicast)],
+      dialableKind: quKeBoRuZhongLei(selfDialable, v6.hasGlobalUnicast),
+      dialableI18n: DIALABILITY_I18N[quKeBoRuZhongLei(selfDialable, v6.hasGlobalUnicast)],
       suggestedRung: rung,
       needsPublicRelayNotice: false,
       i18n: { rung: LADDER_RUNG_I18N[rung] },
@@ -1606,7 +1606,7 @@ export class SecureMesh {
       }
     );
     const rung: TiziDangwei = decision.selected ? 'relay' : v6.hasGlobalUnicast ? 'ipv6-direct' : 'public-direct';
-    const kind = dialableKindOf(selfDialable, v6.hasGlobalUnicast);
+    const kind = quKeBoRuZhongLei(selfDialable, v6.hasGlobalUnicast);
     return {
       ipv6: {
         hasGlobalUnicast: v6.hasGlobalUnicast,
@@ -1765,7 +1765,7 @@ export function shortNodeId(seed: string): string {
 }
 
 /** 供 electron-main 判断"组网数据目录是否可写"（写不进去就别假装有落盘） */
-export function ensureNetDir(userDataDir: string): { ok: boolean; dir: string; error?: string } {
+export function baoZhangWangLuoMuLu(userDataDir: string): { ok: boolean; dir: string; error?: string } {
   const dir = path.join(userDataDir, 'net');
   try {
     fs.mkdirSync(dir, { recursive: true });

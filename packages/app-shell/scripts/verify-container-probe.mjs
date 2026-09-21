@@ -41,7 +41,7 @@ const {
   xiangMuYuanYinJian,
   deriveProjectState,
   guiFanKongZhiTaiQingQiu,
-  projectUnavailableRefusal,
+  xiangMuBuKeYongJuJue,
   CONTAINER_BASE_IMAGES,
   CONTAINER_NODE_NEEDED_CASES,
   RONGQI_ZHIXINGQI_WEIZHI,
@@ -74,7 +74,8 @@ const EN = JSON.parse(fs.readFileSync(path.join(i18nDir, 'en-US.json'), 'utf8'))
 /* ── 1. 真机探测 ── */
 section('1. 真机探测（12 个候选）');
 const t0 = Date.now();
-const report = await probeContainerRuntimes({ cacheMs: 0, perProbeTimeoutMs: 5000, concurrency: 4 });
+// 门禁＝等价于用户显式点「查看本机已有容器」⇒ 允许真的查询 wsl.exe（deep:true）
+const report = await probeContainerRuntimes({ cacheMs: 0, perProbeTimeoutMs: 5000, concurrency: 4, deep: true });
 const wallMs = Date.now() - t0;
 console.log(JSON.stringify(report, null, 1));
 
@@ -186,10 +187,10 @@ ok(report.attentionIds.every((id) => ['installed-not-running', 'engine-error'].i
 
 /* ── 6. 便宜 + 可缓存 ── */
 section('6. 成本与缓存');
-const cached = await probeContainerRuntimes({ cacheMs: 60000 });
+const cached = await probeContainerRuntimes({ cacheMs: 60000, deep: true });
 ok(cached.cached === true, '6-1 短时间内的第二次探测命中缓存（点两次按钮不会重复压机器）');
 ok(cached.runtimes.length === 12, '6-1b 缓存报告形状不变');
-const fresh = await probeContainerRuntimes({ cacheMs: 0 });
+const fresh = await probeContainerRuntimes({ cacheMs: 0, deep: true });
 ok(fresh.cached === false, '6-2 force 时真的重探（cached=false）');
 
 /* ── 7. 启停入口的**参数校验**（不接受任意命令）── */
@@ -406,11 +407,11 @@ ok(downProject.memberFace === 'creator-offline',
   String(downProject.memberFace));
 ok(downProject.code === 'container-not-ready' && xiangMuYuanYinJian(downProject.code) === 'containerDown',
   '12-8 原因码是机器可读的（文案走 i18n）', downProject.code);
-const refusal = projectUnavailableRefusal(downProject);
+const refusal = xiangMuBuKeYongJuJue(downProject);
 ok(!!refusal && refusal.code === 'project-unavailable' && refusal.hostExecutionRefused === true && refusal.memberFace === 'creator-offline',
   '12-9 【核心】主进程据此**拒绝在宿主侧开发**（返回结构化拒绝 project-unavailable，不是悄悄在本机跑）', JSON.stringify(refusal));
-ok(projectUnavailableRefusal(okProject) === null, '12-10 容器就绪时不拒绝（放行到容器内的路径）');
-ok(projectUnavailableRefusal(hostProject) === null, '12-11 本机项目永不因此被拒');
+ok(xiangMuBuKeYongJuJue(okProject) === null, '12-10 容器就绪时不拒绝（放行到容器内的路径）');
+ok(xiangMuBuKeYongJuJue(hostProject) === null, '12-11 本机项目永不因此被拒');
 const creatorStopped = deriveProjectState({ devEnv: 'container', runtimeId: 'docker', runtimeStatus: 'ready', disabledByOwner: true });
 ok(creatorStopped.code === 'disabled-by-owner' && creatorStopped.stopped === true,
   '12-12 【核心】创建者点了「停止项目」⇒ 即使引擎还开着，项目也是停止态（"停止 = 不可开发"）',

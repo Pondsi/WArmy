@@ -683,7 +683,7 @@ export class MemoryService {
 
   /** 同步 recall：fts_uni ∪ fts_tri（+ 已缓存的查询向量）→ RRF → 索引卡 */
   recall(query: string | QueryLike, limit = 10, opts: HuisuoXuanxiang = {}): RecallCard[] {
-    return this.searchSync(normalizeQueryArgs(query, limit, opts)).cards;
+    return this.searchSync(guiFanHuaChaXunCanShu(query, limit, opts)).cards;
   }
 
   /** 异步 recall：先补齐缺失向量、再嵌入查询，然后三路 RRF */
@@ -692,11 +692,11 @@ export class MemoryService {
   }
 
   recallDetailedSync(query: string | QueryLike, limit = 10, opts: HuisuoXuanxiang = {}): HuisuoXiangqing {
-    return this.searchSync(normalizeQueryArgs(query, limit, opts));
+    return this.searchSync(guiFanHuaChaXunCanShu(query, limit, opts));
   }
 
   async recallDetailed(query: string | QueryLike, limit = 10, opts: HuisuoXuanxiang = {}): Promise<HuisuoXiangqing> {
-    const o = normalizeQueryArgs(query, limit, opts);
+    const o = guiFanHuaChaXunCanShu(query, limit, opts);
     const t0 = Date.now();
     const scopeStats = this.buildScopeFilter(o.scope);
     const perChannel = o.perChannel ?? Math.max(o.limit * 3, 20);
@@ -1397,7 +1397,7 @@ function fnv1a(s: string): string {
   return h.toString(16);
 }
 
-function normalizeQueryArgs(
+function guiFanHuaChaXunCanShu(
   query: string | QueryLike,
   limit: number,
   opts: HuisuoXuanxiang

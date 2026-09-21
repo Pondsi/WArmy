@@ -163,7 +163,7 @@ export interface QunChengyuanJilu {
   fingerprint?: string;
 }
 
-export interface GroupStoreState {
+export interface QunCangZhuangtai {
   version: 1;
   groups: qunJilu[];
   members: Record<string, QunChengyuanJilu[]>;
@@ -172,23 +172,23 @@ export interface GroupStoreState {
 }
 
 /** IPC 返回形状（显式写出来，配合 safeHandle<T> 的兜底值保持类型一致） */
-export interface GroupListResult {
+export interface QunLieBiaoJieGuo {
   ok: boolean;
   groups: Array<qunJilu & { memberCount: number; active: boolean }>;
   count: number;
   error?: string;
 }
 
-export interface GroupMembersResult {
+export interface QunChengYuanJieGuo {
   ok: boolean;
   groupId?: string;
   members: QunChengyuanJilu[];
   error?: string;
 }
 
-const EMPTY: GroupStoreState = { version: 1, groups: [], members: {} };
+const EMPTY: QunCangZhuangtai = { version: 1, groups: [], members: {} };
 
-function kongZhuangtai(): GroupStoreState {
+function kongZhuangtai(): QunCangZhuangtai {
   return { version: 1, groups: [], members: {} };
 }
 
@@ -200,15 +200,15 @@ function asNumber(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 }
 
-function normalizeRole(v: unknown): QunChengyuanJuese {
+function guiFanHuaJueSe(v: unknown): QunChengyuanJuese {
   return v === 'creator' || v === 'admin' ? v : 'member';
 }
 
-function normalizeSource(v: unknown): QunChengyuanLaiyuan {
+function guiFanHuaLaiYuan(v: unknown): QunChengyuanLaiyuan {
   return v === 'instance' || v === 'migrated' ? v : 'invite';
 }
 
-function normalizeType(v: unknown): QunLei {
+function guiFanHuaLeiXing(v: unknown): QunLei {
   return v === 'external' ? 'external' : 'internal';
 }
 
@@ -230,9 +230,9 @@ export function sameFingerprintText(a: string, b: string): boolean {
 }
 
 /** 把磁盘上的（可能被手改坏的）数据收敛成合法结构 */
-function normalize(raw: unknown): GroupStoreState {
+function normalize(raw: unknown): QunCangZhuangtai {
   if (!raw || typeof raw !== 'object') return kongZhuangtai();
-  const src = raw as Partial<GroupStoreState>;
+  const src = raw as Partial<QunCangZhuangtai>;
   const out = kongZhuangtai();
   if (src.uiStateMigrated === true) out.uiStateMigrated = true;
   const seen = new Set<string>();
@@ -245,7 +245,7 @@ function normalize(raw: unknown): GroupStoreState {
     const row: qunJilu = {
       groupId,
       name: asString(rec.name) || groupId,
-      type: normalizeType(rec.type),
+      type: guiFanHuaLeiXing(rec.type),
       directedMode: rec.directedMode === true,
       dutyInstanceId: asString(rec.dutyInstanceId) || null,
       createdAt: asNumber(rec.createdAt) || Date.now(),
@@ -256,7 +256,7 @@ function normalize(raw: unknown): GroupStoreState {
     const chuangJianZheZhiWen = asString(rec.creatorFingerprint);
     if (chuangJianZheZhiWen) row.creatorFingerprint = chuangJianZheZhiWen;
     // 旧记录没有项目属性 → 保持缺失（上层回退到本机设置的兼容路径，见 projectOf）
-    const xiangMu = normalizeProject(rec.project);
+    const xiangMu = guiFanHuaXiangMu(rec.project);
     if (xiangMu) row.project = xiangMu;
     out.groups.push(row);
   }
@@ -275,9 +275,9 @@ function normalize(raw: unknown): GroupStoreState {
       const row: QunChengyuanJilu = {
         id,
         name: asString(rec.name) || id,
-        role: normalizeRole(rec.role),
+        role: guiFanHuaJueSe(rec.role),
         joinedAt: asNumber(rec.joinedAt) || Date.now(),
-        source: normalizeSource(rec.source),
+        source: guiFanHuaLaiYuan(rec.source),
       };
       const instId = asString(rec.instanceId);
       if (instId) row.instanceId = instId;
@@ -293,7 +293,7 @@ function normalize(raw: unknown): GroupStoreState {
 }
 
 /** 校验台账里的一条（外来数据：不认识的 op 直接丢，别把"未知"当 write 记下来） */
-function normalizeLedgerEntry(raw: unknown): XiangmuWenjianFangwenTiaomu | null {
+function guiFanHuaZhangBenTiaoMu(raw: unknown): XiangmuWenjianFangwenTiaomu | null {
   if (!raw || typeof raw !== 'object') return null;
   const rec = raw as Partial<XiangmuWenjianFangwenTiaomu>;
   if (!isFileAccessOp(rec.op)) return null;
@@ -312,7 +312,7 @@ function normalizeLedgerEntry(raw: unknown): XiangmuWenjianFangwenTiaomu | null 
 }
 
 /** 把（可能来自磁盘或网络对端的）项目属性收敛成合法结构；什么都没有则返回 undefined */
-export function normalizeProject(raw: unknown): QunXiangmuJilu | undefined {
+export function guiFanHuaXiangMu(raw: unknown): QunXiangmuJilu | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const rec = raw as Partial<QunXiangmuJilu>;
   const row = kongXiangmuJilu();
@@ -343,7 +343,7 @@ export function normalizeProject(raw: unknown): QunXiangmuJilu | undefined {
   }
   const list = Array.isArray(rec.ledger) ? rec.ledger : [];
   for (const item of list) {
-    const e = normalizeLedgerEntry(item);
+    const e = guiFanHuaZhangBenTiaoMu(item);
     if (e) row.ledger.push(e);
   }
   if (row.ledger.length > PROJECT_LEDGER_LIMIT) row.ledger = row.ledger.slice(-PROJECT_LEDGER_LIMIT);
@@ -370,7 +370,7 @@ export class GroupStore {
   constructor(private file: string) {}
 
   /** 一次读盘拿到完整快照（group-list 需要「组 + 成员数」，避免 N 次读文件） */
-  snapshot(): GroupStoreState {
+  snapshot(): QunCangZhuangtai {
     return normalize(duJsonWenJianGeLi<unknown>(this.file, EMPTY));
   }
 
@@ -465,7 +465,7 @@ export class GroupStore {
   ): { ok: boolean; entry?: XiangmuWenjianFangwenTiaomu; error?: string } {
     const gid = asString(groupId);
     if (!gid) return { ok: false, error: 'groupId required' };
-    const e = normalizeLedgerEntry(entry);
+    const e = guiFanHuaZhangBenTiaoMu(entry);
     if (!e) return { ok: false, error: 'bad entry' };
     const state = this.snapshot();
     const g = state.groups.find((x) => x.groupId === gid);
@@ -552,7 +552,7 @@ export class GroupStore {
     let group: qunJilu;
     if (cunzai) {
       cunzai.name = asString(input.name) || cunzai.name;
-      cunzai.type = normalizeType(input.type);
+      cunzai.type = guiFanHuaLeiXing(input.type);
       if (typeof input.directedMode === 'boolean') cunzai.directedMode = input.directedMode;
       // 只在"本来不知道"时补写，绝不覆盖已知的创建者
       const chuangJianZheZhiWen = asString(input.creatorFingerprint);
@@ -563,7 +563,7 @@ export class GroupStore {
       group = {
         groupId,
         name: asString(input.name) || groupId,
-        type: normalizeType(input.type),
+        type: guiFanHuaLeiXing(input.type),
         directedMode: input.directedMode === true,
         dutyInstanceId: null,
         createdAt: now,
@@ -611,7 +611,7 @@ export class GroupStore {
       id?: string;
       fingerprint?: string;
     }
-  ): GroupMembersResult {
+  ): QunChengYuanJieGuo {
     const name = asString(input.name).trim();
     if (!name) return { ok: false, groupId, members: [], error: 'name required' };
     const state = this.snapshot();
@@ -626,9 +626,9 @@ export class GroupStore {
     const row: QunChengyuanJilu = {
       id: asString(input.id) || (instId ? `inst:instId` : `m-Date.now().toString(36)-list.length`),
       name,
-      role: normalizeRole(input.role),
+      role: guiFanHuaJueSe(input.role),
       joinedAt: Date.now(),
-      source: normalizeSource(input.source),
+      source: guiFanHuaLaiYuan(input.source),
     };
     if (instId) row.instanceId = instId;
     const fp = asString(input.fingerprint);
@@ -662,8 +662,8 @@ export class GroupStore {
       fingerprint?: string;
     },
     hooks: { onAudit?: (op: string, detail?: unknown) => void } = {}
-  ): GroupMembersResult {
-    const source = normalizeSource(input.source);
+  ): QunChengYuanJieGuo {
+    const source = guiFanHuaLaiYuan(input.source);
     const rawFp = asString(input.fingerprint).trim();
     // 本机实例成员永不携带指纹（它不是"某个远端身份"）
     const fingerprint = source === 'instance' ? '' : rawFp;
@@ -695,7 +695,7 @@ export class GroupStore {
     return this.listMembersResult(groupId);
   }
 
-  private listMembersResult(groupId: string): GroupMembersResult {
+  private listMembersResult(groupId: string): QunChengYuanJieGuo {
     return { ok: true, groupId, members: this.listMembers(groupId) };
   }
 
@@ -735,7 +735,7 @@ export class GroupStore {
   }
 
   /** 移除成员；creator 不可被移除（与权限表一致：只有创建者可解散群） */
-  removeMember(groupId: string, memberId: string): GroupMembersResult {
+  removeMember(groupId: string, memberId: string): QunChengYuanJieGuo {
     const state = this.snapshot();
     const list = state.members[groupId] || [];
     const target = list.find((m) => m.id === memberId);
@@ -749,7 +749,7 @@ export class GroupStore {
   }
 
   /** 设置 / 取消管理员；创建者角色固定 */
-  setAdmin(groupId: string, memberId: string, admin: boolean): GroupMembersResult {
+  setAdmin(groupId: string, memberId: string, admin: boolean): QunChengYuanJieGuo {
     const state = this.snapshot();
     const list = state.members[groupId] || [];
     const target = list.find((m) => m.id === memberId);
@@ -797,7 +797,7 @@ export class GroupStore {
       state.groups.push({
         groupId,
         name: asString(g?.name) || groupId,
-        type: normalizeType(g?.type),
+        type: guiFanHuaLeiXing(g?.type),
         directedMode: false,
         dutyInstanceId: null,
         createdAt: now,
@@ -813,7 +813,7 @@ export class GroupStore {
     return added;
   }
 
-  private persist(state: GroupStoreState): { ok: boolean; error?: string } {
+  private persist(state: QunCangZhuangtai): { ok: boolean; error?: string } {
     const r = anQuanYuanZiXieJson(this.file, state);
     this.lastWriteError = r.ok ? null : r.error || 'write failed';
     return r;

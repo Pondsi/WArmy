@@ -35,21 +35,21 @@ check('boot applies panelWidth', app.includes('s.settings.panelWidth'));
 
 // ── 2. 窗口几何持久化 ──
 check('window-state.json path', main.includes('window-state.json'));
-check('loadWindowState exists', /function loadWindowState/.test(main));
+check('loadWindowState exists', /function jiaZaiChuangKouZhuangTai/.test(main));
 check('窗口状态延迟保存函数存在（baocunChuangkouZhuangtaiJiukuai）', /function baocunChuangkouZhuangtaiJiukuai/.test(main));
 check('window resize/move hooks', /win\.on\('resize'/.test(main) && /win\.on\('move'/.test(main));
 check('window maximize restore', /ws\.maximized/.test(main) || /maximized/.test(main));
 
 // ── 3. 上下文预算 + 重试 ──
-check('contextBudgetFromSettings exists', /function contextBudgetFromSettings/.test(main));
-check('runWithContextRetry exists', /function runWithContextRetry/.test(main));
+check('contextBudgetFromSettings exists', /function youPeizhiSuanShangXiaWenYuSuan/.test(main));
+check('runWithContextRetry exists', /function daiShangXiaWenChongShiYunXing/.test(main));
 check('上下文重试档位 100/60/35/20', /SHANGXIAWEN_CHONGSHI_BUZHOU\s*=\s*\[1\.0,\s*0\.6,\s*0\.35,\s*0\.2\]/.test(main));
 check('min tokens 2048', /MIN_CONTEXT_TOKENS\s*=\s*2048/.test(main));
 check('model ctx map exists', /MODEL_CTX_MAP/.test(main) && /deepseek-chat/.test(main));
 check('isContextLengthError exists', /function isContextLengthError/.test(main));
 check('budgetCharsForStep exists', /function budgetCharsForStep/.test(main));
-check('chat-send uses retry', /runWithContextRetry/.test(main) && /chat-send/.test(main));
-check('duty LLM uses retry', main.includes('dutyRetried') || main.includes('runWithContextRetry'));
+check('chat-send uses retry', /daiShangXiaWenChongShiYunXing/.test(main) && /chat-send/.test(main));
+check('duty LLM uses retry', main.includes('dutyRetried') || main.includes('daiShangXiaWenChongShiYunXing'));
 check('orchestrate passes model', /contextBudgetChars\(providerCfg\.model\)/.test(main) || /contextBudgetChars\(\s*providerCfg\.model/.test(main));
 check('orchestrator accepts modelId', /contextBudgetChars\?: \(modelId\?: string\)/.test(fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/orchestrator.ts'), 'utf8')));
 check('renderChatView accepts override', /budgetCharsOverride/.test(main));

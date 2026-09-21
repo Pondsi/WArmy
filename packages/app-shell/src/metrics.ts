@@ -63,7 +63,7 @@ export interface GongjuXunhuanZhibiao {
   stopReason: string;
 }
 
-export class MetricsCollector {
+export class ZhiBiaoCaiJiQi {
   private turns: LunciZhibiao[] = [];
   private ccr: CcrMetric[] = [];
   private views: ShituZhibiao[] = [];

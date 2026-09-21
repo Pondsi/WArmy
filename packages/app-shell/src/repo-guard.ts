@@ -80,7 +80,7 @@ const DRIVE_OR_UNC_RE = /^[A-Za-z]:/;
  * 归一化顺序：NFKC → 去零宽 → 统一分隔符（`\` 视为 `/`）→ 逐段去末尾空格/点 →
  * 折叠 `.` 与 `..`（记录是否越界）→ casefold 得 `key`。
  */
-export function normalizeRepoPath(raw: string): CangkuLujingGuifan {
+export function guiFanHuaCangKuLuJing(raw: string): CangkuLujingGuifan {
   const out: CangkuLujingGuifan = {
     raw,
     ok: true,
@@ -166,7 +166,7 @@ export function normalizeRepoPath(raw: string): CangkuLujingGuifan {
 
 /** 比较用键：NFKC + casefold（Windows/macOS 会折叠大小写与 Unicode 形式） */
 export function cangkuLujingMiyao(raw: string): string {
-  return normalizeRepoPath(raw).key;
+  return guiFanHuaCangKuLuJing(raw).key;
 }
 
 /** 把相对路径按 `baseSegs` 解析；返回是否越出仓库根 */
@@ -283,7 +283,7 @@ const ATTR_DRIVER_RE = /(^|\s)(?:filter|diff)\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/;
 const ATTR_BARE_FILTER_RE = /(^|\s)filter(?=\s|$)/;
 
 /** 扫 `.gitattributes` 内容；返回命中的危险写法（无则 null） */
-function scanGitAttributesContent(content: string): { code: TuisongLujingJujueDaima; reason: string } | null {
+function saoMiaoGitShuXing(content: string): { code: TuisongLujingJujueDaima; reason: string } | null {
   const lines = content.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = (lines[i] ?? '').trim();
@@ -308,7 +308,7 @@ function toEntry(input: string | TuiSongLuJingTiaoMu): TuiSongLuJingTiaoMu {
  * 检查顺序（每条路径）：归一化 → 危险路径 → 符号链接逃逸 → `.gitattributes` 内容；
  * 全部路径过完后再做**批次内别名碰撞**（大小写 / Unicode 归一化不同但落到同一个文件）。
  */
-export function validatePushPaths(
+export function jiaoYanTuiSongLuJing(
   paths: Array<string | TuiSongLuJingTiaoMu> | string,
   opts: TuisongLujingXuanxiang = {}
 ): TuisongLujingJiaoyan {
@@ -326,7 +326,7 @@ export function validatePushPaths(
 
   for (const entry of list) {
     const raw = typeof entry.path === 'string' ? entry.path : '';
-    const n = normalizeRepoPath(raw);
+    const n = guiFanHuaCangKuLuJing(raw);
     const reject = (code: TuisongLujingJujueDaima, reason: string, extra: Partial<TuiSongLuJingJuJue> = {}): void => {
       rejected.push({
         path: raw,
@@ -363,7 +363,7 @@ export function validatePushPaths(
         reject('symlink-escape', '符号链接没有目标内容，无法校验它指向哪里');
         continue;
       }
-      const t = normalizeRepoPath(target);
+      const t = guiFanHuaCangKuLuJing(target);
       if (!t.ok) {
         reject('symlink-escape', `符号链接目标非法（${t.reason ?? '未知'}）：${target.slice(0, 80)}`);
         continue;
@@ -391,7 +391,7 @@ export function validatePushPaths(
     const basename = n.key.split('/').pop() ?? '';
     if (basename === '.gitattributes') {
       if (typeof entry.content === 'string') {
-        const hit = scanGitAttributesContent(entry.content);
+        const hit = saoMiaoGitShuXing(entry.content);
         if (hit) {
           reject(hit.code, hit.reason);
           continue;
@@ -430,8 +430,8 @@ export function validatePushPaths(
           e !== entry &&
           typeof e.path === 'string' &&
           e.path !== raw &&
-          normalizeRepoPath(e.path).ok &&
-          normalizeRepoPath(e.path).key === n.key
+          guiFanHuaCangKuLuJing(e.path).ok &&
+          guiFanHuaCangKuLuJing(e.path).key === n.key
       );
       if (shuangzi) {
         reject('collision', `与同批次路径「${shuangzi.path}」在大小写/Unicode 归一化后是同一个文件`, {
@@ -543,7 +543,7 @@ function wuxiaoYinyongYuanyin(ref: string): string | null {
 }
 
 /** 校验一次 ref 更新（pre-receive 中每个 ref 调一次） */
-export function validateRefUpdate(
+export function jiaoYanYinYongGengXin(
   ref: string,
   oldSha: string,
   newSha: string,

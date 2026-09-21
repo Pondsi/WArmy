@@ -29,7 +29,7 @@ import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 import {CONTACT_CARD_I18N, DAISHU_GUIZE_BEIZHU, SHENFEN_SUANFA, ROTATION_SCHEMA, guifan, contactCardView, chuangjianShenfen, currentContactCard, exportIdentityCard, fingerprintFromPublicKey, zhiwenPipei, isContactCardEmpty, isValidFingerprint, keyObjectFromPrivateDer, miyaoHuan, normalizeFingerprint, publicKeyOfPrivate, publicKeyToB64, signWithIdentity, verifyByFingerprint, verifyIdentityCard, verifyRevocationDeclaration, verifyRotationDeclaration, verifySignedPayload, } from '../dist/identity.js';
-import {IdentityStore, electronSafeStorageProtector, loadIdentity, nullProtector} from '../dist/identity-store.js';
+import {ShenFenCang, electronSafeStorageProtector, loadIdentity, nullProtector} from '../dist/identity-store.js';
 
 const self = fileURLToPath(import.meta.url);
 const argOf = (name) => {
@@ -106,7 +106,7 @@ if (argOf('--phase') === 'restart') {
   const expectEmail = argOf('--expect-email');
   const derHex = argOf('--expect-nokey-hex');
 
-  const store = new IdentityStore(file, { protector: fixtureProtector('fixture-os') });
+  const store = new ShenFenCang(file, { protector: fixtureProtector('fixture-os') });
   const info = store.info();
   check('新进程读到身份', !!info, info && info.fingerprint);
   check('指纹与上次一致（认得出自己）', !!info && zhiwenPipei(info.fingerprint, expectFp), info?.fingerprint);
@@ -117,9 +117,9 @@ if (argOf('--phase') === 'restart') {
  * 绝不能因为"像个 ID"就被当成有效设备 ID（那会让身份退回可猜测的空间）。
  */
 {
-  const {isValidDeviceId, LocalAccountStore} = await import('../dist/settings-store.js');
-  check('9 位数字不再被判为有效设备 ID', isValidDeviceId('375102948') === false, { got: isValidDeviceId('375102948') });
-  check('17 位十进制同样不再被判为有效设备 ID（历史形态一律升级）', isValidDeviceId('12345678901234567') === false, {});
+  const {shiFouHeFaPingzheng, BenDiZhangHuCang} = await import('../dist/settings-store.js');
+  check('9 位数字不再被判为有效设备 ID', shiFouHeFaPingzheng('375102948') === false, { got: shiFouHeFaPingzheng('375102948') });
+  check('17 位十进制同样不再被判为有效设备 ID（历史形态一律升级）', shiFouHeFaPingzheng('12345678901234567') === false, {});
   const {shengchengPingzheng, isValidCredential, formatCredential, pingzhengLeixing, PINGZHENG_ZIFUBIAO} = await import('../dist/credential.js');
   const cred = shengchengPingzheng();
   check('新凭证 = 51 位、全大写、不含 I/O/Z（256 bit）',
@@ -134,7 +134,7 @@ if (argOf('--phase') === 'restart') {
   const tmpDir = fsp.mkdtempSync(path2.join(os2.tmpdir(), 'warmy-idup-'));
   const file = path2.join(tmpDir, 'profile.json');
   fsp.writeFileSync(file, JSON.stringify({ username: 'u', avatarDataUrl: '', email: '', deviceId: '12345678901234567' }));
-  const store = new LocalAccountStore(file);
+  const store = new BenDiZhangHuCang(file);
   const prof = store.loadProfile();
   check('历史 17 位 ID 在读取时被升级为 51 位凭证，并记下原值',
     isValidCredential(String(prof.deviceId)) && String(prof.deviceId).length === 51 && prof.deviceIdUpgradedFrom === '12345678901234567',
@@ -265,13 +265,13 @@ check('名片被改（联系方式）→ 验签失败', verifyIdentityCard({ ...
 // ── [4] 加密存储 ──
 section('[4] 私钥加密落盘（不含明文；没有保护就拒绝落盘）');
 check('纯 Node 环境真实 safeStorage 不可用', electronSafeStorageProtector().available() === false, electronSafeStorageProtector().label());
-const noProt = new IdentityStore(path.join(tmpRoot, 'bare', 'identity.json'), { protector: nullProtector() });
+const noProt = new ShenFenCang(path.join(tmpRoot, 'bare', 'identity.json'), { protector: nullProtector() });
 const refuse = noProt.ensureIdentity('000000001', {});
 check('无 OS 保护 + 无口令 → 拒绝落盘（不写 base64 明文）', refuse.ok === false && refuse.error === 'no-protection-available', refuse);
 check('拒绝后磁盘上确实没有身份文件', !fs.existsSync(path.join(tmpRoot, 'bare', 'identity.json')));
 
 const auditOps = [];
-const store = new IdentityStore(file, { protector: fixtureProtector('fixture-os'), onAudit: (op, detail) => auditOps.push({ op, detail }) });
+const store = new ShenFenCang(file, { protector: fixtureProtector('fixture-os'), onAudit: (op, detail) => auditOps.push({ op, detail }) });
 const created = store.ensureIdentity(ALIAS, OLD_CARD);
 check('首次运行即生成身份（ensureIdentity）', created.ok === true && created.created === true, created.ok && created.info.fingerprint);
 const info1 = store.info();
@@ -283,7 +283,7 @@ check('私钥密文与明文不同（确实加密了）', parsed1.keys.privateKe
 check('OS 包裹存在（safeStorage 路径）', typeof parsed1.keys.dekOs === 'string' && !!parsed1.keys.dekOs);
 check('文件里没有明文 DEK 字段', !Object.keys(parsed1.keys).includes('dek'));
 check('info() 不含私钥字段（渲染进程只能看到公开部分）', !('privateKey' in info1) && !('privateKeyDer' in info1) && typeof info1.publicKey === 'string');
-check('换一台机器（无 OS 保护）读同一文件 → 打不开私钥', new IdentityStore(file, { protector: nullProtector() }).load().error === 'no-protection-available');
+check('换一台机器（无 OS 保护）读同一文件 → 打不开私钥', new ShenFenCang(file, { protector: nullProtector() }).load().error === 'no-protection-available');
 const s1 = store.sign('statement-from-os-mode');
 check('OS 模式可直接签发', s1.ok === true);
 check('OS 模式的签名可验', store.verify(s1.signed.payload, s1.signed.signature).ok === true);
@@ -309,7 +309,7 @@ check('启用口令后 OS 包裹被移除（偷到文件不够）', parsed2.keys
 check('口令包裹记录 scrypt 参数', parsed2.keys.dekPass.kdf === 'scrypt' && parsed2.keys.dekPass.N >= 16384, { N: parsed2.keys.dekPass.N, r: parsed2.keys.dekPass.r });
 scanNoPlaintextKey(file, der1, '启用口令后');
 
-const locked = new IdentityStore(file, { protector: nullProtector() });
+const locked = new ShenFenCang(file, { protector: nullProtector() });
 check('无口令调用 → 明确要求口令（passphrase-required）', locked.load().error === 'passphrase-required');
 check('口令错 → 打不开（bad-passphrase）', locked.load('wrong passphrase here').error === 'bad-passphrase');
 check('口令错时不签发（不静默用别的路径）', locked.sign('x').ok === false, locked.sign('x').error);
@@ -457,7 +457,7 @@ check('待确认时新名片仍在 pending 字段里（UI 可提示"需要你手
 const confirmed = store.confirmPeerCard(peerFp, peerNow + 7 * 24 * 3600_000 + 2000);
 check('手动确认后才采用新名片', confirmed.effectiveCard.email === 'peer-new@example.com' && confirmed.awaitingConfirmation === false && confirmed.pendingCard === null, confirmed.effectiveCard);
 check('确认动作写入审计', auditOps.some((a) => a.op === 'identity.peer.confirm'));
-const peerRestart = new IdentityStore(file, { protector: fixtureProtector('fixture-os') });
+const peerRestart = new ShenFenCang(file, { protector: fixtureProtector('fixture-os') });
 check('对端状态已落盘（换进程读得到，本机判定不靠内存）', peerRestart.peerContact(peerFp, peerNow + 7 * 24 * 3600_000 + 3000)?.effectiveCard.email === 'peer-new@example.com', peerRestart.peerContact(peerFp).effectiveCard);
 check('对端旁路文件不含任何私钥', !fs.readFileSync(path.join(tmpRoot, 'identity', 'peer-contacts.json'), 'utf8').includes(store.load(PASS).privateKeyDer.toString('base64')));
 
@@ -511,7 +511,7 @@ check('备份带退役公钥（历史签名仍可验）', exported.backup.retire
 check('备份带声明时间线（声明里没有联系方式）', exported.backup.declarations.some((d) => d.kind === 'warmy.identity.rotation') && !exported.backup.declarations.some((d) => /contact|email|phone/i.test(JSON.stringify(d))));
 check('备份带本机名片历史（旧联系方式随备份走，横幅才有旧值）', Array.isArray(exported.backup.cardHistory) && exported.backup.cardHistory.some((v) => v.card.email === 'laowang@example.com'), exported.backup.cardHistory?.map((v) => v.card.email));
 const restoredFile = path.join(tmpRoot, 'restored', 'identity.json');
-const restored = new IdentityStore(restoredFile, { protector: nullProtector() });
+const restored = new ShenFenCang(restoredFile, { protector: nullProtector() });
 check('备份口令错 → 导入失败', restored.importBackup(exported.backup, { passphrase: 'wrong-pass-here' }).ok === false);
 check('没有口令 → 导入失败（passphrase-required）', restored.importBackup(exported.backup, { passphrase: '' }).error === 'passphrase-required');
 const imported = restored.importBackup(exported.backup, { passphrase: 'backup-pass-2026' });
@@ -527,12 +527,12 @@ section('[10] 身份文件损坏时不静默换身份');
 const corruptFile = path.join(tmpRoot, 'corrupt', 'identity.json');
 fs.mkdirSync(path.dirname(corruptFile), { recursive: true });
 fs.writeFileSync(corruptFile, '{ 这不是合法 JSON', 'utf8');
-const corruptStore = new IdentityStore(corruptFile, { protector: fixtureProtector('fixture-os') });
+const corruptStore = new ShenFenCang(corruptFile, { protector: fixtureProtector('fixture-os') });
 const cr = corruptStore.ensureIdentity('123456789', {});
 check('损坏文件 → 报错而不是重建', cr.ok === false && cr.error === 'corrupt', cr.error);
 check('损坏文件被隔离为 .corrupt-*（留证据）', fs.readdirSync(path.dirname(corruptFile)).some((f) => f.includes('.corrupt-')), fs.readdirSync(path.dirname(corruptFile)));
 check('损坏时不写入新身份（磁盘没有身份文件）', !fs.existsSync(corruptFile));
-check('另一个进程的合法身份不受影响', zhiwenPipei(new IdentityStore(file, { protector: nullProtector() }).info().fingerprint, info2.fingerprint));
+check('另一个进程的合法身份不受影响', zhiwenPipei(new ShenFenCang(file, { protector: nullProtector() }).info().fingerprint, info2.fingerprint));
 
 // ── 汇总 ──
 console.log(`\n=== 汇总 ===`);

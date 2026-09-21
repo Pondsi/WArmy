@@ -7,7 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {GroupStore} from '../dist/group-store.js';
 import {AiWenTiZhongXin, AI_QUESTION_CUSTOM} from '../dist/ai-questions.js';
-import {withReadBack, dedupeByNorm, guifanLujingMiyao} from '../dist/read-back.js';
+import {daiHuiDuYanZheng, anGuiFanHuaQuChong, guiFanLuJingMiyao} from '../dist/read-back.js';
 import {KanbanCang, JieLing, JuShu} from '../../board/dist/index.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
@@ -52,13 +52,13 @@ const inject = hub.contextFor('g1');
 check('decision context includes 人类决策', inject.includes('人类决策') || inject.includes('[人类决策]'), inject);
 
 // read-back
-const rb = await withReadBack(() => 'abc', () => 'abc', (a, b) => a === b);
-check('withReadBack match', rb.ok && rb.confident === true);
-const rb2 = await withReadBack(() => 'abc', () => 'xyz', (a, b) => a === b);
-check('withReadBack mismatch not confident', rb2.ok && rb2.confident === false);
+const rb = await daiHuiDuYanZheng(() => 'abc', () => 'abc', (a, b) => a === b);
+check('daiHuiDuYanZheng match', rb.ok && rb.confident === true);
+const rb2 = await daiHuiDuYanZheng(() => 'abc', () => 'xyz', (a, b) => a === b);
+check('daiHuiDuYanZheng mismatch not confident', rb2.ok && rb2.confident === false);
 
 // dedupe paths
-const d = dedupeByNorm(['C:/A/b', 'c:/a/b/', 'D:\\c'], guifanLujingMiyao);
+const d = anGuiFanHuaQuChong(['C:/A/b', 'c:/a/b/', 'D:\\c'], guiFanLuJingMiyao);
 check('path dedupe', d.list.length === 2 && d.removed === 1, d);
 
 // board tree

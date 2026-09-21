@@ -52,7 +52,7 @@ function write(socket: net.Socket, line: string) {
 }
 
 /** AUTH LOGIN 流程 */
-export async function verifySmtp(cfg: SmtpPeizhi): Promise<SmtpVerifyResult> {
+export async function yanZhengSmtp(cfg: SmtpPeizhi): Promise<SmtpVerifyResult> {
   return new Promise((resolve) => {
     let step = 'connect';
     const wanCheng = (r: SmtpVerifyResult) => {

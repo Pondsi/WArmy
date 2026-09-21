@@ -60,7 +60,7 @@ for (const f of [distProviders, distRenderer, distMemoryClient]) {
 const providers = await import(pathToFileURL(distProviders).href);
 const { liaoTianDaiGongJu, congYuSheChuangJian, OllamaGongYing, JianrongOpenAIGongYing } = providers;
 const { renderBoundedView } = await import(pathToFileURL(distRenderer).href);
-const { MemoryClient, memoryToolSpecs, runMemoryTool } = await import(pathToFileURL(distMemoryClient).href);
+const { JiyiCangKeHu, memoryToolSpecs, runMemoryTool } = await import(pathToFileURL(distMemoryClient).href);
 
 console.log('=== ADR 002 §9.4 待办 2：工具调用（recall/retrieve）验证 ===');
 console.log(`providers=${distProviders}`);
@@ -139,7 +139,7 @@ if (fs.existsSync(path.join(memPkg, 'node_modules'))) {
   fs.symlinkSync(path.join(memPkg, 'node_modules'), path.join(memAscii, 'node_modules'), 'junction');
 }
 const memData = path.join(memAscii, 'data');
-const memory = new MemoryClient({ nodePath: process.execPath, ipcEntry: path.join(memAscii, 'dist', 'ipc.js'), dataDir: memData });
+const memory = new JiyiCangKeHu({ nodePath: process.execPath, ipcEntry: path.join(memAscii, 'dist', 'ipc.js'), dataDir: memData });
 let memOk = true;
 try {
   await memory.start();

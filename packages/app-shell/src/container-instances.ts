@@ -41,7 +41,7 @@ export interface RongQiShiLiLieBiao {
   evidence?: string;
 }
 
-interface ExecResult { ok: boolean; stdout: string; stderr: string; code: number | null; error?: string }
+interface ZhiXingJieGuo { ok: boolean; stdout: string; stderr: string; code: number | null; error?: string }
 
 const TIMEOUT_MS = 12000;
 const MAX_OUTPUT = 200_000;
@@ -52,7 +52,7 @@ function jieMaKeNengUtf16(buf: Buffer): string {
   return buf.toString('utf8');
 }
 
-function run(cmd: string, args: string[]): Promise<ExecResult> {
+function run(cmd: string, args: string[]): Promise<ZhiXingJieGuo> {
   return new Promise((resolve) => {
     execFile(
       cmd,
@@ -103,7 +103,7 @@ function fenHang(stdout: string): string[][] {
     .map((l) => l.split('\t').map((x) => x.trim()));
 }
 
-function dockerLike(stdout: string): RongQiShiLi[] {
+function dockerYangShi(stdout: string): RongQiShiLi[] {
   return fenHang(stdout).map((lieJi) => {
     const [name = '', image = '', state = '', status = ''] = lieJi;
     const running = /^running$/i.test(state);
@@ -117,7 +117,7 @@ function dockerLike(stdout: string): RongQiShiLi[] {
   }).filter((x) => !!x.name);
 }
 
-function wslList(stdout: string): RongQiShiLi[] {
+function wslLieBiao(stdout: string): RongQiShiLi[] {
   return fenHang(stdout).map((lieJi) => {
     const [name = '', state = '', version = ''] = lieJi;
     const running = /running/i.test(state);
@@ -145,7 +145,7 @@ export async function lieYunXingShiLi(id: string): Promise<RongQiShiLiLieBiao> {
       evidence: shouHang.slice(0, 240),
     };
   }
-  const instances = id === 'wsl' ? wslList(r.stdout) : dockerLike(r.stdout);
+  const instances = id === 'wsl' ? wslLieBiao(r.stdout) : dockerYangShi(r.stdout);
   return { ok: true, id, supported: true, controllable, instances, ...(shouHang ? { evidence: shouHang.slice(0, 240) } : {}) };
 }
 

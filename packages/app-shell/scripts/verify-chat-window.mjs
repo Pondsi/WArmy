@@ -20,7 +20,7 @@ const rCss = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/re
 const html = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/index.html'), 'utf8');
 
 check('open-chat-window forces mode=sub', /mode:\s*'sub'/.test(main) && /open-chat-window/.test(main));
-check('open-chat-window sets window icon', /w\.setIcon|icon:\s*iconPath/.test(main));
+check('open-chat-window sets window icon', /w\.setIcon|icon:\s*tuBiaoLuJing/.test(main));
 check('warmyTaskbarIcon helper exists', /function warmyTaskbarIcon/.test(main));
 // 主窗口图标 = **任务栏用的白底版**（产品主：任务栏/托盘要有白底）
 check('main window uses 白底任务栏图标', /chuangjianChuangkou[\s\S]{0,400}warmyTaskbarIcon/.test(main));

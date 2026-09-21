@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import {Gengxinqi, bijiaoBanben, parseVersion} from '../dist/updater.js';
+import {Gengxinqi, bijiaoBanben, jieXiBanBen} from '../dist/updater.js';
 
 let failures = 0;
 function check(label, cond, detail) {
@@ -221,7 +221,7 @@ check('1.0.0 < 1.0.1', bijiaoBanben('1.0.0', '1.0.1') === -1);
 check('v2.0.0 > 1.9.9', bijiaoBanben('v2.0.0', '1.9.9') === 1);
 check('1.0.0 == v1.0.0', bijiaoBanben('1.0.0', 'v1.0.0') === 0);
 check('1.0.0 > 1.0.0-beta.1', bijiaoBanben('1.0.0', '1.0.0-beta.1') === 1);
-check('非法版本返回 null', bijiaoBanben('abc', '1.0.0') === null && parseVersion('abc') === null);
+check('非法版本返回 null', bijiaoBanben('abc', '1.0.0') === null && jieXiBanBen('abc') === null);
 
 server.close();
 console.log(`\n结论: ${failures === 0 ? '全部通过' : `${failures} 项失败`}`);

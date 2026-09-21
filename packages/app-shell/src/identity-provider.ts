@@ -75,13 +75,13 @@ import {
 } from './identity.js';
 import {
   MEMBERSHIP_FILE_SCHEMA,
-  MembershipStore,
-  type IdentityStore,
+  ChengYuanMingceCang,
+  type ShenFenCang,
   type JieSuoTai,
 } from './identity-store.js';
 
 /** 组网层用的指纹推导：raw 32B Ed25519 公钥 → 身份层指纹 */
-export function fingerprintDerivationForAppShell(): ZhiWenTuiDao {
+export function yingYongCengZhiWenTuiDao(): ZhiWenTuiDao {
   return (raw32: Buffer): string =>
     fingerprintFromPublicKey(ed25519SpkiDerFromRaw(raw32).toString('base64'));
 }
@@ -89,7 +89,7 @@ export function fingerprintDerivationForAppShell(): ZhiWenTuiDao {
 /** 无法签名时的类型化错误（**不允许**静默返回空签名） */
 export type ShenfenQianmingzheCuowuDaima = 'identity-locked' | 'identity-missing' | 'identity-unusable';
 
-export class IdentityUnavailableError extends Error {
+export class ShenFenBuKeYongCuoWu extends Error {
   readonly code: ShenfenQianmingzheCuowuDaima;
   constructor(code: ShenfenQianmingzheCuowuDaima, message?: string) {
     super(message ?? code);
@@ -110,22 +110,22 @@ export interface DerivationCheck {
  * 不等（或公钥不是 Ed25519 SPKI）就抛错，并带上期望/实际值 —— 这种情况下一旦启动组网，
  * 结果是"所有合法握手都被拒"，比直接失败更难排查。
  */
-export function duanyanTuidaoPipei(store: IdentityStore): DerivationCheck {
+export function duanyanTuidaoPipei(store: ShenFenCang): DerivationCheck {
   const info = store.info();
   if (!info) {
-    throw new IdentityUnavailableError('identity-missing', '本机身份不存在，无法校验指纹推导');
+    throw new ShenFenBuKeYongCuoWu('identity-missing', '本机身份不存在，无法校验指纹推导');
   }
   const der = Buffer.from(info.publicKey, 'base64');
   const raw = ed25519RawFromSpkiDer(der);
   if (!raw) {
-    throw new IdentityUnavailableError(
+    throw new ShenFenBuKeYongCuoWu(
       'identity-unusable',
       `identity.publicKey 不是 Ed25519 SPKI DER（${der.length} 字节）：无法推出指纹`
     );
   }
-  const derived = fingerprintDerivationForAppShell()(raw);
+  const derived = yingYongCengZhiWenTuiDao()(raw);
   if (derived !== info.fingerprint) {
-    throw new IdentityUnavailableError(
+    throw new ShenFenBuKeYongCuoWu(
       'identity-unusable',
       `指纹推导不一致：身份层期望 ${info.fingerprint}，由公钥推出 ${derived}（组网层会拒掉所有合法握手）`
     );
@@ -156,10 +156,10 @@ export interface ShenfenQianmingzhe {
   verify(msg: Buffer, sig: Buffer, pub: Buffer | string | Uint8Array): boolean | null;
 }
 
-export function createIdentitySigner(store: IdentityStore): ShenfenQianmingzhe {
+export function createIdentitySigner(store: ShenFenCang): ShenfenQianmingzhe {
   const info = store.info();
   if (!info) {
-    throw new IdentityUnavailableError('identity-missing', '本机身份不存在，无法构造签名者');
+    throw new ShenFenBuKeYongCuoWu('identity-missing', '本机身份不存在，无法构造签名者');
   }
   const fingerprint = info.fingerprint;
   const publicKey = info.publicKey;
@@ -194,13 +194,13 @@ export function createIdentitySigner(store: IdentityStore): ShenfenQianmingzhe {
 
     async sign(msg: Buffer): Promise<Buffer> {
       if (!Buffer.isBuffer(msg)) {
-        throw new IdentityUnavailableError('identity-unusable', 'sign 只接受 Buffer');
+        throw new ShenFenBuKeYongCuoWu('identity-unusable', 'sign 只接受 Buffer');
       }
       // ⚠️ 只用 sessionDek（OS 钥匙串模式会自动解包）；**不接受口令参数**：
       // 本桥没有任何入口能把口令带进后台组网进程。
       const loaded = store.load();
       if (!loaded.ok) {
-        throw new IdentityUnavailableError(
+        throw new ShenFenBuKeYongCuoWu(
           'identity-locked',
           `身份未解锁，无法后台签名（${loaded.error}）：请先在身份设置里用口令解锁；后台不会缓存口令`
         );
@@ -211,7 +211,7 @@ export function createIdentitySigner(store: IdentityStore): ShenfenQianmingzhe {
         // raw 64 字节 Ed25519 签名。**不是** store.sign()（那是 domain+payload 的 base64 签名）
         const sig = crypto.sign(null, msg, key);
         if (sig.length !== 64) {
-          throw new IdentityUnavailableError(
+          throw new ShenFenBuKeYongCuoWu(
             'identity-unusable',
             `Ed25519 签名长度异常：${sig.length}（应为 64）`
           );
@@ -245,7 +245,7 @@ export function createIdentitySigner(store: IdentityStore): ShenfenQianmingzhe {
 }
 
 /** 组装成组网层要的四字段 `IdentityProvider`（server / client / handshake / DHT 都吃这个） */
-export function chuangjianShenfenGongyingshang(store: IdentityStore | ShenfenQianmingzhe): ShenfenGongyingshang {
+export function chuangjianShenfenGongyingshang(store: ShenFenCang | ShenfenQianmingzhe): ShenfenGongyingshang {
   const signer = isSigner(store) ? store : createIdentitySigner(store);
   return {
     fingerprint: signer.fingerprint,
@@ -257,7 +257,7 @@ export function chuangjianShenfenGongyingshang(store: IdentityStore | ShenfenQia
   };
 }
 
-function isSigner(v: IdentityStore | ShenfenQianmingzhe): v is ShenfenQianmingzhe {
+function isSigner(v: ShenFenCang | ShenfenQianmingzhe): v is ShenfenQianmingzhe {
   return typeof (v as ShenfenQianmingzhe).signReady === 'function';
 }
 
@@ -274,7 +274,7 @@ export interface SignableGate {
  * 门控：**没有签名能力就不要启动组网 / 不要发宣告**。
  * 返回值是结构化数据（errorCode + unlock），由渲染层决定怎么措辞。
  */
-export function requireSignableIdentity(store: IdentityStore | null): SignableGate {
+export function yaoQiuKeQianMingShenFen(store: ShenFenCang | null): SignableGate {
   if (!store) return { ok: false, errorCode: 'identity-missing', reason: 'identity-store-unavailable' };
   try {
     const signer = createIdentitySigner(store);
@@ -285,7 +285,7 @@ export function requireSignableIdentity(store: IdentityStore | null): SignableGa
     duanyanTuidaoPipei(store);
     return { ok: true, unlock: u };
   } catch (e) {
-    const code = (e as IdentityUnavailableError).code ?? 'identity-unusable';
+    const code = (e as ShenFenBuKeYongCuoWu).code ?? 'identity-unusable';
     return { ok: false, errorCode: code, unlock: null, reason: (e as Error).message };
   }
 }
@@ -297,7 +297,7 @@ export function requireSignableIdentity(store: IdentityStore | null): SignableGa
  * 走 `IdentityStore.peerContactKeys()`（身份层已把它公开）；每条的实际内容仍由
  * `store.peerContact(fp)` 解析（含冻结结算逻辑），这里不做第二份解析。
  */
-export function peerContactKeys(store: IdentityStore | null): string[] {
+export function peerContactKeys(store: ShenFenCang | null): string[] {
   if (!store) return [];
   try {
     return store.peerContactKeys();
@@ -307,32 +307,32 @@ export function peerContactKeys(store: IdentityStore | null): string[] {
 }
 
 /** 本机已知联系人指纹集合（= 名册的 TOFU 部分） */
-export function knownContactFingerprints(store: IdentityStore | null): string[] {
+export function yiZhiLianXiZhiWenJi(store: ShenFenCang | null): string[] {
   return peerContactKeys(store);
 }
 
 /* ────────────────────── 成员证书存储（落盘在身份目录下） ────────────────────── */
 
 /** 成员证书 / 吊销列表的落盘位置（与身份文件同目录；两边都是本机数据） */
-export function membershipFileFor(store: IdentityStore): string {
+export function quChengYuanWenJian(store: ShenFenCang): string {
   return path.join(path.dirname(store.path()), 'membership.json');
 }
 
-const membershipCache = new WeakMap<IdentityStore, MembershipStore>();
+const membershipCache = new WeakMap<ShenFenCang, ChengYuanMingceCang>();
 
 /**
  * 取（并缓存）本机身份的成员证书存储。
  * 缓存按 IdentityStore 实例走：同一进程里所有调用点（名册、IPC、在线态）看到同一份数据；
  * `MembershipStore` 内部再按文件 mtime+size 判定是否重读，所以外部改文件也能被看见。
  */
-export function membershipStoreFor(
-  store: IdentityStore | null,
+export function quChengYuanMingceCang(
+  store: ShenFenCang | null,
   opts: { onAudit?: (op: string, detail?: unknown) => void } = {}
-): MembershipStore | null {
+): ChengYuanMingceCang | null {
   if (!store) return null;
   const hit = membershipCache.get(store);
   if (hit) return hit;
-  const yiChuangJian = new MembershipStore(membershipFileFor(store), {
+  const yiChuangJian = new ChengYuanMingceCang(quChengYuanWenJian(store), {
     ...(opts.onAudit ? { onAudit: opts.onAudit } : {}),
     // 指纹推导与本地时间容差都对齐身份层（同一个值、同一个实现）
     fingerprintOf: fingerprintFromPublicKey,
@@ -344,7 +344,7 @@ export function membershipStoreFor(
 
 export interface RosterCheckerOptions {
   /** 显式注入的成员证书存储（默认从 IdentityStore 推导） */
-  membership?: MembershipStore | null;
+  membership?: ChengYuanMingceCang | null;
   now?: () => number;
   /** 打开"没有证书就不放行"（默认 false —— 没证书的群保留 TOFU 降级） */
   requireCertificate?: boolean;
@@ -365,16 +365,16 @@ export interface RosterCheckerOptions {
  *
  * `requireCertificate: true` 时关掉③（只有②和①能放行）。默认关闭：现有单测/老库都还没有证书。
  */
-export function createRosterChecker(
-  store: IdentityStore | null,
+export function chuangJianMingCeJianChaQi(
+  store: ShenFenCang | null,
   extra: string[] = [],
   opts: RosterCheckerOptions = {}
 ): (fingerprint: string) => boolean {
   const allow = new Set<string>();
-  for (const fp of knownContactFingerprints(store)) allow.add(fp);
+  for (const fp of yiZhiLianXiZhiWenJi(store)) allow.add(fp);
   for (const fp of extra) if (typeof fp === 'string' && fp) allow.add(fp);
   const pinned = new Set<string>(extra.filter((fp) => typeof fp === 'string' && fp.length > 0));
-  const membership = opts.membership !== undefined ? opts.membership : membershipStoreFor(store);
+  const membership = opts.membership !== undefined ? opts.membership : quChengYuanMingceCang(store);
   const now = opts.now ?? ((): number => Date.now());
   const guiFanHua = (s: string): string => s.replace(/-/g, '').toLowerCase();
   const inSet = (set: Set<string>, fingerprint: string): boolean => {
@@ -399,8 +399,8 @@ export function createRosterChecker(
 }
 
 /** 名册判定 + 原因（给 IPC / UI / 审计用；`createRosterChecker` 只回布尔） */
-export function explainRosterDecision(
-  store: IdentityStore | null,
+export function jieshiMingCeJueCe(
+  store: ShenFenCang | null,
   fingerprint: string,
   opts: RosterCheckerOptions & { extra?: string[] } = {}
 ): {
@@ -411,7 +411,7 @@ export function explainRosterDecision(
   certId?: string;
   detail?: string;
 } {
-  const membership = opts.membership !== undefined ? opts.membership : membershipStoreFor(store);
+  const membership = opts.membership !== undefined ? opts.membership : quChengYuanMingceCang(store);
   const extra = opts.extra ?? [];
   if (extra.some((fp) => zhiwenPipei(fp, fingerprint))) {
     return { allowed: true, basis: 'pin', code: 'pinned' };
@@ -429,14 +429,14 @@ export function explainRosterDecision(
       };
     }
   }
-  if (!opts.requireCertificate && knownContactFingerprints(store).some((fp) => zhiwenPipei(fp, fingerprint))) {
+  if (!opts.requireCertificate && yiZhiLianXiZhiWenJi(store).some((fp) => zhiwenPipei(fp, fingerprint))) {
     return { allowed: true, basis: 'tofu', code: 'known-contact' };
   }
   return { allowed: false, basis: 'none', code: 'unknown-fingerprint' };
 }
 
 /** 所有对端名片视图（UI 用「有谁换了证」；逐键走 store.peerContact 以复用冻结期结算） */
-export function listPeerContactViews(store: IdentityStore | null, now: number = Date.now()): DuiDuanLianXiShiTu[] {
+export function lieDuiDuanLianXiShiTu(store: ShenFenCang | null, now: number = Date.now()): DuiDuanLianXiShiTu[] {
   const out: DuiDuanLianXiShiTu[] = [];
   for (const fp of peerContactKeys(store)) {
     const shitu = store?.peerContact(fp, now) ?? null;
@@ -530,7 +530,7 @@ export interface ComputeScopesResult {
  * 前者是降级（旧行为，UI 依赖），后者会让用户完全看不到换证提醒 —— 所以回退方向是 `all`，
  * 并用 `scopeBasis` 如实标出"这是回退，不是结论"。
  */
-export function computeChangeScopes(input: ComputeScopesInput): ComputeScopesResult {
+export function jisuanBiangengZuoYongYu(input: ComputeScopesInput): ComputeScopesResult {
   const fps = [...new Set((input.fingerprints ?? []).map((f) => String(f || '')).filter((f) => f.length > 0))];
   const matchedGroups: ComputeScopesResult['matchedGroups'] = [];
   const matchedContacts: string[] = [];
@@ -584,11 +584,11 @@ export function computeChangeScopes(input: ComputeScopesInput): ComputeScopesRes
  * 才能精确到具体群；**不给就退回 `[{kind:'all'}]`**（旧行为，UI 175 项验收依赖它）。
  */
 export function buildIdentityChangeEntries(
-  store: IdentityStore | null,
+  store: ShenFenCang | null,
   opts: {
     now?: number;
     acks?: Record<string, biangengQuerenJilu>;
-    membership?: MembershipStore | null;
+    membership?: ChengYuanMingceCang | null;
     directory?: ChengyuanMulu | null;
     contacts?: string[];
   } = {}
@@ -596,8 +596,8 @@ export function buildIdentityChangeEntries(
   if (!store) return [];
   const now = opts.now ?? Date.now();
   const acks = opts.acks ?? {};
-  const membership = opts.membership !== undefined ? opts.membership : membershipStoreFor(store);
-  const contacts = opts.contacts ?? knownContactFingerprints(store);
+  const membership = opts.membership !== undefined ? opts.membership : quChengYuanMingceCang(store);
+  const contacts = opts.contacts ?? yiZhiLianXiZhiWenJi(store);
   const chainOf = (fps: string[]): string[] => {
     const out = new Set<string>();
     for (const fp of fps) {
@@ -626,7 +626,7 @@ export function buildIdentityChangeEntries(
       const id = `self:${d.oldFingerprint}->${d.newFingerprint}`;
       // 旧名片 = 换证时刻之前、本机留存的最后一条（声明里没有联系方式）
       const prev = history.filter((h) => h.at <= d.issuedAt).slice(-1)[0]?.card ?? null;
-      const yiZuoYongYu = computeChangeScopes({
+      const yiZuoYongYu = jisuanBiangengZuoYongYu({
         fingerprints: chainOf([d.oldFingerprint, d.newFingerprint]),
         directory: opts.directory ?? null,
         contacts,
@@ -657,7 +657,7 @@ export function buildIdentityChangeEntries(
   }
 
   // ② 对端换证
-  const views = listPeerContactViews(store, now);
+  const views = lieDuiDuanLianXiShiTu(store, now);
   for (const shitu of views) {
     if (!shitu.receivedAt) continue;
     const peiDui = views.filter((v) => v.receivedAt === shitu.receivedAt);
@@ -666,7 +666,7 @@ export function buildIdentityChangeEntries(
     if (zuixin !== shitu) continue; // 旧条目不再单独出横幅
     const zuijiu = peiDui.find((v) => v !== zuixin);
     const id = `peer:${zuixin.fingerprint}:${zuixin.receivedAt}`;
-    const yiZuoYongYu = computeChangeScopes({
+    const yiZuoYongYu = jisuanBiangengZuoYongYu({
       fingerprints: chainOf([zuijiu?.fingerprint ?? '', zuixin.fingerprint]),
       directory: opts.directory ?? null,
       contacts,
@@ -810,7 +810,7 @@ export function goujianChengyuanZaichang(input: GoujianChengyuanZaichangShuru): 
 /** 签发一张成员证书（创建者视角）。`signer` 必须是**已解锁**的本机身份。 */
 export interface WentiChengyuanZhengshuShuru {
   signer: ShenfenQianmingzhe;
-  membership: MembershipStore;
+  membership: ChengYuanMingceCang;
   groupId: string;
   /** 成员的指纹与公钥（SPKI DER base64）：两者必须自洽，否则签发直接失败 */
   memberFingerprint: string;
@@ -896,7 +896,7 @@ async function wentiChengyuanZhengshuShixian(input: WentiChengyuanZhengshuShuru)
 /** 生成下一版吊销列表（在**本机当前列表**基础上追加条目；版本单调 +1） */
 async function appendRevocationEntries(input: {
   signer: ShenfenQianmingzhe;
-  membership: MembershipStore;
+  membership: ChengYuanMingceCang;
   groupId: string;
   add: Array<{ certId: string; memberFingerprint: string; reason: CheXiaoYuanYin }>;
   now?: number;
@@ -937,7 +937,7 @@ async function appendRevocationEntries(input: {
  */
 export function chexiaoChengyuanZhengshu(input: {
   signer: ShenfenQianmingzhe;
-  membership: MembershipStore;
+  membership: ChengYuanMingceCang;
   groupId: string;
   certId: string;
   memberFingerprint: string;
@@ -950,7 +950,7 @@ export function chexiaoChengyuanZhengshu(input: {
 
 async function chexiaoChengyuanZhengshuShixian(input: {
   signer: ShenfenQianmingzhe;
-  membership: MembershipStore;
+  membership: ChengYuanMingceCang;
   groupId: string;
   certId: string;
   memberFingerprint: string;
@@ -1005,9 +1005,9 @@ export interface RotateMemberCertResult {
  * 注意：**声明是攻击者可控数据**，所以第 2 步的验签是硬门槛；`knownKeys` / `currentGeneration`
  * 由调用方从**本机留存**（对端名片 / 密钥环）给出，不能从声明里读。
  */
-export function rotateMemberCertificate(input: {
+export function lunHuanChengYuanZhengShu(input: {
   signer: ShenfenQianmingzhe;
-  membership: MembershipStore;
+  membership: ChengYuanMingceCang;
   groupId: string;
   declaration: LunHuanShengMing;
   knownKeys?: YaoShiHuanTiaoMu[];
@@ -1023,7 +1023,7 @@ export function rotateMemberCertificate(input: {
 
 async function rotateMemberCertificateImpl(input: {
   signer: ShenfenQianmingzhe;
-  membership: MembershipStore;
+  membership: ChengYuanMingceCang;
   groupId: string;
   declaration: LunHuanShengMing;
   knownKeys?: YaoShiHuanTiaoMu[];
@@ -1091,9 +1091,9 @@ async function rotateMemberCertificateImpl(input: {
  * 这样 `isSameMember` 才能推出"新指纹 = 原成员"。没有这两样之一就只是发一张新证书，
  * 与"恢复原成员身份"无关 —— 这时返回 `code: 'not-linked'` 让调用方确认自己知道后果。
  */
-export function reissueMemberCertificateForRecovery(input: {
+export function weiHuifuChongQianChengYuanZhengShu(input: {
   signer: ShenfenQianmingzhe;
-  membership: MembershipStore;
+  membership: ChengYuanMingceCang;
   groupId: string;
   oldFingerprint: string;
   newFingerprint: string;
@@ -1110,7 +1110,7 @@ export function reissueMemberCertificateForRecovery(input: {
 
 async function reissueMemberCertificateForRecoveryImpl(input: {
   signer: ShenfenQianmingzhe;
-  membership: MembershipStore;
+  membership: ChengYuanMingceCang;
   groupId: string;
   oldFingerprint: string;
   newFingerprint: string;
@@ -1169,8 +1169,8 @@ async function reissueMemberCertificateForRecoveryImpl(input: {
  * `fromFingerprint` 必须是**握手得到的对端指纹**（`SecureInboundMessage.peerFingerprint`），
  * **绝不能**用消息体里自称的签发者 —— 否则谁都能自称群主来发吊销名单。
  */
-export function applyInboundRevocationUpdate(input: {
-  membership: MembershipStore;
+export function yingYongRuXiangCheXiaoGengXin(input: {
+  membership: ChengYuanMingceCang;
   groupId: string;
   list: CheXiaoBiao;
   fromFingerprint: string;
@@ -1201,8 +1201,8 @@ export function applyInboundRevocationUpdate(input: {
 }
 
 /** 结构化快照（IPC/UI 用；只有数据与枚举码，没有任何文案） */
-export function membershipSnapshot(
-  membership: MembershipStore | null,
+export function chengYuanKuaiZhao(
+  membership: ChengYuanMingceCang | null,
   opts: { groupId?: string; now?: number } = {}
 ): {
   ok: boolean;
@@ -1270,7 +1270,7 @@ export function membershipSnapshot(
 
 /** 便于验证脚本与 UI：把"这两个指纹是否同一成员"包一层（跨群） */
 export function membershipSameMember(
-  membership: MembershipStore | null,
+  membership: ChengYuanMingceCang | null,
   groupId: string,
   fpA: string,
   fpB: string

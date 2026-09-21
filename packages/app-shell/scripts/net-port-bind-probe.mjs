@@ -20,7 +20,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-import {IdentityStore, nullProtector} from '../dist/identity-store.js';
+import {ShenFenCang, nullProtector} from '../dist/identity-store.js';
 import {SecureMesh, pickPortCandidates, probePortAvailability, getOsReservedTcpRanges, parseExcludedPortRanges, EPHEMERAL_PORT_RANGE, PORT_CANDIDATE_MIN, } from '../dist/net-wiring.js';
 import {WARMY_SUGGESTED_NET_PORTS} from '../dist/settings-store.js';
 
@@ -37,7 +37,7 @@ const PASS = 'bind-probe-passphrase';
 function mkIdentity(name) {
   const dir = path.join(tmpRoot, `id-${name}`);
   fs.mkdirSync(dir, { recursive: true });
-  const store = new IdentityStore(path.join(dir, 'identity.json'), { protector: nullProtector() });
+  const store = new ShenFenCang(path.join(dir, 'identity.json'), { protector: nullProtector() });
   const created = store.ensureIdentity(`alias-${name}`, { email: `${name}@example.test` }, { passphrase: PASS });
   store.lock();
   return { store, created, dir };

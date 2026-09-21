@@ -170,7 +170,7 @@ function yangbenHang(e: LogEntry): string {
  * 所以渲染一条视图的代价是 O(视图)，与日志总长解耦。
  * 样本覆盖不到的部分由指针 + retrieve/recall 兜底（不丢细节）。
  */
-function defaultCompress(entries: LogEntry[]): string {
+function moRenYaSuo(entries: LogEntry[]): string {
   if (!entries.length) return '';
   const half = Math.floor(ENTRY_SAMPLE_MAX / 2);
   const picked: string[] = [];
@@ -193,7 +193,7 @@ function defaultCompress(entries: LogEntry[]): string {
  * 把 [from, to) 切成连续 seq 的段；每个段带齐 recordIds 冗余线索（**有界采样**）。
  * 时间与内存都是 O(日志) 的常数因子：只存段首/段尾各几个 id，不再把段内全部 id 堆起来。
  */
-function rangesOf(log: LogEntry[], from: number, to: number): ElidedRange[] {
+function quFanWei(log: LogEntry[], from: number, to: number): ElidedRange[] {
   const drafts: FanweiCaogao[] = [];
   let cur: FanweiCaogao | null = null;
   for (let i = from; i < to; i++) {
@@ -358,7 +358,7 @@ export function xuanranYoujieShitu(entries: LogEntry[], opts: XuanranXuanxiang):
     Math.min(DEFAULT_KEEP_TAIL, Math.max(0, n - headWant))
   );
   const hint = qiangzhuanWenben(o.recallHint).replace(/\s+/g, ' ').trim().slice(0, HINT_MAX_CHARS);
-  const compressFn = typeof o.compress === 'function' ? o.compress : defaultCompress;
+  const compressFn = typeof o.compress === 'function' ? o.compress : moRenYaSuo;
 
   const mkStats = (viewBytes: number, pointers: number) => ({
     logEntries: n,
@@ -375,7 +375,7 @@ export function xuanranYoujieShitu(entries: LogEntry[], opts: XuanranXuanxiang):
   if (n === 0) return { messages: [], elided: [], stats: mkStats(0, 0) };
   // 预算为 0：不产出任何消息，但把"全部被省略"如实报出（依然不抛错）
   if (budgetChars <= 0) {
-    return { messages: [], elided: rangesOf(log, 0, n), stats: mkStats(0, 0) };
+    return { messages: [], elided: quFanWei(log, 0, n), stats: mkStats(0, 0) };
   }
 
   // 中段要点（按 (headN, tailN) 记忆；压缩器可能很贵，且可能抛错）
@@ -420,7 +420,7 @@ export function xuanranYoujieShitu(entries: LogEntry[], opts: XuanranXuanxiang):
         const headTailChars = prefix[h]! + (prefix[n]! - prefix[n - t]!);
 
         const shenglue = h + t < n;
-        const ranges = shenglue ? rangesOf(log, h, n - t) : [];
+        const ranges = shenglue ? quFanWei(log, h, n - t) : [];
         const elidedChars = shenglue ? logBytes - headTailChars : 0;
         const pre = shenglue ? zhizhenQianzhui(tier, ranges, hint, elidedChars) : '';
         const cap = budgetChars - headTailChars - pre.length;
@@ -446,7 +446,7 @@ export function xuanranYoujieShitu(entries: LogEntry[], opts: XuanranXuanxiang):
 
   // ── 2. 兜底：连最小指针都放不下（极端预算）——截断指针而不是抛错 ──
   if (!satisfied) {
-    elided = rangesOf(log, 0, n);
+    elided = quFanWei(log, 0, n);
     const minText = zhizhenQianzhui('min', elided, hint, logBytes);
     const text = jieWeiAnQuan(minText, budgetChars);
     messages = text ? [{ role: 'system', content: text }] : [];

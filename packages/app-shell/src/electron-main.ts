@@ -7,15 +7,15 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { execFile, execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createP1Runtime } from './runtime.js';
+import { chuangJianP1YunXingShi } from './runtime.js';
 import {
-  MemoryClient,
+  JiyiCangKeHu,
   memoryToolSpecs,
   yunxingJiyiCangGongju,
   chatRoleOfRecordId,
   neirongZhaiyao,
   DEFAULT_MEMORY_TOOL_LABELS,
-  type MemoryToolLabels,
+  type JiyiCangGongjuBiaoqian,
 } from './memory-client.js';
 import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@warmy/group-router';
 import { KanbanCang, JieLing } from '@warmy/board';
@@ -33,14 +33,14 @@ import { CcrGateway } from '@warmy/ccr-compressor';
 import { KnowledgeBase } from '@warmy/knowledge-base';
 import { JianChaDianCang } from './checkpoint.js';
 import { ShenJiRiZhi } from './audit.js';
-import { SecureKeyStore } from './secure-keys.js';
+import { AnQuanMiyaoCang } from './secure-keys.js';
 import * as credentialModule from './credential.js';
 import { ZhiShiGuiDangQi, QingLiGuanLiQi, congGuiDangTiQuZhiShi, heBingYongHuPianHao, tiQuJieGouHuaZhaiYao } from './archive-cleanup.js';
 import { pickModelForUrgency, pickEmbeddingModel, type JueseMoxingPeizhi } from './model-roles.js';
 import { xietiaoQunXiaoxi, buildStatusCard } from './orchestrator.js';
 import { projectMemoryForContext, readProjectMemory, writeProjectMemory } from './project-memory.js';
 import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from './ai-questions.js';
-import { withReadBack, dedupeByNorm, guifanLujingMiyao } from './read-back.js';
+import { daiHuiDuYanZheng, anGuiFanHuaQuChong, guiFanLuJingMiyao } from './read-back.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -48,10 +48,10 @@ import {
   DEFAULT_KEEP_TAIL,
   type LogEntry,
 } from './context-renderer.js';
-import { yunxingDuanCunhuoZhixingqi, runExecutors } from './executor.js';
+import { yunxingDuanCunhuoZhixingqi, yunXingZhiXingQiJi } from './executor.js';
 import { chuShiZiChanGuanLi, retrieveAssetsForChat, zhuCeLiaoTianZiChan, jiLuZiChanShiYong, qingLiZiChan } from './asset-wire.js';
-import { MetricsCollector } from './metrics.js';
-import { LocalAccountStore, SettingsStore, generateDeviceId, type AppSettings, WARMY_DEFAULT_NET_PORT, SKILL_SCAN_DIRS_MAX,} from './settings-store.js';
+import { ZhiBiaoCaiJiQi } from './metrics.js';
+import { BenDiZhangHuCang, PeizhiCang, shengChengPingzheng, type YingYongPeizhi, WARMY_DEFAULT_NET_PORT, SKILL_SCAN_DIRS_MAX,} from './settings-store.js';
 /**
  * 执行环境探测器（ADR 004）：探测本机**已有**的容器运行时 + 驱动其启停。
  * 纯 node 模块（不依赖 electron），因此可以被 scripts/verify-container-probe.mjs 在真机上直接断言。
@@ -65,7 +65,7 @@ import {
   rongQiKongZhiTaiMenJin,
   guiFanKongZhiTaiQingQiu,
   xiangMuYuanYinJian,
-  projectUnavailableRefusal,
+  xiangMuBuKeYongJuJue,
   deriveProjectState,
   envSolidifyCapability,
   quYinQingXiTongMoShi,
@@ -87,22 +87,22 @@ import {
   openContainerShellSession,
   writeContainerShellSession,
   closeContainerShellSession,
-  closeContainerShellSessionsOf,
+  guanBiZhiDingHuiHua,
   hostDirGuardPlan,
   HOST_DIR_GUARD_SECURITY,
-  isUserSid,
-  type ContainerFixedCommandId,
+  shiFouYongHuSid,
+  type RongQiGuDingMingLingId,
   type RongqiXiangmuZhuangtai,
 } from './container-probe.js';
 import { lieYunXingShiLi, yunXingShiLiDongZuo, daKaiYunXingYingYong } from './container-instances.js';
-import { IdentityStore, type MembershipStore } from './identity-store.js';
+import { ShenFenCang, type ChengYuanMingceCang } from './identity-store.js';
 import {
   CONTACT_CARD_I18N,
   CONTACT_FREEZE_NOTE,
   DAISHU_GUIZE_BEIZHU,
   zhiwenPipei,
   isValidFingerprint,
-  verifyIdentityCard,
+  yanZhengShenFenKa,
   verifyRevocationDeclaration,
   verifyRotationDeclaration,
   type LianXiKa,
@@ -111,15 +111,15 @@ import {
   type YaoShiHuanTiaoMu,
   type LunHuanShengMing,
 } from './identity.js';
-import { GroupStore, type GroupListResult, type GroupMembersResult } from './group-store.js';
+import { GroupStore, type QunLieBiaoJieGuo, type QunChengYuanJieGuo } from './group-store.js';
 import {
   Gengxinqi,
-  updaterUnavailableCheck,
-  updaterUnavailableDownload,
+  gengXinqiBuKeYongJianCha,
+  gengXinqiBuKeYongXiaZai,
   jiaoyanGengxinyuanUrl,
-  type UpdateCheckResult,
-  type UpdateDownloadResult,
-  type UpdateSourceInfo,
+  type GengXinJianChaJieGuo,
+  type GengXinXiaZaiJieGuo,
+  type GengXinYuanXinXi,
 } from './updater.js';
 import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomic-json.js';
 /**
@@ -136,12 +136,12 @@ import { DuiDuanMingCe } from '@warmy/sync-protocol';
 import {
   NET_NOTES,
   SecureMesh,
-  discoverPublicIp,
-  ensureNetDir,
-  listLocalAddresses,
+  faxianGongWangIp,
+  baoZhangWangLuoMuLu,
+  lieBenJiDiZhi,
   benjiDizhiXinxi,
-  pickPortCandidates,
-  probeNet,
+  xuanDuanKouHouXuan,
+  tanCeWangLuo,
   secureLoopbackSmoke,
   tcpProbe,
   /* ── ADR 004 第十六批：**项目级属性**的跨机同步（记录文件的改动是产品功能） ── */
@@ -154,41 +154,41 @@ import {
   type WangzhuangDuiduanYinyong,
   type WangzhuangZhuangtaiJieguo,
   type KedaxingTishi,
-  type SecureInboundMessage,
+  type AnQuanRuXiangXiaoXi,
 } from './net-wiring.js';
 // 身份 ↔ 组网的唯一接缝：指纹推导 + 签名者注入 + 「能否后台签名」的门控
 import {
-  IdentityUnavailableError,
-  applyInboundRevocationUpdate,
+  ShenFenBuKeYongCuoWu,
+  yingYongRuXiangCheXiaoGengXin,
   duanyanTuidaoPipei,
   buildIdentityChangeEntries,
   goujianChengyuanZaichang,
   chuangjianShenfenGongyingshang,
   createIdentitySigner,
-  explainRosterDecision,
-  fingerprintDerivationForAppShell,
+  jieshiMingCeJueCe,
+  yingYongCengZhiWenTuiDao,
   wentiChengyuanZhengshu,
-  knownContactFingerprints,
-  listPeerContactViews,
-  membershipFileFor,
-  membershipSnapshot,
-  membershipStoreFor,
+  yiZhiLianXiZhiWenJi,
+  lieDuiDuanLianXiShiTu,
+  quChengYuanWenJian,
+  chengYuanKuaiZhao,
+  quChengYuanMingceCang,
   peerContactKeys,
-  requireSignableIdentity,
+  yaoQiuKeQianMingShenFen,
   chexiaoChengyuanZhengshu,
-  rotateMemberCertificate,
+  lunHuanChengYuanZhengShu,
 } from './identity-provider.js';
 // 本体协作层：ref/路径门禁 + 租约（写操作前 acquire、写完 release）
-import { validatePushPaths, validateRefUpdate, type TuiSongLuJingTiaoMu } from './repo-guard.js';
-import { LeaseRegistry, type AcquireRequest, type LeaseRefRequest } from './lease.js';
+import { jiaoYanTuiSongLuJing, jiaoYanYinYongGengXin, type TuiSongLuJingTiaoMu } from './repo-guard.js';
+import { LeaseRegistry, type HuoQuQingQiu, type ZuYueYinYongQingQiu } from './lease.js';
 import {
-  createGitRunner,
-  findHookScript,
-  installPreReceiveHook,
-  runPreReceive,
-  type PreReceiveResult,
+  chuangJianGitYunXingQi,
+  chaZhaoGouZiJiaoBen,
+  anzhuangYuXianJieShouGouZi,
+  yunXingYuXianJieShou,
+  type YuXianJieShouJieGuo,
 } from './repo-hooks.js';
-import { verifySmtp, type SmtpPeizhi } from './smtp-verify.js';
+import { yanZhengSmtp, type SmtpPeizhi } from './smtp-verify.js';
 import { jiexiYuyan, SUPPORTED_LOCALES } from './i18n/locales.js';
 import crypto from 'node:crypto';
 
@@ -220,8 +220,8 @@ function tMain(k: string, fallback = ''): string {
 }
 
 let win: BrowserWindow | null = null;
-let p1: Awaited<ReturnType<typeof createP1Runtime>> | null = null;
-let memory: MemoryClient | null = null;
+let p1: Awaited<ReturnType<typeof chuangJianP1YunXingShi>> | null = null;
+let memory: JiyiCangKeHu | null = null;
 const aiQuestions = new AiWenTiZhongXin();
 
 /**
@@ -294,7 +294,7 @@ const DEFAULT_GATE_VERIFY = [
 const router = new GroupChatRouter({
   queueWhenFixedBusy: false,
   onQueueMutated: () => {
-    persistRouterQueues();
+    luoPanLuYouQiDuiLie();
   },
 });
 
@@ -310,7 +310,7 @@ function routerQueuesFile(): string {
     return '';
   }
 }
-function persistRouterQueues(): void {
+function luoPanLuYouQiDuiLie(): void {
   const file = routerQueuesFile();
   if (!file) return;
   try {
@@ -319,7 +319,7 @@ function persistRouterQueues(): void {
     /* 落盘失败不影响运行 */
   }
 }
-function restoreRouterQueues(): void {
+function huiFuLuYouQiDuiLie(): void {
   const file = routerQueuesFile();
   if (!file) return;
   try {
@@ -340,7 +340,7 @@ function uiQueuesFile(): string {
     return '';
   }
 }
-function persistUiQueues(queues: Record<string, unknown>): void {
+function luoPanJieMianDuiLie(queues: Record<string, unknown>): void {
   const file = uiQueuesFile();
   if (!file) return;
   try {
@@ -349,7 +349,7 @@ function persistUiQueues(queues: Record<string, unknown>): void {
     /* ignore */
   }
 }
-function restoreUiQueues(): Record<string, unknown> {
+function huiFuJieMianDuiLie(): Record<string, unknown> {
   const file = uiQueuesFile();
   if (!file) return {};
   try {
@@ -362,19 +362,19 @@ let board: KanbanCang | null = null;
 const ccr = new CcrGateway(4000);
 let knowledge: KnowledgeBase | null = null;
 let checkpoints: JianChaDianCang | null = null;
-const metrics = new MetricsCollector();
+const metrics = new ZhiBiaoCaiJiQi();
 let audit: ShenJiRiZhi | null = null;
-let secureKeys: SecureKeyStore | null = null;
+let secureKeys: AnQuanMiyaoCang | null = null;
 let archiver: ZhiShiGuiDangQi | null = null;
 let cleanup: QingLiGuanLiQi | null = null;
 let roleModels: JueseMoxingPeizhi = {};
-let accountStore: LocalAccountStore | null = null;
-let settingsStore: SettingsStore | null = null;
+let accountStore: BenDiZhangHuCang | null = null;
+let settingsStore: PeizhiCang | null = null;
 /**
  * 身份层（ADR 003 附五.2 第 1 步）：Ed25519 身份 + 公钥指纹 + 单调代次 + 加密私钥。
  * 它是握手 / DHT 签名 / 成员证书的共同前提，所以在启动时最先就绪。
  */
-let identityStore: IdentityStore | null = null;
+let identityStore: ShenFenCang | null = null;
 /** 群列表 / 群成员的真实持久化（userData/groups.json） */
 let groupStore: GroupStore | null = null;
 /** 自动更新（真实查询 + 真实下载校验；安装未实现） */
@@ -443,7 +443,7 @@ let historyRestore: {
 } = { done: false, ok: false, entries: 0, sessions: 0, maxSeq: 0, reason: '', trigger: '', at: 0 };
 let memoryEnsureAt = 0;
 
-function nextChatSeq(memSeq?: number): number {
+function xiaYiLiaoTianXuLie(memSeq?: number): number {
   const s =
     typeof memSeq === 'number' && Number.isFinite(memSeq) && memSeq > chatLogSeq
       ? Math.floor(memSeq)
@@ -452,7 +452,7 @@ function nextChatSeq(memSeq?: number): number {
   return s;
 }
 
-function newChatRecordId(prefix: 'm' | 'a' | 'g'): string {
+function xinLiaoTianJiLuId(prefix: 'm' | 'a' | 'g'): string {
   chatLogIdSeq += 1;
   return `prefix-Date.now()-chatLogIdSeq`;
 }
@@ -466,7 +466,7 @@ function memSeqOf(res: unknown): number | undefined {
 }
 
 /** 会话日志 → 模型消息数组（chatHistories 只是它的派生镜像，见下） */
-function chatMessagesOf(key: string): LiaoTianXiaoXi[] {
+function quHuiHuaXiaoXiJi(key: string): LiaoTianXiaoXi[] {
   return (chatLogs.get(key) || []).map((e) => ({ role: e.role, content: e.content }));
 }
 
@@ -497,7 +497,20 @@ function broadcastToWindows(channel: string, payload: unknown, exceptId?: number
   }
 }
 
-function appendChatLog(key: string, entry: LogEntry): void {
+function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
+  /**
+   * **短窗口去重**：同一条消息有两条写入路径（渲染层统一推送里补写 + 主进程自己的路径
+   * chat-send / 群聊编排里的值班记录），不去重就会在日志里出现两份 ⇒ 用户看到"消息显示 2 次"。
+   * 只对"与上一条完全相同、且 3 秒内"生效：用户真连发两句一样的话（间隔 > 3 秒）仍各显示一条。
+   */
+  {
+    const arr0 = chatLogs.get(key) || [];
+    const last = arr0[arr0.length - 1];
+    const ts = Number(entry.ts || 0) || Date.now();
+    if (last && last.role === entry.role && String(last.content) === String(entry.content) && ts - Number(last.ts || 0) < 3000) {
+      return; // 跳过：同一条消息被两条路径重复写入
+    }
+  }
   const arr = chatLogs.get(key);
   if (arr) arr.push(entry);
   else chatLogs.set(key, [entry]);
@@ -515,10 +528,10 @@ function appendChatLog(key: string, entry: LogEntry): void {
 }
 
 /** 读会话历史（缺镜像时按需从日志派生，绝不返回第二份真相） */
-function historyOf(key: string): LiaoTianXiaoXi[] {
+function quHuiHuaLiShi(key: string): LiaoTianXiaoXi[] {
   const cached = chatHistories.get(key);
   if (cached) return cached;
-  const derived = chatMessagesOf(key);
+  const derived = quHuiHuaXiaoXiJi(key);
   chatHistories.set(key, derived);
   return derived;
 }
@@ -533,7 +546,7 @@ function historyOf(key: string): LiaoTianXiaoXi[] {
  *
  * **降级**：记忆服务不可用/超时 → 什么都不做（日志与镜像为空），对话照常发送。
  */
-async function restoreChatLogsFromMemory(trigger: string): Promise<typeof historyRestore> {
+async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyRestore> {
   const report = {
     done: true,
     ok: false,
@@ -574,7 +587,7 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
       yiYou.set(key, seen);
       chars += body.length;
       const rid = String(r['id'] ?? '');
-      appendChatLog(key, {
+      zhuiJiaLiaoTianRiZhi(key, {
         seq,
         role: chatRoleOfRecordId(rid),
         content: body,
@@ -587,7 +600,7 @@ async function restoreChatLogsFromMemory(trigger: string): Promise<typeof histor
     }
     chatLogSeq = Math.max(chatLogSeq, report.maxSeq);
     // 镜像整份重派生：重建后 chatHistories 与日志逐条对齐
-    for (const key of chatLogs.keys()) chatHistories.set(key, chatMessagesOf(key));
+    for (const key of chatLogs.keys()) chatHistories.set(key, quHuiHuaXiaoXiJi(key));
     report.ok = true;
     report.sessions = sessions.size;
     historyRestore = report;
@@ -623,7 +636,7 @@ async function baozhangJiyiCangJiuxu(): Promise<boolean> {
   try {
     await memory.start();
     qidong('memory ready (re-start)');
-    void restoreChatLogsFromMemory('memory-restart');
+    void youJiYiHuiFuHuiHuaRiZhi('memory-restart');
     return memory.isReady;
   } catch (e) {
     qidong(`memory re-start fail String(e)`);
@@ -632,7 +645,7 @@ async function baozhangJiyiCangJiuxu(): Promise<boolean> {
 }
 
 /** 工具描述（i18n，缺键时退回 memory-client 的中文默认文案） */
-function toolLabels(): Partial<MemoryToolLabels> {
+function toolLabels(): Partial<JiyiCangGongjuBiaoqian> {
   const d = DEFAULT_MEMORY_TOOL_LABELS;
   return {
     recall: tMain('llm.toolRecallDesc', d.recall),
@@ -648,7 +661,7 @@ function toolLabels(): Partial<MemoryToolLabels> {
 
 /** 工具调用上限（settings 可配；越界值一律夹到安全区间） */
 function toolLimits(): { maxRounds: number; maxResultChars: number; totalChars: number } {
-  let s: Partial<AppSettings> | undefined;
+  let s: Partial<YingYongPeizhi> | undefined;
   try {
     s = settingsStore?.load();
   } catch {
@@ -677,7 +690,7 @@ function toolLimits(): { maxRounds: number; maxResultChars: number; totalChars: 
  * 审计：decide / enabled / unavailable / tool / degraded / done 六个事件全程留痕，
  * 只记工具名、锚点、长度与错误摘要 —— **不落 API Key，也不落工具结果正文**。
  */
-async function runChatLoop(
+async function yunXingLiaoTianXunHuan(
   sessionId: string,
   provider: MoxingGongYing,
   req: LiaoTianQingQiu
@@ -800,7 +813,7 @@ function modelWindowTokens(modelId?: string): number | null {
   const m = String(modelId).trim();
   return MODEL_CTX_MAP[m] || MODEL_CTX_MAP[m.split('/').pop() || ''] || null;
 }
-function contextBudgetFromSettings(modelId?: string): { chars: number; percent: number; tokens: number; maxTokens: number; minPercent: number } {
+function youPeizhiSuanShangXiaWenYuSuan(modelId?: string): { chars: number; percent: number; tokens: number; maxTokens: number; minPercent: number } {
   let percent = 60;
   let maxTokens = 32768;
   try {
@@ -833,7 +846,7 @@ function budgetCharsForStep(baseChars: number, step: number): number {
  * 上下文超限时自动收缩重试：100% → 60% → 35% → 20%（相对基础预算）。
  * 群聊等无滑块场景由后台自动判断；到最小值仍失败则如实告知用户，不再无限重试。
  */
-async function runWithContextRetry<T>(
+async function daiShangXiaWenChongShiYunXing<T>(
   baseChars: number,
   fn: (budgetChars: number) => Promise<T>,
   isCtxErr: (e: unknown) => boolean = isContextLengthError
@@ -862,7 +875,7 @@ async function runWithContextRetry<T>(
 
 function contextBudgetChars(modelId?: string): number {
   try {
-    const v = Number(settingsStore?.load()?.contextBudgetChars) || contextBudgetFromSettings(modelId).chars;
+    const v = Number(settingsStore?.load()?.contextBudgetChars) || youPeizhiSuanShangXiaWenYuSuan(modelId).chars;
     // 低于下限会让可执行指针放不下（下限 200 + 上限 20 万，防止误配出荒唐值）
     if (Number.isFinite(v)) {
       return Math.min(200000, Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.floor(v)));
@@ -911,7 +924,7 @@ let providerCfg = {
 // 密钥存储实例见上方 `let secureKeys`（同一份；这里不再重复声明）
 
 /** 启动时把「当前生效的供应商」从设置读回内存，密钥按 id 从 SecureKeyStore 解出 */
-function restoreActiveProvider(): void {
+function huiFuHuoYueGongYingShang(): void {
   try {
     const s = settingsStore?.load();
     const a = s?.activeProvider;
@@ -1085,7 +1098,7 @@ function zhunbeiJiyiCangYunxingShi(): { ipcEntry: string; dataDir: string } {
 }
 
 async function bootstrap() {
-  p1 = await createP1Runtime({
+  p1 = await chuangJianP1YunXingShi({
     instancesRoot: path.join(app.getPath('userData'), 'instances'),
     onApprove: async (req) => {
       // 安全模式 full 时自动放行；normal/strict 向渲染进程请求审批
@@ -1110,10 +1123,10 @@ async function bootstrap() {
   board = new KanbanCang(path.join(userData, 'board'));
   knowledge = new KnowledgeBase(path.join(userData, 'knowledge'));
   checkpoints = new JianChaDianCang(path.join(userData, 'checkpoints'));
-  accountStore = new LocalAccountStore(path.join(userData, 'profile.json'));
-  settingsStore = new SettingsStore(path.join(userData, 'settings.json'));
-  secureKeys = new SecureKeyStore(userData);
-  restoreActiveProvider();
+  accountStore = new BenDiZhangHuCang(path.join(userData, 'profile.json'));
+  settingsStore = new PeizhiCang(path.join(userData, 'settings.json'));
+  secureKeys = new AnQuanMiyaoCang(userData);
+  huiFuHuoYueGongYingShang();
   groupStore = new GroupStore(path.join(userData, 'groups.json'));
   /**
    * ADR 004 第十六批：把 helper-tool 的文件访问记录接到**项目台账**上。
@@ -1126,7 +1139,7 @@ async function bootstrap() {
       const gid = String(sessionId || '');
       if (!gid || !groupStore) return;
       const r = groupStore.recordFileAccess(gid, entry);
-      if (r.ok) void publishProjectAttrs(gid);
+      if (r.ok) void faBuXiangMuShuXing(gid);
     } catch {
       /* 记账失败不影响真实文件操作 */
     }
@@ -1140,9 +1153,9 @@ async function bootstrap() {
     log: (msg) => qidong(`updater: msg`),
   });
   qingLiLinShiWenJian(path.join(userData, 'updates'));
-  restoreGroups();
+  huiFuQunLieBiao();
   // 群骨架恢复之后再灌队列快照（否则 createGroup 会把 queues Map 清空）
-  restoreRouterQueues();
+  huiFuLuYouQiDuiLie();
   qidong(`router queues restored file=routerQueuesFile() || 'n/a'`);
   nodeReg = new JieDianMingCe(path.join(userData, 'nodes.json'));
   syncBus = new TongbuZongxian(path.join(userData, 'bus'));
@@ -1153,12 +1166,12 @@ async function bootstrap() {
   localNodeId = nodeReg.list().find((n) => n.isLocal)?.nodeId || 'node-local';
   chuShiZiChanGuanLi(path.join(userData, 'assets.json'));
   audit = new ShenJiRiZhi(userData);
-  secureKeys = new SecureKeyStore(userData);
+  secureKeys = new AnQuanMiyaoCang(userData);
   archiver = new ZhiShiGuiDangQi(userData);
   cleanup = new QingLiGuanLiQi(userData);
   // ── 身份层：首次运行即生成（ADR 003 附三 C6「首次运行即生成唯一 ID 与凭证」）──
   // 私钥用 safeStorage 包裹的 DEK 加密后落盘；启用口令后连同一台机器也不够（附五.1 第一层）。
-  identityStore = new IdentityStore(path.join(userData, 'identity', 'identity.json'), {
+  identityStore = new ShenFenCang(path.join(userData, 'identity', 'identity.json'), {
     onAudit: (op, detail) => audit?.log(op, detail),
   });
   try {
@@ -1171,7 +1184,7 @@ async function bootstrap() {
      * 这里就要把身份**按新凭证重建**（旧身份文件先备份，绝不静默丢弃），
      * 否则会出现"ID 与身份不是同一把密钥"——那等于产品承诺的"ID 即私钥"不成立。
      */
-    const qidongPingzheng = profile.deviceId || generateDeviceId();
+    const qidongPingzheng = profile.deviceId || shengChengPingzheng();
     const upgradedFrom = String(profile.deviceIdUpgradedFrom || '');
     const idInit = identityStore.ensureIdentity(qidongPingzheng, {
       email: profile.email || '',
@@ -1223,7 +1236,7 @@ async function bootstrap() {
   // 这里先建，后续所有调用点（名册/在线态/IPC）都拿到同一个带审计的实例，
   // 证书签发/拒收、吊销应用/拒绝都会落到审计日志（audit 已在上面初始化）。
   {
-    const ms = membershipStoreFor(identityStore, { onAudit: (op, detail) => audit?.log(op, detail) });
+    const ms = quChengYuanMingceCang(identityStore, { onAudit: (op, detail) => audit?.log(op, detail) });
     const heJi = ms?.summary();
     if (heJi) qidong(`membership ready groups=sum.groupCount certs=sum.certCount revoked=sum.revokedCount`);
   }
@@ -1232,14 +1245,14 @@ async function bootstrap() {
   // ── 换证横幅的确认留痕（「已核实 / 已关闭」）；审计写不进去时拒绝关闭，见 IPC ──
   biangengQuerenWenjian = path.join(userData, 'identity', 'change-acks.json');
   // ── 组网（鉴权通道）：**门控在前**，身份拿不到签名能力就不起监听、不发宣告 ──
-  const netDir = ensureNetDir(userData);
+  const netDir = baoZhangWangLuoMuLu(userData);
   if (!netDir.ok) qidong(`net dir unavailable: netDir.error`);
   try {
     // 启动自检：身份层指纹必须能由身份文件里的公钥推出；不一致则整条组网线不可用
     const check = duanyanTuidaoPipei(identityStore);
     qidong(`identity derivation ok fp=check.fingerprint raw=check.publicKeyRawBytesB`);
   } catch (e) {
-    const err = e as IdentityUnavailableError;
+    const err = e as ShenFenBuKeYongCuoWu;
     qidong(`identity derivation FAILED: err.name: err.message`);
     lastError = { ts: Date.now(), message: err.message, context: 'identity-derivation' };
   }
@@ -1317,10 +1330,10 @@ async function bootstrap() {
       }
       if (payload && payload.type === 'warmy.membership.revocation') {
         const gid = String(payload.groupId || msg.groupId || '');
-        const membership = membershipStoreFor(identityStore);
+        const membership = quChengYuanMingceCang(identityStore);
         const expect = expectedIssuerFor(gid);
-        const r = applyInboundRevocationUpdate({
-          membership: membership as MembershipStore,
+        const r = yingYongRuXiangCheXiaoGengXin({
+          membership: membership as ChengYuanMingceCang,
           groupId: gid,
           list: payload.list as never,
           fromFingerprint: msg.peerFingerprint,
@@ -1357,7 +1370,7 @@ async function bootstrap() {
     },
   });
   {
-    const gate = requireSignableIdentity(identityStore);
+    const gate = yaoQiuKeQianMingShenFen(identityStore);
     qidong(`net gate signReady=gate.ok mode=gate.unlock?.mode ?? 'none' error=gate.errorCode ?? '-'`);
   }
   qidong('board/knowledge/checkpoints/account/sync/mesh/assets ready');
@@ -1406,7 +1419,7 @@ function syncMembersFromRouter(groupId: string): void {
  * 重启后恢复：把持久化的群灌回路由（否则重启后群聊收不到消息），
  * 并从旧版会话状态（settings.json 的 state.groups）回填一次。
  */
-function restoreGroups(): void {
+function huiFuQunLieBiao(): void {
   if (!groupStore) return;
   try {
     const s = settingsStore?.load() as unknown as { groups?: unknown } | undefined;
@@ -1444,13 +1457,13 @@ function qishiJiyiCangYibu() {
     qidong(`memory ipc=ipcEntry`);
     const nodeRt = jiexiJiedianYunxingShi();
     qidong(`memory node=nodeRt.path (nodeRt.source)`);
-    memory = new MemoryClient({ nodePath: nodeRt.path, ipcEntry, dataDir });
+    memory = new JiyiCangKeHu({ nodePath: nodeRt.path, ipcEntry, dataDir });
     memory
       .start()
       .then(() => {
         qidong('memory ready');
         // 不变量 #5：记忆服务的 JSONL 是唯一事实来源 → 启动即重建会话日志（ADR 002 §9.4 待办 4）
-        return restoreChatLogsFromMemory('boot');
+        return youJiYiHuiFuHuiHuaRiZhi('boot');
       })
       .catch((e) => {
         qidong(`memory start fail String(e)`);
@@ -1489,7 +1502,7 @@ let tray: import('electron').Tray | null = null;
  * 禁止多开后的行为：重复启动不新建实例，只把**已运行**主窗口
  * 恢复 → 移到屏幕中央 → 获得焦点。
  */
-function focusMainWindowCentered(): void {
+function zhuJiaoZhuChuangKouJuZhong(): void {
   try {
     if (!win || win.isDestroyed()) {
       chuangjianChuangkou();
@@ -1547,7 +1560,7 @@ function tuichuYingyong(reason?: string): void {
 function chuangkouZhuangtaiWenjian(): string {
   try { return path.join(app.getPath('userData'), 'window-state.json'); } catch { return ''; }
 }
-function loadWindowState(): { width?: number; height?: number; x?: number; y?: number; maximized?: boolean } {
+function jiaZaiChuangKouZhuangTai(): { width?: number; height?: number; x?: number; y?: number; maximized?: boolean } {
   const f = chuangkouZhuangtaiWenjian();
   if (!f) return {};
   try {
@@ -1587,7 +1600,7 @@ function baocunChuangkouZhuangtaiJiukuai(yanchi = 500): void {
 
 function chuangjianChuangkou() {
   const isMac = process.platform === 'darwin';
-  const ws = loadWindowState();
+  const ws = jiaZaiChuangKouZhuangTai();
   // 任务栏图标：**白底版**（深色任务栏上棕色标记才看得清）
   const tuBiaoLuJing = warmyTaskbarIcon();
   win = new BrowserWindow({
@@ -1634,10 +1647,10 @@ function chuangjianChuangkou() {
 }
 
 // ── 安全 IPC 辅助函数 ──
-function safeHandle<T>(fn: () => T, fallback: T): T {
+function anQuanChuLi<T>(fn: () => T, fallback: T): T {
   try { return fn(); } catch (e) { return fallback; }
 }
-async function safeHandleAsync<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+async function anQuanChuLiYiBu<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try { return await fn(); } catch (e) { return fallback; }
 }
 /**
@@ -1648,7 +1661,7 @@ async function safeHandleAsync<T>(fn: () => Promise<T>, fallback: T): Promise<T>
  *   3) 重复通道保护 —— 重复注册只记日志并跳过，而不是让 Electron 抛异常把主进程带崩。
  */
 const ipcZhuce = new Set<string>();
-function sanitizeError(e: unknown): string {
+function xiJingCuoWu(e: unknown): string {
   const raw = e instanceof Error ? (e.message || e.name) : String(e);
   // noUncheckedIndexedAccess：split(..)[0] 的类型是 string | undefined，必须兜一下
   const shouHang = String(raw ?? '').split('\n')[0] ?? '';
@@ -1670,8 +1683,8 @@ function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeE
     } catch (e) {
       console.error('[ipc] ' + channel + ' failed:', e);
       // T194：IPC 处理器抛出的异常 = "已处理失败"里最典型的一类，推进控制台（只推频道名 + 脱敏摘要）
-      fachuKongzhitai({ cat: 'error', code: 'err.ipc', data: { channel, message: sanitizeError(e) } });
-      throw new Error(sanitizeError(e));
+      fachuKongzhitai({ cat: 'error', code: 'err.ipc', data: { channel, message: xiJingCuoWu(e) } });
+      throw new Error(xiJingCuoWu(e));
     }
   });
 }
@@ -1706,14 +1719,14 @@ function fachuKongzhitai(ev: { cat: 'tool' | 'net' | 'error' | 'system'; code: s
 /** 未捕获异常 / 未处理的 Promise 拒绝：如实进控制台。用 Monitor 版本，**不**改变默认崩溃语义。 */
 process.on('uncaughtExceptionMonitor', (err) => {
   try {
-    fachuKongzhitai({ cat: 'error', code: 'err.uncaught', data: { message: sanitizeError(err) } });
+    fachuKongzhitai({ cat: 'error', code: 'err.uncaught', data: { message: xiJingCuoWu(err) } });
   } catch {
     /* noop */
   }
 });
 process.on('unhandledRejection', (reason) => {
   try {
-    fachuKongzhitai({ cat: 'error', code: 'err.unhandled-rejection', data: { message: sanitizeError(reason) } });
+    fachuKongzhitai({ cat: 'error', code: 'err.unhandled-rejection', data: { message: xiJingCuoWu(reason) } });
   } catch {
     /* noop */
   }
@@ -1735,7 +1748,7 @@ if (!dedaoDangeSuo) {
   setTimeout(() => process.exit(0), 30);
 } else {
   app.on('second-instance', () => {
-    focusMainWindowCentered();
+    zhuJiaoZhuChuangKouJuZhong();
   });
 }
 
@@ -1779,7 +1792,7 @@ app.on('before-quit', () => {
   tray = null;
   // 退出前再落一次盘，避免内存变更没跟上文件
   try {
-    persistRouterQueues();
+    luoPanLuYouQiDuiLie();
   } catch { /* ignore */ }
   void (async () => {
     try {
@@ -1795,33 +1808,33 @@ app.on('before-quit', () => {
 /** 渲染层「待执行队列」持久化 IPC（重启后不丢 P2/P3 待办） */
 chuliIpc('warmy:ui-queues-get', async () => {
   try {
-    return { ok: true, queues: restoreUiQueues() };
+    return { ok: true, queues: huiFuJieMianDuiLie() };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e), queues: {} };
+    return { ok: false, error: xiJingCuoWu(e), queues: {} };
   }
 });
 chuliIpc('warmy:ui-queues-set', async (_e, payload?: { queues?: Record<string, unknown> }) => {
   try {
     const q = payload?.queues;
     if (!q || typeof q !== 'object') return { ok: false, error: 'queues must be an object' };
-    persistUiQueues(q as Record<string, unknown>);
+    luoPanJieMianDuiLie(q as Record<string, unknown>);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 /** Router 队列只读快照（诊断/巡检用） */
 chuliIpc('warmy:router-queues-get', async () => {
   try {
-    persistRouterQueues();
+    luoPanLuYouQiDuiLie();
     return { ok: true, snapshot: router.serializeState(), file: routerQueuesFile() };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
-chuliIpc('warmy:hardware', () => safeHandle(() => p1?.instances.hardwareAdvice(), null));
-chuliIpc('warmy:list-instances', () => safeHandle(() => p1?.instances.list() ?? [], []));
+chuliIpc('warmy:hardware', () => anQuanChuLi(() => p1?.instances.hardwareAdvice(), null));
+chuliIpc('warmy:list-instances', () => anQuanChuLi(() => p1?.instances.list() ?? [], []));
 chuliIpc(
   'warmy:spawn-instance',
   async (_e, cfg: { id: string; name: string; dutyEligible?: boolean }) => {
@@ -1840,9 +1853,9 @@ chuliIpc('warmy:stop-instance', async (_e, id: string) => {
   try {
     await p1?.instances.stop(id);
     return true;
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:security-mode', () => safeHandle(() => p1?.security.getMode(), 'normal'));
+chuliIpc('warmy:security-mode', () => anQuanChuLi(() => p1?.security.getMode(), 'normal'));
 chuliIpc(
   'warmy:set-security-mode',
   async (_e, mode: 'full' | 'normal' | 'strict') => {
@@ -1858,7 +1871,7 @@ chuliIpc('warmy:memory-recall', async (_e, payload?: string | { query?: string; 
     const scope = typeof payload === 'object' ? payload?.scope : undefined;
     return await memory.recallScoped(q, limit, scope);
   } catch (e) {
-    return { cards: [], error: sanitizeError(e) };
+    return { cards: [], error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:memory-append', async (_e, body: string) => {
@@ -1870,7 +1883,7 @@ chuliIpc('warmy:memory-append', async (_e, body: string) => {
       body,
     });
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:memory-retrieve', async (_e, payload?: { seq?: number; recordId?: string }) => {
@@ -1878,7 +1891,7 @@ chuliIpc('warmy:memory-retrieve', async (_e, payload?: { seq?: number; recordId?
     if (!memory) return { ok: false, error: 'memory-unavailable' };
     return await memory.retrieve({ seq: payload?.seq, recordId: payload?.recordId });
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:memory-status', async () => {
@@ -1900,7 +1913,7 @@ chuliIpc('warmy:memory-status', async () => {
       historyRestore,
     };
   } catch (e) {
-    return { ok: false, ready: false, error: sanitizeError(e) };
+    return { ok: false, ready: false, error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:memory-rebuild', async () => {
@@ -1909,7 +1922,7 @@ chuliIpc('warmy:memory-rebuild', async () => {
     const r = await memory.rebuildProjection();
     return { ok: true, ...r };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -1945,7 +1958,7 @@ chuliIpc('warmy:i18n', (_e, locale: string) => {
 });
 
 chuliIpc('warmy:locale-info', () =>
-  safeHandle(
+  anQuanChuLi(
     () => {
       const sys = app.getLocale();
       return { system: sys, resolved: jiexiYuyan(sys), isZh: sys.startsWith('zh'), supported: SUPPORTED_LOCALES };
@@ -1959,9 +1972,9 @@ chuliIpc('warmy:set-theme-source', (_e, source: 'system' | 'light' | 'dark') => 
   try {
     nativeTheme.themeSource = source === 'system' ? 'system' : source;
     return { shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:theme-info', () => safeHandle(() => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource }), { shouldUseDarkColors: false, themeSource: 'system' }));
+chuliIpc('warmy:theme-info', () => anQuanChuLi(() => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource }), { shouldUseDarkColors: false, themeSource: 'system' }));
 
 // ── 拉取供应商模型列表（OpenAI 兼容 /models） ──
 chuliIpc(
@@ -1981,7 +1994,7 @@ chuliIpc(
       const models = await p.listModels();
       return { ok: true, models };
     } catch (e) {
-      return { ok: false, models: [], error: sanitizeError(e) };
+      return { ok: false, models: [], error: xiJingCuoWu(e) };
     }
   }
 );
@@ -1997,14 +2010,14 @@ chuliIpc('warmy:pick-sound', async () => {
     });
     if (r.canceled || !r.filePaths[0]) return { ok: false };
     return { ok: true, path: r.filePaths[0] };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 检查更新：真实网络查询，状态可区分（不再恒定返回 upToDate:true） ──
 chuliIpc('warmy:check-update', async () =>
-  safeHandleAsync<UpdateCheckResult>(
-    async () => (updater ? await updater.check() : updaterUnavailableCheck(yingyongBanben())),
-    updaterUnavailableCheck(yingyongBanben())
+  anQuanChuLiYiBu<GengXinJianChaJieGuo>(
+    async () => (updater ? await updater.check() : gengXinqiBuKeYongJianCha(yingyongBanben())),
+    gengXinqiBuKeYongJianCha(yingyongBanben())
   )
 );
 
@@ -2019,7 +2032,7 @@ chuliIpc('warmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
     });
     if (r.canceled || !r.filePaths[0]) return { ok: false };
     return { ok: true, path: r.filePaths[0] };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 群聊编排 + 看板 ──
@@ -2058,7 +2071,7 @@ chuliIpc(
        * 这里还顺手把创建者的身份指纹记为**上报者**，成员侧据此判断"这是创建者说的"。
        */
       // 项目属性：开发环境/目录/gateVerify 一律在创建时写入（不依赖 devEnv 是否填了）
-      setProjectAttrsOf(cfg.groupId, {
+      sheZhiXiangMuShuXing(cfg.groupId, {
         ...(cfg.devEnv === 'container' || cfg.devEnv === 'host' ? { devEnv: cfg.devEnv } : {}),
         ...(cfg.directory && fs.existsSync(cfg.directory) ? { directory: cfg.directory, directorySource: 'creator-picked' as const } : {}),
         gateVerify: gateVerifyForProjectType({ directory: cfg.directory, devEnv: cfg.devEnv, name: cfg.name }),
@@ -2075,7 +2088,7 @@ chuliIpc(
 
 // ── 群列表：来自 userData/groups.json（真实存储），不是空数组 / 演示数据 ──
 chuliIpc('warmy:group-list', () =>
-  safeHandle<GroupListResult>(
+  anQuanChuLi<QunLieBiaoJieGuo>(
     () => {
       if (!groupStore) return { ok: false, groups: [], count: 0, error: 'group store unavailable' };
       const snap = groupStore.snapshot();
@@ -2142,7 +2155,7 @@ chuliIpc(
         });
       }
     }
-    const dutyUserRecordId = newChatRecordId('g');
+    const dutyUserRecordId = xinLiaoTianJiLuId('g');
     let dutyUserSeq: number | undefined;
     try {
       dutyUserSeq = memSeqOf(
@@ -2159,8 +2172,8 @@ chuliIpc(
     // 日志只追加 + 真实 recordId/seq（不变量 #1、#5）。
     // recordId 只在记忆服务**真的写入成功**时才挂到日志上：否则指针会给出一个解引用不到的死 id
     // （降级路径下宁可只留 seq + recall 两种线索，也不给假线索）。
-    appendChatLog(msg.groupId, {
-      seq: nextChatSeq(dutyUserSeq),
+    zhuiJiaLiaoTianRiZhi(msg.groupId, {
+      seq: xiaYiLiaoTianXuLie(dutyUserSeq),
       role: 'user',
       content: msg.content,
       recordId: dutyUserSeq !== undefined ? dutyUserRecordId : undefined,
@@ -2182,10 +2195,10 @@ chuliIpc(
         // 计划1/2：值班路径同样自动收敛重试
         const zhibanMoxing = providerCfg.model;
         const dutyBase = contextBudgetChars(zhibanMoxing);
-        const zhibanChongshi = await runWithContextRetry(dutyBase, async (budgetChars) => {
+        const zhibanChongshi = await daiShangXiaWenChongShiYunXing(dutyBase, async (budgetChars) => {
           const shitu = renderChatView(msg.groupId, msg.content, budgetChars);
           // ADR 002 §9.4 待办 2：值班者路径也只走这一个循环入口（工具/降级/审计行为一致）
-          const loop = await runChatLoop(msg.groupId, provider, {
+          const loop = await yunXingLiaoTianXunHuan(msg.groupId, provider, {
             model: zhibanMoxing,
             messages: [
               { role: 'system', content: tMain('llm.dutySystem') },
@@ -2195,17 +2208,17 @@ chuliIpc(
           });
           return { loop, budgetChars };
         });
-        const loop = zhibanChongshi.result?.loop as Awaited<ReturnType<typeof runChatLoop>> | undefined;
+        const loop = zhibanChongshi.result?.loop as Awaited<ReturnType<typeof yunXingLiaoTianXunHuan>> | undefined;
         if (!loop && zhibanChongshi.gaveUp) {
           llmReply = tMain('chat.contextTooSmall', '该模型上下文太小，无法满足当前聊天需求（已自动收缩重试到最小值仍失败）');
         } else if (loop) {
           llmReply = loop.response.choices[0]?.message?.content || '';
         }
-        appendChatLog(msg.groupId, {
-          seq: nextChatSeq(),
+        zhuiJiaLiaoTianRiZhi(msg.groupId, {
+          seq: xiaYiLiaoTianXuLie(),
           role: 'assistant',
           content: llmReply || '',
-          recordId: newChatRecordId('a'),
+          recordId: xinLiaoTianJiLuId('a'),
           ts: Date.now(),
         });
       } catch (e) {
@@ -2228,19 +2241,19 @@ chuliIpc(
 chuliIpc('warmy:board-tasks', (_e, groupId?: string) => {
   try {
     return { ok: true, tasks: board?.listTasks(groupId) || [] };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:board-events', () => {
   try {
     return { ok: true, events: board?.tailEvents(30) || [] };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:board-aggregate', () => {
   try {
     return { ok: true, sessions: board?.aggregateByGroup() || [] };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:group-join-instance', (_e, groupId: string, instanceId: string) => {
@@ -2292,7 +2305,7 @@ chuliIpc('warmy:set-provider', async (_e, cfg: Partial<typeof providerCfg>) => {
       } as never);
     } catch { /* 设置写失败不影响本次生效 */ }
     return { ok: true, providerCfg: { ...providerCfg, apiKey: providerCfg.apiKey ? '***' : '' } };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 /**
@@ -2310,7 +2323,7 @@ chuliIpc('warmy:provider-key-set', async (_e, payload: { providerId?: string; ap
     await secureKeys.save(id, key);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -2328,7 +2341,7 @@ chuliIpc('warmy:provider-key-clear', (_e, payload: { providerId?: string } = {})
     const id = String(payload?.providerId || '');
     if (id && secureKeys) secureKeys.delete(id);
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:get-provider', () => ({
@@ -2387,7 +2400,7 @@ chuliIpc(
     // 日志只追加（不变量 #1）：先写入记忆服务，拿到**真实 recordId + seq** 再落日志，
     // 这样指针里的 retrieve(recordId=…)/retrieve(seq=…) 真的能回到这条原文。
     // recordId 只在写入成功时才挂到日志（失败时宁缺勿假：死 id 会让模型白跑一轮工具）。
-    const userRecordId = newChatRecordId('m');
+    const userRecordId = xinLiaoTianJiLuId('m');
     let userMemSeq: number | undefined;
     try {
       userMemSeq = memSeqOf(
@@ -2407,8 +2420,8 @@ chuliIpc(
     } catch {
       /* optional */
     }
-    appendChatLog(sessionId, {
-      seq: nextChatSeq(userMemSeq),
+    zhuiJiaLiaoTianRiZhi(sessionId, {
+      seq: xiaYiLiaoTianXuLie(userMemSeq),
       role: 'user',
       content: yiYaSuo.content,
       recordId: userMemSeq !== undefined ? userRecordId : undefined,
@@ -2418,11 +2431,11 @@ chuliIpc(
     await baozhangGongyingshangMiyao();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       const reply = tMain('llm.noKey') + msg.content.slice(0, 80);
-      appendChatLog(sessionId, {
-        seq: nextChatSeq(),
+      zhuiJiaLiaoTianRiZhi(sessionId, {
+        seq: xiaYiLiaoTianXuLie(),
         role: 'assistant',
         content: reply,
-        recordId: newChatRecordId('a'),
+        recordId: xinLiaoTianJiLuId('a'),
         ts: Date.now(),
       });
       return { ok: true, reply, usage: null, needsKey: true };
@@ -2437,11 +2450,11 @@ chuliIpc(
       const modelId = msg.model || providerCfg.model;
       const baseBudget = contextBudgetChars(modelId);
       // 计划1/2：上下文超限自动收缩重试（100%→60%→35%→20%），到最小仍失败则如实停止
-      const chongshi = await runWithContextRetry(baseBudget, async (budgetChars) => {
+      const chongshi = await daiShangXiaWenChongShiYunXing(baseBudget, async (budgetChars) => {
         // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）
         const shitu = renderChatView(sessionId, msg.content, budgetChars);
         // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
-        const loop = await runChatLoop(sessionId, provider, {
+        const loop = await yunXingLiaoTianXunHuan(sessionId, provider, {
           model: modelId,
           messages: shitu.messages as LiaoTianXiaoXi[],
           maxTokens: 1024,
@@ -2473,7 +2486,7 @@ chuliIpc(
         providerId: providerCfg.presetId,
         model: msg.model || providerCfg.model,
       });
-      const replyRecordId = newChatRecordId('a');
+      const replyRecordId = xinLiaoTianJiLuId('a');
       let replyMemSeq: number | undefined;
       try {
         replyMemSeq = memSeqOf(
@@ -2487,8 +2500,8 @@ chuliIpc(
       } catch {
         /* optional */
       }
-      appendChatLog(sessionId, {
-        seq: nextChatSeq(replyMemSeq),
+      zhuiJiaLiaoTianRiZhi(sessionId, {
+        seq: xiaYiLiaoTianXuLie(replyMemSeq),
         role: 'assistant',
         content: reply,
         recordId: replyMemSeq !== undefined ? replyRecordId : undefined,
@@ -2519,7 +2532,7 @@ chuliIpc(
         },
       };
     } catch (e) {
-      const err = sanitizeError(e);
+      const err = xiJingCuoWu(e);
       lastError = { ts: Date.now(), message: err, context: 'chat-send' };
       // T194：这条是"**已处理**失败"（聊天链路自己吞掉并回 retry），也要进控制台
       fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: err } });
@@ -2539,8 +2552,8 @@ chuliIpc(
  */
 function currentEnvFingerprint(groupId: string): { active: boolean; runtimeId: string; revision: string; at: number; imageDigests: Record<string, string> } {
   const gid = String(groupId || '');
-  const runtimeId = gid ? projectRuntimeOf(gid) : '';
-  const isContainer = !!gid && projectDevEnvOf(gid) === 'container' && !!runtimeId;
+  const runtimeId = gid ? quXiangMuYunXingShi(gid) : '';
+  const isContainer = !!gid && quXiangMuKaiFaHuanJing(gid) === 'container' && !!runtimeId;
   const imageDigests: Record<string, string> = {};
   for (const tuPian of CONTAINER_BASE_IMAGES) if (tuPian.digest) imageDigests[tuPian.ref] = tuPian.digest;
   if (!isContainer) return { active: false, runtimeId: '', revision: 'host', at: Date.now(), imageDigests: {} };
@@ -2568,7 +2581,7 @@ chuliIpc('warmy:checkpoint-create', (_e, phase: 'round_start' | 'round_end', gro
     const cp = checkpoints.create({ phase, logSeq: Date.now(), jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined });
     recordCheckpointEnv(String((cp && cp.id) || ''), groupId);
     return { ok: true, checkpoint: cp, list: checkpoints.list(), env: currentEnvFingerprint(String(groupId || '')) };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:checkpoint-list', (_e, payload?: { sessionId?: string }) => ({
@@ -2606,14 +2619,14 @@ chuliIpc('warmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: bool
       /** 文件回退成功 ≠ 环境也回退了 —— 这条一起回给渲染层，让 UI 如实提示 */
       noteKey: envChanged ? 'checkpoints.env.changed' : 'checkpoints.env.same',
     };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 知识库 ──
 chuliIpc('warmy:knowledge-query', (_e, q: string) => {
   try {
     return { ok: true, ...(knowledge?.query(q) || { entities: [], events: [] }) };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc(
@@ -2643,7 +2656,7 @@ chuliIpc('warmy:set-insert-mode', (_e, sessionId: string, mode: 'outer' | 'inner
   try {
     insertMode.set(sessionId, mode);
     return { ok: true, mode };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:get-insert-mode', (_e, sessionId: string) => ({
   ok: true,
@@ -2651,9 +2664,9 @@ chuliIpc('warmy:get-insert-mode', (_e, sessionId: string) => ({
 }));
 
 // ── 指标 ──
-chuliIpc('warmy:metrics-summary', () => safeHandle(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true, toolCalls: 0, toolCallsOk: 0, toolChars: 0, toolTurns: 0, toolDegradedTurns: 0, toolStopReasons: {}, toolLoopBounded: true }))
-chuliIpc('warmy:metrics-turns', () => safeHandle(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
-chuliIpc('warmy:metrics-tools', () => safeHandle(() => ({ ok: true, calls: metrics.lastToolCalls(50) }), { ok: true, calls: [] }))
+chuliIpc('warmy:metrics-summary', () => anQuanChuLi(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true, toolCalls: 0, toolCallsOk: 0, toolChars: 0, toolTurns: 0, toolDegradedTurns: 0, toolStopReasons: {}, toolLoopBounded: true }))
+chuliIpc('warmy:metrics-turns', () => anQuanChuLi(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
+chuliIpc('warmy:metrics-tools', () => anQuanChuLi(() => ({ ok: true, calls: metrics.lastToolCalls(50) }), { ok: true, calls: [] }))
 
 /**
  * 会话日志（只追加）的只读视图 —— ADR 002 §9.4 待办 4 的观测面。
@@ -2678,7 +2691,7 @@ chuliIpc('warmy:chat-messages', (_e, payload?: { sessionId?: string; limit?: num
       messages: all.slice(-limit).map((e) => ({ role: e.role, text: e.content, ts: e.ts ?? null })),
     };
   } catch (e2) {
-    return { ok: false, sessionId: String(payload?.sessionId || ''), messages: [], error: sanitizeError(e2) };
+    return { ok: false, sessionId: String(payload?.sessionId || ''), messages: [], error: xiJingCuoWu(e2) };
   }
 });
 
@@ -2701,10 +2714,10 @@ chuliIpc('warmy:chat-log-append', (_e, payload?: { sessionId?: string; role?: st
     if (last && last.role === role && String(last.content) === content) {
       return { ok: true, appended: false, deduped: true };
     }
-    appendChatLog(sid, { seq: nextChatSeq(), role, content, ts: Date.now() });
+    zhuiJiaLiaoTianRiZhi(sid, { seq: xiaYiLiaoTianXuLie(), role, content, ts: Date.now() });
     return { ok: true, appended: true };
   } catch (e3) {
-    return { ok: false, appended: false, error: sanitizeError(e3) };
+    return { ok: false, appended: false, error: xiJingCuoWu(e3) };
   }
 });
 
@@ -2730,22 +2743,22 @@ chuliIpc('warmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number }
         logSeq: chatLogSeq,
         restore: historyRestore,
         // 缺镜像时按需从日志派生（历史上是两份各自 push 的真相，重启后一起清零）
-        historyMirror: historyOf(sessionId).length,
+        historyMirror: quHuiHuaLiShi(sessionId).length,
       },
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 /** 手动触发一次历史重建（排障/验证用；与启动路径同一函数） */
 chuliIpc('warmy:chat-log-restore', async () => {
-  const report = await restoreChatLogsFromMemory('ipc');
+  const report = await youJiYiHuiFuHuiHuaRiZhi('ipc');
   return { ok: report.ok, restore: report, sessions: [...chatLogs.keys()], logSeq: chatLogSeq };
 });
 
 // ── 设置持久化 ──
-chuliIpc('warmy:settings-get', () => safeHandle(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
+chuliIpc('warmy:settings-get', () => anQuanChuLi(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
 chuliIpc('warmy:settings-save', (e, partial: Record<string, unknown>) => {
   const next = settingsStore?.save(partial as never);
   /**
@@ -2767,14 +2780,22 @@ chuliIpc('warmy:settings-save', (e, partial: Record<string, unknown>) => {
    · 启停**只能由本机用户点击触发**：没有任何网络/群成员/智能体路径会调用它；
    · 任何失败都如实回原始输出与退出码，**不当作成功**。
    ══════════════════════════════════════════════════════════════════════════ */
-chuliIpc('warmy:container-probe', async (_e, opts?: { force?: boolean; cacheMs?: number }) => {
+chuliIpc('warmy:container-probe', async (_e, opts?: { force?: boolean; cacheMs?: number; deep?: boolean }) => {
   try {
     const report = await probeContainerRuntimes({
       cacheMs: opts?.force ? 0 : (typeof opts?.cacheMs === 'number' ? opts.cacheMs : 8000),
+      /**
+       * deep 由**调用方**决定（默认 false ⇒ 不启动 WSL）：
+       *   · 用户显式点「查看本机已有容器」⇒ deep:true；
+       *   · 进入容器卡片 / 会话右栏等自动探测 ⇒ deep:false（报 not-probed，不 spawn wsl.exe）。
+       * 父进程链实测：deep:true 时会出现 parent=electron.exe 的
+       * `wsl.exe -d Ubuntu -- true`（它会把发行版真的启动起来）。
+       */
+      deep: opts?.deep === true,
     });
     return { ok: true, report };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e), report: zuiHouRongQiTanCeBaoGao() };
+    return { ok: false, error: xiJingCuoWu(e), report: zuiHouRongQiTanCeBaoGao() };
   }
 });
 chuliIpc('warmy:container-action', async (_e, payload?: { id?: string; action?: string }) => {
@@ -2793,7 +2814,7 @@ chuliIpc('warmy:container-instances', async (_e, payload?: { id?: string }) => {
   try {
     return await lieYunXingShiLi(String(payload?.id || ''));
   } catch (e) {
-    return { ok: false, id: String(payload?.id || ''), supported: false, instances: [], reason: 'unexpected', evidence: sanitizeError(e) };
+    return { ok: false, id: String(payload?.id || ''), supported: false, instances: [], reason: 'unexpected', evidence: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:container-instance-action', async (_e, payload?: { id?: string; action?: string; instance?: string }) => {
@@ -2806,7 +2827,7 @@ chuliIpc('warmy:container-app-open', async (_e, payload?: { id?: string }) => {
   try {
     return await daKaiYunXingYingYong(String(payload?.id || ''));
   } catch (e) {
-    return { ok: false, id: String(payload?.id || ''), opened: false, reason: 'unexpected', evidence: sanitizeError(e) };
+    return { ok: false, id: String(payload?.id || ''), opened: false, reason: 'unexpected', evidence: xiJingCuoWu(e) };
   }
 });
 
@@ -2854,7 +2875,7 @@ interface XiangmuShuxingShitu {
   source: 'project-record' | 'legacy-local-settings';
 }
 
-function projectAttrsOf(groupId: string): XiangmuShuxingShitu {
+function quXiangMuShuXing(groupId: string): XiangmuShuxingShitu {
   const gid = String(groupId || '');
   const legacy = (): XiangmuShuxingShitu => {
     let devEnv: 'host' | 'container' = 'host';
@@ -2898,7 +2919,7 @@ function projectAttrsOf(groupId: string): XiangmuShuxingShitu {
 /** 这个项目的属性是不是**别人的节点同步过来的**（= 本机不是项目主） */
 function projectAttrsAreRemote(groupId: string): boolean {
   const gid = String(groupId || '');
-  const shitu = projectAttrsOf(gid);
+  const shitu = quXiangMuShuXing(gid);
   if (shitu.source !== 'project-record') return false;
   const reportedBy = shitu.reportedBy;
   if (!reportedBy) return false;
@@ -2910,28 +2931,28 @@ function projectAttrsAreRemote(groupId: string): boolean {
   }
 }
 
-function projectDevEnvOf(groupId: string): 'host' | 'container' {
-  return projectAttrsOf(groupId).devEnv;
+function quXiangMuKaiFaHuanJing(groupId: string): 'host' | 'container' {
+  return quXiangMuShuXing(groupId).devEnv;
 }
-function projectDisabledAt(groupId: string): number {
-  return projectAttrsOf(groupId).disabledAt;
+function xiangMuTingYongShiJian(groupId: string): number {
+  return quXiangMuShuXing(groupId).disabledAt;
 }
 /** 项目目录（**产品级事实**：成员据此解析"最近改动文件"的根） */
-function projectDirectoryOf(groupId: string): { dir: string; reason: string } {
-  const v = projectAttrsOf(String(groupId || ''));
+function quXiangMuMuLu(groupId: string): { dir: string; reason: string } {
+  const v = quXiangMuShuXing(String(groupId || ''));
   if (v.directory) return { dir: v.directory, reason: v.directorySource };
   return { dir: '', reason: 'not-recorded' };
 }
 /** 容器开发项目选定的运行时（右键菜单「切换容器…」写入项目记录） */
-function projectRuntimeOf(sessionId: string): string {
-  return projectAttrsOf(String(sessionId || '')).runtimeId;
+function quXiangMuYunXingShi(sessionId: string): string {
+  return quXiangMuShuXing(String(sessionId || '')).runtimeId;
 }
 
 /**
  * 写项目属性：**只写项目记录**（项目级）—— 不再写本机设置。
  * `runtimeId`/`disabledAt` 传 `undefined` = 保持原样（不覆盖已知事实）。
  */
-function setProjectAttrsOf(
+function sheZhiXiangMuShuXing(
   groupId: string,
   patch: {
     devEnv?: 'host' | 'container';
@@ -2962,7 +2983,7 @@ function setProjectAttrsOf(
     ...(patch.env ? { env: patch.env } : {}),
   });
   if (!r.ok) return { ok: false, error: r.error };
-  void publishProjectAttrs(gid);
+  void faBuXiangMuShuXing(gid);
   return { ok: true };
 }
 
@@ -2976,10 +2997,10 @@ function setProjectAttrsOf(
  *
  * 未组网 / 没起 mesh ⇒ 直接返回（**不报错、不假装发出去了**）。
  */
-async function publishProjectAttrs(groupId: string): Promise<{ ok: boolean; sent: boolean; reason?: string }> {
+async function faBuXiangMuShuXing(groupId: string): Promise<{ ok: boolean; sent: boolean; reason?: string }> {
   const gid = String(groupId || '');
   if (!gid) return { ok: false, sent: false, reason: 'no-group-id' };
-  const shitu = projectAttrsOf(gid);
+  const shitu = quXiangMuShuXing(gid);
   const g = groupStore?.getGroup(gid);
   const ledger = (groupStore?.listFileAccess(gid, 30) || []).map((e) => ({ op: e.op, path: e.path, ts: e.ts, ok: e.ok, by: e.by, ...(e.bytes ? { bytes: e.bytes } : {}) }));
   let creatorFingerprint = '';
@@ -3014,12 +3035,12 @@ async function publishProjectAttrs(groupId: string): Promise<{ ok: boolean; sent
     const r = await secureMesh.broadcast({ to: '*', channel: PROJECT_ATTRS_CHANNEL, payload });
     return { ok: r.failed === 0, sent: r.sent > 0, reason: r.errors && r.errors.length ? r.errors[0] : undefined };
   } catch (e) {
-    return { ok: false, sent: false, reason: sanitizeError(e) };
+    return { ok: false, sent: false, reason: xiJingCuoWu(e) };
   }
 }
 
 /** 未就绪时顺手探一次（主进程侧有短缓存）。探不到 ⇒ null ⇒ 按未就绪处理（不乐观放开） */
-async function containerStatusOf(runtimeId: string): Promise<string | null> {
+async function quRongQiZhuangTai(runtimeId: string): Promise<string | null> {
   if (!runtimeId) return null;
   let report = zuiHouRongQiTanCeBaoGao();
   const huanchunHang = report ? (report.runtimes || []).find((x) => x.id === runtimeId) : undefined;
@@ -3033,6 +3054,7 @@ async function containerStatusOf(runtimeId: string): Promise<string | null> {
        * **那会把发行版真的启动起来**。于是"打开一个项目会话 → 查容器就绪没"就顺手拉起了 WSL。
        * 现在：只探需要的那一个、且不允许代为启动发行版。
        */
+      // 注意：这里**不传 deep** ⇒ 例行路径绝不启动 WSL（见 probeWsl 的默认静默）
       report = await probeContainerRuntimes({ cacheMs: 8000, only: [runtimeId] });
     } catch {
       return null;
@@ -3049,7 +3071,7 @@ async function containerStatusOf(runtimeId: string): Promise<string | null> {
  * （group-store 里建群时写入的 creatorFingerprint vs 本机当前身份指纹），
  * 不在渲染层猜、也不新增第二套"谁是创建者"的定义。拿不到指纹 ⇒ false（宁可少给权限）。
  */
-function localIsProjectCreator(groupId: string): boolean {
+function benJiShiXiangMuChuangJianZhe(groupId: string): boolean {
   try {
     const gid = String(groupId || '');
     if (!groupStore || !gid) return false;
@@ -3074,7 +3096,7 @@ function localIsProjectCreator(groupId: string): boolean {
  */
 async function quXiangMuTai(sessionId: string, opts: { probe?: boolean } = {}): Promise<RongqiXiangmuZhuangtai> {
   const id = String(sessionId || '');
-  const attrs = projectAttrsOf(id);
+  const attrs = quXiangMuShuXing(id);
   const remote = projectAttrsAreRemote(id);
   if (remote) {
     const shiShi = projectAttrsToStateInput({
@@ -3104,7 +3126,7 @@ async function quXiangMuTai(sessionId: string, opts: { probe?: boolean } = {}): 
   if (devEnv === 'container' && runtimeId) {
     const cached = zuiHouRongQiTanCeBaoGao();
     const row = cached ? (cached.runtimes || []).find((x) => x.id === runtimeId) : undefined;
-    status = row ? String(row.status) : opts.probe === false ? null : await containerStatusOf(runtimeId);
+    status = row ? String(row.status) : opts.probe === false ? null : await quRongQiZhuangTai(runtimeId);
   }
   return deriveProjectState({
     devEnv,
@@ -3146,16 +3168,16 @@ function jiluBenjiKeyongxing(groupId: string, code: string): void {
     availabilityAt: Date.now(),
     ...(benJiZhiWen ? { reportedBy: benJiZhiWen } : {}),
   });
-  if (r.ok) void publishProjectAttrs(gid);
+  if (r.ok) void faBuXiangMuShuXing(gid);
 }
 
 /** 项目不可用时的结构化拒绝（chat-send / 值班编排 / 各功能入口共用） */
-async function projectUnavailableFor(sessionId: string): Promise<ReturnType<typeof projectUnavailableRefusal>> {
+async function projectUnavailableFor(sessionId: string): Promise<ReturnType<typeof xiangMuBuKeYongJuJue>> {
   const id = String(sessionId || '');
-  const devEnv = projectDevEnvOf(id);
+  const devEnv = quXiangMuKaiFaHuanJing(id);
   // 本机开发 + 未被停用：与容器毫无关系 ⇒ 直接放行，连探测都不做（不误伤）
-  if (devEnv !== 'container' && projectDisabledAt(id) === 0) return null;
-  return projectUnavailableRefusal(await quXiangMuTai(id));
+  if (devEnv !== 'container' && xiangMuTingYongShiJian(id) === 0) return null;
+  return xiangMuBuKeYongJuJue(await quXiangMuTai(id));
 }
 
 /** 项目可用性状态（渲染层**唯一**的事实来源；含"历史仍可读"这条事实） */
@@ -3163,7 +3185,7 @@ chuliIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => 
   try {
     const sessionId = String(payload?.sessionId || '');
     const state = await quXiangMuTai(sessionId);
-    const attrs = projectAttrsOf(sessionId);
+    const attrs = quXiangMuShuXing(sessionId);
     const remote = projectAttrsAreRemote(sessionId);
     // 本机是项目主 ⇒ 把**现场算出来的可用性**记进项目属性并广播（成员据此看到原因）
     if (!remote) jiluBenjiKeyongxing(sessionId, state.code);
@@ -3176,7 +3198,7 @@ chuliIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => 
        */
       memberFaceKey: state.memberFace === 'creator-offline' ? 'group.memberOffline' : null,
       /** 创建者能不能启用/停用（渲染层据此灰掉菜单项；判定本身在主进程） */
-      localIsCreator: localIsProjectCreator(sessionId),
+      localIsCreator: benJiShiXiangMuChuangJianZhe(sessionId),
       /** **历史仍可读**：不可用 ≠ 整块禁掉（渲染层必须继续显示已存在的记录） */
       historyReadable: true,
       /**
@@ -3195,7 +3217,7 @@ chuliIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => 
       inboundGate: projectInboundGate({ running: state.running, code: state.code }),
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -3206,12 +3228,12 @@ chuliIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => 
 chuliIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
-    if (!localIsProjectCreator(id)) {
+    if (!benJiShiXiangMuChuangJianZhe(id)) {
       return { ok: false, code: 'not-creator', error: 'only the creator can enable or disable this project' };
     }
-    if (projectDisabledAt(id) > 0) {
+    if (xiangMuTingYongShiJian(id) > 0) {
       // **写项目记录**（项目级事实 ⇒ 会同步给成员），不再只写本机设置
-      const w = setProjectAttrsOf(id, { disabledAt: 0 });
+      const w = sheZhiXiangMuShuXing(id, { disabledAt: 0 });
       if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
     }
     const after = await quXiangMuTai(id);
@@ -3232,7 +3254,7 @@ chuliIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) =>
     tongzhiShitiBiangeng(id, 'project');
     return { ok: true, running: true, enabledAt: Date.now(), state: after };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -3247,11 +3269,11 @@ chuliIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) =>
 chuliIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
-    if (!localIsProjectCreator(id)) {
+    if (!benJiShiXiangMuChuangJianZhe(id)) {
       return { ok: false, code: 'not-creator', error: 'only the creator can enable or disable this project' };
     }
     const at = Date.now();
-    const w = setProjectAttrsOf(id, { disabledAt: at });
+    const w = sheZhiXiangMuShuXing(id, { disabledAt: at });
     if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
     const state = await quXiangMuTai(id);
     audit?.log('container.project-disable', { sessionId: id, memberFace: state.memberFace });
@@ -3260,7 +3282,7 @@ chuliIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) =
     tongzhiShitiBiangeng(id, 'project');
     return { ok: true, disabled: true, disabledAt: at, state, historyReadable: true };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -3273,16 +3295,16 @@ chuliIpc('warmy:project-set-container', async (_e, payload?: { sessionId?: strin
   try {
     const id = String(payload?.sessionId || '');
     const runtimeId = String(payload?.runtimeId || '');
-    if (!localIsProjectCreator(id)) {
+    if (!benJiShiXiangMuChuangJianZhe(id)) {
       return { ok: false, code: 'not-creator', error: 'only the creator can change this project container' };
     }
-    if (projectDevEnvOf(id) !== 'container') {
+    if (quXiangMuKaiFaHuanJing(id) !== 'container') {
       return { ok: false, code: 'not-container-project', error: 'this project does not develop in a container' };
     }
     if (!rongQiYunXingGuiGeOf(runtimeId)) {
       return { ok: false, code: 'unknown-runtime', error: `unknown runtime id: runtimeId` };
     }
-    const w = setProjectAttrsOf(id, { runtimeId });
+    const w = sheZhiXiangMuShuXing(id, { runtimeId });
     if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
     const state = await quXiangMuTai(id);
     audit?.log('container.project-set-container', { sessionId: id, runtimeId });
@@ -3294,7 +3316,7 @@ chuliIpc('warmy:project-set-container', async (_e, payload?: { sessionId?: strin
       restartRequired: state.running,
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -3337,7 +3359,7 @@ async function projectFilesFor(sessionId: string): Promise<{
   const changed: Array<{ path: string; ts: number; kind: string; scope: string; source?: string }> = [];
   let projectDir: string | null = null;
   let projectDirReason = 'not-recorded';
-  const attrs = projectAttrsOf(id);
+  const attrs = quXiangMuShuXing(id);
   const remote = projectAttrsAreRemote(id);
 
   // ① 项目目录：**项目记录里记了的**优先（产品级事实，成员也拿得到）
@@ -3474,7 +3496,7 @@ async function projectFilesFor(sessionId: string): Promise<{
   };
   const e = entryOf(files);
   // "能不能在主机上跑"：只有**本机开发的项目** + 宿主原生扩展 才可点；其余一律置灰并说明原因
-  const devEnv = projectDevEnvOf(id);
+  const devEnv = quXiangMuKaiFaHuanJing(id);
   const zhujiYuansheng = !!e.entry && /\.(exe|cmd|bat|js|mjs|cjs)$/i.test(path.basename(e.entry));
   const entryHostRunnable = e.kind === 'program' && zhujiYuansheng && devEnv === 'host';
   const entryReason = e.kind !== 'program'
@@ -3512,7 +3534,7 @@ chuliIpc('warmy:project-files', async (_e, payload?: { sessionId?: string }) => 
   try {
     return await projectFilesFor(String(payload?.sessionId || ''));
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -3547,7 +3569,7 @@ chuliIpc('warmy:product-run', async (_e, payload?: { sessionId?: string }) => {
     fachuKongzhitai({ cat: 'system', code: 'product.run.started', data: { sessionId: id } });
     return { ok: true, executed: true, pid: child.pid || 0, entry: real };
   } catch (e) {
-    return { ok: false, code: 'spawn-failed', error: sanitizeError(e), executed: false };
+    return { ok: false, code: 'spawn-failed', error: xiJingCuoWu(e), executed: false };
   }
 });
 
@@ -3590,7 +3612,7 @@ function writeProjectEnvLedger(
     all[gid] = next;
     settingsStore.save({ projectEnv: all } as never);
     // 同步给成员的**摘要**（项目级）
-    setProjectAttrsOf(gid, {
+    sheZhiXiangMuShuXing(gid, {
       env: {
         ...(next.containerRef ? { containerRef: next.containerRef } : {}),
         ...(next.lastImageRef ? { imageRef: next.lastImageRef } : {}),
@@ -3634,7 +3656,7 @@ async function baozhangXiangmuRongqi(
     }
   }
   if (!isAllowedImageRef(image)) return { ok: false, code: 'no-image', containerRef: name, created: false, raw: 'no allowed image reference available' };
-  const dir = String(opts.hostDir || projectDirectoryOf(groupId).dir || '');
+  const dir = String(opts.hostDir || quXiangMuMuLu(groupId).dir || '');
   const r = await runContainerExec(runtimeId, 'run-detached', {
     name,
     image,
@@ -3662,7 +3684,7 @@ chuliIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }
   try {
     const id = String(payload?.sessionId || '');
     const state = await quXiangMuTai(id);
-    const runtimeId = projectRuntimeOf(id);
+    const runtimeId = quXiangMuYunXingShi(id);
     const cap = envSolidifyCapability(runtimeId);
     const ledger = projectEnvLedgerOf(id);
     const mode = quYinQingXiTongMoShi(zuiHouRongQiTanCeBaoGao(), runtimeId);
@@ -3707,7 +3729,7 @@ chuliIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }
       layering: { fileRollbackIndependent: true, snapshotCoversProjectFiles: false },
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -3726,7 +3748,7 @@ chuliIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }
 chuliIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: string; explicit?: boolean; beforeDestroy?: boolean }) => {
   try {
     const id = String(payload?.sessionId || '');
-    const runtimeId = projectRuntimeOf(id);
+    const runtimeId = quXiangMuYunXingShi(id);
     const cap = envSolidifyCapability(runtimeId);
     const ledger = projectEnvLedgerOf(id);
     const decision = shouldSolidifyAt({
@@ -3796,7 +3818,7 @@ chuliIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: string
       securityNotice: 'whole-filesystem-frozen',
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e), executed: false, evidence: 'refused' };
+    return { ok: false, error: xiJingCuoWu(e), executed: false, evidence: 'refused' };
   }
 });
 
@@ -3810,7 +3832,7 @@ chuliIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: string
 chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string; imageRef?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
-    const runtimeId = projectRuntimeOf(id);
+    const runtimeId = quXiangMuYunXingShi(id);
     const cap = envSolidifyCapability(runtimeId);
     if (!runtimeId) return { ok: false, code: 'no-runtime-chosen', executed: false, evidence: 'refused' as const };
     if (cap.programmatic !== true) return { ok: false, code: 'runtime-cannot-solidify', why: cap.reason, executed: false, evidence: 'refused' as const };
@@ -3847,9 +3869,9 @@ chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string
         }
       }
     }
-    closeContainerShellSessionsOf(id);
+    guanBiZhiDingHuiHua(id);
     if (cur.exists) await runContainerExec(runtimeId, 'rm', { name }, 120000);
-    const dir = projectDirectoryOf(id).dir;
+    const dir = quXiangMuMuLu(id).dir;
     const run = await runContainerExec(runtimeId, 'run-detached', {
       name, image: want, ...(dir && fs.existsSync(dir) ? { hostDir: dir } : {}), projectLabel: id,
     }, 180000);
@@ -3876,7 +3898,7 @@ chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string
       layering: { fileRollbackIndependent: true, snapshotCoversProjectFiles: false },
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e), executed: false, evidence: 'refused' as const };
+    return { ok: false, error: xiJingCuoWu(e), executed: false, evidence: 'refused' as const };
   }
 });
 
@@ -3910,8 +3932,8 @@ chuliIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; act
   }
   const { req } = guiFanHua;
   const state = await quXiangMuTai(req.sessionId);
-  const runtimeId = req.runtimeId || projectRuntimeOf(req.sessionId);
-  const status = runtimeId ? await containerStatusOf(runtimeId) : null;
+  const runtimeId = req.runtimeId || quXiangMuYunXingShi(req.sessionId);
+  const status = runtimeId ? await quRongQiZhuangTai(runtimeId) : null;
   const gate = rongQiKongZhiTaiMenJin({
     inProjectOrCattle: true,
     // 控制台只属于**容器开发**的项目（"运行/测试在容器中"那个选项已作废删除）
@@ -4012,7 +4034,7 @@ chuliIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; act
    * 我们只记"发生过一次容器内命令"这个事实 + 挂载点，**不假装知道具体改了哪个文件**
    * （容器里没有文件系统审计，编一个路径出来比不记更糟）。
    */
-  const dir = projectDirectoryOf(req.sessionId).dir;
+  const dir = quXiangMuMuLu(req.sessionId).dir;
   if (dir) {
     beizhuWaibuWenjianFangwenQiu(req.sessionId, 'write', `dirpath.sepCONTAINER_PROJECT_MOUNT.replace(/^\//, '')`, { by: 'container-shell' });
   }
@@ -4037,7 +4059,7 @@ function beizhuWaibuWenjianFangwenQiu(groupId: string, op: 'write' | 'edit' | 'c
     const gid = String(groupId || '');
     if (!groupStore || !gid) return;
     groupStore.recordFileAccess(gid, { op, path: String(file), ts: Date.now(), ok: true, by: extra.by || 'container' });
-    void publishProjectAttrs(gid);
+    void faBuXiangMuShuXing(gid);
   } catch {
     /* 记账失败不影响执行 */
   }
@@ -4070,7 +4092,7 @@ async function maybeSolidifyAfterConsole(
     fachuKongzhitai({ cat: 'system', code: 'container.project.solidified', data: { sessionId: groupId, imageRef: ref, trigger: 'after-console' } });
     return { attempted: true, done: true, code: 'after-console', imageRef: ref };
   } catch (e) {
-    return { attempted: true, done: false, code: 'error:' + sanitizeError(e) };
+    return { attempted: true, done: false, code: 'error:' + xiJingCuoWu(e) };
   }
 }
 
@@ -4083,16 +4105,16 @@ chuliIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comman
   try {
     const id = String(payload?.sessionId || '');
     const command = String(payload?.command || 'env-probe');
-    if (!CONTAINER_FIXED_COMMAND_IDS.includes(command as ContainerFixedCommandId)) {
+    if (!CONTAINER_FIXED_COMMAND_IDS.includes(command as RongQiGuDingMingLingId)) {
       return { ok: false, code: 'bad-command', executed: false, error: `command must be one of CONTAINER_FIXED_COMMAND_IDS.join('|')` };
     }
     const state = await quXiangMuTai(id);
-    const runtimeId = projectRuntimeOf(id);
+    const runtimeId = quXiangMuYunXingShi(id);
     if (state.devEnv !== 'container' || state.stopped || !runtimeId) {
       // **绝不静默退回宿主执行**：项目不可用 ⇒ 直接拒绝（这就是那条硬纪律）
       return { ok: false, code: 'project-unavailable', projectCode: state.code, executed: false, hostExecutionRefused: true };
     }
-    const status = await containerStatusOf(runtimeId);
+    const status = await quRongQiZhuangTai(runtimeId);
     if (status !== 'ready') return { ok: false, code: 'container-not-ready', executed: false, needsInstall: true };
     const yiBaoZhang = await baozhangXiangmuRongqi(id, runtimeId);
     if (!yiBaoZhang.ok) return { ok: false, code: yiBaoZhang.code, executed: false, containerRef: yiBaoZhang.containerRef, rawOutput: yiBaoZhang.raw };
@@ -4115,7 +4137,7 @@ chuliIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comman
       fixedCommands: CONTAINER_FIXED_COMMAND_IDS,
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e), executed: false };
+    return { ok: false, error: xiJingCuoWu(e), executed: false };
   }
 });
 
@@ -4130,7 +4152,7 @@ chuliIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comman
 chuliIpc('warmy:project-set-directory', async (_e, payload?: { sessionId?: string; dir?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
-    if (!localIsProjectCreator(id)) {
+    if (!benJiShiXiangMuChuangJianZhe(id)) {
       return { ok: false, code: 'not-creator', error: 'only the creator can set the project directory' };
     }
     let dir = String(payload?.dir || '');
@@ -4143,13 +4165,13 @@ chuliIpc('warmy:project-set-directory', async (_e, payload?: { sessionId?: strin
     if (!path.isAbsolute(dir) || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
       return { ok: false, code: 'bad-dir', error: 'directory does not exist' };
     }
-    const w = setProjectAttrsOf(id, { directory: dir, directorySource: 'creator-picked' });
+    const w = sheZhiXiangMuShuXing(id, { directory: dir, directorySource: 'creator-picked' });
     if (!w.ok) return { ok: false, code: 'cannot-persist', error: w.error };
     audit?.log('container.project-set-directory', { sessionId: id });
     const shiShi = await projectFilesFor(id);
     return { ok: true, dir, projectDirReason: shiShi.projectDirReason, projectSource: shiShi.projectSource };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -4162,7 +4184,7 @@ chuliIpc('warmy:project-ledger', (_e, payload?: { sessionId?: string; limit?: nu
   try {
     const id = String(payload?.sessionId || '');
     const rows = groupStore?.listFileAccess(id, Number(payload?.limit) || 200) || [];
-    const attrs = projectAttrsOf(id);
+    const attrs = quXiangMuShuXing(id);
     const dir = attrs.directory;
     return {
       ok: true,
@@ -4181,7 +4203,7 @@ chuliIpc('warmy:project-ledger', (_e, payload?: { sessionId?: string; limit?: nu
       entryLimit: 200,
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -4225,7 +4247,7 @@ async function runIcacls(plan: { file: string; args: string[] }): Promise<{ ok: 
         resolve({ ok: false, code: typeof e2.code === 'number' ? e2.code : null, out: String(stdout || '').trim(), err: String(stderr || e2.message || '').trim() });
       });
     } catch (e) {
-      resolve({ ok: false, code: null, out: '', err: sanitizeError(e) });
+      resolve({ ok: false, code: null, out: '', err: xiJingCuoWu(e) });
     }
   });
 }
@@ -4275,7 +4297,7 @@ function runIcaclsSync(plan: { file: string; args: string[] }): { ok: boolean; e
     execFileSync(plan.file, plan.args, { windowsHide: true, timeout: 60000, stdio: 'ignore' });
     return { ok: true, err: '' };
   } catch (e) {
-    return { ok: false, err: sanitizeError(e) };
+    return { ok: false, err: xiJingCuoWu(e) };
   }
 }
 
@@ -4290,10 +4312,10 @@ chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; ac
     const id = String(payload?.sessionId || '');
     const action = String(payload?.action || 'status');
     if (!['apply', 'lift', 'status'].includes(action)) return { ok: false, code: 'bad-action', error: 'action must be apply|lift|status' };
-    if (action !== 'status' && !localIsProjectCreator(id)) {
+    if (action !== 'status' && !benJiShiXiangMuChuangJianZhe(id)) {
       return { ok: false, code: 'not-creator', error: 'only the creator can lock or unlock the project directory' };
     }
-    const attrs = projectAttrsOf(id);
+    const attrs = quXiangMuShuXing(id);
     const dir = attrs.directory;
     const rec = fsGuardRecordOf(id);
     const sid = await dangqianYonghuHuihuaId();
@@ -4365,7 +4387,7 @@ chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; ac
     fachuKongzhitai({ cat: 'system', code: 'container.fsGuard.lifted', data: { sessionId: id, reason: 'user' } });
     return { ...base, ok: true, guarded: false, liftedAt: Date.now() };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -4400,7 +4422,7 @@ function skillMdInfo(file: string): { name: string; description: string } {
 }
 
 /** Read skill auto-discovery directories from the EXISTING settings channel. */
-function loadSkillScanDirs(): string[] {
+function jiaZaiJinengSaomiaoLuJing(): string[] {
   try {
     const s = settingsStore?.load() as { skillScanDirs?: unknown } | undefined;
     const dirs = s && Array.isArray(s.skillScanDirs) ? s.skillScanDirs : [];
@@ -4448,7 +4470,7 @@ function jinengGen(): Array<{ root: string; source: string }> {
   if (fs.existsSync(local)) roots.push({ root: local, source: 'workspace' });
   // Auto-discovery directories (source = 'discovered'); invalid paths are kept out of the
   // scan roots but reported via skillScanStatus on skills-list / skills-scan-dirs-get.
-  for (const dir of loadSkillScanDirs()) {
+  for (const dir of jiaZaiJinengSaomiaoLuJing()) {
     try {
       const abs = path.resolve(dir);
       if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) {
@@ -4463,7 +4485,7 @@ function jinengGen(): Array<{ root: string; source: string }> {
 
 chuliIpc('warmy:skills-list', () => {
   const skills: Array<Record<string, unknown>> = [];
-  const saoMiaoMuluZhuangtai = jinengSaomiaoZhuangtai(loadSkillScanDirs());
+  const saoMiaoMuluZhuangtai = jinengSaomiaoZhuangtai(jiaZaiJinengSaomiaoLuJing());
   const QiYongBiao = ((): Record<string, boolean> => {
     try {
       const s = settingsStore?.load() as { skillEnabled?: Record<string, boolean> } | undefined;
@@ -4515,7 +4537,7 @@ chuliIpc('warmy:skills-list', () => {
 });
 
 chuliIpc('warmy:skills-scan-dirs-get', () => {
-  const dirs = loadSkillScanDirs();
+  const dirs = jiaZaiJinengSaomiaoLuJing();
   return { ok: true, dirs, scanDirs: jinengSaomiaoZhuangtai(dirs), max: SKILL_SCAN_DIRS_MAX };
 });
 
@@ -4528,7 +4550,7 @@ chuliIpc('warmy:skills-scan-dirs-set', (_e, dirs: unknown) => {
     const next = settingsStore?.save({ skillScanDirs: list } as never);
     return { ok: true, dirs: list, scanDirs: jinengSaomiaoZhuangtai(list), settings: next };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -4544,7 +4566,7 @@ chuliIpc('warmy:skills-import', async () => {
   const id = path.basename(src);
   const dest = path.join(app.getPath('userData'), 'skills', id);
   // 写操作门禁：导入技能会整目录覆盖 → 先拿租约（另一台/另一个身份正在导入同一目录就被挡住）
-  const guarded = withLease('skills', ['skills'], () => {
+  const guarded = daiZuYue('skills', ['skills'], () => {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
@@ -4554,7 +4576,7 @@ chuliIpc('warmy:skills-import', async () => {
     if (!guarded.ok) return { ok: false, error: 'lease-denied', errorCode: guarded.errorCode, reason: guarded.reason, conflicts: guarded.conflicts };
     return { ok: true, id: guarded.value };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -4670,7 +4692,7 @@ chuliIpc('warmy:scan-machine', async (_e, kind?: string) => {
     const k = kind === 'plugins' ? 'plugins' : 'skills';
     return await scanMachineFor(k);
   } catch (e) {
-    return { ok: false, found: [], error: sanitizeError(e) };
+    return { ok: false, found: [], error: xiJingCuoWu(e) };
   }
 });
 
@@ -4697,18 +4719,18 @@ interface AssistItem {
 function assistFile(): string {
   return path.join(app.getPath('userData'), 'assist.json');
 }
-function loadAssistItems(): AssistItem[] {
+function jiaZaiXieZhuTiaoMu(): AssistItem[] {
   try {
     const raw = duJsonWenJian<{ items?: AssistItem[] } | null>(assistFile(), null);
     return Array.isArray(raw?.items) ? raw!.items! : [];
   } catch { return []; }
 }
-function saveAssistItems(items: AssistItem[]): void {
+function baoCunXieZhuTiaoMu(items: AssistItem[]): void {
   try { anQuanYuanZiXieJson(assistFile(), { version: 1, items }); } catch { /* noop */ }
 }
 chuliIpc('warmy:assist-list', (_e, sessionId?: string) => {
   try {
-    let items = loadAssistItems();
+    let items = jiaZaiXieZhuTiaoMu();
     const sid = typeof sessionId === 'string' && sessionId ? sessionId : '';
     // 合并 AI 决策卡（pending=open / answered=done）
     try {
@@ -4736,21 +4758,21 @@ chuliIpc('warmy:assist-list', (_e, sessionId?: string) => {
           items.push(mapped);
         }
       }
-      saveAssistItems(items);
+      baoCunXieZhuTiaoMu(items);
     } catch { /* noop */ }
     if (sid) items = items.filter((x) => !x.sessionId || x.sessionId === sid);
     // 有界：每会话最多保留 200 条
     if (items.length > 200) items = items.slice(-200);
     return { ok: true, items };
   } catch (e) {
-    return { ok: false, items: [], error: sanitizeError(e) };
+    return { ok: false, items: [], error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:assist-upsert', (_e, payload: Partial<AssistItem> & { id?: string }) => {
   try {
     const id = String(payload?.id || '').trim();
     if (!id) return { ok: false, error: 'missing-id' };
-    const items = loadAssistItems();
+    const items = jiaZaiXieZhuTiaoMu();
     const now = Date.now();
     const i = items.findIndex((x) => x.id === id);
     const prev = i >= 0 ? items[i] : null;
@@ -4767,11 +4789,11 @@ chuliIpc('warmy:assist-upsert', (_e, payload: Partial<AssistItem> & { id?: strin
     if (next.status === 'done' || next.status === 'stale') next.priority = 'normal';
     if (i >= 0) items[i] = next;
     else items.push(next);
-    saveAssistItems(items);
+    baoCunXieZhuTiaoMu(items);
     audit?.log('assist.upsert', { id, status: next.status, priority: next.priority });
     return { ok: true, item: next };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -4782,7 +4804,7 @@ chuliIpc('warmy:privacy-consent-set', (_e, consent: boolean) => {
     audit?.log('privacy.consent', { consent: !!consent });
     return { ok: true, consent: !!consent, settings: next };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -4794,7 +4816,7 @@ chuliIpc('warmy:app-quit', (_e, reason?: string) => {
 
 /** 唯一凭证：指纹（证明你是你）；私钥不落渲染层明文 */
 chuliIpc('warmy:identity-credential', () =>
-  safeHandle(() => {
+  anQuanChuLi(() => {
     const info = identityStore?.info() ?? null;
     return {
       ok: true,
@@ -4818,13 +4840,13 @@ chuliIpc('warmy:identity-backup-import', (_e, payload: { backupJson?: string; pa
     audit?.log('identity.backup.import', { fingerprint: r.info.fingerprint });
     return { ok: true, identity: r.info, fingerprint: r.info.fingerprint };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 /** 插件自动发现目录扫描：目录下一层含 package.json 的子目录视为插件候选 */
 chuliIpc('warmy:plugins-scan-dirs-get', () =>
-  safeHandle(() => {
+  anQuanChuLi(() => {
     const s = settingsStore?.load?.() || (settingsStore as { get?: () => unknown })?.get?.() || {};
     const dirs = Array.isArray((s as { pluginScanDirs?: string[] }).pluginScanDirs)
       ? (s as { pluginScanDirs: string[] }).pluginScanDirs
@@ -4841,7 +4863,7 @@ chuliIpc('warmy:plugins-scan-dirs-set', (_e, dirs: unknown) => {
     const next = settingsStore?.save({ pluginScanDirs: list } as never);
     return { ok: true, dirs: list, settings: next };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:plugins-scan', () => {
@@ -4877,17 +4899,17 @@ chuliIpc('warmy:plugins-scan', () => {
           } catch { /* skip entry */ }
         }
       } catch (e) {
-        skipped.push({ dir, reason: sanitizeError(e) });
+        skipped.push({ dir, reason: xiJingCuoWu(e) });
       }
     }
     audit?.log('plugins.scan', { dirs: dirs.length, found: found.length });
     return { ok: true, found, skipped, scannedDirs: dirs };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
-chuliIpc('warmy:skills-paths', () => safeHandle(() => ({ ok: true, paths: jinengGen().map((r) => r.root), scanDirs: jinengSaomiaoZhuangtai(loadSkillScanDirs()) }), { ok: true, paths: [], scanDirs: [] }))
+chuliIpc('warmy:skills-paths', () => anQuanChuLi(() => ({ ok: true, paths: jinengGen().map((r) => r.root), scanDirs: jinengSaomiaoZhuangtai(jiaZaiJinengSaomiaoLuJing()) }), { ok: true, paths: [], scanDirs: [] }))
 
 chuliIpc('warmy:skills-remove', (_e, id: string) => {
   try {
@@ -4896,7 +4918,7 @@ chuliIpc('warmy:skills-remove', (_e, id: string) => {
     if (String(id || '').startsWith('discovered:')) {
       return { ok: false, error: 'discovered-skill-not-removable' };
     }
-    const guarded = withLease('skills', ['skills'], () => {
+    const guarded = daiZuYue('skills', ['skills'], () => {
       for (const { root, source } of jinengGen()) {
         if (source === 'discovered') continue;
         const dir = path.resolve(root, String(id || ''));
@@ -4911,11 +4933,11 @@ chuliIpc('warmy:skills-remove', (_e, id: string) => {
     if (!guarded.ok) return { ok: false, error: 'lease-denied', errorCode: guarded.errorCode, reason: guarded.reason };
     return guarded.value ? { ok: true } : { ok: false, error: 'skill not found' };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
-chuliIpc('warmy:profile-get', () => safeHandle(() => ({ ok: true, profile: accountStore?.loadProfile() }), { ok: true, profile: undefined }))
+chuliIpc('warmy:profile-get', () => anQuanChuLi(() => ({ ok: true, profile: accountStore?.loadProfile() }), { ok: true, profile: undefined }))
 // 读自家 package.json 的版本；dev 下 app.getVersion() 返回的是 Electron 版本，不可用
 function yingyongBanben(): string {
   try {
@@ -4947,26 +4969,26 @@ chuliIpc('warmy:app-info', () => {
       identityFingerprint: identityStore?.info()?.fingerprint || '',
       identityGeneration: identityStore?.info()?.generation ?? 0,
     };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:profile-save', (_e, p: { username: string; email: string; avatarDataUrl?: string }) => {
   try {
     const prev = accountStore?.loadProfile();
     const next = { ...prev!, ...p };
     return { ok: true, profile: accountStore?.saveProfile(next) };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:profile-set-password', (_e, pw: string) => {
   try {
     accountStore?.setPassword(pw);
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:profile-login', (_e, pw: string) => {
   try {
     const r = accountStore?.loginLocal(pw) || { ok: false };
     return r;
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 身份层（ADR 003 附五 / 附五.1 / 附六） ──
@@ -4975,7 +4997,7 @@ chuliIpc('warmy:profile-login', (_e, pw: string) => {
  * 私钥永远不出主进程（导出也只能是加密备份）。
  */
 chuliIpc('warmy:identity-info', () =>
-  safeHandle(
+  anQuanChuLi(
     () => ({
       ok: true,
       identity: identityStore?.info() ?? null,
@@ -5029,13 +5051,13 @@ chuliIpc('warmy:identity-rotate', (_e, payload: { reason?: string; passphrase?: 
       contactFreezeNote: CONTACT_FREEZE_NOTE,
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 /** 本机的名片历史（旧值留存；换证横幅的"旧联系方式"取自这里） */
 chuliIpc('warmy:identity-card-history', () =>
-  safeHandle(() => ({ ok: true, history: identityStore?.contactCardHistory() ?? [], freeze: identityStore?.contactFreeze() ?? null }), { ok: true, history: [], freeze: null }),
+  anQuanChuLi(() => ({ ok: true, history: identityStore?.contactCardHistory() ?? [], freeze: identityStore?.contactFreeze() ?? null }), { ok: true, history: [], freeze: null }),
 );
 
 /**
@@ -5049,7 +5071,7 @@ chuliIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card?
     let card = payload?.card as LianXiKa | undefined;
     if (payload?.signedCard) {
       // 带签名的名片先验签（自签 + 指纹自洽），再决定是否留存
-      const v = verifyIdentityCard(payload.signedCard);
+      const v = yanZhengShenFenKa(payload.signedCard);
       if (!v.ok) return { ok: false, error: `bad-card:${v.reason}` };
       fingerprint = payload.signedCard.fingerprint;
       card = payload.signedCard.contactCard;
@@ -5057,7 +5079,7 @@ chuliIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card?
     if (!fingerprint || !isValidFingerprint(fingerprint)) return { ok: false, error: 'fingerprint-required' };
     return { ok: true, peer: identityStore.recordPeerCard(fingerprint, card || {}, Date.now()) };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -5080,14 +5102,14 @@ chuliIpc(
       const peer = identityStore.recordPeerRotation(d, Date.now());
       return { ok: true, verdict, peer };
     } catch (e) {
-      return { ok: false, error: sanitizeError(e) };
+      return { ok: false, error: xiJingCuoWu(e) };
     }
   },
 );
 
 /** 接收方侧：取某指纹的对端名片视图（旧/新两个字段并列 + 冻结状态） */
 chuliIpc('warmy:identity-peer-contact', (_e, fingerprint: string) =>
-  safeHandle(() => ({ ok: true, peer: fingerprint ? identityStore?.peerContact(fingerprint) ?? null : null }), { ok: true, peer: null }),
+  anQuanChuLi(() => ({ ok: true, peer: fingerprint ? identityStore?.peerContact(fingerprint) ?? null : null }), { ok: true, peer: null }),
 );
 
 /**
@@ -5102,7 +5124,7 @@ chuliIpc('warmy:identity-peer-confirm', (_e, fingerprint: string) => {
     if (!peer) return { ok: false, error: 'unknown-peer' };
     return { ok: true, peer, adopted: !peer.awaitingConfirmation && !peer.pendingCard };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -5112,7 +5134,7 @@ chuliIpc('warmy:identity-peer-confirm', (_e, fingerprint: string) => {
  */
 /** 凭证：当前本机 ID（= 私钥凭证）。界面只展示给本人，复制即备份。 */
 chuliIpc('warmy:credential-info', () =>
-  safeHandle(() => {
+  anQuanChuLi(() => {
     const p = accountStore?.loadProfile?.() as { deviceId?: string } | undefined;
     const pingzheng = String(p?.deviceId || '');
     return { ok: true, credential: pingzheng, valid: credentialModule.isValidCredential(pingzheng), formatted: pingzheng ? credentialModule.formatCredential(pingzheng) : '' };
@@ -5130,7 +5152,7 @@ chuliIpc('warmy:credential-info', () =>
 chuliIpc('warmy:credential-rotate', () => {
   try {
     if (!identityStore || !accountStore) return { ok: false, error: 'identity-unavailable' };
-    const fresh = generateDeviceId();
+    const fresh = shengChengPingzheng();
     const r = identityStore.restoreFromCredential(fresh);
     if (!r.ok) return { ok: false, error: r.error };
     try {
@@ -5146,7 +5168,7 @@ chuliIpc('warmy:credential-rotate', () => {
       backupFile: r.backupFile || null,
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -5164,7 +5186,7 @@ chuliIpc('warmy:credential-restore', (_e, credential: string) => {
     audit?.log('identity.restore.credential', { fingerprint: r.info.fingerprint });
     return { ok: true, identity: r.info, fingerprint: r.info.fingerprint, backupFile: r.backupFile || null };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -5192,7 +5214,7 @@ chuliIpc('warmy:identity-backup-export', (_e, payload: { passphrase?: string; wr
       generation: r.backup.generation,
     };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -5209,7 +5231,7 @@ chuliIpc('warmy:identity-set-passphrase', (_e, payload: { passphrase?: string; c
     const passphrase = payload?.passphrase || '';
     if (!identityStore.exists()) {
       const profile = accountStore?.loadProfile();
-      const yiChuangJian = identityStore.ensureIdentity(profile?.deviceId || generateDeviceId(), { email: profile?.email || '' }, { passphrase });
+      const yiChuangJian = identityStore.ensureIdentity(profile?.deviceId || shengChengPingzheng(), { email: profile?.email || '' }, { passphrase });
       if (!yiChuangJian.ok) return { ok: false, error: yiChuangJian.error };
       return { ok: true, created: yiChuangJian.created, identity: yiChuangJian.info, timeline: identityStore.timeline() };
     }
@@ -5219,7 +5241,7 @@ chuliIpc('warmy:identity-set-passphrase', (_e, payload: { passphrase?: string; c
     if (!r.ok) return { ok: false, error: r.error };
     return { ok: true, created: false, identity: r.info, timeline: identityStore.timeline() };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -5254,7 +5276,7 @@ chuliIpc(
         detail: r.detail ?? '',
       };
     } catch (e) {
-      return { ok: false, error: sanitizeError(e) };
+      return { ok: false, error: xiJingCuoWu(e) };
     }
   },
 );
@@ -5270,12 +5292,12 @@ chuliIpc('warmy:save-voice', async (_e, data: { dataUrl: string; ext?: string })
     fs.writeFileSync(file, Buffer.from(b64, 'base64'));
     return { ok: true, path: file };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 // ── 节点 / 邀请 ──
-chuliIpc('warmy:nodes-list', () => safeHandle(() => ({ ok: true, nodes: nodeReg?.list() || [] }), { ok: true, nodes: [] }))
+chuliIpc('warmy:nodes-list', () => anQuanChuLi(() => ({ ok: true, nodes: nodeReg?.list() || [] }), { ok: true, nodes: [] }))
 chuliIpc('warmy:nodes-pair', (_e, nodeId: string, name: string) => ({
   ok: true,
   node: nodeReg?.pairRemote(nodeId, name),
@@ -5289,11 +5311,11 @@ interface biangengQuerenJilu {
   auditId: string;
 }
 
-function readChangeAcks(): Record<string, biangengQuerenJilu> {
+function duBiangengQueRen(): Record<string, biangengQuerenJilu> {
   return duJsonWenJian<Record<string, biangengQuerenJilu>>(biangengQuerenWenjian, {});
 }
 
-function writeChangeAcks(map: Record<string, biangengQuerenJilu>): { ok: boolean; error?: string } {
+function xieBiangengQueRen(map: Record<string, biangengQuerenJilu>): { ok: boolean; error?: string } {
   return anQuanYuanZiXieJson(biangengQuerenWenjian, map);
 }
 
@@ -5309,15 +5331,15 @@ chuliIpc('warmy:identity-changes', (_e, payload: { scope?: string } = {}) => {
     void payload;
     const changes = buildIdentityChangeEntries(identityStore, {
       now: Date.now(),
-      acks: readChangeAcks(),
+      acks: duBiangengQueRen(),
       // 成员表给了才能把「某个指纹换了证」精确定位到群/项目（scopes）；
       // 拿不到映射时 computeChangeScopes 会如实退回 [{kind:'all'}] 并标 scopeBasis
-      membership: membershipStoreFor(identityStore),
+      membership: quChengYuanMingceCang(identityStore),
       directory: groupStore,
     });
     return { ok: true, changes };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e), changes: [] };
+    return { ok: false, error: xiJingCuoWu(e), changes: [] };
   }
 });
 
@@ -5340,13 +5362,13 @@ chuliIpc('warmy:identity-change-ack', (_e, payload: { changeId?: string; level?:
     const luodi =
       !!last && last.op === 'identity.change.ack' && (last.detail as { auditId?: string } | undefined)?.auditId === auditId;
     if (!luodi) return { ok: false, error: 'audit-write-failed' };
-    const acks = readChangeAcks();
+    const acks = duBiangengQueRen();
     acks[changeId] = { level, at: Date.now(), auditId };
-    const w = writeChangeAcks(acks);
+    const w = xieBiangengQueRen(acks);
     if (!w.ok) return { ok: false, error: 'ack-persist-failed' };
     return { ok: true, auditId };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -5360,11 +5382,11 @@ chuliIpc('warmy:identity-change-ack', (_e, payload: { changeId?: string; level?:
 function expectedIssuerFor(groupId: string): string {
   const fromGroup = groupStore?.getGroup(groupId)?.creatorFingerprint ?? '';
   if (fromGroup) return fromGroup;
-  return membershipStoreFor(identityStore)?.groupState(groupId)?.issuerFingerprint ?? '';
+  return quChengYuanMingceCang(identityStore)?.groupState(groupId)?.issuerFingerprint ?? '';
 }
 
 /** 用本机身份（必须是该群创建者且已解锁）为成员签发证书 */
-async function issueMemberCertForGroup(
+async function weiQunQianFaChengYuanZhengShu(
   groupId: string,
   input: {
     memberFingerprint: string;
@@ -5376,7 +5398,7 @@ async function issueMemberCertForGroup(
     ttlMs?: number;
   }
 ): Promise<{ ok: boolean; code: string; cert?: { certId: string; memberFingerprint: string; expiresAt: number }; detail?: string }> {
-  const membership = membershipStoreFor(identityStore);
+  const membership = quChengYuanMingceCang(identityStore);
   if (!membership || !identityStore) return { ok: false, code: 'identity-missing' };
   const signer = createIdentitySigner(identityStore);
   const expect = expectedIssuerFor(groupId);
@@ -5413,7 +5435,7 @@ async function issueMemberCertForGroup(
 }
 
 /** 把新版吊销列表广播给在线成员（走**已鉴权**通道；失败不重试，与本设计一致） */
-async function broadcastRevocationList(groupId: string, list: unknown): Promise<{ sent: number; failed: number } | null> {
+async function guangBoCheXiaoBiao(groupId: string, list: unknown): Promise<{ sent: number; failed: number } | null> {
   try {
     if (!secureMesh?.enabled) return null;
     const r = await secureMesh.broadcast({
@@ -5425,7 +5447,7 @@ async function broadcastRevocationList(groupId: string, list: unknown): Promise<
     audit?.log('membership.revocation.broadcast', { groupId, sent: r.sent, failed: r.failed });
     return { sent: r.sent, failed: r.failed };
   } catch (e) {
-    audit?.log('membership.revocation.broadcast.failed', { groupId, error: sanitizeError(e) });
+    audit?.log('membership.revocation.broadcast.failed', { groupId, error: xiJingCuoWu(e) });
     return null;
   }
 }
@@ -5436,7 +5458,7 @@ async function broadcastRevocationList(groupId: string, list: unknown): Promise<
  */
 chuliIpc('warmy:membership-receive-cert', (_e, payload: { groupId?: string; cert?: unknown } = {}) => {
   try {
-    const membership = membershipStoreFor(identityStore);
+    const membership = quChengYuanMingceCang(identityStore);
     if (!membership) return { ok: false, code: 'identity-missing' };
     const groupId = String(payload?.groupId || '');
     if (!groupId || !payload?.cert || typeof payload.cert !== 'object') return { ok: false, code: 'malformed' };
@@ -5444,14 +5466,14 @@ chuliIpc('warmy:membership-receive-cert', (_e, payload: { groupId?: string; cert
     const r = membership.putCertificate(payload.cert as never, expect ? { expectIssuerFingerprint: expect } : {});
     return { ok: r.ok, code: r.code, stored: r.stored, certId: r.certId, detail: r.detail ?? '' };
   } catch (e) {
-    return { ok: false, code: 'error', detail: sanitizeError(e) };
+    return { ok: false, code: 'error', detail: xiJingCuoWu(e) };
   }
 });
 
 /** 同步（收到）一份吊销列表：验签 + 单调合并（回滚 / 条目变少一律拒绝） */
 chuliIpc('warmy:membership-sync-revocation', (_e, payload: { groupId?: string; list?: unknown } = {}) => {
   try {
-    const membership = membershipStoreFor(identityStore);
+    const membership = quChengYuanMingceCang(identityStore);
     if (!membership) return { ok: false, code: 'identity-missing' };
     const groupId = String(payload?.groupId || '');
     if (!groupId || !payload?.list || typeof payload.list !== 'object') return { ok: false, code: 'malformed' };
@@ -5466,20 +5488,20 @@ chuliIpc('warmy:membership-sync-revocation', (_e, payload: { groupId?: string; l
       detail: r.detail ?? '',
     };
   } catch (e) {
-    return { ok: false, code: 'error', detail: sanitizeError(e) };
+    return { ok: false, code: 'error', detail: xiJingCuoWu(e) };
   }
 });
 
 /** 成员证书与吊销列表的结构化快照（UI 只读；含本地时钟判定结果） */
 chuliIpc('warmy:membership-list', (_e, payload: { groupId?: string } = {}) => {
   try {
-    const membership = membershipStoreFor(identityStore);
+    const membership = quChengYuanMingceCang(identityStore);
     if (!membership) return { ok: false, schema: 'warmy.membership.file.v1', groups: [] };
     const gid = String(payload?.groupId || '');
-    const snap = membershipSnapshot(membership, gid ? { groupId: gid } : {});
+    const snap = chengYuanKuaiZhao(membership, gid ? { groupId: gid } : {});
     return { ...snap, summary: membership.summary() };
   } catch (e) {
-    return { ok: false, schema: 'warmy.membership.file.v1', groups: [], error: sanitizeError(e) };
+    return { ok: false, schema: 'warmy.membership.file.v1', groups: [], error: xiJingCuoWu(e) };
   }
 });
 
@@ -5490,14 +5512,14 @@ chuliIpc(
     try {
       const fp = String(payload?.fingerprint || '');
       if (!fp) return { ok: false, error: 'fingerprint-required' };
-      const membership = membershipStoreFor(identityStore);
-      const verdict = explainRosterDecision(identityStore, fp, {
+      const membership = quChengYuanMingceCang(identityStore);
+      const verdict = jieshiMingCeJueCe(identityStore, fp, {
         membership,
         ...(payload?.requireCertificate === true ? { requireCertificate: true } : {}),
       });
       return { ok: true, verdict };
     } catch (e) {
-      return { ok: false, error: sanitizeError(e) };
+      return { ok: false, error: xiJingCuoWu(e) };
     }
   }
 );
@@ -5522,7 +5544,7 @@ chuliIpc(
     const memberFingerprint = String(payload?.memberFingerprint || '');
     const memberPublicKey = String(payload?.memberPublicKey || '');
     if (!groupId || !memberFingerprint || !memberPublicKey) return { ok: false, code: 'malformed' };
-    return await issueMemberCertForGroup(groupId, {
+    return await weiQunQianFaChengYuanZhengShu(groupId, {
       memberFingerprint,
       memberPublicKey,
       ...(payload?.displayName ? { displayName: String(payload.displayName) } : {}),
@@ -5552,7 +5574,7 @@ chuliIpc(
     } = {}
   ) => {
     try {
-      const membership = membershipStoreFor(identityStore);
+      const membership = quChengYuanMingceCang(identityStore);
       if (!membership || !identityStore) return { ok: false, code: 'identity-missing' };
       const groupId = String(payload?.groupId || '');
       if (!groupId || !payload?.declaration || typeof payload.declaration !== 'object') {
@@ -5563,7 +5585,7 @@ chuliIpc(
       if (expect && !zhiwenPipei(expect, signer.fingerprint)) {
         return { ok: false, code: 'not-the-creator' };
       }
-      const r = await rotateMemberCertificate({
+      const r = await lunHuanChengYuanZhengShu({
         signer,
         membership,
         groupId,
@@ -5585,7 +5607,7 @@ chuliIpc(
         const dabuding = groupStore.setMemberFingerprint(groupId, member.id, r.cert.memberFingerprint);
         memberPatched = dabuding.ok && dabuding.changed ? member.id : null;
       }
-      void broadcastRevocationList(groupId, r.revocation);
+      void guangBoCheXiaoBiao(groupId, r.revocation);
       audit?.log('membership.cert.rotated', {
         groupId,
         old: r.verification?.oldFingerprint ?? '',
@@ -5607,7 +5629,7 @@ chuliIpc(
         listVersion: r.revocation?.listVersion ?? 0,
       };
     } catch (e) {
-      return { ok: false, code: 'error', detail: sanitizeError(e) };
+      return { ok: false, code: 'error', detail: xiJingCuoWu(e) };
     }
   }
 );
@@ -5617,7 +5639,7 @@ chuliIpc(
   'warmy:membership-revoke',
   async (_e, payload: { groupId?: string; certId?: string; memberFingerprint?: string; reason?: string } = {}) => {
     try {
-      const membership = membershipStoreFor(identityStore);
+      const membership = quChengYuanMingceCang(identityStore);
       if (!membership || !identityStore) return { ok: false, code: 'identity-missing' };
       const groupId = String(payload?.groupId || '');
       const reason = String(payload?.reason || 'admin');
@@ -5640,10 +5662,10 @@ chuliIpc(
         ...(expect ? { expectation: expect } : {}),
       });
       if (!r.ok) return { ok: false, code: r.code, detail: r.detail ?? '' };
-      void broadcastRevocationList(groupId, r.list);
+      void guangBoCheXiaoBiao(groupId, r.list);
       return { ok: true, code: 'ok', certId: cert.certId, listVersion: r.list?.listVersion ?? 0 };
     } catch (e) {
-      return { ok: false, code: 'error', detail: sanitizeError(e) };
+      return { ok: false, code: 'error', detail: xiJingCuoWu(e) };
     }
   }
 );
@@ -5651,9 +5673,9 @@ chuliIpc(
 chuliIpc('warmy:identity-peers', () => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable', peers: [] };
-    return { ok: true, peers: listPeerContactViews(identityStore) };
+    return { ok: true, peers: lieDuiDuanLianXiShiTu(identityStore) };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e), peers: [] };
+    return { ok: false, error: xiJingCuoWu(e), peers: [] };
   }
 });
 
@@ -5685,7 +5707,7 @@ interface RepoGuardRefInput {
  * 写操作门禁：先拿租约，写完释放。拿不到就**不写**，也不假装成功。
  * holder = 本机身份指纹（不同身份/实例互斥）。
  */
-function withLease<T>(  scope: string,
+function daiZuYue<T>(  scope: string,
   paths: string[],
   fn: () => T
 ):
@@ -5721,7 +5743,7 @@ chuliIpc('warmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as R
     let isAncestor: ((a: string, d: string) => boolean | undefined) | undefined;
     const repoDir = payload.repoDir ? String(payload.repoDir) : '';
     if (repoDir) {
-      const git = createGitRunner(repoDir);
+      const git = chuangJianGitYunXingQi(repoDir);
       const probe = git(['rev-parse', '--absolute-git-dir']);
       if (probe.code !== 0) return { ok: false, error: 'not-a-git-repo' };
       if (!knownSha) {
@@ -5738,7 +5760,7 @@ chuliIpc('warmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as R
         return v;
       };
     }
-    const result = validateRefUpdate(ref, oldSha, newSha, {
+    const result = jiaoYanYinYongGengXin(ref, oldSha, newSha, {
       role: payload.role ?? 'member',
       ...(payload.memberId ? { memberId: String(payload.memberId) } : {}),
       ...(knownSha ? { knownSha } : {}),
@@ -5754,18 +5776,18 @@ chuliIpc('warmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as R
     });
     return { ok: true, result, knownSha, usedGit: !!repoDir };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 chuliIpc('warmy:repo-guard-check-paths', (_e, payload: { paths?: Array<string | TuiSongLuJingTiaoMu> | string; base?: 'worktree' | 'gitdir' } = {}) => {
   try {
-    const jiaoyan = validatePushPaths(payload.paths ?? [], {
+    const jiaoyan = jiaoYanTuiSongLuJing(payload.paths ?? [], {
       base: payload.base === 'gitdir' ? 'gitdir' : 'worktree',
     });
     return { ok: true, jiaoyan };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -5774,8 +5796,8 @@ chuliIpc(
   'warmy:repo-guard-pre-receive',
   (_e, payload: { stdin?: string; role?: string; memberId?: string; repoDir?: string; assumeFastForward?: boolean } = {}) => {
     try {
-      const git = createGitRunner(payload.repoDir ? String(payload.repoDir) : undefined);
-      const result: PreReceiveResult = runPreReceive({
+      const git = chuangJianGitYunXingQi(payload.repoDir ? String(payload.repoDir) : undefined);
+      const result: YuXianJieShouJieGuo = yunXingYuXianJieShou({
         git,
         stdin: String(payload.stdin ?? ''),
         role: (payload.role as 'member' | 'admin' | 'creator' | 'duty') ?? 'member',
@@ -5784,7 +5806,7 @@ chuliIpc(
       });
       return { ok: true, result };
     } catch (e) {
-      return { ok: false, error: sanitizeError(e) };
+      return { ok: false, error: xiJingCuoWu(e) };
     }
   }
 );
@@ -5795,9 +5817,9 @@ chuliIpc('warmy:repo-guard-install-hooks', (_e, payload: { repoDir?: string; for
     const repoDir = String(payload.repoDir || '');
     if (!repoDir) return { ok: false, error: 'repo-dir-required' };
     const appRoot = path.join(__dirname, '..');
-    const hookScript = findHookScript(appRoot);
+    const hookScript = chaZhaoGouZiJiaoBen(appRoot);
     if (!hookScript) return { ok: false, error: 'hook-script-not-found', searched: appRoot };
-    const r = installPreReceiveHook({
+    const r = anzhuangYuXianJieShouGouZi({
       repoDir,
       hookScript,
       nodeBin: process.execPath,
@@ -5806,47 +5828,47 @@ chuliIpc('warmy:repo-guard-install-hooks', (_e, payload: { repoDir?: string; for
     audit?.log('repo.hook.install', { ok: r.ok, error: r.error, alreadyInstalled: r.alreadyInstalled === true });
     return { ...r, script: hookScript };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 chuliIpc('warmy:repo-guard-status', () =>
-  safeHandle(
+  anQuanChuLi(
     () => ({
       ok: true,
-      hookScript: findHookScript(path.join(__dirname, '..')),
+      hookScript: chaZhaoGouZiJiaoBen(path.join(__dirname, '..')),
       leaseStats: leases?.stats() ?? null,
       mesh: secureMesh?.diagnostics() ?? null,
-      netDir: ensureNetDir(app.getPath('userData')).ok,
+      netDir: baoZhangWangLuoMuLu(app.getPath('userData')).ok,
     }),
     { ok: false, hookScript: null, leaseStats: null, mesh: null, netDir: false }
   )
 );
 
-chuliIpc('warmy:lease-acquire', (_e, req: AcquireRequest = {} as AcquireRequest) => {
+chuliIpc('warmy:lease-acquire', (_e, req: HuoQuQingQiu = {} as HuoQuQingQiu) => {
   try {
     if (!leases) return { ok: false, error: { code: 'no-registry', reason: 'lease-registry-unavailable' }, leases: [] };
     const r = leases.acquire({ ...req, holder: req.holder || leaseHolder() });
     if (r.ok) audit?.log('lease.acquire', { scope: r.lease?.scope, holder: r.lease?.holder, kind: r.lease?.kind });
     return { ...r, leases: leases.list() };
   } catch (e) {
-    return { ok: false, error: { code: 'invalid-request', reason: sanitizeError(e) }, leases: [] };
+    return { ok: false, error: { code: 'invalid-request', reason: xiJingCuoWu(e) }, leases: [] };
   }
 });
 
-chuliIpc('warmy:lease-release', (_e, req: LeaseRefRequest = {} as LeaseRefRequest) => {
+chuliIpc('warmy:lease-release', (_e, req: ZuYueYinYongQingQiu = {} as ZuYueYinYongQingQiu) => {
   try {
     if (!leases) return { ok: false, released: false, error: { code: 'no-registry', reason: 'lease-registry-unavailable' } };
     const r = leases.release({ ...req, ...(req.holder || req.leaseId ? {} : { holder: leaseHolder() }) });
     if (r.released) audit?.log('lease.release', { leaseId: r.lease?.id, scope: r.lease?.scope });
     return { ...r, leases: leases.list() };
   } catch (e) {
-    return { ok: false, released: false, error: { code: 'invalid-request', reason: sanitizeError(e) } };
+    return { ok: false, released: false, error: { code: 'invalid-request', reason: xiJingCuoWu(e) } };
   }
 });
 
 chuliIpc('warmy:lease-list', () =>
-  safeHandle(
+  anQuanChuLi(
     () => ({
       ok: true,
       holder: leaseHolder(),
@@ -5866,16 +5888,16 @@ chuliIpc('warmy:lease-check', (_e, payload: { holder?: string; path?: string; pa
     const results = list.map((p) => leases!.checkWrite(holder, p));
     return { ok: results.every((r) => r.allowed), holder, results, holders: list.map((p) => leases!.holdersOf(p)) };
   } catch (e) {
-    return { ok: false, errorCode: sanitizeError(e), results: [] };
+    return { ok: false, errorCode: xiJingCuoWu(e), results: [] };
   }
 });
 chuliIpc('warmy:nodes-revoke', (_e, nodeId: string) => {
   try {
     nodeReg?.revoke(nodeId);
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:invite-create', (_e, groupId?: string) => safeHandle(() => ({ ok: true, invite: chuangjianYaoQing(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
+chuliIpc('warmy:invite-create', (_e, groupId?: string) => anQuanChuLi(() => ({ ok: true, invite: chuangjianYaoQing(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
 chuliIpc('warmy:invite-use', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
   ok: shiYongYaoQing(tok),
 }));
@@ -5883,7 +5905,7 @@ chuliIpc('warmy:sync-publish', (_e, env: { fromNode: string; toNode: string; cha
   ok: true,
   envelope: syncBus?.publish(env as never),
 }));
-chuliIpc('warmy:sync-pull', (_e, nodeId: string) => safeHandle(() => ({ ok: true, messages: syncBus?.pull(nodeId) || [] }), { ok: true, messages: [] }))
+chuliIpc('warmy:sync-pull', (_e, nodeId: string) => anQuanChuLi(() => ({ ok: true, messages: syncBus?.pull(nodeId) || [] }), { ok: true, messages: [] }))
 
 // ── dsh 实例入口（可选） ──
 chuliIpc('warmy:dsh-available', () => {
@@ -5893,7 +5915,7 @@ chuliIpc('warmy:dsh-available', () => {
       path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
     ]);
     return { ok: !!dir, dir: dir || null };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: string }) => {
@@ -5929,14 +5951,14 @@ chuliIpc('warmy:email-queue', (_e, mail: { to: string; subject: string; body: st
   try {
     emailQueue.push({ ...mail, ts: Date.now() });
     return { ok: true, pending: emailQueue.length };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:email-list', () => safeHandle(() => ({ ok: true, items: emailQueue }), { ok: true, items: [] }))
+chuliIpc('warmy:email-list', () => anQuanChuLi(() => ({ ok: true, items: emailQueue }), { ok: true, items: [] }))
 
 // ── SMTP 验证（用户设置，非写死） ──
 chuliIpc('warmy:smtp-verify', async (_e, cfg: SmtpPeizhi & { id?: string }) => {
   try {
-    const r = await verifySmtp(cfg);
+    const r = await yanZhengSmtp(cfg);
     if (r.ok && cfg.id && settingsStore) {
       const s = settingsStore.load();
       const acc = (s.smtpAccounts || []).find((a) => a.id === cfg.id);
@@ -5947,7 +5969,7 @@ chuliIpc('warmy:smtp-verify', async (_e, cfg: SmtpPeizhi & { id?: string }) => {
       }
     }
     return r;
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:smtp-list', () => {
@@ -5958,7 +5980,7 @@ chuliIpc('warmy:smtp-list', () => {
       pass: a.pass ? '••••••••' : '',
     }));
     return { ok: true, accounts, max: 10 };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:smtp-add', (_e, acc: { label: string; host: string; port: number; secure: boolean; user: string; pass: string }) => {
@@ -5978,7 +6000,7 @@ chuliIpc('warmy:smtp-add', (_e, acc: { label: string; host: string; port: number
     list.push(full);
     settingsStore!.save({ smtpAccounts: list });
     return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })), max: 10 };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:smtp-remove', (_e, id: string) => {
@@ -5987,7 +6009,7 @@ chuliIpc('warmy:smtp-remove', (_e, id: string) => {
     const list = (s.smtpAccounts || []).filter((a) => a.id !== id);
     settingsStore!.save({ smtpAccounts: list });
     return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; host: string; port: number; secure: boolean; user: string; pass: string }>) => {
@@ -5999,7 +6021,7 @@ chuliIpc('warmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; h
     Object.assign(acc, patch);
     settingsStore!.save({ smtpAccounts: list });
     return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 组网：**鉴权通道**（取代原 lan.ts / mesh.ts 的明文 JSONL TCP） ──
@@ -6045,7 +6067,7 @@ function leaseHolder(): string {
  * （`error` 字段）并**保持 requestedPort 不变** —— 不自动换端口、不改设置。
  * 用户由界面引导自己选（见 settings-store 的 WARMY_SUGGESTED_NET_PORTS）。
  */
-async function startSecureMesh(port: number, opts: { discovery?: boolean; announce?: boolean } = {}) {
+async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean; announce?: boolean } = {}) {
   refreshLocalNodeId();
   if (!secureMesh) {
     fachuKongzhitai({ cat: 'net', code: 'net.unavailable' });
@@ -6079,11 +6101,11 @@ async function startSecureMesh(port: number, opts: { discovery?: boolean; announ
 
 chuliIpc('warmy:lan-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   try {
-    const r = await startSecureMesh(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: false, announce: false });
+    const r = await qiDongAnQuanWangZhuang(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: false, announce: false });
     if (!r.ok) return r;
     return { ok: true, port: r.port, requestedPort: r.requestedPort, bind: r.bind, nodeId: r.nodeId };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6093,7 +6115,7 @@ chuliIpc('warmy:lan-stop', async () => {
     fachuKongzhitai({ cat: 'net', code: 'net.disable', data: { reason: 'lan-stop' } });
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6127,15 +6149,15 @@ chuliIpc(
         { ...(msg.fingerprint ? { pin: String(msg.fingerprint) } : {}) }
       );
     } catch (e) {
-      return { ok: false, error: sanitizeError(e) };
+      return { ok: false, error: xiJingCuoWu(e) };
     }
   }
 );
 
-chuliIpc('warmy:lan-inbox', () => safeHandle(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
+chuliIpc('warmy:lan-inbox', () => anQuanChuLi(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
 
 chuliIpc('warmy:lan-status', () =>
-  safeHandle(
+  anQuanChuLi(
     () => ({
       ok: true,
       listening: !!secureMesh?.enabled,
@@ -6164,7 +6186,7 @@ chuliIpc('warmy:lan-dual-smoke', async (_e, opts: { localPort?: number; peerHost
       serverPort: 0,
       loopbackOk: false,
       peerOk: false,
-      peerError: sanitizeError(e),
+      peerError: xiJingCuoWu(e),
       secure: { handshakeOk: false, ephemeral: true as const, peerFingerprint: '' },
     };
   }
@@ -6173,11 +6195,11 @@ chuliIpc('warmy:lan-dual-smoke', async (_e, opts: { localPort?: number; peerHost
 // ── 多节点 mesh（同样走鉴权通道；UDP 只做地址发现，不传业务数据） ──
 chuliIpc('warmy:mesh-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   try {
-    const r = await startSecureMesh(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: true, announce: true });
+    const r = await qiDongAnQuanWangZhuang(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: true, announce: true });
     if (!r.ok) return r;
     return { ok: true, port: r.port, requestedPort: r.requestedPort, bind: r.bind, nodeId: r.nodeId, notes: NET_NOTES };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6187,7 +6209,7 @@ chuliIpc('warmy:mesh-stop', async () => {
     fachuKongzhitai({ cat: 'net', code: 'net.disable', data: { reason: 'mesh-stop' } });
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6210,7 +6232,7 @@ chuliIpc('warmy:peers-remove', (_e, nodeId: string) => {
   try {
     peerReg?.revoke(nodeId);
     return { ok: true, peers: peerReg?.list() || [] };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) => {
@@ -6223,13 +6245,13 @@ chuliIpc('warmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) 
       payload,
     });
     return { ok: true, sent: r.sent, failed: r.failed, errors: r.errors };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:mesh-inbox', () => safeHandle(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
+chuliIpc('warmy:mesh-inbox', () => anQuanChuLi(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
 
 chuliIpc('warmy:mesh-status', () =>
-  safeHandle(
+  anQuanChuLi(
     () => ({
       ok: true,
       listening: !!secureMesh?.enabled,
@@ -6263,7 +6285,7 @@ chuliIpc('warmy:mesh-status', () =>
 let netReachCache: { at: number; value: KedaxingTishi | null } = { at: 0, value: null };
 const NET_REACH_TTL_MS = 20_000;
 
-async function netReachabilityCached(): Promise<KedaxingTishi | null> {
+async function wangLuoKeDaXingHuanCun(): Promise<KedaxingTishi | null> {
   const now = Date.now();
   if (now - netReachCache.at < NET_REACH_TTL_MS) return netReachCache.value;
   let value: KedaxingTishi | null = null;
@@ -6286,33 +6308,33 @@ chuliIpc('warmy:net-status', async () => {
     ok: true,
     meshEnabled: false,
     link: { reachable: false, lastError: 'net-unavailable', peers: [] },
-    unlock: identityStore ? requireSignableIdentity(identityStore).unlock ?? null : null,
+    unlock: identityStore ? yaoQiuKeQianMingShenFen(identityStore).unlock ?? null : null,
   };
-  return await safeHandleAsync<WangzhuangZhuangtaiJieguo>(async () => {
+  return await anQuanChuLiYiBu<WangzhuangZhuangtaiJieguo>(async () => {
     const base = (await secureMesh?.status()) ?? fallback;
     // status() 里的 reachability 是**同步且刻意保守**的（needsPublicRelayNotice 恒 false）。
     // 终态能力在异步的 reachabilityFor() 里，必须在这里合并出去，否则 UI 的终态横幅
     // 在真实应用里永远不会出现（只有异步路径才敢说"两端都拨不进来、而且没有中继"）。
-    const dada = await netReachabilityCached();
+    const dada = await wangLuoKeDaXingHuanCun();
     return dada ? { ...base, reachability: dada } : base;
   }, fallback);
 });
 
 chuliIpc('warmy:net-probe', async (_e, input: { ip?: string; port?: number; domains?: string[] } = {}) => {
   try {
-    return await probeNet({
+    return await tanCeWangLuo({
       ip: String(input.ip ?? ''),
       port: Number(input.port),
       ...(Array.isArray(input.domains) ? { domains: input.domains.map(String) } : {}),
     });
   } catch (e) {
-    return { ok: false, isPublic: false, outboundOk: false, errorCode: sanitizeError(e), inboundVerified: false as const };
+    return { ok: false, isPublic: false, outboundOk: false, errorCode: xiJingCuoWu(e), inboundVerified: false as const };
   }
 });
 
 chuliIpc('warmy:net-local-address', async () => {
   const port = secureMesh?.enabled ? secureMesh.boundPort : undefined;
-  return await safeHandleAsync(
+  return await anQuanChuLiYiBu(
     async () => await benjiDizhiXinxi(port ? { port } : {}),
     { ok: true, localIp: '127.0.0.1', interfaces: [], hasPublicInterface: false, behindNat: true }
   );
@@ -6340,19 +6362,19 @@ chuliIpc('warmy:net-members-presence', (_e, payload: { groupId?: string } = {}) 
       members: rows,
     };
   } catch (e) {
-    return { ok: false, meshEnabled: false, members: [], error: sanitizeError(e) };
+    return { ok: false, meshEnabled: false, members: [], error: xiJingCuoWu(e) };
   }
 });
 
 chuliIpc('warmy:net-mesh-enable', async (_e, input: { ip?: string; port?: number; domains?: string[]; publicAddresses?: string[] } = {}) => {
   try {
     const port = Number(input.port) || WARMY_DEFAULT_NET_PORT;
-    const r = await startSecureMesh(port, { discovery: true, announce: true });
+    const r = await qiDongAnQuanWangZhuang(port, { discovery: true, announce: true });
     return r.ok
       ? { ok: true, port: r.port, requestedPort: r.requestedPort, bind: r.bind, nodeId: r.nodeId, errorCode: r.errorCode }
       : r;
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6371,7 +6393,7 @@ chuliIpc('warmy:net-port-candidates', async (_e, input: { requestedPort?: number
     const requestedPort = Number(input.requestedPort);
     return {
       ok: true,
-      ...(await pickPortCandidates({
+      ...(await xuanDuanKouHouXuan({
         ...(Number.isInteger(requestedPort) && requestedPort > 0 ? { requestedPort } : {}),
         ...(Number.isFinite(Number(input.want)) ? { want: Number(input.want) } : {}),
       })),
@@ -6379,7 +6401,7 @@ chuliIpc('warmy:net-port-candidates', async (_e, input: { requestedPort?: number
   } catch (e) {
     return {
       ok: false,
-      error: sanitizeError(e),
+      error: xiJingCuoWu(e),
       requestedPort: Number(input.requestedPort) || 0,
       recommended: [],
       probed: [],
@@ -6398,7 +6420,7 @@ chuliIpc('warmy:net-mesh-disable', async () => {
     fachuKongzhitai({ cat: 'net', code: 'net.disable', data: { reason: 'net-mesh-disable' } });
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6407,21 +6429,21 @@ chuliIpc('warmy:net-mesh-announce', async (_e, reason: 'startup' | 'address-chan
     if (!secureMesh?.enabled) return { ok: false, errorCode: 'mesh-disabled' };
     return await secureMesh.announce(reason);
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 // ── 窗口控制（自定义标题栏） ──
-chuliIpc('warmy:win-minimize', () => safeHandle(() => win?.minimize(), null))
+chuliIpc('warmy:win-minimize', () => anQuanChuLi(() => win?.minimize(), null))
 chuliIpc('warmy:win-maximize', () => {
   try {
     if (!win) return;
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 // 窗口按钮：作用于**发送 IPC 的那个窗口**（独立会话窗点关闭只关自己，不关主界面）
-chuliIpc('warmy:win-close', (e) => safeHandle(() => {
+chuliIpc('warmy:win-close', (e) => anQuanChuLi(() => {
   const sender = BrowserWindow.fromWebContents(e.sender);
   if (sender && !sender.isDestroyed()) {
     if (win && sender.id === win.id) {
@@ -6436,12 +6458,12 @@ chuliIpc('warmy:win-close', (e) => safeHandle(() => {
   win?.close();
   return true;
 }, null));
-chuliIpc('warmy:win-minimize', (e) => safeHandle(() => {
+chuliIpc('warmy:win-minimize', (e) => anQuanChuLi(() => {
   const sender = BrowserWindow.fromWebContents(e.sender) || win;
   sender?.minimize();
   return true;
 }, null));
-chuliIpc('warmy:win-maximize', (e) => safeHandle(() => {
+chuliIpc('warmy:win-maximize', (e) => anQuanChuLi(() => {
   const sender = BrowserWindow.fromWebContents(e.sender) || win;
   if (!sender) return false;
   if (sender.isMaximized()) sender.unmaximize();
@@ -6456,7 +6478,7 @@ chuliIpc('warmy:win-reload', () => {
     huihua.clearCache().catch(() => {});
     win.webContents.reloadIgnoringCache();
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:win-always-on-top', (_e, on?: boolean) => {
   try {
@@ -6464,7 +6486,7 @@ chuliIpc('warmy:win-always-on-top', (_e, on?: boolean) => {
     const next = typeof on === 'boolean' ? on : !win.isAlwaysOnTop();
     win.setAlwaysOnTop(next);
     return { ok: true, alwaysOnTop: next };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:platform', () => ({
   ok: true,
@@ -6496,7 +6518,7 @@ chuliIpc('warmy:executor-run', async (_e, task: { taskId?: string; brief: string
       }
     );
     return { ok: !r.error, ...r };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
@@ -6505,7 +6527,7 @@ chuliIpc('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brie
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       return { ok: false, error: 'no key' };
     }
-    const rs = await runExecutors(
+    const rs = await yunXingZhiXingQiJi(
       tasks.map((t) => ({ taskId: t.taskId || 'x-' + Date.now(), brief: t.brief, contextItems: t.contextItems || [] })),
       {
         presetId: providerCfg.presetId,
@@ -6515,7 +6537,7 @@ chuliIpc('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brie
       }
     );
     return { ok: true, results: rs };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── P7 资产治理 ──
@@ -6528,17 +6550,17 @@ chuliIpc('warmy:assets-register', (_e, a: { id: string; title: string; body: str
   try {
     zhuCeLiaoTianZiChan({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:assets-feedback', (_e, id: string, good: boolean) => {
   try {
     jiLuZiChanShiYong(id, good);
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:assets-sweep', () => safeHandle(() => ({ ok: true, n: 0 }), { ok: true, n: 0 }))
+chuliIpc('warmy:assets-sweep', () => anQuanChuLi(() => ({ ok: true, n: 0 }), { ok: true, n: 0 }))
 
 // ── P6 知识库：从对话写入 ──
 chuliIpc('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
@@ -6566,7 +6588,7 @@ chuliIpc('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string;
       scope: 'session',
     });
     return { ok: true, eventId: evId };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 
@@ -6586,7 +6608,7 @@ chuliIpc('warmy:request-approval', (_e, req: { action: string; suggested?: strin
         }
       }, 30000);
     });
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:approval-respond', (_e, id: string, allowed: boolean, scope: string) => {
@@ -6596,7 +6618,7 @@ chuliIpc('warmy:approval-respond', (_e, id: string, allowed: boolean, scope: str
     dengdaiPizhun.delete(id);
     p.resolve({ allowed, scope });
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 4 自动检查点 ──
@@ -6611,7 +6633,7 @@ chuliIpc('warmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logSe
       jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined,
     });
     return { ok: true, checkpoint: cp, list: checkpoints.list() };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 6 成本仪表盘 ──
@@ -6628,7 +6650,7 @@ chuliIpc('warmy:cost-summary', () => {
       avgDurationMs: m.avgDurationMs,
       estCostCny: +estCost.toFixed(4),
     };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 1 值班编排闭环 ──
@@ -6764,7 +6786,7 @@ chuliIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: 
 
 // ── C. 执行者状态 ──
 const executorStatus: Array<{ id: string; name: string; taskId: string; brief: string; status: string; durationMs: number; ts: number }> = [];
-chuliIpc('warmy:executors-status', () => safeHandle(() => ({ ok: true, items: executorStatus.slice(-10) }), { ok: true, items: [] }))
+chuliIpc('warmy:executors-status', () => anQuanChuLi(() => ({ ok: true, items: executorStatus.slice(-10) }), { ok: true, items: [] }))
 chuliIpc('warmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
   try {
     const ids = payload.executorIds?.length
@@ -6785,7 +6807,7 @@ chuliIpc('warmy:executors-run-brief', async (_e, payload: { brief: string; conte
       })
     );
     return { ok: true, results };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 
@@ -6797,13 +6819,13 @@ chuliIpc('warmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unkn
     const next = { ...cur, ...state } as never;
     settingsStore.save(next as never);
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:state-load', () => {
   try {
     const s = settingsStore?.load() as never;
     return { ok: true, state: s || {} };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 
@@ -6815,7 +6837,7 @@ chuliIpc('warmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: string
     const removed = payload?.kind === 'event' ? knowledge.removeEvent(payload.id) : knowledge.removeEntity(payload.id);
     return { ok: removed };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6831,7 +6853,7 @@ chuliIpc('warmy:save-text', async (_e, payload: { defaultName?: string; content:
     fs.writeFileSync(r.filePath, String(payload?.content ?? ''), 'utf8');
     return { ok: true, path: r.filePath };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6858,7 +6880,7 @@ chuliIpc('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: st
     const data = (await res.json()) as { text?: string };
     return { ok: true, text: data.text || '' };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6913,7 +6935,7 @@ chuliIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; ki
     w.on('closed', () => chatWindows.delete(payload.id));
     chatWindows.set(payload.id, w);
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── I. 全局热键 ──
@@ -6928,7 +6950,7 @@ chuliIpc('warmy:register-hotkey', (_e, accel: string) => {
     });
     return { ok };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6958,7 +6980,7 @@ function chuangjianTuopan() {
   t.setContextMenu(Menu.buildFromTemplate([
     { label: tuopanGuanGongzuoBiaoqian, click: () => { tuichuYingyong('tray-off-work'); } },
   ]));
-  t.on('double-click', () => { focusMainWindowCentered(); });
+  t.on('double-click', () => { zhuJiaoZhuChuangKouJuZhong(); });
   tray = t;
 }
 chuliIpc('warmy:tray-init', () => {
@@ -6966,7 +6988,7 @@ chuliIpc('warmy:tray-init', () => {
     chuangjianTuopan();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6986,7 +7008,7 @@ chuliIpc('warmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?:
     if (p.me) exportMeLabel = String(p.me);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -6995,7 +7017,7 @@ chuliIpc('warmy:export-session', (_e, payload: { title: string; messages: Array<
   try {
     const dir = path.join(app.getPath('userData'), 'exports');
     // 写操作门禁：导出目录是共享产物，先拿租约再写
-    const guarded = withLease('exports', ['exports'], () => {
+    const guarded = daiZuYue('exports', ['exports'], () => {
       fs.mkdirSync(dir, { recursive: true });
       const lines = [
         '# ' + payload.title,
@@ -7020,26 +7042,26 @@ chuliIpc('warmy:export-session', (_e, payload: { title: string; messages: Array<
     }
     return { ok: true, path: guarded.value };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 // ── L. 自动更新（真实查询 + 真实下载校验；自动安装未实现，明确标记） ──
 chuliIpc('warmy:auto-update-check', async () =>
-  safeHandleAsync<UpdateCheckResult>(
-    async () => (updater ? await updater.check() : updaterUnavailableCheck(yingyongBanben())),
-    updaterUnavailableCheck(yingyongBanben())
+  anQuanChuLiYiBu<GengXinJianChaJieGuo>(
+    async () => (updater ? await updater.check() : gengXinqiBuKeYongJianCha(yingyongBanben())),
+    gengXinqiBuKeYongJianCha(yingyongBanben())
   )
 );
 chuliIpc('warmy:auto-update-download', async () =>
-  safeHandleAsync<UpdateDownloadResult>(
-    async () => (updater ? await updater.download() : updaterUnavailableDownload(yingyongBanben())),
-    updaterUnavailableDownload(yingyongBanben())
+  anQuanChuLiYiBu<GengXinXiaZaiJieGuo>(
+    async () => (updater ? await updater.download() : gengXinqiBuKeYongXiaZai(yingyongBanben())),
+    gengXinqiBuKeYongXiaZai(yingyongBanben())
   )
 );
 
 // ── L2. 更新源配置（写入 settings.json 的 updateFeedUrl / updateChannel） ──
-function updateSourceSnapshot(): UpdateSourceInfo & { ok: boolean } {
+function updateSourceSnapshot(): GengXinYuanXinXi & { ok: boolean } {
   const info = updater?.getSourceInfo();
   if (info) return { ok: true, ...info };
   return {
@@ -7052,7 +7074,7 @@ function updateSourceSnapshot(): UpdateSourceInfo & { ok: boolean } {
     error: 'updater unavailable',
   };
 }
-chuliIpc('warmy:update-source-get', () => safeHandle(() => updateSourceSnapshot(), updateSourceSnapshot()));
+chuliIpc('warmy:update-source-get', () => anQuanChuLi(() => updateSourceSnapshot(), updateSourceSnapshot()));
 chuliIpc('warmy:update-source-set', (_e, payload: { url?: string; channel?: string }) => {
   try {
     if (!settingsStore) return { ok: false, error: 'settings not ready' };
@@ -7078,7 +7100,7 @@ chuliIpc('warmy:update-source-set', (_e, payload: { url?: string; channel?: stri
 
 // ── M. 群成员管理（真实持久化：userData/groups.json） ──
 chuliIpc('warmy:group-members', (_e, groupId: string) =>
-  safeHandle<GroupMembersResult & { localIsCreator?: boolean }>(
+  anQuanChuLi<QunChengYuanJieGuo & { localIsCreator?: boolean }>(
     () => {
       const gid = String(groupId || '');
       if (!groupStore) return { ok: false, groupId: gid, members: [], error: 'group store unavailable' };
@@ -7133,7 +7155,7 @@ chuliIpc(
         members: r.members,
       };
       if (fp && pub) {
-        const issued = await issueMemberCertForGroup(gid, {
+        const issued = await weiQunQianFaChengYuanZhengShu(gid, {
           memberFingerprint: fp,
           memberPublicKey: pub,
           displayName: String(payload?.displayName || payload?.name || ''),
@@ -7167,7 +7189,7 @@ chuliIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: st
     audit?.log('group.kick', { groupId: gid });
     let revoked: { certId: string; listVersion: number } | null = null;
     let revokeError: string | null = null;
-    const membership = membershipStoreFor(identityStore);
+    const membership = quChengYuanMingceCang(identityStore);
     const targetFp = before?.fingerprint ?? '';
     if (membership && targetFp) {
       const cert = membership.certificateForFingerprint(gid, targetFp);
@@ -7188,7 +7210,7 @@ chuliIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: st
         if (rv.ok && rv.list) {
           revoked = { certId: cert.certId, listVersion: rv.list.listVersion };
           audit?.log('membership.revoked', { groupId: gid, certId: cert.certId, reason: 'departed' });
-          void broadcastRevocationList(gid, rv.list);
+          void guangBoCheXiaoBiao(gid, rv.list);
         } else {
           revokeError = String(rv.code);
         }
@@ -7262,7 +7284,7 @@ chuliIpc('warmy:ccr-tool-output', (_e, payload: { toolName?: string; content: st
     const r = ccr.beforeLog({ kind: 'tool_result', content: payload.content, toolName: payload.toolName });
     metrics.recordCcr({ ts: Date.now(), kind: 'tool_result', originalBytes: r.originalBytes, compressedBytes: r.compressedBytes });
     return { ok: true, ...r };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 
@@ -7275,12 +7297,12 @@ chuliIpc('warmy:kb-detail', (_e, q: string) => {
       entities: r.entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, attrs: e.attrs, eventIds: e.eventIds })),
       events: r.events.map((e) => ({ id: e.id, title: e.title, result: e.result, ts: e.ts, entityIds: e.entityIds })),
     };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 
 // ── Q. 错误提示 ──
-chuliIpc('warmy:last-error', () => safeHandle(() => ({ ok: true, error: lastError }), { ok: true, error: null }))
+chuliIpc('warmy:last-error', () => anQuanChuLi(() => ({ ok: true, error: lastError }), { ok: true, error: null }))
 chuliIpc('warmy:clear-error', () => { lastError = null; return { ok: true }; });
 
 
@@ -7294,7 +7316,7 @@ chuliIpc('warmy:project-memory-get', (_e, payload?: { sessionId?: string }) => {
     const memory = readProjectMemory(groupStore, gid);
     return { ok: true, groupId: gid, memory, chars: memory.length };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:project-memory-set', async (_e, payload?: { sessionId?: string; memory?: string }) => {
@@ -7304,15 +7326,15 @@ chuliIpc('warmy:project-memory-set', async (_e, payload?: { sessionId?: string; 
     const w = writeProjectMemory(groupStore, gid, jiYi);
     if (!w.ok) return { ok: false, error: w.error };
     // read-back：从存储读回再确认
-    const rb = await withReadBack(
+    const rb = await daiHuiDuYanZheng(
       () => jiYi,
       () => readProjectMemory(groupStore, gid),
       (saved, back) => String(saved).slice(0, 8000) === String(back).slice(0, 8000)
     );
-    void publishProjectAttrs(gid);
+    void faBuXiangMuShuXing(gid);
     return { ok: rb.confident, saved: w.chars, memory: rb.readBack || '', readBack: rb.match, error: rb.error };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -7329,14 +7351,14 @@ chuliIpc('warmy:ai-question-open', (_e, payload?: { groupId?: string; sessionId?
     fachuKongzhitai({ cat: 'system', code: 'ai.question.open', data: { id: q.id, groupId: q.groupId, title: q.title } });
     return { ok: true, question: q };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:ai-question-list', (_e, groupId?: string) => {
   try {
     return { ok: true, items: aiQuestions.list(typeof groupId === 'string' ? groupId : undefined) };
   } catch (e) {
-    return { ok: false, items: [], error: sanitizeError(e) };
+    return { ok: false, items: [], error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:ai-question-answer', (_e, payload?: { id?: string; optionId?: string; customText?: string }) => {
@@ -7344,7 +7366,7 @@ chuliIpc('warmy:ai-question-answer', (_e, payload?: { id?: string; optionId?: st
     const r = aiQuestions.answer(String(payload?.id || ''), String(payload?.optionId || AI_QUESTION_CUSTOM), payload?.customText);
     return r;
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -7385,7 +7407,7 @@ async function yunxingXiangmuMenjinYici(groupId: string, reason: string): Promis
     groupStore?.setProjectAttrs(groupId, { gateLast: { at: now, pass: allPass, summary: lines.join(' ; ') } });
     return { pass: allPass, summary: lines.join(' ; ') || 'no gates' };
   } catch (e) {
-    return { pass: false, summary: sanitizeError(e) };
+    return { pass: false, summary: xiJingCuoWu(e) };
   }
 }
 
@@ -7393,17 +7415,17 @@ async function yunxingXiangmuMenjinYici(groupId: string, reason: string): Promis
 const _skillsScanSet = chuliIpc;
 chuliIpc('warmy:skills-scan-dirs-set', (_e, dirs: unknown) => {
   const raw = Array.isArray(dirs) ? dirs.map((d) => String(d || '').trim()).filter(Boolean) : [];
-  const { list, removed } = dedupeByNorm(raw, guifanLujingMiyao);
+  const { list, removed } = anGuiFanHuaQuChong(raw, guiFanLuJingMiyao);
   if (list.length > SKILL_SCAN_DIRS_MAX) {
     return { ok: false, error: 'too-many-dirs', max: SKILL_SCAN_DIRS_MAX, count: list.length };
   }
   try {
     const next = settingsStore?.save({ skillScanDirs: list } as never);
     const readBack = ((next as any)?.skillScanDirs || []) as string[];
-    const match = readBack.length === list.length && list.every((x, i) => guifanLujingMiyao(readBack[i]) === guifanLujingMiyao(x));
+    const match = readBack.length === list.length && list.every((x, i) => guiFanLuJingMiyao(readBack[i]) === guiFanLuJingMiyao(x));
     return { ok: true, dirs: list, scanDirs: jinengSaomiaoZhuangtai(list), settings: next, removedDups: removed, readBack: match, confident: match };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -7417,7 +7439,7 @@ chuliIpc('warmy:update-source-set', async (_e, payload?: { url?: string }) => {
     const match = readBack === url;
     return { ok: true, configured: !!url, url: readBack, origin: url ? 'settings' : 'none', readBack: match, confident: match };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -7428,7 +7450,7 @@ chuliIpc('warmy:setup-state', () => {
     const s = settingsStore?.load() as Record<string, unknown> | undefined;
     // 首次运行/安装后首启：setupDone 非 true 一律弹语言选择
     return { ok: true, done: (s as { setupDone?: boolean })?.setupDone === true, locale: s?.locale || app.getLocale() };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
   try {
@@ -7445,7 +7467,7 @@ chuliIpc('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Rec
     const cur = settingsStore?.load() as unknown as Record<string, unknown>;
     settingsStore?.save({ ...cur, setupDone: true } as never);
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 /** Skill enable/pause flags (default enabled when key missing) */
@@ -7466,13 +7488,13 @@ chuliIpc('warmy:skills-set-enabled', (_e, payload: { id?: string; enabled?: bool
     settingsStore?.save({ skillEnabled: map } as never);
     return { ok: true, id, enabled: map[id] };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 // patch skills-list to include enabled flag
 const _skillsListHandler = async () => {
   const skills: Array<Record<string, unknown>> = [];
-  const saoMiaoMuluZhuangtai = jinengSaomiaoZhuangtai(loadSkillScanDirs());
+  const saoMiaoMuluZhuangtai = jinengSaomiaoZhuangtai(jiaZaiJinengSaomiaoLuJing());
   const QiYongBiao = jinengQiyongYingShe();
   for (const { root, source } of jinengGen()) {
     if (!fs.existsSync(root)) continue;
@@ -7510,7 +7532,7 @@ chuliIpc('warmy:search-messages', async (_e, q: string) => {
     const r = await memory?.recall(q, 20);
     return { ok: true, hits: r?.cards || [] };
   } catch (e) {
-    return { ok: false, hits: [], error: sanitizeError(e) };
+    return { ok: false, hits: [], error: xiJingCuoWu(e) };
   }
 });
 
@@ -7533,7 +7555,7 @@ chuliIpc('warmy:plugin-install', (_e, pkg: string) => {
     fs.writeFileSync(BaoJson, JSON.stringify(xiangMuPeiZhi, null, 2));
     return { ok: true, profileDir, pkg };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:plugin-uninstall', (_e, pkg: string) => {
@@ -7547,19 +7569,19 @@ chuliIpc('warmy:plugin-uninstall', (_e, pkg: string) => {
     }
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 
 // ── X. 归档列表 ──
 const archived: Array<{ id: string; name: string; kind: string; ts: number }> = [];
-chuliIpc('warmy:archived-list', () => safeHandle(() => ({ ok: true, items: archived }), { ok: true, items: [] }))
+chuliIpc('warmy:archived-list', () => anQuanChuLi(() => ({ ok: true, items: archived }), { ok: true, items: [] }))
 chuliIpc('warmy:archived-add', (_e, payload: { id: string; name: string; kind: string }) => {
   try {
     archived.push({ ...payload, ts: Date.now() });
     return { ok: true, items: archived };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:archived-restore', (_e, id: string) => {
   try {
@@ -7567,7 +7589,7 @@ chuliIpc('warmy:archived-restore', (_e, id: string) => {
     if (idx < 0) return { ok: false };
     const item = archived.splice(idx, 1)[0];
     return { ok: true, item };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 
@@ -7580,7 +7602,7 @@ chuliIpc('warmy:audit-clear', () => {
   try {
     audit?.clear();
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── SafeStorage 密钥 ──
@@ -7589,13 +7611,13 @@ chuliIpc('warmy:secure-key-save', async (_e, payload: { providerId: string; apiK
     await secureKeys?.save(payload.providerId, payload.apiKey);
     audit?.log('key.save', { providerId: payload.providerId });
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:secure-key-load', async (_e, providerId: string) => {
   try {
     const key = await secureKeys?.load(providerId);
     return { ok: !!key, key: key || null };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── KnowledgeArchiver ──
@@ -7614,7 +7636,7 @@ chuliIpc('warmy:archive-external', (_e, payload: { groupId: string; title: strin
       text: String(payload.summary || ''),
     });
   } catch (e) {
-    tiqu = { error: sanitizeError(e) };
+    tiqu = { error: xiJingCuoWu(e) };
   }
   const r = archiver?.archive({
     id: 'arc-' + Date.now(),
@@ -7653,7 +7675,7 @@ chuliIpc('warmy:archive-external', (_e, payload: { groupId: string; title: strin
       if (liWai.preferences?.length) heBingYongHuPianHao(app.getPath('userData'), liWai.preferences);
     }
   } catch (e) {
-    tiqu = { error: sanitizeError(e) };
+    tiqu = { error: xiJingCuoWu(e) };
   }
   audit?.log('archive.external', { groupId: payload.groupId, prefs: (tiqu as { preferences?: unknown[] } | null)?.preferences?.length || 0 });
   return { ok: true, entry: r, tiqu, structured };
@@ -7710,7 +7732,7 @@ chuliIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; aut
     audit?.log('session.summary', { sessionId: gid, auto: !!payload?.auto });
     return { ok: true, entry, structured };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 chuliIpc('warmy:archive-list', (_e, groupId?: string) => ({
@@ -7725,7 +7747,7 @@ chuliIpc('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
     const v = cleanup?.cleanVoice() || 0;
     audit?.log('cleanup.run', { checkpoints: n, voice: v });
     return { ok: true, checkpointsRemoved: n, voiceRemoved: v };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 模型角色分配 ──
@@ -7734,9 +7756,9 @@ chuliIpc('warmy:role-models-set', (_e, roles: JueseMoxingPeizhi) => {
     roleModels = { ...roleModels, ...roles };
     audit?.log('roles.set', roles);
     return { ok: true, roles: roleModels };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:role-models-get', () => safeHandle(() => ({ ok: true, roles: roleModels }), { ok: true, roles: {} }))
+chuliIpc('warmy:role-models-get', () => anQuanChuLi(() => ({ ok: true, roles: roleModels }), { ok: true, roles: {} }))
 
 // ── 解散群组 ──
 chuliIpc('warmy:group-dissolve', (_e, groupId: string) => {
@@ -7767,7 +7789,7 @@ chuliIpc('warmy:export-allowlist', () => {
     fs.writeFileSync(file, JSON.stringify(list, null, 2), 'utf8');
     audit?.log('allowlist.export', { count: list.length });
     return { ok: true, path: file, count: list.length };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── dsh-app:// 自定义协议（零对外端口） ──
@@ -7801,7 +7823,7 @@ chuliIpc('warmy:import-openclaw', () => {
     audit?.log('providers.import', { count: gongYingShangJi.length });
     return { ok: true, providers: gongYingShangJi };
   } catch (e) {
-    return { ok: false, error: sanitizeError(e) };
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -7812,14 +7834,14 @@ chuliIpc('warmy:special-models-set', (_e, cfg: { asr?: { provider: string }; emb
       settingsStore.save({ ...cur, specialModels: cfg } as never);
     }
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:special-models-get', () => {
   try {
     const s = settingsStore?.load() as unknown as Record<string, unknown>;
     return { ok: true, specialModels: s?.specialModels || {} };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
@@ -7832,7 +7854,7 @@ chuliIpc('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: 
     if (!res.ok) return { ok: false, error: 'http ' + res.status };
     const data = (await res.json()) as { response?: string };
     return { ok: true, text: data.response || '' };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 加入请求 / 黑名单 ──
@@ -7845,14 +7867,14 @@ chuliIpc('warmy:join-request', (_e, payload: { name: string; kind: string; targe
     joinRequests.push({ id, name: payload.name, kind: payload.kind, target: payload.target, targetType: payload.targetType, ts, expireAt: ts + 30 * 24 * 3600_000 });
     audit?.log('join.request', { id, name: payload.name, target: payload.target });
     return { ok: true, id };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:join-pending', () => {
   try {
     const now = Date.now();
     const valid = joinRequests.filter((r) => r.expireAt > now);
     return { ok: true, items: valid, count: valid.length };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
   try {
@@ -7866,13 +7888,13 @@ chuliIpc('warmy:join-respond', (_e, payload: { id: string; action: 'agree' | 're
     joinRequests.splice(idx, 1);
     audit?.log('join.respond', { id: req.id, action: payload.action });
     return { ok: true, remaining: joinRequests.filter((r) => r.expireAt > Date.now()).length };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:blacklist-list', () => safeHandle(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
+chuliIpc('warmy:blacklist-list', () => anQuanChuLi(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
 chuliIpc('warmy:blacklist-remove', (_e, id: string) => {
   try {
     const i = blacklist.findIndex((b) => b.id === id);
     if (i >= 0) blacklist.splice(i, 1);
     return { ok: true };
-  } catch (e) { return { ok: false, error: sanitizeError(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });

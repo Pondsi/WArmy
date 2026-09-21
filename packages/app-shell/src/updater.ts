@@ -51,7 +51,7 @@ export type XiazaiZhuangtai =
 
 export type YanzhengMoshi = 'sha256+size' | 'sha256' | 'size' | 'none';
 
-export interface UpdateManifest {
+export interface GengXinQingDan {
   version: string;
   notes?: string;
   downloadUrl?: string;
@@ -61,7 +61,7 @@ export interface UpdateManifest {
   publishedAt?: string;
 }
 
-export interface UpdateCheckResult {
+export interface GengXinJianChaJieGuo {
   /** 只有在结论明确（有更新 / 已是最新）时为 true；出错与未配置都为 false */
   ok: boolean;
   status: UpdateStatus;
@@ -93,7 +93,7 @@ export interface UpdateCheckResult {
   durationMs: number;
 }
 
-export interface UpdateDownloadResult {
+export interface GengXinXiaZaiJieGuo {
   ok: boolean;
   status: XiazaiZhuangtai;
   message: string;
@@ -115,7 +115,7 @@ export interface UpdateDownloadResult {
   durationMs: number;
 }
 
-export interface UpdateSourceInfo {
+export interface GengXinYuanXinXi {
   configured: boolean;
   url: string | null;
   origin: 'settings' | 'env' | 'none';
@@ -148,8 +148,8 @@ export interface GengxinqiXuanxiang {
 
 interface LuopanZhuangtai {
   version: 1;
-  lastCheck?: UpdateCheckResult;
-  lastDownload?: UpdateDownloadResult;
+  lastCheck?: GengXinJianChaJieGuo;
+  lastDownload?: GengXinXiaZaiJieGuo;
 }
 
 const I18N_KEY: Record<UpdateStatus, string> = {
@@ -189,7 +189,7 @@ const DEFAULT_DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 const MANIFEST_MAX_BYTES = 1024 * 1024;
 
 /** 宽松 semver 解析：可选 v 前缀 + 1~3 段数字 + 可选预发布串 */
-export function parseVersion(input: string): { nums: number[]; pre: string[] } | null {
+export function jieXiBanBen(input: string): { nums: number[]; pre: string[] } | null {
   const v = String(input || '').trim().replace(/^v/i, '');
   if (!v) return null;
   const m = v.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+]([0-9A-Za-z.-]+))?$/);
@@ -201,8 +201,8 @@ export function parseVersion(input: string): { nums: number[]; pre: string[] } |
 
 /** a>b 返回 1，a<b 返回 -1，相等 0，无法解析返回 null */
 export function bijiaoBanben(a: string, b: string): number | null {
-  const va = parseVersion(a);
-  const vb = parseVersion(b);
+  const va = jieXiBanBen(a);
+  const vb = jieXiBanBen(b);
   if (!va || !vb) return null;
   for (let i = 0; i < 3; i++) {
     const x = va.nums[i] ?? 0;
@@ -320,9 +320,9 @@ function firstObjectIn(raw: unknown): Record<string, unknown> | null {
 /**
  * 把各种真实 feed 形态归一化；失败给出机器可读原因
  */
-export function normalizeManifest(
+export function guiFanHuaGengXinQingDan(
   raw: unknown
-): { ok: true; manifest: UpdateManifest } | { ok: false; reason: string } {
+): { ok: true; manifest: GengXinQingDan } | { ok: false; reason: string } {
   const obj = firstObjectIn(raw);
   if (!obj) return { ok: false, reason: 'not-an-object' };
   if (obj['draft'] === true || obj['prerelease'] === true) {
@@ -336,7 +336,7 @@ export function normalizeManifest(
     zifuchuan(obj['tag_name']) ||
     zifuchuan(obj['tag']);
   if (!version) return { ok: false, reason: 'missing-version' };
-  if (!parseVersion(version)) return { ok: false, reason: 'bad-version' };
+  if (!jieXiBanBen(version)) return { ok: false, reason: 'bad-version' };
 
   const assets = Array.isArray(obj['assets']) ? (obj['assets'] as unknown[]) : [];
   let assetUrl: string | undefined;
@@ -372,7 +372,7 @@ export function normalizeManifest(
   const size = shuZhi(obj['size']) ?? shuZhi(obj['sizeBytes']) ?? shuZhi(obj['bytes']) ?? assetSize;
   if (size !== undefined && size <= 0) return { ok: false, reason: 'bad-size' };
 
-  const manifest: UpdateManifest = { version };
+  const manifest: GengXinQingDan = { version };
   const notes = zifuchuan(obj['notes']) || zifuchuan(obj['releaseNotes']) || zifuchuan(obj['body']) || zifuchuan(obj['changelog']);
   if (notes) manifest.notes = notes.slice(0, 4000);
   if (downloadUrl) manifest.downloadUrl = downloadUrl;
@@ -450,7 +450,7 @@ async function diuqiBufen(ws: fs.WriteStream, file: string): Promise<void> {
   }
 }
 
-function fileNameFromUrl(raw: string, version: string): string {
+function youUrlQuWenJianMing(raw: string, version: string): string {
   try {
     const u = new URL(raw);
     const base = path.posix.basename(u.pathname);
@@ -513,7 +513,7 @@ export class Gengxinqi {
     return { url: null, origin: 'none', channel: '' };
   }
 
-  getSourceInfo(): UpdateSourceInfo {
+  getSourceInfo(): GengXinYuanXinXi {
     const s = this.resolveSource();
     const st = this.readState();
     return {
@@ -543,7 +543,7 @@ export class Gengxinqi {
 
   // ── 结果构造 ──
 
-  private result(status: UpdateStatus, extra: Partial<UpdateCheckResult> = {}): UpdateCheckResult {
+  private result(status: UpdateStatus, extra: Partial<GengXinJianChaJieGuo> = {}): GengXinJianChaJieGuo {
     const mingque = status === 'up-to-date' || status === 'update-available';
     const src = this.resolveSource();
     return {
@@ -566,8 +566,8 @@ export class Gengxinqi {
 
   private dlResult(
     status: XiazaiZhuangtai,
-    extra: Partial<UpdateDownloadResult> & { durationMs: number }
-  ): UpdateDownloadResult {
+    extra: Partial<GengXinXiaZaiJieGuo> & { durationMs: number }
+  ): GengXinXiaZaiJieGuo {
     const base = status in I18N_KEY ? I18N_KEY[status as UpdateStatus] : 'update.download.failed';
     const huituiXiaoxi = status in DEFAULT_MESSAGE ? DEFAULT_MESSAGE[status as UpdateStatus] : 'update download failed';
     const installNotes =
@@ -589,7 +589,7 @@ export class Gengxinqi {
 
   // ── 查询 ──
 
-  async check(): Promise<UpdateCheckResult> {
+  async check(): Promise<GengXinJianChaJieGuo> {
     const started = Date.now();
     const src = this.resolveSource();
     if (!src.url) {
@@ -676,7 +676,7 @@ export class Gengxinqi {
       return r;
     }
 
-    const guiFanHua = normalizeManifest(parsed);
+    const guiFanHua = guiFanHuaGengXinQingDan(parsed);
     if (!guiFanHua.ok) {
       const r = this.result('invalid-response', {
         durationMs: Date.now() - started,
@@ -699,7 +699,7 @@ export class Gengxinqi {
       return r;
     }
 
-    const extra: Partial<UpdateCheckResult> = {
+    const extra: Partial<GengXinJianChaJieGuo> = {
       durationMs: Date.now() - started,
       latestVersion: manifest.version,
       ...(manifest.notes ? { notes: manifest.notes } : {}),
@@ -737,7 +737,7 @@ export class Gengxinqi {
 
   // ── 下载（含校验；安装未实现） ──
 
-  async download(): Promise<UpdateDownloadResult> {
+  async download(): Promise<GengXinXiaZaiJieGuo> {
     const started = Date.now();
     const chk = await this.check();
     if (chk.status !== 'update-available') {
@@ -769,7 +769,7 @@ export class Gengxinqi {
     }
 
     const mubiaoMulu = path.join(this.downloadDir, sanitizeSegment(version));
-    const zuizhongLujing = path.join(mubiaoMulu, fileNameFromUrl(v.url, version));
+    const zuizhongLujing = path.join(mubiaoMulu, youUrlQuWenJianMing(v.url, version));
     const root = path.resolve(this.downloadDir) + path.sep;
     if (!path.resolve(zuizhongLujing).startsWith(root)) {
       return this.dlResult('io-error', {
@@ -949,7 +949,7 @@ export class Gengxinqi {
       });
     }
 
-    const out: UpdateDownloadResult = this.dlResult('downloaded', {
+    const out: GengXinXiaZaiJieGuo = this.dlResult('downloaded', {
       durationMs: Date.now() - started,
       version,
       filePath: zuizhongLujing,
@@ -978,19 +978,19 @@ export class Gengxinqi {
     return st && typeof st === 'object' ? st : { version: 1 };
   }
 
-  private persistCheck(r: UpdateCheckResult): void {
+  private persistCheck(r: GengXinJianChaJieGuo): void {
     const prev = this.readState();
     anQuanYuanZiXieJson(this.stateFile, { version: 1, lastCheck: r, ...(prev.lastDownload ? { lastDownload: prev.lastDownload } : {}) });
   }
 
-  private persistDownload(r: UpdateDownloadResult): void {
+  private persistDownload(r: GengXinXiaZaiJieGuo): void {
     const prev = this.readState();
     anQuanYuanZiXieJson(this.stateFile, { version: 1, ...(prev.lastCheck ? { lastCheck: prev.lastCheck } : {}), lastDownload: r });
   }
 }
 
 /** updater 还没就绪（bootstrap 未完成）时的诚实返回 */
-export function updaterUnavailableCheck(currentVersion: string): UpdateCheckResult {
+export function gengXinqiBuKeYongJianCha(currentVersion: string): GengXinJianChaJieGuo {
   return {
     ok: false,
     status: 'updater-unavailable',
@@ -1007,7 +1007,7 @@ export function updaterUnavailableCheck(currentVersion: string): UpdateCheckResu
 }
 
 /** 同上，用于下载通道 */
-export function updaterUnavailableDownload(currentVersion: string): UpdateDownloadResult {
+export function gengXinqiBuKeYongXiaZai(currentVersion: string): GengXinXiaZaiJieGuo {
   return {
     ok: false,
     status: 'updater-unavailable',

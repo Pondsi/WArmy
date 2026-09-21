@@ -7,7 +7,7 @@ import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {GroupStore} from '../dist/group-store.js';
 import {AiWenTiZhongXin, AI_QUESTION_CUSTOM} from '../dist/ai-questions.js';
-import {withReadBack, dedupeByNorm, guifanLujingMiyao} from '../dist/read-back.js';
+import {daiHuiDuYanZheng, anGuiFanHuaQuChong, guiFanLuJingMiyao} from '../dist/read-back.js';
 import {JieLing, JuShu, KanbanCang} from '../../board/dist/index.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
@@ -29,8 +29,8 @@ check('orchestrator deps has runProjectGate', /runProjectGate\s*\?/.test(orch));
 check('orchestrator injects projectMemory into contextItems', /projectMemory\(/.test(orch));
 check('orchestrator injects decisionContext', /decisionContext\(/.test(orch));
 check('orchestrator gateReason from complete_task', /complete_task/.test(orch));
-check('orchestrator gateReason from verify/gate', /验收|门禁|verify|gate/i.test(orch));
-check('orchestrator runWithContextRetry called on chat-send', /runWithContextRetry/.test(main));
+check('orchestrator gateReason from verify/menjin', /验收|门禁|verify|gate/i.test(orch));
+check('orchestrator runWithContextRetry called on chat-send', /daiShangXiaWenChongShiYunXing/.test(main));
 check('main wires runProjectGate', /runProjectGate:\s*async \(gid, reason\)/.test(main));
 check('main wires projectMemory', /projectMemory:\s*\(gid\)/.test(main));
 check('main wires decisionContext', /decisionContext:\s*\(gid\)/.test(main));
@@ -70,9 +70,9 @@ const q3 = hub.open({ groupId: 'g1', title: '是否容器中开发？', options:
 check('ai question new after answered', q3.id !== q.id, q3.id);
 
 // ── read-back / dedupe ──
-const rb = await withReadBack(() => 'x', () => 'x', (a, b) => a === b);
+const rb = await daiHuiDuYanZheng(() => 'x', () => 'x', (a, b) => a === b);
 check('read-back confident match', rb.confident === true);
-const d = dedupeByNorm(['C:/a/b', 'c:/a/b/'], guifanLujingMiyao);
+const d = anGuiFanHuaQuChong(['C:/a/b', 'c:/a/b/'], guiFanLuJingMiyao);
 check('path dedupe', d.list.length === 1 && d.removed === 1, d);
 
 // ── board tree ──

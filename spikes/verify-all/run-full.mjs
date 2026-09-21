@@ -487,10 +487,10 @@ const { dualMachineSmoke } = await import(
 const lan = await dualMachineSmoke({ localId: 'verify-node', localPort: 7799 });
 check('lan loopback', lan.loopbackOk === true, lan);
 
-const { MetricsCollector } = await import(
+const { ZhiBiaoCaiJiQi } = await import(
   toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'metrics.js'))
 );
-const mc = new MetricsCollector();
+const mc = new ZhiBiaoCaiJiQi();
 mc.recordTurn({
   sessionId: 's', ts: Date.now(), promptTokens: 100, completionTokens: 10,
   cacheHitTokens: 90, cacheMissTokens: 10, durationMs: 20, providerId: 'deepseek', model: 'deepseek-chat',
@@ -498,16 +498,16 @@ mc.recordTurn({
 const sum = mc.summary();
 check('metrics cache rate', sum.cacheHitRate === 0.9 && sum.turns === 1, sum);
 
-const { LocalAccountStore, SettingsStore } = await import(
+const { BenDiZhangHuCang, PeizhiCang } = await import(
   toImportUrl(path.join(root, 'packages', 'app-shell', 'dist', 'settings-store.js'))
 );
 const accFile = path.join(os.tmpdir(), 'warmy-verify-acc.json');
-const acc = new LocalAccountStore(accFile);
+const acc = new BenDiZhangHuCang(accFile);
 acc.setPassword('secret123');
 check('local login', acc.loginLocal('secret123').ok === true && acc.loginLocal('wrong').ok === false);
 fs.rmSync(accFile, { force: true });
 const setFile = path.join(os.tmpdir(), 'warmy-verify-set.json');
-const st = new SettingsStore(setFile);
+const st = new PeizhiCang(setFile);
 st.save({ themeMode: 'dark', accent: '#3d8bfd' });
 check('settings persist', st.load().themeMode === 'dark');
 fs.rmSync(setFile, { force: true });

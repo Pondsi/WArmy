@@ -10,20 +10,20 @@ import { fork, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { GongJuDiaoYong, GongJuGuiGe } from '@warmy/providers';
 
-export interface MemoryClientOptions {
+export interface JiyiCangKeHuXuanXiang {
   nodePath?: string;
   ipcEntry: string;
   dataDir: string;
 }
 
-export class MemoryClient {
+export class JiyiCangKeHu {
   private child: ChildProcess | null = null;
   private seq = 0;
   private ready = false;
   private starting: Promise<void> | null = null;
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
 
-  constructor(private opts: MemoryClientOptions) {}
+  constructor(private opts: JiyiCangKeHuXuanXiang) {}
 
   /** 记忆服务是否可用（工具暴露与日志重建都以它为准；不可用一律走降级路径） */
   get isReady(): boolean {
@@ -187,13 +187,13 @@ export class MemoryClient {
 export const JIYICANG_GONGJU_MINGCHENG = { recall: 'recall', retrieve: 'retrieve' } as const;
 
 /** 单次工具结果上限（字符）；与视图预算同量级，防止"取回原文"把上下文撑成无界 */
-export const MEMORY_TOOL_RESULT_CHARS = 4000;
+export const JIYICANG_GONGJU_JIEGUO_ZISHU = 4000;
 /** recall 返回的卡片数上限 */
-export const MEMORY_TOOL_MAX_CARDS = 20;
+export const JIYICANG_GONGJU_ZUIDA_KAPIAN = 20;
 /** 一次 retrieve 最多返回的字符数（模型可要求更小，但不能要求更大） */
-export const MEMORY_TOOL_MAX_RETRIEVE_CHARS = 8000;
+export const JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU = 8000;
 
-export interface MemoryToolLabels {
+export interface JiyiCangGongjuBiaoqian {
   /** recall 工具描述（何时用 / 入参 / 返回） */
   recall: string;
   /** retrieve 工具描述 */
@@ -210,7 +210,7 @@ export interface MemoryToolLabels {
  * 默认工具描述（中文）。文案刻意说清「何时用 / 入参 / 返回」，
  * 因为指针文本里已经点名了这两个工具，描述要与之对齐（ADR §5）。
  */
-export const DEFAULT_MEMORY_TOOL_LABELS: MemoryToolLabels = {
+export const DEFAULT_MEMORY_TOOL_LABELS: JiyiCangGongjuBiaoqian = {
   recall:
     '按语义/关键词在被省略的会话历史里检索。当视图里出现「[已省略 N 条历史 …]」指针，' +
     '而你需要其中某个细节（谁说了什么、某段结论/数值/路径）时**必须**调用它，不要凭空猜测。' +
@@ -230,8 +230,8 @@ export const DEFAULT_MEMORY_TOOL_LABELS: MemoryToolLabels = {
 };
 
 /** 给模型看的工具清单（function calling） */
-export function memoryToolSpecs(labels: Partial<MemoryToolLabels> = {}): GongJuGuiGe[] {
-  const L: MemoryToolLabels = { ...DEFAULT_MEMORY_TOOL_LABELS, ...(labels || {}) };
+export function memoryToolSpecs(labels: Partial<JiyiCangGongjuBiaoqian> = {}): GongJuGuiGe[] {
+  const L: JiyiCangGongjuBiaoqian = { ...DEFAULT_MEMORY_TOOL_LABELS, ...(labels || {}) };
   return [
     {
       type: 'function',
@@ -246,7 +246,7 @@ export function memoryToolSpecs(labels: Partial<MemoryToolLabels> = {}): GongJuG
               type: 'integer',
               description: L.limitParam,
               minimum: 1,
-              maximum: MEMORY_TOOL_MAX_CARDS,
+              maximum: JIYICANG_GONGJU_ZUIDA_KAPIAN,
             },
           },
           required: ['query'],
@@ -268,7 +268,7 @@ export function memoryToolSpecs(labels: Partial<MemoryToolLabels> = {}): GongJuG
               type: 'integer',
               description: L.maxCharsParam,
               minimum: 1,
-              maximum: MEMORY_TOOL_MAX_RETRIEVE_CHARS,
+              maximum: JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU,
             },
           },
           // 两种线索任选其一即可解引用（ADR §5）
@@ -297,7 +297,7 @@ export interface JiyiCangGongjuYuanshuju {
   error?: string;
 }
 
-export interface MemoryToolOutcome {
+export interface JiyiCangGongjuJieGuo {
   ok: boolean;
   /** 直接作为 tool 消息回给模型的文本 */
   content: string;
@@ -315,7 +315,7 @@ function qianZhiZhengShu(v: unknown, lo: number, hi: number, dflt: number): numb
 }
 
 /** 不切出半个代理对 */
-function clipSafe(s: string, max: number): string {
+function anQuanJieDuan(s: string, max: number): string {
   if (max <= 0) return '';
   if (s.length <= max) return s;
   let out = s.slice(0, max);
@@ -324,7 +324,7 @@ function clipSafe(s: string, max: number): string {
   return out;
 }
 
-function parseArgs(raw: unknown): Record<string, unknown> {
+function jieXiCanShu(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
   try {
     const v = JSON.parse(String(raw ?? '{}'));
@@ -350,15 +350,15 @@ function sanitize(e: unknown): string {
  * （模型据此改换锚点/放弃，而不是把整轮对话打成 error）。
  */
 export async function yunxingJiyiCangGongju(
-  client: MemoryClient | null,
+  client: JiyiCangKeHu | null,
   call: GongJuDiaoYong,
   opts: { maxChars?: number } = {}
-): Promise<MemoryToolOutcome> {
+): Promise<JiyiCangGongjuJieGuo> {
   const name = call?.function?.name || '';
-  const args = parseArgs(call?.function?.arguments);
-  const cap = qianZhiZhengShu(opts.maxChars, 64, MEMORY_TOOL_MAX_RETRIEVE_CHARS, MEMORY_TOOL_RESULT_CHARS);
+  const args = jieXiCanShu(call?.function?.arguments);
+  const cap = qianZhiZhengShu(opts.maxChars, 64, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU, JIYICANG_GONGJU_JIEGUO_ZISHU);
   const meta: JiyiCangGongjuYuanshuju = { tool: name, ok: false, chars: 0 };
-  const fail = (msg: string, error?: string): MemoryToolOutcome => {
+  const fail = (msg: string, error?: string): JiyiCangGongjuJieGuo => {
     meta.ok = false;
     meta.chars = msg.length;
     if (error) meta.error = error.slice(0, 120);
@@ -373,7 +373,7 @@ export async function yunxingJiyiCangGongju(
       const query = String(args['query'] ?? '').replace(/\s+/g, ' ').trim();
       meta.queryChars = query.length;
       if (!query) return fail('recall 需要 query 参数（检索串），例：recall("值班者状态机")。', 'bad-args');
-      const limit = qianZhiZhengShu(args['limit'], 1, MEMORY_TOOL_MAX_CARDS, 5);
+      const limit = qianZhiZhengShu(args['limit'], 1, JIYICANG_GONGJU_ZUIDA_KAPIAN, 5);
       const res = await client.recall(query, limit);
       const cards: Array<{ seq?: number; recordId?: string; snippet?: string; score?: number; source?: string; sources?: string[] }> =
         Array.isArray(res?.cards) ? res.cards : [];
@@ -395,7 +395,7 @@ export async function yunxingJiyiCangGongju(
       let truncated = false;
       if (text.length > cap) {
         truncated = true;
-        text = clipSafe(text, cap) + `\n…[卡片列表被截断，本次上限 ${cap} 字符]`;
+        text = anQuanJieDuan(text, cap) + `\n…[卡片列表被截断，本次上限 ${cap} 字符]`;
       }
       meta.ok = true;
       meta.chars = text.length;
@@ -413,8 +413,8 @@ export async function yunxingJiyiCangGongju(
         return fail('retrieve 需要 recordId 或 seq 之一，例：retrieve(seq=12) / retrieve(recordId="m-…")。', 'bad-args');
       }
       const offset = qianZhiZhengShu(args['offset'], 0, 100_000_000, 0);
-      const want = qianZhiZhengShu(args['maxChars'], 1, MEMORY_TOOL_MAX_RETRIEVE_CHARS, cap);
-      const limit = Math.min(want, cap, MEMORY_TOOL_MAX_RETRIEVE_CHARS);
+      const want = qianZhiZhengShu(args['maxChars'], 1, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU, cap);
+      const limit = Math.min(want, cap, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU);
       meta.anchor = { seq, recordId, offset };
       const res = await client.retrieve(recordId ? { recordId } : { seq: seq! });
       const out = res?.result ?? res;
@@ -447,7 +447,7 @@ export async function yunxingJiyiCangGongju(
         meta.nextOffset = next;
       }
       meta.truncated = truncated;
-      if (text.length > limit + 400) text = clipSafe(text, limit + 400);
+      if (text.length > limit + 400) text = anQuanJieDuan(text, limit + 400);
       meta.ok = true;
       meta.chars = text.length;
       return { ok: true, content: text, chars: text.length, meta };

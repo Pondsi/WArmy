@@ -28,7 +28,7 @@ interface Tiaomu {
 
 type YuanwenWenjian = Record<string, Tiaomu | string>;
 
-function safeStorageOf(): { encryptString(s: string): Buffer; decryptString(b: Buffer): string; isEncryptionAvailable(): boolean } | null {
+function anQuanCunChuOf(): { encryptString(s: string): Buffer; decryptString(b: Buffer): string; isEncryptionAvailable(): boolean } | null {
   try {
     const electron = require('electron') as typeof import('electron');
     const anQuanCang = electron?.safeStorage;
@@ -46,7 +46,7 @@ function yunxuMingwen(): boolean {
   return process.env['WARMY_ALLOW_PLAINTEXT_KEYS'] === '1';
 }
 
-export class SecureKeyStore {
+export class AnQuanMiyaoCang {
   private file: string;
 
   constructor(userData: string) {
@@ -57,7 +57,7 @@ export class SecureKeyStore {
 
   /** 加密保存。没有 OS 级保护时**拒绝写明文**（除非显式开发开关）。 */
   async save(providerId: string, apiKey: string): Promise<void> {
-    const anQuanCang = safeStorageOf();
+    const anQuanCang = anQuanCunChuOf();
     let entry: Tiaomu;
     if (anQuanCang) {
       entry = { v: 2, protector: 'os', data: anQuanCang.encryptString(apiKey).toString('base64') };
@@ -81,7 +81,7 @@ export class SecureKeyStore {
     // v1 遗留：裸 base64 字符串，无法区分"密文"还是"明文"
     if (typeof raw === 'string') {
       const buf = Buffer.from(raw, 'base64');
-      const anQuanCang = safeStorageOf();
+      const anQuanCang = anQuanCunChuOf();
       if (anQuanCang) {
         try {
           return anQuanCang.decryptString(buf);
@@ -93,7 +93,7 @@ export class SecureKeyStore {
     }
 
     if (raw.protector === 'os') {
-      const anQuanCang = safeStorageOf();
+      const anQuanCang = anQuanCunChuOf();
       if (!anQuanCang) return null; // 现在解不开，不要返回乱码
       try {
         return anQuanCang.decryptString(Buffer.from(raw.data, 'base64'));

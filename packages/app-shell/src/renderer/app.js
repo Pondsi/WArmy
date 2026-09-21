@@ -9058,7 +9058,7 @@
     });
   }
 
-  async function probeContainers(force) {
+  async function probeContainers(force, deep) {
     if (containerUi.probing) return containerUi.report;
     containerUi.probing = true;
     const msg = $('container-probe-msg');
@@ -9066,7 +9066,7 @@
     const btn = $('btn-container-probe');
     if (btn) btn.disabled = true;
     try {
-      const r = await window.warmy.containerProbe({ force: !!force });
+      const r = await window.warmy.containerProbe({ force: !!force, deep: deep === true });
       const rep = r && r.report ? r.report : null;
       containerUi.report = rep;
       if (msg) {
@@ -9197,7 +9197,7 @@
     renderContainerFacts();
     renderInstallPrompt();
     const btn = $('btn-container-probe');
-    if (btn) btn.onclick = () => { void probeContainers(true); };
+    if (btn) btn.onclick = () => { void probeContainers(true, true); };
     const box = $('container-list');
     if (box) {
       box.onclick = (ev) => {

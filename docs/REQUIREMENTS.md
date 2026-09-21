@@ -358,3 +358,25 @@ IPC：`warmy:project-memory-get/set`（set 必须 read-back）。
 ---
 
 Pondsi (+mimo-X-pro-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop
+
+
+## 永远性要求：启动 / 使用本应用**不启动 WSL**
+
+> 产品主定稿（两次反馈后成为永久要求）："启动这个应用不会启动 wsl"。
+
+**为什么**：`wsl.exe` 的 `--version` / `-l -v` 在 Windows 上会把 WSL 服务拉起来。以前
+"打开会话/新窗口 → 查项目状态 → 全量探测运行时"这条例行路径会顺手 spawn `wsl.exe`，
+用户看到的现象就是"打开应用/新窗口触发了打开 WSL"。
+
+**规则**：
+1. **例行路径一律静默**：项目状态查询等自动探测**不许** spawn `wsl.exe`（`probeWsl` 在非 deep 时
+   一个 wsl.exe 都不启动，如实报 `not-probed`，并在界面说明"只有显式点探测才会查"）。
+2. **只有用户显式动作才允许查询**：设置 → 功能 → 容器 的「查看本机已有容器」按钮（IPC 传 `deep: true`）。
+3. **即便显式查询，也不代为启动发行版**：`wsl -l -v` 里的 Stopped 就报 Stopped，不跑 `wsl -d <发行版> -- true`。
+4. **实例列表**：引擎未启动时实例区禁用、不可展开（既有的产品规则）。
+
+**门禁（永久，不许回退）**：`packages/app-shell/scripts/verify-no-wsl-start.mjs`
+- 动态：启动应用 → 走真实路径选中会话 → 打开新窗口，断言 `wsl.exe`/`wslhost.exe` 进程数不变、
+  各发行版状态不变；本机没有 WSL 时如实跳过动态部分（不假通过）。
+- 静态：`probeWsl` 默认静默、项目状态查询不传 deep、只有显式探测才 deep。
+- 已加入门禁列表（17 项之外的第 18 项）。

@@ -28,12 +28,12 @@ export interface BenjiZiliao {
  * 生成新凭证当本机 ID（**不再**采集硬件熵拼数字：凭证本身就是 256 bit 随机，
  * 见 credential.ts —— ID 即私钥，公钥指纹才是给别人的东西）。
  */
-export function generateDeviceId(): string {
+export function shengChengPingzheng(): string {
   return shengchengPingzheng();
 }
 
 /** 凭证（现行 51 位大写 / 兼容上一版 45 位）——除此之外一律不算有效 ID */
-export function isValidDeviceId(v: unknown): v is string {
+export function shiFouHeFaPingzheng(v: unknown): v is string {
   if (typeof v !== 'string') return false;
   return isValidCredential(v);
 }
@@ -41,11 +41,11 @@ export function isValidDeviceId(v: unknown): v is string {
 
 
 /** 设备 ID 的 HMAC 签名：ID 被手改一位，签名就对不上 */
-function signDeviceId(id: string): string {
+function qianMingPingzheng(id: string): string {
   return crypto.createHmac('sha256', 'warmy.device-id.v1').update(id).digest('hex');
 }
 
-function safeEqual(a: string, b: string): boolean {
+function anQuanXiangDeng(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let chaYi = 0;
   for (let i = 0; i < a.length; i++) chaYi |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -152,7 +152,7 @@ export const SETTINGS_SUPPORTED_LOCALES = [
   'eo',
 ] as const;
 
-export interface AppSettings {
+export interface YingYongPeizhi {
   /** One of SETTINGS_SUPPORTED_LOCALES. Stored as free string for backward compat; resolveLocale maps unknown tags. */
   locale: string;
   themeMode: 'light' | 'dark' | 'system';
@@ -332,7 +332,7 @@ function hash(pw: string) {
   return crypto.createHash('sha256').update(pw + 'warmy').digest('hex');
 }
 
-export class LocalAccountStore {
+export class BenDiZhangHuCang {
   constructor(private file: string) {}
 
   loadProfile(): BenjiZiliao {
@@ -363,8 +363,8 @@ export class LocalAccountStore {
     const weizhiXingzhuang = pingzhengLeixing(before) === null;
     const beigaIPingzheng = !weizhiXingzhuang && !signedOk;
     if (weizhiXingzhuang || beigaIPingzheng) {
-      p.deviceId = generateDeviceId();
-      p.deviceIdSig = signDeviceId(p.deviceId);
+      p.deviceId = shengChengPingzheng();
+      p.deviceIdSig = qianMingPingzheng(p.deviceId);
       if (weizhiXingzhuang && before) p.deviceIdUpgradedFrom = before;
       if (beigaIPingzheng) p.deviceIdUpgradedFrom = `tampered:${before.slice(0, 6)}…`;
       try { this.saveProfile(p); } catch { /* 只读目录时忽略 */ }
@@ -374,9 +374,9 @@ export class LocalAccountStore {
 
   /** 校验 ID 形态与 HMAC 签名；不触碰文件、不重新生成 */
   verifyIdFields(p: Partial<BenjiZiliao>): boolean {
-    if (!isValidDeviceId(p.deviceId)) return false;
+    if (!shiFouHeFaPingzheng(p.deviceId)) return false;
     if (typeof p.deviceIdSig !== 'string' || !p.deviceIdSig) return false;
-    return safeEqual(signDeviceId(p.deviceId), p.deviceIdSig);
+    return anQuanXiangDeng(qianMingPingzheng(p.deviceId), p.deviceIdSig);
   }
 
   /** 供界面展示：当前 ID 与校验状态（只读，不修复） */
@@ -418,10 +418,10 @@ export class LocalAccountStore {
   }
 }
 
-export class SettingsStore {
+export class PeizhiCang {
   constructor(private file: string) {}
 
-  load(): AppSettings {
+  load(): YingYongPeizhi {
     try {
       return { ...defaults(), ...JSON.parse(fs.readFileSync(this.file, 'utf8')) };
     } catch {
@@ -429,7 +429,7 @@ export class SettingsStore {
     }
   }
 
-  save(s: Partial<AppSettings>): AppSettings {
+  save(s: Partial<YingYongPeizhi>): YingYongPeizhi {
     const next = { ...this.load(), ...s };
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(this.file, JSON.stringify(next, null, 2));
@@ -437,7 +437,7 @@ export class SettingsStore {
   }
 }
 
-function defaults(): AppSettings {
+function defaults(): YingYongPeizhi {
   return {
     locale: 'zh-CN',
     themeMode: 'system',

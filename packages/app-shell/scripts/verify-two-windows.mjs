@@ -14,7 +14,7 @@
  *  7. 第二个会话也能独立开窗，且内容与它自己一致。
  */
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
@@ -124,8 +124,18 @@ try {
   check('主界面：自己发的消息可见', m1.bubbles.some((x) => x.includes(t1)), { bubbles: m1.bubbles.length });
 
   // ② 开独立窗
+  /**
+   * 产品定稿：**打开新窗口不得为了探测而启动 WSL**。
+   * 用户两次反馈"开新窗口触发打开 WSL"——根因是项目状态查询会全量探测运行时，
+   * 其中 wsl.exe 的 `--version`/`-l -v` 会把 WSL 服务拉起来。现在例行路径默认静默。
+   */
+  const wslJiShu = () => { try { return execSync('powershell -NoProfile -Command "(Get-Process wsl,wslhost -ErrorAction SilentlyContinue | Measure-Object).Count"').toString().trim(); } catch { return 'na'; } };
+  const wslQian = wslJiShu();
   await main.evaluate(`(function(){ const mi=document.querySelector('#mi-open'); if (mi) mi.click(); return true; })()`);
   const sub1 = await attachTo((p) => p.type === 'page' && p.url.includes('chatId=' + g1), '会话1 独立窗');
+  await sleep(2500);
+  const wslHou = wslJiShu();
+  check('打开新窗口不启动 WSL（wsl/wslhost 进程数不变）', wslQian === wslHou, { before: wslQian, after: wslHou });
   await sleep(3000);
   const s1 = await sub1.evaluate(VIEW);
   check('独立窗：显示的是同一个会话（标题一致）', s1.title === m1.title, { sub: s1.title, main: m1.title });
@@ -141,6 +151,10 @@ try {
   const m2 = await main.evaluate(VIEW);
   check('独立窗发出后：独立窗自己有', s2.bubbles.some((x) => x.includes(t2)), {});
   check('独立窗发出后：**主界面同一会话也同步出现**', m2.bubbles.some((x) => x.includes(t2)), {});
+  // **不重复显示**：同一条消息在两处都只应出现一次（主进程日志曾被两条路径各写一次 ⇒ 用户看到"显示 2 次"）
+  const cMain = m2.bubbles.filter((x) => x === t2).length;
+  const cSub = s2.bubbles.filter((x) => x === t2).length;
+  check('同一消息在两处都**只出现一次**（不重复显示）', cMain === 1 && cSub === 1, { main: cMain, sub: cSub });
   check('同步后两处消息集合仍一致', JSON.stringify(s2.bubbles) === JSON.stringify(m2.bubbles), { sub: s2.bubbles.length, main: m2.bubbles.length });
 
   // ④ 切到第二个会话：不被影响

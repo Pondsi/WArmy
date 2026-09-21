@@ -12,7 +12,7 @@ export interface ReadBackResult<T> {
   confident: boolean;
 }
 
-export async function withReadBack<T>(
+export async function daiHuiDuYanZheng<T>(
   save: () => unknown | Promise<unknown>,
   read: () => T | Promise<T>,
   equals: (a: unknown, b: T) => boolean
@@ -38,7 +38,7 @@ export async function withReadBack<T>(
  * 自动化/列表类写入的去重：按 normalize 后的 key。
  * 用途：skillScanDirs、类似的“最多 N 条目录/账号/源”配置，避免重复点击堆积。
  */
-export function dedupeByNorm<T>(items: T[], keyOf: (x: T) => string): { list: T[]; removed: number } {
+export function anGuiFanHuaQuChong<T>(items: T[], keyOf: (x: T) => string): { list: T[]; removed: number } {
   const seen = new Set<string>();
   const list: T[] = [];
   let removed = 0;
@@ -55,6 +55,6 @@ export function dedupeByNorm<T>(items: T[], keyOf: (x: T) => string): { list: T[
   return { list, removed };
 }
 
-export function guifanLujingMiyao(p: unknown): string {
+export function guiFanLuJingMiyao(p: unknown): string {
   return String(p || '').trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }

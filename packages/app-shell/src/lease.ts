@@ -19,7 +19,7 @@
  *     这样"你刚写过期的租约"能报出 `expired` 而不是含糊的 `no-lease`。
  *   - **纯内存**：跨进程/跨机器需要把租约广播出去并落盘，见文件末尾「接线说明」。
  */
-import { normalizeRepoPath } from './repo-guard.js';
+import { guiFanHuaCangKuLuJing } from './repo-guard.js';
 
 export type LeaseKind = 'task' | 'dir' | 'file';
 
@@ -69,7 +69,7 @@ export interface LeaseConflict {
   expiresAt: number;
 }
 
-export interface AcquireRequest {
+export interface HuoQuQingQiu {
   holder: string;
   /** 默认 dir（范围更宽 = 冲突判定更严，fail-closed） */
   kind?: LeaseKind;
@@ -91,7 +91,7 @@ export interface HuoquJieguo {
   conflicts?: LeaseConflict[];
 }
 
-export interface LeaseRefRequest {
+export interface ZuYueYinYongQingQiu {
   holder?: string;
   leaseId?: string;
   scope?: string;
@@ -233,7 +233,7 @@ export class LeaseRegistry {
   }
 
   /** 申请租约。范围被别人占住 → 拒绝并给出可读原因；自己已占 → 合并（幂等） */
-  acquire(req: AcquireRequest): HuoquJieguo {
+  acquire(req: HuoQuQingQiu): HuoquJieguo {
     const now = this.clock();
     this.prune(now);
 
@@ -255,7 +255,7 @@ export class LeaseRegistry {
 
     const paths: string[] = [];
     for (const raw of rawPaths) {
-      const n = normalizeRepoPath(String(raw ?? ''));
+      const n = guiFanHuaCangKuLuJing(String(raw ?? ''));
       if (!n.ok) {
         return {
           ok: false,
@@ -359,7 +359,7 @@ export class LeaseRegistry {
   }
 
   /** 续租（只有持有者本人；已过期的租约不许续，必须重新申请） */
-  extend(req: LeaseRefRequest, ttlMs?: number): HuoquJieguo {
+  extend(req: ZuYueYinYongQingQiu, ttlMs?: number): HuoquJieguo {
     const now = this.clock();
     this.prune(now);
     const found = this.find(req);
@@ -375,7 +375,7 @@ export class LeaseRegistry {
   }
 
   /** 释放（只有持有者本人；非本人 → holder-mismatch）。已过期 = 已自动失效，不算失败 */
-  release(req: LeaseRefRequest): ShifangJieguo {
+  release(req: ZuYueYinYongQingQiu): ShifangJieguo {
     const now = this.clock();
     this.prune(now);
     const found = this.find(req);
@@ -395,7 +395,7 @@ export class LeaseRegistry {
     const now = this.clock();
     this.prune(now);
     const who = typeof holder === 'string' ? holder.trim() : '';
-    const n = normalizeRepoPath(typeof path === 'string' ? path : '');
+    const n = guiFanHuaCangKuLuJing(typeof path === 'string' ? path : '');
     if (!n.ok) {
       return {
         allowed: false,
@@ -491,7 +491,7 @@ export class LeaseRegistry {
   holdersOf(p: string): ChiyouzheXinxi[] {
     const now = this.clock();
     this.prune(now);
-    const n = normalizeRepoPath(typeof p === 'string' ? p : '');
+    const n = guiFanHuaCangKuLuJing(typeof p === 'string' ? p : '');
     if (!n.ok) {
       return [
         { path: n.normalized, holder: null, lease: null, expiresAt: null, reason: `路径非法：${n.reason ?? '未知'}` },
@@ -569,7 +569,7 @@ export class LeaseRegistry {
     return expired;
   }
 
-  private find(req: LeaseRefRequest): { kind: 'ok'; lease: Lease } | { kind: 'error'; error: LeaseError } {
+  private find(req: ZuYueYinYongQingQiu): { kind: 'ok'; lease: Lease } | { kind: 'error'; error: LeaseError } {
     const id = typeof req?.leaseId === 'string' ? req.leaseId : '';
     const holder = typeof req?.holder === 'string' ? req.holder.trim() : '';
     const scope = typeof req?.scope === 'string' ? req.scope : '';

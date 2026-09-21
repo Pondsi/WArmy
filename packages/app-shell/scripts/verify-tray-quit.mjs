@@ -20,11 +20,11 @@ const rCss = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/re
 const preload = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/preload.cjs'), 'utf8');
 
 check('single instance lock', /requestSingleInstanceLock/.test(main));
-check('second-instance centers+focusses', /second-instance[\s\S]{0,200}focusMainWindowCentered/.test(main));
+check('second-instance centers+focusses', /second-instance[\s\S]{0,200}zhuJiaoZhuChuangKouJuZhong/.test(main));
 check('focusMainWindowCentered centers bounds', /workArea[\s\S]{0,200}setBounds/.test(main));
-check('退出函数置强制退出标志（tuichuYingyong / forceQuit）', /function tuichuYingyong[\s\S]{0,200}qiangzhiTuichu = true/.test(main));
+check('退出函数置强制退出标志（tuichuYingyong / qiangzhiTuichu）', /function tuichuYingyong[\s\S]{0,200}qiangzhiTuichu = true/.test(main));
 check('托盘下班走统一退出函数（不是裸 app.quit）', /tray-off-work[\s\S]{0,80}tuichuYingyong|tuichuYingyong\('tray-off-work'\)/.test(main));
-check('no tray menu app.quit()', !/setContextMenu\(Menu\.buildFromTemplate\(\[\{ label: trayOffWorkLabel, click: \(\) => \{ app\.quit\(\); \}/.test(main));
+check('no tray menu app.quit()', !/setContextMenu\(Menu\.buildFromTemplate\(\[\{ label: tuopanGuanGongzuoBiaoqian, click: \(\) => \{ app\.quit\(\); \}/.test(main));
 check('退出 IPC 走统一退出函数', /warmy:app-quit[\s\S]{0,200}tuichuYingyong/.test(main));
 check('未强制退出时才拦成隐藏', /if \(!qiangzhiTuichu\)[\s\S]{0,80}preventDefault/.test(main));
 check('before-quit destroys tray', /before-quit[\s\S]{0,200}tray\?\.destroy/.test(main));

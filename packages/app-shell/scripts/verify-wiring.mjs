@@ -24,8 +24,8 @@ import crypto from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
-import {IdentityUnavailableError, duanyanTuidaoPipei, chuangjianShenfenGongyingshang, chuangjianShenfenQianmingzhe, buildIdentityChangeEntries, createRosterChecker, fingerprintDerivationForAppShell, knownContactFingerprints, listPeerContactViews, peerContactKeys, requireSignableIdentity, } from '../dist/identity-provider.js';
-import {IdentityStore, nullProtector} from '../dist/identity-store.js';
+import {ShenFenBuKeYongCuoWu, duanyanTuidaoPipei, chuangjianShenfenGongyingshang, chuangjianShenfenQianmingzhe, buildIdentityChangeEntries, createRosterChecker, fingerprintDerivationForAppShell, knownContactFingerprints, listPeerContactViews, peerContactKeys, requireSignableIdentity, } from '../dist/identity-provider.js';
+import {ShenFenCang, nullProtector} from '../dist/identity-store.js';
 import {fingerprintFromPublicKey, isValidFingerprint, keyObjectFromPrivateDer, publicKeyOfPrivate, publicKeyToB64} from '../dist/identity.js';
 import {NET_NOTES, SecureMesh, checkOutbound, discoverPublicIp, ensureNetDir, listLocalAddresses, benjiDizhiXinxi, pickLocalAddress, probeNet, secureLoopbackSmoke, summarizeProbe, tcpProbe, } from '../dist/net-wiring.js';
 import {shoujiTuisongTiaomu, createGitRunner, findHookScript, formatPreReceiveOutput, gouziBaozhuangJiaoben, installPreReceiveHook, parsePreReceiveStdin, runPreReceive, } from '../dist/repo-hooks.js';
@@ -89,7 +89,7 @@ section('1. 身份 ↔ 组网接缝（指纹推导 / 签名者 / 门控 / 名册
 function mkIdentity(name, passphrase) {
   const dir = path.join(tmpRoot, `id-${name}`);
   fs.mkdirSync(dir, { recursive: true });
-  const store = new IdentityStore(path.join(dir, 'identity.json'), { protector: nullProtector() });
+  const store = new ShenFenCang(path.join(dir, 'identity.json'), { protector: nullProtector() });
   const created = store.ensureIdentity(`alias-${name}`, { email: `${name}@example.test` }, passphrase ? { passphrase } : {});
   // ensureIdentity 会把 DEK 放进会话缓存（= 刚创建完是"解锁"状态）；
   // 真实后台进程重启后**没有**这个缓存，所以这里显式 lock() 复现那个状态。

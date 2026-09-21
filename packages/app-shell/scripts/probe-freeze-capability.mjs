@@ -57,7 +57,7 @@ const results = [];
 function record(r) { results.push(r); }
 
 /* ── 1. docker：CLI 命令面（不需要守护进程）+ 引擎是否可达 ───────────────── */
-async function probeDocker() {
+async function tanCeDocker() {
   const ver = await run('docker', ['--version'], 15000);
   if (!ver.ok && !ver.out) {
     return record({ runtimeId: 'docker', capability: 'supported', kind: 'image-commit', verified: 'cli-missing', cli: false, commands: ['docker commit <container> <image:tag>', 'docker save <image> -o x.tar', 'docker export <container> -o x.tar'], artifactSize: '未测（CLI 不在）', timeMs: null, notes: ['cli-not-found'] });
@@ -88,7 +88,7 @@ async function probeDocker() {
 }
 
 /* ── 2. wsl：**没有 commit**，只有 export/import（逐字核对 --help） ───────── */
-async function probeWsl() {
+async function tanCeWsl() {
   const help = await run('wsl.exe', ['--help'], 20000);
   const text = help.out + help.err;
   const has = (re) => re.test(text);
@@ -204,8 +204,8 @@ async function measureDockerCommit() {
 /* ── 主流程 ────────────────────────────────────────────────────────────── */
 console.log('=== 环境固化能力探测（runtime × 能不能固化 × 代价） ===');
 console.log('machine=' + os.platform() + '  at=' + new Date().toISOString() + '  measure=' + MEASURE);
-await probeDocker();
-await probeWsl();
+await tanCeDocker();
+await tanCeWsl();
 await probeOthers();
 if (!fs.existsSync(path.join(selfDir, '..', 'dist', 'container-probe.js'))) {
   console.log('⚠️ 缺少 dist/container-probe.js（--measure 需要它；先构建）');
