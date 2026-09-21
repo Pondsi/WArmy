@@ -14,9 +14,9 @@
  *    → 属**未验证**。`reason` 字段会明确写出验证到的范围。
  *  - UPnP 映射成功的判定需要真实路由器 → **未实现**。
  */
-import { randomHex } from './codec.js';
+import { suiJiShiLiuJin } from './codec.js';
 import type { DhtDiZhi } from './dht.js';
-import { type Ipv6Zuoyongyu, type Ipv6Baogao, guiLeiIpv6ZuoYongYu, jianchaBenjiIpv6, ipFamilyOfHost, normalizeHostLiteral, parseIpv4Bytes } from './ladder.js';
+import { type Ipv6Zuoyongyu, type Ipv6Baogao, guiLeiIpv6ZuoYongYu, jianchaBenjiIpv6, quZhuJiIpJiazu, guiFanZhuJiZiMian, jieXiIpv4ZiJie } from './ladder.js';
 
 export type DizhiZuoyongyu = 'loopback' | 'private' | 'link-local' | 'public' | 'hostname' | 'unknown';
 
@@ -26,9 +26,9 @@ export type DizhiZuoyongyu = 'loopback' | 'private' | 'link-local' | 'public' | 
  * `::1` → loopback；组播/未指定/非法 → unknown；`::ffff:a.b.c.d` 按内嵌 IPv4 判。
  */
 export function guiLeiDiZhi(host: string): DizhiZuoyongyu {
-  const h = normalizeHostLiteral(host);
+  const h = guiFanZhuJiZiMian(host);
   if (h === 'localhost' || h === '') return h === '' ? 'unknown' : 'loopback';
-  const v4 = parseIpv4Bytes(h);
+  const v4 = jieXiIpv4ZiJie(h);
   if (v4) {
     const a = v4[0] as number;
     const b = v4[1] as number;
@@ -41,7 +41,7 @@ export function guiLeiDiZhi(host: string): DizhiZuoyongyu {
     if (a === 0) return 'unknown';
     return 'public';
   }
-  if (ipFamilyOfHost(h) !== 6) return 'hostname';
+  if (quZhuJiIpJiazu(h) !== 6) return 'hostname';
   const scope: Ipv6Zuoyongyu = guiLeiIpv6ZuoYongYu(h);
   if (scope === 'global') return 'public';
   if (scope === 'ula') return 'private';
@@ -49,7 +49,7 @@ export function guiLeiDiZhi(host: string): DizhiZuoyongyu {
   if (scope === 'loopback') return 'loopback';
   if (scope === 'ipv4-mapped') {
     const tail = h.split(':').slice(-1)[0] as string;
-    return parseIpv4Bytes(tail) ? guiLeiDiZhi(tail) : 'unknown';
+    return jieXiIpv4ZiJie(tail) ? guiLeiDiZhi(tail) : 'unknown';
   }
   return 'unknown';
 }
@@ -182,7 +182,7 @@ export class KeBoRuTanCe {
     const verifiedBy: string[] = [];
 
     for (const peer of peers) {
-      const token = (this.opts.token ?? (() => randomHex(8)))();
+      const token = (this.opts.token ?? (() => suiJiShiLiuJin(8)))();
       try {
         const res = await this.opts.sendRpc(peer.addr, boHuiXiaoXi(token, advertised), 'dial_result', this.opts.timeoutMs ?? 4000);
         const ok = res['ok'] === true && (res['token'] === undefined || res['token'] === token);
@@ -199,11 +199,11 @@ export class KeBoRuTanCe {
       }
     }
 
-    const peerScopes = peers.map((p) => guiLeiDiZhi(p.addr.host));
+    const duiDuanZuoyongYuJi = peers.map((p) => guiLeiDiZhi(p.addr.host));
     let verifiedFrom: KeBoRuJieGuo['verifiedFrom'] = 'none';
     if (verifiedBy.length > 0) {
-      if (peerScopes.some((s) => s === 'public' || s === 'hostname')) verifiedFrom = 'public-peers';
-      else if (peerScopes.some((s) => s === 'private')) verifiedFrom = 'lan-peers';
+      if (duiDuanZuoyongYuJi.some((s) => s === 'public' || s === 'hostname')) verifiedFrom = 'public-peers';
+      else if (duiDuanZuoyongYuJi.some((s) => s === 'private')) verifiedFrom = 'lan-peers';
       else verifiedFrom = 'loopback';
     }
     const dialable = verifiedBy.length > 0;
@@ -221,7 +221,7 @@ export class KeBoRuTanCe {
       naturalDialableCandidate: v6.hasGlobalUnicast,
       reason: v6.reason,
     };
-    const baseReason = dialable
+    const jiBenYuanyin = dialable
       ? verifiedFrom === 'public-peers'
         ? '有公网/域名对端成功拨入本机宣告地址 → 外部可拨入'
         : verifiedFrom === 'lan-peers'
@@ -233,7 +233,7 @@ export class KeBoRuTanCe {
     const ipv6Beizhu = ipv6.hasGlobalUnicast
       ? `；另：本机有全局单播 IPv6 ${ipv6.publicCandidate ?? ''}（IPv6 无 NAT）→ **天然可拨入候选，无需打洞**（仅地址事实，不等于已验证公网可达）`
       : '；本机没有全局单播 IPv6（IPv6 档不适用）';
-    const reason = `${baseReason}${ipv6Beizhu}`;
+    const reason = `${jiBenYuanyin}${ipv6Beizhu}`;
     const dialableKind: KeBoRuZhongLei = dialable
       ? 'peer-verified'
       : ipv6.naturalDialableCandidate

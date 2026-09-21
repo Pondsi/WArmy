@@ -26,7 +26,7 @@
  * 与 `heartbeat()` 钩子，接线方决定保活间隔。
  */
 
-import { type CanDialResolution, type CanDialSignals, resolveCanDial } from './announce.js';
+import { type KeBoRuJieXiJieGuo, type KeBoRuXinHaoJi, jiexiKeBoRu } from './announce.js';
 
 export type LianJieZhongLei = 'member-initiated' | 'creator-probe';
 
@@ -76,7 +76,7 @@ export interface QingliJieguo {
   /** 未探测的原因（不可拨出 / 无待探测成员） */
   note: string;
   /** 本轮"是否可拨出"的依据来源（附八.9；两个信号不合并） */
-  canDialBasis: CanDialResolution['basis'];
+  canDialBasis: KeBoRuJieXiJieGuo['basis'];
 }
 
 interface ChengyuanZhuangtai {
@@ -108,7 +108,7 @@ export class LianJieHuoXing {
   private dialableFlagVerified = false;
   /** 地址事实推出的天然可拨入候选（如全局单播 IPv6） */
   private naturalDialableFlag = false;
-  private dialableBasis: CanDialResolution['basis'] = 'unspecified';
+  private dialableBasis: KeBoRuJieXiJieGuo['basis'] = 'unspecified';
   private readonly offlineFailures: number;
   private readonly offlineAfterMs: number;
   private readonly now: () => number;
@@ -131,8 +131,8 @@ export class LianJieHuoXing {
    * 任一为真即视为可拨出；两个信号**分别保留**（`dialable` / `naturalDialable` / `canDialBasis`），
    * UI 与日志要分得清"验证过"与"只是地址事实"。
    */
-  setDialable(v: CanDialSignals | boolean): void {
-    const res = resolveCanDial(v);
+  setDialable(v: KeBoRuXinHaoJi | boolean): void {
+    const res = jiexiKeBoRu(v);
     this.dialableFlag = res.canDial;
     this.dialableFlagVerified = res.dialable === true;
     this.naturalDialableFlag = res.naturalDialable === true;
@@ -151,7 +151,7 @@ export class LianJieHuoXing {
     return this.naturalDialableFlag;
   }
   /** 上面这个结论的依据来源（附八.9） */
-  get canDialBasis(): CanDialResolution['basis'] {
+  get canDialBasis(): KeBoRuJieXiJieGuo['basis'] {
     return this.dialableBasis;
   }
 
@@ -180,7 +180,7 @@ export class LianJieHuoXing {
   /** 成员发起的持久连接建立 → 立即判定在线（这是 C1 的主判据） */
   registerConnection(fp: string, conn: HuoXingLianJie, at = this.now()): ChengYuanHuoXing {
     const s = this.state(fp);
-    const wasOnline = s.online;
+    const cengZaiXian = s.online;
     s.connections.set(conn.id, conn);
     s.lastSeenAt = at;
     s.misses = 0;
@@ -189,7 +189,7 @@ export class LianJieHuoXing {
     // 只要有一条 member-initiated 连接存活，就以它为准
     if (conn.kind === 'member-initiated') s.via = 'member-connection';
     s.online = true;
-    if (!wasOnline) {
+    if (!cengZaiXian) {
       s.since = at;
       this.opts.onOnline?.(fp, s.via);
     }
@@ -215,8 +215,8 @@ export class LianJieHuoXing {
     s.misses = 0;
     s.offlineSince = null;
     if (s.connections.size > 0) {
-      const hasMemberInitiated = [...s.connections.values()].some((c) => c.kind === 'member-initiated');
-      s.via = hasMemberInitiated ? 'member-connection' : 'creator-probe';
+      const chengYuanYiFaQi = [...s.connections.values()].some((c) => c.kind === 'member-initiated');
+      s.via = chengYuanYiFaQi ? 'member-connection' : 'creator-probe';
       s.online = true;
     }
     return this.status(fp);
@@ -271,13 +271,13 @@ export class LianJieHuoXing {
   /** 探测成功 → 记为 creator-probe 在线（弱证据；无后续心跳会被迟滞判回离线） */
   private markProbeOnline(fp: string, at = this.now()): ChengYuanHuoXing {
     const s = this.state(fp);
-    const wasOnline = s.online;
+    const cengZaiXian = s.online;
     s.online = true;
     s.via = s.connections.size > 0 ? s.via : 'creator-probe';
     s.lastSeenAt = at;
     s.misses = 0;
     s.offlineSince = null;
-    if (!wasOnline) {
+    if (!cengZaiXian) {
       s.since = at;
       this.opts.onOnline?.(fp, s.via);
     }

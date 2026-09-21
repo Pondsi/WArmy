@@ -2610,15 +2610,14 @@
   }
 
   /**
-   * 凭证的**遮蔽显示**：露**前后各两组**，中间每一组都用「牛马」两个字写满。
+   * 凭证的**遮蔽显示**：露**前 3 组、后 4 组**，中间每一组都用「牛马」两个字写满。
    *
    * 为什么要遮：凭证就是私钥，屏幕上把它完整摆着，旁边有人看一眼/截个图就等于泄露。
-   * 遮蔽的形状（产品主定稿，两轮收紧过）：**按原有分组来**，每个 `-` 之间就是「牛马」**两个字**
-   *（不是"凑够三个字"）；可见范围是**前后各 2 组**，所以 51 位（17 组）遮住时为
-   * `2B5-09V-牛马-…-牛马-0KP-T3Q`（中间 13 个「牛马」）。
+   * 遮蔽形状按产品主逐轮收紧：51 位（17 组）现在是 `2B5-09V-KPY-牛马-…-牛马-3PX-0KP-T3Q`
+   * —— 中间 **10 个「牛马」**（每组两个字，不是三个）。后段多露一组，便于核对结尾。
    */
-  const CRED_HEAD_GROUPS = 2;
-  const CRED_TAIL_GROUPS = 2;
+  const CRED_HEAD_GROUPS = 3;
+  const CRED_TAIL_GROUPS = 4;
   function maskCredential(value) {
     const s = String(value || '');
     if (!s) return '—';
@@ -4026,6 +4025,18 @@
         yuanSu.className = 'prov-card';
         // 名称重复 ⇒ 这张卡片整体不可用：输入框与它下面的模型一起标红并给出原因
         const nameDup = providerLabelDupCount(pr.label, pr.id) > 0;
+        /**
+         * 「拉取模型」可用性（产品要求）：**名称 / 接口地址 / API Key 任一没填 ⇒ 按钮灰、点不动**。
+         * 例外：`protocol === 'ollama'` 这类**本来不需要密钥**的协议 —— 密钥字段对它不适用，
+         * 不算"没填写"（否则 Ollama 永远拉不了模型）。缺失项写进按钮 title，说清缺什么。
+         */
+        const keyRequired = pr.protocol !== 'ollama';
+        const quShiDe = [];
+        if (!String(pr.label || '').trim()) quShiDe.push(t('settings.fieldName'));
+        if (!String(pr.baseURL || '').trim()) quShiDe.push(t('settings.fieldBaseUrl'));
+        if (keyRequired && !String(pr.apiKey || '').trim() && !pr.hasKey) quShiDe.push(t('settings.fieldApiKey'));
+        const laQuJiuXu = quShiDe.length === 0;
+        const laQuBiaoTi = laQuJiuXu ? t('settings.fetchModels') : fmtKey('settings.fetchDisabledHint', { fields: quShiDe.join(' / ') });
         yuanSu.innerHTML =
           '<div class="prov-head" style="display:flex;justify-content:space-between;align-items:center">' +
           '<span>' + escapeHtml(pr.label) + '</span>' +
@@ -4036,7 +4047,7 @@
           '<div class="field"><label>' + t('settings.baseUrl') + '</label><input data-k="baseURL" value="' + escapeHtml(pr.baseURL) + '"/></div>' +
           '<div class="field"><label>' + t('settings.apiKey') + '</label><input data-k="apiKey" type="password" value="" placeholder="' + escapeHtml(pr.hasKey ? t('settings.keySaved') : t('settings.keyEmpty')) + '"/></div>' +
           '</div>' +
-          '<div class="prov-actions"><button class="btn-mini" data-fetch>' + t('settings.fetchModels') + '</button></div>' +
+          '<div class="prov-actions"><button class="btn-mini" data-fetch' + (laQuJiuXu ? '' : ' disabled') + ' title="' + escapeHtml(laQuBiaoTi) + '">' + t('settings.fetchModels') + '</button></div>' +
           '<div class="model-row">' +
           (((pr.models || [])
             .map((m) => {
@@ -4178,21 +4189,21 @@
       // ── 供应商预设（常用 10 家 + 其他）──
       const PROVIDER_PRESETS = [
         { id: 'deepseek', label: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com/v1' },
-        { id: 'openai', label: 'OpenAI', protocol: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
-        { id: 'moonshot', label: 'Moonshot (Kimi)', protocol: 'openai-compatible', baseURL: 'https://api.moonshot.cn/v1' },
-        { id: 'zhipu', label: '智谱 GLM', protocol: 'openai-compatible', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
-        { id: 'dashscope', label: '通义千问', protocol: 'openai-compatible', baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
-        { id: 'siliconflow', label: 'SiliconFlow', protocol: 'openai-compatible', baseURL: 'https://api.siliconflow.cn/v1' },
-        { id: 'openrouter', label: 'OpenRouter', protocol: 'openai-compatible', baseURL: 'https://openrouter.ai/api/v1' },
-        { id: 'anthropic', label: 'Anthropic (Claude)', protocol: 'anthropic', baseURL: 'https://api.anthropic.com' },
-        { id: 'gemini', label: 'Google Gemini', protocol: 'openai-compatible', baseURL: 'https://generativelanguage.googleapis.com/v1beta' },
+        { id: 'openai', label: t('settings.provider.openai'), protocol: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
+        { id: 'moonshot', label: t('settings.provider.moonshot'), protocol: 'openai-compatible', baseURL: 'https://api.moonshot.cn/v1' },
+        { id: 'zhipu', label: t('settings.provider.zhipu'), protocol: 'openai-compatible', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
+        { id: 'dashscope', label: t('settings.provider.dashscope'), protocol: 'openai-compatible', baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+        { id: 'siliconflow', label: t('settings.provider.siliconflow'), protocol: 'openai-compatible', baseURL: 'https://api.siliconflow.cn/v1' },
+        { id: 'openrouter', label: t('settings.provider.openrouter'), protocol: 'openai-compatible', baseURL: 'https://openrouter.ai/api/v1' },
+        { id: 'anthropic', label: t('settings.provider.anthropic'), protocol: 'anthropic', baseURL: 'https://api.anthropic.com' },
+        { id: 'gemini', label: t('settings.provider.gemini'), protocol: 'openai-compatible', baseURL: 'https://generativelanguage.googleapis.com/v1beta' },
         { id: 'ollama', label: 'Ollama (本地)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434/v1' },
-        { id: 'ollama-remote', label: 'Ollama (远程/在线)', protocol: 'ollama', baseURL: 'http://<host>:11434/v1' },
-        { id: 'groq', label: 'Groq', protocol: 'openai-compatible', baseURL: 'https://api.groq.com/openai/v1' },
-        { id: 'mistral', label: 'Mistral', protocol: 'openai-compatible', baseURL: 'https://api.mistral.ai/v1' },
-        { id: 'together', label: 'Together AI', protocol: 'openai-compatible', baseURL: 'https://api.together.xyz/v1' },
-        { id: 'fireworks', label: 'Fireworks AI', protocol: 'openai-compatible', baseURL: 'https://api.fireworks.ai/inference/v1' },
-        { id: 'perplexity', label: 'Perplexity', protocol: 'openai-compatible', baseURL: 'https://api.perplexity.ai' },
+        { id: 'ollama-remote', label: t('settings.provider.ollamaRemote'), protocol: 'ollama', baseURL: 'http://<host>:11434/v1' },
+        { id: 'groq', label: t('settings.provider.groq'), protocol: 'openai-compatible', baseURL: 'https://api.groq.com/openai/v1' },
+        { id: 'mistral', label: t('settings.provider.mistral'), protocol: 'openai-compatible', baseURL: 'https://api.mistral.ai/v1' },
+        { id: 'together', label: t('settings.provider.together'), protocol: 'openai-compatible', baseURL: 'https://api.together.xyz/v1' },
+        { id: 'fireworks', label: t('settings.provider.fireworks'), protocol: 'openai-compatible', baseURL: 'https://api.fireworks.ai/inference/v1' },
+        { id: 'perplexity', label: t('settings.provider.perplexity'), protocol: 'openai-compatible', baseURL: 'https://api.perplexity.ai' },
         { id: '__other__', label: t('settings.providerOther'), protocol: 'openai-compatible', baseURL: '' },
       ];
       const PROVIDER_MAX = 50;
@@ -8045,7 +8056,7 @@
   // ── 3 权限审批：与决策卡同一通知区视觉整合 ──
   function showApprovalDialog(payload) {
     return new Promise((resolve) => {
-      const finish = async (allowed, scope) => {
+      const wanCheng = async (allowed, scope) => {
         const host = $('approval-host');
         if (host) host.innerHTML = '';
         $('modal-root')?.classList.add('hidden');
@@ -8067,10 +8078,10 @@
         host.querySelectorAll('[data-ap]').forEach((b) => {
           b.onclick = () => {
             const k = b.getAttribute('data-ap');
-            if (k === 'once') void finish(true, 'once');
-            else if (k === 'project') void finish(true, 'project');
-            else if (k === 'global') void finish(true, 'global');
-            else void finish(false, 'deny');
+            if (k === 'once') void wanCheng(true, 'once');
+            else if (k === 'project') void wanCheng(true, 'project');
+            else if (k === 'global') void wanCheng(true, 'global');
+            else void wanCheng(false, 'deny');
           };
         });
       }
@@ -8092,10 +8103,10 @@
         };
         acts.appendChild(b);
       };
-      zao(t('approval.deny'), 'btn-mini', () => finish(false, 'deny'));
-      zao(t('approval.once'), 'btn-primary', () => finish(true, 'once'));
-      zao(t('approval.project'), 'btn-mini', () => finish(true, 'project'));
-      zao(t('approval.global'), 'btn-mini', () => finish(true, 'global'));
+      zao(t('approval.deny'), 'btn-mini', () => wanCheng(false, 'deny'));
+      zao(t('approval.once'), 'btn-primary', () => wanCheng(true, 'once'));
+      zao(t('approval.project'), 'btn-mini', () => wanCheng(true, 'project'));
+      zao(t('approval.global'), 'btn-mini', () => wanCheng(true, 'global'));
       root.classList.remove('hidden');
     });
   }
@@ -9967,7 +9978,7 @@
     head.textContent = t('container.project.switchBody');
     body.appendChild(head);
     let done = false;
-    const finish = (v) => { if (done) return; done = true; root.classList.add('hidden'); resolveSwitch(v); };
+    const wanCheng = (v) => { if (done) return; done = true; root.classList.add('hidden'); resolveSwitch(v); };
     let resolveSwitch = null;
     const p = new Promise((res) => { resolveSwitch = res; });
     if (!usable.length) {
@@ -9985,7 +9996,7 @@
       b.setAttribute('data-pick', id);
       b.innerHTML = '<span class="ctg-env-title">' + escapeHtml(t('container.rt.' + id + '.name')) + '</span>' +
         '<span class="ctg-dim">' + escapeHtml(t('container.project.switchFits')) + '</span>';
-      b.onclick = () => finish(id);
+      b.onclick = () => wanCheng(id);
       body.appendChild(b);
     });
     const acts = $('modal-actions');
@@ -9994,12 +10005,12 @@
     more.className = 'btn-mini';
     more.id = 'switch-more';
     more.textContent = t('container.project.switchMore');
-    more.onclick = () => { finish('__more__'); };
+    more.onclick = () => { wanCheng('__more__'); };
     const cancel = document.createElement('button');
     cancel.className = 'btn-mini';
     cancel.id = 'switch-cancel';
     cancel.textContent = t('common.cancel');
-    cancel.onclick = () => finish(null);
+    cancel.onclick = () => wanCheng(null);
     acts.append(more, cancel);
     root.classList.remove('hidden');
     if (more) more.focus();
@@ -10112,14 +10123,14 @@
       const acts = $('modal-actions');
       acts.innerHTML = '';
       let done = false;
-      const finish = (v) => { if (done) return; done = true; root.classList.add('hidden'); resolve(v); };
+      const wanCheng = (v) => { if (done) return; done = true; root.classList.add('hidden'); resolve(v); };
       (choices || []).forEach((c) => {
         const b = document.createElement('button');
         b.className = c.primary ? 'btn-primary' : 'btn-mini';
         b.textContent = c.label;
         b.setAttribute('data-choice', c.key);
         b.id = 'ctg-choice-' + c.key;
-        b.onclick = () => finish(c.key);
+        b.onclick = () => wanCheng(c.key);
         acts.appendChild(b);
       });
       root.classList.remove('hidden');

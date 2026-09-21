@@ -27,12 +27,12 @@ import {
   hkdf,
   open,
   sealWithIv,
-  sha256Hex,
-  toBuf,
+  sha256ShiLiuJin,
+  zhuanZiJieZu,
   u32be,
   u64be,
 } from './codec.js';
-import type { WoshouJuese, SessionKeys } from './handshake.js';
+import type { WoshouJuese, HuiHuaMiYaoJi } from './handshake.js';
 
 export const RECORD_TYPE_APP = 1;
 export const RECORD_TYPE_KEY_UPDATE = 2;
@@ -41,7 +41,7 @@ export const MAX_RECORDS_PER_GENERATION = 2 ** 32 - 1;
 
 export type TongDaoFangXiang = 'initiator-to-responder' | 'responder-to-initiator';
 
-export type SecureChannelErrorCode =
+export type AnQuanTongDaoCuoWuMa =
   | 'not-authorized-tag'
   | 'record-too-large'
   | 'generation-exhausted'
@@ -51,7 +51,7 @@ export type SecureChannelErrorCode =
 
 export class AnQuanTongDaoCuoWu extends Error {
   constructor(
-    public readonly code: SecureChannelErrorCode,
+    public readonly code: AnQuanTongDaoCuoWuMa,
     message: string
   ) {
     super(message);
@@ -59,7 +59,7 @@ export class AnQuanTongDaoCuoWu extends Error {
   }
 }
 
-export interface SecureChannelEvent {
+export interface AnQuanTongDaoShiJian {
   type: 'send' | 'receive' | 'key-update';
   generation: number;
   direction: TongDaoFangXiang;
@@ -68,12 +68,12 @@ export interface SecureChannelEvent {
   ts: number;
 }
 
-export interface SecureChannelOptions {
+export interface AnQuanTongDaoXuanXiang {
   /** 自动要求换密钥的阈值（已发记录数），默认 2^20 */
   autoKeyUpdateAfter?: number;
   maxRecordBytes?: number;
   now?: () => number;
-  onEvent?: (e: SecureChannelEvent) => void;
+  onEvent?: (e: AnQuanTongDaoShiJian) => void;
 }
 
 interface FangxiangZhuangtai {
@@ -84,7 +84,7 @@ interface FangxiangZhuangtai {
   generation: number;
 }
 
-export interface SecureChannelStats {
+export interface AnQuanTongDaoTongJi {
   recordsSent: number;
   recordsReceived: number;
   bytesSent: number;
@@ -106,9 +106,9 @@ export class AnQuanTongDao {
   private closed = false;
   private readonly autoKeyUpdateAfter: number;
   private readonly now: () => number;
-  private readonly opts: SecureChannelOptions;
+  private readonly opts: AnQuanTongDaoXuanXiang;
   private pendingKeyUpdate = false;
-  private stats: SecureChannelStats = {
+  private stats: AnQuanTongDaoTongJi = {
     recordsSent: 0,
     recordsReceived: 0,
     bytesSent: 0,
@@ -120,9 +120,9 @@ export class AnQuanTongDao {
   private readonly keyHistory: { generation: number; fingerprint: string }[] = [];
 
   constructor(
-    private readonly session: SessionKeys,
+    private readonly session: HuiHuaMiYaoJi,
     role: WoshouJuese = session.role,
-    opts: SecureChannelOptions = {}
+    opts: AnQuanTongDaoXuanXiang = {}
   ) {
     this.opts = opts;
     this.autoKeyUpdateAfter = opts.autoKeyUpdateAfter ?? 2 ** 20;
@@ -172,7 +172,7 @@ export class AnQuanTongDao {
   get counters(): { sent: number; received: number } {
     return { sent: this.sendState.counter, received: this.recvState.counter };
   }
-  get channelStats(): SecureChannelStats {
+  get channelStats(): AnQuanTongDaoTongJi {
     return { ...this.stats };
   }
   get wantsKeyUpdate(): boolean {
@@ -180,7 +180,7 @@ export class AnQuanTongDao {
   }
   /** 本端发送方向的当前密钥指纹 */
   get sendFingerprint(): string {
-    return sha256Hex(this.sendState.material, Buffer.from(`gen|${this.sendState.generation}`));
+    return sha256ShiLiuJin(this.sendState.material, Buffer.from(`gen|${this.sendState.generation}`));
   }
   get history(): ReadonlyArray<{ generation: number; fingerprint: string }> {
     return this.keyHistory;
@@ -191,7 +191,7 @@ export class AnQuanTongDao {
   /** 加密一条应用记录，返回可直接写 socket 的字节 */
   sealRecord(payload: Zijie): Buffer {
     if (this.closed) throw new AnQuanTongDaoCuoWu('peer-closed', 'channel 已关闭');
-    const body = this.encrypt(RECORD_TYPE_APP, toBuf(payload));
+    const body = this.encrypt(RECORD_TYPE_APP, zhuanZiJieZu(payload));
     this.stats.recordsSent += 1;
     this.stats.bytesSent += body.length;
     this.emit('send', body.length);
@@ -270,7 +270,7 @@ export class AnQuanTongDao {
     this.closed = true;
   }
 
-  private emit(type: SecureChannelEvent['type'], bytes?: number, detail?: string): void {
+  private emit(type: AnQuanTongDaoShiJian['type'], bytes?: number, detail?: string): void {
     this.opts.onEvent?.({
       type,
       generation: type === 'receive' ? this.recvState.generation : this.sendState.generation,

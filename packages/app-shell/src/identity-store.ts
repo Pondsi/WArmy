@@ -34,8 +34,8 @@ import {
   lianShiZhiWen,
   moRenChengYuanZhiWen,
   isSameMember,
-  verifyAndApplyRevocationList,
-  verifyMemberCertificate,
+  yanZhengBingYingYongCheXiaoBiao,
+  yanZhengChengYuanZhengShu,
   type ChengYuanZhengShuMa,
   type ChengYuanZhengShu,
   type quChengYuanZhiWen,
@@ -1342,7 +1342,7 @@ export class MembershipStore {
       };
     }
     // ② 结构 / 指纹绑定 / 时间 / 签名
-    const v = verifyMemberCertificate(
+    const v = yanZhengChengYuanZhengShu(
       cert,
       this.verifyOpts({ expectGroupId: groupId, ...(pinned ? { expectIssuerFingerprint: pinned } : {}) })
     );
@@ -1416,7 +1416,7 @@ export class MembershipStore {
     const cunzai = file.groups[groupId];
     const pinned = opts.expectIssuerFingerprint || cunzai?.issuerFingerprint || '';
     const current = cunzai?.revocation ?? null;
-    const res = verifyAndApplyRevocationList(
+    const res = yanZhengBingYingYongCheXiaoBiao(
       current,
       list,
       this.verifyOpts({ expectGroupId: groupId, ...(pinned ? { expectIssuerFingerprint: pinned } : {}) })
@@ -1491,7 +1491,7 @@ export class MembershipStore {
       if (!certs.length) continue;
       kandaoZhengshu = true;
       for (const cert of certs) {
-        const v = verifyMemberCertificate(
+        const v = yanZhengChengYuanZhengShu(
           cert,
           this.verifyOpts({
             now: opts.now,

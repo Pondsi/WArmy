@@ -28,7 +28,7 @@
  * （见 `verify-connectivity.mjs` 的"真实公网可达性未验证"断言）。
  */
 import net from 'node:net';
-import { sha256Hex } from './codec.js';
+import { sha256ShiLiuJin } from './codec.js';
 import type { DhtDiZhi } from './dht.js';
 
 export const ZHONGJI_XIEYI = 'warmy-relay/1';
@@ -143,7 +143,7 @@ interface Yiban {
   timer?: NodeJS.Timeout;
 }
 
-function writeLine(sock: net.Socket, obj: ZhongJiYiZhuCe | ZhongJiJiuXu | Record<string, unknown>): void {
+function xieYiHang(sock: net.Socket, obj: ZhongJiYiZhuCe | ZhongJiJiuXu | Record<string, unknown>): void {
   try {
     sock.write(Buffer.from(`${JSON.stringify(obj)}\n`, 'utf8'));
   } catch {
@@ -318,7 +318,7 @@ export class ZhongJiJieDian {
       this.registered += 1;
       sock.removeListener('data', onData);
       this.emit({ type: 'register', token, detail: role });
-      writeLine(sock, { t: 'relay-registered', v: 1, token, role });
+      xieYiHang(sock, { t: 'relay-registered', v: 1, token, role });
       const caowei = this.slots.get(token) ?? {};
       if (role === 'listener') {
         if (caowei.listener) this.destroy(caowei.listener, 'replaced-by-new-listener');
@@ -334,7 +334,7 @@ export class ZhongJiJieDian {
       });
       half.timer = setTimeout(() => {
         if (!half || half.paired || half.closed) return;
-        writeLine(sock, { t: 'relay-ready', v: 1, token, paired: false, reason: `等待对端配对超时 ${this.opts.pairTimeoutMs ?? DEFAULT_RELAY_PAIR_TIMEOUT_MS}ms（对端未注册/不可达）` });
+        xieYiHang(sock, { t: 'relay-ready', v: 1, token, paired: false, reason: `等待对端配对超时 ${this.opts.pairTimeoutMs ?? DEFAULT_RELAY_PAIR_TIMEOUT_MS}ms（对端未注册/不可达）` });
         this.emit({ type: 'reject', token, detail: 'pair-timeout' });
         this.destroy(half, 'pair-timeout');
       }, this.opts.pairTimeoutMs ?? DEFAULT_RELAY_PAIR_TIMEOUT_MS);
@@ -375,8 +375,8 @@ export class ZhongJiJieDian {
     // 配对前若已收到数据（对端没等 ready 就发了），**原样按序补发**，不丢不乱
     const dialerPre = dialer.reader.takeAll();
     const listenerPre = listener.reader.takeAll();
-    writeLine(listener.sock, { t: 'relay-ready', v: 1, token, paired: true });
-    writeLine(dialer.sock, { t: 'relay-ready', v: 1, token, paired: true });
+    xieYiHang(listener.sock, { t: 'relay-ready', v: 1, token, paired: true });
+    xieYiHang(dialer.sock, { t: 'relay-ready', v: 1, token, paired: true });
     this.pipe(dialer, listener, 'dialer->listener');
     this.pipe(listener, dialer, 'listener->dialer');
     if (dialerPre.length > 0) this.forward(dialer, listener, dialerPre, 'dialer->listener');
@@ -445,7 +445,7 @@ export class ZhongJiJieDian {
 
   private rejectHalf(sock: net.Socket, reason: string): void {
     this.rejected += 1;
-    writeLine(sock, { t: 'relay-ready', v: 1, token: '', paired: false, reason });
+    xieYiHang(sock, { t: 'relay-ready', v: 1, token: '', paired: false, reason });
     this.emit({ type: 'reject', detail: reason });
     try {
       sock.destroy();
@@ -504,7 +504,7 @@ export interface ZhongJiSuiDaoXuanXiang {
 }
 
 /** 打开一条到中继的连接并完成控制行握手 */
-async function openRelayConn(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJueSe): Promise<ZhongjiLianjie> {
+async function daKaiZhongJiLianJie(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJueSe): Promise<ZhongjiLianjie> {
   const timeoutMs = opts.readyTimeoutMs ?? DEFAULT_RELAY_PAIR_TIMEOUT_MS;
   const sock = net.connect({ host: opts.relay.host, port: opts.relay.port });
   const reader = new HangDuquqi();
@@ -678,7 +678,7 @@ export class ZhongJiSuiDaoBoHao {
     local.on('data', (c: Buffer) => {
       buffered.push(c);
     });
-    const conn = await openRelayConn(this.opts, 'dialer');
+    const conn = await daKaiZhongJiLianJie(this.opts, 'dialer');
     if (!conn.ok || !conn.sock) {
       this.stats.lastError = conn.reason ?? 'relay-connect-failed';
       this.settlePair({ ok: false, reason: this.stats.lastError });
@@ -788,7 +788,7 @@ export class ZhongJiSuiDaoJianTing {
   async start(): Promise<{ ok: boolean; registered: boolean; reason?: string }> {
     this.stats.attempts += 1;
     // 先做一次"中继可达"的真实 TCP 检查（注册本身需要它）
-    const conn = await openRelayConn(this.opts, 'listener');
+    const conn = await daKaiZhongJiLianJie(this.opts, 'listener');
     if (!conn.ok || !conn.sock) {
       this.stats.lastError = conn.reason ?? 'relay-connect-failed';
       return { ok: false, registered: false, reason: this.stats.lastError };
@@ -1066,7 +1066,7 @@ export interface ZhongJiJueDingXuanXiang {
  */
 export function quZhongJiLingPai(fingerprintA: string, fingerprintB: string, relay: DhtDiZhi): string {
   const peiDui = [fingerprintA, fingerprintB].sort().join('|');
-  return sha256Hex(Buffer.from(`${ZHONGJI_XIEYI}|token|${peiDui}|${relay.host}:${relay.port}`, 'utf8')).slice(0, 32);
+  return sha256ShiLiuJin(Buffer.from(`${ZHONGJI_XIEYI}|token|${peiDui}|${relay.host}:${relay.port}`, 'utf8')).slice(0, 32);
 }
 
 async function morenBoHao(host: string, port: number, timeoutMs: number): Promise<{ ok: boolean; detail?: string }> {

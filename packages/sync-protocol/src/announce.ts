@@ -29,8 +29,8 @@ import {
   type DuiduanDizhiJilu,
   type JiluQianmingMoshi,
   DhtJieDian,
-  recordKeyForFingerprint,
-  verifyRecordEnvelope,
+  jiLuJianYouZhiWen,
+  yanZhengJiLuFeng,
 } from './dht.js';
 import type { LianJieTiZi, TiziDangwei } from './ladder.js';
 
@@ -46,14 +46,14 @@ export type GuangBoYuanYin = 'startup' | 'address-changed' | 'creator-online' | 
  *
  * UI/日志需要分得清"是验证过还是只是地址事实"，所以两者在报告里都保留。
  */
-export interface CanDialSignals {
+export interface KeBoRuXinHaoJi {
   /** 对端真的拨回来了（已验证） */
   dialable?: boolean;
   /** 地址事实推出：天然可拨入候选（未经验证） */
   naturalDialable?: boolean;
 }
 
-export interface CanDialResolution extends CanDialSignals {
+export interface KeBoRuJieXiJieGuo extends KeBoRuXinHaoJi {
   /** 是否允许主动拨出（两个信号任一为真） */
   canDial: boolean;
   /** 依据来源（不合并两个信号的来历，便于日志/UI 区分） */
@@ -66,7 +66,7 @@ export interface CanDialResolution extends CanDialSignals {
  *
  * 不给（undefined）= 默认允许主动拨（保持既有语义：不知道就不自我阉割）。
  */
-export function resolveCanDial(input?: CanDialSignals | boolean): CanDialResolution {
+export function jiexiKeBoRu(input?: KeBoRuXinHaoJi | boolean): KeBoRuJieXiJieGuo {
   if (input === undefined) return { canDial: true, basis: 'unspecified' };
   if (typeof input === 'boolean') {
     return input
@@ -83,7 +83,7 @@ export function resolveCanDial(input?: CanDialSignals | boolean): CanDialResolut
   };
 }
 
-export interface RosterMember {
+export interface MingceChengyuan {
   fingerprint: string;
   nodeId?: string;
   alias?: string;
@@ -112,7 +112,7 @@ export interface BukeDaChengyuan {
    * 这条记录是**哪一种"不可拨入"**造成的（附八.9）：只有两个信号都为假时才会出现；
    * 有全局 IPv6（`natural-address`）时**不再**走这条路径（那是被修正掉的误判）。
    */
-  canDialBasis?: CanDialResolution['basis'];
+  canDialBasis?: KeBoRuJieXiJieGuo['basis'];
 }
 
 export interface GuangBoBaoGao {
@@ -126,7 +126,7 @@ export interface GuangBoBaoGao {
   /** 因本机不可拨入而跳过的主动连接 */
   skippedNotDialable: string[];
   /** 本次宣告的 canDial 判据（两个信号分开保留，附八.9） */
-  canDial: CanDialResolution;
+  canDial: KeBoRuJieXiJieGuo;
   durationMs: number;
   at: number;
 }
@@ -142,7 +142,7 @@ export interface RuXiangGonggao {
   rung?: TiziDangwei | null;
   reason?: string;
   /** 判定"本机不可拨入"时的依据（附八.9；两个信号分别为 verified-dialable / natural-address / neither） */
-  canDialBasis?: CanDialResolution['basis'];
+  canDialBasis?: KeBoRuJieXiJieGuo['basis'];
 }
 
 /**
@@ -161,7 +161,7 @@ export interface GuangBoFuWuXuanXiang {
   dht: DhtJieDian;
   ladder?: LianJieTiZi;
   /** 本群名册（宣告与授权都用它） */
-  roster: () => RosterMember[];
+  roster: () => MingceChengyuan[];
   /** 本机 TCP 监听地址（写进宣告记录） */
   listenAddr: () => DhtDiZhi;
   /** 地址性质 */
@@ -172,9 +172,9 @@ export interface GuangBoFuWuXuanXiang {
    * 输入可以是旧布尔（`() => true`），也可以是两个信号（`() => ({ dialable, naturalDialable })`）——
    * **有全局 IPv6 的机器必须算"可拨出"**（附八.9），所以不要只认 `dialable === true`。
    */
-  canDial?: () => CanDialSignals | boolean;
+  canDial?: () => KeBoRuXinHaoJi | boolean;
   /** 自定义建连（默认走阶梯）；返回 ok 表示已建立 */
-  connect?: (member: RosterMember, addresses: { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[]) => Promise<{ ok: boolean; rung?: TiziDangwei | null; detail?: string }>;
+  connect?: (member: MingceChengyuan, addresses: { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[]) => Promise<{ ok: boolean; rung?: TiziDangwei | null; detail?: string }>;
   onPeerAnnouncement?: (a: RuXiangGonggao, env: DhtJiLuFeng, from: DhtDiZhi | null) => void;
   onConnectResult?: (a: GuangBoChangShi) => void;
   onUnreachable?: (u: BukeDaChengyuan) => void;
@@ -218,11 +218,11 @@ export class GuangBoFuWu {
     return this.opts.now ? this.opts.now() : Date.now();
   }
 
-  private rosterOf(fp: string): RosterMember | undefined {
+  private rosterOf(fp: string): MingceChengyuan | undefined {
     return this.opts.roster().find((m) => m.fingerprint === fp);
   }
 
-  private addressCandidates(member: RosterMember, fromDht?: DuiduanDizhiJilu): { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[] {
+  private addressCandidates(member: MingceChengyuan, fromDht?: DuiduanDizhiJilu): { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[] {
     const out: { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[] = [];
     if (fromDht) out.push({ host: fromDht.host, port: fromDht.port, source: 'dht' });
     for (const a of member.addresses ?? []) out.push({ host: a.host, port: a.port, source: a.source ?? 'manual' });
@@ -260,18 +260,18 @@ export class GuangBoFuWu {
     const skippedNotDialable: string[] = [];
     // 附八.9：`dialable`（已验证）与 `naturalDialable`（地址事实）**任一为真即可主动拨**；
     // 两个信号都保留在报告里，别在这里压成一个布尔丢掉来历。
-    const canDialRes = resolveCanDial(this.opts.canDial?.());
+    const keBoRuJieXiJieGuo = jiexiKeBoRu(this.opts.canDial?.());
 
     for (const member of this.opts.roster()) {
       if (member.fingerprint === myFingerprint) continue;
-      if (!canDialRes.canDial) {
+      if (!keBoRuJieXiJieGuo.canDial) {
         // C1：本机确实不可拨入（既没被对端验证过，也没有 IPv6 这类天然可拨入地址）→ 不主动拨，等对方拨入
         skippedNotDialable.push(member.fingerprint);
         const u: BukeDaChengyuan = {
           fingerprint: member.fingerprint,
           reason: '本机不可拨入（既无对端验证，也无天然可拨入地址）→ 不主动探测，等待对方上线宣告/拨入',
           fallback: 'wait-for-peer-announce',
-          canDialBasis: canDialRes.basis,
+          canDialBasis: keBoRuJieXiJieGuo.basis,
         };
         unreachable.push(u);
         this.unreachableLog.push(u);
@@ -314,14 +314,14 @@ export class GuangBoFuWu {
       connected,
       unreachable,
       skippedNotDialable,
-      canDial: canDialRes,
+      canDial: keBoRuJieXiJieGuo,
       durationMs: this.now() - startedAt,
       at: startedAt,
     };
   }
 
   private async connectTo(
-    member: RosterMember,
+    member: MingceChengyuan,
     addresses: { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[],
     attempt: GuangBoChangShi
   ): Promise<GuangBoChangShi> {
@@ -401,7 +401,7 @@ export class GuangBoFuWu {
     const key = env.k;
     const quchongMiyao = `${key}:${env.s}`;
     const chongfu = this.seenAnnouncements.has(quchongMiyao);
-    const verified = await verifyRecordEnvelope(env, {
+    const verified = await yanZhengJiLuFeng(env, {
       groupKeys: this.opts.dht.groupKeys,
       requireDecrypt: true,
       now: this.opts.now,
@@ -417,7 +417,7 @@ export class GuangBoFuWu {
       // 自己的记录（自己发布时也会触发 watch）：静默忽略，不记进拒绝日志
       return { ok: false, chongfu, fingerprint: record.fp, reason: '自己发布的记录（忽略）' };
     }
-    if (key !== recordKeyForFingerprint(record.fp)) {
+    if (key !== jiLuJianYouZhiWen(record.fp)) {
       const rej: RuXiangGonggao = { ok: false, chongfu, fingerprint: record.fp, reason: '记录键与被宣告指纹不符（键/内容不一致）' };
       this.inboundRejectedLog.push(rej);
       this.opts.onPeerAnnouncement?.(rej, env, from);
@@ -456,14 +456,14 @@ export class GuangBoFuWu {
 
     // 附八.9：这里**同样**要认 `naturalDialable`（有全局 IPv6 ⇒ 天然可拨入），
     // 否则有 IPv6 的机器收到宣告后会只登记地址、白白放弃一次可直连的机会。
-    const canDialRes = resolveCanDial(this.opts.canDial?.());
-    if (!canDialRes.canDial) {
+    const keBoRuJieXiJieGuo = jiexiKeBoRu(this.opts.canDial?.());
+    if (!keBoRuJieXiJieGuo.canDial) {
       // C1：本机确实不可拨入 → 只登记地址，等对方拨入（不主动拨）
       const res: RuXiangGonggao = {
         ...base,
         connected: false,
         reason: '本机不可拨入（既无对端验证，也无天然可拨入地址）→ 只登记地址，等待对方拨入（C1）',
-        canDialBasis: canDialRes.basis,
+        canDialBasis: keBoRuJieXiJieGuo.basis,
       };
       this.inboundAcceptedLog.push(res);
       this.opts.onPeerAnnouncement?.(res, env, from);

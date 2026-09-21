@@ -45,7 +45,7 @@ import {
   normalizeEd25519PublicKey,
   sha256,
   signEd25519Local,
-  toBuf,
+  zhuanZiJieZu,
   verifyEd25519Local,
 } from './codec.js';
 
@@ -61,7 +61,7 @@ export interface ShenfenGongyingshang {
 export type ZhiWenTuiDao = (publicKey: Buffer) => string;
 
 /** 默认指纹：base32(sha256(公钥))，52 字符 */
-export function warmyFingerprint(publicKey: Zijie): string {
+export function warmyZhiWen(publicKey: Zijie): string {
   return base32(sha256(publicKey));
 }
 
@@ -96,7 +96,7 @@ export interface NormalizeIdentityOptions {
   selfTest?: boolean;
 }
 
-export function isNormalizedIdentity(v: unknown): v is GuifanShenfen {
+export function shiFouGuiFanShenFen(v: unknown): v is GuifanShenfen {
   return (
     typeof v === 'object' &&
     v !== null &&
@@ -107,12 +107,12 @@ export function isNormalizedIdentity(v: unknown): v is GuifanShenfen {
   );
 }
 
-export async function normalizeIdentity(
+export async function guiFanShenFen(
   provider: ShenfenGongyingshang | GuifanShenfen,
   opts: NormalizeIdentityOptions = {}
 ): Promise<GuifanShenfen> {
-  if (isNormalizedIdentity(provider)) return provider;
-  const derivation = opts.fingerprintDerivation ?? warmyFingerprint;
+  if (shiFouGuiFanShenFen(provider)) return provider;
+  const derivation = opts.fingerprintDerivation ?? warmyZhiWen;
   // 公钥接受两种常见表示：32 字节 raw，或 44 字节 SPKI DER（Ed25519）
   let publicKey: Buffer;
   try {
@@ -139,18 +139,18 @@ export async function normalizeIdentity(
     normalizedIdentity: true,
     fingerprint: provider.fingerprint,
     publicKey,
-    sign: async (message) => toBuf(await provider.sign(toBuf(message))),
-    verify: async (message, signature, pk) => (await provider.verify(toBuf(message), toBuf(signature), toBuf(pk))) === true,
+    sign: async (message) => zhuanZiJieZu(await provider.sign(zhuanZiJieZu(message))),
+    verify: async (message, signature, pk) => (await provider.verify(zhuanZiJieZu(message), zhuanZiJieZu(signature), zhuanZiJieZu(pk))) === true,
     enforceLocalEd25519: opts.enforceLocalEd25519 !== false,
     requireInjectedVerify: opts.requireInjectedVerify === true,
     selfTested: false,
   };
-  if (opts.selfTest) await selfTestIdentity(normalized);
+  if (opts.selfTest) await ziWoJianYanShenFen(normalized);
   return normalized;
 }
 
 /** sign → verify 往返自检：注入实现若不满足契约，这里就会暴露 */
-export async function selfTestIdentity(identity: GuifanShenfen, context = 'warmy-sync self-test'): Promise<void> {
+export async function ziWoJianYanShenFen(identity: GuifanShenfen, context = 'warmy-sync self-test'): Promise<void> {
   const probe = sha256(Buffer.from(context, 'utf8'));
   const sig = await identity.sign(probe);
   if (sig.length === 0) throw new ShenfenQiyueCuowu('identity.sign 返回空签名');
@@ -176,7 +176,7 @@ export async function selfTestIdentity(identity: GuifanShenfen, context = 'warmy
  *  - 公钥不是 32 字节（身份层用了别的算法）时，退回注入的 verify。
  * 这样"注入的 verify 被桩实现成恒真"也不会让篡改签名通过。
  */
-export async function verifyPeerSignature(
+export async function yanZhengDuiDuanQianMing(
   identity: GuifanShenfen | null,
   message: Zijie,
   signature: Zijie,
@@ -203,18 +203,18 @@ export function chuangjianLinShiShenFen(seedLabel?: string): {
 } {
   const keys = shengChengEd25519();
   void seedLabel;
-  const fingerprint = warmyFingerprint(keys.publicKey);
+  const fingerprint = warmyZhiWen(keys.publicKey);
   const provider: ShenfenGongyingshang = {
     fingerprint,
     publicKey: keys.publicKey,
     sign: (message) => signEd25519Local(message, keys.privateKey),
     verify: (message, signature, publicKey) =>
-      verifyEd25519Local(message, toBuf(signature), toBuf(publicKey)) === true,
+      verifyEd25519Local(message, zhuanZiJieZu(signature), zhuanZiJieZu(publicKey)) === true,
   };
   return { provider, privateKey: keys.privateKey, fingerprint };
 }
 
 /** 便于测试断言：返回身份的公开描述（不含私钥） */
 export function shuoMingShenFen(identity: GuifanShenfen | ShenfenGongyingshang): { fingerprint: string; publicKey: string } {
-  return { fingerprint: identity.fingerprint, publicKey: b64u(toBuf(identity.publicKey)) };
+  return { fingerprint: identity.fingerprint, publicKey: b64u(zhuanZiJieZu(identity.publicKey)) };
 }

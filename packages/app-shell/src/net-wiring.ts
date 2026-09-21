@@ -30,25 +30,25 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   LianJieHuoXing,
-  LanProbe,
-  ReplayGuard,
-  SecureSyncClient,
-  SecureSyncServer,
-  SecureSession,
+  NeiWangTanCe,
+  ChongfangFangYu,
+  AnQuanTongBuKeHu,
+  AnQuanTongBuFuWu,
+  AnQuanHuiHua,
   guiLeiDiZhi,
   guiLeiIpv6ZuoYongYu,
   jueDingZhongJi,
   jianchaBenjiIpv6,
-  isPublicDialCandidate,
+  shiFouGongKaiKeBoHouXuan,
   DIALABILITY_I18N,
   LADDER_RUNG_I18N,
   RELAY_STATUS_I18N,
-  normalizeHostLiteral,
-  resolveCanDial,
-  type CanDialResolution,
-  type CanDialSignals,
+  guiFanZhuJiZiMian,
+  jiexiKeBoRu,
+  type KeBoRuJieXiJieGuo,
+  type KeBoRuXinHaoJi,
   type KeBoRuZhongLei,
-  type HandshakeFailureRecord,
+  type WoshouShibaiJilu,
   type Ipv6Baogao,
   type TiziDangwei,
   type ChengYuanHuoXing,
@@ -789,7 +789,7 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
   const { all, publicOnes } = listLocalAddresses();
   const scope = guiLeiDiZhi(ip);
   const ipv6 = jianchaBenjiIpv6();
-  const mubiaoZhuji = normalizeHostLiteral(ip);
+  const mubiaoZhuji = guiFanZhuJiZiMian(ip);
   const isIPv6Target = mubiaoZhuji.includes(':') && ipv6ScopeOrNull(mubiaoZhuji) !== null;
   const resolvedIpv4: string[] = [];
   const dnsErrors: string[] = [];
@@ -858,7 +858,7 @@ export async function probeNet(input: ProbeNetInput, timeoutMs = 3000): Promise<
       linkLocal: ipv6.linkLocal,
       reason: ipv6.reason,
     },
-    targetIsDialableIpv6: isIPv6Target ? isPublicDialCandidate(ip) : false,
+    targetIsDialableIpv6: isIPv6Target ? shiFouGongKaiKeBoHouXuan(ip) : false,
   };
 
   let errorCode: string | undefined;
@@ -1003,27 +1003,27 @@ export interface SecureMeshOptions {
  * 重放防护**持久化**到 `userData/net/replay-guard.json`（不持久化 = 进程重启后可重放）。
  */
 export class SecureMesh {
-  private server: SecureSyncServer | null = null;
+  private server: AnQuanTongBuFuWu | null = null;
   private port = 0;
   /** 调用方**要求**的端口（与 this.port = 实际绑上的端口分开记；实现绝不改写它） */
   private requestedPort = 0;
   /** 最近一次绑定失败的底层错误码（成功就清掉）——UI 据此说清"为什么绑不上" */
   private bindError: string | null = null;
-  private readonly clients = new Map<string, SecureSyncClient>();
+  private readonly clients = new Map<string, AnQuanTongBuKeHu>();
   private readonly inbox: SecureInboundMessage[] = [];
   private readonly liveness: LianJieHuoXing;
-  private probe: LanProbe | null = null;
-  private readonly guard: ReplayGuard;
+  private probe: NeiWangTanCe | null = null;
+  private readonly guard: ChongfangFangYu;
   private lastStatusAt = 0;
   private lastStatusValue: WangzhuangZhuangtaiJieguo | null = null;
   private lastPeerProbes: { at: number; peers: NonNullable<WangzhuangZhuangtaiJieguo['link']['peers']> } | null = null;
   private unlockSnapshot: QianMingZheJieSuoTai | null = null;
-  readonly handshakeFailures: HandshakeFailureRecord[] = [];
+  readonly handshakeFailures: WoshouShibaiJilu[] = [];
   private announceCount = 0;
 
   constructor(private readonly opts: SecureMeshOptions) {
     // 重放防护：**必须持久化**，否则进程重启后同一 nonce/seq 仍会被接受（= 重启即可重放）
-    this.guard = new ReplayGuard({ persistFile: path.join(opts.userDataDir, 'net', 'replay-guard.json') });
+    this.guard = new ChongfangFangYu({ persistFile: path.join(opts.userDataDir, 'net', 'replay-guard.json') });
     // 在线判据：事件驱动（连接建立/关闭），不轮询名册。
     // offlineFailures=1 / offlineAfterMs=0：连接断了就判离线（这里的迟滞会变成"谎报在线"）
     this.liveness = new LianJieHuoXing({
@@ -1078,7 +1078,7 @@ export class SecureMesh {
    * 只认 `dialable === true` 会让有全局 IPv6 的机器被误判成"不可拨入"，
    * 从而只被动等对端拨 —— 正是附八.9 点名的"有 IPv6 的用户白白走上打洞/中继"。
    */
-  canDialSignals(): CanDialSignals {
+  canDialSignals(): KeBoRuXinHaoJi {
     const dialable = this.opts.selfDialable?.();
     return {
       ...(dialable === undefined ? {} : { dialable }),
@@ -1087,8 +1087,8 @@ export class SecureMesh {
   }
 
   /** 合并后的判据（回答"要不要主动拨"）；来历仍由 `canDialSignals()` 保留 */
-  canDialResolution(): CanDialResolution {
-    return resolveCanDial(this.canDialSignals());
+  canDialResolution(): KeBoRuJieXiJieGuo {
+    return jiexiKeBoRu(this.canDialSignals());
   }
 
   canDial(): boolean {
@@ -1096,7 +1096,7 @@ export class SecureMesh {
   }
 
   /** 供 `AnnounceService` / 其它接线方直接用的回调（把两个信号原样带过去） */
-  canDialProvider(): () => CanDialSignals {
+  canDialProvider(): () => KeBoRuXinHaoJi {
     return () => this.canDialSignals();
   }
 
@@ -1105,7 +1105,7 @@ export class SecureMesh {
    * 不同步的后果是实测过的：`dialableFlag` 默认 false 且没人置真 ⇒ `sweep()` 永远短路成
    * "本机不可拨入" ⇒ 待探测成员**一次都不会被拨**（纯被动等）。
    */
-  private syncLivenessDialable(): CanDialResolution {
+  private syncLivenessDialable(): KeBoRuJieXiJieGuo {
     const res = this.canDialResolution();
     this.liveness.setDialable({
       ...(res.dialable === undefined ? {} : { dialable: res.dialable }),
@@ -1159,7 +1159,7 @@ export class SecureMesh {
     //    不写回设置、不"兜底顺延"。理由见 settings-store 的 WARMY_SUGGESTED_NET_PORTS
     //    注释：静默换端口会让防火墙/端口映射/对端配置全部对不上，而且用户无从发现。
     //    用户下一步由界面引导（明确告知 + 可点选的建议端口）。
-    const server = new SecureSyncServer({
+    const server = new AnQuanTongBuFuWu({
       identity,
       nodeId: this.opts.nodeId,
       port,
@@ -1231,7 +1231,7 @@ export class SecureMesh {
     const info = this.opts.store()?.info();
     if (!info) return;
     await this.stopDiscovery();
-    const probe = new LanProbe({
+    const probe = new NeiWangTanCe({
       nodeId: this.opts.nodeId,
       fingerprint: info.fingerprint,
       tcpPort: this.port,
@@ -1255,7 +1255,7 @@ export class SecureMesh {
     this.probe = null;
   }
 
-  private trackSession(session: SecureSession): void {
+  private trackSession(session: AnQuanHuiHua): void {
     const fp = session.info.peerFingerprint;
     this.liveness.registerConnection(
       fp,
@@ -1269,7 +1269,7 @@ export class SecureMesh {
     this.opts.onEvent?.({ type: 'session', peer: fp, detail: session.info.direction, ts: this.now() });
   }
 
-  private untrackSession(session: SecureSession): void {
+  private untrackSession(session: AnQuanHuiHua): void {
     const fp = session.info.peerFingerprint;
     this.liveness.closeConnection(fp, session.info.sessionId, this.now());
     this.liveness.markMiss(fp, this.now());
@@ -1278,7 +1278,7 @@ export class SecureMesh {
     void this.liveness.sweep(this.now());
   }
 
-  private onMessage(msg: TongbuXiaoxi, session: SecureSession): void {
+  private onMessage(msg: TongbuXiaoxi, session: AnQuanHuiHua): void {
     const fp = session.info.peerFingerprint;
     this.liveness.heartbeat(fp, this.now());
     if (msg.incognito) return; // 无痕：不留在 inbox（与旧实现一致）
@@ -1332,7 +1332,7 @@ export class SecureMesh {
       }
     }
     const started = this.now();
-    const client = new SecureSyncClient({
+    const client = new AnQuanTongBuKeHu({
       identity: chuangjianShenfenGongyingshang(store),
       nodeId: this.opts.nodeId,
       host,
@@ -1540,7 +1540,7 @@ export class SecureMesh {
   }
 
   /** 让主进程能拿到"上次宣告失败原因"之类的诊断 */
-  diagnostics(): { handshakeFailures: HandshakeFailureRecord[]; announceCalls: number; sessions: number; inbox: number } {
+  diagnostics(): { handshakeFailures: WoshouShibaiJilu[]; announceCalls: number; sessions: number; inbox: number } {
     return {
       handshakeFailures: this.handshakeFailures.slice(-20),
       announceCalls: this.announceCount,
@@ -1560,7 +1560,7 @@ export class SecureMesh {
     const v6 = jianchaBenjiIpv6();
     const selfDialable = this.opts.selfDialable?.();
     const rung: TiziDangwei = v6.hasGlobalUnicast ? 'ipv6-direct' : 'public-direct';
-    const dial = resolveCanDial({
+    const dial = jiexiKeBoRu({
       ...(selfDialable === undefined ? {} : { dialable: selfDialable }),
       naturalDialable: v6.hasGlobalUnicast,
     });
@@ -1668,7 +1668,7 @@ export async function secureLoopbackSmoke(opts: {
   const clientId = chuangjianLinShiShenFen('smoke-client');
 
   let received: TongbuXiaoxi | null = null;
-  const server = new SecureSyncServer({
+  const server = new AnQuanTongBuFuWu({
     identity: serverId.provider,
     nodeId: opts.nodeId,
     port: opts.localPort > 0 ? opts.localPort : 0,
@@ -1686,7 +1686,7 @@ export async function secureLoopbackSmoke(opts: {
   let handshakeOk = false;
   let keyFingerprint: string | undefined;
   let failure: string | undefined;
-  const client = new SecureSyncClient({
+  const client = new AnQuanTongBuKeHu({
     identity: clientId.provider,
     nodeId: `${opts.nodeId}-smoke-client`,
     host: '127.0.0.1',
@@ -1722,7 +1722,7 @@ export async function secureLoopbackSmoke(opts: {
   let peerError: string | undefined;
   if (opts.peerHost && opts.peerPort) {
     // 对端是"另一台机器"：本机没有它的身份/名册 → 只能如实报告失败原因
-    const ext = new SecureSyncClient({
+    const ext = new AnQuanTongBuKeHu({
       identity: clientId.provider,
       nodeId: `${opts.nodeId}-smoke-peer`,
       host: opts.peerHost,

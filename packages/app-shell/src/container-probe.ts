@@ -988,7 +988,7 @@ function zhiXingTanCe(file: string, args: string[], timeoutMs: number): Promise<
   return new Promise((resolve) => {
     const t0 = Date.now();
     let done = false;
-    const finish = (o: Partial<ExecOutcome>): void => {
+    const wanCheng = (o: Partial<ExecOutcome>): void => {
       if (done) return;
       done = true;
       resolve({
@@ -1005,14 +1005,14 @@ function zhiXingTanCe(file: string, args: string[], timeoutMs: number): Promise<
           const out = jiemaHuanchongqu(stdout as unknown as Buffer);
           const err = jiemaHuanchongqu(stderr as unknown as Buffer);
           if (!error) {
-            finish({ ok: true, code: 0, out, err });
+            wanCheng({ ok: true, code: 0, out, err });
             return;
           }
           const renYiCuoWu = error as NodeJS.ErrnoException & { code?: string | number; killed?: boolean };
           const missing = renYiCuoWu.code === 'ENOENT';
           const timedOut = renYiCuoWu.killed === true || String(renYiCuoWu.code) === 'ETIMEDOUT';
           const shuliangDaima = typeof renYiCuoWu.code === 'number' ? renYiCuoWu.code : null;
-          finish({
+          wanCheng({
             ok: false,
             missing,
             code: shuliangDaima,
@@ -1023,12 +1023,12 @@ function zhiXingTanCe(file: string, args: string[], timeoutMs: number): Promise<
         }
       );
     } catch (e) {
-      finish({ missing: true, err: jinyao(String((e as Error)?.message || e)) });
+      wanCheng({ missing: true, err: jinyao(String((e as Error)?.message || e)) });
       return;
     }
     child.on('error', (e) => {
       const renYiCuoWu = e as NodeJS.ErrnoException;
-      finish({ missing: renYiCuoWu.code === 'ENOENT', err: jinyao(String(e.message || e)) });
+      wanCheng({ missing: renYiCuoWu.code === 'ENOENT', err: jinyao(String(e.message || e)) });
     });
   });
 }
@@ -2439,7 +2439,7 @@ export async function runContainerExec(
   const t0 = Date.now();
   const r = await new Promise<{ code: number | null; out: string; err: string; timedOut: boolean; spawnErr?: string }>((resolve) => {
     let done = false;
-    const finish = (o: { code: number | null; out: string; err: string; timedOut: boolean; spawnErr?: string }): void => {
+    const wanCheng = (o: { code: number | null; out: string; err: string; timedOut: boolean; spawnErr?: string }): void => {
       if (done) return;
       done = true;
       resolve(o);
@@ -2453,10 +2453,10 @@ export async function runContainerExec(
         (error, stdout, stderr) => {
           const out = jiemaHuanchongqu(stdout as unknown as Buffer).trim();
           const err = jiemaHuanchongqu(stderr as unknown as Buffer).trim();
-          if (!error) return finish({ code: 0, out, err, timedOut: false });
+          if (!error) return wanCheng({ code: 0, out, err, timedOut: false });
           const renYiCuoWu = error as NodeJS.ErrnoException & { code?: string | number; killed?: boolean };
           const timedOut = renYiCuoWu.killed === true || String(renYiCuoWu.code) === 'ETIMEDOUT';
-          finish({
+          wanCheng({
             code: typeof renYiCuoWu.code === 'number' ? renYiCuoWu.code : null,
             out,
             err: err || jinyao(String(renYiCuoWu.message || '')),
@@ -2466,10 +2466,10 @@ export async function runContainerExec(
         }
       );
     } catch (e) {
-      finish({ code: null, out: '', err: jinyao(String((e as Error)?.message || e)), timedOut: false, spawnErr: 'spawn-failed' });
+      wanCheng({ code: null, out: '', err: jinyao(String((e as Error)?.message || e)), timedOut: false, spawnErr: 'spawn-failed' });
       return;
     }
-    child.on('error', (e) => finish({ code: null, out: '', err: jinyao(String(e.message || e)), timedOut: false, spawnErr: 'spawn-failed' }));
+    child.on('error', (e) => wanCheng({ code: null, out: '', err: jinyao(String(e.message || e)), timedOut: false, spawnErr: 'spawn-failed' }));
   });
   const ms = Date.now() - t0;
   const ok = r.code === 0 && !r.spawnErr;

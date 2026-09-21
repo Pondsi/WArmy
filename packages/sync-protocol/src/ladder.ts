@@ -41,7 +41,7 @@ export interface NeiwangDuiduan {
   seenAt: number;
 }
 
-export interface LanProbeOptions {
+export interface NeiWangTanCeXuanXiang {
   nodeId: string;
   fingerprint: string;
   /** 本机 TCP 服务端口（回给探测方） */
@@ -52,7 +52,7 @@ export interface LanProbeOptions {
   onPeer?: (p: NeiwangDuiduan) => void;
 }
 
-export class LanProbe {
+export class NeiWangTanCe {
   private sock: dgram.Socket | null = null;
   private boundPort = 0;
   private peers = new Map<string, NeiwangDuiduan>();
@@ -60,7 +60,7 @@ export class LanProbe {
   private responses = new Map<string, NeiwangDuiduan[]>();
   private readonly discoveryPort: number;
 
-  constructor(private readonly opts: LanProbeOptions) {
+  constructor(private readonly opts: NeiWangTanCeXuanXiang) {
     this.discoveryPort = opts.discoveryPort ?? DEFAULT_DISCOVERY_PORT;
   }
 
@@ -229,7 +229,7 @@ export type Ipv6Zuoyongyu = 'global' | 'ula' | 'link-local' | 'loopback' | 'unsp
 export const IPV6_WENDANG_QIANZHUI = '2001:0db8';
 
 /** 去掉方括号与 zone id（`fe80::1%eth0` / `%12`）—— 客户端拨号必须去掉 zone */
-export function normalizeHostLiteral(host: string): string {
+export function guiFanZhuJiZiMian(host: string): string {
   let h = String(host ?? '').trim();
   if (h.startsWith('[')) h = h.replace(/^\[/, '').replace(/\]$/, '');
   const pct = h.indexOf('%');
@@ -237,14 +237,14 @@ export function normalizeHostLiteral(host: string): string {
   return h;
 }
 
-export function parseIpv4Bytes(host: string): number[] | null {
+export function jieXiIpv4ZiJie(host: string): number[] | null {
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(host ?? '').trim());
   if (!m) return null;
   const bytes = m.slice(1).map((x) => Number(x));
   return bytes.every((b) => b >= 0 && b <= 255) ? bytes : null;
 }
 
-function hexGroups(arr: string[]): number[] | null {
+function shiLiuJinFenZu(arr: string[]): number[] | null {
   const out: number[] = [];
   for (const g of arr) {
     if (!/^[0-9a-f]{1,4}$/i.test(g)) return null;
@@ -254,13 +254,13 @@ function hexGroups(arr: string[]): number[] | null {
 }
 
 /** 解析 IPv6 字面量为 16 字节；非法返回 null（支持 `::` 压缩与内嵌 IPv4） */
-export function parseIpv6(host: string): Uint8Array | null {
-  let h = normalizeHostLiteral(host);
+export function jieXiIpv6(host: string): Uint8Array | null {
+  let h = guiFanZhuJiZiMian(host);
   if (!h.includes(':')) return null;
   let embedded: number[] | null = null;
   if (h.includes('.')) {
     const lc = h.lastIndexOf(':');
-    const v4 = parseIpv4Bytes(h.slice(lc + 1));
+    const v4 = jieXiIpv4ZiJie(h.slice(lc + 1));
     if (!v4) return null;
     embedded = v4;
     h = h.slice(0, lc);
@@ -279,8 +279,8 @@ export function parseIpv6(host: string): Uint8Array | null {
     head = h.split(':');
     tail = [];
   }
-  const hb = hexGroups(head);
-  const tb = hexGroups(tail);
+  const hb = shiLiuJinFenZu(head);
+  const tb = shiLiuJinFenZu(tail);
   if (!hb || !tb) return null;
   const emb = embedded ? [(embedded[0] as number) * 256 + (embedded[1] as number), (embedded[2] as number) * 256 + (embedded[3] as number)] : [];
   let groups: number[];
@@ -301,15 +301,15 @@ export function parseIpv6(host: string): Uint8Array | null {
 }
 
 /** 地址族：6 = IPv6，4 = IPv4，0 = 既不是字面 IP（域名/主机名） */
-export function ipFamilyOfHost(host: string): 4 | 6 | 0 {
-  const h = normalizeHostLiteral(host);
-  if (parseIpv4Bytes(h)) return 4;
-  if (parseIpv6(h)) return 6;
+export function quZhuJiIpJiazu(host: string): 4 | 6 | 0 {
+  const h = guiFanZhuJiZiMian(host);
+  if (jieXiIpv4ZiJie(h)) return 4;
+  if (jieXiIpv6(h)) return 6;
   return 0;
 }
 
 export function guiLeiIpv6ZuoYongYu(host: string): Ipv6Zuoyongyu {
-  const b = parseIpv6(host);
+  const b = jieXiIpv6(host);
   if (!b) return 'invalid';
   const allZero = b.every((x) => x === 0);
   if (allZero) return 'unspecified';
@@ -323,12 +323,12 @@ export function guiLeiIpv6ZuoYongYu(host: string): Ipv6Zuoyongyu {
 }
 
 /** 是否属于 2000::/3 全局单播（注意：文档段 2001:db8::/32 也在其中，见 isPublicDialCandidate） */
-export function isGlobalUnicastIpv6(host: string): boolean {
+export function shiFouQuanJuDanBoIpv6(host: string): boolean {
   return guiLeiIpv6ZuoYongYu(host) === 'global';
 }
 
-export function isIpv6DocumentationAddress(host: string): boolean {
-  const b = parseIpv6(host);
+export function shiFouIpv6WenDangDiZhi(host: string): boolean {
+  const b = jieXiIpv6(host);
   if (!b) return false;
   return b[0] === 0x20 && b[1] === 0x01 && b[2] === 0x0d && b[3] === 0xb8;
 }
@@ -337,8 +337,8 @@ export function isIpv6DocumentationAddress(host: string): boolean {
  * **可以用来拨号的公网 IPv6 候选**：全局单播 且 非文档段。
  * link-local / ULA / 回环 / 组播 / 未指定一律不算（附八.9 的分类要求）。
  */
-export function isPublicDialCandidate(host: string): boolean {
-  return isGlobalUnicastIpv6(host) && !isIpv6DocumentationAddress(host);
+export function shiFouGongKaiKeBoHouXuan(host: string): boolean {
+  return shiFouQuanJuDanBoIpv6(host) && !shiFouIpv6WenDangDiZhi(host);
 }
 
 /**
@@ -346,7 +346,7 @@ export function isPublicDialCandidate(host: string): boolean {
  * 老版本是字符串 `'IPv4'` / `'IPv6'`，新版本是数字 `4` / `6`。
  * 两种都要认，否则"某天升级 Node 后 IPv6 档静默消失"。
  */
-export function normalizeInterfaceFamily(family: unknown): 'IPv4' | 'IPv6' | 'other' {
+export function guiFanWangKaJiazu(family: unknown): 'IPv4' | 'IPv6' | 'other' {
   if (family === 'IPv6' || family === 6 || family === '6') return 'IPv6';
   if (family === 'IPv4' || family === 4 || family === '4') return 'IPv4';
   return 'other';
@@ -390,12 +390,12 @@ function jiekouPaiming(name: string): number {
  * 本机 IPv6 地址分类（真实现：`os.networkInterfaces()`）。
  * 传入 `nics` 参数是为了**可注入**（验证脚本用构造数据锁住分类矩阵与 `family` 兼容点）。
  */
-export function listLocalIpv6Candidates(nics: ReturnType<typeof os.networkInterfaces> = os.networkInterfaces()): BenjiIpv6Tiaomu[] {
+export function lieBenJiIpv6HouXuan(nics: ReturnType<typeof os.networkInterfaces> = os.networkInterfaces()): BenjiIpv6Tiaomu[] {
   const out: BenjiIpv6Tiaomu[] = [];
   for (const [iface, dizhi] of Object.entries(nics)) {
     for (const a of dizhi ?? []) {
-      if (normalizeInterfaceFamily(a.family) !== 'IPv6') continue;
-      const host = normalizeHostLiteral(a.address);
+      if (guiFanWangKaJiazu(a.family) !== 'IPv6') continue;
+      const host = guiFanZhuJiZiMian(a.address);
       const scope = guiLeiIpv6ZuoYongYu(host);
       if (scope === 'invalid') continue;
       out.push({
@@ -404,7 +404,7 @@ export function listLocalIpv6Candidates(nics: ReturnType<typeof os.networkInterf
         scope,
         familyRaw: a.family,
         internal: a.internal === true,
-        documentation: isIpv6DocumentationAddress(host),
+        documentation: shiFouIpv6WenDangDiZhi(host),
       });
     }
   }
@@ -412,7 +412,7 @@ export function listLocalIpv6Candidates(nics: ReturnType<typeof os.networkInterf
 }
 
 /** 首选 IPv6 全局地址：全局单播、非文档段、非回环、物理网卡优先 */
-export function pickLocalIpv6Address(entries: BenjiIpv6Tiaomu[] = listLocalIpv6Candidates()): string | null {
+export function xuanBenJiIpv6DiZhi(entries: BenjiIpv6Tiaomu[] = lieBenJiIpv6HouXuan()): string | null {
   const cands = entries.filter((e) => e.scope === 'global' && !e.documentation);
   if (cands.length === 0) return null;
   const yiPaiXu = [...cands].sort((a, b) => jiekouPaiming(a.interfaceName) - jiekouPaiming(b.interfaceName));
@@ -420,11 +420,11 @@ export function pickLocalIpv6Address(entries: BenjiIpv6Tiaomu[] = listLocalIpv6C
 }
 
 export function jianchaBenjiIpv6(nics: ReturnType<typeof os.networkInterfaces> = os.networkInterfaces()): Ipv6Baogao {
-  const entries = listLocalIpv6Candidates(nics);
+  const entries = lieBenJiIpv6HouXuan(nics);
   const group = (s: Ipv6Zuoyongyu): string[] => entries.filter((e) => e.scope === s).map((e) => e.address);
   const documentation = entries.filter((e) => e.documentation).map((e) => e.address);
   const publicCandidates = entries.filter((e) => e.scope === 'global' && !e.documentation).map((e) => e.address);
-  const publicCandidate = pickLocalIpv6Address(entries);
+  const publicCandidate = xuanBenJiIpv6DiZhi(entries);
   const hasGlobalUnicast = publicCandidates.length > 0;
   return {
     hasGlobalUnicast,
@@ -463,7 +463,7 @@ export interface BoHaoXiangqing {
 export function boTcpXiangQing(host: string, port: number, timeoutMs: number, family?: 4 | 6): Promise<BoHaoXiangqing> {
   return new Promise((resolve) => {
     const started = Date.now();
-    const target = normalizeHostLiteral(host);
+    const target = guiFanZhuJiZiMian(host);
     const opts: net.NetConnectOpts = family ? { host: target, port, family } : { host: target, port };
     const sock = net.connect(opts);
     let settled = false;
@@ -650,7 +650,7 @@ export interface LianJieTiZiXuanXiang {
   perRungTimeoutMs?: number;
   dialTcp?: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<BoHaoXiangqing | { ok: boolean; detail?: string }>;
   /** LAN 探测提供者（默认用注入的 LanProbe） */
-  lanProbe?: LanProbe;
+  lanProbe?: NeiWangTanCe;
   lanTargets?: () => { host: string; port: number }[];
   lanBroadcastPorts?: number[];
   /** 中继档配置（不配置时：若两端都不可拨入，仍会**如实报缺口**而不是静默失败） */
@@ -695,10 +695,10 @@ export class LianJieTiZi {
       supported: true,
       async attempt(ctx) {
         const all = ctx.target.addresses;
-        const v6 = all.filter((a) => ipFamilyOfHost(a.host) === 6);
-        const candidates = v6.filter((a) => isPublicDialCandidate(a.host));
-        const paichu = v6.filter((a) => !isPublicDialCandidate(a.host));
-        const label = (a: TiziDizhi): string => `${a.host}(${guiLeiIpv6ZuoYongYu(a.host)}${isIpv6DocumentationAddress(a.host) ? '·文档段' : ''})`;
+        const v6 = all.filter((a) => quZhuJiIpJiazu(a.host) === 6);
+        const candidates = v6.filter((a) => shiFouGongKaiKeBoHouXuan(a.host));
+        const paichu = v6.filter((a) => !shiFouGongKaiKeBoHouXuan(a.host));
+        const label = (a: TiziDizhi): string => `${a.host}(${guiLeiIpv6ZuoYongYu(a.host)}${shiFouIpv6WenDangDiZhi(a.host) ? '·文档段' : ''})`;
         if (candidates.length === 0) {
           return {
             ok: false,

@@ -23,12 +23,12 @@ import {
   fromB64u,
   generateX25519,
   hkdf,
-  joinFields,
+  pinJieZiduan,
   open,
-  randomB64u,
+  suiJiB64u,
   fengyin,
   sha256,
-  sha256Hex,
+  sha256ShiLiuJin,
   x25519SharedSecret,
 } from './codec.js';
 import {
@@ -36,9 +36,9 @@ import {
   type ShenfenGongyingshang,
   type GuifanShenfen,
   ShenfenQiyueCuowu,
-  warmyFingerprint,
-  normalizeIdentity,
-  verifyPeerSignature,
+  warmyZhiWen,
+  guiFanShenFen,
+  yanZhengDuiDuanQianMing,
 } from './identity.js';
 
 export const WOSHOU_BANBEN = 1;
@@ -106,9 +106,9 @@ export interface Hs4 {
   tag: string;
 }
 
-export type HsFrame = Hs1 | Hs2 | Hs3 | Hs4;
+export type WoshouZhen = Hs1 | Hs2 | Hs3 | Hs4;
 
-export type HandshakeFailureReason =
+export type WoshouShibaiYuanyin =
   | 'protocol-error'
   | 'bad-version'
   | 'malformed'
@@ -126,7 +126,7 @@ export type HandshakeFailureReason =
 
 export class WoshouCuowu extends Error {
   constructor(
-    public readonly reason: HandshakeFailureReason,
+    public readonly reason: WoshouShibaiYuanyin,
     message: string,
     public readonly peer?: string
   ) {
@@ -145,8 +145,8 @@ export interface WoshouShijian {
 }
 
 /** 握手失败审计记录（ADR A7 可观测性） */
-export interface HandshakeFailureRecord {
-  reason: HandshakeFailureReason;
+export interface WoshouShibaiJilu {
+  reason: WoshouShibaiYuanyin;
   detail: string;
   peer?: string;
   role: WoshouJuese;
@@ -155,7 +155,7 @@ export interface HandshakeFailureRecord {
 
 /* ────────────────────────────── 防重放 ────────────────────────────── */
 
-export interface ReplayCheck {
+export interface ChongfangJianCha {
   ok: boolean;
   reason?: 'replay-nonce' | 'replay-counter' | 'clock-skew';
   detail?: string;
@@ -167,7 +167,7 @@ interface DuiduanChongfangZhuangtai {
   lastSeenAt: number;
 }
 
-export interface ReplayGuardOptions {
+export interface ChongfangFangYuXuanXiang {
   /** 时间戳容差（毫秒），默认 120s */
   toleranceMs?: number;
   /** nonce 记忆窗口（毫秒），默认 10 分钟 */
@@ -177,7 +177,7 @@ export interface ReplayGuardOptions {
   now?: () => number;
 }
 
-interface ReplayGuardSnapshot {
+interface ChongfangFangYuKuaiZhao {
   version: 1;
   localCounter: number;
   peers: Record<string, { maxCounter: number; lastSeenAt: number; nonces: [string, number][] }>;
@@ -192,7 +192,7 @@ const MAX_TRACKED_NONCES = 8192;
  * `check()` 只读，`commit()` 才推进状态 —— 调用方必须在**验签与授权校验都通过之后**
  * 才 commit，否则攻击者可以用伪造帧把合法对端的计数顶掉。
  */
-export class ReplayGuard {
+export class ChongfangFangYu {
   private peers = new Map<string, DuiduanChongfangZhuangtai>();
   private localCounterValue = 0;
   private readonly toleranceMs: number;
@@ -200,7 +200,7 @@ export class ReplayGuard {
   private readonly now: () => number;
   private readonly persistFile?: string;
 
-  constructor(opts: ReplayGuardOptions = {}) {
+  constructor(opts: ChongfangFangYuXuanXiang = {}) {
     this.toleranceMs = opts.toleranceMs ?? DEFAULT_TIMESTAMP_TOLERANCE_MS;
     this.nonceWindowMs = opts.nonceWindowMs ?? 10 * 60_000;
     this.now = opts.now ?? (() => Date.now());
@@ -234,7 +234,7 @@ export class ReplayGuard {
     return this.peers.get(peer)?.nonces.size ?? 0;
   }
 
-  check(args: { peer: string; nonce: string; counter: number; ts: number }): ReplayCheck {
+  check(args: { peer: string; nonce: string; counter: number; ts: number }): ChongfangJianCha {
     const nowMs = this.now();
     if (!Number.isFinite(args.ts) || Math.abs(nowMs - args.ts) > this.toleranceMs) {
       return {
@@ -293,7 +293,7 @@ export class ReplayGuard {
   private load(): void {
     try {
       const raw = fs.readFileSync(this.persistFile as string, 'utf8');
-      const snap = JSON.parse(raw) as ReplayGuardSnapshot;
+      const snap = JSON.parse(raw) as ChongfangFangYuKuaiZhao;
       this.localCounterValue = snap.localCounter ?? 0;
       for (const [peer, st] of Object.entries(snap.peers ?? {})) {
         this.peers.set(peer, {
@@ -310,11 +310,11 @@ export class ReplayGuard {
   private save(): void {
     if (!this.persistFile) return;
     try {
-      const peers: ReplayGuardSnapshot['peers'] = {};
+      const peers: ChongfangFangYuKuaiZhao['peers'] = {};
       for (const [peer, st] of this.peers) {
         peers[peer] = { maxCounter: st.maxCounter, lastSeenAt: st.lastSeenAt, nonces: [...st.nonces] };
       }
-      const snap: ReplayGuardSnapshot = { version: 1, localCounter: this.localCounterValue, peers };
+      const snap: ChongfangFangYuKuaiZhao = { version: 1, localCounter: this.localCounterValue, peers };
       fs.mkdirSync(path.dirname(this.persistFile), { recursive: true });
       fs.writeFileSync(this.persistFile, JSON.stringify(snap, null, 2), 'utf8');
     } catch {
@@ -325,7 +325,7 @@ export class ReplayGuard {
 
 /* ────────────────────────────── 会话密钥 ────────────────────────────── */
 
-export interface SessionKeys {
+export interface HuiHuaMiYaoJi {
   /** sha256(transcript) 全量 hex */
   handshakeId: string;
   transcriptHash: Buffer;
@@ -360,7 +360,7 @@ export interface WoshouXuanxiang {
   /** 名册校验：返回 false 即判定为未授权成员 */
   roster?: (fingerprint: string) => boolean;
   groupId?: string | null;
-  replayGuard?: ReplayGuard;
+  replayGuard?: ChongfangFangYu;
   timestampToleranceMs?: number;
   phaseTimeoutMs?: number;
   fingerprintDerivation?: ZhiWenTuiDao;
@@ -377,7 +377,7 @@ interface JiaoyiZhuangtai {
   hs2?: Hs2;
 }
 
-export class HandshakeDriver {
+export class WoshouQudongqi {
   private identity!: GuifanShenfen;
   private readonly ready: Promise<void>;
   private ephPrivateKey!: Buffer;
@@ -386,15 +386,15 @@ export class HandshakeDriver {
   private localCounter = 0;
   private transcript: JiaoyiZhuangtai = {};
   private state: 'init' | 'awaiting-hs2' | 'awaiting-hs3' | 'awaiting-hs4' | 'established' | 'failed' = 'init';
-  private sessionKeys: SessionKeys | null = null;
+  private sessionKeys: HuiHuaMiYaoJi | null = null;
   private failure: WoshouCuowu | null = null;
   private lastFrameAt = 0;
-  private readonly guard: ReplayGuard;
+  private readonly guard: ChongfangFangYu;
   private readonly now: () => number;
   private readonly phaseTimeoutMs: number;
 
   constructor(private readonly opts: WoshouXuanxiang) {
-    this.guard = opts.replayGuard ?? new ReplayGuard({ toleranceMs: opts.timestampToleranceMs });
+    this.guard = opts.replayGuard ?? new ChongfangFangYu({ toleranceMs: opts.timestampToleranceMs });
     this.now = opts.now ?? (() => Date.now());
     this.phaseTimeoutMs = opts.phaseTimeoutMs ?? DEFAULT_PHASE_TIMEOUT_MS;
     this.ready = this.init();
@@ -403,7 +403,7 @@ export class HandshakeDriver {
   }
 
   private async init(): Promise<void> {
-    this.identity = await normalizeIdentity(this.opts.identity, {
+    this.identity = await guiFanShenFen(this.opts.identity, {
       fingerprintDerivation: this.opts.fingerprintDerivation,
       enforceLocalEd25519: this.opts.enforceLocalEd25519,
       requireInjectedVerify: this.opts.requireInjectedVerify,
@@ -414,7 +414,7 @@ export class HandshakeDriver {
     const eph = generateX25519();
     this.ephPrivateKey = eph.privateKey;
     this.ephPublicKey = eph.publicKey;
-    this.localNonce = randomB64u(WOSHOU_NONCE_ZIJIE);
+    this.localNonce = suiJiB64u(WOSHOU_NONCE_ZIJIE);
     this.localCounter = this.guard.nextLocalCounter();
     this.lastFrameAt = this.now();
   }
@@ -428,7 +428,7 @@ export class HandshakeDriver {
   get established(): boolean {
     return this.state === 'established';
   }
-  get session(): SessionKeys | null {
+  get session(): HuiHuaMiYaoJi | null {
     return this.sessionKeys;
   }
   get error(): WoshouCuowu | null {
@@ -437,7 +437,7 @@ export class HandshakeDriver {
   get phase(): string {
     return this.state;
   }
-  get guardRef(): ReplayGuard {
+  get guardRef(): ChongfangFangYu {
     return this.guard;
   }
   get localHandshakeUsage(): { nonce: string; counter: number; ephemeralPublicKey: string } {
@@ -448,7 +448,7 @@ export class HandshakeDriver {
     this.opts.onEvent?.({ ...e, role: this.opts.role, ts: this.now() });
   }
 
-  private fail(reason: HandshakeFailureReason, message: string, peer?: string): WoshouCuowu {
+  private fail(reason: WoshouShibaiYuanyin, message: string, peer?: string): WoshouCuowu {
     const err = new WoshouCuowu(reason, message, peer);
     this.failure = err;
     if (this.state !== 'established') this.state = 'failed';
@@ -457,7 +457,7 @@ export class HandshakeDriver {
   }
 
   /* ── 飞行 1：发起方 → 被叫方 ── */
-  async start(): Promise<HsFrame | null> {
+  async start(): Promise<WoshouZhen | null> {
     await this.ready;
     if (this.opts.role !== 'initiator') return null;
     if (this.state !== 'init') throw this.fail('state-error', `start() 状态非法：${this.state}`);
@@ -483,7 +483,7 @@ export class HandshakeDriver {
   }
 
   /** 统一入口：吃掉一帧，产出下一帧 */
-  async step(frame: HsFrame): Promise<{ out: HsFrame[]; done: boolean; session?: SessionKeys }> {
+  async step(frame: WoshouZhen): Promise<{ out: WoshouZhen[]; done: boolean; session?: HuiHuaMiYaoJi }> {
     await this.ready;
     if (this.failure) throw this.failure;
     if (this.lastFrameAt && this.now() - this.lastFrameAt > this.phaseTimeoutMs) {
@@ -523,8 +523,8 @@ export class HandshakeDriver {
     if ((hs1.gid ?? null) !== (this.opts.groupId ?? null)) {
       throw this.fail('bad-group', `群 ID 不匹配：对端 ${hs1.gid}，本端 ${this.opts.groupId ?? null}`, hs1.fp);
     }
-    const pk = safeFromB64u(hs1.pk);
-    const eph = safeFromB64u(hs1.eph);
+    const pk = anQuanB64uJieMa(hs1.pk);
+    const eph = anQuanB64uJieMa(hs1.eph);
     if (!pk || pk.length !== 32 || !eph || eph.length !== 32) {
       throw this.fail('malformed', 'HS1 公钥字段长度非法', hs1.fp);
     }
@@ -549,7 +549,7 @@ export class HandshakeDriver {
       n: this.localNonce,
       c: this.localCounter,
       ts: this.now(),
-      th1: sha256Hex(Buffer.from(this.transcript.t1, 'utf8')),
+      th1: sha256ShiLiuJin(Buffer.from(this.transcript.t1, 'utf8')),
       sig: '',
     };
     hs2.sig = b64u(await this.identity.sign(Buffer.from(this.hs2Transcript(hs2, this.transcript.t1), 'utf8')));
@@ -568,11 +568,11 @@ export class HandshakeDriver {
     const t1 = this.transcript.t1;
     const hs1 = this.transcript.hs1;
     if (!t1 || !hs1) throw this.fail('state-error', '缺少 HS1 上下文');
-    if (hs2.th1 !== sha256Hex(Buffer.from(t1, 'utf8'))) {
+    if (hs2.th1 !== sha256ShiLiuJin(Buffer.from(t1, 'utf8'))) {
       throw this.fail('signature-invalid', 'HS2 未绑定本连接的 HS1（transcript 不匹配）', hs2.fp);
     }
-    const pk = safeFromB64u(hs2.pk);
-    const eph = safeFromB64u(hs2.eph);
+    const pk = anQuanB64uJieMa(hs2.pk);
+    const eph = anQuanB64uJieMa(hs2.eph);
     if (!pk || pk.length !== 32 || !eph || eph.length !== 32) throw this.fail('malformed', 'HS2 公钥字段长度非法', hs2.fp);
     this.checkPeerIdentity(hs2.fp, pk);
     await this.checkSignature(this.hs2Transcript(hs2, t1), hs2.sig, pk, hs2.fp, 'HS2');
@@ -582,7 +582,7 @@ export class HandshakeDriver {
     this.transcript.t2 = this.hs2Transcript(hs2, t1);
     this.deriveSession(hs1, hs2);
 
-    const session = this.sessionKeys as SessionKeys;
+    const session = this.sessionKeys as HuiHuaMiYaoJi;
     const th = session.transcriptHash;
     const sealed = fengyin(session.c2sMaterial, th, Buffer.concat([Buffer.from('HS3'), th]));
     this.state = 'awaiting-hs4';
@@ -596,8 +596,8 @@ export class HandshakeDriver {
     if (!session) throw this.fail('state-error', '尚未派生会话密钥');
     if (hs3.id !== session.handshakeId.slice(0, 16)) throw this.fail('confirm-failed', 'HS3 handshakeId 不匹配', session.peerFingerprint);
     const th = session.transcriptHash;
-    const iv = safeFromB64u(hs3.iv);
-    const ct = safeFromB64u(hs3.tag);
+    const iv = anQuanB64uJieMa(hs3.iv);
+    const ct = anQuanB64uJieMa(hs3.tag);
     if (!iv || !ct) throw this.fail('malformed', 'HS3 字段非法', session.peerFingerprint);
     let plain: Buffer;
     try {
@@ -619,8 +619,8 @@ export class HandshakeDriver {
     if (!session) throw this.fail('state-error', '尚未派生会话密钥');
     if (hs4.id !== session.handshakeId.slice(0, 16)) throw this.fail('confirm-failed', 'HS4 handshakeId 不匹配', session.peerFingerprint);
     const th = session.transcriptHash;
-    const iv = safeFromB64u(hs4.iv);
-    const ct = safeFromB64u(hs4.tag);
+    const iv = anQuanB64uJieMa(hs4.iv);
+    const ct = anQuanB64uJieMa(hs4.tag);
     if (!iv || !ct) throw this.fail('malformed', 'HS4 字段非法', session.peerFingerprint);
     let plain: Buffer;
     try {
@@ -639,7 +639,7 @@ export class HandshakeDriver {
     if (claimedFp === this.identity.fingerprint) {
       throw this.fail('protocol-error', '对端声称与本机相同指纹（自反射攻击）', claimedFp);
     }
-    const tuidao = this.opts.fingerprintDerivation ?? warmyFingerprint;
+    const tuidao = this.opts.fingerprintDerivation ?? warmyZhiWen;
     const expected = tuidao(pk);
     if (expected !== claimedFp) {
       throw this.fail('fingerprint-mismatch', `指纹与公钥不符：声明 ${claimedFp}，由公钥推出 ${expected}`, claimedFp);
@@ -654,9 +654,9 @@ export class HandshakeDriver {
   }
 
   private async checkSignature(transcript: string, sigB64: string, pk: Buffer, fp: string, label: string): Promise<void> {
-    const sig = safeFromB64u(sigB64);
+    const sig = anQuanB64uJieMa(sigB64);
     if (!sig || sig.length === 0) throw this.fail('malformed', `${label} 缺少签名`, fp);
-    const r = await verifyPeerSignature(this.identity, Buffer.from(transcript, 'utf8'), sig, pk);
+    const r = await yanZhengDuiDuanQianMing(this.identity, Buffer.from(transcript, 'utf8'), sig, pk);
     if (!r.ok) throw this.fail('signature-invalid', `${label} 签名校验失败（复核方式 ${r.via}）`, fp);
   }
 
@@ -666,7 +666,7 @@ export class HandshakeDriver {
   }
 
   private hs1Transcript(hs1: Hs1): string {
-    return joinFields([
+    return pinJieZiduan([
       'WARMY-HS1',
       WOSHOU_BANBEN,
       hs1.gid,
@@ -681,7 +681,7 @@ export class HandshakeDriver {
   }
 
   private hs2Transcript(hs2: Hs2, t1: string): string {
-    return joinFields([
+    return pinJieZiduan([
       'WARMY-HS2',
       WOSHOU_BANBEN,
       hs2.gid,
@@ -691,7 +691,7 @@ export class HandshakeDriver {
       hs2.n,
       hs2.c,
       hs2.ts,
-      sha256Hex(Buffer.from(t1, 'utf8')),
+      sha256ShiLiuJin(Buffer.from(t1, 'utf8')),
     ]);
   }
 
@@ -704,29 +704,29 @@ export class HandshakeDriver {
     const transcriptHash = sha256(Buffer.from(t1, 'utf8'), Buffer.from('|', 'utf8'), Buffer.from(t2, 'utf8'));
     const c2sMaterial = hkdf(shared, transcriptHash, `${WOSHOU_XIEYI} initiator-to-responder`, 32);
     const s2cMaterial = hkdf(shared, transcriptHash, `${WOSHOU_XIEYI} responder-to-initiator`, 32);
-    const peerIsInitiator = hs1.fp !== this.identity.fingerprint;
+    const duiDuanShiFaQiFang = hs1.fp !== this.identity.fingerprint;
     this.sessionKeys = {
       handshakeId: transcriptHash.toString('hex'),
       transcriptHash,
       role: this.opts.role,
       groupId: this.opts.groupId ?? null,
-      peerFingerprint: peerIsInitiator ? hs1.fp : hs2.fp,
-      peerPublicKey: fromB64u(peerIsInitiator ? hs1.pk : hs2.pk),
+      peerFingerprint: duiDuanShiFaQiFang ? hs1.fp : hs2.fp,
+      peerPublicKey: fromB64u(duiDuanShiFaQiFang ? hs1.pk : hs2.pk),
       localFingerprint: this.identity.fingerprint,
       establishedAt: this.now(),
       localNonce: this.localNonce,
-      peerNonce: peerIsInitiator ? hs1.n : hs2.n,
+      peerNonce: duiDuanShiFaQiFang ? hs1.n : hs2.n,
       localCounter: this.localCounter,
-      peerCounter: peerIsInitiator ? hs1.c : hs2.c,
+      peerCounter: duiDuanShiFaQiFang ? hs1.c : hs2.c,
       c2sMaterial,
       s2cMaterial,
-      keyFingerprint: sha256Hex(c2sMaterial, s2cMaterial),
+      keyFingerprint: sha256ShiLiuJin(c2sMaterial, s2cMaterial),
       tofu: !this.opts.peerFingerprint,
     };
   }
 }
 
-function safeFromB64u(s: unknown): Buffer | null {
+function anQuanB64uJieMa(s: unknown): Buffer | null {
   if (typeof s !== 'string' || s.length === 0) return null;
   try {
     return fromB64u(s);
@@ -736,10 +736,10 @@ function safeFromB64u(s: unknown): Buffer | null {
 }
 
 /** 便捷函数：在两个驱动之间跑完握手（内存内自检 / 测试用） */
-export async function yunxingWoshou(initiator: HandshakeDriver, responder: HandshakeDriver): Promise<SessionKeys> {
+export async function yunxingWoshou(initiator: WoshouQudongqi, responder: WoshouQudongqi): Promise<HuiHuaMiYaoJi> {
   const hs1 = await initiator.start();
   if (!hs1) throw new Error('initiator.start() 未返回 HS1');
-  let cur: HsFrame = hs1;
+  let cur: WoshouZhen = hs1;
   for (let i = 0; i < 4; i += 1) {
     const target = cur.t === 'hs1' || cur.t === 'hs3' ? responder : initiator;
     const res = await target.step(cur);

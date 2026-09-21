@@ -47,10 +47,10 @@ import {
   ed25519RawFromSpkiDer,
   ed25519SpkiDerFromRaw,
   normalizeEd25519PublicKey,
-  randomHex,
-  signMemberCertificate,
-  signRevocationList,
-  verifyMemberCertificate,
+  suiJiShiLiuJin,
+  qianMingChengYuanZhengShu,
+  qianMingCheXiaoBiao,
+  yanZhengChengYuanZhengShu,
   type ZhiWenTuiDao,
   type ShenfenGongyingshang,
   type ChengYuanZhengShuMa,
@@ -854,7 +854,7 @@ async function wentiChengyuanZhengshuShixian(input: WentiChengyuanZhengshuShuru)
     return { ok: false, code: 'identity-locked', detail: '身份未解锁：不能签发成员证书' };
   }
   const now = input.now ?? Date.now();
-  const certId = input.certId || `mc-${randomHex(8)}`;
+  const certId = input.certId || `mc-${suiJiShiLiuJin(8)}`;
   let cert: ChengYuanZhengShu;
   try {
     cert = gouJianChengYuanZhengShu(
@@ -873,12 +873,12 @@ async function wentiChengyuanZhengshuShixian(input: WentiChengyuanZhengshuShuru)
       },
       { now, ...(input.ttlMs ? { ttlMs: input.ttlMs } : {}) }
     );
-    cert = await signMemberCertificate(cert, (bytes) => signer.sign(bytes));
+    cert = await qianMingChengYuanZhengShu(cert, (bytes) => signer.sign(bytes));
   } catch (e) {
     return { ok: false, code: 'build-failed', detail: (e as Error).message };
   }
   // 自检：签出来的东西必须能过自己的验证（签名实现坏掉时立刻暴露，而不是等成员连不上）
-  const self = verifyMemberCertificate(cert, {
+  const self = yanZhengChengYuanZhengShu(cert, {
     fingerprintOf: fingerprintFromPublicKey,
     clockSkewMs: DEFAULT_CLOCK_SKEW_MS,
     now,
@@ -924,7 +924,7 @@ async function appendRevocationEntries(input: {
     { now }
   );
   try {
-    list = await signRevocationList(list, (bytes) => input.signer.sign(bytes));
+    list = await qianMingCheXiaoBiao(list, (bytes) => input.signer.sign(bytes));
   } catch (e) {
     return { ok: false, code: 'build-failed', detail: (e as Error).message };
   }
@@ -1241,7 +1241,7 @@ export function membershipSnapshot(
       revocationListVersion: xiuding?.listVersion ?? 0,
       revokedCount: xiuding?.entries.length ?? 0,
       certs: (st?.certs ?? []).map((c) => {
-        const v = verifyMemberCertificate(c, {
+        const v = yanZhengChengYuanZhengShu(c, {
           fingerprintOf: fingerprintFromPublicKey,
           clockSkewMs: DEFAULT_CLOCK_SKEW_MS,
           now,

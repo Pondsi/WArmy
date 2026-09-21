@@ -55,7 +55,7 @@ function write(socket: net.Socket, line: string) {
 export async function verifySmtp(cfg: SmtpPeizhi): Promise<SmtpVerifyResult> {
   return new Promise((resolve) => {
     let step = 'connect';
-    const finish = (r: SmtpVerifyResult) => {
+    const wanCheng = (r: SmtpVerifyResult) => {
       try {
         socket.destroy();
       } catch {
@@ -68,22 +68,22 @@ export async function verifySmtp(cfg: SmtpPeizhi): Promise<SmtpVerifyResult> {
       ? tls.connect({ host: cfg.host, port: cfg.port, servername: cfg.host, rejectUnauthorized: false })
       : net.connect({ host: cfg.host, port: cfg.port });
 
-    socket.setTimeout(12000, () => finish({ ok: false, step, message: 'timeout' }));
+    socket.setTimeout(12000, () => wanCheng({ ok: false, step, message: 'timeout' }));
 
-    socket.once('error', (e) => finish({ ok: false, step, message: String(e.message || e) }));
+    socket.once('error', (e) => wanCheng({ ok: false, step, message: String(e.message || e) }));
 
     const onConnect = async () => {
       try {
         step = 'banner';
         const banner = await readReply(socket);
         if (banner.code !== 220) {
-          return finish({ ok: false, step, message: banner.text.slice(0, 200), code: banner.code });
+          return wanCheng({ ok: false, step, message: banner.text.slice(0, 200), code: banner.code });
         }
         step = 'ehlo';
         write(socket, 'EHLO warmy');
         const ehlo = await readReply(socket);
         if (ehlo.code !== 250) {
-          return finish({ ok: false, step, message: ehlo.text.slice(0, 200), code: ehlo.code });
+          return wanCheng({ ok: false, step, message: ehlo.text.slice(0, 200), code: ehlo.code });
         }
 
         if (!cfg.secure) {
@@ -93,9 +93,9 @@ export async function verifySmtp(cfg: SmtpPeizhi): Promise<SmtpVerifyResult> {
             write(socket, 'STARTTLS');
             const st = await readReply(socket);
             if (st.code !== 220) {
-              return finish({ ok: false, step, message: st.text.slice(0, 200), code: st.code });
+              return wanCheng({ ok: false, step, message: st.text.slice(0, 200), code: st.code });
             }
-            return finish({
+            return wanCheng({
               ok: false,
               step: 'starttls-handshake',
               message: 'plain socket upgrade not implemented in this verify path; use secure port 465',
@@ -107,24 +107,24 @@ export async function verifySmtp(cfg: SmtpPeizhi): Promise<SmtpVerifyResult> {
         write(socket, 'AUTH LOGIN');
         const a1 = await readReply(socket);
         if (a1.code !== 334) {
-          return finish({ ok: false, step, message: a1.text.slice(0, 200), code: a1.code });
+          return wanCheng({ ok: false, step, message: a1.text.slice(0, 200), code: a1.code });
         }
         write(socket, Buffer.from(cfg.user, 'utf8').toString('base64'));
         const a2 = await readReply(socket);
         if (a2.code !== 334) {
-          return finish({ ok: false, step: 'auth-user', message: a2.text.slice(0, 200), code: a2.code });
+          return wanCheng({ ok: false, step: 'auth-user', message: a2.text.slice(0, 200), code: a2.code });
         }
         write(socket, Buffer.from(cfg.pass, 'utf8').toString('base64'));
         const a3 = await readReply(socket);
         if (a3.code !== 235) {
-          return finish({ ok: false, step: 'auth-pass', message: a3.text.slice(0, 200), code: a3.code });
+          return wanCheng({ ok: false, step: 'auth-pass', message: a3.text.slice(0, 200), code: a3.code });
         }
 
         step = 'quit';
         write(socket, 'QUIT');
-        finish({ ok: true, step: 'auth-pass', message: 'SMTP auth OK' });
+        wanCheng({ ok: true, step: 'auth-pass', message: 'SMTP auth OK' });
       } catch (e) {
-        finish({ ok: false, step, message: String((e as Error).message || e) });
+        wanCheng({ ok: false, step, message: String((e as Error).message || e) });
       }
     };
 

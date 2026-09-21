@@ -1,6 +1,6 @@
 appId: com.pondsi.warmy
-productName: 无限牛马
-copyright: Copyright © Pondsi
+productName: WARMY
+copyright: Copyright (c) Pondsi
 directories:
   output: ../../release
   buildResources: build
@@ -63,6 +63,7 @@ extraResources:
 # ── 应用图标（打包进 exe，任务栏/资源管理器都读它）──
 win:
   icon: build/icon.ico
+  artifactName: WArmy-Setup-${version}.exe
   # 记忆服务必须跑在真正的 Node 上（ADR 不变量 #4），所以把捆绑 Node 一起带上。
   # 只带当前平台，避免把另外 4 个平台的安装包也塞进去。
   extraResources:

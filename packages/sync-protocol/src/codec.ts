@@ -11,7 +11,7 @@ export type Zijie = Uint8Array | ArrayBuffer | Buffer;
 
 /* ────────────────────────────── 字节 / 文本 ────────────────────────────── */
 
-export function toBuf(v: Zijie | string): Buffer {
+export function zhuanZiJieZu(v: Zijie | string): Buffer {
   if (typeof v === 'string') return Buffer.from(v, 'base64url');
   if (Buffer.isBuffer(v)) return Buffer.from(v);
   if (v instanceof Uint8Array) return Buffer.from(v);
@@ -19,7 +19,7 @@ export function toBuf(v: Zijie | string): Buffer {
 }
 
 export function b64u(v: Zijie): string {
-  return toBuf(v).toString('base64url');
+  return zhuanZiJieZu(v).toString('base64url');
 }
 
 export function fromB64u(s: string): Buffer {
@@ -30,7 +30,7 @@ const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 /** RFC 4648 base32（无填充、大写）—— 用于人类可读的指纹 */
 export function base32(buf: Zijie): string {
-  const b = toBuf(buf);
+  const b = zhuanZiJieZu(buf);
   let wei = 0;
   let value = 0;
   let out = '';
@@ -47,7 +47,7 @@ export function base32(buf: Zijie): string {
 }
 
 /** 无歧义的字段拼接（长度前缀），供签名 transcript 使用 */
-export function joinFields(fields: ReadonlyArray<string | number | null | undefined>): string {
+export function pinJieZiduan(fields: ReadonlyArray<string | number | null | undefined>): string {
   return fields
     .map((f) => {
       const s = f === null || f === undefined ? '' : String(f);
@@ -60,40 +60,40 @@ export function joinFields(fields: ReadonlyArray<string | number | null | undefi
 
 export function sha256(...parts: Zijie[]): Buffer {
   const h = crypto.createHash('sha256');
-  for (const p of parts) h.update(toBuf(p));
+  for (const p of parts) h.update(zhuanZiJieZu(p));
   return h.digest();
 }
 
-export function sha256Hex(...parts: Zijie[]): string {
+export function sha256ShiLiuJin(...parts: Zijie[]): string {
   return sha256(...parts).toString('hex');
 }
 
-export function hmacSha256(key: Zijie, ...parts: Zijie[]): Buffer {
-  const h = crypto.createHmac('sha256', toBuf(key));
-  for (const p of parts) h.update(toBuf(p));
+export function hmacSha256Hash(key: Zijie, ...parts: Zijie[]): Buffer {
+  const h = crypto.createHmac('sha256', zhuanZiJieZu(key));
+  for (const p of parts) h.update(zhuanZiJieZu(p));
   return h.digest();
 }
 
 /** HKDF-SHA256（Node 内置实现） */
 export function hkdf(ikm: Zijie, salt: Zijie, info: string, length: number): Buffer {
-  return Buffer.from(crypto.hkdfSync('sha256', toBuf(ikm), toBuf(salt), Buffer.from(info, 'utf8'), length));
+  return Buffer.from(crypto.hkdfSync('sha256', zhuanZiJieZu(ikm), zhuanZiJieZu(salt), Buffer.from(info, 'utf8'), length));
 }
 
 export function randomBytes(n: number): Buffer {
   return crypto.randomBytes(n);
 }
 
-export function randomHex(n: number): string {
+export function suiJiShiLiuJin(n: number): string {
   return crypto.randomBytes(n).toString('hex');
 }
 
-export function randomB64u(n: number): string {
+export function suiJiB64u(n: number): string {
   return crypto.randomBytes(n).toString('base64url');
 }
 
-export function timingSafeEq(a: Zijie, b: Zijie): boolean {
-  const ba = toBuf(a);
-  const bb = toBuf(b);
+export function shiJianHengDengBiJiao(a: Zijie, b: Zijie): boolean {
+  const ba = zhuanZiJieZu(a);
+  const bb = zhuanZiJieZu(b);
   if (ba.length !== bb.length) return false;
   return crypto.timingSafeEqual(ba, bb);
 }
@@ -113,14 +113,14 @@ export const ED25519_SPKI_DER_LENGTH = 44;
 
 /** raw 32B → SPKI DER（44B） */
 export function ed25519SpkiDerFromRaw(raw: Zijie): Buffer {
-  const r = toBuf(raw);
+  const r = zhuanZiJieZu(raw);
   if (r.length !== ED25519_PUBLIC_KEY_LENGTH) throw new Error(`ed25519SpkiDerFromRaw: 需要 32 字节 raw，实际 ${r.length}`);
   return Buffer.concat([ED25519_SPKI_PREFIX, r]);
 }
 
 /** SPKI DER（44B）→ raw 32B；不是合法 Ed25519 SPKI 时返回 null */
 export function ed25519RawFromSpkiDer(der: Zijie): Buffer | null {
-  const d = toBuf(der);
+  const d = zhuanZiJieZu(der);
   if (d.length !== ED25519_SPKI_DER_LENGTH) return null;
   if (!d.subarray(0, 12).equals(ED25519_SPKI_PREFIX)) return null;
   return d.subarray(12);
@@ -128,7 +128,7 @@ export function ed25519RawFromSpkiDer(der: Zijie): Buffer | null {
 
 /** 任意常见表示 → raw 32B Ed25519 公钥（接受 raw / SPKI DER） */
 export function normalizeEd25519PublicKey(key: Zijie | string): Buffer {
-  const b = toBuf(key);
+  const b = zhuanZiJieZu(key);
   if (b.length === ED25519_PUBLIC_KEY_LENGTH) return b;
   const raw = ed25519RawFromSpkiDer(b);
   if (raw) return raw;
@@ -136,22 +136,22 @@ export function normalizeEd25519PublicKey(key: Zijie | string): Buffer {
 }
 
 export function ed25519PublicKeyObject(raw: Zijie): crypto.KeyObject {
-  return crypto.createPublicKey({ key: Buffer.concat([ED25519_SPKI, toBuf(raw)]), format: 'der', type: 'spki' });
+  return crypto.createPublicKey({ key: Buffer.concat([ED25519_SPKI, zhuanZiJieZu(raw)]), format: 'der', type: 'spki' });
 }
 
 export function ed25519PrivateKeyObject(raw: Zijie): crypto.KeyObject {
-  return crypto.createPrivateKey({ key: Buffer.concat([ED25519_PKCS8, toBuf(raw)]), format: 'der', type: 'pkcs8' });
+  return crypto.createPrivateKey({ key: Buffer.concat([ED25519_PKCS8, zhuanZiJieZu(raw)]), format: 'der', type: 'pkcs8' });
 }
 
 export function x25519PublicKeyObject(raw: Zijie): crypto.KeyObject {
-  return crypto.createPublicKey({ key: Buffer.concat([X25519_SPKI, toBuf(raw)]), format: 'der', type: 'spki' });
+  return crypto.createPublicKey({ key: Buffer.concat([X25519_SPKI, zhuanZiJieZu(raw)]), format: 'der', type: 'spki' });
 }
 
 export function x25519PrivateKeyObject(raw: Zijie): crypto.KeyObject {
-  return crypto.createPrivateKey({ key: Buffer.concat([X25519_PKCS8, toBuf(raw)]), format: 'der', type: 'pkcs8' });
+  return crypto.createPrivateKey({ key: Buffer.concat([X25519_PKCS8, zhuanZiJieZu(raw)]), format: 'der', type: 'pkcs8' });
 }
 
-export function rawPublicKey(key: crypto.KeyObject): Buffer {
+export function yuanwenGongYao(key: crypto.KeyObject): Buffer {
   return key.export({ format: 'der', type: 'spki' }).subarray(12);
 }
 
@@ -161,10 +161,10 @@ export function yuanwenSiyouMiyao(key: crypto.KeyObject): Buffer {
 
 /** 本地 Ed25519 验签（raw 公钥）。密钥不是 32 字节时返回 null 表示"本地无法判定" */
 export function verifyEd25519Local(message: Zijie, signature: Zijie, publicKeyRaw: Zijie): boolean | null {
-  const pub = toBuf(publicKeyRaw);
+  const pub = zhuanZiJieZu(publicKeyRaw);
   if (pub.length !== ED25519_PUBLIC_KEY_LENGTH) return null;
   try {
-    return crypto.verify(null, toBuf(message), ed25519PublicKeyObject(pub), toBuf(signature));
+    return crypto.verify(null, zhuanZiJieZu(message), ed25519PublicKeyObject(pub), zhuanZiJieZu(signature));
   } catch {
     return null;
   }
@@ -172,12 +172,12 @@ export function verifyEd25519Local(message: Zijie, signature: Zijie, publicKeyRa
 
 /** 本地 Ed25519 签名（raw 私钥）—— 仅供测试 / 身份层的实现参考 */
 export function signEd25519Local(message: Zijie, privateKeyRaw: Zijie): Buffer {
-  return crypto.sign(null, toBuf(message), ed25519PrivateKeyObject(privateKeyRaw));
+  return crypto.sign(null, zhuanZiJieZu(message), ed25519PrivateKeyObject(privateKeyRaw));
 }
 
 export function shengChengEd25519(): { publicKey: Buffer; privateKey: Buffer } {
   const kp = crypto.generateKeyPairSync('ed25519');
-  return { publicKey: rawPublicKey(kp.publicKey), privateKey: yuanwenSiyouMiyao(kp.privateKey) };
+  return { publicKey: yuanwenGongYao(kp.publicKey), privateKey: yuanwenSiyouMiyao(kp.privateKey) };
 }
 
 /**
@@ -185,7 +185,7 @@ export function shengChengEd25519(): { publicKey: Buffer; privateKey: Buffer } {
  * 用途：从群组密钥派生**假名签名密钥**（DHT 记录用），使公共 DHT 上看不到真实身份指纹。
  */
 export function ed25519FromSeed(seed: Zijie): { publicKey: Buffer; privateKey: Buffer } {
-  const s = toBuf(seed);
+  const s = zhuanZiJieZu(seed);
   if (s.length !== 32) throw new Error(`ed25519FromSeed: seed 必须 32 字节，实际 ${s.length}`);
   const siYao = ed25519PrivateKeyObject(s);
   // 用 JWK 导出拿到公钥分量（x），避免 createPublicKey(KeyObject) 的类型/重载差异
@@ -203,12 +203,12 @@ export interface X25519KeyPair {
 
 export function generateX25519(): X25519KeyPair {
   const kp = crypto.generateKeyPairSync('x25519');
-  return { publicKey: rawPublicKey(kp.publicKey), privateKey: yuanwenSiyouMiyao(kp.privateKey) };
+  return { publicKey: yuanwenGongYao(kp.publicKey), privateKey: yuanwenSiyouMiyao(kp.privateKey) };
 }
 
 /** X25519 ECDHE：共享密钥（32 字节） */
 export function x25519SharedSecret(privateKeyRaw: Zijie, peerPublicKeyRaw: Zijie): Buffer {
-  const peer = toBuf(peerPublicKeyRaw);
+  const peer = zhuanZiJieZu(peerPublicKeyRaw);
   if (peer.length !== X25519_PUBLIC_KEY_LENGTH) throw new Error(`x25519: bad peer public key length ${peer.length}`);
   return crypto.diffieHellman({
     privateKey: x25519PrivateKeyObject(privateKeyRaw),
@@ -236,20 +236,20 @@ export function fengyin(key: Zijie, plaintext: Zijie, aad: Zijie): Fengyin {
  * 返回密文+tag；调用方必须保证「同一密钥下 IV 永不重复」。
  */
 export function sealWithIv(key: Zijie, plaintext: Zijie, aad: Zijie, iv: Zijie): Buffer {
-  const c = crypto.createCipheriv('aes-256-gcm', toBuf(key), toBuf(iv));
-  c.setAAD(toBuf(aad));
-  return Buffer.concat([c.update(toBuf(plaintext)), c.final(), c.getAuthTag()]);
+  const c = crypto.createCipheriv('aes-256-gcm', zhuanZiJieZu(key), zhuanZiJieZu(iv));
+  c.setAAD(zhuanZiJieZu(aad));
+  return Buffer.concat([c.update(zhuanZiJieZu(plaintext)), c.final(), c.getAuthTag()]);
 }
 
 /** 解密失败（无密钥 / 被篡改 / AAD 不符）一律抛错，绝不返回半成品 */
 export function open(key: Zijie, sealed: Fengyin, aad: Zijie): Buffer {
-  const k = toBuf(key);
-  const ct = toBuf(sealed.ct);
+  const k = zhuanZiJieZu(key);
+  const ct = zhuanZiJieZu(sealed.ct);
   if (ct.length < GCM_BIAOQIAN_CHANGDU) throw new Error('aes-gcm: ciphertext too short');
   const tag = ct.subarray(ct.length - GCM_BIAOQIAN_CHANGDU);
   const body = ct.subarray(0, ct.length - GCM_BIAOQIAN_CHANGDU);
-  const d = crypto.createDecipheriv('aes-256-gcm', k, toBuf(sealed.iv));
-  d.setAAD(toBuf(aad));
+  const d = crypto.createDecipheriv('aes-256-gcm', k, zhuanZiJieZu(sealed.iv));
+  d.setAAD(zhuanZiJieZu(aad));
   d.setAuthTag(tag);
   return Buffer.concat([d.update(body), d.final()]);
 }
@@ -263,7 +263,7 @@ export function u64be(n: bigint | number): Buffer {
 }
 
 export function readU64BE(b: Zijie, offset = 0): bigint {
-  return toBuf(b).readBigUInt64BE(offset);
+  return zhuanZiJieZu(b).readBigUInt64BE(offset);
 }
 
 export function u32be(n: number): Buffer {
@@ -279,7 +279,7 @@ export class ZhenJieMa {
   constructor(private maxFrame = 16 * 1024 * 1024) {}
 
   push(chunk: Zijie): Buffer[] {
-    this.buf = this.buf.length === 0 ? toBuf(chunk) : Buffer.concat([this.buf, toBuf(chunk)]);
+    this.buf = this.buf.length === 0 ? zhuanZiJieZu(chunk) : Buffer.concat([this.buf, zhuanZiJieZu(chunk)]);
     const out: Buffer[] = [];
     for (;;) {
       if (this.buf.length < 4) break;
@@ -294,6 +294,6 @@ export class ZhenJieMa {
 }
 
 export function frame(payload: Zijie): Buffer {
-  const p = toBuf(payload);
+  const p = zhuanZiJieZu(payload);
   return Buffer.concat([u32be(p.length), p]);
 }

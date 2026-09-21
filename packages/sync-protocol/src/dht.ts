@@ -24,24 +24,24 @@ import {
   b64u,
   ed25519FromSeed,
   fromB64u,
-  hmacSha256,
-  joinFields,
+  hmacSha256Hash,
+  pinJieZiduan,
   open,
-  randomHex,
+  suiJiShiLiuJin,
   fengyin,
   sha256,
-  sha256Hex,
+  sha256ShiLiuJin,
   signEd25519Local,
-  toBuf,
+  zhuanZiJieZu,
   verifyEd25519Local,
 } from './codec.js';
 import {
   type ZhiWenTuiDao,
   type ShenfenGongyingshang,
   type GuifanShenfen,
-  warmyFingerprint,
-  normalizeIdentity,
-  verifyPeerSignature,
+  warmyZhiWen,
+  guiFanShenFen,
+  yanZhengDuiDuanQianMing,
 } from './identity.js';
 
 export const DHT_PROTOCOL = 'warmy-dht/1';
@@ -80,13 +80,13 @@ export function youZhiWenQuDhtId(fingerprint: string): Buffer {
 }
 
 /** 记录键：由"被宣告者指纹"推出，DHT 上看不到明文指纹 */
-export function recordKeyForFingerprint(fingerprint: string): string {
-  return sha256Hex(Buffer.from(`${DHT_PROTOCOL}|record|${fingerprint}`, 'utf8'));
+export function jiLuJianYouZhiWen(fingerprint: string): string {
+  return sha256ShiLiuJin(Buffer.from(`${DHT_PROTOCOL}|record|${fingerprint}`, 'utf8'));
 }
 
-export function xorDistance(a: Zijie, b: Zijie): Buffer {
-  const ba = toBuf(a);
-  const bb = toBuf(b);
+export function yihuoJuli(a: Zijie, b: Zijie): Buffer {
+  const ba = zhuanZiJieZu(a);
+  const bb = zhuanZiJieZu(b);
   const out = Buffer.alloc(Math.min(ba.length, bb.length));
   for (let i = 0; i < out.length; i += 1) out[i] = (ba[i] as number) ^ (bb[i] as number);
   return out;
@@ -94,8 +94,8 @@ export function xorDistance(a: Zijie, b: Zijie): Buffer {
 
 /** common prefix length（0..256），用于 k 桶划分 */
 export function gongGongQianZhuiChangDu(a: Zijie, b: Zijie): number {
-  const ba = toBuf(a);
-  const bb = toBuf(b);
+  const ba = zhuanZiJieZu(a);
+  const bb = zhuanZiJieZu(b);
   let wei = 0;
   for (let i = 0; i < Math.min(ba.length, bb.length); i += 1) {
     const x = (ba[i] as number) ^ (bb[i] as number);
@@ -165,7 +165,7 @@ export class LuyouBiao {
   /** 距离 target 最近的 n 个联系人（含未验证过的） */
   closest(target: Zijie, n = this.k): DhtLianXi[] {
     return this.list()
-      .sort((a, b) => Buffer.compare(xorDistance(a.id, target), xorDistance(b.id, target)))
+      .sort((a, b) => Buffer.compare(yihuoJuli(a.id, target), yihuoJuli(b.id, target)))
       .slice(0, n);
   }
 }
@@ -208,11 +208,11 @@ export interface DhtJiLuFeng {
 export type JiluQianmingMoshi = 'identity' | 'pseudonymous';
 
 export function jiluQianmingJiaoyi(env: DhtJiLuFeng): string {
-  return joinFields([DHT_PROTOCOL, 'RECORD', env.v, env.k, env.s, env.t, env.sg, env.pk, env.sl]);
+  return pinJieZiduan([DHT_PROTOCOL, 'RECORD', env.v, env.k, env.s, env.t, env.sg, env.pk, env.sl]);
 }
 
 export function jiluAad(env: Pick<DhtJiLuFeng, 'v' | 'k' | 's' | 't' | 'sg' | 'pk'>): Buffer {
-  return Buffer.from(joinFields([DHT_PROTOCOL, 'RECORD-AAD', env.v, env.k, env.s, env.t, env.sg, env.pk]), 'utf8');
+  return Buffer.from(pinJieZiduan([DHT_PROTOCOL, 'RECORD-AAD', env.v, env.k, env.s, env.t, env.sg, env.pk]), 'utf8');
 }
 
 /**
@@ -227,7 +227,7 @@ export class QunMiyaoHuan {
   }
 
   add(key: Zijie, makeActive = true): void {
-    const k = toBuf(key);
+    const k = zhuanZiJieZu(key);
     if (k.length !== 32) throw new Error(`群组密钥必须 32 字节（AES-256），实际 ${k.length}`);
     if (makeActive) this.keys.unshift(k);
     else this.keys.push(k);
@@ -257,7 +257,7 @@ export class QunMiyaoHuan {
   }
 }
 
-export interface SignRecordOptions {
+export interface QianMingJiLuXuanXiang2 {
   identity: ShenfenGongyingshang | GuifanShenfen;
   groupKey: Zijie;
   key: string;
@@ -268,9 +268,9 @@ export interface SignRecordOptions {
 }
 
 /** 组装记录信封：内容加密（群密钥）+ 头部签名（身份密钥或假名密钥） */
-export async function signRecordEnvelope(opts: SignRecordOptions): Promise<DhtJiLuFeng> {
-  const identity = await normalizeIdentity(opts.identity);
-  const groupKey = toBuf(opts.groupKey);
+export async function qianMingJiLuFeng(opts: QianMingJiLuXuanXiang2): Promise<DhtJiLuFeng> {
+  const identity = await guiFanShenFen(opts.identity);
+  const groupKey = zhuanZiJieZu(opts.groupKey);
   const ts = opts.ts ?? Date.now();
   const mode = opts.signing ?? 'identity';
 
@@ -280,11 +280,11 @@ export async function signRecordEnvelope(opts: SignRecordOptions): Promise<DhtJi
   if (mode === 'pseudonymous') {
     // 假名密钥 = Ed25519(HMAC(群密钥, 'pseudonym|' + 真实指纹))
     // 效果：公共 DHT 上无法把记录关联回真实身份（只有群成员能算出来）
-    const seed = hmacSha256(groupKey, Buffer.from(`${DHT_PROTOCOL}|pseudonym|${identity.fingerprint}`, 'utf8'));
+    const seed = hmacSha256Hash(groupKey, Buffer.from(`${DHT_PROTOCOL}|pseudonym|${identity.fingerprint}`, 'utf8'));
     const derived = ed25519FromSeed(seed);
     pk = derived.publicKey;
     signKey = derived.privateKey;
-    sg = warmyFingerprint(pk);
+    sg = warmyZhiWen(pk);
   } else {
     pk = identity.publicKey;
     sg = identity.fingerprint;
@@ -316,7 +316,7 @@ export type JiluJujueYuanyin =
   | 'decrypt-failed'
   | 'malformed';
 
-export interface VerifyRecordResult {
+export interface YanZhengJiLuJieGuo {
   ok: boolean;
   reason?: JiluJujueYuanyin;
   detail?: string;
@@ -327,7 +327,7 @@ export interface VerifyRecordResult {
   envelope?: DhtJiLuFeng;
 }
 
-export interface VerifyRecordOptions {
+export interface YanZhengJiLuXuanXiang {
   /** 校验公钥/指纹的推导函数（默认 base32(sha256(pub))） */
   derivation?: ZhiWenTuiDao;
   /** 注入验签实现（可选；假名模式必须传，因为本地只有公钥） */
@@ -349,10 +349,10 @@ export interface VerifyRecordOptions {
  * 校验记录：版本 → 键 → 签名者 fingerprint↔公钥 → 签名 → seq 回滚 → 解密。
  * 任一步失败都会给出**具体原因**（便于审计与测试断言）。
  */
-export async function verifyRecordEnvelope(
+export async function yanZhengJiLuFeng(
   env: DhtJiLuFeng,
-  opts: VerifyRecordOptions = {}
-): Promise<VerifyRecordResult> {
+  opts: YanZhengJiLuXuanXiang = {}
+): Promise<YanZhengJiLuJieGuo> {
   const now = opts.now ?? (() => Date.now());
   if (!env || typeof env !== 'object') return { ok: false, reason: 'malformed', detail: '信封不是对象' };
   if (env.v !== JILU_BANBEN) return { ok: false, reason: 'bad-version', detail: `版本 ${env.v}` };
@@ -371,14 +371,14 @@ export async function verifyRecordEnvelope(
     }
   })();
   if (!pk || pk.length !== 32) return { ok: false, reason: 'malformed', detail: '签名公钥长度非法' };
-  const derivation = opts.derivation ?? warmyFingerprint;
+  const derivation = opts.derivation ?? warmyZhiWen;
   const tuidaoQianmingzhe = derivation(pk);
   if (tuidaoQianmingzhe !== env.sg) {
     return { ok: false, reason: 'signer-mismatch', detail: `签名者指纹 ${env.sg} 与公钥推出 ${tuidaoQianmingzhe} 不符` };
   }
   const transcript = Buffer.from(jiluQianmingJiaoyi(env), 'utf8');
   const sig = fromB64u(env.sig);
-  const sigOk = await verifyPeerSignature(
+  const sigOk = await yanZhengDuiDuanQianMing(
     opts.verifier
       ? {
           normalizedIdentity: true,
@@ -509,11 +509,11 @@ export class DhtJieDian {
   }
 
   private async init(): Promise<void> {
-    this.identity = await normalizeIdentity(this.opts.identity);
+    this.identity = await guiFanShenFen(this.opts.identity);
     if (this.opts.id && this.opts.id.length !== DHT_ID_LENGTH) throw new Error('DhtNode.id 必须 32 字节');
-    const derivedId = this.opts.id ?? youZhiWenQuDhtId(this.identity.fingerprint);
-    this.id = derivedId;
-    this.table = new LuyouBiao(derivedId, this.k);
+    const tuidaoId = this.opts.id ?? youZhiWenQuDhtId(this.identity.fingerprint);
+    this.id = tuidaoId;
+    this.table = new LuyouBiao(tuidaoId, this.k);
   }
 
   get fingerprint(): string {
@@ -642,7 +642,7 @@ export class DhtJieDian {
   /** 发送一条 RPC 并等待回复（单次，超时即失败；**不重试**） */
   async call(addr: DhtDiZhi, msg: Record<string, unknown>, replyType: string, timeoutMs = this.rpcTimeoutMs): Promise<Record<string, unknown>> {
     if (!this.socket) throw new Error('DhtNode 未启动');
-    const rid = randomHex(6);
+    const rid = suiJiShiLiuJin(6);
     const payload = Buffer.from(JSON.stringify({ ...msg, id: b64u(this.id), rid, reply: replyType }), 'utf8');
     this.stats.rpcSent += 1;
     return new Promise<Record<string, unknown>>((resolve, reject) => {
@@ -706,7 +706,7 @@ export class DhtJieDian {
     for (;;) {
       const candidates = [...shortlist.values()]
         .filter((c) => !queried.has(b64u(c.id)))
-        .sort((a, b) => Buffer.compare(xorDistance(a.id, target), xorDistance(b.id, target)))
+        .sort((a, b) => Buffer.compare(yihuoJuli(a.id, target), yihuoJuli(b.id, target)))
         .slice(0, this.alpha);
       if (candidates.length === 0 || rpcJishu >= maxRpc) break;
       const results = await Promise.all(
@@ -729,7 +729,7 @@ export class DhtJieDian {
       }
     }
     return [...shortlist.values()]
-      .sort((a, b) => Buffer.compare(xorDistance(a.id, target), xorDistance(b.id, target)))
+      .sort((a, b) => Buffer.compare(yihuoJuli(a.id, target), yihuoJuli(b.id, target)))
       .slice(0, this.k);
   }
 
@@ -760,7 +760,7 @@ export class DhtJieDian {
     envelope: DhtJiLuFeng;
   }> {
     await this.ready;
-    const key = recordKeyForFingerprint(args.fingerprint);
+    const key = jiLuJianYouZhiWen(args.fingerprint);
     const groupKey = this.groupKeys.active;
     if (!groupKey) throw new Error('发布记录需要群组密钥（groupKeys.active）');
     const record: DuiduanDizhiJilu =
@@ -774,7 +774,7 @@ export class DhtJieDian {
         alias: this.opts.nodeId,
       } satisfies DuiduanDizhiJilu);
     const seq = args.seq ?? this.nextSeq(key);
-    const env = await signRecordEnvelope({
+    const env = await qianMingJiLuFeng({
       identity: this.identity,
       groupKey,
       key,
@@ -818,7 +818,7 @@ export class DhtJieDian {
     rejected: { addr: DhtDiZhi; reason: string; detail?: string }[];
   }> {
     await this.ready;
-    const key = recordKeyForFingerprint(fingerprint);
+    const key = jiLuJianYouZhiWen(fingerprint);
     const attempts: { addr: DhtDiZhi; status: 'ok' | 'empty' | 'reject' | 'rpc-failed'; reason?: string; seq?: number }[] = [];
     const rejected: { addr: DhtDiZhi; reason: string; detail?: string }[] = [];
     const target = youZhiWenQuDhtId(fingerprint);
@@ -826,7 +826,7 @@ export class DhtJieDian {
     const best = { env: null as DhtJiLuFeng | null, record: undefined as DuiduanDizhiJilu | undefined, signer: undefined as string | undefined, from: undefined as DhtDiZhi | undefined, seq: 0 };
 
     const kaoLv = async (env: DhtJiLuFeng, addr: DhtDiZhi): Promise<void> => {
-      const result = await verifyRecordEnvelope(env, {
+      const result = await yanZhengJiLuFeng(env, {
         expectKey: key,
         groupKeys: this.groupKeys,
         requireDecrypt: opts.requireDecrypt ?? true,
@@ -927,11 +927,11 @@ export class DhtJieDian {
     //    判别依据（三重）：带 rid + 目标地址匹配 + **不是请求**（请求必带 reply 字段）
     //    这样"给本机自己发 RPC"不会被误判成回包。
     const p = rid ? this.pending.get(rid) : undefined;
-    const isRequest = Object.prototype.hasOwnProperty.call(msg, 'reply');
+    const shiFouQingQiu = Object.prototype.hasOwnProperty.call(msg, 'reply');
     if (
       rid &&
       p &&
-      !isRequest &&
+      !shiFouQingQiu &&
       (msg['t'] === p.replyType || msg['t'] === 'error') &&
       p.target.host === host &&
       p.target.port === port
@@ -970,7 +970,7 @@ export class DhtJieDian {
           this.reply(port, host, rid, 'error', { reason: 'malformed' });
           return;
         }
-        const verified = await verifyRecordEnvelope(env, {
+        const verified = await yanZhengJiLuFeng(env, {
           expectKey: typeof msg['key'] === 'string' ? (msg['key'] as string) : undefined,
           groupKeys: null, // 存储方无需群密钥：只验签，不解密（守得住内容机密性）
           requireDecrypt: false,
@@ -1036,13 +1036,13 @@ export class DhtJieDian {
 
   /** 通用：把一条原始报文喂给节点（测试 / 自定义传输用） */
   async feedDatagram(raw: Zijie, host: string, port: number): Promise<void> {
-    await this.handleDatagram(toBuf(raw), host, port);
+    await this.handleDatagram(zhuanZiJieZu(raw), host, port);
   }
 }
 
 /* ────────────────────────────── 便捷函数 ────────────────────────────── */
 
 /** 判断记录里的地址是否与本地地址相同（用于"地址变了要重新宣告"判定） */
-export function sameAddress(a: DhtDiZhi, b: DhtDiZhi): boolean {
+export function tongYiDiZhi(a: DhtDiZhi, b: DhtDiZhi): boolean {
   return a.host === b.host && a.port === b.port;
 }

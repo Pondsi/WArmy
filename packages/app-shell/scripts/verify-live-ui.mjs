@@ -190,6 +190,62 @@ async function main() {
     check('供应商：计数随卡片更新', String(provAfter.count).includes('/50'), provAfter.count);
     check('供应商：添加成功后下拉**复位**到占位项', provAfter.presetValue === '', provAfter.presetValue);
     check('特殊模型：供应商无模型时不给可选项（第 8 条）', provAfter.smOptions.length === 0, provAfter);
+    /**
+     * 「拉取模型」按钮：名称 / 接口 / API Key 任一没填 ⇒ **灰色不可点击**。
+     * 例外：Ollama 类协议本来就不需要密钥 ⇒ 不算"没填"，按钮保持可用。
+     */
+    const fetchGate = await c.evaluate(`(function(){
+      const cards = Array.from(document.querySelectorAll('#prov-list .prov-card'));
+      const rows = cards.map((card) => {
+        const label = (card.querySelector('input[data-k="label"]') || {}).value || '';
+        const baseURL = (card.querySelector('input[data-k="baseURL"]') || {}).value || '';
+        const apiKey = (card.querySelector('input[data-k="apiKey"]') || {}).value || '';
+        const btn = card.querySelector('[data-fetch]');
+        return { label, baseURL, apiKey, disabled: !!(btn && btn.disabled), title: btn ? btn.getAttribute('title') : '' };
+      });
+      return rows;
+    })()`);
+    const ds = fetchGate.filter((r) => /deepseek/i.test(r.label));
+    const ol = fetchGate.filter((r) => /ollama/i.test(r.label) && /本机|local/i.test(r.label));
+    check('拉取按钮：有名称+地址但**没填密钥** ⇒ 按钮变灰（DeepSeek）',
+      ds.length > 0 && ds[0].disabled === true, ds[0]);
+    check('拉取按钮：disabled 时 title 说明缺什么（请先填写…）',
+      ds.length > 0 && /请先填写|Please fill/i.test(ds[0].title || ''), ds[0] && ds[0].title);
+    check('拉取按钮：Ollama（本机）不需要密钥 ⇒ 不因此被禁用',
+      ol.length > 0 && ol[0].disabled === false, ol[0]);
+
+    /**
+     * 下拉选项**随界面语言变化**：产品主要求"切换语言后选项要变成对应语言的名称"。
+     * 做法：走真实 UI 路径把语言切到 en-US（触发 locale select 的 change → loadI18n + 重画），
+     * 再读同一位置的选项文本，必须不再是中文。
+     */
+    const labelZh = await c.evaluate(`(function(){
+      const sel = document.querySelector('#prov-preset');
+      if (!sel) return null;
+      const opt = Array.from(sel.options).find((o) => o.value === 'zhipu');
+      return opt ? opt.textContent.trim() : null;
+    })()`);
+    await c.evaluate(`(function(){
+      const sel = document.querySelector('#sel-locale');
+      if (sel) { sel.value = 'en-US'; sel.dispatchEvent(new Event('change')); }
+      return true;
+    })()`);
+    await sleep(2500);
+    const labelEn = await c.evaluate(`(function(){
+      const sel = document.querySelector('#prov-preset');
+      if (!sel) return null;
+      const opt = Array.from(sel.options).find((o) => o.value === 'zhipu');
+      return opt ? opt.textContent.trim() : null;
+    })()`);
+    check('预设下拉：切换到英文后选项名也变成英文（智谱 GLM → Zhipu GLM）',
+      !!labelZh && !!labelEn && labelZh !== labelEn && /zhipu glm/i.test(labelEn), { zh: labelZh, en: labelEn });
+    // 切回中文，避免影响后续断言
+    await c.evaluate(`(function(){
+      const sel = document.querySelector('#sel-locale');
+      if (sel) { sel.value = 'zh-CN'; sel.dispatchEvent(new Event('change')); }
+      return true;
+    })()`);
+    await sleep(2000);
 
     // 清理：把刚加的空供应商删掉，避免影响后续断言
     await c.evaluate(`(function(){
@@ -451,12 +507,12 @@ async function main() {
      */
     const maskText = String(meDom.credText).trim();
     const maskParts = maskText.split('-');
-    // 形状：前 2 组明文 + 13 个「牛马」组 + 末 2 组明文（2+13+2 = 17 组，与 51 位的分组一致）
+    // 形状：前 3 组明文 + 10 个「牛马」组 + 末 4 组明文（3+10+4 = 17 组，与 51 位的分组一致）
     const CH3 = '[0-9ABCDEFGHJKLMNPQRSTUVWXY]{3}';
-    const maskShape = new RegExp('^(' + CH3 + '-){2}(牛马-){13}' + CH3 + '-' + CH3 + '$').test(maskText);
+    const maskShape = new RegExp('^(' + CH3 + '-){3}(牛马-){10}' + CH3 + '-' + CH3 + '-' + CH3 + '-' + CH3 + '$').test(maskText);
     const maskCounts = { groups: maskParts.length, niuma: (maskText.match(/牛马/g) || []).length };
-    check('凭证默认只露前后各两组（每组「牛马」两个字，共 17 组 / 13 个牛马）',
-      maskShape && maskCounts.groups === 17 && maskCounts.niuma === 13, maskCounts);
+    check('凭证默认只露前三组与后四组（每组「牛马」两个字，共 17 组 / 10 个牛马）',
+      maskShape && maskCounts.groups === 17 && maskCounts.niuma === 10, maskCounts);
     // 小眼睛：点一下看全貌，再点一下遮回去（前后长度一致，排版不跳）
     const eye = await c.evaluate(`(async function(){
       const el = document.querySelector('#me-id-val');
