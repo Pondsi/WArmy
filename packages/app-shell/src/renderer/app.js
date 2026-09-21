@@ -13,6 +13,8 @@
   ];
   const PROVIDER_PROTOCOLS = ['openai-compatible', 'anthropic', 'ollama'];
   const state = {
+    /** 独立会话窗钉住的会话 id（URL 的 chatId）；非独立窗为空 */
+    subWindowPinnedId: '',
     nav: 'singleAi',
     locale: 'zh-CN',
     t: {},
@@ -133,6 +135,16 @@
    *  · `__warmyProviders`：读回渲染层当前持有的供应商数组（只读快照）。
    */
   window.__warmyRenderPage = () => renderPage();
+
+  /** 只读调试快照（门禁/自动诊断用；不改变任何行为） */
+  window.__warmyDebugState = () => ({
+    nav: state.nav,
+    pinned: state.subWindowPinnedId || '',
+    selected: state.selectedChat ? state.selectedChat.id : null,
+    selectedKind: state.selectedChat ? state.selectedChat.kind : null,
+    chatWindow: document.body.classList.contains('chat-window'),
+    itemCount: document.querySelectorAll('#list-body .list-item').length,
+  });
   const t = (k) => state.t[k] || k;
   /** 结构化值展示：对象绝不 textContent 直出（避免 [object Object]） */
   const fmtDisp = (v) => {
@@ -757,6 +769,19 @@
       const items = listItemsFor(nav);
       const cur = state.selectedChat;
       const stillHere = !!cur && pipeiDaohang(cur, nav) && items.some((c) => c.id === cur.id);
+      /**
+       * 独立会话窗**钉住**了 URL 指定的那一个会话：
+       *  · 它在本栏列表里 ⇒ 只打开它（哪怕当前选中的是别的）；
+       *  · 它还没进列表（例如群列表还没拉回来）⇒ **什么都不做**，
+       *    绝不能退化成"打开第一个" —— 那会把用户点开的会话换成不相干的会话
+       *    （产品主反馈的"新窗口联动不对"就是这么来的）。
+       */
+      const pinned = String(state.subWindowPinnedId || '');
+      if (pinned) {
+        const hit = items.find((c) => c.id === pinned);
+        if (hit && !stillHere) { openChat(hit.kind, hit.id, hit.name); }
+        return;
+      }
       if (!stillHere && items.length) {
         openChat(items[0].kind, items[0].id, items[0].name);
         return;
@@ -1120,7 +1145,13 @@
     try {
       const r = await window.warmy.chatMessages?.({ sessionId: sid, limit: 500 });
       if (!r || !r.ok || !Array.isArray(r.messages) || !r.messages.length) return;
-      const fromMain = r.messages.map((m) => ({ role: m.role, text: m.text, ts: m.ts || Date.now() }));
+      /**
+       * 角色**归一到渲染层的命名**（me / them）。
+       * 主进程日志里是 user / assistant，以前直接拿来用 ⇒
+       *  · 与本地消息的 role+text 比对永远不相等 ⇒ 合并时**重复显示**；
+       *  · 'me' 气泡样式也套不上（m.role === 'me' 判断失败）。
+       */
+      const fromMain = r.messages.map((m) => ({ role: m.role === 'user' ? 'me' : 'them', text: m.text, ts: m.ts || Date.now() }));
       const local = (window.__msgs && window.__msgs[sid]) || [];
       const sig = (m) => String(m.role) + '\u0001' + String(m.text);
       const mainSigs = new Set(fromMain.map(sig));
@@ -1207,7 +1238,12 @@
     const o = opts || {};
     const chatId = state.selectedChat && state.selectedChat.id;
     const msgs = chatId ? msgsOf(chatId) : [];
-    const shown = Math.min(chatViewVisible[chatId] || CHAT_VIEW_WINDOW, msgs.length);
+    /**
+     * 可见条数 = max(已加载数, min(窗口, 总条数))。
+     * 早期写成 `min(chatViewVisible[id] || 20, msgs.length)`：日志只有 1 条时把窗口锁成 1，
+     * 之后新消息只会把旧的挤出视野（实测"发了消息但看不到"）。
+     */
+    const shown = Math.min(Math.max(chatViewVisible[chatId] || CHAT_VIEW_WINDOW, Math.min(CHAT_VIEW_WINDOW, msgs.length)), msgs.length);
     chatViewVisible[chatId] = shown;
     const slice = msgs.slice(Math.max(0, msgs.length - shown));
     const wasAtBottom = isAtBottom(box);
@@ -1297,7 +1333,23 @@
   function tuisongXiaoxi(chatId, role, text, opts) {
     window.__msgs = window.__msgs || {};
     window.__msgs[chatId] = window.__msgs[chatId] || [];
-    window.__msgs[chatId].push({ role, text, ts: Date.now() });
+    /**
+     * 去重规则与主进程保持一致：与**上一条** role+text 完全相同就跳过。
+     * 否则窗口比主进程日志多出重复条目，两处视图看起来就不一样
+     *（实测：窗口 4 条 / 日志 2 条）。
+     */
+    const yuanYou = window.__msgs[chatId];
+    const shangYiTiao = yuanYou[yuanYou.length - 1];
+    if (!(shangYiTiao && shangYiTiao.role === role && shangYiTiao.text === text)) {
+      yuanYou.push({ role, text, ts: Date.now() });
+    }
+    /**
+     * **同时写进主进程日志**（唯一事实来源）。
+     * 只有写进那里，"主界面 + 独立窗"才真的是同一套数据：
+     * 以前项目/群聊的消息只 push 在本窗口内存里，新窗口打开就是空的。
+     * 主进程侧对"与上一条完全相同"去重 ⇒ 单聊路径（chat-send 已记账）不会重复。
+     */
+    try { void window.warmy.chatLogAppend?.({ sessionId: chatId, role, content: text }); } catch { /* noop */ }
     if (state.selectedChat && state.selectedChat.id === chatId) {
       const box = $('messages');
       const zaiDiBu = box ? isAtBottom(box) : true;
@@ -2004,6 +2056,8 @@
           const r = await window.warmy.groupOrchestrate({ groupId: chatId, content: text, urgency: u });
           const reply = r?.reply || `[${u}] ${r?.action || 'ok'}`;
           tuisongXiaoxi(chatId, 'them', reply);
+          // 群聊回复也写进主进程日志（去重），另一处视图才能看到同一轮对话
+          try { void window.warmy.chatLogAppend?.({ sessionId: chatId, role: 'them', content: reply }); } catch { /* noop */ }
           if (r?.boardEvent) {
             state.board = state.board || { sessions: [], events: [], recent: [] };
             state.board.events = state.board.events || [];
@@ -2165,6 +2219,9 @@
 
     // P0（停止，见 stopAllAi）/ P1（加急）：立即插入 —— 直接派发
     tuisongXiaoxi(id, 'me', full);
+    // 同时写入**主进程日志**（唯一事实来源）：否则这条消息只活在本窗口内存里，
+    // 新开/另一个窗口看不到它 —— "两处显示同一套数据"就不成立。主进程侧会去重。
+    try { void window.warmy.chatLogAppend?.({ sessionId: id, role: 'me', content: full }); } catch { /* noop */ }
     $('input').value = '';
     state.attachments = [];
     xuanranFujian();
@@ -12005,6 +12062,17 @@
     const title0 = q.get('chatTitle') || '';
     if (mode === 'sub' || cid0) {
       document.body.classList.add('chat-window');
+      /**
+       * 钉住 URL 指定的会话，并把导航设成它所在的栏。
+       * 否则 renderList() 的"自动打开第一个"会在 singleAi 栏里把选中抢回第一个实例
+       * —— 独立窗就永远显示错会话（实测：请求 link-p1，窗口里却是 demo.agent）。
+       */
+      state.subWindowPinnedId = String(cid0 || '');
+      const k0 = String(q.get('chatKind') || 'single');
+      state.nav = k0 === 'internal' ? 'internalGroup'
+        : (k0 === 'extgroup' || k0 === 'externalGroup' || k0 === 'external') ? 'externalGroup'
+          : (k0 === 'extdm' || k0 === 'externaldm') ? 'externalChat'
+            : 'singleAi';
       document.getElementById('rail')?.classList.add('hidden');
       document.getElementById('list-col')?.classList.add('hidden');
       document.getElementById('app-body')?.classList.add('hide-list');
@@ -12263,12 +12331,20 @@
     };
     window.__saveState = saveState;
     
-    setNav('singleAi');
-    // 默认选中第一个聊天
-    setTimeout(() => {
-      const first = state.instances[0] || state.chats.find((x) => x.kind === 'single');
-      if (first) openChat('single', first.id, first.name);
-    }, 100);
+    /**
+     * 独立会话窗：导航已按 URL 的 chatKind 设好，**不能**再改回 singleAi，
+     * 也**不能**执行下面这段"默认选中第一个聊天" —— 它在这段异步启动之后才跑，
+     * 会把 URL 指定的会话直接换成第一列的第一个实例
+     * （实测时间线：500ms 选中还是请求的那个项目，1000ms 变成 demo-1）。
+     */
+    if (!state.subWindowPinnedId) {
+      setNav('singleAi');
+      // 默认选中第一个聊天
+      setTimeout(() => {
+        const first = state.instances[0] || state.chats.find((x) => x.kind === 'single');
+        if (first) openChat('single', first.id, first.name);
+      }, 100);
+    }
     refreshMetrics();
     shuaxinZhixingqiji();
   })();

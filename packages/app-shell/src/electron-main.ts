@@ -2682,6 +2682,32 @@ chuliIpc('warmy:chat-messages', (_e, payload?: { sessionId?: string; limit?: num
   }
 });
 
+/**
+ * **把一条消息补写进会话日志**（渲染层在用）。
+ *
+ * 为什么需要：项目/群聊的消息以前只 push 在发送窗口的内存里，主进程日志是空的 ——
+ * 新开的窗口因此看不到任何记录（实测：主窗口 localCount=2 而 ipcCount=0）。
+ * 去重：与**最后一条**的 role+content 相同时跳过，这样单聊路径（chat-send 已记账）
+ * 不会因为渲染层也补写而重复。
+ */
+chuliIpc('warmy:chat-log-append', (_e, payload?: { sessionId?: string; role?: string; content?: string }) => {
+  try {
+    const sid = String(payload?.sessionId || '');
+    const role = payload?.role === 'me' ? 'user' : 'assistant';
+    const content = String(payload?.content || '');
+    if (!sid || !content) return { ok: false, appended: false, error: 'bad-payload' };
+    const arr = chatLogs.get(sid) || [];
+    const last = arr[arr.length - 1];
+    if (last && last.role === role && String(last.content) === content) {
+      return { ok: true, appended: false, deduped: true };
+    }
+    appendChatLog(sid, { seq: nextChatSeq(), role, content, ts: Date.now() });
+    return { ok: true, appended: true };
+  } catch (e3) {
+    return { ok: false, appended: false, error: sanitizeError(e3) };
+  }
+});
+
 chuliIpc('warmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number }) => {
   try {
     const sessionId = String(payload?.sessionId ?? '');

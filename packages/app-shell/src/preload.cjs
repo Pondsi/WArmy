@@ -54,6 +54,8 @@ contextBridge.exposeInMainWorld('warmy', {
   chatLog: (payload) => ipcRenderer.invoke('warmy:chat-log', payload),
   // 会话消息正文：多窗口共用同一份（主进程日志 = 唯一事实来源）
   chatMessages: (payload) => ipcRenderer.invoke('warmy:chat-messages', payload),
+  /** 把消息补写进主进程日志（唯一事实来源）——两处视图才真的是同一套数据 */
+  chatLogAppend: (payload) => ipcRenderer.invoke('warmy:chat-log-append', payload),
   chatLogRestore: () => ipcRenderer.invoke('warmy:chat-log-restore'),
   settingsGet: () => ipcRenderer.invoke('warmy:settings-get'),
   settingsSave: (partial) => ipcRenderer.invoke('warmy:settings-save', partial),
