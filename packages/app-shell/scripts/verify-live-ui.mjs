@@ -563,6 +563,25 @@ async function main() {
       };
     })()`);
 
+    // ── 5.0 列表头像必须保持 40px（改名工具曾把 av-img 改成 av-tuPian，尺寸约束丢失） ──
+    await c.evaluate(`(function(){ try { document.querySelector('#rail [data-nav="singleAi"]').click(); } catch(e){} return true; })()`);
+    await sleep(1200);
+    const avDom = await c.evaluate(`(function(){
+      const rows = Array.from(document.querySelectorAll('#list-body .list-item'));
+      const row = rows[0];
+      if (!row) return { rows: 0 };
+      const img = row.querySelector('img');
+      const letter = row.querySelector('.av');
+      const el = img || letter;
+      const r = el ? el.getBoundingClientRect() : null;
+      return { rows: rows.length, kind: img ? 'img' : (letter ? 'letter' : 'none'),
+        cls: el ? el.className : '', w: r ? Math.round(r.width) : 0, h: r ? Math.round(r.height) : 0 };
+    })()`);
+    check('列表头像：class 是 av-img / av（未被改名破坏）',
+      avDom.kind !== 'none' && /(^|\s)(av-img|av)(\s|$)/.test(avDom.cls || ''), avDom);
+    check('列表头像：尺寸仍是 40×40（未变大）',
+      avDom.w === 40 && avDom.h === 40, avDom);
+
     const clickNav = async (nav) => {
       await c.evaluate(`(function(){ try { document.querySelector('#rail [data-nav="${nav}"]').click(); } catch(e){} return true; })()`);
       await sleep(1100);

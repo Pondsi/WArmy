@@ -912,7 +912,7 @@
     const yuanSu = document.createElement('div');
     yuanSu.className = 'list-item' + (active ? ' active' : '');
     if (avatarSrc) yuanSu.dataset.av = '1';
-    yuanSu.innerHTML = `${avatarSrc ? `<img class="av-tuPian" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}<div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
+    yuanSu.innerHTML = `${avatarSrc ? `<img class="av-img" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}<div class="meta"><div class="name">${escapeHtml(name)}</div><div class="sub">${escapeHtml(sub)}</div></div>`;
     yuanSu.title = `${name}\n${sub}`;
     yuanSu.onclick = onClick;
     return yuanSu;
@@ -1132,16 +1132,27 @@
     } catch { /* 读不到就保持本地视图，不清空 */ }
   }
 
-  /** 实体级状态变了：把本窗口这一处视图按最新事实重画（不搬内容，也不动另一处） */
+  /**
+   * 实体级状态变了：把**本窗口这一处视图**按最新事实重画。
+   *
+   * ⚠️ 必须先校验：只有当变化的实体**正是当前窗口正在看的那个**才动右栏。
+   * 否则"牛马1 的变化"会把"牛马2 的界面"刷成牛马1 的内容（数据串台）。
+   * 列表刷新与会话无关，照常做。
+   */
   async function refreshEntityView(id) {
-    try {
-      const s = await window.warmy.projectState?.({ sessionId: id }).catch(() => null);
-      if (s && s.ok && s.state) state.selectedChatProject = s.state;
-    } catch { /* noop */ }
-    try { renderChat(); } catch { /* noop */ }
-    try { void renderProjectStateBlock?.(); } catch { /* noop */ }
+    const sid = String(id || '');
+    const cur = state.selectedChat && state.selectedChat.id;
+    const shiDangQian = !!cur && String(cur) === sid;
+    if (shiDangQian) {
+      try {
+        const s = await window.warmy.projectState?.({ sessionId: sid }).catch(() => null);
+        if (s && s.ok && s.state) state.selectedChatProject = s.state;
+      } catch { /* noop */ }
+      try { renderChat(); } catch { /* noop */ }
+      try { void renderProjectStateBlock?.(); } catch { /* noop */ }
+      try { refreshContainerConsoleGate?.(); } catch { /* noop */ }
+    }
     try { renderList(); } catch { /* noop */ }
-    try { refreshContainerConsoleGate?.(); } catch { /* noop */ }
   }
 
 
@@ -12037,7 +12048,10 @@
     window.warmy.onChatUpdated?.((d) => {
       const sid = String((d && d.sessionId) || '');
       if (!sid) return;
+      // 该会话的消息（主进程日志 = 唯一事实来源）
       void loadSessionMessages(sid);
+      // 若它正是本窗口正在看的会话，右侧（进度/成员/项目状态）也要跟着一致
+      if (state.selectedChat && String(state.selectedChat.id) === sid) void refreshEntityView(sid);
     });
     /**
      * 实体级状态变化（群定向 / 项目启用停用 / 项目属性）：

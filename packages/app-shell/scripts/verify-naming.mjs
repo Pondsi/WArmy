@@ -204,5 +204,14 @@ check(`所有子进程调用都隐藏了控制台窗口（发现 ${consoleOffend
     /puBaiDi\(\)/.test(appjsIcons) && /fillStyle = '#ffffff'/.test(appjsIcons));
 }
 
+/* ── 跨窗口联动：只刷"当前正在看的实体"，否则会把另一个会话的界面串台 ── */
+{
+  const appJs2 = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'), 'utf8');
+  check('跨窗口刷新必须校验当前会话（refreshEntityView 带一致性守卫）',
+    /async function refreshEntityView[\s\S]{0,600}shiDangQian/.test(appJs2), '跨窗口刷新必须校验当前会话');
+  check('列表头像 class 未被改名破坏（仍是 av-img）',
+    /class="av-img"/.test(appJs2) && !/av-tuPian/.test(appJs2), 'class 名还原检查');
+}
+
 console.log(`\n==== verify-naming: ${pass} ok / ${fail} FAIL ====`);
 process.exit(fail === 0 ? 0 : 1);
