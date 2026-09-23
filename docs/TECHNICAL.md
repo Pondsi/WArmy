@@ -494,7 +494,7 @@ Set-Location packages\app-shell
 | Electron 可执行 | `packages/app-shell/node_modules/electron/dist/electron.exe` |
 | 主入口 | `packages/app-shell/dist/electron-main.js` |
 | GitHub 令牌 | 本地 `local-token-notes` 中 `ghp_` 段；**永不打印/入库** |
-| 记忆全局 | `C:\Users\p\.local\share\mimocode\memory\global\MEMORY.md` |
+| 记忆全局 | `C:\Users\<user>\.local\share\mimocode\memory\global\MEMORY.md` |
 
 **为什么必须 Electron 40+**（权威映射，来自 `releases.electronjs.org/releases.json`）：
 

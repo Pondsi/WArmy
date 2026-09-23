@@ -279,7 +279,8 @@ function segment(src) {
         if (src[j] === '\\') { lit += src.slice(j, j + 2); j += 2; continue; }
         if (src[j] === '`') { lit += '`'; j += 1; break; }
         if (src[j] === '$' && src[j + 1] === '{') {
-          segs.push({ code: false, text: lit + '${' });
+          // 模板插值定界符：**禁止**被字符串映射改写（历史事故：剥掉 ${} 导致 recordId 全冲突）
+          segs.push({ code: false, text: lit + '${', lock: true });
           lit = '';
           let depth = 1;
           let k = j + 2;
@@ -314,7 +315,7 @@ function segment(src) {
             k += 1;
           }
           for (const inner of segment(src.slice(j + 2, k))) segs.push(inner);
-          segs.push({ code: false, text: '}' });
+          segs.push({ code: false, text: '}', lock: true });
           j = k + 1;
           lit = '';
           continue;
@@ -372,20 +373,25 @@ function applyStringMap(src, map, filePath) {
     // 代码文件：只替换字符串/模板字面量段
     const segs = segment(src);
     for (const seg of segs) {
-      if (seg.code) continue;
+      if (seg.code || seg.lock) continue; // lock=${}/} 定界符，字符串映射不得改
       let t = seg.text;
       for (const [from, to] of entries) {
         if (!from || from === to) continue;
         const esc = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // ⚠️ 模板字面量保护：禁止把 `${ident}` 整段或去掉 $ 的 ident 写回模板正文。
-        // 历史事故：批量替换把 `prefix-${Date.now()}` 改成 `prefix-Date.now()`（丢了 ${}），
-        // 造成 recordId 全冲突。标识符替换只作用于代码标识符位，不得改写模板字符串正文里的英文词。
+        // 真防护：跳过 lock 段；替换后若模板丢了 ${} 则回滚该段
         const rx = new RegExp('(?<![A-Za-z0-9_:-])' + esc + '(?![A-Za-z0-9_-])', 'g');
-        t = t.replace(rx, () => {
+        const next = t.replace(rx, () => {
           changed += 1;
           delta += to.length - from.length;
           return to;
         });
+        // 不变量：字符串段里不得出现“剥掉 $ 的插值残骸”（ident.prop 前无 $）
+        if (/`/.test(seg.text) || seg.text.includes('${')) {
+          const beforeOpen = (seg.text.match(/\$\{/g) || []).length;
+          const afterOpen = (next.match(/\$\{/g) || []).length;
+          if (afterOpen < beforeOpen) continue; // 拒绝会减少 ${} 的替换
+        }
+        t = next;
       }
       seg.text = t;
     }

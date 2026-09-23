@@ -780,7 +780,7 @@ export function rongQiYunXingGuiGeOf(id: string): RongQiYunXingGuiGe | undefined
        但 `docker info` 失败（Docker Desktop 缺注册表键）⇒ 只能到 engine-unavailable。
      · wsl：`wsl --help` 逐字确认有 `--export <Distro> <FileName> [--vhd]`、`--import <Distro> <Dir> <File> [--vhd]`、
        `--import-in-place <Distro> <FileName>`；**没有** `--commit`（WSL 不是镜像仓库）；
-       发行版磁盘镜像实测 **1.39 GB**（`C:\Users\p\AppData\Local\wsl\{guid}\ext4.vhdx`）⇒ 导出就是"很大很慢"，
+       发行版磁盘镜像实测 **1.39 GB**（`C:\Users\<user>\AppData\Local\wsl\{guid}\ext4.vhdx`）⇒ 导出就是"很大很慢"，
        按产品主指示**没有真导**（只给量级）。
      · podman / nerdctl / isulad / pouch / incus / rdctl / colima / limactl / kata-runtime / wsb：本机都没有 CLI。
    ══════════════════════════════════════════════════════════════════════════ */

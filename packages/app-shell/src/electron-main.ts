@@ -197,7 +197,7 @@ const bootLog = path.join(app.getPath('userData'), 'warmy-boot.log');
 
 function qidong(xiaoXi: string) {
   try {
-    fs.appendFileSync(bootLog, `new Date().toISOString() xiaoXi\n`);
+    fs.appendFileSync(bootLog, `${new Date().toISOString()} ${xiaoXi}\n`);
   } catch {
     /* ignore */
   }
@@ -616,7 +616,7 @@ async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyR
     });
     return report;
   } catch (e) {
-    report.reason = `restore-failed: sanitizeError(e)`;
+    report.reason = `restore-failed: ${xiJingCuoWu(e)}`;
     historyRestore = report;
     qidong(`chat log restore failed (trigger): ${report.reason}`);
     return report;
@@ -1683,17 +1683,17 @@ const IPC_ALIASES: Record<string, string> = (() => {
   }
 })();
 function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any): void {
-  /** 只接受本应用窗口（file:// 本地页）调用；外部页面/远程内容一律拒绝 */
+  /** 只接受本应用窗口（file:// 本地页）调用；**fail-closed**：拿不到来源一律拒绝 */
   const yunXuLaiYuan = (event: import('electron').IpcMainInvokeEvent): boolean => {
     try {
       const frame = event.senderFrame;
-      if (!frame) return true; // 主进程/工具路径
+      if (!frame) return false; // 无 frame = 异常调用方，拒绝
       const u = String(frame.url || '');
-      if (!u) return true;
+      if (!u) return false;
       if (u.startsWith('file:')) return true;
       if (u.startsWith('devtools://')) return true;
       return false;
-    } catch { return true; }
+    } catch { return false; }
   };
   const guaGou = async (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => {
     if (!yunXuLaiYuan(event)) {
@@ -2253,7 +2253,7 @@ chuliIpc(
           ts: Date.now(),
         });
       } catch (e) {
-        llmReply = `LLM error: sanitizeError(e).slice(0, 160)`;
+        llmReply = `LLM error: ${xiJingCuoWu(e).slice(0, 160)}`;
       }
     }
 
