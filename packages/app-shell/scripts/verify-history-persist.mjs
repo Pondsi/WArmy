@@ -33,12 +33,12 @@ const SKIP_ELECTRON = argv.includes('--no-electron');
 
 let failures = 0;
 const failuresList = [];
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   if (!cond) {
     failures++;
-    failuresList.push(label);
+    failuresList.push(biaoQian);
   }
-  console.log(`  [${cond ? 'PASS' : 'FAIL'}] ${label}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+  console.log(`  [${cond ? 'PASS' : 'FAIL'}] ${biaoQian}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sha16 = (s) => crypto.createHash('sha256').update(String(s), 'utf8').digest('hex').slice(0, 16);
@@ -96,7 +96,7 @@ const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-verify-persist-'));
 
 function makeCopy(tag, opts = {}) {
   const root = path.join(tmpRoot, tag);
-  const appRoot = path.join(root, 'app');
+  const appRoot = path.join(root, 'yingYong');
   fs.mkdirSync(appRoot, { recursive: true });
   fs.cpSync(path.join(pkgRoot, 'dist'), path.join(appRoot, 'dist'), { recursive: true });
   fs.copyFileSync(path.join(pkgRoot, 'package.json'), path.join(appRoot, 'package.json'));
@@ -108,11 +108,11 @@ function makeCopy(tag, opts = {}) {
     let seen = false;
     const out = [];
     for (const line of lines) {
-      if (line.includes("ipcMain.handle('warmy:clear-error'")) {
+      if (line.includes("ipcMain.handle('warmy:qingChuCuoWu'")) {
         if (seen) continue;
         seen = true;
       }
-      out.push(line.includes("app.setAsDefaultProtocolClient('dsh-app')") ? line.replace("app.setAsDefaultProtocolClient('dsh-app')", 'void 0') : line);
+      out.push(line.includes("yingYong.setAsDefaultProtocolClient('dsh-app')") ? line.replace("yingYong.setAsDefaultProtocolClient('dsh-app')", 'void 0') : line);
     }
     fs.writeFileSync(mainFile, out.join('\n'), 'utf8');
   }
@@ -132,7 +132,7 @@ function makeCopy(tag, opts = {}) {
   if (opts.brokenMemory) {
     const broken = path.join(root, 'memory-os');
     fs.mkdirSync(path.join(broken, 'dist'), { recursive: true });
-    fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ name: '@warmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
+    fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ ming: '@warmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
     fs.writeFileSync(path.join(broken, 'dist', 'ipc.js'), "process.stderr.write('broken memory (degradation test)\\n');\nprocess.exit(1);\n");
   } else {
     for (const dir of [distNm, nmDir]) {
@@ -159,7 +159,7 @@ async function launch({ appRoot, userData, mainFile }, tag) {
   const onChunk = (d) => {
     const text = String(d);
     logs.push(text);
-    const m = text.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
+    const m = text.match(/DevTools listening qiYong ws:\/\/127\.0\.0\.1:(\d+)\//);
     if (m && m[1]) devtoolsPort = Number(m[1]);
   };
   child.stdout.on('data', onChunk);
@@ -194,22 +194,22 @@ async function launch({ appRoot, userData, mainFile }, tag) {
   let seq = 0;
   const pending = new Map();
   ws.addEventListener('message', (ev) => {
-    const msg = JSON.parse(ev.data);
-    if (msg.id && pending.has(msg.id)) {
-      const { resolve, reject } = pending.get(msg.id);
-      pending.delete(msg.id);
-      if (msg.error) reject(new Error(`cdp ${JSON.stringify(msg.error)}`));
-      else resolve(msg.result);
+    const xiaoXi = JSON.parse(ev.data);
+    if (xiaoXi.id && pending.has(xiaoXi.id)) {
+      const { resolve, reject } = pending.get(xiaoXi.id);
+      pending.delete(xiaoXi.id);
+      if (xiaoXi.error) reject(new Error(`cdp ${JSON.stringify(xiaoXi.error)}`));
+      else resolve(xiaoXi.result);
     }
   });
-  const send = (method, params) =>
+  const faSong = (method, params) =>
     new Promise((resolve, reject) => {
       const id = ++seq;
       pending.set(id, { resolve, reject });
       ws.send(JSON.stringify({ id, method, params }));
     });
   const evaluate = async (expression) => {
-    const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
+    const r = await faSong('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
     if (r.exceptionDetails) throw new Error(`renderer exception: ${r.exceptionDetails.exception?.description || r.exceptionDetails.text}`);
     return r.result.value;
   };
@@ -250,16 +250,16 @@ async function launch({ appRoot, userData, mainFile }, tag) {
   };
 }
 
-async function waitRestore(app, sessionId, timeoutMs = 25000) {
+async function waitRestore(yingYong, sessionId, timeoutMs = 25000) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
-    const r = await app.call('chatLog', { sessionId });
+    const r = await yingYong.call('chatLog', { sessionId });
     last = r?.stats?.restore;
     if (last?.done) return { restore: last, res: r };
     await sleep(500);
   }
-  return { restore: last, res: await app.call('chatLog', { sessionId }) };
+  return { restore: last, res: await yingYong.call('chatLog', { sessionId }) };
 }
 
 // ── mock 模型（OpenAI 兼容）：记录所有请求，回固定文本 ──
@@ -268,15 +268,15 @@ const mock = http.createServer((req, res) => {
   let raw = '';
   req.on('data', (c) => (raw += c));
   req.on('end', () => {
-    let body = {};
+    let ti = {};
     try {
-      body = JSON.parse(raw || '{}');
+      ti = JSON.parse(raw || '{}');
     } catch {
       /* 忽略 */
     }
-    seen.push(body);
+    seen.push(ti);
     // "长回复"开关：用来验证"助手回复在记忆里的正文 = 日志正文"（超长也必须一致）
-    const lastUser = [...(body.messages || [])].reverse().find((m) => m.role === 'user');
+    const lastUser = [...(ti.xiaoXiJi || [])].reverse().find((m) => m.role === 'user');
     const wantsLong = /长回复/.test(String(lastUser?.content || ''));
     const reply = wantsLong ? 'L'.repeat(6000) + '｜LONG-END' : `收到#${seen.length}`;
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -338,9 +338,9 @@ check(
   '[1] 日志条目的 seq/digest 与 JSONL 逐条一致（写日志时就对齐了记忆服务）',
   logEntriesBefore.every((e) => {
     const rec = jsonlBySeq.get(e.seq);
-    return rec && sha16(String(rec.body ?? '')) === e.digest;
+    return rec && sha16(String(rec.ti ?? '')) === e.digest;
   }),
-  logEntriesBefore.map((e) => ({ seq: e.seq, digest: e.digest, jsonl: jsonlBySeq.get(e.seq) ? sha16(String(jsonlBySeq.get(e.seq).body ?? '')) : null }))
+  logEntriesBefore.map((e) => ({ seq: e.seq, digest: e.digest, jsonl: jsonlBySeq.get(e.seq) ? sha16(String(jsonlBySeq.get(e.seq).ti ?? '')) : null }))
 );
 // 超长助手回复：记忆里的正文必须与日志正文**一致**（历史上写记忆时被 slice(0,4000)，长回复尾巴取不回来）
 const rLong = await app1.call('chatSend', { sessionId: 's-long', content: '长回复一致性验证（请回 6000 字符）' });
@@ -357,9 +357,9 @@ check(
   '[1] 超长助手回复：日志正文与记忆正文逐字节一致（不再被 slice 成两份真相）',
   longEntries.length === 2 &&
     longEntries[1].chars > 4000 &&
-    sha16(String(longBySeq.get(longEntries[1].seq)?.body ?? '')) === longEntries[1].digest &&
-    Number(longBySeq.get(longEntries[1].seq)?.body?.length ?? 0) === longEntries[1].chars,
-  longEntries.map((e) => ({ seq: e.seq, role: e.role, chars: e.chars, jsonlChars: String(longBySeq.get(e.seq)?.body ?? '').length }))
+    sha16(String(longBySeq.get(longEntries[1].seq)?.ti ?? '')) === longEntries[1].digest &&
+    Number(longBySeq.get(longEntries[1].seq)?.ti?.length ?? 0) === longEntries[1].chars,
+  longEntries.map((e) => ({ seq: e.seq, role: e.role, chars: e.chars, jsonlChars: String(longBySeq.get(e.seq)?.ti ?? '').length }))
 );
 // 长回复之后刷新 JSONL 快照（后面 [2] 要用"重启前的最后一条 seq"）
 jsonlRecords = longJsonl;
@@ -401,7 +401,7 @@ check(
   '[2] 逐字节一致的口径 = 与 JSONL 正文的 sha256 相同',
   logEntriesAfter.every((e) => {
     const rec = jsonlBySeq.get(e.seq);
-    return rec && sha16(String(rec.body ?? '')) === e.digest;
+    return rec && sha16(String(rec.ti ?? '')) === e.digest;
   }),
   logEntriesAfter.map((e) => e.seq)
 );
@@ -414,9 +414,9 @@ const before = seen.length;
 const r3 = await app2.call('chatSend', { sessionId: SESSION, content: USER3 });
 const req = seen[before];
 check('[2] 重启后仍能继续对话', r3?.ok === true, { ok: r3?.ok, reply: r3?.reply, error: r3?.error });
-const promptText = JSON.stringify(req?.messages || []);
-// 最强口径：把"重启前落进 JSONL 的原始 body"与"重启后真正注入给模型的消息"逐字节比对
-const bodiesBefore = logEntriesBefore.map((e) => String(jsonlBySeq.get(e.seq)?.body ?? ''));
+const promptText = JSON.stringify(req?.xiaoXiJi || []);
+// 最强口径：把"重启前落进 JSONL 的原始 ti"与"重启后真正注入给模型的消息"逐字节比对
+const bodiesBefore = logEntriesBefore.map((e) => String(jsonlBySeq.get(e.seq)?.ti ?? ''));
 const injectedBodies = bodiesBefore.filter((b) => b && promptText.includes(JSON.stringify(b)));
 check('[2] 注入 prompt 里逐字节含重启前的全部消息（历史真的回来了）', injectedBodies.length === bodiesBefore.length && bodiesBefore.length === 4, {
   matched: injectedBodies.length,
@@ -427,7 +427,7 @@ check('[2] 注入 prompt 里能看到重启前两轮的标记（可读证据）'
   u1: promptText.includes(sha16('u1')),
   u2: promptText.includes(sha16('u2')),
 });
-const injectedChars = (req?.messages || []).reduce((s, m) => s + String(m.content ?? '').length, 0);
+const injectedChars = (req?.xiaoXiJi || []).reduce((s, m) => s + String(m.content ?? '').length, 0);
 check('[2] 重启后的注入仍 ≤ 预算（1200）', injectedChars > 0 && injectedChars <= 1200, { injectedChars, budget: 1200 });
 
 const logFinal = await app2.call('chatLog', { sessionId: SESSION });
@@ -447,9 +447,9 @@ check(
   '[2] 重启后新增条目也逐字节落在 JSONL（seq 由记忆服务分配）',
   newEntries.every((e) => {
     const rec = bySeq2.get(e.seq);
-    return rec && sha16(String(rec.body ?? '')) === e.digest;
+    return rec && sha16(String(rec.ti ?? '')) === e.digest;
   }),
-  newEntries.map((e) => ({ seq: e.seq, digest: e.digest, jsonl: bySeq2.get(e.seq) ? sha16(String(bySeq2.get(e.seq).body ?? '')) : null }))
+  newEntries.map((e) => ({ seq: e.seq, digest: e.digest, jsonl: bySeq2.get(e.seq) ? sha16(String(bySeq2.get(e.seq).ti ?? '')) : null }))
 );
 console.log(`  第 2 轮：重建 ${restore?.entries} 条 / ${restore?.sessions} 会话 / maxSeq=${restore?.maxSeq}；重启后新增 ${newEntries.map((e) => e.seq).join(',')}`);
 await app2.close();
@@ -466,7 +466,7 @@ console.log('\n[3] 记忆服务不可用（故意坏掉）→ 降级：对话仍
   const before3 = seen.length;
   const r = await app3.call('chatSend', { sessionId: 's-broken-persist', content: '记忆服务坏了，这条也必须能发出去' });
   check('[3] chat-send 仍成功（ok:true 且有回复）', r?.ok === true && String(r.reply || '').length > 0, { ok: r?.ok, reply: r?.reply, error: r?.error });
-  check('[3] 确实打到了模型（请求体存在，只是没有工具）', seen.length > before3 && Array.isArray(seen[before3]?.messages) && seen[before3].tools === undefined, {
+  check('[3] 确实打到了模型（请求体存在，只是没有工具）', seen.length > before3 && Array.isArray(seen[before3]?.xiaoXiJi) && seen[before3].tools === undefined, {
     requests: seen.length - before3,
     hasTools: seen[before3]?.tools !== undefined,
   });

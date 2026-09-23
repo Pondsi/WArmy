@@ -13,7 +13,7 @@ export const AI_QUESTION_CUSTOM = '__custom__';
 
 export interface AiWenTiXuanXiang {
   id: string;
-  label: string;
+  biaoQian: string;
   description?: string;
 }
 
@@ -21,47 +21,47 @@ export interface AiWenTi {
   id: string;
   groupId: string;
   sessionId?: string;
-  title: string;
-  body?: string;
+  biaoTi: string;
+  ti?: string;
   options: AiWenTiXuanXiang[];
   /** 恒 true：产品要求永远提供「其他，用户自行输入」 */
   allowCustom: true;
   createdAt: number;
   status: 'pending' | 'answered' | 'cancelled';
-  answer?: { optionId: string; label: string; customText?: string; answeredAt: number };
+  answer?: { optionId: string; biaoQian: string; customText?: string; answeredAt: number };
 }
 
 export class AiWenTiZhongXin {
   private items = new Map<string, AiWenTi>();
 
-  open(input: {
+  daKai(shuRu: {
     groupId: string;
     sessionId?: string;
-    title: string;
-    body?: string;
-    options: Array<{ id?: string; label: string; description?: string }>;
+    biaoTi: string;
+    ti?: string;
+    options: Array<{ id?: string; biaoQian: string; description?: string }>;
     dedupe?: boolean;
   }): AiWenTi {
-    const groupId = String(input.groupId || '');
-    const title = String(input.title || '').trim();
-    if (input.dedupe !== false) {
+    const groupId = String(shuRu.groupId || '');
+    const biaoTi = String(shuRu.biaoTi || '').trim();
+    if (shuRu.dedupe !== false) {
       for (const q of this.items.values()) {
-        if (q.groupId === groupId && q.status === 'pending' && q.title === title) return q;
+        if (q.groupId === groupId && q.status === 'pending' && q.biaoTi === biaoTi) return q;
       }
     }
-    const options = (input.options || [])
-      .filter((o) => o && String(o.label || '').trim())
+    const options = (shuRu.options || [])
+      .filter((o) => o && String(o.biaoQian || '').trim())
       .map((o) => ({
         id: String(o.id || crypto.randomBytes(4).toString('hex')),
-        label: String(o.label).trim(),
+        biaoQian: String(o.biaoQian).trim(),
         ...(o.description ? { description: String(o.description) } : {}),
       }));
     const q: AiWenTi = {
-      id: 'q-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'),
+      id: 'q' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'),
       groupId,
-      sessionId: input.sessionId,
-      title,
-      body: input.body ? String(input.body) : '',
+      sessionId: shuRu.sessionId,
+      biaoTi,
+      ti: shuRu.ti ? String(shuRu.ti) : '',
       options,
       allowCustom: true,
       createdAt: Date.now(),
@@ -80,11 +80,11 @@ export class AiWenTiZhongXin {
     if (optionId === AI_QUESTION_CUSTOM || optionId === 'custom' || optionId === 'other') {
       const text = String(customText || '').trim();
       if (!text) return { ok: false, error: 'custom-text-required' };
-      q.answer = { optionId: AI_QUESTION_CUSTOM, label: '其他', customText: text, answeredAt: Date.now() };
+      q.answer = { optionId: AI_QUESTION_CUSTOM, biaoQian: '其他', customText: text, answeredAt: Date.now() };
     } else {
       const opt = q.options.find((o) => o.id === optionId);
       if (!opt) return { ok: false, error: 'option-not-found' };
-      q.answer = { optionId: opt.id, label: opt.label, answeredAt: Date.now() };
+      q.answer = { optionId: opt.id, biaoQian: opt.biaoQian, answeredAt: Date.now() };
     }
     q.status = 'answered';
     this.items.set(q.id, q);
@@ -94,26 +94,26 @@ export class AiWenTiZhongXin {
   injectLine(q: AiWenTi): string {
     if (!q.answer) return '';
     const extra = q.answer.customText ? `（自定义）${q.answer.customText}` : '';
-    return `[人类决策] ${q.title} → ${q.answer.label}${extra}`;
+    return `[人类决策] ${q.biaoTi} → ${q.answer.biaoQian}${extra}`;
   }
 
-  list(groupId?: string): AiWenTi[] {
+  LieBiao(groupId?: string): AiWenTi[] {
     return [...this.items.values()]
       .filter((q) => !groupId || q.groupId === groupId)
       .sort((a, b) => b.createdAt - a.createdAt);
   }
 
   pending(groupId?: string): AiWenTi[] {
-    return this.list(groupId).filter((q) => q.status === 'pending');
+    return this.LieBiao(groupId).filter((q) => q.status === 'pending');
   }
 
   /** 会话上下文里拼进未答/已答决策（有界） */
   contextFor(groupId: string): string {
-    const lines = this.list(groupId)
+    const HangJi = this.LieBiao(groupId)
       .filter((q) => q.status === 'answered' || q.status === 'pending')
       .slice(0, 5)
-      .map((q) => (q.status === 'answered' ? this.injectLine(q) : `[待人类决策] ${q.title}（选项：${q.options.map((o) => o.label).join(' / ')} / 其他）`));
-    return lines.length ? `[决策卡]\n${lines.join('\n')}` : '';
+      .map((q) => (q.status === 'answered' ? this.injectLine(q) : `[待人类决策] ${q.biaoTi}（选项：${q.options.map((o) => o.biaoQian).join(' / ')} / 其他）`));
+    return HangJi.length ? `[决策卡]\n${HangJi.join('\n')}` : '';
   }
 
   cancel(id: string): boolean {

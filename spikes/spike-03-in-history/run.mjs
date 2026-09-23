@@ -62,11 +62,11 @@ if (!KEY) {
   process.exit(3);
 }
 
-async function chat(messages) {
+async function chat(xiaoXiJi) {
   const res = await fetch(BASE, {
     method: 'POST',
     headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, messages, max_tokens: 4 }),
+    body: JSON.stringify({ model: MODEL, xiaoXiJi, max_tokens: 4 }),
     signal: AbortSignal.timeout(30000),
   });
   if (!res.ok) throw new Error(`${res.status} ${redact((await res.text()).slice(0, 180))}`);
@@ -113,8 +113,8 @@ async function runRewrite(rounds = 6) {
   const log = [];
   for (let i = 1; i <= rounds; i++) {
     const system = { role: 'system', content: `${LONG_SYSTEM} 当前轮次：${i}。` };
-    const messages = [system, ...history, { role: 'user', content: `第${i}轮只回：${i}` }];
-    const json = await chat(messages);
+    const xiaoXiJi = [system, ...history, { role: 'user', content: `第${i}轮只回：${i}` }];
+    const json = await chat(xiaoXiJi);
     const text = (json.choices?.[0]?.message?.content || '').trim() || String(i);
     history.push({ role: 'user', content: `第${i}轮只回：${i}` });
     history.push({ role: 'assistant', content: text });
@@ -126,13 +126,13 @@ async function runRewrite(rounds = 6) {
 
 /** 额外：同一固定前缀连续 3 次，测纯缓存命中 */
 async function runFixedPrefix(n = 3) {
-  const messages = [
+  const xiaoXiJi = [
     { role: 'system', content: LONG_SYSTEM },
     { role: 'user', content: '只回：ok' },
   ];
   const log = [];
   for (let i = 0; i < n; i++) {
-    const json = await chat(messages);
+    const json = await chat(xiaoXiJi);
     log.push({ i, ...usage(json) });
     await sleep(150);
   }
@@ -149,13 +149,13 @@ try {
   a = await runInHistory(10, 5);
   b = await runRewrite(6);
 } catch (e) {
-  const msg = redact(e?.message ?? String(e));
-  console.error('API 调用失败：', msg);
+  const xiaoXi = redact(e?.message ?? String(e));
+  console.error('API 调用失败：', xiaoXi);
   writeResult({
     ...baseEvidence,
     status: 'blocked-api-error',
     dodMet: false,
-    reason: `凭据存在但 API 调用失败，未能完成测量：${msg}`,
+    reason: `凭据存在但 API 调用失败，未能完成测量：${xiaoXi}`,
     exitCode: 3,
   });
   process.exit(3);

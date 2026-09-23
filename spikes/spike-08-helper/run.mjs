@@ -36,9 +36,9 @@ const RESULT_PATH = path.join(__dirname, 'result.json');
 const BACKUP_DIR = path.join(__dirname, 'backups');
 
 const argv = process.argv.slice(2);
-const argOf = (name) => {
-  const hit = argv.find((a) => a.startsWith(`--${name}=`));
-  return hit ? hit.slice(name.length + 3) : null;
+const argOf = (ming) => {
+  const hit = argv.find((a) => a.startsWith(`--${ming}=`));
+  return hit ? hit.slice(ming.length + 3) : null;
 };
 const SKIP_HOSTS_WRITE = argv.includes('--skip-hosts-write');
 const TIMEOUT_MS = Number(argOf('timeout-ms') ?? 30000);
@@ -70,9 +70,9 @@ log(`已加载真实实现（${loadMode}）：${loadMode === 'dist-js' ? MODULE_
 
 /* ───────── 断言收集 ───────── */
 const items = [];
-function check(id, name, expected, actual, pass, evidence) {
-  items.push({ id, name, expected, actual, pass: !!pass, evidence: evidence ?? null });
-  log(`${pass ? 'PASS' : 'FAIL'} ${id} ${name} | expected=${JSON.stringify(expected)} actual=${JSON.stringify(actual)}`);
+function check(id, ming, expected, actual, pass, evidence) {
+  items.push({ id, ming, expected, actual, pass: !!pass, evidence: evidence ?? null });
+  log(`${pass ? 'PASS' : 'FAIL'} ${id} ${ming} | expected=${JSON.stringify(expected)} actual=${JSON.stringify(actual)}`);
   return !!pass;
 }
 
@@ -150,9 +150,9 @@ check('C-1', 'gsudo -n status 能取到原始输出（不挂住）', true, (cach
 
 /* ───────── 3) 非提权套件：临时文件上跑完整流程 ───────── */
 const nsuite = { items: [], passCount: 0, failCount: 0 };
-const record = (id, name, expected, actual, pass, evidence) => {
-  const ok = check(id, name, expected, actual, pass, evidence);
-  nsuite.items.push({ id, name, expected, actual, pass: ok, evidence: evidence ?? null });
+const record = (id, ming, expected, actual, pass, evidence) => {
+  const ok = check(id, ming, expected, actual, pass, evidence);
+  nsuite.items.push({ id, ming, expected, actual, pass: ok, evidence: evidence ?? null });
   if (ok) nsuite.passCount += 1;
   else nsuite.failCount += 1;
   return ok;
@@ -291,12 +291,12 @@ record('N-37', 'cmd 的 GBK 输出能被正确解码（不再乱码）', '已复
 result.nonElevatedSuite = { ...nsuite, scratchDir: scratch, fakeHostsPath: fakeHosts, backupDirUsed: scratchBackups };
 
 /* ───────── 4) 绝不挂住 / 内层退出码捕获 ───────── */
-const row = { items: [], passCount: 0, failCount: 0 };
-const recordHang = (id, name, expected, actual, pass, evidence) => {
-  const ok = check(id, name, expected, actual, pass, evidence);
-  row.items.push({ id, name, expected, actual, pass: ok, evidence: evidence ?? null });
-  if (ok) row.passCount += 1;
-  else row.failCount += 1;
+const hang = { items: [], passCount: 0, failCount: 0 };
+const recordHang = (id, ming, expected, actual, pass, evidence) => {
+  const ok = check(id, ming, expected, actual, pass, evidence);
+  hang.items.push({ id, ming, expected, actual, pass: ok, evidence: evidence ?? null });
+  if (ok) hang.passCount += 1;
+  else hang.failCount += 1;
   return ok;
 };
 
@@ -392,7 +392,7 @@ recordHang('H-11', '超时后的残留进程观测（ping.exe，仅记录不判�
 recordHang('H-12', '提权调用实际尝试次数（证据项）', 'evidence',  { innerFail: innerFail.raw.attemptCount, innerOk: innerOk.raw.attemptCount, timeoutRun: timeoutRun.raw.attemptCount },
   true, { attemptLog: { innerFail: innerFail.raw.attemptLog, innerOk: innerOk.raw.attemptLog } });
 
-result.noHangSuite = row;
+result.noHangSuite = hang;
 
 /* ───────── 5) 真 hosts 提权写入（非交互，观测并还原） ───────── */
 const hostsFile = helper.defaultHostsPath();
@@ -533,9 +533,9 @@ result.summary = {
   passed: all.filter((i) => i.pass).length,
   failed: failCount,
   failedIds: all.filter((i) => !i.pass).map((i) => i.id),
-  all: all.map((i) => ({ id: i.id, name: i.name, pass: i.pass })),
+  all: all.map((i) => ({ id: i.id, ming: i.name, pass: i.pass })),
   nonElevatedAllPass: nsuite.failCount === 0,
-  noHangAllPass: row.failCount === 0,
+  noHangAllPass: hang.failCount === 0,
   hostsWriteSucceeded: hostsWriteOk,
   hostsRestored: hostsWrite.restoredToOriginal,
   dodMet: hostsWriteOk,
@@ -555,7 +555,7 @@ log(`结果已写入：${RESULT_PATH}`);
 // 清理临时目录（保留 backups/，那是证据）
 try { fs.rmSync(scratch, { recursive: true, force: true }); } catch { /* noop */ }
 
-console.log(`\n[spike-08] 检查项 ${result.summary.passed}/${result.summary.totalChecks} 通过；非提权套件 ${nsuite.passCount}/${nsuite.items.length}；不挂住套件 ${row.passCount}/${row.items.length}`);
+console.log(`\n[spike-08] 检查项 ${result.summary.passed}/${result.summary.totalChecks} 通过；非提权套件 ${nsuite.passCount}/${nsuite.items.length}；不挂住套件 ${hang.passCount}/${hang.items.length}`);
 console.log(`[spike-08] hosts 写入：${hostsWrite.observedOutcome ?? 'skipped'}；已还原=${hostsWrite.restoredToOriginal}`);
 console.log(`[spike-08] 判定：${result.summary.status}`);
 process.exit(failCount > 0 ? 1 : hostsWriteOk ? 0 : 3);

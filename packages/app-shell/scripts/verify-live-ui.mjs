@@ -19,9 +19,9 @@ const mainJs = path.join(pkgRoot, 'dist', 'electron-main.js');
 
 let pass = 0, fail = 0;
 const failures = [];
-function check(label, ok, detail) {
-  if (ok) { pass++; console.log('  ok  ' + label); }
-  else { fail++; failures.push(label); console.log('  FAIL ' + label, detail === undefined ? '' : ' => ' + JSON.stringify(detail).slice(0, 300)); }
+function check(biaoQian, ok, detail) {
+  if (ok) { pass++; console.log('  ok  ' + biaoQian); }
+  else { fail++; failures.push(biaoQian); console.log('  FAIL ' + biaoQian, detail === undefined ? '' : ' => ' + JSON.stringify(detail).slice(0, 300)); }
 }
 
 async function waitCdp(secs = 45) {
@@ -47,13 +47,13 @@ async function main() {
   try {
     if (!(await waitCdp())) { console.error('CDP not up'); process.exit(2); }
     await sleep(4000);
-    const c = await attach(PORT, { label: 'live-ui', callTimeout: 20000 });
+    const c = await attach(PORT, { biaoQian: 'live-ui', callTimeout: 20000 });
     await c.send('Runtime.enable');
     await sleep(2000);
 
     // ── 1. 原始 i18n 键泄漏（在**可见文本**里找 namespace.key 形态） ──
     const rawKeys = await c.evaluate(`(function(){
-      const NAMESPACES = ['me','chat','settings','dashboard','privacy','panel','container','net','list','contact','group','ctx','console','about','projectFiles','memory','join','model','instances','board'];
+      const NAMESPACES = ['wo','chat','settings','dashboard','privacy','panel','container','net','list','contact','group','ctx','console','about','projectFiles','memory','join','model','instances','board'];
       const re = new RegExp('^(?:' + NAMESPACES.join('|') + ')\\\\.[a-zA-Z][a-zA-Z0-9_.]*$');
       const out = [];
       const walk = (root) => {
@@ -62,7 +62,7 @@ async function main() {
         while ((n = it.nextNode())) {
           const s = (n.nodeValue || '').trim();
           if (!s) continue;
-          // 单个文本节点就是 key（含拼接：me.copyme.changeCred）
+          // 单个文本节点就是 key（含拼接：wo.copyme.changeCred）
           const parts = s.split(/(?=(?:me|chat|settings|dashboard|privacy|panel|container|list|contact|group|ctx|console|about|memory|join|model|instances)\\.)/).filter(Boolean);
           for (const p of parts) if (re.test(p.trim())) out.push(p.trim().slice(0, 60));
         }
@@ -74,19 +74,19 @@ async function main() {
 
     // ── 2. 横幅不压住聊天区（真几何） ──
     const bannerGeom = await c.evaluate(`(function(){
-      const host = document.getElementById('net-banner');
-      const cl = document.getElementById('chat-layout');
-      const main = document.getElementById('main-col');
+      const host = document.getElementById('wangLuoBanner');
+      const cl = document.getElementById('liaoTianBuJu');
+      const main = document.getElementById('zhuLan');
       if (!host || !cl) return { skip: true };
       const hb = host.getBoundingClientRect();
       const cb = cl.getBoundingClientRect();
-      const shown = !host.classList.contains('hidden') && hb.height > 1;
+      const shown = !host.classList.contains('yinCang') && hb.height > 1;
       return {
         shown,
         bannerBottom: Math.round(hb.bottom),
         chatTop: Math.round(cb.top),
         overlapPx: Math.round(hb.bottom - cb.top),
-        hasBanner: !!(main && main.classList.contains('has-banner')),
+        hasBanner: !!(main && main.classList.contains('hasBanner')),
       };
     })()`);
     if (bannerGeom.skip) {
@@ -98,29 +98,29 @@ async function main() {
     }
 
     // ── 3. 设置：通知/邮箱布局 + 插件区 + 容器折叠 + 特殊模型 ──
-    await c.evaluate(`(function(){ try { document.querySelector('#rail [data-nav="settings"]').click(); } catch(e){} return true; })()`);
+    await c.evaluate(`(function(){ try { document.querySelector('#ceLan [data-nav="settings"]').click(); } catch(e){} return true; })()`);
     await sleep(1200);
     const settingsDom = await c.evaluate(`(function(){
       const g = (s) => document.querySelector(s);
-      const emailCard = g('#notify-email-card');
+      const emailCard = g('#tongZhiYouJianKa');
       const soundCard = (function(){
-        const el = g('s-complete');
-        return el ? el.closest('.set-card') : null;
+        const el = g('sWanCheng');
+        return el ? el.closest('.sheZhiKa') : null;
       })();
       return {
         emailCardExists: !!emailCard,
         emailNotifyInEmailCard: !!(emailCard && emailCard.querySelector('[data-email-k]')),
         emailNotifyInSoundCard: !!(soundCard && soundCard.querySelector('[data-email-k]')),
-        hasApply: !!g('#btn-notify-apply'),
-        hasCancel: !!g('#btn-notify-cancel'),
+        hasApply: !!g('#anNiuTongZhiApply'),
+        hasCancel: !!g('#anNiuTongZhiCancel'),
         plugPickSelect: !!g('#plug-pick'),
-        plugFolderBtn: !!g('#btn-plug-install-folder'),
-        plugList: !!g('#plug-list'),
-        plugScanCheck: !!g('#btn-plug-scan-check'),
-        skillBrowse: !!g('#btn-skill-scan-browse'),
-        skillCheck: !!g('#btn-skill-scan-check'),
-        containerGuideCollapse: !!g('details#container-guide-collapse'),
-        specialHint: !!document.querySelector('.set-section [data-sec="model"] h2'),
+        plugFolderBtn: !!g('#anNiuPlugAnZhuangFolder'),
+        plugList: !!g('#plugLieBiao'),
+        plugScanCheck: !!g('#anNiuPlugSaoMiaoJianCha'),
+        skillBrowse: !!g('#anNiuJinengSaoMiaoBrowse'),
+        skillCheck: !!g('#anNiuJinengSaoMiaoJianCha'),
+        containerGuideCollapse: !!g('details#rongQiGuideShouQi'),
+        specialHint: !!document.querySelector('.sheZhiSection [data-sec="model"] h2'),
       };
     })()`);
     check('邮件通知在邮箱(SMTP)卡片内', settingsDom.emailNotifyInEmailCard === true, settingsDom);
@@ -135,12 +135,12 @@ async function main() {
     // ── 3b. 供应商（第 8/9 条）真机断言 ──
     const provDom = await c.evaluate(`(function(){
       const g = (s) => document.querySelector(s);
-      const sel = g('#prov-preset');
+      const sel = g('#provPreset');
       const opts = sel ? Array.from(sel.options).map((o) => o.textContent.trim()) : [];
       const values = sel ? Array.from(sel.options).map((o) => o.value) : [];
-      const add = g('#btn-add-prov');
-      const before = document.querySelectorAll('#prov-list .prov-card').length;
-      return { presetExists: !!sel, optionCount: opts.length, options: opts, values, before, hasCount: !!g('#prov-count'),
+      const add = g('#anNiuTianJiaProv');
+      const before = document.querySelectorAll('#provLieBiao .provKa').length;
+      return { presetExists: !!sel, optionCount: opts.length, options: opts, values, before, hasCount: !!g('#provCount'),
         placeholder: values[0] === '', firstReal: values[1], secondReal: values[2] };
     })()`);
     check('供应商：有预设下拉且含 ≥10 项', provDom.presetExists && provDom.optionCount >= 11, provDom);
@@ -156,7 +156,7 @@ async function main() {
      * 用同一个引擎才有意义，否则是拿两把尺子量同一件事。
      */
     const orderOk = await c.evaluate(`(function(){
-      const sel = document.querySelector('#prov-preset');
+      const sel = document.querySelector('#provPreset');
       if (!sel) return null;
       const labels = Array.from(sel.options).map((o) => o.textContent.trim()).slice(2).filter((x) => x && !x.startsWith('其他'));
       const sorted = labels.slice().sort((a, b) => a.localeCompare(b, 'zh-CN'));
@@ -167,24 +167,24 @@ async function main() {
     // 未选择时点「添加」⇒ 只提示、不加卡片（占位项不是选择）
     const noPick = await c.evaluate(`(function(){
       const g = (s) => document.querySelector(s);
-      const before = document.querySelectorAll('#prov-list .prov-card').length;
-      g('#btn-add-prov')?.click();
-      return { before, after: document.querySelectorAll('#prov-list .prov-card').length, alertVisible: !!document.querySelector('.modal, .dlg, [data-ui-alert]') };
+      const before = document.querySelectorAll('#provLieBiao .provKa').length;
+      g('#anNiuTianJiaProv')?.click();
+      return { before, after: document.querySelectorAll('#provLieBiao .provKa').length, alertVisible: !!document.querySelector('.modal, .dlg, [data-ui-alert]') };
     })()`);
     await sleep(500);
     check('供应商：没选供应商就点「添加」⇒ 不加卡片（先让用户选）', noPick.after === noPick.before, noPick);
     // 选一家再加：卡片 +1，且下拉复位到占位项
     const provAfter = await c.evaluate(`(async function(){
       const g = (s) => document.querySelector(s);
-      const sel = g('#prov-preset');
+      const sel = g('#provPreset');
       if (sel) { sel.value = 'groq'; sel.dispatchEvent(new Event('change')); }
-      g('#btn-add-prov')?.click();
+      g('#anNiuTianJiaProv')?.click();
       await new Promise((r) => setTimeout(r, 400));
-      const cards = document.querySelectorAll('#prov-list .prov-card').length;
-      const count = (document.querySelector('#prov-count') || {}).textContent || '';
+      const cards = document.querySelectorAll('#provLieBiao .provKa').length;
+      const count = (document.querySelector('#provCount') || {}).textContent || '';
       const sm = document.querySelector('select[data-special]');
       const smOpts = sm ? Array.from(sm.options).map((o) => o.value).filter((v) => v !== '') : [];
-      return { cards, count, smOptions: smOpts, presetValue: (g('#prov-preset') || {}).value };
+      return { cards, count, smOptions: smOpts, presetValue: (g('#provPreset') || {}).value };
     })()`);
     check('供应商：点「添加」后卡片数 +1', provAfter.cards > provDom.before, { before: provDom.before, after: provAfter.cards });
     check('供应商：计数随卡片更新', String(provAfter.count).includes('/50'), provAfter.count);
@@ -195,44 +195,44 @@ async function main() {
      * 例外：Ollama 类协议本来就不需要密钥 ⇒ 不算"没填"，按钮保持可用。
      */
     const fetchGate = await c.evaluate(`(function(){
-      const cards = Array.from(document.querySelectorAll('#prov-list .prov-card'));
-      const rows = cards.map((card) => {
-        const label = (card.querySelector('input[data-k="label"]') || {}).value || '';
-        const baseURL = (card.querySelector('input[data-k="baseURL"]') || {}).value || '';
-        const apiKey = (card.querySelector('input[data-k="apiKey"]') || {}).value || '';
-        const btn = card.querySelector('[data-fetch]');
-        return { label, baseURL, apiKey, disabled: !!(btn && btn.disabled), title: btn ? btn.getAttribute('title') : '' };
+      const cards = Array.from(document.querySelectorAll('#provLieBiao .provKa'));
+      const rows = cards.map((ka) => {
+        const biaoQian = (ka.querySelector('input[data-k="biaoQian"]') || {}).value || '';
+        const baseURL = (ka.querySelector('input[data-k="baseURL"]') || {}).value || '';
+        const apiKey = (ka.querySelector('input[data-k="apiKey"]') || {}).value || '';
+        const btn = ka.querySelector('[data-fetch]');
+        return { biaoQian, baseURL, apiKey, disabled: !!(btn && btn.disabled), title: btn ? (btn.getAttribute('title') || btn.getAttribute('biaoTi') || '') : '' };
       });
       return rows;
     })()`);
-    const ds = fetchGate.filter((r) => /deepseek/i.test(r.label));
-    const ol = fetchGate.filter((r) => /ollama/i.test(r.label) && /本机|local/i.test(r.label));
+    const ds = fetchGate.filter((r) => /deepseek/i.test(r.biaoQian));
+    const ol = fetchGate.filter((r) => /ollama/i.test(r.biaoQian) && /本机|local/i.test(r.biaoQian));
     check('拉取按钮：有名称+地址但**没填密钥** ⇒ 按钮变灰（DeepSeek）',
       ds.length > 0 && ds[0].disabled === true, ds[0]);
-    check('拉取按钮：disabled 时 title 说明缺什么（请先填写…）',
-      ds.length > 0 && /请先填写|Please fill/i.test(ds[0].title || ''), ds[0] && ds[0].title);
+    check('拉取按钮：disabled 时 biaoTi 说明缺什么（请先填写…）',
+      ds.length > 0 && /请先填写|Please fill/i.test(ds[0].title || ds[0].biaoTi || ''), ds[0] && (ds[0].title || ds[0].biaoTi));
     check('拉取按钮：Ollama（本机）不需要密钥 ⇒ 不因此被禁用',
       ol.length > 0 && ol[0].disabled === false, ol[0]);
 
     /**
      * 下拉选项**随界面语言变化**：产品主要求"切换语言后选项要变成对应语言的名称"。
-     * 做法：走真实 UI 路径把语言切到 en-US（触发 locale select 的 change → loadI18n + 重画），
+     * 做法：走真实 UI 路径把语言切到 en-US（触发 yuYan select 的 change → loadI18n + 重画），
      * 再读同一位置的选项文本，必须不再是中文。
      */
     const labelZh = await c.evaluate(`(function(){
-      const sel = document.querySelector('#prov-preset');
+      const sel = document.querySelector('#provPreset');
       if (!sel) return null;
       const opt = Array.from(sel.options).find((o) => o.value === 'zhipu');
       return opt ? opt.textContent.trim() : null;
     })()`);
     await c.evaluate(`(function(){
-      const sel = document.querySelector('#sel-locale');
+      const sel = document.querySelector('#xuanZeYuYan');
       if (sel) { sel.value = 'en-US'; sel.dispatchEvent(new Event('change')); }
       return true;
     })()`);
     await sleep(2500);
     const labelEn = await c.evaluate(`(function(){
-      const sel = document.querySelector('#prov-preset');
+      const sel = document.querySelector('#provPreset');
       if (!sel) return null;
       const opt = Array.from(sel.options).find((o) => o.value === 'zhipu');
       return opt ? opt.textContent.trim() : null;
@@ -241,7 +241,7 @@ async function main() {
       !!labelZh && !!labelEn && labelZh !== labelEn && /zhipu glm/i.test(labelEn), { zh: labelZh, en: labelEn });
     // 切回中文，避免影响后续断言
     await c.evaluate(`(function(){
-      const sel = document.querySelector('#sel-locale');
+      const sel = document.querySelector('#xuanZeYuYan');
       if (sel) { sel.value = 'zh-CN'; sel.dispatchEvent(new Event('change')); }
       return true;
     })()`);
@@ -249,7 +249,7 @@ async function main() {
 
     // 清理：把刚加的空供应商删掉，避免影响后续断言
     await c.evaluate(`(function(){
-      const btns = document.querySelectorAll('#prov-list [data-prov-del]');
+      const btns = document.querySelectorAll('#provLieBiao [data-prov-del]');
       if (btns.length) btns[btns.length - 1].click();
       return true;
     })()`);
@@ -258,7 +258,7 @@ async function main() {
     // ── 3c. 容器运行时名字不得含"推荐/厂商"等广告性措辞 ──
     const contNames = await c.evaluate(`(function(){
       const out = [];
-      document.querySelectorAll('#container-guide .ctg-guide-name, #container-guide [data-name]').forEach((el) => out.push((el.textContent || '').trim()));
+      document.querySelectorAll('#rongQiGuide .ctgGuideMing, #rongQiGuide [data-name]').forEach((el) => out.push((el.textContent || '').trim()));
       return out;
     })()`);
     check('容器说明：运行时名字无"推荐/厂商"字样',
@@ -267,9 +267,9 @@ async function main() {
 
     // ── 3d. 设置分区：技能/插件独立 + 黑名单归「功能」+ 不会被按钮弹回首页 ──
     const secDom = await c.evaluate(`(function(){
-      const navs = Array.from(document.querySelectorAll('#settings-nav button')).map((b) => b.dataset.sec);
+      const navs = Array.from(document.querySelectorAll('#peiZhiDaoHang button')).map((b) => b.dataset.sec);
       const go = (sec) => {
-        const b = document.querySelector('#settings-nav button[data-sec="' + sec + '"]');
+        const b = document.querySelector('#peiZhiDaoHang button[data-sec="' + sec + '"]');
         if (b) b.click();
         return !!b;
       };
@@ -285,17 +285,17 @@ async function main() {
       };
       // ① 技能/插件是独立层级
       const hasSkill = go('skill');
-      const skillCardVisible = visible('#skills-card');
-      const pluginVisible = visible('#container-card'); // 技能分区里不该看到容器卡
+      const skillCardVisible = visible('#jinengJiKa');
+      const pluginVisible = visible('#rongQiKa'); // 技能分区里不该看到容器卡
       go('plugin');
-      const pluginCardVisible = !!(document.querySelector('#settings-nav button[data-sec="plugin"]'));
+      const pluginCardVisible = !!(document.querySelector('#peiZhiDaoHang button[data-sec="plugin"]'));
       // ② 黑名单属于「功能」：在功能里可见、在模型里不可见
       go('func');
-      const blInFunc = visible('#blacklist-box');
+      const blInFunc = visible('#heiMingDanHe');
       go('model');
-      const blInModel = visible('#blacklist-box');
+      const blInModel = visible('#heiMingDanHe');
       // ③ 点「添加供应商」后**分区不被弹回首页**（这是用户报的 bug）
-      const add = document.querySelector('#btn-add-prov');
+      const add = document.querySelector('#anNiuTianJiaProv');
       if (add) add.click();
       return { navs, hasSkill, skillCardVisible, pluginVisible, pluginCardVisible, blInFunc, blInModel };
     })()`);
@@ -307,17 +307,17 @@ async function main() {
       secDom.blInFunc === true && secDom.blInModel === false, { inFunc: secDom.blInFunc, inModel: secDom.blInModel });
     await sleep(900);
     const secAfter = await c.evaluate(`(function(){
-      const on = document.querySelector('#settings-nav button.on');
-      const cards = document.querySelectorAll('#prov-list .prov-card').length;
-      return { active: on ? on.dataset.sec : null, cards };
+      const qiYong = document.querySelector('#peiZhiDaoHang button.qiYong');
+      const cards = document.querySelectorAll('#provLieBiao .provKa').length;
+      return { jiHuo: qiYong ? qiYong.dataset.sec : null, cards };
     })()`);
-    check('点「添加供应商」后仍停在「模型」分区（不被弹回设置首页）', secAfter.active === 'model', secAfter);
+    check('点「添加供应商」后仍停在「模型」分区（不被弹回设置首页）', secAfter.jiHuo === 'model', secAfter);
 
     // ── 3e. 供应商：新加的排最上面 + 真的落盘（且**密钥不在设置文件里**） ──
     const orderDom = await c.evaluate(`(function(){
-      const cards = Array.from(document.querySelectorAll('#prov-list .prov-card'));
-      const first = cards[0] ? (cards[0].querySelector('.prov-head') || {}).textContent : '';
-      const labels = cards.map((x) => { const h = x.querySelector('.prov-head'); return h ? h.textContent.trim() : ''; });
+      const cards = Array.from(document.querySelectorAll('#provLieBiao .provKa'));
+      const first = cards[0] ? (cards[0].querySelector('.provHead') || {}).textContent : '';
+      const labels = cards.map((x) => { const h = x.querySelector('.provHead'); return h ? h.textContent.trim() : ''; });
       return { count: cards.length, first: String(first || '').trim(), labels };
     })()`);
     // 刚加的是 Groq ⇒ 它必须排在最上面（列表倒序：新添加的在上）
@@ -342,27 +342,27 @@ async function main() {
     const staleDom = await c.evaluate(`(async function(){
       // 灌一份"有模型"的供应商，再按真实路径重画
       await window.warmy.settingsSave({
-        providers: [{ id: 'gate-prov', label: 'GateProv', protocol: 'openai-compatible', baseURL: 'https://a.example/v1', models: ['gate-model-a'], staleModels: {}, hasKey: true }],
+        providers: [{ id: 'gate-prov', biaoQian: 'GateProv', protocol: 'openai-compatible', baseURL: 'https://a.example/v1', models: ['gate-model-a'], staleModels: {}, hasKey: true }],
         providersSeeded: true,
       });
       await window.__warmyReloadProviders();
       window.__warmyRenderPage();
-      const nav = document.querySelector('#settings-nav button[data-sec="model"]');
+      const nav = document.querySelector('#peiZhiDaoHang button[data-sec="model"]');
       if (nav) nav.click();
       await new Promise((r) => setTimeout(r, 200));
-      const before = document.querySelector('#prov-list [data-m="gate-model-a"]');
-      const beforeRed = !!before && before.classList.contains('in-use');
+      const before = document.querySelector('#provLieBiao [data-m="gate-model-a"]');
+      const beforeRed = !!before && before.classList.contains('ruShiYong');
       // 改接口地址（真实的 onchange 路径）
-      const input = document.querySelector('#prov-list input[data-k="baseURL"]');
-      if (input) { input.value = 'https://b.example/v1'; input.dispatchEvent(new Event('change')); }
+      const shuRu = document.querySelector('#provLieBiao input[data-k="baseURL"]');
+      if (shuRu) { shuRu.value = 'https://b.example/v1'; shuRu.dispatchEvent(new Event('change')); }
       await new Promise((r) => setTimeout(r, 400));
-      const chip = document.querySelector('#prov-list [data-m="gate-model-a"]');
+      const chip = document.querySelector('#provLieBiao [data-m="gate-model-a"]');
       return {
         beforeRed,
         stillThere: !!chip,
-        afterRed: !!chip && chip.classList.contains('in-use'),
-        tip: chip ? String(chip.getAttribute('title') || '') : '',
-        note: (document.querySelector('#prov-list [data-models-note]') || {}).textContent || '',
+        afterRed: !!chip && chip.classList.contains('ruShiYong'),
+        tip: chip ? String(chip.getAttribute('title') || chip.getAttribute('biaoTi') || '') : '',
+        note: (document.querySelector('#provLieBiao [data-models-note]') || {}).textContent || '',
       };
     })()`);
     check('改接口地址 ⇒ 模型**保留**（不删除）', staleDom.stillThere === true, staleDom);
@@ -371,7 +371,7 @@ async function main() {
 
     // 清理：把门禁灌进去的供应商删掉，恢复默认列表
     await c.evaluate(`(async function(){
-      const btns = document.querySelectorAll('#prov-list [data-prov-del]');
+      const btns = document.querySelectorAll('#provLieBiao [data-prov-del]');
       for (const b of Array.from(btns)) b.click();
       await new Promise((r) => setTimeout(r, 300));
       return true;
@@ -380,7 +380,7 @@ async function main() {
 
     // ── 3g. 容器实例区：引擎没启动 ⇒ 不可展开、不可创建（灰且 disabled） ──
     const instDom = await c.evaluate(`(function(){
-      const blocks = Array.from(document.querySelectorAll('#container-list .ctg-inst'));
+      const blocks = Array.from(document.querySelectorAll('#rongQiLieBiao .ctgShiLi'));
       const disabled = blocks.filter((b) => b.dataset.instEnabled === '0');
       const bad = disabled.filter((b) => {
         const t = b.querySelector('[data-inst-toggle]');
@@ -394,14 +394,14 @@ async function main() {
 
     // ── 3h. 容器三块都是**折叠**（本机已有容器 / 镜像 / 常用容器安装说明），且用箭头指示 ──
     const folds = await c.evaluate(`(function(){
-      const ids = ['container-existing-collapse', 'container-images-collapse', 'container-guide-collapse'];
+      const ids = ['rongQiExistingShouQi', 'rongQiImagesShouQi', 'rongQiGuideShouQi'];
       const out = {};
       for (const id of ids) {
         const el = document.getElementById(id);
         const sum = el ? el.querySelector('summary') : null;
         out[id] = {
           details: !!el && el.tagName.toLowerCase() === 'details',
-          caret: !!(sum && sum.querySelector('.ctg-caret')),
+          caret: !!(sum && sum.querySelector('.ctgJianTou')),
           titleNotEmpty: !!(sum && (sum.textContent || '').trim().length > 0),
         };
       }
@@ -410,23 +410,23 @@ async function main() {
     const foldIds = Object.keys(folds);
     check('容器：三块（本机已有容器 / 镜像 / 安装说明）都是折叠块且标题非空',
       foldIds.every((k) => folds[k].details && folds[k].titleNotEmpty), folds);
-    check('容器：折叠块用**箭头**（.ctg-caret），不是文字提示',
+    check('容器：折叠块用**箭头**（.ctgJianTou），不是文字提示',
       foldIds.every((k) => folds[k].caret), folds);
     const caretCss = await c.evaluate(`(function(){
       const hit = Array.from(document.styleSheets).some((ss) => {
-        try { return Array.from(ss.cssRules).some((r) => r.cssText && r.cssText.includes('.ctg-caret') && r.cssText.includes('rotate')); } catch (e) { return false; }
+        try { return Array.from(ss.cssRules).some((r) => r.cssText && r.cssText.includes('.ctgJianTou') && r.cssText.includes('rotate')); } catch (e) { return false; }
       });
       return { rotate: hit };
     })()`);
-    check('容器：展开后箭头会翻转（CSS 有 [open] 旋转规则）', caretCss.rotate === true, caretCss);
+    check('容器：展开后箭头会翻转（CSS 有 [daKai] 旋转规则）', caretCss.rotate === true, caretCss);
 
     // ── 3i. 我的页：品牌 logo 与名称**上下排列**、用户资料**一列** ──
-    await c.evaluate(`(function(){ document.querySelector('#rail [data-nav="me"]')?.click(); return true; })()`);
+    await c.evaluate(`(function(){ document.querySelector('#ceLan [data-nav="wo"]')?.click(); return true; })()`);
     await sleep(900);
     const meLayout = await c.evaluate(`(function(){
-      const logo = document.querySelector('.me-brand .brand-logo');
-      const txt = document.querySelector('.me-brand .me-brand-text');
-      const strip = document.querySelector('.me-strip');
+      const logo = document.querySelector('.woPinPai .pinPailogo');
+      const txt = document.querySelector('.woPinPai .woPinPaiWenBen');
+      const strip = document.querySelector('.woStrip');
       const lb = logo ? logo.getBoundingClientRect() : null;
       const tb = txt ? txt.getBoundingClientRect() : null;
       const stacked = !!(lb && tb && tb.top >= lb.bottom - 4);
@@ -439,49 +439,49 @@ async function main() {
     check('我的页：用户资料是一列（不再是两列）', meLayout.stripCol === true, meLayout);
 
     // ── 4. 我的页：无保存按钮、邮箱输入存在 ──
-    await c.evaluate(`(function(){ try { document.querySelector('#rail [data-nav="me"]').click(); } catch(e){} return true; })()`);
+    await c.evaluate(`(function(){ try { document.querySelector('#ceLan [data-nav="wo"]').click(); } catch(e){} return true; })()`);
     await sleep(1400);
     const meDom = await c.evaluate(`(function(){
       const g = (s) => document.querySelector(s);
-      const mail = g('#p-email');
+      const mail = g('#pYouJian');
       // 品牌是否按语言显示 + 是否与资料同一行
-      const top = g('.me-top');
-      const brand = g('.me-brand-name');
-      const prof = g('.me-strip');
+      const top = g('.woDing');
+      const brand = g('.woPinPaiMing');
+      const prof = g('.woStrip');
       // 品牌与资料"同一行"：用几何判据（左右并排 + 垂直有重叠），
       // 不写死 80px 容差 —— 布局改成卡片后会误判。
       let sameRow = false;
       try {
-        const brandBox = (g('.me-brand') || brand).getBoundingClientRect();
+        const brandBox = (g('.woPinPai') || brand).getBoundingClientRect();
         const profBox = (prof || brand).getBoundingClientRect();
         const sideBySide = profBox.left >= brandBox.right - 4;
         const vOverlap = Math.min(brandBox.bottom, profBox.bottom) - Math.max(brandBox.top, profBox.top);
         sameRow = sideBySide && vOverlap > 20;
       } catch { sameRow = false; }
       return {
-        hasSaveBtn: !!g('#p-save'),
+        hasSaveBtn: !!g('#pBaoCun'),
         hasEmail: !!mail,
         emailType: mail ? mail.getAttribute('type') || mail.tagName : null,
         brandText: brand ? brand.textContent.trim() : null,
         sameRow,
-        hasCred: !!g('#me-id-val'),
-        credText: (g('#me-id-val') || {}).textContent || '',
-        hasCopy: !!g('#btn-me-id-copy'),
-        hasRotate: !!g('#btn-me-cred-rotate'),
-        hasSwitch: !!g('#btn-me-cred-switch'),
+        hasCred: !!g('#woidVal'),
+        credText: (g('#woidVal') || {}).textContent || '',
+        hasCopy: !!g('#anNiuWoidCopy'),
+        hasRotate: !!g('#anNiuWoCredLunHuan'),
+        hasSwitch: !!g('#anNiuWoCredSwitch'),
         // 指纹那一块已删（与"凭证"重复）：必须**不再存在**
-        dupCredBlock: !!g('#me-cred-val'),
+        dupCredBlock: !!g('#woCredVal'),
         // ID = 私钥：必须**明说**泄露后果与"没有服务器能挂失"
-        idWarn: (document.querySelector('.me-hint-warn') || {}).textContent || '',
+        idWarn: (document.querySelector('.woTiShiWarn') || {}).textContent || '',
         /* 排布：头像 → 下面用户名（邮箱在用户名**右侧**）→ 再下面凭证 */
         layout: (function () {
-          const av = g('#p-av-btn');
-          const name = g('#p-name-display');
-          const mail = g('#p-email');
-          const cred = g('#me-id-val');
-          if (!av || !name || !mail || !cred) return null;
+          const av = g('#pAvAnNiu');
+          const ming = g('#pMingDisplay');
+          const mail = g('#pYouJian');
+          const cred = g('#woidVal');
+          if (!av || !ming || !mail || !cred) return null;
           const a = av.getBoundingClientRect();
-          const n = name.getBoundingClientRect();
+          const n = ming.getBoundingClientRect();
           const m = mail.getBoundingClientRect();
           const c = cred.getBoundingClientRect();
           return {
@@ -515,8 +515,8 @@ async function main() {
       maskShape && maskCounts.groups === 17 && maskCounts.niuma === 10, maskCounts);
     // 小眼睛：点一下看全貌，再点一下遮回去（前后长度一致，排版不跳）
     const eye = await c.evaluate(`(async function(){
-      const el = document.querySelector('#me-id-val');
-      const btn = document.querySelector('#btn-me-id-eye');
+      const el = document.querySelector('#woidVal');
+      const btn = document.querySelector('#anNiuWoidEye');
       if (!el || !btn) return { exists: false };
       // 事实核对：主进程到底给了什么（避免把"DOM 里拿到的字符串"当成事实）
       let facts = {};
@@ -547,13 +547,13 @@ async function main() {
     // ── 5. 成员卡片按会话类型显隐 + 第二列「+」 ──
     // 规则：**必须选中对应会话**才显示成员 —— 没有选中会话时任何会话卡片都不该出现。
     const panelState = () => c.evaluate(`(function(){
-      const blk = document.getElementById('panel-members-block');
-      const act = document.getElementById('list-action');
+      const blk = document.getElementById('mianBanChengYuanJiKuai');
+      const act = document.getElementById('lieBiaoDongZuo');
       const vis = (el) => {
         if (!el) return false;
         const cs = getComputedStyle(el);
         const r = el.getBoundingClientRect();
-        return cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+        return cs.display !== 'none' && cs.visibility !== 'yinCang' && r.width > 0 && r.height > 0;
       };
       return {
         membersVisible: vis(blk),
@@ -563,27 +563,27 @@ async function main() {
       };
     })()`);
 
-    // ── 5.0 列表头像必须保持 40px（改名工具曾把 av-img 改成 av-tuPian，尺寸约束丢失） ──
-    await c.evaluate(`(function(){ try { document.querySelector('#rail [data-nav="singleAi"]').click(); } catch(e){} return true; })()`);
+    // ── 5.0 列表头像必须保持 40px（改名工具曾把 avTuPian 改成 av-tuPian，尺寸约束丢失） ──
+    await c.evaluate(`(function(){ try { document.querySelector('#ceLan [data-nav="singleAi"]').click(); } catch(e){} return true; })()`);
     await sleep(1200);
     const avDom = await c.evaluate(`(function(){
-      const rows = Array.from(document.querySelectorAll('#list-body .list-item'));
-      const row = rows[0];
-      if (!row) return { rows: 0 };
-      const img = row.querySelector('img');
-      const letter = row.querySelector('.av');
+      const rows = Array.from(document.querySelectorAll('#lieBiaoTi .lieBiaoTiaoMu'));
+      const hang = rows[0];
+      if (!hang) return { rows: 0 };
+      const img = hang.querySelector('img');
+      const letter = hang.querySelector('.av');
       const el = img || letter;
       const r = el ? el.getBoundingClientRect() : null;
       return { rows: rows.length, kind: img ? 'img' : (letter ? 'letter' : 'none'),
         cls: el ? el.className : '', w: r ? Math.round(r.width) : 0, h: r ? Math.round(r.height) : 0 };
     })()`);
-    check('列表头像：class 是 av-img / av（未被改名破坏）',
-      avDom.kind !== 'none' && /(^|\s)(av-img|av)(\s|$)/.test(avDom.cls || ''), avDom);
+    check('列表头像：class 是 avTuPian / av（未被改名破坏）',
+      avDom.kind !== 'none' && /(^|\s)(avTuPian|av)(\s|$)/.test(avDom.cls || ''), avDom);
     check('列表头像：尺寸仍是 40×40（未变大）',
       avDom.w === 40 && avDom.h === 40, avDom);
 
     const clickNav = async (nav) => {
-      await c.evaluate(`(function(){ try { document.querySelector('#rail [data-nav="${nav}"]').click(); } catch(e){} return true; })()`);
+      await c.evaluate(`(function(){ try { document.querySelector('#ceLan [data-nav="${nav}"]').click(); } catch(e){} return true; })()`);
       await sleep(1100);
     };
 
@@ -602,7 +602,7 @@ async function main() {
     const gid = 'live-proj-' + Date.now();
     const created = await c.evaluate(`(async function(){
       try {
-        const r = await window.warmy.groupCreate({ groupId: '${gid}', name: 'Live Project', type: 'internal', directedMode: false, devEnv: 'host' });
+        const r = await window.warmy.groupCreate({ groupId: '${gid}', ming: 'Live Project', type: 'internal', directedMode: false, devEnv: 'host' });
         return r;
       } catch (e) { return { ok: false, error: String(e) }; }
     })()`);
@@ -612,7 +612,7 @@ async function main() {
     await clickNav('internalGroup');
     await sleep(1800);
     const clicked = await c.evaluate(`(function(){
-      const rows = Array.from(document.querySelectorAll('#list-body .list-item'));
+      const rows = Array.from(document.querySelectorAll('#lieBiaoTi .lieBiaoTiaoMu'));
       if (!rows.length) return { clicked: false, count: 0 };
       rows[0].click();
       return { clicked: true, count: rows.length };
@@ -624,14 +624,14 @@ async function main() {
     check('项目：第二列入口是「+」（合并新建/加入）', projDom.actionText === '+', projDom);
 
     const menuDom = await c.evaluate(`(function(){
-      const act = document.getElementById('list-action');
+      const act = document.getElementById('lieBiaoDongZuo');
       if (!act) return { exists: false };
       act.click();
       return { exists: true };
     })()`);
     await sleep(700);
     const menuItems = await c.evaluate(`(function(){
-      const m = document.getElementById('list-plus-menu');
+      const m = document.getElementById('lieBiaoPlusCaiDan');
       if (!m) return { exists: false };
       const btns = Array.from(m.querySelectorAll('button')).map((b) => (b.textContent || '').trim());
       const r = { exists: true, items: btns };
@@ -640,45 +640,45 @@ async function main() {
     })()`);
     check('项目「+」弹出菜单含 新建+加入', menuDom.exists === true && menuItems.exists === true && menuItems.items.length >= 2, menuItems);
 
-    // ── 6. 独立会话窗：body.chat-window 只保留聊天+右栏 ──
+    // ── 6. 独立会话窗：body.liaoTianChuangKou 只保留聊天+右栏 ──
     const subDom = await c.evaluate(`(function(){
-      document.body.classList.add('chat-window');
+      document.body.classList.add('liaoTianChuangKou');
       const vis = (s) => {
         const el = document.querySelector(s);
         if (!el) return 'absent';
         const cs = getComputedStyle(el);
-        return cs.display === 'none' ? 'hidden' : 'visible';
+        return cs.display === 'none' ? 'yinCang' : 'visible';
       };
       const r = {
-        rail: vis('#rail'),
-        listCol: vis('#list-col'),
-        chatLayout: vis('#chat-layout'),
-        panelCol: vis('#panel-col'),
-        titlebar: vis('#titlebar'),
-        pageLayout: vis('#page-layout'),
+        ceLan: vis('#ceLan'),
+        listCol: vis('#lieBiaoLan'),
+        chatLayout: vis('#liaoTianBuJu'),
+        panelCol: vis('#mianBanLan'),
+        biaoTiLan: vis('#biaoTiLan'),
+        pageLayout: vis('#pageBuJu'),
       };
-      document.body.classList.remove('chat-window');
+      document.body.classList.remove('liaoTianChuangKou');
       return r;
     })()`);
-    check('独立窗：rail 隐藏', subDom.rail === 'hidden' || subDom.rail === 'absent', subDom);
-    check('独立窗：第二列隐藏', subDom.listCol === 'hidden' || subDom.listCol === 'absent', subDom);
+    check('独立窗：ceLan 隐藏', subDom.ceLan === 'yinCang' || subDom.ceLan === 'absent', subDom);
+    check('独立窗：第二列隐藏', subDom.listCol === 'yinCang' || subDom.listCol === 'absent', subDom);
     check('独立窗：聊天列可见', subDom.chatLayout === 'visible', subDom);
     check('独立窗：右栏可见', subDom.panelCol === 'visible', subDom);
-    check('独立窗：保留可拖标题栏', subDom.titlebar === 'visible', subDom);
+    check('独立窗：保留可拖标题栏', subDom.biaoTiLan === 'visible', subDom);
     check('独立窗：不显示整页(设置/看板)', subDom.pageLayout !== 'visible', subDom);
     /**
      * 产品要求：独立会话窗里**不该再有「在新窗口打开」** ——
      * 这个窗口本来就是"该会话的窗口"，再开一个只会得到重复视图。
      */
     const subMenu = await c.evaluate(`(function(){
-      const mi = document.getElementById('mi-open');
+      const mi = document.getElementById('caiDanTuBiaoDaKai');
       if (!mi) return { exists: false };
-      const hidden = mi.classList.contains('hidden') || mi.offsetParent === null;
+      const yinCang = mi.classList.contains('yinCang') || mi.offsetParent === null;
       const txt = (mi.textContent || '').trim();
-      return { exists: true, hidden, txt };
+      return { exists: true, yinCang, txt };
     })()`);
     check('独立窗：⋯ 菜单里「在新窗口打开」已隐藏（该窗口本身就是这个会话）',
-      subMenu.exists === true && subMenu.hidden === true, subMenu);
+      subMenu.exists === true && subMenu.yinCang === true, subMenu);
 
     /**
      * 同一会话：两个窗口必须能从**主进程**读到同一份消息（那里是唯一事实来源），

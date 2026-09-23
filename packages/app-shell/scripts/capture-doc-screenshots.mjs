@@ -22,7 +22,7 @@ fs.mkdirSync(OUT, { recursive: true });
 fs.mkdirSync(DEST, { recursive: true });
 
 const HOST = path.join(OUT, 'shot-host.cjs');
-fs.writeFileSync(HOST, `const { app, BrowserWindow } = require('electron');
+fs.writeFileSync(HOST, `const { yingYong, BrowserWindow } = require('electron');
 const target = process.env.PREVIEW_HTML;
 app.whenReady().then(() => {
   const w = new BrowserWindow({ width: 1280, height: 860, show: true,
@@ -52,14 +52,14 @@ async function waitCdp() {
   return false;
 }
 
-async function shot(c, name) {
+async function shot(c, ming) {
   try {
     const r = await c.send('Page.captureScreenshot', { format: 'png' }, { timeout: 10000 });
-    const p = path.join(DEST, name);
+    const p = path.join(DEST, ming);
     fs.writeFileSync(p, Buffer.from(r.data, 'base64'));
     console.log('saved', p, fs.statSync(p).size);
   } catch (e) {
-    console.warn('shot fail', name, e.message.slice(0, 80));
+    console.warn('shot fail', ming, e.message.slice(0, 80));
   }
 }
 
@@ -78,13 +78,13 @@ async function main() {
     throw new Error('CDP not up');
   }
   await sleep(2500);
-  const c = await attach(PORT, { label: 'shots', callTimeout: 15000 });
+  const c = await attach(PORT, { biaoQian: 'shots', callTimeout: 15000 });
   await c.send('Runtime.enable');
   try { await c.waitFor(BOOT_DONE, { timeout: 15000 }); } catch { /* warn */ }
-  // README screenshots must be **English** locale
+  // README screenshots must be **English** yuYan
   await c.evaluate(`(async function(){
     try {
-      localStorage.setItem('warmyPreviewSettings', JSON.stringify({ locale: 'en-US' }));
+      localStorage.setItem('warmyPreviewSettings', JSON.stringify({ yuYan: 'en-US' }));
     } catch (e) {}
   })()`);
   await c.send('Page.reload', { ignoreCache: true });
@@ -94,12 +94,12 @@ async function main() {
   await c.evaluate(`(async function(){
     try {
       if (window.__warmyLoadI18n) await window.__warmyLoadI18n('en-US');
-      if (window.warmy?.settingsSave) await window.warmy.settingsSave({ locale: 'en-US' });
+      if (window.warmy?.settingsSave) await window.warmy.settingsSave({ yuYan: 'en-US' });
     } catch (e) {}
   })()`);
   await sleep(600);
   await shot(c, 'ui-home.png');
-  // open settings → functions (skills always visible)
+  // daKai settings → functions (skills always visible)
   await c.evaluate(`(async()=>{
     const btns=[...document.querySelectorAll('button,[role=button]')];
     const hit=btns.find(b=>/Settings|设置/.test((b.textContent||'').trim())||b.dataset?.nav==='settings');
@@ -110,10 +110,10 @@ async function main() {
     await new Promise(r=>setTimeout(r,400));
   })()`);
   await shot(c, 'ui-settings.png');
-  // skills card
+  // skills ka
   await c.evaluate(`(async()=>{
-    const card=document.getElementById('skills-card');
-    if(card && card.scrollIntoView) card.scrollIntoView({block:'center'});
+    const ka=document.getElementById('jinengJiKa');
+    if(ka && ka.scrollIntoView) ka.scrollIntoView({block:'center'});
     await new Promise(r=>setTimeout(r,300));
   })()`);
   await shot(c, 'ui-skills.png');
@@ -124,9 +124,9 @@ async function main() {
     await new Promise(r=>setTimeout(r,300));
   })()`);
   await shot(c, 'ui-about.png');
-  // locale ja proof (not used in README)
+  // yuYan ja proof (not used in README)
   await c.evaluate(`(async()=>{
-    const sel=document.getElementById('sel-locale');
+    const sel=document.getElementById('xuanZeYuYan');
     if(sel){ sel.value='ja'; sel.dispatchEvent(new Event('change',{bubbles:true})); await new Promise(r=>setTimeout(r,600)); }
   })()`);
   await shot(c, 'ui-locale-ja.png');

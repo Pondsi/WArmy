@@ -1,14 +1,14 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
-let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
-let c = fs.readFileSync(base + 'renderer/app.css', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/';
+let j = fs.readFileSync(base + 'renderer/yingYong.js', 'utf8');
+let c = fs.readFileSync(base + 'renderer/yingYong.css', 'utf8');
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 
-// 1) me-strip CSS（横排紧凑）
-if (!c.includes('.me-strip')) {
+// 1) woStrip CSS（横排紧凑）
+if (!c.includes('.woStrip')) {
   c += `
 /* 我的：横排紧凑，不用卡片 */
-.me-strip {
+.woStrip {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -17,33 +17,33 @@ if (!c.includes('.me-strip')) {
   background: transparent;
   border: none;
 }
-.me-strip .field { min-width: 180px; }
-.me-strip .profile-head { margin-bottom: 0; }
-.join-qr {
+.woStrip .field { min-width: 180px; }
+.woStrip .profileHead { margin-bottom: 0; }
+.jiaRuqr {
   width: 168px; height: 168px;
   background: #fff; border: 1px solid var(--line);
   border-radius: 10px; display: grid; place-items: center;
 }
-.join-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
-.join-link {
+.jiaRuHang { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.jiaRuLink {
   font-family: var(--font-mono); font-size: 12px;
   word-break: break-all; max-width: 320px;
   background: var(--hover); padding: 8px 10px; border-radius: 6px;
 }
 `;
-  fs.writeFileSync(base + 'renderer/app.css', c);
-  console.log('me-strip + join css added');
+  fs.writeFileSync(base + 'renderer/yingYong.css', c);
+  console.log('woStrip + join css added');
 }
 
 // 2) pickFile 支持 filters
-if (!m.includes("filters: ['md']") && m.includes("ipcMain.handle('warmy:pick-file'")) {
+if (!m.includes("filters: ['md']") && m.includes("ipcMain.handle('warmy:xuanZeWenJian'")) {
   m = m.replace(
-    `ipcMain.handle('warmy:pick-file', async () => {
+    `ipcMain.handle('warmy:xuanZeWenJian', async () => {
   if (!win) return { ok: false };
   const r = await dialog.showOpenDialog(win, {
     properties: ['openFile'],
   });`,
-    `ipcMain.handle('warmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
+    `ipcMain.handle('warmy:xuanZeWenJian', async (_e, opts?: { filters?: string[] }) => {
   if (!win) return { ok: false };
   const ext = opts?.filters?.length ? opts.filters : undefined;
   const r = await dialog.showOpenDialog(win, {
@@ -73,23 +73,23 @@ if (!j.includes('data-email-k')) {
 }
 
 // 4) 群聊邀请：链接 + 二维码
-if (!j.includes('join-qr')) {
-  const anchor = `        <div class="set-section set-card">
-          <h2>\${t('mesh.title')}</h2>`;
-  j = j.replace(anchor, `        <div class="set-section set-card">
-          <h2>\${t('join.title')}</h2>
-          <div class="join-row">
-            <div class="join-qr" id="join-qr"></div>
+if (!j.includes('jiaRuqr')) {
+  const anchor = `        <div class="sheZhiSection sheZhiKa">
+          <h2>\${t('mesh.biaoTi')}</h2>`;
+  j = j.replace(anchor, `        <div class="sheZhiSection sheZhiKa">
+          <h2>\${t('join.biaoTi')}</h2>
+          <div class="jiaRuHang">
+            <div class="jiaRuqr" id="jiaRuqr"></div>
             <div>
-              <div class="muted" style="margin-bottom:6px">\${t('join.qrHint')}</div>
-              <div class="join-link" id="join-link">—</div>
-              <div style="margin-top:8px"><button class="btn-mini" id="btn-join-copy">\${t('join.copyLink')}</button>
-              <span class="muted" id="join-msg"></span></div>
+              <div class="jingYin" style="margin-bottom:6px">\${t('join.qrHint')}</div>
+              <div class="jiaRuLink" id="jiaRuLink">—</div>
+              <div style="margin-top:8px"><button class="anNiuXiao" id="btn-join-copy">\${t('join.copyLink')}</button>
+              <span class="jingYin" id="join-msg"></span></div>
               <div class="field" style="margin-top:10px">
-                <label>\${t('join.scanHint')}</label>
-                <input id="join-input" placeholder="\${escapeHtml(t('join.pastePlaceholder'))}"/>
+                <biaoQian>\${t('join.scanHint')}</biaoQian>
+                <shuRu id="join-input" placeholder="\${escapeHtml(t('join.pastePlaceholder'))}"/>
               </div>
-              <button class="btn-mini" id="btn-join-accept">\${t('join.accept')}</button>
+              <button class="anNiuXiao" id="btn-join-accept">\${t('join.accept')}</button>
             </div>
           </div>
         </div>
@@ -106,9 +106,9 @@ if (!j.includes('btn-join-copy')) {
         const st = await window.warmy.meshStatus();
         const node = st?.nodeId || 'local';
         const link = 'warmy://join?node=' + encodeURIComponent(node) + '&port=7788';
-        const lk = $('join-link');
+        const lk = $('jiaRuLink');
         if (lk) lk.textContent = link;
-        const qr = $('join-qr');
+        const qr = $('jiaRuqr');
         if (qr) {
           const inv = await window.warmy.inviteCreate().catch(() => null);
           const tok = inv?.invite?.token ? '&tok=' + inv.invite.token : '';
@@ -124,7 +124,7 @@ if (!j.includes('btn-join-copy')) {
       })();
       $('btn-join-copy').onclick = async () => {
         try {
-          await navigator.clipboard.writeText($('join-link').textContent);
+          await navigator.clipboard.writeText($('jiaRuLink').textContent);
           $('join-msg').textContent = t('join.copied');
         } catch {
           $('join-msg').textContent = t('join.fail');
@@ -141,5 +141,5 @@ if (!j.includes('btn-join-copy')) {
   console.log('join bindings added');
 }
 
-fs.writeFileSync(base + 'renderer/app.js', j);
+fs.writeFileSync(base + 'renderer/yingYong.js', j);
 console.log('done');

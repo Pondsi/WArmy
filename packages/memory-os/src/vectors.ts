@@ -36,19 +36,19 @@ export function congInt8FanLiangHua(data: Int8Array, scale: number): Float32Arra
 }
 
 export function yuXianXiangSiDu(a: Float32Array, b: Float32Array): number {
-  let dot = 0;
+  let dian = 0;
   let na = 0;
   let nb = 0;
-  const len = Math.min(a.length, b.length);
-  for (let i = 0; i < len; i++) {
+  const changdu = Math.min(a.length, b.length);
+  for (let i = 0; i < changdu; i++) {
     const av = a[i] ?? 0;
     const bv = b[i] ?? 0;
-    dot += av * bv;
+    dian += av * bv;
     na += av * av;
     nb += bv * bv;
   }
   const denom = Math.sqrt(na) * Math.sqrt(nb);
-  return denom > 0 ? dot / denom : 0;
+  return denom > 0 ? dian / denom : 0;
 }
 
 // ─────────────────────────────────────────────
@@ -78,14 +78,14 @@ export function bianMaXiangLiang(vec: Float32Array | number[]): { blob: Buffer; 
  * 与 float 版的结果差异只来自量化误差（实测 <1e-2），但快 3–4 倍。
  */
 export function yuXianInt8(a: Int8Array, aScale: number, b: Int8Array, bScale: number): number {
-  const len = Math.min(a.length, b.length);
-  let dot = 0;
+  const changdu = Math.min(a.length, b.length);
+  let dian = 0;
   let na = 0;
   let nb = 0;
-  for (let i = 0; i < len; i++) {
+  for (let i = 0; i < changdu; i++) {
     const av = a[i] ?? 0;
     const bv = b[i] ?? 0;
-    dot += av * bv;
+    dian += av * bv;
     na += av * av;
     nb += bv * bv;
   }
@@ -94,7 +94,7 @@ export function yuXianInt8(a: Int8Array, aScale: number, b: Int8Array, bScale: n
   // scale 均为正且同时出现在分子分母 → 约掉；保留入参以便校验一致性
   void aScale;
   void bScale;
-  return dot / denom;
+  return dian / denom;
 }
 
 /** 把 int8 余弦映射到 [0,1]，便于塞进 RRFSource.score */
@@ -132,7 +132,7 @@ export interface RankedList {
   /** 通道名，用于回溯命中来源 */
   source: 'fts_uni' | 'fts_tri' | 'vector';
   /** 已按相关性降序排列的 id（rank 从 1 开始） */
-  ids: string[];
+  idJi: string[];
 }
 
 export interface RongheMingzhong {
@@ -149,15 +149,15 @@ export interface RongheMingzhong {
  */
 export function rrfRonghePaixu(lists: RankedList[], k = 60): RongheMingzhong[] {
   const map = new Map<string, { rrfScore: number; sources: Set<string>; ranks: Record<string, number> }>();
-  for (const list of lists) {
-    for (let i = 0; i < list.ids.length; i++) {
-      const id = list.ids[i] as string;
+  for (const LieBiao of lists) {
+    for (let i = 0; i < LieBiao.idJi.length; i++) {
+      const id = LieBiao.idJi[i] as string;
       const cur = map.get(id) || { rrfScore: 0, sources: new Set<string>(), ranks: {} };
-      if (cur.ranks[list.source] === undefined) {
-        cur.ranks[list.source] = i + 1;
+      if (cur.ranks[LieBiao.source] === undefined) {
+        cur.ranks[LieBiao.source] = i + 1;
         cur.rrfScore += 1 / (k + i + 1);
       }
-      cur.sources.add(list.source);
+      cur.sources.add(LieBiao.source);
       map.set(id, cur);
     }
   }

@@ -13,25 +13,25 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {GroupStore, QUN_CHENGYUAN_SHANGXIAN} from '../dist/group-store.js';
+import {QunCang, QUN_CHENGYUAN_SHANGXIAN} from '../dist/group-store.js';
 
 const self = fileURLToPath(import.meta.url);
-const argOf = (name) => {
-  const i = process.argv.indexOf(name);
+const argOf = (ming) => {
+  const i = process.argv.indexOf(ming);
   return i >= 0 ? process.argv[i + 1] : '';
 };
 
 let failures = 0;
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   const mark = cond ? 'PASS' : 'FAIL';
   if (!cond) failures++;
-  console.log(`  [${mark}] ${label}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+  console.log(`  [${mark}] ${biaoQian}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
 }
 
 // ── 阶段 2/3：全新进程读取（本脚本被自己 spawn） ──
 if (process.argv.includes('--read')) {
   const file = argOf('--file');
-  const store = new GroupStore(file);
+  const store = new QunCang(file);
   const snap = store.snapshot();
   console.log(`\n[2] 新进程读取 ${file}`);
   console.log(`    原始快照: ${JSON.stringify(snap)}`);
@@ -69,24 +69,24 @@ if (process.argv.includes('--read')) {
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-group-store-'));
 const file = path.join(tmpRoot, 'groups.json');
 console.log(`[1] 写盘目标: ${file}`);
-const store = new GroupStore(file);
+const store = new QunCang(file);
 
-const c1 = store.upsertGroup({ groupId: 'g-1001', name: '无限牛马作战群', type: 'internal' });
+const c1 = store.upsertGroup({ groupId: 'g-1001', ming: '无限牛马作战群', type: 'internal' });
 check('建群 g-1001', c1.ok && c1.group?.name === '无限牛马作战群', c1.group);
-const c1b = store.upsertGroup({ groupId: 'g-1001', name: '无限牛马作战群', type: 'internal', directedMode: true });
+const c1b = store.upsertGroup({ groupId: 'g-1001', ming: '无限牛马作战群', type: 'internal', directedMode: true });
 check('建群幂等（不重复）', store.listGroups().length === 1, store.listGroups().length);
 check('定向模式写入', c1b.ok && c1b.group?.directedMode === true, c1b.group?.directedMode);
 
-const invite1 = store.addMember('g-1001', { name: '群主', role: 'creator', source: 'invite' });
-const invite2 = store.addMember('g-1001', { name: '牛马一号', role: 'member', source: 'invite' });
-const invite1b = store.addMember('g-1001', { name: '牛马二号', role: 'member', source: 'invite' });
-const invite3 = store.addMember('g-1001', { name: '临时工', role: 'member', source: 'invite' });
+const invite1 = store.addMember('g-1001', { ming: '群主', role: 'creator', source: 'invite' });
+const invite2 = store.addMember('g-1001', { ming: '牛马一号', role: 'member', source: 'invite' });
+const invite1b = store.addMember('g-1001', { ming: '牛马二号', role: 'member', source: 'invite' });
+const invite3 = store.addMember('g-1001', { ming: '临时工', role: 'member', source: 'invite' });
 check('邀请 4 人', invite1.ok && invite1b.ok && invite3.ok && invite3.members.length === 4, invite3.members.map((m) => m.name));
-const dup = store.addMember('g-1001', { name: '牛马一号', role: 'member', source: 'invite' });
+const dup = store.addMember('g-1001', { ming: '牛马一号', role: 'member', source: 'invite' });
 check('同名重复邀请被忽略（幂等）', dup.ok && dup.members.length === 4, dup.members.length);
-const inst = store.addMember('g-1001', { name: '本机实例-1', role: 'member', source: 'instance', instanceId: 'inst-1' });
+const inst = store.addMember('g-1001', { ming: '本机实例-1', role: 'member', source: 'instance', instanceId: 'inst-1' });
 check('实例入群写入（id=inst:inst-1）', inst.ok && inst.members.some((m) => m.id === 'inst:inst-1'), inst.members.map((m) => m.id));
-const instDup = store.addMember('g-1001', { name: '本机实例-1 改名', role: 'member', source: 'instance', instanceId: 'inst-1' });
+const instDup = store.addMember('g-1001', { ming: '本机实例-1 改名', role: 'member', source: 'instance', instanceId: 'inst-1' });
 check('同实例重复入群幂等', instDup.ok && instDup.members.length === 5, instDup.members.length);
 
 const creatorRow = store.listMembers('g-1001').find((m) => m.role === 'creator');
@@ -100,19 +100,19 @@ check('踢不存在的成员返回错误', kickMissing.ok === false, kickMissing
 
 // 上限 50（与旧实现一致）
 const capFile = path.join(tmpRoot, 'cap.json');
-const capStore = new GroupStore(capFile);
-capStore.upsertGroup({ groupId: 'g-cap', name: 'cap', type: 'internal' });
-for (let i = 0; i < QUN_CHENGYUAN_SHANGXIAN; i++) capStore.addMember('g-cap', { name: `m${i}`, source: 'invite' });
-const over = capStore.addMember('g-cap', { name: 'overflow', source: 'invite' });
+const capStore = new QunCang(capFile);
+capStore.upsertGroup({ groupId: 'g-cap', ming: 'cap', type: 'internal' });
+for (let i = 0; i < QUN_CHENGYUAN_SHANGXIAN; i++) capStore.addMember('g-cap', { ming: `m${i}`, source: 'invite' });
+const over = capStore.addMember('g-cap', { ming: 'overflow', source: 'invite' });
 check(`成员上限 ${QUN_CHENGYUAN_SHANGXIAN} 生效`, over.ok === false && over.error === `max ${QUN_CHENGYUAN_SHANGXIAN}`, over.error);
 
 // 旧版会话状态回填
 const migrated = store.migrateFrom([
-  { id: 'g-2002', name: '老群', type: 'external' },
-  { id: 'g-1001', name: '重复 id 不应再插一遍', type: 'internal' },
+  { id: 'g-2002', ming: '老群', type: 'external' },
+  { id: 'g-1001', ming: '重复 id 不应再插一遍', type: 'internal' },
 ]);
 check('回填迁移只加新群', migrated === 1 && store.listGroups().length === 2, { migrated, total: store.listGroups().length });
-const migratedAgain = store.migrateFrom([{ id: 'g-3003', name: '第二次回填', type: 'internal' }]);
+const migratedAgain = store.migrateFrom([{ id: 'g-3003', ming: '第二次回填', type: 'internal' }]);
 check('回填只做一次（不会把已解散的群再加回来）', migratedAgain === 0 && !store.getGroup('g-3003'), { migratedAgain, groups: store.listGroups().map((g) => g.groupId) });
 
 // 原子写不留 .tmp
@@ -122,7 +122,7 @@ check('原子写无 .tmp 残留', leftovers.length === 0, leftovers);
 // 损坏文件隔离
 const corruptFile = path.join(tmpRoot, 'corrupt.json');
 fs.writeFileSync(corruptFile, '{ this is not json', 'utf8');
-const corruptStore = new GroupStore(corruptFile);
+const corruptStore = new QunCang(corruptFile);
 const empty = corruptStore.snapshot();
 const quarantined = fs.readdirSync(tmpRoot).filter((f) => f.startsWith('corrupt.json.corrupt-'));
 check('损坏文件返回兜底结构且被隔离', empty.groups.length === 0 && quarantined.length === 1, quarantined);
@@ -133,7 +133,7 @@ console.log(out.trimEnd());
 
 // ── 阶段 4：父进程重新读，确认子进程的改动也在盘上 ──
 console.log('\n[4] 父进程重新读盘，确认子进程的踢人操作已持久化');
-const reread = new GroupStore(file).listMembers('g-1001').map((m) => m.name);
+const reread = new QunCang(file).listMembers('g-1001').map((m) => m.name);
 check('临时工 已被移除且已落盘', !reread.includes('临时工'), reread);
 check('其余成员仍在', reread.includes('牛马一号') && reread.includes('本机实例-1'), reread);
 

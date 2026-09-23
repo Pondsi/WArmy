@@ -2,6 +2,16 @@
 
 ## 0.1.0 — 2026-09-19
 
+### Acceptance / rename residual (2026-09-23)
+- Restore platform keywords damaged by pinyin rename: CSS `body`/`input` type selectors, WebSocket `open`, `document.title`, `Event('input')`, `createElement('input')`, `$('shuRu')` element id, HTML `title` attribute.
+- Fourth-column panel scrolls (`#mianBanLan overflow-y:auto`); whole page stays `overflow:hidden`.
+- Sound checkboxes bind `sWanCheng/sQingQiu/sCuoWu` (not `#s-complete`).
+- English copy: `already using the latest version` / `kept on disk` / `open it first`.
+- 18 verify gates × 3 clean rounds; installer rebuilt `WArmy-Setup-0.1.0.exe`.
+- Acceptance checklist: `docs/ACCEPTANCE-CHECKLIST.md` (five-axis + 18 gates + UAT + artifacts).
+- Installed agent skills for acceptance: webapp-testing, browser-testing-with-devtools, code-review-and-quality, test-driven-development.
+- dsh: PC 启动时若缺失则后台默认安装到 `userData/dsh-packages`（失败不挡启动，同日不重试）。
+
 ### i18n / product naming
 - 「我的牛马」localized: ja `マイ社畜たち`, ko `일꾼들`, en/other `My Workhorses` (cattle.family)
 - High-visibility nav/chat/me/panel/dashboard strings filled for ja/ko/ru/es/fr/pt/eo

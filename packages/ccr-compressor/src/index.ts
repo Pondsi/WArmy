@@ -19,7 +19,7 @@ export interface CompressOutput {
   /** 是否被截断/折叠 */
   truncated: boolean;
   /** 折叠掉的锚点提示，供 recall */
-  pointers: Array<{ label: string; bytes: number }>;
+  pointers: Array<{ biaoQian: string; bytes: number }>;
 }
 
 const MOREN_YUSUAN = 4000;
@@ -45,9 +45,9 @@ function quchuZaoyin(s: string, toolName?: string): string {
 /**
  * 头尾保留 + 中部指针（ADR：工具输出先过 CCR 再进历史）
  */
-export function compress(input: CompressInput, budget = MOREN_YUSUAN): CompressOutput {
-  const raw = zhedieKongbai(quchuZaoyin(input.content, input.toolName));
-  const originalBytes = Buffer.byteLength(input.content, 'utf8');
+export function compress(shuRu: CompressInput, budget = MOREN_YUSUAN): CompressOutput {
+  const raw = zhedieKongbai(quchuZaoyin(shuRu.content, shuRu.toolName));
+  const originalBytes = Buffer.byteLength(shuRu.content, 'utf8');
   const buf = Buffer.byteLength(raw, 'utf8');
   if (buf <= budget) {
     return {
@@ -61,10 +61,10 @@ export function compress(input: CompressInput, budget = MOREN_YUSUAN): CompressO
   }
 
   const half = Math.floor(budget * 0.4);
-  const head = raw.slice(0, half);
+  const touBu = raw.slice(0, half);
   const tail = raw.slice(-Math.floor(budget * 0.35));
-  const zhongjianZijie = buf - Buffer.byteLength(head, 'utf8') - Buffer.byteLength(tail, 'utf8');
-  const content = `${head}\n\n… [CCR 省略 ${zhongjianZijie} 字节 / 可用 recall 取回] …\n\n${tail}`;
+  const zhongjianZijie = buf - Buffer.byteLength(touBu, 'utf8') - Buffer.byteLength(tail, 'utf8');
+  const content = `${touBu}\n\n… [CCR 省略 ${zhongjianZijie} 字节 / 可用 recall 取回] …\n\n${tail}`;
   const compressedBytes = Buffer.byteLength(content, 'utf8');
   return {
     content,
@@ -72,7 +72,7 @@ export function compress(input: CompressInput, budget = MOREN_YUSUAN): CompressO
     compressedBytes,
     ratio: originalBytes ? compressedBytes / originalBytes : 1,
     truncated: true,
-    pointers: [{ label: `${input.kind}:${input.toolName || 'body'}`, bytes: zhongjianZijie }],
+    pointers: [{ biaoQian: `${shuRu.kind}:${shuRu.toolName || 'ti'}`, bytes: zhongjianZijie }],
   };
 }
 
@@ -80,9 +80,9 @@ export function compress(input: CompressInput, budget = MOREN_YUSUAN): CompressO
 export class CcrGateway {
   constructor(private budget = MOREN_YUSUAN) {}
 
-  beforeLog(input: CompressInput): CompressOutput {
+  beforeLog(shuRu: CompressInput): CompressOutput {
     // 消息类少压缩，工具结果优先压缩（ADR：工具输出↓70% 目标）
-    const budget = input.kind === 'tool_result' ? this.budget : this.budget * 4;
-    return compress(input, budget);
+    const budget = shuRu.kind === 'tool_result' ? this.budget : this.budget * 4;
+    return compress(shuRu, budget);
   }
 }

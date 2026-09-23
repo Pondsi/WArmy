@@ -55,14 +55,14 @@ const css = fs.readFileSync(path.join(mobileDir, 'app.css'), 'utf8');
 const js = fs.readFileSync(path.join(mobileDir, 'app.js'), 'utf8');
 
 const globals = [
-  'window.__I18N__ = ' + JSON.stringify({ locale: defaultLocale, strings: all[defaultLocale] }) + ';',
+  'window.__I18N__ = ' + JSON.stringify({ yuYan: defaultLocale, strings: all[defaultLocale] }) + ';',
   'window.__I18N_ALL__ = ' + JSON.stringify(all) + ';',
   'window.__AVATARS__ = ' + JSON.stringify(avatars) + ';',
   'window.__LOGO__ = ' + JSON.stringify(logo) + ';',
 ].join('\n');
 
-html = html.replace(/<link rel="stylesheet" href="\.\/app\.css"\s*\/?>/, () => '<style>\n' + css + '\n</style>');
-html = html.replace(/<script src="\.\/app\.js"><\/script>/, () => '<script>\n' + globals + '\n' + js + '\n</script>');
+html = html.replace(/<link rel="stylesheet" href="\.\/yingYong\.css"\s*\/?>/, () => '<style>\n' + css + '\n</style>');
+html = html.replace(/<script src="\.\/yingYong\.js"><\/script>/, () => '<script>\n' + globals + '\n' + js + '\n</script>');
 
 fs.writeFileSync(path.join(outDir, outName), html, 'utf8');
 console.log('  ' + outName + '  (' + Math.round(html.length / 1024) + ' KB, 单文件自包含)');

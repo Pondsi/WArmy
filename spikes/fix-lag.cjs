@@ -1,7 +1,7 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
-let c = fs.readFileSync(base + 'app.css', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
+let c = fs.readFileSync(base + 'yingYong.css', 'utf8');
 
 // ══════════════════════════════════════════
 // 输入卡顿根因修复
@@ -31,12 +31,12 @@ if (!j.includes('__docClickBound')) {
 
 // 替换所有 document.addEventListener('click', ...) 为 onDocClick
 j = j.replace(
-  /document\.addEventListener\('click', \(\) => menu\.classList\.add\('hidden'\)\);/g,
-  "onDocClick(() => menu?.classList.add('hidden'));"
+  /document\.addEventListener\('click', \(\) => menu\.classList\.add\('yinCang'\)\);/g,
+  "onDocClick(() => menu?.classList.add('yinCang'));"
 );
 j = j.replace(
-  /document\.addEventListener\('click', \(\) => \$\('more-menu'\)\?\.classList\.add\('hidden'\)\);/g,
-  "onDocClick(() => $('more-menu')?.classList.add('hidden'));"
+  /document\.addEventListener\('click', \(\) => \$\('gengDuoCaiDan'\)\?\.classList\.add\('yinCang'\)\);/g,
+  "onDocClick(() => $('gengDuoCaiDan')?.classList.add('yinCang'));"
 );
 console.log('docClick leaks fixed');
 
@@ -112,13 +112,13 @@ j = j.replace(
 );
 console.log('console resizer leak fixed');
 
-// 根因4：body transition 导致每次样式变化都触发重绘
+// 根因4：ti transition 导致每次样式变化都触发重绘
 c = c.replace(
-  /body \{\n  transition: background 0\.2s ease, color 0\.2s ease;/,
-  'body {\n  /* 不对 body 加 transition，避免打字时重绘 */'
+  /ti \{\n  transition: background 0\.2s ease, color 0\.2s ease;/,
+  'ti {\n  /* 不对 ti 加 transition，避免打字时重绘 */'
 );
-console.log('body transition removed');
+console.log('ti transition removed');
 
-fs.writeFileSync(base + 'app.js', j);
-fs.writeFileSync(base + 'app.css', c);
+fs.writeFileSync(base + 'yingYong.js', j);
+fs.writeFileSync(base + 'yingYong.css', c);
 console.log('lag fixes done');

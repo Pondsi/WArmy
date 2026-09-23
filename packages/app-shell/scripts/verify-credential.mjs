@@ -9,9 +9,9 @@ import {shengchengPingzheng, formatCredential, normalizeCredential, isValidCrede
 import {fingerprintFromPublicKey} from '../dist/identity.js';
 
 let pass = 0, fail = 0;
-function check(label, ok, detail) {
-  if (ok) { pass++; console.log('  ok  ' + label); }
-  else { fail++; console.log('  FAIL ' + label, detail === undefined ? '' : ' => ' + JSON.stringify(detail).slice(0, 200)); }
+function check(biaoQian, ok, detail) {
+  if (ok) { pass++; console.log('  ok  ' + biaoQian); }
+  else { fail++; console.log('  FAIL ' + biaoQian, detail === undefined ? '' : ' => ' + JSON.stringify(detail).slice(0, 200)); }
 }
 
 const cred = shengchengPingzheng();

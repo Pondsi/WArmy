@@ -42,27 +42,27 @@ let pass = 0;
 let fail = 0;
 const failures = [];
 
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   const shown = detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
   if (cond) {
     pass++;
-    console.log(`  [PASS] ${label}${shown}`);
+    console.log(`  [PASS] ${biaoQian}${shown}`);
   } else {
     fail++;
-    failures.push(label);
-    console.log(`  [FAIL] ${label}${shown}`);
+    failures.push(biaoQian);
+    console.log(`  [FAIL] ${biaoQian}${shown}`);
   }
 }
 
-function section(title) {
-  console.log(`\n── ${title} ──`);
+function section(biaoTi) {
+  console.log(`\n── ${biaoTi} ──`);
 }
 
 /** 真跑一个命令（不经过 shell；返回码/输出都原样带出来） */
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
     cwd: opts.cwd,
-    input: opts.input,
+    shuRu: opts.shuRu,
     env: { ...process.env, ...(opts.env || {}) },
     encoding: 'utf8',
     windowsHide: true,
@@ -86,11 +86,11 @@ console.log(`hook: ${hookScript}`);
 section('1. 身份 ↔ 组网接缝（指纹推导 / 签名者 / 门控 / 名册）');
 
 /** 造一个真身份（口令保护 → 可控地"锁上/解开"） */
-function mkIdentity(name, passphrase) {
-  const dir = path.join(tmpRoot, `id-${name}`);
+function mkIdentity(ming, passphrase) {
+  const dir = path.join(tmpRoot, `id-${ming}`);
   fs.mkdirSync(dir, { recursive: true });
   const store = new ShenFenCang(path.join(dir, 'identity.json'), { protector: nullProtector() });
-  const created = store.ensureIdentity(`alias-${name}`, { email: `${name}@example.test` }, passphrase ? { passphrase } : {});
+  const created = store.ensureIdentity(`alias-${ming}`, { email: `${ming}@example.test` }, passphrase ? { passphrase } : {});
   // ensureIdentity 会把 DEK 放进会话缓存（= 刚创建完是"解锁"状态）；
   // 真实后台进程重启后**没有**这个缓存，所以这里显式 lock() 复现那个状态。
   store.lock();
@@ -152,7 +152,7 @@ check('signer.fingerprint === info.fingerprint', signerA.fingerprint === infoA?.
 
 const lockedSign = await signerA.sign(Buffer.from('while-locked')).then(
   () => ({ ok: true }),
-  (e) => ({ ok: false, name: e.name, code: e.code }),
+  (e) => ({ ok: false, ming: e.name, code: e.code }),
 );
 check('未解锁时 sign() 抛类型化错误 identity-locked（不是空签名）', lockedSign.ok === false && lockedSign.name === 'identity-locked', lockedSign);
 
@@ -167,8 +167,8 @@ check('解锁后 signReady() === true（会话内免口令，私钥仍不出主�
 const gateOpen = requireSignableIdentity(idA.store);
 check('门控：解锁后 ok=true', gateOpen.ok === true && gateOpen.unlock?.signReady === true, gateOpen.unlock);
 
-const msg = Buffer.from('warmy-wiring-verify-message', 'utf8');
-const sig = await signerA.sign(msg);
+const xiaoXi = Buffer.from('warmy-wiring-verify-message', 'utf8');
+const sig = await signerA.sign(xiaoXi);
 check('sign() 产 raw 64 字节 Ed25519 签名', Buffer.isBuffer(sig) && sig.length === 64, `${sig.length}B`);
 const privLoaded = idA.store.load();
 check('store.load() 的私钥确实对应 info.publicKey（指纹可复算）', publicKeyToB64(publicKeyOfPrivate(keyObjectFromPrivateDer(privLoaded.privateKeyDer))) === infoA?.publicKey);
@@ -180,17 +180,17 @@ check(
 
 // 用 node:crypto 独立复核（真验证：签名能被公钥验过）
 const pubObj = crypto.createPublicKey({ key: Buffer.from(String(infoA?.publicKey), 'base64'), format: 'der', type: 'spki' });
-check('node:crypto 用身份公钥验签通过', crypto.verify(null, msg, pubObj, sig) === true);
-check('独立复核：同一私钥重签亦通过', crypto.verify(null, msg, pubObj, crypto.sign(null, msg, keyObjectFromPrivateDer(privLoaded.privateKeyDer))) === true);
-check('signer.verify(msg, sig, SPKI b64) === true', signerA.verify(msg, sig, String(infoA?.publicKey)) === true);
-check('signer.verify(改过的 msg, sig) === false', signerA.verify(Buffer.from('tampered'), sig, String(infoA?.publicKey)) === false);
-check('signer.verify 无法解释的公钥 → null（"没验过"，不是"验过了"）', signerA.verify(msg, sig, Buffer.from([1, 2, 3])) === null);
+check('node:crypto 用身份公钥验签通过', crypto.verify(null, xiaoXi, pubObj, sig) === true);
+check('独立复核：同一私钥重签亦通过', crypto.verify(null, xiaoXi, pubObj, crypto.sign(null, xiaoXi, keyObjectFromPrivateDer(privLoaded.privateKeyDer))) === true);
+check('signer.verify(xiaoXi, sig, SPKI b64) === true', signerA.verify(xiaoXi, sig, String(infoA?.publicKey)) === true);
+check('signer.verify(改过的 xiaoXi, sig) === false', signerA.verify(Buffer.from('tampered'), sig, String(infoA?.publicKey)) === false);
+check('signer.verify 无法解释的公钥 → null（"没验过"，不是"验过了"）', signerA.verify(xiaoXi, sig, Buffer.from([1, 2, 3])) === null);
 
 const provider = chuangjianShenfenGongyingshang(idA.store);
 check('chuangjianShenfenGongyingshang 四字段齐备', typeof provider.sign === 'function' && typeof provider.verify === 'function' && !!provider.fingerprint && !!provider.publicKey);
-const providerSig = await provider.sign(msg);
+const providerSig = await provider.sign(xiaoXi);
 check('provider.sign 经组网层契约返回 64 字节签名', Buffer.isBuffer(providerSig) && providerSig.length === 64, `${providerSig.length}B`);
-check('provider.verify 通过', provider.verify(msg, providerSig, String(infoA?.publicKey)) === true);
+check('provider.verify 通过', provider.verify(xiaoXi, providerSig, String(infoA?.publicKey)) === true);
 
 // **核心接缝**：身份层指纹必须能被组网层接受；用默认推导必然失败
 const normalized = await normalizeIdentity(provider, { fingerprintDerivation: deriv });
@@ -198,7 +198,7 @@ check('组网层 normalizeIdentity 接受身份层指纹（注入 derivation）'
 check('归一化后的公钥被剥成 raw 32B', Buffer.isBuffer(normalized.publicKey) && normalized.publicKey.length === 32, normalized.publicKey.length);
 const withoutDeriv = await normalizeIdentity(provider).then(
   () => ({ threw: false }),
-  (e) => ({ threw: true, name: e.name, message: e.message }),
+  (e) => ({ threw: true, ming: e.name, message: e.message }),
 );
 check('不注入 derivation 时组网层拒收（这就是必须注入的原因）', withoutDeriv.threw === true, withoutDeriv.name);
 check('拒收原因写明期望/实际指纹不一致', /期望|mismatch|不符/.test(String(withoutDeriv.message)), String(withoutDeriv.message).slice(0, 140));
@@ -451,10 +451,10 @@ const dnsFail = await probeNet({ ip: 'no-such-host.invalid', port: 80, domains: 
 check('解析失败被如实记录（dnsErrors 非空）', (dnsFail.details?.dnsErrors?.length ?? 0) >= 2, dnsFail.details?.dnsErrors);
 
 const outbound = await checkOutbound(2000);
-check('checkOutbound 真的尝试了至少一个公网端点', outbound.attempts.length >= 1, outbound.attempts.map((a) => `${a.label}:${a.ok}`));
+check('checkOutbound 真的尝试了至少一个公网端点', outbound.attempts.length >= 1, outbound.attempts.map((a) => `${a.biaoQian}:${a.ok}`));
 check('checkOutbound 结论与尝试记录一致（ok ⇔ 有成功的尝试）', outbound.ok === outbound.attempts.some((a) => a.ok), summarizeProbe({ ok: true, isPublic: false, outboundOk: outbound.ok, inboundVerified: false }));
 if (outbound.ok) {
-  check('出站成功时给出方式（tcp:<label>）', String(outbound.method).startsWith('tcp:'), outbound.method);
+  check('出站成功时给出方式（tcp:<biaoQian>）', String(outbound.method).startsWith('tcp:'), outbound.method);
 } else {
   check('出站失败时给出逐端点原因（不空口说"不通"）', String(outbound.error).length > 0, outbound.error);
 }
@@ -525,7 +525,7 @@ check('已有别人的钩子时拒绝覆盖（hook-exists）', clobber.ok === fa
  */
 function mkCraft(container) {
   let seq = 0;
-  const raw = (args, input) => spawnSync('git', args, { cwd: container, input, encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
+  const raw = (args, shuRu) => spawnSync('git', args, { cwd: container, shuRu, encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
   const blob = (content) => {
     const r = raw(['hash-object', '-w', '--stdin'], content);
     if (r.status !== 0) throw new Error(`hash-object failed: ${r.stderr}`);
@@ -589,21 +589,21 @@ check('放行后服务端真的建出了该 ref', git(bare, ['rev-parse', '--ver
 
 // 危险路径（逐条真实 push）
 const dangerCases = [
-  { label: '.git/hooks/pre-receive', files: [{ path: '.git/hooks/pre-receive', content: '#!/bin/sh\necho pwned\n' }], expect: 'git-hooks' },
-  { label: '.git/config', files: [{ path: '.git/config', content: '[core]\n\thooksPath = /tmp/x\n' }], expect: 'git-config' },
-  { label: '嵌套 a/.git/x', files: [{ path: 'a/.git/x', content: 'x\n' }], expect: 'git-internal' },
-  { label: '.gitattributes 绑 filter 驱动', files: [{ path: '.gitattributes', content: '*.txt filter=evil\n' }], expect: 'git-attributes' },
-  { label: '大小写别名碰撞 A.txt + a.txt', files: [{ path: 'A.txt', content: '1\n' }, { path: 'a.txt', content: '2\n' }], expect: 'collision' },
+  { biaoQian: '.git/hooks/pre-receive', files: [{ path: '.git/hooks/pre-receive', content: '#!/bin/sh\necho pwned\n' }], expect: 'git-hooks' },
+  { biaoQian: '.git/config', files: [{ path: '.git/config', content: '[core]\n\thooksPath = /tmp/x\n' }], expect: 'git-config' },
+  { biaoQian: '嵌套 a/.git/x', files: [{ path: 'a/.git/x', content: 'x\n' }], expect: 'git-internal' },
+  { biaoQian: '.gitattributes 绑 filter 驱动', files: [{ path: '.gitattributes', content: '*.txt filter=evil\n' }], expect: 'git-attributes' },
+  { biaoQian: '大小写别名碰撞 A.txt + a.txt', files: [{ path: 'A.txt', content: '1\n' }, { path: 'a.txt', content: '2\n' }], expect: 'collision' },
 ];
 let dangerIdx = 0;
 for (const c of dangerCases) {
   dangerIdx += 1;
   const sha = craftWork.commitWithFiles(c.files, `danger ${dangerIdx}`);
   const res = git(work, ['push', bare, `${sha}:refs/heads/proposals/d${dangerIdx}`], { env: pushEnv });
-  check(`危险推送被拒：${c.label}`, res.code !== 0, `exit=${res.code}`);
-  check(`拒绝原因含 ${c.expect}：${c.label}`, new RegExp(c.expect).test(res.stderr), (/\[(path|batch|ref|enumerate)\/[a-z-]+\][^\n]*/.exec(res.stderr) || [''])[0].slice(0, 130));
-  check(`整批拒绝（服务端没有建出该 ref）：${c.label}`, git(bare, ['rev-parse', '--verify', '--quiet', `refs/heads/proposals/d${dangerIdx}`]).code !== 0);
-  check(`拒绝时打印 RESULT: rejected：${c.label}`, /RESULT: rejected/.test(res.stderr));
+  check(`危险推送被拒：${c.biaoQian}`, res.code !== 0, `exit=${res.code}`);
+  check(`拒绝原因含 ${c.expect}：${c.biaoQian}`, new RegExp(c.expect).test(res.stderr), (/\[(path|batch|ref|enumerate)\/[a-z-]+\][^\n]*/.exec(res.stderr) || [''])[0].slice(0, 130));
+  check(`整批拒绝（服务端没有建出该 ref）：${c.biaoQian}`, git(bare, ['rev-parse', '--verify', '--quiet', `refs/heads/proposals/d${dangerIdx}`]).code !== 0);
+  check(`拒绝时打印 RESULT: rejected：${c.biaoQian}`, /RESULT: rejected/.test(res.stderr));
 }
 
 // ref 规则
@@ -626,7 +626,7 @@ check('非快进更新提案分支被拒（isAncestor 判定生效）', nonFF.co
 
 // 直接用 stdin 喂钩子（三列格式）：退出码必须真的反映结果
 const hookViaStdin = (line, extraEnv = {}) =>
-  run(process.execPath, [hookScript], { env: { ...process.env, GIT_DIR: bare, ...pushEnv, ...extraEnv }, input: `${line}\n` });
+  run(process.execPath, [hookScript], { env: { ...process.env, GIT_DIR: bare, ...pushEnv, ...extraEnv }, shuRu: `${line}\n` });
 const stdinPass = hookViaStdin(`${ZERO} ${goodCommit} refs/heads/proposals/stdin-ok`);
 check('stdin 直接调用钩子：合法推送退出码 0', stdinPass.code === 0, stdinPass.stdout.trim().split('\n').filter(Boolean).slice(-1)[0]);
 check('stdin 调用打印 role/refs 摘要', /role=member/.test(stdinPass.stdout), /role=[^\n]*/.exec(stdinPass.stdout)?.[0]);
@@ -746,36 +746,36 @@ const mainSrc = fs.readFileSync(path.join(selfDir, '..', 'src', 'electron-main.t
 const preloadSrc = fs.readFileSync(path.join(selfDir, '..', 'src', 'preload.cjs'), 'utf8');
 
 const CHANNELS = [
-  'warmy:identity-changes',
-  'warmy:identity-change-ack',
-  'warmy:identity-peers',
-  'warmy:net-status',
-  'warmy:net-probe',
-  'warmy:net-local-address',
-  'warmy:net-members-presence',
-  'warmy:net-mesh-enable',
-  'warmy:net-mesh-disable',
-  'warmy:lan-start',
-  'warmy:lan-stop',
-  'warmy:lan-send',
-  'warmy:lan-inbox',
-  'warmy:lan-status',
-  'warmy:lan-dual-smoke',
-  'warmy:mesh-start',
-  'warmy:mesh-stop',
-  'warmy:mesh-broadcast',
-  'warmy:mesh-inbox',
-  'warmy:mesh-status',
-  'warmy:repo-guard-check-ref',
-  'warmy:repo-guard-check-paths',
-  'warmy:repo-guard-pre-receive',
-  'warmy:repo-guard-install-hooks',
-  'warmy:lease-acquire',
-  'warmy:lease-release',
-  'warmy:lease-list',
-  'warmy:lease-check',
+  'warmy:shenFenBianGengJi',
+  'warmy:shenFenBianGengQueRen',
+  'warmy:shenFenDuiDuanJi',
+  'warmy:wangLuoZhuangTai',
+  'warmy:wangLuoTanCe',
+  'warmy:wangLuoBenJiDiZhi',
+  'warmy:wangLuoChengYuanJiZaiChang',
+  'warmy:wangLuoWangZhuangQiYong',
+  'warmy:wangLuoWangZhuangTingYong',
+  'warmy:neiWangQiDong',
+  'warmy:neiWangTingZhi',
+  'warmy:neiWangFaSong',
+  'warmy:neiWangShouXiang',
+  'warmy:neiWangZhuangTai',
+  'warmy:neiWangShuangJiMaoYan',
+  'warmy:wangZhuangQiDong',
+  'warmy:wangZhuangTingZhi',
+  'warmy:wangZhuangGuangBo',
+  'warmy:wangZhuangShouXiang',
+  'warmy:wangZhuangZhuangTai',
+  'warmy:cangKuShouWeiJianChaYinYong',
+  'warmy:cangKuShouWeiJianChaLuJingJi',
+  'warmy:cangKuShouWeiYuXianJieShou',
+  'warmy:cangKuShouWeiAnZhuangGouZiJi',
+  'warmy:zuYueHuoQu',
+  'warmy:zuYueShiFang',
+  'warmy:zuYueLieBiao',
+  'warmy:zuYueJianCha',
 ];
-// handleIpc 允许换行写法（handleIpc(\n  'warmy:x', ...）→ 只要通道字面量出现在主进程即可
+// handleIpc 允许换行写法（handleIpc(\n  'warmy:neiBu', ...）→ 只要通道字面量出现在主进程即可
 const missingMain = CHANNELS.filter((c) => !mainSrc.includes(`'${c}'`));
 check('主进程至少注册了 28 个 handleIpc 调用', (mainSrc.match(/handleIpc\(/g) ?? []).length >= 28, (mainSrc.match(/handleIpc\(/g) ?? []).length);
 const missingPreload = CHANNELS.filter((c) => !preloadSrc.includes(`'${c}'`));
@@ -821,7 +821,7 @@ check('A 申请目录租约成功', acq1.ok === true && !!acq1.lease, acq1.error
 check('租约覆盖路径被归一化（src）', acq1.lease?.paths[0] === 'src', acq1.lease?.paths);
 check('A 写入自己租约覆盖的路径被放行', leases.checkWrite('fp-A', 'src/a.ts').allowed === true, leases.checkWrite('fp-A', 'src/a.ts').reason);
 
-const acq2 = leases.acquire({ holder: 'fp-B', kind: 'dir', scope: 'src/sub', paths: ['src/sub'], ttlMs: 60_000 });
+const acq2 = leases.acquire({ holder: 'fp-B', kind: 'dir', scope: 'src/fu', paths: ['src/fu'], ttlMs: 60_000 });
 check('B 申请同一「本体」下的重叠路径被拒（held-by-other）', acq2.ok === false && acq2.error?.code === 'held-by-other', acq2.error);
 check('被拒时给出当前持有者（可读原因）', (acq2.conflicts ?? []).some((c) => c.holder === 'fp-A'), acq2.conflicts);
 check(
@@ -837,7 +837,7 @@ check(
 check('大小写路径也视为同一文件（SRC/A.TS 被 A 的租约覆盖）', leases.checkWrite('fp-A', 'SRC/A.TS').allowed === true);
 
 clock += 61_000; // 过期
-const afterExpiry = leases.acquire({ holder: 'fp-B', kind: 'dir', scope: 'src/sub', paths: ['src/sub'], ttlMs: 60_000 });
+const afterExpiry = leases.acquire({ holder: 'fp-B', kind: 'dir', scope: 'src/fu', paths: ['src/fu'], ttlMs: 60_000 });
 check('租约过期后 B 可以拿到', afterExpiry.ok === true, afterExpiry.error);
 check('过期时 A 的写入被明确判为 expired（提示重新申请）', leases.checkWrite('fp-A', 'src/a.ts').code === 'expired', leases.checkWrite('fp-A', 'src/a.ts').reason);
 check('过期租约进了留痕（可审计）', leases.expiredHistory().length >= 1, leases.expiredHistory().length);
@@ -850,7 +850,7 @@ const crossRelease = leases.release({ holder: 'fp-B', leaseId: merged.lease?.id 
 check('越权释放别人的租约被拒（holder-mismatch）', crossRelease.ok === false && crossRelease.error?.code === 'holder-mismatch', crossRelease.error);
 const invalid = leases.acquire({ holder: 'fp-C', paths: ['../escape'] });
 check('非法路径的租约申请被拒（path-invalid）', invalid.ok === false && invalid.error?.code === 'path-invalid', invalid.error);
-check('stats 反映活跃租约数', leases.stats().active >= 1, leases.stats());
+check('stats 反映活跃租约数', leases.stats().jiHuo >= 1, leases.stats());
 const batch = leases.checkWriteBatch('fp-A', ['src/a.ts', 'src/b.ts']);
 check('批量写入门禁：全覆盖时放行', batch.allowed === true);
 const batchDeny = leases.checkWriteBatch('fp-D', ['docs/x.md']);

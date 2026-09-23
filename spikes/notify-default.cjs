@@ -1,32 +1,32 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
-let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/';
+let j = fs.readFileSync(base + 'renderer/yingYong.js', 'utf8');
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 
 // 1) 默认 notify=true：创建实例/群/联系人/演示数据
 j = j.replace(
-  "const inst = state.instances.find((x) => x.id === c.id) || { id: c.id, name: c.name, status: 'stopped', notify: false };",
-  "const inst = state.instances.find((x) => x.id === c.id) || { id: c.id, name: c.name, status: 'stopped', notify: true };"
+  "const inst = state.instances.find((x) => x.id === c.id) || { id: c.id, ming: c.name, status: 'stopped', notify: false };",
+  "const inst = state.instances.find((x) => x.id === c.id) || { id: c.id, ming: c.name, status: 'stopped', notify: true };"
 );
 // 创建牛马
 j = j.replace(
-  "        id: 'inst-' + Date.now(),\n        name,\n        status: 'stopped',\n        dutyEligible: true,",
-  "        id: 'inst-' + Date.now(),\n        name,\n        status: 'stopped',\n        dutyEligible: true,\n        notify: true,"
+  "        id: 'inst-' + Date.now(),\n        ming,\n        status: 'stopped',\n        dutyEligible: true,",
+  "        id: 'inst-' + Date.now(),\n        ming,\n        status: 'stopped',\n        dutyEligible: true,\n        notify: true,"
 );
 // 创建群
 j = j.replace(
-  "      state.groups.push({ id, name, type, members: [] });",
-  "      state.groups.push({ id, name, type, members: [], notify: true });"
+  "      state.groups.push({ id, ming, type, members: [] });",
+  "      state.groups.push({ id, ming, type, members: [], notify: true });"
 );
 // 添加联系人
 j = j.replace(
-  "      state.chats.push({ id: 'c-' + Date.now(), name, kind: 'extdm', lastPreview: t('list.noReply') });",
-  "      state.chats.push({ id: 'c-' + Date.now(), name, kind: 'extdm', lastPreview: t('list.noReply'), notify: true });"
+  "      state.chats.push({ id: 'c-' + Date.now(), ming, kind: 'extdm', lastPreview: t('list.noReply') });",
+  "      state.chats.push({ id: 'c-' + Date.now(), ming, kind: 'extdm', lastPreview: t('list.noReply'), notify: true });"
 );
 // 演示实例
 j = j.replace(
-  "          id: 'demo-1',\n          name: 'demo.agent',",
-  "          id: 'demo-1',\n          name: 'demo.agent',\n          notify: true,"
+  "          id: 'demo-1',\n          ming: 'demo.agent',",
+  "          id: 'demo-1',\n          ming: 'demo.agent',\n          notify: true,"
 );
 // 演示会话（board.sessions）
 j = j.replace(
@@ -35,8 +35,8 @@ j = j.replace(
 );
 // 给 demo sessions 加 notify
 j = j.replace(
-  "{ id: 's-internal-1', kind: 'internal', name: 'demo.project1', progress: 65, status: 'doing', blocked: false },",
-  "{ id: 's-internal-1', kind: 'internal', name: 'demo.project1', progress: 65, status: 'doing', blocked: false, notify: true },"
+  "{ id: 's-internal-1', kind: 'internal', ming: 'demo.project1', jinDu: 65, status: 'doing', blocked: false },",
+  "{ id: 's-internal-1', kind: 'internal', ming: 'demo.project1', jinDu: 65, status: 'doing', blocked: false, notify: true },"
 );
 
 // 2) shouldNotify 辅助函数
@@ -95,7 +95,7 @@ j = j.replace(
 // 5) 主进程邮件队列：根据 notify 决定是否入队
 m = m.replace(
   "    // 请求时邮件提醒（队列占位）\n    if (settingsStore?.load().emailOnRequest) {\n      const profile = accountStore?.loadProfile();\n      if (profile?.email) {\n        emailQueue.push({",
-  "    // 请求时邮件提醒：仅在该会话勾选了「提醒」时才入队\n    const notifyOk = (p1?.instances.list().find((x) => x.id === msg.groupId)?.dutyEligible !== false);\n    if (settingsStore?.load().emailOnRequest && notifyOk) {\n      const profile = accountStore?.loadProfile();\n      if (profile?.email) {\n        emailQueue.push({"
+  "    // 请求时邮件提醒：仅在该会话勾选了「提醒」时才入队\n    const notifyOk = (p1?.instances.list().find((x) => x.id === xiaoXi.groupId)?.dutyEligible !== false);\n    if (settingsStore?.load().emailOnRequest && notifyOk) {\n      const profile = accountStore?.loadProfile();\n      if (profile?.email) {\n        emailQueue.push({"
 );
 
 // 更精确：用 emailNotify.request 控制
@@ -104,6 +104,6 @@ m = m.replace(
   "    const sset = settingsStore?.load();\n    const emailOn = sset?.emailNotify?.request !== false || sset?.emailOnRequest;\n    if (emailOn && notifyOk) {\n      const profile = accountStore?.loadProfile();\n      if (profile?.email) {"
 );
 
-fs.writeFileSync(base + 'renderer/app.js', j);
+fs.writeFileSync(base + 'renderer/yingYong.js', j);
 fs.writeFileSync(base + 'electron-main.ts', m);
 console.log('done');

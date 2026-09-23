@@ -1,5 +1,5 @@
 /**
- * 真实 UI 核验：启动 Electron（带 CDP）→ 断言 rail/list 列可见、诊断在右栏、菜单项存在。
+ * 真实 UI 核验：启动 Electron（带 CDP）→ 断言 ceLan/list 列可见、诊断在右栏、菜单项存在。
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -45,7 +45,7 @@ async function main() {
     process.exit(2);
   }
   await sleep(3500);
-  const c = await attach(PORT, { label: 'ui-check', callTimeout: 15000 });
+  const c = await attach(PORT, { biaoQian: 'ui-check', callTimeout: 15000 });
   await c.send('Runtime.enable');
   await sleep(1500);
 
@@ -58,42 +58,42 @@ async function main() {
       return { exists:true, display:cs.display, visibility:cs.visibility, w:Math.round(r.width), h:Math.round(r.height) };
     };
     return {
-      appBodyHideList: !!document.getElementById('app-body')?.classList.contains('hide-list'),
-      rail: vis('#rail'),
-      listCol: vis('#list-col'),
-      mainCol: vis('#main-col'),
-      panelCol: vis('#panel-col'),
-      tree: vis('#list-col .list-body'),
-      watermark: vis('#list-watermark'),
-      diagBtn: vis('#btn-console'),
-      consolePaneInPanel: !!document.querySelector('#panel-col #console-pane'),
-      scrollBtn: vis('#scroll-bottom-btn'),
-      bubble: vis('#new-msg-bubble'),
-      menuAuto: !!document.getElementById('mi-autoscroll'),
-      menuDirected: !!document.getElementById('mi-directed'),
-      inputMax: (document.getElementById('input')||{}).getAttribute ? document.getElementById('input').getAttribute('maxlength') : null,
+      appBodyHideList: !!document.getElementById('yingYongTi')?.classList.contains('yinCangLieBiao'),
+      ceLan: vis('#ceLan'),
+      listCol: vis('#lieBiaoLan'),
+      mainCol: vis('#zhuLan'),
+      panelCol: vis('#mianBanLan'),
+      tree: vis('#lieBiaoLan .lieBiaoTi'),
+      watermark: vis('#lieBiaoWatermark'),
+      diagBtn: vis('#anNiuKongZhiTai'),
+      consolePaneInPanel: !!document.querySelector('#mianBanLan #kongZhiTaiMianBan'),
+      scrollBtn: vis('#scrollDiAnNiu'),
+      bubble: vis('#newXiaoXiBubble'),
+      menuAuto: !!document.getElementById('caiDanTuBiaoAutoscroll'),
+      menuDirected: !!document.getElementById('caiDanTuBiaoDingXiang'),
+      inputMax: (document.getElementById('shuRu')||{}).getAttribute ? document.getElementById('shuRu').getAttribute('maxlength') : null,
       watermarkAfter: (function(){
         try {
-          const lc = document.getElementById('list-col');
+          const lc = document.getElementById('lieBiaoLan');
           if (!lc) return 'no-el';
           const cs = getComputedStyle(lc, '::after');
           return { bg: cs.backgroundImage, opacity: cs.opacity, h: cs.height };
         } catch (e) { return 'err:' + e.message; }
       })(),
-      ctxBtn: !!document.getElementById('btn-ctx'),
-      summaryBtn: !!document.getElementById('btn-gen-summary'),
-      autoSummary: !!document.getElementById('auto-summary-toggle'),
-      ctxSlider: !!document.getElementById('ctx-slider'),
-      menuStopGone: !document.getElementById('mi-stop'),
-      menuMarks: document.querySelectorAll('#more-menu .mark').length,
+      ctxBtn: !!document.getElementById('anNiuShangXiaWen'),
+      summaryBtn: !!document.getElementById('anNiuGenZhaiYao'),
+      autoSummary: !!document.getElementById('ziDongZhaiYaoKaiGuan'),
+      ctxSlider: !!document.getElementById('shangXiaWenSlider'),
+      menuStopGone: !document.getElementById('caiDanTuBiaoTingZhi'),
+      menuMarks: document.querySelectorAll('#gengDuoCaiDan .mark').length,
     };
   })()`);
   console.log(JSON.stringify(dom, null, 2));
 
-  check('rail 可见（宽>0）', dom.rail.exists && dom.rail.display !== 'none' && dom.rail.w > 0, dom.rail);
-  check('list-col 可见（宽>0）', dom.listCol.exists && dom.listCol.display !== 'none' && dom.listCol.w > 100, dom.listCol);
-  check('main-col 存在', dom.mainCol.exists, dom.mainCol);
-  check('诊断事件流在右栏 (#panel-col #console-pane)', dom.consolePaneInPanel === true);
+  check('ceLan 可见（宽>0）', dom.ceLan.exists && dom.ceLan.display !== 'none' && dom.ceLan.w > 0, dom.ceLan);
+  check('lieBiaoLan 可见（宽>0）', dom.listCol.exists && dom.listCol.display !== 'none' && dom.listCol.w > 100, dom.listCol);
+  check('zhuLan 存在', dom.mainCol.exists, dom.mainCol);
+  check('诊断事件流在右栏 (#mianBanLan #kongZhiTaiMianBan)', dom.consolePaneInPanel === true);
   check('下箭头按钮存在', dom.scrollBtn.exists === true, dom.scrollBtn);
   check('新消息气泡存在', dom.bubble.exists === true, dom.bubble);
   check('菜单含自动滚动项', dom.menuAuto === true);

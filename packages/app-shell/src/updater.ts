@@ -1,8 +1,8 @@
 /**
  * 自动更新：真实查询 + 真实下载（校验），不伪装成功
  *
- * 之前 `warmy:check-update` 恒定返回 { ok:true, upToDate:true }，
- * `warmy:auto-update-check/download` 是「no release channel configured」占位。
+ * 之前 `warmy:jianChaGengXin` 恒定返回 { ok:true, upToDate:true }，
+ * `warmy:ziDongGengXinJianCha/download` 是「no release channel configured」占位。
  * 这里做成可验证的真实实现：
  *
  * 1. 更新源可配置（优先 settings.json 的 updateFeedUrl，其次环境变量），未配置时
@@ -16,9 +16,9 @@
  *   A. 通用 JSON：{ "version": "0.2.0", "url": "https://…/WArmy-0.2.0.exe",
  *                   "sha256": "…", "size": 12345, "notes": "…", "mandatory": false }
  *      （也接受 latest/latestVersion、downloadUrl/download_url/asset、checksum/hash、
- *        sizeBytes/bytes、releaseNotes/body、force、publishedAt/published_at/date）
- *   B. GitHub Releases 风格：{ "tag_name": "v0.2.0", "body": "…",
- *      "assets": [{ "name": "…", "browser_download_url": "…", "size": 123 }] }
+ *        sizeBytes/bytes、releaseNotes/ti、force、publishedAt/published_at/date）
+ *   B. GitHub Releases 风格：{ "tag_name": "v0.2.0", "ti": "…",
+ *      "assets": [{ "ming": "…", "browser_download_url": "…", "size": 123 }] }
  *      （也接受 /releases 数组，取第一个非 draft 条目）
  *
  * 本模块不依赖 electron，可直接用 node 跑验证脚本。
@@ -37,7 +37,7 @@ export type UpdateStatus =
   | 'invalid-response'
   | 'updater-unavailable';
 
-/** electron-updater 风格状态，保留给 warmy:auto-update-check */
+/** electron-updater 风格状态，保留给 warmy:ziDongGengXinJianCha */
 export type AutoUpdateStatus = 'available' | 'not-available' | 'error' | 'not-configured' | 'unavailable';
 
 export type XiazaiZhuangtai =
@@ -67,7 +67,7 @@ export interface GengXinJianChaJieGuo {
   status: UpdateStatus;
   autoUpdateStatus: AutoUpdateStatus;
   currentVersion: string;
-  /** 兼容旧 `warmy:check-update` 的 { version } 字段：当前版本 */
+  /** 兼容旧 `warmy:jianChaGengXin` 的 { version } 字段：当前版本 */
   version: string;
   latestVersion?: string;
   updateAvailable?: boolean;
@@ -103,9 +103,9 @@ export interface GengXinXiaZaiJieGuo {
   bytes?: number;
   sha256?: string;
   expectedSha256?: string;
-  expectedSize?: number;
+  yuqiDaxiao?: number;
   verification: YanzhengMoshi;
-  verified: boolean;
+  yiYanZheng: boolean;
   warning?: string;
   /** 安装路径未实现：显式标记，避免看起来可用 */
   installImplemented: false;
@@ -123,7 +123,7 @@ export interface GengXinYuanXinXi {
   currentVersion: string;
   error?: string;
   lastCheck?: { status: UpdateStatus; latestVersion?: string; checkedAt: number } | null;
-  lastDownload?: { status: XiazaiZhuangtai; version?: string; verified?: boolean; checkedAt: number } | null;
+  lastDownload?: { status: XiazaiZhuangtai; version?: string; yiYanZheng?: boolean; checkedAt: number } | null;
 }
 
 export interface GengxinqiXuanxiang {
@@ -143,7 +143,7 @@ export interface GengxinqiXuanxiang {
   /** 下载硬上限（默认 512MB） */
   maxBytes?: number;
   userAgent?: string;
-  log?: (msg: string) => void;
+  log?: (xiaoXi: string) => void;
 }
 
 interface LuopanZhuangtai {
@@ -174,12 +174,12 @@ const AUTO_STATUS: Record<UpdateStatus, AutoUpdateStatus> = {
 
 const DEFAULT_MESSAGE: Record<UpdateStatus, string> = {
   'not-configured': 'update feed url is not configured',
-  'up-to-date': 'already on the latest version',
+  'up-to-date': 'already using the latest version',
   'update-available': 'a newer version is available',
   'network-error': 'update check failed: network error',
   'http-error': 'update check failed: unexpected http status',
   'invalid-response': 'update check failed: feed response is not a valid manifest',
-  'updater-unavailable': 'updater is not ready (app still starting)',
+  'updater-unavailable': 'updater is not ready (yingYong still starting)',
 };
 
 const DEFAULT_MAX_BYTES = 512 * 1024 * 1024;
@@ -189,8 +189,8 @@ const DEFAULT_DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 const MANIFEST_MAX_BYTES = 1024 * 1024;
 
 /** 宽松 semver 解析：可选 v 前缀 + 1~3 段数字 + 可选预发布串 */
-export function jieXiBanBen(input: string): { nums: number[]; pre: string[] } | null {
-  const v = String(input || '').trim().replace(/^v/i, '');
+export function jieXiBanBen(shuRu: string): { nums: number[]; pre: string[] } | null {
+  const v = String(shuRu || '').trim().replace(/^v/i, '');
   if (!v) return null;
   const m = v.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+]([0-9A-Za-z.-]+))?$/);
   if (!m) return null;
@@ -212,8 +212,8 @@ export function bijiaoBanben(a: string, b: string): number | null {
   if (!va.pre.length && !vb.pre.length) return 0;
   if (!va.pre.length) return 1; // 正式版 > 预发布版
   if (!vb.pre.length) return -1;
-  const len = Math.max(va.pre.length, vb.pre.length);
-  for (let i = 0; i < len; i++) {
+  const changdu = Math.max(va.pre.length, vb.pre.length);
+  for (let i = 0; i < changdu; i++) {
     const x = va.pre[i];
     const y = vb.pre[i];
     if (x === undefined) return -1;
@@ -229,7 +229,7 @@ export function bijiaoBanben(a: string, b: string): number | null {
   return 0;
 }
 
-/** 更新源地址校验：只接受 http(s)，不接受内嵌凭据 */
+/** 更新源地址校验：远程只接受 https；http 仅放行环回（本机测试）。不接受内嵌凭据 */
 export function jiaoyanGengxinyuanUrl(raw: string): { ok: true; url: string } | { ok: false; error: string } {
   const s = String(raw || '').trim();
   if (!s) return { ok: false, error: 'feed url is empty' };
@@ -238,6 +238,11 @@ export function jiaoyanGengxinyuanUrl(raw: string): { ok: true; url: string } | 
     u = new URL(s);
   } catch {
     return { ok: false, error: 'feed url is not a valid URL' };
+  }
+  const h = u.hostname;
+  const isLoopback = h === '127.0.0.1' || h === 'localhost' || h === '[::1]' || h === '::1';
+  if (u.protocol === 'http:' && !isLoopback) {
+    return { ok: false, error: 'feed url must use https (http refused)' };
   }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') {
     return { ok: false, error: 'feed url must be http(s)' };
@@ -261,18 +266,18 @@ function settingsFeed(settings: unknown): { url: string; channel: string } | nul
   if (!settings || typeof settings !== 'object') return null;
   const s = settings as Record<string, unknown>;
   const update = s['update'] && typeof s['update'] === 'object' ? (s['update'] as Record<string, unknown>) : null;
-  const updates = s['updates'] && typeof s['updates'] === 'object' ? (s['updates'] as Record<string, unknown>) : null;
+  const gengxin = s['updates'] && typeof s['updates'] === 'object' ? (s['updates'] as Record<string, unknown>) : null;
   const candidates = [
     s['updateFeedUrl'],
     s['updateUrl'],
     update?.['feedUrl'],
     update?.['url'],
-    updates?.['url'],
-    updates?.['feedUrl'],
+    gengxin?.['url'],
+    gengxin?.['feedUrl'],
   ];
   for (const c of candidates) {
     if (typeof c === 'string' && c.trim()) {
-      const ch = [s['updateChannel'], update?.['channel'], updates?.['channel']].find((x) => typeof x === 'string' && x);
+      const ch = [s['updateChannel'], update?.['channel'], gengxin?.['channel']].find((x) => typeof x === 'string' && x);
       return { url: c.trim(), channel: typeof ch === 'string' ? ch : '' };
     }
   }
@@ -343,11 +348,11 @@ export function guiFanHuaGengXinQingDan(
   let assetSize: number | undefined;
   for (const a of assets) {
     if (!a || typeof a !== 'object') continue;
-    const rec = a as Record<string, unknown>;
-    const u = zifuchuan(rec['browser_download_url']) || zifuchuan(rec['url']);
+    const jiLu = a as Record<string, unknown>;
+    const u = zifuchuan(jiLu['browser_download_url']) || zifuchuan(jiLu['url']);
     if (u) {
       assetUrl = u;
-      assetSize = shuZhi(rec['size']);
+      assetSize = shuZhi(jiLu['size']);
       break;
     }
   }
@@ -373,7 +378,7 @@ export function guiFanHuaGengXinQingDan(
   if (size !== undefined && size <= 0) return { ok: false, reason: 'bad-size' };
 
   const manifest: GengXinQingDan = { version };
-  const notes = zifuchuan(obj['notes']) || zifuchuan(obj['releaseNotes']) || zifuchuan(obj['body']) || zifuchuan(obj['changelog']);
+  const notes = zifuchuan(obj['notes']) || zifuchuan(obj['releaseNotes']) || zifuchuan(obj['ti']) || zifuchuan(obj['changelog']);
   if (notes) manifest.notes = notes.slice(0, 4000);
   if (downloadUrl) manifest.downloadUrl = downloadUrl;
   if (sha256) manifest.sha256 = sha256;
@@ -393,8 +398,8 @@ export function guileiHuoquCuowu(e: unknown): { reason: string; message: string 
     const c2 = anyE?.cause && typeof anyE.cause.code === 'string' ? anyE.cause.code : '';
     return c1 || c2;
   })();
-  const name = e instanceof Error ? e.name : '';
-  if (name === 'AbortError' || code === 'ABORT_ERR') return { reason: 'timeout', message: 'update check timed out' };
+  const ming = e instanceof Error ? e.name : '';
+  if (ming === 'AbortError' || code === 'ABORT_ERR') return { reason: 'timeout', message: 'update check timed out' };
   switch (code) {
     case 'ENOTFOUND':
     case 'EAI_AGAIN':
@@ -473,7 +478,7 @@ export class Gengxinqi {
   private readonly downloadTimeoutMs: number;
   private readonly maxBytes: number;
   private readonly userAgent: string;
-  private readonly log: (msg: string) => void;
+  private readonly log: (xiaoXi: string) => void;
 
   constructor(opts: GengxinqiXuanxiang) {
     this.currentVersion = opts.currentVersion || '0.0.0';
@@ -534,7 +539,7 @@ export class Gengxinqi {
         ? {
             status: st.lastDownload.status,
             ...(st.lastDownload.version ? { version: st.lastDownload.version } : {}),
-            verified: st.lastDownload.verified,
+            yiYanZheng: st.lastDownload.yiYanZheng,
             checkedAt: st.lastDownload.checkedAt,
           }
         : null,
@@ -578,7 +583,7 @@ export class Gengxinqi {
       message: huituiXiaoxi,
       i18nKey: base,
       verification: 'none',
-      verified: false,
+      yiYanZheng: false,
       installImplemented: false,
       installNotes,
       downloadUrlPresent: false,
@@ -604,7 +609,7 @@ export class Gengxinqi {
 
     let res: Response;
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), this.timeoutMs);
+    const jiShiQi = setTimeout(() => ac.abort(), this.timeoutMs);
     try {
       res = await this.fetchImpl(src.url, {
         method: 'GET',
@@ -613,7 +618,7 @@ export class Gengxinqi {
         signal: ac.signal,
       });
     } catch (e) {
-      clearTimeout(timer);
+      clearTimeout(jiShiQi);
       const c = guileiHuoquCuowu(e);
       this.log(`update check network fail: ${c.reason}`);
       const r = this.result('network-error', {
@@ -624,7 +629,7 @@ export class Gengxinqi {
       this.persistCheck(r);
       return r;
     }
-    clearTimeout(timer);
+    clearTimeout(jiShiQi);
 
     if (!res.ok) {
       const r = this.result('http-error', {
@@ -792,10 +797,10 @@ export class Gengxinqi {
     }
 
     const expectedSha256 = chk.sha256 ? chk.sha256.toLowerCase() : undefined;
-    const expectedSize = chk.size;
+    const yuqiDaxiao = chk.size;
 
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), this.downloadTimeoutMs);
+    const jiShiQi = setTimeout(() => ac.abort(), this.downloadTimeoutMs);
     let res: Response;
     try {
       res = await this.fetchImpl(v.url, {
@@ -805,7 +810,7 @@ export class Gengxinqi {
         signal: ac.signal,
       });
     } catch (e) {
-      clearTimeout(timer);
+      clearTimeout(jiShiQi);
       const c = guileiHuoquCuowu(e);
       this.log(`update download network fail: ${c.reason}`);
       return this.dlResult('network-error', {
@@ -817,7 +822,7 @@ export class Gengxinqi {
     }
 
     if (!res.ok) {
-      clearTimeout(timer);
+      clearTimeout(jiShiQi);
       return this.dlResult('http-error', {
         durationMs: Date.now() - started,
         version,
@@ -828,7 +833,7 @@ export class Gengxinqi {
 
     const shengming = Number(res.headers.get('content-length') || '0');
     if (Number.isFinite(shengming) && shengming > this.maxBytes) {
-      clearTimeout(timer);
+      clearTimeout(jiShiQi);
       ac.abort();
       return this.dlResult('too-large', {
         durationMs: Date.now() - started,
@@ -843,9 +848,9 @@ export class Gengxinqi {
     let tooLarge = false;
     const ws = fs.createWriteStream(bufenLujing);
     try {
-      const body = res.body as unknown as AsyncIterable<Uint8Array> | null;
-      if (!body) throw new Error('empty body');
-      for await (const chunk of body) {
+      const shuJuLiu = res.body as unknown as AsyncIterable<Uint8Array> | null;
+      if (!shuJuLiu) throw new Error('empty body');
+      for await (const chunk of shuJuLiu) {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         bytes += buf.length;
         if (bytes > this.maxBytes) {
@@ -872,7 +877,7 @@ export class Gengxinqi {
       }
       if (!tooLarge) await new Promise<void>((resolve, reject) => ws.end(() => resolve()).once('error', reject));
     } catch (e) {
-      clearTimeout(timer);
+      clearTimeout(jiShiQi);
       await diuqiBufen(ws, bufenLujing);
       const c = guileiHuoquCuowu(e);
       this.log(`update download aborted: ${c.reason}`);
@@ -883,7 +888,7 @@ export class Gengxinqi {
         message: bytes > 0 ? 'download interrupted while writing to disk' : c.message,
       });
     }
-    clearTimeout(timer);
+    clearTimeout(jiShiQi);
 
     if (tooLarge) {
       await diuqiBufen(ws, bufenLujing);
@@ -898,11 +903,11 @@ export class Gengxinqi {
 
     const actualSha256 = hash.digest('hex');
     const verification: YanzhengMoshi =
-      expectedSha256 && expectedSize !== undefined
+      expectedSha256 && yuqiDaxiao !== undefined
         ? 'sha256+size'
         : expectedSha256
           ? 'sha256'
-          : expectedSize !== undefined
+          : yuqiDaxiao !== undefined
             ? 'size'
             : 'none';
 
@@ -920,13 +925,28 @@ export class Gengxinqi {
         i18nKey: 'update.download.checksumMismatch',
       });
     }
-    if (expectedSize !== undefined && bytes !== expectedSize) {
+    // 供应链：feed 未声明 sha256 时**不落盘**（自证哈希等于没证）
+    if (verification === 'none' || verification === 'size') {
+      await diuqiBufen(ws, bufenLujing);
+      return this.dlResult('checksum-mismatch', {
+        durationMs: Date.now() - started,
+        version,
+        bytes,
+        sha256: actualSha256,
+        verification,
+        downloadUrlPresent: true,
+        message: 'feed did not declare sha256: artifact discarded (refuse unverified keep)',
+        i18nKey: 'update.download.checksumMismatch',
+        warning: 'unverified artifact discarded',
+      });
+    }
+    if (yuqiDaxiao !== undefined && bytes !== yuqiDaxiao) {
       await diuqiBufen(ws, bufenLujing);
       return this.dlResult('size-mismatch', {
         durationMs: Date.now() - started,
         version,
         bytes,
-        expectedSize,
+        yuqiDaxiao,
         sha256: actualSha256,
         expectedSha256,
         verification,
@@ -956,17 +976,14 @@ export class Gengxinqi {
       bytes,
       sha256: actualSha256,
       ...(expectedSha256 ? { expectedSha256 } : {}),
-      ...(expectedSize !== undefined ? { expectedSize } : {}),
+      ...(yuqiDaxiao !== undefined ? { yuqiDaxiao } : {}),
       verification,
-      verified: verification !== 'none',
+      yiYanZheng: true,
       downloadUrlPresent: true,
       message: `artifact downloaded (${bytes} bytes)`,
       i18nKey: 'update.download.done',
-      ...(verification === 'none'
-        ? { warning: 'feed did not declare sha256/size: artifact could not be verified' }
-        : {}),
     });
-    this.log(`update downloaded ${version} verified=${out.verified}`);
+    this.log(`update downloaded ${version} verified=${out.yiYanZheng}`);
     this.persistDownload(out);
     return out;
   }
@@ -1014,7 +1031,7 @@ export function gengXinqiBuKeYongXiaZai(currentVersion: string): GengXinXiaZaiJi
     message: DEFAULT_MESSAGE['updater-unavailable'],
     i18nKey: I18N_KEY['updater-unavailable'],
     verification: 'none',
-    verified: false,
+    yiYanZheng: false,
     installImplemented: false,
     installNotes:
       'automatic installation is not implemented: the verified artifact is kept on disk for a manual install',

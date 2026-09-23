@@ -36,12 +36,12 @@ const SKIP_ELECTRON = argv.includes('--no-electron');
 
 let failures = 0;
 const failuresList = [];
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   if (!cond) {
     failures++;
-    failuresList.push(label);
+    failuresList.push(biaoQian);
   }
-  console.log(`  [${cond ? 'PASS' : 'FAIL'}] ${label}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+  console.log(`  [${cond ? 'PASS' : 'FAIL'}] ${biaoQian}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sha = (s) => crypto.createHash('sha256').update(String(s), 'utf8').digest('hex');
@@ -67,7 +67,7 @@ console.log(`providers=${distProviders}`);
 console.log(`renderer=${distRenderer}\n`);
 
 /** OpenAI 兼容的 tool_calls 响应 */
-function toolCallResponse(id, name, args) {
+function toolCallResponse(id, ming, args) {
   return {
     id: 'chatcmpl-' + id,
     model: 'mock',
@@ -77,7 +77,7 @@ function toolCallResponse(id, name, args) {
         message: {
           role: 'assistant',
           content: null,
-          tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }],
+          tool_calls: [{ id, type: 'function', function: { name: ming, arguments: JSON.stringify(args) } }],
         },
         finish_reason: 'tool_calls',
       },
@@ -93,21 +93,21 @@ function textResponse(text) {
     usage: { prompt_tokens: 120, completion_tokens: 30 },
   };
 }
-/** 起一个真 HTTP mock 模型；handler(body, res) 决定回什么 */
+/** 起一个真 HTTP mock 模型；handler(ti, res) 决定回什么 */
 async function startModelServer(handler) {
   const state = { requests: [] };
   const server = http.createServer((req, res) => {
     let raw = '';
     req.on('data', (c) => (raw += c));
     req.on('end', () => {
-      let body = {};
+      let ti = {};
       try {
-        body = JSON.parse(raw || '{}');
+        ti = JSON.parse(raw || '{}');
       } catch {
         /* 忽略 */
       }
-      state.requests.push({ path: req.url, body });
-      const out = handler(body, state);
+      state.requests.push({ path: req.url, ti });
+      const out = handler(ti, state);
       if (out && out.__httpStatus) {
         res.writeHead(out.__httpStatus, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: { message: out.__error || 'error' } }));
@@ -121,7 +121,7 @@ async function startModelServer(handler) {
   return { server, state, base: `http://127.0.0.1:${port}/v1`, ollamaBase: `http://127.0.0.1:${port}` };
 }
 
-const toolMsgsOf = (body) => (body.messages || []).filter((m) => m.role === 'tool');
+const toolMsgsOf = (ti) => (ti.xiaoXiJi || []).filter((m) => m.role === 'tool');
 
 // ══════════════════════════════════════════════════════════════
 // [0] 真记忆服务（MemoryClient 子进程）—— 工具执行器的真实后端
@@ -154,7 +154,7 @@ check('工具清单 = recall + retrieve（且描述说清何时用/入参/返回
 check(
   '工具描述包含「何时用」与入参说明（模型可见）',
   specs.every((s) => (s.function.description || '').length > 60 && s.function.parameters && Object.keys(s.function.parameters.properties || {}).length >= 1),
-  specs.map((s) => ({ name: s.function.name, descChars: (s.function.description || '').length, params: Object.keys(s.function.parameters.properties || {}) }))
+  specs.map((s) => ({ ming: s.function.name, descChars: (s.function.description || '').length, params: Object.keys(s.function.parameters.properties || {}) }))
 );
 
 // 写入真实记录：一条带唯一标记的长正文（会被挤出视图），若干背景记录
@@ -166,23 +166,23 @@ let markerBody = '';
 for (let i = 0; i < N; i++) {
   const id = `m-${Date.now()}-${i + 1}`;
   const isMarker = i === N - 3;
-  const body = isMarker
+  const ti = isMarker
     ? `值班者状态机｜上下文有界渲染器｜工具调用全链路验证\nMARKER-${sha16('marker-' + i)}\n` + 'Z'.repeat(600) + '\nMARKER-END'
     : `背景记录 ${i}｜值班者状态机与有界渲染器\npayload-${i}-` + 'X'.repeat(200) + `-end-${i}`;
-  const rec = await memory.append({ id, sessionId: 's-tools', kind: 'message', body }, 'duty');
-  bodies.set(id, { body, seq: Number(rec.seq), role: i % 2 === 0 ? 'user' : 'assistant' });
+  const rec = await memory.append({ id, sessionId: 's-tools', kind: 'message', ti }, 'duty');
+  bodies.set(id, { ti, seq: Number(rec.seq), role: i % 2 === 0 ? 'user' : 'assistant' });
   if (isMarker) {
     markerSeq = Number(rec.seq);
     markerId = id;
-    markerBody = body;
+    markerBody = ti;
   }
 }
 check('真记忆服务写入 24 条记录（含一条带标记的长正文）', bodies.size === N && markerSeq > 0 && !!markerId, { records: bodies.size, markerSeq, markerChars: markerBody.length });
 
 // 视图：小预算 → 标记那条必然被挤出视图（只留指针）
-const log = [...bodies.entries()].map(([id, v]) => ({ seq: v.seq, role: v.role, content: v.body, recordId: id }));
+const log = [...bodies.entries()].map(([id, v]) => ({ seq: v.seq, role: v.role, content: v.ti, recordId: id }));
 const view = renderBoundedView(log, { budgetChars: 900, recallHint: '值班者状态机' });
-const viewText = view.messages.map((m) => m.content).join('\n');
+const viewText = view.xiaoXiJi.map((m) => m.content).join('\n');
 check('视图确实把标记正文挤出去了（只剩指针）', view.elided.length > 0 && !viewText.includes('MARKER-END'), {
   viewBytes: view.stats.viewBytes,
   pointers: view.stats.pointers,
@@ -195,8 +195,8 @@ check('视图确实把标记正文挤出去了（只剩指针）', view.elided.l
 console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给模型 → 终答');
 {
   const events = [];
-  const mock = await startModelServer((body, state) => {
-    const toolMsgs = toolMsgsOf(body);
+  const mock = await startModelServer((ti, state) => {
+    const toolMsgs = toolMsgsOf(ti);
     if (toolMsgs.length === 0) {
       // 第 1 轮：模型只看到"指针"，先按语义线索 recall
       return toolCallResponse('call-recall-1', 'recall', { query: '值班者状态机', limit: 5 });
@@ -219,11 +219,11 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
   const provider = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
   const loop = await liaoTianDaiGongJu(
     provider,
-    { model: 'mock', messages: view.messages, maxTokens: 256, tools: specs },
+    { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 256, tools: specs },
     (call, ctx) => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }).then((r) => r.content),
     { maxRounds: 4, onEvent: (e) => events.push(e) }
   );
-  const reqs = mock.state.requests.map((r) => r.body);
+  const reqs = mock.state.requests.map((r) => r.ti);
   const finalText = loop.response.choices[0]?.message?.content || '';
 
   check('模型请求带 tools（recall/retrieve 真的暴露给了模型）', Array.isArray(reqs[0]?.tools) && reqs[0].tools.length === 2, (reqs[0]?.tools || []).map((t) => t.function?.name));
@@ -241,7 +241,7 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
   });
   const r3 = toolMsgsOf(reqs[2] || {})[toolMsgsOf(reqs[2] || {}).length - 1];
   const retrievedRaw = (/——原文——\n([\s\S]*?)(?:\n…\[本段到此为止|$)/.exec(String(r3?.content || '')) || [])[1] || '';
-  const wantBody = bodies.get(mock.state.parsedRecordId)?.body;
+  const wantBody = bodies.get(mock.state.parsedRecordId)?.ti;
   check('retrieve 的结果逐字节等于写入记忆的原文', !!wantBody && retrievedRaw === wantBody, {
     recordId: mock.state.parsedRecordId,
     gotChars: retrievedRaw.length,
@@ -290,7 +290,7 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
 
   // 超长记录分段取回：逐字节可拼回全文
   const longBody = '分段取回验证｜' + 'P'.repeat(9000) + '｜END';
-  const longRec = await memory.append({ id: `m-${Date.now()}-pager`, sessionId: 's-tools', kind: 'message', body: longBody }, 'duty');
+  const longRec = await memory.append({ id: `m-${Date.now()}-pager`, sessionId: 's-tools', kind: 'message', ti: longBody }, 'duty');
   const longId = `m-${Date.now()}-pager`;
   let assembled = '';
   let offset = 0;
@@ -326,20 +326,20 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
 // ══════════════════════════════════════════════════════════════
 console.log('\n[2] 最大轮数生效（模型一直要工具）');
 {
-  const mock = await startModelServer((body) => {
-    const n = toolMsgsOf(body).length;
+  const mock = await startModelServer((ti) => {
+    const n = toolMsgsOf(ti).length;
     return toolCallResponse(`call-${n + 1}`, 'retrieve', { seq: markerSeq });
   });
   const provider = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
   const loop = await liaoTianDaiGongJu(
     provider,
-    { model: 'mock', messages: view.messages, maxTokens: 64, tools: specs },
+    { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
     (call, ctx) => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }).then((r) => r.content),
     { maxRounds: 2, maxResultChars: 500 }
   );
   check('工具轮被上限截断（maxRounds=2 → rounds=2、toolCalls=2）', loop.rounds === 2 && loop.toolCalls === 2, { rounds: loop.rounds, toolCalls: loop.toolCalls });
   check('stopReason=max-rounds（如实报告是"截断"而不是"答完了"）', loop.stopReason === 'max-rounds', loop.stopReason);
-  const reqs = mock.state.requests.map((r) => r.body);
+  const reqs = mock.state.requests.map((r) => r.ti);
   check('轮数用尽后强制收敛一次（tool_choice=none），总请求 = maxRounds+1', reqs.length === 3 && reqs[2].tool_choice === 'none', {
     http: reqs.length,
     lastToolChoice: reqs[2]?.tool_choice,
@@ -351,8 +351,8 @@ console.log('\n[2] 最大轮数生效（模型一直要工具）');
 
 console.log('\n[3] 工具结果总预算生效');
 {
-  const mock = await startModelServer((body) => {
-    const n = toolMsgsOf(body).length;
+  const mock = await startModelServer((ti) => {
+    const n = toolMsgsOf(ti).length;
     return toolCallResponse(`call-b${n + 1}`, 'retrieve', { seq: markerSeq, maxChars: 4000 });
   });
   const provider = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
@@ -360,15 +360,15 @@ console.log('\n[3] 工具结果总预算生效');
   const PER = 200;
   const loop = await liaoTianDaiGongJu(
     provider,
-    { model: 'mock', messages: view.messages, maxTokens: 64, tools: specs },
+    { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
     (call, ctx) => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }).then((r) => r.content),
     { maxRounds: 3, maxResultChars: PER, maxToolResultChars: TOTAL }
   );
-  const sizes = mock.state.requests.flatMap((r) => toolMsgsOf(r.body).map((m) => String(m.content).length));
+  const sizes = mock.state.requests.flatMap((r) => toolMsgsOf(r.ti).map((m) => String(m.content).length));
   check('单条工具结果 ≤ 单条上限 + 截断标记', sizes.every((n) => n <= PER + 80), { sizes, per: PER });
   check('工具结果总量被总预算拦住（≤ 总预算 + 1 条标记开销）', loop.toolResultChars <= TOTAL + 80, { total: loop.toolResultChars, budget: TOTAL });
   check('预算用尽后如实报告 stopReason=budget', loop.stopReason === 'budget', loop.stopReason);
-  check('预算用尽也收敛成一次终答（不把半截 tool_calls 交给调用方）', mock.state.requests.length >= 2 && mock.state.requests[mock.state.requests.length - 1].body.tool_choice === 'none', {
+  check('预算用尽也收敛成一次终答（不把半截 tool_calls 交给调用方）', mock.state.requests.length >= 2 && mock.state.requests[mock.state.requests.length - 1].ti.tool_choice === 'none', {
     http: mock.state.requests.length,
   });
   console.log(`  单条 ${sizes.join(' / ')} 字符（上限 ${PER}）；总计 ${loop.toolResultChars} 字符（预算 ${TOTAL}）；rounds=${loop.rounds}`);
@@ -381,8 +381,8 @@ console.log('\n[3] 工具结果总预算生效');
 console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话）');
 {
   // (a) 协议不支持 tools：真 OllamaProvider 打真 mock /api/chat
-  const mock = await startModelServer((body) => ({
-    model: body.model || 'ollama-mock',
+  const mock = await startModelServer((ti) => ({
+    model: ti.model || 'ollama-mock',
     message: { role: 'assistant', content: 'ollama 普通回答' },
     done_reason: 'stop',
     prompt_eval_count: 10,
@@ -393,14 +393,14 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
   let executorCalls = 0;
   const loop = await liaoTianDaiGongJu(
     ollama,
-    { model: 'ollama-mock', messages: view.messages, maxTokens: 64, tools: specs },
+    { model: 'ollama-mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
     () => {
       executorCalls += 1;
       return 'never';
     },
     { maxRounds: 3 }
   );
-  const body0 = mock.state.requests[0]?.body || {};
+  const body0 = mock.state.requests[0]?.ti || {};
   check('降级：只发 1 次模型请求，且请求体里**没有** tools', mock.state.requests.length === 1 && body0.tools === undefined, {
     http: mock.state.requests.length,
     tools: body0.tools,
@@ -415,8 +415,8 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
   mock.server.close();
 
   // (b) 支持 tools 但中转直接报错（HTTP 400）→ 重试一次不带 tools
-  const mock2 = await startModelServer((body) => {
-    if (Array.isArray(body.tools) && body.tools.length) {
+  const mock2 = await startModelServer((ti) => {
+    if (Array.isArray(ti.tools) && ti.tools.length) {
       return { __httpStatus: 400, __error: 'tools are not supported by this model' };
     }
     return textResponse('中转不吃 tools，这是降级后的回答');
@@ -424,7 +424,7 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
   const p2 = new JianrongOpenAIGongYing({ apiKey: 'sk-mock', baseURL: mock2.base }, { id: 'relay', defaultBase: mock2.base });
   const loop2 = await liaoTianDaiGongJu(
     p2,
-    { model: 'mock', messages: view.messages, maxTokens: 64, tools: specs },
+    { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
     () => 'never',
     { maxRounds: 3 }
   );
@@ -433,17 +433,17 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
     reason: loop2.degradedReason,
     reply: loop2.response.choices[0]?.message?.content,
   });
-  check('降级后重试的请求确实没带 tools，且请求数如实为 2', mock2.state.requests.length === 2 && mock2.state.requests[1].body.tools === undefined && loop2.requests === 2, {
+  check('降级后重试的请求确实没带 tools，且请求数如实为 2', mock2.state.requests.length === 2 && mock2.state.requests[1].ti.tools === undefined && loop2.requests === 2, {
     http: mock2.state.requests.length,
     requests: loop2.requests,
-    tools2: mock2.state.requests[1]?.body?.tools,
+    tools2: mock2.state.requests[1]?.ti?.tools,
   });
   mock2.server.close();
 
   // (c) 调用方根本不给 tools：普通对话，不算降级
   const mock3 = await startModelServer(() => textResponse('普通回答'));
   const p3 = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock3.base, model: 'mock' });
-  const loop3 = await liaoTianDaiGongJu(p3, { model: 'mock', messages: view.messages, maxTokens: 32 }, () => 'never', {});
+  const loop3 = await liaoTianDaiGongJu(p3, { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 32 }, () => 'never', {});
   check('没有 tools 时就是普通对话（degraded=false，不误报降级）', loop3.degraded === false && loop3.requests === 1 && loop3.stopReason === 'stop', {
     degraded: loop3.degraded,
     requests: loop3.requests,
@@ -462,7 +462,7 @@ if (!SKIP_ELECTRON) {
   /** 准备一份可启动的临时副本（与 verify-e2e 相同的最小 patch） */
   function makeCopy(tag, opts = {}) {
     const root = path.join(tmpRoot, tag);
-    const appRoot = path.join(root, 'app');
+    const appRoot = path.join(root, 'yingYong');
     fs.mkdirSync(appRoot, { recursive: true });
     fs.cpSync(path.join(pkgRoot, 'dist'), path.join(appRoot, 'dist'), { recursive: true });
     fs.copyFileSync(path.join(pkgRoot, 'package.json'), path.join(appRoot, 'package.json'));
@@ -474,11 +474,11 @@ if (!SKIP_ELECTRON) {
       let seen = false;
       const out = [];
       for (const line of lines) {
-        if (line.includes("ipcMain.handle('warmy:clear-error'")) {
+        if (line.includes("ipcMain.handle('warmy:qingChuCuoWu'")) {
           if (seen) continue;
           seen = true;
         }
-        out.push(line.includes("app.setAsDefaultProtocolClient('dsh-app')") ? line.replace("app.setAsDefaultProtocolClient('dsh-app')", 'void 0') : line);
+        out.push(line.includes("yingYong.setAsDefaultProtocolClient('dsh-app')") ? line.replace("yingYong.setAsDefaultProtocolClient('dsh-app')", 'void 0') : line);
       }
       fs.writeFileSync(mainFile, out.join('\n'), 'utf8');
     }
@@ -500,7 +500,7 @@ if (!SKIP_ELECTRON) {
       // 故意坏掉的记忆服务：prepareMemoryRuntime 的第一候选是 <siteRoot>/memory-os/dist
       const broken = path.join(root, 'memory-os');
       fs.mkdirSync(path.join(broken, 'dist'), { recursive: true });
-      fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ name: '@warmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
+      fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ ming: '@warmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
       fs.writeFileSync(
         path.join(broken, 'dist', 'ipc.js'),
         "process.stderr.write('memory service intentionally broken for degradation test\\n');\nprocess.exit(1);\n"
@@ -533,7 +533,7 @@ if (!SKIP_ELECTRON) {
     const onChunk = (d) => {
       const text = String(d);
       logs.push(text);
-      const m = text.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
+      const m = text.match(/DevTools listening qiYong ws:\/\/127\.0\.0\.1:(\d+)\//);
       if (m && m[1]) devtoolsPort = Number(m[1]);
     };
     child.stdout.on('data', onChunk);
@@ -565,22 +565,22 @@ if (!SKIP_ELECTRON) {
     let seq = 0;
     const pending = new Map();
     ws.addEventListener('message', (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.id && pending.has(msg.id)) {
-        const { resolve, reject } = pending.get(msg.id);
-        pending.delete(msg.id);
-        if (msg.error) reject(new Error(`cdp ${JSON.stringify(msg.error)}`));
-        else resolve(msg.result);
+      const xiaoXi = JSON.parse(ev.data);
+      if (xiaoXi.id && pending.has(xiaoXi.id)) {
+        const { resolve, reject } = pending.get(xiaoXi.id);
+        pending.delete(xiaoXi.id);
+        if (xiaoXi.error) reject(new Error(`cdp ${JSON.stringify(xiaoXi.error)}`));
+        else resolve(xiaoXi.result);
       }
     });
-    const send = (method, params) =>
+    const faSong = (method, params) =>
       new Promise((resolve, reject) => {
         const id = ++seq;
         pending.set(id, { resolve, reject });
         ws.send(JSON.stringify({ id, method, params }));
       });
     const evaluate = async (expression) => {
-      const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
+      const r = await faSong('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
       if (r.exceptionDetails) throw new Error(`renderer exception: ${r.exceptionDetails.exception?.description || r.exceptionDetails.text}`);
       return r.result.value;
     };
@@ -626,10 +626,10 @@ if (!SKIP_ELECTRON) {
     const copy = makeCopy('ok');
     const seen = [];
     // 会要工具的 mock 模型：第一轮要 recall，拿到结果后终答
-    const mock = await startModelServer((body, state) => {
-      const toolMsgs = toolMsgsOf(body);
-      const hasTools = Array.isArray(body.tools) && body.tools.length > 0;
-      seen.push({ hasTools, toolNames: (body.tools || []).map((t) => t.function?.name), toolsRaw: body.tools || [], toolMsgs: toolMsgs.map((m) => String(m.content)) });
+    const mock = await startModelServer((ti, state) => {
+      const toolMsgs = toolMsgsOf(ti);
+      const hasTools = Array.isArray(ti.tools) && ti.tools.length > 0;
+      seen.push({ hasTools, toolNames: (ti.tools || []).map((t) => t.function?.name), toolsRaw: ti.tools || [], toolMsgs: toolMsgs.map((m) => String(m.content)) });
       if (hasTools && toolMsgs.length === 0) {
         return toolCallResponse(`c-recall-${state.requests.length}`, 'recall', { query: '牛马有界渲染工具链', limit: 3 });
       }
@@ -639,25 +639,25 @@ if (!SKIP_ELECTRON) {
       return textResponse('无工具普通回答');
     });
 
-    const app = await launch(copy, 'ok');
-    check('[5] Electron 起来且 bootstrap 完成', app.ready === true);
-    const setP = await app.call('setProvider', { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mock.base, model: 'mock', protocol: 'openai-compatible' });
+    const yingYong = await launch(copy, 'ok');
+    check('[5] Electron 起来且 bootstrap 完成', yingYong.ready === true);
+    const setP = await yingYong.call('setProvider', { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mock.base, model: 'mock', protocol: 'openai-compatible' });
     check('[5] provider 指向本地 mock', setP?.ok === true, setP);
 
     // 等历史重建完成（记忆服务就绪信号）
     let restore = null;
     for (let i = 0; i < 40; i++) {
-      const r = await app.call('chatLog', { sessionId: 's-tools-e2e' });
+      const r = await yingYong.call('chatLog', { sessionId: 's-tools-e2e' });
       restore = r?.stats?.restore;
       if (restore?.done) break;
       await sleep(500);
     }
     check('[5] 记忆服务就绪 + 历史重建已完成', restore?.done === true && restore?.ok === true, restore);
 
-    await app.call('settingsSave', { contextBudgetChars: 800, contextToolMaxRounds: 3, contextToolResultChars: 1500, contextToolTotalChars: 6000 });
+    await yingYong.call('settingsSave', { contextBudgetChars: 800, contextToolMaxRounds: 3, contextToolResultChars: 1500, contextToolTotalChars: 6000 });
     const turns = [];
     for (let i = 0; i < 4; i++) {
-      turns.push(await app.call('chatSend', { sessionId: 's-tools-e2e', content: `第 ${i + 1} 轮：` + '牛马有界渲染工具链验证 '.repeat(30) }));
+      turns.push(await yingYong.call('chatSend', { sessionId: 's-tools-e2e', content: `第 ${i + 1} 轮：` + '牛马有界渲染工具链验证 '.repeat(30) }));
     }
     check('[5] 4 轮 chat-send 走通', turns.every((r) => r && r.ok === true && typeof r.reply === 'string'), turns.map((t) => ({ ok: t?.ok, reply: String(t?.reply || '').slice(0, 20) })));
     check(
@@ -678,14 +678,14 @@ if (!SKIP_ELECTRON) {
             Object.keys(t.function.parameters.properties || {}).length >= 1 &&
             !/^llm\./.test(t.function.description)
         ),
-      firstTools.map((t) => ({ name: t.function?.name, descChars: (t.function?.description || '').length, params: Object.keys(t.function?.parameters?.properties || {}) }))
+      firstTools.map((t) => ({ ming: t.function?.name, descChars: (t.function?.description || '').length, params: Object.keys(t.function?.parameters?.properties || {}) }))
     );
     check('[5] 宿主真执行了工具并把结果回给模型（tool 消息里带真记忆卡片）', seen.some((s) => s.toolMsgs.some((c) => /recall\(/.test(c) && /recordId=/.test(c) && /seq=/.test(c))), {
       toolMsgSample: seen.flatMap((s) => s.toolMsgs).map((c) => c.slice(0, 60)).slice(0, 2),
     });
     check('[5] 模型终答来自工具结果（回复里含工具返回长度）', turns[turns.length - 1]?.reply?.includes('工具回答：宿主返回'), String(turns[turns.length - 1]?.reply).slice(0, 60));
 
-    const metrics = await app.call('metricsSummary');
+    const metrics = await yingYong.call('metricsSummary');
     check('[5] metrics 记录工具调用（toolCalls≥1 且成功）', metrics?.toolCalls >= 1 && metrics?.toolCallsOk >= 1 && metrics?.toolTurns >= 1, {
       toolCalls: metrics?.toolCalls,
       toolCallsOk: metrics?.toolCallsOk,
@@ -696,7 +696,7 @@ if (!SKIP_ELECTRON) {
     });
     check('[5] 视图有界未被工具撑破（viewBounded 仍 true）', metrics?.viewBounded === true && metrics?.viewBytes <= 800, { viewBytes: metrics?.viewBytes, budget: metrics?.viewBudgetChars });
 
-    const audit = await app.call('auditLog', 500);
+    const audit = await yingYong.call('auditLog', 500);
     const entries = audit?.entries || [];
     const ops = entries.map((e) => e.op);
     check('[5] audit 记录 chat.tool（工具调用留痕）', ops.includes('chat.tool'), [...new Set(ops)].filter((o) => String(o).startsWith('chat.')));
@@ -710,9 +710,9 @@ if (!SKIP_ELECTRON) {
     });
 
     // settings 关掉工具 → 退回现状（请求体无 tools），对话照常
-    await app.call('settingsSave', { contextToolMaxRounds: 0 });
+    await yingYong.call('settingsSave', { contextToolMaxRounds: 0 });
     const before = seen.length;
-    const r0 = await app.call('chatSend', { sessionId: 's-tools-e2e', content: '关掉工具之后还能说话吗？' });
+    const r0 = await yingYong.call('chatSend', { sessionId: 's-tools-e2e', content: '关掉工具之后还能说话吗？' });
     const lastReq = seen[seen.length - 1];
     check('[5] contextToolMaxRounds=0 → 请求体无 tools（退回现状）', r0?.ok === true && seen.length > before && lastReq?.hasTools === false, {
       ok: r0?.ok,
@@ -720,11 +720,11 @@ if (!SKIP_ELECTRON) {
       reply: String(r0?.reply || '').slice(0, 30),
     });
     check('[5] 对话仍能发（降级不报错）', r0?.ok === true && typeof r0.reply === 'string' && r0.reply.length > 0);
-    const audit2 = await app.call('auditLog', 300);
+    const audit2 = await yingYong.call('auditLog', 300);
     const entryUnavailable = (audit2?.entries || []).find((e) => e.op === 'chat.tools.unavailable');
     check('[5] audit 如实记录"工具未暴露"及原因', entryUnavailable?.detail?.reason === 'disabled-by-settings', entryUnavailable?.detail);
 
-    app.close();
+    yingYong.close();
     mock.server.close();
   }
 
@@ -733,21 +733,21 @@ if (!SKIP_ELECTRON) {
   {
     const copy = makeCopy('broken', { brokenMemory: true });
     const seen = [];
-    const mock = await startModelServer((body) => {
-      seen.push({ hasTools: Array.isArray(body.tools) && body.tools.length > 0 });
+    const mock = await startModelServer((ti) => {
+      seen.push({ hasTools: Array.isArray(ti.tools) && ti.tools.length > 0 });
       return textResponse('记忆服务不可用时也能收到回答');
     });
-    const app = await launch(copy, 'broken');
-    check('[6] Electron 起来且 bootstrap 完成（记忆服务是坏的）', app.ready === true);
-    await app.call('setProvider', { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mock.base, model: 'mock', protocol: 'openai-compatible' });
+    const yingYong = await launch(copy, 'broken');
+    check('[6] Electron 起来且 bootstrap 完成（记忆服务是坏的）', yingYong.ready === true);
+    await yingYong.call('setProvider', { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mock.base, model: 'mock', protocol: 'openai-compatible' });
 
-    const r = await app.call('chatSend', { sessionId: 's-broken', content: '记忆服务坏了，这条还能发出去吗？' });
+    const r = await yingYong.call('chatSend', { sessionId: 's-broken', content: '记忆服务坏了，这条还能发出去吗？' });
     check('[6] 对话仍能发（ok:true 且有回复）', r?.ok === true && String(r.reply || '').length > 0, { ok: r?.ok, reply: r?.reply, error: r?.error });
     check('[6] 请求体里没有 tools（记忆服务不可用 → 不暴露工具）', seen.length >= 1 && seen.every((s) => s.hasTools === false), { requests: seen.length, tools: seen.map((s) => s.hasTools) });
-    const logRes = await app.call('chatLog', { sessionId: 's-broken' });
+    const logRes = await yingYong.call('chatLog', { sessionId: 's-broken' });
     check('[6] 重建跳过但如实报告（restore.done=true & ok=false）', logRes?.stats?.restore?.done === true && logRes?.stats?.restore?.ok === false, logRes?.stats?.restore);
     check('[6] 日志照常只追加（进程内镜像仍可用）', (logRes?.count || 0) >= 2, { count: logRes?.count, entries: logRes?.entries?.map((e) => ({ seq: e.seq, role: e.role, chars: e.chars })) });
-    const audit = await app.call('auditLog', 200);
+    const audit = await yingYong.call('auditLog', 200);
     const unavailable = (audit?.entries || []).find((e) => e.op === 'chat.tools.unavailable');
     check('[6] audit 记录不可用原因 memory-unavailable', unavailable?.detail?.reason === 'memory-unavailable', unavailable?.detail);
     const bootLog = path.join(copy.userData, 'warmy-boot.log');
@@ -755,7 +755,7 @@ if (!SKIP_ELECTRON) {
       const lines = fs.readFileSync(bootLog, 'utf8').trim().split('\n').filter((l) => /memory|restore/i.test(l));
       for (const l of lines.slice(-4)) console.log('  boot: ' + l);
     }
-    app.close();
+    yingYong.close();
     mock.server.close();
   }
   console.log(`  Electron 临时目录: ${tmpRoot}`);

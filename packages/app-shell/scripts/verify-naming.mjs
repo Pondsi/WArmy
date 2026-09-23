@@ -22,12 +22,12 @@ function check(l, ok, d) {
 }
 
 function walk(dir, acc = []) {
-  for (const name of fs.readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'dist' || name === '.git' || name === 'coverage') continue;
-    const p = path.join(dir, name);
+  for (const ming of fs.readdirSync(dir)) {
+    if (ming === 'node_modules' || ming === 'dist' || ming === '.git' || ming === 'coverage') continue;
+    const p = path.join(dir, ming);
     const st = fs.statSync(p);
     if (st.isDirectory()) walk(p, acc);
-    else if (/\.(ts|js|cjs|mjs)$/.test(name)) acc.push(p);
+    else if (/\.(ts|js|cjs|mjs)$/.test(ming)) acc.push(p);
   }
   return acc;
 }
@@ -57,7 +57,7 @@ for (const f of files) {
   const badPort = src.match(/\b(CCAARMY_|CCARMY_|CCARM_)[A-Z_]*PORT[A-Z_]*\b/g);
   if (badPort) offenders.portConst.push(`${rel}: ${badPort.join(',')}`);
   // 3) IPC 通道必须 warmy:
-  const badIpc = src.match(/\b(ipcMain\.(handle|on)|ipcRenderer\.(invoke|on)|chuliIpc)\(\s*['"](?!warmy:)[a-z0-9:-]+['"]/g);
+  const badIpc = src.match(/\b(ipcMain\.(handle|qiYong)|ipcRenderer\.(invoke|qiYong)|chuliIpc)\(\s*['"](?!warmy:)[a-z0-9:-]+['"]/g);
   if (badIpc && !/node_modules/.test(rel)) offenders.ipc.push(`${rel}: ${badIpc.slice(0, 3).join(' | ')}`);
   // 4) 新代码禁止再引入 CCAARMY_* 环境变量名（legacy 读取除外）
   const badEnv = src.match(/process\.env\[['"]CCAARMY_[^'"]+['"]\]|process\.env\.CCAARMY_[A-Z_]+/g);
@@ -93,7 +93,7 @@ if (fs.existsSync(tech)) {
 }
 if (fs.existsSync(req)) {
   const r = fs.readFileSync(req, 'utf8');
-  check('REQUIREMENTS documents product goals', /产品定位|核心承诺|功能需求/.test(r));
+  check('REQUIREMENTS documents chanPin goals', /产品定位|核心承诺|功能需求/.test(r));
   check('REQUIREMENTS documents security modes', /完全授权|常规模式|严格模式/.test(r));
   check('REQUIREMENTS documents ports/update/WSL', /59599|GitHub|WSL/.test(r));
 }
@@ -118,40 +118,40 @@ if (fs.existsSync(mapFile)) {
   check('PINYIN-MAP has global + local scopes', !!m.global && !!m.local);
 }
 
-// renderer composer：输入框与按钮之间不得有分隔线
+// renderer shuRuQu：输入框与按钮之间不得有分隔线
 const rcss = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/renderer.css'), 'utf8');
 const acss = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.css'), 'utf8');
-check('renderer.css #input has no border (no separator line)', /#input\s*\{[^}]*border:\s*none/i.test(rcss) || /border:\s*none\s*!important/.test(rcss));
-check('renderer.css composer-bar has no border', /\.composer-bar\s*\{[^}]*border:\s*none/i.test(rcss.replace(/\n/g, ' ')) || /composer-bar[\s\S]{0,200}border:\s*none/i.test(rcss));
-check('app.css #input min-height increased', /min-height:\s*96px/.test(acss));
+check('renderer.css #shuRu has no border (no separator line)', /#shuRu\s*\{[^}]*border:\s*none/i.test(rcss) || /border:\s*none\s*!important/.test(rcss));
+check('renderer.css shuRuQuTiao has no border', /\.shuRuQuTiao\s*\{[^}]*border:\s*none/i.test(rcss.replace(/\n/g, ' ')) || /shuRuQuTiao[\s\S]{0,200}border:\s*none/i.test(rcss));
+check('app.css #shuRu min-height increased', /min-height:\s*96px/.test(acss));
 check('index.html loads both app.css and renderer.css', (() => {
   const html = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/index.html'), 'utf8');
-  return /app\.css/.test(html) && /renderer\.css/.test(html);
+  return (/app\.css/.test(html) || /yingYong\.css/.test(html)) && /renderer\.css/.test(html);
 })());
 
 /* ── CSS 大括号平衡（曾经漏掉一段导致后续规则被解析器丢弃：真机 UI 才看得出） ──
    任何一次 `{`/`}` 不平衡都会让**后面的规则整段失效**，静态 grep 查不出来。 */
 for (const f of ['app.css', 'renderer.css']) {
   const css = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer', f), 'utf8');
-  const open = (css.match(/\{/g) || []).length;
+  const daKai = (css.match(/\{/g) || []).length;
   const close = (css.match(/\}/g) || []).length;
-  check(`${f} braces balanced (${open}/${close})`, open === close, { open, close });
+  check(`${f} braces balanced (${daKai}/${close})`, daKai === close, { daKai, close });
 }
 
 /* ── 关键 UI 契约：横幅在文档流内（不得 absolute 覆盖聊天区） ── */
-check('net-banner is in flow (not absolute overlay)',
-  /\.net-banner\s*\{[^}]*position:\s*relative/.test(acss) && !/\.net-banner\s*\{[^}]*position:\s*absolute/.test(acss));
+check('wangLuoBanner is in flow (not absolute overlay)',
+  /\.wangLuoBanner\s*\{[^}]*position:\s*relative/.test(acss) && !/\.wangLuoBanner\s*\{[^}]*position:\s*absolute/.test(acss));
 
 /* ── 右栏分区唯一权威 + 会话卡片默认隐藏 ── */
 const idxHtml = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/index.html'), 'utf8');
-check('panel members block hidden by default', /id="panel-members-block"[^>]*class="[^"]*hidden|class="panel-block only-group hidden"[^>]*id="panel-members-block"/.test(idxHtml));
-check('panel progress/assist/model default hidden',
-  /class="panel-block hidden" id="panel-progress-block"/.test(idxHtml) &&
-  /class="panel-block hidden" id="panel-assist-block"/.test(idxHtml) &&
-  /class="panel-block hidden" id="panel-model-mgr-block"/.test(idxHtml));
+check('panel members block yinCang by default', /id="mianBanChengYuanJiKuai"[^>]*class="[^"]*yinCang|class="mianBanKuai onlyQun yinCang"[^>]*id="mianBanChengYuanJiKuai"/.test(idxHtml));
+check('panel jinDu/assist/model default yinCang',
+  /class="mianBanKuai yinCang" id="mianBanJinDuKuai"/.test(idxHtml) &&
+  /class="mianBanKuai yinCang" id="mianBanAssistKuai"/.test(idxHtml) &&
+  /class="mianBanKuai yinCang" id="mianBanMoXingMgrKuai"/.test(idxHtml));
 const appjs2 = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'), 'utf8');
 check('applyPanelVisibility exists and is authoritative', /function applyPanelVisibility/.test(appjs2));
-check('refreshPanelVisibility called on nav change', /hideMain\(\);[\s\S]{0,200}refreshPanelVisibility\(\)/.test(appjs2));
+check('refreshPanelVisibility called qiYong nav change', /hideMain\(\);[\s\S]{0,200}refreshPanelVisibility\(\)/.test(appjs2));
 check('panelVisibilityFor: members only group kinds',
   /members:\s*group/.test(appjs2) && /const group = kind === 'internal' \|\| kind === 'external' \|\| kind === 'externalGroup' \|\| kind === 'extgroup'/.test(appjs2));
 
@@ -209,8 +209,8 @@ check(`所有子进程调用都隐藏了控制台窗口（发现 ${consoleOffend
   const appJs2 = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'), 'utf8');
   check('跨窗口刷新必须校验当前会话（refreshEntityView 带一致性守卫）',
     /async function refreshEntityView[\s\S]{0,600}shiDangQian/.test(appJs2), '跨窗口刷新必须校验当前会话');
-  check('列表头像 class 未被改名破坏（仍是 av-img）',
-    /class="av-img"/.test(appJs2) && !/av-tuPian/.test(appJs2), 'class 名还原检查');
+  check('列表头像 class 未被改名破坏（仍是 avTuPian）',
+    /class="avTuPian"/.test(appJs2) && !/av-tuPian/.test(appJs2), 'class 名还原检查');
 }
 
 /* ── WSL：例行路径绝不为了探测而启动它（用户两次反馈"开新窗口触发打开 WSL"） ── */
@@ -220,9 +220,9 @@ check(`所有子进程调用都隐藏了控制台窗口（发现 ${consoleOffend
   check('例行探测默认静默：probeWsl 在 !deep 时不 spawn 任何 wsl.exe',
     /async function tanCeWsl[\s\S]{0,900}status: 'not-probed'/.test(probeSrc) && /wsl-not-probed/.test(probeSrc), '例行探测默认静默');
   check('项目状态查询不传 deep（不会启动 WSL）',
-    /probeContainerRuntimes\(\{ cacheMs: 8000, only: \[runtimeId\] \}\)/.test(mainSrc2) && !/probeContainerRuntimes\(\{ cacheMs: 8000, only: \[runtimeId\], deep/.test(mainSrc2), '项目状态查询不传 deep');
+    /tanCeRongQiYunXing\(\{ cacheMs: 8000, only: \[runtimeId\] \}\)/.test(mainSrc2) && !/tanCeRongQiYunXing\(\{ cacheMs: 8000, only: \[runtimeId\], deep/.test(mainSrc2), '项目状态查询不传 deep');
   check('显式探测（容器卡片按钮）才允许 deep',
-    /warmy:container-probe/.test(mainSrc2) && /opts\?\.deep === true/.test(mainSrc2), '显式探测才允许 deep');
+    /warmy:rongQiTanCe/.test(mainSrc2) && /opts\?\.deep === true/.test(mainSrc2), '显式探测才允许 deep');
 }
 
 console.log(`\n==== verify-naming: ${pass} ok / ${fail} FAIL ====`);

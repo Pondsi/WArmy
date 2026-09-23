@@ -17,8 +17,8 @@ function ensureDb(dbPath) {
 }
 
 function seedFts(database, rows) {
-  database.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(body, tokenize='unicode61');`);
-  const insF = database.prepare('INSERT INTO docs_fts (rowid, body) VALUES (?, ?)');
+  database.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(ti, tokenize='unicode61');`);
+  const insF = database.prepare('INSERT INTO docs_fts (rowid, ti) VALUES (?, ?)');
   const txF = database.transaction(() => {
     for (let i = 1; i <= rows; i++) {
       const raw = `这是第${i}条记录 关于项目进度 与无限牛马协作 的说明`;
@@ -28,11 +28,11 @@ function seedFts(database, rows) {
   txF();
 }
 
-process.on('message', (msg) => {
-  const { id, op } = msg;
+process.on('message', (xiaoXi) => {
+  const { id, op } = xiaoXi;
   try {
     if (op === 'init') {
-      ensureDb(msg.dbPath);
+      ensureDb(xiaoXi.dbPath);
       db.exec(`
         CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
       `);
@@ -42,7 +42,7 @@ process.on('message', (msg) => {
       });
       tx();
 
-      const rows = msg.ftsRows ?? 10000;
+      const rows = xiaoXi.ftsRows ?? 10000;
       const t0 = Date.now();
       seedFts(db, rows);
       process.send({ id, ok: true, ftsRows: rows, seedMs: Date.now() - t0 });
@@ -51,7 +51,7 @@ process.on('message', (msg) => {
 
     // 重建 FTS 索引到指定规模（用于按 ADR 的 10 万条记录口径重测）
     if (op === 'reseed-fts') {
-      const rows = msg.ftsRows ?? 100000;
+      const rows = xiaoXi.ftsRows ?? 100000;
       db.exec('DROP TABLE IF EXISTS docs_fts');
       const t0 = Date.now();
       seedFts(db, rows);
@@ -61,13 +61,13 @@ process.on('message', (msg) => {
     }
 
     if (op === 'hash') {
-      const row = db.prepare('SELECT v FROM kv WHERE k = ?').get(msg.key);
-      process.send({ id, ok: true, v: row?.v });
+      const hang = db.prepare('SELECT v FROM kv WHERE k = ?').get(xiaoXi.key);
+      process.send({ id, ok: true, v: hang?.v });
       return;
     }
 
     if (op === 'fts') {
-      const phrase = Array.from(msg.q).join(' ');
+      const phrase = Array.from(xiaoXi.q).join(' ');
       const rows = db.prepare(
         "SELECT rowid FROM docs_fts WHERE docs_fts MATCH ? LIMIT 5"
       ).all(`"${phrase}"`);

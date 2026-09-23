@@ -67,25 +67,25 @@ for (const f of fs.readdirSync(i18nDir)) {
 
 const now = Date.now();
 const demoInstances = [
-  { id: 'demo-1', name: 'demo.agent', status: 'running', dutyEligible: true, notify: true, model: 'deepseek-chat',
+  { id: 'demo-1', ming: 'demo.agent', status: 'running', dutyEligible: true, notify: true, model: 'deepseek-chat',
     avatarPreset: 5, availableModels: ['deepseek-chat', 'deepseek-reasoner', 'mimo-v2.5-pro'],
     chain: ['deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-chat', allModels: true,
     persona: '性格：沉稳可靠\n角色：值班执行者', cognitionFiles: [] },
-  { id: 'demo-2', name: '归档员', status: 'stopped', dutyEligible: false, notify: true, model: 'mimo-v2.5-pro',
+  { id: 'demo-2', ming: '归档员', status: 'stopped', dutyEligible: false, notify: true, model: 'mimo-v2.5-pro',
     avatarPreset: 9, availableModels: ['mimo-v2.5-pro'], chain: ['mimo-v2.5-pro'], defaultModel: 'mimo-v2.5-pro', allModels: true,
     persona: '', cognitionFiles: [] },
 ];
 // 演示用的群：字段按主进程 group-store 的 GroupRecord 写（groupId/type/origin…），
 // 成员名单独放 memberNames —— 因为 GroupRecord 里**没有**成员的形状，成员走 groupMembers 另一次调用。
 const demoGroups = [
-  { groupId: 'g-1', name: '项目推进群', type: 'internal', directedMode: false, dutyInstanceId: null,
+  { groupId: 'g-1', ming: '项目推进群', type: 'internal', directedMode: false, dutyInstanceId: null,
     createdAt: now - 86400000, updatedAt: now - 60000, origin: 'ipc', memberNames: ['demo.agent', '归档员'] },
-  { groupId: 'g-3', name: '外部协作群', type: 'external', directedMode: false, dutyInstanceId: null,
+  { groupId: 'g-3', ming: '外部协作群', type: 'external', directedMode: false, dutyInstanceId: null,
     createdAt: now - 86400000, updatedAt: now - 300000, origin: 'ipc', memberNames: ['demo.agent'] },
 ];
 const demoChats = [
-  { id: 'demo-1', kind: 'single', name: 'demo.agent', lastTs: now - 30000, lastPreview: '好的，已安排' },
-  { id: 'c-2', kind: 'extdm', name: '张三', lastTs: now - 120000, lastPreview: '收到' },
+  { id: 'demo-1', kind: 'single', ming: 'demo.agent', lastTs: now - 30000, lastPreview: '好的，已安排' },
+  { id: 'c-2', kind: 'extdm', ming: '张三', lastTs: now - 120000, lastPreview: '收到' },
 ];
 const demoTurns = [
   { sessionId: 'demo-1', model: 'deepseek-chat', promptTokens: 2400, completionTokens: 800, cacheHitRate: 0.4, durationMs: 1800 },
@@ -114,9 +114,9 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
   };
 
   const SUPPORTED = ['zh-CN','zh-TW','en-US','ja','ko','ru','es','fr','pt','eo'];
-  function resolveLocalePack(locale) {
-    if (!locale) return 'zh-CN';
-    const raw = String(locale).trim();
+  function resolveLocalePack(yuYan) {
+    if (!yuYan) return 'zh-CN';
+    const raw = String(yuYan).trim();
     if (SUPPORTED.indexOf(raw) !== -1) return raw;
     const l = raw.toLowerCase().replace('_', '-');
     if (l.indexOf('zh-tw') === 0 || l.indexOf('zh-hant') === 0 || l === 'zh-hk' || l === 'zh-mo') return 'zh-TW';
@@ -132,13 +132,13 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
     return 'zh-CN';
   }
   const api = {
-    i18n: async (locale) => {
+    i18n: async (yuYan) => {
       // Full 10-locale resolution — never collapse to zh-CN/en-US only.
-      const key = resolveLocalePack(locale);
-      return { locale: key, strings: PACKS[key] || PACKS['zh-CN'], displayName: (PACKS[key] || {})['app.displayName'], supported: SUPPORTED };
+      const key = resolveLocalePack(yuYan);
+      return { yuYan: key, strings: PACKS[key] || PACKS['zh-CN'], displayName: (PACKS[key] || {})['yingYong.displayName'], supported: SUPPORTED };
     },
     settingsGet: async () => ok({ settings: Object.assign({
-      locale: 'zh-CN', themeMode: 'system', accent: '#917627', sound: { complete: true, request: true, error: true },
+      yuYan: 'zh-CN', themeMode: 'system', accent: '#917627', sound: { complete: true, request: true, error: true },
       soundFiles: { complete: '', request: '', error: '' }, globalSecurity: 'normal', embedUseGpu: true, listSort: 'time',
       skillScanDirs: [],
     }, (window.__previewSettings || {})) }),
@@ -151,7 +151,7 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
     profileSave: async (p) => ok({ profile: p }),
     stateLoad: async () => ok({ state: { listSort: 'time', instanceAvatars: {}, chats: CHATS } }),
     stateSave: async () => ok(),
-    appInfo: async () => ok({ name: '无限牛马', enName: 'WArmy', version: '0.1.0', electron: '33.2.0', chrome: '130.0.6723.118',
+    appInfo: async () => ok({ ming: '无限牛马', enName: 'WArmy', version: '0.1.0', electron: '33.2.0', chrome: '130.0.6723.118',
       node: '20.18.0', platform: 'win32', arch: 'x64', deviceId: '884024787', deviceIdValid: true }),
     listInstances: async () => INSTANCES,
     // 形状必须与主进程一致（GroupListResult / GroupMembersResult）。早期桩返回裸数组、字段叫 id，
@@ -161,7 +161,7 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
       groups: GROUPS.map((g) => {
         const rest = Object.assign({}, g);
         delete rest.memberNames;
-        return Object.assign(rest, { memberCount: (g.memberNames || []).length, active: true });
+        return Object.assign(rest, { memberCount: (g.memberNames || []).length, jiHuo: true });
       }),
     }),
     groupMembers: async (id) => {
@@ -170,7 +170,7 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
       return {
         ok: true, groupId: id,
         members: names.map((n, i) => ({
-          id: n, groupId: id, name: n,
+          id: n, groupId: id, ming: n,
           role: n === 'demo.agent' ? 'creator' : 'member',
           source: 'invite', instanceId: n, joinedAt: Date.now() - 3600000 + i,
         })),
@@ -186,13 +186,13 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
       list: [{ id: 'cp-1', createdAt: Date.now() - 600000, phase: 'round_end', strategy: 'copy-on-write',
         filesChanged: [{ path: 'src/a.ts' }], filesCreated: [{ path: 'src/b.ts' }], irreversible: [], assets: [], dir: 'checkpoints/cp-1' }],
       envByCheckpoint: {},
-      currentEnv: { active: false, runtimeId: '', revision: 'host', at: Date.now(), imageDigests: {} },
+      currentEnv: { jiHuo: false, runtimeId: '', revision: 'host', at: Date.now(), imageDigests: {} },
       layering: { fileRollbackIndependent: true, snapshotCoversProjectFiles: false, envRollbackNeedsRuntime: true },
     }),
     checkpointCreate: async () => ok(), checkpointRollback: async () => ok(),
-    knowledgeQuery: async () => ok({ entities: [{ id: 'e-1', name: '无限牛马', kind: 'project' }, { id: 'e-2', name: '项目推进群', kind: 'org' }],
+    knowledgeQuery: async () => ok({ entities: [{ id: 'e-1', ming: '无限牛马', kind: 'project' }, { id: 'e-2', ming: '项目推进群', kind: 'org' }],
       events: [{ id: 'v-1', title: '确定四栏布局' }] }),
-    kbDetail: async () => ok({ entities: [{ id: 'e-1', name: '无限牛马', kind: 'project' }] }),
+    kbDetail: async () => ok({ entities: [{ id: 'e-1', ming: '无限牛马', kind: 'project' }] }),
     kbDelete: async () => ok(),
     skillsList: async () => {
       const dirs = (((window.__previewSettings || {}).skillScanDirs) || []).map(String);
@@ -201,12 +201,12 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
         return { path: pth, ok: true, error: null, skillCount: 1 };
       });
       const skills = [
-        { id: 'ui-polish', name: 'UI 打磨', description: '对界面做视觉一致性与对比度检查', source: 'userData', mtime: Date.now() },
-        { id: 'release-check', name: '发布检查', description: '打包前跑一遍验收清单', source: 'workspace', mtime: Date.now() },
+        { id: 'ui-polish', ming: 'UI 打磨', description: '对界面做视觉一致性与对比度检查', source: 'userData', mtime: Date.now() },
+        { id: 'release-check', ming: '发布检查', description: '打包前跑一遍验收清单', source: 'workspace', mtime: Date.now() },
       ];
       scanDirs.forEach(function (s, i) {
         if (s.ok) {
-          skills.push({ id: 'discovered:demo:' + i, name: 'Discovered ' + i, description: 'from ' + s.path, source: 'discovered', mtime: Date.now() });
+          skills.push({ id: 'discovered:demo:' + i, ming: 'Discovered ' + i, description: 'from ' + s.path, source: 'discovered', mtime: Date.now() });
         }
       });
       return ok({ skills, scanDirs });
@@ -257,15 +257,15 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
     trayInit: async () => ok(), trayTooltip: async () => ok(), setSecurityMode: async () => ok(),
     setThemeSource: async () => ok(), winMinimize: async () => ok(), winMaximize: async () => ok(),
     winClose: async () => ok(), winReload: async () => ok(), winAlwaysOnTop: async () => ok({ alwaysOnTop: false }),
-    // 形状必须与主进程一致：warmy:check-update 真实返回 UpdateCheckResult{status:'up-to-date'|'update-available'|…}。
+    // 形状必须与主进程一致：warmy:jianChaGengXin 真实返回 UpdateCheckResult{status:'up-to-date'|'update-available'|…}。
     // 旧桩只给 {upToDate:true} → updateStatusText() 落到"检查更新失败：未知状态"，
     // 预览里看起来像**功能坏了**（无组网巡检时实测到的那条误导）。
     checkUpdate: async () => ok({ status: 'up-to-date', currentVersion: '0.1.0' }),
     asrTranscribe: async () => ok({ text: '' }),
     // 形状同上：真主进程的 chatSend 一定会回一个**字符串** reply（无 key 时回"未配置密钥"那句）。
     // 桩若回 {ok:true} 而 reply 缺失，会话里会冒出气泡 "undefined" —— 预览的假缺陷。
-    chatSend: async (msg) => ok({ reply: '（预览）已收到：' + String((msg && msg.content) || '').slice(0, 40), needsKey: false, usage: null }),
-    groupOrchestrate: async (msg) => ok({ reply: '（预览）值班者已安排：' + String((msg && msg.content) || '').slice(0, 40), action: 'ok' }),
+    chatSend: async (xiaoXi) => ok({ reply: '（预览）已收到：' + String((xiaoXi && xiaoXi.content) || '').slice(0, 40), needsKey: false, usage: null }),
+    groupOrchestrate: async (xiaoXi) => ok({ reply: '（预览）值班者已安排：' + String((xiaoXi && xiaoXi.content) || '').slice(0, 40), action: 'ok' }),
     exportSession: async () => ok({ path: '（预览模式）仅示意' }), saveText: async () => ok({ path: '（预览模式）仅示意' }),
     onApprovalRequest: () => () => {}, onInbox: () => () => {}, onTray: () => () => {},
   };
@@ -273,7 +273,7 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
   window.warmy = new Proxy(api, {
     get(target, prop) {
       if (prop in target) return target[prop];
-      if (typeof prop === 'string' && prop.startsWith('on')) return () => () => {};
+      if (typeof prop === 'string' && prop.startsWith('qiYong')) return () => () => {};
       return async () => ok({});
     },
   });

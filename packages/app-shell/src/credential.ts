@@ -82,9 +82,9 @@ export function jieMaYong(text: string, alphabet: string, length: number): Buffe
   const base = BigInt(alphabet.length);
   let n = 0n;
   for (const ch of s) {
-    const idx = alphabet.indexOf(ch);
-    if (idx < 0) throw new Error(`credential: 非法字符 ${ch}`);
-    n = n * base + BigInt(idx);
+    const suoYin = alphabet.indexOf(ch);
+    if (suoYin < 0) throw new Error(`credential: 非法字符 ${ch}`);
+    n = n * base + BigInt(suoYin);
   }
   const shiLiuJin = n.toString(16).padStart(64, '0').slice(-64);
   return Buffer.from(shiLiuJin, 'hex');
@@ -112,9 +112,9 @@ export function isValidCredential(text: string): boolean {
 /** 51 位 → 17 组 × 3 位（便于人眼抄写与核对） */
 export function formatCredential(text: string): string {
   const s = guiFanHuaPingZheng(text);
-  const parts: string[] = [];
-  for (let i = 0; i < s.length; i += qun) parts.push(s.slice(i, i + qun));
-  return parts.join(FENFU);
+  const Pian: string[] = [];
+  for (let i = 0; i < s.length; i += qun) Pian.push(s.slice(i, i + qun));
+  return Pian.join(FENFU);
 }
 
 /**

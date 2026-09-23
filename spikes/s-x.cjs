@@ -1,17 +1,17 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
-let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
+let j = fs.readFileSync(base + 'renderer/yingYong.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
-let c = fs.readFileSync(base + 'renderer/app.css', 'utf8');
+let c = fs.readFileSync(base + 'renderer/yingYong.css', 'utf8');
 
 // ── S. 消息搜索 ──
-if (!m.includes('warmy:search-messages')) {
+if (!m.includes('warmy:souSuoXiaoXiJi')) {
   m += `
 
 // ── S. 消息搜索（从 memory-os recall） ──
-ipcMain.handle('warmy:search-messages', async (_e, q: string) => {
+ipcMain.handle('warmy:souSuoXiaoXiJi', async (_e, q: string) => {
   try {
     const r = await memory?.recall(q, 20);
     return { ok: true, hits: r?.cards || [] };
@@ -24,11 +24,11 @@ ipcMain.handle('warmy:search-messages', async (_e, q: string) => {
 }
 
 // ── V. 插件真实安装 ──
-if (!m.includes('warmy:plugin-install')) {
+if (!m.includes('warmy:chaJianAnZhuang')) {
   m += `
 
 // ── V. 插件真实安装/卸载 ──
-ipcMain.handle('warmy:plugin-install', (_e, pkg: string) => {
+ipcMain.handle('warmy:chaJianAnZhuang', (_e, pkg: string) => {
   try {
     const dshHome = path.join(app.getPath('userData'), 'dsh-home');
     const profile = 'warmy';
@@ -48,7 +48,7 @@ ipcMain.handle('warmy:plugin-install', (_e, pkg: string) => {
     return { ok: false, error: String(e) };
   }
 });
-ipcMain.handle('warmy:plugin-uninstall', (_e, pkg: string) => {
+ipcMain.handle('warmy:chaJianXieZai', (_e, pkg: string) => {
   try {
     const dshHome = path.join(app.getPath('userData'), 'dsh-home');
     const pkgJson = path.join(dshHome, 'profiles', 'warmy', 'package.json');
@@ -70,17 +70,17 @@ ipcMain.handle('warmy:plugin-uninstall', (_e, pkg: string) => {
 // 已在 M 中有 group-directed
 
 // ── X. 归档列表 ──
-if (!m.includes('warmy:archived-list')) {
+if (!m.includes('warmy:yiGuiDangLieBiao')) {
   m += `
 
 // ── X. 归档列表 ──
-const archived: Array<{ id: string; name: string; kind: string; ts: number }> = [];
-ipcMain.handle('warmy:archived-list', () => ({ ok: true, items: archived }));
-ipcMain.handle('warmy:archived-add', (_e, payload: { id: string; name: string; kind: string }) => {
+const archived: Array<{ id: string; ming: string; kind: string; ts: number }> = [];
+ipcMain.handle('warmy:yiGuiDangLieBiao', () => ({ ok: true, items: archived }));
+ipcMain.handle('warmy:yiGuiDangTianJia', (_e, payload: { id: string; ming: string; kind: string }) => {
   archived.push({ ...payload, ts: Date.now() });
   return { ok: true, items: archived };
 });
-ipcMain.handle('warmy:archived-restore', (_e, id: string) => {
+ipcMain.handle('warmy:yiGuiDangHuiFu', (_e, id: string) => {
   const idx = archived.findIndex((x) => x.id === id);
   if (idx < 0) return { ok: false };
   const item = archived.splice(idx, 1)[0];
@@ -95,14 +95,14 @@ fs.writeFileSync(base + 'electron-main.ts', m);
 // preload
 if (!p.includes('searchMessages')) {
   p = p.replace(
-    "  setupComplete: (payload) => ipcRenderer.invoke('warmy:setup-complete', payload),",
-    `  setupComplete: (payload) => ipcRenderer.invoke('warmy:setup-complete', payload),
-  searchMessages: (q) => ipcRenderer.invoke('warmy:search-messages', q),
-  pluginInstall: (pkg) => ipcRenderer.invoke('warmy:plugin-install', pkg),
-  pluginUninstall: (pkg) => ipcRenderer.invoke('warmy:plugin-uninstall', pkg),
-  archivedList: () => ipcRenderer.invoke('warmy:archived-list'),
-  archivedAdd: (payload) => ipcRenderer.invoke('warmy:archived-add', payload),
-  archivedRestore: (id) => ipcRenderer.invoke('warmy:archived-restore', id),`
+    "  setupComplete: (payload) => ipcRenderer.invoke('warmy:chuShiSheZhiWanCheng', payload),",
+    `  setupComplete: (payload) => ipcRenderer.invoke('warmy:chuShiSheZhiWanCheng', payload),
+  searchMessages: (q) => ipcRenderer.invoke('warmy:souSuoXiaoXiJi', q),
+  pluginInstall: (pkg) => ipcRenderer.invoke('warmy:chaJianAnZhuang', pkg),
+  pluginUninstall: (pkg) => ipcRenderer.invoke('warmy:chaJianXieZai', pkg),
+  archivedList: () => ipcRenderer.invoke('warmy:yiGuiDangLieBiao'),
+  archivedAdd: (payload) => ipcRenderer.invoke('warmy:yiGuiDangTianJia', payload),
+  archivedRestore: (id) => ipcRenderer.invoke('warmy:yiGuiDangHuiFu', id),`
   );
   fs.writeFileSync(base + 'preload.cjs', p);
   console.log('preload S-X');
@@ -112,13 +112,13 @@ if (!p.includes('searchMessages')) {
 if (!j.includes('btn-chat-search')) {
   // 聊天头加搜索
   h = h.replace(
-    '              <button id="btn-open-win" class="btn-mini"',
-    `              <input id="chat-search" style="width:100px" data-i18n-placeholder="list.search"/>
-              <button id="btn-chat-search" class="btn-mini">🔍</button>
-              <button id="btn-open-win" class="btn-mini"`
+    '              <button id="btn-open-win" class="anNiuXiao"',
+    `              <shuRu id="chat-search" style="width:100px" data-i18n-placeholder="list.search"/>
+              <button id="btn-chat-search" class="anNiuXiao">🔍</button>
+              <button id="btn-open-win" class="anNiuXiao"`
   );
   fs.writeFileSync(base + 'renderer/index.html', h);
-  console.log('S search input added');
+  console.log('S search shuRu added');
 }
 
 if (!j.includes('btn-chat-search')) {
@@ -133,15 +133,15 @@ if (!j.includes('btn-chat-search')) {
     renderChat();
   });
   // T. 消息右键：复制/引用
-  $('messages')?.addEventListener('contextmenu', (e) => {
+  $('xiaoXiJi')?.addEventListener('contextmenu', (e) => {
     const bubble = e.target.closest('.bubble');
     if (!bubble) return;
     e.preventDefault();
     const text = bubble.textContent || '';
     openContextMenu(e.clientX, e.clientY, [
-      { label: t('common.copy'), onClick: () => { navigator.clipboard?.writeText(text); } },
-      { label: t('common.quote'), onClick: () => {
-          const inp = $('input');
+      { biaoQian: t('common.copy'), onClick: () => { navigator.clipboard?.writeText(text); } },
+      { biaoQian: t('common.quote'), onClick: () => {
+          const inp = $('shuRu');
           if (inp) inp.value = '> ' + text.slice(0, 120) + '\\n' + inp.value;
         } },
     ]);
@@ -155,11 +155,11 @@ if (!j.includes('btn-chat-search')) {
 // 聊天头加定向开关
 if (!h.includes('btn-directed')) {
   h = h.replace(
-    '              <button id="btn-export" class="btn-mini"',
-    `              <label class="muted" style="display:inline-flex;align-items:center;gap:4px">
-                <input type="checkbox" id="btn-directed"/> <span data-i18n="group.directed"></span>
-              </label>
-              <button id="btn-export" class="btn-mini"`
+    '              <button id="btn-export" class="anNiuXiao"',
+    `              <biaoQian class="jingYin" style="display:inline-flex;align-items:center;gap:4px">
+                <shuRu type="checkbox" id="btn-directed"/> <span data-i18n="group.directed"></span>
+              </biaoQian>
+              <button id="btn-export" class="anNiuXiao"`
   );
   fs.writeFileSync(base + 'renderer/index.html', h);
   console.log('W directed switch added');
@@ -179,15 +179,15 @@ if (!j.includes('btn-directed')) {
 
 // V. 插件安装：设置里真实调用
 j = j.replace(
-  "      $('btn-plug-install').onclick = () => {\n        const v = $('plug-path').value.trim();\n        if (!v) return;\n        state.plugins.push({ id: v, name: v, enabled: true, desc: '' });\n        renderPage();\n      };",
-  "      $('btn-plug-install').onclick = async () => {\n        const v = $('plug-path').value.trim();\n        if (!v) return;\n        const r = await window.warmy.pluginInstall(v).catch(() => null);\n        state.plugins.push({ id: v, name: v, enabled: true, desc: r?.ok ? 'installed' : 'pending' });\n        renderPage();\n      };"
+  "      $('anNiuPlugAnZhuang').onclick = () => {\n        const v = $('plugLuJing').value.trim();\n        if (!v) return;\n        state.chaJianJi.push({ id: v, ming: v, enabled: true, desc: '' });\n        renderPage();\n      };",
+  "      $('anNiuPlugAnZhuang').onclick = async () => {\n        const v = $('plugLuJing').value.trim();\n        if (!v) return;\n        const r = await window.warmy.pluginInstall(v).catch(() => null);\n        state.chaJianJi.push({ id: v, ming: v, enabled: true, desc: r?.ok ? 'installed' : 'pending' });\n        renderPage();\n      };"
 );
 
-// U. 深色适配：检查关键对比度变量已存在，补充 body 背景过渡
+// U. 深色适配：检查关键对比度变量已存在，补充 ti 背景过渡
 if (!c.includes('transition: background')) {
   c = c.replace(
-    'body {',
-    'body {\n  transition: background 0.2s ease, color 0.2s ease;'
+    'ti {',
+    'ti {\n  transition: background 0.2s ease, color 0.2s ease;'
   );
   console.log('U dark transition');
 }
@@ -196,15 +196,15 @@ if (!c.includes('transition: background')) {
 // X. 归档：右键归档时调用 archived-add
 j = j.replace(
   "          inst.archived = true;\n          uiAlert(t('instances.saved'));",
-  "          inst.archived = true;\n          await window.warmy.archivedAdd({ id: inst.id, name: inst.name, kind: 'agent' }).catch(() => {});\n          uiAlert(t('instances.saved'));"
+  "          inst.archived = true;\n          await window.warmy.archivedAdd({ id: inst.id, ming: inst.name, kind: 'agent' }).catch(() => {});\n          uiAlert(t('instances.saved'));"
 );
 j = j.replace(
   "          g.archived = true;\n          uiAlert(t('instances.saved'));",
-  "          g.archived = true;\n          await window.warmy.archivedAdd({ id: g.id, name: g.name, kind: 'group' }).catch(() => {});\n          uiAlert(t('instances.saved'));"
+  "          g.archived = true;\n          await window.warmy.archivedAdd({ id: g.id, ming: g.name, kind: 'group' }).catch(() => {});\n          uiAlert(t('instances.saved'));"
 );
 
 fs.writeFileSync(base + 'electron-main.ts', m);
-fs.writeFileSync(base + 'renderer/app.js', j);
+fs.writeFileSync(base + 'renderer/yingYong.js', j);
 fs.writeFileSync(base + 'renderer/index.html', h);
-fs.writeFileSync(base + 'renderer/app.css', c);
+fs.writeFileSync(base + 'renderer/yingYong.css', c);
 console.log('done S-X');

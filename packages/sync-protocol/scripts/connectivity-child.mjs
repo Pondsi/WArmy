@@ -109,11 +109,11 @@ async function roleListener() {
     groupId: null,
     roster: (fp) => fp === peer,
     peerFingerprint: peer,
-    onMessage: (msg, session) => {
-      received = msg;
+    onMessage: (xiaoXi, session) => {
+      received = xiaoXi;
       writeState({
         phase: 'received',
-        receivedPayload: msg.payload,
+        receivedPayload: xiaoXi.payload,
         verifiedPeerFingerprint: session.info.peerFingerprint,
         remoteAddress: session.info.remoteAddress,
       });
@@ -185,11 +185,11 @@ async function roleDialer() {
     peerFingerprint: peer,
     roster: (fp) => fp === peer,
     handshakeTimeoutMs: 9000,
-    onMessage: (msg) => {
-      reply = msg;
-      // 注意：msg.from 是**对端 nodeId**（消息自称字段），不是握手得出的指纹；
+    onMessage: (xiaoXi) => {
+      reply = xiaoXi;
+      // 注意：xiaoXi.from 是**对端 nodeId**（消息自称字段），不是握手得出的指纹；
       // 指纹必须取 session.info.peerFingerprint（来自 HS 帧的 fp + 公钥推导校验）。
-      writeState({ phase: 'got-reply', replyPayload: msg.payload, replyFromNodeId: msg.from });
+      writeState({ phase: 'got-reply', replyPayload: xiaoXi.payload, replyFromNodeId: xiaoXi.from });
     },
   });
   const r = await client.connect(9000);

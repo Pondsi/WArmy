@@ -37,15 +37,15 @@ let failures = 0;
 let noteCount = 0;
 const unverified = [];
 
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   const mark = cond ? 'PASS' : 'FAIL';
   if (cond) passes += 1;
   else failures += 1;
   const extra = detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
-  console.log(`  [${mark}] ${label}${extra}`);
+  console.log(`  [${mark}] ${biaoQian}${extra}`);
 }
-function group(title) {
-  console.log(`\n${title}`);
+function group(biaoTi) {
+  console.log(`\n${biaoTi}`);
 }
 /** 如实标注"本机做不到 / 未验证"的边界（并汇总计数） */
 function note(text) {
@@ -427,7 +427,7 @@ async function main() {
     JSON.stringify(DEFAULT_LADDER_ORDER) === JSON.stringify(['ipv6-direct', 'public-direct', 'upnp', 'holepunch', 'relay', 'lan']),
     DEFAULT_LADDER_ORDER
   );
-  check('每一档都有中文 label', DEFAULT_LADDER_ORDER.every((r) => typeof LADDER_LABELS[r] === 'string' && LADDER_LABELS[r].length > 0), DEFAULT_LADDER_ORDER.map((r) => LADDER_LABELS[r]));
+  check('每一档都有中文 biaoQian', DEFAULT_LADDER_ORDER.every((r) => typeof LADDER_LABELS[r] === 'string' && LADDER_LABELS[r].length > 0), DEFAULT_LADDER_ORDER.map((r) => LADDER_LABELS[r]));
   check('每一档都有 i18n key（net.rung.*）', DEFAULT_LADDER_ORDER.every((r) => String(LADDER_RUNG_I18N[r]).startsWith('net.rung.')), LADDER_RUNG_I18N);
   {
     const l = new LianJieTiZi();
@@ -556,7 +556,7 @@ async function main() {
 
     if (S.connect.ok && S.connect.session) {
       const mark = S.tap.mark();
-      S.connect.session.send({ to: '*', channel: 'group', payload: { type: 'secret', marker: MARKER_SEND, body: 'x'.repeat(64) } });
+      S.connect.session.send({ to: '*', channel: 'group', payload: { type: 'secret', marker: MARKER_SEND, ti: 'x'.repeat(64) } });
       let waited = 0;
       while (S.server.received.length === 0 && waited < 3000) {
         await sleep(50);
@@ -578,7 +578,7 @@ async function main() {
       check('中继真的搬了字节（bytesForwarded > 0）', S.relay.stats.bytesForwarded > 0, S.relay.stats);
       check('中继样本非空（真的"看到"了经过的字节）', S.relay.samples.length > 0, S.relay.samples.length);
       check('**中继样本里没有消息明文标记**（只看到密文）', samplesWithMarker(S.relay, [MARKER_SEND, MARKER_REPLY]).length === 0, samplesWithMarker(S.relay, [MARKER_SEND, MARKER_REPLY]).map((s) => s.direction));
-      check('中继样本里也没有明文 body（64 个 x 的重复串）', !S.relay.samples.some((s) => sampleBuf(s).toString('latin1').includes('x'.repeat(64))), S.relay.samples.length);
+      check('中继样本里也没有明文 ti（64 个 x 的重复串）', !S.relay.samples.some((s) => sampleBuf(s).toString('latin1').includes('x'.repeat(64))), S.relay.samples.length);
       check('中继样本里确实存在**加密记录帧**（类型字节=1）', recordSamples(S.relay).length >= 1, recordSamples(S.relay).map((s) => ({ d: s.direction, n: s.bytes })));
       check('中继能看到握手帧（元数据：指纹/nonce/公钥）—— 如实记录这一事实', handshakeSamples(S.relay).length >= 1, handshakeSamples(S.relay).map((s) => s.bytes));
       check('握手帧里也没有消息明文标记', samplesWithMarker({ samples: handshakeSamples(S.relay) }, [MARKER_SEND, MARKER_REPLY]).length === 0, {});

@@ -1,41 +1,41 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
-let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
+let j = fs.readFileSync(base + 'renderer/yingYong.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 
 // ── M. 群成员管理 IPC ──
-if (!m.includes('warmy:group-members')) {
+if (!m.includes('warmy:qunChengYuanJi')) {
   m += `
 
 // ── M. 群成员管理 ──
-const groupMembers = new Map<string, Array<{ id: string; name: string; role: string; joinedAt: number }>>();
-ipcMain.handle('warmy:group-members', (_e, groupId: string) => ({
+const groupMembers = new Map<string, Array<{ id: string; ming: string; role: string; joinedAt: number }>>();
+ipcMain.handle('warmy:qunChengYuanJi', (_e, groupId: string) => ({
   ok: true,
   members: groupMembers.get(groupId) || [],
 }));
-ipcMain.handle('warmy:group-invite', (_e, payload: { groupId: string; name: string; role?: string }) => {
+ipcMain.handle('warmy:qunYaoQing', (_e, payload: { groupId: string; ming: string; role?: string }) => {
   const list = groupMembers.get(payload.groupId) || [];
   if (list.length >= 50) return { ok: false, error: 'max 50' };
-  list.push({ id: 'm-' + Date.now(), name: payload.name, role: payload.role || 'member', joinedAt: Date.now() });
+  list.push({ id: 'm-' + Date.now(), ming: payload.name, role: payload.role || 'member', joinedAt: Date.now() });
   groupMembers.set(payload.groupId, list);
   return { ok: true, members: list };
 });
-ipcMain.handle('warmy:group-kick', (_e, payload: { groupId: string; memberId: string }) => {
+ipcMain.handle('warmy:qunTi', (_e, payload: { groupId: string; memberId: string }) => {
   const list = groupMembers.get(payload.groupId) || [];
   const next = list.filter((x) => x.id !== payload.memberId);
   groupMembers.set(payload.groupId, next);
   return { ok: true, members: next };
 });
-ipcMain.handle('warmy:group-set-admin', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
+ipcMain.handle('warmy:qunSheZhiGuanLiYuan', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
   const list = groupMembers.get(payload.groupId) || [];
   const m = list.find((x) => x.id === payload.memberId);
   if (m) m.role = payload.admin ? 'admin' : 'member';
   groupMembers.set(payload.groupId, list);
   return { ok: true, members: list };
 });
-ipcMain.handle('warmy:group-directed', (_e, payload: { groupId: string; directed: boolean }) => {
+ipcMain.handle('warmy:qunDingXiang', (_e, payload: { groupId: string; directed: boolean }) => {
   const g = router.getGroup(payload.groupId);
   if (!g) return { ok: false, error: 'no group' };
   g.directedMode = payload.directed;
@@ -46,11 +46,11 @@ ipcMain.handle('warmy:group-directed', (_e, payload: { groupId: string; directed
 }
 
 // ── N. 会话内嵌看板（只读展示，值班者写入） ──
-if (!m.includes('warmy:board-session')) {
+if (!m.includes('warmy:kanbanHuiHua')) {
   m += `
 
 // ── N. 会话内嵌看板 ──
-ipcMain.handle('warmy:board-session', (_e, groupId: string) => ({
+ipcMain.handle('warmy:kanbanHuiHua', (_e, groupId: string) => ({
   ok: true,
   tasks: board?.listTasks(groupId) || [],
   events: (board?.tailEvents(20) || []).filter((e) => e.groupId === groupId),
@@ -60,11 +60,11 @@ ipcMain.handle('warmy:board-session', (_e, groupId: string) => ({
 }
 
 // ── O. CCR 工具输出压缩 ──
-if (!m.includes('warmy:ccr-tool-output')) {
+if (!m.includes('warmy:ccrGongJuShuChu')) {
   m += `
 
 // ── O. CCR 工具输出压缩 ──
-ipcMain.handle('warmy:ccr-tool-output', (_e, payload: { toolName?: string; content: string }) => {
+ipcMain.handle('warmy:ccrGongJuShuChu', (_e, payload: { toolName?: string; content: string }) => {
   const r = ccr.beforeLog({ kind: 'tool_result', content: payload.content, toolName: payload.toolName });
   metrics.recordCcr({ ts: Date.now(), kind: 'tool_result', originalBytes: r.originalBytes, compressedBytes: r.compressedBytes });
   return { ok: true, ...r };
@@ -74,16 +74,16 @@ ipcMain.handle('warmy:ccr-tool-output', (_e, payload: { toolName?: string; conte
 }
 
 // ── P. 知识库详情 ──
-if (!m.includes('warmy:kb-detail')) {
+if (!m.includes('warmy:zhiShiKuXiangQing')) {
   m += `
 
 // ── P. 知识库详情 ──
-ipcMain.handle('warmy:kb-detail', (_e, q: string) => {
+ipcMain.handle('warmy:zhiShiKuXiangQing', (_e, q: string) => {
   const r = knowledge?.query(q) || { entities: [], events: [] };
   return {
     ok: true,
-    entities: r.entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, attrs: e.attrs, eventIds: e.eventIds })),
-    events: r.events.map((e) => ({ id: e.id, title: e.title, result: e.result, ts: e.ts, entityIds: e.entityIds })),
+    entities: r.entities.map((e) => ({ id: e.id, ming: e.name, kind: e.kind, attrs: e.attrs, eventIds: e.eventIds })),
+    events: r.events.map((e) => ({ id: e.id, title: e.biaoTi, result: e.result, ts: e.ts, entityIds: e.entityIds })),
   };
 });
 `;
@@ -91,17 +91,17 @@ ipcMain.handle('warmy:kb-detail', (_e, q: string) => {
 }
 
 // ── Q. 错误提示与重试（主进程暴露 last error） ──
-if (!m.includes('warmy:last-error')) {
+if (!m.includes('warmy:zuiHouCuoWu')) {
   m = m.replace(
-    "const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];",
-    `const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
+    "const emailQueue: Array<{ to: string; subject: string; ti: string; ts: number }> = [];",
+    `const emailQueue: Array<{ to: string; subject: string; ti: string; ts: number }> = [];
 let lastError: { ts: number; message: string; context?: string } | null = null;`
   );
   m += `
 
 // ── Q. 错误提示 ──
-ipcMain.handle('warmy:last-error', () => ({ ok: true, error: lastError }));
-ipcMain.handle('warmy:clear-error', () => { lastError = null; return { ok: true }; });
+ipcMain.handle('warmy:zuiHouCuoWu', () => ({ ok: true, error: lastError }));
+ipcMain.handle('warmy:qingChuCuoWu', () => { lastError = null; return { ok: true }; });
 `;
   // chat-send 错误时记录
   m = m.replace(
@@ -112,16 +112,16 @@ ipcMain.handle('warmy:clear-error', () => { lastError = null; return { ok: true 
 }
 
 // ── R. 启动引导 ──
-if (!m.includes('warmy:setup-state')) {
+if (!m.includes('warmy:chuShiSheZhiTai')) {
   m += `
 
 // ── R. 启动引导 ──
-ipcMain.handle('warmy:setup-state', () => {
+ipcMain.handle('warmy:chuShiSheZhiTai', () => {
   const s = settingsStore?.load() as Record<string, unknown> | undefined;
-  return { ok: true, done: !!(s as { setupDone?: boolean })?.setupDone, locale: s?.locale || app.getLocale() };
+  return { ok: true, done: !!(s as { setupDone?: boolean })?.setupDone, yuYan: s?.yuYan || app.getLocale() };
 });
-ipcMain.handle('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
-  if (payload.locale) settingsStore?.save({ locale: payload.locale } as never);
+ipcMain.handle('warmy:chuShiSheZhiWanCheng', (_e, payload: { yuYan?: string; provider?: Record<string, unknown> }) => {
+  if (payload.yuYan) settingsStore?.save({ yuYan: payload.yuYan } as never);
   if (payload.provider) {
     // 预填 provider
     Object.assign(providerCfg, {
@@ -144,20 +144,20 @@ fs.writeFileSync(base + 'electron-main.ts', m);
 // preload
 if (!p.includes('groupMembers')) {
   p = p.replace(
-    "  autoUpdateCheck: () => ipcRenderer.invoke('warmy:auto-update-check'),",
-    `  autoUpdateCheck: () => ipcRenderer.invoke('warmy:auto-update-check'),
-  groupMembers: (groupId) => ipcRenderer.invoke('warmy:group-members', groupId),
-  groupInvite: (payload) => ipcRenderer.invoke('warmy:group-invite', payload),
-  groupKick: (payload) => ipcRenderer.invoke('warmy:group-kick', payload),
-  groupSetAdmin: (payload) => ipcRenderer.invoke('warmy:group-set-admin', payload),
-  groupDirected: (payload) => ipcRenderer.invoke('warmy:group-directed', payload),
-  boardSession: (groupId) => ipcRenderer.invoke('warmy:board-session', groupId),
-  ccrToolOutput: (payload) => ipcRenderer.invoke('warmy:ccr-tool-output', payload),
-  kbDetail: (q) => ipcRenderer.invoke('warmy:kb-detail', q),
-  lastError: () => ipcRenderer.invoke('warmy:last-error'),
-  clearError: () => ipcRenderer.invoke('warmy:clear-error'),
-  setupState: () => ipcRenderer.invoke('warmy:setup-state'),
-  setupComplete: (payload) => ipcRenderer.invoke('warmy:setup-complete', payload),`
+    "  autoUpdateCheck: () => ipcRenderer.invoke('warmy:ziDongGengXinJianCha'),",
+    `  autoUpdateCheck: () => ipcRenderer.invoke('warmy:ziDongGengXinJianCha'),
+  groupMembers: (groupId) => ipcRenderer.invoke('warmy:qunChengYuanJi', groupId),
+  groupInvite: (payload) => ipcRenderer.invoke('warmy:qunYaoQing', payload),
+  groupKick: (payload) => ipcRenderer.invoke('warmy:qunTi', payload),
+  groupSetAdmin: (payload) => ipcRenderer.invoke('warmy:qunSheZhiGuanLiYuan', payload),
+  groupDirected: (payload) => ipcRenderer.invoke('warmy:qunDingXiang', payload),
+  boardSession: (groupId) => ipcRenderer.invoke('warmy:kanbanHuiHua', groupId),
+  ccrToolOutput: (payload) => ipcRenderer.invoke('warmy:ccrGongJuShuChu', payload),
+  kbDetail: (q) => ipcRenderer.invoke('warmy:zhiShiKuXiangQing', q),
+  lastError: () => ipcRenderer.invoke('warmy:zuiHouCuoWu'),
+  clearError: () => ipcRenderer.invoke('warmy:qingChuCuoWu'),
+  setupState: () => ipcRenderer.invoke('warmy:chuShiSheZhiTai'),
+  setupComplete: (payload) => ipcRenderer.invoke('warmy:chuShiSheZhiWanCheng', payload),`
   );
   fs.writeFileSync(base + 'preload.cjs', p);
   console.log('preload M-R');
@@ -166,20 +166,20 @@ if (!p.includes('groupMembers')) {
 // renderer: 右栏加会话看板 + 成员；聊天加错误重试；启动引导
 if (!h.includes('board-sess-box')) {
   h = h.replace(
-    '          <div class="panel-block">\n            <h3 data-i18n="panel.duty"></h3>',
-    `          <div class="panel-block">
+    '          <div class="mianBanKuai">\n            <h3 data-i18n="panel.duty"></h3>',
+    `          <div class="mianBanKuai">
             <h3 data-i18n="board.session"></h3>
-            <div id="board-sess-box" class="muted">—</div>
+            <div id="board-sess-box" class="jingYin">—</div>
           </div>
-          <div class="panel-block">
+          <div class="mianBanKuai">
             <h3 data-i18n="group.members"></h3>
-            <div id="members-box" class="muted">—</div>
+            <div id="chengYuanJiHe" class="jingYin">—</div>
             <div style="margin-top:6px;display:flex;gap:6px">
-              <input id="member-name" style="flex:1" placeholder=""/>
-              <button class="btn-mini" id="btn-member-add">+</button>
+              <shuRu id="chengYuanMing" style="flex:1" placeholder=""/>
+              <button class="anNiuXiao" id="anNiuChengYuanTianJia">+</button>
             </div>
           </div>
-          <div class="panel-block">
+          <div class="mianBanKuai">
             <h3 data-i18n="panel.duty"></h3>`
   );
   fs.writeFileSync(base + 'renderer/index.html', h);
@@ -195,11 +195,11 @@ if (!j.includes('refreshSessionBoard')) {
     const r = await window.warmy.boardSession(state.selectedChat.id).catch(() => null);
     const tasks = r?.tasks || [];
     box.innerHTML = tasks.length
-      ? tasks.map((t) => '<div>' + escapeHtml(t.title) + ' · ' + (t.progress || 0) + '% · ' + t.status + '</div>').join('')
+      ? tasks.map((t) => '<div>' + escapeHtml(t.biaoTi) + ' · ' + (t.jinDu || 0) + '% · ' + t.status + '</div>').join('')
       : '—';
   }
   async function refreshMembers() {
-    const box = $('members-box');
+    const box = $('chengYuanJiHe');
     if (!box || !state.selectedChat) return;
     const r = await window.warmy.groupMembers(state.selectedChat.id).catch(() => null);
     const ms = r?.members || [];
@@ -207,11 +207,11 @@ if (!j.includes('refreshSessionBoard')) {
       ? ms.map((x) => '<div>' + escapeHtml(x.name) + ' · ' + x.role + '</div>').join('')
       : '—';
   }
-  $('btn-member-add')?.addEventListener('click', async () => {
-    const name = $('member-name')?.value?.trim();
-    if (!name || !state.selectedChat) return;
-    await window.warmy.groupInvite({ groupId: state.selectedChat.id, name });
-    $('member-name').value = '';
+  $('anNiuChengYuanTianJia')?.addEventListener('click', async () => {
+    const ming = $('chengYuanMing')?.value?.trim();
+    if (!ming || !state.selectedChat) return;
+    await window.warmy.groupInvite({ groupId: state.selectedChat.id, ming });
+    $('chengYuanMing').value = '';
     refreshMembers();
   });
   setInterval(() => { refreshSessionBoard(); refreshMembers(); }, 6000);
@@ -224,7 +224,7 @@ if (!j.includes('refreshSessionBoard')) {
       const ok = await uiConfirm(t('common.error') + ': ' + r.error.message.slice(0, 80) + ' · ' + t('common.retry'), t('common.error'));
       if (ok && state.selectedChat) {
         await window.warmy.clearError();
-        send();
+        faSong();
       } else {
         await window.warmy.clearError();
       }
@@ -236,8 +236,8 @@ if (!j.includes('refreshSessionBoard')) {
   async function maybeShowSetup() {
     const st = await window.warmy.setupState().catch(() => null);
     if (!st || st.done) return;
-    const locale = await uiPrompt(t('settings.language'), 'zh-CN');
-    if (locale) await window.warmy.setupComplete({ locale });
+    const yuYan = await uiPrompt(t('settings.language'), 'zh-CN');
+    if (yuYan) await window.warmy.setupComplete({ yuYan });
     else await window.warmy.setupComplete({});
     uiAlert(t('instances.saved'));
   }
@@ -249,5 +249,5 @@ if (!j.includes('refreshSessionBoard')) {
 }
 
 fs.writeFileSync(base + 'electron-main.ts', m);
-fs.writeFileSync(base + 'renderer/app.js', j);
+fs.writeFileSync(base + 'renderer/yingYong.js', j);
 console.log('done');

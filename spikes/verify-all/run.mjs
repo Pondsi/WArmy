@@ -6,9 +6,9 @@ import {chuangjianGongYing, congYuSheChuangJian, GONGYING_YUSHE, guiFanYongLiang
 import {createP1Runtime, AnquanGuanliqi, MemorySecurityStore, FileSecurityStore, ChaixieMingce, suggestMaxInstances, } from '@warmy/app-shell';
 
 const fails = [];
-function check(name, cond, detail) {
-  if (!cond) fails.push({ name, detail });
-  console.log(`${cond ? 'OK' : 'FAIL'}  ${name}${detail ? ' — ' + JSON.stringify(detail) : ''}`);
+function check(ming, cond, detail) {
+  if (!cond) fails.push({ ming, detail });
+  console.log(`${cond ? 'OK' : 'FAIL'}  ${ming}${detail ? ' — ' + JSON.stringify(detail) : ''}`);
 }
 
 // ── Provider ──
@@ -104,7 +104,7 @@ const { instances, teardown } = await createP1Runtime({
 });
 check('suggest 1..8', suggestMaxInstances() >= 1 && suggestMaxInstances() <= 8, { s: suggestMaxInstances() });
 const h = await instances.spawn({
-  config: { id: 'v1', name: 'v1', workspace: 'x', dutyEligible: true },
+  config: { id: 'v1', ming: 'v1', workspace: 'x', dutyEligible: true },
 });
 check('spawn running', h.status === 'running' && !!h.pid, h);
 await new Promise((r) => setTimeout(r, 200));
@@ -118,10 +118,10 @@ const { instances: im2, teardown: tr2 } = await createP1Runtime({
   instancesRoot: 'C:\\Users\\p\\AppData\\Local\\Temp\\warmy-verify-instances',
   maxInstances: 1,
 });
-await im2.spawn({ config: { id: 'a', name: 'a', workspace: 'x', dutyEligible: true } });
+await im2.spawn({ config: { id: 'a', ming: 'a', workspace: 'x', dutyEligible: true } });
 let maxErr = null;
 try {
-  await im2.spawn({ config: { id: 'b', name: 'b', workspace: 'x', dutyEligible: false } });
+  await im2.spawn({ config: { id: 'b', ming: 'b', workspace: 'x', dutyEligible: false } });
 } catch (e) {
   maxErr = String(e.message);
 }
@@ -134,7 +134,7 @@ if (process.env.DEEPSEEK_API_KEY) {
   const live = congYuSheChuangJian('deepseek', { apiKey: process.env.DEEPSEEK_API_KEY });
   const r = await live.chat({
     model: 'deepseek-chat',
-    messages: [{ role: 'user', content: '只回：ok' }],
+    xiaoXiJi: [{ role: 'user', content: '只回：ok' }],
     maxTokens: 4,
   });
   check('deepseek live', (r.choices[0]?.message?.content || '').includes('ok'), {

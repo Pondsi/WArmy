@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const root = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/i18n';
+const root = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/i18n';
 const zhP = path.join(root, 'zh-CN.json');
 const enP = path.join(root, 'en-US.json');
 const zh = JSON.parse(fs.readFileSync(zhP, 'utf8'));
@@ -14,17 +14,17 @@ Object.assign(zh, {
   'nav.externalGroup': '群聊',
   'nav.instances': '牛马管理局',
   'list.addInstance': '创建牛马',
-  'console.title': '控制台',
-  'console.open': '控制台',
+  'console.biaoTi': '控制台',
+  'console.daKai': '控制台',
   'console.hide': '隐藏控制台',
   'chat.file': '文件',
   'chat.screenshot': '截图',
   'chat.voiceIcon': '语音',
-  'urg.label': '优先级',
+  'urg.biaoQian': '优先级',
   'urg.P1': '加急（慎用）',
   'urg.P2': '插入',
   'urg.P3': '排队',
-  'cp.title': '回退点',
+  'cp.biaoTi': '回退点',
   'cp.time': '节点',
   'cp.detail': '详情',
   'cp.tasks': '执行任务',
@@ -63,17 +63,17 @@ Object.assign(en, {
   'nav.externalGroup': 'Groups',
   'nav.instances': 'Agent HQ',
   'list.addInstance': 'New Agent',
-  'console.title': 'Console',
-  'console.open': 'Console',
+  'console.biaoTi': 'Console',
+  'console.daKai': 'Console',
   'console.hide': 'Hide console',
   'chat.file': 'File',
   'chat.screenshot': 'Screenshot',
   'chat.voiceIcon': 'Voice',
-  'urg.label': 'Priority',
+  'urg.biaoQian': 'Priority',
   'urg.P1': 'Urgent',
   'urg.P2': 'Insert',
   'urg.P3': 'Queue',
-  'cp.title': 'Checkpoints',
+  'cp.biaoTi': 'Checkpoints',
   'cp.time': 'Node',
   'cp.detail': 'Detail',
   'cp.tasks': 'Tasks',

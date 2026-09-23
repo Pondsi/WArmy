@@ -166,7 +166,7 @@ export interface RetrieveOutcome {
 }
 
 export interface JiansuoXuanxiang {
-  fallback?: 'exact' | 'nearby' | 'fuzzy';
+  huiTui?: 'exact' | 'nearby' | 'fuzzy';
   /** nearby 级别的 seq 邻域半径，默认 5 */
   window?: number;
   /** fuzzy 级别的检索串（缺省时用 anchor.recordId） */
@@ -195,7 +195,7 @@ export interface XiangliangXuanxiang {
 
 export interface MemoryOsOptions {
   /** 数据目录 */
-  dataDir: string;
+  CangLu: string;
   /** JSONL 日志文件名，默认 fast-memory.jsonl */
   jsonlName?: string;
   /** 向量/嵌入配置 */
@@ -243,7 +243,7 @@ const SQL_JILU = `
     session_id TEXT NOT NULL,
     kind TEXT NOT NULL,
     ts INTEGER NOT NULL,
-    body TEXT NOT NULL
+    ti TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
   CREATE TABLE IF NOT EXISTS vec_index (
@@ -253,20 +253,20 @@ const SQL_JILU = `
     data BLOB NOT NULL
   );
 `;
-const SQL_FTS_UNI = `CREATE VIRTUAL TABLE IF NOT EXISTS fts_uni USING fts5(body, tokenize='unicode61', content='records', content_rowid='seq');`;
-const SQL_FTS_TRI = `CREATE VIRTUAL TABLE IF NOT EXISTS fts_tri USING fts5(body, tokenize='trigram', content='records', content_rowid='seq');`;
+const SQL_FTS_UNI = `CREATE VIRTUAL TABLE IF NOT EXISTS fts_uni USING fts5(ti, tokenize='unicode61', content='records', content_rowid='seq');`;
+const SQL_FTS_TRI = `CREATE VIRTUAL TABLE IF NOT EXISTS fts_tri USING fts5(ti, tokenize='trigram', content='records', content_rowid='seq');`;
 
 /**
  * 记忆服务核心。应作为长驻子进程运行（见 startMemoryServiceIpc）。
  */
-export class MemoryService {
+export class JiyiCangFuwu {
   private db: any;
   private seq = 0;
   readonly jsonlPath: string;
   readonly dbPath: string;
   readonly upgrade: ShengjiBaogao;
   /** 冷启动重建报告（DB 丢了但 JSONL 还在 → 全量重建投影，不变量 #5） */
-  readonly coldStart: { rebuilt: boolean; lines: number; reason: string };
+  readonly coldStart: { rebuilt: boolean; HangJi: number; reason: string };
 
   private vectorPromise: Promise<void>;
   private embedder: OnnxQianruqi | null = null;
@@ -277,16 +277,16 @@ export class MemoryService {
   private jsonlIndex: JsonlSuoyin | null = null;
 
   constructor(private opts: MemoryOsOptions) {
-    fs.mkdirSync(opts.dataDir, { recursive: true });
-    this.jsonlPath = path.join(opts.dataDir, opts.jsonlName || 'fast-memory.jsonl');
-    this.dbPath = path.join(opts.dataDir, 'memory.db');
+    fs.mkdirSync(opts.CangLu, { recursive: true });
+    this.jsonlPath = path.join(opts.CangLu, opts.jsonlName || 'fast-memory.jsonl');
+    this.dbPath = path.join(opts.CangLu, 'memory.db');
     const Shujuku = require('better-sqlite3');
     this.db = new Shujuku(this.dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.exec(SQL_JILU);
     this.upgrade = this.ensureSchema();
-    const row = this.db.prepare("SELECT v FROM meta WHERE k='last_seq'").get();
-    this.seq = row ? Number(row.v) : 0;
+    const hang = this.db.prepare("SELECT v FROM meta WHERE k='last_seq'").get();
+    this.seq = hang ? Number(hang.v) : 0;
     this.coldStart = this.coldStartRebuild();
     this.backfillFtsFromRecords(this.upgrade);
     this.vectorPromise = this.initVector();
@@ -296,8 +296,8 @@ export class MemoryService {
   // schema：建表 + 旧库升级
   // ─────────────────────────────────────────────
 
-  private tableExists(name: string): boolean {
-    const r = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name);
+  private tableExists(ming: string): boolean {
+    const r = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(ming);
     return !!r;
   }
 
@@ -305,10 +305,10 @@ export class MemoryService {
     return (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((r) => r.name);
   }
 
-  private addColumnIfMissing(table: string, col: string, type: string, added: string[]): void {
-    if (this.columns(table).includes(col)) return;
-    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
-    added.push(`${table}.${col}`);
+  private addColumnIfMissing(table: string, lie: string, type: string, yiTianJia: string[]): void {
+    if (this.columns(table).includes(lie)) return;
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${lie} ${type}`);
+    yiTianJia.push(`${table}.${lie}`);
   }
 
   /**
@@ -322,9 +322,9 @@ export class MemoryService {
     const hadFtsUni = this.tableExists('fts_uni');
     const hadFtsTri = this.tableExists('fts_tri');
 
-    const added: string[] = [];
-    this.addColumnIfMissing('records', 'group_id', 'TEXT', added);
-    this.addColumnIfMissing('records', 'entity_type', 'TEXT', added);
+    const yiTianJia: string[] = [];
+    this.addColumnIfMissing('records', 'group_id', 'TEXT', yiTianJia);
+    this.addColumnIfMissing('records', 'entity_type', 'TEXT', yiTianJia);
 
     this.db.exec(SQL_FTS_UNI);
     // 旧库升级路径：把 fts_tri 真正建出来（此前只有注释和类型）
@@ -342,7 +342,7 @@ export class MemoryService {
       hadFtsUni,
       hadFtsTri,
       createdFtsTri: !hadFtsTri,
-      addedColumns: added,
+      addedColumns: yiTianJia,
       backfilledTriRows: 0,
       backfilledUniRows: 0,
     };
@@ -361,19 +361,19 @@ export class MemoryService {
     const needTri = up.createdFtsTri || this.indexedDocs('fts_tri') === 0;
     if (!needUni && !needTri) return;
 
-    const rows = this.db.prepare('SELECT seq, body FROM records').all() as Array<{ seq: number; body: string }>;
+    const rows = this.db.prepare('SELECT seq, ti FROM records').all() as Array<{ seq: number; ti: string }>;
     if (needUni) {
-      const shiLi = this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, body) VALUES (?, ?)');
+      const shiLi = this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, ti) VALUES (?, ?)');
       const shiwu = this.db.transaction(() => {
-        for (const row of rows) shiLi.run(row.seq, spaceChars(String(row.body)));
+        for (const hang of rows) shiLi.run(hang.seq, spaceChars(String(hang.ti)));
       });
       shiwu();
       up.backfilledUniRows = rows.length;
     }
     if (needTri) {
-      const shiLi = this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, body) VALUES (?, ?)');
+      const shiLi = this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, ti) VALUES (?, ?)');
       const shiwu = this.db.transaction(() => {
-        for (const row of rows) shiLi.run(row.seq, String(row.body));
+        for (const hang of rows) shiLi.run(hang.seq, String(hang.ti));
       });
       shiwu();
       up.backfilledTriRows = rows.length;
@@ -385,14 +385,14 @@ export class MemoryService {
    * 不变量 #5：SQLite 是可丢弃投影。库被删/被清空但 JSONL 还在 → 从 JSONL 全量重建。
    * 这是"删掉 memory.db 重启后照样检索"的实现依据。
    */
-  private coldStartRebuild(): { rebuilt: boolean; lines: number; reason: string } {
+  private coldStartRebuild(): { rebuilt: boolean; HangJi: number; reason: string } {
     const recN = (this.db.prepare('SELECT COUNT(*) AS n FROM records').get() as { n: number }).n;
-    if (recN > 0) return { rebuilt: false, lines: recN, reason: 'projection present' };
-    if (!fs.existsSync(this.jsonlPath)) return { rebuilt: false, lines: 0, reason: 'no jsonl' };
+    if (recN > 0) return { rebuilt: false, HangJi: recN, reason: 'projection present' };
+    if (!fs.existsSync(this.jsonlPath)) return { rebuilt: false, HangJi: 0, reason: 'no jsonl' };
     const size = fs.statSync(this.jsonlPath).size;
-    if (size === 0) return { rebuilt: false, lines: 0, reason: 'jsonl empty' };
+    if (size === 0) return { rebuilt: false, HangJi: 0, reason: 'jsonl empty' };
     const n = this.rebuildProjection();
-    return { rebuilt: true, lines: n, reason: 'projection missing, rebuilt from jsonl' };
+    return { rebuilt: true, HangJi: n, reason: 'projection missing, rebuilt from jsonl' };
   }
 
   // ─────────────────────────────────────────────
@@ -402,19 +402,19 @@ export class MemoryService {
   /** 只追加写入 JSONL + 投影到 SQLite */
   append(
     record: { id: string; sessionId: string; kind: string; [k: string]: unknown },
-    writer: XieRuQi
+    Bi: XieRuQi
   ): JsonlJilu {
     // 写入者唯一约束（简化：duty 写 message；router 写 queue；其余拒绝）
-    if (record.kind === 'queue' && writer !== 'router') {
+    if (record.kind === 'queue' && Bi !== 'router') {
       throw Object.assign(new Error('queue.jsonl writer must be router'), { code: 'WRITER' });
     }
-    if (record.kind === 'message' && writer === 'executor') {
+    if (record.kind === 'message' && Bi === 'executor') {
       // 执行者只回传蒸馏，不直接写 message 流
       throw Object.assign(new Error('executor cannot write message records'), { code: 'WRITER' });
     }
 
     const seq = ++this.seq;
-    const full: JsonlJilu = {
+    const Quan: JsonlJilu = {
       ...record,
       seq,
       ts: Date.now(),
@@ -422,43 +422,43 @@ export class MemoryService {
       sessionId: record.sessionId,
       kind: record.kind,
     };
-    const line = JSON.stringify(full) + '\n';
-    fs.appendFileSync(this.jsonlPath, line, 'utf8');
+    const Hang = JSON.stringify(Quan) + '\n';
+    fs.appendFileSync(this.jsonlPath, Hang, 'utf8');
 
-    const body = String(full.body ?? full.content ?? full.text ?? JSON.stringify(full));
+    const ti = String(Quan.ti ?? Quan.content ?? Quan.text ?? JSON.stringify(Quan));
     this.db
       .prepare(
-        'INSERT OR REPLACE INTO records (seq, id, session_id, kind, ts, body, group_id, entity_type) VALUES (?,?,?,?,?,?,?,?)'
+        'INSERT OR REPLACE INTO records (seq, id, session_id, kind, ts, ti, group_id, entity_type) VALUES (?,?,?,?,?,?,?,?)'
       )
       .run(
         seq,
-        full.id,
-        full.sessionId,
-        full.kind,
-        full.ts,
-        body,
-        (full.groupId as string) ?? null,
-        (full.entityType as string) ?? null
+        Quan.id,
+        Quan.sessionId,
+        Quan.kind,
+        Quan.ts,
+        ti,
+        (Quan.groupId as string) ?? null,
+        (Quan.entityType as string) ?? null
       );
-    this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, body) VALUES (?, ?)').run(seq, spaceChars(body));
+    this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, ti) VALUES (?, ?)').run(seq, spaceChars(ti));
     // fts_tri 索引进原文（不插空格），trigram 才能覆盖 ASCII 标识符/路径与 ≥3 字 CJK 子串
-    this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, body) VALUES (?, ?)').run(seq, body);
+    this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, ti) VALUES (?, ?)').run(seq, ti);
     this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('last_seq', ?)").run(String(seq));
     this.jsonlIndex = null;
-    return full;
+    return Quan;
   }
 
   tail(limit = 50): JsonlJilu[] {
     const rows = this.db
       .prepare('SELECT * FROM records ORDER BY seq DESC LIMIT ?')
-      .all(limit) as Array<{ seq: number; ts: number; session_id: string; kind: string; id: string; body: string }>;
+      .all(limit) as Array<{ seq: number; ts: number; session_id: string; kind: string; id: string; ti: string }>;
     return rows.map((r) => ({
       seq: r.seq,
       ts: r.ts,
       sessionId: r.session_id,
       kind: r.kind,
       id: r.id,
-      body: r.body,
+      ti: r.ti,
     }));
   }
 
@@ -466,7 +466,7 @@ export class MemoryService {
   // 权限过滤先于相关性检索（不变量 #9）
   // ─────────────────────────────────────────────
 
-  private scopePredicate(scope?: HuisuoZuoyongyu): { active: boolean; predicate: string; params: any[] } {
+  private scopePredicate(scope?: HuisuoZuoyongyu): { jiHuo: boolean; predicate: string; params: any[] } {
     const preds: string[] = [];
     const params: any[] = [];
     if (scope?.sessionId) {
@@ -485,7 +485,7 @@ export class MemoryService {
       preds.push('kind = ?');
       params.push(scope.kind);
     }
-    return { active: preds.length > 0, predicate: preds.join(' AND '), params };
+    return { jiHuo: preds.length > 0, predicate: preds.join(' AND '), params };
   }
 
   /**
@@ -499,7 +499,7 @@ export class MemoryService {
   private buildScopeFilter(scope?: HuisuoZuoyongyu): ScopeStats {
     const total = (this.db.prepare('SELECT COUNT(*) AS n FROM records').get() as { n: number }).n;
     const sp = this.scopePredicate(scope);
-    if (!sp.active) {
+    if (!sp.jiHuo) {
       this.db.exec('DROP TABLE IF EXISTS scope_filter');
       return { scopeActive: false, predicate: '', table: null, totalRecords: total, authorizedRecords: total, deniedRecords: 0 };
     }
@@ -518,8 +518,8 @@ export class MemoryService {
     };
   }
 
-  private scopeJoin(scopeStats: ScopeStats, alias: string): string {
-    return scopeStats.scopeActive && scopeStats.table ? `JOIN ${scopeStats.table} sf ON sf.seq = ${alias}.rowid` : '';
+  private scopeJoin(scopeStats: ScopeStats, bieMing: string): string {
+    return scopeStats.scopeActive && scopeStats.table ? `JOIN ${scopeStats.table} sf ON sf.seq = ${bieMing}.rowid` : '';
   }
 
   // ─────────────────────────────────────────────
@@ -546,8 +546,8 @@ export class MemoryService {
       .filter((t) => t.length > 0);
     if (cixiang.length < 2) return [];
     const quoted = cixiang.map((t) => {
-      const body = mode === 'chars' ? spaceChars(t) : t;
-      return `"${body.replace(/"/g, '""')}"`;
+      const ti = mode === 'chars' ? spaceChars(t) : t;
+      return `"${ti.replace(/"/g, '""')}"`;
     });
     return [quoted.join(' AND '), quoted.join(' OR ')];
   }
@@ -563,8 +563,8 @@ export class MemoryService {
     return { rows: [] };
   }
 
-  private channelUni(query: string, limit: number, scopeStats: ScopeStats): { ids: string[]; scoreById: Map<string, number>; skipped?: string } {
-    const ids: string[] = [];
+  private channelUni(query: string, limit: number, scopeStats: ScopeStats): { idJi: string[]; scoreById: Map<string, number>; skipped?: string } {
+    const idJi: string[] = [];
     const scoreById = new Map<string, number>();
     const join = this.scopeJoin(scopeStats, 'f');
     const yuju = this.db.prepare(
@@ -583,17 +583,17 @@ export class MemoryService {
     for (const r of rows) {
       const id = String(r.seq);
       if (!scoreById.has(id)) {
-        ids.push(id);
+        idJi.push(id);
         scoreById.set(id, -Number(r.s));
       }
     }
-    return { ids, scoreById, ...(skipped ? { skipped } : {}) };
+    return { idJi, scoreById, ...(skipped ? { skipped } : {}) };
   }
 
-  private channelTri(query: string, limit: number, scopeStats: ScopeStats): { ids: string[]; scoreById: Map<string, number>; skipped?: string } {
-    const ids: string[] = [];
+  private channelTri(query: string, limit: number, scopeStats: ScopeStats): { idJi: string[]; scoreById: Map<string, number>; skipped?: string } {
+    const idJi: string[] = [];
     const scoreById = new Map<string, number>();
-    if (!triQueryable(query)) return { ids, scoreById, skipped: 'query<3chars' };
+    if (!triQueryable(query)) return { idJi, scoreById, skipped: 'query<3chars' };
     const join = this.scopeJoin(scopeStats, 'f');
     const yuju = this.db.prepare(
       `SELECT f.rowid AS seq, bm25(fts_tri) AS s FROM fts_tri f ${join}
@@ -611,31 +611,31 @@ export class MemoryService {
     for (const r of rows) {
       const id = String(r.seq);
       if (!scoreById.has(id)) {
-        ids.push(id);
+        idJi.push(id);
         scoreById.set(id, -Number(r.s));
       }
     }
-    return { ids, scoreById, ...(skipped ? { skipped } : {}) };
+    return { idJi, scoreById, ...(skipped ? { skipped } : {}) };
   }
 
   /** LIKE 兜底：1–2 字 CJK 与 trigram 停用时的语义保持不变（历史上是 recall 的兜底路径） */
-  private channelLike(query: string, limit: number, scopeStats: ScopeStats): { ids: string[]; scoreById: Map<string, number> } {
-    const ids: string[] = [];
+  private channelLike(query: string, limit: number, scopeStats: ScopeStats): { idJi: string[]; scoreById: Map<string, number> } {
+    const idJi: string[] = [];
     const scoreById = new Map<string, number>();
     const join = scopeStats.scopeActive && scopeStats.table ? `JOIN ${scopeStats.table} sf ON sf.seq = r.seq` : '';
     const rows = this.db
       .prepare(
-        `SELECT r.seq FROM records r ${join} WHERE r.body LIKE ? OR r.id LIKE ? ORDER BY r.seq DESC LIMIT ?`
+        `SELECT r.seq FROM records r ${join} WHERE r.ti LIKE ? OR r.id LIKE ? ORDER BY r.seq DESC LIMIT ?`
       )
       .all(`%${query}%`, `%${query}%`, limit) as Array<{ seq: number }>;
     for (const r of rows) {
       const id = String(r.seq);
       if (!scoreById.has(id)) {
-        ids.push(id);
-        scoreById.set(id, 1 / (1 + ids.length));
+        idJi.push(id);
+        scoreById.set(id, 1 / (1 + idJi.length));
       }
     }
-    return { ids, scoreById };
+    return { idJi, scoreById };
   }
 
   /**
@@ -647,7 +647,7 @@ export class MemoryService {
     limit: number,
     scopeStats: ScopeStats,
     minCosine: number
-  ): { ids: string[]; scoreById: Map<string, number>; cosines: number; belowThreshold: number } {
+  ): { idJi: string[]; scoreById: Map<string, number>; cosines: number; belowThreshold: number } {
     const join = scopeStats.scopeActive && scopeStats.table ? `JOIN ${scopeStats.table} sf ON sf.seq = v.seq` : '';
     const rows = this.db
       .prepare(`SELECT v.seq, v.scale, v.data FROM vec_index v ${join}`)
@@ -661,7 +661,7 @@ export class MemoryService {
       scored.push({ seq: r.seq, cos });
     }
     scored.sort((a, b) => b.cos - a.cos);
-    const ids: string[] = [];
+    const idJi: string[] = [];
     const scoreById = new Map<string, number>();
     let belowThreshold = 0;
     for (const s of scored.slice(0, limit)) {
@@ -670,11 +670,11 @@ export class MemoryService {
         continue;
       }
       const id = String(s.seq);
-      ids.push(id);
+      idJi.push(id);
       scoreById.set(id, normalizeCosine(s.cos));
     }
     belowThreshold += Math.max(0, scored.length - limit);
-    return { ids, scoreById, cosines: rows.length, belowThreshold };
+    return { idJi, scoreById, cosines: rows.length, belowThreshold };
   }
 
   // ─────────────────────────────────────────────
@@ -697,7 +697,7 @@ export class MemoryService {
 
   async recallDetailed(query: string | QueryLike, limit = 10, opts: HuisuoXuanxiang = {}): Promise<HuisuoXiangqing> {
     const o = guiFanHuaChaXunCanShu(query, limit, opts);
-    const t0 = Date.now();
+    const qiShiShiJian = Date.now();
     const scopeStats = this.buildScopeFilter(o.scope);
     const perChannel = o.perChannel ?? Math.max(o.limit * 3, 20);
     const channels: TongdaoBaogao[] = [];
@@ -719,29 +719,29 @@ export class MemoryService {
     const uni = this.channelUni(o.query, perChannel, scopeStats);
     timings.uniMs = Date.now() - uniT;
     let likeReport: TongdaoBaogao | null = null;
-    if (uni.ids.length) {
-      lists.push({ source: 'fts_uni', ids: uni.ids });
-      for (const id of uni.ids) scoreById.set(id, { ...(scoreById.get(id) ?? {}), uni: uni.scoreById.get(id) });
-      channels.push({ channel: 'fts_uni', used: true, hits: uni.ids.length, ms: timings.uniMs });
+    if (uni.idJi.length) {
+      lists.push({ source: 'fts_uni', idJi: uni.idJi });
+      for (const id of uni.idJi) scoreById.set(id, { ...(scoreById.get(id) ?? {}), uni: uni.scoreById.get(id) });
+      channels.push({ channel: 'fts_uni', used: true, hits: uni.idJi.length, ms: timings.uniMs });
     } else {
       // 保持历史语义：fts_uni 空时用 LIKE 兜底（1–2 字 CJK）
       const like = this.channelLike(o.query, perChannel, scopeStats);
-      likeReport = { channel: 'like', used: like.ids.length > 0, hits: like.ids.length, ms: 0, skipped: 'fallback-of-fts_uni' };
-      if (like.ids.length) {
-        lists.push({ source: 'fts_uni', ids: like.ids });
-        for (const id of like.ids) scoreById.set(id, { ...(scoreById.get(id) ?? {}), uni: like.scoreById.get(id) });
+      likeReport = { channel: 'like', used: like.idJi.length > 0, hits: like.idJi.length, ms: 0, skipped: 'fallback-of-fts_uni' };
+      if (like.idJi.length) {
+        lists.push({ source: 'fts_uni', idJi: like.idJi });
+        for (const id of like.idJi) scoreById.set(id, { ...(scoreById.get(id) ?? {}), uni: like.scoreById.get(id) });
       }
-      channels.push({ channel: 'fts_uni', used: like.ids.length > 0, hits: like.ids.length, ms: timings.uniMs, skipped: 'matched via LIKE fallback' });
+      channels.push({ channel: 'fts_uni', used: like.idJi.length > 0, hits: like.idJi.length, ms: timings.uniMs, skipped: 'matched via LIKE fallback' });
     }
 
     const triT = Date.now();
     const tri = this.channelTri(o.query, perChannel, scopeStats);
     timings.triMs = Date.now() - triT;
-    if (tri.ids.length) {
-      lists.push({ source: 'fts_tri', ids: tri.ids });
-      for (const id of tri.ids) scoreById.set(id, { ...(scoreById.get(id) ?? {}), tri: tri.scoreById.get(id) });
+    if (tri.idJi.length) {
+      lists.push({ source: 'fts_tri', idJi: tri.idJi });
+      for (const id of tri.idJi) scoreById.set(id, { ...(scoreById.get(id) ?? {}), tri: tri.scoreById.get(id) });
     }
-    channels.push({ channel: 'fts_tri', used: tri.ids.length > 0, hits: tri.ids.length, ms: timings.triMs, skipped: tri.skipped });
+    channels.push({ channel: 'fts_tri', used: tri.idJi.length > 0, hits: tri.idJi.length, ms: timings.triMs, skipped: tri.skipped });
 
     // ── 向量通道（异步：补齐 → 嵌入查询 → 授权集合内算余弦）
     let vecShiyong = false;
@@ -773,10 +773,10 @@ export class MemoryService {
           timings.vecMs = Date.now() - vT;
           timings.cosines = vec.cosines;
           vecYixiaYuzhi = vec.belowThreshold;
-          vecShiyong = vec.ids.length > 0;
-          if (vec.ids.length) {
-            lists.push({ source: 'vector', ids: vec.ids });
-            for (const id of vec.ids) scoreById.set(id, { ...(scoreById.get(id) ?? {}), vector: vec.scoreById.get(id) });
+          vecShiyong = vec.idJi.length > 0;
+          if (vec.idJi.length) {
+            lists.push({ source: 'vector', idJi: vec.idJi });
+            for (const id of vec.idJi) scoreById.set(id, { ...(scoreById.get(id) ?? {}), vector: vec.scoreById.get(id) });
           }
           if (!vecShiyong) vecSkipped = `all ${vec.cosines} cosines below minCosine ${o.minCosine ?? vo.minCosine ?? 0.5}`;
         }
@@ -785,7 +785,7 @@ export class MemoryService {
     channels.push({
       channel: 'vector',
       used: vecShiyong,
-      hits: vecShiyong ? (lists.find((l) => l.source === 'vector')?.ids.length ?? 0) : 0,
+      hits: vecShiyong ? (lists.find((l) => l.source === 'vector')?.idJi.length ?? 0) : 0,
       ms: timings.vecMs,
       skipped: vecSkipped,
     });
@@ -798,7 +798,7 @@ export class MemoryService {
     timings.fuseMs = Date.now() - fuseT;
 
     const cards = this.buildCards(fused.slice(0, o.limit), scoreById, scopeStats);
-    timings.totalMs = Date.now() - t0;
+    timings.totalMs = Date.now() - qiShiShiJian;
     return {
       cards,
       timings,
@@ -806,8 +806,8 @@ export class MemoryService {
       channels,
       levels: [...new Set(cards.map((c) => c.source))],
       candidates: {
-        uni: uni.ids.length,
-        tri: tri.ids.length,
+        uni: uni.idJi.length,
+        tri: tri.idJi.length,
         vector: timings.cosines,
         fused: fused.length,
       },
@@ -815,7 +815,7 @@ export class MemoryService {
   }
 
   private searchSync(o: Required<Pick<HuisuoXuanxiang, 'limit'>> & HuisuoXuanxiang & { query: string }): HuisuoXiangqing {
-    const t0 = Date.now();
+    const qiShiShiJian = Date.now();
     const scopeStats = this.buildScopeFilter(o.scope);
     const perChannel = o.perChannel ?? Math.max(o.limit * 3, 20);
     const lists: RankedList[] = [];
@@ -836,28 +836,28 @@ export class MemoryService {
     const uT = Date.now();
     const uni = this.channelUni(o.query, perChannel, scopeStats);
     timings.uniMs = Date.now() - uT;
-    if (uni.ids.length) {
-      lists.push({ source: 'fts_uni', ids: uni.ids });
-      for (const id of uni.ids) scoreById.set(id, { uni: uni.scoreById.get(id) });
-      channels.push({ channel: 'fts_uni', used: true, hits: uni.ids.length, ms: timings.uniMs });
+    if (uni.idJi.length) {
+      lists.push({ source: 'fts_uni', idJi: uni.idJi });
+      for (const id of uni.idJi) scoreById.set(id, { uni: uni.scoreById.get(id) });
+      channels.push({ channel: 'fts_uni', used: true, hits: uni.idJi.length, ms: timings.uniMs });
     } else {
       const like = this.channelLike(o.query, perChannel, scopeStats);
-      if (like.ids.length) {
-        lists.push({ source: 'fts_uni', ids: like.ids });
-        for (const id of like.ids) scoreById.set(id, { uni: like.scoreById.get(id) });
+      if (like.idJi.length) {
+        lists.push({ source: 'fts_uni', idJi: like.idJi });
+        for (const id of like.idJi) scoreById.set(id, { uni: like.scoreById.get(id) });
       }
-      channels.push({ channel: 'fts_uni', used: like.ids.length > 0, hits: like.ids.length, ms: timings.uniMs, skipped: 'matched via LIKE fallback' });
-      channels.push({ channel: 'like', used: like.ids.length > 0, hits: like.ids.length, ms: 0, skipped: 'fallback-of-fts_uni' });
+      channels.push({ channel: 'fts_uni', used: like.idJi.length > 0, hits: like.idJi.length, ms: timings.uniMs, skipped: 'matched via LIKE fallback' });
+      channels.push({ channel: 'like', used: like.idJi.length > 0, hits: like.idJi.length, ms: 0, skipped: 'fallback-of-fts_uni' });
     }
 
     const tT = Date.now();
     const tri = this.channelTri(o.query, perChannel, scopeStats);
     timings.triMs = Date.now() - tT;
-    if (tri.ids.length) {
-      lists.push({ source: 'fts_tri', ids: tri.ids });
-      for (const id of tri.ids) scoreById.set(id, { ...(scoreById.get(id) ?? {}), tri: tri.scoreById.get(id) });
+    if (tri.idJi.length) {
+      lists.push({ source: 'fts_tri', idJi: tri.idJi });
+      for (const id of tri.idJi) scoreById.set(id, { ...(scoreById.get(id) ?? {}), tri: tri.scoreById.get(id) });
     }
-    channels.push({ channel: 'fts_tri', used: tri.ids.length > 0, hits: tri.ids.length, ms: timings.triMs, skipped: tri.skipped });
+    channels.push({ channel: 'fts_tri', used: tri.idJi.length > 0, hits: tri.idJi.length, ms: timings.triMs, skipped: tri.skipped });
 
     // 同步路径的向量通道：只在查询向量已缓存时使用（避免阻塞事件循环）
     let vecSkipped: string | undefined;
@@ -872,11 +872,11 @@ export class MemoryService {
       timings.vecMs = Date.now() - vT;
       timings.cosines = vec.cosines;
       timings.vectorBelowThreshold = vec.belowThreshold;
-      if (vec.ids.length) {
-        lists.push({ source: 'vector', ids: vec.ids });
-        for (const id of vec.ids) scoreById.set(id, { ...(scoreById.get(id) ?? {}), vector: vec.scoreById.get(id) });
+      if (vec.idJi.length) {
+        lists.push({ source: 'vector', idJi: vec.idJi });
+        for (const id of vec.idJi) scoreById.set(id, { ...(scoreById.get(id) ?? {}), vector: vec.scoreById.get(id) });
       }
-      channels.push({ channel: 'vector', used: vec.ids.length > 0, hits: vec.ids.length, ms: timings.vecMs });
+      channels.push({ channel: 'vector', used: vec.idJi.length > 0, hits: vec.idJi.length, ms: timings.vecMs });
     }
     if (vecSkipped) channels.push({ channel: 'vector', used: false, hits: 0, ms: 0, skipped: vecSkipped });
 
@@ -884,14 +884,14 @@ export class MemoryService {
     const fused = rrfRonghePaixu(lists, o.k ?? 60);
     timings.fuseMs = Date.now() - fT;
     const cards = this.buildCards(fused.slice(0, o.limit), scoreById as any, scopeStats);
-    timings.totalMs = Date.now() - t0;
+    timings.totalMs = Date.now() - qiShiShiJian;
     return {
       cards,
       timings,
       scopeStats,
       channels,
       levels: [...new Set(cards.map((c) => c.source))],
-      candidates: { uni: uni.ids.length, tri: tri.ids.length, vector: timings.cosines, fused: fused.length },
+      candidates: { uni: uni.idJi.length, tri: tri.idJi.length, vector: timings.cosines, fused: fused.length },
     };
   }
 
@@ -905,20 +905,20 @@ export class MemoryService {
     const zhanwei = seqs.map(() => '?').join(',');
     const join = scopeStats.scopeActive && scopeStats.table ? `JOIN ${scopeStats.table} sf ON sf.seq = r.seq` : '';
     const rows = this.db
-      .prepare(`SELECT r.seq, r.id, r.body, r.session_id FROM records r ${join} WHERE r.seq IN (${zhanwei})`)
-      .all(...seqs) as Array<{ seq: number; id: string; body: string; session_id: string }>;
+      .prepare(`SELECT r.seq, r.id, r.ti, r.session_id FROM records r ${join} WHERE r.seq IN (${zhanwei})`)
+      .all(...seqs) as Array<{ seq: number; id: string; ti: string; session_id: string }>;
     const bySeq = new Map(rows.map((r) => [r.seq, r]));
     const out: RecallCard[] = [];
     for (const f of fused) {
       const seq = Number(f.id);
-      const row = bySeq.get(seq);
-      if (!row) continue; // 越权行会被 scope join 挡掉（防御性二次校验）
+      const hang = bySeq.get(seq);
+      if (!hang) continue; // 越权行会被 scope join 挡掉（防御性二次校验）
       const source: HuisuoLaiyuan = f.sources.length > 1 ? 'fused' : ((f.sources[0] as HuisuoLaiyuan) ?? 'fts_uni');
       const sc = scoreById.get(f.id) ?? {};
       out.push({
         seq,
-        recordId: row.id,
-        snippet: String(row.body).slice(0, 200),
+        recordId: hang.id,
+        snippet: String(hang.ti).slice(0, 200),
         score: sc.vector ?? sc.tri ?? sc.uni ?? f.rrfScore,
         source,
         hitLevel: source,
@@ -926,7 +926,7 @@ export class MemoryService {
         ranks: f.ranks as Partial<Record<HuisuoLaiyuan, number>>,
         rrfScore: f.rrfScore,
         cosine: f.ranks.vector ? sc.vector : undefined,
-        anchor: { file: path.basename(this.jsonlPath), seq, recordId: row.id },
+        anchor: { file: path.basename(this.jsonlPath), seq, recordId: hang.id },
       });
     }
     return out;
@@ -936,29 +936,29 @@ export class MemoryService {
   // retrieve（解引用，三级回退 exact → nearby → fuzzy）
   // ─────────────────────────────────────────────
 
-  retrieve(input: JiansuoMaodianShuru | { anchor: JiansuoMaodianShuru; fallback?: JiansuoXuanxiang['fallback'] }, opts: JiansuoXuanxiang = {}): RetrieveOutcome | null {
-    const req = (input ?? {}) as { anchor?: JiansuoMaodianShuru; fallback?: JiansuoXuanxiang['fallback'] };
-    const anchor: JiansuoMaodianShuru = req.anchor ?? (input as JiansuoMaodianShuru);
-    const maxLevel = opts.fallback ?? req.fallback ?? 'fuzzy';
+  retrieve(shuRu: JiansuoMaodianShuru | { anchor: JiansuoMaodianShuru; huiTui?: JiansuoXuanxiang['huiTui'] }, opts: JiansuoXuanxiang = {}): RetrieveOutcome | null {
+    const Qiu = (shuRu ?? {}) as { anchor?: JiansuoMaodianShuru; huiTui?: JiansuoXuanxiang['huiTui'] };
+    const anchor: JiansuoMaodianShuru = Qiu.anchor ?? (shuRu as JiansuoMaodianShuru);
+    const maxLevel = opts.huiTui ?? Qiu.huiTui ?? 'fuzzy';
     const order: Array<'exact' | 'nearby' | 'fuzzy'> = ['exact', 'nearby', 'fuzzy'];
     const allowed = order.slice(0, order.indexOf(maxLevel) + 1);
     const tried: string[] = [];
 
     for (const level of allowed) {
-      const hit =
+      const mingZhong =
         level === 'exact'
           ? this.retrieveExact(anchor)
           : level === 'nearby'
             ? this.retrieveNearby(anchor, opts.window ?? 5)
             : this.retrieveFuzzy(anchor, opts.query);
-      if (hit) {
+      if (mingZhong) {
         return {
-          raw: hit.raw,
-          seq: hit.seq,
-          recordId: hit.recordId,
+          raw: mingZhong.raw,
+          seq: mingZhong.seq,
+          recordId: mingZhong.recordId,
           hitLevel: level,
-          via: hit.via,
-          anchor: { file: path.basename(this.jsonlPath), seq: hit.seq, recordId: hit.recordId, byteOffset: anchor.byteOffset },
+          via: mingZhong.via,
+          anchor: { file: path.basename(this.jsonlPath), seq: mingZhong.seq, recordId: mingZhong.recordId, byteOffset: anchor.byteOffset },
           note: tried.length ? `previous levels failed: ${tried.join(', ')}` : undefined,
         };
       }
@@ -970,26 +970,26 @@ export class MemoryService {
   /** exact：SQLite 主键/唯键直取；SQLite 缺行时回 JSONL（JSONL 才是唯一事实来源） */
   private retrieveExact(anchor: JiansuoMaodianShuru): YuanwenMingzhong | null {
     if (anchor.recordId) {
-      const row = this.db.prepare('SELECT seq, id, body FROM records WHERE id = ?').get(anchor.recordId);
-      if (row) return { raw: String(row.body), seq: Number(row.seq), recordId: String(row.id), via: 'sqlite:id' };
+      const hang = this.db.prepare('SELECT seq, id, ti FROM records WHERE id = ?').get(anchor.recordId);
+      if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: 'sqlite:id' };
     }
     if (anchor.seq !== undefined && anchor.seq !== null) {
-      const row = this.db.prepare('SELECT seq, id, body FROM records WHERE seq = ?').get(anchor.seq);
-      if (row) return { raw: String(row.body), seq: Number(row.seq), recordId: String(row.id), via: 'sqlite:seq' };
+      const hang = this.db.prepare('SELECT seq, id, ti FROM records WHERE seq = ?').get(anchor.seq);
+      if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: 'sqlite:seq' };
       // seq 已删除但 JSONL 仍在 → 直接读 JSONL（投影可丢弃，事实源不丢）
-      const idx = this.jsonlIndexOrBuild();
-      const entry = idx.entries.find((e) => e.seq === Number(anchor.seq));
-      if (entry) return { raw: entry.body, seq: entry.seq, recordId: entry.id, via: 'jsonl:seq' };
+      const suoYin = this.jsonlIndexOrBuild();
+      const entry = suoYin.entries.find((e) => e.seq === Number(anchor.seq));
+      if (entry) return { raw: entry.ti, seq: entry.seq, recordId: entry.id, via: 'jsonl:seq' };
     }
     if (anchor.recordId) {
-      const idx = this.jsonlIndexOrBuild();
-      const entry = idx.entries.find((e) => e.id === anchor.recordId);
-      if (entry) return { raw: entry.body, seq: entry.seq, recordId: entry.id, via: 'jsonl:id' };
+      const suoYin = this.jsonlIndexOrBuild();
+      const entry = suoYin.entries.find((e) => e.id === anchor.recordId);
+      if (entry) return { raw: entry.ti, seq: entry.seq, recordId: entry.id, via: 'jsonl:id' };
     }
     if (anchor.byteOffset !== undefined) {
-      const idx = this.jsonlIndexOrBuild();
-      const entry = idx.entries.find((e) => anchor.byteOffset! >= e.start && anchor.byteOffset! < e.end);
-      if (entry) return { raw: entry.body, seq: entry.seq, recordId: entry.id, via: 'jsonl:offset' };
+      const suoYin = this.jsonlIndexOrBuild();
+      const entry = suoYin.entries.find((e) => anchor.byteOffset! >= e.start && anchor.byteOffset! < e.end);
+      if (entry) return { raw: entry.ti, seq: entry.seq, recordId: entry.id, via: 'jsonl:offset' };
     }
     return null;
   }
@@ -997,41 +997,41 @@ export class MemoryService {
   /** nearby：seq 邻域 / 去掉后缀的 id / id 长前缀 / 字节偏移最近的行走近一步 */
   private retrieveNearby(anchor: JiansuoMaodianShuru, window: number): YuanwenMingzhong | null {
     if (anchor.seq !== undefined && anchor.seq !== null) {
-      const row = this.db
-        .prepare('SELECT seq, id, body FROM records WHERE seq BETWEEN ? AND ? ORDER BY ABS(seq - ?) LIMIT 1')
+      const hang = this.db
+        .prepare('SELECT seq, id, ti FROM records WHERE seq BETWEEN ? AND ? ORDER BY ABS(seq - ?) LIMIT 1')
         .get(Number(anchor.seq) - window, Number(anchor.seq) + window, Number(anchor.seq));
-      if (row) return { raw: String(row.body), seq: Number(row.seq), recordId: String(row.id), via: `sqlite:seq±${window}` };
+      if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: `sqlite:seq±${window}` };
     }
     if (anchor.recordId) {
       // 逐级剥掉尾部片段（'m-003#7' → 'm-003'，'m-012-v2' → 'm-012'）
-      let cand = String(anchor.recordId);
+      let houXuan = String(anchor.recordId);
       for (let i = 0; i < 3; i++) {
-        const m = /^(.*?)[-:#@./][^-:#@./]*$/.exec(cand);
+        const m = /^(.*?)[-:#@./][^-:#@./]*$/.exec(houXuan);
         if (!m || !m[1]) break;
-        cand = m[1];
-        const row = this.db.prepare('SELECT seq, id, body FROM records WHERE id = ?').get(cand);
-        if (row) return { raw: String(row.body), seq: Number(row.seq), recordId: String(row.id), via: 'sqlite:id-trim' };
+        houXuan = m[1];
+        const hang = this.db.prepare('SELECT seq, id, ti FROM records WHERE id = ?').get(houXuan);
+        if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: 'sqlite:id-trim' };
       }
       // id 长前缀：anchor 比真实 id 长且共享长前缀时也算"邻近"
-      const prefix = cand.slice(0, Math.max(8, Math.floor(cand.length * 0.7)));
-      if (prefix.length >= 8 && prefix !== cand) {
-        const row = this.db.prepare('SELECT seq, id, body FROM records WHERE id LIKE ? ORDER BY LENGTH(id) LIMIT 1').get(`${prefix}%`);
-        if (row) return { raw: String(row.body), seq: Number(row.seq), recordId: String(row.id), via: 'sqlite:id-prefix' };
+      const prefix = houXuan.slice(0, Math.max(8, Math.floor(houXuan.length * 0.7)));
+      if (prefix.length >= 8 && prefix !== houXuan) {
+        const hang = this.db.prepare('SELECT seq, id, ti FROM records WHERE id LIKE ? ORDER BY LENGTH(id) LIMIT 1').get(`${prefix}%`);
+        if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: 'sqlite:id-prefix' };
       }
-      const idx = this.jsonlIndexOrBuild();
-      const cand2 = idx.entries
+      const suoYin = this.jsonlIndexOrBuild();
+      const cand2 = suoYin.entries
         .map((e) => ({ e, lcp: gongyongQianzhuiChangdu(e.id, String(anchor.recordId)) }))
         .filter((x) => x.lcp >= 8)
         .sort((a, b) => b.lcp - a.lcp)[0];
-      if (cand2) return { raw: cand2.e.body, seq: cand2.e.seq, recordId: cand2.e.id, via: 'jsonl:id-prefix' };
+      if (cand2) return { raw: cand2.e.ti, seq: cand2.e.seq, recordId: cand2.e.id, via: 'jsonl:id-prefix' };
     }
     if (anchor.byteOffset !== undefined) {
-      const idx = this.jsonlIndexOrBuild();
-      let best: JsonlSuoyinTiaomu | null = null;
-      for (const e of idx.entries) {
-        if (!best || Math.abs(e.start - anchor.byteOffset) < Math.abs(best.start - anchor.byteOffset)) best = e;
+      const suoYin = this.jsonlIndexOrBuild();
+      let zuiJia: JsonlSuoyinTiaomu | null = null;
+      for (const e of suoYin.entries) {
+        if (!zuiJia || Math.abs(e.start - anchor.byteOffset) < Math.abs(zuiJia.start - anchor.byteOffset)) zuiJia = e;
       }
-      if (best) return { raw: best.body, seq: best.seq, recordId: best.id, via: 'jsonl:offset-nearest' };
+      if (zuiJia) return { raw: zuiJia.ti, seq: zuiJia.seq, recordId: zuiJia.id, via: 'jsonl:offset-nearest' };
     }
     return null;
   }
@@ -1041,26 +1041,26 @@ export class MemoryService {
     const q = (query ?? anchor.recordId ?? '').trim();
     if (q) {
       const scopeStats = this.buildScopeFilter(undefined);
-      for (const [chan, ids] of [
-        ['fts:uni', this.channelUni(q, 5, scopeStats).ids],
-        ['fts:tri', this.channelTri(q, 5, scopeStats).ids],
+      for (const [chan, idJi] of [
+        ['fts:uni', this.channelUni(q, 5, scopeStats).idJi],
+        ['fts:tri', this.channelTri(q, 5, scopeStats).idJi],
       ] as Array<[string, string[]]>) {
-        if (ids.length) {
-          const row = this.db.prepare('SELECT seq, id, body FROM records WHERE seq = ?').get(Number(ids[0]));
-          if (row) return { raw: String(row.body), seq: Number(row.seq), recordId: String(row.id), via: chan };
+        if (idJi.length) {
+          const hang = this.db.prepare('SELECT seq, id, ti FROM records WHERE seq = ?').get(Number(idJi[0]));
+          if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: chan };
         }
       }
-      const row = this.db
-        .prepare('SELECT seq, id, body FROM records WHERE id LIKE ? ORDER BY LENGTH(id) LIMIT 1')
+      const hang = this.db
+        .prepare('SELECT seq, id, ti FROM records WHERE id LIKE ? ORDER BY LENGTH(id) LIMIT 1')
         .get(`%${q}%`);
-      if (row) return { raw: String(row.body), seq: Number(row.seq), recordId: String(row.id), via: 'like:id' };
+      if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: 'like:id' };
     }
-    const zuixin = this.db.prepare('SELECT seq, id, body FROM records ORDER BY seq DESC LIMIT 1').get();
-    if (zuixin) return { raw: String(zuixin.body), seq: Number(zuixin.seq), recordId: String(zuixin.id), via: 'sqlite:newest' };
+    const zuixin = this.db.prepare('SELECT seq, id, ti FROM records ORDER BY seq DESC LIMIT 1').get();
+    if (zuixin) return { raw: String(zuixin.ti), seq: Number(zuixin.seq), recordId: String(zuixin.id), via: 'sqlite:newest' };
     // SQLite 空投影 → 回 JSONL 最后一行
-    const idx = this.jsonlIndexOrBuild();
-    const last = idx.entries[idx.entries.length - 1];
-    if (last) return { raw: last.body, seq: last.seq, recordId: last.id, via: 'jsonl:last' };
+    const suoYin = this.jsonlIndexOrBuild();
+    const last = suoYin.entries[suoYin.entries.length - 1];
+    if (last) return { raw: last.ti, seq: last.seq, recordId: last.id, via: 'jsonl:last' };
     return null;
   }
 
@@ -1099,7 +1099,7 @@ export class MemoryService {
     if (vo.modelPath) {
       candidates.push({ modelPath: vo.modelPath, tokenizerPath: vo.tokenizerPath ?? path.join(path.dirname(vo.modelPath), 'tokenizer.json'), from: 'explicit' });
     }
-    for (const c of morenMoxingHouxuan(this.opts.dataDir)) candidates.push(c);
+    for (const c of morenMoxingHouxuan(this.opts.CangLu)) candidates.push(c);
     this.vectorTried = candidates.map((c) => `${c.from}:${c.modelPath}`);
     const found = candidates.find((c) => fs.existsSync(c.modelPath));
     if (!found) {
@@ -1173,31 +1173,31 @@ export class MemoryService {
    * 被动水合：把还没有向量的历史记录补上（最近优先），上限 budget 条。
    * 不是全量预算 —— 每次查询只补水合预算内的那部分，其余留给下一次。
    */
-  async hydrateVectors(budget = 256): Promise<{ embedded: number; ms: number; remaining: number; skipped?: string }> {
-    const t0 = Date.now();
-    if (!this.embedder) return { embedded: 0, ms: 0, remaining: 0, skipped: this.vectorInitError || 'embedder unavailable' };
+  async hydrateVectors(budget = 256): Promise<{ embedded: number; ms: number; shengYu: number; skipped?: string }> {
+    const qiShiShiJian = Date.now();
+    if (!this.embedder) return { embedded: 0, ms: 0, shengYu: 0, skipped: this.vectorInitError || 'embedder unavailable' };
     const maxChars = this.vectorOpts().maxEmbedChars ?? 512;
     const rows = this.db
       .prepare(
-        `SELECT r.seq, r.body FROM records r LEFT JOIN vec_index v ON v.seq = r.seq
+        `SELECT r.seq, r.ti FROM records r LEFT JOIN vec_index v ON v.seq = r.seq
          WHERE v.seq IS NULL ORDER BY r.seq DESC LIMIT ?`
       )
-      .all(Math.max(0, budget)) as Array<{ seq: number; body: string }>;
-    if (!rows.length) return { embedded: 0, ms: Date.now() - t0, remaining: 0 };
+      .all(Math.max(0, budget)) as Array<{ seq: number; ti: string }>;
+    if (!rows.length) return { embedded: 0, ms: Date.now() - qiShiShiJian, shengYu: 0 };
     const shiLi = this.db.prepare('INSERT OR REPLACE INTO vec_index (seq, dim, scale, data) VALUES (?,?,?,?)');
     let n = 0;
-    for (const row of rows) {
+    for (const hang of rows) {
       if (this.closed) break;
-      const text = String(row.body).slice(0, maxChars);
+      const text = String(hang.ti).slice(0, maxChars);
       const vec = await this.embedder.embed(text);
       const enc = bianMaXiangLiang(vec);
-      shiLi.run(row.seq, enc.dim, enc.scale, enc.blob);
+      shiLi.run(hang.seq, enc.dim, enc.scale, enc.blob);
       n += 1;
     }
-    const rest = (this.db
+    const qiYu = (this.db
       .prepare('SELECT COUNT(*) AS n FROM records r LEFT JOIN vec_index v ON v.seq = r.seq WHERE v.seq IS NULL')
       .get() as { n: number }).n;
-    return { embedded: n, ms: Date.now() - t0, remaining: rest };
+    return { embedded: n, ms: Date.now() - qiShiShiJian, shengYu: qiYu };
   }
 
   /** 直接嵌入一段文本（调试/测试用） */
@@ -1221,19 +1221,19 @@ export class MemoryService {
       this.jsonlIndex = null;
       return 0;
     }
-    const lines = fs.readFileSync(this.jsonlPath, 'utf8').split('\n').filter(Boolean);
+    const HangJi = fs.readFileSync(this.jsonlPath, 'utf8').split('\n').filter(Boolean);
     const shiLi = this.db.prepare(
-      'INSERT OR REPLACE INTO records (seq, id, session_id, kind, ts, body, group_id, entity_type) VALUES (?,?,?,?,?,?,?,?)'
+      'INSERT OR REPLACE INTO records (seq, id, session_id, kind, ts, ti, group_id, entity_type) VALUES (?,?,?,?,?,?,?,?)'
     );
-    const insU = this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, body) VALUES (?, ?)');
-    const insT = this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, body) VALUES (?, ?)');
+    const insU = this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, ti) VALUES (?, ?)');
+    const insT = this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, ti) VALUES (?, ?)');
     const shiwu = this.db.transaction(() => {
-      for (const line of lines) {
-        const r = JSON.parse(line) as JsonlJilu;
-        const body = String(r.body ?? r.content ?? r.text ?? line);
-        shiLi.run(r.seq, r.id, r.sessionId, r.kind, r.ts, body, (r.groupId as string) ?? null, (r.entityType as string) ?? null);
-        insU.run(r.seq, spaceChars(body));
-        insT.run(r.seq, body);
+      for (const Hang of HangJi) {
+        const r = JSON.parse(Hang) as JsonlJilu;
+        const ti = String(r.ti ?? r.content ?? r.text ?? Hang);
+        shiLi.run(r.seq, r.id, r.sessionId, r.kind, r.ts, ti, (r.groupId as string) ?? null, (r.entityType as string) ?? null);
+        insU.run(r.seq, spaceChars(ti));
+        insT.run(r.seq, ti);
         if (r.seq > this.seq) this.seq = r.seq;
       }
     });
@@ -1241,7 +1241,7 @@ export class MemoryService {
     this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('last_seq', ?)").run(String(this.seq));
     this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('schema_version', ?)").run(String(MOSHI_BANBEN));
     this.jsonlIndex = null;
-    return lines.length;
+    return HangJi.length;
   }
 
   /**
@@ -1272,11 +1272,11 @@ export class MemoryService {
     dbPath: string;
     jsonlPath: string;
     upgrade: ShengjiBaogao;
-    coldStart: { rebuilt: boolean; lines: number; reason: string };
+    coldStart: { rebuilt: boolean; HangJi: number; reason: string };
     vector: XiangliangZhuangtai & { error?: string; modelCandidates: string[] };
   } {
     const n = (sql: string) => (this.db.prepare(sql).get() as { n: number }).n;
-    const idx = this.jsonlIndexOrBuild();
+    const suoYin = this.jsonlIndexOrBuild();
     return {
       schemaVersion: Number((this.db.prepare("SELECT v FROM meta WHERE k='schema_version'").get() as { v?: string } | undefined)?.v ?? 0),
       seq: this.seq,
@@ -1285,8 +1285,8 @@ export class MemoryService {
       ftsTriDocs: this.indexedDocs('fts_tri'),
       ftsTriPresent: this.tableExists('fts_tri'),
       vecRows: n('SELECT COUNT(*) AS n FROM vec_index'),
-      jsonlLines: idx.entries.length,
-      jsonlBytes: idx.size,
+      jsonlLines: suoYin.entries.length,
+      jsonlBytes: suoYin.size,
       dbPath: this.dbPath,
       jsonlPath: this.jsonlPath,
       upgrade: this.upgrade,
@@ -1338,7 +1338,7 @@ interface JsonlSuoyinTiaomu {
   end: number;
   seq: number;
   id: string;
-  body: string;
+  ti: string;
 }
 
 interface JsonlSuoyin {
@@ -1360,21 +1360,21 @@ export function gouJianJsonlSuoYin(jsonlPath: string): JsonlSuoyin {
     const hangHuanchong = buf.subarray(start, i);
     start = i + 1;
     if (!hangHuanchong.length) continue;
-    const line = hangHuanchong.toString('utf8').trim();
-    if (!line) continue;
+    const Hang = hangHuanchong.toString('utf8').trim();
+    if (!Hang) continue;
     let parsed: any = null;
     try {
-      parsed = JSON.parse(line);
+      parsed = JSON.parse(Hang);
     } catch {
       continue;
     }
-    const body = String(parsed.body ?? parsed.content ?? parsed.text ?? line);
+    const ti = String(parsed.ti ?? parsed.content ?? parsed.text ?? Hang);
     entries.push({
       start: i - hangHuanchong.length,
       end: i,
       seq: Number(parsed.seq ?? entries.length + 1),
       id: String(parsed.id ?? ''),
-      body,
+      ti,
     });
   }
   return { size: st.size, mtimeMs: st.mtimeMs, entries };
@@ -1428,65 +1428,65 @@ function encodeVectorToInt8ForQuery(vec: Float32Array): { data: Int8Array; scale
 // ─────────────────────────────────────────────
 
 /** IPC 子进程入口（pnpm --filter @warmy/memory-os start） */
-export function qishiJiyiCangFuwuIpc(dataDir: string): MemoryService {
-  const fuwu = new MemoryService({ dataDir });
-  const send = (msg: any) => {
+export function qishiJiyiCangFuwuIpc(CangLu: string): JiyiCangFuwu {
+  const fuwu = new JiyiCangFuwu({ CangLu });
+  const faSong = (xiaoXi: any) => {
     try {
-      process.send?.(msg);
+      process.send?.(xiaoXi);
     } catch {
       /* noop */
     }
   };
-  send({ type: 'ready', pid: process.pid, dataDir, schemaVersion: MOSHI_BANBEN });
+  faSong({ type: 'ready', pid: process.pid, CangLu, schemaVersion: MOSHI_BANBEN });
 
-  const handlers: Record<string, (msg: any) => Promise<any> | any> = {
-    append: (msg) => {
-      const rec = fuwu.append(msg.record, msg.writer || 'memory-service');
-      return { ok: true, seq: rec.seq };
+  const handlers: Record<string, (xiaoXi: any) => Promise<any> | any> = {
+    append: (xiaoXi) => {
+      const jiLu = fuwu.append(xiaoXi.record, xiaoXi.Bi || 'memory-service');
+      return { ok: true, seq: jiLu.seq };
     },
-    tail: (msg) => ({ ok: true, records: fuwu.tail(msg.limit) }),
+    tail: (xiaoXi) => ({ ok: true, records: fuwu.tail(xiaoXi.limit) }),
     /** 完整三路 recall（fts_uni ∪ fts_tri ∪ 向量 → RRF），返回卡片 + 计时 + 作用域统计 */
-    recall: async (msg) => {
-      const detail = await fuwu.recallDetailed({ query: msg.query, scope: msg.scope, limit: msg.limit });
+    recall: async (xiaoXi) => {
+      const detail = await fuwu.recallDetailed({ query: xiaoXi.query, scope: xiaoXi.scope, limit: xiaoXi.limit });
       return { ok: true, cards: detail.cards, timings: detail.timings, scopeStats: detail.scopeStats, channels: detail.channels, candidates: detail.candidates };
     },
     /** 同步 recall（不含异步向量水合），保持历史语义 */
-    recall_sync: (msg) => {
-      const detail = fuwu.recallDetailedSync({ query: msg.query, scope: msg.scope, limit: msg.limit });
+    recall_sync: (xiaoXi) => {
+      const detail = fuwu.recallDetailedSync({ query: xiaoXi.query, scope: xiaoXi.scope, limit: xiaoXi.limit });
       return { ok: true, cards: detail.cards, timings: detail.timings, scopeStats: detail.scopeStats, channels: detail.channels };
     },
-    retrieve: (msg) => ({ ok: true, result: fuwu.retrieve(msg.anchor ?? msg.request ?? {}, msg.opts ?? {}) }),
-    rebuild: (msg) => ({ ok: true, count: fuwu.rebuildProjection() }),
+    retrieve: (xiaoXi) => ({ ok: true, result: fuwu.retrieve(xiaoXi.anchor ?? xiaoXi.request ?? {}, xiaoXi.opts ?? {}) }),
+    rebuild: (xiaoXi) => ({ ok: true, count: fuwu.rebuildProjection() }),
     vector_status: async () => {
       await fuwu.waitVectorReady();
       return { ok: true, vector: fuwu.vectorStatus() };
     },
-    hydrate: async (msg) => ({ ok: true, result: await fuwu.hydrateVectors(msg.budget ?? 256) }),
+    hydrate: async (xiaoXi) => ({ ok: true, result: await fuwu.hydrateVectors(xiaoXi.budget ?? 256) }),
     stats: () => ({ ok: true, stats: fuwu.stats() }),
-    embed: async (msg) => {
-      const v = await fuwu.embedText(msg.text);
+    embed: async (xiaoXi) => {
+      const v = await fuwu.embedText(xiaoXi.text);
       return { ok: true, dim: v?.length ?? 0, vector: v ? Array.from(v) : null };
     },
-    shutdown: (msg) => {
+    guanBi: (xiaoXi) => {
       fuwu.close();
       setTimeout(() => process.exit(0), 20);
       return { ok: true };
     },
   };
 
-  process.on('message', (msg: any) => {
-    const { id, op } = msg || {};
+  process.on('message', (xiaoXi: any) => {
+    const { id, op } = xiaoXi || {};
     const h = handlers[op];
     if (!h) {
-      send({ id, error: `unknown op ${op}` });
+      faSong({ id, error: `unknown op ${op}` });
       return;
     }
     Promise.resolve()
-      .then(() => h(msg))
+      .then(() => h(xiaoXi))
       .then((res) => {
-        if (op !== 'shutdown') send({ id, ...res });
+        if (op !== 'shutdown') faSong({ id, ...res });
       })
-      .catch((e: any) => send({ id, error: String(e?.message || e), code: e?.code }));
+      .catch((e: any) => faSong({ id, error: String(e?.message || e), code: e?.code }));
   });
   return fuwu;
 }

@@ -87,13 +87,13 @@ function snippet(text, max = 600) {
   return s.length > max ? `${s.slice(0, max)}…(+${s.length - max} chars)` : s;
 }
 
-async function httpOnce(method, url, { headers = {}, body = null, timeoutMs = 20000 } = {}) {
+async function httpOnce(method, url, { headers = {}, ti = null, timeoutMs = 20000 } = {}) {
   const started = Date.now();
   try {
     const res = await fetch(url, {
       method,
       headers,
-      body,
+      ti,
       signal: AbortSignal.timeout(timeoutMs),
     });
     const text = await res.text();
@@ -103,7 +103,7 @@ async function httpOnce(method, url, { headers = {}, body = null, timeoutMs = 20
       statusText: res.statusText,
       elapsedMs: Date.now() - started,
       bodyText: text,
-      body: anQuanJson(text),
+      ti: anQuanJson(text),
     };
   } catch (e) {
     return {
@@ -134,7 +134,7 @@ function resultFor(r) {
       raw: null,
     };
   }
-  const errObj = r.body?.error ?? null;
+  const errObj = r.ti?.error ?? null;
   return {
     transportOk: true,
     requestFailed: false,
@@ -144,9 +144,9 @@ function resultFor(r) {
     // 原始响应体片段（已脱敏）
     rawBodySnippet: snippet(r.bodyText),
     // 结构化判读（来自原始响应体，不额外推断）
-    modelEcho: r.body?.model ?? null,
-    finishReason: r.body?.choices?.[0]?.finish_reason ?? null,
-    contentSnippet: snippet(r.body?.choices?.[0]?.message?.content ?? '', 160),
+    modelEcho: r.ti?.model ?? null,
+    finishReason: r.ti?.choices?.[0]?.finish_reason ?? null,
+    contentSnippet: snippet(r.ti?.choices?.[0]?.message?.content ?? '', 160),
     errorCode: errObj?.code ?? null,
     errorMessage: errObj?.message ? snippet(errObj.message, 300) : null,
     ok: r.status >= 200 && r.status < 300,
@@ -215,16 +215,16 @@ if (!report.credential.present) {
   report.modelsEndpoint = {
     ...m,
     modelIds: modelsRes.ok
-      ? (modelsRes.body?.data ?? []).map((d) => d?.id).filter(Boolean)
+      ? (modelsRes.ti?.data ?? []).map((d) => d?.id).filter(Boolean)
       : null,
   };
   console.log(`[spike-06] GET /models → ${modelsRes.ok ? `HTTP ${modelsRes.status}` : '请求失败'}`);
 
   // 2) 逐个模型发最小 chat 请求（真调用，拿原始响应）
   for (const model of MODELS) {
-    const body = JSON.stringify({
+    const ti = JSON.stringify({
       model,
-      messages: [{ role: 'user', content: 'ping' }],
+      xiaoXiJi: [{ role: 'user', content: 'ping' }],
       max_tokens: 8,
       stream: false,
     });
@@ -234,7 +234,7 @@ if (!report.credential.present) {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body,
+      ti,
       timeoutMs: args.timeoutMs,
     });
     const rec = { model, ...resultFor(res) };

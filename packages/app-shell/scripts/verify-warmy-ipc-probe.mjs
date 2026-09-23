@@ -18,14 +18,14 @@ const OUT = path.join(repoRoot, 'docs', 'API-OPERATIONS-RESULTS.json');
 
 const HOST = path.join(os.tmpdir(), 'warmy-ipc-probe-host.cjs');
 fs.writeFileSync(HOST, `
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { yingYong, BrowserWindow, ipcMain } = require('electron');
 const mainJs = process.env.MAIN_JS;
-// load product main after we can intercept
+// load chanPin main after we can intercept
 require('electron');
 app.whenReady().then(async () => {
   try { require(mainJs); } catch (e) { console.log('MAIN_LOAD_FAIL', String(e).slice(0,200)); }
   const w = new BrowserWindow({ show:false, webPreferences:{ contextIsolation:true, nodeIntegration:false } });
-  w.loadURL('data:text/html,<html><body>probe</body></html>');
+  w.loadURL('data:text/html,<html><ti>probe</ti></html>');
   // Give main process handlers time to register
   setTimeout(() => {
     const { ipcMain } = require('electron');
@@ -36,10 +36,10 @@ app.whenReady().then(async () => {
 });
 `, 'utf8');
 
-// Simpler approach: run product e2e-style with a small script inside electron that uses ipcRenderer
+// Simpler approach: run chanPin e2e-style with a small script inside electron that uses ipcRenderer
 const PROBE = path.join(os.tmpdir(), 'warmy-ipc-probe.cjs');
 fs.writeFileSync(PROBE, `
-const { app } = require('electron');
+const { yingYong } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const mainJs = process.env.MAIN_JS;
@@ -48,7 +48,7 @@ const NAMES = JSON.parse(process.env.PROBE_NAMES || '[]');
 const SIG = JSON.parse(process.env.PROBE_SIG || '{}');
 
 app.whenReady().then(async () => {
-  // boot product main
+  // boot chanPin main
   try { require(mainJs); } catch (e) {
     fs.writeFileSync(outPath, JSON.stringify({ error: 'main-load', message: String(e) }, null, 2));
     app.exit(2);
@@ -57,9 +57,9 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 2500));
   const { ipcRenderer } = require('electron');
   const results = [];
-  for (const name of NAMES) {
-    const sig = SIG[name] || '()';
-    let channel = name.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+  for (const ming of NAMES) {
+    const sig = SIG[ming] || '()';
+    let channel = ming.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
     // common channel prefix
     channel = 'warmy:' + channel;
     const argsBySig = {
@@ -76,13 +76,13 @@ app.whenReady().then(async () => {
       membershipList: [],
       archiveList: [],
     };
-    const args = argsBySig[name] || [];
+    const args = argsBySig[ming] || [];
     const t0 = Date.now();
     try {
       const r = await ipcRenderer.invoke(channel, ...args);
-      results.push({ name, channel, sig, ok: true, ms: Date.now() - t0, resultPreview: preview(r) });
+      results.push({ ming, channel, sig, ok: true, ms: Date.now() - t0, resultPreview: preview(r) });
     } catch (e) {
-      results.push({ name, channel, sig, ok: false, ms: Date.now() - t0, error: String(e && e.message || e) });
+      results.push({ ming, channel, sig, ok: false, ms: Date.now() - t0, error: String(e && e.message || e) });
     }
   }
   fs.writeFileSync(outPath, JSON.stringify({ at: Date.now(), results }, null, 2));
@@ -102,25 +102,25 @@ const READONLY = [
   ['listInstances', '()', 'List local workhorse instances'],
   ['securityMode', '()', 'Get global security mode (full/normal/strict)'],
   ['memoryStatus', '()', 'Memory service readiness + data dir'],
-  ['localeInfo', '()', 'System/resolved locale packs'],
+  ['localeInfo', '()', 'System/resolved yuYan packs'],
   ['themeInfo', '()', 'Current theme source'],
   ['groupList', '()', 'List project/group records'],
   ['updateSourceGet', '()', 'Configured update feed URL/status'],
   ['boardEvents', '()', 'Tail board events'],
-  ['boardAggregate', '()', 'Aggregate board progress per group'],
+  ['boardAggregate', '()', 'Aggregate board jinDu per group'],
   ['getProvider', '()', 'Current LLM provider config (secrets omitted in UI)'],
   ['checkpointList', '()', 'List rollback points'],
-  ['knowledgeQuery', 'WArmy', 'FTS/entity search on knowledge base'],
+  ['knowledgeQuery', 'WArmy', 'FTS/entity search qiYong knowledge base'],
   ['metricsSummary', '()', 'Chat/tool metrics summary'],
   ['settingsGet', '()', 'App settings snapshot'],
   ['skillsList', '()', 'Installed + discovered skills'],
-  ['skillsPaths', '()', 'Skill roots on disk'],
+  ['skillsPaths', '()', 'Skill roots qiYong disk'],
   ['skillsScanDirsGet', '()', 'Auto-discovery directories (max 10)'],
   ['uiQueuesGet', '()', 'Persisted P2/P3 UI queues'],
   ['routerQueuesGet', '()', 'Router queue snapshot (read-only)'],
-  ['profileGet', '()', 'Local profile (name/avatar/deviceId)'],
+  ['profileGet', '()', 'Local profile (ming/touXiang/deviceId)'],
   ['appInfo', '()', 'App version / electron / platform'],
-  ['identityInfo', '()', 'Local identity fingerprint/card'],
+  ['identityInfo', '()', 'Local identity fingerprint/ka'],
   ['identityPeers', '()', 'Confirmed peer identities'],
   ['netStatus', '()', 'Mesh/dialability facts'],
   ['peersList', '()', 'Known mesh peers'],
@@ -133,11 +133,11 @@ const READONLY = [
   ['platformInfo', '()', 'OS platform flags'],
   ['costSummary', '()', 'Cost rollup'],
   ['memoryRecall', 'WArmy', 'Semantic/FTS recall cards'],
-  ['i18n', 'zh-CN', 'Load a locale pack'],
+  ['i18n', 'zh-CN', 'Load a yuYan pack'],
   ['chatLogRestore', '()', 'Rebuild chat logs from memory JSONL'],
 ];
 
-const payload = READONLY.map(([name]) => name);
+const payload = READONLY.map(([ming]) => ming);
 const sigMap = Object.fromEntries(READONLY.map(([n, , d]) => [n, d]));
 // channel probe uses names only
 fs.writeFileSync(OUT + '.plan.json', JSON.stringify({ readonly: READONLY }, null, 2));

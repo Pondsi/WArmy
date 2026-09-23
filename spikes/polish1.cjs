@@ -1,18 +1,18 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
 let h = fs.readFileSync(base + 'index.html', 'utf8');
 
 // 归档列表
-if (!j.includes('archived-box')) {
+if (!j.includes('yiGuiDangHe')) {
   h = h.replace(
-    "        <div class=\"set-section set-card\">\n          <h2>${t('settings.about')}</h2>",
-    "        <div class=\"set-section set-card\">\n          <h2>${t('ctx.archive')}</h2>\n          <div id=\"archived-box\" class=\"muted\">—</div>\n        </div>\n        <div class=\"set-section set-card\">\n          <h2>${t('settings.about')}</h2>"
+    "        <div class=\"sheZhiSection sheZhiKa\">\n          <h2>${t('settings.about')}</h2>",
+    "        <div class=\"sheZhiSection sheZhiKa\">\n          <h2>${t('ctx.archive')}</h2>\n          <div id=\"yiGuiDangHe\" class=\"jingYin\">—</div>\n        </div>\n        <div class=\"sheZhiSection sheZhiKa\">\n          <h2>${t('settings.about')}</h2>"
   );
   j = j.replace(
     "      // SMTP",
     `      async function refreshArchived() {
-        const box = $('archived-box');
+        const box = $('yiGuiDangHe');
         if (!box) return;
         const r = await window.warmy.archivedList().catch(() => null);
         const items = r?.items || [];
@@ -30,10 +30,10 @@ if (!j.includes('archived-box')) {
 // KB 详情展开
 if (!j.includes('kbDetail(q)')) {
   j = j.replace(
-    "        $('kb-out').innerHTML =\n          '<div><b>' + t('knowledge.title') + '</b></div>' +\n          '<div>' + escapeHtml(ents || '—') + '</div>' +\n          '<div>' + escapeHtml(evs || '—') + '</div>';",
+    "        $('zhiShiKuShuChu').innerHTML =\n          '<div><b>' + t('knowledge.biaoTi') + '</b></div>' +\n          '<div>' + escapeHtml(ents || '—') + '</div>' +\n          '<div>' + escapeHtml(evs || '—') + '</div>';",
     `        const det = await window.warmy.kbDetail(q).catch(() => null);
-        $('kb-out').innerHTML =
-          '<div><b>' + t('knowledge.title') + '</b></div>' +
+        $('zhiShiKuShuChu').innerHTML =
+          '<div><b>' + t('knowledge.biaoTi') + '</b></div>' +
           '<div>' + escapeHtml(ents || '—') + '</div>' +
           '<div>' + escapeHtml(evs || '—') + '</div>' +
           (det?.entities?.length
@@ -46,8 +46,8 @@ if (!j.includes('kbDetail(q)')) {
 // 成本独立卡片
 if (!h.includes('cost-box')) {
   h = h.replace(
-    "          <div class=\"panel-block\">\n            <h3 data-i18n=\"metrics.title\"></h3>",
-    "          <div class=\"panel-block\">\n            <h3 data-i18n=\"cost.title\"></h3>\n            <div id=\"cost-box\" class=\"muted\">—</div>\n          </div>\n          <div class=\"panel-block\">\n            <h3 data-i18n=\"metrics.title\"></h3>"
+    "          <div class=\"mianBanKuai\">\n            <h3 data-i18n=\"metrics.biaoTi\"></h3>",
+    "          <div class=\"mianBanKuai\">\n            <h3 data-i18n=\"cost.biaoTi\"></h3>\n            <div id=\"cost-box\" class=\"jingYin\">—</div>\n          </div>\n          <div class=\"mianBanKuai\">\n            <h3 data-i18n=\"metrics.biaoTi\"></h3>"
   );
   console.log('cost box added');
 }
@@ -71,6 +71,6 @@ if (!j.includes('cost-box')) {
   console.log('cost refresh wired');
 }
 
-fs.writeFileSync(base + 'app.js', j);
+fs.writeFileSync(base + 'yingYong.js', j);
 fs.writeFileSync(base + 'index.html', h);
 console.log('done');

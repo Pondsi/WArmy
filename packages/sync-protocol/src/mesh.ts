@@ -16,7 +16,7 @@ import path from 'node:path';
 
 export interface DuiDuanXinXi {
   nodeId: string;
-  name: string;
+  ming: string;
   /** IPv4 / 主机名 */
   host: string;
   /** TCP 服务端口 */
@@ -62,14 +62,14 @@ export class DuiDuanMingCe {
 
   upsert(p: DuiDuanXinXi): DuiDuanXinXi {
     const prev = this.peers.get(p.nodeId);
-    const full = { ...prev, ...p, lastSeen: Date.now() };
-    this.peers.set(full.nodeId, full);
+    const Quan = { ...prev, ...p, lastSeen: Date.now() };
+    this.peers.set(Quan.nodeId, Quan);
     this.save();
-    return full;
+    return Quan;
   }
 
-  addManual(nodeId: string, name: string, host: string, port: number, kind: 'lan' | 'wan' = 'wan'): DuiDuanXinXi {
-    return this.upsert({ nodeId, name, host, port, kind, lastSeen: Date.now() });
+  addManual(nodeId: string, ming: string, host: string, port: number, kind: 'lan' | 'wan' = 'wan'): DuiDuanXinXi {
+    return this.upsert({ nodeId, ming, host, port, kind, lastSeen: Date.now() });
   }
 
   revoke(nodeId: string) {
@@ -80,7 +80,7 @@ export class DuiDuanMingCe {
     }
   }
 
-  list(includeRevoked = false): DuiDuanXinXi[] {
+  LieBiao(includeRevoked = false): DuiDuanXinXi[] {
     return [...this.peers.values()].filter((p) => includeRevoked || !p.revoked);
   }
 
@@ -99,24 +99,24 @@ export class NeiWangFaXian {
 
   constructor(
     private nodeId: string,
-    private name: string,
+    private ming: string,
     private tcpPort: number,
-    private onPeer: (p: { nodeId: string; name: string; host: string; port: number }) => void
+    private onPeer: (p: { nodeId: string; ming: string; host: string; port: number }) => void
   ) {}
 
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
       this.sock.on('error', reject);
-      this.sock.on('message', (msg, rinfo) => {
-        const s = msg.toString('utf8');
+      this.sock.on('message', (xiaoXi, rinfo) => {
+        const s = xiaoXi.toString('utf8');
         if (!s.startsWith(WENHOU)) return;
         try {
           const j = JSON.parse(s.slice(WENHOU.length + 1));
           if (j.nodeId === this.nodeId) return;
           this.onPeer({
             nodeId: j.nodeId,
-            name: j.name || j.nodeId,
+            ming: j.ming || j.nodeId,
             host: rinfo.address,
             port: j.port,
           });
@@ -138,7 +138,7 @@ export class NeiWangFaXian {
   broadcast(): void {
     if (!this.sock) return;
     const payload = Buffer.from(
-      `${WENHOU} ${JSON.stringify({ nodeId: this.nodeId, name: this.name, port: this.tcpPort })}`,
+      `${WENHOU} ${JSON.stringify({ nodeId: this.nodeId, ming: this.ming, port: this.tcpPort })}`,
       'utf8'
     );
     try {
@@ -179,13 +179,13 @@ export class WangZhuangJieDian {
           buf += d.toString('utf8');
           let i;
           while ((i = buf.indexOf('\n')) >= 0) {
-            const line = buf.slice(0, i).trim();
+            const Hang = buf.slice(0, i).trim();
             buf = buf.slice(i + 1);
-            if (!line) continue;
+            if (!Hang) continue;
             try {
-              const msg = JSON.parse(line) as WangZhuangXiaoXi;
-              this.receive(msg);
-              sock.write(JSON.stringify({ ack: true, id: msg.id }) + '\n');
+              const xiaoXi = JSON.parse(Hang) as WangZhuangXiaoXi;
+              this.receive(xiaoXi);
+              sock.write(JSON.stringify({ ack: true, id: xiaoXi.id }) + '\n');
             } catch {
               /* skip */
             }
@@ -198,27 +198,27 @@ export class WangZhuangJieDian {
     });
   }
 
-  private receive(msg: WangZhuangXiaoXi) {
-    if (msg.incognito) return;
-    this.inbox.push(msg);
+  private receive(xiaoXi: WangZhuangXiaoXi) {
+    if (xiaoXi.incognito) return;
+    this.inbox.push(xiaoXi);
     if (this.logFile) {
       fs.mkdirSync(path.dirname(this.logFile), { recursive: true });
-      fs.appendFileSync(this.logFile, JSON.stringify(msg) + '\n');
+      fs.appendFileSync(this.logFile, JSON.stringify(xiaoXi) + '\n');
     }
     // gossip：广播给未访问过的 peer（简单洪泛）
-    if (msg.channel === 'gossip') {
-      const hops = new Set([...(msg.hops || []), this.nodeId, msg.from]);
-      for (const p of this.peers.list()) {
+    if (xiaoXi.channel === 'gossip') {
+      const hops = new Set([...(xiaoXi.hops || []), this.nodeId, xiaoXi.from]);
+      for (const p of this.peers.LieBiao()) {
         if (hops.has(p.nodeId)) continue;
-        void this.sendToPeer(p, { ...msg, hops: [...hops] });
+        void this.sendToPeer(p, { ...xiaoXi, hops: [...hops] });
       }
     }
   }
 
-  private sendToPeer(p: DuiDuanXinXi, msg: WangZhuangXiaoXi): Promise<boolean> {
+  private sendToPeer(p: DuiDuanXinXi, xiaoXi: WangZhuangXiaoXi): Promise<boolean> {
     return new Promise((resolve) => {
       const sock = net.connect({ host: p.host, port: p.port }, () => {
-        sock.write(JSON.stringify(msg) + '\n');
+        sock.write(JSON.stringify(xiaoXi) + '\n');
         sock.end();
         resolve(true);
       });
@@ -230,9 +230,9 @@ export class WangZhuangJieDian {
     });
   }
 
-  async sendToAll(msg: Omit<WangZhuangXiaoXi, 'id' | 'ts' | 'from' | 'hops'>): Promise<{ sent: number; failed: number }> {
-    const full: WangZhuangXiaoXi = {
-      ...msg,
+  async sendToAll(xiaoXi: Omit<WangZhuangXiaoXi, 'id' | 'ts' | 'from' | 'hops'>): Promise<{ sent: number; failed: number }> {
+    const Quan: WangZhuangXiaoXi = {
+      ...xiaoXi,
       from: this.nodeId,
       id: `m-${crypto.randomBytes(6).toString('hex')}`,
       ts: Date.now(),
@@ -240,26 +240,26 @@ export class WangZhuangJieDian {
     };
     let sent = 0;
     let failed = 0;
-    for (const p of this.peers.list()) {
-      const ok = await this.sendToPeer(p, full);
+    for (const p of this.peers.LieBiao()) {
+      const ok = await this.sendToPeer(p, Quan);
       if (ok) sent++;
       else failed++;
     }
-    if (!msg.incognito) this.receive(full);
+    if (!xiaoXi.incognito) this.receive(Quan);
     return { sent, failed };
   }
 
-  async sendTo(nodeId: string, msg: Omit<WangZhuangXiaoXi, 'id' | 'ts' | 'from' | 'hops'>): Promise<boolean> {
-    const p = this.peers.list().find((x) => x.nodeId === nodeId);
+  async sendTo(nodeId: string, xiaoXi: Omit<WangZhuangXiaoXi, 'id' | 'ts' | 'from' | 'hops'>): Promise<boolean> {
+    const p = this.peers.LieBiao().find((x) => x.nodeId === nodeId);
     if (!p) return false;
-    const full: WangZhuangXiaoXi = {
-      ...msg,
+    const Quan: WangZhuangXiaoXi = {
+      ...xiaoXi,
       from: this.nodeId,
       id: `m-${crypto.randomBytes(6).toString('hex')}`,
       ts: Date.now(),
       hops: [this.nodeId],
     };
-    return this.sendToPeer(p, full);
+    return this.sendToPeer(p, Quan);
   }
 
   inboxOf(): WangZhuangXiaoXi[] {

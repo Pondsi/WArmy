@@ -14,9 +14,9 @@ const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
 let pass = 0;
 let fail = 0;
-function check(label, ok, detail) {
-  if (ok) { pass += 1; console.log(`  ok  ${label}`); }
-  else { fail += 1; console.log(`  FAIL ${label}`, detail ?? ''); }
+function check(biaoQian, ok, detail) {
+  if (ok) { pass += 1; console.log(`  ok  ${biaoQian}`); }
+  else { fail += 1; console.log(`  FAIL ${biaoQian}`, detail ?? ''); }
 }
 
 const required = [
@@ -95,15 +95,15 @@ const feedJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'feed/latest.json'),
 check('feed version is 0.1.0', feedJson.version === '0.1.0', feedJson.version);
 check('feed points to GitHub release asset', String(feedJson.url || feedJson.downloadUrl || '').includes('github.com/Pondsi/WArmy'), feedJson.url);
 
-// privacy on first-party docs
+// privacy qiYong first-party docs
 const privacyPats = [
   [/(ghp_[A-Za-z0-9]+)/, 'TOKEN'],
   [/C:\\Users\\p\\/, 'ABS_PATH_USER'],
   [/\b192\.168\.\d+\.\d+\b/, 'PRIVATE_IP'],
 ];
-for (const [re, name] of privacyPats) {
-  check(`README no ${name}`, !re.test(readme));
-  check(`说明 no ${name}`, !re.test(shuoming));
+for (const [re, ming] of privacyPats) {
+  check(`README no ${ming}`, !re.test(readme));
+  check(`说明 no ${ming}`, !re.test(shuoming));
 }
 
 // release asset naming consistency

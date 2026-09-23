@@ -28,27 +28,27 @@ let pass = 0;
 let fail = 0;
 let skip = 0;
 
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   if (cond) {
     pass++;
-    console.log(`  [PASS] ${label}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+    console.log(`  [PASS] ${biaoQian}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
   } else {
     fail++;
-    console.log(`  [FAIL] ${label}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+    console.log(`  [FAIL] ${biaoQian}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
   }
 }
 
-function skipped(label, why) {
+function skipped(biaoQian, why) {
   skip++;
-  console.log(`  [SKIP] ${label} => ${why}`);
+  console.log(`  [SKIP] ${biaoQian} => ${why}`);
 }
 
 function codes(result) {
   return (result.rejected ?? result.rejections ?? result.violations ?? []).map((r) => r.code).join(',');
 }
 
-function section(title) {
-  console.log(`\n── ${title} ──`);
+function section(biaoTi) {
+  console.log(`\n── ${biaoTi} ──`);
 }
 
 const A = 'a'.repeat(40);
@@ -65,57 +65,57 @@ section('1. 危险推送路径必须被拒（validatePushPaths）');
 // ─────────────────────────────────────────────────────────────────────────────
 
 const dangerCases = [
-  { label: '.git/hooks/post-receive（钩子=任意代码执行）', entries: ['.git/hooks/post-receive'], expect: 'git-hooks' },
-  { label: '.git/config（core.hooksPath）', entries: ['.git/config'], expect: 'git-config' },
-  { label: '.git/config.worktree', entries: ['.git/config.worktree'], expect: 'git-config' },
-  { label: '.git/info/attributes', entries: ['.git/info/attributes'], expect: 'git-attributes' },
-  { label: '.git 本体', entries: ['.git'], expect: 'git-internal' },
-  { label: '.git/objects/…（内部数据）', entries: ['.git/objects/ab/cdef'], expect: 'git-internal' },
-  { label: '嵌套 foo/.git/hooks/pre-commit', entries: ['foo/.git/hooks/pre-commit'], expect: 'git-hooks' },
-  { label: '.. 穿越：../outside.txt', entries: ['../outside.txt'], expect: 'parent-escape' },
-  { label: '.. 穿越：src/../../etc/passwd', entries: ['src/../../etc/passwd'], expect: 'parent-escape' },
-  { label: '绝对路径：/etc/passwd', entries: ['/etc/passwd'], expect: 'abs-path' },
-  { label: 'Windows 盘符：C:\\Users\\p\\secret.txt', entries: ['C:\\Users\\p\\secret.txt'], expect: 'abs-path' },
-  { label: 'UNC 路径：\\\\server\\share\\x', entries: ['\\\\server\\share\\x'], expect: 'abs-path' },
-  { label: '家目录：~/x', entries: ['~/x'], expect: 'abs-path' },
-  { label: 'NUL / 控制字符', entries: ['.git/config\u0000.txt'], expect: 'illegal-char' },
+  { biaoQian: '.git/hooks/post-receive（钩子=任意代码执行）', entries: ['.git/hooks/post-receive'], expect: 'git-hooks' },
+  { biaoQian: '.git/config（core.hooksPath）', entries: ['.git/config'], expect: 'git-config' },
+  { biaoQian: '.git/config.worktree', entries: ['.git/config.worktree'], expect: 'git-config' },
+  { biaoQian: '.git/info/attributes', entries: ['.git/info/attributes'], expect: 'git-attributes' },
+  { biaoQian: '.git 本体', entries: ['.git'], expect: 'git-internal' },
+  { biaoQian: '.git/objects/…（内部数据）', entries: ['.git/objects/ab/cdef'], expect: 'git-internal' },
+  { biaoQian: '嵌套 foo/.git/hooks/pre-commit', entries: ['foo/.git/hooks/pre-commit'], expect: 'git-hooks' },
+  { biaoQian: '.. 穿越：../outside.txt', entries: ['../outside.txt'], expect: 'parent-escape' },
+  { biaoQian: '.. 穿越：src/../../etc/passwd', entries: ['src/../../etc/passwd'], expect: 'parent-escape' },
+  { biaoQian: '绝对路径：/etc/passwd', entries: ['/etc/passwd'], expect: 'abs-path' },
+  { biaoQian: 'Windows 盘符：C:\\Users\\p\\secret.txt', entries: ['C:\\Users\\p\\secret.txt'], expect: 'abs-path' },
+  { biaoQian: 'UNC 路径：\\\\server\\share\\x', entries: ['\\\\server\\share\\x'], expect: 'abs-path' },
+  { biaoQian: '家目录：~/x', entries: ['~/x'], expect: 'abs-path' },
+  { biaoQian: 'NUL / 控制字符', entries: ['.git/config\u0000.txt'], expect: 'illegal-char' },
   {
-    label: '.gitattributes 绑 filter 驱动',
+    biaoQian: '.gitattributes 绑 filter 驱动',
     entries: [{ path: '.gitattributes', content: '*.txt filter=evil\n' }],
     expect: 'git-attributes',
   },
   {
-    label: '.gitattributes 绑 diff 驱动（textconv）',
+    biaoQian: '.gitattributes 绑 diff 驱动（textconv）',
     entries: [{ path: '.gitattributes', content: '*.bin diff=evil\n' }],
     expect: 'git-attributes',
   },
   {
-    label: '子目录 .gitattributes 绑 filter 驱动',
-    entries: [{ path: 'sub/.gitattributes', content: '*.md filter=lfs\n' }],
+    biaoQian: '子目录 .gitattributes 绑 filter 驱动',
+    entries: [{ path: 'fu/.gitattributes', content: '*.md filter=lfs\n' }],
     expect: 'git-attributes',
   },
   {
-    label: '.gitattributes 没给内容 → fail-closed（无法校验）',
+    biaoQian: '.gitattributes 没给内容 → fail-closed（无法校验）',
     entries: [{ path: '.gitattributes' }],
     expect: 'git-attributes-unverified',
   },
   {
-    label: '符号链接逃逸：link -> ../../outside',
+    biaoQian: '符号链接逃逸：link -> ../../outside',
     entries: [{ path: 'link', mode: '120000', symlinkTarget: '../../outside' }],
     expect: 'symlink-escape',
   },
   {
-    label: '符号链接逃逸：link -> C:/Windows/System32',
+    biaoQian: '符号链接逃逸：link -> C:/Windows/System32',
     entries: [{ path: 'link', mode: '120000', symlinkTarget: 'C:/Windows/System32' }],
     expect: 'symlink-escape',
   },
   {
-    label: '符号链接指向 git 内部：link -> .git/config',
+    biaoQian: '符号链接指向 git 内部：link -> .git/config',
     entries: [{ path: 'link', mode: '120000', symlinkTarget: '.git/config' }],
     expect: 'symlink-escape',
   },
   {
-    label: '符号链接没给目标',
+    biaoQian: '符号链接没给目标',
     entries: [{ path: 'link', mode: '120000' }],
     expect: 'symlink-escape',
   },
@@ -124,7 +124,7 @@ const dangerCases = [
 for (const c of dangerCases) {
   const r = validatePushPaths(c.entries);
   const hit = r.rejected.some((x) => x.code === c.expect);
-  check(c.label, r.allowed === false && hit, `${c.expect} | 实际=[${codes(r)}] ${r.rejected[0]?.reason ?? ''}`);
+  check(c.biaoQian, r.allowed === false && hit, `${c.expect} | 实际=[${codes(r)}] ${r.rejected[0]?.reason ?? ''}`);
 }
 
 const gitdirHooks = validatePushPaths(['hooks/post-receive'], { base: 'gitdir' });
@@ -136,7 +136,7 @@ check('base=gitdir：显式前缀 .git/hooks/… 仍被拒', gitdirDotGit.allowe
 
 section('1b. 正常路径必须通过');
 const okPush = validatePushPaths([
-  'src/app.ts',
+  'src/yingYong.ts',
   'packages/app-shell/src/index.ts',
   'docs/报告.md',
   '.gitignore',
@@ -154,7 +154,7 @@ check(
   attrNoContentLoose.allowed === true && attrNoContentLoose.warnings.length > 0,
   attrNoContentLoose.warnings.join(' / ')
 );
-const insideLink = validatePushPaths([{ path: 'link', mode: '120000', symlinkTarget: 'src/app.ts' }]);
+const insideLink = validatePushPaths([{ path: 'link', mode: '120000', symlinkTarget: 'src/yingYong.ts' }]);
 check('指向仓库内的符号链接放行（但给告警）', insideLink.allowed === true && insideLink.warnings.length > 0, insideLink.warnings.join(' / '));
 const single = validatePushPaths('src/single.ts');
 check('单字符串入参可用', single.allowed === true && single.accepted[0] === 'src/single.ts', single.accepted);
@@ -164,20 +164,20 @@ section('2. 绕过尝试回归（反斜杠 / 末尾空格 / Unicode 归一化 / 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const bypass = [
-  { label: '[反斜杠] .git\\hooks\\post-receive', entries: ['.git\\hooks\\post-receive'], expect: 'git-hooks' },
-  { label: '[反斜杠+穿越] ..\\..\\etc\\passwd', entries: ['..\\..\\etc\\passwd'], expect: 'parent-escape' },
-  { label: '[末尾空格] ".git/config  "', entries: ['.git/config  '], expect: 'git-config' },
-  { label: '[末尾点] ".git./config"', entries: ['.git./config'], expect: 'git-config' },
-  { label: '[末尾空格] "src/app.ts " 也被拒（Windows 会剥离 → 可改到另一个文件）', entries: ['src/app.ts '], expect: 'noise-suffix' },
-  { label: '[Unicode] 全角 ".ｇｉｔ／ｃｏｎｆｉｇ"', entries: ['.ｇｉｔ／ｃｏｎｆｉｇ'], expect: 'git-config' },
-  { label: '[Unicode] 零宽空格 ".git\\u200b/config"', entries: ['.git\u200b/config'], expect: 'git-config' },
-  { label: '[大小写] ".GIT/CONFIG"', entries: ['.GIT/CONFIG'], expect: 'git-config' },
-  { label: '[大小写] ".Git/Hooks/Post-Receive"', entries: ['.Git/Hooks/Post-Receive'], expect: 'git-hooks' },
+  { biaoQian: '[反斜杠] .git\\hooks\\post-receive', entries: ['.git\\hooks\\post-receive'], expect: 'git-hooks' },
+  { biaoQian: '[反斜杠+穿越] ..\\..\\etc\\passwd', entries: ['..\\..\\etc\\passwd'], expect: 'parent-escape' },
+  { biaoQian: '[末尾空格] ".git/config  "', entries: ['.git/config  '], expect: 'git-config' },
+  { biaoQian: '[末尾点] ".git./config"', entries: ['.git./config'], expect: 'git-config' },
+  { biaoQian: '[末尾空格] "src/yingYong.ts " 也被拒（Windows 会剥离 → 可改到另一个文件）', entries: ['src/yingYong.ts '], expect: 'noise-suffix' },
+  { biaoQian: '[Unicode] 全角 ".ｇｉｔ／ｃｏｎｆｉｇ"', entries: ['.ｇｉｔ／ｃｏｎｆｉｇ'], expect: 'git-config' },
+  { biaoQian: '[Unicode] 零宽空格 ".git\\u200b/config"', entries: ['.git\u200b/config'], expect: 'git-config' },
+  { biaoQian: '[大小写] ".GIT/CONFIG"', entries: ['.GIT/CONFIG'], expect: 'git-config' },
+  { biaoQian: '[大小写] ".Git/Hooks/Post-Receive"', entries: ['.Git/Hooks/Post-Receive'], expect: 'git-hooks' },
 ];
 for (const c of bypass) {
   const r = validatePushPaths(c.entries);
   const hit = r.rejected.some((x) => x.code === c.expect);
-  check(c.label, r.allowed === false && hit, `${c.expect} | 实际=[${codes(r)}]`);
+  check(c.biaoQian, r.allowed === false && hit, `${c.expect} | 实际=[${codes(r)}]`);
 }
 
 const zw = validatePushPaths(['.git\u200b/config']);
@@ -206,10 +206,10 @@ check(
 const dup = validatePushPaths(['src/dup.ts', 'src/zhongFu.ts']);
 check('完全重复路径 = 只收一条 + 告警（不算绕过）', dup.allowed === true && dup.accepted.length === 1 && dup.warnings.length > 0, dup.warnings[0]);
 
-const norm = normalizeRepoPath('．/／src/../src\\app.ts ');
+const norm = normalizeRepoPath('．/／src/../src\\yingYong.ts ');
 check(
   'normalizeRepoPath 归一化可见（供审计/日志用）',
-  norm.ok === true && norm.normalized === 'src/app.ts' && norm.aliases.length > 0,
+  norm.ok === true && norm.normalized === 'src/yingYong.ts' && norm.aliases.length > 0,
   `${norm.normalized} aliases=${JSON.stringify(norm.aliases)} noisy=${norm.noisy}`
 );
 
@@ -222,79 +222,79 @@ const ffNo = () => false;
 
 const refCases = [
   {
-    label: '成员推主分支 refs/heads/main → 拒',
+    biaoQian: '成员推主分支 refs/heads/main → 拒',
     res: validateRefUpdate('refs/heads/main', A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'main-branch-protected',
   },
   {
-    label: '成员推 refs/heads/master → 拒',
+    biaoQian: '成员推 refs/heads/master → 拒',
     res: validateRefUpdate('refs/heads/master', A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'main-branch-protected',
   },
   {
-    label: '成员删自己的提案分支 → 拒（不允许删 ref）',
+    biaoQian: '成员删自己的提案分支 → 拒（不允许删 ref）',
     res: validateRefUpdate('refs/heads/proposals/fix-1', A, Z, { role: 'member' }),
     expect: 'ref-delete',
   },
   {
-    label: '创建者删环境 ref → 拒（环境 ref 任何人不得删）',
+    biaoQian: '创建者删环境 ref → 拒（环境 ref 任何人不得删）',
     res: validateRefUpdate('refs/environments/staging', A, Z, { role: 'creator', allowDeleteByCreator: true }),
     expect: 'env-ref-delete',
   },
   {
-    label: '成员推环境 ref → 拒（只允许 creator/admin）',
+    biaoQian: '成员推环境 ref → 拒（只允许 creator/admin）',
     res: validateRefUpdate('refs/environments/staging', A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'env-ref-protected',
   },
   {
-    label: '非快进推送 → 拒',
+    biaoQian: '非快进推送 → 拒',
     res: validateRefUpdate('refs/heads/proposals/fix-1', A, C, { role: 'member', isAncestor: ffNo }),
     expect: 'non-fast-forward',
   },
   {
-    label: '强制推（--force）→ 拒',
+    biaoQian: '强制推（--force）→ 拒',
     res: validateRefUpdate('refs/heads/proposals/fix-1', A, C, { role: 'member', force: true, isAncestor: ffYes }),
     expect: 'forced-update',
   },
   {
-    label: '没有对象图可判定 → fail-closed 拒',
+    biaoQian: '没有对象图可判定 → fail-closed 拒',
     res: validateRefUpdate('refs/heads/proposals/fix-1', A, C, { role: 'member' }),
     expect: 'fast-forward-unverified',
   },
   {
-    label: 'ref 名非法（含 ..）→ 拒',
+    biaoQian: 'ref 名非法（含 ..）→ 拒',
     res: validateRefUpdate('refs/heads/../evil', A, C, { role: 'member', isAncestor: ffYes }),
     expect: 'ref-invalid',
   },
   {
-    label: 'ref 名非法（.lock 结尾）→ 拒',
+    biaoQian: 'ref 名非法（.lock 结尾）→ 拒',
     res: validateRefUpdate('refs/heads/evil.lock', A, C, { role: 'member', isAncestor: ffYes }),
     expect: 'ref-invalid',
   },
   {
-    label: '对象名非法 → 拒',
+    biaoQian: '对象名非法 → 拒',
     res: validateRefUpdate('refs/heads/proposals/x', 'not-a-sha', C, { role: 'member', isAncestor: ffYes }),
     expect: 'sha-invalid',
   },
   {
-    label: '成员推 refs/heads/别人的分支 → 拒（白名单）',
+    biaoQian: '成员推 refs/heads/别人的分支 → 拒（白名单）',
     res: validateRefUpdate('refs/heads/feature-x', A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'ref-not-whitelisted',
   },
   {
-    label: '推 refs/replace/** → 拒（永久封禁，改对象图）',
+    biaoQian: '推 refs/replace/** → 拒（永久封禁，改对象图）',
     res: validateRefUpdate('refs/replace/' + A, A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'ref-blocked',
   },
   {
-    label: 'oldSha 与服务端不一致（并发/强推）→ 拒',
+    biaoQian: 'oldSha 与服务端不一致（并发/强推）→ 拒',
     res: validateRefUpdate('refs/heads/proposals/fix-1', A, B, { role: 'member', isAncestor: ffYes, knownSha: D }),
     expect: 'stale-old-sha',
   },
 ];
 for (const c of refCases) {
   const hit = c.res.rejections.some((r) => r.code === c.expect);
-  check(c.label, c.res.allowed === false && hit, `${c.expect} | 实际=[${codes(c.res)}] ${c.res.rejections[0]?.reason ?? ''}`);
+  check(c.biaoQian, c.res.allowed === false && hit, `${c.expect} | 实际=[${codes(c.res)}] ${c.res.rejections[0]?.reason ?? ''}`);
 }
 
 section('3b. 合法推送必须通过');
@@ -321,7 +321,7 @@ const cleanDir = path.join(tmpRoot, 'clean-public');
 fs.mkdirSync(path.join(cleanDir, 'src'), { recursive: true });
 fs.mkdirSync(path.join(cleanDir, 'docs'), { recursive: true });
 fs.writeFileSync(path.join(cleanDir, 'README.md'), '# 公开目录\n本目录的内容会被导出并发布到公开位置。\n', 'utf8');
-fs.writeFileSync(path.join(cleanDir, 'src', 'app.ts'), 'export const hello = (): string => "hi";\n', 'utf8');
+fs.writeFileSync(path.join(cleanDir, 'src', 'yingYong.ts'), 'export const hello = (): string => "hi";\n', 'utf8');
 fs.writeFileSync(path.join(cleanDir, 'docs', 'notes.md'), '联系示例（占位邮箱，允许）：alice@example.com\n', 'utf8');
 const cleanScan = saomiaoKeFabucDaochu(cleanDir);
 check(
@@ -339,8 +339,8 @@ fs.writeFileSync(
   path.join(dirtyDir, 'members.json'),
   JSON.stringify(
     [
-      { memberId: 'm1', name: '群主', email: 'boss@corp.example.cn' },
-      { memberId: 'm2', name: '牛马一号' },
+      { memberId: 'm1', ming: '群主', email: 'boss@corp.example.cn' },
+      { memberId: 'm2', ming: '牛马一号' },
     ],
     null,
     2
@@ -402,8 +402,8 @@ check('数组入参：内容含真实邮箱 → 拒', emailOnly.allowed === fals
 const keyOnly = saomiaoKeFabucDaochu([{ path: 'public/config.md', content: `key = "sk-${'z'.repeat(24)}"\n` }]);
 check('数组入参：内容含 API Key → 拒', keyOnly.allowed === false && codes(keyOnly).includes('secret-key'), codes(keyOnly));
 const cleanArray = saomiaoKeFabucDaochu([
-  { path: 'public/index.html', content: '<!doctype html><title>ok</title>\n' },
-  { path: 'public/style.css', content: 'body { color: #333; }\n' },
+  { path: 'public/index.html', content: '<!doctype html><biaoTi>ok</biaoTi>\n' },
+  { path: 'public/style.css', content: 'ti { color: #333; }\n' },
 ]);
 check('数组入参：干净的两条 → 允许', cleanArray.allowed === true && cleanArray.files === 2, JSON.stringify(cleanArray.violations));
 const placeholder = saomiaoKeFabucDaochu([{ path: 'public/a.md', content: 'demo@example.org\n' }]);
@@ -469,15 +469,15 @@ check('任务级租约缺 paths → 拒（invalid-request）', taskNoPaths.ok ==
 
 section('5b. 租约绕过尝试回归');
 const bypassLease = [
-  { label: '[反斜杠] 他人写 "src\\a.ts" → 拒', path: 'src\\a.ts' },
-  { label: '[末尾空格] 他人写 "src/a.ts " → 拒', path: 'src/a.ts ' },
-  { label: '[大小写] 他人写 "SRC/A.TS" → 拒', path: 'SRC/A.TS' },
-  { label: '[点前缀] 他人写 "./src/a.ts" → 拒', path: './src/a.ts' },
-  { label: '[相对穿越] 他人写 "src/../src/a.ts" → 拒', path: 'src/../src/a.ts' },
+  { biaoQian: '[反斜杠] 他人写 "src\\a.ts" → 拒', path: 'src\\a.ts' },
+  { biaoQian: '[末尾空格] 他人写 "src/a.ts " → 拒', path: 'src/a.ts ' },
+  { biaoQian: '[大小写] 他人写 "SRC/A.TS" → 拒', path: 'SRC/A.TS' },
+  { biaoQian: '[点前缀] 他人写 "./src/a.ts" → 拒', path: './src/a.ts' },
+  { biaoQian: '[相对穿越] 他人写 "src/../src/a.ts" → 拒', path: 'src/../src/a.ts' },
 ];
 for (const c of bypassLease) {
   const r = reg.checkWrite('m2', c.path);
-  check(c.label, r.allowed === false && r.code === 'held-by-other', `${r.code} | ${r.reason}`);
+  check(c.biaoQian, r.allowed === false && r.code === 'held-by-other', `${r.code} | ${r.reason}`);
 }
 const escape = reg.checkWrite('m1', '../../etc/passwd');
 check('[穿越] 写入路径逃出仓库 → 拒（path-invalid）', escape.allowed === false && escape.code === 'path-invalid', escape.reason);
@@ -516,7 +516,7 @@ reg2.acquire({ holder: 'y', kind: 'dir', scope: 'b' });
 now2 += 5_000;
 const swept = reg2.sweep();
 check('sweep() 返回本次过期的租约（无定时器，靠调用/操作时判定）', swept.length === 2, swept.map((l) => `${l.holder}:${l.scope}`));
-check('sweep 后活跃数归零', reg2.stats().active === 0 && reg2.stats().expired === 2, JSON.stringify(reg2.stats()));
+check('sweep 后活跃数归零', reg2.stats().jiHuo === 0 && reg2.stats().expired === 2, JSON.stringify(reg2.stats()));
 check('过期留痕有上限（historyLimit=3）', reg2.expiredHistory().length === 2);
 
 section('5d. 自己的租约合并 / 上限');

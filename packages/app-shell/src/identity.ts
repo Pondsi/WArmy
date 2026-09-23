@@ -42,7 +42,7 @@ export const YIQIANMING_ZAIHE_MOSHI = 'warmy.identity.signed.v1' as const;
 
 /** 签名的域分隔前缀：不同用途的签名不互串（防跨协议签名重放） */
 export const YUMING_SHENGMING = 'warmy.identity.statement.v1';
-export const DOMAIN_CARD = 'warmy.identity.card.v1';
+export const DOMAIN_CARD = 'warmy.identity.ka.v1';
 
 /**
  * 代次规则的**诚实说明**。任何一次换证验签都必须把它原样带给调用方（UI 文案必须照此写），
@@ -144,17 +144,17 @@ export interface LianXiKa {
   email?: string;
   phone?: string;
   /** 可选其它联系方式（例如备用邮箱 / 即时通讯），名字由用户自己起 */
-  extra?: Array<{ label: string; value: string }>;
+  extra?: Array<{ biaoQian: string; value: string }>;
   /** 本地最后修改时间（不参与签名语义之外的计算，仅用于展示与审计） */
   updatedAt?: number;
 }
 
 /** 渲染层必须传 t（否则会显示 i18n key 原文）；主进程侧只给结构化数据，不拼中文 */
-export type Fanyi = (key: string, fallback?: string) => string;
+export type Fanyi = (key: string, huiTui?: string) => string;
 
 /** 名片相关 i18n key（**UI 那条线负责落盘**，这里只声明"需要哪些"） */
 export const CONTACT_CARD_I18N = {
-  title: 'identity.contact.title',
+  title: 'identity.contact.biaoTi',
   email: 'identity.contact.email',
   phone: 'identity.contact.phone',
   extra: 'identity.contact.extra',
@@ -167,7 +167,7 @@ export const CONTACT_CARD_I18N = {
 export interface LianxiZiduanShitu {
   key: string;
   labelKey: string;
-  label: string;
+  biaoQian: string;
   value: string;
   filled: boolean;
   /** true 表示这是"未填写"占位（刻意区别于"他隐藏了"） */
@@ -183,26 +183,26 @@ export interface ContactCardView {
   alwaysVisibleNote: string;
 }
 
-export function cloneContactCard(card: LianXiKa | undefined): LianXiKa {
+export function cloneContactCard(ka: LianXiKa | undefined): LianXiKa {
   const out: LianXiKa = {};
-  if (!card) return out;
-  if (typeof card.email === 'string') out.email = card.email;
-  if (typeof card.phone === 'string') out.phone = card.phone;
-  if (Array.isArray(card.extra)) {
-    out.extra = card.extra
-      .filter((e) => e && (typeof e.label === 'string' || typeof e.value === 'string'))
-      .map((e) => ({ label: String(e.label ?? ''), value: String(e.value ?? '') }));
+  if (!ka) return out;
+  if (typeof ka.email === 'string') out.email = ka.email;
+  if (typeof ka.phone === 'string') out.phone = ka.phone;
+  if (Array.isArray(ka.extra)) {
+    out.extra = ka.extra
+      .filter((e) => e && (typeof e.biaoQian === 'string' || typeof e.value === 'string'))
+      .map((e) => ({ biaoQian: String(e.biaoQian ?? ''), value: String(e.value ?? '') }));
   }
-  if (typeof card.updatedAt === 'number') out.updatedAt = card.updatedAt;
+  if (typeof ka.updatedAt === 'number') out.updatedAt = ka.updatedAt;
   return out;
 }
 
 /** 是否一个字段都没有填（不用于展示，只用于内部判断） */
-export function isContactCardEmpty(card: LianXiKa | undefined): boolean {
-  const c = cloneContactCard(card);
+export function isContactCardEmpty(ka: LianXiKa | undefined): boolean {
+  const c = cloneContactCard(ka);
   const hasEmail = typeof c.email === 'string' && c.email.trim().length > 0;
   const hasPhone = typeof c.phone === 'string' && c.phone.trim().length > 0;
-  const hasExtra = (c.extra || []).some((e) => e.label.trim() || e.value.trim());
+  const hasExtra = (c.extra || []).some((e) => e.biaoQian.trim() || e.value.trim());
   return !hasEmail && !hasPhone && !hasExtra;
 }
 
@@ -247,7 +247,7 @@ export function contactFreezeState(contactFreezeUntil: number | undefined, now: 
 
 /** 本机留存的名片版本（append-only）：换证横幅要展示的"旧联系方式"就来自这里 */
 export interface ContactCardVersion {
-  card: LianXiKa;
+  ka: LianXiKa;
   at: number;
   note: 'created' | 'updated' | 'rotation' | 'imported';
 }
@@ -255,7 +255,7 @@ export interface ContactCardVersion {
 /** 本机身份的名片历史（**永远本地留存**，不进任何对外声明） */
 export function contactCardHistory(identity: ShenfenJilu): ContactCardVersion[] {
   const h = Array.isArray(identity.cardHistory) ? identity.cardHistory : [];
-  return h.map((v) => ({ card: cloneContactCard(v.card), at: v.at, note: v.note }));
+  return h.map((v) => ({ ka: cloneContactCard(v.ka), at: v.at, note: v.note }));
 }
 
 /** 最近一次改名片之前的留存值（UI 要"旧/新并列展示"时取旧的） */
@@ -263,7 +263,7 @@ export function benJiShangYiFenLianXiKa(identity: ShenfenJilu): LianXiKa | null 
   const h = contactCardHistory(identity);
   // 末尾一条是当前值，倒数第二条才是"旧的"；若只有创建这一条则没有旧的
   if (h.length < 2) return null;
-  return h[h.length - 2]!.card;
+  return h[h.length - 2]!.ka;
 }
 
 // ── 接收方侧：对某个对端身份的联系资料状态（本机各自判定） ──
@@ -276,7 +276,7 @@ export function benJiShangYiFenLianXiKa(identity: ShenfenJilu): LianXiKa | null 
  * 这三个字段都不来自任何可伪造的广播，所以本地判定是可信的。
  */
 export interface DuiduanLianxiZhuangtai {
-  fingerprint: string;
+  zhiWen: string;
   storedCard: LianXiKa;
   storedAt: number;
   pendingCard: LianXiKa | null;
@@ -290,7 +290,7 @@ export interface DuiduanLianxiZhuangtai {
 }
 
 export interface DuiDuanLianXiShiTu {
-  fingerprint: string;
+  zhiWen: string;
   /** UI 要**并列展示**的两个字段之一：本机历史留存的名片（旧） */
   previousCard: LianXiKa;
   /** 与（若已收到）对方新提交的名片；冻结期内不被采用；没有则为 null */
@@ -312,10 +312,10 @@ export interface DuiDuanLianXiShiTu {
 }
 
 /** 首次加入：**不受冻结限制**（否则新人根本填不了联系方式） */
-export function chuangjianDuiduanLianxi(fingerprint: string, card: LianXiKa | undefined, now: number = Date.now()): DuiduanLianxiZhuangtai {
+export function chuangjianDuiduanLianxi(zhiWen: string, ka: LianXiKa | undefined, now: number = Date.now()): DuiduanLianxiZhuangtai {
   return {
-    fingerprint,
-    storedCard: cloneContactCard(card),
+    zhiWen,
+    storedCard: cloneContactCard(ka),
     storedAt: now,
     pendingCard: null,
     pendingAt: 0,
@@ -345,8 +345,8 @@ export function lunHuanShiDuiDuanLianXi(
  *  - 不在冻结期 → 直接采用（首次加入走这条）；
  *  - 在冻结期 → 只记为 pendingCard，冻结期满前 effectiveCard 仍是本机留存值。
  */
-export function mingPianShiDuiDuanLianXi(state: DuiduanLianxiZhuangtai, card: LianXiKa | undefined, now: number = Date.now()): DuiduanLianxiZhuangtai {
-  const next = cloneContactCard(card);
+export function mingPianShiDuiDuanLianXi(state: DuiduanLianxiZhuangtai, ka: LianXiKa | undefined, now: number = Date.now()): DuiduanLianxiZhuangtai {
+  const next = cloneContactCard(ka);
   if (state.contactFreezeUntil > now) {
     return { ...state, pendingCard: next, pendingAt: now };
   }
@@ -398,21 +398,21 @@ export function duiduanLianxiQueren(state: DuiduanLianxiZhuangtai, now: number =
 /** 对端名片视图：两个字段（旧/新）并列，外加冻结状态 */
 export function duiduanLianxiShitu(state: DuiduanLianxiZhuangtai, now: number = Date.now()): DuiDuanLianXiShiTu {
   const wasFrozen = state.contactFreezeUntil > now;
-  const settled = duiduanLianxiJiesuan(state, now);
-  const freeze = contactFreezeState(settled.contactFreezeUntil, now);
+  const yiJieSuan = duiduanLianxiJiesuan(state, now);
+  const freeze = contactFreezeState(yiJieSuan.contactFreezeUntil, now);
   return {
-    fingerprint: settled.fingerprint,
-    previousCard: cloneContactCard(settled.storedCard),
-    pendingCard: settled.pendingCard ? cloneContactCard(settled.pendingCard) : null,
-    effectiveCard: cloneContactCard(settled.storedCard),
-    contactFreezeUntil: settled.contactFreezeUntil,
+    zhiWen: yiJieSuan.zhiWen,
+    previousCard: cloneContactCard(yiJieSuan.storedCard),
+    pendingCard: yiJieSuan.pendingCard ? cloneContactCard(yiJieSuan.pendingCard) : null,
+    effectiveCard: cloneContactCard(yiJieSuan.storedCard),
+    contactFreezeUntil: yiJieSuan.contactFreezeUntil,
     frozen: freeze.frozen,
     remainingMs: freeze.remainingMs,
-    receivedAt: settled.receivedAt,
-    generation: settled.generation,
-    usingStoredHistory: wasFrozen || freeze.frozen || settled.awaitingConfirmation,
-    pendingIsHeldBack: freeze.frozen && !!settled.pendingCard,
-    awaitingConfirmation: settled.awaitingConfirmation,
+    receivedAt: yiJieSuan.receivedAt,
+    generation: yiJieSuan.generation,
+    usingStoredHistory: wasFrozen || freeze.frozen || yiJieSuan.awaitingConfirmation,
+    pendingIsHeldBack: freeze.frozen && !!yiJieSuan.pendingCard,
+    awaitingConfirmation: yiJieSuan.awaitingConfirmation,
     note: CONTACT_FREEZE_NOTE,
   };
 }
@@ -421,8 +421,8 @@ export function duiduanLianxiShitu(state: DuiduanLianxiZhuangtai, now: number = 
  * 名片视图：**空字段渲染成占位**，而不是删掉这一行。
  * 这是附六第 2 条的落地：字段可空，但界面必须展示占位。
  */
-export function contactCardView(card: LianXiKa | undefined, t: Fanyi = (k) => k): ContactCardView {
-  const c = cloneContactCard(card);
+export function contactCardView(ka: LianXiKa | undefined, t: Fanyi = (k) => k): ContactCardView {
+  const c = cloneContactCard(ka);
   const unfilled = t(CONTACT_CARD_I18N.unfilled);
   const fields: LianxiZiduanShitu[] = [];
   const push = (key: string, labelKey: string, raw: string | undefined): void => {
@@ -431,7 +431,7 @@ export function contactCardView(card: LianXiKa | undefined, t: Fanyi = (k) => k)
     fields.push({
       key,
       labelKey,
-      label: t(labelKey),
+      biaoQian: t(labelKey),
       value: filled ? value : unfilled,
       filled,
       placeholder: !filled,
@@ -440,7 +440,7 @@ export function contactCardView(card: LianXiKa | undefined, t: Fanyi = (k) => k)
   push('email', CONTACT_CARD_I18N.email, c.email);
   push('phone', CONTACT_CARD_I18N.phone, c.phone);
   for (const [i, e] of (c.extra || []).entries()) {
-    push(`extra:${i}:${e.label}`, e.label || CONTACT_CARD_I18N.extra, e.value);
+    push(`extra:${i}:${e.biaoQian}`, e.biaoQian || CONTACT_CARD_I18N.extra, e.value);
   }
   const unfilledCount = fields.filter((f) => !f.filled).length;
   return {
@@ -456,7 +456,7 @@ export function contactCardView(card: LianXiKa | undefined, t: Fanyi = (k) => k)
 
 /** 退役密钥：**保公钥、丢私钥**（附三.3）—— 换证后历史签名仍可验证 */
 export interface TuiyiMiyao {
-  fingerprint: string;
+  zhiWen: string;
   /** SPKI DER base64 */
   publicKey: string;
   /** 该密钥**最后使用**的代次 */
@@ -472,9 +472,9 @@ export interface ShenfenJilu {
   schema: typeof SHENFEN_MOSHI;
   algo: typeof SHENFEN_SUANFA;
   /** 人读别名：旧的 9 位 deviceId（保留兼容，**不是**身份） */
-  alias: string;
+  bieMing: string;
   /** 身份主键：公钥指纹 */
-  fingerprint: string;
+  zhiWen: string;
   /** 单调代次：创建 = 1，每次换证 +1 */
   generation: number;
   createdAt: number;
@@ -500,17 +500,17 @@ export interface ShenfenJilu {
 
 /** 密钥环条目：当前公钥 + 全部退役公钥（验签用） */
 export interface YaoShiHuanTiaoMu {
-  fingerprint: string;
+  zhiWen: string;
   publicKey: string;
   generation: number;
   current: boolean;
 }
 
-export function keyRing(identity: ShenfenJilu): YaoShiHuanTiaoMu[] {
+export function miyaoHuan(identity: ShenfenJilu): YaoShiHuanTiaoMu[] {
   return [
-    { fingerprint: identity.fingerprint, publicKey: identity.publicKey, generation: identity.generation, current: true },
+    { zhiWen: identity.zhiWen, publicKey: identity.publicKey, generation: identity.generation, current: true },
     ...identity.retiredKeys.map((r) => ({
-      fingerprint: r.fingerprint,
+      zhiWen: r.zhiWen,
       publicKey: r.publicKey,
       generation: r.generation,
       current: false,
@@ -518,7 +518,7 @@ export function keyRing(identity: ShenfenJilu): YaoShiHuanTiaoMu[] {
   ];
 }
 
-export function currentContactCard(identity: ShenfenJilu): LianXiKa {
+export function dangQianLianXiKa(identity: ShenfenJilu): LianXiKa {
   return cloneContactCard(identity.contactCard);
 }
 
@@ -580,7 +580,7 @@ export function keyObjectFromPublicB64(b64: string): KeyObject | null {
 
 export interface ChuangjianShenfenXuanxiang {
   /** 人读别名（旧的 9 位 deviceId 或自定义短码） */
-  alias: string;
+  bieMing: string;
   contactCard?: LianXiKa;
   /** 允许导入既有密钥（备份恢复 / 迁移） */
   keyPair?: GeneratedKeyPair;
@@ -602,14 +602,14 @@ export function chuangjianShenfen(opts: ChuangjianShenfenXuanxiang): ChuangjianS
   const identity: ShenfenJilu = {
     schema: SHENFEN_MOSHI,
     algo: SHENFEN_SUANFA,
-    alias: String(opts.alias || ''),
-    fingerprint: fingerprintFromPublicKey(keyPair.publicKeyB64),
+    bieMing: String(opts.bieMing || ''),
+    zhiWen: fingerprintFromPublicKey(keyPair.publicKeyB64),
     generation,
     createdAt: now,
     updatedAt: now,
     contactCard: initialCard,
     /** 首次加入不受冻结限制（尚无换证） */
-    cardHistory: [{ card: cloneContactCard(initialCard), at: now, note: 'created' }],
+    cardHistory: [{ ka: cloneContactCard(initialCard), at: now, note: 'created' }],
     contactFreezeUntil: 0,
     publicKey: keyPair.publicKeyB64,
     retiredKeys: [],
@@ -648,7 +648,7 @@ export interface YiQianmingZaihe {
   domain: string;
   payload: string;
   /** 签名者指纹（用哪个密钥签的） */
-  fingerprint: string;
+  zhiWen: string;
   generation: number;
   algo: typeof SHENFEN_SUANFA;
   signedAt: number;
@@ -666,7 +666,7 @@ export function yongShenFenQianMing(
   opts: { domain?: string; now?: number } = {},
 ): YiQianmingZaihe {
   const domain = opts.domain || YUMING_SHENGMING;
-  const fingerprint = identity?.fingerprint || '';
+  const zhiWen = identity?.zhiWen || '';
   const signature = crypto.sign(null, qianmingZijie(domain, payload), privateKey).toString('base64');
   return {
     schema: YIQIANMING_ZAIHE_MOSHI,
@@ -674,7 +674,7 @@ export function yongShenFenQianMing(
     version: 1,
     domain,
     payload,
-    fingerprint,
+    zhiWen,
     generation: identity?.generation ?? 1,
     algo: SHENFEN_SUANFA,
     signedAt: opts.now ?? Date.now(),
@@ -693,7 +693,7 @@ export type VerifyReason =
 export interface yanzhengJieguo {
   ok: boolean;
   reason: VerifyReason;
-  fingerprint: string;
+  zhiWen: string;
   generation?: number;
   /** 命中哪把钥匙 */
   matched?: 'current' | 'retired';
@@ -707,19 +707,19 @@ export interface yanzhengJieguo {
  * 它不证明"对方现在还是那个人"（换证/被偷都可能），后者靠代次规则 + 人工核实。
  */
 export function anZhiWenYanZheng(
-  fingerprint: string,
+  zhiWen: string,
   payload: string,
   signatureB64: string,
   keys: YaoShiHuanTiaoMu[],
   opts: { domain?: string } = {},
 ): yanzhengJieguo {
   const domain = opts.domain || YUMING_SHENGMING;
-  if (!isValidFingerprint(fingerprint)) {
-    return { ok: false, reason: 'malformed', fingerprint: String(fingerprint || ''), detail: 'fingerprint 形态/校验位不合法' };
+  if (!isValidFingerprint(zhiWen)) {
+    return { ok: false, reason: 'malformed', zhiWen: String(zhiWen || ''), detail: 'fingerprint 形态/校验位不合法' };
   }
-  const entry = keys.find((k) => zhiwenPipei(k.fingerprint, fingerprint));
+  const entry = keys.find((k) => zhiwenPipei(k.zhiWen, zhiWen));
   if (!entry) {
-    return { ok: false, reason: 'unknown-fingerprint', fingerprint, detail: '密钥环里没有这个指纹（当前或退役）' };
+    return { ok: false, reason: 'unknown-fingerprint', zhiWen, detail: '密钥环里没有这个指纹（当前或退役）' };
   }
   return anTiaoMuYanZheng(entry, payload, signatureB64, domain);
 }
@@ -729,7 +729,7 @@ function anTiaoMuYanZheng(entry: YaoShiHuanTiaoMu, payload: string, signatureB64
   const base: yanzhengJieguo = {
     ok: false,
     reason: 'bad-signature',
-    fingerprint: entry.fingerprint,
+    zhiWen: entry.zhiWen,
     generation: entry.generation,
     matched: entry.current ? 'current' : 'retired',
   };
@@ -752,9 +752,9 @@ function anTiaoMuYanZheng(entry: YaoShiHuanTiaoMu, payload: string, signatureB64
 /** 验自描述信封：先按信封里声明的指纹找钥匙，再验签名与载荷一致性 */
 export function yanZhengYiQianmingZaiHe(env: YiQianmingZaihe, keys: YaoShiHuanTiaoMu[]): yanzhengJieguo {
   if (!env || typeof env !== 'object' || env.schema !== YIQIANMING_ZAIHE_MOSHI || typeof env.signature !== 'string') {
-    return { ok: false, reason: 'malformed', fingerprint: String(env?.fingerprint || ''), detail: '信封结构不合法' };
+    return { ok: false, reason: 'malformed', zhiWen: String(env?.zhiWen || ''), detail: '信封结构不合法' };
   }
-  return anZhiWenYanZheng(env.fingerprint, env.payload, env.signature, keys, { domain: env.domain || YUMING_SHENGMING });
+  return anZhiWenYanZheng(env.zhiWen, env.payload, env.signature, keys, { domain: env.domain || YUMING_SHENGMING });
 }
 
 // ── 换证（主动轮换）：迁移声明 + 作废声明 ──
@@ -799,7 +799,7 @@ export interface RevocationDeclaration {
   version: 1;
   algo: typeof SHENFEN_SUANFA;
   /** 被作废的指纹（= 签名者） */
-  fingerprint: string;
+  zhiWen: string;
   publicKey: string;
   /** 该密钥最后使用的代次 */
   generation: number;
@@ -815,13 +815,13 @@ export type ShenfenShengming = LunHuanShengMing | RevocationDeclaration;
 
 /** 迁移声明的签名载荷（去掉 signature 字段后规范化） */
 export function rotationSigningPayload(decl: LunHuanShengMing): Record<string, unknown> {
-  const { signature: _sig, ...rest } = decl;
-  return rest as unknown as Record<string, unknown>;
+  const { signature: _sig, ...qiYu } = decl;
+  return qiYu as unknown as Record<string, unknown>;
 }
 
 export function revocationSigningPayload(decl: RevocationDeclaration): Record<string, unknown> {
-  const { signature: _sig, ...rest } = decl;
-  return rest as unknown as Record<string, unknown>;
+  const { signature: _sig, ...qiYu } = decl;
+  return qiYu as unknown as Record<string, unknown>;
 }
 
 export interface RotateArgs {
@@ -853,7 +853,7 @@ export function lunHuanShenFen(args: RotateArgs): RotateOutput {
   const { identity, privateKey } = args;
   const now = args.now ?? Date.now();
   const keyPair = shengChengShenFenMiyaoDui();
-  const shangyiZhiwen = identity.fingerprint;
+  const shangyiZhiwen = identity.zhiWen;
   const previousGeneration = identity.generation;
   const generation = previousGeneration + 1;
   /** 旧名片：从**本机留存历史**取（不进声明） */
@@ -887,7 +887,7 @@ export function lunHuanShenFen(args: RotateArgs): RotateOutput {
     kind: 'warmy.identity.revocation',
     version: 1,
     algo: SHENFEN_SUANFA,
-    fingerprint: shangyiZhiwen,
+    zhiWen: shangyiZhiwen,
     publicKey: identity.publicKey,
     generation: previousGeneration,
     supersededBy: declaration.newFingerprint,
@@ -904,19 +904,19 @@ export function lunHuanShenFen(args: RotateArgs): RotateOutput {
 
   const next: ShenfenJilu = {
     ...identity,
-    fingerprint: declaration.newFingerprint,
+    zhiWen: declaration.newFingerprint,
     publicKey: keyPair.publicKeyB64,
     generation,
     updatedAt: now,
     /** 换证**不改**联系资料（改了也要被冻结期挡住），名片历史只追加"换证"这一条时间点 */
     contactCard: cloneContactCard(identity.contactCard),
     contactFreezeUntil,
-    cardHistory: [...(identity.cardHistory || []), { card: cloneContactCard(identity.contactCard), at: now, note: 'rotation' as const }],
+    cardHistory: [...(identity.cardHistory || []), { ka: cloneContactCard(identity.contactCard), at: now, note: 'rotation' as const }],
     // 保公钥、丢私钥
     retiredKeys: [
       ...identity.retiredKeys,
       {
-        fingerprint: shangyiZhiwen,
+        zhiWen: shangyiZhiwen,
         publicKey: identity.publicKey,
         generation: previousGeneration,
         retiredAt: now,
@@ -992,10 +992,10 @@ export function verifyRotationDeclaration(
     return { ...base, detail: '结构不合法' };
   }
   // 0) 声明里不得出现任何联系方式（攻击者可控制声明 → 不能拿它当"旧名片"的来源）
-  const CONTACT_KEYS = ['contactCard', 'previousContactCard', 'contact', 'card', 'email', 'phone', 'contactCardSnapshot'];
-  const injected = Object.keys(decl as unknown as Record<string, unknown>).filter((k) => CONTACT_KEYS.includes(k));
-  if (injected.length) {
-    return { ...base, reason: 'contact-not-allowed', detail: `声明不得携带联系方式（发现字段 ${injected.join(',')}）；旧名片只能取自接收方本机留存` };
+  const CONTACT_KEYS = ['contactCard', 'previousContactCard', 'contact', 'ka', 'email', 'phone', 'contactCardSnapshot'];
+  const yiZhuRu = Object.keys(decl as unknown as Record<string, unknown>).filter((k) => CONTACT_KEYS.includes(k));
+  if (yiZhuRu.length) {
+    return { ...base, reason: 'contact-not-allowed', detail: `声明不得携带联系方式（发现字段 ${yiZhuRu.join(',')}）；旧名片只能取自接收方本机留存` };
   }
   if (decl.algo !== SHENFEN_SUANFA) return { ...base, detail: `算法不支持: ${String(decl.algo)}` };
   if (!isValidFingerprint(decl.oldFingerprint) || !isValidFingerprint(decl.newFingerprint)) {
@@ -1012,7 +1012,7 @@ export function verifyRotationDeclaration(
   }
   // ① 签名必须由**旧公钥**验过
   const oldEntry: YaoShiHuanTiaoMu = {
-    fingerprint: decl.oldFingerprint,
+    zhiWen: decl.oldFingerprint,
     publicKey: decl.oldPublicKey,
     generation: decl.previousGeneration,
     current: false,
@@ -1040,7 +1040,7 @@ export function verifyRotationDeclaration(
 
   // ④ 代次必须高于"已经知道的一切"（这才是防回滚）
   const knownGenerations = (opts.knownKeys || [])
-    .filter((k) => zhiwenPipei(k.fingerprint, decl.oldFingerprint) || zhiwenPipei(k.fingerprint, decl.newFingerprint))
+    .filter((k) => zhiwenPipei(k.zhiWen, decl.oldFingerprint) || zhiwenPipei(k.zhiWen, decl.newFingerprint))
     .map((k) => k.generation);
   const knownMax = Math.max(opts.currentGeneration ?? 0, ...(knownGenerations.length ? knownGenerations : [0]));
   if (decl.generation <= knownMax) {
@@ -1052,7 +1052,7 @@ export function verifyRotationDeclaration(
   }
 
   const warnings: string[] = [];
-  const oldKnown = (opts.knownKeys || []).some((k) => zhiwenPipei(k.fingerprint, decl.oldFingerprint));
+  const oldKnown = (opts.knownKeys || []).some((k) => zhiwenPipei(k.zhiWen, decl.oldFingerprint));
   if (opts.knownKeys && !oldKnown) {
     warnings.push('旧公钥不在本地密钥环里（首次见到该身份）：这是 TOFU，无法确认新旧密钥的连续性');
   }
@@ -1077,7 +1077,7 @@ export function verifyRotationDeclaration(
 export interface RevocationVerifyResult {
   accepted: boolean;
   reason: 'ok' | 'malformed' | 'bad-signature' | 'fingerprint-mismatch';
-  fingerprint: string;
+  zhiWen: string;
   generation: number;
   warnings: string[];
   honestNote: string;
@@ -1089,7 +1089,7 @@ export function verifyRevocationDeclaration(decl: RevocationDeclaration): Revoca
   const base: RevocationVerifyResult = {
     accepted: false,
     reason: 'malformed',
-    fingerprint: String(decl?.fingerprint || ''),
+    zhiWen: String(decl?.zhiWen || ''),
     generation: Number(decl?.generation || 0),
     warnings: [],
     honestNote:
@@ -1099,12 +1099,12 @@ export function verifyRevocationDeclaration(decl: RevocationDeclaration): Revoca
     return { ...base, detail: '结构不合法' };
   }
   if (decl.algo !== SHENFEN_SUANFA) return { ...base, detail: `算法不支持: ${String(decl.algo)}` };
-  if (!isValidFingerprint(decl.fingerprint)) return { ...base, detail: '指纹形态/校验位不合法' };
-  if (!zhiwenPipei(fingerprintFromPublicKey(decl.publicKey), decl.fingerprint)) {
+  if (!isValidFingerprint(decl.zhiWen)) return { ...base, detail: '指纹形态/校验位不合法' };
+  if (!zhiwenPipei(fingerprintFromPublicKey(decl.publicKey), decl.zhiWen)) {
     return { ...base, reason: 'fingerprint-mismatch', detail: '公钥与指纹不一致' };
   }
   const entry: YaoShiHuanTiaoMu = {
-    fingerprint: decl.fingerprint,
+    zhiWen: decl.zhiWen,
     publicKey: decl.publicKey,
     generation: decl.generation,
     current: false,
@@ -1113,7 +1113,7 @@ export function verifyRevocationDeclaration(decl: RevocationDeclaration): Revoca
   if (!res.ok) return { ...base, reason: 'bad-signature', detail: res.detail || '签名不通过' };
   const warnings: string[] = [];
   if (!decl.supersededBy) warnings.push('未声明接替者（supersededBy 缺失）：联系人应人工核对新指纹');
-  return { accepted: true, reason: 'ok', fingerprint: decl.fingerprint, generation: decl.generation, warnings, honestNote: base.honestNote };
+  return { accepted: true, reason: 'ok', zhiWen: decl.zhiWen, generation: decl.generation, warnings, honestNote: base.honestNote };
 }
 
 // ── 身份名片（附六第 1 条：加入动作即交换名片） ──
@@ -1122,8 +1122,8 @@ export interface ShenFenKa {
   schema: typeof IDENTITY_CARD_SCHEMA;
   kind: 'warmy.identity-card';
   version: 1;
-  fingerprint: string;
-  alias: string;
+  zhiWen: string;
+  bieMing: string;
   generation: number;
   publicKey: string;
   contactCard: LianXiKa;
@@ -1136,8 +1136,8 @@ export function daoChuShenFenKa(identity: ShenfenJilu, privateKey: KeyObject, no
     schema: IDENTITY_CARD_SCHEMA,
     kind: 'warmy.identity-card' as const,
     version: 1 as const,
-    fingerprint: identity.fingerprint,
-    alias: identity.alias,
+    zhiWen: identity.zhiWen,
+    bieMing: identity.bieMing,
     generation: identity.generation,
     publicKey: identity.publicKey,
     contactCard: cloneContactCard(identity.contactCard),
@@ -1150,17 +1150,17 @@ export function daoChuShenFenKa(identity: ShenfenJilu, privateKey: KeyObject, no
 }
 
 /** 验名片：自签 + 指纹自洽（确认"这张名片确实是该指纹的持有者发出的"） */
-export function yanZhengShenFenKa(card: ShenFenKa): yanzhengJieguo {
-  if (!card || typeof card !== 'object' || card.schema !== IDENTITY_CARD_SCHEMA || typeof card.signature !== 'string') {
-    return { ok: false, reason: 'malformed', fingerprint: String(card?.fingerprint || ''), detail: '名片结构不合法' };
+export function yanZhengShenFenKa(ka: ShenFenKa): yanzhengJieguo {
+  if (!ka || typeof ka !== 'object' || ka.schema !== IDENTITY_CARD_SCHEMA || typeof ka.signature !== 'string') {
+    return { ok: false, reason: 'malformed', zhiWen: String(ka?.zhiWen || ''), detail: '名片结构不合法' };
   }
-  if (!isValidFingerprint(card.fingerprint)) {
-    return { ok: false, reason: 'malformed', fingerprint: card.fingerprint, detail: '指纹形态/校验位不合法' };
+  if (!isValidFingerprint(ka.zhiWen)) {
+    return { ok: false, reason: 'malformed', zhiWen: ka.zhiWen, detail: '指纹形态/校验位不合法' };
   }
-  if (!zhiwenPipei(fingerprintFromPublicKey(card.publicKey), card.fingerprint)) {
-    return { ok: false, reason: 'fingerprint-mismatch', fingerprint: card.fingerprint, detail: '公钥与指纹不一致' };
+  if (!zhiwenPipei(fingerprintFromPublicKey(ka.publicKey), ka.zhiWen)) {
+    return { ok: false, reason: 'fingerprint-mismatch', zhiWen: ka.zhiWen, detail: '公钥与指纹不一致' };
   }
-  const entry: YaoShiHuanTiaoMu = { fingerprint: card.fingerprint, publicKey: card.publicKey, generation: card.generation, current: true };
-  const { signature: _s, ...draft } = card;
-  return anTiaoMuYanZheng(entry, guifan(draft), card.signature, DOMAIN_CARD);
+  const entry: YaoShiHuanTiaoMu = { zhiWen: ka.zhiWen, publicKey: ka.publicKey, generation: ka.generation, current: true };
+  const { signature: _s, ...draft } = ka;
+  return anTiaoMuYanZheng(entry, guifan(draft), ka.signature, DOMAIN_CARD);
 }

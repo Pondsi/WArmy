@@ -176,8 +176,8 @@ const WANGLUO_PAICHU_FANWEI_MINGLING = 'netsh int ipv4 show excludedportrange pr
  */
 export function jieXiPaiChuDuanKouFanWei(text: string): Array<readonly [number, number]> {
   const out: Array<readonly [number, number]> = [];
-  for (const line of String(text ?? '').split(/\r?\n/)) {
-    const m = /^\s*(\d{1,5})\s+(\d{1,5})\s*\*?\s*$/.exec(line);
+  for (const Hang of String(text ?? '').split(/\r?\n/)) {
+    const m = /^\s*(\d{1,5})\s+(\d{1,5})\s*\*?\s*$/.exec(Hang);
     if (!m) continue;
     const start = Number(m[1]);
     const end = Number(m[2]);
@@ -198,10 +198,10 @@ async function duXiTongBaoLiuDuanKou(): Promise<OsReservedRanges> {
       resolve({ supported: false, source: 'unsupported-platform', ranges: [] });
       return;
     }
-    let settled = false;
+    let yiJieSuan = false;
     const done = (r: OsReservedRanges): void => {
-      if (settled) return;
-      settled = true;
+      if (yiJieSuan) return;
+      yiJieSuan = true;
       resolve(r);
     };
     try {
@@ -246,8 +246,8 @@ function guiFanZhuRuBaoLiuFanWei(
 ): OsReservedRanges | null {
   if (v === undefined) return null;
   if (Array.isArray(v)) {
-    const list = v as readonly (readonly [number, number])[];
-    return { supported: true, source: 'injected', ranges: list.map((r) => [r[0], r[1]] as const) };
+    const LieBiao = v as readonly (readonly [number, number])[];
+    return { supported: true, source: 'injected', ranges: LieBiao.map((r) => [r[0], r[1]] as const) };
   }
   return v as OsReservedRanges;
 }
@@ -264,11 +264,11 @@ function guiLeiBangDingTanCe(code: string | undefined): PortProbeStatus {
 export function tanCeDuanKouKeYongXing(port: number, host = '0.0.0.0', timeoutMs = 400): Promise<PortProbeEntry> {
   return new Promise<PortProbeEntry>((resolve) => {
     const started = Date.now();
-    let settled = false;
+    let yiJieSuan = false;
     const s = net.createServer();
     const done = (status: PortProbeStatus, errorCode?: string): void => {
-      if (settled) return;
-      settled = true;
+      if (yiJieSuan) return;
+      yiJieSuan = true;
       if (status !== 'ok') {
         try {
           s.close();
@@ -346,7 +346,7 @@ export async function xuanDuanKouHouXuan(opts: PickPortCandidatesOptions = {}): 
 
   const started = Date.now();
   const probed = new Map<number, PortProbeEntry>();
-  const seen = new Set<number>();
+  const yiKanDao = new Set<number>();
   const recommended: PortProbeEntry[] = [];
   const skipped: PortCandidateSkip[] = [];
   // 只有真的走进扩展搜索才会去读系统保留段：优先池够用时读它纯属多余，
@@ -380,8 +380,8 @@ export async function xuanDuanKouHouXuan(opts: PickPortCandidatesOptions = {}): 
   }
 
   // 阶段 1：优先池（用户当前那个端口不做候选 —— 它就是绑不上的那个）
-  await yunxingPici(pool.filter((p) => p !== requestedPort && !seen.has(p)));
-  for (const p of pool) seen.add(p);
+  await yunxingPici(pool.filter((p) => p !== requestedPort && !yiKanDao.has(p)));
+  for (const p of pool) yiKanDao.add(p);
 
   // 阶段 2：优先池不够 → 先探同号段相邻值，再在整个动态区间随机取样
   if (!zuyi() && allowExtended) {
@@ -393,9 +393,9 @@ export async function xuanDuanKouHouXuan(opts: PickPortCandidatesOptions = {}): 
      *     这些端口连 bind 都不允许（EACCES），既浪费时间又可能把探测预算耗在"永远不可用"的号上。
      * 读不到（非 Windows / netsh 跑失败）→ ranges 为空 → 不跳过任何端口，并如实回报 source/error。
      */
-    const injected = guiFanZhuRuBaoLiuFanWei(opts.reservedRanges);
+    const yiZhuRu = guiFanZhuRuBaoLiuFanWei(opts.reservedRanges);
     osReserved =
-      injected ??
+      yiZhuRu ??
       (tiaoguoBaoliu
         ? await quXiTongBaoLiuDuanKou()
         : { supported: process.platform === 'win32', source: 'disabled', ranges: [] });
@@ -411,11 +411,11 @@ export async function xuanDuanKouHouXuan(opts: PickPortCandidatesOptions = {}): 
     const neighbours: number[] = [];
     for (const base of pool) {
       for (let k = 1; k <= 6 && neighbours.length < pool.length * 3; k += 1) {
-        for (const cand of [base + k, base - k]) {
-          if (cand >= lo && cand <= hi && !seen.has(cand) && cand !== requestedPort) {
-            seen.add(cand);
-            if (skipIfReserved(cand)) continue;
-            neighbours.push(cand);
+        for (const houXuan of [base + k, base - k]) {
+          if (houXuan >= lo && houXuan <= hi && !yiKanDao.has(houXuan) && houXuan !== requestedPort) {
+            yiKanDao.add(houXuan);
+            if (skipIfReserved(houXuan)) continue;
+            neighbours.push(houXuan);
           }
         }
       }
@@ -425,11 +425,11 @@ export async function xuanDuanKouHouXuan(opts: PickPortCandidatesOptions = {}): 
     if (!zuyi() && !outOfTime()) {
       const samples: number[] = [];
       for (let i = 0; i < PROBE_BUDGET && samples.length < PROBE_BUDGET - probeCount; i += 1) {
-        const cand = lo + Math.floor(random() * (hi - lo + 1));
-        if (!seen.has(cand) && cand !== requestedPort) {
-          seen.add(cand);
-          if (skipIfReserved(cand)) continue;
-          samples.push(cand);
+        const houXuan = lo + Math.floor(random() * (hi - lo + 1));
+        if (!yiKanDao.has(houXuan) && houXuan !== requestedPort) {
+          yiKanDao.add(houXuan);
+          if (skipIfReserved(houXuan)) continue;
+          samples.push(houXuan);
         }
       }
       await yunxingPici(samples);
@@ -471,11 +471,11 @@ export interface TcpProbeResult {
 export function tcpProbe(host: string, port: number, timeoutMs = 2500): Promise<TcpProbeResult> {
   return new Promise((resolve) => {
     const started = Date.now();
-    let settled = false;
+    let yiJieSuan = false;
     const sock = net.connect({ host, port });
     const done = (r: TcpProbeResult): void => {
-      if (settled) return;
-      settled = true;
+      if (yiJieSuan) return;
+      yiJieSuan = true;
       try {
         sock.destroy();
       } catch {
@@ -484,7 +484,7 @@ export function tcpProbe(host: string, port: number, timeoutMs = 2500): Promise<
       resolve(r);
     };
     sock.once('connect', () => done({ ok: true, latencyMs: Date.now() - started, localPort: sock.localPort ?? undefined }));
-    // 用 on（不是 once）：settle 之后对端再抛 ECONNRESET 之类也必须被吞掉，
+    // 用 qiYong（不是 once）：settle 之后对端再抛 ECONNRESET 之类也必须被吞掉，
     // 否则一个未处理的 'error' 事件能直接把 Electron 主进程带崩
     sock.on('error', (e: Error & { code?: string }) => done({ ok: false, error: e.code ?? e.message }));
     sock.setTimeout(timeoutMs, () => done({ ok: false, error: 'timeout' }));
@@ -542,7 +542,7 @@ export function lieBenJiDiZhi(): { all: string[]; publicOnes: string[] } {
 export function xuanBenJiDiZhi(all: string[]): string {
   // 多网卡机器上（Hyper-V/WSL 的 172.16-31 虚拟网卡、Docker 网桥…）排序很关键：
   // 家用/办公局域网一般是 192.168.*，其次是 10.*，172.16-31 往往是虚拟网卡 → 排最后。
-  const rank = (a: string): number => {
+  const paiMing = (a: string): number => {
     if (/^192\.168\./.test(a)) return 0;
     if (/^10\./.test(a)) return 1;
     if (/^172\.(1[6-9]|2\d|3[01])\./.test(a)) return 2;
@@ -550,7 +550,7 @@ export function xuanBenJiDiZhi(all: string[]): string {
     if (guiLeiDiZhi(a) === 'public') return 4;
     return 5;
   };
-  const yiPaiXu = [...all].sort((a, b) => rank(a) - rank(b));
+  const yiPaiXu = [...all].sort((a, b) => paiMing(a) - paiMing(b));
   if (yiPaiXu.length > 0) return yiPaiXu[0] as string;
   return '127.0.0.1';
 }
@@ -633,7 +633,7 @@ export async function faxianGongWangIp(timeoutMs = 4000): Promise<PublicIpResult
   const errors: string[] = [];
   for (const fuwu of PUBLIC_IP_SERVICES) {
     const kongzhi = new AbortController();
-    const timer = setTimeout(() => kongzhi.abort(), timeoutMs);
+    const jiShiQi = setTimeout(() => kongzhi.abort(), timeoutMs);
     try {
       const res = await fetch(fuwu.url, { signal: kongzhi.signal, redirect: 'follow' });
       const text = (await res.text()).trim().slice(0, 64);
@@ -643,17 +643,17 @@ export async function faxianGongWangIp(timeoutMs = 4000): Promise<PublicIpResult
     } catch (e) {
       errors.push(`${fuwu.source}:${(e as Error).name === 'AbortError' ? 'timeout' : 'unreachable'}`);
     } finally {
-      clearTimeout(timer);
+      clearTimeout(jiShiQi);
     }
   }
   return { ok: false, error: errors.join(','), latencyMs: Date.now() - started };
 }
 
 /** 出站连通性：真的 TCP 连一次公网端点（默认挑几个稳定可用的） */
-const OUTBOUND_TARGETS: { host: string; port: number; label: string }[] = [
-  { host: 'registry.npmjs.org', port: 443, label: 'npm-registry' },
-  { host: '1.1.1.1', port: 443, label: 'cloudflare-dns' },
-  { host: '8.8.8.8', port: 53, label: 'google-dns' },
+const OUTBOUND_TARGETS: { host: string; port: number; biaoQian: string }[] = [
+  { host: 'registry.npmjs.org', port: 443, biaoQian: 'npm-registry' },
+  { host: '1.1.1.1', port: 443, biaoQian: 'cloudflare-dns' },
+  { host: '8.8.8.8', port: 53, biaoQian: 'google-dns' },
 ];
 
 export interface ChuXiangJieguo {
@@ -661,7 +661,7 @@ export interface ChuXiangJieguo {
   method?: string;
   latencyMs?: number;
   error?: string;
-  attempts: { label: string; ok: boolean; error?: string; latencyMs?: number }[];
+  attempts: { biaoQian: string; ok: boolean; error?: string; latencyMs?: number }[];
 }
 
 export async function jianChaChuXiang(timeoutMs = 2500, targets = OUTBOUND_TARGETS): Promise<ChuXiangJieguo> {
@@ -669,14 +669,14 @@ export async function jianChaChuXiang(timeoutMs = 2500, targets = OUTBOUND_TARGE
   for (const t of targets) {
     const r = await tcpProbe(t.host, t.port, timeoutMs);
     attempts.push({
-      label: t.label,
+      biaoQian: t.biaoQian,
       ok: r.ok,
       ...(r.error ? { error: r.error } : {}),
       ...(r.latencyMs ? { latencyMs: r.latencyMs } : {}),
     });
-    if (r.ok) return { ok: true, method: `tcp:${t.label}`, latencyMs: r.latencyMs, attempts };
+    if (r.ok) return { ok: true, method: `tcp:${t.biaoQian}`, latencyMs: r.latencyMs, attempts };
   }
-  return { ok: false, error: attempts.map((a) => `${a.label}:${a.error ?? 'fail'}`).join(','), attempts };
+  return { ok: false, error: attempts.map((a) => `${a.biaoQian}:${a.error ?? 'fail'}`).join(','), attempts };
 }
 
 /** 本机地址信息（不联网也有结果；公网地址尽力而为） */
@@ -739,7 +739,7 @@ export interface ProbeNetResult {
   /** 被探测地址若是 IPv6，给出其作用域（global/ula/link-local/loopback/…） */
   targetIpv6Scope?: string;
   /** 结构化证据（UI/日志可用；不含任何文案） */
-  details?: {
+  xiangQing?: {
     scope: string;
     localInterfaces: string[];
     onLocalNic: boolean;
@@ -776,9 +776,9 @@ function shiFouHeFaZhuJi(v: string): boolean {
  *  · 域名 → 真的 DNS 解析；解析结果里有公网地址才算 `isPublic`，全是私网则 `lanOnly`；
  *  · 端口可达性：只对本机地址/回环做**真实 TCP 连接**；对非本机地址不做任何"假装可达"的结论。
  */
-export async function tanCeWangLuo(input: ProbeNetInput, timeoutMs = 3000): Promise<ProbeNetResult> {
-  const ip = String(input?.ip ?? '').trim();
-  const port = Number(input?.port);
+export async function tanCeWangLuo(shuRu: ProbeNetInput, timeoutMs = 3000): Promise<ProbeNetResult> {
+  const ip = String(shuRu?.ip ?? '').trim();
+  const port = Number(shuRu?.port);
   if (!ip || !shiFouHeFaZhuJi(ip)) {
     return { ok: false, isPublic: false, outboundOk: false, errorCode: 'invalid-ip', inboundVerified: false };
   }
@@ -793,7 +793,7 @@ export async function tanCeWangLuo(input: ProbeNetInput, timeoutMs = 3000): Prom
   const isIPv6Target = mubiaoZhuji.includes(':') && ipv6ScopeOrNull(mubiaoZhuji) !== null;
   const resolvedIpv4: string[] = [];
   const dnsErrors: string[] = [];
-  const hosts = [ip, ...(Array.isArray(input.domains) ? input.domains : []).map((d) => String(d ?? '').trim()).filter(Boolean)];
+  const hosts = [ip, ...(Array.isArray(shuRu.domains) ? shuRu.domains : []).map((d) => String(d ?? '').trim()).filter(Boolean)];
 
   for (const h of hosts) {
     if (isIpv4(h)) {
@@ -838,9 +838,9 @@ export async function tanCeWangLuo(input: ProbeNetInput, timeoutMs = 3000): Prom
   methodBits.push(onLocalNic ? 'local-interface' : scope === 'hostname' ? 'dns-resolve' : `${scope}-address`);
   methodBits.push(chuXiang.ok ? `outbound-${chuXiang.method ?? 'ok'}` : 'outbound-failed');
   if (pub.ok) methodBits.push(`public-ip-${pub.source ?? 'echo'}`);
-  if (portCheck) methodBits.push(`local-port-${portCheck.ok ? 'open' : 'closed'}`);
+  if (portCheck) methodBits.push(`local-port-${portCheck.ok ? 'daKai' : 'closed'}`);
 
-  const details: ProbeNetResult['details'] = {
+  const xiangQing: NonNullable<ProbeNetResult['xiangQing']> = {
     scope,
     localInterfaces: all,
     onLocalNic,
@@ -878,7 +878,7 @@ export async function tanCeWangLuo(input: ProbeNetInput, timeoutMs = 3000): Prom
     inboundVerified: false,
     naturallyDialable: ipv6.hasGlobalUnicast,
     ...(isIPv6Target ? { targetIpv6Scope: guiLeiIpv6ZuoYongYu(mubiaoZhuji) } : {}),
-    details,
+    xiangQing,
   };
 }
 
@@ -892,7 +892,7 @@ function ipv6ScopeOrNull(host: string): string | null {
 
 export interface WangzhuangDuiduanYinyong {
   nodeId: string;
-  name?: string;
+  ming?: string;
   host: string;
   port: number;
   kind?: 'lan' | 'wan';
@@ -985,7 +985,7 @@ export interface SecureMeshOptions {
   /** 已知对端（peerReg：手工添加 / 发现到的） */
   peers: () => WangzhuangDuiduanYinyong[];
   /** 收到对端消息（IPC 层转渲染进程） */
-  onInbound?: (msg: AnQuanRuXiangXiaoXi) => void;
+  onInbound?: (xiaoXi: AnQuanRuXiangXiaoXi) => void;
   onEvent?: (e: { type: string; detail?: string; peer?: string; ts: number }) => void;
   /**
    * 本机是否可拨入（来自 DialabilityProbe / autonat 结论；`undefined` = 还没测过）。
@@ -1126,14 +1126,14 @@ export class SecureMesh {
    */
   async enable(port: number, opts: { discovery?: boolean; announce?: boolean } = {}): Promise<WangzhuangQiyongJieguo> {
     const store = this.opts.store();
-    const gate = yaoQiuKeQianMingShenFen(store);
-    this.unlockSnapshot = gate.unlock ?? null;
-    if (!gate.ok || !store) {
+    const menjin = yaoQiuKeQianMingShenFen(store);
+    this.unlockSnapshot = menjin.unlock ?? null;
+    if (!menjin.ok || !store) {
       return {
         ok: false,
-        errorCode: gate.errorCode ?? 'identity-missing',
-        unlock: gate.unlock ?? null,
-        error: gate.reason ?? 'identity-unavailable',
+        errorCode: menjin.errorCode ?? 'identity-missing',
+        unlock: menjin.unlock ?? null,
+        error: menjin.reason ?? 'identity-unavailable',
       };
     }
     const identity = chuangjianShenfenGongyingshang(store);
@@ -1233,11 +1233,11 @@ export class SecureMesh {
     await this.stopDiscovery();
     const probe = new NeiWangTanCe({
       nodeId: this.opts.nodeId,
-      fingerprint: info.fingerprint,
+      zhiWen: info.zhiWen,
       tcpPort: this.port,
       onPeer: (p) => {
         // 只记地址；所有数据仍走鉴权 TCP。名册外的人拨不进来（roster 拒）。
-        this.opts.onEvent?.({ type: 'discovered', peer: p.fingerprint, detail: `${p.host}:${p.port}`, ts: this.now() });
+        this.opts.onEvent?.({ type: 'discovered', peer: p.zhiWen, detail: `${p.host}:${p.port}`, ts: this.now() });
       },
     });
     try {
@@ -1278,18 +1278,18 @@ export class SecureMesh {
     void this.liveness.sweep(this.now());
   }
 
-  private onMessage(msg: TongbuXiaoxi, session: AnQuanHuiHua): void {
+  private onMessage(xiaoXi: TongbuXiaoxi, session: AnQuanHuiHua): void {
     const fp = session.info.peerFingerprint;
     this.liveness.heartbeat(fp, this.now());
-    if (msg.incognito) return; // 无痕：不留在 inbox（与旧实现一致）
+    if (xiaoXi.incognito) return; // 无痕：不留在 inbox（与旧实现一致）
     const entry: AnQuanRuXiangXiaoXi = {
-      id: msg.id,
-      from: msg.from,
-      to: msg.to,
-      channel: msg.channel,
-      ...(msg.groupId ? { groupId: msg.groupId } : {}),
-      payload: msg.payload,
-      ts: msg.ts,
+      id: xiaoXi.id,
+      from: xiaoXi.from,
+      to: xiaoXi.to,
+      channel: xiaoXi.channel,
+      ...(xiaoXi.groupId ? { groupId: xiaoXi.groupId } : {}),
+      payload: xiaoXi.payload,
+      ts: xiaoXi.ts,
       peerFingerprint: fp,
       ...(session.info.remoteAddress ? { remoteAddress: session.info.remoteAddress } : {}),
     };
@@ -1304,28 +1304,28 @@ export class SecureMesh {
 
   /** 成员在线状态（真判据：**已建立的鉴权连接** + 心跳；没有连接就是不在线） */
   presence(): ChengYuanHuoXing[] {
-    return this.liveness.list();
+    return this.liveness.LieBiao();
   }
 
-  presenceOf(fingerprint: string): ChengYuanHuoXing {
-    return this.liveness.status(fingerprint);
+  presenceOf(zhiWen: string): ChengYuanHuoXing {
+    return this.liveness.status(zhiWen);
   }
 
   /** 出站：连一个地址发一条消息（一次拨号一次握手；失败即返回，不重试） */
   async sendToHost(
     host: string,
     port: number,
-    msg: Omit<TongbuXiaoxi, 'id' | 'ts' | 'from'>,
+    xiaoXi: Omit<TongbuXiaoxi, 'id' | 'ts' | 'from'>,
     opts: { pin?: string; timeoutMs?: number; keepOpen?: boolean } = {}
   ): Promise<{ ok: boolean; error?: string; peerFingerprint?: string; latencyMs?: number }> {
     const store = this.opts.store();
-    const gate = yaoQiuKeQianMingShenFen(store);
-    if (!gate.ok || !store) return { ok: false, error: gate.errorCode ?? 'identity-missing' };
+    const menjin = yaoQiuKeQianMingShenFen(store);
+    if (!menjin.ok || !store) return { ok: false, error: menjin.errorCode ?? 'identity-missing' };
     const key = `${host}:${port}`;
     const cunzai = this.clients.get(key);
     if (cunzai?.session?.alive) {
       try {
-        cunzai.session.send(msg);
+        cunzai.session.faSong(xiaoXi);
         return { ok: true, peerFingerprint: cunzai.session.info.peerFingerprint };
       } catch (e) {
         return { ok: false, error: (e as Error).message };
@@ -1359,7 +1359,7 @@ export class SecureMesh {
     const peerFingerprint = r.session.info.peerFingerprint;
     const latencyMs = this.now() - started;
     try {
-      r.session.send(msg);
+      r.session.faSong(xiaoXi);
     } catch (e) {
       return { ok: false, error: (e as Error).message, peerFingerprint, latencyMs };
     }
@@ -1368,12 +1368,12 @@ export class SecureMesh {
   }
 
   /** 向所有已知对端广播（逐个真拨；返回成功/失败计数） */
-  async broadcast(msg: Omit<TongbuXiaoxi, 'id' | 'ts' | 'from'>): Promise<{ sent: number; failed: number; errors: string[] }> {
+  async broadcast(xiaoXi: Omit<TongbuXiaoxi, 'id' | 'ts' | 'from'>): Promise<{ sent: number; failed: number; errors: string[] }> {
     let sent = 0;
     let failed = 0;
     const errors: string[] = [];
     for (const p of this.opts.peers()) {
-      const r = await this.sendToHost(p.host, p.port, { ...msg, to: msg.to ?? '*' });
+      const r = await this.sendToHost(p.host, p.port, { ...xiaoXi, to: xiaoXi.to ?? '*' });
       if (r.ok) sent++;
       else {
         failed++;
@@ -1396,9 +1396,9 @@ export class SecureMesh {
     errors: string[];
     errorCode?: string;
   }> {
-    const gate = yaoQiuKeQianMingShenFen(this.opts.store());
-    this.unlockSnapshot = gate.unlock ?? this.unlockSnapshot;
-    if (!gate.ok) {
+    const menjin = yaoQiuKeQianMingShenFen(this.opts.store());
+    this.unlockSnapshot = menjin.unlock ?? this.unlockSnapshot;
+    if (!menjin.ok) {
       return {
         ok: false,
         reason,
@@ -1406,7 +1406,7 @@ export class SecureMesh {
         attempted: 0,
         delivered: 0,
         errors: [],
-        errorCode: gate.errorCode ?? 'identity-locked',
+        errorCode: menjin.errorCode ?? 'identity-locked',
       };
     }
     const info = this.opts.store()?.info();
@@ -1415,7 +1415,7 @@ export class SecureMesh {
     const payload = {
       type: 'announce',
       reason,
-      fingerprint: info?.fingerprint ?? '',
+      zhiWen: info?.zhiWen ?? '',
       nodeId: this.opts.nodeId,
       host,
       port: this.port,
@@ -1560,7 +1560,7 @@ export class SecureMesh {
     const v6 = jianchaBenjiIpv6();
     const selfDialable = this.opts.selfDialable?.();
     const rung: TiziDangwei = v6.hasGlobalUnicast ? 'ipv6-direct' : 'public-direct';
-    const dial = jiexiKeBoRu({
+    const boHao = jiexiKeBoRu({
       ...(selfDialable === undefined ? {} : { dialable: selfDialable }),
       naturalDialable: v6.hasGlobalUnicast,
     });
@@ -1591,12 +1591,12 @@ export class SecureMesh {
     const v6 = jianchaBenjiIpv6();
     const selfDialable = this.opts.selfDialable?.();
     const relays = this.opts.relays?.() ?? [];
-    const selfFp = this.opts.store()?.info()?.fingerprint;
+    const selfFp = this.opts.store()?.info()?.zhiWen;
     // 注意：传给 decideRelay 的 selfDialable **仍然只用已验证的那个信号**。
     // 刻意不把 naturalDialable 塞进去：本地有全局 IPv6 只说明"我这条路可能通"，
     // 对端未必有 IPv6（IPv4-only 对端照样拨不进来），据此宣布"不需要中继"会漏掉应有的兜底。
     const decision = await jueDingZhongJi(
-      { fingerprint: peerFingerprint },
+      { zhiWen: peerFingerprint },
       {
         selfDialable,
         peerDialable,
@@ -1659,7 +1659,7 @@ export async function secureLoopbackSmoke(opts: {
     ephemeral: true;
     peerFingerprint: string;
     keyFingerprint?: string;
-    recordRoundTrip?: boolean;
+    jiluLunLupeng?: boolean;
     failure?: string;
   };
 }> {
@@ -1674,8 +1674,8 @@ export async function secureLoopbackSmoke(opts: {
     port: opts.localPort > 0 ? opts.localPort : 0,
     groupId: null,
     // 冒烟：名册只放行这一把一次性身份
-    roster: (fp) => fp === clientId.fingerprint,
-    peerFingerprint: clientId.fingerprint,
+    roster: (fp) => fp === clientId.zhiWen,
+    peerFingerprint: clientId.zhiWen,
     handshakeTimeoutMs: opts.timeoutMs ?? 8000,
     onMessage: (m) => {
       received = m;
@@ -1692,8 +1692,8 @@ export async function secureLoopbackSmoke(opts: {
     host: '127.0.0.1',
     port: serverPort,
     groupId: null,
-    peerFingerprint: serverId.fingerprint,
-    roster: (fp) => fp === serverId.fingerprint,
+    peerFingerprint: serverId.zhiWen,
+    roster: (fp) => fp === serverId.zhiWen,
     handshakeTimeoutMs: opts.timeoutMs ?? 8000,
   });
   const r = await client.connect(opts.timeoutMs ?? 8000);
@@ -1701,7 +1701,7 @@ export async function secureLoopbackSmoke(opts: {
     handshakeOk = true;
     keyFingerprint = r.session.info.keyFingerprint;
     try {
-      r.session.send({ to: '*', channel: 'group', payload: { text: 'loopback-hello', secure: true } });
+      r.session.faSong({ to: '*', channel: 'group', payload: { text: 'loopback-hello', secure: true } });
     } catch (e) {
       failure = (e as Error).message;
     }
@@ -1709,10 +1709,10 @@ export async function secureLoopbackSmoke(opts: {
     failure = r.reason ?? 'connect-failed';
   }
   // 等加密记录真的被对端解出来
-  const deadline = Date.now() + 2000;
-  while (!received && Date.now() < deadline) await new Promise((res) => setTimeout(res, 50));
+  const jiezhixian = Date.now() + 2000;
+  while (!received && Date.now() < jiezhixian) await new Promise((res) => setTimeout(res, 50));
   const daoda = received as TongbuXiaoxi | null;
-  const recordRoundTrip =
+  const jiluLunLupeng =
     daoda !== null && ((daoda.payload as { text?: string } | null)?.text ?? '') === 'loopback-hello';
 
   client.close('smoke-done');
@@ -1739,16 +1739,16 @@ export async function secureLoopbackSmoke(opts: {
 
   return {
     serverPort,
-    loopbackOk: handshakeOk && recordRoundTrip,
+    loopbackOk: handshakeOk && jiluLunLupeng,
     ...(opts.peerHost ? { peerHost: opts.peerHost } : {}),
     peerOk,
     ...(peerError ? { peerError } : {}),
     secure: {
       handshakeOk,
       ephemeral: true,
-      peerFingerprint: clientId.fingerprint,
+      peerFingerprint: clientId.zhiWen,
       ...(keyFingerprint ? { keyFingerprint } : {}),
-      recordRoundTrip,
+      jiluLunLupeng,
       ...(failure ? { failure } : {}),
     },
   };
@@ -1806,9 +1806,9 @@ export function baoZhangWangLuoMuLu(userDataDir: string): { ok: boolean; dir: st
  * "控制面小消息"的通道，握手层自己的 ping/pong 也走它），用下面的 `kind` 自报身份：
  * 不认识的 kind 一律**拒绝**，不会被误当成 ping 或别的东西。
  */
-export const PROJECT_ATTRS_CHANNEL = 'control' as const;
+export const XIANGMU_SHUXING_TONGDAO = 'control' as const;
 /** 消息内的 type 常量（防止别的负载被误认成项目属性） */
-export const PROJECT_ATTRS_KIND = 'warmy.project.attrs';
+export const XIANGMU_SHUXING_LEIXING = 'warmy.project.attrs';
 /** 信号里最多带多少条台账（有界：频道消息不能被台账撑爆） */
 export const PROJECT_ATTRS_LEDGER_TAIL = 30;
 
@@ -1823,10 +1823,10 @@ export interface XiangmuKeyongxingXinhao {
 }
 
 export interface XiangmuShuxingZaihe {
-  kind: typeof PROJECT_ATTRS_KIND;
+  kind: typeof XIANGMU_SHUXING_LEIXING;
   groupId: string;
   /** 群名/类型跟着走，成员第一次收到时才有东西可建 */
-  name?: string;
+  ming?: string;
   type?: 'internal' | 'external';
   /** 项目属性（**项目级事实**，不是"本机设置"） */
   project: {
@@ -1849,9 +1849,9 @@ export interface XiangmuShuxingZaihe {
  * 造一条同步消息（**只带白名单字段**；多余字段不会被带出去）。
  * 台账尾部截断到 `PROJECT_ATTRS_LEDGER_TAIL` 条（按时间倒序取最新）。
  */
-export function projectAttrsMessage(input: {
+export function xiangmuShuxingXiaoxi(shuRu: {
   groupId: string;
-  name?: string;
+  ming?: string;
   type?: 'internal' | 'external';
   project: XiangmuShuxingZaihe['project'];
   availability: XiangmuKeyongxingXinhao;
@@ -1859,37 +1859,37 @@ export function projectAttrsMessage(input: {
   ledger?: Array<{ op: string; path: string; ts: number; ok: boolean; by: string; bytes?: number }>;
   updatedAt?: number;
 }): XiangmuShuxingZaihe {
-  const msg: XiangmuShuxingZaihe = {
-    kind: PROJECT_ATTRS_KIND,
-    groupId: String(input.groupId || ''),
+  const xiaoXi: XiangmuShuxingZaihe = {
+    kind: XIANGMU_SHUXING_LEIXING,
+    groupId: String(shuRu.groupId || ''),
     project: {
-      devEnv: input.project.devEnv === 'container' ? 'container' : 'host',
-      runtimeId: String(input.project.runtimeId || ''),
-      disabledAt: Math.max(0, Number(input.project.disabledAt) || 0),
+      devEnv: shuRu.project.devEnv === 'container' ? 'container' : 'host',
+      runtimeId: String(shuRu.project.runtimeId || ''),
+      disabledAt: Math.max(0, Number(shuRu.project.disabledAt) || 0),
     },
     availability: {
-      availability: input.availability.availability,
-      code: String(input.availability.code || ''),
-      at: Number(input.availability.at) || Date.now(),
+      availability: shuRu.availability.availability,
+      code: String(shuRu.availability.code || ''),
+      at: Number(shuRu.availability.at) || Date.now(),
     },
-    updatedAt: Number(input.updatedAt) || Date.now(),
+    updatedAt: Number(shuRu.updatedAt) || Date.now(),
   };
-  if (input.name) msg.name = String(input.name);
-  if (input.type) msg.type = input.type === 'external' ? 'external' : 'internal';
-  if (input.project.directory) {
-    msg.project.directory = String(input.project.directory);
-    msg.project.directorySource = input.project.directorySource === 'checkpoint-workspace' ? 'checkpoint-workspace' : 'creator-picked';
+  if (shuRu.ming) xiaoXi.ming = String(shuRu.ming);
+  if (shuRu.type) xiaoXi.type = shuRu.type === 'external' ? 'external' : 'internal';
+  if (shuRu.project.directory) {
+    xiaoXi.project.directory = String(shuRu.project.directory);
+    xiaoXi.project.directorySource = shuRu.project.directorySource === 'checkpoint-workspace' ? 'checkpoint-workspace' : 'creator-picked';
   }
-  if (input.project.env && (input.project.env.containerRef || input.project.env.imageRef || input.project.env.solidifiedAt)) {
+  if (shuRu.project.env && (shuRu.project.env.containerRef || shuRu.project.env.imageRef || shuRu.project.env.solidifiedAt)) {
     const env: NonNullable<XiangmuShuxingZaihe['project']['env']> = {};
-    if (input.project.env.containerRef) env.containerRef = String(input.project.env.containerRef);
-    if (input.project.env.imageRef) env.imageRef = String(input.project.env.imageRef);
-    if (input.project.env.solidifiedAt) env.solidifiedAt = Number(input.project.env.solidifiedAt);
-    msg.project.env = env;
+    if (shuRu.project.env.containerRef) env.containerRef = String(shuRu.project.env.containerRef);
+    if (shuRu.project.env.imageRef) env.imageRef = String(shuRu.project.env.imageRef);
+    if (shuRu.project.env.solidifiedAt) env.solidifiedAt = Number(shuRu.project.env.solidifiedAt);
+    xiaoXi.project.env = env;
   }
-  if (input.creatorFingerprint) msg.creatorFingerprint = String(input.creatorFingerprint);
-  if (Array.isArray(input.ledger) && input.ledger.length) {
-    msg.ledgerTail = input.ledger
+  if (shuRu.creatorFingerprint) xiaoXi.creatorFingerprint = String(shuRu.creatorFingerprint);
+  if (Array.isArray(shuRu.ledger) && shuRu.ledger.length) {
+    xiaoXi.ledgerTail = shuRu.ledger
       .slice()
       .sort((a, b) => (b.ts || 0) - (a.ts || 0))
       .slice(0, PROJECT_ATTRS_LEDGER_TAIL)
@@ -1902,7 +1902,7 @@ export function projectAttrsMessage(input: {
         ...(Number(e.bytes) > 0 ? { bytes: Number(e.bytes) } : {}),
       }));
   }
-  return msg;
+  return xiaoXi;
 }
 
 const AVAILABILITY_VALUES: readonly XiangmuKeyongxingXinhaoZhi[] = ['available', 'stopped', 'not-ready', 'not-installed', 'not-chosen', 'unknown'];
@@ -1911,7 +1911,7 @@ const AVAILABILITY_VALUES: readonly XiangmuKeyongxingXinhaoZhi[] = ['available',
 export function parseProjectAttrsMessage(raw: unknown): { ok: true; value: XiangmuShuxingZaihe } | { ok: false; error: string } {
   if (!raw || typeof raw !== 'object') return { ok: false, error: 'not-an-object' };
   const m = raw as Partial<XiangmuShuxingZaihe>;
-  if (m.kind !== PROJECT_ATTRS_KIND) return { ok: false, error: 'not-project-attrs' };
+  if (m.kind !== XIANGMU_SHUXING_LEIXING) return { ok: false, error: 'not-project-attrs' };
   const groupId = String(m.groupId || '');
   if (!groupId) return { ok: false, error: 'missing-group-id' };
   const p = m.project;
@@ -1923,9 +1923,9 @@ export function parseProjectAttrsMessage(raw: unknown): { ok: true; value: Xiang
   const a = m.availability;
   if (!a || typeof a !== 'object') return { ok: false, error: 'missing-availability' };
   if (!AVAILABILITY_VALUES.includes(a.availability as XiangmuKeyongxingXinhaoZhi)) return { ok: false, error: 'bad-availability' };
-  const value: XiangmuShuxingZaihe = projectAttrsMessage({
+  const value: XiangmuShuxingZaihe = xiangmuShuxingXiaoxi({
     groupId,
-    ...(m.name ? { name: String(m.name) } : {}),
+    ...((m as { ming?: string; name?: string }).ming || (m as { name?: string }).name ? { ming: String((m as { ming?: string; name?: string }).ming || (m as { name?: string }).name) } : {}),
     ...(m.type ? { type: m.type === 'external' ? 'external' : 'internal' } : {}),
     project: {
       devEnv: p.devEnv,
@@ -2002,7 +2002,7 @@ export interface XiangmuRuXiangMenjin {
  * ⚠️ 这里**不重复**原因码→文案的映射：`projectCode` 原样带回，渲染层用**既有**的
  * `container.project.reason.<suffix>`（与"创建者下线"那一档共用 `group.memberOffline`）。
  */
-export function projectInboundGate(state: { running: boolean; code: string; devEnv?: string }): XiangmuRuXiangMenjin {
+export function xiangmuRuXiangMenjin(state: { running: boolean; code: string; devEnv?: string }): XiangmuRuXiangMenjin {
   const running = state?.running === true;
   if (running) {
     return { allow: true, queue: null, memberFaceKey: null, projectCode: String(state?.code || 'ok'), projectRunning: true };

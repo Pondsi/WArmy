@@ -1,25 +1,25 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
-let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
+let j = fs.readFileSync(base + 'renderer/yingYong.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 
 // ── 1) 导入 openclaw 供应商 + 特殊模型配置 IPC ──
-if (!m.includes('warmy:import-openclaw')) {
+if (!m.includes('warmy:daoRuopenclaw')) {
   m += `
 
 // ── 导入 openclaw.json 供应商配置 ──
-ipcMain.handle('warmy:import-openclaw', () => {
+ipcMain.handle('warmy:daoRuopenclaw', () => {
   try {
     const ocPath = path.join(app.getPath('userData'), '..', 'openclaw.json');
     if (!fs.existsSync(ocPath)) return { ok: false, error: 'openclaw.json not found' };
     const j = JSON.parse(fs.readFileSync(ocPath, 'utf8'));
     const provs = Object.entries(j.models?.providers || {}).map(([id, pv]) => {
-      const p = pv as { baseURL?: string; baseUrl?: string; apiKey?: string; api?: string; models?: Array<{ name?: string; id?: string }> };
+      const p = pv as { baseURL?: string; baseUrl?: string; apiKey?: string; api?: string; models?: Array<{ ming?: string; id?: string }> };
       return {
         id,
-        label: id,
+        biaoQian: id,
         protocol: 'openai-compatible' as const,
         baseURL: p.baseURL || p.baseUrl || '',
         apiKey: p.apiKey || p.api || '',
@@ -40,7 +40,7 @@ ipcMain.handle('warmy:import-openclaw', () => {
 });
 
 // ── 特殊模型配置：ASR / 向量 / 摘要 / 整理 ──
-ipcMain.handle('warmy:special-models-set', (_e, cfg: {
+ipcMain.handle('warmy:teShuMoXingJiSheZhi', (_e, cfg: {
   asr?: { provider: 'ollama' | 'whisper-cpp' | 'openai'; model?: string; path?: string };
   embedding?: { provider: 'onnx' | 'ollama' | 'api'; model?: string };
   summary?: { provider: string; model?: string };
@@ -53,13 +53,13 @@ ipcMain.handle('warmy:special-models-set', (_e, cfg: {
   audit?.log('special-models.set', cfg);
   return { ok: true };
 });
-ipcMain.handle('warmy:special-models-get', () => {
+ipcMain.handle('warmy:teShuMoXingJiQu', () => {
   const s = settingsStore?.load() as Record<string, unknown>;
   return { ok: true, specialModels: s?.specialModels || {} };
 });
 
 // ── Ollama whisper ASR（通过 Ollama /api/generate 或自定义端点） ──
-ipcMain.handle('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
+ipcMain.handle('warmy:asrollama', async (_e, payload: { audioBase64: string; model?: string }) => {
   try {
     const ollamaBase = 'http://127.0.0.1:11434';
     const res = await fetch(ollamaBase + '/api/generate', {
@@ -86,12 +86,12 @@ ipcMain.handle('warmy:asr-ollama', async (_e, payload: { audioBase64: string; mo
 // preload
 if (!p.includes('importOpenclaw')) {
   p = p.replace(
-    "  exportAllowlist: () => ipcRenderer.invoke('warmy:export-allowlist'),",
-    `  exportAllowlist: () => ipcRenderer.invoke('warmy:export-allowlist'),
-  importOpenclaw: () => ipcRenderer.invoke('warmy:import-openclaw'),
-  specialModelsSet: (cfg) => ipcRenderer.invoke('warmy:special-models-set', cfg),
-  specialModelsGet: () => ipcRenderer.invoke('warmy:special-models-get'),
-  asrOllama: (payload) => ipcRenderer.invoke('warmy:asr-ollama', payload),`
+    "  exportAllowlist: () => ipcRenderer.invoke('warmy:daoChuYunXuMingDan'),",
+    `  exportAllowlist: () => ipcRenderer.invoke('warmy:daoChuYunXuMingDan'),
+  importOpenclaw: () => ipcRenderer.invoke('warmy:daoRuopenclaw'),
+  specialModelsSet: (cfg) => ipcRenderer.invoke('warmy:teShuMoXingJiSheZhi', cfg),
+  specialModelsGet: () => ipcRenderer.invoke('warmy:teShuMoXingJiQu'),
+  asrOllama: (payload) => ipcRenderer.invoke('warmy:asrollama', payload),`
   );
   fs.writeFileSync(base + 'preload.cjs', p);
   console.log('preload ok');
@@ -116,22 +116,22 @@ if (!j.includes('__rafThrottle')) {
   console.log('raf throttle added');
 }
 
-// 输入框：不再每键触发昂贵操作，改为 input 节流
+// 输入框：不再每键触发昂贵操作，改为 shuRu 节流
 j = j.replace(
-  `  $('input').addEventListener('keydown', (e) => {
+  `  $('shuRu').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      send();
+      faSong();
     }
   });`,
-  `  $('input').addEventListener('keydown', (e) => {
+  `  $('shuRu').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      send();
+      faSong();
     }
   });
   // 输入防抖：避免每键触发 DOM 操作
-  $('input')?.addEventListener('input', () => {
+  $('shuRu')?.addEventListener('shuRu', () => {
     const now = Date.now();
     if (now - __inputThrottle < 50) return;
     __inputThrottle = now;
@@ -147,49 +147,49 @@ j = j.replace('setInterval(checkLastError, 10000);', 'setInterval(() => raf(chec
 j = j.replace("setInterval(() => { refreshSessionBoard(); refreshMembers(); }, 6000);", 'setInterval(() => raf(() => { refreshSessionBoard(); refreshMembers(); }), 10000);');
 j = j.replace('setInterval(saveState, 15000);', 'setInterval(() => raf(saveState), 30000);');
 
-console.log('input lag fix applied');
+console.log('shuRu lag fix applied');
 
 // ── 3) 设置里加「导入供应商」和「特殊模型」 ──
 if (!j.includes('btn-import-openclaw')) {
   j = j.replace(
-    "        <div class=\"set-section set-card\">\n          <h2>${t('settings.about')}</h2>",
-    `        <div class="set-section set-card">
+    "        <div class=\"sheZhiSection sheZhiKa\">\n          <h2>${t('settings.about')}</h2>",
+    `        <div class="sheZhiSection sheZhiKa">
           <h2>${t('settings.importProviders')}</h2>
-          <p class="muted">${t('settings.importHint')}</p>
-          <button class="btn-mini" id="btn-import-openclaw">${t('settings.importDo')}</button>
-          <span class="muted" id="import-msg"></span>
+          <p class="jingYin">${t('settings.importHint')}</p>
+          <button class="anNiuXiao" id="btn-import-openclaw">${t('settings.importDo')}</button>
+          <span class="jingYin" id="import-msg"></span>
         </div>
-        <div class="set-section set-card">
+        <div class="sheZhiSection sheZhiKa">
           <h2>${t('settings.specialModels')}</h2>
-          <p class="muted">${t('settings.specialModelsHint')}</p>
+          <p class="jingYin">${t('settings.specialModelsHint')}</p>
           <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.asrModel')}</label>
-            <select id="sm-asr">
+            <biaoQian>${t('settings.asrModel')}</biaoQian>
+            <select id="smasr">
               <option value="ollama">Ollama (whisper-tiny)</option>
               <option value="whisper-cpp">whisper.cpp (local)</option>
               <option value="openai">OpenAI Whisper API</option>
             </select>
           </div>
           <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.embeddingModel')}</label>
-            <select id="sm-embed">
+            <biaoQian>${t('settings.embeddingModel')}</biaoQian>
+            <select id="smEmbed">
               <option value="onnx">ONNX (bge-small-zh)</option>
               <option value="ollama">Ollama embedding</option>
               <option value="api">API embedding</option>
             </select>
           </div>
           <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.summaryModel')}</label>
-            <input id="sm-summary" placeholder="deepseek-flash"/>
+            <biaoQian>${t('settings.summaryModel')}</biaoQian>
+            <shuRu id="sm-summary" placeholder="deepseek-flash"/>
           </div>
           <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.organizerModel')}</label>
-            <input id="sm-organizer" placeholder="deepseek-chat"/>
+            <biaoQian>${t('settings.organizerModel')}</biaoQian>
+            <shuRu id="smOrganizer" placeholder="deepseek-chat"/>
           </div>
-          <button class="btn-mini" id="btn-save-special">${t('common.save')}</button>
-          <span class="muted" id="sm-msg"></span>
+          <button class="anNiuXiao" id="anNiuBaoCunTeShu">${t('common.save')}</button>
+          <span class="jingYin" id="smXiaoXi"></span>
         </div>
-        <div class="set-section set-card">
+        <div class="sheZhiSection sheZhiKa">
           <h2>${t('settings.about')}</h2>`
   );
   console.log('special models UI added');
@@ -211,15 +211,15 @@ if (!j.includes('btn-import-openclaw')) {
           $('import-msg').textContent = String(r?.error || t('common.error'));
         }
       });
-      $('btn-save-special')?.addEventListener('click', async () => {
+      $('anNiuBaoCunTeShu')?.addEventListener('click', async () => {
         const cfg = {
-          asr: { provider: $('sm-asr')?.value || 'ollama' },
-          embedding: { provider: $('sm-embed')?.value || 'onnx' },
+          asr: { provider: $('smasr')?.value || 'ollama' },
+          embedding: { provider: $('smEmbed')?.value || 'onnx' },
           summary: { provider: 'deepseek', model: $('sm-summary')?.value || 'deepseek-flash' },
-          organizer: { provider: 'deepseek', model: $('sm-organizer')?.value || 'deepseek-chat' },
+          organizer: { provider: 'deepseek', model: $('smOrganizer')?.value || 'deepseek-chat' },
         };
         await window.warmy.specialModelsSet(cfg).catch(() => {});
-        $('sm-msg').textContent = t('instances.saved');
+        $('smXiaoXi').textContent = t('instances.saved');
       });
       // 邀请链接 / 二维码`
   );
@@ -227,7 +227,7 @@ if (!j.includes('btn-import-openclaw')) {
 }
 
 fs.writeFileSync(base + 'electron-main.ts', m);
-fs.writeFileSync(base + 'renderer/app.js', j);
+fs.writeFileSync(base + 'renderer/yingYong.js', j);
 fs.writeFileSync(base + 'renderer/index.html', h);
 fs.writeFileSync(base + 'preload.cjs', p);
 console.log('done');

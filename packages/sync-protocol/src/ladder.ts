@@ -35,7 +35,7 @@ export const DEFAULT_DISCOVERY_PORT = 7799;
 
 export interface NeiwangDuiduan {
   nodeId: string;
-  fingerprint: string;
+  zhiWen: string;
   host: string;
   port: number;
   seenAt: number;
@@ -43,7 +43,7 @@ export interface NeiwangDuiduan {
 
 export interface NeiWangTanCeXuanXiang {
   nodeId: string;
-  fingerprint: string;
+  zhiWen: string;
   /** 本机 TCP 服务端口（回给探测方） */
   tcpPort: number;
   /** 探测端口；默认 7799（与 LanDiscovery 一致，便于多机同网广播） */
@@ -69,7 +69,7 @@ export class NeiWangTanCe {
       const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
       this.sock = sock;
       sock.on('error', reject);
-      sock.on('message', (msg, rinfo) => this.onMessage(msg, rinfo.address, rinfo.port));
+      sock.on('message', (xiaoXi, rinfo) => this.onMessage(xiaoXi, rinfo.address, rinfo.port));
       sock.bind({ port: this.discoveryPort, address: this.opts.listenHost ?? '0.0.0.0' }, () => {
         this.boundPort = sock.address().port;
         try {
@@ -101,13 +101,13 @@ export class NeiWangTanCe {
   /** 主动探测：单播给 targets +（可选）广播到指定端口列表 */
   query(opts: { targets?: { host: string; port: number }[]; broadcastPorts?: number[]; timeoutMs?: number } = {}): Promise<NeiwangDuiduan[]> {
     const timeoutMs = opts.timeoutMs ?? 600;
-    const req = `${Math.random().toString(36).slice(2, 10)}`;
+    const Qiu = `${Math.random().toString(36).slice(2, 10)}`;
     const payload = Buffer.from(
       JSON.stringify({
         v: 1,
-        req,
+        Qiu,
         nodeId: this.opts.nodeId,
-        fingerprint: this.opts.fingerprint,
+        zhiWen: this.opts.zhiWen,
         tcpPort: this.opts.tcpPort,
       }),
       'utf8'
@@ -115,12 +115,12 @@ export class NeiWangTanCe {
     const xianshang = Buffer.concat([Buffer.from(`${LAN_PROBE_MAGIC} `, 'utf8'), payload]);
     const collected = new Map<string, NeiwangDuiduan>();
     return new Promise<NeiwangDuiduan[]>((resolve) => {
-      this.pending.set(req, () => {
-        for (const p of this.responses.get(req) ?? []) collected.set(`${p.fingerprint}@${p.host}:${p.port}`, p);
-        this.responses.delete(req);
+      this.pending.set(Qiu, () => {
+        for (const p of this.responses.get(Qiu) ?? []) collected.set(`${p.zhiWen}@${p.host}:${p.port}`, p);
+        this.responses.delete(Qiu);
         resolve([...collected.values()]);
       });
-      this.responses.set(req, []);
+      this.responses.set(Qiu, []);
       for (const t of opts.targets ?? []) {
         try {
           this.sock?.send(xianshang, t.port, t.host);
@@ -138,9 +138,9 @@ export class NeiWangTanCe {
         }
       }
       setTimeout(() => {
-        const cb = this.pending.get(req);
+        const cb = this.pending.get(Qiu);
         if (cb) {
-          this.pending.delete(req);
+          this.pending.delete(Qiu);
           cb();
         }
       }, timeoutMs).unref?.();
@@ -150,7 +150,7 @@ export class NeiWangTanCe {
   /** 只广播（不等待） */
   broadcast(port = this.discoveryPort): void {
     const payload = Buffer.from(
-      JSON.stringify({ v: 1, req: 'bcast', nodeId: this.opts.nodeId, fingerprint: this.opts.fingerprint, tcpPort: this.opts.tcpPort }),
+      JSON.stringify({ v: 1, Qiu: 'bcast', nodeId: this.opts.nodeId, zhiWen: this.opts.zhiWen, tcpPort: this.opts.tcpPort }),
       'utf8'
     );
     const xianshang = Buffer.concat([Buffer.from(`${LAN_PROBE_MAGIC} `, 'utf8'), payload]);
@@ -163,40 +163,40 @@ export class NeiWangTanCe {
     }
   }
 
-  private onMessage(msg: Buffer, host: string, port: number): void {
-    const s = msg.toString('utf8');
+  private onMessage(xiaoXi: Buffer, host: string, port: number): void {
+    const s = xiaoXi.toString('utf8');
     if (!s.startsWith(LAN_PROBE_MAGIC)) return;
-    let j: { req?: string; res?: string; nodeId?: string; fingerprint?: string; tcpPort?: number };
+    let j: { Qiu?: string; res?: string; nodeId?: string; zhiWen?: string; tcpPort?: number };
     try {
       j = JSON.parse(s.slice(LAN_PROBE_MAGIC.length + 1)) as typeof j;
     } catch {
       return;
     }
     if (j.res) {
-      const list = this.responses.get(j.res);
-      if (!list) return;
+      const LieBiao = this.responses.get(j.res);
+      if (!LieBiao) return;
       const peer: NeiwangDuiduan = {
         nodeId: j.nodeId ?? 'unknown',
-        fingerprint: j.fingerprint ?? '',
+        zhiWen: j.zhiWen ?? '',
         host,
         port: j.tcpPort ?? 0,
         seenAt: Date.now(),
       };
-      list.push(peer);
-      this.peers.set(peer.fingerprint || `${host}:${port}`, peer);
+      LieBiao.push(peer);
+      this.peers.set(peer.zhiWen || `${host}:${port}`, peer);
       this.opts.onPeer?.(peer);
       return;
     }
-    if (!j.req) return;
-    if (j.fingerprint === this.opts.fingerprint) return; // 自己
+    if (!j.Qiu) return;
+    if (j.zhiWen === this.opts.zhiWen) return; // 自己
     const reply = Buffer.concat([
       Buffer.from(`${LAN_PROBE_MAGIC} `, 'utf8'),
       Buffer.from(
         JSON.stringify({
           v: 1,
-          res: j.req,
+          res: j.Qiu,
           nodeId: this.opts.nodeId,
-          fingerprint: this.opts.fingerprint,
+          zhiWen: this.opts.zhiWen,
           tcpPort: this.opts.tcpPort,
         }),
         'utf8'
@@ -207,8 +207,8 @@ export class NeiWangTanCe {
     } catch {
       /* ignore */
     }
-    const peer: NeiwangDuiduan = { nodeId: j.nodeId ?? 'unknown', fingerprint: j.fingerprint ?? '', host, port: j.tcpPort ?? 0, seenAt: Date.now() };
-    this.peers.set(peer.fingerprint || `${host}:${port}`, peer);
+    const peer: NeiwangDuiduan = { nodeId: j.nodeId ?? 'unknown', zhiWen: j.zhiWen ?? '', host, port: j.tcpPort ?? 0, seenAt: Date.now() };
+    this.peers.set(peer.zhiWen || `${host}:${port}`, peer);
     this.opts.onPeer?.(peer);
   }
 }
@@ -232,8 +232,8 @@ export const IPV6_WENDANG_QIANZHUI = '2001:0db8';
 export function guiFanZhuJiZiMian(host: string): string {
   let h = String(host ?? '').trim();
   if (h.startsWith('[')) h = h.replace(/^\[/, '').replace(/\]$/, '');
-  const pct = h.indexOf('%');
-  if (pct >= 0) h = h.slice(0, pct);
+  const baiFenBi = h.indexOf('%');
+  if (baiFenBi >= 0) h = h.slice(0, baiFenBi);
   return h;
 }
 
@@ -244,9 +244,9 @@ export function jieXiIpv4ZiJie(host: string): number[] | null {
   return bytes.every((b) => b >= 0 && b <= 255) ? bytes : null;
 }
 
-function shiLiuJinFenZu(arr: string[]): number[] | null {
+function shiLiuJinFenZu(shuZu: string[]): number[] | null {
   const out: number[] = [];
-  for (const g of arr) {
+  for (const g of shuZu) {
     if (!/^[0-9a-f]{1,4}$/i.test(g)) return null;
     out.push(parseInt(g, 16));
   }
@@ -267,19 +267,19 @@ export function jieXiIpv6(host: string): Uint8Array | null {
   }
   const dc = h.indexOf('::');
   if (dc >= 0 && h.indexOf('::', dc + 1) >= 0) return null; // 只能压缩一次
-  let head: string[];
+  let touBu: string[];
   let tail: string[];
   if (dc >= 0) {
-    head = h.slice(0, dc).split(':').filter((s) => s !== '');
+    touBu = h.slice(0, dc).split(':').filter((s) => s !== '');
     tail = h
       .slice(dc + 2)
       .split(':')
       .filter((s) => s !== '');
   } else {
-    head = h.split(':');
+    touBu = h.split(':');
     tail = [];
   }
-  const hb = shiLiuJinFenZu(head);
+  const hb = shiLiuJinFenZu(touBu);
   const tb = shiLiuJinFenZu(tail);
   if (!hb || !tb) return null;
   const emb = embedded ? [(embedded[0] as number) * 256 + (embedded[1] as number), (embedded[2] as number) * 256 + (embedded[3] as number)] : [];
@@ -382,8 +382,8 @@ export interface Ipv6Baogao {
 const VIRTUAL_IFACE_RE = /vEthernet|hyper-?v|wsl|docker|vmware|virtualbox|loopback|virtual|vethernet|tap|tun|npcap|bluetooth/i;
 
 /** 接口名打分：越小越优先（真实物理网卡优先于虚拟网卡） */
-function jiekouPaiming(name: string): number {
-  return VIRTUAL_IFACE_RE.test(name) ? 1 : 0;
+function jiekouPaiming(ming: string): number {
+  return VIRTUAL_IFACE_RE.test(ming) ? 1 : 0;
 }
 
 /**
@@ -466,10 +466,10 @@ export function boTcpXiangQing(host: string, port: number, timeoutMs: number, fa
     const target = guiFanZhuJiZiMian(host);
     const opts: net.NetConnectOpts = family ? { host: target, port, family } : { host: target, port };
     const sock = net.connect(opts);
-    let settled = false;
+    let yiJieSuan = false;
     const done = (r: BoHaoXiangqing): void => {
-      if (settled) return;
-      settled = true;
+      if (yiJieSuan) return;
+      yiJieSuan = true;
       try {
         sock.destroy();
       } catch {
@@ -525,7 +525,7 @@ export interface TiziDizhi {
 }
 
 export interface TiziMubiao {
-  fingerprint: string;
+  zhiWen: string;
   nodeId?: string;
   addresses: TiziDizhi[];
   /**
@@ -549,7 +549,7 @@ export interface ZhongjiDangweiXinxi {
 
 export interface DangweiChangshi {
   rung: TiziDangwei;
-  label: string;
+  biaoQian: string;
   status: DangweiZhuangtai;
   ms: number;
   detail?: string;
@@ -596,7 +596,7 @@ export interface DangweiShangxiawen {
   target: TiziMubiao;
   timeoutMs: number;
   dialTcp: (host: string, port: number, timeoutMs: number, family?: 4 | 6) => Promise<BoHaoXiangqing | { ok: boolean; detail?: string }>;
-  log: (msg: string) => void;
+  log: (xiaoXi: string) => void;
   /** 本机是否可拨入（来自 DialabilityProbe；undefined = 未知） */
   selfDialable?: boolean;
   /** 中继候选（有公网地址的机器） */
@@ -698,7 +698,7 @@ export class LianJieTiZi {
         const v6 = all.filter((a) => quZhuJiIpJiazu(a.host) === 6);
         const candidates = v6.filter((a) => shiFouGongKaiKeBoHouXuan(a.host));
         const paichu = v6.filter((a) => !shiFouGongKaiKeBoHouXuan(a.host));
-        const label = (a: TiziDizhi): string => `${a.host}(${guiLeiIpv6ZuoYongYu(a.host)}${shiFouIpv6WenDangDiZhi(a.host) ? '·文档段' : ''})`;
+        const biaoQian = (a: TiziDizhi): string => `${a.host}(${guiLeiIpv6ZuoYongYu(a.host)}${shiFouIpv6WenDangDiZhi(a.host) ? '·文档段' : ''})`;
         if (candidates.length === 0) {
           return {
             ok: false,
@@ -707,7 +707,7 @@ export class LianJieTiZi {
               all.length === 0
                 ? '没有可用地址（DHT 未宣告 / 未提供）→ IPv6 档不适用'
                 : paichu.length > 0
-                  ? `目标有 ${paichu.length} 个 IPv6 地址但不是公网候选（链路本地/ULA/回环/文档段，IPv6 无 NAT 只对全局单播成立）：${paichu.map(label).join('、')}`
+                  ? `目标有 ${paichu.length} 个 IPv6 地址但不是公网候选（链路本地/ULA/回环/文档段，IPv6 无 NAT 只对全局单播成立）：${paichu.map(biaoQian).join('、')}`
                   : '目标没有 IPv6 地址（只有 IPv4）→ IPv6 档不适用，交给下一档',
           };
         }
@@ -767,7 +767,7 @@ export class LianJieTiZi {
       supported: true,
       async attempt(ctx) {
         const decision = await jueDingZhongJi(
-          { fingerprint: ctx.target.fingerprint, nodeId: ctx.target.nodeId },
+          { zhiWen: ctx.target.zhiWen, nodeId: ctx.target.nodeId },
           {
             selfDialable: ctx.selfDialable,
             peerDialable: ctx.target.peerDialable,
@@ -813,21 +813,21 @@ export class LianJieTiZi {
           broadcastPorts: opts.lanBroadcastPorts ?? [],
           timeoutMs: Math.min(ctx.timeoutMs, 800),
         });
-        const hit = peers.filter((p) => p.fingerprint === ctx.target.fingerprint);
-        if (hit.length === 0) {
+        const mingZhong = peers.filter((p) => p.zhiWen === ctx.target.zhiWen);
+        if (mingZhong.length === 0) {
           return {
             ok: false,
-            detail: `同网探测未找到 ${ctx.target.fingerprint.slice(0, 12)}…（单播 ${opts.lanTargets?.().length ?? 0} 个目标 / 广播 ${(opts.lanBroadcastPorts ?? []).length} 个端口）`,
+            detail: `同网探测未找到 ${ctx.target.zhiWen.slice(0, 12)}…（单播 ${opts.lanTargets?.().length ?? 0} 个目标 / 广播 ${(opts.lanBroadcastPorts ?? []).length} 个端口）`,
           };
         }
         // 同一对端可能从多个地址被发现（LAN IP + 回环），逐个试到能连上为止
         const errors: string[] = [];
-        for (const p of hit) {
+        for (const p of mingZhong) {
           const r = await ctx.dialTcp(p.host, p.port, ctx.timeoutMs);
           if (r.ok) return { ok: true, address: { host: p.host, port: p.port }, detail: `同网发现 ${p.host}:${p.port}` };
           errors.push(`${p.host}:${p.port} ${r.detail ?? '失败'}`);
         }
-        return { ok: false, detail: `同网发现 ${hit.length} 个候选地址但都连不上：${errors.join(' / ')}` };
+        return { ok: false, detail: `同网发现 ${mingZhong.length} 个候选地址但都连不上：${errors.join(' / ')}` };
       },
     };
 
@@ -863,15 +863,15 @@ export class LianJieTiZi {
     const selfDialable = this.opts.relay?.selfDialable ? this.opts.relay.selfDialable() : undefined;
     for (const rung of this.order) {
       const strat = this.strategies.get(rung);
-      const startedAt = this.now();
+      const kaiShiShiJian = this.now();
       if (!strat) {
-        attempts.push({ rung, label: LADDER_LABELS[rung], status: 'skipped', ms: 0, detail: '未注册该级策略' });
+        attempts.push({ rung, biaoQian: LADDER_LABELS[rung], status: 'skipped', ms: 0, detail: '未注册该级策略' });
         continue;
       }
       if (!strat.supported) {
         const a: DangweiChangshi = {
           rung,
-          label: LADDER_LABELS[rung],
+          biaoQian: LADDER_LABELS[rung],
           status: 'unsupported',
           ms: 0,
           detail: strat.unsupportedReason ?? '未实现',
@@ -898,9 +898,9 @@ export class LianJieTiZi {
       if (outcome.relayDecision) this.lastRelayDecision = outcome.relayDecision;
       const a: DangweiChangshi = {
         rung,
-        label: LADDER_LABELS[rung],
+        biaoQian: LADDER_LABELS[rung],
         status: outcome.ok ? 'ok' : outcome.skip ? 'skipped' : 'failed',
-        ms: this.now() - startedAt,
+        ms: this.now() - kaiShiShiJian,
         detail: outcome.detail,
         address: outcome.address,
         ...(outcome.family ? { family: outcome.family } : {}),
@@ -936,19 +936,19 @@ export class LianJieTiZi {
     const missing = attempts.filter((a) => a.status === 'unsupported').map((a) => LADDER_LABELS[a.rung]);
     const zhongjiChangshi = attempts.find((a) => a.rung === 'relay');
     const relayDecision = this.lastRelayDecision;
-    const parts: string[] = ['全部可用方式均失败'];
+    const Pian: string[] = ['全部可用方式均失败'];
     if (relayDecision?.needsPublicRelayNotice) {
-      parts.push(`两端都无法直连且无可用中继（${relayDecision.code}）：需要一台有公网地址的机器做中继`);
+      Pian.push(`两端都无法直连且无可用中继（${relayDecision.code}）：需要一台有公网地址的机器做中继`);
     } else if (relayDecision && relayDecision.code === 'dialability-unknown') {
-      parts.push('对端可拨入性未知，无法判定是否必须中继');
+      Pian.push('对端可拨入性未知，无法判定是否必须中继');
     }
-    if (missing.length) parts.push(`未实现的降级路径：${missing.join('、')}`);
-    parts.push('（详见 attempts）');
+    if (missing.length) Pian.push(`未实现的降级路径：${missing.join('、')}`);
+    Pian.push('（详见 attempts）');
     return {
       ok: false,
       rung: null,
       attempts,
-      summary: parts.join('；'),
+      summary: Pian.join('；'),
       code: relayDecision?.needsPublicRelayNotice
         ? 'no-relay-available'
         : attempts.some((a) => a.code === 'no-address') && attempts.some((a) => a.code === 'no-ipv6-candidate')

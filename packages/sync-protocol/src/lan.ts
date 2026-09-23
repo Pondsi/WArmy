@@ -36,22 +36,22 @@ export class NeiWangTongBuFuWu {
         let buf = '';
         sock.on('data', (d) => {
           buf += d.toString('utf8');
-          let idx;
-          while ((idx = buf.indexOf('\n')) >= 0) {
-            const line = buf.slice(0, idx).trim();
-            buf = buf.slice(idx + 1);
-            if (!line) continue;
+          let suoYin;
+          while ((suoYin = buf.indexOf('\n')) >= 0) {
+            const Hang = buf.slice(0, suoYin).trim();
+            buf = buf.slice(suoYin + 1);
+            if (!Hang) continue;
             try {
-              const msg = JSON.parse(line) as NeiWangXiaoXi;
-              if (!msg.incognito) {
-                this.inbox.push(msg);
+              const xiaoXi = JSON.parse(Hang) as NeiWangXiaoXi;
+              if (!xiaoXi.incognito) {
+                this.inbox.push(xiaoXi);
                 if (this.logFile) {
                   fs.mkdirSync(path.dirname(this.logFile), { recursive: true });
-                  fs.appendFileSync(this.logFile, line + '\n');
+                  fs.appendFileSync(this.logFile, Hang + '\n');
                 }
               }
               // ACK
-              sock.write(JSON.stringify({ ack: true, id: msg.id }) + '\n');
+              sock.write(JSON.stringify({ ack: true, id: xiaoXi.id }) + '\n');
             } catch {
               /* skip */
             }
@@ -89,16 +89,16 @@ export class NeiWangTongBuFuWu {
 export class NeiWangTongBuKeHu {
   constructor(private nodeId: string) {}
 
-  send(host: string, port: number, msg: Omit<NeiWangXiaoXi, 'id' | 'ts' | 'from'>): Promise<{ ok: boolean; error?: string }> {
+  faSong(host: string, port: number, xiaoXi: Omit<NeiWangXiaoXi, 'id' | 'ts' | 'from'>): Promise<{ ok: boolean; error?: string }> {
     return new Promise((resolve) => {
       const sock = net.connect({ host, port }, () => {
-        const full: NeiWangXiaoXi = {
-          ...msg,
+        const Quan: NeiWangXiaoXi = {
+          ...xiaoXi,
           from: this.nodeId,
           id: `m-${crypto.randomBytes(6).toString('hex')}`,
           ts: Date.now(),
         };
-        sock.write(JSON.stringify(full) + '\n');
+        sock.write(JSON.stringify(Quan) + '\n');
         sock.end();
         resolve({ ok: true });
       });
@@ -112,7 +112,7 @@ export class NeiWangTongBuKeHu {
 }
 
 /** 双机联测：本机起 server，向 peer 发消息 */
-export async function dualMachineSmoke(opts: {
+export async function shuangJiMaoYan(opts: {
   localId: string;
   localPort: number;
   peerHost?: string;
@@ -128,7 +128,7 @@ export async function dualMachineSmoke(opts: {
   const serverPort = await srv.start();
   const client = new NeiWangTongBuKeHu(opts.localId + '-client');
 
-  const loop = await client.send('127.0.0.1', serverPort, {
+  const loop = await client.faSong('127.0.0.1', serverPort, {
     to: '*',
     channel: 'group',
     payload: { text: 'loopback-hello' },
@@ -141,7 +141,7 @@ export async function dualMachineSmoke(opts: {
   let peerError: string | undefined;
   let peerHost = opts.peerHost;
   if (opts.peerHost && opts.peerPort) {
-    const pr = await client.send(opts.peerHost, opts.peerPort, {
+    const pr = await client.faSong(opts.peerHost, opts.peerPort, {
       to: '*',
       channel: 'group',
       payload: { text: 'peer-hello-from-' + opts.localId },

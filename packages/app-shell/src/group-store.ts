@@ -1,7 +1,7 @@
 /**
  * 群列表 / 群成员的真实持久化（userData/groups.json）
  *
- * 背景：原实现里 `warmy:group-list` 只返回 `{ ok:true }`（没有列表），
+ * 背景：原实现里 `warmy:qunLieBiao` 只返回 `{ ok:true }`（没有列表），
  * `groupMembers` 是一个进程内 Map，重启即丢。这里把两者落到磁盘：
  *
  *   { version: 1, groups: [...], members: { [groupId]: [...] } }
@@ -21,7 +21,7 @@ export type QunChengyuanLaiyuan = 'instance' | 'invite' | 'migrated';
 
 export interface qunJilu {
   groupId: string;
-  name: string;
+  ming: string;
   type: QunLei;
   directedMode: boolean;
   /** 固定值班实例（可为空） */
@@ -77,13 +77,13 @@ export interface XiangmuWenjianFangwenTiaomu {
   path: string;
   ts: number;
   ok: boolean;
-  /** 谁动的手：helper-tool（提权写入那套）/ container（容器内的命令）/ product（产品自身） */
+  /** 谁动的手：helper-tool（提权写入那套）/ container（容器内的命令）/ chanPin（产品自身） */
   by: string;
   bytes?: number;
 }
 
 /** 台账条数上限（项目级，随项目同步 ⇒ 必须有界，超出丢最旧的） */
-export const PROJECT_LEDGER_LIMIT = 200;
+export const XIANGMU_ZHANGBEN_SHANGXIAN = 200;
 
 export interface QunXiangmuJilu {
   /** 开发环境：创建项目时必选 */
@@ -144,7 +144,7 @@ export function kongXiangmuJilu(): QunXiangmuJilu {
 
 export interface QunChengyuanJilu {
   id: string;
-  name: string;
+  ming: string;
   role: QunChengyuanJuese;
   joinedAt: number;
   source: QunChengyuanLaiyuan;
@@ -156,11 +156,11 @@ export interface QunChengyuanJilu {
    * **可选，缺失 = 未知**（旧记录、拿不到名片的邀请、本机实例成员都是这样）：
    *  - 旧格式（本字段出现之前落盘的 groups.json）读进来就是 `undefined`，
    *    **不猜、不伪造、不改写文件**；下次因别的原因写盘时也依旧是 `undefined`；
-   *  - 有了它，`warmy:identity-changes` 才能把"某个指纹换了证"精确定位到
-   *    具体是哪个群（`scopes`），`warmy:net-members-presence` 才能用**活连接**
+   *  - 有了它，`warmy:shenFenBianGengJi` 才能把"某个指纹换了证"精确定位到
+   *    具体是哪个群（`scopes`），`warmy:wangLuoChengYuanJiZaiChang` 才能用**活连接**
    *    判定异地成员在不在线（而不是只知道"他是异地"）。
    */
-  fingerprint?: string;
+  zhiWen?: string;
 }
 
 export interface QunCangZhuangtai {
@@ -174,7 +174,7 @@ export interface QunCangZhuangtai {
 /** IPC 返回形状（显式写出来，配合 safeHandle<T> 的兜底值保持类型一致） */
 export interface QunLieBiaoJieGuo {
   ok: boolean;
-  groups: Array<qunJilu & { memberCount: number; active: boolean }>;
+  groups: Array<qunJilu & { memberCount: number; jiHuo: boolean }>;
   count: number;
   error?: string;
 }
@@ -235,57 +235,57 @@ function normalize(raw: unknown): QunCangZhuangtai {
   const src = raw as Partial<QunCangZhuangtai>;
   const out = kongZhuangtai();
   if (src.uiStateMigrated === true) out.uiStateMigrated = true;
-  const seen = new Set<string>();
+  const yiKanDao = new Set<string>();
   for (const g of Array.isArray(src.groups) ? src.groups : []) {
     if (!g || typeof g !== 'object') continue;
-    const rec = g as Partial<qunJilu>;
-    const groupId = asString(rec.groupId);
-    if (!groupId || seen.has(groupId)) continue;
-    seen.add(groupId);
-    const row: qunJilu = {
+    const jiLu = g as Partial<qunJilu>;
+    const groupId = asString(jiLu.groupId);
+    if (!groupId || yiKanDao.has(groupId)) continue;
+    yiKanDao.add(groupId);
+    const hang: qunJilu = {
       groupId,
-      name: asString(rec.name) || groupId,
-      type: guiFanHuaLeiXing(rec.type),
-      directedMode: rec.directedMode === true,
-      dutyInstanceId: asString(rec.dutyInstanceId) || null,
-      createdAt: asNumber(rec.createdAt) || Date.now(),
-      updatedAt: asNumber(rec.updatedAt) || asNumber(rec.createdAt) || Date.now(),
-      origin: rec.origin === 'migrated' ? 'migrated' : 'ipc',
+      ming: asString(jiLu.ming) || groupId,
+      type: guiFanHuaLeiXing(jiLu.type),
+      directedMode: jiLu.directedMode === true,
+      dutyInstanceId: asString(jiLu.dutyInstanceId) || null,
+      createdAt: asNumber(jiLu.createdAt) || Date.now(),
+      updatedAt: asNumber(jiLu.updatedAt) || asNumber(jiLu.createdAt) || Date.now(),
+      origin: jiLu.origin === 'migrated' ? 'migrated' : 'ipc',
     };
     // 旧记录没有 creatorFingerprint → 保持缺失（不编造）
-    const chuangJianZheZhiWen = asString(rec.creatorFingerprint);
-    if (chuangJianZheZhiWen) row.creatorFingerprint = chuangJianZheZhiWen;
+    const chuangJianZheZhiWen = asString(jiLu.creatorFingerprint);
+    if (chuangJianZheZhiWen) hang.creatorFingerprint = chuangJianZheZhiWen;
     // 旧记录没有项目属性 → 保持缺失（上层回退到本机设置的兼容路径，见 projectOf）
-    const xiangMu = guiFanHuaXiangMu(rec.project);
-    if (xiangMu) row.project = xiangMu;
-    out.groups.push(row);
+    const xiangMu = guiFanHuaXiangMu(jiLu.project);
+    if (xiangMu) hang.project = xiangMu;
+    out.groups.push(hang);
   }
   const membersSrc = src.members && typeof src.members === 'object' ? src.members : {};
   for (const key of Object.keys(membersSrc)) {
-    const list = (membersSrc as Record<string, unknown>)[key];
-    if (!Array.isArray(list)) continue;
+    const LieBiao = (membersSrc as Record<string, unknown>)[key];
+    if (!Array.isArray(LieBiao)) continue;
     const out2: QunChengyuanJilu[] = [];
-    const ids = new Set<string>();
-    for (const m of list) {
+    const idJi = new Set<string>();
+    for (const m of LieBiao) {
       if (!m || typeof m !== 'object') continue;
-      const rec = m as Partial<QunChengyuanJilu>;
-      const id = asString(rec.id);
-      if (!id || ids.has(id)) continue;
-      ids.add(id);
-      const row: QunChengyuanJilu = {
+      const jiLu = m as Partial<QunChengyuanJilu>;
+      const id = asString(jiLu.id);
+      if (!id || idJi.has(id)) continue;
+      idJi.add(id);
+      const hang: QunChengyuanJilu = {
         id,
-        name: asString(rec.name) || id,
-        role: guiFanHuaJueSe(rec.role),
-        joinedAt: asNumber(rec.joinedAt) || Date.now(),
-        source: guiFanHuaLaiYuan(rec.source),
+        ming: asString(jiLu.ming) || id,
+        role: guiFanHuaJueSe(jiLu.role),
+        joinedAt: asNumber(jiLu.joinedAt) || Date.now(),
+        source: guiFanHuaLaiYuan(jiLu.source),
       };
-      const instId = asString(rec.instanceId);
-      if (instId) row.instanceId = instId;
+      const instId = asString(jiLu.instanceId);
+      if (instId) hang.instanceId = instId;
       // ⚠️ 旧格式（没有 fingerprint 字段）读进来必须是 undefined：
-      // 不猜、不用 id/name 凑、也不因为"看起来像指纹"就填上。
-      const fp = asString(rec.fingerprint);
-      if (fp) row.fingerprint = fp;
-      out2.push(row);
+      // 不猜、不用 id/ming 凑、也不因为"看起来像指纹"就填上。
+      const fp = asString(jiLu.zhiWen);
+      if (fp) hang.zhiWen = fp;
+      out2.push(hang);
     }
     out.members[key] = out2;
   }
@@ -295,75 +295,75 @@ function normalize(raw: unknown): QunCangZhuangtai {
 /** 校验台账里的一条（外来数据：不认识的 op 直接丢，别把"未知"当 write 记下来） */
 function guiFanHuaZhangBenTiaoMu(raw: unknown): XiangmuWenjianFangwenTiaomu | null {
   if (!raw || typeof raw !== 'object') return null;
-  const rec = raw as Partial<XiangmuWenjianFangwenTiaomu>;
-  if (!isFileAccessOp(rec.op)) return null;
-  const p = asString(rec.path);
+  const jiLu = raw as Partial<XiangmuWenjianFangwenTiaomu>;
+  if (!isFileAccessOp(jiLu.op)) return null;
+  const p = asString(jiLu.path);
   if (!p) return null;
-  const row: XiangmuWenjianFangwenTiaomu = {
-    op: rec.op,
+  const hang: XiangmuWenjianFangwenTiaomu = {
+    op: jiLu.op,
     path: p,
-    ts: asNumber(rec.ts) || Date.now(),
-    ok: rec.ok !== false,
-    by: asString(rec.by) || 'unknown',
+    ts: asNumber(jiLu.ts) || Date.now(),
+    ok: jiLu.ok !== false,
+    by: asString(jiLu.by) || 'unknown',
   };
-  const bytes = asNumber(rec.bytes);
-  if (bytes > 0) row.bytes = bytes;
-  return row;
+  const bytes = asNumber(jiLu.bytes);
+  if (bytes > 0) hang.bytes = bytes;
+  return hang;
 }
 
 /** 把（可能来自磁盘或网络对端的）项目属性收敛成合法结构；什么都没有则返回 undefined */
 export function guiFanHuaXiangMu(raw: unknown): QunXiangmuJilu | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
-  const rec = raw as Partial<QunXiangmuJilu>;
-  const row = kongXiangmuJilu();
-  row.devEnv = rec.devEnv === 'container' ? 'container' : 'host';
-  row.runtimeId = asString(rec.runtimeId);
-  row.disabledAt = Math.max(0, asNumber(rec.disabledAt));
-  const dir = asString(rec.directory);
+  const jiLu = raw as Partial<QunXiangmuJilu>;
+  const hang = kongXiangmuJilu();
+  hang.devEnv = jiLu.devEnv === 'container' ? 'container' : 'host';
+  hang.runtimeId = asString(jiLu.runtimeId);
+  hang.disabledAt = Math.max(0, asNumber(jiLu.disabledAt));
+  const dir = asString(jiLu.directory);
   if (dir) {
-    row.directory = dir;
-    const src = asString(rec.directorySource);
-    row.directorySource = src === 'creator-picked' ? 'creator-picked' : 'checkpoint-workspace';
+    hang.directory = dir;
+    const src = asString(jiLu.directorySource);
+    hang.directorySource = src === 'creator-picked' ? 'creator-picked' : 'checkpoint-workspace';
   }
-  const keYong = asString(rec.availability);
-  row.availability = (['available', 'stopped', 'not-ready', 'not-installed', 'not-chosen'] as const).includes(keYong as never)
+  const keYong = asString(jiLu.availability);
+  hang.availability = (['available', 'stopped', 'not-ready', 'not-installed', 'not-chosen'] as const).includes(keYong as never)
     ? (keYong as XiangmuKeyongxing)
     : 'unknown';
-  row.availabilityCode = asString(rec.availabilityCode);
-  row.availabilityAt = asNumber(rec.availabilityAt);
-  const by = asString(rec.reportedBy);
-  if (by) row.reportedBy = by;
-  if (rec.env && typeof rec.env === 'object') {
-    const e = rec.env as { containerRef?: unknown; imageRef?: unknown; solidifiedAt?: unknown };
+  hang.availabilityCode = asString(jiLu.availabilityCode);
+  hang.availabilityAt = asNumber(jiLu.availabilityAt);
+  const by = asString(jiLu.reportedBy);
+  if (by) hang.reportedBy = by;
+  if (jiLu.env && typeof jiLu.env === 'object') {
+    const e = jiLu.env as { containerRef?: unknown; imageRef?: unknown; solidifiedAt?: unknown };
     const env: NonNullable<QunXiangmuJilu['env']> = {};
     if (asString(e.containerRef)) env.containerRef = asString(e.containerRef);
     if (asString(e.imageRef)) env.imageRef = asString(e.imageRef);
     if (asNumber(e.solidifiedAt) > 0) env.solidifiedAt = asNumber(e.solidifiedAt);
-    if (Object.keys(env).length) row.env = env;
+    if (Object.keys(env).length) hang.env = env;
   }
-  const list = Array.isArray(rec.ledger) ? rec.ledger : [];
-  for (const item of list) {
+  const LieBiao = Array.isArray(jiLu.ledger) ? jiLu.ledger : [];
+  for (const item of LieBiao) {
     const e = guiFanHuaZhangBenTiaoMu(item);
-    if (e) row.ledger.push(e);
+    if (e) hang.ledger.push(e);
   }
-  if (row.ledger.length > PROJECT_LEDGER_LIMIT) row.ledger = row.ledger.slice(-PROJECT_LEDGER_LIMIT);
-  const jiYi = asString(rec.memory);
-  if (jiYi) row.memory = jiYi.slice(0, 8000);
-  if (Array.isArray(rec.gateVerify)) {
-    row.gateVerify = rec.gateVerify.map((x) => asString(x)).filter(Boolean).slice(0, 8);
+  if (hang.ledger.length > XIANGMU_ZHANGBEN_SHANGXIAN) hang.ledger = hang.ledger.slice(-XIANGMU_ZHANGBEN_SHANGXIAN);
+  const jiYi = asString(jiLu.memory);
+  if (jiYi) hang.memory = jiYi.slice(0, 8000);
+  if (Array.isArray(jiLu.gateVerify)) {
+    hang.gateVerify = jiLu.gateVerify.map((x) => asString(x)).filter(Boolean).slice(0, 8);
   }
-  if (rec.gateLast && typeof rec.gateLast === 'object') {
-    const quanJu = rec.gateLast as { at?: unknown; pass?: unknown; summary?: unknown };
-    row.gateLast = {
+  if (jiLu.gateLast && typeof jiLu.gateLast === 'object') {
+    const quanJu = jiLu.gateLast as { at?: unknown; pass?: unknown; summary?: unknown };
+    hang.gateLast = {
       at: asNumber(quanJu.at) || 0,
       pass: quanJu.pass === true,
       summary: asString(quanJu.summary).slice(0, 400),
     };
   }
-  return row;
+  return hang;
 }
 
-export class GroupStore {
+export class QunCang {
   /** 最近一次落盘失败的粗粒度原因（不含路径/堆栈） */
   lastWriteError: string | null = null;
 
@@ -404,10 +404,10 @@ export class GroupStore {
     groupId: string,
     patch: Partial<Omit<QunXiangmuJilu, 'ledger'>> & { ledger?: XiangmuWenjianFangwenTiaomu[] }
   ): { ok: boolean; project?: QunXiangmuJilu; error?: string } {
-    const gid = asString(groupId);
-    if (!gid) return { ok: false, error: 'groupId required' };
+    const qunId = asString(groupId);
+    if (!qunId) return { ok: false, error: 'groupId required' };
     const state = this.snapshot();
-    const g = state.groups.find((x) => x.groupId === gid);
+    const g = state.groups.find((x) => x.groupId === qunId);
     // 群记录不存在时不偷偷建一条（群名/类型都不知道，编出来比没有更糟）
     if (!g) return { ok: false, error: 'group not found' };
     const cur = g.project || kongXiangmuJilu();
@@ -426,7 +426,7 @@ export class GroupStore {
     if (patch.env && typeof patch.env === 'object') {
       next.env = { ...(next.env || {}), ...patch.env };
     }
-    if (Array.isArray(patch.ledger)) next.ledger = patch.ledger.slice(-PROJECT_LEDGER_LIMIT);
+    if (Array.isArray(patch.ledger)) next.ledger = patch.ledger.slice(-XIANGMU_ZHANGBEN_SHANGXIAN);
     if (typeof patch.memory === 'string') next.memory = patch.memory.slice(0, 8000);
     if (Array.isArray(patch.gateVerify)) {
       next.gateVerify = patch.gateVerify.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 8);
@@ -463,17 +463,17 @@ export class GroupStore {
     groupId: string,
     entry: XiangmuWenjianFangwenTiaomu
   ): { ok: boolean; entry?: XiangmuWenjianFangwenTiaomu; error?: string } {
-    const gid = asString(groupId);
-    if (!gid) return { ok: false, error: 'groupId required' };
+    const qunId = asString(groupId);
+    if (!qunId) return { ok: false, error: 'groupId required' };
     const e = guiFanHuaZhangBenTiaoMu(entry);
     if (!e) return { ok: false, error: 'bad entry' };
     const state = this.snapshot();
-    const g = state.groups.find((x) => x.groupId === gid);
+    const g = state.groups.find((x) => x.groupId === qunId);
     if (!g) return { ok: false, error: 'group not found' };
     const xiangMu = g.project || kongXiangmuJilu();
-    const list = (xiangMu.ledger || []).filter((x) => !(x.path === e.path && x.op === e.op));
-    list.push(e);
-    xiangMu.ledger = list.length > PROJECT_LEDGER_LIMIT ? list.slice(-PROJECT_LEDGER_LIMIT) : list;
+    const LieBiao = (xiangMu.ledger || []).filter((x) => !(x.path === e.path && x.op === e.op));
+    LieBiao.push(e);
+    xiangMu.ledger = LieBiao.length > XIANGMU_ZHANGBEN_SHANGXIAN ? LieBiao.slice(-XIANGMU_ZHANGBEN_SHANGXIAN) : LieBiao;
     g.project = xiangMu;
     g.updatedAt = Date.now();
     const w = this.persist(state);
@@ -482,11 +482,11 @@ export class GroupStore {
   }
 
   /** 台账读取（按时间倒序；`limit` 有上限，避免一次把大台账全推给渲染层） */
-  listFileAccess(groupId: string, limit = PROJECT_LEDGER_LIMIT): XiangmuWenjianFangwenTiaomu[] {
+  listFileAccess(groupId: string, limit = XIANGMU_ZHANGBEN_SHANGXIAN): XiangmuWenjianFangwenTiaomu[] {
     const xiangMu = this.projectOf(groupId);
-    const list = (xiangMu && xiangMu.ledger) || [];
-    const n = Math.max(1, Math.min(Math.floor(limit) || PROJECT_LEDGER_LIMIT, PROJECT_LEDGER_LIMIT));
-    return list.slice().sort((a, b) => b.ts - a.ts).slice(0, n);
+    const LieBiao = (xiangMu && xiangMu.ledger) || [];
+    const n = Math.max(1, Math.min(Math.floor(limit) || XIANGMU_ZHANGBEN_SHANGXIAN, XIANGMU_ZHANGBEN_SHANGXIAN));
+    return LieBiao.slice().sort((a, b) => b.ts - a.ts).slice(0, n);
   }
 
   /**
@@ -497,21 +497,21 @@ export class GroupStore {
   applyProjectSync(
     groupId: string,
     payload: {
-      name?: string;
+      ming?: string;
       type?: QunLei;
       project: Partial<Omit<QunXiangmuJilu, 'ledger'>>;
       /** 对端（创建者）的指纹：只在本地还不知道创建者时补上 */
       creatorFingerprint?: string;
     }
   ): { ok: boolean; group?: qunJilu; error?: string } {
-    const gid = asString(groupId);
-    if (!gid) return { ok: false, error: 'groupId required' };
+    const qunId = asString(groupId);
+    if (!qunId) return { ok: false, error: 'groupId required' };
     // 先确保有这条群记录（成员第一次收到同步时本地可能还没有）
-    const cunzai = this.getGroup(gid);
+    const cunzai = this.getGroup(qunId);
     if (!cunzai) {
       const created = this.upsertGroup({
-        groupId: gid,
-        name: asString(payload.name) || gid,
+        groupId: qunId,
+        ming: asString(payload.ming) || qunId,
         type: payload.type === 'external' ? 'external' : 'internal',
         ...(asString(payload.creatorFingerprint) ? { creatorFingerprint: asString(payload.creatorFingerprint) } : {}),
       });
@@ -519,15 +519,15 @@ export class GroupStore {
     } else if (asString(payload.creatorFingerprint) && !cunzai.creatorFingerprint) {
       // 只在本地不知道时补；已知创建者绝不被对端覆盖（避免"谁都能自称群主"）
       this.upsertGroup({
-        groupId: gid,
-        name: cunzai.name,
+        groupId: qunId,
+        ming: cunzai.ming,
         type: cunzai.type,
         creatorFingerprint: asString(payload.creatorFingerprint),
       });
     }
-    const r = this.setProjectAttrs(gid, payload.project);
+    const r = this.setProjectAttrs(qunId, payload.project);
     if (!r.ok) return { ok: false, error: r.error };
-    return { ok: true, group: this.getGroup(gid) };
+    return { ok: true, group: this.getGroup(qunId) };
   }
 
   memberCount(groupId: string): number {
@@ -535,42 +535,42 @@ export class GroupStore {
   }
 
   /** 建群 / 更新群信息：已存在则保留 createdAt 与成员列表 */
-  upsertGroup(input: {
+  upsertGroup(shuRu: {
     groupId: string;
-    name: string;
+    ming: string;
     type: QunLei;
     directedMode?: boolean;
     origin?: 'ipc' | 'migrated';
     /** 建群者（本机身份）指纹；不确定就**不要传**（留空 = 未知） */
     creatorFingerprint?: string;
   }): { ok: boolean; group?: qunJilu; error?: string } {
-    const groupId = asString(input.groupId);
+    const groupId = asString(shuRu.groupId);
     if (!groupId) return { ok: false, error: 'groupId required' };
     const state = this.snapshot();
     const now = Date.now();
     const cunzai = state.groups.find((g) => g.groupId === groupId);
     let group: qunJilu;
     if (cunzai) {
-      cunzai.name = asString(input.name) || cunzai.name;
-      cunzai.type = guiFanHuaLeiXing(input.type);
-      if (typeof input.directedMode === 'boolean') cunzai.directedMode = input.directedMode;
+      cunzai.ming = asString(shuRu.ming) || cunzai.ming;
+      cunzai.type = guiFanHuaLeiXing(shuRu.type);
+      if (typeof shuRu.directedMode === 'boolean') cunzai.directedMode = shuRu.directedMode;
       // 只在"本来不知道"时补写，绝不覆盖已知的创建者
-      const chuangJianZheZhiWen = asString(input.creatorFingerprint);
+      const chuangJianZheZhiWen = asString(shuRu.creatorFingerprint);
       if (chuangJianZheZhiWen && !cunzai.creatorFingerprint) cunzai.creatorFingerprint = chuangJianZheZhiWen;
       cunzai.updatedAt = now;
       group = cunzai;
     } else {
       group = {
         groupId,
-        name: asString(input.name) || groupId,
-        type: guiFanHuaLeiXing(input.type),
-        directedMode: input.directedMode === true,
+        ming: asString(shuRu.ming) || groupId,
+        type: guiFanHuaLeiXing(shuRu.type),
+        directedMode: shuRu.directedMode === true,
         dutyInstanceId: null,
         createdAt: now,
         updatedAt: now,
-        origin: input.origin === 'migrated' ? 'migrated' : 'ipc',
+        origin: shuRu.origin === 'migrated' ? 'migrated' : 'ipc',
       };
-      const chuangJianZheZhiWen = asString(input.creatorFingerprint);
+      const chuangJianZheZhiWen = asString(shuRu.creatorFingerprint);
       if (chuangJianZheZhiWen) group.creatorFingerprint = chuangJianZheZhiWen;
       state.groups.push(group);
     }
@@ -583,9 +583,9 @@ export class GroupStore {
   /** 解散群：群记录与成员一起删除 */
   removeGroup(groupId: string): { ok: boolean; removed: boolean; error?: string } {
     const state = this.snapshot();
-    const idx = state.groups.findIndex((g) => g.groupId === groupId);
-    if (idx < 0) return { ok: true, removed: false };
-    state.groups.splice(idx, 1);
+    const suoYin = state.groups.findIndex((g) => g.groupId === groupId);
+    if (suoYin < 0) return { ok: true, removed: false };
+    state.groups.splice(suoYin, 1);
     delete state.members[groupId];
     const w = this.persist(state);
     if (!w.ok) return { ok: false, removed: false, error: w.error };
@@ -603,40 +603,40 @@ export class GroupStore {
    */
   addMember(
     groupId: string,
-    input: {
-      name: string;
+    shuRu: {
+      ming: string;
       role?: QunChengyuanJuese;
       source?: QunChengyuanLaiyuan;
       instanceId?: string;
       id?: string;
-      fingerprint?: string;
+      zhiWen?: string;
     }
   ): QunChengYuanJieGuo {
-    const name = asString(input.name).trim();
-    if (!name) return { ok: false, groupId, members: [], error: 'name required' };
+    const ming = asString(shuRu.ming).trim();
+    if (!ming) return { ok: false, groupId, members: [], error: 'ming required' };
     const state = this.snapshot();
-    const list = state.members[groupId] || [];
-    if (!state.members[groupId]) state.members[groupId] = list;
-    const instId = asString(input.instanceId);
-    const dup = list.find((m) => (instId ? m.instanceId === instId : m.name === name));
-    if (dup) return { ok: true, groupId, members: list.slice() };
-    if (list.length >= QUN_CHENGYUAN_SHANGXIAN) {
-      return { ok: false, groupId, members: list.slice(), error: `max GROUP_MEMBER_LIMIT` };
+    const LieBiao = state.members[groupId] || [];
+    if (!state.members[groupId]) state.members[groupId] = LieBiao;
+    const instId = asString(shuRu.instanceId);
+    const zhongFu = LieBiao.find((m) => (instId ? m.instanceId === instId : m.ming === ming));
+    if (zhongFu) return { ok: true, groupId, members: LieBiao.slice() };
+    if (LieBiao.length >= QUN_CHENGYUAN_SHANGXIAN) {
+      return { ok: false, groupId, members: LieBiao.slice(), error: `max ${QUN_CHENGYUAN_SHANGXIAN}` };
     }
-    const row: QunChengyuanJilu = {
-      id: asString(input.id) || (instId ? `inst:instId` : `m-Date.now().toString(36)-list.length`),
-      name,
-      role: guiFanHuaJueSe(input.role),
+    const hang: QunChengyuanJilu = {
+      id: asString(shuRu.id) || (instId ? `inst:${instId}` : `m-${Date.now().toString(36)}-${LieBiao.length}`),
+      ming,
+      role: guiFanHuaJueSe(shuRu.role),
       joinedAt: Date.now(),
-      source: guiFanHuaLaiYuan(input.source),
+      source: guiFanHuaLaiYuan(shuRu.source),
     };
-    if (instId) row.instanceId = instId;
-    const fp = asString(input.fingerprint);
-    if (fp) row.fingerprint = fp;
-    list.push(row);
+    if (instId) hang.instanceId = instId;
+    const fp = asString(shuRu.zhiWen);
+    if (fp) hang.zhiWen = fp;
+    LieBiao.push(hang);
     const w = this.persist(state);
-    if (!w.ok) return { ok: false, groupId, members: list.slice(0, -1), error: w.error };
-    return { ok: true, groupId, members: list.slice() };
+    if (!w.ok) return { ok: false, groupId, members: LieBiao.slice(0, -1), error: w.error };
+    return { ok: true, groupId, members: LieBiao.slice() };
   }
 
   /**
@@ -653,32 +653,32 @@ export class GroupStore {
    */
   addMemberWithFingerprint(
     groupId: string,
-    input: {
-      name: string;
+    shuRu: {
+      ming: string;
       role?: QunChengyuanJuese;
       source?: QunChengyuanLaiyuan;
       instanceId?: string;
       id?: string;
-      fingerprint?: string;
+      zhiWen?: string;
     },
     hooks: { onAudit?: (op: string, detail?: unknown) => void } = {}
   ): QunChengYuanJieGuo {
-    const source = guiFanHuaLaiYuan(input.source);
-    const rawFp = asString(input.fingerprint).trim();
+    const source = guiFanHuaLaiYuan(shuRu.source);
+    const rawFp = asString(shuRu.zhiWen).trim();
     // 本机实例成员永不携带指纹（它不是"某个远端身份"）
-    const fingerprint = source === 'instance' ? '' : rawFp;
-    // ⚠️ 必须把入参里的 fingerprint 拆掉再往下传：否则 `{...input}` 会把原值带进去，
-    // "instance 一律不写指纹"这条策略会被 input 覆盖掉（实测踩过）。
-    const { fingerprint: _dropFingerprint, ...rest } = input;
+    const zhiWen = source === 'instance' ? '' : rawFp;
+    // ⚠️ 必须把入参里的 fingerprint 拆掉再往下传：否则 `{...shuRu}` 会把原值带进去，
+    // "instance 一律不写指纹"这条策略会被 shuRu 覆盖掉（实测踩过）。
+    const { zhiWen: _dropFingerprint, ...qiYu } = shuRu;
     void _dropFingerprint;
-    const res = this.addMember(groupId, { ...rest, source, ...(fingerprint ? { fingerprint } : {}) });
+    const res = this.addMember(groupId, { ...qiYu, source, ...(zhiWen ? { zhiWen } : {}) });
     if (!res.ok) return res;
-    const name = asString(input.name).trim();
-    if (fingerprint) {
-      const before = this.listMembers(groupId).find((m) => m.name === name);
+    const ming = asString(shuRu.ming).trim();
+    if (zhiWen) {
+      const before = this.listMembers(groupId).find((m) => m.ming === ming);
       // 已存在但当时没指纹：这次补上（幂等；已有同一个就什么都不做）
-      if (before && before.fingerprint !== fingerprint) {
-        this.setMemberFingerprint(groupId, before.id, fingerprint);
+      if (before && before.zhiWen !== zhiWen) {
+        this.setMemberFingerprint(groupId, before.id, zhiWen);
         hooks.onAudit?.('group.member.fingerprint', { groupId, source, bound: 'patched' });
       } else {
         hooks.onAudit?.('group.member.fingerprint', { groupId, source, bound: 'already-present' });
@@ -700,34 +700,34 @@ export class GroupStore {
   }
 
   /**
-   * 给已有成员补/换指纹（幂等；`memberId` 为空时按 name 找）。
+   * 给已有成员补/换指纹（幂等；`memberId` 为空时按 ming 找）。
    * 传空指纹 = 不改（**没有"清空指纹"这条路径**：指纹一旦绑定就是审计事实，
    * 要"解绑"应该走换证/吊销，而不是抹掉记录）。
    */
-  setMemberFingerprint(groupId: string, memberId: string, fingerprint: string): { ok: boolean; changed: boolean; members: QunChengyuanJilu[]; error?: string } {
-    const fp = asString(fingerprint).trim();
+  setMemberFingerprint(groupId: string, memberId: string, zhiWen: string): { ok: boolean; changed: boolean; members: QunChengyuanJilu[]; error?: string } {
+    const fp = asString(zhiWen).trim();
     if (!fp) return { ok: false, changed: false, members: [], error: 'fingerprint required' };
     const state = this.snapshot();
-    const list = state.members[groupId] || [];
-    const target = memberId ? list.find((m) => m.id === memberId) : undefined;
-    if (!target) return { ok: false, changed: false, members: list.slice(), error: 'member not found' };
-    if (target.fingerprint === fp) return { ok: true, changed: false, members: list.slice() };
-    target.fingerprint = fp;
+    const LieBiao = state.members[groupId] || [];
+    const target = memberId ? LieBiao.find((m) => m.id === memberId) : undefined;
+    if (!target) return { ok: false, changed: false, members: LieBiao.slice(), error: 'member not found' };
+    if (target.zhiWen === fp) return { ok: true, changed: false, members: LieBiao.slice() };
+    target.zhiWen = fp;
     const w = this.persist(state);
-    if (!w.ok) return { ok: false, changed: false, members: list.slice(), error: w.error };
-    return { ok: true, changed: true, members: list.slice() };
+    if (!w.ok) return { ok: false, changed: false, members: LieBiao.slice(), error: w.error };
+    return { ok: true, changed: true, members: LieBiao.slice() };
   }
 
   /** 哪些群里出现过这个指纹（T179：把"某个指纹换了证"定位到具体群） */
-  groupsWithFingerprint(fingerprint: string): Array<{ groupId: string; memberId: string; name: string }> {
-    const fp = asString(fingerprint).trim();
+  groupsWithFingerprint(zhiWen: string): Array<{ groupId: string; memberId: string; ming: string }> {
+    const fp = asString(zhiWen).trim();
     if (!fp) return [];
-    const out: Array<{ groupId: string; memberId: string; name: string }> = [];
+    const out: Array<{ groupId: string; memberId: string; ming: string }> = [];
     const snap = this.snapshot();
-    for (const [groupId, list] of Object.entries(snap.members)) {
-      for (const m of list) {
-        if (m.fingerprint && sameFingerprintText(m.fingerprint, fp)) {
-          out.push({ groupId, memberId: m.id, name: m.name });
+    for (const [groupId, LieBiao] of Object.entries(snap.members)) {
+      for (const m of LieBiao) {
+        if (m.zhiWen && sameFingerprintText(m.zhiWen, fp)) {
+          out.push({ groupId, memberId: m.id, ming: m.ming });
         }
       }
     }
@@ -737,28 +737,28 @@ export class GroupStore {
   /** 移除成员；creator 不可被移除（与权限表一致：只有创建者可解散群） */
   removeMember(groupId: string, memberId: string): QunChengYuanJieGuo {
     const state = this.snapshot();
-    const list = state.members[groupId] || [];
-    const target = list.find((m) => m.id === memberId);
-    if (!target) return { ok: false, groupId, members: list.slice(), error: 'member not found' };
-    if (target.role === 'creator') return { ok: false, groupId, members: list.slice(), error: 'creator cannot be removed' };
-    const next = list.filter((m) => m.id !== memberId);
+    const LieBiao = state.members[groupId] || [];
+    const target = LieBiao.find((m) => m.id === memberId);
+    if (!target) return { ok: false, groupId, members: LieBiao.slice(), error: 'member not found' };
+    if (target.role === 'creator') return { ok: false, groupId, members: LieBiao.slice(), error: 'creator cannot be removed' };
+    const next = LieBiao.filter((m) => m.id !== memberId);
     state.members[groupId] = next;
     const w = this.persist(state);
-    if (!w.ok) return { ok: false, groupId, members: list.slice(), error: w.error };
+    if (!w.ok) return { ok: false, groupId, members: LieBiao.slice(), error: w.error };
     return { ok: true, groupId, members: next.slice() };
   }
 
   /** 设置 / 取消管理员；创建者角色固定 */
   setAdmin(groupId: string, memberId: string, admin: boolean): QunChengYuanJieGuo {
     const state = this.snapshot();
-    const list = state.members[groupId] || [];
-    const target = list.find((m) => m.id === memberId);
-    if (!target) return { ok: false, groupId, members: list.slice(), error: 'member not found' };
-    if (target.role === 'creator') return { ok: false, groupId, members: list.slice(), error: 'creator role is fixed' };
+    const LieBiao = state.members[groupId] || [];
+    const target = LieBiao.find((m) => m.id === memberId);
+    if (!target) return { ok: false, groupId, members: LieBiao.slice(), error: 'member not found' };
+    if (target.role === 'creator') return { ok: false, groupId, members: LieBiao.slice(), error: 'creator role is fixed' };
     target.role = admin ? 'admin' : 'member';
     const w = this.persist(state);
-    if (!w.ok) return { ok: false, groupId, members: list.slice(), error: w.error };
-    return { ok: true, groupId, members: list.slice() };
+    if (!w.ok) return { ok: false, groupId, members: LieBiao.slice(), error: w.error };
+    return { ok: true, groupId, members: LieBiao.slice() };
   }
 
   /** 定向模式（无 @ 不响应）落盘 */
@@ -786,17 +786,17 @@ export class GroupStore {
   }
 
   /** 一次性回填（旧版本把群列表存在 settings.json 的 state.groups 里）；只做一次 */
-  migrateFrom(input: Array<{ id?: unknown; name?: unknown; type?: unknown }>): number {
+  migrateFrom(shuRu: Array<{ id?: unknown; ming?: unknown; type?: unknown }>): number {
     const state = this.snapshot();
     if (state.uiStateMigrated) return 0;
     const now = Date.now();
-    let added = 0;
-    for (const g of input) {
+    let yiTianJia = 0;
+    for (const g of shuRu) {
       const groupId = asString(g?.id);
       if (!groupId || state.groups.some((x) => x.groupId === groupId)) continue;
       state.groups.push({
         groupId,
-        name: asString(g?.name) || groupId,
+        ming: asString(g?.ming) || groupId,
         type: guiFanHuaLeiXing(g?.type),
         directedMode: false,
         dutyInstanceId: null,
@@ -805,12 +805,12 @@ export class GroupStore {
         origin: 'migrated',
       });
       if (!state.members[groupId]) state.members[groupId] = [];
-      added++;
+      yiTianJia++;
     }
     // 无论有没有新增都记下「已回填」，否则解散过的群会在下次启动被再加回来
     state.uiStateMigrated = true;
     this.persist(state);
-    return added;
+    return yiTianJia;
   }
 
   private persist(state: QunCangZhuangtai): { ok: boolean; error?: string } {

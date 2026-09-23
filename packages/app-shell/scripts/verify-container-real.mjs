@@ -32,7 +32,7 @@ if (!fs.existsSync(dist)) {
   process.exit(3);
 }
 const mod = await import(new URL('file://' + dist.replace(/\\/g, '/')).href);
-const { probeContainerRuntimes, runContainerAction, jiLuRongQiHaoShi, containerTimings, CONTAINER_BASE_IMAGES } = mod;
+const { tanCeRongQiYunXing, runContainerAction, jiLuRongQiHaoShi, containerTimings, CONTAINER_BASE_IMAGES } = mod;
 
 const KEEP = process.argv.includes('--keep-running');
 const START_TIMEOUT_MS = Number(process.env.WARMY_START_TIMEOUT_MS || 420000);
@@ -60,11 +60,11 @@ const HOST_NODE_EXE = path.join(repoRoot, 'resources', 'node', 'win-x64', 'node.
 const {execFile, spawn} = await import('node:child_process');
 const results = [];
 let failures = 0;
-function ok(cond, label, detail) {
+function ok(cond, biaoQian, detail) {
   const pass = !!cond;
   if (!pass) failures++;
-  results.push({ pass, label, detail: detail === undefined ? null : String(detail) });
-  console.log((pass ? '  PASS ' : '  FAIL ') + label + (detail === undefined ? '' : '  [' + String(detail).slice(0, 400) + ']'));
+  results.push({ pass, biaoQian, detail: detail === undefined ? null : String(detail) });
+  console.log((pass ? '  PASS ' : '  FAIL ') + biaoQian + (detail === undefined ? '' : '  [' + String(detail).slice(0, 400) + ']'));
   return pass;
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -106,14 +106,14 @@ async function registryVerifyDigest(ref, digest) {
   const ACC = 'application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json';
   const r = await call(`https://registry-1.docker.io/v2/${repo}/manifests/${digest}`, ACC, tok);
   if (r.status !== 200) return { ok: false, why: `manifest HTTP ${r.status}` };
-  const body = Buffer.from(await r.arrayBuffer());
-  const actual = 'sha256:' + sha256Hex(body);
+  const ti = Buffer.from(await r.arrayBuffer());
+  const actual = 'sha256:' + sha256Hex(ti);
   const header = r.headers.get('docker-content-digest');
-  return { ok: actual === digest, actual, header, bytes: body.length, mediaType: (JSON.parse(body.toString('utf8')).mediaType) || r.headers.get('content-type') };
+  return { ok: actual === digest, actual, header, bytes: ti.length, mediaType: (JSON.parse(ti.toString('utf8')).mediaType) || r.headers.get('content-type') };
 }
 
 console.log('=== 0. 起始状态（真探测） ===');
-const before = await probeContainerRuntimes({ cacheMs: 0 });
+const before = await tanCeRongQiYunXing({ cacheMs: 0 });
 const dockerBefore = before.runtimes.find((x) => x.id === 'docker');
 const wslBefore = before.runtimes.find((x) => x.id === 'wsl');
 console.log(JSON.stringify({ docker: { status: dockerBefore.status, run: dockerBefore.run, version: dockerBefore.version, detail: dockerBefore.detail, evidence: dockerBefore.evidence }, wsl: { status: wslBefore.status, detail: wslBefore.detail } }));
@@ -142,7 +142,7 @@ if (wasRunning) {
     const cliTry = await runContainerAction({ id: 'docker', action: 'start' });
     console.log('     [诊断] 产品当前路径 runContainerAction({id:"docker",action:"start"}) = ' + JSON.stringify(cliTry));
     for (let i = 0; i < 25; i++) {
-      const rep = await probeContainerRuntimes({ cacheMs: 0 });
+      const rep = await tanCeRongQiYunXing({ cacheMs: 0 });
       const d = rep.runtimes.find((x) => x.id === 'docker');
       if (d && d.action && d.action.result) { cliStartOutput = String(d.action.result.output || ''); break; }
       await sleep(1000);
@@ -199,7 +199,7 @@ if (wasRunning) {
   }
 }
 
-const afterStart = await probeContainerRuntimes({ cacheMs: 0 });
+const afterStart = await tanCeRongQiYunXing({ cacheMs: 0 });
 const dockerAfter = afterStart.runtimes.find((x) => x.id === 'docker');
 console.log('     探测转换: ' + dockerBefore.status + ' -> ' + dockerAfter.status + '  detail=' + dockerAfter.detail);
 ok(dockerAfter.status === 'ready' && dockerAfter.run === 'running',
@@ -291,10 +291,10 @@ try {
   const ledger = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
   const mismatches = [];
   for (const img of CONTAINER_BASE_IMAGES) {
-    const row = (ledger.results || []).find((r) => r.ref === img.ref);
-    if (!row || !row.indexDigest) { mismatches.push(img.ref + ':台账缺失'); continue; }
-    if (row.indexDigest !== img.digest) mismatches.push(img.ref + ':台账=' + row.indexDigest + ' 表=' + img.digest);
-    const amd = row.platforms && row.platforms['linux/amd64'];
+    const hang = (ledger.results || []).find((r) => r.ref === img.ref);
+    if (!hang || !hang.indexDigest) { mismatches.push(img.ref + ':台账缺失'); continue; }
+    if (hang.indexDigest !== img.digest) mismatches.push(img.ref + ':台账=' + hang.indexDigest + ' 表=' + img.digest);
+    const amd = hang.platforms && hang.platforms['linux/amd64'];
     const pinnedAmd = img.platformDigests && img.platformDigests['linux/amd64'];
     if (amd && pinnedAmd && amd.digest !== pinnedAmd) mismatches.push(img.ref + '(amd64):台账=' + amd.digest + ' 表=' + pinnedAmd);
   }
@@ -344,7 +344,7 @@ if (!wasRunning && (dockerAfter.status === 'ready' || engineStartOk)) {
   jiLuRongQiHaoShi('stop', stopMs, 'Docker Desktop');
   console.log('     实测停止耗时 = ' + (stopMs / 1000).toFixed(1) + ' 秒（' + polls + ' 次轮询）');
   ok(down, '4-2 【核心】引擎真的停下去了（不是只发了命令）', (stopMs / 1000).toFixed(1) + 's');
-  const afterStop = await probeContainerRuntimes({ cacheMs: 0 });
+  const afterStop = await tanCeRongQiYunXing({ cacheMs: 0 });
   const d2 = afterStop.runtimes.find((x) => x.id === 'docker');
   ok(d2.status === 'installed-not-running' && d2.run === 'not-running',
     '4-3 探测又如实回到"已安装未运行"（状态与事实一致，两个方向都验过）', JSON.stringify({ status: d2.status, run: d2.run }));

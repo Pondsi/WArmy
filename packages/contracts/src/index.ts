@@ -104,7 +104,7 @@ export interface RecallCard {
 export interface RetrieveRequest {
   anchor: ZhengjuMaodian;
   /** 回退策略：exact → nearby → fuzzy */
-  fallback?: 'exact' | 'nearby' | 'fuzzy';
+  huiTui?: 'exact' | 'nearby' | 'fuzzy';
 }
 
 export interface JiansuoJieguo {
@@ -160,7 +160,7 @@ export interface GongjuJieguoJilu extends JsonlRecordBase {
   kind: 'tool_result';
   toolCallId: string;
   /** 压缩后的输出 */
-  output: string;
+  shuChu: string;
   isError: boolean;
 }
 
@@ -321,7 +321,7 @@ export interface ZhengjuMaodian {
 
 export type KanbanLing =
   | { type: 'create_task'; id: string; title: string; owner?: string }
-  | { type: 'update_progress'; id: string; progress: number; note?: string }
+  | { type: 'update_progress'; id: string; jinDu: number; note?: string }
   | { type: 'complete_task'; id: string; result?: string }
   | { type: 'add_note'; id: string; note: string }
   | { type: 'block'; id: string; reason: string };
@@ -374,7 +374,7 @@ export interface QunYuan {
 
 export interface QunPeizhi {
   groupId: string;
-  name: string;
+  ming: string;
   type: QunLei;
   /** 值班者实例 ID（仅本机实例可成为值班者） */
   dutyInstanceId: string | null;

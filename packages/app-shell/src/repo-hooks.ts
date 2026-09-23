@@ -80,14 +80,14 @@ export function jieXiYuXianJieShuRu(text: string): { refs: PreReceiveRef[]; malf
   const refs: PreReceiveRef[] = [];
   const malformed: string[] = [];
   for (const raw of String(text ?? '').split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line) continue;
-    const parts = line.split(/\s+/);
-    if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
-      malformed.push(line);
+    const Hang = raw.trim();
+    if (!Hang) continue;
+    const Pian = Hang.split(/\s+/);
+    if (Pian.length !== 3 || !Pian[0] || !Pian[1] || !Pian[2]) {
+      malformed.push(Hang);
       continue;
     }
-    refs.push({ oldSha: parts[0], newSha: parts[1], ref: parts[2] });
+    refs.push({ oldSha: Pian[0], newSha: Pian[1], ref: Pian[2] });
   }
   return { refs, malformed };
 }
@@ -131,9 +131,9 @@ export function shoujiTuisongTiaomu(
     const first = fields[i + 1];
     if (first === undefined) break;
     if (/^[RC]/.test(status)) {
-      const second = fields[i + 2];
-      if (second === undefined) break;
-      changes.push({ status, path: second });
+      const dier = fields[i + 2];
+      if (dier === undefined) break;
+      changes.push({ status, path: dier });
       i += 2;
       continue;
     }
@@ -147,8 +147,8 @@ export function shoujiTuisongTiaomu(
     const entry: TuiSongLuJingTiaoMu = { path: c.path };
     const ls = git(['ls-tree', '-z', ref.newSha, '--', `:(literal)${c.path}`]);
     if (ls.code === 0 && ls.stdout.trim()) {
-      const rec = ls.stdout.split('\0')[0] ?? '';
-      const m = /^(\d{6})\s+(\w+)\s+([0-9a-f]+)\t/.exec(rec);
+      const jiLu = ls.stdout.split('\0')[0] ?? '';
+      const m = /^(\d{6})\s+(\w+)\s+([0-9a-f]+)\t/.exec(jiLu);
       if (m?.[1]) entry.mode = m[1];
     } else {
       errors.push(`ls-tree 取不到 mode：${c.path}`);
@@ -276,15 +276,15 @@ export function formatPreReceiveOutput(r: YuXianJieShouJieGuo): string[] {
   for (const m of r.malformed) out.push(`  MALFORMED LINE: ${m}`);
   for (const ref of r.refs) {
     out.push(`  ref ${ref.ref}  action=${ref.action}  entries=${ref.entries}  ${ref.allowed ? 'ALLOW' : 'REJECT'}`);
-    for (const rej of ref.rejections) out.push(`    [ref/${rej.code}] ${rej.reason}`);
-    for (const rej of ref.pathRejected) out.push(`    [path/${rej.code}] ${rej.path}: ${rej.reason}`);
+    for (const juJue of ref.rejections) out.push(`    [ref/${juJue.code}] ${juJue.reason}`);
+    for (const juJue of ref.pathRejected) out.push(`    [path/${juJue.code}] ${juJue.path}: ${juJue.reason}`);
     for (const err of ref.enumerationErrors) out.push(`    [enumerate] ${err}`);
     for (const w of ref.warnings) out.push(`    [warn] ${w}`);
     for (const w of ref.pathWarnings) out.push(`    [warn] ${w}`);
   }
   if (r.union) {
     out.push(`  cross-ref batch check: entries=${r.union.entries} ${r.union.allowed ? 'ALLOW' : 'REJECT'}`);
-    for (const rej of r.union.rejected) out.push(`    [batch/${rej.code}] ${rej.path}: ${rej.reason}`);
+    for (const juJue of r.union.rejected) out.push(`    [batch/${juJue.code}] ${juJue.path}: ${juJue.reason}`);
   }
   out.push(r.ok ? '  RESULT: pass (0)' : '  RESULT: rejected (1) — 整批拒绝，请修正后重推');
   return out;
@@ -294,7 +294,7 @@ export function formatPreReceiveOutput(r: YuXianJieShouJieGuo): string[] {
 
 export interface AnzhuangGouziJieguo {
   ok: boolean;
-  hookPath?: string;
+  gouziLujing?: string;
   gitDir?: string;
   alreadyInstalled?: boolean;
   error?: string;
@@ -328,30 +328,30 @@ export function anzhuangYuXianJieShouGouZi(opts: {
   }
   const gitDir = gitDirRes.stdout.trim();
   const hooksDir = path.join(gitDir, 'hooks');
-  const hookPath = path.join(hooksDir, 'pre-receive');
+  const gouziLujing = path.join(hooksDir, 'pre-receive');
   try {
     fs.mkdirSync(hooksDir, { recursive: true });
   } catch (e) {
     return { ok: false, gitDir, error: (e as NodeJS.ErrnoException).code ?? 'mkdir-failed' };
   }
-  if (fs.existsSync(hookPath)) {
+  if (fs.existsSync(gouziLujing)) {
     let current = '';
     try {
-      current = fs.readFileSync(hookPath, 'utf8');
+      current = fs.readFileSync(gouziLujing, 'utf8');
     } catch {
       current = '';
     }
     if (current.includes(GOUZI_BIAOZHI)) {
-      return { ok: true, hookPath, gitDir, alreadyInstalled: true };
+      return { ok: true, gouziLujing, gitDir, alreadyInstalled: true };
     }
-    if (opts.force !== true) return { ok: false, hookPath, gitDir, error: 'hook-exists' };
+    if (opts.force !== true) return { ok: false, gouziLujing, gitDir, error: 'hook-exists' };
   }
   try {
-    fs.writeFileSync(hookPath, gouziBaozhuangJiaoben(opts.nodeBin ?? process.execPath, opts.hookScript), 'utf8');
-    fs.chmodSync(hookPath, 0o755);
-    return { ok: true, hookPath, gitDir, alreadyInstalled: false };
+    fs.writeFileSync(gouziLujing, gouziBaozhuangJiaoben(opts.nodeBin ?? process.execPath, opts.hookScript), 'utf8');
+    fs.chmodSync(gouziLujing, 0o755);
+    return { ok: true, gouziLujing, gitDir, alreadyInstalled: false };
   } catch (e) {
-    return { ok: false, hookPath, gitDir, error: (e as NodeJS.ErrnoException).code ?? 'write-failed' };
+    return { ok: false, gouziLujing, gitDir, error: (e as NodeJS.ErrnoException).code ?? 'write-failed' };
   }
 }
 

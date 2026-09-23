@@ -16,19 +16,19 @@ export interface JueseMoxingPeizhi {
 export function pickModelForUrgency(
   urgency: JinjiduJibie,
   roles: JueseMoxingPeizhi,
-  fallback = 'deepseek-chat'
+  huiTui = 'deepseek-chat'
 ): string {
   switch (urgency) {
     case 'P0':
-      return roles.duty || fallback;
+      return roles.duty || huiTui;
     case 'P1':
-      return roles.duty || fallback;
+      return roles.duty || huiTui;
     case 'P2':
-      return roles.executor || roles.duty || fallback;
+      return roles.executor || roles.duty || huiTui;
     case 'P3':
-      return roles.summary || fallback;
+      return roles.summary || huiTui;
     default:
-      return fallback;
+      return huiTui;
   }
 }
 

@@ -7,11 +7,11 @@
     "node": "v24.20.0",
     "platform": "win32",
     "arch": "x64",
-    "hostname": "DESKTOP-6N59TGI",
-    "repoRoot": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy"
+    "hostname": "DESKTOP-XXXXXXX",
+    "repoRoot": "C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy"
   },
   "subject": {
-    "module": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\packages\\app-shell\\src\\helper-tool.ts",
+    "module": "C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy\\packages\\app-shell\\src\\helper-tool.ts",
     "loadMode": "ts-type-strip",
     "loadError": null,
     "version": "0.1.0-p0-spike8"
@@ -71,7 +71,7 @@
       "credentialCache": {
         "queried": true,
         "available": false,
-        "raw": "Caller Pid: 10228\r\nRunning as:\n  User: DESKTOP-6N59TGI\\p\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n     2088     10228 Medium     DESKTOP-6N59TGI\\p         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)",
+        "raw": "Caller Pid: 10228\r\nRunning as:\n  User: DESKTOP-XXXXXXX\\p\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n     2088     10228 Medium     DESKTOP-XXXXXXX\\p         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)",
         "note": "gsudo status 报告的缓存状态**不代表实际能否提权**：本机实测 Available=False 时 gsudo -n 仍可提权成功。"
       },
       "unverified": [
@@ -81,7 +81,7 @@
   },
   "credentialSuite": {
     "available": false,
-    "rawStdout": "Caller Pid: 10228\r\nRunning as:\n  User: DESKTOP-6N59TGI\\p\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n    36072     10228 Medium     DESKTOP-6N59TGI\\p         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)\r\n",
+    "rawStdout": "Caller Pid: 10228\r\nRunning as:\n  User: DESKTOP-XXXXXXX\\p\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n    36072     10228 Medium     DESKTOP-XXXXXXX\\p         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)\r\n",
     "rawStderr": "",
     "exitCode": 0,
     "elapsedMs": 26,
@@ -611,7 +611,7 @@
       "writeMethod": "elevated",
       "backup": {
         "source": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
-        "path": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak",
+        "path": "C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak",
         "bytes": 2538,
         "sha256": "b27b9adf94b3ea539e34e40872e52a758797c31517f27d9e6f0415c7d1d2adc7",
         "createdAt": "2026-09-17T12:10:15.002Z"
@@ -694,7 +694,7 @@
       "writeMethod": "elevated",
       "backup": {
         "source": "C:\\WINDOWS\\System32\\drivers\\etc\\hosts",
-        "path": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-337Z.bak",
+        "path": "C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-337Z.bak",
         "bytes": 2616,
         "sha256": "411f8f91c2c20a697dcceb83ca628cf25c42e2bfd325285d1dbcd036a6f2c2ec",
         "createdAt": "2026-09-17T12:10:15.337Z"
@@ -779,7 +779,7 @@
     },
     "restoredToOriginal": true,
     "observedOutcome": "success-elevated-write-verified",
-    "originalBackupPath": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak"
+    "originalBackupPath": "C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy\\spikes\\spike-08-helper\\backups\\hosts.2026-09-17T12-10-15-002Z.bak"
   },
   "macosSuite": {
     "plan": {

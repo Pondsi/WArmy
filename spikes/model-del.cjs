@@ -1,6 +1,6 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
 
 // ── 1) 实例模型配置重写：全部可用时隐藏列表；手动模式下添加/删除常显 ──
 const oldCfg = j.match(/          <h3 style="margin:14px 0 8px;font-size:13px">\$\{t\('instances\.availableModels'\)\}<\/h3>[\s\S]*?<h3 style="margin:14px 0 8px;font-size:13px">\$\{t\('instances\.fallbackChain'\)\}<\/h3>/);
@@ -8,18 +8,18 @@ if (!oldCfg) {
   console.log('WARN: model cfg block not found');
 } else {
   j = j.replace(oldCfg[0], `          <h3 style="margin:14px 0 8px;font-size:13px">\${t('instances.availableModels')}</h3>
-          <label style="display:block;margin-bottom:8px">
-            <input type="checkbox" id="i-all-models" \${inst.allModels !== false ? 'checked' : ''}/> \${t('instances.allAvailable')}
-          </label>
+          <biaoQian style="display:block;margin-bottom:8px">
+            <shuRu type="checkbox" id="iAllMoXingJi" \${inst.allModels !== false ? 'checked' : ''}/> \${t('instances.allAvailable')}
+          </biaoQian>
 
-          <div id="i-manual" class="\${inst.allModels !== false ? 'hidden' : ''}">
+          <div id="iManual" class="\${inst.allModels !== false ? 'yinCang' : ''}">
             <div style="display:grid;grid-template-columns:140px 1fr;gap:8px;max-width:520px">
-              <select id="i-prov-pick" size="6">\${state.providers.map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</option>').join('')}</select>
-              <select id="i-model-pick" size="6"></select>
+              <select id="iProvXuanZe" size="6">\${state.providers.map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.biaoQian) + '</option>').join('')}</select>
+              <select id="iMoXingXuanZe" size="6"></select>
             </div>
             <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-              <button class="btn-mini" id="i-add-model">\${t('instances.addModel')}</button>
-              <button class="btn-mini" id="i-del-model">\${t('settings.removeModel')}</button>
+              <button class="anNiuXiao" id="iTianJiaMoXing">\${t('instances.addModel')}</button>
+              <button class="anNiuXiao" id="iDelMoXing">\${t('settings.removeModel')}</button>
             </div>
           </div>
 
@@ -36,9 +36,9 @@ if (!oldBind) {
       if (allChk) {
         allChk.onchange = () => {
           inst2.allModels = allChk.checked;
-          manual?.classList.toggle('hidden', allChk.checked);
+          manual?.classList.toggle('yinCang', allChk.checked);
           if (allChk.checked) {
-            const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.label + ' · ' + m));
+            const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m));
             inst2.availableModels = all;
             inst2.chain = [...all];
             renderChain();
@@ -61,14 +61,14 @@ if (!oldBind) {
         const p = state.providers.find((x) => x.id === provPick?.value);
         const m = modelPick?.value;
         if (!p || !m) return '';
-        return p.label + ' · ' + m;
+        return p.biaoQian + ' · ' + m;
       }
 
       function updateAddDelState() {
         const full = selectedFull();
         const inChain = full && (inst2.chain || []).includes(full);
-        const addBtn = $('i-add-model');
-        const delBtn = $('i-del-model');
+        const addBtn = $('iTianJiaMoXing');
+        const delBtn = $('iDelMoXing');
         if (addBtn) {
           addBtn.disabled = !full || inChain;
           addBtn.style.opacity = addBtn.disabled ? 0.45 : 1;
@@ -85,12 +85,12 @@ if (!oldBind) {
       }
       modelPick?.addEventListener('change', updateAddDelState);
 
-      $('i-add-model')?.addEventListener('click', () => {
+      $('iTianJiaMoXing')?.addEventListener('click', () => {
         const full = selectedFull();
         if (!full) return;
         inst2.availableModels = [...new Set([...(inst2.availableModels || []), full])];
         inst2.chain = [...new Set([...(inst2.chain || []), full])];
-        const sel = $('i-default-model');
+        const sel = $('iDefaultMoXing');
         if (sel && ![...sel.options].some((o) => o.value === full)) {
           const opt = document.createElement('option');
           opt.value = full;
@@ -101,7 +101,7 @@ if (!oldBind) {
         updateAddDelState();
       });
 
-      $('i-del-model')?.addEventListener('click', () => {
+      $('iDelMoXing')?.addEventListener('click', () => {
         const full = selectedFull();
         if (!full) return;
         inst2.chain = (inst2.chain || []).filter((x) => x !== full);
@@ -121,14 +121,14 @@ if (!oldBind) {
 
 // ── 2) 供应商删除按钮 ──
 const provHead = `        el.innerHTML =
-          '<div class="prov-head">' + escapeHtml(pr.label) + '</div>' +`;
+          '<div class="provHead">' + escapeHtml(pr.biaoQian) + '</div>' +`;
 if (j.includes(provHead)) {
   j = j.replace(
     provHead,
     `        el.innerHTML =
-          '<div class="prov-head" style="display:flex;justify-content:space-between;align-items:center">' +
-          '<span>' + escapeHtml(pr.label) + '</span>' +
-          '<button class="btn-mini" data-prov-del="' + escapeHtml(pr.id) + '" title="' + t('settings.pluginUninstall') + '">' + t('settings.pluginUninstall') + '</button>' +
+          '<div class="provHead" style="display:flex;justify-content:space-between;align-items:center">' +
+          '<span>' + escapeHtml(pr.biaoQian) + '</span>' +
+          '<button class="anNiuXiao" data-prov-del="' + escapeHtml(pr.id) + '" biaoTi="' + t('settings.pluginUninstall') + '">' + t('settings.pluginUninstall') + '</button>' +
           '</div>' +`
   );
   // 删除绑定
@@ -155,8 +155,8 @@ if (j.includes(provHead)) {
   );
   console.log('provider delete added');
 } else {
-  console.log('WARN: prov-head anchor not found');
+  console.log('WARN: provHead anchor not found');
 }
 
-fs.writeFileSync(base + 'app.js', j);
+fs.writeFileSync(base + 'yingYong.js', j);
 console.log('done');

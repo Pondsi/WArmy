@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.js';
+const p = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/yingYong.js';
 let j = fs.readFileSync(p, 'utf8');
 
 const anchor = `      document.querySelectorAll('[data-clear]').forEach((b) => {
@@ -23,23 +23,23 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
       async function renderSmtpList() {
         const r = await window.warmy.smtpList();
         const accounts = r?.accounts || [];
-        const n = $('smtp-n');
+        const n = $('smtpN');
         if (n) n.textContent = String(accounts.length);
-        const box = $('smtp-accounts');
+        const box = $('smtpAccounts');
         if (!box) return;
         if (!accounts.length) {
-          box.innerHTML = '<div class="muted">' + t('smtp.empty') + '</div>';
+          box.innerHTML = '<div class="jingYin">' + t('smtp.empty') + '</div>';
           return;
         }
         box.innerHTML = accounts
           .map(
             (a) =>
-              '<div class="prov-card" style="margin-bottom:8px" data-id="' + escapeHtml(a.id) + '">' +
-              '<div class="inst-row">' +
-              '<div><b>' + escapeHtml(a.label) + '</b> <span class="muted">' + escapeHtml(a.user) + '@' + escapeHtml(a.host) + ':' + a.port + '</span></div>' +
-              '<span class="badge ' + (a.verified ? '' : 'off') + '">' + (a.verified ? t('smtp.verified') : t('smtp.unverified')) + '</span>' +
-              '<button class="btn-mini" data-v="' + escapeHtml(a.id) + '">' + t('smtp.verify') + '</button>' +
-              '<button class="btn-mini" data-x="' + escapeHtml(a.id) + '">' + t('smtp.remove') + '</button>' +
+              '<div class="provKa" style="margin-bottom:8px" data-id="' + escapeHtml(a.id) + '">' +
+              '<div class="shiLiHang">' +
+              '<div><b>' + escapeHtml(a.biaoQian) + '</b> <span class="jingYin">' + escapeHtml(a.user) + '@' + escapeHtml(a.host) + ':' + a.port + '</span></div>' +
+              '<span class="huiZhang ' + (a.verified ? '' : 'off') + '">' + (a.verified ? t('smtp.verified') : t('smtp.unverified')) + '</span>' +
+              '<button class="anNiuXiao" data-v="' + escapeHtml(a.id) + '">' + t('smtp.verify') + '</button>' +
+              '<button class="anNiuXiao" data-x="' + escapeHtml(a.id) + '">' + t('smtp.remove') + '</button>' +
               '</div></div>'
           )
           .join('');
@@ -54,71 +54,71 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
             const id = b.dataset.v;
             const full = (state.smtpFull || []).find((x) => x.id === id);
             if (!full) {
-              $('smtp-msg').textContent = t('smtp.fail');
+              $('smtpXiaoXi').textContent = t('smtp.fail');
               return;
             }
-            $('smtp-msg').textContent = t('common.loading');
+            $('smtpXiaoXi').textContent = t('common.loading');
             const vr = await window.warmy.smtpVerify({ ...full, id });
-            $('smtp-msg').textContent = vr?.ok ? t('smtp.ok') : t('smtp.fail') + ': ' + (vr?.message || '');
+            $('smtpXiaoXi').textContent = vr?.ok ? t('smtp.ok') : t('smtp.fail') + ': ' + (vr?.message || '');
             renderSmtpList();
           };
         });
       }
       renderSmtpList();
 
-      $('btn-smtp-add').onclick = async () => {
+      $('anNiusmtpTianJia').onclick = async () => {
         const acc = {
-          label: $('smtp-label').value.trim(),
-          host: $('smtp-host').value.trim(),
-          port: parseInt($('smtp-port').value, 10) || 465,
-          secure: $('smtp-secure').checked,
-          user: $('smtp-user').value.trim(),
-          pass: $('smtp-pass').value,
+          biaoQian: $('smtpBiaoQian').value.trim(),
+          host: $('smtpHost').value.trim(),
+          port: parseInt($('smtpDuanKou').value, 10) || 465,
+          secure: $('smtpAnQuan').checked,
+          user: $('smtpUser').value.trim(),
+          pass: $('smtpPass').value,
         };
         if (!acc.host || !acc.user) {
-          $('smtp-msg').textContent = t('common.error');
+          $('smtpXiaoXi').textContent = t('common.error');
           return;
         }
         const r = await window.warmy.smtpAdd(acc);
         if (r?.ok) {
           state.smtpFull = (state.smtpFull || []).concat([acc]);
-          ['smtp-label', 'smtp-host', 'smtp-user', 'smtp-pass'].forEach((id) => {
+          ['smtpBiaoQian', 'smtpHost', 'smtpUser', 'smtpPass'].forEach((id) => {
             const el = $(id);
             if (el) el.value = '';
           });
-          $('smtp-msg').textContent = t('instances.saved');
+          $('smtpXiaoXi').textContent = t('instances.saved');
         } else {
-          $('smtp-msg').textContent = String(r?.error || t('common.error'));
+          $('smtpXiaoXi').textContent = String(r?.error || t('common.error'));
         }
         renderSmtpList();
       };
 
       // ── 模型供应商（含拉取模型/删除/默认模型） ──
-      const prov = $('prov-list');
+      const prov = $('provLieBiao');
       state.providers.forEach((pr) => {
         const el = document.createElement('div');
-        el.className = 'prov-card';
+        el.className = 'provKa';
         el.innerHTML =
-          '<div class="prov-head">' + escapeHtml(pr.label) + '</div>' +
-          '<div class="inst-row">' +
-          '<div class="field"><label>' + t('settings.providerName') + '</label><input data-k="label" value="' + escapeHtml(pr.label) + '"/></div>' +
-          '<div class="field"><label>' + t('settings.baseUrl') + '</label><input data-k="baseURL" value="' + escapeHtml(pr.baseURL) + '"/></div>' +
-          '<div class="field"><label>' + t('settings.apiKey') + '</label><input data-k="apiKey" type="password" value="' + escapeHtml(pr.apiKey || '') + '"/></div>' +
+          '<div class="provHead">' + escapeHtml(pr.biaoQian) + '</div>' +
+          '<div class="shiLiHang">' +
+          '<div class="field"><biaoQian>' + t('settings.providerName') + '</biaoQian><shuRu data-k="biaoQian" value="' + escapeHtml(pr.biaoQian) + '"/></div>' +
+          '<div class="field"><biaoQian>' + t('settings.baseUrl') + '</biaoQian><shuRu data-k="baseURL" value="' + escapeHtml(pr.baseURL) + '"/></div>' +
+          '<div class="field"><biaoQian>' + t('settings.apiKey') + '</biaoQian><shuRu data-k="apiKey" type="password" value="' + escapeHtml(pr.apiKey || '') + '"/></div>' +
           '</div>' +
-          '<div class="prov-actions"><button class="btn-mini" data-fetch>' + t('settings.fetchModels') + '</button></div>' +
-          '<div class="model-row">' +
+          '<div class="provDongZuoJi"><button class="anNiuXiao" data-fetch>' + t('settings.fetchModels') + '</button></div>' +
+          '<div class="moXingHang">' +
           (((pr.models || [])
             .map(
               (m) =>
-                '<span class="model-chip" data-m="' + escapeHtml(m) + '">' + escapeHtml(m) +
-                '<button class="x" data-del="' + escapeHtml(m) + '" title="' + t('settings.removeModel') + '">×</button></span>'
+                '<span class="moXingChip" data-m="' + escapeHtml(m) + '">' + escapeHtml(m) +
+                '<button class="x" data-del="' + escapeHtml(m) + '" biaoTi="' + t('settings.removeModel') + '">×</button></span>'
             )
-            .join('')) || '<span class="muted">' + t('settings.modelsEmpty') + '</span>') +
+            .join('')) || '<span class="jingYin">' + t('settings.modelsEmpty') + '</span>') +
           '</div>';
-        el.querySelectorAll('input[data-k]').forEach((inp) => {
+        el.querySelectorAll('shuRu[data-k]').forEach((inp) => {
           inp.onchange = () => {
             pr[inp.dataset.k] = inp.value;
-            if (inp.dataset.k === 'label') el.querySelector('.prov-head').textContent = inp.value;
+            if (inp.dataset.k === 'biaoQian') el.querySelector('.provHead').textContent = inp.value;
             window.warmy.setProvider({
               presetId: pr.id,
               apiKey: pr.apiKey,
@@ -151,7 +151,7 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
             renderPage();
           };
         });
-        el.querySelectorAll('.model-chip').forEach((chip) => {
+        el.querySelectorAll('.moXingChip').forEach((chip) => {
           chip.onclick = async () => {
             pr.defaultModel = chip.dataset.m;
             await window.warmy.setProvider({
@@ -166,10 +166,10 @@ const block = `      document.querySelectorAll('[data-clear]').forEach((b) => {
         });
         prov.appendChild(el);
       });
-      $('btn-add-prov').onclick = () => {
+      $('anNiuTianJiaProv').onclick = () => {
         state.providers.push({
           id: 'custom-' + Date.now(),
-          label: 'Custom',
+          biaoQian: 'Custom',
           protocol: 'openai-compatible',
           baseURL: '',
           defaultModel: '',

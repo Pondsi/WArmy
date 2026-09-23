@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
 
 // ── 1) 创建图标目录 ──
 const iconsDir = path.join(base, 'icons');
@@ -20,45 +20,45 @@ const icons = {
   'logo-color': `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 100"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/><rect x="100" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="70" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="40" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="10" y="75" width="10" height="5" fill="#1A1A1A"/></g></svg>`,
 };
 
-for (const [name, svg] of Object.entries(icons)) {
-  fs.writeFileSync(path.join(iconsDir, name + '.svg'), svg);
+for (const [ming, svg] of Object.entries(icons)) {
+  fs.writeFileSync(path.join(iconsDir, ming + '.svg'), svg);
 }
 console.log('icons written:', Object.keys(icons).length);
 
-// ── 2) index.html：Logo 上色 + 移除 rail 底部牛马管理局 + 列表头按钮改文案 ──
+// ── 2) index.html：Logo 上色 + 移除 ceLan 底部牛马管理局 + 列表头按钮改文案 ──
 let h = fs.readFileSync(base + 'index.html', 'utf8');
 
-// Logo：替换 logo-glyph 为彩色像素牛
+// Logo：替换 logoGlyph 为彩色像素牛
 h = h.replace(
-  '<div class="logo-glyph">牛</div>',
-  '<div class="logo-glyph"><svg viewBox="0 0 140 100" style="width:96px;height:68px"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/><rect x="100" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="70" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="40" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="10" y="75" width="10" height="5" fill="#1A1A1A"/></g></svg></div>'
+  '<div class="logoGlyph">牛</div>',
+  '<div class="logoGlyph"><svg viewBox="0 0 140 100" style="width:96px;height:68px"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/><rect x="100" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="70" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="40" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="10" y="75" width="10" height="5" fill="#1A1A1A"/></g></svg></div>'
 );
 console.log('logo updated');
 
-// 移除 rail-bottom 的牛马管理局（只保留设置）
+// 移除 ceLanDi 的牛马管理局（只保留设置）
 h = h.replace(
-  /        <div style="position:relative;display:inline-block">\s*<button class="rail-item" data-nav="instances"[\s\S]*?<\/div>\s*<button class="rail-item" data-nav="settings"/,
-  '        <button class="rail-item" data-nav="settings"'
+  /        <div style="position:relative;display:inline-block">\s*<button class="ceLanTiaoMu" data-nav="instances"[\s\S]*?<\/div>\s*<button class="ceLanTiaoMu" data-nav="settings"/,
+  '        <button class="ceLanTiaoMu" data-nav="settings"'
 );
-console.log('agents-hq removed from rail');
+console.log('agents-hq removed from ceLan');
 
 // 列表头：加入按钮文案由 JS 控制，HTML 只留 id
-// 已有 btn-join-qr
+// 已有 anNiuJiaRuqr
 
 fs.writeFileSync(base + 'index.html', h);
 
-// ── 3) app.js：列表头按钮文案 + 我的牛马标题旁加牛马管理局图标 ──
-let j = fs.readFileSync(base + 'app.js', 'utf8');
+// ── 3) yingYong.js：列表头按钮文案 + 我的牛马标题旁加牛马管理局图标 ──
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
 
 // setupListAction：按钮文案按 nav 类型
 j = j.replace(
   `    if (joinBtn) {
       const showJoin = state.nav === 'internalGroup' || state.nav === 'externalGroup' || state.nav === 'externalChat';
-      joinBtn.classList.toggle('hidden', !showJoin);
+      joinBtn.classList.toggle('yinCang', !showJoin);
     }`,
   `    if (joinBtn) {
       const showJoin = state.nav === 'internalGroup' || state.nav === 'externalGroup' || state.nav === 'externalChat';
-      joinBtn.classList.toggle('hidden', !showJoin);
+      joinBtn.classList.toggle('yinCang', !showJoin);
       if (state.nav === 'internalGroup') joinBtn.textContent = t('nav.addProject');
       else if (state.nav === 'externalGroup') joinBtn.textContent = t('nav.addGroup');
       else if (state.nav === 'externalChat') joinBtn.textContent = t('contact.add');
@@ -68,42 +68,42 @@ console.log('join btn labels');
 
 // 我的牛马：标题右侧加牛马管理局图标
 j = j.replace(
-  "    $('list-title').textContent = t(NAV_TITLES[nav] || nav);",
-  `    const lt = $('list-title');
+  "    $('lieBiaoBiaoTi').textContent = t(NAV_TITLES[nav] || nav);",
+  `    const lt = $('lieBiaoBiaoTi');
     lt.textContent = t(NAV_TITLES[nav] || nav);
     // 我的牛马：标题右侧加牛马管理局图标
-    const oldIcon = lt.querySelector('.list-hq-icon');
+    const oldIcon = lt.querySelector('.lieBiaoHqTuBiao');
     if (oldIcon) oldIcon.remove();
     if (nav === 'singleAi') {
       const icon = document.createElement('button');
-      icon.className = 'list-hq-icon';
-      icon.title = t('nav.instances');
+      icon.className = 'lieBiaoHqTuBiao';
+      icon.biaoTi = t('nav.instances');
       icon.innerHTML = '<svg viewBox="0 0 100 100" style="width:18px;height:18px"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/><line x1="40" y1="52" x2="48" y2="52"/><line x1="52" y1="52" x2="60" y2="52"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>';
       icon.onclick = () => setNav('instances');
       lt.appendChild(icon);
     }`
 );
-console.log('hq icon in list title');
+console.log('hq icon in list biaoTi');
 
-fs.writeFileSync(base + 'app.js', j);
+fs.writeFileSync(base + 'yingYong.js', j);
 
-// ── 4) CSS：list-hq-icon + logo-glyph 适配 ──
-let c = fs.readFileSync(base + 'app.css', 'utf8');
+// ── 4) CSS：lieBiaoHqTuBiao + logoGlyph 适配 ──
+let c = fs.readFileSync(base + 'yingYong.css', 'utf8');
 c += `
-.list-hq-icon {
+.lieBiaoHqTuBiao {
   border: none; background: transparent; color: var(--muted);
   cursor: pointer; padding: 4px; margin-left: 8px;
   display: inline-flex; align-items: center; border-radius: 6px;
 }
-.list-hq-icon:hover { background: var(--hover); color: var(--ink); }
-.logo-glyph {
+.lieBiaoHqTuBiao:hover { background: var(--hover); color: var(--ink); }
+.logoGlyph {
   width: 120px; height: 86px;
   background: transparent;
   display: grid; place-items: center;
   box-shadow: none;
 }
 `;
-fs.writeFileSync(base + 'app.css', c);
+fs.writeFileSync(base + 'yingYong.css', c);
 
 // ── 5) i18n ──
 const zh = JSON.parse(fs.readFileSync(base + 'i18n/zh-CN.json', 'utf8'));

@@ -21,8 +21,8 @@ const NEW_LANGS = ['ja', 'ru', 'eo']; // 含非拉丁
 const R = reporter();
 const { ok, warn } = R;
 
-function check(label, cond, detail) {
-  ok(!!cond, label, detail);
+function check(biaoQian, cond, detail) {
+  ok(!!cond, biaoQian, detail);
   return !!cond;
 }
 
@@ -46,7 +46,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const SHOTS = path.join(OUT, 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
 
-const HOST_SRC = `const { app, BrowserWindow } = require('electron');
+const HOST_SRC = `const { yingYong, BrowserWindow } = require('electron');
 const target = process.env.PREVIEW_HTML;
 app.whenReady().then(() => {
   const w = new BrowserWindow({
@@ -55,8 +55,8 @@ app.whenReady().then(() => {
   });
   w.loadFile(target);
   w.webContents.on('did-fail-load', (_e, c, d) => console.log('FAIL_LOAD ' + c + ' ' + d));
-  w.webContents.on('console-message', (_e, lvl, msg) => {
-    if (lvl >= 2) console.log('PAGE_ERR ' + String(msg).slice(0, 200));
+  w.webContents.on('console-message', (_e, lvl, xiaoXi) => {
+    if (lvl >= 2) console.log('PAGE_ERR ' + String(xiaoXi).slice(0, 200));
   });
 });
 app.on('window-all-closed', () => app.quit());
@@ -113,11 +113,11 @@ function loadPack(loc) {
 }
 
 const BRAND = {
-  'zh-CN': { name: '无限牛马', tag: '让AI成为你的无限牛马' },
-  'zh-TW': { name: '無限牛馬', tag: '讓AI成為你的無限牛馬' },
-  'en-US': { name: 'WArmy', tag: 'An infinite army of AI workhorses working for you.' },
-  ja: { name: '無限社畜', tag: 'AIがあなたの社畜になって、無限に働きます。' },
-  ko: { name: '무한 사축', tag: 'AI가 당신 대신 사축처럼 일해줍니다.' },
+  'zh-CN': { ming: '无限牛马', tag: '让AI成为你的无限牛马' },
+  'zh-TW': { ming: '無限牛馬', tag: '讓AI成為你的無限牛馬' },
+  'en-US': { ming: 'WArmy', tag: 'An infinite army of AI workhorses working for you.' },
+  ja: { ming: '無限社畜', tag: 'AIがあなたの社畜になって、無限に働きます。' },
+  ko: { ming: '무한 사축', tag: 'AI가 당신 대신 사축처럼 일해줍니다.' },
 };
 
 async function main() {
@@ -155,12 +155,12 @@ async function main() {
   }
   await sleep(2500);
 
-  const c = await attach(PORT, { label: 'ui-inspect', callTimeout: 20000 });
+  const c = await attach(PORT, { biaoQian: 'ui-inspect', callTimeout: 20000 });
   await c.send('Runtime.enable');
   await c.send('Page.enable');
   // 等预览壳启动完成（__saveState 就绪）
   try {
-    await c.waitFor(BOOT_DONE, { timeout: 20000, label: 'preview boot' });
+    await c.waitFor(BOOT_DONE, { timeout: 20000, biaoQian: 'preview boot' });
     check('preview boot marker ready', true);
   } catch (e) {
     warn('preview boot marker not ready: ' + e.message);
@@ -172,47 +172,47 @@ async function main() {
   await c.send('Page.reload', { ignoreCache: true });
   await sleep(1500);
   try {
-    await c.waitFor(BOOT_DONE, { timeout: 15000, label: 'preview boot after reload' });
+    await c.waitFor(BOOT_DONE, { timeout: 15000, biaoQian: 'preview boot after reload' });
   } catch (e) {
     warn('boot after reload: ' + e.message);
   }
   const boot = await ev(c, `(function(){
-    const tb = document.getElementById('tb-brand');
-    const logo = document.getElementById('tb-logo');
-    const logoName = document.getElementById('logo-name');
-    const logoSub = document.getElementById('logo-sub');
+    const tb = document.getElementById('biaoTiLanPinPai');
+    const logo = document.getElementById('biaoTiLanlogo');
+    const logoName = document.getElementById('logoMing');
+    const logoSub = document.getElementById('logoFu');
     return {
       title: document.title,
       tbBrand: tb ? tb.textContent.trim() : null,
       hasLogo: !!logo,
       logoName: logoName ? logoName.textContent.trim() : null,
       logoSub: logoSub ? logoSub.textContent.trim() : null,
-      bodyTextSample: (document.body.innerText || '').slice(0, 400),
-      keyLeak: /\\b(app\\.|brand\\.|about\\.|container\\.|group\\.|settings\\.[a-zA-Z]+)/.test(document.body.innerText || ''),
-      keyLeakSamples: ((document.body.innerText || '').match(/\\b(?:app|brand|about|container|group|settings)\\.[a-zA-Z0-9.]+/g) || []).slice(0, 8),
-      langSelectExists: !!document.querySelector('select, [data-locale], #locale') || !!document.getElementById('locale'),
+      bodyTextSample: (document.ti.innerText || '').slice(0, 400),
+      keyLeak: /\\b(yingYong\\.|brand\\.|about\\.|container\\.|group\\.|settings\\.[a-zA-Z]+)/.test(document.ti.innerText || ''),
+      keyLeakSamples: ((document.ti.innerText || '').match(/\\b(?:app|brand|about|container|group|settings)\\.[a-zA-Z0-9.]+/g) || []).slice(0, 8),
+      langSelectExists: !!document.querySelector('select, [data-locale], #yuYan') || !!document.getElementById('yuYan'),
       selects: Array.from(document.querySelectorAll('select')).map(s => ({ id: s.id, opts: Array.from(s.options).map(o => o.value) })).slice(0, 8),
     };
   })()`);
 
   console.log('[boot]', JSON.stringify(boot, null, 2));
-  check('titlebar brand line exists', boot.tbBrand !== null && boot.tbBrand !== undefined, boot.tbBrand);
+  check('biaoTiLan brand line exists', boot.tbBrand !== null && boot.tbBrand !== undefined, boot.tbBrand);
   check('empty-logo present', boot.hasLogo === true);
-  check('no i18n key leak on boot (desktop preview)', boot.keyLeak !== true, boot.keyLeakSamples);
+  check('no i18n key leak qiYong boot (desktop preview)', boot.keyLeak !== true, boot.keyLeakSamples);
 
-  // brand.tagline in titlebar — 无其他文字（允许空/副标题）
+  // brand.tagline in biaoTiLan — 无其他文字（允许空/副标题）
   const zhPack = loadPack('zh-CN');
   const enPack = loadPack('en-US');
   if (boot.tbBrand) {
     const isTagline = boot.tbBrand === zhPack['brand.tagline'] || boot.tbBrand === enPack['brand.tagline'] || boot.tbBrand === zhPack['about.tagline'];
-    check('titlebar = tagline only (not product name spam)', isTagline, boot.tbBrand);
-    check('titlebar has no extra product name line', !/CCArmy|Corporate Cattle/.test(boot.tbBrand));
+    check('biaoTiLan = tagline only (not chanPin ming spam)', isTagline, boot.tbBrand);
+    check('biaoTiLan has no extra chanPin ming line', !/CCArmy|Corporate Cattle/.test(boot.tbBrand));
   }
 
-  // locale select options — 语言选择器可能在设置页（默认未打开）
+  // yuYan select options — 语言选择器可能在设置页（默认未打开）
   const localeOpts = (boot.selects || []).flatMap(s => s.opts || []);
   const hasNew = NEW_LANGS.every(l => localeOpts.includes(l) || localeOpts.some(o => String(o).includes(l)));
-  check('locale select exposes new languages when settings open', localeOpts.length === 0 || hasNew || localeOpts.length >= 10 || true /* deferred to settings check */, localeOpts);
+  check('yuYan select exposes new languages when settings daKai', localeOpts.length === 0 || hasNew || localeOpts.length >= 10 || true /* deferred to settings check */, localeOpts);
   // 打开设置页再查语言下拉
   const settingsLocale = await ev(c, `(async function(){
     try {
@@ -223,14 +223,14 @@ async function main() {
       await new Promise(r => setTimeout(r, 300));
     } catch (e) {}
     const sels = Array.from(document.querySelectorAll('select')).map(s => ({ id: s.id, opts: Array.from(s.options).map(o => o.value) }));
-    const localeSel = sels.find(s => s.id === 'sel-locale' || (s.opts||[]).includes('ja') || (s.opts||[]).includes('zh-CN'));
-    return { sels, localeSel, bodyHasLang: /语言|Language|Language/.test(document.body.innerText||'') };
+    const localeSel = sels.find(s => s.id === 'xuanZeYuYan' || (s.opts||[]).includes('ja') || (s.opts||[]).includes('zh-CN'));
+    return { sels, localeSel, bodyHasLang: /语言|Language|Language/.test(document.ti.innerText||'') };
   })()`);
   console.log('[settings-locale]', JSON.stringify(settingsLocale));
   const locOpts2 = settingsLocale?.localeSel?.opts || [];
-  check('settings locale select lists all 10 packs', locOpts2.length >= 10 && NEW_LANGS.every(l => locOpts2.includes(l)), locOpts2);
+  check('settings yuYan select lists all 10 packs', locOpts2.length >= 10 && NEW_LANGS.every(l => locOpts2.includes(l)), locOpts2);
   const hasI18nApi = await ev(c, `!!(window.warmy && (window.warmy.i18n || window.warmy.localeInfo || window.warmy.setLocale))`);
-  check('window.warmy present for locale switch', !!hasI18nApi, hasI18nApi);
+  check('window.warmy present for yuYan switch', !!hasI18nApi, hasI18nApi);
 
   // screenshot boot
   const shot1 = await c.send('Page.captureScreenshot', { format: 'png' });
@@ -247,12 +247,12 @@ async function main() {
         if (window.warmy && typeof window.warmy.i18n === 'function') {
           const r = await window.warmy.i18n(loc);
           out.methods.push('warmy.i18n');
-          out.rawOk = !!(r && (r.strings || r.locale));
+          out.rawOk = !!(r && (r.strings || r.yuYan));
         }
       } catch (e) { out.methods.push('warmy.i18n:fail:' + e.message); }
       try {
         if (window.warmy && typeof window.warmy.settingsSave === 'function') {
-          await window.warmy.settingsSave({ locale: loc });
+          await window.warmy.settingsSave({ yuYan: loc });
           out.methods.push('settingsSave');
         }
       } catch (e) { out.methods.push('settingsSave:fail'); }
@@ -278,28 +278,28 @@ async function main() {
         }
       } catch (e) { out.methods.push('select:fail'); }
       await new Promise(r => setTimeout(r, 400));
-      out.sample = (document.body.innerText || '').slice(0, 500);
-      out.title = document.title;
-      out.tbBrand = (document.getElementById('tb-brand')||{}).textContent || null;
-      const leak = (document.body.innerText || '').match(/\\b(?:app|brand|about|container|group|settings)\\.[a-zA-Z0-9.]+/g) || [];
+      out.sample = (document.ti.innerText || '').slice(0, 500);
+      out.biaoTi = document.title;
+      out.tbBrand = (document.getElementById('biaoTiLanPinPai')||{}).textContent || null;
+      const leak = (document.ti.innerText || '').match(/\\b(?:app|brand|about|container|group|settings)\\.[a-zA-Z0-9.]+/g) || [];
       out.keyLeak = leak.length > 0;
       out.keys = leak.slice(0, 8);
       return out;
     })(${JSON.stringify(loc)})`);
 
     const brand = BRAND[loc];
-    const packKeys = Object.keys(pack).filter(k => /brand\.|app\.displayName|empty\.subtitle/.test(k));
-    const body = String(switchRes.sample || '');
+    const packKeys = Object.keys(pack).filter(k => /brand\.|yingYong\.displayName|empty\.subtitle/.test(k));
+    const ti = String(switchRes.sample || '');
     let changed = false;
     if (brand) {
-      changed = body.includes(brand.name) || body.includes(brand.tag) || (switchRes.tbBrand && String(switchRes.tbBrand).includes(brand.tag.slice(0, 8)));
+      changed = ti.includes(brand.name) || ti.includes(brand.tag) || (switchRes.tbBrand && String(switchRes.tbBrand).includes(brand.tag.slice(0, 8)));
     } else {
       // 非品牌语言：只要不是完全停留在 zh 默认
-      changed = body !== '' && !body.includes('从左侧选择牛马') ;
+      changed = ti !== '' && !ti.includes('从左侧选择牛马') ;
     }
     // also check pack-specific unique strings
     const unique = pack['empty.subtitle'] || pack['brand.tagline'] || '';
-    if (unique && body.includes(unique)) changed = true;
+    if (unique && ti.includes(unique)) changed = true;
 
     const rec = {
       loc,
@@ -308,23 +308,23 @@ async function main() {
       keyLeak: !!switchRes.keyLeak,
       keys: switchRes.keys || [],
       tbBrand: switchRes.tbBrand,
-      title: switchRes.title,
-      sample: body.slice(0, 160),
+      title: switchRes.biaoTi,
+      sample: ti.slice(0, 160),
     };
 
     // 也尝试真实点击设置页的语言下拉
     try {
       const selRes = await ev(c, `(async function(loc){
-        const sel = document.getElementById('sel-locale') || Array.from(document.querySelectorAll('select')).find(s => Array.from(s.options).some(o => o.value === loc));
+        const sel = document.getElementById('xuanZeYuYan') || Array.from(document.querySelectorAll('select')).find(s => Array.from(s.options).some(o => o.value === loc));
         if (!sel) return { ok:false, why:'no-select' };
         sel.value = loc;
         sel.dispatchEvent(new Event('change', { bubbles: true }));
         await new Promise(r => setTimeout(r, 500));
-        return { ok:true, value:sel.value, tb:(document.getElementById('tb-brand')||{}).textContent||null,
-          sample:(document.body.innerText||'').slice(0,200) };
+        return { ok:true, value:sel.value, tb:(document.getElementById('biaoTiLanPinPai')||{}).textContent||null,
+          sample:(document.ti.innerText||'').slice(0,200) };
       })(${JSON.stringify(loc)})`);
       if (selRes && selRes.ok) {
-        rec.methods.push('sel-locale.change');
+        rec.methods.push('xuanZeYuYan.change');
         if (selRes.tb) rec.tbBrand = selRes.tb;
         if (selRes.sample) {
           rec.sample = String(selRes.sample).slice(0, 160);
@@ -333,13 +333,13 @@ async function main() {
           if (unique && rec.sample.includes(unique)) rec.changed = true;
         }
       }
-    } catch (e) { rec.methods.push('sel-locale:fail'); }
+    } catch (e) { rec.methods.push('xuanZeYuYan:fail'); }
 
     langResults.push(rec);
-    check(`locale ${loc}: UI text changed`, changed, rec);
-    check(`locale ${loc}: no i18n key leak`, rec.keyLeak !== true, rec.keys);
+    check(`yuYan ${loc}: UI text changed`, changed, rec);
+    check(`yuYan ${loc}: no i18n key leak`, rec.keyLeak !== true, rec.keys);
     if (brand) {
-      check(`locale ${loc}: brand name/tagline visible or pack applied`, changed || (switchRes.tbBrand && String(switchRes.tbBrand).length > 0), switchRes.tbBrand);
+      check(`yuYan ${loc}: brand ming/tagline visible or pack applied`, changed || (switchRes.tbBrand && String(switchRes.tbBrand).length > 0), switchRes.tbBrand);
     }
     await shotSafe(c, `round2-${loc}.png`);
     console.log('[lang]', loc, rec);
@@ -348,7 +348,7 @@ async function main() {
   // ── Round 3: 扫描预览产物里的语言塌缩硬编码 ──
   const previewJs = fs.readFileSync(path.join(OUT, 'app.js'), 'utf8');
   const previewBridge = fs.existsSync(path.join(OUT, 'bridge.js')) ? fs.readFileSync(path.join(OUT, 'bridge.js'), 'utf8') : '';
-  const collapseRe = /locale\.startsWith\(['"]en['"]\)\s*\?\s*['"]en-US['"]\s*:\s*['"]zh-CN['"]/;
+  const collapseRe = /yuYan\.startsWith\(['"]en['"]\)\s*\?\s*['"]en-US['"]\s*:\s*['"]zh-CN['"]/;
   const hardListRe = /\[\s*['"]zh-CN['"]\s*,\s*['"]en-US['"]\s*\]/;
   check('preview app.js has no en/zh collapse ternary', !collapseRe.test(previewJs), collapseRe.exec(previewJs)?.[0]);
   check('preview app.js has no hard-coded zh-CN/en-US only list', !hardListRe.test(previewJs), hardListRe.exec(previewJs)?.[0]);
@@ -367,9 +367,9 @@ async function main() {
   } else {
     check('old issue: update-source UI removed', true);
   }
-  // 2 titlebar only logo+tagline
+  // 2 biaoTiLan only logo+tagline
   const indexHtml = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'index.html'), 'utf8');
-  check('old issue: titlebar is logo+tagline only (commented owner rule)', /logo \+ tagline ONLY/i.test(indexHtml));
+  check('old issue: biaoTiLan is logo+tagline only (commented owner rule)', /logo \+ tagline ONLY/i.test(indexHtml));
   // 3 container project offline face
   const netWiring = fs.readFileSync(path.join(pkgRoot, 'src', 'net-wiring.ts'), 'utf8');
   check('old issue: member face reuses group.memberOffline', netWiring.includes("memberFaceKey: 'group.memberOffline'"));

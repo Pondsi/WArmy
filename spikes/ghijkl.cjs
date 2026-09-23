@@ -1,8 +1,8 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
-let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
+let j = fs.readFileSync(base + 'renderer/yingYong.js', 'utf8');
 let h = fs.readFileSync(base + 'renderer/index.html', 'utf8');
 
 // ── G. 检查点真实文件时间戳 ──
@@ -33,12 +33,12 @@ if (!ck.includes('mtimeMs')) {
 }
 
 // ── H/I/J/L: 主进程 IPC ──
-if (!m.includes('warmy:open-chat-window')) {
+if (!m.includes('warmy:daKaiLiaoTianChuangKou')) {
   m += `
 
 // ── H. 多窗口：在新窗口打开会话 ──
 const chatWindows = new Map<string, BrowserWindow>();
-ipcMain.handle('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string }) => {
+ipcMain.handle('warmy:daKaiLiaoTianChuangKou', (_e, payload: { id: string; title: string; kind?: string }) => {
   if (chatWindows.has(payload.id)) {
     chatWindows.get(payload.id)?.focus();
     return { ok: true };
@@ -46,7 +46,7 @@ ipcMain.handle('warmy:open-chat-window', (_e, payload: { id: string; title: stri
   const w = new BrowserWindow({
     width: 900,
     height: 700,
-    title: payload.title || 'WArmy',
+    title: payload.biaoTi || 'WArmy',
     frame: process.platform === 'darwin',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -56,7 +56,7 @@ ipcMain.handle('warmy:open-chat-window', (_e, payload: { id: string; title: stri
     },
   });
   void w.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
-    query: { chatId: payload.id, chatKind: payload.kind || 'single', chatTitle: payload.title || '' },
+    query: { chatId: payload.id, chatKind: payload.kind || 'single', chatTitle: payload.biaoTi || '' },
   });
   w.on('closed', () => chatWindows.delete(payload.id));
   chatWindows.set(payload.id, w);
@@ -64,7 +64,7 @@ ipcMain.handle('warmy:open-chat-window', (_e, payload: { id: string; title: stri
 });
 
 // ── I. 全局热键 ──
-ipcMain.handle('warmy:register-hotkey', (_e, accel: string) => {
+ipcMain.handle('warmy:zhuCeKuaiJieJian', (_e, accel: string) => {
   try {
     const { globalShortcut } = require('electron');
     globalShortcut.unregister(accel);
@@ -82,7 +82,7 @@ ipcMain.handle('warmy:register-hotkey', (_e, accel: string) => {
 
 // ── J. 托盘 ──
 let tray: import('electron').Tray | null = null;
-ipcMain.handle('warmy:tray-init', () => {
+ipcMain.handle('warmy:tuoPanChuShi', () => {
   try {
     const { Tray, Menu, nativeImage } = require('electron');
     if (tray) return { ok: true };
@@ -92,9 +92,9 @@ ipcMain.handle('warmy:tray-init', () => {
     tray.setToolTip('WArmy');
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        { label: '显示主窗口', click: () => { win?.show(); win?.focus(); } },
+        { biaoQian: '显示主窗口', click: () => { win?.show(); win?.focus(); } },
         { type: 'separator' },
-        { label: '退出', click: () => { app.quit(); } },
+        { biaoQian: '退出', click: () => { app.quit(); } },
       ])
     );
     tray.on('click', () => {
@@ -108,15 +108,15 @@ ipcMain.handle('warmy:tray-init', () => {
 });
 
 // ── K. 会话导出 Markdown ──
-ipcMain.handle('warmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
+ipcMain.handle('warmy:daoChuHuiHua', (_e, payload: { title: string; xiaoXiJi: Array<{ role: string; text: string; ts?: number }> }) => {
   try {
     const dir = path.join(app.getPath('userData'), 'exports');
     fs.mkdirSync(dir, { recursive: true });
-    const lines = [\n      '# ' + payload.title,\n      '',\n      '> 导出自 WArmy · ' + new Date().toLocaleString(),\n      '',\n    ];
-    for (const msg of payload.messages) {
-      const who = msg.role === 'me' ? '我' : payload.title;
-      const time = msg.ts ? new Date(msg.ts).toLocaleString() : '';
-      lines.push(\`**\${who}** \${time}\`);\n      lines.push('');\n      lines.push(msg.text || '');\n      lines.push('');\n    }\n    const file = path.join(dir, \`\${payload.title.replace(/[\\\\/:*?"<>|]/g, '_')}-\${Date.now()}.md\`);\n    fs.writeFileSync(file, lines.join('\\n'), 'utf8');\n    return { ok: true, path: file };\n  } catch (e) {\n    return { ok: false, error: String(e) };\n  }\n});\n\n// ── L. 自动更新（electron-updater 占位） ──\nipcMain.handle('warmy:auto-update-check', async () => {\n  // 无签名/发布源时只返回状态，不实际下载\n  return { ok: true, status: 'idle', message: 'no release channel configured' };\n});\nipcMain.handle('warmy:auto-update-download', async () => {\n  return { ok: false, status: 'skipped', message: 'requires signed release + update server' };\n});\n`;
+    const lines = [\n      '# ' + payload.biaoTi,\n      '',\n      '> 导出自 WArmy · ' + new Date().toLocaleString(),\n      '',\n    ];
+    for (const xiaoXi of payload.xiaoXiJi) {
+      const shui = xiaoXi.role === 'wo' ? '我' : payload.biaoTi;
+      const time = xiaoXi.ts ? new Date(xiaoXi.ts).toLocaleString() : '';
+      lines.push(\`**\${shui}** \${time}\`);\n      lines.push('');\n      lines.push(xiaoXi.text || '');\n      lines.push('');\n    }\n    const file = path.join(dir, \`\${payload.biaoTi.replace(/[\\\\/:*?"<>|]/g, '_')}-\${Date.now()}.md\`);\n    fs.writeFileSync(file, lines.join('\\n'), 'utf8');\n    return { ok: true, path: file };\n  } catch (e) {\n    return { ok: false, error: String(e) };\n  }\n});\n\n// ── L. 自动更新（electron-updater 占位） ──\nipcMain.handle('warmy:ziDongGengXinJianCha', async () => {\n  // 无签名/发布源时只返回状态，不实际下载\n  return { ok: true, status: 'idle', message: 'no release channel configured' };\n});\nipcMain.handle('warmy:ziDongGengXinXiaZai', async () => {\n  return { ok: false, status: 'skipped', message: 'requires signed release + update server' };\n});\n`;
   console.log('H/I/J/K/L ipc added');
 }
 
@@ -125,14 +125,14 @@ fs.writeFileSync(base + 'electron-main.ts', m);
 // preload
 if (!p.includes('openChatWindow')) {
   p = p.replace(
-    "  asrTranscribe: (p) => ipcRenderer.invoke('warmy:asr-transcribe', p),",
-    `  asrTranscribe: (p) => ipcRenderer.invoke('warmy:asr-transcribe', p),
-  openChatWindow: (payload) => ipcRenderer.invoke('warmy:open-chat-window', payload),
-  registerHotkey: (accel) => ipcRenderer.invoke('warmy:register-hotkey', accel),
-  trayInit: () => ipcRenderer.invoke('warmy:tray-init'),
-  exportSession: (payload) => ipcRenderer.invoke('warmy:export-session', payload),
-  autoUpdateCheck: () => ipcRenderer.invoke('warmy:auto-update-check'),
-  autoUpdateDownload: () => ipcRenderer.invoke('warmy:auto-update-download'),
+    "  asrTranscribe: (p) => ipcRenderer.invoke('warmy:asrZhuanXie', p),",
+    `  asrTranscribe: (p) => ipcRenderer.invoke('warmy:asrZhuanXie', p),
+  openChatWindow: (payload) => ipcRenderer.invoke('warmy:daKaiLiaoTianChuangKou', payload),
+  registerHotkey: (accel) => ipcRenderer.invoke('warmy:zhuCeKuaiJieJian', accel),
+  trayInit: () => ipcRenderer.invoke('warmy:tuoPanChuShi'),
+  exportSession: (payload) => ipcRenderer.invoke('warmy:daoChuHuiHua', payload),
+  autoUpdateCheck: () => ipcRenderer.invoke('warmy:ziDongGengXinJianCha'),
+  autoUpdateDownload: () => ipcRenderer.invoke('warmy:ziDongGengXinXiaZai'),
   getChatQuery: () => { try { return new URLSearchParams(window.location.search); } catch { return new URLSearchParams(); } },`
   );
   fs.writeFileSync(base + 'preload.cjs', p);
@@ -142,10 +142,10 @@ if (!p.includes('openChatWindow')) {
 // renderer: 打开新窗口按钮 + 导出 + 启动时托盘/热键
 if (!j.includes('btn-export')) {
   h = h.replace(
-    '              <button id="btn-stop-all" class="btn-stop" data-i18n="chat.stopAll" data-i18n-title="chat.stopAllTip"></button>',
-    `              <button id="btn-open-win" class="btn-mini" data-i18n="chat.openWindow" data-i18n-title="chat.openWindowTip"></button>
-              <button id="btn-export" class="btn-mini" data-i18n="chat.export" data-i18n-title="chat.exportTip"></button>
-              <button id="btn-stop-all" class="btn-stop" data-i18n="chat.stopAll" data-i18n-title="chat.stopAllTip"></button>`
+    '              <button id="anNiuTingZhiAll" class="anNiuTingZhi" data-i18n="chat.stopAll" data-i18n-title="chat.stopAllTip"></button>',
+    `              <button id="btn-open-win" class="anNiuXiao" data-i18n="chat.openWindow" data-i18n-title="chat.openWindowTip"></button>
+              <button id="btn-export" class="anNiuXiao" data-i18n="chat.export" data-i18n-title="chat.exportTip"></button>
+              <button id="anNiuTingZhiAll" class="anNiuTingZhi" data-i18n="chat.stopAll" data-i18n-title="chat.stopAllTip"></button>`
   );
   j = j.replace(
     "  setInterval(refreshMetrics, 5000);",
@@ -159,10 +159,10 @@ if (!j.includes('btn-export')) {
   });
   $('btn-export')?.addEventListener('click', async () => {
     if (!state.selectedChat) return;
-    const msgs = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
+    const xiaoXi = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
     const r = await window.warmy.exportSession({
       title: state.selectedChat.name,
-      messages: msgs.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
+      xiaoXiJi: xiaoXi.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
     });
     uiAlert(r?.ok ? r.path : t('common.error'));
   });
@@ -174,9 +174,9 @@ if (!j.includes('btn-export')) {
     const q = new URLSearchParams(window.location.search);
     const cid = q.get('chatId');
     if (cid) {
-      const title = q.get('chatTitle') || cid;
+      const biaoTi = q.get('chatTitle') || cid;
       const kind = q.get('chatKind') || 'single';
-      setTimeout(() => openChat(kind, cid, title), 300);
+      setTimeout(() => openChat(kind, cid, biaoTi), 300);
     }
   } catch { /* noop */ }
 
@@ -196,6 +196,6 @@ j = j.replace(
 );
 
 fs.writeFileSync(base + 'electron-main.ts', m);
-fs.writeFileSync(base + 'renderer/app.js', j);
+fs.writeFileSync(base + 'renderer/yingYong.js', j);
 fs.writeFileSync(base + 'renderer/index.html', h);
 console.log('done');

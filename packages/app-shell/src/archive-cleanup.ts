@@ -15,7 +15,7 @@ export interface GuiDangJieGou {
 export interface GuiDangTiaoMu {
   id: string;
   groupId: string;
-  title: string;
+  biaoTi: string;
   summary: string;
   ts: number;
   anchors: Array<{ file: string; seq: number }>;
@@ -32,13 +32,13 @@ export class ZhiShiGuiDangQi {
   }
 
   archive(entry: Omit<GuiDangTiaoMu, 'ts'>): GuiDangTiaoMu {
-    const full: GuiDangTiaoMu = { ...entry, ts: Date.now() };
-    if (!full.structured) delete full.structured;
-    fs.appendFileSync(this.file, JSON.stringify(full) + '\n', 'utf8');
-    return full;
+    const Quan: GuiDangTiaoMu = { ...entry, ts: Date.now() };
+    if (!Quan.structured) delete Quan.structured;
+    fs.appendFileSync(this.file, JSON.stringify(Quan) + '\n', 'utf8');
+    return Quan;
   }
 
-  list(groupId?: string): GuiDangTiaoMu[] {
+  LieBiao(groupId?: string): GuiDangTiaoMu[] {
     try {
       if (!fs.existsSync(this.file)) return [];
       return fs
@@ -113,27 +113,27 @@ export class QingLiGuanLiQi {
  * 产品原则：归档不只是 summary+anchors 存档，还要**进知识**与**进偏好**。
  */
 export interface GuiDangTiQu {
-  entities: Array<{ id: string; name: string; kind: string; attrs?: Record<string, string> }>;
-  events: Array<{ id: string; title: string; result?: string }>;
+  entities: Array<{ id: string; ming: string; kind: string; attrs?: Record<string, string> }>;
+  events: Array<{ id: string; biaoTi: string; result?: string }>;
   preferences: Array<{ key: string; value: string; source: string }>;
 }
 
-export function congGuiDangTiQuZhiShi(input: {
+export function congGuiDangTiQuZhiShi(shuRu: {
   groupId: string;
-  title: string;
+  biaoTi: string;
   summary: string;
 }): GuiDangTiQu {
-  const text = `${input.title}\n${input.summary}`.slice(0, 4000);
+  const text = `${shuRu.biaoTi}\n${shuRu.summary}`.slice(0, 4000);
   const entities: GuiDangTiQu['entities'] = [];
   const events: GuiDangTiQu['events'] = [];
   const preferences: GuiDangTiQu['preferences'] = [];
 
   // 实体：标题本身作为会话/主题实体
   entities.push({
-    id: `arc-topic-${input.groupId}-${Date.now()}`,
-    name: input.title.slice(0, 80),
+    id: `arc-topic-${shuRu.groupId}-${Date.now()}`,
+    ming: shuRu.biaoTi.slice(0, 80),
     kind: 'concept',
-    attrs: { groupId: input.groupId },
+    attrs: { groupId: shuRu.groupId },
   });
 
   // 从摘要里抓简单要点（中英文关键词）
@@ -141,7 +141,7 @@ export function congGuiDangTiQuZhiShi(input: {
     [/(?:用户|我)(?:偏好|希望|想要|倾向)[：: ]*(.{2,60})/g, 'preference.stated'],
     [/(?:always|prefer|user likes)\s+(.{3,60})/gi, 'preference.stated'],
     [/(?:端口|port)\s*[=:：]?\s*(\d{2,5})/gi, 'preference.port'],
-    [/(?:语言|locale|language)\s*[=:：]?\s*([a-zA-Z-]{2,8})/gi, 'preference.language'],
+    [/(?:语言|yuYan|language)\s*[=:：]?\s*([a-zA-Z-]{2,8})/gi, 'preference.language'],
   ];
   for (const [re, key] of prefPatterns) {
     let m: RegExpExecArray | null;
@@ -149,22 +149,22 @@ export function congGuiDangTiQuZhiShi(input: {
     while ((m = re.exec(text))) {
       const zhi = String(m[1] || '').trim();
       if (!zhi) continue;
-      preferences.push({ key, value: zhi.slice(0, 120), source: `archive:${input.groupId}` });
+      preferences.push({ key, value: zhi.slice(0, 120), source: `archive:${shuRu.groupId}` });
       if (preferences.length >= 8) break;
     }
   }
 
   // 结构化提炼：决策/待办/风险/要点（不编造，只从文本模式匹配）
   const structured = tiQuJieGouHuaZhaiYao({
-    groupId: input.groupId,
-    title: input.title,
-    text: input.summary,
+    groupId: shuRu.groupId,
+    biaoTi: shuRu.biaoTi,
+    ti: shuRu.summary,
   });
-  const shouHang = input.summary.split(/\n|\r/).map((s) => s.trim()).filter(Boolean)[0] || input.title;
+  const shouHang = shuRu.summary.split(/\n|\r/).map((s) => s.trim()).filter(Boolean)[0] || shuRu.biaoTi;
   const zhuJieguo = (structured.decisions[0] || structured.bullets[0] || shouHang).slice(0, 160);
   events.push({
     id: `ev-arc-${Date.now()}`,
-    title: input.title.slice(0, 100),
+    biaoTi: shuRu.biaoTi.slice(0, 100),
     result: zhuJieguo,
   });
   // 决策/待办进知识库事件（有界，避免爆炸）
@@ -173,7 +173,7 @@ export function congGuiDangTiQuZhiShi(input: {
     if (d === zhuJieguo) continue;
     events.push({
       id: `ev-arc-${Date.now()}-${extra}`,
-      title: d.slice(0, 80),
+      biaoTi: d.slice(0, 80),
       result: d.slice(0, 160),
     });
     extra += 1;
@@ -217,7 +217,7 @@ export function heBingYongHuPianHao(
 
 /** 结构化会话摘要：要点/决策/待办/风险（从近期日志文本提炼，不编造） */
 export interface JieGouHuaZhaiYao {
-  title: string;
+  biaoTi: string;
   bullets: string[];
   decisions: string[];
   todos: string[];
@@ -225,13 +225,13 @@ export interface JieGouHuaZhaiYao {
   anchors: Array<{ file: string; seq: number }>;
 }
 
-export function tiQuJieGouHuaZhaiYao(input: {
+export function tiQuJieGouHuaZhaiYao(shuRu: {
   groupId: string;
-  title: string;
-  text: string;
+  biaoTi: string;
+  ti: string;
   anchors?: Array<{ file: string; seq: number }>;
 }): JieGouHuaZhaiYao {
-  const lines = String(input.text || '')
+  const HangJi = String(shuRu.ti || '')
     .split(/\r?\n/)
     .map((s) => s.trim())
     .filter(Boolean);
@@ -242,20 +242,20 @@ export function tiQuJieGouHuaZhaiYao(input: {
   const DECID = /^(决定|定稿|结论|decision|decided|conclu|заключ|결정|決定)/i;
   const TODO = /^(待办|todo|next|下一步|задача|할 일|やること|待ち)/i;
   const RISK = /^(风险|注意|警告|risk|warning|注意|risk|рис|위험|注意)/i;
-  for (const ln of lines.slice(-80)) {
-    const body = ln.replace(/^(user|assistant|system|me|ai)\s*[:：]\s*/i, '').trim();
-    if (!body) continue;
-    if (DECID.test(body)) decisions.push(body.slice(0, 200));
-    else if (TODO.test(body)) todos.push(body.slice(0, 200));
-    else if (RISK.test(body)) risks.push(body.slice(0, 200));
-    else if (bullets.length < 8) bullets.push(body.slice(0, 180));
+  for (const ln of HangJi.slice(-80)) {
+    const ti = ln.replace(/^(user|assistant|system|wo|ai)\s*[:：]\s*/i, '').trim();
+    if (!ti) continue;
+    if (DECID.test(ti)) decisions.push(ti.slice(0, 200));
+    else if (TODO.test(ti)) todos.push(ti.slice(0, 200));
+    else if (RISK.test(ti)) risks.push(ti.slice(0, 200));
+    else if (bullets.length < 8) bullets.push(ti.slice(0, 180));
   }
   return {
-    title: String(input.title || '').slice(0, 100),
+    biaoTi: String(shuRu.biaoTi || '').slice(0, 100),
     bullets,
     decisions: decisions.slice(0, 6),
     todos: todos.slice(0, 6),
     risks: risks.slice(0, 4),
-    anchors: input.anchors || [],
+    anchors: shuRu.anchors || [],
   };
 }

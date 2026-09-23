@@ -8,37 +8,37 @@ const arg = (n) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 
-const name = arg('name') || 'node';
+const ming = arg('ming') || 'node';
 const dataDir = arg('data') || process.cwd();
 const busDir = arg('bus') || path.join(dataDir, 'bus');
 const dutyEligible = arg('duty') === 'true';
 
 fs.mkdirSync(busDir, { recursive: true });
 
-process.on('message', (msg) => {
-  const { id, type } = msg;
+process.on('message', (xiaoXi) => {
+  const { id, type } = xiaoXi;
   try {
     if (type === 'hello') {
-      process.send({ id, ok: true, name, pid: process.pid, dutyEligible });
+      process.send({ id, ok: true, ming, pid: process.pid, dutyEligible });
       return;
     }
     if (type === 'publish') {
       const line =
         JSON.stringify({
-          from: name,
-          to: msg.to,
-          groupId: msg.groupId,
-          text: msg.text,
+          from: ming,
+          to: xiaoXi.to,
+          groupId: xiaoXi.groupId,
+          text: xiaoXi.text,
           ts: Date.now(),
         }) + '\n';
-      fs.appendFileSync(path.join(busDir, 'messages.jsonl'), line);
+      fs.appendFileSync(path.join(busDir, 'xiaoXiJi.jsonl'), line);
       process.send({ id, ok: true });
       return;
     }
     if (type === 'pull') {
-      const file = path.join(busDir, 'messages.jsonl');
+      const file = path.join(busDir, 'xiaoXiJi.jsonl');
       if (!fs.existsSync(file)) {
-        process.send({ id, messages: [] });
+        process.send({ id, xiaoXiJi: [] });
         return;
       }
       const all = fs
@@ -46,12 +46,12 @@ process.on('message', (msg) => {
         .split('\n')
         .filter(Boolean)
         .map((l) => JSON.parse(l));
-      const mine = all.filter((m) => m.to === name);
-      process.send({ id, messages: mine });
+      const mine = all.filter((m) => m.to === ming);
+      process.send({ id, xiaoXiJi: mine });
       return;
     }
     if (type === 'incognito_exec') {
-      process.send({ id, distilled: `incognito:${name}:OK`, wroteDisk: false });
+      process.send({ id, distilled: `incognito:${ming}:OK`, wroteDisk: false });
       return;
     }
     if (type === 'become_duty') {

@@ -1,8 +1,8 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
 let h = fs.readFileSync(base + 'index.html', 'utf8');
-let c = fs.readFileSync(base + 'app.css', 'utf8');
+let c = fs.readFileSync(base + 'yingYong.css', 'utf8');
 
 // 1) 内部群走编排闭环
 const oldGroup = j.match(/    \/\/ 内部群走值班者编排 \+ LLM[\s\S]*?      if \(CHAT_NAVS\.has\(state\.nav\)\) renderList\(\);\n      return;\n    \}/);
@@ -36,7 +36,7 @@ if (oldGroup) {
     }`);
   console.log('group orchestrate wired');
 } else {
-  console.log('WARN: group send block not matched');
+  console.log('WARN: group faSong block not matched');
 }
 
 // 2) 审批弹窗
@@ -46,29 +46,29 @@ if (!j.includes('function showApprovalDialog')) {
     `  // ── 3 权限审批弹窗 ──
   function showApprovalDialog(payload) {
     return new Promise((resolve) => {
-      const root = $('modal-root');
-      $('modal-title').textContent = t('approval.title');
-      $('modal-body').innerHTML =
+      const root = $('duiHuaKuangGen');
+      $('duiHuaKuangBiaoTi').textContent = t('approval.biaoTi');
+      $('duiHuaKuangTi').innerHTML =
         '<div style="margin-bottom:8px">' + escapeHtml(payload.action || '') + '</div>' +
-        '<div class="muted">' + t('approval.hint') + '</div>';
-      const acts = $('modal-actions');
+        '<div class="jingYin">' + t('approval.tiShi') + '</div>';
+      const acts = $('duiHuaKuangDongZuoJi');
       acts.innerHTML = '';
-      const mk = (label, cls, fn) => {
+      const mk = (biaoQian, cls, fn) => {
         const b = document.createElement('button');
         b.className = cls;
-        b.textContent = label;
+        b.textContent = biaoQian;
         b.onclick = async () => {
-          root.classList.add('hidden');
+          root.classList.add('yinCang');
           await fn();
         };
         acts.appendChild(b);
       };
-      mk(t('common.cancel'), 'btn-mini', () => resolve({ allowed: false, scope: 'deny' }));
-      mk(t('approval.deny'), 'btn-mini', () => resolve({ allowed: false, scope: 'deny' }));
-      mk(t('approval.once'), 'btn-primary', () => resolve({ allowed: true, scope: 'once' }));
-      mk(t('approval.project'), 'btn-mini', () => resolve({ allowed: true, scope: 'project' }));
-      mk(t('approval.global'), 'btn-mini', () => resolve({ allowed: true, scope: 'global' }));
-      root.classList.remove('hidden');
+      mk(t('common.cancel'), 'anNiuXiao', () => resolve({ allowed: false, scope: 'deny' }));
+      mk(t('approval.deny'), 'anNiuXiao', () => resolve({ allowed: false, scope: 'deny' }));
+      mk(t('approval.once'), 'anNiuZhuYao', () => resolve({ allowed: true, scope: 'once' }));
+      mk(t('approval.project'), 'anNiuXiao', () => resolve({ allowed: true, scope: 'project' }));
+      mk(t('approval.global'), 'anNiuXiao', () => resolve({ allowed: true, scope: 'global' }));
+      root.classList.remove('yinCang');
     });
   }
   window.warmy.onApprovalRequest?.(async (d) => {
@@ -93,35 +93,35 @@ j = j.replace(
 
 // 4) 知识库：从聊天一键存入
 j = j.replace(
-  /      \$\('btn-kb-go'\)\?\.addEventListener\('click', async \(\) => \{[\s\S]*?\n      \}\);/,
-  `      $('btn-kb-go')?.addEventListener('click', async () => {
-        const q = $('kb-q').value.trim();
+  /      \$\('anNiuZhiShiKuGo'\)\?\.addEventListener\('click', async \(\) => \{[\s\S]*?\n      \}\);/,
+  `      $('anNiuZhiShiKuGo')?.addEventListener('click', async () => {
+        const q = $('zhiShiKuQ').value.trim();
         if (!q) return;
         const r = await window.warmy.knowledgeQuery(q);
         const ents = (r?.entities || []).map((e) => e.name + '(' + e.kind + ')').join(', ');
-        const evs = (r?.events || []).map((e) => e.title).join(' | ');
-        $('kb-out').innerHTML =
-          '<div><b>' + t('knowledge.title') + '</b></div>' +
+        const evs = (r?.events || []).map((e) => e.biaoTi).join(' | ');
+        $('zhiShiKuShuChu').innerHTML =
+          '<div><b>' + t('knowledge.biaoTi') + '</b></div>' +
           '<div>' + escapeHtml(ents || '—') + '</div>' +
           '<div>' + escapeHtml(evs || '—') + '</div>';
       });
       // 从当前会话存入知识库
-      $('btn-kb-save')?.addEventListener('click', async () => {
+      $('anNiuZhiShiKuBaoCun')?.addEventListener('click', async () => {
         const sid = state.selectedChat?.id;
         if (!sid) {
-          $('kb-out').textContent = t('common.error');
+          $('zhiShiKuShuChu').textContent = t('common.error');
           return;
         }
-        const msgs = (window.__msgs && window.__msgs[sid]) || [];
-        const last = msgs[msgs.length - 1];
-        const body = last?.text || '';
-        if (!body) return;
+        const xiaoXi = (window.__msgs && window.__msgs[sid]) || [];
+        const last = xiaoXi[xiaoXi.length - 1];
+        const ti = last?.text || '';
+        if (!ti) return;
         await window.warmy.kbFromChat({
           sessionId: sid,
-          title: body.slice(0, 40),
-          body,
+          title: ti.slice(0, 40),
+          ti,
         });
-        $('kb-out').textContent = t('instances.saved');
+        $('zhiShiKuShuChu').textContent = t('instances.saved');
       });`
 );
 
@@ -133,10 +133,10 @@ j = j.replace(
 
 // 6) HTML：知识库加「存入」按钮
 h = h.replace(
-  '<button class="btn-mini" id="btn-kb-go" data-i18n="knowledge.search"></button>',
-  '<button class="btn-mini" id="btn-kb-go" data-i18n="knowledge.search"></button>\n            <button class="btn-mini" id="btn-kb-save" data-i18n="knowledge.save"></button>'
+  '<button class="anNiuXiao" id="anNiuZhiShiKuGo" data-i18n="knowledge.search"></button>',
+  '<button class="anNiuXiao" id="anNiuZhiShiKuGo" data-i18n="knowledge.search"></button>\n            <button class="anNiuXiao" id="anNiuZhiShiKuBaoCun" data-i18n="knowledge.save"></button>'
 );
 
-fs.writeFileSync(base + 'app.js', j);
+fs.writeFileSync(base + 'yingYong.js', j);
 fs.writeFileSync(base + 'index.html', h);
 console.log('renderer patched');

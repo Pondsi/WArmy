@@ -7,39 +7,39 @@
 
 export const CORPUS = [
   // ── s1 / group-A ──────────────────────────────
-  { id: 'm-001', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: '无限牛马项目进度正常，值班者状态机已上线' },
-  { id: 'm-002', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: '错误码 E_MEMORY_CORRUPT 表示 SQLite 投影损坏，可从 JSONL 全量重建' },
-  { id: 'm-003', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: '实现文件 packages/memory-os/src/index.ts 新增 fts_tri 三元索引' },
-  { id: 'm-004', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: '构建脚本 spikes/p2-memory/run.mjs 会输出 result.json 原始数据' },
-  { id: 'm-009', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: '牛' },
+  { id: 'm-001', sessionId: 's1', groupId: 'group-A', entityType: 'note', ti: '无限牛马项目进度正常，值班者状态机已上线' },
+  { id: 'm-002', sessionId: 's1', groupId: 'group-A', entityType: 'note', ti: '错误码 E_MEMORY_CORRUPT 表示 SQLite 投影损坏，可从 JSONL 全量重建' },
+  { id: 'm-003', sessionId: 's1', groupId: 'group-A', entityType: 'note', ti: '实现文件 packages/memory-os/src/index.ts 新增 fts_tri 三元索引' },
+  { id: 'm-004', sessionId: 's1', groupId: 'group-A', entityType: 'note', ti: '构建脚本 spikes/p2-memory/run.mjs 会输出 result.json 原始数据' },
+  { id: 'm-009', sessionId: 's1', groupId: 'group-A', entityType: 'note', ti: '牛' },
   {
     id: 'm-010',
     sessionId: 's1',
     groupId: 'group-A',
     entityType: 'note',
-    body: '值班者状态机在指定成员忙碌时自动排队并顺延到下一个空闲成员',
+    ti: '值班者状态机在指定成员忙碌时自动排队并顺延到下一个空闲成员',
   },
-  { id: 'm-012', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: 'pnpm --filter @warmy/memory-os build 编译投影层' },
-  { id: 'm-014', sessionId: 's1', groupId: 'group-A', entityType: 'note', body: '多智能体群聊桌面应用的定稿方案由 ADR 000 固化，十一条不变量为硬约束' },
+  { id: 'm-012', sessionId: 's1', groupId: 'group-A', entityType: 'note', ti: 'pnpm --filter @warmy/memory-os build 编译投影层' },
+  { id: 'm-014', sessionId: 's1', groupId: 'group-A', entityType: 'note', ti: '多智能体群聊桌面应用的定稿方案由 ADR 000 固化，十一条不变量为硬约束' },
   // ── s2 / group-B ──────────────────────────────
-  { id: 'm-005', sessionId: 's2', groupId: 'group-B', entityType: 'archive', body: '外部群归档流水线 KnowledgeArchiver 处理证据锚点与双向索引' },
-  { id: 'm-006', sessionId: 's2', groupId: 'group-B', entityType: 'archive', body: '群聊桌面应用支持单 AI、内部群、外部群三种群类型' },
-  { id: 'm-007', sessionId: 's2', groupId: 'group-B', entityType: 'archive', body: 'E_WRITER_DENIED 执行者不能直接写 message 记录' },
+  { id: 'm-005', sessionId: 's2', groupId: 'group-B', entityType: 'archive', ti: '外部群归档流水线 KnowledgeArchiver 处理证据锚点与双向索引' },
+  { id: 'm-006', sessionId: 's2', groupId: 'group-B', entityType: 'archive', ti: '群聊桌面应用支持单 AI、内部群、外部群三种群类型' },
+  { id: 'm-007', sessionId: 's2', groupId: 'group-B', entityType: 'archive', ti: 'E_WRITER_DENIED 执行者不能直接写 message 记录' },
   {
     id: 'm-008',
     sessionId: 's2',
     groupId: 'group-B',
     entityType: 'archive',
-    body: '多智能体群聊桌面应用的记忆层采用极速层 JSONL 加深度层 SQLite 的双层设计',
+    ti: '多智能体群聊桌面应用的记忆层采用极速层 JSONL 加深度层 SQLite 的双层设计',
   },
   {
     id: 'm-011',
     sessionId: 's2',
     groupId: 'group-B',
     entityType: 'archive',
-    body: '记忆服务作为长驻子进程通过 IPC 与主进程通信，避免主进程加载原生模块',
+    ti: '记忆服务作为长驻子进程通过 IPC 与主进程通信，避免主进程加载原生模块',
   },
-  { id: 'm-013', sessionId: 's2', groupId: 'group-B', entityType: 'archive', body: 'ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程' },
+  { id: 'm-013', sessionId: 's2', groupId: 'group-B', entityType: 'archive', ti: 'ELECTRON_RUN_AS_NODE=1 CCA_ARMY_MEMORY_DIR=/tmp/mem 启动子进程' },
 ];
 
 /** 查询矩阵：每条都记录"预期该由哪一路命中"，用于人工/Auto 核对 */
@@ -88,8 +88,8 @@ export const NOISE_QUERIES = ['zzz_not_present_zzz', '今天中午吃什么比�
 
 /** 语义相似度对照：用于验证嵌入质量（不是死记硬背的断言） */
 export const SEMANTIC_PAIRS = [
-  { a: '值班者状态机在指定成员忙碌时自动排队并顺延', b: '值班安排如何顺延到下一个空闲成员', label: 'paraphrase-值班' },
-  { a: '记忆服务作为长驻子进程通过 IPC 通信', b: '子进程与主进程之间的通信方式', label: 'paraphrase-IPC' },
-  { a: '记忆服务作为长驻子进程通过 IPC 通信', b: '今天中午吃什么比较好', label: 'unrelated' },
-  { a: '错误码 E_MEMORY_CORRUPT 表示投影损坏', b: '数据库投影损坏的报错名', label: 'paraphrase-错误码' },
+  { a: '值班者状态机在指定成员忙碌时自动排队并顺延', b: '值班安排如何顺延到下一个空闲成员', biaoQian: 'paraphrase-值班' },
+  { a: '记忆服务作为长驻子进程通过 IPC 通信', b: '子进程与主进程之间的通信方式', biaoQian: 'paraphrase-IPC' },
+  { a: '记忆服务作为长驻子进程通过 IPC 通信', b: '今天中午吃什么比较好', biaoQian: 'unrelated' },
+  { a: '错误码 E_MEMORY_CORRUPT 表示投影损坏', b: '数据库投影损坏的报错名', biaoQian: 'paraphrase-错误码' },
 ];

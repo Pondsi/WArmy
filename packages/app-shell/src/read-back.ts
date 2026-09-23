@@ -38,21 +38,21 @@ export async function daiHuiDuYanZheng<T>(
  * 自动化/列表类写入的去重：按 normalize 后的 key。
  * 用途：skillScanDirs、类似的“最多 N 条目录/账号/源”配置，避免重复点击堆积。
  */
-export function anGuiFanHuaQuChong<T>(items: T[], keyOf: (x: T) => string): { list: T[]; removed: number } {
-  const seen = new Set<string>();
-  const list: T[] = [];
+export function anGuiFanHuaQuChong<T>(items: T[], keyOf: (x: T) => string): { LieBiao: T[]; removed: number } {
+  const yiKanDao = new Set<string>();
+  const LieBiao: T[] = [];
   let removed = 0;
   for (const it of items) {
     const k = keyOf(it);
     if (!k) continue;
-    if (seen.has(k)) {
+    if (yiKanDao.has(k)) {
       removed += 1;
       continue;
     }
-    seen.add(k);
-    list.push(it);
+    yiKanDao.add(k);
+    LieBiao.push(it);
   }
-  return { list, removed };
+  return { LieBiao, removed };
 }
 
 export function guiFanLuJingMiyao(p: unknown): string {

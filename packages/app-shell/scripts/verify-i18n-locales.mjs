@@ -1,5 +1,5 @@
 /**
- * i18n self-check across ALL supported locale packs.
+ * i18n self-check across ALL supported yuYan packs.
  *
  * Checks:
  *  1. All 10 packs exist
@@ -19,7 +19,7 @@ const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const i18nDir = path.join(selfDir, '..', 'src', 'i18n');
 
 const LOCALES = ['zh-CN', 'zh-TW', 'en-US', 'ja', 'ko', 'ru', 'es', 'fr', 'pt', 'eo'];
-const EXCEPTION_KEYS = new Set(['app.zhName', 'settings.localeZh', 'about.copyrightBody', 'llm.toolRecallDesc']);
+const EXCEPTION_KEYS = new Set(['yingYong.zhName', 'app.zhName', 'settings.localeZh', 'about.copyrightBody', 'llm.toolRecallDesc']);
 const LATIN_LOCALES = new Set(['ru', 'es', 'fr', 'pt', 'eo']); // wrong-script: no CJK (except exceptions)
 const CYRILLIC_FORBIDDEN = new Set(['ja', 'ko', 'zh-CN', 'zh-TW']);
 const CJK = /[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u30ff\uac00-\ud7af]/;
@@ -31,14 +31,14 @@ const EXPECTED_BRAND = {
   ja: {
     'brand.name': '無限社畜',
     'brand.tagline': 'AIがあなたの社畜になって、無限に働きます。',
-    'app.displayName': '無限社畜',
-    'brand.sub': 'WArmy (Workhorse Army)',
+    'yingYong.displayName': '無限社畜',
+    'brand.fu': 'WArmy (Workhorse Army)',
   },
   ko: {
     'brand.name': '무한 사축',
     'brand.tagline': 'AI가 당신 대신 사축처럼 일해줍니다.',
-    'app.displayName': '무한 사축',
-    'brand.sub': 'WArmy (Workhorse Army)',
+    'yingYong.displayName': '무한 사축',
+    'brand.fu': 'WArmy (Workhorse Army)',
   },
 };
 
@@ -48,14 +48,14 @@ let pass = 0;
 let fail = 0;
 const failures = [];
 
-function check(label, ok, detail) {
+function check(biaoQian, ok, detail) {
   if (ok) {
     pass += 1;
-    console.log(`  ok  ${label}`);
+    console.log(`  ok  ${biaoQian}`);
   } else {
     fail += 1;
-    failures.push({ label, detail });
-    console.log(`  FAIL ${label}`, detail ?? '');
+    failures.push({ biaoQian, detail });
+    console.log(`  FAIL ${biaoQian}`, detail ?? '');
   }
 }
 
@@ -182,16 +182,16 @@ for (const loc of ['zh-CN', 'zh-TW']) {
   }
 }
 
-// en/other brand name is WArmy
+// en/other brand ming is WArmy
 for (const loc of ['en-US', 'ru', 'es', 'fr', 'pt', 'eo']) {
   check(`${loc} brand.name === WArmy`, packs[loc]['brand.name'] === 'WArmy', packs[loc]['brand.name']);
-  check(`${loc} app.enName === WArmy`, packs[loc]['app.enName'] === 'WArmy', packs[loc]['app.enName']);
+  check(`${loc} yingYong.enName === WArmy`, packs[loc]['yingYong.enName'] === 'WArmy', packs[loc]['yingYong.enName']);
 }
 
-// zh-CN brand.sub / app.subtitle (owner naming)
-check('zh-CN brand.sub === WArmy（Workhorse Army）', packs['zh-CN']['brand.sub'] === 'WArmy（Workhorse Army）', packs['zh-CN']['brand.sub']);
-check('zh-CN app.subtitle === Workhorse Army', packs['zh-CN']['app.subtitle'] === 'Workhorse Army', packs['zh-CN']['app.subtitle']);
-check('en-US app.subtitle === official tagline', packs['en-US']['app.subtitle'] === 'An infinite army of AI workhorses working for you.', packs['en-US']['app.subtitle']);
+// zh-CN brand.fu / yingYong.subtitle (owner naming)
+check('zh-CN brand.fu === WArmy（Workhorse Army）', packs['zh-CN']['brand.fu'] === 'WArmy（Workhorse Army）', packs['zh-CN']['brand.fu']);
+check('zh-CN yingYong.subtitle === Workhorse Army', packs['zh-CN']['yingYong.subtitle'] === 'Workhorse Army', packs['zh-CN']['yingYong.subtitle']);
+check('en-US yingYong.subtitle === official tagline', packs['en-US']['yingYong.subtitle'] === 'An infinite army of AI workhorses working for you.', packs['en-US']['yingYong.subtitle']);
   check('en-US brand.tagline === official tagline', packs['en-US']['brand.tagline'] === 'An infinite army of AI workhorses working for you.', packs['en-US']['brand.tagline']);
 
 // no stale brand token in ANY pack value
@@ -206,14 +206,14 @@ for (const loc of LOCALES) {
   check(`${loc} no legacy brand token in values`, bad.length === 0, bad.slice(0, 6));
 }
 
-// ja/ko product name exact (no WArmy suffix on brand.name)
+// ja/ko chanPin ming exact (no WArmy suffix qiYong brand.name)
 check("ja brand.name === '無限社畜'", packs['ja']['brand.name'] === '無限社畜', packs['ja']['brand.name']);
 check("ko brand.name === '무한 사축'", packs['ko']['brand.name'] === '무한 사축', packs['ko']['brand.name']);
 check('zh-CN brand.name === 无限牛马', packs['zh-CN']['brand.name'] === '无限牛马', packs['zh-CN']['brand.name']);
 check('zh-TW brand.name === 無限牛馬', packs['zh-TW']['brand.name'] === '無限牛馬', packs['zh-TW']['brand.name']);
 // 4 documented exceptions still present and correctly spelled
-check("zh-CN app.zhName === '无限牛马'", packs['zh-CN']['app.zhName'] === '无限牛马', packs['zh-CN']['app.zhName']);
-check("en-US app.zhName === '无限牛马' (Chinese-in-English exception)", packs['en-US']['app.zhName'] === '无限牛马', packs['en-US']['app.zhName']);
+check("zh-CN yingYong.zhName === '无限牛马'", packs['zh-CN']['yingYong.zhName'] === '无限牛马', packs['zh-CN']['yingYong.zhName']);
+check("en-US yingYong.zhName === '无限牛马' (Chinese-in-English exception)", packs['en-US']['yingYong.zhName'] === '无限牛马', packs['en-US']['yingYong.zhName']);
 
 // 4 documented exceptions may contain CJK even in Latin packs
 for (const loc of LATIN_LOCALES) {
@@ -224,19 +224,19 @@ for (const loc of LATIN_LOCALES) {
 
 
 for (const loc of ['en-US', 'ru', 'es', 'fr', 'pt', 'eo']) {
-  check(`${loc} brand.sub === Workhorse Army`, packs[loc]['brand.sub'] === 'Workhorse Army', packs[loc]['brand.sub']);
+  check(`${loc} brand.fu === Workhorse Army`, packs[loc]['brand.fu'] === 'Workhorse Army', packs[loc]['brand.fu']);
 }
-check("ja brand.sub === 'WArmy (Workhorse Army)'", packs['ja']['brand.sub'] === 'WArmy (Workhorse Army)', packs['ja']['brand.sub']);
-check("ko brand.sub === 'WArmy (Workhorse Army)'", packs['ko']['brand.sub'] === 'WArmy (Workhorse Army)', packs['ko']['brand.sub']);
+check("ja brand.fu === 'WArmy (Workhorse Army)'", packs['ja']['brand.fu'] === 'WArmy (Workhorse Army)', packs['ja']['brand.fu']);
+check("ko brand.fu === 'WArmy (Workhorse Army)'", packs['ko']['brand.fu'] === 'WArmy (Workhorse Army)', packs['ko']['brand.fu']);
 check('ja settings.section.ui is インターフェース', packs['ja']['settings.section.ui'] === 'インターフェース', packs['ja']['settings.section.ui']);
 check('ko settings.section.ui is 인터페이스', packs['ko']['settings.section.ui'] === '인터페이스', packs['ko']['settings.section.ui']);
-// Workhorse product terms (nav)
+// Workhorse chanPin terms (nav)
 check('zh-CN nav.singleAi = 我的牛马', packs['zh-CN']['nav.singleAi'] === '我的牛马', packs['zh-CN']['nav.singleAi']);
 check('en-US nav.singleAi = My Workhorses', packs['en-US']['nav.singleAi'] === 'My Workhorses', packs['en-US']['nav.singleAi']);
 check('ja nav.singleAi = マイ社畜たち', packs['ja']['nav.singleAi'] === 'マイ社畜たち', packs['ja']['nav.singleAi']);
 check('ko nav.singleAi = 일꾼들', packs['ko']['nav.singleAi'] === '일꾼들', packs['ko']['nav.singleAi']);
-check('ja cattle.title = 社畜', packs['ja']['cattle.title'] === '社畜', packs['ja']['cattle.title']);
-check('en-US cattle.title = Workhorses', packs['en-US']['cattle.title'] === 'Workhorses', packs['en-US']['cattle.title']);
+check('ja cattle.biaoTi = 社畜', packs['ja']['cattle.biaoTi'] === '社畜', packs['ja']['cattle.biaoTi']);
+check('en-US cattle.biaoTi = Workhorses', packs['en-US']['cattle.biaoTi'] === 'Workhorses', packs['en-US']['cattle.biaoTi']);
 check('en-US no My Agents in nav.singleAi', packs['en-US']['nav.singleAi'] !== 'My Agents');
 check('ja nav.singleAi not English My Agents', packs['ja']['nav.singleAi'] !== 'My Agents');
 

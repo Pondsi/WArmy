@@ -10,22 +10,22 @@
   const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
 
   // ── i18n：单文件构建时会把语言包注入 window.__I18N__ ──
-  const I18N = window.__I18N__ || { locale: 'zh-CN', strings: {} };
+  const I18N = window.__I18N__ || { yuYan: 'zh-CN', strings: {} };
   const D = {
     'brand.name': '无限牛马',
-    'brand.sub': 'WArmy（Workhorse Army）',
-    'tab.sessions': '会话', 'tab.cattle': '牛马', 'tab.board': '看板', 'tab.me': '我',
-    'sessions.title': '会话',
-    'cattle.title': '牛马',
-    'board.title': '看板', 'board.running': '进行中', 'board.done': '今日完成',
-    'board.instances': '运行实例', 'board.queue': '排队', 'board.progress': '会话进展',
-    'me.title': '我', 'me.settings': '设置', 'me.appearance': '外观', 'me.provider': '模型供应商',
-    'me.smtp': '邮箱 SMTP', 'me.mesh': '组网', 'me.about': '关于',
-    'me.language': '语言', 'me.theme': '主题', 'me.accent': '主题色',
-    'me.light': '浅色', 'me.dark': '深色', 'me.system': '跟随系统',
-    'me.version': '版本', 'me.checkUpdate': '检查更新', 'me.opensource': '开源信息',
-    'me.copyright': '版权', 'me.deviceId': '设备 ID', 'me.owner': '主人',
-    'chat.placeholder': '输入消息', 'm.chat.placeholder': '输入消息', 'chat.send': '发送', 'chat.more': '更多',
+    'brand.fu': 'WArmy（Workhorse Army）',
+    'tab.sessions': '会话', 'tab.cattle': '牛马', 'tab.board': '看板', 'tab.wo': '我',
+    'sessions.biaoTi': '会话',
+    'cattle.biaoTi': '牛马',
+    'board.biaoTi': '看板', 'board.running': '进行中', 'board.done': '今日完成',
+    'board.instances': '运行实例', 'board.queue': '排队', 'board.jinDu': '会话进展',
+    'wo.biaoTi': '我', 'wo.settings': '设置', 'wo.appearance': '外观', 'wo.provider': '模型供应商',
+    'wo.smtp': '邮箱 SMTP', 'wo.mesh': '组网', 'wo.about': '关于',
+    'wo.language': '语言', 'wo.theme': '主题', 'wo.accent': '主题色',
+    'wo.light': '浅色', 'wo.dark': '深色', 'wo.system': '跟随系统',
+    'wo.version': '版本', 'wo.checkUpdate': '检查更新', 'wo.opensource': '开源信息',
+    'wo.copyright': '版权', 'wo.deviceId': '设备 ID', 'wo.owner': '主人',
+    'chat.placeholder': '输入消息', 'm.chat.placeholder': '输入消息', 'chat.faSong': '发送', 'chat.more': '更多',
     'chat.members': '成员', 'chat.model': '模型管理', 'chat.kb': '知识库',
     'chat.checkpoints': '回退点', 'chat.metrics': '性能指标', 'chat.export': '导出会话',
     'chat.urgent': '加急', 'chat.insert': '插入', 'chat.queue': '排队',
@@ -33,23 +33,23 @@
     'inst.status.running': '运行中', 'inst.status.stopped': '已停止',
     'inst.defaultModel': '默认模型', 'inst.models': '可用模型', 'inst.chain': '调用链',
     'inst.persona': '写入更多', 'inst.group': '成员',
-    'kb.hint': '输入关键词检索知识库', 'cp.empty': '暂无回退点', 'cp.rollback': '回退', 'cp.rollbackHint': '回退：将停止当前任务并回到该节点。',
+    'kb.tiShi': '输入关键词检索知识库', 'cp.empty': '暂无回退点', 'cp.rollback': '回退', 'cp.rollbackHint': '回退：将停止当前任务并回到该节点。',
     'metrics.turns': '轮次', 'metrics.cost': '成本(¥)',
     'common.yes': '是',
     'ui.type.single': '牛马', 'ui.type.internal': '项目', 'ui.type.contact': '联系人', 'ui.type.external': '群聊',
     'board.blocked': '阻塞', 'board.readonlyHint': '看板为只读聚合视图，修改请通过与值班者对话完成。',
-    'chat.sub.single': '我的牛马', 'chat.sub.group': '群聊',
+    'chat.fu.single': '我的牛马', 'chat.fu.group': '群聊',
     'export.hasTs': '包含时间戳', 'accent.custom': '自定义取色',
     'provider.list': '供应商列表', 'provider.add': '+ 添加供应商', 'provider.configured': '已配置', 'provider.notConfigured': '未配置',
     'smtp.settings': '邮箱 SMTP 设置', 'smtp.hostLabel': 'SMTP 服务器', 'smtp.portLabel': '端口', 'smtp.userLabel': '用户名',
     'smtp.passLabel': '授权码', 'smtp.passPlaceholder': '输入授权码', 'smtp.fromLabel': '发件人名称', 'smtp.fromPlaceholder': '无限牛马通知', 'smtp.verifyBtn': '验证并保存',
-    'notify.title': '邮件通知', 'notify.done': '完成通知', 'notify.req': '请求通知', 'notify.err': '错误通知',
+    'notify.biaoTi': '邮件通知', 'notify.done': '完成通知', 'notify.req': '请求通知', 'notify.err': '错误通知',
     'mesh.portLabel': '监听端口', 'mesh.stateLabel': '组网开关', 'mesh.peers': '已知节点', 'mesh.start': '打开组网', 'mesh.stop': '关闭组网',
     'mesh.stopped': '已关闭', 'mesh.invite': '邀请加入', 'mesh.genInvite': '生成邀请码', 'mesh.scanJoin': '扫码加入',
     'about.license': '许可证',
-    'msg.initFailed': '移动端初始化失败：',
-    'preview.settingsNotice': '以下设置仅为本机预览：改动不会保存，也不会同步到桌面端。', 'msg.smtpDesktopOnly': 'SMTP 验证需要桌面端配合，手机端仅作界面预览。', 'prompt.providerName': '供应商名称',
-    'msg.latest': '当前已是最新版本', 'msg.inviteCopied': '邀请码已复制到剪贴板', 'msg.scanOnDesktop': '请使用桌面端扫码功能', 'export.hint': '导出当前会话为 Markdown',
+    'xiaoXi.initFailed': '移动端初始化失败：',
+    'preview.settingsNotice': '以下设置仅为本机预览：改动不会保存，也不会同步到桌面端。', 'xiaoXi.smtpDesktopOnly': 'SMTP 验证需要桌面端配合，手机端仅作界面预览。', 'prompt.providerName': '供应商名称',
+    'xiaoXi.latest': '当前已是最新版本', 'xiaoXi.inviteCopied': '邀请码已复制到剪贴板', 'xiaoXi.scanOnDesktop': '请使用桌面端扫码功能', 'export.tiShi': '导出当前会话为 Markdown',
   };
   const t = (k) => (I18N.strings && I18N.strings[k]) || D[k] || k;
   const brandName = () => t('brand.name');
@@ -58,7 +58,7 @@
     if (v === null || v === undefined || v === '') return '—';
     if (typeof v === 'object') {
       if (Array.isArray(v)) return v.map(disp).join(' · ');
-      return String(v.label || v.text || v.name || v.value || '—');
+      return String(v.biaoQian || v.text || v.name || v.value || '—');
     }
     return String(v);
   };
@@ -70,19 +70,19 @@
   };
   const demoName = (key, fallback) => t(key) !== key ? t(key) : fallback;
   const INSTANCES = [
-    { id: 'demo-1', nameKey: null, name: 'demo.agent', status: 'running', model: 'deepseek-chat', preset: 5,
+    { id: 'demo-1', nameKey: null, ming: 'demo.agent', status: 'running', model: 'deepseek-chat', preset: 5,
       models: ['deepseek-chat', 'deepseek-reasoner', 'mimo-v2.5-pro'],
       chain: ['deepseek-chat', 'deepseek-reasoner'], personaKey: 'demo.persona' },
-    { id: 'demo-2', nameKey: 'demo.name.archiver', name: null, status: 'stopped', model: 'mimo-v2.5-pro', preset: 9,
+    { id: 'demo-2', nameKey: 'demo.name.archiver', ming: null, status: 'stopped', model: 'mimo-v2.5-pro', preset: 9,
       models: ['mimo-v2.5-pro'], chain: ['mimo-v2.5-pro'], personaKey: null },
   ];
   const instName = (i) => (i && (i.name || (i.nameKey ? t(i.nameKey) : ''))) || '?';
   const SESSIONS = [
-    { id: 'demo-1', nameKey: null, name: 'demo.agent', kind: 'single', lastKey: 'demo.msg.scheduled', tsKey: null, ts: null, unread: 1 },
-    { id: 'g-1', nameKey: 'demo.sess.g1', name: null, kind: 'internal', lastKey: 'demo.msg.synced', ts: '12:04', unread: 2 },
-    { id: 'g-2', nameKey: 'demo.sess.g2', name: null, kind: 'internal', lastKey: 'demo.msg.rndUpdated', tsKey: null, ts: null },
-    { id: 'g-3', nameKey: 'demo.sess.g3', name: null, kind: 'external', lastKey: 'demo.msg.extSilent', ts: null },
-    { id: 'c-1', nameKey: 'demo.sess.c1', name: null, kind: 'contact', lastKey: 'demo.msg.weekly', ts: null },
+    { id: 'demo-1', nameKey: null, ming: 'demo.agent', kind: 'single', lastKey: 'demo.xiaoXi.scheduled', tsKey: null, ts: null, unread: 1 },
+    { id: 'g-1', nameKey: 'demo.sess.g1', ming: null, kind: 'internal', lastKey: 'demo.xiaoXi.synced', ts: '12:04', unread: 2 },
+    { id: 'g-2', nameKey: 'demo.sess.g2', ming: null, kind: 'internal', lastKey: 'demo.xiaoXi.rndUpdated', tsKey: null, ts: null },
+    { id: 'g-3', nameKey: 'demo.sess.g3', ming: null, kind: 'external', lastKey: 'demo.xiaoXi.extSilent', ts: null },
+    { id: 'c-1', nameKey: 'demo.sess.c1', ming: null, kind: 'contact', lastKey: 'demo.xiaoXi.weekly', ts: null },
   ];
   // 时间戳也走 i18n：中文「刚刚/昨天/周一」在英文界面不能原样出现
   const TIME_KEYS = {
@@ -96,29 +96,29 @@
       if (s.id === 'g-1') return '12:04';
       return s.ts;
     }
-    if (s.id === 'demo-1') return t('time.justNow') !== 'time.justNow' ? t('time.justNow') : (I18N.locale && I18N.locale.startsWith('en') ? 'Just now' : '刚刚');
-    if (s.id === 'g-2') return t('time.yesterday') !== 'time.yesterday' ? t('time.yesterday') : (I18N.locale && I18N.locale.startsWith('en') ? 'Yesterday' : '昨天');
-    if (s.id === 'g-3') return t('time.monday') !== 'time.monday' ? t('time.monday') : (I18N.locale && I18N.locale.startsWith('en') ? 'Mon' : '周一');
-    if (s.id === 'c-1') return t('time.yesterday') !== 'time.yesterday' ? t('time.yesterday') : (I18N.locale && I18N.locale.startsWith('en') ? 'Yesterday' : '昨天');
+    if (s.id === 'demo-1') return t('time.justNow') !== 'time.justNow' ? t('time.justNow') : (I18N.yuYan && I18N.yuYan.startsWith('en') ? 'Just now' : '刚刚');
+    if (s.id === 'g-2') return t('time.yesterday') !== 'time.yesterday' ? t('time.yesterday') : (I18N.yuYan && I18N.yuYan.startsWith('en') ? 'Yesterday' : '昨天');
+    if (s.id === 'g-3') return t('time.monday') !== 'time.monday' ? t('time.monday') : (I18N.yuYan && I18N.yuYan.startsWith('en') ? 'Mon' : '周一');
+    if (s.id === 'c-1') return t('time.yesterday') !== 'time.yesterday' ? t('time.yesterday') : (I18N.yuYan && I18N.yuYan.startsWith('en') ? 'Yesterday' : '昨天');
     return '';
   };
   const GROUP_MEMBERS = { 'g-1': ['demo-agent', 'demo-2'], 'g-2': ['demo-agent'], 'g-3': ['demo-agent'] };
   const MSGS = {
     'demo-1': [
-      { who: 'them', key: 'demo.msg.hello' },
-      { who: 'me', key: 'demo.msg.schedule' },
-      { who: 'them', key: 'demo.msg.scheduled' },
+      { shui: 'them', key: 'demo.xiaoXi.hello' },
+      { shui: 'wo', key: 'demo.xiaoXi.schedule' },
+      { shui: 'them', key: 'demo.xiaoXi.scheduled' },
     ],
     'g-1': [
-      { who: 'sys', key: 'demo.msg.duty' },
-      { who: 'them', key: 'demo.msg.synced' },
-      { who: 'me', key: 'demo.msg.urgent' },
+      { shui: 'sys', key: 'demo.xiaoXi.duty' },
+      { shui: 'them', key: 'demo.xiaoXi.synced' },
+      { shui: 'wo', key: 'demo.xiaoXi.urgent' },
     ],
-    'g-2': [{ who: 'them', key: 'demo.msg.rndUpdated' }],
-    'g-3': [{ who: 'sys', key: 'demo.msg.extSilent' }],
+    'g-2': [{ shui: 'them', key: 'demo.xiaoXi.rndUpdated' }],
+    'g-3': [{ shui: 'sys', key: 'demo.xiaoXi.extSilent' }],
     'c-1': [
-      { who: 'them', key: 'demo.msg.weekly' },
-      { who: 'me', key: 'demo.msg.weeklyOk' },
+      { shui: 'them', key: 'demo.xiaoXi.weekly' },
+      { shui: 'wo', key: 'demo.xiaoXi.weeklyOk' },
     ],
   };
   const KB_ENTRIES = [
@@ -131,13 +131,13 @@
 
   const state = {
     tab: 'sessions',
-    locale: I18N.locale || 'zh-CN',
+    yuYan: I18N.yuYan || 'zh-CN',
     theme: 'light',
     accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#07c160',
     urgent: 'P2',
     providers: [
-      { name: 'DeepSeek', url: 'api.deepseek.com', key: '***', configured: true },
-      { name: 'Ollama', url: '127.0.0.1:11434', key: '', configured: false },
+      { ming: 'DeepSeek', url: 'api.deepseek.com', key: '***', configured: true },
+      { ming: 'Ollama', url: '127.0.0.1:11434', key: '', configured: false },
     ],
     smtp: { host: '', port: '465', user: '', pass: '', from: '' },
     mesh: { port: 59599, running: false, peers: 0 },
@@ -204,38 +204,38 @@
 
   // ── 通用片段 ──
   /** 头像：优先 preset SVG；无图时用 CSS 状态/首字点，绝不出现裸字母文本兜底 */
-  const avHtml = (name, preset, cls, status) => {
+  const avHtml = (ming, preset, cls, status) => {
     const src = preset ? AV(preset) : null;
     const st = status || '';
     let inner;
     if (src) inner = '<img src="' + src + '" alt=""/>';
-    else inner = '<span class="av-dot" data-status="' + esc(st || 'idle') + '" aria-hidden="true"></span>';
+    else inner = '<span class="avDian" data-status="' + esc(st || 'idle') + '" aria-hidden="true"></span>';
     return '<div class="av ' + (cls || '') + '" data-has-img="' + (src ? '1' : '0') + '">' + inner + '</div>';
   };
   const statusDotHtml = (status) =>
-    '<span class="status-dot" data-status="' + esc(status || 'stopped') + '" aria-hidden="true"></span>';
+    '<span class="zhuangTaiDian" data-status="' + esc(status || 'stopped') + '" aria-hidden="true"></span>';
 
   const noticeHtml = (key) => '<div class="notice">' + esc(t(key || 'preview.settingsNotice')) + '</div>';
 
-  const barHtml = (title, sub, opts) => {
+  const barHtml = (biaoTi, fu, opts) => {
     const o = opts || {};
     const left = o.back
       ? '<button class="iconbtn back" data-act="back" aria-label="' + esc(t('tip.back')) + '" title="' + esc(t('tip.back')) + '">‹</button>'
       : '<div class="spacer"></div>';
-    const right = o.more
+    const you = o.more
       ? '<button class="iconbtn" data-act="more" aria-label="' + esc(t('tip.more')) + '" title="' + esc(t('tip.more')) + '"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>'
       : '<div class="spacer"></div>';
-    return '<div class="bar">' + left + '<div class="title">' + esc(title) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div>' + right + '</div>';
+    return '<div class="tiao">' + left + '<div class="biaoTi">' + esc(biaoTi) + (fu ? '<small>' + esc(fu) + '</small>' : '') + '</div>' + you + '</div>';
   };
-  const cellHtml = (label, value, act, attrs) => {
+  const cellHtml = (biaoQian, value, act, attrs) => {
     return '<div class="cell"' + (act ? ' data-act="' + act + '"' : '') + (attrs || '') + '>' +
-      '<span class="label">' + esc(label) + '</span>' +
+      '<span class="biaoQian">' + esc(biaoQian) + '</span>' +
       (value === undefined ? '' : '<span class="value">' + value + '</span>') +
-      (act ? '<span class="chev">›</span>' : '') + '</div>';
+      (act ? '<span class="jianTou">›</span>' : '') + '</div>';
   };
 
-  function toast(msg) {
-    state.lastToast = String(msg || '');
+  function toast(xiaoXi) {
+    state.lastToast = String(xiaoXi || '');
     let el = $('#toast');
     if (!el) {
       el = document.createElement('div');
@@ -244,9 +244,9 @@
       document.body.appendChild(el);
     }
     el.textContent = state.lastToast;
-    el.classList.add('on');
+    el.classList.add('qiYong');
     clearTimeout(el.__timer);
-    el.__timer = setTimeout(() => el.classList.remove('on'), 2200);
+    el.__timer = setTimeout(() => el.classList.remove('qiYong'), 2200);
   }
 
   // ── PC 端左侧导航图标 ──
@@ -272,56 +272,56 @@
       const nm = sessionName(s);
       let avWrap;
       if (UNIFIED_AVATAR[s.kind]) {
-        avWrap = '<div class="av-wrap"><div class="av unified">' + navSvg(s.kind, 'nav-ic') + '</div></div>';
+        avWrap = '<div class="avBaoGuo"><div class="av unified">' + navSvg(s.kind, 'nav-ic') + '</div></div>';
       } else {
-        avWrap = '<div class="av-wrap">' + avHtml(nm, inst ? inst.preset : 0, '', inst ? inst.status : '') +
-          '<span class="av-badge">' + navSvg(s.kind, 'badge-ic') + '</span></div>';
+        avWrap = '<div class="avBaoGuo">' + avHtml(nm, inst ? inst.preset : 0, '', inst ? inst.status : '') +
+          '<span class="avHuiZhang">' + navSvg(s.kind, 'badge-ic') + '</span></div>';
       }
-      return '<div class="row" data-open="' + esc(s.id) + '">' + avWrap +
-        '<div class="mid"><div class="n">' + esc(nm) + ' <span class="type-tag" data-kind="' + esc(s.kind) + '">' + esc(typeLabel(s.kind)) + '</span></div><div class="s">' + esc(sessionLast(s)) + '</div></div>' +
-        '<div class="right"><div class="t">' + esc(sessionTs(s)) + '</div>' +
-        (s.unread ? '<div class="badge" title="' + esc(t('chat.tipBadge')) + '" aria-label="' + esc(t('chat.tipBadge')) + '">' + s.unread + '</div>' : '') + '</div></div>';
+      return '<div class="hang" data-open="' + esc(s.id) + '">' + avWrap +
+        '<div class="mid"><div class="n">' + esc(nm) + ' <span class="leiXingBiaoQian" data-kind="' + esc(s.kind) + '">' + esc(typeLabel(s.kind)) + '</span></div><div class="s">' + esc(sessionLast(s)) + '</div></div>' +
+        '<div class="you"><div class="t">' + esc(sessionTs(s)) + '</div>' +
+        (s.unread ? '<div class="huiZhang" title="' + esc(t('chat.tipBadge')) + '" aria-label="' + esc(t('chat.tipBadge')) + '">' + s.unread + '</div>' : '') + '</div></div>';
     }).join('');
     return barHtml(brandName()) +
-      '<div class="body">' + rows +
-      '<div class="hint">' + esc(t('chat.systemNote')) + '</div></div>';
+      '<div class="ti">' + rows +
+      '<div class="tiShi">' + esc(t('chat.systemNote')) + '</div></div>';
   }
 
   function renderCattle() {
     const rows = INSTANCES.map((i) => {
-      return '<div class="row" data-inst="' + esc(i.id) + '">' + avHtml(instName(i), i.preset, '', i.status) +
+      return '<div class="hang" data-inst="' + esc(i.id) + '">' + avHtml(instName(i), i.preset, '', i.status) +
         '<div class="mid"><div class="n">' + esc(instName(i)) + '</div>' +
         '<div class="s">' + statusDotHtml(i.status) + esc(t('inst.status.' + i.status)) + ' · ' + esc(i.model) + '</div></div>' +
-        '<div class="right"><span class="chev" style="color:var(--ink-dim)">›</span></div></div>';
+        '<div class="you"><span class="jianTou" style="color:var(--ink-dim)">›</span></div></div>';
     }).join('');
-    return barHtml(t('cattle.title')) + '<div class="body">' + rows + '</div>';
+    return barHtml(t('cattle.biaoTi')) + '<div class="ti">' + rows + '</div>';
   }
 
   function renderBoard() {
     const tasks = state.boardTasks || [];
     const queueN = tasks.length;
-    const stat = (label, n) => '<div class="cellbox"><span>' + esc(label) + '</span><b>' + n + '</b></div>';
-    const prog = (name, pct, note) =>
-      '<div class="cell cell-compact"><span class="label">' + esc(name) + (note ? ' <span class="muted" style="color:var(--ink-dim);font-size:12px">' + esc(note) + '</span>' : '') +
+    const stat = (biaoQian, n) => '<div class="cellbox"><span>' + esc(biaoQian) + '</span><b>' + n + '</b></div>';
+    const prog = (ming, pct, note) =>
+      '<div class="cell cellCompact"><span class="biaoQian">' + esc(ming) + (note ? ' <span class="jingYin" style="color:var(--ink-dim);font-size:12px">' + esc(note) + '</span>' : '') +
       '</span><span class="value">' + pct + '%</span></div>' +
-      '<div style="padding:0 14px 8px"><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
+      '<div style="padding:0 14px 8px"><div class="jinDu"><i style="width:' + pct + '%"></i></div></div>';
     const taskRows = tasks.map((task) => {
-      const title = task.title || (task.titleKey ? t(task.titleKey) : '');
-      return '<div class="cell cell-compact" data-task="' + esc(task.id) + '"><span class="label">' + esc(title) + '</span><span class="value">' + (task.pct || 0) + '%</span></div>';
+      const biaoTi = task.biaoTi || (task.titleKey ? t(task.titleKey) : '');
+      return '<div class="cell cellCompact" data-task="' + esc(task.id) + '"><span class="biaoQian">' + esc(biaoTi) + '</span><span class="value">' + (task.pct || 0) + '%</span></div>';
     }).join('');
-    return barHtml(t('board.title')) +
-      '<div class="body">' +
+    return barHtml(t('board.biaoTi')) +
+      '<div class="ti">' +
       '<div class="stats">' + stat(t('board.running'), 3) + stat(t('board.done'), 1) + stat(t('board.instances'), 1) + stat(t('board.queue'), queueN) + '</div>' +
-      '<div class="card"><div class="card-title">' + esc(t('board.addTask')) + '</div>' +
-      '<div class="board-add"><input id="board-task-input" placeholder="' + esc(t('board.taskTitle')) + '" />' +
-      '<button class="btn-accent" data-act="board-add">' + esc(t('board.addBtn')) + '</button>' +
-      '<button class="btn-ghost" data-act="board-ai">' + esc(t('board.aiGenerate')) + '</button></div>' +
-      '<div class="card-title">' + esc(t('board.queueList')) + '</div>' +
-      '<div id="board-task-list">' + (taskRows || '<div class="empty">' + esc(t('cp.empty')) + '</div>') + '</div>' +
+      '<div class="ka"><div class="kaBiaoTi">' + esc(t('board.addTask')) + '</div>' +
+      '<div class="kanbanTianJia"><input id="kanbanRenwuShuRu" placeholder="' + esc(t('board.taskTitle')) + '" />' +
+      '<button class="anNiuAccent" data-act="kanbanTianJia">' + esc(t('board.addBtn')) + '</button>' +
+      '<button class="anNiuGhost" data-act="board-ai">' + esc(t('board.aiGenerate')) + '</button></div>' +
+      '<div class="kaBiaoTi">' + esc(t('board.queueList')) + '</div>' +
+      '<div id="kanbanRenwuLieBiao">' + (taskRows || '<div class="empty">' + esc(t('cp.empty')) + '</div>') + '</div>' +
       '</div>' +
-      '<div class="card"><div class="card-title">' + esc(t('board.progress')) + '</div>' +
+      '<div class="ka"><div class="kaBiaoTi">' + esc(t('board.jinDu')) + '</div>' +
       prog(demoName('demo.sess.g1', '项目推进群'), 65) + prog(demoName('demo.sess.g2', '研发排期'), 30, t('board.blocked')) + prog('demo.agent', 40) +
-      '</div><div class="hint">' + esc(t('board.readonlyHint')) + '</div></div>';
+      '</div><div class="tiShi">' + esc(t('board.readonlyHint')) + '</div></div>';
   }
 
   /**
@@ -337,50 +337,50 @@
   }
   /** 组网开关文案（与桌面端同一套键：net.switchOn/net.switchOff） */
   function meshSwitchText() {
-    const on = !!(state.mesh && state.mesh.running);
-    return String(on ? t('net.switchOn') : t('net.switchOff')).replace('{port}', String(meshPort()));
+    const qiYong = !!(state.mesh && state.mesh.running);
+    return String(qiYong ? t('net.switchOn') : t('net.switchOff')).replace('{port}', String(meshPort()));
   }
 
   function renderMe() {
-    return barHtml(t('me.title')) +
-      '<div class="body">' +
-      '<div class="me-head">' + avHtml(t('me.owner'), 1) +
-      '<div class="who"><div class="n">' + esc(t('me.owner')) + '</div><div class="m">ID: 884024787 · ' + esc(brandName()) + '</div></div></div>' +
+    return barHtml(t('wo.biaoTi')) +
+      '<div class="ti">' +
+      '<div class="woHead">' + avHtml(t('wo.owner'), 1) +
+      '<div class="shui"><div class="n">' + esc(t('wo.owner')) + '</div><div class="m">ID: 884024787 · ' + esc(brandName()) + '</div></div></div>' +
       noticeHtml() +
-      '<div class="card">' +
-      cellHtml(t('me.appearance'), '', 'set-appearance') +
-      cellHtml(t('me.provider'), esc(t('provider.configured')), 'set-provider') +
-      cellHtml(t('me.smtp'), esc(t('me.notConfiguredHint')), 'set-smtp') +
-      cellHtml(t('me.mesh'), String(meshPort()), 'set-mesh') +
-      cellHtml(t('me.about'), '0.1.0', 'set-about') +
+      '<div class="ka">' +
+      cellHtml(t('wo.appearance'), '', 'set-appearance') +
+      cellHtml(t('wo.provider'), esc(t('provider.configured')), 'set-provider') +
+      cellHtml(t('wo.smtp'), esc(t('wo.notConfiguredHint')), 'set-smtp') +
+      cellHtml(t('wo.mesh'), String(meshPort()), 'set-mesh') +
+      cellHtml(t('wo.about'), '0.1.0', 'set-about') +
       '</div>' +
-      '<div class="card"><div class="card-title">' + esc(t('me.settings')) + '</div>' +
-      cellHtml(t('me.models'), esc(t('me.desktopOnly')), 'act-models') +
-      cellHtml(t('me.skills'), esc(t('me.desktopOnly')), 'act-skills') +
-      cellHtml(t('me.cleanup'), esc(t('me.desktopOnly')), 'act-cleanup') +
-      cellHtml(t('me.updates'), esc(t('me.desktopOnly')), 'act-updates') +
+      '<div class="ka"><div class="kaBiaoTi">' + esc(t('wo.settings')) + '</div>' +
+      cellHtml(t('wo.models'), esc(t('wo.desktopOnly')), 'act-models') +
+      cellHtml(t('wo.skills'), esc(t('wo.desktopOnly')), 'act-skills') +
+      cellHtml(t('wo.cleanup'), esc(t('wo.desktopOnly')), 'act-cleanup') +
+      cellHtml(t('wo.updates'), esc(t('wo.desktopOnly')), 'act-updates') +
       '</div></div>';
   }
 
   const TABS = [
-    { id: 'sessions', label: 'tab.sessions', svg: '<path d="M4 4h16v11H8l-4 4V4z"/>' },
-    { id: 'cattle', label: 'tab.cattle', svg: '<path d="M12 4a4 4 0 014 4v1h1v9H7v-9h1V8a4 4 0 014-4zm-6 6a2 2 0 100-4 2 2 0 000 4zm12 0a2 2 0 100-4 2 2 0 000 4z"/>' },
-    { id: 'board', label: 'tab.board', svg: '<path d="M4 4h7v7H4V4zm9 0h7v4h-7V4zM4 13h7v7H4v-7zm9 2h7v5h-7v-5z"/>' },
-    { id: 'me', label: 'tab.me', svg: '<path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-5 0-8 2.5-8 5v1h16v-1c0-2.5-3-5-8-5z"/>' },
+    { id: 'sessions', biaoQian: 'tab.sessions', svg: '<path d="M4 4h16v11H8l-4 4V4z"/>' },
+    { id: 'cattle', biaoQian: 'tab.cattle', svg: '<path d="M12 4a4 4 0 014 4v1h1v9H7v-9h1V8a4 4 0 014-4zm-6 6a2 2 0 100-4 2 2 0 000 4zm12 0a2 2 0 100-4 2 2 0 000 4z"/>' },
+    { id: 'board', biaoQian: 'tab.board', svg: '<path d="M4 4h7v7H4V4zm9 0h7v4h-7V4zM4 13h7v7H4v-7zm9 2h7v5h-7v-5z"/>' },
+    { id: 'wo', biaoQian: 'tab.wo', svg: '<path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-5 0-8 2.5-8 5v1h16v-1c0-2.5-3-5-8-5z"/>' },
   ];
   function renderTabs() {
     return TABS.map((x) => {
-      const label = t(x.label);
-      return '<button data-tab="' + x.id + '" class="' + (state.tab === x.id ? 'on' : '') + '"' +
-        ' aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
-        '<svg viewBox="0 0 24 24" aria-hidden="true">' + x.svg + '</svg>' + esc(label) + '</button>';
+      const biaoQian = t(x.biaoQian);
+      return '<button data-tab="' + x.id + '" class="' + (state.tab === x.id ? 'qiYong' : '') + '"' +
+        ' aria-label="' + esc(biaoQian) + '" title="' + esc(biaoQian) + '">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + x.svg + '</svg>' + esc(biaoQian) + '</button>';
     }).join('');
   }
 
-  const TAB_RENDER = { sessions: renderSessions, cattle: renderCattle, board: renderBoard, me: renderMe };
+  const TAB_RENDER = { sessions: renderSessions, cattle: renderCattle, board: renderBoard, wo: renderMe };
 
   function renderTab() {
-    $('#tabs-host').innerHTML = '<section class="tab-page on">' + TAB_RENDER[state.tab]() + '</section>';
+    $('#tabsHost').innerHTML = '<section class="tab-page qiYong">' + TAB_RENDER[state.tab]() + '</section>';
     $('#tabs').innerHTML = renderTabs();
   }
 
@@ -390,14 +390,14 @@
     const el = document.createElement('div');
     el.className = 'page';
     el.innerHTML = inner;
-    $('#page-host').appendChild(el);
-    requestAnimationFrame(() => el.classList.add('on'));
+    $('#pageHost').appendChild(el);
+    requestAnimationFrame(() => el.classList.add('qiYong'));
     return el;
   }
   function pop() {
     const el = stack.pop();
     if (!el) return;
-    el.classList.remove('on');
+    el.classList.remove('qiYong');
     setTimeout(() => el.remove(), 240);
   }
   function push(inner) {
@@ -417,46 +417,46 @@
 
   // 聊天页
   function openChat(id) {
-    const s = sessionOf(id) || { id: id, name: id, kind: 'internal' };
+    const s = sessionOf(id) || { id: id, ming: id, kind: 'internal' };
     const nm = sessionName(s);
-    const msgs = MSGS[id] || [];
-    const body = msgs.map((m) => {
+    const xiaoXi = MSGS[id] || [];
+    const ti = xiaoXi.map((m) => {
       const text = m.key ? t(m.key) : m.text;
-      if (m.who === 'sys') return '<div class="msg-row"><span class="sys">' + esc(text) + '</span></div>';
-      const me = m.who === 'me';
-      const inst = me ? null : instOf(id);
-      const av = me ? avHtml(t('me.owner'), 1) : inst ? avHtml(instName(inst), inst.preset, '', inst.status) : avHtml(nm, 0);
-      return '<div class="msg' + (me ? ' me' : '') + '">' + av + '<div class="bubble">' + esc(text) + '</div></div>';
+      if (m.shui === 'sys') return '<div class="xiaoXiHang"><span class="sys">' + esc(text) + '</span></div>';
+      const wo = m.shui === 'wo';
+      const inst = wo ? null : instOf(id);
+      const av = wo ? avHtml(t('wo.owner'), 1) : inst ? avHtml(instName(inst), inst.preset, '', inst.status) : avHtml(nm, 0);
+      return '<div class="xiaoXi' + (wo ? ' wo' : '') + '">' + av + '<div class="bubble">' + esc(text) + '</div></div>';
     }).join('');
     const inner =
-      barHtml(nm, s.kind === 'single' ? t('chat.sub.single') : t('chat.sub.group'), { back: true, more: true }) +
-      '<div class="body chat-body"><div class="msgs" id="msgs">' + body + '</div></div>' +
-      '<div class="composer"><textarea id="input" rows="1" placeholder="' + esc(t('m.chat.placeholder')) + '"></textarea>' +
-      '<button class="send" id="send" disabled>' + esc(t('chat.send')) + '</button></div>';
+      barHtml(nm, s.kind === 'single' ? t('chat.fu.single') : t('chat.fu.group'), { back: true, more: true }) +
+      '<div class="ti liaoTianTi"><div class="xiaoXi" id="xiaoXi">' + ti + '</div></div>' +
+      '<div class="shuRuQu"><textarea id="shuRu" rows="1" placeholder="' + esc(t('m.chat.placeholder')) + '"></textarea>' +
+      '<button class="faSong" id="faSong" disabled>' + esc(t('chat.faSong')) + '</button></div>';
     const el = push(inner);
     wirePage(el, {
       more: () => openSheet([
-        { label: t('chat.members'), act: 'p-members', id: id },
-        { label: t('chat.model'), act: 'p-model', id: id },
-        { label: t('chat.kb'), act: 'p-kb', id: id },
-        { label: t('chat.checkpoints'), act: 'p-cp', id: id },
-        { label: t('chat.metrics'), act: 'p-metrics', id: id },
-        { label: t('chat.export'), act: 'p-export', id: id },
+        { biaoQian: t('chat.members'), act: 'p-members', id: id },
+        { biaoQian: t('chat.model'), act: 'p-model', id: id },
+        { biaoQian: t('chat.kb'), act: 'p-kb', id: id },
+        { biaoQian: t('chat.checkpoints'), act: 'p-cp', id: id },
+        { biaoQian: t('chat.metrics'), act: 'p-metrics', id: id },
+        { biaoQian: t('chat.export'), act: 'p-export', id: id },
       ]),
     });
-    const ta = $('#input', el);
-    const send = $('#send', el);
-    const sync = () => { send.disabled = !ta.value.trim(); };
+    const ta = $('#shuRu', el);
+    const faSong = $('#faSong', el);
+    const sync = () => { faSong.disabled = !ta.value.trim(); };
     ta.addEventListener('input', sync);
-    send.addEventListener('click', () => {
+    faSong.addEventListener('click', () => {
       const v = ta.value.trim();
       if (!v) return;
       const d = document.createElement('div');
-      d.className = 'msg me';
-      d.innerHTML = avHtml(t('me.owner'), 1) + '<div class="bubble">' + esc(v) + '</div>';
-      $('#msgs', el).appendChild(d);
+      d.className = 'xiaoXi wo';
+      d.innerHTML = avHtml(t('wo.owner'), 1) + '<div class="bubble">' + esc(v) + '</div>';
+      $('#xiaoXi', el).appendChild(d);
       ta.value = ''; sync();
-      $('#msgs', el).scrollTop = $('#msgs', el).scrollHeight;
+      $('#xiaoXi', el).scrollTop = $('#xiaoXi', el).scrollHeight;
     });
   }
 
@@ -467,23 +467,23 @@
     const chip = (m) => '<span style="display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:3px 9px;margin:3px 6px 3px 0;font-size:12px">' + esc(m) + '</span>';
     const persona = i.personaKey ? t(i.personaKey) : (i.persona || '');
     const inner = barHtml(instName(i), t('inst.status.' + i.status), { back: true }) +
-      '<div class="body" data-inst-page="' + esc(i.id) + '">' +
-      '<div class="me-head">' + avHtml(instName(i), i.preset, '', i.status) +
-      '<div class="who"><div class="n">' + esc(instName(i)) + '</div><div class="m" data-inst-status>' + statusDotHtml(i.status) + esc(t('inst.status.' + i.status)) + '</div></div></div>' +
-      '<div class="card"><div class="card-title">' + esc(t('inst.defaultModel')) + '</div>' +
+      '<div class="ti" data-inst-page="' + esc(i.id) + '">' +
+      '<div class="woHead">' + avHtml(instName(i), i.preset, '', i.status) +
+      '<div class="shui"><div class="n">' + esc(instName(i)) + '</div><div class="m" data-inst-status>' + statusDotHtml(i.status) + esc(t('inst.status.' + i.status)) + '</div></div></div>' +
+      '<div class="ka"><div class="kaBiaoTi">' + esc(t('inst.defaultModel')) + '</div>' +
       cellHtml(disp(i.model)) + '</div>' +
-      '<div class="card inst-actions">' +
-      '<button class="btn-accent" data-act="inst-start" data-id="' + esc(i.id) + '">' + esc(t('inst.start')) + '</button>' +
-      '<button class="btn-ghost" data-act="inst-stop" data-id="' + esc(i.id) + '">' + esc(t('inst.stop')) + '</button>' +
-      '<button class="btn-ghost" data-act="inst-restart" data-id="' + esc(i.id) + '">' + esc(t('inst.restart')) + '</button>' +
+      '<div class="ka shiLiDongZuoJi">' +
+      '<button class="anNiuAccent" data-act="inst-start" data-id="' + esc(i.id) + '">' + esc(t('inst.start')) + '</button>' +
+      '<button class="anNiuGhost" data-act="inst-stop" data-id="' + esc(i.id) + '">' + esc(t('inst.stop')) + '</button>' +
+      '<button class="anNiuGhost" data-act="inst-restart" data-id="' + esc(i.id) + '">' + esc(t('inst.restart')) + '</button>' +
       '</div>' +
-      '<div class="card"><div class="card-title">' + esc(t('inst.models')) + '</div>' +
+      '<div class="ka"><div class="kaBiaoTi">' + esc(t('inst.models')) + '</div>' +
       '<div style="padding:10px 14px 14px">' + i.models.map(chip).join('') + '</div></div>' +
-      '<div class="card"><div class="card-title">' + esc(t('inst.chain')) + '</div>' +
+      '<div class="ka"><div class="kaBiaoTi">' + esc(t('inst.chain')) + '</div>' +
       i.chain.map((m, k) => cellHtml((k + 1) + '. ' + m)).join('') + '</div>' +
-      '<div class="card"><div class="card-title">' + esc(t('inst.persona')) + '</div>' +
+      '<div class="ka"><div class="kaBiaoTi">' + esc(t('inst.persona')) + '</div>' +
       '<div style="padding:12px 14px;white-space:pre-wrap;font-size:14px">' + esc(persona || '—') + '</div></div>' +
-      '<div class="hint">' + esc(t('chat.systemNote')) + '</div></div>';
+      '<div class="tiShi">' + esc(t('chat.systemNote')) + '</div></div>';
     const el = push(inner);
     wirePage(el, {
       'inst-start': () => applyInstStatus(i, 'running'),
@@ -500,57 +500,57 @@
     if (page) {
       const slot = page.querySelector('[data-inst-status]');
       if (slot) slot.innerHTML = statusDotHtml(next) + esc(t('inst.status.' + next));
-      const titleSub = page.querySelector('.bar .title small');
+      const titleSub = page.querySelector('.tiao .biaoTi small');
       if (titleSub) titleSub.textContent = t('inst.status.' + next);
     }
   }
 
   // 聊天「…」里的六个面板（三级）
   function openPanel(kind, id) {
-    const s = sessionOf(id) || { name: id, id: id };
+    const s = sessionOf(id) || { ming: id, id: id };
     const sName = sessionName(s);
-    let title = '', bodyHtml = '';
+    let biaoTi = '', bodyHtml = '';
     if (kind === 'members') {
-      title = t('chat.members');
+      biaoTi = t('chat.members');
       const names = (GROUP_MEMBERS[id] || [id]).map((mid) => {
         const inst = instOf(mid);
-        return { name: inst ? instName(inst) : mid, inst: inst };
+        return { ming: inst ? instName(inst) : mid, inst: inst };
       });
-      bodyHtml = '<div class="card">' + names.map((n) => {
+      bodyHtml = '<div class="ka">' + names.map((n) => {
         const inst = n.inst;
-        return '<div class="row" data-inst="' + esc(inst ? inst.id : n.name) + '">' +
+        return '<div class="hang" data-inst="' + esc(inst ? inst.id : n.name) + '">' +
           avHtml(n.name, inst ? inst.preset : 0, '', inst ? inst.status : '') +
           '<div class="mid"><div class="n">' + esc(n.name) + '</div><div class="s">' + esc(inst ? disp(inst.model) : '—') + '</div></div></div>';
       }).join('') + '</div>';
     } else if (kind === 'model') {
-      title = t('chat.model');
+      biaoTi = t('chat.model');
       const inst = instOf(id) || INSTANCES[0];
       const chip = (m) => '<span style="display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:3px 9px;margin:3px 6px 3px 0;font-size:12px">' + esc(m) + '</span>';
-      bodyHtml = '<div class="card"><div class="card-title">' + esc(t('inst.defaultModel')) + '</div>' + cellHtml(disp(inst.model)) + '</div>' +
-        '<div class="card"><div class="card-title">' + esc(t('inst.models')) + '</div><div style="padding:10px 14px 14px">' + inst.models.map(chip).join('') + '</div></div>' +
-        '<div class="card"><div class="card-title">' + esc(t('inst.chain')) + '</div>' + inst.chain.map((m, k) => cellHtml((k + 1) + '. ' + m)).join('') + '</div>';
+      bodyHtml = '<div class="ka"><div class="kaBiaoTi">' + esc(t('inst.defaultModel')) + '</div>' + cellHtml(disp(inst.model)) + '</div>' +
+        '<div class="ka"><div class="kaBiaoTi">' + esc(t('inst.models')) + '</div><div style="padding:10px 14px 14px">' + inst.models.map(chip).join('') + '</div></div>' +
+        '<div class="ka"><div class="kaBiaoTi">' + esc(t('inst.chain')) + '</div>' + inst.chain.map((m, k) => cellHtml((k + 1) + '. ' + m)).join('') + '</div>';
     } else if (kind === 'kb') {
-      title = t('chat.kb');
+      biaoTi = t('chat.kb');
       const rows = KB_ENTRIES.map((e) =>
-        cellHtml(t(e.nameKey), esc(t(e.kindKey)), 'kb-open', ' data-kb="' + esc(e.id) + '"')
+        cellHtml(t(e.mingKey), esc(t(e.kindKey)), 'kb-open', ' data-kb="' + esc(e.id) + '"')
       ).join('');
-      bodyHtml = '<div class="card"><div style="padding:12px 14px"><input id="kb-q" placeholder="' + esc(t('kb.hint')) + '" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit"/></div></div>' +
-        '<div class="card" id="kb-list">' + rows + '</div>';
+      bodyHtml = '<div class="ka"><div style="padding:12px 14px"><input id="zhiShiKuQ" placeholder="' + esc(t('kb.tiShi')) + '" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit"/></div></div>' +
+        '<div class="ka" id="zhiShiKuLieBiao">' + rows + '</div>';
     } else if (kind === 'cp') {
-      title = t('chat.checkpoints');
-      bodyHtml = '<div class="card">' + cellHtml(t('time.justNow') !== 'time.justNow' ? t('time.justNow') : '12:04', '65%') + cellHtml(t('time.yesterday') !== 'time.yesterday' ? t('time.yesterday') : '18:20', '30%') + '</div>' +
-        '<div class="hint">' + esc(t('cp.rollbackHint')) + '</div>';
+      biaoTi = t('chat.checkpoints');
+      bodyHtml = '<div class="ka">' + cellHtml(t('time.justNow') !== 'time.justNow' ? t('time.justNow') : '12:04', '65%') + cellHtml(t('time.yesterday') !== 'time.yesterday' ? t('time.yesterday') : '18:20', '30%') + '</div>' +
+        '<div class="tiShi">' + esc(t('cp.rollbackHint')) + '</div>';
     } else if (kind === 'metrics') {
-      title = t('chat.metrics');
+      biaoTi = t('chat.metrics');
       bodyHtml = '<div class="stats"><div class="cellbox"><span>' + esc(t('metrics.turns')) + '</span><b>3</b></div>' +
         '<div class="cellbox"><span>' + esc(t('metrics.cost')) + '</span><b>0.029</b></div></div>' +
-        '<div class="card">' + cellHtml('cache', '32%') + cellHtml('ccr', '90%') + cellHtml('avg', '2400ms') + '</div>';
+        '<div class="ka">' + cellHtml('cache', '32%') + cellHtml('ccr', '90%') + cellHtml('avg', '2400ms') + '</div>';
     } else {
-      title = t('chat.export');
-      bodyHtml = '<div class="card">' + cellHtml(t('export.markdown'), '.md') + cellHtml(t('export.hasTs'), t('common.yes')) + '</div>' +
-        '<div class="hint">' + esc(t('export.hint')) + '</div>';
+      biaoTi = t('chat.export');
+      bodyHtml = '<div class="ka">' + cellHtml(t('export.markdown'), '.md') + cellHtml(t('export.hasTs'), t('common.yes')) + '</div>' +
+        '<div class="tiShi">' + esc(t('export.tiShi')) + '</div>';
     }
-    const el = push(barHtml(title, sName, { back: true }) + '<div class="body" data-panel="' + esc(kind) + '">' + bodyHtml + '</div>');
+    const el = push(barHtml(biaoTi, sName, { back: true }) + '<div class="ti" data-panel="' + esc(kind) + '">' + bodyHtml + '</div>');
     if (kind === 'kb') {
       wirePage(el, {
         'kb-open': (b) => openKbDetail(b.dataset.kb),
@@ -560,65 +560,65 @@
 
   function openKbDetail(kbId) {
     const e = KB_ENTRIES.filter((x) => x.id === kbId)[0] || KB_ENTRIES[0];
-    const inner = barHtml(t(e.nameKey), t(e.kindKey), { back: true }) +
-      '<div class="body"><div class="card"><div class="card-title">' + esc(t('kb.detail')) + '</div>' +
-      cellHtml(t(e.nameKey), esc(t(e.kindKey))) +
+    const inner = barHtml(t(e.mingKey), t(e.kindKey), { back: true }) +
+      '<div class="ti"><div class="ka"><div class="kaBiaoTi">' + esc(t('kb.detail')) + '</div>' +
+      cellHtml(t(e.mingKey), esc(t(e.kindKey))) +
       '<div style="padding:12px 14px;font-size:14px;line-height:1.6">' + esc(t(e.summaryKey)) + '</div>' +
-      '</div><div class="hint">' + esc(t('chat.systemNote')) + '</div></div>';
+      '</div><div class="tiShi">' + esc(t('chat.systemNote')) + '</div></div>';
     push(inner);
   }
 
   function openDesktopOnly(kind) {
     // 'diag'（卡顿自检）已退休：桌面端入口整块移除，移动端这条悬空入口也随之删掉。
-    const labelKey = { models: 'me.models', skills: 'me.skills', cleanup: 'me.cleanup', updates: 'me.updates' }[kind] || 'me.settings';
+    const labelKey = { models: 'wo.models', skills: 'wo.skills', cleanup: 'wo.cleanup', updates: 'wo.updates' }[kind] || 'wo.settings';
     const inner = barHtml(t(labelKey), '', { back: true }) +
-      '<div class="body"><div class="notice">' + esc(t('me.desktopOnly')) + '</div>' +
-      '<div class="card">' + cellHtml(t(labelKey), esc(t('me.desktopOnly'))) + '</div></div>';
+      '<div class="ti"><div class="notice">' + esc(t('wo.desktopOnly')) + '</div>' +
+      '<div class="ka">' + cellHtml(t(labelKey), esc(t('wo.desktopOnly'))) + '</div></div>';
     push(inner);
   }
 
   // 设置分组（三级）
   function openSetting(group) {
     const map = {
-      appearance: t('me.appearance'),
-      provider: t('me.provider'),
-      smtp: t('me.smtp'),
-      mesh: t('me.mesh'),
-      about: t('me.about'),
+      appearance: t('wo.appearance'),
+      provider: t('wo.provider'),
+      smtp: t('wo.smtp'),
+      mesh: t('wo.mesh'),
+      about: t('wo.about'),
     };
-    let body = '';
+    let ti = '';
     const flatColors = accentPalette();
     const swatchHtml = flatColors.map((c) => '<button data-color="' + c + '" style="width:100%;aspect-ratio:1;border-radius:50%;background:' + c + ';border:2px solid ' + (c === state.accent ? 'var(--ink)' : 'transparent') + ';cursor:pointer;padding:0"></button>').join('');
 
     if (group === 'appearance') {
-      body = '<div class="card"><div class="card-title">' + esc(t('me.language')) + '</div>' +
-        cellHtml(t('settings.localeZh'), state.locale === 'zh-CN' ? '✓' : '', 'lang-zh') +
-        cellHtml(t('settings.localeEn'), state.locale === 'en-US' ? '✓' : '', 'lang-en') + '</div>' +
-        '<div class="card"><div class="card-title">' + esc(t('me.theme')) + '</div>' +
-        cellHtml(t('me.light'), state.theme === 'light' ? '✓' : '', 'theme-light') +
-        cellHtml(t('me.dark'), state.theme === 'dark' ? '✓' : '', 'theme-dark') +
-        cellHtml(t('me.system'), state.theme === 'system' ? '✓' : '', 'theme-system') + '</div>' +
-        '<div class="card"><div class="card-title">' + esc(t('me.accent')) + '</div>' +
+      ti = '<div class="ka"><div class="kaBiaoTi">' + esc(t('wo.language')) + '</div>' +
+        cellHtml(t('settings.localeZh'), state.yuYan === 'zh-CN' ? '✓' : '', 'lang-zh') +
+        cellHtml(t('settings.localeEn'), state.yuYan === 'en-US' ? '✓' : '', 'lang-en') + '</div>' +
+        '<div class="ka"><div class="kaBiaoTi">' + esc(t('wo.theme')) + '</div>' +
+        cellHtml(t('wo.light'), state.theme === 'light' ? '✓' : '', 'theme-light') +
+        cellHtml(t('wo.dark'), state.theme === 'dark' ? '✓' : '', 'theme-dark') +
+        cellHtml(t('wo.system'), state.theme === 'system' ? '✓' : '', 'theme-system') + '</div>' +
+        '<div class="ka"><div class="kaBiaoTi">' + esc(t('wo.accent')) + '</div>' +
         '<div style="display:grid;grid-template-columns:repeat(17,1fr);gap:5px;padding:10px 14px">' + swatchHtml + '</div>' +
         '<div style="padding:0 14px 12px;text-align:center"><button data-act="custom-color" style="font-size:13px;color:var(--accent);background:none;border:none;cursor:pointer">' + esc(t('accent.custom')) + ' ›</button></div>' +
         '</div>';
     } else if (group === 'provider') {
       const rows = state.providers || [];
-      body = '<div class="card"><div class="card-title">' + esc(t('provider.list')) + '</div>' +
-        rows.map((p, i) => '<div class="cell" data-edit-prov="' + i + '"><span class="label">' + esc(p.name) + '</span><span class="value">' + esc(p.configured ? t('provider.configured') : t('provider.notConfigured')) + '</span><span class="chev">›</span></div>').join('') +
-        '<div class="cell" data-act="add-provider"><span class="label" style="color:var(--accent)">' + esc(t('provider.add')) + '</span></div>' +
+      ti = '<div class="ka"><div class="kaBiaoTi">' + esc(t('provider.list')) + '</div>' +
+        rows.map((p, i) => '<div class="cell" data-edit-prov="' + i + '"><span class="biaoQian">' + esc(p.name) + '</span><span class="value">' + esc(p.configured ? t('provider.configured') : t('provider.notConfigured')) + '</span><span class="jianTou">›</span></div>').join('') +
+        '<div class="cell" data-act="add-provider"><span class="biaoQian" style="color:var(--accent)">' + esc(t('provider.add')) + '</span></div>' +
         '</div>';
     } else if (group === 'smtp') {
       const smtp = state.smtp || { host: '', port: '465', user: '', pass: '', from: '' };
-      body = '<div class="card"><div class="card-title">' + esc(t('smtp.settings')) + '</div>' +
+      ti = '<div class="ka"><div class="kaBiaoTi">' + esc(t('smtp.settings')) + '</div>' +
         '<div style="padding:10px 14px;display:flex;flex-direction:column;gap:10px">' +
-        '<label style="font-size:13px">' + esc(t('smtp.hostLabel')) + '<input id="smtp-host" value="' + esc(smtp.host) + '" placeholder="smtp.example.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '<label style="font-size:13px">' + esc(t('smtp.portLabel')) + '<input id="smtp-port" value="' + esc(smtp.port) + '" placeholder="465" type="number" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '<label style="font-size:13px">' + esc(t('smtp.userLabel')) + '<input id="smtp-user" value="' + esc(smtp.user) + '" placeholder="your@email.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '<label style="font-size:13px">' + esc(t('smtp.passLabel')) + '<input id="smtp-pass" value="" type="password" placeholder="' + esc(t('smtp.passPlaceholder')) + '" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '<label style="font-size:13px">' + esc(t('smtp.fromLabel')) + '<input id="smtp-from" value="' + esc(smtp.from) + '" placeholder="' + esc(t('smtp.fromPlaceholder')) + '" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
-        '</div><div style="padding:0 14px 12px"><button data-act="verify-smtp" class="btn-primary" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font:inherit;cursor:pointer">' + esc(t('smtp.verifyBtn')) + '</button></div></div>' +
-        '<div class="card"><div class="card-title">' + esc(t('notify.title')) + '</div>' +
+        '<label style="font-size:13px">' + esc(t('smtp.hostLabel')) + '<input id="smtpHost" value="' + esc(smtp.host) + '" placeholder="smtp.example.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">' + esc(t('smtp.portLabel')) + '<input id="smtpDuanKou" value="' + esc(smtp.port) + '" placeholder="465" type="number" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">' + esc(t('smtp.userLabel')) + '<input id="smtpUser" value="' + esc(smtp.user) + '" placeholder="your@email.com" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">' + esc(t('smtp.passLabel')) + '<input id="smtpPass" value="" type="password" placeholder="' + esc(t('smtp.passPlaceholder')) + '" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '<label style="font-size:13px">' + esc(t('smtp.fromLabel')) + '<input id="smtpCong" value="' + esc(smtp.from) + '" placeholder="' + esc(t('smtp.fromPlaceholder')) + '" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin-top:4px"/></label>' +
+        '</div><div style="padding:0 14px 12px"><button data-act="verify-smtp" class="anNiuZhuYao" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font:inherit;cursor:pointer">' + esc(t('smtp.verifyBtn')) + '</button></div></div>' +
+        '<div class="ka"><div class="kaBiaoTi">' + esc(t('notify.biaoTi')) + '</div>' +
         cellHtml(t('notify.done'), state.notifyDone ? '✓' : '', 'notify-done') +
         cellHtml(t('notify.req'), state.notifyReq ? '✓' : '', 'notify-req') +
         cellHtml(t('notify.err'), state.notifyErr ? '✓' : '', 'notify-err') + '</div>';
@@ -626,29 +626,29 @@
       // 组网（新概念）：沿用桌面端的键与语义 —— 组网开关 + 监听端口 + 已知节点 + 邀请入口。
       // 旧「内网同步 / 多节点组网」块已退休：这里不再有 mesh.addPeer/remove/broadcast 那套多节点面板文案。
       const mesh = state.mesh || { port: MESH_DEFAULT_PORT, running: false, peers: 0 };
-      body = '<div class="card"><div class="card-title">' + esc(t('mesh.title')) + '</div>' +
+      ti = '<div class="ka"><div class="kaBiaoTi">' + esc(t('mesh.biaoTi')) + '</div>' +
         cellHtml(t('mesh.portLabel'), String(meshPort())) +
         cellHtml(t('mesh.stateLabel'), esc(meshSwitchText())) +
         cellHtml(t('mesh.peers'), String(mesh.peers)) +
         '<div style="padding:10px 14px 12px"><button data-act="toggle-mesh" style="width:100%;padding:10px;border:none;border-radius:8px;background:' + (mesh.running ? 'var(--danger)' : 'var(--accent)') + ';color:#fff;font:inherit;cursor:pointer">' + (mesh.running ? esc(t('mesh.stop')) : esc(t('mesh.start'))) + '</button></div>' +
         '</div>' +
-        '<div class="card"><div class="card-title">' + esc(t('mesh.invite')) + '</div>' +
+        '<div class="ka"><div class="kaBiaoTi">' + esc(t('mesh.invite')) + '</div>' +
         cellHtml(t('mesh.genInvite'), '', 'gen-invite') +
         cellHtml(t('mesh.scanJoin'), '', 'scan-invite') + '</div>';
     } else {
-      body = '<div class="card"><div class="card-title">' + esc(t('me.about')) + '</div>' +
-        cellHtml(t('me.version'), 'v0.1.0') +
-        cellHtml(t('me.checkUpdate'), esc(t('me.checkUpdate')), 'check-update') +
+      ti = '<div class="ka"><div class="kaBiaoTi">' + esc(t('wo.about')) + '</div>' +
+        cellHtml(t('wo.version'), 'v0.1.0') +
+        cellHtml(t('wo.checkUpdate'), esc(t('wo.checkUpdate')), 'check-update') +
         cellHtml('Electron', '33.2.0') +
         cellHtml('Chromium', '130.0.6723.191') +
         cellHtml('Node.js', '24.20.0') + '</div>' +
-        '<div class="card"><div class="card-title">' + esc(t('about.opensource')) + '</div>' +
+        '<div class="ka"><div class="kaBiaoTi">' + esc(t('about.opensource')) + '</div>' +
         cellHtml(t('about.license'), 'MIT') +
         cellHtml(t('about.author'), 'Pondsi') +
-        cellHtml(t('me.copyright'), '© 2026 Pondsi') +
-        cellHtml(t('me.deviceId'), '884024787') + '</div>';
+        cellHtml(t('wo.copyright'), '© 2026 Pondsi') +
+        cellHtml(t('wo.deviceId'), '884024787') + '</div>';
     }
-    const el = push(barHtml(map[group], '', { back: true }) + '<div class="body">' + noticeHtml() + body + '</div>');
+    const el = push(barHtml(map[group], '', { back: true }) + '<div class="ti">' + noticeHtml() + ti + '</div>');
     el.querySelectorAll('[data-color]').forEach((b) => {
       b.addEventListener('click', () => {
         state.accent = b.dataset.color;
@@ -659,7 +659,7 @@
         setTimeout(() => openSetting('appearance'), 30);
       });
     });
-    ['smtp-host', 'smtp-port', 'smtp-user', 'smtp-pass', 'smtp-from'].forEach((id) => {
+    ['smtpHost', 'smtpDuanKou', 'smtpUser', 'smtpPass', 'smtpCong'].forEach((id) => {
       const inp = el.querySelector('#' + id);
       if (inp) inp.addEventListener('change', () => {
         const key = id.replace('smtp-', '');
@@ -678,7 +678,7 @@
         inp.onchange = () => { state.accent = inp.value; document.documentElement.style.setProperty('--accent', state.accent); document.documentElement.style.setProperty('--me-bubble', state.accent); pop(); setTimeout(() => openSetting('appearance'), 30); };
         inp.click();
       },
-      'verify-smtp': () => { toast(t('msg.smtpDesktopOnly')); },
+      'verify-smtp': () => { toast(t('xiaoXi.smtpDesktopOnly')); },
       'toggle-mesh': () => {
         state.mesh.running = !state.mesh.running;
         pop();
@@ -688,16 +688,16 @@
       'notify-req': () => { state.notifyReq = !state.notifyReq; pop(); setTimeout(() => openSetting('smtp'), 30); },
       'notify-err': () => { state.notifyErr = !state.notifyErr; pop(); setTimeout(() => openSetting('smtp'), 30); },
       'add-provider': () => {
-        const name = prompt(t('prompt.providerName'));
-        if (name) {
-          state.providers.push({ name, url: '', key: '', configured: false });
+        const ming = prompt(t('prompt.providerName'));
+        if (ming) {
+          state.providers.push({ ming, url: '', key: '', configured: false });
           pop();
           setTimeout(() => openSetting('provider'), 30);
         }
       },
-      'check-update': () => toast(t('msg.latest') + ' v0.1.0'),
-      'gen-invite': () => toast(t('msg.inviteCopied')),
-      'scan-invite': () => toast(t('msg.scanOnDesktop')),
+      'check-update': () => toast(t('xiaoXi.latest') + ' v0.1.0'),
+      'gen-invite': () => toast(t('xiaoXi.inviteCopied')),
+      'scan-invite': () => toast(t('xiaoXi.scanOnDesktop')),
     });
     el.querySelectorAll('[data-edit-prov]').forEach((b) => {
       b.addEventListener('click', () => {
@@ -717,11 +717,11 @@
     closeSheet();
     const mask = $('#mask');
     const sheet = $('#sheet');
-    sheet.innerHTML = '<div class="sheet-title">' + esc(brandName()) + '</div>' +
-      items.map((x) => '<button type="button" data-sheet="' + esc(x.act) + '" data-id="' + esc(x.id || '') + '">' + esc(x.label) + '</button>').join('') +
+    sheet.innerHTML = '<div class="sheetBiaoTi">' + esc(brandName()) + '</div>' +
+      items.map((x) => '<button type="button" data-sheet="' + esc(x.act) + '" data-id="' + esc(x.id || '') + '">' + esc(x.biaoQian) + '</button>').join('') +
       '<button type="button" class="cancel" data-sheet="__cancel">' + esc(t('chat.cancel')) + '</button>';
-    mask.classList.add('on');
-    requestAnimationFrame(() => sheet.classList.add('on'));
+    mask.classList.add('qiYong');
+    requestAnimationFrame(() => sheet.classList.add('qiYong'));
     mask.onclick = closeSheet;
     // 每条单独绑，避免 closest 委托在部分触摸实现里 target 漂移
     sheet.querySelectorAll('[data-sheet]').forEach((b) => {
@@ -740,9 +740,9 @@
   function closeSheet() {
     const mask = $('#mask');
     const sheet = $('#sheet');
-    if (mask) mask.classList.remove('on');
+    if (mask) mask.classList.remove('qiYong');
     if (sheet) {
-      sheet.classList.remove('on');
+      sheet.classList.remove('qiYong');
       // 清空内容：否则切换语言后 sheet 里仍残留上一语言的 innerText（英文界面扫到中文）
       sheet.innerHTML = '';
     }
@@ -753,14 +753,14 @@
     while (stack.length) pop();
   }
   function setLocale(loc) {
-    state.locale = loc;
+    state.yuYan = loc;
     const pack = (window.__I18N_ALL__ || {})[loc];
     if (pack) {
       I18N.strings = pack;
-      I18N.locale = loc;
+      I18N.yuYan = loc;
     }
     document.documentElement.lang = loc;
-    document.title = brandName() + ' ' + t('brand.sub');
+    document.title = brandName() + ' ' + t('brand.fu');
     closeSheet();
     popAll();
     renderTab();
@@ -776,8 +776,8 @@
     openSetting('appearance');
   }
 
-  function boardAddTask(title) {
-    const v = String(title || '').trim();
+  function boardAddTask(biaoTi) {
+    const v = String(biaoTi || '').trim();
     if (!v) return false;
     state.boardTasks.push({ id: 'bt-' + Date.now(), title: v, pct: 0 });
     return true;
@@ -795,8 +795,8 @@
         renderTab();
         return;
       }
-      const row = e.target.closest('[data-open]');
-      if (row) { openChat(row.dataset.open); return; }
+      const hang = e.target.closest('[data-open]');
+      if (hang) { openChat(hang.dataset.daKai); return; }
       const inst = e.target.closest('[data-inst]');
       if (inst) { openInstance(inst.dataset.inst); return; }
       const b = e.target.closest('[data-act]');
@@ -805,8 +805,8 @@
       if (act.indexOf('set-') === 0) { openSetting(act.slice(4)); return; }
       if (act.indexOf('act-') === 0) { openDesktopOnly(act.slice(4)); return; }
       if (act === 'back') { pop(); return; }
-      if (act === 'board-add') {
-        const inp = $('#board-task-input');
+      if (act === 'kanbanTianJia') {
+        const inp = $('#kanbanRenwuShuRu');
         const ok = boardAddTask(inp ? inp.value : '');
         if (ok) { toast(t('board.added')); renderTab(); }
         return;
@@ -828,12 +828,12 @@
     $$('[data-i18n]').forEach((el) => used.add(el.getAttribute('data-i18n')));
     // 扫描可见文本里的 D 键命中情况
     const visible = ($('#phone') && $('#phone').innerText) || '';
-    const allowCjkInEn = ['app.zhName', 'settings.localeZh', 'about.copyrightBody', 'llm.toolRecallDesc'];
+    const allowCjkInEn = ['yingYong.zhName', 'settings.localeZh', 'about.copyrightBody', 'llm.toolRecallDesc'];
     const zhKeys = Object.keys(zh);
     const enKeys = Object.keys(en);
     const missingInPack = zhKeys.filter((k) => !pack[k] && !D[k]);
     return {
-      locale: state.locale,
+      yuYan: state.yuYan,
       localeDoc: document.documentElement.lang,
       zhCount: zhKeys.length,
       enCount: enKeys.length,
@@ -841,7 +841,7 @@
       usedKeys: [...used],
       missingInPack: missingInPack.slice(0, 50),
       visibleSample: visible.slice(0, 800),
-      hasStaticViews: $$('#tabs-host section.tab-page').length === 1 && $('#page-host') !== null,
+      hasStaticViews: $$('#tabsHost section.tab-page').length === 1 && $('#pageHost') !== null,
       stackDepth: stack.length,
       toast: state.lastToast,
       boardTaskCount: (state.boardTasks || []).length,
@@ -854,11 +854,11 @@
     try {
       renderTab();
       bindGlobal();
-      document.title = brandName() + ' ' + t('brand.sub');
+      document.title = brandName() + ' ' + t('brand.fu');
       window.__MOBILE_I18N_AUDIT__ = collectAudit;
     } catch (e) {
       document.body.innerHTML =
-        '<pre style="padding:16px;font-size:12px;color:#c00;white-space:pre-wrap">' + esc(t('msg.initFailed')) + String((e && e.message) || e) + '</pre>';
+        '<pre style="padding:16px;font-size:12px;color:#c00;white-space:pre-wrap">' + esc(t('xiaoXi.initFailed')) + String((e && e.message) || e) + '</pre>';
     }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

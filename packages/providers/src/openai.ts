@@ -31,31 +31,31 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
     return h;
   }
 
-  private body(req: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
+  private qingQiuTi(Qiu: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
     return {
-      model: req.model,
-      messages: zhuanHuanOpenAI(req.messages),
-      max_tokens: req.maxTokens,
-      temperature: req.temperature,
-      top_p: req.topP,
-      stop: req.stop,
-      tools: req.tools,
-      tool_choice: req.toolChoice,
+      model: Qiu.model,
+      messages: zhuanHuanOpenAI(Qiu.xiaoXiJi),
+      max_tokens: Qiu.maxTokens,
+      temperature: Qiu.temperature,
+      top_p: Qiu.topP,
+      stop: Qiu.stop,
+      tools: Qiu.tools,
+      tool_choice: Qiu.toolChoice,
       stream,
-      ...req.extra,
+      ...Qiu.extra,
     };
   }
 
-  async chat(req: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
+  async chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
     const json = await qingQiuJson<Parameters<typeof jieXiOpenAIXiangYing>[0]>(
       pinJieUrl(this.baseURL, 'chat/completions'),
-      { method: 'POST', body: JSON.stringify(this.body(req, false)), signal, headers: this.headers() },
+      { method: 'POST', body: JSON.stringify(this.qingQiuTi(Qiu, false)), signal, headers: this.headers() },
       this.auth
     );
     return jieXiOpenAIXiangYing(json);
   }
 
-  async *chatStream(req: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
+  async *chatStream(Qiu: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
     const res = await fetch(pinJieUrl(this.baseURL, 'chat/completions'), {
       method: 'POST',
       headers: {
@@ -63,24 +63,24 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
         ...this.headers(),
         ...this.auth.headers,
       },
-      body: JSON.stringify(this.body(req, true)),
+      body: JSON.stringify(this.qingQiuTi(Qiu, true)),
       signal,
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       throw new Error(`stream HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
+    const duQuQi = res.body.getReader();
+    const jieMaQi = new TextDecoder();
     let buf = '';
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await duQuQi.read();
       if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop() || '';
-      for (const line of lines) {
-        const t = line.trim();
+      buf += jieMaQi.decode(value, { stream: true });
+      const HangJi = buf.split('\n');
+      buf = HangJi.pop() || '';
+      for (const Hang of HangJi) {
+        const t = Hang.trim();
         if (!t.startsWith('data:')) continue;
         const data = t.slice(5).trim();
         if (data === '[DONE]') return;
@@ -89,7 +89,7 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
           const c = j.choices?.[0];
           yield {
             id: j.id || '',
-            model: j.model || req.model,
+            model: j.model || Qiu.model,
             choices: [
               {
                 index: c?.index ?? 0,

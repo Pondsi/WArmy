@@ -25,7 +25,7 @@ import {
   GCM_BIAOQIAN_CHANGDU,
   frame,
   hkdf,
-  open,
+  daKai,
   sealWithIv,
   sha256ShiLiuJin,
   zhuanZiJieZu,
@@ -60,7 +60,7 @@ export class AnQuanTongDaoCuoWu extends Error {
 }
 
 export interface AnQuanTongDaoShiJian {
-  type: 'send' | 'receive' | 'key-update';
+  type: 'faSong' | 'receive' | 'key-update';
   generation: number;
   direction: TongDaoFangXiang;
   bytes?: number;
@@ -102,7 +102,7 @@ export interface AnQuanTongDaoTongJi {
 export class AnQuanTongDao {
   private sendState: FangxiangZhuangtai;
   private recvState: FangxiangZhuangtai;
-  private readonly decoder: ZhenJieMa;
+  private readonly jieMaQi: ZhenJieMa;
   private closed = false;
   private readonly autoKeyUpdateAfter: number;
   private readonly now: () => number;
@@ -117,7 +117,7 @@ export class AnQuanTongDao {
     handshakes: 1,
   };
   /** 每代次的发送密钥指纹（外部可核对代次切换是否真的换了密钥） */
-  private readonly keyHistory: { generation: number; fingerprint: string }[] = [];
+  private readonly keyHistory: { generation: number; zhiWen: string }[] = [];
 
   constructor(
     private readonly session: HuiHuaMiYaoJi,
@@ -127,12 +127,12 @@ export class AnQuanTongDao {
     this.opts = opts;
     this.autoKeyUpdateAfter = opts.autoKeyUpdateAfter ?? 2 ** 20;
     this.now = opts.now ?? (() => Date.now());
-    this.decoder = new ZhenJieMa(opts.maxRecordBytes ?? 16 * 1024 * 1024);
+    this.jieMaQi = new ZhenJieMa(opts.maxRecordBytes ?? 16 * 1024 * 1024);
     const fasongCailiao = role === 'initiator' ? session.c2sMaterial : session.s2cMaterial;
     const jieshouCailiao = role === 'initiator' ? session.s2cMaterial : session.c2sMaterial;
     this.sendState = this.buildDirection(fasongCailiao, 0);
     this.recvState = this.buildDirection(jieshouCailiao, 0);
-    this.keyHistory.push({ generation: 0, fingerprint: this.sendFingerprint });
+    this.keyHistory.push({ generation: 0, zhiWen: this.sendFingerprint });
   }
 
   private buildDirection(material: Buffer, generation: number): FangxiangZhuangtai {
@@ -182,7 +182,7 @@ export class AnQuanTongDao {
   get sendFingerprint(): string {
     return sha256ShiLiuJin(this.sendState.material, Buffer.from(`gen|${this.sendState.generation}`));
   }
-  get history(): ReadonlyArray<{ generation: number; fingerprint: string }> {
+  get history(): ReadonlyArray<{ generation: number; zhiWen: string }> {
     return this.keyHistory;
   }
 
@@ -191,12 +191,12 @@ export class AnQuanTongDao {
   /** 加密一条应用记录，返回可直接写 socket 的字节 */
   sealRecord(payload: Zijie): Buffer {
     if (this.closed) throw new AnQuanTongDaoCuoWu('peer-closed', 'channel 已关闭');
-    const body = this.encrypt(RECORD_TYPE_APP, zhuanZiJieZu(payload));
+    const ti = this.encrypt(RECORD_TYPE_APP, zhuanZiJieZu(payload));
     this.stats.recordsSent += 1;
-    this.stats.bytesSent += body.length;
-    this.emit('send', body.length);
+    this.stats.bytesSent += ti.length;
+    this.emit('faSong', ti.length);
     if (this.sendState.counter >= this.autoKeyUpdateAfter) this.pendingKeyUpdate = true;
-    return body;
+    return ti;
   }
 
   /**
@@ -206,13 +206,13 @@ export class AnQuanTongDao {
    */
   requestKeyUpdate(): Buffer {
     if (this.closed) throw new AnQuanTongDaoCuoWu('peer-closed', 'channel 已关闭');
-    const rec = this.encrypt(RECORD_TYPE_KEY_UPDATE, Buffer.from('key-update', 'utf8'));
+    const jiLu = this.encrypt(RECORD_TYPE_KEY_UPDATE, Buffer.from('key-update', 'utf8'));
     this.sendState = this.deriveNext(this.sendState);
     this.stats.keyUpdates += 1;
     this.pendingKeyUpdate = false;
-    this.keyHistory.push({ generation: this.sendState.generation, fingerprint: this.sendFingerprint });
-    this.emit('key-update', rec.length, 'send-direction updated');
-    return rec;
+    this.keyHistory.push({ generation: this.sendState.generation, zhiWen: this.sendFingerprint });
+    this.emit('key-update', jiLu.length, 'send-direction updated');
+    return jiLu;
   }
 
   /* ── 接收 ── */
@@ -222,17 +222,17 @@ export class AnQuanTongDao {
     if (this.closed) throw new AnQuanTongDaoCuoWu('peer-closed', 'channel 已关闭');
     let records: Buffer[];
     try {
-      records = this.decoder.push(chunk);
+      records = this.jieMaQi.push(chunk);
     } catch (e) {
       throw new AnQuanTongDaoCuoWu('record-too-large', String((e as Error).message ?? e));
     }
     const out: Buffer[] = [];
-    for (const rec of records) {
-      if (rec.length < 1 + GCM_BIAOQIAN_CHANGDU) {
-        throw new AnQuanTongDaoCuoWu('malformed-record', `记录过短：${rec.length}`);
+    for (const jiLu of records) {
+      if (jiLu.length < 1 + GCM_BIAOQIAN_CHANGDU) {
+        throw new AnQuanTongDaoCuoWu('malformed-record', `记录过短：${jiLu.length}`);
       }
-      const type = rec.readUInt8(0);
-      const ct = rec.subarray(1);
+      const type = jiLu.readUInt8(0);
+      const ct = jiLu.subarray(1);
       const st = this.recvState;
       const counter = st.counter;
       if (counter > MAX_RECORDS_PER_GENERATION) {
@@ -240,9 +240,9 @@ export class AnQuanTongDao {
       }
       const iv = Buffer.concat([st.ivSalt, u64be(counter)]);
       const aad = Buffer.concat([Buffer.from([type]), u32be(st.generation), u64be(counter)]);
-      let plain: Buffer;
+      let chunWenBen: Buffer;
       try {
-        plain = open(st.key, { iv, ct }, aad);
+        chunWenBen = daKai(st.key, { iv, ct }, aad);
       } catch {
         throw new AnQuanTongDaoCuoWu(
           'not-authorized-tag',
@@ -251,14 +251,14 @@ export class AnQuanTongDao {
       }
       st.counter += 1;
       this.stats.recordsReceived += 1;
-      this.stats.bytesReceived += rec.length;
+      this.stats.bytesReceived += jiLu.length;
       if (type === RECORD_TYPE_APP) {
-        out.push(plain);
-        this.emit('receive', rec.length);
+        out.push(chunWenBen);
+        this.emit('receive', jiLu.length);
       } else if (type === RECORD_TYPE_KEY_UPDATE) {
         this.recvState = this.deriveNext(this.recvState);
         this.stats.keyUpdates += 1;
-        this.emit('key-update', rec.length, 'recv-direction updated');
+        this.emit('key-update', jiLu.length, 'recv-direction updated');
       } else {
         throw new AnQuanTongDaoCuoWu('malformed-record', `未知记录类型 ${type}`);
       }

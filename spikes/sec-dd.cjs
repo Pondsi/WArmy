@@ -1,6 +1,6 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
 
 // ── 1) 安全模式下拉：替换 session-sec 绑定 ──
 const oldSec = j.match(/\s*\$\(\'session-sec\'\)\.addEventListener\(\'change\', \(e\) => \{[\s\S]*?\n  \}\);/);
@@ -8,10 +8,10 @@ if (oldSec) {
   j = j.replace(oldSec[0], `
   // 本会话安全模式：同紧急度的下拉样式
   (function bindSecurityDropdown() {
-    const trigger = $('sec-trigger');
-    const menu = $('sec-menu');
-    const dd = $('sec-dd');
-    const label = $('sec-label');
+    const trigger = $('secTrigger');
+    const menu = $('secCaiDan');
+    const dd = $('secDd');
+    const biaoQian = $('secBiaoQian');
     if (!trigger || !menu || !dd) return;
 
     const LABELS = {
@@ -25,20 +25,20 @@ if (oldSec) {
     }
     function refresh() {
       const mode = currentMode();
-      if (label) label.textContent = t(LABELS[mode] || LABELS.normal);
+      if (biaoQian) biaoQian.textContent = t(LABELS[mode] || LABELS.normal);
       dd.classList.toggle('urgent', mode === 'full');
-      const warn = dd.querySelector('.sec-warn');
-      if (warn) warn.classList.toggle('hidden', mode !== 'full');
-      menu.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.s === mode));
+      const warn = dd.querySelector('.secWarn');
+      if (warn) warn.classList.toggle('yinCang', mode !== 'full');
+      menu.querySelectorAll('button').forEach((b) => b.classList.toggle('qiYong', b.dataset.s === mode));
     }
     window.__refreshSecurity = refresh;
     refresh();
 
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      menu.classList.toggle('hidden');
+      menu.classList.toggle('yinCang');
     });
-    document.addEventListener('click', () => menu.classList.add('hidden'));
+    document.addEventListener('click', () => menu.classList.add('yinCang'));
 
     menu.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-s]');
@@ -47,11 +47,11 @@ if (oldSec) {
       if (mode === 'full') {
         const ok = await uiConfirmCountdown(t('sec.confirmBody'), t('sec.confirmTitle'), 5);
         if (!ok) {
-          menu.classList.add('hidden');
+          menu.classList.add('yinCang');
           return;
         }
       }
-      menu.classList.add('hidden');
+      menu.classList.add('yinCang');
       if (state.selectedChat) {
         state.sessionSecurity[state.selectedChat.id] = mode;
       } else {
@@ -72,5 +72,5 @@ j = j.replace(/\$\(\'session-sec\'\)\.value = [^\n]*\n/g, "    window.__refreshS
 // loadI18n 后刷新安全下拉
 j = j.replace("window.__refreshUrgency?.();", "window.__refreshUrgency?.();\n    window.__refreshSecurity?.();");
 
-fs.writeFileSync(base + 'app.js', j);
+fs.writeFileSync(base + 'yingYong.js', j);
 console.log('session-sec refs left:', (j.match(/session-sec/g) || []).length);

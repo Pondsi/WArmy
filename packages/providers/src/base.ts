@@ -1,4 +1,4 @@
-import { PROTOCOL_TOOL_SUPPORT } from './tools.js';
+import { XIEYI_GONGJU_ZHICHI } from './tools.js';
 import type {
   HuanCunYongLiang,
   LiaoTianPian,
@@ -20,47 +20,47 @@ export function guiFanYongLiang(
   if (protocol === 'openai-compatible') {
     // DeepSeek: prompt_cache_hit_tokens / prompt_cache_miss_tokens
     // OpenAI: prompt_tokens_details.cached_tokens
-    const details = raw?.prompt_tokens_details as { cached_tokens?: number } | undefined;
-    const hit =
-      shuZhi(raw?.prompt_cache_hit_tokens) || shuZhi(details?.cached_tokens);
+    const xiangQing = raw?.prompt_tokens_details as { cached_tokens?: number } | undefined;
+    const mingZhong =
+      shuZhi(raw?.prompt_cache_hit_tokens) || shuZhi(xiangQing?.cached_tokens);
     const weiMingZhong = shuZhi(raw?.prompt_cache_miss_tokens);
-    const prompt = shuZhi(raw?.prompt_tokens);
+    const tiShiCi = shuZhi(raw?.prompt_tokens);
     const wancheng = shuZhi(raw?.completion_tokens);
     return {
-      promptTokens: prompt,
+      promptTokens: tiShiCi,
       completionTokens: wancheng,
-      totalTokens: shuZhi(raw?.total_tokens) || prompt + wancheng,
-      cacheHitTokens: hit,
-      cacheMissTokens: weiMingZhong || Math.max(0, prompt - hit),
-      source: hit > 0 || weiMingZhong > 0 || details ? 'native' : prompt ? 'estimated' : 'none',
+      totalTokens: shuZhi(raw?.total_tokens) || tiShiCi + wancheng,
+      cacheHitTokens: mingZhong,
+      cacheMissTokens: weiMingZhong || Math.max(0, tiShiCi - mingZhong),
+      source: mingZhong > 0 || weiMingZhong > 0 || xiangQing ? 'native' : tiShiCi ? 'estimated' : 'none',
     };
   }
 
   if (protocol === 'anthropic') {
     const huanCunDuQu = shuZhi(raw?.cache_read_input_tokens);
     const huanCunChuangJian = shuZhi(raw?.cache_creation_input_tokens);
-    const input = shuZhi(raw?.input_tokens);
-    const output = shuZhi(raw?.output_tokens);
+    const shuRu = shuZhi(raw?.input_tokens);
+    const shuChu = shuZhi(raw?.output_tokens);
     return {
-      promptTokens: input + huanCunChuangJian + huanCunDuQu,
-      completionTokens: output,
-      totalTokens: input + huanCunChuangJian + huanCunDuQu + output,
+      promptTokens: shuRu + huanCunChuangJian + huanCunDuQu,
+      completionTokens: shuChu,
+      totalTokens: shuRu + huanCunChuangJian + huanCunDuQu + shuChu,
       cacheHitTokens: huanCunDuQu,
-      cacheMissTokens: huanCunChuangJian + input,
-      source: huanCunDuQu || huanCunChuangJian ? 'native' : input ? 'estimated' : 'none',
+      cacheMissTokens: huanCunChuangJian + shuRu,
+      source: huanCunDuQu || huanCunChuangJian ? 'native' : shuRu ? 'estimated' : 'none',
     };
   }
 
   // ollama: prompt_eval_count / eval_count；无缓存字段
-  const prompt = shuZhi(raw?.prompt_eval_count);
+  const tiShiCi = shuZhi(raw?.prompt_eval_count);
   const wancheng = shuZhi(raw?.eval_count);
   return {
-    promptTokens: prompt,
+    promptTokens: tiShiCi,
     completionTokens: wancheng,
-    totalTokens: prompt + wancheng,
+    totalTokens: tiShiCi + wancheng,
     cacheHitTokens: 0,
-    cacheMissTokens: prompt,
-    source: prompt || wancheng ? 'estimated' : 'none',
+    cacheMissTokens: tiShiCi,
+    source: tiShiCi || wancheng ? 'estimated' : 'none',
   };
 }
 
@@ -81,8 +81,8 @@ export async function qingQiuJson<T>(
   auth: GongYingRenZheng
 ): Promise<T> {
   const timeoutMs = init.timeoutMs ?? auth.timeoutMs ?? 120_000;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(new Error('timeout')), timeoutMs);
+  const kongZhiQi = new AbortController();
+  const jiShiQi = setTimeout(() => kongZhiQi.abort(new Error('timeout')), timeoutMs);
   try {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -92,7 +92,7 @@ export async function qingQiuJson<T>(
     const res = await fetch(url, {
       ...init,
       headers,
-      signal: init.signal ?? ctrl.signal,
+      signal: init.signal ?? kongZhiQi.signal,
     });
     const text = await res.text();
     if (!res.ok) {
@@ -100,7 +100,7 @@ export async function qingQiuJson<T>(
     }
     return JSON.parse(text) as T;
   } finally {
-    clearTimeout(timer);
+    clearTimeout(jiShiQi);
   }
 }
 
@@ -119,8 +119,8 @@ export abstract class JichuGongYing implements MoxingGongYing {
     this.baseURL = (auth.baseURL || defaultBase).replace(/\/+$/, '');
   }
 
-  abstract chat(req: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing>;
-  abstract chatStream(req: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian>;
+  abstract chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing>;
+  abstract chatStream(Qiu: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian>;
   abstract listModels(signal?: AbortSignal): Promise<string[]>;
 
   /**
@@ -128,30 +128,30 @@ export abstract class JichuGongYing implements MoxingGongYing {
    * 写成 getter 而不是字段，是因为 protocol 由子类以字段形式声明。
    */
   get supportsTools(): boolean {
-    return PROTOCOL_TOOL_SUPPORT[this.protocol] ?? true;
+    return XIEYI_GONGJU_ZHICHI[this.protocol] ?? true;
   }
 
   async ping(signal?: AbortSignal): Promise<{ ok: boolean; latencyMs: number; detail?: string }> {
-    const t0 = performance.now();
+    const qiShiShiJian = performance.now();
     try {
       await this.listModels(signal);
-      return { ok: true, latencyMs: +(performance.now() - t0).toFixed(1) };
+      return { ok: true, latencyMs: +(performance.now() - qiShiShiJian).toFixed(1) };
     } catch (e) {
       // listModels 失败时退回一次最小 chat
       try {
         await this.chat(
           {
             model: '',
-            messages: [{ role: 'user', content: 'ping' }],
+            xiaoXiJi: [{ role: 'user', content: 'ping' }],
             maxTokens: 1,
           },
           signal
         );
-        return { ok: true, latencyMs: +(performance.now() - t0).toFixed(1) };
+        return { ok: true, latencyMs: +(performance.now() - qiShiShiJian).toFixed(1) };
       } catch (e2) {
         return {
           ok: false,
-          latencyMs: +(performance.now() - t0).toFixed(1),
+          latencyMs: +(performance.now() - qiShiShiJian).toFixed(1),
           detail: String((e2 as Error).message || e),
         };
       }
@@ -159,8 +159,8 @@ export abstract class JichuGongYing implements MoxingGongYing {
   }
 }
 
-export function zhuanHuanOpenAI(messages: LiaoTianXiaoXi[]): unknown[] {
-  return messages.map((m) => {
+export function zhuanHuanOpenAI(xiaoXiJi: LiaoTianXiaoXi[]): unknown[] {
+  return xiaoXiJi.map((m) => {
     if (m.role === 'tool') {
       return {
         role: 'tool',
@@ -168,11 +168,11 @@ export function zhuanHuanOpenAI(messages: LiaoTianXiaoXi[]): unknown[] {
         tool_call_id: m.toolCallId,
       };
     }
-    if (m.role === 'assistant' && m.toolCalls?.length) {
+    if (m.role === 'assistant' && m.gongJuDiaoYongJi?.length) {
       return {
         role: 'assistant',
         content: m.content || null,
-        tool_calls: m.toolCalls.map((t) => ({
+        tool_calls: m.gongJuDiaoYongJi.map((t) => ({
           id: t.id,
           type: 'function',
           function: t.function,
@@ -201,12 +201,12 @@ export function jieXiOpenAIXiangYing(json: {
   usage?: Record<string, unknown>;
 }): LiaoTianXiangYing {
   const xuanXiang = json.choices?.[0];
-  const msg = xuanXiang?.message;
-  const toolCalls = (msg?.tool_calls || []).map((t) => ({
+  const xiaoXi = xuanXiang?.message;
+  const gongJuDiaoYongJi = (xiaoXi?.tool_calls || []).map((t) => ({
     id: t.id,
     type: 'function' as const,
     function: {
-      name: t.function?.name || '',
+      name: t.function?.name || t.function?.name || '',
       arguments: t.function?.arguments || '{}',
     },
   }));
@@ -218,8 +218,8 @@ export function jieXiOpenAIXiangYing(json: {
         index: 0,
         message: {
           role: 'assistant',
-          content: msg?.content || '',
-          toolCalls: toolCalls.length ? toolCalls : undefined,
+          content: xiaoXi?.content || '',
+          gongJuDiaoYongJi: gongJuDiaoYongJi.length ? gongJuDiaoYongJi : undefined,
         },
         finishReason: xuanXiang?.finish_reason || 'stop',
       },

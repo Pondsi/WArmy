@@ -39,11 +39,11 @@ const result = {
 };
 
 const tmpDirs = [];
-const check = (name, cond, detail) => {
-  const rec = { name, ok: !!cond, detail: detail ?? null };
+const check = (ming, cond, detail) => {
+  const rec = { ming, ok: !!cond, detail: detail ?? null };
   result.checks.push(rec);
-  if (!cond) result.failures.push({ name, detail });
-  console.log(`${cond ? 'OK  ' : 'FAIL'} ${name}${detail !== undefined && detail !== null ? ' :: ' + JSON.stringify(detail).slice(0, 200) : ''}`);
+  if (!cond) result.failures.push({ ming, detail });
+  console.log(`${cond ? 'OK  ' : 'FAIL'} ${ming}${detail !== undefined && detail !== null ? ' :: ' + JSON.stringify(detail).slice(0, 200) : ''}`);
   return !!cond;
 };
 const newTmp = (tag) => {
@@ -78,7 +78,7 @@ const t0All = Date.now();
     fts5: compile.filter((c) => /FTS5|FTS4/.test(c)),
     schemaVersion: stats0.schemaVersion,
     ftsTriPresent: stats0.ftsTriPresent,
-    tables: svc.rawQuery("SELECT name, type FROM sqlite_master WHERE type IN ('table','view') ORDER BY name"),
+    tables: svc.rawQuery("SELECT ming, type FROM sqlite_master WHERE type IN ('table','view') ORDER BY ming"),
     coldStart: svc.coldStart,
     vector: { ...stats0.vector, modelCandidates: stats0.vector.modelCandidates },
     modelFiles: fs.existsSync(MODEL_DIR) ? fs.readdirSync(MODEL_DIR).map((f) => ({ f, bytes: fs.statSync(path.join(MODEL_DIR, f)).size })) : null,
@@ -105,7 +105,7 @@ const t0All = Date.now();
   const rows = samples.map((s) => {
     const enc = tokenizer.encode(s, { maxLength: 256 });
     return {
-      input: s,
+      shuRu: s,
       tokens: enc.tokens,
       ids: enc.ids,
       tokenCount: enc.ids.length,
@@ -146,14 +146,14 @@ let seqMap = {};
 
   let writerErr = null;
   try {
-    svc.append({ id: 'x', sessionId: 's1', kind: 'message', body: 'nope' }, 'executor');
+    svc.append({ id: 'x', sessionId: 's1', kind: 'message', ti: 'nope' }, 'executor');
   } catch (e) {
     writerErr = e.message;
   }
   check('executor 不能写 message 记录（不变量 #6）', !!writerErr, writerErr);
   let qErr = null;
   try {
-    svc.append({ id: 'q', sessionId: 's1', kind: 'queue', body: 'q' }, 'duty');
+    svc.append({ id: 'q', sessionId: 's1', kind: 'queue', ti: 'q' }, 'duty');
   } catch (e) {
     qErr = e.message;
   }
@@ -183,7 +183,7 @@ let seqMap = {};
       probe.tri = null;
       probe.triSkipped = 'query<3chars (fts5 trigram 限制)';
     }
-    probe.like = svc.rawQuery('SELECT id FROM records WHERE body LIKE ? ORDER BY seq DESC LIMIT 20', `%${q}%`).map((r) => r.id);
+    probe.like = svc.rawQuery('SELECT id FROM records WHERE ti LIKE ? ORDER BY seq DESC LIMIT 20', `%${q}%`).map((r) => r.id);
     channelProbe.push(probe);
   }
   result.sections.channels = channelProbe;
@@ -383,11 +383,11 @@ let seqMap = {};
     ['empty-anchor', {}, {}],
   ];
   const retrieveRows = [];
-  for (const [name, anchor, opts] of retrieveCases) {
+  for (const [ming, anchor, opts] of retrieveCases) {
     const out = svc.retrieve(anchor, opts);
     retrieveRows.push({
-      name,
-      input: anchor,
+      ming,
+      shuRu: anchor,
       opts,
       hitLevel: out?.hitLevel ?? null,
       via: out?.via ?? null,
@@ -488,8 +488,8 @@ let seqMap = {};
     pairs.push({ ...p, cosine: Number(yuXianXiangSiDu(va, vb).toFixed(4)) });
   }
   result.sections.semanticPairs = pairs;
-  const para = pairs.filter((p) => p.label.startsWith('paraphrase'));
-  const unrel = pairs.filter((p) => p.label === 'unrelated');
+  const para = pairs.filter((p) => p.biaoQian.startsWith('paraphrase'));
+  const unrel = pairs.filter((p) => p.biaoQian === 'unrelated');
   if (para.length && unrel.length) {
     check(
       '改写对余弦 > 无关对余弦（嵌入语义有效）',
@@ -528,7 +528,7 @@ let seqMap = {};
     const b = { source: 'fts_tri', ids: ['2', '1', '9'] };
     const c = { source: 'vector', ids: ['3', '2', '8'] };
     const fused = rrfFusionRanked([a, b, c], 60);
-    result.sections.rrf = { input: { fts_uni: a.ids, fts_tri: b.ids, vector: c.ids }, fused: fused.map((f) => ({ id: f.id, rrfScore: Number(f.rrfScore.toFixed(5)), sources: f.sources, ranks: f.ranks })) };
+    result.sections.rrf = { shuRu: { fts_uni: a.ids, fts_tri: b.ids, vector: c.ids }, fused: fused.map((f) => ({ id: f.id, rrfScore: Number(f.rrfScore.toFixed(5)), sources: f.sources, ranks: f.ranks })) };
     check('RRF：多通道共现的 id 排在最前', fused[0].id === '2' && fused[0].sources.length === 3, fused[0]);
     check('RRF：单通道 id 得分低于多通道', fused.find((f) => f.id === '9').rrfScore < fused[0].rrfScore, { nine: fused.find((f) => f.id === '9').rrfScore, top: fused[0].rrfScore });
   }
@@ -544,7 +544,7 @@ if (LARGE_N > 0) {
   const svc = new MemoryService({ dataDir, vector: { enabled: false } });
   const ZH = ['无限牛马', '值班者状态机', '记忆服务', '群聊桌面应用', '投影重建', '三元索引', '权限过滤', '证据锚点', '压缩网关', '检查点回退'];
   const ASCII_TOKEN = ['packages/memory-os/src/index.ts', 'E_MEMORY_CORRUPT', 'E_WRITER_DENIED', 'CCA_ARMY_MEMORY_DIR', 'spikes/p2-memory/run.mjs', 'better-sqlite3', 'fts5vocab', 'struct.pack', 'GroupChatRouter', 'KnowledgeArchiver'];
-  const NOISE = ['the quick brown fox', 'lorem ipsum dolor sit amet', '无关的长文本填充内容用于稀释索引', 'bash: command not found', 'error TS2304: Cannot find name', 'WAL checkpoint complete'];
+  const NOISE = ['the quick brown fox', 'lorem ipsum dolor sit amet', '无关的长文本填充内容用于稀释索引', 'bash: command not found', 'error TS2304: Cannot find ming', 'WAL checkpoint complete'];
   let seed = 20260917;
   const rnd = () => {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
@@ -553,15 +553,15 @@ if (LARGE_N > 0) {
   const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
   const tBuild0 = Date.now();
   for (let i = 0; i < LARGE_N; i++) {
-    const body = `${i}. ${pick(ZH)} ${pick(NOISE)} ${pick(ASCII_TOKEN)} ${pick(ZH)} ${pick(NOISE)}`;
-    svc.append({ id: `L${i}`, sessionId: `s${i % 7}`, kind: 'message', body }, 'duty');
+    const ti = `${i}. ${pick(ZH)} ${pick(NOISE)} ${pick(ASCII_TOKEN)} ${pick(ZH)} ${pick(NOISE)}`;
+    svc.append({ id: `L${i}`, sessionId: `s${i % 7}`, kind: 'message', ti }, 'duty');
   }
   const buildMs = Date.now() - tBuild0;
   const st = svc.stats();
 
   const vocabStats = {};
   for (const fts of ['fts_uni', 'fts_tri']) {
-    svc.rawExec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${fts}_v USING fts5vocab(${fts}, 'row')`);
+    svc.rawExec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${fts}_v USING fts5vocab(${fts}, 'hang')`);
     const distinct = svc.rawQuery(`SELECT COUNT(*) AS n FROM ${fts}_v`)[0].n;
     const postings = svc.rawQuery(`SELECT SUM(cnt) AS n FROM ${fts}_v`)[0].n;
     const avgDocLen = svc.rawQuery(`SELECT AVG(cnt) AS n FROM (SELECT doc, SUM(cnt) AS cnt FROM ${fts}_v GROUP BY doc)`)[0].n;
@@ -591,13 +591,13 @@ if (LARGE_N > 0) {
   }
 
   const likePlan = {
-    fts_tri: svc.rawQuery("EXPLAIN QUERY PLAN SELECT rowid FROM fts_tri WHERE body LIKE '%memory-os%'"),
-    fts_uni: svc.rawQuery("EXPLAIN QUERY PLAN SELECT rowid FROM fts_uni WHERE body LIKE '%memory-os%'"),
-    records_fullscan: svc.rawQuery("EXPLAIN QUERY PLAN SELECT rowid FROM records WHERE body LIKE '%memory-os%'"),
+    fts_tri: svc.rawQuery("EXPLAIN QUERY PLAN SELECT rowid FROM fts_tri WHERE ti LIKE '%memory-os%'"),
+    fts_uni: svc.rawQuery("EXPLAIN QUERY PLAN SELECT rowid FROM fts_uni WHERE ti LIKE '%memory-os%'"),
+    records_fullscan: svc.rawQuery("EXPLAIN QUERY PLAN SELECT rowid FROM records WHERE ti LIKE '%memory-os%'"),
   };
   const likeBench = {
-    triIndexed: bench(() => svc.rawQuery("SELECT rowid FROM fts_tri WHERE body LIKE '%memory-os%'", []).length),
-    recordsFullScan: bench(() => svc.rawQuery("SELECT rowid FROM records WHERE body LIKE '%memory-os%'", []).length),
+    triIndexed: bench(() => svc.rawQuery("SELECT rowid FROM fts_tri WHERE ti LIKE '%memory-os%'", []).length),
+    recordsFullScan: bench(() => svc.rawQuery("SELECT rowid FROM records WHERE ti LIKE '%memory-os%'", []).length),
   };
 
   result.sections.latency = {
@@ -724,7 +724,7 @@ if (LARGE_N > 0) {
   const before = { ...legacy, jsonlSha: hashFile(legacy.jsonlPath) };
   const svc = new MemoryService({ dataDir });
   const st = svc.stats();
-  const after = { jsonlSha: hashFile(legacy.jsonlPath), tables: svc.rawQuery("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").map((r) => r.name), columns: svc.rawQuery('PRAGMA table_info(records)').map((r) => r.name), metaKeys: svc.rawQuery('SELECT k FROM meta').map((r) => r.k) };
+  const after = { jsonlSha: hashFile(legacy.jsonlPath), tables: svc.rawQuery("SELECT ming FROM sqlite_master WHERE type='table' ORDER BY ming").map((r) => r.name), columns: svc.rawQuery('PRAGMA table_info(records)').map((r) => r.name), metaKeys: svc.rawQuery('SELECT k FROM meta').map((r) => r.k) };
   const triHit = svc.rawQuery('SELECT r.id FROM fts_tri f JOIN records r ON r.seq=f.rowid WHERE fts_tri MATCH ?', toTriPhrase('E_MEMORY_CORRUPT')).map((r) => r.id);
   const triHitCjk = svc.rawQuery('SELECT r.id FROM fts_tri f JOIN records r ON r.seq=f.rowid WHERE fts_tri MATCH ?', toTriPhrase('多智能体群聊')).map((r) => r.id);
   const recallAfter = await svc.recallDetailed('memory-os', 5);

@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.js';
+const p = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/yingYong.js';
 const src = fs.readFileSync(p, 'utf8');
 // 简化：跟踪 {} 深度（忽略字符串/注释/模板不便，用近似扫描）
 let depth = 0;

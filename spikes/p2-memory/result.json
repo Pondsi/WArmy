@@ -4,7 +4,7 @@
     "node": "v24.20.0",
     "platform": "win32",
     "arch": "x64",
-    "repo": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy",
+    "repo": "C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy",
     "cpus": 32,
     "totalMemMB": 65228
   },
@@ -1430,7 +1430,7 @@
         "tokenizer": null,
         "modelCandidates": [
           "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\warmy-p2-env-1789748649632-gxb7z\\models\\model_quantized.onnx",
-          "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
+          "repo:C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy:C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
         ]
       },
       "modelFiles": [
@@ -2054,10 +2054,10 @@
       "dim": 512,
       "simdSupported": true,
       "threads": 1,
-      "modelPath": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx",
-      "tokenizerPath": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-07-onnx\\models\\tokenizer.json",
+      "modelPath": "C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx",
+      "tokenizerPath": "C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy\\spikes\\spike-07-onnx\\models\\tokenizer.json",
       "modelBytes": 24010842,
-      "ortMain": "C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\node_modules\\.pnpm\\onnxruntime-web@1.22.0\\node_modules\\onnxruntime-web\\dist\\ort.node.min.js",
+      "ortMain": "C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy\\node_modules\\.pnpm\\onnxruntime-web@1.22.0\\node_modules\\onnxruntime-web\\dist\\ort.node.min.js",
       "ortTried": [
         "require:onnxruntime-web"
       ],
@@ -2087,7 +2087,7 @@
       ],
       "modelCandidates": [
         "dataDir/models:C:\\Users\\p\\AppData\\Local\\Temp\\warmy-p2-main-1789748649691-39wl1\\models\\model_quantized.onnx",
-        "repo:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy:C:\\Users\\p\\.openclaw\\workspace\\大龙虾互动区\\WArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
+        "repo:C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy:C:\\Users\\p\\.openclaw\\workspace\\<repo>\\WArmy\\spikes\\spike-07-onnx\\models\\model_quantized.onnx"
       ]
     },
     "fused": [

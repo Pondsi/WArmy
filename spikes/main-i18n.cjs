@@ -1,10 +1,10 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/';
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/';
 const p = base + 'src/electron-main.ts';
 let s = fs.readFileSync(p, 'utf8');
 
-const loadStrings = `function loadMainStrings(locale) {
-  const f = locale && locale.startsWith('zh') ? 'zh-CN' : 'en-US';
+const loadStrings = `function loadMainStrings(yuYan) {
+  const f = yuYan && yuYan.startsWith('zh') ? 'zh-CN' : 'en-US';
   try {
     return JSON.parse(fs.readFileSync(path.join(__dirname, 'i18n', \`\${f}.json\`), 'utf8'));
   } catch {
@@ -23,8 +23,8 @@ if (!s.includes('function tMain')) {
 
 // 未配置 Key 回复
 s = s.replace(
-  /const reply = `\[未配置 API Key\] 已收到：\$\{msg\.content\.slice\(0, 80\)\}`;/,
-  "const reply = tMain('llm.noKey') + msg.content.slice(0, 80);"
+  /const reply = `\[未配置 API Key\] 已收到：\$\{xiaoXi\.content\.slice\(0, 80\)\}`;/,
+  "const reply = tMain('llm.noKey') + xiaoXi.content.slice(0, 80);"
 );
 
 // 值班者系统提示

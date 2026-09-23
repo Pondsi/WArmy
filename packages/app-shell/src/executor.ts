@@ -30,11 +30,11 @@ export interface ZhixingqiGongyingshangPeizhi {
  * 蒸馏返回：只给结论，不给完整对话
  */
 export async function yunxingDuanCunhuoZhixingqi(
-  task: ZhixingqiRenwu,
+  renwu: ZhixingqiRenwu,
   cfg: ZhixingqiGongyingshangPeizhi
 ): Promise<zhixingqiJieguo> {
-  const t0 = Date.now();
-  const messages: LiaoTianXiaoXi[] = [
+  const qiShiShiJian = Date.now();
+  const xiaoXiJi: LiaoTianXiaoXi[] = [
     {
       role: 'system',
       content:
@@ -42,7 +42,7 @@ export async function yunxingDuanCunhuoZhixingqi(
     },
     {
       role: 'user',
-      content: `【任务】${task.brief}\n\n【上下文】\n${task.contextItems.join('\n---\n')}`,
+      content: `【任务】${renwu.brief}\n\n【上下文】\n${renwu.contextItems.join('\n---\n')}`,
     },
   ];
   try {
@@ -52,23 +52,23 @@ export async function yunxingDuanCunhuoZhixingqi(
     });
     const xiangYing = await provider.chat({
       model: cfg.model || 'deepseek-chat',
-      messages,
-      maxTokens: Math.min(512, task.budgetTokens || 512),
+      xiaoXiJi,
+      maxTokens: Math.min(512, renwu.budgetTokens || 512),
     });
     return {
-      taskId: task.taskId,
+      taskId: renwu.taskId,
       distilled: xiangYing.choices[0]?.message?.content || '',
       stats: {
-        durationMs: Date.now() - t0,
+        durationMs: Date.now() - qiShiShiJian,
         promptTokens: xiangYing.usage.promptTokens,
         completionTokens: xiangYing.usage.completionTokens,
       },
     };
   } catch (e) {
     return {
-      taskId: task.taskId,
+      taskId: renwu.taskId,
       distilled: '',
-      stats: { durationMs: Date.now() - t0, promptTokens: 0, completionTokens: 0 },
+      stats: { durationMs: Date.now() - qiShiShiJian, promptTokens: 0, completionTokens: 0 },
       error: String((e as Error).message || e),
     };
   }
@@ -76,8 +76,8 @@ export async function yunxingDuanCunhuoZhixingqi(
 
 /** 批量派发：多个执行者并行，各自短命 */
 export async function yunXingZhiXingQiJi(
-  tasks: ZhixingqiRenwu[],
+  RenwuJi: ZhixingqiRenwu[],
   cfg: ZhixingqiGongyingshangPeizhi
 ): Promise<zhixingqiJieguo[]> {
-  return Promise.all(tasks.map((t) => yunxingDuanCunhuoZhixingqi(t, cfg)));
+  return Promise.all(RenwuJi.map((t) => yunxingDuanCunhuoZhixingqi(t, cfg)));
 }

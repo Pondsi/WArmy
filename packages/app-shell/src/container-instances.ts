@@ -18,7 +18,7 @@
 import { execFile } from 'node:child_process';
 
 export interface RongQiShiLi {
-  name: string;
+  ming: string;
   image?: string;
   state: 'running' | 'stopped' | 'unknown';
   /** 原始状态文本（不翻译，便于核对） */
@@ -105,28 +105,28 @@ function fenHang(stdout: string): string[][] {
 
 function dockerYangShi(stdout: string): RongQiShiLi[] {
   return fenHang(stdout).map((lieJi) => {
-    const [name = '', image = '', state = '', status = ''] = lieJi;
+    const [ming = '', image = '', state = '', status = ''] = lieJi;
     const running = /^running$/i.test(state);
     return {
-      name,
+      ming,
       ...(image ? { image } : {}),
       state: running ? 'running' : 'stopped',
       rawStatus: status || state,
-      ours: /^warmy-/.test(name),
+      ours: /^warmy-/.test(ming),
     } satisfies RongQiShiLi;
-  }).filter((x) => !!x.name);
+  }).filter((x) => !!x.ming);
 }
 
 function wslLieBiao(stdout: string): RongQiShiLi[] {
   return fenHang(stdout).map((lieJi) => {
-    const [name = '', state = '', version = ''] = lieJi;
+    const [ming = '', state = '', version = ''] = lieJi;
     const running = /running/i.test(state);
     return {
-      name: name.replace(/^\*/, '').trim(),
+      ming: ming.replace(/^\*/, '').trim(),
       state: running ? 'running' : 'stopped',
       rawStatus: [state, version ? `v${version}` : ''].filter(Boolean).join(' '),
     } satisfies RongQiShiLi;
-  }).filter((x) => !!x.name);
+  }).filter((x) => !!x.ming);
 }
 
 /** 列出某个运行时的实例；不支持时 `supported:false` + 原因，绝不编造空列表当成功 */
@@ -159,20 +159,20 @@ export interface ShiLiDongZuoJieGuo {
 }
 
 /**
- * 启动/停止**单个实例**。命令参数固定为 `start|stop <name>`，
+ * 启动/停止**单个实例**。命令参数固定为 `start|stop <ming>`，
  * 名字先过白名单正则（不合规直接拒绝执行，不做任何转义尝试）。
  */
-export async function yunXingShiLiDongZuo(id: string, action: 'start' | 'stop', name: string): Promise<ShiLiDongZuoJieGuo> {
-  const base: ShiLiDongZuoJieGuo = { ok: false, id, action, instance: name };
+export async function yunXingShiLiDongZuo(id: string, action: 'start' | 'stop', ming: string): Promise<ShiLiDongZuoJieGuo> {
+  const base: ShiLiDongZuoJieGuo = { ok: false, id, action, instance: ming };
   if (!LIST_COMMANDS[id]) return { ...base, error: 'no-instance-cli' };
   if (!INSTANCE_CONTROL[id]) return { ...base, error: 'instance-control-unsupported' };
-  if (!SAFE_NAME.test(String(name || ''))) return { ...base, error: 'bad-instance-name' };
-  const r = await run(id, [action, name]);
+  if (!SAFE_NAME.test(String(ming || ''))) return { ...base, error: 'bad-instance-name' };
+  const r = await run(id, [action, ming]);
   const shouHang = (r.stderr || r.stdout || r.error || '').split(/\r?\n/).find((l) => l.trim()) || '';
   if (!r.ok) {
     return { ...base, error: r.code === null ? 'spawn-failed' : 'command-failed', evidence: shouHang.slice(0, 240) };
   }
-  return { ok: true, id, action, instance: name, ...(shouHang ? { evidence: shouHang.slice(0, 240) } : {}) };
+  return { ok: true, id, action, instance: ming, ...(shouHang ? { evidence: shouHang.slice(0, 240) } : {}) };
 }
 
 /**

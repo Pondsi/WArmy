@@ -42,8 +42,8 @@ function wordpiece(token, vocab, unk = '[UNK]', maxChars = 100) {
     let end = chars.length;
     let cur = null;
     while (start < end) {
-      const sub = chars.slice(start, end).join('');
-      const piece = start === 0 ? sub : `##${sub}`;
+      const fu = chars.slice(start, end).join('');
+      const piece = start === 0 ? fu : `##${fu}`;
       if (vocab[piece] !== undefined) {
         cur = piece;
         break;
@@ -72,22 +72,22 @@ function encode(text, vocab, maxLen = 64) {
     }
   }
   ids.push(BigInt(vocab[SEP] ?? 102));
-  const input = ids.slice(0, maxLen);
-  const mask = new Array(input.length).fill(1n);
-  const type = new Array(input.length).fill(0n);
-  return { ids: BigInt64Array.from(input), mask: BigInt64Array.from(mask), type: BigInt64Array.from(type) };
+  const shuRu = ids.slice(0, maxLen);
+  const mask = new Array(shuRu.length).fill(1n);
+  const type = new Array(shuRu.length).fill(0n);
+  return { ids: BigInt64Array.from(shuRu), mask: BigInt64Array.from(mask), type: BigInt64Array.from(type) };
 }
 
-async function tryBackend(name, options) {
+async function tryBackend(ming, options) {
   try {
     ort.env.wasm.numThreads = options.threads ?? 1;
-    if (name === 'wasm-simd') {
+    if (ming === 'wasm-simd') {
       ort.env.wasm.simd = true;
       options.executionProviders = ['wasm'];
-    } else if (name === 'wasm-nosimd') {
+    } else if (ming === 'wasm-nosimd') {
       ort.env.wasm.simd = false;
       options.executionProviders = ['wasm'];
-    } else if (name === 'webgpu') {
+    } else if (ming === 'webgpu') {
       options.executionProviders = ['webgpu', 'wasm'];
     }
     const t0 = performance.now();
@@ -170,9 +170,9 @@ try {
         const out = await r.session.run(feedsBuilder(t));
         const keys = Object.keys(out);
         const dim = out[keys[0]]?.dims;
-        boundary.push({ input: t.slice(0, 20), ok: true, outDim: dim });
+        boundary.push({ shuRu: t.slice(0, 20), ok: true, outDim: dim });
       } catch (e) {
-        boundary.push({ input: t.slice(0, 20), ok: false, err: String(e.message || e) });
+        boundary.push({ shuRu: t.slice(0, 20), ok: false, err: String(e.message || e) });
       }
     }
   }

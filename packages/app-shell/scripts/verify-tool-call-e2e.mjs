@@ -7,7 +7,7 @@
  *   1) 真的发起：应用**真的**向模型发了带 tools 的请求（recall/retrieve 由记忆服务就绪后暴露）；
  *   2) 真的完成：宿主真的执行了工具，并把工具结果回给模型，模型据此给出终答（同一个会话里闭环）；
  *   3) **真的在控制台里看得见**：渲染层控制台（T194 那套 IPC 事件流）显示 tool.start / tool.finish 两行，
- *      且这两行同时出现在 ①页面 DOM（#console-out）与 ②原始 IPC 事件流（onConsoleEvent）两处。
+ *      且这两行同时出现在 ①页面 DOM（#kongZhiTaiShuChu）与 ②原始 IPC 事件流（onConsoleEvent）两处。
  *
  * 模型这一侧的**诚实声明**：本机**没有**任何可用的 provider 密钥
  * （providerCfg 是内存态、默认 apiKey 为空；userData 下没有 secure/keys.enc.json；环境里也没有 *_API_KEY），
@@ -51,7 +51,7 @@ fs.mkdirSync(OUT, { recursive: true });
    ══════════════════════════════════════════════════════════════════════════ */
 const state = { requests: [], toolsSeen: null, toolResults: [], turns: 0 };
 
-const toolCallResponse = (id, name, args) => ({
+const toolCallResponse = (id, ming, args) => ({
   id: 'stub-' + id,
   object: 'chat.completion',
   created: Math.floor(Date.now() / 1000),
@@ -59,7 +59,7 @@ const toolCallResponse = (id, name, args) => ({
   choices: [
     {
       index: 0,
-      message: { role: 'assistant', content: null, tool_calls: [{ id: 'call-' + id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] },
+      message: { role: 'assistant', content: null, tool_calls: [{ id: 'call-' + id, type: 'function', function: { name: ming, arguments: JSON.stringify(args) } }] },
       finish_reason: 'tool_calls',
     },
   ],
@@ -79,9 +79,9 @@ const server = http.createServer((req, res) => {
   let raw = '';
   req.on('data', (c) => (raw += c));
   req.on('end', () => {
-    let body = {};
+    let ti = {};
     try {
-      body = JSON.parse(raw || '{}');
+      ti = JSON.parse(raw || '{}');
     } catch {
       /* 忽略 */
     }
@@ -90,10 +90,10 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ data: [{ id: 'stub-model' }] }));
       return;
     }
-    const tools = Array.isArray(body.tools) ? body.tools : [];
-    const toolMsgs = (body.messages || []).filter((m) => m.role === 'tool');
+    const tools = Array.isArray(ti.tools) ? ti.tools : [];
+    const toolMsgs = (ti.xiaoXiJi || []).filter((m) => m.role === 'tool');
     // users 是给「默认紧急度真的把消息发到模型了吗」取证用的：请求体里必须出现那条原文
-    const users = (body.messages || []).filter((m) => m.role === 'user').map((m) => String(m.content || ''));
+    const users = (ti.xiaoXiJi || []).filter((m) => m.role === 'user').map((m) => String(m.content || ''));
     state.requests.push({ url: req.url, hasTools: tools.length > 0, toolNames: tools.map((x) => x.function && x.function.name), toolMsgs: toolMsgs.map((m) => String(m.content || '')), users });
     if (tools.length && !state.toolsSeen) state.toolsSeen = tools.map((x) => x.function && x.function.name);
     if (toolMsgs.length) state.toolResults.push(String(toolMsgs[toolMsgs.length - 1].content || ''));
@@ -121,7 +121,7 @@ console.log('桩模型（本地 OpenAI 兼容，模型不是真的）: ' + STUB_
    ══════════════════════════════════════════════════════════════════════════ */
 const electronPath = require('electron');
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-tool-e2e-'));
-const appRoot = path.join(tmpRoot, 'app');
+const appRoot = path.join(tmpRoot, 'yingYong');
 fs.mkdirSync(appRoot, { recursive: true });
 fs.cpSync(path.join(pkgRoot, 'dist'), path.join(appRoot, 'dist'), { recursive: true });
 fs.copyFileSync(path.join(pkgRoot, 'package.json'), path.join(appRoot, 'package.json'));
@@ -133,7 +133,7 @@ const mainFile = path.join(appRoot, 'dist', 'electron-main.js');
   const lines = fs.readFileSync(mainFile, 'utf8').split('\n');
   fs.writeFileSync(
     mainFile,
-    lines.map((l) => (l.includes("app.setAsDefaultProtocolClient('dsh-app')") ? l.replace("app.setAsDefaultProtocolClient('dsh-app')", 'void 0') : l)).join('\n'),
+    lines.map((l) => (l.includes("yingYong.setAsDefaultProtocolClient('dsh-app')") ? l.replace("yingYong.setAsDefaultProtocolClient('dsh-app')", 'void 0') : l)).join('\n'),
     'utf8'
   );
 }
@@ -189,9 +189,9 @@ try {
   ok(cdpUp, '1-1 真 Electron 主进程起来了（真 main + 真 preload + 真渲染层）', 'CDP 端口 ' + PORT);
   if (!cdpUp) throw new Error('CDP 没起来: ' + appLogs.join('').slice(-400));
 
-  c = await attach(PORT, { label: 'tool-e2e', callTimeout: 20000 });
+  c = await attach(PORT, { biaoQian: 'tool-e2e', callTimeout: 20000 });
   await c.send('Runtime.enable');
-  await c.waitFor('typeof window.warmy === "object" && typeof window.__saveState === "function"', { timeout: 60000, label: '真应用渲染层就绪' });
+  await c.waitFor('typeof window.warmy === "object" && typeof window.__saveState === "function"', { timeout: 60000, biaoQian: '真应用渲染层就绪' });
   const info = await c.evaluate(`(async function(){ var r = await window.warmy.appInfo(); return JSON.stringify({ ok: r && r.ok, version: r && r.version, href: location.href }); })()`);
   const infoObj = JSON.parse(info);
   ok(infoObj.ok === true && String(infoObj.href).startsWith('file://'), '1-2 渲染层是真 file:// 文档 + 真 IPC（window.warmy 来自真 preload，不是预览桩）', JSON.stringify(infoObj));
@@ -228,13 +228,13 @@ try {
 
   /* ── 2. 用**设置界面**把 provider 指到本地桩（与应用自己保存 baseURL/密钥是同一条路径） ── */
   await c.evaluate(`(function(){var e=document.querySelector('[data-nav="settings"]'); if(e) e.click(); return true;})()`);
-  await c.waitForQuiet(`!!document.querySelector('#settings-nav')`, { timeout: 20000, label: '设置页' });
-  await c.evaluate(`(function(){var b=document.querySelector('#settings-nav button[data-sec="model"]'); if(b) b.click(); return true;})()`);
-  await c.waitFor(`!!document.querySelector('#prov-list .prov-card input[data-k="baseURL"]')`, { timeout: 20000, label: '设置页的供应商卡片' });
+  await c.waitForQuiet(`!!document.querySelector('#peiZhiDaoHang')`, { timeout: 20000, biaoQian: '设置页' });
+  await c.evaluate(`(function(){var b=document.querySelector('#peiZhiDaoHang button[data-sec="model"]'); if(b) b.click(); return true;})()`);
+  await c.waitFor(`!!document.querySelector('#provLieBiao .provKa input[data-k="baseURL"]')`, { timeout: 20000, biaoQian: '设置页的供应商卡片' });
   const uiSet = await c.evaluate(`(function(){
-    var card = document.querySelector('#prov-list .prov-card');
-    var base = card.querySelector('input[data-k="baseURL"]');
-    var key = card.querySelector('input[data-k="apiKey"]');
+    var ka = document.querySelector('#provLieBiao .provKa');
+    var base = ka.querySelector('input[data-k="baseURL"]');
+    var key = ka.querySelector('input[data-k="apiKey"]');
     base.value = ${JSON.stringify(STUB_BASE)};
     base.dispatchEvent(new Event('change', { bubbles: true }));
     key.value = ${JSON.stringify(STUB_KEY)};
@@ -262,29 +262,29 @@ try {
 
   /* ── 4. 真实会话：在真界面里「建一头牛马 → 开会话 → 输入 → 发送」（不是直接调 IPC） ── */
   await c.evaluate(`(function(){var e=document.querySelector('[data-nav="singleAi"]'); if(e) e.click(); return true;})()`);
-  await c.waitForQuiet(`!!document.querySelector('.list-hq-icon')`, { timeout: 15000, label: '「我的牛马」页的牛马管理局入口' });
+  await c.waitForQuiet(`!!document.querySelector('.lieBiaoHqTuBiao')`, { timeout: 15000, biaoQian: '「我的牛马」页的牛马管理局入口' });
   // 全新 profile 里没有实例 → 走产品自己的「新建实例」流程（弹窗填名字 → 确定），
   // 这样后面的会话就是**产品自己造出来的**，不是测试塞进去的假会话。
-  await c.evaluate(`(function(){ var i = document.querySelector('.list-hq-icon'); if (i) i.click(); return true; })()`);
-  await c.waitFor(`!!document.querySelector('#list-action') && !document.querySelector('#list-action').classList.contains('hidden')`, { timeout: 15000, label: '牛马管理局页的新建按钮' });
-  await c.evaluate(`(function(){ document.querySelector('#list-action').click(); return true; })()`);
-  await c.waitFor(`!!document.querySelector('#modal-body input') && !document.querySelector('#modal-root').classList.contains('hidden')`, { timeout: 10000, label: '新建实例的名字弹窗' });
+  await c.evaluate(`(function(){ var i = document.querySelector('.lieBiaoHqTuBiao'); if (i) i.click(); return true; })()`);
+  await c.waitFor(`!!document.querySelector('#lieBiaoDongZuo') && !document.querySelector('#lieBiaoDongZuo').classList.contains('yinCang')`, { timeout: 15000, biaoQian: '牛马管理局页的新建按钮' });
+  await c.evaluate(`(function(){ document.querySelector('#lieBiaoDongZuo').click(); return true; })()`);
+  await c.waitFor(`!!document.querySelector('#duiHuaKuangTi input') && !document.querySelector('#duiHuaKuangGen').classList.contains('yinCang')`, { timeout: 10000, biaoQian: '新建实例的名字弹窗' });
   await c.evaluate(`(function(){
-    var inp = document.querySelector('#modal-body input');
+    var inp = document.querySelector('#duiHuaKuangTi input');
     inp.value = 'R16-值班牛马';
     inp.dispatchEvent(new Event('input', { bubbles: true }));
-    var bs = document.querySelectorAll('#modal-actions button');
-    for (var i = 0; i < bs.length; i++) if (bs[i].classList.contains('btn-primary')) { bs[i].click(); return true; }
+    var bs = document.querySelectorAll('#duiHuaKuangDongZuoJi button');
+    for (var i = 0; i < bs.length; i++) if (bs[i].classList.contains('anNiuZhuYao')) { bs[i].click(); return true; }
     return false;
   })()`);
-  await c.waitForQuiet(`!!document.querySelector('#inst-detail') && !document.querySelector('#inst-detail').classList.contains('hidden')`, { timeout: 12000, label: '实例详情页' });
+  await c.waitForQuiet(`!!document.querySelector('#shiLiXiangQing') && !document.querySelector('#shiLiXiangQing').classList.contains('yinCang')`, { timeout: 12000, biaoQian: '实例详情页' });
   await c.evaluate(`(function(){var e=document.querySelector('[data-nav="singleAi"]'); if(e) e.click(); return true;})()`);
-  await c.waitFor(`!!document.querySelector('#chat-layout') && !document.querySelector('#chat-layout').classList.contains('hidden') && !!document.querySelector('#input')`,
-    { timeout: 15000, label: '会话打开（应用自动打开列表里的第一个）' });
+  await c.waitFor(`!!document.querySelector('#liaoTianBuJu') && !document.querySelector('#liaoTianBuJu').classList.contains('yinCang') && !!document.querySelector('#shuRu')`,
+    { timeout: 15000, biaoQian: '会话打开（应用自动打开列表里的第一个）' });
   const opened = JSON.parse(await c.evaluate(`JSON.stringify({
-    title: (document.querySelector('#chat-title')||document.querySelector('.chat-title')||{}).textContent || '',
-    bubbles: document.querySelectorAll('#messages .bubble').length,
-    inputVisible: !!document.querySelector('#input') && document.querySelector('#input').offsetParent !== null
+    title: (document.querySelector('#liaoTianBiaoTi')||document.querySelector('.liaoTianBiaoTi')||{}).textContent || '',
+    bubbles: document.querySelectorAll('#xiaoXiJi .bubble').length,
+    inputVisible: !!document.querySelector('#shuRu') && document.querySelector('#shuRu').offsetParent !== null
   })`));
   ok(opened.inputVisible,
     '4-1 走产品自己的流程：新建牛马 → 自动打开会话 → 输入框可见可用（不是测试塞的假会话）', JSON.stringify(opened));
@@ -293,15 +293,15 @@ try {
   //     修前 P2/P3（P2 就是默认「插入」）只进本地队列、flushQueue 只回显不派发，
   //     所以这条 e2e 当时必须切 P1 才发得出去。现在默认就该真的到达模型。
   const urgUi = JSON.parse(await c.evaluate(`JSON.stringify((function(){
-    var lbl = document.querySelector('#urg-label');
-    var on = document.querySelector('#urg-menu button.on');
+    var lbl = document.querySelector('#jinJiBiaoQian');
+    var qiYong = document.querySelector('#jinJiCaiDan button.qiYong');
     return {
-      label: lbl ? String(lbl.textContent || '') : '',
-      on: on ? String(on.dataset.u || '') : '',
-      p1On: (function(){ var b = document.querySelector('#urg-menu button[data-u="P1"]'); return !!(b && b.classList.contains('on')); })()
+      biaoQian: lbl ? String(lbl.textContent || '') : '',
+      qiYong: qiYong ? String(qiYong.dataset.u || '') : '',
+      p1On: (function(){ var b = document.querySelector('#jinJiCaiDan button[data-u="P1"]'); return !!(b && b.classList.contains('qiYong')); })()
     };
   })())`));
-  ok(urgUi.label === ZH['urgency.insertLabel'] && urgUi.on === 'P2' && urgUi.p1On === false,
+  ok(urgUi.biaoQian === ZH['urgency.insertLabel'] && urgUi.qiYong === 'P2' && urgUi.p1On === false,
     '4-2 默认紧急度就是 P2（界面上的原话「' + ZH['urgency.insertLabel'] + '」）—— 这正是修前"发了没反应"的那条默认路径',
     JSON.stringify(urgUi));
 
@@ -313,10 +313,10 @@ try {
   })()`);
   const MSG = 'R16-TOOL-E2E：请调用记忆工具取回「无限牛马 工具链 实测」这条锚点。';
   const sent = await c.evaluate(`(function(){
-    var inp = document.querySelector('#input');
+    var inp = document.querySelector('#shuRu');
     inp.value = ${JSON.stringify(MSG)};
     inp.dispatchEvent(new Event('input', { bubbles: true }));
-    var b = document.querySelector('#btn-send');
+    var b = document.querySelector('#anNiuFaSong');
     if (!b) return 'no-btn';
     if (b.disabled) return 'disabled';
     b.click();
@@ -325,7 +325,7 @@ try {
   ok(sent === 'clicked', '4-3 输入框里的消息通过「发送」按钮真的发出去了（点的是真按钮，不是调 IPC）', JSON.stringify({ sent, key: 'sha16=' + sha16(STUB_KEY) }));
   /** 数一数会话里出现了几条"桩模型终答"（不能用"最后一条气泡"判断：上一轮的终答还留在那儿） */
   const finalCount = async () =>
-    Number(await c.evaluate(`(function(){ return Array.from(document.querySelectorAll('#messages .bubble')).filter(function(b){ return /桩模型终答/.test(String(b.textContent||'')); }).length; })()`));
+    Number(await c.evaluate(`(function(){ return Array.from(document.querySelectorAll('#xiaoXiJi .bubble')).filter(function(b){ return /桩模型终答/.test(String(b.textContent||'')); }).length; })()`));
   let finalAfterDefault = 0;
   for (let i = 0; i < 90; i++) {
     finalAfterDefault = await finalCount();
@@ -334,7 +334,7 @@ try {
   }
   ok(finalAfterDefault >= 1,
     '4-4 默认紧急度下终答回到聊天气泡（输入框 → 默认 P2 → 队列冲刷 → preload → 主进程 chat-send → 工具循环 → 模型 → 回界面）',
-    JSON.stringify({ bubbles: await c.evaluate(`document.querySelectorAll('#messages .bubble').length`), finals: finalAfterDefault }));
+    JSON.stringify({ bubbles: await c.evaluate(`document.querySelectorAll('#xiaoXiJi .bubble').length`), finals: finalAfterDefault }));
   const queuedMsgReachedModel = state.requests.filter((r) => (r.users || []).some((u) => u.indexOf('R16-TOOL-E2E') >= 0));
   ok(queuedMsgReachedModel.length >= 1,
     '4-5 **桩模型真的收到了这条消息**（请求体里出现那条原文）—— 默认路径不再被队列吞掉',
@@ -351,40 +351,40 @@ try {
     '4-6 默认 P2 走的是**外循环后插入**（主进程里该会话的插入级别 = outer，与 ADR000「默认：外循环后插入」一致）',
     JSON.stringify({ sessionId, mode: modeAfterDefault.mode }));
   const queueAfter = JSON.parse(await c.evaluate(`JSON.stringify((function(){
-    var bar = document.querySelector('#queue-bar');
+    var tiao = document.querySelector('#duiLieTiao');
     return {
-      items: (document.querySelector('#queue-items')||{}).innerText || '',
-      hidden: bar ? bar.classList.contains('hidden') : null,
-      count: (document.querySelector('#queue-count')||{}).textContent || ''
+      items: (document.querySelector('#duiLieTiaoMuJi')||{}).innerText || '',
+      yinCang: tiao ? tiao.classList.contains('yinCang') : null,
+      count: (document.querySelector('#duiLieCount')||{}).textContent || ''
     };
   })())`));
-  ok(queueAfter.items.trim() === '' && queueAfter.hidden === true,
+  ok(queueAfter.items.trim() === '' && queueAfter.yinCang === true,
     '4-7 「待执行队列」被真的排空了（队列项不是留在条上、也不是只被回显）', JSON.stringify(queueAfter));
   ok(state.turns >= 2, '4-8 桩模型被调用了至少两次（第 1 次给工具调用，第 2 次拿工具结果给终答）', 'turns=' + state.turns);
 
   /* ── 4b. 紧急度语义没被改坏：P1 仍然立即插入（内循环），P0（停止）仍然只停不发 ── */
-  await c.evaluate(`(function(){ var t = document.querySelector('#urg-trigger'); if (t) t.click(); return true; })()`);
-  await c.waitFor(`!!document.querySelector('#urg-menu') && !document.querySelector('#urg-menu').classList.contains('hidden')`, { timeout: 8000, label: '紧急度菜单' });
-  await c.evaluate(`(function(){ var b = document.querySelector('#urg-menu button[data-u="P1"]'); if (b) b.click(); return true; })()`);
-  await c.waitFor(`!!document.querySelector('#modal-actions .btn-danger')`, { timeout: 8000, label: 'P1 倒计时确认弹窗' });
-  await c.waitFor(`document.querySelector('#modal-actions .btn-danger').disabled === false`, { timeout: 15000, label: 'P1 倒计时结束（确认键可用）' });
-  await c.evaluate(`(function(){ document.querySelector('#modal-actions .btn-danger').click(); return true; })()`);
-  await c.waitForQuiet(`document.querySelector('#modal-root').classList.contains('hidden')`, { timeout: 6000, label: '紧急度确立' });
-  const p1Label = String(await c.evaluate(`(function(){ var e = document.querySelector('#urg-label'); return e ? String(e.textContent || '') : ''; })()`));
+  await c.evaluate(`(function(){ var t = document.querySelector('#jinJiTrigger'); if (t) t.click(); return true; })()`);
+  await c.waitFor(`!!document.querySelector('#jinJiCaiDan') && !document.querySelector('#jinJiCaiDan').classList.contains('yinCang')`, { timeout: 8000, biaoQian: '紧急度菜单' });
+  await c.evaluate(`(function(){ var b = document.querySelector('#jinJiCaiDan button[data-u="P1"]'); if (b) b.click(); return true; })()`);
+  await c.waitFor(`!!document.querySelector('#duiHuaKuangDongZuoJi .anNiuDanger')`, { timeout: 8000, biaoQian: 'P1 倒计时确认弹窗' });
+  await c.waitFor(`document.querySelector('#duiHuaKuangDongZuoJi .anNiuDanger').disabled === false`, { timeout: 15000, biaoQian: 'P1 倒计时结束（确认键可用）' });
+  await c.evaluate(`(function(){ document.querySelector('#duiHuaKuangDongZuoJi .anNiuDanger').click(); return true; })()`);
+  await c.waitForQuiet(`document.querySelector('#duiHuaKuangGen').classList.contains('yinCang')`, { timeout: 6000, biaoQian: '紧急度确立' });
+  const p1Label = String(await c.evaluate(`(function(){ var e = document.querySelector('#jinJiBiaoQian'); return e ? String(e.textContent || '') : ''; })()`));
   ok(p1Label === ZH['urgency.urgentLabel'],
     '4-9 切到加急：界面上的紧急度变成 P1（原话「' + ZH['urgency.urgentLabel'] + '」，走完倒计时确认）', p1Label);
   const MSG_P1 = 'R16-P1-E2E：加急这条也要照旧立即插入（不排队）。';
   const turnsBeforeP1 = state.turns;
   await c.evaluate(`(function(){
-    var inp = document.querySelector('#input');
+    var inp = document.querySelector('#shuRu');
     inp.value = ${JSON.stringify(MSG_P1)};
     inp.dispatchEvent(new Event('input', { bubbles: true }));
-    document.querySelector('#btn-send').click();
+    document.querySelector('#anNiuFaSong').click();
     return true;
   })()`);
   // P1 是"立即插入"：消息**立刻**进会话，且**不进**排队条
-  await c.waitFor(`(document.querySelector('#messages').innerText||'').indexOf('R16-P1-E2E') >= 0`, { timeout: 15000, label: 'P1：用户消息立刻进会话' });
-  const p1Queue = String(await c.evaluate(`(function(){ var e = document.querySelector('#queue-items'); return e ? String(e.innerText || '') : ''; })()`));
+  await c.waitFor(`(document.querySelector('#xiaoXiJi').innerText||'').indexOf('R16-P1-E2E') >= 0`, { timeout: 15000, biaoQian: 'P1：用户消息立刻进会话' });
+  const p1Queue = String(await c.evaluate(`(function(){ var e = document.querySelector('#duiLieTiaoMuJi'); return e ? String(e.innerText || '') : ''; })()`));
   let finalsAfterP1 = 0;
   for (let i = 0; i < 90; i++) {
     finalsAfterP1 = await finalCount();
@@ -399,9 +399,9 @@ try {
     '4-11 加急（P1）走的是**内循环后插入**（主进程里插入级别 = inner，与 ADR000「P1 立即插入」一致）', JSON.stringify(modeP1));
   const turnsBeforeStop = state.turns;
   const stopLabel = ZH['chat.stopAll'];
-  const stopHit = await c.evaluate(`(function(){ var b = document.querySelector('#btn-stop-all'); if (!b) return 'no-btn'; b.click(); return 'clicked'; })()`);
-  const bubblesHaveStop = `(function(){ return Array.from(document.querySelectorAll('#messages .bubble')).some(function(x){ return String(x.textContent||'').trim() === ${JSON.stringify(stopLabel)}; }); })()`;
-  await c.waitForQuiet(bubblesHaveStop, { timeout: 8000, label: 'P0：停止那句原话' });
+  const stopHit = await c.evaluate(`(function(){ var b = document.querySelector('#anNiuTingZhiAll'); if (!b) return 'no-btn'; b.click(); return 'clicked'; })()`);
+  const bubblesHaveStop = `(function(){ return Array.from(document.querySelectorAll('#xiaoXiJi .bubble')).some(function(x){ return String(x.textContent||'').trim() === ${JSON.stringify(stopLabel)}; }); })()`;
+  await c.waitForQuiet(bubblesHaveStop, { timeout: 8000, biaoQian: 'P0：停止那句原话' });
   await sleepMs(900);
   ok(stopHit === 'clicked' && (await c.evaluate(bubblesHaveStop)) === true,
     '4-12 停止（P0）仍然只"停"：会话里出现语言包原话「' + stopLabel + '」', stopHit);
@@ -410,18 +410,18 @@ try {
     'turns ' + turnsBeforeStop + ' -> ' + state.turns);
 
   /* ── 4c. 默认路径再来一次：这次插入级别要从 inner **翻回** outer（不是"默认值恰好是 outer"） ── */
-  await c.evaluate(`(function(){ var t = document.querySelector('#urg-trigger'); if (t) t.click(); return true; })()`);
-  await c.waitFor(`!!document.querySelector('#urg-menu') && !document.querySelector('#urg-menu').classList.contains('hidden')`, { timeout: 8000, label: '紧急度菜单（切回 P2）' });
-  await c.evaluate(`(function(){ var b = document.querySelector('#urg-menu button[data-u="P2"]'); if (b) b.click(); return true; })()`);
-  await c.evaluate(`(function(){ var m = document.querySelector('#urg-menu'); if (m) m.classList.add('hidden'); return true; })()`);
+  await c.evaluate(`(function(){ var t = document.querySelector('#jinJiTrigger'); if (t) t.click(); return true; })()`);
+  await c.waitFor(`!!document.querySelector('#jinJiCaiDan') && !document.querySelector('#jinJiCaiDan').classList.contains('yinCang')`, { timeout: 8000, biaoQian: '紧急度菜单（切回 P2）' });
+  await c.evaluate(`(function(){ var b = document.querySelector('#jinJiCaiDan button[data-u="P2"]'); if (b) b.click(); return true; })()`);
+  await c.evaluate(`(function(){ var m = document.querySelector('#jinJiCaiDan'); if (m) m.classList.add('yinCang'); return true; })()`);
   const modeBeforeP2 = JSON.parse(await c.evaluate(`(async function(){ var r = await window.warmy.getInsertMode(${JSON.stringify(sessionId)}); return JSON.stringify({ mode: r && r.mode }); })()`));
   const turnsBeforeP2 = state.turns;
   const MSG_P2 = 'R16-P2-E2E-002：默认紧急度再来一条，验证不是"只对第一条管用"。';
   await c.evaluate(`(function(){
-    var inp = document.querySelector('#input');
+    var inp = document.querySelector('#shuRu');
     inp.value = ${JSON.stringify(MSG_P2)};
     inp.dispatchEvent(new Event('input', { bubbles: true }));
-    document.querySelector('#btn-send').click();
+    document.querySelector('#anNiuFaSong').click();
     return true;
   })()`);
   let finalsAfterP2 = finalsAfterP1;
@@ -438,10 +438,10 @@ try {
     '4-15 默认路径**第二条**同样真的到达模型（不是"只对第一条管用"）', 'turns ' + turnsBeforeP2 + ' -> ' + state.turns);
   await sleepMs(1200);
   const queueAfterP2 = JSON.parse(await c.evaluate(`JSON.stringify((function(){
-    var bar = document.querySelector('#queue-bar');
-    return { items: (document.querySelector('#queue-items')||{}).innerText || '', hidden: bar ? bar.classList.contains('hidden') : null };
+    var tiao = document.querySelector('#duiLieTiao');
+    return { items: (document.querySelector('#duiLieTiaoMuJi')||{}).innerText || '', yinCang: tiao ? tiao.classList.contains('yinCang') : null };
   })())`));
-  ok(queueAfterP2.items.trim() === '' && queueAfterP2.hidden === true && finalsAfterP2 > finalsAfterP1,
+  ok(queueAfterP2.items.trim() === '' && queueAfterP2.yinCang === true && finalsAfterP2 > finalsAfterP1,
     '4-16 第二条默认消息也拿到了回复、队列同样被真的排空（没有堆积、没有残留）',
     JSON.stringify({ finals: finalsAfterP2, queue: queueAfterP2 }));
 
@@ -459,9 +459,9 @@ try {
     JSON.stringify({ toolCalls: metrics && metrics.toolCalls, toolCallsOk: metrics && metrics.toolCallsOk, toolTurns: metrics && metrics.toolTurns }));
 
   /* ── 6. 控制台（T194 那套真事件流）：原始 IPC + 页面 DOM 两处都要看得见 ── */
-  await c.evaluate(`(function(){ var b = document.querySelector('#btn-console'); if (b) b.click(); return true; })()`);
-  await c.waitFor(`!document.querySelector('#console-pane').classList.contains('hidden')`, { timeout: 10000, label: '控制台展开' });
-  const consoleText = String(await c.evaluate(`(function(){ return (document.querySelector('#console-out')||{}).textContent || ''; })()`) || '');
+  await c.evaluate(`(function(){ var b = document.querySelector('#anNiuKongZhiTai'); if (b) b.click(); return true; })()`);
+  await c.waitFor(`!document.querySelector('#kongZhiTaiMianBan').classList.contains('yinCang')`, { timeout: 10000, biaoQian: '控制台展开' });
+  const consoleText = String(await c.evaluate(`(function(){ return (document.querySelector('#kongZhiTaiShuChu')||{}).textContent || ''; })()`) || '');
   const raw = JSON.parse(await c.evaluate(`JSON.stringify(window.__toolE2E.events)`));
   const toolRaw = raw.filter((e) => e && e.cat === 'tool');
   const startLine = ZH['console.tool.start'].replace('{tool}', 'recall').replace('{round}', '1');
@@ -486,7 +486,7 @@ try {
     '6-3 tool.finish 带着结论与度量（ok / chars / ms）—— 工具是**完成**的，不是只开了个头',
     JSON.stringify(finishEvents.map((e) => e.data).slice(0, 2)));
   ok(consoleText.indexOf('[' + ZH['console.cat.tool'] + '] ' + startLine) >= 0,
-    '6-4 **控制台面板**（#console-out）里显示了工具开始那一行（来自语言包的原话）',
+    '6-4 **控制台面板**（#kongZhiTaiShuChu）里显示了工具开始那一行（来自语言包的原话）',
     JSON.stringify(consoleText.split('\n').filter((l) => l.indexOf(ZH['console.cat.tool']) >= 0).slice(0, 2)));
   ok(finishRe.test(consoleText) && consoleText.indexOf(ZH['console.result.ok']) >= 0,
     '6-5 控制台面板里显示了工具结束那一行（含结论/字符数/耗时，且结论是"成功"）',
@@ -496,9 +496,9 @@ try {
     'keyLen=' + STUB_KEY.length + ' sha16=' + sha16(STUB_KEY));
   const shot = await c.snap(path.join(OUT, 'console-tool-call.png'));
   if (!shot.ok) warn('截图失败（不影响判定）: ' + shot.reason);
-  fs.writeFileSync(path.join(OUT, 'console-out.txt'), consoleText, 'utf8');
+  fs.writeFileSync(path.join(OUT, 'kongZhiTaiShuChu.txt'), consoleText, 'utf8');
   fs.writeFileSync(path.join(OUT, 'raw-console-events.json'), JSON.stringify(raw, null, 1), 'utf8');
-  console.log('\n--- #console-out（真应用控制台里的原始文本，工具相关行） ---');
+  console.log('\n--- #kongZhiTaiShuChu（真应用控制台里的原始文本，工具相关行） ---');
   console.log(
     consoleText
       .split('\n')
@@ -518,7 +518,7 @@ try {
   fs.writeFileSync(path.join(OUT, 'tool-e2e-result.json'), JSON.stringify({ pass, results: R.results }, null, 1), 'utf8');
 } catch (e) {
   ok(false, '卡住', String(e && e.message).slice(0, 300));
-  console.error('app logs tail: ' + appLogs.join('').slice(-800));
+  console.error('yingYong logs tail: ' + appLogs.join('').slice(-800));
   pass = R.summary('真应用 tool-call 端到端（桩模型）');
 } finally {
   try { if (c) c.close(); } catch { /* noop */ }

@@ -13,13 +13,13 @@ import {GroupChatRouter, DEFAULT_PERMISSIONS} from '@warmy/group-router';
 
 let pass = 0;
 let fail = 0;
-function check(label, ok, detail) {
+function check(biaoQian, ok, detail) {
   if (ok) {
     pass += 1;
-    console.log(`  ok  ${label}`);
+    console.log(`  ok  ${biaoQian}`);
   } else {
     fail += 1;
-    console.log(`  FAIL ${label}`, detail ?? '');
+    console.log(`  FAIL ${biaoQian}`, detail ?? '');
   }
 }
 
@@ -31,7 +31,7 @@ const router = new GroupChatRouter({
 
 router.createGroup({
   groupId: 'g1',
-  name: '测试群',
+  ming: '测试群',
   type: 'internal',
   members: [],
   permissions: DEFAULT_PERMISSIONS,
@@ -82,7 +82,7 @@ check('serialize 含 g1 队列', Array.isArray(snap.queues.g1) && snap.queues.g1
 const router2 = new GroupChatRouter({ queueWhenFixedBusy: false });
 router2.createGroup({
   groupId: 'g1',
-  name: '测试群',
+  ming: '测试群',
   type: 'internal',
   members: [],
   permissions: DEFAULT_PERMISSIONS,

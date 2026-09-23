@@ -9,160 +9,160 @@
 </head>
 <body>
   <div id="app">
-    <div id="titlebar">
-      <div class="tb-drag">
-        <div class="tb-logo" id="tb-logo" aria-hidden="true"><img src="./icons/logo-color.svg" alt="" class="tb-logo-img"/></div>
-        <!-- Owner rule: this titlebar line is logo + tagline ONLY (app.js fills #tb-brand with brand.tagline). -->
-        <span class="tb-brand" id="tb-brand"></span>
+    <div id="biaoTiLan">
+      <div class="biaoTiLanTuoZhuai">
+        <div class="biaoTiLanlogo" id="biaoTiLanlogo" aria-hidden="true"><img src="./icons/logo-color.svg" alt="" class="biaoTiLanlogoTuPian"/></div>
+        <!-- Owner rule: this biaoTiLan line is logo + tagline ONLY (app.js fills #biaoTiLanPinPai with brand.tagline). -->
+        <span class="biaoTiLanPinPai" id="biaoTiLanPinPai"></span>
       </div>
-      <div class="tb-actions" id="tb-actions">
-        <button id="btn-always-top" title="置顶窗口" aria-label="always on top" data-i18n-title="tip.pin">
-          <svg class="tb-svg" viewBox="0 0 100 100" aria-hidden="true"><rect x="18" y="14" width="64" height="12" rx="6" fill="currentColor"/><polygon points="32,26 68,26 58,58 42,58" fill="none" stroke="currentColor" stroke-width="9" stroke-linejoin="round"/><rect x="45" y="58" width="10" height="28" rx="5" fill="currentColor"/></svg>
+      <div class="biaoTiLanDongZuoJi" id="biaoTiLanDongZuoJi">
+        <button id="anNiuZongShiDing" title="置顶窗口" aria-label="always qiYong top" data-i18n-title="tip.pin">
+          <svg class="biaoTiLansvg" viewBox="0 0 100 100" aria-hidden="true"><rect x="18" y="14" width="64" height="12" rx="6" fill="currentColor"/><polygon points="32,26 68,26 58,58 42,58" fill="none" stroke="currentColor" stroke-width="9" stroke-linejoin="round"/><rect x="45" y="58" width="10" height="28" rx="5" fill="currentColor"/></svg>
         </button>
-        <button id="btn-ui-refresh" title="刷新并清除缓存" aria-label="refresh" data-i18n-title="tip.refresh">
-          <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.7 0 3.2.7 4.2 1.9V3h1.5v4.5H9.2V6.2h1.9A4 4 0 1 0 12 8h1.5z"/></svg>
+        <button id="anNiuuiRefresh" title="刷新并清除缓存" aria-label="refresh" data-i18n-title="tip.refresh">
+          <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.7 0 3.2.7 4.2 1.9V3h1.5v4.5H9.2V6.2h1.9A4 4 0 1 0 12 8h1.5z"/></svg>
         </button>
-        <span class="tb-sep" aria-hidden="true"></span>
-        <button id="btn-win-min" title="最小化" aria-label="minimize" data-i18n-title="tip.min">
-          <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 7.5h10v1H3v-1z"/></svg>
+        <span class="biaoTiLanFenGe" aria-hidden="true"></span>
+        <button id="anNiuwinMin" title="最小化" aria-label="minimize" data-i18n-title="tip.min">
+          <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 7.5h10v1H3v-1z"/></svg>
         </button>
-        <button id="btn-win-max" title="最大化" aria-label="maximize" data-i18n-title="tip.max">
-          <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v8H4V4zm1 1v6h6V5H5z"/></svg>
+        <button id="anNiuwinMax" title="最大化" aria-label="maximize" data-i18n-title="tip.max">
+          <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v8H4V4zm1 1v6h6V5H5z"/></svg>
         </button>
-        <button id="btn-win-close" class="tb-close" title="关闭" aria-label="close" data-i18n-title="tip.close">
-          <svg class="tb-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+        <button id="anNiuwinGuanBi" class="biaoTiLanGuanBi" title="关闭" aria-label="close" data-i18n-title="tip.close">
+          <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
         </button>
       </div>
     </div>
-    <div id="app-body">
-    <nav id="rail">
-      <div class="rail-top">
-        <button class="rail-item" data-nav="me" data-i18n-title="tip.me">
-          <img class="avatar-img hidden" id="selfAvatarImg" alt="" />
-          <span class="avatar" id="selfAvatar" data-i18n="nav.avatar">我</span>
+    <div id="appTi">
+    <nav id="ceLan">
+      <div class="ceLanDing">
+        <button class="ceLanTiaoMu" data-nav="wo" data-i18n-title="tip.wo">
+          <img class="touXiangTuPian yinCang" id="selfAvatarImg" alt="" />
+          <span class="touXiang" id="selfAvatar" data-i18n="nav.touXiang">我</span>
         </button>
-        <button class="rail-item active" data-nav="singleAi" data-i18n-title="tip.singleAi">
+        <button class="ceLanTiaoMu jiHuo" data-nav="singleAi" data-i18n-title="tip.singleAi">
           <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M14,78 C14,60 24,54 34,54 C40,54 45,56 49,60"/><rect x="58" y="26" width="24" height="24" rx="4"/><circle cx="70" cy="38" r="3" fill="currentColor"/><line x1="70" y1="26" x2="70" y2="18"/><circle cx="70" cy="16" r="3" fill="currentColor"/></g></svg>
         </button>
-        <button class="rail-item" data-nav="internalGroup" data-i18n-title="tip.internalGroup">
+        <button class="ceLanTiaoMu" data-nav="internalGroup" data-i18n-title="tip.internalGroup">
           <svg viewBox="0 0 100 100"><path d="M50,14 A36,36 0 1,1 21,71" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M34,50 C30,38 42,38 50,50 C58,62 70,62 66,50 C62,38 50,38 50,50" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/></svg>
         </button>
-        <button class="rail-item" data-nav="externalChat" data-i18n-title="tip.externalChat">
+        <button class="ceLanTiaoMu" data-nav="externalChat" data-i18n-title="tip.externalChat">
           <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><circle cx="42" cy="34" r="14"/><path d="M18,82 C18,62 30,56 42,56 C48,56 53,58 57,62"/><path d="M68,32 C74,38 74,50 68,56"/><path d="M78,24 C88,36 88,52 78,64"/></g></svg>
         </button>
-        <button class="rail-item" data-nav="externalGroup" data-i18n-title="tip.externalGroup">
+        <button class="ceLanTiaoMu" data-nav="externalGroup" data-i18n-title="tip.externalGroup">
           <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M16,78 C16,62 24,54 34,54 C44,54 52,62 52,78"/><circle cx="66" cy="34" r="12"/><path d="M48,78 C48,62 56,54 66,54 C76,54 84,62 84,78"/></g></svg>
         </button>
       </div>
-      <div class="rail-bottom">
-        <button class="rail-item" data-nav="settings" data-i18n-title="tip.settings">
+      <div class="ceLanDi">
+        <button class="ceLanTiaoMu" data-nav="settings" data-i18n-title="tip.settings">
           <svg viewBox="0 0 100 100"><defs><mask id="h2"><rect width="100" height="100" fill="white"/><polygon points="50,32 66,42 66,58 50,68 34,58 34,42" fill="black"/></mask></defs><g fill="currentColor" mask="url(#h2)"><circle cx="50" cy="50" r="30"/><g stroke="currentColor" stroke-width="14"><line x1="50" y1="20" x2="50" y2="6"/><line x1="50" y1="80" x2="50" y2="94"/><line x1="20" y1="50" x2="6" y2="50"/><line x1="80" y1="50" x2="94" y2="50"/><line x1="29" y1="29" x2="19" y2="19"/><line x1="71" y1="71" x2="81" y2="81"/><line x1="71" y1="29" x2="81" y2="19"/><line x1="29" y1="71" x2="19" y2="81"/></g></g></svg>
         </button>
       </div>
     </nav>
 
-    <aside id="list-col">
-      <header class="list-head">
-        <h2 id="list-title">—</h2>
-        <div class="list-head-actions" id="list-head-actions" style="display:flex;gap:6px;align-items:center">
+    <aside id="lieBiaoLan">
+      <header class="lieBiaoHead">
+        <h2 id="lieBiaoBiaoTi">—</h2>
+        <div class="lieBiaoHeadDongZuoJi" id="lieBiaoHeadDongZuoJi" style="display:flex;gap:6px;align-items:center">
           <!-- 标签由 setupListAction 按页面设置（联系人页=添加联系人，项目/群聊=新建），
                所以不要挂 static data-i18n，否则切换语言时会把它改回「扫码加入」 -->
-          <button id="btn-join-qr" class="btn-mini hidden" data-i18n-title="join.qrHint"></button>
-          <button id="list-action" class="btn-mini hidden"></button>
+          <button id="anNiuJiaRuqr" class="anNiuXiao yinCang" data-i18n-title="join.qrHint"></button>
+          <button id="lieBiaoDongZuo" class="anNiuXiao yinCang"></button>
         </div>
       </header>
-      <div class="search-wrap">
-        <input id="list-search" type="search" data-i18n-placeholder="list.search" data-i18n-title="list.search" />
+      <div class="souSuoBaoGuo">
+        <input id="lieBiaoSouSuo" type="search" data-i18n-placeholder="list.search" data-i18n-title="list.search" />
       </div>
-      <div id="list-body" class="list-body"></div>
-      <div id="list-watermark" class="list-watermark" aria-hidden="true"></div>
-      <div id="col-resizer" data-i18n-title="tip.dragWidth"></div>
+      <div id="lieBiaoTi" class="lieBiaoTi"></div>
+      <div id="lieBiaoWatermark" class="lieBiaoWatermark" aria-hidden="true"></div>
+      <div id="lanTiaoZhengTiao" data-i18n-title="tip.dragWidth"></div>
     </aside>
 
-    <main id="main-col">
+    <main id="zhuLan">
       <!-- 顶部横幅（ADR 003 R9/R10 组网状态 + 附六 身份变更）；内容由 app.js 的 renderNetBanner() 填 -->
-      <div id="net-banner" class="net-banner hidden" role="status" aria-live="polite"></div>
-      <div id="empty-state" class="empty-state">
-        <div class="logo-mark">
-          <div class="logo-glyph"><svg viewBox="0 0 140 100" style="width:96px;height:68px"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/><rect x="100" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="70" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="40" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="10" y="75" width="10" height="5" fill="#1A1A1A"/></g></svg></div>
-          <div class="logo-name" id="logo-name">无限牛马</div>
-          <div class="logo-sub" id="logo-sub">Workhorse Army</div>
+      <div id="wangLuoBanner" class="wangLuoBanner yinCang" role="status" aria-live="polite"></div>
+      <div id="kongTai" class="kongTai">
+        <div class="logoMark">
+          <div class="logoGlyph"><svg viewBox="0 0 140 100" style="width:96px;height:68px"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/><rect x="100" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="70" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="40" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="10" y="75" width="10" height="5" fill="#1A1A1A"/></g></svg></div>
+          <div class="logoMing" id="logoMing">无限牛马</div>
+          <div class="logoFu" id="logoFu">Workhorse Army</div>
         </div>
       </div>
 
-      <div id="chat-layout" class="chat-layout hidden">
-        <section id="chat-col">
-          <header class="chat-head">
+      <div id="liaoTianBuJu" class="liaoTianBuJu yinCang">
+        <section id="liaoTianLan">
+          <header class="liaoTianHead">
             <div>
-              <div class="chat-title" id="chat-title">—</div>
-              <div class="chat-meta" id="chat-meta"></div>
+              <div class="liaoTianBiaoTi" id="liaoTianBiaoTi">—</div>
+              <div class="liaoTianYuanShuju" id="liaoTianYuanShuju"></div>
             </div>
-            <div class="chat-actions">
+            <div class="liaoTianDongZuoJi">
               <!-- 诊断事件流（T194，**已降级为独立的排障视图**）：这是本机事件日志，
-                   不是控制台。控制台 = 容器内的 shell（右边的 btn-container-shell）。 -->
+                   不是控制台。控制台 = 容器内的 shell（右边的 anNiuRongQiKongZhiTai）。 -->
 
               <!-- ADR 004 P4 定稿：**控制台就是容器内的控制台**（其价值是给主机带来安全性防护）。
                    硬约束：只在「项目 / 我的牛马」里、且容器真的就绪时才可用；否则置灰并给出
                    诚实原因（见 app.js 的 refreshContainerConsoleGate / openContainerShell）。 -->
-              <button id="btn-container-shell" class="btn-icon" data-i18n-title="container.console.tip" aria-label="in-container shell console" disabled>
+              <button id="anNiuRongQiKongZhiTai" class="anNiuTuBiao" data-i18n-title="container.console.tip" aria-label="in-container shell console" disabled>
                 <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="24" width="84" height="56" rx="6"/><line x1="22" y1="48" x2="46" y2="48"/><circle cx="60" cy="48" r="5" fill="currentColor" stroke="none"/><circle cx="76" cy="48" r="5" fill="currentColor" stroke="none"/></g></svg>
               </button>
-              <div class="urg-dd" id="sec-dd">
-                <button class="urg-trigger" id="sec-trigger" type="button" data-i18n-title="chat.security">
-                  <svg class="ico sec-warn hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v11h-2V3zm0 13h2v2h-2v-2z"/></svg>
-                  <span id="sec-label" data-i18n="chat.securityNormal"></span>
-                  <svg class="ico urg-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
+              <div class="jinJiDd" id="secDd">
+                <button class="jinJiTrigger" id="secTrigger" type="button" data-i18n-title="chat.security">
+                  <svg class="ico secWarn yinCang" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v11h-2V3zm0 13h2v2h-2v-2z"/></svg>
+                  <span id="secBiaoQian" data-i18n="chat.securityNormal"></span>
+                  <svg class="ico jinJiJianTou" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
                 </button>
-                <div class="urg-menu hidden" id="sec-menu" role="menu">
+                <div class="jinJiCaiDan yinCang" id="secCaiDan" role="menu">
                   <button type="button" data-s="normal" data-i18n="chat.securityNormal"></button>
                   <button type="button" data-s="strict" data-i18n="chat.securityStrict"></button>
                   <button type="button" data-s="full" data-i18n="chat.securityFull"></button>
                 </div>
               </div>
-              <div class="urg-dd" id="more-dd">
-                <button class="urg-trigger" id="more-trigger" type="button" data-i18n-title="common.more">
+              <div class="jinJiDd" id="gengDuoDd">
+                <button class="jinJiTrigger" id="gengDuoTrigger" type="button" data-i18n-title="common.more">
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
                 </button>
-                <div class="urg-menu more-menu-panel hidden" id="more-menu" role="menu">
-                  <button type="button" id="mi-search" class="more-menu-btn"><span class="mark"></span><span data-i18n="list.search"></span></button>
+                <div class="jinJiCaiDan gengDuoCaiDanMianBan yinCang" id="gengDuoCaiDan" role="menu">
+                  <button type="button" id="caiDanTuBiaoSouSuo" class="gengDuoCaiDanAnNiu"><span class="mark"></span><span data-i18n="list.search"></span></button>
                   <!-- 「仅@ai才发言」：只在项目/群聊出现；群聊默认勾选 -->
-                  <button type="button" id="mi-directed" class="more-menu-btn"><span id="mi-directed-mark" class="mark">✓</span><span data-i18n="group.directedOnly"></span></button>
+                  <button type="button" id="caiDanTuBiaoDingXiang" class="gengDuoCaiDanAnNiu"><span id="caiDanTuBiaoDingXiangMark" class="mark">✓</span><span data-i18n="group.directedOnly"></span></button>
                   <!-- 自动滚动聊天记录：默认不勾选 -->
-                  <button type="button" id="mi-autoscroll" class="more-menu-btn"><span id="mi-autoscroll-mark" class="mark">✓</span><span data-i18n="chat.autoScroll"></span></button>
-                  <button type="button" id="mi-open" class="more-menu-btn"><span class="mark"></span><span data-i18n="chat.openWindow"></span><span class="menu-sc" id="sc-open"></span></button>
-                  <button type="button" id="mi-export" class="more-menu-btn"><span class="mark"></span><span data-i18n="chat.export"></span><span class="menu-sc" id="sc-export"></span></button>
+                  <button type="button" id="caiDanTuBiaoAutoscroll" class="gengDuoCaiDanAnNiu"><span id="caiDanTuBiaoAutoscrollMark" class="mark">✓</span><span data-i18n="chat.autoScroll"></span></button>
+                  <button type="button" id="caiDanTuBiaoDaKai" class="gengDuoCaiDanAnNiu"><span class="mark"></span><span data-i18n="chat.openWindow"></span><span class="caiDanSc" id="scDaKai"></span></button>
+                  <button type="button" id="caiDanTuBiaoDaoChu" class="gengDuoCaiDanAnNiu"><span class="mark"></span><span data-i18n="chat.export"></span><span class="caiDanSc" id="scDaoChu"></span></button>
                 </div>
               </div>
-              <button id="btn-stop-all" class="btn-stop-icon" data-i18n-title="chat.stopAllTip" aria-label="stop"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path fill-rule="evenodd" fill="currentColor" d="M12 21a9 9 0 110-18 9 9 0 010 18zM9 9h6v6H9z"/></svg></button>
+              <button id="anNiuTingZhiAll" class="anNiuTingZhiTuBiao" data-i18n-title="chat.stopAllTip" aria-label="stop"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path fill-rule="evenodd" fill="currentColor" d="M12 21a9 9 0 110-18 9 9 0 010 18zM9 9h6v6H9z"/></svg></button>
             </div>
           </header>
-          <div id="messages" class="messages"></div>
-          <div id="notify-zone" class="notify-zone">
-            <div id="aiq-host" class="aiq-host"></div>
-            <div id="approval-host" class="approval-host"></div>
+          <div id="xiaoXiJi" class="xiaoXiJi"></div>
+          <div id="tongZhiQu" class="tongZhiQu">
+            <div id="aiqHost" class="aiqHost"></div>
+            <div id="piZhunHost" class="piZhunHost"></div>
           </div>
-        <div id="pm-box" class="pm-box"></div>
-        <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" type="button"
+        <div id="pmHe" class="pmHe"></div>
+        <button id="scrollDiAnNiu" class="scrollDiAnNiu yinCang" type="button"
                 data-i18n-title="chat.scrollToBottom" aria-label="scroll to bottom">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <button id="new-msg-bubble" class="new-msg-bubble hidden" type="button"></button>
-                  <div id="ctx-popover" class="ctx-popover hidden" role="dialog">
-            <div class="ctx-pop-head" data-i18n="ctx.budget.title"></div>
-            <input id="ctx-slider" class="ctx-slider" type="range" min="10" max="90" step="5" value="60"/>
-            <div class="ctx-pop-meta">
-              <span id="ctx-pct">60%</span>
-              <span id="ctx-tokens" class="muted"></span>
+        <button id="newXiaoXiBubble" class="newXiaoXiBubble yinCang" type="button"></button>
+                  <div id="shangXiaWenPopover" class="shangXiaWenPopover yinCang" role="dialog">
+            <div class="shangXiaWenPopHead" data-i18n="ctx.budget.biaoTi"></div>
+            <input id="shangXiaWenSlider" class="shangXiaWenSlider" type="range" min="10" max="90" step="5" value="60"/>
+            <div class="shangXiaWenPopYuanShuju">
+              <span id="shangXiaWenPct">60%</span>
+              <span id="shangXiaWenTokens" class="jingYin"></span>
             </div>
-            <div class="muted ctx-pop-hint" data-i18n="ctx.budget.hint"></div>
-            <div class="muted ctx-pop-min" data-i18n="ctx.budget.minHint"></div>
+            <div class="jingYin shangXiaWenPopTiShi" data-i18n="ctx.budget.tiShi"></div>
+            <div class="jingYin shangXiaWenPopMin" data-i18n="ctx.budget.minHint"></div>
           </div>
-          <div id="queue-bar" class="queue-bar hidden">
-            <div class="queue-bar-head">
+          <div id="duiLieTiao" class="duiLieTiao yinCang">
+            <div class="duiLieTiaoHead">
               <span data-i18n="chat.queueTitle"></span>
-              <span class="muted" id="queue-count"></span>
+              <span class="jingYin" id="duiLieCount"></span>
             </div>
-            <ul id="queue-items" class="queue-items"></ul>
+            <ul id="duiLieTiaoMuJi" class="duiLieTiaoMuJi"></ul>
           </div>
           <!-- 诊断事件流（T194）：**不是控制台**，是排障用的本机事件日志；
                标题与说明由 app.js 按 i18n 渲染（console.diag.*），与容器控制台面板分开。 -->
@@ -170,80 +170,80 @@
                价值是给主机带来安全性防护：AI 生成的命令跑在容器边界内，不在主机上跑。
                现在容器里还没有项目镜像，所以这里如实说明"为什么还开不了"，
                并且**输入行是禁用的**（一条命令都不会执行），不给假 shell、也不回退成事件日志。 -->
-          <div id="ctg-shell-pane" class="console-pane hidden">
-            <div class="console-head">
-              <span id="ctg-shell-hint" class="console-hint"></span>
+          <div id="ctgKongZhiTaiMianBan" class="kongZhiTaiMianBan yinCang">
+            <div class="kongZhiTaiHead">
+              <span id="ctgKongZhiTaiTiShi" class="kongZhiTaiTiShi"></span>
               <!-- 状态行：就绪/未就绪 + 运行时 + 门禁原因（全走 i18n） -->
-              <span id="ctg-shell-status" class="console-hint ctg-dim" data-shell-state="unknown"></span>
-              <button type="button" id="ctg-shell-close" class="console-clear" data-i18n-title="common.close"></button>
+              <span id="ctgKongZhiTaiZhuangTai" class="kongZhiTaiTiShi ctgDim" data-shell-state="unknown"></span>
+              <button type="button" id="ctgKongZhiTaiGuanBi" class="kongZhiTaiQingChu" data-i18n-title="common.close"></button>
             </div>
-            <pre id="ctg-shell-out" class="console-out" role="log" aria-live="polite"></pre>
+            <pre id="ctgKongZhiTaiShuChu" class="kongZhiTaiShuChu" role="log" aria-live="polite"></pre>
             <!-- 只有本机的人手动输入；远程对端/群成员/智能体没有任何注入路径；
                  输入行在容器未就绪时**禁用**（不是"能敲但被忽略"）。 -->
-            <div class="ctg-shell-input-row">
-              <input id="ctg-shell-input" type="text" data-i18n-placeholder="container.console.inputPlaceholder" spellcheck="false" disabled />
-              <button type="button" id="ctg-shell-send" data-i18n="container.console.run" disabled></button>
-              <span id="ctg-shell-note" class="ctg-dim" data-shell-note="none"></span>
+            <div class="ctgKongZhiTaiShuRuHang">
+              <input id="ctgKongZhiTaiShuRu" type="text" data-i18n-placeholder="container.console.inputPlaceholder" spellcheck="false" disabled />
+              <button type="button" id="ctgKongZhiTaiFaSong" data-i18n="container.console.run" disabled></button>
+              <span id="ctgKongZhiTaiNote" class="ctgDim" data-shell-note="none"></span>
             </div>
           </div>
-          <div id="input-top-resizer" class="console-resizer input-resizer"></div>
-          <footer class="composer">
-            <div id="attach-list" class="hidden"></div>
-            <div class="composer-main">
-              <textarea id="input" rows="3" maxlength="8000" data-i18n-placeholder="chat.placeholder" spellcheck="false"></textarea>
-              <div class="input-counter" id="input-counter"></div>
-              <div class="composer-bar">
-                <div class="composer-left">
-                  <button class="btn-icon" id="btn-attach" data-i18n-title="chat.attachTip">
+          <div id="shuRuDingTiaoZhengTiao" class="kongZhiTaiTiaoZhengTiao shuRuTiaoZhengTiao"></div>
+          <footer class="shuRuQu">
+            <div id="attachLieBiao" class="yinCang"></div>
+            <div class="shuRuQuZhu">
+              <textarea id="shuRu" rows="3" maxlength="8000" data-i18n-placeholder="chat.placeholder" spellcheck="false"></textarea>
+              <div class="shuRuCounter" id="shuRuCounter"></div>
+              <div class="shuRuQuTiao">
+                <div class="shuRuQuZuo">
+                  <button class="anNiuTuBiao" id="anNiuAttach" data-i18n-title="chat.attachTip">
                     <svg viewBox="0 0 100 100" class="ico"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter"><path d="M22,24 L56,24 L70,38 L70,86 L22,86 Z"/><polyline points="56,24 56,38 70,38"/></g><g stroke="currentColor" stroke-width="8" stroke-linecap="square"><line x1="76" y1="14" x2="76" y2="30"/><line x1="68" y1="22" x2="84" y2="22"/></g></svg>
                   </button>
-                  <button class="btn-icon" id="btn-shot" data-i18n-title="chat.screenshotTip">
+                  <button class="anNiuTuBiao" id="anNiuShot" data-i18n-title="chat.screenshotTip">
                     <svg viewBox="0 0 1024 1024" class="ico"><path d="M334 111.6c0-24.6-20-44.4-44.4-44.4s-44.4 20-44.4 44.4v89H111.6c-24.6 0-44.4 20-44.4 44.4s20 44.4 44.4 44.4h623V690h89V245c0-24.6-20-44.4-44.4-44.4H334V111.6zM245 334v445c0 24.6 20 44.4 44.4 44.4h445v89c0 24.6 20 44.4 44.4 44.4s44.4-20 44.4-44.4v-89h89c24.6 0 44.4-20 44.4-44.4s-20-44.4-44.4-44.4H334V334h-89z"/></svg>
                   </button>
-                  <button class="btn-icon" id="btn-ctx" data-i18n-title="ctx.budget.title">
+                  <button class="anNiuTuBiao" id="anNiuShangXiaWen" data-i18n-title="ctx.budget.biaoTi">
                     <svg viewBox="0 0 24 24" class="ico" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="3" y2="18"/><line x1="21" y1="6" x2="21" y2="18"/><path d="M7 12 H17" stroke-dasharray="1 3"/><path d="M9 10 L7 12 L9 14"/><path d="M15 10 L17 12 L15 14"/></svg>
                   </button>
-                  <div class="urg-dd" id="urgency-dd">
-                    <button class="urg-trigger" id="urg-trigger" type="button" data-i18n-title="chat.urgency">
-                      <svg class="ico urgent-i hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v11h-2V3zm0 13h2v2h-2v-2z"/></svg>
-                      <span id="urg-label" data-i18n="urgency.insertLabel"></span>
-                      <svg class="ico urg-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
+                  <div class="jinJiDd" id="urgencyDd">
+                    <button class="jinJiTrigger" id="jinJiTrigger" type="button" data-i18n-title="chat.urgency">
+                      <svg class="ico urgentI yinCang" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v11h-2V3zm0 13h2v2h-2v-2z"/></svg>
+                      <span id="jinJiBiaoQian" data-i18n="urgency.insertLabel"></span>
+                      <svg class="ico jinJiJianTou" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
                     </button>
-                    <div class="urg-menu hidden" id="urg-menu" role="menu">
+                    <div class="jinJiCaiDan yinCang" id="jinJiCaiDan" role="menu">
                       <button type="button" data-u="P1" data-i18n="urgency.urgentLabel"></button>
-                      <button type="button" class="on" data-u="P2" data-i18n="urgency.insertLabel"></button>
+                      <button type="button" class="qiYong" data-u="P2" data-i18n="urgency.insertLabel"></button>
                       <button type="button" data-u="P3" data-i18n="urgency.queueLabel"></button>
                     </div>
                   </div>
                 </div>
-                <div class="composer-send-row">
-                  <button class="btn-icon" id="btn-voice" data-i18n-title="chat.voiceTip">
+                <div class="shuRuQuFaSongHang">
+                  <button class="anNiuTuBiao" id="anNiuYuYin" data-i18n-title="chat.voiceTip">
                     <svg viewBox="0 0 24 24" class="ico"><path d="M12 3a3 3 0 013 3v6a3 3 0 11-6 0V6a3 3 0 013-3zm-7 9a7 7 0 0014 0h2a9 9 0 01-8 8.9V24h-2v-3.1A9 9 0 013 12h2z"/></svg>
                   </button>
-                  <button id="btn-send" class="btn-primary" data-i18n="chat.send"></button>
+                  <button id="anNiuFaSong" class="anNiuZhuYao" data-i18n="chat.faSong"></button>
                 </div>
               </div>
             </div>
           </footer>
-          <!-- R3：聊天区与右栏之间的竖分隔条（放在 #chat-col 右缘，和 #col-resizer 同一套做法；
-               放在 #panel-col 里会被它的 overflow:auto 裁掉，拖不到） -->
-          <div id="panel-resizer" data-i18n-title="tip.splitHint"></div>
+          <!-- R3：聊天区与右栏之间的竖分隔条（放在 #liaoTianLan 右缘，和 #lanTiaoZhengTiao 同一套做法；
+               放在 #mianBanLan 里会被它的 overflow:auto 裁掉，拖不到） -->
+          <div id="mianBanTiaoZhengTiao" data-i18n-title="tip.splitHint"></div>
         </section>
-        <aside id="panel-col">
+        <aside id="mianBanLan">
           <!-- 诊断事件流：**右侧第四列**（不是聊天顶部）。点击标题即可展开/收起。 -->
-          <div class="panel-block" id="diag-panel-block">
-            <div class="panel-toggle" id="diag-toggle" title="诊断事件流：本机真实事件日志（工具调用/组网/错误），不是容器终端">
-              <span id="diag-toggle-title" data-i18n="console.title">诊断事件流</span>
-              <span class="muted diag-what" data-i18n="panel.diagWhat">排障用</span>
-              <span class="chev" id="diag-chev">›</span>
+          <div class="mianBanKuai" id="diagMianBanKuai">
+            <div class="mianBanKaiGuan" id="diagKaiGuan" title="诊断事件流：本机真实事件日志（工具调用/组网/错误），不是容器终端">
+              <span id="diagKaiGuanBiaoTi" data-i18n="console.biaoTi">诊断事件流</span>
+              <span class="jingYin diagWhat" data-i18n="panel.diagWhat">排障用</span>
+              <span class="jianTou" id="diagJianTou">›</span>
             </div>
-            <div id="diag-host" class="hidden">
-              <div id="console-pane" class="console-pane panel-console">
-                <div class="console-head">
-                  <span id="console-hint" class="console-hint"></span>
-                  <button type="button" id="console-clear" class="console-clear" data-i18n-title="console.clearTip"></button>
+            <div id="diagHost" class="yinCang">
+              <div id="kongZhiTaiMianBan" class="kongZhiTaiMianBan mianBanKongZhiTai">
+                <div class="kongZhiTaiHead">
+                  <span id="kongZhiTaiTiShi" class="kongZhiTaiTiShi"></span>
+                  <button type="button" id="kongZhiTaiQingChu" class="kongZhiTaiQingChu" data-i18n-title="console.clearTip"></button>
                 </div>
-                <pre id="console-out" class="console-out" role="log" aria-live="polite"></pre>
+                <pre id="kongZhiTaiShuChu" class="kongZhiTaiShuChu" role="log" aria-live="polite"></pre>
               </div>
             </div>
           </div>
@@ -251,65 +251,65 @@
           <!-- ADR 004 第七批：右栏顶部**只有只读的项目状态**（动作都在项目右键菜单里）。
                产品主明确：**不要**把"切换容器"放在右侧顶部 —— 切换容器在项目的右键菜单里。
                只出现在「项目」与「我的牛马」（data-only="proj-single"）。 -->
-          <div class="panel-block" id="project-state-block" data-only="proj-single">
+          <div class="mianBanKuai" id="xiangMuTaiKuai" data-only="proj-single">
             <h3 data-i18n="panel.projectState"></h3>
-            <div id="project-state-box"></div>
-            <div class="ctg-dim" id="project-state-msg"></div>
+            <div id="xiangMuTaiHe"></div>
+            <div class="ctgDim" id="xiangMuTaiXiaoXi"></div>
           </div>
 
           <!-- 聊天类会话（联系人/群聊）：本会话自己的知识库 -->
-          <div class="panel-block" id="panel-kb-block" style="display:none">
-            <h3 data-i18n="panel.kb.title"></h3>
-            <p class="muted" style="font-size:11px" data-i18n="panel.kb.hint"></p>
-            <div id="panel-kb-box" class="muted">—</div>
+          <div class="mianBanKuai" id="mianBanZhiShiKuKuai" style="display:none">
+            <h3 data-i18n="panel.kb.biaoTi"></h3>
+            <p class="jingYin" style="font-size:11px" data-i18n="panel.kb.tiShi"></p>
+            <div id="mianBanZhiShiKuHe" class="jingYin">—</div>
           </div>
           <!-- 聊天类会话：聊天摘要 / 归档（可跳原文） -->
-          <div class="panel-block" id="panel-summary-block" style="display:none">
-            <h3 data-i18n="panel.summary.title"></h3>
-            <div id="panel-summary-box" class="muted">—</div>
+          <div class="mianBanKuai" id="mianBanZhaiYaoKuai" style="display:none">
+            <h3 data-i18n="panel.summary.biaoTi"></h3>
+            <div id="mianBanZhaiYaoHe" class="jingYin">—</div>
             <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <button class="btn-mini" id="btn-gen-summary" data-i18n="panel.summary.gen"></button>
-              <label class="muted" style="font-size:11px;display:flex;align-items:center;gap:4px">
-                <input type="checkbox" id="auto-summary-toggle" checked/>
+              <button class="anNiuXiao" id="anNiuGenZhaiYao" data-i18n="panel.summary.gen"></button>
+              <label class="jingYin" style="font-size:11px;display:flex;align-items:center;gap:4px">
+                <input type="checkbox" id="ziDongZhaiYaoKaiGuan" checked/>
                 <span data-i18n="panel.summary.auto"></span>
               </label>
-              <span class="muted" id="summary-msg" style="font-size:11px"></span>
+              <span class="jingYin" id="zhaiYaoXiaoXi" style="font-size:11px"></span>
             </div>
           </div>
 
           <!-- ADR 004 第七批新增三块（真实数据）：最近改动文件 / 其他文件 / 生成的产品。
-               数据来自主进程 warmy:project-files（checkpoint 明细 + 产物目录扫描）；
+               数据来自主进程 warmy:xiangMuWenJianJi（checkpoint 明细 + 产物目录扫描）；
                拿不到就如实显示空态与原因，**绝不用演示数据充数**。 -->
-          <div class="panel-block" id="project-files-block" data-only="proj-single">
+          <div class="mianBanKuai" id="xiangMuWenJianJiKuai" data-only="proj-single">
             <h3 data-i18n="panel.projectFiles"></h3>
-            <div id="project-files-box"></div>
+            <div id="xiangMuWenJianJiHe"></div>
           </div>
 
           <!-- 进度（折叠：百分比条；展开：任务列表，限高可滚动，默认滚到最新）——未选会话默认隐藏 -->
-          <div class="panel-block hidden" id="panel-progress-block">
-            <div class="panel-toggle" id="progress-toggle">
-              <span data-i18n="panel.progress">进度</span>
-              <div class="progress" style="flex:1;margin:0 8px"><div id="progress-bar" class="progress-bar" style="width:0%"></div></div>
-              <span id="progress-text" class="muted">0%</span>
-              <span class="chev">›</span>
+          <div class="mianBanKuai yinCang" id="mianBanJinDuKuai">
+            <div class="mianBanKaiGuan" id="jinDuKaiGuan">
+              <span data-i18n="panel.jinDu">进度</span>
+              <div class="jinDu" style="flex:1;margin:0 8px"><div id="jinDuTiao" class="jinDuTiao" style="width:0%"></div></div>
+              <span id="jinDuWenBen" class="jingYin">0%</span>
+              <span class="jianTou">›</span>
             </div>
-            <ul id="task-list" class="task-list hidden panel-scroll"></ul>
+            <ul id="renwuLieBiao" class="renwuLieBiao yinCang mianBanScroll"></ul>
           </div>
 
           <!-- 等待协助：AI 运行中需要人处理的事；默认折叠；未读红/黄点。未选会话默认隐藏 -->
-          <div class="panel-block hidden" id="panel-assist-block">
-            <div class="panel-toggle" id="assist-toggle">
-              <span data-i18n="panel.assist.title">等待协助</span>
-              <span id="assist-badge" class="assist-badge hidden" aria-hidden="true"></span>
-              <span class="chev">›</span>
+          <div class="mianBanKuai yinCang" id="mianBanAssistKuai">
+            <div class="mianBanKaiGuan" id="assistKaiGuan">
+              <span data-i18n="panel.assist.biaoTi">等待协助</span>
+              <span id="assistHuiZhang" class="assistHuiZhang yinCang" aria-hidden="true"></span>
+              <span class="jianTou">›</span>
             </div>
-            <ul id="assist-list" class="assist-list hidden panel-scroll"></ul>
+            <ul id="assistLieBiao" class="assistLieBiao yinCang mianBanScroll"></ul>
           </div>
 
           <!-- 模型管理（我的牛马 / 项目 / 群聊 都显示）——未选会话默认隐藏 -->
-          <div class="panel-block hidden" id="panel-model-mgr-block">
+          <div class="mianBanKuai yinCang" id="mianBanMoXingMgrKuai">
             <h3 data-i18n="panel.modelMgr"></h3>
-            <div id="model-mgr"></div>
+            <div id="moXingMgr"></div>
           </div>
 
           <!-- ADR 004 P2/P3：运行/测试环境（容器）——只在「我的牛马」与「项目」里出现；
@@ -317,85 +317,85 @@
                入口已按产品主要求挪到聊天「…」菜单里；这里只保留"当前容器"下拉框（在右栏最上面）。 -->
 
           <!-- 项目目录（仅项目/群聊） -->
-          <div class="panel-block only-group" id="panel-directory-block">
+          <div class="mianBanKuai onlyQun" id="mianBanMuLuKuai">
             <h3 data-i18n="panel.directory"></h3>
-            <div id="dir-box" class="muted">—</div>
+            <div id="muLuHe" class="jingYin">—</div>
           </div>
 
           <!-- 成员（仅项目/群聊）——默认隐藏：未选中会话前不得出现 -->
-          <div class="panel-block only-group hidden" id="panel-members-block">
+          <div class="mianBanKuai onlyQun yinCang" id="mianBanChengYuanJiKuai">
             <h3 data-i18n="group.members"></h3>
-            <div id="members-box" class="muted">—</div>
+            <div id="chengYuanJiHe" class="jingYin">—</div>
             <div style="margin-top:6px;display:flex;gap:6px">
-              <select id="member-pick" style="flex:1" data-i18n-title="group.pickInstance"></select>
-              <button class="btn-mini" id="btn-member-add" data-i18n="group.pullIn"></button>
+              <select id="chengYuanXuanZe" style="flex:1" data-i18n-title="group.pickInstance"></select>
+              <button class="anNiuXiao" id="anNiuChengYuanTianJia" data-i18n="group.pullIn"></button>
             </div>
           </div>
 
           <!-- 值班者（仅项目/群聊） -->
-          <div class="panel-block only-group">
+          <div class="mianBanKuai onlyQun">
             <h3 data-i18n="panel.duty"></h3>
-            <div id="duty-info" class="muted">—</div>
+            <div id="dutyXinXi" class="jingYin">—</div>
           </div>
 
           <!-- 知识库 -->
-          <div class="panel-block">
-            <h3 data-i18n="knowledge.title"></h3>
-            <input id="kb-q" data-i18n-placeholder="knowledge.search" style="width:100%;margin-bottom:6px"/>
+          <div class="mianBanKuai">
+            <h3 data-i18n="knowledge.biaoTi"></h3>
+            <input id="zhiShiKuQ" data-i18n-placeholder="knowledge.search" style="width:100%;margin-bottom:6px"/>
             <div style="display:flex;gap:6px">
-              <button class="btn-mini" id="btn-kb-go" data-i18n="knowledge.search"></button>
-              <button class="btn-mini" id="btn-kb-save" data-i18n="knowledge.save"></button>
+              <button class="anNiuXiao" id="anNiuZhiShiKuGo" data-i18n="knowledge.search"></button>
+              <button class="anNiuXiao" id="anNiuZhiShiKuBaoCun" data-i18n="knowledge.save"></button>
             </div>
-            <div id="kb-out" class="muted" style="margin-top:8px;max-height:100px;overflow:auto"></div>
+            <div id="zhiShiKuShuChu" class="jingYin" style="margin-top:8px;max-height:100px;overflow:auto"></div>
           </div>
 
           <!-- 回退点 -->
-          <div class="panel-block">
-            <h3 data-i18n="checkpoints.title"></h3>
-            <div class="muted" id="cp-space"></div>
-            <div id="cp-detail-list" class="cp-list"></div>
+          <div class="mianBanKuai">
+            <h3 data-i18n="checkpoints.biaoTi"></h3>
+            <div class="jingYin" id="cpSpace"></div>
+            <div id="cpXiangQingLieBiao" class="cpLieBiao"></div>
           </div>
 
           <!-- 执行者（仅项目/群聊） -->
-          <div class="panel-block only-group">
-            <h3 data-i18n="executors.title"></h3>
-            <div id="exec-box" class="muted">—</div>
+          <div class="mianBanKuai onlyQun">
+            <h3 data-i18n="executors.biaoTi"></h3>
+            <div id="zhiXingHe" class="jingYin">—</div>
             <div style="margin-top:8px">
-              <button class="btn-mini" id="btn-exec-run" data-i18n="executors.run"></button>
+              <button class="anNiuXiao" id="anNiuZhiXingYunXing" data-i18n="executors.run"></button>
             </div>
           </div>
 
           <!-- 指标 + 成本 -->
-          <div class="panel-block">
-            <h3 data-i18n="metrics.title"></h3>
-            <div id="metrics-box" class="muted">—</div>
-            <div class="panel-toggle" id="cost-toggle" style="margin-top:8px">
-              <span data-i18n="cost.title"></span>
-              <span class="chev">›</span>
+          <div class="mianBanKuai">
+            <h3 data-i18n="metrics.biaoTi"></h3>
+            <div id="zhiBiaoJiHe" class="jingYin">—</div>
+            <div class="mianBanKaiGuan" id="chengBenKaiGuan" style="margin-top:8px">
+              <span data-i18n="cost.biaoTi"></span>
+              <span class="jianTou">›</span>
             </div>
-            <div id="cost-body" class="hidden">
-              <div id="cost-dash" class="muted"></div>
-              <div style="margin-top:6px"><button class="btn-mini" id="btn-cost-csv" data-i18n="cost.export"></button></div>
+            <div id="chengBenTi" class="yinCang">
+              <div id="chengBenDash" class="jingYin"></div>
+              <div style="margin-top:6px"><button class="anNiuXiao" id="anNiuChengBenCsv" data-i18n="cost.export"></button></div>
             </div>
           </div>
         </aside>
       </div>
 
-      <div id="inst-detail" class="page-layout hidden"></div>
+      <div id="shiLiXiangQing" class="pageBuJu yinCang"></div>
 
-      <div id="page-layout" class="page-layout full hidden">
-        <div id="page-body"></div>
+      <div id="pageBuJu" class="pageBuJu full yinCang">
+        <div id="pageTi"></div>
       </div>
     </main>
-    </div><!-- /app-body -->
+    </div><!-- /appTi -->
   </div>
-  <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="hidden" />
-  <div id="modal-root" class="modal-root hidden" role="dialog" aria-modal="true">
-    <div class="modal-mask"></div>
-    <div class="modal-card">
-      <div class="modal-title" id="modal-title"></div>
-      <div class="modal-body" id="modal-body"></div>
-      <div class="modal-actions" id="modal-actions"></div>
+  <input type="file" id="touXiangWenJian" accept="image/png,image/jpeg,image/webp" class="yinCang" />
+  <div id="duiHuaKuangGen" class="duiHuaKuangGen yinCang" role="dialog" aria-modal="true">
+    <div class="duiHuaKuangMask"></div>
+    <div class="duiHuaKuangKa">
+      <div class="duiHuaKuangBiaoTi" id="duiHuaKuangBiaoTi"></div>
+      <div class="duiHuaKuangTi" id="duiHuaKuangTi"></div>
+      <div class="duiHuaKuangDongZuoJi" id="duiHuaKuangDongZuoJi"></div>
     </div>
   </div>
   <!-- 二维码编码器 + 解码器：都是 vendored 的**经典脚本**（非 ESM，全局 `qrcode` / `jsQR`）。

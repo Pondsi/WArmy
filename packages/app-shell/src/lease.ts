@@ -233,16 +233,16 @@ export class LeaseRegistry {
   }
 
   /** 申请租约。范围被别人占住 → 拒绝并给出可读原因；自己已占 → 合并（幂等） */
-  acquire(req: HuoQuQingQiu): HuoquJieguo {
+  acquire(Qiu: HuoQuQingQiu): HuoquJieguo {
     const now = this.clock();
     this.prune(now);
 
-    const holder = typeof req?.holder === 'string' ? req.holder.trim() : '';
+    const holder = typeof Qiu?.holder === 'string' ? Qiu.holder.trim() : '';
     if (!holder) return { ok: false, error: { code: 'invalid-request', reason: 'holder 不能为空' } };
 
-    const kind: LeaseKind = req.kind === 'task' || req.kind === 'file' ? req.kind : 'dir';
-    const explicitPaths = Array.isArray(req.paths) && req.paths.length ? req.paths : [];
-    const rawPaths = explicitPaths.length ? explicitPaths : req.scope ? [req.scope] : [];
+    const kind: LeaseKind = Qiu.kind === 'task' || Qiu.kind === 'file' ? Qiu.kind : 'dir';
+    const explicitPaths = Array.isArray(Qiu.paths) && Qiu.paths.length ? Qiu.paths : [];
+    const rawPaths = explicitPaths.length ? explicitPaths : Qiu.scope ? [Qiu.scope] : [];
     if (!rawPaths.length) {
       return { ok: false, error: { code: 'invalid-request', reason: '必须给 scope 或 paths（要保护的路径）' } };
     }
@@ -269,9 +269,9 @@ export class LeaseRegistry {
       if (!paths.includes(key)) paths.push(key);
     }
 
-    const ttlMs = req.ttlMs === undefined ? this.defaultTtlMs : req.ttlMs;
+    const ttlMs = Qiu.ttlMs === undefined ? this.defaultTtlMs : Qiu.ttlMs;
     if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
-      return { ok: false, error: { code: 'ttl-invalid', reason: `租约时长必须为正数毫秒：${String(req.ttlMs)}` } };
+      return { ok: false, error: { code: 'ttl-invalid', reason: `租约时长必须为正数毫秒：${String(Qiu.ttlMs)}` } };
     }
     const youXiaoQi = Math.min(Math.floor(ttlMs), this.maxTtlMs);
 
@@ -279,30 +279,30 @@ export class LeaseRegistry {
       id: '',
       holder,
       kind,
-      scope: req.scope?.trim() || paths[0] || holder,
+      scope: Qiu.scope?.trim() || paths[0] || holder,
       paths,
       ttlMs: youXiaoQi,
       createdAt: now,
       expiresAt: now + youXiaoQi,
-      ...(req.taskId ? { taskId: req.taskId } : {}),
-      ...(req.note ? { note: req.note } : {}),
+      ...(Qiu.taskId ? { taskId: Qiu.taskId } : {}),
+      ...(Qiu.note ? { note: Qiu.note } : {}),
     };
 
     // 1) 别人的活跃租约 → 冲突
     const conflicts: LeaseConflict[] = [];
     let sharedPaths: string[] = [];
-    for (const live of this.leases.values()) {
-      if (live.holder === holder) continue;
-      const chongdie = overlapPaths(candidate.kind, candidate.paths, live.kind, live.paths);
+    for (const huoZhe of this.leases.values()) {
+      if (huoZhe.holder === holder) continue;
+      const chongdie = overlapPaths(candidate.kind, candidate.paths, huoZhe.kind, huoZhe.paths);
       if (!chongdie.length) continue;
       if (!sharedPaths.length) sharedPaths = chongdie;
       conflicts.push({
-        leaseId: live.id,
-        holder: live.holder,
-        kind: live.kind,
-        scope: live.scope,
-        paths: live.paths.slice(),
-        expiresAt: live.expiresAt,
+        leaseId: huoZhe.id,
+        holder: huoZhe.holder,
+        kind: huoZhe.kind,
+        scope: huoZhe.scope,
+        paths: huoZhe.paths.slice(),
+        expiresAt: huoZhe.expiresAt,
       });
     }
     if (conflicts.length) {
@@ -322,11 +322,11 @@ export class LeaseRegistry {
     }
 
     // 2) 自己已有重叠租约 → 合并（幂等，避免自己跟自己抢）
-    const own = [...this.leases.values()].filter((l) => l.holder === holder && zuyueChongdie(l, candidate));
-    const base = own[0];
+    const ziji = [...this.leases.values()].filter((l) => l.holder === holder && zuyueChongdie(l, candidate));
+    const base = ziji[0];
     if (base) {
       for (const p of candidate.paths) if (!base.paths.includes(p)) base.paths.push(p);
-      for (const extra of own.slice(1)) {
+      for (const extra of ziji.slice(1)) {
         for (const p of extra.paths) if (!base.paths.includes(p)) base.paths.push(p);
         this.leases.delete(extra.id);
       }
@@ -336,14 +336,14 @@ export class LeaseRegistry {
       if (base.kind === 'file' && candidate.kind !== 'file') base.kind = candidate.kind;
       base.expiresAt = Math.max(base.expiresAt, candidate.expiresAt);
       base.ttlMs = Math.max(base.ttlMs, youXiaoQi);
-      if (req.note) base.note = req.note;
-      if (req.taskId) base.taskId = req.taskId;
+      if (Qiu.note) base.note = Qiu.note;
+      if (Qiu.taskId) base.taskId = Qiu.taskId;
       return { ok: true, lease: this.copy(base), merged: true };
     }
 
     // 3) 新建
-    const mine = [...this.leases.values()].filter((l) => l.holder === holder).length;
-    if (mine >= this.maxLeasesPerHolder) {
+    const benji = [...this.leases.values()].filter((l) => l.holder === holder).length;
+    if (benji >= this.maxLeasesPerHolder) {
       return {
         ok: false,
         error: {
@@ -359,10 +359,10 @@ export class LeaseRegistry {
   }
 
   /** 续租（只有持有者本人；已过期的租约不许续，必须重新申请） */
-  extend(req: ZuYueYinYongQingQiu, ttlMs?: number): HuoquJieguo {
+  extend(Qiu: ZuYueYinYongQingQiu, ttlMs?: number): HuoquJieguo {
     const now = this.clock();
     this.prune(now);
-    const found = this.find(req);
+    const found = this.find(Qiu);
     if (found.kind === 'error') return { ok: false, error: found.error };
     const lease = found.lease;
     const youXiaoQi = Math.min(Math.floor(ttlMs === undefined ? lease.ttlMs : ttlMs), this.maxTtlMs);
@@ -375,10 +375,10 @@ export class LeaseRegistry {
   }
 
   /** 释放（只有持有者本人；非本人 → holder-mismatch）。已过期 = 已自动失效，不算失败 */
-  release(req: ZuYueYinYongQingQiu): ShifangJieguo {
+  release(Qiu: ZuYueYinYongQingQiu): ShifangJieguo {
     const now = this.clock();
     this.prune(now);
-    const found = this.find(req);
+    const found = this.find(Qiu);
     if (found.kind === 'error') {
       if (found.error.code === 'expired') return { ok: true, released: false, reason: found.error.reason };
       return { ok: false, released: false, error: found.error };
@@ -394,12 +394,12 @@ export class LeaseRegistry {
   checkWrite(holder: string, path: string): CheckWriteResult {
     const now = this.clock();
     this.prune(now);
-    const who = typeof holder === 'string' ? holder.trim() : '';
+    const shui = typeof holder === 'string' ? holder.trim() : '';
     const n = guiFanHuaCangKuLuJing(typeof path === 'string' ? path : '');
     if (!n.ok) {
       return {
         allowed: false,
-        holder: who,
+        holder: shui,
         path: n.normalized,
         code: 'path-invalid',
         reason: `写入路径非法（${n.reason ?? '未知'}）：${String(path)}`,
@@ -408,10 +408,10 @@ export class LeaseRegistry {
       };
     }
     const key = this.caseInsensitive ? n.key : n.normalized;
-    if (!who) {
+    if (!shui) {
       return {
         allowed: false,
-        holder: who,
+        holder: shui,
         path: n.normalized,
         code: 'invalid-request',
         reason: 'holder 不能为空：无法判断你是否持有租约',
@@ -421,42 +421,42 @@ export class LeaseRegistry {
     }
 
     // 1) 自己有覆盖该路径的活跃租约 → 放行
-    for (const live of this.leases.values()) {
-      if (live.holder === who && leaseCovers(live, key)) {
+    for (const huoZhe of this.leases.values()) {
+      if (huoZhe.holder === shui && leaseCovers(huoZhe, key)) {
         return {
           allowed: true,
-          holder: who,
+          holder: shui,
           path: n.normalized,
-          reason: `允许写入（命中你自己的${LeiXingMing(live.kind)}租约 ${live.scope}，${geshiShijian(live.expiresAt)} 到期，剩余 ${geshiShengyu(live.expiresAt - now)}）`,
-          lease: this.copy(live),
+          reason: `允许写入（命中你自己的${LeiXingMing(huoZhe.kind)}租约 ${huoZhe.scope}，${geshiShijian(huoZhe.expiresAt)} 到期，剩余 ${geshiShengyu(huoZhe.expiresAt - now)}）`,
+          lease: this.copy(huoZhe),
         };
       }
     }
     // 2) 别人持有 → 拒绝
-    for (const live of this.leases.values()) {
-      if (live.holder !== who && leaseCovers(live, key)) {
+    for (const huoZhe of this.leases.values()) {
+      if (huoZhe.holder !== shui && leaseCovers(huoZhe, key)) {
         return {
           allowed: false,
-          holder: who,
+          holder: shui,
           path: n.normalized,
           code: 'held-by-other',
           reason:
-            `${n.normalized} 当前被「${live.holder}」持有（${LeiXingMing(live.kind)}租约，范围 ${live.scope}，` +
-            `${geshiShijian(live.expiresAt)} 到期，剩余 ${geshiShengyu(live.expiresAt - now)}）。` +
+            `${n.normalized} 当前被「${huoZhe.holder}」持有（${LeiXingMing(huoZhe.kind)}租约，范围 ${huoZhe.scope}，` +
+            `${geshiShijian(huoZhe.expiresAt)} 到期，剩余 ${geshiShengyu(huoZhe.expiresAt - now)}）。` +
             `直接写会静默覆盖对方的改动（工作区内容 git 救不回来）。请等它释放/过期，或找值班者仲裁。`,
-          lease: this.copy(live),
-          heldBy: live.holder,
-          expiresAt: live.expiresAt,
+          lease: this.copy(huoZhe),
+          heldBy: huoZhe.holder,
+          expiresAt: huoZhe.expiresAt,
         };
       }
     }
     // 3) 自己的租约刚过期（留痕里能查到）→ 报 expired 而不是含糊的 no-lease
     for (let i = this.history.length - 1; i >= 0; i--) {
       const old = this.history[i]!;
-      if (old.holder === who && leaseCovers(old, key)) {
+      if (old.holder === shui && leaseCovers(old, key)) {
         return {
           allowed: false,
-          holder: who,
+          holder: shui,
           path: n.normalized,
           code: 'expired',
           reason: `你对 ${n.normalized} 的租约已于 ${geshiShijian(old.expiresAt)} 过期（原时长 ${Math.round(old.ttlMs / 60_000)} 分钟），已自动失效，请重新申请`,
@@ -468,7 +468,7 @@ export class LeaseRegistry {
     // 4) 无租约
     return {
       allowed: false,
-      holder: who,
+      holder: shui,
       path: n.normalized,
       code: 'no-lease',
       reason: `${n.normalized} 没有租约：本项目要求「先拿租约再写」，范围外写入会被拒，请先 acquire`,
@@ -499,14 +499,14 @@ export class LeaseRegistry {
     }
     const key = this.caseInsensitive ? n.key : n.normalized;
     const out: ChiyouzheXinxi[] = [];
-    for (const live of this.leases.values()) {
-      if (!leaseCovers(live, key)) continue;
+    for (const huoZhe of this.leases.values()) {
+      if (!leaseCovers(huoZhe, key)) continue;
       out.push({
         path: n.normalized,
-        holder: live.holder,
-        lease: this.copy(live),
-        expiresAt: live.expiresAt,
-        reason: `「${live.holder}」的${LeiXingMing(live.kind)}租约覆盖该路径（范围 ${live.scope}，${geshiShijian(live.expiresAt)} 到期，剩余 ${geshiShengyu(live.expiresAt - now)}）`,
+        holder: huoZhe.holder,
+        lease: this.copy(huoZhe),
+        expiresAt: huoZhe.expiresAt,
+        reason: `「${huoZhe.holder}」的${LeiXingMing(huoZhe.kind)}租约覆盖该路径（范围 ${huoZhe.scope}，${geshiShijian(huoZhe.expiresAt)} 到期，剩余 ${geshiShengyu(huoZhe.expiresAt - now)}）`,
       });
     }
     if (!out.length) {
@@ -516,7 +516,7 @@ export class LeaseRegistry {
   }
 
   /** 活跃租约列表（先按过期时间、再按创建时间） */
-  list(): Lease[] {
+  LieBiao(): Lease[] {
     this.prune(this.clock());
     return [...this.leases.values()]
       .sort((a, b) => a.expiresAt - b.expiresAt || a.createdAt - b.createdAt)
@@ -533,12 +533,12 @@ export class LeaseRegistry {
     return this.history.map((l) => ({ ...l, paths: l.paths.slice() }));
   }
 
-  stats(): { active: number; holders: number; expired: number; nextExpiryAt: number | null } {
+  stats(): { jiHuo: number; holders: number; expired: number; nextExpiryAt: number | null } {
     this.prune(this.clock());
     const holders = new Set([...this.leases.values()].map((l) => l.holder));
     let next: number | null = null;
     for (const l of this.leases.values()) next = next === null ? l.expiresAt : Math.min(next, l.expiresAt);
-    return { active: this.leases.size, holders: holders.size, expired: this.history.length, nextExpiryAt: next };
+    return { jiHuo: this.leases.size, holders: holders.size, expired: this.history.length, nextExpiryAt: next };
   }
 
   clear(): void {
@@ -558,9 +558,9 @@ export class LeaseRegistry {
     for (const [id, l] of [...this.leases.entries()]) {
       if (l.expiresAt <= now) {
         this.leases.delete(id);
-        const rec: ExpiredLease = { ...this.copy(l), expiredAt: now };
-        expired.push(rec);
-        this.history.push(rec);
+        const jiLu: ExpiredLease = { ...this.copy(l), expiredAt: now };
+        expired.push(jiLu);
+        this.history.push(jiLu);
       }
     }
     if (this.history.length > this.historyLimit) {
@@ -569,24 +569,24 @@ export class LeaseRegistry {
     return expired;
   }
 
-  private find(req: ZuYueYinYongQingQiu): { kind: 'ok'; lease: Lease } | { kind: 'error'; error: LeaseError } {
-    const id = typeof req?.leaseId === 'string' ? req.leaseId : '';
-    const holder = typeof req?.holder === 'string' ? req.holder.trim() : '';
-    const scope = typeof req?.scope === 'string' ? req.scope : '';
-    const live = id
+  private find(Qiu: ZuYueYinYongQingQiu): { kind: 'ok'; lease: Lease } | { kind: 'error'; error: LeaseError } {
+    const id = typeof Qiu?.leaseId === 'string' ? Qiu.leaseId : '';
+    const holder = typeof Qiu?.holder === 'string' ? Qiu.holder.trim() : '';
+    const scope = typeof Qiu?.scope === 'string' ? Qiu.scope : '';
+    const huoZhe = id
       ? this.leases.get(id)
       : [...this.leases.values()].find((l) => l.holder === holder && (!scope || l.scope === scope));
-    if (live) {
-      if (holder && live.holder !== holder) {
+    if (huoZhe) {
+      if (holder && huoZhe.holder !== holder) {
         return {
           kind: 'error',
           error: {
             code: 'holder-mismatch',
-            reason: `租约 ${live.id} 属于「${live.holder}」，你不是持有者，不能操作它`,
+            reason: `租约 ${huoZhe.id} 属于「${huoZhe.holder}」，你不是持有者，不能操作它`,
           },
         };
       }
-      return { kind: 'ok', lease: live };
+      return { kind: 'ok', lease: huoZhe };
     }
     // 查过期留痕，给出"已过期"而不是"不存在"
     const expired = this.history.find(

@@ -1,6 +1,6 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
 
 if (j.includes('warmy://join?node=')) {
   console.log('join bindings present');
@@ -20,9 +20,9 @@ j = j.replace(
         const inv = await window.warmy.inviteCreate().catch(() => null);
         const tok = inv?.invite?.token ? '&tok=' + inv.invite.token : '';
         const link = 'warmy://join?node=' + encodeURIComponent(node) + '&port=7788' + tok;
-        const lk = $('join-link');
+        const lk = $('jiaRuLink');
         if (lk) lk.textContent = link;
-        const qr = $('join-qr');
+        const qr = $('jiaRuqr');
         if (qr) {
           try {
             const mod = await import('./qr.js');
@@ -34,7 +34,7 @@ j = j.replace(
       })();
       $('btn-join-copy')?.addEventListener('click', async () => {
         try {
-          await navigator.clipboard.writeText($('join-link').textContent);
+          await navigator.clipboard.writeText($('jiaRuLink').textContent);
           $('join-msg').textContent = t('join.copied');
         } catch {
           $('join-msg').textContent = t('join.fail');
@@ -48,5 +48,5 @@ j = j.replace(
 
 ${anchor}`
 );
-fs.writeFileSync(base + 'app.js', j);
+fs.writeFileSync(base + 'yingYong.js', j);
 console.log('join bindings added');

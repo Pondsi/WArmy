@@ -22,8 +22,8 @@ for (const dir of candidates) {
   // maybe nested
   try {
     if (fs.existsSync(dir)) {
-      for (const name of fs.readdirSync(dir)) {
-        const p = path.join(dir, name, 'settings.json');
+      for (const ming of fs.readdirSync(dir)) {
+        const p = path.join(dir, ming, 'settings.json');
         if (fs.existsSync(p)) { hit = p; break; }
       }
     }
@@ -36,7 +36,7 @@ if (!hit) {
   const dir = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), '无限牛马');
   fs.mkdirSync(dir, { recursive: true });
   hit = path.join(dir, 'settings.json');
-  const seed = { updateFeedUrl: FEED, locale: 'zh-CN' };
+  const seed = { updateFeedUrl: FEED, yuYan: 'zh-CN' };
   fs.writeFileSync(hit, JSON.stringify(seed, null, 2), 'utf8');
   console.log('created', hit, seed);
 } else {

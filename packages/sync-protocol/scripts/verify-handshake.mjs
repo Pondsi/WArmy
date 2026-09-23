@@ -18,20 +18,20 @@ import {HandshakeDriver, ShenfenQiyueCuowu, ReplayGuard, AnQuanTongDao, SecureSy
 
 let failures = 0;
 let passes = 0;
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   const mark = cond ? 'PASS' : 'FAIL';
   if (cond) passes += 1;
   else failures += 1;
   const extra = detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
-  console.log(`  [${mark}] ${label}${extra}`);
+  console.log(`  [${mark}] ${biaoQian}${extra}`);
 }
 
-function group(title) {
-  console.log(`\n${title}`);
+function group(biaoTi) {
+  console.log(`\n${biaoTi}`);
 }
 
-function mkIdentity(label) {
-  const i = chuangjianLinShiShenFen(label);
+function mkIdentity(biaoQian) {
+  const i = chuangjianLinShiShenFen(biaoQian);
   return { provider: i.provider, privateKey: i.privateKey, fingerprint: i.fingerprint };
 }
 
@@ -303,7 +303,7 @@ async function main() {
     const gen0 = chA.sealRecord(Buffer.from('gen0-msg', 'utf8'));
     check('gen0 记录正常解出', chB.openRecords(gen0).toString('utf8') === 'gen0-msg');
     chB.openRecords(chA.requestKeyUpdate());
-    check('KeyUpdate 后双方代次一致', chA.generation === 1 && chB.recvGeneration === 1, { send: chA.generation, recv: chB.recvGeneration });
+    check('KeyUpdate 后双方代次一致', chA.generation === 1 && chB.recvGeneration === 1, { faSong: chA.generation, recv: chB.recvGeneration });
     let replayErr = 'no-error';
     try {
       chB.openRecords(gen0);

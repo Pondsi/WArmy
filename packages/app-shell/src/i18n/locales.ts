@@ -1,6 +1,6 @@
 /**
  * Supported UI locales for WArmy / 无限牛马.
- * Single source of truth for pack resolution, settings, and locale selects.
+ * Single source of truth for pack resolution, settings, and yuYan selects.
  * Main process, preview bridge, and renderer must all resolve through this.
  */
 export const SUPPORTED_LOCALES = [
@@ -18,7 +18,7 @@ export const SUPPORTED_LOCALES = [
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
-/** Native display names (used in locale selects; not translated). */
+/** Native display names (used in yuYan selects; not translated). */
 export const LOCALE_NATIVE_NAMES: Record<SupportedLocale, string> = {
   'zh-CN': '简体中文',
   'zh-TW': '繁體中文',
@@ -33,12 +33,12 @@ export const LOCALE_NATIVE_NAMES: Record<SupportedLocale, string> = {
 };
 
 /**
- * Resolve an arbitrary locale tag to a supported pack id.
- * Maps language prefixes to the full product set — never collapses to only zh-CN/en-US.
+ * Resolve an arbitrary yuYan tag to a supported pack id.
+ * Maps language prefixes to the full chanPin set — never collapses to only zh-CN/en-US.
  */
-export function jiexiYuyan(locale: string | undefined | null): SupportedLocale {
-  if (!locale) return 'zh-CN';
-  const raw = String(locale).trim();
+export function jiexiYuyan(yuYan: string | undefined | null): SupportedLocale {
+  if (!yuYan) return 'zh-CN';
+  const raw = String(yuYan).trim();
   if ((SUPPORTED_LOCALES as readonly string[]).includes(raw)) {
     return raw as SupportedLocale;
   }
@@ -56,7 +56,7 @@ export function jiexiYuyan(locale: string | undefined | null): SupportedLocale {
   return 'zh-CN';
 }
 
-/** True when `locale` is an exact supported pack id. */
-export function isSupportedLocale(locale: string): locale is SupportedLocale {
-  return (SUPPORTED_LOCALES as readonly string[]).includes(locale);
+/** True when `yuYan` is an exact supported pack id. */
+export function isSupportedLocale(yuYan: string): yuYan is SupportedLocale {
+  return (SUPPORTED_LOCALES as readonly string[]).includes(yuYan);
 }

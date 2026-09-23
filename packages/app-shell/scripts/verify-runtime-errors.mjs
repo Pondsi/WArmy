@@ -37,7 +37,7 @@ try {
     await sleep(500);
   }
   await sleep(4500);
-  const c = await attach(PORT, { label: 'errgate', callTimeout: 20000 });
+  const c = await attach(PORT, { biaoQian: 'errgate', callTimeout: 20000 });
   await c.send('Runtime.enable');
   await sleep(1500);
 
@@ -56,39 +56,39 @@ try {
     return true;
   })()`);
 
-  const step = async (label, js) => {
+  const step = async (biaoQian, js) => {
     const r = await c.evaluate(`(function(){ try { ${js}; return { ok: true }; } catch (e) { return { ok: false, err: String((e && (e.stack || e.message)) || e).slice(0, 400) }; } })()`);
-    check(`交互无异常：${label}`, !!r && r.ok === true, r && r.err);
+    check(`交互无异常：${biaoQian}`, !!r && r.ok === true, r && r.err);
   };
 
-  await step('切换导航(我的牛马)', `document.querySelector('#rail [data-nav="singleAi"]').click();`);
+  await step('切换导航(我的牛马)', `document.querySelector('#ceLan [data-nav="singleAi"]').click();`);
   await sleep(900);
-  await step('切换导航(项目)', `document.querySelector('#rail [data-nav="internalGroup"]').click();`);
+  await step('切换导航(项目)', `document.querySelector('#ceLan [data-nav="internalGroup"]').click();`);
   await sleep(900);
-  await step('切换导航(联系人)', `document.querySelector('#rail [data-nav="externalChat"]').click();`);
+  await step('切换导航(联系人)', `document.querySelector('#ceLan [data-nav="externalChat"]').click();`);
   await sleep(900);
-  await step('切换导航(群聊)', `document.querySelector('#rail [data-nav="externalGroup"]').click();`);
+  await step('切换导航(群聊)', `document.querySelector('#ceLan [data-nav="externalGroup"]').click();`);
   await sleep(900);
-  await step('打开设置', `document.querySelector('#rail [data-nav="settings"]').click();`);
+  await step('打开设置', `document.querySelector('#ceLan [data-nav="settings"]').click();`);
   await sleep(1200);
-  await step('打开我的', `document.querySelector('#rail [data-nav="me"]').click();`);
+  await step('打开我的', `document.querySelector('#ceLan [data-nav="wo"]').click();`);
   await sleep(1200);
 
   // 建项目 → 选会话 → 打开会话（renderChat 路径）
   await step('创建内部项目', `window.__created = null;`);
   const gid = 'errgate-' + Date.now();
-  await c.evaluate(`(async function(){ try { await window.warmy.groupCreate({ groupId:'${gid}', name:'ErrGate', type:'internal', directedMode:false, devEnv:'host' }); await window.__syncGroups(); } catch(e){} return true; })()`);
+  await c.evaluate(`(async function(){ try { await window.warmy.groupCreate({ groupId:'${gid}', ming:'ErrGate', type:'internal', directedMode:false, devEnv:'host' }); await window.__syncGroups(); } catch(e){} return true; })()`);
   await sleep(800);
-  await step('切换导航(项目)', `document.querySelector('#rail [data-nav="internalGroup"]').click();`);
+  await step('切换导航(项目)', `document.querySelector('#ceLan [data-nav="internalGroup"]').click();`);
   await sleep(1500);
-  await step('点击项目会话(走 openChat/renderChat)', `var r=document.querySelectorAll('#list-body .list-item'); if(r.length) r[0].onclick();`);
+  await step('点击项目会话(走 openChat/renderChat)', `var r=document.querySelectorAll('#lieBiaoTi .lieBiaoTiaoMu'); if(r.length) r[0].onclick();`);
   await sleep(1500);
-  await step('再次点击同一会话', `var r=document.querySelectorAll('#list-body .list-item'); if(r.length) r[0].onclick();`);
+  await step('再次点击同一会话', `var r=document.querySelectorAll('#lieBiaoTi .lieBiaoTiaoMu'); if(r.length) r[0].onclick();`);
   await sleep(1200);
 
   // 右栏分区必须生效（成员卡片可见）
   const panel = await c.evaluate(`(function(){
-    const el = document.getElementById('panel-members-block');
+    const el = document.getElementById('mianBanChengYuanJiKuai');
     if (!el) return { missing: true };
     const cs = getComputedStyle(el);
     const r = el.getBoundingClientRect();

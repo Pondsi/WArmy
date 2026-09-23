@@ -55,12 +55,12 @@ export interface GongjuDiaoyongZhibiao {
 export interface GongjuXunhuanZhibiao {
   ts: number;
   sessionId: string;
-  requests: number;
-  rounds: number;
-  toolCalls: number;
+  qingQiuJi: number;
+  lunShu: number;
+  gongJuDiaoYongJi: number;
   toolResultChars: number;
   degraded: boolean;
-  stopReason: string;
+  tingZhiYuanYin: string;
 }
 
 export class ZhiBiaoCaiJiQi {
@@ -105,9 +105,9 @@ export class ZhiBiaoCaiJiQi {
 
   summary() {
     const t = this.turns;
-    const hit = t.reduce((s, x) => s + x.cacheHitTokens, 0);
+    const mingZhong = t.reduce((s, x) => s + x.cacheHitTokens, 0);
     const weiMingZhong = t.reduce((s, x) => s + x.cacheMissTokens, 0);
-    const total = hit + weiMingZhong;
+    const total = mingZhong + weiMingZhong;
     const ccrIn = this.ccr.reduce((s, x) => s + x.originalBytes, 0);
     const ccrOut = this.ccr.reduce((s, x) => s + x.compressedBytes, 0);
     // 有界视图哨兵：最近一次 + 观测区间内的极值（恒定性证据）
@@ -118,8 +118,8 @@ export class ZhiBiaoCaiJiQi {
       avgDurationMs: t.length ? Math.round(t.reduce((s, x) => s + x.durationMs, 0) / t.length) : 0,
       promptTokens: t.reduce((s, x) => s + x.promptTokens, 0),
       completionTokens: t.reduce((s, x) => s + x.completionTokens, 0),
-      cacheHitRate: total ? +(hit / total).toFixed(4) : 0,
-      cacheHitTokens: hit,
+      cacheHitRate: total ? +(mingZhong / total).toFixed(4) : 0,
+      cacheHitTokens: mingZhong,
       cacheMissTokens: weiMingZhong,
       ccrOriginalBytes: ccrIn,
       ccrCompressedBytes: ccrOut,
@@ -134,21 +134,21 @@ export class ZhiBiaoCaiJiQi {
       logEntries: lastView ? lastView.logEntries : 0,
       viewPointers: lastView ? lastView.pointers : 0,
       /** ADR 002 §9.4 待办 2：工具调用观测（模型是否真的 recall/retrieve 了） */
-      toolCalls: this.toolCallsLog.length,
+      gongJuDiaoYongJi: this.toolCallsLog.length,
       toolCallsOk: this.toolCallsLog.filter((x) => x.ok).length,
       toolChars: this.toolCallsLog.reduce((s, x) => s + x.chars, 0),
       toolTurns: this.toolLoops.length,
       toolDegradedTurns: this.toolLoops.filter((x) => x.degraded).length,
-      toolStopReasons: this.toolLoops.reduce<Record<string, number>>((acc, x) => {
-        acc[x.stopReason] = (acc[x.stopReason] || 0) + 1;
-        return acc;
+      toolStopReasons: this.toolLoops.reduce<Record<string, number>>((leiJi, x) => {
+        leiJi[x.tingZhiYuanYin] = (leiJi[x.tingZhiYuanYin] || 0) + 1;
+        return leiJi;
       }, {}),
       /** 工具循环从未越界（请求数受 maxRounds 约束） */
-      toolLoopBounded: this.toolLoops.every((x) => x.requests <= 9 && x.rounds <= 8),
+      toolLoopBounded: this.toolLoops.every((x) => x.qingQiuJi <= 9 && x.lunShu <= 8),
       /** 历史观测里 viewBytes 从未越过预算 → 不变量 #2 成立 */
       viewBounded: this.views.every((x) => x.viewBytes <= x.budgetChars),
       /** ADR：命中率 >95% 为健康；工具输出压缩比目标可观察 */
-      healthyCache: total > 0 ? hit / total >= 0.9 : true,
+      healthyCache: total > 0 ? mingZhong / total >= 0.9 : true,
     };
   }
 

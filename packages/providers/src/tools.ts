@@ -31,7 +31,7 @@ import type {
  * Ollama `/api/chat` 只对部分模型支持 tools，且旧版本会直接报错 —— 保守按"不支持"处理，
  * 走优雅降级（普通对话）。需要时可显式传 `supportsTools: true` 覆盖。
  */
-export const PROTOCOL_TOOL_SUPPORT: Record<GongYingXieYi, boolean> = {
+export const XIEYI_GONGJU_ZHICHI: Record<GongYingXieYi, boolean> = {
   'openai-compatible': true,
   anthropic: true,
   ollama: false,
@@ -48,7 +48,7 @@ export type GongJuTingZhiYuan = 'stop' | 'max-rounds' | 'budget' | 'unsupported'
 /** 工具执行器：入参是模型的 tool_call，返回值是回给模型的文本（不许抛错，抛了也会被兜住） */
 export type GongJuZhiXing = (
   call: GongJuDiaoYong,
-  ctx: { round: number; maxResultChars: number }
+  ctx: { round: number; zuiDaJieGuoZiShu: number }
 ) => Promise<string> | string;
 
 export interface GongJuXunHuanShi {
@@ -63,9 +63,9 @@ export interface GongJuXunHuanShi {
 
 export interface GongJuXunHuanXuan {
   /** 工具轮上限，默认 3；0 = 不暴露工具（直接普通对话） */
-  maxRounds?: number;
+  zuiDaLunShu?: number;
   /** 单条工具结果上限（字符），默认 4000 */
-  maxResultChars?: number;
+  zuiDaJieGuoZiShu?: number;
   /** 工具结果总预算（字符），默认 12000 */
   maxToolResultChars?: number;
   /** 覆盖协议能力判定 */
@@ -76,16 +76,16 @@ export interface GongJuXunHuanXuan {
 }
 
 export interface GongJuXunHuanGuo {
-  response: LiaoTianXiangYing;
+  xiangYingTi: LiaoTianXiangYing;
   /** 实际发出的模型请求次数（含强制收敛那次） */
-  requests: number;
+  qingQiuJi: number;
   /** 真正执行了工具的轮数 */
-  rounds: number;
+  lunShu: number;
   /** 执行的工具调用条数 */
-  toolCalls: number;
+  gongJuDiaoYongJi: number;
   /** 工具结果累计字符数 */
   toolResultChars: number;
-  stopReason: GongJuTingZhiYuan;
+  tingZhiYuanYin: GongJuTingZhiYuan;
   /** true = 本轮走的是"不带 tools 的普通对话"（未暴露工具 / 不支持 / 首次调用报错） */
   degraded: boolean;
   /** 降级原因（审计用，不含密钥） */
@@ -103,9 +103,9 @@ function qianZhiZhengShu(v: unknown, lo: number, hi: number, dflt: number): numb
 
 /** 该 provider 是否具备工具调用能力（实例标志优先于协议表） */
 export function gongYingZhiChiGongJu(provider: MoxingGongYing): boolean {
-  const flag = (provider as { supportsTools?: boolean }).supportsTools;
-  if (typeof flag === 'boolean') return flag;
-  return PROTOCOL_TOOL_SUPPORT[provider.protocol] ?? true;
+  const biaoZhi = (provider as { supportsTools?: boolean }).supportsTools;
+  if (typeof biaoZhi === 'boolean') return biaoZhi;
+  return XIEYI_GONGJU_ZHICHI[provider.protocol] ?? true;
 }
 
 /**
@@ -117,65 +117,65 @@ export function gongYingZhiChiGongJu(provider: MoxingGongYing): boolean {
  */
 export async function liaoTianDaiGongJu(
   provider: MoxingGongYing,
-  req: LiaoTianQingQiu,
+  Qiu: LiaoTianQingQiu,
   execute: GongJuZhiXing,
   opts: GongJuXunHuanXuan = {}
 ): Promise<GongJuXunHuanGuo> {
   const o = opts && typeof opts === 'object' ? opts : {};
-  const tools = Array.isArray(req.tools) ? req.tools : [];
+  const tools = Array.isArray(Qiu.tools) ? Qiu.tools : [];
   const qingQiuGongJuJi = tools.length > 0;
-  const maxRounds = qianZhiZhengShu(o.maxRounds, 0, 8, MOREN_GONGJU_ZUIDA_LUN);
-  const maxResultChars = qianZhiZhengShu(o.maxResultChars, 64, 20000, MOREN_GONGJU_JIEGUO_ZISHU);
+  const zuiDaLunShu = qianZhiZhengShu(o.zuiDaLunShu, 0, 8, MOREN_GONGJU_ZUIDA_LUN);
+  const zuiDaJieGuoZiShu = qianZhiZhengShu(o.zuiDaJieGuoZiShu, 64, 20000, MOREN_GONGJU_JIEGUO_ZISHU);
   const zongYuSuan = qianZhiZhengShu(o.maxToolResultChars, 0, 200000, MOREN_GONGJU_ZONG_ZISHU);
   const zhiChi = typeof o.supportsTools === 'boolean' ? o.supportsTools : gongYingZhiChiGongJu(provider);
   const emit = typeof o.onEvent === 'function' ? o.onEvent : () => {};
 
   /** 不带 tools 的普通对话（= ADR 002 之前的现状行为） */
-  const plain = async (degraded: boolean, reason?: string): Promise<GongJuXunHuanGuo> => {
-    const response = await provider.chat(
-      { ...req, tools: undefined, toolChoice: undefined },
+  const chunWenBen = async (degraded: boolean, reason?: string): Promise<GongJuXunHuanGuo> => {
+    const xiangYingTi = await provider.chat(
+      { ...Qiu, tools: undefined, toolChoice: undefined },
       o.signal
     );
     if (degraded) emit({ kind: 'degraded', round: 0, detail: reason });
     return {
-      response,
-      requests: 1,
-      rounds: 0,
-      toolCalls: 0,
+      xiangYingTi,
+      qingQiuJi: 1,
+      lunShu: 0,
+      gongJuDiaoYongJi: 0,
       toolResultChars: 0,
-      stopReason: degraded ? 'unsupported' : 'stop',
+      tingZhiYuanYin: degraded ? 'unsupported' : 'stop',
       degraded,
       degradedReason: reason,
     };
   };
 
-  if (!qingQiuGongJuJi) return plain(false); // 调用方没要工具：普通对话，不属于降级
-  if (maxRounds <= 0) return plain(true, 'tools-disabled(maxRounds=0)');
-  if (!zhiChi) return plain(true, `unsupported(${provider.protocol})`);
+  if (!qingQiuGongJuJi) return chunWenBen(false); // 调用方没要工具：普通对话，不属于降级
+  if (zuiDaLunShu <= 0) return chunWenBen(true, 'tools-disabled(maxRounds=0)');
+  if (!zhiChi) return chunWenBen(true, `unsupported(${provider.protocol})`);
 
-  const messages: LiaoTianXiaoXi[] = req.messages.map((m) => ({ ...m }));
-  let requests = 0;
-  let rounds = 0;
-  let toolCalls = 0;
-  let resultChars = 0;
-  let stopReason: GongJuTingZhiYuan = 'stop';
+  const xiaoXiJi: LiaoTianXiaoXi[] = Qiu.xiaoXiJi.map((m) => ({ ...m }));
+  let qingQiuJi = 0;
+  let lunShu = 0;
+  let gongJuDiaoYongJi = 0;
+  let jieGuoZiShu = 0;
+  let tingZhiYuanYin: GongJuTingZhiYuan = 'stop';
   let last: LiaoTianXiangYing | null = null;
 
   const diaoYongMoXing = async (toolChoice: LiaoTianQingQiu['toolChoice']): Promise<LiaoTianXiangYing> => {
-    requests += 1;
-    return provider.chat({ ...req, messages, tools, toolChoice }, o.signal);
+    qingQiuJi += 1;
+    return provider.chat({ ...Qiu, xiaoXiJi, tools, toolChoice }, o.signal);
   };
 
   try {
     for (;;) {
       // 工具轮 / 总预算已用尽：**下一次**就用 tool_choice:'none' 逼出文本答案（不再多发一次 auto）。
       // 这样"最多 maxRounds 轮工具 + 1 次强制收敛"是精确的请求数上界。
-      const daoLunShangXian = rounds >= maxRounds;
-      const yuSuanShuChu = rounds > 0 && resultChars >= zongYuSuan;
+      const daoLunShangXian = lunShu >= zuiDaLunShu;
+      const yuSuanShuChu = lunShu > 0 && jieGuoZiShu >= zongYuSuan;
       if (daoLunShangXian || yuSuanShuChu) {
         // 两个限制同时命中时，报"预算"（更具体：说明是被工具结果总量拦下的）
-        stopReason = yuSuanShuChu ? 'budget' : 'max-rounds';
-        emit({ kind: 'final', round: rounds, detail: stopReason });
+        tingZhiYuanYin = yuSuanShuChu ? 'budget' : 'max-rounds';
+        emit({ kind: 'final', round: lunShu, detail: tingZhiYuanYin });
         try {
           const zuiZhongXiangYing = await diaoYongMoXing('none');
           const text = zuiZhongXiangYing.choices[0]?.message?.content || '';
@@ -189,45 +189,45 @@ export async function liaoTianDaiGongJu(
       }
       const xiangYing = await diaoYongMoXing('auto');
       last = xiangYing;
-      const msg = xiangYing.choices[0]?.message;
-      const calls = Array.isArray(msg?.toolCalls) ? msg.toolCalls.filter(Boolean) : [];
-      if (!calls.length) {
-        stopReason = 'stop';
+      const xiaoXi = xiangYing.choices[0]?.message;
+      const diaoYongJi = Array.isArray(xiaoXi?.gongJuDiaoYongJi) ? xiaoXi.gongJuDiaoYongJi.filter(Boolean) : [];
+      if (!diaoYongJi.length) {
+        tingZhiYuanYin = 'stop';
         break;
       }
-      rounds += 1;
-      emit({ kind: 'round', round: rounds, detail: `${calls.length} 个工具调用` });
+      lunShu += 1;
+      emit({ kind: 'round', round: lunShu, detail: `${diaoYongJi.length} 个工具调用` });
       // 模型的 tool_calls 必须以 assistant 消息入对话，随后每条都要有对应的 tool 结果
-      messages.push({ role: 'assistant', content: msg?.content || '', toolCalls: calls });
-      for (const call of calls) {
-        const name = call.function?.name || 'unknown';
-        const remaining = zongYuSuan - resultChars;
+      xiaoXiJi.push({ role: 'assistant', content: xiaoXi?.content || '', gongJuDiaoYongJi: diaoYongJi });
+      for (const call of diaoYongJi) {
+        const ming = call.function?.name || 'unknown';
+        const shengYu = zongYuSuan - jieGuoZiShu;
         let text = '';
-        if (remaining <= 0) {
-          text = `（工具结果预算已用尽，未执行 ${name}；请基于已有信息作答）`;
-          emit({ kind: 'tool', round: rounds, tool: name, ok: false, chars: text.length, detail: 'budget' });
+        if (shengYu <= 0) {
+          text = `（工具结果预算已用尽，未执行 ${ming}；请基于已有信息作答）`;
+          emit({ kind: 'tool', round: lunShu, tool: ming, ok: false, chars: text.length, detail: 'budget' });
         } else {
-          const cap = Math.min(maxResultChars, remaining);
+          const shangXian = Math.min(zuiDaJieGuoZiShu, shengYu);
           try {
-            const out = await execute(call, { round: rounds, maxResultChars: cap });
+            const out = await execute(call, { round: lunShu, zuiDaJieGuoZiShu: shangXian });
             text = out === undefined || out === null ? '' : String(out);
           } catch (e) {
             // 工具执行失败不是致命错误：把失败原因作为工具结果回给模型，让它自己纠偏
-            const why = String((e as Error)?.message || e).slice(0, 200);
-            text = `工具 ${name} 执行失败：${why}`;
-            emit({ kind: 'tool', round: rounds, tool: name, ok: false, chars: text.length, detail: why });
+            const yuanYin = String((e as Error)?.message || e).slice(0, 200);
+            text = `工具 ${ming} 执行失败：${yuanYin}`;
+            emit({ kind: 'tool', round: lunShu, tool: ming, ok: false, chars: text.length, detail: yuanYin });
           }
-          if (text.length > cap) {
-            text = jieWeiAnQuan(text, cap) + `\n…[结果被截断：原 ${text.length} 字符，本次上限 ${cap}]`;
+          if (text.length > shangXian) {
+            text = jieWeiAnQuan(text, shangXian) + `\n…[结果被截断：原 ${text.length} 字符，本次上限 ${shangXian}]`;
           }
-          toolCalls += 1;
-          emit({ kind: 'tool', round: rounds, tool: name, ok: true, chars: text.length });
+          gongJuDiaoYongJi += 1;
+          emit({ kind: 'tool', round: lunShu, tool: ming, ok: true, chars: text.length });
         }
-        resultChars += text.length;
-        messages.push({
+        jieGuoZiShu += text.length;
+        xiaoXiJi.push({
           role: 'tool',
           toolCallId: call.id,
-          name,
+          ming,
           content: text,
         });
       }
@@ -235,13 +235,13 @@ export async function liaoTianDaiGongJu(
   } catch (e) {
     // 首次带 tools 就报错：多半是该模型/中转不吃 tools（HTTP 400 之类）。
     // 优雅降级 = 重试一次不带 tools 的普通对话，而不是把整轮对话打成 error。
-    if (requests <= 1) {
-      const why = String((e as Error)?.message || e).slice(0, 160);
-      emit({ kind: 'degraded', round: 0, detail: `tools-failed: ${why}` });
+    if (qingQiuJi <= 1) {
+      const yuanYin = String((e as Error)?.message || e).slice(0, 160);
+      emit({ kind: 'degraded', round: 0, detail: `tools-failed: ${yuanYin}` });
       try {
-        const r = await plain(true, `tools-failed: ${why}`);
+        const r = await chunWenBen(true, `tools-failed: ${yuanYin}`);
         // requests 如实反映"试过带 tools 的那次 + 降级后这次"（失败的尝试也算一次模型请求）
-        return { ...r, requests: r.requests + requests, stopReason: 'unsupported' };
+        return { ...r, qingQiuJi: r.qingQiuJi + qingQiuJi, tingZhiYuanYin: 'unsupported' };
       } catch (e2) {
         // 连降级都失败（网络/鉴权），保持原始错误的语义，交给调用方
         throw e2;
@@ -252,9 +252,9 @@ export async function liaoTianDaiGongJu(
 
   // 轮数/预算用尽时已在循环里用 tool_choice:'none' 强制收敛过一次（见上），
   // 这里只处理"极端情况"：一次模型请求都没成功（正常路径不会走到）。
-  const fallback: LiaoTianXiangYing = last ?? {
+  const huiTui: LiaoTianXiangYing = last ?? {
     id: 'tool-loop-empty',
-    model: req.model,
+    model: Qiu.model,
     choices: [{ index: 0, message: { role: 'assistant', content: '' }, finishReason: 'stop' }],
     usage: {
       promptTokens: 0,
@@ -267,12 +267,12 @@ export async function liaoTianDaiGongJu(
   };
 
   return {
-    response: fallback,
-    requests,
-    rounds,
-    toolCalls,
-    toolResultChars: resultChars,
-    stopReason,
+    xiangYingTi: huiTui,
+    qingQiuJi,
+    lunShu,
+    gongJuDiaoYongJi,
+    toolResultChars: jieGuoZiShu,
+    tingZhiYuanYin,
     degraded: false,
   };
 }

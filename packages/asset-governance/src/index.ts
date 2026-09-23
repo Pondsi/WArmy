@@ -7,7 +7,7 @@ import path from 'node:path';
 export type ZichanLeibie = 'skill' | 'rule' | 'memory' | 'prompt' | 'tool' | 'file';
 export type ZichanZuoyongyu = 'session' | 'project' | 'user' | 'global';
 export type ZichanQiangdu = 'strong' | 'weak' | 'background';
-export type ZichanZhuangtai = 'active' | 'deprecated' | 'archived' | 'revoked';
+export type ZichanZhuangtai = 'jiHuo' | 'deprecated' | 'archived' | 'revoked';
 
 export interface ZiChan {
   id: string;
@@ -15,8 +15,8 @@ export interface ZiChan {
   scope: ZichanZuoyongyu;
   strength: ZichanQiangdu;
   status: ZichanZhuangtai;
-  title: string;
-  body: string;
+  biaoTi: string;
+  ti: string;
   negativeScore: number;
   createdAt: number;
   updatedAt: number;
@@ -44,16 +44,16 @@ export class ZichanGuanliqi {
   }
 
   register(a: Omit<ZiChan, 'createdAt' | 'updatedAt' | 'negativeScore' | 'status'> & Partial<ZiChan>): ZiChan {
-    const full: ZiChan = {
-      status: 'active',
+    const Quan: ZiChan = {
+      status: 'jiHuo',
       negativeScore: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       ...a,
     } as ZiChan;
-    this.assets.set(full.id, full);
+    this.assets.set(Quan.id, Quan);
     this.save();
-    return full;
+    return Quan;
   }
 
   /** 权限过滤先于相关性检索：严格模式不注入持久资产 */
@@ -61,7 +61,7 @@ export class ZichanGuanliqi {
     if (opts.strict) return [];
     return [...this.assets.values()].filter(
       (a) =>
-        a.status === 'active' &&
+        a.status === 'jiHuo' &&
         (!opts.category || a.category === opts.category) &&
         (!opts.scope || a.scope === opts.scope)
     );
@@ -83,7 +83,7 @@ export class ZichanGuanliqi {
     const now = Date.now();
     let n = 0;
     for (const a of this.assets.values()) {
-      if (a.status === 'active' && a.lastUsedAt && now - a.lastUsedAt > maxIdleMs) {
+      if (a.status === 'jiHuo' && a.lastUsedAt && now - a.lastUsedAt > maxIdleMs) {
         a.status = 'archived';
         n++;
       }
@@ -92,7 +92,7 @@ export class ZichanGuanliqi {
     return n;
   }
 
-  list(): ZiChan[] {
+  LieBiao(): ZiChan[] {
     return [...this.assets.values()];
   }
 }

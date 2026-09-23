@@ -1,21 +1,21 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/';
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/';
 let m = fs.readFileSync(base + 'electron-main.ts', 'utf8');
-let j = fs.readFileSync(base + 'renderer/app.js', 'utf8');
+let j = fs.readFileSync(base + 'renderer/yingYong.js', 'utf8');
 let p = fs.readFileSync(base + 'preload.cjs', 'utf8');
 
 // ── IPC ──
-if (!m.includes('warmy:import-openclaw')) {
+if (!m.includes('warmy:daoRuopenclaw')) {
   m += '\n// ── 导入 openclaw.json 供应商配置 ──\n';
-  m += "ipcMain.handle('warmy:import-openclaw', () => {\n";
+  m += "ipcMain.handle('warmy:daoRuopenclaw', () => {\n";
   m += "  try {\n";
   m += "    const ocPath = path.join(app.getPath('userData'), '..', 'openclaw.json');\n";
   m += "    if (!fs.existsSync(ocPath)) return { ok: false, error: 'openclaw.json not found' };\n";
   m += "    const j = JSON.parse(fs.readFileSync(ocPath, 'utf8'));\n";
   m += "    const provs = Object.entries(j.models?.providers || {}).map(([id, pv]) => {\n";
-  m += "      const p = pv as { baseURL?: string; baseUrl?: string; apiKey?: string; api?: string; models?: Array<{ name?: string; id?: string }> };\n";
+  m += "      const p = pv as { baseURL?: string; baseUrl?: string; apiKey?: string; api?: string; models?: Array<{ ming?: string; id?: string }> };\n";
   m += "      return {\n";
-  m += "        id, label: id, protocol: 'openai-compatible' as const,\n";
+  m += "        id, biaoQian: id, protocol: 'openai-compatible' as const,\n";
   m += "        baseURL: p.baseURL || p.baseUrl || '',\n";
   m += "        apiKey: p.apiKey || p.api || '',\n";
   m += "        defaultModel: (p.models?.[0]?.name || p.models?.[0]?.id) || '',\n";
@@ -32,18 +32,18 @@ if (!m.includes('warmy:import-openclaw')) {
   m += "    return { ok: false, error: String(e) };\n";
   m += "  }\n";
   m += "});\n\n";
-  m += "ipcMain.handle('warmy:special-models-set', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {\n";
+  m += "ipcMain.handle('warmy:teShuMoXingJiSheZhi', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {\n";
   m += "  if (settingsStore) {\n";
   m += "    const cur = settingsStore.load() as Record<string, unknown>;\n";
   m += "    settingsStore.save({ ...cur, specialModels: cfg } as never);\n";
   m += "  }\n";
   m += "  return { ok: true };\n";
   m += "});\n\n";
-  m += "ipcMain.handle('warmy:special-models-get', () => {\n";
+  m += "ipcMain.handle('warmy:teShuMoXingJiQu', () => {\n";
   m += "  const s = settingsStore?.load() as Record<string, unknown>;\n";
   m += "  return { ok: true, specialModels: s?.specialModels || {} };\n";
   m += "});\n\n";
-  m += "ipcMain.handle('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {\n";
+  m += "ipcMain.handle('warmy:asrollama', async (_e, payload: { audioBase64: string; model?: string }) => {\n";
   m += "  try {\n";
   m += "    const res = await fetch('http://127.0.0.1:11434/api/generate', {\n";
   m += "      method: 'POST',\n";
@@ -60,12 +60,12 @@ if (!m.includes('warmy:import-openclaw')) {
 
 // preload
 if (!p.includes('importOpenclaw')) {
-  const anchor = "  exportAllowlist: () => ipcRenderer.invoke('warmy:export-allowlist'),";
+  const anchor = "  exportAllowlist: () => ipcRenderer.invoke('warmy:daoChuYunXuMingDan'),";
   p = p.replace(anchor, anchor + '\n' +
-    "  importOpenclaw: () => ipcRenderer.invoke('warmy:import-openclaw'),\n" +
-    "  specialModelsSet: (cfg) => ipcRenderer.invoke('warmy:special-models-set', cfg),\n" +
-    "  specialModelsGet: () => ipcRenderer.invoke('warmy:special-models-get'),\n" +
-    "  asrOllama: (payload) => ipcRenderer.invoke('warmy:asr-ollama', payload),");
+    "  importOpenclaw: () => ipcRenderer.invoke('warmy:daoRuopenclaw'),\n" +
+    "  specialModelsSet: (cfg) => ipcRenderer.invoke('warmy:teShuMoXingJiSheZhi', cfg),\n" +
+    "  specialModelsGet: () => ipcRenderer.invoke('warmy:teShuMoXingJiQu'),\n" +
+    "  asrOllama: (payload) => ipcRenderer.invoke('warmy:asrollama', payload),");
   fs.writeFileSync(base + 'preload.cjs', p);
   console.log('preload ok');
 }
@@ -89,43 +89,43 @@ j = j.replace('setInterval(saveState, 15000);', 'setInterval(() => raf(saveState
 
 // ── 设置里加导入按钮和特殊模型 ──
 if (!j.includes('btn-import-openclaw')) {
-  const about = "        <div class=\"set-section set-card\">\n          <h2>${t('settings.about')}</h2>";
+  const about = "        <div class=\"sheZhiSection sheZhiKa\">\n          <h2>${t('settings.about')}</h2>";
   if (j.includes(about)) {
-    j = j.replace(about, `        <div class="set-section set-card">
+    j = j.replace(about, `        <div class="sheZhiSection sheZhiKa">
           <h2>\${t('settings.importProviders')}</h2>
-          <p class="muted">\${t('settings.importHint')}</p>
-          <button class="btn-mini" id="btn-import-openclaw">\${t('settings.importDo')}</button>
-          <span class="muted" id="import-msg"></span>
+          <p class="jingYin">\${t('settings.importHint')}</p>
+          <button class="anNiuXiao" id="btn-import-openclaw">\${t('settings.importDo')}</button>
+          <span class="jingYin" id="import-msg"></span>
         </div>
-        <div class="set-section set-card">
+        <div class="sheZhiSection sheZhiKa">
           <h2>\${t('settings.specialModels')}</h2>
-          <p class="muted">\${t('settings.specialModelsHint')}</p>
+          <p class="jingYin">\${t('settings.specialModelsHint')}</p>
           <div class="field" style="margin-bottom:8px">
-            <label>\${t('settings.asrModel')}</label>
-            <select id="sm-asr">
+            <biaoQian>\${t('settings.asrModel')}</biaoQian>
+            <select id="smasr">
               <option value="ollama">Ollama (whisper-tiny)</option>
               <option value="whisper-cpp">whisper.cpp (local)</option>
               <option value="openai">OpenAI Whisper API</option>
             </select>
           </div>
           <div class="field" style="margin-bottom:8px">
-            <label>\${t('settings.embeddingModel')}</label>
-            <select id="sm-embed">
+            <biaoQian>\${t('settings.embeddingModel')}</biaoQian>
+            <select id="smEmbed">
               <option value="onnx">ONNX (bge-small-zh)</option>
               <option value="ollama">Ollama embedding</option>
               <option value="api">API embedding</option>
             </select>
           </div>
           <div class="field" style="margin-bottom:8px">
-            <label>\${t('settings.summaryModel')}</label>
-            <input id="sm-summary" placeholder="deepseek-flash"/>
+            <biaoQian>\${t('settings.summaryModel')}</biaoQian>
+            <shuRu id="sm-summary" placeholder="deepseek-flash"/>
           </div>
           <div class="field" style="margin-bottom:8px">
-            <label>\${t('settings.organizerModel')}</label>
-            <input id="sm-organizer" placeholder="deepseek-chat"/>
+            <biaoQian>\${t('settings.organizerModel')}</biaoQian>
+            <shuRu id="smOrganizer" placeholder="deepseek-chat"/>
           </div>
-          <button class="btn-mini" id="btn-save-special">\${t('common.save')}</button>
-          <span class="muted" id="sm-msg"></span>
+          <button class="anNiuXiao" id="anNiuBaoCunTeShu">\${t('common.save')}</button>
+          <span class="jingYin" id="smXiaoXi"></span>
         </div>
 ${about}`);
     console.log('special models UI added');
@@ -147,15 +147,15 @@ if (!j.includes('btn-import-openclaw\')')) {
           $('import-msg').textContent = String(r?.error || t('common.error'));
         }
       });
-      $('btn-save-special')?.addEventListener('click', async () => {
+      $('anNiuBaoCunTeShu')?.addEventListener('click', async () => {
         const cfg = {
-          asr: { provider: $('sm-asr')?.value || 'ollama' },
-          embedding: { provider: $('sm-embed')?.value || 'onnx' },
+          asr: { provider: $('smasr')?.value || 'ollama' },
+          embedding: { provider: $('smEmbed')?.value || 'onnx' },
           summary: { provider: 'deepseek', model: $('sm-summary')?.value || 'deepseek-flash' },
-          organizer: { provider: 'deepseek', model: $('sm-organizer')?.value || 'deepseek-chat' },
+          organizer: { provider: 'deepseek', model: $('smOrganizer')?.value || 'deepseek-chat' },
         };
         await window.warmy.specialModelsSet(cfg).catch(() => {});
-        $('sm-msg').textContent = t('instances.saved');
+        $('smXiaoXi').textContent = t('instances.saved');
       });
 ${invite}`);
     console.log('bindings added');
@@ -163,11 +163,11 @@ ${invite}`);
 }
 
 fs.writeFileSync(base + 'electron-main.ts', m);
-fs.writeFileSync(base + 'renderer/app.js', j);
+fs.writeFileSync(base + 'renderer/yingYong.js', j);
 console.log('done');
-console.log('  importOpenclaw:', m.includes('warmy:import-openclaw'));
-console.log('  specialModels:', m.includes('warmy:special-models-set'));
-console.log('  ollama asr:', m.includes('warmy:asr-ollama'));
+console.log('  importOpenclaw:', m.includes('warmy:daoRuopenclaw'));
+console.log('  specialModels:', m.includes('warmy:teShuMoXingJiSheZhi'));
+console.log('  ollama asr:', m.includes('warmy:asrollama'));
 console.log('  raf throttle:', j.includes('__rafThrottle'));
 console.log('  btn-import:', j.includes('btn-import-openclaw'));
-console.log('  btn-save-special:', j.includes('btn-save-special'));
+console.log('  anNiuBaoCunTeShu:', j.includes('anNiuBaoCunTeShu'));

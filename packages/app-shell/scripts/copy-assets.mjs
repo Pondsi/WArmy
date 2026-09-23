@@ -21,6 +21,7 @@ mkdirSync(path.join(dist, 'renderer'), { recursive: true });
 mkdirSync(path.join(dist, 'i18n'), { recursive: true });
 
 copyFileSync(path.join(src, 'preload.cjs'), path.join(dist, 'preload.cjs'));
+copyFileSync(path.join(src, 'ipc-aliases.json'), path.join(dist, 'ipc-aliases.json'));
 copyDir(path.join(src, 'renderer'), path.join(dist, 'renderer'));
 copyDir(path.join(src, 'i18n'), path.join(dist, 'i18n'));
 

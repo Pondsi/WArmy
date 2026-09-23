@@ -13,7 +13,7 @@ const r = new GroupChatRouter({ queueWhenFixedBusy: true });
 
 r.createGroup({
   groupId: 'g1',
-  name: '内部群',
+  ming: '内部群',
   type: 'internal',
   dutyInstanceId: null,
   directedMode: false,
@@ -23,9 +23,9 @@ r.createGroup({
 });
 
 // 本机两个实例 + 远程一个
-r.join('g1', { id: 'a', name: 'A', local: true, dutyEligible: true, status: 'idle' });
-r.join('g1', { id: 'b', name: 'B', local: true, dutyEligible: true, status: 'idle' });
-r.join('g1', { id: 'remote', name: 'R', local: false, dutyEligible: true, status: 'idle' });
+r.join('g1', { id: 'a', ming: 'A', local: true, dutyEligible: true, status: 'idle' });
+r.join('g1', { id: 'b', ming: 'B', local: true, dutyEligible: true, status: 'idle' });
+r.join('g1', { id: 'remote', ming: 'R', local: false, dutyEligible: true, status: 'idle' });
 
 const members = r.listMembers('g1');
 check('order 1,2,3', members[0].order === 1 && members[2].order === 3, members.map((m) => m.id + ':' + m.order));
@@ -50,7 +50,7 @@ check('fixed busy + queue → null', duty === null, duty);
 const r2 = new GroupChatRouter({ queueWhenFixedBusy: false });
 r2.createGroup({
   groupId: 'g2',
-  name: 'e',
+  ming: 'e',
   type: 'internal',
   dutyInstanceId: null,
   directedMode: false,
@@ -58,15 +58,15 @@ r2.createGroup({
   permissions: DEFAULT_PERMISSIONS,
   checkpointLimit: 50,
 });
-r2.join('g2', { id: 'a', name: 'A', local: true, dutyEligible: true, status: 'busy' });
-r2.join('g2', { id: 'b', name: 'B', local: true, dutyEligible: true, status: 'idle' });
+r2.join('g2', { id: 'a', ming: 'A', local: true, dutyEligible: true, status: 'busy' });
+r2.join('g2', { id: 'b', ming: 'B', local: true, dutyEligible: true, status: 'idle' });
 r2.setFixedDuty('g2', 'a');
 check('fixed busy + handoff → B', r2.selectDuty('g2')?.id === 'b', r2.selectDuty('g2')?.id);
 
 // 外部群静默
 r.createGroup({
   groupId: 'ext',
-  name: '外部',
+  ming: '外部',
   type: 'external',
   dutyInstanceId: null,
   directedMode: false,
@@ -74,7 +74,7 @@ r.createGroup({
   permissions: DEFAULT_PERMISSIONS,
   checkpointLimit: 50,
 });
-r.join('ext', { id: 'a', name: 'A', local: true, dutyEligible: true, status: 'idle' });
+r.join('ext', { id: 'a', ming: 'A', local: true, dutyEligible: true, status: 'idle' });
 const silent = r.route({
   groupId: 'ext',
   userId: 'u',
@@ -125,7 +125,7 @@ check('P0 front', q0.urgency === 'P0', q0.urgency);
 // 定向模式
 r.createGroup({
   groupId: 'dir',
-  name: 'd',
+  ming: 'd',
   type: 'internal',
   dutyInstanceId: null,
   directedMode: true,
@@ -133,7 +133,7 @@ r.createGroup({
   permissions: DEFAULT_PERMISSIONS,
   checkpointLimit: 50,
 });
-r.join('dir', { id: 'a', name: 'A', local: true, dutyEligible: true, status: 'idle' });
+r.join('dir', { id: 'a', ming: 'A', local: true, dutyEligible: true, status: 'idle' });
 const dirSilent = r.route({
   groupId: 'dir',
   userId: 'u',

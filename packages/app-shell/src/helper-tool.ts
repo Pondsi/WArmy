@@ -44,7 +44,7 @@ import net from 'node:net';
 import crypto from 'node:crypto';
 import type { XiangmuWenjianFangwenTiaomu, ProjectFileAccessOp } from './group-store.js';
 
-export const HELPER_TOOL_VERSION = '0.1.0-p0-spike8';
+export const ZHUSHOU_GONGJU_BANBEN = '0.1.0-p0-spike8';
 
 /* ══════════════════════════════════════════════════════════════════════════
    工具文件访问台账（helper-tool 侧的**记录点**）
@@ -110,7 +110,7 @@ function beizhuWenjianFangwen(op: ProjectFileAccessOp, file: string, extra: { ok
 }
 
 /** 外层（主进程）也能直接记一条：例如容器里的命令改过的文件 */
-export function noteExternalFileAccess(op: ProjectFileAccessOp, file: string, extra: { ok?: boolean; bytes?: number; by?: string } = {}): void {
+export function beizhuWaibuWenjianFangwen(op: ProjectFileAccessOp, file: string, extra: { ok?: boolean; bytes?: number; by?: string } = {}): void {
   beizhuWenjianFangwen(op, file, extra);
 }
 
@@ -185,7 +185,7 @@ export interface HostsContentAnalysis {
   ok: boolean;
   fatal: string[];
   warnings: string[];
-  stats: { lines: number; entries: number; comments: number; blanks: number };
+  stats: { HangJi: number; entries: number; comments: number; blanks: number };
 }
 
 export interface BeifenXinxi {
@@ -255,7 +255,7 @@ export interface HostsOpResult {
   backup: BeifenXinxi | null;
   before: WenjianZhiwen;
   after: WenjianZhiwen;
-  verified: boolean;
+  yiYanZheng: boolean;
   rolledBack: boolean;
   warnings: string[];
   tool: TiquanGongjuXinxi;
@@ -270,19 +270,19 @@ export interface ZhushouZhuangtai {
   hostsFile: string;
   hostsWritableByCurrentProcess: boolean;
   tool: TiquanGongjuXinxi;
-  credentialCache: { queried: boolean; available: boolean | null; raw: string | null; note: string };
+  credentialCache: { yiChaXun: boolean; available: boolean | null; raw: string | null; note: string };
   /** 本机（当前平台）尚无法验证的部分，UI 需据此降级展示 */
   unverified: string[];
 }
 
 /* ────────────────────────── 平台与工具探测 ────────────────────────── */
 
-export function detectHelperPlatform(platform: string = process.platform): ZhushouPingtai {
+export function tanceZhushouPingtai(platform: string = process.platform): ZhushouPingtai {
   if (platform === 'win32' || platform === 'darwin' || platform === 'linux') return platform;
   return 'unsupported';
 }
 
-export function defaultHostsPath(platform: ZhushouPingtai = detectHelperPlatform()): string {
+export function defaultHostsPath(platform: ZhushouPingtai = tanceZhushouPingtai()): string {
   if (platform === 'win32') {
     const root = process.env['SystemRoot'] ?? process.env['windir'] ?? 'C:\\Windows';
     return path.join(root, 'System32', 'drivers', 'etc', 'hosts');
@@ -307,7 +307,7 @@ export function gsudoCandidatePaths(env: NodeJS.ProcessEnv = process.env): strin
 }
 
 /** 子进程输出解码：优先严格 UTF-8，失败则按 GBK 解（Windows cmd 的 copy/系统提示是 GBK） */
-export function decodeConsoleOutput(buf: Buffer): string {
+export function jiemaKongzhitaiShuchu(buf: Buffer): string {
   if (buf.length === 0) return '';
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(buf);
@@ -334,9 +334,9 @@ export async function yunxingJincheng(
   const timeoutMs = opts.timeoutMs ?? 15000;
   const started = Date.now();
   return new Promise<MinglingJieguo>((resolve) => {
-    let child: ReturnType<typeof spawn>;
+    let Zhi: ReturnType<typeof spawn>;
     try {
-      child = spawn(exe, args, {
+      Zhi = spawn(exe, args, {
         // 关键：stdin 直接忽略，任何交互式提示都会立刻拿到 EOF 而不是挂住
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -361,22 +361,22 @@ export async function yunxingJincheng(
     let biaozhunShuchuHuanchong = Buffer.alloc(0);
     let biaozhunCuowuHuanchong = Buffer.alloc(0);
     let timedOut = false;
-    const cap = 64 * 1024; // 只留证据，不吞内存
-    child.stdout?.on('data', (d: Buffer) => {
-      if (biaozhunShuchuHuanchong.length < cap) biaozhunShuchuHuanchong = Buffer.concat([biaozhunShuchuHuanchong, d]);
+    const shangXian = 64 * 1024; // 只留证据，不吞内存
+    Zhi.stdout?.on('data', (d: Buffer) => {
+      if (biaozhunShuchuHuanchong.length < shangXian) biaozhunShuchuHuanchong = Buffer.concat([biaozhunShuchuHuanchong, d]);
     });
-    child.stderr?.on('data', (d: Buffer) => {
-      if (biaozhunCuowuHuanchong.length < cap) biaozhunCuowuHuanchong = Buffer.concat([biaozhunCuowuHuanchong, d]);
+    Zhi.stderr?.on('data', (d: Buffer) => {
+      if (biaozhunCuowuHuanchong.length < shangXian) biaozhunCuowuHuanchong = Buffer.concat([biaozhunCuowuHuanchong, d]);
     });
-    const decode = () => ({ stdout: decodeConsoleOutput(biaozhunShuchuHuanchong), stderr: decodeConsoleOutput(biaozhunCuowuHuanchong) });
+    const decode = () => ({ stdout: jiemaKongzhitaiShuchu(biaozhunShuchuHuanchong), stderr: jiemaKongzhitaiShuchu(biaozhunCuowuHuanchong) });
 
-    const timer = setTimeout(() => {
+    const jiShiQi = setTimeout(() => {
       timedOut = true;
-      zhongzhiShu(child.pid);
+      zhongzhiShu(Zhi.pid);
     }, timeoutMs);
 
-    child.on('error', (e) => {
-      clearTimeout(timer);
+    Zhi.on('error', (e) => {
+      clearTimeout(jiShiQi);
       const d = decode();
       resolve({
         exe,
@@ -391,8 +391,8 @@ export async function yunxingJincheng(
       });
     });
 
-    child.on('close', (code, signal) => {
-      clearTimeout(timer);
+    Zhi.on('close', (code, signal) => {
+      clearTimeout(jiShiQi);
       const d = decode();
       resolve({
         exe,
@@ -464,7 +464,7 @@ export async function queryGsudoCredentialCache(
   let available: boolean | null = null;
   const m = text.match(/Available for this process:\s*(True|False)/i);
   if (m?.[1]) available = m[1].toLowerCase() === 'true';
-  const sessions = text.match(/Total active cache sessions:\s*(\d+)/i);
+  const sessions = text.match(/Total jiHuo cache sessions:\s*(\d+)/i);
   if (sessions?.[1] !== undefined && available === null) available = Number(sessions[1]) > 0;
   return { available, raw };
 }
@@ -473,8 +473,8 @@ export async function queryGsudoCredentialCache(
  * 选择提权工具。Windows → gsudo；macOS → SMAppService；其它 → 不支持（明确返回原因）。
  * 注意：macOS 的 SMAppService 只能在 macOS 上真正验证；此处如实标注 unverified。
  */
-export async function selectElevationTool(): Promise<TiquanGongjuXinxi> {
-  const platform = detectHelperPlatform();
+export async function xuanzeTiquanGongju(): Promise<TiquanGongjuXinxi> {
+  const platform = tanceZhushouPingtai();
 
   if (platform === 'win32') {
     const exe = await jiexiGsudoKezhixing();
@@ -544,28 +544,28 @@ export async function selectElevationTool(): Promise<TiquanGongjuXinxi> {
 
 export interface MacHelperPlan {
   tool: 'smappservice';
-  label: string;
+  biaoQian: string;
   plistPath: string;
   helperExecutable: string;
   plist: string;
   registrationSteps: string[];
-  verified: boolean;
+  yiYanZheng: boolean;
   unverifiedReason: string;
 }
 
 /** 生成 macOS privileged helper 的注册计划（真实可执行步骤，本机无法验证） */
-export function macHelperPlan(opts: { label?: string; helperDir?: string } = {}): MacHelperPlan {
-  const label = opts.label ?? 'com.warmy.helper';
+export function macHelperPlan(opts: { biaoQian?: string; helperDir?: string } = {}): MacHelperPlan {
+  const biaoQian = opts.biaoQian ?? 'com.warmy.helper';
   const helperDir = opts.helperDir ?? '/Library/PrivilegedHelperTools';
   const helperExecutable = path.join(helperDir, 'warmy-helper');
-  const plistPath = `/Library/LaunchDaemons/${label}.plist`;
+  const plistPath = `/Library/LaunchDaemons/${biaoQian}.plist`;
   const plist = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
     '<plist version="1.0">',
     '<dict>',
     '  <key>Label</key>',
-    `  <string>${label}</string>`,
+    `  <string>${biaoQian}</string>`,
     '  <key>ProgramArguments</key>',
     '  <array>',
     `    <string>${helperExecutable}</string>`,
@@ -573,7 +573,7 @@ export function macHelperPlan(opts: { label?: string; helperDir?: string } = {})
     '  </array>',
     '  <key>MachServices</key>',
     '  <dict>',
-    `    <key>${label}</key>`,
+    `    <key>${biaoQian}</key>`,
     '    <dict><key>ResetAtClose</key><true/></dict>',
     '  </dict>',
     '  <key>RunAtLoad</key>',
@@ -584,7 +584,7 @@ export function macHelperPlan(opts: { label?: string; helperDir?: string } = {})
   ].join('\n');
   return {
     tool: 'smappservice',
-    label,
+    biaoQian,
     plistPath,
     helperExecutable,
     plist,
@@ -595,7 +595,7 @@ export function macHelperPlan(opts: { label?: string; helperDir?: string } = {})
       '4. 用户首次授权后由 launchd 拉活 XPC listener；主 App 通过 NSXPCConnection 调 write-hosts。',
       '5. macOS 26 已知 XPC 断言 fullPath is nil（bundle 未被正确签名/注册时出现），需校验 code signature 与 Team ID。',
     ],
-    verified: false,
+    yiYanZheng: false,
     unverifiedReason:
       'SMAppService 只能由 macOS 上已签名并注册的 helper bundle 调用；本机为 win32，无 macOS 环境，未验证。',
   };
@@ -605,7 +605,7 @@ export function macHelperPlan(opts: { label?: string; helperDir?: string } = {})
 
 const HOSTNAME_RE = /^[A-Za-z0-9]([A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$/;
 
-export function validateHostEntrySpec(spec: ZhujiTiaomuGuige): JiaoyanJieguo {
+export function jiaoyanZhujiTiaomuGuige(spec: ZhujiTiaomuGuige): JiaoyanJieguo {
   if (!spec || typeof spec.ip !== 'string' || typeof spec.hostname !== 'string') {
     return { ok: false, reason: 'ip/hostname 必须是字符串' };
   }
@@ -623,23 +623,23 @@ export function validateHostEntrySpec(spec: ZhujiTiaomuGuige): JiaoyanJieguo {
 }
 
 /** 渲染成一行 hosts 记录；此处就是「写入前校验目标行格式」的产物 */
-export function formatHostEntry(spec: ZhujiTiaomuGuige): string {
+export function geshiZhujiTiaomu(spec: ZhujiTiaomuGuige): string {
   const base = `${spec.ip.trim()} ${spec.hostname.trim()}`;
   return spec.comment ? `${base} # ${spec.comment}` : base;
 }
 
 /** 分析单行：空行 / 注释 / 合法映射 / 非法 */
-export function analyzeHostsLine(line: string): HostsLineAnalysis {
-  if (/[\u0000\u0001-\u0008\u000b\u000c\u000e-\u001f]/.test(line)) {
+export function analyzeHostsLine(Hang: string): HostsLineAnalysis {
+  if (/[\u0000\u0001-\u0008\u000b\u000c\u000e-\u001f]/.test(Hang)) {
     return { kind: 'invalid', ok: false, reason: '含控制字符' };
   }
-  const trimmed = line.trim();
+  const trimmed = Hang.trim();
   if (!trimmed) return { kind: 'blank', ok: true };
   if (trimmed.startsWith('#')) return { kind: 'comment', ok: true };
   const hashAt = trimmed.indexOf('#');
-  const body = (hashAt === -1 ? trimmed : trimmed.slice(0, hashAt)).trim();
-  if (!body) return { kind: 'comment', ok: true };
-  const tokens = body.split(/\s+/).filter(Boolean);
+  const ti = (hashAt === -1 ? trimmed : trimmed.slice(0, hashAt)).trim();
+  if (!ti) return { kind: 'comment', ok: true };
+  const tokens = ti.split(/\s+/).filter(Boolean);
   const ip = tokens[0];
   if (ip === undefined) return { kind: 'comment', ok: true };
   if (net.isIP(ip) === 0) return { kind: 'invalid', ok: false, reason: `首个字段不是合法 IP：${JSON.stringify(ip)}` };
@@ -657,11 +657,11 @@ export function analyzeHostsContent(content: string): HostsContentAnalysis {
   const warnings: string[] = [];
   if (content.includes('\u0000')) fatal.push('文件含 NUL 字节（疑似二进制/损坏）');
   if (/\r(?!\n)/.test(content)) warnings.push('存在孤立 CR');
-  const lines = content.split(/\r?\n/);
-  const stats = { lines: lines.length, entries: 0, comments: 0, blanks: 0 };
-  lines.forEach((line, i) => {
-    if (i === lines.length - 1 && line === '') return; // 末尾换行不算一行
-    const a = analyzeHostsLine(line);
+  const HangJi = content.split(/\r?\n/);
+  const stats = { HangJi: HangJi.length, entries: 0, comments: 0, blanks: 0 };
+  HangJi.forEach((Hang, i) => {
+    if (i === HangJi.length - 1 && Hang === '') return; // 末尾换行不算一行
+    const a = analyzeHostsLine(Hang);
     if (a.kind === 'entry') stats.entries += 1;
     else if (a.kind === 'comment') stats.comments += 1;
     else if (a.kind === 'blank') stats.blanks += 1;
@@ -679,8 +679,8 @@ export function findHostEntry(content: string, spec: ZhujiTiaomuGuige): { presen
   const target = spec.hostname.trim().toLowerCase();
   const muBiaoIp = spec.ip.trim();
   const lineNumbers: number[] = [];
-  content.split(/\r?\n/).forEach((line, i) => {
-    const a = analyzeHostsLine(line);
+  content.split(/\r?\n/).forEach((Hang, i) => {
+    const a = analyzeHostsLine(Hang);
     if (a.kind !== 'entry' || a.ip !== muBiaoIp) return;
     const names = (a.hostnames ?? []).map((h) => h.toLowerCase());
     if (names.includes(target)) lineNumbers.push(i + 1);
@@ -689,11 +689,11 @@ export function findHostEntry(content: string, spec: ZhujiTiaomuGuige): { presen
 }
 
 /** 幂等 upsert：已存在不改，末尾按原 EOL 追加校验过的一行 */
-export function upsertHostEntry(
+export function gengxinHuoCharuZhujiTiaomu(
   content: string,
   spec: ZhujiTiaomuGuige
 ): { ok: boolean; content: string; changed: boolean; alreadyPresent: boolean; reason?: string; appendedLine?: string } {
-  const v = validateHostEntrySpec(spec);
+  const v = jiaoyanZhujiTiaomuGuige(spec);
   if (!v.ok) return { ok: false, content, changed: false, alreadyPresent: false, reason: v.reason };
 
   const analysis = analyzeHostsContent(content);
@@ -704,9 +704,9 @@ export function upsertHostEntry(
   const found = findHostEntry(content, spec);
   if (found.present) return { ok: true, content, changed: false, alreadyPresent: true };
 
-  const line = formatHostEntry(spec);
+  const Hang = geshiZhujiTiaomu(spec);
   // 自检渲染结果本身必须能被解析器接受（不盲拼接）
-  const selfCheck = analyzeHostsLine(line);
+  const selfCheck = analyzeHostsLine(Hang);
   if (selfCheck.kind !== 'entry' || selfCheck.ip !== spec.ip.trim()) {
     return { ok: false, content, changed: false, alreadyPresent: false, reason: `渲染结果自检失败：${selfCheck.reason ?? '未知'}` };
   }
@@ -717,23 +717,23 @@ export function upsertHostEntry(
 
   const hangWei = tanceHangwei(content);
   const base = content.endsWith('\n') ? content : content + hangWei;
-  return { ok: true, content: base + line + hangWei, changed: true, alreadyPresent: false, appendedLine: line };
+  return { ok: true, content: base + Hang + hangWei, changed: true, alreadyPresent: false, appendedLine: Hang };
 }
 
 /** 精确移除（回滚/清理用）：只删 ip+hostname 完全匹配的行 */
-export function removeHostEntry(
+export function yichuZhujiTiaomu(
   content: string,
   spec: ZhujiTiaomuGuige
 ): { ok: boolean; content: string; changed: boolean; removedCount: number; reason?: string } {
-  const v = validateHostEntrySpec(spec);
+  const v = jiaoyanZhujiTiaomuGuige(spec);
   if (!v.ok) return { ok: false, content, changed: false, removedCount: 0, reason: v.reason };
   const target = spec.hostname.trim().toLowerCase();
   const muBiaoIp = spec.ip.trim();
   const hangWei = tanceHangwei(content);
   let removed = 0;
   const kept: string[] = [];
-  for (const line of content.split(/\r?\n/)) {
-    const a = analyzeHostsLine(line);
+  for (const Hang of content.split(/\r?\n/)) {
+    const a = analyzeHostsLine(Hang);
     if (
       a.kind === 'entry' &&
       a.ip === muBiaoIp &&
@@ -743,7 +743,7 @@ export function removeHostEntry(
       removed += 1;
       continue;
     }
-    kept.push(line);
+    kept.push(Hang);
   }
   if (removed === 0) return { ok: true, content, changed: false, removedCount: 0 };
   return { ok: true, content: kept.join(hangWei), changed: true, removedCount: removed };
@@ -759,12 +759,12 @@ export function morenBeifenMulu(): string {
   return path.join(os.homedir(), '.warmy', 'helper-backups');
 }
 
-export function backupFile(source: string, backupDir = morenBeifenMulu(), label = 'hosts'): BeifenXinxi {
+export function backupFile(source: string, backupDir = morenBeifenMulu(), biaoQian = 'hosts'): BeifenXinxi {
   const buf = fs.readFileSync(source);
   beizhuWenjianFangwen('read', source, { bytes: buf.length });
   fs.mkdirSync(backupDir, { recursive: true });
   const shijianchuo = new Date().toISOString().replace(/[:.]/g, '-');
-  const target = path.join(backupDir, `${label}.${shijianchuo}.bak`);
+  const target = path.join(backupDir, `${biaoQian}.${shijianchuo}.bak`);
   fs.writeFileSync(target, buf);
   beizhuWenjianFangwen('backup', target, { bytes: buf.length });
   const readBack = fs.readFileSync(target);
@@ -772,7 +772,7 @@ export function backupFile(source: string, backupDir = morenBeifenMulu(), label 
   return { source, path: target, bytes: buf.length, sha256: sha256(buf), createdAt: new Date().toISOString() };
 }
 
-export function fingerprintFile(file: string, spec?: ZhujiTiaomuGuige): WenjianZhiwen {
+export function zhiwenWenjian(file: string, spec?: ZhujiTiaomuGuige): WenjianZhiwen {
   try {
     const buf = fs.readFileSync(file);
     beizhuWenjianFangwen('read', file, { bytes: buf.length });
@@ -805,7 +805,7 @@ function readDecodedOrNull(file: string): string | null {
   try {
     const buf = fs.readFileSync(file);
     beizhuWenjianFangwen('read', file, { bytes: buf.length });
-    return decodeConsoleOutput(buf);
+    return jiemaKongzhitaiShuchu(buf);
   } catch {
     return null;
   }
@@ -1183,13 +1183,13 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
   const op = opts.op ?? 'upsert';
   const hostsFile = opts.hostsFile ?? defaultHostsPath();
   const backupDir = opts.backupDir ?? morenBeifenMulu();
-  const tool = opts.toolInfo ?? (await selectElevationTool());
+  const tool = opts.toolInfo ?? (await xuanzeTiquanGongju());
   const warnings: string[] = [];
 
-  const before = fingerprintFile(hostsFile, opts.spec);
+  const before = zhiwenWenjian(hostsFile, opts.spec);
   const kongJihua = { appendedLine: null, contentSha256: null, bytesToWrite: 0 };
 
-  const specCheck = validateHostEntrySpec(opts.spec);
+  const specCheck = jiaoyanZhujiTiaomuGuige(opts.spec);
   if (!specCheck.ok) {
     return {
       ok: false,
@@ -1203,7 +1203,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       backup: null,
       before,
       after: before,
-      verified: false,
+      yiYanZheng: false,
       rolledBack: false,
       warnings,
       tool,
@@ -1226,7 +1226,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       backup: null,
       before,
       after: before,
-      verified: false,
+      yiYanZheng: false,
       rolledBack: false,
       warnings,
       tool,
@@ -1250,7 +1250,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       backup: null,
       before,
       after: before,
-      verified: false,
+      yiYanZheng: false,
       rolledBack: false,
       warnings,
       tool,
@@ -1260,7 +1260,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
   }
 
   const biangeng =
-    op === 'upsert' ? upsertHostEntry(current, opts.spec) : removeHostEntry(current, opts.spec);
+    op === 'upsert' ? gengxinHuoCharuZhujiTiaomu(current, opts.spec) : yichuZhujiTiaomu(current, opts.spec);
   if (!biangeng.ok) {
     return {
       ok: false,
@@ -1274,7 +1274,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       backup: null,
       before,
       after: before,
-      verified: false,
+      yiYanZheng: false,
       rolledBack: false,
       warnings,
       tool,
@@ -1304,7 +1304,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
     backup: null,
     before,
     after: before,
-    verified: false,
+    yiYanZheng: false,
     rolledBack: false,
     warnings,
     tool,
@@ -1318,7 +1318,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       ...base,
       ok: true,
       changed: false,
-      verified: true,
+      yiYanZheng: true,
       message:
         op === 'upsert'
           ? `幂等跳过：${opts.spec.ip} ${opts.spec.hostname} 已存在（行 ${findHostEntry(current, opts.spec).lineNumbers.join(',')}）`
@@ -1327,7 +1327,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
   }
 
   if (opts.dryRun) {
-    return { ...base, ok: true, changed: false, message: 'dryRun：已算出变更但未写盘', verified: false };
+    return { ...base, ok: true, changed: false, message: 'dryRun：已算出变更但未写盘', yiYanZheng: false };
   }
 
   // 先备份（读 hosts 不需要提权）
@@ -1357,7 +1357,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
     timeoutMs: opts.verifyTimeoutMs ?? 5000,
   });
 
-  const after = fingerprintFile(hostsFile, opts.spec);
+  const after = zhiwenWenjian(hostsFile, opts.spec);
 
   if (write.ok && verify.match) {
     return {
@@ -1367,7 +1367,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
       writeMethod: write.method,
       backup,
       after,
-      verified: true,
+      yiYanZheng: true,
       raw: write.raw,
       message: `写入成功（${write.method}）并回读校验通过：sha256=${verify.actualSha256}`,
     };
@@ -1390,7 +1390,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
   } else {
     huigunXiaoxi = '未创建备份，无法回滚';
   }
-  const zuizhongZhiwen = fingerprintFile(hostsFile, opts.spec);
+  const zuizhongZhiwen = zhiwenWenjian(hostsFile, opts.spec);
 
   return {
     ...base,
@@ -1399,7 +1399,7 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
     writeMethod: write.method,
     backup,
     after: zuizhongZhiwen,
-    verified: false,
+    yiYanZheng: false,
     rolledBack,
     raw: write.raw,
     errorCode: write.ok ? 'HOSTS_VERIFY_FAILED' : write.errorCode,
@@ -1412,14 +1412,14 @@ export async function applyHostEntry(opts: HostsOpOptions): Promise<HostsOpResul
 
 /* ────────────────────────── 状态汇总（给 UI/IPC 用） ────────────────────────── */
 
-export async function getHelperStatus(): Promise<ZhushouZhuangtai> {
-  const platform = detectHelperPlatform();
-  const tool = await selectElevationTool();
+export async function quZhushouZhuangtai(): Promise<ZhushouZhuangtai> {
+  const platform = tanceZhushouPingtai();
+  const tool = await xuanzeTiquanGongju();
   const hostsFile = defaultHostsPath(platform);
   const unverified: string[] = [...tool.unverified];
 
   let credentialCache: ZhushouZhuangtai['credentialCache'] = {
-    queried: false,
+    yiChaXun: false,
     available: null,
     raw: null,
     note: '非 Windows 平台无 gsudo 凭据缓存概念',
@@ -1428,7 +1428,7 @@ export async function getHelperStatus(): Promise<ZhushouZhuangtai> {
   if (platform === 'win32' && tool.executable) {
     const q = await queryGsudoCredentialCache(tool.executable);
     credentialCache = {
-      queried: true,
+      yiChaXun: true,
       available: q.available,
       raw: `${q.raw.stdout}\n${q.raw.stderr}`.trim().slice(0, 4000),
       note:
@@ -1438,7 +1438,7 @@ export async function getHelperStatus(): Promise<ZhushouZhuangtai> {
   }
 
   return {
-    version: HELPER_TOOL_VERSION,
+    version: ZHUSHOU_GONGJU_BANBEN,
     platform,
     isAdmin: platform === 'win32' ? await detectIsAdmin() : false,
     hostsFile,

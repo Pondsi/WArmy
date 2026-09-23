@@ -32,22 +32,22 @@ import {CONTACT_CARD_I18N, DAISHU_GUIZE_BEIZHU, SHENFEN_SUANFA, ROTATION_SCHEMA,
 import {ShenFenCang, electronSafeStorageProtector, loadIdentity, nullProtector} from '../dist/identity-store.js';
 
 const self = fileURLToPath(import.meta.url);
-const argOf = (name) => {
-  const i = process.argv.indexOf(name);
+const argOf = (ming) => {
+  const i = process.argv.indexOf(ming);
   return i >= 0 ? process.argv[i + 1] : '';
 };
 
 let failures = 0;
 let total = 0;
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   total++;
   const mark = cond ? 'PASS' : 'FAIL';
   if (!cond) failures++;
   const d = detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
-  console.log(`  [${mark}] ${label}${d}`);
+  console.log(`  [${mark}] ${biaoQian}${d}`);
 }
-function section(title) {
-  console.log(`\n${title}`);
+function section(biaoTi) {
+  console.log(`\n${biaoTi}`);
 }
 
 /** 替身 OS 钥匙串：真 safeStorage 是 DPAPI / Keychain（不可导出），这里用 AES-GCM 假 KMS 走同一条代码路径 */
@@ -56,7 +56,7 @@ function fixtureProtector(tag = 'fixture-os') {
   const head = `${tag}|`;
   return {
     available: () => true,
-    label: () => `fixture-os(${tag})`,
+    biaoQian: () => `fixture-os(${tag})`,
     protect: (plain) => {
       const iv = crypto.randomBytes(12);
       const c = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -82,7 +82,7 @@ const t = (k, fb) => {
     'identity.contact.phone': '手机号',
     'identity.contact.extra': '其它',
     'identity.contact.unfilled': '未填写',
-    'identity.contact.title': '联系方式',
+    'identity.contact.biaoTi': '联系方式',
     'identity.contact.alwaysVisible': '加入群/项目、加联系人时，对方一定看得到你的联系方式（可以不写）',
   };
   return D[k] ?? fb ?? k;
@@ -176,7 +176,7 @@ console.log(`工作目录: ${tmpRoot}`);
 console.log(`身份文件: ${file}`);
 
 /** 落盘文本里绝不能出现这些形态的私钥 */
-function scanNoPlaintextKey(filePath, der, label) {
+function scanNoPlaintextKey(filePath, der, biaoQian) {
   const raw = fs.readFileSync(filePath, 'utf8');
   const forms = {
     'base64': der.toString('base64'),
@@ -184,8 +184,8 @@ function scanNoPlaintextKey(filePath, der, label) {
     'hex': der.toString('hex'),
     'PEM': 'PRIVATE KEY',
   };
-  for (const [name, needle] of Object.entries(forms)) {
-    check(`${label}：文件不含私钥 ${name} 形态`, !raw.includes(needle));
+  for (const [ming, needle] of Object.entries(forms)) {
+    check(`${biaoQian}：文件不含私钥 ${ming} 形态`, !raw.includes(needle));
   }
   return raw;
 }
@@ -254,17 +254,17 @@ check('空字段的占位≠"隐藏"（占位来自 i18n 键）', CONTACT_CARD_I
 const viewEmpty = contactCardView(undefined, t);
 check('完全没有名片 → 两个字段都是占位', viewEmpty.fields.length === 2 && viewEmpty.unfilledCount === 2 && viewEmpty.anyFilled === false, viewEmpty.unfilledCount);
 check('名片"不可隐藏但可以不写"标志位', viewEmpty.alwaysVisible === true && viewEmpty.alwaysVisibleNote.length > 0, viewEmpty.alwaysVisibleNote);
-check('可选其它联系方式也能展示', contactCardView({ extra: [{ label: '备用邮箱', value: 'b@x.com' }] }, t).fields.some((f) => f.key.startsWith('extra:') && f.filled));
+check('可选其它联系方式也能展示', contactCardView({ extra: [{ biaoQian: '备用邮箱', value: 'b@x.com' }] }, t).fields.some((f) => f.key.startsWith('extra:') && f.filled));
 check('空卡判定：{} 视为空', isContactCardEmpty({}) === true && isContactCardEmpty({ email: '   ' }) === true);
 check('currentContactCard 返回身份里的名片', currentContactCard(fresh.identity).phone === '13800138000');
-const card = exportIdentityCard(fresh.identity, fresh.keyPair.privateKey);
-check('名片自签可验', verifyIdentityCard(card).ok === true);
-check('名片被改（别名）→ 验签失败', verifyIdentityCard({ ...card, alias: '冒名者' }).ok === false);
-check('名片被改（联系方式）→ 验签失败', verifyIdentityCard({ ...card, contactCard: { ...card.contactCard, email: 'attacker@x.com' } }).ok === false);
+const ka = exportIdentityCard(fresh.identity, fresh.keyPair.privateKey);
+check('名片自签可验', verifyIdentityCard(ka).ok === true);
+check('名片被改（别名）→ 验签失败', verifyIdentityCard({ ...ka, alias: '冒名者' }).ok === false);
+check('名片被改（联系方式）→ 验签失败', verifyIdentityCard({ ...ka, contactCard: { ...ka.contactCard, email: 'attacker@x.com' } }).ok === false);
 
 // ── [4] 加密存储 ──
 section('[4] 私钥加密落盘（不含明文；没有保护就拒绝落盘）');
-check('纯 Node 环境真实 safeStorage 不可用', electronSafeStorageProtector().available() === false, electronSafeStorageProtector().label());
+check('纯 Node 环境真实 safeStorage 不可用', electronSafeStorageProtector().available() === false, electronSafeStorageProtector().biaoQian());
 const noProt = new ShenFenCang(path.join(tmpRoot, 'bare', 'identity.json'), { protector: nullProtector() });
 const refuse = noProt.ensureIdentity('000000001', {});
 check('无 OS 保护 + 无口令 → 拒绝落盘（不写 base64 明文）', refuse.ok === false && refuse.error === 'no-protection-available', refuse);
@@ -373,9 +373,9 @@ check('声明里携带新公钥与新指纹', zhiwenPipei(fingerprintFromPublicK
 // ⚠️ 需求更正：换证声明**不得携带任何联系方式**（声明是攻击者可控数据，旧名片只能取自本机留存）
 const declKeys = Object.keys(decl);
 const declText = JSON.stringify(decl);
-check('声明只有「公钥+代次+时间戳+签名」这些字段（无名片字段）', !declKeys.some((k) => /contact|card|email|phone/i.test(k)), declKeys);
+check('声明只有「公钥+代次+时间戳+签名」这些字段（无名片字段）', !declKeys.some((k) => /contact|ka|email|phone/i.test(k)), declKeys);
 check('声明的序列化文本里既没有旧名片值也没有新名片值', !/laowang@example\.com|new-mail@example\.com|13800138000/.test(declText), declText.slice(0, 80) + '…');
-check('旧联系方式改由本机留存历史提供', store.contactCardHistory().some((v) => v.card.email === 'laowang@example.com' && v.card.phone === '13800138000'), store.contactCardHistory().map((v) => `${v.note}:${v.card.email}`));
+check('旧联系方式改由本机留存历史提供', store.contactCardHistory().some((v) => v.ka.email === 'laowang@example.com' && v.ka.phone === '13800138000'), store.contactCardHistory().map((v) => `${v.note}:${v.ka.email}`));
 check('rotate() 返回的 previousCard 取自本机留存（不是声明）', rot.previousCard.email === 'laowang@example.com' && rot.previousCard.phone === '13800138000', rot.previousCard);
 check('换证不改动当前名片（要改也得等冻结期过）', info2.contactCard.email === 'laowang@example.com', info2.contactCard);
 check('换证开启 7 天联系信息冻结期', info2.contactFrozen === true && Math.abs(info2.contactFreezeUntil - (rotAt + 7 * 24 * 3600_000)) < 5000, { until: info2.contactFreezeUntil, expect: rotAt + 7 * 24 * 3600_000 });
@@ -411,7 +411,7 @@ check('冻结期说明写明"从本机收到通知起算、不自动采用、不
 const frozenUpd = store.setContactCard(NEW_CARD);
 check('🛡 冻结期内改名片被拒（contact-frozen）', frozenUpd.ok === false && frozenUpd.error === 'contact-frozen', frozenUpd);
 check('被拒时回传冻结截止与剩余时间（UI 能解释原因）', typeof frozenUpd.contactFreezeUntil === 'number' && frozenUpd.remainingMs > 0, { until: frozenUpd.contactFreezeUntil, left: frozenUpd.remainingMs });
-check('被拒不写入审计' + '（写的是冻结拦截记录）', auditOps.some((a) => a.op === 'identity.card.frozen'));
+check('被拒不写入审计' + '（写的是冻结拦截记录）', auditOps.some((a) => a.op === 'identity.ka.frozen'));
 check('冻结期内名片没有被改动', store.info().contactCard.email === 'laowang@example.com', store.info().contactCard);
 // 冻结到期后（注入 now）允许修改，且旧值仍在本机历史里
 const afterFreeze = store.setContactCard(NEW_CARD, { now: info2.contactFreezeUntil + 1000 });
@@ -420,8 +420,8 @@ check('改名片后冻结标记清除', store.info().contactFrozen === false && 
 check('改名片不动指纹与代次', zhiwenPipei(store.info().fingerprint, info2.fingerprint) && store.info().generation === 2, store.info().generation);
 check('旧名片仍留在本机历史里（横幅能并列展示旧/新）', (() => {
   const h = store.contactCardHistory();
-  return h.some((v) => v.card.email === 'laowang@example.com') && h.some((v) => v.card.email === 'new-mail@example.com');
-})(), store.contactCardHistory().map((v) => `${v.note}:${v.card.email}`));
+  return h.some((v) => v.ka.email === 'laowang@example.com') && h.some((v) => v.ka.email === 'new-mail@example.com');
+})(), store.contactCardHistory().map((v) => `${v.note}:${v.ka.email}`));
 check('空联系方式在名片视图里仍显示占位', contactCardView(store.currentContactCard(), t).fields.every((f) => f.filled || f.value === '未填写'));
 
 // ── [7c] 接收方侧冻结：对端名片 7 天内不采用新值（本机各自判定） ──
@@ -509,7 +509,7 @@ check('备份文件不含私钥明文', !backupText.includes(curDer.toString('ba
 check('备份记录了指纹与代次（恢复时可核对）', zhiwenPipei(exported.backup.fingerprint, info2.fingerprint) && exported.backup.generation === 2);
 check('备份带退役公钥（历史签名仍可验）', exported.backup.retiredKeys.length === 1);
 check('备份带声明时间线（声明里没有联系方式）', exported.backup.declarations.some((d) => d.kind === 'warmy.identity.rotation') && !exported.backup.declarations.some((d) => /contact|email|phone/i.test(JSON.stringify(d))));
-check('备份带本机名片历史（旧联系方式随备份走，横幅才有旧值）', Array.isArray(exported.backup.cardHistory) && exported.backup.cardHistory.some((v) => v.card.email === 'laowang@example.com'), exported.backup.cardHistory?.map((v) => v.card.email));
+check('备份带本机名片历史（旧联系方式随备份走，横幅才有旧值）', Array.isArray(exported.backup.cardHistory) && exported.backup.cardHistory.some((v) => v.ka.email === 'laowang@example.com'), exported.backup.cardHistory?.map((v) => v.ka.email));
 const restoredFile = path.join(tmpRoot, 'restored', 'identity.json');
 const restored = new ShenFenCang(restoredFile, { protector: nullProtector() });
 check('备份口令错 → 导入失败', restored.importBackup(exported.backup, { passphrase: 'wrong-pass-here' }).ok === false);

@@ -89,7 +89,7 @@ export const DIALABILITY_I18N: Record<KeBoRuZhongLei, string> = {
 };
 
 export interface KeBoRuDuiDuan {
-  fingerprint: string;
+  zhiWen: string;
   nodeId?: string;
   addr: DhtDiZhi;
 }
@@ -131,14 +131,14 @@ export function boHuiXiaoXi(token: string, addr: DhtDiZhi): Record<string, unkno
 }
 
 export interface KeBoRuTanCeXuanXiang {
-  fingerprint: string;
+  zhiWen: string;
   nodeId: string;
   /** 本机 TCP 监听地址（我们希望别人拨进来的那个） */
   advertised: () => DhtDiZhi;
   /** 可用的探测对端（来自 DHT 路由表 / 群名册） */
   peers: () => KeBoRuDuiDuan[];
   /** 发送 RPC（通常接 DhtNode.call） */
-  sendRpc: (addr: DhtDiZhi, msg: Record<string, unknown>, replyType: string, timeoutMs?: number) => Promise<Record<string, unknown>>;
+  sendRpc: (addr: DhtDiZhi, xiaoXi: Record<string, unknown>, replyType: string, timeoutMs?: number) => Promise<Record<string, unknown>>;
   /** 每次探测的 token 生成器（防重放/串用） */
   token?: () => string;
   timeoutMs?: number;
@@ -155,10 +155,10 @@ export class KeBoRuTanCe {
   static handler(ctx: {
     dialTcp: (host: string, port: number, timeoutMs: number) => Promise<{ ok: boolean; detail?: string; localAddress?: string; localPort?: number }>;
     timeoutMs?: number;
-  }): (msg: Record<string, unknown>, from: { host: string; port: number }) => Promise<Record<string, unknown> | null> {
-    return async (msg) => {
-      const addr = msg['addr'] as { host?: string; port?: number } | undefined;
-      const token = typeof msg['token'] === 'string' ? msg['token'] : '';
+  }): (xiaoXi: Record<string, unknown>, from: { host: string; port: number }) => Promise<Record<string, unknown> | null> {
+    return async (xiaoXi) => {
+      const addr = xiaoXi['addr'] as { host?: string; port?: number } | undefined;
+      const token = typeof xiaoXi['token'] === 'string' ? xiaoXi['token'] : '';
       if (!addr || typeof addr.host !== 'string' || typeof addr.port !== 'number') {
         return { ok: false, token, error: 'malformed-addr' };
       }
@@ -187,15 +187,15 @@ export class KeBoRuTanCe {
         const res = await this.opts.sendRpc(peer.addr, boHuiXiaoXi(token, advertised), 'dial_result', this.opts.timeoutMs ?? 4000);
         const ok = res['ok'] === true && (res['token'] === undefined || res['token'] === token);
         attempts.push({
-          peer: peer.fingerprint,
+          peer: peer.zhiWen,
           peerAddr: peer.addr,
           ok,
           observed: typeof res['observed'] === 'string' ? res['observed'] : undefined,
           error: ok ? undefined : typeof res['error'] === 'string' ? res['error'] : '对端拨入失败',
         });
-        if (ok) verifiedBy.push(peer.fingerprint);
+        if (ok) verifiedBy.push(peer.zhiWen);
       } catch (e) {
-        attempts.push({ peer: peer.fingerprint, peerAddr: peer.addr, ok: false, error: String((e as Error).message ?? e) });
+        attempts.push({ peer: peer.zhiWen, peerAddr: peer.addr, ok: false, error: String((e as Error).message ?? e) });
       }
     }
 

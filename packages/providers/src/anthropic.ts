@@ -1,13 +1,13 @@
 import { JichuGongYing, kongYongLiang, qingQiuJson, pinJieUrl, guiFanYongLiang } from './base.js';
 import type { LiaoTianPian, LiaoTianXiaoXi, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
 
-function chaiXiTong(messages: LiaoTianXiaoXi[]): { system?: string; rest: LiaoTianXiaoXi[] } {
-  const sys = messages
+function chaiXiTong(xiaoXiJi: LiaoTianXiaoXi[]): { system?: string; qiYu: LiaoTianXiaoXi[] } {
+  const xitongTiShi = xiaoXiJi
     .filter((m) => m.role === 'system')
     .map((m) => m.content)
     .join('\n\n');
-  const rest = messages.filter((m) => m.role !== 'system');
-  return { system: sys || undefined, rest };
+  const qiYu = xiaoXiJi.filter((m) => m.role !== 'system');
+  return { system: xitongTiShi || undefined, qiYu };
 }
 
 /** tool_call.arguments 是字符串（OpenAI 形状）；脏参数不能让整个请求 400 */
@@ -22,7 +22,7 @@ function anQuanJson(s: string | undefined): unknown {
 
 /**
  * Anthropic Messages API
- * https://docs.anthropic.com/en/api/messages
+ * https://docs.anthropic.com/en/api/xiaoXiJi
  */
 export class AnthropicGongYing extends JichuGongYing {
   readonly id: string;
@@ -40,16 +40,16 @@ export class AnthropicGongYing extends JichuGongYing {
     };
   }
 
-  private body(req: LiaoTianQingQiu): Record<string, unknown> {
-    const { system, rest } = chaiXiTong(req.messages);
-    const contents: Array<{ role: string; content: unknown }> = [];
-    for (const m of rest) {
-      if (m.role === 'assistant' && m.toolCalls?.length) {
-        contents.push({
+  private qingQiuTi(Qiu: LiaoTianQingQiu): Record<string, unknown> {
+    const { system, qiYu } = chaiXiTong(Qiu.xiaoXiJi);
+    const neiRongJi: Array<{ role: string; content: unknown }> = [];
+    for (const m of qiYu) {
+      if (m.role === 'assistant' && m.gongJuDiaoYongJi?.length) {
+        neiRongJi.push({
           role: 'assistant',
           content: [
             ...(m.content ? [{ type: 'text', text: m.content }] : []),
-            ...m.toolCalls.map((t) => ({
+            ...m.gongJuDiaoYongJi.map((t) => ({
               type: 'tool_use',
               id: t.id,
               name: t.function.name,
@@ -61,42 +61,42 @@ export class AnthropicGongYing extends JichuGongYing {
       }
       if (m.role === 'tool') {
         // Anthropic 要求 role 交替：一轮里的多个 tool_result 必须合成**一条** user 消息，
-        // 否则连续两条 user 会被 API 拒绝（400 messages: roles must alternate）。
-        const block = {
+        // 否则连续两条 user 会被 API 拒绝（400 xiaoXiJi: roles must alternate）。
+        const kuai = {
           type: 'tool_result',
           tool_use_id: m.toolCallId,
           content: m.content,
         };
-        const prev = contents[contents.length - 1];
+        const prev = neiRongJi[neiRongJi.length - 1];
         const qianYiKuai = prev?.role === 'user' ? (prev.content as Array<{ type?: string }>) : null;
         if (qianYiKuai && Array.isArray(qianYiKuai) && qianYiKuai.every((b) => b?.type === 'tool_result')) {
-          qianYiKuai.push(block);
+          qianYiKuai.push(kuai);
         } else {
-          contents.push({ role: 'user', content: [block] });
+          neiRongJi.push({ role: 'user', content: [kuai] });
         }
         continue;
       }
-      contents.push({ role: m.role === 'system' ? 'user' : m.role, content: m.content });
+      neiRongJi.push({ role: m.role === 'system' ? 'user' : m.role, content: m.content });
     }
 
     return {
-      model: req.model,
-      max_tokens: req.maxTokens ?? 1024,
+      model: Qiu.model,
+      max_tokens: Qiu.maxTokens ?? 1024,
       system,
-      messages: contents,
-      temperature: req.temperature,
-      top_p: req.topP,
-      stop_sequences: req.stop,
-      tools: req.tools?.map((t) => ({
+      content: neiRongJi,
+      temperature: Qiu.temperature,
+      top_p: Qiu.topP,
+      stop_sequences: Qiu.stop,
+      tools: Qiu.tools?.map((t) => ({
         name: t.function.name,
         description: t.function.description,
         input_schema: t.function.parameters || { type: 'object', properties: {} },
       })),
-      ...req.extra,
+      ...Qiu.extra,
     };
   }
 
-  async chat(req: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
+  async chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
     const json = await qingQiuJson<{
       id: string;
       model: string;
@@ -107,7 +107,7 @@ export class AnthropicGongYing extends JichuGongYing {
       pinJieUrl(this.baseURL, 'v1/messages'),
       {
         method: 'POST',
-        body: JSON.stringify(this.body(req)),
+        body: JSON.stringify(this.qingQiuTi(Qiu)),
         signal,
         headers: this.headers(),
       },
@@ -118,7 +118,7 @@ export class AnthropicGongYing extends JichuGongYing {
       .filter((c) => c.type === 'text')
       .map((c) => c.text || '')
       .join('');
-    const toolCalls = json.content
+    const gongJuDiaoYongJi = json.content
       .filter((c) => c.type === 'tool_use')
       .map((c) => ({
         id: c.id || '',
@@ -138,7 +138,7 @@ export class AnthropicGongYing extends JichuGongYing {
           message: {
             role: 'assistant',
             content: text,
-            toolCalls: toolCalls.length ? toolCalls : undefined,
+            gongJuDiaoYongJi: gongJuDiaoYongJi.length ? gongJuDiaoYongJi : undefined,
           },
           finishReason:
             json.stop_reason === 'tool_use'
@@ -153,7 +153,7 @@ export class AnthropicGongYing extends JichuGongYing {
     };
   }
 
-  async *chatStream(req: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
+  async *chatStream(Qiu: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
     const res = await fetch(pinJieUrl(this.baseURL, 'v1/messages'), {
       method: 'POST',
       headers: {
@@ -161,31 +161,31 @@ export class AnthropicGongYing extends JichuGongYing {
         ...this.headers(),
         ...this.auth.headers,
       },
-      body: JSON.stringify({ ...this.body(req), stream: true }),
+      body: JSON.stringify({ ...this.qingQiuTi(Qiu), stream: true }),
       signal,
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       throw new Error(`anthropic stream ${res.status}: ${text.slice(0, 200)}`);
     }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
+    const duQuQi = res.body.getReader();
+    const jieMaQi = new TextDecoder();
     let buf = '';
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await duQuQi.read();
       if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop() || '';
-      for (const line of lines) {
-        const t = line.trim();
+      buf += jieMaQi.decode(value, { stream: true });
+      const HangJi = buf.split('\n');
+      buf = HangJi.pop() || '';
+      for (const Hang of HangJi) {
+        const t = Hang.trim();
         if (!t.startsWith('data:')) continue;
         try {
           const j = JSON.parse(t.slice(5).trim());
           if (j.type === 'content_block_delta' && j.delta?.type === 'text_delta') {
             yield {
               id: '',
-              model: req.model,
+              model: Qiu.model,
               choices: [
                 {
                   index: 0,

@@ -24,16 +24,16 @@ check('second-instance centers+focusses', /second-instance[\s\S]{0,200}zhuJiaoZh
 check('focusMainWindowCentered centers bounds', /workArea[\s\S]{0,200}setBounds/.test(main));
 check('退出函数置强制退出标志（tuichuYingyong / qiangzhiTuichu）', /function tuichuYingyong[\s\S]{0,200}qiangzhiTuichu = true/.test(main));
 check('托盘下班走统一退出函数（不是裸 app.quit）', /tray-off-work[\s\S]{0,80}tuichuYingyong|tuichuYingyong\('tray-off-work'\)/.test(main));
-check('no tray menu app.quit()', !/setContextMenu\(Menu\.buildFromTemplate\(\[\{ label: tuopanGuanGongzuoBiaoqian, click: \(\) => \{ app\.quit\(\); \}/.test(main));
-check('退出 IPC 走统一退出函数', /warmy:app-quit[\s\S]{0,200}tuichuYingyong/.test(main));
+check('no tray menu app.quit()', !/setContextMenu\(Menu\.buildFromTemplate\(\[\{ biaoQian: tuopanGuanGongzuoBiaoqian, click: \(\) => \{ yingYong\.quit\(\); \}/.test(main));
+check('退出 IPC 走统一退出函数', /warmy:yingYongTuiChu[\s\S]{0,200}tuichuYingyong/.test(main));
 check('未强制退出时才拦成隐藏', /if \(!qiangzhiTuichu\)[\s\S]{0,80}preventDefault/.test(main));
 check('before-quit destroys tray', /before-quit[\s\S]{0,200}tray\?\.destroy/.test(main));
-check('assist IPC list/upsert', /warmy:assist-list/.test(main) && /warmy:assist-upsert/.test(main));
+check('assist IPC list/upsert', /warmy:assistLieBiao/.test(main) && /warmy:assistGengXinHuoChaRu/.test(main));
 check('preload assist APIs', /assistList/.test(preload) && /assistUpsert/.test(preload));
-check('diag toggle self-contained', /function toggleDiagPanel/.test(appJs) && /\$\('diag-toggle'\)\?\.addEventListener\('click', \(\) => \{ toggleDiagPanel\(\); \}\)/.test(appJs));
-check('assist list in panel HTML', /panel-assist-block/.test(html) && /assist-badge/.test(html));
-check('task-list has panel-scroll', /task-list[^"]*panel-scroll|panel-scroll[^>]*task-list/.test(html));
-check('progress has datetime class', /task-time/.test(appJs));
+check('diag toggle self-contained', /function toggleDiagPanel/.test(appJs) && /\$\('diagKaiGuan'\)\?\.addEventListener\('click', \(\) => \{ toggleDiagPanel\(\); \}\)/.test(appJs));
+check('assist list in panel HTML', /mianBanAssistKuai/.test(html) && /assistHuiZhang/.test(html));
+check('renwuLieBiao has mianBanScroll', /renwuLieBiao[^"]*mianBanScroll|mianBanScroll[^>]*renwuLieBiao/.test(html));
+check('jinDu has datetime class', /renwuShiJian/.test(appJs));
 check('assist sorting urgent bottom', /priority === 'urgent'\) return 3/.test(appJs));
 check('logo uses transparent svg', /logo-color\.svg/.test(html));
 check('icon white stripped app-64', (() => {
@@ -42,8 +42,8 @@ check('icon white stripped app-64', (() => {
     return fs.existsSync(path.join(ROOT, 'packages/app-shell/src/renderer/icons/logo-color.svg'));
   } catch { return false; }
 })());
-check('panel-scroll css max-height', /panel-scroll[\s\S]{0,80}max-height/.test(rCss));
-check('assist-dot css', /assist-dot\.urgent/.test(rCss) && /is-stale/.test(rCss));
+check('mianBanScroll css max-height', /mianBanScroll[\s\S]{0,80}max-height/.test(rCss));
+check('assistDian css', /assistDian\.urgent/.test(rCss) && /isStale/.test(rCss));
 
 console.log(`\n==== verify-tray-quit: ${pass} ok / ${fail} FAIL ====`);
 process.exit(fail === 0 ? 0 : 1);

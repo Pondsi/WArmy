@@ -74,7 +74,7 @@ pkg.dependencies = {
   '@nanmicoder/dsh-agent-teams': `file:${teamsPkg.replace(/\\/g, '/')}`,
   'dsh-memory-bundle': `file:${memBundle.replace(/\\/g, '/')}`,
 };
-// memory-plus 可能不是 npm name dsh-memory-bundle —— 用目录名
+// memory-plus 可能不是 npm ming dsh-memory-bundle —— 用目录名
 // 核对
 const memPkg = JSON.parse(fs.readFileSync(path.join(memBundle, 'package.json'), 'utf8'));
 pkg.dependencies[memPkg.name] = `file:${memBundle.replace(/\\/g, '/')}`;
@@ -83,7 +83,7 @@ delete pkg.dependencies['dsh-memory-bundle'];
 pkg.dsh = pkg.dsh || {};
 pkg.dsh.profile = pkg.dsh.profile || {};
 const bundles = new Set(pkg.dsh.profile.bundles || []);
-// 期望合成后的 bundle 列表包含这两项（名称与 package.json name 一致）
+// 期望合成后的 bundle 列表包含这两项（名称与 package.json ming 一致）
 bundles.add('@nanmicoder/dsh-agent-teams');
 bundles.add(memPkg.name);
 pkg.dsh.profile.bundles = [...bundles];

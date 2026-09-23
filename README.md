@@ -150,7 +150,7 @@ See also [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 | Area | Approach |
 | --- | --- |
-| Shell | Electron 33 + TypeScript; zero native modules in main/renderer |
+| Shell | Electron 40 + TypeScript; zero native modules in main/renderer |
 | Memory | JSONL truth + SQLite/FTS/vector projection + recall/retrieve tools |
 | Context | Bounded renderer + pointers |
 | Router | Duty machine + persistent queues |

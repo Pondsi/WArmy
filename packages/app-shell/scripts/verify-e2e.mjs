@@ -12,8 +12,8 @@
  *      必须还在（真实重启持久化），更新源也必须还在。
  *
  * 说明：为了让临时副本能启动，会 patch 两行与本次改动无关的代码（真实源码不动）：
- *   - 去掉重复注册的 warmy:clear-error（Electron 会因重复注册抛异常）
- *   - 去掉 app.setAsDefaultProtocolClient（避免改到本机注册表）
+ *   - 去掉重复注册的 warmy:qingChuCuoWu（Electron 会因重复注册抛异常）
+ *   - 去掉 yingYong.setAsDefaultProtocolClient（避免改到本机注册表）
  */
 import {execFileSync, spawn} from 'node:child_process';
 import crypto from 'node:crypto';
@@ -30,9 +30,9 @@ const repoRoot = path.join(pkgRoot, '..', '..');
 const require = createRequire(import.meta.url);
 
 let failures = 0;
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   if (!cond) failures++;
-  console.log(`  [${cond ? 'PASS' : 'FAIL'}] ${label}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+  console.log(`  [${cond ? 'PASS' : 'FAIL'}] ${biaoQian}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -77,7 +77,7 @@ console.log(`本地更新源: ${feedUrl}\n构件 ${ARTIFACT.length} 字节 sha25
 // ── 准备临时可运行副本 ──
 const electronPath = require('electron');
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-e2e-'));
-const appRoot = path.join(tmpRoot, 'app');
+const appRoot = path.join(tmpRoot, 'yingYong');
 fs.mkdirSync(appRoot, { recursive: true });
 fs.cpSync(path.join(pkgRoot, 'dist'), path.join(appRoot, 'dist'), { recursive: true });
 fs.copyFileSync(path.join(pkgRoot, 'package.json'), path.join(appRoot, 'package.json'));
@@ -91,16 +91,16 @@ let dedupRemoved = 0;
 let protocolPatched = 0;
 const patched = [];
 for (const line of lines) {
-  if (line.includes("ipcMain.handle('warmy:clear-error'")) {
+  if (line.includes("ipcMain.handle('warmy:qingChuCuoWu'")) {
     if (seenClearError) {
       dedupRemoved++;
       continue; // 丢掉重复注册那一行
     }
     seenClearError = true;
   }
-  if (line.includes("app.setAsDefaultProtocolClient('dsh-app')")) {
+  if (line.includes("yingYong.setAsDefaultProtocolClient('dsh-app')")) {
     protocolPatched++;
-    patched.push(line.replace("app.setAsDefaultProtocolClient('dsh-app')", 'void 0'));
+    patched.push(line.replace("yingYong.setAsDefaultProtocolClient('dsh-app')", 'void 0'));
     continue;
   }
   patched.push(line);
@@ -152,22 +152,22 @@ async function connect(devtoolsPort, appPrefix) {
   let seq = 0;
   const pending = new Map();
   ws.addEventListener('message', (ev) => {
-    const msg = JSON.parse(ev.data);
-    if (msg.id && pending.has(msg.id)) {
-      const { resolve, reject } = pending.get(msg.id);
-      pending.delete(msg.id);
-      if (msg.error) reject(new Error(`cdp ${JSON.stringify(msg.error)}`));
-      else resolve(msg.result);
+    const xiaoXi = JSON.parse(ev.data);
+    if (xiaoXi.id && pending.has(xiaoXi.id)) {
+      const { resolve, reject } = pending.get(xiaoXi.id);
+      pending.delete(xiaoXi.id);
+      if (xiaoXi.error) reject(new Error(`cdp ${JSON.stringify(xiaoXi.error)}`));
+      else resolve(xiaoXi.result);
     }
   });
-  const send = (method, params) =>
+  const faSong = (method, params) =>
     new Promise((resolve, reject) => {
       const id = ++seq;
       pending.set(id, { resolve, reject });
       ws.send(JSON.stringify({ id, method, params }));
     });
   const evaluate = async (expression) => {
-    const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
+    const r = await faSong('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
     if (r.exceptionDetails) {
       throw new Error(`renderer exception: ${r.exceptionDetails.exception?.description || r.exceptionDetails.text}`);
     }
@@ -199,7 +199,7 @@ async function launchApp(tag) {
   const onChunk = (d) => {
     const text = String(d);
     logs.push(text);
-    const m = text.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
+    const m = text.match(/DevTools listening qiYong ws:\/\/127\.0\.0\.1:(\d+)\//);
     if (m && m[1]) devtoolsPort = Number(m[1]);
   };
   child.stdout.on('data', onChunk);
@@ -211,7 +211,7 @@ async function launchApp(tag) {
   }
   if (!devtoolsPort) {
     console.log(`[${tag}] 主进程没起来，输出如下：\n${logs.join('')}`);
-    throw new Error(`${tag}: no devtools port (app failed to start)`);
+    throw new Error(`${tag}: no devtools port (yingYong failed to start)`);
   }
   // 等副本自己的页面出现 + 主进程 bootstrap 完成
   const appPrefix = path.join(appRoot, 'dist', 'renderer').toLowerCase().replace(/\\/g, '/');
@@ -291,15 +291,15 @@ console.log('\n[第一轮 C] 群列表 / 群成员');
 const g0 = await call('groupList');
 check('初始 group-list 是真实空列表（ok + groups:[]，非演示数据）', g0.ok === true && Array.isArray(g0.groups) && g0.groups.length === 0, g0);
 
-const gc = await call('groupCreate', { groupId: 'g-e2e', name: 'E2E 作战群', type: 'internal' });
+const gc = await call('groupCreate', { groupId: 'g-e2e', ming: 'E2E 作战群', type: 'internal' });
 check('建群 ok', gc.ok === true, gc);
 const g1 = await call('groupList');
 check('group-list 立刻能读到该群（来自落盘存储）', g1.ok === true && g1.count === 1 && g1.groups[0].groupId === 'g-e2e', g1.groups?.[0]);
-check('group-list 带 memberCount / active / type', g1.groups?.[0]?.memberCount === 0 && g1.groups?.[0]?.active === true && g1.groups?.[0]?.type === 'internal', g1.groups?.[0]);
+check('group-list 带 memberCount / jiHuo / type', g1.groups?.[0]?.memberCount === 0 && g1.groups?.[0]?.jiHuo === true && g1.groups?.[0]?.type === 'internal', g1.groups?.[0]);
 
-const inv = await call('groupInvite', { groupId: 'g-e2e', name: '牛马-E2E' });
+const inv = await call('groupInvite', { groupId: 'g-e2e', ming: '牛马-E2E' });
 check('邀请成员 ok', inv.ok === true && inv.members.length === 1, inv.members);
-const inv2 = await call('groupInvite', { groupId: 'g-e2e', name: '牛马-E2E-2', role: 'admin' });
+const inv2 = await call('groupInvite', { groupId: 'g-e2e', ming: '牛马-E2E-2', role: 'admin' });
 check('邀请第二位成员（admin）', inv2.ok === true && inv2.members.length === 2, inv2.members.map((m) => `${m.name}:${m.role}`));
 const mem = await call('groupMembers', 'g-e2e');
 check('group-members 返回邀请的成员', mem.ok === true && mem.members.length === 2, mem.members.map((m) => `${m.name}:${m.role}`));
@@ -329,12 +329,12 @@ const call2 = (api, ...args) =>
 
 const g2 = await call2('groupList');
 check('重启后 group-list 仍有 g-e2e（真实持久化）', g2.ok === true && g2.count === 1 && g2.groups[0].groupId === 'g-e2e', g2.groups);
-check('重启后群属性保留（name/type/directed/memberCount）', g2.groups?.[0]?.name === 'E2E 作战群' && g2.groups?.[0]?.directedMode === true && g2.groups?.[0]?.memberCount === 2, g2.groups?.[0]);
+check('重启后群属性保留（ming/type/directed/memberCount）', g2.groups?.[0]?.name === 'E2E 作战群' && g2.groups?.[0]?.directedMode === true && g2.groups?.[0]?.memberCount === 2, g2.groups?.[0]);
 const mem2 = await call2('groupMembers', 'g-e2e');
 check('重启后 group-members 仍有 2 人（原来只是内存 Map）', mem2.ok === true && mem2.members.length === 2 && mem2.members.some((m) => m.name === '牛马-E2E'), mem2.members.map((m) => `${m.name}:${m.role}`));
 const msg2 = await call2('groupMessage', { groupId: 'g-e2e', content: '重启后还能发消息吗' });
 check('重启后群消息路由仍认识该群（不是 no-group）', msg2.ok === true && msg2.reason !== 'no-group', { action: msg2.action, reason: msg2.reason, duty: msg2.duty });
-const g2b = await call2('groupCreate', { groupId: 'g-e2e', name: 'E2E 作战群', type: 'internal' });
+const g2b = await call2('groupCreate', { groupId: 'g-e2e', ming: 'E2E 作战群', type: 'internal' });
 check('重启后重复建群不报错（幂等复用）', g2b.ok === true, g2b);
 const c5 = await call2('checkUpdate');
 check('重启后更新源仍在且仍能查到有更新', c5.status === 'update-available' && c5.latestVersion === '9.9.9', { status: c5.status, latest: c5.latestVersion });

@@ -16,9 +16,9 @@ import path from 'node:path';
 import {Gengxinqi, bijiaoBanben, jieXiBanBen} from '../dist/updater.js';
 
 let failures = 0;
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   if (!cond) failures++;
-  console.log(`  [${cond ? 'PASS' : 'FAIL'}] ${label}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+  console.log(`  [${cond ? 'PASS' : 'FAIL'}] ${biaoQian}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
 }
 
 // ── 本地更新源（真实 HTTP 服务器） ──
@@ -51,7 +51,7 @@ const server = http.createServer(async (req, res) => {
       return json({ version: '3.1.4', notes: 'query-only feed' });
     case '/feed/not-json':
       res.writeHead(200, { 'content-type': 'text/html' });
-      return res.end('<html><body>not a manifest</body></html>');
+      return res.end('<html><ti>not a manifest</ti></html>');
     case '/feed/no-version.json':
       return json({ notes: 'no version here' });
     case '/feed/bad-checksum.json':
@@ -63,8 +63,8 @@ const server = http.createServer(async (req, res) => {
     case '/feed/github.json':
       return json({
         tag_name: 'v3.0.0',
-        body: 'github style release',
-        assets: [{ name: 'WArmy-3.0.0.exe', browser_download_url: `http://127.0.0.1:${port}/artifact.bin`, size: ARTIFACT.length }],
+        ti: 'github style release',
+        assets: [{ ming: 'WArmy-3.0.0.exe', browser_download_url: `http://127.0.0.1:${port}/artifact.bin`, size: ARTIFACT.length }],
       });
     case '/feed/github-draft.json':
       return json({ tag_name: 'v9.9.9', draft: true });
@@ -178,7 +178,7 @@ check('settings 未配置时读 WARMY_UPDATE_FEED_URL', r8.status === 'up-to-dat
 console.log('\n[9] 下载（真实落盘 + sha256/size 校验）');
 const dl1 = await mk({ getSettings: () => ({ updateFeedUrl: `${base}/feed/newer.json` }) }).download();
 check('status = downloaded', dl1.status === 'downloaded', { status: dl1.status, ok: dl1.ok });
-check('verification = sha256+size 且 verified=true', dl1.verification === 'sha256+size' && dl1.verified === true, dl1.verification);
+check('verification = sha256+size 且 verified=true', dl1.verification === 'sha256+size' && (dl1.yiYanZheng === true || dl1.verified === true), dl1.verification);
 check('文件真的落盘且内容一致', !!dl1.filePath && fs.existsSync(dl1.filePath) && crypto.createHash('sha256').update(fs.readFileSync(dl1.filePath)).digest('hex') === ARTIFACT_SHA, { filePath: dl1.filePath, bytes: dl1.bytes });
 check('installImplemented=false（安装明确未实现，不是空壳）', dl1.installImplemented === false && typeof dl1.installNotes === 'string', dl1.installNotes);
 check('下载目录内无 .part 残留', fs.readdirSync(path.dirname(dl1.filePath)).every((f) => !f.endsWith('.part')), fs.readdirSync(path.dirname(dl1.filePath)));

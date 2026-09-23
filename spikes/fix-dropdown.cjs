@@ -1,15 +1,15 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
-let c = fs.readFileSync(base + 'app.css', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
+let c = fs.readFileSync(base + 'yingYong.css', 'utf8');
 
 // ── CSS：下拉菜单改为 fixed 定位，脱离 overflow 容器 ──
 c = c.replace(
-  `.urg-menu {
+  `.jinJiCaiDan {
   position: absolute;
   bottom: calc(100% + 6px);
   left: 0;`,
-  `.urg-menu {
+  `.jinJiCaiDan {
   position: fixed;
   z-index: 500;`
 );
@@ -36,18 +36,18 @@ if (!j.includes('positionMenuFixed')) {
 j = j.replace(
   `    trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      menu.classList.toggle('hidden');
+      menu.classList.toggle('yinCang');
     });
-    document.addEventListener('click', () => menu.classList.add('hidden'));
+    document.addEventListener('click', () => menu.classList.add('yinCang'));
 
     menu.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-s]');`,
   `    trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      menu.classList.toggle('hidden');
-      if (!menu.classList.contains('hidden')) positionMenuFixed(trigger, menu);
+      menu.classList.toggle('yinCang');
+      if (!menu.classList.contains('yinCang')) positionMenuFixed(trigger, menu);
     });
-    document.addEventListener('click', () => menu.classList.add('hidden'));
+    document.addEventListener('click', () => menu.classList.add('yinCang'));
 
     menu.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-s]');`
@@ -57,18 +57,18 @@ j = j.replace(
 j = j.replace(
   `    trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      menu.classList.toggle('hidden');
+      menu.classList.toggle('yinCang');
     });
-    document.addEventListener('click', () => menu.classList.add('hidden'));
+    document.addEventListener('click', () => menu.classList.add('yinCang'));
 
     menu.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-u]');`,
   `    trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      menu.classList.toggle('hidden');
-      if (!menu.classList.contains('hidden')) positionMenuFixed(trigger, menu);
+      menu.classList.toggle('yinCang');
+      if (!menu.classList.contains('yinCang')) positionMenuFixed(trigger, menu);
     });
-    document.addEventListener('click', () => menu.classList.add('hidden'));
+    document.addEventListener('click', () => menu.classList.add('yinCang'));
 
     menu.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-u]');`
@@ -76,20 +76,20 @@ j = j.replace(
 
 // 更多菜单：打开时定位
 j = j.replace(
-  `  $('more-trigger')?.addEventListener('click', (e) => {
+  `  $('gengDuoTrigger')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    $('more-menu')?.classList.toggle('hidden');
+    $('gengDuoCaiDan')?.classList.toggle('yinCang');
   });`,
-  `  $('more-trigger')?.addEventListener('click', (e) => {
+  `  $('gengDuoTrigger')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    const menu = $('more-menu');
-    menu?.classList.toggle('hidden');
-    if (menu && !menu.classList.contains('hidden')) positionMenuFixed($('more-trigger'), menu);
+    const menu = $('gengDuoCaiDan');
+    menu?.classList.toggle('yinCang');
+    if (menu && !menu.classList.contains('yinCang')) positionMenuFixed($('gengDuoTrigger'), menu);
   });`
 );
 
-fs.writeFileSync(base + 'app.js', j);
-fs.writeFileSync(base + 'app.css', c);
+fs.writeFileSync(base + 'yingYong.js', j);
+fs.writeFileSync(base + 'yingYong.css', c);
 console.log('done');
 console.log('  positionMenuFixed:', j.includes('positionMenuFixed'));
-console.log('  urg-menu fixed:', c.includes('position: fixed'));
+console.log('  jinJiCaiDan fixed:', c.includes('position: fixed'));

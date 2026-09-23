@@ -51,7 +51,7 @@ import {
 
 /** 身份提供方（身份层注入） */
 export interface ShenfenGongyingshang {
-  readonly fingerprint: string;
+  readonly zhiWen: string;
   readonly publicKey: Zijie | string;
   sign(message: Uint8Array): Zijie | string | Promise<Zijie | string>;
   verify(message: Uint8Array, signature: Zijie | string, publicKey: Zijie | string): boolean | Promise<boolean>;
@@ -76,7 +76,7 @@ export class ShenfenQiyueCuowu extends Error {
 export interface GuifanShenfen {
   /** 显式标记，避免"鸭子类型"把裸 provider 误当成已校验身份（校验会被跳过） */
   readonly normalizedIdentity: true;
-  fingerprint: string;
+  zhiWen: string;
   publicKey: Buffer;
   sign(message: Zijie): Promise<Buffer>;
   verify(message: Zijie, signature: Zijie, publicKey: Zijie): Promise<boolean>;
@@ -123,13 +123,13 @@ export async function guiFanShenFen(
         '可用 `normalizeEd25519PublicKey()` / `ed25519SpkiDerFromRaw()` 做转换。'
     );
   }
-  if (typeof provider.fingerprint !== 'string' || provider.fingerprint.length === 0) {
+  if (typeof provider.zhiWen !== 'string' || provider.zhiWen.length === 0) {
     throw new ShenfenQiyueCuowu('identity.fingerprint 缺失');
   }
-  const derived = derivation(publicKey);
-  if (derived !== provider.fingerprint) {
+  const yiTuiDao = derivation(publicKey);
+  if (yiTuiDao !== provider.zhiWen) {
     throw new ShenfenQiyueCuowu(
-      `identity.fingerprint 与公钥不匹配：期望 ${derived}（由 fingerprintDerivation 推出），实际 ${provider.fingerprint}`
+      `identity.fingerprint 与公钥不匹配：期望 ${yiTuiDao}（由 fingerprintDerivation 推出），实际 ${provider.zhiWen}`
     );
   }
   if (typeof provider.sign !== 'function' || typeof provider.verify !== 'function') {
@@ -137,7 +137,7 @@ export async function guiFanShenFen(
   }
   const normalized: GuifanShenfen = {
     normalizedIdentity: true,
-    fingerprint: provider.fingerprint,
+    zhiWen: provider.zhiWen,
     publicKey,
     sign: async (message) => zhuanZiJieZu(await provider.sign(zhuanZiJieZu(message))),
     verify: async (message, signature, pk) => (await provider.verify(zhuanZiJieZu(message), zhuanZiJieZu(signature), zhuanZiJieZu(pk))) === true,
@@ -186,8 +186,8 @@ export async function yanZhengDuiDuanQianMing(
   if (local !== null) {
     if (local === false) return { ok: false, via: 'none' };
     if (identity?.requireInjectedVerify) {
-      const injected = await identity.verify(message, signature, publicKey);
-      return { ok: injected, via: 'both' };
+      const yiZhuRu = await identity.verify(message, signature, publicKey);
+      return { ok: yiZhuRu, via: 'both' };
     }
     return { ok: true, via: 'local-ed25519' };
   }
@@ -199,22 +199,22 @@ export async function yanZhengDuiDuanQianMing(
 export function chuangjianLinShiShenFen(seedLabel?: string): {
   provider: ShenfenGongyingshang;
   privateKey: Buffer;
-  fingerprint: string;
+  zhiWen: string;
 } {
   const keys = shengChengEd25519();
   void seedLabel;
-  const fingerprint = warmyZhiWen(keys.publicKey);
+  const zhiWen = warmyZhiWen(keys.publicKey);
   const provider: ShenfenGongyingshang = {
-    fingerprint,
+    zhiWen,
     publicKey: keys.publicKey,
     sign: (message) => signEd25519Local(message, keys.privateKey),
     verify: (message, signature, publicKey) =>
       verifyEd25519Local(message, zhuanZiJieZu(signature), zhuanZiJieZu(publicKey)) === true,
   };
-  return { provider, privateKey: keys.privateKey, fingerprint };
+  return { provider, privateKey: keys.privateKey, zhiWen };
 }
 
 /** 便于测试断言：返回身份的公开描述（不含私钥） */
-export function shuoMingShenFen(identity: GuifanShenfen | ShenfenGongyingshang): { fingerprint: string; publicKey: string } {
-  return { fingerprint: identity.fingerprint, publicKey: b64u(zhuanZiJieZu(identity.publicKey)) };
+export function shuoMingShenFen(identity: GuifanShenfen | ShenfenGongyingshang): { zhiWen: string; publicKey: string } {
+  return { zhiWen: identity.zhiWen, publicKey: b64u(zhuanZiJieZu(identity.publicKey)) };
 }

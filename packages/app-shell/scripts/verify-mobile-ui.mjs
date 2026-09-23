@@ -21,13 +21,13 @@ const ok = (c, l, extra) => {
   return !!c;
 };
 
-const ALLOW_CJK_IN_EN = ['app.zhName', 'settings.localeZh', 'about.copyrightBody', 'llm.toolRecallDesc'];
+const ALLOW_CJK_IN_EN = ['yingYong.zhName', 'settings.localeZh', 'about.copyrightBody', 'llm.toolRecallDesc'];
 const LATIN_WORD = /[A-Za-z]{3,}/;
 const CJK = /[\u4e00-\u9fff]/;
 
 async function main() {
   console.log('=== verify-mobile-ui @ CDP ' + PORT + ' ===');
-  const c = await attach(PORT, { label: 'mobile-ui', callTimeout: 12000 });
+  const c = await attach(PORT, { biaoQian: 'mobile-ui', callTimeout: 12000 });
   await c.send('Page.enable');
   await c.send('Runtime.enable');
   await c.send('Network.enable');
@@ -35,7 +35,7 @@ async function main() {
   await c.send('Page.reload', { ignoreCache: true });
   await sleep(2000);
   await c.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
-  await c.waitFor('typeof window.__MOBILE__ === "object" && typeof window.__MOBILE_I18N_AUDIT__ === "function"', { timeout: 12000, label: '移动端脚本启动' });
+  await c.waitFor('typeof window.__MOBILE__ === "object" && typeof window.__MOBILE_I18N_AUDIT__ === "function"', { timeout: 12000, biaoQian: '移动端脚本启动' });
 
   const ev = (expr) => c.evaluate(expr);
 
@@ -56,8 +56,8 @@ async function main() {
     return { ok:true, box };
   }
 
-  async function snap(name) {
-    const r = await c.snap(path.join(SHOTS, name + '.png'), { timeout: 6000 });
+  async function snap(ming) {
+    const r = await c.snap(path.join(SHOTS, ming + '.png'), { timeout: 6000 });
     return r && r.ok;
   }
 
@@ -104,22 +104,22 @@ async function main() {
   await snap('zh-home');
 
   // ── 2. Tab 切换 + 真触摸 ──
-  for (const tab of ['cattle', 'board', 'me', 'sessions']) {
+  for (const tab of ['cattle', 'board', 'wo', 'sessions']) {
     const r = await touch(`#tabs button[data-tab="${tab}"]`);
-    const on = await ev(`(function(){ const b=document.querySelector('#tabs button[data-tab="${tab}"]'); return !!(b && b.classList.contains('on')); })()`);
-    ok(r.ok && on, `Tab 真触摸切换: ${tab}`, JSON.stringify({ hit: r.box && r.box.text, on }));
+    const qiYong = await ev(`(function(){ const b=document.querySelector('#tabs button[data-tab="${tab}"]'); return !!(b && b.classList.contains('qiYong')); })()`);
+    ok(r.ok && qiYong, `Tab 真触摸切换: ${tab}`, JSON.stringify({ hit: r.box && r.box.text, qiYong }));
   }
 
   // ── 3. 会话 → 聊天 → 底部面板 → 6 个三级页 ──
   await touch('#tabs button[data-tab="sessions"]');
   await sleep(150);
-  const chatTouch = await touch('#tabs-host .row[data-open="demo-1"]');
-  const pageN = await ev(`document.querySelectorAll('#page-host .page').length`);
+  const chatTouch = await touch('#tabsHost .hang[data-open="demo-1"]');
+  const pageN = await ev(`document.querySelectorAll('#pageHost .page').length`);
   ok(chatTouch.ok && pageN >= 1, 'A2 会话行触摸打开聊天', JSON.stringify({ pageN, box: chatTouch.box }));
 
-  const moreTouch = await touch('.page.on .iconbtn[data-act="more"], .page .iconbtn[data-act="more"]');
+  const moreTouch = await touch('.page.qiYong .iconbtn[data-act="more"], .page .iconbtn[data-act="more"]');
   await sleep(200);
-  const sheetOn = await ev(`!!(document.querySelector('#sheet') && document.querySelector('#sheet').classList.contains('on'))`);
+  const sheetOn = await ev(`!!(document.querySelector('#sheet') && document.querySelector('#sheet').classList.contains('qiYong'))`);
   ok(moreTouch.ok && sheetOn, 'A2 聊天「…」打开底部面板', sheetOn);
   await snap('sheet');
 
@@ -133,54 +133,54 @@ async function main() {
   ];
   for (const [act, kind] of panels) {
     // re-open sheet each time
-    const pagesBefore = await ev(`document.querySelectorAll('#page-host .page').length`);
+    const pagesBefore = await ev(`document.querySelectorAll('#pageHost .page').length`);
     await touch('#tabs button[data-tab="sessions"]');
     await sleep(120);
-    await touch('#tabs-host .row[data-open="demo-1"]');
+    await touch('#tabsHost .hang[data-open="demo-1"]');
     await sleep(200);
     await touch('.page .iconbtn[data-act="more"]');
     await sleep(220);
     const tr = await touch(`#sheet button[data-sheet="${act}"]`);
     await sleep(320);
     const info = await ev(`(function(){
-      const pages = Array.from(document.querySelectorAll('#page-host .page'));
+      const pages = Array.from(document.querySelectorAll('#pageHost .page'));
       const top = pages[pages.length-1];
-      if (!top) return { open:false };
+      if (!top) return { daKai:false };
       const back = !!top.querySelector('[data-act="back"]');
-      const body = top.querySelector('[data-panel]') || top.querySelector('.body');
-      return { open:true, panel: body && body.getAttribute('data-panel'), back, text:(top.innerText||'').slice(0,80), opaque: (function(){
+      const ti = top.querySelector('[data-panel]') || top.querySelector('.ti');
+      return { daKai:true, panel: ti && ti.getAttribute('data-panel'), back, text:(top.innerText||'').slice(0,80), opaque: (function(){
         let el=top; while(el){ const bg=getComputedStyle(el).backgroundColor; if(bg && bg!=='rgba(0, 0, 0, 0)' && bg!=='transparent') return bg; el=el.parentElement;} return null;
       })() };
     })()`);
-    ok(tr.ok && info.open && info.back && info.panel === kind, `A2 面板 ${act} 滑入三级页且有返回`, JSON.stringify({ hit: tr.box, info }));
+    ok(tr.ok && info.daKai && info.back && info.panel === kind, `A2 面板 ${act} 滑入三级页且有返回`, JSON.stringify({ hit: tr.box, info }));
     // back
-    await touch('#page-host .page.on [data-act="back"], #page-host .page:last-child [data-act="back"]');
+    await touch('#pageHost .page.qiYong [data-act="back"], #pageHost .page:last-child [data-act="back"]');
     await sleep(280);
   }
   await snap('panel-after');
 
   // ── 4. 页面不透明（亮/暗）──
   async function assertPageOpaque(theme) {
-    await touch('#tabs button[data-tab="me"]');
+    await touch('#tabs button[data-tab="wo"]');
     await sleep(120);
     await touch('.tab-page .cell[data-act="set-appearance"]');
     await sleep(280);
     if (theme === 'dark') {
       await touch('.page .cell[data-act="theme-dark"]');
       await sleep(280);
-      await touch('.tab-page .cell[data-act="set-appearance"], #tabs-host .cell[data-act="set-appearance"]');
+      await touch('.tab-page .cell[data-act="set-appearance"], #tabsHost .cell[data-act="set-appearance"]');
       await sleep(250);
     } else if (theme === 'light') {
       await touch('.page .cell[data-act="theme-light"]');
       await sleep(220);
     }
-    // open provider page
-    await touch('#tabs button[data-tab="me"]');
+    // daKai provider page
+    await touch('#tabs button[data-tab="wo"]');
     await sleep(120);
     await touch('.tab-page .cell[data-act="set-provider"]');
     await sleep(300);
     const alphaInfo = await ev(`(function(){
-      const pages = document.querySelectorAll('#page-host .page');
+      const pages = document.querySelectorAll('#pageHost .page');
       const top = pages[pages.length-1];
       if (!top) return { found:false };
       let el = top;
@@ -209,7 +209,7 @@ async function main() {
   await assertPageOpaque('dark');
   await snap('page-provider-dark');
   // restore light
-  await touch('#tabs button[data-tab="me"]');
+  await touch('#tabs button[data-tab="wo"]');
   await sleep(100);
   await touch('.tab-page .cell[data-act="set-appearance"]');
   await sleep(220);
@@ -222,21 +222,21 @@ async function main() {
   await sleep(250);
   for (const group of ['appearance', 'provider', 'smtp', 'mesh', 'about']) {
     await ev(`(function(){ if (window.__MOBILE__ && window.__MOBILE__.popAll) window.__MOBILE__.popAll(); return true;})()`);
-    await touch('#tabs button[data-tab="me"]');
+    await touch('#tabs button[data-tab="wo"]');
     await sleep(120);
     const tr = await touch(`.tab-page .cell[data-act="set-${group}"]`);
     await sleep(280);
     const info = await ev(`(function(){
-      const pages=document.querySelectorAll('#page-host .page'); const top=pages[pages.length-1];
-      return top? { title:(top.querySelector('.bar .title')||{}).textContent, back:!!top.querySelector('[data-act="back"]') } : {title:null};
+      const pages=document.querySelectorAll('#pageHost .page'); const top=pages[pages.length-1];
+      return top? { title:(top.querySelector('.tiao .biaoTi')||{}).textContent, back:!!top.querySelector('[data-act="back"]') } : {title:null};
     })()`);
-    ok(tr.ok && info.back && info.title, `A5 设置项可进: ${group}`, JSON.stringify(info));
-    await touch('#page-host .page:last-child [data-act="back"], #page-host .page.on [data-act="back"]');
+    ok(tr.ok && info.back && info.biaoTi, `A5 设置项可进: ${group}`, JSON.stringify(info));
+    await touch('#pageHost .page:last-child [data-act="back"], #pageHost .page.qiYong [data-act="back"]');
     await sleep(200);
   }
 
   // language switch
-  await touch('#tabs button[data-tab="me"]');
+  await touch('#tabs button[data-tab="wo"]');
   await sleep(100);
   await touch('.tab-page .cell[data-act="set-appearance"]');
   await sleep(280);
@@ -245,9 +245,9 @@ async function main() {
   const afterEn = await ev(`(function(){
     const a = window.__MOBILE_I18N_AUDIT__();
     const phone = document.querySelector('#phone');
-    return { locale:a.locale, docLang:a.localeDoc, aligned:a.keyAligned, sample:(phone&&phone.innerText||'').slice(0,160), title:document.title };
+    return { yuYan:a.yuYan, docLang:a.localeDoc, aligned:a.keyAligned, sample:(phone&&phone.innerText||'').slice(0,160), title:document.title };
   })()`);
-  ok(langTr.ok && afterEn.locale === 'en-US' && afterEn.docLang === 'en-US', 'A5 语言切换到 en-US 生效', JSON.stringify(afterEn));
+  ok(langTr.ok && afterEn.yuYan === 'en-US' && afterEn.docLang === 'en-US', 'A5 语言切换到 en-US 生效', JSON.stringify(afterEn));
   ok(afterEn.aligned, 'A5 切换后探针仍显示键集合一致', afterEn.aligned);
 
   const enBad = await ev(`(function(){
@@ -257,9 +257,9 @@ async function main() {
     lines.forEach(function(line){
       if (!CJS.test(line) && false) return;
       if (!/[\u4e00-\u9fff]/.test(line)) return;
-      // allow product exceptions via keys rendered as Chinese in en? should be none except brand
+      // allow chanPin exceptions via keys rendered as Chinese in en? should be none except brand
       if (/无限牛马/.test(line) && /WArmy/.test(line)) return;
-      if (/中文/.test(line)) return; // locale option
+      if (/中文/.test(line)) return; // yuYan option
       bad.push(line);
     });
     return bad.slice(0,10);
@@ -288,24 +288,24 @@ async function main() {
   // ⚠️ act-diag 不在这里：卡顿自检是产品负责人退休掉的功能（桌面端入口整块移除），
   //    移动端那条「诊断」行是**悬空入口**，已删除；它由下面那条反向断言守着（必须不存在）。
   for (const act of ['act-models', 'act-skills', 'act-cleanup', 'act-updates']) {
-    await touch('#tabs button[data-tab="me"]');
+    await touch('#tabs button[data-tab="wo"]');
     await sleep(100);
     const tr = await touch(`.tab-page .cell[data-act="${act}"]`);
     await sleep(280);
     const info = await ev(`(function(){
-      const pages=document.querySelectorAll('#page-host .page'); const top=pages[pages.length-1];
-      if (!top) return {open:false};
-      return { open:true, back:!!top.querySelector('[data-act="back"]'), text:(top.innerText||'').slice(0,120), hasDesktopOnly: (top.innerText||'').indexOf('桌面')!==-1 || (top.innerText||'').toLowerCase().indexOf('desktop')!==-1 };
+      const pages=document.querySelectorAll('#pageHost .page'); const top=pages[pages.length-1];
+      if (!top) return {daKai:false};
+      return { daKai:true, back:!!top.querySelector('[data-act="back"]'), text:(top.innerText||'').slice(0,120), hasDesktopOnly: (top.innerText||'').indexOf('桌面')!==-1 || (top.innerText||'').toLowerCase().indexOf('desktop')!==-1 };
     })()`);
-    ok(tr.ok && info.open && info.back && info.hasDesktopOnly, `A6 ${act} 明确提示桌面端`, JSON.stringify(info));
-    await touch('#page-host .page:last-child [data-act="back"]');
+    ok(tr.ok && info.daKai && info.back && info.hasDesktopOnly, `A6 ${act} 明确提示桌面端`, JSON.stringify(info));
+    await touch('#pageHost .page:last-child [data-act="back"]');
     await sleep(180);
   }
 
   // 退休功能「卡顿自检（诊断）」的悬空入口必须真的没了：
   // 结构上（没有 data-act="act-diag" 的单元、行为项只剩 4 条）+ 文案上（该文案不再出现在「我」页）。
   // 与上面那 4 条行为项检查一对一：少一条行为项，就补一条「已移除」的反向检查。
-  await touch('#tabs button[data-tab="me"]');
+  await touch('#tabs button[data-tab="wo"]');
   await sleep(150);
   const dangling = await ev(`(function(){
     const acts = Array.from(document.querySelectorAll('.tab-page .cell[data-act]'))
@@ -313,9 +313,9 @@ async function main() {
       .filter(function(a){ return a.indexOf('act-') === 0; });
     const cell = document.querySelector('.tab-page .cell[data-act="act-diag"]');
     const zhPack = (window.__I18N_ALL__ && window.__I18N_ALL__['zh-CN']) || {};
-    const label = zhPack['me.diagnostics'];
-    const txt = (document.querySelector('#tabs-host')||{}).innerText || '';
-    return JSON.stringify({ hasCell: !!cell, acts: acts, labelRendered: !!label && txt.indexOf(label) !== -1 });
+    const biaoQian = zhPack['wo.diagnostics'];
+    const txt = (document.querySelector('#tabsHost')||{}).innerText || '';
+    return JSON.stringify({ hasCell: !!cell, acts: acts, labelRendered: !!biaoQian && txt.indexOf(biaoQian) !== -1 });
   })()`);
   const danglingObj = JSON.parse(dangling);
   ok(danglingObj.hasCell === false && danglingObj.acts.length === 4 && danglingObj.acts.indexOf('act-diag') === -1 && danglingObj.labelRendered === false,
@@ -324,19 +324,19 @@ async function main() {
   // ── 7. 实例按钮状态真变 + 无裸字母 a ──
   await touch('#tabs button[data-tab="cattle"]');
   await sleep(150);
-  const instTr = await touch('#tabs-host .row[data-inst="demo-2"]');
+  const instTr = await touch('#tabsHost .hang[data-inst="demo-2"]');
   await sleep(280);
-  const beforeStatus = await ev(`(function(){ const el=document.querySelector('#page-host .page:last-child [data-inst-status]'); return el? el.innerText.trim(): null; })()`);
-  const startTr = await touch('.page .inst-actions [data-act="inst-start"]');
+  const beforeStatus = await ev(`(function(){ const el=document.querySelector('#pageHost .page:last-child [data-inst-status]'); return el? el.innerText.trim(): null; })()`);
+  const startTr = await touch('.page .shiLiDongZuoJi [data-act="inst-start"]');
   await sleep(300);
-  const afterStatus = await ev(`(function(){ const el=document.querySelector('#page-host .page:last-child [data-inst-status]'); return el? {text: el.innerText.trim(), html: el.innerHTML.slice(0,80)}: null; })()`);
-  const toastText = await ev(`(function(){ const t=document.querySelector('#toast'); return t? {text:t.textContent, on:t.classList.contains('on')}:null; })()`);
+  const afterStatus = await ev(`(function(){ const el=document.querySelector('#pageHost .page:last-child [data-inst-status]'); return el? {text: el.innerText.trim(), html: el.innerHTML.slice(0,80)}: null; })()`);
+  const toastText = await ev(`(function(){ const t=document.querySelector('#toast'); return t? {text:t.textContent, qiYong:t.classList.contains('qiYong')}:null; })()`);
   ok(instTr.ok && startTr.ok && afterStatus && afterStatus.text && afterStatus.text !== beforeStatus, 'A4 实例启动按钮后状态文字变化', JSON.stringify({ beforeStatus, afterStatus, toastText }));
 
   const bareLetter = await ev(`(function(){
-    const pages=document.querySelectorAll('#page-host .page');
+    const pages=document.querySelectorAll('#pageHost .page');
     const top=pages[pages.length-1] || document;
-    const nodes=top.querySelectorAll('.av, .status-dot, .av-dot');
+    const nodes=top.querySelectorAll('.av, .zhuangTaiDian, .avDian');
     const bad=[];
     nodes.forEach(function(n){
       const txt=(n.textContent||'').trim();
@@ -346,23 +346,23 @@ async function main() {
   })()`);
   ok(bareLetter.length === 0, 'A11 状态/头像无裸字母 a', JSON.stringify(bareLetter));
   await snap('instance-actions');
-  await touch('#page-host .page:last-child [data-act="back"]');
+  await touch('#pageHost .page:last-child [data-act="back"]');
   await sleep(200);
 
   // ── 8. 看板手动加任务 + AI 生成反馈 ──
   await touch('#tabs button[data-tab="board"]');
   await sleep(200);
   const setVal = await ev(`(function(){
-    const inp=document.querySelector('#board-task-input');
+    const inp=document.querySelector('#kanbanRenwuShuRu');
     if(!inp) return false;
     inp.value='UIQA-TASK-001';
     inp.dispatchEvent(new Event('input',{bubbles:true}));
     return true;
   })()`);
-  const addTr = await touch('.tab-page [data-act="board-add"]');
+  const addTr = await touch('.tab-page [data-act="kanbanTianJia"]');
   await sleep(280);
   const boardAfter = await ev(`(function(){
-    const list=document.querySelector('#board-task-list');
+    const list=document.querySelector('#kanbanRenwuLieBiao');
     const text=(list&&list.innerText)||'';
     const toast=document.querySelector('#toast');
     return { hasTask: text.indexOf('UIQA-TASK-001')!==-1, text:text.slice(0,120), toast: toast? toast.textContent: '', count: window.__MOBILE__.state.boardTasks.length };
@@ -372,53 +372,53 @@ async function main() {
   await sleep(220);
   const aiToast = await ev(`(function(){ const t=document.querySelector('#toast'); return t? t.textContent: ''; })()`);
   ok(aiTr.ok && aiToast && aiToast.length > 4, 'A7「让 AI 生成」有明确 i18n 反馈', aiToast);
-  await snap('board-add');
+  await snap('kanbanTianJia');
 
   // ── 9. 知识库条目进详情 ──
   await touch('#tabs button[data-tab="sessions"]');
   await sleep(120);
-  await touch('#tabs-host .row[data-open="demo-1"]');
+  await touch('#tabsHost .hang[data-open="demo-1"]');
   await sleep(220);
   await touch('.page .iconbtn[data-act="more"]');
   await sleep(220);
   await touch('#sheet button[data-sheet="p-kb"]');
   await sleep(320);
-  const kbCell = await touch('.page:last-child .cell[data-act="kb-open"], .page.on .cell[data-kb]');
+  const kbCell = await touch('.page:last-child .cell[data-act="kb-open"], .page.qiYong .cell[data-kb]');
   await sleep(320);
   const kbInfo = await ev(`(function(){
-    const pages=document.querySelectorAll('#page-host .page'); const top=pages[pages.length-1];
+    const pages=document.querySelectorAll('#pageHost .page'); const top=pages[pages.length-1];
     return top? { text:(top.innerText||'').slice(0,100), back:!!top.querySelector('[data-act="back"]'), depth:pages.length } : null;
   })()`);
   ok(kbCell.ok && kbInfo && kbInfo.back && kbInfo.depth >= 2, 'A8 知识库条目滑入详情且可返回', JSON.stringify({ kbCell: kbCell.box, kbInfo }));
   await snap('kb-detail');
-  await touch('#page-host .page:last-child [data-act="back"]');
+  await touch('#pageHost .page:last-child [data-act="back"]');
   await sleep(200);
-  await touch('#page-host .page:last-child [data-act="back"]');
+  await touch('#pageHost .page:last-child [data-act="back"]');
   await sleep(200);
 
   // ── 10. 聊天图标 tooltip + 未读角标可点 ──
   const tips = await ev(`(function(){
-    const btns=Array.from(document.querySelectorAll('.bar .iconbtn, .tabs button'));
-    return btns.map(function(b){ return { title:b.getAttribute('title')||'', aria:b.getAttribute('aria-label')||'', act:b.getAttribute('data-act')||b.getAttribute('data-tab')||'' }; });
+    const btns=Array.from(document.querySelectorAll('.tiao .iconbtn, .tabs button'));
+    return btns.map(function(b){ return { title:b.getAttribute('title')||b.getAttribute('biaoTi')||'', aria:b.getAttribute('aria-label')||'', act:b.getAttribute('data-act')||b.getAttribute('data-tab')||'' }; });
   })()`);
-  const moreTip = tips.find((x) => x.act === 'more' || x.title || x.aria);
-  ok(tips.length > 0 && tips.every((x) => x.title || x.aria), 'A9 图标均有 tooltip/aria-label（i18n）', JSON.stringify(tips.slice(0, 6)));
+  const moreTip = tips.find((x) => x.act === 'more' || x.biaoTi || x.aria);
+  ok(tips.length > 0 && tips.every((x) => x.biaoTi || x.aria), 'A9 图标均有 tooltip/aria-label（i18n）', JSON.stringify(tips.slice(0, 6)));
 
   await touch('#tabs button[data-tab="sessions"]');
   await sleep(150);
-  const badgeTouch = await touch('#tabs-host .row[data-open="demo-1"] .badge');
+  const badgeTouch = await touch('#tabsHost .hang[data-open="demo-1"] .huiZhang');
   await sleep(280);
-  const badgeOpen = await ev(`document.querySelectorAll('#page-host .page').length >= 1`);
+  const badgeOpen = await ev(`document.querySelectorAll('#pageHost .page').length >= 1`);
   ok((badgeTouch.ok && badgeOpen) || badgeTouch.box === null, 'A9 未读角标可点进会话（整行热区）', JSON.stringify({ badgeTouch, badgeOpen }));
 
   // ── 11. 面板条目视觉反馈高度稳定（sheet button min-height）──
   const sheetGeo = await ev(`(function(){
-    // open sheet
+    // daKai sheet
     return null;
   })()`);
   await touch('#tabs button[data-tab="sessions"]');
   await sleep(100);
-  await touch('#tabs-host .row[data-open="demo-1"]');
+  await touch('#tabsHost .hang[data-open="demo-1"]');
   await sleep(220);
   await touch('.page .iconbtn[data-act="more"]');
   await sleep(220);
@@ -437,7 +437,7 @@ async function main() {
   await touch('#tabs button[data-tab="sessions"]');
   await sleep(150);
   const rowPad = await ev(`(function(){
-    const rows=Array.from(document.querySelectorAll('#tabs-host .row'));
+    const rows=Array.from(document.querySelectorAll('#tabsHost .hang'));
     return rows.map(function(r){ const cs=getComputedStyle(r); return {pt:cs.paddingTop, pb:cs.paddingBottom, h:Math.round(r.getBoundingClientRect().height)}; });
   })()`);
   const padOk = rowPad.every((r) => parseFloat(r.pt) <= 14 && parseFloat(r.pb) <= 14 && r.h >= 48 && r.h <= 72);
@@ -449,8 +449,8 @@ async function main() {
 
   // ── 14. 空状态不是「未绑定/未设置」──
   const meText = await ev(`(function(){
-    document.querySelector('#tabs button[data-tab="me"]').click();
-    return (document.querySelector('#tabs-host')||{}).innerText || '';
+    document.querySelector('#tabs button[data-tab="wo"]').click();
+    return (document.querySelector('#tabsHost')||{}).innerText || '';
   })()`);
   ok(!/未绑定|未设置/.test(meText), 'A13「我的」页无「未绑定/未设置」误导文案', meText.slice(0, 80));
   ok(/桌面/.test(meText) || /desktop/i.test(meText), 'A13 行为项显示可行动提示', meText.slice(0, 120));
@@ -470,21 +470,21 @@ async function main() {
   const meshObj = JSON.parse(meshState);
   ok(meshObj.port === 59599, 'T195-1 移动端组网端口默认 = 59599（与桌面端 WARMY_DEFAULT_NET_PORT 一致，不是旧的 7788）', meshState);
 
-  await touch('#tabs button[data-tab="me"]');
+  await touch('#tabs button[data-tab="wo"]');
   await sleep(200);
-  const meRowsText = await ev(`(function(){ return (document.querySelector('#tabs-host')||{}).innerText || ''; })()`);
+  const meRowsText = await ev(`(function(){ return (document.querySelector('#tabsHost')||{}).innerText || ''; })()`);
   ok(meRowsText.indexOf('59599') !== -1, 'T195-2 「我」页的组网行显示真实端口 59599', String(meRowsText).replace(/\s+/g, ' ').slice(0, 90));
 
   await touch('.tab-page .cell[data-act="set-mesh"]');
   await sleep(300);
   const meshPage = await ev(`(function(){
-    var pages = document.querySelectorAll('#page-host .page');
+    var pages = document.querySelectorAll('#pageHost .page');
     var top = pages[pages.length - 1];
-    return JSON.stringify({ title: top ? (top.querySelector('.bar .title')||{}).textContent : null, text: top ? (top.innerText||'') : '' });
+    return JSON.stringify({ title: top ? (top.querySelector('.tiao .biaoTi')||{}).textContent : null, text: top ? (top.innerText||'') : '' });
   })()`);
   const meshPageObj = JSON.parse(meshPage);
-  ok(meshPageObj.title && meshPageObj.title.indexOf('多节点') === -1 && /组网/.test(meshPageObj.title),
-    'T195-3 组网页标题是新概念「组网」，不含退休的「多节点」', JSON.stringify({ title: meshPageObj.title }));
+  ok(meshPageObj.biaoTi && meshPageObj.biaoTi.indexOf('多节点') === -1 && /组网/.test(meshPageObj.biaoTi),
+    'T195-3 组网页标题是新概念「组网」，不含退休的「多节点」', JSON.stringify({ title: meshPageObj.biaoTi }));
   ok(String(meshPageObj.text).indexOf('7788') === -1, 'T195-3 组网页里没有旧端口 7788', String(meshPageObj.text).replace(/\s+/g, ' ').slice(0, 90));
   ok(/组网开关/.test(String(meshPageObj.text)), 'T195-3 状态行用桌面端同款措辞「组网开关」', String(meshPageObj.text).replace(/\s+/g, ' ').slice(0, 60));
 
@@ -492,7 +492,7 @@ async function main() {
   await touch('.page .cell[data-act="toggle-mesh"], .page button[data-act="toggle-mesh"]');
   await sleep(320);
   const meshOn = await ev(`(function(){
-    var pages = document.querySelectorAll('#page-host .page');
+    var pages = document.querySelectorAll('#pageHost .page');
     var top = pages[pages.length - 1];
     return top ? (top.innerText||'') : '';
   })()`);
@@ -508,12 +508,12 @@ async function main() {
   await sleep(400);
   await ev(`(function(){ window.__MOBILE__.popAll(); return true; })()`);
   await sleep(250);
-  await touch('#tabs button[data-tab="me"]');
+  await touch('#tabs button[data-tab="wo"]');
   await sleep(200);
   await touch('.tab-page .cell[data-act="set-mesh"]');
   await sleep(300);
   const meshEn = await ev(`(function(){
-    var pages = document.querySelectorAll('#page-host .page');
+    var pages = document.querySelectorAll('#pageHost .page');
     var top = pages[pages.length - 1];
     return top ? (top.innerText||'') : '';
   })()`);
@@ -526,7 +526,7 @@ async function main() {
   await sleep(250);
 
   // 全站扫描：任何页面都不该再出现 7788 / 多节点组网
-  await touch('#tabs button[data-tab="me"]');
+  await touch('#tabs button[data-tab="wo"]');
   await sleep(200);
   const legacy = await ev(`(function(){
     var txt = (document.querySelector('#phone')||{}).innerText || '';

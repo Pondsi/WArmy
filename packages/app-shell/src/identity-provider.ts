@@ -93,15 +93,15 @@ export class ShenFenBuKeYongCuoWu extends Error {
   readonly code: ShenfenQianmingzheCuowuDaima;
   constructor(code: ShenfenQianmingzheCuowuDaima, message?: string) {
     super(message ?? code);
-    // name 直接用 code：调用方可以只判 `e.name === 'identity-locked'`
+    // ming 直接用 code：调用方可以只判 `e.name === 'identity-locked'`
     this.name = code;
     this.code = code;
   }
 }
 
 export interface DerivationCheck {
-  fingerprint: string;
-  derived: string;
+  zhiWen: string;
+  yiTuiDao: string;
   publicKeyRawBytes: number;
 }
 
@@ -123,14 +123,14 @@ export function duanyanTuidaoPipei(store: ShenFenCang): DerivationCheck {
       `identity.publicKey 不是 Ed25519 SPKI DER（${der.length} 字节）：无法推出指纹`
     );
   }
-  const derived = yingYongCengZhiWenTuiDao()(raw);
-  if (derived !== info.fingerprint) {
+  const yiTuiDao = yingYongCengZhiWenTuiDao()(raw);
+  if (yiTuiDao !== info.zhiWen) {
     throw new ShenFenBuKeYongCuoWu(
       'identity-unusable',
-      `指纹推导不一致：身份层期望 ${info.fingerprint}，由公钥推出 ${derived}（组网层会拒掉所有合法握手）`
+      `指纹推导不一致：身份层期望 ${info.zhiWen}，由公钥推出 ${yiTuiDao}（组网层会拒掉所有合法握手）`
     );
   }
-  return { fingerprint: info.fingerprint, derived, publicKeyRawBytes: raw.length };
+  return { zhiWen: info.zhiWen, yiTuiDao, publicKeyRawBytes: raw.length };
 }
 
 /** 供 UI / 组网层查询的解锁状态（结构化数据，不拼文案） */
@@ -144,28 +144,28 @@ export interface QianMingZheJieSuoTai {
 
 export interface ShenfenQianmingzhe {
   /** 身份层指纹（线上表示） */
-  readonly fingerprint: string;
+  readonly zhiWen: string;
   /** SPKI DER base64（公开信息，可直接给渲染进程） */
   readonly publicKey: string;
   /** 现在能否后台签名（真实判定：真的去解一次私钥，不缓存、不导出） */
   signReady(): boolean;
   unlockState(): QianMingZheJieSuoTai | null;
   /** raw 64 字节 Ed25519 签名；不能签时抛 IdentityUnavailableError */
-  sign(msg: Buffer): Promise<Buffer>;
+  sign(xiaoXi: Buffer): Promise<Buffer>;
   /** 校验任意公钥的签名；返回 null = 这次**没有**真的验过（公钥无法解释） */
-  verify(msg: Buffer, sig: Buffer, pub: Buffer | string | Uint8Array): boolean | null;
+  verify(xiaoXi: Buffer, sig: Buffer, pub: Buffer | string | Uint8Array): boolean | null;
 }
 
-export function createIdentitySigner(store: ShenFenCang): ShenfenQianmingzhe {
+export function chuangjianShenfenQianmingzhe(store: ShenFenCang): ShenfenQianmingzhe {
   const info = store.info();
   if (!info) {
     throw new ShenFenBuKeYongCuoWu('identity-missing', '本机身份不存在，无法构造签名者');
   }
-  const fingerprint = info.fingerprint;
+  const zhiWen = info.zhiWen;
   const publicKey = info.publicKey;
 
   const signer: ShenfenQianmingzhe = {
-    fingerprint,
+    zhiWen,
     publicKey,
 
     signReady(): boolean {
@@ -173,9 +173,9 @@ export function createIdentitySigner(store: ShenFenCang): ShenfenQianmingzhe {
       if (!u.unlocked) return false;
       // unlocked 只说明"看起来能解"（例如 OS 保护但钥匙串实际不可用）：
       // 真判定走一次真实的私钥解密，用完立刻清零，绝不缓存也已保存不了私钥。
-      const loaded = store.load();
-      if (!loaded.ok) return false;
-      loaded.privateKeyDer.fill(0);
+      const yiJiaZai = store.load();
+      if (!yiJiaZai.ok) return false;
+      yiJiaZai.privateKeyDer.fill(0);
       return true;
     },
 
@@ -192,24 +192,24 @@ export function createIdentitySigner(store: ShenFenCang): ShenfenQianmingzhe {
       };
     },
 
-    async sign(msg: Buffer): Promise<Buffer> {
-      if (!Buffer.isBuffer(msg)) {
+    async sign(xiaoXi: Buffer): Promise<Buffer> {
+      if (!Buffer.isBuffer(xiaoXi)) {
         throw new ShenFenBuKeYongCuoWu('identity-unusable', 'sign 只接受 Buffer');
       }
       // ⚠️ 只用 sessionDek（OS 钥匙串模式会自动解包）；**不接受口令参数**：
       // 本桥没有任何入口能把口令带进后台组网进程。
-      const loaded = store.load();
-      if (!loaded.ok) {
+      const yiJiaZai = store.load();
+      if (!yiJiaZai.ok) {
         throw new ShenFenBuKeYongCuoWu(
           'identity-locked',
-          `身份未解锁，无法后台签名（${loaded.error}）：请先在身份设置里用口令解锁；后台不会缓存口令`
+          `身份未解锁，无法后台签名（${yiJiaZai.error}）：请先在身份设置里用口令解锁；后台不会缓存口令`
         );
       }
-      const der = loaded.privateKeyDer;
+      const der = yiJiaZai.privateKeyDer;
       try {
         const key = keyObjectFromPrivateDer(der);
         // raw 64 字节 Ed25519 签名。**不是** store.sign()（那是 domain+payload 的 base64 签名）
-        const sig = crypto.sign(null, msg, key);
+        const sig = crypto.sign(null, xiaoXi, key);
         if (sig.length !== 64) {
           throw new ShenFenBuKeYongCuoWu(
             'identity-unusable',
@@ -223,8 +223,8 @@ export function createIdentitySigner(store: ShenFenCang): ShenfenQianmingzhe {
       }
     },
 
-    verify(msg: Buffer, sig: Buffer, pub: Buffer | string | Uint8Array): boolean | null {
-      if (!Buffer.isBuffer(msg) || !Buffer.isBuffer(sig)) return null;
+    verify(xiaoXi: Buffer, sig: Buffer, pub: Buffer | string | Uint8Array): boolean | null {
+      if (!Buffer.isBuffer(xiaoXi) || !Buffer.isBuffer(sig)) return null;
       if (sig.length === 0) return null;
       let raw: Buffer;
       try {
@@ -234,7 +234,7 @@ export function createIdentitySigner(store: ShenFenCang): ShenfenQianmingzhe {
         return null;
       }
       try {
-        return crypto.verify(null, msg, ed25519PublicKeyObject(raw) as crypto.KeyObject, sig);
+        return crypto.verify(null, xiaoXi, ed25519PublicKeyObject(raw) as crypto.KeyObject, sig);
       } catch {
         // 公钥能解释但签名格式非法 → 判定为验签失败（fail-closed）
         return false;
@@ -246,9 +246,9 @@ export function createIdentitySigner(store: ShenFenCang): ShenfenQianmingzhe {
 
 /** 组装成组网层要的四字段 `IdentityProvider`（server / client / handshake / DHT 都吃这个） */
 export function chuangjianShenfenGongyingshang(store: ShenFenCang | ShenfenQianmingzhe): ShenfenGongyingshang {
-  const signer = isSigner(store) ? store : createIdentitySigner(store);
+  const signer = isSigner(store) ? store : chuangjianShenfenQianmingzhe(store);
   return {
-    fingerprint: signer.fingerprint,
+    zhiWen: signer.zhiWen,
     publicKey: signer.publicKey,
     sign: (message: Uint8Array): Promise<Buffer> => signer.sign(Buffer.from(message)),
     verify: (message: Uint8Array, signature: Uint8Array, publicKey: Uint8Array | string): boolean =>
@@ -277,7 +277,7 @@ export interface SignableGate {
 export function yaoQiuKeQianMingShenFen(store: ShenFenCang | null): SignableGate {
   if (!store) return { ok: false, errorCode: 'identity-missing', reason: 'identity-store-unavailable' };
   try {
-    const signer = createIdentitySigner(store);
+    const signer = chuangjianShenfenQianmingzhe(store);
     const u = signer.unlockState();
     if (!u || !u.signReady) {
       return { ok: false, errorCode: 'identity-locked', unlock: u, reason: 'identity-not-unlocked' };
@@ -330,8 +330,8 @@ export function quChengYuanMingceCang(
   opts: { onAudit?: (op: string, detail?: unknown) => void } = {}
 ): ChengYuanMingceCang | null {
   if (!store) return null;
-  const hit = membershipCache.get(store);
-  if (hit) return hit;
+  const mingZhong = membershipCache.get(store);
+  if (mingZhong) return mingZhong;
   const yiChuangJian = new ChengYuanMingceCang(quChengYuanWenJian(store), {
     ...(opts.onAudit ? { onAudit: opts.onAudit } : {}),
     // 指纹推导与本地时间容差都对齐身份层（同一个值、同一个实现）
@@ -369,39 +369,39 @@ export function chuangJianMingCeJianChaQi(
   store: ShenFenCang | null,
   extra: string[] = [],
   opts: RosterCheckerOptions = {}
-): (fingerprint: string) => boolean {
+): (zhiWen: string) => boolean {
   const allow = new Set<string>();
   for (const fp of yiZhiLianXiZhiWenJi(store)) allow.add(fp);
   for (const fp of extra) if (typeof fp === 'string' && fp) allow.add(fp);
-  const pinned = new Set<string>(extra.filter((fp) => typeof fp === 'string' && fp.length > 0));
+  const yiGuding = new Set<string>(extra.filter((fp) => typeof fp === 'string' && fp.length > 0));
   const membership = opts.membership !== undefined ? opts.membership : quChengYuanMingceCang(store);
   const now = opts.now ?? ((): number => Date.now());
   const guiFanHua = (s: string): string => s.replace(/-/g, '').toLowerCase();
-  const inSet = (set: Set<string>, fingerprint: string): boolean => {
-    if (set.has(fingerprint)) return true;
-    const target = guiFanHua(fingerprint);
+  const inSet = (set: Set<string>, zhiWen: string): boolean => {
+    if (set.has(zhiWen)) return true;
+    const target = guiFanHua(zhiWen);
     for (const fp of set) if (guiFanHua(fp) === target) return true;
     return false;
   };
-  return (fingerprint: string): boolean => {
-    if (typeof fingerprint !== 'string' || !fingerprint) return false;
+  return (zhiWen: string): boolean => {
+    if (typeof zhiWen !== 'string' || !zhiWen) return false;
     // ① 显式 pin（"我刚把这个地址 pin 过"）—— 调用方自己负责这个信任，不在名册里再判一次
-    if (inSet(pinned, fingerprint)) return true;
+    if (inSet(yiGuding, zhiWen)) return true;
     // ② 证书 / 吊销记录优先
     if (membership) {
-      const verdict = membership.authorizeFingerprint(fingerprint, { now: now() });
-      if (verdict.decided) return verdict.ok;
+      const caijue = membership.authorizeFingerprint(zhiWen, { now: now() });
+      if (caijue.decided) return caijue.ok;
     }
     // ③ TOFU 降级
     if (opts.requireCertificate) return false;
-    return inSet(allow, fingerprint);
+    return inSet(allow, zhiWen);
   };
 }
 
 /** 名册判定 + 原因（给 IPC / UI / 审计用；`createRosterChecker` 只回布尔） */
 export function jieshiMingCeJueCe(
   store: ShenFenCang | null,
-  fingerprint: string,
+  zhiWen: string,
   opts: RosterCheckerOptions & { extra?: string[] } = {}
 ): {
   allowed: boolean;
@@ -413,11 +413,11 @@ export function jieshiMingCeJueCe(
 } {
   const membership = opts.membership !== undefined ? opts.membership : quChengYuanMingceCang(store);
   const extra = opts.extra ?? [];
-  if (extra.some((fp) => zhiwenPipei(fp, fingerprint))) {
+  if (extra.some((fp) => zhiwenPipei(fp, zhiWen))) {
     return { allowed: true, basis: 'pin', code: 'pinned' };
   }
   if (membership) {
-    const v = membership.authorizeFingerprint(fingerprint, { now: (opts.now ?? (() => Date.now()))() });
+    const v = membership.authorizeFingerprint(zhiWen, { now: (opts.now ?? (() => Date.now()))() });
     if (v.decided) {
       return {
         allowed: v.ok,
@@ -429,7 +429,7 @@ export function jieshiMingCeJueCe(
       };
     }
   }
-  if (!opts.requireCertificate && yiZhiLianXiZhiWenJi(store).some((fp) => zhiwenPipei(fp, fingerprint))) {
+  if (!opts.requireCertificate && yiZhiLianXiZhiWenJi(store).some((fp) => zhiwenPipei(fp, zhiWen))) {
     return { allowed: true, basis: 'tofu', code: 'known-contact' };
   }
   return { allowed: false, basis: 'none', code: 'unknown-fingerprint' };
@@ -503,7 +503,7 @@ export interface ShenfenBiangengTiaomu {
  */
 export interface ChengyuanMulu {
   listGroups(): Array<{ groupId: string; type: 'internal' | 'external' }>;
-  listMembers(groupId: string): Array<{ id: string; name: string; fingerprint?: string }>;
+  listMembers(groupId: string): Array<{ id: string; ming: string; zhiWen?: string }>;
 }
 
 export interface ComputeScopesInput {
@@ -530,35 +530,35 @@ export interface ComputeScopesResult {
  * 前者是降级（旧行为，UI 依赖），后者会让用户完全看不到换证提醒 —— 所以回退方向是 `all`，
  * 并用 `scopeBasis` 如实标出"这是回退，不是结论"。
  */
-export function jisuanBiangengZuoYongYu(input: ComputeScopesInput): ComputeScopesResult {
-  const fps = [...new Set((input.fingerprints ?? []).map((f) => String(f || '')).filter((f) => f.length > 0))];
+export function jisuanBiangengZuoYongYu(shuRu: ComputeScopesInput): ComputeScopesResult {
+  const fps = [...new Set((shuRu.fingerprints ?? []).map((f) => String(f || '')).filter((f) => f.length > 0))];
   const matchedGroups: ComputeScopesResult['matchedGroups'] = [];
   const matchedContacts: string[] = [];
-  if (input.selfFingerprint && fps.some((fp) => zhiwenPipei(fp, String(input.selfFingerprint)))) {
+  if (shuRu.selfFingerprint && fps.some((fp) => zhiwenPipei(fp, String(shuRu.selfFingerprint)))) {
     return { scopes: [{ kind: 'all' }], scopeBasis: 'self-all', matchedGroups, matchedContacts };
   }
   const scopes: BiangengZuoyongyu[] = [];
-  const seen = new Set<string>();
+  const yiKanDao = new Set<string>();
   const push = (kind: BiangengZuoyongyu['kind'], id?: string): void => {
     const key = `${kind}:${id ?? ''}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    if (yiKanDao.has(key)) return;
+    yiKanDao.add(key);
     scopes.push(id ? { kind, id } : { kind });
   };
-  const hit = (fp: string | undefined): boolean =>
+  const mingZhong = (fp: string | undefined): boolean =>
     !!fp && fps.some((target) => zhiwenPipei(fp, target));
-  if (input.directory) {
-    for (const g of input.directory.listGroups()) {
+  if (shuRu.directory) {
+    for (const g of shuRu.directory.listGroups()) {
       const kind: BiangengZuoyongyu['kind'] = g.type === 'external' ? 'external' : 'internal';
-      for (const m of input.directory.listMembers(g.groupId)) {
-        if (!hit(m.fingerprint)) continue;
-        matchedGroups.push({ groupId: g.groupId, type: g.type, memberId: m.id, memberName: m.name });
+      for (const m of shuRu.directory.listMembers(g.groupId)) {
+        if (!mingZhong(m.zhiWen)) continue;
+        matchedGroups.push({ groupId: g.groupId, type: g.type, memberId: m.id, memberName: m.ming });
         push(kind, g.groupId);
       }
     }
   }
-  for (const fp of input.contacts ?? []) {
-    if (!hit(fp)) continue;
+  for (const fp of shuRu.contacts ?? []) {
+    if (!mingZhong(fp)) continue;
     matchedContacts.push(fp);
   }
   // 联系人的会话 id 与指纹之间本机没有映射表 → 只能标到"联系人（extdm）"这一级，
@@ -619,13 +619,13 @@ export function buildIdentityChangeEntries(
   const info = store.info();
   const history = store.contactCardHistory();
   const freeze = store.contactFreeze(now);
-  const selfFingerprint = info?.fingerprint ?? '';
+  const selfFingerprint = info?.zhiWen ?? '';
   if (info) {
     for (const d of store.declarations()) {
       if (d.kind !== 'warmy.identity.rotation') continue;
       const id = `self:${d.oldFingerprint}->${d.newFingerprint}`;
       // 旧名片 = 换证时刻之前、本机留存的最后一条（声明里没有联系方式）
-      const prev = history.filter((h) => h.at <= d.issuedAt).slice(-1)[0]?.card ?? null;
+      const prev = history.filter((h) => h.at <= d.issuedAt).slice(-1)[0]?.ka ?? null;
       const yiZuoYongYu = jisuanBiangengZuoYongYu({
         fingerprints: chainOf([d.oldFingerprint, d.newFingerprint]),
         directory: opts.directory ?? null,
@@ -636,8 +636,8 @@ export function buildIdentityChangeEntries(
       const entry: ShenfenBiangengTiaomu = {
         id,
         ts: d.issuedAt,
-        subjectId: info.fingerprint,
-        subjectName: info.alias,
+        subjectId: info.zhiWen,
+        subjectName: info.bieMing,
         oldFingerprint: d.oldFingerprint,
         newFingerprint: d.newFingerprint,
         generation: d.generation,
@@ -665,20 +665,20 @@ export function buildIdentityChangeEntries(
     for (const v of peiDui) if (v.generation > zuixin.generation) zuixin = v;
     if (zuixin !== shitu) continue; // 旧条目不再单独出横幅
     const zuijiu = peiDui.find((v) => v !== zuixin);
-    const id = `peer:${zuixin.fingerprint}:${zuixin.receivedAt}`;
+    const id = `peer:${zuixin.zhiWen}:${zuixin.receivedAt}`;
     const yiZuoYongYu = jisuanBiangengZuoYongYu({
-      fingerprints: chainOf([zuijiu?.fingerprint ?? '', zuixin.fingerprint]),
+      fingerprints: chainOf([zuijiu?.zhiWen ?? '', zuixin.zhiWen]),
       directory: opts.directory ?? null,
       contacts,
     });
     const entry: ShenfenBiangengTiaomu = {
       id,
       ts: zuixin.receivedAt,
-      subjectId: zuixin.fingerprint,
+      subjectId: zuixin.zhiWen,
       subjectName: '',
       // 旧指纹来自本机留存条目（不是声明）
-      oldFingerprint: zuijiu?.fingerprint ?? '',
-      newFingerprint: zuixin.fingerprint,
+      oldFingerprint: zuijiu?.zhiWen ?? '',
+      newFingerprint: zuixin.zhiWen,
       generation: zuixin.generation,
       reason: 'rotate',
       previousCard: zuixin.previousCard ?? null,
@@ -703,11 +703,11 @@ export type ZaichangYiju = 'local-instance' | 'mesh-session' | 'unattributed';
 
 export interface ChengyuanZaichangHang {
   id: string;
-  name: string;
+  ming: string;
   /** 异地成员（不在本机实例列表里） */
   remote: boolean;
   /** 成员表里记的身份指纹（缺失 = 未知，**不猜**） */
-  fingerprint?: string;
+  zhiWen?: string;
   /** 只有"知道是谁"时才给这一项（`local-instance` / `mesh-session`）；unattributed 时**不给** */
   online?: boolean;
   disabled?: boolean;
@@ -717,14 +717,14 @@ export interface ChengyuanZaichangHang {
 }
 
 export interface LivenessLike {
-  fingerprint: string;
+  zhiWen: string;
   online: boolean;
   via?: string;
 }
 
 export interface GoujianChengyuanZaichangShuru {
-  members: Array<{ id: string; name: string; source?: string; instanceId?: string; fingerprint?: string }>;
-  instances: Array<{ id: string; name?: string; status?: string }>;
+  members: Array<{ id: string; ming: string; source?: string; instanceId?: string; zhiWen?: string }>;
+  instances: Array<{ id: string; ming?: string; status?: string }>;
   /** 活连接集合（`SecureMesh.presence()` / `ConnectionLiveness.list()` 的原样输出） */
   liveness: LivenessLike[];
   /** 关掉时异地成员一律不判在线（UI 会显示"组网关闭"） */
@@ -743,53 +743,53 @@ export interface GoujianChengyuanZaichangShuru {
  *      不假装知道、也不假装在线）；
  *  - 没指纹的异地成员 → `unattributed`，**不给 `online`**（宁可不给，也不编）。
  */
-export function goujianChengyuanZaichang(input: GoujianChengyuanZaichangShuru): ChengyuanZaichangHang[] {
-  const disabled = new Set(input.disabledInstanceIds ?? []);
+export function goujianChengyuanZaichang(shuRu: GoujianChengyuanZaichangShuru): ChengyuanZaichangHang[] {
+  const disabled = new Set(shuRu.disabledInstanceIds ?? []);
   const liveByFp = new Map<string, LivenessLike>();
-  for (const l of input.liveness ?? []) {
-    if (l && typeof l.fingerprint === 'string' && l.fingerprint) liveByFp.set(l.fingerprint, l);
+  for (const l of shuRu.liveness ?? []) {
+    if (l && typeof l.zhiWen === 'string' && l.zhiWen) liveByFp.set(l.zhiWen, l);
   }
   const findLive = (fp: string): LivenessLike | null => {
-    const exact = liveByFp.get(fp);
-    if (exact) return exact;
+    const jingque = liveByFp.get(fp);
+    if (jingque) return jingque;
     for (const [k, v] of liveByFp) if (zhiwenPipei(k, fp)) return v;
     return null;
   };
-  return (input.members ?? []).map((m) => {
-    const id = String(m.id || m.name || '');
+  return (shuRu.members ?? []).map((m) => {
+    const id = String(m.id || m.ming || '');
     const inst = m.instanceId
-      ? input.instances.find((h) => h.id === m.instanceId)
-      : input.instances.find((h) => h.id === id || (h.name && h.name === m.name));
+      ? shuRu.instances.find((h) => h.id === m.instanceId)
+      : shuRu.instances.find((h) => h.id === id || (h.ming && h.ming === m.ming));
     const isLocal = !!inst || m.source === 'instance';
     if (isLocal) {
-      const row: ChengyuanZaichangHang = {
+      const hang: ChengyuanZaichangHang = {
         id,
-        name: String(m.name || id),
+        ming: String(m.ming || id),
         remote: false,
         online: inst ? inst.status === 'running' : false,
         presenceBasis: 'local-instance',
       };
-      if (inst && disabled.has(inst.id)) row.disabled = true;
-      return row;
+      if (inst && disabled.has(inst.id)) hang.disabled = true;
+      return hang;
     }
-    const fp = String(m.fingerprint || '');
+    const fp = String(m.zhiWen || '');
     if (fp) {
-      const live = findLive(fp);
-      const row: ChengyuanZaichangHang = {
+      const huoZhe = findLive(fp);
+      const hang: ChengyuanZaichangHang = {
         id,
-        name: String(m.name || id),
+        ming: String(m.ming || id),
         remote: true,
-        fingerprint: fp,
-        online: input.meshEnabled ? live?.online === true : false,
+        zhiWen: fp,
+        online: shuRu.meshEnabled ? huoZhe?.online === true : false,
         presenceBasis: 'mesh-session',
-        presenceVia: (live?.via as ChengyuanZaichangHang['presenceVia']) ?? 'none',
+        presenceVia: (huoZhe?.via as ChengyuanZaichangHang['presenceVia']) ?? 'none',
       };
-      return row;
+      return hang;
     }
     // 拿不到指纹 → 如实说"本机无法归属"，**不给 online**
     return {
       id,
-      name: String(m.name || id),
+      ming: String(m.ming || id),
       remote: true,
       presenceBasis: 'unattributed',
     };
@@ -842,36 +842,36 @@ export interface WentiChengyuanZhengshuJieguo {
  * 串行化包装：见 `MembershipStore.runExclusive`。
  * 内层实现不拿锁，所以 rotate / reissue 里嵌套调用它不会死锁。
  */
-export function wentiChengyuanZhengshu(input: WentiChengyuanZhengshuShuru): Promise<WentiChengyuanZhengshuJieguo> {
-  return input.membership.runExclusive(() => wentiChengyuanZhengshuShixian(input));
+export function wentiChengyuanZhengshu(shuRu: WentiChengyuanZhengshuShuru): Promise<WentiChengyuanZhengshuJieguo> {
+  return shuRu.membership.runExclusive(() => wentiChengyuanZhengshuShixian(shuRu));
 }
 
-async function wentiChengyuanZhengshuShixian(input: WentiChengyuanZhengshuShuru): Promise<WentiChengyuanZhengshuJieguo> {
-  const signer = input.signer;
+async function wentiChengyuanZhengshuShixian(shuRu: WentiChengyuanZhengshuShuru): Promise<WentiChengyuanZhengshuJieguo> {
+  const signer = shuRu.signer;
   if (!signer) return { ok: false, code: 'identity-missing' };
   if (!signer.signReady()) {
     // 绝不允许"拿不到私钥就发一张没有签名的证书"
     return { ok: false, code: 'identity-locked', detail: '身份未解锁：不能签发成员证书' };
   }
-  const now = input.now ?? Date.now();
-  const certId = input.certId || `mc-${suiJiShiLiuJin(8)}`;
+  const now = shuRu.now ?? Date.now();
+  const certId = shuRu.certId || `mc-${suiJiShiLiuJin(8)}`;
   let cert: ChengYuanZhengShu;
   try {
     cert = gouJianChengYuanZhengShu(
       {
         certId,
-        groupId: input.groupId,
-        memberFingerprint: input.memberFingerprint,
-        memberPublicKey: input.memberPublicKey,
-        issuerFingerprint: signer.fingerprint,
+        groupId: shuRu.groupId,
+        memberFingerprint: shuRu.memberFingerprint,
+        memberPublicKey: shuRu.memberPublicKey,
+        issuerFingerprint: signer.zhiWen,
         issuerPublicKey: signer.publicKey,
-        ...(input.displayName ? { displayName: input.displayName } : {}),
-        ...(input.role ? { role: input.role } : {}),
-        ...(input.permissions ? { permissions: input.permissions } : {}),
-        ...(input.memberId ? { memberId: input.memberId } : {}),
-        ...(input.supersedes ? { supersedes: input.supersedes } : {}),
+        ...(shuRu.displayName ? { displayName: shuRu.displayName } : {}),
+        ...(shuRu.role ? { role: shuRu.role } : {}),
+        ...(shuRu.permissions ? { permissions: shuRu.permissions } : {}),
+        ...(shuRu.memberId ? { memberId: shuRu.memberId } : {}),
+        ...(shuRu.supersedes ? { supersedes: shuRu.supersedes } : {}),
       },
-      { now, ...(input.ttlMs ? { ttlMs: input.ttlMs } : {}) }
+      { now, ...(shuRu.ttlMs ? { ttlMs: shuRu.ttlMs } : {}) }
     );
     cert = await qianMingChengYuanZhengShu(cert, (bytes) => signer.sign(bytes));
   } catch (e) {
@@ -882,60 +882,60 @@ async function wentiChengyuanZhengshuShixian(input: WentiChengyuanZhengshuShuru)
     fingerprintOf: fingerprintFromPublicKey,
     clockSkewMs: DEFAULT_CLOCK_SKEW_MS,
     now,
-    expectGroupId: input.groupId,
-    expectIssuerFingerprint: input.expectIssuerFingerprint || signer.fingerprint,
+    expectGroupId: shuRu.groupId,
+    expectIssuerFingerprint: shuRu.expectIssuerFingerprint || signer.zhiWen,
   });
   if (!self.ok) return { ok: false, code: `self-check:${self.code}`, detail: self.detail };
-  const stored = input.membership.putCertificate(cert, {
-    ...(input.expectIssuerFingerprint ? { expectIssuerFingerprint: input.expectIssuerFingerprint } : {}),
+  const stored = shuRu.membership.putCertificate(cert, {
+    ...(shuRu.expectIssuerFingerprint ? { expectIssuerFingerprint: shuRu.expectIssuerFingerprint } : {}),
   });
   if (!stored.ok) return { ok: false, code: stored.code, cert, stored: false, detail: stored.detail };
   return { ok: true, code: stored.code, cert, stored: true };
 }
 
 /** 生成下一版吊销列表（在**本机当前列表**基础上追加条目；版本单调 +1） */
-async function appendRevocationEntries(input: {
+async function appendRevocationEntries(shuRu: {
   signer: ShenfenQianmingzhe;
   membership: ChengYuanMingceCang;
   groupId: string;
   add: Array<{ certId: string; memberFingerprint: string; reason: CheXiaoYuanYin }>;
   now?: number;
-}): Promise<{ ok: true; list: CheXiaoBiao; previousVersion: number } | { ok: false; code: string; detail?: string }> {
-  const now = input.now ?? Date.now();
-  if (!input.signer.signReady()) return { ok: false, code: 'identity-locked', detail: '身份未解锁：不能签发吊销列表' };
-  const current = input.membership.revocation(input.groupId);
+}): Promise<{ ok: true; LieBiao: CheXiaoBiao; previousVersion: number } | { ok: false; code: string; detail?: string }> {
+  const now = shuRu.now ?? Date.now();
+  if (!shuRu.signer.signReady()) return { ok: false, code: 'identity-locked', detail: '身份未解锁：不能签发吊销列表' };
+  const current = shuRu.membership.revocation(shuRu.groupId);
   const entries = (current?.entries ?? []).map((e) => ({ ...e }));
-  for (const a of input.add) {
-    const idx = entries.findIndex((e) => e.certId === a.certId);
-    const row = { certId: a.certId, memberFingerprint: a.memberFingerprint, reason: a.reason, revokedAt: now };
-    if (idx >= 0) entries[idx] = row;
-    else entries.push(row);
+  for (const a of shuRu.add) {
+    const suoYin = entries.findIndex((e) => e.certId === a.certId);
+    const hang = { certId: a.certId, memberFingerprint: a.memberFingerprint, reason: a.reason, revokedAt: now };
+    if (suoYin >= 0) entries[suoYin] = hang;
+    else entries.push(hang);
   }
   const listVersion = (current?.listVersion ?? 0) + 1;
-  let list = gouJianCheXiaoBiao(
+  let LieBiao = gouJianCheXiaoBiao(
     {
-      groupId: input.groupId,
+      groupId: shuRu.groupId,
       listVersion,
       entries,
       issuedAt: now,
-      issuerFingerprint: input.signer.fingerprint,
-      issuerPublicKey: input.signer.publicKey,
+      issuerFingerprint: shuRu.signer.zhiWen,
+      issuerPublicKey: shuRu.signer.publicKey,
     },
     { now }
   );
   try {
-    list = await qianMingCheXiaoBiao(list, (bytes) => input.signer.sign(bytes));
+    LieBiao = await qianMingCheXiaoBiao(LieBiao, (bytes) => shuRu.signer.sign(bytes));
   } catch (e) {
     return { ok: false, code: 'build-failed', detail: (e as Error).message };
   }
-  return { ok: true, list, previousVersion: current?.listVersion ?? 0 };
+  return { ok: true, LieBiao, previousVersion: current?.listVersion ?? 0 };
 }
 
 /**
  * 吊销某个成员（踢人 / 私钥泄漏 / 换证的旧证书）。
  * 结果是一份**新的、已签名、版本 +1** 的吊销列表，并落到本机存储。
  */
-export function chexiaoChengyuanZhengshu(input: {
+export function chexiaoChengyuanZhengshu(shuRu: {
   signer: ShenfenQianmingzhe;
   membership: ChengYuanMingceCang;
   groupId: string;
@@ -944,11 +944,11 @@ export function chexiaoChengyuanZhengshu(input: {
   reason: CheXiaoYuanYin;
   now?: number;
   expectation?: string;
-}): Promise<{ ok: boolean; code: string; list?: CheXiaoBiao; listVersion?: number; previousVersion?: number; detail?: string }> {
-  return input.membership.runExclusive(() => chexiaoChengyuanZhengshuShixian(input));
+}): Promise<{ ok: boolean; code: string; LieBiao?: CheXiaoBiao; listVersion?: number; previousVersion?: number; detail?: string }> {
+  return shuRu.membership.runExclusive(() => chexiaoChengyuanZhengshuShixian(shuRu));
 }
 
-async function chexiaoChengyuanZhengshuShixian(input: {
+async function chexiaoChengyuanZhengshuShixian(shuRu: {
   signer: ShenfenQianmingzhe;
   membership: ChengYuanMingceCang;
   groupId: string;
@@ -957,25 +957,25 @@ async function chexiaoChengyuanZhengshuShixian(input: {
   reason: CheXiaoYuanYin;
   now?: number;
   expectation?: string;
-}): Promise<{ ok: boolean; code: string; list?: CheXiaoBiao; listVersion?: number; previousVersion?: number; detail?: string }> {
-  if (!REVOCATION_REASONS.includes(input.reason)) return { ok: false, code: 'bad-reason' };
+}): Promise<{ ok: boolean; code: string; LieBiao?: CheXiaoBiao; listVersion?: number; previousVersion?: number; detail?: string }> {
+  if (!REVOCATION_REASONS.includes(shuRu.reason)) return { ok: false, code: 'bad-reason' };
   const goujian = await appendRevocationEntries({
-    signer: input.signer,
-    membership: input.membership,
-    groupId: input.groupId,
-    add: [{ certId: input.certId, memberFingerprint: input.memberFingerprint, reason: input.reason }],
-    ...(typeof input.now === 'number' ? { now: input.now } : {}),
+    signer: shuRu.signer,
+    membership: shuRu.membership,
+    groupId: shuRu.groupId,
+    add: [{ certId: shuRu.certId, memberFingerprint: shuRu.memberFingerprint, reason: shuRu.reason }],
+    ...(typeof shuRu.now === 'number' ? { now: shuRu.now } : {}),
   });
   if (!goujian.ok) return goujian;
-  const applied = input.membership.applyRevocationList(input.groupId, goujian.list, {
-    ...(input.expectation ? { expectIssuerFingerprint: input.expectation } : {}),
+  const applied = shuRu.membership.yingYongCheXiaoBiao(shuRu.groupId, goujian.LieBiao, {
+    ...(shuRu.expectation ? { expectIssuerFingerprint: shuRu.expectation } : {}),
   });
   if (!applied.ok) return { ok: false, code: applied.code, detail: applied.detail };
   return {
     ok: true,
     code: 'ok',
-    list: goujian.list,
-    listVersion: goujian.list.listVersion,
+    LieBiao: goujian.LieBiao,
+    listVersion: goujian.LieBiao.listVersion,
     previousVersion: goujian.previousVersion,
   };
 }
@@ -1005,7 +1005,7 @@ export interface RotateMemberCertResult {
  * 注意：**声明是攻击者可控数据**，所以第 2 步的验签是硬门槛；`knownKeys` / `currentGeneration`
  * 由调用方从**本机留存**（对端名片 / 密钥环）给出，不能从声明里读。
  */
-export function lunHuanChengYuanZhengShu(input: {
+export function lunHuanChengYuanZhengShu(shuRu: {
   signer: ShenfenQianmingzhe;
   membership: ChengYuanMingceCang;
   groupId: string;
@@ -1018,10 +1018,10 @@ export function lunHuanChengYuanZhengShu(input: {
   /** 显式指定新 certId（默认随机） */
   certId?: string;
 }): Promise<RotateMemberCertResult> {
-  return input.membership.runExclusive(() => rotateMemberCertificateImpl(input));
+  return shuRu.membership.runExclusive(() => rotateMemberCertificateImpl(shuRu));
 }
 
-async function rotateMemberCertificateImpl(input: {
+async function rotateMemberCertificateImpl(shuRu: {
   signer: ShenfenQianmingzhe;
   membership: ChengYuanMingceCang;
   groupId: string;
@@ -1034,55 +1034,55 @@ async function rotateMemberCertificateImpl(input: {
   /** 显式指定新 certId（默认随机） */
   certId?: string;
 }): Promise<RotateMemberCertResult> {
-  const jiuZhengShu = input.membership.certificateForFingerprint(input.groupId, input.declaration?.oldFingerprint ?? '');
+  const jiuZhengShu = shuRu.membership.certificateForFingerprint(shuRu.groupId, shuRu.declaration?.oldFingerprint ?? '');
   if (!jiuZhengShu) {
     return {
       ok: false,
       code: 'no-existing-cert',
-      detail: `本机没有 ${input.declaration?.oldFingerprint ?? ''} 在该群的成员证书：无法认定"新指纹 = 原成员"`,
+      detail: `本机没有 ${shuRu.declaration?.oldFingerprint ?? ''} 在该群的成员证书：无法认定"新指纹 = 原成员"`,
     };
   }
-  const knownKeys = input.knownKeys ?? [
-    { fingerprint: jiuZhengShu.memberFingerprint, publicKey: jiuZhengShu.memberPublicKey, generation: 0, current: false },
+  const knownKeys = shuRu.knownKeys ?? [
+    { zhiWen: jiuZhengShu.memberFingerprint, publicKey: jiuZhengShu.memberPublicKey, generation: 0, current: false },
   ];
-  const verification = verifyRotationDeclaration(input.declaration, {
+  const verification = verifyRotationDeclaration(shuRu.declaration, {
     knownKeys,
-    ...(typeof input.currentGeneration === 'number' ? { currentGeneration: input.currentGeneration } : {}),
-    ...(typeof input.now === 'number' ? { now: input.now } : {}),
-    clockSkewMs: typeof input.clockSkewMs === 'number' ? input.clockSkewMs : DEFAULT_CLOCK_SKEW_MS,
+    ...(typeof shuRu.currentGeneration === 'number' ? { currentGeneration: shuRu.currentGeneration } : {}),
+    ...(typeof shuRu.now === 'number' ? { now: shuRu.now } : {}),
+    clockSkewMs: typeof shuRu.clockSkewMs === 'number' ? shuRu.clockSkewMs : DEFAULT_CLOCK_SKEW_MS,
   });
   if (!verification.accepted) {
     return { ok: false, code: `declaration:${verification.reason}`, verification, detail: verification.detail };
   }
   const issued = await wentiChengyuanZhengshuShixian({
-    signer: input.signer,
-    membership: input.membership,
-    groupId: input.groupId,
-    memberFingerprint: input.declaration.newFingerprint,
-    memberPublicKey: input.declaration.newPublicKey,
+    signer: shuRu.signer,
+    membership: shuRu.membership,
+    groupId: shuRu.groupId,
+    memberFingerprint: shuRu.declaration.newFingerprint,
+    memberPublicKey: shuRu.declaration.newPublicKey,
     supersedes: jiuZhengShu.certId,
     role: jiuZhengShu.role,
     permissions: jiuZhengShu.permissions,
     ...(jiuZhengShu.memberId ? { memberId: jiuZhengShu.memberId } : {}),
     ...(jiuZhengShu.displayName ? { displayName: jiuZhengShu.displayName } : {}),
-    ...(input.certId ? { certId: input.certId } : {}),
-    ...(input.ttlMs ? { ttlMs: input.ttlMs } : {}),
-    ...(typeof input.now === 'number' ? { now: input.now } : {}),
+    ...(shuRu.certId ? { certId: shuRu.certId } : {}),
+    ...(shuRu.ttlMs ? { ttlMs: shuRu.ttlMs } : {}),
+    ...(typeof shuRu.now === 'number' ? { now: shuRu.now } : {}),
   });
   if (!issued.ok || !issued.cert) return { ok: false, code: `issue:${issued.code}`, verification, detail: issued.detail };
   const revoked = await chexiaoChengyuanZhengshuShixian({
-    signer: input.signer,
-    membership: input.membership,
-    groupId: input.groupId,
+    signer: shuRu.signer,
+    membership: shuRu.membership,
+    groupId: shuRu.groupId,
     certId: jiuZhengShu.certId,
     memberFingerprint: jiuZhengShu.memberFingerprint,
     reason: 'rotation',
-    ...(typeof input.now === 'number' ? { now: input.now } : {}),
+    ...(typeof shuRu.now === 'number' ? { now: shuRu.now } : {}),
   });
-  if (!revoked.ok || !revoked.list) {
+  if (!revoked.ok || !revoked.LieBiao) {
     return { ok: false, code: `revoke:${revoked.code}`, cert: issued.cert, verification, detail: revoked.detail };
   }
-  return { ok: true, code: 'ok', cert: issued.cert, revocation: revoked.list, verification };
+  return { ok: true, code: 'ok', cert: issued.cert, revocation: revoked.LieBiao, verification };
 }
 
 /**
@@ -1091,7 +1091,7 @@ async function rotateMemberCertificateImpl(input: {
  * 这样 `isSameMember` 才能推出"新指纹 = 原成员"。没有这两样之一就只是发一张新证书，
  * 与"恢复原成员身份"无关 —— 这时返回 `code: 'not-linked'` 让调用方确认自己知道后果。
  */
-export function weiHuifuChongQianChengYuanZhengShu(input: {
+export function weiHuifuChongQianChengYuanZhengShu(shuRu: {
   signer: ShenfenQianmingzhe;
   membership: ChengYuanMingceCang;
   groupId: string;
@@ -1105,10 +1105,10 @@ export function weiHuifuChongQianChengYuanZhengShu(input: {
   /** 显式要求"这确实是同一个人"（默认 true：没有链就不给恢复） */
   requireLink?: boolean;
 }): Promise<RotateMemberCertResult & { linked?: boolean; memberId?: string }> {
-  return input.membership.runExclusive(() => reissueMemberCertificateForRecoveryImpl(input));
+  return shuRu.membership.runExclusive(() => reissueMemberCertificateForRecoveryImpl(shuRu));
 }
 
-async function reissueMemberCertificateForRecoveryImpl(input: {
+async function reissueMemberCertificateForRecoveryImpl(shuRu: {
   signer: ShenfenQianmingzhe;
   membership: ChengYuanMingceCang;
   groupId: string;
@@ -1122,44 +1122,44 @@ async function reissueMemberCertificateForRecoveryImpl(input: {
   /** 显式要求"这确实是同一个人"（默认 true：没有链就不给恢复） */
   requireLink?: boolean;
 }): Promise<RotateMemberCertResult & { linked?: boolean; memberId?: string }> {
-  const jiuZhengShu = input.membership.certificateForFingerprint(input.groupId, input.oldFingerprint);
+  const jiuZhengShu = shuRu.membership.certificateForFingerprint(shuRu.groupId, shuRu.oldFingerprint);
   if (!jiuZhengShu) return { ok: false, code: 'no-existing-cert', detail: '本机没有旧证书，无法认定归属' };
-  const requireLink = input.requireLink !== false;
+  const requireLink = shuRu.requireLink !== false;
   const memberId = jiuZhengShu.memberId ?? jiuZhengShu.certId;
   if (requireLink && !jiuZhengShu.memberId && !jiuZhengShu.certId) {
     return { ok: false, code: 'not-linked', detail: '旧证书没有可用于延续的成员标识' };
   }
   const issued = await wentiChengyuanZhengshuShixian({
-    signer: input.signer,
-    membership: input.membership,
-    groupId: input.groupId,
-    memberFingerprint: input.newFingerprint,
-    memberPublicKey: input.newPublicKey,
+    signer: shuRu.signer,
+    membership: shuRu.membership,
+    groupId: shuRu.groupId,
+    memberFingerprint: shuRu.newFingerprint,
+    memberPublicKey: shuRu.newPublicKey,
     supersedes: jiuZhengShu.certId,
     memberId,
     role: jiuZhengShu.role,
     permissions: jiuZhengShu.permissions,
     ...(jiuZhengShu.displayName ? { displayName: jiuZhengShu.displayName } : {}),
-    ...(input.certId ? { certId: input.certId } : {}),
-    ...(input.ttlMs ? { ttlMs: input.ttlMs } : {}),
-    ...(typeof input.now === 'number' ? { now: input.now } : {}),
+    ...(shuRu.certId ? { certId: shuRu.certId } : {}),
+    ...(shuRu.ttlMs ? { ttlMs: shuRu.ttlMs } : {}),
+    ...(typeof shuRu.now === 'number' ? { now: shuRu.now } : {}),
   });
   if (!issued.ok || !issued.cert) return { ok: false, code: `issue:${issued.code}`, detail: issued.detail };
   let revocation: CheXiaoBiao | undefined;
-  if (input.revokeOld !== false) {
+  if (shuRu.revokeOld !== false) {
     const revoked = await chexiaoChengyuanZhengshuShixian({
-      signer: input.signer,
-      membership: input.membership,
-      groupId: input.groupId,
+      signer: shuRu.signer,
+      membership: shuRu.membership,
+      groupId: shuRu.groupId,
       certId: jiuZhengShu.certId,
       memberFingerprint: jiuZhengShu.memberFingerprint,
       reason: 'rotation',
-      ...(typeof input.now === 'number' ? { now: input.now } : {}),
+      ...(typeof shuRu.now === 'number' ? { now: shuRu.now } : {}),
     });
     if (!revoked.ok) return { ok: false, code: `revoke:${revoked.code}`, cert: issued.cert, detail: revoked.detail };
-    revocation = revoked.list;
+    revocation = revoked.LieBiao;
   }
-  const same = input.membership.isSameMember(input.groupId, input.oldFingerprint, input.newFingerprint);
+  const same = shuRu.membership.shiTongYiChengYuan(shuRu.groupId, shuRu.oldFingerprint, shuRu.newFingerprint);
   return { ok: true, code: 'ok', cert: issued.cert, revocation, linked: same.same, memberId };
 }
 
@@ -1169,26 +1169,26 @@ async function reissueMemberCertificateForRecoveryImpl(input: {
  * `fromFingerprint` 必须是**握手得到的对端指纹**（`SecureInboundMessage.peerFingerprint`），
  * **绝不能**用消息体里自称的签发者 —— 否则谁都能自称群主来发吊销名单。
  */
-export function yingYongRuXiangCheXiaoGengXin(input: {
+export function yingYongRuXiangCheXiaoGengXin(shuRu: {
   membership: ChengYuanMingceCang;
   groupId: string;
-  list: CheXiaoBiao;
+  LieBiao: CheXiaoBiao;
   fromFingerprint: string;
   /** 本机已知的群主（创建者）指纹；给定就要求 `fromFingerprint` 必须是他 */
   expectedIssuerFingerprint?: string;
 }): { ok: boolean; code: string; changed?: boolean; listVersion?: number; detail?: string } {
-  const expected = input.expectedIssuerFingerprint || input.membership.groupState(input.groupId)?.issuerFingerprint || '';
+  const expected = shuRu.expectedIssuerFingerprint || shuRu.membership.groupState(shuRu.groupId)?.issuerFingerprint || '';
   if (!expected) {
     return { ok: false, code: 'unknown-issuer', detail: '本机不知道该群的创建者，无法判断这份吊销列表的来路' };
   }
-  if (!zhiwenPipei(input.fromFingerprint, expected)) {
+  if (!zhiwenPipei(shuRu.fromFingerprint, expected)) {
     return {
       ok: false,
       code: 'not-issuer',
-      detail: `发来吊销列表的连接指纹不是本群创建者（${input.fromFingerprint} ≠ ${expected}）`,
+      detail: `发来吊销列表的连接指纹不是本群创建者（${shuRu.fromFingerprint} ≠ ${expected}）`,
     };
   }
-  const applied = input.membership.applyRevocationList(input.groupId, input.list, {
+  const applied = shuRu.membership.yingYongCheXiaoBiao(shuRu.groupId, shuRu.LieBiao, {
     expectIssuerFingerprint: expected,
   });
   return {
@@ -1231,8 +1231,8 @@ export function chengYuanKuaiZhao(
 } {
   const now = opts.now ?? Date.now();
   if (!membership) return { ok: false, schema: MEMBERSHIP_FILE_SCHEMA, groups: [] };
-  const ids = opts.groupId ? [opts.groupId] : membership.listGroups();
-  const groups = ids.map((groupId) => {
+  const idJi = opts.groupId ? [opts.groupId] : membership.listGroups();
+  const groups = idJi.map((groupId) => {
     const st = membership.groupState(groupId);
     const xiuding = st?.revocation ?? null;
     return {
@@ -1276,7 +1276,7 @@ export function membershipSameMember(
   fpB: string
 ): { same: boolean; reason: string; rootA: string; rootB: string } {
   if (!membership) return { same: false, reason: 'no-membership-store', rootA: '', rootB: '' };
-  return membership.isSameMember(groupId, fpA, fpB);
+  return membership.shiTongYiChengYuan(groupId, fpA, fpB);
 }
 
 /** 与 sync-protocol 的默认容差必须一致（写在这里，好让验证脚本直接断言） */

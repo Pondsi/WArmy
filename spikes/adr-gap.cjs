@@ -1,8 +1,8 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/electron-main.ts';
+const p = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/electron-main.ts';
 let s = fs.readFileSync(p, 'utf8');
 
-if (s.includes('warmy:audit-log')) {
+if (s.includes('warmy:shenJiRiZhi')) {
   console.log('already wired');
   process.exit(0);
 }
@@ -32,52 +32,52 @@ s = s.replace(
   secureKeys = new SecureKeyStore(userData);
   archiver = new ZhiShiGuiDangQi(userData);
   cleanup = new QingLiGuanLiQi(userData);
-  audit.log('app.start', { platform: process.platform });`
+  audit.log('yingYong.start', { platform: process.platform });`
 );
 
 // IPC handlers
 s += `
 
 // ── 审计日志 ──
-ipcMain.handle('warmy:audit-log', (_e, limit?: number) => ({
+ipcMain.handle('warmy:shenJiRiZhi', (_e, limit?: number) => ({
   ok: true,
   entries: audit?.read(limit || 50) || [],
 }));
-ipcMain.handle('warmy:audit-clear', () => {
+ipcMain.handle('warmy:shenJiQingChu', () => {
   audit?.clear();
   return { ok: true };
 });
 
 // ── SafeStorage 密钥 ──
-ipcMain.handle('warmy:secure-key-save', async (_e, payload: { providerId: string; apiKey: string }) => {
+ipcMain.handle('warmy:anQuanMiYaoBaoCun', async (_e, payload: { providerId: string; apiKey: string }) => {
   await secureKeys?.save(payload.providerId, payload.apiKey);
   audit?.log('key.save', { providerId: payload.providerId });
   return { ok: true };
 });
-ipcMain.handle('warmy:secure-key-load', async (_e, providerId: string) => {
+ipcMain.handle('warmy:anQuanMiYaoJiaZai', async (_e, providerId: string) => {
   const key = await secureKeys?.load(providerId);
   return { ok: !!key, key: key || null };
 });
 
 // ── ZhiShiGuiDangQi ──
-ipcMain.handle('warmy:archive-external', (_e, payload: { groupId: string; title: string; summary: string; anchors?: unknown[] }) => {
+ipcMain.handle('warmy:guiDangWaiBu', (_e, payload: { groupId: string; title: string; summary: string; anchors?: unknown[] }) => {
   const r = archiver?.archive({
     id: 'arc-' + Date.now(),
     groupId: payload.groupId,
-    title: payload.title,
+    title: payload.biaoTi,
     summary: payload.summary,
     anchors: payload.anchors || [],
   });
   audit?.log('archive.external', { groupId: payload.groupId });
   return { ok: true, entry: r };
 });
-ipcMain.handle('warmy:archive-list', (_e, groupId?: string) => ({
+ipcMain.handle('warmy:guiDangLieBiao', (_e, groupId?: string) => ({
   ok: true,
   entries: archiver?.list(groupId) || [],
 }));
 
 // ── QingLiGuanLiQi ──
-ipcMain.handle('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
+ipcMain.handle('warmy:qingLiYunXing', (_e, opts?: { checkpoints?: number }) => {
   const n = cleanup?.cleanCheckpoints(opts?.checkpoints || 20) || 0;
   const v = cleanup?.cleanVoice() || 0;
   audit?.log('cleanup.run', { checkpoints: n, voice: v });
@@ -85,15 +85,15 @@ ipcMain.handle('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
 });
 
 // ── 模型角色分配 ──
-ipcMain.handle('warmy:role-models-set', (_e, roles: JueseMoxingPeizhi) => {
+ipcMain.handle('warmy:jueSeMoXingJiSheZhi', (_e, roles: JueseMoxingPeizhi) => {
   roleModels = { ...roleModels, ...roles };
   audit?.log('roles.set', roles);
   return { ok: true, roles: roleModels };
 });
-ipcMain.handle('warmy:role-models-get', () => ({ ok: true, roles: roleModels }));
+ipcMain.handle('warmy:jueSeMoXingJiQu', () => ({ ok: true, roles: roleModels }));
 
 // ── 解散群组 ──
-ipcMain.handle('warmy:group-dissolve', (_e, groupId: string) => {
+ipcMain.handle('warmy:qunJieSan', (_e, groupId: string) => {
   // 只有创建者可解散（简化：本机节点）
   const g = router.getGroup(groupId);
   if (!g) return { ok: false, error: 'no group' };
@@ -105,7 +105,7 @@ ipcMain.handle('warmy:group-dissolve', (_e, groupId: string) => {
 });
 
 // ── 允许库导出 ──
-ipcMain.handle('warmy:export-allowlist', () => {
+ipcMain.handle('warmy:daoChuYunXuMingDan', () => {
   const list = p1?.security.listAllowlist() || [];
   const dir = path.join(app.getPath('userData'), 'permissions');
   fs.mkdirSync(dir, { recursive: true });
@@ -118,7 +118,7 @@ ipcMain.handle('warmy:export-allowlist', () => {
 // ── dsh-app:// 自定义协议（零对外端口） ──
 // 仅在 Electron 内部注册，不对外暴露端口
 try {
-  app.setAsDefaultProtocolClient('dsh-app');
+  yingYong.setAsDefaultProtocolClient('dsh-app');
 } catch {
   /* noop */
 }

@@ -30,7 +30,7 @@ python scripts 风格：
 # 必须 unset ELECTRON_RUN_AS_NODE
 ```
 
-仓库根：`C:\Users\p\.openclaw\workspace\大龙虾互动区\WARMY`（本地目录历史名可为 CCArmy，remote 为 WArmy）。
+仓库根：`C:\Users\<user>\workspace\<repo>\WARMY`（本地目录历史名可为 CCArmy，remote 为 WArmy）。
 
 ---
 
@@ -416,7 +416,7 @@ devEnv=container
 ### 9.1 快速命令
 
 ```powershell
-Set-Location C:\Users\p\.openclaw\workspace\大龙虾互动区\WARMY
+Set-Location C:\Users\<user>\workspace\<repo>\WARMY
 $node = "C:\Program Files\nodejs\node.exe"
 
 & $node packages/app-shell/scripts/verify-i18n-locales.mjs
@@ -493,7 +493,7 @@ Set-Location packages\app-shell
 | Python | `$env:MIMO_PYTHON`（勿用 `python -c` 传中文复杂引号，写 .py 文件） |
 | Electron 可执行 | `packages/app-shell/node_modules/electron/dist/electron.exe` |
 | 主入口 | `packages/app-shell/dist/electron-main.js` |
-| GitHub 令牌 | 本地 `github的令牌.txt` 中 `ghp_` 段；**永不打印/入库** |
+| GitHub 令牌 | 本地 `local-token-notes` 中 `ghp_` 段；**永不打印/入库** |
 | 记忆全局 | `C:\Users\p\.local\share\mimocode\memory\global\MEMORY.md` |
 
 **为什么必须 Electron 40+**（权威映射，来自 `releases.electronjs.org/releases.json`）：

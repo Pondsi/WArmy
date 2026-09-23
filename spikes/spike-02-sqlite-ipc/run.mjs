@@ -52,11 +52,11 @@ child.on('message', (m) => {
   }
 });
 
-function call(msg) {
+function call(xiaoXi) {
   const id = ++seq;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
-    child.send({ ...msg, id });
+    child.send({ ...xiaoXi, id });
   });
 }
 

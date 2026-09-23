@@ -13,7 +13,7 @@
 //     被跳过的端口要**如实记在 skipped 里**、且**真的没有探测过**（本脚本用钉死的随机源确定性压出这条路径）。
 //
 // 用法：node packages/app-shell/scripts/net-port-bind-probe.mjs
-// 输出：一行 JSON（{ok, checks:[{name,pass,detail}], suggested:[...]}），rc=0 全通过 / 1 有失败。
+// 输出：一行 JSON（{ok, checks:[{ming,pass,detail}], suggested:[...]}），rc=0 全通过 / 1 有失败。
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -26,19 +26,19 @@ import {WARMY_SUGGESTED_NET_PORTS} from '../dist/settings-store.js';
 
 const SUGGESTED = [...WARMY_SUGGESTED_NET_PORTS];
 const checks = [];
-function check(name, pass, detail) {
-  checks.push({ name, pass: !!pass, detail: detail === undefined ? null : detail });
+function check(ming, pass, detail) {
+  checks.push({ ming, pass: !!pass, detail: detail === undefined ? null : detail });
   return !!pass;
 }
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-bindprobe-'));
 const PASS = 'bind-probe-passphrase';
 
-function mkIdentity(name) {
-  const dir = path.join(tmpRoot, `id-${name}`);
+function mkIdentity(ming) {
+  const dir = path.join(tmpRoot, `id-${ming}`);
   fs.mkdirSync(dir, { recursive: true });
   const store = new ShenFenCang(path.join(dir, 'identity.json'), { protector: nullProtector() });
-  const created = store.ensureIdentity(`alias-${name}`, { email: `${name}@example.test` }, { passphrase: PASS });
+  const created = store.ensureIdentity(`alias-${ming}`, { email: `${ming}@example.test` }, { passphrase: PASS });
   store.lock();
   return { store, created, dir };
 }
@@ -93,7 +93,7 @@ const idOk = check('临时身份创建成功且可解锁', id.created.ok === tru
 function mkMesh(tag) {
   return new SecureMesh({
     userDataDir: path.join(tmpRoot, `mesh-${tag}`),
-    nodeId: `node-${tag}`,
+    nodeId: `jieDian${tag}`,
     store: () => id.store,
     peers: () => [],
   });

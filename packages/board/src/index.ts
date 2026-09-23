@@ -17,13 +17,13 @@ export interface KanbanShi {
   ts: number;
   groupId: string;
   action: KanbanLingLei;
-  title: string;
-  progress?: number;
+  biaoTi: string;
+  jinDu?: number;
   note?: string;
   /** 解析来源：值班者从自然语言解析 */
   parsedFrom: string;
   /**
-   * 可选父任务 id（= 父任务 title）。用于**轻量任务树**：
+   * 可选父任务 id（= 父任务 biaoTi）。用于**轻量任务树**：
    * 不是第二套任务系统，只是看板任务的父子层级（进度条仍聚合 BoardTask）。
    * 约定：`新建任务 父任务 / 子任务` 或 `新建任务 父任务 > 子任务`
    */
@@ -33,8 +33,8 @@ export interface KanbanShi {
 export interface KanbanRenwu {
   id: string;
   groupId: string;
-  title: string;
-  progress: number;
+  biaoTi: string;
+  jinDu: number;
   status: 'todo' | 'doing' | 'done' | 'blocked';
   notes: string[];
   updatedAt: number;
@@ -47,7 +47,7 @@ export type KanbanBi = 'duty';
 
 export class KanbanCang {
   private seq = 0;
-  private tasks = new Map<string, KanbanRenwu>();
+  private RenwuJi = new Map<string, KanbanRenwu>();
   readonly jsonlPath: string;
 
   constructor(CangLu: string) {
@@ -61,9 +61,9 @@ export class KanbanCang {
     const HangJi = fs.readFileSync(this.jsonlPath, 'utf8').split('\n').filter(Boolean);
     for (const Hang of HangJi) {
       try {
-        const ev = JSON.parse(Hang) as KanbanShi;
-        this.seq = Math.max(this.seq, ev.seq);
-        this.apply(ev);
+        const Shi = JSON.parse(Hang) as KanbanShi;
+        this.seq = Math.max(this.seq, Shi.seq);
+        this.apply(Shi);
       } catch {
         /* skip corrupt */
       }
@@ -71,70 +71,70 @@ export class KanbanCang {
   }
 
   /** 仅 duty 可写（铁律） */
-  append(ev: Omit<KanbanShi, 'seq' | 'ts'>, Bi: KanbanBi): KanbanShi {
+  append(Shi: Omit<KanbanShi, 'seq' | 'ts'>, Bi: KanbanBi): KanbanShi {
     if (Bi !== 'duty') {
       throw Object.assign(new Error('board writer must be duty'), { code: 'WRITER' });
     }
-    const Quan: KanbanShi = { ...ev, seq: ++this.seq, ts: Date.now() };
+    const Quan: KanbanShi = { ...Shi, seq: ++this.seq, ts: Date.now() };
     fs.appendFileSync(this.jsonlPath, JSON.stringify(Quan) + '\n', 'utf8');
     this.apply(Quan);
     return Quan;
   }
 
-  private apply(ev: KanbanShi): void {
-    if (!ev || !ev.action) return;
-    if (ev.action === 'create_task') {
-      const parentFromNote = ev.note && String(ev.note).startsWith('parent:') ? String(ev.note).slice(7) : undefined;
-      const parentId = ev.parentId || parentFromNote;
-      this.tasks.set(ev.title, {
-        id: ev.title,
-        groupId: ev.groupId,
-        title: ev.title,
-        progress: 0,
+  private apply(Shi: KanbanShi): void {
+    if (!Shi || !Shi.action) return;
+    if (Shi.action === 'create_task') {
+      const parentFromNote = Shi.note && String(Shi.note).startsWith('parent:') ? String(Shi.note).slice(7) : undefined;
+      const parentId = Shi.parentId || parentFromNote;
+      this.RenwuJi.set(Shi.biaoTi, {
+        id: Shi.biaoTi,
+        groupId: Shi.groupId,
+        biaoTi: Shi.biaoTi,
+        jinDu: 0,
         status: 'todo',
         notes: [],
-        updatedAt: ev.ts,
+        updatedAt: Shi.ts,
         ...(parentId ? { parentId } : {}),
       });
       // 父任务若不存在，占位创建，便于树形显示
-      if (parentId && !this.tasks.has(parentId)) {
-        this.tasks.set(parentId, {
+      if (parentId && !this.RenwuJi.has(parentId)) {
+        this.RenwuJi.set(parentId, {
           id: parentId,
-          groupId: ev.groupId,
-          title: parentId,
-          progress: 0,
+          groupId: Shi.groupId,
+          biaoTi: parentId,
+          jinDu: 0,
           status: 'doing',
           notes: [],
-          updatedAt: ev.ts,
+          updatedAt: Shi.ts,
         });
       }
       return;
     }
-    const task = this.tasks.get(ev.title) || this.tasks.get(String(ev.title || '').replace(/ →.*/, ''));
-    if (!task) return;
-    task.updatedAt = ev.ts;
-    if (ev.action === 'update_progress') {
-      task.status = 'doing';
-      if (typeof ev.progress === 'number') task.progress = ev.progress;
-    } else if (ev.action === 'complete_task') {
-      task.status = 'done';
-      task.progress = 100;
-    } else if (ev.action === 'block') {
-      task.status = 'blocked';
-      if (ev.note) task.notes.push(ev.note);
-    } else if (ev.action === 'add_note') {
-      if (ev.note) task.notes.push(ev.note);
+    const renwu = this.RenwuJi.get(Shi.biaoTi) || this.RenwuJi.get(String(Shi.biaoTi || '').replace(/ →.*/, ''));
+    if (!renwu) return;
+    renwu.updatedAt = Shi.ts;
+    if (Shi.action === 'update_progress') {
+      renwu.status = 'doing';
+      if (typeof Shi.jinDu === 'number') renwu.jinDu = Shi.jinDu;
+    } else if (Shi.action === 'complete_task') {
+      renwu.status = 'done';
+      renwu.jinDu = 100;
+    } else if (Shi.action === 'block') {
+      renwu.status = 'blocked';
+      if (Shi.note) renwu.notes.push(Shi.note);
+    } else if (Shi.action === 'add_note') {
+      if (Shi.note) renwu.notes.push(Shi.note);
     }
   }
 
   listTasks(groupId?: string): KanbanRenwu[] {
-    return JuShu([...this.tasks.values()].filter((t) => !groupId || t.groupId === groupId));
+    return JuShu([...this.RenwuJi.values()].filter((t) => !groupId || t.groupId === groupId));
   }
 
   /** 外部聚合：按会话汇总进展 */
   aggregateByGroup(): Array<{ groupId: string; taskCount: number; doing: number; done: number; avgProgress: number }> {
     const map = new Map<string, KanbanRenwu[]>();
-    for (const t of this.tasks.values()) {
+    for (const t of this.RenwuJi.values()) {
       if (!map.has(t.groupId)) map.set(t.groupId, []);
       map.get(t.groupId)!.push(t);
     }
@@ -144,7 +144,7 @@ export class KanbanCang {
       doing: LieBiao.filter((x) => x.status === 'doing' || x.status === 'blocked').length,
       done: LieBiao.filter((x) => x.status === 'done').length,
       avgProgress: LieBiao.length
-        ? Math.round(LieBiao.reduce((s, x) => s + x.progress, 0) / LieBiao.length)
+        ? Math.round(LieBiao.reduce((s, x) => s + x.jinDu, 0) / LieBiao.length)
         : 0,
     }));
   }
@@ -171,41 +171,41 @@ export function JieLing(text: string, groupId: string): Omit<KanbanShi, 'seq' | 
       const parent = Pian[0]!;
       const Zhi = Pian.slice(1).join(' / ');
       // 先确保存在父任务（幂等：已存在则不覆盖进度）
-      return { groupId, action: 'create_task', title: Zhi, parentId: parent, parsedFrom: s, note: `parent:${parent}` };
+      return { groupId, action: 'create_task', biaoTi: Zhi, parentId: parent, parsedFrom: s, note: `parent:${parent}` };
     }
-    return { groupId, action: 'create_task', title: YuanWen, parsedFrom: s };
+    return { groupId, action: 'create_task', biaoTi: YuanWen, parsedFrom: s };
   }
   m = s.match(/^(?:完成|complete)\s*(.+)$/i);
-  if (m) return { groupId, action: 'complete_task', title: m[1]!, parsedFrom: s };
+  if (m) return { groupId, action: 'complete_task', biaoTi: m[1]!, parsedFrom: s };
   m = s.match(/^(?:阻塞|block)\s*(.+?)(?:[:：]\s*(.+))?$/i);
-  if (m) return { groupId, action: 'block', title: m[1]!, note: m[2], parsedFrom: s };
+  if (m) return { groupId, action: 'block', biaoTi: m[1]!, note: m[2], parsedFrom: s };
   m = s.match(/^(?:备注|note)\s*(.+?)[:：]\s*(.+)$/i);
-  if (m) return { groupId, action: 'add_note', title: m[1]!, note: m[2], parsedFrom: s };
-  m = s.match(/^(?:进度|progress)\s*(.+?)[:：]?\s*(\d{1,3})%?$/i);
-  if (m) return { groupId, action: 'update_progress', title: m[1]!, progress: Math.min(100, +m[2]!), parsedFrom: s };
+  if (m) return { groupId, action: 'add_note', biaoTi: m[1]!, note: m[2], parsedFrom: s };
+  m = s.match(/^(?:进度|jinDu)\s*(.+?)[:：]?\s*(\d{1,3})%?$/i);
+  if (m) return { groupId, action: 'update_progress', biaoTi: m[1]!, jinDu: Math.min(100, +m[2]!), parsedFrom: s };
   return null;
 }
 
 /** 聚合：父任务进度 = 子任务平均（无子则用自身）——进度条继续用同一数据源 */
-export function JuShu(tasks: KanbanRenwu[]): KanbanRenwu[] {
-  const byId = new Map(tasks.map((t) => [t.id, { ...t }]));
+export function JuShu(RenwuJi: KanbanRenwu[]): KanbanRenwu[] {
+  const Suoyin = new Map(RenwuJi.map((t) => [t.id, { ...t }]));
   const ZhiJi = new Map<string, KanbanRenwu[]>();
-  for (const t of byId.values()) {
+  for (const t of Suoyin.values()) {
     if (!t.parentId) continue;
     const LieBiao = ZhiJi.get(t.parentId) || [];
     LieBiao.push(t);
     ZhiJi.set(t.parentId, LieBiao);
   }
   for (const [pid, kids] of ZhiJi) {
-    const parent = byId.get(pid);
+    const parent = Suoyin.get(pid);
     if (!parent) continue;
-    const junzhi = Math.round(kids.reduce((s, k) => s + k.progress, 0) / kids.length);
+    const junzhi = Math.round(kids.reduce((s, k) => s + k.jinDu, 0) / kids.length);
     if (parent.status !== 'done') {
-      parent.progress = junzhi;
+      parent.jinDu = junzhi;
       if (kids.every((k) => k.status === 'done')) parent.status = 'done';
       else if (kids.some((k) => k.status === 'blocked')) parent.status = 'blocked';
       else if (kids.some((k) => k.status === 'doing')) parent.status = 'doing';
     }
   }
-  return [...byId.values()];
+  return [...Suoyin.values()];
 }

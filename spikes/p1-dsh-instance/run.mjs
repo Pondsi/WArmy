@@ -43,7 +43,7 @@ const { instances, teardown } = await createP1Runtime({
 const h = await instances.spawn({
   config: {
     id: 'dsh-1',
-    name: 'dsh-worker',
+    ming: 'dsh-worker',
     workspace: path.join(root, 'instances', 'dsh-1'),
     dutyEligible: true,
   },

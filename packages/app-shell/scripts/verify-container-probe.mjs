@@ -30,7 +30,7 @@ if (!fs.existsSync(distFile)) {
 }
 const mod = await import(new URL('file://' + distFile.replace(/\\/g, '/')).href);
 const {
-  probeContainerRuntimes,
+  tanCeRongQiYunXing,
   yunxingRongqiDongzuo,
   CONTAINER_RUNTIME_SPECS,
   rongQiYunXingGuiGeOf,
@@ -48,9 +48,9 @@ const {
   CONTAINER_IMAGE_STACKS,
   guiLeiDongZuoJieGuo,
   dongZuoXuAnZhuang,
-  envSolidifyCapability,
+  huanJingGuHuaNengLi,
   quYinQingXiTongMoShi,
-  shouldSolidifyAt,
+  shiFouGaiGuHua,
   guHuaBaoLiu,
   SOLIDIFY_COALESCE_MS,
   SOLIDIFY_KEEP,
@@ -58,15 +58,15 @@ const {
 
 const results = [];
 let failures = 0;
-function ok(cond, label, detail) {
+function ok(cond, biaoQian, detail) {
   const pass = !!cond;
   if (!pass) failures++;
-  results.push({ pass, label, detail: detail === undefined ? null : String(detail) });
-  console.log((pass ? '  PASS ' : '  FAIL ') + label + (detail === undefined || detail === null ? '' : '  [' + String(detail).slice(0, 300) + ']'));
+  results.push({ pass, biaoQian, detail: detail === undefined ? null : String(detail) });
+  console.log((pass ? '  PASS ' : '  FAIL ') + biaoQian + (detail === undefined || detail === null ? '' : '  [' + String(detail).slice(0, 300) + ']'));
   return pass;
 }
-function section(title) {
-  console.log('\n=== ' + title + ' ===');
+function section(biaoTi) {
+  console.log('\n=== ' + biaoTi + ' ===');
 }
 const ZH = JSON.parse(fs.readFileSync(path.join(i18nDir, 'zh-CN.json'), 'utf8'));
 const EN = JSON.parse(fs.readFileSync(path.join(i18nDir, 'en-US.json'), 'utf8'));
@@ -75,7 +75,7 @@ const EN = JSON.parse(fs.readFileSync(path.join(i18nDir, 'en-US.json'), 'utf8'))
 section('1. 真机探测（12 个候选）');
 const t0 = Date.now();
 // 门禁＝等价于用户显式点「查看本机已有容器」⇒ 允许真的查询 wsl.exe（deep:true）
-const report = await probeContainerRuntimes({ cacheMs: 0, perProbeTimeoutMs: 5000, concurrency: 4, deep: true });
+const report = await tanCeRongQiYunXing({ cacheMs: 0, perProbeTimeoutMs: 5000, concurrency: 4, deep: true });
 const wallMs = Date.now() - t0;
 console.log(JSON.stringify(report, null, 1));
 
@@ -120,7 +120,7 @@ ok(DOCKER_STATES.includes(wsl.status),
   '2-2a 【核心】wsl 同样只允许「已安装未运行」或「可用」两态（命令在就不许报 no-distro 之外的第三种）', wsl.status);
 /**
  * 第十七批修正：WSL 的探测**不再为了探测而启动发行版**（用户实测"打开新窗口会拉起 WSL"）。
- * 所以原因码多了 `distro-not-running:<name>` —— 它如实说明"发行版存在但没在跑，
+ * 所以原因码多了 `distro-not-running:<ming>` —— 它如实说明"发行版存在但没在跑，
  * 我们没有替你启动它"，而不是含糊的"命令不在"或假装"启动失败"。
  */
 ok(/no-distro|distro-start|distro-not-running|^distro=/.test(String(wsl.detail)),
@@ -187,10 +187,10 @@ ok(report.attentionIds.every((id) => ['installed-not-running', 'engine-error'].i
 
 /* ── 6. 便宜 + 可缓存 ── */
 section('6. 成本与缓存');
-const cached = await probeContainerRuntimes({ cacheMs: 60000, deep: true });
+const cached = await tanCeRongQiYunXing({ cacheMs: 60000, deep: true });
 ok(cached.cached === true, '6-1 短时间内的第二次探测命中缓存（点两次按钮不会重复压机器）');
 ok(cached.runtimes.length === 12, '6-1b 缓存报告形状不变');
-const fresh = await probeContainerRuntimes({ cacheMs: 0, deep: true });
+const fresh = await tanCeRongQiYunXing({ cacheMs: 0, deep: true });
 ok(fresh.cached === false, '6-2 force 时真的重探（cached=false）');
 
 /* ── 7. 启停入口的**参数校验**（不接受任意命令）── */
@@ -210,18 +210,18 @@ ok(bad5.ok === false && bad5.code === 'not-controllable', '7-5 containerd/nerdct
 /* ── 8. i18n：安装说明与启停文案必须齐（中英键集相等、英文无中文）── */
 section('8. i18n（折叠安装说明四要素 + 四条链接 + 状态/动作）');
 const REQUIRED = [
-  'container.title', 'container.probeBtn', 'container.probing', 'container.probeDone', 'container.listTitle',
+  'container.biaoTi', 'container.probeBtn', 'container.probing', 'container.probeDone', 'container.listTitle',
   'container.guideTitle', 'container.guideHint', 'container.guideCost', 'container.guideCommercial', 'container.guideOs', 'container.guideSize',
   'container.link.official', 'container.link.install', 'container.link.download', 'container.link.support',
   'container.guideFirstStep', 'container.listEmpty', 'container.notInstalledNote',
   'container.action.start', 'container.action.stop', 'container.action.starting', 'container.action.stopping',
   'container.action.confirmStopTitle', 'container.action.confirmStopBody', 'container.action.needsAdmin',
-  'container.runEnv.title', 'container.runEnv.fitsLabel', 'container.runEnv.needsLabel', 'container.runEnv.blockedLabel',
+  'container.runEnv.biaoTi', 'container.runEnv.fitsLabel', 'container.runEnv.needsLabel', 'container.runEnv.blockedLabel',
   // 「运行/测试在容器中」那整套选项**已作废删除**（容器 = 开发环境）；这里只保留仍被设置页引用的"选项事实"键
-  'container.runEnv.opt.container-linux.title', 'container.runEnv.opt.container-windows.title',
-  'container.runEnv.opt.device-android.title', 'container.runEnv.opt.device-ios.title',
-  'container.runEnv.opt.device-windows-desktop.title',
-  'container.devEnv.title', 'container.devEnv.host', 'container.devEnv.container', 'container.devEnv.required',
+  'container.runEnv.opt.container-linux.biaoTi', 'container.runEnv.opt.container-windows.biaoTi',
+  'container.runEnv.opt.device-android.biaoTi', 'container.runEnv.opt.device-ios.biaoTi',
+  'container.runEnv.opt.device-windows-desktop.biaoTi',
+  'container.devEnv.biaoTi', 'container.devEnv.host', 'container.devEnv.container', 'container.devEnv.required',
   // 右键菜单要用的那句话（"只有创建者能启用/停用"）
   'container.project.notCreator',
   // P3/P7 定稿：项目可用性 / 不可用 = 只能看历史 / 右键启用停用 / 三块面板（含诚实边界）
@@ -248,32 +248,32 @@ const REQUIRED = [
   'projectFiles.runReason.host-native', 'projectFiles.runReason.container-built', 'projectFiles.runReason.no-host-runtime',
   'projectFiles.runStarted', 'projectFiles.runFailed', 'projectFiles.loadFailed', 'projectFiles.missingHint',
   // 镜像按技术栈选
-  'container.image.stack.title', 'container.image.stack.nodeOnly', 'container.image.stack.minimal',
+  'container.image.stack.biaoTi', 'container.image.stack.nodeOnly', 'container.image.stack.minimal',
   'container.image.stack.node', 'container.image.stack.fits', 'container.image.stack.moreLater',
   'container.image.executorHost',
   // P4 定稿：控制台 = 容器内的 shell（含安全契约逐条）
-  'container.console.title', 'container.console.tip', 'container.console.onlyInChat', 'container.console.notEnabled',
+  'container.console.biaoTi', 'container.console.tip', 'container.console.onlyInChat', 'container.console.notEnabled',
   'container.console.notReady', 'container.console.projectStopped', 'container.console.needsImage',
   'container.console.linuxNode', 'container.console.security', 'container.console.securityDetail',
   'container.console.intro', 'container.console.stateLine', 'container.console.noExec', 'container.console.refused',
   'container.console.run', 'container.console.sent', 'container.console.inputPlaceholder',
   // 诊断事件流（事件日志已从"控制台"降级为独立排障视图）
-  'console.hint', 'console.title', 'tip.console', 'console.clearTip', 'console.empty', 'console.redacted',
+  'console.tiShi', 'console.biaoTi', 'tip.console', 'console.clearTip', 'console.empty', 'console.redacted',
 ];
 for (const rid of ['docker', 'podman', 'wsl', 'nerdctl', 'rancher-desktop', 'colima', 'lima', 'windows-sandbox', 'lxd-incus', 'isulad', 'pouch', 'kata']) {
-  for (const f of ['name', 'cost', 'commercial', 'os', 'size']) REQUIRED.push('container.rt.' + rid + '.' + f);
+  for (const f of ['ming', 'cost', 'commercial', 'os', 'size']) REQUIRED.push('container.rt.' + rid + '.' + f);
 }
 const missZh = REQUIRED.filter((k) => !ZH[k]);
 const missEn = REQUIRED.filter((k) => !EN[k]);
 ok(missZh.length === 0, '8-1 中文包包含全部必需键', JSON.stringify(missZh));
 ok(missEn.length === 0, '8-2 英文包包含全部必需键', JSON.stringify(missEn));
 const CJK = /[\u4e00-\u9fff]/;
-const allow = new Set(['app.zhName', 'settings.localeZh', 'about.copyrightBody', 'llm.toolRecallDesc']);
+const allow = new Set(['yingYong.zhName', 'app.zhName', 'settings.localeZh', 'about.copyrightBody', 'llm.toolRecallDesc']);
 const leaked = Object.keys(EN).filter((k) => CJK.test(String(EN[k])) && !allow.has(k));
 ok(leaked.length === 0, '8-3 英文包除 4 个已知例外外没有中文', JSON.stringify(leaked));
 ok(Object.keys(ZH).length === Object.keys(EN).length, '8-4 中英键数量相等（键集合相等）',
   Object.keys(ZH).length + '/' + Object.keys(EN).length);
-const sameText = REQUIRED.filter((k) => k.endsWith('.name') === false && ZH[k] === EN[k]);
+const sameText = REQUIRED.filter((k) => !k.endsWith('.name') && !k.endsWith('.ming') && ZH[k] === EN[k]);
 ok(sameText.length === 0, '8-5 必需键里的**说明性文案**中英不相同（不是漏翻/复制粘贴）', JSON.stringify(sameText));
 // 名字是专有名词，允许本来就一样（Colima / Lima / Rancher Desktop …）。
 // 产品要求：名字里**不许**出现"推荐/优先"等广告性措辞，也不许挂厂商括注。
@@ -327,17 +327,17 @@ ok(translatedEvidence.length === 0, '9-3b evidence 没有被 i18n 渲染过（�
 
 /* ── 10. 控制台 = 容器内的 shell：参数形状与门禁（ADR 004 P4 定稿）── */
 section('10. 控制台（容器内 shell）的参数形状：只有 runtimeId + 动作枚举');
-const badCmd = guiFanKongZhiTaiQingQiu({ runtimeId: 'docker', action: 'open', sessionId: 's1', cmd: 'rm -rf /', command: 'curl evil' });
-ok(badCmd.ok === true && !('cmd' in badCmd.req) && !('command' in badCmd.req),
+const badCmd = guiFanKongZhiTaiQingQiu({ runtimeId: 'docker', action: 'daKai', sessionId: 's1', cmd: 'rm -rf /', command: 'curl evil' });
+ok(badCmd.ok === true && !('cmd' in badCmd.Qiu) && !('command' in badCmd.Qiu),
   '10-1 【核心】载荷里的 `cmd` / `command` 等字段**根本不被采纳**（白名单外的字段一律忽略）',
-  JSON.stringify(Object.keys(badCmd.ok ? badCmd.req : {})));
-ok(badCmd.ok === true && badCmd.req.action === 'open' && badCmd.req.runtimeId === 'docker',
-  '10-2 采纳的字段只有 { runtimeId, action, sessionId, data }', JSON.stringify(badCmd.ok ? badCmd.req : null));
+  JSON.stringify(Object.keys(badCmd.ok ? badCmd.Qiu : {})));
+ok(badCmd.ok === true && badCmd.Qiu.action === 'daKai' && badCmd.Qiu.runtimeId === 'docker',
+  '10-2 采纳的字段只有 { runtimeId, action, sessionId, data }', JSON.stringify(badCmd.ok ? badCmd.Qiu : null));
 const badAct = guiFanKongZhiTaiQingQiu({ action: 'exec', runtimeId: 'docker' });
 ok(badAct.ok === false && badAct.code === 'bad-action',
   '10-3 动作是**枚举**（' + CONTAINER_SHELL_ACTIONS.join('/') + '）：`exec` 这种即被拒',
   JSON.stringify(badAct));
-ok(guiFanKongZhiTaiQingQiu({ action: 'open', runtimeId: 'docker; rm -rf /' }).code === 'unknown-runtime',
+ok(guiFanKongZhiTaiQingQiu({ action: 'daKai', runtimeId: 'docker; rm -rf /' }).code === 'unknown-runtime',
   '10-4 【核心】运行时 id 必须是预定义清单里的（命令字符串不可能出现在 id 里）');
 ok(guiFanKongZhiTaiQingQiu({ action: 'write', data: 'x'.repeat(CONTAINER_SHELL_MAX_DATA + 1) }).code === 'data-too-long',
   '10-5 写入有长度上限（' + CONTAINER_SHELL_MAX_DATA + ' 字符），拿它当大数据通道会被拒');
@@ -346,7 +346,7 @@ ok(guiFanKongZhiTaiQingQiu({ action: 'write', data: 'echo\u0000hi' }).code === '
 ok(guiFanKongZhiTaiQingQiu({ action: 'close', data: 'echo hi' }).code === 'unexpected-data',
   '10-7 不该带数据的动作带上 data 也被拒（形状收紧，不留模糊地带）');
 ok(CONTAINER_SHELL_ACTIONS.length === 4 && CONTAINER_SHELL_ACTIONS.includes('write'),
-  '10-8 动作清单就是这 4 个（open/write/close/status）', JSON.stringify(CONTAINER_SHELL_ACTIONS));
+  '10-8 动作清单就是这 4 个（daKai/write/close/status）', JSON.stringify(CONTAINER_SHELL_ACTIONS));
 
 section('10b. 安全契约必须写成**可断言的事实**（不是一句宣传语）');
 ok(CONTAINER_SHELL_SECURITY.remoteInjectPaths === 0, '10b-1 远程注入路径 0 条（对端/群成员/智能体都没有入口）');
@@ -513,19 +513,19 @@ ok(!!ZH['container.action.retry'] && !!EN['container.action.retry'],
 
 /* ── 15. 第九批：不得假定 Linux + 环境固化按运行时区分 ── */
 section('15. 运行时不假定 Linux；固化能力按运行时如实区分');
-const capDocker = envSolidifyCapability('docker');
-const capPodman = envSolidifyCapability('podman');
-const capWsl = envSolidifyCapability('wsl');
-const capNone = envSolidifyCapability('');
+const capDocker = huanJingGuHuaNengLi('docker');
+const capPodman = huanJingGuHuaNengLi('podman');
+const capWsl = huanJingGuHuaNengLi('wsl');
+const capNone = huanJingGuHuaNengLi('');
 ok(capDocker.kind === 'commit' && capDocker.programmatic === true, '15-1 Docker ⇒ 可 commit 固化', JSON.stringify(capDocker));
 ok(capPodman.kind === 'commit' && capPodman.programmatic === true, '15-2 Podman ⇒ 同样可 commit', JSON.stringify(capPodman));
 ok(capWsl.kind === 'export-import' && capWsl.programmatic === false && capWsl.reason === 'wsl-no-commit',
   '15-3 【核心】WSL **没有 commit**：只能整盘 export/import，而且**我们不代跑**（programmatic=false）',
   JSON.stringify(capWsl));
 ok(capNone.kind === 'unsupported' && capNone.reason === 'no-runtime-chosen', '15-4 没选容器 ⇒ 能力未知/不支持如实标注', JSON.stringify(capNone));
-ok(envSolidifyCapability('windows-sandbox').reason === 'one-shot-vm' && envSolidifyCapability('lxd-incus').reason === 'system-service-needs-root',
+ok(huanJingGuHuaNengLi('windows-sandbox').reason === 'one-shot-vm' && huanJingGuHuaNengLi('lxd-incus').reason === 'system-service-needs-root',
   '15-5 每个运行时的固化能力都单独给（一次性沙箱 / 系统容器各自的原因）');
-ok(CONTAINER_RUNTIME_SPECS.every((sp) => typeof envSolidifyCapability(sp.id).reason === 'string' && envSolidifyCapability(sp.id).reason.length > 0),
+ok(CONTAINER_RUNTIME_SPECS.every((sp) => typeof huanJingGuHuaNengLi(sp.id).reason === 'string' && huanJingGuHuaNengLi(sp.id).reason.length > 0),
   '15-6 【核心】12 个候选运行时**全部**有固化能力结论（新增运行时必须补这一栏，不留空白）');
 
 const modeRow = (id, detail) => ({ ok: true, platform: 'win32', probedAt: 0, elapsedMs: 0, cached: false,
@@ -539,25 +539,25 @@ ok(quYinQingXiTongMoShi(modeRow('wsl', 'distro=Ubuntu'), 'wsl') === 'distro:Ubun
 ok(quYinQingXiTongMoShi(modeRow('docker', 'daemon-not-running'), 'docker') === 'unknown',
   '15-10 读不到就如实 unknown（不猜一个模式出来）');
 ok(quYinQingXiTongMoShi(null, 'docker') === 'unknown', '15-11 没有报告时同样 unknown');
-ok(!/Linux 容器/.test(ZH['container.env.mode.body']) && !/Linux 容器/.test(EN['container.env.mode.body']),
+ok(!/Linux 容器/.test(ZH['container.env.mode.ti']) && !/Linux 容器/.test(EN['container.env.mode.ti']),
   '15-12 UI 文案里不写"Linux 容器"，改说"你选择的容器 / 运行环境"');
 
 /* ── 16. 第九批：固化时机（节流 + 明确时机）与保留策略 ── */
 section('16. 环境固化的时机与保留策略（不是"一变就固化"）');
 const now16 = 1000000;
-ok(shouldSolidifyAt({ dirty: true, now: now16, lastSolidifiedAt: 0, programmatic: true }).solidify === true,
-  '16-1 第一次有变化 ⇒ 固化一次', JSON.stringify(shouldSolidifyAt({ dirty: true, now: now16, lastSolidifiedAt: 0, programmatic: true })));
-ok(shouldSolidifyAt({ dirty: true, now: now16, lastSolidifiedAt: now16 - 5000, programmatic: true }).code === 'coalesced',
+ok(shiFouGaiGuHua({ dirty: true, now: now16, lastSolidifiedAt: 0, programmatic: true }).solidify === true,
+  '16-1 第一次有变化 ⇒ 固化一次', JSON.stringify(shiFouGaiGuHua({ dirty: true, now: now16, lastSolidifiedAt: 0, programmatic: true })));
+ok(shiFouGaiGuHua({ dirty: true, now: now16, lastSolidifiedAt: now16 - 5000, programmatic: true }).code === 'coalesced',
   '16-2 【核心】节流窗口内**不**重复固化（避免把缓存/日志一起 commit、避免镜像爆炸）');
-ok(shouldSolidifyAt({ dirty: true, now: now16, lastSolidifiedAt: now16 - SOLIDIFY_COALESCE_MS - 1, programmatic: true }).solidify === true,
+ok(shiFouGaiGuHua({ dirty: true, now: now16, lastSolidifiedAt: now16 - SOLIDIFY_COALESCE_MS - 1, programmatic: true }).solidify === true,
   '16-3 过了节流窗口且有变化 ⇒ 固化一次');
-ok(shouldSolidifyAt({ dirty: false, now: now16, lastSolidifiedAt: now16 - SOLIDIFY_COALESCE_MS * 10, programmatic: true }).code === 'nothing-changed',
+ok(shiFouGaiGuHua({ dirty: false, now: now16, lastSolidifiedAt: now16 - SOLIDIFY_COALESCE_MS * 10, programmatic: true }).code === 'nothing-changed',
   '16-4 可写层没变化 ⇒ 不固化（docker diff 看不到变化就别 commit）');
-ok(shouldSolidifyAt({ dirty: false, beforeDestroy: true, programmatic: true }).code === 'before-destroy' &&
-   shouldSolidifyAt({ dirty: false, beforeDestroy: true, programmatic: true }).solidify === true,
+ok(shiFouGaiGuHua({ dirty: false, beforeDestroy: true, programmatic: true }).code === 'before-destroy' &&
+   shiFouGaiGuHua({ dirty: false, beforeDestroy: true, programmatic: true }).solidify === true,
   '16-5 【核心】可能销毁容器之前**无论如何**固化一次（最后机会）');
-ok(shouldSolidifyAt({ explicit: true, dirty: false, programmatic: true }).solidify === true, '16-6 用户显式点按钮 ⇒ 固化');
-ok(shouldSolidifyAt({ explicit: true, dirty: true, programmatic: false }).code === 'runtime-cannot-solidify',
+ok(shiFouGaiGuHua({ explicit: true, dirty: false, programmatic: true }).solidify === true, '16-6 用户显式点按钮 ⇒ 固化');
+ok(shiFouGaiGuHua({ explicit: true, dirty: true, programmatic: false }).code === 'runtime-cannot-solidify',
   '16-7 【核心】能力不支持时**连显式请求也不执行**（如实说不能，而不是点了假装成功）');
 const ret = guHuaBaoLiu([{ imageRef: 'a', at: 1 }, { imageRef: 'b', at: 5 }, { imageRef: 'c', at: 3 }, { imageRef: 'd', at: 9 }]);
 ok(ret.keep.length === SOLIDIFY_KEEP && ret.keep[0].imageRef === 'd' && ret.prune.length === 1 && ret.prune[0].imageRef === 'a',
@@ -576,11 +576,11 @@ section('17. 快照 vs 回退点（分层）+ 安装提示词（可复制、可�
 ok(ZH['container.snapshot.body'].indexOf('覆盖不到项目文件') >= 0 && ZH['container.snapshot.body'].indexOf('不成立') >= 0,
   '17-1 【核心】如实写明"bind mount 下容器快照覆盖不到项目文件"，并否掉"有容器回退点就更简单"',
   String(ZH['container.snapshot.body']).slice(0, 40));
-ok(ZH['container.snapshot.layerFiles'].indexOf('不依赖容器') >= 0 && ZH['container.snapshot.layerFiles'].indexOf('没有容器也必须有回退点') >= 0,
+ok(ZH['container.snapshot.body'].indexOf('不依赖容器') >= 0 && ZH['container.snapshot.body'].indexOf('没有容器也必须有回退点') >= 0,
   '17-2 【核心】文件回退 = 现有回退点机制，**不依赖容器**（没容器也必须有回退点）');
-ok(ZH['container.snapshot.layerEnv'].indexOf('环境回退') >= 0 && ZH['container.snapshot.fingerprint'].indexOf('环境指纹') >= 0,
+ok(ZH['container.snapshot.body'].indexOf('环境回退') >= 0 && ZH['container.snapshot.body'].indexOf('环境指纹') >= 0,
   '17-3 环境回退靠镜像/快照；回退点升级为"文件 + 环境指纹"（这是容器带来的**唯一**增益）');
-ok(ZH['container.snapshot.noClaim'].indexOf('不会') >= 0 && EN['container.snapshot.noClaim'].match(/will \*\*not\*\*/) !== null,
+ok(ZH['container.snapshot.body'].indexOf('不会') >= 0 && EN['container.snapshot.body'].match(/will \*\*not\*\*/) !== null,
   '17-4 明确承诺"不会声称有容器回退点就更简单"（中英都有）');
 const promptZh = ZH['container.env.prompt.content'];
 const promptEn = EN['container.env.prompt.content'];
@@ -601,8 +601,8 @@ ok(!!ZH['container.env.install.persistBody'] && ZH['container.env.install.persis
 ok(!!ZH['container.env.install.netBody'] && ZH['container.env.install.netBody'].indexOf('镜像源') >= 0,
   '17-10 也给了**网络**上的现实提醒（装包要联网，国内可能要换镜像源）',
   String(ZH['container.env.install.netBody']).slice(0, 30));
-ok(ZH['container.env.install.body'].indexOf('都不预装') >= 0 && ZH['container.env.install.body'].indexOf('指引') >= 0,
-  '17-11 明说"不预装 + 我们只给指引、不代跑"', String(ZH['container.env.install.body']).slice(0, 30));
+ok(ZH['container.env.install.ti'].indexOf('都不预装') >= 0 && ZH['container.env.install.ti'].indexOf('指引') >= 0,
+  '17-11 明说"不预装 + 我们只给指引、不代跑"', String(ZH['container.env.install.ti']).slice(0, 30));
 ok(!!ZH['checkpoints.env.changed'] && ZH['checkpoints.env.changed'].indexOf('环境回不去') >= 0 &&
    !!EN['checkpoints.env.changed'] && !!ZH['checkpoints.env.layered'],
   '17-12 回退点上的环境指纹文案：环境变了要**提前告知**"文件回退了、环境回不去"（中英都有）');

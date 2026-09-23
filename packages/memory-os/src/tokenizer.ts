@@ -66,7 +66,7 @@ export interface BianMaXuanXiang {
 }
 
 export interface Bianma {
-  ids: number[];
+  idJi: number[];
   attentionMask: number[];
   tokenTypeIds: number[];
   tokens: string[];
@@ -146,8 +146,8 @@ export class BertWordPieceFenCiQi {
 
     // 具体 token id 以 post_processor 声明为准（若声明了）
     const teshu = tijiao?.special_tokens;
-    if (teshu?.[this.clsToken]?.ids?.[0] != null) (this as any).clsId = teshu[this.clsToken].ids[0];
-    if (teshu?.[this.sepToken]?.ids?.[0] != null) (this as any).sepId = teshu[this.sepToken].ids[0];
+    if (teshu?.[this.clsToken]?.idJi?.[0] != null) (this as any).clsId = teshu[this.clsToken].idJi[0];
+    if (teshu?.[this.sepToken]?.idJi?.[0] != null) (this as any).sepId = teshu[this.sepToken].idJi[0];
 
     this.config = {
       type: model.type ?? 'WordPiece',
@@ -227,23 +227,23 @@ export class BertWordPieceFenCiQi {
     let start = 0;
     while (start < chars.length) {
       let end = chars.length;
-      let piece: string | null = null;
+      let pianDuan: string | null = null;
       while (start < end) {
-        const sub = chars.slice(start, end).join('');
-        const cand = start > 0 ? this.continuingPrefix + sub : sub;
-        if (this.vocab.has(cand)) {
-          piece = cand;
+        const fu = chars.slice(start, end).join('');
+        const houXuan = start > 0 ? this.continuingPrefix + fu : fu;
+        if (this.vocab.has(houXuan)) {
+          pianDuan = houXuan;
           break;
         }
         end -= 1;
       }
-      if (piece === null) {
+      if (pianDuan === null) {
         out.push(this.unkToken);
         outIds.push(this.unkId);
         start += 1;
       } else {
-        out.push(piece);
-        outIds.push(this.vocab.get(piece) as number);
+        out.push(pianDuan);
+        outIds.push(this.vocab.get(pianDuan) as number);
         start = end;
       }
     }
@@ -252,8 +252,8 @@ export class BertWordPieceFenCiQi {
   /** 无特殊 token 的纯分词（调试/测试用） */
   tokenize(text: string): string[] {
     const toks: string[] = [];
-    const ids: number[] = [];
-    for (const t of this.preTokenize(this.normalize(text))) this.wordpiece(t, toks, ids);
+    const idJi: number[] = [];
+    for (const t of this.preTokenize(this.normalize(text))) this.wordpiece(t, toks, idJi);
     return toks;
   }
 
@@ -261,42 +261,42 @@ export class BertWordPieceFenCiQi {
     const maxLength = opts.maxLength ?? 512;
     const tianjiaTeshu = opts.addSpecialTokens !== false;
     const toks: string[] = [];
-    const body: number[] = [];
-    for (const t of this.preTokenize(this.normalize(text))) this.wordpiece(t, toks, body);
+    const ti: number[] = [];
+    for (const t of this.preTokenize(this.normalize(text))) this.wordpiece(t, toks, ti);
 
-    let ids: number[];
+    let idJi: number[];
     let tokens: string[];
     let typeIds: number[];
     if (tianjiaTeshu && this.postKind !== 'none') {
       const budget = Math.max(0, maxLength - 2);
-      if (body.length > budget) {
-        body.length = budget;
+      if (ti.length > budget) {
+        ti.length = budget;
         toks.length = budget;
       }
-      ids = [this.clsId, ...body, this.sepId];
+      idJi = [this.clsId, ...ti, this.sepId];
       tokens = [this.clsToken, ...toks, this.sepToken];
-      typeIds = new Array(ids.length).fill(0);
+      typeIds = new Array(idJi.length).fill(0);
     } else {
-      if (body.length > maxLength) {
-        body.length = maxLength;
+      if (ti.length > maxLength) {
+        ti.length = maxLength;
         toks.length = maxLength;
       }
-      ids = body;
+      idJi = ti;
       tokens = toks;
-      typeIds = new Array(ids.length).fill(0);
+      typeIds = new Array(idJi.length).fill(0);
     }
-    return { ids, tokens, attentionMask: new Array(ids.length).fill(1), tokenTypeIds: typeIds };
+    return { idJi, tokens, attentionMask: new Array(idJi.length).fill(1), tokenTypeIds: typeIds };
   }
 
   /** 反解（decoder 声明为 WordPiece, prefix '##', cleanup=true） */
-  decode(ids: number[]): string {
-    const byId = new Map<number, string>();
-    for (const [tok, id] of this.vocab) if (!byId.has(id)) byId.set(id, tok);
+  decode(idJi: number[]): string {
+    const Suoyin = new Map<number, string>();
+    for (const [tok, id] of this.vocab) if (!Suoyin.has(id)) Suoyin.set(id, tok);
     const skip = new Set([this.clsId, this.sepId, this.padId]);
     let s = '';
-    for (const id of ids) {
+    for (const id of idJi) {
       if (skip.has(id)) continue;
-      const tok = byId.get(id);
+      const tok = Suoyin.get(id);
       if (tok === undefined) continue;
       if (tok.startsWith(this.continuingPrefix)) s += tok.slice(this.continuingPrefix.length);
       else s += (s.endsWith(' ') ? '' : ' ') + tok;

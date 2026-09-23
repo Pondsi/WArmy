@@ -13,7 +13,7 @@
 
 | 项 | 值 |
 |---|---|
-| OS | Windows x64（本机 DESKTOP-6N59TGI） |
+| OS | Windows x64（本机 DESKTOP-XXXXXXX） |
 | Node | v24.20.0（`C:\Program Files\nodejs\node.exe`） |
 | 权限 | **非管理员**（`net session` 失败；gsudo status 报 `Is Admin: False`） |
 | API 凭据 | **无任何 key**（`DEEPSEEK_API_KEY` 等环境变量均未设置，无 `.env`） |

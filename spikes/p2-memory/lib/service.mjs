@@ -73,12 +73,12 @@ export function startChild(dataDir, opts = {}) {
     else p.resolve(m);
   });
   child.on('exit', (c) => readyReject?.(new Error('child exit ' + c + ' :: ' + stderr.join('').slice(0, 400))));
-  const call = (msg, timeoutMs = 120000) =>
+  const call = (xiaoXi, timeoutMs = 120000) =>
     new Promise((resolve, reject) => {
       const id = ++seq;
       const timer = setTimeout(() => {
         pending.delete(id);
-        reject(new Error(`ipc timeout: ${JSON.stringify(msg).slice(0, 120)}`));
+        reject(new Error(`ipc timeout: ${JSON.stringify(xiaoXi).slice(0, 120)}`));
       }, timeoutMs);
       pending.set(id, {
         resolve: (v) => {
@@ -90,7 +90,7 @@ export function startChild(dataDir, opts = {}) {
           reject(e);
         },
       });
-      child.send({ ...msg, id });
+      child.send({ ...xiaoXi, id });
     });
   const stop = async () => {
     try {

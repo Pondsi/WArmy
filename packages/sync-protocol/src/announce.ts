@@ -66,15 +66,15 @@ export interface KeBoRuJieXiJieGuo extends KeBoRuXinHaoJi {
  *
  * 不给（undefined）= 默认允许主动拨（保持既有语义：不知道就不自我阉割）。
  */
-export function jiexiKeBoRu(input?: KeBoRuXinHaoJi | boolean): KeBoRuJieXiJieGuo {
-  if (input === undefined) return { canDial: true, basis: 'unspecified' };
-  if (typeof input === 'boolean') {
-    return input
+export function jiexiKeBoRu(shuRu?: KeBoRuXinHaoJi | boolean): KeBoRuJieXiJieGuo {
+  if (shuRu === undefined) return { canDial: true, basis: 'unspecified' };
+  if (typeof shuRu === 'boolean') {
+    return shuRu
       ? { dialable: true, canDial: true, basis: 'verified-dialable' }
       : { dialable: false, canDial: false, basis: 'neither' };
   }
-  const dialable = input.dialable === true;
-  const naturalDialable = input.naturalDialable === true;
+  const dialable = shuRu.dialable === true;
+  const naturalDialable = shuRu.naturalDialable === true;
   return {
     dialable,
     naturalDialable,
@@ -84,16 +84,16 @@ export function jiexiKeBoRu(input?: KeBoRuXinHaoJi | boolean): KeBoRuJieXiJieGuo
 }
 
 export interface MingceChengyuan {
-  fingerprint: string;
+  zhiWen: string;
   nodeId?: string;
-  alias?: string;
+  bieMing?: string;
   /** 已知地址（没走 DHT 时的手工地址） */
   addresses?: { host: string; port: number; source?: 'dht' | 'lan' | 'manual' }[];
 }
 
 export interface GuangBoChangShi {
   /** 哪个成员 */
-  fingerprint: string;
+  zhiWen: string;
   kind: 'dial';
   ok: boolean;
   /** 恒为 0：宣告失败即放弃，不重试 */
@@ -104,10 +104,10 @@ export interface GuangBoChangShi {
 }
 
 export interface BukeDaChengyuan {
-  fingerprint: string;
+  zhiWen: string;
   reason: string;
   /** C3 退化路径：等对方上线时反向宣告 */
-  fallback: 'wait-for-peer-announce';
+  huiTui: 'wait-for-peer-announce';
   /**
    * 这条记录是**哪一种"不可拨入"**造成的（附八.9）：只有两个信号都为假时才会出现；
    * 有全局 IPv6（`natural-address`）时**不再**走这条路径（那是被修正掉的误判）。
@@ -133,7 +133,7 @@ export interface GuangBoBaoGao {
 
 export interface RuXiangGonggao {
   ok: boolean;
-  fingerprint?: string;
+  zhiWen?: string;
   address?: DhtDiZhi;
   chongfu?: boolean;
   /** 是否在本群名册内 */
@@ -195,7 +195,7 @@ export class GuangBoFuWu {
   private readonly selfFingerprint: string;
 
   constructor(private readonly opts: GuangBoFuWuXuanXiang) {
-    this.selfFingerprint = typeof opts.identity.fingerprint === 'string' ? opts.identity.fingerprint : '';
+    this.selfFingerprint = typeof opts.identity.zhiWen === 'string' ? opts.identity.zhiWen : '';
   }
 
   get attempts(): readonly GuangBoChangShi[] {
@@ -219,7 +219,7 @@ export class GuangBoFuWu {
   }
 
   private rosterOf(fp: string): MingceChengyuan | undefined {
-    return this.opts.roster().find((m) => m.fingerprint === fp);
+    return this.opts.roster().find((m) => m.zhiWen === fp);
   }
 
   private addressCandidates(member: MingceChengyuan, fromDht?: DuiduanDizhiJilu): { host: string; port: number; source: 'dht' | 'lan' | 'manual' }[] {
@@ -235,20 +235,20 @@ export class GuangBoFuWu {
    */
   async announce(reason: GuangBoYuanYin = 'startup'): Promise<GuangBoBaoGao> {
     this.announceCalls += 1;
-    const startedAt = this.now();
+    const kaiShiShiJian = this.now();
     const myFingerprint = this.selfFingerprint;
     const address = this.opts.listenAddr();
 
     // ① 宣告"我在线 + 当前地址"（IP/端口变了就重新宣告，seq 递增）
     const published = await this.opts.dht.publish({
-      fingerprint: myFingerprint,
+      zhiWen: myFingerprint,
       record: {
         fp: myFingerprint,
         host: address.host,
         port: address.port,
         scope: this.opts.scope?.() ?? 'lan',
         announcedAt: this.now(),
-        alias: this.opts.nodeId,
+        bieMing: this.opts.nodeId,
       },
       signing: this.opts.signing,
     });
@@ -263,14 +263,14 @@ export class GuangBoFuWu {
     const keBoRuJieXiJieGuo = jiexiKeBoRu(this.opts.canDial?.());
 
     for (const member of this.opts.roster()) {
-      if (member.fingerprint === myFingerprint) continue;
+      if (member.zhiWen === myFingerprint) continue;
       if (!keBoRuJieXiJieGuo.canDial) {
         // C1：本机确实不可拨入（既没被对端验证过，也没有 IPv6 这类天然可拨入地址）→ 不主动拨，等对方拨入
-        skippedNotDialable.push(member.fingerprint);
+        skippedNotDialable.push(member.zhiWen);
         const u: BukeDaChengyuan = {
-          fingerprint: member.fingerprint,
+          zhiWen: member.zhiWen,
           reason: '本机不可拨入（既无对端验证，也无天然可拨入地址）→ 不主动探测，等待对方上线宣告/拨入',
-          fallback: 'wait-for-peer-announce',
+          huiTui: 'wait-for-peer-announce',
           canDialBasis: keBoRuJieXiJieGuo.basis,
         };
         unreachable.push(u);
@@ -281,14 +281,14 @@ export class GuangBoFuWu {
       // 解析当前地址（DHT 优先；查不到就用名册里的手工地址）
       let resolved: DuiduanDizhiJilu | undefined;
       try {
-        const q = await this.opts.dht.query(member.fingerprint, { requireDecrypt: true });
+        const q = await this.opts.dht.query(member.zhiWen, { requireDecrypt: true });
         if (q.ok) resolved = q.record;
       } catch {
         /* 查不到就用手工地址 */
       }
       const addresses = this.addressCandidates(member, resolved);
       const attempt: GuangBoChangShi = {
-        fingerprint: member.fingerprint,
+        zhiWen: member.zhiWen,
         kind: 'dial',
         ok: false,
         retries: 0,
@@ -303,7 +303,7 @@ export class GuangBoFuWu {
       const result = await this.connectTo(member, addresses, attempt);
       attempts.push(result);
       this.finishAttempt(result, unreachable);
-      if (result.ok) connected.push(member.fingerprint);
+      if (result.ok) connected.push(member.zhiWen);
     }
 
     this.attemptsLog.push(...attempts);
@@ -315,8 +315,8 @@ export class GuangBoFuWu {
       unreachable,
       skippedNotDialable,
       canDial: keBoRuJieXiJieGuo,
-      durationMs: this.now() - startedAt,
-      at: startedAt,
+      durationMs: this.now() - kaiShiShiJian,
+      at: kaiShiShiJian,
     };
   }
 
@@ -331,7 +331,7 @@ export class GuangBoFuWu {
         r = await this.opts.connect(member, addresses);
       } else if (this.opts.ladder) {
         const tiziJieguo = await this.opts.ladder.connect({
-          fingerprint: member.fingerprint,
+          zhiWen: member.zhiWen,
           nodeId: member.nodeId,
           addresses,
         });
@@ -349,9 +349,9 @@ export class GuangBoFuWu {
     this.opts.onConnectResult?.(attempt);
     if (!attempt.ok) {
       const u: BukeDaChengyuan = {
-        fingerprint: attempt.fingerprint,
+        zhiWen: attempt.zhiWen,
         reason: attempt.detail ?? '连接失败',
-        fallback: 'wait-for-peer-announce',
+        huiTui: 'wait-for-peer-announce',
       };
       unreachable.push(u);
       this.unreachableLog.push(u);
@@ -401,57 +401,57 @@ export class GuangBoFuWu {
     const key = env.k;
     const quchongMiyao = `${key}:${env.s}`;
     const chongfu = this.seenAnnouncements.has(quchongMiyao);
-    const verified = await yanZhengJiLuFeng(env, {
+    const yiYanZheng = await yanZhengJiLuFeng(env, {
       groupKeys: this.opts.dht.groupKeys,
       requireDecrypt: true,
       now: this.opts.now,
     });
-    if (!verified.ok || !verified.record) {
-      const rej: RuXiangGonggao = { ok: false, chongfu, reason: `记录不可用：${verified.reason ?? 'unknown'} ${verified.detail ?? ''}`.trim() };
-      this.inboundRejectedLog.push(rej);
-      this.opts.onPeerAnnouncement?.(rej, env, from);
-      return rej;
+    if (!yiYanZheng.ok || !yiYanZheng.record) {
+      const juJue: RuXiangGonggao = { ok: false, chongfu, reason: `记录不可用：${yiYanZheng.reason ?? 'unknown'} ${yiYanZheng.detail ?? ''}`.trim() };
+      this.inboundRejectedLog.push(juJue);
+      this.opts.onPeerAnnouncement?.(juJue, env, from);
+      return juJue;
     }
-    const record = verified.record;
+    const record = yiYanZheng.record;
     if (record.fp === this.selfFingerprint) {
       // 自己的记录（自己发布时也会触发 watch）：静默忽略，不记进拒绝日志
-      return { ok: false, chongfu, fingerprint: record.fp, reason: '自己发布的记录（忽略）' };
+      return { ok: false, chongfu, zhiWen: record.fp, reason: '自己发布的记录（忽略）' };
     }
     if (key !== jiLuJianYouZhiWen(record.fp)) {
-      const rej: RuXiangGonggao = { ok: false, chongfu, fingerprint: record.fp, reason: '记录键与被宣告指纹不符（键/内容不一致）' };
-      this.inboundRejectedLog.push(rej);
-      this.opts.onPeerAnnouncement?.(rej, env, from);
-      return rej;
+      const juJue: RuXiangGonggao = { ok: false, chongfu, zhiWen: record.fp, reason: '记录键与被宣告指纹不符（键/内容不一致）' };
+      this.inboundRejectedLog.push(juJue);
+      this.opts.onPeerAnnouncement?.(juJue, env, from);
+      return juJue;
     }
     const member = this.rosterOf(record.fp);
     if (!member) {
-      const rej: RuXiangGonggao = {
+      const juJue: RuXiangGonggao = {
         ok: false,
         chongfu,
-        fingerprint: record.fp,
+        zhiWen: record.fp,
         authorized: false,
         reason: `对方指纹 ${record.fp.slice(0, 12)}… 不在本群名册内 → 不建连`,
         address: { host: record.host, port: record.port },
       };
-      this.inboundRejectedLog.push(rej);
-      this.opts.onPeerAnnouncement?.(rej, env, from);
-      return rej;
+      this.inboundRejectedLog.push(juJue);
+      this.opts.onPeerAnnouncement?.(juJue, env, from);
+      return juJue;
     }
 
     this.seenAnnouncements.add(quchongMiyao);
     const base: RuXiangGonggao = {
       ok: true,
       chongfu,
-      fingerprint: record.fp,
+      zhiWen: record.fp,
       authorized: true,
       address: { host: record.host, port: record.port },
     };
     if (chongfu) {
       // 同一条宣告（同 seq）重复到达：只登记地址，不重复建连
-      const dup: RuXiangGonggao = { ...base, connected: false, reason: '同 seq 宣告重复（已处理过）→ 只更新地址' };
-      this.inboundAcceptedLog.push(dup);
-      this.opts.onPeerAnnouncement?.(dup, env, from);
-      return dup;
+      const zhongFu: RuXiangGonggao = { ...base, connected: false, reason: '同 seq 宣告重复（已处理过）→ 只更新地址' };
+      this.inboundAcceptedLog.push(zhongFu);
+      this.opts.onPeerAnnouncement?.(zhongFu, env, from);
+      return zhongFu;
     }
 
     // 附八.9：这里**同样**要认 `naturalDialable`（有全局 IPv6 ⇒ 天然可拨入），
@@ -471,7 +471,7 @@ export class GuangBoFuWu {
     }
 
     const addresses = this.addressCandidates(member, record);
-    const attempt: GuangBoChangShi = { fingerprint: record.fp, kind: 'dial', ok: false, retries: 0, at: this.now() };
+    const attempt: GuangBoChangShi = { zhiWen: record.fp, kind: 'dial', ok: false, retries: 0, at: this.now() };
     const result = await this.connectTo(member, addresses, attempt);
     this.attemptsLog.push(result);
     this.opts.onConnectResult?.(result);
@@ -496,7 +496,7 @@ export class GuangBoFuWu {
  * （见 `SecureSession.info.remoteAddress` / autonat 拨回），这一点在报告里标注。
  */
 export class DizhiJiantingqi {
-  private timer?: NodeJS.Timeout;
+  private jiShiQi?: NodeJS.Timeout;
   private last: string;
 
   constructor(
@@ -526,14 +526,14 @@ export class DizhiJiantingqi {
   }
 
   start(): void {
-    if (this.timer) return;
+    if (this.jiShiQi) return;
     const jiange = this.opts.intervalMs ?? 15_000;
-    this.timer = setInterval(() => this.check(), jiange);
-    this.timer.unref?.();
+    this.jiShiQi = setInterval(() => this.check(), jiange);
+    this.jiShiQi.unref?.();
   }
 
   stop(): void {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = undefined;
+    if (this.jiShiQi) clearInterval(this.jiShiQi);
+    this.jiShiQi = undefined;
   }
 }

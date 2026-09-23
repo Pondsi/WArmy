@@ -134,13 +134,13 @@ interface Yiban {
   token: string;
   role: ZhongJiJueSe;
   sock: net.Socket;
-  reader: HangDuquqi;
+  duQuQi: HangDuquqi;
   paired: boolean;
   closed: boolean;
   bytesIn: number;
   bytesOut: number;
   peer?: Yiban;
-  timer?: NodeJS.Timeout;
+  jiShiQi?: NodeJS.Timeout;
 }
 
 function xieYiHang(sock: net.Socket, obj: ZhongJiYiZhuCe | ZhongJiJiuXu | Record<string, unknown>): void {
@@ -156,7 +156,7 @@ interface ZhongjiLianjie {
   ok: boolean;
   sock?: net.Socket;
   /** 控制行之外多读到的字节（配对时缓冲下来的），要原样交给本地侧 */
-  rest?: Buffer;
+  qiYu?: Buffer;
   paired?: boolean;
   reason?: string;
 }
@@ -265,7 +265,7 @@ export class ZhongJiJieDian {
     sock.on('error', () => {
       /* 对端断开/重置：不抛到进程外 */
     });
-    const reader = new HangDuquqi();
+    const duQuQi = new HangDuquqi();
     let half: Yiban | null = null;
     let state: 'hello' | 'piped' = 'hello';
 
@@ -274,18 +274,18 @@ export class ZhongJiJieDian {
         // 已配对：任何到达的数据都是纯转发（见 pipe()）
         return;
       }
-      reader.push(chunk);
-      let line: string | null;
+      duQuQi.push(chunk);
+      let Hang: string | null;
       try {
-        line = reader.readLine();
+        Hang = duQuQi.readLine();
       } catch {
         this.rejectHalf(sock, 'control-line-too-long');
         return;
       }
-      if (line === null) return;
+      if (Hang === null) return;
       let hello: ZhongJiWenHou;
       try {
-        hello = JSON.parse(line) as ZhongJiWenHou;
+        hello = JSON.parse(Hang) as ZhongJiWenHou;
       } catch {
         this.rejectHalf(sock, 'bad-hello-json');
         return;
@@ -308,7 +308,7 @@ export class ZhongJiJieDian {
         token,
         role,
         sock,
-        reader,
+        duQuQi,
         paired: false,
         closed: false,
         bytesIn: 0,
@@ -332,16 +332,16 @@ export class ZhongJiJieDian {
       sock.on('data', (c: Buffer) => {
         if (half) half.bytesIn += c.length;
       });
-      half.timer = setTimeout(() => {
+      half.jiShiQi = setTimeout(() => {
         if (!half || half.paired || half.closed) return;
         xieYiHang(sock, { t: 'relay-ready', v: 1, token, paired: false, reason: `等待对端配对超时 ${this.opts.pairTimeoutMs ?? DEFAULT_RELAY_PAIR_TIMEOUT_MS}ms（对端未注册/不可达）` });
         this.emit({ type: 'reject', token, detail: 'pair-timeout' });
         this.destroy(half, 'pair-timeout');
       }, this.opts.pairTimeoutMs ?? DEFAULT_RELAY_PAIR_TIMEOUT_MS);
-      half.timer.unref?.();
+      half.jiShiQi.unref?.();
       sock.once('close', () => {
         if (half) half.closed = true;
-        if (half && half.timer) clearTimeout(half.timer);
+        if (half && half.jiShiQi) clearTimeout(half.jiShiQi);
         const s = half ? this.slots.get(half.token) : undefined;
         if (s && half) {
           if (s.listener === half) delete s.listener;
@@ -363,8 +363,8 @@ export class ZhongJiJieDian {
     const { listener, dialer } = caowei;
     this.slots.delete(token);
     this.pairCount += 1;
-    if (listener.timer) clearTimeout(listener.timer);
-    if (dialer.timer) clearTimeout(dialer.timer);
+    if (listener.jiShiQi) clearTimeout(listener.jiShiQi);
+    if (dialer.jiShiQi) clearTimeout(dialer.jiShiQi);
     listener.paired = true;
     dialer.paired = true;
     listener.peer = dialer;
@@ -373,8 +373,8 @@ export class ZhongJiJieDian {
     this.pairs.add(dialer);
     this.emit({ type: 'paired', token });
     // 配对前若已收到数据（对端没等 ready 就发了），**原样按序补发**，不丢不乱
-    const dialerPre = dialer.reader.takeAll();
-    const listenerPre = listener.reader.takeAll();
+    const dialerPre = dialer.duQuQi.takeAll();
+    const listenerPre = listener.duQuQi.takeAll();
     xieYiHang(listener.sock, { t: 'relay-ready', v: 1, token, paired: true });
     xieYiHang(dialer.sock, { t: 'relay-ready', v: 1, token, paired: true });
     this.pipe(dialer, listener, 'dialer->listener');
@@ -405,7 +405,7 @@ export class ZhongJiJieDian {
         at: this.now(),
       });
     }
-    const send = (b: Buffer): void => {
+    const faSong = (b: Buffer): void => {
       if (to.sock.destroyed) return;
       to.sock.write(b);
       to.bytesOut += b.length;
@@ -414,21 +414,21 @@ export class ZhongJiJieDian {
     };
 
     if (this.mode === 'forward' || this.attackArmed) {
-      send(chunk);
+      faSong(chunk);
       return;
     }
     this.attackArmed = true;
     if (this.mode === 'tamper-once') {
-      const tampered = Buffer.from(chunk);
-      if (tampered.length > 0) tampered[tampered.length - 1] = (tampered[tampered.length - 1] as number) ^ 0xff;
+      const yiCuanGai = Buffer.from(chunk);
+      if (yiCuanGai.length > 0) yiCuanGai[yiCuanGai.length - 1] = (yiCuanGai[yiCuanGai.length - 1] as number) ^ 0xff;
       this.emit({ type: 'attack', token: from.token, detail: `tamper-once(${direction})` });
-      send(tampered);
+      faSong(yiCuanGai);
       return;
     }
     if (this.mode === 'replay-once') {
       this.emit({ type: 'attack', token: from.token, detail: `replay-once(${direction})` });
-      send(chunk);
-      send(chunk);
+      faSong(chunk);
+      faSong(chunk);
       return;
     }
     // swap-once：扣下第一片，等第二片到了先发第二片再发第一片（字节序被改动）
@@ -436,8 +436,8 @@ export class ZhongJiJieDian {
     const first = chunk;
     const once = (next: Buffer): void => {
       from.sock.removeListener('data', onNext);
-      send(next);
-      send(first);
+      faSong(next);
+      faSong(first);
     };
     const onNext = (next: Buffer): void => once(next);
     from.sock.once('data', onNext);
@@ -457,7 +457,7 @@ export class ZhongJiJieDian {
   private destroy(half: Yiban, reason: string): void {
     if (half.closed) return;
     half.closed = true;
-    if (half.timer) clearTimeout(half.timer);
+    if (half.jiShiQi) clearTimeout(half.jiShiQi);
     this.pairs.delete(half);
     try {
       half.sock.destroy();
@@ -507,16 +507,16 @@ export interface ZhongJiSuiDaoXuanXiang {
 async function daKaiZhongJiLianJie(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJueSe): Promise<ZhongjiLianjie> {
   const timeoutMs = opts.readyTimeoutMs ?? DEFAULT_RELAY_PAIR_TIMEOUT_MS;
   const sock = net.connect({ host: opts.relay.host, port: opts.relay.port });
-  const reader = new HangDuquqi();
+  const duQuQi = new HangDuquqi();
   return new Promise<ZhongjiLianjie>((resolve) => {
-    let settled = false;
+    let yiJieSuan = false;
     const done = (r: ZhongjiLianjie): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
+      if (yiJieSuan) return;
+      yiJieSuan = true;
+      clearTimeout(jiShiQi);
       resolve(r);
     };
-    const timer = setTimeout(() => {
+    const jiShiQi = setTimeout(() => {
       try {
         sock.destroy();
       } catch {
@@ -524,49 +524,49 @@ async function daKaiZhongJiLianJie(opts: ZhongJiSuiDaoXuanXiang, role: ZhongJiJu
       }
       done({ ok: false, reason: `中继无响应（超时 ${timeoutMs}ms）` });
     }, timeoutMs);
-    timer.unref?.();
+    jiShiQi.unref?.();
     sock.on('error', (e: Error) => {
       done({ ok: false, reason: `中继连接失败：${e.message}` });
     });
     let registered = false;
     /** 非控制行（= 真实数据，可能是对端握手帧）**原样保留**，绝不当作无关行丢掉 */
     const pendingLines: Buffer[] = [];
-    const quzouQiyu = (): Buffer => Buffer.concat([...pendingLines.splice(0), reader.takeAll()]);
+    const quzouQiyu = (): Buffer => Buffer.concat([...pendingLines.splice(0), duQuQi.takeAll()]);
     sock.on('data', (chunk: Buffer) => {
-      reader.push(chunk);
+      duQuQi.push(chunk);
       for (;;) {
         let raw: Buffer | null;
         try {
-          raw = reader.readLineRaw();
+          raw = duQuQi.readLineRaw();
         } catch {
           sock.destroy();
           done({ ok: false, reason: '中继控制行异常' });
           return;
         }
         if (raw === null) return;
-        let msg: ZhongJiYiZhuCe | ZhongJiJiuXu | { t?: string };
+        let xiaoXi: ZhongJiYiZhuCe | ZhongJiJiuXu | { t?: string };
         try {
-          msg = JSON.parse(raw.subarray(0, raw.length - 1).toString('utf8')) as ZhongJiYiZhuCe | ZhongJiJiuXu | { t?: string };
+          xiaoXi = JSON.parse(raw.subarray(0, raw.length - 1).toString('utf8')) as ZhongJiYiZhuCe | ZhongJiJiuXu | { t?: string };
         } catch {
           pendingLines.push(raw);
           continue;
         }
-        if (msg.t === 'relay-registered') {
+        if (xiaoXi.t === 'relay-registered') {
           registered = true;
           if (role === 'listener') {
-            done({ ok: true, sock, rest: quzouQiyu(), paired: false });
+            done({ ok: true, sock, qiYu: quzouQiyu(), paired: false });
             return;
           }
           continue;
         }
-        if (msg.t === 'relay-ready') {
-          const ready = msg as ZhongJiJiuXu;
+        if (xiaoXi.t === 'relay-ready') {
+          const ready = xiaoXi as ZhongJiJiuXu;
           if (!ready.paired) {
             sock.destroy();
             done({ ok: false, reason: ready.reason ?? '中继未能配对到对端', paired: false });
             return;
           }
-          done({ ok: true, sock, rest: quzouQiyu(), paired: true });
+          done({ ok: true, sock, qiYu: quzouQiyu(), paired: true });
           return;
         }
         pendingLines.push(raw);
@@ -592,7 +592,7 @@ export class ZhongJiSuiDaoBoHao {
   private localPort = 0;
   private readonly opts: ZhongJiSuiDaoXuanXiang;
   private readonly stats: ZhongJiSuiDaoTongJi;
-  private pairWaiters: { resolve: (v: { ok: boolean; reason?: string }) => void; timer: NodeJS.Timeout }[] = [];
+  private pairWaiters: { resolve: (v: { ok: boolean; reason?: string }) => void; jiShiQi: NodeJS.Timeout }[] = [];
   private readonly sampleLog: ZhongJiYangBen[] = [];
   private readonly now: () => number;
 
@@ -636,7 +636,7 @@ export class ZhongJiSuiDaoBoHao {
 
   stop(): Promise<void> {
     for (const w of this.pairWaiters) {
-      clearTimeout(w.timer);
+      clearTimeout(w.jiShiQi);
       w.resolve({ ok: false, reason: 'tunnel-stopped' });
     }
     this.pairWaiters = [];
@@ -651,12 +651,12 @@ export class ZhongJiSuiDaoBoHao {
   /** 等一次"中继配对成功 / 失败"（测试与 UI 都能用它代替轮询） */
   waitForPair(timeoutMs = 5000): Promise<{ ok: boolean; reason?: string }> {
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        this.pairWaiters = this.pairWaiters.filter((w) => w.timer !== timer);
+      const jiShiQi = setTimeout(() => {
+        this.pairWaiters = this.pairWaiters.filter((w) => w.jiShiQi !== jiShiQi);
         resolve({ ok: false, reason: `等待中继配对超时 ${timeoutMs}ms` });
       }, timeoutMs);
-      timer.unref?.();
-      this.pairWaiters.push({ resolve, timer });
+      jiShiQi.unref?.();
+      this.pairWaiters.push({ resolve, jiShiQi });
     });
   }
 
@@ -664,7 +664,7 @@ export class ZhongJiSuiDaoBoHao {
     const dengdaizhe = this.pairWaiters;
     this.pairWaiters = [];
     for (const w of dengdaizhe) {
-      clearTimeout(w.timer);
+      clearTimeout(w.jiShiQi);
       w.resolve(r);
     }
   }
@@ -710,15 +710,15 @@ export class ZhongJiSuiDaoBoHao {
       this.recordSample(this.opts.token, 'dialer->listener', c);
       relaySock.write(c);
     });
-    if (conn.rest && conn.rest.length > 0) {
-      this.stats.bytesFromRelay += conn.rest.length;
-      local.write(conn.rest);
+    if (conn.qiYu && conn.qiYu.length > 0) {
+      this.stats.bytesFromRelay += conn.qiYu.length;
+      local.write(conn.qiYu);
     }
     relaySock.on('data', (c: Buffer) => {
       this.stats.bytesFromRelay += c.length;
       local.write(c);
     });
-    const shutdown = (): void => {
+    const guanBi = (): void => {
       try {
         local.destroy();
       } catch {
@@ -730,8 +730,8 @@ export class ZhongJiSuiDaoBoHao {
         /* ignore */
       }
     };
-    local.once('close', shutdown);
-    relaySock.once('close', shutdown);
+    local.once('close', guanBi);
+    relaySock.once('close', guanBi);
   }
 
   private recordSample(token: string, direction: ZhongJiFangXiang, chunk: Buffer): void {
@@ -812,27 +812,27 @@ export class ZhongJiSuiDaoJianTing {
      *     等 localSink 就绪后按序补发。
      * 否则表现为"中继说转发成功、端点却一个字节没收到"（静默丢包）。
      */
-    const reader = new HangDuquqi();
-    if (conn.rest) reader.push(conn.rest);
+    const duQuQi = new HangDuquqi();
+    if (conn.qiYu) duQuQi.push(conn.qiYu);
     const beng = (): void => {
       for (;;) {
-        const raw = reader.readLineRaw();
+        const raw = duQuQi.readLineRaw();
         if (raw === null) break;
-        let msg: ZhongJiJiuXu | { t?: string } | null = null;
+        let xiaoXi: ZhongJiJiuXu | { t?: string } | null = null;
         try {
-          msg = JSON.parse(raw.toString('utf8')) as ZhongJiJiuXu | { t?: string };
+          xiaoXi = JSON.parse(raw.toString('utf8')) as ZhongJiJiuXu | { t?: string };
         } catch {
-          msg = null;
+          xiaoXi = null;
         }
-        if (msg && msg.t === 'relay-ready') {
-          if ((msg as ZhongJiJiuXu).paired === true) this.pairedFired = true;
+        if (xiaoXi && xiaoXi.t === 'relay-ready') {
+          if ((xiaoXi as ZhongJiJiuXu).paired === true) this.pairedFired = true;
           continue;
         }
-        if (msg && (msg.t === 'relay-registered' || msg.t === 'relay-hello')) continue;
+        if (xiaoXi && (xiaoXi.t === 'relay-registered' || xiaoXi.t === 'relay-hello')) continue;
         this.feedLocal(raw); // 非控制行 = 真实数据，原样保留（含换行）
       }
       if (this.pairedFired) {
-        const shengyu = reader.takeAll();
+        const shengyu = duQuQi.takeAll();
         if (shengyu.length > 0) this.feedLocal(shengyu);
         this.stats.paired = true;
         if (!this.stats.pairedAt) {
@@ -846,7 +846,7 @@ export class ZhongJiSuiDaoJianTing {
         this.feedLocal(c);
         return;
       }
-      reader.push(c);
+      duQuQi.push(c);
       beng();
     });
     beng();
@@ -866,16 +866,16 @@ export class ZhongJiSuiDaoJianTing {
   }
 
   /** 等中继说"已配对"（listener 侧只有这一条通路） */
-  private readonly relayReadyWaiters: { resolve: (v: boolean) => void; timer: NodeJS.Timeout }[] = [];
+  private readonly relayReadyWaiters: { resolve: (v: boolean) => void; jiShiQi: NodeJS.Timeout }[] = [];
 
   waitForPair(timeoutMs = 5000): Promise<boolean> {
     if (this.stats.paired) return Promise.resolve(true);
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
+      const jiShiQi = setTimeout(() => {
         resolve(false);
       }, timeoutMs);
-      timer.unref?.();
-      this.relayReadyWaiters.push({ resolve, timer });
+      jiShiQi.unref?.();
+      this.relayReadyWaiters.push({ resolve, jiShiQi });
     });
   }
 
@@ -886,7 +886,7 @@ export class ZhongJiSuiDaoJianTing {
         clearInterval(iv);
         const ws = this.relayReadyWaiters.splice(0);
         for (const w of ws) {
-          clearTimeout(w.timer);
+          clearTimeout(w.jiShiQi);
           w.resolve(this.stats.paired);
         }
       }
@@ -894,7 +894,7 @@ export class ZhongJiSuiDaoJianTing {
     iv.unref?.();
   }
 
-  private async onPaired(rest: Buffer): Promise<void> {
+  private async onPaired(qiYu: Buffer): Promise<void> {
     if (this.stopped) return;
     const relaySock = this.relaySock;
     if (!relaySock) return;
@@ -941,16 +941,16 @@ export class ZhongJiSuiDaoJianTing {
       this.stats.bytesFromRelay += b.length;
       local.write(b);
     }
-    if (rest.length > 0) {
-      this.stats.bytesFromRelay += rest.length;
-      local.write(rest);
+    if (qiYu.length > 0) {
+      this.stats.bytesFromRelay += qiYu.length;
+      local.write(qiYu);
     }
     local.on('data', (c: Buffer) => {
       this.stats.bytesToRelay += c.length;
       this.recordSample(this.opts.token, 'listener->dialer', c);
       relaySock.write(c);
     });
-    const shutdown = (): void => {
+    const guanBi = (): void => {
       this.localSink = null;
       try {
         local.destroy();
@@ -963,15 +963,15 @@ export class ZhongJiSuiDaoJianTing {
         /* ignore */
       }
     };
-    local.once('close', shutdown);
-    relaySock.once('close', shutdown);
+    local.once('close', guanBi);
+    relaySock.once('close', guanBi);
   }
 
   stop(): Promise<void> {
     this.stopped = true;
     const ws = this.relayReadyWaiters.splice(0);
     for (const w of ws) {
-      clearTimeout(w.timer);
+      clearTimeout(w.jiShiQi);
       w.resolve(this.stats.paired);
     }
     return new Promise((resolve) => {
@@ -1014,7 +1014,7 @@ export type ZhongJiJueDingMa =
   | 'dialability-unknown';
 
 export interface ZhongJiHouXuanYinYong {
-  fingerprint?: string;
+  zhiWen?: string;
   nodeId?: string;
   /** 中继节点的地址（真实部署时 = 有公网地址的那台机器） */
   addr: DhtDiZhi;
@@ -1097,12 +1097,12 @@ async function morenBoHao(host: string, port: number, timeoutMs: number): Promis
  *  4. 对端可拨入性未知 → 如实标 `dialability-unknown`（不猜）。
  */
 export async function jueDingZhongJi(
-  target: { fingerprint: string; nodeId?: string },
+  target: { zhiWen: string; nodeId?: string },
   opts: ZhongJiJueDingXuanXiang
 ): Promise<ZhongJiJueDing> {
   const now = opts.now ?? (() => Date.now());
   const timeoutMs = opts.timeoutMs ?? 2000;
-  const dial = opts.dialTcp ?? morenBoHao;
+  const boHao = opts.dialTcp ?? morenBoHao;
   const selfDialable = opts.selfDialable;
   const peerDialable = opts.peerDialable;
   const tokenSymmetric = typeof opts.selfFingerprint === 'string' && opts.selfFingerprint.length > 0;
@@ -1162,14 +1162,14 @@ export async function jueDingZhongJi(
     };
   }
   for (const c of candidates) {
-    const startedAt = now();
+    const kaiShiShiJian = now();
     let r: { ok: boolean; detail?: string };
     try {
-      r = await dial(c.addr.host, c.addr.port, timeoutMs);
+      r = await boHao(c.addr.host, c.addr.port, timeoutMs);
     } catch (e) {
       r = { ok: false, detail: `探测异常：${(e as Error).message ?? String(e)}` };
     }
-    base.attempts.push({ addr: c.addr, ok: r.ok, detail: r.detail, ms: now() - startedAt });
+    base.attempts.push({ addr: c.addr, ok: r.ok, detail: r.detail, ms: now() - kaiShiShiJian });
     if (r.ok) {
       return {
         ...base,
@@ -1178,7 +1178,7 @@ export async function jueDingZhongJi(
         code: 'relay-selected',
         relay: c.addr,
         // 两端各用「自己指纹 + 对方指纹 + 中继地址」算，因 relayTokenFor 内部排序 ⇒ 两端必得同一个值
-        ...(tokenSymmetric ? { token: quZhongJiLingPai(opts.selfFingerprint as string, target.fingerprint, c.addr) } : {}),
+        ...(tokenSymmetric ? { token: quZhongJiLingPai(opts.selfFingerprint as string, target.zhiWen, c.addr) } : {}),
         reason: `两端都不可拨入，已选中继 ${c.addr.host}:${c.addr.port}（经中继：更慢，但可用）`,
       };
     }

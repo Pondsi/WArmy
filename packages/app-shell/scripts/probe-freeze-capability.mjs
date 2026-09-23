@@ -135,7 +135,7 @@ const OTHERS = [
   { id: 'nerdctl', cli: 'nerdctl', args: ['--version'], capability: 'supported', kind: 'image-commit', commands: ['nerdctl commit', 'nerdctl save / load'], notes: ['containerd-image-store'] },
   { id: 'isulad', cli: 'isula', args: ['version'], capability: 'supported', kind: 'image-commit', commands: ['isula commit', 'isula export / load'], notes: ['isulad-has-commit'] },
   { id: 'pouch', cli: 'pouch', args: ['version'], capability: 'supported', kind: 'image-commit', commands: ['pouch commit', 'pouch save / load'], notes: ['pouch-has-commit'] },
-  { id: 'lxd-incus', cli: 'incus', args: ['version'], capability: 'supported', kind: 'filesystem-export', commands: ['incus publish <instance> --alias x', 'incus snapshot create <instance> <name>', 'incus export <instance> x.tar'], notes: ['system-container-not-a-container-engine'] },
+  { id: 'lxd-incus', cli: 'incus', args: ['version'], capability: 'supported', kind: 'filesystem-export', commands: ['incus publish <instance> --alias x', 'incus snapshot create <instance> <ming>', 'incus export <instance> x.tar'], notes: ['system-container-not-a-container-engine'] },
   { id: 'rancher-desktop', cli: 'rdctl', args: ['version'], capability: 'unknown', kind: 'image-commit', commands: ['（底层是 containerd/nerdctl，固化走 nerdctl；rdctl 自身没有 commit）'], notes: ['rdctl-has-no-commit-itself'] },
   { id: 'colima', cli: 'colima', args: ['version'], capability: 'unsupported', kind: 'none', commands: ['（colima 是 VM 管理器，没有镜像固化命令；容器内的固化走 docker/podman）'], notes: ['vm-manager-not-image-store'] },
   { id: 'lima', cli: 'limactl', args: ['--version'], capability: 'unsupported', kind: 'none', commands: ['（limactl 无快照/固化；容器内的固化走运行时自身）'], notes: ['vm-manager-no-snapshot'] },
@@ -170,17 +170,17 @@ async function measureDockerCommit() {
   const mod = await import(new URL('file://' + dist.replace(/\\/g, '/')).href);
   const alpine = (mod.CONTAINER_BASE_IMAGES || []).find((x) => /alpine/.test(x.ref));
   const ref = alpine && alpine.digest ? `${alpine.ref}@${alpine.digest}` : 'alpine:3.20';
-  const name = 'warmy-freeze-probe';
+  const ming = 'warmy-freeze-probe';
   const img = 'warmy-freeze-probe:tmp';
   const out = { performed: true, image: ref, steps: [] };
   try {
     const pull = await run('docker', ['pull', ref], 300000);
     out.steps.push({ step: 'pull', ms: pull.ms, ok: pull.ok });
-    const c = await run('docker', ['run', '-d', '--name', name, ref, 'sh', '-c', 'dd if=/dev/urandom of=/probe.bin bs=1M count=8 && sync && sleep 600'], 120000);
+    const c = await run('docker', ['run', '-d', '--name', ming, ref, 'sh', '-c', 'dd if=/dev/urandom of=/probe.bin bs=1M count=8 && sync && sleep 600'], 120000);
     out.steps.push({ step: 'run', ms: c.ms, ok: c.ok, out: c.out.slice(0, 60) });
     const before = await run('docker', ['image', 'inspect', '--format', '{{.Size}}', ref], 30000);
     out.baseImageBytes = Number(before.out.trim()) || null;
-    const commit = await run('docker', ['commit', name, img], 300000);
+    const commit = await run('docker', ['commit', ming, img], 300000);
     out.commitMs = commit.ms;
     out.steps.push({ step: 'commit', ms: commit.ms, ok: commit.ok, out: (commit.out || commit.err).slice(0, 120) });
     const after = await run('docker', ['image', 'inspect', '--format', '{{.Size}}', img], 30000);
@@ -191,7 +191,7 @@ async function measureDockerCommit() {
     try { out.tarBytes = fs.statSync(path.join(outDir, 'freeze-probe.tar')).size; } catch { out.tarBytes = null; }
   } finally {
     // 清理：容器 + 临时镜像 + tar（**只删我们自己建的**）
-    const rm = await run('docker', ['rm', '-f', name], 60000);
+    const rm = await run('docker', ['rm', '-f', ming], 60000);
     const rmi = await run('docker', ['rmi', '-f', img], 60000);
     const clean = { rmOk: rm.ok, rmiOk: rmi.ok };
     try { fs.rmSync(path.join(outDir, 'freeze-probe.tar'), { force: true }); } catch { /* ignore */ }

@@ -38,7 +38,7 @@ export interface HuoXingLianJie {
 }
 
 export interface ChengYuanHuoXing {
-  fingerprint: string;
+  zhiWen: string;
   online: boolean;
   /** 在线是依据什么得出的 */
   via: 'member-connection' | 'creator-probe' | 'none';
@@ -62,7 +62,7 @@ export interface HuoXingXuanXiang {
 }
 
 export interface TanCeJiLu {
-  fingerprint: string;
+  zhiWen: string;
   at: number;
   ok: boolean;
   detail?: string;
@@ -80,7 +80,7 @@ export interface QingliJieguo {
 }
 
 interface ChengyuanZhuangtai {
-  fingerprint: string;
+  zhiWen: string;
   connections: Map<string, HuoXingLianJie>;
   since: number;
   lastSeenAt: number;
@@ -91,7 +91,7 @@ interface ChengyuanZhuangtai {
 }
 
 const UNKNOWN: ChengYuanHuoXing = {
-  fingerprint: '',
+  zhiWen: '',
   online: false,
   via: 'none',
   since: 0,
@@ -163,7 +163,7 @@ export class LianJieHuoXing {
     let s = this.members.get(fp);
     if (!s) {
       s = {
-        fingerprint: fp,
+        zhiWen: fp,
         connections: new Map(),
         since: this.now(),
         lastSeenAt: 0,
@@ -199,7 +199,7 @@ export class LianJieHuoXing {
   /** 连接断开 → 进入迟滞，不立即判离线 */
   closeConnection(fp: string, connId: string, at = this.now()): ChengYuanHuoXing {
     const s = this.members.get(fp);
-    if (!s) return { ...UNKNOWN, fingerprint: fp };
+    if (!s) return { ...UNKNOWN, zhiWen: fp };
     s.connections.delete(connId);
     s.lastSeenAt = at;
     if (s.connections.size === 0) {
@@ -252,9 +252,9 @@ export class LianJieHuoXing {
 
   status(fp: string): ChengYuanHuoXing {
     const s = this.members.get(fp);
-    if (!s) return { ...UNKNOWN, fingerprint: fp };
+    if (!s) return { ...UNKNOWN, zhiWen: fp };
     return {
-      fingerprint: fp,
+      zhiWen: fp,
       online: s.online,
       via: s.online ? s.via : 'none',
       since: s.since,
@@ -264,7 +264,7 @@ export class LianJieHuoXing {
     };
   }
 
-  list(): ChengYuanHuoXing[] {
+  LieBiao(): ChengYuanHuoXing[] {
     return [...this.members.keys()].map((fp) => this.status(fp));
   }
 
@@ -334,7 +334,7 @@ export class LianJieHuoXing {
       this.probeCallCount.total += 1;
       this.probeCallCount.bySweep += 1;
       const r = await this.opts.probe(fp);
-      this.probeLog.push({ fingerprint: fp, at: this.now(), ok: r.ok, detail: r.detail });
+      this.probeLog.push({ zhiWen: fp, at: this.now(), ok: r.ok, detail: r.detail });
       probed.push(fp);
       if (r.ok) {
         // 探测成功 = 对端确实活着。证据强度弱于"成员发起的持久连接"：

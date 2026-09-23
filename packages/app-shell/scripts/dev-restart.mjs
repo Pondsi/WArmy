@@ -14,8 +14,8 @@ const pkgRoot = path.join(here, '..');
 const electronExe = path.join(pkgRoot, 'node_modules', 'electron', 'dist', 'electron.exe');
 const mainJs = path.join(pkgRoot, 'dist', 'electron-main.js');
 
-function log(msg) {
-  process.stdout.write(`[dev-restart] ${msg}\n`);
+function log(xiaoXi) {
+  process.stdout.write(`[dev-restart] ${xiaoXi}\n`);
 }
 
 // 1. 杀掉在跑的 WArmy Electron 进程（按命令行匹配，避免误伤其它 electron 应用）

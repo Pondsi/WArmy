@@ -1,6 +1,6 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
 
 // 加入群聊邀请绑定（若尚未注入）
 if (!j.includes("btn-join-copy")) {
@@ -18,9 +18,9 @@ if (!j.includes("btn-join-copy")) {
         const inv = await window.warmy.inviteCreate().catch(() => null);
         const tok = inv?.invite?.token ? '&tok=' + inv.invite.token : '';
         const link = 'warmy://join?node=' + encodeURIComponent(node) + '&port=7788' + tok;
-        const lk = $('join-link');
+        const lk = $('jiaRuLink');
         if (lk) lk.textContent = link;
-        const qr = $('join-qr');
+        const qr = $('jiaRuqr');
         if (qr) {
           try {
             const mod = await import('./qr.js');
@@ -32,7 +32,7 @@ if (!j.includes("btn-join-copy")) {
       })();
       $('btn-join-copy')?.addEventListener('click', async () => {
         try {
-          await navigator.clipboard.writeText($('join-link').textContent);
+          await navigator.clipboard.writeText($('jiaRuLink').textContent);
           $('join-msg').textContent = t('join.copied');
         } catch {
           $('join-msg').textContent = t('join.fail');
@@ -47,4 +47,4 @@ if (!j.includes("btn-join-copy")) {
 ${use}`);
   console.log('join bindings added');
 }
-fs.writeFileSync(base + 'app.js', j);
+fs.writeFileSync(base + 'yingYong.js', j);

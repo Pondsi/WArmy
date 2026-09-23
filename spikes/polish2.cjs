@@ -1,6 +1,6 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
 let h = fs.readFileSync(base + 'index.html', 'utf8');
 
 console.log('appJs has SMTP:', j.includes('// SMTP'));
@@ -8,12 +8,12 @@ console.log('html about idx:', h.indexOf('settings.about'));
 console.log('html about context:', JSON.stringify(h.slice(h.indexOf('settings.about') - 80, h.indexOf('settings.about') + 60)));
 
 // 归档列表
-if (!h.includes('archived-box')) {
-  const aboutAnchor = "        <div class=\"set-section set-card\">\n          <h2>${t('settings.about')}</h2>";
+if (!h.includes('yiGuiDangHe')) {
+  const aboutAnchor = "        <div class=\"sheZhiSection sheZhiKa\">\n          <h2>${t('settings.about')}</h2>";
   if (h.includes(aboutAnchor)) {
     h = h.replace(
       aboutAnchor,
-      "        <div class=\"set-section set-card\">\n          <h2>${t('ctx.archive')}</h2>\n          <div id=\"archived-box\" class=\"muted\">—</div>\n        </div>\n" + aboutAnchor
+      "        <div class=\"sheZhiSection sheZhiKa\">\n          <h2>${t('ctx.archive')}</h2>\n          <div id=\"yiGuiDangHe\" class=\"jingYin\">—</div>\n        </div>\n" + aboutAnchor
     );
     console.log('archived HTML added');
   } else {
@@ -27,7 +27,7 @@ if (!j.includes('refreshArchived')) {
     j = j.replace(
       smtpAnchor,
       `      async function refreshArchived() {
-        const box = $('archived-box');
+        const box = $('yiGuiDangHe');
         if (!box) return;
         const r = await window.warmy.archivedList().catch(() => null);
         const items = r?.items || [];
@@ -47,11 +47,11 @@ ${smtpAnchor}`
 
 // KB 详情
 if (!j.includes('kbDetail(q)')) {
-  const old = "        $('kb-out').innerHTML =\n          '<div><b>' + t('knowledge.title') + '</b></div>' +\n          '<div>' + escapeHtml(ents || '—') + '</div>' +\n          '<div>' + escapeHtml(evs || '—') + '</div>';";
+  const old = "        $('zhiShiKuShuChu').innerHTML =\n          '<div><b>' + t('knowledge.biaoTi') + '</b></div>' +\n          '<div>' + escapeHtml(ents || '—') + '</div>' +\n          '<div>' + escapeHtml(evs || '—') + '</div>';";
   if (j.includes(old)) {
     j = j.replace(old, `        const det = await window.warmy.kbDetail(q).catch(() => null);
-        $('kb-out').innerHTML =
-          '<div><b>' + t('knowledge.title') + '</b></div>' +
+        $('zhiShiKuShuChu').innerHTML =
+          '<div><b>' + t('knowledge.biaoTi') + '</b></div>' +
           '<div>' + escapeHtml(ents || '—') + '</div>' +
           '<div>' + escapeHtml(evs || '—') + '</div>' +
           (det?.entities?.length
@@ -59,7 +59,7 @@ if (!j.includes('kbDetail(q)')) {
             : '');`);
     console.log('kb detail JS added');
   } else {
-    console.log('WARN: kb-out anchor not found');
+    console.log('WARN: zhiShiKuShuChu anchor not found');
   }
 }
 
@@ -84,11 +84,11 @@ ${mAnchor}`);
   }
 }
 
-fs.writeFileSync(base + 'app.js', j);
+fs.writeFileSync(base + 'yingYong.js', j);
 fs.writeFileSync(base + 'index.html', h);
 console.log('final check:');
 console.log('  refreshArchived:', j.includes('refreshArchived'));
 console.log('  kbDetail:', j.includes('kbDetail'));
 console.log('  cost-box js:', j.includes('cost-box'));
-console.log('  archived-box html:', h.includes('archived-box'));
+console.log('  yiGuiDangHe html:', h.includes('yiGuiDangHe'));
 console.log('  cost-box html:', h.includes('cost-box'));

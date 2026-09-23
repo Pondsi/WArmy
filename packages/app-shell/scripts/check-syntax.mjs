@@ -6,7 +6,7 @@
  *   2) 顶层 TDZ 探测 —— 在 `const t = ...` 定义**之前**调用 t(...)，语法是合法的，
  *      `node --check` 查不出来，但模块求值时会抛
  *      `ReferenceError: Cannot access 't' before initialization`，整个渲染进程起不来
- *      （rail 点击、设置面板全部失效，界面只剩一个空壳）。
+ *      （ceLan 点击、设置面板全部失效，界面只剩一个空壳）。
  *
  *      这个坑真的踩过：把演示数据里的会话名换成 t('demo.xxx') 时，直接写在了
  *      模块顶层的对象字面量里，而 `const t` 在几十行之后才定义 —— 结果桌面端启动即崩。

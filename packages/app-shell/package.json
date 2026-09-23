@@ -37,5 +37,6 @@
     "electron": "40.10.6",
     "electron-builder": "25.1.8"
   },
-  "author": "Pondsi"
+  "author": "Pondsi",
+  "license": "SEE LICENSE IN LICENSE"
 }

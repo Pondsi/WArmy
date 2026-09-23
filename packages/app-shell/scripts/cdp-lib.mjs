@@ -16,27 +16,27 @@ class CdpTimeout extends Error {}
 
 export async function attach(port, opts = {}) {
   const callTimeout = opts.callTimeout ?? 10000;
-  const label = opts.label || ('cdp:' + port);
+  const biaoQian = opts.biaoQian || ('cdp:' + port);
   const t0 = Date.now();
   const res = await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(5000) });
   const list = await res.json();
   const page = list.find((t) => t.type === 'page');
-  if (!page) throw new Error(`[${label}] 没有 page target（渲染进程可能已崩）`);
+  if (!page) throw new Error(`[${biaoQian}] 没有 page target（渲染进程可能已崩）`);
 
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await Promise.race([
-    new Promise((r, j) => { ws.addEventListener('open', r); ws.addEventListener('error', () => j(new Error(`[${label}] ws 连接失败`))); }),
-    sleep(5000).then(() => { throw new Error(`[${label}] ws 连接超时 5s`); }),
+    new Promise((r, j) => { ws.addEventListener('open', r); ws.addEventListener('error', () => j(new Error(`[${biaoQian}] ws 连接失败`))); }),
+    sleep(5000).then(() => { throw new Error(`[${biaoQian}] ws 连接超时 5s`); }),
   ]);
 
   let id = 0;
   const pending = new Map();          // id -> {resolve, reject, method, params, t0, timer}
   const events = [];                  // 收到的事件（用于收集 console 错误等）
-  let closed = null;                  // 断开原因；断开后所有 send 直接失败
+  let closed = null;                  // 断开原因；断开后所有 faSong 直接失败
 
   const failAll = (why) => {
     closed = why;
-    for (const [pid, p] of pending) { clearTimeout(p.timer); p.reject(new Error(`[${label}] ${why}（在 ${p.method} 上）`)); pending.delete(pid); }
+    for (const [pid, p] of pending) { clearTimeout(p.timer); p.reject(new Error(`[${biaoQian}] ${why}（在 ${p.method} 上）`)); pending.delete(pid); }
   };
   ws.addEventListener('message', (e) => {
     let m;
@@ -47,7 +47,7 @@ export async function attach(port, opts = {}) {
         clearTimeout(p.timer);
         pending.delete(m.id);
         const dt = Date.now() - p.t0;
-        if (m.error) p.reject(new Error(`[${label}] CDP 错误 @${p.method}: ${JSON.stringify(m.error).slice(0, 200)}`));
+        if (m.error) p.reject(new Error(`[${biaoQian}] CDP 错误 @${p.method}: ${JSON.stringify(m.error).slice(0, 200)}`));
         else { const res = m.result || {}; res.__ms = dt; p.resolve(res); }
         return;
       }
@@ -61,30 +61,32 @@ export async function attach(port, opts = {}) {
   ws.addEventListener('close', () => failAll('CDP 连接已断开'));
   ws.addEventListener('error', () => failAll('CDP 连接出错'));
 
-  function send(method, params = {}, o = {}) {
-    if (closed) return Promise.reject(new Error(`[${label}] 连接已关闭（${closed}），无法执行 ${method}`));
+  function faSong(method, params = {}, o = {}) {
+    if (closed) return Promise.reject(new Error(`[${biaoQian}] 连接已关闭（${closed}），无法执行 ${method}`));
     const timeout = o.timeout ?? callTimeout;
     const i = ++id;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(i);
         const detail = o.probe ? ` 现场: ${(() => { try { return JSON.stringify(o.probe()); } catch { return 'probe 失败'; } })()}` : '';
-        reject(new CdpTimeout(`[${label}] CDP 调用超时 ${timeout}ms: ${method} ${JSON.stringify(params).slice(0, 120)}${detail}`));
+        reject(new CdpTimeout(`[${biaoQian}] CDP 调用超时 ${timeout}ms: ${method} ${JSON.stringify(params).slice(0, 120)}${detail}`));
       }, timeout);
       pending.set(i, { resolve, reject, timer, method, params, t0: Date.now() });
       try { ws.send(JSON.stringify({ id: i, method, params })); } catch (err) {
         clearTimeout(timer); pending.delete(i);
-        reject(new Error(`[${label}] ws.send 失败 @${method}: ${err.message}`));
+        reject(new Error(`[${biaoQian}] ws.faSong 失败 @${method}: ${err.message}`));
       }
     });
   }
 
   const client = {
-    label, page, port,
+    biaoQian, page, port,
     get eventCount() { return events.length; },
-    send,
+    // 标准 CDP 客户端 API 名；faSong 是内部改名残留，两者等价
+    send: faSong,
+    faSong,
     async evaluate(expr, o = {}) {
-      const r = await send('Runtime.evaluate', {
+      const r = await faSong('Runtime.evaluate', {
         expression: expr, returnByValue: true, awaitPromise: o.awaitPromise !== false,
       }, o);
       if (r.exceptionDetails) return { __exc: String(r.exceptionDetails.text || '').slice(0, 200) };
@@ -106,7 +108,7 @@ export async function attach(port, opts = {}) {
           }
         } catch (e) { lastExc = e.message.slice(0, 120); last = undefined; }
         if (Date.now() - started > timeout) {
-          throw new Error(`等待条件超时 ${timeout}ms: ${o.label || expr.slice(0, 90)}  最后观测值=${String(JSON.stringify(last)).slice(0, 160)}`
+          throw new Error(`等待条件超时 ${timeout}ms: ${o.biaoQian || expr.slice(0, 90)}  最后观测值=${String(JSON.stringify(last)).slice(0, 160)}`
             + (lastExc ? `  最后异常=${lastExc}` : ''));
         }
         await sleep(poll);
@@ -133,7 +135,7 @@ export async function attach(port, opts = {}) {
         const differs = o.mustDifferFrom === undefined || val !== o.mustDifferFrom;
         if (same >= need && differs) return val;
         if (Date.now() - started > timeout) {
-          throw new Error(`等待取值稳定超时 ${timeout}ms: ${o.label || expr.slice(0, 60)}  最后值=${JSON.stringify(val).slice(0, 120)}`);
+          throw new Error(`等待取值稳定超时 ${timeout}ms: ${o.biaoQian || expr.slice(0, 60)}  最后值=${JSON.stringify(val).slice(0, 120)}`);
         }
         await sleep(poll);
       }
@@ -145,10 +147,10 @@ export async function attach(port, opts = {}) {
       return client.evaluate(`(function(){const e=document.elementFromPoint(${x},${y});if(!e)return 'null';return e.id?('#'+e.id):(e.className?('.'+String(e.className).split(' ')[0]):e.tagName);})()`);
     },
     async mouseClick(x, y, o = {}) {
-      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
-      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1, buttons: 1 });
+      await faSong('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+      await faSong('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1, buttons: 1 });
       await sleep(o.hold ?? 40);
-      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1, buttons: 0 });
+      await faSong('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1, buttons: 0 });
     },
     /** 真实鼠标点击（坐标点击，和真人一致）。返回命中的元素描述，方便诊断"点空了"。 */
     async clickSelector(sel, o = {}) {
@@ -185,7 +187,7 @@ export async function attach(port, opts = {}) {
       const fs = await import('node:fs');
       const t = Date.now();
       try {
-        const r = await send('Page.captureScreenshot', { format: 'png' }, { timeout: o.timeout ?? 8000 });
+        const r = await faSong('Page.captureScreenshot', { format: 'png' }, { timeout: o.timeout ?? 8000 });
         if (r.data) { fs.writeFileSync(file, Buffer.from(r.data, 'base64')); return { ok: true, ms: Date.now() - t }; }
         return { ok: false, reason: '无 data' };
       } catch (e) {
@@ -214,7 +216,7 @@ export const PORTS = { desktop: 9222, mobile: 9333, realapp: 9444 };
 export const BOOT_DONE = 'typeof window.__saveState === "function"';
 
 export async function bootWait(client, extra = '', timeout = 20000) {
-  return client.waitFor(`${BOOT_DONE} && (${extra || 'true'})`, { timeout, label: '页面启动完成（__saveState 就绪）' + (extra ? ' + ' + extra : '') });
+  return client.waitFor(`${BOOT_DONE} && (${extra || 'true'})`, { timeout, biaoQian: '页面启动完成（__saveState 就绪）' + (extra ? ' + ' + extra : '') });
 }
 
 export function reporter() {
@@ -223,9 +225,9 @@ export function reporter() {
   const warn = (l) => console.log('  WARN ' + l);
   return {
     ok, warn, results,
-    summary(name) {
+    summary(ming) {
       const pass = results.filter(Boolean).length;
-      console.log('\n' + name + ': ' + pass + '/' + results.length + ' 通过');
+      console.log('\n' + ming + ': ' + pass + '/' + results.length + ' 通过');
       return pass === results.length;
     },
   };

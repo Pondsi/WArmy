@@ -12,7 +12,7 @@ const HTML = process.env.PREVIEW_HTML || path.join(OUT, 'index.html');
 const electronPath = path.join(pkgRoot, 'node_modules', 'electron', 'dist', 'electron.exe');
 
 const HOST_SRC = `// auto host for verify-net-ui
-const { app, BrowserWindow } = require('electron');
+const { yingYong, BrowserWindow } = require('electron');
 const target = process.env.PREVIEW_HTML;
 app.whenReady().then(() => {
   const w = new BrowserWindow({

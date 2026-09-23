@@ -42,7 +42,7 @@ report.hardware = instances.hardwareAdvice();
 const h = await instances.spawn({
   config: {
     id: 'inst-1',
-    name: '测试实例',
+    ming: '测试实例',
     workspace: root + '\\inst-1',
     dutyEligible: true,
   },
@@ -60,7 +60,7 @@ if (process.env.DEEPSEEK_API_KEY) {
   try {
     const r = await live.chat({
       model: 'deepseek-chat',
-      messages: [{ role: 'user', content: '只回：ok' }],
+      xiaoXiJi: [{ role: 'user', content: '只回：ok' }],
       maxTokens: 4,
     });
     report.deepseekLive = {

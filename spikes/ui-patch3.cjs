@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/app.js';
+const p = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/yingYong.js';
 let j = fs.readFileSync(p, 'utf8');
 
 // 定位提示音区块
@@ -9,7 +9,7 @@ if (sIdx > 0 && aIdx > sIdx) {
   let seg = j.slice(sIdx, aIdx);
   const before = seg.length;
   // 移除提示音区的“检查更新”按钮块
-  seg = seg.replace(/\s*<div style="margin-top:12px">\s*<button class="btn-mini" id="btn-update">[\s\S]*?<\/div>/, '');
+  seg = seg.replace(/\s*<div style="margin-top:12px">\s*<button class="anNiuXiao" id="btn-update">[\s\S]*?<\/div>/, '');
   j = j.slice(0, sIdx) + seg + j.slice(aIdx);
   console.log('sound seg', before, '->', seg.length);
 }
@@ -26,4 +26,4 @@ const out = fs.readFileSync(p, 'utf8');
 const s2 = out.indexOf("t('settings.sound')");
 const a2 = out.indexOf("t('settings.about')");
 console.log('sound still has update btn:', out.slice(s2, a2).includes('btn-update'));
-console.log('about has update btn:', out.slice(a2, a2 + 1200).includes('btn-about-update'));
+console.log('about has update btn:', out.slice(a2, a2 + 1200).includes('anNiuAboutGengXin'));

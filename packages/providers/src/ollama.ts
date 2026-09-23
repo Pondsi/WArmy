@@ -16,37 +16,37 @@ export class OllamaGongYing extends JichuGongYing {
 
   /**
    * Ollama 的 /api/chat 目前只对部分模型支持 tools，旧版本对 tools 字段直接报错，
-   * 且本 provider 的 body() 也不透传 tools —— 如实声明"不支持"，
+   * 且本 provider 的 qingQiuTi() 也不透传 tools —— 如实声明"不支持"，
    * 让工具调用循环走优雅降级（普通单轮对话），而不是把整轮对话打成 error。
    */
   override get supportsTools(): boolean {
     return false;
   }
 
-  private body(req: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
-    const messages = req.messages.map((m) => ({
+  private qingQiuTi(Qiu: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
+    const xiaoXiJi = Qiu.xiaoXiJi.map((m) => ({
       role: m.role === 'tool' ? 'tool' : m.role,
       content: m.content,
     }));
     return {
-      model: req.model,
-      messages,
+      model: Qiu.model,
+      messages: xiaoXiJi,
       stream,
       options: {
-        num_predict: req.maxTokens,
-        temperature: req.temperature,
-        top_p: req.topP,
-        stop: req.stop,
+        num_predict: Qiu.maxTokens,
+        temperature: Qiu.temperature,
+        top_p: Qiu.topP,
+        stop: Qiu.stop,
       },
-      ...req.extra,
+      ...Qiu.extra,
     };
   }
 
-  async chat(req: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
+  async chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
     const res = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...this.auth.headers },
-      body: JSON.stringify(this.body(req, false)),
+      body: JSON.stringify(this.qingQiuTi(Qiu, false)),
       signal,
     });
     if (!res.ok) {
@@ -62,7 +62,7 @@ export class OllamaGongYing extends JichuGongYing {
     };
     return {
       id: `ollama-${Date.now()}`,
-      model: json.model || req.model,
+      model: json.model || Qiu.model,
       choices: [
         {
           index: 0,
@@ -81,34 +81,34 @@ export class OllamaGongYing extends JichuGongYing {
     };
   }
 
-  async *chatStream(req: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
+  async *chatStream(Qiu: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
     const res = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...this.auth.headers },
-      body: JSON.stringify(this.body(req, true)),
+      body: JSON.stringify(this.qingQiuTi(Qiu, true)),
       signal,
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       throw new Error(`ollama stream ${res.status}: ${text.slice(0, 200)}`);
     }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
+    const duQuQi = res.body.getReader();
+    const jieMaQi = new TextDecoder();
     let buf = '';
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await duQuQi.read();
       if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop() || '';
-      for (const line of lines) {
-        const t = line.trim();
+      buf += jieMaQi.decode(value, { stream: true });
+      const HangJi = buf.split('\n');
+      buf = HangJi.pop() || '';
+      for (const Hang of HangJi) {
+        const t = Hang.trim();
         if (!t) continue;
         try {
           const j = JSON.parse(t);
           yield {
             id: '',
-            model: j.model || req.model,
+            model: j.model || Qiu.model,
             choices: [
               {
                 index: 0,

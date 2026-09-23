@@ -26,9 +26,9 @@ const PORT = Number(process.env.WARMY_NO_WSL_CDP_PORT || 9937);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const failures = [];
-function check(name, ok, detail) {
-  console.log((ok ? '  ok   ' : '  FAIL ') + name + (detail !== undefined ? '  ' + JSON.stringify(detail).slice(0, 200) : ''));
-  if (!ok) failures.push(name);
+function check(ming, ok, detail) {
+  console.log((ok ? '  ok   ' : '  FAIL ') + ming + (detail !== undefined ? '  ' + JSON.stringify(detail).slice(0, 200) : ''));
+  if (!ok) failures.push(ming);
 }
 
 // ── 静态部分：规则必须写在代码里 ──
@@ -38,10 +38,10 @@ function check(name, ok, detail) {
   check('静态：probeWsl 默认静默（!deep 时不 spawn 任何 wsl.exe，报 not-probed）',
     /async function tanCeWsl[\s\S]{0,900}status: 'not-probed'/.test(probeSrc) && /wsl-not-probed/.test(probeSrc));
   check('静态：项目状态查询不传 deep（例行路径不启动 WSL）',
-    /probeContainerRuntimes\(\{ cacheMs: 8000, only: \[runtimeId\] \}\)/.test(mainSrc)
-    && !/probeContainerRuntimes\(\{ cacheMs: 8000, only: \[runtimeId\], deep/.test(mainSrc));
+    /tanCeRongQiYunXing\(\{ cacheMs: 8000, only: \[runtimeId\] \}\)/.test(mainSrc)
+    && !/tanCeRongQiYunXing\(\{ cacheMs: 8000, only: \[runtimeId\], deep/.test(mainSrc));
   check('静态：只有显式探测（容器卡片按钮）才传 deep:true',
-    /opts\?\.deep === true/.test(mainSrc) && /warmy:container-probe/.test(mainSrc));
+    /opts\?\.deep === true/.test(mainSrc) && /warmy:rongQiTanCe/.test(mainSrc));
 }
 
 // ── 动态部分：真机启动应用 + 开新窗口，看 wsl 有没有被拉起 ──
@@ -60,8 +60,8 @@ if (beforeStates === null) {
   const electron = path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe');
   const child = spawn(electron, [`--remote-debugging-port=${PORT}`, '--disable-features=CalculateNativeWinOcclusion', path.join(PKG, 'dist', 'electron-main.js')], { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', () => {}); child.stderr.on('data', () => {});
-  const afterBootProcs = { v: null, v2: null, sub: null };
-  async function attachTo(pred, label) {
+  const afterBootProcs = { v: null, v2: null, fu: null };
+  async function attachTo(pred, biaoQian) {
     for (let i = 0; i < 60; i++) {
       try {
         const list = await (await fetch(`http://127.0.0.1:${PORT}/json`, { signal: AbortSignal.timeout(4000) })).json();
@@ -71,14 +71,14 @@ if (beforeStates === null) {
           await new Promise((r, j) => { ws.addEventListener('open', r); ws.addEventListener('error', () => j(new Error('ws'))); });
           let id = 0; const pending = new Map();
           ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { const p = pending.get(m.id); pending.delete(m.id); m.error ? p.reject(new Error(JSON.stringify(m.error))) : p.resolve(m.result); } });
-          const send = (method, params) => new Promise((res, rej) => { const mid = ++id; pending.set(mid, { resolve: res, reject: rej }); ws.send(JSON.stringify({ id: mid, method, params })); setTimeout(() => { if (pending.has(mid)) { pending.delete(mid); rej(new Error('timeout')); } }, 20000); });
-          await send('Runtime.enable', {});
-          return { url: page.url, evaluate: async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(String(r.exceptionDetails.exception?.description || r.exceptionDetails.text).slice(0, 200)); return r.result.value; } };
+          const faSong = (method, params) => new Promise((res, rej) => { const mid = ++id; pending.set(mid, { resolve: res, reject: rej }); ws.send(JSON.stringify({ id: mid, method, params })); setTimeout(() => { if (pending.has(mid)) { pending.delete(mid); rej(new Error('timeout')); } }, 20000); });
+          await faSong('Runtime.enable', {});
+          return { url: page.url, evaluate: async (expr) => { const r = await faSong('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(String(r.exceptionDetails.exception?.description || r.exceptionDetails.text).slice(0, 200)); return r.result.value; } };
         }
       } catch { /* retry */ }
       await sleep(1000);
     }
-    throw new Error('no target ' + label);
+    throw new Error('no target ' + biaoQian);
   }
   try {
     const main = await attachTo((p) => p.type === 'page' && !/chatId=/.test(p.url), 'main');
@@ -88,26 +88,26 @@ if (beforeStates === null) {
 
     const stamp = String(Date.now()).slice(-6);
     const gid = 'nowsl-' + stamp;
-    const name = '无WSL-' + stamp;
+    const ming = '无WSL-' + stamp;
     await main.evaluate(`(async function(){
-      await window.warmy.groupCreate({ groupId: '${gid}', name: '${name}', type: 'internal', directedMode: false, devEnv: 'host' });
+      await window.warmy.groupCreate({ groupId: '${gid}', ming: '${ming}', type: 'internal', directedMode: false, devEnv: 'host' });
       if (window.__syncGroups) await window.__syncGroups();
       return true;
     })()`);
     await sleep(1500);
-    await main.evaluate(`(function(){ document.querySelector('#rail [data-nav="internalGroup"]').click(); return true; })()`);
+    await main.evaluate(`(function(){ document.querySelector('#ceLan [data-nav="internalGroup"]').click(); return true; })()`);
     await sleep(2000);
-    await main.evaluate(`(function(){ const r=Array.from(document.querySelectorAll('#list-body .list-item')).find((x)=>((x.querySelector('.name')||{}).textContent||'').trim()===${JSON.stringify(name)}); if(r) r.click(); return true; })()`);
+    await main.evaluate(`(function(){ const r=Array.from(document.querySelectorAll('#lieBiaoTi .lieBiaoTiaoMu')).find((x)=>((x.querySelector('.name')||{}).textContent||'').trim()===${JSON.stringify(ming)}); if(r) r.click(); return true; })()`);
     await sleep(2500);
     afterBootProcs.v2 = wslProcs();
     check('动态：选中会话后没有新的 wsl.exe/wslhost.exe', afterBootProcs.v2 === beforeProcs);
 
-    await main.evaluate(`(function(){ const mi=document.querySelector('#mi-open'); if (mi) mi.click(); return true; })()`);
-    await attachTo((p) => p.type === 'page' && p.url.includes('chatId=' + gid), 'sub');
+    await main.evaluate(`(function(){ const mi=document.querySelector('#caiDanTuBiaoDaKai'); if (mi) mi.click(); return true; })()`);
+    await attachTo((p) => p.type === 'page' && p.url.includes('chatId=' + gid), 'fu');
     await sleep(4000);
-    afterBootProcs.sub = wslProcs();
+    afterBootProcs.fu = wslProcs();
     const afterStates = wslStates();
-    check('动态：打开新窗口后没有新的 wsl.exe/wslhost.exe', afterBootProcs.sub === beforeProcs);
+    check('动态：打开新窗口后没有新的 wsl.exe/wslhost.exe', afterBootProcs.fu === beforeProcs);
     check('动态：发行版状态未被改变（没有被代为启动）', afterStates === beforeStates, { before: String(beforeStates).replace(/\s+/g, ' ').slice(0, 90), after: String(afterStates).replace(/\s+/g, ' ').slice(0, 90) });
   } catch (e) {
     check('动态：执行未抛异常', false, String(e).slice(0, 200));

@@ -16,7 +16,7 @@ for (const f of fs.readdirSync(path.join(root, 'packages/sync-protocol/dist'))) 
 }
 
 const mod = await import(pathToFileURL(path.join(ascii, 'dist', 'lan.js')).href);
-const r = await mod.dualMachineSmoke({
+const r = await mod.shuangJiMaoYan({
   localId: 'node-a',
   localPort: 7791,
   peerHost: process.env.PEER_HOST || '192.168.1.123',

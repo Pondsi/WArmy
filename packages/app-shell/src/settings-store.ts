@@ -54,7 +54,7 @@ function anQuanXiangDeng(a: string, b: string): boolean {
 
 export interface SmtpZhanghao {
   id: string;
-  label: string;
+  biaoQian: string;
   host: string;
   port: number;
   secure: boolean;
@@ -62,7 +62,7 @@ export interface SmtpZhanghao {
   /** 授权码；本地保存，界面可用密文展示 */
   pass: string;
   /** 验证结果缓存 */
-  verified?: boolean;
+  yiYanZheng?: boolean;
   lastVerifyAt?: number;
 }
 
@@ -75,7 +75,7 @@ export interface SmtpZhanghao {
  */
 export interface gongyingshangJilu {
   id: string;
-  label: string;
+  biaoQian: string;
   protocol: 'openai-compatible' | 'anthropic' | 'ollama';
   baseURL: string;
   defaultModel?: string;
@@ -138,7 +138,7 @@ export const WARMY_SUGGESTED_NET_PORTS: readonly number[] = [
 /** Maximum number of skill auto-discovery directories the user may configure. */
 export const SKILL_SCAN_DIRS_MAX = 10;
 
-/** Supported UI locale pack ids (mirrors src/i18n/locales.ts; kept here so settings stay aligned). */
+/** Supported UI yuYan pack ids (mirrors src/i18n/locales.ts; kept here so settings stay aligned). */
 export const SETTINGS_SUPPORTED_LOCALES = [
   'zh-CN',
   'zh-TW',
@@ -154,7 +154,7 @@ export const SETTINGS_SUPPORTED_LOCALES = [
 
 export interface YingYongPeizhi {
   /** One of SETTINGS_SUPPORTED_LOCALES. Stored as free string for backward compat; resolveLocale maps unknown tags. */
-  locale: string;
+  yuYan: string;
   themeMode: 'light' | 'dark' | 'system';
   accent: string;
   sound: { complete: boolean; request: boolean; error: boolean };
@@ -174,12 +174,12 @@ export interface YingYongPeizhi {
   skillScanDirs: string[];
   /**
    * Plugin auto-discovery directories (absolute paths). Max SKILL_SCAN_DIRS_MAX (10).
-   * "检查插件" scans these dirs and installs discovered plugins into the list.
+   * "检查插件" scans these dirs and installs discovered chaJianJi into the list.
    */
   pluginScanDirs?: string[];
   /**
    * Per-skill runtime enable flag. Key = skill id (from skills-list).
-   * Missing key = enabled (default on). Persisted so pause survives restart.
+   * Missing key = enabled (default qiYong). Persisted so pause survives restart.
    */
   skillEnabled?: Record<string, boolean>;
   /**
@@ -191,7 +191,7 @@ export interface YingYongPeizhi {
   netBannerDismissed?: string[];
   /**
    * Privacy policy consent. Default false — first launch must show policy after language pick.
-   * Revoke in About closes the app; next launch requires agree again.
+   * Revoke in About closes the yingYong; next launch requires agree again.
    */
   privacyConsent?: boolean;
   /** 聊天自动滚动到最新（默认关） */
@@ -209,7 +209,7 @@ export interface YingYongPeizhi {
   updateFeedUrl?: string;
   updateChannel?: string;
   /**
-   * Networking config persisted from the 组网设置 card.
+   * Networking config persisted from the 组网设置 ka.
    * `publicAddresses` is a mixed list of IPs and domain names.
    * Legacy `ip` / `domains` are kept as mirrors for older readers.
    */
@@ -305,7 +305,7 @@ export interface YingYongPeizhi {
    * 宿主开发的项目记 `host`（没有环境维度），不写空对象。
    */
   checkpointEnv?: Record<string, {
-    active: boolean;
+    jiHuo: boolean;
     runtimeId: string;
     revision: string;
     at: number;
@@ -392,9 +392,9 @@ export class BenDiZhangHuCang {
 
   saveProfile(p: BenjiZiliao): BenjiZiliao {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const { passwordHash: _drop, ...rest } = p;
-    fs.writeFileSync(this.file, JSON.stringify(rest, null, 2));
-    return rest as BenjiZiliao;
+    const { passwordHash: _drop, ...qiYu } = p;
+    fs.writeFileSync(this.file, JSON.stringify(qiYu, null, 2));
+    return qiYu as BenjiZiliao;
   }
 
   /** 登录功能占位：本地密码校验 */
@@ -439,7 +439,7 @@ export class PeizhiCang {
 
 function defaults(): YingYongPeizhi {
   return {
-    locale: 'zh-CN',
+    yuYan: 'zh-CN',
     themeMode: 'system',
     accent: '#07c160',
     sound: { complete: true, request: true, error: true },

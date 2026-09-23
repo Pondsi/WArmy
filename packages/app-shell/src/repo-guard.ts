@@ -127,15 +127,15 @@ export function guiFanHuaCangKuLuJing(raw: string): CangkuLujingGuifan {
     quchu.startsWith('~\\');
 
   const segments: string[] = [];
-  for (const piece of quchu.split(/[/\\]+/)) {
-    if (piece === '' || piece === '.') continue;
-    if (piece === '..') {
+  for (const pianDuan of quchu.split(/[/\\]+/)) {
+    if (pianDuan === '' || pianDuan === '.') continue;
+    if (pianDuan === '..') {
       if (segments.length === 0) out.escaped = true;
       else segments.pop();
       continue;
     }
-    const trimmed = piece.replace(NOISE_TAIL_RE, '');
-    if (trimmed !== piece) out.noisy = true;
+    const trimmed = pianDuan.replace(NOISE_TAIL_RE, '');
+    if (trimmed !== pianDuan) out.noisy = true;
     if (trimmed === '') continue;
     segments.push(trimmed);
   }
@@ -242,24 +242,24 @@ interface WeixianMingzhong {
 
 /** 判定"这个 key 落在 git 目录里"，并给出**具体**的危险类型 */
 function dangerInGitDir(restKey: string[], restDisp: string[]): WeixianMingzhong | null {
-  const label = `.git` + (restDisp.length ? `/${restDisp.join('/')}` : '');
+  const biaoQian = `.git` + (restDisp.length ? `/${restDisp.join('/')}` : '');
   if (restKey.length === 0) {
-    return { code: 'git-internal', reason: `${label} 是 git 目录本体，成员不得写入` };
+    return { code: 'git-internal', reason: `${biaoQian} 是 git 目录本体，成员不得写入` };
   }
-  const head = restKey[0] ?? '';
-  if (head === 'hooks') {
-    return { code: 'git-hooks', reason: `${label} 落在 .git/hooks/**：钩子会在创建者机器上被执行（post-receive 等）` };
+  const touBu = restKey[0] ?? '';
+  if (touBu === 'hooks') {
+    return { code: 'git-hooks', reason: `${biaoQian} 落在 .git/hooks/**：钩子会在创建者机器上被执行（post-receive 等）` };
   }
-  if (head === 'config' || head === 'config.worktree') {
-    return { code: 'git-config', reason: `${label} 可设置 core.hooksPath / filter 驱动等指向任意脚本，等于任意代码执行` };
+  if (touBu === 'config' || touBu === 'config.worktree') {
+    return { code: 'git-config', reason: `${biaoQian} 可设置 core.hooksPath / filter 驱动等指向任意脚本，等于任意代码执行` };
   }
-  if (head === 'info' && (restKey[1] ?? '') === 'attributes') {
-    return { code: 'git-attributes', reason: `${label} 可绑定 filter/diff 驱动并作用于后续操作` };
+  if (touBu === 'info' && (restKey[1] ?? '') === 'attributes') {
+    return { code: 'git-attributes', reason: `${biaoQian} 可绑定 filter/diff 驱动并作用于后续操作` };
   }
-  if (head === 'modules') {
-    return { code: 'git-internal', reason: `${label} 是子模块元数据，可诱导 git 递归到仓库外` };
+  if (touBu === 'modules') {
+    return { code: 'git-internal', reason: `${biaoQian} 是子模块元数据，可诱导 git 递归到仓库外` };
   }
-  return { code: 'git-internal', reason: `${label} 属于 git 内部数据，成员不得写入` };
+  return { code: 'git-internal', reason: `${biaoQian} 属于 git 内部数据，成员不得写入` };
 }
 
 /** 危险路径判定：`.git/**`（含任意层级嵌套 .git），key 已 casefold */
@@ -284,14 +284,14 @@ const ATTR_BARE_FILTER_RE = /(^|\s)filter(?=\s|$)/;
 
 /** 扫 `.gitattributes` 内容；返回命中的危险写法（无则 null） */
 function saoMiaoGitShuXing(content: string): { code: TuisongLujingJujueDaima; reason: string } | null {
-  const lines = content.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const line = (lines[i] ?? '').trim();
-    if (!line || line.startsWith('#')) continue;
-    if (ATTR_DRIVER_RE.test(line) || ATTR_BARE_FILTER_RE.test(line)) {
+  const HangJi = content.split(/\r?\n/);
+  for (let i = 0; i < HangJi.length; i++) {
+    const Hang = (HangJi[i] ?? '').trim();
+    if (!Hang || Hang.startsWith('#')) continue;
+    if (ATTR_DRIVER_RE.test(Hang) || ATTR_BARE_FILTER_RE.test(Hang)) {
       return {
         code: 'git-attributes',
-        reason: `.gitattributes 第 ${i + 1} 行绑定了 filter/diff 驱动：${line.slice(0, 120)}`,
+        reason: `.gitattributes 第 ${i + 1} 行绑定了 filter/diff 驱动：${Hang.slice(0, 120)}`,
       };
     }
   }
@@ -316,15 +316,15 @@ export function jiaoYanTuiSongLuJing(
   const requireAttributesContent = opts.requireAttributesContent !== false;
   const rejectAliasCollisions = opts.rejectAliasCollisions !== false;
 
-  const list = (typeof paths === 'string' ? [paths] : paths).map(toEntry);
+  const LieBiao = (typeof paths === 'string' ? [paths] : paths).map(toEntry);
   const rejected: TuiSongLuJingJuJue[] = [];
   const warnings: string[] = [];
   const accepted: string[] = [];
   const acceptedSet = new Set<string>();
   /** key → 第一条出现的原始路径（用于碰撞检测） */
-  const seen = new Map<string, string>();
+  const yiKanDao = new Map<string, string>();
 
-  for (const entry of list) {
+  for (const entry of LieBiao) {
     const raw = typeof entry.path === 'string' ? entry.path : '';
     const n = guiFanHuaCangKuLuJing(raw);
     const reject = (code: TuisongLujingJujueDaima, reason: string, extra: Partial<TuiSongLuJingJuJue> = {}): void => {
@@ -342,9 +342,9 @@ export function jiaoYanTuiSongLuJing(
       reject(n.code ?? 'empty-path', n.reason ?? '路径非法');
       continue;
     }
-    const danger = weixianTuisongLujing(n.key, base);
-    if (danger) {
-      reject(danger.code, danger.reason);
+    const weixian = weixianTuisongLujing(n.key, base);
+    if (weixian) {
+      reject(weixian.code, weixian.reason);
       continue;
     }
     if (n.noisy) {
@@ -391,9 +391,9 @@ export function jiaoYanTuiSongLuJing(
     const basename = n.key.split('/').pop() ?? '';
     if (basename === '.gitattributes') {
       if (typeof entry.content === 'string') {
-        const hit = saoMiaoGitShuXing(entry.content);
-        if (hit) {
-          reject(hit.code, hit.reason);
+        const mingZhong = saoMiaoGitShuXing(entry.content);
+        if (mingZhong) {
+          reject(mingZhong.code, mingZhong.reason);
           continue;
         }
       } else if (requireAttributesContent) {
@@ -411,9 +411,9 @@ export function jiaoYanTuiSongLuJing(
     }
 
     // 批次内别名碰撞：`A.ts` 与 `a.ts`、NFC 与 NFD 的 cafe 在多数文件系统上是同一个文件
-    const xianqian = seen.get(n.key);
+    const xianqian = yiKanDao.get(n.key);
     if (xianqian === undefined) {
-      seen.set(n.key, raw);
+      yiKanDao.set(n.key, raw);
     } else if (rejectAliasCollisions && xianqian !== raw) {
       reject('collision', `与同批次路径「${xianqian}」在大小写/Unicode 归一化后是同一个文件`, {
         conflictsWith: xianqian,
@@ -425,7 +425,7 @@ export function jiaoYanTuiSongLuJing(
 
     // 同时把先前那条也标成碰撞（否则一条被拒、另一条被放行，语义含糊）
     if (rejectAliasCollisions) {
-      const shuangzi = list.find(
+      const shuangzi = LieBiao.find(
         (e) =>
           e !== entry &&
           typeof e.path === 'string' &&
@@ -698,7 +698,7 @@ export interface PublishViolation {
   /** 已脱敏的命中片段（绝不回显完整密钥/邮箱） */
   match?: string;
   /** 内容命中时的行号（1 起） */
-  line?: number;
+  Hang?: number;
 }
 
 export interface PublishScanResult {
@@ -724,7 +724,7 @@ export interface PublishScanOptions {
 
 interface MingGuize {
   code: PublishViolationCode;
-  label: string;
+  biaoQian: string;
   re: RegExp;
 }
 
@@ -732,27 +732,27 @@ interface MingGuize {
 const NAME_RULES: MingGuize[] = [
   {
     code: 'chat-log',
-    label: '聊天日志',
-    re: /(^|\/)(chat|chats|chatlog|chat[-_.]?log|chat[-_.]?history|conversation|transcript|session|messages?|history)([-_.][^/]*)?\.(json|jsonl|ndjson|log|txt|md|csv|db|sqlite3?)$/i,
+    biaoQian: '聊天日志',
+    re: /(^|\/)(chat|chats|chatlog|chat[-_.]?log|chat[-_.]?history|conversation|transcript|session|xiaoXiJi?|history)([-_.][^/]*)?\.(json|jsonl|ndjson|log|txt|md|csv|db|sqlite3?)$/i,
   },
-  { code: 'chat-log', label: '聊天日志（中文名）', re: /(^|\/)[^/]*聊天(记录|日志|历史)[^/]*$|(^|\/)[^/]*对话记录[^/]*$/ },
+  { code: 'chat-log', biaoQian: '聊天日志（中文名）', re: /(^|\/)[^/]*聊天(记录|日志|历史)[^/]*$|(^|\/)[^/]*对话记录[^/]*$/ },
   {
     code: 'member-roster',
-    label: '成员名册',
+    biaoQian: '成员名册',
     re: /(^|\/)(members?|member[-_]?list|roster|participants|名册|成员)[^/]*\.(json|jsonl|csv|tsv|txt|md|ya?ml)$/i,
   },
-  { code: 'secret-key', label: '私钥文件', re: /(^|\/)(id_rsa|id_dsa|id_ecdsa|id_ed25519)(\.[^/]*)?$|\.(pem|pfx|p12|jks|keystore|key)$/i },
+  { code: 'secret-key', biaoQian: '私钥文件', re: /(^|\/)(id_rsa|id_dsa|id_ecdsa|id_ed25519)(\.[^/]*)?$|\.(pem|pfx|p12|jks|keystore|key)$/i },
   {
     code: 'device-credential',
-    label: '凭据文件',
+    biaoQian: '凭据文件',
     re: /(^|\/)(credentials?|tokens?|secrets?|device[-_]?(id|key|secret)|identity|passwd|shadow)[^/]*\.(json|txt|ini|key|pem|ya?ml|cfg)$/i,
   },
-  { code: 'env-file', label: '环境变量文件', re: /(^|\/)\.env(\.[\w-]+)?$|(^|\/)\.npmrc$|(^|\/)\.pypirc$/i },
+  { code: 'env-file', biaoQian: '环境变量文件', re: /(^|\/)\.env(\.[\w-]+)?$|(^|\/)\.npmrc$|(^|\/)\.pypirc$/i },
 ];
 
 interface NeirongGuize {
   code: PublishViolationCode;
-  label: string;
+  biaoQian: string;
   re: RegExp;
   /** 命中多少次才算违规（默认 1） */
   minHits?: number;
@@ -762,28 +762,28 @@ const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/;
 const PLACEHOLDER_EMAIL_RE = /@(?:example\.(?:com|org|net)|invalid|test|localhost)$/i;
 
 const CONTENT_RULES: NeirongGuize[] = [
-  { code: 'secret-key', label: '私钥块', re: /-----BEGIN[^-]{0,40}PRIVATE KEY-----/ },
+  { code: 'secret-key', biaoQian: '私钥块', re: /-----BEGIN[^-]{0,40}PRIVATE KEY-----/ },
   {
     code: 'secret-key',
-    label: '常见 API Key',
+    biaoQian: '常见 API Key',
     re: /\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{30,})\b/,
   },
   {
     code: 'secret-key',
-    label: '口令/密钥赋值',
+    biaoQian: '口令/密钥赋值',
     re: /(?:password|passwd|secret|api[_-]?key|access[_-]?token|private[_-]?key)\s*[:=]\s*["']?[A-Za-z0-9!@#$%^&*_+.-]{8,}/i,
   },
-  { code: 'device-credential', label: 'SSH 公钥/指纹', re: /\b(?:ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp\d+|sk-ssh-ed25519@openssh\.com)\s+AAAA[A-Za-z0-9+/=]{20,}/ },
-  { code: 'member-roster', label: '成员名册内容', re: /"(?:memberId|holderId|instanceId)"\s*:/g, minHits: 2 },
-  { code: 'chat-log', label: '聊天记录内容', re: /"role"\s*:\s*"(?:user|assistant|system)"[\s\S]{0,120}?"(?:content|text)"\s*:/ },
-  { code: 'email', label: '邮箱', re: new RegExp(EMAIL_RE.source, 'g') },
-  { code: 'local-abs-path', label: 'Windows 绝对路径', re: /[A-Za-z]:\\[^\s"'<>|]{2,}/ },
-  { code: 'local-abs-path', label: 'POSIX 家目录/系统路径', re: /(?<![\w."'])\/(?:Users|home|root|mnt|var\/folders|private\/var|opt\/home)\/[\w.$-]+/ },
-  { code: 'local-abs-path', label: 'file:// URL', re: /file:\/\/\/?[A-Za-z0-9]/ },
+  { code: 'device-credential', biaoQian: 'SSH 公钥/指纹', re: /\b(?:ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp\d+|sk-ssh-ed25519@openssh\.com)\s+AAAA[A-Za-z0-9+/=]{20,}/ },
+  { code: 'member-roster', biaoQian: '成员名册内容', re: /"(?:memberId|holderId|instanceId)"\s*:/g, minHits: 2 },
+  { code: 'chat-log', biaoQian: '聊天记录内容', re: /"role"\s*:\s*"(?:user|assistant|system)"[\s\S]{0,120}?"(?:content|text)"\s*:/ },
+  { code: 'email', biaoQian: '邮箱', re: new RegExp(EMAIL_RE.source, 'g') },
+  { code: 'local-abs-path', biaoQian: 'Windows 绝对路径', re: /[A-Za-z]:\\[^\s"'<>|]{2,}/ },
+  { code: 'local-abs-path', biaoQian: 'POSIX 家目录/系统路径', re: /(?<![\w."'])\/(?:Users|home|root|mnt|var\/folders|private\/var|opt\/home)\/[\w.$-]+/ },
+  { code: 'local-abs-path', biaoQian: 'file:// URL', re: /file:\/\/\/?[A-Za-z0-9]/ },
 ];
 
 /** 命中片段脱敏：绝不在报告里回显完整的密钥或邮箱 */
-function redact(code: PublishViolationCode, matched: string): string {
+function tuomin(code: PublishViolationCode, matched: string): string {
   const m = matched.trim();
   if (code === 'email') {
     const at = m.indexOf('@');
@@ -794,10 +794,10 @@ function redact(code: PublishViolationCode, matched: string): string {
 }
 
 function lineOf(text: string, index: number): number {
-  let line = 1;
+  let Hang = 1;
   const end = Math.min(index, text.length);
-  for (let i = 0; i < end; i++) if (text.charCodeAt(i) === 10) line++;
-  return line;
+  for (let i = 0; i < end; i++) if (text.charCodeAt(i) === 10) Hang++;
+  return Hang;
 }
 
 function matchesFor(rule: NeirongGuize, text: string, opts: PublishScanOptions): { index: number; matched: string }[] {
@@ -820,8 +820,8 @@ function matchesFor(rule: NeirongGuize, text: string, opts: PublishScanOptions):
 
 /** 判断是不是二进制（只看头部少量字节） */
 function looksBinary(text: string): boolean {
-  const head = text.slice(0, 512);
-  return /\u0000/.test(head);
+  const touBu = text.slice(0, 512);
+  return /\u0000/.test(touBu);
 }
 
 function scanOneFile(
@@ -839,16 +839,16 @@ function scanOneFile(
   }
   for (const rule of NAME_RULES) {
     if (rule.re.test(p)) {
-      violations.push({ path: p, code: rule.code, reason: `文件名命中「${rule.label}」规则：${p}` });
+      violations.push({ path: p, code: rule.code, reason: `文件名命中「${rule.biaoQian}」规则：${p}` });
       break;
     }
   }
   if (file.content === undefined) return 0;
   const buf = Buffer.isBuffer(file.content) ? file.content : Buffer.from(file.content, 'utf8');
   const max = opts.maxScanBytes ?? 2 * 1024 * 1024;
-  const head = buf.subarray(0, max);
+  const touBu = buf.subarray(0, max);
   if (buf.byteLength > max) truncated.push(p);
-  const text = head.toString('utf8');
+  const text = touBu.toString('utf8');
   if (looksBinary(text)) {
     warnings.push(`二进制内容只做文件名检查：${p}`);
     return buf.byteLength;
@@ -864,8 +864,8 @@ function scanOneFile(
         path: p,
         code: 'local-abs-path',
         reason: '内容里出现了**本机**的用户目录绝对路径',
-        match: redact('local-abs-path', text.slice(at, at + h.length + 8)),
-        line: lineOf(text, at),
+        match: tuomin('local-abs-path', text.slice(at, at + h.length + 8)),
+        Hang: lineOf(text, at),
       });
       break;
     }
@@ -875,7 +875,7 @@ function scanOneFile(
     const hits = matchesFor(rule, text, opts);
     if (hits.length < (rule.minHits ?? 1)) {
       if (hits.length > 0 && (rule.minHits ?? 1) > 1) {
-        warnings.push(`${p} 有 ${hits.length} 处疑似「${rule.label}」但未达阈值 ${rule.minHits}`);
+        warnings.push(`${p} 有 ${hits.length} 处疑似「${rule.biaoQian}」但未达阈值 ${rule.minHits}`);
       }
       continue;
     }
@@ -884,9 +884,9 @@ function scanOneFile(
     violations.push({
       path: p,
       code: rule.code,
-      reason: `内容命中「${rule.label}」${hits.length > 1 ? `（共 ${hits.length} 处）` : ''}`,
-      match: redact(rule.code, first.matched),
-      line: lineOf(text, first.index),
+      reason: `内容命中「${rule.biaoQian}」${hits.length > 1 ? `（共 ${hits.length} 处）` : ''}`,
+      match: tuomin(rule.code, first.matched),
+      Hang: lineOf(text, first.index),
     });
   }
   return buf.byteLength;
@@ -912,7 +912,7 @@ export function saomiaoKeFabucDaochu(
 
   if (typeof files === 'string') {
     const root = files;
-    const walk = (dir: string): void => {
+    const bianli = (dir: string): void => {
       let entries: fs.Dirent[];
       try {
         entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -921,8 +921,8 @@ export function saomiaoKeFabucDaochu(
         return;
       }
       for (const tiaoMu of entries) {
-        const full = path.join(dir, tiaoMu.name);
-        const xiangDuiLu = path.relative(root, full).replace(/\\/g, '/');
+        const Quan = path.join(dir, tiaoMu.name);
+        const xiangDuiLu = path.relative(root, Quan).replace(/\\/g, '/');
         if (tiaoMu.isSymbolicLink()) {
           // 导出目录里的符号链接一律拒绝：它能把仓库外/本体内部的东西带进公开产物
           violations.push({ path: xiangDuiLu, code: 'symlink', reason: '公开目录里存在符号链接，可能把目录外的内容带进发布产物' });
@@ -933,17 +933,17 @@ export function saomiaoKeFabucDaochu(
             warnings.push(`跳过目录：${xiangDuiLu}`);
             continue;
           }
-          walk(full);
+          bianli(Quan);
           continue;
         }
         if (!tiaoMu.isFile()) continue;
         let buf: Buffer | undefined;
         let size = 0;
         try {
-          const st = fs.statSync(full);
+          const st = fs.statSync(Quan);
           size = st.size;
           const max = opts.maxScanBytes ?? 2 * 1024 * 1024;
-          const fd = fs.openSync(full, 'r');
+          const fd = fs.openSync(Quan, 'r');
           try {
             const want = Math.min(size, max);
             const chunk = Buffer.alloc(want);
@@ -961,7 +961,7 @@ export function saomiaoKeFabucDaochu(
         scanOneFile({ path: xiangDuiLu, content: buf, size }, violations, warnings, truncated, opts);
       }
     };
-    walk(root);
+    bianli(root);
     return { allowed: violations.length === 0, files: count, bytes, violations, warnings, truncated };
   }
 

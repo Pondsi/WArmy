@@ -57,22 +57,22 @@ const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
  * 这里把它变成"带现场的错误"：否则只会得到一句 `"[object Object]" is not valid JSON`，
  * 根本不知道页面里发生了什么（本轮踩过）。
  */
-async function evalJson(c, expr, label) {
+async function evalJson(c, expr, biaoQian) {
   const v = await c.evaluate(expr);
   if (v && typeof v === 'object' && v.__exc !== undefined) {
-    throw new Error('渲染层异常 @' + label + ': ' + v.__exc);
+    throw new Error('渲染层异常 @' + biaoQian + ': ' + v.__exc);
   }
   if (typeof v !== 'string') {
-    throw new Error('返回值不是字符串 @' + label + ': ' + JSON.stringify(v).slice(0, 200));
+    throw new Error('返回值不是字符串 @' + biaoQian + ': ' + JSON.stringify(v).slice(0, 200));
   }
   try {
     return JSON.parse(v);
   } catch (e) {
-    throw new Error('返回值不是 JSON @' + label + ': ' + String(v).slice(0, 200));
+    throw new Error('返回值不是 JSON @' + biaoQian + ': ' + String(v).slice(0, 200));
   }
 }
 
-/** 没有 label 的薄封装（变量形态的站点用） */
+/** 没有 biaoQian 的薄封装（变量形态的站点用） */
 function evalJsonAny(v) {
   if (v && typeof v === 'object' && v.__exc !== undefined) throw new Error('渲染层异常: ' + v.__exc);
   return JSON.parse(v);
@@ -85,7 +85,7 @@ async function scanObserved(c, prefix) {
     return {
       state: b ? b.getAttribute('data-scan-state') : 'no-block',
       detail: (document.querySelector('#${prefix}-detail')||{}).textContent || '',
-      input: (document.querySelector('#join-link-input')||{}).value || '',
+      shuRu: (document.querySelector('#jiaRuLinkShuRu')||{}).value || '',
       joins: (window.__qrJoins||[]).length,
       join0: (window.__qrJoins||[])[0] || null
     };
@@ -117,19 +117,19 @@ async function reopenContactScan(c) {
   // 先等上一次「加入成功 → 800ms 后自动收窗」的定时器跑完：否则它会把这一次刚打开的弹窗也收掉，
   // 于是"喂进去的图没反应"——那是**测试的**竞态，不是产品行为（本轮实测踩到过）。
   await sleepMs(950);
-  await c.evaluate(`(function(){ window.__qrJoins = []; document.querySelector('#modal-root').classList.add('hidden'); return true; })()`);
-  await c.evaluate(`(function(){ var b = document.querySelector('#btn-join-qr'); if (b) b.click(); return true; })()`);
-  await c.waitFor(`!!document.querySelector('#contact-qr-scan') && !document.querySelector('#modal-root').classList.contains('hidden') && !!document.querySelector('#contact-my-qr svg')`,
-    { timeout: 12000, label: '重开「添加联系人」弹窗' });
+  await c.evaluate(`(function(){ window.__qrJoins = []; document.querySelector('#duiHuaKuangGen').classList.add('yinCang'); return true; })()`);
+  await c.evaluate(`(function(){ var b = document.querySelector('#anNiuJiaRuqr'); if (b) b.click(); return true; })()`);
+  await c.waitFor(`!!document.querySelector('#lianXiqrSaoMiao') && !document.querySelector('#duiHuaKuangGen').classList.contains('yinCang') && !!document.querySelector('#lianXiMyqr svg')`,
+    { timeout: 12000, biaoQian: '重开「添加联系人」弹窗' });
 }
 
 /**
- * 把一张图片喂进扫码区块的 <input type=file> 并**确认真的喂进去了**。
+ * 把一张图片喂进扫码区块的 <shuRu type=file> 并**确认真的喂进去了**。
  * 返回 'fed:1' 才算成功；拿不到就抛错（不要静默地"测了个寂寞"）。
  */
-async function feedContactFile(c, fileExpr, label) {
-  const r = await c.evaluate(`(async function(){ var f = ${fileExpr}; if (!f) return 'file-is-null'; return await window.__qrScanTest.feedInput('#contact-qr-file', f); })()`);
-  if (r !== 'fed:1') throw new Error('喂文件失败 @' + label + ': ' + JSON.stringify(r));
+async function feedContactFile(c, fileExpr, biaoQian) {
+  const r = await c.evaluate(`(async function(){ var f = ${fileExpr}; if (!f) return 'file-is-null'; return await window.__qrScanTest.feedInput('#lianXiqrWenJian', f); })()`);
+  if (r !== 'fed:1') throw new Error('喂文件失败 @' + biaoQian + ': ' + JSON.stringify(r));
   return r;
 }
 
@@ -182,7 +182,7 @@ ok(
   !/<script[^>]*\stype\s*=\s*["']module["']/.test(htmlCode) &&
   !/unsafe-eval/.test(htmlCode),
   '0-6 解码器是**经典脚本**（<script src>、非 ESM、在 app.js 之前；CSP 里没有 unsafe-eval）',
-  'enc@' + encTagIdx + ' dec@' + decTagIdx + ' app@' + appTagIdx
+  'enc@' + encTagIdx + ' dec@' + decTagIdx + ' yingYong@' + appTagIdx
 );
 ok(/img-src 'self' data: blob:/.test(htmlCode) && /script-src 'self'/.test(htmlCode),
   '0-7 CSP 允许 data:/blob: 图片（canvas 读像素这条路）且 script-src 只信 self', 'csp ok');
@@ -191,7 +191,7 @@ ok(/img-src 'self' data: blob:/.test(htmlCode) && /script-src 'self'/.test(htmlC
    1. 起一个极简 Electron 壳（自己写的 host，写在临时目录，不污染仓库）
    ══════════════════════════════════════════════════════════════════════════ */
 const HOST_SRC = `// 自动生成：极简 Electron 壳，只用来在真 Chromium 里打开指定 index.html 并暴露 CDP
-const { app, BrowserWindow } = require('electron');
+const { yingYong, BrowserWindow } = require('electron');
 const target = process.env.PREVIEW_HTML || process.argv[2];
 app.whenReady().then(() => {
   const w = new BrowserWindow({
@@ -260,7 +260,7 @@ async function startHost({ html, port, profileTag }) {
     return null;
   }
   await sleepMs(4000);
-  const c = await attach(port, { label: profileTag, callTimeout: 15000 });
+  const c = await attach(port, { biaoQian: profileTag, callTimeout: 15000 });
   await c.send('Runtime.enable');
   return { c, logs, stop: () => { try { c.close(); } catch { /* noop */ } killMine(profileTag); } };
 }
@@ -297,11 +297,11 @@ window.__qrScanTest = (function () {
       return cv;
     },
     /** 文本 -> PNG File */
-    fileOfText: async function (text, unit, name) {
+    fileOfText: async function (text, unit, ming) {
       var cv = this.qrCanvas(text, unit);
       if (!cv) return null;
       var blob = await pngOfCanvas(cv);
-      return new File([blob], name || 'qr.png', { type: 'image/png' });
+      return new File([blob], ming || 'qr.png', { type: 'image/png' });
     },
     /** DOM 里那个真二维码（SVG）-> PNG File：模拟"用户把对方发来的二维码图片存成文件再选进来" */
     fileOfOwnSvg: async function (sel, size) {
@@ -538,10 +538,10 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
     let at = 'B 段开始';
     try {
       at = 'B 启动与静态事实';
-      await c.waitFor('typeof window.__saveState === "function" && typeof window.__PREVIEW__ === "boolean"', { timeout: 30000, label: 'B：预览页面就绪' });
+      await c.waitFor('typeof window.__saveState === "function" && typeof window.__PREVIEW__ === "boolean"', { timeout: 30000, biaoQian: 'B：预览页面就绪' });
       const boot = await evalJson(c, `JSON.stringify({
         href: location.href, protocol: location.protocol, csp: !!document.querySelector('meta[http-equiv="Content-Security-Policy"]'),
-        jsQR: typeof window.jsQR, preview: window.__PREVIEW__ === true, entries: document.querySelectorAll('#rail .rail-item').length
+        jsQR: typeof window.jsQR, preview: window.__PREVIEW__ === true, entries: document.querySelectorAll('#ceLan .ceLanTiaoMu').length
       })`);
       ok(boot.protocol === 'file:' && boot.csp === true && boot.jsQR === 'function' && boot.preview === true && boot.entries >= 5,
         'B-1 页面在 file:// + 真 CSP 下起来了，解码器可用，界面渲染完整',
@@ -550,35 +550,35 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
       at = 'B 打开「添加联系人」弹窗';
       await c.evaluate(PAGE_HELPERS); // 把测试侧的取图工具装进页面（与 [A] 段同一份实现）
       await c.evaluate(`(function(){var e=document.querySelector('[data-nav="externalChat"]'); if(e) e.click(); return true;})()`);
-      await c.waitFor(`!!document.querySelector('.rail-item[data-nav="externalChat"].active')`, { timeout: 10000, label: 'B：切到联系人页' });
+      await c.waitFor(`!!document.querySelector('.ceLanTiaoMu[data-nav="externalChat"].jiHuo')`, { timeout: 10000, biaoQian: 'B：切到联系人页' });
       await c.evaluate(PAGE_STUBS);
-      await c.evaluate(`(function(){var b=document.querySelector('#btn-join-qr'); if(b) b.click(); return true;})()`);
-      await c.waitFor(`!!document.querySelector('#contact-my-qr svg') && !!document.querySelector('#contact-qr-scan')`, { timeout: 12000, label: 'B：添加联系人弹窗（含扫码区块）' });
-      const ownLink = String(await c.evaluate("(document.querySelector('#contact-my-link')||{}).textContent || ''")).trim();
+      await c.evaluate(`(function(){var b=document.querySelector('#anNiuJiaRuqr'); if(b) b.click(); return true;})()`);
+      await c.waitFor(`!!document.querySelector('#lianXiMyqr svg') && !!document.querySelector('#lianXiqrSaoMiao')`, { timeout: 12000, biaoQian: 'B：添加联系人弹窗（含扫码区块）' });
+      const ownLink = String(await c.evaluate("(document.querySelector('#lianXiMyLink')||{}).textContent || ''")).trim();
       ok(/^warmy:\/\/join\?/.test(ownLink) && ownLink.indexOf(NODE_ID) >= 0,
         'B-2 「我的链接」是真的邀请链接（扫码要解的就是它，方向正好与"展示我的二维码"相反）', ownLink);
 
       /* ── B-3：用户选图 → 解码 → 加入（主路径） ── */
       at = 'B 选图识别（主路径）';
       const scan = await evalJson(c, `(async function(){
-        var file = await window.__qrScanTest.fileOfOwnSvg('#contact-my-qr svg', 336);
+        var file = await window.__qrScanTest.fileOfOwnSvg('#lianXiMyqr svg', 336);
         window.__scanFeed = { bytes: file ? file.size : -1, type: file ? file.type : null };
-        await window.__qrScanTest.feedInput('#contact-qr-file', file);
+        await window.__qrScanTest.feedInput('#lianXiqrWenJian', file);
         return JSON.stringify(window.__scanFeed);
       })()`);
-      await c.waitFor(`document.querySelector('#contact-qr-scan').getAttribute('data-scan-state') === 'found'`, { timeout: 15000, label: 'B：扫码命中' });
-      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 10000, label: 'B：加入被调用' });
+      await c.waitFor(`document.querySelector('#lianXiqrSaoMiao').getAttribute('data-scan-state') === 'found'`, { timeout: 15000, biaoQian: 'B：扫码命中' });
+      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 10000, biaoQian: 'B：加入被调用' });
       const after = await evalJson(c, `JSON.stringify((function(){
-        var block = document.querySelector('#contact-qr-scan');
+        var block = document.querySelector('#lianXiqrSaoMiao');
         return {
           state: block.getAttribute('data-scan-state'),
-          detail: (document.querySelector('#contact-qr-detail')||{}).textContent || '',
-          input: (document.querySelector('#join-link-input')||{}).value || '',
+          detail: (document.querySelector('#lianXiqrXiangQing')||{}).textContent || '',
+          shuRu: (document.querySelector('#jiaRuLinkShuRu')||{}).value || '',
           joins: window.__qrJoins,
-          msg: (document.querySelector('#join-qr-msg')||{}).textContent || '',
-          inputHadFocusableButton: !!document.querySelector('#contact-qr-pick'),
-          pickLabel: (document.querySelector('#contact-qr-pick')||{}).textContent || '',
-          hint: (document.querySelector('#contact-qr-hint')||{}).textContent || ''
+          xiaoXi: (document.querySelector('#jiaRuqrXiaoXi')||{}).textContent || '',
+          inputHadFocusableButton: !!document.querySelector('#lianXiqrXuanZe'),
+          pickLabel: (document.querySelector('#lianXiqrXuanZe')||{}).textContent || '',
+          tiShi: (document.querySelector('#lianXiqrTiShi')||{}).textContent || ''
         };
       })())`);
       ok(scan.bytes > 200 && scan.type === 'image/png',
@@ -590,14 +590,14 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
         JSON.stringify(after.joins[0] && after.joins[0].target));
       ok(after.joins[0] && after.joins[0].targetType === 'contact' && after.joins[0].kind === 'human',
         'B-6 走的是**同一条**加入实现（与「粘贴链接 + 确定」相同的 targetType/kind/名片入参）',
-        JSON.stringify(after.joins[0] && { t: after.joins[0].targetType, k: after.joins[0].kind, card: after.joins[0].card }));
-      ok(after.input === ownLink,
-        'B-7 解出来的链接写回了链接输入框（用户看得见、能核对——扫码与粘贴共用同一个入口）', after.input.slice(0, 50));
-      ok(after.detail.indexOf(after.input.slice(0, 40)) >= 0 && after.detail.indexOf('{') < 0,
+        JSON.stringify(after.joins[0] && { t: after.joins[0].targetType, k: after.joins[0].kind, ka: after.joins[0].ka }));
+      ok(after.shuRu === ownLink,
+        'B-7 解出来的链接写回了链接输入框（用户看得见、能核对——扫码与粘贴共用同一个入口）', after.shuRu.slice(0, 50));
+      ok(after.detail.indexOf(after.shuRu.slice(0, 40)) >= 0 && after.detail.indexOf('{') < 0,
         'B-8 提示里如实报出识别到的链接（不是只写"识别成功"）', after.detail.slice(0, 70));
-      ok(after.msg === ZH['join.ok'], 'B-9 加入结果显示的是语言包里的原话（join.ok）', JSON.stringify(after.msg));
-      ok(after.pickLabel === ZH['join.pickImage'] && after.hint === ZH['join.dropHint'],
-        'B-10 按钮/提示文案都来自语言包（没有硬编码中文）', JSON.stringify({ pick: after.pickLabel, hint: after.hint }));
+      ok(after.xiaoXi === ZH['join.ok'], 'B-9 加入结果显示的是语言包里的原话（join.ok）', JSON.stringify(after.xiaoXi));
+      ok(after.pickLabel === ZH['join.pickImage'] && after.tiShi === ZH['join.dropHint'],
+        'B-10 按钮/提示文案都来自语言包（没有硬编码中文）', JSON.stringify({ pick: after.pickLabel, tiShi: after.tiShi }));
       const png1 = await c.snap(path.join(OUT, 'scan-found.png'));
       if (!png1.ok) warn('截图失败（不影响判定）: ' + png1.reason);
 
@@ -605,10 +605,10 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
       at = 'B 粘贴路径对照';
       await reopenContactScan(c);
       await c.evaluate(`(function(){
-        var inp = document.querySelector('#join-link-input'); inp.value = ${JSON.stringify(ownLink)};
+        var inp = document.querySelector('#jiaRuLinkShuRu'); inp.value = ${JSON.stringify(ownLink)};
         return true;})()`);
-      await c.evaluate(`(function(){var bs=document.querySelectorAll('#modal-actions button'); for (var i=0;i<bs.length;i++){ if (bs[i].classList.contains('btn-primary')) { bs[i].click(); return true; } } return false;})()`);
-      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 8000, label: 'B：粘贴路径的加入调用' });
+      await c.evaluate(`(function(){var bs=document.querySelectorAll('#duiHuaKuangDongZuoJi button'); for (var i=0;i<bs.length;i++){ if (bs[i].classList.contains('anNiuZhuYao')) { bs[i].click(); return true; } } return false;})()`);
+      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 8000, biaoQian: 'B：粘贴路径的加入调用' });
       const pasteJoin = await evalJson(c, `JSON.stringify(window.__qrJoins[0] || null)`);
       ok(pasteJoin && pasteJoin.target === after.joins[0].target && pasteJoin.targetType === after.joins[0].targetType,
         'B-11 粘贴链接与扫码走的是**同一条**加入入参（唯一实现，不是两条平行链路）',
@@ -618,30 +618,30 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
       at = 'B 大照片识别';
       await reopenContactScan(c);
       const big = await evalJson(c, `(async function(){
-        var inner = await window.__qrScanTest.fileOfOwnSvg('#contact-my-qr svg', 900);
+        var inner = await window.__qrScanTest.fileOfOwnSvg('#lianXiMyqr svg', 900);
         var big = await window.__qrScanTest.fileOfLargePhoto(inner);
-        await window.__qrScanTest.feedInput('#contact-qr-file', big);
+        await window.__qrScanTest.feedInput('#lianXiqrWenJian', big);
         return JSON.stringify({ px: 4000, bytes: big.size, type: big.type });
       })()`);
-      await c.waitFor(`document.querySelector('#contact-qr-scan').getAttribute('data-scan-state') === 'found'`, { timeout: 30000, label: 'B：大照片扫码命中' });
-      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 10000, label: 'B：大照片加入被调用' });
-      const bigRes = await evalJson(c, `JSON.stringify({ state: document.querySelector('#contact-qr-scan').getAttribute('data-scan-state'), target: (window.__qrJoins[0]||{}).target })`);
+      await c.waitFor(`document.querySelector('#lianXiqrSaoMiao').getAttribute('data-scan-state') === 'found'`, { timeout: 30000, biaoQian: 'B：大照片扫码命中' });
+      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 10000, biaoQian: 'B：大照片加入被调用' });
+      const bigRes = await evalJson(c, `JSON.stringify({ state: document.querySelector('#lianXiqrSaoMiao').getAttribute('data-scan-state'), target: (window.__qrJoins[0]||{}).target })`);
       ok(big.bytes > 100000 && bigRes.state === 'found' && bigRes.target === ownLink,
         'B-12 4000×4000 的"拍摄照片"也能解出同一条链接（大图会先按尺寸缩几次再解）', JSON.stringify({ bytes: big.bytes, state: bigRes.state }));
 
       /* ── B-13：拖入（drop）这条 DOM 路径 ── */
       at = 'B 拖入路径';
       await reopenContactScan(c);
-      await c.evaluate(`(async function(){ var f = await window.__qrScanTest.fileOfOwnSvg('#contact-my-qr svg', 336); await window.__qrScanTest.drop('#contact-qr-scan', f); return true; })()`);
-      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 15000, label: 'B：拖入后加入被调用' });
+      await c.evaluate(`(async function(){ var f = await window.__qrScanTest.fileOfOwnSvg('#lianXiMyqr svg', 336); await window.__qrScanTest.drop('#lianXiqrSaoMiao', f); return true; })()`);
+      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 15000, biaoQian: 'B：拖入后加入被调用' });
       const dropJoin = await evalJson(c, `JSON.stringify((window.__qrJoins||[])[0] || null)`);
       ok(dropJoin && dropJoin.target === ownLink, 'B-13 拖入图片同样能解出并走加入（drop 事件是真派发的）', JSON.stringify(dropJoin && dropJoin.target));
 
       /* ── B-14：粘贴（paste）这条 DOM 路径 ── */
       at = 'B 粘贴图片路径';
       await reopenContactScan(c);
-      await c.evaluate(`(async function(){ var f = await window.__qrScanTest.fileOfOwnSvg('#contact-my-qr svg', 336); await window.__qrScanTest.paste(f); return true; })()`);
-      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 15000, label: 'B：粘贴后加入被调用' });
+      await c.evaluate(`(async function(){ var f = await window.__qrScanTest.fileOfOwnSvg('#lianXiMyqr svg', 336); await window.__qrScanTest.paste(f); return true; })()`);
+      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 15000, biaoQian: 'B：粘贴后加入被调用' });
       const pasteImg = await evalJson(c, `JSON.stringify((window.__qrJoins||[])[0] || null)`);
       ok(pasteImg && pasteImg.target === ownLink, 'B-14 粘贴一张二维码截图（Ctrl+V）同样能解出并走加入', JSON.stringify(pasteImg && pasteImg.target));
 
@@ -649,15 +649,15 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
       at = 'B 旋转过的图片';
       await reopenContactScan(c);
       await c.evaluate(`(async function(){
-        var f = await window.__qrScanTest.fileOfOwnSvg('#contact-my-qr svg', 336);
+        var f = await window.__qrScanTest.fileOfOwnSvg('#lianXiMyqr svg', 336);
         var rot = await window.__qrScanTest.rotateFile(f, 90);
-        await window.__qrScanTest.feedInput('#contact-qr-file', rot);
+        await window.__qrScanTest.feedInput('#lianXiqrWenJian', rot);
         return true;
       })()`);
-      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 20000, label: 'B：旋转图也能解出' });
+      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 20000, biaoQian: 'B：旋转图也能解出' });
       const rotRes = await evalJson(c, `JSON.stringify({
-        state: document.querySelector('#contact-qr-scan').getAttribute('data-scan-state'),
-        via: document.querySelector('#contact-qr-scan').getAttribute('data-scan-via'),
+        state: document.querySelector('#lianXiqrSaoMiao').getAttribute('data-scan-state'),
+        via: document.querySelector('#lianXiqrSaoMiao').getAttribute('data-scan-via'),
         target: (window.__qrJoins[0]||{}).target
       })`);
       ok(rotRes.state === 'found' && rotRes.target === ownLink,
@@ -668,7 +668,7 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
       /* ── B-15：失败路径 1 —— 图里没有二维码 ── */
       at = 'B 失败路径：图里没码';
       await reopenContactScan(c);
-      await c.evaluate(`(async function(){ var f = await window.__qrScanTest.fileOfNoise(); await window.__qrScanTest.feedInput('#contact-qr-file', f); return true; })()`);
+      await c.evaluate(`(async function(){ var f = await window.__qrScanTest.fileOfNoise(); await window.__qrScanTest.feedInput('#lianXiqrWenJian', f); return true; })()`);
       const noQr = await waitScanState(c, 'contact-qr', 'no-qr', 25000);
       // 文案里的 {n} = 实际尝试的尺寸/角度组合数：用语言包模板反解，不写死数字（写死会与实现悄悄脱钩）
       const noQrRe = new RegExp('^' + ZH['join.scanNoQr'].replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\\{n\\}', '(\\d+)') + '$');
@@ -676,7 +676,7 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
       ok(!!noQrMatch && Number(noQrMatch[1]) >= 3,
         'B-15 图里没有二维码 → 如实说「没找到 + 已按 N 种尺寸/角度找过」，不静默、不假成功',
         JSON.stringify({ state: noQr.state, n: noQrMatch ? noQrMatch[1] : null, detail: String(noQr.detail).slice(0, 60) }));
-      ok(noQr.joins === 0 && noQr.input === '', 'B-16 没解出东西时**绝不**调用加入、也不往输入框里塞东西（不会凭空造联系人）', JSON.stringify({ joins: noQr.joins, input: noQr.input }));
+      ok(noQr.joins === 0 && noQr.shuRu === '', 'B-16 没解出东西时**绝不**调用加入、也不往输入框里塞东西（不会凭空造联系人）', JSON.stringify({ joins: noQr.joins, shuRu: noQr.shuRu }));
 
       /* ── B-17：失败路径 2 —— 解出来了但不是加入链接 ── */
       at = 'B 失败路径：不是加入链接';
@@ -706,31 +706,31 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
       at = 'B 失败路径：解码器缺失';
       await reopenContactScan(c);
       await c.evaluate(`(function(){ window.__jsQRSaved = window.jsQR; window.jsQR = undefined; return true; })()`);
-      await feedContactFile(c, `await window.__qrScanTest.fileOfOwnSvg('#contact-my-qr svg', 336)`, 'B-21');
+      await feedContactFile(c, `await window.__qrScanTest.fileOfOwnSvg('#lianXiMyqr svg', 336)`, 'B-21');
       const noDec = await waitScanState(c, 'contact-qr', 'no-decoder', 12000);
       ok(noDec.detail === ZH['join.scanUnavailable'] && noDec.joins === 0,
         'B-21 解码器没加载时如实说「本机暂时无法识图，仍可粘贴链接」——不静默、也不假装成功',
         JSON.stringify({ state: noDec.state, detail: String(noDec.detail).slice(0, 60) }));
       await c.evaluate(`(function(){ window.jsQR = window.__jsQRSaved; return typeof window.jsQR; })()`);
-      await c.evaluate(`(function(){ var f=document.querySelector('#contact-qr-file'); f.value=''; document.querySelector('#modal-root').classList.add('hidden'); return true; })()`);
+      await c.evaluate(`(function(){ var f=document.querySelector('#lianXiqrWenJian'); f.value=''; document.querySelector('#duiHuaKuangGen').classList.add('yinCang'); return true; })()`);
       const badShot = await c.snap(path.join(OUT, 'scan-honest-failures.png'));
       if (!badShot.ok) warn('截图失败（不影响判定）: ' + badShot.reason);
 
       /* ── B-22：项目/群聊弹窗里也接了同一条路（同一份扫码区块实现） ── */
       at = 'B 项目弹窗扫码';
       await c.evaluate(`(function(){var e=document.querySelector('[data-nav="internalGroup"]'); if(e) e.click(); return true;})()`);
-      await c.waitFor(`!!document.querySelector('.rail-item[data-nav="internalGroup"].active')`, { timeout: 10000, label: 'B：切到项目页' });
-      await c.evaluate(`(function(){window.__qrJoins=[]; var b=document.querySelector('#btn-join-qr'); if(b) b.click(); return true;})()`);
-      await c.waitFor(`!!document.querySelector('#join-qr-scan') && !!document.querySelector('#join-qr-file')`, { timeout: 10000, label: 'B：加入项目/群聊弹窗的扫码区块' });
-      await c.evaluate(`(async function(){ var f = await window.__qrScanTest.fileOfText(${JSON.stringify('warmy://join?node=NODE-R16-QR-0001&port=59599&tok=TOK-R16-QR-0002')}, 6, 'proj.png'); await window.__qrScanTest.feedInput('#join-qr-file', f); return true; })()`);
-      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 20000, label: 'B：项目弹窗扫码后加入被调用' });
+      await c.waitFor(`!!document.querySelector('.ceLanTiaoMu[data-nav="internalGroup"].jiHuo')`, { timeout: 10000, biaoQian: 'B：切到项目页' });
+      await c.evaluate(`(function(){window.__qrJoins=[]; var b=document.querySelector('#anNiuJiaRuqr'); if(b) b.click(); return true;})()`);
+      await c.waitFor(`!!document.querySelector('#jiaRuqrSaoMiao') && !!document.querySelector('#jiaRuqrWenJian')`, { timeout: 10000, biaoQian: 'B：加入项目/群聊弹窗的扫码区块' });
+      await c.evaluate(`(async function(){ var f = await window.__qrScanTest.fileOfText(${JSON.stringify('warmy://join?node=NODE-R16-QR-0001&port=59599&tok=TOK-R16-QR-0002')}, 6, 'proj.png'); await window.__qrScanTest.feedInput('#jiaRuqrWenJian', f); return true; })()`);
+      await c.waitFor(`(window.__qrJoins||[]).length >= 1`, { timeout: 20000, biaoQian: 'B：项目弹窗扫码后加入被调用' });
       const projJoin = await evalJson(c, `JSON.stringify({
         join: (window.__qrJoins||[])[0] || null,
-        state: document.querySelector('#join-qr-scan').getAttribute('data-scan-state'),
-        detail: (document.querySelector('#join-qr-detail')||{}).textContent || '',
-        input: (document.querySelector('#join-link-input')||{}).value || ''
+        state: document.querySelector('#jiaRuqrSaoMiao').getAttribute('data-scan-state'),
+        detail: (document.querySelector('#jiaRuqrXiangQing')||{}).textContent || '',
+        shuRu: (document.querySelector('#jiaRuLinkShuRu')||{}).value || ''
       })`);
-      ok(projJoin.state === 'found' && projJoin.join && /project|group/.test(String(projJoin.join.targetType)) && projJoin.input.indexOf('warmy://join?') === 0,
+      ok(projJoin.state === 'found' && projJoin.join && /project|group/.test(String(projJoin.join.targetType)) && projJoin.shuRu.indexOf('warmy://join?') === 0,
         'B-22 「加入项目/群聊」弹窗用的是同一份扫码实现（同一套 DOM 监听 + 同一个提交函数）',
         JSON.stringify({ state: projJoin.state, type: projJoin.join && projJoin.join.targetType }));
 
@@ -749,35 +749,35 @@ const PREVIEW_OUT = path.join(OUT, 'preview-keep-csp');
 
       /* ── B-25：切英文后弹窗里的扫码文案真的变成英文（不是只有语言包里有译文） ── */
       at = 'B 英文界面下的扫码区块';
-      await c.evaluate(`(function(){ document.querySelector('#modal-root').classList.add('hidden'); return true; })()`);
+      await c.evaluate(`(function(){ document.querySelector('#duiHuaKuangGen').classList.add('yinCang'); return true; })()`);
       await c.evaluate(`(function(){var e=document.querySelector('[data-nav="settings"]'); if(e) e.click(); return true;})()`);
-      const secOk = await c.waitForQuiet(`!!document.querySelector('#settings-nav button[data-sec="ui"]')`, { timeout: 12000, label: 'B：设置页 UI 分区' });
-      if (secOk) await c.evaluate(`(function(){var b=document.querySelector('#settings-nav button[data-sec="ui"]'); if(b) b.click(); return true;})()`);
-      const enReady = await c.waitForQuiet(`!!document.querySelector('#sel-locale')`, { timeout: 12000, label: 'B：语言选择器' }) ? 'has-select' : 'no-locale-select';
+      const secOk = await c.waitForQuiet(`!!document.querySelector('#peiZhiDaoHang button[data-sec="ui"]')`, { timeout: 12000, biaoQian: 'B：设置页 UI 分区' });
+      if (secOk) await c.evaluate(`(function(){var b=document.querySelector('#peiZhiDaoHang button[data-sec="ui"]'); if(b) b.click(); return true;})()`);
+      const enReady = await c.waitForQuiet(`!!document.querySelector('#xuanZeYuYan')`, { timeout: 12000, biaoQian: 'B：语言选择器' }) ? 'has-select' : 'no-locale-select';
       if (enReady === 'has-select') {
-        await c.evaluate(`(function(){var s=document.querySelector('#sel-locale'); s.value='en-US'; s.dispatchEvent(new Event('change',{bubbles:true})); return true;})()`);
-        await c.waitFor(`(document.querySelector('#logo-name')||{}).textContent === 'WArmy'`, { timeout: 12000, label: 'B：切到英文' });
+        await c.evaluate(`(function(){var s=document.querySelector('#xuanZeYuYan'); s.value='en-US'; s.dispatchEvent(new Event('change',{bubbles:true})); return true;})()`);
+        await c.waitFor(`(document.querySelector('#logoMing')||{}).textContent === 'WArmy'`, { timeout: 12000, biaoQian: 'B：切到英文' });
         await c.evaluate(`(function(){var e=document.querySelector('[data-nav="externalChat"]'); if(e) e.click(); return true;})()`);
-        await c.waitFor(`!!document.querySelector('.rail-item[data-nav="externalChat"].active')`, { timeout: 10000, label: 'B：英文下切到联系人页' });
-        await c.evaluate(`(function(){var b=document.querySelector('#btn-join-qr'); if(b) b.click(); return true;})()`);
-        await c.waitFor(`!!document.querySelector('#contact-qr-scan')`, { timeout: 12000, label: 'B：英文下的添加联系人弹窗' });
+        await c.waitFor(`!!document.querySelector('.ceLanTiaoMu[data-nav="externalChat"].jiHuo')`, { timeout: 10000, biaoQian: 'B：英文下切到联系人页' });
+        await c.evaluate(`(function(){var b=document.querySelector('#anNiuJiaRuqr'); if(b) b.click(); return true;})()`);
+        await c.waitFor(`!!document.querySelector('#lianXiqrSaoMiao')`, { timeout: 12000, biaoQian: 'B：英文下的添加联系人弹窗' });
         const enUi = await evalJson(c, `JSON.stringify({
-          pick: (document.querySelector('#contact-qr-pick')||{}).textContent || '',
-          hint: (document.querySelector('#contact-qr-hint')||{}).textContent || '',
-          cjk: (document.querySelector('#add-contact-others')||{}).innerText || ''
+          pick: (document.querySelector('#lianXiqrXuanZe')||{}).textContent || '',
+          tiShi: (document.querySelector('#lianXiqrTiShi')||{}).textContent || '',
+          cjk: (document.querySelector('#tianJiaLianXiOthers')||{}).innerText || ''
         })`);
-        ok(enUi.pick === EN['join.pickImage'] && enUi.hint === EN['join.dropHint'],
+        ok(enUi.pick === EN['join.pickImage'] && enUi.tiShi === EN['join.dropHint'],
           'B-25 切到英文后扫码区块的按钮与提示是英文包里的原话（i18n 真的接到了新 UI 上）',
-          JSON.stringify({ pick: enUi.pick, hint: enUi.hint }));
+          JSON.stringify({ pick: enUi.pick, tiShi: enUi.tiShi }));
         ok(!/[\u4e00-\u9fff]/.test(String(enUi.cjk)), 'B-26 英文界面里扫码区块没有中文残留', String(enUi.cjk).replace(/\s+/g, ' ').slice(0, 60));
-        await c.evaluate(`(function(){document.querySelector('#modal-root').classList.add('hidden'); return true;})()`);
+        await c.evaluate(`(function(){document.querySelector('#duiHuaKuangGen').classList.add('yinCang'); return true;})()`);
         await c.evaluate(`(function(){var e=document.querySelector('[data-nav="settings"]'); if(e) e.click(); return true;})()`);
-        await c.waitForQuiet(`!!document.querySelector('#settings-nav button[data-sec="ui"]')`, { timeout: 10000, label: 'B：回到设置页' });
-        await c.evaluate(`(function(){var b=document.querySelector('#settings-nav button[data-sec="ui"]'); if(b) b.click(); return true;})()`);
-        await c.waitForQuiet(`!!document.querySelector('#sel-locale')`, { timeout: 10000, label: 'B：语言选择器（回到中文）' });
-        await c.evaluate(`(function(){var s=document.querySelector('#sel-locale'); s.value='zh-CN'; s.dispatchEvent(new Event('change',{bubbles:true})); return true;})()`);
-        await c.waitForQuiet(`(document.querySelector('#logo-name')||{}).textContent !== 'WArmy'`, { timeout: 12000, label: 'B：切回中文' });
-        await c.evaluate(`(function(){document.querySelector('#modal-root').classList.add('hidden'); return true;})()`);
+        await c.waitForQuiet(`!!document.querySelector('#peiZhiDaoHang button[data-sec="ui"]')`, { timeout: 10000, biaoQian: 'B：回到设置页' });
+        await c.evaluate(`(function(){var b=document.querySelector('#peiZhiDaoHang button[data-sec="ui"]'); if(b) b.click(); return true;})()`);
+        await c.waitForQuiet(`!!document.querySelector('#xuanZeYuYan')`, { timeout: 10000, biaoQian: 'B：语言选择器（回到中文）' });
+        await c.evaluate(`(function(){var s=document.querySelector('#xuanZeYuYan'); s.value='zh-CN'; s.dispatchEvent(new Event('change',{bubbles:true})); return true;})()`);
+        await c.waitForQuiet(`(document.querySelector('#logoMing')||{}).textContent !== 'WArmy'`, { timeout: 12000, biaoQian: 'B：切回中文' });
+        await c.evaluate(`(function(){document.querySelector('#duiHuaKuangGen').classList.add('yinCang'); return true;})()`);
       } else {
         warn('没找到语言选择器，跳过英文界面断言（' + enReady + '）');
       }

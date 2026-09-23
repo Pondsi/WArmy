@@ -43,8 +43,8 @@ export function qingLiZiChan(): number {
 /** 从对话/文件自动登记资产 */
 export function zhuCeLiaoTianZiChan(opts: {
   id: string;
-  title: string;
-  body: string;
+  biaoTi: string;
+  ti: string;
   scope?: ZiChan['scope'];
 }): ZiChan {
   return quZiChanGuanLi().register({
@@ -52,7 +52,7 @@ export function zhuCeLiaoTianZiChan(opts: {
     category: 'memory',
     scope: opts.scope || 'session',
     strength: 'weak',
-    title: opts.title,
-    body: opts.body,
+    biaoTi: opts.biaoTi,
+    ti: opts.ti,
   });
 }

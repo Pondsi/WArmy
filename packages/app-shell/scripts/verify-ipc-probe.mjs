@@ -99,23 +99,23 @@ async function main() {
     process.exit(2);
   }
   await sleep(4000);
-  const c = await attach(PORT, { label: 'ipc-probe', callTimeout: 20000 });
+  const c = await attach(PORT, { biaoQian: 'ipc-probe', callTimeout: 20000 });
   await c.send('Runtime.enable');
   try { await c.waitFor(BOOT_DONE, { timeout: 20000 }); } catch { /* warn */ }
   await sleep(2000);
 
   const results = [];
-  for (const [name, fn] of PROBES) {
+  for (const [ming, fn] of PROBES) {
     const t0 = Date.now();
     try {
       const r = await c.evaluate(`(async function(){ try { return ${fn.toString().replace(/^\(\)\s*=>\s*/, 'return ').replace(/^return\s+/, '')}; } catch(e) { return { __err: String(e && e.message || e) }; } })()`);
       const ms = Date.now() - t0;
       const ok = r && !r.__err && r.ok !== false;
-      results.push({ name, ok, ms, resultPreview: preview(r) });
-      console.log(`  [${ok ? 'ok' : 'FAIL'}] ${name} ${ms}ms ${preview(r)}`);
+      results.push({ ming, ok, ms, resultPreview: preview(r) });
+      console.log(`  [${ok ? 'ok' : 'FAIL'}] ${ming} ${ms}ms ${preview(r)}`);
     } catch (e) {
-      results.push({ name, ok: false, ms: Date.now() - t0, error: String(e.message || e) });
-      console.log(`  [FAIL] ${name} ${e.message}`);
+      results.push({ ming, ok: false, ms: Date.now() - t0, error: String(e.message || e) });
+      console.log(`  [FAIL] ${ming} ${e.message}`);
     }
   }
 

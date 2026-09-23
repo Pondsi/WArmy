@@ -57,7 +57,7 @@ import { BenDiZhangHuCang, PeizhiCang, shengChengPingzheng, type YingYongPeizhi,
  * 纯 node 模块（不依赖 electron），因此可以被 scripts/verify-container-probe.mjs 在真机上直接断言。
  */
 import {
-  probeContainerRuntimes,
+  tanCeRongQiYunXing,
   yunxingRongqiDongzuo,
   zuiHouRongQiTanCeBaoGao,
   rongQiYunXingGuiGeOf,
@@ -67,28 +67,28 @@ import {
   xiangMuYuanYinJian,
   xiangMuBuKeYongJuJue,
   deriveProjectState,
-  envSolidifyCapability,
+  huanJingGuHuaNengLi,
   quYinQingXiTongMoShi,
-  shouldSolidifyAt,
+  shiFouGaiGuHua,
   guHuaBaoLiu,
   SOLIDIFY_KEEP,
   SOLIDIFY_COALESCE_MS,
   CONTAINER_BASE_IMAGES,
   /* ── 第十六批：真实的容器内执行 / 固化 / 回滚 / 宿主目录加锁 ── */
-  runContainerExec,
-  containerProjectName,
-  isValidContainerProjectName,
+  yunXingRongQiZhiXing,
+  rongQiXiangMuMing,
+  shiFouHeFaRongQiXiangMuMing,
   solidifiedImageRef,
-  isAllowedImageRef,
-  CONTAINER_PROJECT_MOUNT,
+  shiFouYunXuJingXiang,
+  RONGQI_XIANGMU_GUAZAI,
   CONTAINER_EXEC_SECURITY,
   CONTAINER_FIXED_COMMAND_IDS,
   ENV_SOLIDIFY_SECURITY,
-  openContainerShellSession,
-  writeContainerShellSession,
-  closeContainerShellSession,
+  daKaiKongZhiTaiHuiHua,
+  xieRuKongZhiTaiHuiHua,
+  guanBiKongZhiTaiHuiHua,
   guanBiZhiDingHuiHua,
-  hostDirGuardPlan,
+  zhuJiMuLuHuLanJiHua,
   HOST_DIR_GUARD_SECURITY,
   shiFouYongHuSid,
   type RongQiGuDingMingLingId,
@@ -111,7 +111,7 @@ import {
   type YaoShiHuanTiaoMu,
   type LunHuanShengMing,
 } from './identity.js';
-import { GroupStore, type QunLieBiaoJieGuo, type QunChengYuanJieGuo } from './group-store.js';
+import { QunCang, type QunLieBiaoJieGuo, type QunChengYuanJieGuo } from './group-store.js';
 import {
   Gengxinqi,
   gengXinqiBuKeYongJianCha,
@@ -145,12 +145,12 @@ import {
   secureLoopbackSmoke,
   tcpProbe,
   /* ── ADR 004 第十六批：**项目级属性**的跨机同步（记录文件的改动是产品功能） ── */
-  PROJECT_ATTRS_CHANNEL,
-  PROJECT_ATTRS_KIND,
-  projectAttrsMessage,
+  XIANGMU_SHUXING_TONGDAO,
+  XIANGMU_SHUXING_LEIXING,
+  xiangmuShuxingXiaoxi,
   parseProjectAttrsMessage,
   projectAttrsToStateInput,
-  projectInboundGate,
+  xiangmuRuXiangMenjin,
   type WangzhuangDuiduanYinyong,
   type WangzhuangZhuangtaiJieguo,
   type KedaxingTishi,
@@ -164,7 +164,7 @@ import {
   buildIdentityChangeEntries,
   goujianChengyuanZaichang,
   chuangjianShenfenGongyingshang,
-  createIdentitySigner,
+  chuangjianShenfenQianmingzhe,
   jieshiMingCeJueCe,
   yingYongCengZhiWenTuiDao,
   wentiChengyuanZhengshu,
@@ -195,28 +195,28 @@ import crypto from 'node:crypto';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bootLog = path.join(app.getPath('userData'), 'warmy-boot.log');
 
-function qidong(msg: string) {
+function qidong(xiaoXi: string) {
   try {
-    fs.appendFileSync(bootLog, `new Date().toISOString() msg\n`);
+    fs.appendFileSync(bootLog, `new Date().toISOString() xiaoXi\n`);
   } catch {
     /* ignore */
   }
 }
-qidong(`main loaded dir=__dirname`);
+qidong(`main loaded dir=${__dirname}`);
 // 去掉 File/Edit/View/Window/Help 应用菜单
 Menu.setApplicationMenu(null);
 
-function loadMainStrings(locale: string | undefined): Record<string, string> {
-  const f = jiexiYuyan(locale);
+function loadMainStrings(yuYan: string | undefined): Record<string, string> {
+  const f = jiexiYuyan(yuYan);
   try {
-    return JSON.parse(fs.readFileSync(path.join(__dirname, 'i18n', `f.json`), 'utf8'));
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'i18n', `${f}.json`), 'utf8'));
   } catch {
     return {};
   }
 }
 const MAIN_I18N = loadMainStrings(app.getLocale());
-function tMain(k: string, fallback = ''): string {
-  return MAIN_I18N[k] || fallback || k;
+function tMain(k: string, huiTui = ''): string {
+  return MAIN_I18N[k] || huiTui || k;
 }
 
 let win: BrowserWindow | null = null;
@@ -244,10 +244,10 @@ function warmyTaskbarIcon(): string {
   return warmyWindowIcon();
 }
 
-/** 窗口/托盘图标路径：产品 logo（app.ico → logo.ico → build/icon.ico → png） */
+/** 窗口/托盘图标路径：产品 logo（yingYong.ico → logo.ico → build/icon.ico → png） */
 function warmyWindowIcon(): string {
   const candidates: string[] = [
-    path.join(__dirname, 'renderer', 'icons', 'app.ico'),
+    path.join(__dirname, 'renderer', 'icons', 'yingYong.ico'),
     path.join(__dirname, 'renderer', 'icons', 'logo.ico'),
     path.join(__dirname, 'build', 'icon.ico'),
     path.join(__dirname, 'renderer', 'icons', 'app-256.png'),
@@ -260,16 +260,16 @@ function warmyWindowIcon(): string {
 }
 
 /** 按项目类型自动选择 gateVerify（授权由产品主授予；防过度执行） */
-function gateVerifyForProjectType(opts: { directory?: string; devEnv?: string; name?: string }): string[] {
+function gateVerifyForProjectType(opts: { directory?: string; devEnv?: string; ming?: string }): string[] {
   const dir = String(opts.directory || '').replace(/\\/g, '/');
-  const name = String(opts.name || '');
-  const suoyinwen = `name dir`.toLowerCase();
+  const ming = String(opts.ming || '');
+  const suoyinwen = `${ming} ${dir}`.toLowerCase();
   const isDocsOnly = /(^|[^a-z])(docs?|说明|readme|spec|adr|手册|guide)([^a-z]|$)/i.test(suoyinwen) &&
     !/(packages\/|src\/|node_modules|\.ts$|\.js$|\.py$|api|backend|frontend)/i.test(suoyinwen);
   const isCode =
     /package\.json|tsconfig|pyproject|cargo\.toml|go\.mod|pom\.xml|build\.gradle/i.test(dir) ||
     /(packages\/|src\/|backend|frontend|server|client|api|repo|monorepo)/i.test(suoyinwen) ||
-    /code|开发|dev[-_]?env|工程/i.test(name) ||
+    /code|开发|dev[-_]?env|工程/i.test(ming) ||
     /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|cs|cpp|c|h)$/i.test(dir);
   const base = [
     'packages/app-shell/scripts/verify-docs.mjs',
@@ -376,12 +376,12 @@ let settingsStore: PeizhiCang | null = null;
  */
 let identityStore: ShenFenCang | null = null;
 /** 群列表 / 群成员的真实持久化（userData/groups.json） */
-let groupStore: GroupStore | null = null;
+let groupStore: QunCang | null = null;
 /** 自动更新（真实查询 + 真实下载校验；安装未实现） */
 let updater: Gengxinqi | null = null;
 let nodeReg: JieDianMingCe | null = null;
 let syncBus: TongbuZongxian | null = null;
-const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
+const emailQueue: Array<{ to: string; subject: string; text: string; ts: number }> = [];
 let lastError: { ts: number; message: string; context?: string } | null = null;
 let dengdaiPizhun = new Map<string, { resolve: (d: { allowed: boolean; scope: string }) => void }>();
 let pizhunXulie = 0;
@@ -454,7 +454,7 @@ function xiaYiLiaoTianXuLie(memSeq?: number): number {
 
 function xinLiaoTianJiLuId(prefix: 'm' | 'a' | 'g'): string {
   chatLogIdSeq += 1;
-  return `prefix-Date.now()-chatLogIdSeq`;
+  return `${prefix}-${Date.now()}-${chatLogIdSeq}`;
 }
 
 /** 记忆服务 IPC 的 append 回包是 { ok, seq }；兼容直接返回记录对象的实现 */
@@ -511,11 +511,11 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
       return; // 跳过：同一条消息被两条路径重复写入
     }
   }
-  const arr = chatLogs.get(key);
-  if (arr) arr.push(entry);
+  const shuZu = chatLogs.get(key);
+  if (shuZu) shuZu.push(entry);
   else chatLogs.set(key, [entry]);
-  const mirror = chatHistories.get(key);
-  if (mirror) mirror.push({ role: entry.role, content: entry.content });
+  const yingshe = chatHistories.get(key);
+  if (yingshe) yingshe.push({ role: entry.role, content: entry.content });
   else chatHistories.set(key, [{ role: entry.role, content: entry.content }]);
   /**
    * 日志一写就**播给所有窗口**：对方（另一个窗口）据此重新拉一次该会话的日志。
@@ -523,7 +523,7 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
    * 保证"看到的就是日志里那份"，不会出现第二个真相。
    */
   try {
-    broadcastToWindows('warmy:chat-updated', { sessionId: key, seq: (entry as { seq?: number }).seq ?? null, ts: Date.now() });
+    broadcastToWindows('warmy:liaoTianUpdated', { sessionId: key, seq: (entry as { seq?: number }).seq ?? null, ts: Date.now() });
   } catch { /* noop */ }
 }
 
@@ -531,9 +531,9 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
 function quHuiHuaLiShi(key: string): LiaoTianXiaoXi[] {
   const cached = chatHistories.get(key);
   if (cached) return cached;
-  const derived = quHuiHuaXiaoXiJi(key);
-  chatHistories.set(key, derived);
-  return derived;
+  const yiTuiDao = quHuiHuaXiaoXiJi(key);
+  chatHistories.set(key, yiTuiDao);
+  return yiTuiDao;
 }
 
 /**
@@ -571,26 +571,26 @@ async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyR
       .filter((r) => r && typeof r === 'object')
       .sort((a, b) => Number(a['seq'] ?? 0) - Number(b['seq'] ?? 0));
     const yiYou = new Map<string, Set<number>>();
-    for (const [k, arr] of chatLogs) yiYou.set(k, new Set(arr.map((e) => e.seq)));
+    for (const [k, shuZu] of chatLogs) yiYou.set(k, new Set(shuZu.map((e) => e.seq)));
     const sessions = new Set<string>();
     let chars = 0;
     for (const r of shengxu) {
       if (String(r['kind'] ?? '') !== 'message') continue;
       const key = String(r['sessionId'] ?? '');
       const seq = Number(r['seq']);
-      const body = typeof r['body'] === 'string' ? r['body'] : '';
+      const ti = typeof r['ti'] === 'string' ? r['ti'] : '';
       if (!key || !Number.isFinite(seq) || seq <= 0) continue;
-      const seen = yiYou.get(key) ?? new Set<number>();
-      if (seen.has(seq)) continue;
-      if (chars + body.length > HISTORY_RESTORE_MAX_CHARS) continue;
-      seen.add(seq);
-      yiYou.set(key, seen);
-      chars += body.length;
+      const yiKanDao = yiYou.get(key) ?? new Set<number>();
+      if (yiKanDao.has(seq)) continue;
+      if (chars + ti.length > HISTORY_RESTORE_MAX_CHARS) continue;
+      yiKanDao.add(seq);
+      yiYou.set(key, yiKanDao);
+      chars += ti.length;
       const rid = String(r['id'] ?? '');
       zhuiJiaLiaoTianRiZhi(key, {
         seq,
         role: chatRoleOfRecordId(rid),
-        content: body,
+        content: ti,
         recordId: rid || undefined,
         ts: Number(r['ts']) || undefined,
       });
@@ -605,7 +605,7 @@ async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyR
     report.sessions = sessions.size;
     historyRestore = report;
     qidong(
-      `chat log restored (trigger): report.entries 条 / report.sessions 会话 / maxSeq=report.maxSeq`
+      `chat log restored (trigger): ${report.entries} 条 / ${report.sessions} 会话 / maxSeq=${report.maxSeq}`
     );
     audit?.log('chat.history.restore', {
       trigger,
@@ -618,7 +618,7 @@ async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyR
   } catch (e) {
     report.reason = `restore-failed: sanitizeError(e)`;
     historyRestore = report;
-    qidong(`chat log restore failed (trigger): report.reason`);
+    qidong(`chat log restore failed (trigger): ${report.reason}`);
     return report;
   }
 }
@@ -639,7 +639,7 @@ async function baozhangJiyiCangJiuxu(): Promise<boolean> {
     void youJiYiHuiFuHuiHuaRiZhi('memory-restart');
     return memory.isReady;
   } catch (e) {
-    qidong(`memory re-start fail String(e)`);
+    qidong(`memory re-start fail ${String(e)}`);
     return false;
   }
 }
@@ -660,19 +660,19 @@ function toolLabels(): Partial<JiyiCangGongjuBiaoqian> {
 }
 
 /** 工具调用上限（settings 可配；越界值一律夹到安全区间） */
-function toolLimits(): { maxRounds: number; maxResultChars: number; totalChars: number } {
+function toolLimits(): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalChars: number } {
   let s: Partial<YingYongPeizhi> | undefined;
   try {
     s = settingsStore?.load();
   } catch {
     /* 配置坏了就用默认 */
   }
-  const rounds = Number(s?.contextToolMaxRounds);
-  const per = Number(s?.contextToolResultChars);
+  const lunShu = Number(s?.contextToolMaxRounds);
+  const mei = Number(s?.contextToolResultChars);
   const total = Number(s?.contextToolTotalChars);
   return {
-    maxRounds: Number.isFinite(rounds) ? Math.min(8, Math.max(0, Math.floor(rounds))) : 3,
-    maxResultChars: Number.isFinite(per) ? Math.min(8000, Math.max(200, Math.floor(per))) : 4000,
+    zuiDaLunShu: Number.isFinite(lunShu) ? Math.min(8, Math.max(0, Math.floor(lunShu))) : 3,
+    zuiDaJieGuoZiShu: Number.isFinite(mei) ? Math.min(8000, Math.max(200, Math.floor(mei))) : 4000,
     totalChars: Number.isFinite(total) ? Math.min(40000, Math.max(200, Math.floor(total))) : 12000,
   };
 }
@@ -693,12 +693,12 @@ function toolLimits(): { maxRounds: number; maxResultChars: number; totalChars: 
 async function yunXingLiaoTianXunHuan(
   sessionId: string,
   provider: MoxingGongYing,
-  req: LiaoTianQingQiu
+  Qiu: LiaoTianQingQiu
 ): Promise<GongJuXunHuanGuo & { tooled: boolean }> {
   const limits = toolLimits();
   const jiyiJiuxu = await baozhangJiyiCangJiuxu();
   const tools: GongJuGuiGe[] | undefined =
-    jiyiJiuxu && limits.maxRounds > 0 ? memoryToolSpecs(toolLabels()) : undefined;
+    jiyiJiuxu && limits.zuiDaLunShu > 0 ? memoryToolSpecs(toolLabels()) : undefined;
   const supported = gongYingZhiChiGongJu(provider);
 
   audit?.log('chat.tools.decide', {
@@ -706,8 +706,8 @@ async function yunXingLiaoTianXunHuan(
     memoryReady: jiyiJiuxu,
     supported,
     exposed: !!tools,
-    maxRounds: limits.maxRounds,
-    resultChars: limits.maxResultChars,
+    zuiDaLunShu: limits.zuiDaLunShu,
+    jieGuoZiShu: limits.zuiDaJieGuoZiShu,
     totalChars: limits.totalChars,
   });
   if (tools) {
@@ -721,14 +721,14 @@ async function yunXingLiaoTianXunHuan(
 
   const loop = await liaoTianDaiGongJu(
     provider,
-    { ...req, tools },
+    { ...Qiu, tools },
     async (call, ctx) => {
       const t1 = Date.now();
       // T194：工具调用开始（只给工具名/轮次/会话 —— 不给参数与结果正文）
       const toolName = String((call && call.function && call.function.name) || 'tool');
       fachuKongzhitai({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId } });
       // 工具里对文件做过的真实读写都记到**这个项目**的台账上（scope = 会话 id）
-      const out = await withFileAccessScope(sessionId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.maxResultChars }));
+      const out = await withFileAccessScope(sessionId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }));
       metrics.recordToolCall({
         ts: Date.now(),
         sessionId,
@@ -761,11 +761,11 @@ async function yunXingLiaoTianXunHuan(
       return out.content;
     },
     {
-      maxRounds: limits.maxRounds,
-      maxResultChars: limits.maxResultChars,
+      zuiDaLunShu: limits.zuiDaLunShu,
+      zuiDaJieGuoZiShu: limits.zuiDaJieGuoZiShu,
       maxToolResultChars: limits.totalChars,
-      onEvent: (ev) => {
-        if (ev.kind === 'degraded') audit?.log('chat.tools.degraded', { sessionId, detail: ev.detail });
+      onEvent: (Shi) => {
+        if (Shi.kind === 'degraded') audit?.log('chat.tools.degraded', { sessionId, detail: Shi.detail });
       },
     }
   );
@@ -773,21 +773,21 @@ async function yunXingLiaoTianXunHuan(
   metrics.recordToolLoop({
     ts: Date.now(),
     sessionId,
-    requests: loop.requests,
-    rounds: loop.rounds,
-    toolCalls: loop.toolCalls,
+    qingQiuJi: loop.qingQiuJi,
+    lunShu: loop.lunShu,
+    gongJuDiaoYongJi: loop.gongJuDiaoYongJi,
     toolResultChars: loop.toolResultChars,
     degraded: loop.degraded,
-    stopReason: loop.stopReason,
+    tingZhiYuanYin: loop.tingZhiYuanYin,
   });
   audit?.log('chat.tools.done', {
     sessionId,
-    requests: loop.requests,
-    rounds: loop.rounds,
-    toolCalls: loop.toolCalls,
+    qingQiuJi: loop.qingQiuJi,
+    lunShu: loop.lunShu,
+    gongJuDiaoYongJi: loop.gongJuDiaoYongJi,
     toolResultChars: loop.toolResultChars,
     degraded: loop.degraded,
-    stopReason: loop.stopReason,
+    tingZhiYuanYin: loop.tingZhiYuanYin,
   });
   return { ...loop, tooled: !!tools };
 }
@@ -838,8 +838,8 @@ function isContextLengthError(err: unknown): boolean {
   const s = String((err as Error)?.message || err || '');
   return /context|token|too long|maximum length|context_length|maximum context/i.test(s);
 }
-function budgetCharsForStep(baseChars: number, step: number): number {
-  return Math.max(Math.round(MIN_CONTEXT_TOKENS * CHARS_PER_TOKEN_EST), Math.round(baseChars * step));
+function budgetCharsForStep(baseChars: number, buZhou: number): number {
+  return Math.max(Math.round(MIN_CONTEXT_TOKENS * CHARS_PER_TOKEN_EST), Math.round(baseChars * buZhou));
 }
 
 /**
@@ -864,12 +864,12 @@ async function daiShangXiaWenChongShiYunXing<T>(
       retries += 1;
     }
   }
-  const msg = String((lastErr as Error)?.message || lastErr || 'context-too-small');
+  const xiaoXi = String((lastErr as Error)?.message || lastErr || 'context-too-small');
   return {
-    result: { ok: false, error: msg, contextTooSmall: true, retries } as unknown as T,
+    result: { ok: false, error: xiaoXi, contextTooSmall: true, retries } as unknown as T,
     usedBudget: budgetCharsForStep(baseChars, SHANGXIAWEN_CHONGSHI_BUZHOU[SHANGXIAWEN_CHONGSHI_BUZHOU.length - 1]!),
     retries,
-    gaveUp: msg,
+    gaveUp: xiaoXi,
   };
 }
 
@@ -997,9 +997,9 @@ function jiexiJiedianYunxingShi(): { path: string; source: string } {
   return { path: process.execPath, source: 'electron-fallback(不推荐)' };
 }
 
-function zhunbeiJiyiCangYunxingShi(): { ipcEntry: string; dataDir: string } {
+function zhunbeiJiyiCangYunxingShi(): { ipcEntry: string; CangLu: string } {
   const userData = app.getPath('userData');
-  const dataDir = path.join(userData, 'memory');
+  const CangLu = path.join(userData, 'memory');
   const yunxingShiMulu = path.join(userData, 'memory-runtime');
   const srcCandidates = [
     path.join(__dirname, '..', '..', 'memory-os', 'dist'),
@@ -1007,7 +1007,7 @@ function zhunbeiJiyiCangYunxingShi(): { ipcEntry: string; dataDir: string } {
   ];
   const src = srcCandidates.find((d) => fs.existsSync(path.join(d, 'ipc.js')));
   if (!src) {
-    qidong(`memory ipc source missing among srcCandidates.join(' | ')`);
+    qidong(`memory ipc source missing among ${srcCandidates.join(' | ')}`);
     throw new Error('memory-os dist not found');
   }
   fs.mkdirSync(yunxingShiMulu, { recursive: true });
@@ -1094,20 +1094,20 @@ function zhunbeiJiyiCangYunxingShi(): { ipcEntry: string; dataDir: string } {
   } else if (!srcSqlite) {
     qidong('memory sqlite not found in ' + sqliteHouxuan.join(' | '));
   }
-  return { ipcEntry: path.join(yunxingShiMulu, 'ipc.js'), dataDir };
+  return { ipcEntry: path.join(yunxingShiMulu, 'ipc.js'), CangLu };
 }
 
-async function bootstrap() {
+async function yindao() {
   p1 = await chuangJianP1YunXingShi({
     instancesRoot: path.join(app.getPath('userData'), 'instances'),
-    onApprove: async (req) => {
+    onApprove: async (Qiu) => {
       // 安全模式 full 时自动放行；normal/strict 向渲染进程请求审批
       const mode = p1?.security.getMode();
-      if (mode === 'full') return { action: req.action, scope: 'once', allowed: true };
-      const id = 'ap-' + ++pizhunXulie;
+      if (mode === 'full') return { action: Qiu.action, scope: 'once', allowed: true };
+      const id = 'ap' + ++pizhunXulie;
       return new Promise((resolve) => {
         dengdaiPizhun.set(id, { resolve: resolve as never });
-        win?.webContents.send('warmy:approval-request', { id, action: req.action, suggested: req.suggested });
+        win?.webContents.send('warmy:piZhunQingQiu', { id, action: Qiu.action, suggested: Qiu.suggested });
         setTimeout(() => {
           const p = dengdaiPizhun.get(id);
           if (p) {
@@ -1127,7 +1127,7 @@ async function bootstrap() {
   settingsStore = new PeizhiCang(path.join(userData, 'settings.json'));
   secureKeys = new AnQuanMiyaoCang(userData);
   huiFuHuoYueGongYingShang();
-  groupStore = new GroupStore(path.join(userData, 'groups.json'));
+  groupStore = new QunCang(path.join(userData, 'groups.json'));
   /**
    * ADR 004 第十六批：把 helper-tool 的文件访问记录接到**项目台账**上。
    * 产品主的原话：**「记录文件的改动应该是无限牛马的功能，不是本机的功能」**
@@ -1136,10 +1136,10 @@ async function bootstrap() {
    */
   setFileAccessSink((sessionId, entry) => {
     try {
-      const gid = String(sessionId || '');
-      if (!gid || !groupStore) return;
-      const r = groupStore.recordFileAccess(gid, entry);
-      if (r.ok) void faBuXiangMuShuXing(gid);
+      const qunId = String(sessionId || '');
+      if (!qunId || !groupStore) return;
+      const r = groupStore.recordFileAccess(qunId, entry);
+      if (r.ok) void faBuXiangMuShuXing(qunId);
     } catch {
       /* 记账失败不影响真实文件操作 */
     }
@@ -1149,21 +1149,21 @@ async function bootstrap() {
     downloadDir: path.join(userData, 'updates'),
     getSettings: () => settingsStore?.load() ?? null,
     env: process.env,
-    userAgent: `WArmy/appVersion() (process.platform; process.arch)`,
-    log: (msg) => qidong(`updater: msg`),
+    userAgent: `WArmy/${yingyongBanben()} (${process.platform}; ${process.arch})`,
+    log: (xiaoXi) => qidong(`updater: ${xiaoXi}`),
   });
   qingLiLinShiWenJian(path.join(userData, 'updates'));
   huiFuQunLieBiao();
   // 群骨架恢复之后再灌队列快照（否则 createGroup 会把 queues Map 清空）
   huiFuLuYouQiDuiLie();
-  qidong(`router queues restored file=routerQueuesFile() || 'n/a'`);
+  qidong(`router queues restored file=${routerQueuesFile() || 'n/a'}`);
   nodeReg = new JieDianMingCe(path.join(userData, 'nodes.json'));
   syncBus = new TongbuZongxian(path.join(userData, 'bus'));
   peerReg = new DuiDuanMingCe(path.join(userData, 'peers.json'));
-  if (!nodeReg.list().some((n) => n.isLocal)) {
+  if (!nodeReg.LieBiao().some((n) => n.isLocal)) {
     nodeReg.registerLocal('local');
   }
-  localNodeId = nodeReg.list().find((n) => n.isLocal)?.nodeId || 'node-local';
+  localNodeId = nodeReg.LieBiao().find((n) => n.isLocal)?.nodeId || 'node-local';
   chuShiZiChanGuanLi(path.join(userData, 'assets.json'));
   audit = new ShenJiRiZhi(userData);
   secureKeys = new AnQuanMiyaoCang(userData);
@@ -1197,38 +1197,36 @@ async function bootstrap() {
            * 升级**只做一次**：清掉标记并落盘，否则每次启动都会重建身份 + 多一个备份文件。
            */
           try {
-            const { deviceIdUpgradedFrom: _done, ...rest } = profile;
-            accountStore.saveProfile(rest as never);
+            const { deviceIdUpgradedFrom: _done, ...qiYu } = profile;
+            accountStore.saveProfile(qiYu as never);
           } catch { /* 清标记失败不致命：最多下次再重建一次（身份内容相同、不会漂移） */ }
-          audit?.log('identity.credential.upgraded', { from: 'legacy-numeric-or-uuid', to: 'credential-51', fingerprint: rebuilt.info.fingerprint, backup: rebuilt.backupFile || '' });
-          qidong(`identity upgraded to credential-51 fp=rebuilt.info.fingerprint backup=rebuilt.backupFile || 'none'`);
+          audit?.log('identity.credential.upgraded', { from: 'legacy-numeric-or-uuid', to: 'credential-51', zhiWen: rebuilt.info.zhiWen, backup: rebuilt.backupFile || '' });
+          qidong(`identity upgraded to credential-51 fp=${rebuilt.info.zhiWen} backup=${rebuilt.backupFile || 'none'}`);
         } else {
-          qidong(`identity upgrade failed（保留原身份）: rebuilt.error`);
+          qidong(`identity upgrade failed（保留原身份）: ${rebuilt.error}`);
         }
       } catch (e) {
-        qidong(`identity upgrade threw: sanitizeError(e)`);
+        qidong(`identity upgrade threw: ${xiJingCuoWu(e)}`);
       }
     }
     if (idInit.ok) {
       qidong(
-        `identity idInit.created ? 'created' : 'loaded' fp=idInit.info.fingerprint gen=idInit.info.generation alias=idInit.info.alias protection=
-          idInit.info.passphraseProtected ? 'passphrase' : idInit.info.osProtected ? idInit.info.osLabel : 'none'
-        `,
+        `identity ${idInit.created ? 'created' : 'loaded'} fp=${idInit.info.zhiWen} gen=${idInit.info.generation} alias=${idInit.info.bieMing} protection=${idInit.info.passphraseProtected ? 'passphrase' : idInit.info.osProtected ? idInit.info.osLabel : 'none'}`
       );
     } else {
       // 绝不静默重建：文件损坏时保留证据（已隔离为 .corrupt-*），由用户走"导入备份"恢复
-      qidong(`identity init fail: idInit.error`);
-      lastError = { ts: Date.now(), message: `身份初始化失败：idInit.error`, context: 'identity' };
+      qidong(`identity init fail: ${idInit.error}`);
+      lastError = { ts: Date.now(), message: `身份初始化失败：${idInit.error}`, context: 'identity' };
     }
   } catch (e) {
-    qidong(`identity init fail String(e)`);
+    qidong(`identity init fail ${String(e)}`);
   }
   // 启动时结算一次对端冻结期：到期则把"待采用的新名片"提升为本机留存值（纯本地判定，无定时器）
   try {
-    const settled = identityStore.settlePeerContacts();
-    qidong(`identity peer-contacts settled promoted=settled.promoted/settled.total`);
+    const yiJieSuan = identityStore.settlePeerContacts();
+    qidong(`identity peer-contacts settled promoted=${yiJieSuan.promoted}/${yiJieSuan.total}`);
   } catch (e) {
-    qidong(`identity peer settle fail String(e)`);
+    qidong(`identity peer settle fail ${String(e)}`);
   }
   audit.log('app.start', { platform: process.platform });
   // ── 成员证书 / 吊销列表（ADR §附八.8）：先"热身"建好带审计回调的实例 ──
@@ -1238,7 +1236,7 @@ async function bootstrap() {
   {
     const ms = quChengYuanMingceCang(identityStore, { onAudit: (op, detail) => audit?.log(op, detail) });
     const heJi = ms?.summary();
-    if (heJi) qidong(`membership ready groups=sum.groupCount certs=sum.certCount revoked=sum.revokedCount`);
+    if (heJi) qidong(`membership ready groups=${heJi.groupCount} certs=${heJi.certCount} revoked=${heJi.revokedCount}`);
   }
   // ── 租约表（本体协作层）：写操作的唯一仲裁者 ──
   leases = new LeaseRegistry({ idPrefix: 'warmy' });
@@ -1246,14 +1244,14 @@ async function bootstrap() {
   biangengQuerenWenjian = path.join(userData, 'identity', 'change-acks.json');
   // ── 组网（鉴权通道）：**门控在前**，身份拿不到签名能力就不起监听、不发宣告 ──
   const netDir = baoZhangWangLuoMuLu(userData);
-  if (!netDir.ok) qidong(`net dir unavailable: netDir.error`);
+  if (!netDir.ok) qidong(`net dir unavailable: ${netDir.error}`);
   try {
     // 启动自检：身份层指纹必须能由身份文件里的公钥推出；不一致则整条组网线不可用
     const check = duanyanTuidaoPipei(identityStore);
-    qidong(`identity derivation ok fp=check.fingerprint raw=check.publicKeyRawBytesB`);
+    qidong(`identity derivation ok fp=${check.zhiWen} raw=${check.publicKeyRawBytes}`);
   } catch (e) {
     const err = e as ShenFenBuKeYongCuoWu;
-    qidong(`identity derivation FAILED: err.name: err.message`);
+    qidong(`identity derivation FAILED: ${err.name}: ${err.message}`);
     lastError = { ts: Date.now(), message: err.message, context: 'identity-derivation' };
   }
   secureMesh = new SecureMesh({
@@ -1261,11 +1259,11 @@ async function bootstrap() {
     nodeId: localNodeId,
     store: () => identityStore,
     peers: () => duiduanYinyong(),
-    onInbound: (msg) => {
-      qidong(`mesh inbound msg.channel from msg.peerFingerprint.slice(0, 12)`);
-      // 成员证书 / 吊销列表的**同步落点**：对端指纹来自握手（msg.peerFingerprint），
+    onInbound: (xiaoXi) => {
+      qidong(`mesh inbound ${xiaoXi.channel} from ${xiaoXi.peerFingerprint.slice(0, 12)}`);
+      // 成员证书 / 吊销列表的**同步落点**：对端指纹来自握手（xiaoXi.peerFingerprint），
       // 不是消息体自称 —— 只有本群创建者发来的吊销列表才会被接受。
-      const payload = msg.payload as { type?: string; groupId?: string; list?: unknown } | null;
+      const payload = xiaoXi.payload as { type?: string; groupId?: string; LieBiao?: unknown } | null;
       /**
        * ADR 004 第十六批：**项目属性 / 可用性信号的落点**（成员侧）。
        * 「记录文件的改动是产品功能」这条要求的另一半就在这：异地成员收到的项目属性
@@ -1273,16 +1271,16 @@ async function bootstrap() {
        * 并**复用既有「创建者离线」那一套**（不新造第三种状态）。
        * 纪律：只接受**校验通过**的消息（不认识就如实拒绝），且**只补创建者指纹、绝不覆盖**。
        */
-      if (msg.channel === PROJECT_ATTRS_CHANNEL && (msg.payload as { kind?: unknown } | null)?.kind === PROJECT_ATTRS_KIND) {
-        const parsed = parseProjectAttrsMessage(msg.payload);
+      if (xiaoXi.channel === XIANGMU_SHUXING_TONGDAO && (xiaoXi.payload as { kind?: unknown } | null)?.kind === XIANGMU_SHUXING_LEIXING) {
+        const parsed = parseProjectAttrsMessage(xiaoXi.payload);
         if (!parsed.ok) {
           audit?.log('project.attrs.inbound', { ok: false, code: parsed.error });
-          qidong(`project attrs inbound rejected: parsed.error`);
+          qidong(`project attrs inbound rejected: ${parsed.error}`);
         } else {
           const v = parsed.value;
           // 指纹用**握手**得到的那个（消息体自称的不采信），只在本地还不知道创建者时补上
           const apply = groupStore?.applyProjectSync(v.groupId, {
-            ...(v.name ? { name: v.name } : {}),
+            ...(v.ming ? { ming: v.ming } : {}),
             ...(v.type ? { type: v.type } : {}),
             project: {
               devEnv: v.project.devEnv,
@@ -1292,7 +1290,7 @@ async function bootstrap() {
               ...(v.project.directorySource ? { directorySource: v.project.directorySource } : {}),
               ...(v.project.env ? { env: v.project.env } : {}),
             },
-            creatorFingerprint: msg.peerFingerprint,
+            creatorFingerprint: xiaoXi.peerFingerprint,
           });
           // 台账尾部：**项目级、成员可见**（去重由 store 负责；只记路径/操作/时间）
           let zhangbenYitianjia = 0;
@@ -1315,63 +1313,63 @@ async function bootstrap() {
             // 本机就是创建者：自己的信号回声，忽略（不要用对端的值覆盖本机事实）
             audit?.log('project.attrs.inbound', { groupId: v.groupId, ok: true, echo: true, zhangbenYitianjia });
           } else {
-            const gate = projectInboundGate({
+            const menjin = xiangmuRuXiangMenjin({
               running: v.availability.availability === 'available' && v.project.disabledAt === 0,
               code: v.project.disabledAt > 0 ? 'disabled-by-owner' : (v.availability.code || 'container-not-ready'),
             });
-            audit?.log('project.attrs.inbound', { groupId: v.groupId, ok: true, queue: gate.queue, zhangbenYitianjia });
-            if (!gate.allow) {
-              fachuKongzhitai({ cat: 'net', code: 'project.inbound.queued', data: { groupId: v.groupId, projectCode: gate.projectCode, memberFaceKey: gate.memberFaceKey } });
+            audit?.log('project.attrs.inbound', { groupId: v.groupId, ok: true, queue: menjin.queue, zhangbenYitianjia });
+            if (!menjin.allow) {
+              fachuKongzhitai({ cat: 'net', code: 'project.inbound.queued', data: { groupId: v.groupId, projectCode: menjin.projectCode, memberFaceKey: menjin.memberFaceKey } });
             }
-            qidong(`project attrs inbound v.groupId allow=gate.allow code=gate.projectCode ledger+ledgerAdded`);
+            qidong(`project attrs inbound ${v.groupId} allow=${menjin.allow} code=${menjin.projectCode} ledger+${zhangbenYitianjia}`);
           }
           fachuKongzhitai({ cat: 'system', code: 'project.attrs.applied', data: { groupId: v.groupId, devEnv: v.project.devEnv } });
         }
       }
       if (payload && payload.type === 'warmy.membership.revocation') {
-        const gid = String(payload.groupId || msg.groupId || '');
+        const qunId = String(payload.groupId || xiaoXi.groupId || '');
         const membership = quChengYuanMingceCang(identityStore);
-        const expect = expectedIssuerFor(gid);
+        const yuQi = expectedIssuerFor(qunId);
         const r = yingYongRuXiangCheXiaoGengXin({
           membership: membership as ChengYuanMingceCang,
-          groupId: gid,
-          list: payload.list as never,
-          fromFingerprint: msg.peerFingerprint,
-          ...(expect ? { expectedIssuerFingerprint: expect } : {}),
+          groupId: qunId,
+          LieBiao: payload.LieBiao as never,
+          fromFingerprint: xiaoXi.peerFingerprint,
+          ...(yuQi ? { expectedIssuerFingerprint: yuQi } : {}),
         });
-        audit?.log('membership.revocation.inbound', { groupId: gid, ok: r.ok, code: r.code, changed: r.changed ?? false });
-        qidong(`membership revocation inbound ok=r.ok code=r.code`);
+        audit?.log('membership.revocation.inbound', { groupId: qunId, ok: r.ok, code: r.code, changed: r.changed ?? false });
+        qidong(`membership revocation inbound ok=${r.ok} code=${r.code}`);
       }
     },
-    onEvent: (ev) => {
-      if (ev.type === 'handshake-ok' || ev.type === 'offline') qidong(`mesh ev.type ev.peer ?? ''`);
+    onEvent: (Shi) => {
+      if (Shi.type === 'handshake-ok' || Shi.type === 'offline') qidong(`mesh ${Shi.type} ${Shi.peer ?? ''}`);
       // T194：对端会话上下线 / 握手 / 局域网发现 —— 组网层的**真实**事件，直接进控制台。
       // 这里**只**推手指纹（peer）与方向/原因（detail），不推消息正文。
-      switch (ev.type) {
+      switch (Shi.type) {
         case 'session':
-          fachuKongzhitai({ cat: 'net', code: 'net.peer-up', data: { peer: ev.peer, detail: ev.detail } });
+          fachuKongzhitai({ cat: 'net', code: 'net.peer-up', data: { peer: Shi.peer, detail: Shi.detail } });
           break;
         case 'online':
-          fachuKongzhitai({ cat: 'net', code: 'net.peer-online', data: { peer: ev.peer } });
+          fachuKongzhitai({ cat: 'net', code: 'net.peer-online', data: { peer: Shi.peer } });
           break;
         case 'offline':
-          fachuKongzhitai({ cat: 'net', code: 'net.peer-down', data: { peer: ev.peer, detail: ev.detail } });
+          fachuKongzhitai({ cat: 'net', code: 'net.peer-down', data: { peer: Shi.peer, detail: Shi.detail } });
           break;
         case 'handshake-ok':
-          fachuKongzhitai({ cat: 'net', code: 'net.handshake-ok', data: { peer: ev.peer } });
+          fachuKongzhitai({ cat: 'net', code: 'net.handshake-ok', data: { peer: Shi.peer } });
           break;
         case 'discovered':
-          fachuKongzhitai({ cat: 'net', code: 'net.discovered', data: { peer: ev.peer, detail: ev.detail } });
+          fachuKongzhitai({ cat: 'net', code: 'net.discovered', data: { peer: Shi.peer, detail: Shi.detail } });
           break;
         default:
-          fachuKongzhitai({ cat: 'net', code: 'net.event', data: { type: String(ev.type || ''), detail: ev.detail } });
+          fachuKongzhitai({ cat: 'net', code: 'net.event', data: { type: String(Shi.type || ''), detail: Shi.detail } });
           break;
       }
     },
   });
   {
-    const gate = yaoQiuKeQianMingShenFen(identityStore);
-    qidong(`net gate signReady=gate.ok mode=gate.unlock?.mode ?? 'none' error=gate.errorCode ?? '-'`);
+    const menjin = yaoQiuKeQianMingShenFen(identityStore);
+    qidong(`net gate signReady=${menjin.ok} mode=${menjin.unlock?.mode ?? 'none'} error=${menjin.errorCode ?? '-'}`);
   }
   qidong('board/knowledge/checkpoints/account/sync/mesh/assets ready');
 }
@@ -1380,12 +1378,12 @@ async function bootstrap() {
 
 /** 本机实例入群（路由 + 持久化成员表），已入群则跳过 */
 function joinLocalInstances(groupId: string): void {
-  for (const inst of p1?.instances.list() || []) {
+  for (const inst of p1?.instances.LieBiao() || []) {
     if (router.listMembers(groupId).some((m) => m.id === inst.id)) continue;
     try {
       router.join(groupId, {
         id: inst.id,
-        name: inst.name,
+        ming: inst.ming,
         local: true,
         dutyEligible: inst.dutyEligible,
         status: inst.status === 'running' ? 'idle' : 'offline',
@@ -1395,7 +1393,7 @@ function joinLocalInstances(groupId: string): void {
     }
     groupStore?.addMemberWithFingerprint(
       groupId,
-      { name: inst.name, role: 'member', source: 'instance', instanceId: inst.id },
+      { ming: inst.ming, role: 'member', source: 'instance', instanceId: inst.id },
       { onAudit: (op, detail) => audit?.log(op, detail) }
     );
   }
@@ -1409,7 +1407,7 @@ function syncMembersFromRouter(groupId: string): void {
   for (const m of router.listMembers(groupId)) {
     groupStore.addMemberWithFingerprint(
       groupId,
-      { name: m.name, role: 'member', source: 'instance', instanceId: m.id },
+      { ming: m.ming, role: 'member', source: 'instance', instanceId: m.id },
       { onAudit: (op, detail) => audit?.log(op, detail) }
     );
   }
@@ -1423,15 +1421,15 @@ function huiFuQunLieBiao(): void {
   if (!groupStore) return;
   try {
     const s = settingsStore?.load() as unknown as { groups?: unknown } | undefined;
-    const uiGroups = Array.isArray(s?.groups) ? (s?.groups as Array<{ id?: unknown; name?: unknown; type?: unknown }>) : [];
-    const migrated = groupStore.migrateFrom(uiGroups);
-    if (migrated) qidong(`groups migrated from ui state: migrated`);
+    const uiGroups = Array.isArray(s?.groups) ? (s?.groups as Array<{ id?: unknown; ming?: unknown; type?: unknown }>) : [];
+    const yiQianYi = groupStore.migrateFrom(uiGroups);
+    if (yiQianYi) qidong(`groups migrated from ui state: migrated`);
     for (const g of groupStore.listGroups()) {
       if (!router.getGroup(g.groupId)) {
         try {
           router.createGroup({
             groupId: g.groupId,
-            name: g.name,
+            ming: g.ming,
             type: g.type,
             dutyInstanceId: g.dutyInstanceId,
             directedMode: g.directedMode,
@@ -1445,7 +1443,7 @@ function huiFuQunLieBiao(): void {
       }
       joinLocalInstances(g.groupId);
     }
-    qidong(`groups restored: groupStore.listGroups().length`);
+    qidong(`groups restored: ${groupStore.listGroups().length}`);
   } catch {
     qidong('groups restore failed');
   }
@@ -1453,11 +1451,11 @@ function huiFuQunLieBiao(): void {
 
 function qishiJiyiCangYibu() {
   try {
-    const { ipcEntry, dataDir } = zhunbeiJiyiCangYunxingShi();
+    const { ipcEntry, CangLu } = zhunbeiJiyiCangYunxingShi();
     qidong(`memory ipc=ipcEntry`);
     const nodeRt = jiexiJiedianYunxingShi();
-    qidong(`memory node=nodeRt.path (nodeRt.source)`);
-    memory = new JiyiCangKeHu({ nodePath: nodeRt.path, ipcEntry, dataDir });
+    qidong(`memory node=${nodeRt.path} (${nodeRt.source})`);
+    memory = new JiyiCangKeHu({ nodePath: nodeRt.path, ipcEntry, CangLu });
     memory
       .start()
       .then(() => {
@@ -1466,7 +1464,7 @@ function qishiJiyiCangYibu() {
         return youJiYiHuiFuHuiHuaRiZhi('boot');
       })
       .catch((e) => {
-        qidong(`memory start fail String(e)`);
+        qidong(`memory start fail ${String(e)}`);
         // 降级路径的可观测信号：记忆服务没起来，重建被跳过（对话仍可发送）
         historyRestore = {
           done: true,
@@ -1480,7 +1478,7 @@ function qishiJiyiCangYibu() {
         };
       });
   } catch (e) {
-    qidong(`memory prepare fail String(e)`);
+    qidong(`memory prepare fail ${String(e)}`);
     historyRestore = {
       done: true,
       ok: false,
@@ -1574,8 +1572,8 @@ function jiaZaiChuangKouZhuangTai(): { width?: number; height?: number; x?: numb
         const { screen } = require('electron');
         const b = { x: Number(j.x), y: Number(j.y), width: out.width || 1280, height: out.height || 800 };
         const quyu = screen.getDisplayMatching(b).workArea;
-        const visible = b.x < quyu.x + quyu.width - 40 && b.y < quyu.y + quyu.height - 40 && b.x + 80 > quyu.x && b.y + 40 > quyu.y;
-        if (visible) { out.x = Math.round(Number(j.x)); out.y = Math.round(Number(j.y)); }
+        const kejian = b.x < quyu.x + quyu.width - 40 && b.y < quyu.y + quyu.height - 40 && b.x + 80 > quyu.x && b.y + 40 > quyu.y;
+        if (kejian) { out.x = Math.round(Number(j.x)); out.y = Math.round(Number(j.y)); }
       } catch { /* 无 screen 时忽略位置 */ }
     }
     if (j.maximized === true) out.maximized = true;
@@ -1610,7 +1608,7 @@ function chuangjianChuangkou() {
     minWidth: 960,
     minHeight: 600,
     title: '无限牛马',
-    // macOS：系统原生标题栏与红绿灯；Windows/Linux：无边框 + **渲染层 #titlebar 可拖动**
+    // macOS：系统原生标题栏与红绿灯；Windows/Linux：无边框 + **渲染层 #biaoTiLan 可拖动**
     frame: isMac,
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
     trafficLightPosition: isMac ? { x: 12, y: 10 } : undefined,
@@ -1630,7 +1628,7 @@ function chuangjianChuangkou() {
   win.on('ready-to-show', () => {
     if (ws.maximized) { try { win?.maximize(); } catch { /* noop */ } }
     win?.show();
-    qidong(`window ready platform=process.platform`);
+    qidong(`window ready platform=${process.platform}`);
   });
   win.on('resize', () => baocunChuangkouZhuangtaiJiukuai());
   win.on('move', () => baocunChuangkouZhuangtaiJiukuai());
@@ -1647,11 +1645,11 @@ function chuangjianChuangkou() {
 }
 
 // ── 安全 IPC 辅助函数 ──
-function anQuanChuLi<T>(fn: () => T, fallback: T): T {
-  try { return fn(); } catch (e) { return fallback; }
+function anQuanChuLi<T>(fn: () => T, huiTui: T): T {
+  try { return fn(); } catch (e) { return huiTui; }
 }
-async function anQuanChuLiYiBu<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
-  try { return await fn(); } catch (e) { return fallback; }
+async function anQuanChuLiYiBu<T>(fn: () => Promise<T>, huiTui: T): Promise<T> {
+  try { return await fn(); } catch (e) { return huiTui; }
 }
 /**
  * 统一 IPC 收口：所有 `warmy:*` 通道自动获得
@@ -1671,22 +1669,52 @@ function xiJingCuoWu(e: unknown): string {
     .slice(0, 200);
   return yiQingLi || 'unknown error';
 }
-function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any): void {
-  if (ipcZhuce.has(channel)) {
-    console.error('[ipc] duplicate channel registration ignored: ' + channel);
-    return;
+/**
+ * IPC 注册 + **兼容层**：改名后旧英文频道（如 warmy:group-create）仍可用。
+ * 别名表：src/ipc-aliases.json（English -> 当前拼音频道），构建时拷到 dist。
+ */
+const IPC_ALIASES: Record<string, string> = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'ipc-aliases.json'), 'utf8'));
+  } catch {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'ipc-aliases.json'), 'utf8'));
+    } catch { return {}; }
   }
-  ipcZhuce.add(channel);
-  ipcMain.handle(channel, async (event, ...args) => {
+})();
+function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any): void {
+  /** 只接受本应用窗口（file:// 本地页）调用；外部页面/远程内容一律拒绝 */
+  const yunXuLaiYuan = (event: import('electron').IpcMainInvokeEvent): boolean => {
+    try {
+      const frame = event.senderFrame;
+      if (!frame) return true; // 主进程/工具路径
+      const u = String(frame.url || '');
+      if (!u) return true;
+      if (u.startsWith('file:')) return true;
+      if (u.startsWith('devtools://')) return true;
+      return false;
+    } catch { return true; }
+  };
+  const guaGou = async (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => {
+    if (!yunXuLaiYuan(event)) {
+      const err = new Error('ipc: forbidden sender');
+      console.error('[ipc] ' + channel + ' rejected non-file sender');
+      throw err;
+    }
     try {
       return await fn(event, ...args);
     } catch (e) {
       console.error('[ipc] ' + channel + ' failed:', e);
-      // T194：IPC 处理器抛出的异常 = "已处理失败"里最典型的一类，推进控制台（只推频道名 + 脱敏摘要）
       fachuKongzhitai({ cat: 'error', code: 'err.ipc', data: { channel, message: xiJingCuoWu(e) } });
       throw new Error(xiJingCuoWu(e));
     }
-  });
+  };
+  try { ipcMain.handle(channel, guaGou); } catch { /* already registered */ }
+  for (const [yingWen, pinYin] of Object.entries(IPC_ALIASES)) {
+    if (pinYin === channel && yingWen !== channel) {
+      try { ipcMain.handle(yingWen, guaGou); } catch { /* already */ }
+    }
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1701,12 +1729,12 @@ function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeE
    seq 单调递增：渲染层据此去重（窗口重建/重复投递不会刷屏）。
    ══════════════════════════════════════════════════════════════════════════ */
 let kongzhitaiXulie = 0;
-function fachuKongzhitai(ev: { cat: 'tool' | 'net' | 'error' | 'system'; code: string; data?: Record<string, unknown> }): void {
+function fachuKongzhitai(Shi: { cat: 'tool' | 'net' | 'error' | 'system'; code: string; data?: Record<string, unknown> }): void {
   try {
-    const payload = { seq: ++kongzhitaiXulie, ts: Date.now(), cat: ev.cat, code: ev.code, data: ev.data || {} };
+    const payload = { seq: ++kongzhitaiXulie, ts: Date.now(), cat: Shi.cat, code: Shi.code, data: Shi.data || {} };
     for (const w of BrowserWindow.getAllWindows()) {
       try {
-        if (!w.isDestroyed()) w.webContents.send('warmy:console-event', payload);
+        if (!w.isDestroyed()) w.webContents.send('warmy:kongZhiTaiShiJian', payload);
       } catch {
         /* 窗口正在销毁：控制台丢一行不影响主流程 */
       }
@@ -1752,7 +1780,7 @@ if (!dedaoDangeSuo) {
   });
 }
 
-// 任务栏/窗口图标统一用产品 logo（app.ico 优先）
+// 任务栏/窗口图标统一用产品 logo（yingYong.ico 优先）
 try {
   const tubiao = warmyWindowIcon();
   if (tubiao && fs.existsSync(tubiao)) {
@@ -1769,8 +1797,9 @@ if (dedaoDangeSuo) {
       qidong('whenReady');
       chuangjianChuangkou();
       qidong('window created');
-      await bootstrap();
+      await yindao();
       qishiJiyiCangYibu();
+      try { dshMoRenBaoZhuang(); qidong('dsh auto-install scheduled'); } catch (e) { qidong(`dsh auto ${String(e)}`); }
       try { chuangjianTuopan(); qidong('tray ready'); } catch (e) { qidong(`tray fail ${String(e)}`); }
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) chuangjianChuangkou();
@@ -1806,14 +1835,14 @@ app.on('before-quit', () => {
 });
 
 /** 渲染层「待执行队列」持久化 IPC（重启后不丢 P2/P3 待办） */
-chuliIpc('warmy:ui-queues-get', async () => {
+chuliIpc('warmy:uiDuiLieJiQu', async () => {
   try {
     return { ok: true, queues: huiFuJieMianDuiLie() };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e), queues: {} };
   }
 });
-chuliIpc('warmy:ui-queues-set', async (_e, payload?: { queues?: Record<string, unknown> }) => {
+chuliIpc('warmy:uiDuiLieJiSheZhi', async (_e, payload?: { queues?: Record<string, unknown> }) => {
   try {
     const q = payload?.queues;
     if (!q || typeof q !== 'object') return { ok: false, error: 'queues must be an object' };
@@ -1824,7 +1853,7 @@ chuliIpc('warmy:ui-queues-set', async (_e, payload?: { queues?: Record<string, u
   }
 });
 /** Router 队列只读快照（诊断/巡检用） */
-chuliIpc('warmy:router-queues-get', async () => {
+chuliIpc('warmy:luYouQiDuiLieJiQu', async () => {
   try {
     luoPanLuYouQiDuiLie();
     return { ok: true, snapshot: router.serializeState(), file: routerQueuesFile() };
@@ -1833,37 +1862,37 @@ chuliIpc('warmy:router-queues-get', async () => {
   }
 });
 
-chuliIpc('warmy:hardware', () => anQuanChuLi(() => p1?.instances.hardwareAdvice(), null));
-chuliIpc('warmy:list-instances', () => anQuanChuLi(() => p1?.instances.list() ?? [], []));
+chuliIpc('warmy:yingJian', () => anQuanChuLi(() => p1?.instances.hardwareAdvice(), null));
+chuliIpc('warmy:lieBiaoShiLiJi', () => anQuanChuLi(() => (p1?.instances.LieBiao() ?? []).map((x) => ({ ...x, name: x.ming })), []));
 chuliIpc(
-  'warmy:spawn-instance',
-  async (_e, cfg: { id: string; name: string; dutyEligible?: boolean }) => {
+  'warmy:paiShengShiLi',
+  async (_e, cfg: { id: string; ming: string; dutyEligible?: boolean }) => {
     if (!p1) throw new Error('runtime not ready');
     return p1.instances.spawn({
       config: {
         id: cfg.id,
-        name: cfg.name,
+        ming: cfg.ming || (cfg as { name?: string }).name || cfg.id,
         workspace: path.join(app.getPath('userData'), 'instances', cfg.id),
         dutyEligible: !!cfg.dutyEligible,
       },
     });
   }
 );
-chuliIpc('warmy:stop-instance', async (_e, id: string) => {
+chuliIpc('warmy:tingZhiShiLi', async (_e, id: string) => {
   try {
     await p1?.instances.stop(id);
     return true;
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:security-mode', () => anQuanChuLi(() => p1?.security.getMode(), 'normal'));
+chuliIpc('warmy:anQuanMoShi', () => anQuanChuLi(() => p1?.security.getMode(), 'normal'));
 chuliIpc(
-  'warmy:set-security-mode',
+  'warmy:sheZhiAnQuanMoShi',
   async (_e, mode: 'full' | 'normal' | 'strict') => {
     await p1?.security.setMode(mode);
     return p1?.security.getMode();
   }
 );
-chuliIpc('warmy:memory-recall', async (_e, payload?: string | { query?: string; limit?: number; scope?: Record<string, string> }) => {
+chuliIpc('warmy:jiYiHuiSuo', async (_e, payload?: string | { query?: string; limit?: number; scope?: Record<string, string> }) => {
   try {
     if (!memory) return { cards: [], error: 'memory-unavailable' };
     const q = typeof payload === 'string' ? payload : String(payload?.query || '');
@@ -1874,19 +1903,19 @@ chuliIpc('warmy:memory-recall', async (_e, payload?: string | { query?: string; 
     return { cards: [], error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:memory-append', async (_e, body: string) => {
+chuliIpc('warmy:jiYiZhuiJia', async (_e, text: string) => {
   try {
     return await memory?.append({
       id: `m-${Date.now()}`,
       sessionId: 'ui',
       kind: 'message',
-      body,
+      ti: text,
     });
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:memory-retrieve', async (_e, payload?: { seq?: number; recordId?: string }) => {
+chuliIpc('warmy:jiYiJianSuo', async (_e, payload?: { seq?: number; recordId?: string }) => {
   try {
     if (!memory) return { ok: false, error: 'memory-unavailable' };
     return await memory.retrieve({ seq: payload?.seq, recordId: payload?.recordId });
@@ -1894,7 +1923,7 @@ chuliIpc('warmy:memory-retrieve', async (_e, payload?: { seq?: number; recordId?
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:memory-status', async () => {
+chuliIpc('warmy:jiYiZhuangTai', async () => {
   try {
     const ready = !!(memory?.isReady);
     let vector: unknown = null;
@@ -1906,7 +1935,7 @@ chuliIpc('warmy:memory-status', async () => {
     return {
       ok: true,
       ready,
-      dataDir: path.join(app.getPath('userData'), 'memory'),
+      CangLu: path.join(app.getPath('userData'), 'memory'),
       jsonl: path.join(app.getPath('userData'), 'memory', 'fast-memory.jsonl'),
       vector,
       stats,
@@ -1916,7 +1945,7 @@ chuliIpc('warmy:memory-status', async () => {
     return { ok: false, ready: false, error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:memory-rebuild', async () => {
+chuliIpc('warmy:jiYiChongJian', async () => {
   try {
     if (!memory?.isReady) return { ok: false, error: 'memory-unavailable' };
     const r = await memory.rebuildProjection();
@@ -1936,10 +1965,10 @@ function i18nDir(): string {
   return found ?? candidates[0]!;
 }
 
-chuliIpc('warmy:i18n', (_e, locale: string) => {
+chuliIpc('warmy:i18n', (_e, yuYan: string) => {
   // Resolve to any of the 10 supported packs — never collapse to zh-CN/en-US only.
-  const loc = jiexiYuyan(locale);
-  const file = path.join(i18nDir(), `${loc}.json`);
+  const weiZhi = jiexiYuyan(yuYan);
+  const file = path.join(i18nDir(), `${weiZhi}.json`);
   let strings: Record<string, string> = {};
   try {
     strings = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -1947,38 +1976,38 @@ chuliIpc('warmy:i18n', (_e, locale: string) => {
     strings = {};
   }
   // Trust the pack's own brand strings (ja=無限社畜 WArmy, ko=무한 사축 WArmy, zh=无限牛马, else WArmy).
-  if (!strings['app.displayName']) {
-    strings['app.displayName'] =
+  if (!strings['yingYong.displayName']) {
+    strings['yingYong.displayName'] =
       strings['brand.name'] ||
-      (loc === 'zh-CN' || loc === 'zh-TW' ? strings['app.zhName'] || '无限牛马' : strings['app.enName'] || 'WArmy');
+      (weiZhi === 'zh-CN' || weiZhi === 'zh-TW' ? strings['yingYong.zhName'] || '无限牛马' : strings['yingYong.enName'] || 'WArmy');
   }
-  // Non-Chinese packs may still list zh name in copyright context; UI display uses displayName.
-  win?.setTitle(strings['app.displayName'] || 'WArmy');
-  return { locale: loc, strings, displayName: strings['app.displayName'], supported: SUPPORTED_LOCALES };
+  // Non-Chinese packs may still list zh ming in copyright context; UI display uses displayName.
+  win?.setTitle(strings['yingYong.displayName'] || 'WArmy');
+  return { yuYan: weiZhi, strings, displayName: strings['yingYong.displayName'], supported: SUPPORTED_LOCALES };
 });
 
-chuliIpc('warmy:locale-info', () =>
+chuliIpc('warmy:yuYanXinXi', () =>
   anQuanChuLi(
     () => {
-      const sys = app.getLocale();
-      return { system: sys, resolved: jiexiYuyan(sys), isZh: sys.startsWith('zh'), supported: SUPPORTED_LOCALES };
+      const xitongTiShi = app.getLocale();
+      return { system: xitongTiShi, resolved: jiexiYuyan(xitongTiShi), isZh: xitongTiShi.startsWith('zh'), supported: SUPPORTED_LOCALES };
     },
     { system: 'zh-CN', resolved: 'zh-CN', isZh: true, supported: SUPPORTED_LOCALES },
   ),
 );
 
 // ── 主题 ──
-chuliIpc('warmy:set-theme-source', (_e, source: 'system' | 'light' | 'dark') => {
+chuliIpc('warmy:sheZhiZhuTiLaiYuan', (_e, source: 'system' | 'light' | 'dark') => {
   try {
     nativeTheme.themeSource = source === 'system' ? 'system' : source;
     return { shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:theme-info', () => anQuanChuLi(() => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource }), { shouldUseDarkColors: false, themeSource: 'system' }));
+chuliIpc('warmy:zhuTiXinXi', () => anQuanChuLi(() => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors, themeSource: nativeTheme.themeSource }), { shouldUseDarkColors: false, themeSource: 'system' }));
 
 // ── 拉取供应商模型列表（OpenAI 兼容 /models） ──
 chuliIpc(
-  'warmy:list-models',
+  'warmy:lieBiaoMoXingJi',
   async (_e, cfg: { protocol: string; baseURL: string; apiKey?: string; providerId?: string }) => {
     try {
       const { chuangjianGongYing } = await import('@warmy/providers');
@@ -2000,7 +2029,7 @@ chuliIpc(
 );
 
 // ── 选择本地提示音文件 ──
-chuliIpc('warmy:pick-sound', async () => {
+chuliIpc('warmy:xuanZeSound', async () => {
   try {
     if (!win) return { ok: false };
     const r = await dialog.showOpenDialog(win, {
@@ -2014,7 +2043,7 @@ chuliIpc('warmy:pick-sound', async () => {
 });
 
 // ── 检查更新：真实网络查询，状态可区分（不再恒定返回 upToDate:true） ──
-chuliIpc('warmy:check-update', async () =>
+chuliIpc('warmy:jianChaGengXin', async () =>
   anQuanChuLiYiBu<GengXinJianChaJieGuo>(
     async () => (updater ? await updater.check() : gengXinqiBuKeYongJianCha(yingyongBanben())),
     gengXinqiBuKeYongJianCha(yingyongBanben())
@@ -2022,7 +2051,7 @@ chuliIpc('warmy:check-update', async () =>
 );
 
 // ── 选择附件文件 ──
-chuliIpc('warmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
+chuliIpc('warmy:xuanZeWenJian', async (_e, opts?: { filters?: string[] }) => {
   try {
     if (!win) return { ok: false };
     const ext = opts?.filters?.length ? opts.filters : undefined;
@@ -2037,14 +2066,14 @@ chuliIpc('warmy:pick-file', async (_e, opts?: { filters?: string[] }) => {
 
 // ── 群聊编排 + 看板 ──
 chuliIpc(
-  'warmy:group-create',
-  (_e, cfg: { groupId: string; name: string; type: 'internal' | 'external'; directedMode?: boolean; devEnv?: 'host' | 'container'; directory?: string }) => {
+  'warmy:qunChuangJian',
+  (_e, cfg: { groupId: string; ming: string; type: 'internal' | 'external'; directedMode?: boolean; devEnv?: 'host' | 'container'; directory?: string }) => {
     try {
       // 已存在（例如重启后 restoreGroups 已恢复）则不再 createGroup，直接复用
       if (!router.getGroup(cfg.groupId)) {
         router.createGroup({
           groupId: cfg.groupId,
-          name: cfg.name,
+          ming: cfg.ming,
           type: cfg.type,
           dutyInstanceId: null,
           directedMode: !!cfg.directedMode,
@@ -2056,12 +2085,12 @@ chuliIpc(
       // 群记录落盘（group-list 的真实数据来源）
       const saved = groupStore?.upsertGroup({
         groupId: cfg.groupId,
-        name: cfg.name,
+        ming: cfg.ming,
         type: cfg.type,
         directedMode: !!cfg.directedMode,
         // 本机建的群 = 本机身份是创建者（成员证书的签发者就是它）。
         // 拿不到身份时**不填**（留空 = 未知），上层会退回"首次收到的签发者即群主"。
-        ...(identityStore?.info()?.fingerprint ? { creatorFingerprint: String(identityStore.info()?.fingerprint) } : {}),
+        ...(identityStore?.info()?.zhiWen ? { creatorFingerprint: String(identityStore.info()?.zhiWen) } : {}),
       });
       if (saved && !saved.ok) return { ok: false, error: 'cannot persist group' };
       /**
@@ -2074,7 +2103,7 @@ chuliIpc(
       sheZhiXiangMuShuXing(cfg.groupId, {
         ...(cfg.devEnv === 'container' || cfg.devEnv === 'host' ? { devEnv: cfg.devEnv } : {}),
         ...(cfg.directory && fs.existsSync(cfg.directory) ? { directory: cfg.directory, directorySource: 'creator-picked' as const } : {}),
-        gateVerify: gateVerifyForProjectType({ directory: cfg.directory, devEnv: cfg.devEnv, name: cfg.name }),
+        gateVerify: gateVerifyForProjectType({ directory: cfg.directory, devEnv: cfg.devEnv, ming: cfg.ming }),
       });
       // 本机实例全部可值班（同时写入持久化成员表）
       joinLocalInstances(cfg.groupId);
@@ -2087,7 +2116,7 @@ chuliIpc(
 );
 
 // ── 群列表：来自 userData/groups.json（真实存储），不是空数组 / 演示数据 ──
-chuliIpc('warmy:group-list', () =>
+chuliIpc('warmy:qunLieBiao', () =>
   anQuanChuLi<QunLieBiaoJieGuo>(
     () => {
       if (!groupStore) return { ok: false, groups: [], count: 0, error: 'group store unavailable' };
@@ -2097,8 +2126,10 @@ chuliIpc('warmy:group-list', () =>
         .sort((a, b) => a.createdAt - b.createdAt)
         .map((g) => ({
           ...g,
+          // 渲染层兼容：同时提供 name 与 ming（改名后存储字段是 ming）
+          name: g.ming,
           memberCount: (snap.members[g.groupId] || []).length,
-          active: !!router.getGroup(g.groupId),
+          jiHuo: !!router.getGroup(g.groupId),
         }));
       return { ok: true, groups, count: groups.length };
     },
@@ -2107,30 +2138,30 @@ chuliIpc('warmy:group-list', () =>
 );
 
 chuliIpc(
-  'warmy:group-message',
+  'warmy:qunXiaoXi',
   async (
     _e,
-    msg: { groupId: string; userId?: string; content: string; urgency?: string; mentionIds?: string[] }
+    xiaoXi: { groupId: string; userId?: string; content: string; urgency?: string; mentionIds?: string[] }
   ) => {
-    const urgency = (msg.urgency || 'P2') as 'P0' | 'P1' | 'P2' | 'P3';
+    const urgency = (xiaoXi.urgency || 'P2') as 'P0' | 'P1' | 'P2' | 'P3';
     const route = router.route({
-      groupId: msg.groupId,
-      userId: msg.userId || 'local-user',
-      content: msg.content,
+      groupId: xiaoXi.groupId,
+      userId: xiaoXi.userId || 'local-user',
+      content: xiaoXi.content,
       urgency,
-      mentionIds: msg.mentionIds || [],
+      mentionIds: xiaoXi.mentionIds || [],
       timestamp: Date.now(),
     });
 
     // 外部群：无 @ 静默（不变量：仅聊天）
-    const g = router.getGroup(msg.groupId);
+    const g = router.getGroup(xiaoXi.groupId);
     if (g?.type === 'external' && route.action === 'silent') {
       return { ok: true, action: 'silent', reason: route.reason, reply: null };
     }
 
     // 值班者看板解析（仅 duty 写入）
     if (board && route.action !== 'silent') {
-      const parsed = JieLing(msg.content, msg.groupId);
+      const parsed = JieLing(xiaoXi.content, xiaoXi.groupId);
       if (parsed) {
         try {
           board.append(parsed, 'duty');
@@ -2141,7 +2172,7 @@ chuliIpc(
     }
 
     // 请求时邮件提醒：仅在该会话勾选了「提醒」时才入队
-    const notifyOk = (p1?.instances.list().find((x) => x.id === msg.groupId)?.dutyEligible !== false);
+    const notifyOk = (p1?.instances.LieBiao().find((x) => x.id === xiaoXi.groupId)?.dutyEligible !== false);
     const sset = settingsStore?.load();
     const emailOn = sset?.emailNotify?.request !== false || sset?.emailOnRequest;
     if (emailOn && notifyOk) {
@@ -2149,8 +2180,8 @@ chuliIpc(
       if (profile?.email) {
         emailQueue.push({
           to: profile.email,
-          subject: `WArmy request msg.groupId`,
-          body: msg.content.slice(0, 500),
+          subject: `WArmy request ${xiaoXi.groupId}`,
+          text: xiaoXi.content.slice(0, 500),
           ts: Date.now(),
         });
       }
@@ -2161,9 +2192,9 @@ chuliIpc(
       dutyUserSeq = memSeqOf(
         await memory?.append({
           id: dutyUserRecordId,
-          sessionId: msg.groupId,
+          sessionId: xiaoXi.groupId,
           kind: 'message',
-          body: msg.content,
+          ti: xiaoXi.content,
         }, 'duty')
       );
     } catch {
@@ -2172,10 +2203,10 @@ chuliIpc(
     // 日志只追加 + 真实 recordId/seq（不变量 #1、#5）。
     // recordId 只在记忆服务**真的写入成功**时才挂到日志上：否则指针会给出一个解引用不到的死 id
     // （降级路径下宁可只留 seq + recall 两种线索，也不给假线索）。
-    zhuiJiaLiaoTianRiZhi(msg.groupId, {
+    zhuiJiaLiaoTianRiZhi(xiaoXi.groupId, {
       seq: xiaYiLiaoTianXuLie(dutyUserSeq),
       role: 'user',
-      content: msg.content,
+      content: xiaoXi.content,
       recordId: dutyUserSeq !== undefined ? dutyUserRecordId : undefined,
       ts: Date.now(),
     });
@@ -2196,13 +2227,13 @@ chuliIpc(
         const zhibanMoxing = providerCfg.model;
         const dutyBase = contextBudgetChars(zhibanMoxing);
         const zhibanChongshi = await daiShangXiaWenChongShiYunXing(dutyBase, async (budgetChars) => {
-          const shitu = renderChatView(msg.groupId, msg.content, budgetChars);
+          const shitu = renderChatView(xiaoXi.groupId, xiaoXi.content, budgetChars);
           // ADR 002 §9.4 待办 2：值班者路径也只走这一个循环入口（工具/降级/审计行为一致）
-          const loop = await yunXingLiaoTianXunHuan(msg.groupId, provider, {
+          const loop = await yunXingLiaoTianXunHuan(xiaoXi.groupId, provider, {
             model: zhibanMoxing,
-            messages: [
+            xiaoXiJi: [
               { role: 'system', content: tMain('llm.dutySystem') },
-              ...(shitu.messages as LiaoTianXiaoXi[]),
+              ...(shitu.xiaoXiJi as LiaoTianXiaoXi[]),
             ],
             maxTokens: 512,
           });
@@ -2212,9 +2243,9 @@ chuliIpc(
         if (!loop && zhibanChongshi.gaveUp) {
           llmReply = tMain('chat.contextTooSmall', '该模型上下文太小，无法满足当前聊天需求（已自动收缩重试到最小值仍失败）');
         } else if (loop) {
-          llmReply = loop.response.choices[0]?.message?.content || '';
+          llmReply = loop.xiangYingTi.choices[0]?.message?.content || '';
         }
-        zhuiJiaLiaoTianRiZhi(msg.groupId, {
+        zhuiJiaLiaoTianRiZhi(xiaoXi.groupId, {
           seq: xiaYiLiaoTianXuLie(),
           role: 'assistant',
           content: llmReply || '',
@@ -2232,37 +2263,37 @@ chuliIpc(
       reason: route.reason,
       duty: route.duty?.id,
       decision: route.decision,
-      queueLength: router.listQueue(msg.groupId).length,
+      queueLength: router.listQueue(xiaoXi.groupId).length,
       reply: llmReply,
     };
   }
 );
 
-chuliIpc('warmy:board-tasks', (_e, groupId?: string) => {
+chuliIpc('warmy:kanbanRenwuJi', (_e, groupId?: string) => {
   try {
-    return { ok: true, tasks: board?.listTasks(groupId) || [] };
+    return { ok: true, RenwuJi: board?.listTasks(groupId) || [] };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:board-events', () => {
+chuliIpc('warmy:kanbanShiJianJi', () => {
   try {
     return { ok: true, events: board?.tailEvents(30) || [] };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:board-aggregate', () => {
+chuliIpc('warmy:kanbanJuHe', () => {
   try {
     return { ok: true, sessions: board?.aggregateByGroup() || [] };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:group-join-instance', (_e, groupId: string, instanceId: string) => {
+chuliIpc('warmy:qunJiaRuShiLi', (_e, groupId: string, instanceId: string) => {
   try {
-    const inst = p1?.instances.list().find((x) => x.id === instanceId);
+    const inst = p1?.instances.LieBiao().find((x) => x.id === instanceId);
     if (!inst) return { ok: false };
     router.join(groupId, {
       id: inst.id,
-      name: inst.name,
+      ming: inst.ming,
       local: true,
       dutyEligible: inst.dutyEligible,
       status: inst.status === 'running' ? 'idle' : 'offline',
@@ -2270,7 +2301,7 @@ chuliIpc('warmy:group-join-instance', (_e, groupId: string, instanceId: string) 
     // 成员关系落盘：重启后仍在群里
     groupStore?.addMemberWithFingerprint(
       groupId,
-      { name: inst.name, role: 'member', source: 'instance', instanceId: inst.id },
+      { ming: inst.ming, role: 'member', source: 'instance', instanceId: inst.id },
       { onAudit: (op, detail) => audit?.log(op, detail) }
     );
     return { ok: true };
@@ -2278,7 +2309,7 @@ chuliIpc('warmy:group-join-instance', (_e, groupId: string, instanceId: string) 
 });
 
 // ── 真 LLM 对话 ──
-chuliIpc('warmy:set-provider', async (_e, cfg: Partial<typeof providerCfg>) => {
+chuliIpc('warmy:sheZhiGongYingShang', async (_e, cfg: Partial<typeof providerCfg>) => {
   try {
     const shuru = cfg.apiKey;
     providerCfg = { ...providerCfg, ...cfg };
@@ -2313,7 +2344,7 @@ chuliIpc('warmy:set-provider', async (_e, cfg: Partial<typeof providerCfg>) => {
  * 明确拒绝在没有 OS 保护时写明文（`no-safe-storage`），并把这个结果**如实**回给界面，
  * 由界面告诉用户"这台机器上没有可用的加密存储"，绝不静默降级。
  */
-chuliIpc('warmy:provider-key-set', async (_e, payload: { providerId?: string; apiKey?: string }) => {
+chuliIpc('warmy:gongYingShangMiYaoSheZhi', async (_e, payload: { providerId?: string; apiKey?: string }) => {
   const id = String(payload?.providerId || '');
   const key = String(payload?.apiKey || '');
   if (!id) return { ok: false, error: 'bad-provider-id' };
@@ -2327,16 +2358,16 @@ chuliIpc('warmy:provider-key-set', async (_e, payload: { providerId?: string; ap
   }
 });
 
-chuliIpc('warmy:provider-key-has', async (_e, payload: { providerIds?: string[] } = {}) => {
-  const ids = Array.isArray(payload.providerIds) ? payload.providerIds.map((x) => String(x)) : [];
+chuliIpc('warmy:gongYingShangMiYaoHas', async (_e, payload: { providerIds?: string[] } = {}) => {
+  const idJi = Array.isArray(payload.providerIds) ? payload.providerIds.map((x) => String(x)) : [];
   const has: Record<string, boolean> = {};
-  for (const id of ids) {
+  for (const id of idJi) {
     try { has[id] = !!(await secureKeys?.load(id)); } catch { has[id] = false; }
   }
   return { ok: true, has };
 });
 
-chuliIpc('warmy:provider-key-clear', (_e, payload: { providerId?: string } = {}) => {
+chuliIpc('warmy:gongYingShangMiYaoQingChu', (_e, payload: { providerId?: string } = {}) => {
   try {
     const id = String(payload?.providerId || '');
     if (id && secureKeys) secureKeys.delete(id);
@@ -2344,17 +2375,17 @@ chuliIpc('warmy:provider-key-clear', (_e, payload: { providerId?: string } = {})
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:get-provider', () => ({
+chuliIpc('warmy:quGongYingShang', () => ({
   ok: true,
   providerCfg: { ...providerCfg, apiKey: providerCfg.apiKey ? '***' : '' },
   hasKey: !!providerCfg.apiKey || providerCfg.protocol === 'ollama',
 }));
 
 chuliIpc(
-  'warmy:chat-send',
+  'warmy:liaoTianFaSong',
   async (
     _e,
-    msg: {
+    xiaoXi: {
       sessionId: string;
       role?: 'user';
       content: string;
@@ -2363,8 +2394,8 @@ chuliIpc(
       insertMode?: 'outer' | 'inner';
     }
   ) => {
-    const sessionId = msg.sessionId;
-    if (msg.insertMode) insertMode.set(sessionId, msg.insertMode);
+    const sessionId = xiaoXi.sessionId;
+    if (xiaoXi.insertMode) insertMode.set(sessionId, xiaoXi.insertMode);
 
     /**
      * ADR 004 第七批定稿：**项目不可用**时不可聊天（也不可在宿主侧执行这一轮）。
@@ -2390,7 +2421,7 @@ chuliIpc(
     }
 
     // 写入侧 CCR
-    const yiYaSuo = ccr.beforeLog({ kind: 'message', content: msg.content });
+    const yiYaSuo = ccr.beforeLog({ kind: 'message', content: xiaoXi.content });
     metrics.recordCcr({
       ts: Date.now(),
       kind: 'message',
@@ -2412,7 +2443,7 @@ chuliIpc(
             // role 一并落 JSONL（SQLite 投影查不到它，但 JSONL 才是事实来源；
             // 重建时先用 recordId 前缀，将来有读 JSONL 的 IPC 就能直接用这个字段）
             role: 'user',
-            body: yiYaSuo.content,
+            ti: yiYaSuo.content,
           },
           'duty'
         )
@@ -2430,7 +2461,7 @@ chuliIpc(
 
     await baozhangGongyingshangMiyao();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
-      const reply = tMain('llm.noKey') + msg.content.slice(0, 80);
+      const reply = tMain('llm.noKey') + xiaoXi.content.slice(0, 80);
       zhuiJiaLiaoTianRiZhi(sessionId, {
         seq: xiaYiLiaoTianXuLie(),
         role: 'assistant',
@@ -2441,22 +2472,22 @@ chuliIpc(
       return { ok: true, reply, usage: null, needsKey: true };
     }
 
-    const t0 = Date.now();
+    const qiShiShiJian = Date.now();
     try {
       const provider = congYuSheChuangJian(providerCfg.presetId, {
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL || undefined,
       });
-      const modelId = msg.model || providerCfg.model;
+      const modelId = xiaoXi.model || providerCfg.model;
       const baseBudget = contextBudgetChars(modelId);
       // 计划1/2：上下文超限自动收缩重试（100%→60%→35%→20%），到最小仍失败则如实停止
       const chongshi = await daiShangXiaWenChongShiYunXing(baseBudget, async (budgetChars) => {
         // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）
-        const shitu = renderChatView(sessionId, msg.content, budgetChars);
+        const shitu = renderChatView(sessionId, xiaoXi.content, budgetChars);
         // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
         const loop = await yunXingLiaoTianXunHuan(sessionId, provider, {
           model: modelId,
-          messages: shitu.messages as LiaoTianXiaoXi[],
+          xiaoXiJi: shitu.xiaoXiJi as LiaoTianXiaoXi[],
           maxTokens: 1024,
         });
         return { shitu, loop, budgetChars };
@@ -2473,7 +2504,7 @@ chuliIpc(
         };
       }
       const { loop } = chongshi.result;
-      const xiangYing = loop.response;
+      const xiangYing = loop.xiangYingTi;
       const reply = xiangYing.choices[0]?.message?.content || '';
       metrics.recordTurn({
         sessionId,
@@ -2482,9 +2513,9 @@ chuliIpc(
         completionTokens: xiangYing.usage.completionTokens,
         cacheHitTokens: xiangYing.usage.cacheHitTokens,
         cacheMissTokens: xiangYing.usage.cacheMissTokens,
-        durationMs: Date.now() - t0,
+        durationMs: Date.now() - qiShiShiJian,
         providerId: providerCfg.presetId,
-        model: msg.model || providerCfg.model,
+        model: xiaoXi.model || providerCfg.model,
       });
       const replyRecordId = xinLiaoTianJiLuId('a');
       let replyMemSeq: number | undefined;
@@ -2493,7 +2524,7 @@ chuliIpc(
           await memory?.append(
             // 与日志正文**一致**地落盘：之前这里 slice(0,4000)，会让 retrieve(recordId) 只能回到前 4000 字符，
             // 而日志里是全量 —— 两份真相不一致，等于长回复的尾巴取不回来（不丢细节的前提是两边同一份内容）。
-            { id: replyRecordId, sessionId, kind: 'message', role: 'assistant', body: reply },
+            { id: replyRecordId, sessionId, kind: 'message', role: 'assistant', ti: reply },
             'duty'
           )
         );
@@ -2511,7 +2542,7 @@ chuliIpc(
         knowledge.upsertEntity({
           id: 'session-' + sessionId,
           kind: 'project',
-          name: sessionId,
+          ming: sessionId,
           attrs: {},
           anchors: [],
         });
@@ -2524,11 +2555,11 @@ chuliIpc(
         /** 工具调用观测（渲染层可据此展示"本轮调用了 retrieve/recall"） */
         tools: {
           requested: !!loop.tooled,
-          calls: loop.toolCalls,
-          rounds: loop.rounds,
-          requests: loop.requests,
+          diaoYongJi: loop.gongJuDiaoYongJi,
+          lunShu: loop.lunShu,
+          qingQiuJi: loop.qingQiuJi,
           degraded: loop.degraded,
-          stopReason: loop.stopReason,
+          tingZhiYuanYin: loop.tingZhiYuanYin,
         },
       };
     } catch (e) {
@@ -2550,15 +2581,15 @@ chuliIpc(
  *   · 增益：每个回退点顺便记下当时的**环境指纹**（运行时 + 我们镜像表的 digest 快照），
  *     这样"回退了代码但环境变了"能被提前告知，而不是等跑不起来才发现。
  */
-function currentEnvFingerprint(groupId: string): { active: boolean; runtimeId: string; revision: string; at: number; imageDigests: Record<string, string> } {
-  const gid = String(groupId || '');
-  const runtimeId = gid ? quXiangMuYunXingShi(gid) : '';
-  const isContainer = !!gid && quXiangMuKaiFaHuanJing(gid) === 'container' && !!runtimeId;
+function currentEnvFingerprint(groupId: string): { jiHuo: boolean; runtimeId: string; revision: string; at: number; imageDigests: Record<string, string> } {
+  const qunId = String(groupId || '');
+  const runtimeId = qunId ? quXiangMuYunXingShi(qunId) : '';
+  const isContainer = !!qunId && quXiangMuKaiFaHuanJing(qunId) === 'container' && !!runtimeId;
   const imageDigests: Record<string, string> = {};
   for (const tuPian of CONTAINER_BASE_IMAGES) if (tuPian.digest) imageDigests[tuPian.ref] = tuPian.digest;
-  if (!isContainer) return { active: false, runtimeId: '', revision: 'host', at: Date.now(), imageDigests: {} };
+  if (!isContainer) return { jiHuo: false, runtimeId: '', revision: 'host', at: Date.now(), imageDigests: {} };
   const revision = crypto.createHash('sha256').update(JSON.stringify({ runtimeId, imageDigests })).digest('hex').slice(0, 12);
-  return { active: true, runtimeId, revision, at: Date.now(), imageDigests };
+  return { jiHuo: true, runtimeId, revision, at: Date.now(), imageDigests };
 }
 /** 把当前环境指纹挂到刚建的回退点上（缺容器开发信息时如实记 host，不编） */
 function recordCheckpointEnv(cpId: string, groupId?: string): void {
@@ -2573,20 +2604,20 @@ function recordCheckpointEnv(cpId: string, groupId?: string): void {
     /* 记不上就不记（宁可缺，也不编） */
   }
 }
-chuliIpc('warmy:checkpoint-create', (_e, phase: 'round_start' | 'round_end', groupId?: string) => {
+chuliIpc('warmy:checkpointChuangJian', (_e, phase: 'round_start' | 'round_end', groupId?: string) => {
   try {
     if (!checkpoints) return { ok: false };
     const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
     const jsonl = path.join(jiYiMuLu, 'fast-memory.jsonl');
     const cp = checkpoints.create({ phase, logSeq: Date.now(), jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined });
     recordCheckpointEnv(String((cp && cp.id) || ''), groupId);
-    return { ok: true, checkpoint: cp, list: checkpoints.list(), env: currentEnvFingerprint(String(groupId || '')) };
+    return { ok: true, checkpoint: cp, LieBiao: checkpoints.LieBiao(), env: currentEnvFingerprint(String(groupId || '')) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:checkpoint-list', (_e, payload?: { sessionId?: string }) => ({
+chuliIpc('warmy:checkpointLieBiao', (_e, payload?: { sessionId?: string }) => ({
   ok: true,
-  list: checkpoints?.list() || [],
+  LieBiao: checkpoints?.LieBiao() || [],
   space: checkpoints?.space() || { maxBytes: 512 * 1024 * 1024, usedBytes: 0, count: 0 },
   /** 每个回退点当时的**环境指纹**（没记过就没有 —— 不编） */
   envByCheckpoint: (settingsStore?.load()?.checkpointEnv) || {},
@@ -2600,7 +2631,7 @@ chuliIpc('warmy:checkpoint-list', (_e, payload?: { sessionId?: string }) => ({
   layering: { fileRollbackIndependent: true, snapshotCoversProjectFiles: false, envRollbackNeedsRuntime: true },
 }));
 
-chuliIpc('warmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: boolean; sessionId?: string }) => {
+chuliIpc('warmy:checkpointHuiGun', (_e, id: string, opts?: { stopFirst?: boolean; sessionId?: string }) => {
   try {
     if (!checkpoints) return { ok: false };
     if (opts?.stopFirst) {
@@ -2610,12 +2641,12 @@ chuliIpc('warmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: bool
     const jsonl = path.join(jiYiMuLu, 'fast-memory.jsonl');
     const ok = checkpoints.rollback(id, { jsonlPath: jsonl });
     // 回退后**如实对比环境**：环境变了就提前告知（文件回退了、环境回不去）
-    const recorded = (settingsStore?.load()?.checkpointEnv || {})[String(id)] || null;
+    const jilu = (settingsStore?.load()?.checkpointEnv || {})[String(id)] || null;
     const current = currentEnvFingerprint(String(opts?.sessionId || ''));
-    const envChanged = !!recorded && String(recorded.revision || '') !== String(current.revision || '');
+    const envChanged = !!jilu && String(jilu.revision || '') !== String(current.revision || '');
     return {
       ok,
-      env: { recorded, current, changed: envChanged, active: current.active },
+      env: { jilu, current, changed: envChanged, jiHuo: current.jiHuo },
       /** 文件回退成功 ≠ 环境也回退了 —— 这条一起回给渲染层，让 UI 如实提示 */
       noteKey: envChanged ? 'checkpoints.env.changed' : 'checkpoints.env.same',
     };
@@ -2623,27 +2654,27 @@ chuliIpc('warmy:checkpoint-rollback', (_e, id: string, opts?: { stopFirst?: bool
 });
 
 // ── 知识库 ──
-chuliIpc('warmy:knowledge-query', (_e, q: string) => {
+chuliIpc('warmy:zhiShiQuery', (_e, q: string) => {
   try {
     return { ok: true, ...(knowledge?.query(q) || { entities: [], events: [] }) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc(
-  'warmy:knowledge-add-event',
-  (_e, ev: { id: string; title: string; entityIds?: string[]; result?: string }) => {
+  'warmy:zhiShiTianJiaShiJian',
+  (_e, Shi: { id: string; biaoTi: string; entityIds?: string[]; result?: string }) => {
     knowledge?.upsertEntity({
       id: 'default',
       kind: 'project',
-      name: 'default',
+      ming: 'default',
       attrs: {},
       anchors: [],
     });
     knowledge?.addEvent({
-      id: ev.id,
-      title: ev.title,
-      result: ev.result,
-      entityIds: ev.entityIds || ['default'],
+      id: Shi.id,
+      biaoTi: Shi.biaoTi,
+      result: Shi.result,
+      entityIds: Shi.entityIds || ['default'],
       anchors: [],
       ts: Date.now(),
     });
@@ -2652,21 +2683,21 @@ chuliIpc(
 );
 
 // ── 指令插入级别 ──
-chuliIpc('warmy:set-insert-mode', (_e, sessionId: string, mode: 'outer' | 'inner') => {
+chuliIpc('warmy:sheZhiInsertMoShi', (_e, sessionId: string, mode: 'outer' | 'inner') => {
   try {
     insertMode.set(sessionId, mode);
     return { ok: true, mode };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:get-insert-mode', (_e, sessionId: string) => ({
+chuliIpc('warmy:quInsertMoShi', (_e, sessionId: string) => ({
   ok: true,
   mode: insertMode.get(sessionId) || 'outer',
 }));
 
 // ── 指标 ──
-chuliIpc('warmy:metrics-summary', () => anQuanChuLi(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true, toolCalls: 0, toolCallsOk: 0, toolChars: 0, toolTurns: 0, toolDegradedTurns: 0, toolStopReasons: {}, toolLoopBounded: true }))
-chuliIpc('warmy:metrics-turns', () => anQuanChuLi(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
-chuliIpc('warmy:metrics-tools', () => anQuanChuLi(() => ({ ok: true, calls: metrics.lastToolCalls(50) }), { ok: true, calls: [] }))
+chuliIpc('warmy:zhiBiaoJiZhaiYao', () => anQuanChuLi(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true, gongJuDiaoYongJi: 0, toolCallsOk: 0, toolChars: 0, toolTurns: 0, toolDegradedTurns: 0, toolStopReasons: {}, toolLoopBounded: true }))
+chuliIpc('warmy:zhiBiaoJiLunCi', () => anQuanChuLi(() => ({ ok: true, turns: metrics.lastTurns(20) }), { ok: true, turns: [] }))
+chuliIpc('warmy:zhiBiaoJiGongJu', () => anQuanChuLi(() => ({ ok: true, diaoYongJi: metrics.lastToolCalls(50) }), { ok: true, diaoYongJi: [] }))
 
 /**
  * 会话日志（只追加）的只读视图 —— ADR 002 §9.4 待办 4 的观测面。
@@ -2678,20 +2709,20 @@ chuliIpc('warmy:metrics-tools', () => anQuanChuLi(() => ({ ok: true, calls: metr
  * 新窗口打开一片空白，这就是"新窗口和主界面记录不同步"的根因。
  * 内容一律从主进程的日志取（唯一事实来源），渲染层不自造第二份。
  */
-chuliIpc('warmy:chat-messages', (_e, payload?: { sessionId?: string; limit?: number }) => {
+chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: number }) => {
   try {
     const sessionId = String(payload?.sessionId || '');
-    if (!sessionId) return { ok: false, sessionId, messages: [] };
+    if (!sessionId) return { ok: false, sessionId, xiaoXiJi: [] };
     const limit = Math.min(1000, Math.max(1, Math.floor(Number(payload?.limit)) || 500));
     const all = chatLogs.get(sessionId) || [];
     return {
       ok: true,
       sessionId,
       count: all.length,
-      messages: all.slice(-limit).map((e) => ({ role: e.role, text: e.content, ts: e.ts ?? null })),
+      xiaoXiJi: all.slice(-limit).map((e) => ({ role: e.role, text: e.content, ts: e.ts ?? null })),
     };
   } catch (e2) {
-    return { ok: false, sessionId: String(payload?.sessionId || ''), messages: [], error: xiJingCuoWu(e2) };
+    return { ok: false, sessionId: String(payload?.sessionId || ''), xiaoXiJi: [], error: xiJingCuoWu(e2) };
   }
 });
 
@@ -2703,14 +2734,14 @@ chuliIpc('warmy:chat-messages', (_e, payload?: { sessionId?: string; limit?: num
  * 去重：与**最后一条**的 role+content 相同时跳过，这样单聊路径（chat-send 已记账）
  * 不会因为渲染层也补写而重复。
  */
-chuliIpc('warmy:chat-log-append', (_e, payload?: { sessionId?: string; role?: string; content?: string }) => {
+chuliIpc('warmy:liaoTianRiZhiZhuiJia', (_e, payload?: { sessionId?: string; role?: string; content?: string }) => {
   try {
     const sid = String(payload?.sessionId || '');
-    const role = payload?.role === 'me' ? 'user' : 'assistant';
+    const role = payload?.role === 'wo' ? 'user' : 'assistant';
     const content = String(payload?.content || '');
     if (!sid || !content) return { ok: false, appended: false, error: 'bad-payload' };
-    const arr = chatLogs.get(sid) || [];
-    const last = arr[arr.length - 1];
+    const shuZu = chatLogs.get(sid) || [];
+    const last = shuZu[shuZu.length - 1];
     if (last && last.role === role && String(last.content) === content) {
       return { ok: true, appended: false, deduped: true };
     }
@@ -2721,7 +2752,7 @@ chuliIpc('warmy:chat-log-append', (_e, payload?: { sessionId?: string; role?: st
   }
 });
 
-chuliIpc('warmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number }) => {
+chuliIpc('warmy:liaoTianRiZhi', (_e, payload?: { sessionId?: string; limit?: number }) => {
   try {
     const sessionId = String(payload?.sessionId ?? '');
     const limit = Math.min(500, Math.max(1, Math.floor(Number(payload?.limit)) || 200));
@@ -2752,21 +2783,21 @@ chuliIpc('warmy:chat-log', (_e, payload?: { sessionId?: string; limit?: number }
 });
 
 /** 手动触发一次历史重建（排障/验证用；与启动路径同一函数） */
-chuliIpc('warmy:chat-log-restore', async () => {
+chuliIpc('warmy:liaoTianRiZhiHuiFu', async () => {
   const report = await youJiYiHuiFuHuiHuaRiZhi('ipc');
   return { ok: report.ok, restore: report, sessions: [...chatLogs.keys()], logSeq: chatLogSeq };
 });
 
 // ── 设置持久化 ──
-chuliIpc('warmy:settings-get', () => anQuanChuLi(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
-chuliIpc('warmy:settings-save', (e, partial: Record<string, unknown>) => {
+chuliIpc('warmy:peiZhiQu', () => anQuanChuLi(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
+chuliIpc('warmy:peiZhiBaoCun', (e, partial: Record<string, unknown>) => {
   const next = settingsStore?.save(partial as never);
   /**
    * **设置改动要播给其它窗口**：主界面和独立会话窗都从同一份设置渲染，
    * 一边改了主题/语言/供应商，另一边必须跟着变（"它们的选项等都应该同步"）。
    * 跳过发起方自己（它已经渲染过了）。
    */
-  try { broadcastToWindows('warmy:settings-changed', { keys: Object.keys(partial || {}) }, e?.sender?.id); } catch { /* noop */ }
+  try { broadcastToWindows('warmy:peiZhiChanged', { keys: Object.keys(partial || {}) }, e?.sender?.id); } catch { /* noop */ }
   return { ok: true, settings: next };
 });
 
@@ -2780,9 +2811,9 @@ chuliIpc('warmy:settings-save', (e, partial: Record<string, unknown>) => {
    · 启停**只能由本机用户点击触发**：没有任何网络/群成员/智能体路径会调用它；
    · 任何失败都如实回原始输出与退出码，**不当作成功**。
    ══════════════════════════════════════════════════════════════════════════ */
-chuliIpc('warmy:container-probe', async (_e, opts?: { force?: boolean; cacheMs?: number; deep?: boolean }) => {
+chuliIpc('warmy:rongQiTanCe', async (_e, opts?: { force?: boolean; cacheMs?: number; deep?: boolean }) => {
   try {
-    const report = await probeContainerRuntimes({
+    const report = await tanCeRongQiYunXing({
       cacheMs: opts?.force ? 0 : (typeof opts?.cacheMs === 'number' ? opts.cacheMs : 8000),
       /**
        * deep 由**调用方**决定（默认 false ⇒ 不启动 WSL）：
@@ -2798,7 +2829,7 @@ chuliIpc('warmy:container-probe', async (_e, opts?: { force?: boolean; cacheMs?:
     return { ok: false, error: xiJingCuoWu(e), report: zuiHouRongQiTanCeBaoGao() };
   }
 });
-chuliIpc('warmy:container-action', async (_e, payload?: { id?: string; action?: string }) => {
+chuliIpc('warmy:rongQiDongZuo', async (_e, payload?: { id?: string; action?: string }) => {
   // 参数形状**只**认 { id, action }：多余字段一律忽略，也不会被拼进命令
   const r = await yunxingRongqiDongzuo({ id: payload?.id, action: payload?.action });
   if (r.ok) fachuKongzhitai({ cat: 'system', code: 'container.action.accepted', data: { id: r.id, action: r.action } });
@@ -2810,20 +2841,20 @@ chuliIpc('warmy:container-action', async (_e, payload?: { id?: string; action?: 
  * 容器**实例**：环境类型不再是抽象选项，**具体实例就是环境**。
  * 列表按引擎自己的 CLI 现问现答；不支持的引擎如实返回 supported:false。
  */
-chuliIpc('warmy:container-instances', async (_e, payload?: { id?: string }) => {
+chuliIpc('warmy:rongQiShiLiJi', async (_e, payload?: { id?: string }) => {
   try {
     return await lieYunXingShiLi(String(payload?.id || ''));
   } catch (e) {
     return { ok: false, id: String(payload?.id || ''), supported: false, instances: [], reason: 'unexpected', evidence: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:container-instance-action', async (_e, payload?: { id?: string; action?: string; instance?: string }) => {
+chuliIpc('warmy:rongQiShiLiDongZuo', async (_e, payload?: { id?: string; action?: string; instance?: string }) => {
   const action = payload?.action === 'stop' ? 'stop' : payload?.action === 'start' ? 'start' : null;
   if (!action) return { ok: false, id: String(payload?.id || ''), action: 'start', instance: '', error: 'bad-action' };
   return yunXingShiLiDongZuo(String(payload?.id || ''), action, String(payload?.instance || ''));
 });
 /** 打开容器产品自己的界面：创建实例由用户在那边做（各引擎造法不同，我们不代造） */
-chuliIpc('warmy:container-app-open', async (_e, payload?: { id?: string }) => {
+chuliIpc('warmy:rongQiYingYongDaKai', async (_e, payload?: { id?: string }) => {
   try {
     return await daKaiYunXingYingYong(String(payload?.id || ''));
   } catch (e) {
@@ -2876,19 +2907,19 @@ interface XiangmuShuxingShitu {
 }
 
 function quXiangMuShuXing(groupId: string): XiangmuShuxingShitu {
-  const gid = String(groupId || '');
-  const legacy = (): XiangmuShuxingShitu => {
+  const qunId = String(groupId || '');
+  const yichan = (): XiangmuShuxingShitu => {
     let devEnv: 'host' | 'container' = 'host';
     let runtimeId = '';
     let disabledAt = 0;
     try {
       const s = settingsStore?.load();
-      const dev = (s && s.containerDev) || {};
-      devEnv = dev[gid] === 'container' ? 'container' : 'host';
+      const kaifa = (s && s.containerDev) || {};
+      devEnv = kaifa[qunId] === 'container' ? 'container' : 'host';
       const rt = (s && s.containerProjectRuntime) || {};
-      runtimeId = String(rt[gid] || '');
+      runtimeId = String(rt[qunId] || '');
       const dis = (s && s.projectDisabled) || {};
-      const n = Number(dis[gid] || 0);
+      const n = Number(dis[qunId] || 0);
       disabledAt = Number.isFinite(n) && n > 0 ? n : 0;
     } catch {
       /* 拿不到就按默认（本机 / 未停用） */
@@ -2900,8 +2931,8 @@ function quXiangMuShuXing(groupId: string): XiangmuShuxingShitu {
       source: 'legacy-local-settings',
     };
   };
-  const xiangMu = groupStore?.projectOf(gid);
-  if (!xiangMu) return legacy();
+  const xiangMu = groupStore?.projectOf(qunId);
+  if (!xiangMu) return yichan();
   return {
     devEnv: xiangMu.devEnv === 'container' ? 'container' : 'host',
     runtimeId: String(xiangMu.runtimeId || ''),
@@ -2918,13 +2949,13 @@ function quXiangMuShuXing(groupId: string): XiangmuShuxingShitu {
 
 /** 这个项目的属性是不是**别人的节点同步过来的**（= 本机不是项目主） */
 function projectAttrsAreRemote(groupId: string): boolean {
-  const gid = String(groupId || '');
-  const shitu = quXiangMuShuXing(gid);
+  const qunId = String(groupId || '');
+  const shitu = quXiangMuShuXing(qunId);
   if (shitu.source !== 'project-record') return false;
   const reportedBy = shitu.reportedBy;
   if (!reportedBy) return false;
   try {
-    const benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
+    const benJiZhiWen = String(identityStore?.info()?.zhiWen || '');
     return !!benJiZhiWen && !zhiwenPipei(reportedBy, benJiZhiWen);
   } catch {
     return false;
@@ -2970,9 +3001,9 @@ function sheZhiXiangMuShuXing(
     memory?: string;
   }
 ): { ok: boolean; error?: string } {
-  const gid = String(groupId || '');
-  if (!groupStore || !gid) return { ok: false, error: 'group store unavailable' };
-  const r = groupStore.setProjectAttrs(gid, {
+  const qunId = String(groupId || '');
+  if (!groupStore || !qunId) return { ok: false, error: 'group store unavailable' };
+  const r = groupStore.setProjectAttrs(qunId, {
     ...(patch.devEnv ? { devEnv: patch.devEnv } : {}),
     ...(typeof patch.runtimeId === 'string' ? { runtimeId: patch.runtimeId } : {}),
     ...(typeof patch.disabledAt === 'number' ? { disabledAt: patch.disabledAt } : {}),
@@ -2983,7 +3014,7 @@ function sheZhiXiangMuShuXing(
     ...(patch.env ? { env: patch.env } : {}),
   });
   if (!r.ok) return { ok: false, error: r.error };
-  void faBuXiangMuShuXing(gid);
+  void faBuXiangMuShuXing(qunId);
   return { ok: true };
 }
 
@@ -2998,21 +3029,21 @@ function sheZhiXiangMuShuXing(
  * 未组网 / 没起 mesh ⇒ 直接返回（**不报错、不假装发出去了**）。
  */
 async function faBuXiangMuShuXing(groupId: string): Promise<{ ok: boolean; sent: boolean; reason?: string }> {
-  const gid = String(groupId || '');
-  if (!gid) return { ok: false, sent: false, reason: 'no-group-id' };
-  const shitu = quXiangMuShuXing(gid);
-  const g = groupStore?.getGroup(gid);
-  const ledger = (groupStore?.listFileAccess(gid, 30) || []).map((e) => ({ op: e.op, path: e.path, ts: e.ts, ok: e.ok, by: e.by, ...(e.bytes ? { bytes: e.bytes } : {}) }));
+  const qunId = String(groupId || '');
+  if (!qunId) return { ok: false, sent: false, reason: 'no-group-id' };
+  const shitu = quXiangMuShuXing(qunId);
+  const g = groupStore?.getGroup(qunId);
+  const ledger = (groupStore?.listFileAccess(qunId, 30) || []).map((e) => ({ op: e.op, path: e.path, ts: e.ts, ok: e.ok, by: e.by, ...(e.bytes ? { bytes: e.bytes } : {}) }));
   let creatorFingerprint = '';
   try {
-    creatorFingerprint = String(g?.creatorFingerprint || identityStore?.info()?.fingerprint || '');
+    creatorFingerprint = String(g?.creatorFingerprint || identityStore?.info()?.zhiWen || '');
   } catch {
     creatorFingerprint = String(g?.creatorFingerprint || '');
   }
   const availabilityCode = shitu.availabilityCode || shitu.availability || 'unknown';
-  const payload = projectAttrsMessage({
-    groupId: gid,
-    ...(g?.name ? { name: g.name } : {}),
+  const payload = xiangmuShuxingXiaoxi({
+    groupId: qunId,
+    ...(g?.ming ? { ming: g.ming } : {}),
     ...(g ? { type: g.type } : {}),
     project: {
       devEnv: shitu.devEnv,
@@ -3032,7 +3063,7 @@ async function faBuXiangMuShuXing(groupId: string): Promise<{ ok: boolean; sent:
   });
   if (!secureMesh || !secureMesh.enabled) return { ok: true, sent: false, reason: 'mesh-not-running' };
   try {
-    const r = await secureMesh.broadcast({ to: '*', channel: PROJECT_ATTRS_CHANNEL, payload });
+    const r = await secureMesh.broadcast({ to: '*', channel: XIANGMU_SHUXING_TONGDAO, payload });
     return { ok: r.failed === 0, sent: r.sent > 0, reason: r.errors && r.errors.length ? r.errors[0] : undefined };
   } catch (e) {
     return { ok: false, sent: false, reason: xiJingCuoWu(e) };
@@ -3055,28 +3086,28 @@ async function quRongQiZhuangTai(runtimeId: string): Promise<string | null> {
        * 现在：只探需要的那一个、且不允许代为启动发行版。
        */
       // 注意：这里**不传 deep** ⇒ 例行路径绝不启动 WSL（见 probeWsl 的默认静默）
-      report = await probeContainerRuntimes({ cacheMs: 8000, only: [runtimeId] });
+      report = await tanCeRongQiYunXing({ cacheMs: 8000, only: [runtimeId] });
     } catch {
       return null;
     }
   }
-  const row = (report?.runtimes || []).find((x) => x.id === runtimeId);
-  if (!row) return null;
+  const hang = (report?.runtimes || []).find((x) => x.id === runtimeId);
+  if (!hang) return null;
   // `not-probed` 不是事实断言（只是"本轮没探它"）：如实返回 null，由调用方按未就绪处理
-  return row.status === 'not-probed' ? null : String(row.status);
+  return hang.status === 'not-probed' ? null : String(hang.status);
 }
 
 /**
- * 「只有创建者能启用/停用项目」——判定依据与 `warmy:group-members` **完全相同**
+ * 「只有创建者能启用/停用项目」——判定依据与 `warmy:qunChengYuanJi` **完全相同**
  * （group-store 里建群时写入的 creatorFingerprint vs 本机当前身份指纹），
  * 不在渲染层猜、也不新增第二套"谁是创建者"的定义。拿不到指纹 ⇒ false（宁可少给权限）。
  */
 function benJiShiXiangMuChuangJianZhe(groupId: string): boolean {
   try {
-    const gid = String(groupId || '');
-    if (!groupStore || !gid) return false;
-    const chuangJianZheZhiWen = String(groupStore.getGroup(gid)?.creatorFingerprint || '');
-    const benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
+    const qunId = String(groupId || '');
+    if (!groupStore || !qunId) return false;
+    const chuangJianZheZhiWen = String(groupStore.getGroup(qunId)?.creatorFingerprint || '');
+    const benJiZhiWen = String(identityStore?.info()?.zhiWen || '');
     return !!chuangJianZheZhiWen && !!benJiZhiWen && zhiwenPipei(chuangJianZheZhiWen, benJiZhiWen);
   } catch {
     return false;
@@ -3125,8 +3156,8 @@ async function quXiangMuTai(sessionId: string, opts: { probe?: boolean } = {}): 
   let status: string | null = null;
   if (devEnv === 'container' && runtimeId) {
     const cached = zuiHouRongQiTanCeBaoGao();
-    const row = cached ? (cached.runtimes || []).find((x) => x.id === runtimeId) : undefined;
-    status = row ? String(row.status) : opts.probe === false ? null : await quRongQiZhuangTai(runtimeId);
+    const hang = cached ? (cached.runtimes || []).find((x) => x.id === runtimeId) : undefined;
+    status = hang ? String(hang.status) : opts.probe === false ? null : await quRongQiZhuangTai(runtimeId);
   }
   return deriveProjectState({
     devEnv,
@@ -3145,9 +3176,9 @@ async function quXiangMuTai(sessionId: string, opts: { probe?: boolean } = {}): 
  * ⚠️ 写入失败/无变化一律静默（不能因为"状态记不下来"就把渲染层卡住）。
  */
 function jiluBenjiKeyongxing(groupId: string, code: string): void {
-  const gid = String(groupId || '');
-  if (!gid || !groupStore) return;
-  const cur = groupStore.projectOf(gid);
+  const qunId = String(groupId || '');
+  if (!qunId || !groupStore) return;
+  const cur = groupStore.projectOf(qunId);
   if (!cur) return; // 没有项目记录的不写（例如「我的牛马」的聊天、联系人）
   const availability =
     code === 'host-dev' || code === 'ok' ? 'available'
@@ -3158,17 +3189,17 @@ function jiluBenjiKeyongxing(groupId: string, code: string): void {
   if (cur.availability === availability && cur.availabilityCode === code) return;
   let benJiZhiWen = '';
   try {
-    benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
+    benJiZhiWen = String(identityStore?.info()?.zhiWen || '');
   } catch {
     benJiZhiWen = '';
   }
-  const r = groupStore.setProjectAttrs(gid, {
+  const r = groupStore.setProjectAttrs(qunId, {
     availability,
     availabilityCode: code,
     availabilityAt: Date.now(),
     ...(benJiZhiWen ? { reportedBy: benJiZhiWen } : {}),
   });
-  if (r.ok) void faBuXiangMuShuXing(gid);
+  if (r.ok) void faBuXiangMuShuXing(qunId);
 }
 
 /** 项目不可用时的结构化拒绝（chat-send / 值班编排 / 各功能入口共用） */
@@ -3181,7 +3212,7 @@ async function projectUnavailableFor(sessionId: string): Promise<ReturnType<type
 }
 
 /** 项目可用性状态（渲染层**唯一**的事实来源；含"历史仍可读"这条事实） */
-chuliIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:xiangMuTai', async (_e, payload?: { sessionId?: string }) => {
   try {
     const sessionId = String(payload?.sessionId || '');
     const state = await quXiangMuTai(sessionId);
@@ -3214,7 +3245,7 @@ chuliIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => 
       projectDir: attrs.directory,
       projectDirReason: attrs.directorySource,
       /** 成员侧入站门控结论（可断言的事实：不可用 ⇒ 排队为 creator-offline） */
-      inboundGate: projectInboundGate({ running: state.running, code: state.code }),
+      inboundGate: xiangmuRuXiangMenjin({ running: state.running, code: state.code }),
     };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
@@ -3225,7 +3256,7 @@ chuliIpc('warmy:project-state', async (_e, payload?: { sessionId?: string }) => 
  * 「启用项目」（右键菜单）：**只有创建者**能启用。
  * 容器开发项目**必须先有就绪的容器** —— 否则如实拒绝并给"去设置启动容器"的引导，**不假装启用**。
  */
-chuliIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:xiangMuQiYong', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     if (!benJiShiXiangMuChuangJianZhe(id)) {
@@ -3266,7 +3297,7 @@ chuliIpc('warmy:project-enable', async (_e, payload?: { sessionId?: string }) =>
  * 第十六批：停用时间戳写进**项目记录**（项目级）并广播出去 —— 否则异地的成员看到的
  * 还是一台"普通的本机项目"（这正是产品主要修的那件事）。
  */
-chuliIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:xiangMuTingYong', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     if (!benJiShiXiangMuChuangJianZhe(id)) {
@@ -3291,7 +3322,7 @@ chuliIpc('warmy:project-disable', async (_e, payload?: { sessionId?: string }) =
  * 只接受设置里已探测到的运行时 id（`{ sessionId, runtimeId }`）；
  * **不接受任何命令字符串**（运行时 id 必须在预定义清单里，否则拒绝）。
  */
-chuliIpc('warmy:project-set-container', async (_e, payload?: { sessionId?: string; runtimeId?: string }) => {
+chuliIpc('warmy:xiangMuSheZhiRongQi', async (_e, payload?: { sessionId?: string; runtimeId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const runtimeId = String(payload?.runtimeId || '');
@@ -3343,7 +3374,7 @@ async function projectFilesFor(sessionId: string): Promise<{
   other: Array<{ path: string; ts: number; kind: string; scope: string; source: string }>;
   ledger: Array<{ path: string; op: string; ts: number; ok: boolean; by: string; bytes?: number; scope: string }>;
   missingSources: string[];
-  product: {
+  chanPin: {
     dir: string;
     dirExists: boolean;
     dirKind: 'planned' | 'existing';
@@ -3351,7 +3382,7 @@ async function projectFilesFor(sessionId: string): Promise<{
     entry: string | null;
     entryHostRunnable: boolean;
     entryReason: string;
-    files: Array<{ path: string; name: string; bytes: number; ts: number }>;
+    files: Array<{ path: string; ming: string }>;
   };
 }> {
   const id = String(sessionId || '');
@@ -3369,7 +3400,7 @@ async function projectFilesFor(sessionId: string): Promise<{
   }
   // ② 回退点明细（真实 path + 真实 ts）
   try {
-    const cps = checkpoints?.list() || [];
+    const cps = checkpoints?.LieBiao() || [];
     for (const cp of cps.slice(-20)) {
       const detail = (cp && (cp as unknown as { detail?: { filesChanged?: Array<{ path: string; ts: number }>; filesCreated?: Array<{ path: string; ts: number }> } }).detail) || {};
       for (const f of detail.filesChanged || []) changed.push({ path: String(f.path), ts: Number(f.ts) || 0, kind: 'changed', scope: 'other', source: 'checkpoint-detail' });
@@ -3397,9 +3428,9 @@ async function projectFilesFor(sessionId: string): Promise<{
   if (projectDir && fs.existsSync(projectDir)) {
     try {
       const skip = new Set(['node_modules', '.git', 'dist', 'build', '.next', '.venv', 'venv', '__pycache__', '.cache', 'target']);
-      const seen: Array<{ path: string; ts: number }> = [];
-      const walk = (dir: string, depth: number): void => {
-        if (depth > 3 || seen.length >= 400) return;
+      const yiKanDao: Array<{ path: string; ts: number }> = [];
+      const bianli = (dir: string, depth: number): void => {
+        if (depth > 3 || yiKanDao.length >= 400) return;
         let entries: import('node:fs').Dirent[] = [];
         try {
           entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -3407,25 +3438,25 @@ async function projectFilesFor(sessionId: string): Promise<{
           return;
         }
         for (const tiaoMu of entries) {
-          if (seen.length >= 400) return;
+          if (yiKanDao.length >= 400) return;
           if (tiaoMu.name.startsWith('.') && tiaoMu.name !== '.env') continue;
           const fp = path.join(dir, tiaoMu.name);
           if (tiaoMu.isDirectory()) {
             if (skip.has(tiaoMu.name)) continue;
-            walk(fp, depth + 1);
+            bianli(fp, depth + 1);
             continue;
           }
           if (!tiaoMu.isFile()) continue;
           try {
             const st = fs.statSync(fp);
-            seen.push({ path: fp, ts: st.mtimeMs });
+            yiKanDao.push({ path: fp, ts: st.mtimeMs });
           } catch {
             /* 拿不到就跳过 */
           }
         }
       };
-      walk(projectDir, 0);
-      for (const f of seen.sort((a, b) => b.ts - a.ts).slice(0, 60)) {
+      bianli(projectDir, 0);
+      for (const f of yiKanDao.sort((a, b) => b.ts - a.ts).slice(0, 60)) {
         changed.push({ path: f.path, ts: f.ts, kind: 'changed', scope: 'project', source: 'dir-scan' });
       }
     } catch {
@@ -3442,7 +3473,7 @@ async function projectFilesFor(sessionId: string): Promise<{
   for (const c of all) {
     if (projectDir && path.resolve(c.path).startsWith(path.resolve(projectDir) + path.sep)) c.scope = 'project';
   }
-  const own = all.filter((c) => c.scope === 'project');
+  const ziji = all.filter((c) => c.scope === 'project');
   /**
    * 「其他文件（非项目内）」= 被工具动过、但**不在项目目录下**的路径（例如 ~/.warmy 备份、
    * 临时产物、别的盘的路径）。这是产品明确要的那一栏；来源如实标注。
@@ -3461,7 +3492,7 @@ async function projectFilesFor(sessionId: string): Promise<{
   // 产物目录（我们计划的存放位置；不存在也如实显示"即将存放"）
   const shengchanMulu = path.join(app.getPath('userData'), 'products', id || 'default');
   let dirExists = false;
-  let files: Array<{ path: string; name: string; bytes: number; ts: number }> = [];
+  let files: Array<{ path: string; ming: string }> = [];
   try {
     dirExists = fs.existsSync(shengchanMulu) && fs.statSync(shengchanMulu).isDirectory();
     if (dirExists) {
@@ -3480,17 +3511,17 @@ async function projectFilesFor(sessionId: string): Promise<{
           } catch {
             /* 拿不到就 0 */
           }
-          return { path: fp, name: e.name, bytes, ts };
+          return { path: fp, ming: e.name, bytes, ts };
         })
         .sort((a, b) => b.ts - a.ts);
     }
   } catch {
     /* 忽略 */
   }
-  const entryOf = (list: Array<{ path: string; name: string }>): { entry: string | null; kind: 'program' | 'file' | 'none'; reason: string } => {
-    const prog = list.find((f) => /\.(exe|cmd|bat|js|mjs|cjs|py)$/i.test(f.name)) || null;
+  const entryOf = (LieBiao: Array<{ path: string; ming: string }>): { entry: string | null; kind: 'program' | 'file' | 'none'; reason: string } => {
+    const prog = LieBiao.find((f) => /\.(exe|cmd|bat|js|mjs|cjs|py)$/i.test(f.ming)) || null;
     if (prog) return { entry: prog.path, kind: 'program', reason: 'entry-found' };
-    const anyFile = list.find((f) => /\.(md|txt|docx?|pptx?|xlsx?|csv|pdf|mp[34]|wav|png|jpe?g|zip)$/i.test(f.name)) || list[0] || null;
+    const anyFile = LieBiao.find((f) => /\.(md|txt|docx?|pptx?|xlsx?|csv|pdf|mp[34]|wav|png|jpe?g|zip)$/i.test(f.ming)) || LieBiao[0] || null;
     if (anyFile) return { entry: anyFile.path, kind: 'file', reason: 'file-found' };
     return { entry: null, kind: 'none', reason: dirExists ? 'dir-empty' : 'dir-planned' };
   };
@@ -3513,11 +3544,11 @@ async function projectFilesFor(sessionId: string): Promise<{
     projectDirReason,
     /** 属性是本地事实还是创建者信号（渲染层据此多一行"由创建者的节点上报"） */
     projectSource: remote ? 'creator-signal' : 'local',
-    changed: own,
+    changed: ziji,
     other,
     ledger: zhangBenHang,
     missingSources,
-    product: {
+    chanPin: {
       dir: shengchanMulu,
       dirExists,
       dirKind: dirExists ? 'existing' : 'planned',
@@ -3530,7 +3561,7 @@ async function projectFilesFor(sessionId: string): Promise<{
   };
 }
 
-chuliIpc('warmy:project-files', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:xiangMuWenJianJi', async (_e, payload?: { sessionId?: string }) => {
   try {
     return await projectFilesFor(String(payload?.sessionId || ''));
   } catch (e) {
@@ -3543,31 +3574,31 @@ chuliIpc('warmy:project-files', async (_e, payload?: { sessionId?: string }) => 
  * 安全：入口路径**由主进程自己解析**（渲染层只给 sessionId，**不接受任何路径/命令字符串**），
  * 且必须满足 `entryHostRunnable`（本机开发 + 宿主原生扩展）才允许；不满足就如实拒绝。
  */
-chuliIpc('warmy:product-run', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:chanPinYunXing', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const shiShi = await projectFilesFor(id);
-    const p = shiShi.product;
+    const p = shiShi.chanPin;
     if (!p.entry || p.kind !== 'program') return { ok: false, code: 'no-entry', reason: p.entryReason, executed: false };
     if (!p.entryHostRunnable) return { ok: false, code: p.entryReason, executed: false, entry: p.entry };
     // 归一化后再校验：必须落在产物目录里（防路径穿越/软链逃逸）
-    const real = fs.realpathSync(p.entry);
+    const zhenshi = fs.realpathSync(p.entry);
     const zhenshiMulu = fs.realpathSync(p.dir);
-    if (!real.startsWith(zhenshiMulu + path.sep)) return { ok: false, code: 'outside-product-dir', executed: false };
-    const ext = path.extname(real).toLowerCase();
-    let file = real;
+    if (!zhenshi.startsWith(zhenshiMulu + path.sep)) return { ok: false, code: 'outside-product-dir', executed: false };
+    const ext = path.extname(zhenshi).toLowerCase();
+    let file = zhenshi;
     let args: string[] = [];
     if (ext === '.js' || ext === '.mjs' || ext === '.cjs') {
       // 用**本机捆绑的 Node** 跑（Windows 版），不假设系统里有 node
       const bundled = path.join(process.resourcesPath || '', 'node', process.platform === 'win32' ? 'win-x64' : 'linux-x64', process.platform === 'win32' ? 'node.exe' : 'node');
       file = fs.existsSync(bundled) ? bundled : 'node';
-      args = [real];
+      args = [zhenshi];
     }
-    const child = spawn(file, args, { cwd: zhenshiMulu, detached: true, stdio: 'ignore', windowsHide: false });
-    child.unref();
-    audit?.log('product.run', { sessionId: id, entry: real });
-    fachuKongzhitai({ cat: 'system', code: 'product.run.started', data: { sessionId: id } });
-    return { ok: true, executed: true, pid: child.pid || 0, entry: real };
+    const Zhi = spawn(file, args, { cwd: zhenshiMulu, detached: true, stdio: 'ignore', windowsHide: false });
+    Zhi.unref();
+    audit?.log('chanPin.run', { sessionId: id, entry: zhenshi });
+    fachuKongzhitai({ cat: 'system', code: 'chanPin.run.started', data: { sessionId: id } });
+    return { ok: true, executed: true, pid: Zhi.pid || 0, entry: zhenshi };
   } catch (e) {
     return { ok: false, code: 'spawn-failed', error: xiJingCuoWu(e), executed: false };
   }
@@ -3595,10 +3626,10 @@ function writeProjectEnvLedger(
   patch: { runtimeId?: string; containerRef?: string; imageRef?: string; solidifiedAt?: number }
 ): void {
   try {
-    const gid = String(groupId || '');
-    if (!settingsStore || !gid) return;
+    const qunId = String(groupId || '');
+    if (!settingsStore || !qunId) return;
     const all = { ...(settingsStore.load().projectEnv || {}) };
-    const cur = all[gid] || { runtimeId: '' };
+    const cur = all[qunId] || { runtimeId: '' };
     const next = { ...cur };
     if (patch.runtimeId !== undefined) next.runtimeId = patch.runtimeId;
     if (patch.containerRef !== undefined) next.containerRef = patch.containerRef;
@@ -3609,10 +3640,10 @@ function writeProjectEnvLedger(
       // 只留最近 N 个（与 ADR 的保留策略一致）；被裁掉的**只报告不删**（删镜像要用户明确同意）
       next.solidifyHistory = guHuaBaoLiu(liShi).keep;
     }
-    all[gid] = next;
+    all[qunId] = next;
     settingsStore.save({ projectEnv: all } as never);
     // 同步给成员的**摘要**（项目级）
-    sheZhiXiangMuShuXing(gid, {
+    sheZhiXiangMuShuXing(qunId, {
       env: {
         ...(next.containerRef ? { containerRef: next.containerRef } : {}),
         ...(next.lastImageRef ? { imageRef: next.lastImageRef } : {}),
@@ -3626,12 +3657,12 @@ function writeProjectEnvLedger(
 
 /** 项目容器现在在不在（真的问引擎，不猜） */
 async function projectContainerStatusOf(groupId: string, runtimeId: string): Promise<{ running: boolean; exists: boolean; containerRef: string; raw: string }> {
-  const name = containerProjectName(groupId);
-  const r = await runContainerExec(runtimeId, 'ps', { name }, 30000);
+  const ming = rongQiXiangMuMing(groupId);
+  const r = await yunXingRongQiZhiXing(runtimeId, 'ps', { ming }, 30000);
   if (!r.executed) return { running: false, exists: false, containerRef: '', raw: r.err };
-  const line = r.out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)[0] || '';
-  const status = line.split('|')[2] || '';
-  return { running: /(^|\s)Up\b/i.test(status), exists: !!line, containerRef: name, raw: line };
+  const Hang = r.out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)[0] || '';
+  const status = Hang.split('|')[2] || '';
+  return { running: /(^|\s)Up\b/i.test(status), exists: !!Hang, containerRef: ming, raw: Hang };
 }
 
 /** 确保项目容器存在（不存在就按项目镜像起一个，**默认不删** ⇒ 保留可写层） */
@@ -3640,34 +3671,34 @@ async function baozhangXiangmuRongqi(
   runtimeId: string,
   opts: { image?: string; hostDir?: string } = {}
 ): Promise<{ ok: boolean; code: string; containerRef: string; created: boolean; raw: string }> {
-  const name = containerProjectName(groupId);
+  const ming = rongQiXiangMuMing(groupId);
   const cur = await projectContainerStatusOf(groupId, runtimeId);
-  if (cur.exists) return { ok: true, code: 'already-exists', containerRef: name, created: false, raw: cur.raw };
+  if (cur.exists) return { ok: true, code: 'already-exists', containerRef: ming, created: false, raw: cur.raw };
   // 镜像来源：优先用**上次固化出来的**那一层（真有才用），否则用镜像表里钉死 digest 的默认镜像
   const ledger = projectEnvLedgerOf(groupId);
   let image = String(opts.image || '');
   if (!image) {
-    if (ledger.lastImageRef && isAllowedImageRef(ledger.lastImageRef)) image = ledger.lastImageRef;
+    if (ledger.lastImageRef && shiFouYunXuJingXiang(ledger.lastImageRef)) image = ledger.lastImageRef;
     else {
       const jiedianTupian = CONTAINER_BASE_IMAGES.find((x) => x.id === 'node-24-slim');
       const zuixiao = CONTAINER_BASE_IMAGES.find((x) => x.id === 'alpine-3.20');
       const pick = jiedianTupian || zuixiao;
-      image = pick && pick.digest ? `pick.ref@pick.digest` : '';
+      image = pick && pick.digest ? `${pick.ref}@${pick.digest}` : '';
     }
   }
-  if (!isAllowedImageRef(image)) return { ok: false, code: 'no-image', containerRef: name, created: false, raw: 'no allowed image reference available' };
+  if (!shiFouYunXuJingXiang(image)) return { ok: false, code: 'no-image', containerRef: ming, created: false, raw: 'no allowed image reference available' };
   const dir = String(opts.hostDir || quXiangMuMuLu(groupId).dir || '');
-  const r = await runContainerExec(runtimeId, 'run-detached', {
-    name,
+  const r = await yunXingRongQiZhiXing(runtimeId, 'run-detached', {
+    ming,
     image,
     ...(dir && fs.existsSync(dir) ? { hostDir: dir } : {}),
     projectLabel: groupId,
   }, 180000);
   if (!r.ok) {
-    return { ok: false, code: r.codeReason || 'run-failed', containerRef: name, created: false, raw: jinyaoWenben(`r.out r.err`, 300) };
+    return { ok: false, code: r.codeReason || 'run-failed', containerRef: ming, created: false, raw: jinyaoWenben(`${r.out} ${r.err}`, 300) };
   }
-  writeProjectEnvLedger(groupId, { runtimeId, containerRef: name, ...(image ? {} : {}) });
-  return { ok: true, code: 'created', containerRef: name, created: true, raw: r.out };
+  writeProjectEnvLedger(groupId, { runtimeId, containerRef: ming, ...(image ? {} : {}) });
+  return { ok: true, code: 'created', containerRef: ming, created: true, raw: r.out };
 }
 
 function jinyaoWenben(s: string, max = 300): string {
@@ -3680,21 +3711,21 @@ function jinyaoWenben(s: string, max = 300): string {
  * 全部来自真实事实：运行时的固化能力（按运行时区分，**不假定 Linux 容器**）、
  * 真探测里的**引擎系统模式**、以及**真发生过的**固化记录（没发生过就不写）。
  */
-chuliIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:xiangMuHuanJingZhuangTai', async (_e, payload?: { sessionId?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const state = await quXiangMuTai(id);
     const runtimeId = quXiangMuYunXingShi(id);
-    const cap = envSolidifyCapability(runtimeId);
+    const shangXian = huanJingGuHuaNengLi(runtimeId);
     const ledger = projectEnvLedgerOf(id);
     const mode = quYinQingXiTongMoShi(zuiHouRongQiTanCeBaoGao(), runtimeId);
     const container = state.devEnv === 'container' && runtimeId && state.running
       ? await projectContainerStatusOf(id, runtimeId)
       : { running: false, exists: false, containerRef: '', raw: '' };
-    const decision = shouldSolidifyAt({
+    const decision = shiFouGaiGuHua({
       lastSolidifiedAt: ledger.lastSolidifiedAt || 0,
       dirty: container.exists,
-      programmatic: cap.programmatic,
+      programmatic: shangXian.programmatic,
     });
     const liShi = ledger.solidifyHistory || [];
     return {
@@ -3705,9 +3736,9 @@ chuliIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }
       /** 引擎的**真实系统模式**（docker 是 linux / windows；wsl 是某个发行版；拿不到 = unknown） */
       engineMode: mode,
       solidify: {
-        kind: cap.kind,
-        programmatic: cap.programmatic,
-        why: cap.reason,
+        kind: shangXian.kind,
+        programmatic: shangXian.programmatic,
+        yuanYin: shangXian.reason,
         lastImageRef: ledger.lastImageRef || '',
         lastSolidifiedAt: ledger.lastSolidifiedAt || 0,
         history: guHuaBaoLiu(liShi).keep,
@@ -3722,7 +3753,7 @@ chuliIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }
         security: ENV_SOLIDIFY_SECURITY,
       },
       /** 项目容器**真的在不在**（问过引擎，不是猜） */
-      container: { ref: container.containerRef || containerProjectName(id), exists: container.exists, running: container.running, probeRaw: container.raw },
+      container: { ref: container.containerRef || rongQiXiangMuMing(id), exists: container.exists, running: container.running, probeRaw: container.raw },
       /** 项目容器**默认保留**（长期存在、不用 --rm ⇒ 停止/启动保留可写层） */
       containerRetained: true,
       /** 环境维度与文件维度是**分层**的（不许对用户说"有容器回退点就更简单"） */
@@ -3745,22 +3776,22 @@ chuliIpc('warmy:project-env-status', async (_e, payload?: { sessionId?: string }
  *   · WSL / 系统服务 / 一次性沙箱 ⇒ 如实说"做不到"（能力表说了算）；
  *   · **安全提醒**随响应回传（commit 会把整个文件系统、可能包括密钥一起固化）。
  */
-chuliIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: string; explicit?: boolean; beforeDestroy?: boolean }) => {
+chuliIpc('warmy:xiangMuHuanJingGuHua', async (_e, payload?: { sessionId?: string; explicit?: boolean; beforeDestroy?: boolean }) => {
   try {
     const id = String(payload?.sessionId || '');
     const runtimeId = quXiangMuYunXingShi(id);
-    const cap = envSolidifyCapability(runtimeId);
+    const shangXian = huanJingGuHuaNengLi(runtimeId);
     const ledger = projectEnvLedgerOf(id);
-    const decision = shouldSolidifyAt({
+    const decision = shiFouGaiGuHua({
       lastSolidifiedAt: ledger.lastSolidifiedAt || 0,
       dirty: true,
       explicit: payload?.explicit === true,
       beforeDestroy: payload?.beforeDestroy === true,
-      programmatic: cap.programmatic,
+      programmatic: shangXian.programmatic,
     });
     const security = ENV_SOLIDIFY_SECURITY;
-    if (cap.programmatic !== true) {
-      return { ok: false, code: 'runtime-cannot-solidify', solidifyKind: cap.kind, why: cap.reason, executed: false, decision, evidence: 'refused', security };
+    if (shangXian.programmatic !== true) {
+      return { ok: false, code: 'runtime-cannot-solidify', solidifyKind: shangXian.kind, yuanYin: shangXian.reason, executed: false, decision, evidence: 'refused', security };
     }
     if (!runtimeId) return { ok: false, code: 'no-runtime-chosen', executed: false, decision, evidence: 'refused', security };
     // 节流：窗口内不重复固化（除非这次是"销毁前/显式"—— 那两条 shouldSolidifyAt 已经放行）
@@ -3773,28 +3804,28 @@ chuliIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: string
       return {
         ok: false, code: 'no-container', executed: false, decision, evidence: 'refused',
         detail: 'the project container does not exist yet (start the project first)',
-        containerRef: container.containerRef || containerProjectName(id), security,
+        containerRef: container.containerRef || rongQiXiangMuMing(id), security,
       };
     }
     const at = Date.now();
     const imageRef = solidifiedImageRef(id, at);
-    const commit = await runContainerExec(runtimeId, 'commit', { name: container.containerRef, imageRef }, 600000);
+    const commit = await yunXingRongQiZhiXing(runtimeId, 'commit', { ming: container.containerRef, imageRef }, 600000);
     if (!commit.ok) {
       return {
         ok: false, code: 'commit-failed', executed: true, evidence: 'refused', decision,
         detail: commit.codeReason || 'commit failed',
-        rawOutput: jinyaoWenben(`commit.out commit.err`, 400),
+        rawOutput: jinyaoWenben(`${commit.out} ${commit.err}`, 400),
         imageRef, security,
       };
     }
     // **回读**：拿镜像 id 才算真的固化成功（"命令 rc=0"不足以当证据）
-    const inspect = await runContainerExec(runtimeId, 'image-inspect', { image: imageRef }, 60000);
-    const imageId = inspect.ok ? String(inspect.out.split('|')[0] || '').trim() : '';
-    if (!inspect.ok || !imageId) {
+    const jiancha = await yunXingRongQiZhiXing(runtimeId, 'image-inspect', { image: imageRef }, 60000);
+    const imageId = jiancha.ok ? String(jiancha.out.split('|')[0] || '').trim() : '';
+    if (!jiancha.ok || !imageId) {
       return {
         ok: false, code: 'commit-unverified', executed: true, evidence: 'refused', decision, imageRef,
         detail: 'commit returned success but the image could not be read back',
-        rawOutput: jinyaoWenben(`inspect.out inspect.err`, 300), security,
+        rawOutput: jinyaoWenben(`${jiancha.out} ${jiancha.err ?? ''}`, 300), security,
       };
     }
     writeProjectEnvLedger(id, { runtimeId, containerRef: container.containerRef, imageRef, solidifiedAt: at });
@@ -3829,16 +3860,16 @@ chuliIpc('warmy:project-env-solidify', async (_e, payload?: { sessionId?: string
  * **bind mount 的项目文件不在里面** —— 所以响应里把这条事实一起回给渲染层，别让用户误解。
  * 步骤：确保容器在（不在就按镜像起）→ 用指定/最近的固化镜像重建 → 回读容器 id。
  */
-chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string; imageRef?: string }) => {
+chuliIpc('warmy:xiangMuHuanJingHuiGun', async (_e, payload?: { sessionId?: string; imageRef?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const runtimeId = quXiangMuYunXingShi(id);
-    const cap = envSolidifyCapability(runtimeId);
+    const shangXian = huanJingGuHuaNengLi(runtimeId);
     if (!runtimeId) return { ok: false, code: 'no-runtime-chosen', executed: false, evidence: 'refused' as const };
-    if (cap.programmatic !== true) return { ok: false, code: 'runtime-cannot-solidify', why: cap.reason, executed: false, evidence: 'refused' as const };
+    if (shangXian.programmatic !== true) return { ok: false, code: 'runtime-cannot-solidify', yuanYin: shangXian.reason, executed: false, evidence: 'refused' as const };
     const ledger = projectEnvLedgerOf(id);
     const want = String(payload?.imageRef || ledger.lastImageRef || '');
-    if (!want || !isAllowedImageRef(want)) {
+    if (!want || !shiFouYunXuJingXiang(want)) {
       return { ok: false, code: 'no-solidified-point', executed: false, evidence: 'refused' as const, detail: 'no solidified image recorded for this project' };
     }
     const state = await quXiangMuTai(id);
@@ -3846,7 +3877,7 @@ chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string
       // 项目不可用 ⇒ 不越权起容器（那正是"等同创建者下线"要拦的事）
       return { ok: false, code: 'project-unavailable', projectCode: state.code, executed: false, evidence: 'refused' as const };
     }
-    const name = containerProjectName(id);
+    const ming = rongQiXiangMuMing(id);
     const cur = await projectContainerStatusOf(id, runtimeId);
     /**
      * 重建前**先固化一次**（"可能销毁容器之前一定固化一次"这条时机的落点）：
@@ -3854,15 +3885,15 @@ chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string
      */
     let preSolidify: { ok: boolean; code: string; imageRef?: string } = { ok: false, code: 'skipped' };
     if (cur.exists) {
-      const decision = shouldSolidifyAt({ lastSolidifiedAt: ledger.lastSolidifiedAt || 0, dirty: true, beforeDestroy: true, programmatic: cap.programmatic });
+      const decision = shiFouGaiGuHua({ lastSolidifiedAt: ledger.lastSolidifiedAt || 0, dirty: true, beforeDestroy: true, programmatic: shangXian.programmatic });
       if (decision.solidify) {
         const at = Date.now();
         const ref = solidifiedImageRef(id, at);
-        const c = await runContainerExec(runtimeId, 'commit', { name, imageRef: ref }, 600000);
-        const shiLi = c.ok ? await runContainerExec(runtimeId, 'image-inspect', { image: ref }, 60000) : null;
+        const c = await yunXingRongQiZhiXing(runtimeId, 'commit', { ming, imageRef: ref }, 600000);
+        const shiLi = c.ok ? await yunXingRongQiZhiXing(runtimeId, 'image-inspect', { image: ref }, 60000) : null;
         const JingXiangId = shiLi && shiLi.ok ? String(shiLi.out.split('|')[0] || '').trim() : '';
         if (c.ok && JingXiangId) {
-          writeProjectEnvLedger(id, { runtimeId, containerRef: name, imageRef: ref, solidifiedAt: at });
+          writeProjectEnvLedger(id, { runtimeId, containerRef: ming, imageRef: ref, solidifiedAt: at });
           preSolidify = { ok: true, code: 'before-destroy', imageRef: ref };
         } else {
           preSolidify = { ok: false, code: c.ok ? 'commit-unverified' : (c.codeReason || 'commit-failed') };
@@ -3870,15 +3901,15 @@ chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string
       }
     }
     guanBiZhiDingHuiHua(id);
-    if (cur.exists) await runContainerExec(runtimeId, 'rm', { name }, 120000);
+    if (cur.exists) await yunXingRongQiZhiXing(runtimeId, 'rm', { ming }, 120000);
     const dir = quXiangMuMuLu(id).dir;
-    const run = await runContainerExec(runtimeId, 'run-detached', {
-      name, image: want, ...(dir && fs.existsSync(dir) ? { hostDir: dir } : {}), projectLabel: id,
+    const run = await yunXingRongQiZhiXing(runtimeId, 'run-detached', {
+      ming, image: want, ...(dir && fs.existsSync(dir) ? { hostDir: dir } : {}), projectLabel: id,
     }, 180000);
     if (!run.ok) {
       return {
         ok: false, code: run.codeReason || 'run-failed', executed: true, evidence: 'refused' as const,
-        imageRef: want, rawOutput: jinyaoWenben(`run.out run.err`, 400), preSolidify,
+        imageRef: want, rawOutput: jinyaoWenben(`${run.out} ${run.err}`, 400), preSolidify,
       };
     }
     const after = await projectContainerStatusOf(id, runtimeId);
@@ -3890,7 +3921,7 @@ chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string
       /** 证据等级：真的从那个镜像起了一个容器（有名字 + 真实 ps 为证） */
       evidence: 'container-started' as const,
       imageRef: want,
-      containerRef: name,
+      containerRef: ming,
       containerRunning: after.running,
       ms: run.ms,
       preSolidify,
@@ -3906,14 +3937,14 @@ chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string
  * ADR 004 P4（第十六批：**真的接上容器内执行**）：**容器内的 shell**（= 控制台本体）。
  *
  * 控制台**就是容器里的控制台**，其价值是给主机带来安全性防护；它**不是**应用内部事件日志
- * （那一版做错了，已撤销：事件日志降级为独立的诊断视图，见渲染层的 `#console-pane`）。
+ * （那一版做错了，已撤销：事件日志降级为独立的诊断视图，见渲染层的 `#kongZhiTaiMianBan`）。
  *
  * 架构（产品主第七批定稿）：**AI 执行器留在主机，只把"用户项目的命令/工具执行"送进容器**
  * （即 `exec` 进那个项目容器）。所以镜像**不需要**因为"我们的执行器是 Node 写的"而塞 Node ——
  * 镜像按项目技术栈选（见 CONTAINER_BASE_IMAGES / CONTAINER_NODE_NEEDED_CASES）。
  *
  * 现在真的做了什么（每一步都能查证）：
- *   · `open`  ⇒ 确保项目容器存在（`docker run -d`，**默认不删** ⇒ 保留可写层）→ `docker exec -i sh`；
+ *   · `daKai`  ⇒ 确保项目容器存在（`docker run -d`，**默认不删** ⇒ 保留可写层）→ `docker exec -i sh`；
  *   · `write` ⇒ 把 data 写进那个 shell 的 **stdin**，并把容器回显的输出取回来（`executed:true`）；
  *   · `close` ⇒ 关掉 stdin（1.5s 后退不掉才杀我们自己的子进程）；
  *   · `status`⇒ 真的问引擎（`ps`）在不在，并回会话清单。
@@ -3924,17 +3955,17 @@ chuliIpc('warmy:project-env-rollback', async (_e, payload?: { sessionId?: string
  *   只有本机的人手动输入才会执行；远程/群成员/智能体/网络内容没有注入路径；
  *   不自动执行；不把本机密钥类环境变量带进容器；**未就绪 ⇒ 一条命令都不执行**。
  */
-chuliIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; action?: string; sessionId?: string; data?: string }) => {
+chuliIpc('warmy:rongQiKongZhiTai', async (_e, payload?: { runtimeId?: string; action?: string; sessionId?: string; data?: string }) => {
   const guiFanHua = guiFanKongZhiTaiQingQiu(payload);
   if (!guiFanHua.ok) {
     fachuKongzhitai({ cat: 'error', code: 'container.console.rejected', data: { code: guiFanHua.code } });
     return { ok: false, code: guiFanHua.code, error: guiFanHua.error, security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY };
   }
-  const { req } = guiFanHua;
-  const state = await quXiangMuTai(req.sessionId);
-  const runtimeId = req.runtimeId || quXiangMuYunXingShi(req.sessionId);
+  const { Qiu } = guiFanHua;
+  const state = await quXiangMuTai(Qiu.sessionId);
+  const runtimeId = Qiu.runtimeId || quXiangMuYunXingShi(Qiu.sessionId);
   const status = runtimeId ? await quRongQiZhuangTai(runtimeId) : null;
-  const gate = rongQiKongZhiTaiMenJin({
+  const menjin = rongQiKongZhiTaiMenJin({
     inProjectOrCattle: true,
     // 控制台只属于**容器开发**的项目（"运行/测试在容器中"那个选项已作废删除）
     runInContainer: state.devEnv === 'container',
@@ -3945,17 +3976,17 @@ chuliIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; act
      * 镜像来源**已经定了**：镜像表里钉死 digest 的基础镜像（+ 我们自己固化出来的层）。
      * 所以门禁的第 ⑤ 档不再长期成立 —— 引擎就绪就能真的开 shell（这条是本轮的实质变化）。
      */
-    imageReady: !!runtimeId && state.devEnv === 'container' && isAllowedImageRef(defaultProjectImageRef()),
+    imageReady: !!runtimeId && state.devEnv === 'container' && shiFouYunXuJingXiang(defaultProjectImageRef()),
   });
-  if (!gate.available) {
-    if (req.action === 'write' || req.action === 'open') {
-      fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: gate.code, reasonKey: gate.reason, action: req.action } });
+  if (!menjin.available) {
+    if (Qiu.action === 'write' || Qiu.action === 'daKai') {
+      fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: menjin.code, reasonKey: menjin.reason, action: Qiu.action } });
     }
     return {
       ok: false,
-      code: gate.code,
-      reasonKey: gate.reason,
-      needsInstall: gate.needsInstall,
+      code: menjin.code,
+      reasonKey: menjin.reason,
+      needsInstall: menjin.needsInstall,
       executed: false, // 【核心】没就绪 ⇒ **一条命令都没执行**
       runtimeId,
       projectCode: state.code,
@@ -3964,20 +3995,20 @@ chuliIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; act
     };
   }
 
-  const name = containerProjectName(req.sessionId);
-  if (req.action === 'status') {
-    const cur = await projectContainerStatusOf(req.sessionId, runtimeId);
+  const ming = rongQiXiangMuMing(Qiu.sessionId);
+  if (Qiu.action === 'status') {
+    const cur = await projectContainerStatusOf(Qiu.sessionId, runtimeId);
     return {
-      ok: true, code: 'ok', reasonKey: 'ok', executed: false, runtimeId, containerRef: cur.containerRef || name,
+      ok: true, code: 'ok', reasonKey: 'ok', executed: false, runtimeId, containerRef: cur.containerRef || ming,
       containerExists: cur.exists, containerRunning: cur.running,
       sessionId: String(payload?.sessionId || ''),
       security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
     };
   }
-  if (req.action === 'open') {
-    const yiBaoZhang = await baozhangXiangmuRongqi(req.sessionId, runtimeId);
+  if (Qiu.action === 'daKai') {
+    const yiBaoZhang = await baozhangXiangmuRongqi(Qiu.sessionId, runtimeId);
     if (!yiBaoZhang.ok) {
-      fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: yiBaoZhang.code, action: 'open' } });
+      fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: yiBaoZhang.code, action: 'daKai' } });
       return {
         ok: false, code: yiBaoZhang.code, reasonKey: yiBaoZhang.code === 'no-image' ? 'needsImage' : 'notReady',
         executed: false, runtimeId, containerRef: yiBaoZhang.containerRef, rawOutput: yiBaoZhang.raw,
@@ -3986,17 +4017,17 @@ chuliIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; act
     }
     // **解锁**宿主目录（如果这个项目被加过锁）：容器要在同一份 bind mount 上写，
     // 让锁和正在运行的容器同时存在会互相打脸（这条在 fsGuard 那边也写着）
-    liftFsGuardIfAny(req.sessionId, 'container-started');
-    const opened = openContainerShellSession({ groupId: req.sessionId, runtimeId, containerName: yiBaoZhang.containerRef });
+    liftFsGuardIfAny(Qiu.sessionId, 'container-started');
+    const opened = daKaiKongZhiTaiHuiHua({ groupId: Qiu.sessionId, runtimeId, containerName: yiBaoZhang.containerRef });
     if (!opened.ok) {
-      fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: opened.code, action: 'open' } });
+      fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: opened.code, action: 'daKai' } });
       return {
         ok: false, code: opened.code || 'spawn-failed', reasonKey: 'notReady', executed: false,
         runtimeId, containerRef: yiBaoZhang.containerRef, error: opened.error,
         security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
       };
     }
-    fachuKongzhitai({ cat: 'system', code: 'container.console.opened', data: { sessionId: req.sessionId, containerRef: yiBaoZhang.containerRef } });
+    fachuKongzhitai({ cat: 'system', code: 'container.console.opened', data: { sessionId: Qiu.sessionId, containerRef: yiBaoZhang.containerRef } });
     return {
       ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId, containerRef: yiBaoZhang.containerRef,
       sessionId: opened.sessionId, /** 真的是容器里的 shell（不是宿主 shell、不是事件日志） */
@@ -4004,43 +4035,43 @@ chuliIpc('warmy:container-shell', async (_e, payload?: { runtimeId?: string; act
       security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
     };
   }
-  if (req.action === 'close') {
+  if (Qiu.action === 'close') {
     // `sessionId` 既可以是 shell 会话 id，也可以是项目 id（container-probe 侧两者都能解析）
-    const r = closeContainerShellSession(req.sessionId || String(payload?.sessionId || ''));
+    const r = guanBiKongZhiTaiHuiHua(Qiu.sessionId || String(payload?.sessionId || ''));
     return {
-      ok: true, code: 'ok', reasonKey: 'ok', executed: r.closed, runtimeId, containerRef: name,
+      ok: true, code: 'ok', reasonKey: 'ok', executed: r.closed, runtimeId, containerRef: ming,
       closed: r.closed, security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
     };
   }
   // write：真的写进那个 shell 的 stdin
-  const xieru = await writeContainerShellSession(req.sessionId, req.data);
+  const xieru = await xieRuKongZhiTaiHuiHua(Qiu.sessionId, Qiu.data);
   if (!xieru.ok) {
     // 会话没了 ⇒ 如实说"得先打开"，**不**偷偷开一条新的（那会绕过用户的重启意图）
     return {
       ok: false, code: xieru.code || 'no-session', reasonKey: 'notReady', executed: false,
-      runtimeId, containerRef: name, error: xieru.error, output: '',
+      runtimeId, containerRef: ming, error: xieru.error, shuChu: '',
       security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
     };
   }
-  fachuKongzhitai({ cat: 'tool', code: 'container.console.exec', data: { sessionId: req.sessionId, bytes: req.data.length } });
+  fachuKongzhitai({ cat: 'tool', code: 'container.console.exec', data: { sessionId: Qiu.sessionId, bytes: Qiu.data.length } });
   /**
    * 「一条控制台命令之后」这个固化时机（ADR §8.6 的时机表之一）：
    * 只在**节流窗口外**且确实该固化时才真的 commit（45s 合并，避免"敲一行就固化一个镜像"）。
    * 失败不影响命令本身的返回（如实附带 autoSolidify 结果）。
    */
-  const autoSolidify = await maybeSolidifyAfterConsole(req.sessionId, runtimeId);
+  const autoSolidify = await maybeSolidifyAfterConsole(Qiu.sessionId, runtimeId);
   /**
    * 容器里的命令**真的可能改了项目文件** ⇒ 如实记一条台账（项目级、成员可见）。
    * 我们只记"发生过一次容器内命令"这个事实 + 挂载点，**不假装知道具体改了哪个文件**
    * （容器里没有文件系统审计，编一个路径出来比不记更糟）。
    */
-  const dir = quXiangMuMuLu(req.sessionId).dir;
+  const dir = quXiangMuMuLu(Qiu.sessionId).dir;
   if (dir) {
-    beizhuWaibuWenjianFangwenQiu(req.sessionId, 'write', `dirpath.sepCONTAINER_PROJECT_MOUNT.replace(/^\//, '')`, { by: 'container-shell' });
+    beizhuWaibuWenjianFangwenQiu(Qiu.sessionId, 'write', `${path.sep}${RONGQI_XIANGMU_GUAZAI.replace(/^\//, '')}`, { by: 'container-shell' });
   }
   return {
-    ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId, containerRef: name,
-    output: xieru.output || '', autoSolidify,
+    ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId, containerRef: ming,
+    shuChu: xieru.shuChu || '', autoSolidify,
     security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
   };
 });
@@ -4050,16 +4081,16 @@ function defaultProjectImageRef(): string {
   const jiedianTupian = CONTAINER_BASE_IMAGES.find((x) => x.id === 'node-24-slim' && x.digest);
   const min = CONTAINER_BASE_IMAGES.find((x) => x.digest);
   const pick = jiedianTupian || min;
-  return pick && pick.digest ? `pick.ref@pick.digest` : '';
+  return pick && pick.digest ? `${pick.ref}@${pick.digest}` : '';
 }
 
 /** 记一条外部（容器侧）文件访问到项目台账 */
 function beizhuWaibuWenjianFangwenQiu(groupId: string, op: 'write' | 'edit' | 'create' | 'delete' | 'read', file: string, extra: { by?: string } = {}): void {
   try {
-    const gid = String(groupId || '');
-    if (!groupStore || !gid) return;
-    groupStore.recordFileAccess(gid, { op, path: String(file), ts: Date.now(), ok: true, by: extra.by || 'container' });
-    void faBuXiangMuShuXing(gid);
+    const qunId = String(groupId || '');
+    if (!groupStore || !qunId) return;
+    groupStore.recordFileAccess(qunId, { op, path: String(file), ts: Date.now(), ok: true, by: extra.by || 'container' });
+    void faBuXiangMuShuXing(qunId);
   } catch {
     /* 记账失败不影响执行 */
   }
@@ -4074,21 +4105,21 @@ async function maybeSolidifyAfterConsole(
   runtimeId: string
 ): Promise<{ attempted: boolean; done: boolean; code: string; imageRef?: string }> {
   try {
-    const cap = envSolidifyCapability(runtimeId);
+    const shangXian = huanJingGuHuaNengLi(runtimeId);
     const ledger = projectEnvLedgerOf(groupId);
-    const decision = shouldSolidifyAt({ lastSolidifiedAt: ledger.lastSolidifiedAt || 0, dirty: true, programmatic: cap.programmatic });
+    const decision = shiFouGaiGuHua({ lastSolidifiedAt: ledger.lastSolidifiedAt || 0, dirty: true, programmatic: shangXian.programmatic });
     if (!decision.solidify) return { attempted: false, done: false, code: decision.code };
-    const name = containerProjectName(groupId);
+    const ming = rongQiXiangMuMing(groupId);
     const cur = await projectContainerStatusOf(groupId, runtimeId);
     if (!cur.exists) return { attempted: false, done: false, code: 'no-container' };
     const at = Date.now();
     const ref = solidifiedImageRef(groupId, at);
-    const c = await runContainerExec(runtimeId, 'commit', { name, imageRef: ref }, 600000);
+    const c = await yunXingRongQiZhiXing(runtimeId, 'commit', { ming, imageRef: ref }, 600000);
     if (!c.ok) return { attempted: true, done: false, code: c.codeReason || 'commit-failed' };
-    const shiLi = await runContainerExec(runtimeId, 'image-inspect', { image: ref }, 60000);
+    const shiLi = await yunXingRongQiZhiXing(runtimeId, 'image-inspect', { image: ref }, 60000);
     const JingXiangId = shiLi.ok ? String(shiLi.out.split('|')[0] || '').trim() : '';
     if (!JingXiangId) return { attempted: true, done: false, code: 'commit-unverified' };
-    writeProjectEnvLedger(groupId, { runtimeId, containerRef: name, imageRef: ref, solidifiedAt: at });
+    writeProjectEnvLedger(groupId, { runtimeId, containerRef: ming, imageRef: ref, solidifiedAt: at });
     fachuKongzhitai({ cat: 'system', code: 'container.project.solidified', data: { sessionId: groupId, imageRef: ref, trigger: 'after-console' } });
     return { attempted: true, done: true, code: 'after-console', imageRef: ref };
   } catch (e) {
@@ -4101,12 +4132,12 @@ async function maybeSolidifyAfterConsole(
  * 用于环境探测 / 证明工具调用真的跑在容器里。
  * ⚠️ 参数里**没有命令字符串**：`command` 只能取 `CONTAINER_FIXED_COMMAND_IDS` 里的 id。
  */
-chuliIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; command?: string }) => {
+chuliIpc('warmy:xiangMuZhiXing', async (_e, payload?: { sessionId?: string; command?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const command = String(payload?.command || 'env-probe');
     if (!CONTAINER_FIXED_COMMAND_IDS.includes(command as RongQiGuDingMingLingId)) {
-      return { ok: false, code: 'bad-command', executed: false, error: `command must be one of CONTAINER_FIXED_COMMAND_IDS.join('|')` };
+      return { ok: false, code: 'bad-command', executed: false, error: `command must be one of ${CONTAINER_FIXED_COMMAND_IDS.join('|')}` };
     }
     const state = await quXiangMuTai(id);
     const runtimeId = quXiangMuYunXingShi(id);
@@ -4119,7 +4150,7 @@ chuliIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comman
     const yiBaoZhang = await baozhangXiangmuRongqi(id, runtimeId);
     if (!yiBaoZhang.ok) return { ok: false, code: yiBaoZhang.code, executed: false, containerRef: yiBaoZhang.containerRef, rawOutput: yiBaoZhang.raw };
     liftFsGuardIfAny(id, 'container-started');
-    const r = await runContainerExec(runtimeId, 'exec-capture', { name: yiBaoZhang.containerRef, command }, 120000);
+    const r = await yunXingRongQiZhiXing(runtimeId, 'exec-capture', { ming: yiBaoZhang.containerRef, command }, 120000);
     fachuKongzhitai({ cat: 'tool', code: 'container.project.exec', data: { sessionId: id, command, ok: r.ok } });
     return {
       ok: r.ok,
@@ -4129,7 +4160,7 @@ chuliIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comman
       command,
       containerRef: yiBaoZhang.containerRef,
       code: r.code,
-      output: r.out,
+      shuChu: r.out,
       error: r.err,
       ms: r.ms,
       codeReason: r.codeReason,
@@ -4149,7 +4180,7 @@ chuliIpc('warmy:project-exec', async (_e, payload?: { sessionId?: string; comman
  * 记录进项目记录并同步给成员 —— 成员那边也能按同一个根解析。
  * 安全：只接受 `{ sessionId }`，目录**由主进程弹系统对话框选**（渲染层给不了任意路径）。
  */
-chuliIpc('warmy:project-set-directory', async (_e, payload?: { sessionId?: string; dir?: string }) => {
+chuliIpc('warmy:xiangMuSheZhiMuLu', async (_e, payload?: { sessionId?: string; dir?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     if (!benJiShiXiangMuChuangJianZhe(id)) {
@@ -4180,7 +4211,7 @@ chuliIpc('warmy:project-set-directory', async (_e, payload?: { sessionId?: strin
  * 产品主的原话：**「记录文件的改动应该是无限牛马的功能，不是本机的功能」**
  * ⇒ 台账存在项目记录里、会随项目同步给成员，所以成员也能看到"谁改了什么、什么时候改的"。
  */
-chuliIpc('warmy:project-ledger', (_e, payload?: { sessionId?: string; limit?: number }) => {
+chuliIpc('warmy:xiangMuZhangBen', (_e, payload?: { sessionId?: string; limit?: number }) => {
   try {
     const id = String(payload?.sessionId || '');
     const rows = groupStore?.listFileAccess(id, Number(payload?.limit) || 200) || [];
@@ -4226,12 +4257,12 @@ async function dangqianYonghuHuihuaId(): Promise<string> {
   if (process.platform !== 'win32') return '';
   return new Promise((resolve) => {
     try {
-      const child = execFile('whoami', ['/user', '/fo', 'csv', '/nh'], { windowsHide: true, timeout: 15000, encoding: 'utf8' }, (err, stdout) => {
+      const Zhi = execFile('whoami', ['/user', '/fo', 'csv', '/nh'], { windowsHide: true, timeout: 15000, encoding: 'utf8' }, (err, stdout) => {
         if (err) return resolve('');
         const m = String(stdout || '').match(/(S-1-\d+(?:-\d+)+)/);
         resolve(m && m[1] ? m[1] : '');
       });
-      child.on('error', () => resolve(''));
+      Zhi.on('error', () => resolve(''));
     } catch {
       resolve('');
     }
@@ -4261,11 +4292,11 @@ function fsGuardRecordOf(groupId: string): { dir: string; sid: string; appliedAt
   }
 }
 
-function writeFsGuardRecord(groupId: string, rec: { dir: string; sid: string; appliedAt: number; liftedAt?: number } | null): void {
+function writeFsGuardRecord(groupId: string, jiLu: { dir: string; sid: string; appliedAt: number; liftedAt?: number } | null): void {
   try {
     if (!settingsStore) return;
     const all = { ...(settingsStore.load().fsGuard || {}) };
-    if (rec) all[String(groupId)] = rec;
+    if (jiLu) all[String(groupId)] = jiLu;
     else delete all[String(groupId)];
     settingsStore.save({ fsGuard: all } as never);
   } catch {
@@ -4275,17 +4306,17 @@ function writeFsGuardRecord(groupId: string, rec: { dir: string; sid: string; ap
 
 /** 容器一启动就解锁（如果这个项目被加过锁）；如实返回发生了什么 */
 function liftFsGuardIfAny(groupId: string, reason: string): { lifted: boolean; dir?: string } {
-  const rec = fsGuardRecordOf(groupId);
-  if (!rec || rec.liftedAt) return { lifted: false };
+  const jiLu = fsGuardRecordOf(groupId);
+  if (!jiLu || jiLu.liftedAt) return { lifted: false };
   try {
-    const plan = hostDirGuardPlan({ action: 'lift', dir: rec.dir, sid: rec.sid });
+    const plan = zhuJiMuLuHuLanJiHua({ action: 'lift', dir: jiLu.dir, sid: jiLu.sid });
     if (!plan.ok) return { lifted: false };
     const r = runIcaclsSync(plan.plan);
     if (!r.ok) return { lifted: false };
-    writeFsGuardRecord(groupId, { ...rec, liftedAt: Date.now() });
+    writeFsGuardRecord(groupId, { ...jiLu, liftedAt: Date.now() });
     audit?.log('container.fs-guard.lift', { sessionId: groupId, reason });
     fachuKongzhitai({ cat: 'system', code: 'container.fsGuard.lifted', data: { sessionId: groupId, reason } });
-    return { lifted: true, dir: rec.dir };
+    return { lifted: true, dir: jiLu.dir };
   } catch {
     return { lifted: false };
   }
@@ -4307,7 +4338,7 @@ function runIcaclsSync(plan: { file: string; args: string[] }): { ok: boolean; e
  *   · `apply`  = 真的加锁（一条继承式 deny ACE）；
  *   · `lift`   = 真的撤销（一条 `/remove:d`）—— **永远给出还原路径**。
  */
-chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; action?: string }) => {
+chuliIpc('warmy:xiangMuWenJianXiTongShouWei', async (_e, payload?: { sessionId?: string; action?: string }) => {
   try {
     const id = String(payload?.sessionId || '');
     const action = String(payload?.action || 'status');
@@ -4317,7 +4348,7 @@ chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; ac
     }
     const attrs = quXiangMuShuXing(id);
     const dir = attrs.directory;
-    const rec = fsGuardRecordOf(id);
+    const jiLu = fsGuardRecordOf(id);
     const sid = await dangqianYonghuHuihuaId();
     const base = {
       ok: true,
@@ -4328,7 +4359,7 @@ chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; ac
       sid,
       /** 只有容器开发项目才谈得上"宿主侧不该改" */
       devEnv: attrs.devEnv,
-      record: rec,
+      record: jiLu,
       /** 平台能力：非 Windows 如实说做不到（不假装） */
       platformSupported: process.platform === 'win32' && !!sid,
       security: HOST_DIR_GUARD_SECURITY,
@@ -4343,7 +4374,7 @@ chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; ac
     if (process.platform !== 'win32' || !sid) return { ...base, ok: false, code: 'platform-not-supported', error: 'locking is only implemented on Windows (icacls)' };
 
     if (action === 'status') {
-      const plan = hostDirGuardPlan({ action: 'status', dir, sid });
+      const plan = zhuJiMuLuHuLanJiHua({ action: 'status', dir, sid });
       if (!plan.ok) return { ...base, ok: false, code: plan.code, error: plan.error };
       const r = await runIcacls(plan.plan);
       const denies = String(r.out || '')
@@ -4361,13 +4392,13 @@ chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; ac
          * 记录与事实不一致时**如实标出来**（例如用户自己在应用外改了 ACL）：
          * 这是我们"不假装锁着"的判据。
          */
-        recordMatchesFilesystem: rec ? (r.ok && denies.length > 0 && !rec.liftedAt) : false,
+        recordMatchesFilesystem: jiLu ? (r.ok && denies.length > 0 && !jiLu.liftedAt) : false,
       };
     }
 
     if (action === 'apply') {
-      if (rec && !rec.liftedAt) return { ...base, ok: true, guarded: true, already: true };
-      const plan = hostDirGuardPlan({ action: 'apply', dir, sid });
+      if (jiLu && !jiLu.liftedAt) return { ...base, ok: true, guarded: true, already: true };
+      const plan = zhuJiMuLuHuLanJiHua({ action: 'apply', dir, sid });
       if (!plan.ok) return { ...base, ok: false, code: plan.code, error: plan.error };
       const r = await runIcacls(plan.plan);
       if (!r.ok) return { ...base, ok: false, code: 'icacls-failed', error: jinyaoWenben(r.err, 300) };
@@ -4378,11 +4409,11 @@ chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; ac
     }
 
     // lift
-    const plan = hostDirGuardPlan({ action: 'lift', dir, sid });
+    const plan = zhuJiMuLuHuLanJiHua({ action: 'lift', dir, sid });
     if (!plan.ok) return { ...base, ok: false, code: plan.code, error: plan.error };
     const r = await runIcacls(plan.plan);
     if (!r.ok) return { ...base, ok: false, code: 'icacls-failed', error: jinyaoWenben(r.err, 300) };
-    writeFsGuardRecord(id, { dir, sid, appliedAt: rec ? rec.appliedAt : Date.now(), liftedAt: Date.now() });
+    writeFsGuardRecord(id, { dir, sid, appliedAt: jiLu ? jiLu.appliedAt : Date.now(), liftedAt: Date.now() });
     audit?.log('container.fs-guard.lift', { sessionId: id, reason: 'user' });
     fachuKongzhitai({ cat: 'system', code: 'container.fsGuard.lifted', data: { sessionId: id, reason: 'user' } });
     return { ...base, ok: true, guarded: false, liftedAt: Date.now() };
@@ -4394,31 +4425,31 @@ chuliIpc('warmy:project-fs-guard', async (_e, payload?: { sessionId?: string; ac
 // ── 本地账号 ──
 
 // ── 本地 SKILL：扫描 / 删除 ──
-function skillMdInfo(file: string): { name: string; description: string } {
-  let name = '';
+function skillMdInfo(file: string): { ming: string; description: string } {
+  let ming = '';
   let description = '';
   try {
     const raw = fs.readFileSync(file, 'utf8');
     const fm = raw.match(/^---\s*\n([\s\S]*?)\n---/);
-    const head = fm && fm[1] ? fm[1] : '';
-    if (head) {
-      const mingCheng = head.match(/^\s*name\s*:\s*(.+)$/m);
-      const dm = head.match(/^\s*description\s*:\s*(.+)$/m);
-      if (mingCheng && mingCheng[1]) name = mingCheng[1].trim().replace(/^["']|["']$/g, '');
+    const touBu = fm && fm[1] ? fm[1] : '';
+    if (touBu) {
+      const mingCheng = touBu.match(/^\s*ming\s*:\s*(.+)$/m);
+      const dm = touBu.match(/^\s*description\s*:\s*(.+)$/m);
+      if (mingCheng && mingCheng[1]) ming = mingCheng[1].trim().replace(/^["']|["']$/g, '');
       if (dm && dm[1]) description = dm[1].trim().replace(/^["']|["']$/g, '');
     }
-    if (!name) {
+    if (!ming) {
       const h = raw.match(/^#\s+(.+)$/m);
-      if (h && h[1]) name = h[1].trim();
+      if (h && h[1]) ming = h[1].trim();
     }
     if (!description) {
-      const body = raw.replace(/^---[\s\S]*?---/, '').replace(/^#.*$/gm, '').trim();
-      description = (body.split(/\n\s*\n/)[0] || '').replace(/\s+/g, ' ').slice(0, 180);
+      const ti = raw.replace(/^---[\s\S]*?---/, '').replace(/^#.*$/gm, '').trim();
+      description = (ti.split(/\n\s*\n/)[0] || '').replace(/\s+/g, ' ').slice(0, 180);
     }
   } catch {
     /* 忽略 */
   }
-  return { name, description };
+  return { ming, description };
 }
 
 /** Read skill auto-discovery directories from the EXISTING settings channel. */
@@ -4435,11 +4466,11 @@ function jiaZaiJinengSaomiaoLuJing(): string[] {
 /** Honest per-directory status: missing / not-a-directory / read-failed are reported, never silently ignored. */
 function jinengSaomiaoZhuangtai(dirs: string[]): Array<{ path: string; ok: boolean; error: string | null; skillCount: number }> {
   return dirs.map((p) => {
-    const abs = path.resolve(p);
-    if (!fs.existsSync(abs)) return { path: p, ok: false, error: 'missing', skillCount: 0 };
+    const jueDuiLu = path.resolve(p);
+    if (!fs.existsSync(jueDuiLu)) return { path: p, ok: false, error: 'missing', skillCount: 0 };
     let st: import('node:fs').Stats;
     try {
-      st = fs.statSync(abs);
+      st = fs.statSync(jueDuiLu);
     } catch {
       return { path: p, ok: false, error: 'stat-failed', skillCount: 0 };
     }
@@ -4447,10 +4478,10 @@ function jinengSaomiaoZhuangtai(dirs: string[]): Array<{ path: string; ok: boole
     let skillCount = 0;
     try {
       // Directory itself may be a skill (contains SKILL.md)
-      if (fs.existsSync(path.join(abs, 'SKILL.md'))) skillCount += 1;
-      const zixiang = fs.readdirSync(abs, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+      if (fs.existsSync(path.join(jueDuiLu, 'SKILL.md'))) skillCount += 1;
+      const zixiang = fs.readdirSync(jueDuiLu, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
       for (const d of zixiang) {
-        if (fs.existsSync(path.join(abs, d, 'SKILL.md'))) skillCount += 1;
+        if (fs.existsSync(path.join(jueDuiLu, d, 'SKILL.md'))) skillCount += 1;
       }
     } catch {
       return { path: p, ok: false, error: 'read-failed', skillCount: 0 };
@@ -4469,12 +4500,12 @@ function jinengGen(): Array<{ root: string; source: string }> {
   const local = path.join(process.cwd(), 'skills');
   if (fs.existsSync(local)) roots.push({ root: local, source: 'workspace' });
   // Auto-discovery directories (source = 'discovered'); invalid paths are kept out of the
-  // scan roots but reported via skillScanStatus on skills-list / skills-scan-dirs-get.
+  // scan roots but reported via skillScanStatus qiYong skills-list / skills-scan-dirs-get.
   for (const dir of jiaZaiJinengSaomiaoLuJing()) {
     try {
-      const abs = path.resolve(dir);
-      if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) {
-        roots.push({ root: abs, source: 'discovered' });
+      const jueDuiLu = path.resolve(dir);
+      if (fs.existsSync(jueDuiLu) && fs.statSync(jueDuiLu).isDirectory()) {
+        roots.push({ root: jueDuiLu, source: 'discovered' });
       }
     } catch {
       /* status is reported separately */
@@ -4483,8 +4514,8 @@ function jinengGen(): Array<{ root: string; source: string }> {
   return roots;
 }
 
-chuliIpc('warmy:skills-list', () => {
-  const skills: Array<Record<string, unknown>> = [];
+chuliIpc('warmy:jinengJiLieBiao', () => {
+  const jinengJi: Array<Record<string, unknown>> = [];
   const saoMiaoMuluZhuangtai = jinengSaomiaoZhuangtai(jiaZaiJinengSaomiaoLuJing());
   const QiYongBiao = ((): Record<string, boolean> => {
     try {
@@ -4504,9 +4535,9 @@ chuliIpc('warmy:skills-list', () => {
       }
       const id = source === 'discovered' ? 'discovered:' + path.basename(root) + ':' + dirName : dirName;
       const enabled = QiYongBiao[id] !== false;
-      skills.push({
+      jinengJi.push({
         id,
-        name: info.name || dirName,
+        ming: info.ming || dirName,
         description: info.description,
         source,
         root,
@@ -4532,30 +4563,30 @@ chuliIpc('warmy:skills-list', () => {
       tuiSongYiTiao(d, md);
     }
   }
-  skills.sort((x, y) => Number(y.mtime || 0) - Number(x.mtime || 0));
-  return { ok: true, skills, scanDirs: saoMiaoMuluZhuangtai, maxScanDirs: SKILL_SCAN_DIRS_MAX };
+  jinengJi.sort((x, y) => Number(y.mtime || 0) - Number(x.mtime || 0));
+  return { ok: true, jinengJi, scanDirs: saoMiaoMuluZhuangtai, maxScanDirs: SKILL_SCAN_DIRS_MAX };
 });
 
-chuliIpc('warmy:skills-scan-dirs-get', () => {
+chuliIpc('warmy:jinengJiSaoMiaoMuLuJiQu', () => {
   const dirs = jiaZaiJinengSaomiaoLuJing();
   return { ok: true, dirs, scanDirs: jinengSaomiaoZhuangtai(dirs), max: SKILL_SCAN_DIRS_MAX };
 });
 
-chuliIpc('warmy:skills-scan-dirs-set', (_e, dirs: unknown) => {
-  const list = Array.isArray(dirs) ? dirs.map((d) => String(d || '').trim()).filter(Boolean) : [];
-  if (list.length > SKILL_SCAN_DIRS_MAX) {
-    return { ok: false, error: 'too-many-dirs', max: SKILL_SCAN_DIRS_MAX, count: list.length };
+chuliIpc('warmy:jinengJiSaoMiaoMuLuJiSheZhi', (_e, dirs: unknown) => {
+  const LieBiao = Array.isArray(dirs) ? dirs.map((d) => String(d || '').trim()).filter(Boolean) : [];
+  if (LieBiao.length > SKILL_SCAN_DIRS_MAX) {
+    return { ok: false, error: 'too-many-dirs', max: SKILL_SCAN_DIRS_MAX, count: LieBiao.length };
   }
   try {
-    const next = settingsStore?.save({ skillScanDirs: list } as never);
-    return { ok: true, dirs: list, scanDirs: jinengSaomiaoZhuangtai(list), settings: next };
+    const next = settingsStore?.save({ skillScanDirs: LieBiao } as never);
+    return { ok: true, dirs: LieBiao, scanDirs: jinengSaomiaoZhuangtai(LieBiao), settings: next };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 
-chuliIpc('warmy:skills-import', async () => {
+chuliIpc('warmy:jinengJiDaoRu', async () => {
   if (!win) return { ok: false, error: 'no window' };
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
@@ -4614,29 +4645,29 @@ function jiqiSaomiaoGen(): string[] {
   return roots;
 }
 
-function looksLikeWarmyPlugin(pkgPath: string): { ok: boolean; name?: string; desc?: string } {
+function looksLikeWarmyPlugin(pkgPath: string): { ok: boolean; ming?: string; desc?: string } {
   try {
     const j = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as Record<string, unknown>;
-    const name = String(j.name || '');
+    const ming = String(j.name || '');
     const deps = { ...(j.dependencies as Record<string, string> | undefined), ...(j.devDependencies as Record<string, string> | undefined) };
     const yilaiMingzhong = Object.keys(deps || {}).some((k) => /warmy|plugin/i.test(k));
     const ziduanMingzhong = 'warmy' in j || 'warmyPlugin' in j || Array.isArray((j.keywords as unknown[])) && (j.keywords as string[]).some((k) => /warmy|plugin/i.test(String(k)));
-    const mingMingzhong = /warmy|plugin/i.test(name);
-    return { ok: mingMingzhong || yilaiMingzhong || ziduanMingzhong, name, desc: String(j.description || '') };
+    const mingMingzhong = /warmy|plugin/i.test(ming);
+    return { ok: mingMingzhong || yilaiMingzhong || ziduanMingzhong, ming, desc: String(j.description || '') };
   } catch { return { ok: false }; }
 }
 
-async function scanMachineFor(kind: 'skills' | 'plugins') {
-  const t0 = Date.now();
+async function scanMachineFor(kind: 'skills' | 'chaJianJi') {
+  const qiShiShiJian = Date.now();
   const roots = jiqiSaomiaoGen();
-  const found: Array<{ id: string; name: string; path: string; desc?: string; root: string }> = [];
+  const found: Array<{ id: string; ming: string; path: string; desc?: string; root: string }> = [];
   const pruned: Array<{ dir: string; reason: string }> = [];
   let fangwen = 0;
   let stoppedBy: string | null = null;
 
   const queue: Array<{ dir: string; depth: number; root: string }> = roots.map((r) => ({ dir: r, depth: 0, root: r }));
   while (queue.length) {
-    if (Date.now() - t0 > JIQI_SAOMIAO_XIANZHI.budgetMs) { stoppedBy = 'time-budget'; break; }
+    if (Date.now() - qiShiShiJian > JIQI_SAOMIAO_XIANZHI.budgetMs) { stoppedBy = 'time-budget'; break; }
     if (fangwen >= JIQI_SAOMIAO_XIANZHI.maxDirs) { stoppedBy = 'max-dirs'; break; }
     if (found.length >= JIQI_SAOMIAO_XIANZHI.maxResults) { stoppedBy = 'max-results'; break; }
     const cur = queue.shift()!;
@@ -4648,16 +4679,16 @@ async function scanMachineFor(kind: 'skills' | 'plugins') {
         if (fs.existsSync(jinengWenjian)) {
           const id = `machine:${path.basename(cur.dir)}`;
           if (!found.some((f) => f.path === cur.dir)) {
-            found.push({ id, name: path.basename(cur.dir), path: cur.dir, root: cur.root });
+            found.push({ id, ming: path.basename(cur.dir), path: cur.dir, root: cur.root });
           }
           continue; // 技能目录内部不再下钻
         }
       } else {
         const pkg = path.join(cur.dir, 'package.json');
         if (fs.existsSync(pkg)) {
-          const hit = looksLikeWarmyPlugin(pkg);
-          if (hit.ok) {
-            found.push({ id: hit.name || path.basename(cur.dir), name: hit.name || path.basename(cur.dir), path: cur.dir, desc: hit.desc, root: cur.root });
+          const mingZhong = looksLikeWarmyPlugin(pkg);
+          if (mingZhong.ok) {
+            found.push({ id: mingZhong.ming || path.basename(cur.dir), ming: mingZhong.ming || path.basename(cur.dir), path: cur.dir, desc: mingZhong.desc, root: cur.root });
             continue;
           }
         }
@@ -4681,22 +4712,22 @@ async function scanMachineFor(kind: 'skills' | 'plugins') {
     dirsPruned: pruned.length,
     prunedSample: pruned.slice(0, 12),
     stoppedBy,
-    elapsedMs: Date.now() - t0,
+    elapsedMs: Date.now() - qiShiShiJian,
     limits: JIQI_SAOMIAO_XIANZHI,
   };
   audit?.log('machine.scan', { kind, found: found.length, dirs: fangwen, stoppedBy });
   return { ok: true, kind, found, bound, scannedRoots: roots };
 }
-chuliIpc('warmy:scan-machine', async (_e, kind?: string) => {
+chuliIpc('warmy:saoMiaoJiQi', async (_e, kind?: string) => {
   try {
-    const k = kind === 'plugins' ? 'plugins' : 'skills';
+    const k = kind === 'chaJianJi' ? 'chaJianJi' : 'skills';
     return await scanMachineFor(k);
   } catch (e) {
     return { ok: false, found: [], error: xiJingCuoWu(e) };
   }
 });
 
-chuliIpc('warmy:pick-directory', async () => {
+chuliIpc('warmy:xuanZeMuLu', async () => {
   if (!win) return { ok: false, error: 'no window' };
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
@@ -4704,13 +4735,13 @@ chuliIpc('warmy:pick-directory', async () => {
 });
 
 /** 等待协助：userData/assist.json —— AI 运行中需要人处理的事项（项目级会话可见） */
-type AssistStatus = 'open' | 'done' | 'stale';
+type AssistStatus = 'daKai' | 'done' | 'stale';
 type AssistPriority = 'normal' | 'urgent';
 interface AssistItem {
   id: string;
   sessionId: string;
-  title: string;
-  body?: string;
+  biaoTi: string;
+  ti?: string;
   status: AssistStatus;
   priority: AssistPriority;
   createdAt: number;
@@ -4728,29 +4759,29 @@ function jiaZaiXieZhuTiaoMu(): AssistItem[] {
 function baoCunXieZhuTiaoMu(items: AssistItem[]): void {
   try { anQuanYuanZiXieJson(assistFile(), { version: 1, items }); } catch { /* noop */ }
 }
-chuliIpc('warmy:assist-list', (_e, sessionId?: string) => {
+chuliIpc('warmy:assistLieBiao', (_e, sessionId?: string) => {
   try {
     let items = jiaZaiXieZhuTiaoMu();
     const sid = typeof sessionId === 'string' && sessionId ? sessionId : '';
-    // 合并 AI 决策卡（pending=open / answered=done）
+    // 合并 AI 决策卡（pending=daKai / answered=done）
     try {
-      const qs = aiQuestions.list(sid || undefined);
+      const qs = aiQuestions.LieBiao(sid || undefined);
       for (const q of qs) {
-        const id = 'q-' + q.id;
+        const id = 'q' + q.id;
         const exists = items.find((x) => x.id === id);
         const mapped: AssistItem = {
           id,
           sessionId: q.groupId || sid,
-          title: q.title,
-          body: q.body || '',
-          status: q.status === 'pending' ? 'open' : q.status === 'answered' ? 'done' : 'stale',
+          biaoTi: q.biaoTi,
+          ti: q.ti || '',
+          status: q.status === 'pending' ? 'daKai' : q.status === 'answered' ? 'done' : 'stale',
           priority: 'normal',
           createdAt: q.createdAt,
           updatedAt: (q.answer && q.answer.answeredAt) || q.createdAt,
         };
         if (exists) {
-          // 人工标记优先于自动状态；仅在仍为 open 时跟随决策卡
-          if (exists.status === 'open' && mapped.status === 'done') {
+          // 人工标记优先于自动状态；仅在仍为 daKai 时跟随决策卡
+          if (exists.status === 'daKai' && mapped.status === 'done') {
             exists.status = 'done';
             exists.updatedAt = mapped.updatedAt;
           }
@@ -4768,7 +4799,7 @@ chuliIpc('warmy:assist-list', (_e, sessionId?: string) => {
     return { ok: false, items: [], error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:assist-upsert', (_e, payload: Partial<AssistItem> & { id?: string }) => {
+chuliIpc('warmy:assistGengXinHuoChaRu', (_e, payload: Partial<AssistItem> & { id?: string }) => {
   try {
     const id = String(payload?.id || '').trim();
     if (!id) return { ok: false, error: 'missing-id' };
@@ -4779,9 +4810,9 @@ chuliIpc('warmy:assist-upsert', (_e, payload: Partial<AssistItem> & { id?: strin
     const next: AssistItem = {
       id,
       sessionId: String(payload.sessionId || prev?.sessionId || ''),
-      title: String(payload.title || prev?.title || '').slice(0, 200),
-      body: String(payload.body || prev?.body || '').slice(0, 500),
-      status: (payload.status as AssistStatus) || prev?.status || 'open',
+      biaoTi: String(payload.biaoTi || prev?.biaoTi || '').slice(0, 200),
+      ti: String(payload.ti || prev?.ti || '').slice(0, 500),
+      status: (payload.status as AssistStatus) || prev?.status || 'daKai',
       priority: (payload.priority as AssistPriority) || prev?.priority || 'normal',
       createdAt: prev?.createdAt || Number(payload.createdAt) || now,
       updatedAt: now,
@@ -4798,7 +4829,7 @@ chuliIpc('warmy:assist-upsert', (_e, payload: Partial<AssistItem> & { id?: strin
 });
 
 /** 隐私政策同意/撤销 */
-chuliIpc('warmy:privacy-consent-set', (_e, consent: boolean) => {
+chuliIpc('warmy:yinSiTongYiSheZhi', (_e, consent: boolean) => {
   try {
     const next = settingsStore?.save({ privacyConsent: !!consent } as never);
     audit?.log('privacy.consent', { consent: !!consent });
@@ -4809,26 +4840,26 @@ chuliIpc('warmy:privacy-consent-set', (_e, consent: boolean) => {
 });
 
 /** 拒绝隐私政策 / 撤销同意 / 主动退出 → 统一 quitApp（会置 forceQuit，否则 close 会拦截） */
-chuliIpc('warmy:app-quit', (_e, reason?: string) => {
+chuliIpc('warmy:yingYongTuiChu', (_e, reason?: string) => {
   setTimeout(() => tuichuYingyong(String(reason || 'ipc')), 40);
   return { ok: true };
 });
 
 /** 唯一凭证：指纹（证明你是你）；私钥不落渲染层明文 */
-chuliIpc('warmy:identity-credential', () =>
+chuliIpc('warmy:shenFenPingZheng', () =>
   anQuanChuLi(() => {
     const info = identityStore?.info() ?? null;
     return {
       ok: true,
-      fingerprint: info?.fingerprint || '',
+      zhiWen: info?.zhiWen || '',
       generation: info?.generation ?? 0,
-      alias: info?.alias || '',
+      bieMing: info?.bieMing || '',
     };
-  }, { ok: true, fingerprint: '', generation: 0, alias: '' })
+  }, { ok: true, zhiWen: '', generation: 0, bieMing: '' })
 );
 
 /** 切换身份：粘贴备份 JSON + 口令 → importBackup */
-chuliIpc('warmy:identity-backup-import', (_e, payload: { backupJson?: string; passphrase?: string }) => {
+chuliIpc('warmy:shenFenBeiFenDaoRu', (_e, payload: { backupJson?: string; passphrase?: string }) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const raw = String(payload?.backupJson || '').trim();
@@ -4837,15 +4868,15 @@ chuliIpc('warmy:identity-backup-import', (_e, payload: { backupJson?: string; pa
     try { backup = JSON.parse(raw); } catch { return { ok: false, error: 'backup-invalid-json' }; }
     const r = identityStore.importBackup(backup as never, { passphrase: String(payload?.passphrase || '') });
     if (!r.ok) return { ok: false, error: r.error };
-    audit?.log('identity.backup.import', { fingerprint: r.info.fingerprint });
-    return { ok: true, identity: r.info, fingerprint: r.info.fingerprint };
+    audit?.log('identity.backup.import', { zhiWen: r.info.zhiWen });
+    return { ok: true, identity: r.info, zhiWen: r.info.zhiWen };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 /** 插件自动发现目录扫描：目录下一层含 package.json 的子目录视为插件候选 */
-chuliIpc('warmy:plugins-scan-dirs-get', () =>
+chuliIpc('warmy:chaJianJiSaoMiaoMuLuJiQu', () =>
   anQuanChuLi(() => {
     const s = settingsStore?.load?.() || (settingsStore as { get?: () => unknown })?.get?.() || {};
     const dirs = Array.isArray((s as { pluginScanDirs?: string[] }).pluginScanDirs)
@@ -4854,23 +4885,23 @@ chuliIpc('warmy:plugins-scan-dirs-get', () =>
     return { ok: true, dirs: dirs.map(String).slice(0, 10) };
   }, { ok: true, dirs: [] })
 );
-chuliIpc('warmy:plugins-scan-dirs-set', (_e, dirs: unknown) => {
+chuliIpc('warmy:chaJianJiSaoMiaoMuLuJiSheZhi', (_e, dirs: unknown) => {
   try {
-    const list = (Array.isArray(dirs) ? dirs : [])
+    const LieBiao = (Array.isArray(dirs) ? dirs : [])
       .map((x) => String(x || '').trim())
       .filter(Boolean)
       .slice(0, SKILL_SCAN_DIRS_MAX);
-    const next = settingsStore?.save({ pluginScanDirs: list } as never);
-    return { ok: true, dirs: list, settings: next };
+    const next = settingsStore?.save({ pluginScanDirs: LieBiao } as never);
+    return { ok: true, dirs: LieBiao, settings: next };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:plugins-scan', () => {
+chuliIpc('warmy:chaJianJiSaoMiao', () => {
   try {
     const s = (settingsStore?.load?.() || {}) as { pluginScanDirs?: string[] };
     const dirs = Array.isArray(s.pluginScanDirs) ? s.pluginScanDirs.slice(0, 10) : [];
-    const found: Array<{ id: string; path: string; name: string; desc: string }> = [];
+    const found: Array<{ id: string; path: string; ming: string; desc: string }> = [];
     const skipped: Array<{ dir: string; reason: string }> = [];
     for (const dir of dirs) {
       try {
@@ -4878,40 +4909,40 @@ chuliIpc('warmy:plugins-scan', () => {
           skipped.push({ dir, reason: 'not-a-directory' });
           continue;
         }
-        for (const name of fs.readdirSync(dir)) {
-          const p = path.join(dir, name);
+        for (const ming of fs.readdirSync(dir)) {
+          const p = path.join(dir, ming);
           try {
             if (!fs.statSync(p).isDirectory()) continue;
             const pkg = path.join(p, 'package.json');
-            const skill = path.join(p, 'SKILL.md');
-            if (!fs.existsSync(pkg) && !fs.existsSync(skill)) continue;
-            let xiangmuMing = name;
+            const jineng = path.join(p, 'SKILL.md');
+            if (!fs.existsSync(pkg) && !fs.existsSync(jineng)) continue;
+            let xiangmuMing = ming;
             let xiangmuShuoming = '';
             if (fs.existsSync(pkg)) {
               try {
                 const j = JSON.parse(fs.readFileSync(pkg, 'utf8'));
-                xiangmuMing = String(j.name || name);
+                xiangmuMing = String(j.name || ming);
                 xiangmuShuoming = String(j.description || '');
-              } catch { /* keep folder name */ }
+              } catch { /* keep folder ming */ }
             }
             if (found.some((f) => f.id === xiangmuMing)) continue;
-            found.push({ id: xiangmuMing, path: p, name: xiangmuMing, desc: xiangmuShuoming });
+            found.push({ id: xiangmuMing, path: p, ming: xiangmuMing, desc: xiangmuShuoming });
           } catch { /* skip entry */ }
         }
       } catch (e) {
         skipped.push({ dir, reason: xiJingCuoWu(e) });
       }
     }
-    audit?.log('plugins.scan', { dirs: dirs.length, found: found.length });
+    audit?.log('chaJianJi.scan', { dirs: dirs.length, found: found.length });
     return { ok: true, found, skipped, scannedDirs: dirs };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
-chuliIpc('warmy:skills-paths', () => anQuanChuLi(() => ({ ok: true, paths: jinengGen().map((r) => r.root), scanDirs: jinengSaomiaoZhuangtai(jiaZaiJinengSaomiaoLuJing()) }), { ok: true, paths: [], scanDirs: [] }))
+chuliIpc('warmy:jinengJiLuJingJi', () => anQuanChuLi(() => ({ ok: true, paths: jinengGen().map((r) => r.root), scanDirs: jinengSaomiaoZhuangtai(jiaZaiJinengSaomiaoLuJing()) }), { ok: true, paths: [], scanDirs: [] }))
 
-chuliIpc('warmy:skills-remove', (_e, id: string) => {
+chuliIpc('warmy:jinengJiYiChu', (_e, id: string) => {
   try {
     // 删除也是写操作：与导入共用同一把租约（否则导入中途被删 = 半个目录）
     // Discovered skills live in user-owned auto-discovery directories — never delete those sources.
@@ -4937,7 +4968,7 @@ chuliIpc('warmy:skills-remove', (_e, id: string) => {
   }
 });
 
-chuliIpc('warmy:profile-get', () => anQuanChuLi(() => ({ ok: true, profile: accountStore?.loadProfile() }), { ok: true, profile: undefined }))
+chuliIpc('warmy:profileQu', () => anQuanChuLi(() => ({ ok: true, profile: accountStore?.loadProfile() }), { ok: true, profile: undefined }))
 // 读自家 package.json 的版本；dev 下 app.getVersion() 返回的是 Electron 版本，不可用
 function yingyongBanben(): string {
   try {
@@ -4949,13 +4980,33 @@ function yingyongBanben(): string {
   return app.getVersion();
 }
 
+
+/** 读 dsh 包版本；未安装/读不到则返回 null（关于页如实显示「未检测到」） */
+function duquDshBanben(): string | null {
+  try {
+    const cands = [
+      path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+      path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+      path.join(process.cwd(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+    ];
+    for (const p of cands) {
+      if (fs.existsSync(p)) {
+        const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (j && typeof j.version === 'string' && j.version) return j.version;
+      }
+    }
+  } catch { /* noop */ }
+  return null;
+}
+
 // 关于页：版本 / 运行时 / 平台 / 用户 ID 及其签名校验状态
-chuliIpc('warmy:app-info', () => {
+chuliIpc('warmy:yingYongXinXi', () => {
   try {
     const st = accountStore?.idStatus();
     return {
       ok: true,
-      name: '无限牛马',
+      ming: '无限牛马',
       enName: 'WArmy',
       version: yingyongBanben(),
       electron: process.versions.electron,
@@ -4963,28 +5014,29 @@ chuliIpc('warmy:app-info', () => {
       node: process.versions.node,
       platform: process.platform,
       arch: process.arch,
+      dsh: duquDshBanben(),
       deviceId: st?.id || '',
       deviceIdValid: st?.valid ?? false,
       // 身份层（ADR 003）：deviceId 只是人读别名，身份以公钥指纹为准
-      identityFingerprint: identityStore?.info()?.fingerprint || '',
+      identityFingerprint: identityStore?.info()?.zhiWen || '',
       identityGeneration: identityStore?.info()?.generation ?? 0,
     };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:profile-save', (_e, p: { username: string; email: string; avatarDataUrl?: string }) => {
+chuliIpc('warmy:profileBaoCun', (_e, p: { username: string; email: string; avatarDataUrl?: string }) => {
   try {
     const prev = accountStore?.loadProfile();
     const next = { ...prev!, ...p };
     return { ok: true, profile: accountStore?.saveProfile(next) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:profile-set-password', (_e, pw: string) => {
+chuliIpc('warmy:profileSheZhiPassword', (_e, pw: string) => {
   try {
     accountStore?.setPassword(pw);
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:profile-login', (_e, pw: string) => {
+chuliIpc('warmy:profileLogin', (_e, pw: string) => {
   try {
     const r = accountStore?.loginLocal(pw) || { ok: false };
     return r;
@@ -4996,7 +5048,7 @@ chuliIpc('warmy:profile-login', (_e, pw: string) => {
  * 身份公开信息。**只给公开部分**：指纹 / 公钥 / 代次 / 名片 / 退役公钥 / 时间线。
  * 私钥永远不出主进程（导出也只能是加密备份）。
  */
-chuliIpc('warmy:identity-info', () =>
+chuliIpc('warmy:shenFenXinXi', () =>
   anQuanChuLi(
     () => ({
       ok: true,
@@ -5031,7 +5083,7 @@ chuliIpc('warmy:identity-info', () =>
  * 与"旧的作废"声明，代次 +1，旧公钥进退役列表（保公钥丢私钥），并开启 7 天联系信息冻结期。
  * `previousCard` 取自**本机留存历史**（不是声明）—— 横幅展示旧联系方式用它。
  */
-chuliIpc('warmy:identity-rotate', (_e, payload: { reason?: string; passphrase?: string } = {}) => {
+chuliIpc('warmy:shenFenLunHuan', (_e, payload: { reason?: string; passphrase?: string } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const r = identityStore.rotate(payload || {});
@@ -5056,7 +5108,7 @@ chuliIpc('warmy:identity-rotate', (_e, payload: { reason?: string; passphrase?: 
 });
 
 /** 本机的名片历史（旧值留存；换证横幅的"旧联系方式"取自这里） */
-chuliIpc('warmy:identity-card-history', () =>
+chuliIpc('warmy:shenFenKaLiShi', () =>
   anQuanChuLi(() => ({ ok: true, history: identityStore?.contactCardHistory() ?? [], freeze: identityStore?.contactFreeze() ?? null }), { ok: true, history: [], freeze: null }),
 );
 
@@ -5064,20 +5116,20 @@ chuliIpc('warmy:identity-card-history', () =>
  * 接收方侧：记录对方的名片（加入时交换 / 换证后补发）。
  * 首次加入直接留存、**不冻结**；处于冻结期则只记为 pending，展示继续用本机留存值。
  */
-chuliIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card?: LianXiKa; signedCard?: ShenFenKa } = {}) => {
+chuliIpc('warmy:shenFenDuiDuanKa', (_e, payload: { zhiWen?: string; ka?: LianXiKa; signedCard?: ShenFenKa } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
-    let fingerprint = payload?.fingerprint || '';
-    let card = payload?.card as LianXiKa | undefined;
+    let zhiWen = payload?.zhiWen || '';
+    let ka = payload?.ka as LianXiKa | undefined;
     if (payload?.signedCard) {
       // 带签名的名片先验签（自签 + 指纹自洽），再决定是否留存
       const v = yanZhengShenFenKa(payload.signedCard);
       if (!v.ok) return { ok: false, error: `bad-card:${v.reason}` };
-      fingerprint = payload.signedCard.fingerprint;
-      card = payload.signedCard.contactCard;
+      zhiWen = payload.signedCard.zhiWen;
+      ka = payload.signedCard.contactCard;
     }
-    if (!fingerprint || !isValidFingerprint(fingerprint)) return { ok: false, error: 'fingerprint-required' };
-    return { ok: true, peer: identityStore.recordPeerCard(fingerprint, card || {}, Date.now()) };
+    if (!zhiWen || !isValidFingerprint(zhiWen)) return { ok: false, error: 'fingerprint-required' };
+    return { ok: true, peer: identityStore.recordPeerCard(zhiWen, ka || {}, Date.now()) };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
@@ -5088,19 +5140,19 @@ chuliIpc('warmy:identity-peer-card', (_e, payload: { fingerprint?: string; card?
  * 先验签 + 走代次规则，规则不过就不落地。
  */
 chuliIpc(
-  'warmy:identity-peer-rotation',
+  'warmy:shenFenDuiDuanLunHuan',
   (_e, payload: { declaration?: LunHuanShengMing; knownKeys?: YaoShiHuanTiaoMu[]; currentGeneration?: number } = {}) => {
     try {
       if (!identityStore) return { ok: false, error: 'identity-unavailable' };
       const d = payload?.declaration;
       if (!d) return { ok: false, error: 'declaration-required' };
-      const verdict = verifyRotationDeclaration(d, {
+      const caijue = verifyRotationDeclaration(d, {
         ...(payload?.knownKeys ? { knownKeys: payload.knownKeys } : {}),
         ...(typeof payload?.currentGeneration === 'number' ? { currentGeneration: payload.currentGeneration } : {}),
       });
-      if (!verdict.accepted) return { ok: false, error: verdict.reason, verdict };
+      if (!caijue.accepted) return { ok: false, error: caijue.reason, caijue };
       const peer = identityStore.recordPeerRotation(d, Date.now());
-      return { ok: true, verdict, peer };
+      return { ok: true, caijue, peer };
     } catch (e) {
       return { ok: false, error: xiJingCuoWu(e) };
     }
@@ -5108,19 +5160,19 @@ chuliIpc(
 );
 
 /** 接收方侧：取某指纹的对端名片视图（旧/新两个字段并列 + 冻结状态） */
-chuliIpc('warmy:identity-peer-contact', (_e, fingerprint: string) =>
-  anQuanChuLi(() => ({ ok: true, peer: fingerprint ? identityStore?.peerContact(fingerprint) ?? null : null }), { ok: true, peer: null }),
+chuliIpc('warmy:shenFenDuiDuanLianXi', (_e, zhiWen: string) =>
+  anQuanChuLi(() => ({ ok: true, peer: zhiWen ? identityStore?.peerContact(zhiWen) ?? null : null }), { ok: true, peer: null }),
 );
 
 /**
  * 接收方侧：**手动确认**采用对方的新名片（冻结期结束后才生效）。
  * 对应 UI 文案「冻结期已结束，但不会自动采用新值——需要你手动确认」。
  */
-chuliIpc('warmy:identity-peer-confirm', (_e, fingerprint: string) => {
+chuliIpc('warmy:shenFenDuiDuanQueRen', (_e, zhiWen: string) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
-    if (!fingerprint) return { ok: false, error: 'fingerprint-required' };
-    const peer = identityStore.confirmPeerCard(fingerprint);
+    if (!zhiWen) return { ok: false, error: 'fingerprint-required' };
+    const peer = identityStore.confirmPeerCard(zhiWen);
     if (!peer) return { ok: false, error: 'unknown-peer' };
     return { ok: true, peer, adopted: !peer.awaitingConfirmation && !peer.pendingCard };
   } catch (e) {
@@ -5133,7 +5185,7 @@ chuliIpc('warmy:identity-peer-confirm', (_e, fingerprint: string) => {
  * **永远是加密文件**：不存在"明文导出私钥"这条路径（附五：默认不显示明文）。
  */
 /** 凭证：当前本机 ID（= 私钥凭证）。界面只展示给本人，复制即备份。 */
-chuliIpc('warmy:credential-info', () =>
+chuliIpc('warmy:pingZhengXinXi', () =>
   anQuanChuLi(() => {
     const p = accountStore?.loadProfile?.() as { deviceId?: string } | undefined;
     const pingzheng = String(p?.deviceId || '');
@@ -5149,22 +5201,22 @@ chuliIpc('warmy:credential-info', () =>
  *   3) 用它派生出新身份；
  *   4) 把新凭证写回 profile。
  */
-chuliIpc('warmy:credential-rotate', () => {
+chuliIpc('warmy:pingZhengLunHuan', () => {
   try {
     if (!identityStore || !accountStore) return { ok: false, error: 'identity-unavailable' };
-    const fresh = shengChengPingzheng();
-    const r = identityStore.restoreFromCredential(fresh);
+    const xinxian = shengChengPingzheng();
+    const r = identityStore.restoreFromCredential(xinxian);
     if (!r.ok) return { ok: false, error: r.error };
     try {
       const raw = accountStore.loadProfile() as unknown as Record<string, unknown>;
-      accountStore.saveProfile({ ...raw, deviceId: fresh } as never);
+      accountStore.saveProfile({ ...raw, deviceId: xinxian } as never);
     } catch { /* profile 写失败不影响身份本身 */ }
-    audit?.log('identity.credential.rotated', { fingerprint: r.info.fingerprint, backup: r.backupFile || '' });
+    audit?.log('identity.credential.rotated', { zhiWen: r.info.zhiWen, backup: r.backupFile || '' });
     return {
       ok: true,
-      credential: fresh,
-      formatted: credentialModule.formatCredential(fresh),
-      fingerprint: r.info.fingerprint,
+      credential: xinxian,
+      formatted: credentialModule.formatCredential(xinxian),
+      zhiWen: r.info.zhiWen,
       backupFile: r.backupFile || null,
     };
   } catch (e) {
@@ -5173,7 +5225,7 @@ chuliIpc('warmy:credential-rotate', () => {
 });
 
 /** 用凭证恢复身份（换机 / 误删配置）：只凭这一串即可找回同一身份与指纹 */
-chuliIpc('warmy:credential-restore', (_e, credential: string) => {
+chuliIpc('warmy:pingZhengHuiFu', (_e, credential: string) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const r = identityStore.restoreFromCredential(String(credential || ''));
@@ -5183,14 +5235,14 @@ chuliIpc('warmy:credential-restore', (_e, credential: string) => {
       const raw = accountStore?.loadProfile?.() as Record<string, unknown> | undefined;
       if (raw) accountStore?.saveProfile?.({ ...raw, deviceId: String(credential || '') } as never);
     } catch { /* profile 写失败不影响身份本身 */ }
-    audit?.log('identity.restore.credential', { fingerprint: r.info.fingerprint });
-    return { ok: true, identity: r.info, fingerprint: r.info.fingerprint, backupFile: r.backupFile || null };
+    audit?.log('identity.restore.credential', { zhiWen: r.info.zhiWen });
+    return { ok: true, identity: r.info, zhiWen: r.info.zhiWen, backupFile: r.backupFile || null };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
-chuliIpc('warmy:identity-backup-export', (_e, payload: { passphrase?: string; writeFile?: boolean } = {}) => {
+chuliIpc('warmy:shenFenBeiFenDaoChu', (_e, payload: { passphrase?: string; writeFile?: boolean } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const passphrase = payload?.passphrase || '';
@@ -5203,14 +5255,14 @@ chuliIpc('warmy:identity-backup-export', (_e, payload: { passphrase?: string; wr
       const f = path.join(dir, `identity-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
       fs.writeFileSync(f, JSON.stringify(r.backup, null, 2), 'utf8');
       savedTo = f;
-      audit?.log('identity.backup.save', { file: path.basename(f), fingerprint: r.backup.fingerprint });
+      audit?.log('identity.backup.save', { file: path.basename(f), zhiWen: r.backup.zhiWen });
     }
     return {
       ok: true,
       savedTo,
       // 备份本身是口令加密的密文（可打印 / 拷到别的硬盘），不含明文私钥
       backup: r.backup,
-      fingerprint: r.backup.fingerprint,
+      zhiWen: r.backup.zhiWen,
       generation: r.backup.generation,
     };
   } catch (e) {
@@ -5225,7 +5277,7 @@ chuliIpc('warmy:identity-backup-export', (_e, payload: { passphrase?: string; wr
  *   ② 已有身份（OS 模式）—— 升级成口令模式：此后"文件 + 同一台机器"都不够，必须知道口令。
  * ⚠️ 代价必须对用户讲清：口令忘了 = 身份没了（产品无服务器，不存在找回/补发）。
  */
-chuliIpc('warmy:identity-set-passphrase', (_e, payload: { passphrase?: string; currentPassphrase?: string } = {}) => {
+chuliIpc('warmy:shenFenSheZhiMiMaKouLing', (_e, payload: { passphrase?: string; currentPassphrase?: string } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
     const passphrase = payload?.passphrase || '';
@@ -5250,7 +5302,7 @@ chuliIpc('warmy:identity-set-passphrase', (_e, payload: { passphrase?: string; c
  * 返回值里的 generationRuleNote 必须一路带到 UI —— 它明确写了"不防抢先"。
  */
 chuliIpc(
-  'warmy:identity-verify-rotation',
+  'warmy:shenFenYanZhengLunHuan',
   (_e, payload: { declaration?: ShenfenShengming; knownKeys?: YaoShiHuanTiaoMu[]; currentGeneration?: number } = {}) => {
     try {
       const d = payload?.declaration;
@@ -5282,7 +5334,7 @@ chuliIpc(
 );
 
 // ── 语音保存 ──
-chuliIpc('warmy:save-voice', async (_e, data: { dataUrl: string; ext?: string }) => {
+chuliIpc('warmy:baoCunYuYin', async (_e, data: { dataUrl: string; ext?: string }) => {
   try {
     const dir = path.join(app.getPath('userData'), 'voice');
     fs.mkdirSync(dir, { recursive: true });
@@ -5297,10 +5349,10 @@ chuliIpc('warmy:save-voice', async (_e, data: { dataUrl: string; ext?: string })
 });
 
 // ── 节点 / 邀请 ──
-chuliIpc('warmy:nodes-list', () => anQuanChuLi(() => ({ ok: true, nodes: nodeReg?.list() || [] }), { ok: true, nodes: [] }))
-chuliIpc('warmy:nodes-pair', (_e, nodeId: string, name: string) => ({
+chuliIpc('warmy:jieDianJiLieBiao', () => anQuanChuLi(() => ({ ok: true, nodes: nodeReg?.LieBiao() || [] }), { ok: true, nodes: [] }))
+chuliIpc('warmy:jieDianJiPeiDui', (_e, nodeId: string, ming: string) => ({
   ok: true,
-  node: nodeReg?.pairRemote(nodeId, name),
+  node: nodeReg?.pairRemote(nodeId, ming),
 }));
 
 // ── D. 身份变更横幅（UI 已经按这个形状写完：identityChanges / identityChangeAcknowledge / identityPeers） ──
@@ -5325,7 +5377,7 @@ function xieBiangengQueRen(map: Record<string, biangengQuerenJilu>): { ok: boole
  * 这里只负责「读确认留痕 → 交给它 → 返回 UI 契约形状」。
  * ⚠️ previousCard **只从本机留存历史取**：换证声明是攻击者可控数据。
  */
-chuliIpc('warmy:identity-changes', (_e, payload: { scope?: string } = {}) => {
+chuliIpc('warmy:shenFenBianGengJi', (_e, payload: { scope?: string } = {}) => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable', changes: [] };
     void payload;
@@ -5348,7 +5400,7 @@ chuliIpc('warmy:identity-changes', (_e, payload: { scope?: string } = {}) => {
  * （UI 明确依赖这一点：`{ok:false}` 时不会把横幅消掉）。
  * auditId 同时写进审计日志与本地留痕，便于事后对账。
  */
-chuliIpc('warmy:identity-change-ack', (_e, payload: { changeId?: string; level?: 'dismiss' | 'verified' } = {}) => {
+chuliIpc('warmy:shenFenBianGengQueRen', (_e, payload: { changeId?: string; level?: 'dismiss' | 'verified' } = {}) => {
   try {
     if (!audit) return { ok: false, error: 'audit-unavailable' };
     if (!identityStore) return { ok: false, error: 'identity-unavailable' };
@@ -5400,12 +5452,12 @@ async function weiQunQianFaChengYuanZhengShu(
 ): Promise<{ ok: boolean; code: string; cert?: { certId: string; memberFingerprint: string; expiresAt: number }; detail?: string }> {
   const membership = quChengYuanMingceCang(identityStore);
   if (!membership || !identityStore) return { ok: false, code: 'identity-missing' };
-  const signer = createIdentitySigner(identityStore);
-  const expect = expectedIssuerFor(groupId);
-  if (expect && !zhiwenPipei(expect, signer.fingerprint)) {
+  const signer = chuangjianShenfenQianmingzhe(identityStore);
+  const yuQi = expectedIssuerFor(groupId);
+  if (yuQi && !zhiwenPipei(yuQi, signer.zhiWen)) {
     // 本机不是该群的创建者 → 无权签发（星型拓扑里只有群主能发证书）
     // 诊断串用 ASCII（主进程不拼面向用户的文字；界面文案一律走 i18n）
-    return { ok: false, code: 'not-the-creator', detail: `issuer=${expect} local=${signer.fingerprint}` };
+    return { ok: false, code: 'not-the-creator', detail: `issuer=${yuQi} local=${signer.zhiWen}` };
   }
   const r = await wentiChengyuanZhengshu({
     signer,
@@ -5418,7 +5470,7 @@ async function weiQunQianFaChengYuanZhengShu(
     ...(input.memberId ? { memberId: input.memberId } : {}),
     ...(input.supersedes ? { supersedes: input.supersedes } : {}),
     ...(input.ttlMs ? { ttlMs: input.ttlMs } : {}),
-    ...(expect ? { expectIssuerFingerprint: expect } : {}),
+    ...(yuQi ? { expectIssuerFingerprint: yuQi } : {}),
   });
   if (!r.ok || !r.cert) return { ok: false, code: r.code, detail: r.detail };
   audit?.log('membership.cert.issued', {
@@ -5435,14 +5487,14 @@ async function weiQunQianFaChengYuanZhengShu(
 }
 
 /** 把新版吊销列表广播给在线成员（走**已鉴权**通道；失败不重试，与本设计一致） */
-async function guangBoCheXiaoBiao(groupId: string, list: unknown): Promise<{ sent: number; failed: number } | null> {
+async function guangBoCheXiaoBiao(groupId: string, LieBiao: unknown): Promise<{ sent: number; failed: number } | null> {
   try {
     if (!secureMesh?.enabled) return null;
     const r = await secureMesh.broadcast({
       to: '*',
       channel: 'control',
       groupId,
-      payload: { type: 'warmy.membership.revocation', groupId, list },
+      payload: { type: 'warmy.membership.revocation', groupId, LieBiao },
     });
     audit?.log('membership.revocation.broadcast', { groupId, sent: r.sent, failed: r.failed });
     return { sent: r.sent, failed: r.failed };
@@ -5456,14 +5508,14 @@ async function guangBoCheXiaoBiao(groupId: string, list: unknown): Promise<{ sen
  * 收到成员证书（例如刚入群时对端送来一张）。
  * 签发者必须是**本群创建者**：群记录里有创建者指纹就按它校验，否则按本机已钉住的那个。
  */
-chuliIpc('warmy:membership-receive-cert', (_e, payload: { groupId?: string; cert?: unknown } = {}) => {
+chuliIpc('warmy:chengYuanMingCeJieShouZhengShu', (_e, payload: { groupId?: string; cert?: unknown } = {}) => {
   try {
     const membership = quChengYuanMingceCang(identityStore);
     if (!membership) return { ok: false, code: 'identity-missing' };
     const groupId = String(payload?.groupId || '');
     if (!groupId || !payload?.cert || typeof payload.cert !== 'object') return { ok: false, code: 'malformed' };
-    const expect = expectedIssuerFor(groupId);
-    const r = membership.putCertificate(payload.cert as never, expect ? { expectIssuerFingerprint: expect } : {});
+    const yuQi = expectedIssuerFor(groupId);
+    const r = membership.putCertificate(payload.cert as never, yuQi ? { expectIssuerFingerprint: yuQi } : {});
     return { ok: r.ok, code: r.code, stored: r.stored, certId: r.certId, detail: r.detail ?? '' };
   } catch (e) {
     return { ok: false, code: 'error', detail: xiJingCuoWu(e) };
@@ -5471,14 +5523,14 @@ chuliIpc('warmy:membership-receive-cert', (_e, payload: { groupId?: string; cert
 });
 
 /** 同步（收到）一份吊销列表：验签 + 单调合并（回滚 / 条目变少一律拒绝） */
-chuliIpc('warmy:membership-sync-revocation', (_e, payload: { groupId?: string; list?: unknown } = {}) => {
+chuliIpc('warmy:chengYuanMingCeTongBuCheXiao', (_e, payload: { groupId?: string; LieBiao?: unknown } = {}) => {
   try {
     const membership = quChengYuanMingceCang(identityStore);
     if (!membership) return { ok: false, code: 'identity-missing' };
     const groupId = String(payload?.groupId || '');
-    if (!groupId || !payload?.list || typeof payload.list !== 'object') return { ok: false, code: 'malformed' };
-    const expect = expectedIssuerFor(groupId);
-    const r = membership.applyRevocationList(groupId, payload.list as never, expect ? { expectIssuerFingerprint: expect } : {});
+    if (!groupId || !payload?.LieBiao || typeof payload.LieBiao !== 'object') return { ok: false, code: 'malformed' };
+    const yuQi = expectedIssuerFor(groupId);
+    const r = membership.yingYongCheXiaoBiao(groupId, payload.LieBiao as never, yuQi ? { expectIssuerFingerprint: yuQi } : {});
     return {
       ok: r.ok,
       code: r.code,
@@ -5493,12 +5545,12 @@ chuliIpc('warmy:membership-sync-revocation', (_e, payload: { groupId?: string; l
 });
 
 /** 成员证书与吊销列表的结构化快照（UI 只读；含本地时钟判定结果） */
-chuliIpc('warmy:membership-list', (_e, payload: { groupId?: string } = {}) => {
+chuliIpc('warmy:chengYuanMingCeLieBiao', (_e, payload: { groupId?: string } = {}) => {
   try {
     const membership = quChengYuanMingceCang(identityStore);
     if (!membership) return { ok: false, schema: 'warmy.membership.file.v1', groups: [] };
-    const gid = String(payload?.groupId || '');
-    const snap = chengYuanKuaiZhao(membership, gid ? { groupId: gid } : {});
+    const qunId = String(payload?.groupId || '');
+    const snap = chengYuanKuaiZhao(membership, qunId ? { groupId: qunId } : {});
     return { ...snap, summary: membership.summary() };
   } catch (e) {
     return { ok: false, schema: 'warmy.membership.file.v1', groups: [], error: xiJingCuoWu(e) };
@@ -5507,17 +5559,17 @@ chuliIpc('warmy:membership-list', (_e, payload: { groupId?: string } = {}) => {
 
 /** 名册判定（含依据）：给 UI/排障用的只读通道，不改任何状态 */
 chuliIpc(
-  'warmy:membership-authorize',
-  (_e, payload: { fingerprint?: string; groupId?: string; requireCertificate?: boolean } = {}) => {
+  'warmy:chengYuanMingCeShouQuan',
+  (_e, payload: { zhiWen?: string; groupId?: string; requireCertificate?: boolean } = {}) => {
     try {
-      const fp = String(payload?.fingerprint || '');
+      const fp = String(payload?.zhiWen || '');
       if (!fp) return { ok: false, error: 'fingerprint-required' };
       const membership = quChengYuanMingceCang(identityStore);
-      const verdict = jieshiMingCeJueCe(identityStore, fp, {
+      const caijue = jieshiMingCeJueCe(identityStore, fp, {
         membership,
         ...(payload?.requireCertificate === true ? { requireCertificate: true } : {}),
       });
-      return { ok: true, verdict };
+      return { ok: true, caijue };
     } catch (e) {
       return { ok: false, error: xiJingCuoWu(e) };
     }
@@ -5526,7 +5578,7 @@ chuliIpc(
 
 /** 签发成员证书（创建者；身份锁着就如实回 identity-locked） */
 chuliIpc(
-  'warmy:membership-issue',
+  'warmy:chengYuanMingCeQianFa',
   async (
     _e,
     payload: {
@@ -5562,7 +5614,7 @@ chuliIpc(
  * 成功后旧证书进吊销列表（rotation），新指纹持有 `supersedes` 链 → "新指纹 = 原成员"。
  */
 chuliIpc(
-  'warmy:membership-rotate',
+  'warmy:chengYuanMingCeLunHuan',
   async (
     _e,
     payload: {
@@ -5580,9 +5632,9 @@ chuliIpc(
       if (!groupId || !payload?.declaration || typeof payload.declaration !== 'object') {
         return { ok: false, code: 'malformed' };
       }
-      const expect = expectedIssuerFor(groupId);
-      const signer = createIdentitySigner(identityStore);
-      if (expect && !zhiwenPipei(expect, signer.fingerprint)) {
+      const yuQi = expectedIssuerFor(groupId);
+      const signer = chuangjianShenfenQianmingzhe(identityStore);
+      if (yuQi && !zhiwenPipei(yuQi, signer.zhiWen)) {
         return { ok: false, code: 'not-the-creator' };
       }
       const r = await lunHuanChengYuanZhengShu({
@@ -5601,7 +5653,7 @@ chuliIpc(
       // 这样横幅（scopes）与在线态映射立刻跟着新指纹走，不用等下次加入。
       const member = groupStore
         ?.listMembers(groupId)
-        .find((m) => m.fingerprint && zhiwenPipei(m.fingerprint, String(r.verification?.oldFingerprint || '')));
+        .find((m) => m.zhiWen && zhiwenPipei(m.zhiWen, String(r.verification?.oldFingerprint || '')));
       let memberPatched: string | null = null;
       if (member && groupStore) {
         const dabuding = groupStore.setMemberFingerprint(groupId, member.id, r.cert.memberFingerprint);
@@ -5636,7 +5688,7 @@ chuliIpc(
 
 /** 主动吊销（踢人之外的场景：私钥泄漏 / 管理员处置） */
 chuliIpc(
-  'warmy:membership-revoke',
+  'warmy:chengYuanMingCeCheXiao',
   async (_e, payload: { groupId?: string; certId?: string; memberFingerprint?: string; reason?: string } = {}) => {
     try {
       const membership = quChengYuanMingceCang(identityStore);
@@ -5649,9 +5701,9 @@ chuliIpc(
         (payload?.certId ? membership.certificateById(groupId, String(payload.certId)) : null) ??
         (payload?.memberFingerprint ? membership.certificateForFingerprint(groupId, String(payload.memberFingerprint)) : null);
       if (!cert) return { ok: false, code: 'no-certificate' };
-      const expect = expectedIssuerFor(groupId);
-      const signer = createIdentitySigner(identityStore);
-      if (expect && !zhiwenPipei(expect, signer.fingerprint)) return { ok: false, code: 'not-the-creator' };
+      const yuQi = expectedIssuerFor(groupId);
+      const signer = chuangjianShenfenQianmingzhe(identityStore);
+      if (yuQi && !zhiwenPipei(yuQi, signer.zhiWen)) return { ok: false, code: 'not-the-creator' };
       const r = await chexiaoChengyuanZhengshu({
         signer,
         membership,
@@ -5659,18 +5711,18 @@ chuliIpc(
         certId: cert.certId,
         memberFingerprint: cert.memberFingerprint,
         reason: reason as never,
-        ...(expect ? { expectation: expect } : {}),
+        ...(yuQi ? { expectation: yuQi } : {}),
       });
       if (!r.ok) return { ok: false, code: r.code, detail: r.detail ?? '' };
-      void guangBoCheXiaoBiao(groupId, r.list);
-      return { ok: true, code: 'ok', certId: cert.certId, listVersion: r.list?.listVersion ?? 0 };
+      void guangBoCheXiaoBiao(groupId, r.LieBiao);
+      return { ok: true, code: 'ok', certId: cert.certId, listVersion: r.LieBiao?.listVersion ?? 0 };
     } catch (e) {
       return { ok: false, code: 'error', detail: xiJingCuoWu(e) };
     }
   }
 );
 
-chuliIpc('warmy:identity-peers', () => {
+chuliIpc('warmy:shenFenDuiDuanJi', () => {
   try {
     if (!identityStore) return { ok: false, error: 'identity-unavailable', peers: [] };
     return { ok: true, peers: lieDuiDuanLianXiShiTu(identityStore) };
@@ -5733,7 +5785,7 @@ function daiZuYue<T>(  scope: string,
   }
 }
 
-chuliIpc('warmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as RepoGuardRefInput) => {
+chuliIpc('warmy:cangKuShouWeiJianChaYinYong', (_e, payload: RepoGuardRefInput = {} as RepoGuardRefInput) => {
   try {
     const ref = String(payload.ref || '');
     const oldSha = String(payload.oldSha || '');
@@ -5780,7 +5832,7 @@ chuliIpc('warmy:repo-guard-check-ref', (_e, payload: RepoGuardRefInput = {} as R
   }
 });
 
-chuliIpc('warmy:repo-guard-check-paths', (_e, payload: { paths?: Array<string | TuiSongLuJingTiaoMu> | string; base?: 'worktree' | 'gitdir' } = {}) => {
+chuliIpc('warmy:cangKuShouWeiJianChaLuJingJi', (_e, payload: { paths?: Array<string | TuiSongLuJingTiaoMu> | string; base?: 'worktree' | 'gitdir' } = {}) => {
   try {
     const jiaoyan = jiaoYanTuiSongLuJing(payload.paths ?? [], {
       base: payload.base === 'gitdir' ? 'gitdir' : 'worktree',
@@ -5793,7 +5845,7 @@ chuliIpc('warmy:repo-guard-check-paths', (_e, payload: { paths?: Array<string | 
 
 /** 真跑一遍 pre-receive 逻辑（stdin 三列格式）；UI / 验证脚本 / 钩子共用同一实现 */
 chuliIpc(
-  'warmy:repo-guard-pre-receive',
+  'warmy:cangKuShouWeiYuXianJieShou',
   (_e, payload: { stdin?: string; role?: string; memberId?: string; repoDir?: string; assumeFastForward?: boolean } = {}) => {
     try {
       const git = chuangJianGitYunXingQi(payload.repoDir ? String(payload.repoDir) : undefined);
@@ -5812,7 +5864,7 @@ chuliIpc(
 );
 
 /** 给仓库初始化（安装）pre-receive 钩子；找不到钩子脚本时如实报错，不假装装好了 */
-chuliIpc('warmy:repo-guard-install-hooks', (_e, payload: { repoDir?: string; force?: boolean } = {}) => {
+chuliIpc('warmy:cangKuShouWeiAnZhuangGouZiJi', (_e, payload: { repoDir?: string; force?: boolean } = {}) => {
   try {
     const repoDir = String(payload.repoDir || '');
     if (!repoDir) return { ok: false, error: 'repo-dir-required' };
@@ -5832,7 +5884,7 @@ chuliIpc('warmy:repo-guard-install-hooks', (_e, payload: { repoDir?: string; for
   }
 });
 
-chuliIpc('warmy:repo-guard-status', () =>
+chuliIpc('warmy:cangKuShouWeiZhuangTai', () =>
   anQuanChuLi(
     () => ({
       ok: true,
@@ -5845,34 +5897,34 @@ chuliIpc('warmy:repo-guard-status', () =>
   )
 );
 
-chuliIpc('warmy:lease-acquire', (_e, req: HuoQuQingQiu = {} as HuoQuQingQiu) => {
+chuliIpc('warmy:zuYueHuoQu', (_e, Qiu: HuoQuQingQiu = {} as HuoQuQingQiu) => {
   try {
     if (!leases) return { ok: false, error: { code: 'no-registry', reason: 'lease-registry-unavailable' }, leases: [] };
-    const r = leases.acquire({ ...req, holder: req.holder || leaseHolder() });
+    const r = leases.acquire({ ...Qiu, holder: Qiu.holder || leaseHolder() });
     if (r.ok) audit?.log('lease.acquire', { scope: r.lease?.scope, holder: r.lease?.holder, kind: r.lease?.kind });
-    return { ...r, leases: leases.list() };
+    return { ...r, leases: leases.LieBiao() };
   } catch (e) {
     return { ok: false, error: { code: 'invalid-request', reason: xiJingCuoWu(e) }, leases: [] };
   }
 });
 
-chuliIpc('warmy:lease-release', (_e, req: ZuYueYinYongQingQiu = {} as ZuYueYinYongQingQiu) => {
+chuliIpc('warmy:zuYueShiFang', (_e, Qiu: ZuYueYinYongQingQiu = {} as ZuYueYinYongQingQiu) => {
   try {
     if (!leases) return { ok: false, released: false, error: { code: 'no-registry', reason: 'lease-registry-unavailable' } };
-    const r = leases.release({ ...req, ...(req.holder || req.leaseId ? {} : { holder: leaseHolder() }) });
+    const r = leases.release({ ...Qiu, ...(Qiu.holder || Qiu.leaseId ? {} : { holder: leaseHolder() }) });
     if (r.released) audit?.log('lease.release', { leaseId: r.lease?.id, scope: r.lease?.scope });
-    return { ...r, leases: leases.list() };
+    return { ...r, leases: leases.LieBiao() };
   } catch (e) {
     return { ok: false, released: false, error: { code: 'invalid-request', reason: xiJingCuoWu(e) } };
   }
 });
 
-chuliIpc('warmy:lease-list', () =>
+chuliIpc('warmy:zuYueLieBiao', () =>
   anQuanChuLi(
     () => ({
       ok: true,
       holder: leaseHolder(),
-      leases: leases?.list() ?? [],
+      leases: leases?.LieBiao() ?? [],
       expired: leases?.expiredHistory() ?? [],
       stats: leases?.stats() ?? null,
     }),
@@ -5880,64 +5932,162 @@ chuliIpc('warmy:lease-list', () =>
   )
 );
 
-chuliIpc('warmy:lease-check', (_e, payload: { holder?: string; path?: string; paths?: string[] } = {}) => {
+chuliIpc('warmy:zuYueJianCha', (_e, payload: { holder?: string; path?: string; paths?: string[] } = {}) => {
   try {
     if (!leases) return { ok: false, errorCode: 'no-registry', results: [] };
     const holder = payload.holder || leaseHolder();
-    const list = Array.isArray(payload.paths) && payload.paths.length ? payload.paths.map(String) : [String(payload.path ?? '')];
-    const results = list.map((p) => leases!.checkWrite(holder, p));
-    return { ok: results.every((r) => r.allowed), holder, results, holders: list.map((p) => leases!.holdersOf(p)) };
+    const LieBiao = Array.isArray(payload.paths) && payload.paths.length ? payload.paths.map(String) : [String(payload.path ?? '')];
+    const results = LieBiao.map((p) => leases!.checkWrite(holder, p));
+    return { ok: results.every((r) => r.allowed), holder, results, holders: LieBiao.map((p) => leases!.holdersOf(p)) };
   } catch (e) {
     return { ok: false, errorCode: xiJingCuoWu(e), results: [] };
   }
 });
-chuliIpc('warmy:nodes-revoke', (_e, nodeId: string) => {
+chuliIpc('warmy:jieDianJiCheXiao', (_e, nodeId: string) => {
   try {
     nodeReg?.revoke(nodeId);
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:invite-create', (_e, groupId?: string) => anQuanChuLi(() => ({ ok: true, invite: chuangjianYaoQing(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
-chuliIpc('warmy:invite-use', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
+chuliIpc('warmy:yaoQingChuangJian', (_e, groupId?: string) => anQuanChuLi(() => ({ ok: true, invite: chuangjianYaoQing(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
+chuliIpc('warmy:yaoQingShiYong', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
   ok: shiYongYaoQing(tok),
 }));
-chuliIpc('warmy:sync-publish', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => ({
+chuliIpc('warmy:tongBuFaBu', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => ({
   ok: true,
   envelope: syncBus?.publish(env as never),
 }));
-chuliIpc('warmy:sync-pull', (_e, nodeId: string) => anQuanChuLi(() => ({ ok: true, messages: syncBus?.pull(nodeId) || [] }), { ok: true, messages: [] }))
+chuliIpc('warmy:tongBuLaQu', (_e, nodeId: string) => anQuanChuLi(() => ({ ok: true, xiaoXiJi: syncBus?.pull(nodeId) || [] }), { ok: true, xiaoXiJi: [] }))
 
-// ── dsh 实例入口（可选） ──
-chuliIpc('warmy:dsh-available', () => {
+// ── WebGPU 探测（硬件信息；无则如实不可用） ──
+chuliIpc('warmy:webgpuTanCe', () => {
   try {
-    const dir = findDshPackageDir([
-      path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
-      path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
-    ]);
-    return { ok: !!dir, dir: dir || null };
+    // 渲染进程才有 WebGPU；主进程只回「需在渲染层探测」标记
+    return { ok: false, reason: 'probe-in-renderer', note: 'WebGPU probe runs in renderer via navigator.gpu' };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: string }) => {
+// ── dsh 实例入口（可选） ──
+
+/** dsh 安装目标目录（用户数据下，不污染系统全局） */
+function dshAnZhuangMuLu(): string {
+  return path.join(app.getPath('userData'), 'dsh-packages');
+}
+function dshHouXuanLuJing(): string[] {
+  const dest = path.join(dshAnZhuangMuLu(), 'node_modules', '@deepseek-ai', 'dsh');
+  return [
+    dest,
+    path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
+    path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
+    path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh'),
+    path.join(process.cwd(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
+  ];
+}
+chuliIpc('warmy:dshZhuangTai', () => {
+  try {
+    const dir = findDshPackageDir(dshHouXuanLuJing());
+    let version: string | null = null;
+    if (dir) {
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+        version = typeof j.version === 'string' ? j.version : null;
+      } catch { /* noop */ }
+    }
+    return { ok: !!dir, dir: dir || null, version, required: process.platform !== 'darwin' || true, platform: process.platform };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 一键安装 dsh：npm 安装到 userData/dsh-packages（PC 必装；移动端不需要） */
+async function dshZhiXingAnZhuang(): Promise<{ ok: boolean; dir?: string | null; version?: string | null; error?: string; hint?: string }> {
+  try {
+    const dest = dshAnZhuangMuLu();
+    fs.mkdirSync(dest, { recursive: true });
+    const BaoJson = path.join(dest, 'package.json');
+    if (!fs.existsSync(BaoJson)) {
+      fs.writeFileSync(BaoJson, JSON.stringify({ name: 'warmy-dsh-packages', private: true, dependencies: {} }, null, 2));
+    }
+    const spec = ' @deepseek-ai/dsh@0.1.5-rc.1 ';
+    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const { spawnSync } = await import('node:child_process');
+    const r = spawnSync(npmCmd, ['install', '--no-fund', '--no-audit', spec.trim()], {
+      cwd: dest,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 10 * 60 * 1000,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    });
+    const dir = findDshPackageDir(dshHouXuanLuJing());
+    if (!dir) {
+      return {
+        ok: false,
+        error: (r.stderr || r.stdout || 'dsh install failed').slice(-400),
+        hint: 'install-failed',
+      };
+    }
+    let version: string | null = null;
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+      version = j.version || null;
+    } catch { /* noop */ }
+    return { ok: true, dir, version };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e), hint: 'install-exception' }; }
+}
+chuliIpc('warmy:dshAnZhuang', async () => dshZhiXingAnZhuang());
+
+/** 产品定稿：PC 安装后**默认装 dsh**（后台一次；失败不挡启动，可在设置里手动再装） */
+function dshMoRenBaoZhuang(): void {
+  try {
+    if (process.platform === 'android') return;
+    const already = findDshPackageDir(dshHouXuanLuJing());
+    if (already) return;
+    const flag = path.join(app.getPath('userData'), 'dsh-autoinstall.json');
+    // 同一天失败过就不再自动重试（避免每次启动都打 npm）
+    try {
+      if (fs.existsSync(flag)) {
+        const j = JSON.parse(fs.readFileSync(flag, 'utf8'));
+        const day = String(j && j.day || '');
+        const today = new Date().toISOString().slice(0, 10);
+        if (day === today && j && j.ok === false) return;
+      }
+    } catch { /* flag 坏了就继续装 */ }
+    void dshZhiXingAnZhuang().then((r) => {
+      try {
+        fs.writeFileSync(flag, JSON.stringify({ day: new Date().toISOString().slice(0, 10), ok: !!r.ok, version: r.version || null, at: Date.now() }, null, 2));
+      } catch { /* noop */ }
+      if (r.ok) console.log('dsh auto-install ok', r.version);
+      else console.log('dsh auto-install fail', r.hint || r.error);
+    });
+  } catch (e) { console.log('dsh auto-install skip', xiJingCuoWu(e)); }
+}
+
+chuliIpc('warmy:dshKeYong', () => {
+  try {
+    const dir = findDshPackageDir(dshHouXuanLuJing());
+    let version: string | null = null;
+    if (dir) { try { version = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version || null; } catch { /* noop */ } }
+    return { ok: !!dir, dir: dir || null, version };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+chuliIpc('warmy:paiShengdshShiLi', async (_e, cfg: { id: string; ming: string }) => {
   const dshDir = findDshPackageDir([
     path.join(app.getAppPath(), 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
     path.join(__dirname, '..', '..', '..', 'spikes', 'spike-05-plugins', 'node_modules', '@deepseek-ai', 'dsh'),
   ]);
   if (!dshDir) return { ok: false, error: 'dsh not found' };
-  const dshHome = path.join(app.getPath('userData'), 'dsh-home');
+  const dshJiaMuLu = path.join(app.getPath('userData'), 'dsh-home');
   const profile = 'warmy';
   await ensureDshProfile({
     nodePath: process.execPath,
     dshPackageDir: dshDir,
-    dshHome,
+    dshJiaMuLu,
     profile,
   });
   const entry = path.join(app.getPath('userData'), 'instances', cfg.id, 'dsh-entry.mjs');
-  writeDshInstanceEntry(entry, { dshPackageDir: dshDir, dshHome, profile });
+  writeDshInstanceEntry(entry, { dshPackageDir: dshDir, dshJiaMuLu, profile });
   const handle = await p1!.instances.spawn({
     config: {
       id: cfg.id,
-      name: cfg.name,
+      ming: cfg.ming,
       workspace: path.join(app.getPath('userData'), 'instances', cfg.id),
       dutyEligible: true,
     },
@@ -5947,24 +6097,24 @@ chuliIpc('warmy:spawn-dsh-instance', async (_e, cfg: { id: string; name: string 
 });
 
 // ── 邮件提醒（队列占位，功能待接 SMTP） ──
-chuliIpc('warmy:email-queue', (_e, mail: { to: string; subject: string; body: string }) => {
+chuliIpc('warmy:youJianDuiLie', (_e, mail: { to: string; subject: string; text: string }) => {
   try {
     emailQueue.push({ ...mail, ts: Date.now() });
     return { ok: true, pending: emailQueue.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:email-list', () => anQuanChuLi(() => ({ ok: true, items: emailQueue }), { ok: true, items: [] }))
+chuliIpc('warmy:youJianLieBiao', () => anQuanChuLi(() => ({ ok: true, items: emailQueue }), { ok: true, items: [] }))
 
 // ── SMTP 验证（用户设置，非写死） ──
-chuliIpc('warmy:smtp-verify', async (_e, cfg: SmtpPeizhi & { id?: string }) => {
+chuliIpc('warmy:smtpYanZheng', async (_e, cfg: SmtpPeizhi & { id?: string }) => {
   try {
     const r = await yanZhengSmtp(cfg);
     if (r.ok && cfg.id && settingsStore) {
       const s = settingsStore.load();
-      const acc = (s.smtpAccounts || []).find((a) => a.id === cfg.id);
-      if (acc) {
-        acc.verified = true;
-        acc.lastVerifyAt = Date.now();
+      const leiJi = (s.smtpAccounts || []).find((a) => a.id === cfg.id);
+      if (leiJi) {
+        leiJi.yiYanZheng = true;
+        leiJi.lastVerifyAt = Date.now();
         settingsStore.save({ smtpAccounts: s.smtpAccounts });
       }
     }
@@ -5972,7 +6122,7 @@ chuliIpc('warmy:smtp-verify', async (_e, cfg: SmtpPeizhi & { id?: string }) => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:smtp-list', () => {
+chuliIpc('warmy:smtpLieBiao', () => {
   try {
     const s = settingsStore?.load();
     const accounts = (s?.smtpAccounts || []).map((a) => ({
@@ -5983,44 +6133,44 @@ chuliIpc('warmy:smtp-list', () => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:smtp-add', (_e, acc: { label: string; host: string; port: number; secure: boolean; user: string; pass: string }) => {
+chuliIpc('warmy:smtpTianJia', (_e, leiJi: { biaoQian?: string; label?: string; host: string; port: number; secure: boolean; user: string; pass: string }) => {
   try {
     const s = settingsStore!.load();
-    const list = s.smtpAccounts || [];
-    if (list.length >= 10) return { ok: false, error: 'max 10' };
-    const full = {
+    const LieBiao = s.smtpAccounts || [];
+    if (LieBiao.length >= 10) return { ok: false, error: 'max 10' };
+    const Quan = {
       id: 'smtp-' + Date.now().toString(36),
-      label: acc.label || acc.user || `smtp-${list.length + 1}`,
-      host: acc.host,
-      port: acc.port || 465,
-      secure: acc.secure !== false,
-      user: acc.user,
-      pass: acc.pass,
+      biaoQian: leiJi.biaoQian || leiJi.label || leiJi.user || `smtp-${LieBiao.length + 1}`,
+      host: leiJi.host,
+      port: leiJi.port || 465,
+      secure: leiJi.secure !== false,
+      user: leiJi.user,
+      pass: leiJi.pass,
     };
-    list.push(full);
-    settingsStore!.save({ smtpAccounts: list });
-    return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })), max: 10 };
+    LieBiao.push(Quan);
+    settingsStore!.save({ smtpAccounts: LieBiao });
+    return { ok: true, accounts: LieBiao.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })), max: 10 };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:smtp-remove', (_e, id: string) => {
+chuliIpc('warmy:smtpYiChu', (_e, id: string) => {
   try {
     const s = settingsStore!.load();
-    const list = (s.smtpAccounts || []).filter((a) => a.id !== id);
-    settingsStore!.save({ smtpAccounts: list });
-    return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
+    const LieBiao = (s.smtpAccounts || []).filter((a) => a.id !== id);
+    settingsStore!.save({ smtpAccounts: LieBiao });
+    return { ok: true, accounts: LieBiao.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; host: string; port: number; secure: boolean; user: string; pass: string }>) => {
+chuliIpc('warmy:smtpGengXin', (_e, id: string, patch: Partial<{ label: string; host: string; port: number; secure: boolean; user: string; pass: string }>) => {
   try {
     const s = settingsStore!.load();
-    const list = s.smtpAccounts || [];
-    const acc = list.find((a) => a.id === id);
-    if (!acc) return { ok: false, error: 'not found' };
-    Object.assign(acc, patch);
-    settingsStore!.save({ smtpAccounts: list });
-    return { ok: true, accounts: list.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
+    const LieBiao = s.smtpAccounts || [];
+    const leiJi = LieBiao.find((a) => a.id === id);
+    if (!leiJi) return { ok: false, error: 'not found' };
+    Object.assign(leiJi, patch);
+    settingsStore!.save({ smtpAccounts: LieBiao });
+    return { ok: true, accounts: LieBiao.map((a) => ({ ...a, pass: a.pass ? '••••••••' : '' })) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
@@ -6035,11 +6185,11 @@ chuliIpc('warmy:smtp-update', (_e, id: string, patch: Partial<{ label: string; h
 
 /** PeerRegistry（地址簿）→ 组网层要的对端列表 */
 function duiduanYinyong(): WangzhuangDuiduanYinyong[] {
-  return (peerReg?.list() ?? [])
+  return (peerReg?.LieBiao() ?? [])
     .filter((p) => !!p && typeof p.host === 'string' && Number(p.port) > 0)
     .map((p) => ({
       nodeId: p.nodeId,
-      name: p.name,
+      ming: p.ming,
       host: p.host,
       port: Number(p.port),
       kind: p.kind,
@@ -6049,14 +6199,14 @@ function duiduanYinyong(): WangzhuangDuiduanYinyong[] {
 
 /** 本机节点 id 刷新（nodeReg 里的 isLocal 那条） */
 function refreshLocalNodeId(): string {
-  const local = nodeReg?.list().find((n) => n.isLocal);
+  const local = nodeReg?.LieBiao().find((n) => n.isLocal);
   localNodeId = local?.nodeId || 'node-local';
   return localNodeId;
 }
 
 /** 身份指纹（写操作租约的持有者 id；没有身份时退回本机节点 id） */
 function leaseHolder(): string {
-  return identityStore?.info()?.fingerprint || localNodeId || 'local';
+  return identityStore?.info()?.zhiWen || localNodeId || 'local';
 }
 
 /**
@@ -6099,7 +6249,7 @@ async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean;
   return r;
 }
 
-chuliIpc('warmy:lan-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
+chuliIpc('warmy:neiWangQiDong', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   try {
     const r = await qiDongAnQuanWangZhuang(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: false, announce: false });
     if (!r.ok) return r;
@@ -6109,7 +6259,7 @@ chuliIpc('warmy:lan-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   }
 });
 
-chuliIpc('warmy:lan-stop', async () => {
+chuliIpc('warmy:neiWangTingZhi', async () => {
   try {
     await secureMesh?.disable();
     fachuKongzhitai({ cat: 'net', code: 'net.disable', data: { reason: 'lan-stop' } });
@@ -6120,10 +6270,10 @@ chuliIpc('warmy:lan-stop', async () => {
 });
 
 chuliIpc(
-  'warmy:lan-send',
+  'warmy:neiWangFaSong',
   async (
     _e,
-    msg: { host: string; port: number; to?: string; payload: unknown; groupId?: string; incognito?: boolean; fingerprint?: string } = {
+    xiaoXi: { host: string; port: number; to?: string; payload: unknown; groupId?: string; incognito?: boolean; zhiWen?: string } = {
       host: '',
       port: 0,
       payload: null,
@@ -6131,8 +6281,8 @@ chuliIpc(
   ) => {
     try {
       if (!secureMesh) return { ok: false, error: 'net-unavailable' };
-      const host = String(msg.host || '');
-      const port = Number(msg.port);
+      const host = String(xiaoXi.host || '');
+      const port = Number(xiaoXi.port);
       if (!host || !Number.isInteger(port) || port <= 0 || port > 65535) return { ok: false, error: 'invalid-target' };
       // 出站一次拨号一次握手。给了 fingerprint 就 pin（同时在名册里放行它），
       // 没给则 TOFU + 严格名册校验（只有本机已知联系人能通过）。
@@ -6140,13 +6290,13 @@ chuliIpc(
         host,
         port,
         {
-          to: msg.to || '*',
+          to: xiaoXi.to || '*',
           channel: 'group',
-          ...(msg.groupId ? { groupId: msg.groupId } : {}),
-          payload: msg.payload,
-          ...(msg.incognito ? { incognito: true } : {}),
+          ...(xiaoXi.groupId ? { groupId: xiaoXi.groupId } : {}),
+          payload: xiaoXi.payload,
+          ...(xiaoXi.incognito ? { incognito: true } : {}),
         },
-        { ...(msg.fingerprint ? { pin: String(msg.fingerprint) } : {}) }
+        { ...(xiaoXi.zhiWen ? { pin: String(xiaoXi.zhiWen) } : {}) }
       );
     } catch (e) {
       return { ok: false, error: xiJingCuoWu(e) };
@@ -6154,9 +6304,9 @@ chuliIpc(
   }
 );
 
-chuliIpc('warmy:lan-inbox', () => anQuanChuLi(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
+chuliIpc('warmy:neiWangShouXiang', () => anQuanChuLi(() => ({ ok: true, xiaoXiJi: secureMesh?.inboxOf() ?? [] }), { ok: true, xiaoXiJi: [] }));
 
-chuliIpc('warmy:lan-status', () =>
+chuliIpc('warmy:neiWangZhuangTai', () =>
   anQuanChuLi(
     () => ({
       ok: true,
@@ -6170,7 +6320,7 @@ chuliIpc('warmy:lan-status', () =>
   )
 );
 
-chuliIpc('warmy:lan-dual-smoke', async (_e, opts: { localPort?: number; peerHost?: string; peerPort?: number } = {}) => {
+chuliIpc('warmy:neiWangShuangJiMaoYan', async (_e, opts: { localPort?: number; peerHost?: string; peerPort?: number } = {}) => {
   try {
     refreshLocalNodeId();
     // 回环冒烟用**一次性**身份：握手层拒绝"对端指纹 == 本机指纹"（自反射），
@@ -6193,7 +6343,7 @@ chuliIpc('warmy:lan-dual-smoke', async (_e, opts: { localPort?: number; peerHost
 });
 
 // ── 多节点 mesh（同样走鉴权通道；UDP 只做地址发现，不传业务数据） ──
-chuliIpc('warmy:mesh-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
+chuliIpc('warmy:wangZhuangQiDong', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   try {
     const r = await qiDongAnQuanWangZhuang(Number(port) || WARMY_DEFAULT_NET_PORT, { discovery: true, announce: true });
     if (!r.ok) return r;
@@ -6203,7 +6353,7 @@ chuliIpc('warmy:mesh-start', async (_e, port = WARMY_DEFAULT_NET_PORT) => {
   }
 });
 
-chuliIpc('warmy:mesh-stop', async () => {
+chuliIpc('warmy:wangZhuangTingZhi', async () => {
   try {
     await secureMesh?.disable();
     fachuKongzhitai({ cat: 'net', code: 'net.disable', data: { reason: 'mesh-stop' } });
@@ -6213,29 +6363,29 @@ chuliIpc('warmy:mesh-stop', async () => {
   }
 });
 
-chuliIpc('warmy:peers-list', () => ({
+chuliIpc('warmy:duiDuanJiLieBiao', () => ({
   ok: true,
-  peers: peerReg?.list() || [],
+  peers: peerReg?.LieBiao() || [],
   notes: NET_NOTES,
 }));
 
 chuliIpc(
-  'warmy:peers-add',
-  (_e, p: { nodeId?: string; name: string; host: string; port: number; kind?: 'lan' | 'wan' }) => {
+  'warmy:duiDuanJiTianJia',
+  (_e, p: { nodeId?: string; ming: string; host: string; port: number; kind?: 'lan' | 'wan' }) => {
     const nodeId = p.nodeId || `peer-${p.host}-${p.port}`;
-    const info = peerReg!.addManual(nodeId, p.name || nodeId, p.host, p.port, p.kind || 'wan');
-    return { ok: true, peer: info, peers: peerReg!.list() };
+    const info = peerReg!.addManual(nodeId, p.ming || nodeId, p.host, p.port, p.kind || 'wan');
+    return { ok: true, peer: info, peers: peerReg!.LieBiao() };
   }
 );
 
-chuliIpc('warmy:peers-remove', (_e, nodeId: string) => {
+chuliIpc('warmy:duiDuanJiYiChu', (_e, nodeId: string) => {
   try {
     peerReg?.revoke(nodeId);
-    return { ok: true, peers: peerReg?.list() || [] };
+    return { ok: true, peers: peerReg?.LieBiao() || [] };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) => {
+chuliIpc('warmy:wangZhuangGuangBo', async (_e, payload: unknown, groupId?: string) => {
   try {
     if (!secureMesh?.enabled) return { ok: false, error: 'mesh not started' };
     const r = await secureMesh.broadcast({
@@ -6248,9 +6398,9 @@ chuliIpc('warmy:mesh-broadcast', async (_e, payload: unknown, groupId?: string) 
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:mesh-inbox', () => anQuanChuLi(() => ({ ok: true, messages: secureMesh?.inboxOf() ?? [] }), { ok: true, messages: [] }));
+chuliIpc('warmy:wangZhuangShouXiang', () => anQuanChuLi(() => ({ ok: true, xiaoXiJi: secureMesh?.inboxOf() ?? [] }), { ok: true, xiaoXiJi: [] }));
 
-chuliIpc('warmy:mesh-status', () =>
+chuliIpc('warmy:wangZhuangZhuangTai', () =>
   anQuanChuLi(
     () => ({
       ok: true,
@@ -6260,7 +6410,7 @@ chuliIpc('warmy:mesh-status', () =>
       requestedPort: secureMesh?.requestedNetPort || undefined,
       bind: secureMesh?.enabled ? secureMesh.bindInfo() : undefined,
       nodeId: localNodeId,
-      peerCount: peerReg?.list().length || 0,
+      peerCount: peerReg?.LieBiao().length || 0,
       sessions: secureMesh?.sessionCount ?? 0,
     }),
     { ok: true, listening: false, port: undefined, requestedPort: undefined, bind: undefined, nodeId: localNodeId, peerCount: 0, sessions: 0 }
@@ -6290,11 +6440,11 @@ async function wangLuoKeDaXingHuanCun(): Promise<KedaxingTishi | null> {
   if (now - netReachCache.at < NET_REACH_TTL_MS) return netReachCache.value;
   let value: KedaxingTishi | null = null;
   try {
-    const benJiZhiWen = identityStore?.info()?.fingerprint;
+    const benJiZhiWen = identityStore?.info()?.zhiWen;
     const peers = secureMesh?.presence() ?? [];
-    const peer = peers.find((p) => !!p.fingerprint && p.fingerprint !== benJiZhiWen);
-    if (secureMesh && peer?.fingerprint) {
-      value = await secureMesh.reachabilityFor(peer.fingerprint, peer.online === true);
+    const peer = peers.find((p) => !!p.zhiWen && p.zhiWen !== benJiZhiWen);
+    if (secureMesh && peer?.zhiWen) {
+      value = await secureMesh.reachabilityFor(peer.zhiWen, peer.online === true);
     }
   } catch {
     value = null; // 探测失败不影响 net-status 本身：上层按"未知"处理
@@ -6303,24 +6453,24 @@ async function wangLuoKeDaXingHuanCun(): Promise<KedaxingTishi | null> {
   return value;
 }
 
-chuliIpc('warmy:net-status', async () => {
-  const fallback: WangzhuangZhuangtaiJieguo = {
+chuliIpc('warmy:wangLuoZhuangTai', async () => {
+  const huiTui: WangzhuangZhuangtaiJieguo = {
     ok: true,
     meshEnabled: false,
     link: { reachable: false, lastError: 'net-unavailable', peers: [] },
     unlock: identityStore ? yaoQiuKeQianMingShenFen(identityStore).unlock ?? null : null,
   };
   return await anQuanChuLiYiBu<WangzhuangZhuangtaiJieguo>(async () => {
-    const base = (await secureMesh?.status()) ?? fallback;
+    const base = (await secureMesh?.status()) ?? huiTui;
     // status() 里的 reachability 是**同步且刻意保守**的（needsPublicRelayNotice 恒 false）。
     // 终态能力在异步的 reachabilityFor() 里，必须在这里合并出去，否则 UI 的终态横幅
     // 在真实应用里永远不会出现（只有异步路径才敢说"两端都拨不进来、而且没有中继"）。
     const dada = await wangLuoKeDaXingHuanCun();
     return dada ? { ...base, reachability: dada } : base;
-  }, fallback);
+  }, huiTui);
 });
 
-chuliIpc('warmy:net-probe', async (_e, input: { ip?: string; port?: number; domains?: string[] } = {}) => {
+chuliIpc('warmy:wangLuoTanCe', async (_e, input: { ip?: string; port?: number; domains?: string[] } = {}) => {
   try {
     return await tanCeWangLuo({
       ip: String(input.ip ?? ''),
@@ -6332,7 +6482,7 @@ chuliIpc('warmy:net-probe', async (_e, input: { ip?: string; port?: number; doma
   }
 });
 
-chuliIpc('warmy:net-local-address', async () => {
+chuliIpc('warmy:wangLuoBenJiDiZhi', async () => {
   const port = secureMesh?.enabled ? secureMesh.boundPort : undefined;
   return await anQuanChuLiYiBu(
     async () => await benjiDizhiXinxi(port ? { port } : {}),
@@ -6340,14 +6490,14 @@ chuliIpc('warmy:net-local-address', async () => {
   );
 });
 
-chuliIpc('warmy:net-members-presence', (_e, payload: { groupId?: string } = {}) => {
+chuliIpc('warmy:wangLuoChengYuanJiZaiChang', (_e, payload: { groupId?: string } = {}) => {
   try {
     const groupId = String(payload.groupId || '');
     const members = groupId ? groupStore?.listMembers(groupId) ?? [] : [];
     const meshEnabled = !!secureMesh?.enabled;
     const liveness = secureMesh?.presence() ?? [];
     const liveSessions = liveness.filter((p) => p.online).length;
-    const instances = p1?.instances.list() ?? [];
+    const instances = p1?.instances.LieBiao() ?? [];
     // 判定逻辑在 identity-provider 的 buildMemberPresence（纯函数、验证脚本能真跑）：
     //  · 本机实例成员 → InstanceManager 的真实状态（presenceBasis: 'local-instance'）；
     //  · **有指纹**的异地成员 → 用活连接集合（SecureMesh / ConnectionLiveness）按指纹判
@@ -6366,7 +6516,7 @@ chuliIpc('warmy:net-members-presence', (_e, payload: { groupId?: string } = {}) 
   }
 });
 
-chuliIpc('warmy:net-mesh-enable', async (_e, input: { ip?: string; port?: number; domains?: string[]; publicAddresses?: string[] } = {}) => {
+chuliIpc('warmy:wangLuoWangZhuangQiYong', async (_e, input: { ip?: string; port?: number; domains?: string[]; publicAddresses?: string[] } = {}) => {
   try {
     const port = Number(input.port) || WARMY_DEFAULT_NET_PORT;
     const r = await qiDongAnQuanWangZhuang(port, { discovery: true, announce: true });
@@ -6388,7 +6538,7 @@ chuliIpc('warmy:net-mesh-enable', async (_e, input: { ip?: string; port?: number
  * 语义约束：**只读、只探测** —— 不绑定、不改配置、不替用户做主。
  * 探测并发有上限、总超时 4s，绝不让界面卡住。
  */
-chuliIpc('warmy:net-port-candidates', async (_e, input: { requestedPort?: number; want?: number } = {}) => {
+chuliIpc('warmy:wangLuoDuanKouHouXuanJi', async (_e, input: { requestedPort?: number; want?: number } = {}) => {
   try {
     const requestedPort = Number(input.requestedPort);
     return {
@@ -6414,7 +6564,7 @@ chuliIpc('warmy:net-port-candidates', async (_e, input: { requestedPort?: number
   }
 });
 
-chuliIpc('warmy:net-mesh-disable', async () => {
+chuliIpc('warmy:wangLuoWangZhuangTingYong', async () => {
   try {
     await secureMesh?.disable();
     fachuKongzhitai({ cat: 'net', code: 'net.disable', data: { reason: 'net-mesh-disable' } });
@@ -6424,7 +6574,7 @@ chuliIpc('warmy:net-mesh-disable', async () => {
   }
 });
 
-chuliIpc('warmy:net-mesh-announce', async (_e, reason: 'startup' | 'address-changed' | 'manual' = 'manual') => {
+chuliIpc('warmy:wangLuoWangZhuangGuangBo', async (_e, reason: 'startup' | 'address-changed' | 'manual' = 'manual') => {
   try {
     if (!secureMesh?.enabled) return { ok: false, errorCode: 'mesh-disabled' };
     return await secureMesh.announce(reason);
@@ -6434,8 +6584,8 @@ chuliIpc('warmy:net-mesh-announce', async (_e, reason: 'startup' | 'address-chan
 });
 
 // ── 窗口控制（自定义标题栏） ──
-chuliIpc('warmy:win-minimize', () => anQuanChuLi(() => win?.minimize(), null))
-chuliIpc('warmy:win-maximize', () => {
+chuliIpc('warmy:winZuiXiaoHua', () => anQuanChuLi(() => win?.minimize(), null))
+chuliIpc('warmy:winZuiDaHua', () => {
   try {
     if (!win) return;
     if (win.isMaximized()) win.unmaximize();
@@ -6443,7 +6593,7 @@ chuliIpc('warmy:win-maximize', () => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 // 窗口按钮：作用于**发送 IPC 的那个窗口**（独立会话窗点关闭只关自己，不关主界面）
-chuliIpc('warmy:win-close', (e) => anQuanChuLi(() => {
+chuliIpc('warmy:winGuanBi', (e) => anQuanChuLi(() => {
   const sender = BrowserWindow.fromWebContents(e.sender);
   if (sender && !sender.isDestroyed()) {
     if (win && sender.id === win.id) {
@@ -6458,19 +6608,19 @@ chuliIpc('warmy:win-close', (e) => anQuanChuLi(() => {
   win?.close();
   return true;
 }, null));
-chuliIpc('warmy:win-minimize', (e) => anQuanChuLi(() => {
+chuliIpc('warmy:winZuiXiaoHua', (e) => anQuanChuLi(() => {
   const sender = BrowserWindow.fromWebContents(e.sender) || win;
   sender?.minimize();
   return true;
 }, null));
-chuliIpc('warmy:win-maximize', (e) => anQuanChuLi(() => {
+chuliIpc('warmy:winZuiDaHua', (e) => anQuanChuLi(() => {
   const sender = BrowserWindow.fromWebContents(e.sender) || win;
   if (!sender) return false;
   if (sender.isMaximized()) sender.unmaximize();
   else sender.maximize();
   return true;
 }, null));
-chuliIpc('warmy:win-reload', () => {
+chuliIpc('warmy:winChongXinJiaZai', () => {
   try {
     if (!win) return { ok: false };
     // 清 HTTP 缓存后重载，避免旧 JS/CSS 残留
@@ -6480,15 +6630,15 @@ chuliIpc('warmy:win-reload', () => {
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:win-always-on-top', (_e, on?: boolean) => {
+chuliIpc('warmy:winZongShiQiYongDing', (_e, qiYong?: boolean) => {
   try {
     if (!win) return { ok: false };
-    const next = typeof on === 'boolean' ? on : !win.isAlwaysOnTop();
+    const next = typeof qiYong === 'boolean' ? qiYong : !win.isAlwaysOnTop();
     win.setAlwaysOnTop(next);
     return { ok: true, alwaysOnTop: next };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:platform', () => ({
+chuliIpc('warmy:pingTai', () => ({
   ok: true,
   platform: process.platform,
   isMac: process.platform === 'darwin',
@@ -6498,7 +6648,7 @@ chuliIpc('warmy:platform', () => ({
 
 
 // ── P5 短命执行者 ──
-chuliIpc('warmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
+chuliIpc('warmy:zhiXingQiYunXing', async (_e, renwu: { taskId?: string; brief: string; contextItems?: string[] }) => {
   try {
     await baozhangGongyingshangMiyao();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
@@ -6506,9 +6656,9 @@ chuliIpc('warmy:executor-run', async (_e, task: { taskId?: string; brief: string
     }
     const r = await yunxingDuanCunhuoZhixingqi(
       {
-        taskId: task.taskId || 'x-' + Date.now(),
-        brief: task.brief,
-        contextItems: task.contextItems || [],
+        taskId: renwu.taskId || 'x-' + Date.now(),
+        brief: renwu.brief,
+        contextItems: renwu.contextItems || [],
       },
       {
         presetId: providerCfg.presetId,
@@ -6521,14 +6671,14 @@ chuliIpc('warmy:executor-run', async (_e, task: { taskId?: string; brief: string
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
+chuliIpc('warmy:zhiXingQiPiLiang', async (_e, RenwuJi: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
   try {
     await baozhangGongyingshangMiyao();
     if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
       return { ok: false, error: 'no key' };
     }
     const rs = await yunXingZhiXingQiJi(
-      tasks.map((t) => ({ taskId: t.taskId || 'x-' + Date.now(), brief: t.brief, contextItems: t.contextItems || [] })),
+      RenwuJi.map((t) => ({ taskId: t.taskId || 'x-' + Date.now(), brief: t.brief, contextItems: t.contextItems || [] })),
       {
         presetId: providerCfg.presetId,
         apiKey: providerCfg.apiKey,
@@ -6541,50 +6691,50 @@ chuliIpc('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brie
 });
 
 // ── P7 资产治理 ──
-chuliIpc('warmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: boolean }) => ({
+chuliIpc('warmy:ziChanJiJianSuo', (_e, opts?: { scope?: string; strict?: boolean }) => ({
   ok: true,
   assets: retrieveAssetsForChat({ scope: opts?.scope as never, strict: opts?.strict }),
 }));
 
-chuliIpc('warmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
+chuliIpc('warmy:ziChanJiZhuCe', (_e, a: { id: string; biaoTi: string; ti: string; scope?: string }) => {
   try {
-    zhuCeLiaoTianZiChan({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
+    zhuCeLiaoTianZiChan({ id: a.id, biaoTi: a.biaoTi, ti: a.ti, scope: a.scope as never });
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:assets-feedback', (_e, id: string, good: boolean) => {
+chuliIpc('warmy:ziChanJiFeedback', (_e, id: string, good: boolean) => {
   try {
     jiLuZiChanShiYong(id, good);
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:assets-sweep', () => anQuanChuLi(() => ({ ok: true, n: 0 }), { ok: true, n: 0 }))
+chuliIpc('warmy:ziChanJiSweep', () => anQuanChuLi(() => ({ ok: true, n: 0 }), { ok: true, n: 0 }))
 
 // ── P6 知识库：从对话写入 ──
-chuliIpc('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
+chuliIpc('warmy:zhiShiKuCongLiaoTian', (_e, payload: { sessionId: string; biaoTi: string; ti: string }) => {
   try {
     knowledge?.upsertEntity({
       id: 'sess-' + payload.sessionId,
       kind: 'project',
-      name: payload.sessionId,
+      ming: payload.sessionId,
       attrs: {},
       anchors: [],
     });
     const evId = 'ev-' + Date.now();
     knowledge?.addEvent({
       id: evId,
-      title: payload.title,
-      result: payload.body.slice(0, 500),
+      biaoTi: payload.biaoTi,
+      result: payload.ti.slice(0, 500),
       entityIds: ['sess-' + payload.sessionId],
       anchors: [],
       ts: Date.now(),
     });
     zhuCeLiaoTianZiChan({
       id: evId,
-      title: payload.title,
-      body: payload.body,
+      biaoTi: payload.biaoTi,
+      ti: payload.ti,
       scope: 'session',
     });
     return { ok: true, eventId: evId };
@@ -6594,12 +6744,12 @@ chuliIpc('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string;
 
 
 // ── 3 权限审批弹窗 ──
-chuliIpc('warmy:request-approval', (_e, req: { action: string; suggested?: string }) => {
+chuliIpc('warmy:qingQiuPiZhun', (_e, Qiu: { action: string; suggested?: string }) => {
   try {
-    const id = 'ap-' + ++pizhunXulie;
+    const id = 'ap' + ++pizhunXulie;
     return new Promise((resolve) => {
       dengdaiPizhun.set(id, { resolve });
-      win?.webContents.send('warmy:approval-request', { id, action: req.action, suggested: req.suggested || 'once' });
+      win?.webContents.send('warmy:piZhunQingQiu', { id, action: Qiu.action, suggested: Qiu.suggested || 'once' });
       setTimeout(() => {
         const p = dengdaiPizhun.get(id);
         if (p) {
@@ -6611,7 +6761,7 @@ chuliIpc('warmy:request-approval', (_e, req: { action: string; suggested?: strin
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:approval-respond', (_e, id: string, allowed: boolean, scope: string) => {
+chuliIpc('warmy:piZhunHuiYing', (_e, id: string, allowed: boolean, scope: string) => {
   try {
     const p = dengdaiPizhun.get(id);
     if (!p) return { ok: false };
@@ -6622,7 +6772,7 @@ chuliIpc('warmy:approval-respond', (_e, id: string, allowed: boolean, scope: str
 });
 
 // ── 4 自动检查点 ──
-chuliIpc('warmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
+chuliIpc('warmy:checkpointZiDong', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
   try {
     if (!checkpoints) return { ok: false };
     const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
@@ -6632,12 +6782,12 @@ chuliIpc('warmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logSe
       logSeq: logSeq || Date.now(),
       jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined,
     });
-    return { ok: true, checkpoint: cp, list: checkpoints.list() };
+    return { ok: true, checkpoint: cp, LieBiao: checkpoints.LieBiao() };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 6 成本仪表盘 ──
-chuliIpc('warmy:cost-summary', () => {
+chuliIpc('warmy:chengBenZhaiYao', () => {
   try {
     const m = metrics.summary();
     const estCost = ((m.promptTokens + m.completionTokens) / 1000) * 0.002;
@@ -6654,15 +6804,15 @@ chuliIpc('warmy:cost-summary', () => {
 });
 
 // ── 1 值班编排闭环 ──
-chuliIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: string; urgency?: string; userId?: string }) => {
+chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: string; urgency?: string; userId?: string }) => {
   /**
    * ADR 004 第七批定稿：项目不可用（容器开发项目 + 容器没起，或被创建者停用）⇒ 拒绝派发
    * （**不**退到主机上跑）。启用/停用与切换容器的入口在**项目右键菜单**：
-   * `warmy:project-enable` / `warmy:project-disable` / `warmy:project-set-container`。
+   * `warmy:xiangMuQiYong` / `warmy:xiangMuTingYong` / `warmy:xiangMuSheZhiRongQi`。
    */
-  const KaiFaJuJue = await projectUnavailableFor(String(msg?.groupId || ''));
+  const KaiFaJuJue = await projectUnavailableFor(String(xiaoXi?.groupId || ''));
   if (KaiFaJuJue) {
-    fachuKongzhitai({ cat: 'system', code: 'container.project.unavailable', data: { sessionId: msg?.groupId, projectCode: KaiFaJuJue.projectCode } });
+    fachuKongzhitai({ cat: 'system', code: 'container.project.unavailable', data: { sessionId: xiaoXi?.groupId, projectCode: KaiFaJuJue.projectCode } });
     return {
       ok: false,
       action: 'error',
@@ -6675,9 +6825,9 @@ chuliIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: 
       historyReadable: true,
     };
   }
-  const instList = (p1?.instances.list() || []).map((x) => ({
+  const instList = (p1?.instances.LieBiao() || []).map((x) => ({
     id: x.id,
-    name: x.name,
+    ming: x.ming,
     status: x.status,
     dutyEligible: x.dutyEligible,
   }));
@@ -6692,17 +6842,17 @@ chuliIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: 
       logOf: (key: string) => chatLogs.get(key) || [],
       contextBudgetChars: () => contextBudgetChars(providerCfg.model),
       // ADR 002 §9.4 待办 2：值班者路径共用同一套工具与限额（memory-client 是唯一实现）
-      toolSpecs: () => (memory?.isReady && toolLimits().maxRounds > 0 ? memoryToolSpecs(toolLabels()) : undefined),
+      toolSpecs: () => (memory?.isReady && toolLimits().zuiDaLunShu > 0 ? memoryToolSpecs(toolLabels()) : undefined),
       toolLimits,
       runTool: async (call, ctx) => {
         const t1 = Date.now();
         const toolName = String((call && call.function && call.function.name) || 'tool');
-        fachuKongzhitai({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId: msg.groupId } });
+        fachuKongzhitai({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId: xiaoXi.groupId } });
         // 工具里对文件做过的真实读写都记到**这个项目**的台账上（scope = 会话 id）
-        const out = await withFileAccessScope(msg.groupId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.maxResultChars }));
+        const out = await withFileAccessScope(xiaoXi.groupId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }));
         metrics.recordToolCall({
           ts: Date.now(),
-          sessionId: msg.groupId,
+          sessionId: xiaoXi.groupId,
           round: ctx.round,
           tool: out.meta.tool,
           ok: out.ok,
@@ -6712,10 +6862,10 @@ chuliIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: 
         fachuKongzhitai({
           cat: 'tool',
           code: 'tool.finish',
-          data: { tool: out.meta.tool || toolName, round: ctx.round, sessionId: msg.groupId, ok: out.ok, chars: out.chars, ms: Date.now() - t1 },
+          data: { tool: out.meta.tool || toolName, round: ctx.round, sessionId: xiaoXi.groupId, ok: out.ok, chars: out.chars, ms: Date.now() - t1 },
         });
         audit?.log('chat.tool', {
-          sessionId: msg.groupId,
+          sessionId: xiaoXi.groupId,
           round: ctx.round,
           tool: out.meta.tool,
           ok: out.ok,
@@ -6727,15 +6877,15 @@ chuliIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: 
       },
       listInstances: () => instList,
       // 项目 MEMORY：从 group-store 读，**不**从 memory-os 流水复制（避免双源）
-      projectMemory: (gid) => projectMemoryForContext(groupStore, gid),
-      decisionContext: (gid) => aiQuestions.contextFor(gid),
-      runProjectGate: async (gid, reason) => yunxingXiangmuMenjinYici(gid, reason),
-      addEvent: (title, body, groupId) => {
-        knowledge?.upsertEntity({ id: 'grp-' + groupId, kind: 'project', name: groupId, attrs: {}, anchors: [] });
+      projectMemory: (qunId) => projectMemoryForContext(groupStore, qunId),
+      decisionContext: (qunId) => aiQuestions.contextFor(qunId),
+      runProjectGate: async (qunId, reason) => yunxingXiangmuMenjinYici(qunId, reason),
+      addEvent: (biaoTi, ti, groupId) => {
+        knowledge?.upsertEntity({ id: 'grp-' + groupId, kind: 'project', ming: groupId, attrs: {}, anchors: [] });
         knowledge?.addEvent({
           id: 'ev-' + Date.now(),
-          title,
-          result: body.slice(0, 400),
+          biaoTi,
+          result: ti.slice(0, 400),
           entityIds: ['grp-' + groupId],
           anchors: [],
           ts: Date.now(),
@@ -6749,16 +6899,16 @@ chuliIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: 
       model: providerCfg.model,
     },
     {
-      groupId: msg.groupId,
-      userId: msg.userId,
-      content: msg.content,
-      urgency: msg.urgency as never,
+      groupId: xiaoXi.groupId,
+      userId: xiaoXi.userId,
+      content: xiaoXi.content,
+      urgency: xiaoXi.urgency as never,
     }
   );
 
   if (result.usage) {
     metrics.recordTurn({
-      sessionId: msg.groupId,
+      sessionId: xiaoXi.groupId,
       ts: Date.now(),
       promptTokens: result.usage.promptTokens,
       completionTokens: result.usage.completionTokens,
@@ -6785,24 +6935,24 @@ chuliIpc('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: 
 
 
 // ── C. 执行者状态 ──
-const executorStatus: Array<{ id: string; name: string; taskId: string; brief: string; status: string; durationMs: number; ts: number }> = [];
-chuliIpc('warmy:executors-status', () => anQuanChuLi(() => ({ ok: true, items: executorStatus.slice(-10) }), { ok: true, items: [] }))
-chuliIpc('warmy:executors-run-brief', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
+const executorStatus: Array<{ id: string; ming: string; taskId: string; brief: string; status: string; durationMs: number; ts: number }> = [];
+chuliIpc('warmy:zhiXingQiJiZhuangTai', () => anQuanChuLi(() => ({ ok: true, items: executorStatus.slice(-10) }), { ok: true, items: [] }))
+chuliIpc('warmy:zhiXingQiJiYunXingJianYao', async (_e, payload: { brief: string; contextItems?: string[]; executorIds?: string[] }) => {
   try {
-    const ids = payload.executorIds?.length
+    const idJi = payload.executorIds?.length
       ? payload.executorIds
-      : (p1?.instances.list() || []).filter((x) => x.status === 'running').map((x) => x.id).slice(0, 3);
-    const t0 = Date.now();
+      : (p1?.instances.LieBiao() || []).filter((x) => x.status === 'running').map((x) => x.id).slice(0, 3);
+    const qiShiShiJian = Date.now();
     const results = await Promise.all(
-      ids.map(async (id) => {
-        const item = { id, name: id, taskId: 't-' + Date.now(), brief: payload.brief, status: 'running', durationMs: 0, ts: Date.now() };
+      idJi.map(async (id) => {
+        const item = { id, ming: id, taskId: 't-' + Date.now(), brief: payload.brief, status: 'running', durationMs: 0, ts: Date.now() };
         executorStatus.push(item);
         const r = await yunxingDuanCunhuoZhixingqi(
           { taskId: item.taskId, brief: payload.brief, contextItems: payload.contextItems || [] },
           { presetId: providerCfg.presetId, apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL || undefined, model: providerCfg.model }
         );
         item.status = r.error ? 'error' : 'done';
-        item.durationMs = Date.now() - t0;
+        item.durationMs = Date.now() - qiShiShiJian;
         return r;
       })
     );
@@ -6812,7 +6962,7 @@ chuliIpc('warmy:executors-run-brief', async (_e, payload: { brief: string; conte
 
 
 // ── E. 会话状态持久化 ──
-chuliIpc('warmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unknown[]; groups?: unknown[]; chats?: unknown[] }) => {
+chuliIpc('warmy:taiBaoCun', (_e, state: { chaJianJi?: unknown[]; instances?: unknown[]; groups?: unknown[]; chats?: unknown[] }) => {
   try {
     if (!settingsStore) return { ok: false };
     const cur = settingsStore.load();
@@ -6821,7 +6971,7 @@ chuliIpc('warmy:state-save', (_e, state: { plugins?: unknown[]; instances?: unkn
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:state-load', () => {
+chuliIpc('warmy:taiJiaZai', () => {
   try {
     const s = settingsStore?.load() as never;
     return { ok: true, state: s || {} };
@@ -6831,7 +6981,7 @@ chuliIpc('warmy:state-load', () => {
 
 
 // ── 知识库删除 ──
-chuliIpc('warmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: string }) => {
+chuliIpc('warmy:zhiShiKuShanChu', (_e, payload: { kind: 'entity' | 'event'; id: string }) => {
   try {
     if (!knowledge) return { ok: false, error: 'kb not ready' };
     const removed = payload?.kind === 'event' ? knowledge.removeEvent(payload.id) : knowledge.removeEntity(payload.id);
@@ -6842,12 +6992,12 @@ chuliIpc('warmy:kb-delete', (_e, payload: { kind: 'entity' | 'event'; id: string
 });
 
 // ── 通用：把文本保存到文件（CSV / Markdown 等）──
-chuliIpc('warmy:save-text', async (_e, payload: { defaultName?: string; content: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
+chuliIpc('warmy:baoCunWenBen', async (_e, payload: { defaultName?: string; content: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
   try {
     if (!win) return { ok: false, error: 'no window' };
     const r = await dialog.showSaveDialog(win, {
       defaultPath: payload?.defaultName || 'warmy-export.txt',
-      filters: payload?.filters || [{ name: 'Text', extensions: ['txt'] }],
+      filters: (payload?.filters || [{ name: 'Text', extensions: ['txt'] }]).map((f) => ({ name: f.name, extensions: f.extensions })),
     });
     if (r.canceled || !r.filePath) return { ok: false, canceled: true };
     fs.writeFileSync(r.filePath, String(payload?.content ?? ''), 'utf8');
@@ -6860,7 +7010,7 @@ chuliIpc('warmy:save-text', async (_e, payload: { defaultName?: string; content:
 // ── 卡顿自检（diagnostics IPC）已下线：功能整块移除，IPC 通道不再注册 ──
 
 // ── D. ASR 语音转文字（调用 DeepSeek 兼容接口的 audio 端点；失败返回 null） ──
-chuliIpc('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: string }) => {
+chuliIpc('warmy:asrZhuanXie', async (_e, payload: { dataUrl: string; ext?: string }) => {
   try {
     await baozhangGongyingshangMiyao();
     if (!providerCfg.apiKey) return { ok: false, error: 'no key' };
@@ -6889,7 +7039,8 @@ chuliIpc('warmy:asr-transcribe', async (_e, payload: { dataUrl: string; ext?: st
 // 产品定稿：独立会话窗 = **可拖动顶栏** + 聊天（第3列）+ 右侧事项（第4列）。
 // 不要再做成「完整主界面」；不要无边框导致无法拖动。
 const chatWindows = new Map<string, BrowserWindow>();
-chuliIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; kind?: string; mode?: string; iconDataUrl?: string }) => {
+chuliIpc('warmy:daKaiLiaoTianChuangKou', (_e, payload: { id: string; biaoTi?: string; title?: string; ming?: string; kind?: string; mode?: string; iconDataUrl?: string }) => {
+  const biaoTi = String(payload.biaoTi || payload.title || payload.ming || payload.id || 'WArmy');
   try {
     if (chatWindows.has(payload.id)) {
       chatWindows.get(payload.id)?.focus();
@@ -6909,8 +7060,8 @@ chuliIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; ki
       height: 720,
       minWidth: 640,
       minHeight: 420,
-      title: payload.title || 'WArmy',
-      // Windows/Linux：无系统边框，但渲染层保留 #titlebar（可拖动 + 窗控）
+      title: biaoTi,
+      // Windows/Linux：无系统边框，但渲染层保留 #biaoTiLan（可拖动 + 窗控）
       frame: process.platform === 'darwin',
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       backgroundColor: '#ededed',
@@ -6928,8 +7079,8 @@ chuliIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; ki
       query: {
         chatId: payload.id,
         chatKind: payload.kind || 'single',
-        chatTitle: payload.title || '',
-        mode: 'sub',
+        chatBiaoTi: biaoTi,
+        mode: 'fu',
       },
     });
     w.on('closed', () => chatWindows.delete(payload.id));
@@ -6939,7 +7090,7 @@ chuliIpc('warmy:open-chat-window', (_e, payload: { id: string; title: string; ki
 });
 
 // ── I. 全局热键 ──
-chuliIpc('warmy:register-hotkey', (_e, accel: string) => {
+chuliIpc('warmy:zhuCeKuaiJieJian', (_e, accel: string) => {
   try {
     globalShortcut.unregister(accel);
     const ok = globalShortcut.register(accel, () => {
@@ -6983,7 +7134,7 @@ function chuangjianTuopan() {
   t.on('double-click', () => { zhuJiaoZhuChuangKouJuZhong(); });
   tray = t;
 }
-chuliIpc('warmy:tray-init', () => {
+chuliIpc('warmy:tuoPanChuShi', () => {
   try {
     chuangjianTuopan();
     return { ok: true };
@@ -6994,7 +7145,7 @@ chuliIpc('warmy:tray-init', () => {
 
 
 // 托盘提示语由渲染层按当前语言下发（logo 文案随语言变化）
-chuliIpc('warmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?: string; header?: string; me?: string }) => {
+chuliIpc('warmy:tuoPanTiShi', (_e, payload: string | { text?: string; offWork?: string; header?: string; wo?: string }) => {
   try {
     const p = typeof payload === 'string' ? { text: payload } : payload || {};
     if (p.text) tray?.setToolTip(String(p.text).slice(0, 120));
@@ -7005,7 +7156,7 @@ chuliIpc('warmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?:
       ]));
     }
     if (p.header) daochuTouBiaoqian = String(p.header);
-    if (p.me) exportMeLabel = String(p.me);
+    if (p.wo) exportMeLabel = String(p.wo);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
@@ -7013,28 +7164,28 @@ chuliIpc('warmy:tray-tooltip', (_e, payload: string | { text?: string; offWork?:
 });
 
 // ── K. 会话导出 Markdown ──
-chuliIpc('warmy:export-session', (_e, payload: { title: string; messages: Array<{ role: string; text: string; ts?: number }> }) => {
+chuliIpc('warmy:daoChuHuiHua', (_e, payload: { biaoTi: string; xiaoXiJi: Array<{ role: string; text: string; ts?: number }> }) => {
   try {
     const dir = path.join(app.getPath('userData'), 'exports');
     // 写操作门禁：导出目录是共享产物，先拿租约再写
     const guarded = daiZuYue('exports', ['exports'], () => {
       fs.mkdirSync(dir, { recursive: true });
-      const lines = [
-        '# ' + payload.title,
+      const HangJi = [
+        '# ' + payload.biaoTi,
         '',
         '> ' + daochuTouBiaoqian + ' WArmy · ' + new Date().toLocaleString(),
         '',
       ];
-      for (const msg of payload.messages) {
-        const who = msg.role === 'me' ? exportMeLabel : payload.title;
-        const time = msg.ts ? new Date(msg.ts).toLocaleString() : '';
-        lines.push(`**${who}** ${time}`);
-        lines.push('');
-        lines.push(msg.text || '');
-        lines.push('');
+      for (const xiaoXi of payload.xiaoXiJi) {
+        const shui = xiaoXi.role === 'wo' ? exportMeLabel : payload.biaoTi;
+        const time = xiaoXi.ts ? new Date(xiaoXi.ts).toLocaleString() : '';
+        HangJi.push(`**${shui}** ${time}`);
+        HangJi.push('');
+        HangJi.push(xiaoXi.text || '');
+        HangJi.push('');
       }
-      const file = path.join(dir, `${payload.title.replace(/[\\/:*?"<>|]/g, '_')}-${Date.now()}.md`);
-      fs.writeFileSync(file, lines.join('\n'), 'utf8');
+      const file = path.join(dir, `${payload.biaoTi.replace(/[\\/:*?"<>|]/g, '_')}-${Date.now()}.md`);
+      fs.writeFileSync(file, HangJi.join('\n'), 'utf8');
       return file;
     });
     if (!guarded.ok) {
@@ -7047,13 +7198,13 @@ chuliIpc('warmy:export-session', (_e, payload: { title: string; messages: Array<
 });
 
 // ── L. 自动更新（真实查询 + 真实下载校验；自动安装未实现，明确标记） ──
-chuliIpc('warmy:auto-update-check', async () =>
+chuliIpc('warmy:ziDongGengXinJianCha', async () =>
   anQuanChuLiYiBu<GengXinJianChaJieGuo>(
     async () => (updater ? await updater.check() : gengXinqiBuKeYongJianCha(yingyongBanben())),
     gengXinqiBuKeYongJianCha(yingyongBanben())
   )
 );
-chuliIpc('warmy:auto-update-download', async () =>
+chuliIpc('warmy:ziDongGengXinXiaZai', async () =>
   anQuanChuLiYiBu<GengXinXiaZaiJieGuo>(
     async () => (updater ? await updater.download() : gengXinqiBuKeYongXiaZai(yingyongBanben())),
     gengXinqiBuKeYongXiaZai(yingyongBanben())
@@ -7074,8 +7225,8 @@ function updateSourceSnapshot(): GengXinYuanXinXi & { ok: boolean } {
     error: 'updater unavailable',
   };
 }
-chuliIpc('warmy:update-source-get', () => anQuanChuLi(() => updateSourceSnapshot(), updateSourceSnapshot()));
-chuliIpc('warmy:update-source-set', (_e, payload: { url?: string; channel?: string }) => {
+chuliIpc('warmy:gengXinLaiYuanQu', () => anQuanChuLi(() => updateSourceSnapshot(), updateSourceSnapshot()));
+chuliIpc('warmy:gengXinLaiYuanSheZhi', (_e, payload: { url?: string; channel?: string }) => {
   try {
     if (!settingsStore) return { ok: false, error: 'settings not ready' };
     const patch: Record<string, unknown> = {};
@@ -7099,24 +7250,24 @@ chuliIpc('warmy:update-source-set', (_e, payload: { url?: string; channel?: stri
 
 
 // ── M. 群成员管理（真实持久化：userData/groups.json） ──
-chuliIpc('warmy:group-members', (_e, groupId: string) =>
+chuliIpc('warmy:qunChengYuanJi', (_e, groupId: string) =>
   anQuanChuLi<QunChengYuanJieGuo & { localIsCreator?: boolean }>(
     () => {
-      const gid = String(groupId || '');
-      if (!groupStore) return { ok: false, groupId: gid, members: [], error: 'group store unavailable' };
+      const qunId = String(groupId || '');
+      if (!groupStore) return { ok: false, groupId: qunId, members: [], error: 'group store unavailable' };
       // 路由里已有但成员表缺的（例如更早版本入群）补一次，保证列表与路由一致
-      syncMembersFromRouter(gid);
-      const members = groupStore.listMembers(gid);
+      syncMembersFromRouter(qunId);
+      const members = groupStore.listMembers(qunId);
       /**
        * ADR 004 §2.2：**只有创建者**能启动/停止项目。
        * 判定依据是 group-store 里记的 `creatorFingerprint`（建群时写入的**本机身份指纹**）
        * 与本机当前身份指纹是否相等 —— 不在渲染层猜、也不新增一套"谁是创建者"的定义。
        * 拿不到指纹时如实回 false（宁可少一个按钮，也不要给错人权限）。
        */
-      const chuangJianZheZhiWen = String(groupStore.getGroup(gid)?.creatorFingerprint || '');
-      const benJiZhiWen = String(identityStore?.info()?.fingerprint || '');
+      const chuangJianZheZhiWen = String(groupStore.getGroup(qunId)?.creatorFingerprint || '');
+      const benJiZhiWen = String(identityStore?.info()?.zhiWen || '');
       const localIsCreator = !!chuangJianZheZhiWen && !!benJiZhiWen && zhiwenPipei(chuangJianZheZhiWen, benJiZhiWen);
-      return { ok: true, groupId: gid, members, localIsCreator };
+      return { ok: true, groupId: qunId, members, localIsCreator };
     },
     { ok: false, members: [], error: 'group store unavailable' }
   )
@@ -7127,40 +7278,40 @@ chuliIpc('warmy:group-members', (_e, groupId: string) =>
  * 拿不到名片也照常加入，但**指纹留空**并记一条审计 —— 不猜、不伪造。
  */
 chuliIpc(
-  'warmy:group-invite',
+  'warmy:qunYaoQing',
   async (
     _e,
-    payload: { groupId: string; name: string; role?: string; fingerprint?: string; publicKey?: string; displayName?: string }
+    payload: { groupId: string; ming: string; role?: string; zhiWen?: string; publicKey?: string; displayName?: string }
   ) => {
     try {
       if (!groupStore) return { ok: false, error: 'group store unavailable' };
-      const gid = String(payload?.groupId || '');
+      const qunId = String(payload?.groupId || '');
       const role = payload?.role === 'admin' ? 'admin' : 'member';
-      const fp = String(payload?.fingerprint || '').trim();
+      const fp = String(payload?.zhiWen || '').trim();
       const pub = String(payload?.publicKey || '').trim();
       const r = groupStore.addMemberWithFingerprint(
-        gid,
+        qunId,
         {
-          name: String(payload?.name || ''),
+          ming: String(payload?.ming || payload?.displayName || ''),
           role,
           source: 'invite',
-          ...(fp ? { fingerprint: fp } : {}),
+          ...(fp ? { zhiWen: fp } : {}),
         },
         { onAudit: (op, detail) => audit?.log(op, detail) }
       );
       if (!r.ok) return { ok: false, error: r.error || 'invite failed', members: r.members };
-      audit?.log('group.invite', { groupId: gid, withFingerprint: !!fp });
+      audit?.log('group.invite', { groupId: qunId, withFingerprint: !!fp });
       const result: { ok: boolean; members: typeof r.members; certId?: string; certError?: string } = {
         ok: true,
         members: r.members,
       };
       if (fp && pub) {
-        const issued = await weiQunQianFaChengYuanZhengShu(gid, {
+        const issued = await weiQunQianFaChengYuanZhengShu(qunId, {
           memberFingerprint: fp,
           memberPublicKey: pub,
-          displayName: String(payload?.displayName || payload?.name || ''),
+          displayName: String(payload?.displayName || payload?.ming || ''),
           role,
-          memberId: String(payload?.name || ''),
+          memberId: String(payload?.ming || ''),
         });
         if (issued.ok && issued.cert) result.certId = issued.cert.certId;
         else result.certError = String(issued.code);
@@ -7175,25 +7326,25 @@ chuliIpc(
  * 踢人 —— **同时吊销他的成员证书**（reason: 'departed'），并把新版吊销列表广播给在线成员。
  * 这是"吊销后拿旧证书重连必须被拒"的真实入口：证书先在本地吊销，再同步出去。
  */
-chuliIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: string }) => {
+chuliIpc('warmy:qunTi', async (_e, payload: { groupId: string; memberId: string }) => {
   try {
     if (!groupStore) return { ok: false, error: 'group store unavailable' };
-    const gid = String(payload?.groupId || '');
-    const mid = String(payload?.memberId || '');
-    const before = groupStore.listMembers(gid).find((m) => m.id === mid);
-    const r = groupStore.removeMember(gid, mid);
+    const qunId = String(payload?.groupId || '');
+    const zhongJian = String(payload?.memberId || '');
+    const before = groupStore.listMembers(qunId).find((m) => m.id === zhongJian);
+    const r = groupStore.removeMember(qunId, zhongJian);
     if (!r.ok) return { ok: false, error: r.error || 'kick failed', members: r.members };
     // 本机实例被踢时同步退出路由值班池
-    const ti = router.listMembers(gid).find((m) => m.id === mid || `inst:${m.id}` === mid);
-    if (ti) router.leave(gid, ti.id);
-    audit?.log('group.kick', { groupId: gid });
+    const ti = router.listMembers(qunId).find((m) => m.id === zhongJian || `inst:${m.id}` === zhongJian);
+    if (ti) router.leave(qunId, ti.id);
+    audit?.log('group.kick', { groupId: qunId });
     let revoked: { certId: string; listVersion: number } | null = null;
     let revokeError: string | null = null;
     const membership = quChengYuanMingceCang(identityStore);
-    const targetFp = before?.fingerprint ?? '';
+    const targetFp = before?.zhiWen ?? '';
     if (membership && targetFp) {
-      const cert = membership.certificateForFingerprint(gid, targetFp);
-      const signer = identityStore ? createIdentitySigner(identityStore) : null;
+      const cert = membership.certificateForFingerprint(qunId, targetFp);
+      const signer = identityStore ? chuangjianShenfenQianmingzhe(identityStore) : null;
       if (!cert) {
         revokeError = 'no-certificate';
       } else if (!signer) {
@@ -7202,15 +7353,15 @@ chuliIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: st
         const rv = await chexiaoChengyuanZhengshu({
           signer,
           membership,
-          groupId: gid,
+          groupId: qunId,
           certId: cert.certId,
           memberFingerprint: cert.memberFingerprint,
           reason: 'departed',
         });
-        if (rv.ok && rv.list) {
-          revoked = { certId: cert.certId, listVersion: rv.list.listVersion };
-          audit?.log('membership.revoked', { groupId: gid, certId: cert.certId, reason: 'departed' });
-          void guangBoCheXiaoBiao(gid, rv.list);
+        if (rv.ok && rv.LieBiao) {
+          revoked = { certId: cert.certId, listVersion: rv.LieBiao.listVersion };
+          audit?.log('membership.revoked', { groupId: qunId, certId: cert.certId, reason: 'departed' });
+          void guangBoCheXiaoBiao(qunId, rv.LieBiao);
         } else {
           revokeError = String(rv.code);
         }
@@ -7228,12 +7379,12 @@ chuliIpc('warmy:group-kick', async (_e, payload: { groupId: string; memberId: st
     return { ok: false, error: 'kick failed' };
   }
 });
-chuliIpc('warmy:group-set-admin', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
+chuliIpc('warmy:qunSheZhiGuanLiYuan', (_e, payload: { groupId: string; memberId: string; admin: boolean }) => {
   try {
     if (!groupStore) return { ok: false, error: 'group store unavailable' };
-    const gid = String(payload?.groupId || '');
-    const mid = String(payload?.memberId || '');
-    const r = groupStore.setAdmin(gid, mid, !!payload?.admin);
+    const qunId = String(payload?.groupId || '');
+    const zhongJian = String(payload?.memberId || '');
+    const r = groupStore.setAdmin(qunId, zhongJian, !!payload?.admin);
     if (!r.ok) return { ok: false, error: r.error || 'set admin failed', members: r.members };
     return { ok: true, members: r.members };
   } catch {
@@ -7251,10 +7402,10 @@ chuliIpc('warmy:group-set-admin', (_e, payload: { groupId: string; memberId: str
 function tongzhiShitiBiangeng(id: string, kind: string, exceptId?: number): void {
   const key = String(id || '');
   if (!key) return;
-  try { broadcastToWindows('warmy:entity-updated', { id: key, kind, ts: Date.now() }, exceptId); } catch { /* noop */ }
+  try { broadcastToWindows('warmy:shiTiUpdated', { id: key, kind, ts: Date.now() }, exceptId); } catch { /* noop */ }
 }
 
-chuliIpc('warmy:group-directed', (e, payload: { groupId: string; directed: boolean }) => {
+chuliIpc('warmy:qunDingXiang', (e, payload: { groupId: string; directed: boolean }) => {
   try {
     const g = router.getGroup(payload.groupId);
     if (!g) return { ok: false, error: 'no group' };
@@ -7271,15 +7422,15 @@ chuliIpc('warmy:group-directed', (e, payload: { groupId: string; directed: boole
 
 
 // ── N. 会话内嵌看板 ──
-chuliIpc('warmy:board-session', (_e, groupId: string) => ({
+chuliIpc('warmy:kanbanHuiHua', (_e, groupId: string) => ({
   ok: true,
-  tasks: board?.listTasks(groupId) || [],
+  RenwuJi: board?.listTasks(groupId) || [],
   events: (board?.tailEvents(20) || []).filter((e) => e.groupId === groupId),
 }));
 
 
 // ── O. CCR 工具输出压缩 ──
-chuliIpc('warmy:ccr-tool-output', (_e, payload: { toolName?: string; content: string }) => {
+chuliIpc('warmy:ccrGongJuShuChu', (_e, payload: { toolName?: string; content: string }) => {
   try {
     const r = ccr.beforeLog({ kind: 'tool_result', content: payload.content, toolName: payload.toolName });
     metrics.recordCcr({ ts: Date.now(), kind: 'tool_result', originalBytes: r.originalBytes, compressedBytes: r.compressedBytes });
@@ -7289,49 +7440,49 @@ chuliIpc('warmy:ccr-tool-output', (_e, payload: { toolName?: string; content: st
 
 
 // ── P. 知识库详情 ──
-chuliIpc('warmy:kb-detail', (_e, q: string) => {
+chuliIpc('warmy:zhiShiKuXiangQing', (_e, q: string) => {
   try {
     const r = knowledge?.query(q) || { entities: [], events: [] };
     return {
       ok: true,
-      entities: r.entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, attrs: e.attrs, eventIds: e.eventIds })),
-      events: r.events.map((e) => ({ id: e.id, title: e.title, result: e.result, ts: e.ts, entityIds: e.entityIds })),
+      entities: r.entities.map((e) => ({ id: e.id, ming: e.ming, kind: e.kind, attrs: e.attrs, eventIds: e.eventIds })),
+      events: r.events.map((e) => ({ id: e.id, biaoTi: e.biaoTi, result: e.result, ts: e.ts, entityIds: e.entityIds })),
     };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 
 // ── Q. 错误提示 ──
-chuliIpc('warmy:last-error', () => anQuanChuLi(() => ({ ok: true, error: lastError }), { ok: true, error: null }))
-chuliIpc('warmy:clear-error', () => { lastError = null; return { ok: true }; });
+chuliIpc('warmy:zuiHouCuoWu', () => anQuanChuLi(() => ({ ok: true, error: lastError }), { ok: true, error: null }))
+chuliIpc('warmy:qingChuCuoWu', () => { lastError = null; return { ok: true }; });
 
 
 
 // ── 项目 MEMORY / AI 决策卡 / 门禁 / read-back / 去重 ──
 
 /** 项目 MEMORY：唯一落点 = groups.json project.memory */
-chuliIpc('warmy:project-memory-get', (_e, payload?: { sessionId?: string }) => {
+chuliIpc('warmy:xiangMuJiYiQu', (_e, payload?: { sessionId?: string }) => {
   try {
-    const gid = String(payload?.sessionId || '');
-    const memory = readProjectMemory(groupStore, gid);
-    return { ok: true, groupId: gid, memory, chars: memory.length };
+    const qunId = String(payload?.sessionId || '');
+    const memory = readProjectMemory(groupStore, qunId);
+    return { ok: true, groupId: qunId, memory, chars: memory.length };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:project-memory-set', async (_e, payload?: { sessionId?: string; memory?: string }) => {
+chuliIpc('warmy:xiangMuJiYiSheZhi', async (_e, payload?: { sessionId?: string; memory?: string }) => {
   try {
-    const gid = String(payload?.sessionId || '');
+    const qunId = String(payload?.sessionId || '');
     const jiYi = String(payload?.memory ?? '');
-    const w = writeProjectMemory(groupStore, gid, jiYi);
+    const w = writeProjectMemory(groupStore, qunId, jiYi);
     if (!w.ok) return { ok: false, error: w.error };
     // read-back：从存储读回再确认
     const rb = await daiHuiDuYanZheng(
       () => jiYi,
-      () => readProjectMemory(groupStore, gid),
+      () => readProjectMemory(groupStore, qunId),
       (saved, back) => String(saved).slice(0, 8000) === String(back).slice(0, 8000)
     );
-    void faBuXiangMuShuXing(gid);
+    void faBuXiangMuShuXing(qunId);
     return { ok: rb.confident, saved: w.chars, memory: rb.readBack || '', readBack: rb.match, error: rb.error };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
@@ -7339,29 +7490,29 @@ chuliIpc('warmy:project-memory-set', async (_e, payload?: { sessionId?: string; 
 });
 
 /** AI 工作中求助选项卡（永远含「其他」自定义输入） */
-chuliIpc('warmy:ai-question-open', (_e, payload?: { groupId?: string; sessionId?: string; title?: string; body?: string; options?: Array<{ id?: string; label: string; description?: string }> }) => {
+chuliIpc('warmy:aiWenTiDaKai', (_e, payload?: { groupId?: string; sessionId?: string; biaoTi?: string; ti?: string; options?: Array<{ id?: string; biaoQian: string; description?: string }> }) => {
   try {
-    const q = aiQuestions.open({
+    const q = aiQuestions.daKai({
       groupId: String(payload?.groupId || payload?.sessionId || ''),
       sessionId: payload?.sessionId,
-      title: String(payload?.title || '需要你的决定'),
-      body: payload?.body,
+      biaoTi: String(payload?.biaoTi || '需要你的决定'),
+      ti: payload?.ti,
       options: payload?.options || [],
     });
-    fachuKongzhitai({ cat: 'system', code: 'ai.question.open', data: { id: q.id, groupId: q.groupId, title: q.title } });
+    fachuKongzhitai({ cat: 'system', code: 'ai.question.daKai', data: { id: q.id, groupId: q.groupId, biaoTi: q.biaoTi } });
     return { ok: true, question: q };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:ai-question-list', (_e, groupId?: string) => {
+chuliIpc('warmy:aiWenTiLieBiao', (_e, groupId?: string) => {
   try {
-    return { ok: true, items: aiQuestions.list(typeof groupId === 'string' ? groupId : undefined) };
+    return { ok: true, items: aiQuestions.LieBiao(typeof groupId === 'string' ? groupId : undefined) };
   } catch (e) {
     return { ok: false, items: [], error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:ai-question-answer', (_e, payload?: { id?: string; optionId?: string; customText?: string }) => {
+chuliIpc('warmy:aiWenTiAnswer', (_e, payload?: { id?: string; optionId?: string; customText?: string }) => {
   try {
     const r = aiQuestions.answer(String(payload?.id || ''), String(payload?.optionId || AI_QUESTION_CUSTOM), payload?.customText);
     return r;
@@ -7382,30 +7533,30 @@ async function yunxingXiangmuMenjinYici(groupId: string, reason: string): Promis
     if (now - last < 3000) return { pass: !!xiangMu?.gateLast?.pass, summary: '节流：3s 内不重复跑门禁' };
     menjinYunxing.set(groupId, now);
     const repo = path.resolve(__dirname, '..', '..', '..');
-    const lines: string[] = [];
+    const HangJi: string[] = [];
     let allPass = true;
     for (const xiangDuiLu of gates.slice(0, 4)) {
       const script = path.join(repo, xiangDuiLu);
       if (!fs.existsSync(script)) {
         allPass = false;
-        lines.push(`${xiangDuiLu}: missing`);
+        HangJi.push(`${xiangDuiLu}: missing`);
         continue;
       }
       const out = await new Promise<{ code: number; tail: string }>((resolve) => {
         // windowsHide：仓库钩子脚本是后台跑的，不该在桌面上弹控制台窗口
-        const child = spawn(process.execPath, [script], { cwd: repo, env: process.env, windowsHide: true });
+        const Zhi = spawn(process.execPath, [script], { cwd: repo, env: process.env, windowsHide: true });
         let buf = '';
-        child.stdout?.on('data', (d) => { buf += String(d); if (buf.length > 4000) buf = buf.slice(-2000); });
-        child.stderr?.on('data', (d) => { buf += String(d); if (buf.length > 4000) buf = buf.slice(-2000); });
-        child.on('close', (code) => resolve({ code: code ?? 1, tail: buf.split('\n').filter(Boolean).slice(-3).join(' | ') }));
-        child.on('error', () => resolve({ code: 1, tail: 'spawn-failed' }));
+        Zhi.stdout?.on('data', (d) => { buf += String(d); if (buf.length > 4000) buf = buf.slice(-2000); });
+        Zhi.stderr?.on('data', (d) => { buf += String(d); if (buf.length > 4000) buf = buf.slice(-2000); });
+        Zhi.on('close', (code) => resolve({ code: code ?? 1, tail: buf.split('\n').filter(Boolean).slice(-3).join(' | ') }));
+        Zhi.on('error', () => resolve({ code: 1, tail: 'spawn-failed' }));
       });
       const pass = out.code === 0;
       if (!pass) allPass = false;
-      lines.push(`${xiangDuiLu}: ${pass ? 'pass' : 'fail(rc=' + out.code + ')'} ${out.tail}`.slice(0, 160));
+      HangJi.push(`${xiangDuiLu}: ${pass ? 'pass' : 'fail(rc=' + out.code + ')'} ${out.tail}`.slice(0, 160));
     }
-    groupStore?.setProjectAttrs(groupId, { gateLast: { at: now, pass: allPass, summary: lines.join(' ; ') } });
-    return { pass: allPass, summary: lines.join(' ; ') || 'no gates' };
+    groupStore?.setProjectAttrs(groupId, { gateLast: { at: now, pass: allPass, summary: HangJi.join(' ; ') } });
+    return { pass: allPass, summary: HangJi.join(' ; ') || 'no gates' };
   } catch (e) {
     return { pass: false, summary: xiJingCuoWu(e) };
   }
@@ -7413,24 +7564,24 @@ async function yunxingXiangmuMenjinYici(groupId: string, reason: string): Promis
 
 /** skills-scan-dirs-set：路径去重 + read-back */
 const _skillsScanSet = chuliIpc;
-chuliIpc('warmy:skills-scan-dirs-set', (_e, dirs: unknown) => {
+chuliIpc('warmy:jinengJiSaoMiaoMuLuJiSheZhi', (_e, dirs: unknown) => {
   const raw = Array.isArray(dirs) ? dirs.map((d) => String(d || '').trim()).filter(Boolean) : [];
-  const { list, removed } = anGuiFanHuaQuChong(raw, guiFanLuJingMiyao);
-  if (list.length > SKILL_SCAN_DIRS_MAX) {
-    return { ok: false, error: 'too-many-dirs', max: SKILL_SCAN_DIRS_MAX, count: list.length };
+  const { LieBiao, removed } = anGuiFanHuaQuChong(raw, guiFanLuJingMiyao);
+  if (LieBiao.length > SKILL_SCAN_DIRS_MAX) {
+    return { ok: false, error: 'too-many-dirs', max: SKILL_SCAN_DIRS_MAX, count: LieBiao.length };
   }
   try {
-    const next = settingsStore?.save({ skillScanDirs: list } as never);
+    const next = settingsStore?.save({ skillScanDirs: LieBiao } as never);
     const readBack = ((next as any)?.skillScanDirs || []) as string[];
-    const match = readBack.length === list.length && list.every((x, i) => guiFanLuJingMiyao(readBack[i]) === guiFanLuJingMiyao(x));
-    return { ok: true, dirs: list, scanDirs: jinengSaomiaoZhuangtai(list), settings: next, removedDups: removed, readBack: match, confident: match };
+    const match = readBack.length === LieBiao.length && LieBiao.every((x, i) => guiFanLuJingMiyao(readBack[i]) === guiFanLuJingMiyao(x));
+    return { ok: true, dirs: LieBiao, scanDirs: jinengSaomiaoZhuangtai(LieBiao), settings: next, removedDups: removed, readBack: match, confident: match };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 /** update-source-set：read-back */
-chuliIpc('warmy:update-source-set', async (_e, payload?: { url?: string }) => {
+chuliIpc('warmy:gengXinLaiYuanSheZhi', async (_e, payload?: { url?: string }) => {
   try {
     const url = String(payload?.url || '').trim();
     const patch: Record<string, unknown> = { updateFeedUrl: url };
@@ -7445,16 +7596,16 @@ chuliIpc('warmy:update-source-set', async (_e, payload?: { url?: string }) => {
 
 
 // ── R. 启动引导 ──
-chuliIpc('warmy:setup-state', () => {
+chuliIpc('warmy:chuShiSheZhiTai', () => {
   try {
     const s = settingsStore?.load() as Record<string, unknown> | undefined;
     // 首次运行/安装后首启：setupDone 非 true 一律弹语言选择
-    return { ok: true, done: (s as { setupDone?: boolean })?.setupDone === true, locale: s?.locale || app.getLocale() };
+    return { ok: true, done: (s as { setupDone?: boolean })?.setupDone === true, yuYan: s?.yuYan || app.getLocale() };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:setup-complete', (_e, payload: { locale?: string; provider?: Record<string, unknown> }) => {
+chuliIpc('warmy:chuShiSheZhiWanCheng', (_e, payload: { yuYan?: string; provider?: Record<string, unknown> }) => {
   try {
-    if (payload.locale) settingsStore?.save({ locale: payload.locale } as never);
+    if (payload.yuYan) settingsStore?.save({ yuYan: payload.yuYan } as never);
     if (payload.provider) {
       // 预填 provider
       Object.assign(providerCfg, {
@@ -7479,7 +7630,7 @@ function jinengQiyongYingShe(): Record<string, boolean> {
     return {};
   }
 }
-chuliIpc('warmy:skills-set-enabled', (_e, payload: { id?: string; enabled?: boolean }) => {
+chuliIpc('warmy:jinengJiSheZhiEnabled', (_e, payload: { id?: string; enabled?: boolean }) => {
   try {
     const id = String(payload?.id || '');
     if (!id) return { ok: false, error: 'missing-id' };
@@ -7493,7 +7644,7 @@ chuliIpc('warmy:skills-set-enabled', (_e, payload: { id?: string; enabled?: bool
 });
 // patch skills-list to include enabled flag
 const _skillsListHandler = async () => {
-  const skills: Array<Record<string, unknown>> = [];
+  const jinengJi: Array<Record<string, unknown>> = [];
   const saoMiaoMuluZhuangtai = jinengSaomiaoZhuangtai(jiaZaiJinengSaomiaoLuJing());
   const QiYongBiao = jinengQiyongYingShe();
   for (const { root, source } of jinengGen()) {
@@ -7504,7 +7655,7 @@ const _skillsListHandler = async () => {
       try { mtime = fs.statSync(md).mtimeMs; } catch { /* ignore */ }
       const id = source === 'discovered' ? 'discovered:' + path.basename(root) + ':' + dirName : dirName;
       const enabled = QiYongBiao[id] !== false;
-      skills.push({ id, name: info.name || dirName, description: info.description, source, root, mtime, enabled, removable: source !== 'discovered' });
+      jinengJi.push({ id, ming: info.ming || dirName, description: info.description, source, root, mtime, enabled, removable: source !== 'discovered' });
     };
     if (source === 'discovered') {
       const benJiMiaoShu = path.join(root, 'SKILL.md');
@@ -7520,14 +7671,14 @@ const _skillsListHandler = async () => {
       tuiSongYiTiao(d, md);
     }
   }
-  skills.sort((x, y) => Number(y.mtime || 0) - Number(x.mtime || 0));
-  return { ok: true, skills, scanDirs: saoMiaoMuluZhuangtai, maxScanDirs: SKILL_SCAN_DIRS_MAX };
+  jinengJi.sort((x, y) => Number(y.mtime || 0) - Number(x.mtime || 0));
+  return { ok: true, jinengJi, scanDirs: saoMiaoMuluZhuangtai, maxScanDirs: SKILL_SCAN_DIRS_MAX };
 };
 // re-register by replacing through handleIpc if it overwrites; electron handleIpc likely last-wins
-chuliIpc('warmy:skills-list', () => _skillsListHandler());
+chuliIpc('warmy:jinengJiLieBiao', () => _skillsListHandler());
 
 // ── S. 消息搜索（从 memory-os recall） ──
-chuliIpc('warmy:search-messages', async (_e, q: string) => {
+chuliIpc('warmy:souSuoXiaoXiJi', async (_e, q: string) => {
   try {
     const r = await memory?.recall(q, 20);
     return { ok: true, hits: r?.cards || [] };
@@ -7538,12 +7689,12 @@ chuliIpc('warmy:search-messages', async (_e, q: string) => {
 
 
 // ── V. 插件真实安装/卸载 ──
-chuliIpc('warmy:plugin-install', (_e, pkg: string) => {
+chuliIpc('warmy:chaJianAnZhuang', (_e, pkg: string) => {
   try {
-    const dshHome = path.join(app.getPath('userData'), 'dsh-home');
+    const dshJiaMuLu = path.join(app.getPath('userData'), 'dsh-home');
     const profile = 'warmy';
     // 用 pnpm 安装到 profile
-    const profileDir = path.join(dshHome, 'profiles', profile);
+    const profileDir = path.join(dshJiaMuLu, 'profiles', profile);
     fs.mkdirSync(profileDir, { recursive: true });
     const BaoJson = path.join(profileDir, 'package.json');
     if (!fs.existsSync(BaoJson)) {
@@ -7551,20 +7702,33 @@ chuliIpc('warmy:plugin-install', (_e, pkg: string) => {
     }
     const xiangMuPeiZhi = JSON.parse(fs.readFileSync(BaoJson, 'utf8'));
     xiangMuPeiZhi.dependencies = xiangMuPeiZhi.dependencies || {};
-    xiangMuPeiZhi.dependencies[pkg] = 'latest';
+    // 禁止裸 latest：必须带显式版本（name@1.2.3），避免供应链漂移
+    const pin = String(pkg || '').trim();
+    const m = pin.match(/^(?<name>(?:@[^/]+\/)?[^@]+)@(?<ver>[^@\s]+)$/);
+    const pinName = m?.groups?.name;
+    const pinVer = m?.groups?.ver;
+    if (!pinName || !pinVer || pinVer === 'latest') {
+      return { ok: false, error: 'plugin spec must pin a version (e.g. pkg@1.2.3), not latest', hint: 'pin-version' };
+    }
+    xiangMuPeiZhi.dependencies[pinName] = pinVer;
     fs.writeFileSync(BaoJson, JSON.stringify(xiangMuPeiZhi, null, 2));
-    return { ok: true, profileDir, pkg };
+    return { ok: true, profileDir, pkg: pinName, version: pinVer };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:plugin-uninstall', (_e, pkg: string) => {
+chuliIpc('warmy:chaJianXieZai', (_e, pkg: string) => {
   try {
-    const dshHome = path.join(app.getPath('userData'), 'dsh-home');
-    const BaoJson = path.join(dshHome, 'profiles', 'warmy', 'package.json');
+    const dshJiaMuLu = path.join(app.getPath('userData'), 'dsh-home');
+    const BaoJson = path.join(dshJiaMuLu, 'profiles', 'warmy', 'package.json');
     if (fs.existsSync(BaoJson)) {
       const xiangMuPeiZhi = JSON.parse(fs.readFileSync(BaoJson, 'utf8'));
-      if (xiangMuPeiZhi.dependencies) delete xiangMuPeiZhi.dependencies[pkg];
+      const pin = String(pkg || '').trim();
+      const nm = (pin.match(/^(?<name>(?:@[^/]+\/)?[^@]+)(?:@[^@]+)?$/) || [])[1] || pin;
+      if (xiangMuPeiZhi.dependencies) {
+        delete xiangMuPeiZhi.dependencies[nm];
+        delete xiangMuPeiZhi.dependencies[pin];
+      }
       fs.writeFileSync(BaoJson, JSON.stringify(xiangMuPeiZhi, null, 2));
     }
     return { ok: true };
@@ -7575,30 +7739,30 @@ chuliIpc('warmy:plugin-uninstall', (_e, pkg: string) => {
 
 
 // ── X. 归档列表 ──
-const archived: Array<{ id: string; name: string; kind: string; ts: number }> = [];
-chuliIpc('warmy:archived-list', () => anQuanChuLi(() => ({ ok: true, items: archived }), { ok: true, items: [] }))
-chuliIpc('warmy:archived-add', (_e, payload: { id: string; name: string; kind: string }) => {
+const archived: Array<{ id: string; ming: string; kind: string; ts: number }> = [];
+chuliIpc('warmy:yiGuiDangLieBiao', () => anQuanChuLi(() => ({ ok: true, items: archived }), { ok: true, items: [] }))
+chuliIpc('warmy:yiGuiDangTianJia', (_e, payload: { id: string; ming: string; kind: string }) => {
   try {
     archived.push({ ...payload, ts: Date.now() });
     return { ok: true, items: archived };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:archived-restore', (_e, id: string) => {
+chuliIpc('warmy:yiGuiDangHuiFu', (_e, id: string) => {
   try {
-    const idx = archived.findIndex((x) => x.id === id);
-    if (idx < 0) return { ok: false };
-    const item = archived.splice(idx, 1)[0];
+    const suoYin = archived.findIndex((x) => x.id === id);
+    if (suoYin < 0) return { ok: false };
+    const item = archived.splice(suoYin, 1)[0];
     return { ok: true, item };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 
 // ── 审计日志 ──
-chuliIpc('warmy:audit-log', (_e, limit?: number) => ({
+chuliIpc('warmy:shenJiRiZhi', (_e, limit?: number) => ({
   ok: true,
   entries: audit?.read(limit || 50) || [],
 }));
-chuliIpc('warmy:audit-clear', () => {
+chuliIpc('warmy:shenJiQingChu', () => {
   try {
     audit?.clear();
     return { ok: true };
@@ -7606,14 +7770,14 @@ chuliIpc('warmy:audit-clear', () => {
 });
 
 // ── SafeStorage 密钥 ──
-chuliIpc('warmy:secure-key-save', async (_e, payload: { providerId: string; apiKey: string }) => {
+chuliIpc('warmy:anQuanMiYaoBaoCun', async (_e, payload: { providerId: string; apiKey: string }) => {
   try {
     await secureKeys?.save(payload.providerId, payload.apiKey);
     audit?.log('key.save', { providerId: payload.providerId });
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:secure-key-load', async (_e, providerId: string) => {
+chuliIpc('warmy:anQuanMiYaoJiaZai', async (_e, providerId: string) => {
   try {
     const key = await secureKeys?.load(providerId);
     return { ok: !!key, key: key || null };
@@ -7621,19 +7785,19 @@ chuliIpc('warmy:secure-key-load', async (_e, providerId: string) => {
 });
 
 // ── KnowledgeArchiver ──
-chuliIpc('warmy:archive-external', (_e, payload: { groupId: string; title: string; summary: string; anchors?: Array<{ file: string; seq: number }> }) => {
+chuliIpc('warmy:guiDangWaiBu', (_e, payload: { groupId: string; biaoTi: string; summary: string; anchors?: Array<{ file: string; seq: number }> }) => {
   let tiqu = null as null | ReturnType<typeof congGuiDangTiQuZhiShi> | { error?: string };
   let structured = null as null | ReturnType<typeof tiQuJieGouHuaZhaiYao>;
   try {
     tiqu = congGuiDangTiQuZhiShi({
       groupId: String(payload.groupId || ''),
-      title: String(payload.title || ''),
+      biaoTi: String(payload.biaoTi || ''),
       summary: String(payload.summary || ''),
     });
     structured = tiQuJieGouHuaZhaiYao({
       groupId: String(payload.groupId || ''),
-      title: String(payload.title || ''),
-      text: String(payload.summary || ''),
+      biaoTi: String(payload.biaoTi || ''),
+      ti: String(payload.summary || ''),
     });
   } catch (e) {
     tiqu = { error: xiJingCuoWu(e) };
@@ -7641,7 +7805,7 @@ chuliIpc('warmy:archive-external', (_e, payload: { groupId: string; title: strin
   const r = archiver?.archive({
     id: 'arc-' + Date.now(),
     groupId: payload.groupId,
-    title: payload.title,
+    biaoTi: payload.biaoTi,
     summary: payload.summary,
     anchors: payload.anchors || [],
     ...(structured ? { structured: { bullets: structured.bullets, decisions: structured.decisions, todos: structured.todos, risks: structured.risks } } : {}),
@@ -7653,20 +7817,20 @@ chuliIpc('warmy:archive-external', (_e, payload: { groupId: string; title: strin
       for (const e of liWai.entities) {
         const LeiXingBiao = ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] as const;
         const kind = (LeiXingBiao as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof LeiXingBiao)[number]) : 'concept';
-        knowledge.upsertEntity({ id: e.id, kind, name: e.name, attrs: e.attrs || {}, anchors: [] });
+        knowledge.upsertEntity({ id: e.id, kind, ming: e.ming, attrs: e.attrs || {}, anchors: [] });
       }
       knowledge.upsertEntity({
         id: `grp-${payload.groupId}`,
         kind: 'project',
-        name: String(payload.groupId),
+        ming: String(payload.groupId),
         attrs: {},
         anchors: (payload.anchors || []).map((a) => ({ file: a.file, seq: a.seq, recordId: `seq:${a.seq}` })),
       });
-      for (const ev of liWai.events) {
+      for (const Shi of liWai.events) {
         knowledge.addEvent({
-          id: ev.id,
-          title: ev.title,
-          result: ev.result || '',
+          id: Shi.id,
+          biaoTi: Shi.biaoTi,
+          result: Shi.result || '',
           entityIds: [`grp-${payload.groupId}`],
           anchors: (payload.anchors || []).map((a) => ({ file: a.file, seq: a.seq, recordId: `seq:${a.seq}` })),
           ts: Date.now(),
@@ -7680,18 +7844,18 @@ chuliIpc('warmy:archive-external', (_e, payload: { groupId: string; title: strin
   audit?.log('archive.external', { groupId: payload.groupId, prefs: (tiqu as { preferences?: unknown[] } | null)?.preferences?.length || 0 });
   return { ok: true, entry: r, tiqu, structured };
 });
-chuliIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; auto?: boolean }) => {
+chuliIpc('warmy:huiHuaZhaiYao', async (_e, payload?: { sessionId?: string; auto?: boolean }) => {
   try {
-    const gid = String(payload?.sessionId || '');
-    if (!gid) return { ok: false, error: 'sessionId required' };
-    const rizhi = chatLogs.get(gid) || [];
+    const qunId = String(payload?.sessionId || '');
+    if (!qunId) return { ok: false, error: 'sessionId required' };
+    const rizhi = chatLogs.get(qunId) || [];
     const recent = rizhi.slice(-30).map((l) => `${l.role}: ${String(l.content || '').slice(0, 160)}`).join('\n');
     if (!recent.trim()) return { ok: false, error: 'no-history' };
-    const title = `${gid} 会话摘要 ${new Date().toLocaleString()}`;
-    const structured = tiQuJieGouHuaZhaiYao({ groupId: gid, title, text: recent });
+    const biaoTi = `${qunId} 会话摘要 ${new Date().toLocaleString()}`;
+    const structured = tiQuJieGouHuaZhaiYao({ groupId: qunId, biaoTi, ti: recent });
     const summary =
       [
-        `# ${title}`,
+        `# ${biaoTi}`,
         structured.decisions.length ? `## 决策\n${structured.decisions.map((d) => '- ' + d).join('\n')}` : '',
         structured.todos.length ? `## 待办\n${structured.todos.map((d) => '- ' + d).join('\n')}` : '',
         structured.risks.length ? `## 风险\n${structured.risks.map((d) => '- ' + d).join('\n')}` : '',
@@ -7703,8 +7867,8 @@ chuliIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; aut
       .map((l) => ({ file: 'chat-log', seq: Number(l.seq || 0), recordId: `seq:${l.seq}` }));
     const entry = archiver?.archive({
       id: 'arc-' + Date.now(),
-      groupId: gid,
-      title,
+      groupId: qunId,
+      biaoTi,
       summary,
       anchors,
       structured: {
@@ -7715,33 +7879,33 @@ chuliIpc('warmy:session-summary', async (_e, payload?: { sessionId?: string; aut
       },
     });
     try {
-      const liWai = congGuiDangTiQuZhiShi({ groupId: gid, title, summary });
+      const liWai = congGuiDangTiQuZhiShi({ groupId: qunId, biaoTi, summary });
       if (knowledge) {
-        knowledge.upsertEntity({ id: `grp-${gid}`, kind: 'project', name: gid, attrs: {}, anchors: [] });
+        knowledge.upsertEntity({ id: `grp-${qunId}`, kind: 'project', ming: qunId, attrs: {}, anchors: [] });
         for (const e of liWai.entities) {
           const LeiXingBiao = ['person','org','material','place','concept','tool','project'] as const;
           const kind = (LeiXingBiao as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof LeiXingBiao)[number]) : 'concept';
-          knowledge.upsertEntity({ id: e.id, kind, name: e.name, attrs: e.attrs || {}, anchors: [] });
+          knowledge.upsertEntity({ id: e.id, kind, ming: e.ming, attrs: e.attrs || {}, anchors: [] });
         }
-        for (const ev of liWai.events) {
-          knowledge.addEvent({ id: ev.id, title: ev.title, result: ev.result || '', entityIds: [`grp-${gid}`], anchors: [], ts: Date.now() });
+        for (const Shi of liWai.events) {
+          knowledge.addEvent({ id: Shi.id, biaoTi: Shi.biaoTi, result: Shi.result || '', entityIds: [`grp-${qunId}`], anchors: [], ts: Date.now() });
         }
       }
       if (liWai.preferences?.length) heBingYongHuPianHao(app.getPath('userData'), liWai.preferences);
     } catch { /* 提炼失败不影响摘要落盘 */ }
-    audit?.log('session.summary', { sessionId: gid, auto: !!payload?.auto });
+    audit?.log('session.summary', { sessionId: qunId, auto: !!payload?.auto });
     return { ok: true, entry, structured };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
-chuliIpc('warmy:archive-list', (_e, groupId?: string) => ({
+chuliIpc('warmy:guiDangLieBiao', (_e, groupId?: string) => ({
   ok: true,
-  entries: archiver?.list(groupId) || [],
+  entries: archiver?.LieBiao(groupId) || [],
 }));
 
 // ── CleanupManager ──
-chuliIpc('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
+chuliIpc('warmy:qingLiYunXing', (_e, opts?: { checkpoints?: number }) => {
   try {
     const n = cleanup?.cleanCheckpoints(opts?.checkpoints || 20) || 0;
     const v = cleanup?.cleanVoice() || 0;
@@ -7751,17 +7915,17 @@ chuliIpc('warmy:cleanup-run', (_e, opts?: { checkpoints?: number }) => {
 });
 
 // ── 模型角色分配 ──
-chuliIpc('warmy:role-models-set', (_e, roles: JueseMoxingPeizhi) => {
+chuliIpc('warmy:jueSeMoXingJiSheZhi', (_e, roles: JueseMoxingPeizhi) => {
   try {
     roleModels = { ...roleModels, ...roles };
     audit?.log('roles.set', roles);
     return { ok: true, roles: roleModels };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:role-models-get', () => anQuanChuLi(() => ({ ok: true, roles: roleModels }), { ok: true, roles: {} }))
+chuliIpc('warmy:jueSeMoXingJiQu', () => anQuanChuLi(() => ({ ok: true, roles: roleModels }), { ok: true, roles: {} }))
 
 // ── 解散群组 ──
-chuliIpc('warmy:group-dissolve', (_e, groupId: string) => {
+chuliIpc('warmy:qunJieSan', (_e, groupId: string) => {
   try {
     // 只有创建者可解散（简化：本机节点）
     const g = router.getGroup(groupId);
@@ -7780,15 +7944,15 @@ chuliIpc('warmy:group-dissolve', (_e, groupId: string) => {
 });
 
 // ── 允许库导出 ──
-chuliIpc('warmy:export-allowlist', () => {
+chuliIpc('warmy:daoChuYunXuMingDan', () => {
   try {
-    const list = p1?.security.listAllowlist() || [];
+    const LieBiao = p1?.security.listAllowlist() || [];
     const dir = path.join(app.getPath('userData'), 'permissions');
     fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, 'allowlist-export.json');
-    fs.writeFileSync(file, JSON.stringify(list, null, 2), 'utf8');
-    audit?.log('allowlist.export', { count: list.length });
-    return { ok: true, path: file, count: list.length };
+    fs.writeFileSync(file, JSON.stringify(LieBiao, null, 2), 'utf8');
+    audit?.log('allowlist.export', { count: LieBiao.length });
+    return { ok: true, path: file, count: LieBiao.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
@@ -7801,7 +7965,7 @@ try {
 }
 
 // ── 导入 openclaw.json 供应商配置 ──
-chuliIpc('warmy:import-openclaw', () => {
+chuliIpc('warmy:daoRuopenclaw', () => {
   try {
     const ocLujing = path.join(app.getPath('userData'), '..', 'openclaw.json');
     if (!fs.existsSync(ocLujing)) return { ok: false, error: 'openclaw.json not found' };
@@ -7827,7 +7991,7 @@ chuliIpc('warmy:import-openclaw', () => {
   }
 });
 
-chuliIpc('warmy:special-models-set', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {
+chuliIpc('warmy:teShuMoXingJiSheZhi', (_e, cfg: { asr?: { provider: string }; embedding?: { provider: string }; summary?: { provider: string; model?: string }; organizer?: { provider: string; model?: string } }) => {
   try {
     if (settingsStore) {
       const cur = settingsStore.load() as unknown as Record<string, unknown>;
@@ -7837,61 +8001,61 @@ chuliIpc('warmy:special-models-set', (_e, cfg: { asr?: { provider: string }; emb
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:special-models-get', () => {
+chuliIpc('warmy:teShuMoXingJiQu', () => {
   try {
     const s = settingsStore?.load() as unknown as Record<string, unknown>;
     return { ok: true, specialModels: s?.specialModels || {} };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:asr-ollama', async (_e, payload: { audioBase64: string; model?: string }) => {
+chuliIpc('warmy:asrollama', async (_e, payload: { audioBase64: string; model?: string }) => {
   try {
     const res = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: payload.model || 'dimavz/whisper-tiny', prompt: 'Transcribe audio:', stream: false, options: { audio: payload.audioBase64 } }),
+      body: JSON.stringify({ model: payload.model || 'dimavz/whisper-tiny', tiShiCi: 'Transcribe audio:', stream: false, options: { audio: payload.audioBase64 } }),
     });
     if (!res.ok) return { ok: false, error: 'http ' + res.status };
-    const data = (await res.json()) as { response?: string };
-    return { ok: true, text: data.response || '' };
+    const data = (await res.json()) as { xiangYingTi?: string };
+    return { ok: true, text: data.xiangYingTi || '' };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 // ── 加入请求 / 黑名单 ──
-const joinRequests: Array<{ id: string; name: string; kind: string; target: string; targetType: string; ts: number; expireAt: number }> = [];
-const blacklist: Array<{ id: string; name: string; blockedAt: number; target: string }> = [];
-chuliIpc('warmy:join-request', (_e, payload: { name: string; kind: string; target: string; targetType: string }) => {
+const joinRequests: Array<{ id: string; ming: string; kind: string; target: string; targetType: string; ts: number; expireAt: number }> = [];
+const blacklist: Array<{ id: string; ming: string; blockedAt: number; target: string }> = [];
+chuliIpc('warmy:jiaRuQingQiu', (_e, payload: { ming: string; kind: string; target: string; targetType: string }) => {
   try {
-    const id = "jr-" + Date.now();
+    const id = "jr" + Date.now();
     const ts = Date.now();
-    joinRequests.push({ id, name: payload.name, kind: payload.kind, target: payload.target, targetType: payload.targetType, ts, expireAt: ts + 30 * 24 * 3600_000 });
-    audit?.log('join.request', { id, name: payload.name, target: payload.target });
+    joinRequests.push({ id, ming: payload.ming, kind: payload.kind, target: payload.target, targetType: payload.targetType, ts, expireAt: ts + 30 * 24 * 3600_000 });
+    audit?.log('join.request', { id, ming: payload.ming, target: payload.target });
     return { ok: true, id };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:join-pending', () => {
+chuliIpc('warmy:jiaRuPending', () => {
   try {
     const now = Date.now();
     const valid = joinRequests.filter((r) => r.expireAt > now);
     return { ok: true, items: valid, count: valid.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:join-respond', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
+chuliIpc('warmy:jiaRuHuiYing', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
   try {
-    const idx = joinRequests.findIndex((r) => r.id === payload.id);
-    if (idx < 0) return { ok: false };
-    const req = joinRequests[idx];
-    if (!req) return { ok: false };
+    const suoYin = joinRequests.findIndex((r) => r.id === payload.id);
+    if (suoYin < 0) return { ok: false };
+    const Qiu = joinRequests[suoYin];
+    if (!Qiu) return { ok: false };
     if (payload.action === 'block') {
-      blacklist.push({ id: req.id, name: req.name, blockedAt: Date.now(), target: req.target });
+      blacklist.push({ id: Qiu.id, ming: Qiu.ming, blockedAt: Date.now(), target: Qiu.target });
     }
-    joinRequests.splice(idx, 1);
-    audit?.log('join.respond', { id: req.id, action: payload.action });
-    return { ok: true, remaining: joinRequests.filter((r) => r.expireAt > Date.now()).length };
+    joinRequests.splice(suoYin, 1);
+    audit?.log('join.respond', { id: Qiu.id, action: payload.action });
+    return { ok: true, shengYu: joinRequests.filter((r) => r.expireAt > Date.now()).length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:blacklist-list', () => anQuanChuLi(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
-chuliIpc('warmy:blacklist-remove', (_e, id: string) => {
+chuliIpc('warmy:heiMingDanLieBiao', () => anQuanChuLi(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
+chuliIpc('warmy:heiMingDanYiChu', (_e, id: string) => {
   try {
     const i = blacklist.findIndex((b) => b.id === id);
     if (i >= 0) blacklist.splice(i, 1);

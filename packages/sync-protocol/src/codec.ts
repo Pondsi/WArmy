@@ -58,19 +58,19 @@ export function pinJieZiduan(fields: ReadonlyArray<string | number | null | unde
 
 /* ────────────────────────────── 摘要 / HMAC / KDF ────────────────────────────── */
 
-export function sha256(...parts: Zijie[]): Buffer {
+export function sha256(...Pian: Zijie[]): Buffer {
   const h = crypto.createHash('sha256');
-  for (const p of parts) h.update(zhuanZiJieZu(p));
+  for (const p of Pian) h.update(zhuanZiJieZu(p));
   return h.digest();
 }
 
-export function sha256ShiLiuJin(...parts: Zijie[]): string {
-  return sha256(...parts).toString('hex');
+export function sha256ShiLiuJin(...Pian: Zijie[]): string {
+  return sha256(...Pian).toString('hex');
 }
 
-export function hmacSha256Hash(key: Zijie, ...parts: Zijie[]): Buffer {
+export function hmacSha256Hash(key: Zijie, ...Pian: Zijie[]): Buffer {
   const h = crypto.createHmac('sha256', zhuanZiJieZu(key));
-  for (const p of parts) h.update(zhuanZiJieZu(p));
+  for (const p of Pian) h.update(zhuanZiJieZu(p));
   return h.digest();
 }
 
@@ -242,16 +242,16 @@ export function sealWithIv(key: Zijie, plaintext: Zijie, aad: Zijie, iv: Zijie):
 }
 
 /** 解密失败（无密钥 / 被篡改 / AAD 不符）一律抛错，绝不返回半成品 */
-export function open(key: Zijie, sealed: Fengyin, aad: Zijie): Buffer {
+export function daKai(key: Zijie, sealed: Fengyin, aad: Zijie): Buffer {
   const k = zhuanZiJieZu(key);
   const ct = zhuanZiJieZu(sealed.ct);
   if (ct.length < GCM_BIAOQIAN_CHANGDU) throw new Error('aes-gcm: ciphertext too short');
   const tag = ct.subarray(ct.length - GCM_BIAOQIAN_CHANGDU);
-  const body = ct.subarray(0, ct.length - GCM_BIAOQIAN_CHANGDU);
+  const ti = ct.subarray(0, ct.length - GCM_BIAOQIAN_CHANGDU);
   const d = crypto.createDecipheriv('aes-256-gcm', k, zhuanZiJieZu(sealed.iv));
   d.setAAD(zhuanZiJieZu(aad));
   d.setAuthTag(tag);
-  return Buffer.concat([d.update(body), d.final()]);
+  return Buffer.concat([d.update(ti), d.final()]);
 }
 
 /* ────────────────────────────── 8 字节大端计数 ────────────────────────────── */
@@ -283,11 +283,11 @@ export class ZhenJieMa {
     const out: Buffer[] = [];
     for (;;) {
       if (this.buf.length < 4) break;
-      const len = this.buf.readUInt32BE(0);
-      if (len > this.maxFrame) throw new Error(`frame too large: ${len}`);
-      if (this.buf.length < 4 + len) break;
-      out.push(this.buf.subarray(4, 4 + len));
-      this.buf = this.buf.subarray(4 + len);
+      const changdu = this.buf.readUInt32BE(0);
+      if (changdu > this.maxFrame) throw new Error(`frame too large: ${changdu}`);
+      if (this.buf.length < 4 + changdu) break;
+      out.push(this.buf.subarray(4, 4 + changdu));
+      this.buf = this.buf.subarray(4 + changdu);
     }
     return out;
   }

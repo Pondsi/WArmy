@@ -16,7 +16,7 @@ export interface ZhengjuMaodian {
 export interface Shiti {
   id: string;
   kind: ShitiLeixing;
-  name: string;
+  ming: string;
   attrs: Record<string, string>;
   eventIds: string[];
   anchors: ZhengjuMaodian[];
@@ -25,7 +25,7 @@ export interface Shiti {
 
 export interface ZhishiShijian {
   id: string;
-  title: string;
+  biaoTi: string;
   tool?: string;
   method?: string;
   result?: string;
@@ -39,13 +39,13 @@ export class KnowledgeBase {
   private entities = new Map<string, Shiti>();
   private events = new Map<string, ZhishiShijian>();
 
-  constructor(private dataDir: string) {
-    fs.mkdirSync(dataDir, { recursive: true });
+  constructor(private CangLu: string) {
+    fs.mkdirSync(CangLu, { recursive: true });
     this.load();
   }
 
   private get storePath() {
-    return path.join(this.dataDir, 'knowledge.json');
+    return path.join(this.CangLu, 'knowledge.json');
   }
 
   private load(): void {
@@ -84,9 +84,9 @@ export class KnowledgeBase {
   removeEntity(id: string): boolean {
     if (!this.entities.has(id)) return false;
     this.entities.delete(id);
-    for (const ev of this.events.values()) {
-      const i = ev.entityIds.indexOf(id);
-      if (i >= 0) ev.entityIds.splice(i, 1);
+    for (const Shi of this.events.values()) {
+      const i = Shi.entityIds.indexOf(id);
+      if (i >= 0) Shi.entityIds.splice(i, 1);
     }
     this.save();
     return true;
@@ -104,17 +104,17 @@ export class KnowledgeBase {
     return true;
   }
 
-  addEvent(ev: ZhishiShijian): ZhishiShijian {
-    this.events.set(ev.id, ev);
-    for (const shitiId of ev.entityIds) {
+  addEvent(Shi: ZhishiShijian): ZhishiShijian {
+    this.events.set(Shi.id, Shi);
+    for (const shitiId of Shi.entityIds) {
       const tiaoMu = this.entities.get(shitiId);
-      if (tiaoMu && !tiaoMu.eventIds.includes(ev.id)) {
-        tiaoMu.eventIds.push(ev.id);
+      if (tiaoMu && !tiaoMu.eventIds.includes(Shi.id)) {
+        tiaoMu.eventIds.push(Shi.id);
         tiaoMu.updatedAt = Date.now();
       }
     }
     this.save();
-    return ev;
+    return Shi;
   }
 
   /** 实体 → 事件 */
@@ -126,20 +126,20 @@ export class KnowledgeBase {
 
   /** 事件 → 实体 */
   entitiesOfEvent(eventId: string): Shiti[] {
-    const ev = this.events.get(eventId);
-    if (!ev) return [];
-    return ev.entityIds.map((id) => this.entities.get(id)).filter(Boolean) as Shiti[];
+    const Shi = this.events.get(eventId);
+    if (!Shi) return [];
+    return Shi.entityIds.map((id) => this.entities.get(id)).filter(Boolean) as Shiti[];
   }
 
   /** 统一检索入口 */
   query(q: string): { entities: Shiti[]; events: ZhishiShijian[] } {
     const s = q.trim().toLowerCase();
     const entities = [...this.entities.values()].filter(
-      (e) => e.name.toLowerCase().includes(s) || JSON.stringify(e.attrs).toLowerCase().includes(s)
+      (e) => e.ming.toLowerCase().includes(s) || JSON.stringify(e.attrs).toLowerCase().includes(s)
     );
     const events = [...this.events.values()].filter(
       (e) =>
-        e.title.toLowerCase().includes(s) ||
+        e.biaoTi.toLowerCase().includes(s) ||
         (e.result || '').toLowerCase().includes(s) ||
         (e.tool || '').toLowerCase().includes(s)
     );

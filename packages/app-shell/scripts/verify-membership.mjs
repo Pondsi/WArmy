@@ -31,7 +31,7 @@ import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 import {LianJieHuoXing, DEFAULT_MEMBER_CERT_TTL_MS, MEMBERSHIP_CLOCK_SKEW_MS, CHENGYUAN_ZHENGSHU_MOSHI, REVOCATION_LIST_SCHEMA, yingYongCheXiaoBiao, gouJianChengYuanZhengShu, gouJianCheXiaoBiao, guiFanChengYuanJson, lianShiZhiWen, lianGenZhengShuId, shuoMingChengYuanZhengShu, chaZhaoCheXiaoTiaoMu, shengChengEd25519, yiCheXiao, shiTongYiChengYuan, zhengShuQianMingZiJie, quChengYuanShenFen, signMemberCertificate, signRevocationList, verifyAndApplyRevocationList, verifyMemberCertificate, verifyRevocationList, bianliZhengshuLian, } from '../../bucketBu-protocol/dist/index.js';
-import {GroupStore, sameFingerprintText} from '../dist/group-store.js';
+import {QunCang, sameFingerprintText} from '../dist/group-store.js';
 import {ShenFenCang, MEMBERSHIP_FILE_SCHEMA, ChengYuanMingceCang, nullProtector} from '../dist/identity-store.js';
 import {applyInboundRevocationUpdate, buildIdentityChangeEntries, goujianChengyuanZaichang, computeChangeScopes, createRosterChecker, explainRosterDecision, wentiChengyuanZhengshu, membershipFileFor, membershipSameMember, membershipSnapshot, membershipStoreFor, MEMBERSHIP_SKEW_CHECK, reissueMemberCertificateForRecovery, chexiaoChengyuanZhengshu, rotateMemberCertificate, } from '../dist/identity-provider.js';
 import {DEFAULT_CLOCK_SKEW_MS, fingerprintFromPublicKey, isValidFingerprint, keyObjectFromPrivateDer, normalizeFingerprint, } from '../dist/identity.js';
@@ -46,29 +46,29 @@ let pass = 0;
 let fail = 0;
 const failures = [];
 
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   const shown = detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
   if (cond) {
     pass++;
-    console.log(`  [PASS] ${label}${shown}`);
+    console.log(`  [PASS] ${biaoQian}${shown}`);
   } else {
     fail++;
-    failures.push(label);
-    console.log(`  [FAIL] ${label}${shown}`);
+    failures.push(biaoQian);
+    console.log(`  [FAIL] ${biaoQian}${shown}`);
   }
 }
-function section(title) {
-  console.log(`\n── ${title} ──`);
+function section(biaoTi) {
+  console.log(`\n── ${biaoTi} ──`);
 }
 
 /* ────────────────────────────── 夹具 ────────────────────────────── */
 
 /** 造一个真身份（口令保护 → 可控地锁上/解开）；口令只用于 TEMP 下的抛弃身份 */
-function mkIdentity(name, passphrase) {
-  const dir = path.join(tmpRoot, `id-${name}`);
+function mkIdentity(ming, passphrase) {
+  const dir = path.join(tmpRoot, `id-${ming}`);
   fs.mkdirSync(dir, { recursive: true });
   const store = new ShenFenCang(path.join(dir, 'identity.json'), { protector: nullProtector() });
-  const created = store.ensureIdentity(`alias-${name}`, { email: `${name}@example.test` }, passphrase ? { passphrase } : {});
+  const created = store.ensureIdentity(`alias-${ming}`, { email: `${ming}@example.test` }, passphrase ? { passphrase } : {});
   store.lock(); // 复现"重启后没有会话 DEK"的真实状态
   return { store, created, dir, idFile: path.join(dir, 'identity.json') };
 }
@@ -91,10 +91,10 @@ const creator = mkIdentity('creator', PASS);
 const memberB = mkIdentity('bob', PASS);
 const memberC = mkIdentity('carol', PASS);
 const attacker = mkIdentity('evil', PASS);
-for (const [label, id] of [['creator', creator], ['bob', memberB], ['carol', memberC], ['evil', attacker]]) {
+for (const [biaoQian, id] of [['creator', creator], ['bob', memberB], ['carol', memberC], ['evil', attacker]]) {
   const u = id.store.unlock(PASS);
   if (!u.ok) {
-    console.error(`夹具身份 ${label} 解锁失败：`, u);
+    console.error(`夹具身份 ${biaoQian} 解锁失败：`, u);
     process.exit(1);
   }
 }
@@ -255,13 +255,13 @@ const tamperCases = [
   ['加一个 supersedes', (c) => ({ ...c, supersedes: 'mc-nonexistent' })],
   ['加一个未知字段（不进签名载荷，必须不影响判定）', (c) => ({ ...c, extraJunk: 1 })],
 ];
-for (const [label, mutate] of tamperCases) {
+for (const [biaoQian, mutate] of tamperCases) {
   const t = mutate(bobCert);
   const r = verifyMemberCertificate(t, VOPT);
-  if (label.includes('未知字段')) {
-    check(`篡改「${label}」→ 仍通过（载荷只含列出的字段，这是刻意的）`, r.ok === true, r.code);
+  if (biaoQian.includes('未知字段')) {
+    check(`篡改「${biaoQian}」→ 仍通过（载荷只含列出的字段，这是刻意的）`, r.ok === true, r.code);
   } else {
-    check(`篡改「${label}」→ 验签/校验失败`, r.ok === false, r.code);
+    check(`篡改「${biaoQian}」→ 验签/校验失败`, r.ok === false, r.code);
   }
 }
 check('成对换掉"公钥 + 指纹"（自洽的攻击者公钥）→ 也失败（issuer 不变则签名不通过）', (() => {
@@ -430,10 +430,10 @@ const v2 = await signRevocationList(
   gouJianCheXiaoBiao({ groupId: GROUP, listVersion: 2, entries: [...curList.entries], issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey }),
   (b) => signerCreator.sign(b)
 );
-const applied2 = creatorMembership.applyRevocationList(GROUP, v2);
+const applied2 = creatorMembership.yingYongCheXiaoBiao(GROUP, v2);
 check('升版（v1 → v2，条目不变）被接受', applied2.ok === true && applied2.changed === true && applied2.listVersion === 2, applied2);
 check('落盘版本同步为 2', readJson(membershipFileFor(creator.store)).groups[GROUP].revocation.listVersion === 2);
-const rollback = creatorMembership.applyRevocationList(GROUP, curList);
+const rollback = creatorMembership.yingYongCheXiaoBiao(GROUP, curList);
 check('回滚（再送 v1）→ code=rollback 且被拒', rollback.ok === false && rollback.code === 'rollback', rollback.code);
 check('回滚被拒后本机列表仍是 v2（没被降级）', creatorMembership.revocation(GROUP).listVersion === 2);
 check('纯 yingYongCheXiaoBiao(v2, v1) 也报 rollback（协议层同样挡）', yingYongCheXiaoBiao(v2, curList).code === 'rollback');
@@ -441,17 +441,17 @@ const sameVersionDifferent = await signRevocationList(
   gouJianCheXiaoBiao({ groupId: GROUP, listVersion: 2, entries: [], issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey, issuedAt: v2.issuedAt + 5000 }),
   (b) => signerCreator.sign(b)
 );
-const replayRes = creatorMembership.applyRevocationList(GROUP, sameVersionDifferent);
+const replayRes = creatorMembership.yingYongCheXiaoBiao(GROUP, sameVersionDifferent);
 check('同版本(v2)但内容不同 → code=replay 且被拒', replayRes.ok === false && replayRes.code === 'replay', replayRes.code);
 check('同版本(v2)且内容相同 → 幂等接受（changed=false）', (() => {
-  const r = creatorMembership.applyRevocationList(GROUP, v2);
+  const r = creatorMembership.yingYongCheXiaoBiao(GROUP, v2);
   return r.ok === true && r.changed === false;
 })());
 const v3Dropped = await signRevocationList(
   gouJianCheXiaoBiao({ groupId: GROUP, listVersion: 3, entries: [], issuerFingerprint: infoCreator.fingerprint, issuerPublicKey: infoCreator.publicKey }),
   (b) => signerCreator.sign(b)
 );
-const dropped = creatorMembership.applyRevocationList(GROUP, v3Dropped);
+const dropped = creatorMembership.yingYongCheXiaoBiao(GROUP, v3Dropped);
 check('升版但**少了已吊销项** → code=entries-dropped 且被拒（不能借新版本偷偷解吊销）', dropped.ok === false && dropped.code === 'entries-dropped', dropped.code);
 check('被拒后列表仍停在 v2 且条目还在', creatorMembership.revocation(GROUP).listVersion === 2 && creatorMembership.revocation(GROUP).entries.length === 1);
 check('条目变少的拒绝在协议层同样成立', yingYongCheXiaoBiao(v2, v3Dropped).code === 'entries-dropped');
@@ -471,9 +471,9 @@ const evilList = await signRevocationList(
 );
 check('attacker 自称签发者但签名不是他的 → bad-signature', verifyRevocationList(evilList, VOPT).code === 'bad-signature');
 check('把攻击者的列表塞进本机 → 被拒且版本不变', (() => {
-  const r = creatorMembership.applyRevocationList(GROUP, evilList);
+  const r = creatorMembership.yingYongCheXiaoBiao(GROUP, evilList);
   return r.ok === false && creatorMembership.revocation(GROUP).listVersion === 2;
-})(), creatorMembership.applyRevocationList(GROUP, evilList).code);
+})(), creatorMembership.yingYongCheXiaoBiao(GROUP, evilList).code);
 check('verifyAndApplyRevocationList：验签失败时**不合并**（顺序不可颠倒）', (() => {
   const r = verifyAndApplyRevocationList(v2, evilList, VOPT);
   return r.ok === false && r.changed === false;
@@ -564,8 +564,8 @@ check('换证后**新指纹被放行**（原成员以新身份回来）', (() =>
   const v = creatorMembership.authorizeFingerprint(bobInfoAfter.fingerprint);
   return v.decided === true && v.ok === true && v.certId === 'mc-bob-2';
 })(), creatorMembership.authorizeFingerprint(bobInfoAfter.fingerprint));
-check('shiTongYiChengYuan(旧, 新) === true', creatorMembership.isSameMember(GROUP, bobInfoBefore.fingerprint, bobInfoAfter.fingerprint).same === true);
-check('shiTongYiChengYuan 给出理由（链根）', /链/.test(creatorMembership.isSameMember(GROUP, bobInfoBefore.fingerprint, bobInfoAfter.fingerprint).reason), creatorMembership.isSameMember(GROUP, bobInfoBefore.fingerprint, bobInfoAfter.fingerprint).reason);
+check('shiTongYiChengYuan(旧, 新) === true', creatorMembership.shiTongYiChengYuan(GROUP, bobInfoBefore.fingerprint, bobInfoAfter.fingerprint).same === true);
+check('shiTongYiChengYuan 给出理由（链根）', /链/.test(creatorMembership.shiTongYiChengYuan(GROUP, bobInfoBefore.fingerprint, bobInfoAfter.fingerprint).reason), creatorMembership.shiTongYiChengYuan(GROUP, bobInfoBefore.fingerprint, bobInfoAfter.fingerprint).reason);
 check('membershipSameMember（跨群封装）同样为 true', membershipSameMember(creatorMembership, GROUP, bobInfoBefore.fingerprint, bobInfoAfter.fingerprint).same === true);
 check('lianShiZhiWen 覆盖链上两个指纹', (() => {
   const fps = creatorMembership.chainFingerprints(bobInfoAfter.fingerprint);
@@ -648,7 +648,7 @@ const recover = await reissueMemberCertificateForRecovery({
 });
 check('人工恢复（被踢成员换新密钥后回来，沿用 memberId）成功签发', recover.ok === true, recover.code);
 check('人工恢复给出 linked=true（同一成员身份）', recover.linked === true, recover.linked);
-check('人工恢复后 shiTongYiChengYuan(新指纹, 被踢的旧指纹) === true —— 这就是"群内身份恢复"', creatorMembership.isSameMember(GROUP, infoRevived.fingerprint, infoC.fingerprint).same === true);
+check('人工恢复后 shiTongYiChengYuan(新指纹, 被踢的旧指纹) === true —— 这就是"群内身份恢复"', creatorMembership.shiTongYiChengYuan(GROUP, infoRevived.fingerprint, infoC.fingerprint).same === true);
 check('人工恢复沿用旧证书的成员标识', recover.memberId === 'mc-carol-1' || recover.memberId === 'carol', recover.memberId);
 check('恢复出来的新指纹持有效证书 → 放行（真正重新进群）', creatorMembership.authorizeFingerprint(infoRevived.fingerprint).ok === true);
 check('被踢的旧指纹依旧被吊销（恢复不解除旧证书的吊销）', creatorMembership.authorizeFingerprint(infoC.fingerprint).code === 'revoked');
@@ -681,7 +681,7 @@ check('证书记录优先于 TOFU：被吊销者即使在本机联系人表里�
   const cert = creatorMembership.certificateById(GROUP, 'mc-carol-1');
   m.putCertificate(cert, { expectIssuerFingerprint: infoCreator.fingerprint });
   const list = creatorMembership.revocation(GROUP);
-  m.applyRevocationList(GROUP, list, { expectIssuerFingerprint: infoCreator.fingerprint });
+  m.yingYongCheXiaoBiao(GROUP, list, { expectIssuerFingerprint: infoCreator.fingerprint });
   plain.store.recordPeerCard(infoC.fingerprint, { email: 'c@example.test' }, Date.now());
   const checker = createRosterChecker(plain.store, [], { membership: m });
   const decision = explainRosterDecision(plain.store, infoC.fingerprint, { membership: m });
@@ -747,17 +747,17 @@ section('9. 成员表 fingerprint 字段与旧格式迁移（不猜、不伪造�
 const groupsFile = path.join(tmpRoot, 'groups.json');
 const legacy = {
   version: 1,
-  groups: [{ groupId: 'g-legacy', name: '旧群', type: 'internal', directedMode: false, dutyInstanceId: null, createdAt: 1, updatedAt: 1, origin: 'ipc' }],
+  groups: [{ groupId: 'g-legacy', ming: '旧群', type: 'internal', directedMode: false, dutyInstanceId: null, createdAt: 1, updatedAt: 1, origin: 'ipc' }],
   members: {
     'g-legacy': [
-      { id: 'm-1', name: '老王', role: 'member', joinedAt: 1, source: 'invite' },
-      { id: 'inst:inst-9', name: '牛马九号', role: 'member', joinedAt: 2, source: 'instance', instanceId: 'inst-9' },
+      { id: 'm-1', ming: '老王', role: 'member', joinedAt: 1, source: 'invite' },
+      { id: 'inst:inst-9', ming: '牛马九号', role: 'member', joinedAt: 2, source: 'instance', instanceId: 'inst-9' },
     ],
   },
 };
 fs.writeFileSync(groupsFile, JSON.stringify(legacy, null, 2), 'utf8');
 const legacyRaw = fs.readFileSync(groupsFile, 'utf8');
-const gs = new GroupStore(groupsFile);
+const gs = new QunCang(groupsFile);
 const legacySnap = gs.snapshot();
 check('旧格式读入不报错', legacySnap.groups.length === 1 && legacySnap.members['g-legacy'].length === 2, legacySnap.groups.length);
 check('旧成员记录的 fingerprint 是 undefined（不猜、不伪造）', legacySnap.members['g-legacy'].every((m) => m.fingerprint === undefined), legacySnap.members['g-legacy'].map((m) => m.fingerprint));
@@ -768,7 +768,7 @@ check('groupsWithFingerprint 对无指纹的旧库返回空', gs.groupsWithFinge
 const audits = [];
 const inviteWithFp = gs.addMemberWithFingerprint(
   'g-legacy',
-  { name: '小张', role: 'member', source: 'invite', fingerprint: infoB.fingerprint },
+  { ming: '小张', role: 'member', source: 'invite', fingerprint: infoB.fingerprint },
   { onAudit: (op, detail) => audits.push({ op, detail }) }
 );
 check('邀请 + 带指纹 → 成员写入成功', inviteWithFp.ok === true && inviteWithFp.members.length === 3, inviteWithFp.members.map((m) => m.name));
@@ -777,19 +777,19 @@ check('写入路径记录审计 group.member.fingerprint', audits.some((a) => a.
 check('这次写盘后文件里出现了指纹（"下次写入时才带上"）', readJson(groupsFile).members['g-legacy'].find((m) => m.name === '小张').fingerprint === infoB.fingerprint);
 check('旧成员依然没有指纹（没有被"顺便补上"）', readJson(groupsFile).members['g-legacy'].find((m) => m.name === '老王').fingerprint === undefined);
 const audits2 = [];
-const inviteNoFp = gs.addMemberWithFingerprint('g-legacy', { name: '无名', role: 'member', source: 'invite' }, { onAudit: (op, detail) => audits2.push({ op, detail }) });
+const inviteNoFp = gs.addMemberWithFingerprint('g-legacy', { ming: '无名', role: 'member', source: 'invite' }, { onAudit: (op, detail) => audits2.push({ op, detail }) });
 check('邀请但拿不到指纹 → 留空', inviteNoFp.members.find((m) => m.name === '无名')?.fingerprint === undefined);
 check('拿不到指纹时记一条审计（missing）', audits2.some((a) => a.op === 'group.member.fingerprint.missing'), audits2.map((a) => a.op));
 const audits3 = [];
 const instMember = gs.addMemberWithFingerprint(
   'g-legacy',
-  { name: '牛马十号', role: 'member', source: 'instance', instanceId: 'inst-10', fingerprint: infoC.fingerprint },
+  { ming: '牛马十号', role: 'member', source: 'instance', instanceId: 'inst-10', fingerprint: infoC.fingerprint },
   { onAudit: (op, detail) => audits3.push({ op, detail }) }
 );
 check('本机实例成员即使传了指纹也**不写**（实例不是远端身份，套指纹等于伪造归属）', instMember.members.find((m) => m.name === '牛马十号')?.fingerprint === undefined);
 check('实例路径不记 missing 审计（原因已明确：不是"拿不到"）', audits3.length === 0, audits3);
 const audits4 = [];
-gs.addMemberWithFingerprint('g-legacy', { name: '迁移员', role: 'member', source: 'migrated' }, { onAudit: (op, detail) => audits4.push({ op, detail }) });
+gs.addMemberWithFingerprint('g-legacy', { ming: '迁移员', role: 'member', source: 'migrated' }, { onAudit: (op, detail) => audits4.push({ op, detail }) });
 check('migrated 路径留空且记审计', audits4.some((a) => a.op === 'group.member.fingerprint.missing' && a.detail?.reason === 'legacy-record'), audits4);
 
 const patch = gs.setMemberFingerprint('g-legacy', 'm-1', infoB.fingerprint);
@@ -804,19 +804,19 @@ check('给不存在的成员补指纹 → member not found', gs.setMemberFingerp
 check('groupsWithFingerprint 命中该群', gs.groupsWithFingerprint(infoB.fingerprint).some((r) => r.groupId === 'g-legacy'), gs.groupsWithFingerprint(infoB.fingerprint));
 check('groupsWithFingerprint 忽略短横/大小写差异', gs.groupsWithFingerprint(infoB.fingerprint.replace(/-/g, '').toLowerCase()).length >= 1);
 check('addMember（底层）也接受 fingerprint 参数', (() => {
-  const r = gs.addMember('g-legacy', { name: '直接加', role: 'member', source: 'invite', fingerprint: infoC.fingerprint });
+  const r = gs.addMember('g-legacy', { ming: '直接加', role: 'member', source: 'invite', fingerprint: infoC.fingerprint });
   return r.ok === true && r.members.find((m) => m.name === '直接加')?.fingerprint === infoC.fingerprint;
 })());
-const gs2 = new GroupStore(groupsFile);
-const up = gs2.upsertGroup({ groupId: 'g-legacy', name: '旧群', type: 'internal', creatorFingerprint: infoCreator.fingerprint });
+const gs2 = new QunCang(groupsFile);
+const up = gs2.upsertGroup({ groupId: 'g-legacy', ming: '旧群', type: 'internal', creatorFingerprint: infoCreator.fingerprint });
 check('upsertGroup 写入 creatorFingerprint', up.ok === true && up.group?.creatorFingerprint === infoCreator.fingerprint, up.group?.creatorFingerprint);
 check('creatorFingerprint 落盘', readJson(groupsFile).groups[0].creatorFingerprint === infoCreator.fingerprint);
 check('再次 upsert 不覆盖已知的 creatorFingerprint', (() => {
-  const r = gs2.upsertGroup({ groupId: 'g-legacy', name: '旧群2', type: 'internal', creatorFingerprint: infoEvil.fingerprint });
+  const r = gs2.upsertGroup({ groupId: 'g-legacy', ming: '旧群2', type: 'internal', creatorFingerprint: infoEvil.fingerprint });
   return r.group?.creatorFingerprint === infoCreator.fingerprint;
 })());
 check('不给 creatorFingerprint 时保持缺失（不编造）', (() => {
-  const r = gs2.upsertGroup({ groupId: 'g-new', name: '新群', type: 'external' });
+  const r = gs2.upsertGroup({ groupId: 'g-new', ming: '新群', type: 'external' });
   return r.ok === true && r.group?.creatorFingerprint === undefined;
 })());
 check('group-store 的指纹比较与身份层规则一致（同一批输入结论相同）', (() => {
@@ -835,12 +835,12 @@ check('group-store 的指纹比较与身份层规则一致（同一批输入结�
 
 section('10. scopes：有映射精确到群/项目；无映射如实回退 [{kind:all}]');
 
-const scopeGroups = new GroupStore(path.join(tmpRoot, 'scope-groups.json'));
-scopeGroups.upsertGroup({ groupId: 'g-in', name: '项目推进群', type: 'internal', creatorFingerprint: infoCreator.fingerprint });
-scopeGroups.upsertGroup({ groupId: 'g-ext', name: '外部队', type: 'external', creatorFingerprint: infoCreator.fingerprint });
-scopeGroups.addMemberWithFingerprint('g-in', { name: 'bob', role: 'member', source: 'invite', fingerprint: bobInfoAfter.fingerprint });
-scopeGroups.addMemberWithFingerprint('g-ext', { name: 'bob', role: 'member', source: 'invite', fingerprint: bobInfoAfter.fingerprint });
-scopeGroups.addMemberWithFingerprint('g-ext', { name: '本地牛马', role: 'member', source: 'instance', instanceId: 'inst-1' });
+const scopeGroups = new QunCang(path.join(tmpRoot, 'scope-groups.json'));
+scopeGroups.upsertGroup({ groupId: 'g-in', ming: '项目推进群', type: 'internal', creatorFingerprint: infoCreator.fingerprint });
+scopeGroups.upsertGroup({ groupId: 'g-ext', ming: '外部队', type: 'external', creatorFingerprint: infoCreator.fingerprint });
+scopeGroups.addMemberWithFingerprint('g-in', { ming: 'bob', role: 'member', source: 'invite', fingerprint: bobInfoAfter.fingerprint });
+scopeGroups.addMemberWithFingerprint('g-ext', { ming: 'bob', role: 'member', source: 'invite', fingerprint: bobInfoAfter.fingerprint });
+scopeGroups.addMemberWithFingerprint('g-ext', { ming: '本地牛马', role: 'member', source: 'instance', instanceId: 'inst-1' });
 
 const scoped = computeChangeScopes({
   fingerprints: [bobInfoBefore.fingerprint, bobInfoAfter.fingerprint],
@@ -851,7 +851,7 @@ check('有映射时 scopeBasis = membership', scoped.scopeBasis === 'membership'
 check('精确命中内群（kind=internal + groupId）', scoped.scopes.some((s) => s.kind === 'internal' && s.id === 'g-in'), scoped.scopes);
 check('精确命中外部群（kind=external + groupId）', scoped.scopes.some((s) => s.kind === 'external' && s.id === 'g-ext'), scoped.scopes);
 check('scopes 里**没有** all（有映射就不该到处出现）', scoped.scopes.every((s) => s.kind !== 'all'), scoped.scopes);
-check('命中群列表非空且带成员 id/name（可追责）', scoped.matchedGroups.length === 2 && scoped.matchedGroups.every((g) => !!g.memberId), scoped.matchedGroups);
+check('命中群列表非空且带成员 id/ming（可追责）', scoped.matchedGroups.length === 2 && scoped.matchedGroups.every((g) => !!g.memberId), scoped.matchedGroups);
 check('映射不存在 → 回退 [{kind:all}] 且 scopeBasis=fallback-all', (() => {
   const r = computeChangeScopes({ fingerprints: ['QQQQ-QQQQ-QQQQ-QQQQ-QQQQ'], directory: scopeGroups, contacts: [] });
   return r.scopeBasis === 'fallback-all' && r.scopes.length === 1 && r.scopes[0].kind === 'all';
@@ -928,13 +928,13 @@ const liveness = new LianJieHuoXing({ now: () => livenessClock, offlineFailures:
 const liveB = liveness.registerConnection(bobInfoAfter.fingerprint, { id: 'conn-1', kind: 'member-initiated' });
 check('真活连接注册后该指纹在线（member-connection）', liveB.online === true && liveB.via === 'member-connection', liveB);
 const presenceMembers = [
-  { id: 'inst-1', name: '牛马一号', source: 'instance', instanceId: 'inst-1' },
-  { id: 'm-bob', name: 'bob', role: 'member', source: 'invite', fingerprint: bobInfoAfter.fingerprint },
-  { id: 'm-nofp', name: '无名氏', role: 'member', source: 'invite' },
+  { id: 'inst-1', ming: '牛马一号', source: 'instance', instanceId: 'inst-1' },
+  { id: 'm-bob', ming: 'bob', role: 'member', source: 'invite', fingerprint: bobInfoAfter.fingerprint },
+  { id: 'm-nofp', ming: '无名氏', role: 'member', source: 'invite' },
 ];
 const presenceRows = goujianChengyuanZaichang({
   members: presenceMembers,
-  instances: [{ id: 'inst-1', name: '牛马一号', status: 'running' }],
+  instances: [{ id: 'inst-1', ming: '牛马一号', status: 'running' }],
   liveness: liveness.list(),
   meshEnabled: true,
 });
@@ -956,12 +956,12 @@ check('异地+没有指纹：**不给** online 字段（宁可不给，不编）
 check('异地+没有指纹：也不给 fingerprint 字段', !('fingerprint' in rowNoFp), Object.keys(rowNoFp));
 check('未连过的指纹 → 明确 offline（有指纹但没活连接 = 不在线）', (() => {
   const rows = goujianChengyuanZaichang({
-    members: [{ id: 'm-c', name: 'carol', source: 'invite', fingerprint: infoC.fingerprint }],
+    members: [{ id: 'm-c', ming: 'carol', source: 'invite', fingerprint: infoC.fingerprint }],
     instances: [], liveness: liveness.list(), meshEnabled: true,
   });
   return rows[0].presenceBasis === 'mesh-session' && rows[0].online === false && rows[0].presenceVia === 'none';
 })(), goujianChengyuanZaichang({
-  members: [{ id: 'm-c', name: 'carol', source: 'invite', fingerprint: infoC.fingerprint }],
+  members: [{ id: 'm-c', ming: 'carol', source: 'invite', fingerprint: infoC.fingerprint }],
   instances: [], liveness: liveness.list(), meshEnabled: true,
 })[0]);
 liveness.closeConnection(bobInfoAfter.fingerprint, 'conn-1', livenessClock);
@@ -982,14 +982,14 @@ check('组网关闭时异地成员一律不在线（UI 会显示"组网关闭"�
 })());
 check('指纹书写差异也能匹配活连接（去短横/小写）', (() => {
   const rows = goujianChengyuanZaichang({
-    members: [{ id: 'm-b', name: 'bob', source: 'invite', fingerprint: bobInfoAfter.fingerprint.toLowerCase() }],
+    members: [{ id: 'm-b', ming: 'bob', source: 'invite', fingerprint: bobInfoAfter.fingerprint.toLowerCase() }],
     instances: [], liveness: [liveB], meshEnabled: true,
   });
   return rows[0].online === true;
 })());
 check('已停用实例在 presence 行里带 disabled 标记', (() => {
   const rows = goujianChengyuanZaichang({
-    members: [presenceMembers[0]], instances: [{ id: 'inst-1', name: '牛马一号', status: 'stopped' }],
+    members: [presenceMembers[0]], instances: [{ id: 'inst-1', ming: '牛马一号', status: 'stopped' }],
     liveness: [], meshEnabled: true, disabledInstanceIds: ['inst-1'],
   });
   return rows[0].disabled === true && rows[0].online === false;
@@ -1000,23 +1000,23 @@ check('空成员表 → 空数组（不抛）', goujianChengyuanZaichang({ membe
 const mainSrc = fs.readFileSync(path.join(selfDir, '..', 'src', 'electron-main.ts'), 'utf8');
 const preloadSrc = fs.readFileSync(path.join(selfDir, '..', 'src', 'preload.cjs'), 'utf8');
 check('主进程 net-members-presence 已改用 goujianChengyuanZaichang', /net-members-presence[\s\S]{0,900}buildMemberPresence\(/.test(mainSrc));
-check('主进程不再残留"成员表里只有 id/name/instanceId，没有指纹"的旧注释', !mainSrc.includes('成员表里只有 id/name/instanceId'));
+check('主进程不再残留"成员表里只有 id/ming/instanceId，没有指纹"的旧注释', !mainSrc.includes('成员表里只有 id/ming/instanceId'));
 check('主进程 identity-changes 传入 directory（成员表）', /identity-changes[\s\S]{0,700}directory: groupStore/.test(mainSrc));
 const CHANNELS = [
-  'warmy:membership-list',
-  'warmy:membership-authorize',
-  'warmy:membership-issue',
-  'warmy:membership-rotate',
-  'warmy:membership-revoke',
-  'warmy:membership-receive-cert',
-  'warmy:membership-sync-revocation',
+  'warmy:chengYuanMingCeLieBiao',
+  'warmy:chengYuanMingCeShouQuan',
+  'warmy:chengYuanMingCeQianFa',
+  'warmy:chengYuanMingCeLunHuan',
+  'warmy:chengYuanMingCeCheXiao',
+  'warmy:chengYuanMingCeJieShouZhengShu',
+  'warmy:chengYuanMingCeTongBuCheXiao',
 ];
 check('7 条成员证书 IPC 都在主进程注册', CHANNELS.every((c) => mainSrc.includes(`'${c}'`)), CHANNELS.filter((c) => !mainSrc.includes(`'${c}'`)));
 check('7 条成员证书 IPC 都在 preload 白名单里', CHANNELS.every((c) => preloadSrc.includes(`'${c}'`)), CHANNELS.filter((c) => !preloadSrc.includes(`'${c}'`)));
 check('preload 暴露了 renderer 用的函数名（membershipList/Authorize/Issue/Rotate/Revoke）', ['membershipList', 'membershipAuthorize', 'membershipIssue', 'membershipRotate', 'membershipRevoke'].every((n) => new RegExp(`\\b${n}: `).test(preloadSrc)));
 check('踢人会顺手吊销证书（group-kick 里调用 chexiaoChengyuanZhengshu）', /group-kick[\s\S]{0,2000}revokeMemberCertificate\(/.test(mainSrc));
 check('邀请带名片时会签发证书（group-invite 里调用 issueMemberCertForGroup）', /group-invite[\s\S]{0,2000}issueMemberCertForGroup\(/.test(mainSrc));
-check('收到的吊销列表走已鉴权指纹校验（onInbound 里用 msg.peerFingerprint）', /applyInboundRevocationUpdate\(\{[\s\S]{0,400}fromFingerprint: msg\.peerFingerprint/.test(mainSrc));
+check('收到的吊销列表走已鉴权指纹校验（onInbound 里用 xiaoXi.peerFingerprint）', /applyInboundRevocationUpdate\(\{[\s\S]{0,400}fromFingerprint: xiaoXi\.peerFingerprint/.test(mainSrc));
 check('UI（app.js）把 presenceBasis 带进 DOM 属性（可观测，不改判定）', fs.readFileSync(path.join(selfDir, '..', 'src', 'renderer', 'app.js'), 'utf8').includes('data-presence-basis'));
 check('UI 换证条目带 data-scope-basis（降级原因可见）', fs.readFileSync(path.join(selfDir, '..', 'src', 'renderer', 'app.js'), 'utf8').includes('data-scope-basis'));
 check('i18n 两侧都有 group.memberPresenceUnknown 且非空', (() => {
@@ -1047,8 +1047,8 @@ const reopened = new ChengYuanMingceCang(membershipFileFor(creator.store), {
   fingerprintOf: fingerprintFromPublicKey,
   clockSkewMs: DEFAULT_CLOCK_SKEW_MS,
 });
-check('重开（模拟重启）后证书仍在', reopened.listCertificates(GROUP).length === creatorMembership.listCertificates(GROUP).length, {
-  reopened: reopened.listCertificates(GROUP).length,
+check('重开（模拟重启）后证书仍在', reopened.LieBiaoCertificates(GROUP).length === creatorMembership.listCertificates(GROUP).length, {
+  reopened: reopened.LieBiaoCertificates(GROUP).length,
   live: creatorMembership.listCertificates(GROUP).length,
 });
 check('重开后吊销列表版本一致', reopened.revocation(GROUP).listVersion === creatorMembership.revocation(GROUP).listVersion);
@@ -1070,7 +1070,7 @@ const vNext = await signRevocationList(
   (b) => signerCreator.sign(b)
 );
 const vNextVersion = vNext.listVersion;
-reopened.applyRevocationList(GROUP, vNext, { expectIssuerFingerprint: infoCreator.fingerprint });
+reopened.yingYongCheXiaoBiao(GROUP, vNext, { expectIssuerFingerprint: infoCreator.fingerprint });
 check('另一实例写入后，本实例读到新版本（缓存按文件变化失效）', creatorMembership.revocation(GROUP).listVersion === vNextVersion, creatorMembership.revocation(GROUP).listVersion);
 check('刚刚被吊销的指纹立刻被名册拒（无需重启）', rosterCreator(infoEvil.fingerprint) === false);
 
@@ -1144,7 +1144,7 @@ check('跨群一致性：吊销与"有效证书"并存时**与写入顺序无关
     });
     if (!issued2.ok) return { decided: false, ok: false, code: `issue:${issued2.code}` };
     void revocationFirst;
-    const applied = m.applyRevocationList(revokeGroup, revocationList, { expectIssuerFingerprint: infoCreator.fingerprint });
+    const applied = m.yingYongCheXiaoBiao(revokeGroup, revocationList, { expectIssuerFingerprint: infoCreator.fingerprint });
     if (!applied.ok) return { decided: false, ok: false, code: `apply:${applied.code}` };
     return m.authorizeFingerprint(infoRevived.fingerprint);
   };

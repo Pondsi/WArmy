@@ -33,13 +33,13 @@ export interface StatusCard {
 }
 
 /** 状态卡片：≤2000 token 的紧凑视图 */
-export function buildStatusCard(card: StatusCard): string {
-  const lines = [
-    `[状态卡片] 群=card.groupId 值班=card.dutyId 队列=card.queueLength`,
-    `运行中: card.runningTasks.slice(0, 5).join(' | ') || '无'`,
-    `最近: card.recent.slice(0, 6).join(' / ')`,
+export function buildStatusCard(ka: StatusCard): string {
+  const HangJi = [
+    `[状态卡片] 群=${ka.groupId} 值班=${ka.dutyId} 队列=${ka.queueLength}`,
+    `运行中: ${ka.runningTasks.slice(0, 5).join(' | ') || '无'}`,
+    `最近: ${ka.recent.slice(0, 6).join(' / ')}`,
   ];
-  const text = lines.join('\n');
+  const text = HangJi.join('\n');
   return text.length > 1800 ? text.slice(0, 1800) + '…' : text;
 }
 
@@ -49,9 +49,9 @@ export interface XietiaoqiYilai {
   ccr: CcrGateway;
   history: Map<string, LiaoTianXiaoXi[]>;
   /** 知识库写入（可选） */
-  addEvent?: (title: string, body: string, groupId: string) => void;
+  addEvent?: (title: string, ti: string, groupId: string) => void;
   /** 取本机实例 ID 列表 */
-  listInstances: () => Array<{ id: string; name: string; status: string; dutyEligible: boolean }>;
+  listInstances: () => Array<{ id: string; ming: string; status: string; dutyEligible: boolean }>;
   /**
    * 会话日志（只追加，ADR 002 / 不变量 #2）：由主进程提供同一份日志，值班者输入复用它渲染。
    * 缺省时退化为按 history 下标造 seq，仍然走同一个渲染器（不另写一份）。
@@ -65,8 +65,8 @@ export interface XietiaoqiYilai {
    * 不给就等于"不暴露工具"（退回普通单轮对话）。
    */
   toolSpecs?: () => GongJuGuiGe[] | undefined;
-  runTool?: (call: GongJuDiaoYong, ctx: { round: number; maxResultChars: number }) => Promise<string> | string;
-  toolLimits?: () => { maxRounds: number; maxResultChars: number; totalChars: number };
+  runTool?: (call: GongJuDiaoYong, ctx: { round: number; zuiDaJieGuoZiShu: number }) => Promise<string> | string;
+  toolLimits?: () => { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalChars: number };
   /** 项目 MEMORY（有界片段）；来自 group-store.project.memory，不来自 memory-os 流水 */
   projectMemory?: (groupId: string) => string;
   /** AI 求助选项卡的上下文片段 */
@@ -91,20 +91,20 @@ export interface XietiaoJieguo {
 export async function xietiaoQunXiaoxi(
   deps: XietiaoqiYilai,
   cfg: ZhibanGongyingshangPeizhi,
-  msg: { groupId: string; userId?: string; content: string; urgency?: 'P0'|'P1'|'P2'|'P3'; mentionIds?: string[] }
+  xiaoXi: { groupId: string; userId?: string; content: string; urgency?: 'P0'|'P1'|'P2'|'P3'; mentionIds?: string[] }
 ): Promise<XietiaoJieguo> {
-  const urgency = msg.urgency || 'P2';
+  const urgency = xiaoXi.urgency || 'P2';
   const route = deps.router.route({
-    groupId: msg.groupId,
-    userId: msg.userId || 'local-user',
-    content: msg.content,
+    groupId: xiaoXi.groupId,
+    userId: xiaoXi.userId || 'local-user',
+    content: xiaoXi.content,
     urgency,
-    mentionIds: msg.mentionIds || [],
+    mentionIds: xiaoXi.mentionIds || [],
     timestamp: Date.now(),
   });
 
   if (route.action === 'silent') {
-    return { action: 'silent', reply: '', queueLength: deps.router.listQueue(msg.groupId).length };
+    return { action: 'silent', reply: '', queueLength: deps.router.listQueue(xiaoXi.groupId).length };
   }
 
   if (route.action === 'queue' || !route.duty) {
@@ -112,7 +112,7 @@ export async function xietiaoQunXiaoxi(
      * route() 在无空闲值班时**已经** enqueue 过（group-router.route 内部）。
      * 这里绝不能再次 enqueue —— 那会双写同一条消息。
      */
-    const duilieChangdu = deps.router.listQueue(msg.groupId).length;
+    const duilieChangdu = deps.router.listQueue(xiaoXi.groupId).length;
     return {
       action: 'queue',
       reply: `[排队] 队列长度 qlen`,
@@ -122,62 +122,62 @@ export async function xietiaoQunXiaoxi(
 
   const duty = route.duty;
   const zhiXingQiJi = (route.decision?.executorIds || []).filter((id) => id !== duty.id);
-  const queueLen = deps.router.listQueue(msg.groupId).length;
+  const queueLen = deps.router.listQueue(xiaoXi.groupId).length;
 
   // 状态卡片：有日志时以日志为准（不变量 #5：日志是唯一事实来源），否则退回历史镜像
-  const logEntries: LogEntry[] | null = deps.logOf ? deps.logOf(msg.groupId) : null;
-  const card = buildStatusCard({
-    groupId: msg.groupId,
+  const logEntries: LogEntry[] | null = deps.logOf ? deps.logOf(xiaoXi.groupId) : null;
+  const ka = buildStatusCard({
+    groupId: xiaoXi.groupId,
     dutyId: duty.id,
     queueLength: queueLen,
-    runningTasks: zhiXingQiJi.map((id) => deps.listInstances().find((x) => x.id === id)?.name || id),
-    recent: (logEntries ?? (deps.history.get(msg.groupId) || []))
+    runningTasks: zhiXingQiJi.map((id) => deps.listInstances().find((x) => x.id === id)?.ming || id),
+    recent: (logEntries ?? (deps.history.get(xiaoXi.groupId) || []))
       .slice(-6)
       .map((m) => String(m.content ?? '').slice(0, 40)),
     tokenBudget: 2000,
   });
 
   // CCR 压缩用户输入
-  const yiYaSuo = deps.ccr.beforeLog({ kind: 'message', content: msg.content });
+  const yiYaSuo = deps.ccr.beforeLog({ kind: 'message', content: xiaoXi.content });
 
   // 值班者历史：有 logOf 时**不写** history —— 那份日志由主进程 appendChatLog 统一维护，
   // 这里再 push 一份就是第二份真相（重启后与 JSONL 脱节）。
-  const liShi = deps.history.get(msg.groupId) || [];
+  const liShi = deps.history.get(xiaoXi.groupId) || [];
   if (!deps.logOf) {
     liShi.push({ role: 'user', content: yiYaSuo.content });
-    deps.history.set(msg.groupId, liShi);
+    deps.history.set(xiaoXi.groupId, liShi);
   }
 
   // 看板解析（仅 duty）
   let boardEvent: string | undefined;
   let gateReason: string | null = null;
-  const parsed = JieLing(msg.content, msg.groupId);
+  const parsed = JieLing(xiaoXi.content, xiaoXi.groupId);
   if (parsed) {
     try {
-      const ev = deps.board.append(parsed, 'duty');
-      boardEvent = `parsed.action:parsed.title`;
-      deps.addEvent?.(parsed.title, msg.content, msg.groupId);
+      const Shi = deps.board.append(parsed, 'duty');
+      boardEvent = `${parsed.action}:${parsed.biaoTi}`;
+      deps.addEvent?.(parsed.biaoTi, xiaoXi.content, xiaoXi.groupId);
       if (parsed.action === 'complete_task') gateReason = 'complete_task';
     } catch {
       /* ignore */
     }
   }
-  if (/(?:验收|门禁|verify|gate|read-?back)/i.test(msg.content)) {
+  if (/(?:验收|门禁|verify|gate|read-?back)/i.test(xiaoXi.content)) {
     gateReason = gateReason || 'user-verify';
   }
 
   // 派发执行者：优先用短命执行者，失败则值班者自己答
   let distilled = '';
   let usage: XietiaoJieguo['usage'];
-  const brief = route.decision?.taskBrief || msg.content;
-  const memSnip = deps.projectMemory ? deps.projectMemory(msg.groupId) : '';
-  const decSnip = deps.decisionContext ? deps.decisionContext(msg.groupId) : '';
+  const brief = route.decision?.taskBrief || xiaoXi.content;
+  const memSnip = deps.projectMemory ? deps.projectMemory(xiaoXi.groupId) : '';
+  const decSnip = deps.decisionContext ? deps.decisionContext(xiaoXi.groupId) : '';
   const contextItems = [
-    card,
+    ka,
     ...(memSnip ? [memSnip] : []),
     ...(decSnip ? [decSnip] : []),
-    `用户消息: msg.content`,
-    ...retrieveAssetsForChat({ scope: 'project', strict: false }).slice(0, 3).map((a) => a.body.slice(0, 200)),
+    `用户消息: ${xiaoXi.content}`,
+    ...retrieveAssetsForChat({ scope: 'project', strict: false }).slice(0, 3).map((a) => a.ti.slice(0, 200)),
   ];
 
   if (cfg.apiKey || cfg.presetId === 'ollama') {
@@ -195,10 +195,10 @@ export async function xietiaoQunXiaoxi(
         apiKey: cfg.apiKey,
         baseURL: cfg.baseURL || undefined,
       });
-      const sys: LiaoTianXiaoXi = {
+      const xitongTiShi: LiaoTianXiaoXi = {
         role: 'system',
         content:
-          `你是 WArmy 项目「msg.groupId」的值班者。\ncard\n` +
+          `你是 WArmy 项目「${xiaoXi.groupId}」的值班者。\n${ka}\n` +
           (memSnip ? memSnip + '\n' : '') +
           (decSnip ? decSnip + '\n' : '') +
           `请用简短中文回复。若需更新任务，使用指令：新建任务:/完成/进度 标题:百分比\n` +
@@ -207,7 +207,7 @@ export async function xietiaoQunXiaoxi(
       // 不变量 #2：值班者输入复用**同一个**有界渲染器（原来这里是 hist.slice(-12)，只按条数有界）。
       // 值班系统提示里已含状态卡片，保持冻结头；会话部分恒 ≤ 预算且与日志总长解耦。
       const entries: LogEntry[] = deps.logOf
-        ? deps.logOf(msg.groupId)
+        ? deps.logOf(xiaoXi.groupId)
         : liShi.map((m, i) => ({
             seq: i + 1,
             role: (m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user') as LogEntry['role'],
@@ -217,25 +217,25 @@ export async function xietiaoQunXiaoxi(
         budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars(cfg.model) : DEFAULT_CONTEXT_BUDGET_CHARS,
         keepHead: DEFAULT_KEEP_HEAD,
         keepTail: DEFAULT_KEEP_TAIL,
-        recallHint: msg.content,
+        recallHint: xiaoXi.content,
       });
       // ADR 002 §9.4 待办 2：值班者路径同样可以用 recall/retrieve 解引用被省略的历史
-      const limits = deps.toolLimits?.() ?? { maxRounds: 3, maxResultChars: 4000, totalChars: 12000 };
+      const limits = deps.toolLimits?.() ?? { zuiDaLunShu: 3, zuiDaJieGuoZiShu: 4000, totalChars: 12000 };
       const tools: GongJuGuiGe[] | undefined = deps.toolSpecs?.();
-      const req: Parameters<typeof liaoTianDaiGongJu>[1] = {
+      const Qiu: Parameters<typeof liaoTianDaiGongJu>[1] = {
         model: cfg.model || 'deepseek-chat',
-        messages: [sys, ...(shitu.messages as LiaoTianXiaoXi[])],
+        xiaoXiJi: [xitongTiShi, ...(shitu.xiaoXiJi as LiaoTianXiaoXi[])],
         maxTokens: 512,
         tools,
       };
       const loop = deps.runTool
-        ? await liaoTianDaiGongJu(provider, req, deps.runTool, {
-            maxRounds: limits.maxRounds,
-            maxResultChars: limits.maxResultChars,
+        ? await liaoTianDaiGongJu(provider, Qiu, deps.runTool, {
+            zuiDaLunShu: limits.zuiDaLunShu,
+            zuiDaJieGuoZiShu: limits.zuiDaJieGuoZiShu,
             maxToolResultChars: limits.totalChars,
           })
         : null;
-      const xiangYing = loop ? loop.response : await provider.chat(req);
+      const xiangYing = loop ? loop.xiangYingTi : await provider.chat(Qiu);
       distilled = xiangYing.choices[0]?.message?.content || '';
       usage = {
         promptTokens: xiangYing.usage.promptTokens,
@@ -244,12 +244,12 @@ export async function xietiaoQunXiaoxi(
       };
     }
   } else {
-    distilled = `[未配置 Key] 值班=duty.name 执行者=executors.join(',') || '无' 卡片已生成`;
+    distilled = `[未配置 Key] 值班=${duty.ming} 执行者=${zhiXingQiJi.join(',') || '无'} 卡片已生成`;
   }
 
   if (!deps.logOf) {
     liShi.push({ role: 'assistant', content: distilled });
-    deps.history.set(msg.groupId, liShi);
+    deps.history.set(xiaoXi.groupId, liShi);
   }
 
   /**
@@ -257,17 +257,17 @@ export async function xietiaoQunXiaoxi(
    * 且弹出后必须真的处理 —— 处理不了就 requeue，绝不静默丢弃（旧实现的 bug）。
    * 深度上限防止同一条故障消息无限循环。
    */
-  deps.router.complete(msg.groupId);
+  deps.router.complete(xiaoXi.groupId);
   let paidiaoShendu = 0;
   const DRAIN_MAX = 5;
   let extraReplies: string[] = [];
   while (paidiaoShendu < DRAIN_MAX) {
     paidiaoShendu += 1;
-    const next = deps.router.dequeueNext(msg.groupId);
+    const next = deps.router.dequeueNext(xiaoXi.groupId);
     if (!next) break;
     try {
       const xiayiJieguo = await runOneDutyRound(deps, cfg, {
-        groupId: next.request.groupId || msg.groupId,
+        groupId: next.request.groupId || xiaoXi.groupId,
         userId: next.request.userId || 'local-user',
         content: next.request.content,
         urgency: next.urgency || 'P2',
@@ -285,7 +285,7 @@ export async function xietiaoQunXiaoxi(
         break;
       }
       if (xiayiJieguo.reply) extraReplies.push(xiayiJieguo.reply);
-      deps.router.complete(msg.groupId);
+      deps.router.complete(xiaoXi.groupId);
     } catch {
       // 处理失败 ⇒ 放回队列，留给下一轮；**不丢**
       try {
@@ -299,8 +299,8 @@ export async function xietiaoQunXiaoxi(
   let menjinHang = '';
   if (gateReason && deps.runProjectGate) {
     try {
-      const g = await deps.runProjectGate(msg.groupId, gateReason);
-      if (g) menjinHang = g.pass ? `\n[门禁] 通过 · g.summary` : `\n[门禁] 未通过 · g.summary`;
+      const g = await deps.runProjectGate(xiaoXi.groupId, gateReason);
+      if (g) menjinHang = g.pass ? `\n[门禁] 通过 · ${g.summary}` : `\n[门禁] 未通过 · ${g.summary}`;
     } catch (e) {
       menjinHang = `\n[门禁] 执行失败 · String((e as Error)?.message || e).slice(0, 120)`;
     }
@@ -308,11 +308,11 @@ export async function xietiaoQunXiaoxi(
 
   return {
     action: 'dispatch',
-    reply: (extraReplies.length ? `distilled\n\n[队列冲刷]\nextraReplies.join('\n---\n')` : distilled) + menjinHang,
+    reply: (extraReplies.length ? `${distilled}\n\n[队列冲刷]\n${extraReplies.join('\n---\n')}` : distilled) + menjinHang,
     dutyId: duty.id,
     executorIds: zhiXingQiJi,
     boardEvent,
-    queueLength: deps.router.listQueue(msg.groupId).length,
+    queueLength: deps.router.listQueue(xiaoXi.groupId).length,
     usage,
   };
 }
@@ -321,14 +321,14 @@ export async function xietiaoQunXiaoxi(
 async function runOneDutyRound(
   deps: XietiaoqiYilai,
   cfg: ZhibanGongyingshangPeizhi,
-  msg: { groupId: string; userId: string; content: string; urgency: 'P0'|'P1'|'P2'|'P3'; mentionIds: string[] }
+  xiaoXi: { groupId: string; userId: string; content: string; urgency: 'P0'|'P1'|'P2'|'P3'; mentionIds: string[] }
 ): Promise<XietiaoJieguo> {
   const route = deps.router.route({
-    groupId: msg.groupId,
-    userId: msg.userId,
-    content: msg.content,
-    urgency: msg.urgency,
-    mentionIds: msg.mentionIds,
+    groupId: xiaoXi.groupId,
+    userId: xiaoXi.userId,
+    content: xiaoXi.content,
+    urgency: xiaoXi.urgency,
+    mentionIds: xiaoXi.mentionIds,
     timestamp: Date.now(),
   });
   if (route.action === 'silent' || !route.duty) {
@@ -336,41 +336,41 @@ async function runOneDutyRound(
     if (route.action === 'queue' || !route.duty) {
       // route 可能已再次入队；若没有 duty 则上层 catch/requeue
       if (!route.duty && route.action !== 'queue') {
-        return { action: 'queue', reply: '', queueLength: deps.router.listQueue(msg.groupId).length };
+        return { action: 'queue', reply: '', queueLength: deps.router.listQueue(xiaoXi.groupId).length };
       }
     }
-    return { action: 'silent', reply: '', queueLength: deps.router.listQueue(msg.groupId).length };
+    return { action: 'silent', reply: '', queueLength: deps.router.listQueue(xiaoXi.groupId).length };
   }
   const duty = route.duty;
   const zhiXingQiJi = (route.decision?.executorIds || []).filter((id) => id !== duty.id);
-  const logEntries: LogEntry[] | null = deps.logOf ? deps.logOf(msg.groupId) : null;
-  const card = buildStatusCard({
-    groupId: msg.groupId,
+  const logEntries: LogEntry[] | null = deps.logOf ? deps.logOf(xiaoXi.groupId) : null;
+  const ka = buildStatusCard({
+    groupId: xiaoXi.groupId,
     dutyId: duty.id,
-    queueLength: deps.router.listQueue(msg.groupId).length,
-    runningTasks: zhiXingQiJi.map((id) => deps.listInstances().find((x) => x.id === id)?.name || id),
-    recent: (logEntries ?? (deps.history.get(msg.groupId) || []))
+    queueLength: deps.router.listQueue(xiaoXi.groupId).length,
+    runningTasks: zhiXingQiJi.map((id) => deps.listInstances().find((x) => x.id === id)?.ming || id),
+    recent: (logEntries ?? (deps.history.get(xiaoXi.groupId) || []))
       .slice(-6)
       .map((m) => String(m.content ?? '').slice(0, 40)),
     tokenBudget: 2000,
   });
   let distilled = '';
   let usage: XietiaoJieguo['usage'];
-  const brief = route.decision?.taskBrief || msg.content;
+  const brief = route.decision?.taskBrief || xiaoXi.content;
   if (cfg.apiKey || cfg.presetId === 'ollama') {
     if (zhiXingQiJi.length) {
-      const r = await yunxingDuanCunhuoZhixingqi({ taskId: 't-' + Date.now(), brief, contextItems: [card, `用户消息: msg.content`] }, cfg);
+      const r = await yunxingDuanCunhuoZhixingqi({ taskId: 't-' + Date.now(), brief, contextItems: [ka, `用户消息: ${xiaoXi.content}`] }, cfg);
       distilled = r.distilled;
     } else {
       const { congYuSheChuangJian } = await import('@warmy/providers');
       const provider = congYuSheChuangJian(cfg.presetId, { apiKey: cfg.apiKey, baseURL: cfg.baseURL || undefined });
-      const sys: LiaoTianXiaoXi = {
+      const xitongTiShi: LiaoTianXiaoXi = {
         role: 'system',
-        content: `你是 WArmy 项目「msg.groupId」的值班者。\ncard\n请用简短中文回复。`,
+        content: `你是 WArmy 项目「${xiaoXi.groupId}」的值班者。\n${ka}\n请用简短中文回复。`,
       };
       const entries: LogEntry[] = deps.logOf
-        ? deps.logOf(msg.groupId)
-        : (deps.history.get(msg.groupId) || []).map((m, i) => ({
+        ? deps.logOf(xiaoXi.groupId)
+        : (deps.history.get(xiaoXi.groupId) || []).map((m, i) => ({
             seq: i + 1,
             role: (m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user') as LogEntry['role'],
             content: typeof m.content === 'string' ? m.content : '',
@@ -379,24 +379,24 @@ async function runOneDutyRound(
         budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars(cfg.model) : DEFAULT_CONTEXT_BUDGET_CHARS,
         keepHead: DEFAULT_KEEP_HEAD,
         keepTail: DEFAULT_KEEP_TAIL,
-        recallHint: msg.content,
+        recallHint: xiaoXi.content,
       });
-      const limits = deps.toolLimits?.() ?? { maxRounds: 3, maxResultChars: 4000, totalChars: 12000 };
+      const limits = deps.toolLimits?.() ?? { zuiDaLunShu: 3, zuiDaJieGuoZiShu: 4000, totalChars: 12000 };
       const tools: GongJuGuiGe[] | undefined = deps.toolSpecs?.();
-      const req: Parameters<typeof liaoTianDaiGongJu>[1] = {
+      const Qiu: Parameters<typeof liaoTianDaiGongJu>[1] = {
         model: cfg.model || 'deepseek-chat',
-        messages: [sys, ...(shitu.messages as LiaoTianXiaoXi[])],
+        xiaoXiJi: [xitongTiShi, ...(shitu.xiaoXiJi as LiaoTianXiaoXi[])],
         maxTokens: 512,
         tools,
       };
       const loop = deps.runTool
-        ? await liaoTianDaiGongJu(provider, req, deps.runTool, {
-            maxRounds: limits.maxRounds,
-            maxResultChars: limits.maxResultChars,
+        ? await liaoTianDaiGongJu(provider, Qiu, deps.runTool, {
+            zuiDaLunShu: limits.zuiDaLunShu,
+            zuiDaJieGuoZiShu: limits.zuiDaJieGuoZiShu,
             maxToolResultChars: limits.totalChars,
           })
         : null;
-      const xiangYing = loop ? loop.response : await provider.chat(req);
+      const xiangYing = loop ? loop.xiangYingTi : await provider.chat(Qiu);
       distilled = xiangYing.choices[0]?.message?.content || '';
       usage = {
         promptTokens: xiangYing.usage.promptTokens,
@@ -405,14 +405,14 @@ async function runOneDutyRound(
       };
     }
   } else {
-    distilled = `[未配置 Key] 队列项已处理 duty=duty.name`;
+    distilled = `[未配置 Key] 队列项已处理 duty=${duty.ming}`;
   }
   return {
     action: 'dispatch',
     reply: distilled,
     dutyId: duty.id,
     executorIds: zhiXingQiJi,
-    queueLength: deps.router.listQueue(msg.groupId).length,
+    queueLength: deps.router.listQueue(xiaoXi.groupId).length,
     usage,
   };
 }

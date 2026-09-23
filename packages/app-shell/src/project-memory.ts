@@ -8,7 +8,7 @@
  *   （注入时从 group-store 读；检索历史用 recall，不是读 MEMORY 副本）
  * - 注入有界：超过 PROJECT_MEMORY_INJECT_CHARS 截断并标注
  */
-import type { GroupStore } from './group-store.js';
+import type { QunCang } from './group-store.js';
 
 export const PROJECT_MEMORY_INJECT_CHARS = 1200;
 export const PROJECT_MEMORY_MAX_CHARS = 8000;
@@ -22,7 +22,7 @@ export interface XiangmuJiyiCangShitu {
   updatedAt: number | null;
 }
 
-export function readProjectMemory(groupStore: GroupStore | null, groupId: string): string {
+export function readProjectMemory(groupStore: QunCang | null, groupId: string): string {
   try {
     const p = groupStore?.projectOf?.(groupId) || (groupStore as any)?.projectOf?.(groupId);
     const jiYi = p && typeof p.memory === 'string' ? p.memory : '';
@@ -33,7 +33,7 @@ export function readProjectMemory(groupStore: GroupStore | null, groupId: string
 }
 
 /** 值班注入用：有界截断；空则返回空串（不编造） */
-export function projectMemoryForContext(groupStore: GroupStore | null, groupId: string): string {
+export function projectMemoryForContext(groupStore: QunCang | null, groupId: string): string {
   const raw = readProjectMemory(groupStore, groupId).trim();
   if (!raw) return '';
   if (raw.length <= PROJECT_MEMORY_INJECT_CHARS) {
@@ -43,7 +43,7 @@ export function projectMemoryForContext(groupStore: GroupStore | null, groupId: 
 }
 
 export function writeProjectMemory(
-  groupStore: GroupStore | null,
+  groupStore: QunCang | null,
   groupId: string,
   memory: string
 ): { ok: boolean; chars: number; error?: string; memory?: string } {

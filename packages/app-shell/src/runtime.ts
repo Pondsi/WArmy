@@ -23,7 +23,7 @@ export type AnquanMoshi = 'full' | 'normal' | 'strict';
 
 export interface ShiliPeizhi {
   id: string;
-  name: string;
+  ming: string;
   /** 独立 dshHome / workspace */
   workspace: string;
   /** 可选：人格文件路径 */
@@ -34,18 +34,18 @@ export interface ShiliPeizhi {
   models?: {
     duty?: string;
     executor?: string;
-    fallback?: string;
+    huiTui?: string;
   };
 }
 
 export interface ShiliChuli {
   id: string;
-  name: string;
+  ming: string;
   status: ShiliZhuangtai;
   pid?: number;
   workspace: string;
   dutyEligible: boolean;
-  startedAt?: number;
+  kaiShiShiJian?: number;
 }
 
 export interface QuanxianJuece {
@@ -59,9 +59,9 @@ export interface QuanxianJuece {
 // ─────────────────────────────────────────────
 
 interface ChaixieTiaomu {
-  label: string;
+  biaoQian: string;
   pid: number;
-  child?: ChildProcess;
+  Zhi?: ChildProcess;
   /** 额外清理钩子 */
   cleanup?: () => Promise<void> | void;
   /** Windows 下是否需要 taskkill /T */
@@ -74,7 +74,7 @@ export class ChaixieMingce {
 
   register(id: string, entry: ChaixieTiaomu): void {
     this.entries.set(id, entry);
-    entry.child?.once('exit', () => {
+    entry.Zhi?.once('exit', () => {
       this.entries.delete(id);
     });
   }
@@ -87,10 +87,10 @@ export class ChaixieMingce {
     return this.entries.size;
   }
 
-  list(): Array<{ id: string; label: string; pid: number }> {
+  LieBiao(): Array<{ id: string; biaoQian: string; pid: number }> {
     return [...this.entries.entries()].map(([id, e]) => ({
       id,
-      label: e.label,
+      biaoQian: e.biaoQian,
       pid: e.pid,
     }));
   }
@@ -118,12 +118,12 @@ export class ChaixieMingce {
     } catch {
       /* ignore cleanup errors */
     }
-    if (e.child && e.child.exitCode === null && !e.child.killed) {
-      const yiTuiChu = new Promise<void>((resolve) => e.child!.once('exit', () => resolve()));
-      e.child.kill('SIGTERM');
-      const timer = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
-      await Promise.race([yiTuiChu, timer]);
-      if (e.child.exitCode === null) {
+    if (e.Zhi && e.Zhi.exitCode === null && !e.Zhi.killed) {
+      const yiTuiChu = new Promise<void>((resolve) => e.Zhi!.once('exit', () => resolve()));
+      e.Zhi.kill('SIGTERM');
+      const jiShiQi = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
+      await Promise.race([yiTuiChu, jiShiQi]);
+      if (e.Zhi.exitCode === null) {
         await this.forceKill(e.pid, e.tree !== false);
       }
     } else if (e.pid) {
@@ -201,7 +201,7 @@ export class WenJianAnQuanCang implements AnQuanCang {
   }
 }
 
-export type PizhunChuliqi = (req: {
+export type PizhunChuliqi = (Qiu: {
   action: string;
   mode: AnquanMoshi;
   suggested: 'once' | 'project' | 'global' | 'deny';
@@ -285,25 +285,25 @@ export class AnquanGuanliqi {
 
   /** 工作区外文件写入 */
   async requestBoundaryWrite(targetPath: string, workspace: string): Promise<QuanxianJuece> {
-    const abs = path.resolve(targetPath);
+    const jueDuiLu = path.resolve(targetPath);
     const root = path.resolve(workspace);
-    const neibu = abs === root || abs.startsWith(root + path.sep);
-    if (neibu) return { action: `write:${abs}`, scope: 'once', allowed: true };
+    const neibu = jueDuiLu === root || jueDuiLu.startsWith(root + path.sep);
+    if (neibu) return { action: `write:${jueDuiLu}`, scope: 'once', allowed: true };
 
     if (this.mode === 'full') {
-      return this.record(`write:${abs}`, { action: `write:${abs}`, scope: 'once', allowed: true });
+      return this.record(`write:${jueDuiLu}`, { action: `write:${jueDuiLu}`, scope: 'once', allowed: true });
     }
     if (this.mode === 'strict') {
-      if (!this.onApprove) return this.record(`write:${abs}`, { action: `write:${abs}`, scope: 'once', allowed: false });
-      const d = await this.onApprove({ action: `write-outside:${abs}`, mode: this.mode, suggested: 'once' });
-      return this.record(`write:${abs}`, d);
+      if (!this.onApprove) return this.record(`write:${jueDuiLu}`, { action: `write:${jueDuiLu}`, scope: 'once', allowed: false });
+      const d = await this.onApprove({ action: `write-outside:${jueDuiLu}`, mode: this.mode, suggested: 'once' });
+      return this.record(`write:${jueDuiLu}`, d);
     }
     // normal：需授权
     if (!this.onApprove) {
-      return this.record(`write:${abs}`, { action: `write:${abs}`, scope: 'once', allowed: false });
+      return this.record(`write:${jueDuiLu}`, { action: `write:${jueDuiLu}`, scope: 'once', allowed: false });
     }
-    const d = await this.onApprove({ action: `write-outside:${abs}`, mode: this.mode, suggested: 'once' });
-    return this.record(`write:${abs}`, d);
+    const d = await this.onApprove({ action: `write-outside:${jueDuiLu}`, mode: this.mode, suggested: 'once' });
+    return this.record(`write:${jueDuiLu}`, d);
   }
 
   listAllowlist(): XukemingdanTiaomu[] {
@@ -323,8 +323,8 @@ export class AnquanGuanliqi {
   /** audit.jsonl 绝不上传（ADR） */
   async flushAudit(file: string): Promise<void> {
     await fs.promises.mkdir(path.dirname(file), { recursive: true });
-    const lines = this.audit.map((a) => JSON.stringify(a)).join('\n') + '\n';
-    await fs.promises.appendFile(file, lines, 'utf8');
+    const HangJi = this.audit.map((a) => JSON.stringify(a)).join('\n') + '\n';
+    await fs.promises.appendFile(file, HangJi, 'utf8');
     this.audit = [];
   }
 
@@ -372,7 +372,7 @@ export function jianYiZuiDaShiLiShu(cpuCount = os.cpus().length): number {
 }
 
 export class ShiliGuanliqi extends EventEmitter {
-  private instances = new Map<string, ShiliChuli & { child?: ChildProcess }>();
+  private instances = new Map<string, ShiliChuli & { Zhi?: ChildProcess }>();
 
   constructor(private opts: ShiliGuanliqiXuanxiang) {
     super();
@@ -382,15 +382,15 @@ export class ShiliGuanliqi extends EventEmitter {
     return this.opts.maxInstances ?? jianYiZuiDaShiLiShu();
   }
 
-  list(): ShiliChuli[] {
-    return [...this.instances.values()].map(({ child: _c, ...h }) => h);
+  LieBiao(): ShiliChuli[] {
+    return [...this.instances.values()].map(({ Zhi: _c, ...h }) => h);
   }
 
   get(id: string): ShiliChuli | undefined {
     const h = this.instances.get(id);
     if (!h) return undefined;
-    const { child: _c, ...rest } = h;
-    return rest;
+    const { Zhi: _c, ...qiYu } = h;
+    return qiYu;
   }
 
   private get nodeBin(): string {
@@ -414,23 +414,23 @@ export class ShiliGuanliqi extends EventEmitter {
       // 默认 stub：可被真实 dsh 入口替换
       await fs.promises.writeFile(
         entry,
-        `process.send?.({ type: 'ready', pid: process.pid, name: ${JSON.stringify(config.name)} });\n` +
+        `process.send?.({ type: 'ready', pid: process.pid, ming: ${JSON.stringify(config.ming)} });\n` +
           `process.on('message', (m) => { if (m === 'ping') process.send({ type: 'pong' }); });\n` +
           `setInterval(() => {}, 1 << 30);\n`,
         'utf8'
       );
     }
 
-    const handle: ShiliChuli & { child?: ChildProcess } = {
+    const handle: ShiliChuli & { Zhi?: ChildProcess } = {
       id: config.id,
-      name: config.name,
+      ming: config.ming,
       status: 'starting',
       workspace: ws,
       dutyEligible: config.dutyEligible,
     };
     this.instances.set(config.id, handle);
 
-    const child = spawn(this.nodeBin, [entry, ...(opts.args || [])], {
+    const Zhi = spawn(this.nodeBin, [entry, ...(opts.args || [])], {
       cwd: ws,
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       /**
@@ -450,29 +450,29 @@ export class ShiliGuanliqi extends EventEmitter {
       },
     });
 
-    handle.child = child;
-    handle.pid = child.pid;
+    handle.Zhi = Zhi;
+    handle.pid = Zhi.pid;
     handle.status = 'running';
-    handle.startedAt = Date.now();
+    handle.kaiShiShiJian = Date.now();
 
     this.opts.teardown.register(config.id, {
-      label: `instance:${config.name}`,
-      pid: child.pid || 0,
-      child,
+      biaoQian: `instance:${config.ming}`,
+      pid: Zhi.pid || 0,
+      Zhi,
       tree: true,
     });
 
-    child.on('exit', (code, signal) => {
+    Zhi.on('exit', (code, signal) => {
       handle.status = code === 0 ? 'stopped' : 'dead';
       this.emit('exit', { id: config.id, code, signal });
       this.instances.delete(config.id);
     });
-    child.stderr?.on('data', (d: Buffer) => {
+    Zhi.stderr?.on('data', (d: Buffer) => {
       this.emit('stderr', { id: config.id, text: d.toString() });
     });
 
-    this.emit('spawned', { id: config.id, pid: child.pid });
-    const { child: _drop, ...publicHandle } = handle;
+    this.emit('spawned', { id: config.id, pid: Zhi.pid });
+    const { Zhi: _drop, ...publicHandle } = handle;
     return publicHandle;
   }
 
@@ -480,11 +480,11 @@ export class ShiliGuanliqi extends EventEmitter {
     const h = this.instances.get(id);
     if (!h) return;
     h.status = 'stopping';
-    if (h.child && h.child.exitCode === null) {
-      const yiTuiChu = new Promise<void>((r) => h.child!.once('exit', () => r()));
-      h.child.kill('SIGTERM');
+    if (h.Zhi && h.Zhi.exitCode === null) {
+      const yiTuiChu = new Promise<void>((r) => h.Zhi!.once('exit', () => r()));
+      h.Zhi.kill('SIGTERM');
       await Promise.race([yiTuiChu, new Promise((r) => setTimeout(r, timeoutMs))]);
-      if (h.child.exitCode === null && h.pid) {
+      if (h.Zhi.exitCode === null && h.pid) {
         if (process.platform === 'win32') {
           await new Promise<void>((r) => {
             const p = spawn('taskkill', ['/PID', String(h.pid!), '/T', '/F'], { stdio: 'ignore', windowsHide: true });

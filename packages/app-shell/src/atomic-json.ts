@@ -12,15 +12,15 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 /** 读取并解析 JSON；文件缺失 / 空 / 非法 JSON 时返回 fallback，绝不抛出 */
-export function duJsonWenJian<T>(file: string, fallback: T): T {
+export function duJsonWenJian<T>(file: string, huiTui: T): T {
   try {
     const raw = fs.readFileSync(file, 'utf8');
-    if (!raw.trim()) return fallback;
+    if (!raw.trim()) return huiTui;
     const parsed = JSON.parse(raw) as T;
-    if (parsed === null || typeof parsed !== 'object') return fallback;
+    if (parsed === null || typeof parsed !== 'object') return huiTui;
     return parsed;
   } catch {
-    return fallback;
+    return huiTui;
   }
 }
 
@@ -28,21 +28,21 @@ export function duJsonWenJian<T>(file: string, fallback: T): T {
  * 读取 JSON；解析失败时把损坏文件改名隔离（file.corrupt-<ts>），
  * 便于排查而不是静默丢掉用户数据。
  */
-export function duJsonWenJianGeLi<T>(file: string, fallback: T): T {
+export function duJsonWenJianGeLi<T>(file: string, huiTui: T): T {
   let raw = '';
   try {
     raw = fs.readFileSync(file, 'utf8');
   } catch {
-    return fallback; // 不存在 / 无权限
+    return huiTui; // 不存在 / 无权限
   }
   try {
-    if (!raw.trim()) return fallback;
+    if (!raw.trim()) return huiTui;
     const parsed = JSON.parse(raw) as T;
-    if (parsed === null || typeof parsed !== 'object') return fallback;
+    if (parsed === null || typeof parsed !== 'object') return huiTui;
     return parsed;
   } catch {
     geLiWenJian(file);
-    return fallback;
+    return huiTui;
   }
 }
 

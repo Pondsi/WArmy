@@ -38,11 +38,11 @@ const H = await importDist(distHelper);
 const NO_CONTAINER = process.argv.includes('--no-container');
 const results = [];
 let failures = 0;
-function ok(cond, label, detail) {
+function ok(cond, biaoQian, detail) {
   const pass = !!cond;
   if (!pass) failures++;
-  results.push({ pass, label, detail: detail === undefined ? null : String(detail).slice(0, 400) });
-  console.log((pass ? '  PASS ' : '  FAIL ') + label + (detail === undefined ? '' : '  [' + String(detail).slice(0, 260) + ']'));
+  results.push({ pass, biaoQian, detail: detail === undefined ? null : String(detail).slice(0, 400) });
+  console.log((pass ? '  PASS ' : '  FAIL ') + biaoQian + (detail === undefined ? '' : '  [' + String(detail).slice(0, 260) + ']'));
   return pass;
 }
 function section(t) {
@@ -57,7 +57,7 @@ ok(P.CONTAINER_EXEC_OPS.length >= 8 && P.CONTAINER_EXEC_OPS.includes('commit') &
   P.CONTAINER_EXEC_OPS.join('|'));
 const badOp = P.containerExecPlan('docker', 'exec; rm -rf /', {});
 ok(badOp.ok === false && badOp.code === 'bad-op', '1-2 未知 op 一律拒绝（拼不进任何命令行）', JSON.stringify(badOp));
-const badName = P.containerExecPlan('docker', 'exec-capture', { name: 'evil; rm -rf /', command: 'pwd' });
+const badName = P.containerExecPlan('docker', 'exec-capture', { ming: 'evil; rm -rf /', command: 'pwd' });
 ok(badName.ok === false && badName.code === 'bad-container-name',
   '1-3 容器名必须是 warmy-<12hex>（外部传入的名字不可能被采纳）', JSON.stringify(badName));
 const badImg = P.containerExecPlan('docker', 'run-rm', { image: 'ubuntu:latest', command: 'smoke-echo' });
@@ -69,7 +69,7 @@ const badCmd = P.containerExecPlan('docker', 'run-rm', {
 });
 ok(badCmd.ok === false && badCmd.code === 'bad-command',
   '1-5 固定命令表以外的东西一律拒绝（`command` 只能是 `CONTAINER_FIXED_COMMAND_IDS` 里的 id）', JSON.stringify(badCmd));
-ok(P.CONTAINER_FIXED_COMMAND_IDS.every((id) => P.isFixedCommandId(id)) && !P.isFixedCommandId('rm -rf /'),
+ok(P.CONTAINER_FIXED_COMMAND_IDS.every((id) => P.shiFouGuDingMingLing(id)) && !P.shiFouGuDingMingLing('rm -rf /'),
   '1-5b 固定命令表可枚举、可校验（面板上"查看容器里有什么"跑的就是它）', P.CONTAINER_FIXED_COMMAND_IDS.join('|'));
 const goodRun = P.containerExecPlan('docker', 'run-rm', {
   image: P.CONTAINER_BASE_IMAGES.find((x) => x.id === 'alpine-3.20').ref + '@' + P.CONTAINER_BASE_IMAGES.find((x) => x.id === 'alpine-3.20').digest,
@@ -81,23 +81,23 @@ ok(P.CONTAINER_EXEC_SECURITY.argvFromUntrustedSource === false && P.CONTAINER_EX
    P.CONTAINER_EXEC_SECURITY.hostFallback === false && P.CONTAINER_EXEC_SECURITY.fixedCommandsOnly === true,
   '1-7 安全契约写成**可断言**的字段（无不可信 argv / 无远程注入 / 无宿主回退 / 只有固定命令）',
   JSON.stringify(P.CONTAINER_EXEC_SECURITY));
-const env = P.scrubbedChildEnv({ PATH: 'x', OPENAI_API_KEY: 'sk-secret', SMTP_PASS: 'p', WARMY_TOKEN: 't', LANG: 'zh_CN.UTF-8' });
+const env = P.xiJingHuanJingBianLiang({ PATH: 'x', OPENAI_API_KEY: 'sk-secret', SMTP_PASS: 'p', WARMY_TOKEN: 't', LANG: 'zh_CN.UTF-8' });
 ok(env.OPENAI_API_KEY === undefined && env.SMTP_PASS === undefined && env.WARMY_TOKEN === undefined && env.PATH === 'x',
   '1-8 子进程环境先洗一遍：密钥/token/密码类变量**一律不带**', JSON.stringify(Object.keys(env)));
 
 /* ══ 2. 项目容器命名与固化镜像引用（可复算、可校验） ══ */
 section('2. 项目容器名 / 固化镜像引用：由 groupId 决定，可复算');
-const n1 = P.containerProjectName('g-1');
-ok(P.isValidContainerProjectName(n1) && n1 === P.containerProjectName('g-1') && n1 !== P.containerProjectName('g-2'),
+const n1 = P.rongQiXiangMuMing('g-1');
+ok(P.shiFouHeFaRongQiXiangMuMing(n1) && n1 === P.rongQiXiangMuMing('g-1') && n1 !== P.rongQiXiangMuMing('g-2'),
   '2-1 容器名 = warmy-<sha256(groupId) 前 12 位>（同名项目可复算，不同项目必不同）', n1);
 const ref = P.solidifiedImageRef('g-1', 1700000000000);
-ok(P.SOLIDIFIED_IMAGE_RE.test(ref) && P.isAllowedImageRef(ref), '2-2 固化镜像引用形态正确且被放行', ref);
-ok(P.isAllowedImageRef('nginx:alpine') === false, '2-3 别人的镜像引用不被放行（固化只碰我们自己的命名空间）');
+ok(P.SOLIDIFIED_IMAGE_RE.test(ref) && P.shiFouYunXuJingXiang(ref), '2-2 固化镜像引用形态正确且被放行', ref);
+ok(P.shiFouYunXuJingXiang('nginx:alpine') === false, '2-3 别人的镜像引用不被放行（固化只碰我们自己的命名空间）');
 ok(P.CONTAINER_PROJECT_MOUNT === '/workspace', '2-4 项目目录挂载点是 /workspace（与给用户的安装提示词一致）', P.CONTAINER_PROJECT_MOUNT);
 
 /* ══ 3. 宿主目录加锁：最小侵入 + 一条命令可撤销 ══ */
 section('3. 宿主目录加锁（P5）：argv 白名单 + 可撤销 + 平台诚实');
-const apply = P.hostDirGuardPlan({ action: 'apply', dir: 'C:\\proj', sid: 'S-1-5-21-1-2-3-1001', platform: 'win32' });
+const apply = P.zhuJiMuLuHuLanJiHua({ action: 'apply', dir: 'C:\\proj', sid: 'S-1-5-21-1-2-3-1001', platform: 'win32' });
 ok(apply.ok === true && apply.plan.file === 'icacls' && apply.plan.args.join(' ').includes('/deny') &&
    apply.plan.args.join(' ').includes('*S-1-5-21-1-2-3-1001:(OI)(CI)(' + P.HOST_DIR_GUARD_RIGHTS + ')'),
   '3-1 加锁 = 一条**继承式** deny「改/建/删」权限（不动子项 ACL，且**不拒读**）',
@@ -106,13 +106,13 @@ ok(!/:(OI)\(CI\)\(W\)$/.test(apply.ok ? apply.plan.args.join(' ') : '') && P.HOS
    P.HOST_DIR_GUARD_RIGHTS.indexOf('WRITE_DAC') < 0,
   '3-1b 【实测教训】不用笼统的 (W)：那会把 SYNCHRONIZE 一起拒掉 ⇒ **连读都打不开**（本机实测 EPERM）；也不拒 WRITE_DAC，否则用户无法自己解锁',
   P.HOST_DIR_GUARD_RIGHTS);
-const lift = P.hostDirGuardPlan({ action: 'lift', dir: 'C:\\proj', sid: 'S-1-5-21-1-2-3-1001', platform: 'win32' });
+const lift = P.zhuJiMuLuHuLanJiHua({ action: 'lift', dir: 'C:\\proj', sid: 'S-1-5-21-1-2-3-1001', platform: 'win32' });
 ok(lift.ok === true && lift.plan.args.join(' ') === 'C:\\proj /remove:d *S-1-5-21-1-2-3-1001',
   '3-2 【核心】撤销 = 一条 `/remove:d`（用户自己也能跑；属主永远能改自己的 DACL）',
   lift.ok ? lift.plan.args.join(' ') : JSON.stringify(lift));
-const badSid = P.hostDirGuardPlan({ action: 'apply', dir: 'C:\\proj', sid: 'Administrator', platform: 'win32' });
+const badSid = P.zhuJiMuLuHuLanJiHua({ action: 'apply', dir: 'C:\\proj', sid: 'Administrator', platform: 'win32' });
 ok(badSid.ok === false && badSid.code === 'bad-sid', '3-3 只接受 SID 文本（账号名有本地化歧义 ⇒ 拒绝）', JSON.stringify(badSid));
-const posix = P.hostDirGuardPlan({ action: 'apply', dir: '/tmp/xiangMu', sid: 'S-1-5-21-1-2-3-1001', platform: 'linux' });
+const posix = P.zhuJiMuLuHuLanJiHua({ action: 'apply', dir: '/tmp/xiangMu', sid: 'S-1-5-21-1-2-3-1001', platform: 'linux' });
 ok(posix.ok === false && posix.code === 'platform-not-supported',
   '3-4 非 Windows 如实拒绝（不做半套：POSIX 改 mode 位的侵入性更大）', JSON.stringify(posix));
 ok(P.HOST_DIR_GUARD_SECURITY.userInitiatedOnly === true && P.HOST_DIR_GUARD_SECURITY.autoApply === false &&
@@ -121,11 +121,11 @@ ok(P.HOST_DIR_GUARD_SECURITY.userInitiatedOnly === true && P.HOST_DIR_GUARD_SECU
   JSON.stringify(P.HOST_DIR_GUARD_SECURITY));
 
 /* ══ 4. 项目级属性与台账（项目记录 = 事实来源；不是本机设置） ══ */
-section('4. 项目级属性 + 工具文件访问台账（product 事实，随项目走）');
+section('4. 项目级属性 + 工具文件访问台账（chanPin 事实，随项目走）');
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-exec-'));
 const groupsFile = path.join(tmpDir, 'groups.json');
-const store = new G.GroupStore(groupsFile);
-store.upsertGroup({ groupId: 'g-1', name: '项目推进群', type: 'internal', creatorFingerprint: 'AABB' });
+const store = new G.QunCang(groupsFile);
+store.upsertGroup({ groupId: 'g-1', ming: '项目推进群', type: 'internal', creatorFingerprint: 'AABB' });
 const setP = store.setProjectAttrs('g-1', { devEnv: 'container', runtimeId: 'docker', directory: 'C:\\proj', availability: 'available', availabilityCode: 'ok', reportedBy: 'AABB' });
 ok(setP.ok === true && setP.project.devEnv === 'container' && setP.project.runtimeId === 'docker' && setP.project.directory === 'C:\\proj',
   '4-1 开发环境 / 运行时 / 项目目录写进**项目记录**（不是本机设置）', JSON.stringify(setP.project));
@@ -149,7 +149,7 @@ for (let i = 0; i < G.PROJECT_LEDGER_LIMIT + 20; i++) {
 const ledger3 = store.listFileAccess('g-1', 500);
 ok(ledger3.length === G.PROJECT_LEDGER_LIMIT, '4-6 台账**有界**（超过上限丢最旧的，随项目同步不会无限涨）', ledger3.length);
 const synced = store.applyProjectSync('g-9', {
-  name: '来自创建者的项目', type: 'internal',
+  ming: '来自创建者的项目', type: 'internal',
   project: { devEnv: 'container', runtimeId: 'podman', disabledAt: 12345, directory: 'C:\\remote', availability: 'stopped', availabilityCode: 'disabled-by-owner' },
   creatorFingerprint: 'CCDD',
 });
@@ -200,18 +200,18 @@ ok(typeof bak.sha256 === 'string' && bak.bytes > 0, '5-6 备份产物真实可�
 
 /* ══ 6. 跨机信号：项目属性的形状、校验、映射与入站门控 ══ */
 section('6. 项目属性跨机同步（成员能看到"为什么"）');
-const msg = W.projectAttrsMessage({
-  groupId: 'g-1', name: '项目推进群', type: 'internal',
+const xiaoXi = W.projectAttrsMessage({
+  groupId: 'g-1', ming: '项目推进群', type: 'internal',
   project: { devEnv: 'container', runtimeId: 'docker', disabledAt: 0, directory: 'C:\\proj' },
   availability: { availability: 'not-ready', code: 'container-not-ready', at: 4242 },
   creatorFingerprint: 'AABB',
   ledger: [{ op: 'edit', path: 'C:\\proj\\a.ts', ts: 9, ok: true, by: 'helper-tool' }],
 });
-ok(msg.kind === W.PROJECT_ATTRS_KIND && msg.project.devEnv === 'container' && msg.availability.availability === 'not-ready',
-  '6-1 信号带：项目属性 + **创建者节点的实时可用性**（原因码）', JSON.stringify(msg).slice(0, 140));
+ok(xiaoXi.kind === W.PROJECT_ATTRS_KIND && xiaoXi.project.devEnv === 'container' && xiaoXi.availability.availability === 'not-ready',
+  '6-1 信号带：项目属性 + **创建者节点的实时可用性**（原因码）', JSON.stringify(xiaoXi).slice(0, 140));
 ok(W.PROJECT_ATTRS_CHANNEL === 'control',
   '6-2 搭在协议既有的 control 频道上（不改 sync-protocol；用 kind 自报身份）', W.PROJECT_ATTRS_CHANNEL);
-const rt = W.parseProjectAttrsMessage(JSON.parse(JSON.stringify(msg)));
+const rt = W.parseProjectAttrsMessage(JSON.parse(JSON.stringify(xiaoXi)));
 ok(rt.ok === true && rt.value.groupId === 'g-1' && rt.value.ledgerTail.length === 1,
   '6-3 往返可解析（含台账尾部；只带路径/操作/时间）', rt.ok ? JSON.stringify(rt.value.ledgerTail) : rt.error);
 ok(W.parseProjectAttrsMessage({ kind: 'warmy.membership.revocation' }).ok === false &&
@@ -239,7 +239,7 @@ ok(deriveDisabled.code === 'disabled-by-owner' && W.projectInboundGate(deriveDis
 section('7. 真容器执行（与用后清理）');
 let engine = { status: 'unknown' };
 try {
-  const rep = await P.probeContainerRuntimes({ cacheMs: 0, perProbeTimeoutMs: 6000, concurrency: 4 });
+  const rep = await P.tanCeRongQiYunXing({ cacheMs: 0, perProbeTimeoutMs: 6000, concurrency: 4 });
   const d = (rep.runtimes || []).find((x) => x.id === 'docker');
   engine = { status: d ? d.status : 'missing', detail: d ? d.detail : '' };
 } catch (e) {
@@ -258,68 +258,68 @@ if (NO_CONTAINER) {
 } else {
   realRan = true;
   const groupId = 'g-exec-' + Date.now().toString(36);
-  const name = P.containerProjectName(groupId);
+  const ming = P.rongQiXiangMuMing(groupId);
   // 7-1 一次性：run --rm <钉死 digest> echo ok
-  const smoke = await P.runContainerExec('docker', 'run-rm', { image: alpineRef, command: 'smoke-echo' }, 240000);
+  const smoke = await P.yunXingRongQiZhiXing('docker', 'run-rm', { image: alpineRef, command: 'smoke-echo' }, 240000);
   ok(smoke.executed === true && smoke.ok === true && /ok/.test(smoke.out),
     '7-1 【真机】`run --rm <钉死 digest> echo ok` 真的跑起来了（executed=true）',
     'rc=' + smoke.code + ' ' + smoke.ms + 'ms out=' + JSON.stringify(smoke.out));
   // 7-2 常驻项目容器（绑定一个临时目录；默认不用 --rm）
   const projDir = fs.mkdtempSync(path.join(tmpdirBase(), 'warmy-exec-proj-'));
   fs.writeFileSync(path.join(projDir, 'hello.txt'), 'from-host\n');
-  const up = await P.runContainerExec('docker', 'run-detached', { name, image: alpineRef, hostDir: projDir, projectLabel: groupId }, 240000);
-  if (up.ok) createdContainers.push(name);
+  const up = await P.yunXingRongQiZhiXing('docker', 'run-detached', { ming, image: alpineRef, hostDir: projDir, projectLabel: groupId }, 240000);
+  if (up.ok) createdContainers.push(ming);
   ok(up.ok === true, '7-2 【真机】项目容器起来了（`run -d`，**没有 --rm** ⇒ 可写层保留）',
     up.ok ? up.out.slice(0, 40) : 'rc=' + up.code + ' ' + (up.err || '').slice(0, 200));
   // 7-3 项目命令**真的在容器里**跑（exec-capture，固定命令）
-  const pwd = await P.runContainerExec('docker', 'exec-capture', { name, command: 'pwd' }, 60000);
+  const pwd = await P.yunXingRongQiZhiXing('docker', 'exec-capture', { ming, command: 'pwd' }, 60000);
   ok(pwd.ok === true && pwd.out.trim() === P.CONTAINER_PROJECT_MOUNT,
     '7-3 【真机·核心】"把项目的命令送进容器"真的执行在容器里（pwd = /workspace）',
     pwd.out.trim() + ' / ' + pwd.ms + 'ms');
-  const ls = await P.runContainerExec('docker', 'exec-capture', { name, command: 'ls-workspace' }, 60000);
+  const ls = await P.yunXingRongQiZhiXing('docker', 'exec-capture', { ming, command: 'ls-workspace' }, 60000);
   ok(ls.ok === true && ls.out.indexOf('hello.txt') >= 0,
     '7-4 【真机·核心】bind mount 生效：宿主目录里的文件在容器里看得见（属于项目目录事实）',
     ls.out.replace(/\s+/g, ' ').slice(0, 120));
   // 7-5 真的交互 shell（容器内）：写一行，拿回容器里的输出
-  const opened = P.openContainerShellSession({ groupId, runtimeId: 'docker', containerName: name });
+  const opened = P.daKaiKongZhiTaiHuiHua({ groupId, runtimeId: 'docker', containerName: ming });
   ok(opened.ok === true && opened.executed === true && opened.insideContainer === true,
-    '7-5 【真机·核心】控制台 = **容器内的 shell**（真的 spawn 了 `docker exec -i <name> sh`）', JSON.stringify(opened).slice(0, 200));
+    '7-5 【真机·核心】控制台 = **容器内的 shell**（真的 spawn 了 `docker exec -i <ming> sh`）', JSON.stringify(opened).slice(0, 200));
   if (opened.ok) {
-    const w1 = await P.writeContainerShellSession(opened.sessionId, 'echo shell-in-container-$((1+1))\n');
+    const w1 = await P.xieRuKongZhiTaiHuiHua(opened.sessionId, 'echo shell-in-container-$((1+1))\n');
     ok(w1.ok && w1.executed && /shell-in-container-2/.test(String(w1.output)),
       '7-6 【真机·核心】敲进 shell 的命令**在容器里**执行并回显结果', JSON.stringify(String(w1.output)).slice(0, 120));
-    const w2 = await P.writeContainerShellSession(opened.sessionId, 'cat /etc/os-release | head -n 1\n');
+    const w2 = await P.xieRuKongZhiTaiHuiHua(opened.sessionId, 'cat /etc/os-release | head -n 1\n');
     ok(w2.ok && /Alpine|Linux|NAME/i.test(String(w2.output)), '7-7 容器里的发行版事实可读（先探测再动手那条的前提）', String(w2.output).slice(0, 80));
-    const closed = P.closeContainerShellSession(opened.sessionId);
+    const closed = P.guanBiKongZhiTaiHuiHua(opened.sessionId);
     ok(closed.ok === true, '7-8 shell 会话可正常关闭（用完就关，不留悬挂进程）', JSON.stringify(closed));
-    const after = await P.writeContainerShellSession(opened.sessionId, 'echo nope\n');
+    const after = await P.xieRuKongZhiTaiHuiHua(opened.sessionId, 'echo nope\n');
     ok(after.ok === false && after.code === 'no-session', '7-9 关掉之后再写 ⇒ 如实报 no-session（不会偷偷再开一条）', JSON.stringify(after));
   }
   // 7-10 固化：commit + **回读镜像 id**（证据等级 = commit-succeeded 的唯一判据）
   const at = Date.now();
   const imageRef = P.solidifiedImageRef(groupId, at);
-  const commit = await P.runContainerExec('docker', 'commit', { name, imageRef }, 600000);
+  const commit = await P.yunXingRongQiZhiXing('docker', 'commit', { ming, imageRef }, 600000);
   if (commit.ok) createdImages.push(imageRef);
   ok(commit.ok === true, '7-10 【真机】`commit` 真的把项目容器固化成一层（产物在我们自己的命名空间里）',
     commit.ok ? imageRef : 'rc=' + commit.code + ' ' + (commit.err || '').slice(0, 200));
-  const inspect = commit.ok ? await P.runContainerExec('docker', 'image-inspect', { image: imageRef }, 60000) : { ok: false, out: '' };
+  const inspect = commit.ok ? await P.yunXingRongQiZhiXing('docker', 'image-inspect', { image: imageRef }, 60000) : { ok: false, out: '' };
   const imageId = String(inspect.out || '').split('|')[0] || '';
   ok(commit.ok && inspect.ok && /^sha256:[0-9a-f]{64}$/.test(imageId),
     '7-11 【真机·核心】回读镜像 id 成功 ⇒ 这次的证据等级才够写"已固化"（没回读成功就按失败处理）', imageId.slice(0, 20));
   // 7-12 回滚：删掉容器，从固化镜像再起一个（这就是「回滚到固化点」的真身）
-  const rm = await P.runContainerExec('docker', 'rm', { name }, 120000);
+  const rm = await P.yunXingRongQiZhiXing('docker', 'rm', { ming }, 120000);
   ok(rm.ok === true, '7-12 【真机】原来的项目容器已删除（回滚的前置）', rm.out.replace(/\s+/g, ' ').slice(0, 60));
-  const back = await P.runContainerExec('docker', 'run-detached', { name, image: imageRef, hostDir: projDir, projectLabel: groupId }, 240000);
+  const back = await P.yunXingRongQiZhiXing('docker', 'run-detached', { ming, image: imageRef, hostDir: projDir, projectLabel: groupId }, 240000);
   ok(back.ok === true, '7-13 【真机·核心】从**固化镜像**起容器成功（回滚到固化点的真身，证据等级 container-started）',
     back.ok ? back.out.slice(0, 20) : 'rc=' + back.code + ' ' + (back.err || '').slice(0, 200));
-  const ps = await P.runContainerExec('docker', 'ps', { name }, 30000);
+  const ps = await P.yunXingRongQiZhiXing('docker', 'ps', { ming }, 30000);
   ok(ps.ok && /Up/i.test(ps.out), '7-14 【真机】探测确认它**真的在运行**（不是"命令被受理了"）', ps.out.replace(/\s+/g, ' ').slice(0, 100));
-  const verify = await P.runContainerExec('docker', 'exec-capture', { name, command: 'smoke-echo' }, 60000);
+  const verify = await P.yunXingRongQiZhiXing('docker', 'exec-capture', { ming, command: 'smoke-echo' }, 60000);
   ok(verify.ok && /ok/.test(verify.out), '7-15 【真机】回滚后的容器里照样能跑命令（链路完整）', verify.out.slice(0, 40));
   // 清理：只删我们自己起的东西
-  const stopR = await P.runContainerExec('docker', 'stop', { name }, 150000);
-  const rmR = await P.runContainerExec('docker', 'rm', { name }, 120000);
-  const rmImg = createdImages.length ? await P.runContainerExec('docker', 'image-rm', { image: createdImages[0] }, 120000) : { ok: true, out: 'none' };
+  const stopR = await P.yunXingRongQiZhiXing('docker', 'stop', { ming }, 150000);
+  const rmR = await P.yunXingRongQiZhiXing('docker', 'rm', { ming }, 120000);
+  const rmImg = createdImages.length ? await P.yunXingRongQiZhiXing('docker', 'image-rm', { image: createdImages[0] }, 120000) : { ok: true, out: 'none' };
   ok(stopR.ok && rmR.ok, '7-16 【清理】我们自己起的容器已停 + 已删（不留残留）',
     JSON.stringify({ stop: stopR.code, rm: rmR.code }));
   ok(rmImg.ok, '7-17 【清理】我们自己固化出来的镜像已删除（磁盘回到原状）', String(rmImg.out || '').slice(0, 60));
@@ -331,15 +331,15 @@ ok(P.ENV_SOLIDIFY_SECURITY.freezesWholeFilesystem === true && P.ENV_SOLIDIFY_SEC
    P.ENV_SOLIDIFY_SECURITY.forwardsSecretEnv === false && P.ENV_SOLIDIFY_SECURITY.keep === 3,
   '8-1 安全提醒写成可断言的事实：冻结整个文件系统 / 不删用户文件 / 不带密钥环境变量 / 只留 3 个',
   JSON.stringify(P.ENV_SOLIDIFY_SECURITY));
-ok(P.envSolidifyCapability('docker').programmatic === true && P.envSolidifyCapability('wsl').programmatic === false &&
-   P.envSolidifyCapability('wsl').kind === 'export-import' && P.envSolidifyCapability('windows-sandbox').programmatic === false,
+ok(P.huanJingGuHuaNengLi('docker').programmatic === true && P.huanJingGuHuaNengLi('wsl').programmatic === false &&
+   P.huanJingGuHuaNengLi('wsl').kind === 'export-import' && P.huanJingGuHuaNengLi('windows-sandbox').programmatic === false,
   '8-2 能力表照旧：Docker 可程序化固化；WSL 只能整盘导出（**不可程序化**，我们不代跑）；一次性沙箱不支持');
 ok(P.SOLIDIFY_KEEP === 3 && P.SOLIDIFY_COALESCE_MS === 45000,
   '8-3 保留 3 个 + 45s 节流（时机驱动，不是"一变就固化"）', P.SOLIDIFY_KEEP + '/' + P.SOLIDIFY_COALESCE_MS);
-const d1 = P.shouldSolidifyAt({ lastSolidifiedAt: Date.now() - 1000, dirty: true, programmatic: true });
-const d2 = P.shouldSolidifyAt({ lastSolidifiedAt: Date.now() - 1000, dirty: true, explicit: true, programmatic: true });
-const d3 = P.shouldSolidifyAt({ lastSolidifiedAt: Date.now() - 1000, dirty: true, beforeDestroy: true, programmatic: true });
-const d4 = P.shouldSolidifyAt({ lastSolidifiedAt: Date.now() - 1000, dirty: true, programmatic: false });
+const d1 = P.shiFouGaiGuHua({ lastSolidifiedAt: Date.now() - 1000, dirty: true, programmatic: true });
+const d2 = P.shiFouGaiGuHua({ lastSolidifiedAt: Date.now() - 1000, dirty: true, explicit: true, programmatic: true });
+const d3 = P.shiFouGaiGuHua({ lastSolidifiedAt: Date.now() - 1000, dirty: true, beforeDestroy: true, programmatic: true });
+const d4 = P.shiFouGaiGuHua({ lastSolidifiedAt: Date.now() - 1000, dirty: true, programmatic: false });
 ok(d1.solidify === false && d1.code === 'coalesced' && d2.solidify === true && d3.solidify === true && d4.solidify === false,
   '8-4 节流窗口内不固化；显式按键与"销毁前"必须固化；运行时不能固化时一律不执行',
   JSON.stringify([d1.code, d2.code, d3.code, d4.code]));
@@ -363,7 +363,7 @@ if (process.platform !== 'win32') {
   ok(!!sid, '9-0 取到本机当前用户 SID（加锁只按 SID，不按本地化的账号名）', sid);
   const guardDir = fs.mkdtempSync(path.join(tmpdirBase(), 'warmy-guard-'));
   fs.writeFileSync(path.join(guardDir, 'file.txt'), 'x');
-  const planA = P.hostDirGuardPlan({ action: 'apply', dir: guardDir, sid });
+  const planA = P.zhuJiMuLuHuLanJiHua({ action: 'apply', dir: guardDir, sid });
   const applyRes = planA.ok ? await runCmd(planA.plan.file, planA.plan.args) : { ok: false, out: '', err: JSON.stringify(planA) };
   const listed1 = await runCmd('icacls', [guardDir]);
   /* icacls 会把 SID 解析成本地化账号名显示，所以两种形态都接受（ACE 一定带 (DENY)） */
@@ -392,7 +392,7 @@ if (process.platform !== 'win32') {
     readOk = fs.readFileSync(path.join(guardDir, 'file.txt'), 'utf8').length > 0;
   } catch { /* noop */ }
   ok(readOk, '9-3 只锁写、不锁读（目录仍然可读，不会被锁死）');
-  const planL = P.hostDirGuardPlan({ action: 'lift', dir: guardDir, sid });
+  const planL = P.zhuJiMuLuHuLanJiHua({ action: 'lift', dir: guardDir, sid });
   const liftRes = planL.ok ? await runCmd(planL.plan.file, planL.plan.args) : { ok: false };
   const listed2 = await runCmd('icacls', [guardDir]);
   let writeBack = false;

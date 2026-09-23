@@ -17,19 +17,19 @@ export interface DshLaunchOptions {
   /** dsh 包目录，内含 lib/bin.js 或 bin 字段 */
   dshPackageDir: string;
   /** DSH_HOME */
-  dshHome: string;
+  dshJiaMuLu: string;
   profile: string;
   cwd: string;
   env?: Record<string, string>;
-  /** 传给 dsh app 的参数 */
+  /** 传给 dsh yingYong 的参数 */
   appArgs?: string[];
   onStdout?: (chunk: string) => void;
   onStderr?: (chunk: string) => void;
-  onMessage?: (msg: unknown) => void;
+  onMessage?: (xiaoXi: unknown) => void;
 }
 
 export interface DshHandle {
-  child: ChildProcess;
+  Zhi: ChildProcess;
   pid: number;
 }
 
@@ -71,50 +71,50 @@ export function findDshPackageDir(hints: string[] = []): string | null {
 export function launchDsh(opts: DshLaunchOptions): DshHandle {
   const entry = resolveDshEntry(opts.dshPackageDir);
   const args = ['--profile', opts.profile, ...(opts.appArgs || [])];
-  const child = spawn(opts.nodePath, [entry, ...args], {
+  const Zhi = spawn(opts.nodePath, [entry, ...args], {
     cwd: opts.cwd,
     env: {
       ...process.env,
-      DSH_HOME: opts.dshHome,
+      DSH_HOME: opts.dshJiaMuLu,
       ...opts.env,
     },
     stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
   });
-  child.stdout?.on('data', (d: Buffer) => opts.onStdout?.(d.toString()));
-  child.stderr?.on('data', (d: Buffer) => opts.onStderr?.(d.toString()));
-  child.on('message', (m) => opts.onMessage?.(m));
-  return { child, pid: child.pid || 0 };
+  Zhi.stdout?.on('data', (d: Buffer) => opts.onStdout?.(d.toString()));
+  Zhi.stderr?.on('data', (d: Buffer) => opts.onStderr?.(d.toString()));
+  Zhi.on('message', (m) => opts.onMessage?.(m));
+  return { Zhi, pid: Zhi.pid || 0 };
 }
 
 /** 确保 profile 存在：不存在则从 web 模板创建 */
 export async function ensureDshProfile(opts: {
   nodePath: string;
   dshPackageDir: string;
-  dshHome: string;
+  dshJiaMuLu: string;
   profile: string;
   fromDefault?: string;
 }): Promise<{ created: boolean; profileDir: string }> {
-  const profileDir = path.join(opts.dshHome, 'profiles', opts.profile);
+  const profileDir = path.join(opts.dshJiaMuLu, 'profiles', opts.profile);
   if (fs.existsSync(path.join(profileDir, 'package.json'))) {
     return { created: false, profileDir };
   }
   const entry = resolveDshEntry(opts.dshPackageDir);
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(
+    const Zhi = spawn(
       opts.nodePath,
       [entry, '--profile', opts.profile, '--from-default-profile', opts.fromDefault || 'web', '--dump-config'],
       {
-        env: { ...process.env, DSH_HOME: opts.dshHome },
+        env: { ...process.env, DSH_HOME: opts.dshJiaMuLu },
         stdio: ['ignore', 'pipe', 'pipe'],
       }
     );
     let err = '';
-    child.stderr?.on('data', (d: Buffer) => (err += d.toString()));
-    child.on('exit', (code) => {
+    Zhi.stderr?.on('data', (d: Buffer) => (err += d.toString()));
+    Zhi.on('exit', (code) => {
       if (fs.existsSync(path.join(profileDir, 'package.json'))) resolve();
       else reject(new Error(`create profile failed code=${code} ${err.slice(0, 300)}`));
     });
-    child.on('error', reject);
+    Zhi.on('error', reject);
   });
   return { created: true, profileDir };
 }
@@ -122,7 +122,7 @@ export async function ensureDshProfile(opts: {
 /** 向 InstanceManager 暴露的入口脚本路径 */
 export function writeDshInstanceEntry(outFile: string, opts: {
   dshPackageDir: string;
-  dshHome: string;
+  dshJiaMuLu: string;
   profile: string;
 }): void {
   const entry = resolveDshEntry(opts.dshPackageDir);
@@ -130,7 +130,7 @@ export function writeDshInstanceEntry(outFile: string, opts: {
 import { spawn } from 'node:child_process';
 
 const entry = ${JSON.stringify(entry)};
-const dshHome = ${JSON.stringify(opts.dshHome)};
+const dshHome = ${JSON.stringify(opts.dshJiaMuLu)};
 const profile = ${JSON.stringify(opts.profile)};
 const child = spawn(process.execPath, [entry, '--profile', profile], {
   cwd: process.cwd(),

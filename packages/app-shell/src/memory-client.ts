@@ -13,11 +13,11 @@ import type { GongJuDiaoYong, GongJuGuiGe } from '@warmy/providers';
 export interface JiyiCangKeHuXuanXiang {
   nodePath?: string;
   ipcEntry: string;
-  dataDir: string;
+  CangLu: string;
 }
 
 export class JiyiCangKeHu {
-  private child: ChildProcess | null = null;
+  private Zhi: ChildProcess | null = null;
   private seq = 0;
   private ready = false;
   private starting: Promise<void> | null = null;
@@ -27,7 +27,7 @@ export class JiyiCangKeHu {
 
   /** 记忆服务是否可用（工具暴露与日志重建都以它为准；不可用一律走降级路径） */
   get isReady(): boolean {
-    return this.ready && !!this.child;
+    return this.ready && !!this.Zhi;
   }
 
   async start(): Promise<void> {
@@ -42,51 +42,51 @@ export class JiyiCangKeHu {
 
   private async startOnce(): Promise<void> {
     // 上一次没起来（崩溃/启动超时）：先清掉再重开，否则永远卡在 half-open 状态
-    if (this.child) {
+    if (this.Zhi) {
       try {
-        this.child.kill();
+        this.Zhi.kill();
       } catch {
         /* ignore */
       }
-      this.child = null;
+      this.Zhi = null;
     }
     this.ready = false;
     const execPath = this.opts.nodePath || process.execPath;
     // 只有在拿 Electron 二进制兜底当 Node 时才需要这个开关；
     // 用真正的 node.exe 时设了也无害，但不设的话 electron 会当普通 GUI 启动并立刻崩。
     const useElectronAsNode = /electron(\.exe)?$/i.test(execPath);
-    this.child = fork(this.opts.ipcEntry, [], {
+    this.Zhi = fork(this.opts.ipcEntry, [], {
       execPath,
       execArgv: [],
       env: {
         ...process.env,
-        WARMY_MEMORY_DIR: this.opts.dataDir,
+        WARMY_MEMORY_DIR: this.opts.CangLu,
         // legacy alias during rename window
-        CCA_ARMY_MEMORY_DIR: this.opts.dataDir,
+        CCA_ARMY_MEMORY_DIR: this.opts.CangLu,
         ...(useElectronAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
-    this.child.on('message', (m: any) => {
+    this.Zhi.on('message', (m: any) => {
       const p = this.pending.get(m.id);
       if (!p) return;
       this.pending.delete(m.id);
       if (m.error) p.reject(new Error(m.error));
       else p.resolve(m);
     });
-    this.child.on('exit', () => {
+    this.Zhi.on('exit', () => {
       // 子进程死了 → 立刻标记不可用，避免后续工具调用/重建挂在超时上
       this.ready = false;
     });
     await new Promise<void>((resolve, reject) => {
       const t = setTimeout(() => reject(new Error('memory service start timeout')), 10_000);
-      this.child!.once('message', (m: any) => {
+      this.Zhi!.once('message', (m: any) => {
         if (m?.type === 'ready') {
           clearTimeout(t);
           resolve();
         }
       });
-      this.child!.once('error', (e) => {
+      this.Zhi!.once('error', (e) => {
         clearTimeout(t);
         reject(e);
       });
@@ -94,8 +94,8 @@ export class JiyiCangKeHu {
     this.ready = true;
   }
 
-  private call(msg: Record<string, unknown>, timeoutMs = 8000): Promise<any> {
-    if (!this.child) throw new Error('memory service not started');
+  private call(xiaoXi: Record<string, unknown>, timeoutMs = 8000): Promise<any> {
+    if (!this.Zhi) throw new Error('memory service not started');
     const id = ++this.seq;
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
@@ -112,7 +112,7 @@ export class JiyiCangKeHu {
           reject(e);
         },
       });
-      this.child!.send({ ...msg, id });
+      this.Zhi!.send({ ...xiaoXi, id });
     });
   }
 
@@ -121,7 +121,7 @@ export class JiyiCangKeHu {
       id: string;
       sessionId: string;
       kind: string;
-      body: string;
+      ti: string;
       /**
        * 角色（可选）。memory-os 会把它一起写进 JSONL（`...record`），
        * 但 SQLite 投影 / `tail()` 查不到它 —— 所以重建时仍以 recordId 前缀为准（见 CHAT_RECORD_PREFIX），
@@ -130,9 +130,9 @@ export class JiyiCangKeHu {
       role?: 'user' | 'assistant';
       [k: string]: unknown;
     },
-    writer = 'duty'
+    Bi = 'duty'
   ) {
-    return this.call({ op: 'append', record, writer });
+    return this.call({ op: 'append', record, Bi });
   }
 
   tail(limit = 20) {
@@ -148,7 +148,7 @@ export class JiyiCangKeHu {
     return this.call({ op: 'recall', query, limit, scope });
   }
 
-  retrieve(anchor: { seq?: number; recordId?: string }, opts?: { fallback?: 'exact' | 'nearby' | 'fuzzy'; window?: number }) {
+  retrieve(anchor: { seq?: number; recordId?: string }, opts?: { huiTui?: 'exact' | 'nearby' | 'fuzzy'; window?: number }) {
     return this.call({ op: 'retrieve', anchor, opts });
   }
 
@@ -168,13 +168,13 @@ export class JiyiCangKeHu {
   }
 
   async stop(): Promise<void> {
-    if (!this.child) return;
+    if (!this.Zhi) return;
     try {
       await this.call({ op: 'shutdown' }, 2000);
     } catch {
-      this.child.kill();
+      this.Zhi.kill();
     }
-    this.child = null;
+    this.Zhi = null;
     this.ready = false;
   }
 }
@@ -354,22 +354,22 @@ export async function yunxingJiyiCangGongju(
   call: GongJuDiaoYong,
   opts: { maxChars?: number } = {}
 ): Promise<JiyiCangGongjuJieGuo> {
-  const name = call?.function?.name || '';
+  const ming = call?.function?.name || '';
   const args = jieXiCanShu(call?.function?.arguments);
-  const cap = qianZhiZhengShu(opts.maxChars, 64, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU, JIYICANG_GONGJU_JIEGUO_ZISHU);
-  const meta: JiyiCangGongjuYuanshuju = { tool: name, ok: false, chars: 0 };
-  const fail = (msg: string, error?: string): JiyiCangGongjuJieGuo => {
+  const shangXian = qianZhiZhengShu(opts.maxChars, 64, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU, JIYICANG_GONGJU_JIEGUO_ZISHU);
+  const meta: JiyiCangGongjuYuanshuju = { tool: ming, ok: false, chars: 0 };
+  const fail = (xiaoXi: string, error?: string): JiyiCangGongjuJieGuo => {
     meta.ok = false;
-    meta.chars = msg.length;
+    meta.chars = xiaoXi.length;
     if (error) meta.error = error.slice(0, 120);
-    return { ok: false, content: msg, chars: msg.length, meta };
+    return { ok: false, content: xiaoXi, chars: xiaoXi.length, meta };
   };
 
   try {
     if (!client) return fail('记忆服务不可用：当前会话没有可解引用的历史，请直接基于已有上下文作答。', 'memory-client-missing');
     if (!client.isReady) return fail('记忆服务尚未就绪（正在启动或已退出）：无法取回被省略的历史，请直接基于已有上下文作答。', 'memory-not-ready');
 
-    if (name === JIYICANG_GONGJU_MINGCHENG.recall) {
+    if (ming === JIYICANG_GONGJU_MINGCHENG.recall) {
       const query = String(args['query'] ?? '').replace(/\s+/g, ' ').trim();
       meta.queryChars = query.length;
       if (!query) return fail('recall 需要 query 参数（检索串），例：recall("值班者状态机")。', 'bad-args');
@@ -379,23 +379,23 @@ export async function yunxingJiyiCangGongju(
         Array.isArray(res?.cards) ? res.cards : [];
       meta.cards = cards.length;
       if (!cards.length) {
-        const none = `recall("${query}") 没有命中任何历史记录（可能该内容不在记忆里）。可换关键词重试，或直接用指针里的 retrieve(seq=…) 精确取回。`;
-        return fail(none);
+        const wu = `recall("${query}") 没有命中任何历史记录（可能该内容不在记忆里）。可换关键词重试，或直接用指针里的 retrieve(seq=…) 精确取回。`;
+        return fail(wu);
       }
-      const lines = cards.map((c, i) => {
+      const HangJi = cards.map((c, i) => {
         const src = c.source || (Array.isArray(c.sources) ? c.sources.join('+') : '');
         const snip = String(c.snippet ?? '').replace(/\s+/g, ' ').slice(0, 160);
         return `${i + 1}) seq=${c.seq ?? '?'} recordId=${c.recordId ?? '?'}${src ? ` 来源=${src}` : ''}\n   片段：${snip}`;
       });
-      const head = `recall("${query}", limit=${limit}) 命中 ${cards.length} 条：\n`;
+      const touBu = `recall("${query}", limit=${limit}) 命中 ${cards.length} 条：\n`;
       const tailMsg =
         `\n提示：用 retrieve(recordId="…") 或 retrieve(seq=…) 取回**逐字节**原文；` +
         `超长记录可用 offset/maxChars 分段取。`;
-      let text = head + lines.join('\n') + tailMsg;
+      let text = touBu + HangJi.join('\n') + tailMsg;
       let truncated = false;
-      if (text.length > cap) {
+      if (text.length > shangXian) {
         truncated = true;
-        text = anQuanJieDuan(text, cap) + `\n…[卡片列表被截断，本次上限 ${cap} 字符]`;
+        text = anQuanJieDuan(text, shangXian) + `\n…[卡片列表被截断，本次上限 ${shangXian} 字符]`;
       }
       meta.ok = true;
       meta.chars = text.length;
@@ -404,7 +404,7 @@ export async function yunxingJiyiCangGongju(
       return { ok: true, content: text, chars: text.length, meta };
     }
 
-    if (name === JIYICANG_GONGJU_MINGCHENG.retrieve) {
+    if (ming === JIYICANG_GONGJU_MINGCHENG.retrieve) {
       const ridRaw = args['recordId'];
       const recordId = typeof ridRaw === 'string' && ridRaw.trim() ? ridRaw.trim() : undefined;
       const xulieShuliang = Number(args['seq']);
@@ -413,8 +413,8 @@ export async function yunxingJiyiCangGongju(
         return fail('retrieve 需要 recordId 或 seq 之一，例：retrieve(seq=12) / retrieve(recordId="m-…")。', 'bad-args');
       }
       const offset = qianZhiZhengShu(args['offset'], 0, 100_000_000, 0);
-      const want = qianZhiZhengShu(args['maxChars'], 1, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU, cap);
-      const limit = Math.min(want, cap, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU);
+      const want = qianZhiZhengShu(args['maxChars'], 1, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU, shangXian);
+      const limit = Math.min(want, shangXian, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU);
       meta.anchor = { seq, recordId, offset };
       const res = await client.retrieve(recordId ? { recordId } : { seq: seq! });
       const out = res?.result ?? res;
@@ -425,22 +425,22 @@ export async function yunxingJiyiCangGongju(
       }
       meta.hitLevel = typeof out?.hitLevel === 'string' ? out.hitLevel : undefined;
       meta.totalChars = raw.length;
-      const piece = raw.slice(offset, offset + limit);
-      const truncated = offset + piece.length < raw.length;
+      const pianDuan = raw.slice(offset, offset + limit);
+      const truncated = offset + pianDuan.length < raw.length;
       // 记忆服务的 retrieve 是分级回退（exact → nearby → fuzzy）：非 exact 时必须**明说**，
       // 否则模型会把"另一个相近记录"当成它要的那条（这比拿不到原文更危险）。
       const notExact = !!meta.hitLevel && meta.hitLevel !== 'exact';
       let text =
         `retrieve(${recordId ? `recordId="${recordId}"` : `seq=${seq}`}) 命中` +
         `${meta.hitLevel ? `(${meta.hitLevel})` : ''}：原文 ${raw.length} 字符` +
-        `${offset || truncated ? `，本次返回 [${offset}, ${offset + piece.length})` : ''}\n` +
+        `${offset || truncated ? `，本次返回 [${offset}, ${offset + pianDuan.length})` : ''}\n` +
         (notExact
           ? `⚠ 这不是精确命中（记忆服务做了 ${meta.hitLevel} 回退）：请核对 seq/recordId，` +
             `或用 recall("关键词") 按语义确认后再引用。\n`
           : '') +
-        `——原文——\n${piece}`;
+        `——原文——\n${pianDuan}`;
       if (truncated) {
-        const next = offset + piece.length;
+        const next = offset + pianDuan.length;
         text +=
           `\n…[本段到此为止；原文还有 ${raw.length - next} 字符，继续取可用 ` +
           `${recordId ? `retrieve(recordId="${recordId}"` : `retrieve(seq=${seq}`}, offset=${next})]`;
@@ -454,12 +454,12 @@ export async function yunxingJiyiCangGongju(
     }
 
     return fail(
-      `未知工具 "${name}"：本会话只提供 recall(query) 与 retrieve(recordId|seq)。请改用这两个之一。`,
+      `未知工具 "${ming}"：本会话只提供 recall(query) 与 retrieve(recordId|seq)。请改用这两个之一。`,
       'unknown-tool'
     );
   } catch (e) {
     // 超时/子进程挂掉等：不抛错，回一句可读原因让模型自己决定下一步
-    return fail(`工具 ${name || '?'} 执行失败：${sanitize(e)}`, 'exec-error');
+    return fail(`工具 ${ming || '?'} 执行失败：${sanitize(e)}`, 'exec-error');
   }
 }
 
@@ -475,7 +475,7 @@ export function neirongZhaiyao(s: string): string {
 /**
  * recordId 前缀 = 角色（不变量 #5 的重建契约）。
  *
- * 为什么只能靠前缀：memory-os 的 SQLite 投影只有 seq/id/session_id/kind/ts/body，
+ * 为什么只能靠前缀：memory-os 的 SQLite 投影只有 seq/id/session_id/kind/ts/ti，
  * `tail()` 读的是投影，取不到 JSONL 记录上的额外字段（我们写进去的 role 会被丢掉）。
  * 所以"重启后从 fast-memory.jsonl 重建 chatLogs"必须能从 id 看出角色，
  * 而 id 是**我们**自己生成的（`newChatRecordId(prefix)`），这条约定是可信的。

@@ -60,7 +60,7 @@
     /* R13：让 meshEnable 返回"**端口无法绑定**"（真主进程此时回 errorCode=port-bind-failed
        且**不改端口**）。用来验"界面明确告知 + 配置端口未被修改 + 绝不自动换端口"。 */
     bindFail: CFG.bindFail || null,
-    /* R13：`warmy:net-port-candidates` 的**实测**报告（{recommended:[{port,status}],probed,...}）。
+    /* R13：`warmy:wangLuoDuanKouHouXuanJi` 的**实测**报告（{recommended:[{port,status}],probed,...}）。
        默认不给 → UI 应当如实显示"没测到可用端口"，而不是拿静态列表充数。 */
     portCandidates: CFG.portCandidates || null,
     sessions: CFG.sessions || 0,
@@ -72,8 +72,8 @@
   net.setProbeByHost = function (map) { net.probeByHost = map || null; };
   net.probeByHost = null;
 
-  var rec = function (name, payload) { net.calls.push({ name: name, payload: payload || null, ts: Date.now() }); };
-  net.callsOf = function (name) { return net.calls.filter(function (c) { return c.name === name; }); };
+  var rec = function (ming, payload) { net.calls.push({ ming: ming, payload: payload || null, ts: Date.now() }); };
+  net.callsOf = function (ming) { return net.calls.filter(function (c) { return c.name === ming; }); };
   net.reset = function () { net.calls = []; };
 
   window.__warmyNetStub = {
@@ -183,7 +183,7 @@
 
   /* ── 身份层桩 ── */
   var idc = {
-    card: LS('card', CFG.card || { email: 'me@example.com', phone: '' }),
+    ka: LS('ka', CFG.ka || { email: 'wo@example.com', phone: '' }),
     changes: LS('changes', (CFG.changes || []).slice()),
     acks: LS('acks', {}),
     adopted: LS('adopted', {}),
@@ -191,16 +191,16 @@
   };
   window.__idTest = idc;
   idc.setChanges = function (arr) { idc.changes = arr.slice(); LSS('changes', idc.changes); };
-  idc.callsOf = function (name) { return idc.calls.filter(function (c) { return c.name === name; }); };
+  idc.callsOf = function (ming) { return idc.calls.filter(function (c) { return c.name === ming; }); };
   idc.reset = function () { idc.calls = []; };
   idc.setState = function (p) { for (var k in p) idc[k] = p[k]; };
 
   window.__warmyIdentityStub = {
     identityInfo: async function () {
-      return { ok: true, identity: { alias: '884024787', fingerprint: 'FP-ME', generation: 2, contactCard: idc.card }, contactI18n: null };
+      return { ok: true, identity: { alias: '884024787', fingerprint: 'FP-ME', generation: 2, contactCard: idc.ka }, contactI18n: null };
     },
     identityGet: async function () {
-      return { ok: true, identity: { contactCard: idc.card }, card: idc.card, contactI18n: null };
+      return { ok: true, identity: { contactCard: idc.ka }, ka: idc.ka, contactI18n: null };
     },
     identityChanges: async function () {
       return {
@@ -212,7 +212,7 @@
       };
     },
     identityChangeAcknowledge: async function (p) {
-      idc.calls.push({ name: 'ack', changeId: p && p.changeId, level: p && p.level, ts: Date.now() });
+      idc.calls.push({ ming: 'ack', changeId: p && p.changeId, level: p && p.level, ts: Date.now() });
       var ack = Object.assign({}, idc.acks[p.changeId] || {});
       if (p.level === 'verified') ack.verifiedAt = Date.now();
       if (p.level === 'dismiss') ack.dismissedAt = Date.now();
@@ -221,7 +221,7 @@
       return { ok: true, auditId: 'audit-' + p.changeId + '-' + p.level };
     },
     identityContactAdopt: async function (p) {
-      idc.calls.push({ name: 'adopt', changeId: p && p.changeId, ts: Date.now() });
+      idc.calls.push({ ming: 'adopt', changeId: p && p.changeId, ts: Date.now() });
       idc.adopted[p.changeId] = true;
       LSS('adopted', idc.adopted);
       return { ok: true };
@@ -252,10 +252,10 @@
   window.__ctgTest = ctg;
   ctg.setReport = function (r) { ctg.report = r; };
   ctg.setAfterAction = function (a) { ctg.afterAction = a; };
-  ctg.callsOf = function (name) {
-    if (name === 'probe') return ctg.probes.slice();
-    if (name === 'shell') return ctg.shellCalls.slice();
-    return ctg.actions.filter(function (a) { return a.action === name; });
+  ctg.callsOf = function (ming) {
+    if (ming === 'probe') return ctg.probes.slice();
+    if (ming === 'shell') return ctg.shellCalls.slice();
+    return ctg.actions.filter(function (a) { return a.action === ming; });
   };
   ctg.reset = function () { ctg.actions = []; ctg.probes = []; ctg.shellCalls = []; ctg.projectCalls = []; };
 
@@ -291,8 +291,8 @@
         memberFace: 'creator-offline', restrictions: ['development', 'collaboration', 'features'], fix: 'enable-project' };
     }
     var runtimeId = String(((s.containerProjectRuntime || {})[sessionId]) || '');
-    var row = rowOf(runtimeId);
-    var ready = !!(row && row.status === 'ready');
+    var hang = rowOf(runtimeId);
+    var ready = !!(hang && hang.status === 'ready');
     var code = disabled ? 'disabled-by-owner' : (!runtimeId ? 'container-not-chosen' : ready ? 'ok' : 'container-not-ready');
     var stopped = code !== 'ok';
     var fix = disabled ? 'enable-project' : code === 'ok' ? 'ok' : code === 'container-not-chosen' ? 'choose-container' : 'start-container';
@@ -316,7 +316,7 @@
   var SHELL_SEC = { typedBy: 'local-human-only', remoteInjectPaths: 0, autoRun: false, forwardsSecretEnv: false, argvFromUntrustedSource: false, hostFallback: false };
   /* 第十六批：**真执行面**的契约（与 container-probe 的 CONTAINER_EXEC_SECURITY 逐字段一致） */
   var EXEC_SEC = { argvFromUntrustedSource: false, remoteInjectPaths: 0, inheritsSecretEnv: false, hostFallback: false, fixedCommandsOnly: true };
-  var SHELL_ACTIONS = ['open', 'write', 'close', 'status'];
+  var SHELL_ACTIONS = ['daKai', 'write', 'close', 'status'];
 
   window.__warmyContainerStub = {
     containerProbe: async function (opts) {
@@ -333,12 +333,12 @@
       var next = ctg.afterAction && ctg.afterAction[p.action];
       if (next) {
         ctg.report = JSON.parse(JSON.stringify(next));
-        var row = (ctg.report.runtimes || []).filter(function (x) { return x.id === p.id; })[0];
-        if (row) row.action = { kind: p.action, startedAt: Date.now(), pending: false, result: { kind: p.action, ok: true, code: 0, output: 'harness:' + p.action + ':ok', at: Date.now() } };
+        var hang = (ctg.report.runtimes || []).filter(function (x) { return x.id === p.id; })[0];
+        if (hang) hang.action = { kind: p.action, startedAt: Date.now(), pending: false, result: { kind: p.action, ok: true, code: 0, output: 'harness:' + p.action + ':ok', at: Date.now() } };
       }
       return { ok: true, accepted: true, id: p.id, action: p.action };
     },
-    /* 项目可用性（真实现 = 主进程 warmy:project-state） */
+    /* 项目可用性（真实现 = 主进程 warmy:xiangMuTai） */
     projectState: async function (payload) {
       var id = String((payload && payload.sessionId) || '');
       var st = ctg.devState(id);
@@ -419,7 +419,7 @@
         ledger: [],
         /* 如实说明还缺什么：项目目录没被记录过 ⇒ 缺一个解析根（台账那一项不再缺） */
         missingSources: ['project-directory-record'],
-        product: {
+        chanPin: {
           dir: 'C:/preview/products/' + (id || 'default'), dirExists: false, dirKind: 'planned',
           kind: 'none', entry: null, entryHostRunnable: false, entryReason: 'dir-planned', files: [],
         },
@@ -431,12 +431,12 @@
       ctg.productRuns = ctg.productRuns || [];
       ctg.productRuns.push({ sessionId: id });
       var facts = ctg.filesFacts || null;
-      var p = (facts && facts.product) || null;
+      var p = (facts && facts.chanPin) || null;
       if (!p || !p.entry || p.kind !== 'program') return { ok: false, code: 'no-entry', executed: false };
       if (!p.entryHostRunnable) return { ok: false, code: p.entryReason || 'no-host-runtime', executed: false };
       return { ok: true, executed: true, pid: 4242, entry: p.entry };
     },
-    /* 环境状态（真实现 = 主进程 warmy:project-env-status）：能力**按运行时区分**，系统模式不假定 Linux */
+    /* 环境状态（真实现 = 主进程 warmy:xiangMuHuanJingZhuangTai）：能力**按运行时区分**，系统模式不假定 Linux */
     projectEnvStatus: async function (payload) {
       var id = String((payload && payload.sessionId) || '');
       var s = pSettings();
@@ -450,9 +450,9 @@
           : !runtimeId
             ? { kind: 'unsupported', programmatic: false, why: 'no-runtime-chosen' }
             : { kind: 'unsupported', programmatic: false, why: 'runtime-unknown' };
-      var row = rowOf(runtimeId);
+      var hang = rowOf(runtimeId);
       var mode = 'unknown';
-      if (row && /^daemon-reachable:/.test(String(row.detail || ''))) mode = String(row.detail).slice('daemon-reachable:'.length);
+      if (hang && /^daemon-reachable:/.test(String(hang.detail || ''))) mode = String(hang.detail).slice('daemon-reachable:'.length);
       ctg.envCalls = (ctg.envCalls || 0) + 1;
       var lastRef = String(ctg.solidifiedRef || '');
       return {
@@ -523,8 +523,8 @@
         return ret({ ok: false, code: 'project-stopped', reasonKey: 'projectStopped', executed: false, projectCode: st.code, security: SHELL_SEC });
       }
       var runtimeId = rec.runtimeId || String(((s.containerProjectRuntime || {})[id]) || '');
-      var row = rowOf(runtimeId);
-      if (!row || row.status !== 'ready') {
+      var hang = rowOf(runtimeId);
+      if (!hang || hang.status !== 'ready') {
         return ret({ ok: false, code: 'container-not-ready', reasonKey: 'notReady', needsInstall: true, executed: false, runtimeId: runtimeId, security: SHELL_SEC });
       }
       /**
@@ -538,7 +538,7 @@
         return ret({ ok: false, code: 'no-image', reasonKey: 'needsImage', executed: false, runtimeId: runtimeId, imageDecided: false, security: SHELL_SEC });
       }
       var containerRef = 'warmy-' + String(id).replace(/[^a-z0-9]/gi, '').slice(0, 12).toLowerCase().padEnd(12, '0');
-      if (action === 'open') {
+      if (action === 'daKai') {
         ctg.shellOpened = (ctg.shellOpened || 0) + 1;
         return ret({ ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId: runtimeId, containerRef: containerRef,
           sessionId: id, insideContainer: true, containerCreated: true, security: SHELL_SEC, execSecurity: EXEC_SEC });
@@ -678,7 +678,7 @@
                 return Object.assign({}, g, {
                   groupId: g.groupId || g.id,
                   memberCount: (g.members || []).length,
-                  active: true,
+                  jiHuo: true,
                 });
               }),
             };
@@ -692,8 +692,8 @@
             var r = await origState();
             if (r && r.state && !(Array.isArray(r.state.chats) && r.state.chats.length)) {
               r.state.chats = [
-                { id: 'demo-1', kind: 'single', name: 'demo.agent', lastTs: Date.now() - 30000, lastPreview: '好的，已安排' },
-                { id: 'c-2', kind: 'extdm', name: '张三', lastTs: Date.now() - 120000, lastPreview: '收到', notify: true },
+                { id: 'demo-1', kind: 'single', ming: 'demo.agent', lastTs: Date.now() - 30000, lastPreview: '好的，已安排' },
+                { id: 'c-2', kind: 'extdm', ming: '张三', lastTs: Date.now() - 120000, lastPreview: '收到', notify: true },
               ];
             }
             return r;
@@ -707,7 +707,7 @@
             var list = ((window.__HARNESS_CFG && window.__HARNESS_CFG.groupMembersOverride) || CFG.groupMembersOverride || []);
             var hit = list.filter(function (x) { return x.groupId === gid; })[0];
             if (!hit) return orig(gid);
-            return { ok: true, groupId: gid, members: hit.members.map(function (n) { return { id: n, name: n, role: 'member', joinedAt: 1, source: 'invite' }; }) };
+            return { ok: true, groupId: gid, members: hit.members.map(function (n) { return { id: n, ming: n, role: 'member', joinedAt: 1, source: 'invite' }; }) };
           };
         }
       } catch (e) {}

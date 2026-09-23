@@ -24,7 +24,7 @@ import {
   generateX25519,
   hkdf,
   pinJieZiduan,
-  open,
+  daKai,
   suiJiB64u,
   fengyin,
   sha256,
@@ -55,7 +55,7 @@ export interface Hs1 {
   t: 'hs1';
   v: number;
   /** 群/项目 ID（绑定进 transcript，防跨群重放）；无群时 null */
-  gid: string | null;
+  qunId: string | null;
   /** 发起方临时 X25519 公钥（b64url） */
   eph: string;
   /** 发起方身份指纹 */
@@ -79,7 +79,7 @@ export interface Hs1 {
 export interface Hs2 {
   t: 'hs2';
   v: number;
-  gid: string | null;
+  qunId: string | null;
   eph: string;
   fp: string;
   pk: string;
@@ -358,7 +358,7 @@ export interface WoshouXuanxiang {
   /** 已知/名册内的对端指纹；null = TOFU 首次接触（不做 pin 校验） */
   peerFingerprint?: string | null;
   /** 名册校验：返回 false 即判定为未授权成员 */
-  roster?: (fingerprint: string) => boolean;
+  roster?: (zhiWen: string) => boolean;
   groupId?: string | null;
   replayGuard?: ChongfangFangYu;
   timestampToleranceMs?: number;
@@ -408,7 +408,7 @@ export class WoshouQudongqi {
       enforceLocalEd25519: this.opts.enforceLocalEd25519,
       requireInjectedVerify: this.opts.requireInjectedVerify,
     });
-    if (this.opts.peerFingerprint && this.opts.peerFingerprint === this.identity.fingerprint) {
+    if (this.opts.peerFingerprint && this.opts.peerFingerprint === this.identity.zhiWen) {
       throw new ShenfenQiyueCuowu('握手配置错误：peerFingerprint 不能等于本机指纹');
     }
     const eph = generateX25519();
@@ -423,7 +423,7 @@ export class WoshouQudongqi {
     return this.opts.role;
   }
   get localFingerprint(): string {
-    return this.identity.fingerprint;
+    return this.identity.zhiWen;
   }
   get established(): boolean {
     return this.state === 'established';
@@ -464,9 +464,9 @@ export class WoshouQudongqi {
     const hs1: Hs1 = {
       t: 'hs1',
       v: WOSHOU_BANBEN,
-      gid: this.opts.groupId ?? null,
+      qunId: this.opts.groupId ?? null,
       eph: b64u(this.ephPublicKey),
-      fp: this.identity.fingerprint,
+      fp: this.identity.zhiWen,
       pk: b64u(this.identity.publicKey),
       n: this.localNonce,
       c: this.localCounter,
@@ -483,7 +483,7 @@ export class WoshouQudongqi {
   }
 
   /** 统一入口：吃掉一帧，产出下一帧 */
-  async step(frame: WoshouZhen): Promise<{ out: WoshouZhen[]; done: boolean; session?: HuiHuaMiYaoJi }> {
+  async buZhou(frame: WoshouZhen): Promise<{ out: WoshouZhen[]; done: boolean; session?: HuiHuaMiYaoJi }> {
     await this.ready;
     if (this.failure) throw this.failure;
     if (this.lastFrameAt && this.now() - this.lastFrameAt > this.phaseTimeoutMs) {
@@ -520,8 +520,8 @@ export class WoshouQudongqi {
   /* ── 被叫方处理 HS1，产出 HS2 ── */
   private async onHs1(hs1: Hs1): Promise<Hs2> {
     if (hs1.v !== WOSHOU_BANBEN) throw this.fail('bad-version', `不支持的握手版本 ${hs1.v}`, hs1.fp);
-    if ((hs1.gid ?? null) !== (this.opts.groupId ?? null)) {
-      throw this.fail('bad-group', `群 ID 不匹配：对端 ${hs1.gid}，本端 ${this.opts.groupId ?? null}`, hs1.fp);
+    if ((hs1.qunId ?? null) !== (this.opts.groupId ?? null)) {
+      throw this.fail('bad-group', `群 ID 不匹配：对端 ${hs1.qunId}，本端 ${this.opts.groupId ?? null}`, hs1.fp);
     }
     const pk = anQuanB64uJieMa(hs1.pk);
     const eph = anQuanB64uJieMa(hs1.eph);
@@ -529,8 +529,8 @@ export class WoshouQudongqi {
       throw this.fail('malformed', 'HS1 公钥字段长度非法', hs1.fp);
     }
     // 被叫方校验「这一帧是否是发给我的」：'' = TOFU 允许；否则必须等于本机指纹
-    if (hs1.pins !== '' && hs1.pins !== this.identity.fingerprint) {
-      throw this.fail('pin-mismatch', `HS1 声明的被叫方指纹 ${hs1.pins} 不是本机（本机 ${this.identity.fingerprint}）`, hs1.fp);
+    if (hs1.pins !== '' && hs1.pins !== this.identity.zhiWen) {
+      throw this.fail('pin-mismatch', `HS1 声明的被叫方指纹 ${hs1.pins} 不是本机（本机 ${this.identity.zhiWen}）`, hs1.fp);
     }
     this.checkPeerIdentity(hs1.fp, pk);
     await this.checkSignature(this.hs1Transcript(hs1), hs1.sig, pk, hs1.fp, 'HS1');
@@ -542,9 +542,9 @@ export class WoshouQudongqi {
     const hs2: Hs2 = {
       t: 'hs2',
       v: WOSHOU_BANBEN,
-      gid: this.opts.groupId ?? null,
+      qunId: this.opts.groupId ?? null,
       eph: b64u(this.ephPublicKey),
-      fp: this.identity.fingerprint,
+      fp: this.identity.zhiWen,
       pk: b64u(this.identity.publicKey),
       n: this.localNonce,
       c: this.localCounter,
@@ -564,7 +564,7 @@ export class WoshouQudongqi {
   /* ── 发起方处理 HS2，产出 HS3 ── */
   private async onHs2(hs2: Hs2): Promise<Hs3> {
     if (hs2.v !== WOSHOU_BANBEN) throw this.fail('bad-version', `不支持的握手版本 ${hs2.v}`, hs2.fp);
-    if ((hs2.gid ?? null) !== (this.opts.groupId ?? null)) throw this.fail('bad-group', `群 ID 不匹配：对端 ${hs2.gid}`, hs2.fp);
+    if ((hs2.qunId ?? null) !== (this.opts.groupId ?? null)) throw this.fail('bad-group', `群 ID 不匹配：对端 ${hs2.qunId}`, hs2.fp);
     const t1 = this.transcript.t1;
     const hs1 = this.transcript.hs1;
     if (!t1 || !hs1) throw this.fail('state-error', '缺少 HS1 上下文');
@@ -599,13 +599,13 @@ export class WoshouQudongqi {
     const iv = anQuanB64uJieMa(hs3.iv);
     const ct = anQuanB64uJieMa(hs3.tag);
     if (!iv || !ct) throw this.fail('malformed', 'HS3 字段非法', session.peerFingerprint);
-    let plain: Buffer;
+    let chunWenBen: Buffer;
     try {
-      plain = open(session.c2sMaterial, { iv, ct }, Buffer.concat([Buffer.from('HS3'), th]));
+      chunWenBen = daKai(session.c2sMaterial, { iv, ct }, Buffer.concat([Buffer.from('HS3'), th]));
     } catch {
       throw this.fail('confirm-failed', 'HS3 解密失败：对端未持有同一会话密钥', session.peerFingerprint);
     }
-    if (!plain.equals(th)) throw this.fail('confirm-failed', 'HS3 transcript 校验值不符', session.peerFingerprint);
+    if (!chunWenBen.equals(th)) throw this.fail('confirm-failed', 'HS3 transcript 校验值不符', session.peerFingerprint);
     const sealed = fengyin(session.s2cMaterial, th, Buffer.concat([Buffer.from('HS4'), th]));
     this.state = 'established';
     this.emit({ type: 'sent', flight: 4, peer: session.peerFingerprint });
@@ -622,13 +622,13 @@ export class WoshouQudongqi {
     const iv = anQuanB64uJieMa(hs4.iv);
     const ct = anQuanB64uJieMa(hs4.tag);
     if (!iv || !ct) throw this.fail('malformed', 'HS4 字段非法', session.peerFingerprint);
-    let plain: Buffer;
+    let chunWenBen: Buffer;
     try {
-      plain = open(session.s2cMaterial, { iv, ct }, Buffer.concat([Buffer.from('HS4'), th]));
+      chunWenBen = daKai(session.s2cMaterial, { iv, ct }, Buffer.concat([Buffer.from('HS4'), th]));
     } catch {
       throw this.fail('confirm-failed', 'HS4 解密失败：被叫方未持有同一会话密钥', session.peerFingerprint);
     }
-    if (!plain.equals(th)) throw this.fail('confirm-failed', 'HS4 transcript 校验值不符', session.peerFingerprint);
+    if (!chunWenBen.equals(th)) throw this.fail('confirm-failed', 'HS4 transcript 校验值不符', session.peerFingerprint);
     this.state = 'established';
     this.emit({ type: 'established', flight: 4, peer: session.peerFingerprint, detail: session.keyFingerprint.slice(0, 16) });
   }
@@ -636,7 +636,7 @@ export class WoshouQudongqi {
   /* ── 校验辅助 ── */
 
   private checkPeerIdentity(claimedFp: string, pk: Buffer): void {
-    if (claimedFp === this.identity.fingerprint) {
+    if (claimedFp === this.identity.zhiWen) {
       throw this.fail('protocol-error', '对端声称与本机相同指纹（自反射攻击）', claimedFp);
     }
     const tuidao = this.opts.fingerprintDerivation ?? warmyZhiWen;
@@ -644,20 +644,20 @@ export class WoshouQudongqi {
     if (expected !== claimedFp) {
       throw this.fail('fingerprint-mismatch', `指纹与公钥不符：声明 ${claimedFp}，由公钥推出 ${expected}`, claimedFp);
     }
-    const pinned = this.opts.peerFingerprint;
-    if (pinned && pinned !== claimedFp) {
-      throw this.fail('pin-mismatch', `对端指纹与预期不符：预期 ${pinned}，实际 ${claimedFp}`, claimedFp);
+    const yiGuding = this.opts.peerFingerprint;
+    if (yiGuding && yiGuding !== claimedFp) {
+      throw this.fail('pin-mismatch', `对端指纹与预期不符：预期 ${yiGuding}，实际 ${claimedFp}`, claimedFp);
     }
     if (this.opts.roster && !this.opts.roster(claimedFp)) {
       throw this.fail('not-authorized', `对端指纹 ${claimedFp} 不在本群名册内`, claimedFp);
     }
   }
 
-  private async checkSignature(transcript: string, sigB64: string, pk: Buffer, fp: string, label: string): Promise<void> {
+  private async checkSignature(transcript: string, sigB64: string, pk: Buffer, fp: string, biaoQian: string): Promise<void> {
     const sig = anQuanB64uJieMa(sigB64);
-    if (!sig || sig.length === 0) throw this.fail('malformed', `${label} 缺少签名`, fp);
+    if (!sig || sig.length === 0) throw this.fail('malformed', `${biaoQian} 缺少签名`, fp);
     const r = await yanZhengDuiDuanQianMing(this.identity, Buffer.from(transcript, 'utf8'), sig, pk);
-    if (!r.ok) throw this.fail('signature-invalid', `${label} 签名校验失败（复核方式 ${r.via}）`, fp);
+    if (!r.ok) throw this.fail('signature-invalid', `${biaoQian} 签名校验失败（复核方式 ${r.via}）`, fp);
   }
 
   private checkReplay(fp: string, nonce: string, counter: number, ts: number): void {
@@ -669,7 +669,7 @@ export class WoshouQudongqi {
     return pinJieZiduan([
       'WARMY-HS1',
       WOSHOU_BANBEN,
-      hs1.gid,
+      hs1.qunId,
       hs1.eph,
       hs1.fp,
       hs1.pk,
@@ -684,7 +684,7 @@ export class WoshouQudongqi {
     return pinJieZiduan([
       'WARMY-HS2',
       WOSHOU_BANBEN,
-      hs2.gid,
+      hs2.qunId,
       hs2.eph,
       hs2.fp,
       hs2.pk,
@@ -704,7 +704,7 @@ export class WoshouQudongqi {
     const transcriptHash = sha256(Buffer.from(t1, 'utf8'), Buffer.from('|', 'utf8'), Buffer.from(t2, 'utf8'));
     const c2sMaterial = hkdf(shared, transcriptHash, `${WOSHOU_XIEYI} initiator-to-responder`, 32);
     const s2cMaterial = hkdf(shared, transcriptHash, `${WOSHOU_XIEYI} responder-to-initiator`, 32);
-    const duiDuanShiFaQiFang = hs1.fp !== this.identity.fingerprint;
+    const duiDuanShiFaQiFang = hs1.fp !== this.identity.zhiWen;
     this.sessionKeys = {
       handshakeId: transcriptHash.toString('hex'),
       transcriptHash,
@@ -712,7 +712,7 @@ export class WoshouQudongqi {
       groupId: this.opts.groupId ?? null,
       peerFingerprint: duiDuanShiFaQiFang ? hs1.fp : hs2.fp,
       peerPublicKey: fromB64u(duiDuanShiFaQiFang ? hs1.pk : hs2.pk),
-      localFingerprint: this.identity.fingerprint,
+      localFingerprint: this.identity.zhiWen,
       establishedAt: this.now(),
       localNonce: this.localNonce,
       peerNonce: duiDuanShiFaQiFang ? hs1.n : hs2.n,
@@ -742,7 +742,7 @@ export async function yunxingWoshou(initiator: WoshouQudongqi, responder: Woshou
   let cur: WoshouZhen = hs1;
   for (let i = 0; i < 4; i += 1) {
     const target = cur.t === 'hs1' || cur.t === 'hs3' ? responder : initiator;
-    const res = await target.step(cur);
+    const res = await target.buZhou(cur);
     if (res.session) return res.session;
     const next = res.out[0];
     if (!next) throw new Error('握手飞行链中断');

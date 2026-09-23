@@ -8,7 +8,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 export interface JianChaDianXiangQing {
-  tasks: string[];
+  RenwuJi: string[];
   filesChanged: Array<{ path: string; ts: number }>;
   filesCreated: Array<{ path: string; ts: number }>;
   irreversible: string[];
@@ -100,16 +100,16 @@ export class JianChaDianCang {
   }): Jianchadian {
     const id = `cp-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
     const dir = path.join('shadows', id);
-    const abs = path.join(this.root, dir);
-    fs.mkdirSync(abs, { recursive: true });
+    const jueDuiLu = path.join(this.root, dir);
+    fs.mkdirSync(jueDuiLu, { recursive: true });
     let strategy: 'cow' | 'shadow' = 'cow';
     if (opts.jsonlPath && fs.existsSync(opts.jsonlPath)) {
-      if (kaoBeiZhi(opts.jsonlPath, path.join(abs, 'fast-memory.jsonl')) === 'shadow') strategy = 'shadow';
+      if (kaoBeiZhi(opts.jsonlPath, path.join(jueDuiLu, 'fast-memory.jsonl')) === 'shadow') strategy = 'shadow';
     }
     if (opts.workspace && fs.existsSync(opts.workspace)) {
-      if (kaoBeiMuLu(opts.workspace, path.join(abs, 'workspace')) === 'shadow') strategy = 'shadow';
+      if (kaoBeiMuLu(opts.workspace, path.join(jueDuiLu, 'workspace')) === 'shadow') strategy = 'shadow';
     }
-    const bytes = muLuDaXiao(abs);
+    const bytes = muLuDaXiao(jueDuiLu);
     const now = Date.now();
     // G. 真实文件时间戳
     const filesChanged: Array<{ path: string; ts: number }> = [];
@@ -151,7 +151,7 @@ export class JianChaDianCang {
         opts.summary ||
         `${new Date(now).toLocaleTimeString()} · ${opts.phase === 'round_start' ? '轮起' : '轮末'}`,
       detail: {
-        tasks: [],
+        RenwuJi: [],
         filesChanged,
         filesCreated,
         irreversible: [],
@@ -181,20 +181,20 @@ export class JianChaDianCang {
     return { maxBytes, usedBytes, count: this.items.length };
   }
 
-  list(): Jianchadian[] {
+  LieBiao(): Jianchadian[] {
     return [...this.items].reverse();
   }
 
   rollback(id: string, targets: { jsonlPath?: string; workspace?: string }): boolean {
     const cp = this.items.find((x) => x.id === id);
     if (!cp) return false;
-    const abs = path.join(this.root, cp.dir);
+    const jueDuiLu = path.join(this.root, cp.dir);
     if (targets.jsonlPath) {
-      const src = path.join(abs, 'fast-memory.jsonl');
+      const src = path.join(jueDuiLu, 'fast-memory.jsonl');
       if (fs.existsSync(src)) fs.copyFileSync(src, targets.jsonlPath);
     }
     if (targets.workspace) {
-      const src = path.join(abs, 'workspace');
+      const src = path.join(jueDuiLu, 'workspace');
       if (fs.existsSync(src)) {
         fs.rmSync(targets.workspace, { recursive: true, force: true });
         kaoBeiMuLu(src, targets.workspace);

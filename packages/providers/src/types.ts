@@ -4,7 +4,7 @@
  * 协议覆盖：
  * 1. OpenAI 兼容 /v1/chat/completions
  *    — DeepSeek / SiliconFlow / Moonshot / GLM / Groq / Together / OpenAI …
- * 2. Anthropic Messages /v1/messages
+ * 2. Anthropic Messages /v1/xiaoXiJi
  * 3. Ollama 本地 /api/chat
  *
  * 产品不绑死任何一家；DeepSeek 仅是 OpenAI 兼容预设之一。
@@ -20,9 +20,9 @@ export interface LiaoTianXiaoXi {
   role: LiaoTianJueSe;
   content: string;
   /** tool_calls 时由 assistant 侧携带 */
-  toolCalls?: GongJuDiaoYong[];
+  gongJuDiaoYongJi?: GongJuDiaoYong[];
   toolCallId?: string;
-  name?: string;
+  ming?: string;
 }
 
 export interface GongJuDiaoYong {
@@ -55,7 +55,7 @@ export interface HuanCunYongLiang {
 
 export interface LiaoTianQingQiu {
   model: string;
-  messages: LiaoTianXiaoXi[];
+  xiaoXiJi: LiaoTianXiaoXi[];
   maxTokens?: number;
   temperature?: number;
   topP?: number;
@@ -83,7 +83,7 @@ export interface LiaoTianXiangYing {
 
 export interface LiaoTianPianZengLiang {
   content?: string;
-  toolCalls?: GongJuDiaoYong[];
+  gongJuDiaoYongJi?: GongJuDiaoYong[];
   role?: LiaoTianJueSe;
 }
 
@@ -116,7 +116,7 @@ export interface GongYingRenZheng {
 
 export interface GongYingYuShe {
   id: string;
-  label: string;
+  biaoQian: string;
   protocol: GongYingXieYi;
   /** 默认 baseURL */
   baseURL: string;
@@ -139,10 +139,10 @@ export interface MoxingGongYing {
   readonly supportsTools?: boolean;
 
   /** 同步对话 */
-  chat(req: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing>;
+  chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing>;
 
   /** 流式对话 */
-  chatStream(req: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian>;
+  chatStream(Qiu: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian>;
 
   /** 列模型（协议支持时） */
   listModels(signal?: AbortSignal): Promise<string[]>;
@@ -155,10 +155,10 @@ export interface MoxingGongYing {
 // 内置预设（用户可改 baseURL / key / 模型）
 // ─────────────────────────────────────────────
 
-export const PROVIDER_PRESETS: GongYingYuShe[] = [
+export const GONGYING_YUSHE: GongYingYuShe[] = [
   {
     id: 'deepseek',
-    label: 'DeepSeek',
+    biaoQian: 'DeepSeek',
     protocol: 'openai-compatible',
     baseURL: 'https://api.deepseek.com',
     defaultModel: 'deepseek-chat',
@@ -166,7 +166,7 @@ export const PROVIDER_PRESETS: GongYingYuShe[] = [
   },
   {
     id: 'openai',
-    label: 'OpenAI',
+    biaoQian: 'OpenAI',
     protocol: 'openai-compatible',
     baseURL: 'https://api.openai.com/v1',
     defaultModel: 'gpt-4o-mini',
@@ -174,7 +174,7 @@ export const PROVIDER_PRESETS: GongYingYuShe[] = [
   },
   {
     id: 'siliconflow',
-    label: 'SiliconFlow 硅基流动',
+    biaoQian: 'SiliconFlow 硅基流动',
     protocol: 'openai-compatible',
     baseURL: 'https://api.siliconflow.cn/v1',
     defaultModel: 'Qwen/Qwen2.5-7B-Instruct',
@@ -182,7 +182,7 @@ export const PROVIDER_PRESETS: GongYingYuShe[] = [
   },
   {
     id: 'moonshot',
-    label: 'Moonshot Kimi',
+    biaoQian: 'Moonshot Kimi',
     protocol: 'openai-compatible',
     baseURL: 'https://api.moonshot.cn/v1',
     defaultModel: 'moonshot-v1-8k',
@@ -190,15 +190,15 @@ export const PROVIDER_PRESETS: GongYingYuShe[] = [
   },
   {
     id: 'zhipu',
-    label: '智谱 GLM',
+    biaoQian: '智谱 GLM',
     protocol: 'openai-compatible',
-    baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+    baseURL: 'https://daKai.bigmodel.cn/api/paas/v4',
     defaultModel: 'glm-4-flash',
     requiresApiKey: true,
   },
   {
     id: 'anthropic',
-    label: 'Anthropic Claude',
+    biaoQian: 'Anthropic Claude',
     protocol: 'anthropic',
     baseURL: 'https://api.anthropic.com',
     defaultModel: 'claude-sonnet-4-5',
@@ -206,7 +206,7 @@ export const PROVIDER_PRESETS: GongYingYuShe[] = [
   },
   {
     id: 'ollama',
-    label: 'Ollama 本地',
+    biaoQian: 'Ollama 本地',
     protocol: 'ollama',
     baseURL: 'http://127.0.0.1:11434',
     defaultModel: 'qwen2.5:7b',

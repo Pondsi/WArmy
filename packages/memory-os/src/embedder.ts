@@ -122,7 +122,7 @@ export class OnnxQianruqi {
 
   static async create(opts: QianruqiXuanxiang): Promise<OnnxQianruqi> {
     const tokenizerPath = opts.tokenizerPath ?? path.join(path.dirname(opts.modelPath), 'tokenizer.json');
-    const t0 = Date.now();
+    const qiShiShiJian = Date.now();
     const status: XiangliangZhuangtai = {
       ready: false,
       reason: '',
@@ -172,11 +172,11 @@ export class OnnxQianruqi {
     // wasmPaths 必须是 file:// URL（onnxruntime-web 内部走 ESM 动态 import，
     // Windows 盘符路径会被 ESM loader 拒绝：ERR_UNSUPPORTED_ESM_URL_SCHEME）
     const wasmMulu = path.dirname(handle.main) + path.sep;
-    const attempts: Array<{ name: 'wasm-simd' | 'wasm-basic'; simd: boolean; setPaths: boolean }> = [
-      { name: 'wasm-simd', simd: true, setPaths: true },
-      { name: 'wasm-simd', simd: true, setPaths: false },
-      { name: 'wasm-basic', simd: false, setPaths: true },
-      { name: 'wasm-basic', simd: false, setPaths: false },
+    const attempts: Array<{ ming: 'wasm-simd' | 'wasm-basic'; simd: boolean; setPaths: boolean }> = [
+      { ming: 'wasm-simd', simd: true, setPaths: true },
+      { ming: 'wasm-simd', simd: true, setPaths: false },
+      { ming: 'wasm-basic', simd: false, setPaths: true },
+      { ming: 'wasm-basic', simd: false, setPaths: false },
     ];
 
     let lastErr: any = null;
@@ -195,10 +195,10 @@ export class OnnxQianruqi {
         if (!session.inputNames.includes('input_ids')) {
           throw new Error(`unexpected model inputs: ${session.inputNames.join(',')}`);
         }
-        status.backend = at.name;
+        status.backend = at.ming;
         status.ready = true;
         status.reason = `ok(wasmPaths=${at.setPaths ? 'file-url' : 'default'})`;
-        status.loadMs = Date.now() - t0;
+        status.loadMs = Date.now() - qiShiShiJian;
         const outputs = session.outputNames;
         const emb = new OnnxQianruqi(ort, session, tokenizer, status, opts);
         const probe = await emb.embed('维度探测', { raw: true });
@@ -210,10 +210,10 @@ export class OnnxQianruqi {
         return emb;
       } catch (e: any) {
         lastErr = e;
-        status.reason = `${at.name}${at.setPaths ? '+paths' : ''}: ${e?.message || e}`;
+        status.reason = `${at.ming}${at.setPaths ? '+paths' : ''}: ${e?.message || e}`;
       }
     }
-    status.loadMs = Date.now() - t0;
+    status.loadMs = Date.now() - qiShiShiJian;
     if (!status.reason) status.reason = String(lastErr?.message || lastErr || 'unknown');
     throw Object.assign(new Error(`WASM 后端不可用：${status.reason}`), { code: 'ORT_BACKEND', status });
   }
@@ -228,18 +228,18 @@ export class OnnxQianruqi {
 
   /** 文本 → L2 归一化 512 维向量（bge 用 CLS pooling） */
   async embed(text: string, o: { raw?: boolean } = {}): Promise<Float32Array> {
-    const input = o.raw ? text : this.queryPrefix + text;
-    const enc = this.tokenizer.encode(input, { maxLength: this.maxLength });
-    const ids = BigInt64Array.from(enc.ids.map((v) => BigInt(v)));
-    const mask = BigInt64Array.from(enc.attentionMask.map((v) => BigInt(v)));
+    const shuRu = o.raw ? text : this.queryPrefix + text;
+    const enc = this.tokenizer.encode(shuRu, { maxLength: this.maxLength });
+    const idJi = BigInt64Array.from(enc.idJi.map((v) => BigInt(v)));
+    const yanma = BigInt64Array.from(enc.attentionMask.map((v) => BigInt(v)));
     const leixing = BigInt64Array.from(enc.tokenTypeIds.map((v) => BigInt(v)));
-    const n = enc.ids.length;
+    const n = enc.idJi.length;
     const feeds: Record<string, any> = {
-      input_ids: new this.ort.Tensor('int64', ids, [1, n]),
-      attention_mask: new this.ort.Tensor('int64', mask, [1, n]),
+      input_ids: new this.ort.Tensor('int64', idJi, [1, n]),
+      attention_mask: new this.ort.Tensor('int64', yanma, [1, n]),
       token_type_ids: new this.ort.Tensor('int64', leixing, [1, n]),
     };
-    const t0 = Date.now();
+    const qiShiShiJian = Date.now();
     const out = await this.session.run(feeds);
     const key = this.session.outputNames.includes('last_hidden_state') ? 'last_hidden_state' : this.session.outputNames[0];
     const lhs = out[key];
@@ -256,7 +256,7 @@ export class OnnxQianruqi {
     if (guiFanHua > 0) {
       for (let i = 0; i < dim; i++) vec[i] = (vec[i] as number) / guiFanHua;
     }
-    const dt = Date.now() - t0;
+    const dt = Date.now() - qiShiShiJian;
     this.status.embeds += 1;
     this.status.embedTotalMs += dt;
     this.status.lastEmbedMs = dt;
@@ -269,7 +269,7 @@ export class OnnxQianruqi {
 }
 
 /** 默认模型搜索路径：显式配置 → 环境变量 → 本仓库 spike 资产 → dataDir/models */
-export function morenMoxingHouxuan(dataDir?: string, env = process.env): Array<{ modelPath: string; tokenizerPath: string; from: string }> {
+export function morenMoxingHouxuan(CangLu?: string, env = process.env): Array<{ modelPath: string; tokenizerPath: string; from: string }> {
   const out: Array<{ modelPath: string; tokenizerPath: string; from: string }> = [];
   if (env.CCA_ONNX_MODEL) {
     out.push({
@@ -278,21 +278,21 @@ export function morenMoxingHouxuan(dataDir?: string, env = process.env): Array<{
       from: 'env:CCA_ONNX_MODEL',
     });
   }
-  if (dataDir) {
+  if (CangLu) {
     out.push({
-      modelPath: path.join(dataDir, 'models', 'model_quantized.onnx'),
-      tokenizerPath: path.join(dataDir, 'models', 'tokenizer.json'),
+      modelPath: path.join(CangLu, 'models', 'model_quantized.onnx'),
+      tokenizerPath: path.join(CangLu, 'models', 'tokenizer.json'),
       from: 'dataDir/models',
     });
   }
   // 仓库内开发资产（spike-07 实测资产，打包时由 electron-builder extraResources 提供）
   let dir = process.cwd();
   for (let i = 0; i < 6; i++) {
-    const cand = path.join(dir, 'spikes', 'spike-07-onnx', 'models', 'model_quantized.onnx');
-    if (fs.existsSync(cand)) {
+    const houXuan = path.join(dir, 'spikes', 'spike-07-onnx', 'models', 'model_quantized.onnx');
+    if (fs.existsSync(houXuan)) {
       out.push({
-        modelPath: cand,
-        tokenizerPath: path.join(path.dirname(cand), 'tokenizer.json'),
+        modelPath: houXuan,
+        tokenizerPath: path.join(path.dirname(houXuan), 'tokenizer.json'),
         from: `repo:${dir}`,
       });
       break;

@@ -1,8 +1,8 @@
 const fs = require('node:fs');
-const base = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/renderer/';
-let j = fs.readFileSync(base + 'app.js', 'utf8');
+const base = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/renderer/';
+let j = fs.readFileSync(base + 'yingYong.js', 'utf8');
 
-const anchor = `    $('i-del').onclick = async () => {`;
+const anchor = `    $('iDel').onclick = async () => {`;
 if (!j.includes(anchor)) {
   console.log('anchor missing');
   process.exit(1);
@@ -19,13 +19,13 @@ const bind = `    // ── 模型配置：默认模型 / 全部可用 / 手动�
       if (inst2.allModels === undefined) inst2.allModels = true;
       if (!inst2.chain) inst2.chain = [...inst2.availableModels];
 
-      const defSel = $('i-default-model');
-      const allChk = $('i-all-models');
+      const defSel = $('iDefaultMoXing');
+      const allChk = $('iAllMoXingJi');
       const allList = $('i-all-list');
-      const manual = $('i-manual');
-      const provPick = $('i-prov-pick');
-      const modelPick = $('i-model-pick');
-      const chainBox = $('i-chain');
+      const manual = $('iManual');
+      const provPick = $('iProvXuanZe');
+      const modelPick = $('iMoXingXuanZe');
+      const chainBox = $('iChain');
 
       function renderChain() {
         if (!chainBox) return;
@@ -34,13 +34,13 @@ const bind = `    // ── 模型配置：默认模型 / 全部可用 / 手动�
           list
             .map(
               (m, i) =>
-                '<div class="inst-row" style="margin:4px 0">' +
+                '<div class="shiLiHang" style="margin:4px 0">' +
                 '<span style="flex:1">' + escapeHtml(m) + '</span>' +
-                '<button class="btn-mini" data-up="' + i + '">' + t('instances.moveUp') + '</button>' +
-                '<button class="btn-mini" data-down="' + i + '">' + t('instances.moveDown') + '</button>' +
+                '<button class="anNiuXiao" data-up="' + i + '">' + t('instances.moveUp') + '</button>' +
+                '<button class="anNiuXiao" data-down="' + i + '">' + t('instances.moveDown') + '</button>' +
                 '</div>'
             )
-            .join('') || '<div class="muted">' + t('settings.modelsEmpty') + '</div>';
+            .join('') || '<div class="jingYin">' + t('settings.modelsEmpty') + '</div>';
         chainBox.querySelectorAll('[data-up]').forEach((b) => {
           b.onclick = () => {
             const i = Number(b.dataset.up);
@@ -66,10 +66,10 @@ const bind = `    // ── 模型配置：默认模型 / 全部可用 / 手动�
       if (allChk) {
         allChk.onchange = () => {
           inst2.allModels = allChk.checked;
-          allList?.classList.toggle('hidden', !allChk.checked);
-          manual?.classList.toggle('hidden', allChk.checked);
+          allList?.classList.toggle('yinCang', !allChk.checked);
+          manual?.classList.toggle('yinCang', allChk.checked);
           if (allChk.checked) {
-            const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.label + ' · ' + m));
+            const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m));
             inst2.availableModels = all;
             inst2.chain = [...all];
             renderChain();
@@ -90,16 +90,16 @@ const bind = `    // ── 模型配置：默认模型 / 全部可用 / 手动�
         provPick.onchange = fillModels;
         fillModels();
       }
-      const addBtn = $('i-add-model');
+      const addBtn = $('iTianJiaMoXing');
       if (addBtn) {
         addBtn.onclick = () => {
           const p = state.providers.find((x) => x.id === provPick.value);
           const m = modelPick.value;
           if (!p || !m) return;
-          const full = p.label + ' · ' + m;
+          const full = p.biaoQian + ' · ' + m;
           inst2.availableModels = [...new Set([...(inst2.availableModels || []), full])];
           inst2.chain = [...new Set([...(inst2.chain || []), full])];
-          const sel = $('i-default-model');
+          const sel = $('iDefaultMoXing');
           if (sel && ![...sel.options].some((o) => o.value === full)) {
             const opt = document.createElement('option');
             opt.value = full;
@@ -118,7 +118,7 @@ const bind = `    // ── 模型配置：默认模型 / 全部可用 / 手动�
     })();
 
     function renderPageCurrentInstanceOptions() {
-      const sel = $('i-default-model');
+      const sel = $('iDefaultMoXing');
       if (!sel) return;
       const cur = inst2DefaultModel();
       sel.innerHTML =
@@ -131,8 +131,8 @@ const bind = `    // ── 模型配置：默认模型 / 全部可用 / 手动�
       }
     }
 
-    $('i-del').onclick = async () => {`;
+    $('iDel').onclick = async () => {`;
 
 j = j.replace(anchor, bind);
-fs.writeFileSync(base + 'app.js', j);
+fs.writeFileSync(base + 'yingYong.js', j);
 console.log('model bindings inserted');

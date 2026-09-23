@@ -17,18 +17,18 @@ import {DizhiJiantingqi, LianJieTiZi, DhtJieDian, KeBoRuTanCe, QunMiyaoHuan, Lan
 
 let failures = 0;
 let passes = 0;
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   const mark = cond ? 'PASS' : 'FAIL';
   if (cond) passes += 1;
   else failures += 1;
   const extra = detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
-  console.log(`  [${mark}] ${label}${extra}`);
+  console.log(`  [${mark}] ${biaoQian}${extra}`);
 }
-function group(title) {
-  console.log(`\n${title}`);
+function group(biaoTi) {
+  console.log(`\n${biaoTi}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const mk = (label) => chuangjianLinShiShenFen(label);
+const mk = (biaoQian) => chuangjianLinShiShenFen(biaoQian);
 
 const GROUP = 'grp-announce-1';
 const GROUP_KEY = randomBytes(32);
@@ -417,7 +417,7 @@ async function main() {
       nodeId: 'creator',
       advertised: () => ({ host: '127.0.0.1', port: creatorTcpPort }),
       peers: () => [{ fingerprint: memberId.fingerprint, addr: memberDht.address }],
-      sendRpc: (addr, msg, replyType, timeoutMs) => memberDht.call(addr, msg, replyType, timeoutMs),
+      sendRpc: (addr, xiaoXi, replyType, timeoutMs) => memberDht.call(addr, xiaoXi, replyType, timeoutMs),
     });
     const res = await okProbe.probe();
     check('对端拨回成功 → dialable=true', res.dialable === true, res.reason);
@@ -431,7 +431,7 @@ async function main() {
       nodeId: 'creator',
       advertised: () => ({ host: '127.0.0.1', port: 1 }),
       peers: () => [{ fingerprint: memberId.fingerprint, addr: memberDht.address }],
-      sendRpc: (addr, msg, replyType, timeoutMs) => memberDht.call(addr, msg, replyType, timeoutMs),
+      sendRpc: (addr, xiaoXi, replyType, timeoutMs) => memberDht.call(addr, xiaoXi, replyType, timeoutMs),
     });
     const bad = await badProbe.probe();
     check('端口错 → dialable=false', bad.dialable === false, bad.reason);

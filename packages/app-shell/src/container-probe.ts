@@ -91,7 +91,7 @@ export interface RongQiDongZuoJieGuo {
   ok: boolean;
   code: number | null;
   /** 原始输出/错误行（不翻译，便于排查；已截断） */
-  output: string;
+  shuChu: string;
   at: number;
   /**
    * **失败原因码**（机器可读；`ok=true` 时为 'ok'）。文案走 i18n：container.action.reason.<code>
@@ -108,9 +108,9 @@ export interface RongQiDongZuoJieGuo {
  *   · `✗ Failed to start Docker Desktop`
  *   · `starting Docker Desktop: getting launcher path: cannot find registry key "SOFTWARE\Docker Inc.\Docker Desktop"`
  */
-export function guiLeiDongZuoJieGuo(kind: 'start' | 'stop', ok: boolean, output: string, exitCode: number | null): string {
+export function guiLeiDongZuoJieGuo(kind: 'start' | 'stop', ok: boolean, shuChu: string, exitCode: number | null): string {
   if (ok) return 'ok';
-  const text = String(output || '').toLowerCase();
+  const text = String(shuChu || '').toLowerCase();
   if (/cannot find registry key|getting launcher path|getting backend binary path|install incomplete|no such file or directory.*docker desktop/.test(text)) {
     return 'install-incomplete';
   }
@@ -127,7 +127,7 @@ export function dongZuoXuAnZhuang(reasonCode: string): boolean {
 
 export interface RongQiDongZuoTai {
   kind: 'start' | 'stop';
-  startedAt: number;
+  kaiShiShiJian: number;
   /** 子进程还在跑 = 过渡态 */
   pending: boolean;
   result?: RongQiDongZuoJieGuo;
@@ -165,7 +165,7 @@ export interface RongQiTanCeBaoGao {
   /** 未安装的候选数量（这些只进安装说明，不进列表） */
   notInstalledCount: number;
   /** 过渡态中的操作 */
-  pendingActions: Array<{ id: string; kind: 'start' | 'stop'; startedAt: number }>;
+  pendingActions: Array<{ id: string; kind: 'start' | 'stop'; kaiShiShiJian: number }>;
   /** 环境类型（Linux / Windows / Android，含"是否真的是容器"与"本轮是否真的支持"） */
   envTypes: ContainerEnvTypeSpec[];
   /** 基础镜像表（公开免费开源；**已按 digest 钉死**，取数方式见 CONTAINER_BASE_IMAGES 注释） */
@@ -472,7 +472,7 @@ export interface HuanJingGuHuaNengLi {
  * 运行时 → 固化能力。**默认按运行时 id 判**，而不是按"是不是容器"一刀切。
  * 维护提醒：新增运行时必须在这里给出它的固化能力（没有就 unsupported + 原因）。
  */
-export function envSolidifyCapability(runtimeId: string): HuanJingGuHuaNengLi {
+export function huanJingGuHuaNengLi(runtimeId: string): HuanJingGuHuaNengLi {
   const id = String(runtimeId || '');
   if (!id) return { kind: 'unsupported', programmatic: false, reason: 'no-runtime-chosen' };
   if (id === 'docker' || id === 'podman' || id === 'nerdctl' || id === 'rancher-desktop') {
@@ -496,9 +496,9 @@ export function envSolidifyCapability(runtimeId: string): HuanJingGuHuaNengLi {
  */
 export function quYinQingXiTongMoShi(report: RongQiTanCeBaoGao | null | undefined, runtimeId: string): string {
   if (!report || !runtimeId) return 'unknown';
-  const row = (report.runtimes || []).find((x) => x.id === runtimeId);
-  if (!row) return 'unknown';
-  const detail = String(row.detail || '');
+  const hang = (report.runtimes || []).find((x) => x.id === runtimeId);
+  if (!hang) return 'unknown';
+  const detail = String(hang.detail || '');
   if (detail.indexOf('daemon-reachable:') === 0) {
     const mode = detail.slice('daemon-reachable:'.length).trim();
     return mode || 'unknown';
@@ -560,14 +560,14 @@ export interface GuHuaJueCe {
  *   · 可能销毁容器之前 ⇒ **一定**固化一次（这是最后机会）；
  *   · 其余情况 ⇒ 有变化且在节流窗口之外才固化（避免把缓存/日志也 commit 进去、避免镜像爆炸）。
  */
-export function shouldSolidifyAt(input: GuHuaJueCeShuRu = {}): GuHuaJueCe {
-  const now = typeof input.now === 'number' ? input.now : Date.now();
-  const last = Number(input.lastSolidifiedAt || 0);
-  const hebing = typeof input.coalesceMs === 'number' ? Math.max(0, input.coalesceMs) : SOLIDIFY_COALESCE_MS;
-  if (input.programmatic === false) return { solidify: false, code: 'runtime-cannot-solidify' };
-  if (input.beforeDestroy === true) return { solidify: true, code: 'before-destroy' };
-  if (input.explicit === true) return { solidify: true, code: 'explicit' };
-  if (input.dirty !== true) return { solidify: false, code: 'nothing-changed' };
+export function shiFouGaiGuHua(shuRu: GuHuaJueCeShuRu = {}): GuHuaJueCe {
+  const now = typeof shuRu.now === 'number' ? shuRu.now : Date.now();
+  const last = Number(shuRu.lastSolidifiedAt || 0);
+  const hebing = typeof shuRu.coalesceMs === 'number' ? Math.max(0, shuRu.coalesceMs) : SOLIDIFY_COALESCE_MS;
+  if (shuRu.programmatic === false) return { solidify: false, code: 'runtime-cannot-solidify' };
+  if (shuRu.beforeDestroy === true) return { solidify: true, code: 'before-destroy' };
+  if (shuRu.explicit === true) return { solidify: true, code: 'explicit' };
+  if (shuRu.dirty !== true) return { solidify: false, code: 'nothing-changed' };
   if (last > 0 && now - last < hebing) return { solidify: false, code: 'coalesced' };
   if (last === 0) return { solidify: true, code: 'first-time' };
   return { solidify: true, code: 'throttled-due' };
@@ -575,10 +575,10 @@ export function shouldSolidifyAt(input: GuHuaJueCeShuRu = {}): GuHuaJueCe {
 
 /** 固化镜像的保留列表（只留最近 N 个；返回要**保留**的与要**清理**的） */
 export function guHuaBaoLiu(
-  list: Array<{ imageRef: string; at: number }>,
+  LieBiao: Array<{ imageRef: string; at: number }>,
   keep = SOLIDIFY_KEEP
 ): { keep: Array<{ imageRef: string; at: number }>; prune: Array<{ imageRef: string; at: number }> } {
-  const yiPaiXu = [...(list || [])].sort((a, b) => (b.at || 0) - (a.at || 0));
+  const yiPaiXu = [...(LieBiao || [])].sort((a, b) => (b.at || 0) - (a.at || 0));
   const n = Math.max(1, Math.floor(keep));
   return { keep: yiPaiXu.slice(0, n), prune: yiPaiXu.slice(n) };
 }
@@ -670,7 +670,7 @@ export const CONTAINER_RUNTIME_SPECS: readonly RongQiYunXingGuiGe[] = [
     engineKind: 'container',
     api: 'podman',
     platforms: [WIN, 'darwin', 'linux'],
-    // Windows 上是 `podman machine start|stop <name>`；Linux 上 podman 无守护进程（daemonless），
+    // Windows 上是 `podman machine start|stop <ming>`；Linux 上 podman 无守护进程（daemonless），
     // 没有"引擎启停"这回事 —— 动态判断见 probePodman。
     lifecycle: { startable: true, stoppable: true, reason: 'ok', waitMs: 120000 },
   },
@@ -883,7 +883,7 @@ export const CONTAINER_FREEZE_EVIDENCE: readonly RongQiGuHuaZhengJuGuiGe[] = [
     runtimeId: 'lxd-incus',
     kind: 'commit',
     evidence: 'cli-missing',
-    commands: ['incus publish <instance> --alias x', 'incus snapshot create <instance> <name>', 'incus export <instance> x.tar'],
+    commands: ['incus publish <instance> --alias x', 'incus snapshot create <instance> <ming>', 'incus export <instance> x.tar'],
     artifact: 'tar-archive',
     cost: ['incremental-when-published', 'root-required-for-daemon'],
     dependsOnEngineOsMode: false,
@@ -986,18 +986,18 @@ function jinyao(text: string, max = 300): string {
 
 function zhiXingTanCe(file: string, args: string[], timeoutMs: number): Promise<ZhiXingJieJu> {
   return new Promise((resolve) => {
-    const t0 = Date.now();
+    const qiShiShiJian = Date.now();
     let done = false;
     const wanCheng = (o: Partial<ZhiXingJieJu>): void => {
       if (done) return;
       done = true;
       resolve({
-        ok: false, missing: false, code: null, timedOut: false, out: '', err: '', ms: Date.now() - t0, ...o,
+        ok: false, missing: false, code: null, timedOut: false, out: '', err: '', ms: Date.now() - qiShiShiJian, ...o,
       });
     };
-    let child: ChildProcess;
+    let Zhi: ChildProcess;
     try {
-      child = execFile(
+      Zhi = execFile(
         file,
         args,
         { timeout: timeoutMs, windowsHide: true, maxBuffer: 1 << 20, encoding: 'buffer' },
@@ -1026,7 +1026,7 @@ function zhiXingTanCe(file: string, args: string[], timeoutMs: number): Promise<
       wanCheng({ missing: true, err: jinyao(String((e as Error)?.message || e)) });
       return;
     }
-    child.on('error', (e) => {
+    Zhi.on('error', (e) => {
       const renYiCuoWu = e as NodeJS.ErrnoException;
       wanCheng({ missing: renYiCuoWu.code === 'ENOENT', err: jinyao(String(e.message || e)) });
     });
@@ -1034,7 +1034,7 @@ function zhiXingTanCe(file: string, args: string[], timeoutMs: number): Promise<
 }
 
 /** 有并发上限的 map（避免 12 个候选同时 spawn 把机器压住） */
-async function bingFaYingShe<T, R>(items: readonly T[], limit: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
+async function bingFaYingShe<T, R>(items: readonly T[], limit: number, fn: (item: T, suoYin: number) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;
   const gongzuozhe = async (): Promise<void> => {
@@ -1178,7 +1178,7 @@ async function dockerZhuoMianCli(): Promise<string> {
           'C:\\Program Files\\Docker\\Docker\\resources\\cli-plugins\\docker-desktop.exe',
           'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker-desktop.exe',
         ]
-      : ['/Applications/Docker.app/Contents/Resources/cli-plugins/docker-desktop', '/usr/local/lib/docker/cli-plugins/docker-desktop'];
+      : ['/Applications/Docker.yingYong/Contents/Resources/cli-plugins/docker-desktop', '/usr/local/lib/docker/cli-plugins/docker-desktop'];
     for (const p of candidates) {
       try {
         const fs = await import('node:fs');
@@ -1223,7 +1223,7 @@ async function tanCePodman(timeout: number): Promise<TanCeJieJu> {
 }
 
 /**
- * podman 的启停通道：Windows 上是 `podman machine start|stop <name>`。
+ * podman 的启停通道：Windows 上是 `podman machine start|stop <ming>`。
  * 恰好一个 machine 才给按钮（多个 = 歧义，宁可不给；零个 = 还没 init，属安装步骤）。
  * Linux 上 podman 是 daemonless，没有"引擎启停"这回事。
  */
@@ -1241,9 +1241,9 @@ async function podmanJiQiMingJi(): Promise<string[]> {
   const r = await zhiXingTanCe('podman', ['machine', 'list', '--format', 'json'], 6000);
   if (!r.ok && !r.out) return [];
   try {
-    const arr = JSON.parse(r.out) as Array<Record<string, unknown>>;
-    if (!Array.isArray(arr)) return [];
-    return arr.map((m) => String(m['Name'] ?? m['name'] ?? '')).filter(Boolean);
+    const shuZu = JSON.parse(r.out) as Array<Record<string, unknown>>;
+    if (!Array.isArray(shuZu)) return [];
+    return shuZu.map((m) => String(m['Name'] ?? m['ming'] ?? '')).filter(Boolean);
   } catch {
     return [];
   }
@@ -1271,10 +1271,10 @@ async function tanCeWsl(timeout: number, deep: boolean): Promise<TanCeJieJu> {
   if (ver.missing) return { status: 'not-installed', detail: 'cli-not-found' };
   const version = shouGeBanBen(`${ver.out} ${ver.err}`, VER_WSL) || jinyao(ver.out, 30);
   // 无发行版时 -l -v 返回非 0 退出码 + 一段说明文字（本机实测就是这条）
-  const list = await zhiXingTanCe('wsl.exe', ['-l', '-v'], timeout);
-  const text = `${list.out}\n${list.err}`;
+  const LieBiao = await zhiXingTanCe('wsl.exe', ['-l', '-v'], timeout);
+  const text = `${LieBiao.out}\n${LieBiao.err}`;
   const noDistro = /没有已安装的分发|no installed distributions|WSL_E_DISTRO_NOT_FOUND/i.test(text);
-  const distros = jieXiWslFaXingBan(list.out);
+  const distros = jieXiWslFaXingBan(LieBiao.out);
   const lifecycle: Partial<RongQiShengMing> = { startable: false, stoppable: false, reason: 'vm-shutdown-affects-all' };
   if (noDistro || distros.length === 0) {
     return {
@@ -1295,9 +1295,9 @@ async function tanCeWsl(timeout: number, deep: boolean): Promise<TanCeJieJu> {
    *     （用户自己点了"探测"这类动作）才进去跑那一句。
    * 结论：**看状态不等于启动它**。
    */
-  const zhuangtai = jieXiWslFaXingBanZhuangtai(list.out);
+  const zhuangtai = jieXiWslFaXingBanZhuangtai(LieBiao.out);
   const first = distros[0] as string;
-  const shouZhuangtai = zhuangtai.find((d) => d.name === first);
+  const shouZhuangtai = zhuangtai.find((d) => d.ming === first);
   const running = !!shouZhuangtai?.running;
   if (!running && !deep) {
     return {
@@ -1322,32 +1322,32 @@ async function tanCeWsl(timeout: number, deep: boolean): Promise<TanCeJieJu> {
 }
 
 /** 从 `wsl -l -v` 的输出里解析每个发行版的**真实状态**（Running / Stopped），不启动任何东西 */
-export function jieXiWslFaXingBanZhuangtai(out: string): Array<{ name: string; running: boolean; raw: string }> {
-  const rows: Array<{ name: string; running: boolean; raw: string }> = [];
+export function jieXiWslFaXingBanZhuangtai(out: string): Array<{ ming: string; running: boolean; raw: string }> {
+  const rows: Array<{ ming: string; running: boolean; raw: string }> = [];
   for (const raw of String(out || '').split(/\r?\n/)) {
-    const line = raw.replace(/\u0000/g, '').trim();
-    if (!line || /^NAME\s+STATE\s+VERSION/i.test(line)) continue;
-    if (/没有已安装的分发|no installed distributions/i.test(line)) continue;
-    const lieJi = line.split(/\s{2,}|\t/).map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
+    const Hang = raw.replace(/\u0000/g, '').trim();
+    if (!Hang || /^NAME\s+STATE\s+VERSION/i.test(Hang)) continue;
+    if (/没有已安装的分发|no installed distributions/i.test(Hang)) continue;
+    const lieJi = Hang.split(/\s{2,}|\t/).map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
     if (lieJi.length < 2) continue;
-    const name = lieJi[0] as string;
+    const ming = lieJi[0] as string;
     const state = String(lieJi[1] || '');
-    if (!name || /^NAME$/i.test(name)) continue;
-    rows.push({ name, running: /running/i.test(state), raw: state });
+    if (!ming || /^NAME$/i.test(ming)) continue;
+    rows.push({ ming, running: /running/i.test(state), raw: state });
   }
   return rows;
 }
 
 /** `wsl -l -v` 的表格：NAME STATE VERSION（第一列是名字，*, 前缀表示默认发行版） */
 function jieXiWslFaXingBan(out: string): string[] {
-  const lines = String(out || '').split(/\r?\n/);
+  const HangJi = String(out || '').split(/\r?\n/);
   const names: string[] = [];
-  for (const raw of lines) {
-    const line = raw.replace(/\u0000/g, '').trim();
-    if (!line) continue;
-    if (/^NAME\s+STATE\s+VERSION/i.test(line)) continue;
-    if (/没有已安装的分发|no installed distributions/i.test(line)) continue;
-    const lieJi = line.split(/\s{2,}|\t/).map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
+  for (const raw of HangJi) {
+    const Hang = raw.replace(/\u0000/g, '').trim();
+    if (!Hang) continue;
+    if (/^NAME\s+STATE\s+VERSION/i.test(Hang)) continue;
+    if (/没有已安装的分发|no installed distributions/i.test(Hang)) continue;
+    const lieJi = Hang.split(/\s{2,}|\t/).map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
     if (lieJi.length < 2) continue;
     const mingCheng = lieJi[0] as string;
     if (!mingCheng || /^NAME$/i.test(mingCheng)) continue;
@@ -1401,20 +1401,20 @@ async function tanCeLima(timeout: number): Promise<TanCeJieJu> {
   const cli = await zhiXingTanCe('limactl', ['--version'], timeout);
   if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
   const version = shouGeBanBen(`${cli.out} ${cli.err}`, VER_LIMA) || jinyao(cli.out, 30);
-  const list = await zhiXingTanCe('limactl', ['list', '--json'], Math.max(timeout, 8000));
-  const names = jieXiLimaShiLi(list.out);
+  const LieBiao = await zhiXingTanCe('limactl', ['list', '--json'], Math.max(timeout, 8000));
+  const names = jieXiLimaShiLi(LieBiao.out);
   const lifecycle: Partial<RongQiShengMing> =
     names.length === 1
       ? { startable: true, stoppable: true, reason: 'ok' }
       : { startable: false, stoppable: false, reason: names.length === 0 ? 'vm-not-engine' : 'ambiguous-instances' };
-  if (!list.ok && !list.out) {
+  if (!LieBiao.ok && !LieBiao.out) {
     return {
       status: 'installed-not-running', version, detail: 'no-instance',
-      evidence: jinyao(`${list.err} ${list.out}`), lifecycle: { startable: false, stoppable: false, reason: 'ambiguous-instances' },
+      evidence: jinyao(`${LieBiao.err} ${LieBiao.out}`), lifecycle: { startable: false, stoppable: false, reason: 'ambiguous-instances' },
     };
   }
   if (names.length === 0) return { status: 'installed-not-running', version, detail: 'no-instance', lifecycle };
-  const running = /"status"\s*:\s*"Running"/i.test(list.out);
+  const running = /"status"\s*:\s*"Running"/i.test(LieBiao.out);
   return {
     status: running ? 'ready' : 'installed-not-running',
     version,
@@ -1425,12 +1425,12 @@ async function tanCeLima(timeout: number): Promise<TanCeJieJu> {
 
 function jieXiLimaShiLi(out: string): string[] {
   const names: string[] = [];
-  for (const line of String(out || '').split(/\r?\n/)) {
-    const t = line.trim();
+  for (const Hang of String(out || '').split(/\r?\n/)) {
+    const t = Hang.trim();
     if (!t.startsWith('{')) continue;
     try {
       const o = JSON.parse(t) as Record<string, unknown>;
-      const n = String(o['name'] ?? '');
+      const n = String(o['ming'] ?? '');
       if (n) names.push(n);
     } catch {
       /* 非 JSON 行忽略 */
@@ -1543,7 +1543,7 @@ export function zuiHouRongQiTanCeBaoGao(): RongQiTanCeBaoGao | null {
   return cache ? cache.report : null;
 }
 
-export async function probeContainerRuntimes(opts: RongQiTanCeXuanXiang = {}): Promise<RongQiTanCeBaoGao> {
+export async function tanCeRongQiYunXing(opts: RongQiTanCeXuanXiang = {}): Promise<RongQiTanCeBaoGao> {
   const platform = opts.platform || process.platform;
   const cacheMs = typeof opts.cacheMs === 'number' ? opts.cacheMs : 8000;
   const zhiYouLieBiao = Array.isArray(opts.only) && opts.only.length ? opts.only.map((x) => String(x)) : null;
@@ -1565,7 +1565,7 @@ export async function probeContainerRuntimes(opts: RongQiTanCeXuanXiang = {}): P
   }
   const timeout = Math.max(1000, Math.min(opts.perProbeTimeoutMs ?? 5000, 30000));
   const concurrency = Math.max(1, Math.min(opts.concurrency ?? 4, CONTAINER_RUNTIME_SPECS.length));
-  const t0 = Date.now();
+  const qiShiShiJian = Date.now();
   const onlySet = Array.isArray(opts.only) && opts.only.length ? new Set(opts.only.map((x) => String(x))) : null;
   const deep = opts.deep === true;
 
@@ -1644,7 +1644,7 @@ export async function probeContainerRuntimes(opts: RongQiTanCeXuanXiang = {}): P
     ok: true,
     platform,
     probedAt: Date.now(),
-    elapsedMs: Date.now() - t0,
+    elapsedMs: Date.now() - qiShiShiJian,
     cached: false,
     runtimes: entries,
     usableIds,
@@ -1671,8 +1671,8 @@ export type RongqiDongzuoMing = 'start' | 'stop';
 export const CONTAINER_ACTION_NAMES: readonly RongqiDongzuoMing[] = ['start', 'stop'];
 
 interface NeibuDongzuo extends RongQiDongZuoTai {
-  child?: ChildProcess;
-  output: string;
+  Zhi?: ChildProcess;
+  shuChu: string;
 }
 
 const actions = new Map<string, NeibuDongzuo>();
@@ -1680,15 +1680,15 @@ const actions = new Map<string, NeibuDongzuo>();
 function gongKaiDongZuo(a: NeibuDongzuo): RongQiDongZuoTai {
   return {
     kind: a.kind,
-    startedAt: a.startedAt,
+    kaiShiShiJian: a.kaiShiShiJian,
     pending: a.pending,
     ...(a.result ? { result: a.result } : {}),
   };
 }
 
-function daiDongZuoLieBiao(): Array<{ id: string; kind: 'start' | 'stop'; startedAt: number }> {
-  const out: Array<{ id: string; kind: 'start' | 'stop'; startedAt: number }> = [];
-  for (const [id, a] of actions) if (a.pending) out.push({ id, kind: a.kind, startedAt: a.startedAt });
+function daiDongZuoLieBiao(): Array<{ id: string; kind: 'start' | 'stop'; kaiShiShiJian: number }> {
+  const out: Array<{ id: string; kind: 'start' | 'stop'; kaiShiShiJian: number }> = [];
+  for (const [id, a] of actions) if (a.pending) out.push({ id, kind: a.kind, kaiShiShiJian: a.kaiShiShiJian });
   return out;
 }
 
@@ -1724,8 +1724,8 @@ async function dongzuoMingling(id: string, action: RongqiDongzuoMing): Promise<{
   }
   if (id === 'lima') {
     if (process.platform === WIN) return { code: 'unsupported-platform', error: 'lima is not applicable on this platform' };
-    const list = await zhiXingTanCe('limactl', ['list', '--json'], 8000);
-    const names = jieXiLimaShiLi(list.out);
+    const LieBiao = await zhiXingTanCe('limactl', ['list', '--json'], 8000);
+    const names = jieXiLimaShiLi(LieBiao.out);
     if (names.length !== 1) return { code: 'no-unique-instance', error: `lima instance count=${names.length}` };
     return { file: 'limactl', args: [action, names[0] as string], timeoutMs: 180000 };
   }
@@ -1736,9 +1736,9 @@ async function dongzuoMingling(id: string, action: RongqiDongzuoMing): Promise<{
  * 启动/停止。**只接受预定义运行时 id + 'start'|'stop'**（不接受任意命令）。
  * 立即返回"已接受"，真正的结果由后续 probe 报告如实反映（过渡态 + 成功/失败 + 原始输出）。
  */
-export async function yunxingRongqiDongzuo(input: { id?: unknown; action?: unknown }): Promise<RongqiDongzuoXiangying> {
-  const id = String(input?.id ?? '');
-  const action = String(input?.action ?? '') as RongqiDongzuoMing;
+export async function yunxingRongqiDongzuo(shuRu: { id?: unknown; action?: unknown }): Promise<RongqiDongzuoXiangying> {
+  const id = String(shuRu?.id ?? '');
+  const action = String(shuRu?.action ?? '') as RongqiDongzuoMing;
   const spec = rongQiYunXingGuiGeOf(id);
   if (!spec) return { ok: false, code: 'unknown-runtime', error: `unknown runtime id: ${id}` };
   if (!CONTAINER_ACTION_NAMES.includes(action)) {
@@ -1749,25 +1749,25 @@ export async function yunxingRongqiDongzuo(input: { id?: unknown; action?: unkno
   const cmd = await dongzuoMingling(id, action);
   if ('code' in cmd) return { ok: false, code: cmd.code, error: cmd.error };
 
-  const st: NeibuDongzuo = { kind: action, startedAt: Date.now(), pending: true, output: '' };
+  const st: NeibuDongzuo = { kind: action, kaiShiShiJian: Date.now(), pending: true, shuChu: '' };
   actions.set(id, st);
   try {
-    const child = spawn(cmd.file, cmd.args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    st.child = child;
+    const Zhi = spawn(cmd.file, cmd.args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    st.Zhi = Zhi;
     const push = (buf: Buffer): void => {
-      if (st.output.length < 4000) st.output += jiemaHuanchongqu(buf);
+      if (st.shuChu.length < 4000) st.shuChu += jiemaHuanchongqu(buf);
     };
-    child.stdout?.on('data', (d: Buffer) => push(d));
-    child.stderr?.on('data', (d: Buffer) => push(d));
+    Zhi.stdout?.on('data', (d: Buffer) => push(d));
+    Zhi.stderr?.on('data', (d: Buffer) => push(d));
     const jiesuan = (code: number | null, errMsg?: string): void => {
       if (!st.pending) return;
       st.pending = false;
-      const shuChuWenBen = jinyao(errMsg ? `${errMsg} ${st.output}` : st.output, 400) || `exit=${code}`;
+      const shuChuWenBen = jinyao(errMsg ? `${errMsg} ${st.shuChu}` : st.shuChu, 400) || `exit=${code}`;
       st.result = {
         kind: action,
         ok: code === 0,
         code,
-        output: shuChuWenBen,
+        shuChu: shuChuWenBen,
         at: Date.now(),
         /**
          * 【产品 bug 修复】**进程派生了 ≠ 成功**：这里把"为什么没起来"如实归类成原因码，
@@ -1777,8 +1777,8 @@ export async function yunxingRongqiDongzuo(input: { id?: unknown; action?: unkno
       };
       qingRongQiTanCeHuanCun();
     };
-    child.on('error', (e) => jiesuan(null, String(e.message || e)));
-    child.on('close', (code) => jiesuan(typeof code === 'number' ? code : null));
+    Zhi.on('error', (e) => jiesuan(null, String(e.message || e)));
+    Zhi.on('close', (code) => jiesuan(typeof code === 'number' ? code : null));
     // 过渡态兜底：命令挂住也别永远显示"正在启动"
     setTimeout(() => jiesuan(null, 'action-timeout'), Math.max(60000, cmd.timeoutMs)).unref?.();
   } catch (e) {
@@ -1787,7 +1787,7 @@ export async function yunxingRongqiDongzuo(input: { id?: unknown; action?: unkno
       kind: action,
       ok: false,
       code: null,
-      output: jinyao(String((e as Error)?.message || e)),
+      shuChu: jinyao(String((e as Error)?.message || e)),
       at: Date.now(),
       reasonCode: 'spawn-failed',
     };
@@ -1902,9 +1902,9 @@ export function xiangMuYuanYinJian(code: RongqiXiangmuDaima): string {
   return 'containerDown';
 }
 
-export function deriveProjectState(input: RongqiXiangmuZhuangtaiShuru = {}): RongqiXiangmuZhuangtai {
-  const devEnv: RongQiXiangMuKaiFaHuanJing = input.devEnv === 'container' ? 'container' : 'host';
-  const disabledByOwner = input.disabledByOwner === true;
+export function deriveProjectState(shuRu: RongqiXiangmuZhuangtaiShuru = {}): RongqiXiangmuZhuangtai {
+  const devEnv: RongQiXiangMuKaiFaHuanJing = shuRu.devEnv === 'container' ? 'container' : 'host';
+  const disabledByOwner = shuRu.disabledByOwner === true;
   if (devEnv === 'host') {
     // 没选容器开发的项目（含旧项目）：**只**受"创建者停用"影响，与容器一点关系都没有
     if (!disabledByOwner) {
@@ -1943,8 +1943,8 @@ export function deriveProjectState(input: RongqiXiangmuZhuangtaiShuru = {}): Ron
     };
   }
 
-  const runtimeId = String(input.runtimeId || '');
-  const status = input.runtimeStatus ?? null;
+  const runtimeId = String(shuRu.runtimeId || '');
+  const status = shuRu.runtimeStatus ?? null;
   const ready = status === 'ready';
   let code: RongqiXiangmuDaima;
   let fix: RongqiXiangmuZhuangtai['fix'];
@@ -2053,10 +2053,10 @@ export const rongqiXiangmuYuanyinMiyao = xiangMuYuanYinJian;
        —— 也绝不退化成"在主机上跑"或"回退成事件日志"）。
    ══════════════════════════════════════════════════════════════════════════ */
 
-export type ContainerShellAction = 'open' | 'write' | 'close' | 'status';
+export type ContainerShellAction = 'daKai' | 'write' | 'close' | 'status';
 
 /** 动作**枚举**：除此之外一律拒绝（渲染层不可能传"任意命令"进来） */
-export const CONTAINER_SHELL_ACTIONS: readonly ContainerShellAction[] = ['open', 'write', 'close', 'status'];
+export const CONTAINER_SHELL_ACTIONS: readonly ContainerShellAction[] = ['daKai', 'write', 'close', 'status'];
 
 /** 单次写入 stdin 的上限（字符）：防止拿它当大文件/数据通道 */
 export const CONTAINER_SHELL_MAX_DATA = 4096;
@@ -2092,8 +2092,8 @@ export interface RongQiKongZhiTaiCuoWuQingQiu {
  * 参数校验（**唯一入口**）。除了白名单里的四个字段，其余字段一律忽略，
  * 所以 `{ cmd: 'rm -rf /' }` 这类载荷**不可能**变成一条命令。
  */
-export function guiFanKongZhiTaiQingQiu(input: unknown): { ok: true; req: RongQiKongZhiTaiQingQiu } | RongQiKongZhiTaiCuoWuQingQiu {
-  const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+export function guiFanKongZhiTaiQingQiu(shuRu: unknown): { ok: true; Qiu: RongQiKongZhiTaiQingQiu } | RongQiKongZhiTaiCuoWuQingQiu {
+  const raw = (shuRu && typeof shuRu === 'object' ? shuRu : {}) as Record<string, unknown>;
   const action = String(raw['action'] ?? '');
   if (!CONTAINER_SHELL_ACTIONS.includes(action as ContainerShellAction)) {
     return { ok: false, code: 'bad-action', error: `action must be one of ${CONTAINER_SHELL_ACTIONS.join('|')}` };
@@ -2111,7 +2111,7 @@ export function guiFanKongZhiTaiQingQiu(input: unknown): { ok: true; req: RongQi
   if (action !== 'write' && data) {
     return { ok: false, code: 'unexpected-data', error: `action '${action}' does not take data` };
   }
-  return { ok: true, req: { runtimeId, action: action as ContainerShellAction, sessionId: String(raw['sessionId'] ?? ''), data } };
+  return { ok: true, Qiu: { runtimeId, action: action as ContainerShellAction, sessionId: String(raw['sessionId'] ?? ''), data } };
 }
 
 export type RongQiKongZhiTaiMenJinMa =
@@ -2156,20 +2156,20 @@ export interface RongQiKongZhiTaiMenJin {
  * 再判"项目是否停止"，最后才判"容器就绪 + 有没有镜像"。
  * 任何一条不满足都**不执行**任何命令（调用方据此如实拒绝）。
  */
-export function rongQiKongZhiTaiMenJin(input: RongQiKongZhiTaiMenJinShuRu = {}): RongQiKongZhiTaiMenJin {
-  if (input.inProjectOrCattle !== true) {
+export function rongQiKongZhiTaiMenJin(shuRu: RongQiKongZhiTaiMenJinShuRu = {}): RongQiKongZhiTaiMenJin {
+  if (shuRu.inProjectOrCattle !== true) {
     return { available: false, openable: false, code: 'not-in-chat', needsInstall: false, reason: 'onlyInChat' };
   }
-  if (input.runInContainer !== true) {
+  if (shuRu.runInContainer !== true) {
     return { available: false, openable: false, code: 'not-enabled', needsInstall: false, reason: 'notEnabled' };
   }
-  if (input.projectStopped === true) {
+  if (shuRu.projectStopped === true) {
     return { available: false, openable: false, code: 'project-stopped', needsInstall: false, reason: 'projectStopped' };
   }
-  if (!input.runtimeId || input.runtimeStatus !== 'ready') {
+  if (!shuRu.runtimeId || shuRu.runtimeStatus !== 'ready') {
     return { available: false, openable: false, code: 'container-not-ready', needsInstall: true, reason: 'notReady' };
   }
-  if (input.imageReady !== true) {
+  if (shuRu.imageReady !== true) {
     // 引擎就绪 ⇒ 面板可以打开，但**输入行必须禁用**（一条命令都不跑）
     return { available: false, openable: true, code: 'no-image', needsInstall: false, reason: 'needsImage' };
   }
@@ -2192,18 +2192,18 @@ export function rongQiKongZhiTaiMenJin(input: RongQiKongZhiTaiMenJinShuRu = {}):
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** 项目目录在容器里的挂载点（与设置卡片里给用户的提示词一致） */
-export const CONTAINER_PROJECT_MOUNT = '/workspace';
+export const RONGQI_XIANGMU_GUAZAI = '/workspace';
 /** 项目容器名前缀（后面跟 12 位十六进制，来源 = groupId 的 sha256） */
 export const RONGQI_XIANGMU_MING_QIANZHUI = 'warmy-';
 export const CONTAINER_PROJECT_NAME_RE = /^warmy-[0-9a-f]{12}$/;
 
 /** 项目容器名：**由 groupId 决定**（可复算、可断言；不接受任何外部传入的名字） */
-export function containerProjectName(groupId: string): string {
+export function rongQiXiangMuMing(groupId: string): string {
   const h = createHash('sha256').update(String(groupId || '')).digest('hex').slice(0, 12);
   return RONGQI_XIANGMU_MING_QIANZHUI + h;
 }
 
-export function isValidContainerProjectName(v: unknown): boolean {
+export function shiFouHeFaRongQiXiangMuMing(v: unknown): boolean {
   return typeof v === 'string' && CONTAINER_PROJECT_NAME_RE.test(v);
 }
 
@@ -2215,7 +2215,7 @@ export function solidifiedImageRef(groupId: string, at: number): string {
 export const SOLIDIFIED_IMAGE_RE = /^warmy-solid-[0-9a-f]{12}:\d{1,16}$/;
 
 /** 镜像引用只允许两种来源：我们镜像表里**钉死 digest** 的那几个，或我们自己固化出来的 */
-export function isAllowedImageRef(ref: unknown): boolean {
+export function shiFouYunXuJingXiang(ref: unknown): boolean {
   const r = String(ref || '');
   if (!r) return false;
   if (SOLIDIFIED_IMAGE_RE.test(r)) return true;
@@ -2237,7 +2237,7 @@ export const CONTAINER_FIXED_COMMANDS = {
   'ls-workspace': ['sh', '-c', 'ls -la | head -n 40'],
 } as const;
 export type RongQiGuDingMingLingId = keyof typeof CONTAINER_FIXED_COMMANDS;
-export function isFixedCommandId(v: unknown): v is RongQiGuDingMingLingId {
+export function shiFouGuDingMingLing(v: unknown): v is RongQiGuDingMingLingId {
   return typeof v === 'string' && Object.prototype.hasOwnProperty.call(CONTAINER_FIXED_COMMANDS, v);
 }
 export const CONTAINER_FIXED_COMMAND_IDS: readonly RongQiGuDingMingLingId[] = [
@@ -2272,7 +2272,7 @@ export function rongQiZhiXingChengXu(runtimeId: string): string | null {
 }
 
 /** 洗过的子进程环境（密钥类变量**一律不带**：`docker` 客户端自己也不需要它们） */
-export function scrubbedChildEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+export function xiJingHuanJingBianLiang(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   const out: Record<string, string> = {};
   const juJueMingDan = /(key|token|secret|passwo?rd|credential|auth|cookie|session)/i;
   const allowlist = ['PATH', 'SystemRoot', 'SystemDrive', 'windir', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'LANG', 'LC_ALL', 'DOCKER_HOST', 'DOCKER_CONFIG'];
@@ -2292,7 +2292,7 @@ export function scrubbedChildEnv(env: NodeJS.ProcessEnv = process.env): Record<s
 
 export interface RongQiZhiXingCanShu {
   /** 已存在的项目容器名（必须形如 warmy-<12hex>） */
-  name?: string;
+  ming?: string;
   /** 一次性运行的镜像（必须是我们钉死的 digest 或我们自己固化出来的） */
   image?: string;
   /** 固定命令 id（argv 从 CONTAINER_FIXED_COMMANDS 取） */
@@ -2343,23 +2343,23 @@ export function containerExecPlan(runtimeId: string, op: string, params: RongQiZ
     return { ok: false, code: 'bad-op', error: `op must be one of ${CONTAINER_EXEC_OPS.join('|')}` };
   }
   const caoZuoMing = op as RongQiZhiXingCaoZuo;
-  const name = String(params.name || '');
+  const ming = String(params.ming || '');
   const needName = caoZuoMing !== 'run-rm' && caoZuoMing !== 'image-inspect' && caoZuoMing !== 'image-rm';
-  if (needName && !isValidContainerProjectName(name)) {
-    return { ok: false, code: 'bad-container-name', error: `container name must match ${RONGQI_XIANGMU_MING_QIANZHUI}<12hex>` };
+  if (needName && !shiFouHeFaRongQiXiangMuMing(ming)) {
+    return { ok: false, code: 'bad-container-name', error: `container ming must match ${RONGQI_XIANGMU_MING_QIANZHUI}<12hex>` };
   }
   const fixed = (): string[] | null => {
     if (params.command === undefined || params.command === '') return ['echo', 'ok'];
-    if (!isFixedCommandId(params.command)) return null;
+    if (!shiFouGuDingMingLing(params.command)) return null;
     return [...CONTAINER_FIXED_COMMANDS[params.command]];
   };
   switch (caoZuoMing) {
     case 'ps': {
-      return { ok: true, plan: { file: bin, args: ['ps', '-a', '--filter', `name=^${name}$`, '--format', '{{.ID}}|{{.Names}}|{{.Status}}|{{.Image}}'], timeoutMs: 30000 } };
+      return { ok: true, plan: { file: bin, args: ['ps', '-a', '--filter', `ming=^${ming}$`, '--format', '{{.ID}}|{{.Names}}|{{.Status}}|{{.Image}}'], timeoutMs: 30000 } };
     }
     case 'run-rm': {
       const image = String(params.image || '');
-      if (!isAllowedImageRef(image)) return { ok: false, code: 'bad-image', error: 'image must be a pinned digest ref from our image table or our own solidified image' };
+      if (!shiFouYunXuJingXiang(image)) return { ok: false, code: 'bad-image', error: 'image must be a pinned digest ref from our image table or our own solidified image' };
       const cmd = fixed();
       if (!cmd) return { ok: false, code: 'bad-command', error: `command must be one of ${CONTAINER_FIXED_COMMAND_IDS.join('|')}` };
       const args = ['run'];
@@ -2370,17 +2370,17 @@ export function containerExecPlan(runtimeId: string, op: string, params: RongQiZ
     }
     case 'run-detached': {
       const image = String(params.image || '');
-      if (!isAllowedImageRef(image)) return { ok: false, code: 'bad-image', error: 'image must be a pinned digest ref from our image table or our own solidified image' };
-      const args = ['run', '-d', '--name', name];
+      if (!shiFouYunXuJingXiang(image)) return { ok: false, code: 'bad-image', error: 'image must be a pinned digest ref from our image table or our own solidified image' };
+      const args = ['run', '-d', '--name', ming];
       const dir = String(params.hostDir || '');
       if (dir) {
         if (!path.isAbsolute(dir)) return { ok: false, code: 'bad-host-dir', error: 'hostDir must be absolute' };
-        args.push('-v', `${dir}:${CONTAINER_PROJECT_MOUNT}`, '-w', CONTAINER_PROJECT_MOUNT);
+        args.push('-v', `${dir}:${RONGQI_XIANGMU_GUAZAI}`, '-w', RONGQI_XIANGMU_GUAZAI);
       }
-      const label = String(params.projectLabel || '');
-      if (label) {
-        if (!SAFE_LABEL_RE.test(label)) return { ok: false, code: 'bad-label', error: 'label contains unsupported characters' };
-        args.push('--label', `warmy.project=${label}`);
+      const biaoQian = String(params.projectLabel || '');
+      if (biaoQian) {
+        if (!SAFE_LABEL_RE.test(biaoQian)) return { ok: false, code: 'bad-label', error: 'biaoQian contains unsupported characters' };
+        args.push('--label', `warmy.project=${biaoQian}`);
       }
       // 常驻：**默认不删**（保留可写层 ⇒ 停止/启动回到之前的状态）
       args.push(image, 'sh', '-c', 'while true; do sleep 3600; done');
@@ -2389,22 +2389,22 @@ export function containerExecPlan(runtimeId: string, op: string, params: RongQiZ
     case 'exec-capture': {
       const cmd = fixed();
       if (!cmd) return { ok: false, code: 'bad-command', error: `command must be one of ${CONTAINER_FIXED_COMMAND_IDS.join('|')}` };
-      return { ok: true, plan: { file: bin, args: ['exec', name, ...cmd], timeoutMs: 120000 } };
+      return { ok: true, plan: { file: bin, args: ['exec', ming, ...cmd], timeoutMs: 120000 } };
     }
     case 'exec-shell':
-      return { ok: true, plan: { file: bin, args: ['exec', '-i', name, 'sh'], timeoutMs: 0 } };
+      return { ok: true, plan: { file: bin, args: ['exec', '-i', ming, 'sh'], timeoutMs: 0 } };
     case 'stop':
-      return { ok: true, plan: { file: bin, args: ['stop', name], timeoutMs: 150000 } };
+      return { ok: true, plan: { file: bin, args: ['stop', ming], timeoutMs: 150000 } };
     case 'rm':
-      return { ok: true, plan: { file: bin, args: ['rm', '-f', name], timeoutMs: 120000 } };
+      return { ok: true, plan: { file: bin, args: ['rm', '-f', ming], timeoutMs: 120000 } };
     case 'commit': {
       const ref = String(params.imageRef || '');
       if (!SOLIDIFIED_IMAGE_RE.test(ref)) return { ok: false, code: 'bad-image-ref', error: 'imageRef must match warmy-solid-<12hex>:<ts>' };
-      return { ok: true, plan: { file: bin, args: ['commit', name, ref], timeoutMs: 600000 } };
+      return { ok: true, plan: { file: bin, args: ['commit', ming, ref], timeoutMs: 600000 } };
     }
     case 'image-inspect': {
       const ref = String(params.image || params.imageRef || '');
-      if (!isAllowedImageRef(ref)) return { ok: false, code: 'bad-image', error: 'image must be a pinned digest ref from our image table or our own solidified image' };
+      if (!shiFouYunXuJingXiang(ref)) return { ok: false, code: 'bad-image', error: 'image must be a pinned digest ref from our image table or our own solidified image' };
       return { ok: true, plan: { file: bin, args: ['image', 'inspect', '--format', '{{.Id}}|{{.Size}}|{{.Created}}', ref], timeoutMs: 60000 } };
     }
     case 'image-rm': {
@@ -2437,22 +2437,22 @@ export interface RongQiZhiXingJieGuo {
  * 真的执行一次（这一层是**唯一** spawn 引擎的地方）。
  * 注意：`op`/参数不合法 ⇒ `executed:false` 且**不 spawn**。
  */
-export async function runContainerExec(
+export async function yunXingRongQiZhiXing(
   runtimeId: string,
   op: string,
   params: RongQiZhiXingCanShu = {},
   timeoutMsOverride?: number
 ): Promise<RongQiZhiXingJieGuo> {
-  const planned = containerExecPlan(runtimeId, op, params);
-  if (!planned.ok) {
+  const yiJiHua = containerExecPlan(runtimeId, op, params);
+  if (!yiJiHua.ok) {
     return {
       ok: false, executed: false, op: String(op || ''), file: '', argv: [], code: null,
-      out: '', err: planned.error, ms: 0, timedOut: false, codeReason: planned.code,
+      out: '', err: yiJiHua.error, ms: 0, timedOut: false, codeReason: yiJiHua.code,
     };
   }
-  const { file, args } = planned.plan;
-  const timeoutMs = typeof timeoutMsOverride === 'number' && timeoutMsOverride > 0 ? timeoutMsOverride : planned.plan.timeoutMs;
-  const t0 = Date.now();
+  const { file, args } = yiJiHua.plan;
+  const timeoutMs = typeof timeoutMsOverride === 'number' && timeoutMsOverride > 0 ? timeoutMsOverride : yiJiHua.plan.timeoutMs;
+  const qiShiShiJian = Date.now();
   const r = await new Promise<{ code: number | null; out: string; err: string; timedOut: boolean; spawnErr?: string }>((resolve) => {
     let done = false;
     const wanCheng = (o: { code: number | null; out: string; err: string; timedOut: boolean; spawnErr?: string }): void => {
@@ -2460,12 +2460,12 @@ export async function runContainerExec(
       done = true;
       resolve(o);
     };
-    let child: ChildProcess;
+    let Zhi: ChildProcess;
     try {
-      child = execFile(
+      Zhi = execFile(
         file,
         args,
-        { timeout: timeoutMs, windowsHide: true, maxBuffer: 1 << 22, encoding: 'buffer', env: scrubbedChildEnv() },
+        { timeout: timeoutMs, windowsHide: true, maxBuffer: 1 << 22, encoding: 'buffer', env: xiJingHuanJingBianLiang() },
         (error, stdout, stderr) => {
           const out = jiemaHuanchongqu(stdout as unknown as Buffer).trim();
           const err = jiemaHuanchongqu(stderr as unknown as Buffer).trim();
@@ -2485,9 +2485,9 @@ export async function runContainerExec(
       wanCheng({ code: null, out: '', err: jinyao(String((e as Error)?.message || e)), timedOut: false, spawnErr: 'spawn-failed' });
       return;
     }
-    child.on('error', (e) => wanCheng({ code: null, out: '', err: jinyao(String(e.message || e)), timedOut: false, spawnErr: 'spawn-failed' }));
+    Zhi.on('error', (e) => wanCheng({ code: null, out: '', err: jinyao(String(e.message || e)), timedOut: false, spawnErr: 'spawn-failed' }));
   });
-  const ms = Date.now() - t0;
+  const ms = Date.now() - qiShiShiJian;
   const ok = r.code === 0 && !r.spawnErr;
   return {
     ok,
@@ -2504,14 +2504,14 @@ export async function runContainerExec(
   };
 }
 
-/* ── 交互 shell 会话（= 控制台本体）：一个常驻的 `docker exec -i <name> sh` ── */
+/* ── 交互 shell 会话（= 控制台本体）：一个常驻的 `docker exec -i <ming> sh` ── */
 
 interface KongZhiTaiHuiHua {
   id: string;
   groupId: string;
   runtimeId: string;
-  name: string;
-  child: ChildProcess;
+  ming: string;
+  Zhi: ChildProcess;
   /** 还没被取走的输出（有界） */
   buffer: string;
   alive: boolean;
@@ -2535,41 +2535,41 @@ export interface KongZhiTaiDaKaiJieGuo {
 }
 
 /** 打开一条**容器内的** shell（失败一律如实回错误码，不 fallback 到宿主） */
-export function openContainerShellSession(input: { groupId: string; runtimeId: string; containerName: string }): KongZhiTaiDaKaiJieGuo {
-  const { groupId, runtimeId } = input;
-  const name = String(input.containerName || '');
-  if (!isValidContainerProjectName(name)) return { ok: false, executed: false, code: 'bad-container-name', error: 'invalid container name' };
-  const planned = containerExecPlan(runtimeId, 'exec-shell', { name });
-  if (!planned.ok) return { ok: false, executed: false, code: planned.code, error: planned.error };
+export function daKaiKongZhiTaiHuiHua(shuRu: { groupId: string; runtimeId: string; containerName: string }): KongZhiTaiDaKaiJieGuo {
+  const { groupId, runtimeId } = shuRu;
+  const ming = String(shuRu.containerName || '');
+  if (!shiFouHeFaRongQiXiangMuMing(ming)) return { ok: false, executed: false, code: 'bad-container-name', error: 'invalid container ming' };
+  const yiJiHua = containerExecPlan(runtimeId, 'exec-shell', { ming });
+  if (!yiJiHua.ok) return { ok: false, executed: false, code: yiJiHua.code, error: yiJiHua.error };
   // 同一个项目只留一条会话：重复打开 = 复用（避免用户点两次就多一条 shell）
   for (const s of shellSessions.values()) {
-    if (s.groupId === groupId && s.alive) return { ok: true, executed: false, sessionId: s.id, insideContainer: true, containerName: s.name };
+    if (s.groupId === groupId && s.alive) return { ok: true, executed: false, sessionId: s.id, insideContainer: true, containerName: s.ming };
   }
   try {
-    const child = spawn(planned.plan.file, planned.plan.args, {
+    const Zhi = spawn(yiJiHua.plan.file, yiJiHua.plan.args, {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: scrubbedChildEnv(),
+      env: xiJingHuanJingBianLiang(),
     });
     const id = `${groupId}:${Date.now().toString(36)}`;
     const s: KongZhiTaiHuiHua = {
-      id, groupId, runtimeId, name, child, buffer: '', alive: true, openedAt: Date.now(), lastWriteAt: 0, commandCount: 0,
+      id, groupId, runtimeId, ming, Zhi, buffer: '', alive: true, openedAt: Date.now(), lastWriteAt: 0, commandCount: 0,
     };
     const push = (buf: Buffer): void => {
       if (!s.alive) return;
       s.buffer += jiemaHuanchongqu(buf);
       if (s.buffer.length > CONTAINER_SHELL_BUFFER_MAX) s.buffer = s.buffer.slice(-CONTAINER_SHELL_BUFFER_MAX);
     };
-    child.stdout?.on('data', push);
-    child.stderr?.on('data', push);
-    child.on('error', () => {
+    Zhi.stdout?.on('data', push);
+    Zhi.stderr?.on('data', push);
+    Zhi.on('error', () => {
       s.alive = false;
     });
-    child.on('close', () => {
+    Zhi.on('close', () => {
       s.alive = false;
     });
     shellSessions.set(id, s);
-    return { ok: true, executed: true, sessionId: id, insideContainer: true, containerName: name };
+    return { ok: true, executed: true, sessionId: id, insideContainer: true, containerName: ming };
   } catch (e) {
     return { ok: false, executed: false, code: 'spawn-failed', error: jinyao(String((e as Error)?.message || e)) };
   }
@@ -2584,8 +2584,8 @@ export function openContainerShellSession(input: { groupId: string; runtimeId: s
 function chaZhaoKongZhiTaiHuiHua(key: string): KongZhiTaiHuiHua | undefined {
   const k = String(key || '');
   if (!k) return undefined;
-  const byId = shellSessions.get(k);
-  if (byId) return byId;
+  const Suoyin = shellSessions.get(k);
+  if (Suoyin) return Suoyin;
   for (const s of shellSessions.values()) if (s.groupId === k && s.alive) return s;
   return undefined;
 }
@@ -2596,12 +2596,12 @@ export interface KongZhiTaiXieRuJieGuo {
   code?: string;
   error?: string;
   /** 这一条命令跑完之后取到的输出（**来自容器**） */
-  output?: string;
+  shuChu?: string;
   sessionId?: string;
 }
 
 /** 把 `data` 写进已打开的容器 shell 的 stdin（**只当 stdin，绝不当命令行**） */
-export async function writeContainerShellSession(
+export async function xieRuKongZhiTaiHuiHua(
   sessionId: string,
   data: string,
   opts: { settleMs?: number; quietMs?: number } = {}
@@ -2614,7 +2614,7 @@ export async function writeContainerShellSession(
   if (text.indexOf('\u0000') >= 0) return { ok: false, executed: false, code: 'bad-data', error: 'data contains NUL' };
   try {
     s.buffer = '';
-    s.child.stdin?.write(text);
+    s.Zhi.stdin?.write(text);
     s.lastWriteAt = Date.now();
     s.commandCount += 1;
   } catch (e) {
@@ -2623,7 +2623,7 @@ export async function writeContainerShellSession(
   // 收输出：静默 quietMs 之后就算这一轮结束（最多等 settleMs）
   const settleMs = Math.max(100, Math.min(opts.settleMs ?? 1200, 8000));
   const quietMs = Math.max(40, Math.min(opts.quietMs ?? 180, 1000));
-  const t0 = Date.now();
+  const qiShiShiJian = Date.now();
   let zuiHouChangDu = -1;
   let zuihouBiangeng = Date.now();
   for (;;) {
@@ -2632,27 +2632,27 @@ export async function writeContainerShellSession(
       zuihouBiangeng = Date.now();
     }
     if (s.buffer.length > 0 && Date.now() - zuihouBiangeng >= quietMs) break;
-    if (Date.now() - t0 >= settleMs) break;
+    if (Date.now() - qiShiShiJian >= settleMs) break;
     if (!s.alive) break;
     await new Promise((r) => setTimeout(r, 40));
   }
-  const output = s.buffer;
+  const shuChu = s.buffer;
   s.buffer = '';
-  return { ok: true, executed: true, output, sessionId: s.id };
+  return { ok: true, executed: true, shuChu, sessionId: s.id };
 }
 
-export function closeContainerShellSession(sessionId: string): { ok: boolean; closed: boolean; code?: string } {
+export function guanBiKongZhiTaiHuiHua(sessionId: string): { ok: boolean; closed: boolean; code?: string } {
   const s = chaZhaoKongZhiTaiHuiHua(sessionId);
   if (!s) return { ok: true, closed: false, code: 'no-session' };
   try {
-    s.child.stdin?.end();
+    s.Zhi.stdin?.end();
   } catch {
     /* noop */
   }
   // 给它 1.5s 自己退；不退就杀了它（只杀我们自己起的这个子进程）
   setTimeout(() => {
     try {
-      if (s.alive) s.child.kill();
+      if (s.alive) s.Zhi.kill();
     } catch {
       /* noop */
     }
@@ -2664,7 +2664,7 @@ export function closeContainerShellSession(sessionId: string): { ok: boolean; cl
 
 export function kongZhiTaiHuiHuaJi(): Array<{ id: string; groupId: string; runtimeId: string; containerName: string; alive: boolean; commands: number }> {
   return [...shellSessions.values()].map((s) => ({
-    id: s.id, groupId: s.groupId, runtimeId: s.runtimeId, containerName: s.name, alive: s.alive, commands: s.commandCount,
+    id: s.id, groupId: s.groupId, runtimeId: s.runtimeId, containerName: s.ming, alive: s.alive, commands: s.commandCount,
   }));
 }
 
@@ -2673,7 +2673,7 @@ export function guanBiZhiDingHuiHua(groupId: string): number {
   let n = 0;
   for (const s of [...shellSessions.values()]) {
     if (s.groupId === String(groupId || '')) {
-      closeContainerShellSession(s.id);
+      guanBiKongZhiTaiHuiHua(s.id);
       n++;
     }
   }
@@ -2782,7 +2782,7 @@ export const HOST_DIR_GUARD_RIGHTS = 'WD,AD,WEA,WA,DE,DC';
  * 解锁：`icacls <dir> /remove:d *<sid>`        —— 删掉那条 deny ACE
  * 查看：`icacls <dir>`                          —— 只读
  */
-export function hostDirGuardPlan(opts: {
+export function zhuJiMuLuHuLanJiHua(opts: {
   action: ZhuJiMuLuHuLanDongZuo;
   dir: string;
   sid: string;

@@ -77,7 +77,7 @@ export interface AnQuanHuiHuaXinXi {
 export interface AnQuanHuiHuaXuanXiang {
   /** 本节点别名（放进消息的 from 字段） */
   nodeId: string;
-  onMessage?: (msg: TongbuXiaoxi, session: AnQuanHuiHua) => void;
+  onMessage?: (xiaoXi: TongbuXiaoxi, session: AnQuanHuiHua) => void;
   onClose?: (session: AnQuanHuiHua, reason: string) => void;
   onEvent?: (e: WoshouShijian) => void;
   /** 保活间隔（毫秒）；0 = 关闭。成员侧保持轻量保活即可（ADR C1） */
@@ -93,11 +93,11 @@ class QiehuanHuanChongQu {
     this.buf = this.buf.length === 0 ? chunk : Buffer.concat([this.buf, chunk]);
   }
   readLine(): string | null {
-    const idx = this.buf.indexOf(0x0a);
-    if (idx < 0) return null;
-    const line = this.buf.subarray(0, idx).toString('utf8');
-    this.buf = this.buf.subarray(idx + 1);
-    return line;
+    const suoYin = this.buf.indexOf(0x0a);
+    if (suoYin < 0) return null;
+    const Hang = this.buf.subarray(0, suoYin).toString('utf8');
+    this.buf = this.buf.subarray(suoYin + 1);
+    return Hang;
   }
   takeAll(): Buffer {
     const b = this.buf;
@@ -170,8 +170,8 @@ export class AnQuanHuiHua {
   enterRecordPhase(): void {
     if (this.phase !== 'handshake') return;
     this.phase = 'records';
-    const rest = this.buffer.takeAll();
-    if (rest.length > 0) this.consumeRecords(rest);
+    const qiYu = this.buffer.takeAll();
+    if (qiYu.length > 0) this.consumeRecords(qiYu);
     const hb = this.opts.heartbeatMs ?? 0;
     if (hb > 0) {
       this.heartbeatTimer = setInterval(() => void this.beat(), hb);
@@ -182,29 +182,29 @@ export class AnQuanHuiHua {
   private async beat(): Promise<void> {
     if (!this.alive) return;
     try {
-      this.send({ to: '*', channel: 'control', payload: { type: 'ping', at: this.now() } });
+      this.faSong({ to: '*', channel: 'control', payload: { type: 'ping', at: this.now() } });
     } catch {
       /* 连接已断，交给 close 路径 */
     }
   }
 
-  send(msg: Omit<TongbuXiaoxi, 'id' | 'ts' | 'from'> & { from?: string; ts?: number }): TongbuXiaoxi {
+  faSong(xiaoXi: Omit<TongbuXiaoxi, 'id' | 'ts' | 'from'> & { from?: string; ts?: number }): TongbuXiaoxi {
     if (!this.alive) throw new Error('session 未建立或已关闭');
-    const full: TongbuXiaoxi = {
-      ...msg,
-      from: msg.from ?? this.opts.nodeId,
+    const Quan: TongbuXiaoxi = {
+      ...xiaoXi,
+      from: xiaoXi.from ?? this.opts.nodeId,
       id: `m-${suiJiShiLiuJin(6)}`,
-      ts: msg.ts ?? this.now(),
+      ts: xiaoXi.ts ?? this.now(),
     };
-    const payload = Buffer.from(JSON.stringify(full), 'utf8');
+    const payload = Buffer.from(JSON.stringify(Quan), 'utf8');
     this.socket.write(this.channel.sealRecord(payload));
     this.lastOutboundAt = this.now();
     this.counters.sent += 1;
-    if (!full.incognito && this.opts.logFile) {
+    if (!Quan.incognito && this.opts.logFile) {
       fs.mkdirSync(path.dirname(this.opts.logFile), { recursive: true });
-      fs.appendFileSync(this.opts.logFile, JSON.stringify(full) + '\n');
+      fs.appendFileSync(this.opts.logFile, JSON.stringify(Quan) + '\n');
     }
-    return full;
+    return Quan;
   }
 
   /** 长连接密钥更新（不重握手、不重认证） */
@@ -219,8 +219,8 @@ export class AnQuanHuiHua {
     if (this.phase === 'closed') return;
     this.buffer.push(chunk);
     if (this.phase === 'handshake') return;
-    const rest = this.buffer.takeAll();
-    if (rest.length > 0) this.consumeRecords(rest);
+    const qiYu = this.buffer.takeAll();
+    if (qiYu.length > 0) this.consumeRecords(qiYu);
   }
 
   /** 握手完成后的收尾：把 channel 从 driver 的会话密钥建起来 */
@@ -243,23 +243,23 @@ export class AnQuanHuiHua {
     this.lastInboundAt = this.now();
     for (const p of plaintexts) {
       this.counters.received += 1;
-      let msg: TongbuXiaoxi;
+      let xiaoXi: TongbuXiaoxi;
       try {
-        msg = JSON.parse(p.toString('utf8')) as TongbuXiaoxi;
+        xiaoXi = JSON.parse(p.toString('utf8')) as TongbuXiaoxi;
       } catch {
         continue;
       }
       // 轻量 keepalive：ping → pong（不落盘、不投递给上层）
-      const payload = msg.payload as { type?: string } | undefined;
-      if (msg.channel === 'control' && payload?.type === 'ping') {
+      const payload = xiaoXi.payload as { type?: string } | undefined;
+      if (xiaoXi.channel === 'control' && payload?.type === 'ping') {
         try {
-          this.send({ to: msg.from, channel: 'control', payload: { type: 'pong', at: this.now() } });
+          this.faSong({ to: xiaoXi.from, channel: 'control', payload: { type: 'pong', at: this.now() } });
         } catch {
           /* ignore */
         }
         continue;
       }
-      if (msg.channel === 'control' && payload?.type === 'pong') continue;
+      if (xiaoXi.channel === 'control' && payload?.type === 'pong') continue;
       if (this.channel.wantsKeyUpdate) {
         try {
           this.requestKeyUpdate();
@@ -267,7 +267,7 @@ export class AnQuanHuiHua {
           /* ignore */
         }
       }
-      this.opts.onMessage?.(msg, this);
+      this.opts.onMessage?.(xiaoXi, this);
     }
   }
 
@@ -294,7 +294,7 @@ export interface AnQuanTongBuFuWuXuanXiang {
   host?: string;
   groupId?: string | null;
   /** 名册校验（返回 false 即拒绝） */
-  roster?: (fingerprint: string) => boolean;
+  roster?: (zhiWen: string) => boolean;
   /** 允许的对端指纹白名单（可选，pin 模式） */
   peerFingerprint?: string | null;
   /**
@@ -310,7 +310,7 @@ export interface AnQuanTongBuFuWuXuanXiang {
   heartbeatMs?: number;
   logFile?: string;
   onSession?: (session: AnQuanHuiHua) => void;
-  onMessage?: (msg: TongbuXiaoxi, session: AnQuanHuiHua) => void;
+  onMessage?: (xiaoXi: TongbuXiaoxi, session: AnQuanHuiHua) => void;
   onClose?: (session: AnQuanHuiHua, reason: string) => void;
   onHandshakeEvent?: (e: WoshouShijian) => void;
   now?: () => number;
@@ -382,13 +382,13 @@ export class AnQuanTongBuFuWu {
     const remoteAddress = sock.remoteAddress ?? undefined;
     const remotePort = sock.remotePort ?? undefined;
 
-    const timer = setTimeout(
+    const jiShiQi = setTimeout(
       () => {
         if (phase === 'handshake') wanCheng(`握手超时 ${this.opts.handshakeTimeoutMs ?? 15_000}ms`);
       },
       this.opts.handshakeTimeoutMs ?? 15_000
     );
-    timer.unref?.();
+    jiShiQi.unref?.();
 
     const shibaiWoshou = (err: unknown): void => {
       const reason = err instanceof WoshouCuowu ? err.reason : 'protocol-error';
@@ -407,7 +407,7 @@ export class AnQuanTongBuFuWu {
     const wanCheng = (reason: string): void => {
       if (phase === 'done') return;
       phase = 'done';
-      clearTimeout(timer);
+      clearTimeout(jiShiQi);
       try {
         sock.destroy();
       } catch {
@@ -436,22 +436,22 @@ export class AnQuanTongBuFuWu {
         void (async () => {
           try {
             for (;;) {
-              const line = buffer.readLine();
-              if (line === null) break;
-              if (!line.trim()) continue;
+              const Hang = buffer.readLine();
+              if (Hang === null) break;
+              if (!Hang.trim()) continue;
               let frame: WoshouZhen | { t: 'error'; reason?: string; detail?: string };
               try {
-                frame = JSON.parse(line) as WoshouZhen | { t: 'error'; reason?: string; detail?: string };
+                frame = JSON.parse(Hang) as WoshouZhen | { t: 'error'; reason?: string; detail?: string };
               } catch {
                 throw new WoshouCuowu('malformed', '握手帧不是合法 JSON');
               }
               if (frame.t === 'error') {
                 throw new WoshouCuowu('protocol-error', `对端拒绝握手：${JSON.stringify(frame)}`);
               }
-              const res = await driver.step(frame as WoshouZhen);
+              const res = await driver.buZhou(frame as WoshouZhen);
               for (const out of res.out) sock.write(JSON.stringify(out) + '\n');
               if (res.done) {
-                clearTimeout(timer);
+                clearTimeout(jiShiQi);
                 const channel = AnQuanHuiHua.buildChannel(driver, 'responder');
                 const keys = driver.session;
                 if (!keys) throw new Error('缺少会话密钥');
@@ -521,13 +521,13 @@ export interface AnQuanTongBuKeHuXuanXiang {
   groupId?: string | null;
   /** 已知对端指纹（名册内）；null = TOFU */
   peerFingerprint?: string | null;
-  roster?: (fingerprint: string) => boolean;
+  roster?: (zhiWen: string) => boolean;
   /** 指纹推导（公钥 → 指纹）；必须与身份层一致，理由见 SecureSyncServerOptions */
   fingerprintDerivation?: ZhiWenTuiDao;
   replayGuard?: ChongfangFangYu;
   handshakeTimeoutMs?: number;
   heartbeatMs?: number;
-  onMessage?: (msg: TongbuXiaoxi, session: AnQuanHuiHua) => void;
+  onMessage?: (xiaoXi: TongbuXiaoxi, session: AnQuanHuiHua) => void;
   onClose?: (session: AnQuanHuiHua, reason: string) => void;
   onHandshakeEvent?: (e: WoshouShijian) => void;
   now?: () => number;
@@ -560,10 +560,10 @@ export class AnQuanTongBuKeHu {
     const now = this.opts.now ?? (() => Date.now());
     const sock = net.connect({ host: this.opts.host, port: this.opts.port });
     const result = await new Promise<LianJieJieGuo>((resolve) => {
-      let settled = false;
+      let yiJieSuan = false;
       const jiesuan = (r: LianJieJieGuo): void => {
-        if (settled) return;
-        settled = true;
+        if (yiJieSuan) return;
+        yiJieSuan = true;
         resolve(r);
       };
       const fail = (reason: string, failure?: WoshouShibaiJilu): void => {
@@ -574,8 +574,8 @@ export class AnQuanTongBuKeHu {
         }
         jiesuan({ ok: false, reason, handshakeFailure: failure, remoteAddress: sock.remoteAddress ?? undefined });
       };
-      const timer = setTimeout(() => fail(`TCP 连接超时 ${timeoutMs}ms`), timeoutMs);
-      timer.unref?.();
+      const jiShiQi = setTimeout(() => fail(`TCP 连接超时 ${timeoutMs}ms`), timeoutMs);
+      jiShiQi.unref?.();
 
       const driver = new WoshouQudongqi({
         identity: this.opts.identity,
@@ -615,10 +615,10 @@ export class AnQuanTongBuKeHu {
           void (async () => {
             try {
               for (;;) {
-                const line = buffer.readLine();
-                if (line === null) break;
-                if (!line.trim()) continue;
-                const frame = JSON.parse(line) as WoshouZhen | { t: 'error'; reason?: string; detail?: string };
+                const Hang = buffer.readLine();
+                if (Hang === null) break;
+                if (!Hang.trim()) continue;
+                const frame = JSON.parse(Hang) as WoshouZhen | { t: 'error'; reason?: string; detail?: string };
                 if (frame.t === 'error') {
                   // 对端给出的具体原因原样透出（便于 UI 显示"上次失败原因"，ADR A7）
                   const reason = KNOWN_HANDSHAKE_REASONS.has(String(frame.reason))
@@ -626,10 +626,10 @@ export class AnQuanTongBuKeHu {
                     : 'protocol-error';
                   throw new WoshouCuowu(reason, `对端拒绝握手：${frame.reason ?? ''} ${frame.detail ?? ''}`.trim());
                 }
-                const res = await driver.step(frame as WoshouZhen);
+                const res = await driver.buZhou(frame as WoshouZhen);
                 for (const out of res.out) sock.write(JSON.stringify(out) + '\n');
                 if (res.done) {
-                  clearTimeout(timer);
+                  clearTimeout(jiShiQi);
                   const channel = AnQuanHuiHua.buildChannel(driver, 'initiator');
                   const keys = driver.session;
                   if (!keys) throw new Error('缺少会话密钥');

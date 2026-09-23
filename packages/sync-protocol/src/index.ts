@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 
 export interface JieDianXinXi {
   nodeId: string;
-  name: string;
+  ming: string;
   isLocal: boolean;
   pairedAt: number;
   revoked?: boolean;
@@ -51,16 +51,16 @@ export class JieDianMingCe {
     fs.writeFileSync(this.file, JSON.stringify({ nodes: [...this.nodes.values()] }, null, 2));
   }
 
-  registerLocal(name: string): JieDianXinXi {
-    const id = 'node-' + crypto.randomBytes(4).toString('hex');
-    const info: JieDianXinXi = { nodeId: id, name, isLocal: true, pairedAt: Date.now() };
+  registerLocal(ming: string): JieDianXinXi {
+    const id = 'jieDian' + crypto.randomBytes(4).toString('hex');
+    const info: JieDianXinXi = { nodeId: id, ming, isLocal: true, pairedAt: Date.now() };
     this.nodes.set(id, info);
     this.save();
     return info;
   }
 
-  pairRemote(nodeId: string, name: string): JieDianXinXi {
-    const info: JieDianXinXi = { nodeId, name, isLocal: false, pairedAt: Date.now() };
+  pairRemote(nodeId: string, ming: string): JieDianXinXi {
+    const info: JieDianXinXi = { nodeId, ming, isLocal: false, pairedAt: Date.now() };
     this.nodes.set(nodeId, info);
     this.save();
     return info;
@@ -74,7 +74,7 @@ export class JieDianMingCe {
     }
   }
 
-  list(): JieDianXinXi[] {
+  LieBiao(): JieDianXinXi[] {
     return [...this.nodes.values()].filter((n) => !n.revoked);
   }
 
@@ -91,21 +91,21 @@ export class TongbuZongxian {
   }
 
   private get file() {
-    return path.join(this.busDir, 'messages.jsonl');
+    return path.join(this.busDir, 'xiaoXiJi.jsonl');
   }
 
   publish(env: Omit<TongbuFeng, 'id' | 'ts'>): TongbuFeng {
-    const full: TongbuFeng = {
+    const Quan: TongbuFeng = {
       ...env,
       id: `m-${++this.seq}-${Date.now().toString(36)}`,
       ts: Date.now(),
     };
     // incognito：不写入 bus 文件（无痕）
-    if (full.incognito) {
-      return full;
+    if (Quan.incognito) {
+      return Quan;
     }
-    fs.appendFileSync(this.file, JSON.stringify(full) + '\n', 'utf8');
-    return full;
+    fs.appendFileSync(this.file, JSON.stringify(Quan) + '\n', 'utf8');
+    return Quan;
   }
 
   pull(nodeId: string): TongbuFeng[] {

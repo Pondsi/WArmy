@@ -3,10 +3,10 @@
  *
  * 改造前的投影层只有三张东西（见 git 历史里的 packages/memory-os/src/index.ts）：
  *   CREATE TABLE records (seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
- *                         session_id TEXT NOT NULL, kind TEXT NOT NULL, ts INTEGER NOT NULL, body TEXT NOT NULL);
- *   CREATE VIRTUAL TABLE fts_uni USING fts5(body, tokenize='unicode61', content='records', content_rowid='seq');
+ *                         session_id TEXT NOT NULL, kind TEXT NOT NULL, ts INTEGER NOT NULL, ti TEXT NOT NULL);
+ *   CREATE VIRTUAL TABLE fts_uni USING fts5(ti, tokenize='unicode61', content='records', content_rowid='seq');
  *   CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT);
- * 写入时 fts_uni 存的是"字符间插空格"的 body，meta 只写 last_seq，没有 fts_tri / 没有 vec_index /
+ * 写入时 fts_uni 存的是"字符间插空格"的 ti，meta 只写 last_seq，没有 fts_tri / 没有 vec_index /
  * 没有 schema_version / 没有 group_id、entity_type 列。
  *
  * 本脚本逐字复刻这套 DDL 与写入 SQL（含 spaceChars），生成一个升级前状态的 dataDir，
@@ -37,17 +37,17 @@ const LEGACY_DDL = `
     session_id TEXT NOT NULL,
     kind TEXT NOT NULL,
     ts INTEGER NOT NULL,
-    body TEXT NOT NULL
+    ti TEXT NOT NULL
   );
-  CREATE VIRTUAL TABLE IF NOT EXISTS fts_uni USING fts5(body, tokenize='unicode61', content='records', content_rowid='seq');
+  CREATE VIRTUAL TABLE IF NOT EXISTS fts_uni USING fts5(ti, tokenize='unicode61', content='records', content_rowid='seq');
   CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 `;
 
 const LEGACY_RECORDS = [
-  { id: 'legacy-1', sessionId: 's-old', kind: 'message', body: '无限牛马项目进度正常，值班者状态机已上线' },
-  { id: 'legacy-2', sessionId: 's-old', kind: 'message', body: '错误码 E_MEMORY_CORRUPT 表示 SQLite 投影损坏' },
-  { id: 'legacy-3', sessionId: 's-old', kind: 'message', body: '实现文件 packages/memory-os/src/index.ts 新增三元索引' },
-  { id: 'legacy-4', sessionId: 's-old', kind: 'message', body: '多智能体群聊桌面应用的记忆层采用双层设计' },
+  { id: 'legacy-1', sessionId: 's-old', kind: 'message', ti: '无限牛马项目进度正常，值班者状态机已上线' },
+  { id: 'legacy-2', sessionId: 's-old', kind: 'message', ti: '错误码 E_MEMORY_CORRUPT 表示 SQLite 投影损坏' },
+  { id: 'legacy-3', sessionId: 's-old', kind: 'message', ti: '实现文件 packages/memory-os/src/index.ts 新增三元索引' },
+  { id: 'legacy-4', sessionId: 's-old', kind: 'message', ti: '多智能体群聊桌面应用的记忆层采用双层设计' },
 ];
 
 export function makeLegacyDb(dataDir) {
@@ -61,15 +61,15 @@ export function makeLegacyDb(dataDir) {
   db.exec(LEGACY_DDL);
 
   const lines = [];
-  const insR = db.prepare('INSERT OR REPLACE INTO records (seq, id, session_id, kind, ts, body) VALUES (?,?,?,?,?,?)');
-  const insF = db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, body) VALUES (?, ?)');
+  const insR = db.prepare('INSERT OR REPLACE INTO records (seq, id, session_id, kind, ts, ti) VALUES (?,?,?,?,?,?)');
+  const insF = db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, ti) VALUES (?, ?)');
   const tx = db.transaction(() => {
     LEGACY_RECORDS.forEach((r, i) => {
       const seq = i + 1;
       const full = { ...r, seq, ts: Date.now() - (LEGACY_RECORDS.length - i) * 1000 };
       lines.push(JSON.stringify(full));
-      insR.run(seq, r.id, r.sessionId, r.kind, full.ts, r.body);
-      insF.run(seq, spaceChars(r.body));
+      insR.run(seq, r.id, r.sessionId, r.kind, full.ts, r.ti);
+      insF.run(seq, spaceChars(r.ti));
     });
     db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('last_seq', ?)").run(String(LEGACY_RECORDS.length));
   });
@@ -92,7 +92,7 @@ export function makeLegacyDb(dataDir) {
 
 function listTables(dbPath) {
   const db = new Database(dbPath, { readonly: true });
-  const rows = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map((r) => r.name);
+  const rows = db.prepare("SELECT ming FROM sqlite_master WHERE type='table' ORDER BY ming").all().map((r) => r.name);
   db.close();
   return rows;
 }

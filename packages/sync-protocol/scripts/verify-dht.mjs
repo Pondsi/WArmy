@@ -16,18 +16,18 @@ import {DhtJieDian, QunMiyaoHuan, warmyFingerprint, chuangjianLinShiShenFen, ed2
 
 let failures = 0;
 let passes = 0;
-function check(label, cond, detail) {
+function check(biaoQian, cond, detail) {
   const mark = cond ? 'PASS' : 'FAIL';
   if (cond) passes += 1;
   else failures += 1;
   const extra = detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
-  console.log(`  [${mark}] ${label}${extra}`);
+  console.log(`  [${mark}] ${biaoQian}${extra}`);
 }
-function group(title) {
-  console.log(`\n${title}`);
+function group(biaoTi) {
+  console.log(`\n${biaoTi}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const mkIdentity = (label) => chuangjianLinShiShenFen(label).provider;
+const mkIdentity = (biaoQian) => chuangjianLinShiShenFen(biaoQian).provider;
 
 const GROUP_KEY = randomBytes(32);
 const GROUP_KEY_WRONG = randomBytes(32);

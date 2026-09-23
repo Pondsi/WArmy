@@ -1,7 +1,7 @@
 import { AnthropicGongYing } from './anthropic.js';
 import { OllamaGongYing } from './ollama.js';
 import { JianrongOpenAIGongYing } from './openai.js';
-import { PROVIDER_PRESETS } from './types.js';
+import { GONGYING_YUSHE } from './types.js';
 import type { MoxingGongYing, GongYingRenZheng, GongYingXieYi } from './types.js';
 
 export * from './types.js';
@@ -12,13 +12,13 @@ export { JianrongOpenAIGongYing, chuangjianDeepSeek } from './openai.js';
 export { AnthropicGongYing } from './anthropic.js';
 export { OllamaGongYing } from './ollama.js';
 
-const DEFAULT_BASE: Record<GongYingXieYi, string> = {
+const MOREN_DIZHI: Record<GongYingXieYi, string> = {
   'openai-compatible': 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com',
   ollama: 'http://127.0.0.1:11434',
 };
 
-const YUSHE_BIAO = Object.fromEntries(PROVIDER_PRESETS.map((p) => [p.id, p]));
+const YUSHE_BIAO = Object.fromEntries(GONGYING_YUSHE.map((p) => [p.id, p]));
 
 export function chuangjianGongYing(
   protocol: GongYingXieYi,
@@ -29,7 +29,7 @@ export function chuangjianGongYing(
     case 'openai-compatible':
       return new JianrongOpenAIGongYing(auth, {
         id,
-        defaultBase: auth.baseURL || DEFAULT_BASE['openai-compatible'],
+        defaultBase: auth.baseURL || MOREN_DIZHI['openai-compatible'],
       });
     case 'anthropic':
       return new AnthropicGongYing(auth, { id, defaultBase: auth.baseURL });

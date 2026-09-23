@@ -103,15 +103,15 @@ for (const ref of targets) {
     const idx = await get(`${REGISTRY}/v2/${repo}/manifests/${tag}`, { accept: MANIFEST_ACCEPT, token: tk.token });
     if (idx.status !== 200) throw new Error(`manifest HTTP ${idx.status}`);
     const indexDigest = idx.rec.digestHeader || sha256(idx.buf);
-    const body = JSON.parse(idx.buf.toString('utf8'));
+    const ti = JSON.parse(idx.buf.toString('utf8'));
     entry.api.push(`② GET ${REGISTRY}/v2/${repo}/manifests/${tag}  Accept: ${MANIFEST_ACCEPT}  -> ${idx.status}`);
     entry.indexDigest = indexDigest;
-    entry.mediaType = body.mediaType || idx.headers.get('content-type');
-    entry.manifestList = Array.isArray(body.manifests);
+    entry.mediaType = ti.mediaType || idx.headers.get('content-type');
+    entry.manifestList = Array.isArray(ti.manifests);
 
     const platforms = {};
-    if (Array.isArray(body.manifests)) {
-      for (const m of body.manifests) {
+    if (Array.isArray(ti.manifests)) {
+      for (const m of ti.manifests) {
         if (m.platform?.os !== 'linux') continue;
         // 归一化：官方镜像里 arm64 带 variant=v8、arm 带 v6/v7 —— 归到 `linux/arm64` / `linux/arm`
         const os = m.platform.os;

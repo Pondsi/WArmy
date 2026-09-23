@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/electron-main.ts';
+const p = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/electron-main.ts';
 let s = fs.readFileSync(p, 'utf8');
 
 if (s.includes('xietiaoQunXiaoxi')) {
@@ -22,8 +22,8 @@ s = s.replace(
 
 // 审批弹窗：pending approvals
 s = s.replace(
-  "const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];",
-  `const emailQueue: Array<{ to: string; subject: string; body: string; ts: number }> = [];
+  "const emailQueue: Array<{ to: string; subject: string; ti: string; ts: number }> = [];",
+  `const emailQueue: Array<{ to: string; subject: string; ti: string; ts: number }> = [];
 // 权限审批：渲染进程弹窗后回调
 const pendingApprovals = new Map<string, { resolve: (d: { allowed: boolean; scope: string }) => void }>();
 let approvalSeq = 0;`
@@ -32,11 +32,11 @@ let approvalSeq = 0;`
 // IPC 审批
 s += `
 // ── 3 权限审批弹窗 ──
-ipcMain.handle('warmy:request-approval', (_e, req: { action: string; suggested?: string }) => {
-  const id = 'ap-' + ++approvalSeq;
+ipcMain.handle('warmy:qingQiuPiZhun', (_e, req: { action: string; suggested?: string }) => {
+  const id = 'ap' + ++approvalSeq;
   return new Promise((resolve) => {
     pendingApprovals.set(id, { resolve });
-    win?.webContents.send('warmy:approval-request', { id, action: req.action, suggested: req.suggested || 'once' });
+    win?.webContents.send('warmy:piZhunQingQiu', { id, action: req.action, suggested: req.suggested || 'once' });
     // 30s 超时 → 拒绝
     setTimeout(() => {
       const p = pendingApprovals.get(id);
@@ -48,7 +48,7 @@ ipcMain.handle('warmy:request-approval', (_e, req: { action: string; suggested?:
   });
 });
 
-ipcMain.handle('warmy:approval-respond', (_e, id: string, allowed: boolean, scope: string) => {
+ipcMain.handle('warmy:piZhunHuiYing', (_e, id: string, allowed: boolean, scope: string) => {
   const p = pendingApprovals.get(id);
   if (!p) return { ok: false };
   pendingApprovals.delete(id);
@@ -57,7 +57,7 @@ ipcMain.handle('warmy:approval-respond', (_e, id: string, allowed: boolean, scop
 });
 
 // ── 4 自动检查点 ──
-ipcMain.handle('warmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
+ipcMain.handle('warmy:checkpointZiDong', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
   if (!checkpoints) return { ok: false };
   const memDir = path.join(app.getPath('userData'), 'memory');
   const jsonl = path.join(memDir, 'fast-memory.jsonl');
@@ -70,7 +70,7 @@ ipcMain.handle('warmy:checkpoint-auto', (_e, phase: 'round_start' | 'round_end',
 });
 
 // ── 6 成本仪表盘 ──
-ipcMain.handle('warmy:cost-summary', () => {
+ipcMain.handle('warmy:chengBenZhaiYao', () => {
   const m = metrics.summary();
   // 按最近用量估算（简化：0.001 元/1k token 量级示意）
   const estCost = ((m.promptTokens + m.completionTokens) / 1000) * 0.002;
@@ -86,10 +86,10 @@ ipcMain.handle('warmy:cost-summary', () => {
 });
 
 // ── 1 值班编排闭环 ──
-ipcMain.handle('warmy:group-orchestrate', async (_e, msg: { groupId: string; content: string; urgency?: string; userId?: string }) => {
+ipcMain.handle('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: string; urgency?: string; userId?: string }) => {
   const instList = p1?.instances.list().map((x) => ({
     id: x.id,
-    name: x.name,
+    ming: x.name,
     status: x.status,
     dutyEligible: x.dutyEligible,
   })) || [];
@@ -101,12 +101,12 @@ ipcMain.handle('warmy:group-orchestrate', async (_e, msg: { groupId: string; con
       ccr,
       history: chatHistories,
       listInstances: () => instList,
-      addEvent: (title, body, groupId) => {
-        knowledge?.upsertEntity({ id: 'grp-' + groupId, kind: 'project', name: groupId, attrs: {}, anchors: [] });
+      addEvent: (biaoTi, ti, groupId) => {
+        knowledge?.upsertEntity({ id: 'grp-' + groupId, kind: 'project', ming: groupId, attrs: {}, anchors: [] });
         knowledge?.addEvent({
           id: 'ev-' + Date.now(),
-          title,
-          result: body.slice(0, 400),
+          biaoTi,
+          result: ti.slice(0, 400),
           entityIds: ['grp-' + groupId],
           anchors: [],
           ts: Date.now(),
@@ -120,16 +120,16 @@ ipcMain.handle('warmy:group-orchestrate', async (_e, msg: { groupId: string; con
       model: providerCfg.model,
     },
     {
-      groupId: msg.groupId,
-      userId: msg.userId,
-      content: msg.content,
-      urgency: msg.urgency as never,
+      groupId: xiaoXi.groupId,
+      userId: xiaoXi.userId,
+      content: xiaoXi.content,
+      urgency: xiaoXi.urgency as never,
     }
   );
 
   if (result.usage) {
     metrics.recordTurn({
-      sessionId: msg.groupId,
+      sessionId: xiaoXi.groupId,
       ts: Date.now(),
       promptTokens: result.usage.promptTokens,
       completionTokens: result.usage.completionTokens,

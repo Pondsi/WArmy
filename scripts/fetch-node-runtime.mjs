@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import https from 'node:https';
+import crypto from 'node:crypto';
 import {createWriteStream} from 'node:fs';
 import {pipeline} from 'node:stream/promises';
 import {fileURLToPath} from 'node:url';
@@ -23,12 +24,13 @@ const platform = process.platform;
 const arch = process.arch;
 const key = platform === 'win32' ? `win-${arch}` : `${platform}-${arch}`;
 const ext = platform === 'win32' ? 'zip' : 'tar.gz';
-const name = platform === 'win32'
+const ming = platform === 'win32'
   ? `node-v${VERSION}-win-${arch}`
   : `node-v${VERSION}-${platform}-${arch}`;
-const url = `https://nodejs.org/dist/v${VERSION}/${name}.${ext}`;
+const url = `https://nodejs.org/dist/v${VERSION}/${ming}.${ext}`;
+const shasumsUrl = `https://nodejs.org/dist/v${VERSION}/SHASUMS256.txt`;
 const destDir = path.join(ROOT, 'resources', 'node', key);
-const destFile = path.join(destDir, `${name}.${ext}`);
+const destFile = path.join(destDir, `${ming}.${ext}`);
 
 function get(u) {
   return new Promise((resolve, reject) => {
@@ -46,6 +48,27 @@ function get(u) {
   });
 }
 
+async function getText(u) {
+  const res = await get(u);
+  const chunks = [];
+  for await (const c of res) chunks.push(c);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function sha256File(file) {
+  const h = crypto.createHash('sha256');
+  h.update(fs.readFileSync(file));
+  return h.digest('hex');
+}
+
+function expectedShaFromShasums(txt, name) {
+  for (const line of txt.split(/\r?\n/)) {
+    const m = line.match(/^([0-9a-f]{64})\s+\*?(.+)$/i);
+    if (m && m[2].trim() === name) return m[1].toLowerCase();
+  }
+  return null;
+}
+
 async function main() {
   fs.mkdirSync(destDir, { recursive: true });
   const nodeBin = path.join(destDir, platform === 'win32' ? 'node.exe' : 'bin/node');
@@ -53,9 +76,23 @@ async function main() {
     console.log('already present:', nodeBin);
     return;
   }
+  // 供应链：必须对照 nodejs.org 官方 SHASUMS256.txt，不匹配不落盘
+  console.log('fetch shasums', shasumsUrl);
+  const shasums = await getText(shasumsUrl);
+  const expected = expectedShaFromShasums(shasums, `${ming}.${ext}`);
+  if (!expected) {
+    throw new Error(`SHASUMS256.txt has no entry for ${ming}.${ext}`);
+  }
+  console.log('expected sha256', expected);
   console.log('download', url);
   const res = await get(url);
   await pipeline(res, createWriteStream(destFile));
+  const actual = sha256File(destFile);
+  if (actual !== expected) {
+    fs.rmSync(destFile, { force: true });
+    throw new Error(`SHA-256 mismatch for ${ming}.${ext}: expected ${expected} got ${actual}; file discarded`);
+  }
+  console.log('sha256 ok', actual);
   console.log('saved', destFile, fs.statSync(destFile).size);
   if (platform === 'win32') {
     try {

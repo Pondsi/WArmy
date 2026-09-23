@@ -18,13 +18,13 @@ fs.mkdirSync(dirA, { recursive: true });
 fs.mkdirSync(dirB, { recursive: true });
 fs.mkdirSync(bus, { recursive: true });
 
-function startNode(name, dataDir, eligibleDuty) {
+function startNode(ming, dataDir, eligibleDuty) {
   const child = spawn(
     process.execPath,
-    [path.join(__dirname, 'node.mjs'), '--name', name, '--data', dataDir, '--bus', bus, '--duty', String(eligibleDuty)],
+    [path.join(__dirname, 'node.mjs'), '--name', ming, '--data', dataDir, '--bus', bus, '--duty', String(eligibleDuty)],
     { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] }
   );
-  child.stderr.on('data', (d) => process.stderr.write(`[${name}] ${d}`));
+  child.stderr.on('data', (d) => process.stderr.write(`[${ming}] ${d}`));
   const pending = new Map();
   let seq = 0;
   child.on('message', (m) => {
@@ -35,14 +35,14 @@ function startNode(name, dataDir, eligibleDuty) {
     else p.resolve(m);
   });
   return {
-    name,
+    ming,
     child,
-    call(msg, timeoutMs = 5000) {
+    call(xiaoXi, timeoutMs = 5000) {
       const id = ++seq;
       return new Promise((resolve, reject) => {
         const t = setTimeout(() => {
           pending.delete(id);
-          reject(new Error(`${name} timeout ${msg.type}`));
+          reject(new Error(`${ming} timeout ${xiaoXi.type}`));
         }, timeoutMs);
         pending.set(id, {
           resolve: (v) => {
@@ -54,7 +54,7 @@ function startNode(name, dataDir, eligibleDuty) {
             reject(e);
           },
         });
-        child.send({ ...msg, id });
+        child.send({ ...xiaoXi, id });
       });
     },
     async stop() {
@@ -89,12 +89,12 @@ await B.call({ type: 'hello' });
 // 1) A → bus → B
 const send1 = await A.call({ type: 'publish', to: 'B-remote', text: 'from-A-to-B', groupId: 'g1' });
 const pull1 = await B.call({ type: 'pull' });
-const abOk = pull1.messages?.some((m) => m.text === 'from-A-to-B');
+const abOk = pull1.xiaoXiJi?.some((m) => m.text === 'from-A-to-B');
 
 // 2) B → bus → A
 const send2 = await B.call({ type: 'publish', to: 'A-creator', text: 'from-B-to-A', groupId: 'g1' });
 const pull2 = await A.call({ type: 'pull' });
-const baOk = pull2.messages?.some((m) => m.text === 'from-B-to-A');
+const baOk = pull2.xiaoXiJi?.some((m) => m.text === 'from-B-to-A');
 
 // 3) incognito 零痕迹
 const before = countFiles(dirB);
@@ -127,8 +127,8 @@ const evidence = {
   scopeNote:
     '同机双进程 + 共享目录模拟，**不是两台真机**；不覆盖真实网络/时钟偏差/并发冲突场景',
   details: {
-    aToB: { publish: send1, pull: { count: pull1.messages?.length ?? 0, texts: (pull1.messages ?? []).map((m) => m.text) } },
-    bToA: { publish: send2, pull: { count: pull2.messages?.length ?? 0, texts: (pull2.messages ?? []).map((m) => m.text) } },
+    aToB: { publish: send1, pull: { count: pull1.xiaoXiJi?.length ?? 0, texts: (pull1.xiaoXiJi ?? []).map((m) => m.text) } },
+    bToA: { publish: send2, pull: { count: pull2.xiaoXiJi?.length ?? 0, texts: (pull2.xiaoXiJi ?? []).map((m) => m.text) } },
     incognito: { raw: incog, filesBefore: before, filesAfter: after },
     duty: duty,
     busDir: bus,

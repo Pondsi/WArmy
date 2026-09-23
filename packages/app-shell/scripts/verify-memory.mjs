@@ -14,9 +14,9 @@ const ROOT = path.resolve(selfDir, '..', '..', '..');
 const require = createRequire(import.meta.url);
 let pass = 0;
 let fail = 0;
-function check(label, ok, detail) {
-  if (ok) { pass += 1; console.log(`  ok  ${label}`); }
-  else { fail += 1; console.log(`  FAIL ${label}`, detail ?? ''); }
+function check(biaoQian, ok, detail) {
+  if (ok) { pass += 1; console.log(`  ok  ${biaoQian}`); }
+  else { fail += 1; console.log(`  FAIL ${biaoQian}`, detail ?? ''); }
 }
 
 const memSrc = fs.readFileSync(path.join(ROOT, 'packages/memory-os/src/index.ts'), 'utf8');
@@ -64,20 +64,20 @@ const liveOk = fs.existsSync(distIndex) && nativeSqliteAvailable();
 if (!fs.existsSync(distIndex)) {
   console.log('  skip live memory test (dist missing) — build packages/memory-os first');
 } else if (!liveOk) {
-  console.log('  skip live memory test (better-sqlite3 native module not built here — e.g. CI without Visual Studio; dynamically skipped, NOT a product failure)');
+  console.log('  skip live memory test (better-sqlite3 native module not built here — e.g. CI without Visual Studio; dynamically skipped, NOT a chanPin failure)');
 } else {
   const dataDir = path.join(os.tmpdir(), 'warmy-memory-verify-' + Date.now());
   fs.mkdirSync(dataDir, { recursive: true });
   try {
     const mod = await import(pathToFileURL(distIndex).href);
-    const svc = new mod.MemoryService({ dataDir });
+    const svc = new mod.JiyiCangFuwu({ CangLu: dataDir });
     const a = svc.append({
       seq: 0,
       ts: Date.now(),
       sessionId: 'mem-verify',
       kind: 'message',
       id: 'm-mem-verify-1',
-      body: 'WArmy memory verify token ALPHA-7799 project directory ledger',
+      ti: 'WArmy memory verify token ALPHA-7799 project directory ledger',
     }, 'memory-service');
     check('append returns seq>0', Number(a?.seq) > 0, a);
     /**
@@ -87,7 +87,7 @@ if (!fs.existsSync(distIndex)) {
      *      向量需要本地 ONNX 模型，CI/干净机器上没有 ⇒ 如实跳过并写明原因。
      */
     const sync = svc.recallDetailedSync({ query: 'ALPHA-7799 memory verify', limit: 5 });
-    check('sync recall finds inserted body (FTS legs)', Array.isArray(sync?.cards) && sync.cards.length > 0,
+    check('sync recall finds inserted ti (FTS legs)', Array.isArray(sync?.cards) && sync.cards.length > 0,
       { cards: (sync?.cards || []).map((c) => c.recordId), channels: sync?.channels });
     const syncHit = (sync?.cards || []).find((c) => String(c.recordId || '').includes('mem-verify') || String(c.snippet || '').includes('ALPHA-7799'));
     check('sync recall snippet contains token', !!syncHit, syncHit?.snippet);
@@ -100,7 +100,7 @@ if (!fs.existsSync(distIndex)) {
     } catch { /* noop */ }
     const detail = await svc.recallDetailed({ query: 'ALPHA-7799 memory verify', limit: 5 });
     if (vectorReady) {
-      check('async recall finds inserted body (with vector leg)', Array.isArray(detail?.cards) && detail.cards.length > 0,
+      check('async recall finds inserted ti (with vector leg)', Array.isArray(detail?.cards) && detail.cards.length > 0,
         { cards: (detail?.cards || []).map((c) => c.recordId), channels: detail?.channels });
       const hit = (detail?.cards || []).find((c) => String(c.recordId || '').includes('mem-verify') || String(c.snippet || '').includes('ALPHA-7799'));
       check('async recall snippet contains token', !!hit, hit?.snippet);
@@ -109,8 +109,8 @@ if (!fs.existsSync(distIndex)) {
     }
     const hit = syncHit || (detail?.cards || []).find((c) => String(c.recordId || '').includes('mem-verify') || String(c.snippet || '').includes('ALPHA-7799'));
     const ret = hit ? svc.retrieve({ recordId: hit.recordId }) : svc.retrieve({ seq: a.seq });
-    const body = JSON.stringify(ret || {});
-    check('retrieve returns record body', body.includes('ALPHA-7799') || body.includes('mem-verify'), body.slice(0, 200));
+    const ti = JSON.stringify(ret || {});
+    check('retrieve returns record ti', ti.includes('ALPHA-7799') || ti.includes('mem-verify'), ti.slice(0, 200));
     // rebuild projection
     const rebuilt = svc.rebuildProjection?.();
     check('rebuildProjection callable', rebuilt === undefined || Number.isFinite(rebuilt) || typeof rebuilt === 'number', rebuilt);
@@ -118,7 +118,7 @@ if (!fs.existsSync(distIndex)) {
     // writer constraint (fail closed)
     let writerBlocked = false;
     try {
-      svc.append({ id: 'q-1', sessionId: 'mem-verify', kind: 'queue', body: 'x' }, 'duty');
+      svc.append({ id: 'q-1', sessionId: 'mem-verify', kind: 'queue', ti: 'x' }, 'duty');
     } catch (e) {
       writerBlocked = e?.code === 'WRITER' || /Bi/i.test(String(e?.message || e));
     }
@@ -131,7 +131,7 @@ if (!fs.existsSync(distIndex)) {
       sessionId: 'other-session',
       kind: 'message',
       id: 'm-other-1',
-      body: 'WArmy memory verify token BETA-1234 other session',
+      ti: 'WArmy memory verify token BETA-1234 other session',
     }, 'memory-service');
     const scoped = await svc.recallDetailed({ query: 'BETA-1234', limit: 5, scope: { sessionId: 'mem-verify' } });
     const scopedHits = (scoped?.cards || []).filter((c) => String(c.recordId || '').includes('other') || String(c.snippet || '').includes('BETA-1234'));

@@ -1,5 +1,5 @@
 const fs = require('node:fs');
-const p = 'C:/Users/p/.openclaw/workspace/大龙虾互动区/WArmy/packages/app-shell/src/electron-main.ts';
+const p = 'C:/Users/<user>/workspace/<repo>/WArmy/packages/app-shell/src/electron-main.ts';
 let s = fs.readFileSync(p, 'utf8');
 
 if (!s.includes('yunxingDuanCunhuoZhixingqi')) {
@@ -17,7 +17,7 @@ if (!s.includes('yunxingDuanCunhuoZhixingqi')) {
   // IPC: executor + assets + knowledge-from-chat
   const ipc = `
 // ── P5 短命执行者 ──
-ipcMain.handle('warmy:executor-run', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
+ipcMain.handle('warmy:zhiXingQiYunXing', async (_e, task: { taskId?: string; brief: string; contextItems?: string[] }) => {
   if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
     return { ok: false, error: 'no key' };
   }
@@ -37,7 +37,7 @@ ipcMain.handle('warmy:executor-run', async (_e, task: { taskId?: string; brief: 
   return { ok: !r.error, ...r };
 });
 
-ipcMain.handle('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
+ipcMain.handle('warmy:zhiXingQiPiLiang', async (_e, tasks: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
   if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
     return { ok: false, error: 'no key' };
   }
@@ -54,45 +54,45 @@ ipcMain.handle('warmy:executor-batch', async (_e, tasks: Array<{ taskId?: string
 });
 
 // ── P7 资产治理 ──
-ipcMain.handle('warmy:assets-retrieve', (_e, opts?: { scope?: string; strict?: boolean }) => ({
+ipcMain.handle('warmy:ziChanJiJianSuo', (_e, opts?: { scope?: string; strict?: boolean }) => ({
   ok: true,
   assets: retrieveAssetsForChat({ scope: opts?.scope as never, strict: opts?.strict }),
 }));
 
-ipcMain.handle('warmy:assets-register', (_e, a: { id: string; title: string; body: string; scope?: string }) => {
-  zhuCeLiaoTianZiChan({ id: a.id, title: a.title, body: a.body, scope: a.scope as never });
+ipcMain.handle('warmy:ziChanJiZhuCe', (_e, a: { id: string; title: string; ti: string; scope?: string }) => {
+  zhuCeLiaoTianZiChan({ id: a.id, title: a.biaoTi, ti: a.ti, scope: a.scope as never });
   return { ok: true };
 });
 
-ipcMain.handle('warmy:assets-feedback', (_e, id: string, good: boolean) => {
+ipcMain.handle('warmy:ziChanJiFeedback', (_e, id: string, good: boolean) => {
   jiLuZiChanShiYong(id, good);
   return { ok: true };
 });
 
-ipcMain.handle('warmy:assets-sweep', () => ({ ok: true, n: qingLiZiChan() }));
+ipcMain.handle('warmy:ziChanJiSweep', () => ({ ok: true, n: qingLiZiChan() }));
 
 // ── P6 知识库：从对话写入 ──
-ipcMain.handle('warmy:kb-from-chat', (_e, payload: { sessionId: string; title: string; body: string }) => {
+ipcMain.handle('warmy:zhiShiKuCongLiaoTian', (_e, payload: { sessionId: string; title: string; ti: string }) => {
   knowledge?.upsertEntity({
     id: 'sess-' + payload.sessionId,
     kind: 'project',
-    name: payload.sessionId,
+    ming: payload.sessionId,
     attrs: {},
     anchors: [],
   });
   const evId = 'ev-' + Date.now();
   knowledge?.addEvent({
     id: evId,
-    title: payload.title,
-    result: payload.body.slice(0, 500),
+    title: payload.biaoTi,
+    result: payload.ti.slice(0, 500),
     entityIds: ['sess-' + payload.sessionId],
     anchors: [],
     ts: Date.now(),
   });
   zhuCeLiaoTianZiChan({
     id: evId,
-    title: payload.title,
-    body: payload.body,
+    title: payload.biaoTi,
+    ti: payload.ti,
     scope: 'session',
   });
   return { ok: true, eventId: evId };

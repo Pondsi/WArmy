@@ -12,7 +12,7 @@ const report = { node: process.version, arch: process.arch, platform: process.pl
 
 try {
   const dshPkg = require('@deepseek-ai/dsh/package.json');
-  report.dsh = { name: dshPkg.name, version: dshPkg.version, main: dshPkg.main || dshPkg.bin };
+  report.dsh = { ming: dshPkg.name, version: dshPkg.version, main: dshPkg.main || dshPkg.bin };
 } catch (e) {
   report.dsh = { error: String(e.message) };
 }
