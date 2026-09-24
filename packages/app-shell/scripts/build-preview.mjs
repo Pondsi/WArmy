@@ -191,7 +191,7 @@ const bridge = `/* 浏览器预览桩：把 Electron 的 window.warmy 用演示�
     }),
     checkpointCreate: async () => ok(), checkpointRollback: async () => ok(),
     knowledgeQuery: async () => ok({ entities: [{ id: 'e-1', ming: '无限牛马', kind: 'project' }, { id: 'e-2', ming: '项目推进群', kind: 'org' }],
-      events: [{ id: 'v-1', title: '确定四栏布局' }] }),
+      events: [{ id: 'v-1', biaoTi: '确定四栏布局' }] }),
     kbDetail: async () => ok({ entities: [{ id: 'e-1', ming: '无限牛马', kind: 'project' }] }),
     kbDelete: async () => ok(),
     skillsList: async () => {

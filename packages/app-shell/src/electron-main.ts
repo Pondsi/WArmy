@@ -839,7 +839,7 @@ function isContextLengthError(err: unknown): boolean {
   return /context|token|too long|maximum length|context_length|maximum context/i.test(s);
 }
 function budgetCharsForStep(baseChars: number, buZhou: number): number {
-  return Math.max(Math.round(MIN_CONTEXT_TOKENS * CHARS_PER_TOKEN_EST), Math.round(baseChars * buZhou));
+  return Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.round(baseChars * buZhou));
 }
 
 /**

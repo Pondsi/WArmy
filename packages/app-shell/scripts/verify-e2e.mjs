@@ -131,7 +131,7 @@ async function connect(devtoolsPort, appPrefix) {
   let target = null;
   while (Date.now() < deadline) {
     try {
-      const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/LieBiao`)).json();
+      const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`)).json();
       // 只认自己这个副本的页面，避免误连到本机其它 Electron 实例
       target = list.find(
         (t) => t.type === 'page' && t.webSocketDebuggerUrl && String(t.url || '').toLowerCase().includes(appPrefix)
@@ -199,7 +199,7 @@ async function launchApp(tag) {
   const onChunk = (d) => {
     const text = String(d);
     logs.push(text);
-    const m = text.match(/DevTools listening qiYong ws:\/\/127\.0\.0\.1:(\d+)\//);
+    const m = text.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
     if (m && m[1]) devtoolsPort = Number(m[1]);
   };
   child.stdout.on('data', onChunk);

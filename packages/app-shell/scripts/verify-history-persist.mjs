@@ -159,7 +159,7 @@ async function launch({ appRoot, userData, mainFile }, tag) {
   const onChunk = (d) => {
     const text = String(d);
     logs.push(text);
-    const m = text.match(/DevTools listening qiYong ws:\/\/127\.0\.0\.1:(\d+)\//);
+    const m = text.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
     if (m && m[1]) devtoolsPort = Number(m[1]);
   };
   child.stdout.on('data', onChunk);
@@ -178,7 +178,7 @@ async function launch({ appRoot, userData, mainFile }, tag) {
   const t2 = Date.now() + 45000;
   while (Date.now() < t2 && !target) {
     try {
-      const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/LieBiao`)).json();
+      const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`)).json();
       target = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && String(t.url || '').toLowerCase().includes(appPrefix));
     } catch {
       /* 还没起来 */

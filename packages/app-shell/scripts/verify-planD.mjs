@@ -58,15 +58,15 @@ check('autoSummary default qiYong in settings', /autoSummary:\s*true/.test(fs.re
 
 // ── 决策卡 ──
 const hub = new AiWenTiZhongXin();
-const q = hub.daKai({ groupId: 'g1', title: '是否容器中开发？', options: [{ biaoQian: '容器' }, { biaoQian: '本机' }] });
+const q = hub.daKai({ groupId: 'g1', biaoTi: '是否容器中开发？', options: [{ biaoQian: '容器' }, { biaoQian: '本机' }] });
 check('ai question allowCustom', q.allowCustom === true);
 // 去重：同标题且仍 pending 时应返回同一张卡
-const q2 = hub.daKai({ groupId: 'g1', title: '是否容器中开发？', options: [{ biaoQian: 'x' }] });
-check('ai question dedupe pending same biaoTi', q2.id === q.id, q2.id);
+const q2 = hub.daKai({ groupId: 'g1', biaoTi: '是否容器中开发？', options: [{ biaoQian: 'x' }] });
+check('ai question dedupe pending same biaoTi', q2.id === q.id && q.biaoTi === '是否容器中开发？', { id: q2.id, biaoTi: q.biaoTi });
 const ans = hub.answer(q.id, AI_QUESTION_CUSTOM, '先本机');
 check('ai question custom answer', ans.ok === true && ans.inject.includes('先本机'), ans.inject);
 // 回答后新卡可再开
-const q3 = hub.daKai({ groupId: 'g1', title: '是否容器中开发？', options: [{ biaoQian: '容器' }] });
+const q3 = hub.daKai({ groupId: 'g1', biaoTi: '是否容器中开发？', options: [{ biaoQian: '容器' }] });
 check('ai question new after answered', q3.id !== q.id, q3.id);
 
 // ── read-back / dedupe ──

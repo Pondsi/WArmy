@@ -2178,7 +2178,7 @@ try {
         var el=document.querySelector('#biaoTiLanPinPai'); var act=document.querySelector('.biaoTiLanDongZuoJi'); var tb=document.querySelector('#biaoTiLan');
         if(!el||!act||!tb) return {absent:true};
         var r=el.getBoundingClientRect(), a=act.getBoundingClientRect();
-        return { text:(el.textContent||'').trim(), you:Math.round(r.you), actLeft:Math.round(a.left),
+        return { text:(el.textContent||'').trim(), you:Math.round(r.right), actLeft:Math.round(a.left),
                  w:Math.round(r.width), overflow: tb.scrollWidth - tb.clientWidth };
       })())`));
       ok(

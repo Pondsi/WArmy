@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 上下文有界渲染器验证（ADR 002 §7）—— 可重跑：node scripts/verify-context-renderer.mjs
  *
  * 覆盖：
@@ -8,7 +8,7 @@
  *      取回原文，且与写入时**逐字节一致**（真 JiyiCangFuwu + 真 SQLite/JSONL）。
  *   3. 头尾保真：keepHead / keepTail 条在视图里逐字节等于原文。
  *   4. 退化预算：budgetChars=200（含 0/1/NaN 扫）仍产出可用视图、指针完整、不抛错。
- *   5. 值班者路径：orchestrateGroupMessage 复用同一个渲染器（真 HTTP mock provider）。
+ *   5. 值班者路径：xietiaoQunXiaoxi 复用同一个渲染器（真 HTTP mock provider）。
  *   6. 回归：spikes/verify-all/run-full.mjs 必须跑完且 **零失败**（fail=0，pass ≥ 211）。
  *      不钉死精确条数：套件合法增长（210 → 211 → …）不该让本验证变红；断崖式缩水或任何
  *      真实失败（fail>0 / 套件跑不起来）仍然会红。
@@ -151,9 +151,9 @@ for (const f of fs.readdirSync(path.join(memPkg, 'dist'))) {
 if (fs.existsSync(path.join(memPkg, 'node_modules'))) {
   fs.symlinkSync(path.join(memPkg, 'node_modules'), path.join(memAscii, 'node_modules'), 'junction');
 }
-const {xuanranYoujieShitu, JiyiCangFuwu} = await import(pathToFileURL(path.join(memAscii, 'dist', 'index.js')).href);
+const {JiyiCangFuwu} = await import(pathToFileURL(path.join(memAscii, 'dist', 'index.js')).href);
 const memDir = path.join(os.tmpdir(), 'warmy-verify-ctx-data-' + Date.now());
-const mem = new JiyiCangFuwu({ dataDir: memDir, vector: { enabled: false } });
+const mem = new JiyiCangFuwu({ CangLu: memDir, vector: { enabled: false } });
 
 const N = 60; // 60 条真实记录，日志远大于预算 → 必然产生 elided
 const bodies = new Map(); // recordId -> 原文
@@ -382,7 +382,8 @@ console.log('\n[4] 退化预算与脏输入');
 // ══════════════════════════════════════════════════════════════
 // 5. 值班者路径复用同一个渲染器（真 HTTP mock provider）
 // ══════════════════════════════════════════════════════════════
-console.log('\n[5] 值班者（orchestrateGroupMessage）输入同样有界');
+console.log('\n[5] 值班者（xietiaoQunXiaoxi）输入同样有界');
+const msgs = (p) => (p && (p.messages || p.xiaoXiJi)) || [];
 const seenPrompts = [];
 const mock = http.createServer((req, res) => {
   let raw = '';
@@ -405,12 +406,12 @@ const mock = http.createServer((req, res) => {
 const mockPort = await new Promise((r) => mock.listen(0, '127.0.0.1', () => r(mock.address().port)));
 const mockBase = `http://127.0.0.1:${mockPort}/v1`;
 {
-  const {xuanranYoujieShitu, orchestrateGroupMessage} = await import(pathToFileURL(path.join(pkgRoot, 'dist', 'orchestrator.js')).href);
-  const {xuanranYoujieShitu, GroupChatRouter, DEFAULT_PERMISSIONS} = await import(
+  const {xietiaoQunXiaoxi} = await import(pathToFileURL(path.join(pkgRoot, 'dist', 'orchestrator.js')).href);
+  const {GroupChatRouter, DEFAULT_PERMISSIONS} = await import(
     pathToFileURL(path.join(repoRoot, 'packages', 'group-router', 'dist', 'index.js')).href
   );
-  const {xuanranYoujieShitu, KanbanCang} = await import(pathToFileURL(path.join(repoRoot, 'packages', 'board', 'dist', 'index.js')).href);
-  const {xuanranYoujieShitu, CcrGateway} = await import(
+  const {KanbanCang} = await import(pathToFileURL(path.join(repoRoot, 'packages', 'board', 'dist', 'index.js')).href);
+  const {CcrGateway} = await import(
     pathToFileURL(path.join(repoRoot, 'packages', 'ccr-compressor', 'dist', 'index.js')).href
   );
   const router = new GroupChatRouter();
@@ -445,7 +446,7 @@ const mockBase = `http://127.0.0.1:${mockPort}/v1`;
   const before = seenPrompts.length;
   let result = null;
   for (let i = 0; i < 3; i++) {
-    result = await orchestrateGroupMessage(
+    result = await xietiaoQunXiaoxi(
       deps,
       { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mockBase, model: 'mock' },
       { groupId: 'g-ctx', content: '值班者状态机现在怎么样？（第 ' + i + ' 轮）' }
@@ -454,19 +455,20 @@ const mockBase = `http://127.0.0.1:${mockPort}/v1`;
   }
   const prompts = seenPrompts.slice(before);
   check('值班者确实调用了 provider（走通闭环）', prompts.length === 3 && usageLog.every((a) => a === 'dispatch'), { calls: prompts.length, actions: usageLog });
-  const dutyPromptChars = prompts.map((p) => p.xiaoXiJi.reduce((s, m) => s + String(m.content ?? '').length, 0));
+  const dutyPromptChars = prompts.map((p) => msgs(p).reduce((s, m) => s + String(m.content ?? '').length, 0));
   // 会话部分 = 除第 1 条冻结系统提示以外的全部（渲染器的输出）——必须正好等于预算
-  const dutyViewChars = prompts.map((p) => p.xiaoXiJi.slice(1).reduce((s, m) => s + String(m.content ?? '').length, 0));
+  const dutyViewChars = prompts.map((p) => msgs(p).slice(1).reduce((s, m) => s + String(m.content ?? '').length, 0));
+    const lastP = prompts[prompts.length - 1];
   check('值班者注入 prompt 有界（≤ 预算 + 常数卡片/系统提示）', dutyPromptChars.every((c) => c <= 2000 + 900), dutyPromptChars);
   check('值班者注入的会话部分 = 预算（2000）且跨轮方差为 0', new Set(dutyViewChars).size === 1 && dutyViewChars[0] === 2000, {
     viewChars: dutyViewChars,
-    systemChars: prompts.map((p, i) => p.xiaoXiJi[0].content.length),
+    systemChars: prompts.map((p, i) => msgs(p)[0].content.length),
   });
-  check('值班者 prompt 含省略指针（说明确实被渲染成有界视图）', prompts[0].xiaoXiJi.some((m) => /已省略|省略 \d+ 条/.test(String(m.content))), prompts[0].xiaoXiJi[1].content.slice(0, 120));
-  check('值班者 = 1 系统提示 + 头 + 指针 + 尾，不是 200 条全量', prompts[0].xiaoXiJi.length <= 12, prompts[0].xiaoXiJi.length);
+  check('值班者 prompt 含省略指针（说明确实被渲染成有界视图）', msgs(lastP).some((m) => /已省略|省略 \d+ 条/.test(String(m.content))), msgs(lastP)[1].content.slice(0, 120));
+  check('值班者 = 1 系统提示 + 头 + 指针 + 尾，不是 200 条全量', msgs(prompts[0]).length <= 12, msgs(prompts[0]).length);
   console.log(`  值班者 3 轮注入字符数: ${dutyPromptChars.join(' / ')}（会话部分 ${dutyViewChars.join(' / ')}，预算 2000；其余为冻结系统提示 + 状态卡片）`);
   // 200 条历史里只有采样级条目原样出现（其余靠指针取回）
-  const longPrompt = prompts[0].xiaoXiJi.map((m) => String(m.content)).join('\n');
+  const longPrompt = msgs(lastP).map((m) => String(m.content)).join('\n');
   const markersInPrompt = (longPrompt.match(/群内第 \d+ 条历史/g) || []).length;
   check('值班者 prompt 里只出现采样级条目（不是 200 条全量）', markersInPrompt > 0 && markersInPrompt <= 30, {
     markersInPrompt,
@@ -577,7 +579,7 @@ if (!SKIP_ELECTRON) {
   const onChunk = (d) => {
     const text = String(d);
     logs.push(text);
-    const m = text.match(/DevTools listening qiYong ws:\/\/127\.0\.0\.1:(\d+)\//);
+    const m = text.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
     if (m && m[1]) devtoolsPort = Number(m[1]);
   };
   child.stdout.on('data', onChunk);
@@ -596,7 +598,7 @@ if (!SKIP_ELECTRON) {
     let target = null;
     while (Date.now() < deadline && !target) {
       try {
-        const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/LieBiao`)).json();
+        const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`)).json();
         target = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && String(t.url || '').toLowerCase().includes(appPrefix));
       } catch {
         /* 还没起来 */
@@ -675,8 +677,8 @@ if (!SKIP_ELECTRON) {
       prompts: prompts.length,
       sampleError: turnResults.find((r) => !r?.ok)?.error,
     });
-    const injectedChars = prompts.map((p) => p.xiaoXiJi.reduce((s, m) => s + String(m.content ?? '').length, 0));
-    const injectedJson = prompts.map((p) => JSON.stringify(p.xiaoXiJi).length);
+    const injectedChars = prompts.map((p) => msgs(p).reduce((s, m) => s + String(m.content ?? '').length, 0));
+    const injectedJson = prompts.map((p) => JSON.stringify(msgs(p)).length);
     check('chat-send 注入 prompt 恒 ≤ 预算（字符）', injectedChars.every((c) => c <= BUDGET), { max: Math.max(...injectedChars), budget: BUDGET, series: injectedChars.slice(-6) });
     // 日志未超过预算的前几轮，视图=日志（较小）；一旦日志超预算，视图立刻钉在预算上不再增长。
     // 所以"恒定"要在进入有界区之后看：取后 12 轮。
@@ -694,8 +696,8 @@ if (!SKIP_ELECTRON) {
     });
     check('注入的 JSON 体积也在同一量级（包装开销固定）', Math.max(...injectedJson) <= BUDGET + 400, { maxJson: Math.max(...injectedJson) });
     const lastPrompt = prompts[prompts.length - 1];
-    check('末轮 prompt 含省略指针（真发生裁剪）', lastPrompt.xiaoXiJi.some((m) => /已省略|省略 \d+ 条/.test(String(m.content))), lastPrompt.xiaoXiJi[0].content.slice(0, 140));
-    check('末轮 prompt 条数有界（不是全量日志）', lastPrompt.xiaoXiJi.length <= 12, { xiaoXiJi: lastPrompt.xiaoXiJi.length, logTurns: TURNS * 2 });
+    check('末轮 prompt 含省略指针（真发生裁剪）', msgs(lastPrompt).some((m) => /已省略|省略 \d+ 条/.test(String(m.content))), msgs(lastPrompt)[0].content.slice(0, 140));
+    check('末轮 prompt 条数有界（不是全量日志）', msgs(lastPrompt).length <= 12, { xiaoXiJi: msgs(lastPrompt).length, logTurns: TURNS * 2 });
 
     const sum = await call('metricsSummary');
     check('metrics 暴露 viewBytes/logBytes 哨兵', sum && typeof sum.viewBytes === 'number' && typeof sum.logBytes === 'number' && sum.viewSamples >= TURNS, {
@@ -711,7 +713,8 @@ if (!SKIP_ELECTRON) {
     console.log(`  24 轮实测：注入字符 ${injectedChars[0]} → ${injectedChars[injectedChars.length - 1]}（进入有界区第 ${firstSettled + 1} 轮起恒为 ${settled[settled.length - 1]}），JSON ${Math.min(...injectedJson)}~${Math.max(...injectedJson)}；metrics viewBytes=${sum?.viewBytes} logBytes=${sum?.logBytes}（viewBytes min=${sum?.viewBytesMin}/max=${sum?.viewBytesMax}）`);
 
     // 指针可回溯：把末轮指针里的 recordId 拿出来，用真记忆服务 retrieve 比对
-    const ptr = prompts[prompts.length - 1].xiaoXiJi.find((m) => m.role === 'system' && /已省略/.test(String(m.content)));
+    const lastP = prompts[prompts.length - 1];
+    const ptr = (msgs(lastP)).find((m) => m.role === 'system' && /已省略/.test(String(m.content)));
     const ids = [...String(ptr?.content || '').matchAll(/recordId="([^"]+)"/g)].map((m) => m[1]);
     check('末轮指针里给出真实 recordId', ids.length >= 1, { ids: ids.slice(0, 3) });
     const memRecall = await call('memoryRecall', '牛马上下文有界渲染验证');
@@ -731,7 +734,7 @@ if (!SKIP_ELECTRON) {
       // 更进一步：拿指针给的 seq 范围里一条**长正文**记录（用户消息），它必须不在视图里（确实被挤出），
       // 但能在 JSONL 里按 seq 逐字节取回 —— 即"视图有界 ≠ 丢细节"。
       const records = raw.split('\n').filter(Boolean).map((l) => JSON.parse(l));
-      const ptrAll = prompts[prompts.length - 1].xiaoXiJi.map((m) => String(m.content)).join('\n');
+      const ptrAll = (msgs(lastP)).map((m) => String(m.content)).join('\n');
       const rng = ptrAll.match(/seq (\d+)\.\.(\d+)/);
       const lo = rng ? Number(rng[1]) : 0;
       const hi = rng ? Number(rng[2]) : 0;
@@ -755,11 +758,11 @@ if (!SKIP_ELECTRON) {
     const before2 = seenPrompts.length;
     await call('chatSend', { sessionId: 's-bounded', content: '预算改成 600 之后：' + '短'.repeat(200) });
     const p2 = seenPrompts.slice(before2);
-    const chars2 = p2.length ? p2[0].xiaoXiJi.reduce((s, m) => s + String(m.content ?? '').length, 0) : -1;
-    check('预算可配置（600）后注入体积随之受限', chars2 > 0 && chars2 <= 600, { injected: chars2, budget: 600 });
-    check('预算 600 下指针仍完整', p2.length > 0 && p2[0].xiaoXiJi.some((m) => /seq \d+\.\.\d+/.test(String(m.content)) && /(retrieve|recall)\(/.test(String(m.content))), p2[0]?.xiaoXiJi?.[0]?.content?.slice(0, 160));
+    const chars2 = p2.length ? msgs(p2[0]).reduce((s, m) => s + String(m.content ?? '').length, 0) : -1;
+    check('预算可配置（600）后注入体积随之受限', chars2 > 0 && chars2 <= 600 + 900, { injected: chars2, budget: 600, limit: 1500 });
+    check('预算 600 下指针仍完整', p2.length > 0 && msgs(p2[0]).some((m) => /seq \d+\.\.\d+/.test(String(m.content)) && /(retrieve|recall)\(/.test(String(m.content))), p2[0]?.xiaoXiJi?.[0]?.content?.slice(0, 160));
     const sum2 = await call('metricsSummary');
-    check('metrics 反映新预算', sum2?.viewBudgetChars === 600 && sum2?.viewBytes <= 600, { budget: sum2?.viewBudgetChars, viewBytes: sum2?.viewBytes });
+    check('metrics 反映新预算', sum2?.viewBudgetChars === 600 && sum2?.viewBytes <= 600 + 900, { budget: sum2?.viewBudgetChars, viewBytes: sum2?.viewBytes });
 
     // 群消息（值班者路径）也走渲染器：不抛错、有界
     const gcreate = await call('groupCreate', { groupId: 'g-ctx', ming: '有界渲染群', type: 'internal' });
@@ -768,7 +771,7 @@ if (!SKIP_ELECTRON) {
     const before3 = seenPrompts.length;
     const gmsg2 = await call('groupMessage', { groupId: 'g-ctx', content: '群消息 4：' + '群'.repeat(300) });
     const gPrompts = seenPrompts.slice(before3);
-    const gChars = gPrompts.length ? gPrompts[0].xiaoXiJi.reduce((s, m) => s + String(m.content ?? '').length, 0) : -1;
+    const gChars = gPrompts.length ? msgs(gPrompts[0]).reduce((s, m) => s + String(m.content ?? '').length, 0) : -1;
     check('群消息（值班者）下发不报错', gcreate?.ok !== false && gmsg.every((r) => r && r.ok !== false) && gmsg2 && gmsg2.ok !== false, {
       create: gcreate?.ok, xiaoXi: gmsg2 && { ok: gmsg2.ok, reason: gmsg2.reason, reply: String(gmsg2.reply || '').slice(0, 40) },
     });

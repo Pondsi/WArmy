@@ -121,6 +121,33 @@ for (const rel of ['src/renderer/app.js', 'src/electron-main.ts']) {
 }
 check('无用户字段未转义 innerHTML', danger === 0, `hits=${danger}`);
 
+// 改名残留：测试/脚本里禁止旧英文 API（曾导致 CI run-full 连红）
+{
+  const stale = [];
+  const STALE = [
+    [/\bMemoryService\b/, 'MemoryService→JiyiCangFuwu'],
+    [/\{\s*dataDir\s*:/, 'dataDir→CangLu（JiyiCangFuwu 构造参数）'],
+    [/\b(?:gov|cps|asset)\.list\(/, 'gov/cps.list()→LieBiao()'],
+  ];
+  const scanDirs = [
+    path.join(root, 'spikes', 'verify-all'),
+    path.join(pkgRoot, 'scripts'),
+  ];
+  for (const dir of scanDirs) {
+    if (!fs.existsSync(dir)) continue;
+    for (const e of fs.readdirSync(dir)) {
+      if (!/\.(mjs|js)$/.test(e)) continue;
+      if (e === 'verify-security.mjs') continue; // 自身含规则字面量
+      const p = path.join(dir, e);
+      const t = fs.readFileSync(p, 'utf8');
+      for (const [rx, label] of STALE) {
+        if (rx.test(t)) stale.push(`${path.relative(root, p)} ${label}`);
+      }
+    }
+  }
+  check('测试脚本无改名残留旧 API', stale.length === 0, stale.slice(0, 8).join(' | '));
+}
+
 // git 不跟踪密钥文件
 try {
   const tracked = execFileSync('git', ['-C', root, 'ls-files'], { encoding: 'utf8' });
