@@ -5247,7 +5247,7 @@ try {
     window.__ctgTest.filesFacts = {
       ok: true, sessionId: 'g-1', projectDir: null, projectDirReason: 'not-recorded',
       changed: [{ path: 'shadows/cp-1/notes.md', ts: Date.now() - 1000, kind: 'changed', scope: 'other' }],
-      other: [{ path: 'C:/Users/x/AppData/Roaming/warmy/memory/fast-memory.jsonl', ts: Date.now() - 2000, kind: 'changed', scope: 'other', source: 'checkpoint-detail' }],
+      other: [{ path: 'C:/Users/<user>/AppData/Roaming/warmy/memory/fast-memory.jsonl', ts: Date.now() - 2000, kind: 'changed', scope: 'other', source: 'checkpoint-detail' }],
       missingSources: ['project-directory-record'],
       chanPin: { dir: 'C:/preview/products/g-1', dirExists: true, dirKind: 'existing', kind: 'program',
         entry: 'C:/preview/products/g-1/app.js', entryHostRunnable: false, entryReason: 'container-built',

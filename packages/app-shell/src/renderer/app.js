@@ -616,7 +616,7 @@
           <span class="swatch" id="zhuTiPickerSwatch"></span>
           <span class="jingYin" id="zhuTiPickerHex"></span>
         </div>
-        <div class="jingYin">${t('settings.themePreview')}</div>
+        <div class="jingYin">${escapeHtml(t('settings.themePreview'))}</div>
       </div>`;
       const input = $('zhuTiPickerShuRu');
       const swatch = $('zhuTiPickerSwatch');
@@ -683,13 +683,13 @@
   function syncTrayText() {
     // 设置第二列的水印文字也要随语言变化（CSS 里读这个变量）
     try {
-      document.documentElement.style.setProperty('--brand-watermark', `"${t('brand.name')}"`);
+      document.documentElement.style.setProperty('--brand-watermark', `"${escapeHtml(t('brand.name'))}"`);
     } catch {
       /* noop */
     }
     try {
       window.warmy.trayTooltip?.({
-        text: `${t('brand.name')} ${t('brand.fu')}`,
+        text: `${escapeHtml(t('brand.name'))} ${escapeHtml(t('brand.fu'))}`,
         offWork: t('tray.offWork'),
         header: t('export.header'),
         wo: t('export.wo'),
@@ -1023,8 +1023,8 @@
     const m = document.createElement('span');
     m.className = 'idBianGengMark';
     m.setAttribute('data-idchg-mark', '1');
-    m.textContent = '! ' + t('idchg.pending');
-    m.title = t('idchg.biaoTi') + ' · ' + t('idchg.marker');
+    m.textContent = '! ' + escapeHtml(t('idchg.pending'));
+    m.title = escapeHtml(t('idchg.biaoTi')) + ' · ' + escapeHtml(t('idchg.marker'));
     hangYuanSu.appendChild(m);
     return hangYuanSu;
   }
@@ -1069,10 +1069,10 @@
       const hw = state.hardware || { cpus: '—', suggested: '—', max: '—' };
       const ka = document.createElement('div');
       ka.className = 'lieBiaoKa';
-      ka.innerHTML = `<h4>${t('instances.hardware')}</h4>
-        <div class="jingYin">${t('instances.cpus')}: <b>${escapeHtml(String(hw.cpus ?? '—'))}</b></div>
-        <div class="jingYin">${t('instances.suggested')}: <b>${escapeHtml(String(hw.suggested ?? '—'))}</b></div>
-        <div class="jingYin">${t('instances.max')}: <b>${escapeHtml(String(hw.max ?? '—'))}</b></div>`;
+      ka.innerHTML = `<h4>${escapeHtml(t('instances.hardware'))}</h4>
+        <div class="jingYin">${escapeHtml(t('instances.cpus'))}: <b>${escapeHtml(String(hw.cpus ?? '—'))}</b></div>
+        <div class="jingYin">${escapeHtml(t('instances.suggested'))}: <b>${escapeHtml(String(hw.suggested ?? '—'))}</b></div>
+        <div class="jingYin">${escapeHtml(t('instances.max'))}: <b>${escapeHtml(String(hw.max ?? '—'))}</b></div>`;
       heZi.appendChild(ka);
       state.instances
         .filter((i) => !q || (mingOf(i)).toLowerCase().includes(q))
@@ -1112,10 +1112,10 @@
       if (!source.length) {
         // 一个实例都没有 → 显示「进入牛马管理局」按钮
         heZi.innerHTML = `<div class="enterHqBaoGuo">
-          <div class="jingYin">${t('list.empty')}</div>
+          <div class="jingYin">${escapeHtml(t('list.empty'))}</div>
           <button class="enterHqAnNiu" id="anNiuEnterHq">
             <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/><line x1="40" y1="52" x2="48" y2="52"/><line x1="52" y1="52" x2="60" y2="52"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>
-            <span>${t('nav.instances')}</span>
+            <span>${escapeHtml(t('nav.instances'))}</span>
           </button>
         </div>`;
         $('anNiuEnterHq')?.addEventListener('click', () => setNav('instances'));
@@ -1143,7 +1143,7 @@
       const type = state.nav === 'internalGroup' ? 'internal' : 'external';
       const items = sortList(state.groups.filter((g) => g.type === type).filter((g) => !q || g.name.toLowerCase().includes(q)));
       if (!items.length) {
-        heZi.innerHTML = `<div class="lieBiaoKong">${t('list.empty')}</div>`;
+        heZi.innerHTML = `<div class="lieBiaoKong">${escapeHtml(t('list.empty'))}</div>`;
         return;
       }
       items.forEach((g) => {
@@ -1164,7 +1164,7 @@
     if (state.nav === 'externalChat') {
       const items = sortList(state.chats.filter((c) => c.kind === 'extdm').filter((c) => !q || c.name.toLowerCase().includes(q)));
       if (!items.length) {
-        heZi.innerHTML = `<div class="lieBiaoKong">${t('list.empty')}</div>`;
+        heZi.innerHTML = `<div class="lieBiaoKong">${escapeHtml(t('list.empty'))}</div>`;
         return;
       }
       items.forEach((c) => {
@@ -2378,11 +2378,11 @@
     ];
 
     host.innerHTML = `
-      <h1>${t('dashboard.biaoTi')}</h1>
+      <h1>${escapeHtml(t('dashboard.biaoTi'))}</h1>
       <div class="dashStats">
-        <div class="dashKa"><div class="jingYin">${t('dashboard.inProgressProjects')}</div><div class="stat">${escapeHtml(String(inProgressProjects))}</div></div>
-        <div class="dashKa"><div class="jingYin">${t('dashboard.runningInstances')}</div><div class="stat">${escapeHtml(String(running))}</div></div>
-        <div class="dashKa"><div class="jingYin">${t('dashboard.pendingDecisions')}</div><div class="stat">${escapeHtml(String(pendingCount))}</div></div>
+        <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.inProgressProjects'))}</div><div class="stat">${escapeHtml(String(inProgressProjects))}</div></div>
+        <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.runningInstances'))}</div><div class="stat">${escapeHtml(String(running))}</div></div>
+        <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.pendingDecisions'))}</div><div class="stat">${escapeHtml(String(pendingCount))}</div></div>
       </div>
       <div id="dashHuiHuaJi"></div>`;
     const heZi = $('dashHuiHuaJi');
@@ -2447,35 +2447,35 @@
             <img class="touXiangTuPian big" src="${instanceAvatarSrc(inst)}" alt=""/>
           </button>
           <div style="flex:1">
-            <div class="field"><label>${t('instances.name')}</label><input id="iMing" value="${escapeHtml(mingOf(inst))}"/></div>
+            <div class="field"><label>${escapeHtml(t('instances.name'))}</label><input id="iMing" value="${escapeHtml(mingOf(inst))}"/></div>
           </div>
         </div>
 
-        <h3 style="margin:14px 0 8px;font-size:13px">${t('instances.cognition')}</h3>
-        <div class="jingYin" style="margin-bottom:8px">${t('instances.cognitionHint')}</div>
+        <h3 style="margin:14px 0 8px;font-size:13px">${escapeHtml(t('instances.cognition'))}</h3>
+        <div class="jingYin" style="margin-bottom:8px">${escapeHtml(t('instances.cognitionHint'))}</div>
         <div id="iCogLieBiao"></div>
         <div style="margin-top:8px">
-          <button class="anNiuXiao" id="iCogTianJia">${t('instances.cognitionAdd')}</button>
+          <button class="anNiuXiao" id="iCogTianJia">${escapeHtml(t('instances.cognitionAdd'))}</button>
         </div>
         <div class="field" style="margin-top:12px">
-          <label>${t('instances.persona')}</label>
+          <label>${escapeHtml(t('instances.persona'))}</label>
           <textarea id="iPersona" placeholder="${escapeHtml(t('instances.personaPlaceholder'))}">${escapeHtml(inst.persona || '')}</textarea>
         </div>
         <div class="sheZhiKa yinCang" style="margin-top:14px" id="iModelcfg">
-          <h3 style="margin:0 0 10px;font-size:13px">${t('instances.defaultModel')}</h3>
+          <h3 style="margin:0 0 10px;font-size:13px">${escapeHtml(t('instances.defaultModel'))}</h3>
           <div class="shiLiHang">
             <div class="field">
-              <label>${t('instances.defaultModel')}</label>
+              <label>${escapeHtml(t('instances.defaultModel'))}</label>
               <select id="iDefaultMoXing">
-                <option value="__smart__">${t('instances.smartPick')}</option>
+                <option value="__smart__">${escapeHtml(t('instances.smartPick'))}</option>
                 ${(inst.availableModels || []).map((m) => '<option value="' + escapeHtml(m) + '"' + (inst.defaultModel === m ? ' selected' : '') + '>' + escapeHtml(m) + '</option>').join('')}
               </select>
             </div>
           </div>
 
-          <h3 style="margin:14px 0 8px;font-size:13px">${t('instances.availableModels')}</h3>
+          <h3 style="margin:14px 0 8px;font-size:13px">${escapeHtml(t('instances.availableModels'))}</h3>
           <label style="display:block;margin-bottom:8px">
-            <input type="checkbox" id="iAllMoXingJi" ${inst.allModels !== false ? 'checked' : ''}/> ${t('instances.allAvailable')}
+            <input type="checkbox" id="iAllMoXingJi" ${inst.allModels !== false ? 'checked' : ''}/> ${escapeHtml(t('instances.allAvailable'))}
           </label>
 
           <div id="iManual" class="${inst.allModels !== false ? 'yinCang' : ''}">
@@ -2484,19 +2484,19 @@
               <select id="iMoXingXuanZe" size="6"></select>
             </div>
             <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-              <button class="anNiuXiao" id="iTianJiaMoXing">${t('instances.addModel')}</button>
-              <button class="anNiuXiao" id="iDelMoXing">${t('settings.removeModel')}</button>
+              <button class="anNiuXiao" id="iTianJiaMoXing">${escapeHtml(t('instances.addModel'))}</button>
+              <button class="anNiuXiao" id="iDelMoXing">${escapeHtml(t('settings.removeModel'))}</button>
             </div>
           </div>
 
-          <h3 style="margin:14px 0 8px;font-size:13px">${t('instances.fallbackChain')}</h3>
+          <h3 style="margin:14px 0 8px;font-size:13px">${escapeHtml(t('instances.fallbackChain'))}</h3>
           <div id="iChain"></div>
         </div>
         <div class="shiLiHang" style="margin-top:14px">
-          <button class="anNiuZhuYao" id="iBaoCun" title="${escapeHtml(t('common.save'))}">${t('common.save')}</button>
-          <button class="anNiuXiao" id="iQiDong" title="${escapeHtml(t('instances.start'))}">${t('instances.start')}</button>
-          <button class="anNiuXiao" id="iTingZhi" title="${escapeHtml(t('instances.stop'))}">${t('instances.stop')}</button>
-          <button class="anNiuDanger" id="iDel" title="${escapeHtml(t('instances.delete'))}">${t('instances.delete')}</button>
+          <button class="anNiuZhuYao" id="iBaoCun" title="${escapeHtml(t('common.save'))}">${escapeHtml(t('common.save'))}</button>
+          <button class="anNiuXiao" id="iQiDong" title="${escapeHtml(t('instances.start'))}">${escapeHtml(t('instances.start'))}</button>
+          <button class="anNiuXiao" id="iTingZhi" title="${escapeHtml(t('instances.stop'))}">${escapeHtml(t('instances.stop'))}</button>
+          <button class="anNiuDanger" id="iDel" title="${escapeHtml(t('instances.delete'))}">${escapeHtml(t('instances.delete'))}</button>
           <span class="huiZhang ${inst.status === 'running' ? '' : 'off'}">${inst.status === 'running' ? t('instances.running') : t('instances.stopped')}</span>
         </div>
       </div>`;
@@ -2553,9 +2553,9 @@
                 '<div class="shiLiHang" style="margin:4px 0"><span style="flex:1">' +
                 escapeHtml(f.name) +
                 '</span><span class="jingYin">' + escapeHtml(String(f.size || 0)) + ' B</span>' +
-                '<button class="anNiuXiao" data-cog-del="' + i + '">' + t('mesh.remove') + '</button></div>'
+                '<button class="anNiuXiao" data-cog-del="' + i + '">' + escapeHtml(t('mesh.remove')) + '</button></div>'
             )
-            .join('') || '<div class="jingYin">' + t('instances.cognitionEmpty') + '</div>';
+            .join('') || '<div class="jingYin">' + escapeHtml(t('instances.cognitionEmpty')) + '</div>';
         LieBiao.querySelectorAll('[data-cog-del]').forEach((b) => {
           b.onclick = () => {
             inst.cognitionFiles.splice(Number(b.dataset.cogDel), 1);
@@ -2612,11 +2612,11 @@
               (m, i) =>
                 '<div class="shiLiHang" style="margin:4px 0">' +
                 '<span style="flex:1">' + escapeHtml(m) + '</span>' +
-                '<button class="anNiuXiao" data-up="' + i + '">' + t('instances.moveUp') + '</button>' +
-                '<button class="anNiuXiao" data-down="' + i + '">' + t('instances.moveDown') + '</button>' +
+                '<button class="anNiuXiao" data-up="' + i + '">' + escapeHtml(t('instances.moveUp')) + '</button>' +
+                '<button class="anNiuXiao" data-down="' + i + '">' + escapeHtml(t('instances.moveDown')) + '</button>' +
                 '</div>'
             )
-            .join('') || '<div class="jingYin">' + t('settings.modelsEmpty') + '</div>';
+            .join('') || '<div class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</div>';
         chainBox.querySelectorAll('[data-up]').forEach((b) => {
           b.onclick = () => {
             const i = Number(b.dataset.up);
@@ -2728,7 +2728,7 @@
       if (!sel) return;
       const cur = inst2DefaultModel();
       sel.innerHTML =
-        '<option value="__smart__">' + t('instances.smartPick') + '</option>' +
+        '<option value="__smart__">' + escapeHtml(t('instances.smartPick')) + '</option>' +
         (inst.availableModels || [])
           .map((m) => '<option value="' + escapeHtml(m) + '"' + (cur === m ? ' selected' : '') + '>' + escapeHtml(m) + '</option>')
           .join('');
@@ -2835,9 +2835,9 @@
                           aria-label="${escapeHtml(t('wo.showFull'))}" title="${escapeHtml(t('wo.showFull'))}">
                     <span class="me-eye-off" aria-hidden="true">${EYE_SVG}</span>
                   </button>
-                  <button class="anNiuXiao" id="anNiuWoidCopy">${t('wo.copy')}</button>
-                  <button class="anNiuXiao" id="anNiuWoCredLunHuan">${t('wo.changeCred')}</button>
-                  <button class="anNiuXiao" id="anNiuWoCredSwitch">${t('wo.switchIdentity')}</button>
+                  <button class="anNiuXiao" id="anNiuWoidCopy">${escapeHtml(t('wo.copy'))}</button>
+                  <button class="anNiuXiao" id="anNiuWoCredLunHuan">${escapeHtml(t('wo.changeCred'))}</button>
+                  <button class="anNiuXiao" id="anNiuWoCredSwitch">${escapeHtml(t('wo.switchIdentity'))}</button>
                 </div>
                 <div class="jingYin woTiShi" style="margin-top:4px">${escapeHtml(t('wo.idHint'))}</div>
                 <!-- 诚实告知：凭证就是私钥，泄露 = 身份被接管；没有服务器能替你找回 -->
@@ -3032,63 +3032,63 @@
       heZi.innerHTML = `
         <div class="peiZhiBuJu">
         <div class="peiZhiDaoHang" id="peiZhiDaoHang">
-          <button data-sec="ui" class="qiYong">${t('settings.section.ui')}</button>
-          <button data-sec="notify">${t('settings.section.notify')}</button>
-          <button data-sec="model">${t('settings.section.model')}</button>
-          <button data-sec="func">${t('settings.section.func')}</button>
-          <button data-sec="skill">${t('settings.tabSkills')}</button>
-          <button data-sec="plugin">${t('settings.tabPlugins')}</button>
-          <button data-sec="hotkey">${t('settings.section.hotkey')}</button>
-          <button data-sec="about">${t('settings.section.about')}</button>
+          <button data-sec="ui" class="qiYong">${escapeHtml(t('settings.section.ui'))}</button>
+          <button data-sec="notify">${escapeHtml(t('settings.section.notify'))}</button>
+          <button data-sec="model">${escapeHtml(t('settings.section.model'))}</button>
+          <button data-sec="func">${escapeHtml(t('settings.section.func'))}</button>
+          <button data-sec="skill">${escapeHtml(t('settings.tabSkills'))}</button>
+          <button data-sec="plugin">${escapeHtml(t('settings.tabPlugins'))}</button>
+          <button data-sec="hotkey">${escapeHtml(t('settings.section.hotkey'))}</button>
+          <button data-sec="about">${escapeHtml(t('settings.section.about'))}</button>
         </div>
         <div class="peiZhiNeiRong" id="peiZhiNeiRong">
-        <div class="sheZhiSection" data-sec="ui"><h2 style="color:var(--accent)">${t('settings.section.ui')}</h2></div>
+        <div class="sheZhiSection" data-sec="ui"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.ui'))}</h2></div>
         <div class="sheZhiSection sheZhiKa">
-          <h2>${t('settings.language')}</h2>
+          <h2>${escapeHtml(t('settings.language'))}</h2>
           <select id="xuanZeYuYan" title="${escapeHtml(t('settings.language'))}">
             ${localeOptionsHtml(state.yuYan)}
           </select>
         </div>
         <div class="sheZhiSection sheZhiKa">
-          <h2>${t('settings.themeMode')}</h2>
+          <h2>${escapeHtml(t('settings.themeMode'))}</h2>
           <div class="zhuTiMoShi">
-            <button data-m="light" class="${state.themeMode === 'light' ? 'qiYong' : ''}">${t('settings.themeLight')}</button>
-            <button data-m="dark" class="${state.themeMode === 'dark' ? 'qiYong' : ''}">${t('settings.themeDark')}</button>
-            <button data-m="system" class="${state.themeMode === 'system' ? 'qiYong' : ''}">${t('settings.themeSystem')}</button>
+            <button data-m="light" class="${state.themeMode === 'light' ? 'qiYong' : ''}">${escapeHtml(t('settings.themeLight'))}</button>
+            <button data-m="dark" class="${state.themeMode === 'dark' ? 'qiYong' : ''}">${escapeHtml(t('settings.themeDark'))}</button>
+            <button data-m="system" class="${state.themeMode === 'system' ? 'qiYong' : ''}">${escapeHtml(t('settings.themeSystem'))}</button>
           </div>
-          <h2 style="margin-top:12px">${t('settings.theme')}</h2>
+          <h2 style="margin-top:12px">${escapeHtml(t('settings.theme'))}</h2>
           <div class="zhuTiSwatches" id="zhuTiSwatches"></div>
           <div class="zhuTiCustomHang">
-            <button class="anNiuXiao" id="anNiuZhuTiCustom">${t('settings.themeCustom')}</button>
+            <button class="anNiuXiao" id="anNiuZhuTiCustom">${escapeHtml(t('settings.themeCustom'))}</button>
             <span class="zhuTiCustomPreview" id="zhuTiCustomPreview"></span>
-            <span class="jingYin">${t('settings.themePreview')}</span>
+            <span class="jingYin">${escapeHtml(t('settings.themePreview'))}</span>
           </div>
         </div>
-        <div class="sheZhiSection" data-sec="notify"><h2 style="color:var(--accent)">${t('settings.section.notify')}</h2></div>
+        <div class="sheZhiSection" data-sec="notify"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.notify'))}</h2></div>
         <div class="sheZhiSection sheZhiKa">
-          <h2>${t('settings.soundName')}</h2>
+          <h2>${escapeHtml(t('settings.soundName'))}</h2>
           <div class="soundHang">
-            <label><input type="checkbox" id="sWanCheng" ${state.sound.complete ? 'checked' : ''}/> ${t('settings.soundComplete')}</label>
-            <label><input type="checkbox" id="sQingQiu" ${state.sound.request ? 'checked' : ''}/> ${t('settings.soundRequest')}</label>
-            <label><input type="checkbox" id="sCuoWu" ${state.sound.error ? 'checked' : ''}/> ${t('settings.soundError')}</label>
+            <label><input type="checkbox" id="sWanCheng" ${state.sound.complete ? 'checked' : ''}/> ${escapeHtml(t('settings.soundComplete'))}</label>
+            <label><input type="checkbox" id="sQingQiu" ${state.sound.request ? 'checked' : ''}/> ${escapeHtml(t('settings.soundRequest'))}</label>
+            <label><input type="checkbox" id="sCuoWu" ${state.sound.error ? 'checked' : ''}/> ${escapeHtml(t('settings.soundError'))}</label>
           </div>
-          <div class="field" style="margin-top:10px"><label>${t('settings.soundCompleteFile')}</label>
+          <div class="field" style="margin-top:10px"><label>${escapeHtml(t('settings.soundCompleteFile'))}</label>
             <div class="shiLiHang"><input id="sfWanCheng" value="${escapeHtml(state.soundFiles.complete)}" readonly/>
-            <button class="anNiuXiao" data-pick="complete">${t('settings.soundPick')}</button>
-            <button class="anNiuXiao" data-clear="complete">${t('settings.soundClear')}</button></div></div>
-          <div class="field" style="margin-top:8px"><label>${t('settings.soundRequestFile')}</label>
+            <button class="anNiuXiao" data-pick="complete">${escapeHtml(t('settings.soundPick'))}</button>
+            <button class="anNiuXiao" data-clear="complete">${escapeHtml(t('settings.soundClear'))}</button></div></div>
+          <div class="field" style="margin-top:8px"><label>${escapeHtml(t('settings.soundRequestFile'))}</label>
             <div class="shiLiHang"><input id="sfQingQiu" value="${escapeHtml(state.soundFiles.request)}" readonly/>
-            <button class="anNiuXiao" data-pick="request">${t('settings.soundPick')}</button>
-            <button class="anNiuXiao" data-clear="request">${t('settings.soundClear')}</button></div></div>
-          <div class="field" style="margin-top:8px"><label>${t('settings.soundErrorFile')}</label>
+            <button class="anNiuXiao" data-pick="request">${escapeHtml(t('settings.soundPick'))}</button>
+            <button class="anNiuXiao" data-clear="request">${escapeHtml(t('settings.soundClear'))}</button></div></div>
+          <div class="field" style="margin-top:8px"><label>${escapeHtml(t('settings.soundErrorFile'))}</label>
             <div class="shiLiHang"><input id="sfCuoWu" value="${escapeHtml(state.soundFiles.error)}" readonly/>
-            <button class="anNiuXiao" data-pick="error">${t('settings.soundPick')}</button>
-            <button class="anNiuXiao" data-clear="error">${t('settings.soundClear')}</button></div></div>
+            <button class="anNiuXiao" data-pick="error">${escapeHtml(t('settings.soundPick'))}</button>
+            <button class="anNiuXiao" data-clear="error">${escapeHtml(t('settings.soundClear'))}</button></div></div>
         </div>
                 <div class="sheZhiSection sheZhiKa" id="tongZhiYouJianKa">
-          <h2>${t('settings.emailNotify')}</h2>
-          <p class="jingYin">${t('settings.emailNotifyHint')}</p>
-          <div style="font-weight:600;font-size:13px;margin:10px 0 4px">${t('settings.emailWhen')}</div>
+          <h2>${escapeHtml(t('settings.emailNotify'))}</h2>
+          <p class="jingYin">${escapeHtml(t('settings.emailNotifyHint'))}</p>
+          <div style="font-weight:600;font-size:13px;margin:10px 0 4px">${escapeHtml(t('settings.emailWhen'))}</div>
           <div id="smtpYouJianNotify2">
             ${['complete', 'request', 'error']
               .map(
@@ -3097,106 +3097,106 @@
                   (state.emailNotify && state.emailNotify[k] ? 'checked' : '') + '/> ' + t('settings.sound' + k.charAt(0).toUpperCase() + k.slice(1)) + '</label>'
               )
               .join('')}
-            <div class="jingYin">${t('settings.emailHint')}</div>
+            <div class="jingYin">${escapeHtml(t('settings.emailHint'))}</div>
           </div>
-          <h3 style="font-size:13px;margin:12px 0 4px">${t('smtp.biaoTi')} <span class="jingYin">(${t('smtp.count')} <span id="smtpN">0</span>/10 · ${t('smtp.max10')})</span></h3>
-          <p class="jingYin">${t('smtp.tiShi')}</p>
+          <h3 style="font-size:13px;margin:12px 0 4px">${escapeHtml(t('smtp.biaoTi'))} <span class="jingYin">(${escapeHtml(t('smtp.count'))} <span id="smtpN">0</span>/10 · ${escapeHtml(t('smtp.max10'))})</span></h3>
+          <p class="jingYin">${escapeHtml(t('smtp.tiShi'))}</p>
           <div id="smtpAccounts"></div>
           <div class="shiLiHang" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:10px">
-            <div class="field"><label>${t('smtp.biaoQian')}</label><input id="smtpBiaoQian" placeholder="${escapeHtml(t('placeholder.email'))}"/></div>
-            <div class="field"><label>${t('smtp.host')}</label><input id="smtpHost" value="" placeholder="smtp.example.com"/></div>
-            <div class="field"><label>${t('smtp.port')}</label><input id="smtpDuanKou" value="465"/></div>
+            <div class="field"><label>${escapeHtml(t('smtp.biaoQian'))}</label><input id="smtpBiaoQian" placeholder="${escapeHtml(t('placeholder.email'))}"/></div>
+            <div class="field"><label>${escapeHtml(t('smtp.host'))}</label><input id="smtpHost" value="" placeholder="smtp.example.com"/></div>
+            <div class="field"><label>${escapeHtml(t('smtp.port'))}</label><input id="smtpDuanKou" value="465"/></div>
           </div>
           <div class="shiLiHang" style="margin-top:8px">
-            <label><input type="checkbox" id="smtpAnQuan" checked/> ${t('smtp.secure')}</label>
-            <div class="field"><label>${t('smtp.user')}</label><input id="smtpUser"/></div>
-            <div class="field"><label>${t('smtp.pass')}</label><input id="smtpPass" type="password"/></div>
-            <button class="anNiuXiao" id="anNiusmtpTianJia">${t('smtp.add')}</button>
+            <label><input type="checkbox" id="smtpAnQuan" checked/> ${escapeHtml(t('smtp.secure'))}</label>
+            <div class="field"><label>${escapeHtml(t('smtp.user'))}</label><input id="smtpUser"/></div>
+            <div class="field"><label>${escapeHtml(t('smtp.pass'))}</label><input id="smtpPass" type="password"/></div>
+            <button class="anNiuXiao" id="anNiusmtpTianJia">${escapeHtml(t('smtp.add'))}</button>
           </div>
                     <div class="tongZhiApplyTiao">
-            <button class="anNiuXiao" id="anNiuTongZhiCancel">${t('settings.notifyCancel')}</button>
-            <button class="anNiuZhuYao" id="anNiuTongZhiApply">${t('settings.notifyApply')}</button>
+            <button class="anNiuXiao" id="anNiuTongZhiCancel">${escapeHtml(t('settings.notifyCancel'))}</button>
+            <button class="anNiuZhuYao" id="anNiuTongZhiApply">${escapeHtml(t('settings.notifyApply'))}</button>
             <span class="jingYin" id="tongZhiApplyXiaoXi"></span>
           </div>
           <span class="jingYin" id="smtpXiaoXi"></span>
         </div>
-        <div class="sheZhiSection" data-sec="model"><h2 style="color:var(--accent)">${t('settings.section.model')}</h2></div>
+        <div class="sheZhiSection" data-sec="model"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.model'))}</h2></div>
         <div class="sheZhiSection sheZhiKa">
-          <h2>${t('settings.providers')} <span class="jingYin" id="provCount"></span></h2>
+          <h2>${escapeHtml(t('settings.providers'))} <span class="jingYin" id="provCount"></span></h2>
           <div class="shiLiHang" style="align-items:flex-end;margin-bottom:10px">
             <div class="field" style="max-width:220px">
-              <label>${t('settings.providerPreset')}</label>
+              <label>${escapeHtml(t('settings.providerPreset'))}</label>
               <select id="provPreset"></select>
             </div>
-            <button class="anNiuZhuYao" id="anNiuTianJiaProv">${t('settings.addProvider')}</button>
+            <button class="anNiuZhuYao" id="anNiuTianJiaProv">${escapeHtml(t('settings.addProvider'))}</button>
           </div>
           <div id="provLieBiao"></div>
         </div>
-        <div class="sheZhiSection" data-sec="func"><h2 style="color:var(--accent)">${t('settings.section.func')}</h2></div>
+        <div class="sheZhiSection" data-sec="func"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.func'))}</h2></div>
         <div class="sheZhiSection sheZhiKa" id="jiYiXiTongKa">
-          <h2>${t('memory.statusTitle')}</h2>
-          <p class="jingYin">${t('memory.desc')}</p>
+          <h2>${escapeHtml(t('memory.statusTitle'))}</h2>
+          <p class="jingYin">${escapeHtml(t('memory.desc'))}</p>
           <div class="jingYin" id="aboutJiYi">—</div>
           <div style="margin-top:8px">
-            <button class="anNiuXiao" id="anNiuJiYiChongJian">${t('memory.rebuild')}</button>
+            <button class="anNiuXiao" id="anNiuJiYiChongJian">${escapeHtml(t('memory.rebuild'))}</button>
             <span class="jingYin" id="aboutJiYiXiaoXi"></span>
           </div>
-          <p class="jingYin" style="margin-top:6px">${t('memory.rebuildWhy')}</p>
+          <p class="jingYin" style="margin-top:6px">${escapeHtml(t('memory.rebuildWhy'))}</p>
         </div>
         <div class="sheZhiSection sheZhiKa" id="dshAnZhuangKa">
-          <h2>${t('dsh.biaoTi')}</h2>
-          <p class="jingYin">${t('dsh.tiShi')}</p>
+          <h2>${escapeHtml(t('dsh.biaoTi'))}</h2>
+          <p class="jingYin">${escapeHtml(t('dsh.tiShi'))}</p>
           <div class="jingYin" id="dshZhuangTaiWenBen">—</div>
           <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button class="anNiuZhuYao" id="anNiuDshAnZhuang">${t('dsh.anZhuang')}</button>
-            <button class="anNiuXiao" id="anNiuDshJianCha">${t('dsh.jianCha')}</button>
+            <button class="anNiuZhuYao" id="anNiuDshAnZhuang">${escapeHtml(t('dsh.anZhuang'))}</button>
+            <button class="anNiuXiao" id="anNiuDshJianCha">${escapeHtml(t('dsh.jianCha'))}</button>
             <span class="jingYin" id="dshAnZhuangXiaoXi"></span>
           </div>
         </div>
         <div class="sheZhiSection sheZhiKa">
-          <h2>${t('settings.security')}</h2>
+          <h2>${escapeHtml(t('settings.security'))}</h2>
           <div class="secHang">
             <select id="xuanZeSec" title="${escapeHtml(t('settings.securityHint'))}">
-              <option value="normal">${t('settings.securityNormal')}</option>
-              <option value="strict">${t('settings.securityStrict')}</option>
-              <option value="full">${t('settings.securityFull')}</option>
+              <option value="normal">${escapeHtml(t('settings.securityNormal'))}</option>
+              <option value="strict">${escapeHtml(t('settings.securityStrict'))}</option>
+              <option value="full">${escapeHtml(t('settings.securityFull'))}</option>
             </select>
             <span class="secMiaoShu" id="secMiaoShu"></span>
           </div>
-          <p class="jingYin" style="margin:8px 0 0">${t('settings.securityHint')}</p>
+          <p class="jingYin" style="margin:8px 0 0">${escapeHtml(t('settings.securityHint'))}</p>
         </div>
         <!-- ═══ ADR 004：功能 → 容器 ═══════════════════════════════════════
              ADR §3.2：主操作 =「查看本机已有容器」→ 列出本机**已有**的容器（含三态与不可用原因）；
              下方 =「常用容器安装说明」折叠区（折叠只显示名字，展开显示 收费/商用/系统/体积 + 官网四条链接）。
              列表数据来自主进程真探测（warmy:rongQiTanCe），不是写死的。 -->
         <div class="sheZhiSection sheZhiKa" id="rongQiKa">
-          <h2>${t('container.biaoTi')}</h2>
-          <p class="ctgDim">${t('container.tiShi')}</p>
+          <h2>${escapeHtml(t('container.biaoTi'))}</h2>
+          <p class="ctgDim">${escapeHtml(t('container.tiShi'))}</p>
           <div class="shiLiHang" style="align-items:center;gap:8px;flex-wrap:wrap">
-            <button type="button" class="anNiuZhuYao" id="anNiuRongQiTanCe">${t('container.probeBtn')}</button>
+            <button type="button" class="anNiuZhuYao" id="anNiuRongQiTanCe">${escapeHtml(t('container.probeBtn'))}</button>
             <span class="ctgDim" id="rongQiTanCeXiaoXi" data-probe-state="idle"></span>
           </div>
-          <div id="rongQiCta" class="ctgCta yinCang">${t('container.guideFirstStep')}</div>
+          <div id="rongQiCta" class="ctgCta yinCang">${escapeHtml(t('container.guideFirstStep'))}</div>
           <div class="ctgZhaiYao" id="rongQiZhaiYao" data-summary="none"></div>
           <!-- 第十七批：**本机已有容器**与**镜像**也做成折叠块（与"常用容器安装说明"一致）：
                折叠时只有标题 + 一个箭头；展开后箭头翻转朝下，一眼看出能收起。 -->
           <details class="ctgShouQi ctgFold" id="rongQiExistingShouQi">
             <summary class="ctgFoldZhaiYao">
               <span class="ctgJianTou" aria-hidden="true"></span>
-              <span class="ctgFoldBiaoTi">${t('container.section.existing')}</span>
+              <span class="ctgFoldBiaoTi">${escapeHtml(t('container.section.existing'))}</span>
               <span class="ctgDim" id="rongQiCountInline"></span>
-              <span class="ctgDim">${t('container.listTitleHint')}</span>
+              <span class="ctgDim">${escapeHtml(t('container.listTitleHint'))}</span>
             </summary>
             <div class="ctgShouQiTi">
-              <div class="ctgLieBiaoHead"><span>${t('container.listTitle')}</span></div>
+              <div class="ctgLieBiaoHead"><span>${escapeHtml(t('container.listTitle'))}</span></div>
               <div id="rongQiLieBiao" class="ctgLieBiao" data-probe="none"></div>
               <div class="ctgDim" id="rongQiMissingNote"></div>
               <div class="ctgTiShiHe" id="rongQiTargetNote">
-            <div class="ctgTiShiBiaoTi">${t('container.target.biaoTi')}</div>
-            <div class="ctgDim">${t('container.target.tiShi')}</div>
-            <div class="ctgTiShiBiaoTi">${t('container.mount.biaoTi')}</div>
-            <div class="ctgDim">${t('container.mount.ti')}</div>
-            <div class="ctgDim">${t('container.mount.perf')}</div>
+            <div class="ctgTiShiBiaoTi">${escapeHtml(t('container.target.biaoTi'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.target.tiShi'))}</div>
+            <div class="ctgTiShiBiaoTi">${escapeHtml(t('container.mount.biaoTi'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.mount.ti'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.mount.perf'))}</div>
           </div>
             </div>
           </details>
@@ -3204,20 +3204,20 @@
           <details class="ctgShouQi ctgFold" id="rongQiImagesShouQi">
             <summary class="ctgFoldZhaiYao">
               <span class="ctgJianTou" aria-hidden="true"></span>
-              <span class="ctgFoldBiaoTi">${t('container.section.images')}</span>
+              <span class="ctgFoldBiaoTi">${escapeHtml(t('container.section.images'))}</span>
             </summary>
             <div class="ctgShouQiTi">
-          <div class="ctgGuideHead">${t('container.image.biaoTi')}</div>
-          <div class="ctgDim">${t('container.image.why')}</div>
-          <div class="ctgDim">${t('container.image.node')}</div>
-          <div class="ctgDim">${t('container.image.sourcePending')}</div>
+          <div class="ctgGuideHead">${escapeHtml(t('container.image.biaoTi'))}</div>
+          <div class="ctgDim">${escapeHtml(t('container.image.why'))}</div>
+          <div class="ctgDim">${escapeHtml(t('container.image.node'))}</div>
+          <div class="ctgDim">${escapeHtml(t('container.image.sourcePending'))}</div>
           <div id="rongQiImages" class="ctgLieBiao"></div>
           <!-- 第八/九批：镜像按**项目技术栈**选 + 环境由用户自装 + 一键复制的安装提示词 -->
           <div class="ctgTiShiHe" id="rongQiImageStackScale">
-            <div class="ctgTiShiBiaoTi">${t('container.image.stack.biaoTi')}</div>
-            <div class="ctgDim">${t('container.image.stack.nodeOnly')}</div>
-            <div class="ctgDim">${t('container.image.executorHost')}</div>
-            <div class="ctgDim">${t('container.image.stack.moreLater')}</div>
+            <div class="ctgTiShiBiaoTi">${escapeHtml(t('container.image.stack.biaoTi'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.image.stack.nodeOnly'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.image.executorHost'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.image.stack.moreLater'))}</div>
             <div id="rongQiImageStacks" class="ctgLieBiao"></div>
           </div>
             </div>
@@ -3225,62 +3225,62 @@
           <details class="ctgShouQi ctgFold" id="rongQiGuideShouQi">
             <summary class="ctgFoldZhaiYao">
               <span class="ctgJianTou" aria-hidden="true"></span>
-              <span class="ctgFoldBiaoTi">${t('container.guideCollapse')}</span>
+              <span class="ctgFoldBiaoTi">${escapeHtml(t('container.guideCollapse'))}</span>
             </summary>
             <div class="ctgShouQiTi">
           <div class="ctgTiShiHe" id="rongQiHuanJingAnZhuang">
-            <div class="ctgTiShiBiaoTi">${t('container.env.install.biaoTi')}</div>
-            <div class="ctgDim">${t('container.env.install.ti')}</div>
-            <div class="ctgTiShiBiaoTi">${t('container.env.install.persistTitle')}</div>
-            <div class="ctgDim">${t('container.env.install.persistBody')}</div>
-            <div class="ctgTiShiBiaoTi">${t('container.env.install.netTitle')}</div>
-            <div class="ctgDim">${t('container.env.install.netBody')}</div>
-            <div class="ctgDim">${t('container.env.install.noNodeForUs')}</div>
+            <div class="ctgTiShiBiaoTi">${escapeHtml(t('container.env.install.biaoTi'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.env.install.ti'))}</div>
+            <div class="ctgTiShiBiaoTi">${escapeHtml(t('container.env.install.persistTitle'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.env.install.persistBody'))}</div>
+            <div class="ctgTiShiBiaoTi">${escapeHtml(t('container.env.install.netTitle'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.env.install.netBody'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.env.install.noNodeForUs'))}</div>
           </div>
           <div class="ctgTiShiHe" id="rongQiAnZhuangPrompt">
-            <div class="ctgTiShiBiaoTi">${t('container.env.prompt.biaoTi')}</div>
-            <div class="ctgDim">${t('container.env.prompt.tiShi')}</div>
+            <div class="ctgTiShiBiaoTi">${escapeHtml(t('container.env.prompt.biaoTi'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.env.prompt.tiShi'))}</div>
             <pre id="ctgAnZhuangPromptWenBen" class="ctgPromptWenBen" data-prompt-lang=""></pre>
             <div class="ctgDongZuoJiHang">
-              <button type="button" class="anNiuXiao" id="anNiuCopyAnZhuangPrompt">${t('container.env.prompt.copy')}</button>
+              <button type="button" class="anNiuXiao" id="anNiuCopyAnZhuangPrompt">${escapeHtml(t('container.env.prompt.copy'))}</button>
               <span class="ctgDim" id="ctgAnZhuangPromptXiaoXi" data-copy-state="idle"></span>
             </div>
           </div>
           <!-- 第八批：快照与回退点的关系（分层；不许声称"有容器回退点就更简单"） -->
           <div class="ctgTiShiHe" id="rongQiSnapshotNote">
-            <div class="ctgTiShiBiaoTi">${t('container.snapshot.biaoTi')}</div>
-            <div class="ctgDim">${t('container.snapshot.ti')}</div>
-            <div class="ctgDim">${t('container.snapshot.layerFiles')}</div>
-            <div class="ctgDim">${t('container.snapshot.layerEnv')}</div>
-            <div class="ctgDim">${t('container.snapshot.fingerprint')}</div>
-            <div class="ctgDim">${t('container.snapshot.noClaim')}</div>
+            <div class="ctgTiShiBiaoTi">${escapeHtml(t('container.snapshot.biaoTi'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.snapshot.ti'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.snapshot.layerFiles'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.snapshot.layerEnv'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.snapshot.fingerprint'))}</div>
+            <div class="ctgDim">${escapeHtml(t('container.snapshot.noClaim'))}</div>
           </div>
-          <div class="ctgGuideHead">${t('container.timing.biaoTi')}</div>
+          <div class="ctgGuideHead">${escapeHtml(t('container.timing.biaoTi'))}</div>
           <div id="rongQiTimings" class="ctgDim"></div>
-          <div class="ctgGuideHead">${t('container.guideTitle')}</div>
-          <div class="ctgDim">${t('container.guideHint')}</div>
+          <div class="ctgGuideHead">${escapeHtml(t('container.guideTitle'))}</div>
+          <div class="ctgDim">${escapeHtml(t('container.guideHint'))}</div>
           <div id="rongQiGuide" class="ctgGuide"></div>
             </div>
           </details>
         </div>
-        <div class="sheZhiSection" data-sec="plugin"><h2 style="color:var(--accent)">${t('settings.tabPlugins')}</h2></div>
+        <div class="sheZhiSection" data-sec="plugin"><h2 style="color:var(--accent)">${escapeHtml(t('settings.tabPlugins'))}</h2></div>
         <div class="sheZhiSection sheZhiKa">
-          <h2>${t('settings.chaJianJi')}</h2>
+          <h2>${escapeHtml(t('settings.chaJianJi'))}</h2>
           <div id="plugLieBiao" class="chaJianLieBiao"></div>
           <div class="shiLiHang" style="margin-top:6px;align-items:center">
-            <button class="anNiuXiao" id="anNiuPlugAnZhuangFolder">${t('settings.pluginInstallBrowse')}</button>
+            <button class="anNiuXiao" id="anNiuPlugAnZhuangFolder">${escapeHtml(t('settings.pluginInstallBrowse'))}</button>
           </div>
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
-            <div class="jinengSaoMiaoBiaoTi">${t('settings.pluginScanTitle')}</div>
+            <div class="jinengSaoMiaoBiaoTi">${escapeHtml(t('settings.pluginScanTitle'))}</div>
             <div id="plugSaoMiaoMuLuJi"></div>
             <div class="shiLiHang" style="margin-top:6px;align-items:center">
               <input id="plugSaoMiaoMuLuShuRu" style="flex:1;min-width:120px" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}"/>
-              <button class="anNiuXiao" id="anNiuPlugSaoMiaoBrowse">${t('settings.pickFolder')}</button>
-              <button class="anNiuXiao" id="anNiuPlugSaoMiaoTianJia">${t('settings.skillsScanAdd')}</button>
+              <button class="anNiuXiao" id="anNiuPlugSaoMiaoBrowse">${escapeHtml(t('settings.pickFolder'))}</button>
+              <button class="anNiuXiao" id="anNiuPlugSaoMiaoTianJia">${escapeHtml(t('settings.skillsScanAdd'))}</button>
             </div>
             <div style="margin-top:6px">
-              <button class="anNiuXiao" id="anNiuPlugSaoMiaoJianCha">${t('settings.pluginScanCheck')}</button>
-              <button class="anNiuXiao" id="anNiuPlugSaoMiaoJiQi">${t('settings.scanMachine')}</button>
+              <button class="anNiuXiao" id="anNiuPlugSaoMiaoJianCha">${escapeHtml(t('settings.pluginScanCheck'))}</button>
+              <button class="anNiuXiao" id="anNiuPlugSaoMiaoJiQi">${escapeHtml(t('settings.scanMachine'))}</button>
             </div>
             <div class="jingYin" id="plugSaoMiaoXiaoXi"></div>
           </div>
@@ -3289,11 +3289,11 @@
              底层 IPC 通道 warmy:lan-* / warmy:mesh-* 保留为产品契约，仅去掉 UI 与死渲染代码。 -->
         <!-- R8：组网设置：混合公网地址列表（IP + 域名）+ 刷新本机/公网地址 + 逐条检测 + 开关（检测通过才能打开） -->
         <div class="sheZhiSection sheZhiKa" id="wangLuoKa" data-sec="func">
-          <h2>${t('net.biaoTi')} <button type="button" class="anNiuXiao wangLuoHelpAnNiu" id="anNiuWangLuoHelp" aria-label="${escapeHtml(t('net.helpTitle'))}" title="${escapeHtml(t('net.helpTitle'))}">?</button></h2>
+          <h2>${escapeHtml(t('net.biaoTi'))} <button type="button" class="anNiuXiao wangLuoHelpAnNiu" id="anNiuWangLuoHelp" aria-label="${escapeHtml(t('net.helpTitle'))}" title="${escapeHtml(t('net.helpTitle'))}">?</button></h2>
           <div id="wangLuoHelpHe" class="jingYin wangLuoHelpHe yinCang">${escapeHtml(t('net.helpBody'))}</div>
-          <p class="jingYin" style="margin:0 0 10px">${t('net.tiShi')}</p>
+          <p class="jingYin" style="margin:0 0 10px">${escapeHtml(t('net.tiShi'))}</p>
           <div class="shiLiHang">
-            <div class="field" style="max-width:120px"><label>${t('net.port')}</label><input id="wangLuoDuanKou" value="${escapeHtml(String(netState.addr.port || ''))}"/></div>
+            <div class="field" style="max-width:120px"><label>${escapeHtml(t('net.port'))}</label><input id="wangLuoDuanKou" value="${escapeHtml(String(netState.addr.port || ''))}"/></div>
           </div>
           <!-- R13：端口**只是默认值 + 约定**，不是限制 —— 输入框永远可改（1–65535）。
                约定端口（开发/测试）在这里提示；实际绑上的端口由组网层事实驱动。
@@ -3306,99 +3306,99 @@
           <!-- 本机地址事实 + 刷新按钮（取代旧「自动填入本机地址」） -->
           <div class="shiLiHang" style="align-items:center;gap:8px;margin:6px 0">
             <div class="jingYin" id="wangLuoBenJiXinXi" style="flex:1;min-width:0"></div>
-            <button type="button" class="anNiuXiao" id="anNiuWangLuoRefresh" title="${escapeHtml(t('net.refresh'))}">${t('net.refresh')}</button>
+            <button type="button" class="anNiuXiao" id="anNiuWangLuoRefresh" title="${escapeHtml(t('net.refresh'))}">${escapeHtml(t('net.refresh'))}</button>
           </div>
           <!-- 附八.9 / 附八.3：连接阶梯档位 + 中继状态（全部走 i18n；未实现的档如实标「尚未实现」） -->
           <div class="wangLuoLadder" id="wangLuoLadder" data-sig=""></div>
           <!-- 公网地址列表：IP 与域名共用同一列表；标签只出现一次（修复旧双重渲染缺陷） -->
           <div style="margin-top:6px">
-            <label class="wangLuoFuBiaoQian" id="wangLuoPublicLieBiaoBiaoQian">${t('net.domainTitle')}</label>
+            <label class="wangLuoFuBiaoQian" id="wangLuoPublicLieBiaoBiaoQian">${escapeHtml(t('net.domainTitle'))}</label>
             <div id="wangLuoDomains"></div>
-            <div style="margin-top:6px"><button class="anNiuXiao" id="anNiuWangLuoDomainTianJia">${t('net.domainAdd')}</button></div>
+            <div style="margin-top:6px"><button class="anNiuXiao" id="anNiuWangLuoDomainTianJia">${escapeHtml(t('net.domainAdd'))}</button></div>
           </div>
           <div id="wangLuoEntryResults" class="wangLuoEntryResults"></div>
           <div class="shiLiHang" style="margin-top:10px;align-items:center">
-            <button class="anNiuZhuYao" id="anNiuWangLuoDetect">${t('net.detect')}</button>
+            <button class="anNiuZhuYao" id="anNiuWangLuoDetect">${escapeHtml(t('net.detect'))}</button>
             <div id="wangLuoTanCeResult" style="flex:1;min-width:220px"></div>
           </div>
           <div class="wangLuoSwitchHang">
             <label class="wangLuoSwitch"><input type="checkbox" id="wangLuoSwitch" aria-label="${escapeHtml(t('net.switch'))}"/><span class="wangLuoSwitchTrack"></span></label>
-            <span class="wangLuoSwitchBiaoQian">${t('net.switch')}</span>
+            <span class="wangLuoSwitchBiaoQian">${escapeHtml(t('net.switch'))}</span>
             <span class="jingYin" id="wangLuoSwitchXiaoXi"></span>
           </div>
         </div>
         <div class="sheZhiSection sheZhiKa" id="peiZhiDataKa" data-sec="func">
-          <h2>${t('settings.dataTitle')}</h2>
-          <p class="jingYin">${t('settings.dataHint')}</p>
+          <h2>${escapeHtml(t('settings.dataTitle'))}</h2>
+          <p class="jingYin">${escapeHtml(t('settings.dataHint'))}</p>
           <div id="peiZhiDataZhiBiaoJi" class="diagGrid"></div>
         </div>
         <div class="sheZhiSection sheZhiKa" data-sec="func">
-          <h2>${t('ctx.archive')}</h2>
-          <p class="jingYin">${t('archive.tiShi')}</p>
+          <h2>${escapeHtml(t('ctx.archive'))}</h2>
+          <p class="jingYin">${escapeHtml(t('archive.tiShi'))}</p>
           <div id="yiGuiDangHe" class="jingYin">—</div>
         </div>
         <div class="sheZhiSection sheZhiKa" data-sec="model">
-          <h2>${t('settings.specialModels')}</h2>
-          <p class="jingYin">${t('settings.specialModelsHint')}</p>
+          <h2>${escapeHtml(t('settings.specialModels'))}</h2>
+          <p class="jingYin">${escapeHtml(t('settings.specialModelsHint'))}</p>
           <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.asrModel')}</label>
+            <label>${escapeHtml(t('settings.asrModel'))}</label>
             <select id="smasr" data-special="asr"></select>
           </div>
           <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.embeddingModel')}</label>
+            <label>${escapeHtml(t('settings.embeddingModel'))}</label>
             <select id="smEmbed" data-special="embed"></select>
           </div>
           <div class="field" style="margin-bottom:8px">
-            <label>${t('settings.organizerModel')}</label>
+            <label>${escapeHtml(t('settings.organizerModel'))}</label>
             <select id="smOrganizer" data-special="organizer"></select>
           </div>
-          <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${t('webgpu.test')}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
-          <button class="anNiuXiao" id="anNiuBaoCunTeShu">${t('common.save')}</button>
+          <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
+          <button class="anNiuXiao" id="anNiuBaoCunTeShu">${escapeHtml(t('common.save'))}</button>
           <span class="jingYin" id="smXiaoXi"></span>
         </div>
         
         <div class="sheZhiSection sheZhiKa" data-sec="func">
-          <h2>${t('join.blacklistTitle')}</h2>
-          <div id="heiMingDanHe" class="jingYin">${t('join.blacklistEmpty')}</div>
+          <h2>${escapeHtml(t('join.blacklistTitle'))}</h2>
+          <div id="heiMingDanHe" class="jingYin">${escapeHtml(t('join.blacklistEmpty'))}</div>
         </div>
-        <div class="sheZhiSection" data-sec="skill"><h2 style="color:var(--accent)">${t('settings.tabSkills')}</h2></div>
+        <div class="sheZhiSection" data-sec="skill"><h2 style="color:var(--accent)">${escapeHtml(t('settings.tabSkills'))}</h2></div>
         <div class="sheZhiSection sheZhiKa" id="jinengJiKa">
-          <h2>${t('settings.skills')}</h2>
-          <p class="jingYin" style="margin:0 0 8px">${t('settings.skillsHint')}</p>
-          <div style="margin-bottom:8px"><button class="anNiuXiao" id="anNiuJinengDaoRu">${t('settings.skillsImport')}</button></div>
+          <h2>${escapeHtml(t('settings.skills'))}</h2>
+          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(t('settings.skillsHint'))}</p>
+          <div style="margin-bottom:8px"><button class="anNiuXiao" id="anNiuJinengDaoRu">${escapeHtml(t('settings.skillsImport'))}</button></div>
           <div class="jinengSaoMiaoKuai">
-            <div class="jinengSaoMiaoBiaoTi">${t('settings.skillsScanTitle')}</div>
-            <div class="jingYin">${t('settings.skillsScanHint')}</div>
+            <div class="jinengSaoMiaoBiaoTi">${escapeHtml(t('settings.skillsScanTitle'))}</div>
+            <div class="jingYin">${escapeHtml(t('settings.skillsScanHint'))}</div>
             <div id="jinengSaoMiaoMuLuJi"></div>
             <div class="shiLiHang" style="margin-top:6px;align-items:center">
               <input id="jinengSaoMiaoMuLuShuRu" class="skill-scan-input" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}" style="flex:1;min-width:120px"/>
-              <button class="anNiuXiao" id="anNiuJinengSaoMiaoBrowse">${t('settings.pickFolder')}</button>
-              <button class="anNiuXiao" id="anNiuJinengSaoMiaoTianJia">${t('settings.skillsScanAdd')}</button>
+              <button class="anNiuXiao" id="anNiuJinengSaoMiaoBrowse">${escapeHtml(t('settings.pickFolder'))}</button>
+              <button class="anNiuXiao" id="anNiuJinengSaoMiaoTianJia">${escapeHtml(t('settings.skillsScanAdd'))}</button>
             </div>
             <div style="margin-top:6px">
-              <button class="anNiuXiao" id="anNiuJinengSaoMiaoJianCha">${t('settings.skillsScanCheck')}</button>
-              <button class="anNiuXiao" id="anNiuJinengSaoMiaoJiQi">${t('settings.scanMachine')}</button>
+              <button class="anNiuXiao" id="anNiuJinengSaoMiaoJianCha">${escapeHtml(t('settings.skillsScanCheck'))}</button>
+              <button class="anNiuXiao" id="anNiuJinengSaoMiaoJiQi">${escapeHtml(t('settings.scanMachine'))}</button>
             </div>
             <div class="jingYin" id="jinengSaoMiaoXiaoXi"></div>
           </div>
-          <div id="jinengLieBiao" class="jingYin">${t('settings.skillsEmpty')}</div>
+          <div id="jinengLieBiao" class="jingYin">${escapeHtml(t('settings.skillsEmpty'))}</div>
           <div class="jingYin jinengLuJingJi" id="jinengLuJingJi"></div>
         </div>
         <!-- R2「快捷」：**键盘快捷键在前**，AI/IPC 接口目录在后 -->
-        <div class="sheZhiSection" data-sec="hotkey"><h2 style="color:var(--accent)">${t('settings.section.hotkey')}</h2></div>
+        <div class="sheZhiSection" data-sec="hotkey"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.hotkey'))}</h2></div>
         <div class="sheZhiSection sheZhiKa" id="hkMiYaoJiKa">
-          <h2>${t('settings.hotkey.keyTitle')}</h2>
-          <p class="hkTiShi">${t('settings.hotkey.keyHint')}</p>
-          <p class="hkTiShi">${t('settings.hotkey.onlyWired')}</p>
+          <h2>${escapeHtml(t('settings.hotkey.keyTitle'))}</h2>
+          <p class="hkTiShi">${escapeHtml(t('settings.hotkey.keyHint'))}</p>
+          <p class="hkTiShi">${escapeHtml(t('settings.hotkey.onlyWired'))}</p>
           <table class="hkMiYaoJi">
-            <thead><tr><th>${t('settings.hotkey.colAction')}</th><th>${t('settings.hotkey.colBinding')}</th><th>${t('settings.hotkey.colDesc')}</th></tr></thead>
+            <thead><tr><th>${escapeHtml(t('settings.hotkey.colAction'))}</th><th>${escapeHtml(t('settings.hotkey.colBinding'))}</th><th>${escapeHtml(t('settings.hotkey.colDesc'))}</th></tr></thead>
             <tbody id="hkMiYaoJiTi"></tbody>
           </table>
           <div class="hkXiaoXi" id="hkMiYaoJiXiaoXi"></div>
         </div>
         <div class="sheZhiSection sheZhiKa" id="hkapiKa">
-          <h2>${t('settings.hotkey.apiTitle')}</h2>
-          <p class="hkTiShi">${t('settings.hotkey.apiHint')}</p>
+          <h2>${escapeHtml(t('settings.hotkey.apiTitle'))}</h2>
+          <p class="hkTiShi">${escapeHtml(t('settings.hotkey.apiHint'))}</p>
           <div class="hkCount" id="hkapiCount"></div>
           <div style="margin:6px 0">
             <button class="anNiuXiao" id="anNiuCopyapiOps">${escapeHtml(t('settings.hotkey.apiCopyOps') || 'Copy AI guide')}</button>
@@ -3408,7 +3408,7 @@
           <div id="hkapiTi"></div>
           <div class="hkapiShiJianJi" id="hkapiShiJianJi"></div>
         </div>
-        <div class="sheZhiSection" data-sec="about"><h2 style="color:var(--accent)">${t('settings.section.about')}</h2></div>
+        <div class="sheZhiSection" data-sec="about"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.about'))}</h2></div>
         <div class="sheZhiSection sheZhiKa aboutKa">
           <div class="aboutPinPai">
             <img class="aboutlogo" src="./icons/logo-tight.png" alt="${escapeHtml(t('about.logoAlt'))}"/>
@@ -3418,30 +3418,30 @@
               <div class="aboutTagline">${escapeHtml(t('brand.tagline') || t('about.tagline'))}</div>
               <div class="aboutVerXian">
                 <span class="jingYin aboutVer" id="aboutVersion">—</span>
-                <button class="anNiuXiao" id="anNiuAboutGengXin">${t('about.checkUpdate')}</button>
+                <button class="anNiuXiao" id="anNiuAboutGengXin">${escapeHtml(t('about.checkUpdate'))}</button>
                 <span class="jingYin" id="aboutUpd"></span>
               </div>
             </div>
           </div>
           <div class="aboutKuai">
-            <h3>${t('about.versionInfo')}</h3>
+            <h3>${escapeHtml(t('about.versionInfo'))}</h3>
             <div class="jingYin" id="aboutRuntime">—</div>
             <div class="jingYin" id="aboutDevice">—</div>
           </div>
           <div class="aboutKuai">
-            <h3>${t('privacy.viewTitle')}</h3>
+            <h3>${escapeHtml(t('privacy.viewTitle'))}</h3>
             <div class="yinSiShiTu" id="aboutYinSiShiTu">${privacyHtml(t('privacy.ti'))}</div>
             <div style="margin-top:8px">
-              <button class="anNiuXiao" id="anNiuYinSiCheXiao">${t('privacy.revoke')}</button>
+              <button class="anNiuXiao" id="anNiuYinSiCheXiao">${escapeHtml(t('privacy.revoke'))}</button>
               <span class="jingYin" id="yinSiCheXiaoXiaoXi"></span>
             </div>
           </div>
-          <div class="aboutKuai"><h3>${t('about.opensource')}</h3><p class="jingYin">${t('about.opensourceBody')}</p></div>
-          <div class="aboutKuai"><h3>${t('about.techStack')}</h3><p class="jingYin">${t('about.techStackBody')}</p></div>
-          <div class="aboutKuai"><h3>${t('about.copyright')}</h3><p class="jingYin">${t('about.copyrightBody')}</p></div>
-          <div class="aboutKuai"><h3>${t('about.author')}</h3><p class="jingYin">${t('about.authorBody')}</p></div>
-          <div class="aboutKuai"><h3>${t('about.contact')}</h3><p class="jingYin">${t('about.contactBody')}</p></div>
-          <div class="aboutKuai"><h3>${t('about.legal')}</h3><p class="jingYin">${t('about.legalBody')}</p></div>
+          <div class="aboutKuai"><h3>${escapeHtml(t('about.opensource'))}</h3><p class="jingYin">${escapeHtml(t('about.opensourceBody'))}</p></div>
+          <div class="aboutKuai"><h3>${escapeHtml(t('about.techStack'))}</h3><p class="jingYin">${escapeHtml(t('about.techStackBody'))}</p></div>
+          <div class="aboutKuai"><h3>${escapeHtml(t('about.copyright'))}</h3><p class="jingYin">${escapeHtml(t('about.copyrightBody'))}</p></div>
+          <div class="aboutKuai"><h3>${escapeHtml(t('about.author'))}</h3><p class="jingYin">${escapeHtml(t('about.authorBody'))}</p></div>
+          <div class="aboutKuai"><h3>${escapeHtml(t('about.contact'))}</h3><p class="jingYin">${escapeHtml(t('about.contactBody'))}</p></div>
+          <div class="aboutKuai"><h3>${escapeHtml(t('about.legal'))}</h3><p class="jingYin">${escapeHtml(t('about.legalBody'))}</p></div>
         </div></div></div>`;
 
       // 更新源 UI 已从「关于」移除（产品要求）。设置项 updateFeedUrl 仍然生效：
@@ -3493,16 +3493,16 @@
           const info = await window.warmy.appInfo();
           if (!info?.ok) return;
           const v = $('aboutVersion');
-          if (v) v.textContent = `${t('about.version')} ${info.version}`;
+          if (v) v.textContent = `${escapeHtml(t('about.version'))} ${info.version}`;
           const rt = $('aboutRuntime');
           const dshLine = info.dsh
             ? ` · dsh ${info.dsh}`
-            : ` · dsh ${t('about.dshMissing')}`;
+            : ` · dsh ${escapeHtml(t('about.dshMissing'))}`;
           if (rt) rt.textContent =
             `Electron ${info.electron} · Chromium ${info.chrome} · Node ${info.node}${dshLine} · ${info.platform}/${info.arch}`;
           const dv = $('aboutDevice');
           // 产品要求：关于-版本信息**不显示设备 ID**
-          if (dv) dv.textContent = `${t('about.version')} ${info.version || ''} · ${info.platform || ''}/${info.arch || ''}` + (info.dsh ? ` · dsh ${info.dsh}` : '');
+          if (dv) dv.textContent = `${escapeHtml(t('about.version'))} ${info.version || ''} · ${info.platform || ''}/${info.arch || ''}` + (info.dsh ? ` · dsh ${info.dsh}` : '');
         } catch { /* noop */ }
         // 启动时自动检测更新（不打断：只在有更新时改按钮）
         try { await doCheckUpdate(true); } catch { /* noop */ }
@@ -3529,7 +3529,7 @@
             const s = st?.stats?.stats || st?.stats || null;
             if (s && typeof s === 'object') recText = JSON.stringify(s).slice(0, 120);
           } catch { /* noop */ }
-          yuanSu.textContent = `${line1} · ${t('memory.vector')}: ${vecText} · ${t('memory.records')}: ${recText}`;
+          yuanSu.textContent = `${line1} · ${escapeHtml(t('memory.vector'))}: ${vecText} · ${escapeHtml(t('memory.records'))}: ${recText}`;
         };
         try {
           const st = await window.warmy.memoryStatus?.();
@@ -3541,7 +3541,7 @@
           btn.onclick = async () => {
             if (xiaoXi) xiaoXi.textContent = '';
             const r = await window.warmy.memoryRebuild?.().catch((e) => ({ ok: false, error: String(e) }));
-            if (xiaoXi) xiaoXi.textContent = r?.ok ? t('memory.rebuildOk') : `${t('memory.rebuildFail')}${r?.error ? ' · ' + r.error : ''}`;
+            if (xiaoXi) xiaoXi.textContent = r?.ok ? t('memory.rebuildOk') : `${escapeHtml(t('memory.rebuildFail'))}${r?.error ? ' · ' + r.error : ''}`;
             try { xuanranJiyi(await window.warmy.memoryStatus?.()); } catch { /* noop */ }
           };
         }
@@ -3592,7 +3592,7 @@
         const xiaoXi = $('dshAnZhuangXiaoXi');
         const xuanran = (r) => {
           if (!st) return;
-          if (r && r.ok) st.textContent = `${t('dsh.yiAnZhuang')}${r.version ? ' · ' + r.version : ''}${r.dir ? ' · ' + r.dir : ''}`;
+          if (r && r.ok) st.textContent = `${escapeHtml(t('dsh.yiAnZhuang'))}${r.version ? ' · ' + r.version : ''}${r.dir ? ' · ' + r.dir : ''}`;
           else st.textContent = t('dsh.weiAnZhuang');
         };
         const jianCha = async () => {
@@ -3606,7 +3606,7 @@
         $('anNiuDshAnZhuang')?.addEventListener('click', async () => {
           if (xiaoXi) xiaoXi.textContent = t('dsh.anZhuangZhong');
           const r = await window.warmy.dshInstall?.().catch((e) => ({ ok: false, error: String(e) }));
-          if (xiaoXi) xiaoXi.textContent = r?.ok ? t('dsh.anZhuangChengGong') : `${t('dsh.anZhuangShiBai')}${r?.error ? ' · ' + String(r.error).slice(0, 160) : ''}`;
+          if (xiaoXi) xiaoXi.textContent = r?.ok ? t('dsh.anZhuangChengGong') : `${escapeHtml(t('dsh.anZhuangShiBai'))}${r?.error ? ' · ' + String(r.error).slice(0, 160) : ''}`;
           await jianCha();
         });
         void jianCha();
@@ -3678,7 +3678,7 @@
         try {
           await window.warmy.skillsList?.();
           const r = await window.warmy.skillsList?.();
-          if (xiaoXi) xiaoXi.textContent = t('settings.skillsScanCheck') + ' · ' + String((r && (r.jinengJi || r.items) || []).length || 0);
+          if (xiaoXi) xiaoXi.textContent = escapeHtml(t('settings.skillsScanCheck')) + ' · ' + String((r && (r.jinengJi || r.items) || []).length || 0);
           if (typeof window.__refreshSkills === 'function') window.__refreshSkills();
           else setNav('settings');
         } catch (e) {
@@ -4070,7 +4070,7 @@
         $('import-msg').textContent = t('common.loading');
         const r = await window.warmy.importOpenclaw().catch(() => null);
         if (r?.ok) {
-          $('import-msg').textContent = t('instances.saved') + ' (' + r.providers.length + ')';
+          $('import-msg').textContent = escapeHtml(t('instances.saved')) + ' (' + r.providers.length + ')';
           state.providers = r.providers;
           renderPage();
         } else {
@@ -4084,7 +4084,7 @@
           const adapter = await navigator.gpu.requestAdapter();
           if (!adapter) throw new Error('no adapter');
           const info = adapter.info || {};
-          $('webgpuXiaoXi').textContent = t('webgpu.ok') + ' · vendor=' + (info.vendor||'') + ' arch=' + (info.architecture||'');
+          $('webgpuXiaoXi').textContent = escapeHtml(t('webgpu.ok')) + ' · vendor=' + (info.vendor||'') + ' arch=' + (info.architecture||'');
         } catch (e) {
           $('webgpuXiaoXi').textContent = t('webgpu.fail');
         }
@@ -4146,7 +4146,7 @@
         const r = await window.warmy.blacklistList().catch(() => null);
         const items = r?.items || [];
         heZi.innerHTML = items.length
-          ? items.map((b) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(b.name) + ' · ' + escapeHtml(b.target) + ' · ' + new Date(b.blockedAt).toLocaleString() + '</span><button class="anNiuXiao" data-unblock="' + escapeHtml(b.id) + '">' + t('join.removeBlacklist') + '</button></div>').join('')
+          ? items.map((b) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(b.name) + ' · ' + escapeHtml(b.target) + ' · ' + new Date(b.blockedAt).toLocaleString() + '</span><button class="anNiuXiao" data-unblock="' + escapeHtml(b.id) + '">' + escapeHtml(t('join.removeBlacklist')) + '</button></div>').join('')
           : t('join.blacklistEmpty');
         heZi.querySelectorAll('[data-unblock]').forEach((btn) => {
           btn.onclick = async () => {
@@ -4163,7 +4163,7 @@
         const r = await window.warmy.archivedList().catch(() => null);
         const items = r?.items || [];
         heZi.innerHTML = items.length
-          ? items.map((a) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(a.name) + ' · ' + escapeHtml(String(a.kind || '')) + '</span><button class="anNiuXiao" data-restore="' + escapeHtml(a.id) + '">' + t('cp.rollback') + '</button></div>').join('')
+          ? items.map((a) => '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1">' + escapeHtml(a.name) + ' · ' + escapeHtml(String(a.kind || '')) + '</span><button class="anNiuXiao" data-restore="' + escapeHtml(a.id) + '">' + escapeHtml(t('cp.rollback')) + '</button></div>').join('')
           : '—';
         heZi.querySelectorAll('[data-restore]').forEach((b) => {
           b.onclick = async () => {
@@ -4183,7 +4183,7 @@
         const heZi = $('smtpAccounts');
         if (!heZi) return;
         if (!accounts.length) {
-          heZi.innerHTML = '<div class="jingYin">' + t('smtp.empty') + '</div>';
+          heZi.innerHTML = '<div class="jingYin">' + escapeHtml(t('smtp.empty')) + '</div>';
           return;
         }
         heZi.innerHTML = accounts
@@ -4193,8 +4193,8 @@
               '<div class="shiLiHang">' +
               '<div><b>' + escapeHtml(a.biaoQian) + '</b> <span class="jingYin">' + escapeHtml(a.user) + '@' + escapeHtml(a.host) + ':' + escapeHtml(String(a.port)) + '</span></div>' +
               '<span class="huiZhang ' + (a.yiYanZheng ? '' : 'off') + '">' + (a.yiYanZheng ? t('smtp.verified') : t('smtp.unverified')) + '</span>' +
-              '<button class="anNiuXiao" data-v="' + escapeHtml(a.id) + '">' + t('smtp.verify') + '</button>' +
-              '<button class="anNiuXiao" data-x="' + escapeHtml(a.id) + '">' + t('smtp.remove') + '</button>' +
+              '<button class="anNiuXiao" data-v="' + escapeHtml(a.id) + '">' + escapeHtml(t('smtp.verify')) + '</button>' +
+              '<button class="anNiuXiao" data-x="' + escapeHtml(a.id) + '">' + escapeHtml(t('smtp.remove')) + '</button>' +
               '</div></div>'
           )
           .join('');
@@ -4274,14 +4274,14 @@
         yuanSu.innerHTML =
           '<div class="provHead" style="display:flex;justify-content:space-between;align-items:center">' +
           '<span>' + escapeHtml(pr.biaoQian) + '</span>' +
-          '<button class="anNiuXiao" data-prov-del="' + escapeHtml(pr.id) + '" title="' + t('settings.pluginUninstall') + '">' + t('settings.pluginUninstall') + '</button>' +
+          '<button class="anNiuXiao" data-prov-del="' + escapeHtml(pr.id) + '" title="' + escapeHtml(t('settings.pluginUninstall')) + '">' + escapeHtml(t('settings.pluginUninstall')) + '</button>' +
           '</div>' +
           '<div class="shiLiHang">' +
-          '<div class="field"><label>' + t('settings.providerName') + '</label><input data-k="biaoQian" class="' + (nameDup ? 'dup' : '') + '" value="' + escapeHtml(pr.biaoQian) + '" title="' + (nameDup ? escapeHtml(t('settings.providerNameDup')) : '') + '"/></div>' +
-          '<div class="field"><label>' + t('settings.baseUrl') + '</label><input data-k="baseURL" value="' + escapeHtml(pr.baseURL) + '"/></div>' +
-          '<div class="field"><label>' + t('settings.apiKey') + '</label><input data-k="apiKey" type="password" value="" placeholder="' + escapeHtml(pr.hasKey ? t('settings.keySaved') : t('settings.keyEmpty')) + '"/></div>' +
+          '<div class="field"><label>' + escapeHtml(t('settings.providerName')) + '</label><input data-k="biaoQian" class="' + (nameDup ? 'dup' : '') + '" value="' + escapeHtml(pr.biaoQian) + '" title="' + (nameDup ? escapeHtml(t('settings.providerNameDup')) : '') + '"/></div>' +
+          '<div class="field"><label>' + escapeHtml(t('settings.baseUrl')) + '</label><input data-k="baseURL" value="' + escapeHtml(pr.baseURL) + '"/></div>' +
+          '<div class="field"><label>' + escapeHtml(t('settings.apiKey')) + '</label><input data-k="apiKey" type="password" value="" placeholder="' + escapeHtml(pr.hasKey ? t('settings.keySaved') : t('settings.keyEmpty')) + '"/></div>' +
           '</div>' +
-          '<div class="provDongZuoJi"><button class="anNiuXiao" data-fetch' + (laQuJiuXu ? '' : ' disabled') + ' title="' + escapeHtml(laQuBiaoTi) + '">' + t('settings.fetchModels') + '</button></div>' +
+          '<div class="provDongZuoJi"><button class="anNiuXiao" data-fetch' + (laQuJiuXu ? '' : ' disabled') + ' title="' + escapeHtml(laQuBiaoTi) + '">' + escapeHtml(t('settings.fetchModels')) + '</button></div>' +
           '<div class="moXingHang">' +
           (((pr.models || [])
             .map((m) => {
@@ -4299,9 +4299,9 @@
               if (!tips.length) tips.push(t('settings.modelSetDefault'));
               return '<span class="moXingChip' + ((inUse || GuoQi || zhongFu) ? ' ruShiYong' : '') + '" data-m="' + escapeHtml(m) + '" title="' + escapeHtml(tips.join(' · ')) + '">' +
                 escapeHtml(m) +
-                '<button class="x" data-del="' + escapeHtml(m) + '" title="' + t('settings.removeModel') + '">×</button></span>';
+                '<button class="x" data-del="' + escapeHtml(m) + '" title="' + escapeHtml(t('settings.removeModel')) + '">×</button></span>';
             })
-            .join('')) || '<span class="jingYin">' + t('settings.modelsEmpty') + '</span>') +
+            .join('')) || '<span class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</span>') +
           '</div>' +
           '<div class="jingYin" data-models-note style="font-size:11px">' +
           (nameDup ? escapeHtml(t('settings.providerNameDup')) : '') + '</div>';
@@ -5834,9 +5834,7 @@
     const liShi = idHistoryCard(c);
     const dec = idContactDecision(c);
     // 折叠时只留常驻标记 + 一行历史值摘要（历史留存值才是本机当前认的那份）
-    const summary =
-      t('idchg.oldEmail') + ' ' + (liShi ? String(liShi.email || '').trim() || t('idchg.empty') : t('idchg.noHistory')) + ' · ' +
-      t('idchg.oldPhone') + ' ' + (liShi ? String(liShi.phone || '').trim() || t('idchg.empty') : t('idchg.noHistory'));
+    const summary = escapeHtml(t('idchg.oldEmail')) + ' ' + (liShi ? String(liShi.email || '').trim() || t('idchg.empty') : t('idchg.noHistory')) + ' · ' + escapeHtml(t('idchg.oldPhone')) + ' ' + (liShi ? String(liShi.phone || '').trim() || t('idchg.empty') : t('idchg.noHistory'));
     return (
       '<div class="idTiaoMu' + (collapsed ? ' isCollapsed' : '') + '" data-cid="' + cid + '"' +
       ' data-scope-basis="' + escapeHtml(String(c.scopeBasis || '')) + '">' +
@@ -6455,7 +6453,7 @@
     if (info) {
       const weiZhi = netState.local;
       info.textContent = weiZhi
-        ? t('net.localIp') + ': ' + weiZhi.ip + (weiZhi.publicIp ? ' · ' + t('net.publicIp') + ': ' + weiZhi.publicIp : '')
+        ? t('net.localIp') + ': ' + weiZhi.ip + (weiZhi.publicIp ? ' · ' + escapeHtml(t('net.publicIp')) + ': ' + weiZhi.publicIp : '')
         : '';
     }
   }
@@ -6877,7 +6875,7 @@
         if (r?.ok && state.selectedChat) {
           // 尝试 ASR 转文字
           const asr = await window.warmy.asrTranscribe({ dataUrl, ext: 'webm' }).catch(() => null);
-          const text = asr?.ok && asr.text ? asr.text : `[${t('chat.voice')}] ${r.path.split(/[\\/]/).pop()}`;
+          const text = asr?.ok && asr.text ? asr.text : `[${escapeHtml(t('chat.voice'))}] ${r.path.split(/[\\/]/).pop()}`;
           tuisongXiaoxi(state.selectedChat.id, 'wo', text);
           renderChat();
         } else {
@@ -7572,8 +7570,8 @@
   function addInstanceFlow() {
     const suanMing = () => {
       let n = (state.instances || []).length + 1;
-      let houXuan = t('placeholder.agentName') + '-' + n;
-      while (mingYiZhanYong(houXuan)) { n += 1; houXuan = t('placeholder.agentName') + '-' + n; }
+      let houXuan = escapeHtml(t('placeholder.agentName')) + '-' + n;
+      while (mingYiZhanYong(houXuan)) { n += 1; houXuan = escapeHtml(t('placeholder.agentName')) + '-' + n; }
       return houXuan;
     };
     uiPrompt(t('instances.name'), suanMing()).then(async (ming) => {
@@ -8427,7 +8425,7 @@
       $('duiHuaKuangBiaoTi').textContent = t('approval.biaoTi');
       $('duiHuaKuangTi').innerHTML =
         '<div style="margin-bottom:8px">' + escapeHtml(payload.action || '') + '</div>' +
-        '<div class="jingYin">' + t('approval.tiShi') + '</div>';
+        '<div class="jingYin">' + escapeHtml(t('approval.tiShi')) + '</div>';
       const dongZuoJi = $('duiHuaKuangDongZuoJi');
       dongZuoJi.innerHTML = '';
       const zao = (biaoQian, cls, fn) => {
@@ -8721,11 +8719,11 @@
       const root = $('duiHuaKuangGen');
       $('duiHuaKuangBiaoTi').textContent = t('join.requestBadge');
       $('duiHuaKuangTi').innerHTML =
-        '<div>' + t('join.requester') + ': ' + escapeHtml(Qiu.name) + '</div>' +
-        '<div>' + t('join.kind') + ': ' + escapeHtml(Qiu.kind) + '</div>' +
-        '<div>' + t('join.target') + ': ' + escapeHtml(Qiu.targetType) + ' ' + escapeHtml(Qiu.target) + '</div>' +
-        '<div>' + t('join.applyTime') + ': ' + new Date(Qiu.ts).toLocaleString() + '</div>' +
-        '<div>' + t('join.expireTime') + ': ' + new Date(Qiu.expireAt).toLocaleString() + '</div>';
+        '<div>' + escapeHtml(t('join.requester')) + ': ' + escapeHtml(Qiu.name) + '</div>' +
+        '<div>' + escapeHtml(t('join.kind')) + ': ' + escapeHtml(Qiu.kind) + '</div>' +
+        '<div>' + escapeHtml(t('join.target')) + ': ' + escapeHtml(Qiu.targetType) + ' ' + escapeHtml(Qiu.target) + '</div>' +
+        '<div>' + escapeHtml(t('join.applyTime')) + ': ' + new Date(Qiu.ts).toLocaleString() + '</div>' +
+        '<div>' + escapeHtml(t('join.expireTime')) + ': ' + new Date(Qiu.expireAt).toLocaleString() + '</div>';
       const dongZuoJi = $('duiHuaKuangDongZuoJi');
       dongZuoJi.innerHTML = '';
       const zao = (biaoQian, cls, fn) => {
@@ -10203,7 +10201,7 @@
     const Hang = shuRu ? String(shuRu.value || '') : '';
     if (!menjin.available) {
       applyShellAvailability(menjin);
-      if (out) out.textContent += t('container.console.noExec') + '\n';
+      if (out) out.textContent += escapeHtml(t('container.console.noExec')) + '\n';
       return false;
     }
     if (!Hang.trim()) return false;
@@ -10513,7 +10511,7 @@
     if (!heZi) return;
     const sel = state.selectedChat;
     if (!sel) {
-      heZi.innerHTML = '<div class="jingYin">' + t('panel.modelMgrEmpty') + '</div>';
+      heZi.innerHTML = '<div class="jingYin">' + escapeHtml(t('panel.modelMgrEmpty')) + '</div>';
       return;
     }
     const shiQun = sel.kind === 'internal' || sel.kind === 'extgroup';
@@ -10535,7 +10533,7 @@
       if (local) entries = [{ inst: local, editable: true }];
     }
     if (!entries.length) {
-      heZi.innerHTML = '<div class="jingYin">' + t('panel.modelMgrEmpty') + '</div>';
+      heZi.innerHTML = '<div class="jingYin">' + escapeHtml(t('panel.modelMgrEmpty')) + '</div>';
       return;
     }
     heZi.innerHTML = entries
@@ -10565,33 +10563,33 @@
       <summary>
         <img class="avTuPian small" src="${escapeHtml(instanceAvatarSrc(inst))}" alt=""/>
         <span class="mgrMing">${escapeHtml(mingOf(inst) || inst.id || '')}</span>
-        ${editable ? '' : '<span class="mgrRo">' + t('panel.modelMgrReadonly') + '</span>'}
+        ${editable ? '' : '<span class="mgrRo">' + escapeHtml(t('panel.modelMgrReadonly')) + '</span>'}
       </summary>
       <div class="mgrTi">
-        <label class="mgrLb">${t('instances.defaultModel')}</label>
+        <label class="mgrLb">${escapeHtml(t('instances.defaultModel'))}</label>
         <select data-mg="default" data-i="${suoYin}"${dis}>
-          <option value="__smart__"${!inst.defaultModel ? ' selected' : ''}>${t('instances.smartPick')}</option>
+          <option value="__smart__"${!inst.defaultModel ? ' selected' : ''}>${escapeHtml(t('instances.smartPick'))}</option>
           ${models.map((m) => `<option value="${escapeHtml(m)}"${inst.defaultModel === m ? ' selected' : ''}>${escapeHtml(m)}</option>`).join('')}
         </select>
-        <label class="mgrLb">${t('instances.availableModels')}</label>
+        <label class="mgrLb">${escapeHtml(t('instances.availableModels'))}</label>
         <div class="mgrMoXingJi">${
           models.length
             ? models.map((m) => `<span class="moXingChip">${escapeHtml(m)}${
-                editable ? `<button class="x" data-mgdel="${suoYin}" data-m="${escapeHtml(m)}" title="${t('settings.removeModel')}">×</button>` : ''
+                editable ? `<button class="x" data-mgdel="${suoYin}" data-m="${escapeHtml(m)}" title="${escapeHtml(t('settings.removeModel'))}">×</button>` : ''
               }</span>`).join('')
-            : '<span class="jingYin">' + t('settings.modelsEmpty') + '</span>'
+            : '<span class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</span>'
         }</div>
-        <label class="mgrLb">${t('instances.fallbackChain')}</label>
+        <label class="mgrLb">${escapeHtml(t('instances.fallbackChain'))}</label>
         <ol class="mgrChain">${
           chain.length
             ? chain.map((m, k) => `<li data-chain="${suoYin}" data-k="${k}"${editable ? ' draggable="true"' : ''}>
                 <span class="mgrChainMing">${escapeHtml(m)}</span>
                 <span class="mgrChainYuanShuju">${escapeHtml(providerLabelOf(m))} · ${escapeHtml(latencyText(m))}</span>
-                ${editable ? `<button class="anNiuXiao" data-mgtest="${suoYin}" data-m="${escapeHtml(m)}" title="${t('model.test')}">⚡</button>` : ''}
+                ${editable ? `<button class="anNiuXiao" data-mgtest="${suoYin}" data-m="${escapeHtml(m)}" title="${escapeHtml(t('model.test'))}">⚡</button>` : ''}
               </li>`).join('')
             : '<li class="jingYin">—</li>'
         }</ol>
-        ${editable ? `<div class="mgrTianJiaHang"><button class="anNiuXiao" data-mgadd="${suoYin}">＋ ${t('instances.addModel')}</button></div>` : ''}
+        ${editable ? `<div class="mgrTianJiaHang"><button class="anNiuXiao" data-mgadd="${suoYin}">＋ ${escapeHtml(t('instances.addModel'))}</button></div>` : ''}
       </div>
     </details>`;
   }
@@ -10717,14 +10715,14 @@
       const gongYingShangJi = state.providers || [];
       const editProvLabel = t('model.editProvider') || t('settings.providers');
       duiHuaTi.innerHTML = `<div class="field">
-          <label>${t('model.pickProvider')}</label>
+          <label>${escapeHtml(t('model.pickProvider'))}</label>
           <div style="display:flex;gap:6px;align-items:center">
             <select id="mpProv" style="flex:1">${gongYingShangJi.map((p, i) => `<option value="${i}">${escapeHtml(p.biaoQian || p.id)}</option>`).join('')}</select>
-            <button class="anNiuXiao" id="mpFetch">${t('model.fetch')}</button>
+            <button class="anNiuXiao" id="mpFetch">${escapeHtml(t('model.fetch'))}</button>
             <button class="anNiuXiao" id="mpEditProv" title="${escapeHtml(editProvLabel)}">${escapeHtml(editProvLabel)}</button>
           </div>
         </div>
-        <div class="jingYin" style="font-size:12px">${t('model.fetchHint')}</div>
+        <div class="jingYin" style="font-size:12px">${escapeHtml(t('model.fetchHint'))}</div>
         <div class="moXingXuanZeLieBiao" id="mpLieBiao"></div>`;
       const listBox = $('mpLieBiao');
       const renderList = () => {
@@ -10733,7 +10731,7 @@
         const houXuan = (p.models || []).filter((m) => !yiYou.has(m));
         listBox.innerHTML = houXuan.length
           ? houXuan.map((m) => `<label><input type="checkbox" value="${escapeHtml(m)}"/> ${escapeHtml(m)}</label>`).join('')
-          : `<div class="jingYin">${t('model.noneAvailable')}</div>`;
+          : `<div class="jingYin">${escapeHtml(t('model.noneAvailable'))}</div>`;
       };
       renderList();
       if ($('mpProv')) $('mpProv').onchange = renderList;
@@ -10810,7 +10808,7 @@
   function showSearchPopup() {
     const root = $('duiHuaKuangGen');
     $('duiHuaKuangBiaoTi').textContent = t('list.search');
-    $('duiHuaKuangTi').innerHTML = '<input id="souSuoPopupShuRu" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px" placeholder="' + t('list.search') + '"/><div id="souSuoPopupResults" class="jingYin" style="margin-top:8px;max-height:200px;overflow:auto"></div>';
+    $('duiHuaKuangTi').innerHTML = '<input id="souSuoPopupShuRu" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px" placeholder="' + escapeHtml(t('list.search')) + '"/><div id="souSuoPopupResults" class="jingYin" style="margin-top:8px;max-height:200px;overflow:auto"></div>';
     const dongZuoJi = $('duiHuaKuangDongZuoJi');
     dongZuoJi.innerHTML = '';
     const close = document.createElement('button');
@@ -10841,8 +10839,8 @@
     const root = $('duiHuaKuangGen');
     $('duiHuaKuangBiaoTi').textContent = t('chat.export');
     $('duiHuaKuangTi').innerHTML =
-      '<div style="margin-bottom:8px">' + t('export.tiShi') + '</div>' +
-      '<div class="jingYin">' + t('export.include') + '</div>';
+      '<div style="margin-bottom:8px">' + escapeHtml(t('export.tiShi')) + '</div>' +
+      '<div class="jingYin">' + escapeHtml(t('export.include')) + '</div>';
     const dongZuoJi = $('duiHuaKuangDongZuoJi');
     dongZuoJi.innerHTML = '';
     const cancel = document.createElement('button');
@@ -10926,7 +10924,7 @@
     const r = await window.warmy.metricsTurns().catch(() => null);
     const turns = (r && r.turns) || [];
     if (!turns.length) {
-      heZi.innerHTML = '<div class="jingYin">' + t('cost.empty') + '</div>';
+      heZi.innerHTML = '<div class="jingYin">' + escapeHtml(t('cost.empty')) + '</div>';
       return;
     }
     const agg = (key) => {
@@ -10943,7 +10941,7 @@
     };
     const table = (rows, firstCol) => {
       const touBu =
-        '<tr><th>' + firstCol + '</th><th>' + t('cost.turns') + '</th><th>' + t('cost.tokens') + '</th><th>' + t('cost.cost') + '</th></tr>';
+        '<tr><th>' + firstCol + '</th><th>' + escapeHtml(t('cost.turns')) + '</th><th>' + escapeHtml(t('cost.tokens')) + '</th><th>' + escapeHtml(t('cost.cost')) + '</th></tr>';
       const ti = rows
         .slice(0, 8)
         .map(
@@ -10955,8 +10953,8 @@
       return '<table class="chengBenTable">' + touBu + ti + '</table>';
     };
     heZi.innerHTML =
-      '<div class="chengBenFu">' + t('cost.bySession') + '</div>' + table(agg('sessionId'), t('cost.session')) +
-      '<div class="chengBenFu">' + t('cost.byModel') + '</div>' + table(agg('model'), t('cost.model'));
+      '<div class="chengBenFu">' + escapeHtml(t('cost.bySession')) + '</div>' + table(agg('sessionId'), t('cost.session')) +
+      '<div class="chengBenFu">' + escapeHtml(t('cost.byModel')) + '</div>' + table(agg('model'), t('cost.model'));
 
     const btn = $('anNiuChengBenCsv');
     if (btn) {
@@ -10996,10 +10994,10 @@
     const maxMb = 50;
     const usedMb = Math.min(maxMb, LieBiao.length * 0.5);
     if (space) {
-      space.textContent = `${t('checkpoints.used')} ${usedMb.toFixed(1)}MB / ${t('checkpoints.max')} ${maxMb}MB`;
+      space.textContent = `${escapeHtml(t('checkpoints.used'))} ${usedMb.toFixed(1)}MB / ${escapeHtml(t('checkpoints.max'))} ${maxMb}MB`;
     }
     if (!LieBiao.length) {
-      heZi.innerHTML = `<div class="jingYin">${t('checkpoints.empty')}</div>`;
+      heZi.innerHTML = `<div class="jingYin">${escapeHtml(t('checkpoints.empty'))}</div>`;
       return;
     }
     const now = Date.now();
@@ -11022,21 +11020,21 @@
         return `<details class="cpTiaoMu" data-id="${escapeHtml(String(c.id))}" data-env-revision="${escapeHtml(String((envRec && envRec.revision) || ''))}">
           <summary>${escapeHtml(String(faShengShiJian))} · ${escapeHtml(String(c.phase || ''))} · ${escapeHtml(String(c.strategy || ''))}</summary>
           <div class="cpTi">
-            <div>${t('checkpoints.tasks')}: ${escapeHtml(c.phase || '')}</div>
+            <div>${escapeHtml(t('checkpoints.tasks'))}: ${escapeHtml(c.phase || '')}</div>
             <div class="ctgDim">${escapeHtml(t('checkpoints.env.biaoTi'))}</div>
             <div class="ctgDim" data-env-line="1">${escapeHtml(envLine)}</div>
             <div class="ctgDim">${escapeHtml(fmtKey('checkpoints.env.current', { runtime: rtName(cur.runtimeId), revision: String(cur.revision || '') }))}</div>
             ${envDiff}
             <div class="ctgDim">${escapeHtml(t('checkpoints.env.layered'))}</div>
             <ul>
-              <li>${t('checkpoints.changed')}: ${escapeHtml((c.filesChanged || []).map((f) => f.path).join(', ') || '—')}</li>
-              <li>${t('checkpoints.created')}: ${escapeHtml((c.filesCreated || []).map((f) => f.path).join(', ') || c.dir)}</li>
-              <li>${t('checkpoints.irreversible')}: ${escapeHtml((c.irreversible || []).join(', ') || '—')}</li>
-              <li>${t('checkpoints.assets')}: ${escapeHtml((c.assets || []).join(', ') || '—')}</li>
+              <li>${escapeHtml(t('checkpoints.changed'))}: ${escapeHtml((c.filesChanged || []).map((f) => f.path).join(', ') || '—')}</li>
+              <li>${escapeHtml(t('checkpoints.created'))}: ${escapeHtml((c.filesCreated || []).map((f) => f.path).join(', ') || c.dir)}</li>
+              <li>${escapeHtml(t('checkpoints.irreversible'))}: ${escapeHtml((c.irreversible || []).join(', ') || '—')}</li>
+              <li>${escapeHtml(t('checkpoints.assets'))}: ${escapeHtml((c.assets || []).join(', ') || '—')}</li>
             </ul>
           </div>
           <div class="cpDongZuoJi">
-            <button class="anNiuXiao" data-load="${c.id}">${t('checkpoints.stopAndLoad')}</button>
+            <button class="anNiuXiao" data-load="${c.id}">${escapeHtml(t('checkpoints.stopAndLoad'))}</button>
           </div>
         </details>`;
       })
@@ -11207,10 +11205,10 @@
       const huai = scanDirs.filter((s) => s && s.ok === false);
       const pb = $('jinengLuJingJi');
       if (pb) {
-        let txt = t('settings.skillsPaths') + ': ' + ((pr && pr.paths) || []).join('  ·  ');
-        if (huai.length) txt += '  ·  ' + t('settings.skillsScanMissing') + ': ' + huai.map((s) => s.path).join(' · ');
+        let txt = escapeHtml(t('settings.skillsPaths')) + ': ' + ((pr && pr.paths) || []).join('  ·  ');
+        if (huai.length) txt += '  ·  ' + escapeHtml(t('settings.skillsScanMissing')) + ': ' + huai.map((s) => s.path).join(' · ');
         const max = (r0 && r0.maxScanDirs) || 10;
-        txt += '  ·  ' + t('settings.skillsScanTitle') + ` (${scanDirs.length}/${max})`;
+        txt += '  ·  ' + escapeHtml(t('settings.skillsScanTitle')) + ` (${scanDirs.length}/${max})`;
         pb.textContent = txt;
       }
     } catch { /* keep going */ }
@@ -11241,7 +11239,7 @@
             '<div class="jinengMing">' + escapeHtml(s.name || s.id) +
             ' <span class="jinengZhuangTai ' + (enabled ? 'isQiYong' : 'isOff') + '">' + escapeHtml(enabled ? t('settings.skillEnabled') : t('settings.skillPaused')) + '</span></div>' +
             '<div class="jingYin jinengMiaoShu">' + escapeHtml(s.description || '—') + '</div>' +
-            '<div class="jingYin jinengSrc">' + t('settings.skillFrom') + ': ' + escapeHtml(skillSourceLabel(s)) +
+            '<div class="jingYin jinengSrc">' + escapeHtml(t('settings.skillFrom')) + ': ' + escapeHtml(skillSourceLabel(s)) +
             (discovered ? ' · ' + escapeHtml(t('settings.skillSourceDiscovered')) : '') + '</div>' +
             '</div>' +
             '<div class="jinengDongZuoJi">' +
@@ -11340,12 +11338,12 @@
               (v.kind === 'offline'
                 ? '<div class="chengYuanTiShi jingYin">' + escapeHtml(t('group.memberPendingConfirm')) + ' · ' + escapeHtml(t('group.memberPendingConfirmHint')) + '</div>'
                 : '') +
-              '<button class="anNiuXiao" data-mkick="' + escapeHtml(String(x.id || x.name)) + '">' + t('group.kick') + '</button>' +
+              '<button class="anNiuXiao" data-mkick="' + escapeHtml(String(x.id || x.name)) + '">' + escapeHtml(t('group.kick')) + '</button>' +
               '</div>'
             );
           })
           .join('')
-      : '<div class="jingYin">' + t('group.memberEmpty') + '</div>';
+      : '<div class="jingYin">' + escapeHtml(t('group.memberEmpty')) + '</div>';
     heZi.querySelectorAll('[data-mkick]').forEach((b) => {
       b.onclick = async () => {
         await window.warmy.groupKick({ groupId: state.selectedChat.id, memberId: b.dataset.mkick });
@@ -11359,7 +11357,7 @@
       const houXuan = (state.instances || []).filter((i) => !inGroup.has(i.name));
       pick.innerHTML = houXuan.length
         ? houXuan.map((i) => '<option value="' + escapeHtml(i.id) + '">' + escapeHtml(i.name) + '</option>').join('')
-        : '<option value="">' + t('group.memberEmpty') + '</option>';
+        : '<option value="">' + escapeHtml(t('group.memberEmpty')) + '</option>';
     }
     void renderMembershipCerts(state.selectedChat && state.selectedChat.id, ms);
   }
@@ -11634,7 +11632,7 @@
           '<button class="anNiuXiao" data-kbdel="event" data-kbid="' + escapeHtml(id) + '">×</button></div>'
       );
     });
-    out.innerHTML = rows.length ? rows.join('') : '<div class="jingYin">' + t('knowledge.empty') + '</div>';
+    out.innerHTML = rows.length ? rows.join('') : '<div class="jingYin">' + escapeHtml(t('knowledge.empty')) + '</div>';
     // 点击 → 跳到聊天搜索（把关键词带过去）
     out.querySelectorAll('.zhiShiKuLink').forEach((b) => {
       b.onclick = () => {

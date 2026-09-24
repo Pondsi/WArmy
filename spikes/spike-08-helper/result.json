@@ -71,7 +71,7 @@
       "credentialCache": {
         "queried": true,
         "available": false,
-        "raw": "Caller Pid: 10228\r\nRunning as:\n  User: DESKTOP-XXXXXXX\\p\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n     2088     10228 Medium     DESKTOP-XXXXXXX\\p         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)",
+        "raw": "Caller Pid: 10228\r\nRunning as:\n  User: <host>\\<user>\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n     2088     10228 Medium     <host>\\<user>         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)",
         "note": "gsudo status 报告的缓存状态**不代表实际能否提权**：本机实测 Available=False 时 gsudo -n 仍可提权成功。"
       },
       "unverified": [
@@ -81,7 +81,7 @@
   },
   "credentialSuite": {
     "available": false,
-    "rawStdout": "Caller Pid: 10228\r\nRunning as:\n  User: DESKTOP-XXXXXXX\\p\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n    36072     10228 Medium     DESKTOP-XXXXXXX\\p         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)\r\n",
+    "rawStdout": "Caller Pid: 10228\r\nRunning as:\n  User: <host>\\<user>\r\n  Sid: S-1-5-21-1826118683-2375757895-3010676836-1001\n  Is Admin: False\r\n  Integrity Level: Medium (8192)\r\n\nCredentials Cache:\n  Mode: Explicit\n  Available for this process: False\r\n  Total active cache sessions: 0\r\n\nProcesses attached to the current **REDIRECTED** console:\r\n      PID      PPID Integrity  UserName                  Name\r\n    36072     10228 Medium     <host>\\<user>         C:\\Program Files\\gsudo\\Current\\gsudo.exe (this gsudo status)\r\n",
     "rawStderr": "",
     "exitCode": 0,
     "elapsedMs": 26,
