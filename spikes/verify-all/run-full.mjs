@@ -178,14 +178,14 @@ const boardDir = path.join(os.tmpdir(), 'warmy-verify-board-' + Date.now());
 const board = new KanbanCang(boardDir);
 check('board duty only', (() => {
   try {
-    board.append({ groupId: 'g', action: 'create_task', title: 't', parsedFrom: 'x' }, 'router');
+    board.append({ groupId: 'g', action: 'create_task', biaoTi: 't', parsedFrom: 'x' }, 'router');
     return false;
   } catch {
     return true;
   }
 })());
-board.append({ groupId: 'g1', action: 'create_task', title: '整理周报', parsedFrom: '新建任务: 整理周报' }, 'duty');
-board.append({ groupId: 'g1', action: 'update_progress', title: '整理周报', jinDu: 50, parsedFrom: 'x' }, 'duty');
+board.append({ groupId: 'g1', action: 'create_task', biaoTi: '整理周报', parsedFrom: '新建任务: 整理周报' }, 'duty');
+board.append({ groupId: 'g1', action: 'update_progress', biaoTi: '整理周报', jinDu: 50, parsedFrom: 'x' }, 'duty');
 const tasks = board.listTasks('g1');
 check('board task jinDu', tasks[0]?.jinDu === 50 && tasks[0]?.status === 'doing', tasks[0]);
 check('parse board cmd', JieLing('新建任务: 测试', 'g')?.action === 'create_task');
@@ -202,9 +202,9 @@ for (const f of fs.readdirSync(path.join(memSrc, 'dist'))) {
 }
 const nm = path.join(memSrc, 'node_modules');
 if (fs.existsSync(nm)) fs.symlinkSync(nm, path.join(memAscii, 'node_modules'), 'junction');
-const { MemoryService } = await import(toImportUrl(path.join(memAscii, 'dist', 'index.js')));
+const { JiyiCangFuwu } = await import(toImportUrl(path.join(memAscii, 'dist', 'index.js')));
 const memDir = path.join(os.tmpdir(), 'warmy-verify-memdata-' + Date.now());
-const mem = new MemoryService({ dataDir: memDir });
+const mem = new JiyiCangFuwu({ CangLu: memDir });
 mem.append({ id: 'r1', sessionId: 's', kind: 'message', ti: '无限牛马项目进度' }, 'duty');
 const cards = mem.recall('牛马');
 check('memory fts recall', cards.length >= 1, cards.length);
@@ -238,7 +238,7 @@ const { KnowledgeBase } = await import(toImportUrl(path.join(ascii, 'knowledge-b
 const kbDir = path.join(os.tmpdir(), 'warmy-verify-kb-' + Date.now());
 const kb = new KnowledgeBase(kbDir);
 kb.upsertEntity({ id: 'e1', kind: 'person', ming: '值班者A', attrs: { role: 'duty' }, anchors: [] });
-kb.addEvent({ id: 'ev1', title: '完成周报', entityIds: ['e1'], anchors: [], ts: Date.now() });
+kb.addEvent({ id: 'ev1', biaoTi: '完成周报', entityIds: ['e1'], anchors: [], ts: Date.now() });
 check('kb bidirectional', kb.eventsOfEntity('e1').length === 1 && kb.entitiesOfEvent('ev1')[0]?.id === 'e1');
 check('kb query', kb.query('周报').events.length === 1);
 fs.rmSync(kbDir, { recursive: true, force: true });
@@ -266,11 +266,11 @@ fs.rmSync(regFile, { force: true });
 
 const { ZichanGuanliqi } = await import(toImportUrl(path.join(ascii, 'asset-governance', 'dist', 'index.js')));
 const gov = new ZichanGuanliqi();
-gov.register({ id: 'a1', category: 'rule', scope: 'project', strength: 'strong', title: 'r', ti: 'b' });
+gov.register({ id: 'a1', category: 'rule', scope: 'project', strength: 'strong', biaoTi: 'r', ti: 'b' });
 check('assets strict empty', gov.retrieve({ strict: true }).length === 0);
 check('assets normal has', gov.retrieve({}).length === 1);
 gov.negativeFeedback('a1', 6);
-check('assets downrank', gov.list()[0]?.strength === 'weak');
+check('assets downrank', gov.LieBiao()[0]?.strength === 'weak');
 
 // checkpoint
 const { JianChaDianCang } = await import(
@@ -282,7 +282,7 @@ const jsonl = path.join(cpDir, 'mem.jsonl');
 fs.writeFileSync(jsonl, '{"seq":1}\n');
 const cp = cps.create({ phase: 'round_end', logSeq: 1, jsonlPath: jsonl });
 fs.writeFileSync(jsonl, '{"seq":999}\n');
-check('checkpoint create', !!cp.id && cps.list().length === 1);
+check('checkpoint create', !!cp.id && cps.LieBiao().length === 1);
 check('checkpoint rollback', cps.rollback(cp.id, { jsonlPath: jsonl }) && fs.readFileSync(jsonl, 'utf8').includes('"seq":1'));
 fs.rmSync(cpDir, { recursive: true, force: true });
 
@@ -528,7 +528,7 @@ console.log('\n=== SUMMARY ===');
 console.log(`pass=${pass} fail=${fail}`);
 if (fails.length) {
   console.log('FAILURES:');
-  for (const f of fails) console.log(' -', f.name, f.detail ?? '');
+  for (const f of fails) console.log(' -', f.ming, f.detail ?? '');
   process.exit(1);
 }
 console.log('ALL PASS');
