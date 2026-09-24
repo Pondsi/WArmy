@@ -32,6 +32,18 @@ function exists(...parts) {
 console.log('=== WArmy verify pass ===');
 console.log('root', root);
 
+// 0. 模板字面量完整性（改名脚本曾剥掉 ${} ⇒ recordId 全冲突；必须进全量清单）
+{
+  const tip = path.join(root, 'packages/app-shell/scripts/verify-template-integrity.mjs');
+  check('verify-template-integrity script exists', exists('packages', 'app-shell', 'scripts', 'verify-template-integrity.mjs'));
+  try {
+    execSync(`"${process.execPath}" "${tip}"`, { cwd: root, stdio: 'pipe', encoding: 'utf8' });
+    check('verify-template-integrity passes', true);
+  } catch (e) {
+    check('verify-template-integrity passes', false, String(e.stdout || e.stderr || e).slice(0, 300));
+  }
+}
+
 // 1. 仓库与快照
 check('git repo', exists('.git'));
 /**
@@ -69,8 +81,8 @@ for (const p of ['contracts', 'providers', 'app-shell', 'memory-os', 'group-rout
 check('electron main', exists('packages', 'app-shell', 'dist', 'electron-main.js'));
 check('preload', exists('packages', 'app-shell', 'dist', 'preload.cjs'));
 check('renderer html', exists('packages', 'app-shell', 'dist', 'renderer', 'index.html'));
-check('renderer js', exists('packages', 'app-shell', 'dist', 'renderer', 'yingYong.js'));
-check('renderer css', exists('packages', 'app-shell', 'dist', 'renderer', 'yingYong.css'));
+check('renderer js', exists('packages', 'app-shell', 'dist', 'renderer', 'app.js'));
+check('renderer css', exists('packages', 'app-shell', 'dist', 'renderer', 'app.css'));
 check('i18n zh', exists('packages', 'app-shell', 'dist', 'i18n', 'zh-CN.json'));
 check('i18n en', exists('packages', 'app-shell', 'dist', 'i18n', 'en-US.json'));
 check('memory ipc', exists('packages', 'memory-os', 'dist', 'ipc.js'));
@@ -90,8 +102,8 @@ for (const k of ['nav.settings', 'chat.faSong', 'dashboard.biaoTi', 'wo.username
 }
 
 // 5. UI 源码关键能力
-const appJs = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/yingYong.js'), 'utf8');
-const appCss = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/yingYong.css'), 'utf8');
+const appJs = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.js'), 'utf8');
+const appCss = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/index.html'), 'utf8');
 const mainTs = fs.readFileSync(path.join(root, 'packages/app-shell/src/electron-main.ts'), 'utf8');
 
@@ -279,7 +291,7 @@ check('chat-send ipc', mainTs.includes('warmy:liaoTianFaSong'));
 check('checkpoint ipc', mainTs.includes('warmy:checkpointChuangJian'));
 check('knowledge ipc', mainTs.includes('warmy:zhiShiQuery'));
 check('set-provider ipc', mainTs.includes('warmy:sheZhiGongYingShang'));
-const appJs2 = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/yingYong.js'), 'utf8');
+const appJs2 = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.js'), 'utf8');
 check('renderer uses chatSend', appJs2.includes('warmy.chatSend'));
 check('renderer setProvider', appJs2.includes('warmy.setProvider'));
 
@@ -454,7 +466,7 @@ const lanMeshRetiredUiIds = [
   'wangZhuangXiaoXi', 'wangZhuangShouXiang',
 ];
 const lanMeshUiProblems = [];
-for (const [file, src] of [['renderer/yingYong.js', appJs], ['renderer/index.html', html]]) {
+for (const [file, src] of [['renderer/app.js', appJs], ['renderer/index.html', html]]) {
   for (const id of lanMeshRetiredUiIds) {
     if (src.includes(id)) lanMeshUiProblems.push(`retired lan/mesh UI entry still present: ${file}:${id}`);
   }

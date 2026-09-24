@@ -55,6 +55,10 @@ jobs:
         run: node packages/app-shell/scripts/verify-chat-window.mjs
       - name: verify summary quality
         run: node packages/app-shell/scripts/verify-summary-quality.mjs
+      - name: verify template integrity (recordId 插值 + 唯一性 + rename lock)
+        run: node packages/app-shell/scripts/verify-template-integrity.mjs
+      - name: verify security (密钥/隐私/IPC/updater 不变量)
+        run: node packages/app-shell/scripts/verify-security.mjs
       # 真机（Electron + CDP）门禁需要下载 Electron 二进制，CI 里用 --ignore-scripts 跳过了，
       # 因此这两项在 CI 不跑；它们属于本地验收套件的一部分（见本文件顶部说明）。
       - run: node spikes/verify-all/run-full.mjs

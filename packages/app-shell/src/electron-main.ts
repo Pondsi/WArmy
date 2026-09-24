@@ -1691,7 +1691,9 @@ function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeE
       const u = String(frame.url || '');
       if (!u) return false;
       if (u.startsWith('file:')) return true;
-      if (u.startsWith('devtools://')) return true;
+      // DevTools 前端页默认不给 IPC（避免任意 devtools 页面打全量通道）。
+      // 页面内 CDP Runtime.evaluate 的 senderFrame 仍是 page 的 file://，不受影响。
+      if (u.startsWith('devtools://') && process.env.WARMY_ALLOW_DEVTOOLS_IPC === '1') return true;
       return false;
     } catch { return false; }
   };
