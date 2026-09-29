@@ -1807,7 +1807,7 @@ body.liaoTianChuangKou #mianBanTiaoZhengTiao { z-index: 30; }
 body.liaoTianChuangKou .pageBuJu { display: none !important; }
 .woDing { display: flex; align-items: center; gap: 20px; margin-bottom: 12px; flex-wrap: wrap; }
 .woDing .pinPailogo { width: 72px; height: 72px; object-fit: contain; background: transparent; }
-.dashStats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin: 12px 0 16px; }
+.dashStats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin: 12px 0 16px; }
 .dashHang { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
 .dashHuiZhang { width: 8px; height: 8px; border-radius: 50%; background: #f5a524; flex-shrink: 0; }
 .dashXiangQing { border-left: 3px solid var(--accent); margin: 0 0 8px 12px; padding: 8px 10px; background: var(--card); border-radius: 8px; font-size: 12px; }

@@ -9,7 +9,7 @@
    */
   const PROVIDER_DEFAULTS = [
     { id: 'deepseek', biaoQian: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat', models: [] },
-    { id: 'ollama', biaoQian: 'Ollama (本机)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434/v1', defaultModel: 'qwen2.5:7b', models: [] },
+    { id: 'ollama', biaoQian: 'Ollama (本机)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434', defaultModel: 'qwen2.5:7b', models: [] },
   ];
   const PROVIDER_PROTOCOLS = ['openai-compatible', 'anthropic', 'ollama'];
   const state = {
@@ -320,8 +320,8 @@
       { id: 'openrouter', biaoQian: t('settings.provider.openrouter') || 'OpenRouter', protocol: 'openai-compatible', baseURL: 'https://openrouter.ai/api/v1' },
       { id: 'anthropic', biaoQian: t('settings.provider.anthropic') || 'Anthropic', protocol: 'anthropic', baseURL: 'https://api.anthropic.com' },
       { id: 'gemini', biaoQian: t('settings.provider.gemini') || 'Gemini', protocol: 'openai-compatible', baseURL: 'https://generativelanguage.googleapis.com/v1beta' },
-      { id: 'ollama', biaoQian: 'Ollama', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434/v1' },
-      { id: 'ollama-remote', biaoQian: t('settings.provider.ollamaRemote') || 'Ollama Remote', protocol: 'ollama', baseURL: 'http://<host>:11434/v1' },
+      { id: 'ollama', biaoQian: 'Ollama (本机)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434' },
+      { id: 'ollama-remote', biaoQian: t('settings.provider.ollamaCloud') || 'Ollama（云）', protocol: 'ollama', baseURL: 'http://<host>:11434' },
       { id: 'groq', biaoQian: t('settings.provider.groq') || 'Groq', protocol: 'openai-compatible', baseURL: 'https://api.groq.com/openai/v1' },
       { id: 'mistral', biaoQian: t('settings.provider.mistral') || 'Mistral', protocol: 'openai-compatible', baseURL: 'https://api.mistral.ai/v1' },
       { id: 'together', biaoQian: t('settings.provider.together') || 'Together', protocol: 'openai-compatible', baseURL: 'https://api.together.xyz/v1' },
@@ -2602,7 +2602,8 @@
           g.tokens += row.tokens || 0;
           g.rows.push(row);
         }
-        return [...m.values()].filter((g) => g.tokens > 0).sort((a, b) => b.tokens - a.tokens);
+        const keepZero = sort !== 'window';
+        return [...m.values()].filter((g) => keepZero || g.tokens > 0).sort((a, b) => b.tokens - a.tokens);
       };
       const render = () => {
         const gs = groupBy(sort === 'window' ? 'window' : sort === 'provider' ? 'provider' : 'model');
@@ -2998,29 +2999,20 @@
    * 遮蔽形状按产品主逐轮收紧：51 位（17 组）现在是 `2B5-09V-KPY-牛马-…-牛马-3PX-0KP-T3Q`
    * —— 中间 **10 个「牛马」**（每组两个字，不是三个）。后段多露一组，便于核对结尾。
    */
-  const CRED_HEAD_GROUPS = 3;
-  const CRED_MID_SHOW = 3;
-  const CRED_TAIL_GROUPS = 6;
-  const CRED_MASK_GROUPS = 9; // 虚假数量：固定 9 个「牛马」
+  const CRED_HEAD_CHARS = 9;
+  const CRED_MID_CHARS = 3;
+  const CRED_TAIL_CHARS = 6;
+  const CRED_MASK_GROUPS = 9;
   function maskCredential(value) {
     const s = String(value || '');
     if (!s) return '—';
     const raw = s.replace(/[\s-]+/g, '');
-    if (raw.length <= 6) return s;
-    const Pian = [];
-    for (let i = 0; i < raw.length; i += 3) Pian.push(raw.slice(i, i + 3));
-    const need = CRED_HEAD_GROUPS + CRED_MID_SHOW + CRED_TAIL_GROUPS;
-    if (Pian.length <= need) return Pian.join('-');
-    // 开头3 + 中间3 + 结尾6；中间遮挡固定 9 个「牛马」（不暴露真实长度）
-    const head = Pian.slice(0, CRED_HEAD_GROUPS);
-    const mid = Pian.slice(CRED_HEAD_GROUPS, CRED_HEAD_GROUPS + CRED_MID_SHOW);
-    const tail = Pian.slice(-CRED_TAIL_GROUPS);
-    return [
-      ...head,
-      ...Array(CRED_MASK_GROUPS).fill('牛马'),
-      ...mid,
-      ...tail,
-    ].join('-');
+    if (raw.length <= CRED_HEAD_CHARS + CRED_MID_CHARS + CRED_TAIL_CHARS) return s;
+    // 开头9位 + 中间3位 + 结尾6位（按字符位数）；遮挡固定 9 个「牛马」
+    const head = raw.slice(0, CRED_HEAD_CHARS);
+    const mid = raw.slice(CRED_HEAD_CHARS, CRED_HEAD_CHARS + CRED_MID_CHARS);
+    const tail = raw.slice(-CRED_TAIL_CHARS);
+    return [head, ...Array(CRED_MASK_GROUPS).fill('牛马'), mid, tail].join('-');
   }
 
   /** 小眼睛图标（内联 SVG，不依赖字体/emoji） */
@@ -3858,6 +3850,27 @@
           xuanran(r);
           return r;
         };
+        // 委托：renderPage 重建按钮后仍可点
+        if (!window.__dshBtnDelegated) {
+          window.__dshBtnDelegated = 1;
+          document.addEventListener('click', (e) => {
+            const t = e.target && e.target.closest && e.target.closest('#anNiuDshJianCha');
+            if (t) { e.preventDefault(); void jianCha(); }
+          });
+          document.addEventListener('click', (e) => {
+            const t = e.target && e.target.closest && e.target.closest('#anNiuDshAnZhuang');
+            if (t) {
+              e.preventDefault();
+              void (async () => {
+                const x = $('dshAnZhuangXiaoXi');
+                if (x) x.textContent = t('dsh.anZhuangZhong');
+                const r = await window.warmy.dshInstall?.().catch((err) => ({ ok: false, error: String(err) }));
+                if (x) x.textContent = r?.ok ? t('dsh.anZhuangChengGong') : (t('dsh.anZhuangShiBai') + (r?.error ? ' · ' + String(r.error).slice(0, 120) : ''));
+                void jianCha();
+              })();
+            }
+          });
+        }
         $('anNiuDshJianCha')?.addEventListener('click', () => { void jianCha(); });
         $('anNiuDshAnZhuang')?.addEventListener('click', async () => {
           if (xiaoXi) xiaoXi.textContent = t('dsh.anZhuangZhong');
@@ -4079,7 +4092,7 @@
         if (!panel) {
           panel = document.createElement('div');
           panel.id = 'zhuTiCustomMianBan';
-          panel.className = 'zhuTiCustomMianBan yinCang';
+          panel.className = 'zhuTiCustomMianBan';
           panel.innerHTML = `
             <div class="tcpHang">
               <input type="color" id="tcpYanSe" value="${escapeHtml(state.theme || '#07c160')}"/>
@@ -4130,7 +4143,7 @@
           try {
             if (window.EyeDropper) {
               const ed = new window.EyeDropper();
-              const res = await ed.daKai();
+              const res = await ed.open();
               if (res && res.sRGBHex) tongBu(res.sRGBHex);
             } else {
               uiAlert(t('settings.pickScreenColor') + ' · unsupported');
@@ -4253,11 +4266,15 @@
         const preview = $('zhuTiCustomPreview');
         if (preview) preview.style.background = state.theme || '#c45c26';
         if (!btn) return;
-        btn.onclick = async () => {
-          const picked = await pickCustomAccent();
-          if (!picked) return;
-          applyAccent(picked);
-          renderPage();
+        btn.onclick = () => {
+          // 内联色板直出：不再弹第二个取色窗口
+          const panel = document.getElementById('zhuTiCustomMianBan');
+          if (panel) {
+            panel.classList.remove('yinCang');
+            panel.style.display = '';
+            const c = document.getElementById('tcpYanSe');
+            if (c) { try { if (typeof c.showPicker === 'function') c.showPicker(); else c.click(); } catch { /* noop */ } }
+          }
         };
       })();
       const SEC_DESC = {
@@ -4687,8 +4704,8 @@
         { id: 'openrouter', biaoQian: t('settings.provider.openrouter'), protocol: 'openai-compatible', baseURL: 'https://openrouter.ai/api/v1' },
         { id: 'anthropic', biaoQian: t('settings.provider.anthropic'), protocol: 'anthropic', baseURL: 'https://api.anthropic.com' },
         { id: 'gemini', biaoQian: t('settings.provider.gemini'), protocol: 'openai-compatible', baseURL: 'https://generativelanguage.googleapis.com/v1beta' },
-        { id: 'ollama', biaoQian: 'Ollama (本地)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434/v1' },
-        { id: 'ollama-remote', biaoQian: t('settings.provider.ollamaRemote'), protocol: 'ollama', baseURL: 'http://<host>:11434/v1' },
+        { id: 'ollama', biaoQian: 'Ollama (本机)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434' },
+        { id: 'ollama-remote', biaoQian: t('settings.provider.ollamaCloud'), protocol: 'ollama', baseURL: 'http://<host>:11434' },
         { id: 'groq', biaoQian: t('settings.provider.groq'), protocol: 'openai-compatible', baseURL: 'https://api.groq.com/openai/v1' },
         { id: 'mistral', biaoQian: t('settings.provider.mistral'), protocol: 'openai-compatible', baseURL: 'https://api.mistral.ai/v1' },
         { id: 'together', biaoQian: t('settings.provider.together'), protocol: 'openai-compatible', baseURL: 'https://api.together.xyz/v1' },
@@ -9957,8 +9974,16 @@
     const sel = state.selectedChat;
     const shuRu = $('shuRu');
     const lie = $('liaoTianLan');
+    // 我的牛马：实例 stopped ⇒ 只读（可看历史/右栏，禁输入发送与工具钮）
+    let singleStopped = false;
+    try {
+      if (sel && sel.kind === 'single') {
+        const inst = (state.instances || []).find((x) => x.id === sel.id);
+        singleStopped = !!(inst && inst.status === 'stopped');
+      }
+    } catch { /* noop */ }
     const xiangMuTai = sel && sel.kind === 'internal' ? await quXiangMuTai(sel.id) : null;
-    const blocked = !!(xiangMuTai && xiangMuTai.stopped);
+    const blocked = singleStopped || !!(xiangMuTai && xiangMuTai.stopped);
     const reason = blocked ? projectReasonText(xiangMuTai) : '';
     if (lie) {
       lie.dataset.projectState = xiangMuTai ? (blocked ? 'unavailable' : 'available') : 'none';
@@ -9971,7 +9996,13 @@
       shuRu.title = blocked ? fmtKey('container.project.blockedNotice', { reason }) : '';
     }
     const btn = $('anNiuFaSong');
-    if (btn) btn.title = blocked ? (shuRu ? shuRu.title : '') : '';
+    if (btn) { btn.disabled = blocked; btn.title = blocked ? (shuRu ? shuRu.title : '') : ''; }
+    try {
+      for (const id of ['anNiuAttach', 'anNiuYuYin', 'jinJiTrigger', 'anNiuTingZhiAll']) {
+        const b = $(id);
+        if (b) { b.disabled = blocked; b.style.opacity = blocked ? '0.45' : ''; }
+      }
+    } catch { /* noop */ }
     // 项目功能入口：不可用时禁用（跑执行者=在项目里干活；控制台另有自己的门禁）
     const exec = $('anNiuZhiXingYunXing');
     if (exec && xiangMuTai) {
