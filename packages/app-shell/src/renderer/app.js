@@ -278,6 +278,18 @@
     return { ...o, ming, name: ming, id: o.id || o.groupId, groupId: o.groupId || o.id };
   };
 
+  /** 预设占位时「添加」不可点；选中真供应商才可点 */
+  function syncTianJiaProvBtn() {
+    try {
+      const sel = $('provPreset');
+      const btn = $('anNiuTianJiaProv');
+      if (!btn) return;
+      const okSel = !!(sel && sel.value && sel.value !== '');
+      btn.disabled = !okSel;
+      btn.style.opacity = okSel ? '' : '0.45';
+      btn.style.cursor = okSel ? '' : 'not-allowed';
+    } catch { /* noop */ }
+  }
   /** 预设供应商下拉填充（设置→模型）：DeepSeek 第一，其余按界面语言排序 */
   function tianChongYuSheXiaLa() {
     const sel = $('provPreset');
@@ -289,8 +301,9 @@
     const other = presets.filter((p) => p.id === '__other__');
     const first = presets.filter((p) => p.id === 'deepseek');
     const rows = [...first, ...qiYu, ...other];
-    sel.innerHTML = '<option value="" selected>' + escapeHtml(t('settings.providerPickHint')) + '</option>' +
+    sel.innerHTML = '<option value="" selected disabled>' + escapeHtml(t('settings.providerPickHint')) + '</option>' +
       rows.map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.biaoQian || p.id) + '</option>').join('');
+    syncTianJiaProvBtn();
     if (sel.options.length <= 1) {
       sel.innerHTML = '<option value="" selected>…</option><option value="deepseek">DeepSeek</option><option value="__other__">Other</option>';
     }
@@ -1516,6 +1529,145 @@
     };
   }
 
+  /** 第四列默认卡片（我的牛马 / 项目）；其余由用户添加 */
+  const PAN_DEFAULT = {
+    single: ['diagMianBanKuai', 'mianBanAssistKuai', 'mianBanMoXingMgrKuai', 'mianBanZhiShiKuKuai'],
+    internal: ['diagMianBanKuai', 'xiangMuTaiKuai', 'mianBanJinDuKuai', 'mianBanAssistKuai', 'mianBanMoXingMgrKuai', 'mianBanZhiShiKuKuai', 'mianBanMuLuKuai', 'xiangMuWenJianJiKuai', 'mianBanChengYuanJiKuai', 'mianBanZhiBanZheKuai', 'mianBanHuiTuiDianKuai'],
+  };
+  const PAN_ALL = {
+    diagMianBanKuai: 'diag', xiangMuTaiKuai: 'state', mianBanJinDuKuai: 'jinDu',
+    mianBanAssistKuai: 'assist', mianBanMoXingMgrKuai: 'model', mianBanZhiShiKuKuai: 'kb',
+    mianBanMuLuKuai: 'dir', xiangMuWenJianJiKuai: 'files', mianBanChengYuanJiKuai: 'members',
+    mianBanZhaiYaoKuai: 'summary', mianBanZhiBanZheKuai: 'duty', mianBanHuiTuiDianKuai: 'checkpoint',
+  };
+  function panCardsFor(kind) {
+    try {
+      const saved = state.panCards && state.panCards[kind];
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch { /* noop */ }
+    return (PAN_DEFAULT[kind === 'single' ? 'single' : 'internal'] || []).slice();
+  }
+  /** 第四列：自定义卡片（需求 / 成果）渲染 */
+  function renderPanCustomCards(kind) {
+    const host = $('mianBanLan');
+    if (!host) return;
+    let bar = $('panKaPianTianJia');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'panKaPianTianJia';
+      bar.style.cssText = 'display:flex;gap:6px;align-items:center;margin:0 0 10px;flex-wrap:wrap';
+      bar.innerHTML = `
+        <select id="panKaXuanZe" style="flex:1;min-width:120px">
+          <option value="custom">${escapeHtml(t('panel.addCustomCard') || '自定义卡片')}</option>
+          <option value="xiangMuTaiKuai">${escapeHtml(t('panel.projectState') || '项目状态')}</option>
+          <option value="mianBanJinDuKuai">${escapeHtml(t('panel.jinDu') || '进度')}</option>
+          <option value="mianBanAssistKuai">${escapeHtml(t('panel.assist') || '等待协助')}</option>
+          <option value="mianBanMoXingMgrKuai">${escapeHtml(t('panel.modelMgr') || '模型管理')}</option>
+          <option value="mianBanZhiShiKuKuai">${escapeHtml(t('panel.kb.biaoTi') || '知识库')}</option>
+          <option value="mianBanMuLuKuai">${escapeHtml(t('panel.dir') || '项目目录')}</option>
+          <option value="xiangMuWenJianJiKuai">${escapeHtml(t('panel.projectFiles') || '项目文件与产物')}</option>
+          <option value="mianBanChengYuanJiKuai">${escapeHtml(t('panel.members') || '成员')}</option>
+          <option value="mianBanZhaiYaoKuai">${escapeHtml(t('panel.summary.biaoTi') || '摘要')}</option>
+          <option value="diagMianBanKuai">${escapeHtml(t('console.biaoTi') || '诊断事件流')}</option>
+        </select>
+        <button class="anNiuXiao" id="panKaTianJia">${escapeHtml(t('panel.addCard') || '添加')}</button>`;
+      host.insertBefore(bar, host.firstChild);
+      $('panKaTianJia')?.addEventListener('click', () => {
+        const v = $('panKaXuanZe')?.value || 'custom';
+        if (v === 'custom') { showCustomCardDialog(); return; }
+        const k = state.selectedChat && state.selectedChat.kind === 'single' ? 'single' : 'internal';
+        const cur = panCardsFor(k);
+        if (!cur.includes(v)) cur.push(v);
+        state.panCards = state.panCards || {};
+        state.panCards[k] = cur;
+        try { window.warmy.settingsSave?.({ panCards: state.panCards }); } catch { /* noop */ }
+        refreshPanelVisibility();
+      });
+    }
+    // 自定义卡片列表
+    let box = $('panZiDingYiJi');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'panZiDingYiJi';
+      host.insertBefore(box, bar.nextSibling);
+    }
+    const customs = (state.customCards || []).filter((c) => !kind || c.kind === (kind === 'single' ? 'single' : 'internal'));
+    box.innerHTML = customs.map((c, idx) => `
+      <div class="mianBanKuai" data-custom-card="${idx}">
+        <h3>${escapeHtml(t('panel.customCard') || '自定义卡片')}</h3>
+        <div class="jingYin" style="margin-bottom:4px">${escapeHtml(t('panel.requirement') || '需求')}</div>
+        <div style="white-space:pre-wrap;max-height:120px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px">${escapeHtml(c.req || '')}</div>
+        <div class="jingYin" style="margin:8px 0 4px">${escapeHtml(t('panel.result') || '成果')}</div>
+        <div style="white-space:pre-wrap;max-height:160px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px">${escapeHtml(c.res || '—')}</div>
+        <div style="margin-top:6px;display:flex;gap:6px">
+          <button class="anNiuXiao" data-custom-edit="${idx}">${escapeHtml(t('common.edit') || '编辑')}</button>
+          <button class="anNiuXiao" data-custom-del="${idx}">${escapeHtml(t('common.delete') || '删除')}</button>
+        </div>
+      </div>`).join('');
+    box.querySelectorAll('[data-custom-del]').forEach((b) => b.addEventListener('click', () => {
+      const i = Number(b.dataset.customDel);
+      const k = state.selectedChat && state.selectedChat.kind === 'single' ? 'single' : 'internal';
+      const list = (state.customCards || []).filter((c) => c.kind === k);
+      const target = list[i];
+      if (target) state.customCards = (state.customCards || []).filter((c) => c !== target);
+      try { window.warmy.settingsSave?.({ customCards: state.customCards }); } catch { /* noop */ }
+      renderPanCustomCards(kind);
+    }));
+    box.querySelectorAll('[data-custom-edit]').forEach((b) => b.addEventListener('click', () => {
+      const i = Number(b.dataset.customEdit);
+      const k = state.selectedChat && state.selectedChat.kind === 'single' ? 'single' : 'internal';
+      const list = (state.customCards || []).filter((c) => c.kind === k);
+      showCustomCardDialog(list[i]);
+    }));
+  }
+  /** 自定义卡片弹窗：需求 5000 字上限，固定高度+滚动，取消/保存 */
+  function showCustomCardDialog(edit) {
+    const root = $('duiHuaKuangGen');
+    if (!root) return;
+    $('duiHuaKuangBiaoTi').textContent = t('panel.customCard') || '自定义卡片';
+    const duiHuaTi = $('duiHuaKuangTi');
+    duiHuaTi.innerHTML = `
+      <div class="jingYin" style="margin-bottom:4px">${escapeHtml(t('panel.requirement') || '需求')}（≤5000）</div>
+      <textarea id="customReq" maxlength="5000" style="width:100%;height:160px;resize:none;overflow:auto"></textarea>
+      <div class="jingYin" style="margin:8px 0 4px">${escapeHtml(t('panel.result') || '成果')}</div>
+      <div id="customRes" style="max-height:120px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px">—</div>`;
+    $('customReq').value = edit ? (edit.req || '') : '';
+    if (edit) $('customRes').textContent = edit.res || '—';
+    const dongZuoJi = $('duiHuaKuangDongZuoJi');
+    dongZuoJi.innerHTML = '';
+    const cancel = document.createElement('button');
+    cancel.className = 'anNiuXiao';
+    cancel.textContent = t('common.cancel') || '取消';
+    cancel.onclick = () => root.classList.add('yinCang');
+    const save = document.createElement('button');
+    save.className = 'anNiuZhuYao';
+    save.textContent = t('common.save') || '保存';
+    save.onclick = async () => {
+      const req = ($('customReq')?.value || '').slice(0, 5000);
+      const k = state.selectedChat && state.selectedChat.kind === 'single' ? 'single' : 'internal';
+      state.customCards = state.customCards || [];
+      if (edit) {
+        edit.req = req;
+        // 成果：值班 AI 生成（有 Key 时）
+        try {
+          const r = await window.warmy.customCardGenerate?.({ req });
+          if (r && r.ok && r.text) edit.res = r.text;
+        } catch { /* noop */ }
+      } else {
+        let res = '';
+        try {
+          const r = await window.warmy.customCardGenerate?.({ req });
+          if (r && r.ok && r.text) res = r.text;
+        } catch { /* noop */ }
+        state.customCards.push({ kind: k, req, res });
+      }
+      try { window.warmy.settingsSave?.({ customCards: state.customCards }); } catch { /* noop */ }
+      root.classList.add('yinCang');
+      refreshPanelVisibility();
+    };
+    dongZuoJi.append(cancel, save);
+    root.classList.remove('yinCang');
+  }
   function applyPanelVisibility(kindRaw) {
     const v = panelVisibilityFor(kindRaw);
     try {
@@ -1530,15 +1682,37 @@
       yuanSu.style.display = qiYong ? '' : 'none';
       yuanSu.setAttribute('data-panel-hidden', qiYong ? '0' : '1');
     };
-    set('xiangMuTaiKuai', v.state);
-    set('xiangMuWenJianJiKuai', v.files);
-    set('mianBanJinDuKuai', v.jinDu);
-    set('mianBanMoXingMgrKuai', v.model);
-    set('mianBanMuLuKuai', v.dir);
-    set('mianBanChengYuanJiKuai', v.members);
-    set('mianBanZhiShiKuKuai', v.kb);
-    set('mianBanZhaiYaoKuai', v.summary);
-    set('mianBanAssistKuai', v.assist);
+    // 用户可自定义卡片集合（默认见 PAN_DEFAULT）
+    const kind = String(kindRaw || '');
+    const want = new Set(kind === 'none' || !kind ? [] : panCardsFor(kind === 'single' ? 'single' : 'internal'));
+    const vis = {
+      xiangMuTaiKuai: want.has('xiangMuTaiKuai'),
+      xiangMuWenJianJiKuai: want.has('xiangMuWenJianJiKuai'),
+      mianBanJinDuKuai: want.has('mianBanJinDuKuai'),
+      mianBanMoXingMgrKuai: want.has('mianBanMoXingMgrKuai'),
+      mianBanMuLuKuai: want.has('mianBanMuLuKuai'),
+      mianBanChengYuanJiKuai: want.has('mianBanChengYuanJiKuai'),
+      mianBanZhiShiKuKuai: want.has('mianBanZhiShiKuKuai'),
+      mianBanZhaiYaoKuai: want.has('mianBanZhaiYaoKuai'),
+      mianBanAssistKuai: want.has('mianBanAssistKuai'),
+      diagMianBanKuai: want.has('diagMianBanKuai'),
+      mianBanZhiBanZheKuai: want.has('mianBanZhiBanZheKuai'),
+      mianBanHuiTuiDianKuai: want.has('mianBanHuiTuiDianKuai'),
+    };
+    set('xiangMuTaiKuai', vis.xiangMuTaiKuai);
+    set('xiangMuWenJianJiKuai', vis.xiangMuWenJianJiKuai);
+    set('mianBanJinDuKuai', vis.mianBanJinDuKuai);
+    set('mianBanMoXingMgrKuai', vis.mianBanMoXingMgrKuai);
+    set('mianBanMuLuKuai', vis.mianBanMuLuKuai);
+    set('mianBanChengYuanJiKuai', vis.mianBanChengYuanJiKuai);
+    set('mianBanZhiShiKuKuai', vis.mianBanZhiShiKuKuai);
+    set('mianBanZhaiYaoKuai', vis.mianBanZhaiYaoKuai);
+    set('mianBanAssistKuai', vis.mianBanAssistKuai);
+    set('diagMianBanKuai', vis.diagMianBanKuai);
+    set('mianBanZhiBanZheKuai', vis.mianBanZhiBanZheKuai);
+    set('mianBanHuiTuiDianKuai', vis.mianBanHuiTuiDianKuai);
+    // 自定义卡片容器
+    try { renderPanCustomCards(kind); } catch { /* noop */ }
     return v;
   }
   window.__applyPanelVisibility = applyPanelVisibility;
@@ -2377,14 +2551,77 @@
       { key: 'external', biaoQian: t('dashboard.cat.external'), items: sessions.filter((s) => s.kind === 'external') },
     ];
 
+    // token 消耗汇总（0 不计）+ 成本明细（按窗口/供应商/模型）
+    let tokenTotal = 0;
+    window.__costData = [];
+    try {
+      const sum = await window.warmy.metricsSummary?.();
+      if (sum && typeof sum.promptTokens === 'number') tokenTotal = (sum.promptTokens || 0) + (sum.completionTokens || 0);
+      // 细目：metricsSummary 若带 turns 明细则用之；否则按会话汇总占位
+      const turns = (sum && (sum.turnsDetail || sum.turns_list)) || [];
+      if (Array.isArray(turns) && turns.length) {
+        window.__costData = turns.filter((x) => ((x.promptTokens || 0) + (x.completionTokens || 0)) > 0).map((x) => ({
+          window: x.sessionId || x.window || '—',
+          provider: x.providerId || x.provider || '—',
+          model: x.model || '—',
+          tokens: (x.promptTokens || 0) + (x.completionTokens || 0),
+        }));
+      }
+    } catch { /* noop */ }
     host.innerHTML = `
       <h1>${escapeHtml(t('dashboard.biaoTi'))}</h1>
       <div class="dashStats">
         <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.inProgressProjects'))}</div><div class="stat">${escapeHtml(String(inProgressProjects))}</div></div>
         <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.runningInstances'))}</div><div class="stat">${escapeHtml(String(running))}</div></div>
         <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.pendingDecisions'))}</div><div class="stat">${escapeHtml(String(pendingCount))}</div></div>
+        <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.tokenCost') || 'Token 消耗')}</div><div class="stat">${escapeHtml(String(tokenTotal))}</div></div>
       </div>
+      <details class="dashKa" id="dashChengBen" style="margin:12px 0">
+        <summary style="cursor:pointer;font-weight:600">${escapeHtml(t('dashboard.cost') || '成本')}</summary>
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap" id="costSortBar">
+          <button class="anNiuXiao" data-cost-sort="window">${escapeHtml(t('cost.byWindow') || '按窗口')}</button>
+          <button class="anNiuXiao" data-cost-sort="provider">${escapeHtml(t('cost.byProvider') || '按供应商')}</button>
+          <button class="anNiuXiao" data-cost-sort="model">${escapeHtml(t('cost.byModel') || '按模型')}</button>
+        </div>
+        <div id="costList" style="margin-top:8px"></div>
+      </details>
       <div id="dashHuiHuaJi"></div>`;
+    // 成本：默认按窗口，0 消耗不显示；点击展开明细
+    (function bindCost() {
+      const list = $('costList');
+      const bar = $('costSortBar');
+      if (!list || !bar) return;
+      let sort = 'window';
+      const data = () => { try { return (window.__costData || []); } catch { return []; } };
+      const groupBy = (key) => {
+        const m = new Map();
+        for (const row of data()) {
+          const k = row[key] || '—';
+          if (!m.has(k)) m.set(k, { name: k, tokens: 0, rows: [] });
+          const g = m.get(k);
+          g.tokens += row.tokens || 0;
+          g.rows.push(row);
+        }
+        return [...m.values()].filter((g) => g.tokens > 0).sort((a, b) => b.tokens - a.tokens);
+      };
+      const render = () => {
+        const gs = groupBy(sort === 'window' ? 'window' : sort === 'provider' ? 'provider' : 'model');
+        list.innerHTML = gs.length ? gs.map((g, i) => `
+          <details class="dashKa" style="margin:4px 0">
+            <summary style="cursor:pointer">${escapeHtml(g.name)} · ${escapeHtml(String(g.tokens))}</summary>
+            <div style="margin:6px 0 0 8px;font-size:12px;color:var(--muted)">
+              ${g.rows.filter((r) => r.tokens > 0).map((r) => `<div>${escapeHtml(r.window || '')} / ${escapeHtml(r.provider || '')} / ${escapeHtml(r.model || '')} · ${escapeHtml(String(r.tokens))}</div>`).join('')}
+            </div>
+          </details>`).join('') : '<div class="jingYin">—</div>';
+      };
+      bar.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-cost-sort]');
+        if (!b) return;
+        sort = b.dataset.costSort;
+        render();
+      });
+      render();
+    })();
     const heZi = $('dashHuiHuaJi');
     if (!heZi) return;
 
@@ -2762,7 +2999,9 @@
    * —— 中间 **10 个「牛马」**（每组两个字，不是三个）。后段多露一组，便于核对结尾。
    */
   const CRED_HEAD_GROUPS = 3;
-  const CRED_TAIL_GROUPS = 4;
+  const CRED_MID_SHOW = 3;
+  const CRED_TAIL_GROUPS = 6;
+  const CRED_MASK_GROUPS = 9; // 虚假数量：固定 9 个「牛马」
   function maskCredential(value) {
     const s = String(value || '');
     if (!s) return '—';
@@ -2770,12 +3009,17 @@
     if (raw.length <= 6) return s;
     const Pian = [];
     for (let i = 0; i < raw.length; i += 3) Pian.push(raw.slice(i, i + 3));
-    if (Pian.length <= CRED_HEAD_GROUPS + CRED_TAIL_GROUPS) return Pian.join('-');
-    const yinCang = Pian.length - CRED_HEAD_GROUPS - CRED_TAIL_GROUPS;
+    const need = CRED_HEAD_GROUPS + CRED_MID_SHOW + CRED_TAIL_GROUPS;
+    if (Pian.length <= need) return Pian.join('-');
+    // 开头3 + 中间3 + 结尾6；中间遮挡固定 9 个「牛马」（不暴露真实长度）
+    const head = Pian.slice(0, CRED_HEAD_GROUPS);
+    const mid = Pian.slice(CRED_HEAD_GROUPS, CRED_HEAD_GROUPS + CRED_MID_SHOW);
+    const tail = Pian.slice(-CRED_TAIL_GROUPS);
     return [
-      ...Pian.slice(0, CRED_HEAD_GROUPS),
-      ...Array(yinCang).fill('牛马'),
-      ...Pian.slice(-CRED_TAIL_GROUPS),
+      ...head,
+      ...Array(CRED_MASK_GROUPS).fill('牛马'),
+      ...mid,
+      ...tail,
     ].join('-');
   }
 
@@ -3590,6 +3834,18 @@
       (function bindDshAnZhuang() {
         const st = $('dshZhuangTaiWenBen');
         const xiaoXi = $('dshAnZhuangXiaoXi');
+        // 程序启动/进入设置时立即显示安装状态
+        const shuaXin = async () => {
+          try {
+            const r = await window.warmy.dshStatus();
+            if (st) st.textContent = (r && r.ok)
+              ? `${t('dsh.yiAnZhuang')}${r.version ? ' · ' + r.version : ''}`
+              : t('dsh.weiAnZhuang');
+          } catch { if (st) st.textContent = t('dsh.weiAnZhuang'); }
+        };
+        setTimeout(() => { void shuaXin(); }, 300);
+        // 启动即探测一次（设置页打开时也会刷）
+        setTimeout(() => { try { void (typeof jianCha === 'function' ? jianCha() : null); } catch { /* noop */ } }, 800);
         const xuanran = (r) => {
           if (!st) return;
           if (r && r.ok) st.textContent = `${escapeHtml(t('dsh.yiAnZhuang'))}${r.version ? ' · ' + r.version : ''}${r.dir ? ' · ' + r.dir : ''}`;
@@ -4518,7 +4774,8 @@
           if (sel && sel.options.length <= 1) {
             const picks = (typeof GONGYING_YUSHE !== 'undefined' ? GONGYING_YUSHE : [])
               .map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.biaoQian) + '</option>').join('');
-            sel.innerHTML = '<option value="" selected>' + escapeHtml(t('settings.providerPickHint')) + '</option>' + picks;
+            sel.innerHTML = '<option value="" selected disabled>' + escapeHtml(t('settings.providerPickHint')) + '</option>' + picks;
+            syncTianJiaProvBtn();
           }
         } catch { /* noop */ }
       }, 0);
@@ -4549,17 +4806,13 @@
           uiAlert(String(e && e.message || e));
         }
       };
-      if (btnTianJiaProv) btnTianJiaProv.onclick = () => { void tianJiaProvHandler(); };
-      // 事件委托：即使按钮是后插入的也能点
-      try {
-        if (!window.__tianJiaProvDelegated) {
-          window.__tianJiaProvDelegated = 1;
-          document.addEventListener('click', (Shi) => {
-            const t = Shi.target && Shi.target.closest && Shi.target.closest('#anNiuTianJiaProv');
-            if (t) { Shi.preventDefault(); void tianJiaProvHandler(); }
-          });
-        }
-      } catch { /* noop */ }
+      if (btnTianJiaProv) {
+        btnTianJiaProv.onclick = () => { void tianJiaProvHandler(); };
+        // 占位时不可点（委托会重复触发已移除）
+        btnTianJiaProv.addEventListener('change', syncTianJiaProvBtn);
+      }
+      try { const sp = $('provPreset'); if (sp) sp.addEventListener('change', syncTianJiaProvBtn); } catch { /* noop */ }
+      syncTianJiaProvBtn();
       const __unusedOldAdd = async () => {
         if (state.providers.length >= PROVIDER_MAX) {
           uiAlert(fmtKey('settings.providerMax', { n: String(PROVIDER_MAX) }));
@@ -7032,8 +7285,16 @@
     const sel = state.selectedChat;
     const input = $('shuRu');
     const lie = $('liaoTianLan');
+    // 我的牛马：实例 stopped ⇒ 只读（可看记录/右栏，不可输入发送）
+    let singleStopped = false;
+    try {
+      if (sel && sel.kind === 'single') {
+        const inst = (state.instances || []).find((x) => x.id === sel.id);
+        singleStopped = !!(inst && inst.status === 'stopped');
+      }
+    } catch { /* noop */ }
     const xiangMuTai = sel && sel.kind === 'internal' ? await quXiangMuTai(sel.id) : null;
-    const stopped = !!(xiangMuTai && xiangMuTai.stopped);
+    const stopped = singleStopped || !!(xiangMuTai && xiangMuTai.stopped);
     if (lie) {
       lie.dataset.projectState = xiangMuTai ? (stopped ? 'stopped' : 'running') : 'none';
       lie.dataset.projectCode = xiangMuTai ? String(xiangMuTai.code) : '';
@@ -7047,8 +7308,16 @@
     }
     const btn = $('anNiuFaSong');
     if (btn) {
-      btn.title = stopped ? (input ? input.title: '') : '';
+      btn.disabled = stopped;
+      btn.title = stopped ? (input ? input.title : '') : '';
     }
+    // 附件/语音/紧急度等工具钮：stopped 时一并禁用（仍可看历史与右栏）
+    try {
+      for (const id of ['anNiuAttach', 'anNiuYuYin', 'jinJiTrigger', 'anNiuTingZhiAll']) {
+        const b = $(id);
+        if (b) { b.disabled = stopped; if (stopped) b.style.opacity = '0.45'; else b.style.opacity = ''; }
+      }
+    } catch { /* noop */ }
     syncSendState();
     return stopped;
   }
@@ -10069,6 +10338,17 @@
   async function refreshContainerConsoleGate() {
     const btn = $('anNiuRongQiKongZhiTai');
     if (!btn) return;
+    // 我的牛马永不进容器 ⇒ 控制台按钮直接隐藏（项目里仍保留）
+    try {
+      const sel = state.selectedChat;
+      if (!sel || sel.kind === 'single') {
+        btn.classList.add('yinCang');
+        btn.style.display = 'none';
+        return 'hidden-single';
+      }
+      btn.classList.remove('yinCang');
+      btn.style.display = '';
+    } catch { /* noop */ }
     const menjin = await currentShellGate();
     // 按钮可用 = 面板能打开（引擎就绪）；能不能**跑命令**另有一说（见 applyShellAvailability）
     btn.disabled = !menjin.openable;
