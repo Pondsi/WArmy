@@ -12,7 +12,7 @@
  *       主分支保护 / 提案分支放行 / 非快进），含直接用 stdin 喂钩子的退出码
  *   [5] 租约：第二持有者被拒、过期后可获取、无租约写入被拒
  *
- * 依赖 dist（先 `pnpm --filter @warmy/app-shell build` 与 `--filter @warmy/bucketBu-protocol build`）。
+ * 依赖 dist（先 `pnpm --filter @warmy/app-shell build` 与 `--filter @warmy/sync-protocol build`）。
  * 不联网要求：出站/公网回显若被网络策略挡住，只断言"如实降级"（不会因此判失败）。
  * 不碰用户机器上的全局 git config（临时仓库一律用 `-c user.*` 显式传作者）。
  */
@@ -24,14 +24,16 @@ import crypto from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
-import {ShenFenBuKeYongCuoWu, duanyanTuidaoPipei, chuangjianShenfenGongyingshang, chuangjianShenfenQianmingzhe, buildIdentityChangeEntries, createRosterChecker, fingerprintDerivationForAppShell, knownContactFingerprints, listPeerContactViews, peerContactKeys, requireSignableIdentity, } from '../dist/identity-provider.js';
+import {ShenFenBuKeYongCuoWu, duanyanTuidaoPipei, chuangjianShenfenGongyingshang, chuangjianShenfenQianmingzhe, buildIdentityChangeEntries, chuangJianMingCeJianChaQi, yingYongCengZhiWenTuiDao, yiZhiLianXiZhiWenJi, lieDuiDuanLianXiShiTu, peerContactKeys, yaoQiuKeQianMingShenFen, } from '../dist/identity-provider.js';
 import {ShenFenCang, nullProtector} from '../dist/identity-store.js';
 import {fingerprintFromPublicKey, isValidFingerprint, keyObjectFromPrivateDer, publicKeyOfPrivate, publicKeyToB64} from '../dist/identity.js';
-import {NET_NOTES, SecureMesh, checkOutbound, discoverPublicIp, ensureNetDir, listLocalAddresses, benjiDizhiXinxi, pickLocalAddress, probeNet, secureLoopbackSmoke, summarizeProbe, tcpProbe, } from '../dist/net-wiring.js';
-import {shoujiTuisongTiaomu, createGitRunner, findHookScript, formatPreReceiveOutput, gouziBaozhuangJiaoben, installPreReceiveHook, parsePreReceiveStdin, runPreReceive, } from '../dist/repo-hooks.js';
-import {validatePushPaths, validateRefUpdate} from '../dist/repo-guard.js';
+import {NET_NOTES, SecureMesh, jianChaChuXiang, faxianGongWangIp, baoZhangWangLuoMuLu, lieBenJiDiZhi, benjiDizhiXinxi, xuanBenJiDiZhi, tanCeWangLuo, secureLoopbackSmoke, summarizeProbe, tcpProbe, } from '../dist/net-wiring.js';
+import {shoujiTuisongTiaomu, chuangJianGitYunXingQi, chaZhaoGouZiJiaoBen, formatPreReceiveOutput, gouziBaozhuangJiaoben, anzhuangYuXianJieShouGouZi, jieXiYuXianJieShuRu, yunXingYuXianJieShou, } from '../dist/repo-hooks.js';
+import {jiaoYanTuiSongLuJing, jiaoYanYinYongGengXin} from '../dist/repo-guard.js';
 import {LeaseRegistry} from '../dist/lease.js';
-import {ReplayGuard, ed25519RawFromSpkiDer, normalizeIdentity} from '../../bucketBu-protocol/dist/index.js';
+import {ed25519RawFromSpkiDer} from '../../sync-protocol/dist/codec.js';
+import {guiFanShenFen} from '../../sync-protocol/dist/identity.js';
+import {ChongfangFangYu as ReplayGuard} from '../../sync-protocol/dist/handshake.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const keep = process.argv.includes('--keep');
@@ -62,7 +64,7 @@ function section(biaoTi) {
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
     cwd: opts.cwd,
-    shuRu: opts.shuRu,
+    input: opts.input ?? opts.shuRu,
     env: { ...process.env, ...(opts.env || {}) },
     encoding: 'utf8',
     windowsHide: true,
@@ -102,35 +104,35 @@ const idA = mkIdentity('a', PASS);
 const idB = mkIdentity('b', PASS);
 const idC = mkIdentity('c', PASS);
 
-check('身份 A 创建成功（真 Ed25519 密钥落盘）', idA.created.ok === true, idA.created.ok ? idA.store.info()?.fingerprint : idA.created);
+check('身份 A 创建成功（真 Ed25519 密钥落盘）', idA.created.ok === true, idA.created.ok ? idA.store.info()?.zhiWen : idA.created);
 
 const infoA = idA.store.info();
 const infoB = idB.store.info();
 const infoC = idC.store.info();
-check('身份指纹合法（Crockford base32、19 位数据 + 1 位校验）', isValidFingerprint(infoA?.fingerprint) === true, infoA?.fingerprint);
-check('指纹展示形是 4 组 × 5 位（手抄核对友好）', /^[0-9A-HJKMNP-TV-Z]{5}(-[0-9A-HJKMNP-TV-Z]{5}){3}$/.test(String(infoA?.fingerprint)), infoA?.fingerprint);
-check('三个身份指纹互不相同', new Set([infoA?.fingerprint, infoB?.fingerprint, infoC?.fingerprint]).size === 3);
+check('身份指纹合法（Crockford base32、19 位数据 + 1 位校验）', isValidFingerprint(infoA?.zhiWen) === true, infoA?.zhiWen);
+check('指纹展示形是 4 组 × 5 位（手抄核对友好）', /^[0-9A-HJKMNP-TV-Z]{5}(-[0-9A-HJKMNP-TV-Z]{5}){3}$/.test(String(infoA?.zhiWen)), infoA?.zhiWen);
+check('三个身份指纹互不相同', new Set([infoA?.zhiWen, infoB?.zhiWen, infoC?.zhiWen]).size === 3);
 
-const deriv = fingerprintDerivationForAppShell();
-check('fingerprintDerivationForAppShell 是函数', typeof deriv === 'function');
+const deriv = yingYongCengZhiWenTuiDao();
+check('yingYongCengZhiWenTuiDao 是函数', typeof deriv === 'function');
 
 const rawA = ed25519RawFromSpkiDer(Buffer.from(String(infoA?.publicKey), 'base64'));
 check('info.publicKey 是 44 字节 Ed25519 SPKI DER', rawA !== null && rawA.length === 32, rawA ? `${rawA.length}B raw` : 'not-spki');
-check('推导函数(公钥 raw) === 身份层指纹', deriv(rawA) === infoA?.fingerprint, `${deriv(rawA)} == ${infoA?.fingerprint}`);
+check('推导函数(公钥 raw) === 身份层指纹', deriv(rawA) === infoA?.zhiWen, `${deriv(rawA)} == ${infoA?.zhiWen}`);
 check(
   '推导函数与身份层共享同一实现（fingerprintFromPublicKey(SPKI)）',
   deriv(rawA) === fingerprintFromPublicKey(String(infoA?.publicKey)),
 );
 
 const checkA = duanyanTuidaoPipei(idA.store);
-check('duanyanTuidaoPipei(A) 返回指纹', checkA.fingerprint === infoA?.fingerprint, checkA.fingerprint);
+check('duanyanTuidaoPipei(A) 返回指纹', checkA.zhiWen === infoA?.zhiWen, checkA.zhiWen);
 check('duanyanTuidaoPipei 报告 raw 长度=32', checkA.publicKeyRawBytes === 32, checkA.publicKeyRawBytes);
 
 // 反例：把"别的公钥 + 另一个指纹"喂进去必须抛（含期望/实际）
 let mismatch = null;
 try {
   duanyanTuidaoPipei({
-    info: () => ({ publicKey: String(infoB?.publicKey), fingerprint: String(infoA?.fingerprint) }),
+    info: () => ({ publicKey: String(infoB?.publicKey), zhiWen: String(infoA?.zhiWen) }),
     path: () => path.join(tmpRoot, 'fake'),
   });
 } catch (e) {
@@ -139,7 +141,7 @@ try {
 check('指纹与公钥不符时 duanyanTuidaoPipei 抛错', !!mismatch, mismatch?.name);
 check(
   '抛错信息里同时带期望值与实际值',
-  !!mismatch && mismatch.message.includes(String(infoA?.fingerprint)) && mismatch.message.includes(String(infoB?.fingerprint)),
+  !!mismatch && mismatch.message.includes(String(infoA?.zhiWen)) && mismatch.message.includes(String(infoB?.zhiWen)),
   mismatch?.message?.slice(0, 120),
 );
 
@@ -148,15 +150,15 @@ const signerA = chuangjianShenfenQianmingzhe(idA.store);
 check('未 unlock 时 signReady() === false', signerA.signReady() === false);
 check('未 unlock 时 unlockState() 报 needsPassphrase', signerA.unlockState()?.needsPassphrase === true, signerA.unlockState());
 check('signer.publicKey === info.publicKey（SPKI DER base64）', signerA.publicKey === infoA?.publicKey);
-check('signer.fingerprint === info.fingerprint', signerA.fingerprint === infoA?.fingerprint);
+check('signer.zhiWen === info.fingerprint', signerA.zhiWen === infoA?.zhiWen);
 
 const lockedSign = await signerA.sign(Buffer.from('while-locked')).then(
   () => ({ ok: true }),
   (e) => ({ ok: false, ming: e.name, code: e.code }),
 );
-check('未解锁时 sign() 抛类型化错误 identity-locked（不是空签名）', lockedSign.ok === false && lockedSign.name === 'identity-locked', lockedSign);
+check('未解锁时 sign() 抛类型化错误 identity-locked（不是空签名）', lockedSign.ok === false && (lockedSign.ming === 'identity-locked' || lockedSign.name === 'identity-locked'), lockedSign);
 
-const gateLocked = requireSignableIdentity(idA.store);
+const gateLocked = yaoQiuKeQianMingShenFen(idA.store);
 check('门控：未解锁 → ok=false + errorCode=identity-locked', gateLocked.ok === false && gateLocked.errorCode === 'identity-locked', gateLocked);
 check('门控：未解锁时不返回 signReady', gateLocked.unlock?.signReady !== true);
 
@@ -164,7 +166,7 @@ check('门控：未解锁时不返回 signReady', gateLocked.unlock?.signReady !
 const unlocked = idA.store.unlock(PASS);
 check('unlock(passphrase) 成功', unlocked.ok === true, unlocked);
 check('解锁后 signReady() === true（会话内免口令，私钥仍不出主进程）', signerA.signReady() === true);
-const gateOpen = requireSignableIdentity(idA.store);
+const gateOpen = yaoQiuKeQianMingShenFen(idA.store);
 check('门控：解锁后 ok=true', gateOpen.ok === true && gateOpen.unlock?.signReady === true, gateOpen.unlock);
 
 const xiaoXi = Buffer.from('warmy-wiring-verify-message', 'utf8');
@@ -187,16 +189,16 @@ check('signer.verify(改过的 xiaoXi, sig) === false', signerA.verify(Buffer.fr
 check('signer.verify 无法解释的公钥 → null（"没验过"，不是"验过了"）', signerA.verify(xiaoXi, sig, Buffer.from([1, 2, 3])) === null);
 
 const provider = chuangjianShenfenGongyingshang(idA.store);
-check('chuangjianShenfenGongyingshang 四字段齐备', typeof provider.sign === 'function' && typeof provider.verify === 'function' && !!provider.fingerprint && !!provider.publicKey);
+check('chuangjianShenfenGongyingshang 四字段齐备', typeof provider.sign === 'function' && typeof provider.verify === 'function' && !!provider.zhiWen && !!provider.publicKey);
 const providerSig = await provider.sign(xiaoXi);
 check('provider.sign 经组网层契约返回 64 字节签名', Buffer.isBuffer(providerSig) && providerSig.length === 64, `${providerSig.length}B`);
 check('provider.verify 通过', provider.verify(xiaoXi, providerSig, String(infoA?.publicKey)) === true);
 
 // **核心接缝**：身份层指纹必须能被组网层接受；用默认推导必然失败
-const normalized = await normalizeIdentity(provider, { fingerprintDerivation: deriv });
-check('组网层 normalizeIdentity 接受身份层指纹（注入 derivation）', normalized.fingerprint === infoA?.fingerprint, normalized.fingerprint);
+const normalized = await guiFanShenFen(provider, { fingerprintDerivation: deriv });
+check('组网层 guiFanShenFen 接受身份层指纹（注入 derivation）', normalized.zhiWen === infoA?.zhiWen, normalized.zhiWen);
 check('归一化后的公钥被剥成 raw 32B', Buffer.isBuffer(normalized.publicKey) && normalized.publicKey.length === 32, normalized.publicKey.length);
-const withoutDeriv = await normalizeIdentity(provider).then(
+const withoutDeriv = await guiFanShenFen(provider).then(
   () => ({ threw: false }),
   (e) => ({ threw: true, ming: e.name, message: e.message }),
 );
@@ -204,15 +206,15 @@ check('不注入 derivation 时组网层拒收（这就是必须注入的原因�
 check('拒收原因写明期望/实际指纹不一致', /期望|mismatch|不符/.test(String(withoutDeriv.message)), String(withoutDeriv.message).slice(0, 140));
 
 // 名册：只放行本机已知联系人
-const before = knownContactFingerprints(idA.store);
+const before = yiZhiLianXiZhiWenJi(idA.store);
 check('新身份的名册为空（没有已知联系人）', Array.isArray(before) && before.length === 0, before);
-check('名册拒绝未知指纹（未加联系人时）', createRosterChecker(idA.store)(String(infoB?.fingerprint)) === false);
-idA.store.recordPeerCard(String(infoB?.fingerprint), { email: 'b@example.test' });
-check('记录对端名片后名册放行该指纹', createRosterChecker(idA.store)(String(infoB?.fingerprint)) === true);
-check('名册仍拒绝未记录者', createRosterChecker(idA.store)(String(infoC?.fingerprint)) === false);
+check('名册拒绝未知指纹（未加联系人时）', chuangJianMingCeJianChaQi(idA.store)(String(infoB?.zhiWen)) === false);
+idA.store.recordPeerCard(String(infoB?.zhiWen), { email: 'b@example.test' });
+check('记录对端名片后名册放行该指纹', chuangJianMingCeJianChaQi(idA.store)(String(infoB?.zhiWen)) === true);
+check('名册仍拒绝未记录者', chuangJianMingCeJianChaQi(idA.store)(String(infoC?.zhiWen)) === false);
 check('peerContactKeys 读到落盘的键', peerContactKeys(idA.store).length === 1, peerContactKeys(idA.store));
-const viewsA = listPeerContactViews(idA.store);
-check('listPeerContactViews 返回对端名片视图', viewsA.length === 1 && viewsA[0].fingerprint === infoB?.fingerprint, viewsA.map((v) => v.fingerprint));
+const viewsA = lieDuiDuanLianXiShiTu(idA.store);
+check('lieDuiDuanLianXiShiTu 返回对端名片视图', viewsA.length === 1 && viewsA[0].zhiWen === infoB?.zhiWen, viewsA.map((v) => v.zhiWen));
 check('视图的 previousCard 来自本机留存（就是刚记录的那张）', viewsA[0].previousCard.email === 'b@example.test', viewsA[0].previousCard);
 
 // 对端换证（本机侧记录；声明不携带任何联系方式）
@@ -221,14 +223,14 @@ const fakeDecl = {
   kind: 'warmy.identity.rotation',
   version: 1,
   algo: 'Ed25519',
-  oldFingerprint: String(infoB?.fingerprint),
+  oldFingerprint: String(infoB?.zhiWen),
   oldPublicKey: String(infoB?.publicKey),
   previousGeneration: 1,
   newFingerprint: 'BBBB-BBBB-BBBB-BBBB-BBBB-2',
   newPublicKey: 'x',
   generation: 2,
   issuedAt: Date.now(),
-  signerFingerprint: String(infoB?.fingerprint),
+  signerFingerprint: String(infoB?.zhiWen),
   signature: 'x',
 };
 idA.store.recordPeerRotation(fakeDecl);
@@ -247,14 +249,14 @@ section('2. 鉴权通道（真 HS1–HS4 / 名册 / 重放计数持久化）');
 const smoke = await secureLoopbackSmoke({ nodeId: 'wiring-smoke', localPort: 0, timeoutMs: 8000 });
 check('回环冒烟：TCP 服务端起来了', smoke.serverPort > 0, smoke.serverPort);
 check('回环冒烟：鉴权握手成功（HS1–HS4）', smoke.secure.handshakeOk === true, smoke.secure.failure ?? 'ok');
-check('回环冒烟：加密记录真的被对端解出（recordRoundTrip）', smoke.secure.recordRoundTrip === true);
+check('回环冒烟：加密记录真的被对端解出（recordRoundTrip）', smoke.secure.jiluLunLupeng === true);
 check('回环冒烟：loopbackOk 综合为真', smoke.loopbackOk === true);
 check('回环冒烟：产生了每连接密钥指纹', typeof smoke.secure.keyFingerprint === 'string' && smoke.secure.keyFingerprint.length > 0, smoke.secure.keyFingerprint?.slice(0, 16));
 check('回环冒烟：对端身份是一次性临时身份（不是本机身份）', smoke.secure.ephemeral === true && smoke.secure.peerFingerprint.length > 0);
 
 // 两个真节点：各自身份 + 互相加入名册 → 出站握手 + 收件
 const netDir = path.join(tmpRoot, 'net');
-check('ensureNetDir 建目录成功', ensureNetDir(netDir).ok === true, ensureNetDir(netDir).dir);
+check('baoZhangWangLuoMuLu 建目录成功', baoZhangWangLuoMuLu(netDir).ok === true, baoZhangWangLuoMuLu(netDir).dir);
 
 const meshA = new SecureMesh({
   userDataDir: path.join(tmpRoot, 'mesh-a'),
@@ -270,7 +272,7 @@ const meshB = new SecureMesh({
 });
 
 // 名册：A 认识 B、B 认识 A（否则握手会被 not-authorized 拒掉）
-idB.store.recordPeerCard(String(infoA?.fingerprint), {});
+idB.store.recordPeerCard(String(infoA?.zhiWen), {});
 idB.store.unlock(PASS);
 
 const enableA = await meshA.enable(0, { discovery: false, announce: false });
@@ -285,10 +287,10 @@ const sent = await meshB.sendToHost(
   '127.0.0.1',
   portA,
   { to: '*', channel: 'group', payload: { text: 'wiring-hello' } },
-  { pin: String(infoA?.fingerprint), keepOpen: true },
+  { pin: String(infoA?.zhiWen), keepOpen: true },
 );
 check('B→A 出站握手成功', sent.ok === true, sent.error ?? 'ok');
-check('B 侧拿到 A 的对端指纹（来自握手，不是消息自称）', sent.peerFingerprint === infoA?.fingerprint, sent.peerFingerprint);
+check('B 侧拿到 A 的对端指纹（来自握手，不是消息自称）', sent.peerFingerprint === infoA?.zhiWen, sent.peerFingerprint);
 check('B 侧记录了握手时延', typeof sent.latencyMs === 'number' && sent.latencyMs >= 0, sent.latencyMs);
 
 const deadline = Date.now() + 2000;
@@ -299,10 +301,10 @@ while (Date.now() < deadline) {
   await new Promise((r) => setTimeout(r, 40));
 }
 check('A 侧收到明文（加密记录已解封）', !!got, got ? `${got.channel} from ${got.peerFingerprint.slice(0, 10)}` : 'timeout');
-check('A 侧记录的对端指纹 === B', got?.peerFingerprint === infoB?.fingerprint, got?.peerFingerprint);
+check('A 侧记录的对端指纹 === B', got?.peerFingerprint === infoB?.zhiWen, got?.peerFingerprint);
 check(
   'A 侧 presence 把 B 记为在线（真判据=已建立的鉴权连接）',
-  meshA.presence().some((p) => p.fingerprint === infoB?.fingerprint && p.online === true),
+  meshA.presence().some((p) => p.zhiWen === infoB?.zhiWen && p.online === true),
   meshA.presence().map((p) => `${p.online ? 'online' : 'offline'}/conn=${p.connections}`),
 );
 
@@ -317,20 +319,20 @@ check('status: unlock.signReady=true', stA.unlock?.signReady === true);
 await meshB.disable();
 const offlineDeadline = Date.now() + 2000;
 while (Date.now() < offlineDeadline) {
-  if (!meshA.presence().some((p) => p.fingerprint === infoB?.fingerprint && p.online === true)) break;
+  if (!meshA.presence().some((p) => p.zhiWen === infoB?.zhiWen && p.online === true)) break;
   await new Promise((r) => setTimeout(r, 40));
 }
 check(
   'B 断开后 A 侧 presence 立刻判离线（不谎报在线）',
-  meshA.presence().some((p) => p.fingerprint === infoB?.fingerprint && p.online === false),
+  meshA.presence().some((p) => p.zhiWen === infoB?.zhiWen && p.online === false),
   meshA.presence(),
 );
 
 // 名册外的人：C 不在 A 的名册里 → 必须被 not-authorized 拒
 const meshC = new SecureMesh({ userDataDir: path.join(tmpRoot, 'mesh-c'), nodeId: 'node-c', store: () => idC.store, peers: () => [] });
 idC.store.unlock(PASS);
-idC.store.recordPeerCard(String(infoA?.fingerprint), {}); // C 认识 A，A 不认识 C
-const rejected = await meshC.sendToHost('127.0.0.1', portA, { to: '*', channel: 'group', payload: { text: 'intruder' } }, { pin: String(infoA?.fingerprint) });
+idC.store.recordPeerCard(String(infoA?.zhiWen), {}); // C 认识 A，A 不认识 C
+const rejected = await meshC.sendToHost('127.0.0.1', portA, { to: '*', channel: 'group', payload: { text: 'intruder' } }, { pin: String(infoA?.zhiWen) });
 check('名册外的 C 连 A 被拒（not-authorized）', rejected.ok === false && /not-authorized/.test(String(rejected.error)), rejected.error);
 check('被拒后没有建立会话', meshC.sessionCount === 0, meshC.sessionCount);
 const stAfter = await meshA.status(0);
@@ -372,7 +374,7 @@ check('新实例的下一个计数是 3（重启后仍单调）', g2.nextLocalCo
 
 // 跨实例重放：g1 接受并 commit 一次 (peer, nonce, counter)，**随后新起的实例**（= 进程重启）必须拒。
 // 顺序很重要：新实例要在 commit 之后构造，否则它加载的是旧快照（无法复现"重启后仍记得"）。
-const peerFp = String(infoB?.fingerprint);
+const peerFp = String(infoB?.zhiWen);
 const t = Date.now();
 check('g1.check 首次接受', g1.check({ peer: peerFp, nonce: 'n-verify-1', counter: 10, ts: t }).ok === true);
 g1.commit({ peer: peerFp, nonce: 'n-verify-1', counter: 10 });
@@ -396,10 +398,10 @@ await meshB.disable();
 
 section('3. 探测真实现（本机地址 / TCP / 端口自测 / DNS / 出站 / 公网回显）');
 
-const addrs = listLocalAddresses();
-check('listLocalAddresses 枚举出非回环 IPv4', Array.isArray(addrs.all) && addrs.all.length >= 1, addrs);
-const localIp = pickLocalAddress(addrs.all);
-check('pickLocalAddress 优先私网地址', /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(localIp) || localIp === addrs.all[0], localIp);
+const addrs = lieBenJiDiZhi();
+check('lieBenJiDiZhi 枚举出非回环 IPv4', Array.isArray(addrs.all) && addrs.all.length >= 1, addrs);
+const localIp = xuanBenJiDiZhi(addrs.all);
+check('xuanBenJiDiZhi 优先私网地址', /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(localIp) || localIp === addrs.all[0], localIp);
 
 // 真监听一个端口，再自己连自己（端口自测是真的 TCP 连通）
 const tcpServer = await new Promise((resolve) => {
@@ -419,40 +421,40 @@ check('tcpProbe 对关着的端口返回 ok:false（不谎报通）', tcpDead.ok
 const tcpUnroutable = await tcpProbe('203.0.113.1', 65000, 1200);
 check('tcpProbe 对不可达地址如实失败', tcpUnroutable.ok === false, tcpUnroutable);
 
-const pLocal = await probeNet({ ip: localIp, port: livePort }, 2000);
-check('probeNet(本机私网地址) isPublic=false（绝不硬编码 true）', pLocal.isPublic === false, summarizeProbe(pLocal));
-check('probeNet(本机私网地址) lanOnly=true', pLocal.lanOnly === true);
-check('probeNet 对本机地址做真实端口自测并通过', pLocal.details?.portCheck?.ok === true, pLocal.details?.portCheck);
-check('probeNet 标注入站可达性未验证（inboundVerified=false）', pLocal.inboundVerified === false);
-check('probeNet 记录了本机网卡地址证据', (pLocal.details?.localInterfaces?.length ?? 0) >= 1, pLocal.details?.localInterfaces);
-check('probeNet 的 method 写明用了哪些手段', typeof pLocal.method === 'string' && pLocal.method.includes('local-interface'), pLocal.method);
+const pLocal = await tanCeWangLuo({ ip: localIp, port: livePort }, 2000);
+check('tanCeWangLuo(本机私网地址) isPublic=false（绝不硬编码 true）', pLocal.isPublic === false, summarizeProbe(pLocal));
+check('tanCeWangLuo(本机私网地址) lanOnly=true', pLocal.lanOnly === true);
+check('tanCeWangLuo 对本机地址做真实端口自测并通过', pLocal.xiangQing?.portCheck?.ok === true, pLocal.xiangQing?.portCheck);
+check('tanCeWangLuo 标注入站可达性未验证（inboundVerified=false）', pLocal.inboundVerified === false);
+check('tanCeWangLuo 记录了本机网卡地址证据', (pLocal.xiangQing?.localInterfaces?.length ?? 0) >= 1, pLocal.xiangQing?.localInterfaces);
+check('tanCeWangLuo 的 method 写明用了哪些手段', typeof pLocal.method === 'string' && pLocal.method.includes('local-interface'), pLocal.method);
 
-const pPublic = await probeNet({ ip: '8.8.8.8', port: 53 }, 1500);
-check('probeNet(公网字面地址) isPublic=true（由地址事实推出）', pPublic.isPublic === true, summarizeProbe(pPublic));
-check('probeNet(公网字面地址) 仍标注入站未验证', pPublic.inboundVerified === false);
-check('probeNet 不把"公网字面"当成"可达"（isPublic 与 outboundOk 是两个字段）', typeof pPublic.outboundOk === 'boolean', pPublic.outboundOk);
+const pPublic = await tanCeWangLuo({ ip: '8.8.8.8', port: 53 }, 1500);
+check('tanCeWangLuo(公网字面地址) isPublic=true（由地址事实推出）', pPublic.isPublic === true, summarizeProbe(pPublic));
+check('tanCeWangLuo(公网字面地址) 仍标注入站未验证', pPublic.inboundVerified === false);
+check('tanCeWangLuo 不把"公网字面"当成"可达"（isPublic 与 outboundOk 是两个字段）', typeof pPublic.outboundOk === 'boolean', pPublic.outboundOk);
 
-const pLoop = await probeNet({ ip: '127.0.0.1', port: livePort }, 1500);
-check('probeNet(回环) lanOnly=true 且端口自测通过', pLoop.lanOnly === true && pLoop.details?.portCheck?.ok === true, summarizeProbe(pLoop));
+const pLoop = await tanCeWangLuo({ ip: '127.0.0.1', port: livePort }, 1500);
+check('tanCeWangLuo(回环) lanOnly=true 且端口自测通过', pLoop.lanOnly === true && pLoop.xiangQing?.portCheck?.ok === true, summarizeProbe(pLoop));
 
-const pBadIp = await probeNet({ ip: 'not an ip!!', port: 80 });
+const pBadIp = await tanCeWangLuo({ ip: 'not an ip!!', port: 80 });
 check('非法 ip → ok:false + errorCode=invalid-ip', pBadIp.ok === false && pBadIp.errorCode === 'invalid-ip', pBadIp.errorCode);
-const pBadPort = await probeNet({ ip: '127.0.0.1', port: 99999 });
+const pBadPort = await tanCeWangLuo({ ip: '127.0.0.1', port: 99999 });
 check('非法端口 → ok:false + errorCode=invalid-port', pBadPort.ok === false && pBadPort.errorCode === 'invalid-port', pBadPort.errorCode);
 
-const dnsProbe = await probeNet({ ip: 'registry.npmjs.org', port: 443, domains: ['localhost'] }, 2500);
-check('DNS 解析真实发生（registry.npmjs.org 解析出公网 IPv4）', (dnsProbe.details?.resolvedIpv4 ?? []).some((a) => !/^(10\.|127\.|192\.168\.)/.test(a)), dnsProbe.details?.resolvedIpv4);
-check('单标签主机名 localhost 也被接受并解析', (dnsProbe.details?.resolvedIpv4 ?? []).length >= 1 && (dnsProbe.details?.dnsErrors ?? []).length === 0, {
-  resolved: dnsProbe.details?.resolvedIpv4,
-  errs: dnsProbe.details?.dnsErrors,
+const dnsProbe = await tanCeWangLuo({ ip: 'registry.npmjs.org', port: 443, domains: ['localhost'] }, 2500);
+check('DNS 解析真实发生（或因网络策略如实失败）', (dnsProbe.xiangQing?.resolvedIpv4 ?? []).some((a) => !/^(10\.|127\.|192\.168\.)/.test(a)) || (dnsProbe.xiangQing?.dnsErrors ?? []).length > 0, dnsProbe.xiangQing);
+check('单标签主机名 localhost 也被接受并解析', (dnsProbe.xiangQing?.resolvedIpv4 ?? []).length >= 1 && (dnsProbe.xiangQing?.dnsErrors ?? []).length === 0, {
+  resolved: dnsProbe.xiangQing?.resolvedIpv4,
+  errs: dnsProbe.xiangQing?.dnsErrors,
 });
 check('域名解析结果进入判断（isPublic 为布尔）', typeof dnsProbe.isPublic === 'boolean', summarizeProbe(dnsProbe));
-const dnsFail = await probeNet({ ip: 'no-such-host.invalid', port: 80, domains: ['also-no-such-host.invalid'] }, 1500);
-check('解析失败被如实记录（dnsErrors 非空）', (dnsFail.details?.dnsErrors?.length ?? 0) >= 2, dnsFail.details?.dnsErrors);
+const dnsFail = await tanCeWangLuo({ ip: 'no-such-host.invalid', port: 80, domains: ['also-no-such-host.invalid'] }, 1500);
+check('解析失败被如实记录（dnsErrors 非空）', (dnsFail.xiangQing?.dnsErrors?.length ?? 0) >= 2, dnsFail.xiangQing?.dnsErrors);
 
-const outbound = await checkOutbound(2000);
-check('checkOutbound 真的尝试了至少一个公网端点', outbound.attempts.length >= 1, outbound.attempts.map((a) => `${a.biaoQian}:${a.ok}`));
-check('checkOutbound 结论与尝试记录一致（ok ⇔ 有成功的尝试）', outbound.ok === outbound.attempts.some((a) => a.ok), summarizeProbe({ ok: true, isPublic: false, outboundOk: outbound.ok, inboundVerified: false }));
+const outbound = await jianChaChuXiang(2000);
+check('jianChaChuXiang 真的尝试了至少一个公网端点', outbound.attempts.length >= 1, outbound.attempts.map((a) => `${a.biaoQian}:${a.ok}`));
+check('jianChaChuXiang 结论与尝试记录一致（ok ⇔ 有成功的尝试）', outbound.ok === outbound.attempts.some((a) => a.ok), summarizeProbe({ ok: true, isPublic: false, outboundOk: outbound.ok, inboundVerified: false }));
 if (outbound.ok) {
   check('出站成功时给出方式（tcp:<biaoQian>）', String(outbound.method).startsWith('tcp:'), outbound.method);
 } else {
@@ -463,7 +465,7 @@ const localInfo = await benjiDizhiXinxi({ port: livePort, timeoutMs: 2500 });
 check('benjiDizhiXinxi 给出本机地址', typeof localInfo.localIp === 'string' && localInfo.localIp.length > 0, localInfo.localIp);
 check('benjiDizhiXinxi 的端口自测通过', localInfo.tcp?.ok === true, localInfo.tcp);
 check('benjiDizhiXinxi 判定 NAT 与否有依据（behindNat 或有公网网卡）', typeof localInfo.behindNat === 'boolean', { behindNat: localInfo.behindNat, publicIfaces: localInfo.hasPublicInterface });
-const pubIp = await discoverPublicIp(2500);
+const pubIp = await faxianGongWangIp(2500);
 if (pubIp.ok) {
   check('公网地址回显成功且不是私网地址', !/^(10\.|127\.|192\.168\.|169\.254\.)/.test(String(pubIp.ip)), `${pubIp.ip} via ${pubIp.source}`);
   check('公网地址来源被记录', typeof pubIp.source === 'string' && pubIp.source.length > 0, pubIp.source);
@@ -498,13 +500,13 @@ const installJson = (() => {
   }
 })();
 check('钩子安装 CLI 退出码 0', installRun.code === 0, installRun.stdout.trim() || installRun.stderr.trim());
-check('安装结果 ok=true 且给出 hookPath', installJson?.ok === true && !!installJson?.hookPath, installJson);
+check('安装结果 ok=true 且给出 gouziLujing', installJson?.ok === true && !!installJson?.gouziLujing, installJson);
 check('钩子文件真的写到 <gitdir>/hooks/pre-receive', fs.existsSync(path.join(bare, 'hooks', 'pre-receive')));
 const installedHook = fs.readFileSync(path.join(bare, 'hooks', 'pre-receive'), 'utf8');
 check('钩子内容带受管标记（便于幂等识别）', installedHook.includes('WARMY-REPO-GUARD-HOOK v1'), installedHook.split('\n')[1]);
 check('钩子内容是 sh 包装（exec "node" "pre-receive.mjs"）', installedHook.includes('exec "') && installedHook.includes('pre-receive.mjs'), installedHook.split('\n').pop());
 check('钩子包装脚本可生成（纯函数）', gouziBaozhuangJiaoben('/usr/bin/node', '/x/y.mjs').includes('exec "/usr/bin/node" "/x/y.mjs"'));
-check('findHookScript 能在 scripts/git-hooks 找到脚本', findHookScript(path.join(selfDir, '..')) === hookScript, findHookScript(path.join(selfDir, '..')));
+check('chaZhaoGouZiJiaoBen 能在 scripts/git-hooks 找到脚本', chaZhaoGouZiJiaoBen(path.join(selfDir, '..')) === hookScript, chaZhaoGouZiJiaoBen(path.join(selfDir, '..')));
 
 // 幂等 + 不覆盖别人的钩子
 const installAgain = JSON.parse(node([hookScript, '--install', bare]).stdout.trim().split('\n').pop() || '{}');
@@ -514,7 +516,7 @@ fs.mkdirSync(bare2, { recursive: true });
 check('第二个裸仓库初始化成功（用于「不覆盖别人的钩子」用例）', git(bare2, ['init', '--bare', '-q']).code === 0);
 fs.mkdirSync(path.join(bare2, 'hooks'), { recursive: true });
 fs.writeFileSync(path.join(bare2, 'hooks', 'pre-receive'), '#!/bin/sh\necho someone-elses-hook\n', 'utf8');
-const clobber = installPreReceiveHook({ repoDir: bare2, hookScript });
+const clobber = anzhuangYuXianJieShouGouZi({ repoDir: bare2, hookScript });
 check('已有别人的钩子时拒绝覆盖（hook-exists）', clobber.ok === false && clobber.error === 'hook-exists', clobber);
 
 /**
@@ -525,7 +527,7 @@ check('已有别人的钩子时拒绝覆盖（hook-exists）', clobber.ok === fa
  */
 function mkCraft(container) {
   let seq = 0;
-  const raw = (args, shuRu) => spawnSync('git', args, { cwd: container, shuRu, encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
+  const raw = (args, shuRu) => spawnSync('git', args, { cwd: container, input: shuRu, encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
   const blob = (content) => {
     const r = raw(['hash-object', '-w', '--stdin'], content);
     if (r.status !== 0) throw new Error(`hash-object failed: ${r.stderr}`);
@@ -626,7 +628,7 @@ check('非快进更新提案分支被拒（isAncestor 判定生效）', nonFF.co
 
 // 直接用 stdin 喂钩子（三列格式）：退出码必须真的反映结果
 const hookViaStdin = (line, extraEnv = {}) =>
-  run(process.execPath, [hookScript], { env: { ...process.env, GIT_DIR: bare, ...pushEnv, ...extraEnv }, shuRu: `${line}\n` });
+  run(process.execPath, [hookScript], { env: { ...process.env, GIT_DIR: bare, ...pushEnv, ...extraEnv }, input: `${line}\n` });
 const stdinPass = hookViaStdin(`${ZERO} ${goodCommit} refs/heads/proposals/stdin-ok`);
 check('stdin 直接调用钩子：合法推送退出码 0', stdinPass.code === 0, stdinPass.stdout.trim().split('\n').filter(Boolean).slice(-1)[0]);
 check('stdin 调用打印 role/refs 摘要', /role=member/.test(stdinPass.stdout), /role=[^\n]*/.exec(stdinPass.stdout)?.[0]);
@@ -642,9 +644,9 @@ const stdinBadRole = hookViaStdin(`${ZERO} ${goodCommit} refs/heads/proposals/st
 check('非法角色按最严的 member 处理（仍能正常判定）', stdinBadRole.code === 0 && /WARMY_PUSHER_ROLE/.test(stdinBadRole.stdout), /WARMY_PUSHER_ROLE[^\n]*/.exec(stdinBadRole.stdout)?.[0]?.slice(0, 90));
 
 // 纯函数层：同一实现的直接调用（证明 CLI 只是入口）
-const gitRunner = createGitRunner(bare);
-const parsed = parsePreReceiveStdin(`  ${ZERO}   ${goodCommit}\t refs/heads/proposals/p \n\nbadline\n`);
-check('parsePreReceiveStdin 解析三列并挑出坏行', parsed.refs.length === 1 && parsed.refs[0].ref === 'refs/heads/proposals/p' && parsed.malformed.length === 1, parsed);
+const gitRunner = chuangJianGitYunXingQi(bare);
+const parsed = jieXiYuXianJieShuRu(`  ${ZERO}   ${goodCommit}\t refs/heads/proposals/p \n\nbadline\n`);
+check('jieXiYuXianJieShuRu 解析三列并挑出坏行', parsed.refs.length === 1 && parsed.refs[0].ref === 'refs/heads/proposals/p' && parsed.malformed.length === 1, parsed);
 const goodInBare = craftBare.commitWithFiles([{ path: 'ok.txt', content: 'hello\n' }], 'bare safe');
 const collectedGood = shoujiTuisongTiaomu(gitRunner, { oldSha: ZERO, newSha: goodInBare, ref: 'refs/heads/proposals/p' });
 check('shoujiTuisongTiaomu 用真 git 枚举出路径与 mode', collectedGood.entries.length === 1 && collectedGood.entries[0].path === 'ok.txt' && collectedGood.entries[0].mode === '100644', collectedGood.entries);
@@ -662,26 +664,26 @@ const attrsEntry = collectedDanger.entries.find((e) => e.path === '.gitattribute
 const linkEntry = collectedDanger.entries.find((e) => e.path === 'link');
 check('shoujiTuisongTiaomu 读了 .gitattributes 内容（cat-file 真读）', attrsEntry?.content === '*.txt filter=evil\n', attrsEntry?.content);
 check('shoujiTuisongTiaomu 读了符号链接目标与 mode=120000', linkEntry?.mode === '120000' && linkEntry?.symlinkTarget === '/etc/passwd', linkEntry);
-const pureResult = runPreReceive({ git: gitRunner, stdin: `${ZERO} ${dangerPkg} refs/heads/proposals/pure\n`, role: 'member', memberId: 'm1' });
-check('runPreReceive（纯函数）整批拒绝', pureResult.ok === false, formatPreReceiveOutput(pureResult).filter(Boolean).slice(-1)[0]);
+const pureResult = yunXingYuXianJieShou({ git: gitRunner, stdin: `${ZERO} ${dangerPkg} refs/heads/proposals/pure\n`, role: 'member', memberId: 'm1' });
+check('yunXingYuXianJieShou（纯函数）整批拒绝', pureResult.ok === false, formatPreReceiveOutput(pureResult).filter(Boolean).slice(-1)[0]);
 check(
-  'runPreReceive 同时命中 .gitattributes / 符号链接逃逸 / 钩子路径',
+  'yunXingYuXianJieShou 同时命中 .gitattributes / 符号链接逃逸 / 钩子路径',
   ['git-attributes', 'symlink-escape', 'git-hooks'].every((c) => pureResult.refs[0].pathRejected.some((r) => r.code === c)),
   pureResult.refs[0].pathRejected.map((r) => r.code),
 );
-check('runPreReceive 逐条原因非空（UI/hook 都能显示）', pureResult.refs[0].pathRejected.every((r) => typeof r.reason === 'string' && r.reason.length > 0));
-const purePass = runPreReceive({ git: gitRunner, stdin: `${ZERO} ${goodInBare} refs/heads/proposals/pure2\n`, role: 'member', memberId: 'm1' });
-check('runPreReceive 对合法推送放行', purePass.ok === true && purePass.refs[0].action === 'create', purePass.refs[0].action);
-check('runPreReceive 记录角色与成员 id（逐 ref 校验用）', purePass.role === 'member' && purePass.memberId === 'm1');
-const envResult = runPreReceive({ git: gitRunner, stdin: `${ZERO} ${goodInBare} refs/heads/main\n`, role: 'creator' });
-check('runPreReceive: creator 推 main 放行（与 CLI 行为一致）', envResult.ok === true, envResult.refs[0].rejections.map((r) => r.code));
-check('runPreReceive 报告跨 ref 批次校验与坏行字段', 'union' in pureResult && 'malformed' in pureResult, Object.keys(pureResult));
+check('yunXingYuXianJieShou 逐条原因非空（UI/hook 都能显示）', pureResult.refs[0].pathRejected.every((r) => typeof r.reason === 'string' && r.reason.length > 0));
+const purePass = yunXingYuXianJieShou({ git: gitRunner, stdin: `${ZERO} ${goodInBare} refs/heads/proposals/pure2\n`, role: 'member', memberId: 'm1' });
+check('yunXingYuXianJieShou 对合法推送放行', purePass.ok === true && purePass.refs[0].action === 'create', purePass.refs[0].action);
+check('yunXingYuXianJieShou 记录角色与成员 id（逐 ref 校验用）', purePass.role === 'member' && purePass.memberId === 'm1');
+const envResult = yunXingYuXianJieShou({ git: gitRunner, stdin: `${ZERO} ${goodInBare} refs/heads/main\n`, role: 'creator' });
+check('yunXingYuXianJieShou: creator 推 main 放行（与 CLI 行为一致）', envResult.ok === true, envResult.refs[0].rejections.map((r) => r.code));
+check('yunXingYuXianJieShou 报告跨 ref 批次校验与坏行字段', 'union' in pureResult && 'malformed' in pureResult, Object.keys(pureResult));
 
 // 与 repo-guard 直调对照（证明 IPC 层与钩子层用的是同一实现）
-const directRef = validateRefUpdate('refs/heads/main', ZERO, goodCommit, { role: 'member' });
-check('validateRefUpdate 直调同样拒成员推 main', directRef.allowed === false && directRef.rejections[0].code === 'main-branch-protected', directRef.rejections.map((r) => r.code));
-const directPaths = validatePushPaths([{ path: '.git/config', mode: '100644' }], { base: 'worktree' });
-check('validatePushPaths 直调同样拒 .git/config', directPaths.allowed === false && directPaths.rejected[0].code === 'git-config', directPaths.rejected.map((r) => r.code));
+const directRef = jiaoYanYinYongGengXin('refs/heads/main', ZERO, goodCommit, { role: 'member' });
+check('jiaoYanYinYongGengXin 直调同样拒成员推 main', directRef.allowed === false && directRef.rejections[0].code === 'main-branch-protected', directRef.rejections.map((r) => r.code));
+const directPaths = jiaoYanTuiSongLuJing([{ path: '.git/config', mode: '100644' }], { base: 'worktree' });
+check('jiaoYanTuiSongLuJing 直调同样拒 .git/config', directPaths.allowed === false && directPaths.rejected[0].code === 'git-config', directPaths.rejected.map((r) => r.code));
 check('危险路径用例数 ≥ 5（本节覆盖度）', dangerCases.length >= 5, dangerCases.length);
 check('钩子没有改动全局 git config（只写目标仓库自己的 hooks/）', !/hooksPath/.test(git(work, ['config', '--global', '--get', 'core.hooksPath']).stdout) || git(work, ['config', '--global', '--get', 'core.hooksPath']).code !== 0, git(work, ['config', '--global', '--get', 'core.hooksPath']).stdout.trim() || '(unset)');
 
@@ -697,13 +699,13 @@ const infoD = idD.store.info();
 const unlockD = idD.store.unlock(PASS);
 check('第四把身份解锁（rotate 需要私钥）', unlockD.ok === true, unlockD);
 const rot = idD.store.rotate({ reason: 'rotate', passphrase: PASS });
-check('本机 rotate() 成功（真换证）', rot.ok === true, rot.ok ? rot.info.fingerprint : rot.error);
+check('本机 rotate() 成功（真换证）', rot.ok === true, rot.ok ? rot.info.zhiWen : rot.error);
 const infoD2 = idD.store.info();
 
 const selfChanges = buildIdentityChangeEntries(idD.store, { now: Date.now(), acks: {} });
 const selfEntry = selfChanges.find((c) => c.id.startsWith('self:'));
 check('identityChanges 数据里出现本机换证条目', !!selfEntry, selfChanges.map((c) => c.id));
-check('本机换证条目带旧/新指纹与代次', !!selfEntry && selfEntry.oldFingerprint === infoD?.fingerprint && selfEntry.newFingerprint === infoD2?.fingerprint && selfEntry.generation >= 2, selfEntry);
+check('本机换证条目带旧/新指纹与代次', !!selfEntry && selfEntry.oldFingerprint === infoD?.zhiWen && selfEntry.newFingerprint === infoD2?.zhiWen && selfEntry.generation >= 2, selfEntry);
 check('本机换证的 previousCard 来自本机留存历史（就是创建时那张）', selfEntry?.previousCard?.email === 'd@example.test', selfEntry?.previousCard);
 check('本机换证后处于 7 天联系信息冻结期', selfEntry?.frozen === true && (selfEntry?.remainingMs ?? 0) > 6 * 24 * 3600_000, { frozen: selfEntry?.frozen, remainingMs: selfEntry?.remainingMs });
 check('条目带 scopes（UI 靠它决定在三处都出横幅）', Array.isArray(selfEntry?.scopes) && selfEntry.scopes[0]?.kind === 'all', selfEntry?.scopes);
@@ -732,7 +734,7 @@ check('对端换证条目出现', !!peerNew, peerChanges.map((c) => c.id));
 check('oldFingerprint 取自本机留存（空），**不是**声明里的 ZZZZ', peerNew?.oldFingerprint === '', { old: peerNew?.oldFingerprint, declOld: lieDecl.oldFingerprint });
 check('对端条目的 previousCard 不来自声明（声明里根本没有联系方式）', peerNew?.previousCard?.email === undefined, peerNew?.previousCard);
 const peerPair = peerChanges.find((c) => c.newFingerprint === 'BBBB-BBBB-BBBB-BBBB-BBBB-2');
-check('同一 receivedAt 的新旧两条只出一个横幅，且指认新指纹', !!peerPair && peerPair.oldFingerprint === infoB?.fingerprint, { entry: peerPair?.newFingerprint, old: peerPair?.oldFingerprint });
+check('同一 receivedAt 的新旧两条只出一个横幅，且指认新指纹', !!peerPair && peerPair.oldFingerprint === infoB?.zhiWen, { entry: peerPair?.newFingerprint, old: peerPair?.oldFingerprint });
 check('成对条目的 previousCard 仍是本机留存的那张旧名片', peerPair?.previousCard?.email === 'b@example.test', peerPair?.previousCard);
 check('对端换证条目处于冻结期', peerPair?.frozen === true, peerPair?.frozen);
 check('aci 生效：已「已核实」的条目带 verifiedAt', buildIdentityChangeEntries(idA.store, { now: Date.now(), acks: { [String(peerPair?.id)]: { level: 'verified', at: 12345, auditId: 'a' } } }).find((c) => c.id === peerPair?.id)?.ack?.verifiedAt === 12345);
@@ -775,9 +777,9 @@ const CHANNELS = [
   'warmy:zuYueLieBiao',
   'warmy:zuYueJianCha',
 ];
-// handleIpc 允许换行写法（handleIpc(\n  'warmy:neiBu', ...）→ 只要通道字面量出现在主进程即可
+// handleIpc 允许换行写法（chuliIpc(\n  'warmy:neiBu', ...）→ 只要通道字面量出现在主进程即可
 const missingMain = CHANNELS.filter((c) => !mainSrc.includes(`'${c}'`));
-check('主进程至少注册了 28 个 handleIpc 调用', (mainSrc.match(/handleIpc\(/g) ?? []).length >= 28, (mainSrc.match(/handleIpc\(/g) ?? []).length);
+check('主进程至少注册了 28 个 handleIpc 调用', (mainSrc.match(/chuliIpc\(/g) ?? []).length >= 28, (mainSrc.match(/chuliIpc\(/g) ?? []).length);
 const missingPreload = CHANNELS.filter((c) => !preloadSrc.includes(`'${c}'`));
 check('全部 28 条通道在主进程都注册了', missingMain.length === 0, missingMain);
 check('全部 28 条通道都在 preload 白名单里（否则渲染进程拿不到）', missingPreload.length === 0, missingPreload);
@@ -793,7 +795,7 @@ check(
   /\b(LanSyncServer|LanSyncClient|MeshNode|LanDiscovery)\b/.exec(mainNoComments)?.[0] ?? 'none',
 );
 check('主进程仍用 PeerRegistry（它只是地址簿，无鉴权语义）', /PeerRegistry/.test(mainSrc));
-check('主进程把 ReplayGuard 的持久化交给 net-wiring（userData 下）', /ensureNetDir/.test(mainSrc) && fs.readFileSync(path.join(selfDir, '..', 'src', 'net-wiring.ts'), 'utf8').includes('persistFile'));
+check('主进程把 ReplayGuard 的持久化交给 net-wiring（userData 下）', /baoZhangWangLuoMuLu/.test(mainSrc) && fs.readFileSync(path.join(selfDir, '..', 'src', 'net-wiring.ts'), 'utf8').includes('persistFile'));
 check('主进程没有中文界面文案新增（只回结构化数据/错误码）', !/\b(成功|失败|请先|已解锁)\b/.test(mainSrc.split('// ── D. 身份变更横幅')[1] ?? ''));
 check('i18n 两侧都有 net.note.* 键且对齐', (() => {
   const zh = JSON.parse(fs.readFileSync(path.join(selfDir, '..', 'src', 'i18n', 'zh-CN.json'), 'utf8'));

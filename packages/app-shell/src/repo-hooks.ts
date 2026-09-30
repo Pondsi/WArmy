@@ -98,7 +98,7 @@ function baohanZhuangtai(status: string): boolean {
 }
 
 /**
- * 枚举一个 ref 更新涉及的路径，组装 `PushPathEntry[]`（真正喂给 validatePushPaths 的东西）。
+ * 枚举一个 ref 更新涉及的路径，组装 `PushPathEntry[]`（真正喂给 jiaoYanTuiSongLuJing 的东西）。
  *
  * 用到的真实 git 命令：
  *   · 创建：`git diff-tree -r --no-commit-id --name-status -z --root <new>`

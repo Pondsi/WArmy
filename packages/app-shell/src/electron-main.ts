@@ -2,9 +2,10 @@
  * Electron 主进程 — 零原生模块
  * 注意：Windows 中文路径下 fork 子进程可能乱码，memory ipc 先拷到 userData（ASCII）
  */
-import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut, screen, desktopCapturer } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { execFile, execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { chuangJianP1YunXingShi } from './runtime.js';
@@ -58,6 +59,7 @@ import { BenDiZhangHuCang, PeizhiCang, shengChengPingzheng, type YingYongPeizhi,
  */
 import {
   tanCeRongQiYunXing,
+  qingRongQiTanCeHuanCun,
   yunxingRongqiDongzuo,
   zuiHouRongQiTanCeBaoGao,
   rongQiYunXingGuiGeOf,
@@ -1986,6 +1988,221 @@ chuliIpc('warmy:i18n', (_e, yuYan: string) => {
   // Non-Chinese packs may still list zh ming in copyright context; UI display uses displayName.
   win?.setTitle(strings['yingYong.displayName'] || 'WArmy');
   return { yuYan: weiZhi, strings, displayName: strings['yingYong.displayName'], supported: SUPPORTED_LOCALES };
+});
+
+// ── Microsandbox：虚拟化前提 / 安装 / 卸载 / 重装（msb 可能在 ~/.microsandbox/bin） ──
+/** msb CLI 的常见落盘位置（安装脚本默认写到用户目录，不一定进 PATH） */
+function msbHouXuanLuJing(): string[] {
+  const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
+  return [
+    path.join(home, '.microsandbox', 'bin', process.platform === 'win32' ? 'msb.exe' : 'msb'),
+    path.join(home, '.local', 'bin', 'msb'),
+    'msb',
+  ];
+}
+async function zhaoMsbKe(): Promise<string | null> {
+  for (const p of msbHouXuanLuJing()) {
+    if (p === 'msb') {
+      const r = await new Promise<{ ok: boolean }>((resolve) => {
+        execFile('msb', ['--version'], { timeout: 8000, windowsHide: true }, (err) => resolve({ ok: !err }));
+      });
+      if (r.ok) return 'msb';
+      continue;
+    }
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch { /* next */ }
+  }
+  return null;
+}
+
+/** 平台虚拟化前提是否满足（Windows=虚拟机平台 / Linux=KVM / macOS=Apple Silicon） */
+chuliIpc('warmy:microsandboxXuNiHua', async () => {
+  try {
+    if (process.platform === 'win32') {
+      // 不依赖管理员：HypervisorPresent 为真 ⇒ 虚拟化栈已起来（VirtualMachinePlatform/Hyper-V 至少一套可用）
+      let hypervisorPresent = false;
+      try {
+        const r = await new Promise<{ out: string }>((resolve) => {
+          execFile('powershell.exe', [
+            '-NoProfile', '-Command',
+            '(Get-CimInstance Win32_ComputerSystem).HypervisorPresent',
+          ], { timeout: 15000, windowsHide: true }, (_e, stdout) => resolve({ out: String(stdout || '') }));
+        });
+        hypervisorPresent = /true/i.test(r.out || '');
+      } catch { /* below */ }
+      // 可选功能状态（需要管理员；失败不许当成「没开」）
+      let featureState = 'unknown';
+      try {
+        const r2 = await new Promise<{ out: string; err: string; code: number | null }>((resolve) => {
+          execFile('powershell.exe', [
+            '-NoProfile', '-Command',
+            "(Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State",
+          ], { timeout: 15000, windowsHide: true }, (error, stdout, stderr) => {
+            resolve({ out: String(stdout || ''), err: String(stderr || ''), code: error ? 1 : 0 });
+          });
+        });
+        featureState = (r2.out || '').trim().toLowerCase() || (r2.code ? 'need-admin' : 'unknown');
+      } catch { featureState = 'need-admin'; }
+      const enabled = hypervisorPresent
+        || featureState === 'enabled'
+        || featureState === 'enablepending';
+      return {
+        platform: 'win32',
+        ok: enabled,
+        feature: 'VirtualMachinePlatform',
+        state: hypervisorPresent ? 'hypervisor-present' : featureState,
+        howTo: enabled
+          ? ''
+          : '启用「虚拟机平台」：鼠标右击开始菜单（或 Win+R）→ 运行 → 输入 optionalfeatures → 确定 → 勾选「虚拟机平台」→ 重启。（或管理员 PowerShell：Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -All）',
+      };
+    }
+    if (process.platform === 'linux') {
+      const kvm = fs.existsSync('/dev/kvm');
+      let hint = '';
+      if (!kvm) {
+        hint = '启用 KVM：BIOS 开 VT-x/SVM 后，终端执行 sudo modprobe kvm_intel（或 kvm_amd）；桌面版一般还需 sudo usermod -aG kvm $USER 后重新登录。';
+      }
+      return { platform: 'linux', ok: kvm, feature: 'kvm', state: kvm ? 'ok' : 'missing', howTo: hint };
+    }
+    if (process.platform === 'darwin') {
+      const arm = process.arch === 'arm64';
+      return {
+        platform: 'darwin',
+        ok: arm,
+        feature: 'apple-silicon',
+        state: arm ? 'ok' : 'unsupported-arch',
+        howTo: arm ? '' : 'macOS 仅支持 Apple Silicon（M 系列）；Intel Mac 无法使用本地 microVM。',
+      };
+    }
+    return { platform: process.platform, ok: false, feature: 'unknown', state: 'unsupported', howTo: '当前系统不支持 Microsandbox 本地 microVM。' };
+  } catch (e) {
+    return { platform: process.platform, ok: false, feature: 'error', state: 'error', howTo: String(e) };
+  }
+});
+
+chuliIpc('warmy:microsandboxAnZhuang', async (e, opts?: { force?: boolean }) => {
+  try {
+    const isWin = process.platform === 'win32';
+    const script = isWin
+      ? "irm https://install.microsandbox.dev/windows | iex"
+      : "curl -fsSL https://install.microsandbox.dev | sh";
+    const file = isWin ? 'powershell.exe' : 'sh';
+    const args = isWin ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script] : ['-c', script];
+    const r = await new Promise<{ code: number | null; out: string; err: string }>((resolve) => {
+      execFile(file, args, { timeout: 300000, windowsHide: true, maxBuffer: 1 << 22 }, (error, stdout, stderr) => {
+        resolve({
+          code: error ? (typeof (error as { code?: number }).code === 'number' ? (error as { code?: number }).code! : 1) : 0,
+          out: String(stdout || '').slice(-800),
+          err: String(stderr || error?.message || '').slice(-800),
+        });
+      });
+    });
+    // 成功判定：以「msb 二进制真的在」为准（安装脚本可能非 0 退出但已装好）
+    const bin = await zhaoMsbKe();
+    qingRongQiTanCeHuanCun();
+    const rep = await tanCeRongQiYunXing({ cacheMs: 0, only: ['microsandbox'] });
+    const row = (rep.runtimes || []).find((x) => x.id === 'microsandbox');
+    const ok = !!bin && (!row || row.status !== 'not-installed');
+    return {
+      ok,
+      code: r.code,
+      out: r.out,
+      err: r.err,
+      bin,
+      status: row?.status || (bin ? 'installed' : 'not-installed'),
+      version: row?.version || null,
+    };
+  } catch (e) {
+    return { ok: false, error: xiJingCuoWu(e) };
+  }
+});
+
+/** 卸载 Microsandbox：删用户目录安装树；再探一次用事实说话 */
+chuliIpc('warmy:microsandboxXieZai', async () => {
+  try {
+    const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
+    const dir = path.join(home, '.microsandbox');
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    qingRongQiTanCeHuanCun();
+    const rep = await tanCeRongQiYunXing({ cacheMs: 0, only: ['microsandbox'] });
+    const row = (rep.runtimes || []).find((x) => x.id === 'microsandbox');
+    const gone = !fs.existsSync(dir) && (!row || row.status === 'not-installed');
+    return { ok: gone, removedDir: dir, status: row?.status || 'not-installed', err: gone ? '' : 'dir still exists or still detected' };
+  } catch (e) {
+    return { ok: false, error: xiJingCuoWu(e) };
+  }
+});
+
+/** 当前 Microsandbox 状态（装没装 + 版本 + 虚拟化前提） */
+chuliIpc('warmy:microsandboxZhuangTai', async () => {
+  const bin = await zhaoMsbKe();
+  qingRongQiTanCeHuanCun();
+  const rep = await tanCeRongQiYunXing({ cacheMs: 0, only: ['microsandbox'] });
+  const row = (rep.runtimes || []).find((x) => x.id === 'microsandbox');
+  let virt: { ok: boolean; howTo: string; platform: string; state: string } = { ok: false, howTo: '', platform: process.platform, state: 'unknown' };
+  try {
+    // 复用虚拟化检查逻辑（与 IPC 同实现，避免再起进程）
+    if (process.platform === 'win32') {
+      let hypervisorPresent = false;
+      try {
+        const rh = await new Promise<{ out: string }>((resolve) => {
+          execFile('powershell.exe', ['-NoProfile', '-Command', '(Get-CimInstance Win32_ComputerSystem).HypervisorPresent'], { timeout: 15000, windowsHide: true }, (_e, stdout) => resolve({ out: String(stdout || '') }));
+        });
+        hypervisorPresent = /true/i.test(rh.out || '');
+      } catch { /* ignore */ }
+      let featureState = 'unknown';
+      try {
+        const r = await new Promise<{ out: string; code: number | null }>((resolve) => {
+          execFile('powershell.exe', ['-NoProfile', '-Command', '(Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State'], { timeout: 15000, windowsHide: true }, (error, stdout) => resolve({ out: String(stdout || ''), code: error ? 1 : 0 }));
+        });
+        featureState = (r.out || '').trim().toLowerCase() || (r.code ? 'need-admin' : 'unknown');
+      } catch { featureState = 'need-admin'; }
+      const enabled = hypervisorPresent || featureState === 'enabled' || featureState === 'enablepending';
+      virt = {
+        ok: enabled,
+        platform: 'win32',
+        state: hypervisorPresent ? 'hypervisor-present' : featureState,
+        howTo: enabled ? '' : '启用「虚拟机平台」：右击开始菜单（或 Win+R）→ 运行 → 输入 optionalfeatures → 勾选「虚拟机平台」→ 重启',
+      };
+    } else if (process.platform === 'linux') {
+      const kvm = fs.existsSync('/dev/kvm');
+      virt = { ok: kvm, platform: 'linux', state: kvm ? 'ok' : 'missing', howTo: kvm ? '' : '启用 KVM：BIOS 开 VT-x/SVM 后执行 sudo modprobe kvm_intel（或 kvm_amd）' };
+    } else if (process.platform === 'darwin') {
+      const arm = process.arch === 'arm64';
+      virt = { ok: arm, platform: 'darwin', state: arm ? 'ok' : 'unsupported-arch', howTo: arm ? '' : 'macOS 仅支持 Apple Silicon（M 系列）' };
+    }
+  } catch { /* keep unknown */ }
+  return {
+    ok: !!bin && (!row || row.status !== 'not-installed'),
+    bin,
+    status: row?.status || (bin ? 'installed' : 'not-installed'),
+    version: row?.version || null,
+    virt,
+  };
+});
+
+// ── 全屏取色：截当前屏幕给渲染层点选（浏览器 EyeDropper 出不了窗口） ──
+chuliIpc('warmy:pingMuJieTu', async () => {
+  try {
+    const disp = screen.getPrimaryDisplay();
+    const { width, height } = disp.size;
+    const scale = disp.scaleFactor || 1;
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: {
+        width: Math.round(width * scale),
+        height: Math.round(height * scale),
+      },
+    });
+    const src = sources.find((s) => s.display_id === String(disp.id)) || sources[0];
+    if (!src) return { ok: false, error: 'no-screen' };
+    return { ok: true, dataUrl: src.thumbnail.toDataURL(), width: src.thumbnail.getSize().width, height: src.thumbnail.getSize().height };
+  } catch (e) {
+    return { ok: false, error: xiJingCuoWu(e) };
+  }
 });
 
 chuliIpc('warmy:yuYanXinXi', () =>
@@ -5999,7 +6216,7 @@ chuliIpc('warmy:dshZhuangTai', () => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /** 一键安装 dsh：npm 安装到 userData/dsh-packages（PC 必装；移动端不需要） */
-async function dshZhiXingAnZhuang(): Promise<{ ok: boolean; dir?: string | null; version?: string | null; error?: string; hint?: string }> {
+async function dshZhiXingAnZhuang(_opts?: { force?: boolean }): Promise<{ ok: boolean; dir?: string | null; version?: string | null; error?: string; hint?: string }> {
   try {
     const dest = dshAnZhuangMuLu();
     fs.mkdirSync(dest, { recursive: true });
@@ -6033,7 +6250,7 @@ async function dshZhiXingAnZhuang(): Promise<{ ok: boolean; dir?: string | null;
     return { ok: true, dir, version };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e), hint: 'install-exception' }; }
 }
-chuliIpc('warmy:dshAnZhuang', async () => dshZhiXingAnZhuang());
+chuliIpc('warmy:dshAnZhuang', async (_e, opts?: { force?: boolean }) => dshZhiXingAnZhuang(opts));
 
 /** 产品定稿：PC 安装后**默认装 dsh**（后台一次；失败不挡启动，可在设置里手动再装） */
 function dshMoRenBaoZhuang(): void {

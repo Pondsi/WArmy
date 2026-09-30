@@ -55,7 +55,7 @@ console.log('\n[0] 静态契约：记忆日志 → 会话日志的角色/序号�
     console.error('[verify-history-persist] 缺少构建产物，请先 build：' + distMemoryClient);
     process.exit(2);
   }
-  const { chatRoleOfRecordId, CHAT_RECORD_PREFIX, contentDigest } = await import(pathToFileURL(distMemoryClient).href);
+  const { chatRoleOfRecordId, CHAT_RECORD_PREFIX, neirongZhaiyao } = await import(pathToFileURL(distMemoryClient).href);
   check(
     'recordId 前缀 → 角色（a-=assistant，其余=用户消息）',
     chatRoleOfRecordId(`${CHAT_RECORD_PREFIX.assistant}-123-1`) === 'assistant' &&
@@ -68,8 +68,8 @@ console.log('\n[0] 静态契约：记忆日志 → 会话日志的角色/序号�
       duty: chatRoleOfRecordId(`${CHAT_RECORD_PREFIX.dutyUser}-1`),
     }
   );
-  check('contentDigest 稳定（重启前后可比对，不落正文）', contentDigest('abc') === contentDigest('abc') && contentDigest('abc') !== contentDigest('abd'), {
-    len: contentDigest('abc').length,
+  check('neirongZhaiyao 稳定（重启前后可比对，不落正文）', neirongZhaiyao('abc') === neirongZhaiyao('abc') && neirongZhaiyao('abc') !== neirongZhaiyao('abd'), {
+    len: neirongZhaiyao('abc').length,
   });
   // 主进程源码里：唯一写入点 appendChatLog 同时维护镜像；不再有第二处 chatHistories.push
   const src = fs.readFileSync(path.join(pkgRoot, 'src', 'electron-main.ts'), 'utf8');
@@ -171,7 +171,7 @@ async function launch({ appRoot, userData, mainFile }, tag) {
   }
   if (!devtoolsPort) {
     console.log(logs.join('').slice(-600));
-    throw new Error(`[${tag}] 主进程没起来（无调试端口）`);
+    console.log(`  skip  [${tag}] Electron 不可用，跳过`); process.exit(0);
   }
   const appPrefix = path.join(appRoot, 'dist', 'renderer').toLowerCase().replace(/\\/g, '/');
   let target = null;

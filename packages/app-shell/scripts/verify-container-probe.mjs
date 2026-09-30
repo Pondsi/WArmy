@@ -72,7 +72,7 @@ const ZH = JSON.parse(fs.readFileSync(path.join(i18nDir, 'zh-CN.json'), 'utf8'))
 const EN = JSON.parse(fs.readFileSync(path.join(i18nDir, 'en-US.json'), 'utf8'));
 
 /* ── 1. 真机探测 ── */
-section('1. 真机探测（12 个候选）');
+section('1. 真机探测（13 个候选）');
 const t0 = Date.now();
 // 门禁＝等价于用户显式点「查看本机已有容器」⇒ 允许真的查询 wsl.exe（deep:true）
 const report = await tanCeRongQiYunXing({ cacheMs: 0, perProbeTimeoutMs: 5000, concurrency: 4, deep: true });
@@ -80,11 +80,11 @@ const wallMs = Date.now() - t0;
 console.log(JSON.stringify(report, null, 1));
 
 ok(report.ok === true, '1-1 探测返回结构化报告（ok=true）');
-ok(report.runtimes.length === 12, '1-2 候选运行时 12 个（ADR §3.1 清单）', 'n=' + report.runtimes.length);
+ok(report.runtimes.length === 13, '1-2 候选运行时 13 个（ADR §3.1 清单）', 'n=' + report.runtimes.length);
 ok(report.runtimes.length === CONTAINER_RUNTIME_SPECS.length, '1-2b 与静态目录逐条对齐', CONTAINER_RUNTIME_SPECS.length);
 const ids = report.runtimes.map((r) => r.id);
-const wantIds = ['docker', 'podman', 'wsl', 'nerdctl', 'rancher-desktop', 'colima', 'lima', 'windows-sandbox', 'lxd-incus', 'isulad', 'pouch', 'kata'];
-ok(wantIds.every((w) => ids.includes(w)), '1-2c 12 个 id 与 ADR 清单一致（含国内外运行时）', JSON.stringify(ids));
+const wantIds = ['microsandbox', 'docker', 'podman', 'wsl', 'nerdctl', 'rancher-desktop', 'colima', 'lima', 'windows-sandbox', 'lxd-incus', 'isulad', 'pouch', 'kata'];
+ok(wantIds.every((w) => ids.includes(w)), '1-2c 13 个 id 与 ADR 清单一致（含国内外运行时）', JSON.stringify(ids));
 ok(report.runtimes.every((r) => typeof r.probeMs === 'number'), '1-3 每条都带探测耗时（可诊断慢探测）');
 ok(wallMs < 25000, '1-4 整轮探测在本机 < 25s（不挂住 UI；本机实测毫秒级）', wallMs + 'ms');
 
@@ -189,7 +189,7 @@ ok(report.attentionIds.every((id) => ['installed-not-running', 'engine-error'].i
 section('6. 成本与缓存');
 const cached = await tanCeRongQiYunXing({ cacheMs: 60000, deep: true });
 ok(cached.cached === true, '6-1 短时间内的第二次探测命中缓存（点两次按钮不会重复压机器）');
-ok(cached.runtimes.length === 12, '6-1b 缓存报告形状不变');
+ok(cached.runtimes.length === 13, '6-1b 缓存报告形状不变');
 const fresh = await tanCeRongQiYunXing({ cacheMs: 0, deep: true });
 ok(fresh.cached === false, '6-2 force 时真的重探（cached=false）');
 
@@ -260,7 +260,7 @@ const REQUIRED = [
   // 诊断事件流（事件日志已从"控制台"降级为独立排障视图）
   'console.tiShi', 'console.biaoTi', 'tip.console', 'console.clearTip', 'console.empty', 'console.redacted',
 ];
-for (const rid of ['docker', 'podman', 'wsl', 'nerdctl', 'rancher-desktop', 'colima', 'lima', 'windows-sandbox', 'lxd-incus', 'isulad', 'pouch', 'kata']) {
+for (const rid of ['microsandbox', 'docker', 'podman', 'wsl', 'nerdctl', 'rancher-desktop', 'colima', 'lima', 'windows-sandbox', 'lxd-incus', 'isulad', 'pouch', 'kata']) {
   for (const f of ['ming', 'cost', 'commercial', 'os', 'size']) REQUIRED.push('container.rt.' + rid + '.' + f);
 }
 const missZh = REQUIRED.filter((k) => !ZH[k]);

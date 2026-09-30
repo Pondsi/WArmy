@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {validatePushPaths, validateRefUpdate, saomiaoKeFabucDaochu, normalizeRepoPath} from '../dist/repo-guard.js';
+import {jiaoYanTuiSongLuJing, jiaoYanYinYongGengXin, saomiaoKeFabucDaochu, guiFanHuaCangKuLuJing} from '../dist/repo-guard.js';
 import {LeaseRegistry} from '../dist/lease.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
@@ -61,7 +61,7 @@ console.log(`repo-guard 验证开始`);
 console.log(`临时目录: ${tmpRoot}`);
 
 // ─────────────────────────────────────────────────────────────────────────────
-section('1. 危险推送路径必须被拒（validatePushPaths）');
+section('1. 危险推送路径必须被拒（jiaoYanTuiSongLuJing）');
 // ─────────────────────────────────────────────────────────────────────────────
 
 const dangerCases = [
@@ -122,20 +122,20 @@ const dangerCases = [
 ];
 
 for (const c of dangerCases) {
-  const r = validatePushPaths(c.entries);
+  const r = jiaoYanTuiSongLuJing(c.entries);
   const hit = r.rejected.some((x) => x.code === c.expect);
   check(c.biaoQian, r.allowed === false && hit, `${c.expect} | 实际=[${codes(r)}] ${r.rejected[0]?.reason ?? ''}`);
 }
 
-const gitdirHooks = validatePushPaths(['hooks/post-receive'], { base: 'gitdir' });
+const gitdirHooks = jiaoYanTuiSongLuJing(['hooks/post-receive'], { base: 'gitdir' });
 check('base=gitdir：hooks/post-receive 被拒', gitdirHooks.allowed === false && codes(gitdirHooks).includes('git-hooks'), codes(gitdirHooks));
-const gitdirConfig = validatePushPaths(['config'], { base: 'gitdir' });
+const gitdirConfig = jiaoYanTuiSongLuJing(['config'], { base: 'gitdir' });
 check('base=gitdir：config 被拒', gitdirConfig.allowed === false && codes(gitdirConfig).includes('git-config'), codes(gitdirConfig));
-const gitdirDotGit = validatePushPaths(['.git/hooks/post-receive'], { base: 'gitdir' });
+const gitdirDotGit = jiaoYanTuiSongLuJing(['.git/hooks/post-receive'], { base: 'gitdir' });
 check('base=gitdir：显式前缀 .git/hooks/… 仍被拒', gitdirDotGit.allowed === false, codes(gitdirDotGit));
 
 section('1b. 正常路径必须通过');
-const okPush = validatePushPaths([
+const okPush = jiaoYanTuiSongLuJing([
   'src/yingYong.ts',
   'packages/app-shell/src/index.ts',
   'docs/报告.md',
@@ -146,17 +146,17 @@ check(
   okPush.allowed === true && okPush.accepted.length === 4,
   `accepted=${JSON.stringify(okPush.accepted)}`
 );
-const okAttr = validatePushPaths([{ path: '.gitattributes', content: '*.png binary\n* text=auto\n' }]);
+const okAttr = jiaoYanTuiSongLuJing([{ path: '.gitattributes', content: '*.png binary\n* text=auto\n' }]);
 check('.gitattributes 干净内容（text=auto / binary）通过', okAttr.allowed === true, codes(okAttr));
-const attrNoContentLoose = validatePushPaths([{ path: '.gitattributes' }], { requireAttributesContent: false });
+const attrNoContentLoose = jiaoYanTuiSongLuJing([{ path: '.gitattributes' }], { requireAttributesContent: false });
 check(
   'requireAttributesContent:false 时未给内容的 .gitattributes 放行但给告警',
   attrNoContentLoose.allowed === true && attrNoContentLoose.warnings.length > 0,
   attrNoContentLoose.warnings.join(' / ')
 );
-const insideLink = validatePushPaths([{ path: 'link', mode: '120000', symlinkTarget: 'src/yingYong.ts' }]);
+const insideLink = jiaoYanTuiSongLuJing([{ path: 'link', mode: '120000', symlinkTarget: 'src/yingYong.ts' }]);
 check('指向仓库内的符号链接放行（但给告警）', insideLink.allowed === true && insideLink.warnings.length > 0, insideLink.warnings.join(' / '));
-const single = validatePushPaths('src/single.ts');
+const single = jiaoYanTuiSongLuJing('src/single.ts');
 check('单字符串入参可用', single.allowed === true && single.accepted[0] === 'src/single.ts', single.accepted);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,21 +175,21 @@ const bypass = [
   { biaoQian: '[大小写] ".Git/Hooks/Post-Receive"', entries: ['.Git/Hooks/Post-Receive'], expect: 'git-hooks' },
 ];
 for (const c of bypass) {
-  const r = validatePushPaths(c.entries);
+  const r = jiaoYanTuiSongLuJing(c.entries);
   const hit = r.rejected.some((x) => x.code === c.expect);
   check(c.biaoQian, r.allowed === false && hit, `${c.expect} | 实际=[${codes(r)}]`);
 }
 
-const zw = validatePushPaths(['.git\u200b/config']);
+const zw = jiaoYanTuiSongLuJing(['.git\u200b/config']);
 check(
   '[Unicode] 零宽字符被记录为别名（审计可见）',
   (zw.rejected[0]?.aliases ?? []).includes('unicode'),
   JSON.stringify(zw.rejected[0]?.aliases)
 );
-const upper = validatePushPaths(['.GIT/CONFIG']);
+const upper = jiaoYanTuiSongLuJing(['.GIT/CONFIG']);
 check('[大小写] 大小写别名被记录（审计可见）', (upper.rejected[0]?.aliases ?? []).includes('case'), JSON.stringify(upper.rejected[0]?.aliases));
 
-const caseCollision = validatePushPaths(['src/A.ts', 'src/a.ts']);
+const caseCollision = jiaoYanTuiSongLuJing(['src/A.ts', 'src/a.ts']);
 check(
   '[大小写碰撞] src/A.ts + src/a.ts 同批次两者都被拒',
   caseCollision.allowed === false && caseCollision.rejected.length === 2 && caseCollision.accepted.length === 0,
@@ -197,24 +197,24 @@ check(
 );
 const nfc = 'caf\u00e9.txt';
 const nfd = 'cafe\u0301.txt';
-const uniCollision = validatePushPaths([nfc, nfd]);
+const uniCollision = jiaoYanTuiSongLuJing([nfc, nfd]);
 check(
   '[Unicode 碰撞] NFC 与 NFD 的 café.txt 被判为同一文件',
   uniCollision.allowed === false && uniCollision.rejected.length === 2,
   `rejected=${JSON.stringify(uniCollision.rejected.map((r) => [r.path, r.code]))}`
 );
-const dup = validatePushPaths(['src/dup.ts', 'src/zhongFu.ts']);
+const dup = jiaoYanTuiSongLuJing(['src/dup.ts', 'src/dup.ts']);
 check('完全重复路径 = 只收一条 + 告警（不算绕过）', dup.allowed === true && dup.accepted.length === 1 && dup.warnings.length > 0, dup.warnings[0]);
 
-const norm = normalizeRepoPath('．/／src/../src\\yingYong.ts ');
+const norm = guiFanHuaCangKuLuJing('．/／src/../src\\yingYong.ts ');
 check(
-  'normalizeRepoPath 归一化可见（供审计/日志用）',
+  'guiFanHuaCangKuLuJing 归一化可见（供审计/日志用）',
   norm.ok === true && norm.normalized === 'src/yingYong.ts' && norm.aliases.length > 0,
   `${norm.normalized} aliases=${JSON.stringify(norm.aliases)} noisy=${norm.noisy}`
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-section('3. ref 规则（validateRefUpdate）');
+section('3. ref 规则（jiaoYanYinYongGengXin）');
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ffYes = () => true;
@@ -223,72 +223,72 @@ const ffNo = () => false;
 const refCases = [
   {
     biaoQian: '成员推主分支 refs/heads/main → 拒',
-    res: validateRefUpdate('refs/heads/main', A, B, { role: 'member', isAncestor: ffYes }),
+    res: jiaoYanYinYongGengXin('refs/heads/main', A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'main-branch-protected',
   },
   {
     biaoQian: '成员推 refs/heads/master → 拒',
-    res: validateRefUpdate('refs/heads/master', A, B, { role: 'member', isAncestor: ffYes }),
+    res: jiaoYanYinYongGengXin('refs/heads/master', A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'main-branch-protected',
   },
   {
     biaoQian: '成员删自己的提案分支 → 拒（不允许删 ref）',
-    res: validateRefUpdate('refs/heads/proposals/fix-1', A, Z, { role: 'member' }),
+    res: jiaoYanYinYongGengXin('refs/heads/proposals/fix-1', A, Z, { role: 'member' }),
     expect: 'ref-delete',
   },
   {
     biaoQian: '创建者删环境 ref → 拒（环境 ref 任何人不得删）',
-    res: validateRefUpdate('refs/environments/staging', A, Z, { role: 'creator', allowDeleteByCreator: true }),
+    res: jiaoYanYinYongGengXin('refs/environments/staging', A, Z, { role: 'creator', allowDeleteByCreator: true }),
     expect: 'env-ref-delete',
   },
   {
     biaoQian: '成员推环境 ref → 拒（只允许 creator/admin）',
-    res: validateRefUpdate('refs/environments/staging', A, B, { role: 'member', isAncestor: ffYes }),
+    res: jiaoYanYinYongGengXin('refs/environments/staging', A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'env-ref-protected',
   },
   {
     biaoQian: '非快进推送 → 拒',
-    res: validateRefUpdate('refs/heads/proposals/fix-1', A, C, { role: 'member', isAncestor: ffNo }),
+    res: jiaoYanYinYongGengXin('refs/heads/proposals/fix-1', A, C, { role: 'member', isAncestor: ffNo }),
     expect: 'non-fast-forward',
   },
   {
     biaoQian: '强制推（--force）→ 拒',
-    res: validateRefUpdate('refs/heads/proposals/fix-1', A, C, { role: 'member', force: true, isAncestor: ffYes }),
+    res: jiaoYanYinYongGengXin('refs/heads/proposals/fix-1', A, C, { role: 'member', force: true, isAncestor: ffYes }),
     expect: 'forced-update',
   },
   {
     biaoQian: '没有对象图可判定 → fail-closed 拒',
-    res: validateRefUpdate('refs/heads/proposals/fix-1', A, C, { role: 'member' }),
+    res: jiaoYanYinYongGengXin('refs/heads/proposals/fix-1', A, C, { role: 'member' }),
     expect: 'fast-forward-unverified',
   },
   {
     biaoQian: 'ref 名非法（含 ..）→ 拒',
-    res: validateRefUpdate('refs/heads/../evil', A, C, { role: 'member', isAncestor: ffYes }),
+    res: jiaoYanYinYongGengXin('refs/heads/../evil', A, C, { role: 'member', isAncestor: ffYes }),
     expect: 'ref-invalid',
   },
   {
     biaoQian: 'ref 名非法（.lock 结尾）→ 拒',
-    res: validateRefUpdate('refs/heads/evil.lock', A, C, { role: 'member', isAncestor: ffYes }),
+    res: jiaoYanYinYongGengXin('refs/heads/evil.lock', A, C, { role: 'member', isAncestor: ffYes }),
     expect: 'ref-invalid',
   },
   {
     biaoQian: '对象名非法 → 拒',
-    res: validateRefUpdate('refs/heads/proposals/x', 'not-a-sha', C, { role: 'member', isAncestor: ffYes }),
+    res: jiaoYanYinYongGengXin('refs/heads/proposals/x', 'not-a-sha', C, { role: 'member', isAncestor: ffYes }),
     expect: 'sha-invalid',
   },
   {
     biaoQian: '成员推 refs/heads/别人的分支 → 拒（白名单）',
-    res: validateRefUpdate('refs/heads/feature-x', A, B, { role: 'member', isAncestor: ffYes }),
+    res: jiaoYanYinYongGengXin('refs/heads/feature-x', A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'ref-not-whitelisted',
   },
   {
     biaoQian: '推 refs/replace/** → 拒（永久封禁，改对象图）',
-    res: validateRefUpdate('refs/replace/' + A, A, B, { role: 'member', isAncestor: ffYes }),
+    res: jiaoYanYinYongGengXin('refs/replace/' + A, A, B, { role: 'member', isAncestor: ffYes }),
     expect: 'ref-blocked',
   },
   {
     biaoQian: 'oldSha 与服务端不一致（并发/强推）→ 拒',
-    res: validateRefUpdate('refs/heads/proposals/fix-1', A, B, { role: 'member', isAncestor: ffYes, knownSha: D }),
+    res: jiaoYanYinYongGengXin('refs/heads/proposals/fix-1', A, B, { role: 'member', isAncestor: ffYes, knownSha: D }),
     expect: 'stale-old-sha',
   },
 ];
@@ -298,19 +298,19 @@ for (const c of refCases) {
 }
 
 section('3b. 合法推送必须通过');
-const refOk = validateRefUpdate('refs/heads/proposals/fix-1', Z, B, { role: 'member', memberId: 'm1', isAncestor: ffYes });
+const refOk = jiaoYanYinYongGengXin('refs/heads/proposals/fix-1', Z, B, { role: 'member', memberId: 'm1', isAncestor: ffYes });
 check('成员新建提案分支（create + 快进）→ 通过', refOk.allowed === true && refOk.action === 'create', JSON.stringify(refOk.rejections));
-const refOwn = validateRefUpdate('refs/heads/members/m1/wip', A, B, { role: 'member', memberId: 'm1', isAncestor: ffYes });
+const refOwn = jiaoYanYinYongGengXin('refs/heads/members/m1/wip', A, B, { role: 'member', memberId: 'm1', isAncestor: ffYes });
 check('成员推自己的 refs/heads/members/m1/** → 通过', refOwn.allowed === true, codes(refOwn));
-const refOther = validateRefUpdate('refs/heads/members/m2/wip', A, B, { role: 'member', memberId: 'm1', isAncestor: ffYes });
+const refOther = jiaoYanYinYongGengXin('refs/heads/members/m2/wip', A, B, { role: 'member', memberId: 'm1', isAncestor: ffYes });
 check('成员推别人的 members 命名空间 → 拒', refOther.allowed === false && codes(refOther).includes('ref-not-whitelisted'), codes(refOther));
-const refCreatorMain = validateRefUpdate('refs/heads/main', A, B, { role: 'creator', isAncestor: ffYes });
+const refCreatorMain = jiaoYanYinYongGengXin('refs/heads/main', A, B, { role: 'creator', isAncestor: ffYes });
 check('创建者快进推主分支 → 通过', refCreatorMain.allowed === true, codes(refCreatorMain));
-const refCreatorForceMain = validateRefUpdate('refs/heads/main', A, B, { role: 'creator', force: true });
+const refCreatorForceMain = jiaoYanYinYongGengXin('refs/heads/main', A, B, { role: 'creator', force: true });
 check('创建者强推主分支 → 默认仍拒（可回退靠检查点，不靠 force）', refCreatorForceMain.allowed === false && codes(refCreatorForceMain).includes('forced-update'), codes(refCreatorForceMain));
-const refEnvCreator = validateRefUpdate('refs/environments/staging', A, B, { role: 'creator', isAncestor: ffYes });
+const refEnvCreator = jiaoYanYinYongGengXin('refs/environments/staging', A, B, { role: 'creator', isAncestor: ffYes });
 check('创建者更新环境 ref → 通过', refEnvCreator.allowed === true, codes(refEnvCreator));
-const refNoop = validateRefUpdate('refs/heads/proposals/fix-1', A, A, { role: 'member' });
+const refNoop = jiaoYanYinYongGengXin('refs/heads/proposals/fix-1', A, A, { role: 'member' });
 check('无变化的 no-op → 放行但给告警', refNoop.allowed === true && refNoop.action === 'noop' && refNoop.warnings.length > 0, refNoop.warnings[0]);
 
 // ─────────────────────────────────────────────────────────────────────────────

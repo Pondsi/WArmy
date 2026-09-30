@@ -93,7 +93,7 @@ ok(P.shiFouHeFaRongQiXiangMuMing(n1) && n1 === P.rongQiXiangMuMing('g-1') && n1 
 const ref = P.solidifiedImageRef('g-1', 1700000000000);
 ok(P.SOLIDIFIED_IMAGE_RE.test(ref) && P.shiFouYunXuJingXiang(ref), '2-2 固化镜像引用形态正确且被放行', ref);
 ok(P.shiFouYunXuJingXiang('nginx:alpine') === false, '2-3 别人的镜像引用不被放行（固化只碰我们自己的命名空间）');
-ok(P.CONTAINER_PROJECT_MOUNT === '/workspace', '2-4 项目目录挂载点是 /workspace（与给用户的安装提示词一致）', P.CONTAINER_PROJECT_MOUNT);
+ok(P.RONGQI_XIANGMU_GUAZAI === '/workspace', '2-4 项目目录挂载点是 /workspace（与给用户的安装提示词一致）', P.RONGQI_XIANGMU_GUAZAI);
 
 /* ══ 3. 宿主目录加锁：最小侵入 + 一条命令可撤销 ══ */
 section('3. 宿主目录加锁（P5）：argv 白名单 + 可撤销 + 平台诚实');
@@ -143,11 +143,11 @@ store.recordFileAccess('g-1', { op: 'backup', path: 'C:\\backup\\hosts.bak', ts:
 const ledger2 = store.listFileAccess('g-1');
 ok(ledger2.length === 2 && ledger2[0].op === 'backup' && ledger2[0].path.indexOf('backup') >= 0,
   '4-5 非项目内的路径也在同一份台账里（"其他文件"那一栏的来源）', JSON.stringify(ledger2.map((x) => [x.op, x.path])));
-for (let i = 0; i < G.PROJECT_LEDGER_LIMIT + 20; i++) {
+for (let i = 0; i < G.XIANGMU_ZHANGBEN_SHANGXIAN + 20; i++) {
   store.recordFileAccess('g-1', { op: 'read', path: 'C:\\proj\\f' + i, ts: 4000 + i, ok: true, by: 'helper-tool' });
 }
 const ledger3 = store.listFileAccess('g-1', 500);
-ok(ledger3.length === G.PROJECT_LEDGER_LIMIT, '4-6 台账**有界**（超过上限丢最旧的，随项目同步不会无限涨）', ledger3.length);
+ok(ledger3.length === G.XIANGMU_ZHANGBEN_SHANGXIAN, '4-6 台账**有界**（超过上限丢最旧的，随项目同步不会无限涨）', ledger3.length);
 const synced = store.applyProjectSync('g-9', {
   ming: '来自创建者的项目', type: 'internal',
   project: { devEnv: 'container', runtimeId: 'podman', disabledAt: 12345, directory: 'C:\\remote', availability: 'stopped', availabilityCode: 'disabled-by-owner' },
@@ -186,37 +186,37 @@ recorded.length = 0;
  */
 const bak = await H.withFileAccessScope('g-1', () => {
   const b = H.backupFile(projFile, path.join(tmpDir, 'bak'), 'proj');
-  H.fingerprintFile(projFile);
+  H.zhiwenWenjian(projFile);
   return b;
 });
 ok(recorded.some((r) => r.op === 'backup') && recorded.some((r) => r.op === 'read'),
   '5-4 备份与读取分别记成 backup / read（读操作也记，但面板不会把它当"改动"）', JSON.stringify(recorded.map((r) => r.op)));
 H.setFileAccessSink(null);
 recorded.length = 0;
-H.noteExternalFileAccess('edit', projFile, { by: 'container' });
+H.beizhuWaibuWenjianFangwen('edit', projFile, { by: 'container' });
 ok(recorded.length === 0,
   '5-5 【核心】没接 sink 时**什么都不记**：这一层不会退回成"本机设置里的一份日志"', JSON.stringify(recorded));
 ok(typeof bak.sha256 === 'string' && bak.bytes > 0, '5-6 备份产物真实可用（sha256 + 字节数）', bak.bytes);
 
 /* ══ 6. 跨机信号：项目属性的形状、校验、映射与入站门控 ══ */
 section('6. 项目属性跨机同步（成员能看到"为什么"）');
-const xiaoXi = W.projectAttrsMessage({
+const xiaoXi = W.xiangmuShuxingXiaoxi({
   groupId: 'g-1', ming: '项目推进群', type: 'internal',
   project: { devEnv: 'container', runtimeId: 'docker', disabledAt: 0, directory: 'C:\\proj' },
   availability: { availability: 'not-ready', code: 'container-not-ready', at: 4242 },
   creatorFingerprint: 'AABB',
   ledger: [{ op: 'edit', path: 'C:\\proj\\a.ts', ts: 9, ok: true, by: 'helper-tool' }],
 });
-ok(xiaoXi.kind === W.PROJECT_ATTRS_KIND && xiaoXi.project.devEnv === 'container' && xiaoXi.availability.availability === 'not-ready',
+ok(xiaoXi.kind === W.XIANGMU_SHUXING_LEIXING && xiaoXi.project.devEnv === 'container' && xiaoXi.availability.availability === 'not-ready',
   '6-1 信号带：项目属性 + **创建者节点的实时可用性**（原因码）', JSON.stringify(xiaoXi).slice(0, 140));
-ok(W.PROJECT_ATTRS_CHANNEL === 'control',
-  '6-2 搭在协议既有的 control 频道上（不改 sync-protocol；用 kind 自报身份）', W.PROJECT_ATTRS_CHANNEL);
+ok(W.XIANGMU_SHUXING_TONGDAO === 'control',
+  '6-2 搭在协议既有的 control 频道上（不改 sync-protocol；用 kind 自报身份）', W.XIANGMU_SHUXING_TONGDAO);
 const rt = W.parseProjectAttrsMessage(JSON.parse(JSON.stringify(xiaoXi)));
 ok(rt.ok === true && rt.value.groupId === 'g-1' && rt.value.ledgerTail.length === 1,
   '6-3 往返可解析（含台账尾部；只带路径/操作/时间）', rt.ok ? JSON.stringify(rt.value.ledgerTail) : rt.error);
 ok(W.parseProjectAttrsMessage({ kind: 'warmy.membership.revocation' }).ok === false &&
    W.parseProjectAttrsMessage({ type: 'ping' }).ok === false &&
-   W.parseProjectAttrsMessage({ kind: W.PROJECT_ATTRS_KIND, groupId: 'g-1', project: { devEnv: 'weird', runtimeId: '' }, availability: { availability: 'available' } }).ok === false,
+   W.parseProjectAttrsMessage({ kind: W.XIANGMU_SHUXING_LEIXING, groupId: 'g-1', project: { devEnv: 'weird', runtimeId: '' }, availability: { availability: 'available' } }).ok === false,
   '6-4 不认识 / 形状不对的消息**一律拒绝**（不做"尽力而为"的宽容解析）');
 const facts = W.projectAttrsToStateInput({ project: { devEnv: 'container', runtimeId: 'docker', disabledAt: 0 }, availability: { availability: 'not-ready', code: 'container-not-ready', at: 1 } });
 ok(facts.devEnv === 'container' && facts.runtimeId === 'docker' && facts.runtimeStatus === 'installed-not-running' && facts.source === 'creator-signal',
@@ -224,15 +224,15 @@ ok(facts.devEnv === 'container' && facts.runtimeId === 'docker' && facts.runtime
 const factsUnknown = W.projectAttrsToStateInput({ project: { devEnv: 'container', runtimeId: 'docker', disabledAt: 0 }, availability: { availability: 'unknown', code: '', at: 0 } });
 ok(factsUnknown.runtimeStatus === null, '6-6 拿不准 ⇒ null（按未就绪处理，绝不乐观放开）', JSON.stringify(factsUnknown));
 const derive = P.deriveProjectState({ devEnv: facts.devEnv, runtimeId: facts.runtimeId, runtimeStatus: facts.runtimeStatus, disabledByOwner: false });
-const gate = W.projectInboundGate(derive);
+const gate = W.xiangmuRuXiangMenjin(derive);
 ok(derive.code === 'container-not-ready' && derive.memberFace === 'creator-offline' &&
    gate.allow === false && gate.queue === 'creator-offline' && gate.memberFaceKey === 'group.memberOffline',
   '6-7 【核心】成员侧：不可用 ⇒ 入站**按「创建者离线」排队**（同一句既有文案，不新造状态）', JSON.stringify(gate));
 const deriveOk = P.deriveProjectState({ devEnv: 'container', runtimeId: 'docker', runtimeStatus: 'ready', disabledByOwner: false });
-ok(W.projectInboundGate(deriveOk).allow === true && W.projectInboundGate(deriveOk).queue === null,
+ok(W.xiangmuRuXiangMenjin(deriveOk).allow === true && W.xiangmuRuXiangMenjin(deriveOk).queue === null,
   '6-8 可用时放行（同一条判定的另一半）');
 const deriveDisabled = P.deriveProjectState({ devEnv: 'host', runtimeId: '', runtimeStatus: null, disabledByOwner: true });
-ok(deriveDisabled.code === 'disabled-by-owner' && W.projectInboundGate(deriveDisabled).queue === 'creator-offline',
+ok(deriveDisabled.code === 'disabled-by-owner' && W.xiangmuRuXiangMenjin(deriveDisabled).queue === 'creator-offline',
   '6-9 被创建者停用 ⇒ 同样走「创建者离线」那一档（不区分出第三种表现）');
 
 /* ══ 7. 真容器：真的在容器里跑（引擎可用时才做；不拉任何镜像，用已有的） ══ */
@@ -273,7 +273,7 @@ if (NO_CONTAINER) {
     up.ok ? up.out.slice(0, 40) : 'rc=' + up.code + ' ' + (up.err || '').slice(0, 200));
   // 7-3 项目命令**真的在容器里**跑（exec-capture，固定命令）
   const pwd = await P.yunXingRongQiZhiXing('docker', 'exec-capture', { ming, command: 'pwd' }, 60000);
-  ok(pwd.ok === true && pwd.out.trim() === P.CONTAINER_PROJECT_MOUNT,
+  ok(pwd.ok === true && pwd.out.trim() === P.RONGQI_XIANGMU_GUAZAI,
     '7-3 【真机·核心】"把项目的命令送进容器"真的执行在容器里（pwd = /workspace）',
     pwd.out.trim() + ' / ' + pwd.ms + 'ms');
   const ls = await P.yunXingRongQiZhiXing('docker', 'exec-capture', { ming, command: 'ls-workspace' }, 60000);

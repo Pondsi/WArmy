@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('warmy', {
   memoryStatus: () => ipcRenderer.invoke('warmy:jiYiZhuangTai'),
   memoryRebuild: () => ipcRenderer.invoke('warmy:jiYiChongJian'),
   i18n: (yuYan) => ipcRenderer.invoke('warmy:i18n', yuYan),
+  captureScreen: () => ipcRenderer.invoke('warmy:pingMuJieTu'),
+  microsandboxInstall: (opts) => ipcRenderer.invoke('warmy:microsandboxAnZhuang', opts),
+  microsandboxUninstall: () => ipcRenderer.invoke('warmy:microsandboxXieZai'),
+  microsandboxStatus: () => ipcRenderer.invoke('warmy:microsandboxZhuangTai'),
+  microsandboxVirt: () => ipcRenderer.invoke('warmy:microsandboxXuNiHua'),
   localeInfo: () => ipcRenderer.invoke('warmy:yuYanXinXi'),
   setThemeSource: (s) => ipcRenderer.invoke('warmy:sheZhiZhuTiLaiYuan', s),
   themeInfo: () => ipcRenderer.invoke('warmy:zhuTiXinXi'),
@@ -167,7 +172,7 @@ contextBridge.exposeInMainWorld('warmy', {
   syncPull: (nodeId) => ipcRenderer.invoke('warmy:tongBuLaQu', nodeId),
   dshAvailable: () => ipcRenderer.invoke('warmy:dshKeYong'),
   dshStatus: () => ipcRenderer.invoke('warmy:dshZhuangTai'),
-  dshInstall: () => ipcRenderer.invoke('warmy:dshAnZhuang'),
+  dshInstall: (opts) => ipcRenderer.invoke('warmy:dshAnZhuang', opts),
   // 兼容：旧英文频道名
   // (handlers also accept warmy:group-create via alias table)
   spawnDshInstance: (cfg) => ipcRenderer.invoke('warmy:paiShengdshShiLi', cfg),

@@ -42,8 +42,8 @@ const argv = process.argv.slice(2);
 
 if (argv[0] === '--install') {
   const repoDir = argv[1] || process.cwd();
-  const { installPreReceiveHook } = await loadImpl();
-  const r = installPreReceiveHook({ repoDir, hookScript: fileURLToPath(import.meta.url), force: argv.includes('--force') });
+  const { anzhuangYuXianJieShouGouZi } = await loadImpl();
+  const r = anzhuangYuXianJieShouGouZi({ repoDir, hookScript: fileURLToPath(import.meta.url), force: argv.includes('--force') });
   process.stdout.write(JSON.stringify({ ...r, script: fileURLToPath(import.meta.url) }) + '\n');
   process.exit(r.ok ? 0 : 1);
 }
@@ -60,7 +60,7 @@ function readStdin() {
   });
 }
 
-const { createGitRunner, formatPreReceiveOutput, runPreReceive } = await loadImpl();
+const { chuangJianGitYunXingQi, formatPreReceiveOutput, yunXingYuXianJieShou } = await loadImpl();
 
 const role = (process.env.WARMY_PUSHER_ROLE || 'member').trim();
 const memberId = (process.env.WARMY_PUSHER_ID || '').trim();
@@ -70,8 +70,8 @@ if (!allowedRoles.has(role)) {
 }
 
 const stdin = await readStdin();
-const result = runPreReceive({
-  git: createGitRunner(),
+const result = yunXingYuXianJieShou({
+  git: chuangJianGitYunXingQi(),
   stdin,
   role: (allowedRoles.has(role) ? role : 'member'),
   memberId,

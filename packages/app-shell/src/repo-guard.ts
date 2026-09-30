@@ -11,8 +11,8 @@
  *   - 大小写与 Unicode 归一化别名 → 绕过只看字面量的黑名单。
  *
  * 本模块**只做判断，不做 IO 之外的任何动作**，返回结构化结果（不是 boolean）：
- *   - `validatePushPaths(paths, opts)`      —— 推送（pre-receive）路径校验
- *   - `validateRefUpdate(ref, old, new, o)` —— ref 白名单 / 快进 / 删除 校验
+ *   - `jiaoYanTuiSongLuJing(paths, opts)`      —— 推送（pre-receive）路径校验
+ *   - `jiaoYanYinYongGengXin(ref, old, new, o)` —— ref 白名单 / 快进 / 删除 校验
  *   - `scanPublishableExport(files, opts)`  —— 公开目录导出前的门禁扫描（ADR 附三.4）
  *
  * ⚠️ 诚实声明：本模块**不可能穷尽**所有绕过方式。已知未覆盖项写在文件末尾
@@ -185,7 +185,7 @@ function jiexiXiangdui(baseSegs: string[], relSegs: string[]): { segments: strin
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 二、推送路径校验 validatePushPaths
+// 二、推送路径校验 jiaoYanTuiSongLuJing
 // ────────────────────────────────────────────────────────────────────────────
 
 /** git 对象模式；120000=符号链接，160000=gitlink（子模块） */
@@ -453,7 +453,7 @@ export function jiaoYanTuiSongLuJing(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 三、ref 更新校验 validateRefUpdate
+// 三、ref 更新校验 jiaoYanYinYongGengXin
 // ────────────────────────────────────────────────────────────────────────────
 
 export type YinyongJujueDaima =

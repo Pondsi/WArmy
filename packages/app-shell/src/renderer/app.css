@@ -1911,7 +1911,8 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 .ctgFold .ctgFoldBiaoTi { font-weight: 600; }
 .ctgJianTou { width: 0; height: 0; border-left: 6px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; transition: transform .15s ease; transform: rotate(0deg); }
 /* 展开 ⇒ 箭头朝下（用户一眼看出"点一下能收起"） */
-.ctgFold[daKai] > .ctgFoldZhaiYao .ctgJianTou { transform: rotate(90deg); }
+.ctgFold[daKai] > .ctgFoldZhaiYao .ctgJianTou,
+.ctgFold[open] > .ctgFoldZhaiYao .ctgJianTou { transform: rotate(90deg); }
 .ctgFold > .ctgShouQiTi { margin-top: 6px; }
 
 /* ── 我的页：品牌 logo 与名称上下排列（logo 因此可以更大）───────────────── */
@@ -2167,3 +2168,186 @@ body.liaoTianChuangKou #appTi {
 #kongTai .shuRuQu {
   display: none !important;
 }
+
+/* ── 卡片添加：已存在时滚动定位 + 周边亮一下 ───────────────────────────── */
+@keyframes cardFlashAnim {
+  0%   { box-shadow: 0 0 0 0 rgba(0,0,0,0); outline: 2px solid var(--accent); outline-offset: 2px; }
+  25%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 35%, transparent); outline: 2px solid var(--accent); outline-offset: 2px; }
+  50%  { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); outline: 2px solid var(--accent); outline-offset: 2px; }
+  75%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent); outline: 2px solid var(--accent); outline-offset: 2px; }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); outline: 2px solid transparent; outline-offset: 2px; }
+}
+.cardFlash {
+  animation: cardFlashAnim 1.6s ease-in-out 1;
+  border-radius: 8px;
+  position: relative;
+  z-index: 5;
+}
+
+/* ── 成本排序：当前排列方式按钮高亮 ───────────────────────────────────── */
+.anNiuXiao.qiYong,
+#costSortBar .anNiuXiao.qiYong {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-color: var(--accent) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* ── Win11 风格自定义主题色弹窗 ───────────────────────────────────────── */
+.w11ColorDialog {
+  position: fixed; inset: 0; z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+.w11ColorDialog.yinCang { display: none !important; }
+.w11ColorMask {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.35);
+}
+.w11ColorKa {
+  position: relative; z-index: 1;
+  width: min(560px, calc(100vw - 32px));
+  background: var(--card, #fff);
+  color: var(--ink, #111);
+  border: 1px solid var(--line, #ddd);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.22);
+  overflow: hidden;
+  font-size: 13px;
+}
+.w11ColorTitle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; font-weight: 600; font-size: 14px;
+  border-bottom: 1px solid var(--line, #ddd);
+}
+.w11Close {
+  border: none; background: transparent; cursor: pointer;
+  font-size: 18px; line-height: 1; color: inherit; padding: 2px 8px; border-radius: 6px;
+}
+.w11Close:hover { background: var(--hover, rgba(0,0,0,0.06)); }
+.w11ColorBody {
+  display: grid;
+  grid-template-columns: 1fr 28px 160px;
+  gap: 14px;
+  padding: 16px;
+  align-items: start;
+}
+.w11Sv {
+  position: relative; width: 100%; aspect-ratio: 1.15;
+  border-radius: 8px; cursor: crosshair;
+  background: #f00;
+  overflow: hidden;
+  border: 1px solid var(--line, #ddd);
+  touch-action: none;
+}
+.w11SvWhite {
+  position: absolute; inset: 0;
+  background: linear-gradient(to right, #fff, transparent);
+}
+.w11SvBlack {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, #000, transparent);
+}
+.w11SvCursor {
+  position: absolute; width: 14px; height: 14px;
+  border: 2px solid #fff; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
+  pointer-events: none;
+}
+.w11Hue {
+  position: relative; width: 28px; height: 100%; min-height: 180px;
+  border-radius: 999px; cursor: pointer;
+  background: linear-gradient(to bottom,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+  border: 1px solid var(--line, #ddd);
+  touch-action: none;
+}
+.w11HueCursor {
+  position: absolute; left: 50%; width: 22px; height: 10px;
+  border: 2px solid #fff; border-radius: 4px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
+  pointer-events: none; background: rgba(255,255,255,0.15);
+}
+.w11Right { display: flex; flex-direction: column; gap: 10px; }
+.w11JingYin { font-size: 11px; opacity: 0.7; margin-bottom: 4px; }
+.w11SwatchRow { display: flex; gap: 8px; }
+.w11Swatch {
+  width: 44px; height: 44px; border-radius: 8px;
+  border: 1px solid var(--line, #ddd);
+  background: #ccc;
+}
+.w11Fields { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.w11Fields label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; opacity: 0.9;
+}
+.w11Fields input[type="number"],
+.w11Fields input[type="text"] {
+  width: 64px; padding: 5px 6px;
+  border: 1px solid var(--line, #ccc); border-radius: 6px;
+  background: var(--card, #fff); color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.w11HexLab input { width: 96px !important; font-family: var(--font-mono, Consolas, monospace); text-transform: uppercase; }
+.w11ColorFoot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line, #ddd);
+  background: color-mix(in srgb, var(--hover, #f5f5f5) 70%, transparent);
+}
+
+/* dsh 已安装 / 未安装状态行 */
+.dshZhuangTai { transition: background 0.2s, border-color 0.2s, color 0.2s; }
+
+/* 第四列卡片关闭叉：悬停才显示 */
+.mianBanKuai { position: relative; }
+.kaGuanBi {
+  position: absolute; top: 6px; right: 6px;
+  width: 20px; height: 20px; padding: 0;
+  border: none; border-radius: 4px;
+  background: transparent; color: var(--ink-dim, #888);
+  font-size: 14px; line-height: 1; cursor: pointer;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 6;
+}
+.mianBanKuai:hover > .kaGuanBi { opacity: 1; pointer-events: auto; }
+.kaGuanBi:hover { background: var(--hover, rgba(0,0,0,0.08)); color: var(--danger, #c00); }
+
+/* 自定义主题色色块 */
+.zhuTiSeKuai {
+  width: 36px; height: 36px; padding: 0;
+  border-radius: 8px; border: 2px solid var(--line, #ccc);
+  cursor: pointer; background: #c45c26;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+}
+.zhuTiSeKuai:hover { border-color: var(--accent); }
+
+/* dsh 状态：轻微凸显 */
+.dshZhuangTai.isOk {
+  color: #1a7f37; background: rgba(26,127,55,0.10); border-color: rgba(26,127,55,0.35);
+}
+.dshZhuangTai.isBad {
+  color: #b45309; background: rgba(180,83,9,0.10); border-color: rgba(180,83,9,0.35);
+}
+.dshZhuangTai.isErr {
+  color: #b91c1c; background: rgba(185,28,28,0.10); border-color: rgba(185,28,28,0.40);
+  font-weight: 600;
+}
+.dshZhuangTai.isChecking {
+  color: var(--ink-dim, #666);
+  background: var(--hover, rgba(0,0,0,0.05));
+  border-color: transparent;
+}
+.dshZhuangTai.isChecking::after {
+  content: ''; display: inline-block; width: 12px; height: 12px;
+  margin-left: 8px; vertical-align: -1px;
+  border: 2px solid currentColor; border-top-color: transparent;
+  border-radius: 50%;
+  animation: dshSpin 0.8s linear infinite;
+}
+@keyframes dshSpin { to { transform: rotate(360deg); } }
+
+/* 全屏取色层 */
+#quanPingQuSeCeng img { pointer-events: auto; }

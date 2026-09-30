@@ -28,8 +28,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
-import {CONTACT_CARD_I18N, DAISHU_GUIZE_BEIZHU, SHENFEN_SUANFA, ROTATION_SCHEMA, guifan, contactCardView, chuangjianShenfen, currentContactCard, exportIdentityCard, fingerprintFromPublicKey, zhiwenPipei, isContactCardEmpty, isValidFingerprint, keyObjectFromPrivateDer, miyaoHuan, normalizeFingerprint, publicKeyOfPrivate, publicKeyToB64, signWithIdentity, verifyByFingerprint, verifyIdentityCard, verifyRevocationDeclaration, verifyRotationDeclaration, verifySignedPayload, } from '../dist/identity.js';
-import {ShenFenCang, electronSafeStorageProtector, loadIdentity, nullProtector} from '../dist/identity-store.js';
+import {CONTACT_CARD_I18N, DAISHU_GUIZE_BEIZHU, SHENFEN_SUANFA, ROTATION_SCHEMA, guifan, contactCardView, chuangjianShenfen, dangQianLianXiKa, daoChuShenFenKa, fingerprintFromPublicKey, zhiwenPipei, isContactCardEmpty, isValidFingerprint, keyObjectFromPrivateDer, miyaoHuan, normalizeFingerprint, publicKeyOfPrivate, publicKeyToB64, yongShenFenQianMing, anZhiWenYanZheng, yanZhengShenFenKa, verifyRevocationDeclaration, verifyRotationDeclaration, yanZhengYiQianmingZaiHe, } from '../dist/identity.js';
+import {ShenFenCang, electronSafeStorageProtector, jiaZaiShenFen, nullProtector} from '../dist/identity-store.js';
 
 const self = fileURLToPath(import.meta.url);
 const argOf = (ming) => {
@@ -108,9 +108,9 @@ if (argOf('--phase') === 'restart') {
 
   const store = new ShenFenCang(file, { protector: fixtureProtector('fixture-os') });
   const info = store.info();
-  check('新进程读到身份', !!info, info && info.fingerprint);
-  check('指纹与上次一致（认得出自己）', !!info && zhiwenPipei(info.fingerprint, expectFp), info?.fingerprint);
-  check('别名可以沿用历史的 9 位数字（**只是人读别名**，不再是身份）', info?.alias === expectAlias, { got: info?.alias, want: expectAlias });
+  check('新进程读到身份', !!info, info && info.zhiWen);
+  check('指纹与上次一致（认得出自己）', !!info && zhiwenPipei(info.zhiWen, expectFp), info?.zhiWen);
+  check('别名可以沿用历史的 9 位数字（**只是人读别名**，不再是身份）', info?.bieMing === expectAlias, { got: info?.bieMing, want: expectAlias });
 /**
  * 产品主定稿：**9 位 ID 不再兼容**。
  * 身份由「45 位凭证（= 私钥种子）」派生；9 位数字只允许当**人读别名**，
@@ -139,13 +139,13 @@ if (argOf('--phase') === 'restart') {
   check('历史 17 位 ID 在读取时被升级为 51 位凭证，并记下原值',
     isValidCredential(String(prof.deviceId)) && String(prof.deviceId).length === 51 && prof.deviceIdUpgradedFrom === '12345678901234567',
     { len: String(prof.deviceId).length, from: prof.deviceIdUpgradedFrom });
-  const {keyPairFromCredential} = await import('../dist/credential.js');
-  const k1 = keyPairFromCredential(cred);
-  const k2 = keyPairFromCredential(cred);
+  const {youPingZhengQuMiyaoDui} = await import('../dist/credential.js');
+  const k1 = youPingZhengQuMiyaoDui(cred);
+  const k2 = youPingZhengQuMiyaoDui(cred);
   check('同一凭证在任何时候派生出同一把公钥（无中心服务器也能恢复身份）',
     Buffer.from(k1.publicKey.export({ type: 'spki', format: 'der' })).toString('base64') ===
     Buffer.from(k2.publicKey.export({ type: 'spki', format: 'der' })).toString('base64'), {});
-  const other = keyPairFromCredential(shengchengPingzheng());
+  const other = youPingZhengQuMiyaoDui(shengchengPingzheng());
   check('不同凭证派生出的公钥不同（唯一性来自密钥空间，不靠服务器登记）',
     Buffer.from(k1.publicKey.export({ type: 'spki', format: 'der' })).toString('base64') !==
     Buffer.from(other.publicKey.export({ type: 'spki', format: 'der' })).toString('base64'), {});
@@ -194,15 +194,15 @@ function scanNoPlaintextKey(filePath, der, biaoQian) {
 section('[1] 身份以公钥指纹为准（deviceId 降为人读别名）');
 const ALIAS = '375102948';
 const OLD_CARD = { email: 'laowang@example.com', phone: '13800138000' };
-const fresh = chuangjianShenfen({ alias: ALIAS, contactCard: OLD_CARD });
-const fp = fresh.identity.fingerprint;
+const fresh = chuangjianShenfen({ bieMing: ALIAS, contactCard: OLD_CARD });
+const fp = fresh.identity.zhiWen;
 console.log(`      指纹: ${fp}`);
 check('指纹形态合法（base32 + 校验位）', isValidFingerprint(fp), fp);
 check('指纹为 4 组 × 5 位', /^[0-9A-Z]{5}(-[0-9A-Z]{5}){3}$/.test(fp), fp);
 check('指纹长度 = 20 位（19 数据 + 1 校验）', normalizeFingerprint(fp).length === 20, normalizeFingerprint(fp).length);
 check('公钥→指纹是确定性的', fingerprintFromPublicKey(fresh.keyPair.publicKeyB64) === fp);
-check('归一大写/无分隔符仍匹配', fingerprintMatches(fp.toLowerCase().replace(/-/g, ''), fp));
-check('忽略形近字（I/L→1、O→0）后仍匹配', fingerprintMatches(normalizeFingerprint(fp).replace(/1/g, 'I').replace(/0/g, 'O'), fp));
+check('归一大写/无分隔符仍匹配', zhiwenPipei(fp.toLowerCase().replace(/-/g, ''), fp));
+check('忽略形近字（I/L→1、O→0）后仍匹配', zhiwenPipei(normalizeFingerprint(fp).replace(/1/g, 'I').replace(/0/g, 'O'), fp));
 const FPR_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 // 改动 1 位数据 → 校验位对不上的比例（校验位是数据位的确定性函数，31 个候选中预期 ~30 个被拒）
 const mutated = FPR_ALPHABET.split('')
@@ -212,33 +212,33 @@ const rejected = mutated.filter((m) => !isValidFingerprint(m)).length;
 check('串改 1 位数据 → 校验位拦下绝大多数（≥25/31）', rejected >= 25, `${rejected}/${mutated.length} 被拒`);
 const tamperCheck = normalizeFingerprint(fp).slice(0, 19) + (normalizeFingerprint(fp)[19] === 'Z' ? '0' : 'Z');
 check('串改校验位 → 拒绝', isValidFingerprint(tamperCheck) === false, tamperCheck);
-check('别名 = 9 位 deviceId（兼容保留）', fresh.identity.alias === ALIAS, fresh.identity.alias);
+check('别名 = 9 位 deviceId（兼容保留）', fresh.identity.bieMing === ALIAS, fresh.identity.bieMing);
 check('代次初始为 1', fresh.identity.generation === 1, fresh.identity.generation);
-const other = chuangjianShenfen({ alias: '111111111' });
-check('两个身份指纹不同', other.identity.fingerprint !== fp, { a: fp, b: other.identity.fingerprint });
+const other = chuangjianShenfen({ bieMing: '111111111' });
+check('两个身份指纹不同', other.identity.zhiWen !== fp, { a: fp, b: other.identity.zhiWen });
 check('算法为 Ed25519（Node 内置，无新依赖）', fresh.identity.algo === SHENFEN_SUANFA && SHENFEN_SUANFA === 'Ed25519');
 
 // ── [2] 签发 / 验签（含负例） ──
 section('[2] 签发 → 验签（含串改内容的负例）');
 const ring = miyaoHuan(fresh.identity);
-const signed = signWithIdentity(fresh.keyPair.privateKey, fresh.identity, '把周报整理好 #1');
-check('签发信封带指纹与代次', signed.fingerprint === fp && signed.generation === 1, signed.fingerprint);
-check('按指纹验签通过', verifyByFingerprint(fp, '把周报整理好 #1', signed.signature, ring).ok === true);
-check('命中当前密钥（matched=current）', verifyByFingerprint(fp, '把周报整理好 #1', signed.signature, ring).matched === 'current');
-check('信封整体验签通过', verifySignedPayload(signed, ring).ok === true);
-check('信封 JSON 往返后仍可验', verifySignedPayload(JSON.parse(JSON.stringify(signed)), ring).ok === true);
-const tampered = verifyByFingerprint(fp, '把周报整理好 #2', signed.signature, ring);
+const signed = yongShenFenQianMing(fresh.keyPair.privateKey, fresh.identity, '把周报整理好 #1');
+check('签发信封带指纹与代次', signed.zhiWen === fp && signed.generation === 1, signed.zhiWen);
+check('按指纹验签通过', anZhiWenYanZheng(fp, '把周报整理好 #1', signed.signature, ring).ok === true);
+check('命中当前密钥（matched=current）', anZhiWenYanZheng(fp, '把周报整理好 #1', signed.signature, ring).matched === 'current');
+check('信封整体验签通过', yanZhengYiQianmingZaiHe(signed, ring).ok === true);
+check('信封 JSON 往返后仍可验', yanZhengYiQianmingZaiHe(JSON.parse(JSON.stringify(signed)), ring).ok === true);
+const tampered = anZhiWenYanZheng(fp, '把周报整理好 #2', signed.signature, ring);
 check('串改内容 → 验签失败（bad-signature）', tampered.ok === false && tampered.reason === 'bad-signature', tampered);
-const tamperedEnv = verifySignedPayload({ ...signed, payload: '把周报整理好 #1（被改）' }, ring);
+const tamperedEnv = yanZhengYiQianmingZaiHe({ ...signed, payload: '把周报整理好 #1（被改）' }, ring);
 check('串改信封载荷 → 验签失败', tamperedEnv.ok === false && tamperedEnv.reason === 'bad-signature', tamperedEnv.reason);
 const sigBuf = Buffer.from(signed.signature, 'base64');
 sigBuf[0] ^= 0xff;
-check('串改签名字节 → 验签失败', verifyByFingerprint(fp, '把周报整理好 #1', sigBuf.toString('base64'), ring).ok === false);
-const shortSig = verifyByFingerprint(fp, '把周报整理好 #1', sigBuf.subarray(0, 32).toString('base64'), ring);
+check('串改签名字节 → 验签失败', anZhiWenYanZheng(fp, '把周报整理好 #1', sigBuf.toString('base64'), ring).ok === false);
+const shortSig = anZhiWenYanZheng(fp, '把周报整理好 #1', sigBuf.subarray(0, 32).toString('base64'), ring);
 check('截断签名 → 明确报"应为 64 字节"', shortSig.ok === false && /64/.test(shortSig.detail || ''), shortSig.detail);
-check('换了钥匙（别人的密钥环）→ unknown-fingerprint', verifyByFingerprint(fp, '把周报整理好 #1', signed.signature, miyaoHuan(other.identity)).reason === 'unknown-fingerprint');
-check('指纹形态非法 → malformed', verifyByFingerprint('NOT-A-FINGERPRINT', 'x', signed.signature, ring).reason === 'malformed');
-check('跨域签名不互认（域分隔生效）', verifyByFingerprint(fp, '把周报整理好 #1', signed.signature, ring, { domain: 'warmy.other.v1' }).ok === false);
+check('换了钥匙（别人的密钥环）→ unknown-fingerprint', anZhiWenYanZheng(fp, '把周报整理好 #1', signed.signature, miyaoHuan(other.identity)).reason === 'unknown-fingerprint');
+check('指纹形态非法 → malformed', anZhiWenYanZheng('NOT-A-FINGERPRINT', 'x', signed.signature, ring).reason === 'malformed');
+check('跨域签名不互认（域分隔生效）', anZhiWenYanZheng(fp, '把周报整理好 #1', signed.signature, ring, { domain: 'warmy.other.v1' }).ok === false);
 check('规范化是确定性的（同一对象两次序列化一致）', guifan({ b: [1, 2], a: 'x' }) === guifan({ a: 'x', b: [1, 2] }), guifan({ b: [1, 2], a: 'x' }));
 
 // ── [3] 身份名片 ──
@@ -256,11 +256,11 @@ check('完全没有名片 → 两个字段都是占位', viewEmpty.fields.length
 check('名片"不可隐藏但可以不写"标志位', viewEmpty.alwaysVisible === true && viewEmpty.alwaysVisibleNote.length > 0, viewEmpty.alwaysVisibleNote);
 check('可选其它联系方式也能展示', contactCardView({ extra: [{ biaoQian: '备用邮箱', value: 'b@x.com' }] }, t).fields.some((f) => f.key.startsWith('extra:') && f.filled));
 check('空卡判定：{} 视为空', isContactCardEmpty({}) === true && isContactCardEmpty({ email: '   ' }) === true);
-check('currentContactCard 返回身份里的名片', currentContactCard(fresh.identity).phone === '13800138000');
-const ka = exportIdentityCard(fresh.identity, fresh.keyPair.privateKey);
-check('名片自签可验', verifyIdentityCard(ka).ok === true);
-check('名片被改（别名）→ 验签失败', verifyIdentityCard({ ...ka, alias: '冒名者' }).ok === false);
-check('名片被改（联系方式）→ 验签失败', verifyIdentityCard({ ...ka, contactCard: { ...ka.contactCard, email: 'attacker@x.com' } }).ok === false);
+check('dangQianLianXiKa 返回身份里的名片', dangQianLianXiKa(fresh.identity).phone === '13800138000');
+const ka = daoChuShenFenKa(fresh.identity, fresh.keyPair.privateKey);
+check('名片自签可验', yanZhengShenFenKa(ka).ok === true);
+check('名片被改（别名）→ 验签失败', yanZhengShenFenKa({ ...ka, bieMing: '冒名者' }).ok === false);
+check('名片被改（联系方式）→ 验签失败', yanZhengShenFenKa({ ...ka, contactCard: { ...ka.contactCard, email: 'attacker@x.com' } }).ok === false);
 
 // ── [4] 加密存储 ──
 section('[4] 私钥加密落盘（不含明文；没有保护就拒绝落盘）');
@@ -273,7 +273,7 @@ check('拒绝后磁盘上确实没有身份文件', !fs.existsSync(path.join(tmp
 const auditOps = [];
 const store = new ShenFenCang(file, { protector: fixtureProtector('fixture-os'), onAudit: (op, detail) => auditOps.push({ op, detail }) });
 const created = store.ensureIdentity(ALIAS, OLD_CARD);
-check('首次运行即生成身份（ensureIdentity）', created.ok === true && created.created === true, created.ok && created.info.fingerprint);
+check('首次运行即生成身份（ensureIdentity）', created.ok === true && created.created === true, created.ok && created.info.zhiWen);
 const info1 = store.info();
 const der1 = store.load().privateKeyDer;
 let raw = scanNoPlaintextKey(file, der1, '生成后');
@@ -288,14 +288,14 @@ const s1 = store.sign('statement-from-os-mode');
 check('OS 模式可直接签发', s1.ok === true);
 check('OS 模式的签名可验', store.verify(s1.signed.payload, s1.signed.signature).ok === true);
 
-// loadIdentity()：应用启动路径上的单入口（首次运行即生成 + 解开私钥）
+// jiaZaiShenFen()：应用启动路径上的单入口（首次运行即生成 + 解开私钥）
 const wrapperFile = path.join(tmpRoot, 'wrapper', 'identity.json');
-const l1 = loadIdentity(wrapperFile, { protector: fixtureProtector('fixture-os'), createIfMissing: { alias: '900000001', contactCard: { phone: '13700137000' } } });
-check('loadIdentity() 首次调用即生成并解开', l1.ok === true && isValidFingerprint(l1.identity.fingerprint), l1.ok ? l1.identity.fingerprint : l1.error);
-const l2 = loadIdentity(wrapperFile, { protector: fixtureProtector('fixture-os'), createIfMissing: { alias: '000000000' } });
-check('loadIdentity() 第二次调用读回同一身份（不会重建）', l2.ok === true && l2.identity.fingerprint === l1.identity.fingerprint, l2.ok ? l2.identity.fingerprint : l2.error);
-check('loadIdentity() 保留原别名与名片', l2.ok && l2.identity.alias === '900000001' && l2.identity.contactCard.phone === '13700137000');
-check('loadIdentity() 交出的私钥不在盘上', !fs.readFileSync(wrapperFile, 'utf8').includes(l1.privateKeyDer.toString('base64')));
+const l1 = jiaZaiShenFen(wrapperFile, { protector: fixtureProtector('fixture-os'), createIfMissing: { bieMing: '900000001', contactCard: { phone: '13700137000' } } });
+check('jiaZaiShenFen() 首次调用即生成并解开', l1.ok === true && isValidFingerprint(l1.identity.zhiWen), l1.ok ? l1.identity.zhiWen : l1.error);
+const l2 = jiaZaiShenFen(wrapperFile, { protector: fixtureProtector('fixture-os'), createIfMissing: { bieMing: '000000000' } });
+check('jiaZaiShenFen() 第二次调用读回同一身份（不会重建）', l2.ok === true && l2.identity.zhiWen === l1.identity.zhiWen, l2.ok ? l2.identity.zhiWen : l2.error);
+check('jiaZaiShenFen() 保留原别名与名片', l2.ok && l2.identity.bieMing === '900000001' && l2.identity.contactCard.phone === '13700137000');
+check('jiaZaiShenFen() 交出的私钥不在盘上', !fs.readFileSync(wrapperFile, 'utf8').includes(l1.privateKeyDer.toString('base64')));
 
 // ── [5] 口令保护 ──
 section('[5] 口令保护（口令错打不开；启用后没有 OS 旁路）');
@@ -334,7 +334,7 @@ const childOut = execFileSync(
     '--phase', 'restart',
     '--file', file,
     '--pass', PASS,
-    '--expect-fp', info1.fingerprint,
+    '--expect-fp', info1.zhiWen,
     '--expect-alias', ALIAS,
     '--expect-gen', '1',
     '--expect-email', 'laowang@example.com',
@@ -348,20 +348,20 @@ check('子进程（重启）阶段全部通过', !childOut.includes('[FAIL]'));
 // ── [7] 换证 ──
 section('[7] 换证：新指纹 / 代次 +1 / 旧公钥仍验旧签名 / 声明里没有联系方式');
 const NEW_CARD = { email: 'new-mail@example.com', phone: '' }; // 换证后（过了冻结期）才允许改的新名片
-const oldRing = store.keyRing();
+const oldRing = store.miyaoHuan();
 const oldPrivDer = store.load(PASS).privateKeyDer;
-const oldFp = store.info().fingerprint;
+const oldFp = store.info().zhiWen;
 const oldPub = store.info().publicKey;
 const sigOld = store.sign('换证前签的旧内容 #1', { passphrase: PASS }).signed;
 const rotAt = Date.now();
 const rot = store.rotate({ reason: 'leak-suspected', passphrase: PASS });
 check('换证成功', rot.ok === true, rot.ok ? '' : rot.error);
 const info2 = store.info();
-check('新指纹生效（与旧指纹不同）', info2.fingerprint !== oldFp, { old: oldFp, new: info2.fingerprint });
+check('新指纹生效（与旧指纹不同）', info2.zhiWen !== oldFp, { old: oldFp, new: info2.zhiWen });
 check('代次 +1（1 → 2）', info2.generation === 2, info2.generation);
-check('旧公钥进入退役列表（保公钥、丢私钥）', info2.retiredKeys.some((r) => zhiwenPipei(r.fingerprint, oldFp) && r.publicKey === oldPub), info2.retiredKeys.map((r) => r.fingerprint));
-const ring2 = store.keyRing();
-const vrOld = verifyByFingerprint(oldFp, '换证前签的旧内容 #1', sigOld.signature, ring2);
+check('旧公钥进入退役列表（保公钥、丢私钥）', info2.retiredKeys.some((r) => zhiwenPipei(r.zhiWen, oldFp) && r.publicKey === oldPub), info2.retiredKeys.map((r) => r.zhiWen));
+const ring2 = store.miyaoHuan();
+const vrOld = anZhiWenYanZheng(oldFp, '换证前签的旧内容 #1', sigOld.signature, ring2);
 check('旧公钥仍可验证换证前的旧签名', vrOld.ok === true && vrOld.matched === 'retired', vrOld);
 check('新公钥可验证换证后的新签名', (() => {
   const s = store.sign('换证后签的新内容 #2', { passphrase: PASS });
@@ -417,16 +417,16 @@ check('冻结期内名片没有被改动', store.info().contactCard.email === 'l
 const afterFreeze = store.setContactCard(NEW_CARD, { now: info2.contactFreezeUntil + 1000 });
 check('冻结期满后可以改名片', afterFreeze.ok === true, afterFreeze.ok ? afterFreeze.info.contactCard : afterFreeze.error);
 check('改名片后冻结标记清除', store.info().contactFrozen === false && store.info().contactFreezeUntil === 0);
-check('改名片不动指纹与代次', zhiwenPipei(store.info().fingerprint, info2.fingerprint) && store.info().generation === 2, store.info().generation);
+check('改名片不动指纹与代次', zhiwenPipei(store.info().zhiWen, info2.zhiWen) && store.info().generation === 2, store.info().generation);
 check('旧名片仍留在本机历史里（横幅能并列展示旧/新）', (() => {
   const h = store.contactCardHistory();
   return h.some((v) => v.ka.email === 'laowang@example.com') && h.some((v) => v.ka.email === 'new-mail@example.com');
 })(), store.contactCardHistory().map((v) => `${v.note}:${v.ka.email}`));
-check('空联系方式在名片视图里仍显示占位', contactCardView(store.currentContactCard(), t).fields.every((f) => f.filled || f.value === '未填写'));
+check('空联系方式在名片视图里仍显示占位', contactCardView(store.dangQianLianXiKa(), t).fields.every((f) => f.filled || f.value === '未填写'));
 
 // ── [7c] 接收方侧冻结：对端名片 7 天内不采用新值（本机各自判定） ──
 section('[7c] 接收方侧冻结（本机各自判定；不依赖任何人广播的"冻结中"标志）');
-const peerFp = store.info().fingerprint; // 拿本机指纹当"对端"演示：逻辑与对端完全一样
+const peerFp = store.info().zhiWen; // 拿本机指纹当"对端"演示：逻辑与对端完全一样
 const peerOld = { email: 'peer-old@example.com', phone: '13500135000' };
 const joinView = store.recordPeerCard(peerFp, peerOld);
 check('首次加入：直接留存，不冻结（新人要能填联系方式）', joinView.frozen === false && joinView.effectiveCard.email === 'peer-old@example.com', joinView);
@@ -484,14 +484,14 @@ function forgeRotation(oldPrivateDer, oldFingerprint, oldPublicKey, newFp, newPu
   const sig = crypto.sign(null, Buffer.from(`${ROTATION_SCHEMA}\n${guifan(draft)}`, 'utf8'), priv).toString('base64');
   return { ...draft, signature: sig };
 }
-const stolen = forgeRotation(oldPrivDer, oldFp, oldPub, other.identity.fingerprint, other.identity.publicKey, 2, 1);
+const stolen = forgeRotation(oldPrivDer, oldFp, oldPub, other.identity.zhiWen, other.identity.publicKey, 2, 1);
 check('（前提取证）攻击者用旧私钥手搓的声明签名本身是合法的', verifyRotationDeclaration(stolen, { currentGeneration: 1 }).accepted === true);
 const stale = verifyRotationDeclaration(stolen, { knownKeys: ring2, currentGeneration: 2 });
 check('🛡 旧代次（=2，已知代次 2）声明被拒绝', stale.accepted === false && stale.reason === 'stale-generation', stale);
 console.log(`      拒绝原因: ${stale.detail}`);
-const lower = verifyRotationDeclaration(forgeRotation(oldPrivDer, oldFp, oldPub, other.identity.fingerprint, other.identity.publicKey, 1, 1), { currentGeneration: 2 });
+const lower = verifyRotationDeclaration(forgeRotation(oldPrivDer, oldFp, oldPub, other.identity.zhiWen, other.identity.publicKey, 1, 1), { currentGeneration: 2 });
 check('🛡 更低代次（1）声明被拒绝', lower.accepted === false, lower.reason);
-const preempt = forgeRotation(oldPrivDer, oldFp, oldPub, other.identity.fingerprint, other.identity.publicKey, 3, 2);
+const preempt = forgeRotation(oldPrivDer, oldFp, oldPub, other.identity.zhiWen, other.identity.publicKey, 3, 2);
 const preemptRes = verifyRotationDeclaration(preempt, { knownKeys: ring2, currentGeneration: 2 });
 check('⚠️ 诚实结论：抢先用旧私钥发出**更高代次**的声明 → 规则只能接受（不防抢占）', preemptRes.accepted === true, preemptRes.reason);
 console.log(`      诚实说明（必须进 UI 文案）: ${preemptRes.honestNote}`);
@@ -502,11 +502,11 @@ check('（对照）原主随后发出的声明代次更低 → 会被同一规�
 section('[9] 备份导出 / 导入（凭证用户自持）');
 check('导出必须给口令（不允许明文导出）', store.exportBackup({ passphrase: '' }).ok === false, store.exportBackup({ passphrase: '' }).error);
 const exported = store.exportBackup({ passphrase: 'backup-pass-2026' });
-check('导出成功', exported.ok === true, exported.ok ? exported.backup.fingerprint : exported.error);
+check('导出成功', exported.ok === true, exported.ok ? exported.backup.zhiWen : exported.error);
 const backupText = JSON.stringify(exported.backup);
 const curDer = store.load(PASS).privateKeyDer;
 check('备份文件不含私钥明文', !backupText.includes(curDer.toString('base64')) && !backupText.includes(curDer.toString('hex')));
-check('备份记录了指纹与代次（恢复时可核对）', zhiwenPipei(exported.backup.fingerprint, info2.fingerprint) && exported.backup.generation === 2);
+check('备份记录了指纹与代次（恢复时可核对）', zhiwenPipei(exported.backup.zhiWen, info2.zhiWen) && exported.backup.generation === 2);
 check('备份带退役公钥（历史签名仍可验）', exported.backup.retiredKeys.length === 1);
 check('备份带声明时间线（声明里没有联系方式）', exported.backup.declarations.some((d) => d.kind === 'warmy.identity.rotation') && !exported.backup.declarations.some((d) => /contact|email|phone/i.test(JSON.stringify(d))));
 check('备份带本机名片历史（旧联系方式随备份走，横幅才有旧值）', Array.isArray(exported.backup.cardHistory) && exported.backup.cardHistory.some((v) => v.ka.email === 'laowang@example.com'), exported.backup.cardHistory?.map((v) => v.ka.email));
@@ -515,8 +515,8 @@ const restored = new ShenFenCang(restoredFile, { protector: nullProtector() });
 check('备份口令错 → 导入失败', restored.importBackup(exported.backup, { passphrase: 'wrong-pass-here' }).ok === false);
 check('没有口令 → 导入失败（passphrase-required）', restored.importBackup(exported.backup, { passphrase: '' }).error === 'passphrase-required');
 const imported = restored.importBackup(exported.backup, { passphrase: 'backup-pass-2026' });
-check('口令对 → 导入成功（换机器/恢复）', imported.ok === true, imported.ok ? imported.info.fingerprint : imported.error);
-check('恢复后指纹一致（联系人不需要重新认识你）', zhiwenPipei(restored.info().fingerprint, info2.fingerprint));
+check('口令对 → 导入成功（换机器/恢复）', imported.ok === true, imported.ok ? imported.info.zhiWen : imported.error);
+check('恢复后指纹一致（联系人不需要重新认识你）', zhiwenPipei(restored.info().zhiWen, info2.zhiWen));
 check('恢复后代次一致（不会回滚代次）', restored.info().generation === 2);
 const restoredSign = restored.sign('restored-machine-sign', { passphrase: 'backup-pass-2026' });
 check('恢复后可签发且可验', restoredSign.ok === true && restored.verify(restoredSign.signed.payload, restoredSign.signed.signature).ok === true);
@@ -532,7 +532,7 @@ const cr = corruptStore.ensureIdentity('123456789', {});
 check('损坏文件 → 报错而不是重建', cr.ok === false && cr.error === 'corrupt', cr.error);
 check('损坏文件被隔离为 .corrupt-*（留证据）', fs.readdirSync(path.dirname(corruptFile)).some((f) => f.includes('.corrupt-')), fs.readdirSync(path.dirname(corruptFile)));
 check('损坏时不写入新身份（磁盘没有身份文件）', !fs.existsSync(corruptFile));
-check('另一个进程的合法身份不受影响', zhiwenPipei(new ShenFenCang(file, { protector: nullProtector() }).info().fingerprint, info2.fingerprint));
+check('另一个进程的合法身份不受影响', zhiwenPipei(new ShenFenCang(file, { protector: nullProtector() }).info().zhiWen, info2.zhiWen));
 
 // ── 汇总 ──
 console.log(`\n=== 汇总 ===`);

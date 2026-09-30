@@ -51,7 +51,7 @@ export type RongQiYunXingTai = 'running' | 'not-running' | 'error' | 'unsupporte
  * 引擎类别。ADR 只列了 container / linux-vm / system-container 三种，
  * 这里加 `disposable-vm`：Windows Sandbox 是**一次性** VM，硬塞进前三种都会误导。
  */
-export type RongQiYinQingLei = 'container' | 'linux-vm' | 'system-container' | 'disposable-vm';
+export type RongQiYinQingLei = 'container' | 'linux-vm' | 'system-container' | 'disposable-vm' | 'microvm';
 
 export interface RongQiNengLi {
   runCommand: boolean;
@@ -656,6 +656,19 @@ export interface RongQiYunXingGuiGe {
 }
 
 export const CONTAINER_RUNTIME_SPECS: readonly RongQiYunXingGuiGe[] = [
+  {
+    /**
+     * Microsandbox：嵌入式 microVM，硬件级隔离。产品主线运行时之一。
+     * CLI = `msb`；未安装时设置页提供一键安装（官方脚本），装完即可用。
+     */
+    id: 'microsandbox',
+    engineKind: 'microvm',
+    api: 'msb',
+    platforms: [WIN, 'darwin', 'linux'],
+    // `msb` 本身没有常驻守护进程：沙箱是 SDK/CLI 拉起的子进程，启停是按单个沙箱名来的，
+    // 这里先不给"引擎级启停"按钮（避免语义误导）；单个沙箱生命周期走 exec 面。
+    lifecycle: { startable: false, stoppable: false, reason: 'not-standalone-engine', waitMs: 0 },
+  },
   {
     id: 'docker',
     engineKind: 'container',
@@ -1514,7 +1527,41 @@ async function tanCeKata(timeout: number): Promise<TanCeJieJu> {
   return { status: 'ready', version, detail: 'isolation-level-only', evidence: '不是独立引擎：需配合 docker / containerd 使用' };
 }
 
+/**
+ * Microsandbox 探测：`msb --version` / `msb doctor`。
+ * 装了 CLI 但 hypervisor 没开时，如实报 installed-not-running / engine-error。
+ */
+async function tanCeMicrosandbox(timeout: number): Promise<TanCeJieJu> {
+  // msb 官方脚本默认装到 ~/.microsandbox/bin，不一定在 PATH —— 必须找用户目录
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const binWin = path.join(home, '.microsandbox', 'bin', 'msb.exe');
+  const binPosix = path.join(home, '.microsandbox', 'bin', 'msb');
+  let cli = await zhiXingTanCe('msb', ['--version'], timeout);
+  if (cli.missing) {
+    const bin = process.platform === 'win32' ? binWin : binPosix;
+    try {
+      const fs = await import('node:fs');
+      if (fs.existsSync(bin)) {
+        cli = await zhiXingTanCe(bin, ['--version'], timeout);
+      }
+    } catch { /* fall through */ }
+  }
+  if (cli.missing) return { status: 'not-installed', detail: 'cli-not-found' };
+  const version = shouGeBanBen(`${cli.out} ${cli.err}`, /version\s+([^\s]+)/i) || jinyao(cli.out || cli.err, 40);
+  const doc = await zhiXingTanCe('msb', ['doctor'], timeout);
+  if (doc.ok) return { status: 'ready', version, detail: 'doctor-ok', evidence: jinyao(doc.out, 80) };
+  const evidence = jinyao(`${doc.err} ${doc.out}`);
+  const st = doc.timedOut ? 'installed-not-running' : guiLeiYinQingShiBai(evidence);
+  return {
+    status: st,
+    version,
+    detail: st === 'installed-not-running' ? 'doctor-timeout' : 'hypervisor-or-runtime',
+    evidence: evidence || 'msb doctor failed',
+  };
+}
+
 const PROBES: Record<string, (timeout: number, deep: boolean) => Promise<TanCeJieJu>> = {
+  microsandbox: tanCeMicrosandbox,
   docker: tanCeDocker,
   podman: tanCePodman,
   wsl: tanCeWsl,
@@ -2262,6 +2309,7 @@ export const CONTAINER_EXEC_OPS: readonly RongQiZhiXingCaoZuo[] = [
 
 /** 引擎 CLI 白名单（**只认这几个二进制名**，不接受路径/参数注入） */
 export const CONTAINER_EXEC_BINS: Record<string, string> = {
+  microsandbox: 'msb',
   docker: 'docker',
   podman: 'podman',
   nerdctl: 'nerdctl',
@@ -2332,6 +2380,75 @@ export type RongQiZhiXingJiHuaJieGuo = { ok: true; plan: RongQiZhiXingJiHua } | 
 const SAFE_LABEL_RE = /^[A-Za-z0-9._:@/-]{1,120}$/;
 
 /**
+ * Microsandbox（msb）执行计划。CLI 形态：
+ *   msb create <image> --name <n> [--volume host:guest]
+ *   msb exec <n> -- <cmd...>
+ *   msb stop|rm <n>
+ *   msb run <image> -- <cmd...>     （一次性）
+ *   msb snap create <snap> --sandbox <n> --full
+ *   msb image inspect|rmi
+ */
+function microsandboxExecPlan(
+  caoZuoMing: RongQiZhiXingCaoZuo,
+  params: RongQiZhiXingCanShu,
+  ming: string,
+  fixed: () => string[] | null,
+): RongQiZhiXingJiHuaJieGuo {
+  const bin = 'msb';
+  switch (caoZuoMing) {
+    case 'ps':
+      return { ok: true, plan: { file: bin, args: ['ls', '--format', 'json'], timeoutMs: 30000 } };
+    case 'run-rm': {
+      const image = String(params.image || '');
+      if (!shiFouYunXuJingXiang(image)) return { ok: false, code: 'bad-image', error: 'image must be a pinned digest ref from our image table or our own solidified image' };
+      const cmd = fixed();
+      if (!cmd) return { ok: false, code: 'bad-command', error: `command must be one of ${CONTAINER_FIXED_COMMAND_IDS.join('|')}` };
+      return { ok: true, plan: { file: bin, args: ['run', image, '--', ...cmd], timeoutMs: 240000 } };
+    }
+    case 'run-detached': {
+      const image = String(params.image || '');
+      if (!shiFouYunXuJingXiang(image)) return { ok: false, code: 'bad-image', error: 'image must be a pinned digest ref from our image table or our own solidified image' };
+      const args = ['create', image, '--name', ming];
+      const dir = String(params.hostDir || '');
+      if (dir) {
+        if (!path.isAbsolute(dir)) return { ok: false, code: 'bad-host-dir', error: 'hostDir must be absolute' };
+        args.push('--volume', `${dir}:${RONGQI_XIANGMU_GUAZAI}`);
+      }
+      return { ok: true, plan: { file: bin, args, timeoutMs: 180000 } };
+    }
+    case 'exec-capture': {
+      const cmd = fixed();
+      if (!cmd) return { ok: false, code: 'bad-command', error: `command must be one of ${CONTAINER_FIXED_COMMAND_IDS.join('|')}` };
+      return { ok: true, plan: { file: bin, args: ['exec', ming, '--', ...cmd], timeoutMs: 120000 } };
+    }
+    case 'exec-shell':
+      return { ok: true, plan: { file: bin, args: ['exec', ming, '--', 'sh'], timeoutMs: 0 } };
+    case 'stop':
+      return { ok: true, plan: { file: bin, args: ['stop', ming], timeoutMs: 150000 } };
+    case 'rm':
+      return { ok: true, plan: { file: bin, args: ['rm', ming], timeoutMs: 120000 } };
+    case 'commit': {
+      const ref = String(params.imageRef || '');
+      if (!SOLIDIFIED_IMAGE_RE.test(ref)) return { ok: false, code: 'bad-image-ref', error: 'imageRef must match warmy-solid-<12hex>:<ts>' };
+      const snap = 's' + String(Date.now());
+      return { ok: true, plan: { file: bin, args: ['snap', 'create', snap, '--sandbox', ming, '--full'], timeoutMs: 600000 } };
+    }
+    case 'image-inspect': {
+      const ref = String(params.image || params.imageRef || '');
+      if (!shiFouYunXuJingXiang(ref)) return { ok: false, code: 'bad-image', error: 'image must be a pinned digest ref from our image table or our own solidified image' };
+      return { ok: true, plan: { file: bin, args: ['image', 'inspect', ref], timeoutMs: 60000 } };
+    }
+    case 'image-rm': {
+      const ref = String(params.image || params.imageRef || '');
+      if (!SOLIDIFIED_IMAGE_RE.test(ref)) return { ok: false, code: 'bad-image-ref', error: 'only our own solidified images can be removed' };
+      return { ok: true, plan: { file: bin, args: ['rmi', ref], timeoutMs: 120000 } };
+    }
+    default:
+      return { ok: false, code: 'bad-op', error: 'unreachable' };
+  }
+}
+
+/**
  * 把 (op, 结构化参数) 变成 argv。**这是唯一一处拼 argv 的地方**。
  * 任何不满足白名单的输入 ⇒ 返回错误（不"尽量满足"）。
  */
@@ -2353,6 +2470,10 @@ export function containerExecPlan(runtimeId: string, op: string, params: RongQiZ
     if (!shiFouGuDingMingLing(params.command)) return null;
     return [...CONTAINER_FIXED_COMMANDS[params.command]];
   };
+  // Microsandbox（msb）：API 与 docker 不同，单独映射，不走 docker 的 switch
+  if (id === 'microsandbox') {
+    return microsandboxExecPlan(caoZuoMing, params, ming, fixed);
+  }
   switch (caoZuoMing) {
     case 'ps': {
       return { ok: true, plan: { file: bin, args: ['ps', '-a', '--filter', `ming=^${ming}$`, '--format', '{{.ID}}|{{.Names}}|{{.Status}}|{{.Image}}'], timeoutMs: 30000 } };

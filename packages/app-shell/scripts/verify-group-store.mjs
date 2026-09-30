@@ -37,14 +37,14 @@ if (process.argv.includes('--read')) {
   console.log(`    原始快照: ${JSON.stringify(snap)}`);
   check('群数量 = 2', snap.groups.length === 2, snap.groups.length);
   const g1 = store.getGroup('g-1001');
-  check('群 g-1001 还在', !!g1, g1 && `${g1.name}/${g1.type}/directed=${g1.directedMode}`);
+  check('群 g-1001 还在', !!g1, g1 && `${g1.ming}/${g1.type}/directed=${g1.directedMode}`);
   check('g-1001 directedMode 已持久化', g1?.directedMode === true, g1?.directedMode);
   const members = store.listMembers('g-1001');
-  check('g-1001 成员数 = 5', members.length === 5, members.map((m) => `${m.name}:${m.role}:${m.source}`));
-  const admin = members.find((m) => m.name === '牛马一号');
+  check('g-1001 成员数 = 5', members.length === 5, members.map((m) => `${m.ming}:${m.role}:${m.source}`));
+  const admin = members.find((m) => m.ming === '牛马一号');
   check('牛马一号 角色 = admin 且在盘上', admin?.role === 'admin', admin);
   const creator = members.find((m) => m.role === 'creator');
-  check('创建者 群主 仍是 creator', creator?.name === '群主', creator?.name);
+  check('创建者 群主 仍是 creator', creator?.ming === '群主', creator?.ming);
   const inst = members.find((m) => m.source === 'instance');
   check('实例成员已持久化（source=instance）', !!inst && !!inst.instanceId, inst);
   const kickCreator = store.removeMember('g-1001', creator?.id || '');
@@ -53,10 +53,10 @@ if (process.argv.includes('--read')) {
   check('回填的旧群 g-2002 已落盘', !!migrated && migrated.origin === 'migrated', migrated && migrated.origin);
 
   // [3] 在新进程里踢一个成员，验证改动同样落盘
-  const target = members.find((m) => m.name === '临时工');
+  const target = members.find((m) => m.ming === '临时工');
   const kicked = store.removeMember('g-1001', target?.id || '');
-  check(`踢掉 ${target?.name}（${target?.id}）成功`, kicked.ok === true, kicked.members.map((m) => m.name));
-  console.log(`[3] 新进程写入后成员: ${JSON.stringify(store.listMembers('g-1001').map((m) => m.name))}`);
+  check(`踢掉 ${target?.ming}（${target?.id}）成功`, kicked.ok === true, kicked.members.map((m) => m.ming));
+  console.log(`[3] 新进程写入后成员: ${JSON.stringify(store.listMembers('g-1001').map((m) => m.ming))}`);
   if (failures) {
     console.log(`\n阶段 2/3 失败 ${failures} 项`);
     process.exit(1);
@@ -72,7 +72,7 @@ console.log(`[1] 写盘目标: ${file}`);
 const store = new QunCang(file);
 
 const c1 = store.upsertGroup({ groupId: 'g-1001', ming: '无限牛马作战群', type: 'internal' });
-check('建群 g-1001', c1.ok && c1.group?.name === '无限牛马作战群', c1.group);
+check('建群 g-1001', c1.ok && c1.group?.ming === '无限牛马作战群', c1.group);
 const c1b = store.upsertGroup({ groupId: 'g-1001', ming: '无限牛马作战群', type: 'internal', directedMode: true });
 check('建群幂等（不重复）', store.listGroups().length === 1, store.listGroups().length);
 check('定向模式写入', c1b.ok && c1b.group?.directedMode === true, c1b.group?.directedMode);
@@ -81,7 +81,7 @@ const invite1 = store.addMember('g-1001', { ming: '群主', role: 'creator', sou
 const invite2 = store.addMember('g-1001', { ming: '牛马一号', role: 'member', source: 'invite' });
 const invite1b = store.addMember('g-1001', { ming: '牛马二号', role: 'member', source: 'invite' });
 const invite3 = store.addMember('g-1001', { ming: '临时工', role: 'member', source: 'invite' });
-check('邀请 4 人', invite1.ok && invite1b.ok && invite3.ok && invite3.members.length === 4, invite3.members.map((m) => m.name));
+check('邀请 4 人', invite1.ok && invite1b.ok && invite3.ok && invite3.members.length === 4, invite3.members.map((m) => m.ming));
 const dup = store.addMember('g-1001', { ming: '牛马一号', role: 'member', source: 'invite' });
 check('同名重复邀请被忽略（幂等）', dup.ok && dup.members.length === 4, dup.members.length);
 const inst = store.addMember('g-1001', { ming: '本机实例-1', role: 'member', source: 'instance', instanceId: 'inst-1' });
@@ -92,9 +92,9 @@ check('同实例重复入群幂等', instDup.ok && instDup.members.length === 5,
 const creatorRow = store.listMembers('g-1001').find((m) => m.role === 'creator');
 const adminOnCreator = store.setAdmin('g-1001', creatorRow?.id || '', true);
 check('创建者角色固定（不可提权/降级）', adminOnCreator.ok === false, adminOnCreator.error);
-const m1 = store.listMembers('g-1001').find((m) => m.name === '牛马一号');
+const m1 = store.listMembers('g-1001').find((m) => m.ming === '牛马一号');
 const setAdmin = store.setAdmin('g-1001', m1?.id || '', true);
-check('设置管理员', setAdmin.ok && setAdmin.members.find((m) => m.name === '牛马一号')?.role === 'admin', setAdmin.members.map((m) => `${m.name}:${m.role}`));
+check('设置管理员', setAdmin.ok && setAdmin.members.find((m) => m.ming === '牛马一号')?.role === 'admin', setAdmin.members.map((m) => `${m.ming}:${m.role}`));
 const kickMissing = store.removeMember('g-1001', 'not-exist');
 check('踢不存在的成员返回错误', kickMissing.ok === false, kickMissing.error);
 
@@ -133,7 +133,7 @@ console.log(out.trimEnd());
 
 // ── 阶段 4：父进程重新读，确认子进程的改动也在盘上 ──
 console.log('\n[4] 父进程重新读盘，确认子进程的踢人操作已持久化');
-const reread = new QunCang(file).listMembers('g-1001').map((m) => m.name);
+const reread = new QunCang(file).listMembers('g-1001').map((m) => m.ming);
 check('临时工 已被移除且已落盘', !reread.includes('临时工'), reread);
 check('其余成员仍在', reread.includes('牛马一号') && reread.includes('本机实例-1'), reread);
 
