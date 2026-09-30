@@ -71,6 +71,12 @@ function unitChecks() {
   if (appJs.includes("id=\"iQiDong\"") || appJs.includes("id=\"iTingZhi\"")) fails.push('start/stop not merged');
   if (!appJs.includes('iQiDongTingZhi')) fails.push('toggle button missing');
   if (!appJs.includes("'#A78567'")) fails.push('theme #A78567 missing');
+  if (appJs.includes('2ea56a') || fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.css'), 'utf8').includes('#2ea56a')) fails.push('theme: green #2ea56a still present');
+  if (!appJs.includes('yinDaoTiao')) fails.push('guide: in-page bar missing');
+  if (!appJs.includes('yinDaoGaoLiang')) fails.push('guide: highlight missing');
+  if (appJs.includes('youGongYingShang = () => {') && appJs.includes('p.baseURL)')) fails.push('guide: baseURL counts as configured');
+  if (!appJs.includes('iQiDongTingZhi')) fails.push('toggle: button missing');
+  if (!appJs.includes('toggleBtn.disabled = true')) fails.push('toggle: no busy guard');
   const pd = appJs.split('const PROVIDER_DEFAULTS')[1] || '';
   if (pd && /id: 'ollama'/.test(pd.split('];')[0] || '')) fails.push('providers: ollama still in PROVIDER_DEFAULTS');
   if (!appJs.includes('renderThemeSwatches()')) fails.push('theme: swatches not called');

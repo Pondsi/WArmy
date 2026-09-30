@@ -2879,6 +2879,27 @@
   function renderInstanceDetail() {
     const inst = state.selectedInstance;
     if (!inst) return;
+    // 状态以主进程为准（本地可能是旧值：显示成「启动」却已在跑）
+    try {
+      window.warmy.listInstances?.().then((arr) => {
+        const live = (arr || []).find((x) => x && (x.id === inst.id || x.ming === inst.ming || x.name === inst.name));
+        if (live && live.status && live.status !== inst.status) {
+          inst.status = live.status;
+          // 只刷按钮文案，不整页重入
+          const b = $('iQiDongTingZhi');
+          if (b) {
+            const running = inst.status === 'running';
+            b.textContent = running ? t('instances.stop') : t('instances.start');
+            b.title = b.textContent;
+          }
+          const zhang = document.querySelector('.huiZhang');
+          if (zhang) {
+            zhang.classList.toggle('off', inst.status !== 'running');
+            zhang.textContent = inst.status === 'running' ? t('instances.running') : t('instances.stopped');
+          }
+        }
+      }).catch(() => {});
+    } catch { /* noop */ }
     const heZi = $('shiLiXiangQing');
     heZi.innerHTML = `
       <h1>${escapeHtml(mingOf(inst) || inst.id)}</h1>
@@ -2949,36 +2970,45 @@
       inst.persona = $('iPersona').value;
       renderList();
     };
-    $('iQiDongTingZhi').onclick = async () => {
-      // 单开关：停止中→启动，运行中→停止
-      if (inst.status === 'running') {
+    const toggleBtn = $('iQiDongTingZhi');
+    if (toggleBtn) {
+      toggleBtn.onclick = async () => {
+        toggleBtn.disabled = true;
         try {
-          await window.warmy.stopInstance(inst.id);
-        } catch { /* noop */ }
-        inst.status = 'stopped';
-        renderInstanceDetail();
-        renderList();
-        return;
-      }
-      try {
-        const dsh = await window.warmy.dshAvailable().catch(() => ({ ok: false }));
-        let r;
-        if (dsh?.ok) {
-          r = await window.warmy.spawnDshInstance({ id: inst.id, ming: mingOf(inst) });
-        } else {
-          r = await window.warmy.spawnInstance({ id: inst.id, ming: mingOf(inst), dutyEligible: true });
+          // 单开关：运行中→停止，否则→启动
+          if (inst.status === 'running') {
+            try {
+              await window.warmy.stopInstance(inst.id);
+            } catch (e) {
+              uiAlert(String(e && e.message || e));
+            }
+            inst.status = 'stopped';
+          } else {
+            let r = null;
+            try {
+              const dsh = await window.warmy.dshAvailable().catch(() => ({ ok: false }));
+              if (dsh && dsh.ok) {
+                r = await window.warmy.spawnDshInstance({ id: inst.id, ming: mingOf(inst) });
+              } else {
+                r = await window.warmy.spawnInstance({ id: inst.id, ming: mingOf(inst), dutyEligible: true });
+              }
+            } catch (e) {
+              uiAlert(String(e && e.message || e));
+              return;
+            }
+            if (r && r.ok === false) {
+              uiAlert(String(r.error || 'start failed'));
+              return;
+            }
+            inst.status = 'running';
+          }
+          renderInstanceDetail();
+          renderList();
+        } finally {
+          toggleBtn.disabled = false;
         }
-        if (r?.ok === false && r?.error) {
-          uiAlert(String(r.error));
-          return;
-        }
-        inst.status = 'running';
-        renderInstanceDetail();
-        renderList();
-      } catch (e) {
-        uiAlert(String(e.message || e));
-      }
-    };
+      };
+    }
     // ── 模型配置：默认模型 / 全部可用 / 手动添加 / 调用链 ──
     // ── 牛马头像 + 认知注入 ──
     (function bindInstanceAvatarCognition() {
@@ -12431,41 +12461,68 @@
    *  ③ 开始使用 —— 说明聊天框与左侧入口
    * 点「去操作」只跳转并**等待**，不自动进入下一步。
    */
+  /**
+   * 首启引导（页内高亮条，非阻塞弹窗）：
+   *  - 底部固定一条「引导条」：当前步骤文案 + 去做 / 跳过
+   *  - 目标元素描边高亮，指引用户去点
+   *  - 条件真正达成后自动进入下一步；可随时跳过
+   */
   async function showOnboardingGuide() {
+    // 真·已配置供应商：有密钥或已拉到模型（仅有默认 baseURL 不算）
     const youGongYingShang = () => {
       try {
-        return (state.providers || []).some((p) => p && p.id && (p.hasKey || (p.models && p.models.length) || p.baseURL));
+        return (state.providers || []).some((p) => p && p.id && (p.hasKey === true || (p.models && p.models.length > 0)));
       } catch { return false; }
     };
     const youNiuMa = () => (state.instances || []).length > 0;
 
-    /** 弹出一步，等用户点「跳过」或条件达成 */
-    const dengBu = (step) => new Promise((resolve) => {
-      const root = $('duiHuaKuangGen');
-      $('duiHuaKuangBiaoTi').textContent = step.title;
-      $('duiHuaKuangTi').innerHTML =
-        '<div style="white-space:pre-wrap;line-height:1.6">' + escapeHtml(step.body) + '</div>' +
-        '<div class="jingYin" style="margin-top:8px">' + escapeHtml(step.hint || '') + '</div>';
-      const dongZuoJi = $('duiHuaKuangDongZuoJi');
-      dongZuoJi.innerHTML = '';
-      const sk = document.createElement('button');
-      sk.className = 'anNiuXiao';
-      sk.textContent = tOr('guide.skip', '跳过');
-      sk.onclick = () => { root.classList.add('yinCang'); resolve('skip'); };
-      const go = document.createElement('button');
-      go.className = 'anNiuZhuYao';
-      go.textContent = step.btn;
-      go.onclick = () => {
-        root.classList.add('yinCang');
-        try { step.action(); } catch { /* noop */ }
-        // 跳转后继续等条件；条件达成自动进下一步
-        resolve('go');
-      };
-      dongZuoJi.append(sk, go);
-      root.classList.remove('yinCang');
+    // 页内引导条
+    let bar = $('yinDaoTiao');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'yinDaoTiao';
+      bar.className = 'yinDaoTiao';
+      document.body.appendChild(bar);
+    }
+    const clearHighlight = () => {
+      document.querySelectorAll('.yinDaoGaoLiang').forEach((n) => n.classList.remove('yinDaoGaoLiang'));
+    };
+    const highlight = (sel) => {
+      clearHighlight();
+      const el = typeof sel === 'string' ? document.querySelector(sel) : sel;
+      if (el) {
+        el.classList.add('yinDaoGaoLiang');
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* noop */ }
+      }
+      return el;
+    };
+    const hideBar = () => {
+      clearHighlight();
+      if (bar) bar.remove();
+    };
+
+    /** 页内一步：不打断操作，用户按提示去点 */
+    const showStep = (step) => new Promise((resolve) => {
+      bar.innerHTML =
+        '<div class="yinDaoTi">' + escapeHtml(step.title) + '</div>' +
+        '<div class="yinDaoWen">' + escapeHtml(step.body) + '</div>' +
+        '<div class="yinDaoDongZuo">' +
+        '<button type="button" class="anNiuXiao" data-yd="skip">' + escapeHtml(tOr('guide.skip', '跳过')) + '</button>' +
+        (step.btn ? '<button type="button" class="anNiuZhuYao" data-yd="go">' + escapeHtml(step.btn) + '</button>' : '') +
+        '</div>';
+      highlight(step.target);
+      bar.querySelector('[data-yd="skip"]').onclick = () => { hideBar(); resolve('skip'); };
+      const go = bar.querySelector('[data-yd="go"]');
+      if (go) {
+        go.onclick = () => {
+          try { step.action(); } catch { /* noop */ }
+          // 不关闭条：继续等条件
+          highlight(step.target);
+          resolve('go');
+        };
+      }
     });
 
-    /** 轮询条件，最多 timeoutMs */
     const dengTiaoJian = (fn, timeoutMs) => new Promise((resolve) => {
       const t0 = Date.now();
       const tick = () => {
@@ -12476,39 +12533,53 @@
       tick();
     });
 
-    // ① 供应商
+
+    // ① 供应商（必须真有密钥/模型才算完成）
     if (!youGongYingShang()) {
-      await dengBu({
+      await showStep({
         title: tOr('guide.step1.title', '① 添加模型供应商'),
-        body: tOr('guide.step1.body', '没有模型供应商，AI 无法干活。请到「设置 → 模型」添加供应商（推荐 DeepSeek）并填好 API Key。'),
-        hint: tOr('guide.step1.hint', '完成后本窗口会自动进入下一步；也可点「跳过」。'),
-        btn: tOr('guide.step1.btn', '去设置添加'),
-        action: () => { setNav('settings'); try { settingsSection = 'model'; renderPage(); } catch { /* noop */ } },
+        body: tOr('guide.step1.body', '点击左侧「设置」→「模型」，添加供应商（推荐 DeepSeek）并填好 API Key。完成后这里会自动进入下一步。'),
+        btn: tOr('guide.step1.btn', '去设置'),
+        target: '#peiZhiDaoHang button[data-sec="model"], #navSettings, [data-nav="settings"]',
+        action: () => {
+          setNav('settings');
+          try {
+            settingsSection = 'model';
+            renderPage();
+            setTimeout(() => highlight('#peiZhiDaoHang button[data-sec="model"]'), 200);
+          } catch { /* noop */ }
+        },
       });
-      await dengTiaoJian(youGongYingShang, 10 * 60 * 1000);
+      const ok1 = await dengTiaoJian(youGongYingShang, 15 * 60 * 1000);
+      if (!ok1) { hideBar(); return; }
     }
 
     // ② 创建牛马
     if (!youNiuMa()) {
-      await dengBu({
+      await showStep({
         title: tOr('guide.step2.title', '② 创建你的牛马'),
-        body: tOr('guide.step2.body', '打开「牛马管理局」，点右上角 + 创建牛马；若已添加供应商，请设置默认模型与调用链。'),
-        hint: tOr('guide.step2.hint', '创建完成后本窗口会自动进入下一步；也可点「跳过」。'),
+        body: tOr('guide.step2.body', '点击左侧「牛马管理局」，再点右上角 + 创建牛马，并设置默认模型。完成后这里会自动进入下一步。'),
         btn: tOr('guide.step2.btn', '去牛马管理局'),
-        action: () => { setNav('instances'); },
+        target: '[data-nav="instances"], #navInstances, #peiZhiDaoHang button[data-sec="model"]',
+        action: () => {
+          setNav('instances');
+          setTimeout(() => highlight('#lieBiaoDongZuo'), 200);
+        },
       });
-      await dengTiaoJian(youNiuMa, 10 * 60 * 1000);
+      const ok2 = await dengTiaoJian(youNiuMa, 15 * 60 * 1000);
+      if (!ok2) { hideBar(); return; }
     }
 
     // ③ 开始使用
-    await dengBu({
+    await showStep({
       title: tOr('guide.step3.title', '③ 开始使用'),
       body: tOr('guide.step3.body',
-        '全部完成后，在下方聊天框就可以开始和 AI 聊天，让这个 AI 牛马为你干活了。\n\n左侧「项目」：创建复杂而高效的多牛马合作群聊，具备更高级别安全隔离、多 AI 协同办公，还能加入多人同时指挥多 AI 执行任务。\n左侧「联系人」：和其他人端到端私聊。\n左侧「群聊」：和一群人聊天，并让 AI 进入与你们互动。'),
-      hint: '',
+        '在下方聊天框和 AI 聊天，让牛马为你干活。左侧「项目」= 多牛马协同群聊（可多人指挥）；「联系人」= 端到端私聊；「群聊」= 多人聊天并让 AI 参与。'),
       btn: tOr('guide.step3.btn', '开始使用'),
+      target: null,
       action: () => {},
     });
+    hideBar();
   }
 
   async function shuaxinZhixingqiji() {

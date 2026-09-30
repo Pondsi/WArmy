@@ -101,7 +101,7 @@
   --danger-fg: #ffb3b3;
   --danger-line: #6b3434;
   --ok-fg: #6fd18f;
-  --accent: #2ea56a;
+  --accent: #A78567;
   --danger: #e06060;
   color-scheme: dark;
 }
@@ -320,14 +320,14 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .ceLanTiaoMu { width: 48px; height: 48px; }
 .touXiang {
   width: 40px; height: 40px; border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent), #10ad6a);
+  background: linear-gradient(135deg, var(--accent), #A78567);
   color: #fff; display: grid; place-items: center;
   font-size: var(--fs-md); font-weight: 600;
 }
 .touXiangTuPian { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; display: block; }
 .touXiangTuPian.big, .bigAv { width: 72px; height: 72px; border-radius: 16px; }
 .bigAv {
-  background: linear-gradient(135deg, var(--accent), #10ad6a);
+  background: linear-gradient(135deg, var(--accent), #A78567);
   color: #fff; display: grid; place-items: center; font-size: 28px; font-weight: 700;
 }
 
@@ -2351,3 +2351,22 @@ body.liaoTianChuangKou #appTi {
 
 /* 全屏取色层 */
 #quanPingQuSeCeng img { pointer-events: auto; }
+
+/* 首启页内引导条（非阻塞弹窗） */
+.yinDaoTiao {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  z-index: 9000; min-width: 320px; max-width: min(560px, calc(100vw - 32px));
+  background: var(--card, #fff); color: var(--ink, #111);
+  border: 1px solid var(--line, #ddd); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 12px 14px;
+}
+.yinDaoTi { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.yinDaoWen { font-size: 13px; line-height: 1.55; opacity: 0.92; white-space: pre-wrap; }
+.yinDaoDongZuo { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.yinDaoGaoLiang {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 3px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 28%, transparent);
+  transition: outline 0.2s, box-shadow 0.2s;
+}
