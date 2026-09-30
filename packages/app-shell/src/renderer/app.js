@@ -621,6 +621,11 @@
     document.documentElement.style.setProperty('--me-bubble', color);
     window.warmy.settingsSave({ accent: color });
   }
+  // 启动即上色（产品默认 #A78567；之后以设置里的 accent 为准）
+  try {
+    document.documentElement.style.setProperty('--accent', state.theme || '#A78567');
+    document.documentElement.style.setProperty('--me-bubble', state.theme || '#A78567');
+  } catch { /* noop */ }
 
   /**
    * 全屏取色：主进程截当前屏幕 → 铺一层位图 → 鼠标点哪取哪。
@@ -1131,7 +1136,7 @@
       btn.classList.add('yinCang');
       btn.onclick = null;
     } else if (state.nav === 'instances') {
-      btn.textContent = t('list.addInstance');
+      btn.textContent = '+';
       btn.title = t('list.addInstance');
       btn.classList.remove('yinCang');
       btn.onclick = addInstanceFlow;
@@ -2930,8 +2935,7 @@
         </div>
         <div class="shiLiHang" style="margin-top:14px">
           <button class="anNiuZhuYao" id="iBaoCun" title="${escapeHtml(t('common.save'))}">${escapeHtml(t('common.save'))}</button>
-          <button class="anNiuXiao" id="iQiDong" title="${escapeHtml(t('instances.start'))}">${escapeHtml(t('instances.start'))}</button>
-          <button class="anNiuXiao" id="iTingZhi" title="${escapeHtml(t('instances.stop'))}">${escapeHtml(t('instances.stop'))}</button>
+          <button class="anNiuXiao" id="iQiDongTingZhi" title="${escapeHtml(inst.status === 'running' ? t('instances.stop') : t('instances.start'))}">${escapeHtml(inst.status === 'running' ? t('instances.stop') : t('instances.start'))}</button>
           <button class="anNiuDanger" id="iDel" title="${escapeHtml(t('instances.delete'))}">${escapeHtml(t('instances.delete'))}</button>
           <span class="huiZhang ${inst.status === 'running' ? '' : 'off'}">${inst.status === 'running' ? t('instances.running') : t('instances.stopped')}</span>
         </div>
@@ -2945,7 +2949,17 @@
       inst.persona = $('iPersona').value;
       renderList();
     };
-    $('iQiDong').onclick = async () => {
+    $('iQiDongTingZhi').onclick = async () => {
+      // 单开关：停止中→启动，运行中→停止
+      if (inst.status === 'running') {
+        try {
+          await window.warmy.stopInstance(inst.id);
+        } catch { /* noop */ }
+        inst.status = 'stopped';
+        renderInstanceDetail();
+        renderList();
+        return;
+      }
       try {
         const dsh = await window.warmy.dshAvailable().catch(() => ({ ok: false }));
         let r;
@@ -2964,16 +2978,6 @@
       } catch (e) {
         uiAlert(String(e.message || e));
       }
-    };
-    $('iTingZhi').onclick = async () => {
-      try {
-        await window.warmy.stopInstance(inst.id);
-      } catch {
-        /* noop */
-      }
-      inst.status = 'stopped';
-      renderInstanceDetail();
-      renderList();
     };
     // ── 模型配置：默认模型 / 全部可用 / 手动添加 / 调用链 ──
     // ── 牛马头像 + 认知注入 ──
@@ -3607,7 +3611,7 @@
           <div class="shiLiHang" style="align-items:center;gap:8px;flex-wrap:wrap">
             <button type="button" class="anNiuZhuYao" id="anNiuRongQiTanCe">${escapeHtml(t('container.probeBtn'))}</button>
             <button type="button" class="anNiuXiao" id="anNiuMsbAnZhuang">${escapeHtml(tOr('container.microsandbox.install', '安装 Microsandbox'))}</button>
-            <button type="button" class="anNiuXiao" id="anNiuMsbXieZai" disabled>${escapeHtml(tOr('container.microsandbox.uninstall', '卸载 Microsandbox'))}</button>
+            <button type="button" class="anNiuXiao" id="anNiuMsbXieZai" disabled title="${escapeHtml(tOr('container.microsandbox.uninstallDisabled', '未检测到已安装，不可卸载'))}">${escapeHtml(tOr('container.microsandbox.uninstall', '卸载 Microsandbox'))}</button>
             <span class="ctgDim" id="rongQiTanCeXiaoXi" data-probe-state="idle"></span>
           </div>
           <div class="jingYin" id="msbXuNiHuaTiShi" style="margin-top:4px"></div>
@@ -4160,14 +4164,15 @@
           }
         });
 
-        // 首次：按当前是否已装初始化按钮；虚拟化提示稍后刷
-        setTimeout(() => {
-          void (async () => {
-            const installed = await tanCeShiFouAnZhuang();
-            sheZhiAnNiu(installed);
-            await shuaXinXuNiHua();
-          })();
-        }, 400);
+        // 立即按当前是否已装初始化按钮（未装 ⇒ 卸载钮灰）；虚拟化提示稍后刷
+        const tongBuChuShi = async () => {
+          const installed = await tanCeShiFouAnZhuang();
+          sheZhiAnNiu(installed);
+          await shuaXinXuNiHua();
+        };
+        void tongBuChuShi();
+        setTimeout(() => { void tongBuChuShi(); }, 400);
+        window.__msbTongBuChuShi = tongBuChuShi;
       })();
 
       // dsh：一键安装 / 状态检查（PC 必装；未装时如实提示）
@@ -4453,9 +4458,20 @@
           pick.innerHTML = yiZhi.map((k) => '<option value="' + escapeHtml(k) + '">' + escapeHtml(k) + '</option>').join('');
         }
         heZi.innerHTML = (state.chaJianJi || []).map((p, suoYin) => {
+          // desc 可能是 i18n key（内置）或纯文本（扫描/文件夹）
+          const descText = (p.desc && state.t && state.t[p.desc]) ? t(p.desc) : (p.desc || '');
+          const provider = p.id === 'agent-teams'
+            ? tOr('plugin.teams.provider', '提供方：@nanmicoder')
+            : p.id === 'memory-plus'
+              ? tOr('plugin.memory.provider', '提供方：dsh 社区')
+              : '';
+          const installedAt = p.source === 'folder'
+            ? tOr('plugin.fromFolder', '来源：本地文件夹')
+            : tOr('plugin.builtin', '内置插件（随 dsh 运行时自动安装）');
           return '<div class="ctgHang" data-plugin-idx="' + suoYin + '">' +
-            '<div style="font-weight:600">' + escapeHtml(p.name || p.id) + '</div>' +
-            '<div class="jingYin">' + escapeHtml(p.desc || '') + '</div>' +
+            '<div style="font-weight:600">' + escapeHtml(p.ming || p.name || p.id) + '</div>' +
+            '<div class="jingYin">' + escapeHtml(descText) + '</div>' +
+            '<div class="jingYin" style="font-size:11px;margin-top:2px">' + escapeHtml([provider, installedAt].filter(Boolean).join(' · ')) + '</div>' +
             '<div style="margin-top:4px;display:flex;gap:6px">' +
             '<button class="anNiuXiao" data-plug-act="toggle" data-idx="' + suoYin + '">' + (p.enabled === false ? escapeHtml(t('settings.pluginEnable')) : escapeHtml(t('settings.pluginDisable'))) + '</button>' +
             '<button class="anNiuXiao" data-plug-act="del" data-idx="' + suoYin + '">' + escapeHtml(t('settings.pluginDelete')) + '</button>' +
@@ -4742,6 +4758,8 @@
       })();
       // 容器卡片：安装提示词灌入 + 复制绑定（此前漏调，导致 pre 为空、复制无动作）
       try { bindContainerCard(); } catch { /* noop */ }
+      // Microsandbox 卸载钮：每次重渲染后按真实安装态同步（避免残留可点）
+      try { window.__msbTongBuChuShi?.(); } catch { /* noop */ }
       const SEC_DESC = {
         normal: 'settings.securityNormalDesc',
         strict: 'settings.securityStrictDesc',
@@ -12406,58 +12424,91 @@
    *  2) 去牛马管理局创建牛马（若已有供应商则引导设默认模型与调用链）
    *  3) 说明：聊天框可开始干活；左侧项目/联系人/群聊各是什么
    */
+  /**
+   * 首启引导（逐步真实完成，可随时跳过）：
+   *  ① 添加模型供应商 —— 等到 settings 里真有供应商（且非仅默认空密钥）或用户跳过
+   *  ② 创建牛马 —— 等到 instances.length > 0 或用户跳过
+   *  ③ 开始使用 —— 说明聊天框与左侧入口
+   * 点「去操作」只跳转并**等待**，不自动进入下一步。
+   */
   async function showOnboardingGuide() {
-    const steps = [
-      {
+    const youGongYingShang = () => {
+      try {
+        return (state.providers || []).some((p) => p && p.id && (p.hasKey || (p.models && p.models.length) || p.baseURL));
+      } catch { return false; }
+    };
+    const youNiuMa = () => (state.instances || []).length > 0;
+
+    /** 弹出一步，等用户点「跳过」或条件达成 */
+    const dengBu = (step) => new Promise((resolve) => {
+      const root = $('duiHuaKuangGen');
+      $('duiHuaKuangBiaoTi').textContent = step.title;
+      $('duiHuaKuangTi').innerHTML =
+        '<div style="white-space:pre-wrap;line-height:1.6">' + escapeHtml(step.body) + '</div>' +
+        '<div class="jingYin" style="margin-top:8px">' + escapeHtml(step.hint || '') + '</div>';
+      const dongZuoJi = $('duiHuaKuangDongZuoJi');
+      dongZuoJi.innerHTML = '';
+      const sk = document.createElement('button');
+      sk.className = 'anNiuXiao';
+      sk.textContent = tOr('guide.skip', '跳过');
+      sk.onclick = () => { root.classList.add('yinCang'); resolve('skip'); };
+      const go = document.createElement('button');
+      go.className = 'anNiuZhuYao';
+      go.textContent = step.btn;
+      go.onclick = () => {
+        root.classList.add('yinCang');
+        try { step.action(); } catch { /* noop */ }
+        // 跳转后继续等条件；条件达成自动进下一步
+        resolve('go');
+      };
+      dongZuoJi.append(sk, go);
+      root.classList.remove('yinCang');
+    });
+
+    /** 轮询条件，最多 timeoutMs */
+    const dengTiaoJian = (fn, timeoutMs) => new Promise((resolve) => {
+      const t0 = Date.now();
+      const tick = () => {
+        if (fn()) return resolve(true);
+        if (Date.now() - t0 > timeoutMs) return resolve(false);
+        setTimeout(tick, 800);
+      };
+      tick();
+    });
+
+    // ① 供应商
+    if (!youGongYingShang()) {
+      await dengBu({
         title: tOr('guide.step1.title', '① 添加模型供应商'),
         body: tOr('guide.step1.body', '没有模型供应商，AI 无法干活。请到「设置 → 模型」添加供应商（推荐 DeepSeek）并填好 API Key。'),
+        hint: tOr('guide.step1.hint', '完成后本窗口会自动进入下一步；也可点「跳过」。'),
         btn: tOr('guide.step1.btn', '去设置添加'),
-        skip: tOr('guide.skip', '跳过'),
         action: () => { setNav('settings'); try { settingsSection = 'model'; renderPage(); } catch { /* noop */ } },
-      },
-      {
-        title: tOr('guide.step2.title', '② 创建你的牛马'),
-        body: tOr('guide.step2.body', '打开「牛马管理局」创建牛马；若已添加供应商，请为它设置默认模型与调用链。'),
-        btn: tOr('guide.step2.btn', '去牛马管理局'),
-        skip: tOr('guide.skip', '跳过'),
-        action: () => { setNav('instances'); },
-      },
-      {
-        title: tOr('guide.step3.title', '③ 开始使用'),
-        body: tOr('guide.step3.body',
-          '全部完成后，在下方聊天框就可以开始和 AI 聊天，让这个 AI 牛马为你干活了。\n\n左侧「项目」：创建复杂而高效的多牛马合作群聊，具备更高级别安全隔离、多 AI 协同办公，还能加入多人同时指挥多 AI 执行任务。\n左侧「联系人」：和其他人端到端私聊。\n左侧「群聊」：和一群人聊天，并让 AI 进入与你们互动。'),
-        btn: tOr('guide.step3.btn', '开始使用'),
-        skip: '',
-        action: () => {},
-      },
-    ];
-    for (const step of steps) {
-      await new Promise((resolve) => {
-        const root = $('duiHuaKuangGen');
-        $('duiHuaKuangBiaoTi').textContent = step.title;
-        $('duiHuaKuangTi').innerHTML =
-          '<div style="white-space:pre-wrap;line-height:1.6">' + escapeHtml(step.body) + '</div>';
-        const dongZuoJi = $('duiHuaKuangDongZuoJi');
-        dongZuoJi.innerHTML = '';
-        if (step.skip) {
-          const sk = document.createElement('button');
-          sk.className = 'anNiuXiao';
-          sk.textContent = step.skip;
-          sk.onclick = () => { root.classList.add('yinCang'); resolve('skip'); };
-          dongZuoJi.append(sk);
-        }
-        const go = document.createElement('button');
-        go.className = 'anNiuZhuYao';
-        go.textContent = step.btn;
-        go.onclick = () => {
-          root.classList.add('yinCang');
-          try { step.action(); } catch { /* noop */ }
-          resolve('go');
-        };
-        dongZuoJi.append(go);
-        root.classList.remove('yinCang');
       });
+      await dengTiaoJian(youGongYingShang, 10 * 60 * 1000);
     }
+
+    // ② 创建牛马
+    if (!youNiuMa()) {
+      await dengBu({
+        title: tOr('guide.step2.title', '② 创建你的牛马'),
+        body: tOr('guide.step2.body', '打开「牛马管理局」，点右上角 + 创建牛马；若已添加供应商，请设置默认模型与调用链。'),
+        hint: tOr('guide.step2.hint', '创建完成后本窗口会自动进入下一步；也可点「跳过」。'),
+        btn: tOr('guide.step2.btn', '去牛马管理局'),
+        action: () => { setNav('instances'); },
+      });
+      await dengTiaoJian(youNiuMa, 10 * 60 * 1000);
+    }
+
+    // ③ 开始使用
+    await dengBu({
+      title: tOr('guide.step3.title', '③ 开始使用'),
+      body: tOr('guide.step3.body',
+        '全部完成后，在下方聊天框就可以开始和 AI 聊天，让这个 AI 牛马为你干活了。\n\n左侧「项目」：创建复杂而高效的多牛马合作群聊，具备更高级别安全隔离、多 AI 协同办公，还能加入多人同时指挥多 AI 执行任务。\n左侧「联系人」：和其他人端到端私聊。\n左侧「群聊」：和一群人聊天，并让 AI 进入与你们互动。'),
+      hint: '',
+      btn: tOr('guide.step3.btn', '开始使用'),
+      action: () => {},
+    });
   }
 
   async function shuaxinZhixingqiji() {

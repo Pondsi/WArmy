@@ -1637,8 +1637,8 @@
   "privacy.title": "Politique de confidentialité",
   "privacy.agree": "J'accepte et continue",
   "privacy.disagree": "Je refuse (quitter)",
-  "privacy.scrollHint": "Faites défiler jusqu'en bas pour accepter.",
-  "privacy.waitHint": "Gardez la fenêtre ouverte 3 secondes.",
+  "privacy.scrollHint": "Please read the full text carefully",
+  "privacy.waitHint": "Please read the full text carefully",
   "privacy.viewTitle": "Politique de confidentialité (intégrale)",
   "privacy.revoke": "Révoquer le consentement",
   "privacy.revokeConfirm": "Après révocation, impossible d'utiliser l'app. Révoquer et quitter ?",
@@ -1929,5 +1929,11 @@
   "guide.step3.title": "③ Start using",
   "guide.step3.body": "When done, chat in the box below and your AI workhorse will work for you.\n\nLeft Projects: multi-workhorse group chats with stronger isolation and multi-human command.\nLeft Contacts: end-to-end private chat.\nLeft Groups: chat with people and let AI join in.",
   "guide.step3.btn": "Start",
-  "container.microsandbox.uninstallDisabled": "Not installed — uninstall disabled"
+  "container.microsandbox.uninstallDisabled": "Not installed — uninstall disabled",
+  "plugin.builtin": "Built-in plugin (installed with dsh runtime)",
+  "plugin.teams.provider": "By @nanmicoder",
+  "plugin.memory.provider": "By dsh community",
+  "plugin.fromFolder": "Source: local folder",
+  "guide.step1.hint": "This dialog advances automatically when done; or click Skip.",
+  "guide.step2.hint": "This dialog advances automatically when done; or click Skip."
 }

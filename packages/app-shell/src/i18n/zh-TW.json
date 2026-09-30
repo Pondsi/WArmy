@@ -1638,8 +1638,8 @@
   "privacy.title": "隱私政策",
   "privacy.agree": "同意並繼續",
   "privacy.disagree": "不同意並退出",
-  "privacy.scrollHint": "請捲動到文字底部後才能點擊同意。",
-  "privacy.waitHint": "本視窗需停留 3 秒以上。",
+  "privacy.scrollHint": "Please read the full text carefully",
+  "privacy.waitHint": "Please read the full text carefully",
   "privacy.viewTitle": "隱私政策（全文）",
   "privacy.revoke": "撤銷對隱私條款的同意",
   "privacy.revokeConfirm": "撤銷後將無法繼續使用本軟體，直到你再次同意。確定撤銷並退出嗎？",
@@ -1929,5 +1929,11 @@
   "guide.step3.title": "③ Start using",
   "guide.step3.body": "When done, chat in the box below and your AI workhorse will work for you.\n\nLeft Projects: multi-workhorse group chats with stronger isolation and multi-human command.\nLeft Contacts: end-to-end private chat.\nLeft Groups: chat with people and let AI join in.",
   "guide.step3.btn": "Start",
-  "container.microsandbox.uninstallDisabled": "Not installed — uninstall disabled"
+  "container.microsandbox.uninstallDisabled": "Not installed — uninstall disabled",
+  "plugin.builtin": "Built-in plugin (installed with dsh runtime)",
+  "plugin.teams.provider": "By @nanmicoder",
+  "plugin.memory.provider": "By dsh community",
+  "plugin.fromFolder": "Source: local folder",
+  "guide.step1.hint": "This dialog advances automatically when done; or click Skip.",
+  "guide.step2.hint": "This dialog advances automatically when done; or click Skip."
 }

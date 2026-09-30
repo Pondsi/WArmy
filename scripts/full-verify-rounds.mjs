@@ -66,6 +66,11 @@ function unitChecks() {
   if (!appJs.includes('bindHotkeySection()')) fails.push('hotkey: bindHotkeySection not called');
   if (appJs.includes("ming: 'demo.agent'")) fails.push('demo.agent still present');
   if (!appJs.includes('showOnboardingGuide')) fails.push('guide: onboarding missing');
+  if (!appJs.includes('dengTiaoJian')) fails.push('guide: no wait-for-done');
+  if (appJs.includes("btn.textContent = t('list.addInstance')")) fails.push('create btn not plus');
+  if (appJs.includes("id=\"iQiDong\"") || appJs.includes("id=\"iTingZhi\"")) fails.push('start/stop not merged');
+  if (!appJs.includes('iQiDongTingZhi')) fails.push('toggle button missing');
+  if (!appJs.includes("'#A78567'")) fails.push('theme #A78567 missing');
   const pd = appJs.split('const PROVIDER_DEFAULTS')[1] || '';
   if (pd && /id: 'ollama'/.test(pd.split('];')[0] || '')) fails.push('providers: ollama still in PROVIDER_DEFAULTS');
   if (!appJs.includes('renderThemeSwatches()')) fails.push('theme: swatches not called');
