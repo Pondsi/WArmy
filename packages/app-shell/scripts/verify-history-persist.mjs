@@ -112,7 +112,7 @@ function makeCopy(tag, opts = {}) {
         if (seen) continue;
         seen = true;
       }
-      out.push(line.includes("yingYong.setAsDefaultProtocolClient('dsh-app')") ? line.replace("yingYong.setAsDefaultProtocolClient('dsh-app')", 'void 0') : line);
+      out.push(line.includes("app.setAsDefaultProtocolClient('dsh-app')") ? line.replace("app.setAsDefaultProtocolClient('dsh-app')", 'void 0') : line);
     }
     fs.writeFileSync(mainFile, out.join('\n'), 'utf8');
   }

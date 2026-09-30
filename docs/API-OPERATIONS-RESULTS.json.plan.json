@@ -23,7 +23,7 @@
     [
       "localeInfo",
       "()",
-      "System/resolved locale packs"
+      "System/resolved yuYan packs"
     ],
     [
       "themeInfo",
@@ -48,7 +48,7 @@
     [
       "boardAggregate",
       "()",
-      "Aggregate board progress per group"
+      "Aggregate board jinDu per group"
     ],
     [
       "getProvider",
@@ -63,7 +63,7 @@
     [
       "knowledgeQuery",
       "WArmy",
-      "FTS/entity search on knowledge base"
+      "FTS/entity search qiYong knowledge base"
     ],
     [
       "metricsSummary",
@@ -83,7 +83,7 @@
     [
       "skillsPaths",
       "()",
-      "Skill roots on disk"
+      "Skill roots qiYong disk"
     ],
     [
       "skillsScanDirsGet",
@@ -103,7 +103,7 @@
     [
       "profileGet",
       "()",
-      "Local profile (name/avatar/deviceId)"
+      "Local profile (ming/touXiang/deviceId)"
     ],
     [
       "appInfo",
@@ -113,7 +113,7 @@
     [
       "identityInfo",
       "()",
-      "Local identity fingerprint/card"
+      "Local identity fingerprint/ka"
     ],
     [
       "identityPeers",
@@ -178,7 +178,7 @@
     [
       "i18n",
       "zh-CN",
-      "Load a locale pack"
+      "Load a yuYan pack"
     ],
     [
       "chatLogRestore",

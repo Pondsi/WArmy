@@ -21,7 +21,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {ShenFenCang, nullProtector} from '../dist/identity-store.js';
-import {SecureMesh, pickPortCandidates, probePortAvailability, getOsReservedTcpRanges, parseExcludedPortRanges, EPHEMERAL_PORT_RANGE, PORT_CANDIDATE_MIN, } from '../dist/net-wiring.js';
+import {SecureMesh, xuanDuanKouHouXuan, tanCeDuanKouKeYongXing, quXiTongBaoLiuDuanKou, jieXiPaiChuDuanKouFanWei, EPHEMERAL_PORT_RANGE, PORT_CANDIDATE_MIN, } from '../dist/net-wiring.js';
 import {WARMY_SUGGESTED_NET_PORTS} from '../dist/settings-store.js';
 
 const SUGGESTED = [...WARMY_SUGGESTED_NET_PORTS];
@@ -43,7 +43,7 @@ function mkIdentity(ming) {
   return { store, created, dir };
 }
 
-/** 占端口（0.0.0.0，与 SecureSyncServer 的默认 host 一致）；同端口复用，不重复 bind */
+/** 占端口（0.0.0.0，与 AnQuanTongBuFuWu 的默认 host 一致）；同端口复用，不重复 bind */
 const listeners = new Map();
 function occupy(port) {
   if (listeners.has(port)) return Promise.resolve(listeners.get(port));
@@ -205,7 +205,7 @@ try {
   //  来源改成**系统真值**（netsh 排除段），不再"扫候选表碰运气"：63888 已经从候选表里
   //  剔除（它正是被保留段覆盖的那个），再扫表只会永远得到"未覆盖"。
   //  仍然只在**真能复现**时断言（连占都占不上 = 确实被系统排除）；复现不了就如实记未覆盖。
-  const osReserved0 = await getOsReservedTcpRanges();
+  const osReserved0 = await quXiTongBaoLiuDuanKou();
   let reservedProbe = null;
   for (const [rs, re] of osReserved0.ranges) {
     for (const p of [rs, Math.min(re, rs + 1)]) {
@@ -227,15 +227,15 @@ try {
     + '      5357        5357      \n     63840       63939      \n     50000       50059     *\n\n'
     + '* - Administered port exclusions.\n';
   check('netsh 排除段表格解析器：只认"两个数字成一行"，表头 / 分隔线 / 星号说明行都不进结果',
-    JSON.stringify(parseExcludedPortRanges(NETS_TABLE_FIXTURE)) === JSON.stringify([[5357, 5357], [63840, 63939], [50000, 50059]]),
-    parseExcludedPortRanges(NETS_TABLE_FIXTURE));
+    JSON.stringify(jieXiPaiChuDuanKouFanWei(NETS_TABLE_FIXTURE)) === JSON.stringify([[5357, 5357], [63840, 63939], [50000, 50059]]),
+    jieXiPaiChuDuanKouFanWei(NETS_TABLE_FIXTURE));
   let netshRaw = '';
   try {
     netshRaw = execFileSync('netsh', ['int', 'ipv4', 'show', 'excludedportrange', 'protocol=tcp'], { encoding: 'utf8', timeout: 8000 });
   } catch {
     netshRaw = '';
   }
-  const reparsed = netshRaw ? parseExcludedPortRanges(netshRaw) : null;
+  const reparsed = netshRaw ? jieXiPaiChuDuanKouFanWei(netshRaw) : null;
   check('读到的保留段 === 直接再跑一次 netsh 解析出来的（不是编的、也不是陈旧缓存）',
     reparsed === null ? osReserved0.source === 'command-failed' : JSON.stringify(reparsed) === JSON.stringify(osReserved0.ranges),
     { source: osReserved0.source, supported: osReserved0.supported, ranges: osReserved0.ranges, reparsed: reparsed, error: osReserved0.error ?? null });
@@ -265,7 +265,7 @@ try {
   //  6a 单个优先池端口被占 → 它**不出现在**推荐里（status=occupied），其他可用端口出现
   const HOLD = SUGGESTED[1];
   await occupy(HOLD);
-  const rep1 = await pickPortCandidates({ requestedPort: SUGGESTED[0], want: 4 });
+  const rep1 = await xuanDuanKouHouXuan({ requestedPort: SUGGESTED[0], want: 4 });
   const p1 = rep1.probed.find((x) => x.port === HOLD);
   check('被占用的优先池端口实测结论 = occupied（不是靠静态表猜）', p1 && p1.status === 'occupied' && p1.errorCode === 'EADDRINUSE', p1);
   check('被占用的端口**不出现在**推荐列表里', !rep1.recommended.some((x) => x.port === HOLD), rep1.recommended.map((x) => x.port));
@@ -278,8 +278,8 @@ try {
   const poolOccupiedProbe = (port, host, to) =>
     SUGGESTED.includes(port)
       ? Promise.resolve({ port, status: 'occupied', errorCode: 'EADDRINUSE', latencyMs: 0 })
-      : probePortAvailability(port, host, to);
-  const rep2 = await pickPortCandidates({
+      : tanCeDuanKouKeYongXing(port, host, to);
+  const rep2 = await xuanDuanKouHouXuan({
     requestedPort: SUGGESTED[0],
     want: 4,
     probe: poolOccupiedProbe,
@@ -323,7 +323,7 @@ try {
 
   //  6d OS 保留段端口 → no-permission（本机有排除段时才可复现，否则如实记为未覆盖）
   if (reservedProbe) {
-    const rp = await probePortAvailability(reservedProbe.port, '0.0.0.0', 400);
+    const rp = await tanCeDuanKouKeYongXing(reservedProbe.port, '0.0.0.0', 400);
     check('OS 排除段端口实测结论 = no-permission（errno=' + reservedProbe.code + '）', rp.status === 'no-permission' && rp.errorCode === reservedProbe.code, rp);
   } else {
     check('OS 排除段端口场景：本机无可复现排除段 → 未覆盖（如实记录）', true, 'no-reserved-range');
@@ -337,9 +337,9 @@ try {
     maxInFlight = Math.max(maxInFlight, inFlight);
     await new Promise((r) => setTimeout(r, 30));
     inFlight -= 1;
-    return probePortAvailability(port, host, to);
+    return tanCeDuanKouKeYongXing(port, host, to);
   };
-  const rep3 = await pickPortCandidates({ want: 4, concurrency: 4, probe: slowProbe, allowExtended: false });
+  const rep3 = await xuanDuanKouHouXuan({ want: 4, concurrency: 4, probe: slowProbe, allowExtended: false });
   check('探测并发有上限（concurrency=4 时同时最多 4 个）', maxInFlight <= 4, maxInFlight);
   check('并发探测仍然能凑出推荐', rep3.recommended.length >= PORT_CANDIDATE_MIN, rep3.recommended.map((x) => x.port));
 
@@ -348,10 +348,10 @@ try {
     slowInFlight += 1;
     await new Promise((r) => setTimeout(r, 400)); // 故意比总超时慢：必须被总超时截断
     slowInFlight -= 1;
-    return probePortAvailability(port, host, to);
+    return tanCeDuanKouKeYongXing(port, host, to);
   };
   const t0 = Date.now();
-  const rep4 = await pickPortCandidates({ want: 5, concurrency: 2, totalTimeoutMs: 500, probe: hangProbe });
+  const rep4 = await xuanDuanKouHouXuan({ want: 5, concurrency: 2, totalTimeoutMs: 500, probe: hangProbe });
   const slowElapsed = Date.now() - t0;
   check('总超时生效：探测比超时慢时被截断（< 2500ms，不会一直跑）', slowElapsed < 2500, slowElapsed + 'ms');
   check('被超时截断时如实标记 timedOut=true（不假装已经找遍）', rep4.timedOut === true, { timedOut: rep4.timedOut, recommended: rep4.recommended.length });
@@ -361,11 +361,11 @@ try {
   let probeCalls = 0;
   const countingProbe = async (port, host, to) => {
     probeCalls += 1;
-    return probePortAvailability(port, host, to);
+    return tanCeDuanKouKeYongXing(port, host, to);
   };
-  await pickPortCandidates({ want: 3, allowExtended: true, probe: countingProbe });
+  await xuanDuanKouHouXuan({ want: 3, allowExtended: true, probe: countingProbe });
   const first = probeCalls;
-  await pickPortCandidates({ want: 3, allowExtended: true, probe: countingProbe });
+  await xuanDuanKouHouXuan({ want: 3, allowExtended: true, probe: countingProbe });
   check('候选列表不缓存陈旧结果：第二次调用仍然重新实测', probeCalls > first, { first, second: probeCalls - first });
 
   //  6g **扩展搜索在生成候选时就剔除 OS 保留段**（确定性复现：随机源钉在保留段端口上）
@@ -378,7 +378,7 @@ try {
   if (ephemeralReserved) {
     const target = ephemeralReserved[0];
     const probedByUs = [];
-    const repSkip = await pickPortCandidates({
+    const repSkip = await xuanDuanKouHouXuan({
       want: 5,
       allowExtended: true,
       probe: async (port) => {

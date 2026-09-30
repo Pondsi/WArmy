@@ -1841,7 +1841,7 @@ body.liaoTianChuangKou #appTi {
 .zhuTiSeKuai {
   width: 36px; height: 36px; padding: 0;
   border-radius: 8px; border: 2px solid var(--line, #ccc);
-  cursor: pointer; background: #c45c26;
+  cursor: pointer; background: #A78567;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
 }
 .zhuTiSeKuai:hover { border-color: var(--accent); }
@@ -1874,21 +1874,56 @@ body.liaoTianChuangKou #appTi {
 /* 全屏取色层 */
 #quanPingQuSeCeng img { pointer-events: auto; }
 
-/* 首启页内引导条（非阻塞弹窗） */
+
+/* 首启引导条（非阻塞，页内教练标记） */
 .yinDaoTiao {
-  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-  z-index: 9000; min-width: 320px; max-width: min(560px, calc(100vw - 32px));
+  /* 右侧竖排：贴右缘、垂直居中，不遮挡聊天与列表 */
+  position: fixed; right: 16px; top: 50%; transform: translateY(-50%);
+  z-index: 9000; width: min(320px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px); overflow: auto;
   background: var(--card, #fff); color: var(--ink, #111);
   border: 1px solid var(--line, #ddd); border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 12px 14px;
 }
-.yinDaoTi { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
-.yinDaoWen { font-size: 13px; line-height: 1.55; opacity: 0.92; white-space: pre-wrap; }
-.yinDaoDongZuo { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
-.yinDaoGaoLiang {
-  outline: 2px solid var(--accent) !important;
-  outline-offset: 3px;
-  border-radius: 6px;
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 28%, transparent);
-  transition: outline 0.2s, box-shadow 0.2s;
+.yinDaoLianJie {
+  display: inline-block; margin-top: 6px; font-size: 12px;
+  color: var(--accent); text-decoration: underline; cursor: pointer;
 }
+.yinDaoHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.yinDaoJiDu {
+  font-size: 11px; letter-spacing: .3px; color: #fff;
+  background: var(--accent); padding: 2px 8px; border-radius: 999px;
+}
+.yinDaoClose {
+  border: none; background: transparent; cursor: pointer; font-size: 16px;
+  line-height: 1; color: inherit; opacity: .6; padding: 0 4px; border-radius: 4px;
+}
+.yinDaoClose:hover { opacity: 1; background: var(--hover, rgba(0,0,0,.06)); }
+.yinDaoTi { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.yinDaoWen { font-size: 13px; line-height: 1.55; opacity: .92; }
+.yinDaoJiaZhi {
+  margin-top: 6px; font-size: 12px; line-height: 1.5;
+  border-left: 3px solid var(--accent); padding-left: 8px; opacity: .88;
+}
+.yinDaoDongZuo { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+.yinDaoGaoLiang {
+  outline: 2px solid var(--accent) !important; outline-offset: 3px; border-radius: 6px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 28%, transparent);
+  transition: outline .2s, box-shadow .2s;
+}
+
+/* 聊天气泡：名称 + 气泡包一层（群聊/项目显示发言者名称，微信样式） */
+.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; }
+.xiaoXiMing { font-size: 11px; opacity: .65; margin-bottom: 2px; padding-left: 2px; }
+.xiaoXi .touXiangTuPian { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
+/* 供应商密钥：输入框 + 眼睛 */
+.miYaoHang { display: flex; align-items: center; gap: 6px; }
+.miYaoHang input { flex: 1; min-width: 0; }
+.miYaoYan {
+  flex-shrink: 0; width: 30px; height: 30px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 6px; background: transparent;
+  color: var(--ink-dim, #666); cursor: pointer;
+}
+.miYaoYan:hover { background: var(--hover); }
+.miYaoYan.qiYong { color: var(--accent); border-color: var(--accent); }

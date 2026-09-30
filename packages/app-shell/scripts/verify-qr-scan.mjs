@@ -191,7 +191,7 @@ ok(/img-src 'self' data: blob:/.test(htmlCode) && /script-src 'self'/.test(htmlC
    1. 起一个极简 Electron 壳（自己写的 host，写在临时目录，不污染仓库）
    ══════════════════════════════════════════════════════════════════════════ */
 const HOST_SRC = `// 自动生成：极简 Electron 壳，只用来在真 Chromium 里打开指定 index.html 并暴露 CDP
-const { yingYong, BrowserWindow } = require('electron');
+const { app, BrowserWindow } = require('electron');
 const target = process.env.PREVIEW_HTML || process.argv[2];
 app.whenReady().then(() => {
   const w = new BrowserWindow({

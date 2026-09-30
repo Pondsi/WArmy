@@ -133,7 +133,7 @@ const mainFile = path.join(appRoot, 'dist', 'electron-main.js');
   const lines = fs.readFileSync(mainFile, 'utf8').split('\n');
   fs.writeFileSync(
     mainFile,
-    lines.map((l) => (l.includes("yingYong.setAsDefaultProtocolClient('dsh-app')") ? l.replace("yingYong.setAsDefaultProtocolClient('dsh-app')", 'void 0') : l)).join('\n'),
+    lines.map((l) => (l.includes("app.setAsDefaultProtocolClient('dsh-app')") ? l.replace("app.setAsDefaultProtocolClient('dsh-app')", 'void 0') : l)).join('\n'),
     'utf8'
   );
 }

@@ -7,7 +7,7 @@
  *   [1] IPv6 地址分类矩阵：全局单播 2000::/3 / ULA fc00::/7 / 链路本地 fe80::/10 / 回环 / 未指定 /
  *       组播 / 内嵌 IPv4 / 文档段 2001:db8::/32 / 非法，以及 `family` 的**两种写法**（'IPv6' 与 6）
  *   [2] 本机 IPv6 枚举（真网卡）+ ULA/链路本地**不算公网候选**
- *   [3] IPv6 **真监听 + 真连上**：::1 / 本机全局单播地址 / 双栈 `::`；并且真的跑一次 SecureSyncServer/Client
+ *   [3] IPv6 **真监听 + 真连上**：::1 / 本机全局单播地址 / 双栈 `::`；并且真的跑一次 AnQuanTongBuFuWu/Client
  *   [4] 阶梯顺序（附八.9）：IPv6 公网直连 → IPv4 公网直连 → … → 中继 → 局域网；含"IPv6 档不适用"的如实降级
  *   [5] 中继档判定 jueDingZhongJi：6 种结构化结论码 + token 两端确定性一致
  *   [6] 中继**真转发**：A→中继→B 内容真到达；中继样本里**看不到明文标记**
@@ -30,7 +30,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {LianJieTiZi, DEFAULT_LADDER_ORDER, KeBoRuTanCe, LADDER_LABELS, LADDER_RUNG_I18N, ReplayGuard, ZhongJiJieDian, ZhongJiSuiDaoBoHao, ZhongJiSuiDaoJianTing, SecureSyncClient, SecureSyncServer, guiLeiDiZhi, guiLeiIpv6ZuoYongYu, warmyFingerprint, chuangjianLinShiShenFen, jueDingZhongJi, boTcpXiangQing, ed25519FromSeed, jianchaBenjiIpv6, isGlobalUnicastIpv6, isIpv6DocumentationAddress, isPublicDialCandidate, listLocalIpv6Candidates, normalizeHostLiteral, normalizeInterfaceFamily, parseIpv6, pickLocalIpv6Address, randomBytes, quZhongJiLingPai, sha256, } from '../dist/index.js';
+import {LianJieTiZi, DEFAULT_LADDER_ORDER, KeBoRuTanCe, LADDER_LABELS, LADDER_RUNG_I18N, ChongfangFangYu, ZhongJiJieDian, ZhongJiSuiDaoBoHao, ZhongJiSuiDaoJianTing, AnQuanTongBuKeHu, AnQuanTongBuFuWu, guiLeiDiZhi, guiLeiIpv6ZuoYongYu, warmyZhiWen, chuangjianLinShiShenFen, jueDingZhongJi, boTcpXiangQing, ed25519FromSeed, jianchaBenjiIpv6, shiFouQuanJuDanBoIpv6, shiFouIpv6WenDangDiZhi, shiFouGongKaiKeBoHouXuan, lieBenJiIpv6HouXuan, guiFanZhuJiZiMian, guiFanWangKaJiazu, jieXiIpv6, xuanBenJiIpv6DiZhi, randomBytes, quZhongJiLingPai, sha256, } from '../dist/index.js';
 
 let passes = 0;
 let failures = 0;
@@ -66,7 +66,7 @@ const MARKER_REPLY = 'WARMY-RELAY-PLAINTEXT-MARKER-REPLY-4c2b88';
  */
 function fingerprintFromSeedHex(hex) {
   const seed = sha256(Buffer.from(hex, 'utf8'));
-  return warmyFingerprint(ed25519FromSeed(seed).publicKey);
+  return warmyZhiWen(ed25519FromSeed(seed).publicKey);
 }
 
 /* ────────────────────────── 通用工具 ────────────────────────── */
@@ -89,7 +89,7 @@ const closeSrv = (srv) => new Promise((r) => (srv ? srv.close(() => r()) : r()))
 async function mkSecureServer(opts) {
   const received = [];
   const closes = [];
-  const srv = new SecureSyncServer({
+  const srv = new AnQuanTongBuFuWu({
     identity: opts.id.provider,
     nodeId: opts.nodeId ?? 'verify-server',
     port: 0,
@@ -191,7 +191,7 @@ async function relaySession(opts = {}) {
   }
 
   const replies = [];
-  const client = new SecureSyncClient({
+  const client = new AnQuanTongBuKeHu({
     identity: A.provider,
     nodeId: 'verify-A',
     host: '127.0.0.1',
@@ -235,28 +235,28 @@ async function main() {
   console.log('=== verify-connectivity: IPv6 第一档（附八.9）+ 中继兜底档（附八.3）===');
   console.log(`node ${process.version} | 平台 ${process.platform}`);
 
-  const v6Global = pickLocalIpv6Address();
+  const v6Global = xuanBenJiIpv6DiZhi();
   const v6Report = jianchaBenjiIpv6();
   console.log(`本机全局单播 IPv6 首选：${v6Global ?? '（无）'}`);
 
   /* ══════════════ [1] IPv6 地址分类矩阵 ══════════════ */
   group('[1] IPv6 地址分类矩阵（全局/ULA/链路本地/回环/未指定/组播/内嵌 IPv4/文档段/非法）');
 
-  check('解析 ::1 → 16 字节，最后一字节为 1', parseIpv6('::1')?.length === 16 && parseIpv6('::1')[15] === 1, [...(parseIpv6('::1') ?? [])].join(','));
-  check('解析 :: → 全零（未指定）', [...(parseIpv6('::') ?? [])].every((b) => b === 0), [...(parseIpv6('::') ?? [])].join(','));
+  check('解析 ::1 → 16 字节，最后一字节为 1', jieXiIpv6('::1')?.length === 16 && jieXiIpv6('::1')[15] === 1, [...(jieXiIpv6('::1') ?? [])].join(','));
+  check('解析 :: → 全零（未指定）', [...(jieXiIpv6('::') ?? [])].every((b) => b === 0), [...(jieXiIpv6('::') ?? [])].join(','));
   check(
     '解析完整 8 组地址（240e:36f:3f:e3e0:...）',
-    parseIpv6('240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7')?.[0] === 0x24 && parseIpv6('240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7')?.[1] === 0x0e,
-    [...(parseIpv6('240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7') ?? [])].slice(0, 4).join(',')
+    jieXiIpv6('240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7')?.[0] === 0x24 && jieXiIpv6('240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7')?.[1] === 0x0e,
+    [...(jieXiIpv6('240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7') ?? [])].slice(0, 4).join(',')
   );
   check('解析带 zone id 的链路本地（fe80::1%eth0）', guiLeiIpv6ZuoYongYu('fe80::1%eth0') === 'link-local', guiLeiIpv6ZuoYongYu('fe80::1%eth0'));
   check('解析方括号形式 [2001:4860:4860::8888]', guiLeiIpv6ZuoYongYu('[2001:4860:4860::8888]') === 'global', guiLeiIpv6ZuoYongYu('[2001:4860:4860::8888]'));
-  check('规范化：去方括号 + 去 zone', normalizeHostLiteral('[fe80::1%12]') === 'fe80::1', normalizeHostLiteral('[fe80::1%12]'));
+  check('规范化：去方括号 + 去 zone', guiFanZhuJiZiMian('[fe80::1%12]') === 'fe80::1', guiFanZhuJiZiMian('[fe80::1%12]'));
   check('内嵌 IPv4（::ffff:127.0.0.1）被判为 ipv4-mapped', guiLeiIpv6ZuoYongYu('::ffff:127.0.0.1') === 'ipv4-mapped', guiLeiIpv6ZuoYongYu('::ffff:127.0.0.1'));
   check('IPv4 字面不是 IPv6（返回 invalid）', guiLeiIpv6ZuoYongYu('192.168.1.1') === 'invalid', guiLeiIpv6ZuoYongYu('192.168.1.1'));
-  check('非法 IPv6（组数不够）返回 null', parseIpv6('1:2:3') === null, String(parseIpv6('1:2:3')));
-  check('非法 IPv6（两个 ::）返回 null', parseIpv6('1::2::3') === null, String(parseIpv6('1::2::3')));
-  check('非法 IPv6（组数过多）返回 null', parseIpv6('1:2:3:4:5:6:7:8:9') === null, String(parseIpv6('1:2:3:4:5:6:7:8:9')));
+  check('非法 IPv6（组数不够）返回 null', jieXiIpv6('1:2:3') === null, String(jieXiIpv6('1:2:3')));
+  check('非法 IPv6（两个 ::）返回 null', jieXiIpv6('1::2::3') === null, String(jieXiIpv6('1::2::3')));
+  check('非法 IPv6（组数过多）返回 null', jieXiIpv6('1:2:3:4:5:6:7:8:9') === null, String(jieXiIpv6('1:2:3:4:5:6:7:8:9')));
 
   const matrix = [
     ['240e:36f:3f:e3e0:9f2a:d07:d7d6:6cb7', 'global', true],
@@ -277,24 +277,24 @@ async function main() {
     check(`分类 ${addr} → ${scope}`, guiLeiIpv6ZuoYongYu(addr) === scope, guiLeiIpv6ZuoYongYu(addr));
     check(
       `是否公网拨号候选 ${addr} → ${dialable}`,
-      isPublicDialCandidate(addr) === dialable,
-      { global: isGlobalUnicastIpv6(addr), doc: isIpv6DocumentationAddress(addr) }
+      shiFouGongKaiKeBoHouXuan(addr) === dialable,
+      { global: shiFouQuanJuDanBoIpv6(addr), doc: shiFouIpv6WenDangDiZhi(addr) }
     );
   }
-  check('ULA（fc00::/7）不算公网候选（附八.9 明文要求）', !isPublicDialCandidate('fd00::1') && !isPublicDialCandidate('fc00::abcd'), {});
-  check('链路本地（fe80::/10）不算公网候选（附八.9 明文要求）', !isPublicDialCandidate('fe80::1') && !isPublicDialCandidate('febf:ffff::1'), {});
-  check('回环（::1）不算公网候选', !isPublicDialCandidate('::1'), {});
-  check('文档段 2001:db8::/32 虽属 2000::/3 但**排除**在候选外', isGlobalUnicastIpv6('2001:db8::1') && !isPublicDialCandidate('2001:db8::1'), {});
+  check('ULA（fc00::/7）不算公网候选（附八.9 明文要求）', !shiFouGongKaiKeBoHouXuan('fd00::1') && !shiFouGongKaiKeBoHouXuan('fc00::abcd'), {});
+  check('链路本地（fe80::/10）不算公网候选（附八.9 明文要求）', !shiFouGongKaiKeBoHouXuan('fe80::1') && !shiFouGongKaiKeBoHouXuan('febf:ffff::1'), {});
+  check('回环（::1）不算公网候选', !shiFouGongKaiKeBoHouXuan('::1'), {});
+  check('文档段 2001:db8::/32 虽属 2000::/3 但**排除**在候选外', shiFouQuanJuDanBoIpv6('2001:db8::1') && !shiFouGongKaiKeBoHouXuan('2001:db8::1'), {});
 
   /* family 两种写法：这是必须锁住的兼容点 */
-  check(`family 字符串 'IPv6' → IPv6`, normalizeInterfaceFamily('IPv6') === 'IPv6', normalizeInterfaceFamily('IPv6'));
-  check(`family 数字 6 → IPv6`, normalizeInterfaceFamily(6) === 'IPv6', normalizeInterfaceFamily(6));
-  check(`family 字符串 '6' → IPv6`, normalizeInterfaceFamily('6') === 'IPv6', normalizeInterfaceFamily('6'));
-  check(`family 字符串 'IPv4' → IPv4`, normalizeInterfaceFamily('IPv4') === 'IPv4', normalizeInterfaceFamily('IPv4'));
-  check(`family 数字 4 → IPv4`, normalizeInterfaceFamily(4) === 'IPv4', normalizeInterfaceFamily(4));
-  check(`未知 family（'other'/'17'）→ other`, normalizeInterfaceFamily('other') === 'other' && normalizeInterfaceFamily(17) === 'other', {
-    a: normalizeInterfaceFamily('other'),
-    b: normalizeInterfaceFamily(17),
+  check(`family 字符串 'IPv6' → IPv6`, guiFanWangKaJiazu('IPv6') === 'IPv6', guiFanWangKaJiazu('IPv6'));
+  check(`family 数字 6 → IPv6`, guiFanWangKaJiazu(6) === 'IPv6', guiFanWangKaJiazu(6));
+  check(`family 字符串 '6' → IPv6`, guiFanWangKaJiazu('6') === 'IPv6', guiFanWangKaJiazu('6'));
+  check(`family 字符串 'IPv4' → IPv4`, guiFanWangKaJiazu('IPv4') === 'IPv4', guiFanWangKaJiazu('IPv4'));
+  check(`family 数字 4 → IPv4`, guiFanWangKaJiazu(4) === 'IPv4', guiFanWangKaJiazu(4));
+  check(`未知 family（'other'/'17'）→ other`, guiFanWangKaJiazu('other') === 'other' && guiFanWangKaJiazu(17) === 'other', {
+    a: guiFanWangKaJiazu('other'),
+    b: guiFanWangKaJiazu(17),
   });
 
   const fakeNics = (familyForm) => ({
@@ -309,7 +309,7 @@ async function main() {
     ],
   });
   for (const form of ['string', 'number']) {
-    const entries = listLocalIpv6Candidates(fakeNics(form));
+    const entries = lieBenJiIpv6HouXuan(fakeNics(form));
     check(`family=${form} 写法下也能枚举出 4 个 IPv6 地址（兼容点）`, entries.length === 4, entries.map((e) => `${e.address}|${e.scope}`));
     check(
       `family=${form}：zone id 被去掉、作用域分类正确`,
@@ -341,7 +341,7 @@ async function main() {
   );
   check(
     'ULA / 链路本地 / 回环**绝不**出现在 publicCandidates（附八.9）',
-    v6Report.publicCandidates.every((a) => isPublicDialCandidate(a)),
+    v6Report.publicCandidates.every((a) => shiFouGongKaiKeBoHouXuan(a)),
     v6Report.publicCandidates
   );
   check('publicCandidate 与 hasGlobalUnicast 自洽', v6Report.hasGlobalUnicast === (v6Report.publicCandidate !== null), {
@@ -350,7 +350,7 @@ async function main() {
   });
   check('reason 写明"天然可拨入候选"或"IPv6 档不适用"', /天然可拨入候选|IPv6 档不适用/.test(v6Report.reason), v6Report.reason.slice(0, 120));
   if (v6Global) {
-    check('本机确有全局单播 IPv6（本环境实测）', isPublicDialCandidate(v6Global), v6Global);
+    check('本机确有全局单播 IPv6（本环境实测）', shiFouGongKaiKeBoHouXuan(v6Global), v6Global);
     check('首选候选来自物理网卡（不是 vEthernet/虚拟网卡）', /vEthernet|Hyper|WSL|Docker|VMware|VirtualBox/i.test(v6Report.entries.find((e) => e.address === v6Global)?.interfaceName ?? '') === false, v6Report.entries.find((e) => e.address === v6Global));
   } else {
     note('本机没有全局单播 IPv6 → 无法在本机验证"IPv6 公网直连档真命中"；IPv6 档的降级路径仍已验证');
@@ -387,11 +387,11 @@ async function main() {
       check('全局 IPv6 拨号 socket 自报 IPv6', dg.remoteFamily === 'IPv6', dg.remoteFamily);
       await closeSrv(g.srv);
 
-      // 真的跑一次鉴权会话：SecureSyncServer 监听 IPv6，SecureSyncClient 从 IPv6 连
+      // 真的跑一次鉴权会话：AnQuanTongBuFuWu 监听 IPv6，AnQuanTongBuKeHu 从 IPv6 连
       const idS = chuangjianLinShiShenFen('v6-server');
       const idC = chuangjianLinShiShenFen('v6-client');
       const srv6 = await mkSecureServer({ id: idS, peerFp: idC.fingerprint, host: v6Global });
-      const cli6 = new SecureSyncClient({
+      const cli6 = new AnQuanTongBuKeHu({
         identity: idC.provider,
         nodeId: 'v6-client',
         host: v6Global,
@@ -402,7 +402,7 @@ async function main() {
         handshakeTimeoutMs: 5000,
       });
       const r6 = await cli6.connect(6000);
-      check('SecureSyncServer 在全局 IPv6 上真监听 + 客户端真连上（真握手）', r6.ok === true, r6.reason);
+      check('AnQuanTongBuFuWu 在全局 IPv6 上真监听 + 客户端真连上（真握手）', r6.ok === true, r6.reason);
       check('握手后对端指纹与 pin 一致', r6.session?.info.peerFingerprint === idS.fingerprint, r6.session?.info.peerFingerprint);
       if (r6.ok && r6.session) {
         r6.session.send({ to: '*', channel: 'group', payload: { type: 'ipv6-hello', over: 'ipv6' } });
@@ -594,9 +594,9 @@ async function main() {
   /* ══════════════ [7] 中继引入的攻击面 ══════════════ */
   group('[7] 中继攻击面：重放 / 篡改 / 重排 / 冒充对端 —— 都必须被拒');
   {
-    const guard = new ReplayGuard();
+    const guard = new ChongfangFangYu();
     const S = await relaySession({ tap: true, replayGuard: guard, handshakeTimeoutMs: 6000 });
-    check('中继路径上的握手也走既有 ReplayGuard（双方单调计数都被推进）', guard.maxCounterSeen(S.A.fingerprint) > 0 && guard.maxCounterSeen(S.B.fingerprint) > 0, {
+    check('中继路径上的握手也走既有 ChongfangFangYu（双方单调计数都被推进）', guard.maxCounterSeen(S.A.fingerprint) > 0 && guard.maxCounterSeen(S.B.fingerprint) > 0, {
       a: guard.maxCounterSeen(S.A.fingerprint),
       b: guard.maxCounterSeen(S.B.fingerprint),
     });
@@ -665,7 +665,7 @@ async function main() {
     await xTunnel.start();
     const dialer = new ZhongJiSuiDaoBoHao({ relay: relayAddr, token, readyTimeoutMs: 4000 });
     const localPort = await dialer.start();
-    const client = new SecureSyncClient({
+    const client = new AnQuanTongBuKeHu({
       identity: A.provider,
       nodeId: 'imp-A',
       host: '127.0.0.1',

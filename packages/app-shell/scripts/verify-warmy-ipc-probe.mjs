@@ -18,7 +18,7 @@ const OUT = path.join(repoRoot, 'docs', 'API-OPERATIONS-RESULTS.json');
 
 const HOST = path.join(os.tmpdir(), 'warmy-ipc-probe-host.cjs');
 fs.writeFileSync(HOST, `
-const { yingYong, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const mainJs = process.env.MAIN_JS;
 // load chanPin main after we can intercept
 require('electron');
@@ -39,7 +39,7 @@ app.whenReady().then(async () => {
 // Simpler approach: run chanPin e2e-style with a small script inside electron that uses ipcRenderer
 const PROBE = path.join(os.tmpdir(), 'warmy-ipc-probe.cjs');
 fs.writeFileSync(PROBE, `
-const { yingYong } = require('electron');
+const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const mainJs = process.env.MAIN_JS;

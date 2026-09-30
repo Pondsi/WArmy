@@ -464,6 +464,14 @@
   }
 
   // ── 头像资源 ──
+  /** 群/项目头像：没有自定义图时按名字稳定派生一个预设（换机/重启不变） */
+  function groupAvatarSrc(g) {
+    if (g && g.avatarDataUrl) return g.avatarDataUrl;
+    const s = String((g && (g.ming || g.name || g.id)) || 'group');
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
+    return PRESET_AVATARS[h % PRESET_AVATARS.length];
+  }
   const PERSON_AVATARS = Array.from({ length: 10 }, (_, i) => `./icons/avatars/person-${i + 1}.svg`);
   const PERSON_DEFAULT = './icons/avatars/person-default.svg';
   const PRESET_AVATARS = Array.from({ length: 10 }, (_, i) => `./icons/avatars/preset-${i + 1}.svg`);
@@ -477,11 +485,20 @@
   }
 
   /** 实例头像：自定义图片 > 分配的预设头像 > 第一个预设 */
+  /** 由名字稳定派生一个预设序号（换窗口/重启都不变） */
+  function presetFromName(name) {
+    const s = String(name || 'x');
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
+    return 1 + (h % PRESET_AVATARS.length);
+  }
   function instanceAvatarSrc(inst) {
     if (inst && inst.avatarDataUrl) return inst.avatarDataUrl;
     const n = Number(inst && inst.avatarPreset);
     if (Number.isInteger(n) && n >= 1 && n <= 10) return PRESET_AVATARS[n - 1];
-    return PRESET_AVATARS[0];
+    // 没有 avatarPreset（例如新窗口还没把实例读回来）：按名字派生，保证同一牛马到处一致
+    const byName = presetFromName(mingOf(inst) || (inst && inst.id) || '');
+    return PRESET_AVATARS[byName - 1];
   }
 
   /** 实例创建时随机挑一个预设头像 */
@@ -868,6 +885,17 @@
     window.__refreshUrgency?.();
     window.__refreshSecurity?.();
     applyI18n();
+    // 静态 data-i18n 只覆盖一部分；导航标题/列表/当前页都是 t() 动态渲染的，
+    // 必须整页重画，否则切语言后这些文案仍是旧语言（首启尤其明显）。
+    try { renderList(); } catch { /* noop */ }
+    try {
+      const lt = $('lieBiaoBiaoTi');
+      if (lt) lt.textContent = t(NAV_TITLES[state.nav] || state.nav);
+    } catch { /* noop */ }
+    try { renderPage(); } catch { /* noop */ }
+    try { window.__refreshUrgency?.(); } catch { /* noop */ }
+    // 首启引导条上的文案也要跟着语言走
+    try { window.__yinDaoChongHua?.(); } catch { /* noop */ }
   }
   /** 语言可达性：设置页/预览桥/巡检脚本统一走这一条（10 语言包，禁止塌缩） */
   window.__warmyLoadI18n = loadI18n;
@@ -1479,13 +1507,29 @@
       };
       heZi.appendChild(gengDuo);
     }
+    // 对方头像/名称：我的牛马用该实例的头像与名字；项目/群聊用群头像与群名
+    const cur = state.selectedChat || {};
+    const curInst = (state.instances || []).find((x) => x && (x.id === cur.id || x.ming === cur.ming || x.name === cur.name));
+    const themName = String(curInst ? mingOf(curInst) : (cur.name || cur.ming || '')).trim();
+    const themAvatar = curInst
+      ? instanceAvatarSrc(curInst)
+      : (cur.kind === 'internal' || cur.kind === 'extgroup'
+        ? (cur.avatarDataUrl || groupAvatarSrc(cur))
+        : PERSON_DEFAULT);
     slice.forEach((m) => {
       const div = document.createElement('div');
       div.className = 'xiaoXi' + (m.role === 'wo' ? ' wo' : '');
       const av = state.profile.avatarDataUrl
         ? `<img class="touXiangTuPian" src="${state.profile.avatarDataUrl}" alt=""/>`
         : `<div class="av">${escapeHtml((state.profile.username || t('nav.touXiang')).slice(0, 1))}</div>`;
-      div.innerHTML = `${m.role === 'wo' ? av : `<div class="av">${escapeHtml((state.selectedChat?.name || 'A')[0])}</div>`}<div class="bubble">${escapeHtml(m.text)}</div>`;
+      const themAv = `<img class="touXiangTuPian" src="${themAvatar}" alt=""/>`;
+      // 群聊/项目：气泡上方显示名称（微信样式）；一对一不显示
+      const showName = m.role !== 'wo' && !!themName
+        && (cur.kind === 'internal' || cur.kind === 'extgroup' || cur.kind === 'extdm');
+      div.innerHTML = (m.role === 'wo' ? av : themAv)
+        + '<div class="bubbleWrap">'
+        + (showName ? '<div class="xiaoXiMing">' + escapeHtml(themName) + '</div>' : '')
+        + '<div class="bubble">' + escapeHtml(m.text) + '</div></div>';
       heZi.appendChild(div);
     });
     if (heZi.dataset.lazyBound !== '1') {
@@ -2623,9 +2667,16 @@
     }
   }
 
+  let __lastSend = { text: '', at: 0 };
   async function faSong() {
     const text = $('shuRu').value.trim();
     if (!text || !state.selectedChat) return;
+    // 同一条文本 600ms 内只发一次：Enter 与发送按钮可能同时触发（实测「发一次显示两次」）
+    {
+      const now = Date.now();
+      if (__lastSend.text === text && now - __lastSend.at < 600) return;
+      __lastSend = { text, at: now };
+    }
     const id = state.selectedChat.id;
     const u = state.urgency;
     /**
@@ -3073,17 +3124,47 @@
       const modelPick = $('iMoXingXuanZe');
       const chainBox = $('iChain');
 
+      /** 调用链只允许「可用模型」里的项；禁用的记在 inst2.chainDisabled */
+      function syncChainToAvailable() {
+        const avail = inst2.availableModels || [];
+        inst2.chain = (inst2.chain || []).filter((m) => avail.includes(m));
+        avail.forEach((m) => { if (!inst2.chain.includes(m)) inst2.chain.push(m); });
+        inst2.chainDisabled = (inst2.chainDisabled || []).filter((m) => avail.includes(m));
+      }
+
+      /** 默认模型下拉跟随可用模型（默认「智能」） */
+      function renderDefaultOptions() {
+        const sel = $('iDefaultMoXing');
+        if (!sel) return;
+        const avail = inst2.availableModels || [];
+        const cur = inst2.defaultModel || '__smart__';
+        sel.innerHTML =
+          '<option value="__smart__"' + (cur === '__smart__' ? ' selected' : '') + '>' + escapeHtml(t('instances.smartPick')) + '</option>' +
+          avail.map((m) => '<option value="' + escapeHtml(m) + '"' + (cur === m ? ' selected' : '') + '>' + escapeHtml(m) + '</option>').join('');
+        if (cur !== '__smart__' && !avail.includes(cur)) {
+          inst2.defaultModel = '__smart__';
+          sel.value = '__smart__';
+        }
+      }
+
+      function saveInst() {
+        try { state.instances = state.instances.map((x) => (x.id === inst2.id ? inst2 : x)); window.__saveState?.(); } catch { /* noop */ }
+      }
+
       function renderChain() {
         if (!chainBox) return;
+        syncChainToAvailable();
         const LieBiao = inst2.chain || [];
+        const dis = inst2.chainDisabled || [];
         chainBox.innerHTML =
           LieBiao
             .map(
               (m, i) =>
-                '<div class="shiLiHang" style="margin:4px 0">' +
+                '<div class="shiLiHang" style="margin:4px 0' + (dis.includes(m) ? ';opacity:.5' : '') + '">' +
                 '<span style="flex:1">' + escapeHtml(m) + '</span>' +
-                '<button class="anNiuXiao" data-up="' + i + '">' + escapeHtml(t('instances.moveUp')) + '</button>' +
-                '<button class="anNiuXiao" data-down="' + i + '">' + escapeHtml(t('instances.moveDown')) + '</button>' +
+                '<button class="anNiuXiao" data-up="' + i + '"' + (i === 0 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveUp')) + '</button>' +
+                '<button class="anNiuXiao" data-down="' + i + '"' + (i === LieBiao.length - 1 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveDown')) + '</button>' +
+                '<button class="anNiuXiao" data-tog="' + i + '">' + escapeHtml(dis.includes(m) ? tOr('model.enable', '启用') : tOr('model.disable', '禁用')) + '</button>' +
                 '</div>'
             )
             .join('') || '<div class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</div>';
@@ -3093,7 +3174,7 @@
             if (i <= 0) return;
             const shuZu = inst2.chain;
             [shuZu[i - 1], shuZu[i]] = [shuZu[i], shuZu[i - 1]];
-            renderChain();
+            saveInst(); renderChain();
           };
         });
         chainBox.querySelectorAll('[data-down]').forEach((b) => {
@@ -3102,10 +3183,22 @@
             const shuZu = inst2.chain;
             if (i >= shuZu.length - 1) return;
             [shuZu[i + 1], shuZu[i]] = [shuZu[i], shuZu[i + 1]];
-            renderChain();
+            saveInst(); renderChain();
+          };
+        });
+        chainBox.querySelectorAll('[data-tog]').forEach((b) => {
+          b.onclick = () => {
+            const i = Number(b.dataset.tog);
+            const m = (inst2.chain || [])[i];
+            if (!m) return;
+            const dis2 = new Set(inst2.chainDisabled || []);
+            if (dis2.has(m)) dis2.delete(m); else dis2.add(m);
+            inst2.chainDisabled = [...dis2];
+            saveInst(); renderChain();
           };
         });
       }
+      renderDefaultOptions();
       renderChain();
 
       // 全部可用：勾选时不显示模型列表；取消时进入手动添加
@@ -3115,11 +3208,14 @@
           manual?.classList.toggle('yinCang', allChk.checked);
           if (allChk.checked) {
             const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m));
-            inst2.availableModels = all;
-            inst2.chain = [...all];
-            renderChain();
+            inst2.availableModels = [...new Set(all)];
+            inst2.chain = [...inst2.availableModels];
+            inst2.chainDisabled = [];
           }
+          renderDefaultOptions();
+          renderChain();
           updateAddDelState();
+          saveInst();
         };
       }
 
@@ -3154,6 +3250,11 @@
           delBtn.style.opacity = delBtn.disabled ? 0.45 : 1;
         }
       }
+
+      defSel?.addEventListener('change', () => {
+        inst2.defaultModel = defSel.value;
+        saveInst();
+      });
 
       if (provPick) {
         provPick.onchange = fillModels;
@@ -3853,6 +3954,11 @@
           </div>
           <div id="jinengLieBiao" class="jingYin">${escapeHtml(t('settings.skillsEmpty'))}</div>
           <div class="jingYin jinengLuJingJi" id="jinengLuJingJi"></div>
+        </div>
+        <div class="sheZhiSection sheZhiKa" id="yinDaoKa">
+          <h2>${escapeHtml(tOr('guide.section', '新手引导'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('guide.sectionHint', '第一次用的三步指引；随时可以再看一遍。'))}</p>
+          <div class="shiLiHang" style="margin-top:8px"><button type="button" class="anNiuXiao" id="anNiuChongKanYinDao">${escapeHtml(tOr('guide.restart', '重新查看引导'))}</button></div>
         </div>
         <!-- R2「快捷」：**键盘快捷键在前**，AI/IPC 接口目录在后 -->
         <div class="sheZhiSection" data-sec="hotkey"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.hotkey'))}</h2></div>
@@ -4614,7 +4720,7 @@
 
         let w11 = null;
         let hsv = { h: 0, s: 0, v: 0 };
-        let cur = '#c45c26';
+        let cur = '#A78567';
         let w11Api = null;
 
         const paint = () => {
@@ -4786,6 +4892,46 @@
         const kuai = document.querySelector('.zhuTiSeKuai');
         if (kuai) kuai.style.background = state.theme || '#A78567';
       })();
+      // 语言：设置页下拉必须落盘 + 立即生效（此前没有任何 handler，改了不生效）
+      (function bindLanguageSelect() {
+        const sel = $('xuanZeYuYan');
+        if (!sel) return;
+        sel.value = state.yuYan;
+        sel.onchange = async () => {
+          const pick = resolveLocalePack(sel.value);
+          try { await loadI18n(pick); } catch { /* noop */ }
+          try { await window.warmy.settingsSave({ yuYan: pick }); } catch { /* noop */ }
+          try { await window.warmy.setupComplete({ yuYan: pick }); } catch { /* noop */ }
+          renderPage();
+        };
+      })();
+
+      // 明暗模式（浅色/深色/跟随系统）：此前按钮没有 handler，点了没反应
+      (function bindThemeMode() {
+        const wrap = document.querySelector('.zhuTiMoShi');
+        if (!wrap) return;
+        wrap.querySelectorAll('button[data-m]').forEach((b) => {
+          b.onclick = async () => {
+            const mode = b.dataset.m;
+            applyThemeMode(mode);
+            wrap.querySelectorAll('button[data-m]').forEach((x) => x.classList.toggle('qiYong', x === b));
+            try { await window.warmy.settingsSave({ themeMode: mode }); } catch { /* noop */ }
+          };
+        });
+      })();
+
+      // 重新查看引导（设置 → 功能）：随时可重调
+      (function bindGuideRestart() {
+        if (window.__guideRestartDelegated) return;
+        window.__guideRestartDelegated = 1;
+        document.addEventListener('click', (e) => {
+          const b = e.target && e.target.closest && e.target.closest('#anNiuChongKanYinDao');
+          if (!b) return;
+          e.preventDefault();
+          try { window.__showOnboardingGuide?.(true); } catch { /* noop */ }
+        });
+      })();
+
       // 容器卡片：安装提示词灌入 + 复制绑定（此前漏调，导致 pre 为空、复制无动作）
       try { bindContainerCard(); } catch { /* noop */ }
       // Microsandbox 卸载钮：每次重渲染后按真实安装态同步（避免残留可点）
@@ -5069,7 +5215,11 @@
             ? ' placeholder="http://127.0.0.1:11434" title="Ollama 原生 API 根地址（默认 http://127.0.0.1:11434；远程请改成对方主机）；不要加 /v1"'
             : '') +
           '/></div>' +
-          '<div class="field"><label>' + escapeHtml(t('settings.apiKey')) + '</label><input data-k="apiKey" type="password" value="" placeholder="' + escapeHtml(pr.hasKey ? t('settings.keySaved') : t('settings.keyEmpty')) + '"/></div>' +
+          '<div class="field"><label>' + escapeHtml(t('settings.apiKey')) + '</label>' +
+          '<div class="miYaoHang"><input data-k="apiKey" type="password" value="' + escapeHtml(pr.apiKey || '') + '" placeholder="' + escapeHtml(pr.hasKey && !pr.apiKey ? t('settings.keySaved') : t('settings.keyEmpty')) + '"/>' +
+          '<button type="button" class="miYaoYan" data-key-eye="' + escapeHtml(pr.id) + '" title="' + escapeHtml(tOr('settings.keyReveal', '显示/隐藏密钥')) + '" aria-label="' + escapeHtml(tOr('settings.keyReveal', '显示/隐藏密钥')) + '">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 5.5 12 5.5 22.5 12 22.5 12 18.5 18.5 12 18.5 1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3.2"/></svg>' +
+          '</button></div></div>' +
           '</div>' +
           '<div class="provDongZuoJi"><button class="anNiuXiao" data-fetch' + (laQuJiuXu ? '' : ' disabled') + ' title="' + escapeHtml(laQuBiaoTi) + '">' + escapeHtml(t('settings.fetchModels')) + '</button></div>' +
           '<div class="moXingHang">' +
@@ -5095,6 +5245,18 @@
           '</div>' +
           '<div class="jingYin" data-models-note style="font-size:11px">' +
           (nameDup ? escapeHtml(t('settings.providerNameDup')) : '') + '</div>';
+        // 密钥眼睛：切换明文/密文（明文只在本窗口内存里，落盘仍走 safeStorage）
+        yuanSu.querySelectorAll('[data-key-eye]').forEach((eye) => {
+          eye.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const inp = yuanSu.querySelector('input[data-k="apiKey"]');
+            if (!inp) return;
+            const show = inp.type === 'password';
+            inp.type = show ? 'text' : 'password';
+            eye.classList.toggle('qiYong', show);
+          };
+        });
         yuanSu.querySelectorAll('input[data-k]').forEach((input) => {
           // 记录卡片渲染时的原值，change 时与它比（input 事件会先改 pr，不能拿 pr 当 before）
           input.dataset.prev = input.value;
@@ -5131,8 +5293,8 @@
               const r = await window.warmy.providerKeySet?.({ providerId: pr.id, apiKey: yiLeiXing });
               if (r?.ok) {
                 pr.hasKey = true;
-                pr.apiKey = '';
-                input.value = '';
+                // 保留明文在本窗口内存（用户要求「密钥始终显示」）；落盘仍是 safeStorage 密文
+                pr.apiKey = yiLeiXing;
                 input.placeholder = t('settings.keySaved');
               } else {
                 const note = yuanSu.querySelector('[data-models-note]');
@@ -5149,16 +5311,28 @@
         });
         yuanSu.querySelector('[data-fetch]').onclick = async () => {
           const btn = yuanSu.querySelector('[data-fetch]');
-          btn.textContent = t('common.loading');
           const note0 = yuanSu.querySelector('[data-models-note]');
-          // 当前生效的供应商（离开这个卡片时拉取也要用对端点/密钥）——密钥由主进程按 id 解出
-          await window.warmy.setProvider({
-            presetId: pr.id,
-            baseURL: pr.baseURL,
-            protocol: pr.protocol,
-            model: providerCfgModel(pr),
-          });
-          const r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, providerId: pr.id });
+          const jiuWenBen = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = t('common.loading');
+          if (note0) note0.textContent = t('common.loading');
+          let r = null;
+          try {
+            // 当前生效的供应商（离开这个卡片时拉取也要用对端点/密钥）——密钥由主进程按 id 解出
+            await window.warmy.setProvider({
+              presetId: pr.id,
+              baseURL: pr.baseURL,
+              protocol: pr.protocol,
+              model: providerCfgModel(pr),
+            });
+            r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, providerId: pr.id });
+          } catch (e) {
+            r = { ok: false, error: String(e && e.message || e) };
+          } finally {
+            btn.disabled = false;
+            btn.textContent = jiuWenBen;
+          }
+          if (!r) r = { ok: false, error: t('common.error') };
           if (r?.ok && r.models?.length) {
             const fetched = new Set(r.models);
             const prev = pr.models || [];
@@ -5179,9 +5353,11 @@
                 stillStale ? fmtKey('settings.modelsStale', { n: String(stillStale) }) : '',
               ].filter(Boolean).join(' · ');
             }
-          } else if (note0) {
+          } else {
             // 拉取失败**照实说**：不清空已有模型，也不假装成功（标红状态保持原样）
-            note0.textContent = fmtKey('settings.modelsFetchFailed', { err: String(r?.error || t('common.error')) });
+            const msg = fmtKey('settings.modelsFetchFailed', { err: String(r?.error || t('common.error')) });
+            if (note0) note0.textContent = msg;
+            uiAlert(msg, t('settings.fetchModels'));
           }
           await saveProviders();
           renderPage();
@@ -8384,7 +8560,7 @@
       while (mingYiZhanYong(houXuan)) { n += 1; houXuan = escapeHtml(t('placeholder.agentName')) + '-' + n; }
       return houXuan;
     };
-    uiPrompt(t('instances.name'), suanMing()).then(async (ming) => {
+    uiPrompt(t('instances.name'), suanMing(), t('nav.singleAi')).then(async (ming) => {
       if (!ming) return;
       ming = String(ming).trim();
       if (!ming) return;
@@ -11383,8 +11559,14 @@
     } else {
       const local =
         state.instances.find((i) => i.id === sel.id) ||
-        state.instances.find((i) => mingOf(i) === sel.name);
-      if (local) entries = [{ inst: local, editable: true }];
+        state.instances.find((i) => mingOf(i) === sel.name) ||
+        state.instances.find((i) => mingOf(i) === sel.ming);
+      // 新窗口可能还没把实例读回来：用会话名做一个稳定替身（头像/名称仍与主界面一致）
+      entries = [
+        local
+          ? { inst: local, editable: true }
+          : { inst: { id: sel.id, ming: sel.ming || sel.name, name: sel.name, availableModels: [], chain: [], defaultModel: '' }, editable: false },
+      ];
     }
     if (!entries.length) {
       heZi.innerHTML = '<div class="jingYin">' + escapeHtml(t('panel.modelMgrEmpty')) + '</div>';
@@ -12467,16 +12649,41 @@
    *  - 目标元素描边高亮，指引用户去点
    *  - 条件真正达成后自动进入下一步；可随时跳过
    */
-  async function showOnboardingGuide() {
-    // 真·已配置供应商：有密钥或已拉到模型（仅有默认 baseURL 不算）
-    const youGongYingShang = () => {
-      try {
-        return (state.providers || []).some((p) => p && p.id && (p.hasKey === true || (p.models && p.models.length > 0)));
-      } catch { return false; }
-    };
-    const youNiuMa = () => (state.instances || []).length > 0;
+  /**
+   * 首启引导（按 NN/g「pull revelation」+ app-onboarding-questionnaire 技能原则重做）：
+   *  - **非阻塞**：页内引导条，不遮聊天，不打断操作
+   *  - **必须真做**：每步引导用户去点，条件达成才进下一步
+   *  - **可跳过、可重调**：跳过即退出；设置 → 关于 里有「重新查看引导」
+   *  - **进度可见**：第 n/N 步
+   *  - **收益导向**：文案说「你能得到什么」，不说功能清单
+   *  - **不要求记忆**：帮助贴在当下这一步旁边
+   */
+  let yinDaoBu = 0;           // 当前步序号
+  let yinDaoSteps = [];       // 本次引导的步骤（语言切换后可重画）
+  let yinDaoDone = false;
 
-    // 页内引导条
+  function yinDaoHide() {
+    const bar = $('yinDaoTiao');
+    if (bar) bar.remove();
+    document.querySelectorAll('.yinDaoGaoLiang').forEach((n) => n.classList.remove('yinDaoGaoLiang'));
+  }
+
+  function yinDaoHighlight(sel) {
+    document.querySelectorAll('.yinDaoGaoLiang').forEach((n) => n.classList.remove('yinDaoGaoLiang'));
+    if (!sel) return null;
+    const el = typeof sel === 'string' ? document.querySelector(sel) : sel;
+    if (el) {
+      el.classList.add('yinDaoGaoLiang');
+      try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* noop */ }
+    }
+    return el;
+  }
+
+  /** 画当前步（语言切换后可重画，不重置进度） */
+  function yinDaoRender() {
+    if (yinDaoDone || !yinDaoSteps.length) return;
+    const step = yinDaoSteps[yinDaoBu];
+    if (!step) return;
     let bar = $('yinDaoTiao');
     if (!bar) {
       bar = document.createElement('div');
@@ -12484,103 +12691,122 @@
       bar.className = 'yinDaoTiao';
       document.body.appendChild(bar);
     }
-    const clearHighlight = () => {
-      document.querySelectorAll('.yinDaoGaoLiang').forEach((n) => n.classList.remove('yinDaoGaoLiang'));
-    };
-    const highlight = (sel) => {
-      clearHighlight();
-      const el = typeof sel === 'string' ? document.querySelector(sel) : sel;
-      if (el) {
-        el.classList.add('yinDaoGaoLiang');
-        try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* noop */ }
-      }
-      return el;
-    };
-    const hideBar = () => {
-      clearHighlight();
-      if (bar) bar.remove();
-    };
-
-    /** 页内一步：不打断操作，用户按提示去点 */
-    const showStep = (step) => new Promise((resolve) => {
-      bar.innerHTML =
-        '<div class="yinDaoTi">' + escapeHtml(step.title) + '</div>' +
-        '<div class="yinDaoWen">' + escapeHtml(step.body) + '</div>' +
-        '<div class="yinDaoDongZuo">' +
+    const total = yinDaoSteps.length;
+    bar.innerHTML =
+      '<div class="yinDaoHead">' +
+        '<span class="yinDaoJiDu">' + escapeHtml(tOr('guide.progress', '第 {n}/{total} 步').replace('{n}', String(yinDaoBu + 1)).replace('{total}', String(total))) + '</span>' +
+        '<button type="button" class="yinDaoClose" data-yd="skip" title="' + escapeHtml(tOr('guide.skip', '跳过')) + '">×</button>' +
+      '</div>' +
+      '<div class="yinDaoTi">' + escapeHtml(step.title) + '</div>' +
+      '<div class="yinDaoWen">' + escapeHtml(step.body) + '</div>' +
+      (step.value ? '<div class="yinDaoJiaZhi">' + escapeHtml(step.value) + '</div>' : '') +
+      (step.tip ? '<a class="yinDaoLianJie" href="' + escapeHtml(step.tipUrl || '#') + '" target="_blank" rel="noreferrer noopener">' + escapeHtml(step.tip) + '</a>' : '') +
+      '<div class="yinDaoDongZuo">' +
         '<button type="button" class="anNiuXiao" data-yd="skip">' + escapeHtml(tOr('guide.skip', '跳过')) + '</button>' +
         (step.btn ? '<button type="button" class="anNiuZhuYao" data-yd="go">' + escapeHtml(step.btn) + '</button>' : '') +
-        '</div>';
-      highlight(step.target);
-      bar.querySelector('[data-yd="skip"]').onclick = () => { hideBar(); resolve('skip'); };
-      const go = bar.querySelector('[data-yd="go"]');
-      if (go) {
-        go.onclick = () => {
-          try { step.action(); } catch { /* noop */ }
-          // 不关闭条：继续等条件
-          highlight(step.target);
-          resolve('go');
-        };
-      }
+        '<button type="button" class="anNiuZhuYao" data-yd="next">' +
+          escapeHtml(yinDaoBu >= total - 1 ? tOr('guide.finish', '完成') : tOr('guide.next', '下一步')) +
+        '</button>' +
+      '</div>';
+    yinDaoHighlight(step.target);
+    bar.querySelectorAll('[data-yd="skip"]').forEach((b) => {
+      b.onclick = () => { yinDaoDone = true; yinDaoHide(); try { window.warmy.setupComplete?.({ guideDone: true }); } catch { /* noop */ } };
     });
-
-    const dengTiaoJian = (fn, timeoutMs) => new Promise((resolve) => {
-      const t0 = Date.now();
-      const tick = () => {
-        if (fn()) return resolve(true);
-        if (Date.now() - t0 > timeoutMs) return resolve(false);
-        setTimeout(tick, 800);
+    const go = bar.querySelector('[data-yd="go"]');
+    if (go) go.onclick = () => { try { step.action(); } catch { /* noop */ } yinDaoHighlight(step.target); };
+    const nx = bar.querySelector('[data-yd="next"]');
+    if (nx) {
+      nx.onclick = async () => {
+        if (typeof step.check === 'function' && !step.check()) {
+          // 还没做完：提示但允许继续
+          const w = bar.querySelector('.yinDaoWen');
+          if (w && !w.dataset.warned) {
+            w.dataset.warned = '1';
+            w.textContent = step.body + ' ' + (step.pending || '');
+          }
+          return;
+        }
+        yinDaoBu += 1;
+        if (yinDaoBu >= yinDaoSteps.length) {
+          yinDaoDone = true;
+          yinDaoHide();
+          try { window.warmy.setupComplete?.({ guideDone: true }); } catch { /* noop */ }
+          return;
+        }
+        yinDaoRender();
       };
-      tick();
-    });
+    }
+  }
+  window.__yinDaoChongHua = yinDaoRender;
 
+  async function showOnboardingGuide(force) {
+    try {
+      const st = await window.warmy.setupState?.().catch(() => null);
+      if (!force && st && st.guideDone) return;
+    } catch { /* 读不到就照常引导 */ }
 
-    // ① 供应商（必须真有密钥/模型才算完成）
-    if (!youGongYingShang()) {
-      await showStep({
-        title: tOr('guide.step1.title', '① 添加模型供应商'),
-        body: tOr('guide.step1.body', '点击左侧「设置」→「模型」，添加供应商（推荐 DeepSeek）并填好 API Key。完成后这里会自动进入下一步。'),
+    // 真·已配置供应商：有密钥或已拉到模型（只有默认 baseURL 不算）
+    const youGongYingShang = () => {
+      try {
+        return (state.providers || []).some((p) => p && p.id && (p.hasKey === true || (p.models && p.models.length > 0)));
+      } catch { return false; }
+    };
+    const youNiuMa = () => (state.instances || []).length > 0;
+
+    yinDaoSteps = [
+      {
+        title: tOr('guide.step1.title', '先给 AI 接上一个大脑'),
+        body: tOr('guide.step1.body', '点左侧底部的「设置」→「模型」→ 添加一个你已经拥有 API Key 的供应商（任意供应商都可以）。'),
+        value: tOr('guide.step1.value', '没有它，牛马没法替你干活。'),
+        tip: tOr('guide.step1.tip', '没有 API Key？点这里查看 DeepSeek 的 Key 获取方法'),
+        tipUrl: 'https://platform.deepseek.com/api_keys',
         btn: tOr('guide.step1.btn', '去设置'),
-        target: '#peiZhiDaoHang button[data-sec="model"], #navSettings, [data-nav="settings"]',
+        pending: tOr('guide.step1.pending', '（还没检测到可用的供应商，填好 Key 后再点「下一步」。也可以暂时跳过，稍后再添加。）'),
+        target: '#peiZhiDaoHang button[data-sec="model"], [data-nav="settings"]',
         action: () => {
           setNav('settings');
           try {
             settingsSection = 'model';
             renderPage();
-            setTimeout(() => highlight('#peiZhiDaoHang button[data-sec="model"]'), 200);
+            setTimeout(() => yinDaoHighlight('#peiZhiDaoHang button[data-sec="model"]'), 200);
           } catch { /* noop */ }
         },
-      });
-      const ok1 = await dengTiaoJian(youGongYingShang, 15 * 60 * 1000);
-      if (!ok1) { hideBar(); return; }
-    }
-
-    // ② 创建牛马
-    if (!youNiuMa()) {
-      await showStep({
-        title: tOr('guide.step2.title', '② 创建你的牛马'),
-        body: tOr('guide.step2.body', '点击左侧「牛马管理局」，再点右上角 + 创建牛马，并设置默认模型。完成后这里会自动进入下一步。'),
+        check: youGongYingShang,
+      },
+      {
+        title: tOr('guide.step2.title', '创建一个牛马'),
+        body: tOr('guide.step2.body', '点左侧「我的牛马」→「牛马管理局」（也可以点「我的牛马」列表右上角的牛马管理局图标）→ 点右上角的 + 创建一只牛马。'),
+        value: tOr('guide.step2.value', '创建完成后，点开它并给它选默认模型。做完这步，你就有一个能随时差遣的 AI 牛马了。'),
         btn: tOr('guide.step2.btn', '去牛马管理局'),
-        target: '[data-nav="instances"], #navInstances, #peiZhiDaoHang button[data-sec="model"]',
+        pending: tOr('guide.step2.pending', '（还没创建牛马，建好后再点「下一步」。）'),
+        target: '#lieBiaoHeadDongZuoJi .lieBiaoHqTuBiao, #lieBiaoDongZuo',
         action: () => {
-          setNav('instances');
-          setTimeout(() => highlight('#lieBiaoDongZuo'), 200);
+          setNav('singleAi');
+          setTimeout(() => yinDaoHighlight('#lieBiaoHeadDongZuoJi .lieBiaoHqTuBiao'), 200);
         },
-      });
-      const ok2 = await dengTiaoJian(youNiuMa, 15 * 60 * 1000);
-      if (!ok2) { hideBar(); return; }
-    }
+        check: youNiuMa,
+      },
+      {
+        title: tOr('guide.step3.title', '现在就能开工了'),
+        body: tOr('guide.step3.body', '点下面的按钮进入它的聊天，在底部输入框里说话，牛马就会替你干活。'),
+        value: tOr('guide.step3.value', '左侧四个入口：项目 = 多牛马协同（可多人指挥）；联系人 = 与人端到端私聊；群聊 = 多人聊天并让 AI 参与；我的牛马 = 单只牛马。'),
+        btn: tOr('guide.step3.btn', '进入牛马聊天'),
+        target: null,
+        action: () => {
+          const first = (state.instances || [])[0];
+          setNav('singleAi');
+          if (first) openChat('single', first.id, mingOf(first));
+          setTimeout(() => yinDaoHighlight('#shuRu'), 250);
+        },
+        check: () => true,
+      },
+    ];
 
-    // ③ 开始使用
-    await showStep({
-      title: tOr('guide.step3.title', '③ 开始使用'),
-      body: tOr('guide.step3.body',
-        '在下方聊天框和 AI 聊天，让牛马为你干活。左侧「项目」= 多牛马协同群聊（可多人指挥）；「联系人」= 端到端私聊；「群聊」= 多人聊天并让 AI 参与。'),
-      btn: tOr('guide.step3.btn', '开始使用'),
-      target: null,
-      action: () => {},
-    });
-    hideBar();
+    yinDaoBu = 0;
+    yinDaoDone = false;
+    yinDaoRender();
   }
+  window.__showOnboardingGuide = showOnboardingGuide;
 
   async function shuaxinZhixingqiji() {
     const heZi = $('zhiXingHe');

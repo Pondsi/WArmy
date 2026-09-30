@@ -17,7 +17,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import {ZhongJiJieDian, ZhongJiSuiDaoBoHao, ZhongJiSuiDaoJianTing, SecureSyncClient, SecureSyncServer, warmyFingerprint, ed25519FromSeed, sha256, signEd25519Local, verifyEd25519Local, } from '../dist/index.js';
+import {ZhongJiJieDian, ZhongJiSuiDaoBoHao, ZhongJiSuiDaoJianTing, AnQuanTongBuKeHu, AnQuanTongBuFuWu, warmyZhiWen, ed25519FromSeed, sha256, signEd25519Local, verifyEd25519Local, } from '../dist/index.js';
 
 /** 明文中唯一标记：中继侧任何样本里**都不允许**出现它（证明中继只看到密文） */
 export const MARKER_SEND = 'WARMY-RELAY-PLAINTEXT-MARKER-SEND-9f3a71';
@@ -27,7 +27,7 @@ export const MARKER_REPLY = 'WARMY-RELAY-PLAINTEXT-MARKER-REPLY-4c2b88';
 function identityFromSeedHex(hex) {
   const seed = sha256(Buffer.from(String(hex), 'utf8'));
   const kp = ed25519FromSeed(seed);
-  const fingerprint = warmyFingerprint(kp.publicKey);
+  const fingerprint = warmyZhiWen(kp.publicKey);
   return {
     fingerprint,
     publicKey: kp.publicKey,
@@ -101,7 +101,7 @@ async function roleListener() {
 
   // B 的"本机服务"：**只监听回环**（模拟"本机服务在本机"，B 不接受任何外部入站）
   let received = null;
-  const server = new SecureSyncServer({
+  const server = new AnQuanTongBuFuWu({
     identity: id.provider,
     nodeId: 'endpoint-b',
     port: 0,
@@ -176,7 +176,7 @@ async function roleDialer() {
   writeState({ phase: 'tunnel-up', localPort });
 
   let reply = null;
-  const client = new SecureSyncClient({
+  const client = new AnQuanTongBuKeHu({
     identity: id.provider,
     nodeId: 'endpoint-a',
     host: '127.0.0.1',

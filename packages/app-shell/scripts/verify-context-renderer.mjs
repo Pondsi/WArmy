@@ -527,7 +527,7 @@ if (!SKIP_ELECTRON) {
 
   // 与 verify-e2e 相同的最小 patch（只改临时副本，不动源码）：
   //  - 重复注册的 warmy:qingChuCuoWu 会让 Electron 启动即抛
-  //  - yingYong.setAsDefaultProtocolClient 会改到本机注册表
+  //  - app.setAsDefaultProtocolClient 会改到本机注册表
   const mainFile = path.join(appRoot, 'dist', 'electron-main.js');
   {
     const lines = fs.readFileSync(mainFile, 'utf8').split('\n');
@@ -538,7 +538,7 @@ if (!SKIP_ELECTRON) {
         if (seen) continue;
         seen = true;
       }
-      out.push(line.includes("yingYong.setAsDefaultProtocolClient('dsh-app')") ? line.replace("yingYong.setAsDefaultProtocolClient('dsh-app')", 'void 0') : line);
+      out.push(line.includes("app.setAsDefaultProtocolClient('dsh-app')") ? line.replace("app.setAsDefaultProtocolClient('dsh-app')", 'void 0') : line);
     }
     fs.writeFileSync(mainFile, out.join('\n'), 'utf8');
   }

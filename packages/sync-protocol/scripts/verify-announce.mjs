@@ -13,7 +13,7 @@
  *   [7] 可拨入检测（autonat 思路）：对端真拨回 → dialable=true；端口错 → false
  *   [8] 地址（端口）变化 → 重新宣告 → 对端能查到新地址
  */
-import {DizhiJiantingqi, LianJieTiZi, DhtJieDian, KeBoRuTanCe, QunMiyaoHuan, LanProbe, SecureSyncClient, SecureSyncServer, chuangjianLinShiShenFen, randomBytes, recordKeyForFingerprint, boTcpMoRen, } from '../dist/index.js';
+import {DizhiJiantingqi, LianJieTiZi, DhtJieDian, KeBoRuTanCe, QunMiyaoHuan, NeiWangTanCe, AnQuanTongBuKeHu, AnQuanTongBuFuWu, chuangjianLinShiShenFen, randomBytes, jiLuJianYouZhiWen, boTcpMoRen, } from '../dist/index.js';
 
 let failures = 0;
 let passes = 0;
@@ -45,14 +45,14 @@ async function main() {
   console.log(`node ${process.version} | 创建者 ${creatorId.fingerprint.slice(0, 12)}… 成员 ${memberId.fingerprint.slice(0, 12)}…`);
 
   /* ── 实例搭建 ── */
-  const creatorTcp = new SecureSyncServer({
+  const creatorTcp = new AnQuanTongBuFuWu({
     identity: creatorId.provider,
     nodeId: 'creator',
     port: 0,
     groupId: GROUP,
     roster: (fp) => fp === memberId.fingerprint,
   });
-  const memberTcp = new SecureSyncServer({
+  const memberTcp = new AnQuanTongBuFuWu({
     identity: memberId.provider,
     nodeId: 'member',
     port: 0,
@@ -91,11 +91,11 @@ async function main() {
   /** 成员对外宣告的端口（测试 [8] 会改它来模拟地址变化） */
   let memberAdvertisedPort = memberTcpPort;
 
-  /** 真实建连：阶梯选路 → 鉴权握手（SecureSyncClient） */
+  /** 真实建连：阶梯选路 → 鉴权握手（AnQuanTongBuKeHu） */
   async function connectViaLadder(selfIdentity, selfNodeId, member, addresses, ladder) {
     const ladderRes = await ladder.connect({ fingerprint: member.fingerprint, nodeId: member.nodeId, addresses });
     if (!ladderRes.ok || !ladderRes.address) return { ok: false, rung: ladderRes.rung, detail: ladderRes.summary };
-    const cli = new SecureSyncClient({
+    const cli = new AnQuanTongBuKeHu({
       identity: selfIdentity.provider,
       nodeId: selfNodeId,
       host: ladderRes.address.host,
@@ -287,7 +287,7 @@ async function main() {
     check('宣告仍会发布自己的记录', rep.published.seq >= 1, rep.published.seq);
     check('不可拨入时不主动拨任何成员', dialed === 0, dialed);
     check('跳过记录写入 skippedNotDialable', rep.skippedNotDialable.includes(creatorId.fingerprint), rep.skippedNotDialable);
-    const inbound2 = await passive.handleAnnouncement(creatorDht.localRecord(recordKeyForFingerprint(creatorId.fingerprint)));
+    const inbound2 = await passive.handleAnnouncement(creatorDht.localRecord(jiLuJianYouZhiWen(creatorId.fingerprint)));
     check('收到宣告时只登记地址不建连', inbound2.connected === false && dialed === 0, inbound2.reason);
     check('登记了对方地址', inbound2.address?.port === creatorTcpPort, inbound2.address);
     await passiveDht.stop();
@@ -296,11 +296,11 @@ async function main() {
   /* ── [6] 连接阶梯 ── */
   group('[6] 连接阶梯：逐级降级（未实现的级明确标注）');
   {
-    const probeA = new LanProbe({ nodeId: 'probe-a', fingerprint: creatorId.fingerprint, tcpPort: creatorTcpPort, discoveryPort: 0 });
-    const probeB = new LanProbe({ nodeId: 'probe-b', fingerprint: memberId.fingerprint, tcpPort: memberTcpPort, discoveryPort: 0 });
+    const probeA = new NeiWangTanCe({ nodeId: 'probe-a', fingerprint: creatorId.fingerprint, tcpPort: creatorTcpPort, discoveryPort: 0 });
+    const probeB = new NeiWangTanCe({ nodeId: 'probe-b', fingerprint: memberId.fingerprint, tcpPort: memberTcpPort, discoveryPort: 0 });
     const portA = await probeA.start();
     const portB = await probeB.start();
-    check('两个本地 LanProbe 已启动', portA > 0 && portB > 0 && portA !== portB, { portA, portB });
+    check('两个本地 NeiWangTanCe 已启动', portA > 0 && portB > 0 && portA !== portB, { portA, portB });
 
     // 6.1 单播探测：真实 UDP 往返
     const found = await probeA.query({ targets: [{ host: '127.0.0.1', port: portB }], timeoutMs: 800 });
@@ -499,15 +499,15 @@ async function main() {
       canDial: () => false,
       refreshMs: 60,
     });
-    const before = refreshDht.seenSeq(recordKeyForFingerprint(creatorId.fingerprint));
+    const before = refreshDht.seenSeq(jiLuJianYouZhiWen(creatorId.fingerprint));
     svc.startRefresh();
     await sleep(260);
-    const after = refreshDht.seenSeq(recordKeyForFingerprint(creatorId.fingerprint));
+    const after = refreshDht.seenSeq(jiLuJianYouZhiWen(creatorId.fingerprint));
     check('开启保活后 seq 持续递增（重新发布自己的记录）', after > before + 1, { before, after });
     svc.stopRefresh();
-    const atStop = refreshDht.seenSeq(recordKeyForFingerprint(creatorId.fingerprint));
+    const atStop = refreshDht.seenSeq(jiLuJianYouZhiWen(creatorId.fingerprint));
     await sleep(200);
-    check('stopRefresh() 后停止刷新', refreshDht.seenSeq(recordKeyForFingerprint(creatorId.fingerprint)) === atStop, atStop);
+    check('stopRefresh() 后停止刷新', refreshDht.seenSeq(jiLuJianYouZhiWen(creatorId.fingerprint)) === atStop, atStop);
     check('保活刷新不会去连接失败的成员（只发布自己）', svc.attempts.every((a) => a.retries === 0), svc.attempts.length);
     await refreshDht.stop();
   }

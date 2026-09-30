@@ -87,12 +87,16 @@ async function waitCdp(secs = 45) {
 }
 
 async function main() {
+  // 环境里可能带 ELECTRON_RUN_AS_NODE（会让 Electron 退化成纯 Node，CDP 起不来）
+  const __env = { ...process.env };
+  delete __env.ELECTRON_RUN_AS_NODE;
+
   const child = spawn(electron, [
     `--remote-debugging-port=${PORT}`,
     '--disable-features=CalculateNativeWinOcclusion',
     `--user-data-dir=${path.join(os.tmpdir(), 'warmy-ipc-probe-profile')}`,
     mainJs,
-  ], { cwd: pkgRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: false });
+  ], { cwd: pkgRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: false , env: __env});
   if (!(await waitCdp())) {
     console.error('CDP not up');
     try { child.kill('SIGKILL'); } catch { /* noop */ }

@@ -441,7 +441,7 @@ function defaults(): YingYongPeizhi {
   return {
     yuYan: 'zh-CN',
     themeMode: 'system',
-    accent: '#07c160',
+    accent: '#A78567',
     sound: { complete: true, request: true, error: true },
     soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,

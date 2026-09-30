@@ -46,7 +46,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const SHOTS = path.join(OUT, 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
 
-const HOST_SRC = `const { yingYong, BrowserWindow } = require('electron');
+const HOST_SRC = `const { app, BrowserWindow } = require('electron');
 const target = process.env.PREVIEW_HTML;
 app.whenReady().then(() => {
   const w = new BrowserWindow({

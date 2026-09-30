@@ -131,6 +131,7 @@ import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomi
  * **不是**落到本机设置里（产品主：记录文件的改动是无限牛马的功能，不是本机的功能）。
  */
 import { setFileAccessSink, withFileAccessScope, dangqianWenjianFangwenZuoyongyu } from './helper-tool.js';
+import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS } from './work-tools.js';
 import { JieDianMingCe, TongbuZongxian, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@warmy/dsh-runtime';
 // 组网：**鉴权通道**（SecureSyncServer/Client + 名册 + 持久化重放防护），旧 lan.ts/mesh.ts 只留数据层 PeerRegistry
@@ -692,6 +693,23 @@ function toolLimits(): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalCha
  * 审计：decide / enabled / unavailable / tool / degraded / done 六个事件全程留痕，
  * 只记工具名、锚点、长度与错误摘要 —— **不落 API Key，也不落工具结果正文**。
  */
+/**
+ * 这个会话的 AI 能不能**真的干活**（写文件等）。
+ *
+ * 产品定稿：**我的牛马**与**项目**里的 AI 必须能干活；**群聊**里的牛马只能聊天。
+ * 项目在本产品里就是「internal 群」，所以判据是：有群记录 ⇒ 看它的 type；
+ * 没有群记录 ⇒ 我的牛马 / 联系人会话 ⇒ 允许（工具只落在本会话自己的工作区里）。
+ */
+function huiHuaKeGanHuo(sessionId: string): boolean {
+  try {
+    const g = groupStore?.getGroup?.(sessionId) as { type?: string } | undefined;
+    if (g) return g.type === 'internal';
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 async function yunXingLiaoTianXunHuan(
   sessionId: string,
   provider: MoxingGongYing,
@@ -699,8 +717,12 @@ async function yunXingLiaoTianXunHuan(
 ): Promise<GongJuXunHuanGuo & { tooled: boolean }> {
   const limits = toolLimits();
   const jiyiJiuxu = await baozhangJiyiCangJiuxu();
-  const tools: GongJuGuiGe[] | undefined =
-    jiyiJiuxu && limits.zuiDaLunShu > 0 ? memoryToolSpecs(toolLabels()) : undefined;
+  const keGanHuo = huiHuaKeGanHuo(sessionId);
+  const jiyiTools: GongJuGuiGe[] = jiyiJiuxu ? (memoryToolSpecs(toolLabels()) as unknown as GongJuGuiGe[]) : [];
+  // 干活工具：只有「我的牛马 / 项目」暴露；群聊保持仅聊天
+  const ganHuoTools = keGanHuo ? (workToolSpecs() as unknown as GongJuGuiGe[]) : [];
+  const jiaJu = [...ganHuoTools, ...jiyiTools];
+  const tools: GongJuGuiGe[] | undefined = jiaJu.length && limits.zuiDaLunShu > 0 ? jiaJu : undefined;
   const supported = gongYingZhiChiGongJu(provider);
 
   audit?.log('chat.tools.decide', {
@@ -729,7 +751,30 @@ async function yunXingLiaoTianXunHuan(
       // T194：工具调用开始（只给工具名/轮次/会话 —— 不给参数与结果正文）
       const toolName = String((call && call.function && call.function.name) || 'tool');
       fachuKongzhitai({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId } });
-      // 工具里对文件做过的真实读写都记到**这个项目**的台账上（scope = 会话 id）
+      // 干活工具（写/读/列目录）走工作区沙箱；记忆工具走记忆服务。
+      // 两者都在文件访问作用域里执行 ⇒ 真实读写会记到**这个会话**的项目台账上。
+      const gongJuMing = String((call && call.function && call.function.name) || '');
+      if (isWorkTool(gongJuMing)) {
+        const base = workspaceDirOf(app.getPath('userData'), sessionId);
+        try { fs.mkdirSync(base, { recursive: true }); } catch { /* 建不出来下面会如实失败 */ }
+        const wr = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } });
+        audit?.log('chat.work-tool', {
+          sessionId,
+          tool: wr.meta.tool,
+          ok: wr.meta.ok,
+          bytes: wr.meta.bytes,
+          path: wr.meta.path,
+          error: wr.meta.error,
+          security: WORK_TOOL_SECURITY,
+        });
+        metrics.recordToolCall({ ts: Date.now(), sessionId, round: ctx.round, tool: wr.meta.tool, ok: wr.meta.ok, chars: String(wr.content).length, ms: Date.now() - t1 });
+        fachuKongzhitai({
+          cat: 'tool',
+          code: 'tool.finish',
+          data: { tool: wr.meta.tool, round: ctx.round, sessionId, ok: wr.meta.ok, chars: String(wr.content).length, ms: Date.now() - t1 },
+        });
+        return String(wr.content).slice(0, ctx.zuiDaJieGuoZiShu);
+      }
       const out = await withFileAccessScope(sessionId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }));
       metrics.recordToolCall({
         ts: Date.now(),
@@ -1762,6 +1807,23 @@ process.on('unhandledRejection', (reason) => {
   } catch {
     /* noop */
   }
+});
+/**
+ * **真正的**未捕获异常兜底（产品要求：一轮聊天不许把主进程打崩）。
+ *
+ * 为什么必须用 `uncaughtException` 而不是 `uncaughtExceptionMonitor`：
+ * Monitor 只是"看一眼"，默认语义仍是**打印并退出进程** —— 用户看到的就是
+ * 「A JavaScript error occurred in the main process」，之后所有 IPC 全部失效。
+ * 这里接住、如实报给界面（走既有「错误 + 重试」提示），并让进程继续活着。
+ * 注意：这**不**是掩盖问题 —— 错误原文会进控制台与 lastError，便于定位真正的缺陷。
+ */
+process.on('uncaughtException', (err) => {
+  try {
+    fachuKongzhitai({ cat: 'error', code: 'err.uncaught', data: { message: xiJingCuoWu(err) } });
+  } catch { /* noop */ }
+  try {
+    lastError = { ts: Date.now(), message: xiJingCuoWu(err).slice(0, 800), context: 'main-uncaught' };
+  } catch { /* noop */ }
 });
 
 
@@ -6717,7 +6779,7 @@ chuliIpc('warmy:wangLuoChengYuanJiZaiChang', (_e, payload: { groupId?: string } 
     const liveness = secureMesh?.presence() ?? [];
     const liveSessions = liveness.filter((p) => p.online).length;
     const instances = p1?.instances.LieBiao() ?? [];
-    // 判定逻辑在 identity-provider 的 buildMemberPresence（纯函数、验证脚本能真跑）：
+    // 判定逻辑在 identity-provider 的 goujianChengyuanZaichang（纯函数、验证脚本能真跑）：
     //  · 本机实例成员 → InstanceManager 的真实状态（presenceBasis: 'local-instance'）；
     //  · **有指纹**的异地成员 → 用活连接集合（SecureMesh / ConnectionLiveness）按指纹判
     //    （presenceBasis: 'mesh-session'：没有活连接就是不在线，不假装知道）；
@@ -7819,12 +7881,15 @@ chuliIpc('warmy:chuShiSheZhiTai', () => {
   try {
     const s = settingsStore?.load() as Record<string, unknown> | undefined;
     // 首次运行/安装后首启：setupDone 非 true 一律弹语言选择
-    return { ok: true, done: (s as { setupDone?: boolean })?.setupDone === true, yuYan: s?.yuYan || app.getLocale() };
+    const done = (s as { setupDone?: boolean })?.setupDone === true;
+    const guideDone = (s as { guideDone?: boolean })?.guideDone === true;
+    return { ok: true, done, guideDone, yuYan: s?.yuYan || app.getLocale() };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:chuShiSheZhiWanCheng', (_e, payload: { yuYan?: string; provider?: Record<string, unknown> }) => {
+chuliIpc('warmy:chuShiSheZhiWanCheng', (_e, payload: { yuYan?: string; provider?: Record<string, unknown>; guideDone?: boolean }) => {
   try {
     if (payload.yuYan) settingsStore?.save({ yuYan: payload.yuYan } as never);
+    if (payload.guideDone) settingsStore?.save({ guideDone: true } as never);
     if (payload.provider) {
       // 预填 provider
       Object.assign(providerCfg, {

@@ -118,7 +118,7 @@ ipcMain.handle('warmy:daoChuYunXuMingDan', () => {
 // ── dsh-app:// 自定义协议（零对外端口） ──
 // 仅在 Electron 内部注册，不对外暴露端口
 try {
-  yingYong.setAsDefaultProtocolClient('dsh-app');
+  app.setAsDefaultProtocolClient('dsh-app');
 } catch {
   /* noop */
 }

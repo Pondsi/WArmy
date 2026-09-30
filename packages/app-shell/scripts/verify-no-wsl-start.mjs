@@ -58,7 +58,11 @@ if (beforeStates === null) {
   console.log('  SKIP 本机没有可用的 WSL/PowerShell ⇒ 动态部分跳过（静态规则仍已断言）');
 } else {
   const electron = path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe');
-  const child = spawn(electron, [`--remote-debugging-port=${PORT}`, '--disable-features=CalculateNativeWinOcclusion', path.join(PKG, 'dist', 'electron-main.js')], { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'] });
+  // 环境里可能带 ELECTRON_RUN_AS_NODE（会让 Electron 退化成纯 Node，CDP 起不来）
+  const __env = { ...process.env };
+  delete __env.ELECTRON_RUN_AS_NODE;
+
+  const child = spawn(electron, [`--remote-debugging-port=${PORT}`, '--disable-features=CalculateNativeWinOcclusion', path.join(PKG, 'dist', 'electron-main.js')], { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'] , env: __env});
   child.stdout.on('data', () => {}); child.stderr.on('data', () => {});
   const afterBootProcs = { v: null, v2: null, fu: null };
   async function attachTo(pred, biaoQian) {

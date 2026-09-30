@@ -22,7 +22,7 @@ fs.mkdirSync(OUT, { recursive: true });
 fs.mkdirSync(DEST, { recursive: true });
 
 const HOST = path.join(OUT, 'shot-host.cjs');
-fs.writeFileSync(HOST, `const { yingYong, BrowserWindow } = require('electron');
+fs.writeFileSync(HOST, `const { app, BrowserWindow } = require('electron');
 const target = process.env.PREVIEW_HTML;
 app.whenReady().then(() => {
   const w = new BrowserWindow({ width: 1280, height: 860, show: true,

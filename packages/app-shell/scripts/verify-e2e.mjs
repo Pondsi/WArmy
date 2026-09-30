@@ -13,7 +13,7 @@
  *
  * 说明：为了让临时副本能启动，会 patch 两行与本次改动无关的代码（真实源码不动）：
  *   - 去掉重复注册的 warmy:qingChuCuoWu（Electron 会因重复注册抛异常）
- *   - 去掉 yingYong.setAsDefaultProtocolClient（避免改到本机注册表）
+ *   - 去掉 app.setAsDefaultProtocolClient（避免改到本机注册表）
  */
 import {execFileSync, spawn} from 'node:child_process';
 import crypto from 'node:crypto';
@@ -98,9 +98,9 @@ for (const line of lines) {
     }
     seenClearError = true;
   }
-  if (line.includes("yingYong.setAsDefaultProtocolClient('dsh-app')")) {
+  if (line.includes("app.setAsDefaultProtocolClient('dsh-app')")) {
     protocolPatched++;
-    patched.push(line.replace("yingYong.setAsDefaultProtocolClient('dsh-app')", 'void 0'));
+    patched.push(line.replace("app.setAsDefaultProtocolClient('dsh-app')", 'void 0'));
     continue;
   }
   patched.push(line);

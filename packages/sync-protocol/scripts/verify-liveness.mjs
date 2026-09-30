@@ -13,7 +13,7 @@
  *   [7] heartbeat / misses 语义正确
  *   [8] 与真实鉴权连接联动：成员拨入建立 SecureSession → online；断开 → 迟滞后 offline
  */
-import {LianJieHuoXing, QunMiyaoHuan, SecureSyncClient, SecureSyncServer, chuangjianLinShiShenFen, randomBytes, } from '../dist/index.js';
+import {LianJieHuoXing, QunMiyaoHuan, AnQuanTongBuKeHu, AnQuanTongBuFuWu, chuangjianLinShiShenFen, randomBytes, } from '../dist/index.js';
 
 let failures = 0;
 let passes = 0;
@@ -133,7 +133,7 @@ async function main() {
     const memberId = chuangjianLinShiShenFen('member-lv');
     const GROUP = 'grp-lv';
     const closedReasons = [];
-    const server = new SecureSyncServer({
+    const server = new AnQuanTongBuFuWu({
       identity: creatorId.provider,
       nodeId: 'creator',
       port: 0,
@@ -153,7 +153,7 @@ async function main() {
       probe: async () => ({ ok: true }),
     });
 
-    const client = new SecureSyncClient({
+    const client = new AnQuanTongBuKeHu({
       identity: memberId.provider,
       nodeId: 'member',
       host: '127.0.0.1',
@@ -184,7 +184,7 @@ async function main() {
     check('离线后 via = none', lv.status(memberId.fingerprint).via === 'none', lv.status(memberId.fingerprint));
 
     // 成员重新拨入 → 再次在线（不需要创建者做任何巡检）
-    const client2 = new SecureSyncClient({
+    const client2 = new AnQuanTongBuKeHu({
       identity: memberId.provider,
       nodeId: 'member',
       host: '127.0.0.1',

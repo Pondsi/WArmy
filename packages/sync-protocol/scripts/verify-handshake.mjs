@@ -14,7 +14,7 @@
  */
 import crypto from 'node:crypto';
 import path from 'node:path';
-import {HandshakeDriver, ShenfenQiyueCuowu, ReplayGuard, AnQuanTongDao, SecureSyncClient, SecureSyncServer, chuangjianLinShiShenFen, normalizeIdentity, } from '../dist/index.js';
+import {WoshouQudongqi, ShenfenQiyueCuowu, ChongfangFangYu, AnQuanTongDao, AnQuanTongBuKeHu, AnQuanTongBuFuWu, chuangjianLinShiShenFen, guiFanShenFen, } from '../dist/index.js';
 
 let failures = 0;
 let passes = 0;
@@ -60,7 +60,7 @@ async function handshakePair(opts = {}) {
     groupId = GROUP,
   } = opts;
   const events = [];
-  const I = new HandshakeDriver({
+  const I = new WoshouQudongqi({
     identity: initiatorIdentity.provider,
     role: 'initiator',
     groupId,
@@ -69,7 +69,7 @@ async function handshakePair(opts = {}) {
     now: nowI,
     onEvent: (e) => events.push(e),
   });
-  const R = new HandshakeDriver({
+  const R = new WoshouQudongqi({
     identity: responderIdentity.provider,
     role: 'responder',
     groupId,
@@ -88,7 +88,7 @@ async function handshakePair(opts = {}) {
 
 /** 只跑 HS1，返回 reject 原因（用于篡改/重放用例） */
 async function rejectReason(mutate, opts = {}) {
-  const I = new HandshakeDriver({
+  const I = new WoshouQudongqi({
     identity: (opts.initiatorIdentity ?? A).provider,
     role: 'initiator',
     groupId: opts.initiatorGroupId ?? GROUP,
@@ -96,7 +96,7 @@ async function rejectReason(mutate, opts = {}) {
     now: opts.nowI,
     replayGuard: opts.guardI,
   });
-  const R = new HandshakeDriver({
+  const R = new WoshouQudongqi({
     identity: B.provider,
     role: 'responder',
     groupId: GROUP,
@@ -141,12 +141,12 @@ async function main() {
   check('篡改 ECDHE 临时公钥（破坏 transcript）被拒', ephReason === 'signature-invalid', ephReason);
 
   {
-    const guard = new ReplayGuard();
-    const I = new HandshakeDriver({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
-    const r1 = new HandshakeDriver({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
+    const guard = new ChongfangFangYu();
+    const I = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
+    const r1 = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
     const hs1 = await I.start();
     await r1.step({ ...hs1 });
-    const r2 = new HandshakeDriver({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
+    const r2 = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
     let reason = 'no-error';
     try {
       await r2.step({ ...hs1 });
@@ -157,19 +157,19 @@ async function main() {
   }
   {
     // 新 nonce，但 counter 不递增（驱动内部 nonce 随机，这里只把计数打回 1）
-    const guard = new ReplayGuard();
-    const gOld1 = new ReplayGuard();
+    const guard = new ChongfangFangYu();
+    const gOld1 = new ChongfangFangYu();
     gOld1.nextLocalCounter = () => 1;
-    const I1 = new HandshakeDriver({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint, replayGuard: gOld1 });
-    const r1 = new HandshakeDriver({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
+    const I1 = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint, replayGuard: gOld1 });
+    const r1 = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
     const hs1 = await I1.start();
     await r1.step({ ...hs1 });
     const seen = guard.maxCounterSeen(A.fingerprint);
 
-    const gOld2 = new ReplayGuard();
+    const gOld2 = new ChongfangFangYu();
     gOld2.nextLocalCounter = () => 1;
-    const I2 = new HandshakeDriver({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint, replayGuard: gOld2 });
-    const r2 = new HandshakeDriver({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
+    const I2 = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint, replayGuard: gOld2 });
+    const r2 = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
     const hs1b = await I2.start();
     let reason = 'no-error';
     try {
@@ -198,8 +198,8 @@ async function main() {
     check('名册外的成员被拒（not-authorized）', reason === 'not-authorized', reason);
   }
   {
-    const I = new HandshakeDriver({ identity: ATTACKER.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
-    const R = new HandshakeDriver({ identity: B.provider, role: 'responder', groupId: GROUP, peerFingerprint: A.fingerprint });
+    const I = new WoshouQudongqi({ identity: ATTACKER.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
+    const R = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, peerFingerprint: A.fingerprint });
     const hs1 = await I.start();
     let reason = 'no-error';
     try {
@@ -231,7 +231,7 @@ async function main() {
     const serverMsgs = [];
     const clientMsgs = [];
     let establishedEvents = 0;
-    const server = new SecureSyncServer({
+    const server = new AnQuanTongBuFuWu({
       identity: serverIdentity.provider,
       nodeId: 'node-server',
       port: 0,
@@ -242,7 +242,7 @@ async function main() {
       },
     });
     const port = await server.start();
-    const client = new SecureSyncClient({
+    const client = new AnQuanTongBuKeHu({
       identity: clientIdentity.provider,
       nodeId: 'node-client',
       host: '127.0.0.1',
@@ -331,7 +331,7 @@ async function main() {
   {
     const serverIdentity = mkIdentity('server2');
     const bogus = mkIdentity('bogus');
-    const server = new SecureSyncServer({
+    const server = new AnQuanTongBuFuWu({
       identity: serverIdentity.provider,
       nodeId: 'node-server2',
       port: 0,
@@ -339,7 +339,7 @@ async function main() {
       roster: (fp) => fp !== bogus.fingerprint,
     });
     const port = await server.start();
-    const attacker = new SecureSyncClient({
+    const attacker = new AnQuanTongBuKeHu({
       identity: bogus.provider,
       nodeId: 'node-attacker',
       host: '127.0.0.1',
@@ -358,7 +358,7 @@ async function main() {
   {
     let err = 'no-error';
     try {
-      await normalizeIdentity({ ...A.provider, fingerprint: 'NOT-A-REAL-FINGERPRINT' });
+      await guiFanShenFen({ ...A.provider, fingerprint: 'NOT-A-REAL-FINGERPRINT' });
     } catch (e) {
       err = e instanceof ShenfenQiyueCuowu ? 'ShenfenQiyueCuowu' : String(e.message);
     }
@@ -366,8 +366,8 @@ async function main() {
   }
   {
     const stubIdentity = { fingerprint: A.fingerprint, publicKey: A.provider.publicKey, sign: A.provider.sign, verify: () => true };
-    const I = new HandshakeDriver({ identity: stubIdentity, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
-    const R = new HandshakeDriver({ identity: B.provider, role: 'responder', groupId: GROUP });
+    const I = new WoshouQudongqi({ identity: stubIdentity, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
+    const R = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP });
     const hs1 = await I.start();
     let reason = 'no-error';
     try {
@@ -381,8 +381,8 @@ async function main() {
   }
   {
     const denyIdentity = { fingerprint: B.fingerprint, publicKey: B.provider.publicKey, sign: B.provider.sign, verify: () => false };
-    const I = new HandshakeDriver({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
-    const R = new HandshakeDriver({
+    const I = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
+    const R = new WoshouQudongqi({
       identity: denyIdentity,
       role: 'responder',
       groupId: GROUP,
@@ -399,17 +399,17 @@ async function main() {
   }
   {
     const file = path.join(process.env.TEMP || process.env.TMPDIR || '/tmp', `warmy-replay-${Date.now()}.json`);
-    const g1 = new ReplayGuard({ persistFile: file });
+    const g1 = new ChongfangFangYu({ persistFile: file });
     const c1 = g1.nextLocalCounter();
-    const g2 = new ReplayGuard({ persistFile: file });
+    const g2 = new ChongfangFangYu({ persistFile: file });
     const c2 = g2.nextLocalCounter();
     check('计数持久化后跨实例继续递增（重启不重放）', c1 === 1 && c2 === 2, { c1, c2 });
-    check('无持久化时从 1 开始', new ReplayGuard().nextLocalCounter() === 1);
+    check('无持久化时从 1 开始', new ChongfangFangYu().nextLocalCounter() === 1);
   }
   {
     // 自反射：对端声称与本机相同指纹
-    const I = new HandshakeDriver({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: null });
-    const R = new HandshakeDriver({ identity: A.provider, role: 'responder', groupId: GROUP });
+    const I = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: null });
+    const R = new WoshouQudongqi({ identity: A.provider, role: 'responder', groupId: GROUP });
     const hs1 = await I.start();
     let reason = 'no-error';
     try {
@@ -462,14 +462,14 @@ async function main() {
     const adapterB = spkiAdapter(B);
     check('两种公钥表示得到同一指纹', deriveFingerprint(Buffer.from(A.provider.publicKey)) !== adapterB.fingerprint);
 
-    const I = new HandshakeDriver({
+    const I = new WoshouQudongqi({
       identity: adapterA,
       role: 'initiator',
       groupId: GROUP,
       peerFingerprint: adapterB.fingerprint,
       fingerprintDerivation: deriveFingerprint,
     });
-    const R = new HandshakeDriver({
+    const R = new WoshouQudongqi({
       identity: adapterB,
       role: 'responder',
       groupId: GROUP,
@@ -485,14 +485,14 @@ async function main() {
     check('携带短横分组的指纹在收发两侧原样保留', R.session.peerFingerprint === adapterA.fingerprint, R.session.peerFingerprint);
 
     // 同样的方案下，pin 指向"第三方"仍被拒（HS1.pins 必须等于被叫方指纹）
-    const I2 = new HandshakeDriver({
+    const I2 = new WoshouQudongqi({
       identity: adapterA,
       role: 'initiator',
       groupId: GROUP,
       peerFingerprint: deriveFingerprint(Buffer.from(ATTACKER.provider.publicKey)),
       fingerprintDerivation: deriveFingerprint,
     });
-    const R2 = new HandshakeDriver({
+    const R2 = new WoshouQudongqi({
       identity: adapterB,
       role: 'responder',
       groupId: GROUP,
@@ -510,7 +510,7 @@ async function main() {
     // 篡改 SPKI 表示的公钥（长度变了）→ 公钥非法
     let badKey = 'no-error';
     try {
-      await normalizeIdentity({ fingerprint: adapterA.fingerprint, publicKey: Buffer.alloc(7), sign: adapterA.sign, verify: adapterA.verify });
+      await guiFanShenFen({ fingerprint: adapterA.fingerprint, publicKey: Buffer.alloc(7), sign: adapterA.sign, verify: adapterA.verify });
     } catch (e) {
       badKey = e instanceof ShenfenQiyueCuowu ? 'ShenfenQiyueCuowu' : String(e.message);
     }
