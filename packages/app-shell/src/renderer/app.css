@@ -2362,7 +2362,14 @@ body.liaoTianChuangKou #appTi {
   background: var(--card, #fff); color: var(--ink, #111);
   border: 1px solid var(--line, #ddd); border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 12px 14px;
+  /**
+   * **必须 no-drag**：拖到顶部时会压在 #biaoTiLan（-webkit-app-region: drag）上，
+   * 那片区域的点击会被系统判成"拖窗口"，卡片自己的 pointerdown 收不到 ⇒ 拖到顶部就再也拖不动，
+   * 且卡在顶部条里的按钮也点不了。no-drag 会把这块从窗口拖动区里减掉。
+   */
+  -webkit-app-region: no-drag;
 }
+.yinDaoTiao * { -webkit-app-region: no-drag; }
 .yinDaoLianJie {
   display: inline-block; margin-top: 6px; font-size: 12px;
   color: var(--accent); text-decoration: underline; cursor: pointer;

@@ -920,10 +920,40 @@
     try { renderConsole(); } catch { /* 控制台还没初始化完 */ }
   }
 
-  /** 用户刚选定语言后的一段保护期：期间轮询/回读**不许**把语言改回去 */
+  /**
+   * 用户刚选定语言后的一段保护期：期间轮询/回读**不许**把语言改回去。
+   *
+   * 为什么还要「待确认」这一层：首启引导里改语言只是**即时预览**（还没落盘），
+   * 而 5s 轮询拿的是设置文件里的旧值 —— 实测就是"选了英文→界面变英文→几秒后被拉回简体中文，
+   * 选择框仍显示英文"。所以只要用户明确选过，就一直按住，直到设置文件真的跟上了这个选择；
+   * 落盘一直跟不上（写失败）时按 2 分钟兜底放行，避免永久不再跟读外部改动。
+   */
   let yuYanBaoHuDao = 0;
-  function baoHuYuYan(ms = 30000) { yuYanBaoHuDao = Date.now() + ms; }
-  function keYiGengYuYan() { return Date.now() > yuYanBaoHuDao; }
+  let yuYanDaiQueRen = '';
+  let yuYanDaiQueRenZhi = 0;
+  function baoHuYuYan(ms = 30000, daiQueRen = '') {
+    yuYanBaoHuDao = Date.now() + ms;
+    if (daiQueRen) {
+      yuYanDaiQueRen = resolveLocalePack(daiQueRen);
+      yuYanDaiQueRenZhi = Date.now() + 120000;
+    }
+  }
+  /** 设置文件里的语言已经等于用户的选择 ⇒ 解除待确认（此后正常跟读外部改动） */
+  function jieChuYuYanDaiQueRen(weiZhi) {
+    if (!yuYanDaiQueRen) return false;
+    if (weiZhi && resolveLocalePack(weiZhi) === yuYanDaiQueRen) {
+      yuYanDaiQueRen = '';
+      yuYanDaiQueRenZhi = 0;
+      yuYanBaoHuDao = 0;
+      return true;
+    }
+    return false;
+  }
+  function keYiGengYuYan() {
+    const now = Date.now();
+    if (yuYanDaiQueRen && now >= yuYanDaiQueRenZhi) yuYanDaiQueRen = '';
+    return now > yuYanBaoHuDao && !yuYanDaiQueRen;
+  }
 
   async function loadI18n(yuYan) {
     const pack = await window.warmy.i18n(yuYan);
@@ -2166,8 +2196,10 @@
     const minP = ctxMinPercent();
     if (baiFenBi) baiFenBi.textContent = `${ctxState.percent}%`;
     if (tok) {
-      const t = Math.max(CTX_MIN_TOKENS, Math.round((ctxState.percent / 100) * ctxState.maxTokens));
-      tok.textContent = t('ctx.budget.tokens') ? fmtKey('ctx.budget.tokens', { n: String(t) }) : `≈ ${t} tokens`;
+      // 变量名不能叫 t：会遮蔽 i18n 的 t()，导致 `t is not a function`（本轮真事故）
+      const tokenShu = Math.max(CTX_MIN_TOKENS, Math.round((ctxState.percent / 100) * ctxState.maxTokens));
+      const ju = fmtKey('ctx.budget.tokens', { n: String(tokenShu) });
+      tok.textContent = ju === 'ctx.budget.tokens' ? `≈ ${tokenShu} tokens` : ju;
     }
     const s = $('shangXiaWenSlider');
     if (s) { s.min = String(minP); s.value = String(ctxState.percent); }
@@ -4019,8 +4051,7 @@
             <label>${escapeHtml(t('settings.organizerModel'))}</label>
             <select id="smOrganizer" data-special="organizer"></select>
           </div>
-          <!-- WebGPU 测试与模型无关，挪到「功能」分区 -->
-          </div>
+          <!-- WebGPU 测试与模型无关，已挪到「功能」分区（见下方 #webgpuKa） -->
           <button class="anNiuXiao" id="anNiuBaoCunTeShu">${escapeHtml(t('common.save'))}</button>
           <span class="jingYin" id="smXiaoXi"></span>
         </div>
@@ -4052,10 +4083,11 @@
           <div id="jinengLieBiao" class="jingYin">${escapeHtml(t('settings.skillsEmpty'))}</div>
           <div class="jingYin jinengLuJingJi" id="jinengLuJingJi"></div>
         </div>
-          <div class="sheZhiSection sheZhiKa" id="webgpuKa">
-            <h2>${escapeHtml(tOr('webgpu.section', '图形加速（WebGPU）'))}</h2>
-            <p class="jingYin">${escapeHtml(tOr('webgpu.hint', '检测本机是否支持 WebGPU（与模型无关）。'))}</p>
-            <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
+        <div class="sheZhiSection sheZhiKa" id="webgpuKa">
+          <h2>${escapeHtml(tOr('webgpu.section', '图形加速（WebGPU）'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('webgpu.hint', '检测本机是否支持 WebGPU（与模型无关）。'))}</p>
+          <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
+        </div>
         <div class="sheZhiSection sheZhiKa" id="yinDaoKa">
           <h2>${escapeHtml(tOr('guide.section', '新手引导'))}</h2>
           <p class="jingYin">${escapeHtml(tOr('guide.sectionHint', '第一次用的三步指引；随时可以再看一遍。'))}</p>
@@ -5063,7 +5095,7 @@
         sel.value = state.yuYan;
         sel.onchange = async () => {
           const pick = resolveLocalePack(sel.value);
-          baoHuYuYan(30000);
+          baoHuYuYan(30000, pick);
           try { await loadI18n(pick); } catch { /* noop */ }
           try { await window.warmy.settingsSave({ yuYan: pick }); } catch { /* noop */ }
           try { await window.warmy.setupComplete({ yuYan: pick }); } catch { /* noop */ }
@@ -12703,6 +12735,8 @@
       if (sel()) {
         sel().onchange = async () => {
           const v = sel().value;
+          // 即时预览也要上锁：引导确认前的这段等待里，5s 轮询会把设置文件里的旧语言拉回来
+          baoHuYuYan(60000, v);
           try { await loadI18n(resolveLocalePack(v)); } catch { /* noop */ }
           $('duiHuaKuangBiaoTi').textContent = tOr('setup.biaoTi', '欢迎使用');
           const tiShi = $('duiHuaKuangTi').querySelector('.jingYin');
@@ -12780,7 +12814,7 @@
     }
     const pick = await pickOnboardingLocale();
     if (pick) {
-      baoHuYuYan(60000);
+      baoHuYuYan(60000, pick);
       await window.warmy.setupComplete({ yuYan: pick }).catch(() => {});
       // 无论 live-preview 是否已切过，确认时都强制再载一次，保证 UI 与选项一致
       try { await loadI18n(resolveLocalePack(pick)); } catch { /* noop */ }
@@ -13844,7 +13878,7 @@
             applyThemeMode?.(state.themeMode);
             document.documentElement.style.setProperty('--accent', state.theme);
           }
-          if (keys.includes('yuYan') && s.yuYan && resolveLocalePack(s.yuYan) !== state.yuYan) {
+          if (keys.includes('yuYan') && s.yuYan && keYiGengYuYan() && resolveLocalePack(s.yuYan) !== state.yuYan) {
             await loadI18n(resolveLocalePack(s.yuYan));
           }
           // 供应商/模型：重新从设置读一遍并重画（别一边加了供应商另一边看不到）
@@ -13877,6 +13911,8 @@
         try {
           const s = await window.warmy.settingsGet();
           const weiZhi = s?.settings?.yuYan;
+          // 设置文件跟上用户的选择后解除待确认；此后外部改动照常跟读
+          jieChuYuYanDaiQueRen(weiZhi);
           if (weiZhi && keYiGengYuYan() && resolveLocalePack(weiZhi) !== state.yuYan) {
             await loadI18n(resolveLocalePack(weiZhi));
           }
@@ -13930,6 +13966,7 @@
         // 供应商列表落盘读回（密钥只问"有没有"，读不回明文）
         await loadProvidersFromSettings();
         // Re-apply persisted yuYan (settingsGet is also used above for boot; ensure UI state matches).
+        jieChuYuYanDaiQueRen(s.settings.yuYan);
         if (s.settings.yuYan && keYiGengYuYan() && resolveLocalePack(s.settings.yuYan) !== state.yuYan) {
           try { await loadI18n(resolveLocalePack(s.settings.yuYan)); } catch { /* noop */ }
         }

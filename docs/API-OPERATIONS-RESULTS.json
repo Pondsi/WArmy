@@ -1,12 +1,12 @@
 {
-  "at": "2026-10-01T11:57:11.726Z",
+  "at": "2026-10-01T13:08:08.948Z",
   "total": 46,
-  "ok": 44,
+  "ok": 46,
   "results": [
     {
       "ming": "hardware",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "resultPreview": "{\"cpus\":32,\"suggested\":8,\"max\":8}"
     },
     {
@@ -24,37 +24,37 @@
     {
       "ming": "memoryStatus",
       "ok": true,
-      "ms": 1,
-      "resultPreview": "{\"ok\":true,\"ready\":false,\"CangLu\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\",\"jsonl\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\\\\fast-memory.jsonl\"…"
+      "ms": 2,
+      "resultPreview": "{\"ok\":true,\"ready\":true,\"CangLu\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\",\"jsonl\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\\\\fast-memory.jsonl\",…"
     },
     {
       "ming": "localeInfo",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"system\":\"zh-CN\",\"resolved\":\"zh-CN\",\"isZh\":true,\"supported\":[\"zh-CN\",\"zh-TW\",\"en-US\",\"ja\",\"ko\",\"ru\",\"es\",\"fr\",\"pt\",\"eo\"]}"
     },
     {
       "ming": "themeInfo",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"shouldUseDarkColors\":false,\"themeSource\":\"system\"}"
     },
     {
       "ming": "groupList",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"groups\":[],\"count\":0}"
     },
     {
       "ming": "updateSourceGet",
       "ok": true,
-      "ms": 0,
-      "resultPreview": "{\"ok\":true,\"configured\":true,\"url\":\"https://api.github.com/repos/Pondsi/WArmy/releases/latest\",\"origin\":\"settings\",\"channel\":\"\",\"currentVersion\":\"0.1.3\",\"lastCheck\":null,\"lastDownload\":null}"
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"configured\":true,\"url\":\"https://api.github.com/repos/Pondsi/WArmy/releases/latest\",\"origin\":\"settings\",\"channel\":\"\",\"currentVersion\":\"0.1.4\",\"lastCheck\":null,\"lastDownload\":null}"
     },
     {
       "ming": "boardEvents",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"events\":[]}"
     },
     {
@@ -73,12 +73,12 @@
       "ming": "checkpointList",
       "ok": true,
       "ms": 1,
-      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1790855815202,\"imageDigests\":{}},\"…"
+      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1790860088456,\"imageDigests\":{}},\"…"
     },
     {
       "ming": "knowledgeQuery",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"entities\":[],\"events\":[]}"
     },
     {
@@ -90,13 +90,13 @@
     {
       "ming": "settingsGet",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"settings\":{\"yuYan\":\"zh-CN\",\"themeMode\":\"system\",\"accent\":\"#A78567\",\"sound\":{\"complete\":true,\"request\":true,\"error\":true},\"soundFiles\":{\"complete\":\"\",\"request\":\"\",\"error\":\"\"},\"emailOnReques…"
     },
     {
       "ming": "skillsList",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"jinengJi\":[],\"scanDirs\":[],\"maxScanDirs\":10}"
     },
     {
@@ -108,13 +108,13 @@
     {
       "ming": "skillsScanDirsGet",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"dirs\":[],\"scanDirs\":[],\"max\":10}"
     },
     {
       "ming": "uiQueuesGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"queues\":{}}"
     },
     {
@@ -133,7 +133,7 @@
       "ming": "appInfo",
       "ok": true,
       "ms": 1,
-      "resultPreview": "{\"ok\":true,\"ming\":\"无限牛马\",\"enName\":\"WArmy\",\"version\":\"0.1.3\",\"electron\":\"40.10.6\",\"chrome\":\"144.0.7559.236\",\"node\":\"24.15.0\",\"platform\":\"win32\",\"arch\":\"x64\",\"dsh\":\"0.1.5-rc.1\",\"deviceId\":\"DK07VSLKMNCAN…"
+      "resultPreview": "{\"ok\":true,\"ming\":\"无限牛马\",\"enName\":\"WArmy\",\"version\":\"0.1.4\",\"electron\":\"40.10.6\",\"chrome\":\"144.0.7559.236\",\"node\":\"24.15.0\",\"platform\":\"win32\",\"arch\":\"x64\",\"dsh\":\"0.1.5-rc.1\",\"deviceId\":\"DK07VSLKMNCAN…"
     },
     {
       "ming": "identityInfo",
@@ -150,25 +150,25 @@
     {
       "ming": "netStatus",
       "ok": true,
-      "ms": 7,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"meshEnabled\":false,\"link\":{\"reachable\":false,\"lastError\":\"mesh-disabled\",\"peers\":[]},\"nodeId\":\"jieDian8af5ad76\",\"sessions\":0,\"unlock\":{\"mode\":\"os\",\"unlocked\":true,\"needsPassphrase\":false,\"…"
     },
     {
       "ming": "peersList",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"peers\":[],\"notes\":{\"lan\":\"net.note.lan\",\"wanManual\":\"net.note.wanManual\",\"wanHard\":\"net.note.wanHard\"}}"
     },
     {
       "ming": "executorsStatus",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"items\":[]}"
     },
     {
       "ming": "stateLoad",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"state\":{\"yuYan\":\"zh-CN\",\"themeMode\":\"system\",\"accent\":\"#A78567\",\"sound\":{\"complete\":true,\"request\":true,\"error\":true},\"soundFiles\":{\"complete\":\"\",\"request\":\"\",\"error\":\"\"},\"emailOnRequest\":…"
     },
     {
@@ -198,32 +198,32 @@
     {
       "ming": "platformInfo",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"platform\":\"win32\",\"isMac\":false,\"isWin\":true,\"isLinux\":false}"
     },
     {
       "ming": "costSummary",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"turns\":0,\"promptTokens\":0,\"completionTokens\":0,\"cacheHitRate\":0,\"avgDurationMs\":0,\"estCostCny\":0}"
     },
     {
       "ming": "memoryRecall",
       "ok": true,
-      "ms": 8016,
-      "resultPreview": "{\"cards\":[],\"error\":\"memory ipc timeout\"}"
+      "ms": 7,
+      "resultPreview": "{\"id\":4,\"ok\":true,\"cards\":[],\"timings\":{\"totalMs\":6,\"hydrateMs\":0,\"embedQueryMs\":5,\"uniMs\":0,\"triMs\":0,\"vecMs\":0,\"fuseMs\":0,\"cosines\":0,\"hydrated\":0,\"vectorBelowThreshold\":0,\"vectorUnkRatio\":0.5},\"sco…"
     },
     {
       "ming": "i18n",
       "ok": true,
-      "ms": 11,
+      "ms": 10,
       "resultPreview": "{\"yuYan\":\"zh-CN\",\"strings\":{\"about.author\":\"作者\",\"about.authorBody\":\"Pondsi\",\"about.checkUpdate\":\"检查更新\",\"about.checking\":\"检查中…\",\"about.contact\":\"联系方式\",\"about.contactBody\":\"Public@numumu.com · 232307860…"
     },
     {
       "ming": "memoryRetrieve",
-      "ok": false,
-      "ms": 8009,
-      "resultPreview": "{\"ok\":false,\"error\":\"memory ipc timeout\"}"
+      "ok": true,
+      "ms": 2,
+      "resultPreview": "{\"id\":5,\"ok\":true,\"result\":null}"
     },
     {
       "ming": "projectState",
@@ -240,13 +240,13 @@
     {
       "ming": "aiQuestionList",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"items\":[]}"
     },
     {
       "ming": "archiveList",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"entries\":[]}"
     },
     {
@@ -264,20 +264,20 @@
     {
       "ming": "containerProbe",
       "ok": true,
-      "ms": 454,
-      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1790855831716,\"elapsedMs\":452,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
+      "ms": 446,
+      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1790860088940,\"elapsedMs\":445,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
     },
     {
       "ming": "netPortCandidates",
       "ok": true,
-      "ms": 6,
-      "resultPreview": "{\"ok\":true,\"requestedPort\":59599,\"recommended\":[{\"port\":57757,\"status\":\"ok\",\"latencyMs\":5},{\"port\":52555,\"status\":\"ok\",\"latencyMs\":4},{\"port\":55151,\"status\":\"ok\",\"latencyMs\":4},{\"port\":55335,\"status\":…"
+      "ms": 4,
+      "resultPreview": "{\"ok\":true,\"requestedPort\":59599,\"recommended\":[{\"port\":57757,\"status\":\"ok\",\"latencyMs\":4},{\"port\":52555,\"status\":\"ok\",\"latencyMs\":4},{\"port\":55151,\"status\":\"ok\",\"latencyMs\":4},{\"port\":55335,\"status\":…"
     },
     {
       "ming": "chatLogRestore",
-      "ok": false,
+      "ok": true,
       "ms": 1,
-      "resultPreview": "{\"ok\":false,\"restore\":{\"done\":true,\"ok\":false,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"memory-unavailable\",\"trigger\":\"ipc\",\"at\":1790855831724},\"sessions\":[],\"logSeq\":0}"
+      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1790860088947},\"sessions\":[],\"logSeq\":0}"
     }
   ]
 }

@@ -14,6 +14,8 @@ export interface JiyiCangKeHuXuanXiang {
   nodePath?: string;
   ipcEntry: string;
   CangLu: string;
+  /** 启动日志出口（主进程的 qidong）。子进程崩溃/stderr 过去被直接丢掉，只看到"启动超时" */
+  log?: (xiaoXi: string) => void;
 }
 
 export class JiyiCangKeHu {
@@ -22,6 +24,11 @@ export class JiyiCangKeHu {
   private ready = false;
   private starting: Promise<void> | null = null;
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  /** 子进程输出尾部（有界，退出时写进启动日志） */
+  private zuiHou = new Set<string>();
+  private log = (xiaoXi: string) => {
+    try { this.opts.log?.(xiaoXi); } catch { /* 日志失败不影响主流程 */ }
+  };
 
   constructor(private opts: JiyiCangKeHuXuanXiang) {}
 
@@ -68,15 +75,35 @@ export class JiyiCangKeHu {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
     this.Zhi.on('message', (m: any) => {
+      if (m?.type === 'ready') this.log('memory child ready');
       const p = this.pending.get(m.id);
       if (!p) return;
       this.pending.delete(m.id);
       if (m.error) p.reject(new Error(m.error));
       else p.resolve(m);
     });
-    this.Zhi.on('exit', () => {
+    /**
+     * 子进程的输出必须有人读：
+     *  · 不读 = ⚠️ 崩溃原因永远看不到，只留下"启动超时"这种没有信息量的结论；
+     *  · stdout/stderr 是 pipe，写满（64KB）会把子进程**卡死**在写操作上，start 必然超时。
+     * 这里读进有界缓冲，行数太多就只留尾部，退出时整段写进启动日志。
+     */
+    const shouJi = (liu: NodeJS.ReadableStream | null, biao: string) => {
+      if (!liu) return;
+      liu.on('data', (d: Buffer) => {
+        for (const hang of String(d).split(/\r?\n/)) {
+          if (!hang.trim()) continue;
+          this.zuiHou.add(biao + ': ' + hang.slice(0, 300));
+          while (this.zuiHou.size > 12) this.zuiHou.delete(this.zuiHou.values().next().value as string);
+        }
+      });
+    };
+    shouJi(this.Zhi.stdout, 'out');
+    shouJi(this.Zhi.stderr, 'err');
+    this.Zhi.on('exit', (code, sig) => {
       // 子进程死了 → 立刻标记不可用，避免后续工具调用/重建挂在超时上
       this.ready = false;
+      this.log(`memory child exit code=${code} sig=${sig}${this.zuiHou.size ? ' 输出尾部: ' + [...this.zuiHou].join(' / ') : ''}`);
     });
     await new Promise<void>((resolve, reject) => {
       const t = setTimeout(() => reject(new Error('memory service start timeout')), 10_000);

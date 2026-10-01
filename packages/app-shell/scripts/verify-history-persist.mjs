@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 会话历史持久化验证（ADR 002 §9.4 待办 4 / 不变量 #5）—— 可重跑：
  *   node packages/app-shell/scripts/verify-history-persist.mjs [--no-electron]
  *
@@ -75,7 +75,8 @@ console.log('\n[0] 静态契约：记忆日志 → 会话日志的角色/序号�
   const src = fs.readFileSync(path.join(pkgRoot, 'src', 'electron-main.ts'), 'utf8');
   const histPush = [...src.matchAll(/chatHistories\.(push|set)\(/g)].length;
   check('chatHistories 只在 appendChatLog 一处被写（日志是唯一事实来源）', histPush <= 3, { matches: histPush });
-  check('启动路径调用 restoreChatLogsFromMemory（重建入口存在）', /restoreChatLogsFromMemory\('boot'\)/.test(src), src.includes("restoreChatLogsFromMemory('boot')"));
+  // 注意：入口函数已按全拼命名规范改名 restoreChatLogsFromMemory → youJiYiHuiFuHuiHuaRiZhi
+  check('启动路径调用 youJiYiHuiFuHuiHuaRiZhi(\'boot\')（重建入口存在）', /youJiYiHuiFuHuiHuaRiZhi\('boot'\)/.test(src), src.includes("youJiYiHuiFuHuiHuaRiZhi('boot')"));
 }
 
 if (SKIP_ELECTRON) {
@@ -275,8 +276,10 @@ const mock = http.createServer((req, res) => {
       /* 忽略 */
     }
     seen.push(ti);
+    // 线格式：OpenAI 兼容端点发的是 `messages`（内部字段名 xiaoXiJi 在 provider 里映射过去了）
+    const msgs = ti.messages || ti.xiaoXiJi || [];
     // "长回复"开关：用来验证"助手回复在记忆里的正文 = 日志正文"（超长也必须一致）
-    const lastUser = [...(ti.xiaoXiJi || [])].reverse().find((m) => m.role === 'user');
+    const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
     const wantsLong = /长回复/.test(String(lastUser?.content || ''));
     const reply = wantsLong ? 'L'.repeat(6000) + '｜LONG-END' : `收到#${seen.length}`;
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -346,11 +349,14 @@ check(
 const rLong = await app1.call('chatSend', { sessionId: 's-long', content: '长回复一致性验证（请回 6000 字符）' });
 check('[1] 长回复那一轮走通', rLong?.ok === true && String(rLong.reply || '').length > 4000, { replyChars: String(rLong.reply || '').length });
 const logLong = await app1.call('chatLog', { sessionId: 's-long' });
+// JSONL 万一没落盘（记忆服务没起来）也要给出可读结论，而不是在这里抛 ENOENT 把整套验收打断
+if (!fs.existsSync(jsonlPath)) {
+  check('[1] JSONL 存在（记忆服务必须真的起来）', false, { jsonl: jsonlPath, exists: false });
+}
 const longJsonl = fs
-  .readFileSync(jsonlPath, 'utf8')
-  .split('\n')
-  .filter(Boolean)
-  .map((l) => JSON.parse(l));
+  .existsSync(jsonlPath)
+  ? fs.readFileSync(jsonlPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+  : [];
 const longBySeq = new Map(longJsonl.map((r) => [Number(r.seq), r]));
 const longEntries = logLong?.entries || [];
 check(
@@ -364,7 +370,7 @@ check(
 // 长回复之后刷新 JSONL 快照（后面 [2] 要用"重启前的最后一条 seq"）
 jsonlRecords = longJsonl;
 const jsonlBySeqAll = new Map(longJsonl.map((r) => [Number(r.seq), r]));
-const maxSeqBefore = Math.max(...jsonlRecords.map((r) => Number(r.seq)));
+const maxSeqBefore = jsonlRecords.length ? Math.max(...jsonlRecords.map((r) => Number(r.seq))) : 0;
 console.log(
   `  第 1 轮：logSeqs(s-persist)=${logEntriesBefore.map((e) => e.seq).join(',')}；JSONL ${jsonlRecords.length} 条 / ${fs.statSync(jsonlPath).size} 字节 / maxSeq=${maxSeqBefore}`
 );
@@ -414,7 +420,7 @@ const before = seen.length;
 const r3 = await app2.call('chatSend', { sessionId: SESSION, content: USER3 });
 const req = seen[before];
 check('[2] 重启后仍能继续对话', r3?.ok === true, { ok: r3?.ok, reply: r3?.reply, error: r3?.error });
-const promptText = JSON.stringify(req?.xiaoXiJi || []);
+const promptText = JSON.stringify(req?.messages || req?.xiaoXiJi || []);
 // 最强口径：把"重启前落进 JSONL 的原始 ti"与"重启后真正注入给模型的消息"逐字节比对
 const bodiesBefore = logEntriesBefore.map((e) => String(jsonlBySeq.get(e.seq)?.ti ?? ''));
 const injectedBodies = bodiesBefore.filter((b) => b && promptText.includes(JSON.stringify(b)));
@@ -427,7 +433,7 @@ check('[2] 注入 prompt 里能看到重启前两轮的标记（可读证据）'
   u1: promptText.includes(sha16('u1')),
   u2: promptText.includes(sha16('u2')),
 });
-const injectedChars = (req?.xiaoXiJi || []).reduce((s, m) => s + String(m.content ?? '').length, 0);
+const injectedChars = (req?.messages || req?.xiaoXiJi || []).reduce((s, m) => s + String(m.content ?? '').length, 0);
 check('[2] 重启后的注入仍 ≤ 预算（1200）', injectedChars > 0 && injectedChars <= 1200, { injectedChars, budget: 1200 });
 
 const logFinal = await app2.call('chatLog', { sessionId: SESSION });
@@ -466,9 +472,16 @@ console.log('\n[3] 记忆服务不可用（故意坏掉）→ 降级：对话仍
   const before3 = seen.length;
   const r = await app3.call('chatSend', { sessionId: 's-broken-persist', content: '记忆服务坏了，这条也必须能发出去' });
   check('[3] chat-send 仍成功（ok:true 且有回复）', r?.ok === true && String(r.reply || '').length > 0, { ok: r?.ok, reply: r?.reply, error: r?.error });
-  check('[3] 确实打到了模型（请求体存在，只是没有工具）', seen.length > before3 && Array.isArray(seen[before3]?.xiaoXiJi) && seen[before3].tools === undefined, {
+  /**
+   * 口径更新：自「AI 干活」那轮起，**工作区文件工具**（write_file/read_file/list_dir/make_dir）
+   * 是常驻的，与记忆服务无关 —— 所以这里不能再断言 tools 不存在。
+   * 真正要守的是：**记忆没起来 ⇒ 绝不把 recall/retrieve 暴露给模型**（宁缺勿假）。
+   */
+  const gongJu = seen[before3]?.tools;
+  const jiyiGongJu = (Array.isArray(gongJu) ? gongJu : []).filter((x) => /^(recall|retrieve)$/.test(String(x?.function?.name || x?.name || '')));
+  check('[3] 确实打到了模型（请求体存在；记忆坏了就不暴露 recall/retrieve）', seen.length > before3 && Array.isArray(seen[before3]?.messages || seen[before3]?.xiaoXiJi) && jiyiGongJu.length === 0, {
     requests: seen.length - before3,
-    hasTools: seen[before3]?.tools !== undefined,
+    tools: (Array.isArray(gongJu) ? gongJu : []).map((x) => String(x?.function?.name || x?.name || '')),
   });
   const logRes = await app3.call('chatLog', { sessionId: 's-broken-persist' });
   check('[3] 重建被跳过但如实上报失败原因', logRes?.stats?.restore?.done === true && logRes?.stats?.restore?.ok === false, logRes?.stats?.restore);

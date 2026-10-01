@@ -1581,7 +1581,7 @@ function qishiJiyiCangYibu() {
     qidong(`memory ipc=ipcEntry`);
     const nodeRt = jiexiJiedianYunxingShi();
     qidong(`memory node=${nodeRt.path} (${nodeRt.source})`);
-    memory = new JiyiCangKeHu({ nodePath: nodeRt.path, ipcEntry, CangLu });
+    memory = new JiyiCangKeHu({ nodePath: nodeRt.path, ipcEntry, CangLu, log: qidong });
     memory
       .start()
       .then(() => {

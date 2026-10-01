@@ -47,6 +47,7 @@ const GATES_FAST = [
   E('verify-model-pick.mjs'),
   E('verify-subagents.mjs'),
   E('verify-import-integrity.mjs'),
+  E('verify-renderer-template-balance.mjs'),
   E('verify-membership.mjs'),
   E('verify-planB.mjs'),
   E('verify-planD.mjs'),
@@ -57,6 +58,8 @@ const GATES_FAST = [
 /** Electron 类门禁（真启动应用 + CDP，慢） */
 const GATES_ELECTRON = [
   E('verify-ui-layout.mjs'),
+  E('verify-firstrun-ui.mjs'),
+  E('verify-runtime-errors.mjs'),
   E('verify-chat-window.mjs'),
   E('verify-ipc-probe.mjs'),
 ];
@@ -155,6 +158,28 @@ function unitChecks() {
   if (!cssT.includes('.jianYiToast') || !cssT.includes('pointer-events: none')) fails.push('toast: css missing/not click-through');
   if (!cssT.includes('--fw-ui')) fails.push('text: weight var missing');
   if (!appJs.includes('和牛马聊天')) fails.push('guide: step3 button label');
+  // 本轮 3 项专项（语言回退 / 引导卡拖动 / 设置页排版）
+  if (!appJs.includes('yuYanDaiQueRen')) fails.push('lang: pending-choice lock missing');
+  if (!/jieChuYuYanDaiQueRen\(/.test(appJs)) fails.push('lang: pending not cleared when settings catch up');
+  // 局部变量遮蔽 i18n 的 t() ⇒ TypeError: t is not a function（本轮真事故：ctxRenderMeta）
+  {
+    const tDef = appJs.indexOf('const t = (k) =>');
+    const after = tDef < 0 ? '' : appJs.slice(appJs.indexOf('\n', tDef));
+    if (tDef < 0) fails.push('i18n: t() 定义丢失');
+    else if (/^[ \t]*(?:const|let|var)[ \t]+t[ \t]*=[ \t]*[^=]/m.test(after)) fails.push('renderer: 有局部 t = ... 遮蔽 i18n 的 t()');
+  }
+  {
+    const noDrag = (cssT.match(/\.yinDaoTiao\s*\{[^}]*no-drag/gs) || []).length;
+    if (noDrag < 2) fails.push(`guide: .yinDaoTiao 未声明 -webkit-app-region: no-drag（命中 ${noDrag}/2 个 css）`);
+  }
+  {
+    // 设置页内容列必须真的包住分区（模板级断言放在 verify-renderer-template-balance.mjs；这里再掐一次关键包裹）
+    const seg = appJs.indexOf('id="peiZhiNeiRong"');
+    const tail = appJs.slice(seg, seg + 300);
+    if (!/id="peiZhiNeiRong"/.test(appJs) || !/peiZhiBuJu/.test(appJs)) fails.push('settings: layout container missing');
+    if (!appJs.includes('<!-- WebGPU 测试与模型无关，已挪到「功能」分区（见下方 #webgpuKa） -->')) fails.push('settings: webgpu move comment lost');
+    void tail;
+  }
   // 工作工具
   if (!work.includes('WORK_TOOL_SECURITY')) fails.push('work-tools: security block missing');
   // dist 同步
