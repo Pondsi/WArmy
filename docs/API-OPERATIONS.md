@@ -134,22 +134,22 @@
 
 ## 实测结果（CDP 真实 IPC）
 
-生成时间：2026-09-30T18:43:03.707Z · 通过 44/46
+生成时间：2026-10-01T08:23:51.143Z · 通过 44/46
 
 | API | ok | ms | preview |
 | --- | --- | --- | --- |
-| `undefined` | ✅ | 2ms | {"cpus":32,"suggested":8,"max":8} |
+| `undefined` | ✅ | 1ms | {"cpus":32,"suggested":8,"max":8} |
 | `undefined` | ✅ | 1ms | [] |
 | `undefined` | ✅ | 0ms | "normal" |
-| `undefined` | ✅ | 0ms | {"ok":true,"ready":false,"CangLu":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\memory","jsonl":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\memory\\fast-memory.jsonl"… |
-| `undefined` | ✅ | 1ms | {"system":"zh-CN","resolved":"zh-CN","isZh":true,"supported":["zh-CN","zh-TW","en-US","ja","ko","ru","es","fr","pt","eo"]} |
+| `undefined` | ✅ | 1ms | {"ok":true,"ready":false,"CangLu":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\memory","jsonl":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\memory\\fast-memory.jsonl"… |
+| `undefined` | ✅ | 0ms | {"system":"zh-CN","resolved":"zh-CN","isZh":true,"supported":["zh-CN","zh-TW","en-US","ja","ko","ru","es","fr","pt","eo"]} |
 | `undefined` | ✅ | 0ms | {"shouldUseDarkColors":false,"themeSource":"system"} |
 | `undefined` | ✅ | 1ms | {"ok":true,"groups":[],"count":0} |
-| `undefined` | ✅ | 1ms | {"ok":true,"configured":true,"url":"https://api.github.com/repos/Pondsi/WArmy/releases/latest","origin":"settings","channel":"","currentVersion":"0.1.1","lastCheck":null,"lastDownload":null} |
+| `undefined` | ✅ | 0ms | {"ok":true,"configured":true,"url":"https://api.github.com/repos/Pondsi/WArmy/releases/latest","origin":"settings","channel":"","currentVersion":"0.1.2","lastCheck":null,"lastDownload":null} |
 | `undefined` | ✅ | 1ms | {"ok":true,"events":[]} |
-| `undefined` | ✅ | 0ms | {"ok":true,"sessions":[]} |
-| `undefined` | ✅ | 1ms | {"ok":true,"providerCfg":{"presetId":"deepseek","apiKey":"","baseURL":"","model":"deepseek-chat","protocol":"openai-compatible"},"hasKey":false} |
-| `undefined` | ✅ | 1ms | {"ok":true,"LieBiao":[],"space":{"maxBytes":536870912,"usedBytes":0,"count":0},"envByCheckpoint":{},"currentEnv":{"jiHuo":false,"runtimeId":"","revision":"host","at":1790793767143,"imageDigests":{}},"… |
+| `undefined` | ✅ | 1ms | {"ok":true,"sessions":[]} |
+| `undefined` | ✅ | 0ms | {"ok":true,"providerCfg":{"presetId":"deepseek","apiKey":"","baseURL":"","model":"deepseek-chat","protocol":"openai-compatible"},"hasKey":false} |
+| `undefined` | ✅ | 1ms | {"ok":true,"LieBiao":[],"space":{"maxBytes":536870912,"usedBytes":0,"count":0},"envByCheckpoint":{},"currentEnv":{"jiHuo":false,"runtimeId":"","revision":"host","at":1790843014628,"imageDigests":{}},"… |
 | `undefined` | ✅ | 0ms | {"ok":true,"entities":[],"events":[]} |
 | `undefined` | ✅ | 1ms | {"ok":true,"turns":0,"avgDurationMs":0,"promptTokens":0,"completionTokens":0,"cacheHitRate":0,"cacheHitTokens":0,"cacheMissTokens":0,"ccrOriginalBytes":0,"ccrCompressedBytes":0,"ccrRatio":1,"viewSampl… |
 | `undefined` | ✅ | 0ms | {"ok":true,"settings":{"yuYan":"zh-CN","themeMode":"system","accent":"#A78567","sound":{"complete":true,"request":true,"error":true},"soundFiles":{"complete":"","request":"","error":""},"emailOnReques… |
@@ -159,31 +159,31 @@
 | `undefined` | ✅ | 1ms | {"ok":true,"queues":{}} |
 | `undefined` | ✅ | 1ms | {"ok":true,"snapshot":{"version":1,"seq":0,"queues":{},"dutyState":{}},"file":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\router-queues.json"} |
 | `undefined` | ✅ | 1ms | {"ok":true,"profile":{"username":"主人","avatarDataUrl":"","email":"","deviceId":"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5","deviceIdSig":"bc6111d1f9d967bda223facfcd7dd0fd83f6ac3e1518d4e7d816… |
-| `undefined` | ✅ | 2ms | {"ok":true,"ming":"无限牛马","enName":"WArmy","version":"0.1.1","electron":"40.10.6","chrome":"144.0.7559.236","node":"24.15.0","platform":"win32","arch":"x64","dsh":"0.1.5-rc.1","deviceId":"DK07VSLKMNCAN… |
+| `undefined` | ✅ | 2ms | {"ok":true,"ming":"无限牛马","enName":"WArmy","version":"0.1.2","electron":"40.10.6","chrome":"144.0.7559.236","node":"24.15.0","platform":"win32","arch":"x64","dsh":"0.1.5-rc.1","deviceId":"DK07VSLKMNCAN… |
 | `undefined` | ✅ | 1ms | {"ok":true,"identity":{"bieMing":"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5","zhiWen":"P9C7Z-X9XY7-JY9WS-VG1BT","generation":1,"algo":"Ed25519","createdAt":1790791478634,"updatedAt":17907914… |
-| `undefined` | ✅ | 0ms | {"ok":true,"peers":[]} |
-| `undefined` | ✅ | 1ms | {"ok":true,"meshEnabled":false,"link":{"reachable":false,"lastError":"mesh-disabled","peers":[]},"nodeId":"jieDian8af5ad76","sessions":0,"unlock":{"mode":"os","unlocked":true,"needsPassphrase":false,"… |
-| `undefined` | ✅ | 1ms | {"ok":true,"peers":[],"notes":{"lan":"net.note.lan","wanManual":"net.note.wanManual","wanHard":"net.note.wanHard"}} |
-| `undefined` | ✅ | 1ms | {"ok":true,"items":[]} |
-| `undefined` | ✅ | 0ms | {"ok":true,"state":{"yuYan":"zh-CN","themeMode":"system","accent":"#A78567","sound":{"complete":true,"request":true,"error":true},"soundFiles":{"complete":"","request":"","error":""},"emailOnRequest":… |
-| `undefined` | ✅ | 0ms | {"ok":true,"error":null} |
-| `undefined` | ✅ | 1ms | {"ok":true,"done":false,"guideDone":false,"yuYan":"zh-CN"} |
+| `undefined` | ✅ | 1ms | {"ok":true,"peers":[]} |
+| `undefined` | ✅ | 6ms | {"ok":true,"meshEnabled":false,"link":{"reachable":false,"lastError":"mesh-disabled","peers":[]},"nodeId":"jieDian8af5ad76","sessions":0,"unlock":{"mode":"os","unlocked":true,"needsPassphrase":false,"… |
+| `undefined` | ✅ | 0ms | {"ok":true,"peers":[],"notes":{"lan":"net.note.lan","wanManual":"net.note.wanManual","wanHard":"net.note.wanHard"}} |
+| `undefined` | ✅ | 0ms | {"ok":true,"items":[]} |
+| `undefined` | ✅ | 1ms | {"ok":true,"state":{"yuYan":"zh-CN","themeMode":"system","accent":"#A78567","sound":{"complete":true,"request":true,"error":true},"soundFiles":{"complete":"","request":"","error":""},"emailOnRequest":… |
+| `undefined` | ✅ | 1ms | {"ok":true,"error":null} |
+| `undefined` | ✅ | 0ms | {"ok":true,"done":false,"guideDone":false,"yuYan":"zh-CN"} |
 | `undefined` | ✅ | 0ms | {"ok":true,"listening":false,"nodeId":"jieDian8af5ad76"} |
 | `undefined` | ✅ | 1ms | {"ok":true,"listening":false,"nodeId":"jieDian8af5ad76","peerCount":0,"sessions":0} |
-| `undefined` | ✅ | 1ms | {"ok":true,"platform":"win32","isMac":false,"isWin":true,"isLinux":false} |
-| `undefined` | ✅ | 0ms | {"ok":true,"turns":0,"promptTokens":0,"completionTokens":0,"cacheHitRate":0,"avgDurationMs":0,"estCostCny":0} |
-| `undefined` | ✅ | 8006ms | {"cards":[],"error":"memory ipc timeout"} |
-| `undefined` | ✅ | 11ms | {"yuYan":"zh-CN","strings":{"about.author":"作者","about.authorBody":"Pondsi","about.checkUpdate":"检查更新","about.checking":"检查中…","about.contact":"联系方式","about.contactBody":"Public@numumu.com · 232307860… |
-| `undefined` | ❌ | 8006ms | {"ok":false,"error":"memory ipc timeout"} |
-| `undefined` | ✅ | 1ms | {"ok":true,"state":{"devEnv":"host","containerOnly":false,"running":true,"stopped":false,"code":"host-dev","hostEditingRefused":false,"developmentAllowed":true,"developmentWhere":"host","testingAllowe… |
+| `undefined` | ✅ | 0ms | {"ok":true,"platform":"win32","isMac":false,"isWin":true,"isLinux":false} |
+| `undefined` | ✅ | 1ms | {"ok":true,"turns":0,"promptTokens":0,"completionTokens":0,"cacheHitRate":0,"avgDurationMs":0,"estCostCny":0} |
+| `undefined` | ✅ | 8016ms | {"cards":[],"error":"memory ipc timeout"} |
+| `undefined` | ✅ | 13ms | {"yuYan":"zh-CN","strings":{"about.author":"作者","about.authorBody":"Pondsi","about.checkUpdate":"检查更新","about.checking":"检查中…","about.contact":"联系方式","about.contactBody":"Public@numumu.com · 232307860… |
+| `undefined` | ❌ | 8005ms | {"ok":false,"error":"memory ipc timeout"} |
+| `undefined` | ✅ | 2ms | {"ok":true,"state":{"devEnv":"host","containerOnly":false,"running":true,"stopped":false,"code":"host-dev","hostEditingRefused":false,"developmentAllowed":true,"developmentWhere":"host","testingAllowe… |
 | `undefined` | ✅ | 1ms | {"ok":true,"groupId":"","memory":"","chars":0} |
-| `undefined` | ✅ | 1ms | {"ok":true,"items":[]} |
-| `undefined` | ✅ | 0ms | {"ok":true,"entries":[]} |
-| `undefined` | ✅ | 1ms | {"ok":true,"RenwuJi":[]} |
-| `undefined` | ✅ | 0ms | {"ok":true,"groupId":"","members":[],"localIsCreator":false} |
-| `undefined` | ✅ | 511ms | {"ok":true,"report":{"ok":true,"platform":"win32","probedAt":1790793783698,"elapsedMs":510,"cached":false,"runtimes":[{"id":"microsandbox","engine":{"kind":"microvm","api":"msb"},"status":"installed-n… |
-| `undefined` | ✅ | 6ms | {"ok":true,"requestedPort":59599,"recommended":[{"port":57757,"status":"ok","latencyMs":5},{"port":52555,"status":"ok","latencyMs":5},{"port":55151,"status":"ok","latencyMs":5},{"port":55335,"status":… |
-| `undefined` | ❌ | 1ms | {"ok":false,"restore":{"done":true,"ok":false,"entries":0,"sessions":0,"maxSeq":0,"reason":"memory-unavailable","trigger":"ipc","at":1790793783706},"sessions":[],"logSeq":0} |
+| `undefined` | ✅ | 0ms | {"ok":true,"items":[]} |
+| `undefined` | ✅ | 1ms | {"ok":true,"entries":[]} |
+| `undefined` | ✅ | 0ms | {"ok":true,"RenwuJi":[]} |
+| `undefined` | ✅ | 1ms | {"ok":true,"groupId":"","members":[],"localIsCreator":false} |
+| `undefined` | ✅ | 446ms | {"ok":true,"report":{"ok":true,"platform":"win32","probedAt":1790843031134,"elapsedMs":444,"cached":false,"runtimes":[{"id":"microsandbox","engine":{"kind":"microvm","api":"msb"},"status":"ready","run… |
+| `undefined` | ✅ | 6ms | {"ok":true,"requestedPort":59599,"recommended":[{"port":57757,"status":"ok","latencyMs":4},{"port":52555,"status":"ok","latencyMs":4},{"port":55151,"status":"ok","latencyMs":4},{"port":55335,"status":… |
+| `undefined` | ❌ | 1ms | {"ok":false,"restore":{"done":true,"ok":false,"entries":0,"sessions":0,"maxSeq":0,"reason":"memory-unavailable","trigger":"ipc","at":1790843031142},"sessions":[],"logSeq":0} |
 
 > 本节由 `packages/app-shell/scripts/verify-ipc-probe.mjs` 在真实 Electron 会话内生成。
 

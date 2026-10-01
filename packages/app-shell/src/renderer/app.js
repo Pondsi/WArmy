@@ -2553,10 +2553,19 @@
       }
       // 单 AI / 外部：真 Provider 对话
       try {
+        // 「智能选模型」的决策输入：如实带牛马的配置，由主进程 model-pick 决策
+        // （显式 > 默认 > 调用链+紧急度 > 角色表 > 兜底）
+        const inst0 = (state.instances || []).find((x) => x && (x.id === chatId || x.ming === chatId || x.name === chatId));
         const r = await window.warmy.chatSend({
           sessionId: chatId,
           content: text,
           insertMode: u === 'P1' ? 'inner' : 'outer',
+          moXingJueCe: {
+            urgency: u,
+            defaultModel: inst0 ? (inst0.defaultModel || '') : '',
+            chain: (inst0 && inst0.chain) || [],
+            chainDisabled: (inst0 && inst0.chainDisabled) || [],
+          },
         });
         if (r?.needsKey) {
           tuisongXiaoxi(chatId, 'them', r.reply);

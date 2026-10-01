@@ -37,7 +37,7 @@ import { ShenJiRiZhi } from './audit.js';
 import { AnQuanMiyaoCang } from './secure-keys.js';
 import * as credentialModule from './credential.js';
 import { ZhiShiGuiDangQi, QingLiGuanLiQi, congGuiDangTiQuZhiShi, heBingYongHuPianHao, tiQuJieGouHuaZhaiYao } from './archive-cleanup.js';
-import { pickModelForUrgency, pickEmbeddingModel, type JueseMoxingPeizhi } from './model-roles.js';
+import { type JueseMoxingPeizhi } from './model-roles.js';
 import { xietiaoQunXiaoxi, buildStatusCard } from './orchestrator.js';
 import { projectMemoryForContext, readProjectMemory, writeProjectMemory } from './project-memory.js';
 import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from './ai-questions.js';
@@ -132,6 +132,8 @@ import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomi
  */
 import { setFileAccessSink, withFileAccessScope, dangqianWenjianFangwenZuoyongyu } from './helper-tool.js';
 import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS } from './work-tools.js';
+import { jueCeMoXing, type MoXingJueCeShuRu } from './model-pick.js';
+import { XiaoDiDengJiBu, xiaoDiToolSpecs, isXiaoDiTool } from './subagents.js';
 import { JieDianMingCe, TongbuZongxian, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@warmy/dsh-runtime';
 // 组网：**鉴权通道**（SecureSyncServer/Client + 名册 + 持久化重放防护），旧 lan.ts/mesh.ts 只留数据层 PeerRegistry
@@ -700,6 +702,15 @@ function toolLimits(): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalCha
  * 项目在本产品里就是「internal 群」，所以判据是：有群记录 ⇒ 看它的 type；
  * 没有群记录 ⇒ 我的牛马 / 联系人会话 ⇒ 允许（工具只落在本会话自己的工作区里）。
  */
+/** 会话的显示名（给小弟命名用；拿不到就用 sessionId） */
+function sessionMingOf(sessionId: string): string {
+  try {
+    const g = groupStore?.getGroup?.(sessionId) as { ming?: string; name?: string } | undefined;
+    if (g) return String(g.ming || g.name || sessionId);
+  } catch { /* noop */ }
+  return String(sessionId || 'agent');
+}
+
 function huiHuaKeGanHuo(sessionId: string): boolean {
   try {
     const g = groupStore?.getGroup?.(sessionId) as { type?: string } | undefined;
@@ -720,7 +731,9 @@ async function yunXingLiaoTianXunHuan(
   const keGanHuo = huiHuaKeGanHuo(sessionId);
   const jiyiTools: GongJuGuiGe[] = jiyiJiuxu ? (memoryToolSpecs(toolLabels()) as unknown as GongJuGuiGe[]) : [];
   // 干活工具：只有「我的牛马 / 项目」暴露；群聊保持仅聊天
-  const ganHuoTools = keGanHuo ? (workToolSpecs() as unknown as GongJuGuiGe[]) : [];
+  const ganHuoTools = keGanHuo
+    ? ([...workToolSpecs(), ...xiaoDiToolSpecs()] as unknown as GongJuGuiGe[])
+    : [];
   const jiaJu = [...ganHuoTools, ...jiyiTools];
   const tools: GongJuGuiGe[] | undefined = jiaJu.length && limits.zuiDaLunShu > 0 ? jiaJu : undefined;
   const supported = gongYingZhiChiGongJu(provider);
@@ -754,6 +767,72 @@ async function yunXingLiaoTianXunHuan(
       // 干活工具（写/读/列目录）走工作区沙箱；记忆工具走记忆服务。
       // 两者都在文件访问作用域里执行 ⇒ 真实读写会记到**这个会话**的项目台账上。
       const gongJuMing = String((call && call.function && call.function.name) || '');
+      // 小弟：派出子代理 / 列出小弟
+      if (isXiaoDiTool(gongJuMing)) {
+        const bu = new XiaoDiDengJiBu(path.join(app.getPath('userData'), 'xiaodi.json'));
+        if (gongJuMing === 'list_subagents') {
+          const fuMing = sessionMingOf(sessionId);
+          const LieBiao = bu.list(fuMing);
+          const wenBen = LieBiao.length
+            ? LieBiao.map((x) => `${x.ming}（第${x.hao}号 · ${new Date(x.createdAt).toLocaleString()}）`).join('\n')
+            : '（还没有派出小弟）';
+          audit?.log('chat.xiao-di-list', { sessionId, fuMing, count: LieBiao.length });
+          fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: true, chars: wenBen.length, ms: Date.now() - t1 } });
+          return wenBen;
+        }
+        // spawn_subagent：命名 + 登记 + 用同一个模型把子任务跑一轮
+        const rawArgs = call && call.function ? call.function.arguments : undefined;
+        let args: { task?: string; title?: string } = {};
+        try { args = typeof rawArgs === 'string' ? (rawArgs.trim() ? JSON.parse(rawArgs) : {}) : (rawArgs || {}); } catch { args = {}; }
+        const fuMing = sessionMingOf(sessionId);
+        const pai = bu.pai(fuMing);
+        if (!pai.ok) {
+          audit?.log('chat.xiao-di-fail', { sessionId, fuMing, error: pai.error });
+          return `[spawn_subagent] 失败：${pai.error}`;
+        }
+        const lu = pai.lu;
+        audit?.log('chat.xiao-di-spawn', { sessionId, fuMing, xiaoDi: lu.ming, hao: lu.hao, taskChars: String(args.task || '').length });
+        // 子代理：**可以真干活**（写/读/列目录，同一个工作区沙箱），
+        // 但**不允许再派小弟**（防止子代理无限繁殖）。
+        let jieGuo = '';
+        try {
+          const ziRenWu = `你是子代理「${lu.ming}」，由「${fuMing}」派出。请独立完成下面这一件具体的事，需要写文件就直接写（路径用工作区相对路径），并在最后给出可交付的结论。\n\n【子任务】${String(args.task || '').slice(0, 2000)}`;
+          const subBase = workspaceDirOf(app.getPath('userData'), sessionId);
+          try { fs.mkdirSync(subBase, { recursive: true }); } catch { /* noop */ }
+          const subLoop = await liaoTianDaiGongJu(
+            provider,
+            {
+              model: String(Qiu.model || ''),
+              xiaoXiJi: [{ role: 'user', content: ziRenWu }],
+              maxTokens: 1024,
+              // 只给文件工具；不给 spawn_subagent
+              tools: workToolSpecs() as unknown as GongJuGuiGe[],
+            },
+            async (subCall) => {
+              const subName = String((subCall && subCall.function && subCall.function.name) || '');
+              const subOut = runWorkTool(subBase, subCall as { function?: { name?: string; arguments?: unknown } });
+              audit?.log('chat.xiao-di-tool', {
+                sessionId,
+                xiaoDi: lu.ming,
+                tool: subOut.meta.tool || subName,
+                ok: subOut.meta.ok,
+                bytes: subOut.meta.bytes,
+                path: subOut.meta.path,
+                error: subOut.meta.error,
+                security: WORK_TOOL_SECURITY,
+              });
+              return String(subOut.content).slice(0, 2000);
+            },
+            { zuiDaLunShu: 4, zuiDaJieGuoZiShu: ctx.zuiDaJieGuoZiShu, maxToolResultChars: 8000 },
+          );
+          jieGuo = String(subLoop.xiangYingTi?.choices?.[0]?.message?.content || '').slice(0, ctx.zuiDaJieGuoZiShu);
+        } catch (e) {
+          jieGuo = `[${lu.ming}] 执行失败：${xiJingCuoWu(e)}`;
+        }
+        const huiBao = `[派出小弟] ${lu.ming}（第${lu.hao}号）\n【任务】${String(args.task || '').slice(0, 200)}\n【结论】${jieGuo}`;
+        fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: true, chars: huiBao.length, ms: Date.now() - t1 } });
+        return huiBao.slice(0, ctx.zuiDaJieGuoZiShu);
+      }
       if (isWorkTool(gongJuMing)) {
         const base = workspaceDirOf(app.getPath('userData'), sessionId);
         try { fs.mkdirSync(base, { recursive: true }); } catch { /* 建不出来下面会如实失败 */ }
@@ -2671,6 +2750,8 @@ chuliIpc(
       role?: 'user';
       content: string;
       model?: string;
+      /** 「智能选模型」的决策输入（渲染层把牛马的配置如实带过来；决策只在这里做） */
+      moXingJueCe?: MoXingJueCeShuRu;
       /** 指令插入：outer=外循环后，inner=内循环边界 */
       insertMode?: 'outer' | 'inner';
     }
@@ -2759,7 +2840,15 @@ chuliIpc(
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL || undefined,
       });
-      const modelId = xiaoXi.model || providerCfg.model;
+      // 「智能选模型」：显式 > 牛马默认 > 调用链+紧急度 > 角色表 > 兜底（见 model-pick.ts）
+      const jueCe = jueCeMoXing({
+        explicit: xiaoXi.model,
+        ...(xiaoXi.moXingJueCe || {}),
+        roles: roleModels,
+        fallback: providerCfg.model || 'deepseek-chat',
+      });
+      const modelId = jueCe.model;
+      audit?.log('chat.model-picked', { sessionId, model: modelId, why: jueCe.why, chainIndex: jueCe.chainIndex, urgency: (xiaoXi.moXingJueCe && xiaoXi.moXingJueCe.urgency) || '' });
       const baseBudget = contextBudgetChars(modelId);
       // 计划1/2：上下文超限自动收缩重试（100%→60%→35%→20%），到最小仍失败则如实停止
       const chongshi = await daiShangXiaWenChongShiYunXing(baseBudget, async (budgetChars) => {

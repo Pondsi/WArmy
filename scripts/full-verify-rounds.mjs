@@ -44,6 +44,8 @@ const GATES_FAST = [
   E('verify-updater.mjs'),
   E('verify-updater-github.mjs'),
   E('verify-work-tools.mjs'),
+  E('verify-model-pick.mjs'),
+  E('verify-subagents.mjs'),
   E('verify-import-integrity.mjs'),
   E('verify-membership.mjs'),
   E('verify-planB.mjs'),
@@ -129,6 +131,16 @@ function unitChecks() {
   // 主进程
   if (!/process\.on\('uncaughtException'/.test(emTs)) fails.push('main: uncaughtException not handled');
   if (!huiYongWork(emTs)) fails.push('main: work tools not wired');
+  // 小弟必须能干活，且不能再生小弟
+  {
+    const i = emTs.indexOf('spawn_subagent');
+    const seg = i >= 0 ? emTs.slice(i, i + 2600) : '';
+    if (!seg.includes('workToolSpecs')) fails.push('subagent work tools: 小弟没有文件工具');
+    if (seg.includes('xiaoDiToolSpecs')) fails.push('subagent work tools: 小弟又派小弟');
+    if (!/zuiDaLunShu:\s*4/.test(seg)) fails.push('subagent work tools: 轮数过小');
+  }
+  if (!appJs.includes('chainDisabled')) fails.push('model: chainDisabled not persisted from UI');
+  if (emTs.includes('pickModelForUrgency(')) fails.push('model: dead pickModelForUrgency still called');
   // 工作工具
   if (!work.includes('WORK_TOOL_SECURITY')) fails.push('work-tools: security block missing');
   // dist 同步
