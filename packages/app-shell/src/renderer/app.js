@@ -630,6 +630,49 @@
     return wangGe;
   }
 
+  /**
+   * 文字偏好：字体 / 粗细 / 大小。
+   * 大小是**全局缩放**（不是某一处字号）：按比例放大缩小 `--fs-*` 这套字号变量，
+   * 界面上所有用到它们的地方一起变，保持层级关系。
+   */
+  const FS_ZHI = { 'fs-xs': 11, 'fs-sm': 12, 'fs-base': 13, 'fs-md': 14, 'fs-lg': 16, 'fs-xl': 20 };
+  function yingYongWenZiPiHao(p) {
+    const pp = p || {};
+    const root = document.documentElement;
+    const ziti = String(pp.fontFamily || '').trim();
+    if (ziti) root.style.setProperty('--font-ui', JSON.stringify(ziti) + ', "Segoe UI", "Microsoft YaHei", system-ui, sans-serif');
+    else root.style.removeProperty('--font-ui');
+    const cuXi = Number(pp.fontWeight) || 400;
+    root.style.setProperty('--fw-ui', String(cuXi));
+    const daxiao = Math.max(80, Math.min(160, Number(pp.fontSize) || 100)) / 100;
+    Object.entries(FS_ZHI).forEach(([k, v]) => {
+      root.style.setProperty('--' + k, (Math.round(v * daxiao * 10) / 10) + 'px');
+    });
+    root.style.setProperty('--text-scale', String(daxiao));
+  }
+  window.__yingYongWenZiPiHao = yingYongWenZiPiHao;
+
+  /**
+   * 简洁 Toast：无边框、半透明（约 67% 不透明）、点击穿透（pointer-events:none）、
+   * 2.6 秒自动移除（**真的从 DOM 摘掉**，不留残骸）。
+   */
+  function showToast(text) {
+    try {
+      const old = document.getElementById('jianYiToast');
+      if (old) old.remove();
+      const el = document.createElement('div');
+      el.id = 'jianYiToast';
+      el.className = 'jianYiToast';
+      el.textContent = String(text || '');
+      document.body.appendChild(el);
+      setTimeout(() => {
+        try { el.classList.add('out'); } catch { /* noop */ }
+        setTimeout(() => { try { el.remove(); } catch { /* noop */ } }, 220);
+      }, 2600);
+    } catch { /* noop */ }
+  }
+  window.__showToast = showToast;
+
   /** 应用主题色（色板与自定义入口共用） */
   function applyAccent(color) {
     if (!color) return;
@@ -876,6 +919,11 @@
     // T194：控制台表头/清空按钮也走 i18n（面板合着时只更新表头那一行）
     try { renderConsole(); } catch { /* 控制台还没初始化完 */ }
   }
+
+  /** 用户刚选定语言后的一段保护期：期间轮询/回读**不许**把语言改回去 */
+  let yuYanBaoHuDao = 0;
+  function baoHuYuYan(ms = 30000) { yuYanBaoHuDao = Date.now() + ms; }
+  function keYiGengYuYan() { return Date.now() > yuYanBaoHuDao; }
 
   async function loadI18n(yuYan) {
     const pack = await window.warmy.i18n(yuYan);
@@ -2943,7 +2991,7 @@
     try {
       window.warmy.listInstances?.().then((arr) => {
         const live = (arr || []).find((x) => x && (x.id === inst.id || x.ming === inst.ming || x.name === inst.name));
-        if (live && live.status && live.status !== inst.status) {
+        if (live && live.status) {
           inst.status = live.status;
           // 只刷按钮文案，不整页重入
           const b = $('iQiDongTingZhi');
@@ -2984,35 +3032,42 @@
           <textarea id="iPersona" placeholder="${escapeHtml(t('instances.personaPlaceholder'))}">${escapeHtml(inst.persona || '')}</textarea>
         </div>
         <div class="sheZhiKa" style="margin-top:14px" id="iModelcfg">
-          <h3 style="margin:0 0 10px;font-size:13px">${escapeHtml(t('instances.defaultModel'))}</h3>
-          <div class="shiLiHang">
-            <div class="field">
-              <label>${escapeHtml(t('instances.defaultModel'))}</label>
-              <select id="iDefaultMoXing">
-                <option value="__smart__">${escapeHtml(t('instances.smartPick'))}</option>
-                ${(inst.availableModels || []).map((m) => '<option value="' + escapeHtml(m) + '"' + (inst.defaultModel === m ? ' selected' : '') + '>' + escapeHtml(m) + '</option>').join('')}
-              </select>
+          <h3 style="margin:0 0 10px;font-size:14px">${escapeHtml(tOr('model.mgr', '管理模型'))}</h3>
+
+          <!-- 子项 1：可用模型（只有这里的模型，才能被「默认模型」和「模型调用链」使用） -->
+          <div class="modelZiXiang">
+            <h4>${escapeHtml(tOr('model.available', '可用模型'))}</h4>
+            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.availableHint', '只有这里选中的模型，才能被「默认模型」和「模型调用链」使用。'))}</div>
+            <label style="display:block;margin-bottom:8px">
+              <input type="checkbox" id="iAllMoXingJi" ${inst.allModels !== false ? 'checked' : ''}/> ${escapeHtml(t('instances.allAvailable'))}
+            </label>
+            <div id="iManual" class="${inst.allModels !== false ? 'yinCang' : ''}">
+              <div class="modelLiangLie">
+                <select id="iProvXuanZe" size="6">${state.providers.map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.biaoQian) + '</option>').join('')}</select>
+                <select id="iMoXingXuanZe" size="6"></select>
+              </div>
+              <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+                <button class="anNiuXiao" id="iTianJiaMoXing">${escapeHtml(t('instances.addModel'))}</button>
+                <button class="anNiuXiao" id="iDelMoXing">${escapeHtml(t('settings.removeModel'))}</button>
+              </div>
             </div>
           </div>
 
-          <h3 style="margin:14px 0 8px;font-size:13px">${escapeHtml(t('instances.availableModels'))}</h3>
-          <label style="display:block;margin-bottom:8px">
-            <input type="checkbox" id="iAllMoXingJi" ${inst.allModels !== false ? 'checked' : ''}/> ${escapeHtml(t('instances.allAvailable'))}
-          </label>
-
-          <div id="iManual" class="${inst.allModels !== false ? 'yinCang' : ''}">
-            <div style="display:grid;grid-template-columns:140px 1fr;gap:8px;max-width:520px">
-              <select id="iProvXuanZe" size="6">${state.providers.map((p) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.biaoQian) + '</option>').join('')}</select>
-              <select id="iMoXingXuanZe" size="6"></select>
-            </div>
-            <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-              <button class="anNiuXiao" id="iTianJiaMoXing">${escapeHtml(t('instances.addModel'))}</button>
-              <button class="anNiuXiao" id="iDelMoXing">${escapeHtml(t('settings.removeModel'))}</button>
-            </div>
+          <!-- 子项 2：默认模型 -->
+          <div class="modelZiXiang">
+            <h4>${escapeHtml(tOr('model.default', '默认模型'))}</h4>
+            <select id="iDefaultMoXing">
+              <option value="__smart__"${!inst.defaultModel || inst.defaultModel === '__smart__' ? ' selected' : ''}>${escapeHtml(t('instances.smartPick'))}</option>
+              ${(inst.availableModels || []).map((m) => '<option value="' + escapeHtml(m) + '"' + (inst.defaultModel === m ? ' selected' : '') + '>' + escapeHtml(m) + '</option>').join('')}
+            </select>
           </div>
 
-          <h3 style="margin:14px 0 8px;font-size:13px">${escapeHtml(t('instances.fallbackChain'))}</h3>
-          <div id="iChain"></div>
+          <!-- 子项 3：模型调用链 -->
+          <div class="modelZiXiang">
+            <h4>${escapeHtml(tOr('model.chain', '模型调用链'))}</h4>
+            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.chainHint', '按顺序尝试；禁用的模型不会被调用。'))}</div>
+            <div id="iChain"></div>
+          </div>
         </div>
         <div class="shiLiHang" style="margin-top:14px">
           <button class="anNiuZhuYao" id="iBaoCun" title="${escapeHtml(t('common.save'))}">${escapeHtml(t('common.save'))}</button>
@@ -3022,13 +3077,17 @@
         </div>
       </div>`;
     $('iBaoCun').onclick = () => {
-      const newMing = ($('iMing').value.trim()) || mingOf(inst);
-      if (mingYiZhanYong(newMing, inst.id)) { uiAlert(t('instances.nameDup') || ('重名：' + newMing)); }
-      else { inst.name = newMing; inst.ming = newMing; }
-      inst.model = $('i-model').value.trim();
-      inst.memoryFile = $('i-mem').value.trim();
-      inst.persona = $('iPersona').value;
+      const newMing = ($('iMing') && $('iMing').value.trim()) || mingOf(inst);
+      if (mingYiZhanYong(newMing, inst.id)) { uiAlert(t('instances.nameDup') || ('重名：' + newMing)); return; }
+      inst.name = newMing; inst.ming = newMing;
+      const personaEl = $('iPersona');
+      if (personaEl) inst.persona = personaEl.value;
+      const defSel = $('iDefaultMoXing');
+      if (defSel) inst.defaultModel = defSel.value === '__smart__' ? '' : defSel.value;
+      window.__saveState?.();
       renderList();
+      // 简洁 Toast：无边框、半透明、点击穿透、2.6 秒自毁
+      showToast(tOr('common.saved', '已保存'));
     };
     const toggleBtn = $('iQiDongTingZhi');
     if (toggleBtn) {
@@ -3640,6 +3699,34 @@
             <button type="button" id="anNiuZhuTiCustom" class="zhuTiSeKuai" title="${escapeHtml(tOr('settings.customColorTitle', '自定义主题色'))}" aria-label="${escapeHtml(tOr('settings.customColorTitle', '自定义主题色'))}"></button>
           </div>
         </div>
+        <div class="sheZhiSection sheZhiKa" id="wenZiKa">
+          <h2>${escapeHtml(tOr('settings.text', '文字'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('settings.textHint', '字体、粗细与大小。安装包不内置字体：这里列出系统已装字体，也可自行安装你有权使用的字体。'))}</p>
+          <div class="field" style="margin-top:10px">
+            <label>${escapeHtml(tOr('settings.fontFamily', '字体'))}</label>
+            <div class="shiLiHang">
+              <select id="ziTiXuanZe">
+                <option value="">${escapeHtml(tOr('settings.fontDefault', '默认（跟随系统）'))}</option>
+              </select>
+              <button type="button" class="anNiuXiao" id="anNiuAnZhuangZiTi">${escapeHtml(tOr('settings.fontInstall', '安装字体…'))}</button>
+            </div>
+            <div class="jingYin" id="ziTiXiaoXi" style="font-size:11px;margin-top:4px"></div>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label>${escapeHtml(tOr('settings.fontWeight', '粗细'))}</label>
+            <select id="ziTiCuXi">
+              <option value="400">${escapeHtml(tOr('settings.fw400', '正常'))}</option>
+              <option value="500">${escapeHtml(tOr('settings.fw500', '中等'))}</option>
+              <option value="600">${escapeHtml(tOr('settings.fw600', '加粗'))}</option>
+              <option value="700">${escapeHtml(tOr('settings.fw700', '特粗'))}</option>
+            </select>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label>${escapeHtml(tOr('settings.fontSize', '大小'))} <span class="jingYin" id="ziTiDaXiaoShu"></span></label>
+            <input type="range" id="ziTiDaXiao" min="80" max="160" step="5" style="width:100%"/>
+            <div class="jingYin" style="font-size:11px">${escapeHtml(tOr('settings.fontSizeHint', '统一放大或缩小程序里所有可见文字。'))}</div>
+          </div>
+        </div>
         <div class="sheZhiSection" data-sec="notify"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.notify'))}</h2></div>
         <div class="sheZhiSection sheZhiKa">
           <h2>${escapeHtml(t('settings.soundName'))}</h2>
@@ -3932,7 +4019,8 @@
             <label>${escapeHtml(t('settings.organizerModel'))}</label>
             <select id="smOrganizer" data-special="organizer"></select>
           </div>
-          <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
+          <!-- WebGPU 测试与模型无关，挪到「功能」分区 -->
+          </div>
           <button class="anNiuXiao" id="anNiuBaoCunTeShu">${escapeHtml(t('common.save'))}</button>
           <span class="jingYin" id="smXiaoXi"></span>
         </div>
@@ -3964,6 +4052,10 @@
           <div id="jinengLieBiao" class="jingYin">${escapeHtml(t('settings.skillsEmpty'))}</div>
           <div class="jingYin jinengLuJingJi" id="jinengLuJingJi"></div>
         </div>
+          <div class="sheZhiSection sheZhiKa" id="webgpuKa">
+            <h2>${escapeHtml(tOr('webgpu.section', '图形加速（WebGPU）'))}</h2>
+            <p class="jingYin">${escapeHtml(tOr('webgpu.hint', '检测本机是否支持 WebGPU（与模型无关）。'))}</p>
+            <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
         <div class="sheZhiSection sheZhiKa" id="yinDaoKa">
           <h2>${escapeHtml(tOr('guide.section', '新手引导'))}</h2>
           <p class="jingYin">${escapeHtml(tOr('guide.sectionHint', '第一次用的三步指引；随时可以再看一遍。'))}</p>
@@ -4901,6 +4993,69 @@
         const kuai = document.querySelector('.zhuTiSeKuai');
         if (kuai) kuai.style.background = state.theme || '#A78567';
       })();
+      // 文字：字体 / 粗细 / 大小（列表来自系统字体 + 用户自行安装）
+      (function bindWenZi() {
+        const sel = $('ziTiXuanZe');
+        const cuXi = $('ziTiCuXi');
+        const daXiao = $('ziTiDaXiao');
+        const daShu = $('ziTiDaXiaoShu');
+        const xiaoXi = $('ziTiXiaoXi');
+        const st = state.wenZi || {};
+        const tongBu = () => {
+          const pp = {
+            fontFamily: sel && sel.value,
+            fontWeight: cuXi && cuXi.value,
+            fontSize: daXiao && daXiao.value,
+          };
+          yingYongWenZiPiHao(pp);
+          if (daShu) daShu.textContent = (pp.fontSize || 100) + '%';
+          try { window.warmy.settingsSave({ wenZi: pp }); } catch { /* noop */ }
+        };
+        // 字体列表
+        const tian = (fonts) => {
+          if (!sel) return;
+          const cur = (st.fontFamily || '');
+          sel.innerHTML = '<option value="">' + escapeHtml(tOr('settings.fontDefault', '默认（跟随系统）')) + '</option>' +
+            (fonts || []).map((f) => '<option value="' + escapeHtml(f) + '">' + escapeHtml(f) + '</option>').join('');
+          if (cur) sel.value = cur;
+        };
+        tian([]);
+        if (sel) {
+          sel.value = st.fontFamily || '';
+          sel.onchange = tongBu;
+        }
+        if (cuXi) { cuXi.value = String(st.fontWeight || 400); cuXi.onchange = tongBu; }
+        if (daXiao) { daXiao.value = String(st.fontSize || 100); daXiao.oninput = tongBu; }
+        void (async () => {
+          try {
+            const r = await window.warmy.listSystemFonts?.();
+            if (r && r.ok) tian(r.fonts);
+            else if (xiaoXi) xiaoXi.textContent = tOr('settings.fontListFail', '系统字体列表读取失败');
+            if (sel) sel.value = st.fontFamily || '';
+          } catch { if (xiaoXi) xiaoXi.textContent = tOr('settings.fontListFail', '系统字体列表读取失败'); }
+        })();
+        $('anNiuAnZhuangZiTi')?.addEventListener('click', async () => {
+          try {
+            const r = await window.warmy.pickFile?.({ filters: [{ name: 'Font', extensions: ['ttf', 'otf', 'ttc'] }] });
+            if (!r || !r.ok || !r.path) return;
+            const ins = await window.warmy.installFont?.({ path: r.path });
+            if (ins && ins.ok) {
+              const r2 = await window.warmy.listSystemFonts?.();
+              if (r2 && r2.ok) tian(r2.fonts);
+              if (sel) sel.value = ins.family || '';
+              tongBu();
+              if (xiaoXi) { xiaoXi.textContent = tOr('settings.fontInstalled', '已安装') + '：' + (ins.family || ''); xiaoXi.style.color = '#1a7f37'; }
+            } else if (xiaoXi) {
+              xiaoXi.textContent = tOr('settings.fontInstallFail', '安装失败') + (ins && ins.error ? ' · ' + ins.error : '');
+              xiaoXi.style.color = '#b91c1c';
+            }
+          } catch { /* noop */ }
+        });
+        // 先应用已存的偏好
+        yingYongWenZiPiHao(st);
+        if (daShu) daShu.textContent = (st.fontSize || 100) + '%';
+      })();
+
       // 语言：设置页下拉必须落盘 + 立即生效（此前没有任何 handler，改了不生效）
       (function bindLanguageSelect() {
         const sel = $('xuanZeYuYan');
@@ -4908,6 +5063,7 @@
         sel.value = state.yuYan;
         sel.onchange = async () => {
           const pick = resolveLocalePack(sel.value);
+          baoHuYuYan(30000);
           try { await loadI18n(pick); } catch { /* noop */ }
           try { await window.warmy.settingsSave({ yuYan: pick }); } catch { /* noop */ }
           try { await window.warmy.setupComplete({ yuYan: pick }); } catch { /* noop */ }
@@ -8587,7 +8743,7 @@
         id,
         ming,
         name: ming,
-        status: 'stopped',
+        status: 'running', // 创建即拉起；真实状态以后续 listInstances 为准
         dutyEligible: true,
         notify: true,
         model: 'deepseek-chat',
@@ -12624,10 +12780,10 @@
     }
     const pick = await pickOnboardingLocale();
     if (pick) {
+      baoHuYuYan(60000);
       await window.warmy.setupComplete({ yuYan: pick }).catch(() => {});
-      if (resolveLocalePack(state.yuYan) !== resolveLocalePack(pick)) {
-        try { await loadI18n(resolveLocalePack(pick)); } catch { /* noop */ }
-      }
+      // 无论 live-preview 是否已切过，确认时都强制再载一次，保证 UI 与选项一致
+      try { await loadI18n(resolveLocalePack(pick)); } catch { /* noop */ }
       await window.warmy.settingsSave({ yuYan: pick }).catch(() => {});
     } else {
       await window.warmy.setupComplete({}).catch(() => {});
@@ -12709,7 +12865,7 @@
       '<div class="yinDaoTi">' + escapeHtml(step.title) + '</div>' +
       '<div class="yinDaoWen">' + escapeHtml(step.body) + '</div>' +
       (step.value ? '<div class="yinDaoJiaZhi">' + escapeHtml(step.value) + '</div>' : '') +
-      (step.tip ? '<a class="yinDaoLianJie" href="' + escapeHtml(step.tipUrl || '#') + '" target="_blank" rel="noreferrer noopener">' + escapeHtml(step.tip) + '</a>' : '') +
+      (step.tip ? '<a class="yinDaoLianJie" href="' + escapeHtml(step.tipUrl || '#') + '" data-yd="tip">' + escapeHtml(step.tip) + '</a>' : '') +
       '<div class="yinDaoDongZuo">' +
         '<button type="button" class="anNiuXiao" data-yd="skip">' + escapeHtml(tOr('guide.skip', '跳过')) + '</button>' +
         (step.btn ? '<button type="button" class="anNiuZhuYao" data-yd="go">' + escapeHtml(step.btn) + '</button>' : '') +
@@ -12718,6 +12874,53 @@
         '</button>' +
       '</div>';
     yinDaoHighlight(step.target);
+    // 外链用**系统默认浏览器**打开，不用内置浏览器
+    bar.querySelectorAll('[data-yd="tip"]').forEach((el) => {
+      el.onclick = (ev) => {
+        ev.preventDefault();
+        const url = el.getAttribute('href') || '';
+        if (url && url !== '#') {
+          try { window.warmy.openExternal?.(url); } catch { /* noop */ }
+        }
+      };
+    });
+    // 只许贴边拖动：按住标题栏拖，松手吸附到最近的边
+    (function bangTuo() {
+      const shouBa = bar.querySelector('.yinDaoHead') || bar;
+      let tuozhuai = null;
+      shouBa.style.cursor = 'move';
+      shouBa.addEventListener('pointerdown', (e) => {
+        if (e.target && e.target.closest && e.target.closest('button')) return;
+        const rect = bar.getBoundingClientRect();
+        tuozhuai = { dx: e.clientX - rect.left, dy: e.clientY - rect.top, w: rect.width, h: rect.height };
+        try { shouBa.setPointerCapture(e.pointerId); } catch { /* noop */ }
+        e.preventDefault();
+      });
+      shouBa.addEventListener('pointermove', (e) => {
+        if (!tuozhuai) return;
+        bar.style.transform = 'none';
+        bar.style.left = Math.max(0, Math.min(window.innerWidth - tuozhuai.w, e.clientX - tuozhuai.dx)) + 'px';
+        bar.style.top = Math.max(0, Math.min(window.innerHeight - tuozhuai.h, e.clientY - tuozhuai.dy)) + 'px';
+        bar.style.right = 'auto';
+      });
+      const songShou = () => {
+        if (!tuozhuai) return;
+        tuozhuai = null;
+        // 贴边吸附：四边取最近
+        const r = bar.getBoundingClientRect();
+        const du = [r.left, window.innerWidth - r.right, r.top, window.innerHeight - r.bottom];
+        const min = Math.min(...du);
+        const bian = du.indexOf(min);
+        bar.style.transition = 'left .18s ease, top .18s ease, right .18s ease, bottom .18s ease';
+        if (bian === 0) { bar.style.left = '8px'; bar.style.top = r.top + 'px'; bar.style.right = 'auto'; bar.style.bottom = 'auto'; }
+        else if (bian === 1) { bar.style.right = '8px'; bar.style.left = 'auto'; bar.style.top = r.top + 'px'; bar.style.bottom = 'auto'; }
+        else if (bian === 2) { bar.style.top = '8px'; bar.style.left = r.left + 'px'; bar.style.bottom = 'auto'; bar.style.right = 'auto'; }
+        else { bar.style.bottom = '8px'; bar.style.top = 'auto'; bar.style.left = r.left + 'px'; bar.style.right = 'auto'; }
+        setTimeout(() => { bar.style.transition = ''; }, 220);
+      };
+      shouBa.addEventListener('pointerup', songShou);
+      shouBa.addEventListener('pointercancel', songShou);
+    })();
     bar.querySelectorAll('[data-yd="skip"]').forEach((b) => {
       b.onclick = () => { yinDaoDone = true; yinDaoHide(); try { window.warmy.setupComplete?.({ guideDone: true }); } catch { /* noop */ } };
     });
@@ -12765,7 +12968,7 @@
     yinDaoSteps = [
       {
         title: tOr('guide.step1.title', '先给 AI 接上一个大脑'),
-        body: tOr('guide.step1.body', '点左侧底部的「设置」→「模型」→ 添加一个你已经拥有 API Key 的供应商（任意供应商都可以）。'),
+        body: tOr('guide.step1.body', '点左侧底部的「设置」→「模型」→ 在「预设供应商」中添加一个你已经拥有 API Key 的供应商 → 填写「名称」「接口地址」和「密钥」→ 点击「拉取模型」→ 确保有成功显示模型。'),
         value: tOr('guide.step1.value', '没有它，牛马没法替你干活。'),
         tip: tOr('guide.step1.tip', '没有 API Key？点这里查看 DeepSeek 的 Key 获取方法'),
         tipUrl: 'https://platform.deepseek.com/api_keys',
@@ -12784,7 +12987,7 @@
       },
       {
         title: tOr('guide.step2.title', '创建一个牛马'),
-        body: tOr('guide.step2.body', '点左侧「我的牛马」→「牛马管理局」（也可以点「我的牛马」列表右上角的牛马管理局图标）→ 点右上角的 + 创建一只牛马。'),
+        body: tOr('guide.step2.body', '点左侧「我的牛马」，再点列表右上角的牛马管理局图标（见下方高亮）→ 点右上角的 + 创建一只牛马。'),
         value: tOr('guide.step2.value', '创建完成后，点开它并给它选默认模型。做完这步，你就有一个能随时差遣的 AI 牛马了。'),
         btn: tOr('guide.step2.btn', '去牛马管理局'),
         pending: tOr('guide.step2.pending', '（还没创建牛马，建好后再点「下一步」。）'),
@@ -12797,9 +13000,9 @@
       },
       {
         title: tOr('guide.step3.title', '现在就能开工了'),
-        body: tOr('guide.step3.body', '点下面的按钮进入它的聊天，在底部输入框里说话，牛马就会替你干活。'),
-        value: tOr('guide.step3.value', '左侧四个入口：项目 = 多牛马协同（可多人指挥）；联系人 = 与人端到端私聊；群聊 = 多人聊天并让 AI 参与；我的牛马 = 单只牛马。'),
-        btn: tOr('guide.step3.btn', '进入牛马聊天'),
+        body: tOr('guide.step3.body', '点下面的「和牛马聊天」按钮，进入后就可以在底部输入框里说话，牛马就会替你干活。'),
+        value: tOr('guide.step3.value', '也可以从左侧导航进入：项目 = 多牛马协同（可多人指挥）；联系人 = 与人端到端私聊；群聊 = 多人聊天并让 AI 参与；我的牛马 = 单只牛马。'),
+        btn: tOr('guide.step3.btn', '和牛马聊天'),
         target: null,
         action: () => {
           const first = (state.instances || [])[0];
@@ -13674,7 +13877,7 @@
         try {
           const s = await window.warmy.settingsGet();
           const weiZhi = s?.settings?.yuYan;
-          if (weiZhi && resolveLocalePack(weiZhi) !== state.yuYan) {
+          if (weiZhi && keYiGengYuYan() && resolveLocalePack(weiZhi) !== state.yuYan) {
             await loadI18n(resolveLocalePack(weiZhi));
           }
         } catch { /* noop */ }
@@ -13707,6 +13910,7 @@
     try {
       const s = await window.warmy.settingsGet();
       if (s?.settings) {
+        state.wenZi = s.settings.wenZi || state.wenZi || {};
         state.themeMode = s.settings.themeMode || 'system';
         state.theme = s.settings.accent || state.theme;
         state.sound = s.settings.sound || state.sound;
@@ -13726,7 +13930,7 @@
         // 供应商列表落盘读回（密钥只问"有没有"，读不回明文）
         await loadProvidersFromSettings();
         // Re-apply persisted yuYan (settingsGet is also used above for boot; ensure UI state matches).
-        if (s.settings.yuYan && resolveLocalePack(s.settings.yuYan) !== state.yuYan) {
+        if (s.settings.yuYan && keYiGengYuYan() && resolveLocalePack(s.settings.yuYan) !== state.yuYan) {
           try { await loadI18n(resolveLocalePack(s.settings.yuYan)); } catch { /* noop */ }
         }
         document.documentElement.style.setProperty('--accent', state.theme);
@@ -13753,6 +13957,7 @@
       /* noop */
     }
     applyThemeMode(state.themeMode);
+    try { yingYongWenZiPiHao(state.wenZi); } catch { /* noop */ }
     applyAvatar();
     try {
       state.globalSecurity = (await window.warmy.securityMode()) || state.globalSecurity;

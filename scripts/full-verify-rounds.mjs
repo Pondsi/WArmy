@@ -141,6 +141,20 @@ function unitChecks() {
   }
   if (!appJs.includes('chainDisabled')) fails.push('model: chainDisabled not persisted from UI');
   if (emTs.includes('pickModelForUrgency(')) fails.push('model: dead pickModelForUrgency still called');
+  // 本轮 10 项专项
+  if (!appJs.includes('yuYanBaoHuDao') || !appJs.includes('keYiGengYuYan')) fails.push('lang: no lock against revert');
+  if (!appJs.includes('openExternal') || !emTs.includes('daKaiWaiBuLianJie')) fails.push('guide: external link not via system browser');
+  if (!appJs.includes('bangTuo')) fails.push('guide: drag-snap missing');
+  if (!appJs.includes('webgpuKa')) fails.push('webgpu: section missing');
+  if (!appJs.includes('model.mgr') || !appJs.includes('modelZiXiang')) fails.push('model: manage-model card missing');
+  if (!appJs.includes('showToast') || !appJs.includes('jianYiToast')) fails.push('toast: missing');
+  if (!appJs.includes("status: 'running'")) fails.push('inst: created not marked running');
+  if (!appJs.includes('yingYongWenZiPiHao') || !appJs.includes('ziTiXuanZe')) fails.push('text: font card missing');
+  if (!emTs.includes('lieBiaoXiTongZiTi') || !emTs.includes('anZhuangZiTi')) fails.push('text: font IPC missing');
+  const cssT = ['app.css','renderer.css'].map((n) => fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/' + n), 'utf8')).join('\n');
+  if (!cssT.includes('.jianYiToast') || !cssT.includes('pointer-events: none')) fails.push('toast: css missing/not click-through');
+  if (!cssT.includes('--fw-ui')) fails.push('text: weight var missing');
+  if (!appJs.includes('和牛马聊天')) fails.push('guide: step3 button label');
   // 工作工具
   if (!work.includes('WORK_TOOL_SECURITY')) fails.push('work-tools: security block missing');
   // dist 同步

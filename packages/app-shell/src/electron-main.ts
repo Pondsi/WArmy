@@ -2,7 +2,7 @@
  * Electron 主进程 — 零原生模块
  * 注意：Windows 中文路径下 fork 子进程可能乱码，memory ipc 先拷到 userData（ASCII）
  */
-import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut, screen, desktopCapturer } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut, screen, desktopCapturer, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -2323,6 +2323,75 @@ chuliIpc('warmy:microsandboxZhuangTai', async () => {
     version: row?.version || null,
     virt,
   };
+});
+
+
+
+/* ── 文字（字体 / 粗细 / 大小）────────────────────────────────────────────
+   法律立场（产品定稿）：**安装包不内置任何字体**（零再分发 ⇒ 零授权风险）。
+   字体来源两条，都合法：
+     1) **系统已装字体**：只「点名使用」，不复制、不打包、不再分发；
+     2) **用户自行安装**：用户把自己有权使用的字体装进本应用（仅存本机 userData）。
+   ─────────────────────────────────────────────────────────────────────── */
+chuliIpc('warmy:lieBiaoXiTongZiTi', () => {
+  try {
+    const dir = process.platform === 'win32'
+      ? [path.join(process.env.windir || 'C:\\Windows', 'Fonts'), path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Windows', 'Fonts')]
+      : process.platform === 'darwin'
+        ? ['/System/Library/Fonts', '/Library/Fonts', path.join(os.homedir(), 'Library', 'Fonts')]
+        : ['/usr/share/fonts', '/usr/local/share/fonts', path.join(os.homedir(), '.fonts')];
+    const jia = new Set<string>();
+    for (const d of dir) {
+      try {
+        for (const f of fs.readdirSync(d)) {
+          if (!/\.(ttf|otf|ttc)$/i.test(f)) continue;
+          // 用文件名做「家族名」近似：去掉扩展名与常见样式后缀
+          const base = f.replace(/\.(ttf|otf|ttc)$/i, '')
+            .replace(/[-_ ]?(regular|bold|italic|light|medium|semibold|black|thin|bolditalic|oblique)$/i, '')
+            .replace(/[-_]+/g, ' ')
+            .trim();
+          if (base && base.length <= 40) jia.add(base);
+        }
+      } catch { /* 目录不可读：跳过 */ }
+    }
+    const list = [...jia].sort((x: string, y: string) => x.localeCompare(y, 'zh-Hans-CN'));
+    return { ok: true, fonts: list.slice(0, 400) };
+  } catch (err) {
+    return { ok: false, error: xiJingCuoWu(err), fonts: [] };
+  }
+});
+
+chuliIpc('warmy:anZhuangZiTi', async (_e, p0?: { path?: string }) => {
+  try {
+    const src = String(p0?.path || '').trim();
+    if (!src || !/\.(ttf|otf|ttc)$/i.test(src)) return { ok: false, error: 'bad-font-file' };
+    if (!fs.existsSync(src)) return { ok: false, error: 'not-found' };
+    const muLu = path.join(app.getPath('userData'), 'fonts');
+    fs.mkdirSync(muLu, { recursive: true });
+    const ming = path.basename(src);
+    const dst = path.join(muLu, ming);
+    fs.copyFileSync(src, dst);
+    // 家族名近似（与列表一致）
+    const jia = ming.replace(/\.(ttf|otf|ttc)$/i, '')
+      .replace(/[-_ ]?(regular|bold|italic|light|medium|semibold|black|thin|bolditalic|oblique)$/i, '')
+      .replace(/[-_]+/g, ' ').trim() || ming;
+    audit?.log('settings.font-installed', { ming, jia });
+    return { ok: true, path: dst, family: jia };
+  } catch (err) {
+    return { ok: false, error: xiJingCuoWu(err) };
+  }
+});
+
+// 用**系统默认浏览器**打开外链（引导里的「获取 API Key」等），不走内置浏览器
+chuliIpc('warmy:daKaiWaiBuLianJie', async (_e, url?: string) => {
+  try {
+    const u = String(url || '').trim();
+    if (!/^https?:\/\//i.test(u)) return { ok: false, error: 'bad-url' };
+    await shell.openExternal(u);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: xiJingCuoWu(err) };
+  }
 });
 
 // ── 全屏取色：截当前屏幕给渲染层点选（浏览器 EyeDropper 出不了窗口） ──

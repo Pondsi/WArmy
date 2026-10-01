@@ -2405,3 +2405,24 @@ body.liaoTianChuangKou #appTi {
 }
 .miYaoYan:hover { background: var(--hover); }
 .miYaoYan.qiYong { color: var(--accent); border-color: var(--accent); }
+
+/* ── 简洁 Toast：无边框 / 半透明 / 点击穿透 / 自毁 ── */
+.jianYiToast {
+  position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
+  z-index: 12000; padding: 10px 18px; border-radius: 8px;
+  background: rgba(0,0,0,0.67); color: #fff;
+  font-size: 13px; line-height: 1.4; letter-spacing: .2px;
+  pointer-events: none; user-select: none;
+  opacity: 1; transition: opacity .22s ease;
+  box-shadow: none; border: none;
+}
+.jianYiToast.out { opacity: 0; }
+
+/* ── 管理模型：三个子项 ── */
+.modelZiXiang { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.modelZiXiang:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
+.modelZiXiang h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.modelLiangLie { display: grid; grid-template-columns: 140px 1fr; gap: 8px; max-width: 520px; }
+
+/* 文字粗细：跟随设置 */
+html { font-weight: var(--fw-ui, 400); }
