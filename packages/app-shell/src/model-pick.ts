@@ -50,6 +50,19 @@ export interface MoXingJueCeJieGuo {
 
 const isSmart = (v: unknown) => !v || v === '__smart__';
 
+/**
+ * 「供应商名 · 模型名」是**界面展示**用的复合标签（管理模型里区分同名模型），
+ * 发给 API 的必须是**纯模型 id** —— 实测把复合串发出去会直接 HTTP 400
+ * （`you passed DeepSeek · deepseek-flash`）。
+ * 统一在发送/决策边界剥掉前缀，历史里已存的复合串也能被吃掉。
+ */
+export function jieMoXingMing(ming: string | undefined | null): string {
+  const s = String(ming || '').trim();
+  if (!s) return '';
+  const i = s.lastIndexOf(' · ');
+  return i >= 0 ? s.slice(i + 3).trim() : s;
+}
+
 /** 启用中的调用链（去掉禁用、去空、去重，保序） */
 export function qiYongLian(chain?: string[], disabled?: string[]): string[] {
   const off = new Set((disabled || []).map((s) => String(s)));
@@ -75,19 +88,21 @@ export function zhiNengTiaoLian(chain: string[], urgency?: string): number {
   return n - 1;                                     // P3 ⇒ 链尾（最省）
 }
 
-/** 决策入口：任何输入都不抛错 */
+/** 决策入口：任何输入都不抛错。**返回的 model 一定是纯模型 id**（复合展示标签会被剥掉） */
 export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
-  const fallback = String(shuRu.fallback || 'deepseek-chat');
+  const fallback = jieMoXingMing(shuRu.fallback || 'deepseek-chat') || 'deepseek-chat';
   const explicit = String(shuRu.explicit || '').trim();
-  if (explicit) return { model: explicit, why: 'explicit', chainIndex: -1 };
+  if (explicit) return { model: jieMoXingMing(explicit), why: 'explicit', chainIndex: -1 };
 
   const disabled = (shuRu.chainDisabled || []).map((s) => String(s));
+  /** 禁用名单里存的可能是复合展示标签，判"是否被禁用"一律按纯模型 id 比对 */
+  const beiJinYong = (m: string) => disabled.some((d) => jieMoXingMing(d) === jieMoXingMing(m));
   const dm = String(shuRu.defaultModel || '');
 
   // 2) 显式默认模型（非「智能」）：必须不在禁用名单里
   if (!isSmart(dm)) {
     const d = dm.trim();
-    if (d && !disabled.includes(d)) return { model: d, why: 'default', chainIndex: -1 };
+    if (d && !beiJinYong(d)) return { model: jieMoXingMing(d), why: 'default', chainIndex: -1 };
   }
 
   // 3) 「智能」→ 调用链 + 紧急度
@@ -98,7 +113,7 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
       ? 'chain-p0p1'
       : (shuRu.urgency === 'P2' ? 'chain-p2' : 'chain-p3');
     const mo = String(lian[idx] ?? '');
-    return { model: mo, why, chainIndex: idx };
+    return { model: jieMoXingMing(mo), why, chainIndex: idx };
   }
 
   // 4) 角色表（同样不许选被禁用的）
@@ -106,7 +121,7 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   const u = String(shuRu.urgency || 'P2');
   const keYong = (m?: string) => {
     const s = String(m || '').trim();
-    return s && !disabled.includes(s) ? s : '';
+    return s && !beiJinYong(s) ? s : '';
   };
   const houXuan = (u === 'P0' || u === 'P1')
     ? [r.duty]
@@ -115,13 +130,14 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
       : [r.summary, r.duty];
   for (const c of houXuan) {
     const m = keYong(c);
-    if (m) return { model: m, why: (u === 'P2' ? 'role-executor' : u === 'P3' ? 'role-summary' : 'role-duty'), chainIndex: -1 };
+    if (m) return { model: jieMoXingMing(m), why: (u === 'P2' ? 'role-executor' : u === 'P3' ? 'role-summary' : 'role-duty'), chainIndex: -1 };
   }
 
   // 5) 兜底：若兜底本身被禁用，且角色表里也没有可用项 ——
   //    **仍然返回兜底**（否则这一轮没法对话），但如实标注 why='fallback-disabled'，
   //    调用方可据此提示用户「这个模型被禁用了，但没有别的可选」。
-  if (disabled.includes(fallback)) {
+  //    禁用名单里存的可能是复合展示标签，这里按纯模型 id 比对。
+  if (disabled.some((d) => jieMoXingMing(d) === fallback)) {
     return { model: fallback, why: 'fallback-disabled', chainIndex: -1 };
   }
   return { model: fallback, why: 'fallback', chainIndex: -1 };

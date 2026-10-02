@@ -230,6 +230,21 @@ contextBridge.exposeInMainWorld('warmy', {
   requestApproval: (Qiu) => ipcRenderer.invoke('warmy:qingQiuPiZhun', Qiu),
   approvalRespond: (id, allowed, scope) => ipcRenderer.invoke('warmy:piZhunHuiYing', id, allowed, scope),
   onApprovalRequest: (cb) => ipcRenderer.on('warmy:piZhunQingQiu', (_e, d) => cb(d)),
+  /** 定时任务：列表 / 删除 / 变更通知 / 到点通知（到点要自动补「定时任务」卡片） */
+  dingShiRenWuLieBiao: () => ipcRenderer.invoke('warmy:dingShiRenWuLieBiao'),
+  dingShiRenWuShanChu: (p) => ipcRenderer.invoke('warmy:dingShiRenWuShanChu', p),
+  onDingShiRenWu: (cb) => ipcRenderer.on('warmy:dingShiRenWu', (_e, d) => cb(d)),
+  onDingShiDaoDian: (cb) => ipcRenderer.on('warmy:dingShiDaoDian', (_e, d) => cb(d)),
+  /** 文件产出：AI 写了文件 ⇒ 自动补「文件产物」卡片 */
+  onWenJianChanSheng: (cb) => ipcRenderer.on('warmy:wenJianChanSheng', (_e, d) => cb(d)),
+  /** 界面「打开」按钮：用系统默认程序打开文件 */
+  daKaiLuJing: (p) => ipcRenderer.invoke('warmy:daKaiLuJing', p),
+  /** 通知音：拿 data URL（用户没选就用内置默认音效） */
+  yinXiaoQu: (p) => ipcRenderer.invoke('warmy:yinXiaoQu', p),
+  /** AI 请求卡（选择/授权）出现时通知界面 */
+  onAiWenTi: (cb) => ipcRenderer.on('warmy:aiWenTi', (_e, d) => cb(d)),
+  /** 在资源管理器里显示文件（导出后看文件在哪） */
+  xianShiWenJianJia: (p) => ipcRenderer.invoke('warmy:xianShiWenJianJia', p),
   /**
    * 跨窗口同步：主窗口与独立会话窗是同一份数据的两个视图。
    *  · chatUpdated：某个会话的日志被追加过 → 正在看它的窗口重新拉一次；

@@ -72,17 +72,24 @@ await sleep(1200);
 let L = await lang();
 check('选英文后界面变英文', L.logo === 'WArmy' && L.sel === 'en-US', JSON.stringify(L));
 
-// ── C. 关键回归：连等 12s（跨过 2 次 5s 轮询）不许变回中文 ──
+// ── C. 关键回归：连等 15s（跨过 3 次 5s 轮询）不许变回中文 ──
+//    旧实现在这里就被轮询拉回（选了英文界面却变回简体中文、选择框还显示英文）；
+//    更晚的"待确认 2 分钟兜底"同样会在几分钟后回退 —— 现在用户选过就本会话不让步，
+//    且**引导语言对话框还开着**时任何自动路径都无权改语言。
 const t0 = Date.now();
 let reverted = null;
 const seen = [];
-while (Date.now() - t0 < 12000) {
+while (Date.now() - t0 < 15000) {
   await sleep(500);
   const s = await lang();
   seen.push(s.logo);
   if (s.logo && s.logo !== 'WArmy') { reverted = { at: Date.now() - t0, s }; break; }
 }
-check('选英文后 12s 内不被自动改回中文（轮询/回读都上锁）', !reverted, reverted ? JSON.stringify(reverted) : `采样 ${seen.length} 次，全部 en`);
+check('选英文后 15s 内不被自动改回中文（轮询/回读都上锁）', !reverted, reverted ? JSON.stringify(reverted) : `采样 ${seen.length} 次，全部 en`);
+{
+  const st = await lang();
+  check('语言选择框仍开着且仍是英文（对话框开着 = 用户在选，不许被改）', st.sel === 'en-US' && st.logo === 'WArmy', JSON.stringify(st));
+}
 
 // ── D. 确认后（真落盘）再观察 7s ──
 await c.evaluate(`(function(){ const b=[...document.querySelectorAll('#duiHuaKuangDongZuoJi button')][0]; if(b) b.click(); return 1; })()`);
@@ -104,6 +111,30 @@ check('确认语言后仍然保持英文', !reverted2, reverted2 ? JSON.stringif
 const hasBar = await c.waitForQuiet(`!!document.getElementById('yinDaoTiao')`, { timeout: 15000 });
 check('首启出现引导条', hasBar);
 if (hasBar) {
+  // ── 引导文案里嵌**真实图标**（设置 / 我的牛马 / 牛马管理局）+ 新文案 ──
+  const step1 = await c.evaluate(`(function(){
+    const bar = document.getElementById('yinDaoTiao');
+    return { text: (bar.innerText || ''), icons: bar.querySelectorAll('.yinDaoTuBiao').length };
+  })()`);
+  check('第 1 步文案里有「设置」的真实图标', step1.icons >= 1, JSON.stringify({ icons: step1.icons, text: step1.text.slice(0, 70) }));
+  check('第 1 步指向「设置 → 模型 → 拉取模型」', /设置|Settings/.test(step1.text) && /模型|Model/.test(step1.text) && /拉取|Fetch/.test(step1.text), step1.text.slice(0, 90));
+  await c.evaluate(`(function(){ const b=[...document.querySelectorAll('#yinDaoTiao [data-yd="next"]')][0]; if(b) b.click(); return !!b; })()`);
+  await sleep(700);
+  const step1b = await c.evaluate(`(function(){
+    const bar = document.getElementById('yinDaoTiao');
+    return { text: (bar.innerText || ''), icons: bar.querySelectorAll('.yinDaoTuBiao').length };
+  })()`);
+  check('第 1 步没做完时点「下一步」：图标不许被 textContent 冲掉', step1b.icons >= 1 && !step1b.text.includes('{icon:'), JSON.stringify({ icons: step1b.icons, raw: step1b.text.includes('{icon:') }));
+  // 第 2 步要真的建供应商/牛马才会推进（步骤有达成条件）——这里直接验**文案与图标占位**是否就位
+  const packs = await c.evaluate(`window.warmy.i18n('zh-CN').then(p => p.strings)`);
+  const b2 = packs && packs['guide.step2.body'] || '';
+  const v2 = packs && packs['guide.step2.value'] || '';
+  check('第 2 步文案是「我的牛马 → 牛马管理局」', /我的牛马/.test(b2) && /牛马管理局/.test(b2), b2.slice(0, 80));
+  check('第 2 步两个导航都带真实图标占位', b2.includes('{icon:niuMa}') && b2.includes('{icon:guanLiJu}'), b2.slice(0, 80));
+  // 产品要求（2026-10-02）：删掉「创建完成后，点开它并给它选默认模型。」—— 默认模型已并入调用链
+  check('第 2 步含「管理模型要正确而有效」且不再提默认模型', /管理模型/.test(b2) && /正确而有效/.test(b2) && !/默认模型/.test(b2), b2.slice(80, 190));
+  check('第 2 步收益行只说「能随时差遣的 AI 牛马」', /能随时差遣/.test(v2) && !/创建完成后/.test(v2), v2);
+
   const region = await c.evaluate(`(function(){
     const bar = document.getElementById('yinDaoTiao');
     const g = (e) => e ? getComputedStyle(e).webkitAppRegion : null;

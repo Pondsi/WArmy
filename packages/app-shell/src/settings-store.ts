@@ -163,6 +163,8 @@ export interface YingYongPeizhi {
   listWidth: number;
   panelWidth: number;
   globalSecurity: 'full' | 'normal' | 'strict';
+  /** 超出权限是否询问（默认询问）：勾选则越权操作弹请求卡等用户同意/拒绝；不勾选直接拒绝 */
+  askOnExceed?: boolean;
   /** 最多 10 个 SMTP 账号 */
   smtpAccounts: SmtpZhanghao[];
   /**
@@ -418,21 +420,49 @@ export class BenDiZhangHuCang {
   }
 }
 
+/**
+ * 画面/外观类设置 —— **单独一个配置文件** `appearance.json`
+ * （产品要求：界面上的设置功能与可改的画面外观各自落到独立配置文件）。
+ * 其余功能设置仍写 `settings.json`。老配置里的这些键会在第一次保存时迁过来。
+ */
+export const APPEARANCE_KEYS = [
+  'themeMode', 'accent', 'wenZi', 'listWidth', 'panelWidth', 'autoScrollChat',
+] as const;
+
 export class PeizhiCang {
   constructor(private file: string) {}
 
+  /** 外观配置文件：与功能设置同目录、不同文件 */
+  private get waiGuanFile(): string {
+    return path.join(path.dirname(this.file), 'appearance.json');
+  }
+
+  private duJson(p: string): Record<string, unknown> {
+    try { return JSON.parse(fs.readFileSync(p, 'utf8')) as Record<string, unknown>; } catch { return {}; }
+  }
+
   load(): YingYongPeizhi {
-    try {
-      return { ...defaults(), ...JSON.parse(fs.readFileSync(this.file, 'utf8')) };
-    } catch {
-      return defaults();
+    const ji = { ...defaults(), ...this.duJson(this.file) } as unknown as Record<string, unknown>;
+    const wai = this.duJson(this.waiGuanFile);
+    for (const k of APPEARANCE_KEYS) {
+      if (wai[k] !== undefined) ji[k] = wai[k];
     }
+    return ji as unknown as YingYongPeizhi;
   }
 
   save(s: Partial<YingYongPeizhi>): YingYongPeizhi {
     const next = { ...this.load(), ...s };
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    fs.writeFileSync(this.file, JSON.stringify(next, null, 2));
+    const dir = path.dirname(this.file);
+    fs.mkdirSync(dir, { recursive: true });
+    // 按「功能 / 画面」拆成两个文件写；外观键只出现在 appearance.json（settings.json 里不再留副本）
+    const wai: Record<string, unknown> = {};
+    const gong: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(next as Record<string, unknown>)) {
+      if ((APPEARANCE_KEYS as readonly string[]).includes(k)) wai[k] = v;
+      else gong[k] = v;
+    }
+    fs.writeFileSync(this.file, JSON.stringify(gong, null, 2));
+    fs.writeFileSync(this.waiGuanFile, JSON.stringify(wai, null, 2));
     return next;
   }
 }
@@ -449,6 +479,7 @@ function defaults(): YingYongPeizhi {
     listWidth: 160,
     panelWidth: 300,
     globalSecurity: 'normal',
+    askOnExceed: true,
     smtpAccounts: [],
     skillScanDirs: [],
     pluginScanDirs: [],

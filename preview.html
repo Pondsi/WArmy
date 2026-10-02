@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>WArmy 本轮改动预览（聊天状态 / 思考 / 时间戳 / 模型卡 / 文字）</title>
+<link rel="stylesheet" href="preview.css"/>
+</head>
+<body>
+<header class="top">
+  <div class="brand">WArmy · 本轮界面改动预览</div>
+  <div class="hint">给浏览器直接打开的预览页（产品本体是 Electron 桌面应用；仓库根目录的 index.html 是原有移动端着陆页，未改动）。</div>
+</header>
+
+<main class="grid">
+  <!-- 1. 聊天：右对齐 / 悬停时间 / 跨时段分隔 / 思考过程 / 进行中动态小字 -->
+  <section class="card">
+    <h2>聊天区</h2>
+    <p class="dim">我方消息右侧对齐、文字色随气泡背景自动变（黑白灰分级）；悬停气泡看完整时间；跨小时/跨日插入时间分隔；思考过程可折叠；下方是「进行中」动态小字（含已用秒数）。</p>
+    <div class="chat">
+      <div class="sep">10月1日 09:12</div>
+      <div class="msg them" title="2026-10-01 09:12:30">
+        <div class="av">牛</div>
+        <div class="wrap">
+          <div class="name">牛马1号</div>
+          <details class="think"><summary>思考过程</summary><pre>用户想知道我是谁，并让我在桌面写一个 txt。
+先确认身份，再决定文件落在哪：工作区是隔离目录，写完要在界面里告诉用户路径。</pre></details>
+          <div class="bubble">我是「牛马1号」。文件我已经写好了。</div>
+        </div>
+      </div>
+      <div class="sep">11:40</div>
+      <div class="msg wo" title="2026-10-01 11:40:05">
+        <div class="wrap"><div class="bubble">帮我看看这个</div></div>
+        <div class="av me">我</div>
+      </div>
+      <div class="busy" id="busyLine">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="wen" id="busyText">正在思考…</span>
+        <span class="miao" id="busySec">0s</span>
+      </div>
+      <div class="controls">
+        <button id="btnBusy">模拟「发出去」</button>
+        <button id="btnReset">重置</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. 管理模型：智能模式 + 调用链 + 思考级别 + 小弟数量 -->
+  <section class="card">
+    <h2>管理模型（牛马管理局）</h2>
+    <p class="dim">「默认模型」已并入调用链：勾「智能模式」由系统安排且不展开列表；取消勾选则列出模型，<b>第一个未禁用</b>的挂「默认模型」标签。</p>
+    <label class="row"><input type="checkbox" id="smart"/> 智能模式 <span class="dim">勾选后由系统自动安排调用链</span></label>
+    <div id="chain"></div>
+    <h3>默认思考级别</h3>
+    <div class="row">
+      <input type="range" id="think" min="0" max="4" step="1" value="0" style="flex:1"/>
+      <span class="tag" id="thinkLabel">自动</span>
+    </div>
+    <p class="dim">模型不支持所选档位时自动降级为「自动」，并在回复开头标注。</p>
+    <h3>小弟数量</h3>
+    <select id="xiaoDi">
+      <option value="auto">自适应</option>
+      <option>0</option><option>1</option><option>2</option><option>3</option>
+      <option>4</option><option>6</option><option>8</option>
+    </select>
+  </section>
+
+  <!-- 3. 文字设置 -->
+  <section class="card">
+    <h2>文字（设置 → 界面）</h2>
+    <p class="dim">字体列表现在给的是<b>家族名</b>（改了真的生效）；粗细是滑块（可细可粗 100–900）；点「确定」生效。</p>
+    <label class="col">字体
+      <select id="font">
+        <option value="">默认（跟随系统）</option>
+        <option>Segoe UI</option>
+        <option>Microsoft YaHei</option>
+        <option>Arial</option>
+      </select>
+    </label>
+    <label class="col">粗细 <span class="dim" id="fwLabel">正常</span>
+      <input type="range" id="fw" min="100" max="900" step="50" value="400"/>
+    </label>
+    <label class="col">大小 <span class="dim" id="fsLabel">100%</span>
+      <input type="range" id="fs" min="80" max="160" step="5" value="100"/>
+    </label>
+    <div class="row"><button class="primary" id="fontOk">确定</button><span class="dim" id="fontTip">改完点「确定」后生效。</span></div>
+    <div class="previewText" id="fontPreview">预览文字：让 AI 成为你的无限牛马</div>
+  </section>
+
+  <!-- 4. 前景色随背景（主题色按钮/图标统一） -->
+  <section class="card">
+    <h2>前景色随背景变（黑白灰分级）</h2>
+    <p class="dim">主题色底上的文字/图标不再一会儿白一会儿黑：按背景亮度自动挑前景色。</p>
+    <div class="row" style="flex-wrap:wrap;gap:8px">
+      <button class="primary">主题色按钮</button>
+      <span class="badge">默认模型</span>
+      <button>普通按钮</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <input type="color" id="accent" value="#a78567"/>
+      <span class="dim">拖动换主题色，按钮/标签上的字自动变深浅</span>
+    </div>
+  </section>
+
+  <!-- 5. 右栏动态卡片 -->
+  <section class="card">
+    <h2>右栏卡片（自动添加 / 自动补回）</h2>
+    <p class="dim">定时任务到点、或有文件生成时，卡片会自动出现；即使被关掉也会在事件发生时补回来。</p>
+    <div class="panelBox">
+      <div class="panelCard">
+        <div class="panelTitle">定时任务</div>
+        <div class="dim">每天 09:00 · 下次 10月2日 09:00<br/>每天早上给我一份日程提醒</div>
+      </div>
+      <div class="panelCard">
+        <div class="panelTitle">文件产物</div>
+        <div class="dim">工作区：&lt;用户数据目录&gt;/workspace/inst-…</div>
+        <div class="fileRow"><span>Desktop/测试文本.txt</span><span class="dim">37B</span><button>打开</button></div>
+      </div>
+    </div>
+    <div class="controls"><button id="btnPanel">模拟「定时任务到点」补卡片</button></div>
+    <div class="panelBox" id="panelDemo"></div>
+  </section>
+</main>
+
+<script src="preview.js"></script>
+</body>
+</html>

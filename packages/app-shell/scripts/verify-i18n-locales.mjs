@@ -240,6 +240,30 @@ check('en-US cattle.biaoTi = Workhorses', packs['en-US']['cattle.biaoTi'] === 'W
 check('en-US no My Agents in nav.singleAi', packs['en-US']['nav.singleAi'] !== 'My Agents');
 check('ja nav.singleAi not English My Agents', packs['ja']['nav.singleAi'] !== 'My Agents');
 
+// ── 键值质量：新增的界面状态键必须 10 包同集且非空 ──
+{
+  const busyKeys = ['chat.busy.1', 'chat.busy.2', 'chat.busy.8', 'chat.busy.done', 'chat.busy.still', 'chat.busy.fail'];
+  for (const k of busyKeys) {
+    const missing = Object.keys(packs).filter((loc) => !String(packs[loc][k] || '').trim());
+    check(`所有语言包都有非空的 ${k}`, missing.length === 0, missing.join(',') || 'ok');
+  }
+  const empties = [];
+  for (const loc of Object.keys(packs)) {
+    for (const [k, v] of Object.entries(packs[loc])) {
+      if (v === '' || v === null || v === undefined) empties.push(`${loc}:${k}`);
+    }
+  }
+  check('没有任何语言包存在空值', empties.length === 0, empties.slice(0, 8).join(',') || 'ok');
+  // 引导文案里的图标占位符必须每包都在（图标由渲染层替换，翻译里保持纯文本）
+  for (const loc of Object.keys(packs)) {
+    const b2 = String(packs[loc]['guide.step2.body'] || '');
+    if (!b2.includes('{icon:niuMa}') || !b2.includes('{icon:guanLiJu}')) {
+      check(`${loc} guide.step2.body 含图标占位符`, false, b2.slice(0, 80));
+    }
+  }
+  check('所有语言包的 guide.step2.body 都含图标占位符', true);
+}
+
 console.log(`\n==== i18n self-check: ${pass} ok / ${fail} FAIL ====\n`);
 if (fail) {
   console.log('Failures:', JSON.stringify(failures, null, 2));

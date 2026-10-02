@@ -59,6 +59,7 @@ const GATES_FAST = [
 const GATES_ELECTRON = [
   E('verify-ui-layout.mjs'),
   E('verify-firstrun-ui.mjs'),
+  E('verify-busy-toggle.mjs'),
   E('verify-runtime-errors.mjs'),
   E('verify-chat-window.mjs'),
   E('verify-ipc-probe.mjs'),
@@ -134,12 +135,12 @@ function unitChecks() {
   // 主进程
   if (!/process\.on\('uncaughtException'/.test(emTs)) fails.push('main: uncaughtException not handled');
   if (!huiYongWork(emTs)) fails.push('main: work tools not wired');
-  // 小弟必须能干活，且不能再生小弟
+  // 小弟必须能干活，且不能再生小弟（以 spawn 登记点为锚，别被注释里的名字带偏）
   {
-    const i = emTs.indexOf('spawn_subagent');
-    const seg = i >= 0 ? emTs.slice(i, i + 2600) : '';
+    const i = emTs.indexOf('chat.xiao-di-spawn');
+    const seg = i >= 0 ? emTs.slice(Math.max(0, i - 1800), i + 1800) : '';
     if (!seg.includes('workToolSpecs')) fails.push('subagent work tools: 小弟没有文件工具');
-    if (seg.includes('xiaoDiToolSpecs')) fails.push('subagent work tools: 小弟又派小弟');
+    if (seg.includes('xiaoDiToolSpecs()')) fails.push('subagent work tools: 小弟又派小弟');
     if (!/zuiDaLunShu:\s*4/.test(seg)) fails.push('subagent work tools: 轮数过小');
   }
   if (!appJs.includes('chainDisabled')) fails.push('model: chainDisabled not persisted from UI');
@@ -179,6 +180,141 @@ function unitChecks() {
     if (!/id="peiZhiNeiRong"/.test(appJs) || !/peiZhiBuJu/.test(appJs)) fails.push('settings: layout container missing');
     if (!appJs.includes('<!-- WebGPU 测试与模型无关，已挪到「功能」分区（见下方 #webgpuKa） -->')) fails.push('settings: webgpu move comment lost');
     void tail;
+  }
+  // ── 本轮 11 项专项 ──
+  // 1) 语言：用户选过就本会话不让步（旧的 2 分钟兜底过期是"几分钟后又跳回"的真凶）
+  if (appJs.includes('yuYanDaiQueRenZhi')) fails.push('lang: 过期兜底又回来了（待确认必须粘住）');
+  if (!appJs.includes('yuYanDuiHuaKuanKaiZhe')) fails.push('lang: 引导语言对话框打开时不许自动改语言');
+  if (!appJs.includes('落盘回读校验') && !appJs.includes('落盘未跟上用户选择')) fails.push('lang: 选完语言没有回读校验');
+  // 9) 模型名必须剥成纯 id（复合展示标签发出去是 HTTP 400）
+  if (!appJs.includes('jieMoXingMing')) fails.push('model: 复合标签剥前缀未接入渲染层/主进程');
+  if (!emTs.includes('jieMoXingMing')) fails.push('model: 主进程未接入 jieMoXingMing');
+  // 8) 同一句话显示两遍：角色必须归一（wo/user、them/assistant）
+  if (!emTs.includes('guiYiJiaoSe')) fails.push('chat: 角色未归一（会重复显示）');
+  if (!appJs.includes("m.role === 'user' || m.role === 'wo'")) fails.push('chat: 合并时未认 wo/them 两套角色名');
+  // 10) 聊天进行中的动态小字
+  if (!appJs.includes('yunXingZhuangTaiKai') || !appJs.includes('yunXingZhuangTaiGuan')) fails.push('busy: 进行中动态小字缺失');
+  if (!zh['chat.busy.1'] || !zh['chat.busy.done']) fails.push('busy: i18n 键缺失');
+  if (!zh['chat.busy.still'] || !zh['chat.busy.fail']) fails.push('busy: 长任务/失败态文案缺失');
+  if (!appJs.includes('yunXingMiao')) fails.push('busy: 已用秒数缺失');
+  if (!appJs.includes('yunXingHuiHua')) fails.push('busy: 未按会话隔离');
+  if (!cssT.includes('yunXingTan') || !cssT.includes('prefers-reduced-motion')) fails.push('busy: 打字点动画/减弱动效缺失');
+  // 2) 发送按钮进行中
+  if (!appJs.includes('faSongZhong') || !cssT.includes('faSongZhong')) fails.push('send: 进行中状态缺失');
+  // 3) 拉取失败的「重试」
+  if (!appJs.includes('data-retry') || !zh['common.retry']) fails.push('fetch: 失败后无重试入口');
+  // 4) 启动/停止结果反馈
+  if (!appJs.includes('showToast(inst.status')) fails.push('inst: 启停后无 Toast 反馈');
+  // 5) 渲染层写入口也剥模型复合标签
+  if (!appJs.includes('jieMoXingMing')) fails.push('model: 渲染层未剥复合标签');
+  // 6) 导出角色两套命名都要认
+  if (!emTs.includes("xiaoXi.role === 'user'")) fails.push('export: 角色归一缺失');
+  // 7) 图标按钮无障碍名称跟随标题
+  if (!appJs.includes("setAttribute('aria-label'")) fails.push('a11y: 图标按钮缺 aria-label 同步');
+  // 3) 拉取模型动画至少 1.7s
+  if (!appJs.includes('1700')) fails.push('fetch: 动画没有 1.7s 下限');
+  if (!cssT.includes('.laQuZhuan') || !cssT.includes('.laQuJinDu')) fails.push('fetch: 动画样式缺失');
+  // 2/4/5/7) 引导卡真实图标 + 新文案
+  if (!appJs.includes('YIN_DAO_TU_BIAO') || !appJs.includes('yinDaoTuBiao')) fails.push('guide: 真实图标缺失');
+  if (!cssT.includes('.yinDaoTuBiao')) fails.push('guide: 图标样式缺失');
+  if (!appJs.includes('{icon:settings}') || !appJs.includes('{icon:niuMa}') || !appJs.includes('{icon:guanLiJu}')) fails.push('guide: 图标占位符缺失');
+  if (!String(zh['guide.step2.body'] || '').includes('牛马管理局')) fails.push('guide: 第2步未指向 牛马管理局');
+  if (!String(zh['guide.step2.value'] || '').includes('能随时差遣')) fails.push('guide: 第2步收益行不对');
+  // 6) 启动/停止单飞
+  if (!appJs.includes('instanceToggleBusy')) fails.push('inst: 启动/停止没有单飞保护');
+  // ── 本轮（2026-10-01 第二批）专项 ──
+  // 13) 安全授权标签：键名必须是 full（写成 Quan 会让「完全授权」显示成「常规授权」）
+  if (!appJs.includes("full: 'chat.securityFull'") || !appJs.includes("full: 'settings.securityFullDesc'")) fails.push('sec: 完全授权标签键名不对');
+  if (appJs.includes("Quan: 'chat.securityFull'") || appJs.includes("Quan: 'settings.securityFullDesc'")) fails.push('sec: 过期的 Quan 键还在');
+  // 8/20) 聊天：右对齐 / 悬停时间 / 时间分隔 / 思考过程
+  if (!appJs.includes('wanZhengShiJian') || !appJs.includes('kuaShiJianDian')) fails.push('chat: 时间戳/分隔缺失');
+  if (!appJs.includes('siKaoKuai')) fails.push('chat: 思考过程块缺失');
+  if (!cssT.includes('text-align: right')) fails.push('chat: 我方消息未右对齐');
+  // 21) 思考级别：管理模型滑块 + 聊天框覆盖 + 降级标注
+  if (!appJs.includes('THINK_STOPS') || !appJs.includes('iThinkLevel')) fails.push('think: 思考级别未接通');
+  if (!emTs.includes('siKaoCanShu') || !emTs.includes('jiangJiTiShi')) fails.push('think: 主进程未做降级标注');
+  if (!zh['chat.thinkDowngraded'] || !zh['model.think.auto']) fails.push('think: i18n 键缺失');
+  // 6) 智能模式合并默认模型
+  if (!appJs.includes('iSmartMoXing') || !appJs.includes('lianMoRenMoXing')) fails.push('model: 智能模式/默认模型合并缺失');
+  if (!zh['model.smart']) fails.push('model: 智能模式文案缺失');
+  // 5) 两列选择器：左侧未选右侧为空
+  if (!appJs.includes('x.id === provPick.value) || null')) fails.push('model: 左侧未选时右侧未清空');
+  // 18) 字体：家族名 + 粗细滑块 + 确定
+  if (!emTs.includes('InstalledFontCollection')) fails.push('font: 未取系统家族名');
+  if (!appJs.includes('anNiuWenZiQueDing')) fails.push('font: 缺确定按钮');
+  // 3) MiMo 预设（实测端点）
+  if (!appJs.includes('api.xiaomimimo.com')) fails.push('provider: MiMo 预设缺失');
+  // 1/2) 配置拆分：功能设置 / 画面外观分文件
+  if (!ss.includes('APPEARANCE_KEYS') || !ss.includes('appearance.json')) fails.push('config: 外观未拆独立配置文件');
+  // 10) 截图按钮真功能
+  if (!appJs.includes('captureScreen')) fails.push('shot: 截图按钮未接真功能');
+  if (!emTs.includes('screenshots')) fails.push('shot: 截图未落盘');
+  // 12/15/22) 宿主工具 + 定时任务/文件卡片
+  if (!emTs.includes('hostToolSpecs') || !emTs.includes('open_path')) fails.push('host: 打开文件/浏览器工具缺失');
+  if (!emTs.includes('dingShiRenWuJi') || !appJs.includes('queBaoKaPian')) fails.push('panel: 定时任务卡片缺失');
+  // 14) 身份强制注入
+  if (!emTs.includes('llm.identityLine') || !appJs.includes('ming: inst0')) fails.push('identity: 名字未强制注入');
+  // 16) 导出后在资源管理器里显示
+  if (!appJs.includes('xianShiWenJianJia')) fails.push('export: 导出后未显示文件位置');
+  // 23) 聊天文字随背景变色（黑白灰分级）
+  if (!appJs.includes('wenZiYanSeBeiJing') || !appJs.includes('tongBuBeiJingWenZi')) fails.push('contrast: 文字色未随背景计算');
+  if (!cssT.includes('--me-bubble-ink') || !cssT.includes('--them-bubble-ink')) fails.push('contrast: 气泡文字色变量缺失');
+  if (/\.xiaoXi\.wo \.bubble \{[^}]*color:\s*#111\s*;/s.test(cssT)) fails.push('contrast: 我方气泡仍写死黑字');
+  // 24) 小弟数量（自适应 / 手动）
+  if (!appJs.includes('iXiaoDiShu') || !appJs.includes('xiaoDiShuLiang')) fails.push('xiaoDi: 小弟数量选项缺失');
+  if (!emTs.includes('xiaoDiShangXian') || !emTs.includes('yiPaiXiaoDi')) fails.push('xiaoDi: 主进程未按上限派小弟');
+  if (!zh['model.xiaoDi']) fails.push('xiaoDi: i18n 键缺失');
+  // ── 本轮（第三批）专项 ──
+  // 1/13) 最高信念（agents.md）+ 我的名字强制注入
+  if (!emTs.includes('agents.md') || !emTs.includes('zuiGaoXinNianShe')) fails.push('belief: agents.md 未落地');
+  if (!emTs.includes('最高信念·最高优先级')) fails.push('belief: 未强制注入到每次请求');
+  if (!appJs.includes('zuiGaoXinNianTi') || !zh['wo.belief']) fails.push('belief: 我的页卡片/i18n 缺失');
+  if (!emTs.includes('llm.userLine') || !emTs.includes('dangQianYongHuMing')) fails.push('identity: 我的名字未注入');
+  // 3) 预设：默认只有 DeepSeek；MiMo 在下拉里
+  if (/PROVIDER_DEFAULTS[\s\S]{0,400}?mimo/.test(appJs)) fails.push('provider: 默认预置里不该有 mimo');
+  if (!appJs.includes("id: 'mimo'")) fails.push('provider: 预设下拉里缺 mimo');
+  // 6) 思考级别 8 档 + 按模型档位比例映射
+  if (!/THINK_STOPS = \['off', 'l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'auto'\]/.test(appJs)) fails.push('think: 8 档命名不对');
+  if (!emTs.includes('siKaoQiangDu') || !emTs.includes('yingSheDangWei') || !emTs.includes('listModelsDetailed')) fails.push('think: 模型档位映射未接通');
+  if (!zh['model.think.l6'] || !zh['model.think.off']) fails.push('think: 8 档 i18n 缺失');
+  // 7/24) 思考过程展开折叠 + Markdown 渲染
+  if (!appJs.includes('siKaoKai') || !appJs.includes("' open'")) fails.push('think: 思考过程未按回答状态展开/折叠');
+  if (!appJs.includes('mdHtml') || !cssT.includes('.bubble.md .mdP')) fails.push('md: Markdown 渲染缺失');
+  // 21) 音效：内置默认 + 播放 + 触发规则
+  if (!emTs.includes("'warmy:yinXiaoQu'") || !appJs.includes('chuanBoYinXiao')) fails.push('sound: 通知音未接通');
+  if (!fs.existsSync(path.join(root, 'packages/app-shell/src/renderer/sounds/complete.wav'))) fails.push('sound: 内置完成音缺失');
+  if (!fs.existsSync(path.join(root, 'packages/app-shell/src/renderer/sounds/request.wav'))) fails.push('sound: 内置请求音缺失');
+  if (!fs.existsSync(path.join(root, 'packages/app-shell/src/renderer/sounds/error.mp3'))) fails.push('sound: 内置错误音缺失');
+  if (!/kind !== 'internal' && kind !== 'extgroup'/.test(appJs)) fails.push('sound: 群聊不该发音效');
+  // 16/17/20/22) 请求卡 + 越权询问 + 完全授权 + 带「其他」的选择卡
+  if (!appJs.includes('secWenXun') || !appJs.includes('askOnExceed')) fails.push('auth: 超出权限是否询问缺失');
+  if (!emTs.includes('qingQiuKaPian') || !emTs.includes('dengDaiKaPian')) fails.push('auth: 请求卡阻塞等待缺失');
+  if (!work.includes("name: 'ask_user'") || !work.includes('HOST_TOOL_NAMES')) fails.push('auth: ask_user 工具缺失');
+  if (!work.includes('kuaiQuan')) fails.push('auth: 完全授权未贯穿工作工具');
+  // 8/12) 文件产出并入项目文件卡 + 上传预览/路径气泡
+  if (appJs.includes('mianBanGongZuoWenJianKuai')) fails.push('files: 旧的「文件产物」卡还在');
+  if (!appJs.includes("queBaoKaPian('xiangMuWenJianJiKuai')") || !appJs.includes('data-reveal')) fails.push('files: 未并入项目文件卡/缺文件夹图标');
+  if (!appJs.includes('wenJianYuLan') || !appJs.includes('attachSuoLue')) fails.push('upload: 图片预览/文件名缺失');
+  // 11) 截图：先藏窗口 + 框选 + 右键取消
+  if (!emTs.includes('win.hide()') || !appJs.includes('jieTuKuangXuan') || !appJs.includes('contextmenu')) fails.push('shot: 截图未重做（藏窗口/框选/右键取消）');
+  // 23) 导出字段名
+  if (!appJs.includes('biaoTi: xianShiMing')) fails.push('export: 导出仍未发 biaoTi');
+  // 2) 粗细/大小同一行；5) 小弟到 50
+  if (!appJs.includes('ziTiCuXiShu') || !/ziTiDaXiao[\s\S]{0,200}max="160"/.test(appJs)) fails.push('font: 粗细/大小同行缺失');
+  if (!appJs.includes('[0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 30, 40, 50]')) fails.push('xiaoDi: 选项未到 50');
+  // 9) 前景色多级灰阶（不止黑白两档）
+  if (!/y > 0\.82/.test(appJs) || !/return '#3d3d3d'/.test(appJs)) fails.push('contrast: 仍只有黑白两档');
+  /**
+   * 主进程 TDZ：`chuliIpc` 内部要用 `IPC_ALIASES`（const，后面才初始化）。
+   * 任何 chuliIpc 出现在它之前 ⇒ 启动即崩 `Cannot access 'IPC_ALIASES' before initialization`
+   *（2026-10-02 真事故：两个新 IPC 插得太靠前）。
+   */
+  {
+    const lines = emTs.split('\n');
+    const aliasLine = lines.findIndex((l) => l.startsWith('const IPC_ALIASES'));
+    const badIdx = aliasLine < 0 ? -1 : lines.findIndex((l, i) => i < aliasLine && l.includes('chuliIpc('));
+    if (aliasLine < 0) fails.push('main: IPC_ALIASES 定义丢失');
+    else if (badIdx >= 0) fails.push(`main: chuliIpc 出现在 IPC_ALIASES 之前（第 ${badIdx + 1} 行）⇒ 启动会崩`);
   }
   // 工作工具
   if (!work.includes('WORK_TOOL_SECURITY')) fails.push('work-tools: security block missing');

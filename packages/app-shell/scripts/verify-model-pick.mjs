@@ -100,6 +100,23 @@ console.log('\n[6] 边界：任何输入都不抛错');
   check('6 组怪输入全部返回合法 model', ok);
 }
 
+console.log('\n[7] 复合展示标签「供应商 · 模型」必须剥成纯模型 id（否则 HTTP 400）');
+{
+  check('jieMoXingMing 剥前缀', M.jieMoXingMing('DeepSeek · deepseek-flash') === 'deepseek-flash', M.jieMoXingMing('DeepSeek · deepseek-flash'));
+  check('jieMoXingMing 保留纯名', M.jieMoXingMing('deepseek-flash') === 'deepseek-flash');
+  check('jieMoXingMing 空入参', M.jieMoXingMing('') === '' && M.jieMoXingMing(null) === '');
+  const a = M.jueCeMoXing({ defaultModel: 'DeepSeek · deepseek-flash' });
+  check('默认模型是复合标签 ⇒ 返回纯 id', a.model === 'deepseek-flash', a);
+  const b = M.jueCeMoXing({ explicit: 'DeepSeek · deepseek-v4-pro' });
+  check('显式指定也是复合标签 ⇒ 返回纯 id', b.model === 'deepseek-v4-pro', b);
+  const c = M.jueCeMoXing({ defaultModel: '__smart__', chain: ['DeepSeek · deepseek-flash', 'DeepSeek · deepseek-v4-pro'], urgency: 'P1' });
+  check('调用链里是复合标签 ⇒ 返回纯 id', c.model === 'deepseek-flash', c);
+  const d = M.jueCeMoXing({ defaultModel: 'DeepSeek · deepseek-flash', chainDisabled: ['DeepSeek · deepseek-flash'], fallback: 'deepseek-chat' });
+  check('禁用名单里也是复合标签 ⇒ 判定为被禁用，走兜底', d.why === 'fallback' && d.model === 'deepseek-chat', d);
+  const e = M.jueCeMoXing({ fallback: 'DeepSeek · deepseek-chat' });
+  check('兜底本身是复合标签 ⇒ 也剥成纯 id', e.model === 'deepseek-chat', e);
+}
+
 console.log(`\n==== verify-model-pick: ${pass} ok / ${fail} FAIL ====`);
 if (fail) console.log('失败项：\n - ' + failures.join('\n - '));
 process.exit(fail ? 1 : 0);

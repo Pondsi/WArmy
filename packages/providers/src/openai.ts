@@ -121,6 +121,40 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
       return [];
     }
   }
+
+  /**
+   * **带元数据**的模型清单：有些端点（如 OpenRouter）会在每个模型上给
+   * `supported_parameters`（含 `reasoning` / `reasoning_effort` / `include_reasoning`）
+   * 或 `reasoning` 字段 —— 这是唯一能"问出该模型支持哪些思考档位"的官方口径。
+   * 拿不到就返回 `thinkLevels: []`（由宿主按名称启发式 + 失败降级处理）。
+   */
+  async listModelsDetailed(signal?: AbortSignal): Promise<Array<{ id: string; thinkLevels: string[]; supportsThinking: boolean }>> {
+    try {
+      const json = await qingQiuJson<{ data?: Array<Record<string, unknown>> }>(
+        pinJieUrl(this.baseURL, 'models'),
+        { method: 'GET', signal, headers: this.headers() },
+        this.auth
+      );
+      return (json.data || []).map((m) => {
+        const id = String((m as { id?: unknown }).id || '');
+        const sp = Array.isArray((m as { supported_parameters?: unknown }).supported_parameters)
+          ? ((m as { supported_parameters: unknown[] }).supported_parameters.map((x) => String(x)))
+          : [];
+        const re = (m as { reasoning?: unknown }).reasoning;
+        const youReasoning = sp.some((p) => /reason/i.test(p)) || !!re;
+        // 有的端点直接给档位清单：reasoning: { supported_efforts: [...] } 或 reasoning_efforts: [...]
+        let levels: string[] = [];
+        const raw = (re as { supported_efforts?: unknown; efforts?: unknown } | undefined);
+        const cand = (Array.isArray((m as { reasoning_efforts?: unknown }).reasoning_efforts)
+          ? (m as { reasoning_efforts: unknown[] }).reasoning_efforts
+          : (Array.isArray(raw?.supported_efforts) ? raw?.supported_efforts : raw?.efforts)) as unknown;
+        if (Array.isArray(cand)) levels = cand.map((x) => String(x)).filter(Boolean);
+        return { id, thinkLevels: levels, supportsThinking: youReasoning };
+      });
+    } catch {
+      return [];
+    }
+  }
 }
 
 /** DeepSeek 预设工厂（OpenAI 兼容） */

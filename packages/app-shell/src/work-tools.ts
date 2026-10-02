@@ -79,10 +79,15 @@ export interface WorkToolResult {
  * 把一个"用户/模型给的相对路径"解析成 base 内的绝对路径。
  * 任何越界、绝对路径、非法字符都抛 `workspace-escape`（调用方转成文本回给模型）。
  */
-export function resolveInside(baseDir: string, rel: unknown): string {
+export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false): string {
   const raw = String(rel ?? '').trim();
   if (!raw) throw new Error('empty-path');
   if (raw.includes('\0')) throw new Error('nul-byte');
+  /**
+   * **完全授权**（用户显式选的）：允许绝对路径、允许工作区外 —— 此时 AI 可以直接操作本机。
+   * 但仍然不许 NUL、不许空路径；且"做什么"始终受最高信念/戒律约束（策略层，不在这里）。
+   */
+  if (kuaiQuan) return path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(path.resolve(baseDir), raw);
   // Windows 盘符 / UNC / POSIX 绝对路径：一律拒绝（工作区内只能用相对路径）
   if (path.isAbsolute(raw) || /^[a-zA-Z]:/.test(raw) || raw.startsWith('\\\\') || raw.startsWith('/')) {
     throw new Error('absolute-path-not-allowed');
@@ -111,10 +116,10 @@ function fail(tool: string, err: unknown, p?: string): WorkToolResult {
 }
 
 /** 列目录 */
-export function workListDir(baseDir: string, args: { path?: string }): WorkToolResult {
+export function workListDir(baseDir: string, args: { path?: string }, kuaiQuan = false): WorkToolResult {
   const tool = 'list_dir';
   try {
-    const dir = resolveInside(baseDir, args && args.path ? args.path : '.');
+    const dir = resolveInside(baseDir, args && args.path ? args.path : '.', kuaiQuan);
     if (!fs.existsSync(dir)) return fail(tool, new Error('not-found'), relOf(baseDir, dir));
     if (!fs.statSync(dir).isDirectory()) return fail(tool, new Error('not-a-directory'), relOf(baseDir, dir));
     const names = fs.readdirSync(dir).slice(0, WORK_TOOL_LIMITS.maxListEntries);
@@ -143,10 +148,10 @@ export function workListDir(baseDir: string, args: { path?: string }): WorkToolR
 }
 
 /** 读文件 */
-export function workReadFile(baseDir: string, args: { path?: string; maxChars?: number }): WorkToolResult {
+export function workReadFile(baseDir: string, args: { path?: string; maxChars?: number }, kuaiQuan = false): WorkToolResult {
   const tool = 'read_file';
   try {
-    const file = resolveInside(baseDir, args && args.path);
+    const file = resolveInside(baseDir, args && args.path, kuaiQuan);
     if (!fs.existsSync(file)) return fail(tool, new Error('not-found'), relOf(baseDir, file));
     if (fs.statSync(file).isDirectory()) return fail(tool, new Error('is-a-directory'), relOf(baseDir, file));
     const cap = Math.max(1, Math.min(Number(args?.maxChars) || WORK_TOOL_LIMITS.maxReadChars, WORK_TOOL_LIMITS.maxReadChars));
@@ -164,10 +169,10 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
 }
 
 /** 写文件（必要时建父目录）；超上限**拒绝**，不截断 */
-export function workWriteFile(baseDir: string, args: { path?: string; content?: string }): WorkToolResult {
+export function workWriteFile(baseDir: string, args: { path?: string; content?: string }, kuaiQuan = false): WorkToolResult {
   const tool = 'write_file';
   try {
-    const file = resolveInside(baseDir, args && args.path);
+    const file = resolveInside(baseDir, args && args.path, kuaiQuan);
     const content = String((args && args.content) ?? '');
     const bytes = Buffer.byteLength(content, 'utf8');
     if (bytes > WORK_TOOL_LIMITS.maxWriteBytes) {
@@ -186,10 +191,10 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
 }
 
 /** 建目录 */
-export function workMakeDir(baseDir: string, args: { path?: string }): WorkToolResult {
+export function workMakeDir(baseDir: string, args: { path?: string }, kuaiQuan = false): WorkToolResult {
   const tool = 'make_dir';
   try {
-    const dir = resolveInside(baseDir, args && args.path);
+    const dir = resolveInside(baseDir, args && args.path, kuaiQuan);
     fs.mkdirSync(dir, { recursive: true });
     return { ok: true, content: `已创建目录 ${relOf(baseDir, dir)}`, meta: { tool, ok: true, bytes: 0, path: relOf(baseDir, dir) } };
   } catch (e) {
@@ -198,7 +203,7 @@ export function workMakeDir(baseDir: string, args: { path?: string }): WorkToolR
 }
 
 /** 统一入口：按 tool 名分发（未知工具 → 结构化失败，不抛错） */
-export function runWorkTool(baseDir: string, call: { function?: { name?: string; arguments?: unknown } }): WorkToolResult {
+export function runWorkTool(baseDir: string, call: { function?: { name?: string; arguments?: unknown } }, kuaiQuan = false): WorkToolResult {
   const name = String((call && call.function && call.function.name) || '');
   const rawArgs = call && call.function ? call.function.arguments : undefined;
   let args: Record<string, unknown> = {};
@@ -208,10 +213,10 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
     return fail(name || 'work', new Error('bad-json-arguments'));
   }
   switch (name) {
-    case 'list_dir': return workListDir(baseDir, args as { path?: string });
-    case 'read_file': return workReadFile(baseDir, args as { path?: string; maxChars?: number });
-    case 'write_file': return workWriteFile(baseDir, args as { path?: string; content?: string });
-    case 'make_dir': return workMakeDir(baseDir, args as { path?: string });
+    case 'list_dir': return workListDir(baseDir, args as { path?: string }, kuaiQuan);
+    case 'read_file': return workReadFile(baseDir, args as { path?: string; maxChars?: number }, kuaiQuan);
+    case 'write_file': return workWriteFile(baseDir, args as { path?: string; content?: string }, kuaiQuan);
+    case 'make_dir': return workMakeDir(baseDir, args as { path?: string }, kuaiQuan);
     default: return fail(name || 'work', new Error('unknown-tool'));
   }
 }
@@ -265,4 +270,70 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
 export function workspaceDirOf(userDataDir: string, sessionId: string): string {
   const safe = String(sessionId || 'default').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80) || 'default';
   return path.join(userDataDir, 'workspace', safe);
+}
+
+/**
+ * 宿主工具：需要 **Electron 主进程** 才能做（work-tools 本身保持纯 Node、零依赖）。
+ *  · open_path：用系统默认程序打开文件/目录（.txt 等）
+ *  · open_url ：用系统默认浏览器打开网页
+ *  · schedule_task：登记一条定时任务（到点由宿主替用户发一轮）
+ * 权限：普通/严格授权下**只允许工作区内**的路径与 http(s) 网址；
+ *      完全授权才允许任意本机路径（由调用方按 globalSecurity 判定，这里不判）。
+ */
+export const HOST_TOOL_NAMES = ['open_path', 'open_url', 'schedule_task', 'ask_user'] as const;
+export function isHostTool(name: unknown): boolean {
+  return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
+}
+export function hostToolSpecs(): Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }> {
+  return [
+    {
+      type: 'function',
+      function: {
+        name: 'open_path',
+        description: '用系统默认程序打开一个文件或目录（例如打开 .txt）。默认只允许工作区内的相对路径；给出绝对路径需要用户处于「完全授权」。',
+        parameters: { type: 'object', properties: { path: { type: 'string', description: '工作区相对路径；完全授权时可用绝对路径' } }, required: ['path'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'open_url',
+        description: '用系统默认浏览器打开一个网页（只接受 http/https）。',
+        parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'ask_user',
+        description: '当你有不确定的选择/决定时，列出候选项让用户在界面上点选（永远含「其他」自定义输入），用户选完你会拿到结果并继续。**不要自己猜、也不要因此停下。**',
+        parameters: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: '要问用户的问题（一句话）' },
+            hint: { type: 'string', description: '补充说明（可选）' },
+            options: { type: 'array', items: { type: 'string' }, description: '候选选项（2-8 个，纯文案）' },
+          },
+          required: ['title'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'schedule_task',
+        description: '登记一条定时任务：每隔 N 分钟（或每天 HH:mm）由系统自动替用户发一轮「prompt」。返回任务 id，可在界面「定时任务」卡片里看到。',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: '任务名' },
+            prompt: { type: 'string', description: '到点要发给牛马的内容' },
+            everyMinutes: { type: 'number', description: '每隔多少分钟（与 dailyAt 二选一）' },
+            dailyAt: { type: 'string', description: '每天 HH:mm（24 小时制，与 everyMinutes 二选一）' },
+          },
+          required: ['name', 'prompt'],
+        },
+      },
+    },
+  ];
 }

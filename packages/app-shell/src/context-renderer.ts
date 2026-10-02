@@ -28,6 +28,8 @@ export interface LogEntry {
   /** 记忆服务里的记录 id，供 retrieve 解引用；没有则用 seq */
   recordId?: string;
   ts?: number;
+  /** 思考过程（模型的 reasoning_content 等）——只给界面看，不进模型上下文 */
+  reasoning?: string;
 }
 
 export interface XuanranXuanxiang {

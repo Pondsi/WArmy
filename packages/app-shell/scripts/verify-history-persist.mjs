@@ -322,6 +322,23 @@ check('[1] 两轮 chat-send 走通', r1?.ok === true && r2?.ok === true, { r1: r
 const logBefore = await app1.call('chatLog', { sessionId: SESSION });
 check('[1] 会话日志有 4 条（2 轮 × 用户+助手）', logBefore?.count === 4, { count: logBefore?.count, entries: logBefore?.entries?.map((e) => ({ seq: e.seq, role: e.role, chars: e.chars })) });
 check('[1] 历史镜像与日志条数一致（不再有第二份真相）', logBefore?.stats?.historyMirror === 4, { mirror: logBefore?.stats?.historyMirror });
+check('[1] chat-send 写进日志的角色是 user/assistant（归一后的唯一命名）', (logBefore?.entries || []).map((e) => e.role).join(',') === 'user,assistant,user,assistant', (logBefore?.entries || []).map((e) => e.role));
+{
+  // 角色归一（真事故：同一句话显示两遍）——两条写入路径写同一句：
+  // 主进程 chat-send 写 'user'，渲染层补写 'wo'；角色名不同 ⇒ 去重不生效 ⇒ 日志两条 ⇒ 界面两遍。
+  const DUP_TXT = '同一句话两条路径写入';
+  await app1.call('chatLogAppend', { sessionId: 's-dup', role: 'wo', content: DUP_TXT });
+  await app1.call('chatLogAppend', { sessionId: 's-dup', role: 'user', content: DUP_TXT });
+  await app1.call('chatLogAppend', { sessionId: 's-dup', role: 'them', content: '助手回话' });
+  await app1.call('chatLogAppend', { sessionId: 's-dup', role: 'assistant', content: '助手回话' });
+  const dupLog = await app1.call('chatLog', { sessionId: 's-dup' });
+  check('[1] wo/user、them/assistant 同文只留一条（否则界面显示两遍）', dupLog?.count === 2, {
+    count: dupLog?.count,
+    entries: (dupLog?.entries || []).map((e) => ({ role: e.role, content: e.content })),
+  });
+  const dupMsgs = await app1.call('chatMessages', { sessionId: 's-dup' });
+  check('[1] 回读角色归一为 user/assistant（渲染层据此归并）', (dupMsgs?.xiaoXiJi || []).map((m) => m.role).join(',') === 'user,assistant', (dupMsgs?.xiaoXiJi || []).map((m) => m.role));
+}
 let jsonlRecords = [];
 if (fs.existsSync(jsonlPath)) {
   jsonlRecords = fs
