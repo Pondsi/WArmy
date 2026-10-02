@@ -316,6 +316,21 @@ function unitChecks() {
     if (aliasLine < 0) fails.push('main: IPC_ALIASES 定义丢失');
     else if (badIdx >= 0) fails.push(`main: chuliIpc 出现在 IPC_ALIASES 之前（第 ${badIdx + 1} 行）⇒ 启动会崩`);
   }
+  /**
+   * index.html 标签平衡：多一个 `</div>` 会让解析器把 `#pageBuJu` 挪出 `#zhuLan`，
+   * 于是 `position:absolute; inset:0` 铺满全窗、**压在左侧竖栏下**（2026-10-02 真事故：第二列看不见了）。
+   */
+  {
+    const html = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/index.html'), 'utf8');
+    const tags = ['div', 'main', 'aside', 'nav', 'section', 'header', 'footer', 'table', 'tbody', 'tr', 'td', 'form', 'ul', 'li', 'details', 'label', 'button', 'select', 'textarea', 'span'];
+    const buPing = [];
+    for (const t of tags) {
+      const o = (html.match(new RegExp('<' + t + '(?=[\\s>])', 'gi')) || []).length;
+      const c = (html.match(new RegExp('</' + t + '>', 'gi')) || []).length;
+      if (o !== c) buPing.push(`${t} 开${o}/闭${c}`);
+    }
+    if (buPing.length) fails.push('index.html 标签不平衡（布局会被解析器重排）: ' + buPing.join(', '));
+  }
   // 工作工具
   if (!work.includes('WORK_TOOL_SECURITY')) fails.push('work-tools: security block missing');
   // dist 同步

@@ -1,0 +1,155 @@
+layout probe 2026-10-02T18:10:48.403Z
+
+===== 主布局四列几何 =====
+{
+ "cols": [
+  {
+   "id": "ceLan",
+   "x": 0,
+   "w": 64,
+   "h": 760,
+   "display": "flex",
+   "gridCols": "none",
+   "overflow": "hidden"
+  },
+  {
+   "id": "lieBiaoLan",
+   "x": 64,
+   "w": 160,
+   "h": 760,
+   "display": "flex",
+   "gridCols": "none",
+   "overflow": "hidden"
+  },
+  {
+   "id": "zhuLan",
+   "x": 224,
+   "w": 1056,
+   "h": 760,
+   "display": "block",
+   "gridCols": "none",
+   "overflow": "hidden"
+  },
+  {
+   "id": "mianBanLan",
+   "x": 0,
+   "w": 0,
+   "h": 0,
+   "display": "block",
+   "gridCols": "none",
+   "overflow": "hidden auto"
+  }
+ ],
+ "appTi": {
+  "cols": "64px 160px 1056px",
+  "cls": ""
+ },
+ "listW": "160px",
+ "panelW": "300px",
+ "items": []
+}
+
+===== 设置页几何 =====
+{
+ "nav": {
+  "sel": "#peiZhiDaoHang",
+  "x": 64,
+  "y": 40,
+  "w": 200,
+  "h": 760
+ },
+ "content": {
+  "sel": "#peiZhiNeiRong",
+  "x": 264,
+  "y": 40,
+  "w": 1016,
+  "h": 760
+ },
+ "buju": {
+  "sel": ".peiZhiBuJu",
+  "x": 64,
+  "y": 40,
+  "w": 1216,
+  "h": 760
+ },
+ "navBtns": [
+  {
+   "t": "界面",
+   "x": 72,
+   "y": 62,
+   "w": 183,
+   "h": 35
+  },
+  {
+   "t": "通知",
+   "x": 72,
+   "y": 99,
+   "w": 183,
+   "h": 35
+  },
+  {
+   "t": "模型",
+   "x": 72,
+   "y": 136,
+   "w": 183,
+   "h": 35
+  },
+  {
+   "t": "功能",
+   "x": 72,
+   "y": 173,
+   "w": 183,
+   "h": 35
+  },
+  {
+   "t": "技能",
+   "x": 72,
+   "y": 210,
+   "w": 183,
+   "h": 35
+  },
+  {
+   "t": "插件",
+   "x": 72,
+   "y": 247,
+   "w": 183,
+   "h": 35
+  },
+  {
+   "t": "快捷",
+   "x": 72,
+   "y": 284,
+   "w": 183,
+   "h": 35
+  },
+  {
+   "t": "关于",
+   "x": 72,
+   "y": 321,
+   "w": 183,
+   "h": 35
+  }
+ ]
+}
+
+===== 管理局列表 =====
+[]
+
+===== 管理模型两列选择器 =====
+{
+ "cfg": "no cfg",
+ "twoCol": "no .modelLiangLie",
+ "prov": "no #iProvXuanZe",
+ "model": "no #iMoXingXuanZe",
+ "manual": "no #iManual",
+ "allChk": null,
+ "heads": []
+}
+
+===== 取消全部可用后的两列 =====
+{
+ "manual": "no #iManual",
+ "prov": "no #iProvXuanZe",
+ "model": "no #iMoXingXuanZe",
+ "lianglie": "no .modelLiangLie"
+}
