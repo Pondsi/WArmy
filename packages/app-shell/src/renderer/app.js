@@ -13,7 +13,7 @@
    * 其它（含 MiMo）一律走「预设供应商」下拉由用户自行添加 —— 见 GONGYING_YUSHE_JIAN()。
    */
   const PROVIDER_DEFAULTS = [
-    { id: 'deepseek', biaoQian: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat', models: [] },
+    { id: 'deepseek', biaoQian: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat', models: [] },
   ];
   const PROVIDER_PROTOCOLS = ['openai-compatible', 'anthropic', 'ollama'];
   const state = {
@@ -39,7 +39,9 @@
     dingShiRenWu: [],
     gongZuoWenJian: [],
     gongZuoQuLuJing: '',
+    jiHuaRenWu: [],
     sound: { complete: true, request: true, error: true },
+    soundVolume: 0.9,
     soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,
     theme: '#A78567',
@@ -90,6 +92,8 @@
       },
     ],
     providers: PROVIDER_DEFAULTS.map((p) => ({ ...p, models: [] })),
+    /** 当前**生效**供应商 id（聊天真正用谁）；编辑其它供应商绝不劫持它 */
+    activeProviderId: 'deepseek',
   };
 
   const __CONSOLE_CAP_EARLY = 200;
@@ -138,6 +142,12 @@
       const h = await window.warmy.providerKeyHas?.({ providerIds: idJi });
       if (h?.ok) state.providers.forEach((p) => { p.hasKey = !!h.has[p.id]; });
     } catch { /* 问不到就当没有：界面会显示"未设置密钥" */ }
+    // 读回**当前生效**供应商 id（编辑其它供应商不得劫持它）
+    try {
+      const g = await window.warmy.getProvider?.();
+      const cur = g && (g.providerCfg || g);
+      if (cur && cur.presetId) state.activeProviderId = String(cur.presetId);
+    } catch { /* 读不到就保持默认 */ }
   }
   window.__warmyReloadProviders = loadProvidersFromSettings;
   /**
@@ -372,6 +382,12 @@
       $('duiHuaKuangTi').textContent = String(message ?? '');
       const dongZuoJi = $('duiHuaKuangDongZuoJi');
       dongZuoJi.innerHTML = '';
+      const copy = document.createElement('button');
+      copy.className = 'anNiuXiao';
+      copy.textContent = tOr('chat.copy', '复制');
+      copy.onclick = async () => {
+        try { await navigator.clipboard.writeText(String(message ?? '')); showToast(tOr('chat.copied', '已复制')); } catch { /* noop */ }
+      };
       const ok = document.createElement('button');
       ok.className = 'anNiuZhuYao';
       ok.textContent = t('common.ok');
@@ -379,6 +395,7 @@
         root.classList.add('yinCang');
         resolve(true);
       };
+      dongZuoJi.appendChild(copy);
       dongZuoJi.appendChild(ok);
       root.classList.remove('yinCang');
       ok.focus();
@@ -712,7 +729,7 @@
     else root.style.removeProperty('--font-ui');
     const cuXi = Number(pp.fontWeight) || 400;
     root.style.setProperty('--fw-ui', String(cuXi));
-    const daxiao = Math.max(80, Math.min(160, Number(pp.fontSize) || 100)) / 100;
+    const daxiao = Math.max(15, Math.min(650, Number(pp.fontSize) || 100)) / 100;
     Object.entries(FS_ZHI).forEach(([k, v]) => {
       root.style.setProperty('--' + k, (Math.round(v * daxiao * 10) / 10) + 'px');
     });
@@ -741,7 +758,7 @@
         yinXiaoHuanCun[k] = u;
       }
       const a = new Audio(u);
-      a.volume = 0.9;
+      a.volume = (state.soundVolume != null ? state.soundVolume : 0.9);
       void a.play().catch(() => { /* 自动播放被拦：忽略 */ });
     } catch { /* 播不了不影响功能 */ }
   }
@@ -1838,7 +1855,25 @@
         + '<div class="bubbleWrap">'
         + (showName ? '<div class="xiaoXiMing">' + escapeHtml(themName) + '</div>' : '')
         + siKao
-        + '<div class="bubble md">' + mdHtml(m.text) + '</div></div>';
+        + (m.role === 'wo'
+            // 我方消息是**纯文本**：原样显示（pre-wrap），复制才不会丢换行
+            ? '<div class="bubble">' + escapeHtml(m.text) + '</div>'
+            : '<div class="bubble md">' + mdHtml(m.text) + '</div>')
+        + '<button type="button" class="xiaoXiFuZhi" title="' + escapeHtml(tOr('chat.copy', '复制')) + '" data-copy="' + escapeHtml(m.text) + '">⧉</button>'
+        + '</div>';
+      // 悬停复制：一次委托绑定
+      if (heZi.dataset.copyBound !== '1') {
+        heZi.dataset.copyBound = '1';
+        heZi.addEventListener('click', async (e) => {
+          const b = e.target.closest('[data-copy]');
+          if (!b) return;
+          e.preventDefault(); e.stopPropagation();
+          try {
+            await navigator.clipboard.writeText(b.getAttribute('data-copy') || '');
+            showToast(tOr('chat.copied', '已复制'));
+          } catch { /* 剪贴板不可用 */ }
+        });
+      }
       heZi.appendChild(div);
     });
     if (heZi.dataset.lazyBound !== '1') {
@@ -2026,7 +2061,7 @@
     mianBanChengYuanJiKuai: 'members', mianBanZhaiYaoKuai: 'summary',
     mianBanZhiBanZheKuai: 'duty', mianBanHuiTuiDianKuai: 'checkpoint',
     mianBanZhiXingKuai: 'exec', mianBanZhiBiaoKuai: 'metrics',
-    mianBanDingShiKuai: 'schedule',
+    mianBanDingShiKuai: 'schedule', mianBanJiHuaKuai: 'plan',
   };
   function panCardsFor(kind) {
     try {
@@ -2083,6 +2118,55 @@
   }
   window.__queBaoKaPian = queBaoKaPian;
 
+  /** 计划任务卡片：任务树 T1/T1.1 —— 步骤可见、可阻塞/恢复、逐个完成并逐个验证 */
+  function renderJiHuaKa() {
+    const he = $('jiHuaLieBiao');
+    if (!he) return;
+    // 折叠/展开（隐藏计划模式：只留标题，内容收起）
+    const shouQi = $('jiHuaShouQi');
+    if (shouQi && !shouQi.dataset.bound) {
+      shouQi.dataset.bound = '1';
+      shouQi.onclick = () => {
+        const kai = he.classList.toggle('yinCang');
+        shouQi.textContent = kai ? '+' : '−';
+        try { window.warmy.settingsSave?.({ planCardCollapsed: kai }); } catch { /* noop */ }
+      };
+      // 恢复上次折叠状态
+      (async () => {
+        try {
+          const r = await window.warmy.settingsGet?.();
+          if (r?.settings?.planCardCollapsed) {
+            he.classList.add('yinCang');
+            shouQi.textContent = '+';
+          }
+        } catch { /* noop */ }
+      })();
+    }
+    const bu = state.jiHuaRenWu || [];
+    if (!bu.length) {
+      he.innerHTML = '<div class="jingYin">' + escapeHtml(tOr('panel.plan.empty', '还没有计划；长任务可让牛马先列计划再逐个完成')) + '</div>';
+      return;
+    }
+    const tongji = { pending: 0, doing: 0, done: 0, verified: 0, blocked: 0 };
+    bu.forEach((x) => { tongji[x.status] = (tongji[x.status] || 0) + 1; });
+    he.innerHTML =
+      '<div class="jingYin" style="margin-bottom:6px">' +
+      escapeHtml(tOr('panel.plan.progress', '进度')) + ' ' + (tongji.verified + tongji.done) + '/' + bu.length +
+      ' · ' + escapeHtml(tOr('panel.plan.verified', '已验证')) + ' ' + tongji.verified +
+      (tongji.doing ? ' · ' + escapeHtml(tOr('panel.plan.doing', '进行中')) + ' ' + tongji.doing : '') +
+      (tongji.blocked ? ' · ' + escapeHtml(tOr('panel.plan.blocked', '受阻')) + ' ' + tongji.blocked : '') +
+      '</div>' +
+      bu.map((x) =>
+        '<div class="jiHuaBu" data-st="' + escapeHtml(x.status) + '">' +
+        '<span class="jiHuaId">' + escapeHtml(x.id || '') + '</span>' +
+        '<span class="jiHuaMing">' + escapeHtml(x.title || '') + '</span>' +
+        '<span class="jiHuaZhuangTai">' + escapeHtml(tOr('panel.plan.' + x.status, x.status)) + '</span>' +
+        (x.note ? '<div class="jingYin" style="font-size:11px;word-break:break-all">' + escapeHtml(x.note) + '</div>' : '') +
+        '</div>'
+      ).join('');
+  }
+  window.__renderJiHuaKa = renderJiHuaKa;
+
   /** 定时任务卡片 */
   function renderDingShiKa() {
     const he = $('dingShiLieBiao');
@@ -2098,9 +2182,20 @@
       '<div class="jingYin" style="font-size:11px">' + escapeHtml(r.desc || '') + ' · ' +
         escapeHtml(tOr('panel.schedule.next', '下次')) + ' ' + escapeHtml(yueRiShiFen(r.nextAt)) + '</div>' +
       '<div class="jingYin" style="font-size:11px;word-break:break-all">' + escapeHtml(String(r.prompt || '').slice(0, 60)) + '</div>' +
+      '<button class="anNiuXiao" data-sch-tg="' + escapeHtml(r.id) + '" style="margin-top:2px">' + escapeHtml(r.enabled === false ? tOr('panel.schedule.resume', '恢复') : tOr('panel.schedule.pause', '暂停')) + '</button>' +
       '<button class="anNiuXiao" data-sch-del="' + escapeHtml(r.id) + '" style="margin-top:2px">' + escapeHtml(t('chat.queueDelete')) + '</button>' +
       '</div>'
     ).join('');
+    he.querySelectorAll('[data-sch-tg]').forEach((b) => {
+      b.onclick = async () => {
+        const id = b.getAttribute('data-sch-tg');
+        const it = (state.dingShiRenWu || []).find((x) => x.id === id);
+        if (!it) return;
+        it.enabled = it.enabled === false;
+        try { await window.warmy.dingShiRenWuGengXin?.({ id, enabled: it.enabled }); } catch { /* noop */ }
+        renderDingShiKa();
+      };
+    });
     he.querySelectorAll('[data-sch-del]').forEach((b) => {
       b.onclick = async () => {
         try { await window.warmy.dingShiRenWuShanChu?.({ id: b.getAttribute('data-sch-del') }); } catch { /* noop */ }
@@ -2785,9 +2880,8 @@
       const tag = item.u === 'P2' ? t('chat.p2') : t('chat.p3');
       const ts = Number(item.ts || 0) || Date.now();
       // 发出时间（月日 时:分）+ 已等待（时:分:秒）
-      li.innerHTML = `<span class="qBiaoQian">${escapeHtml(tag)}</span>`
-        + `<span class="qShiJian" title="${escapeHtml(wanZhengShiJian(ts))}">${escapeHtml(yueRiShiFen(ts))}</span>`
-        + `<span class="qDengDai">已等 <b data-deng="${suoYin}">${escapeHtml(dengDaiShiChang(ts))}</b></span>`;
+      // 时间/等待/标签都是**内容上方的小字**（不显眼、不占左侧），下面才是正文
+      li.innerHTML = `<div class="qTouXiaoZi"><span class="qBiaoQian">${escapeHtml(tag)}</span><span class="qShiJian" title="${escapeHtml(wanZhengShiJian(ts))}">${escapeHtml(yueRiShiFen(ts))}</span><span class="qDengDai">已等 <b data-deng="${suoYin}">${escapeHtml(dengDaiShiChang(ts))}</b></span></div><div class="qZhengWen"></div>`;
       if (item.editing) {
         const ta = document.createElement('textarea');
         ta.value = item.text;
@@ -2808,7 +2902,7 @@
           renderQueueBar();
           persistUiQueuesSoon();
         };
-        li.append(ta, save, del);
+        (li.querySelector('.qZhengWen') || li).append(ta, save, del);
       } else {
         const kuaDu = document.createElement('div');
         kuaDu.className = 'qWenBen';
@@ -2819,6 +2913,16 @@
         const del = document.createElement('button');
         del.className = 'anNiuXiao';
         del.textContent = t('chat.queueDelete');
+        const up = document.createElement('button');
+        up.className = 'anNiuXiao';
+        up.textContent = '↑';
+        up.title = tOr('chat.queueUp', '上移');
+        up.disabled = suoYin === 0;
+        up.onclick = () => {
+          if (suoYin <= 0) return;
+          const t0 = q[suoYin - 1]; q[suoYin - 1] = q[suoYin]; q[suoYin] = t0;
+          renderQueueBar(); persistUiQueuesSoon();
+        };
         edit.onclick = () => {
           item.editing = true;
           renderQueueBar();
@@ -2828,7 +2932,17 @@
           renderQueueBar();
           persistUiQueuesSoon();
         };
-        li.append(kuaDu, edit, del);
+        const dn = document.createElement('button');
+        dn.className = 'anNiuXiao';
+        dn.textContent = '↓';
+        dn.title = tOr('chat.queueDown', '下移');
+        dn.disabled = suoYin === q.length - 1;
+        dn.onclick = () => {
+          if (suoYin >= q.length - 1) return;
+          const t0 = q[suoYin + 1]; q[suoYin + 1] = q[suoYin]; q[suoYin] = t0;
+          renderQueueBar(); persistUiQueuesSoon();
+        };
+        (li.querySelector('.qZhengWen') || li).append(kuaDu, up, dn, edit, del);
       }
       LieBiao.appendChild(li);
     });
@@ -2844,10 +2958,11 @@
     yuanSu.classList.remove('yinCang');
     yuanSu.innerHTML = state.attachments
       .map((a, i) => {
-        const suoLue = a.dataUrl ? `<img class="attachSuoLue" src="${a.dataUrl}" alt=""/>` : '';
+        const suoLue = a.dataUrl ? `<img class="attachSuoLue" src="${a.dataUrl}" alt="" data-zoom="${i}"/>` : '';
         // 悬停显示**完整路径**（文件名看不清/重名时最有用）
         const ti = escapeHtml(a.path || a.name || a.ming || '');
-        return `<span class="attachChip" data-i="${i}" title="${ti}">${suoLue}${escapeHtml(a.name || a.ming || '')} <button data-i="${i}" title="${escapeHtml(t('chat.queueDelete'))}">×</button></span>`;
+        const daXiao = a.bytes ? ' · ' + Number(a.bytes) + 'B' : '';
+        return `<span class="attachChip" data-i="${i}" title="${ti}">${suoLue}${escapeHtml(a.name || a.ming || '')}${escapeHtml(daXiao)} <button data-i="${i}" title="${escapeHtml(t('chat.queueDelete'))}">×</button></span>`;
       })
       .join(' ');
     // 图片附件：异步读回缩略图（不是图片/太大 → 保持只显示文件名）
@@ -2863,6 +2978,20 @@
           }
         } catch { /* 读不到就只显示文件名 */ }
       })();
+    });
+    // 点击缩略图放大预览
+    yuanSu.querySelectorAll('img[data-zoom]').forEach((img) => {
+      img.style.cursor = 'zoom-in';
+      img.onclick = (e) => {
+        e.stopPropagation();
+        const a = state.attachments[Number(img.dataset.zoom)];
+        if (!a || !a.dataUrl) return;
+        const lay = document.createElement('div');
+        lay.className = 'tuPianYuLanCeng';
+        lay.innerHTML = '<img src="' + a.dataUrl + '" alt=""/>';
+        lay.onclick = () => lay.remove();
+        document.body.appendChild(lay);
+      };
     });
     yuanSu.querySelectorAll('button').forEach((b) => {
       b.onclick = () => {
@@ -3042,6 +3171,11 @@
           }
         } else {
           tuisongXiaoxi(chatId, 'them', r?.error || t('common.error'));
+          // 失败把原文放回输入框，别让用户重打
+          try {
+            const sr = $('shuRu');
+            if (sr && !String(sr.value || '').trim()) sr.value = text;
+          } catch { /* noop */ }
         }
       } catch (e) {
         tuisongXiaoxi(chatId, 'them', String(e.message || e));
@@ -3556,6 +3690,12 @@
             <datalist id="iThinkTicks">${THINK_STOPS.map((_, i) => `<option value="${i}"></option>`).join('')}</datalist>
           </div>
 
+          <!-- 分类模型：所有已添加模型的**分类调用链**（第一个=默认；可上移/下移/禁用） -->
+          <div class="modelZiXiang">
+            <h4>${escapeHtml(tOr('model.fenLei', '分类模型'))}</h4>
+            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.fenLeiHint', '分类任务用的模型调用链：第一个即默认；可上移/下移/禁用（启用）。'))}</div>
+            <div id="iFenLei"></div>
+          </div>
           <!-- 子项 4：小弟数量（派生小弟的上限；默认自适应） -->
           <div class="modelZiXiang">
             <h4>${escapeHtml(tOr('model.xiaoDi', '小弟数量'))}</h4>
@@ -3564,6 +3704,7 @@
               <option value="auto"${(inst.xiaoDiShuLiang === undefined || inst.xiaoDiShuLiang === 'auto' || inst.xiaoDiShuLiang === '') ? ' selected' : ''}>${escapeHtml(tOr('model.xiaoDiAuto', '自适应'))}</option>
               ${[0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 30, 40, 50].map((n) => `<option value="${n}"${String(inst.xiaoDiShuLiang) === String(n) ? ' selected' : ''}>${n}</option>`).join('')}
             </select>
+            <div class="jingYin" style="font-size:11px;margin-top:4px">${escapeHtml(tOr('model.xiaoDiNow', '当前：'))}${escapeHtml(inst.xiaoDiShuLiang === undefined || inst.xiaoDiShuLiang === 'auto' || inst.xiaoDiShuLiang === '' ? tOr('model.xiaoDiAuto', '自适应') : String(inst.xiaoDiShuLiang))}</div>
           </div>
         </div>
         <div class="shiLiHang" style="margin-top:14px">
@@ -3798,6 +3939,44 @@
       }
       renderDefaultOptions();
       renderChain();
+
+      // 分类模型链：第一个未禁用 = 默认；上移/下移/禁用
+      function renderFenLei() {
+        const he = $('iFenLei');
+        if (!he) return;
+        if (!inst2.fenLeiChain || !inst2.fenLeiChain.length) inst2.fenLeiChain = [...(inst2.availableModels || [])];
+        if (!inst2.fenLeiDisabled) inst2.fenLeiDisabled = [];
+        const lian = inst2.fenLeiChain;
+        const dis = inst2.fenLeiDisabled;
+        const moRen = lian.find((m) => !dis.includes(m)) || '';
+        he.innerHTML = lian.map((m, i) =>
+          '<div class="shiLiHang" style="margin:4px 0' + (dis.includes(m) ? ';opacity:.5' : '') + '">' +
+          '<span style="flex:1' + (dis.includes(m) ? ';text-decoration:line-through' : '') + '">' + escapeHtml(m) +
+          (m === moRen ? ' <span class="moRenBiaoQian">' + escapeHtml(tOr('model.default', '默认模型')) + '</span>' : '') + '</span>' +
+          '<button class="anNiuXiao" data-fl-up="' + i + '"' + (i === 0 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveUp')) + '</button>' +
+          '<button class="anNiuXiao" data-fl-dn="' + i + '"' + (i === lian.length - 1 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveDown')) + '</button>' +
+          '<button class="anNiuXiao" data-fl-tg="' + i + '">' + escapeHtml(dis.includes(m) ? tOr('model.enable', '启用') : tOr('model.disable', '禁用')) + '</button>' +
+          '</div>'
+        ).join('') || '<div class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</div>';
+        he.querySelectorAll('[data-fl-up]').forEach((b) => {
+          b.onclick = () => { const i = +b.dataset.flUp; if (i <= 0) return; const t0 = lian[i - 1]; lian[i - 1] = lian[i]; lian[i] = t0; saveInst(); renderFenLei(); };
+        });
+        he.querySelectorAll('[data-fl-dn]').forEach((b) => {
+          b.onclick = () => { const i = +b.dataset.flDn; if (i >= lian.length - 1) return; const t0 = lian[i + 1]; lian[i + 1] = lian[i]; lian[i] = t0; saveInst(); renderFenLei(); };
+        });
+        he.querySelectorAll('[data-fl-tg]').forEach((b) => {
+          b.onclick = () => {
+            const i = +b.dataset.flTg;
+            const m = lian[i];
+            if (!m) return;
+            const dis2 = new Set(inst2.fenLeiDisabled || []);
+            if (dis2.has(m)) dis2.delete(m); else dis2.add(m);
+            inst2.fenLeiDisabled = [...dis2];
+            saveInst(); renderFenLei();
+          };
+        });
+      }
+      renderFenLei();
 
       // 智能模式：勾上 = 系统自动安排调用链（收起模型列表）；取消 = 手动列出来（第一个未禁用 = 默认模型）
       const smartChk = $('iSmartMoXing');
@@ -4270,6 +4449,7 @@
       heZi.innerHTML = `
         <div class="peiZhiBuJu">
         <div class="peiZhiDaoHang" id="peiZhiDaoHang">
+          <input id="peiZhiSouSuo" class="hkFilter" placeholder="${escapeHtml(tOr('settings.search', '搜索设置…'))}" style="margin-bottom:8px"/>
           <button data-sec="ui" class="qiYong">${escapeHtml(t('settings.section.ui'))}</button>
           <button data-sec="notify">${escapeHtml(t('settings.section.notify'))}</button>
           <button data-sec="model">${escapeHtml(t('settings.section.model'))}</button>
@@ -4321,7 +4501,7 @@
             </div>
             <div class="field" style="flex:1;min-width:180px;max-width:320px">
               <label>${escapeHtml(tOr('settings.fontSize', '大小'))} <span class="jingYin" id="ziTiDaXiaoShu"></span></label>
-              <input type="range" id="ziTiDaXiao" min="80" max="160" step="5" style="width:100%"/>
+              <input type="range" id="ziTiDaXiao" min="15" max="650" step="5" style="width:100%"/>
             </div>
           </div>
           <div class="jingYin" style="font-size:11px">${escapeHtml(tOr('settings.fontWeightHint', '粗细向左更细、向右更粗（100–900）；大小统一放大或缩小程序里所有可见文字。'))}</div>
@@ -4338,16 +4518,21 @@
             <label><input type="checkbox" id="sQingQiu" ${state.sound.request ? 'checked' : ''}/> ${escapeHtml(t('settings.soundRequest'))}</label>
             <label><input type="checkbox" id="sCuoWu" ${state.sound.error ? 'checked' : ''}/> ${escapeHtml(t('settings.soundError'))}</label>
           </div>
+          <div class="field" style="margin-top:8px">
+            <label>${escapeHtml(tOr('settings.soundVolume', '通知音量'))}</label>
+            <input type="range" id="soundVolume" min="0" max="100" step="5" value="${Math.round((state.soundVolume != null ? state.soundVolume : 0.9) * 100)}"/>
+            <div class="jingYin" style="font-size:11px" id="soundVolumeVal">${Math.round((state.soundVolume != null ? state.soundVolume : 0.9) * 100)}%</div>
+          </div>
           <div class="field" style="margin-top:10px"><label>${escapeHtml(t('settings.soundCompleteFile'))}</label>
-            <div class="shiLiHang"><input id="sfWanCheng" value="${escapeHtml(state.soundFiles.complete)}" readonly/>
+            <div class="shiLiHang"><input id="sfWanCheng" value="${escapeHtml(state.soundFiles.complete)}" readonly placeholder="${escapeHtml(tOr('settings.builtinComplete', '内置默认音效'))}"/>
             <button class="anNiuXiao" data-pick="complete">${escapeHtml(t('settings.soundPick'))}</button>
             <button class="anNiuXiao" data-clear="complete">${escapeHtml(t('settings.soundClear'))}</button><button class="anNiuXiao" data-try="complete">${escapeHtml(tOr('sound.try', '试听'))}</button><span class="jingYin" style="font-size:11px">${escapeHtml(tOr('sound.builtin', '留空则用内置默认音效'))}</span></div></div>
           <div class="field" style="margin-top:8px"><label>${escapeHtml(t('settings.soundRequestFile'))}</label>
-            <div class="shiLiHang"><input id="sfQingQiu" value="${escapeHtml(state.soundFiles.request)}" readonly/>
+            <div class="shiLiHang"><input id="sfQingQiu" value="${escapeHtml(state.soundFiles.request)}" readonly placeholder="${escapeHtml(tOr('settings.builtinRequest', '内置默认音效'))}"/>
             <button class="anNiuXiao" data-pick="request">${escapeHtml(t('settings.soundPick'))}</button>
             <button class="anNiuXiao" data-clear="request">${escapeHtml(t('settings.soundClear'))}</button><button class="anNiuXiao" data-try="request">${escapeHtml(tOr('sound.try', '试听'))}</button><span class="jingYin" style="font-size:11px">${escapeHtml(tOr('sound.builtin', '留空则用内置默认音效'))}</span></div></div>
           <div class="field" style="margin-top:8px"><label>${escapeHtml(t('settings.soundErrorFile'))}</label>
-            <div class="shiLiHang"><input id="sfCuoWu" value="${escapeHtml(state.soundFiles.error)}" readonly/>
+            <div class="shiLiHang"><input id="sfCuoWu" value="${escapeHtml(state.soundFiles.error)}" readonly placeholder="${escapeHtml(tOr('settings.builtinError', '内置默认音效'))}"/>
             <button class="anNiuXiao" data-pick="error">${escapeHtml(t('settings.soundPick'))}</button>
             <button class="anNiuXiao" data-clear="error">${escapeHtml(t('settings.soundClear'))}</button><button class="anNiuXiao" data-try="error">${escapeHtml(tOr('sound.try', '试听'))}</button><span class="jingYin" style="font-size:11px">${escapeHtml(tOr('sound.builtin', '留空则用内置默认音效'))}</span></div></div>
         </div>
@@ -4608,7 +4793,7 @@
           <div id="yiGuiDangHe" class="jingYin">—</div>
         </div>
         <div class="sheZhiSection sheZhiKa" data-sec="model">
-          <h2>${escapeHtml(t('settings.specialModels'))}</h2>
+          <h2>${escapeHtml(tOr('settings.modelOptions', '模型选项'))}</h2>
           <p class="jingYin">${escapeHtml(t('settings.specialModelsHint'))}</p>
           <div class="field" style="margin-bottom:8px">
             <label>${escapeHtml(t('settings.asrModel'))}</label>
@@ -4621,6 +4806,12 @@
           <div class="field" style="margin-bottom:8px">
             <label>${escapeHtml(t('settings.organizerModel'))}</label>
             <select id="smOrganizer" data-special="organizer"></select>
+          </div>
+          <!-- 分类模型：所有已添加模型的**分类调用链**（第一个=默认；可上移/下移/禁用） -->
+          <div class="field" style="margin-bottom:8px">
+            <label>${escapeHtml(tOr('model.fenLei', '分类模型'))}</label>
+            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.fenLeiHint', '分类任务用的模型调用链：第一个即默认；可上移/下移/禁用（启用）。'))}</div>
+            <div id="smFenLei"></div>
           </div>
           <!-- WebGPU 测试与模型无关，已挪到「功能」分区（见下方 #webgpuKa） -->
           <button class="anNiuXiao" id="anNiuBaoCunTeShu">${escapeHtml(t('common.save'))}</button>
@@ -4707,6 +4898,7 @@
             <h3>${escapeHtml(t('about.versionInfo'))}</h3>
             <div class="jingYin" id="aboutRuntime">—</div>
             <div class="jingYin" id="aboutDevice">—</div>
+            <div class="jingYin" id="aboutBeliefPath" style="margin-top:4px;word-break:break-all">—</div>
           </div>
           <div class="aboutKuai">
             <h3>${escapeHtml(t('privacy.viewTitle'))}</h3>
@@ -4783,6 +4975,12 @@
           const dv = $('aboutDevice');
           // 产品要求：关于-版本信息**不显示设备 ID**
           if (dv) dv.textContent = `${escapeHtml(t('about.version'))} ${info.version || ''} · ${info.platform || ''}/${info.arch || ''}` + (info.dsh ? ` · dsh ${info.dsh}` : '');
+          // agents.md 路径（最高信念文件）
+          try {
+            const zg = await window.warmy.zuiGaoXinNianDu?.();
+            const lu = $('aboutBeliefPath');
+            if (lu && zg && zg.path) lu.textContent = tOr('wo.beliefFile', '文件') + '：' + zg.path;
+          } catch { /* noop */ }
         } catch { /* noop */ }
         // 启动时自动检测更新（不打断：只在有更新时改按钮）
         try { await doCheckUpdate(true); } catch { /* noop */ }
@@ -4831,6 +5029,20 @@
       (function bindSettingsMenu() {
         const neirongYuansu = $('peiZhiNeiRong');
         if (!neirongYuansu) return;
+        // 设置页搜索：按文案过滤卡片（标题/正文命中即显示）
+        (function bindSettingsSearch() {
+          const souSuo = $('peiZhiSouSuo');
+          if (!souSuo || souSuo.dataset.bound) return;
+          souSuo.dataset.bound = '1';
+          souSuo.addEventListener('input', () => {
+            const q = String(souSuo.value || '').trim().toLowerCase();
+            Array.from(neirongYuansu.querySelectorAll('.sheZhiKa')).forEach((ka) => {
+              if (!q) { ka.style.display = ''; return; }
+              const txt = (ka.textContent || '').toLowerCase();
+              ka.style.display = txt.includes(q) ? '' : 'none';
+            });
+          });
+        })();
         const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'plugin', 'hotkey', 'about'];
         // skill 与 jineng 是同一分区的两种历史键名 —— 必须别名到同一数组
         const skillBucket = [];
@@ -4872,6 +5084,21 @@
       document.querySelectorAll('[data-try]').forEach((b) => {
         b.onclick = () => { void chuanBoYinXiao(b.getAttribute('data-try')); };
       });
+      // 通知音量滑块
+      (function bindSoundVolume() {
+        const sl = $('soundVolume');
+        const lab = $('soundVolumeVal');
+        if (!sl || sl.dataset.bound) return;
+        sl.dataset.bound = '1';
+        sl.oninput = () => {
+          const v = Number(sl.value) / 100;
+          state.soundVolume = v;
+          if (lab) lab.textContent = sl.value + '%';
+        };
+        sl.onchange = () => {
+          try { window.warmy.settingsSave?.({ soundVolume: state.soundVolume }); } catch { /* noop */ }
+        };
+      })();
       // Microsandbox：两按钮状态机（安装/重装 + 卸载）
       // 探测到已装或点过「查看本机已有容器」且已装 ⇒ 安装钮变「重新安装」，卸载钮可用
       (function bindMsbAnZhuang() {
@@ -5366,8 +5593,84 @@
         });
         const xiaoXi = $('smXiaoXi');
         if (xiaoXi && !locals.length) xiaoXi.textContent = t('settings.specialModelsHint');
+        renderSmFenLei(locals.map((m) => m.id));
       }
       window.__fillSpecialModelSelects = fillSpecialModelSelects;
+      /**
+       * 分类模型调用链：列出**所有已添加**的模型；第一个未禁用 = 默认；
+       * 右侧可上移 / 下移 / 禁用（启用）。这个排列就是特殊模型的调用链。
+       */
+      let smFenLeiChain = [];
+      let smFenLeiDisabled = [];
+      async function loadSmFenLei() {
+        try {
+          const sp = await window.warmy.specialModelsGet?.();
+          const sm = (sp && sp.specialModels) || {};
+          smFenLeiChain = Array.isArray(sm.fenLeiChain) ? sm.fenLeiChain.slice() : [];
+          smFenLeiDisabled = Array.isArray(sm.fenLeiDisabled) ? sm.fenLeiDisabled.slice() : [];
+        } catch { /* 读不到就用空链，下面按已添加模型补 */ }
+      }
+      function renderSmFenLei(allIds) {
+        const he = $('smFenLei');
+        if (!he) return;
+        const ids = Array.isArray(allIds) && allIds.length
+          ? allIds.map(String)
+          : (() => {
+              const out = [];
+              for (const p of (state.providers || [])) {
+                (p.models || []).forEach((m) => {
+                  const id = String(typeof m === 'string' ? m : (m.id || m.name || ''));
+                  if (id) out.push(id);
+                });
+              }
+              return out;
+            })();
+        // 链 = 已保存顺序里仍存在的项 + 新出现的项（追加在末尾）
+        const saved = smFenLeiChain.filter((m) => ids.includes(m));
+        const news = ids.filter((m) => !saved.includes(m));
+        smFenLeiChain = [...saved, ...news];
+        smFenLeiDisabled = smFenLeiDisabled.filter((m) => smFenLeiChain.includes(m));
+        const dis = smFenLeiDisabled;
+        const moRen = smFenLeiChain.find((m) => !dis.includes(m)) || '';
+        he.innerHTML = smFenLeiChain.map((m, i) =>
+          '<div class="shiLiHang" style="margin:4px 0;align-items:center' + (dis.includes(m) ? ';opacity:.5' : '') + '">' +
+          '<span style="flex:1' + (dis.includes(m) ? ';text-decoration:line-through' : '') + '">' + escapeHtml(m) +
+          (m === moRen ? ' <span class="moRenBiaoQian">' + escapeHtml(tOr('model.default', '默认模型')) + '</span>' : '') + '</span>' +
+          '<button class="anNiuXiao" data-smfl-up="' + i + '"' + (i === 0 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveUp')) + '</button>' +
+          '<button class="anNiuXiao" data-smfl-dn="' + i + '"' + (i === smFenLeiChain.length - 1 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveDown')) + '</button>' +
+          '<button class="anNiuXiao" data-smfl-tg="' + i + '">' + escapeHtml(dis.includes(m) ? tOr('model.enable', '启用') : tOr('model.disable', '禁用')) + '</button>' +
+          '</div>'
+        ).join('') || '<div class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</div>';
+        he.querySelectorAll('[data-smfl-up]').forEach((b) => {
+          b.onclick = () => {
+            const i = +b.dataset.smflUp;
+            if (i <= 0) return;
+            const t0 = smFenLeiChain[i - 1]; smFenLeiChain[i - 1] = smFenLeiChain[i]; smFenLeiChain[i] = t0;
+            renderSmFenLei(ids);
+          };
+        });
+        he.querySelectorAll('[data-smfl-dn]').forEach((b) => {
+          b.onclick = () => {
+            const i = +b.dataset.smflDn;
+            if (i >= smFenLeiChain.length - 1) return;
+            const t0 = smFenLeiChain[i + 1]; smFenLeiChain[i + 1] = smFenLeiChain[i]; smFenLeiChain[i] = t0;
+            renderSmFenLei(ids);
+          };
+        });
+        he.querySelectorAll('[data-smfl-tg]').forEach((b) => {
+          b.onclick = () => {
+            const i = +b.dataset.smflTg;
+            const m = smFenLeiChain[i];
+            if (!m) return;
+            const dis2 = new Set(smFenLeiDisabled);
+            if (dis2.has(m)) dis2.delete(m); else dis2.add(m);
+            smFenLeiDisabled = [...dis2];
+            renderSmFenLei(ids);
+          };
+        });
+      }
+      window.__renderSmFenLei = renderSmFenLei;
+      loadSmFenLei().then(() => fillSpecialModelSelects());
       fillSpecialModelSelects();
 
       // 插件：从文件夹安装（资源管理器）
@@ -5813,6 +6116,9 @@
           embedding: { provider: $('smEmbed')?.value || 'onnx' },
           summary: { provider: 'deepseek', model: $('sm-summary')?.value || 'deepseek-flash' },
           organizer: { provider: 'deepseek', model: $('smOrganizer')?.value || 'deepseek-chat' },
+          // 分类模型调用链（第一个未禁用 = 默认；顺序即优先级）
+          fenLeiChain: smFenLeiChain.slice(),
+          fenLeiDisabled: smFenLeiDisabled.slice(),
         };
         await window.warmy.specialModelsSet(cfg).catch(() => {});
         $('smXiaoXi').textContent = t('instances.saved');
@@ -5989,10 +6295,16 @@
         if (keyRequired && !String(pr.apiKey || '').trim() && !pr.hasKey) quShiDe.push(t('settings.fieldApiKey'));
         const laQuJiuXu = quShiDe.length === 0;
         const laQuBiaoTi = laQuJiuXu ? t('settings.fetchModels') : fmtKey('settings.fetchDisabledHint', { fields: quShiDe.join(' / ') });
+        const shengXiao = pr.id === state.activeProviderId;
         yuanSu.innerHTML =
           '<div class="provHead" style="display:flex;justify-content:space-between;align-items:center">' +
-          '<span>' + escapeHtml(pr.biaoQian) + '</span>' +
+          '<span>' + escapeHtml(pr.biaoQian) +
+          (shengXiao ? ' <span class="moRenBiaoQian">' + escapeHtml(tOr('settings.providerActive', '当前使用')) + '</span>' : '') +
+          '</span>' +
+          '<span style="display:flex;gap:6px;align-items:center">' +
+          (shengXiao ? '' : '<button class="anNiuZhuYao" data-prov-use="' + escapeHtml(pr.id) + '" title="' + escapeHtml(tOr('settings.providerUse', '设为当前使用')) + '">' + escapeHtml(tOr('settings.providerUse', '设为当前使用')) + '</button>') +
           '<button class="anNiuXiao" data-prov-del="' + escapeHtml(pr.id) + '" title="' + escapeHtml(t('settings.pluginUninstall')) + '">' + escapeHtml(t('settings.pluginUninstall')) + '</button>' +
+          '</span>' +
           '</div>' +
           '<div class="shiLiHang">' +
           '<div class="field"><label>' + escapeHtml(t('settings.providerName')) + '</label><input data-k="biaoQian" class="' + (nameDup ? 'dup' : '') + '" value="' + escapeHtml(pr.biaoQian) + '" title="' + (nameDup ? escapeHtml(t('settings.providerNameDup')) : '') + '"/></div>' +
@@ -6091,12 +6403,37 @@
                 if (note) note.textContent = fmtKey('settings.keySaveFailed', { err: String(r?.error || '') });
               }
             }
-            // 当前生效的供应商：把改动同步给主进程（密钥由主进程自己按 id 取，不回传明文）
-            const cfg = { presetId: pr.id, baseURL: pr.baseURL, model: providerCfgModel(pr), protocol: pr.protocol };
-            await window.warmy.setProvider(cfg);
+            /**
+             * **只同步「当前生效」那一家**：改任何供应商的字段都不得把生效供应商
+             * 劫持成这一家（真事故：加了个 Ollama 当普通供应商，聊天就 404 了 ——
+             * 用户从来没把它设成生效）。
+             */
+            if (pr.id === state.activeProviderId) {
+              const cfg = { presetId: pr.id, baseURL: pr.baseURL, model: providerCfgModel(pr), protocol: pr.protocol };
+              await window.warmy.setProvider(cfg);
+            }
             await saveProviders();
-            // 变更后重渲染：标红与提示都反映最新状态
-            renderPage();
+            /**
+             * **不再整页重渲染**：以前一改密钥就 renderPage()，
+             * 用户接着点「拉取模型」时按钮已被换掉 ⇒ 第一次点了没反应、第二次才生效。
+             * 只同步按钮可用态，DOM 不重建。
+             */
+            try {
+              const btnF = yuanSu.querySelector('[data-fetch]');
+              const keyOk = pr.protocol === 'ollama' || !!String(pr.apiKey || '').trim() || !!pr.hasKey;
+              const nameOk = !!String(pr.biaoQian || '').trim();
+              const urlOk = !!String(pr.baseURL || '').trim();
+              if (btnF) {
+                btnF.disabled = !(nameOk && urlOk && keyOk);
+                const miss = [];
+                if (!nameOk) miss.push(t('settings.fieldName'));
+                if (!urlOk) miss.push(t('settings.fieldBaseUrl'));
+                if (!keyOk) miss.push(t('settings.fieldApiKey'));
+                btnF.title = btnF.disabled
+                  ? fmtKey('settings.fetchDisabledHint', { fields: miss.join(' / ') })
+                  : t('settings.fetchModels');
+              }
+            } catch { /* noop */ }
           };
         });
         yuanSu.querySelector('[data-fetch]').onclick = async () => {
@@ -6114,13 +6451,7 @@
           if (note0) note0.innerHTML = '<div class="laQuJinDu"><div class="laQuJinDuTiao"></div></div>';
           let r = null;
           try {
-            // 当前生效的供应商（离开这个卡片时拉取也要用对端点/密钥）——密钥由主进程按 id 解出
-            await window.warmy.setProvider({
-              presetId: pr.id,
-              baseURL: pr.baseURL,
-              protocol: pr.protocol,
-              model: providerCfgModel(pr),
-            });
+            // 拉取模型**只用本卡的端点/密钥**（listModels 自带 providerId），不改生效供应商
             r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, providerId: pr.id });
           } catch (e) {
             r = { ok: false, error: String(e && e.message || e) };
@@ -6149,6 +6480,7 @@
                 stillStale ? fmtKey('settings.modelsStale', { n: String(stillStale) }) : '',
               ].filter(Boolean).join(' · ');
             }
+            showToast(tOr('settings.modelsFetched', '已拉取') + '：' + pr.models.length + ' ' + tOr('settings.modelsUnit', '个模型'));
           } else {
             // 拉取失败**照实说**：不清空已有模型，也不假装成功（标红状态保持原样）
             const msg = fmtKey('settings.modelsFetchFailed', { err: String(r?.error || t('common.error')) });
@@ -6180,6 +6512,20 @@
             renderPage();
           };
         });
+        yuanSu.querySelector('[data-prov-use]')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          // 显式「设为当前使用」：这才允许切换生效供应商
+          state.activeProviderId = pr.id;
+          await window.warmy.setProvider({
+            presetId: pr.id,
+            baseURL: pr.baseURL,
+            model: providerCfgModel(pr),
+            protocol: pr.protocol,
+          });
+          await saveProviders();
+          showToast(tOr('settings.providerUseOk', '已设为当前使用'));
+          renderPage();
+        });
         yuanSu.querySelector('[data-prov-del]')?.addEventListener('click', async (e) => {
           e.stopPropagation();
           state.providers = state.providers.filter((x) => x.id !== pr.id);
@@ -6191,12 +6537,15 @@
         yuanSu.querySelectorAll('.moXingChip').forEach((chip) => {
           chip.onclick = async () => {
             pr.defaultModel = chip.dataset.m;
-            await window.warmy.setProvider({
-              presetId: pr.id,
-              baseURL: pr.baseURL,
-              model: pr.defaultModel,
-              protocol: pr.protocol,
-            });
+            // 只有这一家**就是**生效供应商时才同步给主进程（绝不劫持）
+            if (pr.id === state.activeProviderId) {
+              await window.warmy.setProvider({
+                presetId: pr.id,
+                baseURL: pr.baseURL,
+                model: pr.defaultModel,
+                protocol: pr.protocol,
+              });
+            }
             await saveProviders();
             renderPage();
           };
@@ -9133,18 +9482,14 @@
   }
   $('anNiuShot')?.addEventListener('click', async () => {
     try {
-      const cap = await window.warmy.captureScreen?.();
-      if (!cap || !cap.ok) {
-        uiAlert(String((cap && cap.error) || t('common.error')));
-        return;
-      }
-      const qu = await jieTuKuangXuan(cap);
-      if (qu === null) { showToast(tOr('chat.shotCancel', '已取消截图')); return; }   // 右键/Esc 取消
+      // 真·全屏截图：独立遮罩窗覆盖整个桌面框选（右键/Esc 取消、单击/回车=整屏），主进程裁切落盘
+      const cap = await window.warmy.jieTuKaiShi?.();
+      if (!cap || !cap.ok) { uiAlert(String((cap && cap.error) || t('common.error'))); return; }
+      if (cap.cancelled) { showToast(tOr('chat.shotCancel', '已取消截图')); return; }
       const d = new Date();
       const p = (n) => String(n).padStart(2, '0');
       const ming = `屏幕截图 ${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.png`;
-      const jieTu = await jieTuCaiQie(cap, qu);
-      state.attachments.push({ name: ming, ming, path: cap.path || '', dataUrl: jieTu || cap.dataUrl || '' });
+      state.attachments.push({ name: ming, ming, path: cap.path || '', dataUrl: cap.dataUrl || '' });
       xuanranFujian();
       showToast(tOr('chat.shotDone', '已截取屏幕并附到消息'));
     } catch (e) {
@@ -9288,6 +9633,34 @@
   $('anNiuwinMin')?.addEventListener('click', () => window.warmy.winMinimize());
   $('anNiuwinMax')?.addEventListener('click', () => window.warmy.winMaximize());
   $('anNiuwinGuanBi')?.addEventListener('click', () => window.warmy.winClose());
+  // 双击标题栏：最大化 / 还原
+  try {
+    const tb = $('biaoTiLanTuoZhuai') || $('biaoTiLan');
+    if (tb) tb.addEventListener('dblclick', () => { try { window.warmy.winMaximize?.(); } catch { /* noop */ } });
+  } catch { /* noop */ }
+  // 双击标题栏空白处：最大化/还原
+  document.querySelector('.biaoTiLanTuoZhuai')?.addEventListener('dblclick', () => {
+    try { window.warmy.winMaximize?.(); } catch { /* noop */ }
+  });
+  // 附件拖拽上传：拖到输入区即加入附件列表
+  (function bindAttachDrop() {
+    const ta = $('shuRu');
+    const host = ta && ta.closest('.shuRuQu');
+    if (!host || host.dataset.dropBound) return;
+    host.dataset.dropBound = '1';
+    host.addEventListener('dragover', (e) => { e.preventDefault(); host.classList.add('dropping'); });
+    host.addEventListener('dragleave', () => host.classList.remove('dropping'));
+    host.addEventListener('drop', (e) => {
+      e.preventDefault();
+      host.classList.remove('dropping');
+      const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+      files.forEach((f) => {
+        const p = (f && f.path) || '';
+        state.attachments.push({ name: f.name || 'file', ming: f.name || 'file', path: p, bytes: f.size || 0, dataUrl: '' });
+      });
+      try { xuanranFujian(); } catch { /* noop */ }
+    });
+  })();
   $('anNiuuiRefresh')?.addEventListener('click', () => window.warmy.winReload());
   $('anNiuZongShiDing')?.addEventListener('click', async () => {
     const r = await window.warmy.winAlwaysOnTop();
@@ -10879,8 +11252,9 @@
         const baiFenBi = renwu && renwu.jinDu != null ? clampPercent(renwu.jinDu) : null;
         return (
           '<li class="task-' + escapeHtml(status || 'todo') + '">' +
-          '<span class="renwuZhu">' + escapeHtml(biaoTi) +
-          (baiFenBi === null ? '' : ' · ' + baiFenBi + '%') +
+          '<span class="renwuZhu">' +
+          '<span class="renwuMing">' + escapeHtml(biaoTi) +
+          (baiFenBi === null ? '' : ' · ' + baiFenBi + '%') + '</span>' +
           '<span class="renwuShiJian jingYin">' + escapeHtml(fmtWhen(ts)) + '</span>' +
           '</span>' +
           '<span class="dian ' + dian + '"></span>' +
@@ -12912,6 +13286,14 @@
   });
   $('lieBiaoSouSuo').addEventListener('input', () => renderList());
   $('anNiuFaSong').addEventListener('click', () => faSong());
+  // Esc 清空输入框（误输入时一键还原）
+  $('shuRu')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && String($('shuRu').value || '').trim()) {
+      e.preventDefault();
+      $('shuRu').value = '';
+      showToast(tOr('chat.inputCleared', '已清空输入框'));
+    }
+  });
   $('anNiuTingZhiAll')?.addEventListener('click', () => stopAllAi());
   $('anNiuAttach').addEventListener('click', async () => {
     const r = await window.warmy.pickFile();
@@ -12922,6 +13304,26 @@
       xuanranFujian();
     }
   });
+  // 附件拖拽上传：拖到聊天输入区即加入附件列表
+  try {
+    const shuRuQu = document.querySelector('.shuRuQu') || $('shuRu');
+    if (shuRuQu) {
+      shuRuQu.addEventListener('dragover', (e) => { e.preventDefault(); shuRuQu.classList.add('dropping'); });
+      shuRuQu.addEventListener('dragleave', () => shuRuQu.classList.remove('dropping'));
+      shuRuQu.addEventListener('drop', (e) => {
+        e.preventDefault();
+        shuRuQu.classList.remove('dropping');
+        const fjs = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+        for (const f of fjs) {
+          const p = f.path || (f.name ? String(f.name) : '');
+          if (!p) continue;
+          const ming = p.split(/[\\/]/).pop() || f.name;
+          state.attachments.push({ name: ming, ming, path: p, bytes: Number(f.size) || 0 });
+        }
+        xuanranFujian();
+      });
+    }
+  } catch { /* noop */ }
 
   bindResizer($('lanTiaoZhengTiao'), '--list-w', 200, 420, { persistKey: 'listWidth', resetWidth: 220 });
   // R3：聊天区 ↔ 右栏 —— 右栏在右边（dir:'you'），左侧聊天区保底 320px，宽度走 settings 里的 panelWidth
@@ -14719,6 +15121,11 @@
         if (d && d.sessionId && d.prompt) void deliver(String(d.sessionId), String(d.prompt), 'P2');
       } catch { /* noop */ }
     });
+    // 计划任务更新（AI 列/改计划）：卡片自动出现并刷新（被关掉也会补回）
+    window.warmy.onJiHuaGengXin?.((d) => {
+      state.jiHuaRenWu = (d && d.steps) || [];
+      try { queBaoKaPian('mianBanJiHuaKuai'); renderJiHuaKa(); } catch { /* noop */ }
+    });
     // 请求卡（AI 要用户做决定 / 越权要授权）：刷新卡片并播「请求」音
     window.warmy.onAiWenTi?.(() => {
       try { void renderAiQuestions(); } catch { /* noop */ }
@@ -14832,6 +15239,7 @@
         state.theme = s.settings.accent || state.theme;
         state.sound = s.settings.sound || state.sound;
         state.soundFiles = s.settings.soundFiles || state.soundFiles;
+        if (s.settings.soundVolume != null) state.soundVolume = Number(s.settings.soundVolume);
         state.emailOnRequest = !!s.settings.emailOnRequest;
         state.globalSecurity = s.settings.globalSecurity || 'normal';
         state.askOnExceed = s.settings.askOnExceed !== false;

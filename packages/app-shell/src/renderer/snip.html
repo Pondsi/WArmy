@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>截图</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; cursor: crosshair; user-select: none; background: #000; }
+  img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: .95; pointer-events: none; }
+  #kuang { position: absolute; border: 2px solid #a78567; box-shadow: 0 0 0 9999px rgba(0,0,0,.5); display: none; pointer-events: none; }
+  #ti { position: absolute; left: 50%; top: 18px; transform: translateX(-50%);
+        background: rgba(0,0,0,.65); color: #fff; padding: 6px 14px; border-radius: 999px; font: 12px/1.4 sans-serif;
+        pointer-events: none; }
+  #bar {
+    position: absolute; display: none; gap: 10px; align-items: center;
+    background: rgba(0,0,0,.78); padding: 8px 12px; border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.4); z-index: 5;
+  }
+  #bar button {
+    border: none; border-radius: 7px; padding: 7px 16px; font: 13px/1.2 sans-serif;
+    cursor: pointer; color: #fff;
+  }
+  #ok { background: #a78567; }
+  #ok:hover { filter: brightness(1.1); }
+  #cancel { background: #555; }
+  #cancel:hover { background: #666; }
+  #full { background: #3a3a3a; }
+  #full:hover { background: #4a4a4a; }
+</style>
+</head>
+<body>
+  <img id="di" alt=""/>
+  <div id="kuang"></div>
+  <div id="ti">拖动框选 → 确定/取消 · 双击＝确定 · 右键/Esc＝取消</div>
+  <div id="bar">
+    <button id="ok">确定</button>
+    <button id="cancel">取消</button>
+    <button id="full">整屏</button>
+  </div>
+  <script>
+    // 真·全屏截图遮罩：独立窗口，覆盖整个屏幕。
+    // 交互（产品定稿）：拖动框选 → 出「确定/取消」；左键双击＝确定；右键/Esc＝取消。
+    const di = document.getElementById('di');
+    const kuang = document.getElementById('kuang');
+    const bar = document.getElementById('bar');
+    const ti = document.getElementById('ti');
+    window.__setCap = (u) => { di.src = u || ''; };
+
+    let x0 = 0, y0 = 0, x1 = 0, y1 = 0, tuo = false;
+    let qu = null;               // 当前选区（null = 未选）
+    let shangCiDianJi = 0;       // 双击判定
+    let yiTiJiao = false;        // 防重复触发
+
+    function done(r) {
+      if (yiTiJiao) return;
+      yiTiJiao = true;
+      try {
+        bar.style.display = 'none';
+        ti.textContent = '处理中…';
+        // 必须走 invoke（见 snip-preload.cjs）；主进程收到后关闭本窗
+        if (window.warmySnipDone) window.warmySnipDone(r);
+      } catch (e) {
+        yiTiJiao = false;
+        ti.textContent = '截图失败：' + String(e && e.message || e);
+      }
+    }
+    function hua() {
+      const l = Math.min(x0, x1), t = Math.min(y0, y1);
+      const w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
+      kuang.style.display = (w < 3 && h < 3) ? 'none' : 'block';
+      kuang.style.left = l + 'px'; kuang.style.top = t + 'px';
+      kuang.style.width = w + 'px'; kuang.style.height = h + 'px';
+    }
+    // 选区定稿：显示操作条（贴在选区下方；放不下就放上方）
+    function dingGao() {
+      const w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
+      if (w < 3 && h < 3) {
+        qu = { x: 0, y: 0, w: 0, h: 0 };   // 未框选 = 整屏
+        bar.style.display = 'flex';
+        bar.style.left = '50%';
+        bar.style.top = '50%';
+        bar.style.transform = 'translate(-50%,-50%)';
+        ti.textContent = '未框选＝整屏 · 双击/确定＝截取 · 右键/Esc＝取消';
+        return;
+      }
+      qu = { x: Math.min(x0, x1), y: Math.min(y0, y1), w, h };
+      bar.style.display = 'flex';
+      bar.style.transform = 'none';
+      const bx = qu.x, by = qu.y + qu.h + 10;
+      const th = 46;
+      bar.style.left = Math.max(8, Math.min(bx, window.innerWidth - 220)) + 'px';
+      bar.style.top = (by + th > window.innerHeight ? Math.max(8, qu.y - th - 10) : by) + 'px';
+      ti.textContent = '双击/确定＝截取选区 · 右键/Esc＝取消';
+    }
+
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 2) return;                 // 右键由 contextmenu 取消
+      // 在按钮上点击：交给按钮自己处理
+      if (e.target.closest('#bar')) return;
+      const xia = Date.now();
+      const shiShuangJi = (xia - shangCiDianJi) < 350;
+      shangCiDianJi = xia;
+      if (shiShuangJi) {
+        // 左键双击 = 确定（当前选区；未框选＝整屏）
+        done(qu || { x: 0, y: 0, w: 0, h: 0 });
+        return;
+      }
+      tuo = true; x0 = x1 = e.clientX; y0 = y1 = e.clientY;
+      qu = null; bar.style.display = 'none';
+      hua();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!tuo) return;
+      x1 = e.clientX; y1 = e.clientY; hua();
+    });
+    window.addEventListener('mouseup', (e) => {
+      if (!tuo) return;
+      tuo = false;
+      if (e.target.closest('#bar')) return;
+      dingGao();   // 框选结束 → 出确定/取消，**不立即截取**
+    });
+
+    // 右键 = 取消
+    window.addEventListener('contextmenu', (e) => { e.preventDefault(); done(null); });
+
+    document.getElementById('ok').addEventListener('click', (e) => {
+      e.stopPropagation();
+      done(qu || { x: 0, y: 0, w: 0, h: 0 });
+    });
+    document.getElementById('cancel').addEventListener('click', (e) => {
+      e.stopPropagation();
+      done(null);
+    });
+    document.getElementById('full').addEventListener('click', (e) => {
+      e.stopPropagation();
+      done({ x: 0, y: 0, w: 0, h: 0 });
+    });
+
+    // Esc = 取消；回车 = 确定
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') done(null);
+      else if (e.key === 'Enter') done(qu || { x: 0, y: 0, w: 0, h: 0 });
+    });
+  </script>
+</body>
+</html>

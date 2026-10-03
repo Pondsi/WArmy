@@ -21,6 +21,7 @@ export interface ZhibanGongyingshangPeizhi {
   apiKey?: string;
   baseURL?: string;
   model?: string;
+  protocol?: string;
 }
 
 export interface StatusCard {
@@ -180,7 +181,7 @@ export async function xietiaoQunXiaoxi(
     ...retrieveAssetsForChat({ scope: 'project', strict: false }).slice(0, 3).map((a) => a.ti.slice(0, 200)),
   ];
 
-  if (cfg.apiKey || cfg.presetId === 'ollama') {
+  if (cfg.apiKey || cfg.protocol === 'ollama' || cfg.presetId === 'ollama' || String(cfg.presetId || '').startsWith('ollama-')) {
     // 执行者（短命）
     if (zhiXingQiJi.length) {
       const r = await yunxingDuanCunhuoZhixingqi(
@@ -194,7 +195,8 @@ export async function xietiaoQunXiaoxi(
       const provider = congYuSheChuangJian(cfg.presetId, {
         apiKey: cfg.apiKey,
         baseURL: cfg.baseURL || undefined,
-      });
+        protocol: cfg.protocol,
+      } as never, cfg.protocol as never);
       const xitongTiShi: LiaoTianXiaoXi = {
         role: 'system',
         content:
@@ -357,13 +359,13 @@ async function runOneDutyRound(
   let distilled = '';
   let usage: XietiaoJieguo['usage'];
   const brief = route.decision?.taskBrief || xiaoXi.content;
-  if (cfg.apiKey || cfg.presetId === 'ollama') {
+  if (cfg.apiKey || cfg.protocol === 'ollama' || cfg.presetId === 'ollama' || String(cfg.presetId || '').startsWith('ollama-')) {
     if (zhiXingQiJi.length) {
       const r = await yunxingDuanCunhuoZhixingqi({ taskId: 't-' + Date.now(), brief, contextItems: [ka, `用户消息: ${xiaoXi.content}`] }, cfg);
       distilled = r.distilled;
     } else {
       const { congYuSheChuangJian } = await import('@warmy/providers');
-      const provider = congYuSheChuangJian(cfg.presetId, { apiKey: cfg.apiKey, baseURL: cfg.baseURL || undefined });
+      const provider = congYuSheChuangJian(cfg.presetId, { apiKey: cfg.apiKey, baseURL: cfg.baseURL || undefined, protocol: cfg.protocol } as never, cfg.protocol as never);
       const xitongTiShi: LiaoTianXiaoXi = {
         role: 'system',
         content: `你是 WArmy 项目「${xiaoXi.groupId}」的值班者。\n${ka}\n请用简短中文回复。`,

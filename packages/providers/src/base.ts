@@ -108,6 +108,20 @@ export function pinJieUrl(base: string, path: string): string {
   return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 }
 
+/**
+ * OpenAI 兼容端点的 baseURL 规范化：`chat/completions` / `models` 都挂在 `/v1` 下，
+ * 少了 `/v1` 就是 **HTTP 404**（真事故：DeepSeek 预设写成 `https://api.deepseek.com`）。
+ */
+export function guiFanBaseURL(u: string): string {
+  const s0 = String(u || '').trim().replace(/\/+$/, '');
+  if (!s0) return s0;
+  if (/\/v\d+[a-z]*$/i.test(s0)) return s0;                       // 已带版本段：不动
+  if (/api\.deepseek\.com$|api\.xiaomimimo\.com$|api\.openai\.com$|api\.moonshot\.cn$|api\.siliconflow\.cn$|open\.bigmodel\.cn\/api\/paas$/i.test(s0)) {
+    return s0 + '/v1';
+  }
+  return s0;
+}
+
 export abstract class JichuGongYing implements MoxingGongYing {
   abstract readonly id: string;
   abstract readonly protocol: GongYingXieYi;
@@ -116,7 +130,7 @@ export abstract class JichuGongYing implements MoxingGongYing {
 
   constructor(auth: GongYingRenZheng, defaultBase: string) {
     this.auth = auth;
-    this.baseURL = (auth.baseURL || defaultBase).replace(/\/+$/, '');
+    this.baseURL = guiFanBaseURL((auth.baseURL || defaultBase).replace(/\/+$/, ''));
   }
 
   abstract chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing>;

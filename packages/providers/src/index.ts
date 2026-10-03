@@ -49,11 +49,19 @@ export function congYuSheChuangJian(
   overrideProtocol?: GongYingXieYi
 ): MoxingGongYing {
   const p = YUSHE_BIAO[presetId];
+  /**
+   * 自定义供应商 id（如 `ollama-1791…`）不在预设表里 —— 此时**必须**由调用方
+   * 带上 protocol，否则会退化成 openai-compatible，去打 `/chat/completions`
+   * （Ollama 真事故：404 page not found）。
+   * auth 上带了协议时优先用它，其次 overrideProtocol，最后才默认 openai-compatible。
+   */
+  const authXieYi = (auth as { protocol?: GongYingXieYi }).protocol;
+  const xieYi = overrideProtocol || authXieYi || (!p ? 'openai-compatible' : p.protocol);
   if (!p) {
-    return chuangjianGongYing(overrideProtocol || 'openai-compatible', auth, presetId);
+    return chuangjianGongYing(xieYi, auth, presetId);
   }
   return chuangjianGongYing(
-    overrideProtocol || p.protocol,
+    xieYi,
     { ...auth, baseURL: auth.baseURL || p.baseURL },
     presetId
   );

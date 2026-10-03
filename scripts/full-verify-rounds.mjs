@@ -300,10 +300,24 @@ function unitChecks() {
   // 23) 导出字段名
   if (!appJs.includes('biaoTi: xianShiMing')) fails.push('export: 导出仍未发 biaoTi');
   // 2) 粗细/大小同一行；5) 小弟到 50
-  if (!appJs.includes('ziTiCuXiShu') || !/ziTiDaXiao[\s\S]{0,200}max="160"/.test(appJs)) fails.push('font: 粗细/大小同行缺失');
+  if (!appJs.includes('ziTiCuXiShu') || !/max="650"/.test(appJs)) fails.push('font: 粗细/大小同行缺失（或字号范围不是 15-650）');
   if (!appJs.includes('[0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 30, 40, 50]')) fails.push('xiaoDi: 选项未到 50');
   // 9) 前景色多级灰阶（不止黑白两档）
   if (!/y > 0\.82/.test(appJs) || !/return '#3d3d3d'/.test(appJs)) fails.push('contrast: 仍只有黑白两档');
+  // ── 本轮（第四批）专项 ──
+  // 1) 分类模型（模型选项卡内，独立调用链）
+  if (!appJs.includes('iFenLei') || !appJs.includes('fenLeiChain')) fails.push('fenLei: 分类模型链缺失');
+  if (!appJs.includes("tOr('settings.modelOptions'")) fails.push('fenLei: 特殊模型未改名「模型选项」');
+  // 3) 截图遮罩取图顺序（先 __setCap 再注入）
+  if (!emTs.includes('__setCap') || !emTs.includes('jieTuKaiShi')) fails.push('shot: 遮罩取图顺序/入口不对');
+  // 4) 队列时间与正文上下排列
+  if (!/\.duiLieTiaoMuJi li\s*\{[^}]*flex-direction:\s*column/s.test(cssT)) fails.push('queue: 时间/正文未上下排列');
+  // 5) baseURL 规范化（少 /v1 会 404）
+  if (!emTs.includes('guiFanBaseURL')) fails.push('url: baseURL 未规范化（会 404）');
+  // 2) 计划模式存在
+  if (!emTs.includes('plan_update') || !appJs.includes('mianBanJiHuaKuai')) fails.push('plan: 计划模式缺失');
+  // 9) 音效 CSP 放行 data:
+  if (!/media-src[^"]*data:/.test(fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/index.html'), 'utf8'))) fails.push('sound: CSP 未放行 data: 音频');
   /**
    * 主进程 TDZ：`chuliIpc` 内部要用 `IPC_ALIASES`（const，后面才初始化）。
    * 任何 chuliIpc 出现在它之前 ⇒ 启动即崩 `Cannot access 'IPC_ALIASES' before initialization`

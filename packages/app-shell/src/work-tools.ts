@@ -280,7 +280,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
  * 权限：普通/严格授权下**只允许工作区内**的路径与 http(s) 网址；
  *      完全授权才允许任意本机路径（由调用方按 globalSecurity 判定，这里不判）。
  */
-export const HOST_TOOL_NAMES = ['open_path', 'open_url', 'schedule_task', 'ask_user'] as const;
+export const HOST_TOOL_NAMES = ['open_path', 'open_url', 'schedule_task', 'ask_user', 'plan_update', 'plan_verify'] as const;
 export function isHostTool(name: unknown): boolean {
   return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
 }
@@ -315,6 +315,48 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             options: { type: 'array', items: { type: 'string' }, description: '候选选项（2-8 个，纯文案）' },
           },
           required: ['title'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'plan_update',
+        description: '计划模式：长任务先把计划列出来（任务树，T1/T1.1 形态），再逐个完成、逐个验证。每次用**全量**提交当前步骤表（id/title/status/note）。status: pending|doing|done|verified|blocked。计划卡会出现在界面右侧第四列。',
+        parameters: {
+          type: 'object',
+          properties: {
+            steps: {
+              type: 'array',
+              description: '全量步骤表（顺序即执行顺序）',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', description: '如 T1 / T1.1' },
+                  title: { type: 'string' },
+                  status: { type: 'string', description: 'pending|doing|done|verified|blocked' },
+                  note: { type: 'string', description: '进展/证据（可选）' },
+                },
+                required: ['id', 'title', 'status'],
+              },
+            },
+          },
+          required: ['steps'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'plan_verify',
+        description: '计划模式：逐个验证 —— 把某个步骤标为 verified（必须真的验过），并在 note 写证据。',
+        parameters: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: '步骤 id，如 T1.2' },
+            note: { type: 'string', description: '验证证据（做了什么、看到什么）' },
+          },
+          required: ['id'],
         },
       },
     },

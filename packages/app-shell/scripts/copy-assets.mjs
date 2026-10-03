@@ -1,4 +1,4 @@
-import {copyFileSync, mkdirSync, readdirSync, statSync} from 'node:fs';
+import {copyFileSync, mkdirSync, readdirSync, statSync, existsSync as fsExists} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -21,6 +21,7 @@ mkdirSync(path.join(dist, 'renderer'), { recursive: true });
 mkdirSync(path.join(dist, 'i18n'), { recursive: true });
 
 copyFileSync(path.join(src, 'preload.cjs'), path.join(dist, 'preload.cjs'));
+if (fsExists(path.join(src, 'snip-preload.cjs'))) copyFileSync(path.join(src, 'snip-preload.cjs'), path.join(dist, 'snip-preload.cjs'));
 copyFileSync(path.join(src, 'ipc-aliases.json'), path.join(dist, 'ipc-aliases.json'));
 copyDir(path.join(src, 'renderer'), path.join(dist, 'renderer'));
 copyDir(path.join(src, 'i18n'), path.join(dist, 'i18n'));

@@ -23,6 +23,7 @@ export interface ZhixingqiGongyingshangPeizhi {
   apiKey?: string;
   baseURL?: string;
   model?: string;
+  protocol?: string;
 }
 
 /**
@@ -49,7 +50,8 @@ export async function yunxingDuanCunhuoZhixingqi(
     const provider = congYuSheChuangJian(cfg.presetId, {
       apiKey: cfg.apiKey,
       baseURL: cfg.baseURL || undefined,
-    });
+      protocol: cfg.protocol,
+    } as never, cfg.protocol as never);
     const xiangYing = await provider.chat({
       model: cfg.model || 'deepseek-chat',
       xiaoXiJi,

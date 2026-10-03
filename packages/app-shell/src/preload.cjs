@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('warmy', {
   memoryRebuild: () => ipcRenderer.invoke('warmy:jiYiChongJian'),
   i18n: (yuYan) => ipcRenderer.invoke('warmy:i18n', yuYan),
   captureScreen: () => ipcRenderer.invoke('warmy:pingMuJieTu'),
+  // 真·全屏截图：独立遮罩窗框选（右键/Esc 取消、单击/回车=整屏）
+  jieTuKaiShi: () => ipcRenderer.invoke('warmy:jieTuKaiShi'),
+  jieTuXuanQu: (q) => ipcRenderer.invoke('warmy:jieTuXuanQu', q),
   openExternal: (url) => ipcRenderer.invoke('warmy:daKaiWaiBuLianJie', url),
   listSystemFonts: () => ipcRenderer.invoke('warmy:lieBiaoXiTongZiTi'),
   installFont: (p0) => ipcRenderer.invoke('warmy:anZhuangZiTi', p0),
@@ -233,6 +236,7 @@ contextBridge.exposeInMainWorld('warmy', {
   /** 定时任务：列表 / 删除 / 变更通知 / 到点通知（到点要自动补「定时任务」卡片） */
   dingShiRenWuLieBiao: () => ipcRenderer.invoke('warmy:dingShiRenWuLieBiao'),
   dingShiRenWuShanChu: (p) => ipcRenderer.invoke('warmy:dingShiRenWuShanChu', p),
+  dingShiRenWuGengXin: (p) => ipcRenderer.invoke('warmy:dingShiRenWuGengXin', p),
   onDingShiRenWu: (cb) => ipcRenderer.on('warmy:dingShiRenWu', (_e, d) => cb(d)),
   onDingShiDaoDian: (cb) => ipcRenderer.on('warmy:dingShiDaoDian', (_e, d) => cb(d)),
   /** 文件产出：AI 写了文件 ⇒ 自动补「文件产物」卡片 */
@@ -241,6 +245,10 @@ contextBridge.exposeInMainWorld('warmy', {
   daKaiLuJing: (p) => ipcRenderer.invoke('warmy:daKaiLuJing', p),
   /** 通知音：拿 data URL（用户没选就用内置默认音效） */
   yinXiaoQu: (p) => ipcRenderer.invoke('warmy:yinXiaoQu', p),
+  /** 计划任务：列表 / 设置 / 变更通知 */
+  jiHuaLieBiao: (p) => ipcRenderer.invoke('warmy:jiHuaLieBiao', p),
+  jiHuaSheZhi: (p) => ipcRenderer.invoke('warmy:jiHuaSheZhi', p),
+  onJiHuaGengXin: (cb) => ipcRenderer.on('warmy:jiHuaGengXin', (_e, d) => cb(d)),
   /** AI 请求卡（选择/授权）出现时通知界面 */
   onAiWenTi: (cb) => ipcRenderer.on('warmy:aiWenTi', (_e, d) => cb(d)),
   /** 在资源管理器里显示文件（导出后看文件在哪） */

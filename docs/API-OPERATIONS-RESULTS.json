@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-02T18:21:29.940Z",
+  "at": "2026-10-03T13:26:09.122Z",
   "total": 46,
   "ok": 46,
   "results": [
@@ -12,25 +12,25 @@
     {
       "ming": "listInstances",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "[]"
     },
     {
       "ming": "securityMode",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "\"normal\""
     },
     {
       "ming": "memoryStatus",
       "ok": true,
-      "ms": 2,
+      "ms": 3,
       "resultPreview": "{\"ok\":true,\"ready\":true,\"CangLu\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\",\"jsonl\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\\\\fast-memory.jsonl\",…"
     },
     {
       "ming": "localeInfo",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"system\":\"zh-CN\",\"resolved\":\"zh-CN\",\"isZh\":true,\"supported\":[\"zh-CN\",\"zh-TW\",\"en-US\",\"ja\",\"ko\",\"ru\",\"es\",\"fr\",\"pt\",\"eo\"]}"
     },
     {
@@ -54,43 +54,43 @@
     {
       "ming": "boardEvents",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"events\":[]}"
     },
     {
       "ming": "boardAggregate",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"sessions\":[]}"
     },
     {
       "ming": "getProvider",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"providerCfg\":{\"presetId\":\"deepseek\",\"apiKey\":\"\",\"baseURL\":\"\",\"model\":\"deepseek-chat\",\"protocol\":\"openai-compatible\"},\"hasKey\":false}"
     },
     {
       "ming": "checkpointList",
       "ok": true,
       "ms": 1,
-      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1790965289440,\"imageDigests\":{}},\"…"
+      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1791033968583,\"imageDigests\":{}},\"…"
     },
     {
       "ming": "knowledgeQuery",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"entities\":[],\"events\":[]}"
     },
     {
       "ming": "metricsSummary",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"turns\":0,\"avgDurationMs\":0,\"promptTokens\":0,\"completionTokens\":0,\"cacheHitRate\":0,\"cacheHitTokens\":0,\"cacheMissTokens\":0,\"ccrOriginalBytes\":0,\"ccrCompressedBytes\":0,\"ccrRatio\":1,\"viewSampl…"
     },
     {
       "ming": "settingsGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"settings\":{\"yuYan\":\"zh-CN\",\"themeMode\":\"system\",\"accent\":\"#A78567\",\"sound\":{\"complete\":true,\"request\":true,\"error\":true},\"soundFiles\":{\"complete\":\"\",\"request\":\"\",\"error\":\"\"},\"emailOnReques…"
     },
     {
@@ -102,7 +102,7 @@
     {
       "ming": "skillsPaths",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"paths\":[\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\skills\"],\"scanDirs\":[]}"
     },
     {
@@ -114,13 +114,13 @@
     {
       "ming": "uiQueuesGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"queues\":{}}"
     },
     {
       "ming": "routerQueuesGet",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"snapshot\":{\"version\":1,\"seq\":0,\"queues\":{},\"dutyState\":{}},\"file\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\router-queues.json\"}"
     },
     {
@@ -174,7 +174,7 @@
     {
       "ming": "lastError",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"error\":null}"
     },
     {
@@ -216,25 +216,25 @@
     {
       "ming": "i18n",
       "ok": true,
-      "ms": 10,
+      "ms": 30,
       "resultPreview": "{\"yuYan\":\"zh-CN\",\"strings\":{\"about.author\":\"作者\",\"about.authorBody\":\"Pondsi\",\"about.checkUpdate\":\"检查更新\",\"about.checking\":\"检查中…\",\"about.contact\":\"联系方式\",\"about.contactBody\":\"Public@numumu.com · 232307860…"
     },
     {
       "ming": "memoryRetrieve",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "resultPreview": "{\"id\":5,\"ok\":true,\"result\":null}"
     },
     {
       "ming": "projectState",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "resultPreview": "{\"ok\":true,\"state\":{\"devEnv\":\"host\",\"containerOnly\":false,\"running\":true,\"stopped\":false,\"code\":\"host-dev\",\"hostEditingRefused\":false,\"developmentAllowed\":true,\"developmentWhere\":\"host\",\"testingAllowe…"
     },
     {
       "ming": "projectMemoryGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"groupId\":\"\",\"memory\":\"\",\"chars\":0}"
     },
     {
@@ -252,32 +252,32 @@
     {
       "ming": "boardTasks",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"RenwuJi\":[]}"
     },
     {
       "ming": "groupMembers",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"groupId\":\"\",\"members\":[],\"localIsCreator\":false}"
     },
     {
       "ming": "containerProbe",
       "ok": true,
-      "ms": 451,
-      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1790965289931,\"elapsedMs\":449,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
+      "ms": 471,
+      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1791033969112,\"elapsedMs\":469,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
     },
     {
       "ming": "netPortCandidates",
       "ok": true,
       "ms": 6,
-      "resultPreview": "{\"ok\":true,\"requestedPort\":59599,\"recommended\":[{\"port\":57757,\"status\":\"ok\",\"latencyMs\":4},{\"port\":52555,\"status\":\"ok\",\"latencyMs\":4},{\"port\":55151,\"status\":\"ok\",\"latencyMs\":4},{\"port\":55335,\"status\":…"
+      "resultPreview": "{\"ok\":true,\"requestedPort\":59599,\"recommended\":[{\"port\":57757,\"status\":\"ok\",\"latencyMs\":5},{\"port\":52555,\"status\":\"ok\",\"latencyMs\":5},{\"port\":55151,\"status\":\"ok\",\"latencyMs\":4},{\"port\":55335,\"status\":…"
     },
     {
       "ming": "chatLogRestore",
       "ok": true,
-      "ms": 2,
-      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1790965289938},\"sessions\":[],\"logSeq\":0}"
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1791033969120},\"sessions\":[],\"logSeq\":0}"
     }
   ]
 }

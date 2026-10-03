@@ -396,7 +396,7 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 .xiaoXi.wo .bubble { background: var(--me-bubble); color: var(--me-bubble-ink, #111); }
 /* 我方消息：与头像同侧（右侧）对齐 —— 文字也右对齐 */
 .xiaoXi.wo { justify-content: flex-start; }
-.xiaoXi.wo .bubble { text-align: right; }
+.xiaoXi.wo .bubble { text-align: left; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
 .xiaoXi.wo .bubbleWrap { align-items: flex-end; }
 [data-theme="dark"] .xiaoXi.wo .bubble { color: #e8ffe8; }
 .shiJianFenGe {
@@ -642,7 +642,8 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 }
 .duiLieTiaoMuJi { list-style: none; margin: 0; padding: 0; }
 .duiLieTiaoMuJi li {
-  display: flex; gap: 8px; align-items: flex-start;
+  /* 时间/标签在**上**、正文在**下**（纵向排列；以前是横排所以左右分开） */
+  display: flex; flex-direction: column; gap: 2px; align-items: stretch;
   padding: 6px 8px; border-radius: var(--radius-sm); background: var(--card);
   border: 1px solid var(--queue-border); margin-bottom: 6px; font-size: var(--fs-base);
 }
@@ -1084,8 +1085,8 @@ details.ctgShouQi > .ctgShouQiTi {
   border-bottom: 1px solid var(--line);
   font-size: 12px;
 }
-.renwuLieBiao .renwuZhu { flex: 1; min-width: 0; }
-.renwuLieBiao .renwuShiJian { display: block; margin-top: 2px; font-size: 11px; }
+.renwuLieBiao .renwuZhu { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.renwuLieBiao .renwuShiJian { display: block; margin-top: 0; font-size: 11px; }
 
 /* 等待协助 */
 #mianBanAssistKuai .mianBanKaiGuan { position: relative; }
@@ -2065,3 +2066,47 @@ html { font-weight: var(--fw-ui, 400); }
 /* 附件缩略图 + 文件名 */
 .attachChip { display: inline-flex; align-items: center; gap: 6px; }
 .attachSuoLue { width: 22px; height: 22px; object-fit: cover; border-radius: 4px; }
+
+/* 调用链里被禁用的模型：变灰**并且**加删除线（只变灰不够明显） */
+.shiLiHang .moYongShanChuXian, .chainRow.disabled .name, .shiLiHang[style*="opacity:.5"] span:first-child {
+  text-decoration: line-through;
+}
+
+/* 字号缩放 15%–650%：超大字号下气泡/按钮不被撑破，文字仍可读 */
+.bubble, .mdP, .mdH, .mdUl, li, .jingYin { overflow-wrap: anywhere; }
+
+/* 待执行队列：时间/等待/标签是**内容上方的小字**，正文在下（强制上下排列，不许左右分开） */
+.duiLieTiaoMuJi li { display: flex; flex-direction: column !important; gap: 2px; align-items: stretch; }
+.qTouXiaoZi { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 11px; color: var(--muted); margin-bottom: 2px; width: 100%; }
+.qZhengWen { font-size: 13px; width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.qWenBen { white-space: pre-wrap; width: 100%; }
+
+/* 计划任务（任务树）：步骤可见、状态一目了然 */
+.jiHuaBu { margin: 6px 0; padding-left: 8px; border-left: 2px solid var(--line); }
+.jiHuaId { font-size: 11px; font-weight: 600; color: var(--accent); margin-right: 6px; }
+.jiHuaMing { font-size: 12px; }
+.jiHuaZhuangTai { float: right; font-size: 11px; opacity: .75; }
+.jiHuaBu[data-st="done"] { border-left-color: var(--ok-fg, #6fd18f); }
+.jiHuaBu[data-st="verified"] { border-left-color: var(--accent); }
+.jiHuaBu[data-st="blocked"] { border-left-color: var(--danger, #e06060); }
+.jiHuaBu[data-st="doing"] { border-left-color: var(--warn-fg, #e8c07a); }
+
+/* 消息悬停复制按钮 */
+.xiaoXiFuZhi {
+  opacity: 0; align-self: flex-end; margin-top: 2px;
+  border: none; background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;
+}
+.xiaoXi:hover .xiaoXiFuZhi { opacity: .75; }
+.xiaoXiFuZhi:hover { opacity: 1; background: var(--hover); }
+
+/* 图片附件点击放大预览 */
+.tuPianYuLanCeng {
+  position: fixed; inset: 0; z-index: 30000;
+  background: rgba(0,0,0,.82); display: flex;
+  align-items: center; justify-content: center; cursor: zoom-out;
+}
+.tuPianYuLanCeng img {
+  max-width: 92vw; max-height: 92vh; border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+}

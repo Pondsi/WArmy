@@ -161,6 +161,6 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
 export function chuangjianDeepSeek(auth: GongYingRenZheng): JianrongOpenAIGongYing {
   return new JianrongOpenAIGongYing(auth, {
     id: 'deepseek',
-    defaultBase: 'https://api.deepseek.com',
+    defaultBase: 'https://api.deepseek.com/v1',
   });
 }
