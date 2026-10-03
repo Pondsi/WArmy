@@ -193,6 +193,8 @@ export function zhuanHuanOpenAI(xiaoXiJi: LiaoTianXiaoXi[]): unknown[] {
         })),
       };
     }
+    // 多模态（含图片）：原样透传内容块数组 —— 视觉模型因此能真的看到图
+    if (Array.isArray(m.content)) return { role: m.role, content: m.content };
     return { role: m.role, content: m.content };
   });
 }

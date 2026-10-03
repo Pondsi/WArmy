@@ -17,6 +17,7 @@
  *   4. 协议映射已在 openai.ts / anthropic.ts 里完成（tools / tool_calls / tool_result），本文件不碰 HTTP。
  */
 import { jieWeiAnQuan } from './util.js';
+import { neiRongWenBen } from './types.js';
 import type {
   LiaoTianXiaoXi,
   LiaoTianQingQiu,
@@ -178,9 +179,9 @@ export async function liaoTianDaiGongJu(
         emit({ kind: 'final', round: lunShu, detail: tingZhiYuanYin });
         try {
           const zuiZhongXiangYing = await diaoYongMoXing('none');
-          const text = zuiZhongXiangYing.choices[0]?.message?.content || '';
+          const text = neiRongWenBen(zuiZhongXiangYing.choices[0]?.message?.content);
           // 强制收敛若仍不产出文本，就保留上一次响应的正文（避免把"空回复"当成答案）
-          const qianYiWenBen = last?.choices[0]?.message?.content || '';
+          const qianYiWenBen = neiRongWenBen(last?.choices[0]?.message?.content);
           if (text || !qianYiWenBen) last = zuiZhongXiangYing;
         } catch {
           /* 收敛失败就退回最后一次响应，绝不抛错（视图/预算已经守住了） */

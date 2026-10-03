@@ -24,6 +24,7 @@ import {
   congYuSheChuangJian,
   liaoTianDaiGongJu,
   gongYingZhiChiGongJu,
+  neiRongWenBen,
   type LiaoTianXiaoXi,
   type LiaoTianQingQiu,
   type MoxingGongYing,
@@ -131,7 +132,7 @@ import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomi
  * **不是**落到本机设置里（产品主：记录文件的改动是无限牛马的功能，不是本机的功能）。
  */
 import { setFileAccessSink, withFileAccessScope, dangqianWenjianFangwenZuoyongyu } from './helper-tool.js';
-import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs } from './work-tools.js';
+import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs, yingSheYongHuWenJianJia } from './work-tools.js';
 import { jueCeMoXing, jieMoXingMing, type MoXingJueCeShuRu } from './model-pick.js';
 import { XiaoDiDengJiBu, xiaoDiToolSpecs, isXiaoDiTool } from './subagents.js';
 import { JieDianMingCe, TongbuZongxian, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
@@ -1050,12 +1051,18 @@ async function yunXingLiaoTianXunHuan(
             const url = String(argsH.url || '').trim();
             if (!/^https?:\/\//i.test(url)) { okH = false; huiBaoH = '[open_url] 只接受 http/https 网址'; }
             else { await shell.openExternal(url); huiBaoH = `[open_url] 已用系统浏览器打开 ${url}`; }
-          } else if (gongJuMing === 'open_path') {
+          } else if (gongJuMing === 'open_path' || gongJuMing === 'open_file') {
             const p0 = String(argsH.path || '').trim();
             const { full: quanQuan2, ask: yaoWen } = anQuanDangWei();
             let abs = '';
             let yueQuan = false;
-            if (path.isAbsolute(p0)) {
+            // 系统用户目录别名（Desktop/桌面/…）→ 真实路径（真事故：模型写 Desktop/x.txt 以为是系统桌面）
+            let zhenLu: { abs: string; rest: string } | null = null;
+            try { zhenLu = yingSheYongHuWenJianJia(p0); } catch { zhenLu = null; }
+            if (zhenLu) {
+              abs = zhenLu.rest ? path.resolve(zhenLu.abs, zhenLu.rest) : path.resolve(zhenLu.abs);
+              yueQuan = true;   // 系统目录在工作区外 ⇒ 走越权流程（完全授权直接放行）
+            } else if (path.isAbsolute(p0)) {
               if (quanQuan2) abs = p0;
               else yueQuan = true;
             } else {
@@ -1064,16 +1071,18 @@ async function yunXingLiaoTianXunHuan(
               if (rel.startsWith('..') || path.isAbsolute(rel)) yueQuan = true;
             }
             if (yueQuan) {
-              // 越权：按「超出权限是否询问」弹请求卡；同意就这一次放行
-              if (yaoWen) {
+              if (quanQuan2) {
+                // 完全授权：系统目录/绝对路径直接放行
+              } else if (yaoWen) {
                 const da = await qingQiuKaPian(
                   sessionId,
                   'AI 请求打开工作区外的文件',
                   `路径：${p0}\n（同意 = 仅这一次放开；拒绝 = 只能开工作区内文件）`,
                   [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
                 );
-                if (/^同意/.test(da)) abs = path.isAbsolute(p0) ? p0 : path.resolve(p0);
-                else { okH = false; huiBaoH = `[open_path] 用户拒绝/未授权打开 ${p0}。若需要，请让用户在顶部改成「完全授权」。`; }
+                // 同意放行：保留上面已解析好的 abs（含系统目录映射结果）
+                if (/^同意/.test(da)) { /* abs 已就绪 */ }
+                else { okH = false; abs = ''; huiBaoH = `[open_path] 用户拒绝/未授权打开 ${p0}。若需要，请让用户在顶部改成「完全授权」。`; }
               } else {
                 okH = false;
                 huiBaoH = '[open_path] 普通/严格授权只允许工作区内的相对路径（要开本机任意路径请改成「完全授权」，或勾上「超出权限询问」由用户批准）';
@@ -1115,7 +1124,7 @@ async function yunXingLiaoTianXunHuan(
          * 普通/严格 ⇒ 先在工作区内做；越权时按「超出权限是否询问」弹请求卡，
          * 用户同意就**这一次**放开，拒绝就如实回绝（AI 不会硬来）。
          */
-        let wr = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, full);
+        let wr = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, full, app.getAppPath());
         if (!wr.meta.ok && /workspace-escape|absolute-path-not-allowed/.test(String(wr.meta.error || '')) && !full) {
           let luJing = '';
           try {
@@ -1131,7 +1140,7 @@ async function yunXingLiaoTianXunHuan(
               [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
             );
             if (/^同意/.test(da)) {
-              wr = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, true);
+              wr = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, true, app.getAppPath());
             } else {
               wr = {
                 ok: false,
@@ -1142,9 +1151,17 @@ async function yunXingLiaoTianXunHuan(
           }
         }
         // 有文件生成 ⇒ 广播给界面（自动补上「文件产物」卡片，见渲染层）
-        if (wr.ok && wr.meta && wr.meta.tool === 'write_file') {
+        if (wr.ok && wr.meta && (wr.meta.tool === 'write_file' || wr.meta.tool === 'make_docx' || wr.meta.tool === 'make_pptx')) {
           try {
-            broadcastToWindows('warmy:wenJianChanSheng', { sessionId, path: String(wr.meta.path || ''), abs: path.join(base, String(wr.meta.path || '')), bytes: wr.meta.bytes || 0, root: base });
+            /**
+             * abs 必须是**真实绝对路径**：桌面/文档这类系统目录写出的文件，
+             * meta.path 本身就是绝对路径，再 path.join(base, …) 会拼出垃圾路径
+             * （真事故：产物卡点开报错 not-found / workspace-escape）。
+             */
+            const luJing = String(wr.meta.path || '');
+            const zhenAbs = String(wr.meta.abs || '')
+              || (path.isAbsolute(luJing) ? luJing : path.join(base, luJing));
+            broadcastToWindows('warmy:wenJianChanSheng', { sessionId, path: luJing, abs: zhenAbs, bytes: wr.meta.bytes || 0, root: base });
           } catch { /* noop */ }
         }
         audit?.log('chat.work-tool', {
@@ -1399,6 +1416,42 @@ async function baozhangGongyingshangMiyao(): Promise<void> {
   if (providerCfg.apiKey || providerCfg.protocol === 'ollama') return;
   const k = await jiexiGongyingshangMiyao(providerCfg.presetId);
   if (k) providerCfg.apiKey = k;
+}
+
+/**
+ * **模型 → 供应商**：找到真正拥有这个模型的那一家（settings.providers 里 models 含它，或它的默认模型就是它）。
+ *
+ * 真事故：用户用 **Ollama 的模型**聊天，但「当前生效供应商」是没配密钥的 DeepSeek ⇒
+ * 报「未配置 API Key」。Ollama 本来就不需要 key —— 根因是**没有按模型路由供应商**。
+ * 找不到归属时返回 null（调用方退回当前生效供应商，保持旧行为）。
+ */
+type MoXingGongYingXinXi = {
+  presetId: string;
+  baseURL: string;
+  protocol: 'openai-compatible' | 'anthropic' | 'ollama';
+  apiKey: string;
+  biaoQian: string;
+};
+async function jieMoXingGongYingShang(modelId: string): Promise<MoXingGongYingXinXi | null> {
+  try {
+    const s = settingsStore?.load() as {
+      providers?: Array<{ id?: string; biaoQian?: string; baseURL?: string; protocol?: string; models?: unknown[]; defaultModel?: string }>
+    } | undefined;
+    const lie = Array.isArray(s?.providers) ? s.providers : [];
+    const ming = String(modelId || '').trim();
+    if (!ming) return null;
+    let hit = lie.find((p) => Array.isArray(p.models) && p.models.some((m) => String(typeof m === 'string' ? m : (m as { id?: string })?.id || '') === ming));
+    if (!hit) hit = lie.find((p) => String(p.defaultModel || '') === ming);
+    if (!hit) return null;
+    const xieYi = (String(hit.protocol || '') as MoXingGongYingXinXi['protocol']);
+    return {
+      presetId: String(hit.id || providerCfg.presetId),
+      baseURL: guiFanBaseURL(String(hit.baseURL || '')),
+      protocol: xieYi === 'ollama' || xieYi === 'anthropic' ? xieYi : 'openai-compatible',
+      apiKey: xieYi === 'ollama' ? '' : (await jiexiGongyingshangMiyao(String(hit.id || ''))),
+      biaoQian: String(hit.biaoQian || hit.id || ''),
+    };
+  } catch { return null; }
 }
 
 /** 打包态资源根目录；开发态下 Electron 也会给值，兜底空串便于拼路径 */
@@ -3096,15 +3149,19 @@ chuliIpc(
       ts: Date.now(),
     });
 
-    // 值班者调用 LLM 生成回复（有 Key 时）
+    // 值班者调用 LLM 生成回复（有 Key 时）——按模型找所属供应商（Ollama 无需密钥）
     let llmReply: string | null = null;
-    if (providerCfg.apiKey || providerCfg.protocol === 'ollama') {
+    {
+      const zhibanMoxing0 = providerCfg.model;
+      const anD = await jieMoXingGongYingShang(String(zhibanMoxing0 || ''));
+      const zhuD = anD || { presetId: providerCfg.presetId, baseURL: providerCfg.baseURL || '', protocol: providerCfg.protocol, apiKey: providerCfg.apiKey || '', biaoQian: providerCfg.presetId };
+      if (zhuD.apiKey || zhuD.protocol === 'ollama') {
       try {
-        const provider = congYuSheChuangJian(providerCfg.presetId, {
-          apiKey: providerCfg.apiKey,
-          baseURL: providerCfg.baseURL || undefined,
-          protocol: providerCfg.protocol,
-        } as never, providerCfg.protocol);
+        const provider = congYuSheChuangJian(zhuD.presetId, {
+          apiKey: zhuD.apiKey,
+          baseURL: zhuD.baseURL || undefined,
+          protocol: zhuD.protocol,
+        } as never, zhuD.protocol);
         // 注意：用户消息已经在上面 appendChatLog 时进了镜像（chatHistories 不再是独立真相，
         // 见 appendChatLog —— 历史 bug 就是两处各自 push，重启后与 JSONL 脱节）
         // 不变量 #2：注入的是有界渲染视图（原来这里是 hist.slice(-20)，只按条数有界）。
@@ -3129,7 +3186,7 @@ chuliIpc(
         if (!loop && zhibanChongshi.gaveUp) {
           llmReply = tMain('chat.contextTooSmall', '该模型上下文太小，无法满足当前聊天需求（已自动收缩重试到最小值仍失败）');
         } else if (loop) {
-          llmReply = loop.xiangYingTi.choices[0]?.message?.content || '';
+          llmReply = neiRongWenBen(loop.xiangYingTi.choices[0]?.message?.content);
         }
         zhuiJiaLiaoTianRiZhi(xiaoXi.groupId, {
           seq: xiaYiLiaoTianXuLie(),
@@ -3140,6 +3197,7 @@ chuliIpc(
         });
       } catch (e) {
         llmReply = `LLM error: ${xiJingCuoWu(e).slice(0, 160)}`;
+      }
       }
     }
 
@@ -3290,6 +3348,8 @@ chuliIpc(
       ming?: string;
       /** 指令插入：outer=外循环后，inner=内循环边界 */
       insertMode?: 'outer' | 'inner';
+      /** 附件（图片走多模态让模型**真的看到**；其它文件只带路径） */
+      attachments?: Array<{ name?: string; path?: string; dataUrl?: string }>;
     }
   ) => {
     const sessionId = xiaoXi.sessionId;
@@ -3358,8 +3418,29 @@ chuliIpc(
     });
 
     await baozhangGongyingshangMiyao();
-    if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
-      const reply = tMain('llm.noKey') + xiaoXi.content.slice(0, 80);
+    /**
+     * 「智能选模型」：显式 > 牛马默认 > 调用链+紧急度 > 角色表 > 兜底（见 model-pick.ts）
+     * **先**定模型，再按模型找它所属的供应商 —— 否则用 Ollama 的模型会撞上
+     * 「当前生效供应商没配密钥」的误报（真事故）。
+     */
+    const jueCe = jueCeMoXing({
+      explicit: xiaoXi.model,
+      ...(xiaoXi.moXingJueCe || {}),
+      roles: roleModels,
+      fallback: providerCfg.model || 'deepseek-chat',
+    });
+    const modelId = jueCe.model;
+    const an = await jieMoXingGongYingShang(modelId);
+    const zhu: MoXingGongYingXinXi = an || {
+      presetId: providerCfg.presetId,
+      baseURL: providerCfg.baseURL || '',
+      protocol: providerCfg.protocol,
+      apiKey: providerCfg.apiKey || '',
+      biaoQian: providerCfg.presetId,
+    };
+    if (!zhu.apiKey && zhu.protocol !== 'ollama') {
+      const reply = tMain('llm.noKey') + xiaoXi.content.slice(0, 80)
+        + `\n（本轮模型 ${modelId} 属于供应商「${zhu.biaoQian}」，该家尚未配置 API Key；Ollama 无需密钥，其它供应商请在「设置 → 模型」里填 Key。）`;
       zhuiJiaLiaoTianRiZhi(sessionId, {
         seq: xiaYiLiaoTianXuLie(),
         role: 'assistant',
@@ -3372,20 +3453,12 @@ chuliIpc(
 
     const qiShiShiJian = Date.now();
     try {
-      const provider = congYuSheChuangJian(providerCfg.presetId, {
-        apiKey: providerCfg.apiKey,
-        baseURL: providerCfg.baseURL || undefined,
-        protocol: providerCfg.protocol,
-      } as never, providerCfg.protocol);
-      // 「智能选模型」：显式 > 牛马默认 > 调用链+紧急度 > 角色表 > 兜底（见 model-pick.ts）
-      const jueCe = jueCeMoXing({
-        explicit: xiaoXi.model,
-        ...(xiaoXi.moXingJueCe || {}),
-        roles: roleModels,
-        fallback: providerCfg.model || 'deepseek-chat',
-      });
-      const modelId = jueCe.model;
-      audit?.log('chat.model-picked', { sessionId, model: modelId, why: jueCe.why, chainIndex: jueCe.chainIndex, urgency: (xiaoXi.moXingJueCe && xiaoXi.moXingJueCe.urgency) || '' });
+      const provider = congYuSheChuangJian(zhu.presetId, {
+        apiKey: zhu.apiKey,
+        baseURL: zhu.baseURL || undefined,
+        protocol: zhu.protocol,
+      } as never, zhu.protocol);
+      audit?.log('chat.model-picked', { sessionId, model: modelId, why: jueCe.why, chainIndex: jueCe.chainIndex, urgency: (xiaoXi.moXingJueCe && xiaoXi.moXingJueCe.urgency) || '', provider: zhu.presetId, protocol: zhu.protocol });
       // 思考级别 → 请求附加参数；模型不支持时**降级为自动**再试，并在回复开头如实标注
       const siKaoExtra = siKaoCanShu(xiaoXi.thinkLevel, xiaoXi.moXingJueCe && xiaoXi.moXingJueCe.urgency, modelId);
       let jiangJiTiShi = false;
@@ -3411,9 +3484,47 @@ chuliIpc(
           if (yongHu) ju.push(tMain('llm.userLine', '你的用户是「{u}」，请这样称呼他。').replace('{u}', yongHu));
           if (ju.length) shenFenTou.push({ role: 'system', content: ju.join('') } as LiaoTianXiaoXi);
         }
+        /**
+         * 图片附件 → 多模态内容块：模型因此能**真的看到**截图/图片
+         * （真事故：以前只把文件路径塞进文本，模型 read_file 到 PNG 字节 ⇒「没看出来」）。
+         * 只挑图片（有 dataUrl 或扩展名像图）；单张上限 6MB，过大如实跳过并注明。
+         */
+        const tuKuaiJi: Array<{ type: 'image_url'; image_url: { url: string } }> = [];
+        const tiaoGuoJi: string[] = [];
+        for (const a of (xiaoXi.attachments || [])) {
+          const ming = String(a.name || a.path || '').trim();
+          let dataUrl = String(a.dataUrl || '');
+          try {
+            if (!dataUrl && a.path && /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.path) && fs.existsSync(a.path)) {
+              const bb = fs.readFileSync(a.path);
+              if (bb.length > 6 * 1024 * 1024) { tiaoGuoJi.push(ming + '（图片超过 6MB，未喂给模型）'); continue; }
+              const mt = /\.jpe?g$/i.test(a.path) ? 'image/jpeg' : /\.gif$/i.test(a.path) ? 'image/gif' : /\.webp$/i.test(a.path) ? 'image/webp' : /\.bmp$/i.test(a.path) ? 'image/bmp' : 'image/png';
+              dataUrl = `data:${mt};base64,${bb.toString('base64')}`;
+            }
+          } catch { tiaoGuoJi.push(ming + '（读取失败，未喂给模型）'); continue; }
+          if (dataUrl && /^data:image\//i.test(dataUrl)) {
+            if (dataUrl.length > 8 * 1024 * 1024) { tiaoGuoJi.push(ming + '（图片过大，未喂给模型）'); continue; }
+            tuKuaiJi.push({ type: 'image_url', image_url: { url: dataUrl } });
+          }
+        }
+        const yuanXiaoXiJi = [...shenFenTou, ...(shitu.xiaoXiJi as LiaoTianXiaoXi[])];
+        let xiaoXiJiZui: LiaoTianXiaoXi[] = yuanXiaoXiJi;
+        if (tuKuaiJi.length) {
+          // 把图片块并进**最后一条用户消息**（模型看到的是"文字 + 图"）
+          xiaoXiJiZui = yuanXiaoXiJi.map((m, i) => {
+            if (i !== yuanXiaoXiJi.length - 1) return m;
+            const yuanWen = typeof m.content === 'string' ? m.content : (m.content as Array<{ text?: string }>).map((b) => b.text || '').join('');
+            const bu = [
+              { type: 'text' as const, text: yuanWen + (tiaoGuoJi.length ? `\n（未喂给模型的附件：${tiaoGuoJi.join('；')}）` : '') },
+              ...tuKuaiJi,
+            ];
+            return { ...m, content: bu };
+          });
+          audit?.log('chat.image-attached', { sessionId, count: tuKuaiJi.length, skipped: tiaoGuoJi.length });
+        }
         const jiBenQiu = {
           model: modelId,
-          xiaoXiJi: [...shenFenTou, ...(shitu.xiaoXiJi as LiaoTianXiaoXi[])],
+          xiaoXiJi: xiaoXiJiZui,
           maxTokens: 1024,
         };
         let loop: Awaited<ReturnType<typeof yunXingLiaoTianXunHuan>>;
@@ -3444,7 +3555,7 @@ chuliIpc(
       }
       const { loop } = chongshi.result;
       const xiangYing = loop.xiangYingTi;
-      const reply0 = xiangYing.choices[0]?.message?.content || '';
+      const reply0 = neiRongWenBen(xiangYing.choices[0]?.message?.content);
       // 思考过程：DeepSeek 等放在 message.reasoning_content，有的叫 reasoning / thinking
       const rawMsg = ((xiangYing.raw as { choices?: Array<{ message?: Record<string, unknown> }> } | undefined)?.choices?.[0]?.message) || {};
       const siKaoGuoCheng = String(rawMsg.reasoning_content ?? rawMsg.reasoning ?? rawMsg.thinking ?? '');
@@ -3765,6 +3876,14 @@ chuliIpc('warmy:liaoTianRiZhiHuiFu', async () => {
 // ── 设置持久化 ──
 chuliIpc('warmy:peiZhiQu', () => anQuanChuLi(() => ({ ok: true, settings: settingsStore?.load() }), { ok: true, settings: undefined }))
 chuliIpc('warmy:peiZhiBaoCun', (e, partial: Record<string, unknown>) => {
+  // 恢复出厂默认：清空设置文件后写回最小默认（保留 Chromium 缓存不动）
+  if (partial && (partial as { restoreDefaults?: boolean }).restoreDefaults) {
+    try {
+      const ji = settingsStore?.reset();
+      try { broadcastToWindows('warmy:peiZhiChanged', { keys: ['restoreDefaults'] }, e?.sender?.id); } catch { /* noop */ }
+      return { ok: true, settings: ji, restored: true };
+    } catch (err) { return { ok: false, error: xiJingCuoWu(err) }; }
+  }
   const next = settingsStore?.save(partial as never);
   /**
    * **设置改动要播给其它窗口**：主界面和独立会话窗都从同一份设置渲染，
@@ -7679,8 +7798,11 @@ chuliIpc('warmy:pingTai', () => ({
 chuliIpc('warmy:zhiXingQiYunXing', async (_e, renwu: { taskId?: string; brief: string; contextItems?: string[] }) => {
   try {
     await baozhangGongyingshangMiyao();
-    if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
-      return { ok: false, error: 'no key' };
+    const mo = String(providerCfg.model || '');
+    const an = await jieMoXingGongYingShang(mo);
+    const zhu = an || { presetId: providerCfg.presetId, baseURL: providerCfg.baseURL || '', protocol: providerCfg.protocol, apiKey: providerCfg.apiKey || '', biaoQian: providerCfg.presetId };
+    if (!zhu.apiKey && zhu.protocol !== 'ollama') {
+      return { ok: false, error: `no key（模型 ${mo || '—'} 属于供应商「${zhu.biaoQian}」；Ollama 无需密钥）` };
     }
     const r = await yunxingDuanCunhuoZhixingqi(
       {
@@ -7689,10 +7811,11 @@ chuliIpc('warmy:zhiXingQiYunXing', async (_e, renwu: { taskId?: string; brief: s
         contextItems: renwu.contextItems || [],
       },
       {
-        presetId: providerCfg.presetId,
-        apiKey: providerCfg.apiKey,
-        baseURL: providerCfg.baseURL || undefined,
-        model: providerCfg.model,
+        presetId: zhu.presetId,
+        apiKey: zhu.apiKey,
+        baseURL: zhu.baseURL || undefined,
+        model: mo,
+        protocol: zhu.protocol,
       }
     );
     return { ok: !r.error, ...r };
@@ -7702,16 +7825,20 @@ chuliIpc('warmy:zhiXingQiYunXing', async (_e, renwu: { taskId?: string; brief: s
 chuliIpc('warmy:zhiXingQiPiLiang', async (_e, RenwuJi: Array<{ taskId?: string; brief: string; contextItems?: string[] }>) => {
   try {
     await baozhangGongyingshangMiyao();
-    if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') {
-      return { ok: false, error: 'no key' };
+    const mo = String(providerCfg.model || '');
+    const an = await jieMoXingGongYingShang(mo);
+    const zhu = an || { presetId: providerCfg.presetId, baseURL: providerCfg.baseURL || '', protocol: providerCfg.protocol, apiKey: providerCfg.apiKey || '', biaoQian: providerCfg.presetId };
+    if (!zhu.apiKey && zhu.protocol !== 'ollama') {
+      return { ok: false, error: `no key（模型 ${mo || '—'} 属于供应商「${zhu.biaoQian}」；Ollama 无需密钥）` };
     }
     const rs = await yunXingZhiXingQiJi(
       RenwuJi.map((t) => ({ taskId: t.taskId || 'x-' + Date.now(), brief: t.brief, contextItems: t.contextItems || [] })),
       {
-        presetId: providerCfg.presetId,
-        apiKey: providerCfg.apiKey,
-        baseURL: providerCfg.baseURL || undefined,
-        model: providerCfg.model,
+        presetId: zhu.presetId,
+        apiKey: zhu.apiKey,
+        baseURL: zhu.baseURL || undefined,
+        model: mo,
+        protocol: zhu.protocol,
       }
     );
     return { ok: true, results: rs };
@@ -8711,18 +8838,16 @@ chuliIpc('warmy:dingShiRenWuGengXin', (_e, p0?: { id?: string; enabled?: boolean
     return { ok: true, enabled: it.enabled };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-/** 界面上的「打开」按钮：用系统默认程序打开文件/目录（完全授权才允许工作区外） */
+/** 界面上的「打开」按钮：用系统默认程序打开文件/目录。
+ *  **这是用户自己在界面上点的**（产物卡/文件列表），不是 AI 工具 —— AI 开文件走 `open_path`（有越权门槛）。
+ *  因此这里不做工作区外限制：AI 产出的桌面文件，用户点开必须能看（真事故：点了报 workspace-escape）。 */
 chuliIpc('warmy:daKaiLuJing', async (_e, p0?: { path?: string }) => {
   try {
     const p = String(p0?.path || '').trim();
     if (!p) return { ok: false, error: 'bad-path' };
-    const quanQuan = String((settingsStore?.load() as { globalSecurity?: string } | undefined)?.globalSecurity || 'normal') === 'full';
     const base = path.join(app.getPath('userData'), 'workspace');
-    const abs = path.isAbsolute(p) ? p : path.resolve(base, p);
-    if (!quanQuan) {
-      const rel = path.relative(base, abs);
-      if (rel.startsWith('..') || path.isAbsolute(rel)) return { ok: false, error: 'workspace-escape（需要「完全授权」才能打开工作区外的文件）' };
-    }
+    const abs = path.isAbsolute(p) ? path.resolve(p) : path.resolve(base, p);
+    if (!fs.existsSync(abs)) return { ok: false, error: 'not-found：' + abs };
     const r = await shell.openPath(abs);
     return r ? { ok: false, error: r } : { ok: true, path: abs };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }

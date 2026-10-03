@@ -16,13 +16,34 @@
 
 export type LiaoTianJueSe = 'system' | 'user' | 'assistant' | 'tool';
 
+/**
+ * 多模态内容块：文本 + 图片（OpenAI 兼容的 image_url 形态）。
+ * 真事故：截图只把**文件路径**塞给模型，模型只能 read_file 到 PNG 字节 ⇒「没看出来」。
+ * 有了它，支持视觉的模型能**真的看到**图；不支持的会报错并如实告知用户。
+ */
+export interface LiaoTianNeiRongBu {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: { url: string; detail?: 'auto' | 'low' | 'high' };
+}
+
 export interface LiaoTianXiaoXi {
   role: LiaoTianJueSe;
-  content: string;
+  /** 纯文本；或多模态块（含图片） */
+  content: string | LiaoTianNeiRongBu[];
   /** tool_calls 时由 assistant 侧携带 */
   gongJuDiaoYongJi?: GongJuDiaoYong[];
   toolCallId?: string;
   ming?: string;
+}
+
+/** 把 content 折成纯文本（回复展示/落日志用；图片块只留文字部分） */
+export function neiRongWenBen(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map((b) => (b && typeof b === 'object' ? String((b as { text?: string }).text || '') : '')).join('');
+  }
+  return content == null ? '' : String(content);
 }
 
 export interface GongJuDiaoYong {

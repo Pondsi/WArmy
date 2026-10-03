@@ -2605,5 +2605,12 @@ html { font-weight: var(--fw-ui, 400); }
   box-shadow: 0 8px 32px rgba(0,0,0,.5);
 }
 
+/* 快捷键键帽 */
+.hkMiYaoJi kbd, .hkMao {
+  display: inline-block; padding: 1px 7px; border: 1px solid var(--line);
+  border-bottom-width: 2px; border-radius: 5px; background: var(--card);
+  font-size: 11px; font-family: inherit; margin: 0 2px;
+}
+
 /* 附件拖拽上传 */
 .shuRuQu.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }

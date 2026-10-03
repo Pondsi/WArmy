@@ -1,7 +1,7 @@
 /**
  * P5 短命执行者协议：上下文 = O(任务规模)，完成即销毁，只回传蒸馏结论
  */
-import { congYuSheChuangJian, type LiaoTianXiaoXi } from '@warmy/providers';
+import { congYuSheChuangJian, neiRongWenBen, type LiaoTianXiaoXi } from '@warmy/providers';
 
 export interface ZhixingqiRenwu {
   taskId: string;
@@ -59,7 +59,7 @@ export async function yunxingDuanCunhuoZhixingqi(
     });
     return {
       taskId: renwu.taskId,
-      distilled: xiangYing.choices[0]?.message?.content || '',
+      distilled: neiRongWenBen(xiangYing.choices[0]?.message?.content),
       stats: {
         durationMs: Date.now() - qiShiShiJian,
         promptTokens: xiangYing.usage.promptTokens,

@@ -14,7 +14,7 @@ import {
   type LogEntry,
 } from './context-renderer.js';
 import { retrieveAssetsForChat, zhuCeLiaoTianZiChan } from './asset-wire.js';
-import { liaoTianDaiGongJu, type LiaoTianXiaoXi, type GongJuDiaoYong, type GongJuGuiGe } from '@warmy/providers';
+import { liaoTianDaiGongJu, neiRongWenBen, type LiaoTianXiaoXi, type GongJuDiaoYong, type GongJuGuiGe } from '@warmy/providers';
 
 export interface ZhibanGongyingshangPeizhi {
   presetId: string;
@@ -238,7 +238,7 @@ export async function xietiaoQunXiaoxi(
           })
         : null;
       const xiangYing = loop ? loop.xiangYingTi : await provider.chat(Qiu);
-      distilled = xiangYing.choices[0]?.message?.content || '';
+      distilled = neiRongWenBen(xiangYing.choices[0]?.message?.content);
       usage = {
         promptTokens: xiangYing.usage.promptTokens,
         completionTokens: xiangYing.usage.completionTokens,
@@ -399,7 +399,7 @@ async function runOneDutyRound(
           })
         : null;
       const xiangYing = loop ? loop.xiangYingTi : await provider.chat(Qiu);
-      distilled = xiangYing.choices[0]?.message?.content || '';
+      distilled = neiRongWenBen(xiangYing.choices[0]?.message?.content);
       usage = {
         promptTokens: xiangYing.usage.promptTokens,
         completionTokens: xiangYing.usage.completionTokens,

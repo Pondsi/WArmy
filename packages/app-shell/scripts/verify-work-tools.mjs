@@ -103,7 +103,7 @@ console.log('\n[6] 工具规格（给模型看的）');
 {
   const specs = W.workToolSpecs();
   const names = specs.map((s) => s.function.name).sort();
-  check('暴露 4 个文件类工具', JSON.stringify(names) === JSON.stringify(['list_dir', 'make_dir', 'read_file', 'write_file']), names);
+  check('暴露 6 个文件类工具（含 make_docx / make_pptx）', JSON.stringify(names) === JSON.stringify(['list_dir', 'make_dir', 'make_docx', 'make_pptx', 'read_file', 'write_file']), names);
   check('每个都有 description 与 parameters', specs.every((s) => s.function.description && s.function.parameters), specs.length);
   check('【安全】不含 shell 执行类工具', !names.some((n) => /exec|run|shell|cmd|bash/i.test(n)), names);
   check('【安全】声明不允许逃出工作区', W.WORK_TOOL_SECURITY.allowsWorkspaceEscape === false);
@@ -128,6 +128,70 @@ console.log('\n[8] 边界：未知工具 / 坏 JSON 不抛错（结构化失败�
   check('未知工具 → 结构化失败', u.ok === false && /unknown-tool/.test(u.meta.error || ''), u.meta.error);
   const bad = W.runWorkTool(base, { function: { name: 'write_file', arguments: '{not json' } });
   check('坏 JSON → 结构化失败', bad.ok === false && /bad-json/.test(bad.meta.error || ''), bad.meta.error);
+}
+
+/* ── [9] 系统用户目录别名：Desktop/… 不许被静默写进工作区 ── */
+console.log('\n[9] 系统目录映射（真事故：模型写 Desktop/x.txt 以为是系统桌面）');
+{
+  const map = W.yingSheYongHuWenJianJia('Desktop/我是谁.txt');
+  check('Desktop/xx 映射到真实用户目录（不是工作区）', !!map && /我是谁\.txt$/.test(path.join(map.abs, map.rest || '')) && !String(map.abs).includes('workspace'), map);
+  const map2 = W.yingSheYongHuWenJianJia('~/Desktop/我是谁.txt');
+  check('~/Desktop/xx 同样映射到真实目录', !!map2 && !String(map2.abs).includes('workspace'), map2);
+  const map3 = W.yingSheYongHuWenJianJia('./Desktop/我是谁.txt');
+  check('显式 ./Desktop/ 不做映射（留给工作区同名子目录）', map3 === null, map3);
+
+  // 普通授权下写系统目录 ⇒ 必须拒绝（且**不能**在工作区里造出 Desktop/）
+  const tmpName = 'warmy-selftest-' + Date.now() + '.txt';
+  const d = W.runWorkTool(base, { function: { name: 'write_file', arguments: { path: 'Desktop/' + tmpName, content: 'x' } } });
+  check('普通授权下写 Desktop/ 被拒（提示需要授权）', d.ok === false && /absolute-path-not-allowed/.test(d.meta.error || ''), d.meta.error);
+  check('被拒后**没有**在工作区里造出 Desktop/（静默误写已修）', !fs.existsSync(path.join(base, 'Desktop', tmpName)));
+
+  // 完全授权下写 Desktop/ ⇒ 真的落到系统桌面（唯一文件名，写完即清理）
+  const w2 = W.runWorkTool(base, { function: { name: 'write_file', arguments: { path: 'Desktop/' + tmpName, content: 'selftest' } } }, true);
+  check('完全授权下 write_file 报**绝对路径**（不是 Desktop/… 裸相对）', w2.ok === true && String(w2.content).includes(path.sep), w2.content);
+  check('meta 带 abs 绝对路径', !!(w2.meta && w2.meta.abs && path.isAbsolute(w2.meta.abs)), w2.meta);
+  check('落点在真实用户桌面（不在 workspace 内）', !!(w2.meta && w2.meta.abs && !String(w2.meta.abs).includes('workspace')), w2.meta);
+  // 清理：只删我们刚写的那一个（绝不误删别的）
+  try { if (w2.ok && w2.meta && w2.meta.abs) fs.rmSync(w2.meta.abs, { force: true }); } catch { /* noop */ }
+}
+
+/* ── [10] open_file 别名（模型猜名字也能用）── */
+console.log('\n[10] open_file 别名与工具规格');
+{
+  const hostNames = W.HOST_TOOL_NAMES.map(String);
+  check('HOST_TOOL_NAMES 含 open_file 别名', hostNames.includes('open_file') && hostNames.includes('open_path'), hostNames);
+  check('isHostTool 认 open_file', W.isHostTool('open_file') === true);
+  const hs = W.hostToolSpecs().map((s) => s.function.name);
+  check('hostToolSpecs 含 open_path 与 open_file', hs.includes('open_path') && hs.includes('open_file'), hs);
+  const w3 = W.runWorkTool(base, { function: { name: 'open_file', arguments: { path: 'a.txt' } } });
+  check('work 分发器不误吞 open_file（应 unknown-tool，由宿主处理）', w3.ok === false, w3.meta.error);
+}
+
+/* ── [11] 真·Office 生成（假 pptx/docx 是真事故）── */
+console.log('\n[11] make_docx / make_pptx 产出真 Office 文件');
+{
+  const tpl = path.join(pkgRoot, 'assets', 'tpl.pptx');
+  check('随包 pptx 模板存在', fs.existsSync(tpl), tpl);
+
+  // write_file 写 .pptx/.docx 必须拒（否则得到假文件）
+  const jia = W.runWorkTool(base, { function: { name: 'write_file', arguments: { path: '假的.pptx', content: '这是测试' } } });
+  check('write_file 写 .pptx 被拒并指引生成器', jia.ok === false && /make_pptx/.test(jia.content + jia.meta.error || ''), jia.content);
+  check('假 pptx 没有落盘', !fs.existsSync(path.join(base, '假的.pptx')));
+  const jia2 = W.runWorkTool(base, { function: { name: 'write_file', arguments: { path: '假的.docx', content: 'x' } } });
+  check('write_file 写 .docx 被拒并指引生成器', jia2.ok === false && /make_docx/.test(jia2.content + jia2.meta.error || ''), jia2.content);
+
+  const doc = W.runWorkTool(base, { function: { name: 'make_docx', arguments: { path: 'out/身份.docx', paragraphs: ['我是谁', '你是谁'] } } }, false, pkgRoot);
+  check('make_docx 成功', doc.ok === true, doc.content);
+  check('docx 落盘且是 zip（PK 头）', fs.existsSync(path.join(base, 'out', '身份.docx')) && fs.readFileSync(path.join(base, 'out', '身份.docx')).subarray(0, 2).toString() === 'PK', doc.content);
+
+  const ppt = W.runWorkTool(base, { function: { name: 'make_pptx', arguments: { path: 'out/汇报.pptx', slides: [{ title: '第一页', body: ['这是测试'] }, { title: '第二页', body: ['A', 'B'] }] } } }, false, pkgRoot);
+  check('make_pptx 成功', ppt.ok === true, ppt.content);
+  const pptBuf = fs.readFileSync(path.join(base, 'out', '汇报.pptx'));
+  check('pptx 落盘且是 zip（PK 头）', pptBuf.subarray(0, 2).toString() === 'PK', ppt.content);
+  check('pptx 里含 2 张幻灯片部件', (pptBuf.toString('latin1').match(/ppt\/slides\/slide/g) || []).length >= 2, ppt.content);
+
+  const meiMoBan = W.runWorkTool(base, { function: { name: 'make_pptx', arguments: { path: 'out/x.pptx', slides: [{ title: 'a' }] } } }, false, path.join(pkgRoot, 'no-such-dir'));
+  check('模板缺失时**如实失败**（不假装成功）', meiMoBan.ok === false && /template-missing/.test(meiMoBan.meta.error || ''), meiMoBan.meta.error);
 }
 
 console.log(`\n==== verify-work-tools: ${pass} ok / ${fail} FAIL ====`);

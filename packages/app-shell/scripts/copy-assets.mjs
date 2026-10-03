@@ -25,5 +25,11 @@ if (fsExists(path.join(src, 'snip-preload.cjs'))) copyFileSync(path.join(src, 's
 copyFileSync(path.join(src, 'ipc-aliases.json'), path.join(dist, 'ipc-aliases.json'));
 copyDir(path.join(src, 'renderer'), path.join(dist, 'renderer'));
 copyDir(path.join(src, 'i18n'), path.join(dist, 'i18n'));
+// pptx 模板（make_pptx 用；打包后也要在，否则只能如实报 template-missing）
+const tplFrom = path.join(root, '..', 'assets');
+if (fsExists(path.join(tplFrom, 'tpl.pptx'))) {
+  mkdirSync(path.join(dist, 'assets'), { recursive: true });
+  copyFileSync(path.join(tplFrom, 'tpl.pptx'), path.join(dist, 'assets', 'tpl.pptx'));
+}
 
 console.log('app-shell assets copied (renderer + i18n, recursive)');

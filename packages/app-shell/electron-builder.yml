@@ -6,6 +6,7 @@ directories:
   buildResources: build
 files:
   - dist/**
+  - assets/**
   - package.json
   - "!**/*.map"
   - "!**/node_modules/**"

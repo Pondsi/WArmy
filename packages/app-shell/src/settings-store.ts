@@ -465,6 +465,22 @@ export class PeizhiCang {
     fs.writeFileSync(this.waiGuanFile, JSON.stringify(wai, null, 2));
     return next;
   }
+
+  /** 恢复出厂默认：两个配置文件都只写回默认值（密钥在 safeStorage，不动） */
+  reset(): YingYongPeizhi {
+    const next = defaults() as unknown as Record<string, unknown>;
+    const dir = path.dirname(this.file);
+    fs.mkdirSync(dir, { recursive: true });
+    const wai: Record<string, unknown> = {};
+    const gong: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(next)) {
+      if ((APPEARANCE_KEYS as readonly string[]).includes(k)) wai[k] = v;
+      else gong[k] = v;
+    }
+    fs.writeFileSync(this.file, JSON.stringify(gong, null, 2));
+    fs.writeFileSync(this.waiGuanFile, JSON.stringify(wai, null, 2));
+    return next as unknown as YingYongPeizhi;
+  }
 }
 
 function defaults(): YingYongPeizhi {

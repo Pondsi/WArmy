@@ -749,18 +749,19 @@
   async function chuanBoYinXiao(kind) {
     try {
       const k = kind === 'request' ? 'request' : kind === 'error' ? 'error' : 'complete';
-      if (state.sound && state.sound[k] === false) return;   // 该类别被关掉
+      if (state.sound && state.sound[k] === false) return true;   // 该类别被关掉：不算失败
       let u = yinXiaoHuanCun[k];
       if (!u) {
         const r = await window.warmy.yinXiaoQu?.({ kind: k });
-        if (!r || !r.ok || !r.dataUrl) return;
+        if (!r || !r.ok || !r.dataUrl) return false;
         u = r.dataUrl;
         yinXiaoHuanCun[k] = u;
       }
       const a = new Audio(u);
       a.volume = (state.soundVolume != null ? state.soundVolume : 0.9);
-      void a.play().catch(() => { /* 自动播放被拦：忽略 */ });
-    } catch { /* 播不了不影响功能 */ }
+      await a.play().catch(() => { /* 自动播放被拦 */ });
+      return true;
+    } catch { return false; }
   }
   window.__chuanBoYinXiao = chuanBoYinXiao;
   window.__qingHuanCunYinXiao = () => { Object.keys(yinXiaoHuanCun).forEach((k) => delete yinXiaoHuanCun[k]); };
@@ -790,6 +791,22 @@
     document.documentElement.style.setProperty('--me-bubble', color);
     tongBuBeiJingWenZi();
     window.warmy.settingsSave({ accent: color });
+    // 对比度提示：过暗/过亮的主题色在浅色/深色底上会看不清 —— 如实提醒
+    try {
+      const c = String(color).replace('#', '');
+      if (c.length === 6) {
+        const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+        const y = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        const ti = $('zhuTiDuibiDuTiShi');
+        if (ti) {
+          ti.textContent = y < 0.18
+            ? tOr('settings.themeTooDark', '该主题色偏浅/偏亮，在浅色背景上可能看不清按钮文字')
+            : y > 0.82
+              ? tOr('settings.themeTooLight', '该主题色偏暗，在深色背景上可能看不清')
+              : '';
+        }
+      }
+    } catch { /* noop */ }
   }
   // 启动即上色（产品默认 #A78567；之后以设置里的 accent 为准）
   try {
@@ -3108,8 +3125,10 @@
    * 直接路径（P0·P1，见 faSong()）与「待执行队列」的冲刷走的是**同一个**实现 ——
    * 修前排队项只被本地回显、从不派发，根因就是没有这一份共用的"派发"。
    */
-  async function deliver(chatId, text, u) {
+  async function deliver(chatId, text, u, fuJian) {
     const kind = chatKindOf(chatId);
+    /** 附件随本轮一起交给主进程（图片走多模态）；发送前已从 state 摘下，这里才是真正送达的那份 */
+    const fuJianJi = Array.isArray(fuJian) ? fuJian : [];
     queueRounds[chatId] = true;
     /** true=干完了 / false=出了点问题 / 'notice'=安静收起（例如还没配密钥） */
     let huiBao = false;
@@ -3145,6 +3164,8 @@
           sessionId: chatId,
           content: text,
           insertMode: u === 'P1' ? 'inner' : 'outer',
+          // 附件一并交给主进程：图片走多模态（模型真的能看到），其它只带路径
+          attachments: fuJianJi.map((a) => ({ name: a.name || a.ming || '', path: a.path || '', dataUrl: a.dataUrl || '' })),
           // 身份强制注入：让它知道自己叫什么（主进程会把这句放在最前面）
           ming: inst0 ? mingOf(inst0) : '',
           // 思考级别：聊天框的一次性覆盖 > 牛马管理里的默认档 > 自动
@@ -3159,15 +3180,18 @@
           },
         });
         if (r?.needsKey) {
-          tuisongXiaoxi(chatId, 'them', r.reply, { reasoning: r.reasoning || '' });
+          const huiFu2 = String(r.reply || '').trim() || tOr('chat.emptyReply', '（本条回复无内容）');
+          tuisongXiaoxi(chatId, 'them', huiFu2, { reasoning: r.reasoning || '' });
           huiBao = 'notice';
         } else if (r?.ok) {
-          tuisongXiaoxi(chatId, 'them', r.reply, { reasoning: r.reasoning || '' });
+          // 空回复如实显示占位（真事故：第二条回复「完成了」但界面上什么都没有）
+          const huiFu = String(r.reply || '').trim() || tOr('chat.emptyReply', '（本条回复无内容）');
+          tuisongXiaoxi(chatId, 'them', huiFu, { reasoning: r.reasoning || '' });
           huiBao = true;
           const c = state.chats.find((x) => x.id === chatId);
           if (c) {
             c.lastTs = Date.now();
-            c.lastPreview = (r.reply || text).slice(0, 30);
+            c.lastPreview = (huiFu || text).slice(0, 30);
           }
         } else {
           tuisongXiaoxi(chatId, 'them', r?.error || t('common.error'));
@@ -3275,7 +3299,7 @@
         tuisongXiaoxi(chatId, 'wo', item.text);
         renderChat();
         if (CHAT_NAVS.has(state.nav)) renderList();
-        await deliver(chatId, item.text, item.u);
+        await deliver(chatId, item.text, item.u, item.fuJian);
         endOfRound(chatId);
       }
     } finally {
@@ -3317,10 +3341,12 @@
           : '')
       : '';
     const Quan = text + attachNote;
+    // 发送前先摘下附件（随后清空输入区），随本轮一直传到 deliver
+    const fuJianJi = (state.attachments || []).map((a) => ({ name: a.name || a.ming || '', path: a.path || '', dataUrl: a.dataUrl || '' }));
 
     // P2（默认「插入」）/ P3（「排队」）：进「待执行队列」，本轮结束后由冲刷**真的派发**出去
     if (u === 'P2' || u === 'P3') {
-      queueOf(id).push({ id: 'q' + Date.now(), text: Quan, u, editing: false, ts: Date.now() });
+      queueOf(id).push({ id: 'q' + Date.now(), text: Quan, u, editing: false, ts: Date.now(), fuJian: fuJianJi });
       $('shuRu').value = '';
       state.attachments = [];
       xuanranFujian();
@@ -3341,7 +3367,7 @@
     renderChat();
 
     // 进行中反馈（动态小字 + 发送按钮）在 deliver 内部统一处理：直接派发与队列冲刷共用
-    await deliver(id, text, u);
+    await deliver(id, text, u, fuJianJi);
     endOfRound(id);
     flushQueue(id); // 本轮结束 → 冲刷队列（真的发，不再只回显）
   }
@@ -4476,6 +4502,7 @@
           </div>
           <h2 style="margin-top:12px">${escapeHtml(t('settings.theme'))}</h2>
           <div class="zhuTiSwatches" id="zhuTiSwatches"></div>
+          <div class="jingYin" id="zhuTiDuibiDuTiShi" style="font-size:11px;min-height:16px"></div>
           <div class="zhuTiCustomHang">
             <div class="jingYin" style="margin:6px 0 4px">${escapeHtml(tOr('settings.themeCustom', '自定义颜色'))}</div>
             <button type="button" id="anNiuZhuTiCustom" class="zhuTiSeKuai" title="${escapeHtml(tOr('settings.customColorTitle', '自定义主题色'))}" aria-label="${escapeHtml(tOr('settings.customColorTitle', '自定义主题色'))}"></button>
@@ -4899,6 +4926,11 @@
             <div class="jingYin" id="aboutRuntime">—</div>
             <div class="jingYin" id="aboutDevice">—</div>
             <div class="jingYin" id="aboutBeliefPath" style="margin-top:4px;word-break:break-all">—</div>
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="anNiuXiao" id="anNiuDaoChuSheZhi">${escapeHtml(tOr('settings.exportJson', '导出设置 JSON'))}</button>
+              <button class="anNiuXiao" id="anNiuHuiFuMoRen">${escapeHtml(tOr('settings.restoreDefaults', '恢复默认设置'))}</button>
+              <button class="anNiuXiao" id="anNiuDaKaiRiZhi">${escapeHtml(tOr('settings.openLog', '打开启动日志'))}</button>
+            </div>
           </div>
           <div class="aboutKuai">
             <h3>${escapeHtml(t('privacy.viewTitle'))}</h3>
@@ -4960,6 +4992,32 @@
         }
         await doCheckUpdate(false);
       };
+      // 导出设置 JSON / 恢复默认 / 打开启动日志
+      $('anNiuDaoChuSheZhi')?.addEventListener('click', async () => {
+        try {
+          const r = await window.warmy.settingsGet?.();
+          const data = JSON.stringify(r?.settings || {}, null, 2);
+          const f = await window.warmy.saveText?.({ defaultName: 'warmy-settings.json', content: data });
+          if (f && f.ok) showToast(tOr('export.done', '已导出') + '：' + (f.path || ''));
+          else showToast(String((f && f.error) || t('common.error')));
+        } catch (e) { showToast(String(e && e.message || e)); }
+      });
+      $('anNiuHuiFuMoRen')?.addEventListener('click', async () => {
+        if (!(await uiConfirm(tOr('settings.restoreConfirm', '将清空所有设置并恢复出厂默认（含供应商/密钥引用/外观）。此操作不可撤销。是否继续？')))) return;
+        try {
+          await window.warmy.settingsSave?.({ restoreDefaults: true });
+          showToast(tOr('settings.restored', '已恢复默认设置'));
+          setTimeout(() => { try { window.location.reload(); } catch { /* noop */ } }, 600);
+        } catch (e) { uiAlert(String(e && e.message || e)); }
+      });
+      $('anNiuDaKaiRiZhi')?.addEventListener('click', async () => {
+        try {
+          const lu = (window.warmy.zuiGaoXinNianDu ? (await window.warmy.zuiGaoXinNianDu()) : null)?.path || '';
+          const logLu = lu ? lu.replace(/agents\.md$/i, 'warmy-boot.log') : '';
+          const r = await window.warmy.daKaiLuJing?.({ path: logLu });
+          if (!r || r.ok === false) showToast(String((r && r.error) || tOr('settings.logMissing', '日志文件不存在')));
+        } catch (e) { showToast(String(e && e.message || e)); }
+      });
       (async () => {
         try {
           const info = await window.warmy.appInfo();
@@ -5082,7 +5140,10 @@
 
       // 通知音「试听」：主进程给 data URL（用户没选就用内置默认音效）
       document.querySelectorAll('[data-try]').forEach((b) => {
-        b.onclick = () => { void chuanBoYinXiao(b.getAttribute('data-try')); };
+        b.onclick = async () => {
+          const ok = await chuanBoYinXiao(b.getAttribute('data-try'));
+          if (ok === false) showToast(tOr('sound.tryFail', '试听失败：音频文件缺失或不可播放'));
+        };
       });
       // 通知音量滑块
       (function bindSoundVolume() {
@@ -9632,7 +9693,16 @@
   });
   $('anNiuwinMin')?.addEventListener('click', () => window.warmy.winMinimize());
   $('anNiuwinMax')?.addEventListener('click', () => window.warmy.winMaximize());
-  $('anNiuwinGuanBi')?.addEventListener('click', () => window.warmy.winClose());
+  $('anNiuwinGuanBi')?.addEventListener('click', async () => {
+    // 关闭二次确认（设置里可关）：防误点把窗口关掉
+    try {
+      const r = await window.warmy.settingsGet?.();
+      if (r?.settings?.closeConfirm !== false) {
+        if (!(await uiConfirm(tOr('win.closeConfirm', '确定关闭窗口吗？（可在设置里关闭此确认）')))) return;
+      }
+    } catch { /* 读不到设置就直接关 */ }
+    window.warmy.winClose();
+  });
   // 双击标题栏：最大化 / 还原
   try {
     const tb = $('biaoTiLanTuoZhuai') || $('biaoTiLan');
@@ -12398,7 +12468,8 @@
     // ④ 工作区产出：AI 真写出来的文件 —— 链接式（点开即打开）+ 文件夹图标（打开所在目录）
     {
       const gz = (state.gongZuoWenJian || []);
-      html.push('<div class="pfHead" data-pf="work">' + escapeHtml(tOr('panel.workfiles.title', '文件产物')) + '</div>');
+      html.push('<div class="pfHead" data-pf="work">' + escapeHtml(tOr('panel.workfiles.title', '文件产物')) +
+        ' <button class="anNiuXiao" id="anNiuShuaXinChanPin" title="' + escapeHtml(tOr('panel.workfiles.refresh', '刷新')) + '" style="margin-left:6px">↻</button></div>');
       if (state.gongZuoQuLuJing) {
         html.push('<div class="ctgDim" style="font-size:11px;word-break:break-all">' +
           escapeHtml(tOr('panel.workfiles.root', '工作区') + '：' + state.gongZuoQuLuJing) + '</div>');
@@ -12416,6 +12487,10 @@
         : '<div class="ctgDim" data-empty="work">' + escapeHtml(tOr('panel.workfiles.empty', '还没有生成文件')) + '</div>');
     }
     heZi.innerHTML = html.join('');
+    heZi.querySelector('#anNiuShuaXinChanPin')?.addEventListener('click', () => {
+      try { void renderProjectFilesBlock(); } catch { /* noop */ }
+      showToast(tOr('panel.workfiles.refreshed', '已刷新'));
+    });
     // 产出文件：点链接打开文件；点文件夹图标在资源管理器里定位
     heZi.querySelectorAll('[data-open]').forEach((a) => {
       a.onclick = async (e) => {
