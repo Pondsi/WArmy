@@ -35,7 +35,9 @@ import type {
 export const XIEYI_GONGJU_ZHICHI: Record<GongYingXieYi, boolean> = {
   'openai-compatible': true,
   anthropic: true,
-  ollama: false,
+  // Ollama：带 tools 的模型支持 function calling；不支持的模型由外层降级链兜住。
+  // 以前这里写 false ⇒ 工具整层被剥掉，模型"够不着桌面"（真事故）。
+  ollama: true,
 };
 
 export const MOREN_GONGJU_ZUIDA_LUN = 3;

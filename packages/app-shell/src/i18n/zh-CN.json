@@ -1985,6 +1985,7 @@
   "chat.busy.still": "还在干，没卡住…",
   "chat.busy.fail": "出了点问题…",
   "llm.identityLine": "你是「{ming}」。",
+  "llm.modelLine": "你当前运行在模型「{model}」上。用户问你是什么模型时如实回答它。",
   "chat.thinkDowngraded": "【提示】该模型不支持所选思考档位，已降级为「自动」。",
   "chat.thinking": "思考过程",
   "chat.shotDone": "已截取屏幕并附到消息",
@@ -2049,9 +2050,9 @@
   "chat.queueUp": "Move up",
   "chat.queueDown": "Move down",
   "settings.modelOptions": "模型选项",
-  "settings.providerActive": "当前使用",
-  "settings.providerUse": "设为当前使用",
-  "settings.providerUseOk": "已设为当前使用",
+  "settings.providerActive": "兜底",
+  "settings.providerUse": "设为兜底",
+  "settings.providerUseOk": "已设为兜底供应商（真正用谁由模型决定）",
   "model.fenLei": "分类模型",
   "model.fenLeiHint": "分类任务用的模型调用链：第一个即默认；可上移/下移/禁用（启用）。这个排列就是特殊模型的调用链。"
 }

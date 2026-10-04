@@ -15,20 +15,32 @@ export class OllamaGongYing extends JichuGongYing {
   }
 
   /**
-   * Ollama 的 /api/chat 目前只对部分模型支持 tools，旧版本对 tools 字段直接报错，
-   * 且本 provider 的 qingQiuTi() 也不透传 tools —— 如实声明"不支持"，
-   * 让工具调用循环走优雅降级（普通单轮对话），而不是把整轮对话打成 error。
+   * Ollama `/api/chat` 对**带 tools 的模型**支持 function calling；不支持的模型会忽略或报错。
+   * 以前这里硬声明"不支持"，把 write_file/make_docx/open_path 整层剥掉 —— 模型只能回答
+   * 「我是纯对话的小牛马，够不着桌面」（真事故）。现在如实声明支持、**透传 tools**，
+   * 由外层的降级链（首请求失败 → 重试不带 tools）兜住不支持的模型。
    */
   override get supportsTools(): boolean {
-    return false;
+    return true;
   }
 
   private qingQiuTi(Qiu: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
-    const xiaoXiJi = Qiu.xiaoXiJi.map((m) => ({
-      role: m.role === 'tool' ? 'tool' : m.role,
-      content: m.content,
-    }));
-    return {
+    const xiaoXiJi = Qiu.xiaoXiJi.map((m) => {
+      const ji: Record<string, unknown> = {
+        role: m.role === 'tool' ? 'tool' : m.role,
+        content: m.content,
+      };
+      // tool_call_id：Ollama 的 tool 消息要带，才能对上上一轮的 tool_calls
+      if (m.role === 'tool' && m.toolCallId) ji.tool_call_id = m.toolCallId;
+      // assistant 发起的工具调用
+      if (m.role === 'assistant' && m.gongJuDiaoYongJi?.length) {
+        ji.tool_calls = m.gongJuDiaoYongJi.map((t) => ({
+          function: { name: t.function.name, arguments: t.function.arguments },
+        }));
+      }
+      return ji;
+    });
+    const ji: Record<string, unknown> = {
       model: Qiu.model,
       messages: xiaoXiJi,
       stream,
@@ -40,6 +52,18 @@ export class OllamaGongYing extends JichuGongYing {
       },
       ...Qiu.extra,
     };
+    // 透传工具表（不支持的模型会忽略它；报错由外层降级）
+    if (Qiu.tools?.length) {
+      ji.tools = Qiu.tools.map((t) => ({
+        type: 'function',
+        function: {
+          name: t.function.name,
+          description: t.function.description || '',
+          parameters: t.function.parameters || { type: 'object', properties: {} },
+        },
+      }));
+    }
+    return ji;
   }
 
   async chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
@@ -55,19 +79,34 @@ export class OllamaGongYing extends JichuGongYing {
     }
     const json = (await res.json()) as {
       model: string;
-      message?: { content?: string };
+      message?: { content?: string; tool_calls?: Array<{ function?: { name?: string; arguments?: unknown } }> };
       done_reason?: string;
       prompt_eval_count?: number;
       eval_count?: number;
     };
+    // 模型发起的工具调用（Ollama 用 tool_calls，参数可能是对象）
+    const gongJu = (json.message?.tool_calls || []).map((t, i) => ({
+      id: `ollama-call-${Date.now()}-${i}`,
+      type: 'function' as const,
+      function: {
+        name: String(t?.function?.name || ''),
+        arguments: typeof t?.function?.arguments === 'string'
+          ? t.function.arguments
+          : JSON.stringify(t?.function?.arguments || {}),
+      },
+    }));
     return {
       id: `ollama-${Date.now()}`,
       model: json.model || Qiu.model,
       choices: [
         {
           index: 0,
-          message: { role: 'assistant', content: json.message?.content || '' },
-          finishReason: json.done_reason === 'length' ? 'length' : 'stop',
+          message: {
+            role: 'assistant',
+            content: json.message?.content || '',
+            ...(gongJu.length ? { gongJuDiaoYongJi: gongJu } : {}),
+          },
+          finishReason: gongJu.length ? 'tool_calls' : (json.done_reason === 'length' ? 'length' : 'stop'),
         },
       ],
       usage: guiFanYongLiang(

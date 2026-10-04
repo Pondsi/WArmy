@@ -1838,14 +1838,18 @@
         ? (cur.avatarDataUrl || groupAvatarSrc(cur))
         : PERSON_DEFAULT);
     let shangYiTiaoShiJian = 0;
+    /** 上一次**主动显示**的时间（跨时才显示；跨自然日加分隔线） */
+    let shangCiZhuDong = 0;
     slice.forEach((m, i) => {
-      // ── 跨小时 / 跨日：插入时间分隔点（所有人的记录都算）──
+      // ── 主动显示时间：与上次主动显示的"时"不同才显示；跨自然日加浅分隔线 ──
       const ts = Number(m.ts || 0) || Date.now();
-      if (shangYiTiaoShiJian && kuaShiJianDian(shangYiTiaoShiJian, ts)) {
-        const fenGe = document.createElement('div');
-        fenGe.className = 'shiJianFenGe';
-        fenGe.textContent = shiJianDianWen(ts);
-        heZi.appendChild(fenGe);
+      if (!shangCiZhuDong || kuaShiJianDian(shangCiZhuDong, ts)) {
+        const zhuDong = document.createElement('div');
+        const kuaRi = shangCiZhuDong && new Date(shangCiZhuDong).getDate() !== new Date(ts).getDate();
+        zhuDong.className = 'zhuDongShiJian' + (kuaRi ? ' kuaRi' : '');
+        zhuDong.textContent = wanZhengShiJian(ts);
+        heZi.appendChild(zhuDong);
+        shangCiZhuDong = ts;
       }
       shangYiTiaoShiJian = ts;
       const div = document.createElement('div');
@@ -1876,7 +1880,7 @@
             // 我方消息是**纯文本**：原样显示（pre-wrap），复制才不会丢换行
             ? '<div class="bubble">' + escapeHtml(m.text) + '</div>'
             : '<div class="bubble md">' + mdHtml(m.text) + '</div>')
-        + '<button type="button" class="xiaoXiFuZhi" title="' + escapeHtml(tOr('chat.copy', '复制')) + '" data-copy="' + escapeHtml(m.text) + '">⧉</button>'
+        + '<div class="xiaoXiJiao"><span class="xiaoXiShiJian">' + escapeHtml(wanZhengShiJian(ts)) + '</span><button type="button" class="xiaoXiFuZhi" title="' + escapeHtml(tOr('chat.copy', '复制')) + '" data-copy="' + escapeHtml(m.text) + '">⧉</button></div>'
         + '</div>';
       // 悬停复制：一次委托绑定
       if (heZi.dataset.copyBound !== '1') {
@@ -3082,17 +3086,18 @@
     const hua = () => {
       const yong = Math.max(0, Math.floor((Date.now() - yunXingKaiShi) / 1000));
       let ju;
-      if (yong < 2) ju = tOr('chat.busy.1', '正在思考…');
-      else if (yong >= 20) ju = tOr('chat.busy.still', '还在干，没卡住…');
+      if (yong < 4) ju = tOr('chat.busy.1', '正在思考…');
+      else if (yong >= 30) ju = tOr('chat.busy.still', '还在干，没卡住…');
       else {
-        // 2..8 号轮换（1 号是"思考"，起手用过就不再占轮换位）
-        yunXingXuHao = (yunXingXuHao % (YUN_XING_CIHOU - 1)) + 2;
+        // 文案每 **3 秒**才轮换一次（真反馈：1 秒一换太快、看着眼花）
+        yunXingXuHao = (Math.floor((yong - 4) / 3) % (YUN_XING_CIHOU - 1)) + 2;
         ju = tOr('chat.busy.' + yunXingXuHao, '正在干活…');
       }
       if (wen) wen.textContent = ju;
       if (miao) miao.textContent = yong + 's';
     };
     hua();
+    // 秒数每秒走；文案在 hua() 内部按 3 秒节流
     yunXingJiShiQi = setInterval(hua, 1000);
   }
   function yunXingZhuangTaiGuan(chengGong, chatId) {
@@ -13040,6 +13045,7 @@
     const chain = (inst.chain && inst.chain.length) ? inst.chain : models;
     const dis = editable ? '' : ' disabled';
     const daKai = __mgrOpen.has(suoYin) ? ' daKai' : '';
+    // 产品定稿：第四列「模型管理」**只显示**可用模型 + 调用链，与牛马管理局一致，其余不放
     return `<details class="mgrKa${editable ? '' : ' zhiDuMianBan'}" data-mgidx="${suoYin}"${daKai}>
       <summary>
         <img class="avTuPian small" src="${escapeHtml(instanceAvatarSrc(inst))}" alt=""/>
@@ -13047,11 +13053,6 @@
         ${editable ? '' : '<span class="mgrRo">' + escapeHtml(t('panel.modelMgrReadonly')) + '</span>'}
       </summary>
       <div class="mgrTi">
-        <label class="mgrLb">${escapeHtml(t('instances.defaultModel'))}</label>
-        <select data-mg="default" data-i="${suoYin}"${dis}>
-          <option value="__smart__"${!inst.defaultModel ? ' selected' : ''}>${escapeHtml(t('instances.smartPick'))}</option>
-          ${models.map((m) => `<option value="${escapeHtml(m)}"${inst.defaultModel === m ? ' selected' : ''}>${escapeHtml(m)}</option>`).join('')}
-        </select>
         <label class="mgrLb">${escapeHtml(t('instances.availableModels'))}</label>
         <div class="mgrMoXingJi">${
           models.length
@@ -13065,12 +13066,12 @@
           chain.length
             ? chain.map((m, k) => `<li data-chain="${suoYin}" data-k="${k}"${editable ? ' draggable="true"' : ''}>
                 <span class="mgrChainMing">${escapeHtml(m)}</span>
-                <span class="mgrChainYuanShuju">${escapeHtml(providerLabelOf(m))} · ${escapeHtml(latencyText(m))}</span>
-                ${editable ? `<button class="anNiuXiao" data-mgtest="${suoYin}" data-m="${escapeHtml(m)}" title="${escapeHtml(t('model.test'))}">⚡</button>` : ''}
+                ${editable ? `
+                  <button class="anNiuXiao" data-mgup="${suoYin}" data-k="${k}"${k === 0 ? ' disabled' : ''}>↑</button>
+                  <button class="anNiuXiao" data-mgdn="${suoYin}" data-k="${k}"${k === chain.length - 1 ? ' disabled' : ''}>↓</button>` : ''}
               </li>`).join('')
             : '<li class="jingYin">—</li>'
         }</ol>
-        ${editable ? `<div class="mgrTianJiaHang"><button class="anNiuXiao" data-mgadd="${suoYin}">＋ ${escapeHtml(t('instances.addModel'))}</button></div>` : ''}
       </div>
     </details>`;
   }

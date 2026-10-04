@@ -1985,6 +1985,7 @@
   "chat.busy.still": "Still working, not stuck…",
   "chat.busy.fail": "Something went wrong…",
   "llm.identityLine": "You are \"{ming}\".",
+  "llm.modelLine": "Estás ejecutando el modelo \"{model}\". Responde con honestidad si te lo preguntan.",
   "chat.thinkDowngraded": "[Note] This model does not support the chosen thinking level; it was downgraded to Auto.",
   "chat.thinking": "Thinking process",
   "chat.shotDone": "Screen captured and attached",
@@ -2049,9 +2050,9 @@
   "chat.queueUp": "Move up",
   "chat.queueDown": "Move down",
   "settings.modelOptions": "Model options",
-  "settings.providerActive": "En uso",
-  "settings.providerUse": "Usar este proveedor",
-  "settings.providerUseOk": "Proveedor activo cambiado",
+  "settings.providerActive": "Respaldo",
+  "settings.providerUse": "Usar como respaldo",
+  "settings.providerUseOk": "Definido como respaldo (el modelo decide el proveedor)",
   "model.fenLei": "Classification models",
   "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
 }

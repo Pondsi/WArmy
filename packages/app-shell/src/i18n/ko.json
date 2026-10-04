@@ -1985,6 +1985,7 @@
   "chat.busy.still": "Still working, not stuck…",
   "chat.busy.fail": "Something went wrong…",
   "llm.identityLine": "You are \"{ming}\".",
+  "llm.modelLine": "당신은 모델 \"{model}\" 위에서 실행 중입니다. 어떤 모델인지 물으면 사실대로 답하세요.",
   "chat.thinkDowngraded": "[Note] This model does not support the chosen thinking level; it was downgraded to Auto.",
   "chat.thinking": "Thinking process",
   "chat.shotDone": "Screen captured and attached",
@@ -2049,9 +2050,9 @@
   "chat.queueUp": "Move up",
   "chat.queueDown": "Move down",
   "settings.modelOptions": "Model options",
-  "settings.providerActive": "사용 중",
-  "settings.providerUse": "이 공급자 사용",
-  "settings.providerUseOk": "이 공급자를 사용 중으로 설정했습니다",
+  "settings.providerActive": "폴백",
+  "settings.providerUse": "폴백으로 설정",
+  "settings.providerUseOk": "폴백 공급자로 설정했습니다(실제 사용처는 모델이 결정)",
   "model.fenLei": "Classification models",
   "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
 }

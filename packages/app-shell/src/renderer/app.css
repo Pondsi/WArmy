@@ -2585,14 +2585,28 @@ html { font-weight: var(--fw-ui, 400); }
 .jiHuaBu[data-st="blocked"] { border-left-color: var(--danger, #e06060); }
 .jiHuaBu[data-st="doing"] { border-left-color: var(--warn-fg, #e8c07a); }
 
-/* 消息悬停复制按钮 */
-.xiaoXiFuZhi {
-  opacity: 0; align-self: flex-end; margin-top: 2px;
-  border: none; background: transparent; color: var(--muted);
-  cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;
+/* 消息排版（微信式）：气泡自适应宽度、文字自然换行；复制钮在气泡右下角，悬停时其左侧露出时间 */
+.bubbleWrap { display: flex; flex-direction: column; min-width: 0; max-width: 72%; align-items: flex-start; }
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; }
+.xiaoXiJiao {
+  display: flex; align-items: center; gap: 6px; margin-top: 2px;
+  opacity: 0; transition: opacity .15s ease;
 }
-.xiaoXi:hover .xiaoXiFuZhi { opacity: .75; }
-.xiaoXiFuZhi:hover { opacity: 1; background: var(--hover); }
+.xiaoXi:hover .xiaoXiJiao { opacity: 1; }
+.xiaoXiShiJian { font-size: 11px; color: var(--muted); }
+.xiaoXiFuZhi {
+  border: none; background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 12px; padding: 1px 6px; border-radius: 4px;
+}
+.xiaoXiFuZhi:hover { background: var(--hover); color: var(--ink); }
+
+/* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
+.zhuDongShiJian {
+  text-align: center; margin: 10px 0 8px; font-size: 11px; color: var(--muted);
+}
+.zhuDongShiJian.kuaRi {
+  border-top: 1px solid var(--line); opacity: .8; padding-top: 10px;
+}
 
 /* 图片附件点击放大预览 */
 .tuPianYuLanCeng {

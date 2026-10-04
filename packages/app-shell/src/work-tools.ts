@@ -457,7 +457,10 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
  * 权限：普通/严格授权下**只允许工作区内**的路径与 http(s) 网址；
  *      完全授权才允许任意本机路径（由调用方按 globalSecurity 判定，这里不判）。
  */
-export const HOST_TOOL_NAMES = ['open_path', 'open_file', 'open_url', 'schedule_task', 'ask_user', 'plan_update', 'plan_verify'] as const;
+export const HOST_TOOL_NAMES = [
+  'open_path', 'open_file', 'open_url', 'schedule_task', 'ask_user', 'plan_update', 'plan_verify',
+  'run_shell', 'find_skill', 'install_skill', 'check_safety', 'read_docx', 'read_pptx', 'fetch_url', 'download_file',
+] as const;
 export function isHostTool(name: unknown): boolean {
   return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
 }
@@ -559,6 +562,113 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             dailyAt: { type: 'string', description: '每天 HH:mm（24 小时制，与 everyMinutes 二选一）' },
           },
           required: ['name', 'prompt'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'run_shell',
+        description: '执行一条命令行（shell/终端）。权限由用户的授权档位决定：完全授权=无限制；严格授权=逐条询问；常规授权=只放行白名单命令（ls/cat/git/node/npm/python 等），其它要用户批准。命令会先做危险模式检测（rm -rf、curl|sh、sudo 等会标为高风险）。返回 stdout/stderr/退出码。',
+        parameters: {
+          type: 'object',
+          properties: {
+            command: { type: 'string', description: '要执行的命令，如 git status 或 python -c "print(1)"' },
+            cwd: { type: 'string', description: '工作目录（可选；默认本会话工作区）' },
+            timeoutMs: { type: 'number', description: '超时毫秒（默认 60000，上限 10 分钟）' },
+          },
+          required: ['command'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'find_skill',
+        description: '查找可用的技能包（skill）：列出已安装的技能，或按关键词在技能目录里搜索。技能是一个含 SKILL.md 的文件夹，装上后你能获得新能力。',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '关键词（可选；不给则列出全部）' },
+            path: { type: 'string', description: '要检查的技能目录（可选）' },
+          },
+          required: [],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'install_skill',
+        description: '安装一个技能包（含 SKILL.md 的文件夹）。安装前会做安全检测（扫描 rm -rf / curl|sh / sudo / 密钥外发 等危险模式）。完全授权：检测通过即可装；严格授权：每次询问；常规授权：低风险自动装，否则询问。不要自己写脚本装。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '技能包目录路径（本地）' },
+            name: { type: 'string', description: '安装后的技能名（可选，默认取目录名）' },
+          },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'check_safety',
+        description: '对一条命令或一个技能包做安全检测，返回风险等级（low/medium/high）与命中原因。做危险动作之前先用它自查。',
+        parameters: {
+          type: 'object',
+          properties: {
+            command: { type: 'string', description: '要检测的命令（与 path 二选一）' },
+            path: { type: 'string', description: '要检测的技能包目录（与 command 二选一）' },
+          },
+          required: [],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'read_docx',
+        description: '读取 Word 文档（.docx）的正文文字。要查看/修改用户给的 word 文档用它，不要用 read_file 读二进制。',
+        parameters: { type: 'object', properties: { path: { type: 'string', description: '.docx 路径' } }, required: ['path'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'read_pptx',
+        description: '读取 PowerPoint（.pptx）每页的标题与文字。要查看用户给的 ppt 用它，不要用 read_file 读二进制。',
+        parameters: { type: 'object', properties: { path: { type: 'string', description: '.pptx 路径' } }, required: ['path'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'fetch_url',
+        description: '抓取一个网页/接口（http/https）的文本内容。用于查资料、读 API 返回。只读，不带鉴权头。',
+        parameters: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'http/https 网址' },
+            maxBytes: { type: 'number', description: '最多返回多少字节（默认 200000）' },
+          },
+          required: ['url'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'download_file',
+        description: '下载一个文件（http/https）保存到指定路径（可写 Desktop/xx 等系统目录，需授权）。返回保存后的绝对路径。',
+        parameters: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'http/https 网址' },
+            path: { type: 'string', description: '保存路径，如 Desktop/资料.pdf 或 out/a.bin' },
+          },
+          required: ['url', 'path'],
         },
       },
     },

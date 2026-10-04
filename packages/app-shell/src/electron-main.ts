@@ -132,7 +132,12 @@ import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomi
  * **不是**落到本机设置里（产品主：记录文件的改动是无限牛马的功能，不是本机的功能）。
  */
 import { setFileAccessSink, withFileAccessScope, dangqianWenjianFangwenZuoyongyu } from './helper-tool.js';
-import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs, yingSheYongHuWenJianJia } from './work-tools.js';
+import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs, yingSheYongHuWenJianJia, resolveInside } from './work-tools.js';
+import {
+  anquanJianCeMingLing, anquanJianCeJiNeng, panDuanShouQuan, yunXingMingLing,
+  duDocx, duPptx, zhuaQuWangZhi, xiaZaiWenJian,
+  type AnquanDang,
+} from './agent-tools.js';
 import { jueCeMoXing, jieMoXingMing, type MoXingJueCeShuRu } from './model-pick.js';
 import { XiaoDiDengJiBu, xiaoDiToolSpecs, isXiaoDiTool } from './subagents.js';
 import { JieDianMingCe, TongbuZongxian, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
@@ -796,13 +801,43 @@ function guiFanBaseURL(u: string): string {
   return s0;
 }
 
+/** 安装技能包：复制到技能根目录（含 SKILL.md 的文件夹）。安装点由 jinengGen() 定 */
+async function anZhuangJiNengBao(yuan: string, ziMing: string): Promise<string> {
+  try {
+    const gen = jinengGen();
+    const gen0 = gen[0]?.root;
+    if (!gen0) return '[install_skill] 没有可用的技能安装目录';
+    const ming = String(ziMing || path.basename(yuan) || 'skill').replace(/[^\w.\-]/g, '_').slice(0, 60) || 'skill';
+    const muBiao = path.join(gen0, ming);
+    fs.mkdirSync(muBiao, { recursive: true });
+    // 递归复制（限层限量，防止把整个盘拷进去）
+    let jiShu = 0;
+    const fu = (src: string, dst: string, ceng = 0) => {
+      if (ceng > 5 || jiShu > 300) return;
+      let ems: string[] = [];
+      try { ems = fs.readdirSync(src); } catch { return; }
+      for (const e of ems) {
+        const s = path.join(src, e), d = path.join(dst, e);
+        let st: fs.Stats; try { st = fs.statSync(s); } catch { continue; }
+        jiShu++;
+        if (st.isDirectory()) { fs.mkdirSync(d, { recursive: true }); fu(s, d, ceng + 1); }
+        else { try { fs.copyFileSync(s, d); } catch { /* skip */ } }
+      }
+    };
+    fu(yuan, muBiao);
+    return `[install_skill] 已安装到 ${muBiao}（${jiShu} 个文件）。重启会话后该技能生效。`;
+  } catch (e) { return `[install_skill] 安装失败：${xiJingCuoWu(e)}`; }
+}
+
 /** 当前安全档位 + 「超出权限是否询问」（默认询问） */
-function anQuanDangWei(): { full: boolean; ask: boolean } {
+function anQuanDangWei(): { full: boolean; ask: boolean; dang: AnquanDang } {
   try {
     const s = settingsStore?.load() as { globalSecurity?: string; askOnExceed?: boolean } | undefined;
-    return { full: String(s?.globalSecurity || 'normal') === 'full', ask: s?.askOnExceed !== false };
+    const raw = String(s?.globalSecurity || 'normal');
+    const dang: AnquanDang = raw === 'full' ? 'full' : raw === 'strict' ? 'strict' : 'normal';
+    return { full: dang === 'full', ask: s?.askOnExceed !== false, dang };
   } catch {
-    return { full: false, ask: true };
+    return { full: false, ask: true, dang: 'normal' };
   }
 }
 
@@ -1092,6 +1127,115 @@ async function yunXingLiaoTianXunHuan(
               const r0 = await shell.openPath(abs);
               if (r0) { okH = false; huiBaoH = `[open_path] 打开失败：${r0}`; }
               else huiBaoH = `[open_path] 已用系统默认程序打开 ${abs}`;
+            }
+          } else if (gongJuMing === 'run_shell') {
+            const cmd = String(argsH.command || '').trim();
+            const { dang, ask: yaoWen2 } = anQuanDangWei();
+            const jian = anquanJianCeMingLing(cmd);
+            const pan = panDuanShouQuan(dang, yaoWen2, 'shell', jian);
+            if (!cmd) { okH = false; huiBaoH = '[run_shell] 请给出 command'; }
+            else if (!pan.allow && !pan.needAsk) { okH = false; huiBaoH = `[run_shell] 被拒（${dang}授权）：${pan.why}`; }
+            else if (!pan.allow) {
+              const da = await qingQiuKaPian(sessionId, 'AI 请求执行命令',
+                `命令：${cmd}\n风险：${jian.summary}\n（同意 = 仅这一次放行；拒绝 = 不执行）`,
+                [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+              if (/^同意/.test(da)) {
+                const r2 = await yunXingMingLing(cmd, { cwd: String(argsH.cwd || baseH), timeoutMs: Number(argsH.timeoutMs) || 60000 });
+                huiBaoH = `[run_shell] exit=${r2.code} (${r2.ms}ms)\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
+              } else { okH = false; huiBaoH = `[run_shell] 用户拒绝执行：${cmd}`; }
+            } else {
+              const r2 = await yunXingMingLing(cmd, { cwd: String(argsH.cwd || baseH), timeoutMs: Number(argsH.timeoutMs) || 60000 });
+              huiBaoH = `[run_shell] exit=${r2.code} (${r2.ms}ms, 风险 ${jian.risk})\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
+              if (r2.code !== 0) okH = false;
+            }
+          } else if (gongJuMing === 'check_safety') {
+            const cmd = String(argsH.command || '');
+            const p0 = String(argsH.path || '');
+            const jian = p0 ? anquanJianCeJiNeng(p0) : anquanJianCeMingLing(cmd);
+            huiBaoH = `[check_safety] ${jian.summary}（risk=${jian.risk}, autoOk=${jian.autoOk}）`;
+          } else if (gongJuMing === 'find_skill') {
+            const q = String(argsH.query || '').trim().toLowerCase();
+            const zhuan = String(argsH.path || '').trim();
+            const lie: string[] = [];
+            const sao = (dir: string, ceng = 0) => {
+              if (ceng > 3) return;
+              let ems: string[] = [];
+              try { ems = fs.readdirSync(dir); } catch { return; }
+              for (const e of ems.slice(0, 80)) {
+                const p = path.join(dir, e);
+                let st: fs.Stats; try { st = fs.statSync(p); } catch { continue; }
+                if (st.isDirectory()) {
+                  if (fs.existsSync(path.join(p, 'SKILL.md'))) {
+                    let desc = '';
+                    try { desc = fs.readFileSync(path.join(p, 'SKILL.md'), 'utf8').split('\n').filter((l) => l.trim()).slice(0, 3).join(' ').slice(0, 120); } catch { /* noop */ }
+                    const x = `${e} — ${p}${desc ? ' :: ' + desc : ''}`;
+                    if (!q || x.toLowerCase().includes(q)) lie.push(x);
+                  } else sao(p, ceng + 1);
+                }
+              }
+            };
+            if (zhuan) sao(zhuan);
+            for (const root of jinengGen()) { try { sao(root.root); } catch { /* noop */ } }
+            huiBaoH = lie.length
+              ? `[find_skill] 找到 ${lie.length} 个技能：\n` + lie.slice(0, 20).join('\n')
+              : '[find_skill] 没有匹配的技能。可让用户把技能包放进技能目录，或用 install_skill 安装本地目录。';
+          } else if (gongJuMing === 'install_skill') {
+            const p0 = String(argsH.path || '').trim();
+            const { dang: dang2, ask: yaoWen3 } = anQuanDangWei();
+            const jian = anquanJianCeJiNeng(p0);
+            const pan = panDuanShouQuan(dang2, yaoWen3, 'skill', jian);
+            if (!p0 || !fs.existsSync(p0)) { okH = false; huiBaoH = `[install_skill] 目录不存在：${p0}`; }
+            else if (!fs.existsSync(path.join(p0, 'SKILL.md'))) { okH = false; huiBaoH = '[install_skill] 不是技能包（缺 SKILL.md）'; }
+            else if (!pan.allow && !pan.needAsk) { okH = false; huiBaoH = `[install_skill] 被拒（${dang2}授权）：${pan.why}`; }
+            else if (!pan.allow) {
+              const da = await qingQiuKaPian(sessionId, 'AI 请求安装技能',
+                `技能目录：${p0}\n安全检测：${jian.summary}\n（同意 = 仅这一次放行）`,
+                [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+              if (/^同意/.test(da)) huiBaoH = await anZhuangJiNengBao(p0, String(argsH.name || ''));
+              else { okH = false; huiBaoH = `[install_skill] 用户拒绝安装 ${p0}`; }
+            } else {
+              huiBaoH = await anZhuangJiNengBao(p0, String(argsH.name || ''));
+            }
+          } else if (gongJuMing === 'read_docx') {
+            const p0 = String(argsH.path || '').trim();
+            const r2 = duDocx(p0);
+            okH = !!r2.ok;
+            huiBaoH = r2.ok ? `[read_docx] ${p0}\n${r2.text.slice(0, 8000)}` : `[read_docx] 失败：${r2.error}`;
+          } else if (gongJuMing === 'read_pptx') {
+            const p0 = String(argsH.path || '').trim();
+            const r2 = duPptx(p0);
+            okH = !!r2.ok;
+            huiBaoH = r2.ok
+              ? `[read_pptx] ${p0}（${r2.slides.length} 页）\n` + r2.slides.map((s, i) => `--- 第 ${i + 1} 页 ---\n${s.slice(0, 1200)}`).join('\n').slice(0, 8000)
+              : `[read_pptx] 失败：${r2.error}`;
+          } else if (gongJuMing === 'fetch_url') {
+            const url = String(argsH.url || '').trim();
+            const r2 = await zhuaQuWangZhi(url, { maxBytes: Number(argsH.maxBytes) || 200000 });
+            okH = !!r2.ok;
+            huiBaoH = r2.ok ? `[fetch_url] HTTP ${r2.status}（${r2.bytes} 字节）\n${r2.text}` : `[fetch_url] 失败：${r2.error}`;
+          } else if (gongJuMing === 'download_file') {
+            const url = String(argsH.url || '').trim();
+            const { dang: dang3, ask: yaoWen4 } = anQuanDangWei();
+            const jian = anquanJianCeMingLing('curl ' + url);
+            const pan = panDuanShouQuan(dang3, yaoWen4, 'shell', jian);
+            // 保存路径沿用工作区/系统目录映射与越权流程
+            let baoCun = '';
+            try {
+              const resolved = resolveInside(baseH, String(argsH.path || ''), dang3 === 'full');
+              baoCun = resolved;
+            } catch (eP) {
+              if (yaoWen4) {
+                const da = await qingQiuKaPian(sessionId, 'AI 请求下载到工作区外',
+                  `地址：${url}\n保存到：${String(argsH.path || '')}\n（同意 = 仅这一次放行）`,
+                  [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+                if (/^同意/.test(da)) baoCun = String(argsH.path || '');
+                else { okH = false; huiBaoH = '[download_file] 用户拒绝'; }
+              } else { okH = false; huiBaoH = '[download_file] ' + String((eP as Error)?.message || eP); }
+            }
+            if (okH && baoCun) {
+              const r2 = await xiaZaiWenJian(url, baoCun, { maxBytes: Number(argsH.maxBytes) || 50 * 1024 * 1024 });
+              okH = !!r2.ok;
+              huiBaoH = r2.ok ? `[download_file] 已保存 ${r2.path}（${r2.bytes} 字节）` : `[download_file] 失败：${r2.error}`;
             }
           } else {
             // schedule_task
@@ -3481,6 +3625,8 @@ chuliIpc(
           const yongHu = dangQianYongHuMing();
           const ju = [];
           if (xiaoXi.ming) ju.push(tMain('llm.identityLine', '你是「{ming}」。').replace('{ming}', String(xiaoXi.ming)));
+          // 让它知道自己跑在哪个模型上（真事故：用户问"你是哪个模型"，它说"看不清蹄子底下"）
+          if (modelId) ju.push(tMain('llm.modelLine', '你当前运行在模型「{model}」上。').replace('{model}', String(modelId)));
           if (yongHu) ju.push(tMain('llm.userLine', '你的用户是「{u}」，请这样称呼他。').replace('{u}', yongHu));
           if (ju.length) shenFenTou.push({ role: 'system', content: ju.join('') } as LiaoTianXiaoXi);
         }
