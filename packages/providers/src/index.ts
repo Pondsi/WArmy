@@ -8,6 +8,7 @@ export * from './types.js';
 export * from './base.js';
 export * from './tools.js';
 export * from './util.js';
+export * from './mo-xing-neng-li.js';
 export { JianrongOpenAIGongYing, chuangjianDeepSeek } from './openai.js';
 export { AnthropicGongYing } from './anthropic.js';
 export { OllamaGongYing } from './ollama.js';

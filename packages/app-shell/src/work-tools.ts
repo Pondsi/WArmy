@@ -336,15 +336,60 @@ export function workMakePptx(baseDir: string, args: { path?: string; slides?: Ar
 }
 
 /** 统一入口：按 tool 名分发（未知工具 → 结构化失败，不抛错） */
+/**
+ * 工具调用参数的**容错解析**。
+ *
+ * 真事故：模型吐出的 tool arguments 是**截断/手写**的 JSON，严格 JSON.parse 抛
+ * `can't find closing '}' symbol` 之类的语法错，直接当回复回给用户 —— 用户只看到
+ * 一句天书，工具压根没跑。
+ *
+ * 策略：能严格解析就用；否则按顺序做常见修复（尾逗号 / 未闭合括号 / 单引号 / 未加引号的键），
+ * 修不出来就返回 `{}` 并让调用方如实回「参数不是合法 JSON」——**绝不把裸解析器报错当回复**。
+ */
+export function jieXiGongJuCanShu(raw: unknown): { ok: boolean; args: Record<string, unknown>; error?: string } {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, args: {} };
+  if (typeof raw === 'object' && !Array.isArray(raw)) return { ok: true, args: raw as Record<string, unknown> };
+  const s0 = String(raw).trim();
+  if (!s0) return { ok: true, args: {} };
+  // 1) 严格解析
+  try { return { ok: true, args: JSON.parse(s0) as Record<string, unknown> }; } catch { /* 往下修 */ }
+  let s = s0;
+  try {
+    // 2) 去掉尾逗号  { "a":1, } → { "a":1 }
+    s = s.replace(/,\s*([}\]])/g, '$1');
+    // 3) 未加引号的键  { a: 1 } → { "a": 1 }
+    s = s.replace(/([{,]\s*)([A-Za-z_][\w$-]*)\s*:/g, '$1"$2":');
+    // 4) 单引号字符串 → 双引号（简单情形）
+    s = s.replace(/'/g, '"');
+    try { return { ok: true, args: JSON.parse(s) as Record<string, unknown> }; } catch { /* 再试闭合 */ }
+    // 5) 未闭合：按栈补齐 } ]（截断的 JSON 最常见）
+    const zhan: string[] = [];
+    let yinHao: string | null = null;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (yinHao) { if (c === '\\') { i++; continue; } if (c === yinHao) yinHao = null; continue; }
+      if (c === '"' || c === "'") { yinHao = c; continue; }
+      if (c === '{') zhan.push('}');
+      else if (c === '[') zhan.push(']');
+      else if (c === '}' || c === ']') zhan.pop();
+    }
+    if (yinHao) s += '"';
+    s = s.replace(/,\s*$/, '');
+    s += zhan.reverse().join('');
+    return { ok: true, args: JSON.parse(s) as Record<string, unknown> };
+  } catch {
+    // **不把解析器原始报错**（Unexpected token / can't find closing …）带回给用户 ——
+    // 那是天书，不是答案；只如实说"参数不是合法 JSON"
+    return { ok: false, args: {}, error: '参数不是合法 JSON（已尝试常见修复仍失败）' };
+  }
+}
+
 export function runWorkTool(baseDir: string, call: { function?: { name?: string; arguments?: unknown } }, kuaiQuan = false, gaoJiMuLu = ''): WorkToolResult {
   const name = String((call && call.function && call.function.name) || '');
   const rawArgs = call && call.function ? call.function.arguments : undefined;
-  let args: Record<string, unknown> = {};
-  try {
-    args = typeof rawArgs === 'string' ? (rawArgs.trim() ? JSON.parse(rawArgs) : {}) : ((rawArgs as Record<string, unknown>) || {});
-  } catch {
-    return fail(name || 'work', new Error('bad-json-arguments'));
-  }
+  const jie = jieXiGongJuCanShu(rawArgs);
+  if (!jie.ok) return fail(name || 'work', new Error(jie.error || 'bad-json-arguments'));
+  const args = jie.args;
   switch (name) {
     case 'list_dir': return workListDir(baseDir, args as { path?: string }, kuaiQuan);
     case 'read_file': return workReadFile(baseDir, args as { path?: string; maxChars?: number }, kuaiQuan);

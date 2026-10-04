@@ -26,17 +26,47 @@ export class OllamaGongYing extends JichuGongYing {
 
   private qingQiuTi(Qiu: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
     const xiaoXiJi = Qiu.xiaoXiJi.map((m) => {
+      /**
+       * Ollama `/api/chat` 的约定与 OpenAI 不同（真事故：`Value looks like object,
+       * but can't find closing '}' symbol` —— 就是我们按 OpenAI 形状发，Ollama 解析报错）：
+       *  · `content` 只接受**字符串**；图片走独立的 `images: [base64...]` 字段
+       *  · `tool_calls[].function.arguments` 必须是**对象**，不是 JSON 字符串
+       */
+      let wenBen = '';
+      const tuJi: string[] = [];
+      if (typeof m.content === 'string') {
+        wenBen = m.content;
+      } else if (Array.isArray(m.content)) {
+        for (const kuai of m.content) {
+          if (!kuai) continue;
+          if (kuai.type === 'text') wenBen += String(kuai.text || '');
+          else if (kuai.type === 'image_url' && kuai.image_url?.url) {
+            const url = String(kuai.image_url.url);
+            const b64 = url.replace(/^data:[^,]*,/, '');
+            if (b64) tuJi.push(b64);
+          }
+        }
+      } else if (m.content != null) {
+        wenBen = String(m.content);
+      }
       const ji: Record<string, unknown> = {
         role: m.role === 'tool' ? 'tool' : m.role,
-        content: m.content,
+        content: wenBen,
       };
+      if (tuJi.length) ji.images = tuJi;
       // tool_call_id：Ollama 的 tool 消息要带，才能对上上一轮的 tool_calls
       if (m.role === 'tool' && m.toolCallId) ji.tool_call_id = m.toolCallId;
-      // assistant 发起的工具调用
+      // assistant 发起的工具调用（arguments **必须是对象**）
       if (m.role === 'assistant' && m.gongJuDiaoYongJi?.length) {
-        ji.tool_calls = m.gongJuDiaoYongJi.map((t) => ({
-          function: { name: t.function.name, arguments: t.function.arguments },
-        }));
+        ji.tool_calls = m.gongJuDiaoYongJi.map((t) => {
+          let can: unknown = {};
+          try {
+            const s = String(t.function?.arguments ?? '').trim();
+            can = s ? JSON.parse(s) : {};
+          } catch { can = {}; }
+          if (!can || typeof can !== 'object' || Array.isArray(can)) can = {};
+          return { function: { name: t.function?.name || '', arguments: can } };
+        });
       }
       return ji;
     });

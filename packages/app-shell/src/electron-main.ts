@@ -25,6 +25,8 @@ import {
   liaoTianDaiGongJu,
   gongYingZhiChiGongJu,
   neiRongWenBen,
+  moXingNengLi,
+  gouJianDangWeiAnShe,
   type LiaoTianXiaoXi,
   type LiaoTianQingQiu,
   type MoxingGongYing,
@@ -132,7 +134,7 @@ import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomi
  * **不是**落到本机设置里（产品主：记录文件的改动是无限牛马的功能，不是本机的功能）。
  */
 import { setFileAccessSink, withFileAccessScope, dangqianWenjianFangwenZuoyongyu } from './helper-tool.js';
-import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs, yingSheYongHuWenJianJia, resolveInside } from './work-tools.js';
+import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs, yingSheYongHuWenJianJia, resolveInside, jieXiGongJuCanShu } from './work-tools.js';
 import {
   anquanJianCeMingLing, anquanJianCeJiNeng, panDuanShouQuan, yunXingMingLing,
   duDocx, duPptx, zhuaQuWangZhi, xiaZaiWenJian,
@@ -527,6 +529,10 @@ function guiYiJiaoSe(role: string): string {
  * 我们的 8 档按**比例**映射到这份清单上 —— 档数不同也能正确对应。
  */
 const modelThinkMeta = new Map<string, string[]>();
+/** 模型能力（视觉/思考/工具/种类/上下文长度）——拉模型时问出来的 + 已知表兑底 */
+const modelNengLiMeta = new Map<string, { vision: boolean | 'unknown'; thinking: boolean | 'unknown'; tools: boolean | 'unknown'; thinkLevels: string[]; source: string; kind?: string; contextLen?: number }>();
+/** 思考档位映射（我们的档 ↔ 该模型的档）——拉取模型时构建，使用时直接查 */
+const modelDangWeiAnShe = new Map<string, { woDaoMo: Record<string, string | null>; moDaoWo: Record<string, string> }>();
 
 /** 我们的 8 档 → 归一化强度：-1=关闭，null=自动（交系统），0..1=强度 */
 function siKaoQiangDu(level: string | undefined): number | null {
@@ -546,20 +552,29 @@ function yingSheDangWei(qiang: number, dangWei: string[]): string {
 
 /**
  * 思考级别 → 请求附加参数。
- * 「自然（自动）」由系统按紧急度挑强度；其余按**该模型支持的档位**比例映射。
- * 各家叫法不同，常见字段都带上；真被拒了由调用方降级为「自然」再试并在回复开头标注。
+ * **按拉取模型时建好的映射表**发（各家档数不同也能正确对应）；
+ * 没有映射表就按强度比例现算一次兜底。
  */
 function siKaoCanShu(level: string | undefined, urgency: string | undefined, modelId?: string): Record<string, unknown> | undefined {
   const q = siKaoQiangDu(level);
-  if (q === -1) return { enable_thinking: false, thinking_level: 'off' };
-  const dangWei = modelThinkMeta.get(String(modelId || '')) || ['minimal', 'low', 'medium', 'high'];
+  const mid = String(modelId || '');
+  const anShe = modelDangWeiAnShe.get(mid) || gouJianDangWeiAnShe(modelThinkMeta.get(mid) || []);
+  if (q === -1) {
+    const off = anShe.woDaoMo.off;
+    return off ? { enable_thinking: false, thinking_level: off, reasoning_effort: off } : { enable_thinking: false };
+  }
   let qq = q;
   if (qq === null) {
     const u = String(urgency || 'P2');
     qq = (u === 'P0' || u === 'P1') ? 0.85 : (u === 'P3' ? 0.15 : 0.5);
   }
-  const effort = yingSheDangWei(qq, dangWei);
-  return { reasoning_effort: effort, thinking_level: effort, enable_thinking: true };
+  // 0..1 强度 → 我们的 l1..l6 → 该模型的档
+  const liu = ['l1', 'l2', 'l3', 'l4', 'l5', 'l6'];
+  const idx = Math.round(Math.max(0, Math.min(1, qq)) * (liu.length - 1));
+  const wo = liu[Math.max(0, Math.min(liu.length - 1, idx))]!;
+  const mo = anShe.woDaoMo[wo] || anShe.woDaoMo.auto || '';
+  if (!mo) return undefined;
+  return { reasoning_effort: mo, thinking_level: mo, enable_thinking: true };
 }
 
 function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
@@ -829,6 +844,33 @@ async function anZhuangJiNengBao(yuan: string, ziMing: string): Promise<string> 
   } catch (e) { return `[install_skill] 安装失败：${xiJingCuoWu(e)}`; }
 }
 
+/**
+ * **真能跑**的模型清单：只列那些供应商已配 Key、或本身是 Ollama（无需 Key）的模型。
+ * 真事故：智能选模型挑到没密钥的 DeepSeek ⇒ 报「未配置 API Key」，而 Ollama 明明有可用模型。
+ */
+async function lieKeYongMoXing(): Promise<string[]> {
+  try {
+    const s = settingsStore?.load() as {
+      providers?: Array<{ id?: string; protocol?: string; models?: unknown[]; defaultModel?: string }>
+    } | undefined;
+    const lie = Array.isArray(s?.providers) ? s.providers : [];
+    const out: string[] = [];
+    for (const p of lie) {
+      const xieYi = String(p.protocol || '');
+      const keYong = xieYi === 'ollama';
+      if (!keYong) {
+        const k = await jiexiGongyingshangMiyao(String(p.id || ''));
+        if (!k) continue;
+      }
+      for (const m of (p.models || [])) {
+        const id = String(typeof m === 'string' ? m : (m as { id?: string })?.id || '');
+        if (id && !out.includes(id)) out.push(id);
+      }
+    }
+    return out;
+  } catch { return []; }
+}
+
 /** 当前安全档位 + 「超出权限是否询问」（默认询问） */
 function anQuanDangWei(): { full: boolean; ask: boolean; dang: AnquanDang } {
   try {
@@ -957,8 +999,8 @@ async function yunXingLiaoTianXunHuan(
         }
         // spawn_subagent：命名 + 登记 + 用同一个模型把子任务跑一轮
         const rawArgs = call && call.function ? call.function.arguments : undefined;
-        let args: { task?: string; title?: string } = {};
-        try { args = typeof rawArgs === 'string' ? (rawArgs.trim() ? JSON.parse(rawArgs) : {}) : (rawArgs || {}); } catch { args = {}; }
+        const jieXd = jieXiGongJuCanShu(rawArgs);
+        const args: { task?: string; title?: string } = (jieXd.args || {}) as { task?: string; title?: string };
         // 本牛马的小弟数量上限（牛马管理里设的）：到顶就如实拒绝
         if (yiPaiXiaoDi >= xiaoDiShangXian) {
           return `[spawn_subagent] 已达本牛马的小弟数量上限（${xiaoDiShangXian}），请等小弟完成或调高「小弟数量」。`;
@@ -1022,16 +1064,22 @@ async function yunXingLiaoTianXunHuan(
         const t1h = Date.now();
         const baseH = workspaceDirOf(app.getPath('userData'), sessionId);
         const rawArgsH = call && call.function ? (call.function as { arguments?: unknown }).arguments : undefined;
-        let argsH: Record<string, unknown> = {};
-        try { argsH = typeof rawArgsH === 'string' ? JSON.parse(rawArgsH || '{}') : ((rawArgsH as Record<string, unknown>) || {}); } catch { argsH = {}; }
+        // 容错解析：截断/手写的 JSON 尽量修出来；修不出如实回参数错误，**不把裸解析器报错当回复**
+        const jieH = jieXiGongJuCanShu(rawArgsH);
+        const argsH: Record<string, unknown> = jieH.args;
         const quanQuan = () => {
           try { return String((settingsStore?.load() as { globalSecurity?: string } | undefined)?.globalSecurity || 'normal') === 'full'; }
           catch { return false; }
         };
         let huiBaoH = '';
         let okH = true;
+        if (!jieH.ok) {
+          okH = false;
+          huiBaoH = `[${gongJuMing}] ${jieH.error || '参数不是合法 JSON'}`;
+        }
         try {
-          if (gongJuMing === 'ask_user') {
+          if (!jieH.ok) { /* 已如实回参错，跳过执行 */ }
+          else if (gongJuMing === 'ask_user') {
             /**
              * AI 拿不准时的**选择卡**：列出候选项（永远带「其他」自定义），用户选完自动继续。
              * 这是"不许自己瞎猜、也不许因此停下"的落点（产品要求）。
@@ -3070,19 +3118,47 @@ chuliIpc(
       );
       const models = await p.listModels();
       /**
-       * 顺手记录**该模型支持的思考档位**（能问到就记）：少数端点（OpenRouter 等）在 /models 里
-       * 给 supported_parameters / reasoning；多数（DeepSeek / MiMo 官方端点）不给 —— 那就留空，
-       * 由 siKaoCanShu 用通用档位并靠"失败即降级为自然"兜底。
+       * 问出**该模型会什么**（视觉 / 思考档位 / 工具）：
+       *  · 端点给字段（`input_modalities`/`capabilities`/`supported_parameters`）就用端点的；
+       *  · 官方端点（DeepSeek / MiMo 等）只回 id ⇒ 用**已知模型能力表**兑底；
+       *  · 两者都没有 ⇒ 如实 unknown（界面上不显示能力徽章，不猜）。
        */
       try {
-        const det = await (p as unknown as { listModelsDetailed?: (sig?: AbortSignal) => Promise<Array<{ id: string; thinkLevels: string[] }>> }).listModelsDetailed?.();
+        const det = await (p as unknown as { listModelsDetailed?: (sig?: AbortSignal) => Promise<Array<{ id: string; thinkLevels: string[]; vision?: boolean | 'unknown'; tools?: boolean | 'unknown'; supportsThinking?: boolean }>> }).listModelsDetailed?.();
+        const duanDianBiao = new Map<string, { vision?: boolean | 'unknown'; thinking?: boolean | 'unknown'; tools?: boolean | 'unknown'; thinkLevels?: string[] }>();
         if (Array.isArray(det)) {
           for (const m of det) {
-            if (m && m.id && Array.isArray(m.thinkLevels) && m.thinkLevels.length) modelThinkMeta.set(m.id, m.thinkLevels);
+            if (!m || !m.id) continue;
+            duanDianBiao.set(m.id, {
+              vision: m.vision,
+              thinking: m.supportsThinking === undefined ? undefined : m.supportsThinking,
+              tools: m.tools,
+              thinkLevels: m.thinkLevels,
+            });
           }
         }
+        for (const id of models) {
+          const neng = moXingNengLi(id, duanDianBiao.get(id) || null);
+          modelNengLiMeta.set(id, neng as never);
+          if (neng.thinkLevels.length) modelThinkMeta.set(id, neng.thinkLevels);
+          /**
+           * **思考档位映射**（拉取时就建好，之后按它发请求）：
+           * 各家档数不同（3 档 / 4 档 / 6 档…），按**强度比例**铺到我们的 l1..l6，
+           * 数量不同也能正确对应（见 gouJianDangWeiAnShe）。
+           */
+          try {
+            const anShe = gouJianDangWeiAnShe(neng.thinkLevels || []);
+            modelDangWeiAnShe.set(id, anShe);
+          } catch { /* noop */ }
+        }
       } catch { /* 可选：拿不到就按通用档位 */ }
-      return { ok: true, models, thinkMeta: Object.fromEntries(modelThinkMeta) };
+      return {
+        ok: true,
+        models,
+        thinkMeta: Object.fromEntries(modelThinkMeta),
+        /** 模型能力（视觉/思考/工具）——拉取时问出来的 + 已知表兑底 */
+        nengLi: Object.fromEntries(modelNengLiMeta),
+      };
     } catch (e) {
       return { ok: false, models: [], error: xiJingCuoWu(e) };
     }
@@ -3566,22 +3642,55 @@ chuliIpc(
      * 「智能选模型」：显式 > 牛马默认 > 调用链+紧急度 > 角色表 > 兜底（见 model-pick.ts）
      * **先**定模型，再按模型找它所属的供应商 —— 否则用 Ollama 的模型会撞上
      * 「当前生效供应商没配密钥」的误报（真事故）。
+     *
+     * 只从**真能跑**的模型里挑（供应商已配 Key 或是 Ollama）——
+     * 真事故：挑到没密钥的 deepseek-chat ⇒ 报「未配置 API Key」，而 Ollama 明明有可用模型。
      */
-    const jueCe = jueCeMoXing({
-      explicit: xiaoXi.model,
-      ...(xiaoXi.moXingJueCe || {}),
-      roles: roleModels,
-      fallback: providerCfg.model || 'deepseek-chat',
-    });
-    const modelId = jueCe.model;
-    const an = await jieMoXingGongYingShang(modelId);
-    const zhu: MoXingGongYingXinXi = an || {
+    const keYongMoXing = await lieKeYongMoXing();
+    const yiShiBai: string[] = [];
+    let jueCe: ReturnType<typeof jueCeMoXing> | null = null;
+    let modelId = '';
+    let an: MoXingGongYingXinXi | null = null;
+    let zhu: MoXingGongYingXinXi = {
       presetId: providerCfg.presetId,
       baseURL: providerCfg.baseURL || '',
       protocol: providerCfg.protocol,
       apiKey: providerCfg.apiKey || '',
       biaoQian: providerCfg.presetId,
     };
+    /**
+     * **自动降级**：按调用链逐个试 —— 挑中的模型不可用（没 Key / 不存在）或本轮已失败，
+     * 就换下一个，直到有能跑的；全部试过才如实报错。绝不"挑到第一个就认死"。
+     */
+    for (let lun = 0; lun < 8; lun++) {
+      jueCe = jueCeMoXing({
+        explicit: xiaoXi.model,
+        ...(xiaoXi.moXingJueCe || {}),
+        roles: roleModels,
+        fallback: providerCfg.model || 'deepseek-chat',
+        keYongMoXing,
+        tiaoGuo: yiShiBai,
+      });
+      modelId = jueCe.model;
+      if (yiShiBai.includes(modelId) && yiShiBai.length >= Math.max(1, keYongMoXing.length)) break;
+      an = await jieMoXingGongYingShang(modelId);
+      zhu = an || {
+        presetId: providerCfg.presetId,
+        baseURL: providerCfg.baseURL || '',
+        protocol: providerCfg.protocol,
+        apiKey: providerCfg.apiKey || '',
+        biaoQian: providerCfg.presetId,
+      };
+      // 能跑 = 有 Key 或 Ollama
+      if (zhu.apiKey || zhu.protocol === 'ollama') break;
+      yiShiBai.push(modelId);
+      audit?.log('chat.model-degraded', { sessionId, model: modelId, reason: 'no-key', provider: zhu.presetId });
+      if (!keYongMoXing.length) break;
+    }
+    if (!jueCe) {
+      jueCe = { model: providerCfg.model || 'deepseek-chat', why: 'fallback', chainIndex: -1 };
+      modelId = jueCe.model;
+    }
     if (!zhu.apiKey && zhu.protocol !== 'ollama') {
       const reply = tMain('llm.noKey') + xiaoXi.content.slice(0, 80)
         + `\n（本轮模型 ${modelId} 属于供应商「${zhu.biaoQian}」，该家尚未配置 API Key；Ollama 无需密钥，其它供应商请在「设置 → 模型」里填 Key。）`;
@@ -3596,6 +3705,9 @@ chuliIpc(
     }
 
     const qiShiShiJian = Date.now();
+    let zuiHouCuo = '';
+    /** **调用失败自动降级**：这一档模型挂了就换调用链上下一个，最多试 3 个（真事故：直接报错给用户） */
+    for (let shi = 0; shi < 3; shi++) {
     try {
       const provider = congYuSheChuangJian(zhu.presetId, {
         apiKey: zhu.apiKey,
@@ -3758,6 +3870,10 @@ chuliIpc(
         thinkDowngraded: jiangJiTiShi || undefined,
         usage: xiangYing.usage,
         needsKey: false,
+        /** 本轮**实际调用的模型与供应商**（产品要求：模型的调用必须清晰可见） */
+        moXing: modelId,
+        gongYingShang: zhu.biaoQian || zhu.presetId,
+        xuanZeYuanYin: jueCe.why,
         /** 工具调用观测（渲染层可据此展示"本轮调用了 retrieve/recall"） */
         tools: {
           requested: !!loop.tooled,
@@ -3770,10 +3886,31 @@ chuliIpc(
       };
     } catch (e) {
       const err = xiJingCuoWu(e);
-      lastError = { ts: Date.now(), message: err, context: 'chat-send' };
-      // T194：这条是"**已处理**失败"（聊天链路自己吞掉并回 retry），也要进控制台
-      fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: err } });
-      return { ok: false, reply: '', error: err, needsKey: false, retry: true };
+      zuiHouCuo = err;
+      // 这一档模型失败 ⇒ 记下它，换下一个再来（不直接把错误丢给用户）
+      yiShiBai.push(modelId);
+      audit?.log('chat.model-degraded', { sessionId, model: modelId, reason: err.slice(0, 120), provider: zhu.presetId });
+      const xiaYiGe = jueCeMoXing({
+        explicit: xiaoXi.model,
+        ...(xiaoXi.moXingJueCe || {}),
+        roles: roleModels,
+        fallback: providerCfg.model || 'deepseek-chat',
+        keYongMoXing,
+        tiaoGuo: yiShiBai,
+      });
+      if (!xiaYiGe || !xiaYiGe.model || xiaYiGe.model === modelId || yiShiBai.includes(xiaYiGe.model)) break;
+      const an2 = await jieMoXingGongYingShang(xiaYiGe.model);
+      const zhu2 = an2 || { presetId: providerCfg.presetId, baseURL: providerCfg.baseURL || '', protocol: providerCfg.protocol, apiKey: providerCfg.apiKey || '', biaoQian: providerCfg.presetId };
+      if (!zhu2.apiKey && zhu2.protocol !== 'ollama') continue;
+      jueCe = xiaYiGe; modelId = xiaYiGe.model; an = an2; zhu = zhu2;
+      continue;
+    }
+    break;
+    }
+    if (zuiHouCuo) {
+      lastError = { ts: Date.now(), message: zuiHouCuo, context: 'chat-send' };
+      fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: zuiHouCuo } });
+      return { ok: false, reply: '', error: zuiHouCuo, needsKey: false, retry: true };
     }
   }
 );
@@ -3925,7 +4062,7 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
       ok: true,
       sessionId,
       count: all.length,
-      xiaoXiJi: all.slice(-limit).map((e) => ({ role: e.role, text: e.content, ts: e.ts ?? null, reasoning: e.reasoning || null })),
+      xiaoXiJi: all.slice(-limit).map((e) => ({ role: e.role, text: e.content, ts: e.ts ?? null, reasoning: e.reasoning || null, system: e.system || false })),
     };
   } catch (e2) {
     return { ok: false, sessionId: String(payload?.sessionId || ''), xiaoXiJi: [], error: xiJingCuoWu(e2) };
@@ -3940,7 +4077,7 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
  * 去重：与**最后一条**的 role+content 相同时跳过，这样单聊路径（chat-send 已记账）
  * 不会因为渲染层也补写而重复。
  */
-chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string; role?: string; content?: string }) => {
+chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string; role?: string; content?: string; system?: boolean }) => {
   try {
     const sid = String(payload?.sessionId || '');
     // 角色归一：wo|user → user，them|assistant → assistant（旧实现只认 'wo'，
@@ -3976,6 +4113,7 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
       content,
       recordId: memSeq !== undefined ? recordId : undefined,
       ts: Date.now(),
+      system: payload?.system || undefined,
     });
     return { ok: true, appended: true };
   } catch (e3) {

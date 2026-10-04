@@ -38,12 +38,20 @@ export interface MoXingJueCeShuRu {
   roles?: { duty?: string; executor?: string; summary?: string };
   /** 最终兜底 */
   fallback?: string;
+  /**
+   * **真实存在的模型**（所有供应商的 models 合集）。
+   * 真事故：以前"智能"会落到一个**不存在**的模型上（或某个空供应商的默认值），
+   * 一调用就报错。现在只从这份清单里挑 —— 挑出来的一定跑得起来。
+   */
+  keYongMoXing?: string[];
+  /** 本轮失败后要跳过的模型（自动降级用） */
+  tiaoGuo?: string[];
 }
 
 export interface MoXingJueCeJieGuo {
   model: string;
   /** 决策依据（审计/可观测用；不是给用户看的文案） */
-  why: 'explicit' | 'default' | 'chain-p0p1' | 'chain-p2' | 'chain-p3' | 'role-duty' | 'role-executor' | 'role-summary' | 'fallback' | 'fallback-disabled';
+  why: 'explicit' | 'default' | 'chain-p0p1' | 'chain-p2' | 'chain-p3' | 'chain-fallback' | 'role-duty' | 'role-executor' | 'role-summary' | 'fallback' | 'fallback-disabled';
   /** 「智能」路径下的真实决策点：这次选中的是调用链第几个（0 起）；非智能为 -1 */
   chainIndex: number;
 }
@@ -97,16 +105,29 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   const disabled = (shuRu.chainDisabled || []).map((s) => String(s));
   /** 禁用名单里存的可能是复合展示标签，判"是否被禁用"一律按纯模型 id 比对 */
   const beiJinYong = (m: string) => disabled.some((d) => jieMoXingMing(d) === jieMoXingMing(m));
+  /**
+   * **真实存在**过滤：只允许挑"供应商里真有的模型"。
+   * 真事故：以前"智能"会落到一个不存在的模型上，一调用就报错。
+   */
+  const keYong = (shuRu.keYongMoXing || []).map((m) => jieMoXingMing(m)).filter(Boolean);
+  const zaiQingDan = (m: string) => {
+    const s = jieMoXingMing(m);
+    return !s ? false : (keYong.length === 0 || keYong.includes(s));
+  };
+  /** 本轮降级要跳过的（上一轮已经失败的模型） */
+  const tiaoGuo = new Set((shuRu.tiaoGuo || []).map((m) => jieMoXingMing(m)));
+  const keYongQie = (m: string) => zaiQingDan(m) && !beiJinYong(m) && !tiaoGuo.has(jieMoXingMing(m));
   const dm = String(shuRu.defaultModel || '');
 
-  // 2) 显式默认模型（非「智能」）：必须不在禁用名单里
+  // 2) 显式默认模型（非「智能」）：必须不在禁用名单里、且真的存在
   if (!isSmart(dm)) {
     const d = dm.trim();
-    if (d && !beiJinYong(d)) return { model: jieMoXingMing(d), why: 'default', chainIndex: -1 };
+    if (d && keYongQie(d)) return { model: jieMoXingMing(d), why: 'default', chainIndex: -1 };
+    // 显式默认不可用（被禁/不存在/本轮已失败）⇒ 顺着降级继续往下挑，不当场报错
   }
 
-  // 3) 「智能」→ 调用链 + 紧急度
-  const lian = qiYongLian(shuRu.chain, disabled);
+  // 3) 「智能」→ 调用链 + 紧急度（只从**存在且启用**的里挑）
+  const lian = qiYongLian(shuRu.chain, disabled).filter((m) => zaiQingDan(m) && !tiaoGuo.has(jieMoXingMing(m)));
   const idx = zhiNengTiaoLian(lian, shuRu.urgency);
   if (idx >= 0) {
     const why = (shuRu.urgency === 'P0' || shuRu.urgency === 'P1')
@@ -115,28 +136,36 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
     const mo = String(lian[idx] ?? '');
     return { model: jieMoXingMing(mo), why, chainIndex: idx };
   }
+  // 3b) 调用链里没剩下可用的 ⇒ 退回**任何**真实存在的启用模型（自动降级的落点）
+  if (lian.length === 0) {
+    const sheng = keYong.filter((m) => keYongQie(m));
+    if (sheng.length) {
+      // 仍按紧急度在剩余项里挑：强=第一个，P2=第二个，P3=最后一个
+      const i2 = zhiNengTiaoLian(sheng, shuRu.urgency);
+      const mo2 = sheng[Math.max(0, i2)] ?? sheng[0] ?? '';
+      return { model: jieMoXingMing(mo2), why: 'chain-fallback', chainIndex: Math.max(0, i2) };
+    }
+  }
 
-  // 4) 角色表（同样不许选被禁用的）
+  // 4) 角色表（同样不许选被禁用的/不存在的/已失败的）
   const r = shuRu.roles || {};
   const u = String(shuRu.urgency || 'P2');
-  const keYong = (m?: string) => {
-    const s = String(m || '').trim();
-    return s && !beiJinYong(s) ? s : '';
-  };
   const houXuan = (u === 'P0' || u === 'P1')
     ? [r.duty]
     : u === 'P2'
       ? [r.executor, r.duty]
       : [r.summary, r.duty];
   for (const c of houXuan) {
-    const m = keYong(c);
-    if (m) return { model: jieMoXingMing(m), why: (u === 'P2' ? 'role-executor' : u === 'P3' ? 'role-summary' : 'role-duty'), chainIndex: -1 };
+    const m = String(c || '').trim();
+    if (m && keYongQie(m)) return { model: jieMoXingMing(m), why: (u === 'P2' ? 'role-executor' : u === 'P3' ? 'role-summary' : 'role-duty'), chainIndex: -1 };
   }
 
-  // 5) 兜底：若兜底本身被禁用，且角色表里也没有可用项 ——
-  //    **仍然返回兜底**（否则这一轮没法对话），但如实标注 why='fallback-disabled'，
-  //    调用方可据此提示用户「这个模型被禁用了，但没有别的可选」。
-  //    禁用名单里存的可能是复合展示标签，这里按纯模型 id 比对。
+  // 5) 兜底：若兜底本身不可用，但清单里还有别的可用项 ⇒ 用别的（**宁可降级也不报错**）
+  if (!keYongQie(fallback)) {
+    const sheng = keYong.filter((m) => keYongQie(m));
+    if (sheng.length) return { model: jieMoXingMing(sheng[0]!), why: 'chain-fallback', chainIndex: 0 };
+  }
+  //    真没有任何可用项 ⇒ 仍返回兜底（否则这一轮没法对话），但如实标注
   if (disabled.some((d) => jieMoXingMing(d) === fallback)) {
     return { model: fallback, why: 'fallback-disabled', chainIndex: -1 };
   }

@@ -30,6 +30,8 @@ export interface LogEntry {
   ts?: number;
   /** 思考过程（模型的 reasoning_content 等）——只给界面看，不进模型上下文 */
   reasoning?: string;
+  /** 系统小字（如"本轮模型：xxx"）——只给界面画成居中浅色行，不进模型上下文 */
+  system?: boolean;
 }
 
 export interface XuanranXuanxiang {

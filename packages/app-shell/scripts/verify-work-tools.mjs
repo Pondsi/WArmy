@@ -126,8 +126,21 @@ console.log('\n[8] 边界：未知工具 / 坏 JSON 不抛错（结构化失败�
 {
   const u = W.runWorkTool(base, { function: { name: 'rm_rf', arguments: {} } });
   check('未知工具 → 结构化失败', u.ok === false && /unknown-tool/.test(u.meta.error || ''), u.meta.error);
-  const bad = W.runWorkTool(base, { function: { name: 'write_file', arguments: '{not json' } });
-  check('坏 JSON → 结构化失败', bad.ok === false && /bad-json/.test(bad.meta.error || ''), bad.meta.error);
+
+  // 容错解析（真事故：截断的 tool arguments 抛 `can't find closing '}' symbol`，直接当回复回给用户）
+  const jie1 = W.jieXiGongJuCanShu('{"path":"a.txt","content":"hi"');
+  check('未闭合 JSON 被**修复**并解析出内容', jie1.ok === true && jie1.args.path === 'a.txt', jie1);
+  const jie2 = W.jieXiGongJuCanShu('{"a":1,}');
+  check('尾逗号被修复', jie2.ok === true && jie2.args.a === 1, jie2.args);
+  const jie3 = W.jieXiGongJuCanShu('{a: 1, b: "x"}');
+  check('未加引号的键被修复', jie3.ok === true && jie3.args.b === 'x', jie3.args);
+  const jie4 = W.jieXiGongJuCanShu('{"path":"Desktop/x.txt","content":"我是谁');
+  check('截断 JSON 补齐闭合并保住字符串值', jie4.ok === true && jie4.args.path === 'Desktop/x.txt', jie4.args);
+  const jie5 = W.jieXiGongJuCanShu('');
+  check('空参数 = 空对象（不算错）', jie5.ok === true && Object.keys(jie5.args).length === 0, jie5.args);
+  const bad = W.runWorkTool(base, { function: { name: 'write_file', arguments: '<<<完全不是 JSON' } });
+  check('完全修不出来的参数 → 结构化失败（不抛错）', bad.ok === false, bad.meta.error);
+  check('且错误里**没有裸解析器字样**（不当回复）', !/closing|Unexpected|SyntaxError/i.test(bad.content + (bad.meta.error || '')), bad.meta.error);
 }
 
 /* ── [9] 系统用户目录别名：Desktop/… 不许被静默写进工作区 ── */

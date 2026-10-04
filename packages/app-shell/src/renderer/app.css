@@ -2607,6 +2607,42 @@ html { font-weight: var(--fw-ui, 400); }
 .zhuDongShiJian.kuaRi {
   border-top: 1px solid var(--line); opacity: .8; padding-top: 10px;
 }
+/* 系统小字（本轮模型 / 提示）：居中一行浅色 */
+.xiTongXiaoZi {
+  text-align: center; margin: 4px 0 8px; font-size: 11px; color: var(--muted); opacity: .85;
+  word-break: break-all;
+}
+
+/* 特殊模型调用链：默认折叠，点开展开（听话/嵌入/整理/说话/分类 统一） */
+.moXianSuLian {
+  border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; padding: 0 12px;
+}
+.moXianSuLian > summary {
+  cursor: pointer; padding: 10px 0; font-size: 13px; font-weight: 600;
+  list-style: none; display: flex; align-items: center; gap: 6px;
+}
+.moXianSuLian > summary::-webkit-details-marker { display: none; }
+.moXianSuLian > summary::before { content: '▸'; color: var(--muted); transition: transform .15s ease; }
+.moXianSuLian[open] > summary::before { transform: rotate(90deg); }
+.moXianSuLian > summary .moXianSuZhaiYao { font-weight: 400; font-size: 11px; color: var(--muted); }
+.moXianSuLian > div, .moXianSuLian > .jingYin { padding-bottom: 10px; }
+
+/* 模型标签：种类徽章 + 上下文长度 */.moXingKind {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 99px;
+  font-size: 10px; background: var(--accent); color: var(--accent-ink, #fff); vertical-align: 1px;
+}
+.moXingCtx {
+  display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 99px;
+  font-size: 10px; border: 1px solid var(--line); color: var(--muted); vertical-align: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 决策卡序号 X/N */
+.aiqJiShu {
+  display: inline-block; margin-right: 6px; padding: 0 7px; border-radius: 99px;
+  font-size: 10px; background: var(--accent); color: var(--accent-ink, #fff);
+  font-variant-numeric: tabular-nums;
+}
 
 /* 图片附件点击放大预览 */
 .tuPianYuLanCeng {
