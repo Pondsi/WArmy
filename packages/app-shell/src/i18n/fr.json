@@ -2089,6 +2089,6 @@
   "settings.providerActive": "Secours",
   "settings.providerUse": "Définir en secours",
   "settings.providerUseOk": "Défini en secours (le modèle choisit le fournisseur)",
-  "model.fenLei": "Classification models",
-  "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
+  "model.fenLei": "Modèle de décision",
+  "model.fenLeiHint": "Chaîne de modèles pour décision/routage (style RLCD : petit et rapide, jugements avec score de confiance) — classification d'intention, routage de messages, arbitrage/approbation. Préférez un modèle de décision dédié (ex. Jev) ; un petit modèle de chat peut le remplacer. Premier activé = défaut ; monter/descendre ou désactiver."
 }

@@ -2089,6 +2089,6 @@
   "settings.providerActive": "Respaldo",
   "settings.providerUse": "Usar como respaldo",
   "settings.providerUseOk": "Definido como respaldo (el modelo decide el proveedor)",
-  "model.fenLei": "Classification models",
-  "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
+  "model.fenLei": "Modelo de decisión",
+  "model.fenLeiHint": "Cadena de modelos para decisión/enrutamiento (estilo RLCD: pequeño y rápido, juicios con confianza) — clasificación de intención, enrutamiento de mensajes, juez/aprobación. Prefiera un modelo de decisión dedicado (p. ej. Jev); un modelo de chat pequeño puede sustituirlo. El primero habilitado = predeterminado; subir/bajar o desactivar."
 }

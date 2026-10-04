@@ -99,8 +99,16 @@ export function zhiNengTiaoLian(chain: string[], urgency?: string): number {
 /** 决策入口：任何输入都不抛错。**返回的 model 一定是纯模型 id**（复合展示标签会被剥掉） */
 export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   const fallback = jieMoXingMing(shuRu.fallback || 'deepseek-chat') || 'deepseek-chat';
+  /**
+   * 本轮失败要跳过的（自动降级用）——**先算出来**，显式/默认也要尊重它：
+   * 真事故：显式模型失败后下一轮还返回同一个显式模型 ⇒ 只试 1 次就断，
+   * 调用链后面的模型根本没轮到（用户要求：整条链都得试完）。
+   */
+  const tiaoGuo = new Set((shuRu.tiaoGuo || []).map((m) => jieMoXingMing(m)));
   const explicit = String(shuRu.explicit || '').trim();
-  if (explicit) return { model: jieMoXingMing(explicit), why: 'explicit', chainIndex: -1 };
+  if (explicit && !tiaoGuo.has(jieMoXingMing(explicit))) {
+    return { model: jieMoXingMing(explicit), why: 'explicit', chainIndex: -1 };
+  }
 
   const disabled = (shuRu.chainDisabled || []).map((s) => String(s));
   /** 禁用名单里存的可能是复合展示标签，判"是否被禁用"一律按纯模型 id 比对 */
@@ -114,10 +122,10 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
     const s = jieMoXingMing(m);
     return !s ? false : (keYong.length === 0 || keYong.includes(s));
   };
-  /** 本轮降级要跳过的（上一轮已经失败的模型） */
-  const tiaoGuo = new Set((shuRu.tiaoGuo || []).map((m) => jieMoXingMing(m)));
   const keYongQie = (m: string) => zaiQingDan(m) && !beiJinYong(m) && !tiaoGuo.has(jieMoXingMing(m));
   const dm = String(shuRu.defaultModel || '');
+  /** 已经在降级（本轮有失败过的模型）⇒ 后续按**调用链原顺序**依次试完，不再按紧急度跳着挑 */
+  const zaiJiangJi = tiaoGuo.size > 0;
 
   // 2) 显式默认模型（非「智能」）：必须不在禁用名单里、且真的存在
   if (!isSmart(dm)) {
@@ -127,21 +135,35 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   }
 
   // 3) 「智能」→ 调用链 + 紧急度（只从**存在且启用**的里挑）
-  const lian = qiYongLian(shuRu.chain, disabled).filter((m) => zaiQingDan(m) && !tiaoGuo.has(jieMoXingMing(m)));
-  const idx = zhiNengTiaoLian(lian, shuRu.urgency);
-  if (idx >= 0) {
-    const why = (shuRu.urgency === 'P0' || shuRu.urgency === 'P1')
-      ? 'chain-p0p1'
-      : (shuRu.urgency === 'P2' ? 'chain-p2' : 'chain-p3');
-    const mo = String(lian[idx] ?? '');
-    return { model: jieMoXingMing(mo), why, chainIndex: idx };
+  //    首次按紧急度挑；**降级中按链原顺序**取下一个没试过的（把整条链跑完）
+  const lianQuan = qiYongLian(shuRu.chain, disabled).filter((m) => zaiQingDan(m));
+  const lian = lianQuan.filter((m) => !tiaoGuo.has(jieMoXingMing(m)));
+  if (lian.length) {
+    let mo: string;
+    let idx: number;
+    if (zaiJiangJi) {
+      // 降级：按链顺序取第一个还没失败的
+      idx = 0;
+      mo = String(lian[0] ?? '');
+    } else {
+      idx = zhiNengTiaoLian(lian, shuRu.urgency);
+      mo = String(lian[Math.max(0, idx)] ?? '');
+    }
+    if (mo) {
+      const why = zaiJiangJi
+        ? 'chain-fallback'
+        : (shuRu.urgency === 'P0' || shuRu.urgency === 'P1')
+          ? 'chain-p0p1'
+          : (shuRu.urgency === 'P2' ? 'chain-p2' : 'chain-p3');
+      return { model: jieMoXingMing(mo), why, chainIndex: Math.max(0, idx) };
+    }
   }
   // 3b) 调用链里没剩下可用的 ⇒ 退回**任何**真实存在的启用模型（自动降级的落点）
   if (lian.length === 0) {
     const sheng = keYong.filter((m) => keYongQie(m));
     if (sheng.length) {
-      // 仍按紧急度在剩余项里挑：强=第一个，P2=第二个，P3=最后一个
-      const i2 = zhiNengTiaoLian(sheng, shuRu.urgency);
+      // 降级中按清单顺序试完；首次仍按紧急度
+      const i2 = zaiJiangJi ? 0 : zhiNengTiaoLian(sheng, shuRu.urgency);
       const mo2 = sheng[Math.max(0, i2)] ?? sheng[0] ?? '';
       return { model: jieMoXingMing(mo2), why: 'chain-fallback', chainIndex: Math.max(0, i2) };
     }

@@ -2089,6 +2089,6 @@
   "settings.providerActive": "Fallback",
   "settings.providerUse": "Set as fallback",
   "settings.providerUseOk": "Set as fallback (the model decides which provider to use)",
-  "model.fenLei": "Classification models",
-  "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
+  "model.fenLei": "Decision model",
+  "model.fenLeiHint": "Model chain for decision/routing (RLCD-style: small and fast, confidence-scored judgments) — intent classification, message routing, judge/approval. Prefer a dedicated decision model (e.g. Jev); a small chat model can substitute. First enabled = default; move up/down or disable."
 }

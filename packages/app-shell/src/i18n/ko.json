@@ -2089,6 +2089,6 @@
   "settings.providerActive": "폴백",
   "settings.providerUse": "폴백으로 설정",
   "settings.providerUseOk": "폴백 공급자로 설정했습니다(실제 사용처는 모델이 결정)",
-  "model.fenLei": "Classification models",
-  "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
+  "model.fenLei": "의사결정 모델",
+  "model.fenLeiHint": "의사결정/라우팅용 모델 체인(RLCD 방식: 작고 빠르며 신뢰도 점수 판단) — 의도 분류, 메시지 라우팅, 판정/승인에 사용. 전용 의사결정 모델(예: Jev)을 우선하고, 없으면 소형 채팅 모델로 대체 가능. 첫 번째가 기본; 위/아래 이동 및 비활성화 가능."
 }

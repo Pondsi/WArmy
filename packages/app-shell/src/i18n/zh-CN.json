@@ -2012,7 +2012,7 @@
   "model.kind.rerank": "重排模型",
   "model.lianKong": "没有支持该用途的模型（拉取模型后会自动识别）",
   "settings.ttsModelHint": "文字转语音（把文字读出来）的模型调用链：第一个即默认；可上移/下移/禁用。",
-  "model.kind.decision": "分类模型",
+  "model.kind.decision": "决策模型",
   "model.kind.tts": "说话模型",
   "model.kind.asr": "听话模型",
   "model.kind.embedding": "嵌入模型",
@@ -2089,6 +2089,6 @@
   "settings.providerActive": "兜底",
   "settings.providerUse": "设为兜底",
   "settings.providerUseOk": "已设为兜底供应商（真正用谁由模型决定）",
-  "model.fenLei": "分类模型",
-  "model.fenLeiHint": "分类任务用的模型调用链：第一个即默认；可上移/下移/禁用（启用）。这个排列就是特殊模型的调用链。"
+  "model.fenLei": "决策模型",
+  "model.fenLeiHint": "决策/路由用的模型调用链（RLCD 类：小而快，输出带置信度的判定）——意图识别、消息路由、裁判/审批都走它。优先专用决策模型（如 Jev）；没有时小参数对话模型也能代劳。第一个即默认；可上移/下移/禁用。"
 }

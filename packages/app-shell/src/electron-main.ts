@@ -1358,7 +1358,7 @@ async function yunXingLiaoTianXunHuan(
             const luJing = String(wr.meta.path || '');
             const zhenAbs = String(wr.meta.abs || '')
               || (path.isAbsolute(luJing) ? luJing : path.join(base, luJing));
-            broadcastToWindows('warmy:wenJianChanSheng', { sessionId, path: luJing, abs: zhenAbs, bytes: wr.meta.bytes || 0, root: base });
+            broadcastToWindows('warmy:wenJianChanSheng', { sessionId, path: luJing, abs: zhenAbs, bytes: wr.meta.bytes || 0, root: base, ts: Date.now() });
           } catch { /* noop */ }
         }
         audit?.log('chat.work-tool', {
@@ -1649,6 +1649,42 @@ async function jieMoXingGongYingShang(modelId: string): Promise<MoXingGongYingXi
       biaoQian: String(hit.biaoQian || hit.id || ''),
     };
   } catch { return null; }
+}
+
+/**
+ * **决策模型**（RLCD 类：小而快、输出带置信度的判定）——
+ * 紧急度还是默认 P2 时，先让决策模型判一下「急 / 一般 / 省着用」。
+ * 判不动就保持 P2（宁可不判，也不瞎改用户意图）。
+ * 真事故：设置里的「决策模型」链存了却**从未被调用**，是个空壳。
+ */
+async function fenLeiPanDing(content: string): Promise<string> {
+  try {
+    const sm0 = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
+    const fl = Array.isArray(sm0.fenLeiChain) ? (sm0.fenLeiChain as string[]) : [];
+    const fld = Array.isArray(sm0.fenLeiDisabled) ? (sm0.fenLeiDisabled as string[]) : [];
+    const flMo = fl.find((m) => m && !fld.includes(m)) || '';
+    if (!flMo) return 'P2';
+    const anF = await jieMoXingGongYingShang(flMo);
+    if (!anF || (!anF.apiKey && anF.protocol !== 'ollama')) return 'P2';
+    const pF = congYuSheChuangJian(anF.presetId, { apiKey: anF.apiKey, baseURL: anF.baseURL || undefined, protocol: anF.protocol } as never, anF.protocol);
+    const pan = await pF.chat({
+      model: flMo,
+      xiaoXiJi: [
+        { role: 'system', content: '你是决策模型。只输出一个 JSON：{"urgency":"P1|P2|P3","intent":"question|task|chat|command","confidence":0-1}。urgency：P1=紧急/必须立刻准确完成，P2=一般，P3=简单闲聊或省着用。' },
+        { role: 'user', content: String(content || '').slice(0, 500) },
+      ],
+      maxTokens: 64,
+    });
+    const txt = neiRongWenBen(pan.choices[0]?.message?.content) || '';
+    const mJ = txt.match(/"urgency"\s*:\s*"(P[123])"/i);
+    const mC = txt.match(/"confidence"\s*:\s*([0-9.]+)/i);
+    const xin = mC ? Number(mC[1]) : 1;
+    if (mJ && xin >= 0.5) {
+      audit?.log('chat.fenlei', { model: flMo, urgency: String(mJ[1]).toUpperCase(), confidence: xin });
+      return String(mJ[1]).toUpperCase();
+    }
+    return 'P2';
+  } catch { return 'P2'; }
 }
 
 /** 打包态资源根目录；开发态下 Electron 也会给值，兜底空串便于拼路径 */
@@ -3412,6 +3448,34 @@ chuliIpc(
           llmReply = tMain('chat.contextTooSmall', '该模型上下文太小，无法满足当前聊天需求（已自动收缩重试到最小值仍失败）');
         } else if (loop) {
           llmReply = neiRongWenBen(loop.xiangYingTi.choices[0]?.message?.content);
+          /**
+           * **空回复不再是死路**（与单聊同一套兜底）：工具跑完没吐正文时，
+           * 如实合成一段总结；再要一次纯文本；都不行就明说原因。
+           * 真事故：多轮工具后返回 `（本条回复无内容）`。
+           */
+          if (!String(llmReply || '').trim()) {
+            const zhongFu = [...new Set(benLunGongJuMing)];
+            if (zhongFu.length) {
+              llmReply = tMain('chat.toolsDone', '本轮我调用了工具来完成这件事：') + zhongFu.join('、')
+                + tMain('chat.toolsDoneTail', '。工具已执行完毕，没有额外要补充的文字说明。');
+            }
+          }
+          if (!String(llmReply || '').trim()) {
+            try {
+              const zaiWen = await provider.chat({
+                model: zhibanMoxing,
+                xiaoXiJi: [
+                  { role: 'system', content: tMain('llm.needText', '请用简短中文直接回答用户，不要调用工具。') },
+                  { role: 'user', content: String(xiaoXi.content || '').slice(0, 2000) },
+                ],
+                maxTokens: 512,
+              });
+              llmReply = neiRongWenBen(zaiWen.choices[0]?.message?.content);
+            } catch { /* 走如实说明 */ }
+          }
+          if (!String(llmReply || '').trim()) {
+            llmReply = tMain('chat.emptyReplyWhy', '本轮模型没有返回文字内容（可能是工具调用后未作说明）。请再问一次，或换个说法。');
+          }
         }
         zhuiJiaLiaoTianRiZhi(xiaoXi.groupId, {
           seq: xiaYiLiaoTianXuLie(),
@@ -3644,6 +3708,14 @@ chuliIpc(
 
     await baozhangGongyingshangMiyao();
     /**
+     * **决策模型**真用起来（详见 fenLeiPanDing）：
+     * 紧急度还是默认 P2 时，先让决策模型判一下这句是急/一般/省着用。
+     */
+    let jueCeJinJiDu = (xiaoXi.moXingJueCe && xiaoXi.moXingJueCe.urgency) || 'P2';
+    if (jueCeJinJiDu === 'P2') {
+      jueCeJinJiDu = await fenLeiPanDing(String(xiaoXi.content || ''));
+    }
+    /**
      * 「智能选模型」：显式 > 牛马默认 > 调用链+紧急度 > 角色表 > 兜底（见 model-pick.ts）
      * **先**定模型，再按模型找它所属的供应商 —— 否则用 Ollama 的模型会撞上
      * 「当前生效供应商没配密钥」的误报（真事故）。
@@ -3665,12 +3737,16 @@ chuliIpc(
     };
     /**
      * **自动降级**：按调用链逐个试 —— 挑中的模型不可用（没 Key / 不存在）或本轮已失败，
-     * 就换下一个，直到有能跑的；全部试过才如实报错。绝不"挑到第一个就认死"。
+     * 就换下一个，直到有能跑的；**整条链（全部可用模型）都试完**才如实报错。
+     * 上限 = 可用模型数 + 2（兜底/角色还能落一两次），不再写死 3/8。
      */
-    for (let lun = 0; lun < 8; lun++) {
+    const zuiDaLun = Math.max(4, keYongMoXing.length + 2, (xiaoXi.moXingJueCe && xiaoXi.moXingJueCe.chain || []).length + 2);
+    for (let lun = 0; lun < zuiDaLun; lun++) {
       jueCe = jueCeMoXing({
         explicit: xiaoXi.model,
         ...(xiaoXi.moXingJueCe || {}),
+        // 决策模型判过的紧急度优先于界面默认 P2
+        urgency: jueCeJinJiDu,
         roles: roleModels,
         fallback: providerCfg.model || 'deepseek-chat',
         keYongMoXing,
@@ -3713,10 +3789,10 @@ chuliIpc(
     benLunGongJuMing = [];
     let zuiHouCuo = '';
     /**
-     * **调用失败自动降级**：把**整条调用链**都试完（不是只试 3 个）——
+     * **调用失败自动降级**：把**整条调用链 / 全部可用模型**都试完（不是只试 3 个）——
      * 一个挂了换下一个，直到链上没有可换的才如实报错。
      */
-    for (let shi = 0; shi < 32; shi++) {
+    for (let shi = 0; shi < zuiDaLun; shi++) {
     try {
       const provider = congYuSheChuangJian(zhu.presetId, {
         apiKey: zhu.apiKey,
@@ -3891,6 +3967,7 @@ chuliIpc(
         reasoning: siKaoGuoCheng || undefined,
         recordId: replyMemSeq !== undefined ? replyRecordId : undefined,
         ts: Date.now(),
+        moXing: modelId || undefined,
       });
       if (knowledge && reply.length > 0) {
         knowledge.upsertEntity({
@@ -3931,6 +4008,7 @@ chuliIpc(
       const xiaYiGe = jueCeMoXing({
         explicit: xiaoXi.model,
         ...(xiaoXi.moXingJueCe || {}),
+        urgency: jueCeJinJiDu,
         roles: roleModels,
         fallback: providerCfg.model || 'deepseek-chat',
         keYongMoXing,
@@ -4100,7 +4178,7 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
       ok: true,
       sessionId,
       count: all.length,
-      xiaoXiJi: all.slice(-limit).map((e) => ({ role: e.role, text: e.content, ts: e.ts ?? null, reasoning: e.reasoning || null, system: e.system || false })),
+      xiaoXiJi: all.slice(-limit).map((e) => ({ role: e.role, text: e.content, ts: e.ts ?? null, reasoning: e.reasoning || null, system: e.system || false, moXing: e.moXing || '' })),
     };
   } catch (e2) {
     return { ok: false, sessionId: String(payload?.sessionId || ''), xiaoXiJi: [], error: xiJingCuoWu(e2) };
@@ -4115,7 +4193,7 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
  * 去重：与**最后一条**的 role+content 相同时跳过，这样单聊路径（chat-send 已记账）
  * 不会因为渲染层也补写而重复。
  */
-chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string; role?: string; content?: string; system?: boolean }) => {
+chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string; role?: string; content?: string; system?: boolean; moXing?: string }) => {
   try {
     const sid = String(payload?.sessionId || '');
     // 角色归一：wo|user → user，them|assistant → assistant（旧实现只认 'wo'，
@@ -4152,6 +4230,7 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
       recordId: memSeq !== undefined ? recordId : undefined,
       ts: Date.now(),
       system: payload?.system || undefined,
+      moXing: payload?.moXing || undefined,
     });
     return { ok: true, appended: true };
   } catch (e3) {

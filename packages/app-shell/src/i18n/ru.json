@@ -2089,6 +2089,6 @@
   "settings.providerActive": "Резерв",
   "settings.providerUse": "Сделать резервным",
   "settings.providerUseOk": "Резервный провайдер задан (провайдера выбирает модель)",
-  "model.fenLei": "Classification models",
-  "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
+  "model.fenLei": "Модель решений",
+  "model.fenLeiHint": "Цепочка моделей для решений/маршрутизации (RLCD: малая и быстрая, решения с уверенностью) — классификация намерений, маршрутизация сообщений, судья/одобрение. Предпочитайте специализированную модель решений (напр. Jev); небольшая чат-модель может подменить. Первая включённая = по умолчанию; можно поднять/опустить/отключить."
 }

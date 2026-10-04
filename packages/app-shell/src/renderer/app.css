@@ -2588,18 +2588,6 @@ html { font-weight: var(--fw-ui, 400); }
 /* 消息排版（微信式）：气泡自适应宽度、文字自然换行；复制钮在气泡右下角，悬停时其左侧露出时间 */
 .bubbleWrap { display: flex; flex-direction: column; min-width: 0; max-width: 72%; align-items: flex-start; }
 .xiaoXi.wo .bubbleWrap { align-items: flex-end; }
-.xiaoXiJiao {
-  display: flex; align-items: center; gap: 6px; margin-top: 2px;
-  opacity: 0; transition: opacity .15s ease;
-}
-.xiaoXi:hover .xiaoXiJiao { opacity: 1; }
-.xiaoXiShiJian { font-size: 11px; color: var(--muted); }
-.xiaoXiFuZhi {
-  border: none; background: transparent; color: var(--muted);
-  cursor: pointer; font-size: 12px; padding: 1px 6px; border-radius: 4px;
-}
-.xiaoXiFuZhi:hover { background: var(--hover); color: var(--ink); }
-
 /* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
 .zhuDongShiJian {
   text-align: center; margin: 10px 0 8px; font-size: 11px; color: var(--muted);
@@ -2644,10 +2632,19 @@ html { font-weight: var(--fw-ui, 400); }
   font-variant-numeric: tabular-nums;
 }
 
-/* 插话队列：上移/下移/编辑/移除 **并排**在会话下方（不许竖着排） */
+/* 插话队列：上移/下移/编辑/移除 **并排**在会话下方（不许竖着排）
+ * 父级 `li { flex-direction: column !important; align-items: stretch }` 会把子块拉满宽，
+ * 所以这里用 !important 锁死横排 + 自适应宽度，按钮绝不折成一列。 */
 .qZhengWen { display: flex; flex-direction: column; gap: 4px; }
-.qCaoZuoJi { display: flex; flex-direction: row; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
-.qCaoZuoJi .anNiuXiao { padding: 2px 8px; font-size: 11px; }
+.qCaoZuoJi {
+  display: flex !important; flex-direction: row !important; flex-wrap: wrap;
+  gap: 4px; margin-top: 2px; width: 100%; align-items: center;
+}
+.qCaoZuoJi .anNiuXiao {
+  padding: 2px 8px; font-size: 11px;
+  display: inline-flex !important; width: auto !important; flex: 0 0 auto;
+  white-space: nowrap;
+}
 
 /* 说话模型专属参数（语速/语音） */
 .moXingZhuanShu { display: inline-flex; align-items: center; gap: 8px; margin: 0 8px; font-size: 11px; color: var(--muted); }
@@ -2655,11 +2652,28 @@ html { font-weight: var(--fw-ui, 400); }
 .moXingZhuanShu input[type=range] { width: 90px; }
 .moXingShu { max-width: 120px; font-size: 11px; }
 
-/* 回复下方的模型名 + 时间/操作 行（模型名仅牛马回复；时间/复制/朗读两边都有） */
-.xiaoXiJiao { display: flex; flex-direction: column; gap: 2px; margin-top: 3px; opacity: 0; transition: opacity .15s ease; }
+/* 回复下方的模型名 + 时间/操作 行（模型名仅牛马回复；时间/复制/朗读两边都有）
+ * 产品要求：两行一起悬停出现、不居中 —— 第一行模型名称（无「本轮模型」前缀），第二行时间+复制+朗读 */
+.xiaoXiMoXing {
+  font-size: 10px; color: var(--muted); margin-top: 3px;
+  opacity: 0; transition: opacity .15s ease;
+  text-align: left; word-break: break-all;
+}
+.xiaoXi.wo .xiaoXiMoXing { text-align: right; }
+.xiaoXi:hover .xiaoXiMoXing { opacity: 1; }
+.xiaoXiJiao {
+  display: flex; flex-direction: column; gap: 2px; margin-top: 1px;
+  opacity: 0; transition: opacity .15s ease;
+}
 .xiaoXi:hover .xiaoXiJiao { opacity: 1; }
-.xiaoXiMoXing { font-size: 10px; color: var(--muted); margin-top: 3px; }
 .xiaoXiJiaoHang { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.xiaoXi.wo .xiaoXiJiaoHang { justify-content: flex-end; }
+.xiaoXiShiJian { font-size: 11px; color: var(--muted); }
+.xiaoXiFuZhi {
+  border: none; background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 12px; padding: 1px 6px; border-radius: 4px;
+}
+.xiaoXiFuZhi:hover { background: var(--hover); color: var(--ink); }
 .xiaoXiLangDu {
   border: none; background: transparent; color: var(--muted);
   cursor: pointer; font-size: 12px; padding: 1px 6px; border-radius: 4px;

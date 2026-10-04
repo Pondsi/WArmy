@@ -34,12 +34,17 @@ export interface MoXingNengLi {
    *  · videoGen   = 做视频模型（视频生成）
    *  · translate  = 翻译模型
    *  · safety     = 安全审核（内容过滤/合规）
-   *  · decision   = **分类/决策模型**（RLCD 类：输出带置信度的决策，约束解码，小而快 —— 用于意图分类、路由、裁判）
+   *  · decision   = **决策模型**（RLCD 类：Reinforcement Learning for Calibrated Decisions ——
+   *                 输出带置信度的决策，约束解码，小而快；用于意图分类、路由、裁判/审批）
    *  · unknown    = 认不出（不放进任何调用链，免得用时出错）
    */
   kind: 'chat' | 'embedding' | 'rerank' | 'asr' | 'tts' | 'image' | 'videoUnd' | 'videoGen' | 'translate' | 'safety' | 'decision' | 'unknown';
   /** 上下文长度（token）；0 = 端点没给、表里也没有 */
   contextLen: number;
+  /** TTS 等的音色清单（端点给 voices/speakers 才有；空 = 不知道） */
+  speakers?: string[];
+  /** TTS 语速默认值（0.5–2；0 = 端点没给） */
+  speed?: number;
   /** 能力来源：endpoint=端点给的 / table=已知型号表 / unknown */
   source: 'endpoint' | 'table' | 'unknown';
 }
@@ -153,9 +158,10 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
    */
   { shi: /cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
   /**
-   * **分类/决策模型**（RLCD 类）：输出**带置信度的决策**而不是长文本，
-   * 用并行约束解码（JSON schema 100% 准确、比自回归快 5~7 倍）。
-   * 代表：Jev、Qwen-2.5-1B-RLCD、各类 router / classifier / judge / arbiter。
+   * **决策模型**（RLCD = Reinforcement Learning for Calibrated Decisions）：
+   * 输出**带置信度的决策**而不是长文本，用并行约束解码（JSON schema 100% 准确、比自回归快 5~7 倍）。
+   * 代表：Jev（jev-1.13.0）、Qwen-2.5-1B-RLCD、各类 router / classifier / judge / arbiter。
+   * 产品叫法：决策模型（不是经典 ML「分类器」；TypeSafe 称 System One / decision model）。
    */
   { shi: /rlcd|\bjev\b|router|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'decision' } },
   // 嵌入重排（检索二次排序）
@@ -186,12 +192,12 @@ export function caiZhongLei(ming: string): MoXingNengLi['kind'] {
   if (/video-?vl|video-?llm|videochat|qwen.*video/.test(s)) return 'videoUnd';
   if (/nllb|marian|opus-?mt|translate|translation|deepl|madlad|m2m-100/.test(s)) return 'translate';
   if (/llama-?guard|guardian|moderation|content-?filter|shield/.test(s)) return 'safety';
-  // 分类/决策（RLCD 类）
+  // 决策模型（RLCD 类）
   if (/rlcd|\bjev\b|router|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/.test(s)) return 'decision';
   return 'unknown';
 }
 
-/** 种类 → 中文（产品定稿叫法：听话=ASR、说话=TTS、对话=LLM；其余仅简体中文用产品叫法） */
+/** 种类 → 中文（产品定稿叫法：听话=ASR、说话=TTS、对话=LLM、决策=RLCD/路由；其余仅简体中文用产品叫法） */
 export function kindZhongWen(k: MoXingNengLi['kind']): string {
   switch (k) {
     case 'embedding': return '嵌入模型';
@@ -203,7 +209,7 @@ export function kindZhongWen(k: MoXingNengLi['kind']): string {
     case 'videoGen': return '做视频模型';
     case 'translate': return '翻译模型';
     case 'safety': return '安全审核';
-    case 'decision': return '分类模型';
+    case 'decision': return '决策模型';
     case 'chat': return '对话模型';
     default: return '未知';
   }
@@ -277,6 +283,18 @@ export function chouNengLiCongDuanDian(m: Record<string, unknown>): Partial<MoXi
   // 6) 上下文长度
   const c = chouShangXiaWenChangDu(m);
   if (c > 0) { (out as { contextLen?: number }).contextLen = c; you = true; }
+  // 7) TTS 专属：音色清单 + 默认语速（端点给了才填 —— 有单独设置项就要能配）
+  const voicesRaw = (m as { voices?: unknown; speakers?: unknown }).voices
+    ?? (m as { speakers?: unknown }).speakers
+    ?? (m as { voice?: unknown }).voice;
+  if (Array.isArray(voicesRaw)) {
+    const spk = voicesRaw.map((v) => (typeof v === 'string' ? v : String((v as { id?: string; name?: string }).id || (v as { name?: string }).name || ''))).filter(Boolean);
+    if (spk.length) { (out as { speakers?: string[] }).speakers = spk; you = true; }
+  } else if (typeof voicesRaw === 'string' && voicesRaw) {
+    (out as { speakers?: string[] }).speakers = [voicesRaw]; you = true;
+  }
+  const spd = Number((m as { speed?: unknown; default_speed?: unknown }).speed ?? (m as { default_speed?: unknown }).default_speed);
+  if (Number.isFinite(spd) && spd > 0) { (out as { speed?: number }).speed = spd > 2.5 ? Math.min(2, spd / 100) : spd; you = true; }
   return you ? out : null;
 }
 
@@ -310,6 +328,8 @@ export function moXingNengLi(modelId: string, duanDian?: Partial<MoXingNengLi> |
     tools: q(dd?.tools, biao?.tools, 'unknown'),
     kind,
     contextLen: Number.isFinite(ctx) && ctx > 0 ? Math.floor(ctx) : 0,
+    ...(dd?.speakers?.length ? { speakers: dd.speakers } : (biao?.speakers?.length ? { speakers: biao.speakers } : {})),
+    ...(dd?.speed ? { speed: dd.speed } : (biao?.speed ? { speed: biao.speed } : {})),
     source: src,
   };
 }

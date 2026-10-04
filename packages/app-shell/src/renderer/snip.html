@@ -30,7 +30,7 @@
 <body>
   <img id="di" alt=""/>
   <div id="kuang"></div>
-  <div id="ti">拖动框选 → 双击/确定＝截取选区 · 右键/Esc＝取消</div>
+  <div id="ti">拖动框选 → 双击/确定＝截取选区 · 整屏请点「整屏」 · 右键/Esc＝取消</div>
   <div id="bar">
     <button id="ok">确定</button>
     <button id="cancel">取消</button>
@@ -38,7 +38,8 @@
   </div>
   <script>
     // 真·全屏截图遮罩：独立窗口，覆盖整个屏幕。
-    // 交互（产品定稿）：拖动框选 → 保留选区并出「确定/取消」；**双击＝截取当前框选**；右键/Esc＝取消。
+    // 交互（产品定稿）：拖动框选 → 保留选区并出「确定/取消」；**双击＝截取当前框选**（不是整屏）；
+    // 整屏只走「整屏」按钮；右键/Esc＝取消。
     const di = document.getElementById('di');
     const kuang = document.getElementById('kuang');
     const bar = document.getElementById('bar');
@@ -74,12 +75,24 @@
     function dingGao() {
       const w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
       if (w < 3 && h < 3) {
-        qu = { x: 0, y: 0, w: 0, h: 0 };   // 未框选 = 整屏
-        bar.style.display = 'flex';
-        bar.style.left = '50%';
-        bar.style.top = '50%';
-        bar.style.transform = 'translate(-50%,-50%)';
-        ti.textContent = '未框选＝整屏 · 双击/确定＝截取 · 右键/Esc＝取消';
+        // 这次只是点了一下、没拖出框：保持已有选区（双击还要用它截图），
+        // 一张都没有时也不在单击就当整屏 —— 整屏只走「整屏」按钮 / 确定。
+        if (qu && qu.w > 0 && qu.h > 0) {
+          bar.style.display = 'flex';
+          bar.style.transform = 'none';
+          const bx = qu.x, by = qu.y + qu.h + 10;
+          const th = 46;
+          bar.style.left = Math.max(8, Math.min(bx, window.innerWidth - 220)) + 'px';
+          bar.style.top = (by + th > window.innerHeight ? Math.max(8, qu.y - th - 10) : by) + 'px';
+          ti.textContent = '双击/确定＝截取选区 · 右键/Esc＝取消';
+        } else {
+          qu = null;
+          bar.style.display = 'flex';
+          bar.style.left = '50%';
+          bar.style.top = '50%';
+          bar.style.transform = 'translate(-50%,-50%)';
+          ti.textContent = '请拖动框选 · 确定＝整屏 · 右键/Esc＝取消';
+        }
         return;
       }
       qu = { x: Math.min(x0, x1), y: Math.min(y0, y1), w, h };
@@ -100,12 +113,16 @@
       const shiShuangJi = (xia - shangCiDianJi) < 350;
       shangCiDianJi = xia;
       if (shiShuangJi) {
-        // 左键双击 = **截取当前框选**（没框选则整屏）
-        done(qu || { x: 0, y: 0, w: 0, h: 0 });
+        /**
+         * 左键双击 = **截取当前框选**（产品定稿：不是整屏）。
+         * 没有选区就不出手 —— 整屏请点「整屏」按钮，别抢在双击里。
+         */
+        if (qu && qu.w > 0 && qu.h > 0) done({ x: qu.x, y: qu.y, w: qu.w, h: qu.h });
         return;
       }
       tuo = true; x0 = x1 = e.clientX; y0 = y1 = e.clientY;
-      qu = null; bar.style.display = 'none';
+      // **不要在这里清选区**：双击的第一下会误清掉刚框好的选区，第二下就变成整屏
+      bar.style.display = 'none';
       hua();
     });
     window.addEventListener('mousemove', (e) => {

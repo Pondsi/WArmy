@@ -2089,6 +2089,6 @@
   "settings.providerActive": "Rimedo",
   "settings.providerUse": "Meti kiel rimedon",
   "settings.providerUseOk": "Metita kiel rimedo (la modelo decidas la provizanton)",
-  "model.fenLei": "Classification models",
-  "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
+  "model.fenLei": "Decida modelo",
+  "model.fenLeiHint": "Modelĉeno por decido/rutado (RLCD-stila: malgranda kaj rapida, juĝoj kun konfido) — intenca klasifiko, mesaĝa rutado, juĝo/aprobo. Preferu dediĉitan decidan modelon (ekz. Jev); malgranta babila modelo povas anstataŭi. La unua ebligita = defaŭlta; supren/malsupren aŭ malŝalti."
 }

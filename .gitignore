@@ -45,3 +45,5 @@ packages/app-shell/win-unpacked/
 # but do not commit local temp profiles
 **/profile-net/
 **/profile-qr/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

@@ -308,8 +308,8 @@ function unitChecks() {
   // 9) 前景色多级灰阶（不止黑白两档）
   if (!/y > 0\.82/.test(appJs) || !/return '#3d3d3d'/.test(appJs)) fails.push('contrast: 仍只有黑白两档');
   // ── 本轮（第四批）专项 ──
-  // 1) 分类模型（模型选项卡内，独立调用链）
-  if (!appJs.includes('iFenLei') || !appJs.includes('fenLeiChain')) fails.push('fenLei: 分类模型链缺失');
+  // 1) 决策模型（模型选项卡内，独立调用链；UI 叫「决策模型」，内部键 fenLei*）
+  if (!appJs.includes('iFenLei') || !appJs.includes('fenLeiChain')) fails.push('fenLei: 决策模型链缺失');
   if (!appJs.includes("tOr('settings.modelOptions'")) fails.push('fenLei: 特殊模型未改名「模型选项」');
   // 3) 截图遮罩取图顺序（先 __setCap 再注入）
   if (!emTs.includes('__setCap') || !emTs.includes('jieTuKaiShi')) fails.push('shot: 遮罩取图顺序/入口不对');

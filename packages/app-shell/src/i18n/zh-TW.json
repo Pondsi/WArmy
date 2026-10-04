@@ -2012,7 +2012,7 @@
   "model.kind.rerank": "重排模型",
   "model.lianKong": "沒有支援該用途的模型（拉取模型後會自動識別）",
   "settings.ttsModelHint": "文字轉語音（把文字讀出來）的模型調用鏈：第一個即預設；可上移/下移/停用。",
-  "model.kind.decision": "分類模型",
+  "model.kind.decision": "決策模型",
   "model.kind.tts": "語音合成模型",
   "model.kind.asr": "語音識別模型",
   "model.kind.embedding": "嵌入模型",
@@ -2089,6 +2089,6 @@
   "settings.providerActive": "兜底",
   "settings.providerUse": "設為兜底",
   "settings.providerUseOk": "已設為兜底供應商（真正用誰由模型決定）",
-  "model.fenLei": "分類模型",
-  "model.fenLeiHint": "分類任務用的模型調用鏈：第一個即預設；可上移/下移/停用（啟用）。這個排列就是特殊模型的調用鏈。"
+  "model.fenLei": "決策模型",
+  "model.fenLeiHint": "決策/路由用的模型調用鏈（RLCD 類：小而快，輸出帶置信度的判定）——意圖識別、消息路由、裁判/審批都走它。優先專用決策模型（如 Jev）；沒有時小參數對話模型也能代勞。第一個即預設；可上移/下移/停用。"
 }

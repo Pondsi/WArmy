@@ -2089,6 +2089,6 @@
   "settings.providerActive": "フォールバック",
   "settings.providerUse": "フォールバックに設定",
   "settings.providerUseOk": "フォールバックに設定しました（実際に使うのはモデルが決める）",
-  "model.fenLei": "Classification models",
-  "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
+  "model.fenLei": "意思決定モデル",
+  "model.fenLeiHint": "意思決定/ルーティング用のモデルチェーン（RLCD 系：小さく高速、確信度付き判定）——意図分類、メッセージルーティング、判定/承認に使用。専用の意思決定モデル（例：Jev）を優先し、無ければ小型チャットモデルでも可。先頭が既定；上下移動/無効化可。"
 }

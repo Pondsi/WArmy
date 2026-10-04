@@ -2089,6 +2089,6 @@
   "settings.providerActive": "Reserva",
   "settings.providerUse": "Definir como reserva",
   "settings.providerUseOk": "Definido como reserva (o modelo decide o provedor)",
-  "model.fenLei": "Classification models",
-  "model.fenLeiHint": "Model chain for classification tasks: the first enabled one is the default; move up/down, enable/disable."
+  "model.fenLei": "Modelo de decisão",
+  "model.fenLeiHint": "Cadeia de modelos para decisão/roteamento (estilo RLCD: pequeno e rápido, julgamentos com confiança) — classificação de intenção, roteamento de mensagens, juiz/aprovação. Prefira um modelo de decisão dedicado (ex.: Jev); um modelo de chat pequeno pode substituir. O primeiro habilitado = padrão; mover para cima/baixo ou desativar."
 }
