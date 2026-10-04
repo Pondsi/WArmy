@@ -42,6 +42,7 @@
     jiHuaRenWu: [],
     sound: { complete: true, request: true, error: true },
     soundVolume: 0.9,
+    autoRead: false,
     soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,
     theme: '#A78567',
@@ -774,6 +775,32 @@
     } catch { return false; }
   }
   window.__chuanBoYinXiao = chuanBoYinXiao;
+  /**
+   * **朗读一段文字**（用设置里选定的说话模型 / TTS）。
+   * 找不到可用的说话模型时**如实告知**，不假装读了。
+   */
+  let langDuMang = false;
+  async function langDuWenBen(text) {
+    const s = String(text || '').trim();
+    if (!s) return false;
+    if (langDuMang) return false;   // 一次只读一段，避免叠音
+    langDuMang = true;
+    try {
+      const r = await window.warmy.ttsLangDu?.({ text: s.slice(0, 500) });
+      if (r && r.ok && r.dataUrl) {
+        const a = new Audio(r.dataUrl);
+        a.volume = (state.soundVolume != null ? state.soundVolume : 0.9);
+        await a.play().catch(() => {});
+        return true;
+      }
+      showToast(String((r && r.error) || tOr('tts.noModel', '没有可用的说话模型（请在「设置 → 模型」里配置）')));
+      return false;
+    } catch (e) {
+      showToast(String(e && e.message || e));
+      return false;
+    } finally { langDuMang = false; }
+  }
+  window.__langDuWenBen = langDuWenBen;
   /**
    * **音频解锁**：浏览器自动播放策略会拦掉"没有用户手势"的播放 ——
    * 真事故：决定卡跳出来没声音，点完决定后才响。第一次指针/键盘动作时
@@ -1937,19 +1964,34 @@
             // 我方消息是**纯文本**：原样显示（pre-wrap），复制才不会丢换行
             ? '<div class="bubble">' + escapeHtml(m.text) + '</div>'
             : '<div class="bubble md">' + mdHtml(m.text) + '</div>')
-        + '<div class="xiaoXiJiao"><span class="xiaoXiShiJian">' + escapeHtml(wanZhengShiJian(ts)) + '</span><button type="button" class="xiaoXiFuZhi" title="' + escapeHtml(tOr('chat.copy', '复制')) + '" data-copy="' + escapeHtml(m.text) + '">⧉</button></div>'
+        + (m.role === 'wo' ? '' :
+          // 牛马回复：多一行模型名（人说的会话不显示）
+          '<div class="xiaoXiMoXing">' + escapeHtml(m.moXing || '') + '</div>')
+        // 第二行：时间 + 复制 + 朗读（**牛马和人的回复都有**）
+        + '<div class="xiaoXiJiao"><div class="xiaoXiJiaoHang">' +
+          '<span class="xiaoXiShiJian">' + escapeHtml(wanZhengShiJian(ts)) + '</span>' +
+          '<button type="button" class="xiaoXiFuZhi" title="' + escapeHtml(tOr('chat.copy', '复制')) + '" data-copy="' + escapeHtml(m.text) + '">⧉</button>' +
+          '<button type="button" class="xiaoXiLangDu" title="' + escapeHtml(tOr('chat.read', '朗读')) + '" data-read="' + escapeHtml(m.text) + '">🔊</button>' +
+          '</div></div>'
         + '</div>';
-      // 悬停复制：一次委托绑定
+      // 悬停复制：一次委托绑定（复制 + 朗读）
       if (heZi.dataset.copyBound !== '1') {
         heZi.dataset.copyBound = '1';
         heZi.addEventListener('click', async (e) => {
           const b = e.target.closest('[data-copy]');
-          if (!b) return;
-          e.preventDefault(); e.stopPropagation();
-          try {
-            await navigator.clipboard.writeText(b.getAttribute('data-copy') || '');
-            showToast(tOr('chat.copied', '已复制'));
-          } catch { /* 剪贴板不可用 */ }
+          if (b) {
+            e.preventDefault(); e.stopPropagation();
+            try {
+              await navigator.clipboard.writeText(b.getAttribute('data-copy') || '');
+              showToast(tOr('chat.copied', '已复制'));
+            } catch { /* 剪贴板不可用 */ }
+            return;
+          }
+          const d = e.target.closest('[data-read]');
+          if (d) {
+            e.preventDefault(); e.stopPropagation();
+            void langDuWenBen(d.getAttribute('data-read') || '');
+          }
         });
       }
       heZi.appendChild(div);
@@ -2027,7 +2069,7 @@
     const yuanYou = window.__msgs[chatId];
     const shangYiTiao = yuanYou[yuanYou.length - 1];
     if (!(shangYiTiao && shangYiTiao.role === role && shangYiTiao.text === text)) {
-      yuanYou.push({ role, text, ts: Date.now(), reasoning: (opts && opts.reasoning) || '', system: !!(opts && opts.system) });
+      yuanYou.push({ role, text, ts: Date.now(), reasoning: (opts && opts.reasoning) || '', system: !!(opts && opts.system), moXing: (opts && opts.moXing) || '' });
     }
     /**
      * **同时写进主进程日志**（唯一事实来源）。
@@ -2834,6 +2876,22 @@
       } catch { /* noop */ }
       syncAuto();
     })();
+    // **自动阅读回复**（勾选）：新回复到了就用说话模型读；提示音先播完再读，避免叠音
+    const miDu = $('caiDanTuBiaoLangDu');
+    const markDu = $('caiDanTuBiaoLangDuMark');
+    const syncDu = () => {
+      if (markDu) markDu.style.visibility = state.autoRead ? 'visible' : 'hidden';
+      if (miDu) miDu.setAttribute('aria-checked', state.autoRead ? 'true' : 'false');
+    };
+    if (miDu && !miDu.dataset.bound) {
+      miDu.dataset.bound = '1';
+      miDu.addEventListener('click', async () => {
+        state.autoRead = !state.autoRead;
+        syncDu();
+        try { await window.warmy.settingsSave({ autoRead: state.autoRead }); } catch { /* noop */ }
+      });
+    }
+    syncDu();
     // 输入字数
     const input = $('shuRu');
     const counter = $('shuRuCounter');
@@ -3033,7 +3091,12 @@
           const t0 = q[suoYin + 1]; q[suoYin + 1] = q[suoYin]; q[suoYin] = t0;
           renderQueueBar(); persistUiQueuesSoon();
         };
-        (li.querySelector('.qZhengWen') || li).append(kuaDu, up, dn, edit, del);
+        (li.querySelector('.qZhengWen') || li).append(kuaDu);
+        // 操作按钮**并排**在会话下方（上移/下移/编辑/移除 —— 不许竖着排）
+        const cao = document.createElement('div');
+        cao.className = 'qCaoZuoJi';
+        cao.append(up, dn, edit, del);
+        (li.querySelector('.qZhengWen') || li).append(cao);
       }
       LieBiao.appendChild(li);
     });
@@ -3261,14 +3324,17 @@
         } else if (r?.ok) {
           // 空回复如实显示占位（真事故：第二条回复「完成了」但界面上什么都没有）
           const huiFu = String(r.reply || '').trim() || tOr('chat.emptyReply', '（本条回复无内容）');
-          tuisongXiaoxi(chatId, 'them', huiFu, { reasoning: r.reasoning || '' });
+          tuisongXiaoxi(chatId, 'them', huiFu, { reasoning: r.reasoning || '', moXing: r.moXing || '' });
           huiBao = true;
-          // **本轮模型调用可见**：把"用了哪个模型 · 哪家供应商"亮出来（产品要求：模型调用必须清晰可见）
-          if (r.moXing) {
-            const fenXi = tOr('chat.modelUsed', '本轮模型') + '：' + r.moXing
-              + (r.gongYingShang ? ' · ' + r.gongYingShang : '')
-              + (r.xuanZeYuanYin ? '（' + r.xuanZeYuanYin + '）' : '');
-            tuisongXiaoxi(chatId, 'them', fenXi, { system: true });
+          // **本轮模型调用可见**：模型名单独一行（在气泡下方，与时间行一起），不再居中占一行
+          // 自动阅读回复：提示音先播完再读，避免重叠
+          if (state.autoRead) {
+            void (async () => {
+              try {
+                await chuanBoYinXiao('complete');
+                await langDuWenBen(huiFu);
+              } catch { /* noop */ }
+            })();
           }
           const c = state.chats.find((x) => x.id === chatId);
           if (c) {
@@ -4568,6 +4634,7 @@
           <button data-sec="plugin">${escapeHtml(t('settings.tabPlugins'))}</button>
           <button data-sec="hotkey">${escapeHtml(t('settings.section.hotkey'))}</button>
           <button data-sec="about">${escapeHtml(t('settings.section.about'))}</button>
+          <button data-sec="mimic">${escapeHtml(tOr('settings.mimic', '拟态'))}</button>
         </div>
         <div class="peiZhiNeiRong" id="peiZhiNeiRong">
         <div class="sheZhiSection" data-sec="ui"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.ui'))}</h2></div>
@@ -4932,6 +4999,36 @@
             <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.fenLeiHint', '分类任务用的模型调用链：第一个即默认；可上移/下移/禁用（启用）。'))}</div>
             <div id="smFenLei"></div>
           </details>
+          <details class="moXianSuLian" id="smShouImage">
+            <summary>${escapeHtml(tOr('settings.imageModel', '画图模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="image"></span></summary>
+            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.lianHint', '模型调用链：第一个即默认；可上移/下移/禁用（启用）。'))}</div>
+            <div id="smImageLian"></div>
+          </details>
+          <details class="moXianSuLian" id="smShouVideoUnd">
+            <summary>${escapeHtml(tOr('settings.videoUndModel', '看视频模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="videoUnd"></span></summary>
+            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.lianHint', '模型调用链：第一个即默认；可上移/下移/禁用（启用）。'))}</div>
+            <div id="smVideoUndLian"></div>
+          </details>
+          <details class="moXianSuLian" id="smShouVideoGen">
+            <summary>${escapeHtml(tOr('settings.videoGenModel', '做视频模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="videoGen"></span></summary>
+            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.lianHint', '模型调用链：第一个即默认；可上移/下移/禁用（启用）。'))}</div>
+            <div id="smVideoGenLian"></div>
+          </details>
+          <details class="moXianSuLian" id="smShouRerank">
+            <summary>${escapeHtml(tOr('settings.rerankModel', '嵌入重排'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="rerank"></span></summary>
+            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.lianHint', '模型调用链：第一个即默认；可上移/下移/禁用（启用）。'))}</div>
+            <div id="smRerankLian"></div>
+          </details>
+          <details class="moXianSuLian" id="smShouSafety">
+            <summary>${escapeHtml(tOr('settings.safetyModel', '安全审核'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="safety"></span></summary>
+            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.lianHint', '模型调用链：第一个即默认；可上移/下移/禁用（启用）。'))}</div>
+            <div id="smSafetyLian"></div>
+          </details>
+          <details class="moXianSuLian" id="smShouTranslate">
+            <summary>${escapeHtml(tOr('settings.translateModel', '翻译模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="translate"></span></summary>
+            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.lianHint', '模型调用链：第一个即默认；可上移/下移/禁用（启用）。'))}</div>
+            <div id="smTranslateLian"></div>
+          </details>
           <!-- WebGPU 测试与模型无关，已挪到「功能」分区（见下方 #webgpuKa） -->
           <button class="anNiuXiao" id="anNiuBaoCunTeShu">${escapeHtml(t('common.save'))}</button>
           <span class="jingYin" id="smXiaoXi"></span>
@@ -4999,6 +5096,10 @@
           <div class="hkapiShiJianJi" id="hkapiShiJianJi"></div>
         </div>
         <div class="sheZhiSection" data-sec="about"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.about'))}</h2></div>
+        <div class="sheZhiSection sheZhiKa" data-sec="mimic">
+          <h2>${escapeHtml(tOr('settings.mimic', '拟态'))}</h2>
+          <div class="jingYin">${escapeHtml(tOr('settings.mimicHint', '（预留）拟态相关设置将在此处提供。'))}</div>
+        </div>
         <div class="sheZhiSection sheZhiKa aboutKa">
           <div class="aboutPinPai">
             <img class="aboutlogo" src="./icons/logo-tight.png" alt="${escapeHtml(t('about.logoAlt'))}"/>
@@ -5193,10 +5294,10 @@
             });
           });
         })();
-        const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'plugin', 'hotkey', 'about'];
+        const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'plugin', 'hotkey', 'about', 'mimic'];
         // skill 与 jineng 是同一分区的两种历史键名 —— 必须别名到同一数组
         const skillBucket = [];
-        const groups = { ui: [], notify: [], model: [], func: [], plugin: [], hotkey: [], about: [] };
+        const groups = { ui: [], notify: [], model: [], func: [], plugin: [], hotkey: [], about: [], mimic: [] };
         groups['skill'] = skillBucket;
         groups['jineng'] = skillBucket;
         let curSec = 'ui';
@@ -5755,10 +5856,18 @@
        * 每类都列出所有已添加模型；第一个未禁用 = 默认；可上移 / 下移 / 禁用（启用）。
        * 产品定稿：这些选项**默认折叠**，点开才展开（`<details>` 自带折叠）。
        */
-      const SM_LIAN_JI = ['asr', 'embed', 'organizer', 'tts', 'fenLei'];
-      const SM_HE_JI = { asr: 'smAsrLian', embed: 'smEmbedLian', organizer: 'smOrganizerLian', tts: 'smTtsLian', fenLei: 'smFenLei' };
+      const SM_LIAN_JI = ['asr', 'embed', 'organizer', 'tts', 'fenLei', 'image', 'videoUnd', 'videoGen', 'rerank', 'safety', 'translate'];
+      const SM_HE_JI = {
+        asr: 'smAsrLian', embed: 'smEmbedLian', organizer: 'smOrganizerLian', tts: 'smTtsLian', fenLei: 'smFenLei',
+        image: 'smImageLian', videoUnd: 'smVideoUndLian', videoGen: 'smVideoGenLian', rerank: 'smRerankLian',
+        safety: 'smSafetyLian', translate: 'smTranslateLian',
+      };
       /** 每条链只收**支持该用途**的模型（用错模型会直接出错） */
-      const SM_LIAN_YAO = { asr: ['asr'], embed: ['embedding'], organizer: ['chat'], tts: ['tts'], fenLei: ['decision', 'chat'] };
+      const SM_LIAN_YAO = {
+        asr: ['asr'], embed: ['embedding'], organizer: ['chat'], tts: ['tts'], fenLei: ['decision'],
+        image: ['image'], videoUnd: ['videoUnd'], videoGen: ['videoGen'], rerank: ['rerank'],
+        safety: ['safety'], translate: ['translate'],
+      };
       const SM_LIAN_DATA = {};   // key -> { chain: string[], disabled: string[] }
       async function loadSmLian() {
         try {
@@ -5783,9 +5892,13 @@
         if (v >= 1000) return Math.round(v / 1000) + 'K';
         return String(v);
       }
-      /** 模型种类 → 文案（简体中文用产品叫法 说话/听话/对话模型，其它语言走规范术语） */
+      /** 模型种类 → 文案（简体中文用产品叫法 说话/听话/对话/画图/看视频/做视频…，其它语言走规范术语） */
       function kindWenAn(k) {
-        const m = { chat: 'model.kind.chat', embedding: 'model.kind.embedding', asr: 'model.kind.asr', tts: 'model.kind.tts', decision: 'model.kind.decision' };
+        const m = {
+          chat: 'model.kind.chat', embedding: 'model.kind.embedding', asr: 'model.kind.asr', tts: 'model.kind.tts',
+          decision: 'model.kind.decision', image: 'model.kind.image', videoUnd: 'model.kind.videoUnd',
+          videoGen: 'model.kind.videoGen', rerank: 'model.kind.rerank', safety: 'model.kind.safety', translate: 'model.kind.translate',
+        };
         return m[k] ? tOr(m[k], k) : '';
       }
       window.__moXingNengLi = {};
@@ -5828,10 +5941,22 @@
           const nl = nengLi[m] || {};
           const ctxB = nl.contextLen ? ' <span class="moXingCtx" title="' + escapeHtml(tOr('model.contextLen', '上下文长度')) + '">' + escapeHtml(shangXiaWenBiaoQian(nl.contextLen)) + '</span>' : '';
           const kindB = (nl.kind && nl.kind !== 'unknown') ? ' <span class="moXingKind">' + escapeHtml(kindWenAn(nl.kind)) + '</span>' : '';
+          // **说话模型**等有专属参数（语速/语音）：拉取时拿到就摆出来可调
+          let zhuan = '';
+          if (nl.kind === 'tts') {
+            const su = (nl.speakers && nl.speakers.length)
+              ? '<select class="moXingShu" data-tts-voice="' + key + '|' + i + '">' + nl.speakers.map((s) => '<option>' + escapeHtml(s) + '</option>').join('') + '</select>'
+              : '';
+            zhuan = '<span class="moXingZhuanShu">' +
+              '<label>' + escapeHtml(tOr('model.speakSpeed', '语速')) +
+              '<input type="range" min="50" max="200" step="5" value="' + Number(nl.speed || 100) + '" data-tts-speed="' + key + '|' + i + '"/></label>' +
+              su + '</span>';
+          }
           return (
-          '<div class="shiLiHang" style="margin:4px 0;align-items:center' + (dis.includes(m) ? ';opacity:.5' : '') + '">' +
-          '<span style="flex:1' + (dis.includes(m) ? ';text-decoration:line-through' : '') + '">' + escapeHtml(m) + kindB + ctxB +
+          '<div class="shiLiHang" style="margin:4px 0;align-items:center;flex-wrap:wrap' + (dis.includes(m) ? ';opacity:.5' : '') + '">' +
+          '<span style="flex:1;min-width:180px' + (dis.includes(m) ? ';text-decoration:line-through' : '') + '">' + escapeHtml(m) + kindB + ctxB +
           (m === moRen ? ' <span class="moRenBiaoQian">' + escapeHtml(tOr('model.default', '默认模型')) + '</span>' : '') + '</span>' +
+          zhuan +
           '<button class="anNiuXiao" data-sml-up="' + key + '|' + i + '"' + (i === 0 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveUp')) + '</button>' +
           '<button class="anNiuXiao" data-sml-dn="' + key + '|' + i + '"' + (i === st.chain.length - 1 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveDown')) + '</button>' +
           '<button class="anNiuXiao" data-sml-tg="' + key + '|' + i + '">' + escapeHtml(dis.includes(m) ? tOr('model.enable', '启用') : tOr('model.disable', '禁用')) + '</button>' +
@@ -12610,15 +12735,24 @@
         ' <button class="anNiuXiao" id="anNiuShuaXinChanPin" title="' + escapeHtml(tOr('panel.workfiles.refresh', '刷新')) + '" style="margin-left:6px">↻</button></div>');
       if (state.gongZuoQuLuJing) {
         html.push('<div class="ctgDim" style="font-size:11px;word-break:break-all">' +
-          escapeHtml(tOr('panel.workfiles.root', '工作区') + '：' + state.gongZuoQuLuJing) + '</div>');
+          escapeHtml(tOr('panel.workfiles.workspace', '工作区')) + '：<a href="#" class="pfLink" data-open="' + escapeHtml(state.gongZuoQuLuJing) + '" title="' + escapeHtml(state.gongZuoQuLuJing) + '">' + escapeHtml(state.gongZuoQuLuJing) + '</a></div>');
       }
+      // 字节 → 自适应单位（>1024 逐级升）
+      const ziJie = (n) => {
+        const v = Number(n) || 0;
+        if (v < 1024) return v + ' B';
+        if (v < 1024 * 1024) return (v / 1024).toFixed(1).replace(/\.0$/, '') + ' KB';
+        if (v < 1024 * 1024 * 1024) return (v / 1024 / 1024).toFixed(1).replace(/\.0$/, '') + ' MB';
+        return (v / 1024 / 1024 / 1024).toFixed(2).replace(/\.00$/, '') + ' GB';
+      };
       html.push(gz.length
         ? gz.slice(-30).reverse().map((g) => {
             const abs = String(g.abs || '');
+            const shiJian = g.ts ? new Date(Number(g.ts)).toLocaleString() : '';
             return '<div class="ctgHang pfHang">' +
               '<div class="ctgHangHead">' +
               '<a href="#" class="pfLink" data-open="' + escapeHtml(abs) + '" title="' + escapeHtml(abs) + '">' + escapeHtml(g.path || '') + '</a>' +
-              '<span class="ctgDim">' + Number(g.bytes || 0) + ' B</span>' +
+              '<span class="ctgDim">' + ziJie(g.bytes) + (shiJian ? ' · ' + escapeHtml(tOr('panel.workfiles.genAt', '生成于')) + ' ' + escapeHtml(shiJian) : '') + '</span>' +
               '<button class="anNiuXiao" data-reveal="' + escapeHtml(abs) + '" title="' + escapeHtml(tOr('panel.workfiles.reveal', '打开所在文件夹')) + '" aria-label="' + escapeHtml(tOr('panel.workfiles.reveal', '打开所在文件夹')) + '">📁</button>' +
               '</div></div>';
           }).join('')
@@ -15448,6 +15582,7 @@
         state.sound = s.settings.sound || state.sound;
         state.soundFiles = s.settings.soundFiles || state.soundFiles;
         if (s.settings.soundVolume != null) state.soundVolume = Number(s.settings.soundVolume);
+        if (s.settings.autoRead != null) state.autoRead = !!s.settings.autoRead;
         state.emailOnRequest = !!s.settings.emailOnRequest;
         state.globalSecurity = s.settings.globalSecurity || 'normal';
         state.askOnExceed = s.settings.askOnExceed !== false;

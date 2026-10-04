@@ -24,14 +24,20 @@ export interface MoXingNengLi {
   tools: boolean | 'unknown';
   /**
    * 模型种类（决定它能干哪类活）：
-   *  · chat       = 文本生成/对话（整理、陪聊、写文档）
+   *  · chat       = 文本生成/对话（整理、陪聊、写文档、写代码 —— 通用 LLM 都能写码/读文档）
    *  · embedding  = 向量嵌入（嵌入模型）
-   *  · asr        = 语音转文字（语音识别）
-   *  · tts        = **文字转语音**（语音模型：能"读"文字）
-   *  · decision   = **决策/路由/分类**（"分类模型"就是这一类：router / classifier / judge）
-   *  · unknown    = 认不出（界面上不放进任何调用链，免得用时出错）
+   *  · rerank     = 嵌入重排（检索结果二次排序）
+   *  · asr        = 听话模型（语音转文字）
+   *  · tts        = 说话模型（文字转语音）
+   *  · image      = 画图模型（图像生成）
+   *  · videoUnd   = 看视频模型（视频理解）
+   *  · videoGen   = 做视频模型（视频生成）
+   *  · translate  = 翻译模型
+   *  · safety     = 安全审核（内容过滤/合规）
+   *  · decision   = **分类/决策模型**（RLCD 类：输出带置信度的决策，约束解码，小而快 —— 用于意图分类、路由、裁判）
+   *  · unknown    = 认不出（不放进任何调用链，免得用时出错）
    */
-  kind: 'chat' | 'embedding' | 'asr' | 'tts' | 'decision' | 'unknown';
+  kind: 'chat' | 'embedding' | 'rerank' | 'asr' | 'tts' | 'image' | 'videoUnd' | 'videoGen' | 'translate' | 'safety' | 'decision' | 'unknown';
   /** 上下文长度（token）；0 = 端点没给、表里也没有 */
   contextLen: number;
   /** 能力来源：endpoint=端点给的 / table=已知型号表 / unknown */
@@ -147,10 +153,23 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
    */
   { shi: /cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
   /**
-   * **决策/路由/分类模型**（"分类模型"就是这一类）：做意图识别、模型路由、裁判/评判的模型。
-   * 代表：OpenRouter 的 auto-router / router-1、各种 classifier、judge / critic / arbiter。
+   * **分类/决策模型**（RLCD 类）：输出**带置信度的决策**而不是长文本，
+   * 用并行约束解码（JSON schema 100% 准确、比自回归快 5~7 倍）。
+   * 代表：Jev、Qwen-2.5-1B-RLCD、各类 router / classifier / judge / arbiter。
    */
-  { shi: /router|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'decision' } },
+  { shi: /rlcd|\bjev\b|router|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'decision' } },
+  // 嵌入重排（检索二次排序）
+  { shi: /rerank|re-?rank|bge-?reranker|cohere-?rerank|rank-?t5|ms-?marco-?minilm/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'rerank' } },
+  // 画图（图像生成）
+  { shi: /flux|stable-?diffusion|sdxl|dall-?e|midjourney|qwen-?image|seedream|imagen|cogview|kolors|wan2\.?1|kontext/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'image' } },
+  // 看视频（视频理解）
+  { shi: /video-?vl|video-?llm|video-?understand|qwen.*video|gemini.*video|videochat|internvl.*video/i, neng: { vision: true, thinking: false, tools: false, thinkLevels: [], kind: 'videoUnd' } },
+  // 做视频（视频生成）
+  { shi: /veo|sora|kling|runway|pika|wan2\.?1-?video|cogvideo|luma|gen-?3|hunyuan-?video|minimax-?video|seedance/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'videoGen' } },
+  // 翻译
+  { shi: /nllb|marian|opus-?mt|translate|translation|deepl|madlad|m2m-100/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'translate' } },
+  // 安全审核
+  { shi: /llama-?guard|guardian|safety|moderation|content-?filter|shield|protect-?ai/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'safety' } },
   // 纯文本开源（明确不看图）
   { shi: /llama|mistral|phi-|gemma|deepseek-v[23]/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
 ];
@@ -159,11 +178,35 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
 export function caiZhongLei(ming: string): MoXingNengLi['kind'] {
   const s = String(ming || '').toLowerCase();
   if (/text-embedding|bge-|bge_|m3e|gte-|e5-|contriever|jina-embed|nomic-embed/.test(s)) return 'embedding';
+  if (/rerank|re-?rank|bge-?reranker/.test(s)) return 'rerank';
   if (/cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts/.test(s)) return 'tts';
   if (/whisper|sense-?voice|paraformer|moonshine|speech-?to-?text|\bstt\b|asr-|vosk|sherpa/.test(s)) return 'asr';
-  // 决策/路由/分类
-  if (/router|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/.test(s)) return 'decision';
+  if (/flux|stable-?diffusion|sdxl|dall-?e|qwen-?image|seedream|imagen|cogview|kolors|kontext/.test(s)) return 'image';
+  if (/veo|sora|kling|runway|pika|cogvideo|luma|gen-?3|hunyuan-?video|seedance/.test(s)) return 'videoGen';
+  if (/video-?vl|video-?llm|videochat|qwen.*video/.test(s)) return 'videoUnd';
+  if (/nllb|marian|opus-?mt|translate|translation|deepl|madlad|m2m-100/.test(s)) return 'translate';
+  if (/llama-?guard|guardian|moderation|content-?filter|shield/.test(s)) return 'safety';
+  // 分类/决策（RLCD 类）
+  if (/rlcd|\bjev\b|router|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/.test(s)) return 'decision';
   return 'unknown';
+}
+
+/** 种类 → 中文（产品定稿叫法：听话=ASR、说话=TTS、对话=LLM；其余仅简体中文用产品叫法） */
+export function kindZhongWen(k: MoXingNengLi['kind']): string {
+  switch (k) {
+    case 'embedding': return '嵌入模型';
+    case 'rerank': return '重排模型';
+    case 'asr': return '听话模型';
+    case 'tts': return '说话模型';
+    case 'image': return '画图模型';
+    case 'videoUnd': return '看视频模型';
+    case 'videoGen': return '做视频模型';
+    case 'translate': return '翻译模型';
+    case 'safety': return '安全审核';
+    case 'decision': return '分类模型';
+    case 'chat': return '对话模型';
+    default: return '未知';
+  }
 }
 
 /** 上下文长度的常见字段名（端点给了就用） */
@@ -282,11 +325,7 @@ export function nengLiBiaoQian(n: MoXingNengLi): string[] {
   return out;
 }
 
-/** 种类 → 中文（产品定稿叫法：听话=ASR、说话=TTS、对话=LLM） */
-export function kindZhongWen(k: MoXingNengLi['kind']): string {
-  return k === 'embedding' ? '嵌入模型' : k === 'asr' ? '听话模型' : k === 'tts' ? '说话模型'
-    : k === 'decision' ? '决策模型' : k === 'chat' ? '对话模型' : '未知';
-}
+
 
 /** 上下文长度 → 界面短标签（如 128K / 32K / 8K） */
 export function shangXiaWenBiaoQian(n: number): string {

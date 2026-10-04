@@ -237,6 +237,7 @@ contextBridge.exposeInMainWorld('warmy', {
   dingShiRenWuLieBiao: () => ipcRenderer.invoke('warmy:dingShiRenWuLieBiao'),
   dingShiRenWuShanChu: (p) => ipcRenderer.invoke('warmy:dingShiRenWuShanChu', p),
   dingShiRenWuGengXin: (p) => ipcRenderer.invoke('warmy:dingShiRenWuGengXin', p),
+  ttsLangDu: (p) => ipcRenderer.invoke('warmy:ttsLangDu', p),
   onDingShiRenWu: (cb) => ipcRenderer.on('warmy:dingShiRenWu', (_e, d) => cb(d)),
   onDingShiDaoDian: (cb) => ipcRenderer.on('warmy:dingShiDaoDian', (_e, d) => cb(d)),
   /** 文件产出：AI 写了文件 ⇒ 自动补「文件产物」卡片 */

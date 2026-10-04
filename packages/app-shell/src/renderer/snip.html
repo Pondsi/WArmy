@@ -30,7 +30,7 @@
 <body>
   <img id="di" alt=""/>
   <div id="kuang"></div>
-  <div id="ti">拖动框选 → 确定/取消 · 双击＝确定 · 右键/Esc＝取消</div>
+  <div id="ti">拖动框选 → 双击/确定＝截取选区 · 右键/Esc＝取消</div>
   <div id="bar">
     <button id="ok">确定</button>
     <button id="cancel">取消</button>
@@ -38,7 +38,7 @@
   </div>
   <script>
     // 真·全屏截图遮罩：独立窗口，覆盖整个屏幕。
-    // 交互（产品定稿）：拖动框选 → 出「确定/取消」；左键双击＝确定；右键/Esc＝取消。
+    // 交互（产品定稿）：拖动框选 → 保留选区并出「确定/取消」；**双击＝截取当前框选**；右键/Esc＝取消。
     const di = document.getElementById('di');
     const kuang = document.getElementById('kuang');
     const bar = document.getElementById('bar');
@@ -100,7 +100,7 @@
       const shiShuangJi = (xia - shangCiDianJi) < 350;
       shangCiDianJi = xia;
       if (shiShuangJi) {
-        // 左键双击 = 确定（当前选区；未框选＝整屏）
+        // 左键双击 = **截取当前框选**（没框选则整屏）
         done(qu || { x: 0, y: 0, w: 0, h: 0 });
         return;
       }

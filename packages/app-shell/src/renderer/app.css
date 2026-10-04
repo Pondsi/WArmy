@@ -2644,6 +2644,28 @@ html { font-weight: var(--fw-ui, 400); }
   font-variant-numeric: tabular-nums;
 }
 
+/* 插话队列：上移/下移/编辑/移除 **并排**在会话下方（不许竖着排） */
+.qZhengWen { display: flex; flex-direction: column; gap: 4px; }
+.qCaoZuoJi { display: flex; flex-direction: row; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.qCaoZuoJi .anNiuXiao { padding: 2px 8px; font-size: 11px; }
+
+/* 说话模型专属参数（语速/语音） */
+.moXingZhuanShu { display: inline-flex; align-items: center; gap: 8px; margin: 0 8px; font-size: 11px; color: var(--muted); }
+.moXingZhuanShu label { display: inline-flex; align-items: center; gap: 4px; }
+.moXingZhuanShu input[type=range] { width: 90px; }
+.moXingShu { max-width: 120px; font-size: 11px; }
+
+/* 回复下方的模型名 + 时间/操作 行（模型名仅牛马回复；时间/复制/朗读两边都有） */
+.xiaoXiJiao { display: flex; flex-direction: column; gap: 2px; margin-top: 3px; opacity: 0; transition: opacity .15s ease; }
+.xiaoXi:hover .xiaoXiJiao { opacity: 1; }
+.xiaoXiMoXing { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.xiaoXiJiaoHang { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.xiaoXiLangDu {
+  border: none; background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 12px; padding: 1px 6px; border-radius: 4px;
+}
+.xiaoXiLangDu:hover { background: var(--hover); color: var(--ink); }
+
 /* 图片附件点击放大预览 */
 .tuPianYuLanCeng {
   position: fixed; inset: 0; z-index: 30000;

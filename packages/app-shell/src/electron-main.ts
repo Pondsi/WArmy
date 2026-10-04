@@ -27,6 +27,7 @@ import {
   neiRongWenBen,
   moXingNengLi,
   gouJianDangWeiAnShe,
+  pinJieUrl,
   type LiaoTianXiaoXi,
   type LiaoTianQingQiu,
   type MoxingGongYing,
@@ -924,6 +925,9 @@ function dangQianYongHuMing(): string {
   } catch { return ''; }
 }
 
+/** 本轮工具调用的名字（空回复兜底时如实告诉用户"干了什么"） */
+let benLunGongJuMing: string[] = [];
+
 async function yunXingLiaoTianXunHuan(
   sessionId: string,
   provider: MoxingGongYing,
@@ -984,6 +988,7 @@ async function yunXingLiaoTianXunHuan(
       // 干活工具（写/读/列目录）走工作区沙箱；记忆工具走记忆服务。
       // 两者都在文件访问作用域里执行 ⇒ 真实读写会记到**这个会话**的项目台账上。
       const gongJuMing = String((call && call.function && call.function.name) || '');
+      if (gongJuMing) benLunGongJuMing.push(gongJuMing);
       // 小弟：派出子代理 / 列出小弟
       if (isXiaoDiTool(gongJuMing)) {
         const bu = new XiaoDiDengJiBu(path.join(app.getPath('userData'), 'xiaodi.json'));
@@ -3705,9 +3710,13 @@ chuliIpc(
     }
 
     const qiShiShiJian = Date.now();
+    benLunGongJuMing = [];
     let zuiHouCuo = '';
-    /** **调用失败自动降级**：这一档模型挂了就换调用链上下一个，最多试 3 个（真事故：直接报错给用户） */
-    for (let shi = 0; shi < 3; shi++) {
+    /**
+     * **调用失败自动降级**：把**整条调用链**都试完（不是只试 3 个）——
+     * 一个挂了换下一个，直到链上没有可换的才如实报错。
+     */
+    for (let shi = 0; shi < 32; shi++) {
     try {
       const provider = congYuSheChuangJian(zhu.presetId, {
         apiKey: zhu.apiKey,
@@ -3813,7 +3822,36 @@ chuliIpc(
       }
       const { loop } = chongshi.result;
       const xiangYing = loop.xiangYingTi;
-      const reply0 = neiRongWenBen(xiangYing.choices[0]?.message?.content);
+      let reply0 = neiRongWenBen(xiangYing.choices[0]?.message?.content);
+      /**
+       * **空回复不再是死路**（真事故：多轮工具调用后模型没吐正文 ⇒ 界面只有「（本条回复无内容）」）。
+       * 依次兜底：① 本轮工具活动合成一段如实总结；② 再要一次纯文本；③ 都不行就如实说明。
+       */
+      if (!reply0.trim()) {
+        // 从本轮工具活动合成（工具名由执行器记账，见下）
+        const zhongFu = [...new Set(benLunGongJuMing)];
+        if (zhongFu.length) {
+          reply0 = tMain('chat.toolsDone', '本轮我调用了工具来完成这件事：') + zhongFu.join('、')
+            + tMain('chat.toolsDoneTail', '。工具已执行完毕，没有额外要补充的文字说明。');
+        }
+      }
+      if (!reply0.trim()) {
+        // 再要一次纯文本答案（不带工具），逼出正文
+        try {
+          const zaiWen = await provider.chat({
+            model: modelId,
+            xiaoXiJi: [
+              { role: 'system', content: tMain('llm.needText', '请用简短中文直接回答用户，不要调用工具。') },
+              { role: 'user', content: xiaoXi.content.slice(0, 2000) },
+            ],
+            maxTokens: 512,
+          });
+          reply0 = neiRongWenBen(zaiWen.choices[0]?.message?.content);
+        } catch { /* 重试失败就走如实说明 */ }
+      }
+      if (!reply0.trim()) {
+        reply0 = tMain('chat.emptyReplyWhy', '本轮模型没有返回文字内容（可能是工具调用后未作说明）。请再问一次，或换个说法。');
+      }
       // 思考过程：DeepSeek 等放在 message.reasoning_content，有的叫 reasoning / thinking
       const rawMsg = ((xiangYing.raw as { choices?: Array<{ message?: Record<string, unknown> }> } | undefined)?.choices?.[0]?.message) || {};
       const siKaoGuoCheng = String(rawMsg.reasoning_content ?? rawMsg.reasoning ?? rawMsg.thinking ?? '');
@@ -9120,6 +9158,45 @@ chuliIpc('warmy:dingShiRenWuGengXin', (_e, p0?: { id?: string; enabled?: boolean
     baoCunDingShi();
     try { broadcastToWindows('warmy:dingShiRenWu', { tasks: dingShiRenWuJi }); } catch { /* noop */ }
     return { ok: true, enabled: it.enabled };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/**
+ * **朗读文字**（说话模型 / TTS）：用「模型选项 → 说话模型」里默认那个。
+ * 没有可用的说话模型就如实回错误，不假装读了。
+ */
+chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
+  try {
+    const s = String(p0?.text || '').trim();
+    if (!s) return { ok: false, error: 'empty-text' };
+    // 说话模型：取 tts 调用链上第一个未禁用的
+    const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
+    const lian = Array.isArray(sm.ttsChain) ? (sm.ttsChain as string[]) : [];
+    const jin = Array.isArray(sm.ttsDisabled) ? (sm.ttsDisabled as string[]) : [];
+    const mo = lian.find((m) => m && !jin.includes(m)) || '';
+    if (!mo) return { ok: false, error: 'no-tts-model（请在「设置 → 模型 → 说话模型」里配置）' };
+    const an = await jieMoXingGongYingShang(mo);
+    if (!an) return { ok: false, error: 'tts-provider-not-found（模型 ' + mo + ' 不在任何供应商里）' };
+    if (!an.apiKey && an.protocol !== 'ollama') return { ok: false, error: 'no-key（' + an.biaoQian + ' 未配密钥）' };
+    const provider = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL || undefined, protocol: an.protocol } as never, an.protocol);
+    /**
+     * TTS 非通用接口：先试 OpenAI 兼容 `/audio/speech`；Ollama 不支持则如实说。
+     * 取不到音频就返回明确错误 —— **不假装读了**。
+     */
+    try {
+      const res = await fetch(pinJieUrl(an.baseURL, 'audio/speech'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${an.apiKey}` },
+        body: JSON.stringify({ model: mo, input: s.slice(0, 500), voice: (sm as { ttsVoice?: string }).ttsVoice || 'alloy', speed: Number((sm as { ttsSpeed?: number }).ttsSpeed || 1) }),
+      });
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        return { ok: true, dataUrl: `data:audio/mpeg;base64,${buf.toString('base64')}`, model: mo };
+      }
+      return { ok: false, error: `tts HTTP ${res.status}（模型 ${mo} 可能不支持 /audio/speech）` };
+    } catch (e2) {
+      return { ok: false, error: 'tts-failed：' + xiJingCuoWu(e2) };
+    }
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /** 界面上的「打开」按钮：用系统默认程序打开文件/目录。
