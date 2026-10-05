@@ -188,6 +188,21 @@ export class OllamaGongYing extends JichuGongYing {
         if (!t) continue;
         try {
           const j = JSON.parse(t);
+          /**
+           * **工具调用必须一起带出去**（真事故：模型明明调了工具，界面却是纯文本 ——
+           * 因为流式解析只取了 content/thinking，`message.tool_calls` 被整段丢掉，
+           * 上层看到的 `gongJuDiaoYongJi` 恒为空 ⇒ `tingZhiYuanYin='stop'` ⇒ 没有下一轮）。
+           */
+          const liuGongJu = (j.message?.tool_calls || []).map((c: { id?: string; function?: { name?: string; arguments?: unknown } }, k: number) => ({
+            id: String(c?.id || `ollama-stream-${Date.now()}-${k}`),
+            type: 'function' as const,
+            function: {
+              name: String(c?.function?.name || ''),
+              arguments: typeof c?.function?.arguments === 'string'
+                ? c.function.arguments
+                : JSON.stringify(c?.function?.arguments || {}),
+            },
+          }));
           yield {
             id: '',
             model: j.model || Qiu.model,
@@ -200,8 +215,9 @@ export class OllamaGongYing extends JichuGongYing {
                   ...((j.message?.thinking || j.message?.reasoning_content)
                     ? { reasoning: String(j.message?.thinking || j.message?.reasoning_content) }
                     : {}),
+                  ...(liuGongJu.length ? { gongJuDiaoYongJi: liuGongJu } : {}),
                 },
-                finishReason: j.done ? 'stop' : null,
+                finishReason: j.done ? (liuGongJu.length ? 'tool_calls' : 'stop') : null,
               },
             ],
             /**
@@ -238,5 +254,67 @@ export class OllamaGongYing extends JichuGongYing {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * **问出每个本地模型到底会什么**（视觉 / 工具 / 思考 / 上下文长度）。
+   *
+   * 为什么必须问 `/api/show`：`/api/tags` 只给名字，**不带任何能力字段** ——
+   * 于是只能按名字猜，猜不出来就只能标 unknown（真事故：用户拉了 Ollama 的多模态模型，
+   * 「看图模型」链里却一个都没有，因为 `^qwen3` 这条把它们一律判成 vision:false）。
+   * `/api/show` 的 `capabilities`（新版）或 `model_info` 里的 `clip`/`projector`/`mmproj`（旧版）
+   * 才是**真能力**。
+   */
+  async listModelsDetailed(signal?: AbortSignal): Promise<Array<{
+    id: string; thinkLevels: string[]; supportsThinking: boolean;
+    vision: boolean | 'unknown'; tools: boolean | 'unknown';
+    kind: string; contextLen: number;
+  }>> {
+    const ids = await this.listModels(signal);
+    const out: Array<{ id: string; thinkLevels: string[]; supportsThinking: boolean; vision: boolean | 'unknown'; tools: boolean | 'unknown'; kind: string; contextLen: number }> = [];
+    for (const id of ids) {
+      let vision: boolean | 'unknown' = 'unknown';
+      let tools: boolean | 'unknown' = 'unknown';
+      let supportsThinking = false;
+      let thinkLevels: string[] = [];
+      let contextLen = 0;
+      try {
+        const res = await fetch(pinJieUrl(this.baseURL, 'api/show'), {
+          method: 'POST',
+          headers: this.auth.headers,
+          body: JSON.stringify({ model: id }),
+          signal,
+        });
+        if (res.ok) {
+          const j = (await res.json()) as {
+            capabilities?: unknown[];
+            model_info?: Record<string, unknown>;
+          };
+          const caps = Array.isArray(j.capabilities) ? j.capabilities.map((x) => String(x).toLowerCase()) : [];
+          const info = j.model_info || {};
+          const infoKeys = Object.keys(info);
+          if (caps.length) {
+            vision = caps.some((c) => /vision|image/.test(c));
+            tools = caps.some((c) => /tool|function/.test(c));
+            supportsThinking = caps.some((c) => /think|reason/.test(c));
+          } else {
+            // 旧版 Ollama：只能从 model_info 的 clip/projector/mmproj 判视觉
+            const youShiJue = infoKeys.some((k) => /(^|\.)clip$|projector|mmproj|vision|(^|\.)llava/i.test(k));
+            vision = youShiJue;
+          }
+          for (const k of infoKeys) {
+            if (/context_length$/i.test(k)) {
+              const n = Number(info[k]);
+              if (Number.isFinite(n) && n > 0) { contextLen = Math.floor(n); break; }
+            }
+          }
+          if (supportsThinking) thinkLevels = ['low', 'medium', 'high'];
+        }
+      } catch {
+        /* 单个模型查不到 ⇒ 保持 unknown（不猜） */
+      }
+      out.push({ id, thinkLevels, supportsThinking, vision, tools, kind: 'unknown', contextLen });
+    }
+    return out;
   }
 }

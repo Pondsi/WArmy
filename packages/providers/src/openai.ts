@@ -88,6 +88,19 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
         try {
           const j = JSON.parse(data);
           const c = j.choices?.[0];
+          /**
+           * **工具调用必须一起带出去**（真事故：流式包装只取了 content ⇒ 工具调用被丢掉 ⇒
+           * 界面变成"纯文本对话"）。OpenAI 的 `delta.tool_calls` 是**增量**的（同一个 id
+           * 多帧拼 arguments），这里原样转成我们的 `gongJuDiaoYongJi`，由上层按 id 归并。
+           */
+          const liuGongJu = (c?.delta?.tool_calls || []).map((t: { id?: string; index?: number; function?: { name?: string; arguments?: string } }) => ({
+            id: String(t?.id || `call-${t?.index ?? 0}`),
+            type: 'function' as const,
+            function: {
+              name: String(t?.function?.name || ''),
+              arguments: String(t?.function?.arguments || ''),
+            },
+          }));
           yield {
             id: j.id || '',
             model: j.model || Qiu.model,
@@ -97,6 +110,10 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
                 delta: {
                   content: c?.delta?.content,
                   role: c?.delta?.role,
+                  ...(liuGongJu.length ? { gongJuDiaoYongJi: liuGongJu } : {}),
+                  ...(c?.delta?.reasoning_content || c?.delta?.reasoning
+                    ? { reasoning: String(c.delta.reasoning_content || c.delta.reasoning) }
+                    : {}),
                 },
                 finishReason: c?.finish_reason ?? null,
               },

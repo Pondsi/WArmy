@@ -448,6 +448,12 @@ export class PeizhiCang {
     for (const k of APPEARANCE_KEYS) {
       if (wai[k] !== undefined) ji[k] = wai[k];
     }
+    /**
+     * **一次性迁移**：`contextToolMaxRounds` 的旧默认是 3 —— 那是我们自己的默认值，
+     * 不是用户的选择，而且它会让多任务跑到一半就 `max-rounds` 停下（真事故）。
+     * 看到 3 就当成"旧默认"，升到新的默认 12。用户显式设的其它值一律不动。
+     */
+    if (Number(ji.contextToolMaxRounds) === 3) ji.contextToolMaxRounds = 12;
     return ji as unknown as YingYongPeizhi;
   }
 
@@ -529,11 +535,12 @@ function defaults(): YingYongPeizhi {
     contextBudgetChars: DEFAULT_CONTEXT_BUDGET_CHARS,
     /**
      * 工具调用上限（ADR 002 §9.4 待办 2）。
-     * 3 轮足够"recall → retrieve → 终答"的典型链路，又是硬上限：
-     * 最坏 4 次模型请求（3 轮工具 + 1 次强制收敛），每次注入都 ≤ contextBudgetChars，
-     * 工具结果另有 12000 字符总预算与 4000 字符单条上限 —— 三层都在"有界"这一侧。
+     * **默认 12**（真事故：默认 3 时多任务跑到一半就 `tingZhiYuanYin: 'max-rounds'`，
+     * 用户那条「生成 txt + 生成 ppt + 打开 + 等 30 秒 + 写小说」根本跑不完）。
+     * 三层仍在"有界"这一侧：每轮注入 ≤ contextBudgetChars，工具结果另有
+     * 12000 字符总预算与 4000 字符单条上限。
      */
-    contextToolMaxRounds: 3,
+    contextToolMaxRounds: 12,
     contextToolResultChars: 4000,
     contextToolTotalChars: 12000,
     /** ADR 004：默认都不在容器里（本机）—— 与"按需安装容器"一致 */

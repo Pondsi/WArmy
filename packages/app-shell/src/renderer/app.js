@@ -360,9 +360,8 @@
   function GONGYING_YUSHE_JIAN() {
     return [
       { id: 'deepseek', biaoQian: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com/v1' },
-      // MiMo（小米）：实测的 OpenAI 兼容端点；不同地区接口地址可能不同 ⇒ 另有地址留空的「自定义地区」预设
+      // MiMo（小米）：实测的 OpenAI 兼容端点
       { id: 'mimo', biaoQian: 'MiMo（小米）', protocol: 'openai-compatible', baseURL: 'https://api.xiaomimimo.com/v1' },
-      { id: 'mimo-local', biaoQian: 'MiMo（自定义地区）', protocol: 'openai-compatible', baseURL: '' },
       { id: 'openai', biaoQian: t('settings.provider.openai') || 'OpenAI', protocol: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
       { id: 'moonshot', biaoQian: t('settings.provider.moonshot') || 'Moonshot', protocol: 'openai-compatible', baseURL: 'https://api.moonshot.cn/v1' },
       { id: 'zhipu', biaoQian: t('settings.provider.zhipu') || 'Zhipu GLM', protocol: 'openai-compatible', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
@@ -756,11 +755,44 @@
    * 只在"真的完成/真的失败/需要用户决定"时播 —— 中间思考、工具调用、流式片段都不响。
    */
   const yinXiaoHuanCun = {};
-  /** 预加载的 Audio 元素（复用，减少首播延迟） */
+  /** 预加载的 Audio 元素（**兜底**通道，主路是 AudioContext） */
   const yinXiaoYuan = {};
   /**
+   * **主路：AudioContext**（真事故修）。
+   * HTMLAudioElement 的 `play()` 受自动播放策略影响，首次/静默场景常被拦下；
+   * AudioContext 在用户手势里 `resume()` 之后可以**稳定**播放 —— 决策卡第 1 张没声音
+   * 的根因就在这里。两条路都留着：AudioContext 失败再退回 HTMLAudioElement。
+   */
+  let yinPinShangXiaWen = null;
+  const jieMaHuanCun = {};
+  function deDaoShangXiaWen() {
+    try {
+      if (!yinPinShangXiaWen) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        yinPinShangXiaWen = new AC();
+      }
+      return yinPinShangXiaWen;
+    } catch { return null; }
+  }
+  /** dataURL → AudioBuffer（解码失败返回 null，由调用方走兜底） */
+  async function jieMaYinPin(u) {
+    const ctx = deDaoShangXiaWen();
+    if (!ctx || !u) return null;
+    if (jieMaHuanCun[u]) return jieMaHuanCun[u];
+    try {
+      const b64 = String(u).replace(/^data:[^,]+,/, '');
+      const bin = atob(b64);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const buf = await ctx.decodeAudioData(arr.buffer.slice(0));
+      jieMaHuanCun[u] = buf;
+      return buf;
+    } catch { return null; }
+  }
+  /**
    * **播不出去的提示音先攒着**：自动播放策略/首播被拦时记下来，
-   * 等音频解锁或用户第一次手势后**补播一次**（真事故：决策卡有时没声音，
+   * 等音频解锁或用户第一次手势后**补播**（真事故：决策卡有时没声音，
    * 因为那一次 play() 被策略拦掉后就再也没人重试）。
    */
   let yinXiaoDaiBo = null;
@@ -780,21 +812,56 @@
         yinXiaoHuanCun[k] = u;
       }
       /**
-       * 用**预加载的 Audio 元素**播（真事故：决定卡跳出来没音效，点完才响）。
-       * 之前每次 new Audio() + play() 会被浏览器自动播放策略拦掉；现在
-       * ① 首次手势时预解码 ② 失败隔 120ms 重试一次 ③ 元素复用，减少首播延迟。
+       * **主路：AudioContext**（真事故修 —— 决策卡第 1 张没声音）。
+       * HTMLAudioElement 的 play() 受自动播放策略影响，首次/静默场景常被拦下且难以重试；
+       * AudioContext 在用户手势里 resume() 之后可以**稳定**播放。解码一次到处复用。
+       */
+      try {
+        const ctx = deDaoShangXiaWen();
+        if (ctx) {
+          if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+          const buf = await jieMaYinPin(u);
+          if (buf && ctx.state === 'running') {
+            const yuanYin = ctx.createBufferSource();
+            yuanYin.buffer = buf;
+            const zengYi = ctx.createGain();
+            zengYi.gain.value = (state.soundVolume != null ? state.soundVolume : 0.9);
+            yuanYin.connect(zengYi);
+            zengYi.connect(ctx.destination);
+            yuanYin.start(0);
+            yinXiaoDaiBo = null;
+            return true;
+          }
+        }
+      } catch { /* 掉到下面的 HTMLAudioElement 兜底 */ }
+      /**
+       * 兜底：**预加载的 Audio 元素**播（真事故：决定卡跳出来没音效，点完才响）。
+       *
+       * 关键点（真事故修）：
+       *  ① **不能 `load()` 完就立刻 `play()`** —— 元素还没就绪时 play() 必被拒；
+       *     这里等 `canplay`（最多 400ms）再播。
+       *  ② 失败按 80/200/360/560ms 退避重试 5 次；
+       *  ③ 还不行就**换一个全新 Audio** 再试（复用元素有时被浏览器卡住）；
+       *  ④ 全部失败 ⇒ 记进 `yinXiaoDaiBo`，之后**每一次手势都补播**，直到真的播出去。
        */
       const yuan = yinXiaoYuan[k] || (yinXiaoYuan[k] = new Audio());
-      if (yuan.src !== u) { yuan.src = u; yuan.load(); }
+      if (yuan.src !== u) {
+        yuan.src = u;
+        // 等就绪（不等就播 = 必被拒）
+        await new Promise((r2) => {
+          let ting = false;
+          const guo = () => { if (!ting) { ting = true; r2(undefined); } };
+          yuan.addEventListener('canplay', guo, { once: true });
+          yuan.addEventListener('error', guo, { once: true });
+          try { yuan.load(); } catch { guo(); }
+          setTimeout(guo, 400);
+        });
+      }
       yuan.volume = (state.soundVolume != null ? state.soundVolume : 0.9);
-      /**
-       * 首播被自动播放策略拦下的真事故：决定卡第 1 张没声、第 3 张才有。
-       * 策略：多退避几次重试；仍失败就换新 Audio 再试一次（复用元素有时会被浏览器卡住）。
-       */
       const bo = () => yuan.play().then(() => true).catch(() => false);
       let ok = await bo();
-      for (let ci = 0; ci < 4 && !ok; ci++) {
-        await new Promise((r2) => setTimeout(r2, 80 + ci * 120));
+      for (let ci = 0; ci < 5 && !ok; ci++) {
+        await new Promise((r2) => setTimeout(r2, 80 + ci * 160));
         ok = await bo();
       }
       if (!ok) {
@@ -806,7 +873,7 @@
         } catch { /* 仍失败就如实返回 */ }
       }
       if (ok) yinXiaoDaiBo = null;
-      else yinXiaoDaiBo = k;   // 记下来，解锁后补播
+      else yinXiaoDaiBo = k;   // 记下来，之后每次手势都补播
       return ok;
     } catch { return false; }
   }
@@ -838,34 +905,46 @@
   }
   window.__langDuWenBen = langDuWenBen;
   /**
-   * **音频解锁**：浏览器自动播放策略会拦掉"没有用户手势"的播放 ——
-   * 真事故：决定卡跳出来没声音，点完决定后才响。第一次指针/键盘动作时
-   * 播一段静音，把音频通道解锁，之后的提示音才放得出来。
+   * **音频解锁**：浏览器自动播放策略会拦掉"没有用户手势"的播放。
+   * 真事故：决定卡第 1 张没声音。
+   *
+   * 这里用 **AudioContext.resume()** 解锁（HTMLAudioElement 的 play() 不可靠，
+   * 见 chuanBoYinXiao 里的说明），并把三个提示音**预解码**成 AudioBuffer。
    */
   let yinYueJieSuo = false;
   function jieSuoYinYue() {
     if (yinYueJieSuo) return;
     yinYueJieSuo = true;
+    // ① 解锁 AudioContext（这是能稳定出声的那条路）
+    try {
+      const ctx = deDaoShangXiaWen();
+      if (ctx && ctx.state === 'suspended') void ctx.resume();
+    } catch { /* noop */ }
+    // ② 旧路子也顺手解锁一次（作为兜底通道）
     try {
       const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=');
       a.volume = 0;
       void a.play().catch(() => { /* 播不出去也不要紧 */ });
     } catch { /* noop */ }
-    // 顺手把三个提示音**预解码**：之后第一次播就不用等加载
+    // ③ 三个提示音预取 + 预解码：之后第一次播就不用等
     for (const k of ['request', 'complete', 'error']) {
       try {
         void window.warmy.yinXiaoQu?.({ kind: k }).then((r) => {
           if (r && r.ok && r.dataUrl) {
             yinXiaoHuanCun[k] = r.dataUrl;
+            // 预解码到 AudioBuffer（主路）
+            void jieMaYinPin(r.dataUrl);
+            // HTMLAudioElement 也备一份（兜底路）
             const el = new Audio(r.dataUrl);
             el.preload = 'auto';
-            el.volume = 0;
+            el.volume = state.soundVolume != null ? state.soundVolume : 0.9;
             yinXiaoYuan[k] = el;
-            void el.play().then(() => { el.pause(); el.currentTime = 0; el.volume = state.soundVolume != null ? state.soundVolume : 0.9; }).catch(() => { el.volume = state.soundVolume != null ? state.soundVolume : 0.9; });
           }
         });
       } catch { /* noop */ }
     }
+    // ④ 补播刚才没播出去的
+    setTimeout(() => { void buBoChenJiYinXiao(); }, 60);
   }
   window.addEventListener('pointerdown', jieSuoYinYue, { once: true, capture: true });
   window.addEventListener('keydown', jieSuoYinYue, { once: true, capture: true });
@@ -1964,16 +2043,28 @@
   /**
    * **流式"正在进行"的气泡**：思考块默认展开、正文逐步追加。
    * 只在聊天末尾挂这一条（`data-streaming=1`），正式回复到了就被收走。
+   *
+   * 真事故修：
+   *  ① 以前每帧 `innerHTML = …` **整块重建** ⇒ 思考块滚动位置被拍回顶部，
+   *     用户既看不到下面、也滚不动。现在结构只建一次，之后**只改文本**。
+   *  ② 思考内容**自动跟到最新一条**；用户手动滚上去就停止跟随，滚回底部再恢复。
+   *  ③ 限频是「**节流 + 尾随**」：最后一段内容一定会被画出来（旧实现直接 return，
+   *     流结束时最后一段就丢了）。
    */
   let _liuShiHuaShangCi = 0;
+  let _liuShiDaiHua = null;
   function xuanRanLiuShiKuai(sid, b) {
     const heZi = $('xiaoXiJi');
     if (!heZi) return;
     if (state.selectedChat && String(state.selectedChat.id) !== String(sid)) return;
-    // 限频 ≤10fps：token 增量到得很密，不重绘就会把主线程刷爆
+    // 节流 + 尾随：密到 100ms 内的增量先攒着，最后一次一定画出来
     const now = Date.now();
-    if (now - _liuShiHuaShangCi < 100) return;
+    if (now - _liuShiHuaShangCi < 100) {
+      _liuShiDaiHua = { sid, b: { reasoning: String(b.reasoning || ''), content: String(b.content || '') } };
+      return;
+    }
     _liuShiHuaShangCi = now;
+    _liuShiDaiHua = null;
     let kuai = heZi.querySelector('[data-streaming="1"]');
     const zaiDiBu = isAtBottom(heZi);
     if (!kuai) {
@@ -1982,18 +2073,50 @@
       kuai.setAttribute('data-streaming', '1');
       heZi.appendChild(kuai);
     }
-    kuai.innerHTML =
-      '<div class="bubbleWrap">' +
-      (b.reasoning
-        ? '<details class="siKaoKuai" open><summary>' + escapeHtml(tOr('chat.thinkingOpen', '思考中…')) + '</summary><pre class="liuShiSiKao"></pre></details>'
-        : '') +
-      (b.content ? '<div class="bubble md liuShiZhengWen"></div>' : '') +
-      '</div>';
-    const si = kuai.querySelector('.liuShiSiKao');
-    if (si) si.textContent = b.reasoning;
-    const zh = kuai.querySelector('.liuShiZhengWen');
-    if (zh) zh.textContent = b.content;
+    // 思考块：结构只建一次（不重建 innerHTML，滚动位置才留得住）
+    let si = kuai.querySelector('.liuShiSiKao');
+    if (b.reasoning && !si) {
+      const wrap = kuai.querySelector('.bubbleWrap') || (() => {
+        kuai.innerHTML = '<div class="bubbleWrap"></div>';
+        return kuai.querySelector('.bubbleWrap');
+      })();
+      wrap.insertAdjacentHTML('afterbegin',
+        '<details class="siKaoKuai" open><summary>' + escapeHtml(tOr('chat.thinkingOpen', '思考中…')) + '</summary><pre class="liuShiSiKao"></pre></details>');
+      si = kuai.querySelector('.liuShiSiKao');
+    }
+    if (si) {
+      si.textContent = b.reasoning || '';
+      // 用户手动滚上去了 ⇒ 不抢视线；在底部（或很接近）⇒ 跟随到最新
+      const zaiDi = si.scrollHeight - si.scrollTop - si.clientHeight < 28;
+      if (!si.dataset.userScrolled || zaiDi) {
+        si.dataset.userScrolled = '';
+        si.scrollTop = si.scrollHeight;
+      }
+      if (!si.dataset.bound) {
+        si.dataset.bound = '1';
+        si.addEventListener('scroll', () => {
+          const d = si.scrollHeight - si.scrollTop - si.clientHeight < 28;
+          si.dataset.userScrolled = d ? '' : '1';
+        }, { passive: true });
+      }
+    }
+    let zh = kuai.querySelector('.liuShiZhengWen');
+    if (b.content && !zh) {
+      const wrap = kuai.querySelector('.bubbleWrap') || (() => {
+        kuai.innerHTML = '<div class="bubbleWrap"></div>';
+        return kuai.querySelector('.bubbleWrap');
+      })();
+      wrap.insertAdjacentHTML('beforeend', '<div class="bubble md liuShiZhengWen"></div>');
+      zh = kuai.querySelector('.liuShiZhengWen');
+    }
+    if (zh) zh.textContent = b.content || '';
     if (zaiDiBu) { try { heZi.scrollTop = heZi.scrollHeight; } catch { /* noop */ } }
+    // 尾随：把刚才被节流掉的那一份补画（含最后一段）
+    if (_liuShiDaiHua) {
+      const d = _liuShiDaiHua;
+      _liuShiDaiHua = null;
+      setTimeout(() => { _liuShiHuaShangCi = 0; xuanRanLiuShiKuai(d.sid, d.b); }, 110);
+    }
   }
   /** 正式回复到了：把流式气泡收掉（正式那条里的思考块**自动折叠**） */
   function shouLiuShiKuai() {
@@ -2044,6 +2167,8 @@
     /** 上一次**主动显示**的时间（跨时才显示；跨自然日加分隔线） */
     let shangCiZhuDong = 0;
     slice.forEach((m, i) => {
+      // **内部指令不进聊天记录**（自动续派的「继续执行计划…」只给模型看，不是用户说的话）
+      if (m && m.hidden) return;
       // ── 主动显示时间：与上次主动显示的"时"不同才显示；跨自然日加浅分隔线 ──
       const ts = Number(m.ts || 0) || Date.now();
       if (!shangCiZhuDong || kuaShiJianDian(shangCiZhuDong, ts)) {
@@ -3135,17 +3260,16 @@
          * 卡片**真的画出来**时才播「请求」音（真事故：以前在事件回调里播，
          * 被浏览器自动播放策略拦下 ⇒ 卡片跳出来没声，点完决定后才响）。
          *
-         * **改成按 id 记账**（不再拿 DOM 反推）：DOM 反推时，切页面/重画/自动刷新
-         * 都会让 host 被清空 ⇒ `xinZeng` 误判 or 误判为"已响过"，双双导致"有时没声音"。
-         * 现在：每个问题 id 全局只响一次，且**无论当时在哪一页**都记上账。
+         * **按 id 记账，且只有播成功才算响过**（真事故：旧实现"先记账再播"，
+         * 播失败也记上了 ⇒ `renderAiQuestions` 不再补播 ⇒ 首张卡永远没声音）。
+         * 失败不记账，交给下一次重绘/手势继续补播。
          */
+        yiJingXiangGuo = yiJingXiangGuo || new Set();
+        const daiXiangDe = [];
         for (const q of pending) {
-          if (!yiJingXiangGuo.has(String(q.id))) {
-            yiJingXiangGuo.add(String(q.id));
-            xinZengJi.add(String(q.id));
-          }
+          const id = String(q.id);
+          if (!yiJingXiangGuo.has(id)) daiXiangDe.push(id);
         }
-        const xinZeng = xinZengJi.size > 0;
         // 只记最近 500 个 id，避免长跑把内存撑大
         if (yiJingXiangGuo.size > 500) {
           yiJingXiangGuo = new Set([...yiJingXiangGuo].slice(-250));
@@ -3171,10 +3295,15 @@
               <button class="anNiuZhuYao" data-aiq-submit="${escapeHtml(q.id)}">${escapeHtml(t('aiq.submit')||'OK')}</button></div>
           </div>`;
         }).join('');
-        if (xinZeng) {
-          // 这一轮的新卡已经记账，清掉待播集合（避免每次重画都重播）
-          xinZengJi = new Set();
-          try { void chuanBoYinXiao('request'); } catch { /* noop */ }
+        // 有待响的新卡：播一次；**播成功才记账**，失败留给下一次重绘/手势补播
+        if (daiXiangDe.length) {
+          void (async () => {
+            const ok = await chuanBoYinXiao('request');
+            if (ok) { for (const id of daiXiangDe) yiJingXiangGuo.add(id); }
+            else {
+              try { showToast(tOr('aiq.newCard', '有新的决策卡，请查看输入框上方')); } catch { /* noop */ }
+            }
+          })();
         }
         host.querySelectorAll('[data-aiq]').forEach((b) => {
           b.onclick = async () => {
@@ -4218,12 +4347,8 @@
             <datalist id="iThinkTicks">${THINK_STOPS.map((_, i) => `<option value="${i}"></option>`).join('')}</datalist>
           </div>
 
-          <!-- 决策模型：所有已添加模型的**决策/路由调用链**（第一个=默认；可上移/下移/禁用） -->
-          <div class="modelZiXiang">
-            <h4>${escapeHtml(tOr('model.fenLei', '决策模型'))}</h4>
-            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.fenLeiHint', '决策/路由用的模型调用链：意图识别、消息路由、裁判/审批。第一个即默认；可上移/下移/禁用。'))}</div>
-            <div id="iFenLei"></div>
-          </div>
+          <!-- 分类/决策模型：**已从牛马管理局移除**（产品要求：用不到，只保留「设置 → 模型」里那一份全局的） -->
+
           <!-- 子项 4：小弟数量（派生小弟的上限；默认自适应） -->
           <div class="modelZiXiang">
             <h4>${escapeHtml(tOr('model.xiaoDi', '小弟数量'))}</h4>
@@ -4269,6 +4394,7 @@
         if (instanceToggleBusy) return;
         instanceToggleBusy = true;
         const yuanWenBen = toggleBtn.textContent;
+        const kaiShi = Date.now();
         toggleBtn.disabled = true;
         toggleBtn.textContent = tOr('common.loading', '处理中…');
         try {
@@ -4309,6 +4435,12 @@
             const live = (arr || []).find((x) => x && (x.id === inst.id || x.ming === inst.ming || x.name === inst.name));
             if (live && live.status) inst.status = live.status;
           } catch { /* 读不到就用刚才的乐观值 */ }
+          /**
+           * **「进行中」最短可见 300ms**：动作太快时按钮一闪就恢复，
+           * 用户（和自动化验收）根本来不及看到反馈（真事故：偶发地"点了没反应"）。
+           */
+          const yongShi = Date.now() - kaiShi;
+          if (yongShi < 300) await new Promise((r) => setTimeout(r, 300 - yongShi));
           instanceToggleBusy = false;
           if (toggleBtn.isConnected) { toggleBtn.disabled = false; toggleBtn.textContent = yuanWenBen; }
           renderInstanceDetail();
@@ -4492,43 +4624,7 @@
       renderDefaultOptions();
       renderChain();
 
-      // 决策模型链：第一个未禁用 = 默认；上移/下移/禁用
-      function renderFenLei() {
-        const he = $('iFenLei');
-        if (!he) return;
-        if (!inst2.fenLeiChain || !inst2.fenLeiChain.length) inst2.fenLeiChain = [...(inst2.availableModels || [])];
-        if (!inst2.fenLeiDisabled) inst2.fenLeiDisabled = [];
-        const lian = inst2.fenLeiChain;
-        const dis = inst2.fenLeiDisabled;
-        const moRen = lian.find((m) => !dis.includes(m)) || '';
-        he.innerHTML = lian.map((m, i) =>
-          '<div class="shiLiHang" style="margin:4px 0' + (dis.includes(m) ? ';opacity:.5' : '') + '">' +
-          '<span style="flex:1' + (dis.includes(m) ? ';text-decoration:line-through' : '') + '">' + escapeHtml(m) +
-          (m === moRen ? ' <span class="moRenBiaoQian">' + escapeHtml(tOr('model.default', '默认模型')) + '</span>' : '') + '</span>' +
-          '<button class="anNiuXiao" data-fl-up="' + i + '"' + (i === 0 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveUp')) + '</button>' +
-          '<button class="anNiuXiao" data-fl-dn="' + i + '"' + (i === lian.length - 1 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveDown')) + '</button>' +
-          '<button class="anNiuXiao" data-fl-tg="' + i + '">' + escapeHtml(dis.includes(m) ? tOr('model.enable', '启用') : tOr('model.disable', '禁用')) + '</button>' +
-          '</div>'
-        ).join('') || '<div class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</div>';
-        he.querySelectorAll('[data-fl-up]').forEach((b) => {
-          b.onclick = () => { const i = +b.dataset.flUp; if (i <= 0) return; const t0 = lian[i - 1]; lian[i - 1] = lian[i]; lian[i] = t0; saveInst(); renderFenLei(); };
-        });
-        he.querySelectorAll('[data-fl-dn]').forEach((b) => {
-          b.onclick = () => { const i = +b.dataset.flDn; if (i >= lian.length - 1) return; const t0 = lian[i + 1]; lian[i + 1] = lian[i]; lian[i] = t0; saveInst(); renderFenLei(); };
-        });
-        he.querySelectorAll('[data-fl-tg]').forEach((b) => {
-          b.onclick = () => {
-            const i = +b.dataset.flTg;
-            const m = lian[i];
-            if (!m) return;
-            const dis2 = new Set(inst2.fenLeiDisabled || []);
-            if (dis2.has(m)) dis2.delete(m); else dis2.add(m);
-            inst2.fenLeiDisabled = [...dis2];
-            saveInst(); renderFenLei();
-          };
-        });
-      }
-      renderFenLei();
+      // 分类/决策模型链已从「牛马管理局 → 管理模型」移除（用不到；全局那份在「设置 → 模型」里）
 
       // 智能模式：勾上 = 系统自动安排调用链（收起模型列表）；取消 = 手动列出来（第一个未禁用 = 默认模型）
       const smartChk = $('iSmartMoXing');
@@ -6322,7 +6418,8 @@
               : (k === 'fenLei' && Array.isArray(sm.fenLeiChain) ? sm.fenLeiChain.slice() : []);
             const d = Array.isArray(sm[k + 'Disabled']) ? sm[k + 'Disabled'].slice()
               : (k === 'fenLei' && Array.isArray(sm.fenLeiDisabled) ? sm.fenLeiDisabled.slice() : []);
-            SM_LIAN_DATA[k] = { chain: c, disabled: d };
+            const mg = Array.isArray(sm[k + 'Manual']) ? sm[k + 'Manual'].slice() : [];
+            SM_LIAN_DATA[k] = { chain: c, disabled: d, manual: mg };
           }
         } catch {
           for (const k of SM_LIAN_JI) SM_LIAN_DATA[k] = { chain: [], disabled: [] };
@@ -6375,7 +6472,14 @@
               return out;
             })()).filter(chun);
         // 链 = 已保存顺序里仍存在的项 + 新出现的项（追加在末尾）
-        const saved = st.chain.filter((m) => ids.includes(m));
+        /**
+         * **手动添加的模型必须留在链上**（真事故：点了「手动添加」却看不到 ——
+         * 因为重绘时 `saved` 只保留能过 `chun()` 能力过滤的项，人工加进来的又被踢掉了）。
+         * 产品语义：自动识别只是**建议**，用户手动放进来的以用户为准。
+         */
+        if (!st.manual) st.manual = [];
+        const shouLiu = (m) => ids.includes(m) || st.manual.includes(m);
+        const saved = st.chain.filter(shouLiu);
         const news = ids.filter((m) => !saved.includes(m));
         st.chain = [...saved, ...news];
         st.disabled = st.disabled.filter((m) => st.chain.includes(m));
@@ -6415,10 +6519,48 @@
           '</div>'
           );
         }).join('') || '<div class="jingYin">' + escapeHtml(tOr('model.lianKong', '没有支持该用途的模型（拉取模型后会自动识别）')) + '</div>';
+        /**
+         * **手动添加**（产品要求）：下拉里列出**所有已拉取到的模型**（不按能力过滤 ——
+         * 自动识别不准时，用户可以自己把模型加进这条链），点「手动添加」就入链。
+         */
+        {
+          const quanBu = [];
+          for (const p of (state.providers || [])) {
+            (p.models || []).forEach((m) => {
+              const id = String(typeof m === 'string' ? m : (m.id || m.name || ''));
+              if (id && !quanBu.includes(id)) quanBu.push(id);
+            });
+          }
+          he.insertAdjacentHTML('beforeend',
+            '<div class="smShouDong">' +
+            '<select class="moXingShu" data-sml-sel="' + escapeHtml(key) + '">' +
+            (quanBu.length
+              ? quanBu.map((m) => '<option value="' + escapeHtml(m) + '"' + (st.chain.includes(m) ? ' disabled' : '') + '>' + escapeHtml(m) + (st.chain.includes(m) ? '（已在链上）' : '') + '</option>').join('')
+              : '<option value="">' + escapeHtml(tOr('model.noModels', '还没有拉取到模型')) + '</option>') +
+            '</select>' +
+            '<button class="anNiuXiao" data-sml-add="' + escapeHtml(key) + '">' + escapeHtml(tOr('model.addManually', '手动添加')) + '</button>' +
+            '</div>');
+        }
         const fen = (b, cha) => {
           const [k, iS] = String(b.getAttribute(cha) || '').split('|');
           return { k, i: Number(iS) };
         };
+        he.querySelectorAll('[data-sml-add]').forEach((b) => {
+          b.onclick = () => {
+            const k = String(b.getAttribute('data-sml-add') || '');
+            const sel = he.querySelector('select[data-sml-sel="' + k + '"]');
+            const m = String((sel && sel.value) || '').trim();
+            const s2 = SM_LIAN_DATA[k];
+            if (!m || !s2) return;
+            if (s2.chain.includes(m)) { showToast(tOr('model.alreadyInChain', '这个模型已经在链上了')); return; }
+            s2.chain.push(m);
+            // 记进 manual：重绘时**不再被能力过滤踢掉**（用户手动放的，以用户为准）
+            if (!s2.manual) s2.manual = [];
+            if (!s2.manual.includes(m)) s2.manual.push(m);
+            renderSmLian(k, ids);
+            showToast(tOr('model.addedToChain', '已加入调用链') + '：' + m);
+          };
+        });
         he.querySelectorAll('[data-sml-top]').forEach((b) => {
           b.onclick = () => {
             const { k, i } = fen(b, 'data-sml-top');
@@ -6936,6 +7078,7 @@
           const st = SM_LIAN_DATA[k] || { chain: [], disabled: [] };
           lian[k + 'Chain'] = st.chain.slice();
           lian[k + 'Disabled'] = st.disabled.slice();
+          lian[k + 'Manual'] = (st.manual || []).slice();
         }
         // 说话模型专属参数：默认取链上第一个未禁用的 tts 模型的设置
         const ttsParams = SM_LIAN_DATA.ttsParams || {};
@@ -7382,8 +7525,7 @@
       const GONGYING_YUSHE = [
         { id: 'deepseek', biaoQian: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com/v1' },
         { id: 'mimo', biaoQian: 'MiMo（小米）', protocol: 'openai-compatible', baseURL: 'https://api.xiaomimimo.com/v1' },
-        { id: 'mimo-local', biaoQian: 'MiMo（自定义地区）', protocol: 'openai-compatible', baseURL: '' },
-        { id: 'openai', biaoQian: t('settings.provider.openai'), protocol: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
+          { id: 'openai', biaoQian: t('settings.provider.openai'), protocol: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
         { id: 'moonshot', biaoQian: t('settings.provider.moonshot'), protocol: 'openai-compatible', baseURL: 'https://api.moonshot.cn/v1' },
         { id: 'zhipu', biaoQian: t('settings.provider.zhipu'), protocol: 'openai-compatible', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
         { id: 'dashscope', biaoQian: t('settings.provider.dashscope'), protocol: 'openai-compatible', baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
@@ -16095,6 +16237,19 @@
       } catch { /* noop */ }
     });
     /**
+     * **自动续派期间动态小字要一直亮着**（真事故：主轮 `deliver` 收尾把小字关了，
+     * 而续派还在跑 ⇒ 界面像"已经结束"，其实 AI 还在干活）。
+     * 主进程在每一轮续派前后各广播一次，这里跟着开/关。
+     */
+    window.warmy.onYunXingZhuangTai?.((d) => {
+      try {
+        const sid = String((d && d.sessionId) || '');
+        if (!sid) return;
+        if (d.kai) yunXingZhuangTaiKai(sid);
+        else yunXingZhuangTaiGuan(true, sid);
+      } catch { /* noop */ }
+    });
+    /**
      * **流式增量**：思考过程与正文**边出边显示**（产品要求）。
      * 形态：聊天末尾一条"正在进行"的气泡，思考块**默认展开**；等正式回复到了
      * （`tuisongXiaoxi`）就把它收走，正式那条里的思考块**自动折叠**。
@@ -16123,14 +16278,28 @@
        */
       try {
         const id = String((d && (d.id || d.question && d.question.id)) || '');
+        /**
+         * **只有真的播出去才算响过**（真事故：旧实现把 id 记进账本后再播，
+         * 播失败也"算响过" ⇒ `renderAiQuestions` 不再补播 ⇒ 首张卡永远没声音）。
+         * 现在：播放失败就不记账，交给下一次 `renderAiQuestions`/手势补播。
+         */
+        const bo = async () => {
+          const ok = await chuanBoYinXiao('request');
+          if (ok === false) {
+            try { showToast(tOr('aiq.newCard', '有新的决策卡，请查看输入框上方')); } catch { /* noop */ }
+            return false;
+          }
+          return true;
+        };
         if (id) {
           yiJingXiangGuo = yiJingXiangGuo || new Set();
           if (!yiJingXiangGuo.has(id)) {
-            yiJingXiangGuo.add(id);
-            void chuanBoYinXiao('request');
+            void bo().then((ok) => {
+              if (ok) yiJingXiangGuo.add(id);
+            });
           }
         } else {
-          void chuanBoYinXiao('request');
+          void bo();
         }
       } catch { /* noop */ }
       try { void renderAiQuestions(); } catch { /* noop */ }

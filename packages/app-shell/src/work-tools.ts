@@ -546,6 +546,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'ask_user', 'plan_update', 'plan_verify',
   'run_shell', 'find_skill', 'install_skill', 'check_safety', 'read_docx', 'read_pptx', 'fetch_url', 'download_file',
+  'get_time', 'wait_seconds',
 ] as const;
 export function isHostTool(name: unknown): boolean {
   return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
@@ -574,6 +575,29 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
         name: 'open_url',
         description: '用系统默认浏览器打开一个网页（只接受 http/https）。',
         parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_time',
+        description: '**感知时间**：返回本机当前时间（含时区）与联网时间（NTP/HTTP）。'
+          + '凡是需要"等一会儿/过 30 秒/到几点"这类时间判断时，**必须先调用它**拿真实时刻，不要凭感觉估。'
+          + '返回里 `local` 是本机时间、`network` 是联网时间、`driftMs` 是两者之差（毫秒）。',
+        parameters: { type: 'object', properties: {}, required: [] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'wait_seconds',
+        description: '**真正等待 N 秒**（跨平台可靠；别用 run_shell 的 sleep，Windows 上没有）。'
+          + '参数 `seconds`（0.5–600）。返回实际等待的毫秒数，可用来确认真的等满了。',
+        parameters: {
+          type: 'object',
+          properties: { seconds: { type: 'number', description: '要等待的秒数（0.5–600）' } },
+          required: ['seconds'],
+        },
       },
     },
     {

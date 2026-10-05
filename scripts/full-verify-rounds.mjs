@@ -56,6 +56,10 @@ const GATES_FAST = [
   E('verify-planD.mjs'),
   E('verify-summary-quality.mjs'),
   E('verify-warmy-features.mjs'),
+  E('verify-css-consistency.mjs'),
+  E('verify-features-99.mjs'),
+  E('verify-nm-format.mjs'),
+  E('verify-tasks-666.mjs'),
 ];
 
 /** Electron 类门禁（真启动应用 + CDP，慢） */
@@ -309,7 +313,9 @@ function unitChecks() {
   if (!/y > 0\.82/.test(appJs) || !/return '#3d3d3d'/.test(appJs)) fails.push('contrast: 仍只有黑白两档');
   // ── 本轮（第四批）专项 ──
   // 1) 决策模型（模型选项卡内，独立调用链；UI 叫「决策模型」，内部键 fenLei*）
-  if (!appJs.includes('iFenLei') || !appJs.includes('fenLeiChain')) fails.push('fenLei: 决策模型链缺失');
+  // 分类/决策模型：**牛马局里那份已按产品要求移除**（用不到）；全局那份在「设置 → 模型」里，必须还在
+  if (!appJs.includes('smFenLei') || !appJs.includes('fenLeiChain')) fails.push('fenLei: 全局分类模型链缺失');
+  if (appJs.includes('id="iFenLei"')) fails.push('fenLei: 牛马局里那份不该还在（产品要求已删）');
   if (!appJs.includes("tOr('settings.modelOptions'")) fails.push('fenLei: 特殊模型未改名「模型选项」');
   // 3) 截图遮罩取图顺序（先 __setCap 再注入）
   if (!emTs.includes('__setCap') || !emTs.includes('jieTuKaiShi')) fails.push('shot: 遮罩取图顺序/入口不对');

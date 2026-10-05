@@ -2115,7 +2115,7 @@
   "chat.inputCleared": "Input cleared",
   "settings.modelsFetched": "Fetched",
   "settings.modelsUnit": "models",
-  "model.xiaoDiNow": "Current: ",
+  "model.xiaoDiNow": "Current:",
   "chat.queueUp": "Move up",
   "chat.queueDown": "Move down",
   "settings.modelOptions": "模型选项",
@@ -2149,5 +2149,11 @@
   "model.moveTop": "置顶",
   "dashboard.usage": "使用量",
   "dashboard.tokens": "词元",
-  "dashboard.noUsage": "还没有用量记录（发一轮对话后就有了）"
+  "dashboard.noUsage": "还没有用量记录（发一轮对话后就有了）",
+  "model.addManually": "手动添加",
+  "model.noModels": "还没有拉取到模型",
+  "model.alreadyInChain": "这个模型已经在链上了",
+  "model.addedToChain": "已加入调用链",
+  "aiq.newCard": "有新的决策卡，请查看输入框上方",
+  "llm.timeLine": "当前时间是 {time}（时区 {tz}，时间戳 {epoch}）。需要精确时刻或联网时间时调用 get_time 工具；做\"等待 N 秒\"这类事请按时间戳算差值，不要凭感觉。"
 }

@@ -137,7 +137,7 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
   { shi: /^deepseek-coder/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
   // Qwen-VL / 多模态
   { shi: /qwen.*vl|qwen-vl|qwen2\.?5-vl|qwen3-vl/i, neng: { vision: true, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
-  { shi: /^qwen3/i, neng: { vision: false, thinking: true, tools: true, thinkLevels: ['low', 'medium', 'high'], kind: 'chat' } },
+  { shi: /^qwen3/i, neng: { vision: 'unknown', thinking: true, tools: true, thinkLevels: ['low', 'medium', 'high'], kind: 'chat' } },
   // GPT
   { shi: /^gpt-4o|^gpt-4\.1|^gpt-5|gpt-4o-mini/i, neng: { vision: true, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
   { shi: /^o[134](-|$)/i, neng: { vision: true, thinking: true, tools: true, thinkLevels: ['low', 'medium', 'high'], kind: 'chat' } },
@@ -316,8 +316,15 @@ export function moXingNengLi(modelId: string, duanDian?: Partial<MoXingNengLi> |
   const src: MoXingNengLi['source'] = dd && (dd.vision !== undefined || dd.thinking !== undefined || (dd.thinkLevels && dd.thinkLevels.length))
     ? 'endpoint'
     : (biao ? 'table' : 'unknown');
-  // 端点字段覆盖表；端点没给的用表补；都没有 ⇒ unknown
-  const q = <T,>(a: T | undefined, b: T | undefined, ren: T): T => (a !== undefined ? a : (b !== undefined ? b : ren));
+  /**
+   * 端点回 **`'unknown'` 等于「它也不知道」**，不能拿它盖掉已知表里明确的 true/false
+   * （真事故：Ollama 查不到能力 ⇒ 回 unknown ⇒ 把表里 qwen-vl 的 vision:true 盖掉了）。
+   */
+  const qBuZhi = (a: boolean | 'unknown' | undefined, b: boolean | 'unknown' | undefined): boolean | 'unknown' => {
+    if (a !== undefined && a !== 'unknown') return a;
+    if (b !== undefined && b !== 'unknown') return b;
+    return a !== undefined ? a : (b !== undefined ? b : 'unknown');
+  };
   // 种类：端点 > 已知表 > 按型号名猜
   const kindDd = (dd as { kind?: MoXingNengLi['kind'] } | null)?.kind;
   const kindBiao = (biao as { kind?: MoXingNengLi['kind'] } | null)?.kind;
@@ -325,10 +332,10 @@ export function moXingNengLi(modelId: string, duanDian?: Partial<MoXingNengLi> |
   // 上下文长度：端点 > 已知表（表里没写就 0）
   const ctx = Number((dd as { contextLen?: number } | null)?.contextLen || (biao as { contextLen?: number } | null)?.contextLen || 0);
   return {
-    vision: q(dd?.vision, biao?.vision, 'unknown'),
-    thinking: q(dd?.thinking, biao?.thinking, 'unknown'),
+    vision: qBuZhi(dd?.vision, biao?.vision),
+    thinking: qBuZhi(dd?.thinking, biao?.thinking),
     thinkLevels: paiXuDangWei(dd?.thinkLevels && dd.thinkLevels.length ? dd.thinkLevels : (biao?.thinkLevels || [])),
-    tools: q(dd?.tools, biao?.tools, 'unknown'),
+    tools: qBuZhi(dd?.tools, biao?.tools),
     kind,
     contextLen: Number.isFinite(ctx) && ctx > 0 ? Math.floor(ctx) : 0,
     ...(dd?.speakers?.length ? { speakers: dd.speakers } : (biao?.speakers?.length ? { speakers: biao.speakers } : {})),

@@ -34,6 +34,11 @@ export interface LogEntry {
   system?: boolean;
   /** 本轮实际用的模型名（牛马回复下方第一行显示；不进模型上下文） */
   moXing?: string;
+  /**
+   * **内部指令**（自动续派的「继续执行计划」等）：**进模型上下文，但不出现在聊天记录里**。
+   * 真事故：用户看到聊天里冒出一段自己没说过的话。
+   */
+  hidden?: boolean;
 }
 
 export interface XuanranXuanxiang {
@@ -464,6 +469,29 @@ export function xuanranYoujieShitu(entries: LogEntry[], opts: XuanranXuanxiang):
   if (viewBytes > budgetChars) {
     xiaoXiJi = yingQianzhi(xiaoXiJi, budgetChars);
     viewBytes = countChars(xiaoXiJi);
+  }
+
+  /**
+   * ── 4. **绝不给空视图**（产品不变量）────────────────────────────
+   * 真事故：预算缩到最小值时，视图把 6 条历史**全省略**，只剩一根指针 ⇒
+   * 模型回答"这是咱们对话的第一条消息"（用户说它"不记得之前的聊天"）。
+   *
+   * 规则：只要日志里有内容，视图**至少**要把最后一条真实消息带给模型
+   * （截断到预算内），宁可少给、不可不给。指针只是补充，不能当唯一内容。
+   */
+  if (log.length > 0) {
+    const zhenShi = xiaoXiJi.filter((m) => m.role === 'user' || m.role === 'assistant');
+    if (zhenShi.length === 0) {
+      const zuiHou = log[n - 1]!;
+      const rong = budgetChars >= 40 ? jieWeiAnQuan(String(zuiHou.content || ''), Math.min(budgetChars - 20, 2000)) : String(zuiHou.content || '').slice(0, 20);
+      if (rong) {
+        xiaoXiJi = [
+          { role: String(zuiHou.role || 'user'), content: rong },
+          ...xiaoXiJi,
+        ].slice(0, 4);
+        viewBytes = countChars(xiaoXiJi);
+      }
+    }
   }
 
   return { xiaoXiJi, elided, stats: mkStats(viewBytes, pointers) };

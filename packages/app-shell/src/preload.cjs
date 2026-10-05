@@ -277,6 +277,12 @@ contextBridge.exposeInMainWorld('warmy', {
     ipcRenderer.on('warmy:suiXingPianDuan', h);
     return () => ipcRenderer.removeListener('warmy:suiXingPianDuan', h);
   },
+  /** 自动续派期间的「进行中」状态：主进程告诉界面"还在干活"，动态小字别提前收 */
+  onYunXingZhuangTai: (cb) => {
+    const h = (_e, d) => cb(d);
+    ipcRenderer.on('warmy:yunXingZhuangTai', h);
+    return () => ipcRenderer.removeListener('warmy:yunXingZhuangTai', h);
+  },
   onSettingsChanged: (cb) => {
     const h = (_e, d) => cb(d);
     ipcRenderer.on('warmy:peiZhiChanged', h);

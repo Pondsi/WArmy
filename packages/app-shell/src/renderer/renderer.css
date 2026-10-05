@@ -383,8 +383,11 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
   width: 36px; height: 36px; border-radius: 6px; background: var(--line);
   display: grid; place-items: center; color: var(--muted); font-size: var(--fs-sm); flex-shrink: 0;
 }
+/* ⚠️ 本文件**后加载**于 app.css ⇒ 同名规则以这里为准。
+ * 气泡宽度曾经在这里写死 `max-width: 70%`，把 app.css 里的宽版盖掉
+ * （真事故：用户连着三轮说"对话宽度还是太短"）。宽度由 .bubbleWrap 统一约束。 */
 .bubble {
-  max-width: 70%;
+  max-width: 100%;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--them-bubble);
@@ -414,7 +417,9 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 .siKaoKuai summary { cursor: pointer; user-select: none; }
 .siKaoKuai pre {
   margin: 6px 0 4px; white-space: pre-wrap; word-break: break-word;
-  max-height: 220px; overflow: auto; font-size: 11px; line-height: 1.5;
+  /* 思考内容要能**自由滚动**（产品要求）：给足高度，超出出滚动条 */
+  max-height: 42vh; overflow: auto; overscroll-behavior: contain;
+  font-size: 11px; line-height: 1.5;
 }
 .moRenBiaoQian {
   display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
@@ -1903,12 +1908,18 @@ body.liaoTianChuangKou #appTi {
 #quanPingQuSeCeng img { pointer-events: auto; }
 
 
-/* 首启引导条（非阻塞，页内教练标记） */
+/* 首启引导条（非阻塞，页内教练标记）
+ * ⚠️ app.css 里有一份同名规则，且 index.html 里**本文件后加载** ⇒ 这里才是生效的那份。
+ * 两边的 top/bottom/height 必须一致：曾经一份写 top:50%、另一份写 bottom:24px，
+ * 两个同时生效 ⇒ 卡片被从屏幕中拉到右下，**又高又空一大块**（真事故）。 */
 .yinDaoTiao {
-  /* 右侧竖排：贴右缘、垂直居中，不遮挡聊天与列表 */
-  position: fixed; right: 16px; top: 50%; transform: translateY(-50%);
-  z-index: 9000; width: min(320px, calc(100vw - 32px));
-  max-height: calc(100vh - 40px); overflow: auto;
+  /* 主界面右下角：尺寸**按内容收**，不许拉伸 */
+  position: fixed; right: 16px; bottom: 16px; top: auto; left: auto;
+  height: auto;
+  z-index: 9000;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 48px));
+  overflow: auto;
   background: var(--card, #fff); color: var(--ink, #111);
   border: 1px solid var(--line, #ddd); border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 12px 14px;
@@ -2001,8 +2012,12 @@ body.liaoTianChuangKou #appTi {
   transition: outline .2s, box-shadow .2s;
 }
 
-/* 聊天气泡：名称 + 气泡包一层（群聊/项目显示发言者名称，微信样式） */
-.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; }
+/* 聊天气泡：名称 + 气泡包一层（群聊/项目显示发言者名称，微信样式）
+ * 宽度上限在这条**高特异性**规则上给（它会盖掉 app.css 的 .bubbleWrap） */
+.xiaoXi .bubbleWrap {
+  display: flex; flex-direction: column; min-width: 0;
+  max-width: 94%;
+}
 .xiaoXiMing { font-size: 11px; opacity: .65; margin-bottom: 2px; padding-left: 2px; }
 .xiaoXi .touXiangTuPian { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
 /* 供应商密钥：输入框 + 眼睛 */

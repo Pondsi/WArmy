@@ -486,9 +486,15 @@ body.liaoTianChuangKou .liaoTianBuJu {
   color: var(--muted); background: color-mix(in srgb, var(--card) 70%, transparent);
 }
 .siKaoKuai summary { cursor: pointer; user-select: none; }
+/* 思考内容**可以自由滚动**（产品要求）：高度给足一点，超出出滚动条 */
 .siKaoKuai pre {
   margin: 6px 0 4px; white-space: pre-wrap; word-break: break-word;
-  max-height: 220px; overflow: auto; font-size: 11px; line-height: 1.5;
+  max-height: 42vh; overflow: auto; font-size: 11px; line-height: 1.5;
+  overscroll-behavior: contain;
+}
+/* 流式中的思考块：同一套滚动规则（用户手动滚上去就别自动拽到底） */
+.liuShiKuai .siKaoKuai pre.liuShiSiKao {
+  max-height: 42vh; overflow: auto; overscroll-behavior: contain;
 }
 /* 调用链里「默认模型」标签 */
 .moRenBiaoQian {
@@ -571,14 +577,14 @@ body.liaoTianChuangKou .liaoTianBuJu {
 }
 .shuRuQuZuo { display: flex; align-items: center; gap: 4px; }
 .anNiuTuBiao {
-  width: 30px; height: 30px;
+  width: 36px; height: 36px;
   border: none; border-radius: 6px;
   background: transparent; color: var(--muted);
   cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
   transition: background 0.12s, color 0.12s;
 }
 .anNiuTuBiao:hover { background: var(--hover); color: var(--ink); }
-.anNiuTuBiao .ico { width: 19px; height: 19px; fill: currentColor; }
+.anNiuTuBiao .ico { width: 22px; height: 22px; fill: currentColor; }
 /* 语音输入「正在听写」：点亮 + 呼吸，一眼看出还在录 */
 .anNiuTuBiao.jiLuZhong {
   background: var(--accent); color: var(--accent-ink, #fff);
@@ -672,7 +678,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
   font-size: 12px; line-height: 1.4; white-space: pre-wrap;
 }
 .kongZhiTaiTiaoZhengTiao {
-  width: 100%; height: 10px; cursor: row-resize;
+  width: 100%; height: 6px; cursor: row-resize;
   background: transparent; flex-shrink: 0; margin: 0;
 }
 .kongZhiTaiTiaoZhengTiao:hover { background: var(--accent); opacity: .4; }
@@ -723,7 +729,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
   cursor: default; filter: none;
 }
 #shuRuDingTiaoZhengTiao {
-  display: block; height: 10px; cursor: row-resize;
+  display: block; height: 6px; cursor: row-resize;
   background: transparent; flex-shrink: 0;
 }
 #shuRuDingTiaoZhengTiao:hover { background: var(--accent); opacity: .35; }
@@ -1948,7 +1954,7 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 }
 
 /* 隐私政策：分节渲染 */
-.yinSiShiTu { max-height: 300px; overflow: auto; }
+.yinSiShiTu { max-height: 220px; overflow: auto; }
 .yinSiShiTu .pvSec { margin: 0 0 10px; }
 .yinSiShiTu .pvSec h4 {
   margin: 0 0 3px; font-size: 13px; font-weight: 600; color: var(--ink);
@@ -2422,12 +2428,18 @@ body.liaoTianChuangKou #appTi {
 #quanPingQuSeCeng img { pointer-events: auto; }
 
 
-/* 首启引导条（非阻塞，页内教练标记） */
+/* 首启引导条（非阻塞，页内教练标记）
+ * ⚠️ **renderer.css 里也有一份同名规则，而且它后加载 ⇒ 那份才是生效的**。
+ * 这里必须与 renderer.css **逐字一致**：曾经一份 top:50%、另一份 bottom:24px，
+ * 两个同时生效 ⇒ 卡片被从屏幕中拉到右下，又高又空一大块（真事故）。 */
 .yinDaoTiao {
-  /* 首次出现：**贴右下角**（产品要求；以前是右侧垂直居中，挡聊天） */
-  position: fixed; right: 16px; bottom: 24px; top: auto;
-  z-index: 9000; width: min(320px, calc(100vw - 32px));
-  max-height: calc(100vh - 40px); overflow: auto;
+  /* 主界面右下角：尺寸**按内容收**，不许拉伸 */
+  position: fixed; right: 16px; bottom: 16px; top: auto; left: auto;
+  height: auto;
+  z-index: 9000;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 48px));
+  overflow: auto;
   background: var(--card, #fff); color: var(--ink, #111);
   border: 1px solid var(--line, #ddd); border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 12px 14px;
@@ -2473,7 +2485,7 @@ body.liaoTianChuangKou #appTi {
 }
 
 /* 聊天气泡：名称 + 气泡包一层（群聊/项目显示发言者名称，微信样式） */
-.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; }
+.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; max-width: 94%; }
 .xiaoXiMing { font-size: 11px; opacity: .65; margin-bottom: 2px; padding-left: 2px; }
 .xiaoXi .touXiangTuPian { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
 /* ── 拉取模型：进行中的动画（至少 1.7s，直到完成/报错）── */
@@ -2620,8 +2632,10 @@ html { font-weight: var(--fw-ui, 400); }
 .jiHuaBu[data-st="doing"] { border-left-color: var(--warn-fg, #e8c07a); }
 
 /* 消息排版（微信式）：气泡自适应宽度、文字自然换行；复制钮在气泡右下角，悬停时其左侧露出时间 */
-/* 微信式排版：气泡区占满行宽、留出左右边距；气泡最宽 78%（微信约 70-75%） */
-.bubbleWrap { display: flex; flex-direction: column; min-width: 0; max-width: 78%; align-items: flex-start; flex: 0 1 auto; }
+/* 微信/QQ 式排版：气泡尽量宽。
+ * ⚠️ renderer.css 里也有 `.xiaoXi .bubbleWrap`（更高特异性、且后加载）——
+ * 两边必须写同一个 max-width，否则这里改了不生效（真事故：连改三轮用户仍说"太窄"）。 */
+.bubbleWrap { display: flex; flex-direction: column; min-width: 0; max-width: 94%; align-items: flex-start; flex: 0 1 auto; }
 .xiaoXi.wo .bubbleWrap { align-items: flex-end; }
 /* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
 .zhuDongShiJian {
@@ -2690,7 +2704,6 @@ html { font-weight: var(--fw-ui, 400); }
   opacity: .45; cursor: not-allowed; filter: grayscale(1);
 }
 /* 流式「正在进行」的气泡：思考块默认展开、正文逐步追加 */
-.liuShiKuai .siKaoKuai pre.liuShiSiKao { max-height: 260px; overflow: auto; }
 .liuShiKuai .liuShiZhengWen { opacity: .92; }
 .liuShiKuai { opacity: .96; }
 
@@ -2737,6 +2750,9 @@ html { font-weight: var(--fw-ui, 400); }
 .moXingZhuanShu label { display: inline-flex; align-items: center; gap: 4px; }
 .moXingZhuanShu input[type=range] { width: 90px; }
 .moXingShu { max-width: 120px; font-size: 11px; }
+/* 手动添加：下拉 + 添加按钮（每个调用链底部一行） */
+.smShouDong { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.smShouDong select { flex: 1; min-width: 160px; max-width: 280px; font-size: 11px; }
 
 /* 回复下方的模型名 + 时间/操作 行（模型名仅牛马回复；时间/复制/朗读两边都有）
  * 产品要求：两行一起悬停出现、不居中 —— 第一行模型名称（无「本轮模型」前缀），第二行时间+复制+朗读 */

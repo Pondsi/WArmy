@@ -755,7 +755,12 @@ function toolLimits(): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalCha
   const mei = Number(s?.contextToolResultChars);
   const total = Number(s?.contextToolTotalChars);
   return {
-    zuiDaLunShu: Number.isFinite(lunShu) ? Math.min(8, Math.max(0, Math.floor(lunShu))) : 3,
+    /**
+     * 轮数上限：**多任务必须能跑完**。真事故：默认 3 轮时
+     * 「生成 txt + 生成 ppt + 打开 + 等 30 秒 + 写 6000 字小说」跑到一半就
+     * `tingZhiYuanYin: 'max-rounds'`，任务直接停了。现在默认 12、最多 32。
+     */
+    zuiDaLunShu: Number.isFinite(lunShu) ? Math.min(32, Math.max(0, Math.floor(lunShu))) : 12,
     zuiDaJieGuoZiShu: Number.isFinite(mei) ? Math.min(8000, Math.max(200, Math.floor(mei))) : 4000,
     totalChars: Number.isFinite(total) ? Math.min(40000, Math.max(200, Math.floor(total))) : 12000,
   };
@@ -971,11 +976,23 @@ function baoZhuangLiuShi(
           if (Array.isArray(g)) {
             for (const c of g) {
               if (!c) continue;
-              gongJu.push({
-                id: String(c.id || `call-${gongJu.length}`),
-                type: 'function',
-                function: { name: String(c.function?.name || ''), arguments: String(c.function?.arguments || '{}') },
-              });
+              /**
+               * 同一个 id 可能拆成多帧（OpenAI 逐段发 `arguments`，Ollama 也一样）——
+               * **按 id 归并**，名字取第一个非空、参数**拼接**，不是"看见重名就丢掉"。
+               */
+              const id = String(c.id || `call-${gongJu.length}`);
+              const yiYou = gongJu.find((x) => x.id === id);
+              const arg = String(c.function?.arguments || '');
+              if (yiYou) {
+                yiYou.function.arguments = String(yiYou.function.arguments || '') + arg;
+                if (!yiYou.function.name && c.function?.name) yiYou.function.name = String(c.function.name);
+              } else {
+                gongJu.push({
+                  id,
+                  type: 'function',
+                  function: { name: String(c.function?.name || ''), arguments: arg },
+                });
+              }
             }
           }
           const fr = pian.choices?.[0]?.finishReason;
@@ -998,6 +1015,15 @@ function baoZhuangLiuShi(
             cacheMissTokens: Math.max(0, Math.round(ruZi / 3)),
             source: 'estimated',
           };
+        }
+        /**
+         * **兜底**：端点说 `tool_calls` 但我们一个工具都没解析出来
+         * （某个 provider 的流式解析漏了工具字段）⇒ 退回一次非流式对话把工具拿回来。
+         * 绝不能因为"想看流式"就把工具调用吃掉（真事故：界面变成纯文本对话）。
+         */
+        if (finishReason === 'tool_calls' && !gongJu.length) {
+          audit?.log('chat.stream-fallback-tools', { model });
+          return yuan.chat(Qiu, signal);
         }
         return {
           id: 'stream-' + Date.now(),
@@ -1254,6 +1280,46 @@ async function yunXingLiaoTianXunHuan(
                 }
               }
             }
+          } else if (gongJuMing === 'get_time') {
+            /**
+             * **感知时间**（产品要求）：本机时间 + 联网时间一起给，
+             * 并算出漂移。凡是"等一会儿/到几点"的判断都要先问它，别凭感觉估
+             * （真事故：模型说"30 秒只花了 115 毫秒"——它根本没有可信的时间源）。
+             */
+            const benDi = new Date();
+            let wangLuo = '';
+            let piaoYiMs: number | null = null;
+            try {
+              // HTTP Date 头是最轻的联网时间源；失败就如实说没有
+              const res = await fetch('https://www.baidu.com', { method: 'HEAD', signal: AbortSignal.timeout(4000) });
+              const h = res.headers.get('date');
+              if (h) {
+                wangLuo = new Date(h).toISOString();
+                const w = new Date(h).getTime();
+                if (Number.isFinite(w)) piaoYiMs = w - benDi.getTime();
+              }
+            } catch { /* 联网时间拿不到就如实留空 */ }
+            huiBaoH = JSON.stringify({
+              local: benDi.toISOString(),
+              localText: benDi.toLocaleString(),
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+              epochMs: benDi.getTime(),
+              network: wangLuo || null,
+              driftMs: piaoYiMs,
+              note: wangLuo
+                ? '本机与联网时间都给你了；需要等待/定时请用 epochMs 算差值，别凭感觉估。'
+                : '联网时间没拿到（断网或被拦）；请以 local/epochMs 为准。',
+            });
+          } else if (gongJuMing === 'wait_seconds') {
+            /**
+             * **真正等待 N 秒**（跨平台）。真事故：模型用 `run_shell` 跑 `sleep 30`，
+             * Windows 上没有 `sleep` ⇒ 秒回"30 秒到了（115 毫秒）"，任务被假完成。
+             */
+            const miao = Math.max(0.5, Math.min(600, Number(argsH.seconds) || 0));
+            const kai = Date.now();
+            await new Promise((r2) => setTimeout(r2, Math.round(miao * 1000)));
+            const shi = Date.now() - kai;
+            huiBaoH = JSON.stringify({ waitedMs: shi, requestedSeconds: miao, local: new Date().toISOString(), note: '已按请求等待；请用 waitedMs 确认真的等满了。' });
           } else if (gongJuMing === 'open_url') {
             const url = String(argsH.url || '').trim();
             if (!/^https?:\/\//i.test(url)) { okH = false; huiBaoH = '[open_url] 只接受 http/https 网址'; }
@@ -3877,6 +3943,8 @@ async function zhenZhengFaSong(
       insertMode?: 'outer' | 'inner';
       /** 附件（图片走多模态让模型**真的看到**；其它文件只带路径） */
       attachments?: Array<{ name?: string; path?: string; dataUrl?: string }>;
+      /** **内部指令**（自动续派等）：进模型上下文但**不出现在聊天记录**里 */
+      internal?: boolean;
     }
 ): Promise<{ ok: boolean; reply: string; [k: string]: unknown }> {
     const sessionId = xiaoXi.sessionId;
@@ -3945,6 +4013,11 @@ async function zhenZhengFaSong(
       content: yiYaSuo.content,
       recordId: userMemSeq !== undefined ? userRecordId : undefined,
       ts: Date.now(),
+      /**
+       * **内部指令不进聊天记录**（真事故：用户看到聊天里冒出一段自己没说过的话）。
+       * 自动续派的「继续执行计划…」只是给模型的工单，要进上下文、但界面不显示。
+       */
+      hidden: !!(xiaoXi as { internal?: boolean }).internal,
     });
 
     await baozhangGongyingshangMiyao();
@@ -4077,6 +4150,17 @@ async function zhenZhengFaSong(
            */
           if (yaoChangWen) {
             ju.push(tMain('llm.longForm', '用户要的是长文：请**完整写出**，不要提前收尾、不要省略、不要只给提纲或开头；篇幅按用户要求（如「N 字」）尽量写足，直到自然结束。'));
+          }
+          /**
+           * **时间感知**（产品要求）：每次请求都带上当前时刻，模型才知道"现在几点"、
+           * "过了多久"。需要更精确的时刻/联网时间时用 `get_time` 工具。
+           */
+          {
+            const xz = new Date();
+            ju.push(tMain('llm.timeLine', '当前时间是 {time}（时区 {tz}，时间戳 {epoch}）。需要精确时刻或联网时间时调用 get_time 工具；做"等待 N 秒"这类事请按时间戳算差值，不要凭感觉。')
+              .replace('{time}', xz.toLocaleString())
+              .replace('{tz}', Intl.DateTimeFormat().resolvedOptions().timeZone || 'local')
+              .replace('{epoch}', String(xz.getTime())));
           }
           /**
            * **加强 AI 语言约束**（设置 → 语言里那个勾）：思考过程与回复都严格用界面语言。
@@ -4277,13 +4361,17 @@ async function zhenZhengFaSong(
        * **多循环自动继续**：判据在 `yingGaiZiDongJiXu()` 里 ——
        *   · 计划里还有 `pending`/`doing`；**或**
        *   · 这一轮**零工具调用**却在"宣告下一步"（真机诊断出的正是这种"只说不做"）。
-       * 回包不等它，先返回给界面（续派的轮次会经日志广播实时出现）。
+       *
+       * ⚠️ **内部轮次（自动续派）不再自己再往下派** —— 否则会和 `yanXuJiHuaRenWu`
+       * 的递归**同时**各派一次（真事故：日志里同一指令出现两遍、模型收到两次同样的工单）。
+       * 续派的调度**只由 `yanXuJiHuaRenWu` 负责**。
        */
-      if (yingGaiZiDongJiXu(sessionId, xiaoXi as { content?: string }, { diaoYongJi: loop.gongJuDiaoYongJi, huiFu: reply }).jiXu) {
+      const shiNeiBu = !!(xiaoXi as { internal?: boolean }).internal;
+      if (!shiNeiBu && yingGaiZiDongJiXu(sessionId, xiaoXi as { content?: string }, { diaoYongJi: loop.gongJuDiaoYongJi, huiFu: reply }).jiXu) {
         setTimeout(() => {
           void yanXuJiHuaRenWu(sessionId, xiaoXi as never, { diaoYongJi: loop.gongJuDiaoYongJi, huiFu: reply });
         }, 250);
-      } else {
+      } else if (!shiNeiBu) {
         yanXuZhuangTai.delete(sessionId);
       }
       return {
@@ -4499,9 +4587,9 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
         yanXuZhuangTai.delete(sessionId);
         return;
       }
-      // 没卡死 ⇒ 预警点翻倍，继续跑
-      tai.ciYuJing *= 2;
-      tai.shiJianYuJing *= 2;
+      // 没卡死 ⇒ 预警点**固定加一档**（不是翻倍：翻倍会让后面越等越久）
+      tai.ciYuJing += YANXU_YUJING_CI;
+      tai.shiJianYuJing += YANXU_YUJING_SHIJIAN_MS;
       tai.kaiShi = Date.now();
       audit?.log('plan.warning-raised', { sessionId, ciYuJing: tai.ciYuJing, shiJianYuJingMin: Math.round(tai.shiJianYuJing / 60000), by: jie.by });
       zhuiJiaLiaoTianRiZhi(sessionId, {
@@ -4521,10 +4609,18 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
       ? tMain('llm.continueNoAction', '【继续执行】你上一条**只说了要做什么，没有真的调用工具**。请现在**直接调用工具**把它做掉，做完再简短汇报；不要说"接下来我会…"就停。')
       : tMain('llm.planContinue', '【继续执行计划】请接着完成下一步（用工具真的去干，不要只说要做）。完成后用 plan_verify 标记验证，再继续下一步。');
     audit?.log('plan.auto-continue', { sessionId, why: pan.liYou, step: xia ? xia.id : '', n: tai.yanXu });
+    /**
+     * **续派期间动态小字要一直亮着**（真事故：主轮 `deliver` 收尾把小字关了，
+     * 而续派还在跑 ⇒ 界面像"已经结束"，其实 AI 还在干活）。
+     */
+    try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: true, ts: Date.now() }); } catch { /* noop */ }
     const r = await zhenZhengFaSong(undefined, {
       ...xiaoXi,
+      /** 内部指令：进模型上下文，但**不出现在聊天记录**里 */
+      internal: true,
       content: zhiLing + (xia ? `\n\n【下一步】${xia.id} ${xia.title}` : '') + `\n\n【当前计划/进度】\n${qingDan}\n\n（这是系统自动接着派的一轮，不需要等我说话。）`,
     } as never);
+    try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
     if (!r || r.ok !== true) {
       zhuiJiaLiaoTianRiZhi(sessionId, {
         seq: xiaYiLiaoTianXuLie(),
