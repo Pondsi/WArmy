@@ -124,6 +124,8 @@ export interface LiaoTianPian {
     delta: LiaoTianPianZengLiang;
     finishReason: string | null;
   }>;
+  /** 流式里也可以带用量（Ollama 的 eval_count 等）；端点不给就没有 */
+  usage?: HuanCunYongLiang;
 }
 
 // ─────────────────────────────────────────────

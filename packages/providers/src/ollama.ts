@@ -204,6 +204,19 @@ export class OllamaGongYing extends JichuGongYing {
                 finishReason: j.done ? 'stop' : null,
               },
             ],
+            /**
+             * **最后一帧带上用量**（`prompt_eval_count` / `eval_count`）。
+             * 真事故：流式路径不吐用量 ⇒ 上层（流式包装）累加出来一直是 0 ⇒
+             * 总看板的「词元消耗」永远显示 0。
+             */
+            ...(j.done
+              ? {
+                  usage: guiFanYongLiang(
+                    { prompt_eval_count: j.prompt_eval_count, eval_count: j.eval_count },
+                    'ollama'
+                  ),
+                }
+              : {}),
           };
           if (j.done) return;
         } catch {

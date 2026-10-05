@@ -40,9 +40,18 @@
     gongZuoWenJian: [],
     gongZuoQuLuJing: '',
     jiHuaRenWu: [],
+    /**
+     * 未读数（微信式角标）：**每次新回复 +1**，直到用户点了这个聊天界面里的任何元素才清零
+     * （产品要求：即使当前正开着这个会话，角标也要显示）。
+     */
+    unread: {},
+    /** 被打断的任务（程序异常/退出/重启后恢复到的会话）：列表亮 ?，会话里给「继续/重试」 */
+    planInterrupted: new Set(),
     sound: { complete: true, request: true, error: true },
     soundVolume: 0.9,
     autoRead: false,
+    /** 加强 AI 语言约束：思考过程与回复严格用界面语言 */
+    strictAiLanguage: false,
     soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,
     theme: '#A78567',
@@ -762,7 +771,11 @@
       let u = yinXiaoHuanCun[k];
       if (!u) {
         const r = await window.warmy.yinXiaoQu?.({ kind: k });
-        if (!r || !r.ok || !r.dataUrl) return false;
+        if (!r || !r.ok || !r.dataUrl) {
+          // 音源都取不到也要**记账待补播**：下一次手势时再试一次（否则第一次就彻底没声音）
+          yinXiaoDaiBo = k;
+          return false;
+        }
         u = r.dataUrl;
         yinXiaoHuanCun[k] = u;
       }
@@ -1524,6 +1537,40 @@
   }
 
   /**
+   * 列表行上的提示（产品要求，本版定稿）：
+   *   · **第二行 = 最新的回复内容**（单行截断，绝不溢出）；
+   *   · **新回复数放在第二行内容前面**：`[3] 最新回复…`；没有新回复时是灰色的 `[无]`；
+   *   · 被打断的任务（`?`）照旧标在行上。
+   *
+   * 说明：上一版用的是右上角微信式小圆圈 —— 产品主改成"放第二行前面"，所以小圆圈撤掉，
+   * 计数改走行首前缀（同一个 `state.unread` 账本）。
+   */
+  function attachChatMarks(hangYuanSu, sid) {
+    if (!hangYuanSu || !sid) return hangYuanSu;
+    hangYuanSu.dataset.sid = String(sid);
+    hangYuanSu.querySelector('.weiDuJiaoBiao')?.remove();
+    hangYuanSu.querySelector('.renWuZhongDuanMark')?.remove();
+    const n = Number(state.unread[sid] || 0);
+    // 第二行：把"新回复数"作为前缀插到最新回复内容前面
+    const fu = hangYuanSu.querySelector('.fu');
+    if (fu) {
+      const wenBen = String(fu.textContent || '').trim();
+      const qianZhui = n > 0
+        ? '<span class="weiDuQianZhui">[' + (n > 99 ? '99+' : String(n)) + ']</span>'
+        : '<span class="weiDuQianZhui wu">[' + escapeHtml(tOr('list.none', '无')) + ']</span>';
+      fu.innerHTML = qianZhui + '<span class="fuWenBen" title="' + escapeHtml(wenBen) + '">' + escapeHtml(wenBen) + '</span>';
+    }
+    if (state.planInterrupted && state.planInterrupted.has(String(sid))) {
+      const q = document.createElement('span');
+      q.className = 'renWuZhongDuanMark';
+      q.textContent = '?';
+      q.title = escapeHtml(tOr('chat.resumeTaskHint', '上次的任务被打断了（程序异常/退出/重启）。点这里接着做。'));
+      hangYuanSu.appendChild(q);
+    }
+    return hangYuanSu;
+  }
+
+  /**
    * R12：停用（stopped）的牛马实例 → 整行灰 + 名字删除线（灰仍须可读，见 --ink-dim）。
    * R11 在成员列表里，列表行这里只处理实例自身的停用态。
    */
@@ -1620,12 +1667,10 @@
       }
       source.forEach((c) => {
         const inst = state.instances.find((x) => x.id === c.id);
-        const moXingMing = inst && inst.defaultModel && inst.defaultModel !== '__smart__'
-          ? inst.defaultModel
-          : (inst && inst.model) || '';
         const hangYuanSu = hang(
           c.name,
-          (moXingMing ? moXingMing + ' · ' : '') + (c.lastPreview || t('list.noReply')),
+          // 第二行 = **最新的回复内容**（产品要求；模型名不再挤在这一行）
+          (c.lastPreview || t('list.noReply')),
           c.name[0],
           () => openChat('single', c.id, xianShiMing(c)),
           state.selectedChat?.id === c.id,
@@ -1634,6 +1679,7 @@
         const menuInst = inst || { id: c.id, ming: c.name, status: 'stopped', notify: true };
         bindRowContext(hangYuanSu, () => agentMenu(menuInst, hangYuanSu));
         applyInstanceRowState(hangYuanSu, inst, 'single');
+        attachChatMarks(hangYuanSu, c.id);
         heZi.appendChild(hangYuanSu);
       });
       return;
@@ -1656,6 +1702,7 @@
         );
         bindRowContext(hangYuanSu, () => qunCaidan(g, hangYuanSu));
         if (hasPendingIdChange(g.type === 'internal' ? 'internal' : 'extgroup', g.id)) attachIdChangeMark(hangYuanSu);
+        attachChatMarks(hangYuanSu, g.id);
         heZi.appendChild(hangYuanSu);
       });
       return;
@@ -1670,6 +1717,7 @@
       items.forEach((c) => {
         const hangYuanSu = hang(c.name, c.lastPreview || t('list.noReply'), c.name[0], () => openChat('extdm', c.id, xianShiMing(c)), state.selectedChat?.id === c.id);
         if (hasPendingIdChange('extdm', c.id)) attachIdChangeMark(hangYuanSu);
+        attachChatMarks(hangYuanSu, c.id);
         heZi.appendChild(hangYuanSu);
       });
     }
@@ -1913,6 +1961,49 @@
    *  - 自动滚动关（默认）：新内容滚到「能看见」为止；若新消息比视口高，
    *    则把它的**顶部**对齐到视口顶部并不再继续滚动（从头展示），此时显示下箭头
    */
+  /**
+   * **流式"正在进行"的气泡**：思考块默认展开、正文逐步追加。
+   * 只在聊天末尾挂这一条（`data-streaming=1`），正式回复到了就被收走。
+   */
+  let _liuShiHuaShangCi = 0;
+  function xuanRanLiuShiKuai(sid, b) {
+    const heZi = $('xiaoXiJi');
+    if (!heZi) return;
+    if (state.selectedChat && String(state.selectedChat.id) !== String(sid)) return;
+    // 限频 ≤10fps：token 增量到得很密，不重绘就会把主线程刷爆
+    const now = Date.now();
+    if (now - _liuShiHuaShangCi < 100) return;
+    _liuShiHuaShangCi = now;
+    let kuai = heZi.querySelector('[data-streaming="1"]');
+    const zaiDiBu = isAtBottom(heZi);
+    if (!kuai) {
+      kuai = document.createElement('div');
+      kuai.className = 'xiaoXi liuShiKuai';
+      kuai.setAttribute('data-streaming', '1');
+      heZi.appendChild(kuai);
+    }
+    kuai.innerHTML =
+      '<div class="bubbleWrap">' +
+      (b.reasoning
+        ? '<details class="siKaoKuai" open><summary>' + escapeHtml(tOr('chat.thinkingOpen', '思考中…')) + '</summary><pre class="liuShiSiKao"></pre></details>'
+        : '') +
+      (b.content ? '<div class="bubble md liuShiZhengWen"></div>' : '') +
+      '</div>';
+    const si = kuai.querySelector('.liuShiSiKao');
+    if (si) si.textContent = b.reasoning;
+    const zh = kuai.querySelector('.liuShiZhengWen');
+    if (zh) zh.textContent = b.content;
+    if (zaiDiBu) { try { heZi.scrollTop = heZi.scrollHeight; } catch { /* noop */ } }
+  }
+  /** 正式回复到了：把流式气泡收掉（正式那条里的思考块**自动折叠**） */
+  function shouLiuShiKuai() {
+    try {
+      const heZi = $('xiaoXiJi');
+      if (heZi) heZi.querySelectorAll('[data-streaming="1"]').forEach((n) => n.remove());
+    } catch { /* noop */ }
+  }
+  window.__shouLiuShiKuai = shouLiuShiKuai;
+
   function renderChat(opts) {
     const heZi = $('xiaoXiJi');
     if (!heZi) return;
@@ -2064,28 +2155,63 @@
       scrollToBottom(false);
     } else if (last && wasAtBottom) {
       /**
-       * **未勾选（默认）**：只滚到「最新那条能看见」为止，绝不遮挡它的开头。
-       *  - 放得下 ⇒ 刚好滚到它完整可见（不多滚一格）；
-       *  - 放不下 ⇒ 把它的**顶部**对齐视口顶部就停住（从头读）。
+       * **未勾选（默认）＝ 像 DeepSeek 网页版那样"不抢你的视线"**：
+       *   · 最新那条**比聊天框高** ⇒ 把它的**开头**对齐聊天框顶部就停住，
+       *     之后流式内容继续长也不会把你拽到中间 —— 你可以从第一行读起；
+       *   · 最新那条**不够高** ⇒ 只滚到"刚好把它完整露出来"为止（底部对齐），
+       *     否则顶上会留一块莫名其妙的空白（这正是上一版照"一律顶部对齐"做出来的毛病）。
        *
-       * 用户已经往上翻（不在底部）时不抢他的位置 —— 右上角会亮「新消息」气泡。
-       *
-       * 真事故修：旧代码这里是 `autoScrollChat || wasAtBottom && !o.newContent`，
-       * 前半句一命中（用户本来就在底部）就直接 `scrollToBottom()` —— 于是
-       * **未勾选也永远滚到底**，长回复的开头被顶出视野（用户报的正是这个）。
+       * **勾选**才是"一直跟到最底"（见上面那个分支）。
        */
       const maxScroll = Math.max(0, heZi.scrollHeight - heZi.clientHeight);
       const lastTop = last.offsetTop;
       const lastH = last.offsetHeight;
       if (lastH <= heZi.clientHeight) {
+        // 放得下：底部对齐（不多滚一格、也不留空白）
         heZi.scrollTop = Math.min(maxScroll, Math.max(0, lastTop + lastH - heZi.clientHeight));
       } else {
+        // 比视口高：从头读
         heZi.scrollTop = Math.min(lastTop, maxScroll);
       }
       updateScrollAffordances(heZi);
     } else {
       updateScrollAffordances(heZi);
     }
+    /**
+     * **被打断的任务：「继续/重试」按钮**（产品要求）。
+     * 形态 = 最新一条聊天记录的样子；点了就能接着做；用户若直接发了新消息而没点它，
+     * 按钮**自动失效变灰**（新对话已经开始，旧任务不再被自动续上）。
+     */
+    try {
+      const sid = state.selectedChat && state.selectedChat.id;
+      const beiDaDuan = !!(sid && state.planInterrupted && state.planInterrupted.has(String(sid)));
+      const yiGuanBi = state.planResumeDisabled && state.planResumeDisabled[String(sid)];
+      if (beiDaDuan || yiGuanBi) {
+        const hang = document.createElement('div');
+        hang.className = 'xiaoXi huiFuRenWuHang' + (yiGuanBi ? ' yiGuoQi' : '');
+        hang.innerHTML =
+          '<div class="bubbleWrap">' +
+          '<div class="bubble">' + escapeHtml(tOr('chat.resumeTaskHint', '上次的任务被打断了（程序异常/退出/重启）。点这里接着做。')) + '</div>' +
+          '<div class="xiaoXiJiao"><div class="xiaoXiJiaoHang">' +
+          '<button type="button" class="anNiuZhuYao huiFuRenWuBtn"' + (yiGuanBi ? ' disabled' : '') + '>'
+          + escapeHtml(yiGuanBi ? tOr('chat.resumeTaskExpired', '已过期（你已开始新的对话）') : tOr('chat.resumeTask', '继续 / 重试')) +
+          '</button></div></div></div>';
+        const btn = hang.querySelector('.huiFuRenWuBtn');
+        if (btn && !yiGuanBi) {
+          btn.onclick = () => {
+            // 点了就交给常规发送流程（工具循环会真的接着干）
+            const ru = $('shuRu');
+            if (ru) {
+              ru.value = tOr('chat.resumeTask', '继续 / 重试');
+              void faSong();
+            }
+            if (sid && state.planInterrupted) state.planInterrupted.delete(String(sid));
+            try { renderList(); } catch { /* noop */ }
+          };
+        }
+        heZi.appendChild(hang);
+      }
+    } catch { /* 恢复按钮失败不得中断渲染 */ }
     const duty = $('dutyXinXi');
     if (duty) duty.textContent = state.selectedChat ? state.selectedChat.name : '—';
     try { updateListWatermark(); } catch { /* 水印失败不得中断聊天渲染 */ }
@@ -2122,6 +2248,23 @@
     const shangYiTiao = yuanYou[yuanYou.length - 1];
     if (!(shangYiTiao && shangYiTiao.role === role && shangYiTiao.text === text)) {
       yuanYou.push({ role, text, ts: Date.now(), reasoning: (opts && opts.reasoning) || '', system: !!(opts && opts.system), moXing: (opts && opts.moXing) || '' });
+      // 正式回复到了 ⇒ 收掉流式"正在进行"的气泡（里面的思考块随之折叠）
+      if (role === 'them' && !(opts && opts.system)) {
+        try { shouLiuShiKuai(); } catch { /* noop */ }
+        if (state.streamBuf) delete state.streamBuf[chatId];
+      }
+      /**
+       * **未读角标**（微信式）：对方/牛马的新回复 +1。
+       * 产品要求：**即使当前正开着这个会话也照常亮**，直到用户点了该聊天界面里的
+       * 任何元素（消息区/输入框/按钮）才清零 —— 所以这里不做"当前会话就跳过"的判断。
+       */
+      if (role === 'them' && !(opts && opts.system)) {
+        state.unread = state.unread || {};
+        // 单会话上限 999（防长跑把数字撑得没法看；到顶就停）
+        const xianZai = Number(state.unread[chatId] || 0);
+        state.unread[chatId] = Math.min(999, xianZai + 1);
+        try { renderList(); } catch { /* noop */ }
+      }
     }
     /**
      * **同时写进主进程日志**（唯一事实来源）。
@@ -3104,6 +3247,32 @@
     }
     jinDuTiao.classList.remove('yinCang');
     $('duiLieCount').textContent = String(q.length);
+    /**
+     * **插话区高度可拉伸**（产品要求）：上下拖这条把手改 `--queue-h`。
+     * 范围：至少 1 条（72px）、最多 12 条 —— 再高就把输入框顶没了。
+     */
+    (function bindQueueResize() {
+      const ba = $('duiLieLaShen');
+      if (!ba || ba.dataset.bound === '1') return;
+      ba.dataset.bound = '1';
+      let startY = 0;
+      let startH = 0;
+      ba.addEventListener('pointerdown', (e) => {
+        startY = e.clientY;
+        startH = LieBiao.getBoundingClientRect().height;
+        try { ba.setPointerCapture(e.pointerId); } catch { /* noop */ }
+        e.preventDefault();
+      });
+      ba.addEventListener('pointermove', (e) => {
+        if (!startY) return;
+        const h = Math.max(72, Math.min(12 * 78, startH - (e.clientY - startY)));
+        LieBiao.style.setProperty('--queue-h', h + 'px');
+        try { window.warmy.settingsSave?.({ queueHeightPx: h }); } catch { /* noop */ }
+      });
+      const ting = () => { startY = 0; };
+      ba.addEventListener('pointerup', ting);
+      ba.addEventListener('pointercancel', ting);
+    })();
     LieBiao.innerHTML = '';
     q.forEach((item, suoYin) => {
       const li = document.createElement('li');
@@ -3582,6 +3751,17 @@
       __lastSend = { text, at: now };
     }
     const id = state.selectedChat.id;
+    /**
+     * **被中断任务的「继续/重试」按钮失效**（产品要求）：
+     * 用户没点按钮、直接发了新内容 ⇒ 旧任务不再被自动续上，按钮变灰不可点。
+     * 按钮自己走的是「先清 planInterrupted 再 faSong」，所以这里不会误伤。
+     */
+    if (state.planInterrupted && state.planInterrupted.has(String(id))) {
+      state.planInterrupted.delete(String(id));
+      state.planResumeDisabled = state.planResumeDisabled || {};
+      state.planResumeDisabled[String(id)] = true;
+      try { renderList(); } catch { /* noop */ }
+    }
     const u = state.urgency;
     /**
      * ADR 004 P3 定稿：容器项目的开发面**只在容器里**。容器没运行 ⇒ 项目 = 已停止
@@ -3780,19 +3960,15 @@
         <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.inProgressProjects'))}</div><div class="stat">${escapeHtml(String(inProgressProjects))}</div></div>
         <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.runningInstances'))}</div><div class="stat">${escapeHtml(String(running))}</div></div>
         <div class="dashKa"><div class="jingYin">${escapeHtml(t('dashboard.pendingDecisions'))}</div><div class="stat">${escapeHtml(String(pendingCount))}</div></div>
-        <div class="dashKa"><div class="jingYin">${escapeHtml(tOr('dashboard.tokenCost', '词元消耗'))}</div><div class="stat">${escapeHtml(String(tokenTotal))}</div></div>
-        <div class="dashKa"><div class="jingYin">${escapeHtml(tOr('dashboard.cost', '成本'))}</div><div class="stat">${escapeHtml(
-          !costPriced ? tOr('cost.unpriced', '未定价')
-            : (costLocalOnly ? '¥0' : '¥' + costTotal.toFixed(4))
-        )}</div><div class="jingYin" style="font-size:11px">${escapeHtml(
-          !costPriced ? tOr('cost.unpricedHint', '这些模型没有内置价格：本地模型无费用，云端模型价格随厂商变动')
-            : (costLocalOnly ? tOr('cost.localHint', '全部走本地模型，不产生 API 费用') : tOr('cost.estHint', '按内置价目估算，仅供参考'))
-        )}</div></div>
+        <div class="dashKa"><div class="jingYin">${escapeHtml(tOr('dashboard.tokenCost', '词元消耗'))}</div><div class="stat">${escapeHtml(String(tokenTotal))}</div>
+          <div class="jingYin" style="font-size:11px">${escapeHtml(
+            !costPriced ? tOr('cost.unpricedHint', '这些模型没有内置价格：本地模型无费用，云端模型价格随厂商变动')
+              : (costLocalOnly ? tOr('cost.localHint', '全部走本地模型，不产生 API 费用') : tOr('cost.estHint', '按内置价目估算，仅供参考'))
+          )}</div></div>
       </div>
+      <!-- 产品要求：**删掉单独的「成本」卡片**；下面的明细改名「使用量」并按词元消耗排序 -->
       <details class="dashKa" id="dashChengBen" style="margin:12px 0">
-        <summary style="cursor:pointer;font-weight:600">${escapeHtml(tOr('dashboard.cost', '成本'))} · ${escapeHtml(
-          !costPriced ? tOr('cost.unpriced', '未定价') : (costLocalOnly ? '¥0' : '¥' + costTotal.toFixed(4))
-        )}</summary>
+        <summary style="cursor:pointer;font-weight:600">${escapeHtml(tOr('dashboard.usage', '使用量'))} · ${escapeHtml(String(tokenTotal))} ${escapeHtml(tOr('dashboard.tokens', '词元'))}</summary>
         <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap" id="costSortBar">
           <button class="anNiuXiao" data-cost-sort="window">${escapeHtml(t('cost.byWindow') || '按窗口')}</button>
           <button class="anNiuXiao" data-cost-sort="provider">${escapeHtml(t('cost.byProvider') || '按供应商')}</button>
@@ -3823,15 +3999,14 @@
       };
       const render = () => {
         const gs = groupBy(sort === 'window' ? 'window' : sort === 'provider' ? 'provider' : 'model');
+        // 使用量：按**词元消耗**降序排（明细行也以词元为主）
         list.innerHTML = gs.length ? gs.map((g) => `
           <details class="dashKa" style="margin:4px 0">
-            <summary style="cursor:pointer">${escapeHtml(g.name)} · ${escapeHtml(String(g.tokens))} ${escapeHtml(
-              !g.priced ? tOr('cost.unpriced', '未定价') : (g.local ? '· ¥0' : '· ¥' + g.cost.toFixed(4))
-            )}</summary>
+            <summary style="cursor:pointer">${escapeHtml(g.name)} · ${escapeHtml(String(g.tokens))} ${escapeHtml(tOr('dashboard.tokens', '词元'))}${g.priced ? escapeHtml(g.local ? ' · ¥0' : ' · ¥' + g.cost.toFixed(4)) : ''}</summary>
             <div style="margin:6px 0 0 8px;font-size:12px;color:var(--muted)">
-              ${g.rows.filter((r) => r.tokens > 0).map((r) => `<div>${escapeHtml(r.window || '')} / ${escapeHtml(r.provider || '')} / ${escapeHtml(r.model || '')} · ${escapeHtml(String(r.tokens))} · ${escapeHtml(chengBenWen(r.cost, r.local, r.priced))}</div>`).join('')}
+              ${g.rows.filter((r) => r.tokens > 0).map((r) => `<div>${escapeHtml(r.window || '')} / ${escapeHtml(r.provider || '')} / ${escapeHtml(r.model || '')} · ${escapeHtml(String(r.tokens))} ${escapeHtml(tOr('dashboard.tokens', '词元'))}${r.priced ? ' · ' + escapeHtml(chengBenWen(r.cost, r.local, r.priced)) : ''}</div>`).join('')}
             </div>
-          </details>`).join('') : '<div class="jingYin">—</div>';
+          </details>`).join('') : '<div class="jingYin">' + escapeHtml(tOr('dashboard.noUsage', '还没有用量记录（发一轮对话后就有了）')) + '</div>';
       };
       const paint = () => {
         bar.querySelectorAll('[data-cost-sort]').forEach((x) => {
@@ -4199,7 +4374,19 @@
       const inst2 = inst;
       if (!inst2.availableModels) inst2.availableModels = [];
       if (inst2.allModels === undefined) inst2.allModels = true;
-      if (!inst2.chain) inst2.chain = [...inst2.availableModels];
+      /**
+       * **真事故修**：「全部可用」默认是勾着的，但 `availableModels` 从没被填过 ——
+       * 于是 `syncChainToAvailable()` 把空链过滤成空链，取消「智能模式」时**一个模型都不显示**。
+       * 只有把「全部可用」取消再勾上（触发 onchange）才会填上模型。
+       * 现在：绑定时就按「全部可用」补一次初始清单。
+       */
+      if (inst2.allModels !== false && (!inst2.availableModels || !inst2.availableModels.length)) {
+        try {
+          const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m));
+          inst2.availableModels = [...new Set(all)];
+        } catch { /* noop */ }
+      }
+      if (!inst2.chain || !inst2.chain.length) inst2.chain = [...inst2.availableModels];
 
       const defSel = $('iDefaultMoXing');
       const allChk = $('iAllMoXingJi');
@@ -4247,16 +4434,28 @@
           LieBiao
             .map(
               (m, i) =>
-                '<div class="shiLiHang" style="margin:4px 0' + (dis.includes(m) ? ';opacity:.5' : '') + '">' +
-                '<span style="flex:1">' + escapeHtml(m) +
+                '<div class="shiLiHang lianHang" style="margin:4px 0' + (dis.includes(m) ? ';color:var(--muted)' : '') + '">' +
+                '<span class="lianMing" style="flex:1' + (dis.includes(m) ? ';text-decoration:line-through' : '') + '">' + escapeHtml(m) +
                 (m === moRen ? ' <span class="moRenBiaoQian">' + escapeHtml(tOr('model.default', '默认模型')) + '</span>' : '') +
                 '</span>' +
+                '<button class="anNiuXiao" data-top="' + i + '"' + (i === 0 ? ' disabled' : '') + ' title="' + escapeHtml(tOr('model.moveTop', '置顶')) + '">⤒</button>' +
                 '<button class="anNiuXiao" data-up="' + i + '"' + (i === 0 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveUp')) + '</button>' +
                 '<button class="anNiuXiao" data-down="' + i + '"' + (i === LieBiao.length - 1 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveDown')) + '</button>' +
                 '<button class="anNiuXiao" data-tog="' + i + '">' + escapeHtml(dis.includes(m) ? tOr('model.enable', '启用') : tOr('model.disable', '禁用')) + '</button>' +
                 '</div>'
             )
             .join('') || '<div class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</div>';
+        chainBox.querySelectorAll('[data-top]').forEach((b) => {
+          b.onclick = () => {
+            const i = Number(b.dataset.top);
+            if (i <= 0) return;
+            const shuZu = inst2.chain;
+            const [m0] = shuZu.splice(i, 1);
+            shuZu.unshift(m0);
+            if (!shiZhiNengMoShi(inst2)) inst2.defaultModel = lianMoRenMoXing(inst2);
+            saveInst(); renderChain();
+          };
+        });
         chainBox.querySelectorAll('[data-up]').forEach((b) => {
           b.onclick = () => {
             const i = Number(b.dataset.up);
@@ -4338,7 +4537,17 @@
           inst2.smartMode = smartChk.checked;
           inst2.defaultModel = smartChk.checked ? '' : lianMoRenMoXing(inst2);
           chainBox?.classList.toggle('yinCang', smartChk.checked);
+          // 取消智能模式时要能**看得到模型**：链是空的就先按「全部可用」补一次
+          if (!smartChk.checked && inst2.allModels !== false && !(inst2.chain || []).length) {
+            try {
+              const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m));
+              inst2.availableModels = [...new Set(all)];
+              inst2.chain = [...inst2.availableModels];
+              inst2.chainDisabled = [];
+            } catch { /* noop */ }
+          }
           saveInst();
+          renderDefaultOptions();
           renderChain();
         };
       }
@@ -4820,6 +5029,12 @@
           <select id="xuanZeYuYan" title="${escapeHtml(t('settings.language'))}">
             ${localeOptionsHtml(state.yuYan)}
           </select>
+          <!-- 加强 AI 语言约束：思考过程与回复都严格用上面选的语言 -->
+          <label style="display:flex;align-items:center;gap:6px;margin-top:10px;cursor:pointer">
+            <input type="checkbox" id="yanGeYuYan" ${state.strictAiLanguage ? 'checked' : ''}/>
+            <span>${escapeHtml(tOr('settings.strictAiLanguage', '加强 AI 语言约束（AI 将更少地使用其他语言）'))}</span>
+          </label>
+          <div class="jingYin" style="margin-top:4px">${escapeHtml(tOr('settings.strictAiLanguageHint', '勾选后，AI 的思考过程与回复会更严格地使用上面设置的语言。'))}</div>
         </div>
         <div class="sheZhiSection sheZhiKa">
           <h2>${escapeHtml(t('settings.themeMode'))}</h2>
@@ -5176,6 +5391,11 @@
             <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.fenLei', ''))}</div>
             <div id="smFenLei"></div>
           </details>
+          <details class="moXianSuLian" id="smShouImageUnd">
+            <summary>${escapeHtml(tOr('settings.imageUndModel', '看图模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="imageUnd"></span></summary>
+            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.imageUnd', ''))}</div>
+            <div id="smImageUndLian"></div>
+          </details>
           <details class="moXianSuLian" id="smShouImage">
             <summary>${escapeHtml(tOr('settings.imageModel', '画图模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="image"></span></summary>
             <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.image', ''))}</div>
@@ -5303,7 +5523,8 @@
             <div class="jingYin" id="aboutDevice">—</div>
             <div class="jingYin" id="aboutBeliefPath" style="margin-top:4px;word-break:break-all">—</div>
             <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-              <button class="anNiuXiao" id="anNiuDaoChuSheZhi">${escapeHtml(tOr('settings.exportJson', '导出设置 JSON'))}</button>
+              <button class="anNiuXiao" id="anNiuDaoChuSheZhi">${escapeHtml(tOr('settings.exportJson', '导出配置（.NM）'))}</button>
+              <button class="anNiuXiao" id="anNiuDaoRuSheZhi">${escapeHtml(tOr('settings.importNm', '导入配置（.NM）'))}</button>
               <button class="anNiuXiao" id="anNiuHuiFuMoRen">${escapeHtml(tOr('settings.restoreDefaults', '恢复默认设置'))}</button>
               <button class="anNiuXiao" id="anNiuDaKaiRiZhi">${escapeHtml(tOr('settings.openLog', '打开启动日志'))}</button>
             </div>
@@ -5368,16 +5589,48 @@
         }
         await doCheckUpdate(false);
       };
-      // 导出设置 JSON / 恢复默认 / 打开启动日志
+      // 导出配置（`.NM`，带口令） / 导入配置（全新开始 / 合并）
       $('anNiuDaoChuSheZhi')?.addEventListener('click', async () => {
         try {
-          const r = await window.warmy.settingsGet?.();
-          const data = JSON.stringify(r?.settings || {}, null, 2);
-          const f = await window.warmy.saveText?.({ defaultName: 'warmy-settings.json', content: data });
-          if (f && f.ok) showToast(tOr('export.done', '已导出') + '：' + (f.path || ''));
-          else showToast(String((f && f.error) || t('common.error')));
+          const pw = await uiPrompt(tOr('nm.setExportPassword', '请设置导出口令（导入时必须输入）'), '');
+          if (pw === null) return;
+          if (!pw.trim()) { uiAlert(tOr('nm.needPassword', '口令不能为空：导出时必须设置口令。')); return; }
+          const r = await window.warmy.peizhiDaoChu?.({ password: pw.trim() });
+          if (r && r.ok) showToast(tOr('export.done', '已导出') + '：' + (r.path || ''));
+          else showToast(String((r && r.error) || t('common.error')));
         } catch (e) { showToast(String(e && e.message || e)); }
       });
+      (function bindPeizhiDaoRu() {
+        const btn = $('anNiuDaoRuSheZhi');
+        if (!btn) return;
+        btn.onclick = async () => {
+          try {
+            const f = await window.warmy.pickFile?.({ filters: [{ name: 'WArmy 配置', extensions: ['NM', 'nm', 'json'] }] });
+            if (!f?.ok || !f.path) return;
+            const xin = await window.warmy.peizhiXinFeng?.({ path: f.path });
+            if (!xin || !xin.ok) { uiAlert(String((xin && xin.error) || tOr('nm.badFormat', '不是 WArmy 的 .nm 文件，或文件已损坏'))); return; }
+            // 模式选择：全新开始（要二次确认） / 合并配置（冲突逐项问）
+            const moShi = await uiConfirm(
+              tOr('nm.freshConfirm', '要「全新开始」吗？\n确定 = 删除当前全部配置后导入（不可撤销）\n取消 = 合并配置（有冲突会逐项问你）'),
+              tOr('nm.importMode', '导入配置')
+            );
+            const mode = moShi ? 'fresh' : 'merge';
+            if (mode === 'fresh') {
+              const erCi = await uiConfirm(tOr('nm.freshConfirm2', '再次确认：将删除当前所有配置（含供应商、牛马、聊天设置），并用导入包替换。此操作不可撤销！'));
+              if (!erCi) return;
+            }
+            const pw = await uiPrompt(tOr('nm.enterPassword', '请输入导出时设置的口令'), '');
+            if (pw === null) return;
+            const r = await window.warmy.peizhiDaoRu?.({ path: f.path, password: pw, mode });
+            if (r && r.ok) {
+              showToast(tOr('nm.importDone', '导入完成') + '（' + (r.applied ? r.applied.length : 0) + '）');
+              setTimeout(() => { try { window.location.reload(); } catch { /* noop */ } }, 700);
+            } else {
+              uiAlert(String((r && r.error) || t('common.error')));
+            }
+          } catch (e) { uiAlert(String(e && e.message || e)); }
+        };
+      })();
       $('anNiuHuiFuMoRen')?.addEventListener('click', async () => {
         if (!(await uiConfirm(tOr('settings.restoreConfirm', '将清空所有设置并恢复出厂默认（含供应商/密钥引用/外观）。此操作不可撤销。是否继续？')))) return;
         try {
@@ -6039,20 +6292,24 @@
        * 每类都列出所有已添加模型；第一个未禁用 = 默认；可上移 / 下移 / 禁用（启用）。
        * 产品定稿：这些选项**默认折叠**，点开才展开（`<details>` 自带折叠）。
        */
-      const SM_LIAN_JI = ['asr', 'embed', 'organizer', 'tts', 'fenLei', 'image', 'videoUnd', 'videoGen', 'rerank', 'safety', 'translate'];
+      const SM_LIAN_JI = ['asr', 'embed', 'organizer', 'tts', 'fenLei', 'imageUnd', 'image', 'videoUnd', 'videoGen', 'rerank', 'safety', 'translate'];
       const SM_HE_JI = {
         asr: 'smAsrLian', embed: 'smEmbedLian', organizer: 'smOrganizerLian', tts: 'smTtsLian', fenLei: 'smFenLei',
-        image: 'smImageLian', videoUnd: 'smVideoUndLian', videoGen: 'smVideoGenLian', rerank: 'smRerankLian',
+        imageUnd: 'smImageUndLian', image: 'smImageLian', videoUnd: 'smVideoUndLian', videoGen: 'smVideoGenLian', rerank: 'smRerankLian',
         safety: 'smSafetyLian', translate: 'smTranslateLian',
       };
       /**
        * 每条链只收**支持该用途**的模型（产品要求：专业链只显专业模型，不放进通用对话模型 ——
        * 用错模型会直接出错）。没有专业模型时链是空的，**使用时会无痛回退到牛马的对话模型链**，
        * 所以这里不需要用 chat 兜底。
+       *
+       * ⚠️ 看图链**不能**把 'chat' 放进白名单：那样 `yaoZhongLei.includes(n.kind)` 会让
+       * **所有对话模型**都通过（真事故：看图链里列出了全部模型，包括不带视觉的）。
+       * 视觉能力走下面 `chun()` 里的 `vision === true` 单独判。
        */
       const SM_LIAN_YAO = {
         asr: ['asr'], embed: ['embedding'], organizer: ['chat'], tts: ['tts'], fenLei: ['decision'],
-        image: ['image'], videoUnd: ['videoUnd'], videoGen: ['videoGen'], rerank: ['rerank'],
+        imageUnd: ['imageUnd'], image: ['image'], videoUnd: ['videoUnd'], videoGen: ['videoGen'], rerank: ['rerank'],
         safety: ['safety'], translate: ['translate'],
       };
       const SM_LIAN_DATA = {};   // key -> { chain: string[], disabled: string[] }
@@ -6083,7 +6340,7 @@
       function kindWenAn(k) {
         const m = {
           chat: 'model.kind.chat', embedding: 'model.kind.embedding', asr: 'model.kind.asr', tts: 'model.kind.tts',
-          decision: 'model.kind.decision', image: 'model.kind.image', videoUnd: 'model.kind.videoUnd',
+          decision: 'model.kind.decision', imageUnd: 'model.kind.imageUnd', image: 'model.kind.image', videoUnd: 'model.kind.videoUnd',
           videoGen: 'model.kind.videoGen', rerank: 'model.kind.rerank', safety: 'model.kind.safety', translate: 'model.kind.translate',
         };
         return m[k] ? tOr(m[k], k) : '';
@@ -6100,7 +6357,10 @@
         const chun = (id) => {
           const n = nengLi[id];
           if (!n || !n.kind || n.kind === 'unknown') return yaoZhongLei.includes('chat');
-          return yaoZhongLei.includes(n.kind);
+          if (yaoZhongLei.includes(n.kind)) return true;
+          // 看图：带视觉能力的对话模型同样胜任（"只显专业模型"针对的是用错模型会出错的链）
+          if (key === 'imageUnd' && n.kind === 'chat' && n.vision === true) return true;
+          return false;
         };
         const ids = (Array.isArray(allIds) && allIds.length
           ? allIds.map(String)
@@ -6140,12 +6400,17 @@
               su + '</span>';
           }
           return (
-          '<div class="shiLiHang" style="margin:4px 0;align-items:center;flex-wrap:wrap' + (dis.includes(m) ? ';opacity:.5' : '') + '">' +
-          '<span style="flex:1;min-width:180px' + (dis.includes(m) ? ';text-decoration:line-through' : '') + '">' + escapeHtml(m) + kindB + ctxB +
+          '<div class="shiLiHang lianHang" style="margin:4px 0;align-items:center;flex-wrap:wrap' + (dis.includes(m) ? ';color:var(--muted)' : '') + '">' +
+          '<span class="lianMing" style="flex:1;min-width:180px' + (dis.includes(m) ? ';text-decoration:line-through' : '') + '">' + escapeHtml(m) + kindB + ctxB +
           (m === moRen ? ' <span class="moRenBiaoQian">' + escapeHtml(tOr('model.default', '默认模型')) + '</span>' : '') + '</span>' +
           zhuan +
+          // 置顶：已是最上面 ⇒ 灰
+          '<button class="anNiuXiao" data-sml-top="' + key + '|' + i + '"' + (i === 0 ? ' disabled' : '') + ' title="' + escapeHtml(tOr('model.moveTop', '置顶')) + '">⤒</button>' +
+          // 上移：已是最上面 ⇒ 灰
           '<button class="anNiuXiao" data-sml-up="' + key + '|' + i + '"' + (i === 0 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveUp')) + '</button>' +
+          // 下移：已是最下面 ⇒ 灰
           '<button class="anNiuXiao" data-sml-dn="' + key + '|' + i + '"' + (i === st.chain.length - 1 ? ' disabled' : '') + '>' + escapeHtml(t('instances.moveDown')) + '</button>' +
+          // 启用/禁用**永不置灰**（禁用了还要能点回来）
           '<button class="anNiuXiao" data-sml-tg="' + key + '|' + i + '">' + escapeHtml(dis.includes(m) ? tOr('model.enable', '启用') : tOr('model.disable', '禁用')) + '</button>' +
           '</div>'
           );
@@ -6154,6 +6419,15 @@
           const [k, iS] = String(b.getAttribute(cha) || '').split('|');
           return { k, i: Number(iS) };
         };
+        he.querySelectorAll('[data-sml-top]').forEach((b) => {
+          b.onclick = () => {
+            const { k, i } = fen(b, 'data-sml-top');
+            const s2 = SM_LIAN_DATA[k]; if (!s2 || i <= 0) return;
+            const [m0] = s2.chain.splice(i, 1);
+            s2.chain.unshift(m0);
+            renderSmLian(k, ids);
+          };
+        });
         he.querySelectorAll('[data-sml-up]').forEach((b) => {
           b.onclick = () => {
             const { k, i } = fen(b, 'data-sml-up');
@@ -6522,6 +6796,20 @@
           try { await window.warmy.settingsSave({ yuYan: pick }); } catch { /* noop */ }
           try { await window.warmy.setupComplete({ yuYan: pick }); } catch { /* noop */ }
           renderPage();
+        };
+      })();
+
+      // 加强 AI 语言约束：勾上后思考过程与回复都严格用界面语言（主进程按它注入系统指令）
+      (function bindStrictAiLanguage() {
+        const chk = $('yanGeYuYan');
+        if (!chk) return;
+        chk.checked = !!state.strictAiLanguage;
+        chk.onchange = () => {
+          state.strictAiLanguage = !!chk.checked;
+          try { window.warmy.settingsSave?.({ strictAiLanguage: state.strictAiLanguage }); } catch { /* noop */ }
+          showToast(state.strictAiLanguage
+            ? tOr('settings.strictOn', '已开启：AI 会更严格地使用界面语言')
+            : tOr('settings.strictOff', '已关闭：AI 可自行选择语言'));
         };
       })();
 
@@ -9597,6 +9885,32 @@
       yuYinQingLi();
     }
   }
+  /**
+   * **未读角标清零**（产品要求）：点了这个聊天界面里的**任何元素**就算"看过了" ——
+   * 消息区、输入框、按钮、决策卡…都算。之后列表上的角标消失。
+   * 用捕获阶段，连被 preventDefault 的按钮点击也算。
+   */
+  (function bindUnreadAck() {
+    const qing = () => {
+      const sid = state.selectedChat && state.selectedChat.id;
+      if (!sid) return;
+      if (!state.unread || !state.unread[sid]) return;
+      delete state.unread[sid];
+      try { renderList(); } catch { /* noop */ }
+    };
+    document.addEventListener('click', (e) => {
+      // ⚠️ 不能叫 `t`：会遮蔽 i18n 的 `t()`（门禁会报「renderer: 有局部 t = ...」）
+      const muBiao = e.target;
+      if (!muBiao || !muBiao.closest) return;
+      if (muBiao.closest('#xiaoXiJi, #shuRu, #tongZhiQu, .liaoTianHead, .shuRuQu, .yunXingZhuangTai, #aiqHost, #piZhunHost, #pmHe')) qing();
+    }, true);
+    // 键盘输入也算（在输入框里打字 = 在看这个会话）
+    document.addEventListener('keydown', (e) => {
+      const muBiao = e.target;
+      if (muBiao && (muBiao.id === 'shuRu' || (muBiao.closest && muBiao.closest('#shuRu')))) qing();
+    }, true);
+  })();
+
   $('anNiuYuYin') && ($('anNiuYuYin').onclick = () => {
     if (yuYinZhuangTai) { const zt = yuYinZhuangTai; try { zt.rec.stop(); } catch { /* noop */ } yuYinQingLi(); return; }
     void yuYinKaiShi();
@@ -12985,8 +13299,8 @@
     html.push('<div class="pfHead" data-pf="chanPin">' + escapeHtml(t('projectFiles.productTitle')) + '</div>');
     html.push('<div class="ctgHang" id="chanPinKa" data-product-kind="' + escapeHtml(p.kind || 'none') + '"' +
       ' data-product-dir-exists="' + (p.dirExists ? '1' : '0') + '" data-entry-runnable="' + (p.entryHostRunnable ? '1' : '0') + '">' +
-      '<div class="ctgDim" data-product-dir="' + escapeHtml(p.dir || '') + '" title="' + escapeHtml(p.dir || '') + '">' +
-      escapeHtml(t('projectFiles.productDir')) + '：' + escapeHtml(jianMing(p.dir) || p.dir || '—') +
+      '<div class="ctgDim pfHang" data-product-dir="' + escapeHtml(p.dir || '') + '" data-open="' + escapeHtml(p.dir || '') + '" title="' + escapeHtml(p.dir || '') + '" style="cursor:pointer">' +
+      escapeHtml(t('projectFiles.productDir')) + '：<span class="pfMing">' + escapeHtml(jianMing(p.dir) || p.dir || '—') + '</span>' +
       (p.dirExists ? '' : ' · ' + escapeHtml(t('projectFiles.productDirPlanned'))) + '</div>');
     if (p.entry) {
       html.push('<div class="pfLuJing pfHang" data-product-entry="' + escapeHtml(p.entry) + '" data-open="' + escapeHtml(p.entry) + '" title="' + escapeHtml(p.entry) + '">' +
@@ -13878,9 +14192,20 @@
   // ── 导出弹窗 ──
   function showExportDialog() {
     const root = $('duiHuaKuangGen');
-    $('duiHuaKuangBiaoTi').textContent = t('chat.export');
+    /**
+     * **导出分流**（产品定稿）：
+     *   · 我的牛马 → 「导出聊天」：只带聊天记录；
+     *   · 项目     → 「导出项目」：聊天 + 产出的文件 + 计划进度 + 项目配置，整个打成 `.nm`。
+     */
+    const shiXiangMu = state.selectedChat && (state.selectedChat.kind === 'internal' || state.selectedChat.kind === 'extgroup');
+    const biaoTi = shiXiangMu ? tOr('nm.exportProject', '导出项目') : tOr('nm.exportChat', '导出聊天');
+    $('duiHuaKuangBiaoTi').textContent = biaoTi;
     $('duiHuaKuangTi').innerHTML =
-      '<div style="margin-bottom:8px">' + escapeHtml(t('export.tiShi')) + '</div>' +
+      '<div style="margin-bottom:8px">' + escapeHtml(
+        shiXiangMu
+          ? tOr('nm.exportProjectHint', '将把这个项目打包成一个 .nm 文件：聊天记录、产出的文件、计划进度、项目配置都在里面。')
+          : tOr('nm.exportChatHint', '将把这个聊天的记录打包成一个 .nm 文件。')
+      ) + '</div>' +
       '<div class="jingYin">' + escapeHtml(t('export.include')) + '</div>';
     const dongZuoJi = $('duiHuaKuangDongZuoJi');
     dongZuoJi.innerHTML = '';
@@ -13890,21 +14215,15 @@
     cancel.onclick = () => { root.classList.add('yinCang'); };
     const ok = document.createElement('button');
     ok.className = 'anNiuZhuYao';
-    ok.textContent = t('chat.export');
+    ok.textContent = biaoTi;
     ok.onclick = async () => {
       if (!state.selectedChat) { root.classList.add('yinCang'); return; }
-      const xiaoXi = (window.__msgs && window.__msgs[state.selectedChat.id]) || [];
-      const r = await window.warmy.exportSession({
-        // ⚠️ 字段名必须是主进程读的那个（biaoTi）：以前只发 title ⇒
-        // 主进程 `payload.biaoTi.replace(...)` 报 "Cannot read properties of undefined (reading 'replace')"
-        biaoTi: xianShiMing(state.selectedChat),
-        title: xianShiMing(state.selectedChat),
-        labels: { header: t('export.header'), wo: t('export.wo') },
-        xiaoXiJi: xiaoXi.map((x) => ({ role: x.role, text: x.text, ts: x.ts || Date.now() })),
-      });
       root.classList.add('yinCang');
+      const r = await window.warmy.xiangMuDaoChu?.({
+        sessionId: state.selectedChat.id,
+        kind: shiXiangMu ? 'project' : 'chat',
+      });
       if (r?.ok && r.path) {
-        // 导出成功 ⇒ 直接在资源管理器里显示它（不然用户找不到导出的文件）
         try { await window.warmy.xianShiWenJianJia?.({ path: r.path }); } catch { /* noop */ }
         showToast(tOr('export.done', '已导出') + '：' + r.path);
       } else {
@@ -14813,7 +15132,9 @@
         bar.style.transform = 'none';
         bar.style.left = Math.max(0, Math.min(window.innerWidth - tuozhuai.w, e.clientX - tuozhuai.dx)) + 'px';
         bar.style.top = Math.max(0, Math.min(window.innerHeight - tuozhuai.h, e.clientY - tuozhuai.dy)) + 'px';
+        // 初始定位是 bottom:24px —— 拖动时必须把它清掉，否则 top/bottom 同时生效会把卡片拉高
         bar.style.right = 'auto';
+        bar.style.bottom = 'auto';
       });
       const songShou = () => {
         if (!tuozhuai) return;
@@ -15761,8 +16082,57 @@
       state.jiHuaRenWu = (d && d.steps) || [];
       try { queBaoKaPian('mianBanJiHuaKuai'); renderJiHuaKa(); } catch { /* noop */ }
     });
-    // 请求卡（AI 要用户做决定 / 越权要授权）：刷新卡片；音效在卡片**真的出现**时播（见 renderAiQuestions）
-    window.warmy.onAiWenTi?.(() => {
+    /**
+     * **重启/崩溃后恢复到「还有被打断的任务」的会话**：
+     * 列表亮 `?`，进会话会看到「继续/重试」按钮（产品要求）。
+     */
+    window.warmy.onJiHuaHuiFu?.((d) => {
+      try {
+        const ss = (d && Array.isArray(d.sessions)) ? d.sessions : [];
+        state.planInterrupted = state.planInterrupted || new Set();
+        for (const s of ss) state.planInterrupted.add(String(s));
+        renderList();
+      } catch { /* noop */ }
+    });
+    /**
+     * **流式增量**：思考过程与正文**边出边显示**（产品要求）。
+     * 形态：聊天末尾一条"正在进行"的气泡，思考块**默认展开**；等正式回复到了
+     * （`tuisongXiaoxi`）就把它收走，正式那条里的思考块**自动折叠**。
+     */
+    window.warmy.onSuiXingPianDuan?.((d) => {
+      try {
+        const sid = String((d && d.sessionId) || '');
+        if (!sid) return;
+        if (d.end) { try { shouLiuShiKuai(); } catch { /* noop */ } return; }
+        state.streamBuf = state.streamBuf || {};
+        const b = state.streamBuf[sid] || (state.streamBuf[sid] = { reasoning: '', content: '' });
+        // 单会话缓冲上限 200KB（防长文把内存撑大；到顶就不再追加）
+        if (d.reasoning && b.reasoning.length < 200000) b.reasoning += String(d.reasoning);
+        if (d.content && b.content.length < 200000) b.content += String(d.content);
+        if (state.selectedChat && String(state.selectedChat.id) === sid) xuanRanLiuShiKuai(sid, b);
+      } catch { /* 流式渲染失败不影响主流程 */ }
+    });
+    window.warmy.onAiWenTi?.((d) => {
+      /**
+       * **决策卡创建那一刻就响**（真事故：首次出现决策卡常常没声音）。
+       * 以前只在 `renderAiQuestions` 里播 —— 那个函数开头会
+       * `if (!host || !state.selectedChat) return`：用户停在别的页/列表还没选中会话时，
+       * 整段音效逻辑被跳过，等回到聊天页才补播（太晚，用户已经以为没声音）。
+       * 现在：主进程一广播就按 id 记账并播一次；`renderAiQuestions` 里只在
+       * **还没记过账**的卡上补播，两边共用同一本账，不会响两遍。
+       */
+      try {
+        const id = String((d && (d.id || d.question && d.question.id)) || '');
+        if (id) {
+          yiJingXiangGuo = yiJingXiangGuo || new Set();
+          if (!yiJingXiangGuo.has(id)) {
+            yiJingXiangGuo.add(id);
+            void chuanBoYinXiao('request');
+          }
+        } else {
+          void chuanBoYinXiao('request');
+        }
+      } catch { /* noop */ }
       try { void renderAiQuestions(); } catch { /* noop */ }
     });
     window.warmy.onWenJianChanSheng?.((d) => {

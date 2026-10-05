@@ -440,11 +440,12 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .liaoTianYuanShuju { font-size: var(--fs-sm); color: var(--muted); }
 .liaoTianDongZuoJi { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .xiaoXiJi {
-  flex: 1; overflow: auto; padding: var(--sp-4);
+  flex: 1; overflow: auto; padding: var(--sp-4) var(--sp-5);
   contain: strict;
   height: 0;
 }
-.xiaoXi { display: flex; margin-bottom: 14px; gap: 10px; animation: msg-in 0.12s ease; }
+/* 微信式：整行铺满，头像贴边、气泡自然撑开 */
+.xiaoXi { display: flex; margin-bottom: 14px; gap: 10px; animation: msg-in 0.12s ease; width: 100%; }
 @keyframes msg-in { from { opacity: 0; } to { opacity: 1; } }
 .xiaoXi.wo { flex-direction: row-reverse; }
 .xiaoXi .av {
@@ -452,7 +453,9 @@ body.liaoTianChuangKou .liaoTianBuJu {
   display: grid; place-items: center; color: var(--muted); font-size: var(--fs-sm); flex-shrink: 0;
 }
 .bubble {
-  max-width: 70%;
+  /* 宽度由 .bubbleWrap 统一约束（这里再写 70% 等于又乘一次 ⇒ 只剩一半宽，
+   * 真事故：用户看到"对话只占屏幕一半"。微信式：气泡在 wrap 内自然撑开、上限交给 wrap） */
+  max-width: 100%;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--them-bubble);
@@ -1813,6 +1816,22 @@ table.hkMiYaoJi td.hkMiYaoJiMiaoShu { color: var(--ink-dim); font-size: var(--fs
 .pfMing { font-size: var(--fs-xs); color: var(--ink); word-break: break-all; min-width: 0; }
 .pfHangKeDian { cursor: pointer; }
 .pfHangKeDian:hover { background: var(--hover); }
+/* ── 超链接样式（产品要求）：文件/文件夹都长得像链接 —— 点开、悬停看完整路径 ── */
+.pfHang .pfMing, .pfLuJing .pfMing, .pfLink,
+[data-open] .pfMing, a.pfLink {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+[data-open]:hover .pfMing, a.pfLink:hover, .pfHang[data-open]:hover .pfMing {
+  filter: brightness(1.15);
+}
+/* 「文件产物」里的 📁 按钮**右对齐**，与左边的名称/大小分开，看起来更整齐 */
+.pfHangKeDian .ctgHangHead { display: flex; align-items: center; gap: 6px; width: 100%; }
+.pfHangKeDian .pfMing { flex: 1 1 auto; min-width: 0; }
+.pfHangKeDian .ctgDim { flex: 0 0 auto; white-space: nowrap; }
+.pfHangKeDian .anNiuXiao[data-reveal] { margin-left: auto; flex: 0 0 auto; }
 .pfDongZuoJi { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 #xiangMuWenJianJiHe .ctgHang + .ctgHang { margin-top: 4px; }
 
@@ -2405,8 +2424,8 @@ body.liaoTianChuangKou #appTi {
 
 /* 首启引导条（非阻塞，页内教练标记） */
 .yinDaoTiao {
-  /* 右侧竖排：贴右缘、垂直居中，不遮挡聊天与列表 */
-  position: fixed; right: 16px; top: 50%; transform: translateY(-50%);
+  /* 首次出现：**贴右下角**（产品要求；以前是右侧垂直居中，挡聊天） */
+  position: fixed; right: 16px; bottom: 24px; top: auto;
   z-index: 9000; width: min(320px, calc(100vw - 32px));
   max-height: calc(100vh - 40px); overflow: auto;
   background: var(--card, #fff); color: var(--ink, #111);
@@ -2601,7 +2620,8 @@ html { font-weight: var(--fw-ui, 400); }
 .jiHuaBu[data-st="doing"] { border-left-color: var(--warn-fg, #e8c07a); }
 
 /* 消息排版（微信式）：气泡自适应宽度、文字自然换行；复制钮在气泡右下角，悬停时其左侧露出时间 */
-.bubbleWrap { display: flex; flex-direction: column; min-width: 0; max-width: 72%; align-items: flex-start; }
+/* 微信式排版：气泡区占满行宽、留出左右边距；气泡最宽 78%（微信约 70-75%） */
+.bubbleWrap { display: flex; flex-direction: column; min-width: 0; max-width: 78%; align-items: flex-start; flex: 0 1 auto; }
 .xiaoXi.wo .bubbleWrap { align-items: flex-end; }
 /* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
 .zhuDongShiJian {
@@ -2647,9 +2667,60 @@ html { font-weight: var(--fw-ui, 400); }
   font-variant-numeric: tabular-nums;
 }
 
+/* ── 第二列：第二行「[N] 最新回复」 ── */
+.lieBiaoTiaoMu .fu { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.weiDuQianZhui {
+  flex: 0 0 auto; font-size: 11px; font-weight: 600;
+  color: var(--danger, #d9534f); font-variant-numeric: tabular-nums;
+}
+.weiDuQianZhui.wu { color: var(--muted); font-weight: 400; }
+.fuWenBen { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lieBiaoTiaoMu { position: relative; }
+.renWuZhongDuanMark {
+  position: absolute; right: 6px; top: 6px;
+  width: 18px; height: 18px; border-radius: 999px;
+  background: var(--warn, #e8a33d); color: #241a0c;
+  font-size: 12px; line-height: 18px; text-align: center; font-weight: 700;
+  pointer-events: none;
+}
+/* 「继续/重试」：以一条消息的样子落在聊天末尾 */
+.huiFuRenWuHang .bubble { border-style: dashed; }
+.huiFuRenWuBtn { margin-top: 4px; }
+.huiFuRenWuHang.yiGuoQi .huiFuRenWuBtn {
+  opacity: .45; cursor: not-allowed; filter: grayscale(1);
+}
+/* 流式「正在进行」的气泡：思考块默认展开、正文逐步追加 */
+.liuShiKuai .siKaoKuai pre.liuShiSiKao { max-height: 260px; overflow: auto; }
+.liuShiKuai .liuShiZhengWen { opacity: .92; }
+.liuShiKuai { opacity: .96; }
+
 /* 插话队列：上移/下移/编辑/移除 **并排**在会话下方（不许竖着排）
  * 父级 `li { flex-direction: column !important; align-items: stretch }` 会把子块拉满宽，
- * 所以这里用 !important 锁死横排 + 自适应宽度，按钮绝不折成一列。 */
+ * 所以这里用 !important 锁死横排 + 自适应宽度，按钮绝不折成一列。
+ *
+ * 高度（产品要求）：**默认最多 3 条对话的高度**，多了出现滚动条；
+ * 整块高度可以由用户**用鼠标拉伸**（把手见 .duiLieLaShen）。
+ */
+#duiLieTiaoMuJi {
+  max-height: var(--queue-h, 232px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+/* 单条正文最多 3 行，别把一条插话撑满整屏（否则按钮又被挤下去） */
+.duiLieTiaoMuJi .qWenBen {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* 拉伸把手：hover 变高亮，上下拖改 --queue-h */
+.duiLieLaShen {
+  height: 6px; margin: 2px 0 4px; border-radius: 999px; cursor: ns-resize;
+  background: var(--line); opacity: .7; transition: opacity .12s, background .12s;
+}
+.duiLieLaShen:hover { opacity: 1; background: var(--accent); }
+
 .qZhengWen { display: flex; flex-direction: column; gap: 4px; }
 .qCaoZuoJi {
   display: flex !important; flex-direction: row !important; flex-wrap: wrap;

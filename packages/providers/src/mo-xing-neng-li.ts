@@ -38,7 +38,7 @@ export interface MoXingNengLi {
    *                 输出带置信度的决策，约束解码，小而快；用于意图分类、路由、裁判/审批）
    *  · unknown    = 认不出（不放进任何调用链，免得用时出错）
    */
-  kind: 'chat' | 'embedding' | 'rerank' | 'asr' | 'tts' | 'image' | 'videoUnd' | 'videoGen' | 'translate' | 'safety' | 'decision' | 'unknown';
+  kind: 'chat' | 'embedding' | 'rerank' | 'asr' | 'tts' | 'image' | 'imageUnd' | 'videoUnd' | 'videoGen' | 'translate' | 'safety' | 'decision' | 'unknown';
   /** 上下文长度（token）；0 = 端点没给、表里也没有 */
   contextLen: number;
   /** TTS 等的音色清单（端点给 voices/speakers 才有；空 = 不知道） */
@@ -187,6 +187,8 @@ export function caiZhongLei(ming: string): MoXingNengLi['kind'] {
   if (/rerank|re-?rank|bge-?reranker/.test(s)) return 'rerank';
   if (/cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts/.test(s)) return 'tts';
   if (/whisper|sense-?voice|paraformer|moonshine|speech-?to-?text|\bstt\b|asr-|vosk|sherpa/.test(s)) return 'asr';
+  // 看图模型（图像**理解** / VLM）—— 必须在「画图」之前判，否则 *-vl 会被误当成生成
+  if (/llava|minicpm-?v|qwen\d*-?vl|qwen2\.5-?vl|internvl|cogvlm|fuyu|paligemma|moondream|deepseek-?vl|janus|minigpt|glm-?4v|glm-?4\.5v|\bvlm\b|vision-?only|image-?understand|visual-?question/.test(s)) return 'imageUnd';
   if (/flux|stable-?diffusion|sdxl|dall-?e|qwen-?image|seedream|imagen|cogview|kolors|kontext/.test(s)) return 'image';
   if (/veo|sora|kling|runway|pika|cogvideo|luma|gen-?3|hunyuan-?video|seedance/.test(s)) return 'videoGen';
   if (/video-?vl|video-?llm|videochat|qwen.*video/.test(s)) return 'videoUnd';
@@ -205,6 +207,7 @@ export function kindZhongWen(k: MoXingNengLi['kind']): string {
     case 'asr': return '听话模型';
     case 'tts': return '说话模型';
     case 'image': return '画图模型';
+    case 'imageUnd': return '看图模型';
     case 'videoUnd': return '看视频模型';
     case 'videoGen': return '做视频模型';
     case 'translate': return '翻译模型';

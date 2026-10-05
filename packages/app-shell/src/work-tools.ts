@@ -210,6 +210,47 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
     if (fs.statSync(file).isDirectory()) return fail(tool, new Error('is-a-directory'), relOf(baseDir, file));
     const cap = Math.max(1, Math.min(Number(args?.maxChars) || WORK_TOOL_LIMITS.maxReadChars, WORK_TOOL_LIMITS.maxReadChars));
     const buf = fs.readFileSync(file);
+    /**
+     * **`.nm` 包内置查看**（产品要求：AI 要能直接读 .nm 了解内容）。
+     * 明文包（项目/聊天导出）直接解开给结构化内容；加密包如实说「要口令」，
+     * 不假装读到了。
+     */
+    if (/\.nm$/i.test(file)) {
+      const raw = buf.toString('utf8');
+      let zhaiYao = '';
+      try {
+        const xin = JSON.parse(raw) as { kind?: string; createdAt?: number; meta?: Record<string, unknown>; data?: string };
+        const shiMingWen = String(xin.data || '').startsWith('plain.');
+        zhaiYao += `[.nm 包] 类型=${xin.kind || '?'} 导出于=${xin.createdAt ? new Date(xin.createdAt).toLocaleString() : '?'}\n`;
+        if (xin.meta && typeof xin.meta === 'object') zhaiYao += `元信息：${JSON.stringify(xin.meta)}\n`;
+        if (!shiMingWen) {
+          zhaiYao += '这是**加密包**，需要口令才能解开内容（可以让用户在界面上导入，或让用户告知口令后用 nmYueDu 通道读）。\n';
+          return { ok: true, content: zhaiYao, meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), truncated: false } };
+        }
+        const payload = JSON.parse(Buffer.from(String(xin.data).slice(6), 'base64').toString('utf8')) as Record<string, unknown>;
+        zhaiYao += `内容键：${Object.keys(payload).join('、')}\n`;
+        if (Array.isArray(payload.chat)) zhaiYao += `聊天记录：${(payload.chat as unknown[]).length} 条\n`;
+        if (Array.isArray(payload.files)) zhaiYao += `工作区文件：${(payload.files as unknown[]).length} 个\n`;
+        if (Array.isArray(payload.plans)) zhaiYao += `计划步骤：${(payload.plans as unknown[]).length} 步\n`;
+        if (typeof payload.memory === 'string' && payload.memory) zhaiYao += `\n【项目 MEMORY】\n${String(payload.memory).slice(0, 2000)}\n`;
+        if (Array.isArray(payload.chat)) {
+          zhaiYao += '\n【聊天记录】\n';
+          for (const c of (payload.chat as Array<{ role?: string; content?: string }>)) {
+            zhaiYao += `(${c.role || '?'}) ${String(c.content || '').slice(0, 300)}\n`;
+          }
+        }
+        if (Array.isArray(payload.files)) {
+          zhaiYao += '\n【工作区文件】\n';
+          for (const f of (payload.files as Array<{ path?: string; bytes?: number; inline?: string }>)) {
+            zhaiYao += `- ${f.path || '?'} (${f.bytes || 0}B)` + (f.inline ? `\n  内容：${String(f.inline).slice(0, 500)}` : '') + '\n';
+          }
+        }
+      } catch (e) {
+        zhaiYao = '[.nm 包] 解析失败：' + String((e as Error)?.message || e);
+      }
+      const text2 = zhaiYao.length > cap ? zhaiYao.slice(0, cap) + `\n…（已截断，原文 ${zhaiYao.length} 字符）` : zhaiYao;
+      return { ok: true, content: text2, meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), truncated: zhaiYao.length > cap } };
+    }
     const text = buf.toString('utf8');
     const truncated = text.length > cap;
     return {

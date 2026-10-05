@@ -27,7 +27,11 @@ check('按 models 列表归属', /p\.models\.some/.test(src) || /models\.some/.t
 check('兜底按 defaultModel 归属', /defaultModel/.test(src));
 
 console.log('\n[2] 聊天路径按模型路由（不是只用全局 providerCfg）');
-const chatSeg = src.slice(src.indexOf('warmy:liaoTianFaSong'), src.indexOf('warmy:liaoTianFaSong') + 12000);
+// 聊天实现抽成了 `zhenZhengFaSong`（供 IPC 与「多循环自动继续」共用）——
+// 切片起点跟着它走，否则窗口落在 `chuliIpc(..., zhenZhengFaSong)` 这一行上，什么都测不到。
+const fnAt = src.indexOf('async function zhenZhengFaSong');
+const qd = fnAt >= 0 ? fnAt : src.indexOf('warmy:liaoTianFaSong');
+const chatSeg = src.slice(qd, qd + 16000);
 check('聊天里调用了 jieMoXingGongYingShang', /jieMoXingGongYingShang\(/.test(chatSeg));
 check('先选模型再定供应商', chatSeg.indexOf('jueCeMoXing') < chatSeg.indexOf('jieMoXingGongYingShang') || /const modelId[\s\S]{0,400}jieMoXingGongYingShang/.test(chatSeg));
 check('密钥检查用的是**解析出来的**供应商', /!zhu\.apiKey && zhu\.protocol !== 'ollama'/.test(chatSeg));

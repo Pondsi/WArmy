@@ -254,6 +254,8 @@ contextBridge.exposeInMainWorld('warmy', {
   jiHuaLieBiao: (p) => ipcRenderer.invoke('warmy:jiHuaLieBiao', p),
   jiHuaSheZhi: (p) => ipcRenderer.invoke('warmy:jiHuaSheZhi', p),
   onJiHuaGengXin: (cb) => ipcRenderer.on('warmy:jiHuaGengXin', (_e, d) => cb(d)),
+  /** 启动时恢复到「还有被打断的任务」的会话列表（界面亮 ? 并给「继续/重试」按钮） */
+  onJiHuaHuiFu: (cb) => ipcRenderer.on('warmy:jiHuaHuiFu', (_e, d) => cb(d)),
   /** AI 请求卡（选择/授权）出现时通知界面 */
   onAiWenTi: (cb) => ipcRenderer.on('warmy:aiWenTi', (_e, d) => cb(d)),
   /** 在资源管理器里显示文件（导出后看文件在哪） */
@@ -268,6 +270,12 @@ contextBridge.exposeInMainWorld('warmy', {
     const h = (_e, d) => cb(d);
     ipcRenderer.on('warmy:liaoTianUpdated', h);
     return () => ipcRenderer.removeListener('warmy:liaoTianUpdated', h);
+  },
+  /** 流式增量：思考过程/正文边出边显示（产品要求） */
+  onSuiXingPianDuan: (cb) => {
+    const h = (_e, d) => cb(d);
+    ipcRenderer.on('warmy:suiXingPianDuan', h);
+    return () => ipcRenderer.removeListener('warmy:suiXingPianDuan', h);
   },
   onSettingsChanged: (cb) => {
     const h = (_e, d) => cb(d);
@@ -300,6 +308,15 @@ contextBridge.exposeInMainWorld('warmy', {
   asrTranscribe: (p) => ipcRenderer.invoke('warmy:asrZhuanXie', p),
   /** 听话模型是否就绪（点语音按钮前先问） */
   tingHuaZhuangTai: () => ipcRenderer.invoke('warmy:tingHuaZhuangTai'),
+  /** 配置导出/导入（`.NM`，带口令；全新开始 / 合并配置） */
+  peizhiDaoChu: (p) => ipcRenderer.invoke('warmy:peiZhiDaoChu', p),
+  peizhiXinFeng: (p) => ipcRenderer.invoke('warmy:peiZhiXinFeng', p),
+  peizhiDaoRu: (p) => ipcRenderer.invoke('warmy:peiZhiDaoRu', p),
+  peizhiChongTu: (p) => ipcRenderer.invoke('warmy:peiZhiChongTu', p),
+  /** 导出项目/聊天为 `.nm`（项目含聊天+产出+计划+配置；聊天只含记录） */
+  xiangMuDaoChu: (p) => ipcRenderer.invoke('warmy:xiangMuDaoChu', p),
+  /** 内置查看 `.nm` */
+  nmYueDu: (p) => ipcRenderer.invoke('warmy:nmYueDu', p),
   openChatWindow: (payload) => ipcRenderer.invoke('warmy:daKaiLiaoTianChuangKou', payload),
   registerHotkey: (accel) => ipcRenderer.invoke('warmy:zhuCeKuaiJieJian', accel),
   trayInit: () => ipcRenderer.invoke('warmy:tuoPanChuShi'),

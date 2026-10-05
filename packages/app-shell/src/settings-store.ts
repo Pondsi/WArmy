@@ -342,7 +342,8 @@ export class BenDiZhangHuCang {
     try {
       p = JSON.parse(fs.readFileSync(this.file, 'utf8'));
     } catch {
-      p = { username: '主人', avatarDataUrl: '', email: '' };
+      // 默认称呼「老板」（产品要求；以前写死「主人」，改 i18n 是改不动的）
+      p = { username: '老板', avatarDataUrl: '', email: '' };
     }
     /**
      * ID = 凭证（51 位大写，见 credential.ts）。
