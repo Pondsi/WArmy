@@ -35,6 +35,12 @@ export interface LiaoTianXiaoXi {
   gongJuDiaoYongJi?: GongJuDiaoYong[];
   toolCallId?: string;
   ming?: string;
+  /**
+   * 思考过程（provider 层归一）。
+   * OpenAI 兼容的 `reasoning_content` / Ollama 的 `message.thinking` 都折到这里 ——
+   * 真事故：Ollama 的 Qwen3 明明吐了 thinking，我们只读 `reasoning_content` ⇒ 界面永远看不到思考过程。
+   */
+  reasoning?: string;
 }
 
 /** 把 content 折成纯文本（回复展示/落日志用；图片块只留文字部分） */
@@ -106,6 +112,8 @@ export interface LiaoTianPianZengLiang {
   content?: string;
   gongJuDiaoYongJi?: GongJuDiaoYong[];
   role?: LiaoTianJueSe;
+  /** 增量思考过程（流式路径） */
+  reasoning?: string;
 }
 
 export interface LiaoTianPian {

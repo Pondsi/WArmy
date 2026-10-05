@@ -442,6 +442,13 @@ export class ShiliGuanliqi extends EventEmitter {
       env: {
         ...process.env,
         ...this.opts.env,
+        /**
+         * **闪退根因修复**：`nodeBin` 兜底是 `process.execPath` —— 在 Electron 里那就是
+         * **electron.exe**。不加这个开关，spawn 出来的子进程会被当成「第二个 Electron 应用」
+         * 去启动（拉 GPU/网络/渲染进程、抢单实例锁、窗口一闪就退），用户看到的就是「闪退」。
+         * 强制 `ELECTRON_RUN_AS_NODE=1` 后，它就是一个**纯 Node** 进程，不会开窗、不会抢锁。
+         */
+        ELECTRON_RUN_AS_NODE: '1',
         WARMY_INSTANCE_ID: config.id,
         CCA_ARMY_INSTANCE_ID: config.id,
         WARMY_WORKSPACE: ws,

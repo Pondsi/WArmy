@@ -216,7 +216,8 @@
                     <button class="jinJiTrigger" id="siKaoTrigger" type="button" data-i18n-title="model.think" title="思考级别">
                       <svg class="ico siKaoIco" viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M32 8 C20 8 12 18 12 28 C12 36 18 42 22 46 V52 H42 V46 C46 42 52 36 52 28 C52 18 44 8 32 8 Z"/>
-                        <path d="M22 32 H28 V28 H34 V24 H40"/>
+                        <!-- 灯泡里的「思路折线」：折得更明显（产品要求），一眼能看出是折线而不是一道波浪 -->
+                        <path d="M18 37 L25 22 L32 39 L39 22 L46 37"/>
                         <line x1="26" y1="58" x2="38" y2="58"/>
                       </svg>
                       <span id="siKaoBiaoQian" class="siKaoBiaoQian"></span>
@@ -447,6 +448,7 @@
        Apache-2.0 要求随发行保留许可证与版权声明：./vendor/jsqr-1.4.0.LICENSE.txt 必须一起打包。 -->
   <script src="./vendor/qrcode-generator-2.0.4.js"></script>
   <script src="./vendor/jsqr-1.4.0.js"></script>
+  <script src="./busy-phrases.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

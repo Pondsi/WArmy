@@ -576,6 +576,15 @@ body.liaoTianChuangKou .liaoTianBuJu {
 }
 .anNiuTuBiao:hover { background: var(--hover); color: var(--ink); }
 .anNiuTuBiao .ico { width: 19px; height: 19px; fill: currentColor; }
+/* 语音输入「正在听写」：点亮 + 呼吸，一眼看出还在录 */
+.anNiuTuBiao.jiLuZhong {
+  background: var(--accent); color: var(--accent-ink, #fff);
+  animation: yuYinHuXi 1.4s ease-in-out infinite;
+}
+@keyframes yuYinHuXi {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(167, 133, 103, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(167, 133, 103, .35); }
+}
 /* 紧急度：默认无框，悬停出外框，点击展开 */
 .jinJiDd { position: relative; display: inline-flex; }
 .jinJiTrigger {
@@ -1798,6 +1807,12 @@ table.hkMiYaoJi td.hkMiYaoJiMiaoShu { color: var(--ink-dim); font-size: var(--fs
 .pfLeiXing[data-kind="changed"] { color: var(--ink); }
 .pfLeiXing[data-kind="deleted"] { color: var(--danger-fg); }
 .pfLuJing { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink-dim); word-break: break-all; line-height: 1.45; }
+/* 文件行：线条图标 + 文件名（完整路径只在 title 上；不占版面） */
+.pfIcoJi { display: inline-flex; align-items: center; color: var(--muted); flex-shrink: 0; }
+.pfIco { width: 15px; height: 15px; display: block; }
+.pfMing { font-size: var(--fs-xs); color: var(--ink); word-break: break-all; min-width: 0; }
+.pfHangKeDian { cursor: pointer; }
+.pfHangKeDian:hover { background: var(--hover); }
 .pfDongZuoJi { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 #xiangMuWenJianJiHe .ctgHang + .ctgHang { margin-top: 4px; }
 
@@ -2677,8 +2692,11 @@ html { font-weight: var(--fw-ui, 400); }
 .xiaoXiLangDu {
   border: none; background: transparent; color: var(--muted);
   cursor: pointer; font-size: 12px; padding: 1px 6px; border-radius: 4px;
+  display: inline-flex; align-items: center; line-height: 1;
 }
 .xiaoXiLangDu:hover { background: var(--hover); color: var(--ink); }
+/* 朗读图标改成**线条单色**（与复制图标同一路子），不再是彩色 emoji */
+.xiaoXiIco { width: 12px; height: 12px; display: block; }
 
 /* 图片附件点击放大预览 */
 .tuPianYuLanCeng {

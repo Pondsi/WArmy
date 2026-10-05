@@ -238,6 +238,10 @@ contextBridge.exposeInMainWorld('warmy', {
   dingShiRenWuShanChu: (p) => ipcRenderer.invoke('warmy:dingShiRenWuShanChu', p),
   dingShiRenWuGengXin: (p) => ipcRenderer.invoke('warmy:dingShiRenWuGengXin', p),
   ttsLangDu: (p) => ipcRenderer.invoke('warmy:ttsLangDu', p),
+  /** 翻译（专业翻译模型优先，缺失回退对话模型） */
+  fanYi: (p) => ipcRenderer.invoke('warmy:fanYi', p),
+  /** 内容安全审核（专业安全模型优先，缺失回退对话模型） */
+  anQuanShenHe: (p) => ipcRenderer.invoke('warmy:anQuanShenHe', p),
   onDingShiRenWu: (cb) => ipcRenderer.on('warmy:dingShiRenWu', (_e, d) => cb(d)),
   onDingShiDaoDian: (cb) => ipcRenderer.on('warmy:dingShiDaoDian', (_e, d) => cb(d)),
   /** 文件产出：AI 写了文件 ⇒ 自动补「文件产物」卡片 */
@@ -294,6 +298,8 @@ contextBridge.exposeInMainWorld('warmy', {
   stateSave: (s) => ipcRenderer.invoke('warmy:taiBaoCun', s),
   stateLoad: () => ipcRenderer.invoke('warmy:taiJiaZai'),
   asrTranscribe: (p) => ipcRenderer.invoke('warmy:asrZhuanXie', p),
+  /** 听话模型是否就绪（点语音按钮前先问） */
+  tingHuaZhuangTai: () => ipcRenderer.invoke('warmy:tingHuaZhuangTai'),
   openChatWindow: (payload) => ipcRenderer.invoke('warmy:daKaiLiaoTianChuangKou', payload),
   registerHotkey: (accel) => ipcRenderer.invoke('warmy:zhuCeKuaiJieJian', accel),
   trayInit: () => ipcRenderer.invoke('warmy:tuoPanChuShi'),

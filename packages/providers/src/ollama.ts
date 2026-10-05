@@ -109,7 +109,13 @@ export class OllamaGongYing extends JichuGongYing {
     }
     const json = (await res.json()) as {
       model: string;
-      message?: { content?: string; tool_calls?: Array<{ function?: { name?: string; arguments?: unknown } }> };
+      message?: {
+        content?: string;
+        /** Qwen3 / DeepSeek-R1 等：思考过程在**单独字段**里，不在 content */
+        thinking?: string;
+        reasoning_content?: string;
+        tool_calls?: Array<{ function?: { name?: string; arguments?: unknown } }>;
+      };
       done_reason?: string;
       prompt_eval_count?: number;
       eval_count?: number;
@@ -134,6 +140,13 @@ export class OllamaGongYing extends JichuGongYing {
           message: {
             role: 'assistant',
             content: json.message?.content || '',
+            /**
+             * 思考过程原样带上（Ollama 放在 `message.thinking`，有的版本叫 `reasoning_content`）。
+             * 不带上 ⇒ 界面「思考过程」永远是空的（真事故）。
+             */
+            ...((json.message?.thinking || json.message?.reasoning_content)
+              ? { reasoning: String(json.message?.thinking || json.message?.reasoning_content) }
+              : {}),
             ...(gongJu.length ? { gongJuDiaoYongJi: gongJu } : {}),
           },
           finishReason: gongJu.length ? 'tool_calls' : (json.done_reason === 'length' ? 'length' : 'stop'),
@@ -181,7 +194,13 @@ export class OllamaGongYing extends JichuGongYing {
             choices: [
               {
                 index: 0,
-                delta: { content: j.message?.content || '' },
+                // 思考过程也在流里（Qwen3 等）—— 一并带出去，别丢
+                delta: {
+                  content: j.message?.content || '',
+                  ...((j.message?.thinking || j.message?.reasoning_content)
+                    ? { reasoning: String(j.message?.thinking || j.message?.reasoning_content) }
+                    : {}),
+                },
                 finishReason: j.done ? 'stop' : null,
               },
             ],

@@ -1658,33 +1658,93 @@ async function jieMoXingGongYingShang(modelId: string): Promise<MoXingGongYingXi
  * 真事故：设置里的「决策模型」链存了却**从未被调用**，是个空壳。
  */
 async function fenLeiPanDing(content: string): Promise<string> {
+  const txt = await wenTeShuMoXing('fenLei', [
+    { role: 'system', content: '你是分类模型。只输出一个 JSON：{"urgency":"P1|P2|P3","intent":"question|task|chat|command","confidence":0-1}。urgency：P1=紧急/必须立刻准确完成，P2=一般，P3=简单闲聊或省着用。' },
+    { role: 'user', content: String(content || '').slice(0, 500) },
+  ], 64);
+  if (txt === null) return 'P2';   // 没有可用分类模型 ⇒ 保持界面传进来的紧急度
+  const mJ = txt.match(/"urgency"\s*:\s*"(P[123])"/i);
+  const mC = txt.match(/"confidence"\s*:\s*([0-9.]+)/i);
+  const xin = mC ? Number(mC[1]) : 1;
+  if (mJ && xin >= 0.5) return String(mJ[1]).toUpperCase();
+  return 'P2';
+}
+
+/**
+ * **专业模型路由（无痛无感）** —— 产品要求：
+ *   凡是"无需人类参与、由 AI 自动分类/判定/审核/翻译"的场景，**流程上**优先派给
+ *   设置里对应的专业模型（分类 / 安全审核 / 翻译 / 重排 / 画图 / 看视频 / 做视频…）；
+ *   没有配置、或那个模型挂了 ⇒ **静默回退**到该牛马自己的对话模型调用链，用户无感。
+ *
+ * 这是**路由**，不是提示词：调用点只声明"我要做哪类活"，由这里决定用谁。
+ * 特殊模型链的键与设置页一致（`<key>Chain` / `<key>Disabled`）。
+ */
+type TeShuMoXingLei = 'fenLei' | 'safety' | 'translate' | 'rerank' | 'image' | 'videoUnd' | 'videoGen' | 'asr' | 'tts';
+
+/** 解析特殊模型链上第一个「已启用」的模型（不考虑可用性） */
+function jieTeShuMoXingKey(lei: TeShuMoXingLei): string {
   try {
-    const sm0 = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
-    const fl = Array.isArray(sm0.fenLeiChain) ? (sm0.fenLeiChain as string[]) : [];
-    const fld = Array.isArray(sm0.fenLeiDisabled) ? (sm0.fenLeiDisabled as string[]) : [];
-    const flMo = fl.find((m) => m && !fld.includes(m)) || '';
-    if (!flMo) return 'P2';
-    const anF = await jieMoXingGongYingShang(flMo);
-    if (!anF || (!anF.apiKey && anF.protocol !== 'ollama')) return 'P2';
-    const pF = congYuSheChuangJian(anF.presetId, { apiKey: anF.apiKey, baseURL: anF.baseURL || undefined, protocol: anF.protocol } as never, anF.protocol);
-    const pan = await pF.chat({
-      model: flMo,
-      xiaoXiJi: [
-        { role: 'system', content: '你是决策模型。只输出一个 JSON：{"urgency":"P1|P2|P3","intent":"question|task|chat|command","confidence":0-1}。urgency：P1=紧急/必须立刻准确完成，P2=一般，P3=简单闲聊或省着用。' },
-        { role: 'user', content: String(content || '').slice(0, 500) },
-      ],
-      maxTokens: 64,
-    });
-    const txt = neiRongWenBen(pan.choices[0]?.message?.content) || '';
-    const mJ = txt.match(/"urgency"\s*:\s*"(P[123])"/i);
-    const mC = txt.match(/"confidence"\s*:\s*([0-9.]+)/i);
-    const xin = mC ? Number(mC[1]) : 1;
-    if (mJ && xin >= 0.5) {
-      audit?.log('chat.fenlei', { model: flMo, urgency: String(mJ[1]).toUpperCase(), confidence: xin });
-      return String(mJ[1]).toUpperCase();
+    const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
+    const lian = Array.isArray(sm[lei + 'Chain']) ? (sm[lei + 'Chain'] as string[]) : [];
+    const jin = Array.isArray(sm[lei + 'Disabled']) ? (sm[lei + 'Disabled'] as string[]) : [];
+    return lian.find((m) => m && !jin.includes(m)) || '';
+  } catch { return ''; }
+}
+
+/** 该专业模型是否真的可用（存在于某个供应商，且已配 Key 或是 Ollama） */
+async function teShuMoXingKeYong(lei: TeShuMoXingLei): Promise<{ mo: string; an: MoXingGongYingXinXi } | null> {
+  const mo = jieTeShuMoXingKey(lei);
+  if (!mo) return null;
+  const an = await jieMoXingGongYingShang(mo);
+  if (!an) return null;
+  if (!an.apiKey && an.protocol !== 'ollama') return null;
+  return { mo, an };
+}
+
+/**
+ * 让专业模型干一件活。**返回 null = 没有可用的专业模型（或它失败了）**，
+ * 调用方据此回退到「该牛马的大模型调用链」—— 回退是**静默**的。
+ */
+async function wenTeShuMoXing(
+  lei: TeShuMoXingLei,
+  xiaoXiJi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  maxTokens = 256,
+): Promise<string | null> {
+  try {
+    const hit = await teShuMoXingKeYong(lei);
+    if (!hit) {
+      audit?.log('special-model.fallback', { lei, reason: 'not-configured-or-unusable' });
+      return null;
     }
-    return 'P2';
-  } catch { return 'P2'; }
+    const p = congYuSheChuangJian(hit.an.presetId, { apiKey: hit.an.apiKey, baseURL: hit.an.baseURL || undefined, protocol: hit.an.protocol } as never, hit.an.protocol);
+    const r = await p.chat({ model: hit.mo, xiaoXiJi: xiaoXiJi as never, maxTokens });
+    const txt = neiRongWenBen(r.choices[0]?.message?.content) || '';
+    audit?.log('special-model.used', { lei, model: hit.mo, chars: txt.length });
+    return txt;
+  } catch (e) {
+    audit?.log('special-model.failed', { lei, error: xiJingCuoWu(e).slice(0, 160) });
+    return null;
+  }
+}
+
+/** 安全审核：有安全模型就让它判，没有就**回退到调用方的大模型判断**（返回 null） */
+async function anQuanShenHeWenBen(wenBen: string): Promise<{ safe: boolean; reason: string; by: string } | null> {
+  const txt = await wenTeShuMoXing('safety', [
+    { role: 'system', content: '你是内容安全审核模型。只输出 JSON：{"safe":true|false,"reason":"简短理由"}。明显违规才判 false。' },
+    { role: 'user', content: String(wenBen || '').slice(0, 2000) },
+  ], 96);
+  if (txt === null) return null;
+  const m = txt.match(/"safe"\s*:\s*(true|false)/i);
+  const r = txt.match(/"reason"\s*:\s*"([^"]*)"/i);
+  return { safe: m ? String(m[1]).toLowerCase() === 'true' : true, reason: r ? String(r[1]) : '', by: 'safety-model' };
+}
+
+/** 翻译：有翻译模型就让它翻，没有就返回 null（回退到大模型链） */
+async function fanYiWenBen(wenBen: string, muBiao: string): Promise<string | null> {
+  return wenTeShuMoXing('translate', [
+    { role: 'system', content: `你是翻译模型。只输出译文，不要解释。目标语言：${muBiao || '中文'}。` },
+    { role: 'user', content: String(wenBen || '').slice(0, 4000) },
+  ], 1024);
 }
 
 /** 打包态资源根目录；开发态下 Electron 也会给值，兜底空串便于拼路径 */
@@ -1823,6 +1883,12 @@ function zhunbeiJiyiCangYunxingShi(): { ipcEntry: string; CangLu: string } {
 async function yindao() {
   p1 = await chuangJianP1YunXingShi({
     instancesRoot: path.join(app.getPath('userData'), 'instances'),
+    /**
+     * **必须用捆绑的 Node**，不能拿 Electron 当 Node：
+     * 兜底成 `process.execPath`（electron.exe）时，每个牛马实例都会以「第二个 Electron 应用」
+     * 的姿态启动 —— 拉 GPU/网络进程、抢单实例锁、窗口一闪就退（用户看到的"闪退"）。
+     */
+    nodePath: jiexiJiedianYunxingShi().path,
     onApprove: async (Qiu) => {
       // 安全模式 full 时自动放行；normal/strict 向渲染进程请求审批
       const mode = p1?.security.getMode();
@@ -2541,6 +2607,20 @@ if (dedaoDangeSuo) {
       qidong('whenReady');
       chuangjianChuangkou();
       qidong('window created');
+      /**
+       * **窗口保底**（用户反馈"突然停止/闪退"）：
+       * 上面任何一步抛错、或窗口被意外销毁，都会让用户看到"程序不见了"。
+       * 这里 5 秒后自查一次：一个可用窗口都没有就再建一个，并如实记日志。
+       */
+      setTimeout(() => {
+        try {
+          const huo = BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed());
+          if (!huo.length) {
+            qidong('window guard: no live window, recreating');
+            chuangjianChuangkou();
+          }
+        } catch (e) { qidong(`window guard error ${String(e)}`); }
+      }, 5000);
       await yindao();
       qishiJiyiCangYibu();
       try { dshMoRenBaoZhuang(); qidong('dsh auto-install scheduled'); } catch (e) { qidong(`dsh auto ${String(e)}`); }
@@ -2550,11 +2630,36 @@ if (dedaoDangeSuo) {
       });
     })
     .catch((e) => {
+      // 启动期就抛错：**不能静默退出**（那就是"闪退"）。记日志 + 尽力建窗口。
       qidong(`whenReady error ${String(e)}`);
+      try { chuangjianChuangkou(); } catch { /* noop */ }
     });
+
+  /**
+   * **崩坏防护**（用户反馈"突然停止/闪退"）：
+   * 渲染进程、GPU 进程、其它子进程挂掉时，Electron 默认可能直接把整个应用带走。
+   * 这里一律**接住 + 记日志 + 恢复窗口**，绝不让一次子进程崩溃变成"应用闪退"。
+   */
+  app.on('render-process-gone', (_e, wc, details) => {
+    qidong(`render-process-gone reason=${details?.reason || '?'} exitCode=${details?.exitCode ?? '?'}`);
+    audit?.log('app.render-gone', { reason: details?.reason || '', exitCode: details?.exitCode ?? 0 });
+    // 只要还开着窗口，就把它的渲染进程重新加载起来（数据在日志/磁盘里，不会丢）
+    try {
+      if (wc && !wc.isDestroyed() && details?.reason !== 'clean-exit') wc.reload();
+    } catch { /* noop */ }
+  });
+  app.on('child-process-gone', (_e, details) => {
+    qidong(`child-process-gone type=${details?.type || '?'} reason=${details?.reason || '?'} exitCode=${details?.exitCode ?? '?'}`);
+    audit?.log('app.child-gone', { type: details?.type || '', reason: details?.reason || '', exitCode: details?.exitCode ?? 0 });
+    // GPU 进程没了是可恢复的：重建窗口即可（不退出应用）
+    if (details?.type === 'GPU' && details?.reason !== 'clean-exit') {
+      try { if (win && !win.isDestroyed()) win.webContents.reload(); } catch { /* noop */ }
+    }
+  });
 }
 
 app.on('window-all-closed', () => {
+  qidong('window-all-closed');
   if (process.platform !== 'darwin') tuichuYingyong('window-all-closed');
 });
 
@@ -3808,6 +3913,11 @@ chuliIpc(
       const chongshi = await daiShangXiaWenChongShiYunXing(baseBudget, async (budgetChars) => {
         // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）
         const shitu = renderChatView(sessionId, xiaoXi.content, budgetChars);
+        /**
+         * **长文判定**（真事故：要 5000 字小说，只回 546 字且停在句中）：
+         * 既影响输出预算（1024 → 8192），也影响给模型的指令（别提前收尾）。
+         */
+        const yaoChangWen = /(\d{3,6})\s*字|小说|长文|长篇|完整写|详细写|写一篇|写一份|报告|论文|剧本|方案|策划|文案|说明书|白皮书/.test(String(xiaoXi.content || ''));
         // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
         // 身份与最高信念**强制注入**（最前面，一句话，简洁）
         const shenFenTou: LiaoTianXiaoXi[] = [];
@@ -3825,6 +3935,13 @@ chuliIpc(
           // 让它知道自己跑在哪个模型上（真事故：用户问"你是哪个模型"，它说"看不清蹄子底下"）
           if (modelId) ju.push(tMain('llm.modelLine', '你当前运行在模型「{model}」上。').replace('{model}', String(modelId)));
           if (yongHu) ju.push(tMain('llm.userLine', '你的用户是「{u}」，请这样称呼他。').replace('{u}', yongHu));
+          /**
+           * 长文指令（真事故：用户要 5000 字小说，模型写到 546 字就停）。
+           * 光调大输出预算是必要条件，还得**明确告诉它别提前收尾**。
+           */
+          if (yaoChangWen) {
+            ju.push(tMain('llm.longForm', '用户要的是长文：请**完整写出**，不要提前收尾、不要省略、不要只给提纲或开头；篇幅按用户要求（如「N 字」）尽量写足，直到自然结束。'));
+          }
           if (ju.length) shenFenTou.push({ role: 'system', content: ju.join('') } as LiaoTianXiaoXi);
         }
         /**
@@ -3865,17 +3982,37 @@ chuliIpc(
           });
           audit?.log('chat.image-attached', { sessionId, count: tuKuaiJi.length, skipped: tiaoGuoJi.length });
         }
+        /**
+         * **输出预算**（真事故：用户要 5000 字小说，回复只有 546 字且**停在句中**）
+         * 根因：这里硬编码 `maxTokens: 1024` —— 模型写到一半就被截断。
+         * 现在：默认 4096；用户明确要长文（N 字 / 小说 / 长文 / 报告 / 论文…）时给 8192。
+         */
+        const shuChuShangXian = yaoChangWen ? 8192 : 4096;
         const jiBenQiu = {
           model: modelId,
           xiaoXiJi: xiaoXiJiZui,
-          maxTokens: 1024,
+          maxTokens: shuChuShangXian,
         };
         let loop: Awaited<ReturnType<typeof yunXingLiaoTianXunHuan>>;
         try {
           loop = await yunXingLiaoTianXunHuan(sessionId, provider, siKaoExtra ? { ...jiBenQiu, extra: siKaoExtra } : jiBenQiu, xiaoXi.xiaoDiShuLiang);
         } catch (e0) {
           const mo = String((e0 as Error)?.message || e0);
-          if (siKaoExtra && /reasoning|thinking|effort|unsupported|unknown (parameter|field)|invalid.*parameter|400/i.test(mo)) {
+          /**
+           * 有的端/模型不收大 max_tokens（报 400 / max_tokens / num_predict 不合法）——
+           * 那就**降一档重试**，而不是把整轮打成失败。
+           */
+          if (/max_?tokens|num_predict|maxTokens|too large|exceed|invalid.*(token|length)|400/i.test(mo) && shuChuShangXian > 1024) {
+            audit?.log('chat.max-tokens-downgraded', { sessionId, from: shuChuShangXian, error: mo.slice(0, 160) });
+            try {
+              loop = await yunXingLiaoTianXunHuan(sessionId, provider, { ...jiBenQiu, maxTokens: 2048 }, xiaoXi.xiaoDiShuLiang);
+            } catch (e1) {
+              const mo1 = String((e1 as Error)?.message || e1);
+              if (/max_?tokens|num_predict|maxTokens|too large|exceed|invalid.*(token|length)|400/i.test(mo1)) {
+                loop = await yunXingLiaoTianXunHuan(sessionId, provider, { ...jiBenQiu, maxTokens: 1024 }, xiaoXi.xiaoDiShuLiang);
+              } else { throw e1; }
+            }
+          } else if (siKaoExtra && /reasoning|thinking|effort|unsupported|unknown (parameter|field)|invalid.*parameter|400/i.test(mo)) {
             jiangJiTiShi = true;
             audit?.log('chat.think-downgraded', { sessionId, level: xiaoXi.thinkLevel || 'auto', error: mo.slice(0, 160) });
             loop = await yunXingLiaoTianXunHuan(sessionId, provider, jiBenQiu, xiaoXi.xiaoDiShuLiang);
@@ -3930,7 +4067,14 @@ chuliIpc(
       }
       // 思考过程：DeepSeek 等放在 message.reasoning_content，有的叫 reasoning / thinking
       const rawMsg = ((xiangYing.raw as { choices?: Array<{ message?: Record<string, unknown> }> } | undefined)?.choices?.[0]?.message) || {};
-      const siKaoGuoCheng = String(rawMsg.reasoning_content ?? rawMsg.reasoning ?? rawMsg.thinking ?? '');
+      /**
+       * **provider 归一后的 message.reasoning 优先**。
+       * Ollama 把思考放在 `message.thinking`（不是 reasoning_content），provider 层已折进
+       * `reasoning` —— 真事故：这里只读 raw 的 reasoning_content ⇒ Ollama 的 Qwen3
+       * 思考过程永远不显示。
+       */
+      const normMsgReasoning = (xiangYing.choices[0]?.message as { reasoning?: unknown } | undefined)?.reasoning;
+      const siKaoGuoCheng = String(normMsgReasoning ?? rawMsg.reasoning_content ?? rawMsg.reasoning ?? rawMsg.thinking ?? '');
       // 思考档位被模型拒绝 ⇒ 已降级为「自动」，回复**开头**如实标注（产品要求）
       const reply = jiangJiTiShi
         ? (tMain('chat.thinkDowngraded', '【提示】该模型不支持所选思考档位，已降级为「自动」。') + '\n\n' + reply0)
@@ -7625,7 +7769,8 @@ chuliIpc('warmy:paiShengdshShiLi', async (_e, cfg: { id: string; ming: string })
   const dshJiaMuLu = path.join(app.getPath('userData'), 'dsh-home');
   const profile = 'warmy';
   await ensureDshProfile({
-    nodePath: process.execPath,
+    // 同上：这里是 Node 运行时，不是"再起一个 Electron 应用"
+    nodePath: jiexiJiedianYunxingShi().path,
     dshPackageDir: dshDir,
     dshJiaMuLu,
     profile,
@@ -8565,26 +8710,75 @@ chuliIpc('warmy:baoCunWenBen', async (_e, payload: { defaultName?: string; conte
 
 // ── 卡顿自检（diagnostics IPC）已下线：功能整块移除，IPC 通道不再注册 ──
 
-// ── D. ASR 语音转文字（调用 DeepSeek 兼容接口的 audio 端点；失败返回 null） ──
+// ── D. ASR 语音转文字（**优先用设置里的「听话模型」**；没有再退回当前供应商） ──
+/**
+ * 听话模型是否就绪（界面点语音按钮前先问这一句 —— 没配就提示去配，而不是录完才发现转不出来）。
+ */
+chuliIpc('warmy:tingHuaZhuangTai', async () => {
+  try {
+    await baozhangGongyingshangMiyao();
+    const hit = await teShuMoXingKeYong('asr');
+    if (hit) return { ok: true, ready: true, model: hit.mo, provider: hit.an.biaoQian, source: 'asr-chain' };
+    // 没配专业听话模型：看看当前供应商能不能顶一下（DeepSeek 等不一定有 /audio/transcriptions）
+    const keYong = !!(providerCfg.apiKey || providerCfg.protocol === 'ollama');
+    return {
+      ok: true,
+      ready: false,
+      model: '',
+      source: keYong ? 'chat-provider-fallback' : 'none',
+      reason: keYong ? 'no-asr-model（用的是当前供应商的兜底转写，建议在「设置 → 模型 → 听话模型」里配一个）' : 'no-asr-model',
+    };
+  } catch (e) { return { ok: false, ready: false, error: xiJingCuoWu(e) }; }
+});
+
 chuliIpc('warmy:asrZhuanXie', async (_e, payload: { dataUrl: string; ext?: string }) => {
   try {
     await baozhangGongyingshangMiyao();
-    if (!providerCfg.apiKey) return { ok: false, error: 'no key' };
-    // 优先走用户配置的 ASR 端点（若支持）；否则尝试 /audio/transcriptions
-    const base = (providerCfg.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '');
     const b64 = String(payload.dataUrl).replace(/^data:[^,]+,/, '');
     const buf = Buffer.from(b64, 'base64');
-    const biaodan = new FormData();
-    biaodan.append('file', new Blob([buf], { type: 'audio/webm' }), 'voice.webm');
-    biaodan.append('model', 'whisper-1');
-    const res = await fetch(base + '/audio/transcriptions', {
+    const biaodan = () => {
+      const f = new FormData();
+      f.append('file', new Blob([buf], { type: 'audio/webm' }), 'voice.webm');
+      return f;
+    };
+    /**
+     * ① **设置里的听话模型优先**（产品要求：有专业模型就用它，没有才回退）。
+     * 真事故：以前完全无视「听话模型」设置，硬发 whisper-1 给当前供应商 ⇒ 转不出来，
+     * 界面只能显示 `[语音] xxx.webm`。
+     */
+    const hit = await teShuMoXingKeYong('asr');
+    if (hit) {
+      const form = biaodan();
+      form.append('model', hit.mo);
+      try {
+        const res = await fetch(pinJieUrl(hit.an.baseURL, 'audio/transcriptions'), {
+          method: 'POST',
+          headers: hit.an.apiKey ? { Authorization: 'Bearer ' + hit.an.apiKey } : undefined,
+          body: form,
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { text?: string };
+          audit?.log('asr.used', { model: hit.mo, chars: String(data.text || '').length, source: 'asr-chain' });
+          return { ok: true, text: data.text || '', model: hit.mo, source: 'asr-chain' };
+        }
+        audit?.log('asr.failed', { model: hit.mo, status: res.status });
+      } catch (e1) {
+        audit?.log('asr.failed', { model: hit.mo, error: xiJingCuoWu(e1).slice(0, 120) });
+      }
+    }
+    // ② 回退：当前生效供应商的 /audio/transcriptions（无感兜底）
+    if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') return { ok: false, error: 'no-asr-model（请在「设置 → 模型 → 听话模型」里配置）' };
+    const base = (providerCfg.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '');
+    const form2 = biaodan();
+    form2.append('model', 'whisper-1');
+    const res2 = await fetch(base + '/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + providerCfg.apiKey },
-      body: biaodan,
+      body: form2,
     });
-    if (!res.ok) return { ok: false, error: 'http ' + res.status };
-    const data = (await res.json()) as { text?: string };
-    return { ok: true, text: data.text || '' };
+    if (!res2.ok) return { ok: false, error: 'http ' + res2.status };
+    const data2 = (await res2.json()) as { text?: string };
+    return { ok: true, text: data2.text || '', model: 'whisper-1', source: 'chat-provider-fallback' };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
@@ -9278,6 +9472,64 @@ chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
     }
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+/**
+ * **翻译**（专业模型优先，缺失回退）：有翻译模型就用它；没有就交给当前生效的对话模型。
+ * 用户无感 —— 界面上只多一个「翻译」动作，用谁由这里决定。
+ */
+chuliIpc('warmy:fanYi', async (_e, p0?: { text?: string; target?: string }) => {
+  try {
+    const s = String(p0?.text || '').trim();
+    if (!s) return { ok: false, error: 'empty-text' };
+    const muBiao = String(p0?.target || '中文');
+    const zhuan = await fanYiWenBen(s, muBiao);
+    if (zhuan !== null) return { ok: true, text: zhuan || s, by: 'translate-model' };
+    // 回退：用当前生效的对话模型
+    const zhu = await jieMoXingGongYingShang(providerCfg.model || '');
+    const use = zhu || { presetId: providerCfg.presetId, baseURL: providerCfg.baseURL || '', protocol: providerCfg.protocol, apiKey: providerCfg.apiKey || '', biaoQian: providerCfg.presetId };
+    if (!use.apiKey && use.protocol !== 'ollama') return { ok: false, error: 'no-model（请先在「设置 → 模型」里配置供应商密钥）' };
+    const p = congYuSheChuangJian(use.presetId, { apiKey: use.apiKey, baseURL: use.baseURL || undefined, protocol: use.protocol } as never, use.protocol);
+    const r = await p.chat({
+      model: providerCfg.model || 'deepseek-chat',
+      xiaoXiJi: [
+        { role: 'system', content: `你是翻译。只输出译文，不要解释。目标语言：${muBiao}。` },
+        { role: 'user', content: s.slice(0, 4000) },
+      ],
+      maxTokens: 1024,
+    });
+    return { ok: true, text: neiRongWenBen(r.choices[0]?.message?.content) || s, by: 'chat-model(fallback)' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/**
+ * **内容安全审核**（专业模型优先，缺失回退）：有安全模型就让它判；没有则交给对话模型判。
+ * 返回 `by` 让界面/审计知道这一判是谁做的（无感但不无痕）。
+ */
+chuliIpc('warmy:anQuanShenHe', async (_e, p0?: { text?: string }) => {
+  try {
+    const s = String(p0?.text || '');
+    if (!s.trim()) return { ok: true, safe: true, reason: '', by: 'skip(empty)' };
+    const zhuan = await anQuanShenHeWenBen(s);
+    if (zhuan) return { ok: true, ...zhuan };
+    // 回退：对话模型判断
+    const zhu = await jieMoXingGongYingShang(providerCfg.model || '');
+    const use = zhu || { presetId: providerCfg.presetId, baseURL: providerCfg.baseURL || '', protocol: providerCfg.protocol, apiKey: providerCfg.apiKey || '', biaoQian: providerCfg.presetId };
+    if (!use.apiKey && use.protocol !== 'ollama') return { ok: true, safe: true, reason: '', by: 'no-model(allow)' };
+    const p = congYuSheChuangJian(use.presetId, { apiKey: use.apiKey, baseURL: use.baseURL || undefined, protocol: use.protocol } as never, use.protocol);
+    const r = await p.chat({
+      model: providerCfg.model || 'deepseek-chat',
+      xiaoXiJi: [
+        { role: 'system', content: '你是内容安全审核。只输出 JSON：{"safe":true|false,"reason":"简短理由"}。明显违规才判 false。' },
+        { role: 'user', content: s.slice(0, 2000) },
+      ],
+      maxTokens: 96,
+    });
+    const txt = neiRongWenBen(r.choices[0]?.message?.content) || '';
+    const m = txt.match(/"safe"\s*:\s*(true|false)/i);
+    const rr = txt.match(/"reason"\s*:\s*"([^"]*)"/i);
+    return { ok: true, safe: m ? String(m[1]).toLowerCase() === 'true' : true, reason: rr ? String(rr[1]) : '', by: 'chat-model(fallback)' };
+  } catch (e) { return { ok: true, safe: true, reason: '', by: 'error(allow)', error: xiJingCuoWu(e) }; }
+});
+
 /** 界面上的「打开」按钮：用系统默认程序打开文件/目录。
  *  **这是用户自己在界面上点的**（产物卡/文件列表），不是 AI 工具 —— AI 开文件走 `open_path`（有越权门槛）。
  *  因此这里不做工作区外限制：AI 产出的桌面文件，用户点开必须能看（真事故：点了报 workspace-escape）。 */
