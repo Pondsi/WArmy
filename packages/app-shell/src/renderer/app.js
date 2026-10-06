@@ -2556,11 +2556,15 @@
           const sid = state.selectedChat && state.selectedChat.id;
           const wei = (state.renWuZhongDuan && sid && state.renWuZhongDuan[String(sid)]) || {};
           const why = String(wei.why || tOr('chat.resumeTaskHint', '任务被中断'));
+          const jieDuan = String(wei.jieDuan || '');
           /**
            * 点了就**带上中断原因**发一条内部指令：让模型先分析原因、规避/修复，
            * 再继续或重新执行（产品要求："点击后就会分析发生的错误…然后继续或重新执行"）。
+           * 有「从哪一步断的」就一并告诉模型，续传不是从头懵。
            */
-          const zhiLing = tOr('chat.resumeTaskCmd', '【继续执行】上次任务因「{why}」中断。请先分析原因并规避或修复，然后继续或重新执行未完成的任务。').replace('{why}', why);
+          const zhiLing = tOr('chat.resumeTaskCmd', '【继续执行】上次任务因「{why}」中断。请先分析原因并规避或修复，然后继续或重新执行未完成的任务。')
+            .replace('{why}', why)
+            + (jieDuan ? ' ' + tOr('chat.resumeTaskFrom', '（中断发生在：{jieDuan}）').replace('{jieDuan}', jieDuan) : '');
           const ru = $('shuRu');
           if (ru) { ru.value = zhiLing; void faSong(); }
           if (sid && state.planInterrupted) state.planInterrupted.delete(String(sid));
@@ -16583,7 +16587,7 @@
         if (d && d.why) {
           state.renWuZhongDuan = state.renWuZhongDuan || {};
           const sid0 = String(d.sessionId || (ss[0] || ''));
-          if (sid0) state.renWuZhongDuan[sid0] = { why: String(d.why), error: String(d.error || '') };
+          if (sid0) state.renWuZhongDuan[sid0] = { why: String(d.why), error: String(d.error || ''), jieDuan: String(d.jieDuan || '') };
         }
         renderList();
       } catch { /* noop */ }

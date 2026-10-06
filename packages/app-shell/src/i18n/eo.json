@@ -2211,5 +2211,6 @@
   "settings.fw": "Dikeco de tiparo",
   "wo.dao": "Dao",
   "wo.daoHint": "La plej alta prioritata prompto: sendita al ĉiu workhorse, **super «Reguloj» kaj iu ajn alia instrukcio**; je konflikto ĉi tiu venkas. Konservita en dao.md.",
-  "wo.daoPlaceholder": "ekz.: unue venku, poste batalu; unuigu scion kaj agon; honeste raportu necertecon; servi al homaro kaj neniam faru malbonon…"
+  "wo.daoPlaceholder": "ekz.: unue venku, poste batalu; unuigu scion kaj agon; honeste raportu necertecon; servi al homaro kaj neniam faru malbonon…",
+  "chat.resumeTaskFrom": "(interrompita ĉe: {jieDuan})"
 }

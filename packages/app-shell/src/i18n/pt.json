@@ -2211,5 +2211,6 @@
   "settings.fw": "Peso da fonte",
   "wo.dao": "Dao",
   "wo.daoHint": "O prompt de prioridade máxima global: enviado a cada workhorse, **acima de «Regras» e de qualquer outra instrução**; em caso de conflito, este vence. Guardado em dao.md.",
-  "wo.daoPlaceholder": "p. ex.: vença primeiro, depois lute; une saber e agir; relate incertezas com honestidade; sirva à humanidade e nunca faça o mal…"
+  "wo.daoPlaceholder": "p. ex.: vença primeiro, depois lute; une saber e agir; relate incertezas com honestidade; sirva à humanidade e nunca faça o mal…",
+  "chat.resumeTaskFrom": "(interrompido em: {jieDuan})"
 }

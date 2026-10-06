@@ -4216,6 +4216,8 @@ async function zhenZhengFaSong(
       originalBytes: yiYaSuo.originalBytes,
       compressedBytes: yiYaSuo.compressedBytes,
     });
+    // 用户开口了（含点「继续/重试」发出的续传指令）⇒ 清掉「从哪一步断的」标记
+    try { etaHuo().qingZhongDuan(sessionId); } catch { /* noop */ }
     // 日志只追加（不变量 #1）：先写入记忆服务，拿到**真实 recordId + seq** 再落日志，
     // 这样指针里的 retrieve(recordId=…)/retrieve(seq=…) 真的能回到这条原文。
     // recordId 只在写入成功时才挂到日志（失败时宁缺勿假：死 id 会让模型白跑一轮工具）。
@@ -4722,11 +4724,11 @@ async function zhenZhengFaSong(
       lastError = { ts: Date.now(), message: zuiHouCuo, context: 'chat-send' };
       fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: zuiHouCuo } });
       // 模型调用失败 ⇒ 任务停在半路：界面在最新回复里挂「继续 / 重试」
-      biaoRenWuZhongDuan(sessionId, '模型调用失败（整条调用链都试过了）', zuiHouCuo);
+      biaoRenWuZhongDuan(sessionId, '模型调用失败（整条调用链都试过了）', zuiHouCuo, '模型调用');
       return { ok: false, reply: '', error: zuiHouCuo, needsKey: false, retry: true };
     }
     // 兜底：整条链跑完既没成功也没留错（理论上不该走到，但类型必须闭合）
-    biaoRenWuZhongDuan(sessionId, '模型调用失败（没有可用模型）', 'no-model-available');
+    biaoRenWuZhongDuan(sessionId, '模型调用失败（没有可用模型）', 'no-model-available', '模型调用');
     return { ok: false, reply: '', error: 'no-model-available', needsKey: false, retry: true };
 }
 chuliIpc('warmy:liaoTianFaSong', zhenZhengFaSong);
@@ -4820,7 +4822,7 @@ const etaYiChang = new Map<string, { xingWei: XingWei; liYou: string; at: number
 const yiShuoGuo = new Set<string>();
 function biaoEtaYiChang(sessionId: string, xingWei: XingWei, liYou: string): void {
   etaYiChang.set(String(sessionId || ''), { xingWei, liYou, at: Date.now() });
-  biaoRenWuZhongDuan(sessionId, liYou, 'eta-anomaly');
+  biaoRenWuZhongDuan(sessionId, liYou, 'eta-anomaly', xingWeiMing(xingWei));
 }
 
 /**
@@ -4828,15 +4830,24 @@ function biaoEtaYiChang(sessionId: string, xingWei: XingWei, liYou: string): voi
  * 挂一个「继续 / 重试」按钮：点了先分析原因、规避/修复，再接着做；
  * 用户若直接发了新对话且 AI 已收到，按钮会变灰失效（渲染层负责）。
  */
-function biaoRenWuZhongDuan(sessionId: string, why: string, error?: string): void {
+function biaoRenWuZhongDuan(sessionId: string, why: string, error?: string, jieDuan?: string): void {
   try {
+    // 记进临时账本：续传时能说清「从哪一步断的」，不是只说"被打断了"
+    try {
+      etaHuo().jiZhongDuan(sessionId, {
+        jieDuan: String(jieDuan || '').slice(0, 200),
+        why: String(why || '').slice(0, 200),
+        error: error ? String(error).slice(0, 200) : undefined,
+      });
+    } catch { /* 账本写不进去不影响广播 */ }
     broadcastToWindows('warmy:jiHuaHuiFu', {
       sessions: [String(sessionId || '')],
       sessionId: String(sessionId || ''),
       why: String(why || '').slice(0, 300),
       error: String(error || '').slice(0, 300),
+      jieDuan: String(jieDuan || '').slice(0, 200),
     });
-    audit?.log('plan.task-interrupted', { sessionId, why: String(why || '').slice(0, 160), error: String(error || '').slice(0, 160) });
+    audit?.log('plan.task-interrupted', { sessionId, why: String(why || '').slice(0, 160), error: String(error || '').slice(0, 160), jieDuan: String(jieDuan || '').slice(0, 120) });
   } catch { /* 广播失败不影响主流程 */ }
 }
 function quEtaYiChang(sessionId: string): { xingWei: XingWei; liYou: string; at: number } | null {
@@ -5257,7 +5268,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
         content: tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）') + '\n' + String((r && (r as { error?: string }).error) || ''),
         ts: Date.now(),
       });
-      biaoRenWuZhongDuan(sessionId, tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）'), String((r && (r as { error?: string }).error) || ''));
+      biaoRenWuZhongDuan(sessionId, tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）'), String((r && (r as { error?: string }).error) || ''), '计划续派');
       etaHuo().jieShuLun(sessionId);   // 出错中止：不当作"完成"，不进学习样本
       return;
     }
@@ -5266,7 +5277,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
     await yanXuJiHuaRenWu(sessionId, xiaoXi, { diaoYongJi: xiaLun.diaoYongJi, huiFu: String((r as { reply?: string }).reply || '') });
   } catch (e) {
     audit?.log('plan.auto-continue-fail', { sessionId, error: xiJingCuoWu(e).slice(0, 160) });
-    biaoRenWuZhongDuan(sessionId, tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）'), xiJingCuoWu(e).slice(0, 160));
+    biaoRenWuZhongDuan(sessionId, tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）'), xiJingCuoWu(e).slice(0, 160), '计划续派');
     try { etaHuo().jieShuLun(sessionId); } catch { /* noop */ }
     yanXuZhuangTai.delete(sessionId);
   }

@@ -2211,5 +2211,6 @@
   "settings.fw": "Font weight",
   "wo.dao": "Dao (The Way)",
   "wo.daoHint": "The globally highest-priority prompt: sent to every workhorse, **above Rules and any other instruction**; on conflict this wins. Stored separately in dao.md.",
-  "wo.daoPlaceholder": "e.g. win first, then fight; unite knowledge and action; report uncertainty honestly; serve humanity and never do harm…"
+  "wo.daoPlaceholder": "e.g. win first, then fight; unite knowledge and action; report uncertainty honestly; serve humanity and never do harm…",
+  "chat.resumeTaskFrom": "(interrupted at: {jieDuan})"
 }

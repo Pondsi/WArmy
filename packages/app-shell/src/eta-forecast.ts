@@ -187,6 +187,14 @@ export interface EtaHuiHua {
   kaiShi: number;
   xingWei: Partial<Record<XingWei, EtaXingWeiHuo>>;
   gengXinTs: number;
+  /** 本轮**从哪一步断的**（续传时如实告诉用户；没断过就没有） */
+  zhongDuan?: {
+    at: number;
+    xingWei?: XingWei;
+    jieDuan: string;
+    why: string;
+    error?: string;
+  } | null;
 }
 
 export interface EtaLinShiKu {
@@ -545,6 +553,35 @@ export class EtaLinShi {
     const w = this.xingWei(sessionId, x, now);
     w.zuiHouZhongLei = zhongLei;
     w.gengXinTs = now;
+    this.baCun();
+  }
+
+  /** 记下**中断发生在哪一步**（续传按钮要能说清"从哪断的"，不是只说"被打断了"） */
+  jiZhongDuan(sessionId: string, d: { xingWei?: XingWei; jieDuan: string; why: string; error?: string }, now = Date.now()): void {
+    const h = this.huiHua(sessionId, now);
+    h.zhongDuan = {
+      at: now,
+      xingWei: d.xingWei,
+      jieDuan: String(d.jieDuan || '').slice(0, 200),
+      why: String(d.why || '').slice(0, 200),
+      error: d.error ? String(d.error).slice(0, 200) : undefined,
+    };
+    h.gengXinTs = now;
+    this.baCun();
+  }
+
+  /** 取"从哪断的"（续传时读；没断过返回 null） */
+  quZhongDuan(sessionId: string): EtaHuiHua['zhongDuan'] {
+    const h = this.ku.huiHua[String(sessionId || '')];
+    return h?.zhongDuan || null;
+  }
+
+  /** 续传成功后清掉中断标记（临时账本就该是临时的） */
+  qingZhongDuan(sessionId: string, now = Date.now()): void {
+    const h = this.ku.huiHua[String(sessionId || '')];
+    if (!h || !h.zhongDuan) return;
+    h.zhongDuan = null;
+    h.gengXinTs = now;
     this.baCun();
   }
 

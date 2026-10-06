@@ -2211,5 +2211,6 @@
   "settings.fw": "Graisse de la police",
   "wo.dao": "Dao",
   "wo.daoHint": "Le prompt de priorité la plus haute : envoyé à chaque workhorse, **au-dessus des «Règles» et de toute autre instruction** ; en cas de conflit, il gagne. Stocké dans dao.md.",
-  "wo.daoPlaceholder": "p. ex. : gagner d'abord, combattre ensuite ; unir savoir et action ; signaler honnêtement l'incertitude ; servir l'humanité et ne jamais faire le mal…"
+  "wo.daoPlaceholder": "p. ex. : gagner d'abord, combattre ensuite ; unir savoir et action ; signaler honnêtement l'incertitude ; servir l'humanité et ne jamais faire le mal…",
+  "chat.resumeTaskFrom": "(interrompu à : {jieDuan})"
 }
