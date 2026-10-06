@@ -13,6 +13,10 @@
     },
     "./ipc": {
       "import": "./dist/ipc.js"
+    },
+    "./lock": {
+      "types": "./dist/lock.d.ts",
+      "import": "./dist/lock.js"
     }
   },
   "scripts": {

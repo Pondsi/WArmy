@@ -21,6 +21,7 @@ import { bianMaXiangLiang, yuXianInt8, normalizeCosine, rrfRonghePaixu, unpackIn
 import type { RankedList, RongheMingzhong } from './vectors.js';
 import { OnnxQianruqi, morenMoxingHouxuan, ortSearchCandidates } from './embedder.js';
 import type { XiangliangZhuangtai } from './embedder.js';
+import { JsonlSuo } from './lock.js';
 
 const require = createRequire(import.meta.url);
 
@@ -275,11 +276,14 @@ export class JiyiCangFuwu {
   private queryVecCache = new Map<string, Float32Array>();
   private closed = false;
   private jsonlIndex: JsonlSuoyin | null = null;
+  /** SWMR 文件锁：写侧持有，读者可并发（与检查点回退共享同一 .lock 协议） */
+  private jsonlSuo: JsonlSuo;
 
   constructor(private opts: MemoryOsOptions) {
     fs.mkdirSync(opts.CangLu, { recursive: true });
     this.jsonlPath = path.join(opts.CangLu, opts.jsonlName || 'fast-memory.jsonl');
     this.dbPath = path.join(opts.CangLu, 'memory.db');
+    this.jsonlSuo = new JsonlSuo(this.jsonlPath);
     const Shujuku = require('better-sqlite3');
     this.db = new Shujuku(this.dbPath);
     this.db.pragma('journal_mode = WAL');
@@ -423,7 +427,13 @@ export class JiyiCangFuwu {
       kind: record.kind,
     };
     const Hang = JSON.stringify(Quan) + '\n';
-    fs.appendFileSync(this.jsonlPath, Hang, 'utf8');
+    // 写侧持锁（SWMR）：与检查点回退/外部改写共享 jsonlPath.lock，避免写写交错
+    const naDaoSuo = this.jsonlSuo.acquire(5000);
+    try {
+      fs.appendFileSync(this.jsonlPath, Hang, 'utf8');
+    } finally {
+      if (naDaoSuo) this.jsonlSuo.release();
+    }
 
     const ti = String(Quan.ti ?? Quan.content ?? Quan.text ?? JSON.stringify(Quan));
     this.db

@@ -155,6 +155,10 @@ export class JiyiCangKeHu {
        * 这里落一份只是将来有"读 JSONL 的 IPC"时能直接用字段。
        */
       role?: 'user' | 'assistant';
+      /** 项目/群作用域（跨项目检索过滤用；不传则列空） */
+      groupId?: string;
+      /** 实体类型（chat / manual / system…；与 kind 正交） */
+      entityType?: string;
       [k: string]: unknown;
     },
     Bi = 'duty'

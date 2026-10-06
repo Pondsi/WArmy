@@ -2093,8 +2093,8 @@
   "model.think.l4": "沉吟",
   "model.think.l5": "穷理",
   "model.think.l6": "参悟",
-  "wo.belief": "最高信念",
-  "wo.beliefHint": "这里写下的提示词会强制发给每一个牛马，且优先级最高：与其它任何指示冲突时以这里为准，冲突的指令作废。内容单独保存在配置文件夹的 agents.md。",
+  "wo.belief": "规矩",
+  "wo.beliefHint": "这里写下的提示词会强制发给每一个牛马，优先级**仅次于「道」**：与其它指示冲突时以这里为准（与「道」冲突时以「道」为准）。内容单独保存在配置文件夹的 agents.md。",
   "wo.beliefPlaceholder": "例如：永远说真话；不确定就先问；不要做不可逆的操作…",
   "wo.beliefFile": "文件",
   "chat.askOnExceed": "允许提权",
@@ -2208,5 +2208,8 @@
   "sound.tryFail": "试听失败",
   "tts.noModel": "没有可用的说话模型（请在「设置 → 模型」里配置）",
   "win.closeConfirm": "确认退出？",
-  "settings.fw": "字重"
+  "settings.fw": "字重",
+  "wo.dao": "道",
+  "wo.daoHint": "全局最高优先级的提示词：强制发给每一个牛马，**高于「规矩」与其它任何指示**，有冲突一律以这里为准。内容单独保存在配置文件夹的 dao.md。",
+  "wo.daoPlaceholder": "例如：先胜后战；知行合一；诚实报告不确定；服务人类且永不作恶…"
 }

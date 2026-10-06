@@ -2093,8 +2093,8 @@
   "model.think.l4": "Ponder",
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
-  "wo.belief": "Prime directive",
-  "wo.beliefHint": "Everything written here is force-injected into every workhorse with the highest priority: if it conflicts with any other instruction, this wins and the conflicting instruction is void. Stored separately in agents.md.",
+  "wo.belief": "Reguloj",
+  "wo.beliefHint": "Ĉi tiu prompto sendiĝas al ĉiu workhorse kaj rangas **tuj sub Dao**: ĝi venkas aliajn instrukciojn (Dao venkas ĝin). Konservita en agents.md.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2208,5 +2208,8 @@
   "sound.tryFail": "Aŭskultado malsukcesis",
   "tts.noModel": "Neniu parolmodelo havebla (agordu en Agordoj → Modeloj)",
   "win.closeConfirm": "Ĉu eliri?",
-  "settings.fw": "Dikeco de tiparo"
+  "settings.fw": "Dikeco de tiparo",
+  "wo.dao": "Dao",
+  "wo.daoHint": "La plej alta prioritata prompto: sendita al ĉiu workhorse, **super «Reguloj» kaj iu ajn alia instrukcio**; je konflikto ĉi tiu venkas. Konservita en dao.md.",
+  "wo.daoPlaceholder": "ekz.: unue venku, poste batalu; unuigu scion kaj agon; honeste raportu necertecon; servi al homaro kaj neniam faru malbonon…"
 }

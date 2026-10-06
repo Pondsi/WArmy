@@ -2093,8 +2093,8 @@
   "model.think.l4": "Ponder",
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
-  "wo.belief": "Prime directive",
-  "wo.beliefHint": "Everything written here is force-injected into every workhorse with the highest priority: if it conflicts with any other instruction, this wins and the conflicting instruction is void. Stored separately in agents.md.",
+  "wo.belief": "규칙",
+  "wo.beliefHint": "여기에 쓴 프롬프트는 모든 우마에 강제로 보내지며 **「도(道)」 바로 아래** 우선순위입니다: 다른 지시와 충돌하면 이쪽이 우선(「도」와 충돌하면 「도」가 우선). agents.md에 별도 저장됩니다.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2208,5 +2208,8 @@
   "sound.tryFail": "미리듣기 실패",
   "tts.noModel": "사용 가능한 말하기 모델이 없습니다(설정 → 모델에서 설정하세요)",
   "win.closeConfirm": "종료할까요?",
-  "settings.fw": "글꼴 굵기"
+  "settings.fw": "글꼴 굵기",
+  "wo.dao": "도(道)",
+  "wo.daoHint": "전역 최우선 프롬프트: 모든 우마에 강제로 보내지며 **「규칙」보다 상위**이고 충돌 시 이쪽이 이깁니다. dao.md에 별도 저장됩니다.",
+  "wo.daoPlaceholder": "예: 선승후전(先勝後戰); 지행합일(知行合一); 불확실성은 정직하게 보고; 인류를 위해 봉사하고 결코 악을 하지 않기…"
 }

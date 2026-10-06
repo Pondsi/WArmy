@@ -205,13 +205,13 @@ tokens    = max(2048, round(百分比 × 模型窗口))
 - **CCR 压缩**：写入侧（`tool_result` 优先、`message` 预算 ×4）与渲染侧串联，规则型、零 LLM。
 - **read-back 回读**：写后回读校验，不匹配**不许说"已保存"**。
 - **资产治理**：会话产生的文件/附件按 project/session 检索（`zhuCeLiaoTianZiChan`）。
-- **检查点回退**：全量快照 + 可 rollback 回写日志 —— 与"只追加"**存在张力**，属**显式例外**（用户主动回退才发生）。
+- **检查点回退**：全量快照 + 可 rollback 回写日志 —— 与"只追加"**存在张力**，属**显式例外**（用户主动回退才发生）。回退前备份 `fast-memory.jsonl.bak-<ts>`，回退后追加 `kind:'rollback'` 标记（含回退点 id / 时间 / 备份路径），全程持 `JsonlSuo`。
 
 ## 16. 已知风险 / 未接线（如实记录）
 
-1. `records.groupId / entityType` 列已建，但 `append` **从未传值** ⇒ 作用域目前实际主要按 `sessionId` / `kind` 生效（跨项目检索的精细度受限）。
-2. `lock.ts` 的 `JsonlSuo`（SWMR 文件锁）**已导出但未实例化** ⇒ JSONL 的读者/写者并发保护目前靠"唯一写入者"约定，而非文件锁。
-3. 检查点回退会改写 `fast-memory.jsonl` ⇒ 与"只追加"不变量冲突（见 §15 的显式例外说明）。
+1. ~~`records.groupId / entityType` 列已建，但 `append` **从未传值**~~ **已修（v0.2.9）**：聊天/补写路径的 `append` 均带 `groupId`（项目/会话 id）与 `entityType`（`chat` / `manual`）；作用域过滤可按项目精细检索。
+2. ~~`lock.ts` 的 `JsonlSuo`（SWMR 文件锁）**已导出但未实例化**~~ **已修（v0.2.9）**：`JiyiCangFuwu.append` 写 JSONL 时持锁；检查点回退共用同一 `.lock` 协议。
+3. ~~检查点回退会改写 `fast-memory.jsonl` ⇒ 与"只追加"不变量冲突~~ **已收窄为可审计例外（v0.2.9）**：备份 + `kind:'rollback'` 标记 + 写锁；除此之外仍严格只追加。
 
 ## 17. 验收（门禁在断言什么）
 

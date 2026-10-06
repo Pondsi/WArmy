@@ -2093,8 +2093,8 @@
   "model.think.l4": "Ponder",
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
-  "wo.belief": "Prime directive",
-  "wo.beliefHint": "Everything written here is force-injected into every workhorse with the highest priority: if it conflicts with any other instruction, this wins and the conflicting instruction is void. Stored separately in agents.md.",
+  "wo.belief": "規矩（ルール）",
+  "wo.beliefHint": "ここに書いたプロンプトはすべての牛馬に強制送信され、優先順位は**「道」の次**：他の指示と衝突したらここが優先（「道」と衝突したら「道」が優先）。agents.md に別保存されます。",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2208,5 +2208,8 @@
   "sound.tryFail": "試聴に失敗しました",
   "tts.noModel": "使える読み上げモデルがありません（「設定 → モデル」で設定してください）",
   "win.closeConfirm": "終了しますか？",
-  "settings.fw": "フォントの太さ"
+  "settings.fw": "フォントの太さ",
+  "wo.dao": "道（タオ）",
+  "wo.daoHint": "グローバルで最優先のプロンプト：すべての牛馬に強制送信し、**「規矩」より上位**、衝突時はここが優先。dao.md に別保存されます。",
+  "wo.daoPlaceholder": "例：先んじて勝ち、それから戦う；知行合一；不確実さは正直に報告；人類に奉仕し、決して悪をしない…"
 }

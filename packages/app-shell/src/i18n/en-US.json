@@ -2093,8 +2093,8 @@
   "model.think.l4": "Ponder",
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
-  "wo.belief": "Prime directive",
-  "wo.beliefHint": "Everything written here is force-injected into every workhorse with the highest priority: if it conflicts with any other instruction, this wins and the conflicting instruction is void. Stored separately in agents.md.",
+  "wo.belief": "Rules",
+  "wo.beliefHint": "This prompt is sent to every workhorse and ranks **just below Dao**: it wins over other instructions (Dao wins over it). Stored separately in agents.md.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2208,5 +2208,8 @@
   "sound.tryFail": "Preview failed",
   "tts.noModel": "No speaking model available (set one in Settings → Models)",
   "win.closeConfirm": "Quit?",
-  "settings.fw": "Font weight"
+  "settings.fw": "Font weight",
+  "wo.dao": "Dao (The Way)",
+  "wo.daoHint": "The globally highest-priority prompt: sent to every workhorse, **above Rules and any other instruction**; on conflict this wins. Stored separately in dao.md.",
+  "wo.daoPlaceholder": "e.g. win first, then fight; unite knowledge and action; report uncertainty honestly; serve humanity and never do harm…"
 }

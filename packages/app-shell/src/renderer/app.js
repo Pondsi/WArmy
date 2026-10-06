@@ -5128,10 +5128,21 @@
             </div>
           </div>
         </div>
-        <!-- 最高信念：单独文件 agents.md；所有 AI 强制遵守，冲突以它为准 -->
+        <!-- 「道」：全局最高优先级提示词，单独保存 dao.md；冲突时以它为准 -->
+        <div class="sheZhiKa" style="margin-top:14px" id="daoKa">
+          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.dao', '道'))}</h3>
+          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.daoHint', '全局最高优先级的提示词：强制发给每一个牛马，**高于「规矩」与其它任何指示**，有冲突一律以这里为准。内容单独保存在配置文件夹的 dao.md。'))}</p>
+          <textarea id="daoTi" rows="5" style="width:100%" placeholder="${escapeHtml(tOr('wo.daoPlaceholder', '例如：先胜后战；知行合一；诚实报告不确定；服务人类且永不作恶…'))}"></textarea>
+          <div class="shiLiHang" style="margin-top:8px;align-items:center">
+            <button class="anNiuZhuYao" id="anNiuDaoQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
+            <button class="anNiuXiao" id="anNiuDaoQuXiao">${escapeHtml(tOr('common.cancel', '取消'))}</button>
+            <span class="jingYin" id="daoLuJing" style="font-size:11px"></span>
+          </div>
+        </div>
+        <!-- 「规矩」：单独文件 agents.md；仅次于「道」 -->
         <div class="sheZhiKa" style="margin-top:14px" id="zuiGaoXinNianKa">
-          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.belief', '最高信念'))}</h3>
-          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.beliefHint', '这里写下的提示词会强制发给每一个牛马，且优先级最高：与其它任何指示冲突时以这里为准，冲突的指令作废。内容单独保存在配置文件夹的 agents.md。'))}</p>
+          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.belief', '规矩'))}</h3>
+          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.beliefHint', '这里写下的提示词会强制发给每一个牛马，优先级**仅次于「道」**：与其它指示冲突时以这里为准（与「道」冲突时以「道」为准）。内容单独保存在配置文件夹的 agents.md。'))}</p>
           <textarea id="zuiGaoXinNianTi" rows="5" style="width:100%" placeholder="${escapeHtml(tOr('wo.beliefPlaceholder', '例如：永远说真话；不确定就问；不要做不可逆的操作…'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
             <button class="anNiuZhuYao" id="anNiuZuiGaoQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
@@ -5140,39 +5151,49 @@
           </div>
         </div>
         <div id="dashHost"></div>`;
-      // 最高信念：读回 → 编辑 → 确定保存 / 取消还原（取消 = 恢复成上次保存的内容）
-      (function bindZuiGaoXinNian() {
-        const ta = $('zuiGaoXinNianTi');
-        if (!ta) return;
-        let shangCi = ta.value;
-        void (async () => {
-          try {
-            const r = await window.warmy.zuiGaoXinNianDu?.();
-            if (r && r.ok) {
-              shangCi = String(r.text || '');
-              ta.value = shangCi;
-              const lu = $('zuiGaoXinNianLu');
-              if (lu && r.path) lu.textContent = tOr('wo.beliefFile', '文件') + '：' + r.path;
-            }
-          } catch { /* noop */ }
-        })();
-        $('anNiuZuiGaoQueDing')?.addEventListener('click', async () => {
-          try {
-            const r = await window.warmy.zuiGaoXinNianShe?.({ text: ta.value });
-            if (r && r.ok) {
-              shangCi = ta.value;
-              showToast(tOr('common.saved', '已保存'));
-              const lu = $('zuiGaoXinNianLu');
-              if (lu && r.path) lu.textContent = tOr('wo.beliefFile', '文件') + '：' + r.path;
-            } else {
-              uiAlert(String((r && r.error) || t('common.error')));
-            }
-          } catch (e) { uiAlert(String(e && e.message || e)); }
-        });
-        $('anNiuZuiGaoQuXiao')?.addEventListener('click', () => {
-          ta.value = shangCi;   // 恢复成上次保存的内容
-          showToast(tOr('common.cancel', '取消'));
-        });
+      /**
+       * 「道」与「规矩」共用同一套「读回 → 编辑 → 确定保存 / 取消还原」。
+       * （真机反馈修：此前 preload 缺这两个入口，`?.()` 让保存静默空转 —— 从来没落过盘。）
+       */
+      (function bindDaoGui() {
+        const zuHe = (taId, okId, noId, luId, du, she, wenJian) => {
+          const ta = $(taId);
+          if (!ta) return;
+          let shangCi = ta.value;
+          void (async () => {
+            try {
+              const r = await du();
+              if (r && r.ok) {
+                shangCi = String(r.text || '');
+                ta.value = shangCi;
+                const lu = $(luId);
+                if (lu && r.path) lu.textContent = tOr('wo.beliefFile', '文件') + '：' + r.path;
+              }
+            } catch { /* noop */ }
+          })();
+          $(okId)?.addEventListener('click', async () => {
+            try {
+              const r = await she({ text: ta.value });
+              if (r && r.ok) {
+                shangCi = ta.value;
+                showToast(tOr('common.saved', '已保存'));
+                const lu = $(luId);
+                if (lu && r.path) lu.textContent = tOr('wo.beliefFile', '文件') + '：' + r.path;
+              } else {
+                uiAlert(String((r && r.error) || t('common.error')));
+              }
+            } catch (e) { uiAlert(String(e && e.message || e)); }
+          });
+          $(noId)?.addEventListener('click', () => {
+            ta.value = shangCi;
+            showToast(tOr('common.cancel', '取消'));
+          });
+          void wenJian;
+        };
+        zuHe('daoTi', 'anNiuDaoQueDing', 'anNiuDaoQuXiao', 'daoLuJing',
+          () => window.warmy.daoDu?.(), (p) => window.warmy.daoShe?.(p), 'dao.md');
+        zuHe('zuiGaoXinNianTi', 'anNiuZuiGaoQueDing', 'anNiuZuiGaoQuXiao', 'zuiGaoXinNianLu',
+          () => window.warmy.zuiGaoXinNianDu?.(), (p) => window.warmy.zuiGaoXinNianShe?.(p), 'agents.md');
       })();
       // 凭证 = ID = 私钥（只展示给本人；指纹不再单独显示，避免与它重复）
       (async () => {
@@ -10350,7 +10371,8 @@
     const LABELS = { P1: 'urgency.urgentLabel', P2: 'urgency.insertLabel', P3: 'urgency.queueLabel' };
     function refresh() {
       dd.classList.toggle('urgent', state.urgency === 'P1');
-      dd.querySelectorAll('.chaRuIco').forEach((s) => {
+      // 只切**触发器上**的图标（菜单里三个选项的图标是并列展示的，都要看得见）
+      trigger.querySelectorAll('.chaRuIco').forEach((s) => {
         s.classList.toggle('yinCang', s.dataset.u !== state.urgency);
       });
       caiDan.querySelectorAll('button[data-u]').forEach((b) => b.classList.toggle('qiYong', b.dataset.u === state.urgency));

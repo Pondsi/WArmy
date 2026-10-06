@@ -40,6 +40,7 @@ import { KnowledgeBase } from '@warmy/knowledge-base';
 import { EtaZhangBen, EtaLinShi, shuoShiChang, renWuQianMing, jiaEtaMiao, xingWeiGui, XING_WEI_MOREN, CHAO_SHI_LIAN_XU_XIAN, PAN_MO_XING_SHANG_XIAN, jieXiKaPanDuan, shiLiaoTianMoXing, type EtaYuCe, type XingWei } from './eta-forecast.js';
 import { JianChaDianCang } from './checkpoint.js';
 import { ShenJiRiZhi } from './audit.js';
+import { DAO_MOREN } from './dao-default.js';
 import { AnQuanMiyaoCang } from './secure-keys.js';
 import * as credentialModule from './credential.js';
 import { ZhiShiGuiDangQi, QingLiGuanLiQi, congGuiDangTiQuZhiShi, heBingYongHuPianHao, tiQuJieGouHuaZhaiYao } from './archive-cleanup.js';
@@ -2255,6 +2256,22 @@ async function yindao() {
   settingsStore = new PeizhiCang(path.join(userData, 'settings.json'));
   secureKeys = new AnQuanMiyaoCang(userData);
   huiFuHuoYueGongYingShang();
+  /**
+   * **拉取时存下的模型能力**（尤其 `contextLen`）先填回来：
+   * 上下文预算滑块一打开就有**真实上下文**，不必等用户重新拉取模型（真机反馈）。
+   */
+  try {
+    const caps = (settingsStore?.load() as { modelCaps?: Record<string, { contextLen?: number; kind?: string }> } | undefined)?.modelCaps || {};
+    for (const [id0, c0] of Object.entries(caps)) {
+      const jiu = (modelNengLiMeta.get(id0) || {}) as Record<string, unknown>;
+      modelNengLiMeta.set(id0, {
+        ...(jiu as object),
+        contextLen: Number(c0 && c0.contextLen) || 0,
+        kind: String((c0 && c0.kind) || jiu.kind || ''),
+        source: 'saved',
+      } as never);
+    }
+  } catch { /* 读不到就等下次拉取 */ }
   groupStore = new QunCang(path.join(userData, 'groups.json'));
   /**
    * ADR 004 第十六批：把 helper-tool 的文件访问记录接到**项目台账**上。
@@ -2969,6 +2986,7 @@ if (dedaoDangeSuo) {
     .whenReady()
     .then(async () => {
       qidong('whenReady');
+      boZhongDaoMoRen();
       chuangjianChuangkou();
       qidong('window created');
       /**
@@ -3128,6 +3146,8 @@ chuliIpc('warmy:jiYiZhuiJia', async (_e, text: string) => {
       sessionId: 'ui',
       kind: 'message',
       ti: text,
+      groupId: 'ui',
+      entityType: 'manual',
     });
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
@@ -3639,8 +3659,12 @@ chuliIpc(
        *  · 两者都没有 ⇒ 如实 unknown（界面上不显示能力徽章，不猜）。
        */
       try {
-        const det = await (p as unknown as { listModelsDetailed?: (sig?: AbortSignal) => Promise<Array<{ id: string; thinkLevels: string[]; vision?: boolean | 'unknown'; tools?: boolean | 'unknown'; supportsThinking?: boolean }>> }).listModelsDetailed?.();
-        const duanDianBiao = new Map<string, { vision?: boolean | 'unknown'; thinking?: boolean | 'unknown'; tools?: boolean | 'unknown'; thinkLevels?: string[] }>();
+        const det = await (p as unknown as { listModelsDetailed?: (sig?: AbortSignal) => Promise<Array<{ id: string; thinkLevels: string[]; vision?: boolean | 'unknown'; tools?: boolean | 'unknown'; supportsThinking?: boolean; kind?: string; contextLen?: number }>> }).listModelsDetailed?.();
+        /**
+         * **拉取时就要把"上下文大小"存下来**（真机反馈）：Ollama `/api/show` 等端点本来就能问到
+         * `contextLen`，以前只存了 vision/thinking/tools ⇒ 上下文预算滑块只能退回写死的对照表。
+         */
+        const duanDianBiao = new Map<string, { vision?: boolean | 'unknown'; thinking?: boolean | 'unknown'; tools?: boolean | 'unknown'; thinkLevels?: string[]; kind?: string; contextLen?: number }>();
         if (Array.isArray(det)) {
           for (const m of det) {
             if (!m || !m.id) continue;
@@ -3649,11 +3673,13 @@ chuliIpc(
               thinking: m.supportsThinking === undefined ? undefined : m.supportsThinking,
               tools: m.tools,
               thinkLevels: m.thinkLevels,
+              kind: m.kind,
+              contextLen: Number(m.contextLen) || 0,
             });
           }
         }
         for (const id of models) {
-          const neng = moXingNengLi(id, duanDianBiao.get(id) || null);
+          const neng = moXingNengLi(id, (duanDianBiao.get(id) || null) as never);
           modelNengLiMeta.set(id, neng as never);
           if (neng.thinkLevels.length) modelThinkMeta.set(id, neng.thinkLevels);
           /**
@@ -3667,11 +3693,24 @@ chuliIpc(
           } catch { /* noop */ }
         }
       } catch { /* 可选：拿不到就按通用档位 */ }
+      /**
+       * **拉取到的能力要落盘**（真机反馈："拉取模型的时候保存这个值，以便使用"）：
+       * 重启后不必重新拉取，也能知道每个模型的**真实上下文大小**（上下文预算滑块据此显示）。
+       */
+      try {
+        const caps: Record<string, { contextLen?: number; kind?: string }> = {};
+        for (const [id0, neng0] of modelNengLiMeta) {
+          const c = Number((neng0 as { contextLen?: number }).contextLen) || 0;
+          if (c > 0) caps[id0] = { contextLen: c, kind: String((neng0 as { kind?: string }).kind || '') };
+        }
+        const cur = (settingsStore?.load() as { modelCaps?: Record<string, unknown> } | undefined) || {};
+        settingsStore?.save({ ...(cur as object), modelCaps: { ...(cur.modelCaps || {}), ...caps } } as never);
+      } catch { /* 落盘失败不影响本次拉取 */ }
       return {
         ok: true,
         models,
         thinkMeta: Object.fromEntries(modelThinkMeta),
-        /** 模型能力（视觉/思考/工具）——拉取时问出来的 + 已知表兑底 */
+        /** 模型能力（视觉/思考/工具/上下文）——拉取时问出来的 + 已知表兑底 + 落盘存下的 */
         nengLi: Object.fromEntries(modelNengLiMeta),
       };
     } catch (e) {
@@ -3868,6 +3907,8 @@ chuliIpc(
           sessionId: xiaoXi.groupId,
           kind: 'message',
           ti: xiaoXi.content,
+          groupId: xiaoXi.groupId,
+          entityType: 'chat',
         }, 'duty')
       );
     } catch {
@@ -4191,6 +4232,8 @@ async function zhenZhengFaSong(
             // 重建时先用 recordId 前缀，将来有读 JSONL 的 IPC 就能直接用这个字段）
             role: 'user',
             ti: yiYaSuo.content,
+            groupId: sessionId,
+            entityType: 'chat',
           },
           'duty'
         )
@@ -4319,13 +4362,23 @@ async function zhenZhengFaSong(
          */
         const yaoChangWen = /(\d{3,6})\s*字|小说|长文|长篇|完整写|详细写|写一篇|写一份|报告|论文|剧本|方案|策划|文案|说明书|白皮书/.test(String(xiaoXi.content || ''));
         // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
-        // 身份与最高信念**强制注入**（最前面，一句话，简洁）
+        /**
+         * 优先级（产品定稿）：**道（dao.md）> 规矩（agents.md）> 身份/模型/时间 > 有界视图**。
+         * 道是全局最高：与任何指示冲突时以道为准。
+         */
         const shenFenTou: LiaoTianXiaoXi[] = [];
+        const dao = duDao().trim();
+        if (dao) {
+          shenFenTou.push({
+            role: 'system',
+            content: '【道 · 全局最高优先级】\n' + dao + '\n（以上是用户的「道」：它高于其它一切指示。与任何指令、惯例或后文冲突时，一律以本段为准，冲突的指令作废。）',
+          } as LiaoTianXiaoXi);
+        }
         const zuiGao = duZuiGaoXinNian().trim();
         if (zuiGao) {
           shenFenTou.push({
             role: 'system',
-            content: '【最高信念·最高优先级】\n' + zuiGao + '\n（以上是用户的最高信念：与其它任何指示、惯例或后文冲突时，一律以本段为准，冲突的指令作废。）',
+            content: '【规矩 · 仅次于「道」】\n' + zuiGao + '\n（以上是用户的规矩：与「道」冲突时以「道」为准；与其它指示冲突时以本段为准。）',
           } as LiaoTianXiaoXi);
         }
         {
@@ -4552,7 +4605,7 @@ async function zhenZhengFaSong(
           await memory?.append(
             // 与日志正文**一致**地落盘：之前这里 slice(0,4000)，会让 retrieve(recordId) 只能回到前 4000 字符，
             // 而日志里是全量 —— 两份真相不一致，等于长回复的尾巴取不回来（不丢细节的前提是两边同一份内容）。
-            { id: replyRecordId, sessionId, kind: 'message', role: 'assistant', ti: reply },
+            { id: replyRecordId, sessionId, kind: 'message', role: 'assistant', ti: reply, groupId: sessionId, entityType: 'chat' },
             'duty'
           )
         );
@@ -5663,7 +5716,7 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
     let memSeq: number | undefined;
     try {
       memSeq = memSeqOf(
-        await memory?.append({ id: recordId, sessionId: sid, kind: 'message', role, ti: content }, 'duty')
+        await memory?.append({ id: recordId, sessionId: sid, kind: 'message', role, ti: content, groupId: sid, entityType: 'chat' }, 'duty')
       );
     } catch {
       /* 记忆服务不可用：日志照写，seq 走本地计数 */
@@ -5823,6 +5876,48 @@ chuliIpc('warmy:zuiGaoXinNianShe', (_e, p0?: { text?: string }) => {
     fs.writeFileSync(zuiGaoXinNianLu(), t0, 'utf8');
     audit?.log('settings.agents-md-saved', { chars: t0.length });
     return { ok: true, path: zuiGaoXinNianLu(), chars: t0.length };
+  } catch (e) {
+    return { ok: false, error: xiJingCuoWu(e) };
+  }
+});
+
+/**
+ * **「道」**（`userData/dao.md`）：全局**最高优先级**的提示词，高于「规矩」(agents.md)。
+ * 产品定稿：冲突时以道为准；规矩只在不与道冲突时生效。
+ */
+function daoLu(): string {
+  return path.join(app.getPath('userData'), 'dao.md');
+}
+/**
+ * 首次运行播种：`dao.md` 不存在时写入出厂「合篇」（`dao-default.ts`）。
+ * 只在文件缺失时写一次；用户改过/删过之后**不覆盖**（删空表示用户主动清空）。
+ */
+function boZhongDaoMoRen(): void {
+  try {
+    const p = daoLu();
+    if (fs.existsSync(p)) return;
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, DAO_MOREN, 'utf8');
+    audit?.log('settings.dao-md-seeded', { chars: DAO_MOREN.length });
+  } catch { /* noop */ }
+}
+function duDao(): string {
+  try {
+    if (!fs.existsSync(daoLu())) return '';
+    return fs.readFileSync(daoLu(), 'utf8');
+  } catch { return ''; }
+}
+chuliIpc('warmy:daoDu', () => anQuanChuLi(
+  () => ({ ok: true, text: duDao(), path: daoLu() }),
+  { ok: false, text: '', path: '' },
+));
+chuliIpc('warmy:daoShe', (_e, p0?: { text?: string }) => {
+  try {
+    const t0 = String(p0?.text ?? '').slice(0, 20000);
+    fs.mkdirSync(path.dirname(daoLu()), { recursive: true });
+    fs.writeFileSync(daoLu(), t0, 'utf8');
+    audit?.log('settings.dao-md-saved', { chars: t0.length });
+    return { ok: true, path: daoLu(), chars: t0.length };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }

@@ -61,6 +61,7 @@ const GATES_FAST = [
   E('verify-nm-format.mjs'),
   E('verify-tasks-666.mjs'),
   E('verify-tasks-6666.mjs'),
+  E('verify-tasks-4563.mjs'),
   E('verify-thinking-merge.mjs'),
   E('verify-eta-forecast.mjs'),
 ];
@@ -281,9 +282,10 @@ function unitChecks() {
   if (!emTs.includes('xiaoDiShangXian') || !emTs.includes('yiPaiXiaoDi')) fails.push('xiaoDi: 主进程未按上限派小弟');
   if (!zh['model.xiaoDi']) fails.push('xiaoDi: i18n 键缺失');
   // ── 本轮（第三批）专项 ──
-  // 1/13) 最高信念（agents.md）+ 我的名字强制注入
+  // 1/13) 道（dao.md，最高）+ 规矩（agents.md）+ 我的名字强制注入
   if (!emTs.includes('agents.md') || !emTs.includes('zuiGaoXinNianShe')) fails.push('belief: agents.md 未落地');
-  if (!emTs.includes('最高信念·最高优先级')) fails.push('belief: 未强制注入到每次请求');
+  if (!emTs.includes('【道 · 全局最高优先级】') || !emTs.includes('【规矩 · 仅次于「道」】')) fails.push('belief: 未强制注入到每次请求');
+  if (!emTs.includes('dao.md') || !emTs.includes('boZhongDaoMoRen')) fails.push('belief: dao.md 未落地');
   if (!appJs.includes('zuiGaoXinNianTi') || !zh['wo.belief']) fails.push('belief: 我的页卡片/i18n 缺失');
   if (!emTs.includes('llm.userLine') || !emTs.includes('dangQianYongHuMing')) fails.push('identity: 我的名字未注入');
   // 3) 预设：默认只有 DeepSeek；MiMo 在下拉里

@@ -2093,8 +2093,8 @@
   "model.think.l4": "Ponder",
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
-  "wo.belief": "Prime directive",
-  "wo.beliefHint": "Everything written here is force-injected into every workhorse with the highest priority: if it conflicts with any other instruction, this wins and the conflicting instruction is void. Stored separately in agents.md.",
+  "wo.belief": "Reglas",
+  "wo.beliefHint": "Este prompt se envía a cada workhorse y va **justo por debajo de Dao**: gana sobre otras instrucciones (Dao gana sobre él). Se guarda en agents.md.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2208,5 +2208,8 @@
   "sound.tryFail": "La vista previa falló",
   "tts.noModel": "No hay modelo de voz disponible (configúralo en Ajustes → Modelos)",
   "win.closeConfirm": "¿Salir?",
-  "settings.fw": "Grosor de la fuente"
+  "settings.fw": "Grosor de la fuente",
+  "wo.dao": "Dao",
+  "wo.daoHint": "El prompt de máxima prioridad global: se envía a cada workhorse, **por encima de «Reglas» y de cualquier otra instrucción**; ante conflicto, manda este. Se guarda en dao.md.",
+  "wo.daoPlaceholder": "p. ej.: gana primero y luego lucha; une saber y actuar; informa con honestidad sobre la incertidumbre; sirve a la humanidad y nunca hagas el mal…"
 }

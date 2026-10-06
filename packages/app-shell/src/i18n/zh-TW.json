@@ -2093,8 +2093,8 @@
   "model.think.l4": "沉吟",
   "model.think.l5": "窮理",
   "model.think.l6": "參悟",
-  "wo.belief": "最高信念",
-  "wo.beliefHint": "這裡寫下的提示詞會強制發給每一個牛馬，且優先級最高：與其它任何指示衝突時以這裡為準，衝突的指令作廢。內容單獨保存在配置資料夾的 agents.md。",
+  "wo.belief": "規矩",
+  "wo.beliefHint": "這裡寫下的提示詞會強制發給每一個牛馬，優先序**僅次於「道」**：與其它指示衝突時以這裡為準（與「道」衝突時以「道」為準）。內容單獨保存在配置資料夾的 agents.md。",
   "wo.beliefPlaceholder": "例如：永遠說真話；不確定就先問；不要做不可逆的操作…",
   "wo.beliefFile": "檔案",
   "chat.askOnExceed": "允許提權",
@@ -2208,5 +2208,8 @@
   "sound.tryFail": "試聽失敗",
   "tts.noModel": "沒有可用的說話模型（請在「設定 → 模型」裡配置）",
   "win.closeConfirm": "確認退出？",
-  "settings.fw": "字重"
+  "settings.fw": "字重",
+  "wo.dao": "道",
+  "wo.daoHint": "全域最高優先序的提示詞：強制發給每一個牛馬，**高於「規矩」與其它任何指示**，有衝突一律以這裡為準。內容單獨保存在配置資料夾的 dao.md。",
+  "wo.daoPlaceholder": "例如：先勝後戰；知行合一；誠實報告不確定；服務人類且永不作惡…"
 }

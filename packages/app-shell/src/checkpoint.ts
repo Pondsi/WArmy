@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { JsonlSuo } from '@warmy/memory-os/lock';
 
 export interface JianChaDianXiangQing {
   RenwuJi: string[];
@@ -185,13 +186,51 @@ export class JianChaDianCang {
     return [...this.items].reverse();
   }
 
+  /**
+   * 回退到检查点。**唯一允许改写 `fast-memory.jsonl` 的路径**（不变量 #1 的显式例外）。
+   * 可审计化（三件事，缺一不可）：
+   *   1. 先把当前 JSONL 备份成 `fast-memory.jsonl.bak-<ts>`，被丢掉的历史可找回；
+   *   2. 覆盖前/后在日志里追加一条 `kind:'rollback'` 标记（回退点 id / 时间 / 备份路径），
+   *      让"改写"这件事本身也留在账上，而不是悄悄消失；
+   *   3. 全程持 `JsonlSuo`（与记忆服务 append 共享同一 `.lock`），避免与写入交错。
+   */
   rollback(id: string, targets: { jsonlPath?: string; workspace?: string }): boolean {
     const cp = this.items.find((x) => x.id === id);
     if (!cp) return false;
     const jueDuiLu = path.join(this.root, cp.dir);
     if (targets.jsonlPath) {
       const src = path.join(jueDuiLu, 'fast-memory.jsonl');
-      if (fs.existsSync(src)) fs.copyFileSync(src, targets.jsonlPath);
+      if (fs.existsSync(src)) {
+        const suo = new JsonlSuo(targets.jsonlPath);
+        const naDao = suo.acquire(5000);
+        try {
+          let beiFenLu = '';
+          if (fs.existsSync(targets.jsonlPath)) {
+            beiFenLu = `${targets.jsonlPath}.bak-${Date.now().toString(36)}`;
+            fs.copyFileSync(targets.jsonlPath, beiFenLu);
+          }
+          fs.copyFileSync(src, targets.jsonlPath);
+          // 显式例外标记：写在回退**后**的账上，声明"历史被改写过、备份在哪"
+          const biaoJi = {
+            seq: 0,
+            ts: Date.now(),
+            sessionId: 'system',
+            kind: 'rollback',
+            id: `rollback-${Date.now().toString(36)}`,
+            checkpointId: cp.id,
+            reason: 'user-checkpoint-rollback',
+            backupPath: beiFenLu || null,
+            rolledBackAt: Date.now(),
+          };
+          try {
+            fs.appendFileSync(targets.jsonlPath, JSON.stringify(biaoJi) + '\n', 'utf8');
+          } catch {
+            /* 标记写不进去也要把回退结果如实返回；备份仍在 */
+          }
+        } finally {
+          if (naDao) suo.release();
+        }
+      }
     }
     if (targets.workspace) {
       const src = path.join(jueDuiLu, 'workspace');

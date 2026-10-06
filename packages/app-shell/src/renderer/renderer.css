@@ -2106,6 +2106,19 @@ html { font-weight: var(--fw-ui, 400); }
 
 /* 思考级别图标：**空心描边**（.jinJiTrigger .ico 默认 fill: currentColor 会把它涂成实心黑） */
 .jinJiTrigger .ico.siKaoIco, .anNiuTuBiao .ico.siKaoIco { fill: none !important; stroke: currentColor; }
+/**
+ * 插入三态图标（紧急/插入/排队）：**必须空心描边**（真机反馈：图标不对）——
+ * `.jinJiTrigger .ico { fill: currentColor }` 会把 SVG 的 fill="none" 覆盖掉，
+ * 气泡被涂成实心块，里面的 感叹号/闪电/十字 全被吞掉 ⇒ 看不出在哪个档。
+ */
+.jinJiTrigger .ico.chaRuIco, .jinJiCaiDan .ico.chaRuIco {
+  fill: none !important;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.jinJiCaiDan button .ico.chaRuIco { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
 /* 话筒图标：**中空描边**（真机反馈：要中空的） */
 .anNiuTuBiao .ico.hollowIco { fill: none !important; stroke: currentColor; }
 .siKaoBiaoQian { font-size: 11px; opacity: .75; margin-left: 2px; }

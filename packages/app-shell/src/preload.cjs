@@ -381,4 +381,12 @@ contextBridge.exposeInMainWorld('warmy', {
   // NOTE: warmy:diagnostics (卡顿自检) removed — feature retired.
   winAlwaysOnTop: (qiYong) => ipcRenderer.invoke('warmy:winZongShiQiYongDing', qiYong),
   platformInfo: () => ipcRenderer.invoke('warmy:pingTai'),
+  /**
+   * 「道」与「规矩」（真机反馈修：此前 preload 里**没有**这两个入口，
+   * 界面的 `?.()` 让保存/读取静默空转 ⇒ 最高信念根本没落过盘）。
+   */
+  zuiGaoXinNianDu: () => ipcRenderer.invoke('warmy:zuiGaoXinNianDu'),
+  zuiGaoXinNianShe: (p) => ipcRenderer.invoke('warmy:zuiGaoXinNianShe', p),
+  daoDu: () => ipcRenderer.invoke('warmy:daoDu'),
+  daoShe: (p) => ipcRenderer.invoke('warmy:daoShe', p),
 });

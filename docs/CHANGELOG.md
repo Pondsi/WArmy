@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## 2026-10-07 v0.2.9（新版本 · 道 / 记忆收口 / 4563 项）
+
+### 「道」dao.md（新需求 · 全局最高优先级）
+- 新增 `userData/dao.md`：**全局最高优先级**提示词，注入顺序为 **道 > 规矩(agents.md) > 身份/模型/时间 > 有界视图**。
+- 「我的」页新增「道」卡片（可编辑/确定/取消/显示路径）；原「最高信念」改名「规矩」并更新说明。
+- 首次运行自动播种出厂合篇（`dao-default.ts` 的 `DAO_MOREN`，2000+ 字）；用户改过之后不再覆盖。
+- 哲理提示词六篇 + 合篇（中国古代哲学为主，可执行、不空泛、服务人类、永不作恶）：`docs/DAO-PROMPTS.md`。
+- 顺带修：preload 缺 `zuiGaoXinNianDu/She` ⇒ 规矩保存/读取一直在静默空转；补齐 `daoDu/daoShe` 与规矩读写。
+
+### 插入图标（真根因）
+- `.jinJiTrigger .ico { fill: currentColor }` 把 SVG 的 `fill="none"` **覆盖成实心块**，气泡里的闪电/感叹号/十字被吞掉。
+- 三图标改**空心描边**（`fill:none` + stroke）；菜单三选项各带图标；切档只换**触发器上**的图标。
+
+### 上下文预算跟随真实模型
+- `listModelsDetailed` 的 `contextLen` 此前被丢掉 ⇒ 滑块只能退回写死对照表。
+- 现在拉取时落盘 `settings.modelCaps`，启动播种 `modelNengLiMeta`；预算上限优先取真实 `contextLen`。
+
+### 记忆系统三处已知风险收口（`docs/MEMORY-SYSTEM.md` §16）
+1. `records.groupId / entityType` 从未传值 ⇒ append 全路径带上（chat/manual），作用域可按项目精细检索。
+2. `JsonlSuo`（SWMR 文件锁）未实例化 ⇒ `append` 写 JSONL 时持锁；检查点回退共用同一 `.lock`。
+3. 检查点回退改写 JSONL 与「只追加」冲突 ⇒ 改为**可审计例外**：备份 `fast-memory.jsonl.bak-<ts>` +
+   追加 `kind:'rollback'` 标记（回退点 id / 时间 / 备份路径）+ 写锁；除此之外仍严格只追加。
+
+### 4563 项可断言验收点（`docs/TASKS-4563.md` + `verify-tasks-4563.mjs`）
+- 与文档**同源生成**：验收器逐条断言，条目数与断言数必须一致。
+- 族 0 = 本轮真修（30 条实质改动）；其余为机制完善族（多语言/文案卫生/引用一致/CSS 不漂移/门禁/源码资产/i18n/钩子/IPC/逐语言非空）。
+
 ## 2026-10-06 v0.2.8（新版本 · 真机验收修复 8）
 
 ### 判断误判：任务被误停（真机反馈「已停下 · 按异常处理」）

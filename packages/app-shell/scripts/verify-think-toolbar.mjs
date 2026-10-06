@@ -29,6 +29,8 @@ function check(l, ok, d) {
 // ── ① 静态：顺序 + 图标 + 结构 ──
 const html = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'index.html'), 'utf8');
 const appJs = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'app.js'), 'utf8');
+const css1 = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'app.css'), 'utf8');
+const css2 = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'renderer.css'), 'utf8');
 const iChaRu = html.indexOf('id="urgencyDd"');
 const iSiKao = html.indexOf('id="siKaoDd"');
 check('插入选项在**思考级别左边**（HTML 顺序）', iChaRu > 0 && iSiKao > 0 && iChaRu < iSiKao, { iChaRu, iSiKao });
@@ -40,6 +42,11 @@ check('插入触发器里有三个状态图标（P1 加急 / P2 插话 / P3 排�
   return ['P1', 'P2', 'P3'].every((u) => new RegExp('class="ico chaRuIco[^"]*" data-u="' + u + '"').test(kuai));
 })(), 'three-state icons');
 check('三态图标都用气泡底 + 各自的区分符号（闪电/感叹号/十字）', /M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z/.test(html) && /M12 7l-2 4h3l-2 4/.test(html) && /M12 8v4M12 15h.01/.test(html) && /M12 8v6M9 11h6/.test(html), 'glyphs');
+check('三态图标是**空心描边**（否则被 .ico 的 fill:currentColor 涂成实心块）', /\.jinJiTrigger \.ico\.chaRuIco[\s\S]{0,160}fill: none !important/.test(css1) && /\.jinJiTrigger \.ico\.chaRuIco[\s\S]{0,160}fill: none !important/.test(css2), 'hollow icons');
+check('菜单里三个选项各带图标（一眼分得清）', (() => {
+  const kuai = html.slice(html.indexOf('id="jinJiCaiDan"'), html.indexOf('id="jinJiCaiDan"') + 1400);
+  return (kuai.match(/class="ico chaRuIco"/g) || []).length >= 3;
+})(), 'menu icons');
 check('插入触发器**没有文字、没有箭头**', (() => {
   const kuai = html.slice(html.indexOf('id="jinJiTrigger"'), html.indexOf('id="urgencyDd"') + 900);
   return !/jinJiBiaoQian/.test(kuai) && !/jinJiJianTou/.test(kuai);
@@ -58,8 +65,6 @@ check('滑块下方只保留**当前级别**一个字（两边的固定标签已
   const kuai = html.slice(html.indexOf('class="siKaoKaBiao"'), html.indexOf('class="siKaoKaBiao"') + 300);
   return /siKaoKaDang/.test(kuai) && !/model\.think\.off/.test(kuai) && !/model\.think\.auto/.test(kuai);
 })(), 'only current level');
-const css1 = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'app.css'), 'utf8');
-const css2 = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'renderer.css'), 'utf8');
 check('两份 CSS 都有"勾选后滑块变灰不可拖"的样式（且一致）', /\.siKaoHuaKuai:disabled\s*\{[^}]*grayscale/.test(css1) && /\.siKaoHuaKuai:disabled\s*\{[^}]*grayscale/.test(css2));
 
 // ── ③ 运行时：真启动 + 点开 + 勾选/拖动 ──
@@ -204,7 +209,7 @@ try {
     const menu = document.getElementById('jinJiCaiDan');
     if (!dd || !b || !menu) return null;
     const xian = () => {
-      const on = [...dd.querySelectorAll('.chaRuIco')].filter((s) => !s.classList.contains('yinCang'));
+      const on = [...b.querySelectorAll('.chaRuIco')].filter((s) => !s.classList.contains('yinCang'));
       return on.map((s) => s.dataset.u).join(',');
     };
     const qian = xian();
@@ -213,10 +218,17 @@ try {
     const xiang = menu.querySelector('button[data-u="P3"]');
     if (xiang) xiang.click();                   // 选「排队」
     await new Promise((r) => setTimeout(r, 200));
-    return { qian, kai, hou: xian(), title: b.title || b.getAttribute('aria-label') || '', jiShu: dd.querySelectorAll('.chaRuIco').length, caiDanXuan: [...menu.querySelectorAll('button[data-u]')].map((x) => x.dataset.u) };
+    return {
+      qian, kai, hou: xian(),
+      title: b.title || b.getAttribute('aria-label') || '',
+      jiShu: b.querySelectorAll('.chaRuIco').length,
+      caiDanXuan: [...menu.querySelectorAll('button[data-u]')].map((x) => x.dataset.u),
+      caiDanTu: menu.querySelectorAll('.chaRuIco').length,
+    };
   })()`);
   console.log('  · 插入菜单: ' + JSON.stringify(sanTai));
   check('插入按钮上是三个状态图标（不多不少）', !!(sanTai && sanTai.jiShu === 3), sanTai);
+  check('菜单里三个选项各带一个图标（看得出差别）', !!(sanTai && sanTai.caiDanTu === 3), sanTai);
   check('默认档是插话(P2)', !!(sanTai && sanTai.qian === 'P2'), sanTai);
   check('点开后菜单出现（三个选项）', !!(sanTai && sanTai.kai === true && sanTai.caiDanXuan.join(',') === 'P1,P2,P3'), sanTai);
   check('选「排队」后图标跟着变（P2 → P3）', !!(sanTai && sanTai.hou === 'P3'), sanTai);
