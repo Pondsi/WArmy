@@ -11,6 +11,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..', '..');
 const appJs = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.js'), 'utf8');
 const emTs = fs.readFileSync(path.join(root, 'packages/app-shell/src/electron-main.ts'), 'utf8');
+const etaTs = fs.readFileSync(path.join(root, 'packages/app-shell/src/eta-forecast.ts'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.css'), 'utf8');
 const neng = fs.readFileSync(path.join(root, 'packages/providers/src/mo-xing-neng-li.ts'), 'utf8');
 const nmTs = fs.readFileSync(path.join(root, 'packages/app-shell/src/nm-wen-jian.ts'), 'utf8');
@@ -29,11 +30,11 @@ check('计划落盘 plans.json', /plans\.json/.test(emTs) && /huiFuJiHua/.test(e
 check('重启后广播 jiHuaHuiFu', /jiHuaHuiFu/.test(emTs) && /onJiHuaHuiFu/.test(appJs));
 check('「继续/重试」按钮', /huiFuRenWuBtn/.test(appJs) && zh['chat.resumeTask']);
 check('发新消息按钮失效', /planResumeDisabled/.test(appJs));
-check('是预警上限而不是硬上限', /YANXU_YUJING_CI/.test(emTs) && /ciYuJing \+= YANXU_YUJING_CI/.test(emTs));
-check('时间预警 + 固定加一档（不是翻倍）', /YANXU_YUJING_SHIJIAN_MS/.test(emTs) && /shiJianYuJing \+= YANXU_YUJING_SHIJIAN_MS/.test(emTs));
+check('是预警上限而不是硬上限', /YANXU_YUJING_CI/.test(emTs) && /tai\.ciYuJing \+ YANXU_YUJING_CI/.test(emTs));
+check('时间预警 + 固定加一档（不是翻倍）', /YANXU_YUJING_SHIJIAN_MS/.test(emTs) && /tai\.shiJianYuJing \+ YANXU_YUJING_SHIJIAN_MS/.test(emTs));
 check('到达预警点请模型判卡死', /panDuanKaSi/.test(emTs));
 check('分析云模型优先、本地兜底', /yun\.forEach\(jia\)/.test(emTs) && /benDi\.forEach\(jia\)/.test(emTs));
-check('分析最多试 5 个模型', /KASI_CHANGSHI = 5/.test(emTs));
+check('分析最多试 5 个模型', /KASI_CHANGSHI = PAN_MO_XING_SHANG_XIAN/.test(emTs) && /PAN_MO_XING_SHANG_XIAN = 5/.test(etaTs));
 check('「只说不做」也会续派', /talk-only/.test(emTs) && /ZHISHUO_BUZUO/.test(emTs));
 
 console.log('\n[2] 第二列：第二行 [N] 最新回复 + 打断标记');
@@ -121,7 +122,7 @@ console.log('\n[12] 看图模型能力识别（Ollama /api/show）');
 console.log('\n[13] 特殊模型链手动添加 + 牛马局分类模型已删');
 check('手动添加下拉', /data-sml-add/.test(appJs) && !!zh['model.addManually']);
 check('牛马局分类模型已移除', !/id="iFenLei"/.test(appJs));
-check('预警点固定加一档', /ciYuJing \+=/.test(emTs) && !/ciYuJing \*=/.test(emTs));
+check('预警点固定加一档', /ciYuJing \+ YANXU_YUJING_CI/.test(emTs) && !/ciYuJing \*=/.test(emTs));
 
 console.log('\n[14] 引导卡：两份 CSS 必须一致，且在主界面右下角');
 {

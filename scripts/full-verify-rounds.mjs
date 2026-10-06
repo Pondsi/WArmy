@@ -74,6 +74,9 @@ const GATES_ELECTRON = [
   E('verify-ipc-probe.mjs'),
   E('verify-raf-batching.mjs'),
   E('verify-sound-card.mjs'),
+  E('verify-strict-language.mjs'),
+  E('verify-think-toolbar.mjs'),
+  E('verify-usage-table.mjs'),
 ];
 
 function killStrayElectron() {

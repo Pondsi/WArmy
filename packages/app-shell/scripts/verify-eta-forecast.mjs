@@ -1,16 +1,15 @@
 /**
- * 门禁：**预计完成时间（ETA）** —— 模型每次判完"是否卡死"都要给一个，写进持久配置，
- * 连续 3 次超出按异常处理，并且**在使用中自我完善**（越用越准）。
+ * 门禁：**行为级的「预计完成时间 + 轮次/时间上限」**（两个文件 + 判断闭环）。
  *
- * 产品要求（逐条对应断言）：
- *   ① 每次判断都要有预计完成时间（模型给；没给就按经验推算并**如实标注来源**）；
- *   ② 同一轮多次判断时，模型要能**参考它自己之前写的**（提问文本里必须有，且带"超了没"）；
- *   ③ 写进**持久配置文件**（真的落盘，重新加载还在）；
- *   ④ 连续 **3** 次超出 ⇒ 当异常处理；中途一次没超 ⇒ 计数归零；
- *   ⑤ 存下来的**不是简单一个时间**：绝对时刻 + 相对时长 + 依据 + 来源 + 模型 + 结论回填；
- *   ⑥ **原本没有任何预计时间**：第一次跑时统计为空，提问里明说"没有历史"，不编数字；
- *   ⑦ 使用中**自我完善**：真实跑完的轮次进统计（中位数/90 分位/偏移系数/命中率），
- *      同类任务的下一次参考里看得到。
+ * 产品需求（逐条对应断言）：
+ *   ① 每类行为都有自己的两把尺子，**首次的数是固定的**，且取值有据可查（不许拍脑袋）；
+ *   ② 时间到 / 次数到 ⇒ 判一次；
+ *   ③ **判断前先看临时文件**：同一轮里"有过超时"就必须存在记录，里面有上次预测的**完成时间戳**；
+ *      累计 3 次超出 ⇒ **直接判异常**（不再问模型）；
+ *   ④ 没到 3 次 ⇒ 模型判：判卡死 ⇒ 异常；判没卡死 ⇒ **重新预测**（模型给 → 持久文件的方法 → 首次固定值）；
+ *   ⑤ 持久文件里存的是**方法库**（按行为×签名聚类：样本/中位/90 分位/偏移系数/命中率），越用越准；
+ *      它**开工时是空的** —— 没有方法就明说"没有历史"，不编数字；
+ *   ⑥ 两个文件必须分开：持久是资产、临时是本轮账本；一轮收尾临时清空、经验留下。
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -21,7 +20,8 @@ const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(selfDir, '..');
 
 const {
-  EtaZhangBen, renWuQianMing, jiaEtaMiao, shuoShiChang, fenWei, ema, CHAO_SHI_LIAN_XU_XIAN,
+  EtaZhangBen, EtaLinShi, XING_WEI_MOREN, xingWeiGui, CHAO_SHI_LIAN_XU_XIAN, PAN_MO_XING_SHANG_XIAN,
+  renWuQianMing, jiaEtaMiao, shuoShiChang, fenWei, ema, emaXiShu,
 } = await import(new URL('../dist/eta-forecast.js', import.meta.url).href);
 
 let pass = 0;
@@ -31,132 +31,143 @@ function check(l, ok, d) {
   else { fail++; console.log('  FAIL ' + l, d === undefined ? '' : JSON.stringify(d).slice(0, 400)); }
 }
 
-const tmp = path.join(os.tmpdir(), 'warmy-eta-gate');
+const tmp = path.join(os.tmpdir(), 'warmy-eta2-gate');
 fs.rmSync(tmp, { recursive: true, force: true });
 fs.mkdirSync(tmp, { recursive: true });
-const wenJian = path.join(tmp, 'eta.json');
-
-// ── ① 全新账本：没有任何预计时间，也不许编数字 ──
-const cang = new EtaZhangBen(wenJian, 1_000_000);
-check('全新账本：经验表为空', Object.keys(cang.kuaiZhao().leiXing).length === 0);
-check('全新账本：没有任何会话状态', Object.keys(cang.kuaiZhao().huiHua).length === 0);
-check('全新账本：全局样本数 = 0（它原本没有任何预计时间）', cang.kuaiZhao().quanJu.yangBen === 0);
-const ming = renWuQianMing({ buShu: 5, gongJuMing: ['read_file', 'write_file'], zhiShuoBuZuo: false, moXing: 'mimo-v2.5-pro' });
-check('没有经验时经验查询返回 null（不编）', cang.jingYan(ming) === null);
-const wen0 = cang.canKaoWenBen('s1', ming, 1_000_000);
-check('没有经验时提问文本**明说没有历史**', /还没有历史记录/.test(wen0), wen0.slice(0, 160));
-
-// ── ② 模型给出预计完成时间 → 记进账本 ──
+const chiJiu = path.join(tmp, 'eta.json');
+const linShi = path.join(tmp, 'eta-live.json');
 const T0 = 1_000_000_000;
-const h = cang.kaiShiLun('s1', T0, ming);
-check('一轮任务开工：kaiShi 记下来了', h.kaiShi === T0);
-const yu1 = cang.jiYuCe('s1', { etaMs: 5 * 60 * 1000, genJu: '看起来还剩 3 步', laiYuan: 'model', moXing: 'mimo-v2.5-pro' }, T0 + 60_000);
-check('预测是"丰富"的：相对时长 + 绝对时刻 + 依据 + 来源 + 模型 + 结论位', yu1.etaMs === 300000 && yu1.jieZhiMs === T0 + 60_000 + 300_000 && yu1.genJu && yu1.laiYuan === 'model' && yu1.moXing === 'mimo-v2.5-pro' && yu1.mingZhong === null, yu1);
-check('预测记下了"当时已经跑了多久"', yu1.yiYongMs === 60_000, yu1.yiYongMs);
 
-// 还没到点 → 不算超时
-const chaoA = cang.panChaoShi('s1', T0 + 120_000);
-check('没到预计完成时间 ⇒ 不算超时', chaoA.chaoShi === false && chaoA.lianXu === 0, chaoA);
+// ── ① 五类行为各有固定初始值，且"不同行为不同数" ──
+const LEI = ['duiHua', 'gongJu', 'dengDaiHuiFu', 'dengDaiXingDong', 'ziDongXuPai'];
+check('五类行为都定义了固定初始值', LEI.every((x) => XING_WEI_MOREN[x] && XING_WEI_MOREN[x].miao > 0 && XING_WEI_MOREN[x].lun > 0), Object.keys(XING_WEI_MOREN));
+const shiJian = LEI.map((x) => XING_WEI_MOREN[x].miao);
+const ciShu = LEI.map((x) => XING_WEI_MOREN[x].lun);
+check('不同行为的时间上限确实不同（不是一刀切）', new Set(shiJian).size >= 4, shiJian);
+check('不同行为的次数上限确实不同', new Set(ciShu).size >= 3, ciShu);
+check('每个初始值都写了依据（有据可查，不是拍脑袋）', LEI.every((x) => String(XING_WEI_MOREN[x].ju || '').length > 20 && /秒|分钟|轮|次/.test(XING_WEI_MOREN[x].ju)), LEI.map((x) => XING_WEI_MOREN[x].ju.length));
+check('工具调用比对话轮"短"（读文件不该等 5 分钟）', XING_WEI_MOREN.gongJu.miao < XING_WEI_MOREN.duiHua.miao);
+check('等待行动完成比单次工具调用"长"（构建/子代理天然更久）', XING_WEI_MOREN.dengDaiXingDong.miao > XING_WEI_MOREN.gongJu.miao);
+check('异常阈值 = 3 次、判断最多换 5 个模型', CHAO_SHI_LIAN_XU_XIAN === 3 && PAN_MO_XING_SHANG_XIAN === 5);
 
-// 第一次预测之前没有"上一次" ⇒ 谈不上超时
-const cangB = new EtaZhangBen(path.join(tmp, 'b.json'), T0);
-cangB.kaiShiLun('sb', T0);
-check('还没有上一次预测 ⇒ chaoShi = null（不是"超了"）', cangB.panChaoShi('sb', T0 + 10_000_000).chaoShi === null);
+// ── ⑤ 持久文件：方法库，开工时是空的 ──
+const cang = new EtaZhangBen(chiJiu, T0);
+check('持久文件开工时没有任何方法（它原本就是空的）', Object.keys(cang.kuaiZhao().fangFa).length === 0);
+check('没有方法时查询返回 null（绝不编数字）', cang.chaFangFa('gongJu', 'x') === null);
+check('没有方法时参考文本明说"还没有历史记录"', /还没有历史记录/.test(cang.canKaoWenBen('gongJu', 'x')));
+check('没有方法时"按方法预测"返回 null（交给模型自己估）', cang.yuCeByFangFa('gongJu', 'x') === null);
 
-// ── ② 多次判断：提问文本里必须带"它自己之前写的" ──
-const wen1 = cang.canKaoWenBen('s1', ming, T0 + 400_000);   // 已过原定截止（T0+360000）
-check('提问文本带上了"你本轮已经写过 N 次预计完成时间"', /你本轮已经写过 1 次预计完成时间/.test(wen1), wen1.slice(0, 200));
-check('提问文本标出这条预测**已经超出**（并给出超了多久）', /已经超出/.test(wen1), wen1.slice(0, 240));
-check('提问文本带上模型自己写的依据', /看起来还剩 3 步/.test(wen1), wen1.slice(0, 240));
+// ── ③ 临时文件：本轮账本，第一次访问就按固定值立好预警点 ──
+const huo = new EtaLinShi(linShi, T0);
+const w = huo.xingWei('s1', 'gongJu', T0);
+check('临时文件里这个行为的预警点 = 该类行为的固定初始值', w.yuJingMiao === xingWeiGui('gongJu').miao && w.yuJingLun === xingWeiGui('gongJu').lun, { miao: w.yuJingMiao, lun: w.yuJingLun });
+check('还没有上次预测 ⇒ panChaoShi 报"空缺"（不是"超了"）', (() => { const r = huo.panChaoShi('s1', 'gongJu', T0); return r.kuiShi === true && r.chaoShi === false && r.yiChang === false; })());
+check('临时文件真的落盘了（判断前读得到）', fs.existsSync(linShi), linShi);
+const duHuo = JSON.parse(fs.readFileSync(linShi, 'utf8'));
+check('临时文件结构：会话 → 行为 → {超时次数, 上次预测}', !!(duHuo.huiHua.s1.xingWei.gongJu && duHuo.huiHua.s1.xingWei.gongJu.chaoShiCiShu === 0), Object.keys(duHuo.huiHua.s1.xingWei));
 
-const chaoB = cang.panChaoShi('s1', T0 + 400_000);
-check('超过预计完成时间 ⇒ 连续计数 1', chaoB.chaoShi === true && chaoB.lianXu === 1 && chaoB.yiChang === false, chaoB);
-const yu2 = cang.jiYuCe('s1', { etaMs: 8 * 60 * 1000, genJu: '上次估少了', laiYuan: 'model' }, T0 + 400_000);
-check('第二次预测写进去了（同一轮里可以多次写）', cang.huiHua('s1').liCi.length === 2 && cang.huiHua('s1').shangCi.ts === yu2.ts);
+// 模型给出预测 ⇒ 临时文件记下"完成时间戳"
+const yu1 = huo.jiYuCe('s1', 'gongJu', { etaMs: 60_000, genJu: '读一个文件', laiYuan: 'model', moXing: 'm' }, T0 + 10_000);
+check('预测记录含**绝对完成时间戳**（重启后能判超没超）', yu1.jieZhiMs === T0 + 10_000 + 60_000 && yu1.etaMs === 60_000, yu1);
+check('预测记下"当时已经跑了多久"与来源', yu1.yiYongMs === 10_000 && yu1.laiYuan === 'model', yu1);
+const duHuo2 = JSON.parse(fs.readFileSync(linShi, 'utf8'));
+check('临时文件里真的写进了上次预测的完成时间戳', duHuo2.huiHua.s1.xingWei.gongJu.shangCiYuCe.jieZhiMs === yu1.jieZhiMs, duHuo2.huiHua.s1.xingWei.gongJu.shangCiYuCe);
 
-// 这次没超 → 连续计数归零（"连续"的语义）
-const chaoC = cang.panChaoShi('s1', T0 + 500_000);
-check('这次在预计时间内 ⇒ 连续计数归零（真"连续"）', chaoC.chaoShi === false && chaoC.lianXu === 0, chaoC);
+// 没到点 ⇒ 不算超
+check('没到预计完成时间 ⇒ 不算超时、计数不动', (() => { const r = huo.panChaoShi('s1', 'gongJu', T0 + 30_000); return r.chaoShi === false && r.ciShu === 0 && r.lianXu === 0; })());
+// 超了 ⇒ 计数 +1
+const chao1 = huo.panChaoShi('s1', 'gongJu', T0 + 100_000);
+check('超过预计完成时间 ⇒ 累计次数 +1', chao1.chaoShi === true && chao1.ciShu === 1 && chao1.yiChang === false, chao1);
 
-// ── ④ 连续 3 次超出 ⇒ 异常 ──
-const cangC = new EtaZhangBen(path.join(tmp, 'c.json'), T0);
-cangC.kaiShiLun('sc', T0);
+// ── ③ 累计 3 次 ⇒ 直接异常 ──
 let yiChangZai = -1;
-for (let i = 0; i < 4; i++) {
-  cangC.jiYuCe('sc', { etaMs: 60_000, laiYuan: 'model' }, T0 + i * 2_000_000);
-  const r = cangC.panChaoShi('sc', T0 + i * 2_000_000 + 120_000);   // 每次都超出
-  if (r.yiChang && yiChangZai < 0) yiChangZai = r.lianXu;
+for (let i = 2; i <= 4; i++) {
+  huo.jiYuCe('s2', 'gongJu', { etaMs: 60_000, laiYuan: 'model' }, T0 + i * 1_000_000);
+  const r = huo.panChaoShi('s2', 'gongJu', T0 + i * 1_000_000 + 120_000);
+  if (r.yiChang && yiChangZai < 0) yiChangZai = r.ciShu;
 }
-check(`连续超出第 ${CHAO_SHI_LIAN_XU_XIAN} 次判定异常（门禁读到 ${yiChangZai}）`, yiChangZai === CHAO_SHI_LIAN_XU_XIAN, { yiChangZai });
-check('异常阈值是 3（产品定稿）', CHAO_SHI_LIAN_XU_XIAN === 3);
+check(`累计超出第 ${CHAO_SHI_LIAN_XU_XIAN} 次判定异常（门禁读到 ${yiChangZai}）`, yiChangZai === 3, { yiChangZai });
+check('异常后仍能读到"上次预测"（要如实告诉用户它预计还剩多久）', !!huo.panChaoShi('s2', 'gongJu', T0 + 9e9).shangCi);
 
-// ── ⑦ 自我完善：真实跑完的轮次进统计 ──
-const cangX = new EtaZhangBen(path.join(tmp, 'x.json'), T0);
-// 三轮同类任务：模型每次都估 5 分钟，实际分别 8/9/10 分钟（模型偏乐观）
-let shiJi = [8, 9, 10];
-let t = T0;
-for (const m of shiJi) {
-  cangX.kaiShiLun('sx', t, ming);
-  cangX.jiYuCe('sx', { etaMs: 300_000, laiYuan: 'model', moXing: 'm' }, t + 1000);
-  cangX.xueXi('sx', { shiJiMs: m * 60_000, now: t + m * 60_000 });
-  cangX.jieShuLun('sx');
-  t += 10 * 24 * 3600 * 1000;   // 换一轮（时间往前推）
+// ── 中途没超 ⇒ 计数归零（"连续/累计"的语义都要对） ──
+const huo3 = new EtaLinShi(path.join(tmp, 'live3.json'), T0);
+huo3.jiYuCe('s3', 'gongJu', { etaMs: 60_000, laiYuan: 'model' }, T0);
+huo3.panChaoShi('s3', 'gongJu', T0 + 120_000);            // 超一次
+const huiLuo = huo3.panChaoShi('s3', 'gongJu', T0 + 130_000); // 已经重新预测过？没有 ⇒ 仍算超
+huo3.jiYuCe('s3', 'gongJu', { etaMs: 600_000, laiYuan: 'model' }, T0 + 200_000);
+const huiLuo2 = huo3.panChaoShi('s3', 'gongJu', T0 + 300_000); // 这次在预计时间内
+check('这次在预计时间内 ⇒ **连续**计数归零（累计次数保留）', huiLuo2.chaoShi === false && huiLuo2.lianXu === 0 && huiLuo2.ciShu >= 1, { huiLuo, huiLuo2 });
+
+// ── 预警点"加一档"（判没卡死之后） ──
+const dang = huo3.jiaYiDang('s3', 'gongJu', T0 + 300_000);
+check('判"没卡死"⇒ 预警点加一档（时间与次数都往后放）', dang.yuJingMiao > XING_WEI_MOREN.gongJu.miao && dang.yuJingLun > XING_WEI_MOREN.gongJu.lun, dang);
+
+// ── ⑤ 自我完善：真实跑完的轮次进方法库 ──
+const cangX = new EtaZhangBen(path.join(tmp, 'eta-x.json'), T0);
+const qm = renWuQianMing({ gongJu: 'read_file', buShu: 3, gongJuMing: ['read_file', 'write_file'] });
+for (const [yu, shi] of [[30_000, 48_000], [30_000, 54_000], [30_000, 60_000]]) {
+  cangX.jiFangFa('gongJu', qm, { yuCeMs: yu, shiJiMs: shi, mingZhong: shi <= yu, moXing: 'm' }, T0);
 }
-const jing = cangX.jingYan(ming);
-check('经验表长出了这类任务（跨轮累积）', !!jing && jing.yangBen === 3, jing && { yangBen: jing.yangBen });
-check('中位数/90 分位是真实耗时分位（8~10 分钟一带）', jing.p50Ms >= 8 * 60_000 && jing.p90Ms >= jing.p50Ms && jing.p90Ms <= 10 * 60_000, { p50: jing.p50Ms, p90: jing.p90Ms });
-check('学出了"模型偏乐观"的偏移系数（>1.5）', jing.piaoYiXiShu > 1.5, jing.piaoYiXiShu);
-check('预测命中率被如实记下（三轮全超 ⇒ 接近 0）', jing.mingZhongLv < 0.3, jing.mingZhongLv);
-check('样例留痕（预测/实际/是否命中）', jing.liZi.length === 3 && jing.liZi[0].shiJiMs === 8 * 60_000, jing.liZi);
-const wenX = cangX.canKaoWenBen('sx2', ming, t);
-check('同类任务的**下一次**参考里看得到这些统计', /实际耗时中位数/.test(wenX) && /命中率/.test(wenX) && /偏乐观|偏保守/.test(wenX), wenX.slice(0, 300));
-check('参考文本里没有"还没有历史"（已经有经验了）', !/还没有历史记录/.test(wenX));
+const f = cangX.chaFangFa('gongJu', qm);
+check('方法库长出了这类行为（样本数 = 3）', !!f && f.yangBen === 3, f && f.yangBen);
+check('方法库记下中位/90 分位（真实耗时）', f.p50Ms >= 48_000 && f.p90Ms >= 54_000 && f.p90Ms <= 60_000, { p50: f.p50Ms, p90: f.p90Ms });
+check('方法库学出"模型偏乐观"的偏移系数（>1.5）', f.piaoYiXiShu > 1.5, f.piaoYiXiShu);
+check('方法库记下命中率（三次全超 ⇒ 接近 0）', f.mingZhongLv < 0.35, f.mingZhongLv);
+check('方法库留痕（预测/实际/是否命中）', f.liZi.length === 3 && f.liZi[0].shiJiMs === 48_000, f.liZi);
+const canKao = cangX.canKaoWenBen('gongJu', qm);
+check('下一次参考里看得到这些统计（越用越准的输入）', /中位数/.test(canKao) && /命中率/.test(canKao) && /偏乐观|偏保守/.test(canKao), canKao.slice(0, 200));
+check('有方法之后"按方法预测"给得出数（标注为 fangFa）', (() => { const y = cangX.yuCeByFangFa('gongJu', qm, T0); return !!y && y.laiYuan === 'fangFa' && y.etaMs >= f.p50Ms; })());
 
-// 签名聚类：不同工作量 → 不同桶；同工作量 → 同桶
-const mingXiao = renWuQianMing({ buShu: 2, gongJuMing: ['read_file'], moXing: 'mimo-v2.5-pro' });
-const mingDa = renWuQianMing({ buShu: 30, gongJuMing: ['read_file', 'write_file', 'run_shell'], moXing: 'mimo-v2.5-pro' });
-check('签名按步数分档（小任务/大任务不同桶）', mingXiao !== mingDa && /步数=1-3/.test(mingXiao) && /步数=21\+/.test(mingDa), { mingXiao, mingDa });
-check('签名对工具顺序不敏感（同一批工具 = 同一桶）', renWuQianMing({ buShu: 5, gongJuMing: ['b', 'a'] }) === renWuQianMing({ buShu: 5, gongJuMing: ['a', 'b'] }));
-check('签名剥掉模型版本尾巴（同一模型不同版本同桶）', renWuQianMing({ buShu: 5, moXing: 'mimo-v2.5-pro' }) === renWuQianMing({ buShu: 5, moXing: 'MIMO-V2.5-PRO' }));
+// ── 两个文件真的分开：各写各的，互不污染 ──
+cangX.baCun();
+const kuChiJiu = JSON.parse(fs.readFileSync(path.join(tmp, 'eta-x.json'), 'utf8'));
+check('持久文件里**没有**本轮状态（只有方法库 + 全局统计）', kuChiJiu.version === 2 && !!kuChiJiu.fangFa && !kuChiJiu.huiHua, Object.keys(kuChiJiu));
+const kuLinShi = JSON.parse(fs.readFileSync(linShi, 'utf8'));
+check('临时文件里**没有**方法库（只有本轮状态）', kuLinShi.version === 1 && !!kuLinShi.huiHua && !kuLinShi.fangFa, Object.keys(kuLinShi));
+check('临时文件记住"这一轮什么时候开始的"（算已用时长要用）', typeof kuLinShi.huiHua.s1.kaiShi === 'number' && kuLinShi.huiHua.s1.kaiShi === T0, kuLinShi.huiHua.s1);
 
-// ── ③ 持久化：真的落盘，重新加载还在 ──
-cang.baCun();
-const yuanWen = fs.readFileSync(wenJian, 'utf8');
-check('文件真的写出来了', yuanWen.length > 50, yuanWen.length);
-const duan = JSON.parse(yuanWen);
-check('文件结构不是"一个时间"：含版本/全局/类型经验/会话状态', duan.version === 1 && !!duan.quanJu && !!duan.leiXing && !!duan.huiHua, Object.keys(duan));
-check('会话状态里有历次预测与连续超时计数', Array.isArray(duan.huiHua.s1.liCi) && duan.huiHua.s1.liCi.length === 2 && typeof duan.huiHua.s1.lianXuChaoShi === 'number', duan.huiHua.s1);
-check('预测条目含绝对截止时刻（重启后能判超时）', duan.huiHua.s1.liCi[0].jieZhiMs > 0 && duan.huiHua.s1.liCi[0].etaMs > 0, duan.huiHua.s1.liCi[0]);
-const cangZai = new EtaZhangBen(wenJian, T0);
-check('重新加载后同一轮状态还在（进程退出不丢）', !!cangZai.huiHua('s1') && cangZai.huiHua('s1').liCi.length === 2);
-check('重新加载后"连续超时"计数还在', cangZai.huiHua('s1').lianXuChaoShi === 0, cangZai.huiHua('s1').lianXuChaoShi);
-const cangZaiX = new EtaZhangBen(path.join(tmp, 'x.json'), T0);
-check('重新加载后同类任务的经验还在（"越用越准"的基础）', !!cangZaiX.jingYan(ming) && cangZaiX.jingYan(ming).yangBen === 3);
+// 重新加载：方法库还在（资产不丢）
+const cangZai = new EtaZhangBen(path.join(tmp, 'eta-x.json'), T0);
+check('重新加载后方法库还在（跨会话复用）', !!cangZai.chaFangFa('gongJu', qm) && cangZai.chaFangFa('gongJu', qm).yangBen === 3);
 
-// ── 边界：模型的离谱值要被夹住，坏值不写进来 ──
-check('离谱的大值被夹到 24 小时', jiaEtaMiao(999999999) === 24 * 60 * 60 * 1000, jiaEtaMiao(999999999));
-check('过小的值被抬到 10 秒（0/负数/非数字都不接受）', jiaEtaMiao(0.001) === 10_000 && jiaEtaMiao(0) === null && jiaEtaMiao(-5) === null && jiaEtaMiao('abc') === null, [jiaEtaMiao(0.001), jiaEtaMiao(0), jiaEtaMiao(-5), jiaEtaMiao('abc')]);
-check('人话时长格式（秒/分/小时）', shuoShiChang(45_000) === '45 秒' && /^2 分 5 秒$/.test(shuoShiChang(125_000)) && /^2 小时 5 分$/.test(shuoShiChang(7_500_000)), [shuoShiChang(45_000), shuoShiChang(125_000), shuoShiChang(7_500_000)]);
-check('分位函数对空样本返回 0（不炸）', fenWei([], 0.5) === 0 && fenWei([1000], 0.9) === 1000);
-check('滑动平均：首个样本直接采纳', ema(0, 500) === 500 && ema(500, 1000, 0.5) === 750);
+// 一轮收尾：临时清空、经验留下
+const huoZ = new EtaLinShi(path.join(tmp, 'live-z.json'), T0);
+huoZ.huiHua('sz', T0);
+huoZ.jiYuCe('sz', 'ziDongXuPai', { etaMs: 300_000, laiYuan: 'model' }, T0 + 1000);
+const xue = huoZ.xueXi('sz', 'ziDongXuPai', qm, cangZai, T0 + 240_000);
+check('收尾时学到样本（预测 5 分钟 / 实际 4 分钟 ⇒ 命中）', xue.xueLe === true && xue.mingZhong === true && xue.shiJiMs === 240_000, xue);
+huoZ.jieShuLun('sz');
+check('收尾后本轮状态清空（不会污染下一次判断）', huoZ.huiHua('sz').xingWei.ziDongXuPai === undefined, huoZ.huiHua('sz').xingWei);
+check('但方法库不受影响（学到的留住）', !!cangZai.chaFangFa('ziDongXuPai', qm));
 
-// ── 收尾：一轮结束清状态，但经验留在库里 ──
-cangZai.jieShuLun('s1');
-check('一轮结束后"当下状态"清掉（不会无限累积）', cangZai.huiHua('s1') === null);
-check('但经验表不受影响（学到的留住）', !!cangZaiX.jingYan(ming));
+// ── 边界 ──
+check('离谱大值被夹到 24 小时', jiaEtaMiao(9e9) === 24 * 60 * 60 * 1000, jiaEtaMiao(9e9));
+check('0/负数/非数字一律不接受', jiaEtaMiao(0) === null && jiaEtaMiao(-1) === null && jiaEtaMiao('x') === null);
+check('人话时长格式', shuoShiChang(45_000) === '45 秒' && /^2 分 5 秒$/.test(shuoShiChang(125_000)) && /^2 小时 5 分$/.test(shuoShiChang(7_500_000)));
+check('分位/滑平均：空样本不炸，小量级比值不被取整压平', fenWei([], 0.9) === 0 && ema(0, 1234) === 1234 && emaXiShu(1, 1.6, 0.35) > 1.1, emaXiShu(1, 1.6, 0.35));
+check('签名按行为+工具+步数分档（同类才聚得起来）', renWuQianMing({ gongJu: 'read_file', buShu: 2 }) !== renWuQianMing({ gongJu: 'run_shell', buShu: 30 }));
 
-// ── 主进程接线（静态不变量）──
+// ── 主进程接线（静态不变量） ──
 const emTs = fs.readFileSync(path.join(pkgRoot, 'src', 'electron-main.ts'), 'utf8');
-check('判卡死时**要求模型给预计完成时间**（etaSeconds）', /"etaSeconds"/.test(emTs) && /etaSeconds/.test(emTs));
-check('提问里带上模型自己写过的预测 + 同类经验', /canKaoWenBen\(sessionId, qianMing\)/.test(emTs) && /本轮已经跑了/.test(emTs));
-check('连续 3 次超出 ⇒ 按异常处理并写进聊天记录', /err\.plan-eta-anomaly/.test(emTs) && /llm\.etaAnomaly/.test(emTs) && /chao\.yiChang/.test(emTs));
-check('模型没给预计时间时按经验推算并如实标注来源', /function yuceTuSuan/.test(emTs) && /laiYuan: 'history'/.test(emTs) && /laiYuan: 'default'/.test(emTs));
-check('每轮任务收尾时学习（预测 vs 实际）', /xueXi\(sessionId, \{ shiJiMs: Date\.now\(\) - h\.kaiShi \}\)/.test(emTs));
-check('异常/出错中止的轮次不进学习样本', /jieShuLun\(sessionId\);   \/\/ 异常中止的轮次\*\*不进学习样本\*\*/.test(emTs));
-check('退出前落盘（节流里那次不丢）', /etaZhangBen\?\.baCun\(\)/.test(emTs));
-check('持久文件是 userData/eta.json', /path\.join\(app\.getPath\('userData'\), 'eta\.json'\)/.test(emTs));
-check('聊天记录里如实告诉用户"这一声/这个数"是不是模型给的', /该预计值不是模型给的/.test(emTs));
-check('预警点系统小字带上了预计完成时间', /llm\.stallEtaOk/.test(emTs) && /llm\.stallEtaOver/.test(emTs));
+check('两个文件都在 userData 下（eta.json / eta-live.json）', /'eta\.json'/.test(emTs) && /'eta-live\.json'/.test(emTs));
+check('五类行为都接进了执行路径', ['duiHua', 'gongJu', 'dengDaiHuiFu', 'dengDaiXingDong', 'ziDongXuPai'].every((x) => new RegExp(`xingWei: '${x}'`).test(emTs) || new RegExp(`'${x}'`).test(emTs)), '行为覆盖');
+check('判断顺序：先读临时文件 → 3 次就异常 → 才请模型', /panChaoShi\(sessionId, x\)/.test(emTs) && /chao\.yiChang/.test(emTs) && /await panDuanKaSi\(/.test(emTs));
+check('模型没给预计值时：持久文件的方法 → 首次固定值（并如实标注来源）', /yuCeByFangFa\(x, qianMing\)/.test(emTs) && /laiYuan: 'fangFa'/.test(emTs) && /laiYuan: 'moren'/.test(emTs));
+check('换模型顺序：正在用的 → 该牛马调用链 → 云 → 本地（最多 5 个）', /jia\(dangQianMoXing\)/.test(emTs) && /lianMingOf\(sessionId\)/.test(emTs) && /KASI_CHANGSHI/.test(emTs));
+check('判异常后**拦住后续动作**（续派判据里检查标记）', /quEtaYiChang\(sessionId\)\) return \{ jiXu: false, liYou: 'eta-anomaly' \}/.test(emTs));
+check('命中上限与异常都写进审计（可追溯）', /plan\.eta-limit-hit/.test(emTs) && /plan\.eta-anomaly/.test(emTs) && /plan\.eta-learn/.test(emTs));
+check('退出前两个文件都落盘', /etaBaCun\(\)/.test(emTs));
+check('聊天里给出"这个预计值不是模型给的"的如实标注', /eta\.notFromModel/.test(emTs));
+
+// ── i18n：行为名与判断文案 10 语言齐备 ──
+const i18nDir = path.join(pkgRoot, 'src', 'i18n');
+const KEYS = ['eta.xw.duiHua', 'eta.xw.gongJu', 'eta.xw.dengDaiHuiFu', 'eta.xw.dengDaiXingDong', 'eta.xw.ziDongXuPai', 'eta.anomalyOverrun', 'eta.anomalyStalled', 'eta.anomalyStop', 'eta.continueWithEta', 'eta.notFromModel'];
+let yuYanQue = 0;
+for (const fn of fs.readdirSync(i18nDir).filter((x) => x.endsWith('.json'))) {
+  const o = JSON.parse(fs.readFileSync(path.join(i18nDir, fn), 'utf8'));
+  for (const k of KEYS) if (!o[k] || !String(o[k]).trim()) { yuYanQue++; console.log('  缺键', fn, k); }
+}
+check('10 个语言包都有行为名与判断文案（不出现半截文案）', yuYanQue === 0, { yuYanQue });
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n==== verify-eta-forecast: ${pass} ok / ${fail} FAIL ====`);

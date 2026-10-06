@@ -647,6 +647,35 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .jinJiCaiDan button:hover { background: var(--hover); }
 .jinJiCaiDan button.qiYong { color: var(--accent); font-weight: 600; }
 .jinJiCaiDan button[data-u="P1"].qiYong { color: var(--danger); }
+/* 思考级别滑块卡（点开思考级别图标后出现）：
+   横向滑块 + 「由牛马管理局设置」勾选框；勾上时滑块**变灰且不可拖**（产品要求）。 */
+.jinJiCaiDan.siKaoKa {
+  padding: 10px 12px;
+  width: 232px;
+  gap: 8px;
+  cursor: default;
+}
+.jinJiCaiDan .siKaoGenSui {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-sm); color: var(--ink);
+  cursor: pointer;
+}
+.jinJiCaiDan .siKaoGenSui input { accent-color: var(--accent); }
+.jinJiCaiDan input[type="range"].siKaoHuaKuai {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.jinJiCaiDan input[type="range"].siKaoHuaKuai:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+.jinJiCaiDan .siKaoKaBiao {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; color: var(--muted);
+}
+.jinJiCaiDan .siKaoKaDang { color: var(--accent); font-weight: 600; }
 .kongZhiTaiMianBan {
   display: flex; flex-direction: column;
   background: #1e1e1e; color: #d4d4d4;
@@ -1883,6 +1912,12 @@ body.liaoTianChuangKou .pageBuJu { display: none !important; }
 .woDing { display: flex; align-items: center; gap: 20px; margin-bottom: 12px; flex-wrap: wrap; }
 .woDing .pinPailogo { width: 72px; height: 72px; object-fit: contain; background: transparent; }
 .dashStats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin: 12px 0 16px; }
+/* 使用量表格（真机反馈：做成表格；**只算词元**，不算钱、不标注价目估算） */
+.usageBiao { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.usageBiao th, .usageBiao td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.usageBiao thead th { color: var(--muted); font-weight: 600; }
+.usageBiao tbody tr:hover { background: var(--hover); }
+.usageBiao tfoot td { font-weight: 600; border-top: 1px solid var(--line); border-bottom: none; }
 .dashHang { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
 .dashHuiZhang { width: 8px; height: 8px; border-radius: 50%; background: #f5a524; flex-shrink: 0; }
 .dashXiangQing { border-left: 3px solid var(--accent); margin: 0 0 8px 12px; padding: 8px 10px; background: var(--card); border-radius: 8px; font-size: 12px; }

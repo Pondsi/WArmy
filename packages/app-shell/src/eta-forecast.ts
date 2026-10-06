@@ -1,151 +1,207 @@
 /**
- * **预计完成时间（ETA）** —— 让"是否卡死"的判断有第二根标尺。
+ * **行为级的「预计完成时间 + 轮次/时间上限」** —— 让"是不是卡死了"有可执行的判据。
  *
- * 产品要求（原话拆解）：
- *  1. 模型每次判断完"是否卡死"，**都要**给出一个预计完成时间；
- *  2. 同一轮任务里多次判断时，模型要能**参考它自己之前写的**预计完成时间；
- *  3. 这些预计完成时间**写进持久配置文件**（进程退出/崩溃都不丢）；
- *  4. 一轮任务**连续 3 次**超出模型自己预计的完成时间 ⇒ 按异常处理（停下并警告）；
- *  5. 存下来的**不是简单一个时间**：要结构丰富到能覆盖各种情况，
- *     并且在使用中**自我完善**（预测越来越准）；
- *  6. 它**原本没有任何预计时间** —— 第一次跑时统计是空的，全靠模型自己给，
- *     随着一轮轮真实结束，同类任务的经验（中位数/高分位/偏移系数/命中率）长出来。
+ * 产品需求（第 6 轮原话拆解）：
+ *  1. **每一类行为都有自己的两把尺子**：最长等待时间 + 最大轮/次数。
+ *     行为至少包含：对话轮、单次工具调用、等待模型回复、等待某个行动完成（子代理/定时任务/命令）、
+ *     多步自动续派任务。**首次的这两个数是固定的**（见 `XING_WEI_MOREN`，取值有据可查，不许拍脑袋）。
+ *  2. 时间到 / 次数到 ⇒ **请模型判一次**（优先用这个行为正在用的模型；它没反应就按**该牛马的调用链**
+ *     换别的模型，**5 个都没反应**就算异常）。
+ *  3. **每次判断之前先看临时文件**（`eta-live.json`）：同一轮里这个行为
+ *     **已经超时/超次数过**，那个文件就必须存在，并且记着**上次预测的完成时间戳**；
+ *     拿当前时间比 —— 超了就把次数 +1；**同一轮连续/累计 3 次超出预测时间 ⇒ 直接判异常，不再问模型**。
+ *  4. 没到 3 次 ⇒ 模型判断：判"卡死" ⇒ 异常停下；判"没卡死" ⇒
+ *     **重新预测这类行为的完成时间**（优先用持久文件里已经写下的**该类行为的预测方法**；
+ *     没有这类方法就让它自己预测，并把**新的方法写进持久文件**），
+ *     同时更新临时文件（这是第几次超时/超次数、新的预计完成时间戳）。
+ *  5. 持久文件里存的**不是简单一个时间**：按行为类型 + 任务签名聚类的方法库
+ *     （样本数、时长中位/90 分位、**偏移系数**、命中率、最近样例），**越用越准**。
+ *     它**开工时是空的** —— 第一次全靠模型自己估，真实跑完的轮次才让它长出经验。
  *
- * 设计要点：
- *  · **两层数据**：
- *      `sessions[sid]` —— 某一轮任务的**当下状态**（模型历次预测、连续超时计数）；
- *      `leiXing[qianMing]` —— 按**任务签名**聚类的**跨会话经验**（越用越准的那部分）。
- *  · **任务签名**只用稳定的、与"工作量"相关的东西：计划步数档、本轮工具集合、是否只说不做、
- *    模型族。签名太细（带具体文件名/时间）就永远复用不上，经验长不起来。
- *  · **绝对时刻 + 相对时长都存**：`etaMs`（还需多久）与 `jieZhiMs`（预计何时完成）。
- *    只存相对量的话，进程重启后就没法判断"是不是已经超了"。
- *  · **自我完善**用"指数滑动平均 + 最近样本分位 + 命中率 + 校准系数"四件套：
- *    模型天生偏乐观（常见 1.2~1.6 倍），校准系数把这个偏差学出来，下一次提问时一并告诉它。
- *  · **绝不用统计替代模型**：统计只作为"参考信息"拼进提问（模型仍是决策者），
- *    统计为空时就不给（`laiYuan: 'model'`），而不是编一个数字出来。
+ * 两个文件（产品明确要求分开）：
+ *   · **持久** `userData/eta.json`    → 预测**方法库**（跨会话、跨轮次复用，越用越准）
+ *   · **临时** `userData/eta-live.json` → **本轮**状态（第几次超时、上次/本次预测完成时间戳）
+ *     临时文件也要落盘（进程崩了/重启后"同一轮"仍能续上判断），但每轮收尾即清。
  */
 import { anQuanYuanZiXieJson, duJsonWenJian } from './atomic-json.js';
 
-/** 一次预计完成时间（模型给的，或从统计里推的参考值） */
+// ───────────────────────── 行为类型与固定初始值 ─────────────────────────
+
+export type XingWei = 'duiHua' | 'gongJu' | 'dengDaiHuiFu' | 'dengDaiXingDong' | 'ziDongXuPai';
+
+export interface XingWeiGui {
+  /** 人看的名字（审计/日志/需求文档共用一份说法） */
+  ming: string;
+  /** 首次的**最长等待时间**（毫秒）—— 到了就判一次 */
+  miao: number;
+  /** 首次的**最大轮/次数** —— 到了就判一次 */
+  lun: number;
+  /** 取值依据（来源或推理），写在数据里，免得以后有人以为这些数字是拍脑袋来的 */
+  ju: string;
+}
+
+/**
+ * 首次的固定初始值（**每个数字都有出处**，不是拍脑袋；调研记录见 `docs/REQUIREMENTS-ETA.md`）。
+ *
+ * 校准来源：
+ *  · OpenAI Agents SDK `DEFAULT_MAX_TURNS = 10`；CrewAI `max_iter = 20`、`max_retry_limit = 2`；
+ *    AutoGen `max_tool_iterations` 默认 1（示例给 10）；LangGraph `recursion_limit` 现行默认已是 1000
+ *    （**那不是 agent 预算，是图引擎上限**，网上流传的 25 已过期）。
+ *  · OpenAI Python SDK 默认超时 10 分钟；Anthropic SDK `DEFAULT_TIMEOUT = 10 分钟`（连接 5s）、
+ *    `DEFAULT_MAX_RETRIES = 2`、退避 0.5s→8s；MCP TS SDK 请求超时 60 000ms；
+ *    MCP 规范要求"所有请求都应有超时、且必须有最大超时"。
+ *  · Claude Code 是**官方分档**的现成范例：Bash 前台默认 120s / 上限 600s、后台默认 30min / 硬顶 2h、
+ *    WebFetch 5min；`askUserQuestionTimeout` 默认 `never`（等用户输入不设超时）。
+ *  · 结论：**不同行为必须给不同尺子**（读文件 vs 跑构建 vs 云模型 vs 等人），
+ *    并且"官方默认 10 分钟"是**上限而不是目标**。
+ */
+export const XING_WEI_MOREN: Record<XingWei, XingWeiGui> = {
+  duiHua: {
+    ming: '对话轮（一次模型回复）',
+    miao: 5 * 60 * 1000,
+    lun: 12,
+    ju: '轮数取 12（Agents SDK 10 与 CrewAI 20 之间，偏保守）：这轮对话最多 12 轮工具 + 一次收敛；'
+      + '单轮墙钟 5 分钟越过 Claude Code Bash 默认 120s、不到其 600s 上限',
+  },
+  gongJu: {
+    ming: '单次工具调用',
+    miao: 60 * 1000,
+    lun: 3,
+    ju: '60 秒 = MCP TS SDK 的默认请求超时（本地读写通常几十毫秒，60 秒就是"明显不正常"）；'
+      + '次数 3 = 1 次 + 2 次重试（Anthropic SDK DEFAULT_MAX_RETRIES=2）',
+  },
+  dengDaiHuiFu: {
+    ming: '等待模型回复',
+    miao: 2 * 60 * 1000,
+    lun: 5,
+    ju: '120 秒（两家 SDK 的 10 分钟是上限不是目标；本地模型冷加载留出余量）；'
+      + '换模型上限 5 —— 5 个都没反应即异常（沿用本项目既有的判卡死链）',
+  },
+  dengDaiXingDong: {
+    ming: '等待某个行动完成（子代理 / 定时任务 / 命令）',
+    miao: 30 * 60 * 1000,
+    lun: 12,
+    ju: '30 分钟 = Claude Code 后台任务默认超时（其硬顶 2h 我们不用：桌面应用宁可早问一次）；'
+      + '子代理内部循环沿用工具轮的 12',
+  },
+  ziDongXuPai: {
+    ming: '多步自动续派任务',
+    miao: 20 * 60 * 1000,
+    lun: 40,
+    ju: '本项目既有产品定稿（40 次续派 / 20 分钟）保留：40 次落在 CrewAI 20 与旧 LangGraph 25 的'
+      + '"步数预算"带之上，因为是"续派次数"而不是"单轮工具轮"',
+  },
+};
+
+export function xingWeiGui(x: XingWei): XingWeiGui {
+  return XING_WEI_MOREN[x] || XING_WEI_MOREN.duiHua;
+}
+
+/** 预警点"加一档"（判"没卡死"就往后放一档，不是翻倍 —— 翻倍会让后面越等越久） */
+export const YU_JING_JIA_YI_DANG_MS = 20 * 60 * 1000;
+export const YU_JING_JIA_YI_DANG_LUN = 40;
+
+/** 连续超时几次算异常（产品定稿：3） */
+export const CHAO_SHI_LIAN_XU_XIAN = 3;
+/** 判断最多换几个模型（全都没反应 = 异常） */
+export const PAN_MO_XING_SHANG_XIAN = 5;
+/** 单次预测的可接受范围：10 秒 ~ 24 小时 */
+export const ETA_ZUI_XIAO_MS = 10 * 1000;
+export const ETA_ZUI_DA_MS = 24 * 60 * 60 * 1000;
+
+// ───────────────────────── 数据结构 ─────────────────────────
+
+/** 一次预计完成时间 */
 export interface EtaYuCe {
-  /** 从"预测那一刻"起，预计还要多久（毫秒） */
+  /** 从预测那一刻起预计还要多久 */
   etaMs: number;
-  /** 预计完成的**绝对时刻**（epoch ms）—— 重启后可判断是否已超 */
+  /** 预计完成的**绝对时刻**（epoch ms）—— 重启后仍能判"超没超" */
   jieZhiMs: number;
-  /** 预测那一刻，本轮任务已经跑了多久（毫秒） */
+  /** 预测时这个行为已经跑了多久 */
   yiYongMs: number;
-  /** 模型给的一句话依据（为什么是这么久） */
+  /** 一句话依据 */
   genJu: string;
-  /** 来源：model=模型自己给的；history=统计推算；default=兜底档位 */
-  laiYuan: 'model' | 'history' | 'default';
-  /** 模型用的模型 id（谁预测的） */
+  /** 来源：model=模型给的；fangFa=按持久文件里的方法算的；moren=首次固定值 */
+  laiYuan: 'model' | 'fangFa' | 'moren';
   moXing?: string;
-  /** 预测时刻 */
   ts: number;
-  /** 这条预测最后**对没对上**：true=在预计时间内完成；null=还没结论（任务还没结束） */
+  /** 结论：true=在预计时间内完成；null=还没结论 */
   mingZhong?: boolean | null;
-  /** 实际总耗时（任务结束时回填） */
   shiJiMs?: number;
 }
 
-/** 一类任务的经验（跨会话复用） */
-export interface EtaLeiXing {
+/** 一类行为的"预测方法"（持久文件里越用越准的那部分） */
+export interface EtaFangFa {
+  xingWei: XingWei;
+  /** 任务签名（同类工作量的聚类键；空 = 按行为类型整体统计） */
   qianMing: string;
-  /** 样本数（真的跑完并有结论的轮数） */
   yangBen: number;
-  /** 模型预测的滑动平均（ms） */
+  /** 预测时长的滑动平均 */
   yuCeEmaMs: number;
-  /** 实际耗时的滑动平均（ms） */
+  /** 实际时长的滑动平均 */
   shiJiEmaMs: number;
-  /**
-   * **校准系数** = 实际 / 预测 的滑动平均。
-   * >1 说明模型一贯偏乐观（说 10 分钟，实际 13 分钟）；提问时把它告诉模型。
-   */
+  /** 校准系数 = 实际/预测 的滑动平均（>1 = 一贯偏乐观） */
   piaoYiXiShu: number;
-  /** 分位数（保留最近 `SAN_SHU` 个实际样本） */
   p50Ms: number;
   p90Ms: number;
-  /** 落在"自己预测的时间"内的比例（0~1） */
   mingZhongLv: number;
-  /** 最近的实际耗时样本（ms，最多 `SAN_SHU` 个） */
   yangBenWei: number[];
-  /** 样例：最近几条完整记录（预测/实际/依据），让排查看得见 */
   liZi: Array<{ ts: number; yuCeMs: number; shiJiMs: number; mingZhong: boolean; moXing?: string }>;
   gengXinTs: number;
 }
 
-/** 某一轮任务的当下状态 */
-export interface EtaHuiHua {
-  sessionId: string;
-  /** 这一轮任务从什么时候开始 */
-  kaiShi: number;
-  /**
-   * 这一轮**第一次预测时**定下的任务签名（之后一直用它）。
-   * 为什么要在轮内锁定：签名里含"本轮用到的工具"，跑完再看会多出几个工具 ⇒
-   * 换个签名桶，学习样本就跟它当初参考的经验对不上了。
-   */
-  qianMing: string;
-  /** 模型**上一次**写的预计完成时间（提问时给它参考） */
-  shangCi: EtaYuCe | null;
-  /** 本轮它写过的全部预测（从早到晚，最多 `LUN_CI_SHANG_XIAN` 条） */
-  liCi: EtaYuCe[];
-  /** **连续**超时次数（连续 3 次 ⇒ 当异常处理） */
+/** 持久文件（方法库） */
+export interface EtaKu {
+  version: 2;
+  shouCiTs: number;
+  gengXinTs: number;
+  quanJu: { yangBen: number; piaoYiXiShu: number; mingZhongLv: number; yuCeEmaMs: number; shiJiEmaMs: number };
+  /** 行为类型 → 签名 → 方法 */
+  fangFa: Partial<Record<XingWei, Record<string, EtaFangFa>>>;
+}
+
+/** 临时文件里，某个行为在本轮的实时状态 */
+export interface EtaXingWeiHuo {
+  /** 本轮这个行为**累计**超时/超次数（产品要求：3 次即异常） */
+  chaoShiCiShu: number;
+  /** **连续**超时次数（中途没超就归零） */
   lianXuChaoShi: number;
-  /** 历史上最多连续超了几次（观测用） */
   zuiChangLianXu: number;
-  /** 已经产出过几个样本 */
+  /** 最近一次是因为什么触发的 */
+  zuiHouZhongLei: '' | 'shiJian' | 'ciShu';
+  /** 上次预测的完成时间（判断"超没超"就靠它） */
+  shangCiYuCe: EtaYuCe | null;
+  /** 本轮的历次预测（给模型"参考自己之前写的"） */
+  liCi: EtaYuCe[];
+  /** 本轮的预警点（判"没卡死"就加一档） */
+  yuJingMiao: number;
+  yuJingLun: number;
+  /** 已产出的真实样本数 */
   yangBen: number;
   gengXinTs: number;
 }
 
-export interface EtaKu {
-  version: 1;
-  shouCiTs: number;
+/** 临时文件里，一轮任务的状态 */
+export interface EtaHuiHua {
+  sessionId: string;
+  kaiShi: number;
+  xingWei: Partial<Record<XingWei, EtaXingWeiHuo>>;
   gengXinTs: number;
-  quanJu: {
-    yangBen: number;
-    piaoYiXiShu: number;
-    mingZhongLv: number;
-    /** 全局"乐观程度"的中位（新类型没有样本时可借它做参考） */
-    yuCeEmaMs: number;
-    shiJiEmaMs: number;
-  };
-  /** 任务签名 → 经验 */
-  leiXing: Record<string, EtaLeiXing>;
-  /** 会话 → 本轮状态 */
+}
+
+export interface EtaLinShiKu {
+  version: 1;
+  gengXinTs: number;
   huiHua: Record<string, EtaHuiHua>;
 }
 
-export const LUN_CI_SHANG_XIAN = 60;   // 单轮最多记 60 条预测（长跑会一直加）
-export const SAN_SHU = 40;             // 每类任务保留最近 40 个样本算分位
-export const LI_ZI_SHANG_XIAN = 12;    // 每类任务保留最近 12 条完整样例
-export const CHAO_SHI_LIAN_XU_XIAN = 3; // 连续超时几次算异常（产品定稿：3）
-/** 单次预测的可接受范围：10 秒 ~ 24 小时（离谱值不当真，如实标注截断） */
-export const ETA_ZUI_XIAO_MS = 10 * 1000;
-export const ETA_ZUI_DA_MS = 24 * 60 * 60 * 1000;
+// ───────────────────────── 工具函数 ─────────────────────────
 
-function kong(t: number): EtaKu {
-  return {
-    version: 1,
-    shouCiTs: t,
-    gengXinTs: t,
-    quanJu: { yangBen: 0, piaoYiXiShu: 1, mingZhongLv: 0, yuCeEmaMs: 0, shiJiEmaMs: 0 },
-    leiXing: {},
-    huiHua: {},
-  };
-}
-
-function youXian(v: unknown, huiTui = 0): number {
+export function youXian(v: unknown, huiTui = 0): number {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : huiTui;
 }
 
-function pos(v: unknown): number {
-  const n = youXian(v, 0);
-  return n > 0 ? n : 0;
-}
-
-/** 分位（样本已排序或未排序都行；空样本返回 0） */
 export function fenWei(yang: number[], p: number): number {
   const a = (yang || []).filter((x) => Number.isFinite(x) && x > 0).slice().sort((x, y) => x - y);
   if (!a.length) return 0;
@@ -153,57 +209,26 @@ export function fenWei(yang: number[], p: number): number {
   return Math.round(a[i] as number);
 }
 
-/** 指数滑动平均：新样本权重 alpha（默认 0.35 —— 既记得历史，也跟得上变化）。**毫秒量级**用，取整。 */
+/** 毫秒量级的滑动平均（取整） */
 export function ema(jiu: number, xin: number, alpha = 0.35): number {
-  if (!(jiu > 0)) return xin;
+  if (!(jiu > 0)) return Math.max(0, Math.round(xin));
   return Math.round(jiu * (1 - alpha) + xin * alpha);
 }
 
-/**
- * 同一套滑动平均，但**保留小数**。
- * ⚠️ 真事故（本门禁抓到的）：偏移系数是 1~5 这种小量级，用取整版 ema 会把它**永远压在 1**
- * （1×0.65 + 1.6×0.35 = 1.21 → round → 1）⇒ "模型偏乐观"这个信息学不出来，
- * 提问里对模型的纠偏提示就成了废话。
- */
+/** 保留小数的滑动平均（小量级比值专用；取整版会把 1.2 压成 1） */
 export function emaXiShu(jiu: number, xin: number, alpha = 0.35): number {
   if (!(jiu > 0)) return Number(xin.toFixed(4));
   return Number((jiu * (1 - alpha) + xin * alpha).toFixed(4));
 }
 
-/**
- * **任务签名**（聚类键）：只用稳定的、与工作量相关的特征。
- * 例：`步数=5|工具集=read_file,write_file|只说不做|模型族=mimo`
- */
-export function renWuQianMing(p: {
-  buShu?: number;
-  gongJuMing?: string[];
-  zhiShuoBuZuo?: boolean;
-  moXing?: string;
-}): string {
-  const bu = Math.max(0, Math.floor(youXian(p.buShu, 0)));
-  // 步数分档（1-3 / 4-8 / 9-20 / 21+）：太细就永远聚不到一起
-  const dang = bu === 0 ? '0' : bu <= 3 ? '1-3' : bu <= 8 ? '4-8' : bu <= 20 ? '9-20' : '21+';
-  const gj = [...new Set((p.gongJuMing || []).map((x) => String(x || '').trim()).filter(Boolean))].sort().slice(0, 8).join(',') || 'none';
-  const mo = moXingZu(p.moXing);
-  return `步数=${dang}|工具=${gj}${p.zhiShuoBuZuo ? '|只说不做' : ''}${mo ? '|模型=' + mo : ''}`;
-}
-
-/** 模型族：去掉版本号/日期尾巴，避免"同一个模型每次签名都不同" */
-export function moXingZu(mo?: string): string {
-  const s = String(mo || '').trim().toLowerCase();
-  if (!s) return '';
-  return s.replace(/[-_ ]?(v?\d+(\.\d+)*|20\d{2}[-.]?\d{2}([-.]?\d{2})?)$/i, '').slice(0, 32);
-}
-
-/** 把模型的取值夹到可用范围（返回 ms；无效值返回 null） */
+/** 把模型的"秒"夹到可用范围（无效值返回 null） */
 export function jiaEtaMiao(miao: unknown): number | null {
   const s = youXian(miao, 0);
   if (!(s > 0)) return null;
-  const ms = Math.round(s * 1000);
-  return Math.min(ETA_ZUI_DA_MS, Math.max(ETA_ZUI_XIAO_MS, ms));
+  return Math.min(ETA_ZUI_DA_MS, Math.max(ETA_ZUI_XIAO_MS, Math.round(s * 1000)));
 }
 
-/** 人话时长：`2 小时 5 分` / `45 秒`（界面与日志共用，避免各处各写一份） */
+/** 人话时长 */
 export function shuoShiChang(ms: number): string {
   const s = Math.max(0, Math.round(youXian(ms, 0) / 1000));
   if (s < 60) return `${s} 秒`;
@@ -213,186 +238,136 @@ export function shuoShiChang(ms: number): string {
   return `${h} 小时 ${m % 60} 分`;
 }
 
+/** 任务签名：只用与"工作量"相关的稳定特征（太细就永远聚不到一起，经验长不起来） */
+export function renWuQianMing(p: {
+  buShu?: number;
+  gongJuMing?: string[];
+  zhiShuoBuZuo?: boolean;
+  moXing?: string;
+  gongJu?: string;
+}): string {
+  const bu = Math.max(0, Math.floor(youXian(p.buShu, 0)));
+  const dang = bu === 0 ? '0' : bu <= 3 ? '1-3' : bu <= 8 ? '4-8' : bu <= 20 ? '9-20' : '21+';
+  const gj = [...new Set((p.gongJuMing || []).map((x) => String(x || '').trim()).filter(Boolean))].sort().slice(0, 8).join(',') || 'none';
+  const mo = moXingZu(p.moXing);
+  const dan = String(p.gongJu || '').trim();
+  return [dan ? `工具=${dan}` : '', `步数=${dang}`, `工具集=${gj}`, p.zhiShuoBuZuo ? '只说不做' : '', mo ? `模型=${mo}` : '']
+    .filter(Boolean).join('|');
+}
+
+export function moXingZu(mo?: string): string {
+  const s = String(mo || '').trim().toLowerCase();
+  if (!s) return '';
+  return s.replace(/[-_ ]?(v?\d+(\.\d+)*|20\d{2}[-.]?\d{2}([-.]?\d{2})?)$/i, '').slice(0, 32);
+}
+
+function kongFangFa(xingWei: XingWei, qianMing: string, now: number): EtaFangFa {
+  return {
+    xingWei, qianMing, yangBen: 0, yuCeEmaMs: 0, shiJiEmaMs: 0, piaoYiXiShu: 1,
+    p50Ms: 0, p90Ms: 0, mingZhongLv: 0, yangBenWei: [], liZi: [], gengXinTs: now,
+  };
+}
+
+// ───────────────────────── 持久文件：预测方法库 ─────────────────────────
+
 /**
- * **预计完成时间的账本**（持久化在 `userData/eta.json`）。
- * 纯逻辑 + 注入文件路径 ⇒ 可以直接被门禁驱动，不需要起 Electron。
+ * **持久**的预测方法库（`userData/eta.json`）。
+ * 存的是"这类行为大概要多久 / 模型估得准不准"的**方法**，不是某一轮的某个时刻。
+ * 它一开始是空的：没有方法时 `chaFangFa` 返回 null，调用方就请模型自己预测，然后把新方法写进来。
  */
 export class EtaZhangBen {
   private ku: EtaKu;
   private jieDian: string | null;
-  /** 落盘节流：同一秒内的多次更新合并成一次写盘 */
   private xiePai: ReturnType<typeof setTimeout> | null = null;
 
   constructor(file?: string | null, now = Date.now()) {
     this.jieDian = file ? String(file) : null;
-    this.ku = this.jieDian ? duJsonWenJian<EtaKu | null>(this.jieDian, null) as EtaKu : kong(now);
-    if (!this.ku || this.ku.version !== 1 || !this.ku.leiXing || !this.ku.huiHua) this.ku = kong(now);
-  }
-
-  /** 快照（给界面/门禁看，深拷贝，别让外面改到内部） */
-  kuaiZhao(): EtaKu {
-    return JSON.parse(JSON.stringify(this.ku)) as EtaKu;
-  }
-
-  /** 某类任务的经验（没有就返回 null —— 绝不编一个出来） */
-  jingYan(qianMing: string): EtaLeiXing | null {
-    const l = this.ku.leiXing[String(qianMing || '')];
-    return l && l.yangBen > 0 ? l : null;
-  }
-
-  /** 某一轮任务的当下状态（没有就返回 null） */
-  huiHua(sessionId: string): EtaHuiHua | null {
-    return this.ku.huiHua[String(sessionId || '')] || null;
-  }
-
-  /** 一轮任务开始：开一本新账（同一会话重复调用不重置，避免递归续派把状态洗掉） */
-  kaiShiLun(sessionId: string, now = Date.now(), qianMing?: string): EtaHuiHua {
-    const sid = String(sessionId || '');
-    let h = this.ku.huiHua[sid];
-    if (!h) {
-      h = { sessionId: sid, kaiShi: now, qianMing: String(qianMing || ''), shangCi: null, liCi: [], lianXuChaoShi: 0, zuiChangLianXu: 0, yangBen: 0, gengXinTs: now };
-      this.ku.huiHua[sid] = h;
-      this.paiXie(now);
-    } else if (qianMing && !h.qianMing) {
-      h.qianMing = String(qianMing);
-      this.paiXie(now);
-    }
-    return h;
-  }
-
-  /** 一轮任务收尾（正常结束/用户介入）：把当下状态清掉，但**经验留在 leiXing 里** */
-  jieShuLun(sessionId: string): void {
-    const sid = String(sessionId || '');
-    if (this.ku.huiHua[sid]) {
-      delete this.ku.huiHua[sid];
-      this.paiXie(Date.now());
-    }
-  }
-
-  /**
-   * 判断"模型上次给的预计完成时间，这次**超了没有**"。
-   * 返回 `null` = 本轮还没有上一次预测（第一次判，谈不上超时）。
-   * 连续 3 次 ⇒ `yiChang = true`（调用方按异常处理）。
-   */
-  panChaoShi(sessionId: string, now = Date.now()): { chaoShi: boolean | null; lianXu: number; yiChang: boolean; shangCi: EtaYuCe | null } {
-    const h = this.ku.huiHua[String(sessionId || '')];
-    if (!h || !h.shangCi) return { chaoShi: null, lianXu: h ? h.lianXuChaoShi : 0, yiChang: false, shangCi: h ? h.shangCi : null };
-    const chaoShi = now > h.shangCi.jieZhiMs;
-    h.lianXuChaoShi = chaoShi ? h.lianXuChaoShi + 1 : 0;
-    h.zuiChangLianXu = Math.max(h.zuiChangLianXu, h.lianXuChaoShi);
-    h.gengXinTs = now;
-    this.ku.huiHua[h.sessionId] = h;
-    this.paiXie(now);
-    return { chaoShi, lianXu: h.lianXuChaoShi, yiChang: h.lianXuChaoShi >= CHAO_SHI_LIAN_XU_XIAN, shangCi: h.shangCi };
-  }
-
-  /** 记下模型这次给的预计完成时间（写进持久账本） */
-  jiYuCe(sessionId: string, yu: { etaMs: number; genJu?: string; laiYuan?: EtaYuCe['laiYuan']; moXing?: string }, now = Date.now(), qianMing?: string): EtaYuCe {
-    const h = this.kaiShiLun(sessionId, now, qianMing);
-    const rec: EtaYuCe = {
-      etaMs: Math.min(ETA_ZUI_DA_MS, Math.max(ETA_ZUI_XIAO_MS, Math.round(youXian(yu.etaMs, ETA_ZUI_XIAO_MS)))),
-      jieZhiMs: now + Math.min(ETA_ZUI_DA_MS, Math.max(ETA_ZUI_XIAO_MS, Math.round(youXian(yu.etaMs, ETA_ZUI_XIAO_MS)))),
-      yiYongMs: Math.max(0, now - h.kaiShi),
-      genJu: String(yu.genJu || '').slice(0, 300),
-      laiYuan: yu.laiYuan || 'model',
-      moXing: yu.moXing ? String(yu.moXing).slice(0, 80) : undefined,
-      ts: now,
-      mingZhong: null,
+    const du = this.jieDian ? (duJsonWenJian<EtaKu | null>(this.jieDian, null) as EtaKu | null) : null;
+    this.ku = (du && du.version === 2 && du.fangFa) ? du : {
+      version: 2, shouCiTs: now, gengXinTs: now,
+      quanJu: { yangBen: 0, piaoYiXiShu: 1, mingZhongLv: 0, yuCeEmaMs: 0, shiJiEmaMs: 0 },
+      fangFa: {},
     };
-    h.shangCi = rec;
-    h.liCi.push(rec);
-    if (h.liCi.length > LUN_CI_SHANG_XIAN) h.liCi.splice(0, h.liCi.length - LUN_CI_SHANG_XIAN);
-    h.gengXinTs = now;
-    this.ku.huiHua[h.sessionId] = h;
-    this.paiXie(now, true);   // 预计完成时间是这一轮的产出：立刻落盘
-    return rec;
+  }
+
+  kuaiZhao(): EtaKu { return JSON.parse(JSON.stringify(this.ku)) as EtaKu; }
+  wenJian(): string { return this.jieDian || ''; }
+
+  /** 查"这类行为/这类任务"的预测方法（没有就 null —— **绝不编一个出来**） */
+  chaFangFa(xingWei: XingWei, qianMing?: string): EtaFangFa | null {
+    const an = this.ku.fangFa[xingWei] || {};
+    const jing = qianMing ? an[String(qianMing)] : null;
+    if (jing && jing.yangBen > 0) return jing;
+    // 签名没命中时退到"该行为整体"的统计（方法库天生该有兜底层次）
+    const zheng = an[''] || null;
+    if (zheng && zheng.yangBen > 0) return zheng;
+    return null;
+  }
+
+  /** 这类行为的样本总数（决定"有没有方法可用"） */
+  yangBenShu(xingWei: XingWei): number {
+    const an = this.ku.fangFa[xingWei] || {};
+    return Object.values(an).reduce((n, x) => n + (x && x.yangBen ? x.yangBen : 0), 0);
   }
 
   /**
-   * **给模型的参考信息**（拼进提问的文本）。
-   *
-   * 三块：① 它自己本轮历次预测（含"超了没/结果如何"）；② 同类任务的经验统计；
-   * ③ 全局乐观程度。**统计为空就明说"还没有历史"**，不编数字。
+   * **写/更新一个预测方法**（需求里"把新的该类型任务的预测方法写入持久的配置文件"）。
+   * 每轮真实结束都会带一个样本进来，方法随之变准。
    */
-  canKaoWenBen(sessionId: string, qianMing: string, now = Date.now()): string {
-    const hang: string[] = [];
-    const h = this.ku.huiHua[String(sessionId || '')];
-    if (h && h.liCi.length) {
-      const li = h.liCi.slice(-6);
-      hang.push(`【你本轮已经写过 ${h.liCi.length} 次预计完成时间（最记 6 条）】`);
-      for (const y of li) {
-        const zhuang = y.mingZhong === true ? '结果：在预计时间内完成'
-          : y.mingZhong === false ? '结果：超了'
-            : (now > y.jieZhiMs ? `结果：**已经超出** ${shuoShiChang(now - y.jieZhiMs)}（还没完成）` : `结果：还没到点（还剩 ${shuoShiChang(y.jieZhiMs - now)}）`);
-        hang.push(`· 已跑 ${shuoShiChang(y.yiYongMs)} 时说"还需 ${shuoShiChang(y.etaMs)}"${y.genJu ? `（依据：${y.genJu}）` : ''} → ${zhuang}`);
-      }
-      if (h.lianXuChaoShi > 0) hang.push(`⚠️ 你已经**连续 ${h.lianXuChaoShi} 次**超出自己写的预计完成时间（连续 ${CHAO_SHI_LIAN_XU_XIAN} 次即按异常处理）。`);
-    }
-    const jing = this.jingYan(qianMing);
-    if (jing) {
-      hang.push(`【同类任务的经验（${jing.yangBen} 次真实记录）】实际耗时中位数 ${shuoShiChang(jing.p50Ms)}，90 分位 ${shuoShiChang(jing.p90Ms)}；`
-        + `历史预测命中率 ${Math.round(jing.mingZhongLv * 100)}%；模型一向偏${jing.piaoYiXiShu >= 1 ? '乐观' : '保守'}（实际/预测 ≈ ${jing.piaoYiXiShu.toFixed(2)}）。`);
-    } else {
-      hang.push('【同类任务的经验】还没有历史记录（这是第一次），你只能靠自己判断 —— 请给**偏保守**的估计。');
-    }
-    if (this.ku.quanJu.yangBen > 0 && (!jing || jing.yangBen < 3)) {
-      hang.push(`【全局】本机所有任务平均"实际/预测" ≈ ${this.ku.quanJu.piaoYiXiShu.toFixed(2)}（${this.ku.quanJu.yangBen} 次样本）。`);
-    }
-    return hang.join('\n');
-  }
-
-  /**
-   * **一轮任务真的结束了** ⇒ 把"最后一次预测 vs 实际总耗时"作为一个样本，自我完善。
-   * 这是"越用越准"的唯一入口：只有真有结论的轮次才进统计（没结论的不污染经验）。
-   */
-  xueXi(sessionId: string, p: { shiJiMs?: number; qianMing?: string; now?: number }): { xueLe: boolean; qianMing: string; shiJiMs: number; mingZhong: boolean | null } {
-    const now = p.now ?? Date.now();
-    const sid = String(sessionId || '');
-    const h = this.ku.huiHua[sid];
-    if (!h || !h.shangCi) return { xueLe: false, qianMing: '', shiJiMs: 0, mingZhong: null };
-    const shiJi = Math.max(1000, Math.round(youXian(p.shiJiMs, now - h.kaiShi)));
-    const qian = String(p.qianMing || h.qianMing || '未分类');
-    const yu = h.shangCi;
-    const mingZhong = shiJi <= yu.etaMs;
-    // 回填这一条预测的结论（历次预测里最后一条）
-    const la = h.liCi[h.liCi.length - 1];
-    if (la && la.ts === yu.ts) { la.mingZhong = mingZhong; la.shiJiMs = shiJi; }
-    h.yangBen += 1;
-
-    const l = this.ku.leiXing[qian] || {
-      qianMing: qian, yangBen: 0, yuCeEmaMs: 0, shiJiEmaMs: 0, piaoYiXiShu: 1,
-      p50Ms: 0, p90Ms: 0, mingZhongLv: 0, yangBenWei: [], liZi: [], gengXinTs: now,
-    };
-    l.yangBen += 1;
-    l.yuCeEmaMs = ema(l.yuCeEmaMs, yu.etaMs);
-    l.shiJiEmaMs = ema(l.shiJiEmaMs, shiJi);
-    const bi = yu.etaMs > 0 ? shiJi / yu.etaMs : 1;
-    l.piaoYiXiShu = emaXiShu(l.piaoYiXiShu, Math.min(20, Math.max(0.05, bi)));
-    l.yangBenWei.push(shiJi);
-    if (l.yangBenWei.length > SAN_SHU) l.yangBenWei.splice(0, l.yangBenWei.length - SAN_SHU);
-    l.p50Ms = fenWei(l.yangBenWei, 0.5);
-    l.p90Ms = fenWei(l.yangBenWei, 0.9);
-    // 命中率用滑动平均（避免"前 3 次全错"把后来的好预测压死）
-    l.mingZhongLv = Number((l.mingZhongLv > 0 || l.yangBen > 1 ? l.mingZhongLv * 0.7 + (mingZhong ? 0.3 : 0) : (mingZhong ? 1 : 0)).toFixed(3));
-    l.liZi.push({ ts: now, yuCeMs: yu.etaMs, shiJiMs: shiJi, mingZhong, moXing: yu.moXing });
-    if (l.liZi.length > LI_ZI_SHANG_XIAN) l.liZi.splice(0, l.liZi.length - LI_ZI_SHANG_XIAN);
-    l.gengXinTs = now;
-    this.ku.leiXing[qian] = l;
+  jiFangFa(xingWei: XingWei, qianMing: string, yangBen: { yuCeMs: number; shiJiMs: number; mingZhong: boolean; moXing?: string }, now = Date.now()): EtaFangFa {
+    const an = this.ku.fangFa[xingWei] || (this.ku.fangFa[xingWei] = {});
+    const f = an[qianMing] || kongFangFa(xingWei, qianMing, now);
+    const bi = yangBen.yuCeMs > 0 ? yangBen.shiJiMs / yangBen.yuCeMs : 1;
+    f.yangBen += 1;
+    f.yuCeEmaMs = ema(f.yuCeEmaMs, yangBen.yuCeMs);
+    f.shiJiEmaMs = ema(f.shiJiEmaMs, yangBen.shiJiMs);
+    f.piaoYiXiShu = emaXiShu(f.piaoYiXiShu, Math.min(20, Math.max(0.05, bi)));
+    f.yangBenWei.push(yangBen.shiJiMs);
+    if (f.yangBenWei.length > 40) f.yangBenWei.splice(0, f.yangBenWei.length - 40);
+    f.p50Ms = fenWei(f.yangBenWei, 0.5);
+    f.p90Ms = fenWei(f.yangBenWei, 0.9);
+    f.mingZhongLv = Number((f.yangBen > 1 ? f.mingZhongLv * 0.7 + (yangBen.mingZhong ? 0.3 : 0) : (yangBen.mingZhong ? 1 : 0)).toFixed(3));
+    f.liZi.push({ ts: now, yuCeMs: yangBen.yuCeMs, shiJiMs: yangBen.shiJiMs, mingZhong: yangBen.mingZhong, moXing: yangBen.moXing });
+    if (f.liZi.length > 12) f.liZi.splice(0, f.liZi.length - 12);
+    f.gengXinTs = now;
+    an[qianMing] = f;
 
     const q = this.ku.quanJu;
     q.yangBen += 1;
-    q.yuCeEmaMs = ema(q.yuCeEmaMs, yu.etaMs);
-    q.shiJiEmaMs = ema(q.shiJiEmaMs, shiJi);
+    q.yuCeEmaMs = ema(q.yuCeEmaMs, yangBen.yuCeMs);
+    q.shiJiEmaMs = ema(q.shiJiEmaMs, yangBen.shiJiMs);
     q.piaoYiXiShu = emaXiShu(q.piaoYiXiShu, Math.min(20, Math.max(0.05, bi)));
-    q.mingZhongLv = Number(((q.mingZhongLv > 0 || q.yangBen > 1 ? q.mingZhongLv * 0.7 + (mingZhong ? 0.3 : 0) : (mingZhong ? 1 : 0))).toFixed(3));
-
-    this.ku.huiHua[sid] = h;
-    this.ku.gengXinTs = now;
-    this.paiXie(now, true);   // 学到的经验是"越用越准"的本钱：立刻落盘
-    return { xueLe: true, qianMing: qian, shiJiMs: shiJi, mingZhong };
+    q.mingZhongLv = Number((q.yangBen > 1 ? q.mingZhongLv * 0.7 + (yangBen.mingZhong ? 0.3 : 0) : (yangBen.mingZhong ? 1 : 0)).toFixed(3));
+    this.paiXie(now, true);
+    return f;
   }
 
-  /** 立刻落盘（进程退出前调用，别把节流里的那次丢掉） */
+  /**
+   * **按持久文件里的方法预测**（模型没给、或给得不合法时用它；也用于交叉校验）。
+   * 返回 null = 连方法都没有 ⇒ 调用方请模型自己预测。
+   */
+  yuCeByFangFa(xingWei: XingWei, qianMing: string, now = Date.now()): EtaYuCe | null {
+    const f = this.chaFangFa(xingWei, qianMing);
+    if (!f) return null;
+    // 方法 = 该类行为的历史中位数 × 它的偏移系数，再抬到 90 分位（宁可高估，别让长任务反复被判超时）
+    const ji = Math.max(f.p50Ms || 0, Math.round((f.shiJiEmaMs || 0) * (f.piaoYiXiShu || 1)));
+    const eta = Math.max(ETA_ZUI_XIAO_MS, Math.min(ETA_ZUI_DA_MS, f.p90Ms ? Math.max(ji, Math.round(f.p90Ms * 0.9)) : (ji || 0)));
+    if (!(eta > 0)) return null;
+    return {
+      etaMs: eta, jieZhiMs: now + eta, yiYongMs: 0,
+      genJu: `方法库（${f.yangBen} 次真实记录：中位 ${shuoShiChang(f.p50Ms)}／90 分位 ${shuoShiChang(f.p90Ms)}／偏移 ${f.piaoYiXiShu}）`,
+      laiYuan: 'fangFa', ts: now, mingZhong: null,
+    };
+  }
+
+  /** 给模型看的参考文本（方法库那一半；自己写过的历次预测在临时文件那一半） */
+  canKaoWenBen(xingWei: XingWei, qianMing: string): string {
+    const f = this.chaFangFa(xingWei, qianMing);
+    if (!f) return `【这类行为的经验】还没有历史记录（这是第一次），你只能靠自己判断 —— 请给**偏保守**的估计。`;
+    return `【这类行为的经验（${f.yangBen} 次真实记录）】实际耗时中位数 ${shuoShiChang(f.p50Ms)}，90 分位 ${shuoShiChang(f.p90Ms)}；`
+      + `历史预测命中率 ${Math.round(f.mingZhongLv * 100)}%；模型一向偏${f.piaoYiXiShu >= 1 ? '乐观' : '保守'}（实际/预测 ≈ ${f.piaoYiXiShu.toFixed(2)}）。`;
+  }
+
   baCun(): void {
     if (this.xiePai) { try { clearTimeout(this.xiePai); } catch { /* noop */ } this.xiePai = null; }
     if (!this.jieDian) return;
@@ -402,11 +377,187 @@ export class EtaZhangBen {
   private paiXie(now: number, liJi = false): void {
     this.ku.gengXinTs = now;
     if (!this.jieDian) return;
-    // "预计完成时间"和"学习样本"都是这一轮的**产出**：立刻落盘，别赌 1.2 秒内不崩
     if (liJi) { this.baCun(); return; }
     if (this.xiePai) return;
     this.xiePai = setTimeout(() => { this.xiePai = null; this.baCun(); }, 1200);
-    // 定时器不该把进程拽住（Node/Electron 里 unref 存在就用）
     try { (this.xiePai as unknown as { unref?: () => void }).unref?.(); } catch { /* noop */ }
+  }
+}
+
+// ───────────────────────── 临时文件：本轮状态 ─────────────────────────
+
+/**
+ * **临时**的本轮状态（`userData/eta-live.json`）。
+ *
+ * 产品要求的硬不变量：**同一轮里这个行为"有过超时/超次数"，这个文件就必须存在，
+ * 并且记着上次预测的完成时间戳**。所以这里每一次状态变化都**立刻落盘**（不节流、不攒），
+ * 读的时候如果发现"应存在却不存在"，要如实当成线索记下来（不能假装没发生过）。
+ */
+export class EtaLinShi {
+  private ku: EtaLinShiKu;
+  private jieDian: string | null;
+
+  constructor(file?: string | null, now = Date.now()) {
+    this.jieDian = file ? String(file) : null;
+    const du = this.jieDian ? (duJsonWenJian<EtaLinShiKu | null>(this.jieDian, null) as EtaLinShiKu | null) : null;
+    this.ku = (du && du.version === 1 && du.huiHua) ? du : { version: 1, gengXinTs: now, huiHua: {} };
+  }
+
+  kuaiZhao(): EtaLinShiKu { return JSON.parse(JSON.stringify(this.ku)) as EtaLinShiKu; }
+  wenJian(): string { return this.jieDian || ''; }
+
+  /** 某个会话某一轮（同会话重复调用不重置，避免递归续派把状态洗掉） */
+  huiHua(sessionId: string, now = Date.now()): EtaHuiHua {
+    const sid = String(sessionId || '');
+    let h = this.ku.huiHua[sid];
+    if (!h) {
+      h = { sessionId: sid, kaiShi: now, xingWei: {}, gengXinTs: now };
+      this.ku.huiHua[sid] = h;
+      this.baCun();
+    }
+    return h;
+  }
+
+  /** 某个行为在本轮的状态（第一次访问就按固定初始值立好预警点） */
+  xingWei(sessionId: string, x: XingWei, now = Date.now()): EtaXingWeiHuo {
+    const h = this.huiHua(sessionId, now);
+    let w = h.xingWei[x];
+    if (!w) {
+      const gui = xingWeiGui(x);
+      w = {
+        chaoShiCiShu: 0, lianXuChaoShi: 0, zuiChangLianXu: 0, zuiHouZhongLei: '',
+        shangCiYuCe: null, liCi: [], yuJingMiao: gui.miao, yuJingLun: gui.lun, yangBen: 0, gengXinTs: now,
+      };
+      h.xingWei[x] = w;
+      this.baCun();
+    }
+    return w;
+  }
+
+  /**
+   * **判断这一次是否已经超出"上次预测的完成时间"**，并如实记账。
+   *
+   * 返回：
+   *   · `kuiShi`  —— 没有上次预测（第一次，谈不上超）
+   *   · `chaoShi` —— 超了没有
+   *   · `ciShu`   —— 本轮累计超了几次
+   *   · `yiChang` —— 到 3 次了（**直接判异常，不再问模型**）
+   *   · `shiZong` —— "应存在却查不到上次预测"（临时文件丢了；如实报告）
+   */
+  panChaoShi(sessionId: string, x: XingWei, now = Date.now()): {
+    kuiShi: boolean; chaoShi: boolean; ciShu: number; lianXu: number; yiChang: boolean;
+    shangCi: EtaYuCe | null; shiZong: boolean;
+  } {
+    const w = this.xingWei(sessionId, x, now);
+    const shangCi = w.shangCiYuCe;
+    if (!shangCi) {
+      const shiZong = w.chaoShiCiShu > 0;   // 已经超过却查不到上次预测 ⇒ 临时状态丢过
+      return { kuiShi: !shiZong, chaoShi: false, ciShu: w.chaoShiCiShu, lianXu: w.lianXuChaoShi, yiChang: w.chaoShiCiShu >= CHAO_SHI_LIAN_XU_XIAN, shangCi: null, shiZong };
+    }
+    const chaoShi = now > shangCi.jieZhiMs;
+    if (chaoShi) {
+      w.chaoShiCiShu += 1;
+      w.lianXuChaoShi += 1;
+      w.zuiChangLianXu = Math.max(w.zuiChangLianXu, w.lianXuChaoShi);
+    } else {
+      w.lianXuChaoShi = 0;
+    }
+    w.gengXinTs = now;
+    this.baCun();
+    return {
+      kuiShi: false, chaoShi, ciShu: w.chaoShiCiShu, lianXu: w.lianXuChaoShi,
+      yiChang: w.chaoShiCiShu >= CHAO_SHI_LIAN_XU_XIAN, shangCi, shiZong: false,
+    };
+  }
+
+  /** 记下这次"因为什么"触发（时间到 / 次数到）—— 判异常时要如实告诉用户 */
+  jiZhongLei(sessionId: string, x: XingWei, zhongLei: 'shiJian' | 'ciShu', now = Date.now()): void {
+    const w = this.xingWei(sessionId, x, now);
+    w.zuiHouZhongLei = zhongLei;
+    w.gengXinTs = now;
+    this.baCun();
+  }
+
+  /** 记下新的预计完成时间（含"这是第几次超时"由 `panChaoShi` 负责，这里只管新预测） */
+  jiYuCe(sessionId: string, x: XingWei, yu: { etaMs: number; genJu?: string; laiYuan?: EtaYuCe['laiYuan']; moXing?: string }, now = Date.now()): EtaYuCe {
+    const w = this.xingWei(sessionId, x, now);
+    const h = this.huiHua(sessionId, now);
+    const eta = Math.min(ETA_ZUI_DA_MS, Math.max(ETA_ZUI_XIAO_MS, Math.round(youXian(yu.etaMs, xingWeiGui(x).miao))));
+    const rec: EtaYuCe = {
+      etaMs: eta, jieZhiMs: now + eta, yiYongMs: Math.max(0, now - h.kaiShi),
+      genJu: String(yu.genJu || '').slice(0, 300), laiYuan: yu.laiYuan || 'model',
+      moXing: yu.moXing ? String(yu.moXing).slice(0, 80) : undefined, ts: now, mingZhong: null,
+    };
+    w.shangCiYuCe = rec;
+    w.liCi.push(rec);
+    if (w.liCi.length > 60) w.liCi.splice(0, w.liCi.length - 60);
+    w.gengXinTs = now;
+    this.baCun();
+    return rec;
+  }
+
+  /** 判"没卡死" ⇒ 预警点加一档（时间 +20 分钟 / 次数 +40，与既有产品行为一致） */
+  jiaYiDang(sessionId: string, x: XingWei, now = Date.now()): { yuJingMiao: number; yuJingLun: number } {
+    const w = this.xingWei(sessionId, x, now);
+    w.yuJingMiao += YU_JING_JIA_YI_DANG_MS;
+    w.yuJingLun += YU_JING_JIA_YI_DANG_LUN;
+    w.gengXinTs = now;
+    this.baCun();
+    return { yuJingMiao: w.yuJingMiao, yuJingLun: w.yuJingLun };
+  }
+
+  /**
+   * 这一轮**真的收尾**了 ⇒ 把"最后一次预测 vs 实际"作为样本交给方法库，
+   * 然后清掉本轮的临时状态（临时文件就该是临时的）。
+   * 返回 null = 这轮压根没有预测（没进过判断流程），不用学。
+   */
+  xueXi(sessionId: string, x: XingWei, qianMing: string, zhangBen: EtaZhangBen, now = Date.now()): { xueLe: boolean; shiJiMs: number; mingZhong: boolean | null; qianMing: string } {
+    const h = this.ku.huiHua[String(sessionId || '')];
+    const w = h && h.xingWei[x];
+    if (!h || !w || !w.shangCiYuCe) return { xueLe: false, shiJiMs: 0, mingZhong: null, qianMing: '' };
+    const shiJi = Math.max(1000, Math.round(now - h.kaiShi));
+    const yu = w.shangCiYuCe;
+    const mingZhong = shiJi <= yu.etaMs;
+    const la = w.liCi[w.liCi.length - 1];
+    if (la && la.ts === yu.ts) { la.mingZhong = mingZhong; la.shiJiMs = shiJi; }
+    w.yangBen += 1;
+    zhangBen.jiFangFa(x, qianMing, { yuCeMs: yu.etaMs, shiJiMs: shiJi, mingZhong, moXing: yu.moXing }, now);
+    this.baCun();
+    return { xueLe: true, shiJiMs: shiJi, mingZhong, qianMing };
+  }
+
+  /** 一轮收尾：清掉本轮状态（经验已经进持久文件了） */
+  jieShuLun(sessionId: string): void {
+    const sid = String(sessionId || '');
+    if (this.ku.huiHua[sid]) {
+      delete this.ku.huiHua[sid];
+      this.baCun();
+    }
+  }
+
+  /** 给模型看的"你自己之前写过什么" */
+  canKaoWenBen(sessionId: string, x: XingWei, now = Date.now()): string {
+    const h = this.ku.huiHua[String(sessionId || '')];
+    const w = h && h.xingWei[x];
+    if (!w || !w.liCi.length) return '';
+    const hang: string[] = [`【你本轮已经为「${xingWeiGui(x).ming}」写过 ${w.liCi.length} 次预计完成时间（最近 6 条）】`];
+    for (const y of w.liCi.slice(-6)) {
+      const zhuang = y.mingZhong === true ? '结果：在预计时间内完成'
+        : y.mingZhong === false ? '结果：超了'
+          : (now > y.jieZhiMs ? `结果：**已经超出** ${shuoShiChang(now - y.jieZhiMs)}（还没完成）` : `结果：还没到点（还剩 ${shuoShiChang(y.jieZhiMs - now)}）`);
+      hang.push(`· 已跑 ${shuoShiChang(y.yiYongMs)} 时说"还需 ${shuoShiChang(y.etaMs)}"${y.genJu ? `（依据：${y.genJu}）` : ''} → ${zhuang}`);
+    }
+    if (w.chaoShiCiShu > 0) {
+      hang.push(`⚠️ 本轮已经**累计 ${w.chaoShiCiShu} 次**超出你自己写的预计完成时间（累计 ${CHAO_SHI_LIAN_XU_XIAN} 次即按异常处理，不再问你）。`);
+    }
+    return hang.join('\n');
+  }
+
+  baCun(): void {
+    if (!this.jieDian) return;
+    try {
+      this.ku.gengXinTs = Date.now();
+      anQuanYuanZiXieJson(this.jieDian, this.ku);
+    } catch { /* 落盘失败不影响本次运行 */ }
   }
 }

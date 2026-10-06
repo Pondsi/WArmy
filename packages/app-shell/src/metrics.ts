@@ -11,6 +11,11 @@ export interface LunciZhibiao {
   cacheMissTokens: number;
   durationMs: number;
   providerId: string;
+  /**
+   * 供应商**显示名**（用户填的那个标签，例如「本地 Ollama」）。
+   * 真机反馈：总看板"按供应商"如果能显示人看得懂的名字更靠谱；id 只作兜底。
+   */
+  providerName?: string;
   model: string;
 }
 

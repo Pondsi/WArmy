@@ -178,7 +178,7 @@ check('card title reads biaoTi', /q\.biaoTi \|\| q\.title/.test(appJs));
 const etaTs = fs.readFileSync(path.join(root, 'packages/app-shell/src/eta-forecast.ts'), 'utf8');
 check('eta ledger persists to userData/eta.json', /'eta\.json'/.test(emTs) && /anQuanYuanZiXieJson\(this\.jieDian/.test(etaTs));
 check('model must give an ETA each judgment', /"etaSeconds"/.test(emTs));
-check('prompt carries its own previous ETAs', /canKaoWenBen\(sessionId, qianMing\)/.test(emTs));
+check('prompt carries its own previous ETAs', /etaHuo\(\)\.canKaoWenBen\(sessionId, xingWei\)/.test(emTs));
 check('3 consecutive overruns = anomaly', /chao\.yiChang/.test(emTs) && /CHAO_SHI_LIAN_XU_XIAN = 3/.test(etaTs));
 check('eta self-improves (calibration/percentiles)', /emaXiShu/.test(etaTs) && /p50Ms/.test(etaTs) && /mingZhongLv/.test(etaTs));
 check('eta task signature groups similar work', /export function renWuQianMing/.test(etaTs));
