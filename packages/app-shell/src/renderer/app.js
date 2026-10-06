@@ -10277,45 +10277,38 @@
     __inputThrottle = now;
   });
   syncSendState();
-  // 紧急度下拉：悬停显框，点击展开
+  /**
+   * 插入（加急 / 插话 / 排队）：**三态切换**（产品要求）——点图标本身换档，
+   * 不要文字、不要箭头、不要下拉菜单；当前档位写进 tooltip。
+   * 顺序：插话(P2) → 排队(P3) → 加急(P1) → 插话(P2)；
+   * 选中「加急」仍要二次确认（它会打断正在跑的活），取消就停在原档。
+   */
   (function bindUrgency() {
     const trigger = $('jinJiTrigger');
-    const caiDan = $('jinJiCaiDan');
     const dd = $('urgencyDd');
-    const biaoQian = $('jinJiBiaoQian');
-    if (!trigger || !caiDan || !dd) return;
-
+    if (!trigger || !dd) return;
+    const XUN_HUAN = ['P2', 'P3', 'P1'];
     const LABELS = { P1: 'urgency.urgentLabel', P2: 'urgency.insertLabel', P3: 'urgency.queueLabel' };
-
     function refresh() {
-      if (biaoQian) biaoQian.textContent = t(LABELS[state.urgency] || 'urgency.insertLabel');
       dd.classList.toggle('urgent', state.urgency === 'P1');
-      const icon = dd.querySelector('.urgentI');
-      if (icon) icon.classList.toggle('yinCang', state.urgency !== 'P1');
-      caiDan.querySelectorAll('button').forEach((b) => b.classList.toggle('qiYong', b.dataset.u === state.urgency));
+      dd.querySelectorAll('.chaRuIco').forEach((s) => {
+        s.classList.toggle('yinCang', s.dataset.u !== state.urgency);
+      });
+      const ming = t(LABELS[state.urgency] || 'urgency.insertLabel');
+      trigger.title = ming;
+      trigger.setAttribute('aria-label', ming);
     }
     refresh();
 
-    trigger.addEventListener('click', (e) => {
+    trigger.addEventListener('click', async (e) => {
       e.stopPropagation();
-      caiDan.classList.toggle('yinCang');
-      if (!caiDan.classList.contains('yinCang')) positionMenuFixed(trigger, caiDan);
-    });
-    onDocClick(() => caiDan?.classList.add('yinCang'));
-
-    caiDan.addEventListener('click', async (e) => {
-      const b = e.target.closest('button[data-u]');
-      if (!b) return;
-      const u = b.dataset.u;
-      if (u === 'P1') {
+      const i = XUN_HUAN.indexOf(state.urgency);
+      const xia = XUN_HUAN[(i + 1) % XUN_HUAN.length];
+      if (xia === 'P1') {
         const ok = await uiConfirmCountdown(t('urgency.confirmBody'), t('urgency.confirmTitle'), 5);
-        if (!ok) {
-          caiDan.classList.add('yinCang');
-          return;
-        }
+        if (!ok) { refresh(); return; }   // 取消 = 停在原档（不许"半只脚"踩进加急）
       }
-      state.urgency = u;
-      caiDan.classList.add('yinCang');
+      state.urgency = xia;
       refresh();
     });
 
@@ -10815,11 +10808,7 @@
       }
       if (id) cunThinkOverride();
       refresh();
-      try {
-        showToast(genSuiJu.checked
-          ? tOr('model.think.followAgency', '思考级别：跟随牛马管理局设置')
-          : tOr('model.think.manualKept', '思考级别：已手动设为「{v}」并保持').replace('{v}', thinkLabelOf(dang)));
-      } catch { /* 提示失败不影响设置 */ }
+      // 产品要求：调整思考级别**不要提示文字**（什么都不弹）
     });
     huaKuai.addEventListener('input', () => {
       const id = dangQianChat();
@@ -10835,8 +10824,7 @@
       huaKuai.disabled = false;
     });
     huaKuai.addEventListener('change', () => {
-      const id = dangQianChat();
-      showToast(tOr('model.think.manualKept', '思考级别：已手动设为「{v}」并保持').replace('{v}', thinkLabelOf(shouDongDang() || (id && state.thinkOverride[id]) || 'auto')));
+      // 产品要求：调整思考级别**不要提示文字**（什么都不弹）
     });
   })();
   // 本会话安全模式：同紧急度的下拉样式

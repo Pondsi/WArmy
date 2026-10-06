@@ -28,11 +28,28 @@ function check(l, ok, d) {
 
 // ── ① 静态：顺序 + 图标 + 结构 ──
 const html = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'index.html'), 'utf8');
+const appJs = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'app.js'), 'utf8');
 const iChaRu = html.indexOf('id="urgencyDd"');
 const iSiKao = html.indexOf('id="siKaoDd"');
 check('插入选项在**思考级别左边**（HTML 顺序）', iChaRu > 0 && iSiKao > 0 && iChaRu < iSiKao, { iChaRu, iSiKao });
 check('插入触发器有图标（本行同一套 24×24 描边画法）', /class="ico chaRuIco"[\s\S]{0,220}stroke="currentColor"/.test(html), 'chaRuIco');
 check('思考级别卡片里有「由牛马管理局设置」勾选框', /id="siKaoGenSuiJu"/.test(html) && /data-i18n="model\.think\.byAgency"/.test(html));
+// ── 插入 = 三态切换图标（产品要求：去掉文字与箭头，图标本身换档） ──
+check('插入触发器里有三个状态图标（P1 加急 / P2 插话 / P3 排队）', (() => {
+  const kuai = html.slice(html.indexOf('id="urgencyDd"'), html.indexOf('id="urgencyDd"') + 1400);
+  return ['P1', 'P2', 'P3'].every((u) => new RegExp('class="ico chaRuIco[^"]*" data-u="' + u + '"').test(kuai));
+})(), 'three-state icons');
+check('三态图标都用气泡底 + 各自的区分符号（闪电/感叹号/十字）', /M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z/.test(html) && /M12 7l-2 4h3l-2 4/.test(html) && /M12 8v4M12 15h.01/.test(html) && /M12 8v6M9 11h6/.test(html), 'glyphs');
+check('插入触发器**没有文字、没有箭头**', (() => {
+  const kuai = html.slice(html.indexOf('id="jinJiTrigger"'), html.indexOf('id="urgencyDd"') + 900);
+  return !/jinJiBiaoQian/.test(kuai) && !/jinJiJianTou/.test(kuai);
+})(), 'no text/no arrow');
+check('思考级别触发器**去掉了箭头**', (() => {
+  const kuai = html.slice(html.indexOf('id="siKaoTrigger"'), html.indexOf('class="siKaoKa'));
+  return !/jinJiJianTou/.test(kuai);
+})(), 'think arrow gone');
+check('下拉菜单已去掉（三态切换不需要菜单）', !/id="jinJiCaiDan"/.test(html), 'menu removed');
+check('调整思考级别**不弹提示文字**（源码里没有那两条 toast）', !/model\.think\.followAgency/.test(appJs) && !/model\.think\.manualKept/.test(appJs), 'no toast');
 check('思考级别卡片里是**横向滑块**（range input）', /type="range"[^>]*id="siKaoHuaKuai"|id="siKaoHuaKuai"[^>]*type="range"/.test(html), 'siKaoHuaKuai');
 check('左端是灵机、右端是自然（data-i18n 顺序）', (() => {
   const kuai = html.slice(html.indexOf('class="siKaoKaBiao"'), html.indexOf('class="siKaoKaBiao"') + 400);
@@ -178,6 +195,26 @@ try {
       return ['model.think.byAgency', 'model.think.followAgency', 'model.think.manualKept'].every((k) => o[k] && String(o[k]).trim());
     });
   })());
+
+  // ③ 插入图标 = 三态切换：点一下换一档（插话 → 排队）
+  const sanTai = await c.evaluate(`(function(){
+    const dd = document.getElementById('urgencyDd');
+    const b = document.getElementById('jinJiTrigger');
+    if (!dd || !b) return null;
+    const xian = () => {
+      const on = [...dd.querySelectorAll('.chaRuIco')].filter((s) => !s.classList.contains('yinCang'));
+      return on.map((s) => s.dataset.u).join(',');
+    };
+    const qian = xian();
+    b.click();
+    const hou = xian();
+    return { qian, hou, title: b.title || b.getAttribute('aria-label') || '', jiShu: dd.querySelectorAll('.chaRuIco').length };
+  })()`);
+  console.log('  · 三态切换: ' + JSON.stringify(sanTai));
+  check('插入按钮上是三个状态图标（不多不少）', !!(sanTai && sanTai.jiShu === 3), sanTai);
+  check('默认档是插话(P2)', !!(sanTai && sanTai.qian === 'P2'), sanTai);
+  check('点一下就换档（P2 → P3 排队）', !!(sanTai && sanTai.hou === 'P3'), sanTai);
+  check('当前档位写进 tooltip（不是文字塞在按钮里）', !!(sanTai && sanTai.title.length > 0), sanTai);
 } catch (e) {
   console.error('门禁异常: ' + ((e && e.stack) || e));
   fail += 1;

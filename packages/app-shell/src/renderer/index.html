@@ -212,25 +212,24 @@
                   <button class="anNiuTuBiao" id="anNiuShangXiaWen" data-i18n-title="ctx.budget.biaoTi">
                     <svg viewBox="0 0 24 24" class="ico" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="3" y2="18"/><line x1="21" y1="6" x2="21" y2="18"/><path d="M7 12 H17" stroke-dasharray="1 3"/><path d="M9 10 L7 12 L9 14"/><path d="M15 10 L17 12 L15 14"/></svg>
                   </button>
-                  <!-- 插入（加急 / 插话 / 排队）：**放在思考级别左边**（产品要求），
-                       图标与本行其它图标同一套画法（24×24 描边、currentColor）：
-                       一条"对话线" + 一支插进去的箭头 + 下方排队的一行。 -->
+                  <!-- 插入（加急 / 插话 / 排队）：**三态切换**（产品要求）——点图标本身在三个状态间切换，
+                       三个状态各用一个图标（气泡里分别是 闪电=插话 / 感叹号=加急 / 十字=排队）。
+                       不要文字、不要箭头；当前状态写进 tooltip。选中「加急」仍要二次确认（会打断正在跑的活）。 -->
                   <div class="jinJiDd" id="urgencyDd">
-                    <button class="jinJiTrigger" id="jinJiTrigger" type="button" data-i18n-title="chat.urgency">
-                      <svg class="ico urgentI yinCang" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v11h-2V3zm0 13h2v2h-2v-2z"/></svg>
-                      <svg class="ico chaRuIco" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="3" y1="13" x2="21" y2="13"/>
-                        <path d="M12 3 v6"/><path d="M9 7 l3 3 3-3"/>
-                        <path d="M7 18 h10"/>
+                    <button class="jinJiTrigger" id="jinJiTrigger" type="button" data-i18n-title="chat.urgency" aria-label="插入">
+                      <svg class="ico chaRuIco" data-u="P2" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        <path d="M12 7l-2 4h3l-2 4"/>
                       </svg>
-                      <span id="jinJiBiaoQian" data-i18n="urgency.insertLabel"></span>
-                      <svg class="ico jinJiJianTou" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
+                      <svg class="ico chaRuIco yinCang" data-u="P1" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        <path d="M12 8v4M12 15h.01"/>
+                      </svg>
+                      <svg class="ico chaRuIco yinCang" data-u="P3" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        <path d="M12 8v6M9 11h6"/>
+                      </svg>
                     </button>
-                    <div class="jinJiCaiDan yinCang" id="jinJiCaiDan" role="menu">
-                      <button type="button" data-u="P1" data-i18n="urgency.urgentLabel"></button>
-                      <button type="button" class="qiYong" data-u="P2" data-i18n="urgency.insertLabel"></button>
-                      <button type="button" data-u="P3" data-i18n="urgency.queueLabel"></button>
-                    </div>
                   </div>
                   <!-- 思考级别（放在插入右边）：点开是**横向滑块**
                        · 左 = 灵机（关闭，最省），右 = 自然（自动，最用力），按这个顺序
@@ -245,7 +244,6 @@
                         <line x1="26" y1="58" x2="38" y2="58"/>
                       </svg>
                       <span id="siKaoBiaoQian" class="siKaoBiaoQian"></span>
-                      <svg class="ico jinJiJianTou" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
                     </button>
                     <div class="jinJiCaiDan siKaoKa yinCang" id="siKaoCaiDan" role="dialog">
                       <label class="siKaoGenSui">

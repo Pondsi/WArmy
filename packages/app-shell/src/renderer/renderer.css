@@ -447,6 +447,21 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
   background: transparent; color: var(--ink); border: 1px solid var(--line);
 }
 .anNiuXiao:hover, .anNiuGhost:hover, .anNiuGongJu:hover { background: var(--hover); }
+/**
+ * **禁用态必须一眼看得出灰**（真机反馈）：模型调用链里的「置顶/上移」在最上面、
+ * 「下移」在最下面时本来就是 `disabled`（点了没反应），但**没有任何 :disabled 样式**
+ * ⇒ 看起来和可用时一模一样，用户以为按了没用。
+ * 这里统一给所有小按钮补上禁用态：变灰 + 不允许光标 + 去掉悬停高亮。
+ */
+.anNiuXiao:disabled, .anNiuXiao[disabled],
+.anNiuGhost:disabled, .anNiuGhost[disabled],
+.anNiuGongJu:disabled, .anNiuGongJu[disabled] {
+  opacity: .4;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+.anNiuXiao:disabled:hover, .anNiuXiao[disabled]:hover,
+.anNiuGhost:disabled:hover, .anNiuGongJu:disabled:hover { background: transparent; }
 .urgency button {
   background: var(--card); color: var(--muted); border: 1px solid var(--line);
 }

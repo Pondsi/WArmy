@@ -77,6 +77,7 @@ const GATES_ELECTRON = [
   E('verify-strict-language.mjs'),
   E('verify-think-toolbar.mjs'),
   E('verify-usage-table.mjs'),
+  E('verify-chain-buttons.mjs'),
 ];
 
 function killStrayElectron() {
