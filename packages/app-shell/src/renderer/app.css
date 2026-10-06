@@ -782,7 +782,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .liaoTianHead .anNiuTuBiao { color: var(--muted); }
 .liaoTianHead .anNiuTuBiao.biaoTiLanQiYong { background: var(--accent); color: var(--accent-ink, #fff); }
 .anNiuTuBiao .ico { width: 22px; height: 22px; fill: currentColor; }
-#anNiuShot .ico { width: 20px; height: 20px; }
+#anNiuShot .ico { width: 18px; height: 18px; }
 
 
 .attachChip {

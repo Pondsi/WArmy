@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 2026-10-07 v0.2.10（新版本 · 复核完善）
+
+### 聊天框工具栏
+- 截图/话题图标改**镂空描边**（`hollowIco`，与话筒/插入同一套画法），并略小到 18px。
+  根因同插入图标：`.anNiuTuBiao .ico { fill: currentColor }` 会把 SVG 的 `fill="none"` 涂成实心。
+- 门禁补两条断言（镂空 + 18px），`verify-think-toolbar` 现 41 条。
+
+### 联网取证复核
+- 依 MDN《SVG fill》确认：**CSS `fill` 优先于 SVG 表现属性** —— 与插入/截图图标实心化的根因一致。
+- 依 MDN《Fills and strokes》核对描边图标画法（`fill="none"` + `stroke` + `stroke-width/linecap/linejoin`）。
+- 依 Fowler《Event Sourcing》核对记忆系统：JSONL 只追加 = 事件日志唯一事实源；SQLite = 可丢弃投影；
+  检查点回退 = 显式例外（备份 + `kind:'rollback'` 标记），与"重放/回滚需可审计"一致。
+
+### 上一轮 17 项全量复核（逐条对码）
+- 插入三态图标/菜单/切档、上下文预算 `contextLen`、dao.md 道>规矩注入与首启播种、
+  哲理提示词六篇+合篇、`groupId/entityType`、`JsonlSuo` 写锁、检查点可审计回退、
+  续传「从哪一步断的」、preload 规矩/道读写 —— 全部在位；发现的问题已在本轮改正。
+
 ## 2026-10-07 v0.2.9（新版本 · 道 / 记忆收口 / 4563 项）
 
 ### 「道」dao.md（新需求 · 全局最高优先级）

@@ -51,6 +51,9 @@ check('插入触发器**没有文字、没有箭头**', (() => {
   const kuai = html.slice(html.indexOf('id="jinJiTrigger"'), html.indexOf('id="urgencyDd"') + 900);
   return !/jinJiBiaoQian/.test(kuai) && !/jinJiJianTou/.test(kuai);
 })(), 'no text/no arrow');
+// ── 话题/截图图标：与本行其它图标同一套镂空描边 + 略小（真机反馈） ──
+check('截图/话题图标是**镂空描边**（hollowIco，不再实心）', /id="anNiuShot"[\s\S]{0,300}class="ico hollowIco"/.test(html), 'shot hollow');
+check('截图/话题图标比默认 22px **略小**（两份 CSS 均为 18px）', /#anNiuShot \.ico \{ width: 18px; height: 18px; \}/.test(css1) && /#anNiuShot \.ico \{ width: 18px; height: 18px; \}/.test(css2), 'shot 18px');
 check('思考级别触发器**去掉了箭头**', (() => {
   const kuai = html.slice(html.indexOf('id="siKaoTrigger"'), html.indexOf('class="siKaoKa'));
   return !/jinJiJianTou/.test(kuai);
