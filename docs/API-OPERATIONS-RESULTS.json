@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-06T11:17:52.586Z",
+  "at": "2026-10-06T16:13:23.596Z",
   "total": 46,
   "ok": 46,
   "results": [
@@ -30,7 +30,7 @@
     {
       "ming": "localeInfo",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"system\":\"zh-CN\",\"resolved\":\"zh-CN\",\"isZh\":true,\"supported\":[\"zh-CN\",\"zh-TW\",\"en-US\",\"ja\",\"ko\",\"ru\",\"es\",\"fr\",\"pt\",\"eo\"]}"
     },
     {
@@ -42,55 +42,55 @@
     {
       "ming": "groupList",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"groups\":[],\"count\":0}"
     },
     {
       "ming": "updateSourceGet",
       "ok": true,
       "ms": 1,
-      "resultPreview": "{\"ok\":true,\"configured\":true,\"url\":\"https://api.github.com/repos/Pondsi/WArmy/releases/latest\",\"origin\":\"settings\",\"channel\":\"\",\"currentVersion\":\"0.2.7\",\"lastCheck\":null,\"lastDownload\":null}"
+      "resultPreview": "{\"ok\":true,\"configured\":true,\"url\":\"https://api.github.com/repos/Pondsi/WArmy/releases/latest\",\"origin\":\"settings\",\"channel\":\"\",\"currentVersion\":\"0.2.8\",\"lastCheck\":null,\"lastDownload\":null}"
     },
     {
       "ming": "boardEvents",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"events\":[]}"
     },
     {
       "ming": "boardAggregate",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"sessions\":[]}"
     },
     {
       "ming": "getProvider",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"providerCfg\":{\"presetId\":\"deepseek\",\"apiKey\":\"\",\"baseURL\":\"\",\"model\":\"deepseek-chat\",\"protocol\":\"openai-compatible\"},\"hasKey\":false}"
     },
     {
       "ming": "checkpointList",
       "ok": true,
       "ms": 1,
-      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1791285472061,\"imageDigests\":{}},\"…"
+      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1791303203070,\"imageDigests\":{}},\"…"
     },
     {
       "ming": "knowledgeQuery",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"entities\":[],\"events\":[]}"
     },
     {
       "ming": "metricsSummary",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"turns\":0,\"avgDurationMs\":0,\"promptTokens\":0,\"completionTokens\":0,\"cacheHitRate\":0,\"cacheHitTokens\":0,\"cacheMissTokens\":0,\"ccrOriginalBytes\":0,\"ccrCompressedBytes\":0,\"ccrRatio\":1,\"viewSampl…"
     },
     {
       "ming": "settingsGet",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"settings\":{\"yuYan\":\"zh-CN\",\"themeMode\":\"system\",\"accent\":\"#A78567\",\"sound\":{\"complete\":true,\"request\":true,\"error\":true},\"soundFiles\":{\"complete\":\"\",\"request\":\"\",\"error\":\"\"},\"emailOnReques…"
     },
     {
@@ -102,25 +102,25 @@
     {
       "ming": "skillsPaths",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"paths\":[\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\skills\"],\"scanDirs\":[]}"
     },
     {
       "ming": "skillsScanDirsGet",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"dirs\":[],\"scanDirs\":[],\"max\":10}"
     },
     {
       "ming": "uiQueuesGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"queues\":{}}"
     },
     {
       "ming": "routerQueuesGet",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"snapshot\":{\"version\":1,\"seq\":0,\"queues\":{},\"dutyState\":{}},\"file\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\router-queues.json\"}"
     },
     {
@@ -132,8 +132,8 @@
     {
       "ming": "appInfo",
       "ok": true,
-      "ms": 2,
-      "resultPreview": "{\"ok\":true,\"ming\":\"无限牛马\",\"enName\":\"WArmy\",\"version\":\"0.2.7\",\"electron\":\"40.10.6\",\"chrome\":\"144.0.7559.236\",\"node\":\"24.15.0\",\"platform\":\"win32\",\"arch\":\"x64\",\"dsh\":\"0.1.5-rc.1\",\"deviceId\":\"DK07VSLKMNCAN…"
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"ming\":\"无限牛马\",\"enName\":\"WArmy\",\"version\":\"0.2.8\",\"electron\":\"40.10.6\",\"chrome\":\"144.0.7559.236\",\"node\":\"24.15.0\",\"platform\":\"win32\",\"arch\":\"x64\",\"dsh\":\"0.1.5-rc.1\",\"deviceId\":\"DK07VSLKMNCAN…"
     },
     {
       "ming": "identityInfo",
@@ -150,49 +150,49 @@
     {
       "ming": "netStatus",
       "ok": true,
-      "ms": 7,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"meshEnabled\":false,\"link\":{\"reachable\":false,\"lastError\":\"mesh-disabled\",\"peers\":[]},\"nodeId\":\"jieDian8af5ad76\",\"sessions\":0,\"unlock\":{\"mode\":\"os\",\"unlocked\":true,\"needsPassphrase\":false,\"…"
     },
     {
       "ming": "peersList",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"peers\":[],\"notes\":{\"lan\":\"net.note.lan\",\"wanManual\":\"net.note.wanManual\",\"wanHard\":\"net.note.wanHard\"}}"
     },
     {
       "ming": "executorsStatus",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"items\":[]}"
     },
     {
       "ming": "stateLoad",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"state\":{\"yuYan\":\"zh-CN\",\"themeMode\":\"system\",\"accent\":\"#A78567\",\"sound\":{\"complete\":true,\"request\":true,\"error\":true},\"soundFiles\":{\"complete\":\"\",\"request\":\"\",\"error\":\"\"},\"emailOnRequest\":…"
     },
     {
       "ming": "lastError",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"error\":null}"
     },
     {
       "ming": "setupState",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"done\":false,\"guideDone\":false,\"yuYan\":\"zh-CN\"}"
     },
     {
       "ming": "lanStatus",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"listening\":false,\"nodeId\":\"jieDian8af5ad76\"}"
     },
     {
       "ming": "meshStatus",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"listening\":false,\"nodeId\":\"jieDian8af5ad76\",\"peerCount\":0,\"sessions\":0}"
     },
     {
@@ -210,8 +210,8 @@
     {
       "ming": "memoryRecall",
       "ok": true,
-      "ms": 7,
-      "resultPreview": "{\"id\":4,\"ok\":true,\"cards\":[],\"timings\":{\"totalMs\":6,\"hydrateMs\":0,\"embedQueryMs\":4,\"uniMs\":0,\"triMs\":0,\"vecMs\":0,\"fuseMs\":1,\"cosines\":0,\"hydrated\":0,\"vectorBelowThreshold\":0,\"vectorUnkRatio\":0.5},\"sco…"
+      "ms": 8,
+      "resultPreview": "{\"id\":4,\"ok\":true,\"cards\":[],\"timings\":{\"totalMs\":5,\"hydrateMs\":0,\"embedQueryMs\":4,\"uniMs\":0,\"triMs\":0,\"vecMs\":0,\"fuseMs\":0,\"cosines\":0,\"hydrated\":0,\"vectorBelowThreshold\":0,\"vectorUnkRatio\":0.5},\"sco…"
     },
     {
       "ming": "i18n",
@@ -228,19 +228,19 @@
     {
       "ming": "projectState",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"state\":{\"devEnv\":\"host\",\"containerOnly\":false,\"running\":true,\"stopped\":false,\"code\":\"host-dev\",\"hostEditingRefused\":false,\"developmentAllowed\":true,\"developmentWhere\":\"host\",\"testingAllowe…"
     },
     {
       "ming": "projectMemoryGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"groupId\":\"\",\"memory\":\"\",\"chars\":0}"
     },
     {
       "ming": "aiQuestionList",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"items\":[]}"
     },
     {
@@ -264,20 +264,20 @@
     {
       "ming": "containerProbe",
       "ok": true,
-      "ms": 468,
-      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1791285472575,\"elapsedMs\":466,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
+      "ms": 474,
+      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1791303203583,\"elapsedMs\":471,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
     },
     {
       "ming": "netPortCandidates",
       "ok": true,
-      "ms": 7,
-      "resultPreview": "{\"ok\":true,\"requestedPort\":59599,\"recommended\":[{\"port\":57757,\"status\":\"ok\",\"latencyMs\":6},{\"port\":52555,\"status\":\"ok\",\"latencyMs\":6},{\"port\":55151,\"status\":\"ok\",\"latencyMs\":5},{\"port\":55335,\"status\":…"
+      "ms": 8,
+      "resultPreview": "{\"ok\":true,\"requestedPort\":59599,\"recommended\":[{\"port\":57757,\"status\":\"ok\",\"latencyMs\":7},{\"port\":52555,\"status\":\"ok\",\"latencyMs\":7},{\"port\":55151,\"status\":\"ok\",\"latencyMs\":6},{\"port\":55335,\"status\":…"
     },
     {
       "ming": "chatLogRestore",
       "ok": true,
       "ms": 1,
-      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1791285472584},\"sessions\":[],\"logSeq\":0}"
+      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1791303203594},\"sessions\":[],\"logSeq\":0}"
     }
   ]
 }

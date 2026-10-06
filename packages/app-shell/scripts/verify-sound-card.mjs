@@ -130,6 +130,7 @@ try {
         r.fengZhi = Math.round(peak * 1000) / 1000;
       }
       r.hasLedger = Array.isArray(window.__yinXiaoZhenDuan);
+    r.baoHuo = !!(window.__yinPinBaoHuo && window.__yinPinBaoHuo());
       r.hasPlay = typeof window.__chuanBoYinXiao === 'function';
       r.selected = (window.__warmyDebugState && window.__warmyDebugState().selected) || null;
       try { ctx.close(); } catch (e) { /* noop */ }
@@ -143,6 +144,7 @@ try {
   check('内置「请求」音效取得到', jichu.youYinYuan === true, jichu.youYinYuan);
   check('内置音效是真有声的内容（峰值 > 0.1，不是静音文件）', (jichu.fengZhi || 0) > 0.1, jichu.fengZhi);
   check('诊断账本可用（能证明"真播了"，不靠猜）', jichu.hasLedger === true && jichu.hasPlay === true, jichu);
+  check('**还没有播过任何声音**时保活源就已经挂上（第一声不走冷路径 ⇒ 起音不被吞）', jichu.baoHuo === true, jichu);
 
   // ③ 直接走产品的播放函数（无手势）+ 主进程确认真的在出声
   const bo = await c.evaluate(`(async function(){
@@ -152,10 +154,11 @@ try {
   })()`);
   console.log('  · 直接播放: ' + JSON.stringify(bo));
   let wenChuSheng = false;
+  let qiYinMs = null;
   if (zhu) {
     for (let i = 0; i < 20; i++) {
-      await sleep(100);
-      if (await zhu.audible()) { wenChuSheng = true; break; }
+      await sleep(50);
+      if (await zhu.audible()) { wenChuSheng = true; qiYinMs = (i + 1) * 50; break; }
     }
   }
   check('无手势直接播放成功', bo.ok === true, bo);
@@ -164,14 +167,10 @@ try {
   check('音量不是 0（静音也算"没声音"）', bo.last && Number(bo.last.gain) > 0, bo.last);
   check('主进程确认窗口**真的在出声**（isCurrentlyAudible=true）', wenChuSheng === true, { wenChuSheng });
 
-  // 让这一声放完（约 2.5s）再测卡片，免得上一条的音频把后面判成"响过"
-  let tingXiaLai = false;
-  for (let i = 0; i < 40; i++) {
-    await sleep(150);
-    const a = zhu ? await zhu.audible() : false;
-    if (!a) { tingXiaLai = true; break; }
-  }
-  check('提示音会结束（audible 能回到 false，采样判据不是"恒真"）', tingXiaLai || !zhu, { tingXiaLai });
+  // ⚠️ 有意**不**断言"audible 会回到 false"：设备保活源（≈ -70dBFS 噪声）会一直把流热着，
+  //    这正是"首次音效起音被吃掉"的修法；改断言**起音够快**（设备不冷启动 ⇒ 起音不被吞）。
+  check('起音够快（出声延迟 < 600ms：设备没有冷启动，起音不被吞）', qiYinMs !== null && qiYinMs < 600, { qiYinMs });
+  check('保活源已挂上（音频流一直热着，第一声不走冷路径）', await c.evaluate(`!!(window.__yinPinBaoHuo && window.__yinPinBaoHuo())`), 'keep-alive');
 
   /**
    * ④ 造一张**真决策卡**（走产品 IPC，与 `ask_user` 工具创建卡片的落点一致），

@@ -60,6 +60,7 @@ const GATES_FAST = [
   E('verify-features-99.mjs'),
   E('verify-nm-format.mjs'),
   E('verify-tasks-666.mjs'),
+  E('verify-tasks-6666.mjs'),
   E('verify-thinking-merge.mjs'),
   E('verify-eta-forecast.mjs'),
 ];

@@ -37,7 +37,7 @@ import {
 } from '@warmy/providers';
 import { CcrGateway } from '@warmy/ccr-compressor';
 import { KnowledgeBase } from '@warmy/knowledge-base';
-import { EtaZhangBen, EtaLinShi, shuoShiChang, renWuQianMing, jiaEtaMiao, xingWeiGui, XING_WEI_MOREN, CHAO_SHI_LIAN_XU_XIAN, PAN_MO_XING_SHANG_XIAN, type EtaYuCe, type XingWei } from './eta-forecast.js';
+import { EtaZhangBen, EtaLinShi, shuoShiChang, renWuQianMing, jiaEtaMiao, xingWeiGui, XING_WEI_MOREN, CHAO_SHI_LIAN_XU_XIAN, PAN_MO_XING_SHANG_XIAN, jieXiKaPanDuan, shiLiaoTianMoXing, type EtaYuCe, type XingWei } from './eta-forecast.js';
 import { JianChaDianCang } from './checkpoint.js';
 import { ShenJiRiZhi } from './audit.js';
 import { AnQuanMiyaoCang } from './secure-keys.js';
@@ -1179,13 +1179,18 @@ async function yunXingLiaoTianXunHuan(
   const liuShiProvider = baoZhuangLiuShi(
     provider,
     (p) => boXingPianDuan(sessionId, p),
-    /** 「等待模型回复」这个行为：每次请求结束就量一次耗时（到点/到次就走完整判断流程） */
+    /** 「等待模型回复」这个行为：**失败/超时的重试次数**才计入轮数（正常一问一答不算"轮"） */
     (wan) => {
       void (async () => {
         try {
-          const ci = (dengDaiCiShu.get(sessionId) || 0) + 1;
-          dengDaiCiShu.set(sessionId, ci);
-          const jieDuan = `等待模型回复：本次耗时 ${shuoShiChang(wan.ms)}（第 ${ci} 次）、${wan.ok ? '已返回' : '失败后回退'}`;
+          let ci = 0;
+          if (!wan.ok) {
+            ci = (dengDaiCiShu.get(sessionId) || 0) + 1;
+            dengDaiCiShu.set(sessionId, ci);
+          }
+          const jieDuan = wan.ok
+            ? `等待模型回复：本次耗时 ${shuoShiChang(wan.ms)}`
+            : `等待模型回复：本次失败，耗时 ${shuoShiChang(wan.ms)}（失败/重试第 ${ci} 次）`;
           const jie = await chaXingWei({
             xingWei: 'dengDaiHuiFu', sessionId,
             moXing: String(Qiu.model || providerCfg.model || ''),
@@ -1702,21 +1707,28 @@ async function yunXingLiaoTianXunHuan(
       // 单次工具调用的"两把尺子"：耗时 + 同一工具本轮第几次
       try {
         const ming = String((call as { function?: { name?: string } } | undefined)?.function?.name || 'tool');
+        /**
+         * **故意等待的工具不算异常**（真机反馈：`wait_seconds` 一等就是几十秒，
+         * 被"单次工具 60 秒"的尺子判成异常 ⇒ 任务被误停）。这类工具的耗时就是它的功能本身。
+         */
+        const guYiDengDai = ming === 'wait_seconds' || ming === 'schedule_task';
         const ci = (gongJuCiShu.get(ming) || 0) + 1;
         gongJuCiShu.set(ming, ci);
         const haoShi = Date.now() - t1;
         const jieDuan = `单次工具调用 ${ming}：耗时 ${shuoShiChang(haoShi)}、本轮第 ${ci} 次`;
-        const jie = await chaXingWei({
-          xingWei: 'gongJu', sessionId,
-          moXing: String(Qiu.model || providerCfg.model || ''),
-          shiJiMs: haoShi, ciShu: ci,
-          qianMing: renWuQianMing({ gongJu: ming, gongJuMing: benLunGongJuMing, buShu: (jiHuaRenWuJi.get(sessionId) || []).length }),
-          jieDuan, zhongLei: haoShi >= xingWeiGui('gongJu').miao ? 'shiJian' : 'ciShu',
-        });
-        if (jie.yiChang) {
-          // 判异常 ⇒ 这一轮不再往下干（工具循环里没法回溯取消，但能拦住后续工具与续派）
-          benLunGongJuMing.length = 0;
-          throw new Error(`[eta-anomaly] ${jie.liYou}`);
+        if (!guYiDengDai) {
+          const jie = await chaXingWei({
+            xingWei: 'gongJu', sessionId,
+            moXing: String(Qiu.model || providerCfg.model || ''),
+            shiJiMs: haoShi, ciShu: ci,
+            qianMing: renWuQianMing({ gongJu: ming, gongJuMing: benLunGongJuMing, buShu: (jiHuaRenWuJi.get(sessionId) || []).length }),
+            jieDuan, zhongLei: haoShi >= xingWeiGui('gongJu').miao ? 'shiJian' : 'ciShu',
+          });
+          if (jie.yiChang) {
+            // 判异常 ⇒ 这一轮不再往下干（工具循环里没法回溯取消，但能拦住后续工具与续派）
+            benLunGongJuMing.length = 0;
+            throw new Error(`[eta-anomaly] ${jie.liYou}`);
+          }
         }
       } catch (e) {
         if (String((e as Error)?.message || '').startsWith('[eta-anomaly]')) throw e;
@@ -1775,22 +1787,35 @@ const MODEL_CTX_MAP: Record<string, number> = {
 function modelWindowTokens(modelId?: string): number | null {
   if (!modelId) return null;
   const m = String(modelId).trim();
+  /**
+   * **真实能力优先**（真机反馈）：上下文窗口要跟着**当前这个牛马实际在用的模型**走，
+   * 不是写死的对照表。真实值是"拉取模型"时问出来的 `contextLen`（`modelNengLiMeta`），
+   * 拿不到才退回已知表。滑块的最高也因此跟着变。
+   */
+  try {
+    const neng = modelNengLiMeta.get(m) || modelNengLiMeta.get(m.split('/').pop() || '');
+    const zhen = Number(neng && (neng as { contextLen?: number }).contextLen) || 0;
+    if (zhen >= 1024) return zhen;
+  } catch { /* 读不到就退回已知表 */ }
   return MODEL_CTX_MAP[m] || MODEL_CTX_MAP[m.split('/').pop() || ''] || null;
 }
 function youPeizhiSuanShangXiaWenYuSuan(modelId?: string): { chars: number; percent: number; tokens: number; maxTokens: number; minPercent: number } {
   let percent = 60;
   let maxTokens = 32768;
+  let youZhenShi = false;
   try {
     const mw = modelWindowTokens(modelId);
-    if (mw && mw >= 4096) maxTokens = mw;
+    if (mw && mw >= 4096) { maxTokens = mw; youZhenShi = true; }
 
     const s = settingsStore?.load();
     const p = Number(s?.contextBudgetPercent);
-    if (Number.isFinite(p)) percent = Math.min(90, Math.max(10, Math.round(p)));
+    // 上限放开到 100%：滑块的最高 = 当前牛马的**实际上下文**（真机反馈）
+    if (Number.isFinite(p)) percent = Math.min(100, Math.max(10, Math.round(p)));
     const m = Number(s?.modelContextTokens);
-    if (Number.isFinite(m) && m >= 4096) maxTokens = m;
+    // 用户显式覆盖只在**拿不到真实窗口**时生效（不许把"实际上下文"盖掉）
+    if (!youZhenShi && Number.isFinite(m) && m >= 4096) maxTokens = m;
   } catch { /* 用默认 */ }
-  const minPercent = Math.min(90, Math.ceil((MIN_CONTEXT_TOKENS / maxTokens) * 100));
+  const minPercent = Math.min(100, Math.ceil((MIN_CONTEXT_TOKENS / maxTokens) * 100));
   const effPercent = Math.max(percent, minPercent);
   const tokens = Math.max(MIN_CONTEXT_TOKENS, Math.round((effPercent / 100) * maxTokens));
   const chars = Math.max(200, Math.round(tokens * CHARS_PER_TOKEN_EST));
@@ -4351,6 +4376,13 @@ async function zhenZhengFaSong(
               audit?.log('chat.lang-constraint', { sessionId, on: false });
             }
           } catch { /* 配置坏了就不加约束 */ }
+          /**
+           * **多步任务先列计划**（真机反馈：这次没出现「计划任务」卡片 —— 模型自己跳过了 plan_update）。
+           * 产品期望：右边栏的计划卡片要能看到步骤；这是提示层的默认行为，不是可选项。
+           */
+          try {
+            ju.push(tMain('llm.planFirst', '【多步任务】如果这件事要做三件以上、或需要按顺序完成多个步骤，请先用 plan_update 列出步骤（id / 标题 / 状态），再逐个完成并用 plan_verify 标记验证；界面右侧的「计划任务」卡片会同步显示进度。'));
+          } catch { /* noop */ }
           if (ju.length) shenFenTou.push({ role: 'system', content: ju.join('') } as LiaoTianXiaoXi);
         }
         /**
@@ -4636,9 +4668,12 @@ async function zhenZhengFaSong(
     if (zuiHouCuo) {
       lastError = { ts: Date.now(), message: zuiHouCuo, context: 'chat-send' };
       fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: zuiHouCuo } });
+      // 模型调用失败 ⇒ 任务停在半路：界面在最新回复里挂「继续 / 重试」
+      biaoRenWuZhongDuan(sessionId, '模型调用失败（整条调用链都试过了）', zuiHouCuo);
       return { ok: false, reply: '', error: zuiHouCuo, needsKey: false, retry: true };
     }
     // 兜底：整条链跑完既没成功也没留错（理论上不该走到，但类型必须闭合）
+    biaoRenWuZhongDuan(sessionId, '模型调用失败（没有可用模型）', 'no-model-available');
     return { ok: false, reply: '', error: 'no-model-available', needsKey: false, retry: true };
 }
 chuliIpc('warmy:liaoTianFaSong', zhenZhengFaSong);
@@ -4732,6 +4767,24 @@ const etaYiChang = new Map<string, { xingWei: XingWei; liYou: string; at: number
 const yiShuoGuo = new Set<string>();
 function biaoEtaYiChang(sessionId: string, xingWei: XingWei, liYou: string): void {
   etaYiChang.set(String(sessionId || ''), { xingWei, liYou, at: Date.now() });
+  biaoRenWuZhongDuan(sessionId, liYou, 'eta-anomaly');
+}
+
+/**
+ * **任务被异常打断**（卡死/闪退/超时/超限/模型调用失败…）⇒ 让界面在**牛马的最新回复里**
+ * 挂一个「继续 / 重试」按钮：点了先分析原因、规避/修复，再接着做；
+ * 用户若直接发了新对话且 AI 已收到，按钮会变灰失效（渲染层负责）。
+ */
+function biaoRenWuZhongDuan(sessionId: string, why: string, error?: string): void {
+  try {
+    broadcastToWindows('warmy:jiHuaHuiFu', {
+      sessions: [String(sessionId || '')],
+      sessionId: String(sessionId || ''),
+      why: String(why || '').slice(0, 300),
+      error: String(error || '').slice(0, 300),
+    });
+    audit?.log('plan.task-interrupted', { sessionId, why: String(why || '').slice(0, 160), error: String(error || '').slice(0, 160) });
+  } catch { /* 广播失败不影响主流程 */ }
 }
 function quEtaYiChang(sessionId: string): { xingWei: XingWei; liYou: string; at: number } | null {
   const v = etaYiChang.get(String(sessionId || ''));
@@ -4976,63 +5029,82 @@ ${canKaoHuo ? canKaoHuo + '\n\n' : ''}${canKaoFangFa}
     else if (await jiexiGongyingshangMiyao(String(p.id || ''))) yun.push(...ids);
   }
   const houXuan: string[] = [];
-  const jia = (m: string) => { const s = String(m || '').trim(); if (s && !houXuan.includes(s)) houXuan.push(s); };
+  const jia = (m: string) => {
+    const s = String(m || '').trim();
+    // 只用聊天模型判卡死（whisper/tts/embed 这类只会回错误或空答，白白吃掉名额）
+    if (s && !houXuan.includes(s) && shiLiaoTianMoXing(s)) houXuan.push(s);
+  };
   jia(dangQianMoXing);                       // ① 正在用的那个模型
   for (const m of lianMingOf(sessionId)) jia(m);   // ② 这个牛马的调用链
   yun.forEach(jia);                          // ③ 云端
   benDi.forEach(jia);                        // ④ 本地兜底（一定排在云之后）
 
   const changGuo: string[] = [];
+  /** 有回应但没给结论（≠ 没反应）；与"压根没回应"分开记账 */
+  let huiDaDanPanBuChu = 0;
+  let genBenMeiHuiDa = 0;
   for (const mo of houXuan.slice(0, KASI_CHANGSHI)) {
     changGuo.push(mo);
     try {
       const an = await jieMoXingGongYingShang(mo);
-      if (!an || (!an.apiKey && an.protocol !== 'ollama')) continue;
+      if (!an || (!an.apiKey && an.protocol !== 'ollama')) { genBenMeiHuiDa += 1; continue; }
       const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL || undefined, protocol: an.protocol } as never, an.protocol);
       const r = await Promise.race([
         p.chat({ model: mo, xiaoXiJi: [{ role: 'user', content: wen }], maxTokens: 240 }),
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error('analysis-timeout')), KASI_PAN_CHAOSHI_MS)),
       ]);
       const txt = neiRongWenBen((r as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message?.content) || '';
-      const m = txt.match(/"stalled"\s*:\s*(true|false)/i);
-      const rr = txt.match(/"reason"\s*:\s*"([^"]*)"/i);
-      const ye = txt.match(/"etaSeconds"\s*:\s*"?([0-9]+(?:\.[0-9]+)?)"?/i);
-      const yb = txt.match(/"etaBasis"\s*:\s*"([^"]*)"/i);
-      if (m) {
-        const stalled = String(m[1]).toLowerCase() === 'true';
-        const etaMs = ye ? jiaEtaMiao(ye[1]) : null;
-        audit?.log('plan.stall-analysis', {
-          sessionId, by: mo, stalled, attempt: changGuo.length,
-          /** 只记结构化事实：给了多久、有没有给 —— 不记正文 */
-          etaSeconds: etaMs === null ? null : Math.round(etaMs / 1000),
-          etaGiven: etaMs !== null,
-        });
-        return {
-          stalled,
-          by: mo,
-          reason: rr ? String(rr[1]) : '',
-          etaRaw: etaMs,
-          etaJiShi: yb ? String(yb[1]).slice(0, 200) : '',
-          /** 模型给了就先记进**临时文件**（"参考自己之前写的"那本账）；没给由调用方按方法库/首次值兜 */
-          eta: etaMs === null
-            ? null
-            : etaHuo().jiYuCe(sessionId, xingWei, { etaMs, genJu: (yb ? String(yb[1]) : '').slice(0, 200), laiYuan: 'model', moXing: mo }),
-        };
+      const jie = jieXiKaPanDuan(txt);
+      if (jie.stalled === null) {
+        // 有回应但判不出结论（话没说清/格式怪）⇒ 换下一个；**不等于卡死**
+        huiDaDanPanBuChu += 1;
+        audit?.log('plan.stall-analysis-badreply', { sessionId, by: mo, panBuChu: true });
+        continue;
       }
-      // 给出了回应但没按格式 ⇒ 视为"没给出结论" ⇒ 换下一个模型继续试
-      audit?.log('plan.stall-analysis-badreply', { sessionId, by: mo });
+      const stalled = jie.stalled;
+      const etaMs = jie.etaSeconds == null ? null : jiaEtaMiao(jie.etaSeconds);
+      audit?.log('plan.stall-analysis', {
+        sessionId, by: mo, stalled, attempt: changGuo.length,
+        /** 只记结构化事实：给了多久、有没有给 —— 不记正文 */
+        etaSeconds: etaMs === null ? null : Math.round(etaMs / 1000),
+        etaGiven: etaMs !== null,
+      });
+      return {
+        stalled,
+        by: mo,
+        reason: jie.reason || '',
+        etaRaw: etaMs,
+        etaJiShi: jie.etaBasis || '',
+        /** 模型给了就先记进**临时文件**（"参考自己之前写的"那本账）；没给由调用方按方法库/首次值兜 */
+        eta: etaMs === null
+          ? null
+          : etaHuo().jiYuCe(sessionId, xingWei, { etaMs, genJu: (jie.etaBasis || '').slice(0, 200), laiYuan: 'model', moXing: mo }),
+      };
     } catch (e) {
+      genBenMeiHuiDa += 1;
       audit?.log('plan.stall-analysis-fail', { sessionId, by: mo, error: xiJingCuoWu(e).slice(0, 120) });
     }
   }
-  // 5 次都没给出结论 ⇒ 当异常处理
-  return { stalled: true, by: '', reason: `no-conclusion（试过 ${changGuo.length} 个模型都没给出结论）`, eta: null, etaRaw: null, etaJiShi: '' };
+  /**
+   * **收尾语义**（产品要求对"5 个模型都没有反应"的解释）：
+   *   · **压根没反应**（超时/报错/没 Key）一个都没有 ⇒ 异常（stalled）；
+   *   · **有回应但判不出结论** ⇒ **不能当成卡死**（那是我们解析不了，不是用户的任务坏了）
+   *     ⇒ 判"没卡死"继续跑，并如实记账，让下一次判断能被看见。
+   */
+  if (huiDaDanPanBuChu > 0) {
+    audit?.log('plan.stall-analysis-unparseable', { sessionId, huiDaDanPanBuChu, genBenMeiHuiDa, changGuo: changGuo.length });
+    return {
+      stalled: false,
+      by: '',
+      reason: `no-conclusion（${huiDaDanPanBuChu} 个模型有回应但判不出结论；不视为卡死，继续跑）`,
+      eta: null, etaRaw: null, etaJiShi: '',
+    };
+  }
+  return { stalled: true, by: '', reason: `no-response（试过 ${changGuo.length} 个模型都没有反应）`, eta: null, etaRaw: null, etaJiShi: '' };
 }
 
-/**
- * 模型**没给**预计完成时间（或给得不合法）时的兜底：拿统计推算，并如实标注来源。
- * 绝不用"编一个数字冒充模型给的" —— `laiYuan` 会写进持久账本，用户/排查看得见。
- */
+
+
 async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhenZhengFaSong>[1], shangLun?: { diaoYongJi?: number; huiFu?: string }): Promise<void> {
   try {
     const pan = yingGaiZiDongJiXu(sessionId, xiaoXi as { content?: string }, shangLun);
@@ -5094,6 +5166,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
           seq: xiaYiLiaoTianXuLie(), role: 'assistant',
           content: etaYiChangHuiFu(sessionId, 'ziDongXuPai', jie.liYou), ts: Date.now(),
         });
+        // （`biaoEtaYiChang` 里已经广播了「继续/重试」，这里不再重复）
         etaHuo().jieShuLun(sessionId);
         yanXuZhuangTai.delete(sessionId);
         return;
@@ -5131,6 +5204,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
         content: tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）') + '\n' + String((r && (r as { error?: string }).error) || ''),
         ts: Date.now(),
       });
+      biaoRenWuZhongDuan(sessionId, tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）'), String((r && (r as { error?: string }).error) || ''));
       etaHuo().jieShuLun(sessionId);   // 出错中止：不当作"完成"，不进学习样本
       return;
     }
@@ -5139,6 +5213,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
     await yanXuJiHuaRenWu(sessionId, xiaoXi, { diaoYongJi: xiaLun.diaoYongJi, huiFu: String((r as { reply?: string }).reply || '') });
   } catch (e) {
     audit?.log('plan.auto-continue-fail', { sessionId, error: xiJingCuoWu(e).slice(0, 160) });
+    biaoRenWuZhongDuan(sessionId, tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）'), xiJingCuoWu(e).slice(0, 160));
     try { etaHuo().jieShuLun(sessionId); } catch { /* noop */ }
     yanXuZhuangTai.delete(sessionId);
   }

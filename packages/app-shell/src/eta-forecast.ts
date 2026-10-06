@@ -261,6 +261,76 @@ export function moXingZu(mo?: string): string {
   return s.replace(/[-_ ]?(v?\d+(\.\d+)*|20\d{2}[-.]?\d{2}([-.]?\d{2})?)$/i, '').slice(0, 32);
 }
 
+/**
+ * **解析"是否卡死"的判断回复**（真机反馈：本地模型往往不吐严格 JSON，
+ * 于是 5 个模型全被判"没给结论" ⇒ 误判卡死 ⇒ 任务被误停）。
+ *
+ * 三级容错：
+ *   ① 先抠 JSON（容忍 ``` 包裹、前后废话、中文键名 卡住/卡死）；
+ *   ② 再按**话**判断（"没卡住"/"没有卡死"/"还在跑" vs "卡住了"/"卡死"）；
+ *   ③ 都判不出来 ⇒ 返回 `stalled: null`（= **没给结论**，不等于卡死），
+ *      由调用方决定"换下一个模型"，而不是当成"卡住了"。
+ */
+export function jieXiKaPanDuan(txt: string): { stalled: boolean | null; reason: string; etaSeconds: number | null; etaBasis: string } {
+  const s = String(txt || '');
+  const quan = (k: string): string | null => {
+    const m = s.match(new RegExp('"' + k + '"\\s*:\\s*"([^"]*)"', 'i'));
+    return m ? String(m[1]) : null;
+  };
+  const shu = (k: string): number | null => {
+    const m = s.match(new RegExp('"' + k + '"\\s*:\\s*"?([0-9]+(?:\\.[0-9]+)?)"?', 'i'));
+    return m ? Number(m[1]) : null;
+  };
+  // ① JSON：先把 ``` 包裹去掉，再抠第一个完整对象
+  const gan = s.replace(/```[a-zA-Z]*/g, '').trim();
+  let obj: Record<string, unknown> | null = null;
+  const kuai = gan.match(/\{[\s\S]*\}/);
+  if (kuai) {
+    try { obj = JSON.parse(kuai[0]) as Record<string, unknown>; } catch { obj = null; }
+  }
+  const zhiBiao = (k: string): boolean | null => {
+    const v = obj ? (obj[k] as unknown) : undefined;
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'string') {
+      const t0 = v.trim().toLowerCase();
+      if (t0 === 'true' || t0 === '是' || t0 === '卡住' || t0 === '卡死') return true;
+      if (t0 === 'false' || t0 === '否' || t0 === '没卡住' || t0 === '没卡死') return false;
+    }
+    const m = gan.match(new RegExp('"' + k + '"\\s*:\\s*(true|false)', 'i'));
+    return m ? String(m[1]).toLowerCase() === 'true' : null;
+  };
+  const stalled0 = zhiBiao('stalled') ?? zhiBiao('stuck') ?? zhiBiao('卡住') ?? zhiBiao('卡死');
+  // ② 话：中英文的"卡住/没卡住"
+  let stalled: boolean | null = stalled0;
+  if (stalled === null) {
+    const kaZhu = /(卡住了|已卡死|已经卡死|停滞了|\bstuck\b|\bstalled\b)/i.test(gan);
+    const meiKa = /(没\s*(卡住|卡死|停滞)|没有\s*(卡住|卡死|停滞)|未\s*停滞|还在(跑|继续|进展)|还在干活|\bnot\s+stuck\b|\bnot\s+stalled\b|\bprogressing\b|\brunning\b)/i.test(gan);
+    if (kaZhu && !meiKa) stalled = true;
+    else if (meiKa && !kaZhu) stalled = false;
+    else stalled = null;
+  }
+  return {
+    stalled,
+    reason: (quan('reason') || quan('理由') || (gan.match(/["']reason["']\s*:\s*["']([^"']*)["']/i) || [])[1] || '').slice(0, 200),
+    etaSeconds: shu('etaSeconds') ?? shu('eta'),
+    etaBasis: (quan('etaBasis') || '').slice(0, 200),
+  };
+}
+
+/**
+ * 判断模型的候选：**只用聊天模型**（真机反馈：把 whisper-tiny 这类 ASR 模型也拿来判卡死，
+ * 它只能回 HTTP 500/空答，白白吃掉 5 个名额）。
+ * `kind` 由调用方从能力表里取（拿不到就只按名字判）。
+ */
+export function shiLiaoTianMoXing(id: string, kind?: string): boolean {
+  const m = String(id || '');
+  if (!m) return false;
+  if (/whisper|tts|asr|embed|rerank|clip|image|video|safety|translate|reranker|bge|stt/i.test(m)) return false;
+  const k = String(kind || '');
+  if (/asr|tts|embedding|rerank|image|video|safety|translate|imageUnd|videoUnd/i.test(k)) return false;
+  return true;
+}
+
 function kongFangFa(xingWei: XingWei, qianMing: string, now: number): EtaFangFa {
   return {
     xingWei, qianMing, yangBen: 0, yuCeEmaMs: 0, shiJiEmaMs: 0, piaoYiXiShu: 1,

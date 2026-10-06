@@ -47,6 +47,8 @@
     unread: {},
     /** 被打断的任务（程序异常/退出/重启后恢复到的会话）：列表亮 ?，会话里给「继续/重试」 */
     planInterrupted: new Set(),
+    /** 中断原因（点「继续/重试」时带给模型分析用） */
+    renWuZhongDuan: {},
     sound: { complete: true, request: true, error: true },
     soundVolume: 0.9,
     autoRead: false,
@@ -408,8 +410,8 @@
   function GONGYING_YUSHE_JIAN() {
     return [
       { id: 'deepseek', biaoQian: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com/v1' },
-      // MiMo（小米）：实测的 OpenAI 兼容端点
-      { id: 'mimo', biaoQian: 'MiMo（小米）', protocol: 'openai-compatible', baseURL: 'https://api.xiaomimimo.com/v1' },
+      // MiMo：实测的 OpenAI 兼容端点
+      { id: 'mimo', biaoQian: 'MiMo', protocol: 'openai-compatible', baseURL: 'https://api.xiaomimimo.com/v1' },
       { id: 'openai', biaoQian: t('settings.provider.openai') || 'OpenAI', protocol: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
       { id: 'moonshot', biaoQian: t('settings.provider.moonshot') || 'Moonshot', protocol: 'openai-compatible', baseURL: 'https://api.moonshot.cn/v1' },
       { id: 'zhipu', biaoQian: t('settings.provider.zhipu') || 'Zhipu GLM', protocol: 'openai-compatible', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
@@ -826,20 +828,31 @@
    * 代价几乎为零（静音源不产生可听输出），换的是"第一声也是完整的"。
    */
   let yinPinBaoHuo = null;
+  /** 保活源挂上多久了（用于决定第一次提示音的提前量） */
+  let baoHuoAt = 0;
   function baoHuoYinPin(ctx) {
     if (!ctx || yinPinBaoHuo) return;
     try {
-      // 2 个采样点的静音缓冲循环：只为让音频图"一直有活的源"
-      const buf = ctx.createBuffer(1, 2, ctx.sampleRate || 48000);
+      /**
+       * 4 个采样的**极低电平噪声**（≈ -70dBFS，人耳听不到）循环。
+       * ⚠️ 不用纯数字静音：部分声卡/驱动会做"静音检测"，把流休眠掉，
+       * 于是第一声到来时又要冷启动 ⇒ 起音被吃掉（真机反馈："首次音效很小、像开头几帧被挡"）。
+       * 留一丝不可闻的电平，流就一直热着。
+       */
+      const n = 4;
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate || 48000);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * 0.0012;
       const yuan = ctx.createBufferSource();
       yuan.buffer = buf;
       yuan.loop = true;
       const yin = ctx.createGain();
-      yin.gain.value = 0;
+      yin.gain.value = 1;
       yuan.connect(yin);
       yin.connect(ctx.destination);
       yuan.start(0);
       yinPinBaoHuo = { yuan, yin };
+      baoHuoAt = Date.now();
     } catch { /* 保活失败不影响播放（只是可能丢掉第一声的起音） */ }
   }
   window.__yinPinBaoHuo = () => !!yinPinBaoHuo;
@@ -959,12 +972,12 @@
             yuanYin.connect(zengYi);
             zengYi.connect(ctx.destination);
             /**
-             * **排一点点提前量**（20ms）而不是 `start(0)`：
-             * `start(0)` 是"立刻"，如果此刻音频线程刚好在起步，最先的几个量子会被吞掉；
-             * 排在"现在 +20ms"就让首帧落在已经稳定的时钟上（人耳听不出这 20ms）。
-             * 保活源已在跑时这点提前量是纯保险。
+             * **排一点点提前量**而不是 `start(0)`：`start(0)` 是"立刻"，若音频线程/设备还在起步，
+             * 最先几个量子会被吞掉（真机反馈："首次音效像开头几帧被挡"）。
+             * 保活源刚挂上不久时多给一点（50ms），之后 20ms 就够 —— 人耳听不出这几十毫秒。
              */
-            const qiShi = ctx.currentTime + 0.02;
+            const baoHuoXin = (baoHuoAt && Date.now() - baoHuoAt < 500) ? 0.05 : 0.02;
+            const qiShi = ctx.currentTime + baoHuoXin;
             yuanYin.start(qiShi);
             yinXiaoDaiBo = null;
             jiYinXiao(Object.assign(jiao, { ok: true, lu: 'audio-context', ctxState: ctx.state, gain: yinLiang, seconds: buf.duration, baoHuo: !!yinPinBaoHuo }));
@@ -1109,8 +1122,9 @@
     // ④ 补播刚才没播出去的
     setTimeout(() => { void buBoChenJiYinXiao(); }, 60);
   }
-  // 启动就预热：第一张决策卡不再走"冷路径"
-  setTimeout(() => { try { deDaoShangXiaWen(); yinXiaoYuRe(); } catch { /* noop */ } }, 400);
+  // 启动**立刻**预热（真机反馈：第一张决策卡的音效像"开头几帧被挡"）
+  // —— 音频上下文 + 保活源 + 三个音源全部提前备好，第一声不走冷路径
+  try { deDaoShangXiaWen(); baoHuoYinPin(yinPinShangXiaWen); yinXiaoYuRe(); } catch { /* noop */ }
   /**
    * 手势保险：**不是 once** —— 万一第一下点击时上下文仍是 suspended，
    * 后面任何一次点击/按键都继续尝试 resume（用户不需要知道这些）。
@@ -2357,6 +2371,25 @@
     let shangYiTiaoShiJian = 0;
     /** 上一次**主动显示**的时间（跨时才显示；跨自然日加分隔线） */
     let shangCiZhuDong = 0;
+    /**
+     * **被打断的任务：「继续 / 重试」按钮出现在牛马的最新回复里**（产品要求）。
+     * 任何异常（卡死/闪退/超时/超限/模型调用失败）让任务停在半路、又没能自我修复，
+     * 恢复可交互后，这条最新回复里就带一个按钮：点了先分析错误、规避/修复，再接着做；
+     * 用户若直接发了新对话且 AI 已收到，按钮**变灰不可再点**。
+     */
+    const sidYong = state.selectedChat && state.selectedChat.id;
+    const beiDaDuan = !!(sidYong && state.planInterrupted && state.planInterrupted.has(String(sidYong)));
+    const yiGuanBi = !!(state.planResumeDisabled && state.planResumeDisabled[String(sidYong)]);
+    const zuiHouThem = (function () {
+      let z = -1;
+      slice.forEach((m, i) => { if (m && !m.system && m.role !== 'wo') z = i; });
+      return z;
+    })();
+    const fuHuoAnNiuHtml = (beiDaDuan || yiGuanBi)
+      ? '<button type="button" class="anNiuZhuYao huiFuRenWuBtn"' + (yiGuanBi ? ' disabled' : '') + '>'
+        + escapeHtml(yiGuanBi ? tOr('chat.resumeTaskExpired', '已过期（你已开始新的对话）') : tOr('chat.resumeTask', '继续 / 重试'))
+        + '</button>'
+      : '';
     slice.forEach((m, i) => {
       // **内部指令不进聊天记录**（自动续派的「继续执行计划…」只给模型看，不是用户说的话）
       if (m && m.hidden) return;
@@ -2399,6 +2432,7 @@
           + escapeHtml(siKaoKai ? tOr('chat.thinkingOpen', '思考中…') : tOr('chat.thinkingDone', '思考过程'))
           + '</summary><pre>' + escapeHtml(String(m.reasoning)) + '</pre></details>'
         : '';
+      const zuYaoHuiFuFu = (i === zuiHouThem) && (beiDaDuan || yiGuanBi) && m.role !== 'wo';
       div.innerHTML = (m.role === 'wo' ? av : themAv)
         + '<div class="bubbleWrap">'
         + (showName ? '<div class="xiaoXiMing">' + escapeHtml(themName) + '</div>' : '')
@@ -2419,6 +2453,7 @@
           + '<path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="M15.5 8.7a4.6 4.6 0 0 1 0 6.6"/>'
           + '</svg></button>' +
           '<button type="button" class="xiaoXiFuZhi" title="' + escapeHtml(tOr('chat.copy', '复制')) + '" data-copy="' + escapeHtml(m.text) + '">⧉</button>' +
+          (zuYaoHuiFuFu ? fuHuoAnNiuHtml : '') +
           '</div></div>'
         + '</div>';
       // 悬停复制：一次委托绑定（复制 + 朗读）
@@ -2499,34 +2534,39 @@
      * 按钮**自动失效变灰**（新对话已经开始，旧任务不再被自动续上）。
      */
     try {
-      const sid = state.selectedChat && state.selectedChat.id;
-      const beiDaDuan = !!(sid && state.planInterrupted && state.planInterrupted.has(String(sid)));
-      const yiGuanBi = state.planResumeDisabled && state.planResumeDisabled[String(sid)];
-      if (beiDaDuan || yiGuanBi) {
+      /**
+       * 兜底：一条牛马回复都没有时（例如任务刚开就崩了），仍给一行提示 + 按钮。
+       * 有回复时按钮**已经挂在最新那条回复里**（见上面 footer）。
+       */
+      if ((beiDaDuan || yiGuanBi) && zuiHouThem < 0) {
         const hang = document.createElement('div');
         hang.className = 'xiaoXi huiFuRenWuHang' + (yiGuanBi ? ' yiGuoQi' : '');
         hang.innerHTML =
           '<div class="bubbleWrap">' +
           '<div class="bubble">' + escapeHtml(tOr('chat.resumeTaskHint', '上次的任务被打断了（程序异常/退出/重启）。点这里接着做。')) + '</div>' +
-          '<div class="xiaoXiJiao"><div class="xiaoXiJiaoHang">' +
-          '<button type="button" class="anNiuZhuYao huiFuRenWuBtn"' + (yiGuanBi ? ' disabled' : '') + '>'
-          + escapeHtml(yiGuanBi ? tOr('chat.resumeTaskExpired', '已过期（你已开始新的对话）') : tOr('chat.resumeTask', '继续 / 重试')) +
-          '</button></div></div></div>';
-        const btn = hang.querySelector('.huiFuRenWuBtn');
-        if (btn && !yiGuanBi) {
-          btn.onclick = () => {
-            // 点了就交给常规发送流程（工具循环会真的接着干）
-            const ru = $('shuRu');
-            if (ru) {
-              ru.value = tOr('chat.resumeTask', '继续 / 重试');
-              void faSong();
-            }
-            if (sid && state.planInterrupted) state.planInterrupted.delete(String(sid));
-            try { renderList(); } catch { /* noop */ }
-          };
-        }
+          '<div class="xiaoXiJiao"><div class="xiaoXiJiaoHang">' + fuHuoAnNiuHtml + '</div></div></div>';
         heZi.appendChild(hang);
       }
+      // 「继续 / 重试」：不管按钮挂在哪儿，共用一套行为
+      heZi.querySelectorAll('.huiFuRenWuBtn').forEach((btn) => {
+        if (btn.dataset.bound === '1') return;
+        btn.dataset.bound = '1';
+        btn.onclick = () => {
+          if (btn.disabled) return;
+          const sid = state.selectedChat && state.selectedChat.id;
+          const wei = (state.renWuZhongDuan && sid && state.renWuZhongDuan[String(sid)]) || {};
+          const why = String(wei.why || tOr('chat.resumeTaskHint', '任务被中断'));
+          /**
+           * 点了就**带上中断原因**发一条内部指令：让模型先分析原因、规避/修复，
+           * 再继续或重新执行（产品要求："点击后就会分析发生的错误…然后继续或重新执行"）。
+           */
+          const zhiLing = tOr('chat.resumeTaskCmd', '【继续执行】上次任务因「{why}」中断。请先分析原因并规避或修复，然后继续或重新执行未完成的任务。').replace('{why}', why);
+          const ru = $('shuRu');
+          if (ru) { ru.value = zhiLing; void faSong(); }
+          if (sid && state.planInterrupted) state.planInterrupted.delete(String(sid));
+          try { renderList(); } catch { /* noop */ }
+        };
+      });
     } catch { /* 恢复按钮失败不得中断渲染 */ }
     const duty = $('dutyXinXi');
     if (duty) duty.textContent = state.selectedChat ? state.selectedChat.name : '—';
@@ -3292,7 +3332,17 @@
         const inst = state.instances.find((x) => x.id === dutyId) || state.instances.find((x) => x.dutyEligible);
         model = String(inst?.model || inst?.defaultModel || '');
       }
-      if (model && MODEL_CTX_MAP[model]) return MODEL_CTX_MAP[model];
+      /**
+       * **真实上下文优先**（真机反馈）：滑块的最高必须跟着**当前这个牛马实际在用的模型**走，
+       * 不是写死的对照表。真实窗口取"拉取模型"时拿到的能力（`__moXingNengLi[model].contextLen`），
+       * 拿不到才退回已知表 / 用户覆盖值。
+       */
+      if (model) {
+        const nl = (window.__moXingNengLi && window.__moXingNengLi[model]) || null;
+        const zhen = Number(nl && nl.contextLen) || 0;
+        if (zhen >= 1024) return zhen;
+        if (MODEL_CTX_MAP[model]) return MODEL_CTX_MAP[model];
+      }
     } catch { /* noop */ }
     return ctxState.maxTokens || CTX_DEFAULT_WINDOW;
   }
@@ -3301,7 +3351,8 @@
     try {
       const s = await window.warmy.settingsGet();
       const p = Number(s?.settings?.contextBudgetPercent);
-      if (Number.isFinite(p)) ctxState.percent = Math.min(90, Math.max(10, Math.round(p)));
+      // 上限放开到 100%：滑块的最高 = 当前牛马的**实际上下文**（不再被 90% 卡住）
+      if (Number.isFinite(p)) ctxState.percent = Math.min(100, Math.max(10, Math.round(p)));
       const m = Number(s?.settings?.modelContextTokens);
       if (Number.isFinite(m) && m >= 4096) ctxState.maxTokens = m;
     } catch { /* 默认 */ }
@@ -3720,6 +3771,8 @@
   }
 
   function xuanranFujian() {
+    // 附件增删要同步「发送」按钮：有文字或有附件都算有内容（真机反馈）
+    try { window.__syncSendState && window.__syncSendState(); } catch { /* noop */ }
     const yuanSu = $('attachLieBiao');
     if (!state.attachments.length) {
       yuanSu.classList.add('yinCang');
@@ -7723,7 +7776,7 @@
       // ── 供应商预设（常用 10 家 + 其他）──
       const GONGYING_YUSHE = [
         { id: 'deepseek', biaoQian: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com/v1' },
-        { id: 'mimo', biaoQian: 'MiMo（小米）', protocol: 'openai-compatible', baseURL: 'https://api.xiaomimimo.com/v1' },
+        { id: 'mimo', biaoQian: 'MiMo', protocol: 'openai-compatible', baseURL: 'https://api.xiaomimimo.com/v1' },
           { id: 'openai', biaoQian: t('settings.provider.openai'), protocol: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
         { id: 'moonshot', biaoQian: t('settings.provider.moonshot'), protocol: 'openai-compatible', baseURL: 'https://api.moonshot.cn/v1' },
         { id: 'zhipu', biaoQian: t('settings.provider.zhipu'), protocol: 'openai-compatible', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
@@ -10268,8 +10321,15 @@
     if (!btn) return;
     // 容器项目停止态：开发入口整体禁用（不是"能敲但发不出去"）
     if (($('shuRu') || {}).dataset && $('shuRu').dataset.devBlocked === '1') { btn.disabled = true; return; }
-    btn.disabled = !($('shuRu')?.value || '').trim();
+    /**
+     * **有内容才能发**（真机反馈）：文字、附件（文件/图片）任一存在就算"有内容"；
+     * 两个都没有才灰掉 —— 否则点了也不知道要发什么。
+     */
+    const youWen = !!($('shuRu')?.value || '').trim();
+    const youFu = Array.isArray(state.attachments) && state.attachments.length > 0;
+    btn.disabled = !(youWen || youFu);
   };
+  window.__syncSendState = syncSendState;
   $('shuRu')?.addEventListener('input', () => {
     syncSendState();
     const now = Date.now();
@@ -10278,37 +10338,45 @@
   });
   syncSendState();
   /**
-   * 插入（加急 / 插话 / 排队）：**三态切换**（产品要求）——点图标本身换档，
-   * 不要文字、不要箭头、不要下拉菜单；当前档位写进 tooltip。
-   * 顺序：插话(P2) → 排队(P3) → 加急(P1) → 插话(P2)；
+   * 插入（加急 / 插话 / 排队）：点图标**弹出三个选项**（产品要求），
+   * 选中哪个，图标就换成哪个（气泡 + 感叹号 / 闪电 / 十字）；不要文字、不要箭头。
    * 选中「加急」仍要二次确认（它会打断正在跑的活），取消就停在原档。
    */
   (function bindUrgency() {
     const trigger = $('jinJiTrigger');
+    const caiDan = $('jinJiCaiDan');
     const dd = $('urgencyDd');
-    if (!trigger || !dd) return;
-    const XUN_HUAN = ['P2', 'P3', 'P1'];
+    if (!trigger || !caiDan || !dd) return;
     const LABELS = { P1: 'urgency.urgentLabel', P2: 'urgency.insertLabel', P3: 'urgency.queueLabel' };
     function refresh() {
       dd.classList.toggle('urgent', state.urgency === 'P1');
       dd.querySelectorAll('.chaRuIco').forEach((s) => {
         s.classList.toggle('yinCang', s.dataset.u !== state.urgency);
       });
+      caiDan.querySelectorAll('button[data-u]').forEach((b) => b.classList.toggle('qiYong', b.dataset.u === state.urgency));
       const ming = t(LABELS[state.urgency] || 'urgency.insertLabel');
       trigger.title = ming;
       trigger.setAttribute('aria-label', ming);
     }
     refresh();
 
-    trigger.addEventListener('click', async (e) => {
+    trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      const i = XUN_HUAN.indexOf(state.urgency);
-      const xia = XUN_HUAN[(i + 1) % XUN_HUAN.length];
-      if (xia === 'P1') {
+      caiDan.classList.toggle('yinCang');
+      if (!caiDan.classList.contains('yinCang')) { refresh(); positionMenuFixed(trigger, caiDan); }
+    });
+    onDocClick(() => caiDan?.classList.add('yinCang'));
+
+    caiDan.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-u]');
+      if (!b) return;
+      const u = b.dataset.u;
+      if (u === 'P1') {
         const ok = await uiConfirmCountdown(t('urgency.confirmBody'), t('urgency.confirmTitle'), 5);
-        if (!ok) { refresh(); return; }   // 取消 = 停在原档（不许"半只脚"踩进加急）
+        if (!ok) { caiDan.classList.add('yinCang'); refresh(); return; }
       }
-      state.urgency = xia;
+      state.urgency = u;
+      caiDan.classList.add('yinCang');
       refresh();
     });
 
@@ -16486,6 +16554,15 @@
         const ss = (d && Array.isArray(d.sessions)) ? d.sessions : [];
         state.planInterrupted = state.planInterrupted || new Set();
         for (const s of ss) state.planInterrupted.add(String(s));
+        /**
+         * **任何异常让任务停在半路**（卡死/闪退/超时/超限/模型调用失败）都会带 `why/error`：
+         * 记下来，点「继续 / 重试」时交给模型分析（产品要求）。
+         */
+        if (d && d.why) {
+          state.renWuZhongDuan = state.renWuZhongDuan || {};
+          const sid0 = String(d.sessionId || (ss[0] || ''));
+          if (sid0) state.renWuZhongDuan[sid0] = { why: String(d.why), error: String(d.error || '') };
+        }
         renderList();
       } catch { /* noop */ }
     });

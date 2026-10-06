@@ -481,7 +481,8 @@ body.liaoTianChuangKou .liaoTianBuJu {
 }
 /* 思考过程：可折叠，正文不抢气泡 */
 .siKaoKuai {
-  max-width: 70%; margin-bottom: 4px; font-size: 11px;
+  /* 与回复对话同宽（真机反馈：思考时内容太窄）—— 在 bubbleWrap 里就是与 .bubble 同宽 */
+  max-width: 100%; margin-bottom: 4px; font-size: 11px;
   border: 1px dashed var(--line); border-radius: 8px; padding: 2px 8px;
   color: var(--muted); background: color-mix(in srgb, var(--card) 70%, transparent);
 }
@@ -2629,6 +2630,8 @@ html { font-weight: var(--fw-ui, 400); }
 
 /* 思考级别图标：**空心描边**（.jinJiTrigger .ico 默认 fill: currentColor 会把它涂成实心黑） */
 .jinJiTrigger .ico.siKaoIco, .anNiuTuBiao .ico.siKaoIco { fill: none !important; stroke: currentColor; }
+/* 话筒图标：**中空描边**（真机反馈：要中空的） */
+.anNiuTuBiao .ico.hollowIco { fill: none !important; stroke: currentColor; }
 .siKaoBiaoQian { font-size: 11px; opacity: .75; margin-left: 2px; }
 
 /* 聊天气泡里的 Markdown 排版（模型回复基本都是 Markdown） */

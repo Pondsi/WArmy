@@ -48,15 +48,16 @@ check('思考级别触发器**去掉了箭头**', (() => {
   const kuai = html.slice(html.indexOf('id="siKaoTrigger"'), html.indexOf('class="siKaoKa'));
   return !/jinJiJianTou/.test(kuai);
 })(), 'think arrow gone');
-check('下拉菜单已去掉（三态切换不需要菜单）', !/id="jinJiCaiDan"/.test(html), 'menu removed');
+check('插入是**点开弹出三个选项**（紧急/插入/排队）', (() => {
+  const kuai = html.slice(html.indexOf('id="urgencyDd"'), html.indexOf('id="urgencyDd"') + 1600);
+  return /id="jinJiCaiDan"/.test(kuai) && ['P1', 'P2', 'P3'].every((u) => new RegExp('data-u="' + u + '"').test(kuai));
+})(), 'menu with 3 options');
 check('调整思考级别**不弹提示文字**（源码里没有那两条 toast）', !/model\.think\.followAgency/.test(appJs) && !/model\.think\.manualKept/.test(appJs), 'no toast');
 check('思考级别卡片里是**横向滑块**（range input）', /type="range"[^>]*id="siKaoHuaKuai"|id="siKaoHuaKuai"[^>]*type="range"/.test(html), 'siKaoHuaKuai');
-check('左端是灵机、右端是自然（data-i18n 顺序）', (() => {
-  const kuai = html.slice(html.indexOf('class="siKaoKaBiao"'), html.indexOf('class="siKaoKaBiao"') + 400);
-  const iOff = kuai.indexOf('model.think.off');
-  const iAuto = kuai.indexOf('model.think.auto');
-  return iOff > 0 && iAuto > 0 && iOff < iAuto;
-})(), 'label order');
+check('滑块下方只保留**当前级别**一个字（两边的固定标签已去掉）', (() => {
+  const kuai = html.slice(html.indexOf('class="siKaoKaBiao"'), html.indexOf('class="siKaoKaBiao"') + 300);
+  return /siKaoKaDang/.test(kuai) && !/model\.think\.off/.test(kuai) && !/model\.think\.auto/.test(kuai);
+})(), 'only current level');
 const css1 = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'app.css'), 'utf8');
 const css2 = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'renderer.css'), 'utf8');
 check('两份 CSS 都有"勾选后滑块变灰不可拖"的样式（且一致）', /\.siKaoHuaKuai:disabled\s*\{[^}]*grayscale/.test(css1) && /\.siKaoHuaKuai:disabled\s*\{[^}]*grayscale/.test(css2));
@@ -196,24 +197,29 @@ try {
     });
   })());
 
-  // ③ 插入图标 = 三态切换：点一下换一档（插话 → 排队）
-  const sanTai = await c.evaluate(`(function(){
+  // ③ 插入图标：点开菜单选档，图标跟着换（P2 插话 → P3 排队）
+  const sanTai = await c.evaluate(`(async function(){
     const dd = document.getElementById('urgencyDd');
     const b = document.getElementById('jinJiTrigger');
-    if (!dd || !b) return null;
+    const menu = document.getElementById('jinJiCaiDan');
+    if (!dd || !b || !menu) return null;
     const xian = () => {
       const on = [...dd.querySelectorAll('.chaRuIco')].filter((s) => !s.classList.contains('yinCang'));
       return on.map((s) => s.dataset.u).join(',');
     };
     const qian = xian();
-    b.click();
-    const hou = xian();
-    return { qian, hou, title: b.title || b.getAttribute('aria-label') || '', jiShu: dd.querySelectorAll('.chaRuIco').length };
+    b.click();                                  // 点开菜单
+    const kai = !menu.classList.contains('yinCang');
+    const xiang = menu.querySelector('button[data-u="P3"]');
+    if (xiang) xiang.click();                   // 选「排队」
+    await new Promise((r) => setTimeout(r, 200));
+    return { qian, kai, hou: xian(), title: b.title || b.getAttribute('aria-label') || '', jiShu: dd.querySelectorAll('.chaRuIco').length, caiDanXuan: [...menu.querySelectorAll('button[data-u]')].map((x) => x.dataset.u) };
   })()`);
-  console.log('  · 三态切换: ' + JSON.stringify(sanTai));
+  console.log('  · 插入菜单: ' + JSON.stringify(sanTai));
   check('插入按钮上是三个状态图标（不多不少）', !!(sanTai && sanTai.jiShu === 3), sanTai);
   check('默认档是插话(P2)', !!(sanTai && sanTai.qian === 'P2'), sanTai);
-  check('点一下就换档（P2 → P3 排队）', !!(sanTai && sanTai.hou === 'P3'), sanTai);
+  check('点开后菜单出现（三个选项）', !!(sanTai && sanTai.kai === true && sanTai.caiDanXuan.join(',') === 'P1,P2,P3'), sanTai);
+  check('选「排队」后图标跟着变（P2 → P3）', !!(sanTai && sanTai.hou === 'P3'), sanTai);
   check('当前档位写进 tooltip（不是文字塞在按钮里）', !!(sanTai && sanTai.title.length > 0), sanTai);
 } catch (e) {
   console.error('门禁异常: ' + ((e && e.stack) || e));
