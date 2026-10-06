@@ -40,7 +40,7 @@ export const XIEYI_GONGJU_ZHICHI: Record<GongYingXieYi, boolean> = {
   ollama: true,
 };
 
-export const MOREN_GONGJU_ZUIDA_LUN = 3;
+export const MOREN_GONGJU_ZUIDA_LUN = 12;
 /** 单条工具结果上限（字符）。与视图预算同量级，避免"取回原文"把上下文又撑成无界 */
 export const MOREN_GONGJU_JIEGUO_ZISHU = 4000;
 /** 一轮对话内所有工具结果的**总**预算（字符） */
@@ -127,7 +127,8 @@ export async function liaoTianDaiGongJu(
   const o = opts && typeof opts === 'object' ? opts : {};
   const tools = Array.isArray(Qiu.tools) ? Qiu.tools : [];
   const qingQiuGongJuJi = tools.length > 0;
-  const zuiDaLunShu = qianZhiZhengShu(o.zuiDaLunShu, 0, 8, MOREN_GONGJU_ZUIDA_LUN);
+  // 上限与设置里的 `contextToolMaxRounds` 对齐（原写死 8 ⇒ 用户设 12/32 被静默砍半）
+  const zuiDaLunShu = qianZhiZhengShu(o.zuiDaLunShu, 0, 32, MOREN_GONGJU_ZUIDA_LUN);
   const zuiDaJieGuoZiShu = qianZhiZhengShu(o.zuiDaJieGuoZiShu, 64, 20000, MOREN_GONGJU_JIEGUO_ZISHU);
   const zongYuSuan = qianZhiZhengShu(o.maxToolResultChars, 0, 200000, MOREN_GONGJU_ZONG_ZISHU);
   const zhiChi = typeof o.supportsTools === 'boolean' ? o.supportsTools : gongYingZhiChiGongJu(provider);
@@ -163,10 +164,22 @@ export async function liaoTianDaiGongJu(
   let jieGuoZiShu = 0;
   let tingZhiYuanYin: GongJuTingZhiYuan = 'stop';
   let last: LiaoTianXiangYing | null = null;
+  /**
+   * **每一轮模型的思考过程**（按轮顺序累积）。
+   *
+   * 真事故：界面流式显示的是"整轮对话所有轮次"的思考（主进程逐增量广播，
+   * 渲染层累加到一个缓冲里），而这里 `last = 最后一轮响应` 只带**最后一轮**的思考
+   * ⇒ 回复一落地，思考块从"很长"变成"很短"（用户一眼就看出丢了内容）。
+   * 落盘（聊天日志）与返回值都用累积后的思考，界面怎么看都一致。
+   */
+  const siKaoJi: string[] = [];
 
   const diaoYongMoXing = async (toolChoice: LiaoTianQingQiu['toolChoice']): Promise<LiaoTianXiangYing> => {
     qingQiuJi += 1;
-    return provider.chat({ ...Qiu, xiaoXiJi, tools, toolChoice }, o.signal);
+    const xiangYing = await provider.chat({ ...Qiu, xiaoXiJi, tools, toolChoice }, o.signal);
+    const siKao = String((xiangYing.choices?.[0]?.message as { reasoning?: unknown } | undefined)?.reasoning || '');
+    if (siKao) siKaoJi.push(siKao);
+    return xiangYing;
   };
 
   try {
@@ -269,8 +282,22 @@ export async function liaoTianDaiGongJu(
     },
   };
 
+  /**
+   * 把**所有轮次**的思考合并回最终响应（界面/日志/返回值三处一致）。
+   * 只有一轮时 `siKaoJi` 里就是那一轮本身，不会重复；某一轮没思考就跳过。
+   */
+  const zuiZhong: LiaoTianXiangYing = (() => {
+    const heBing = siKaoJi.filter(Boolean).join('\n\n');
+    const tou = huiTui.choices[0];
+    if (!heBing || !tou) return huiTui;
+    return {
+      ...huiTui,
+      choices: [{ ...tou, message: { ...tou.message, reasoning: heBing } }, ...huiTui.choices.slice(1)],
+    };
+  })();
+
   return {
-    xiangYingTi: huiTui,
+    xiangYingTi: zuiZhong,
     qingQiuJi,
     lunShu,
     gongJuDiaoYongJi,

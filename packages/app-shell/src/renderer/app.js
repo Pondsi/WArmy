@@ -221,12 +221,41 @@
     caiDan.style.left = left + 'px';
     caiDan.style.top = top + 'px';
   }
-  let __rafThrottle = false;
-  function raf(fn) {
-    if (__rafThrottle) return;
-    __rafThrottle = true;
-    requestAnimationFrame(() => { __rafThrottle = false; fn(); });
+  /**
+   * **同帧合并**（真事故修）：默认每个 tick 里**只有第一个** raf 调用会执行，
+   * 同一帧里排后面的那些被**静默丢掉** —— 主循环里 `renderAiQuestions` 永远排第二，
+   * 于是"决策卡的轮询发现"从来没跑过：主进程没广播的卡片既不显示、也不响。
+   * （同类受害者：`refreshCost`/`shuaxinZhixingqiji`/`refreshSessionBoard`/
+   *   `refreshMembers`/`checkLastError`/`renderProjectMemoryPanel`/`refreshJoinBadge`）
+   *
+   * 现在按帧**排队 + 全跑**：仍然"一个 tick 最多一帧"，但不再丢任何回调；
+   * 单个回调抛错也不影响同帧其它回调（以前一个抛错会把后面的全带下水）。
+   * 另外补一个**兜底定时器**：窗口被遮挡/最小化时 `requestAnimationFrame` 会被节流甚至停发，
+   * 队列要是一直没人喊醒就永远躺着 —— 这时用 setTimeout 把队列放出去。
+   */
+  let __rafDaiLie = null;
+  let __rafBaoXianJi = null;
+  function __rafFangChu() {
+    const pail = __rafDaiLie;
+    __rafDaiLie = null;
+    if (__rafBaoXianJi) { try { clearTimeout(__rafBaoXianJi); } catch { /* noop */ } __rafBaoXianJi = null; }
+    for (const f of (pail || [])) {
+      try { f(); } catch { /* 单个刷新失败不影响其它刷新 */ }
+    }
   }
+  function raf(fn) {
+    if (typeof fn !== 'function') return;
+    if (!__rafDaiLie) {
+      __rafDaiLie = [];
+      try { requestAnimationFrame(__rafFangChu); } catch { __rafFangChu(); return; }
+      // 隐藏窗口里 rAF 可能一直不回来：300ms 内没放出就自己放
+      __rafBaoXianJi = setTimeout(__rafFangChu, 300);
+    }
+    __rafDaiLie.push(fn);
+  }
+  window.__rafDaiLieChang = () => (__rafDaiLie ? __rafDaiLie.length : 0);
+  // 门禁用：直接验证"同一 tick 里排队的回调**全都跑**"（老实现只跑第一个）
+  window.__raf = raf;
   let __inputThrottle = 0;
   /**
    * 「供应商名 · 模型名」是界面展示用复合标签；发给 API 的必须是纯模型 id
@@ -765,12 +794,44 @@
    */
   let yinPinShangXiaWen = null;
   const jieMaHuanCun = {};
+  /**
+   * **播放诊断账本**（只给门禁与真机排查用，不打扰用户）：
+   * 记最近 20 次尝试的真实结果 —— 走的哪条通道、音频上下文状态、音量、成不成、失败原因。
+   *
+   * 为什么要它：本轮"首次决策卡没声音"在代码里看**每一处都像对的**
+   * （会响的函数都调了、音源也在），只有把"到底哪条通道、什么状态"记下来，
+   * 才能证明修好了，而不是又一次"看着像修好了"。
+   * 读法：控制台 `window.__yinXiaoZhenDuan` / `window.__yinXiaoZuiHou`。
+   */
+  const yinXiaoZhenDuan = [];
+  // 一开始就挂到 window 上：账本是空的也能读（否则"没记录"与"没有账本"分不清）
+  try { window.__yinXiaoZhenDuan = yinXiaoZhenDuan; } catch { /* noop */ }
+  function jiYinXiao(rec) {
+    try {
+      yinXiaoZhenDuan.push(Object.assign({ ts: Date.now() }, rec || {}));
+      if (yinXiaoZhenDuan.length > 20) yinXiaoZhenDuan.shift();
+      window.__yinXiaoZhenDuan = yinXiaoZhenDuan;
+      window.__yinXiaoZuiHou = yinXiaoZhenDuan[yinXiaoZhenDuan.length - 1];
+    } catch { /* 记账失败不影响播放 */ }
+  }
   function deDaoShangXiaWen() {
     try {
       if (!yinPinShangXiaWen) {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return null;
         yinPinShangXiaWen = new AC();
+        /**
+         * 上下文一变回 running 就把**欠着的那一声**补上。
+         * 只靠"用户手势"补播是不够的（用户可能一直不点，卡片就那么无声地跳出来了）；
+         * `statechange` 是系统告诉我们"现在能出声了"的**唯一权威信号**。
+         */
+        yinPinShangXiaWen.addEventListener?.('statechange', () => {
+          try {
+            if (yinPinShangXiaWen && yinPinShangXiaWen.state === 'running' && yinXiaoDaiBo) {
+              setTimeout(() => { void buBoChenJiYinXiao(); }, 60);
+            }
+          } catch { /* noop */ }
+        });
       }
       return yinPinShangXiaWen;
     } catch { return null; }
@@ -796,16 +857,31 @@
    * 因为那一次 play() 被策略拦掉后就再也没人重试）。
    */
   let yinXiaoDaiBo = null;
-  async function chuanBoYinXiao(kind) {
+  /** 失败后的**定时重试**：只等用户手势是不够的（用户可能一直不点） */
+  let yinXiaoChongShiJi = null;
+  function paiYinXiaoChongShi() {
+    if (yinXiaoChongShiJi) return;
+    yinXiaoChongShiJi = setTimeout(() => {
+      yinXiaoChongShiJi = null;
+      void buBoChenJiYinXiao();
+    }, 700);
+  }
+  async function chuanBoYinXiao(kind, laiYuan) {
+    const k = kind === 'request' ? 'request' : kind === 'error' ? 'error' : 'complete';
+    const jiao = { kind: k, laiYuan: String(laiYuan || '') };
     try {
-      const k = kind === 'request' ? 'request' : kind === 'error' ? 'error' : 'complete';
-      if (state.sound && state.sound[k] === false) return true;   // 该类别被关掉：不算失败
+      if (state.sound && state.sound[k] === false) {
+        jiYinXiao(Object.assign(jiao, { ok: true, lu: 'off', note: '该类别被用户关掉' }));
+        return true;   // 该类别被关掉：不算失败
+      }
       let u = yinXiaoHuanCun[k];
       if (!u) {
         const r = await window.warmy.yinXiaoQu?.({ kind: k });
         if (!r || !r.ok || !r.dataUrl) {
-          // 音源都取不到也要**记账待补播**：下一次手势时再试一次（否则第一次就彻底没声音）
+          // 音源都取不到也要**记账待补播**：下一次手势/重试时再试一次（否则第一次就彻底没声音）
           yinXiaoDaiBo = k;
+          jiYinXiao(Object.assign(jiao, { ok: false, lu: 'no-file', err: (r && r.error) || 'no-data-url' }));
+          paiYinXiaoChongShi();
           return false;
         }
         u = r.dataUrl;
@@ -821,19 +897,29 @@
         if (ctx) {
           if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
           const buf = await jieMaYinPin(u);
-          if (buf && ctx.state === 'running') {
+          const yinLiang = (state.soundVolume != null ? Number(state.soundVolume) : 0.9);
+          if (buf && ctx.state === 'running' && yinLiang > 0) {
             const yuanYin = ctx.createBufferSource();
             yuanYin.buffer = buf;
             const zengYi = ctx.createGain();
-            zengYi.gain.value = (state.soundVolume != null ? state.soundVolume : 0.9);
+            zengYi.gain.value = yinLiang;
             yuanYin.connect(zengYi);
             zengYi.connect(ctx.destination);
             yuanYin.start(0);
             yinXiaoDaiBo = null;
+            jiYinXiao(Object.assign(jiao, { ok: true, lu: 'audio-context', ctxState: ctx.state, gain: yinLiang, seconds: buf.duration }));
             return true;
           }
+          // 走到这里就是"主路没能出声"：把原因如实记下来（音量 0 与上下文挂起是两回事）
+          jiYinXiao(Object.assign(jiao, {
+            ok: false, lu: 'audio-context-skip', ctxState: ctx.state,
+            decoded: !!buf, gain: yinLiang,
+            note: !buf ? 'decode-failed' : (ctx.state !== 'running' ? 'ctx-not-running' : 'gain-0'),
+          }));
         }
-      } catch { /* 掉到下面的 HTMLAudioElement 兜底 */ }
+      } catch (e) {
+        jiYinXiao(Object.assign(jiao, { ok: false, lu: 'audio-context-throw', err: String((e && e.message) || e) }));
+      }
       /**
        * 兜底：**预加载的 Audio 元素**播（真事故：决定卡跳出来没音效，点完才响）。
        *
@@ -873,9 +959,15 @@
         } catch { /* 仍失败就如实返回 */ }
       }
       if (ok) yinXiaoDaiBo = null;
-      else yinXiaoDaiBo = k;   // 记下来，之后每次手势都补播
+      else { yinXiaoDaiBo = k; paiYinXiaoChongShi(); }   // 记下来：手势 + 定时都会补播
+      jiYinXiao(Object.assign(jiao, { ok, lu: 'html-audio', ctxState: (yinPinShangXiaWen && yinPinShangXiaWen.state) || 'none', gain: yuan.volume }));
       return ok;
-    } catch { return false; }
+    } catch (e) {
+      jiYinXiao(Object.assign(jiao, { ok: false, lu: 'throw', err: String((e && e.message) || e) }));
+      yinXiaoDaiBo = k;
+      paiYinXiaoChongShi();
+      return false;
+    }
   }
   window.__chuanBoYinXiao = chuanBoYinXiao;
   /**
@@ -912,6 +1004,32 @@
    * 见 chuanBoYinXiao 里的说明），并把三个提示音**预解码**成 AudioBuffer。
    */
   let yinYueJieSuo = false;
+  /**
+   * **预热**（三种提示音：取数据 → 解码成 AudioBuffer → 兜底的 Audio 元素也备好）。
+   *
+   * 真事故修：以前只在"第一次用户手势"里预热 ⇒ 若第一张决策卡在手势**之前**跳出来，
+   * 那一次播放既要等 IPC 取音源、又要现解码，一路都是"第一次"的冷路径。
+   * 现在**启动即预热**（Electron 里 AudioContext 无需手势就能 running），手势只当补充保险。
+   */
+  function yinXiaoYuRe() {
+    for (const k of ['request', 'complete', 'error']) {
+      try {
+        void window.warmy.yinXiaoQu?.({ kind: k }).then((r) => {
+          if (r && r.ok && r.dataUrl) {
+            yinXiaoHuanCun[k] = r.dataUrl;
+            void jieMaYinPin(r.dataUrl);
+            if (!yinXiaoYuan[k]) {
+              const el = new Audio(r.dataUrl);
+              el.preload = 'auto';
+              el.volume = state.soundVolume != null ? state.soundVolume : 0.9;
+              yinXiaoYuan[k] = el;
+            }
+          }
+        }).catch(() => { /* 取不到就走兜底/重试 */ });
+      } catch { /* noop */ }
+    }
+  }
+  window.__yinXiaoYuRe = yinXiaoYuRe;
   function jieSuoYinYue() {
     if (yinYueJieSuo) return;
     yinYueJieSuo = true;
@@ -926,28 +1044,26 @@
       a.volume = 0;
       void a.play().catch(() => { /* 播不出去也不要紧 */ });
     } catch { /* noop */ }
-    // ③ 三个提示音预取 + 预解码：之后第一次播就不用等
-    for (const k of ['request', 'complete', 'error']) {
-      try {
-        void window.warmy.yinXiaoQu?.({ kind: k }).then((r) => {
-          if (r && r.ok && r.dataUrl) {
-            yinXiaoHuanCun[k] = r.dataUrl;
-            // 预解码到 AudioBuffer（主路）
-            void jieMaYinPin(r.dataUrl);
-            // HTMLAudioElement 也备一份（兜底路）
-            const el = new Audio(r.dataUrl);
-            el.preload = 'auto';
-            el.volume = state.soundVolume != null ? state.soundVolume : 0.9;
-            yinXiaoYuan[k] = el;
-          }
-        });
-      } catch { /* noop */ }
-    }
+    // ③ 预热（启动时已做过一次，这里补齐"启动那一刻还没起好的")
+    yinXiaoYuRe();
     // ④ 补播刚才没播出去的
     setTimeout(() => { void buBoChenJiYinXiao(); }, 60);
   }
-  window.addEventListener('pointerdown', jieSuoYinYue, { once: true, capture: true });
-  window.addEventListener('keydown', jieSuoYinYue, { once: true, capture: true });
+  // 启动就预热：第一张决策卡不再走"冷路径"
+  setTimeout(() => { try { deDaoShangXiaWen(); yinXiaoYuRe(); } catch { /* noop */ } }, 400);
+  /**
+   * 手势保险：**不是 once** —— 万一第一下点击时上下文仍是 suspended，
+   * 后面任何一次点击/按键都继续尝试 resume（用户不需要知道这些）。
+   */
+  function yinXiaoShouShiBaoXian() {
+    try {
+      const ctx = deDaoShangXiaWen();
+      if (ctx && ctx.state === 'suspended') void ctx.resume().catch(() => {});
+    } catch { /* noop */ }
+    jieSuoYinYue();
+  }
+  window.addEventListener('pointerdown', yinXiaoShouShiBaoXian, { capture: true });
+  window.addEventListener('keydown', yinXiaoShouShiBaoXian, { capture: true });
   window.addEventListener('pointerdown', buBoChenJiYinXiao, { capture: true });
   window.addEventListener('keydown', buBoChenJiYinXiao, { capture: true });
   /**
@@ -958,7 +1074,7 @@
     const k = yinXiaoDaiBo;
     yinXiaoDaiBo = null;
     if (!k) return;
-    setTimeout(() => { void chuanBoYinXiao(k); }, 120);
+    setTimeout(() => { void chuanBoYinXiao(k, 'buBo'); }, 120);
   }
   window.__qingHuanCunYinXiao = () => { Object.keys(yinXiaoHuanCun).forEach((k) => delete yinXiaoHuanCun[k]); };
 
@@ -3231,18 +3347,49 @@
   // ── AI 决策选项卡（会话中）+ 项目 MEMORY 编辑 ──
   /** 已经为**哪些决策卡**响过提示音（按 id 记账；切页面/重画都不丢） */
   let yiJingXiangGuo = new Set();
-  /** 这一轮新出现的（还没播的）决策卡 id */
-  let xinZengJi = new Set();
+  /** 正在播的卡（防"广播"与"轮询"两条入口在同一瞬间各响一次 ⇒ 叠音） */
+  let zhengZaiXiang = new Set();
+  /**
+   * **卡片一出现就响一声** —— 两条入口（主进程广播 / 定时轮询）共用这一本账：
+   *   · 只认"还没响过的 id"，所以不会响两遍；
+   *   · 只有**真的播出去**才记账（播失败不记账），所以不会漏；
+   *   · 正在播的 id 先占位，避免同一张卡被两条入口同时触发。
+   *
+   * 真事故（第三次报修"首次出现的决策卡没有音效"）修的就是这里：
+   * 以前音效逻辑长在 `renderAiQuestions` **里面**，而那个函数开头
+   * `if (!host || !state.selectedChat) return` —— 只要**还没选中任何会话**
+   * （冷启动最常见），音效那一段根本执行不到：卡跳出来，一声不响。
+   * 现在音效与"卡片画不画得出来"**彻底解耦**：能不能画是 UI 的事，响不响是通知的事。
+   */
+  function xiangKaPianYin(ids, laiYuan) {
+    const xin = (ids || []).map((x) => String(x || '')).filter((id) => id && !yiJingXiangGuo.has(id) && !zhengZaiXiang.has(id));
+    if (!xin.length) return;
+    for (const id of xin) zhengZaiXiang.add(id);
+    void (async () => {
+      const ok = await chuanBoYinXiao('request', laiYuan || 'card');
+      for (const id of xin) zhengZaiXiang.delete(id);
+      if (ok) {
+        for (const id of xin) yiJingXiangGuo.add(id);
+        // 只记最近 500 个 id，避免长跑把内存撑大
+        if (yiJingXiangGuo.size > 500) yiJingXiangGuo = new Set([...yiJingXiangGuo].slice(-250));
+      } else if (laiYuan === 'broadcast') {
+        // 播失败如实提示（不假装响过）；失败不记账 ⇒ 下次轮询/手势继续补播
+        try { showToast(tOr('aiq.newCard', '有新的决策卡，请查看输入框上方')); } catch { /* noop */ }
+      }
+    })();
+  }
+  // 门禁用：卡片音效的唯一入口（广播与轮询都走它）
+  window.__xiangKaPianYin = xiangKaPianYin;
   function renderAiQuestions() {
     const host = $('aiqHost');
-    if (!host || !state.selectedChat) {
-      if (host) host.innerHTML = '';
-      return;
-    }
-    const qunId = state.selectedChat.id;
+    const qunId = state.selectedChat ? String(state.selectedChat.id || '') : '';
     void (async () => {
       try {
-        const r = await window.warmy.aiQuestionList?.(qunId);
+        /**
+         * ⚠️ 这里**不带会话过滤能拿到全部**（主进程 `LieBiao(undefined)` 返回所有）：
+         * 冷启动还没选中会话时也要能发现新卡并响一声 —— 这正是"首次出现的决策卡"那条路。
+         */
+        const r = await window.warmy.aiQuestionList?.(qunId || undefined);
         const rawItems = (r && r.items) || [];
         /**
          * **编号必须按时间正序**。
@@ -3252,27 +3399,13 @@
          */
         const items = [...rawItems].sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0));
         const pending = items.filter((q) => q.status === 'pending');
+        // ① 先处理音效（与能不能画出来无关）
+        xiangKaPianYin(pending.map((q) => q.id), 'render');
+        if (!host) return;
+        if (!qunId) { host.innerHTML = ''; return; }
         if (!pending.length) {
           host.innerHTML = '';
           return;
-        }
-        /**
-         * 卡片**真的画出来**时才播「请求」音（真事故：以前在事件回调里播，
-         * 被浏览器自动播放策略拦下 ⇒ 卡片跳出来没声，点完决定后才响）。
-         *
-         * **按 id 记账，且只有播成功才算响过**（真事故：旧实现"先记账再播"，
-         * 播失败也记上了 ⇒ `renderAiQuestions` 不再补播 ⇒ 首张卡永远没声音）。
-         * 失败不记账，交给下一次重绘/手势继续补播。
-         */
-        yiJingXiangGuo = yiJingXiangGuo || new Set();
-        const daiXiangDe = [];
-        for (const q of pending) {
-          const id = String(q.id);
-          if (!yiJingXiangGuo.has(id)) daiXiangDe.push(id);
-        }
-        // 只记最近 500 个 id，避免长跑把内存撑大
-        if (yiJingXiangGuo.size > 500) {
-          yiJingXiangGuo = new Set([...yiJingXiangGuo].slice(-250));
         }
         /**
          * X/N：**这一串决策里的第几个 / 一共几个**（含已答的，编号才稳定）。
@@ -3286,7 +3419,7 @@
           ).join(' ');
           const jiShu = zongShu > 1 ? '<span class="aiqJiShu">' + (qi + 1) + '/' + zongShu + '</span>' : '';
           return `<div class="aiqKa" data-qid="${escapeHtml(q.id)}">
-            <div class="aiqBiaoTi">${jiShu}${escapeHtml(t('aiq.biaoTi')||'')} · ${escapeHtml(q.title||'')}</div>
+            <div class="aiqBiaoTi">${jiShu}${escapeHtml(t('aiq.biaoTi')||'')}${(q.biaoTi || q.title) ? ' · ' + escapeHtml(String(q.biaoTi || q.title)) : ''}</div>
             ${q.ti ? `<div class="jingYin">${escapeHtml(q.ti)}</div>` : ''}
             <div class="aiqOpts">${opts}
               <button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__custom__">${escapeHtml(t('aiq.custom')||'Other')}</button>
@@ -3295,16 +3428,7 @@
               <button class="anNiuZhuYao" data-aiq-submit="${escapeHtml(q.id)}">${escapeHtml(t('aiq.submit')||'OK')}</button></div>
           </div>`;
         }).join('');
-        // 有待响的新卡：播一次；**播成功才记账**，失败留给下一次重绘/手势补播
-        if (daiXiangDe.length) {
-          void (async () => {
-            const ok = await chuanBoYinXiao('request');
-            if (ok) { for (const id of daiXiangDe) yiJingXiangGuo.add(id); }
-            else {
-              try { showToast(tOr('aiq.newCard', '有新的决策卡，请查看输入框上方')); } catch { /* noop */ }
-            }
-          })();
-        }
+        // 音效已在上面 `xiangKaPianYin` 里处理（与绘制解耦），这里不再重复播
         host.querySelectorAll('[data-aiq]').forEach((b) => {
           b.onclick = async () => {
             const id = b.getAttribute('data-aiq');
@@ -16274,33 +16398,12 @@
        * `if (!host || !state.selectedChat) return`：用户停在别的页/列表还没选中会话时，
        * 整段音效逻辑被跳过，等回到聊天页才补播（太晚，用户已经以为没声音）。
        * 现在：主进程一广播就按 id 记账并播一次；`renderAiQuestions` 里只在
-       * **还没记过账**的卡上补播，两边共用同一本账，不会响两遍。
+       * **还没记过账**的卡上补播，两边共用同一本账（`xiangKaPianYin`），不会响两遍也不会漏。
        */
       try {
-        const id = String((d && (d.id || d.question && d.question.id)) || '');
-        /**
-         * **只有真的播出去才算响过**（真事故：旧实现把 id 记进账本后再播，
-         * 播失败也"算响过" ⇒ `renderAiQuestions` 不再补播 ⇒ 首张卡永远没声音）。
-         * 现在：播放失败就不记账，交给下一次 `renderAiQuestions`/手势补播。
-         */
-        const bo = async () => {
-          const ok = await chuanBoYinXiao('request');
-          if (ok === false) {
-            try { showToast(tOr('aiq.newCard', '有新的决策卡，请查看输入框上方')); } catch { /* noop */ }
-            return false;
-          }
-          return true;
-        };
-        if (id) {
-          yiJingXiangGuo = yiJingXiangGuo || new Set();
-          if (!yiJingXiangGuo.has(id)) {
-            void bo().then((ok) => {
-              if (ok) yiJingXiangGuo.add(id);
-            });
-          }
-        } else {
-          void bo();
-        }
+        const id = String((d && (d.id || (d.question && d.question.id))) || '');
+        if (id) xiangKaPianYin([id], 'broadcast');
+        else void chuanBoYinXiao('request', 'broadcast-no-id');
       } catch { /* noop */ }
       try { void renderAiQuestions(); } catch { /* noop */ }
     });
@@ -16361,7 +16464,8 @@
     if (__loopTick % 4 === 0) raf(shuaxinZhixingqiji);
     if (__loopTick % 5 === 0) raf(() => { refreshSessionBoard(); refreshMembers(); });
     if (__loopTick % 6 === 0) raf(checkLastError);
-    if (__loopTick % 2 === 0) raf(renderAiQuestions);
+    // 决策卡：**不走 raf**（窗口被遮挡时 rAF 会停发，卡片就"既不显示也不响"）。
+    // 专用定时器 + 真实计时器（主窗口 backgroundThrottling=false）⇒ 后台也能发现新卡并响铃。
     if (__loopTick % 4 === 0) raf(renderProjectMemoryPanel);
     if (__loopTick % 8 === 0) raf(refreshJoinBadge);
     if (__loopTick % 15 === 0) raf(() => window.__saveState?.());
@@ -16380,6 +16484,12 @@
       })();
     }
   }, 5000);
+  /**
+   * 决策卡专用心跳（**与 rAF 无关**）：主进程广播可能因为渲染层刚起、窗口在后台、
+   * 或广播那一刻刚好没绑上监听而丢掉；轮询是最后一道保险。
+   * 用普通 `setInterval`（主窗口 `backgroundThrottling:false`）⇒ 后台也按时跑到。
+   */
+  setInterval(() => { try { void renderAiQuestions(); } catch { /* noop */ } }, 1200);
   const __mainLoop = true;
 
   (async () => {

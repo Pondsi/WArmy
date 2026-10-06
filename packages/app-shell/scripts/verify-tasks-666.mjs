@@ -18,6 +18,7 @@ const appCss = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/
 const renCss = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/renderer.css'), 'utf8');
 const idxHtml = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/index.html'), 'utf8');
 const setTs = fs.readFileSync(path.join(root, 'packages/app-shell/src/settings-store.ts'), 'utf8');
+const toolsTs = fs.readFileSync(path.join(root, 'packages/providers/src/tools.ts'), 'utf8');
 
 let pass = 0, fail = 0;
 const fails = [];
@@ -161,8 +162,26 @@ check('tool rounds migrated from 3', /contextToolMaxRounds: 12/.test(setTs) && /
 check('get_time tool', /get_time/.test(workTs) && /gongJuMing === 'get_time'/.test(emTs));
 check('wait_seconds tool', /wait_seconds/.test(workTs) && /gongJuMing === 'wait_seconds'/.test(emTs));
 check('time injected into prompt', /llm\.timeLine/.test(emTs));
-check('sound only marks on success', /if \(ok\) \{ for \(const id of daiXiangDe\)/.test(appJs));
+check('sound only marks on success', /if \(ok\) \{[\s\S]{0,90}yiJingXiangGuo\.add\(id\)/.test(appJs));
 check('sound AudioContext primary', /deDaoShangXiaWen/.test(appJs) && /createBufferSource/.test(appJs));
+// ── this round (v0.2.5) ──
+check('thinking merged across tool rounds', /const siKaoJi: string\[\] = \[\]/.test(toolsTs) && /siKaoJi\.filter\(Boolean\)\.join\('\\n\\n'\)/.test(toolsTs));
+check('stream deltas coalesced not dropped', /_boXingDai\.set\(sessionId, dai\)/.test(emTs));
+check('tool rounds not silently capped at 8', /qianZhiZhengShu\(o\.zuiDaLunShu, 0, 32/.test(toolsTs));
+check('raf batches instead of dropping', /__rafDaiLie\.push\(fn\)/.test(appJs) && !/__rafThrottle/.test(appJs));
+check('raf has hidden-window fallback timer', /__rafBaoXianJi = setTimeout\(__rafFangChu, 300\)/.test(appJs));
+check('decision card heartbeat independent of raf', /setInterval\(\(\) => \{ try \{ void renderAiQuestions\(\); \}/.test(appJs));
+check('card sound decoupled from rendering', /xiangKaPianYin\(pending\.map/.test(appJs));
+check('autoplay policy disabled (window + switch)', /autoplayPolicy: 'no-user-gesture-required'/.test(emTs) && /appendSwitch\('autoplay-policy'/.test(emTs));
+check('card title reads biaoTi', /q\.biaoTi \|\| q\.title/.test(appJs));
+// ── 预计完成时间（ETA）──
+const etaTs = fs.readFileSync(path.join(root, 'packages/app-shell/src/eta-forecast.ts'), 'utf8');
+check('eta ledger persists to userData/eta.json', /'eta\.json'/.test(emTs) && /anQuanYuanZiXieJson\(this\.jieDian/.test(etaTs));
+check('model must give an ETA each judgment', /"etaSeconds"/.test(emTs));
+check('prompt carries its own previous ETAs', /canKaoWenBen\(sessionId, qianMing\)/.test(emTs));
+check('3 consecutive overruns = anomaly', /chao\.yiChang/.test(emTs) && /CHAO_SHI_LIAN_XU_XIAN = 3/.test(etaTs));
+check('eta self-improves (calibration/percentiles)', /emaXiShu/.test(etaTs) && /p50Ms/.test(etaTs) && /mingZhongLv/.test(etaTs));
+check('eta task signature groups similar work', /export function renWuQianMing/.test(etaTs));
 
 console.log('==== verify-tasks-666: ' + pass + ' ok / ' + fail + ' FAIL ====');
 if (fails.length) {

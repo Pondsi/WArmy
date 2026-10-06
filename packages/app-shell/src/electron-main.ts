@@ -36,6 +36,7 @@ import {
 } from '@warmy/providers';
 import { CcrGateway } from '@warmy/ccr-compressor';
 import { KnowledgeBase } from '@warmy/knowledge-base';
+import { EtaZhangBen, shuoShiChang, renWuQianMing, jiaEtaMiao, CHAO_SHI_LIAN_XU_XIAN, type EtaYuCe } from './eta-forecast.js';
 import { JianChaDianCang } from './checkpoint.js';
 import { ShenJiRiZhi } from './audit.js';
 import { AnQuanMiyaoCang } from './secure-keys.js';
@@ -1051,20 +1052,48 @@ function baoZhuangLiuShi(
   } as MoxingGongYing;
 }
 
-/** 本轮「思考/正文」增量广播给界面（思考过程边出边显示）。**限频 ≤20/s**，免得刷爆渲染层。 */
+/**
+ * 本轮「思考/正文」增量广播给界面（思考过程边出边显示）。**限频 ≤20/s**，免得刷爆渲染层。
+ *
+ * ⚠️ 限频必须是「**攒着 + 尾随**」，不能是「丢掉」（真事故：以前密集到 50ms 内的增量直接
+ * `return` ⇒ 流式里的思考有洞，看着比真实内容少；而正式回复落地后显示的又是完整内容，
+ * 两边对不上）。现在超出频次的增量被合进待发缓冲，60ms 内一定补发出去。
+ */
 let _boXingShangCi = 0;
-function boXingPianDuan(sessionId: string, p: { reasoning?: string; content?: string }) {
-  const now = Date.now();
-  if (now - _boXingShangCi < 50) return;
-  _boXingShangCi = now;
+const _boXingDai = new Map<string, { reasoning: string; content: string }>();
+let _boXingDingShi: ReturnType<typeof setTimeout> | null = null;
+function _boXingSong(sessionId: string, d: { reasoning: string; content: string }, ts: number) {
+  if (!d.reasoning && !d.content) return;
   try {
     broadcastToWindows('warmy:suiXingPianDuan', {
       sessionId,
-      reasoning: p.reasoning || '',
-      content: p.content || '',
-      ts: now,
+      reasoning: d.reasoning || '',
+      content: d.content || '',
+      ts,
     });
   } catch { /* noop */ }
+}
+function boXingPianDuan(sessionId: string, p: { reasoning?: string; content?: string }) {
+  const now = Date.now();
+  const dai = _boXingDai.get(sessionId) || { reasoning: '', content: '' };
+  dai.reasoning += p.reasoning || '';
+  dai.content += p.content || '';
+  _boXingDai.set(sessionId, dai);
+  if (now - _boXingShangCi >= 50) {
+    _boXingShangCi = now;
+    _boXingDai.delete(sessionId);
+    _boXingSong(sessionId, dai, now);
+    return;
+  }
+  if (!_boXingDingShi) {
+    _boXingDingShi = setTimeout(() => {
+      _boXingDingShi = null;
+      _boXingShangCi = Date.now();
+      const pail = [..._boXingDai.entries()];
+      _boXingDai.clear();
+      for (const [sid, d] of pail) _boXingSong(sid, d, Date.now());
+    }, 60);
+  }
 }
 
 async function yunXingLiaoTianXunHuan(
@@ -2604,6 +2633,8 @@ function chuangjianChuangkou() {
       sandbox: true,
       backgroundThrottling: false,
       spellcheck: false,
+      // 提示音（决策卡"叮"一声）不受用户手势限制：见 app.setName 附近的说明
+      autoplayPolicy: 'no-user-gesture-required',
     },
     icon: tuBiaoLuJing,
   });
@@ -2771,6 +2802,19 @@ app.setName('无限牛马');
 if (process.platform === 'win32') app.setAppUserModelId('com.pondsi.warmy');
 
 /**
+ * **提示音不许被自动播放策略拦掉**（真事故：首次出现的决策卡没声音）。
+ *
+ * Chromium 的自动播放策略会让"没有用户手势"时创建的 `AudioContext` 停在 `suspended`，
+ * 只有等到用户点一下才肯出声 —— 而**决策卡恰恰是"AI 主动跳出来"的**
+ * （用户可能只按了回车、或根本没碰窗口），于是卡片一声不响，点完才有音。
+ *
+ * 这是桌面应用，不是网页：不存在"广告自动爆音"的场景，用户已经主动装了这个程序。
+ * 所以显式关掉用户手势要求（`webPreferences.autoplayPolicy` 也同步设一遍，
+ * 因为窗口级设置优先于命令行开关）—— 让"卡一跳出来就响"成为**确定性行为**。
+ */
+try { app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required'); } catch { /* noop */ }
+
+/**
  * 单实例（产品定稿）：**禁止多开**。
  * 重复启动不会新开进程/托盘，只把已运行主窗口**移到屏幕中央并获得焦点**。
  */
@@ -2869,6 +2913,8 @@ app.on('before-quit', () => {
   try {
     luoPanLuYouQiDuiLie();
   } catch { /* ignore */ }
+  // 预计完成时间账本是"越用越准"的资产：退出前把节流里那次也落下去
+  try { etaZhangBen?.baCun(); } catch { /* ignore */ }
   void (async () => {
     try {
       await memory?.stop();
@@ -3949,7 +3995,19 @@ async function zhenZhengFaSong(
 ): Promise<{ ok: boolean; reply: string; [k: string]: unknown }> {
     const sessionId = xiaoXi.sessionId;
     // 新的一轮**用户**消息 ⇒ 自动继续计数清零（自动续派的那几轮自己带计数，不清）
-    if (!String(xiaoXi.content || '').startsWith('【继续执行计划】') && !String(xiaoXi.content || '').startsWith('【继续执行】')) yanXuZhuangTai.delete(sessionId);
+    if (!String(xiaoXi.content || '').startsWith('【继续执行计划】') && !String(xiaoXi.content || '').startsWith('【继续执行】')) {
+      yanXuZhuangTai.delete(sessionId);
+      /**
+       * 用户**自己说话了** ⇒ 上一轮自动任务到此为止。
+       * 这种收尾也可能是"任务其实做完了"⇒ 把预测/实际作为样本学掉（经验留住），
+       * 然后清掉这轮的当下状态。
+       */
+      try {
+        const h = etaCang().huiHua(sessionId);
+        if (h && h.shangCi) etaCang().xueXi(sessionId, { shiJiMs: Date.now() - h.kaiShi });
+        etaCang().jieShuLun(sessionId);
+      } catch { /* 学习失败不影响这一轮对话 */ }
+    }
     if (xiaoXi.insertMode) insertMode.set(sessionId, xiaoXi.insertMode);
 
     /**
@@ -4452,6 +4510,28 @@ const YANXU_YUJING_SHIJIAN_MS = 20 * 60 * 1000;      // 首次时间预警：20 
 const KASI_PAN_CHAOSHI_MS = 90 * 1000;               // 单次卡死分析超时：90 秒
 const KASI_CHANGSHI = 5;                             // 分析最多换 5 个模型
 
+/**
+ * **预计完成时间账本**（持久化在 `userData/eta.json`）。
+ *
+ * 产品要求：模型每次判完"是否卡死"都要给一个预计完成时间；同一轮多次判断时参考
+ * **它自己之前写的**；连续 3 次超出就按异常处理；而且这份数据**越用越准**
+ * （按任务签名聚类的经验：中位数/90 分位/偏移系数/命中率）。
+ * 它**原本是空的** —— 第一次跑全靠模型自己估，真实跑完的轮次才让它长出经验。
+ */
+let etaZhangBen: EtaZhangBen | null = null;
+function etaWenJian(): string {
+  try { return path.join(app.getPath('userData'), 'eta.json'); } catch { return ''; }
+}
+export function etaCang(): EtaZhangBen {
+  if (!etaZhangBen) etaZhangBen = new EtaZhangBen(etaWenJian());
+  return etaZhangBen;
+}
+/** 本轮任务的**签名**（预测经验按它聚类；只用与工作量相关的稳定特征） */
+function benLunQianMing(sessionId: string, zhiShuoBuZuo: boolean, moXing?: string): string {
+  const bu = (jiHuaRenWuJi.get(sessionId) || []).length;
+  return renWuQianMing({ buShu: bu, gongJuMing: benLunGongJuMing, zhiShuoBuZuo, moXing });
+}
+
 interface YanXuZhuangTai {
   yanXu: number;          // 已经自动继续了几次
   ciYuJing: number;       // 次数预警点（每次判「没卡死」就翻倍）
@@ -4501,19 +4581,47 @@ function yingGaiZiDongJiXu(
 }
 
 /**
- * **判卡死**：请模型看一眼"这活儿是不是卡住了"。
+ * **判卡死 + 要一个预计完成时间**。
  * 选模型顺序：正在干活的那个 → 云模型（有 Key 的非 ollama）→ 本地模型（ollama）。
  * 每个模型给 `KASI_PAN_CHAOSHI_MS`；**无响应不马上认定卡死**，换下一个；5 次都失败才算没响应。
+ *
+ * 预计完成时间（ETA）：
+ *   · 提问里带上**它自己本轮写过的历次预测**（含"超了没"）、同类任务的经验统计、
+ *     以及本轮已经跑了多久 —— 让它能自我修正（越写越准）；
+ *   · 模型没给 / 给得不合法时不硬编：退到统计推算（标注 `history`/`default`），
+ *     并如实告诉用户这个数不是模型给的。
  */
 async function panDuanKaSi(
   sessionId: string,
   dangQianMoXing: string,
   jieDuan: string,
-): Promise<{ stalled: boolean; by: string; reason: string }> {
+  qianMing: string,
+): Promise<{ stalled: boolean; by: string; reason: string; eta: EtaYuCe | null; etaRaw: number | null; etaJiShi: string }> {
   const bu = jiHuaRenWuJi.get(sessionId) || [];
   const qingDan = bu.length ? bu.map((x) => `${x.id} ${x.title} [${x.status}]`).join('\n') : '（没有显式计划）';
   const jinJi = (chatLogs.get(sessionId) || []).slice(-8).map((e) => `${e.role}: ${String(e.content || '').slice(0, 160)}`).join('\n');
-  const wen = `这是一个正在自动执行的任务。现在触发了**预警**（${jieDuan}）。\n\n【最近对话】\n${jinJi}\n\n【计划】\n${qingDan}\n\n请判断这个任务是否**卡死/在原地打转**（比如反复说同样的话、反复失败、明显没有进展）。\n只输出 JSON：{"stalled":true|false,"reason":"一句话理由"}`;
+  /** 它自己写的历次预计完成时间 + 同类任务经验（"参考自己之前写的"这条要求的落点） */
+  const canKao = etaCang().canKaoWenBen(sessionId, qianMing);
+  const yiYong = (() => {
+    const h = etaCang().huiHua(sessionId);
+    return h ? shuoShiChang(Date.now() - h.kaiShi) : shuoShiChang(0);
+  })();
+  const wen = `这是一个正在自动执行的任务。现在触发了**预警**（${jieDuan}）。
+
+【本轮已经跑了】${yiYong}
+
+【最近对话】
+${jinJi}
+
+【计划】
+${qingDan}
+
+${canKao}
+
+请判断这个任务是否**卡死/在原地打转**（比如反复说同样的话、反复失败、明显没有进展），
+并给出你**预计还需多久能完成**（预计完成时间）。
+
+只输出 JSON：{"stalled":true|false,"reason":"一句话理由","etaSeconds":数字（预计还需多少秒完成；给偏保守的值）,"etaBasis":"一句话依据（你凭什么这么估）"}`;
 
   // 候选模型：干活的那个 → 云 → 本地
   const sm = (settingsStore?.load() as { providers?: Array<{ id?: string; protocol?: string; models?: unknown[] }> } | undefined)?.providers || [];
@@ -4538,15 +4646,33 @@ async function panDuanKaSi(
       if (!an || (!an.apiKey && an.protocol !== 'ollama')) continue;
       const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL || undefined, protocol: an.protocol } as never, an.protocol);
       const r = await Promise.race([
-        p.chat({ model: mo, xiaoXiJi: [{ role: 'user', content: wen }], maxTokens: 128 }),
+        p.chat({ model: mo, xiaoXiJi: [{ role: 'user', content: wen }], maxTokens: 240 }),
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error('analysis-timeout')), KASI_PAN_CHAOSHI_MS)),
       ]);
       const txt = neiRongWenBen((r as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message?.content) || '';
       const m = txt.match(/"stalled"\s*:\s*(true|false)/i);
       const rr = txt.match(/"reason"\s*:\s*"([^"]*)"/i);
+      const ye = txt.match(/"etaSeconds"\s*:\s*"?([0-9]+(?:\.[0-9]+)?)"?/i);
+      const yb = txt.match(/"etaBasis"\s*:\s*"([^"]*)"/i);
       if (m) {
-        audit?.log('plan.stall-analysis', { sessionId, by: mo, stalled: String(m[1]).toLowerCase() === 'true', attempt: changGuo.length });
-        return { stalled: String(m[1]).toLowerCase() === 'true', by: mo, reason: rr ? String(rr[1]) : '' };
+        const stalled = String(m[1]).toLowerCase() === 'true';
+        const etaMs = ye ? jiaEtaMiao(ye[1]) : null;
+        audit?.log('plan.stall-analysis', {
+          sessionId, by: mo, stalled, attempt: changGuo.length,
+          /** 只记结构化事实：给了多久、有没有给 —— 不记正文 */
+          etaSeconds: etaMs === null ? null : Math.round(etaMs / 1000),
+          etaGiven: etaMs !== null,
+        });
+        return {
+          stalled,
+          by: mo,
+          reason: rr ? String(rr[1]) : '',
+          etaRaw: etaMs,
+          etaJiShi: yb ? String(yb[1]).slice(0, 200) : '',
+          eta: etaMs === null
+            ? null
+            : etaCang().jiYuCe(sessionId, { etaMs, genJu: (yb ? String(yb[1]) : '').slice(0, 200), laiYuan: 'model', moXing: mo }),
+        };
       }
       // 给出了回应但没按格式 ⇒ 视为"没给出结论" ⇒ 换下一个模型继续试
       audit?.log('plan.stall-analysis-badreply', { sessionId, by: mo });
@@ -4555,26 +4681,86 @@ async function panDuanKaSi(
     }
   }
   // 5 次都没给出结论 ⇒ 当异常处理
-  return { stalled: true, by: '', reason: `no-conclusion（试过 ${changGuo.length} 个模型都没给出结论）` };
+  return { stalled: true, by: '', reason: `no-conclusion（试过 ${changGuo.length} 个模型都没给出结论）`, eta: null, etaRaw: null, etaJiShi: '' };
+}
+
+/**
+ * 模型**没给**预计完成时间（或给得不合法）时的兜底：拿统计推算，并如实标注来源。
+ * 绝不用"编一个数字冒充模型给的" —— `laiYuan` 会写进持久账本，用户/排查看得见。
+ */
+function yuceTuSuan(sessionId: string, qianMing: string): EtaYuCe {
+  const cang = etaCang();
+  const jing = cang.jingYan(qianMing);
+  if (jing && jing.p90Ms > 0) {
+    return cang.jiYuCe(sessionId, { etaMs: jing.p90Ms, genJu: `同类任务 90 分位（${jing.yangBen} 次记录）`, laiYuan: 'history' });
+  }
+  // 连同类经验都没有 ⇒ 用默认档（10 分钟），同样如实标注
+  return cang.jiYuCe(sessionId, { etaMs: 10 * 60 * 1000, genJu: '没有历史经验，取保守默认档', laiYuan: 'default' });
 }
 
 async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhenZhengFaSong>[1], shangLun?: { diaoYongJi?: number; huiFu?: string }): Promise<void> {
   try {
     const pan = yingGaiZiDongJiXu(sessionId, xiaoXi as { content?: string }, shangLun);
-    if (!pan.jiXu) { yanXuZhuangTai.delete(sessionId); return; }
+    if (!pan.jiXu) {
+      /**
+       * 这一轮**真的收尾了**（没有下一步可接着做）⇒ 唯一的学习时机：
+       * 把"最后一次预计完成时间 vs 实际总耗时"作为一个样本写回持久账本，
+       * 同类任务的下一次预测就有了自己的历史（越用越准）。
+       */
+      try {
+        const h = etaCang().huiHua(sessionId);
+        if (h && h.shangCi) {
+          const xue = etaCang().xueXi(sessionId, { shiJiMs: Date.now() - h.kaiShi });
+          if (xue.xueLe) {
+            audit?.log('plan.eta-learn', { sessionId, qianMing: xue.qianMing, shiJiMs: xue.shiJiMs, mingZhong: xue.mingZhong });
+          }
+        }
+      } catch { /* 学习失败不影响收尾 */ }
+      etaCang().jieShuLun(sessionId);
+      yanXuZhuangTai.delete(sessionId);
+      return;
+    }
     const tai = yanXuTai(sessionId);
     const yongShi = Date.now() - tai.kaiShi;
 
     /**
      * **预警点**：到了就请模型判一次，而不是直接停。
-     * 判「没卡死」⇒ 预警点翻倍，继续；否则当异常处理。
+     * 判「没卡死」⇒ 预警点加一档，继续；否则当异常处理。
+     *
+     * 另外两件事（产品要求）：
+     *   · 每次判断都要有一个**预计完成时间**（模型给；它没给就按同类经验推算并如实标注）；
+     *   · **连续 3 次超出模型自己预计的完成时间** ⇒ 当异常处理（不必再问模型）。
      */
     if (tai.yanXu + 1 >= tai.ciYuJing || yongShi >= tai.shiJianYuJing) {
       const jieDuan = tai.yanXu + 1 >= tai.ciYuJing
         ? `已自动继续 ${tai.yanXu} 次（预警点 ${tai.ciYuJing} 次）`
         : `已连续工作 ${Math.round(yongShi / 60000)} 分钟（预警点 ${Math.round(tai.shiJianYuJing / 60000)} 分钟）`;
       const dangQian = String((xiaoXi as { model?: string }).model || providerCfg.model || '');
-      const jie = await panDuanKaSi(sessionId, dangQian, jieDuan);
+      const qianMing = benLunQianMing(sessionId, pan.liYou === 'talk-only', dangQian);
+      etaCang().kaiShiLun(sessionId, Date.now(), qianMing);
+      // ① 先对"它上一次写的预计完成时间"结账
+      const chao = etaCang().panChaoShi(sessionId);
+      if (chao.yiChang) {
+        const yu = chao.shangCi;
+        zhuiJiaLiaoTianRiZhi(sessionId, {
+          seq: xiaYiLiaoTianXuLie(),
+          role: 'assistant',
+          content: tMain('llm.etaAnomaly', '⚠️ 【已停下 · 按异常处理】同一轮任务已连续 {n} 次超过模型自己给出的预计完成时间（上次它预计还需 {eta}，实际又跑了 {over}）。建议看一眼进度再决定是否继续。')
+            .replace('{n}', String(chao.lianXu))
+            .replace('{eta}', shuoShiChang(yu?.etaMs || 0))
+            .replace('{over}', shuoShiChang(yu ? Math.max(0, Date.now() - yu.jieZhiMs) : 0)),
+          ts: Date.now(),
+        });
+        fachuKongzhitai({
+          cat: 'error', code: 'err.plan-eta-anomaly',
+          data: { sessionId, lianXu: chao.lianXu, etaMs: yu?.etaMs || 0, qianMing },
+        });
+        audit?.log('plan.eta-anomaly', { sessionId, lianXu: chao.lianXu, etaMs: yu?.etaMs || 0, qianMing });
+        etaCang().jieShuLun(sessionId);   // 异常中止的轮次**不进学习样本**（时长不是"完成时间"）
+        yanXuZhuangTai.delete(sessionId);
+        return;
+      }
+      const jie = await panDuanKaSi(sessionId, dangQian, jieDuan, qianMing);
       if (jie.stalled) {
         zhuiJiaLiaoTianRiZhi(sessionId, {
           seq: xiaYiLiaoTianXuLie(),
@@ -4584,20 +4770,34 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
           ts: Date.now(),
         });
         fachuKongzhitai({ cat: 'error', code: 'err.plan-stalled', data: { sessionId, why: jieDuan, reason: jie.reason } });
+        etaCang().jieShuLun(sessionId);
         yanXuZhuangTai.delete(sessionId);
         return;
       }
+      /**
+       * ② 这一轮的预计完成时间：模型给了就用它的；它没给（或给得不合法）⇒ 按同类经验推算，
+       *    并如实标注来源（`laiYuan`）——不编一个数字冒充模型给的。
+       */
+      const yu = jie.eta ?? yuceTuSuan(sessionId, qianMing);
       // 没卡死 ⇒ 预警点**固定加一档**（不是翻倍：翻倍会让后面越等越久）
       tai.ciYuJing += YANXU_YUJING_CI;
       tai.shiJianYuJing += YANXU_YUJING_SHIJIAN_MS;
       tai.kaiShi = Date.now();
-      audit?.log('plan.warning-raised', { sessionId, ciYuJing: tai.ciYuJing, shiJianYuJingMin: Math.round(tai.shiJianYuJing / 60000), by: jie.by });
+      audit?.log('plan.warning-raised', {
+        sessionId, ciYuJing: tai.ciYuJing, shiJianYuJingMin: Math.round(tai.shiJianYuJing / 60000), by: jie.by,
+        etaSec: Math.round(yu.etaMs / 1000), etaLaiYuan: yu.laiYuan, lianXuChaoShi: chao.lianXu,
+      });
       zhuiJiaLiaoTianRiZhi(sessionId, {
         seq: xiaYiLiaoTianXuLie(),
         role: 'assistant',
-        content: tMain('llm.stallOk', '（已到预警点，模型判断"没卡死"，继续执行；预警点已放宽。）'),
-        ts: Date.now(),
         system: true,
+        content: (chao.lianXu > 0
+          ? tMain('llm.stallEtaOver', '（模型上次预计的完成时间已超出 {n} 次，按它新给的预计继续：还需 {eta}。）')
+            .replace('{n}', String(chao.lianXu)).replace('{eta}', shuoShiChang(yu.etaMs))
+          : tMain('llm.stallEtaOk', '（已到预警点，模型判断"没卡死"，继续执行；它预计还需 {eta} 完成。预警点已放宽。）')
+            .replace('{eta}', shuoShiChang(yu.etaMs)))
+          + (yu.laiYuan === 'model' ? '' : `（该预计值不是模型给的：${yu.genJu}）`),
+        ts: Date.now(),
       });
     }
 
@@ -4628,6 +4828,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
         content: tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）') + '\n' + String((r && (r as { error?: string }).error) || ''),
         ts: Date.now(),
       });
+      etaCang().jieShuLun(sessionId);   // 出错中止：不当作"完成"，不进学习样本
       return;
     }
     // 递归接着派（判据会在每轮重新算）
@@ -4635,6 +4836,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
     await yanXuJiHuaRenWu(sessionId, xiaoXi, { diaoYongJi: xiaLun.diaoYongJi, huiFu: String((r as { reply?: string }).reply || '') });
   } catch (e) {
     audit?.log('plan.auto-continue-fail', { sessionId, error: xiJingCuoWu(e).slice(0, 160) });
+    try { etaCang().jieShuLun(sessionId); } catch { /* noop */ }
     yanXuZhuangTai.delete(sessionId);
   }
 }
@@ -9576,6 +9778,8 @@ chuliIpc('warmy:daKaiLiaoTianChuangKou', (_e, payload: { id: string; biaoTi?: st
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
+        // 独立会话窗也要能播提示音（决策卡可能出现"没选中会话"的那一侧）
+        autoplayPolicy: 'no-user-gesture-required',
       },
     });
     try { if (!winTubiao.isEmpty()) w.setIcon(winTubiao); } catch { /* noop */ }

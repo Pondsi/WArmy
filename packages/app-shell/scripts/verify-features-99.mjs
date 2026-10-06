@@ -83,7 +83,14 @@ check('真实调用 fenLeiPanDing', /fenLeiPanDing/.test(emTs));
 
 console.log('\n[9] 决策卡');
 check('按 id 记账只响一次', /yiJingXiangGuo/.test(appJs));
-check('创建那一刻就播音', /onAiWenTi/.test(appJs) && /chuanBoYinXiao\('request'\)/.test(appJs));
+check('创建那一刻就播音（广播入口）', /onAiWenTi/.test(appJs) && /xiangKaPianYin\(\[id\], 'broadcast'\)/.test(appJs));
+check('只有真播出去才记账', /if \(ok\) \{[\s\S]{0,90}yiJingXiangGuo\.add\(id\)/.test(appJs));
+check('音效与"卡片画得出来"解耦（没选中会话也照响）', (() => {
+  const iYin = appJs.indexOf('xiangKaPianYin(pending.map');
+  const iTui = appJs.indexOf("if (!qunId) { host.innerHTML = ''; return; }");
+  return iYin > 0 && iTui > 0 && iYin < iTui;
+})());
+check('决策卡标题读 biaoTi（以前读不存在的 q.title ⇒ 永远空白）', /q\.biaoTi \|\| q\.title/.test(appJs));
 check('X/N 按时间正序', /createdAt\) \|\| 0\) - \(Number\(b\.createdAt/.test(appJs));
 check('徽章 CSS', /\.aiqJiShu/.test(css));
 
