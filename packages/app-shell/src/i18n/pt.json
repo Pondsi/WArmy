@@ -1200,7 +1200,7 @@
   "placeholder.groupNameExt": "External group",
   "placeholder.nodeName": "Node name",
   "placeholder.peerHost": "IP or public host",
-  "plugin.memory.desc": "Memory boost: CJK FTS, tool-result dedup, hybrid vector+FTS5, cross-session core memory.",
+  "plugin.memory.desc": "Reforço de memória da comunidade dsh (serve o próprio runtime dsh): busca com tokenização CJK, dedup de resultados de ferramentas, híbrido vector+FTS5, memória central entre sessões. Camada distinta do sistema de memória do WArmy, sem conflito: não escreve fast-memory.jsonl nem assume o registro de diálogo dos workhorses.",
   "plugin.teams.desc": "Multi-agent team orchestration driven by natural language.",
   "preview.settingsNotice": "Preview only: these changes are not saved and do not sync to the desktop.",
   "projectFiles.changedTitle": "Recently changed files",
@@ -2094,7 +2094,7 @@
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
   "wo.belief": "Regras",
-  "wo.beliefHint": "Este prompt é enviado a cada workhorse e fica **logo abaixo do Dao**: vence outras instruções (o Dao vence ele). Guardado em agents.md.",
+  "wo.beliefHint": "Este recurso existe apenas para compatibilidade com o arquivo agents.md.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2212,5 +2212,7 @@
   "wo.dao": "Dao",
   "wo.daoHint": "O prompt de prioridade máxima global: enviado a cada workhorse, **acima de «Regras» e de qualquer outra instrução**; em caso de conflito, este vence. Guardado em dao.md.",
   "wo.daoPlaceholder": "p. ex.: vença primeiro, depois lute; une saber e agir; relate incertezas com honestidade; sirva à humanidade e nunca faça o mal…",
-  "chat.resumeTaskFrom": "(interrompido em: {jieDuan})"
+  "chat.resumeTaskFrom": "(interrompido em: {jieDuan})",
+  "plugin.warmyMemory.desc": "Sistema de memória do WArmy (ativado por padrão): log JSONL só de anexão como única fonte de verdade + projeção SQLite/vetor + ferramentas recall/retrieve + base de conhecimento knowledge_query/add. Camada distinta do dsh-memory-bundle (esse serve o runtime dsh; este serve o diálogo dos workhorses e o conhecimento).",
+  "plugin.warmyMemory.provider": "Por WArmy (integrado)"
 }

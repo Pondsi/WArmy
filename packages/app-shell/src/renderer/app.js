@@ -102,6 +102,13 @@
         enabled: true,
         desc: 'plugin.memory.desc',
       },
+      {
+        id: 'warmy-memory',
+        ming: 'warmy-memory-system',
+        enabled: true,
+        desc: 'plugin.warmyMemory.desc',
+        source: 'builtin',
+      },
     ],
     providers: PROVIDER_DEFAULTS.map((p) => ({ ...p, models: [] })),
     /** 当前**生效**供应商 id（聊天真正用谁）；编辑其它供应商绝不劫持它 */
@@ -2606,6 +2613,15 @@
      */
     const yuanYou = window.__msgs[chatId];
     const shangYiTiao = yuanYou[yuanYou.length - 1];
+    /**
+     * **只有标点的回复一律不显示**（真机反馈：回答完下面多出一个单独的「。」）。
+     * 主进程已拦过一次，但群聊/续派/本地回显等入口各有各的路径 ⇒ 这里再拦一道兜底，
+     * 任何入口进来的纯标点都不进窗口、不写日志。
+     */
+    if (role !== 'wo' && !(opts && opts.system) && text && !youShiZhiWenBen(text)) {
+      try { window.__biaoDianLanJie = (window.__biaoDianLanJie || 0) + 1; } catch { /* noop */ }
+      return;
+    }
     if (!(shangYiTiao && shangYiTiao.role === role && shangYiTiao.text === text)) {
       yuanYou.push({ role, text, ts: Date.now(), reasoning: (opts && opts.reasoning) || '', system: !!(opts && opts.system), moXing: (opts && opts.moXing) || '' });
       // 正式回复到了 ⇒ 收掉流式"正在进行"的气泡（里面的思考块随之折叠）
@@ -3616,6 +3632,17 @@
       heZi.innerHTML = '';
       return;
     }
+    /**
+     * **只有项目聊天**才显示（产品定稿）：「我的牛马」单聊、联系人、外部群一律不显示。
+     * 判据：会话 `kind === 'internal'`（与「项目状态」卡同一口径）。
+     * 以前只看 `quXiangMuTai`，而它的 host 兜底会把非项目会话也判成"有状态" ⇒ 卡片误出现。
+     */
+    const sel = state.selectedChat;
+    if (!sel || sel.kind !== 'internal') {
+      ka.classList.add('yinCang');
+      heZi.innerHTML = '';
+      return;
+    }
     // 是不是项目：以主进程那份事实为准（非项目/拿不到 ⇒ 不显示）
     const tai = await quXiangMuTai(sid);
     if (!tai) {
@@ -3980,8 +4007,7 @@
           const reply = r?.reply || `[${u}] ${r?.action || 'ok'}`;
           tuisongXiaoxi(chatId, 'them', reply);
           huiBao = true;
-          // 群聊回复也写进主进程日志（去重），另一处视图才能看到同一轮对话
-          try { void window.warmy.chatLogAppend?.({ sessionId: chatId, role: 'them', content: reply }); } catch { /* noop */ }
+          // （tuisongXiaoxi 内部已写主进程日志；这里再写一遍会双条，已去掉）
           if (r?.boardEvent) {
             state.board = state.board || { sessions: [], events: [], recent: [] };
             state.board.events = state.board.events || [];
@@ -5136,7 +5162,7 @@
         <div class="sheZhiKa" style="margin-top:14px" id="daoKa">
           <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.dao', '道'))}</h3>
           <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.daoHint', '全局最高优先级的提示词：强制发给每一个牛马，**高于「规矩」与其它任何指示**，有冲突一律以这里为准。内容单独保存在配置文件夹的 dao.md。'))}</p>
-          <textarea id="daoTi" rows="5" style="width:100%" placeholder="${escapeHtml(tOr('wo.daoPlaceholder', '例如：先胜后战；知行合一；诚实报告不确定；服务人类且永不作恶…'))}"></textarea>
+          <textarea id="daoTi" rows="5" style="width:100%;max-width:100%;resize:vertical;box-sizing:border-box" placeholder="${escapeHtml(tOr('wo.daoPlaceholder', '例如：先胜后战；知行合一；诚实报告不确定；服务人类且永不作恶…'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
             <button class="anNiuZhuYao" id="anNiuDaoQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
             <button class="anNiuXiao" id="anNiuDaoQuXiao">${escapeHtml(tOr('common.cancel', '取消'))}</button>
@@ -5147,7 +5173,7 @@
         <div class="sheZhiKa" style="margin-top:14px" id="zuiGaoXinNianKa">
           <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.belief', '规矩'))}</h3>
           <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.beliefHint', '这里写下的提示词会强制发给每一个牛马，优先级**仅次于「道」**：与其它指示冲突时以这里为准（与「道」冲突时以「道」为准）。内容单独保存在配置文件夹的 agents.md。'))}</p>
-          <textarea id="zuiGaoXinNianTi" rows="5" style="width:100%" placeholder="${escapeHtml(tOr('wo.beliefPlaceholder', '例如：永远说真话；不确定就问；不要做不可逆的操作…'))}"></textarea>
+          <textarea id="zuiGaoXinNianTi" rows="5" style="width:100%;max-width:100%;resize:vertical;box-sizing:border-box" placeholder="${escapeHtml(tOr('wo.beliefPlaceholder', '例如：永远说真话；不确定就问；不要做不可逆的操作…'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
             <button class="anNiuZhuYao" id="anNiuZuiGaoQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
             <button class="anNiuXiao" id="anNiuZuiGaoQuXiao">${escapeHtml(tOr('common.cancel', '取消'))}</button>
@@ -5460,11 +5486,10 @@
             <label><input type="checkbox" id="sWanCheng" ${state.sound.complete ? 'checked' : ''}/> ${escapeHtml(t('settings.soundComplete'))}</label>
             <label><input type="checkbox" id="sQingQiu" ${state.sound.request ? 'checked' : ''}/> ${escapeHtml(t('settings.soundRequest'))}</label>
             <label><input type="checkbox" id="sCuoWu" ${state.sound.error ? 'checked' : ''}/> ${escapeHtml(t('settings.soundError'))}</label>
-          </div>
-          <div class="field" style="margin-top:8px">
-            <label>${escapeHtml(tOr('settings.soundVolume', '通知音量'))}</label>
-            <input type="range" id="soundVolume" min="0" max="100" step="5" value="${Math.round((state.soundVolume != null ? state.soundVolume : 0.9) * 100)}"/>
-            <div class="jingYin" style="font-size:11px" id="soundVolumeVal">${Math.round((state.soundVolume != null ? state.soundVolume : 0.9) * 100)}%</div>
+            <label class="soundYinLiang">${escapeHtml(tOr('settings.soundVolume', '通知音量'))}
+              <input type="range" id="soundVolume" min="0" max="100" step="5" value="${Math.round((state.soundVolume != null ? state.soundVolume : 0.9) * 100)}"/>
+              <span class="jingYin" id="soundVolumeVal">${Math.round((state.soundVolume != null ? state.soundVolume : 0.9) * 100)}%</span>
+            </label>
           </div>
           <div class="field" style="margin-top:10px"><label>${escapeHtml(t('settings.soundCompleteFile'))}</label>
             <div class="shiLiHang"><input id="sfWanCheng" value="${escapeHtml(state.soundFiles.complete)}" readonly placeholder="${escapeHtml(tOr('settings.builtinComplete', '内置默认音效'))}"/>
@@ -6598,7 +6623,9 @@
             ? tOr('plugin.teams.provider', '提供方：@nanmicoder')
             : p.id === 'memory-plus'
               ? tOr('plugin.memory.provider', '提供方：dsh 社区')
-              : '';
+              : p.id === 'warmy-memory'
+                ? tOr('plugin.warmyMemory.provider', '提供方：WArmy 内置')
+                : '';
           const installedAt = p.source === 'folder'
             ? tOr('plugin.fromFolder', '来源：本地文件夹')
             : tOr('plugin.builtin', '内置插件（随 dsh 运行时自动安装）');
@@ -13774,16 +13801,55 @@
       '<span class="ctgDim">' + escapeHtml(faShengShiJian(f.ts)) + '</span></div>' +
       (extra ? '<div class="ctgDim">' + escapeHtml(extra) + '</div>' : '') +
       '</div>';
+    /**
+     * **文件夹层级树**（产品要求）：文件不止平铺，也会有文件夹层级。
+     * 按「相对项目根的目录」分组；文件夹**默认折叠**，点开才显示里面的层级与文件。
+     * 只有平铺文件时退化为原来的平铺列表（不多造一层空壳）。
+     */
+    const muLuIco = (kai) => '<svg viewBox="0 0 24 24" class="pfIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      (kai ? '<path d="M6 10l6 6 6-6"/>' : '<path d="M10 6l6 6-6 6"/>') +
+      '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+    const shuOf = (list, extraOf) => {
+      const an = new Map(); // dir -> files
+      const gen = [];
+      for (const f of (list || [])) {
+        const p = String(f.path || '').replace(/[\\/]+$/, '');
+        const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+        const dir = i >= 0 ? p.slice(0, i) : '';
+        const dirJian = dir ? jianMing(dir) : '';
+        if (!dirJian) { gen.push(f); continue; }
+        if (!an.has(dirJian)) an.set(dirJian, []);
+        an.get(dirJian).push(f);
+      }
+      const out = [];
+      // 顶层无目录文件先平铺
+      for (const f of gen) out.push(rowOf(f, extraOf ? extraOf(f) : ''));
+      // 文件夹组：默认折叠（details 不带 open）
+      for (const [ming, ji] of [...an.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const inner = ji.map((f) => rowOf(f, extraOf ? extraOf(f) : '')).join('');
+        out.push(
+          '<details class="pfMuLu">' +
+          '<summary class="ctgHang pfHang pfMuLuHead">' +
+          '<span class="pfIcoJi">' + muLuIco(false) + '</span>' +
+          '<span class="pfMing">' + escapeHtml(ming) + '</span>' +
+          '<span class="ctgDim">' + String(ji.length) + '</span>' +
+          '</summary>' +
+          '<div class="pfMuLuNei">' + inner + '</div>' +
+          '</details>'
+        );
+      }
+      return out.join('');
+    };
     const html = [];
     // ① 最近改动文件
     html.push('<div class="pfHead" data-pf="changed">' + escapeHtml(t('projectFiles.changedTitle')) + '</div>');
     html.push(shiShi.changed && shiShi.changed.length
-      ? shiShi.changed.slice(0, 20).map((f) => rowOf(f, f.source ? sourceLabel(f.source) : '')).join('')
+      ? shuOf(shiShi.changed.slice(0, 40), (f) => (f.source ? sourceLabel(f.source) : ''))
       : '<div class="ctgDim" data-empty="changed">' + escapeHtml(t('projectFiles.empty.' + (shiShi.projectDirReason === 'not-recorded' ? 'noProjectDir' : 'changed'))) + '</div>');
     // ② 其他文件（非项目内的）
     html.push('<div class="pfHead" data-pf="other">' + escapeHtml(t('projectFiles.otherTitle')) + '</div>');
     html.push(shiShi.other && shiShi.other.length
-      ? shiShi.other.slice(0, 20).map((f) => rowOf(f, sourceLabel(f.source))).join('')
+      ? shuOf(shiShi.other.slice(0, 40), (f) => sourceLabel(f.source))
       : '<div class="ctgDim" data-empty="other">' + escapeHtml(t('projectFiles.empty.other')) + '</div>');
     // ③ 生成的产品
     const p = shiShi.chanPin || {};

@@ -1201,7 +1201,7 @@
   "placeholder.groupNameExt": "External group",
   "placeholder.nodeName": "Node name",
   "placeholder.peerHost": "IP or public host",
-  "plugin.memory.desc": "Memory boost: CJK FTS, tool-result dedup, hybrid vector+FTS5, cross-session core memory.",
+  "plugin.memory.desc": "dsh コミュニティの記憶ブースト（dsh ランタイム自身向け）：CJK トークン検索、ツール結果の重複排除、ベクトル+FTS5 ハイブリッド検索、セッション横断コア記憶。WArmy 記憶システムとは**別レイヤーで衝突しません**——fast-memory.jsonl には書かず、牛馬の対話台帳も奪いません。",
   "plugin.teams.desc": "Multi-agent team orchestration driven by natural language.",
   "preview.settingsNotice": "Preview only: these changes are not saved and do not sync to the desktop.",
   "projectFiles.changedTitle": "Recently changed files",
@@ -2094,7 +2094,7 @@
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
   "wo.belief": "規矩（ルール）",
-  "wo.beliefHint": "ここに書いたプロンプトはすべての牛馬に強制送信され、優先順位は**「道」の次**：他の指示と衝突したらここが優先（「道」と衝突したら「道」が優先）。agents.md に別保存されます。",
+  "wo.beliefHint": "この機能は agents.md ファイルとの互換性のためだけのものです。",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2212,5 +2212,7 @@
   "wo.dao": "道（タオ）",
   "wo.daoHint": "グローバルで最優先のプロンプト：すべての牛馬に強制送信し、**「規矩」より上位**、衝突時はここが優先。dao.md に別保存されます。",
   "wo.daoPlaceholder": "例：先んじて勝ち、それから戦う；知行合一；不確実さは正直に報告；人類に奉仕し、決して悪をしない…",
-  "chat.resumeTaskFrom": "（中断箇所：{jieDuan}）"
+  "chat.resumeTaskFrom": "（中断箇所：{jieDuan}）",
+  "plugin.warmyMemory.desc": "WArmy 記憶システム（既定で有効）：追記専用 JSONL を唯一の情報源に、SQLite/ベクトル投影 + recall/retrieve ツール + 知識ベース knowledge_query/add。dsh-memory-bundle とは別レイヤー（あちらは dsh ランタイム向け、こちらは牛馬の対話と知識蓄積向け）。",
+  "plugin.warmyMemory.provider": "提供元：WArmy 内蔵"
 }

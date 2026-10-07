@@ -1200,7 +1200,7 @@
   "placeholder.groupNameExt": "External group",
   "placeholder.nodeName": "Node name",
   "placeholder.peerHost": "IP or public host",
-  "plugin.memory.desc": "Memory boost: CJK FTS, tool-result dedup, hybrid vector+FTS5, cross-session core memory.",
+  "plugin.memory.desc": "Extension mémoire de la communauté dsh (sert le runtime dsh lui-même) : recherche CJK tokenisée, dédup des résultats d'outils, hybride vector+FTS5, mémoire centrale inter-sessions. Couche distincte du système mémoire WArmy, sans conflit : elle n'écrit pas fast-memory.jsonl et ne reprend pas le registre de dialogue des workhorses.",
   "plugin.teams.desc": "Multi-agent team orchestration driven by natural language.",
   "preview.settingsNotice": "Preview only: these changes are not saved and do not sync to the desktop.",
   "projectFiles.changedTitle": "Recently changed files",
@@ -2094,7 +2094,7 @@
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
   "wo.belief": "Règles",
-  "wo.beliefHint": "Ce prompt est envoyé à chaque workhorse et se classe **juste sous le Dao** : il prime sur les autres instructions (le Dao prime sur lui). Stocké dans agents.md.",
+  "wo.beliefHint": "Cette fonctionnalité n'existe que pour la compatibilité avec le fichier agents.md.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2212,5 +2212,7 @@
   "wo.dao": "Dao",
   "wo.daoHint": "Le prompt de priorité la plus haute : envoyé à chaque workhorse, **au-dessus des «Règles» et de toute autre instruction** ; en cas de conflit, il gagne. Stocké dans dao.md.",
   "wo.daoPlaceholder": "p. ex. : gagner d'abord, combattre ensuite ; unir savoir et action ; signaler honnêtement l'incertitude ; servir l'humanité et ne jamais faire le mal…",
-  "chat.resumeTaskFrom": "(interrompu à : {jieDuan})"
+  "chat.resumeTaskFrom": "(interrompu à : {jieDuan})",
+  "plugin.warmyMemory.desc": "Système de mémoire WArmy (activé par défaut) : journal JSONL en ajout seul comme source de vérité + projection SQLite/vecteurs + outils recall/retrieve + base de connaissances knowledge_query/add. Couche distincte de dsh-memory-bundle (celui-ci sert le runtime dsh ; celui-ci sert le dialogue des workhorses et la connaissance).",
+  "plugin.warmyMemory.provider": "Par WArmy (intégré)"
 }

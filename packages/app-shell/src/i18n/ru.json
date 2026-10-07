@@ -1200,7 +1200,7 @@
   "placeholder.groupNameExt": "External group",
   "placeholder.nodeName": "Node name",
   "placeholder.peerHost": "IP or public host",
-  "plugin.memory.desc": "Memory boost: CJK FTS, tool-result dedup, hybrid vector+FTS5, cross-session core memory.",
+  "plugin.memory.desc": "Усилитель памяти сообщества dsh (обслуживает сам рантайм dsh): поиск с CJK-токенизацией, дедуп результатов инструментов, гибрид vector+FTS5, сквозная ядрная память. Отдельный слой от системы памяти WArmy, конфликта нет: не пишет в fast-memory.jsonl и не перехватывает журнал диалога рабочих лошадей.",
   "plugin.teams.desc": "Multi-agent team orchestration driven by natural language.",
   "preview.settingsNotice": "Preview only: these changes are not saved and do not sync to the desktop.",
   "projectFiles.changedTitle": "Recently changed files",
@@ -2094,7 +2094,7 @@
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
   "wo.belief": "Правила",
-  "wo.beliefHint": "Этот промпт отправляется каждому и стоит **сразу после Дао**: он важнее других указаний (Дао важнее его). Хранится в agents.md.",
+  "wo.beliefHint": "Эта функция существует только для совместимости с файлом agents.md.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2212,5 +2212,7 @@
   "wo.dao": "Дао",
   "wo.daoHint": "Глобальный промпт высшего приоритета: отправляется каждому, **выше «Правил» и любых указаний**; при конфликте побеждает он. Хранится в dao.md.",
   "wo.daoPlaceholder": "напр.: сначала победа, потом бой; единство знания и действия; честно сообщать о неопределённости; служить человечеству и никогда не творить зла…",
-  "chat.resumeTaskFrom": "(прервано на: {jieDuan})"
+  "chat.resumeTaskFrom": "(прервано на: {jieDuan})",
+  "plugin.warmyMemory.desc": "Система памяти WArmy (включена по умолчанию): JSONL только с добавлением как единственный источник истины + проекция SQLite/векторов + инструменты recall/retrieve + база знаний knowledge_query/add. Отдельный слой от dsh-memory-bundle (тот для рантайма dsh, этот для диалога рабочих лошадей и знаний).",
+  "plugin.warmyMemory.provider": "От WArmy (встроенный)"
 }

@@ -546,9 +546,10 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'ask_user', 'plan_update', 'plan_verify',
   'run_shell', 'find_skill', 'install_skill', 'check_safety', 'read_docx', 'read_pptx', 'fetch_url', 'download_file',
-  'get_time', 'wait_seconds',
+  'get_time', 'wait_seconds', 'knowledge_query', 'knowledge_add',
 ] as const;
 export function isHostTool(name: unknown): boolean {
+  if (name === 'knowledge_query' || name === 'knowledge_add') return true;
   return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
 }
 export function hostToolSpecs(): Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }> {
@@ -779,6 +780,62 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             path: { type: 'string', description: '保存路径，如 Desktop/资料.pdf 或 out/a.bin' },
           },
           required: ['url', 'path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'knowledge_query',
+        description:
+          '查**知识库**（实体/事件，与 recall 记忆是两回事）。' +
+          '什么时候用：需要结构化事实（某人/某组织/某工具/某项目的属性）、或查某次事件/结论/方法时。' +
+          '触发线索：用户问「X 是什么/有什么/做过什么」，或你要引用长期结论、人、物、项目事实时。' +
+          '返回实体与事件列表；再用 knowledge_add 补记新事实。',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '检索词（名称/属性/事件标题/结果关键词）' },
+          },
+          required: ['query'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'knowledge_add',
+        description:
+          '往**知识库**记一条事实（实体和/或事件）。' +
+          '什么时候用：用户给出长期有效的人/物/项目/结论/方法，或本次会话产生了值得沉淀的事件结果时。' +
+          '与 recall 记忆互补：这里存结构化事实，不是对话流水。',
+        parameters: {
+          type: 'object',
+          properties: {
+            entity: {
+              type: 'object',
+              description: '实体（可选）：{id?, kind: person|org|material|place|concept|tool|project, ming, attrs?}',
+              properties: {
+                id: { type: 'string' },
+                kind: { type: 'string', enum: ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] },
+                ming: { type: 'string' },
+                attrs: { type: 'object' },
+              },
+              required: ['kind', 'ming'],
+            },
+            event: {
+              type: 'object',
+              description: '事件（可选）：{biaoTi, result?, tool?, method?, entityIds?}',
+              properties: {
+                biaoTi: { type: 'string' },
+                result: { type: 'string' },
+                tool: { type: 'string' },
+                method: { type: 'string' },
+                entityIds: { type: 'array', items: { type: 'string' } },
+              },
+              required: ['biaoTi'],
+            },
+          },
         },
       },
     },

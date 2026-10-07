@@ -1201,7 +1201,7 @@
   "placeholder.groupNameExt": "外部协作群",
   "placeholder.nodeName": "節點名",
   "placeholder.peerHost": "IP 或公網位址",
-  "plugin.memory.desc": "记忆增强：中…文全文檢索、工具結果去重、混合向量+FTS5、跨工作階段核心记忆与壓縮定位。",
+  "plugin.memory.desc": "dsh 社群的記憶增強包（服務 dsh 執行時自身）：CJK 分詞檢索、工具結果去重、向量+FTS5 混合檢索、跨會話核心記憶。與 WArmy 記憶系統**不同層、不衝突**——它不寫 fast-memory.jsonl，也不接管牛馬對話帳本。",
   "plugin.teams.desc": "多智慧体团队编排：在工作階段中…用自然語言驱动 AgentTeams 分工协作，适合專案值班者派活。",
   "preview.settingsNotice": "以下設定仅為本机预览：改动不会儲存，也不会同步到桌面端。",
   "projectFiles.changedTitle": "最近改动檔案",
@@ -2094,7 +2094,7 @@
   "model.think.l5": "窮理",
   "model.think.l6": "參悟",
   "wo.belief": "規矩",
-  "wo.beliefHint": "這裡寫下的提示詞會強制發給每一個牛馬，優先序**僅次於「道」**：與其它指示衝突時以這裡為準（與「道」衝突時以「道」為準）。內容單獨保存在配置資料夾的 agents.md。",
+  "wo.beliefHint": "此功能只是為了兼容 agents.md 檔案。",
   "wo.beliefPlaceholder": "例如：永遠說真話；不確定就先問；不要做不可逆的操作…",
   "wo.beliefFile": "檔案",
   "chat.askOnExceed": "允許提權",
@@ -2212,5 +2212,7 @@
   "wo.dao": "道",
   "wo.daoHint": "全域最高優先序的提示詞：強制發給每一個牛馬，**高於「規矩」與其它任何指示**，有衝突一律以這裡為準。內容單獨保存在配置資料夾的 dao.md。",
   "wo.daoPlaceholder": "例如：先勝後戰；知行合一；誠實報告不確定；服務人類且永不作惡…",
-  "chat.resumeTaskFrom": "（中斷發生在：{jieDuan}）"
+  "chat.resumeTaskFrom": "（中斷發生在：{jieDuan}）",
+  "plugin.warmyMemory.desc": "WArmy 記憶系統（預設啟用）：JSONL 只追加日誌為唯一事實源 + SQLite/向量投影 + recall/retrieve 工具 + 知識庫 knowledge_query/add。與 dsh-memory-bundle 不同層——它管 dsh 執行時自身，本外掛管牛馬對話與知識沉澱。",
+  "plugin.warmyMemory.provider": "提供方：WArmy 內建"
 }

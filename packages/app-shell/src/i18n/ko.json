@@ -1201,7 +1201,7 @@
   "placeholder.groupNameExt": "External group",
   "placeholder.nodeName": "Node name",
   "placeholder.peerHost": "IP or public host",
-  "plugin.memory.desc": "Memory boost: CJK FTS, tool-result dedup, hybrid vector+FTS5, cross-session core memory.",
+  "plugin.memory.desc": "dsh 커뮤니티의 기억 부스트(dsh 런타임 자체용): CJK 토큰 검색, 도구 결과 중복 제거, 벡터+FTS5 하이브리드 검색, 세션 간 핵심 기억. WArmy 기억 시스템과 **다른 계층이며 충돌하지 않습니다** — fast-memory.jsonl에 쓰지 않고 우마 대화 원장도 가져가지 않습니다.",
   "plugin.teams.desc": "Multi-agent team orchestration driven by natural language.",
   "preview.settingsNotice": "Preview only: these changes are not saved and do not sync to the desktop.",
   "projectFiles.changedTitle": "Recently changed files",
@@ -2094,7 +2094,7 @@
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
   "wo.belief": "규칙",
-  "wo.beliefHint": "여기에 쓴 프롬프트는 모든 우마에 강제로 보내지며 **「도(道)」 바로 아래** 우선순위입니다: 다른 지시와 충돌하면 이쪽이 우선(「도」와 충돌하면 「도」가 우선). agents.md에 별도 저장됩니다.",
+  "wo.beliefHint": "이 기능은 agents.md 파일 호환성만을 위한 것입니다.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2212,5 +2212,7 @@
   "wo.dao": "도(道)",
   "wo.daoHint": "전역 최우선 프롬프트: 모든 우마에 강제로 보내지며 **「규칙」보다 상위**이고 충돌 시 이쪽이 이깁니다. dao.md에 별도 저장됩니다.",
   "wo.daoPlaceholder": "예: 선승후전(先勝後戰); 지행합일(知行合一); 불확실성은 정직하게 보고; 인류를 위해 봉사하고 결코 악을 하지 않기…",
-  "chat.resumeTaskFrom": "（중단 지점: {jieDuan}）"
+  "chat.resumeTaskFrom": "（중단 지점: {jieDuan}）",
+  "plugin.warmyMemory.desc": "WArmy 기억 시스템(기본 켜짐): JSONL 추가 전용 로그를 단일 진실 원천으로 + SQLite/벡터 투영 + recall/retrieve 도구 + 지식 베이스 knowledge_query/add. dsh-memory-bundle과 다른 계층입니다(그쪽은 dsh 런타임용, 이쪽은 우마 대화·지식 축적용).",
+  "plugin.warmyMemory.provider": "제공: WArmy 내장"
 }

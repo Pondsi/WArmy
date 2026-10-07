@@ -1579,6 +1579,60 @@ async function yunXingLiaoTianXunHuan(
               okH = !!r2.ok;
               huiBaoH = r2.ok ? `[download_file] 已保存 ${r2.path}（${r2.bytes} 字节）` : `[download_file] 失败：${r2.error}`;
             }
+          } else if (gongJuMing === 'knowledge_query') {
+            // **知识库检索**（实体/事件；与 recall 记忆互补）
+            const q = String(argsH.query || '').trim();
+            if (!q) { okH = false; huiBaoH = '[knowledge_query] 需要 query 参数'; }
+            else if (!knowledge) { okH = false; huiBaoH = '[knowledge_query] 知识库未就绪'; }
+            else {
+              const jieGuo = knowledge.query(q);
+              okH = true;
+              const shiTi = (jieGuo.entities || []).slice(0, 10);
+              const shiJian = (jieGuo.events || []).slice(0, 10);
+              huiBaoH = `[knowledge_query] "${q}" 命中实体 ${shiTi.length}、事件 ${shiJian.length}\n`
+                + (shiTi.length ? '实体:\n' + shiTi.map((e) => `· [${e.kind}] ${e.ming}${Object.keys(e.attrs || {}).length ? ' ' + JSON.stringify(e.attrs) : ''} (id=${e.id})`).join('\n') + '\n' : '')
+                + (shiJian.length ? '事件:\n' + shiJian.map((e) => `· ${e.biaoTi}${e.result ? ' → ' + String(e.result).slice(0, 120) : ''} (id=${e.id})`).join('\n') : '')
+                + (!shiTi.length && !shiJian.length ? '（无命中；可换关键词，或用 knowledge_add 记下新事实）' : '');
+            }
+          } else if (gongJuMing === 'knowledge_add') {
+            // **知识库写入**（实体和/或事件；结构化事实，不是对话流水）
+            if (!knowledge) { okH = false; huiBaoH = '[knowledge_add] 知识库未就绪'; }
+            else {
+              try {
+                const eIn = (argsH.entity || null) as { id?: string; kind?: string; ming?: string; attrs?: Record<string, string> } | null;
+                const vIn = (argsH.event || null) as { biaoTi?: string; result?: string; tool?: string; method?: string; entityIds?: string[] } | null;
+                const ji = [];
+                if (eIn && eIn.ming) {
+                  const e = knowledge.upsertEntity({
+                    id: String(eIn.id || ('e-' + Date.now().toString(36))),
+                    kind: (eIn.kind as never) || 'concept',
+                    ming: String(eIn.ming),
+                    attrs: (eIn.attrs as Record<string, string>) || {},
+                    anchors: [],
+                  });
+                  ji.push('实体 ' + e.ming + ' (id=' + e.id + ')');
+                }
+                if (vIn && vIn.biaoTi) {
+                  const ids = Array.isArray(vIn.entityIds) ? vIn.entityIds.map(String) : [];
+                  const e = knowledge.addEvent({
+                    id: 'ev-' + Date.now().toString(36),
+                    biaoTi: String(vIn.biaoTi),
+                    result: vIn.result ? String(vIn.result).slice(0, 2000) : undefined,
+                    tool: vIn.tool ? String(vIn.tool) : undefined,
+                    method: vIn.method ? String(vIn.method) : undefined,
+                    entityIds: ids,
+                    anchors: [],
+                    ts: Date.now(),
+                  });
+                  ji.push('事件 ' + e.biaoTi + ' (id=' + e.id + ')');
+                }
+                okH = ji.length > 0;
+                huiBaoH = ji.length ? '[knowledge_add] 已记：' + ji.join('；') : '[knowledge_add] 未提供 entity.ming 或 event.biaoTi';
+              } catch (eK) {
+                okH = false;
+                huiBaoH = '[knowledge_add] 失败：' + xiJingCuoWu(eK);
+              }
+            }
           } else {
             // schedule_task
             const ren = await dengJiDingShiRenWu(sessionId, {

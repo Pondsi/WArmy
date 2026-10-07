@@ -1200,7 +1200,7 @@
   "placeholder.groupNameExt": "External group",
   "placeholder.nodeName": "Node name",
   "placeholder.peerHost": "IP or public host",
-  "plugin.memory.desc": "Memory boost: CJK FTS, tool-result dedup, hybrid vector+FTS5, cross-session core memory.",
+  "plugin.memory.desc": "Refuerzo de memoria de la comunidad dsh (sirve al propio runtime dsh): búsqueda con tokenización CJK, dedup de resultados de herramientas, híbrido vector+FTS5, memoria central entre sesiones. Capa distinta del sistema de memoria de WArmy, sin conflicto: no escribe fast-memory.jsonl ni toma el registro de diálogo de los workhorses.",
   "plugin.teams.desc": "Multi-agent team orchestration driven by natural language.",
   "preview.settingsNotice": "Preview only: these changes are not saved and do not sync to the desktop.",
   "projectFiles.changedTitle": "Recently changed files",
@@ -2094,7 +2094,7 @@
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
   "wo.belief": "Reglas",
-  "wo.beliefHint": "Este prompt se envía a cada workhorse y va **justo por debajo de Dao**: gana sobre otras instrucciones (Dao gana sobre él). Se guarda en agents.md.",
+  "wo.beliefHint": "Esta función existe solo para compatibilidad con el archivo agents.md.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2212,5 +2212,7 @@
   "wo.dao": "Dao",
   "wo.daoHint": "El prompt de máxima prioridad global: se envía a cada workhorse, **por encima de «Reglas» y de cualquier otra instrucción**; ante conflicto, manda este. Se guarda en dao.md.",
   "wo.daoPlaceholder": "p. ej.: gana primero y luego lucha; une saber y actuar; informa con honestidad sobre la incertidumbre; sirve a la humanidad y nunca hagas el mal…",
-  "chat.resumeTaskFrom": "(interrumpido en: {jieDuan})"
+  "chat.resumeTaskFrom": "(interrumpido en: {jieDuan})",
+  "plugin.warmyMemory.desc": "Sistema de memoria de WArmy (activo por defecto): registro JSONL solo de anexión como fuente única de verdad + proyección SQLite/vector + herramientas recall/retrieve + base de conocimiento knowledge_query/add. Capa distinta de dsh-memory-bundle (ese sirve al runtime dsh; este al diálogo de workhorses y al conocimiento).",
+  "plugin.warmyMemory.provider": "Por WArmy (integrado)"
 }

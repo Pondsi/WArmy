@@ -1200,7 +1200,7 @@
   "placeholder.groupNameExt": "External group",
   "placeholder.nodeName": "Node name",
   "placeholder.peerHost": "IP or public host",
-  "plugin.memory.desc": "Memory boost: CJK FTS, tool-result dedup, hybrid vector+FTS5, cross-session core memory.",
+  "plugin.memory.desc": "dsh-community memory boost (serves the dsh runtime itself): CJK tokenized search, tool-result dedup, hybrid vector+FTS5, cross-session core memory. Different layer from the WArmy memory system and does not conflict: it does not write fast-memory.jsonl and does not take over the workhorse chat ledger.",
   "plugin.teams.desc": "Multi-agent team orchestration driven by natural language.",
   "preview.settingsNotice": "Preview only: these changes are not saved and do not sync to the desktop.",
   "projectFiles.changedTitle": "Recently changed files",
@@ -2094,7 +2094,7 @@
   "model.think.l5": "Exhaust",
   "model.think.l6": "Enlighten",
   "wo.belief": "Rules",
-  "wo.beliefHint": "This prompt is sent to every workhorse and ranks **just below Dao**: it wins over other instructions (Dao wins over it). Stored separately in agents.md.",
+  "wo.beliefHint": "This feature exists only for compatibility with the agents.md file.",
   "wo.beliefPlaceholder": "e.g. Always tell the truth; ask when unsure; never do irreversible things…",
   "wo.beliefFile": "File",
   "chat.askOnExceed": "Allow privilege escalation",
@@ -2212,5 +2212,7 @@
   "wo.dao": "Dao (The Way)",
   "wo.daoHint": "The globally highest-priority prompt: sent to every workhorse, **above Rules and any other instruction**; on conflict this wins. Stored separately in dao.md.",
   "wo.daoPlaceholder": "e.g. win first, then fight; unite knowledge and action; report uncertainty honestly; serve humanity and never do harm…",
-  "chat.resumeTaskFrom": "(interrupted at: {jieDuan})"
+  "chat.resumeTaskFrom": "(interrupted at: {jieDuan})",
+  "plugin.warmyMemory.desc": "WArmy memory system (on by default): append-only JSONL as sole source of truth + SQLite/vector projection + recall/retrieve tools + knowledge base knowledge_query/add. Different layer from dsh-memory-bundle (that one serves the dsh runtime; this one serves workhorse chat and knowledge).",
+  "plugin.warmyMemory.provider": "By WArmy (built-in)"
 }

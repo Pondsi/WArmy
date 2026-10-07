@@ -1201,7 +1201,7 @@
   "placeholder.groupNameExt": "外部协作群",
   "placeholder.nodeName": "节点名",
   "placeholder.peerHost": "IP 或公网地址",
-  "plugin.memory.desc": "跨会话长期记忆与检索：记住历史、支持会话查询。由 dsh 社区提供（dsh-memory-bundle），安装于首次安装 dsh 运行时。",
+  "plugin.memory.desc": "dsh 社区的记忆增强包（服务 dsh 运行时自身）：CJK 分词检索、工具结果去重、向量+FTS5 混合检索、跨会话核心记忆。与 WArmy 记忆系统**不同层、不冲突**——它不写 fast-memory.jsonl，也不接管牛马对话账本。",
   "plugin.teams.desc": "多智能体协作：群聊里多牛马分工、交接、协同执行任务。由 @nanmicoder 提供，安装于首次安装 dsh 运行时。",
   "preview.settingsNotice": "以下设置仅为本机预览：改动不会保存，也不会同步到桌面端。",
   "projectFiles.changedTitle": "最近改动文件",
@@ -2094,7 +2094,7 @@
   "model.think.l5": "穷理",
   "model.think.l6": "参悟",
   "wo.belief": "规矩",
-  "wo.beliefHint": "这里写下的提示词会强制发给每一个牛马，优先级**仅次于「道」**：与其它指示冲突时以这里为准（与「道」冲突时以「道」为准）。内容单独保存在配置文件夹的 agents.md。",
+  "wo.beliefHint": "此功能只是为了兼容 agents.md 文件。",
   "wo.beliefPlaceholder": "例如：永远说真话；不确定就先问；不要做不可逆的操作…",
   "wo.beliefFile": "文件",
   "chat.askOnExceed": "允许提权",
@@ -2212,5 +2212,7 @@
   "wo.dao": "道",
   "wo.daoHint": "全局最高优先级的提示词：强制发给每一个牛马，**高于「规矩」与其它任何指示**，有冲突一律以这里为准。内容单独保存在配置文件夹的 dao.md。",
   "wo.daoPlaceholder": "例如：先胜后战；知行合一；诚实报告不确定；服务人类且永不作恶…",
-  "chat.resumeTaskFrom": "（中断发生在：{jieDuan}）"
+  "chat.resumeTaskFrom": "（中断发生在：{jieDuan}）",
+  "plugin.warmyMemory.desc": "WArmy 记忆系统（默认启用）：JSONL 只追加日志为唯一事实源 + SQLite/向量投影 + recall/retrieve 工具 + 知识库 knowledge_query/add。与 dsh-memory-bundle 不同层——它管 dsh 运行时自身，本插件管牛马对话与知识沉淀。",
+  "plugin.warmyMemory.provider": "提供方：WArmy 内置"
 }
