@@ -2073,7 +2073,7 @@
   "settings.fw800": "Extra bold",
   "settings.fw900": "Black",
   "model.smartHint": "Checked: the system arranges the chain for you. Unchecked: order/disable models yourself.",
-  "model.think": "Default thinking level",
+  "model.think": "Nivel de pensamiento",
   "model.thinkHint": "Thinking depth, 8 stops: Spark (off) → Glimmer → Deliberate → Discerning → Ponder → Exhaust → Enlighten → Nature (auto). Auto lets the system pick; if the model rejects the level it is downgraded to Auto and the reply says so at the top.",
   "model.think.follow": "Follow",
   "model.think.auto": "Nature (auto)",
@@ -2214,5 +2214,9 @@
   "wo.daoPlaceholder": "p. ej.: gana primero y luego lucha; une saber y actuar; informa con honestidad sobre la incertidumbre; sirve a la humanidad y nunca hagas el mal…",
   "chat.resumeTaskFrom": "(interrumpido en: {jieDuan})",
   "plugin.warmyMemory.desc": "Sistema de memoria de WArmy (activo por defecto): registro JSONL solo de anexión como fuente única de verdad + proyección SQLite/vector + herramientas recall/retrieve + base de conocimiento knowledge_query/add. Capa distinta de dsh-memory-bundle (ese sirve al runtime dsh; este al diálogo de workhorses y al conocimiento).",
-  "plugin.warmyMemory.provider": "Por WArmy (integrado)"
+  "plugin.warmyMemory.provider": "Por WArmy (integrado)",
+  "insert.pop.title": "Insertar",
+  "insert.pop.desc": "Cómo entra este mensaje en la cola: Urgente = pasa al frente ya; Insertar = justo después de la tarea actual; Cola = al final. El icono cambia según tu elección.",
+  "think.pop.title": "Nivel de pensamiento",
+  "think.pop.desc": "Cuánto piensa el modelo: izquierda = vivo (mínimo, responde directo), derecha = natural (automático, razona si hace falta). Marca «lo define la oficina» para seguir el valor por defecto de cada workhorse."
 }

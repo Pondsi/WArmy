@@ -2073,7 +2073,7 @@
   "settings.fw800": "Extra bold",
   "settings.fw900": "Black",
   "model.smartHint": "Checked: the system arranges the chain for you. Unchecked: order/disable models yourself.",
-  "model.think": "Default thinking level",
+  "model.think": "Niveau de réflexion",
   "model.thinkHint": "Thinking depth, 8 stops: Spark (off) → Glimmer → Deliberate → Discerning → Ponder → Exhaust → Enlighten → Nature (auto). Auto lets the system pick; if the model rejects the level it is downgraded to Auto and the reply says so at the top.",
   "model.think.follow": "Follow",
   "model.think.auto": "Nature (auto)",
@@ -2214,5 +2214,9 @@
   "wo.daoPlaceholder": "p. ex. : gagner d'abord, combattre ensuite ; unir savoir et action ; signaler honnêtement l'incertitude ; servir l'humanité et ne jamais faire le mal…",
   "chat.resumeTaskFrom": "(interrompu à : {jieDuan})",
   "plugin.warmyMemory.desc": "Système de mémoire WArmy (activé par défaut) : journal JSONL en ajout seul comme source de vérité + projection SQLite/vecteurs + outils recall/retrieve + base de connaissances knowledge_query/add. Couche distincte de dsh-memory-bundle (celui-ci sert le runtime dsh ; celui-ci sert le dialogue des workhorses et la connaissance).",
-  "plugin.warmyMemory.provider": "Par WArmy (intégré)"
+  "plugin.warmyMemory.provider": "Par WArmy (intégré)",
+  "insert.pop.title": "Insérer",
+  "insert.pop.desc": "Comment ce message entre dans la file : Urgent = passer devant tout de suite ; Insérer = juste après la tâche en cours ; File = à la fin. L'icône suit votre choix.",
+  "think.pop.title": "Niveau de réflexion",
+  "think.pop.desc": "L'effort de réflexion du modèle : à gauche = vif (minimum, réponse directe), à droite = naturel (automatique, raisonne si besoin). Cochez « défini par le bureau » pour suivre la valeur par défaut de chaque workhorse."
 }

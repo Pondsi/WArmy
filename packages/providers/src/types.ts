@@ -237,7 +237,7 @@ export const GONGYING_YUSHE: GongYingYuShe[] = [
   },
   {
     id: 'ollama',
-    biaoQian: 'Ollama (本机)',
+    biaoQian: 'Ollama',
     protocol: 'ollama',
     baseURL: 'http://127.0.0.1:11434',
     defaultModel: 'qwen2.5:7b',

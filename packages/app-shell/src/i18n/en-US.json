@@ -2073,7 +2073,7 @@
   "settings.fw800": "Extra bold",
   "settings.fw900": "Black",
   "model.smartHint": "Checked: the system arranges the chain for you. Unchecked: order/disable models yourself.",
-  "model.think": "Default thinking level",
+  "model.think": "Thinking level",
   "model.thinkHint": "Thinking depth, 8 stops: Spark (off) → Glimmer → Deliberate → Discerning → Ponder → Exhaust → Enlighten → Nature (auto). Auto lets the system pick; if the model rejects the level it is downgraded to Auto and the reply says so at the top.",
   "model.think.follow": "Follow",
   "model.think.auto": "Nature (auto)",
@@ -2214,5 +2214,9 @@
   "wo.daoPlaceholder": "e.g. win first, then fight; unite knowledge and action; report uncertainty honestly; serve humanity and never do harm…",
   "chat.resumeTaskFrom": "(interrupted at: {jieDuan})",
   "plugin.warmyMemory.desc": "WArmy memory system (on by default): append-only JSONL as sole source of truth + SQLite/vector projection + recall/retrieve tools + knowledge base knowledge_query/add. Different layer from dsh-memory-bundle (that one serves the dsh runtime; this one serves workhorse chat and knowledge).",
-  "plugin.warmyMemory.provider": "By WArmy (built-in)"
+  "plugin.warmyMemory.provider": "By WArmy (built-in)",
+  "insert.pop.title": "Insert",
+  "insert.pop.desc": "How this message enters the queue: Urgent = jump to the front now; Insert = right after the current task; Queue = go to the end. The icon follows your choice.",
+  "think.pop.title": "Thinking level",
+  "think.pop.desc": "How hard the model thinks: left = quicksilver (least effort, answer directly), right = natural (automatic, reason as needed). Tick \"set by the workhorse bureau\" to follow each workhorse's own default."
 }

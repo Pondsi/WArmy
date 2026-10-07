@@ -663,6 +663,9 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .jinJiCaiDan button:hover { background: var(--hover); }
 .jinJiCaiDan button.qiYong { color: var(--accent); font-weight: 600; }
 .jinJiCaiDan button[data-u="P1"].qiYong { color: var(--danger); }
+/* 弹层标题 + 说明（插入 / 思考级别）：让用户知道这些选项是干什么的 */
+.ddHead { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); padding: 6px 10px 2px; }
+.ddDesc { font-size: var(--fs-xs); color: var(--muted); padding: 0 10px 6px; line-height: 1.45; max-width: 260px; white-space: normal; }
 /* 思考级别滑块卡（点开思考级别图标后出现）：
    横向滑块 + 「由牛马管理局设置」勾选框；勾上时滑块**变灰且不可拖**（产品要求）。 */
 .jinJiCaiDan.siKaoKa {

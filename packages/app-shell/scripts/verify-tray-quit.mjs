@@ -27,7 +27,8 @@ check('托盘下班走统一退出函数（不是裸 app.quit）', /tray-off-wor
 check('no tray menu app.quit()', !/setContextMenu\(Menu\.buildFromTemplate\(\[\{ biaoQian: tuopanGuanGongzuoBiaoqian, click: \(\) => \{ yingYong\.quit\(\); \}/.test(main));
 check('退出 IPC 走统一退出函数', /warmy:yingYongTuiChu[\s\S]{0,200}tuichuYingyong/.test(main));
 check('未强制退出时才拦成隐藏', /if \(!qiangzhiTuichu\)[\s\S]{0,80}preventDefault/.test(main));
-check('before-quit destroys tray', /before-quit[\s\S]{0,200}tray\?\.destroy/.test(main));
+// 窗口放宽到 600：before-quit 里先做了流式收尾/落盘等，托盘销毁在其中（语义未变）。
+check('before-quit destroys tray', /before-quit[\s\S]{0,600}tray\?\.destroy/.test(main));
 check('assist IPC list/upsert', /warmy:assistLieBiao/.test(main) && /warmy:assistGengXinHuoChaRu/.test(main));
 check('preload assist APIs', /assistList/.test(preload) && /assistUpsert/.test(preload));
 check('diag toggle self-contained', /function toggleDiagPanel/.test(appJs) && /\$\('diagKaiGuan'\)\?\.addEventListener\('click', \(\) => \{ toggleDiagPanel\(\); \}\)/.test(appJs));

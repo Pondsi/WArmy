@@ -207,8 +207,8 @@
                     <svg viewBox="0 0 100 100" class="ico"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter"><path d="M22,24 L56,24 L70,38 L70,86 L22,86 Z"/><polyline points="56,24 56,38 70,38"/></g><g stroke="currentColor" stroke-width="8" stroke-linecap="square"><line x1="76" y1="14" x2="76" y2="30"/><line x1="68" y1="22" x2="84" y2="22"/></g></svg>
                   </button>
                   <button class="anNiuTuBiao" id="anNiuShot" data-i18n-title="chat.screenshotTip">
-                    <!-- 截图/裁剪：镂空描边；两个 L 齿**短**、中间方形**大**（产品反馈） -->
-                    <svg viewBox="0 0 24 24" class="ico hollowIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 1V5H1"/><path d="M19 23V19H23"/></svg>
+                    <!-- 截图/裁剪：镂空描边；两个 L 折线 + **中间一个方框**（产品反馈） -->
+                    <svg viewBox="0 0 24 24" class="ico hollowIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 1V5H1"/><path d="M19 23V19H23"/><rect x="7.5" y="7.5" width="9" height="9" rx="1"/></svg>
                   </button>
                   <button class="anNiuTuBiao" id="anNiuShangXiaWen" data-i18n-title="ctx.budget.biaoTi">
                     <svg viewBox="0 0 24 24" class="ico" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="3" y2="18"/><line x1="21" y1="6" x2="21" y2="18"/><path d="M7 12 H17" stroke-dasharray="1 3"/><path d="M9 10 L7 12 L9 14"/><path d="M15 10 L17 12 L15 14"/></svg>
@@ -232,6 +232,9 @@
                       </svg>
                     </button>
                     <div class="jinJiCaiDan yinCang" id="jinJiCaiDan" role="menu">
+                      <!-- 标题 + 说明（产品要求）：让用户知道这三个选项是干什么的 -->
+                      <div class="ddHead" data-i18n="insert.pop.title"></div>
+                      <div class="ddDesc" data-i18n="insert.pop.desc"></div>
                       <button type="button" data-u="P1"><svg class="ico chaRuIco" data-u="P1" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 8v4M12 15h.01"/></svg><span data-i18n="urgency.urgentLabel"></span></button>
                       <button type="button" class="qiYong" data-u="P2"><svg class="ico chaRuIco" data-u="P2" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7l-2 4h3l-2 4"/></svg><span data-i18n="urgency.insertLabel"></span></button>
                       <button type="button" data-u="P3"><svg class="ico chaRuIco" data-u="P3" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 8v6M9 11h6"/></svg><span data-i18n="urgency.queueLabel"></span></button>
@@ -242,7 +245,7 @@
                        · 勾上「由牛马管理局设置」= 跟随牛马里的默认档，滑块变灰不可拖
                        · 取消勾选 = 可以随意拖动，手动选定的档位**保持**（存进设置，重启还在） -->
                   <div class="jinJiDd" id="siKaoDd">
-                    <button class="jinJiTrigger" id="siKaoTrigger" type="button" data-i18n-title="model.think" title="思考级别">
+                    <button class="jinJiTrigger" id="siKaoTrigger" type="button" data-i18n-title="think.pop.title" title="思考级别">
                       <svg class="ico siKaoIco" viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M32 8 C20 8 12 18 12 28 C12 36 18 42 22 46 V52 H42 V46 C46 42 52 36 52 28 C52 18 44 8 32 8 Z"/>
                         <!-- 灯泡里的「思路折线」：折得更明显（产品要求），一眼能看出是折线而不是一道波浪 -->
@@ -252,6 +255,9 @@
                       <span id="siKaoBiaoQian" class="siKaoBiaoQian"></span>
                     </button>
                     <div class="jinJiCaiDan siKaoKa yinCang" id="siKaoCaiDan" role="dialog">
+                      <!-- 标题 + 说明（产品要求）：让用户知道这个选项是干什么的 -->
+                      <div class="ddHead" data-i18n="think.pop.title"></div>
+                      <div class="ddDesc" data-i18n="think.pop.desc"></div>
                       <label class="siKaoGenSui">
                         <input type="checkbox" id="siKaoGenSuiJu" />
                         <span data-i18n="model.think.byAgency"></span>

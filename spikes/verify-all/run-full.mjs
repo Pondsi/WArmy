@@ -150,7 +150,7 @@ const { congYuSheChuangJian, GONGYING_YUSHE, guiFanYongLiang } = await import(
 check('presets>=7', GONGYING_YUSHE.length >= 7);
 check('3 protocols', new Set(GONGYING_YUSHE.map((p) => p.protocol)).size === 3);
 const ds = congYuSheChuangJian('deepseek', { apiKey: 'sk-x' });
-check('deepseek base', ds.baseURL === 'https://api.deepseek.com');
+check('deepseek base', ds.baseURL === 'https://api.deepseek.com/v1');
 const u = guiFanYongLiang({ prompt_cache_hit_tokens: 64, prompt_tokens: 100, completion_tokens: 5 }, 'openai-compatible');
 check('cache normalize', u.cacheHitTokens === 64);
 
@@ -350,7 +350,12 @@ check('settings persist ipc', mainTs.includes('warmy:peiZhiBaoCun'));
 check('renderer metrics panel', html.includes('zhiBiaoJiHe'));
 check('renderer checkpoint panel', html.includes('cpXiangQingLieBiao'));
 check('renderer knowledge', html.includes('anNiuZhiShiKuGo'));
-check('renderer saveVoice', appJs.includes('saveVoice'));
+// 语音：渲染层已改为「边录边转」的流式 ASR（不再本地存 wav）⇒ 校验真实链路：
+// preload 有 saveVoice 兜底入口 + 渲染层用 asrTranscribe；两者都在才算语音功能完整。
+check('renderer saveVoice', (() => {
+  const pre = fs.readFileSync(path.join(root, 'packages/app-shell/src/preload.cjs'), 'utf8');
+  return pre.includes('saveVoice') && appJs.includes('asrTranscribe');
+})());
 check('renderer profileSave', appJs.includes('profileSave'));
 check('i18n metrics keys', typeof zh['metrics.biaoTi'] === 'string' && typeof en['metrics.biaoTi'] === 'string');
 check('i18n cp keys', typeof zh['cp.rollback'] === 'string');
@@ -438,7 +443,7 @@ check('session v3', fs.readFileSync(path.join(root, 'packages/memory-os/src/migr
 check('import-openclaw ipc', mainTs.includes('warmy:daoRuopenclaw'));
 check('special-models ipc', mainTs.includes('warmy:teShuMoXingJiSheZhi'));
 check('ollama-asr ipc', mainTs.includes('warmy:asrollama'));
-check('renderer raf', appJs.includes('__rafThrottle'));
+check('renderer raf', appJs.includes('__rafDaiLie') || appJs.includes('__rafThrottle'));
 check('renderer import btn', appJs.includes('btn-import-openclaw'));
 check('renderer special models', appJs.includes('anNiuBaoCunTeShu'));
 check('i18n special models', typeof zh['settings.specialModels'] === 'string');

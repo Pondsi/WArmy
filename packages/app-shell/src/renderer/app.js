@@ -427,8 +427,7 @@
       { id: 'openrouter', biaoQian: t('settings.provider.openrouter') || 'OpenRouter', protocol: 'openai-compatible', baseURL: 'https://openrouter.ai/api/v1' },
       { id: 'anthropic', biaoQian: t('settings.provider.anthropic') || 'Anthropic', protocol: 'anthropic', baseURL: 'https://api.anthropic.com' },
       { id: 'gemini', biaoQian: t('settings.provider.gemini') || 'Gemini', protocol: 'openai-compatible', baseURL: 'https://generativelanguage.googleapis.com/v1beta' },
-      { id: 'ollama', biaoQian: 'Ollama (本机)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434' },
-      { id: 'ollama-remote', biaoQian: t('settings.provider.ollamaCloud') || 'Ollama（云）', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434' },
+      { id: 'ollama', biaoQian: 'Ollama', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434' },
       { id: 'groq', biaoQian: t('settings.provider.groq') || 'Groq', protocol: 'openai-compatible', baseURL: 'https://api.groq.com/openai/v1' },
       { id: 'mistral', biaoQian: t('settings.provider.mistral') || 'Mistral', protocol: 'openai-compatible', baseURL: 'https://api.mistral.ai/v1' },
       { id: 'together', biaoQian: t('settings.provider.together') || 'Together', protocol: 'openai-compatible', baseURL: 'https://api.together.xyz/v1' },
@@ -3288,6 +3287,27 @@
     return nav === 'singleAi' || nav === 'internalGroup'; // 群聊/联系人不显示，由后台自动收敛
   }
 
+  /**
+   * **三个弹层互斥**（产品要求）：上下文预算 / 插入 / 思考级别——
+   * 点开其中一个，另外两个一律关掉，避免同时浮着互相重叠。
+   * 每个开关都先调它一次（在切换自己之前），只有自己会被重新打开。
+   */
+  function biHeQiYuDanCeng(chuWai) {
+    const all = [
+      ['shangXiaWenPopover', 'anNiuShangXiaWen'],
+      ['jinJiCaiDan', 'jinJiTrigger'],
+      ['siKaoCaiDan', 'siKaoTrigger'],
+    ];
+    for (const [popId, btnId] of all) {
+      if (popId === chuWai) continue;
+      try {
+        $(popId)?.classList.add('yinCang');
+        $(btnId)?.classList.remove('qiYong');
+      } catch { /* noop */ }
+    }
+  }
+  window.__biHeQiYuDanCeng = biHeQiYuDanCeng;
+
   function bindCtxBudget() {
     const btn = $('anNiuShangXiaWen');
     if (!btn || btn.dataset.bound === '1') return;
@@ -3297,6 +3317,8 @@
       const pop = $('shangXiaWenPopover');
       if (!pop) return;
       const opening = pop.classList.contains('yinCang');
+      // 三个弹层互斥：要开自己，先把插入/思考级别关掉
+      if (opening) biHeQiYuDanCeng('shangXiaWenPopover');
       pop.classList.toggle('yinCang');
       btn.classList.toggle('qiYong', opening);
       if (opening) {
@@ -7837,8 +7859,7 @@
         { id: 'openrouter', biaoQian: t('settings.provider.openrouter'), protocol: 'openai-compatible', baseURL: 'https://openrouter.ai/api/v1' },
         { id: 'anthropic', biaoQian: t('settings.provider.anthropic'), protocol: 'anthropic', baseURL: 'https://api.anthropic.com' },
         { id: 'gemini', biaoQian: t('settings.provider.gemini'), protocol: 'openai-compatible', baseURL: 'https://generativelanguage.googleapis.com/v1beta' },
-        { id: 'ollama', biaoQian: 'Ollama (本机)', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434' },
-        { id: 'ollama-remote', biaoQian: t('settings.provider.ollamaCloud'), protocol: 'ollama', baseURL: 'http://127.0.0.1:11434' },
+        { id: 'ollama', biaoQian: 'Ollama', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434' },
         { id: 'groq', biaoQian: t('settings.provider.groq'), protocol: 'openai-compatible', baseURL: 'https://api.groq.com/openai/v1' },
         { id: 'mistral', biaoQian: t('settings.provider.mistral'), protocol: 'openai-compatible', baseURL: 'https://api.mistral.ai/v1' },
         { id: 'together', biaoQian: t('settings.provider.together'), protocol: 'openai-compatible', baseURL: 'https://api.together.xyz/v1' },
@@ -10415,6 +10436,8 @@
 
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
+      // 三个弹层互斥：要开自己，先把上下文/思考级别关掉
+      if (caiDan.classList.contains('yinCang')) biHeQiYuDanCeng('jinJiCaiDan');
       caiDan.classList.toggle('yinCang');
       if (!caiDan.classList.contains('yinCang')) { refresh(); positionMenuFixed(trigger, caiDan); }
     });
@@ -10905,6 +10928,8 @@
     refresh();
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
+      // 三个弹层互斥：要开自己，先把上下文/插入关掉
+      if (ka.classList.contains('yinCang')) biHeQiYuDanCeng('siKaoCaiDan');
       ka.classList.toggle('yinCang');
       if (!ka.classList.contains('yinCang')) { refresh(); positionMenuFixed(trigger, ka); }
     });

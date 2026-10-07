@@ -2073,7 +2073,7 @@
   "settings.fw800": "特粗",
   "settings.fw900": "黑體",
   "model.smartHint": "勾選後由系統自動安排調用鏈；取消勾選可手動排序/停用。",
-  "model.think": "預設思考級別",
+  "model.think": "思考級別",
   "model.thinkHint": "思考深度共 8 檔：靈機（關閉）→ 微覺 → 慎思 → 明辨 → 沉吟 → 窮理 → 參悟 → 自然（自動）。選「自然」由系統按任務挑最合適的檔位；模型不支援所選檔位會自動降級為「自然」並在回覆開頭說明。",
   "model.think.follow": "跟隨牛馬設定",
   "model.think.auto": "自然（自動）",
@@ -2214,5 +2214,9 @@
   "wo.daoPlaceholder": "例如：先勝後戰；知行合一；誠實報告不確定；服務人類且永不作惡…",
   "chat.resumeTaskFrom": "（中斷發生在：{jieDuan}）",
   "plugin.warmyMemory.desc": "WArmy 記憶系統（預設啟用）：JSONL 只追加日誌為唯一事實源 + SQLite/向量投影 + recall/retrieve 工具 + 知識庫 knowledge_query/add。與 dsh-memory-bundle 不同層——它管 dsh 執行時自身，本外掛管牛馬對話與知識沉澱。",
-  "plugin.warmyMemory.provider": "提供方：WArmy 內建"
+  "plugin.warmyMemory.provider": "提供方：WArmy 內建",
+  "insert.pop.title": "插入",
+  "insert.pop.desc": "決定這則訊息怎麼進入佇列：加急＝立即插到最前；插入＝接在目前任務之後；排隊＝排到隊尾。選中哪個，圖示就換成哪個。",
+  "think.pop.title": "思考級別",
+  "think.pop.desc": "控制模型思考的力度：左＝靈機（最省，直接回答），右＝自然（自動，視需要推理）。勾選「由牛馬管理局設定」則跟隨每個牛馬自己的預設檔。"
 }

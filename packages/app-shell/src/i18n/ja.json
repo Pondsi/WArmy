@@ -2073,7 +2073,7 @@
   "settings.fw800": "Extra bold",
   "settings.fw900": "Black",
   "model.smartHint": "Checked: the system arranges the chain for you. Unchecked: order/disable models yourself.",
-  "model.think": "Default thinking level",
+  "model.think": "思考レベル",
   "model.thinkHint": "Thinking depth, 8 stops: Spark (off) → Glimmer → Deliberate → Discerning → Ponder → Exhaust → Enlighten → Nature (auto). Auto lets the system pick; if the model rejects the level it is downgraded to Auto and the reply says so at the top.",
   "model.think.follow": "Follow",
   "model.think.auto": "Nature (auto)",
@@ -2214,5 +2214,9 @@
   "wo.daoPlaceholder": "例：先んじて勝ち、それから戦う；知行合一；不確実さは正直に報告；人類に奉仕し、決して悪をしない…",
   "chat.resumeTaskFrom": "（中断箇所：{jieDuan}）",
   "plugin.warmyMemory.desc": "WArmy 記憶システム（既定で有効）：追記専用 JSONL を唯一の情報源に、SQLite/ベクトル投影 + recall/retrieve ツール + 知識ベース knowledge_query/add。dsh-memory-bundle とは別レイヤー（あちらは dsh ランタイム向け、こちらは牛馬の対話と知識蓄積向け）。",
-  "plugin.warmyMemory.provider": "提供元：WArmy 内蔵"
+  "plugin.warmyMemory.provider": "提供元：WArmy 内蔵",
+  "insert.pop.title": "挿入",
+  "insert.pop.desc": "このメッセージの順番の入れ方：至急＝すぐ先頭へ／挿入＝現在のタスクの直後／待機＝列の最後。選んだ項目にアイコンが変わります。",
+  "think.pop.title": "思考レベル",
+  "think.pop.desc": "モデルが考える度合い：左＝霊機（最小、そのまま回答）、右＝自然（自動、必要なら推論）。「牛馬管理局の設定に従う」を選ぶと各牛馬の既定値に従います。"
 }

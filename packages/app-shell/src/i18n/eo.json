@@ -2073,7 +2073,7 @@
   "settings.fw800": "Extra bold",
   "settings.fw900": "Black",
   "model.smartHint": "Checked: the system arranges the chain for you. Unchecked: order/disable models yourself.",
-  "model.think": "Default thinking level",
+  "model.think": "Pensnivelo",
   "model.thinkHint": "Thinking depth, 8 stops: Spark (off) → Glimmer → Deliberate → Discerning → Ponder → Exhaust → Enlighten → Nature (auto). Auto lets the system pick; if the model rejects the level it is downgraded to Auto and the reply says so at the top.",
   "model.think.follow": "Follow",
   "model.think.auto": "Nature (auto)",
@@ -2214,5 +2214,9 @@
   "wo.daoPlaceholder": "ekz.: unue venku, poste batalu; unuigu scion kaj agon; honeste raportu necertecon; servi al homaro kaj neniam faru malbonon…",
   "chat.resumeTaskFrom": "(interrompita ĉe: {jieDuan})",
   "plugin.warmyMemory.desc": "Memorsistemo de WArmy (apenaŭ aktiva): JSONL nur-aldonenda kiel ununura fonto de vero + projekcio SQLite/vektoroj + iloj recall/retrieve + scibazo knowledge_query/add. Alia tavolo ol dsh-memory-bundle (tiu por la dsh-rultempo; ĉi tiu por laborĉevala dialogo kaj scio).",
-  "plugin.warmyMemory.provider": "De WArmy (enkonstruita)"
+  "plugin.warmyMemory.provider": "De WArmy (enkonstruita)",
+  "insert.pop.title": "Enmeti",
+  "insert.pop.desc": "Kiel ĉi tiu mesaĝo eniras la atendovicon: urĝa = tuj antaŭen; enmeti = tuj post la nuna tasko; vici = al la fino. La ikono sekvas vian elekton.",
+  "think.pop.title": "Pensnivelo",
+  "think.pop.desc": "Kiom multe la modelo pensas: maldekstre = vigla (minimumo, respondas rekte), dekstre = natura (aŭtomata, rezoni laŭbezone). Marku «difinita de la buroo» por sekvi la propran defaŭlton de ĉiu laborĉevalo."
 }

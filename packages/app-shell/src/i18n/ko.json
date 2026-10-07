@@ -2073,7 +2073,7 @@
   "settings.fw800": "Extra bold",
   "settings.fw900": "Black",
   "model.smartHint": "Checked: the system arranges the chain for you. Unchecked: order/disable models yourself.",
-  "model.think": "Default thinking level",
+  "model.think": "사고 수준",
   "model.thinkHint": "Thinking depth, 8 stops: Spark (off) → Glimmer → Deliberate → Discerning → Ponder → Exhaust → Enlighten → Nature (auto). Auto lets the system pick; if the model rejects the level it is downgraded to Auto and the reply says so at the top.",
   "model.think.follow": "Follow",
   "model.think.auto": "Nature (auto)",
@@ -2214,5 +2214,9 @@
   "wo.daoPlaceholder": "예: 선승후전(先勝後戰); 지행합일(知行合一); 불확실성은 정직하게 보고; 인류를 위해 봉사하고 결코 악을 하지 않기…",
   "chat.resumeTaskFrom": "（중단 지점: {jieDuan}）",
   "plugin.warmyMemory.desc": "WArmy 기억 시스템(기본 켜짐): JSONL 추가 전용 로그를 단일 진실 원천으로 + SQLite/벡터 투영 + recall/retrieve 도구 + 지식 베이스 knowledge_query/add. dsh-memory-bundle과 다른 계층입니다(그쪽은 dsh 런타임용, 이쪽은 우마 대화·지식 축적용).",
-  "plugin.warmyMemory.provider": "제공: WArmy 내장"
+  "plugin.warmyMemory.provider": "제공: WArmy 내장",
+  "insert.pop.title": "삽입",
+  "insert.pop.desc": "이 메시지가 대기열에 들어가는 방식: 긴급=즉시 맨 앞, 삽입=현재 작업 바로 뒤, 대기=맨 뒤. 고른 항목에 따라 아이콘이 바뀝니다.",
+  "think.pop.title": "사고 수준",
+  "think.pop.desc": "모델이 얼마나 깊이 생각할지: 왼쪽=영기(최소, 바로 답변), 오른쪽=자연(자동, 필요할 때 추론). 「우마 관리국 설정 따르기」를 켜면 각 우마의 기본값을 따릅니다."
 }

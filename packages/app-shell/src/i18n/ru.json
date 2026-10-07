@@ -2073,7 +2073,7 @@
   "settings.fw800": "Extra bold",
   "settings.fw900": "Black",
   "model.smartHint": "Checked: the system arranges the chain for you. Unchecked: order/disable models yourself.",
-  "model.think": "Default thinking level",
+  "model.think": "Уровень мышления",
   "model.thinkHint": "Thinking depth, 8 stops: Spark (off) → Glimmer → Deliberate → Discerning → Ponder → Exhaust → Enlighten → Nature (auto). Auto lets the system pick; if the model rejects the level it is downgraded to Auto and the reply says so at the top.",
   "model.think.follow": "Follow",
   "model.think.auto": "Nature (auto)",
@@ -2214,5 +2214,9 @@
   "wo.daoPlaceholder": "напр.: сначала победа, потом бой; единство знания и действия; честно сообщать о неопределённости; служить человечеству и никогда не творить зла…",
   "chat.resumeTaskFrom": "(прервано на: {jieDuan})",
   "plugin.warmyMemory.desc": "Система памяти WArmy (включена по умолчанию): JSONL только с добавлением как единственный источник истины + проекция SQLite/векторов + инструменты recall/retrieve + база знаний knowledge_query/add. Отдельный слой от dsh-memory-bundle (тот для рантайма dsh, этот для диалога рабочих лошадей и знаний).",
-  "plugin.warmyMemory.provider": "От WArmy (встроенный)"
+  "plugin.warmyMemory.provider": "От WArmy (встроенный)",
+  "insert.pop.title": "Вставка",
+  "insert.pop.desc": "Как это сообщение встаёт в очередь: срочно = сразу в начало; вставка = сразу после текущей задачи; очередь = в конец. Значок меняется по выбору.",
+  "think.pop.title": "Уровень мышления",
+  "think.pop.desc": "Насколько сильно думает модель: слева = живой (минимум, отвечает сразу), справа = естественный (авто, рассуждает по необходимости). Отметьте «задаёт контора», чтобы следовать значению по умолчанию каждого воркхорса."
 }
