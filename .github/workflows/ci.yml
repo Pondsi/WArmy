@@ -10,6 +10,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # 允许在 Actions 页手动重跑（排查/复核时不必为触发 CI 而空推一个 commit）
+  workflow_dispatch:
 jobs:
   verify:
     runs-on: windows-latest
