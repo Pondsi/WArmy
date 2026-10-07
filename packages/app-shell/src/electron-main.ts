@@ -596,7 +596,12 @@ function siKaoCanShu(level: string | undefined, urgency: string | undefined, mod
  * 因此重复的那次既不会进 JSONL，也不会进会话日志。
  */
 const __yiXieRu = new Map<string, { content: string; ts: number }>();
-const CHONG_XIE_CHUANG_MS = 20_000;
+/**
+ * 窗口取 **10 分钟**（真机事故：同一句回复隔 102 秒又被写了一遍 —— 那次是自动续派/续跑
+ * 吐出了与上一轮**逐字相同**的收尾语，20 秒窗口挡不住）。
+ * 10 分钟内同一会话同一角色吐**逐字相同**的内容，几乎必是重复写入而非"用户真想再说一遍"。
+ */
+const CHONG_XIE_CHUANG_MS = 600_000;
 function yiJingXieGuo(sid: string, role: string, content: string, now = Date.now()): boolean {
   const k = `${sid}|${guiYiJiaoSe(role)}`;
   const prev = __yiXieRu.get(k);
@@ -612,6 +617,15 @@ function qingChongXieJiLu(sid?: string): void {
 function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
   // 归一后写入：去重、镜像、回读全部只认这一套角色名
   const tiaoMu = { ...entry, role: guiYiJiaoSe(entry.role) } as LogEntry;
+  /**
+   * **纯标点/零宽不入账**（真机反馈：回答完下面多出一个只有「。」的回复）。
+   * 主进程各条写入路径都经这里，所以在入口统一拦掉 —— 任何来源的空话都不进会话日志。
+   * （JSONL 侧另有 `yiJingXieGuo`；系统提示类（system:true）如实保留。）
+   */
+  if (!tiaoMu.system && tiaoMu.role !== 'user' && String(tiaoMu.content || '').trim() && !youShiZhiWenBen(String(tiaoMu.content))) {
+    try { audit?.log('chat.punct-only-dropped', { sessionId: key, chars: String(tiaoMu.content || '').length }); } catch { /* noop */ }
+    return;
+  }
   /**
    * **短窗口去重**：同一条消息有两条写入路径（渲染层统一推送里补写 + 主进程自己的路径
    * chat-send / 群聊编排里的值班记录），不去重就会在日志里出现两份 ⇒ 用户看到"消息显示 2 次"。
@@ -4850,20 +4864,39 @@ async function zhenZhengFaSong(
       let replyMemSeq: number | undefined;
       const replyChongFu = yiJingXieGuo(sessionId, 'assistant', reply);
       if (replyChongFu) {
+        // 重复写入：**连会话日志也不写**（只留第一次），避免界面上出现两条一模一样的回复
         try { audit?.log('chat.dup-write-skipped', { sessionId, role: 'assistant', chars: reply.length }); } catch { /* noop */ }
-      } else {
-        try {
-          replyMemSeq = memSeqOf(
-            await memory?.append(
-              // 与日志正文**一致**地落盘：之前这里 slice(0,4000)，会让 retrieve(recordId) 只能回到前 4000 字符，
-              // 而日志里是全量 —— 两份真相不一致，等于长回复的尾巴取不回来（不丢细节的前提是两边同一份内容）。
-              { id: replyRecordId, sessionId, kind: 'message', role: 'assistant', ti: reply, groupId: sessionId, entityType: 'chat' },
-              'duty'
-            )
-          );
-        } catch {
-          /* optional */
-        }
+        return {
+          ok: true,
+          reply,
+          reasoning: siKaoGuoCheng || undefined,
+          thinkDowngraded: jiangJiTiShi || undefined,
+          usage: xiangYing.usage,
+          needsKey: false,
+          moXing: modelId,
+          gongYingShang: zhu.biaoQian || zhu.presetId,
+          xuanZeYuanYin: jueCe.why,
+          tools: {
+            requested: !!loop.tooled,
+            diaoYongJi: loop.gongJuDiaoYongJi,
+            lunShu: loop.lunShu,
+            qingQiuJi: loop.qingQiuJi,
+            degraded: loop.degraded,
+            tingZhiYuanYin: loop.tingZhiYuanYin,
+          },
+        };
+      }
+      try {
+        replyMemSeq = memSeqOf(
+          await memory?.append(
+            // 与日志正文**一致**地落盘：之前这里 slice(0,4000)，会让 retrieve(recordId) 只能回到前 4000 字符，
+            // 而日志里是全量 —— 两份真相不一致，等于长回复的尾巴取不回来（不丢细节的前提是两边同一份内容）。
+            { id: replyRecordId, sessionId, kind: 'message', role: 'assistant', ti: reply, groupId: sessionId, entityType: 'chat' },
+            'duty'
+          )
+        );
+      } catch {
+        /* optional */
       }
       zhuiJiaLiaoTianRiZhi(sessionId, {
         seq: xiaYiLiaoTianXuLie(replyMemSeq),

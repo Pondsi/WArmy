@@ -94,18 +94,9 @@
       recent: [],
     },
     chaJianJi: [
-      {
-        id: 'agent-teams',
-        ming: '@nanmicoder/dsh-agent-teams',
-        enabled: true,
-        desc: 'plugin.teams.desc',
-      },
-      {
-        id: 'memory-plus',
-        ming: 'dsh-memory-bundle',
-        enabled: true,
-        desc: 'plugin.memory.desc',
-      },
+      // 产品定稿：只保留 WArmy 自己的记忆系统插件
+      // （@nanmicoder/dsh-agent-teams 与 dsh-memory-bundle 是 2026-09-16 UI 面板的默认占位，
+      //   从未被任何代码安装/依赖 —— 已删除）
       {
         id: 'warmy-memory',
         ming: 'warmy-memory-system',
@@ -4026,24 +4017,48 @@
   let yunXingJiShiQi = 0;
   let yunXingXuHao = 0;
   let yunXingKaiShi = 0;
+  /** 最近一次**有产出**的时间（有工具调用、有输出、有思考…任何内容/行动） */
+  let yunXingZuiXin = 0;
   let yunXingHuiHua = '';
   /** 每轮的世代号：上一轮的 finally 不许把新一轮的动态小字关掉（真事故：多轮后小字不出现） */
   let yunXingShiDai = 0;
+  /** 年月日时分秒（产品要求：开始/最近更新都按这个格式显示） */
+  function nianYueRiShiFenMiao(ms) {
+    if (!ms) return '—';
+    const d = new Date(ms);
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+  /** 本轮有产出（工具调用/输出/思考…）—— 刷新「最近更新」时间 */
+  function chuoYunXingZuiXin() {
+    yunXingZuiXin = Date.now();
+  }
+  window.__chuoYunXingZuiXin = chuoYunXingZuiXin;
   function yunXingZhuangTaiKai(chatId) {
     const he = $('yunXingZhuangTai');
     if (!he) return;
     yunXingHuiHua = String(chatId || '');
     yunXingKaiShi = Date.now();
+    yunXingZuiXin = yunXingKaiShi;
     yunXingXuHao = 1;
     yunXingShiDai += 1;
     // 文案池从随机位置起（同一句别老重复）；起手段仍然是安静的「正在思考…」
     busyPhraseSeed = Math.floor(Math.random() * Math.max(1, BUSY_PHRASES.length));
     clearInterval(yunXingJiShiQi);
     he.classList.remove('yinCang', 'cuoWu');
+    /**
+     * 动态小字的三段（产品要求，**按这个顺序**）：
+     *   ① 开始时间（年月日时分秒）
+     *   ② 最近更新内容的时间（有工具/输出/思考等任何产出时刷新）
+     *   ③ 持续了多久（秒）
+     */
     he.innerHTML =
       '<span class="yunXingDian" aria-hidden="true"><i></i><i></i><i></i></span>' +
-      '<span class="yunXingWen"></span><span class="yunXingMiao"></span>';
+      '<span class="yunXingWen"></span>' +
+      '<span class="yunXingShiJian"></span>' +
+      '<span class="yunXingMiao"></span>';
     const wen = he.querySelector('.yunXingWen');
+    const shiJian = he.querySelector('.yunXingShiJian');
     const miao = he.querySelector('.yunXingMiao');
     const hua = () => {
       const yong = Math.max(0, Math.floor((Date.now() - yunXingKaiShi) / 1000));
@@ -4059,11 +4074,16 @@
         ju = tOr('chat.busy.' + yunXingXuHao, '正在干活…');
       }
       if (wen) wen.textContent = ju;
+      if (shiJian) {
+        shiJian.textContent =
+          tOr('chat.busy.started', '开始') + ' ' + nianYueRiShiFenMiao(yunXingKaiShi) +
+          ' · ' + tOr('chat.busy.updated', '最近更新') + ' ' + nianYueRiShiFenMiao(yunXingZuiXin);
+      }
       if (miao) miao.textContent = yong + 's';
     };
     hua();
     // 秒数每秒走；文案在 hua() 内部按 BUSY_ROTATE_MS 节流
-    yunXingJiShiQi = setInterval(hua, 1000);
+    yunXingJiShiQi = setInterval(hua, 250);
   }
   function yunXingZhuangTaiGuan(chengGong, chatId) {
     // 只收属于这一轮的那条：并发/切会话/前后轮交错时都不许把别人的动态小字关掉
@@ -4172,8 +4192,18 @@
           }
           const c = state.chats.find((x) => x.id === chatId);
           if (c) {
-            c.lastTs = Date.now();
             c.lastPreview = (huiFu || text).slice(0, 30);
+            /**
+             * **取消勾选「提醒」的会话：新回复不上移到顶部**（产品要求）。
+             * 角标照给（在 `tuisongXiaoxi` 里计），只是不动它在列表里的位置。
+             * 三个来源（chats / groups / instances）一起改，避免排在哪一列都不动。
+             */
+            const tiXingKai = c.notify !== false;
+            if (tiXingKai) c.lastTs = Date.now();
+            const g0 = state.groups && state.groups.find((x) => x.id === chatId);
+            if (g0) { g0.lastPreview = c.lastPreview; if (g0.notify !== false) g0.lastTs = Date.now(); }
+            const i0 = state.instances && state.instances.find((x) => x.id === chatId);
+            if (i0) { i0.lastPreview = c.lastPreview; if (i0.notify !== false) i0.lastTs = Date.now(); }
           }
         } else {
           // 失败：如实告诉用户**出了什么问题**（带上下文，不甩裸解析器报错）
@@ -4298,12 +4328,20 @@
   let __lastSend = { text: '', at: 0 };
   async function faSong() {
     const text = $('shuRu').value.trim();
-    if (!text || !state.selectedChat) return;
+    /**
+     * **有内容才能发**：文字或**附件**（截图/文件）任一存在即可。
+     * 真机反馈：只附了截图/文件、输入框为空时点发送没反应 —— 以前这里写成 `if (!text) return`，
+     * 按钮亮着却发不出去。现在只在「既没文字也没附件」时才拦。
+     */
+    const youFuJian = Array.isArray(state.attachments) && state.attachments.length > 0;
+    if ((!text && !youFuJian) || !state.selectedChat) return;
     // 同一条文本 600ms 内只发一次：Enter 与发送按钮可能同时触发（实测「发一次显示两次」）
+    // 附件也算进指纹，否则"只发附件"会把两次不同的附件当成同一条
     {
       const now = Date.now();
-      if (__lastSend.text === text && now - __lastSend.at < 600) return;
-      __lastSend = { text, at: now };
+      const zhiWen = text + '|' + (state.attachments || []).map((a) => a.name || a.ming || a.path || '').join(',');
+      if (__lastSend.text === zhiWen && now - __lastSend.at < 600) return;
+      __lastSend = { text: zhiWen, at: now };
     }
     const id = state.selectedChat.id;
     /**
@@ -5519,6 +5557,7 @@
       heZi.innerHTML = `
         <div class="peiZhiBuJu">
         <div class="peiZhiDaoHang" id="peiZhiDaoHang">
+          <h2 class="peiZhiDaoHangBiaoTi">${escapeHtml(tOr('settings.title', '设置'))}</h2>
           <input id="peiZhiSouSuo" class="hkFilter" placeholder="${escapeHtml(tOr('settings.search', '搜索设置…'))}" style="margin-bottom:8px"/>
           <button data-sec="ui" class="qiYong">${escapeHtml(t('settings.section.ui'))}</button>
           <button data-sec="notify">${escapeHtml(t('settings.section.notify'))}</button>
@@ -5980,8 +6019,8 @@
           <p class="jingYin">${escapeHtml(tOr('gongJu.hint', '模型能调用的工具都在这里。停用后模型就看不到它；已装的工具可手动安装/导入，也可添加自动发现的目录。'))}</p>
           <div id="gongJuLieBiao" class="jingYin">${escapeHtml(tOr('gongJu.empty', '暂无工具'))}</div>
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
-            <div class="jinengSaoMiaoBiaoTi">${escapeHtml(t('settings.skillsScanTitle'))}</div>
-            <div class="jingYin">${escapeHtml(t('settings.skillsScanHint'))}</div>
+            <div class="jinengSaoMiaoBiaoTi">${escapeHtml(tOr('gongJu.scanTitle', '自动发现目录'))}</div>
+            <div class="jingYin">${escapeHtml(tOr('gongJu.scanHint', '目录下含 TOOL.json 的子目录（或目录本身）会被自动发现为工具包；最多 10 个。无效路径会如实标注。'))}</div>
             <div id="gongJuSaoMiaoMuLuJi"></div>
             <div class="shiLiHang" style="margin-top:6px">
               <input id="gongJuSaoMiaoMuLuShuRu" class="skill-scan-input" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}" style="flex:1;min-width:120px"/>
@@ -6254,14 +6293,20 @@
       (function bindSettingsMenu() {
         const neirongYuansu = $('peiZhiNeiRong');
         if (!neirongYuansu) return;
-        // 设置页搜索：按文案过滤卡片（标题/正文命中即显示）
+        // 设置页搜索：**只搜当前分区**里的卡片（产品要求：搜到的是「该选项中的全部内容」，
+        // 不能把别的分区的卡片也翻出来 —— 以前 `querySelectorAll('.sheZhiKa')` 会跨分区，
+        // 而且 `display:''` 还会把被分区隐藏的卡片重新显示出来）。
         (function bindSettingsSearch() {
           const souSuo = $('peiZhiSouSuo');
           if (!souSuo || souSuo.dataset.bound) return;
           souSuo.dataset.bound = '1';
           souSuo.addEventListener('input', () => {
             const q = String(souSuo.value || '').trim().toLowerCase();
+            const groups = window.__settingsGroups || {};
+            const dangQian = new Set(groups[settingsSection] || []);
             Array.from(neirongYuansu.querySelectorAll('.sheZhiKa')).forEach((ka) => {
+              // 非当前分区的卡片：交给 showSec 管，这里一个字都不动
+              if (!dangQian.has(ka)) return;
               if (!q) { ka.style.display = ''; return; }
               const txt = (ka.textContent || '').toLowerCase();
               ka.style.display = txt.includes(q) ? '' : 'none';
@@ -6274,6 +6319,7 @@
         const groups = { ui: [], notify: [], model: [], func: [], tool: [], plugin: [], hotkey: [], about: [], mimic: [] };
         groups['skill'] = skillBucket;
         groups['jineng'] = skillBucket;
+        window.__settingsGroups = groups;
         let curSec = 'ui';
         Array.from(neirongYuansu.children).forEach((yuanSu) => {
           const ds = yuanSu.getAttribute && yuanSu.getAttribute('data-sec');
@@ -10607,6 +10653,15 @@
       const muBiao = e.target;
       if (muBiao && (muBiao.id === 'shuRu' || (muBiao.closest && muBiao.closest('#shuRu')))) qing();
     }, true);
+    /**
+     * **滚动上下文也算「看过」**（产品要求）：在聊天区上下滚动就会清掉第二列的
+     * 「新回复」标记 —— 翻记录本身就是阅读动作，不必再点一下。
+     * 用捕获阶段，任何子节点触发的 scroll 都算。
+     */
+    document.addEventListener('scroll', (e) => {
+      const muBiao = e.target;
+      if (muBiao && muBiao.closest && muBiao.closest('#xiaoXiJi')) qing();
+    }, true);
   })();
 
   $('anNiuYuYin') && ($('anNiuYuYin').onclick = () => {
@@ -11828,7 +11883,26 @@
     { id: 'toggleSidebar', def: '{mod}+B', alt: '', run: () => { const b = $('appTi'); if (b) b.classList.toggle('yinCangLieBiao'); } },
     { id: 'openSettings', def: '{mod}+,', alt: '', run: () => setNav('settings') },
     { id: 'newSession', def: '{mod}+N', alt: '', run: () => { const b = primaryAddButton(); if (b) b.click(); } },
-    { id: 'focusSearch', def: 'F3', alt: '{mod}+S', run: () => { const i = $('lieBiaoSouSuo'); if (i) { i.focus(); i.select(); } } },
+    { id: 'focusSearch', def: 'F3', alt: '{mod}+S', run: () => {
+      /**
+       * **搜索快捷键的落点**（产品要求）：
+       *   ① 在聊天界面（看得到三点菜单）⇒ 打开**三点菜单里的搜索**（`showSearchPopup`）；
+       *   ② 不在聊天界面但第二列在 ⇒ 聚焦**第二列的搜索框**；
+       *   ③ 两者都没有 ⇒ 什么都不做。
+       */
+      try {
+        const gengDuo = $('gengDuoTrigger');
+        const zaiLiaoTian = !!state.selectedChat && ['singleAi', 'internalGroup', 'externalGroup', 'externalChat'].includes(state.nav);
+        if (zaiLiaoTian && gengDuo && !gengDuo.closest('.yinCang')) {
+          $('gengDuoCaiDan')?.classList.add('yinCang');
+          showSearchPopup();
+          return;
+        }
+      } catch { /* 落到第二列搜索框 */ }
+      const i = $('lieBiaoSouSuo');
+      // 可见才算"在显示"（offsetParent 为 null = 隐藏/未布局）
+      if (i && i.offsetParent !== null) { i.focus(); i.select(); }
+    } },
     { id: 'focusInput', def: '', alt: '', run: () => { const i = $('shuRu'); if (i) i.focus(); } },
     { id: 'toggleConsole', def: '', alt: '', run: () => { const b = $('diagKaiGuan') || $('anNiuKongZhiTai'); if (b) b.click(); } },
     { id: 'stopAll', def: '{mod}+Backspace', alt: '', run: () => { const b = $('anNiuTingZhiAll'); if (b) b.click(); } },
@@ -11842,6 +11916,8 @@
     { id: 'readLatest', def: 'F7', alt: '{mod}+Shift+Space', run: () => { try { window.__duZuiXinHuiFu?.(); } catch { /* noop */ } } },
     // 切到「有最新回复」的会话
     { id: 'jumpLatest', def: 'F8', alt: '', run: () => { try { window.__tiaoZuiXinHuiFu?.(); } catch { /* noop */ } } },
+    // 截图（等于聊天输入框下的截图按钮）
+    { id: 'shotScreen', def: '{mod}+Shift+S', alt: '', run: () => { const b = $('anNiuShot'); if (b) b.click(); } },
   ];
 
   /** 当前页面的「新建」入口（实例页/项目页/群聊页/联系人页各不相同） */
@@ -12649,7 +12725,7 @@
         onClick: () => sheZhiDing(inst.id, !shiZhiDing(inst.id)),
       },
       {
-        biaoQian: running ? t('ctx.close') : t('ctx.enable'),
+        biaoQian: running ? t('ctx.stop') : t('ctx.enable'),
         onClick: async () => {
           if (running) {
             if (sessionHasBlockingTasks(inst.id)) {
@@ -12713,9 +12789,10 @@
         },
       },
       {
-        biaoQian: t('ctx.notify') + (inst.notify ? ' ✓' : ''),
+        // 默认**勾选**（跟随设置→通知里的提示音与邮件）；取消后仅本会话静音、且新回复不上移
+        biaoQian: t('ctx.notify') + ((inst.notify !== false) ? ' ✓' : ''),
         onClick: () => {
-          inst.notify = !inst.notify;
+          inst.notify = (inst.notify === false);
           renderList();
         },
       },
@@ -12793,9 +12870,9 @@
           }
         : null,
       {
-        biaoQian: t('ctx.notify') + (g.notify ? ' ✓' : ''),
+        biaoQian: t('ctx.notify') + ((g.notify !== false) ? ' ✓' : ''),
         onClick: () => {
-          g.notify = !g.notify;
+          g.notify = (g.notify === false);
           renderList();
         },
       },
@@ -17067,6 +17144,8 @@
       try {
         const sid = String((d && d.sessionId) || '');
         if (!sid) return;
+        // 有输出/有思考 = 本轮有产出 ⇒ 刷新「最近更新」时间
+        if ((d && (d.reasoning || d.content)) && !d.end) { try { window.__chuoYunXingZuiXin?.(); } catch { /* noop */ } }
         if (d.end) { try { shouLiuShiKuai(); } catch { /* noop */ } return; }
         state.streamBuf = state.streamBuf || {};
         const b = state.streamBuf[sid] || (state.streamBuf[sid] = { reasoning: '', content: '' });

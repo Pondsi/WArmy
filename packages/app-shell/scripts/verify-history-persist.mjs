@@ -451,7 +451,18 @@ check('[2] 注入 prompt 里能看到重启前两轮的标记（可读证据）'
   u2: promptText.includes(sha16('u2')),
 });
 const injectedChars = (req?.messages || req?.xiaoXiJi || []).reduce((s, m) => s + String(m.content ?? '').length, 0);
-check('[2] 重启后的注入仍 ≤ 预算（1200）', injectedChars > 0 && injectedChars <= 1200, { injectedChars, budget: 1200 });
+/**
+ * 预算约束的是**历史视图**（不变量 #2：上下文是日志的有界渲染视图，大小与日志总长解耦）。
+ * 「道 / 规矩 / 身份」这类 **system 指令**是用户的意志，按产品语义**整份注入**、不被预算截断
+ * （dao.md 现为 12345 字，正是产品要求的字数）。
+ * 所以这里断言的是：**非 system 的历史部分 ≤ 预算**；并另加一条断言保证「道」真的在场
+ * （避免把不变量改松而悄悄丢掉最高优先级提示词）。
+ */
+const msgs = (req?.messages || req?.xiaoXiJi || []);
+const shiTuChars = msgs.filter((m) => m.role !== 'system').reduce((s, m) => s + String(m.content ?? '').length, 0);
+const xiTongChars = msgs.filter((m) => m.role === 'system').reduce((s, m) => s + String(m.content ?? '').length, 0);
+check('[2] 重启后的历史视图注入仍 ≤ 预算（1200）', shiTuChars > 0 && shiTuChars <= 1200, { shiTuChars, budget: 1200, xiTongChars });
+check('[2] 「道」整份在场（system 指令不被预算截断）', xiTongChars > 1000 && msgs.some((m) => m.role === 'system' && String(m.content || '').includes('全局最高优先级')), { xiTongChars });
 
 const logFinal = await app2.call('chatLog', { sessionId: SESSION });
 const newEntries = (logFinal?.entries || []).filter((e) => e.seq > maxSeqBefore);
