@@ -2261,5 +2261,11 @@
   "plugin.builtinNoDelete": "O plugin integrado não pode ser excluído",
   "model.noToolsWarn": "Este modelo nao pode chamar ferramentas para executar tarefas; apenas chat",
   "console.helpTip": "Registro de eventos local real (chamadas de ferramentas/rede/erros) para solucao de problemas. Clique com o botao direito no conteudo do evento para copiar ou limpar.",
-  "settings.scanDirsEmpty": "Nenhum diretorio de descoberta automatica adicionado ainda"
+  "settings.scanDirsEmpty": "Nenhum diretorio de descoberta automatica adicionado ainda",
+  "settings.tabGates": "Portoes",
+  "gate.title": "Portoes de conformidade",
+  "gate.hint": "Verifica automaticamente se o codigo e os documentos atendem as clausulas-chave do dao.md (segredos codificados, catch silencioso, niveis de evidencia, etc.). Executa em CLI, nao exibido em listas de plugins/ferramentas.",
+  "gate.daoCompliance": "Portao de conformidade dao.md: verifica segredos codificados, catch silencioso, niveis de evidencia, controle de versao do changelog, integridade da estrutura do dao.md. Executar: node packages/app-shell/scripts/verify-dao-compliance.mjs",
+  "gate.daoEnforcement": "Habilidade dao: executa automaticamente lista de verificacao pre-acao de 12 itens + 7 blocos duros de linha de base + lista de verificacao pos-acao de 8 itens. Usado como habilidade MiMoCode.",
+  "gate.fullVerify": "Verificacao completa: executa todos os scripts verify-* N rodadas consecutivas, redefinindo a contagem em qualquer falha. Executar: node scripts/full-verify-rounds.mjs 3"
 }

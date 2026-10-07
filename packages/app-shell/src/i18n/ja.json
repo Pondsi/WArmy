@@ -2261,5 +2261,11 @@
   "plugin.builtinNoDelete": "組み込みプラグインは削除できません",
   "model.noToolsWarn": "このモデルはツールを呼び出してタスクを実行できません。チャット専用です",
   "console.helpTip": "ローカルの実際のイベントログ（ツール呼び出し/ネットワーク/エラー）です。トラブルシューティング用。イベント内容を右クリックしてコピーまたはクリアできます。",
-  "settings.scanDirsEmpty": "自動検出ディレクトリはまだ追加されていません"
+  "settings.scanDirsEmpty": "自動検出ディレクトリはまだ追加されていません",
+  "settings.tabGates": "ゲート",
+  "gate.title": "コンプライアンスゲート",
+  "gate.hint": "コードとドキュメントが dao.md の主要条項（ハードコードされたシークレット、サイレントキャッチ、証拠レベルなど）に準拠しているか自動チェックします。CLI で実行され、プラグイン/ツールリストには表示されません。",
+  "gate.daoCompliance": "dao.md コンプライアンスゲート：ハードコードされたシークレット、サイレントキャッチ、証拠レベル、changelog バージョン管理、dao.md 構造の完全性をチェック。実行：node packages/app-shell/scripts/verify-dao-compliance.mjs",
+  "gate.daoEnforcement": "dao スキル：タスク前/高リスク操作前/完了時に行動前チェックリスト 12 項目 + 底線 7 つのハードブロック + 行動後チェックリスト 8 項目を自動実行。MiMoCode スキルとして使用。",
+  "gate.fullVerify": "フル検証：すべての verify-* スクリプトを N ラウンド連続実行し、失敗時にカウントリセット。実行：node scripts/full-verify-rounds.mjs 3"
 }

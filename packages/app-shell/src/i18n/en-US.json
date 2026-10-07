@@ -2261,5 +2261,11 @@
   "plugin.builtinNoDelete": "Built-in plugin cannot be deleted",
   "model.noToolsWarn": "This model cannot call tools to execute tasks; chat-only",
   "console.helpTip": "Real local event log (tool calls/networking/errors) for troubleshooting. Right-click event content to copy or clear.",
-  "settings.scanDirsEmpty": "No auto-discover directories added yet"
+  "settings.scanDirsEmpty": "No auto-discover directories added yet",
+  "settings.tabGates": "Gates",
+  "gate.title": "Compliance Gates",
+  "gate.hint": "Automatically checks code and docs against dao.md key clauses (hardcoded secrets, silent catch, evidence levels, etc.). Runs in CLI, not shown in plugin/tool lists.",
+  "gate.daoCompliance": "dao.md compliance gate: checks hardcoded secrets, silent catch, evidence levels, changelog versioning, dao.md structure. Run: node packages/app-shell/scripts/verify-dao-compliance.mjs",
+  "gate.daoEnforcement": "dao skill: auto-runs 12-item pre-action checklist + 7 bottom-line hard blocks + 8-item post-action checklist. Used as a MiMoCode skill.",
+  "gate.fullVerify": "Full verification: runs all verify-* scripts N rounds consecutively, resetting count on any failure. Run: node scripts/full-verify-rounds.mjs 3"
 }

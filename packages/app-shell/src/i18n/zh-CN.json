@@ -2261,5 +2261,11 @@
   "plugin.builtinNoDelete": "内置插件不可删除",
   "model.noToolsWarn": "该模型无法调用工具执行任务，只能纯聊天",
   "console.helpTip": "本机真实事件日志（工具调用/组网/错误），排障用。右击事件内容可复制或清空。",
-  "settings.scanDirsEmpty": "尚未添加自动发现目录"
+  "settings.scanDirsEmpty": "尚未添加自动发现目录",
+  "settings.tabGates": "门禁",
+  "gate.title": "合规门禁",
+  "gate.hint": "自动检查代码与文档是否符合 dao.md 的关键条款（硬编码密钥、静默吞异常、证据分级等）。在命令行运行，不显示在插件/工具列表中。",
+  "gate.daoCompliance": "dao.md 合规门禁：检查硬编码密钥、静默吞异常、证据分级、changelog 版本化、dao.md 结构完整性。运行：node packages/app-shell/scripts/verify-dao-compliance.mjs",
+  "gate.daoEnforcement": "dao 技能：任务前/高风险操作前/收尾时自动跑行动前自检 12 项 + 底线 7 条硬阻断 + 行动后自检 8 项。作为 MiMoCode 技能使用。",
+  "gate.fullVerify": "全量门禁：连续 N 轮跑完所有 verify-* 脚本，任一失败即重置计数。运行：node scripts/full-verify-rounds.mjs 3"
 }

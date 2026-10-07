@@ -3983,21 +3983,14 @@
   }
 
   function stopAllAi() {
-    // **先标记停止**：让续派循环和当前请求知道用户按了停止
+    /**
+     * **只停当前会话的 AI**（产品要求：不影响其他会话中的 AI）。
+     * 绝不停用牛马实例（真事故：点了停止键牛马变成停用状态）。
+     */
     const sid = state.selectedChat && state.selectedChat.id;
-    if (sid) {
-      try { window.warmy.stopInstance(sid); } catch { /* noop */ }
-    }
-    state.instances.forEach((inst) => {
-      if (inst.status === 'running') {
-        try {
-          window.warmy.stopInstance(inst.id);
-        } catch {
-          /* noop */
-        }
-        inst.status = 'stopped';
-      }
-    });
+    if (!sid) return;
+    // 标记停止：让续派循环和当前请求知道用户按了停止
+    try { window.warmy.stopChat?.(sid); } catch { /* noop */ }
     if (state.selectedChat) {
       queueOf(state.selectedChat.id).forEach((item) => {
         item.editing = false;
@@ -4011,7 +4004,6 @@
       queueRounds[state.selectedChat.id] = false;
     }
     renderList();
-    if (state.nav === 'instances' && state.selectedInstance) renderInstanceDetail();
     renderChat();
   }
 
@@ -5646,6 +5638,7 @@
           <button data-sec="skill">${escapeHtml(t('settings.tabSkills'))}</button>
           <button data-sec="tool">${escapeHtml(tOr('settings.tabTools', '工具'))}</button>
           <button data-sec="plugin">${escapeHtml(t('settings.tabPlugins'))}</button>
+          <button data-sec="gate">${escapeHtml(tOr('settings.tabGates', '门禁'))}</button>
           <button data-sec="hotkey">${escapeHtml(t('settings.section.hotkey'))}</button>
           <button data-sec="about">${escapeHtml(t('settings.section.about'))}</button>
           <button data-sec="mimic">${escapeHtml(tOr('settings.mimic', '拟态'))}</button>
@@ -5936,6 +5929,24 @@
               <button class="anNiuXiao" id="anNiuPlugSaoMiaoJiQi">${escapeHtml(t('settings.scanMachine'))}</button>
             </div>
             <div class="jingYin" id="plugSaoMiaoXiaoXi"></div>
+          </div>
+        </div>
+        <!-- 门禁：dao 合规检查等开发工具 -->
+        <div class="sheZhiSection" data-sec="gate"><h2 style="color:var(--accent)">${escapeHtml(tOr('settings.tabGates', '门禁'))}</h2></div>
+        <div class="sheZhiSection sheZhiKa">
+          <h2>${escapeHtml(tOr('gate.title', '合规门禁'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('gate.hint', '自动检查代码与文档是否符合 dao.md 的关键条款（硬编码密钥、静默吞异常、证据分级等）。在命令行运行，不显示在插件/工具列表中。'))}</p>
+          <div class="ctgHang">
+            <div class="ctgHangHead"><span class="pfMing">verify-dao-compliance</span></div>
+            <div class="ctgDim">${escapeHtml(tOr('gate.daoCompliance', 'dao.md 合规门禁：检查硬编码密钥、静默吞异常、证据分级、changelog 版本化、dao.md 结构完整性。运行：node packages/app-shell/scripts/verify-dao-compliance.mjs'))}</div>
+          </div>
+          <div class="ctgHang">
+            <div class="ctgHangHead"><span class="pfMing">dao-enforcement</span></div>
+            <div class="ctgDim">${escapeHtml(tOr('gate.daoEnforcement', 'dao 技能：任务前/高风险操作前/收尾时自动跑行动前自检 12 项 + 底线 7 条硬阻断 + 行动后自检 8 项。作为 MiMoCode 技能使用。'))}</div>
+          </div>
+          <div class="ctgHang">
+            <div class="ctgHangHead"><span class="pfMing">full-verify-rounds</span></div>
+            <div class="ctgDim">${escapeHtml(tOr('gate.fullVerify', '全量门禁：连续 N 轮跑完所有 verify-* 脚本，任一失败即重置计数。运行：node scripts/full-verify-rounds.mjs 3'))}</div>
           </div>
         </div>
         <!-- 内网同步 / 多节点组网 旧设置块已移除：功能由下方「组网设置」卡片承接。
@@ -6394,7 +6405,7 @@
             });
           });
         })();
-        const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'tool', 'plugin', 'hotkey', 'about', 'mimic'];
+        const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'tool', 'plugin', 'gate', 'hotkey', 'about', 'mimic'];
         // skill 与 jineng 是同一分区的两种历史键名 —— 必须别名到同一数组
         const skillBucket = [];
         const groups = { ui: [], notify: [], model: [], func: [], tool: [], plugin: [], hotkey: [], about: [], mimic: [] };
@@ -12934,12 +12945,14 @@
         biaoQian: running ? t('ctx.stop') : t('ctx.enable'),
         onClick: async () => {
           if (running) {
-            if (sessionHasBlockingTasks(inst.id)) {
-              uiAlert(t('ctx.taskRunning'));
-              return;
-            }
             const ok = await uiConfirm(t('ctx.closeConfirm'));
             if (!ok) return;
+            // **停掉一切正在进行的任务**（AI 请求 + 续派 + 流式）
+            try { window.warmy.stopChat?.(inst.id); } catch { /* noop */ }
+            try { shouLiuShiKuai(); } catch { /* noop */ }
+            if (state.streamBuf) delete state.streamBuf[inst.id];
+            queueRounds[inst.id] = false;
+            try { yunXingZhuangTaiGuan(false, inst.id); } catch { /* noop */ }
             await window.warmy.stopInstance(inst.id);
             inst.status = 'stopped';
           } else {
@@ -12951,6 +12964,8 @@
             }
           }
           renderList();
+          // **停用后禁用输入/发送**（可查看历史/右栏，不可交互）
+          try { void yingYongXiangMuKaiFaMen(); } catch { /* noop */ }
         },
       },
       {
@@ -15159,7 +15174,8 @@
             ? models.map((m) => {
                 const nl = (window.__moXingNengLi || {})[m] || {};
                 const buKeLiao = nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat' && !(nl.kind === 'chat' && nl.vision === true);
-                const wuGongJu = nl.tools === false;
+                /** **不能调用工具**（embedding 等）或**不是聊天模型**都给警示 */
+                const wuGongJu = nl.tools === false || (nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat' && nl.kind !== 'unknown');
                 const jingGaoSvg = '<svg class="moXingJingGao" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1L15 14H1L8 1Z" fill="none" stroke="#e6a23c" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="9" stroke="#e6a23c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.8" fill="#e6a23c"/></svg>';
                 const jingGao = wuGongJu ? ' <span class="moXingJingGaoWrap" title="' + escapeHtml(tOr('model.noToolsWarn', '该模型无法调用工具执行任务，只能纯聊天')) + '">' + jingGaoSvg + '</span>' : '';
                 const hui = buKeLiao ? ' style="opacity:0.45;cursor:not-allowed"' : '';

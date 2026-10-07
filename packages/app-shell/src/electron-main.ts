@@ -3310,6 +3310,20 @@ chuliIpc('warmy:tingZhiShiLi', async (_e, id: string) => {
     return true;
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+/**
+ * **只停当前会话的 AI 请求/续派**（不停用牛马实例）。
+ * 产品要求：停止键只影响当前会话，不影响其他会话中的 AI，也不停用牛马。
+ */
+chuliIpc('warmy:tingZhiDuiHua', (_e, sessionId: string) => {
+  try {
+    stoppedSessions.add(sessionId);
+    yanXuZhuangTai.delete(sessionId);
+    try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
+    try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
+    audit?.log('chat.stop-by-user', { sessionId });
+    return true;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:anQuanMoShi', () => anQuanChuLi(() => p1?.security.getMode(), 'normal'));
 chuliIpc(
   'warmy:sheZhiAnQuanMoShi',

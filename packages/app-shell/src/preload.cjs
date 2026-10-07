@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('warmy', {
   listInstances: () => ipcRenderer.invoke('warmy:lieBiaoShiLiJi'),
   spawnInstance: (cfg) => ipcRenderer.invoke('warmy:paiShengShiLi', cfg),
   stopInstance: (id) => ipcRenderer.invoke('warmy:tingZhiShiLi', id),
+  stopChat: (sessionId) => ipcRenderer.invoke('warmy:tingZhiDuiHua', sessionId),
   securityMode: () => ipcRenderer.invoke('warmy:anQuanMoShi'),
   setSecurityMode: (mode) => ipcRenderer.invoke('warmy:sheZhiAnQuanMoShi', mode),
   memoryRecall: (q) => ipcRenderer.invoke('warmy:jiYiHuiSuo', q),

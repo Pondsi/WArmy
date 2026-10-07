@@ -2261,5 +2261,11 @@
   "plugin.builtinNoDelete": "Enkonstruita kromaĵo ne estas forigebla",
   "model.noToolsWarn": "Cxi tiu modelo ne povas voki ilojn por plenumi taskojn; nur babilo",
   "console.helpTip": "Reala loka eventprotokolo (ilovokoj/reto/eraroj) por problemasolvo. Dekstre alklaku la eventenhavon por kopii aub purigi.",
-  "settings.scanDirsEmpty": "Aŭtomataj malkovro-dosierujoj ankoraŭ ne aldonitaj"
+  "settings.scanDirsEmpty": "Aŭtomataj malkovro-dosierujoj ankoraŭ ne aldonitaj",
+  "settings.tabGates": "Pordegoj",
+  "gate.title": "Konformecpordegoj",
+  "gate.hint": "Aŭtomate kontrolas ĉu kodo kaj dokumentoj kongruas kun ĉefaj klauzoloj de dao.md (enmetitaj sekretoj, silenta catch, pruvo-niveloj ktp). Ruliĝas en CLI, ne montriĝas en kromaĵ-ilaj listoj.",
+  "gate.daoCompliance": "dao.md konformecpordego: kontrolas enmetitajn sekretojn, silentan catch, pruvo-nivelojn, changelog-versiigan, dao.md-strukturan integrecon. Ruli: node packages/app-shell/scripts/verify-dao-compliance.mjs",
+  "gate.daoEnforcement": "dao-lerteco: aŭtomate rulas 12-elementan antaŭ-agan kontrol-liston + 7 malmolajn baza-liniajn blokojn + 8-elementan post-agan kontrol-liston. Uziĝas kiel MiMoCode-lerteco.",
+  "gate.fullVerify": "Plena kontrolo: rulas ĉiujn verify-* skriptojn N sinsekvajn raŭndojn, nuligante kalkulon je iu ajn fiasko. Ruli: node scripts/full-verify-rounds.mjs 3"
 }

@@ -2661,8 +2661,8 @@ body.liaoTianChuangKou #appTi {
 .yunXingDian.ok i { animation: none; opacity: 1; background: var(--ok-fg, #6fd18f); }
 .yunXingDian.cuo i { animation: none; opacity: 1; background: var(--danger, #e06060); }
 .yunXingWen { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.yunXingShiJian { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 12px; white-space: nowrap; flex-shrink: 0; }
-.yunXingMiao { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 6px; white-space: nowrap; flex-shrink: 0; min-width: 3em; text-align: right; }
+.yunXingShiJian { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 6px; white-space: nowrap; flex-shrink: 0; }
+.yunXingMiao { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 4px; white-space: nowrap; flex-shrink: 0; min-width: 3em; text-align: right; }
 .yunXingZhuangTai.cuoWu { color: var(--danger, #e06060); }
 /* 减弱动效：打字点/转圈不再弹跳，只保留静态可见性（无障碍） */
 @media (prefers-reduced-motion: reduce) {

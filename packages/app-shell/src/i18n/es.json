@@ -2261,5 +2261,11 @@
   "plugin.builtinNoDelete": "El complemento integrado no se puede eliminar",
   "model.noToolsWarn": "Este modelo no puede llamar herramientas para ejecutar tareas; solo chat",
   "console.helpTip": "Registro de eventos local real (llamadas a herramientas/red/errores) para solucionar problemas. Haga clic derecho en el contenido del evento para copiar o borrar.",
-  "settings.scanDirsEmpty": "Aún no se han añadido directorios de descubrimiento automático"
+  "settings.scanDirsEmpty": "Aún no se han añadido directorios de descubrimiento automático",
+  "settings.tabGates": "Compuertas",
+  "gate.title": "Compuertas de cumplimiento",
+  "gate.hint": "Verifica automáticamente si el código y los documentos cumplen las cláusulas clave de dao.md (secretos hardcodeados, catch silencioso, niveles de evidencia, etc.). Se ejecuta en CLI, no se muestra en listas de complementos/herramientas.",
+  "gate.daoCompliance": "Compuerta de cumplimiento dao.md: verifica secretos hardcodeados, catch silencioso, niveles de evidencia, versionado de changelog, integridad de estructura de dao.md. Ejecutar: node packages/app-shell/scripts/verify-dao-compliance.mjs",
+  "gate.daoEnforcement": "Habilidad dao: ejecuta automáticamente lista de verificación previa de 12 elementos + 7 bloques duros de línea base + lista de verificación posterior de 8 elementos. Se usa como habilidad de MiMoCode.",
+  "gate.fullVerify": "Verificación completa: ejecuta todos los scripts verify-* N rondas consecutivas, reiniciando el conteo en cualquier fallo. Ejecutar: node scripts/full-verify-rounds.mjs 3"
 }

@@ -6,7 +6,17 @@
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; cursor: crosshair; user-select: none; background: #000; }
   img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: .95; pointer-events: none; }
-  #kuang { position: absolute; border: 2px solid #ffd28a; box-shadow: 0 0 0 9999px rgba(0,0,0,.62); display: none; pointer-events: none; }
+  #kuang { position: absolute; border: 2px solid #ffd28a; box-shadow: 0 0 0 9999px rgba(0,0,0,.62); display: none; }
+  .jiao { position: absolute; width: 14px; height: 14px; background: #ffd28a; border: 2px solid #fff; border-radius: 3px; z-index: 3; }
+  .jiao[data-j="nw"] { left: -7px; top: -7px; cursor: nwse-resize; }
+  .jiao[data-j="ne"] { right: -7px; top: -7px; cursor: nesw-resize; }
+  .jiao[data-j="sw"] { left: -7px; bottom: -7px; cursor: nesw-resize; }
+  .jiao[data-j="se"] { right: -7px; bottom: -7px; cursor: nwse-resize; }
+  .bian { position: absolute; z-index: 2; }
+  .bian[data-b="n"] { left: 12px; right: 12px; top: -5px; height: 10px; cursor: ns-resize; }
+  .bian[data-b="s"] { left: 12px; right: 12px; bottom: -5px; height: 10px; cursor: ns-resize; }
+  .bian[data-b="w"] { top: 12px; bottom: 12px; left: -5px; width: 10px; cursor: ew-resize; }
+  .bian[data-b="e"] { top: 12px; bottom: 12px; right: -5px; width: 10px; cursor: ew-resize; }
   #ti { position: absolute; left: 50%; top: 18px; transform: translateX(-50%);
         background: rgba(0,0,0,.65); color: #fff; padding: 6px 14px; border-radius: 999px; font: 12px/1.4 sans-serif;
         pointer-events: none; }
@@ -29,8 +39,13 @@
 </head>
 <body>
   <img id="di" alt=""/>
-  <div id="kuang"></div>
-  <div id="ti">拖动框选 → 双击/确定＝截取选区 · 整屏请点「整屏」 · 右键/Esc＝取消</div>
+  <div id="kuang">
+    <div class="jiao" data-j="nw"></div><div class="jiao" data-j="ne"></div>
+    <div class="jiao" data-j="sw"></div><div class="jiao" data-j="se"></div>
+    <div class="bian" data-b="n"></div><div class="bian" data-b="s"></div>
+    <div class="bian" data-b="w"></div><div class="bian" data-b="e"></div>
+  </div>
+  <div id="ti">拖动框选 → 可拉伸/移动 → 双击/确定＝截取选区 · 整屏请点「整屏」 · 右键/Esc＝取消</div>
   <div id="bar">
     <button id="ok">确定</button>
     <button id="cancel">取消</button>
@@ -50,6 +65,34 @@
     let qu = null;               // 当前选区（null = 未选）
     let shangCiDianJi = 0;       // 双击判定
     let yiTiJiao = false;        // 防重复触发
+    /** mode: 'draw'=新画 / 'move'=移动 / 'nw'|'ne'|'sw'|'se'|'n'|'s'|'w'|'e'=拉伸 */
+    let mode = '';
+    let moveOX = 0, moveOY = 0;
+    let startQu = null;
+
+    /** 判断点击位置：角/边/内部/外部 */
+    function panDuan(e) {
+      if (!qu || qu.w < 3 || qu.h < 3) return 'draw';
+      const d = e.clientX, y = e.clientY;
+      const inJ = (cx, cy) => Math.abs(d - cx) <= 14 && Math.abs(y - cy) <= 14;
+      if (inJ(qu.x, qu.y)) return 'nw';
+      if (inJ(qu.x + qu.w, qu.y)) return 'ne';
+      if (inJ(qu.x, qu.y + qu.h)) return 'sw';
+      if (inJ(qu.x + qu.w, qu.y + qu.h)) return 'se';
+      const bs = 10;
+      if (Math.abs(y - qu.y) <= bs && d >= qu.x && d <= qu.x + qu.w) return 'n';
+      if (Math.abs(y - qu.y - qu.h) <= bs && d >= qu.x && d <= qu.x + qu.w) return 's';
+      if (Math.abs(d - qu.x) <= bs && y >= qu.y && y <= qu.y + qu.h) return 'w';
+      if (Math.abs(d - qu.x - qu.w) <= bs && y >= qu.y && y <= qu.y + qu.h) return 'e';
+      if (d >= qu.x && d <= qu.x + qu.w && y >= qu.y && y <= qu.y + qu.h) return 'move';
+      return 'draw';
+    }
+
+    function sheQu(r) {
+      qu = r;
+      x0 = r.x; y0 = r.y; x1 = r.x + r.w; y1 = r.y + r.h;
+      hua();
+    }
 
     function done(r) {
       if (yiTiJiao) return;
@@ -106,34 +149,60 @@
     }
 
     window.addEventListener('mousedown', (e) => {
-      if (e.button === 2) return;                 // 右键由 contextmenu 取消
-      // 在按钮上点击：交给按钮自己处理
+      if (e.button === 2) return;
       if (e.target.closest('#bar')) return;
       const xia = Date.now();
       const shiShuangJi = (xia - shangCiDianJi) < 350;
       shangCiDianJi = xia;
       if (shiShuangJi) {
-        /**
-         * 左键双击 = **截取当前框选**（产品定稿：不是整屏）。
-         * 没有选区就不出手 —— 整屏请点「整屏」按钮，别抢在双击里。
-         */
         if (qu && qu.w > 0 && qu.h > 0) done({ x: qu.x, y: qu.y, w: qu.w, h: qu.h });
         return;
       }
-      tuo = true; x0 = x1 = e.clientX; y0 = y1 = e.clientY;
-      // **不要在这里清选区**：双击的第一下会误清掉刚框好的选区，第二下就变成整屏
-      bar.style.display = 'none';
-      hua();
+      mode = panDuan(e);
+      tuo = true;
+      if (mode === 'draw') {
+        x0 = x1 = e.clientX; y0 = y1 = e.clientY;
+        bar.style.display = 'none';
+        hua();
+      } else if (mode === 'move') {
+        moveOX = e.clientX - qu.x; moveOY = e.clientY - qu.y;
+      } else {
+        startQu = { ...qu };
+      }
+      try { window.setPointerCapture && e.target.setPointerCapture(e.pointerId); } catch {}
     });
     window.addEventListener('mousemove', (e) => {
-      if (!tuo) return;
-      x1 = e.clientX; y1 = e.clientY; hua();
+      if (!tuo) {
+        // 光标提示
+        const p = panDuan(e);
+        const cs = { draw: 'crosshair', move: 'move', nw: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', se: 'nwse-resize', n: 'ns-resize', s: 'ns-resize', w: 'ew-resize', e: 'ew-resize' };
+        document.body.style.cursor = cs[p] || 'crosshair';
+        return;
+      }
+      if (mode === 'draw') {
+        x1 = e.clientX; y1 = e.clientY; hua();
+      } else if (mode === 'move') {
+        sheQu({ x: e.clientX - moveOX, y: e.clientY - moveOY, w: qu.w, h: qu.h });
+      } else if (startQu) {
+        const sr = startQu;
+        let { x, y, w, h } = sr;
+        const dx = e.clientX - (mode.includes('w') ? sr.x : sr.x + sr.w);
+        const dy = e.clientY - (mode.includes('n') ? sr.y : sr.y + sr.h);
+        if (mode.includes('w')) { x = sr.x + dx; w = sr.w - dx; }
+        if (mode.includes('e')) { w = sr.w + dx; }
+        if (mode.includes('n')) { y = sr.y + dy; h = sr.h - dy; }
+        if (mode.includes('s')) { h = sr.h + dy; }
+        if (w < 3) w = 3;
+        if (h < 3) h = 3;
+        sheQu({ x, y, w, h });
+      }
     });
     window.addEventListener('mouseup', (e) => {
       if (!tuo) return;
       tuo = false;
       if (e.target.closest('#bar')) return;
-      dingGao();   // 框选结束 → 出确定/取消，**不立即截取**
+      if (mode === 'draw') dingGao();
+      // move/resize 松手不结束，继续调整
     });
 
     // 右键 = 取消
