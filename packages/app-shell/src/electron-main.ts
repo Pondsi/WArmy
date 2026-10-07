@@ -582,6 +582,32 @@ function siKaoCanShu(level: string | undefined, urgency: string | undefined, mod
   return { reasoning_effort: mo, thinking_level: mo, enable_thinking: true };
 }
 
+/**
+ * **同一条消息只写一次**（真机反馈：牛马"回复两次"，日志里每条都出现两份）。
+ *
+ * 事实：用户消息有两条写入路径（渲染层 `chatLogAppend` 补写 + 主进程 `chatSend` 自己记账），
+ * 助手回复同样如此；两条路径会**竞态**，而且不止一次 —— 实测用户消息 5ms 内写两次、
+ * 助手回复 75 秒后又被写一次（自动续派那一轮又走了同一条记账）。
+ * 只在 `zhuiJiaLiaoTianRiZhi` 里按「上一条 + 3 秒」去重**挡不住 JSONL 那一层**：
+ * `memory.append` 发生在去重之前，重复的那次照样进了唯一事实源。
+ *
+ * 这里做**内容级短窗去重**（按 会话+角色+内容 取键），并**在写 JSONL 之前**调用，
+ * 因此重复的那次既不会进 JSONL，也不会进会话日志。
+ */
+const __yiXieRu = new Map<string, { content: string; ts: number }>();
+const CHONG_XIE_CHUANG_MS = 20_000;
+function yiJingXieGuo(sid: string, role: string, content: string, now = Date.now()): boolean {
+  const k = `${sid}|${guiYiJiaoSe(role)}`;
+  const prev = __yiXieRu.get(k);
+  if (prev && prev.content === content && now - prev.ts < CHONG_XIE_CHUANG_MS) return true;
+  __yiXieRu.set(k, { content, ts: now });
+  return false;
+}
+function qingChongXieJiLu(sid?: string): void {
+  if (!sid) { __yiXieRu.clear(); return; }
+  for (const k of [...__yiXieRu.keys()]) if (k.startsWith(sid + '|')) __yiXieRu.delete(k);
+}
+
 function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
   // 归一后写入：去重、镜像、回读全部只认这一套角色名
   const tiaoMu = { ...entry, role: guiYiJiaoSe(entry.role) } as LogEntry;
@@ -3954,19 +3980,23 @@ chuliIpc(
     }
     const dutyUserRecordId = xinLiaoTianJiLuId('g');
     let dutyUserSeq: number | undefined;
-    try {
-      dutyUserSeq = memSeqOf(
-        await memory?.append({
-          id: dutyUserRecordId,
-          sessionId: xiaoXi.groupId,
-          kind: 'message',
-          ti: xiaoXi.content,
-          groupId: xiaoXi.groupId,
-          entityType: 'chat',
-        }, 'duty')
-      );
-    } catch {
-      /* optional */
+    if (yiJingXieGuo(xiaoXi.groupId, 'user', xiaoXi.content)) {
+      try { audit?.log('chat.dup-write-skipped', { sessionId: xiaoXi.groupId, role: 'user', chars: xiaoXi.content.length, from: 'group-duty' }); } catch { /* noop */ }
+    } else {
+      try {
+        dutyUserSeq = memSeqOf(
+          await memory?.append({
+            id: dutyUserRecordId,
+            sessionId: xiaoXi.groupId,
+            kind: 'message',
+            ti: xiaoXi.content,
+            groupId: xiaoXi.groupId,
+            entityType: 'chat',
+          }, 'duty')
+        );
+      } catch {
+        /* optional */
+      }
     }
     // 日志只追加 + 真实 recordId/seq（不变量 #1、#5）。
     // recordId 只在记忆服务**真的写入成功**时才挂到日志上：否则指针会给出一个解引用不到的死 id
@@ -4277,25 +4307,30 @@ async function zhenZhengFaSong(
     // recordId 只在写入成功时才挂到日志（失败时宁缺勿假：死 id 会让模型白跑一轮工具）。
     const userRecordId = xinLiaoTianJiLuId('m');
     let userMemSeq: number | undefined;
-    try {
-      userMemSeq = memSeqOf(
-        await memory?.append(
-          {
-            id: userRecordId,
-            sessionId,
-            kind: 'message',
-            // role 一并落 JSONL（SQLite 投影查不到它，但 JSONL 才是事实来源；
-            // 重建时先用 recordId 前缀，将来有读 JSONL 的 IPC 就能直接用这个字段）
-            role: 'user',
-            ti: yiYaSuo.content,
-            groupId: sessionId,
-            entityType: 'chat',
-          },
-          'duty'
-        )
-      );
-    } catch {
-      /* optional */
+    if (yiJingXieGuo(sessionId, 'user', yiYaSuo.content)) {
+      // 同一条用户消息已被另一条路径记账（内容级去重）⇒ 不再写第二遍 JSONL
+      try { audit?.log('chat.dup-write-skipped', { sessionId, role: 'user', chars: yiYaSuo.content.length }); } catch { /* noop */ }
+    } else {
+      try {
+        userMemSeq = memSeqOf(
+          await memory?.append(
+            {
+              id: userRecordId,
+              sessionId,
+              kind: 'message',
+              // role 一并落 JSONL（SQLite 投影查不到它，但 JSONL 才是事实来源；
+              // 重建时先用 recordId 前缀，将来有读 JSONL 的 IPC 就能直接用这个字段）
+              role: 'user',
+              ti: yiYaSuo.content,
+              groupId: sessionId,
+              entityType: 'chat',
+            },
+            'duty'
+          )
+        );
+      } catch {
+        /* optional */
+      }
     }
     zhuiJiaLiaoTianRiZhi(sessionId, {
       seq: xiaYiLiaoTianXuLie(userMemSeq),
@@ -4492,6 +4527,36 @@ async function zhenZhengFaSong(
           try {
             ju.push(tMain('llm.planFirst', '【多步任务】如果这件事要做三件以上、或需要按顺序完成多个步骤，请先用 plan_update 列出步骤（id / 标题 / 状态），再逐个完成并用 plan_verify 标记验证；界面右侧的「计划任务」卡片会同步显示进度。'));
           } catch { /* noop */ }
+          /**
+           * **知识库触发器**（依据：Self-RAG 的「按需检索」 arXiv:2310.11511 +
+           * RAG 七类失败点 arXiv:2401.05856）。
+           *
+           * 真实缺口：以前只挂了个 UI 的查询入口，模型侧既没有工具、也没人告诉它知识库存在，
+           * 所以它**从不主动查**。这里补三件事：
+           *   ① 告诉它知识库存在、现在有多少条（不给这句，它不知道有这条路）；
+           *   ② 给**明确的触发条件**（不做"每轮都查"的无差别检索 —— 那会降低质量）；
+           *   ③ 给**查不到时怎么办**（RAG 最常见的失败点就是"知识库里没有却硬编"）。
+           */
+          try {
+            if (knowledge) {
+              const quan = knowledge.query('');
+              const shiTiShu = (quan.entities || []).length;
+              const shiJianShu = (quan.events || []).length;
+              if (shiTiShu + shiJianShu > 0) {
+                ju.push(tMain(
+                  'llm.knowledgeTrigger',
+                  '【知识库】本机知识库现有 {e} 个实体、{v} 条事件（结构化事实：人/组织/项目/工具/概念 + 事件结果），' +
+                    '与 recall/retrieve 的「对话原文」是两回事。\n' +
+                    '**该查的四种情形**：① 用户提到某个人/项目/工具/结论，而当前上下文里找不到它的来历；' +
+                    '② 你要对"以前定过的事"下结论或引用；③ 需要结构化属性（某项目的目录/某工具的用法/某人的偏好）；' +
+                    '④ 用户明确问"我们以前是不是说过/记过"。\n' +
+                    '**不该查**：闲聊、当前上下文已经写清楚的事、纯创作与算数。不要每轮都查。\n' +
+                    '**怎么用**：先 knowledge_query("关键词")；命中就用其中的事实作答，并写明来自知识库；' +
+                    '**没命中就如实说"知识库里没有这条"**，绝不拿猜测当事实 —— 然后如值得沉淀，用 knowledge_add 记下来。'
+                ).replace('{e}', String(shiTiShu)).replace('{v}', String(shiJianShu)));
+              }
+            }
+          } catch { /* 拿不到知识库就不加这段（不影响正常对话） */ }
           if (ju.length) shenFenTou.push({ role: 'system', content: ju.join('') } as LiaoTianXiaoXi);
         }
         /**
@@ -4656,17 +4721,22 @@ async function zhenZhengFaSong(
       });
       const replyRecordId = xinLiaoTianJiLuId('a');
       let replyMemSeq: number | undefined;
-      try {
-        replyMemSeq = memSeqOf(
-          await memory?.append(
-            // 与日志正文**一致**地落盘：之前这里 slice(0,4000)，会让 retrieve(recordId) 只能回到前 4000 字符，
-            // 而日志里是全量 —— 两份真相不一致，等于长回复的尾巴取不回来（不丢细节的前提是两边同一份内容）。
-            { id: replyRecordId, sessionId, kind: 'message', role: 'assistant', ti: reply, groupId: sessionId, entityType: 'chat' },
-            'duty'
-          )
-        );
-      } catch {
-        /* optional */
+      const replyChongFu = yiJingXieGuo(sessionId, 'assistant', reply);
+      if (replyChongFu) {
+        try { audit?.log('chat.dup-write-skipped', { sessionId, role: 'assistant', chars: reply.length }); } catch { /* noop */ }
+      } else {
+        try {
+          replyMemSeq = memSeqOf(
+            await memory?.append(
+              // 与日志正文**一致**地落盘：之前这里 slice(0,4000)，会让 retrieve(recordId) 只能回到前 4000 字符，
+              // 而日志里是全量 —— 两份真相不一致，等于长回复的尾巴取不回来（不丢细节的前提是两边同一份内容）。
+              { id: replyRecordId, sessionId, kind: 'message', role: 'assistant', ti: reply, groupId: sessionId, entityType: 'chat' },
+              'duty'
+            )
+          );
+        } catch {
+          /* optional */
+        }
       }
       zhuiJiaLiaoTianRiZhi(sessionId, {
         seq: xiaYiLiaoTianXuLie(replyMemSeq),
@@ -5779,12 +5849,17 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
      */
     const recordId = xinLiaoTianJiLuId(role === 'assistant' ? 'a' : 'm');
     let memSeq: number | undefined;
-    try {
-      memSeq = memSeqOf(
-        await memory?.append({ id: recordId, sessionId: sid, kind: 'message', role, ti: content, groupId: sid, entityType: 'chat' }, 'duty')
-      );
-    } catch {
-      /* 记忆服务不可用：日志照写，seq 走本地计数 */
+    // 内容级去重：主进程自己的记账路径已经写过这条 ⇒ 这里不再写第二遍（真机反馈"回复两次"）
+    if (yiJingXieGuo(sid, role, content)) {
+      try { audit?.log('chat.dup-write-skipped', { sessionId: sid, role, chars: content.length, from: 'chatLogAppend' }); } catch { /* noop */ }
+    } else {
+      try {
+        memSeq = memSeqOf(
+          await memory?.append({ id: recordId, sessionId: sid, kind: 'message', role, ti: content, groupId: sid, entityType: 'chat' }, 'duty')
+        );
+      } catch {
+        /* 记忆服务不可用：日志照写，seq 走本地计数 */
+      }
     }
     zhuiJiaLiaoTianRiZhi(sid, {
       seq: xiaYiLiaoTianXuLie(memSeq),

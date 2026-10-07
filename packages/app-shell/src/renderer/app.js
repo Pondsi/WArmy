@@ -60,6 +60,10 @@
     themeMode: 'system',
     consoleOpen: false,
     listSort: 'time',
+    /** 置顶会话（id → true）：排在最前，不被新回复顶掉 */
+    pinned: {},
+    /** 备用快捷键（动作 id → 组合键）：一个动作可同时有两个快捷键 */
+    shortcuts2: {},
     smtp: { host: '', port: 465, secure: true, user: '', pass: '' },
     smtpAccounts: [],
     embedUseGpu: true,
@@ -1657,15 +1661,14 @@
   }
 
   /** 我的牛马候选列表：优先真实会话，没有会话时用实例兜底 */
-  /** 列表排序：按时间（默认，最近有消息在上）或按名称 */
+  /** 列表排序：按时间（默认，最近有消息在上）或按名称；**置顶项恒在最前** */
   function sortList(LieBiao) {
-    const shuZu = LieBiao.slice();
     if (state.listSort === 'ming') {
-      shuZu.sort((x, y) => String(x.name || '').localeCompare(String(y.name || ''), 'zh'));
-    } else {
-      shuZu.sort((x, y) => tsOfItem(y) - tsOfItem(x));
+      const shuZu = LieBiao.slice().sort((x, y) => String(x.name || '').localeCompare(String(y.name || ''), 'zh'));
+      // 置顶优先（与排序方式无关）
+      return shuZu.sort((x, y) => (shiZhiDing(y.id) ? 1 : 0) - (shiZhiDing(x.id) ? 1 : 0));
     }
-    return shuZu;
+    return zhiDingYouXian(LieBiao);
   }
 
   /** 条目最近消息时间：优先自身 lastTs，否则查会话表 */
@@ -1675,6 +1678,68 @@
     return c ? (c.lastTs || 0) : 0;
   }
 
+  /**
+   * **置顶**（产品要求）：右键会话可置顶；置顶的始终排在最上面，不被新回复顶掉。
+   * 存在 state.pinned（id → true），随界面状态一起落盘，重启还在。
+   */
+  function shiZhiDing(id) {
+    return !!(state.pinned && state.pinned[String(id || '')]);
+  }
+  function sheZhiDing(id, on) {
+    const k = String(id || '');
+    if (!k) return;
+    state.pinned = state.pinned || {};
+    if (on) state.pinned[k] = true;
+    else delete state.pinned[k];
+    try { window.__saveState?.(); } catch { /* noop */ }
+    renderList();
+  }
+  /** 置顶项排前面；同组内仍按「最近消息」降序 */
+  function zhiDingYouXian(LieBiao) {
+    return LieBiao.slice().sort((x, y) => {
+      const px = shiZhiDing(x.id) ? 1 : 0;
+      const py = shiZhiDing(y.id) ? 1 : 0;
+      if (px !== py) return py - px;
+      return tsOfItem(y) - tsOfItem(x);
+    });
+  }
+
+  /**
+   * **F7：朗读当前界面上 AI 的最新回复**（等同点那条回复下面的喇叭）。
+   * 不在聊天界面 / 没有任何 AI 回复 ⇒ 什么都不做（产品要求：此时快捷键无效）。
+   */
+  function duZuiXinHuiFu() {
+    try {
+      if (!state.selectedChat) return;
+      if (!['singleAi', 'internalGroup', 'externalGroup', 'externalChat'].includes(state.nav)) return;
+      const lie = msgsOf(state.selectedChat.id) || [];
+      for (let i = lie.length - 1; i >= 0; i -= 1) {
+        const m = lie[i];
+        if (m && (m.role === 'them' || m.role === 'assistant') && String(m.text || '').trim()) {
+          void langDuWenBen(String(m.text));
+          return;
+        }
+      }
+    } catch { /* 快捷键失败不抛 */ }
+  }
+  window.__duZuiXinHuiFu = duZuiXinHuiFu;
+
+  /**
+   * **F8：切到「有最新回复」的会话**（按 lastTs 找最新的那个）。
+   */
+  function tiaoZuiXinHuiFu() {
+    try {
+      const biao = [...(state.chats || []), ...(state.groups || []), ...(state.instances || []).map((i) => ({ id: i.id, lastTs: i.lastTs || 0, kind: 'single' }))]
+        .filter((x) => x && x.id)
+        .sort((a, b) => (Number(b.lastTs) || 0) - (Number(a.lastTs) || 0));
+      const first = biao.find((x) => Number(x.lastTs) > 0) || biao[0];
+      if (!first) return;
+      const kind = first.kind === 'single' ? 'single' : first.type === 'internal' || first.kind === 'internal' ? 'internal' : 'extgroup';
+      openChat(kind, first.id, first.ming || first.name || first.id);
+    } catch { /* 快捷键失败不抛 */ }
+  }
+  window.__tiaoZuiXinHuiFu = tiaoZuiXinHuiFu;
+
   function setListSort(mode) {
     state.listSort = mode;
     renderList();
@@ -1683,7 +1748,7 @@
 
   function singleChatItems() {
     const chats = state.chats.filter((c) => c.kind === 'single');
-    if (chats.length) return chats.slice().sort((x, y) => (y.lastTs || 0) - (x.lastTs || 0));
+    if (chats.length) return zhiDingYouXian(chats);
     return state.instances.map((i) => ({ id: i.id, ming: xianShiMing(i), name: xianShiMing(i), kind: 'single', lastTs: 0 }));
   }
 
@@ -5895,7 +5960,7 @@
           <p class="hkTiShi">${escapeHtml(t('settings.hotkey.keyHint'))}</p>
           <p class="hkTiShi">${escapeHtml(t('settings.hotkey.onlyWired'))}</p>
           <table class="hkMiYaoJi">
-            <thead><tr><th>${escapeHtml(t('settings.hotkey.colAction'))}</th><th>${escapeHtml(t('settings.hotkey.colBinding'))}</th><th>${escapeHtml(t('settings.hotkey.colDesc'))}</th></tr></thead>
+            <thead><tr><th>${escapeHtml(t('settings.hotkey.colAction'))}</th><th>${escapeHtml(t('settings.hotkey.colBinding'))}</th><th>${escapeHtml(tOr('settings.hotkey.colAlt', '备用按键'))}</th><th>${escapeHtml(t('settings.hotkey.colDesc'))}</th></tr></thead>
             <tbody id="hkMiYaoJiTi"></tbody>
           </table>
           <div class="hkXiaoXi" id="hkMiYaoJiXiaoXi"></div>
@@ -5963,6 +6028,12 @@
           <div class="aboutKuai"><h3>${escapeHtml(t('about.author'))}</h3><p class="jingYin">${escapeHtml(t('about.authorBody'))}</p></div>
           <div class="aboutKuai"><h3>${escapeHtml(t('about.contact'))}</h3><p class="jingYin">${escapeHtml(t('about.contactBody'))}</p></div>
           <div class="aboutKuai"><h3>${escapeHtml(t('about.legal'))}</h3><p class="jingYin">${escapeHtml(t('about.legalBody'))}</p></div>
+          <!-- 底部：重新打开首次引导卡（产品要求） -->
+          <div class="aboutKuai">
+            <div class="shiLiHang" style="margin-top:8px">
+              <button type="button" class="anNiuZhuYao" id="anNiuAboutChongYinDao">${escapeHtml(tOr('about.reopenGuide', '重新打开首次引导卡'))}</button>
+            </div>
+          </div>
         </div></div></div>`;
 
       // 更新源 UI 已从「关于」移除（产品要求）。设置项 updateFeedUrl 仍然生效：
@@ -6648,13 +6719,23 @@
               : p.id === 'warmy-memory'
                 ? tOr('plugin.warmyMemory.provider', '提供方：WArmy 内置')
                 : '';
-          const installedAt = p.source === 'folder'
-            ? tOr('plugin.fromFolder', '来源：本地文件夹')
-            : tOr('plugin.builtin', '内置插件（随 dsh 运行时自动安装）');
+          const installedAt = p.id === 'warmy-memory'
+            ? tOr('plugin.builtinAlways', '内置：随应用启动加载（不需要 dsh 运行时）')
+            : p.source === 'folder'
+              ? tOr('plugin.fromFolder', '来源：本地文件夹')
+              : tOr('plugin.builtin', '内置插件（随 dsh 运行时自动安装）');
+          /**
+           * 这两个是**面向 dsh 运行时**的可选插件（声明式，不装也不影响 WArmy 自己的功能）。
+           * 明确标出来：WArmy 的记忆系统（memory-os）与牛马协作（group-router）都不依赖它们。
+           */
+          const keXuan = (p.id === 'agent-teams' || p.id === 'memory-plus')
+            ? tOr('plugin.optionalDsh', '可选 · 面向 dsh 运行时；移除不影响 WArmy 的记忆与牛马协作')
+            : '';
           return '<div class="ctgHang" data-plugin-idx="' + suoYin + '">' +
             '<div style="font-weight:600">' + escapeHtml(p.ming || p.name || p.id) + '</div>' +
             '<div class="jingYin">' + escapeHtml(descText) + '</div>' +
             '<div class="jingYin" style="font-size:11px;margin-top:2px">' + escapeHtml([provider, installedAt].filter(Boolean).join(' · ')) + '</div>' +
+            (keXuan ? '<div class="jingYin" style="font-size:11px;margin-top:2px">' + escapeHtml(keXuan) + '</div>' : '') +
             '<div style="margin-top:4px;display:flex;gap:6px">' +
             '<button class="anNiuXiao" data-plug-act="toggle" data-idx="' + suoYin + '">' + (p.enabled === false ? escapeHtml(t('settings.pluginEnable')) : escapeHtml(t('settings.pluginDisable'))) + '</button>' +
             '<button class="anNiuXiao" data-plug-act="del" data-idx="' + suoYin + '">' + escapeHtml(t('settings.pluginDelete')) + '</button>' +
@@ -7300,9 +7381,13 @@
         if (window.__guideRestartDelegated) return;
         window.__guideRestartDelegated = 1;
         document.addEventListener('click', (e) => {
-          const b = e.target && e.target.closest && e.target.closest('#anNiuChongKanYinDao');
+          const b = e.target && e.target.closest && e.target.closest('#anNiuChongKanYinDao, #anNiuAboutChongYinDao');
           if (!b) return;
           e.preventDefault();
+          // 「关于」页底部的按钮先跳回首页，否则引导条被设置页盖住看不见
+          if (b.id === 'anNiuAboutChongYinDao') {
+            try { setNav('singleAi'); } catch { /* noop */ }
+          }
           try { window.__showOnboardingGuide?.(true); } catch { /* noop */ }
         });
       })();
@@ -11581,15 +11666,24 @@
    * def = 预置的少数常用键；空串 = 默认留空，由用户自己设。
    */
   const SHORTCUT_ACTIONS = [
-    { id: 'toggleSidebar', def: 'Ctrl+B', run: () => { const b = $('appTi'); if (b) b.classList.toggle('yinCangLieBiao'); } },
-    { id: 'openSettings', def: 'Ctrl+,', run: () => setNav('settings') },
-    { id: 'newSession', def: 'Ctrl+N', run: () => { const b = primaryAddButton(); if (b) b.click(); } },
-    { id: 'focusSearch', def: 'Ctrl+F', run: () => { const i = $('lieBiaoSouSuo'); if (i) { i.focus(); i.select(); } } },
-    { id: 'focusInput', def: '', run: () => { const i = $('shuRu'); if (i) i.focus(); } },
-    { id: 'toggleConsole', def: '', run: () => { const b = $('diagKaiGuan') || $('anNiuKongZhiTai'); if (b) b.click(); } },
-    { id: 'stopAll', def: '', run: () => { const b = $('anNiuTingZhiAll'); if (b) b.click(); } },
-    { id: 'openMe', def: '', run: () => setNav('wo') },
-    { id: 'openContacts', def: '', run: () => setNav('externalChat') },
+    { id: 'help', def: 'F1', alt: '', run: () => { try { window.__showOnboardingGuide?.(true); } catch { /* noop */ } } },
+    { id: 'toggleSidebar', def: 'Ctrl+B', alt: '', run: () => { const b = $('appTi'); if (b) b.classList.toggle('yinCangLieBiao'); } },
+    { id: 'openSettings', def: 'Ctrl+,', alt: '', run: () => setNav('settings') },
+    { id: 'newSession', def: 'Ctrl+N', alt: '', run: () => { const b = primaryAddButton(); if (b) b.click(); } },
+    { id: 'focusSearch', def: 'F3', alt: 'Ctrl+S', run: () => { const i = $('lieBiaoSouSuo'); if (i) { i.focus(); i.select(); } } },
+    { id: 'focusInput', def: '', alt: '', run: () => { const i = $('shuRu'); if (i) i.focus(); } },
+    { id: 'toggleConsole', def: '', alt: '', run: () => { const b = $('diagKaiGuan') || $('anNiuKongZhiTai'); if (b) b.click(); } },
+    { id: 'stopAll', def: 'Ctrl+Backspace', alt: 'Cmd+Backspace', run: () => { const b = $('anNiuTingZhiAll'); if (b) b.click(); } },
+    { id: 'openMe', def: '', alt: '', run: () => setNav('wo') },
+    { id: 'openContacts', def: '', alt: '', run: () => setNav('externalChat') },
+    // 界面顶部「刷新」按钮（在最小化左侧）
+    { id: 'uiRefresh', def: 'F5', alt: '', run: () => { const b = $('anNiuuiRefresh'); if (b) b.click(); } },
+    // 语音输入（聊天输入框下的话筒）
+    { id: 'voiceInput', def: 'F6', alt: 'Ctrl+Space', run: () => { const b = $('anNiuYuYin'); if (b) b.click(); } },
+    // 阅读当前界面上 AI 的最新回复（等同点那条回复下面的喇叭）；不在聊天界面/没有 AI 回复时无效
+    { id: 'readLatest', def: 'F7', alt: 'Ctrl+Shift+Space', run: () => { try { window.__duZuiXinHuiFu?.(); } catch { /* noop */ } } },
+    // 切到「有最新回复」的会话
+    { id: 'jumpLatest', def: 'F8', alt: '', run: () => { try { window.__tiaoZuiXinHuiFu?.(); } catch { /* noop */ } } },
   ];
 
   /** 当前页面的「新建」入口（实例页/项目页/群聊页/联系人页各不相同） */
@@ -11604,8 +11698,10 @@
   /** 给菜单用的快捷键文案（空则返回空串） */
   function SHORTCUT_LABEL(id) {
     try {
-      const b = shortcutBinding(id);
-      return b ? `(${b})` : '';
+      const a = shortcutBinding(id);
+      const b = shortcutBinding(id, true);
+      const all = [a, b].filter(Boolean);
+      return all.length ? `(${all.join(' / ')})` : '';
     } catch {
       return '';
     }
@@ -11615,18 +11711,29 @@
     return SHORTCUT_ACTIONS.filter((a) => a.id === id)[0] || null;
   }
 
-  /** 生效的按键：用户存过就用用户的（空串 = 显式解绑，不回落到预置值） */
-  function shortcutBinding(id) {
-    const s = state.shortcuts || {};
-    if (Object.prototype.hasOwnProperty.call(s, id)) return String(s[id] || '');
+  /** 生效的按键：用户存过就用用户的（空串 = 显式解绑，不回落到预置值）
+   *  `alt=true` 时取**备用按键**（state.shortcuts2）。 */
+  function shortcutBinding(id, alt) {
     const a = shortcutActionById(id);
+    const store = alt ? (state.shortcuts2 || {}) : (state.shortcuts || {});
+    if (Object.prototype.hasOwnProperty.call(store, id)) return String(store[id] || '');
+    if (alt) return (a && a.alt) || '';
     return (a && a.def) || '';
+  }
+
+  /** 某个组合键是否已被任何动作（主键或备用键）占用；返回动作 id 或 null */
+  function shortcutOwnerOf(combo, skipId) {
+    for (const a of SHORTCUT_ACTIONS) {
+      if (a.id === skipId) continue;
+      if (shortcutBinding(a.id) === combo || shortcutBinding(a.id, true) === combo) return a.id;
+    }
+    return null;
   }
 
   /** 持久化：走既有 settings 通道（settings-store 落盘），不新开存储文件 */
   function saveShortcuts() {
     try {
-      window.warmy.settingsSave({ shortcuts: state.shortcuts || {} });
+      window.warmy.settingsSave({ shortcuts: state.shortcuts || {}, shortcuts2: state.shortcuts2 || {} });
     } catch {
       /* 保存失败不影响本次界面 */
     }
@@ -11645,10 +11752,10 @@
     if (cur && cur.btn) cur.btn.classList.remove('listening', 'invalid');
   }
 
-  function startShortcutCapture(id, btn) {
+  function startShortcutCapture(id, btn, alt) {
     if (!btn) return;
     stopShortcutCapture();
-    shortcutCapturing = { id, btn };
+    shortcutCapturing = { id, btn, alt: !!alt };
     btn.classList.remove('invalid', 'unbound');
     btn.classList.add('listening');
     btn.textContent = t('settings.hotkey.press');
@@ -11664,14 +11771,20 @@
       e.stopPropagation();
       const id = shortcutCapturing.id;
       const btn = shortcutCapturing.btn;
+      const alt = !!shortcutCapturing.alt;
+      /** 写入主键或备用键各自的表 */
+      const cunRu = (combo) => {
+        if (alt) { state.shortcuts2 = state.shortcuts2 || {}; state.shortcuts2[id] = combo; }
+        else { state.shortcuts = state.shortcuts || {}; state.shortcuts[id] = combo; }
+        saveShortcuts();
+      };
       if (e.key === 'Escape') {
         stopShortcutCapture();
         renderShortcuts();
         return;
       }
       if (e.key === 'Backspace' || e.key === 'Delete') {
-        state.shortcuts[id] = '';
-        saveShortcuts();
+        cunRu('');
         stopShortcutCapture();
         renderShortcuts();
         shortcutMsg(t('settings.hotkey.saved'));
@@ -11684,8 +11797,15 @@
         btn.textContent = t('settings.hotkey.invalid');
         return;
       }
-      state.shortcuts[id] = c.combo;
-      saveShortcuts();
+      // 冲突检查：同一组合键不能同时绑两个动作（主/备都算）
+      const chong = shortcutOwnerOf(c.combo, id);
+      if (chong) {
+        btn.classList.add('invalid');
+        btn.textContent = t('settings.hotkey.conflict');
+        shortcutMsg(t('settings.hotkey.conflict') + ' · ' + t('settings.hotkey.act.' + chong));
+        return;
+      }
+      cunRu(c.combo);
       stopShortcutCapture();
       renderShortcuts();
       shortcutMsg(t('settings.hotkey.saved') + ' · ' + t('settings.hotkey.act.' + id) + ' → ' + c.combo);
@@ -11693,7 +11813,7 @@
     true
   );
 
-  /** 派发：按下已绑定的组合键就执行它的动作 */
+  /** 派发：按下已绑定的组合键就执行它的动作（主键与备用键都认） */
   document.addEventListener('keydown', (e) => {
     if (shortcutCapturing) return;
     const c = comboFromEvent(e);
@@ -11704,7 +11824,7 @@
     // 正在打字时不抢：只有带真修饰键（Ctrl/Alt/Meta）的组合才算快捷键
     if (typing && !(e.ctrlKey || e.altKey || e.metaKey)) return;
     for (const a of SHORTCUT_ACTIONS) {
-      if (shortcutBinding(a.id) !== c.combo) continue;
+      if (shortcutBinding(a.id) !== c.combo && shortcutBinding(a.id, true) !== c.combo) continue;
       e.preventDefault();
       try {
         a.run();
@@ -11718,20 +11838,22 @@
   function renderShortcuts() {
     const ti = $('hkMiYaoJiTi');
     if (!ti) return;
-    ti.innerHTML = SHORTCUT_ACTIONS.map((a) => {
-      const bound = shortcutBinding(a.id);
-      return (
-        '<tr data-hk-row="' + a.id + '">' +
-        '<td>' + escapeHtml(t('settings.hotkey.act.' + a.id)) + '</td>' +
-        '<td><button type="button" class="hkMiYao' + (bound ? '' : ' unbound') + '" data-hk="' + a.id + '" title="' +
+    const mk = (a, which) => {
+      const bound = shortcutBinding(a.id, which === 'alt');
+      return '<button type="button" class="hkMiYao' + (bound ? '' : ' unbound') + '" data-hk="' + a.id + '" data-hk-which="' + which + '" title="' +
         escapeHtml(t('settings.hotkey.keyHint')) + '">' +
-        escapeHtml(bound || t('settings.hotkey.unbound')) + '</button></td>' +
-        '<td class="hkMiYaoJiMiaoShu">' + escapeHtml(t('settings.hotkey.actDesc.' + a.id)) + '</td>' +
-        '</tr>'
-      );
-    }).join('');
+        escapeHtml(bound || t('settings.hotkey.unbound')) + '</button>';
+    };
+    ti.innerHTML = SHORTCUT_ACTIONS.map((a) => (
+      '<tr data-hk-row="' + a.id + '">' +
+      '<td>' + escapeHtml(t('settings.hotkey.act.' + a.id)) + '</td>' +
+      '<td>' + mk(a, 'main') + '</td>' +
+      '<td>' + mk(a, 'alt') + '</td>' +
+      '<td class="hkMiYaoJiMiaoShu">' + escapeHtml(t('settings.hotkey.actDesc.' + a.id)) + '</td>' +
+      '</tr>'
+    )).join('');
     ti.querySelectorAll('[data-hk]').forEach((btn) => {
-      btn.onclick = () => startShortcutCapture(btn.dataset.hk, btn);
+      btn.onclick = () => startShortcutCapture(btn.dataset.hk, btn, btn.dataset.hkWhich === 'alt');
     });
   }
 
@@ -12293,6 +12415,11 @@
     const rect = hangYuanSu.getBoundingClientRect();
     return [
       {
+        biaoQian: shiZhiDing(inst.id) ? t('list.unpin') : t('list.pin'),
+        checked: shiZhiDing(inst.id),
+        onClick: () => sheZhiDing(inst.id, !shiZhiDing(inst.id)),
+      },
+      {
         biaoQian: running ? t('ctx.close') : t('ctx.enable'),
         onClick: async () => {
           if (running) {
@@ -12375,7 +12502,13 @@
      */
     const projectItems = g.type === 'internal' ? await projectMenuItems(g) : [];
     void hangYuanSu;
-    return projectItems.concat([
+    return [
+      {
+        biaoQian: shiZhiDing(g.id) ? t('list.unpin') : t('list.pin'),
+        checked: shiZhiDing(g.id),
+        onClick: () => sheZhiDing(g.id, !shiZhiDing(g.id)),
+      },
+    ].concat(projectItems).concat([
       {
         biaoQian: t('ctx.rename'),
         onClick: async () => {
@@ -16884,6 +17017,10 @@
         if (s.settings.shortcuts && typeof s.settings.shortcuts === 'object') {
           state.shortcuts = Object.assign({}, s.settings.shortcuts);
         }
+        // 备用按键（一个动作可有第二个快捷键）
+        if (s.settings.shortcuts2 && typeof s.settings.shortcuts2 === 'object') {
+          state.shortcuts2 = Object.assign({}, s.settings.shortcuts2);
+        }
       }
       const p = await window.warmy.profileGet();
       if (p?.profile) {
@@ -16928,6 +17065,7 @@
         if (Array.isArray(st.state.groups) && st.state.groups.length) state.groups = st.state.groups;
         if (Array.isArray(st.state.chats) && st.state.chats.length) state.chats = st.state.chats;
         if (st.state.listSort === 'ming' || st.state.listSort === 'time') state.listSort = st.state.listSort;
+        if (st.state.pinned && typeof st.state.pinned === 'object') state.pinned = st.state.pinned;
         const av = st.state.instanceAvatars;
         if (av && typeof av === 'object') {
           state.instances.forEach((i) => {
@@ -16962,6 +17100,7 @@
         chats: state.chats,
         instanceAvatars,
         listSort: state.listSort,
+        pinned: state.pinned || {},
       }).catch(() => {});
     };
     window.__saveState = saveState;
