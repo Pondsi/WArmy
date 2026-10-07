@@ -2254,7 +2254,12 @@
   "settings.title": "設定",
   "settings.hotkey.act.shotScreen": "スクリーンショット",
   "chat.busy.started": "開始",
-  "chat.busy.updated": "最終更新",
+  "chat.busy.updated": "更新",
   "gongJu.scanTitle": "自動検出ディレクトリ",
-  "gongJu.scanHint": "TOOL.json を含むサブディレクトリ（またはディレクトリ自体）がツールパックとして自動検出されます。最大 10 個。無効なパスはそのまま示します。"
+  "gongJu.scanHint": "TOOL.json を含むサブディレクトリ（またはディレクトリ自体）がツールパックとして自動検出されます。最大 10 個。無効なパスはそのまま示します。",
+  "settings.pluginScanHint": "plugin.json を含むサブディレクトリ（またはディレクトリ自体）がプラグインとして自動検出されます。最大 10 個。無効なパスは正直に表示されます。",
+  "plugin.builtinNoDelete": "組み込みプラグインは削除できません",
+  "model.noToolsWarn": "このモデルはツールを呼び出してタスクを実行できません。チャット専用です",
+  "console.helpTip": "ローカルの実際のイベントログ（ツール呼び出し/ネットワーク/エラー）です。トラブルシューティング用。イベント内容を右クリックしてコピーまたはクリアできます。",
+  "settings.scanDirsEmpty": "自動検出ディレクトリはまだ追加されていません"
 }

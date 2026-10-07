@@ -294,17 +294,13 @@
         <aside id="mianBanLan">
           <!-- 诊断事件流：**右侧第四列**（不是聊天顶部）。点击标题即可展开/收起。 -->
           <div class="mianBanKuai" id="diagMianBanKuai">
-            <div class="mianBanKaiGuan" id="diagKaiGuan" title="诊断事件流：本机真实事件日志（工具调用/组网/错误），不是容器终端">
+            <div class="mianBanKaiGuan" id="diagKaiGuan">
               <span id="diagKaiGuanBiaoTi" data-i18n="console.biaoTi">诊断事件流</span>
-              <span class="jingYin diagWhat" data-i18n="panel.diagWhat">排障用</span>
+              <button type="button" class="ddWen" data-i18n-title="console.helpTip" title="本机真实事件日志（工具调用/组网/错误），排障用。右击事件内容可复制或清空。">?</button>
               <span class="jianTou" id="diagJianTou">›</span>
             </div>
             <div id="diagHost" class="yinCang">
               <div id="kongZhiTaiMianBan" class="kongZhiTaiMianBan mianBanKongZhiTai">
-                <div class="kongZhiTaiHead">
-                  <span id="kongZhiTaiTiShi" class="kongZhiTaiTiShi"></span>
-                  <button type="button" id="kongZhiTaiQingChu" class="kongZhiTaiQingChu" data-i18n-title="console.clearTip"></button>
-                </div>
                 <pre id="kongZhiTaiShuChu" class="kongZhiTaiShuChu" role="log" aria-live="polite"></pre>
               </div>
             </div>
@@ -314,11 +310,12 @@
                产品主明确：**不要**把"切换容器"放在右侧顶部 —— 切换容器在项目的右键菜单里。
                只出现在「项目」与「我的牛马」（data-only="proj-single"）。 -->
           <div class="mianBanKuai yinCang" id="mianBanJiHuaKuai">
-          <div class="mianBanBiaoTi"><span data-i18n="panel.plan.title">计划任务</span>
-            <button type="button" class="anNiuXiao" id="jiHuaShouQi" data-i18n-title="panel.plan.collapse" title="折叠">−</button>
+            <div class="mianBanKaiGuan" id="jiHuaKaiGuan">
+              <span data-i18n="panel.plan.title">计划任务</span>
+              <span class="jianTou" id="jiHuaJianTou">›</span>
+            </div>
+            <div id="jiHuaLieBiao" class="jingYin">—</div>
           </div>
-          <div id="jiHuaLieBiao" class="jingYin">—</div>
-        </div>
         <div class="mianBanKuai yinCang" id="mianBanDingShiKuai">
           <div class="mianBanBiaoTi"><span data-i18n="panel.schedule.title">定时任务</span></div>
           <div id="dingShiLieBiao" class="jingYin">—</div>
@@ -487,6 +484,7 @@
   <script src="./vendor/qrcode-generator-2.0.4.js"></script>
   <script src="./vendor/jsqr-1.4.0.js"></script>
   <script src="./busy-phrases.js"></script>
+  <script src="./niu-ma-templates.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

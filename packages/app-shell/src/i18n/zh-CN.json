@@ -2254,7 +2254,12 @@
   "settings.title": "设置",
   "settings.hotkey.act.shotScreen": "截图",
   "chat.busy.started": "开始",
-  "chat.busy.updated": "最近更新",
+  "chat.busy.updated": "更新",
   "gongJu.scanTitle": "自动发现目录",
-  "gongJu.scanHint": "目录下含 TOOL.json 的子目录（或目录本身）会被自动发现为工具包；最多 10 个。无效路径会如实标注。"
+  "gongJu.scanHint": "目录下含 TOOL.json 的子目录（或目录本身）会被自动发现为工具包；最多 10 个。无效路径会如实标注。",
+  "settings.pluginScanHint": "目录下含 plugin.json 的子目录（或目录本身）会被自动发现为插件；最多 10 个。无效路径会如实标注。",
+  "plugin.builtinNoDelete": "内置插件不可删除",
+  "model.noToolsWarn": "该模型无法调用工具执行任务，只能纯聊天",
+  "console.helpTip": "本机真实事件日志（工具调用/组网/错误），排障用。右击事件内容可复制或清空。",
+  "settings.scanDirsEmpty": "尚未添加自动发现目录"
 }

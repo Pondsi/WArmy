@@ -618,6 +618,38 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
   // 归一后写入：去重、镜像、回读全部只认这一套角色名
   const tiaoMu = { ...entry, role: guiYiJiaoSe(entry.role) } as LogEntry;
   /**
+   * **内部指令不进聊天记录**（真事故：用户看到聊天里冒出「【继续执行计划】…」自己没说过的话）。
+   * 自动续派的工单只进模型上下文（chatHistories），不进会话日志（chatLogs）⇒ 界面不显示。
+   */
+  if ((entry as { hidden?: boolean }).hidden) {
+    const yingshe = chatHistories.get(key);
+    if (yingshe) yingshe.push({ role: tiaoMu.role, content: tiaoMu.content });
+    else chatHistories.set(key, [{ role: tiaoMu.role, content: tiaoMu.content }]);
+    return;
+  }
+  /**
+   * **续派回合的回复合并进上一条**（产品要求：一次用户对话 = 一条思考 + 一条回复）。
+   * 自动续派产生的 assistant 回复不再单开气泡，而是追加到上一条 assistant 消息末尾。
+   */
+  if ((entry as { mergeWithPrev?: boolean }).mergeWithPrev && tiaoMu.role === 'assistant') {
+    const shuZu = chatLogs.get(key);
+    if (shuZu && shuZu.length) {
+      const last = shuZu[shuZu.length - 1];
+      if (last && last.role === 'assistant') {
+        last.content = String(last.content || '') + '\n\n---\n\n' + String(tiaoMu.content || '');
+        if (tiaoMu.reasoning) last.reasoning = String(last.reasoning || '') + '\n\n' + String(tiaoMu.reasoning || '');
+        // 同步镜像
+        const yingshe = chatHistories.get(key);
+        if (yingshe && yingshe.length) {
+          const lastM = yingshe[yingshe.length - 1];
+          if (lastM && lastM.role === 'assistant') lastM.content = last.content;
+        }
+        try { broadcastToWindows('warmy:liaoTianUpdated', { sessionId: key, seq: null, ts: Date.now() }); } catch { /* noop */ }
+        return;
+      }
+    }
+  }
+  /**
    * **纯标点/零宽不入账**（真机反馈：回答完下面多出一个只有「。」的回复）。
    * 主进程各条写入路径都经这里，所以在入口统一拦掉 —— 任何来源的空话都不进会话日志。
    * （JSONL 侧另有 `yiJingXieGuo`；系统提示类（system:true）如实保留。）
@@ -3269,6 +3301,11 @@ chuliIpc(
 );
 chuliIpc('warmy:tingZhiShiLi', async (_e, id: string) => {
   try {
+    // **标记停止**：续派循环查到就不再往下派（否则 stopInstance 只杀进程，续派还跑）
+    stoppedSessions.add(id);
+    yanXuZhuangTai.delete(id);
+    try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId: id, kai: false, ts: Date.now() }); } catch { /* noop */ }
+    try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId: id, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
     await p1?.instances.stop(id);
     return true;
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
@@ -4906,6 +4943,8 @@ async function zhenZhengFaSong(
         recordId: replyMemSeq !== undefined ? replyRecordId : undefined,
         ts: Date.now(),
         moXing: modelId || undefined,
+        /** **续派回合合并进上一条**（一次对话 = 一条回复） */
+        mergeWithPrev: !!(xiaoXi as { internal?: boolean }).internal,
       });
       if (knowledge && reply.length > 0) {
         knowledge.upsertEntity({
@@ -4952,15 +4991,22 @@ async function zhenZhengFaSong(
           }
         } catch { /* 守卫出错不许影响正常回复 */ }
       }
+      // **自动续派是否还要接着跑**：渲染层据此决定"这一轮是不是真的完了"
+      let planPending = false;
       if (!shiNeiBu && yingGaiZiDongJiXu(sessionId, xiaoXi as { content?: string }, { diaoYongJi: loop.gongJuDiaoYongJi, huiFu: reply }).jiXu) {
+        planPending = true;
+        stoppedSessions.delete(sessionId); // 新一轮续派前清掉旧的停止标记
         setTimeout(() => {
           void yanXuJiHuaRenWu(sessionId, xiaoXi as never, { diaoYongJi: loop.gongJuDiaoYongJi, huiFu: reply });
         }, 250);
       } else if (!shiNeiBu) {
         yanXuZhuangTai.delete(sessionId);
+        // **整轮真的结束了** ⇒ 把流式"正在进行"的气泡收掉
+        try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
       }
       return {
         ok: true,
+        planPending,
         reply,
         reasoning: siKaoGuoCheng || undefined,
         thinkDowngraded: jiangJiTiShi || undefined,
@@ -5267,6 +5313,11 @@ interface YanXuZhuangTai {
   shiJianYuJing: number;  // 时间预警点（毫秒；同样翻倍）
 }
 const yanXuZhuangTai = new Map<string, YanXuZhuangTai>();
+/**
+ * **用户主动停止**的会话：续派循环每一步都查这个集合，一旦命中就不再往下派。
+ * 以前停止按钮只杀实例进程，续派 `setTimeout` 还会照跑 ⇒ "停不下来"。
+ */
+const stoppedSessions = new Set<string>();
 
 function yanXuTai(sessionId: string): YanXuZhuangTai {
   let t = yanXuZhuangTai.get(sessionId);
@@ -5455,6 +5506,15 @@ ${canKaoHuo ? canKaoHuo + '\n\n' : ''}${canKaoFangFa}
 
 async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhenZhengFaSong>[1], shangLun?: { diaoYongJi?: number; huiFu?: string }): Promise<void> {
   try {
+    // **用户已点停止** ⇒ 一步都不再派（真事故：停止按钮按了，AI 还在继续干活）
+    if (stoppedSessions.has(sessionId)) {
+      audit?.log('plan.auto-continue-stopped', { sessionId });
+      yanXuZhuangTai.delete(sessionId);
+      etaHuo().jieShuLun(sessionId);
+      try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
+      try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
+      return;
+    }
     const pan = yingGaiZiDongJiXu(sessionId, xiaoXi as { content?: string }, shangLun);
     const dangQian0 = String((xiaoXi as { model?: string }).model || providerCfg.model || '');
     const qianMing0 = benLunQianMing(sessionId, pan.liYou === 'talk-only', dangQian0);
@@ -5481,12 +5541,17 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
           });
         }
         yanXuZhuangTai.delete(sessionId);
+        try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
+        try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
         return;
       }
       etaHuo().jieShuLun(sessionId);
       etaYiChang.delete(sessionId);
       yiShuoGuo.delete(sessionId);
       yanXuZhuangTai.delete(sessionId);
+      // **整轮真的结束了** ⇒ 关动态小字、收流式气泡
+      try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
+      try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
       return;
     }
 
@@ -5536,6 +5601,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
     /**
      * **续派期间动态小字要一直亮着**（真事故：主轮 `deliver` 收尾把小字关了，
      * 而续派还在跑 ⇒ 界面像"已经结束"，其实 AI 还在干活）。
+     * 一直亮到**整轮真的结束**才关（在 `!pan.jiXu` 分支里关）。
      */
     try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: true, ts: Date.now() }); } catch { /* noop */ }
     const r = await zhenZhengFaSong(undefined, {
@@ -5544,7 +5610,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
       internal: true,
       content: zhiLing + (xia ? `\n\n【下一步】${xia.id} ${xia.title}` : '') + `\n\n【当前计划/进度】\n${qingDan}\n\n（这是系统自动接着派的一轮，不需要等我说话。）`,
     } as never);
-    try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
+    // **不再在这里关小字** —— 整轮结束才关（否则每步之间小字会闪"干完了"）
     if (!r || r.ok !== true) {
       zhuiJiaLiaoTianRiZhi(sessionId, {
         seq: xiaYiLiaoTianXuLie(),

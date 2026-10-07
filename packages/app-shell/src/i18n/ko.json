@@ -2254,7 +2254,12 @@
   "settings.title": "설정",
   "settings.hotkey.act.shotScreen": "스크린샷",
   "chat.busy.started": "시작",
-  "chat.busy.updated": "최근 갱신",
+  "chat.busy.updated": "업데이트",
   "gongJu.scanTitle": "자동 검색 디렉터리",
-  "gongJu.scanHint": "TOOL.json이 있는 하위 디렉터리(또는 디렉터리 자체)가 도구 팩으로 자동 검색됩니다. 최대 10개. 잘못된 경로는 그대로 표시됩니다."
+  "gongJu.scanHint": "TOOL.json이 있는 하위 디렉터리(또는 디렉터리 자체)가 도구 팩으로 자동 검색됩니다. 최대 10개. 잘못된 경로는 그대로 표시됩니다.",
+  "settings.pluginScanHint": "plugin.json이 있는 하위 디렉터리(또는 디렉터리 자체)가 플러그인으로 자동 발견됩니다. 최대 10개. 잘못된 경로는 정직하게 표시됩니다.",
+  "plugin.builtinNoDelete": "내장 플러그인은 삭제할 수 없습니다",
+  "model.noToolsWarn": "이 모델은 도구를 호출하여 작업을 수행할 수 없습니다. 채팅 전용입니다",
+  "console.helpTip": "로컬 실제 이벤트 로그(도구 호출/네트워킹/오류)입니다. 문제 해결용. 이벤트 내용을 마우스 오른쪽 버튼으로 클릭하여 복사하거나 지울 수 있습니다.",
+  "settings.scanDirsEmpty": "자동 발견 디렉터리가 아직 추가되지 않았습니다"
 }

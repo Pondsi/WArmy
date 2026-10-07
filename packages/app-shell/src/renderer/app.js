@@ -2514,6 +2514,11 @@
           + '<svg viewBox="0 0 24 24" class="xiaoXiIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
           + '<path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="M15.5 8.7a4.6 4.6 0 0 1 0 6.6"/>'
           + '</svg></button>' +
+          '<button type="button" class="xiaoXiYinYong" title="' + escapeHtml(tOr('common.quote', '引用')) + '" data-quote="' + escapeHtml(m.text) + '">'
+          + '<svg viewBox="0 0 24 24" class="xiaoXiIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+          + '<path d="M10 11H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v7a4 4 0 0 1-4 4"/>'
+          + '<path d="M19 11h-4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v7a4 4 0 0 1-4 4"/>'
+          + '</svg></button>' +
           '<button type="button" class="xiaoXiFuZhi" title="' + escapeHtml(tOr('chat.copy', '复制')) + '" data-copy="' + escapeHtml(m.text) + '">⧉</button>' +
           (zuYaoHuiFuFu ? fuHuoAnNiuHtml : '') +
           '</div></div>'
@@ -2535,6 +2540,21 @@
           if (d) {
             e.preventDefault(); e.stopPropagation();
             void langDuWenBen(d.getAttribute('data-read') || '');
+          }
+          const q = e.target.closest('[data-quote]');
+          if (q) {
+            e.preventDefault(); e.stopPropagation();
+            const input = $('shuRu');
+            if (input) {
+              // **有选区就引用选区，否则引用整条**
+              const sel = window.getSelection();
+              const bubble = q.closest('.bubbleWrap')?.querySelector('.bubble');
+              const selText = sel && !sel.isCollapsed && bubble && bubble.contains(sel.anchorNode) ? String(sel) : '';
+              const quoteText = selText || q.getAttribute('data-quote') || '';
+              const yin = quoteText.split('\n').map((l) => '> ' + l).join('\n');
+              input.value = yin + '\n' + input.value;
+              input.focus();
+            }
           }
         });
       }
@@ -2675,6 +2695,9 @@
      */
     if (role !== 'wo' && !(opts && opts.system) && text && !youShiZhiWenBen(text)) {
       try { window.__biaoDianLanJie = (window.__biaoDianLanJie || 0) + 1; } catch { /* noop */ }
+      // **收掉流式气泡**（真事故：纯标点回复被拦下后，流式里的「？」残留在界面上）
+      try { shouLiuShiKuai(); } catch { /* noop */ }
+      if (state.streamBuf) delete state.streamBuf[chatId];
       return;
     }
     if (!(shangYiTiao && shangYiTiao.role === role && shangYiTiao.text === text)) {
@@ -2875,13 +2898,14 @@
   function renderJiHuaKa() {
     const he = $('jiHuaLieBiao');
     if (!he) return;
-    // 折叠/展开（隐藏计划模式：只留标题，内容收起）
-    const shouQi = $('jiHuaShouQi');
-    if (shouQi && !shouQi.dataset.bound) {
-      shouQi.dataset.bound = '1';
-      shouQi.onclick = () => {
+    // 折叠/展开（与其他卡片统一用箭头 ›/⌄）
+    const kaiGuan = $('jiHuaKaiGuan');
+    const jianTou = $('jiHuaJianTou');
+    if (kaiGuan && !kaiGuan.dataset.bound) {
+      kaiGuan.dataset.bound = '1';
+      kaiGuan.onclick = () => {
         const kai = he.classList.toggle('yinCang');
-        shouQi.textContent = kai ? '+' : '−';
+        if (jianTou) jianTou.textContent = kai ? '›' : '⌄';
         try { window.warmy.settingsSave?.({ planCardCollapsed: kai }); } catch { /* noop */ }
       };
       // 恢复上次折叠状态
@@ -2890,7 +2914,9 @@
           const r = await window.warmy.settingsGet?.();
           if (r?.settings?.planCardCollapsed) {
             he.classList.add('yinCang');
-            shouQi.textContent = '+';
+            if (jianTou) jianTou.textContent = '›';
+          } else {
+            if (jianTou) jianTou.textContent = '⌄';
           }
         } catch { /* noop */ }
       })();
@@ -3957,6 +3983,11 @@
   }
 
   function stopAllAi() {
+    // **先标记停止**：让续派循环和当前请求知道用户按了停止
+    const sid = state.selectedChat && state.selectedChat.id;
+    if (sid) {
+      try { window.warmy.stopInstance(sid); } catch { /* noop */ }
+    }
     state.instances.forEach((inst) => {
       if (inst.status === 'running') {
         try {
@@ -3971,7 +4002,13 @@
       queueOf(state.selectedChat.id).forEach((item) => {
         item.editing = false;
       });
+      // 收掉流式气泡（否则残留"正在进行"的半截内容）
+      try { shouLiuShiKuai(); } catch { /* noop */ }
+      if (state.streamBuf) delete state.streamBuf[state.selectedChat.id];
       tuisongXiaoxi(state.selectedChat.id, 'them', t('chat.stopAll'));
+      // 收尾：动态小字关掉、思考折叠
+      try { yunXingZhuangTaiGuan(false, state.selectedChat.id); } catch { /* noop */ }
+      queueRounds[state.selectedChat.id] = false;
     }
     renderList();
     if (state.nav === 'instances' && state.selectedInstance) renderInstanceDetail();
@@ -4000,7 +4037,7 @@
    * 按会话隔离：切换会话/并发轮不会互相串台。
    */
   /**
-   * 「干活中」小字文案池（2222 条，见 busy-phrases.js）。
+   * 「干活中」小字文案池（1000 条，见 busy-phrases.js）。
    * 起手段保持一句安静的「正在思考…」，之后才轮到这些有人味的短句。
    * 轮换**要慢**（12 秒一条）—— 以前 6 秒换一次，看着眼花。
    */
@@ -4029,7 +4066,7 @@
     const p = (n) => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
   }
-  /** 本轮有产出（工具调用/输出/思考…）—— 刷新「最近更新」时间 */
+  /** 本轮有产出（工具调用/输出/思考…）—— 刷新「更新」时间 */
   function chuoYunXingZuiXin() {
     yunXingZuiXin = Date.now();
   }
@@ -4049,7 +4086,7 @@
     /**
      * 动态小字的三段（产品要求，**按这个顺序**）：
      *   ① 开始时间（年月日时分秒）
-     *   ② 最近更新内容的时间（有工具/输出/思考等任何产出时刷新）
+     *   ② 更新内容的时间（有工具/输出/思考等任何产出时刷新）
      *   ③ 持续了多久（秒）
      */
     he.innerHTML =
@@ -4123,7 +4160,7 @@
     /** 附件随本轮一起交给主进程（图片走多模态）；发送前已从 state 摘下，这里才是真正送达的那份 */
     const fuJianJi = Array.isArray(fuJian) ? fuJian : [];
     queueRounds[chatId] = true;
-    /** true=干完了 / false=出了点问题 / 'notice'=安静收起（例如还没配密钥） */
+    /** true=干完了 / false=出了点问题 / 'notice'=安静收起（例如还没配密钥） / 'running'=计划还在续派 */
     let huiBao = false;
     yunXingZhuangTaiKai(chatId);
     // 发送按钮"进行中"：转圈 + 禁用（防重复发送；也是"点到了"的即时反馈）
@@ -4179,10 +4216,16 @@
           // 空回复如实显示占位（真事故：第二条回复「完成了」但界面上什么都没有）
           const huiFu = (r.reply && youShiZhiWenBen(r.reply)) ? String(r.reply) : tOr('chat.emptyReply', '（本条回复无内容）');
           tuisongXiaoxi(chatId, 'them', huiFu, { reasoning: r.reasoning || '', moXing: r.moXing || '' });
-          huiBao = true;
+          /**
+           * **计划还在续派** ⇒ 这一轮没真完：不播完成音、不关动态小字、思考不折叠。
+           * 真事故：deliver 收尾播了"完成"音、小字也没了，但 AI 还在续派干活。
+           */
+          const planPending = !!r.planPending;
+          if (!planPending) huiBao = true;
+          else huiBao = 'running';
           // **本轮模型调用可见**：模型名单独一行（在气泡下方，与时间行一起），不再居中占一行
           // 自动阅读回复：提示音先播完再读，避免重叠
-          if (state.autoRead) {
+          if (state.autoRead && !planPending) {
             void (async () => {
               try {
                 await chuanBoYinXiao('complete');
@@ -4219,20 +4262,25 @@
         tuisongXiaoxi(chatId, 'them', tOr('chat.failed', '本轮回复失败') + '：' + String(e && e.message || e));
       }
     } finally {
-      yunXingZhuangTaiGuan(huiBao, chatId);
-      /**
-       * 音效规则（产品要求）：**群聊不发音效**；单聊/联系人在"真的成功完成"时播完成音，
-       * 失败（不会再有任何新回复）时播错误音。中间过程（思考/工具调用）一律不响。
-       */
-      if (kind !== 'internal' && kind !== 'extgroup') {
-        if (huiBao === true) void chuanBoYinXiao('complete');
-        else if (huiBao === false) void chuanBoYinXiao('error');
+      // **计划续派中**：动态小字保持亮着、思考不折叠、不播完成音
+      const planRunning = huiBao === 'running';
+      if (!planRunning) {
+        yunXingZhuangTaiGuan(huiBao, chatId);
+        /**
+         * 音效规则（产品要求）：**群聊不发音效**；单聊/联系人在"真的成功完成"时播完成音，
+         * 失败（不会再有任何新回复）时播错误音。中间过程（思考/工具调用）一律不响。
+         */
+        if (kind !== 'internal' && kind !== 'extgroup') {
+          if (huiBao === true) void chuanBoYinXiao('complete');
+          else if (huiBao === false) void chuanBoYinXiao('error');
+        }
       }
       if (faSongAnNiu && faSongAnNiu.isConnected) {
         faSongAnNiu.disabled = false;
         faSongAnNiu.classList.remove('faSongZhong');
       }
-      queueRounds[chatId] = false;
+      // **计划续派中**：queueRounds 保持 true，思考块继续展开
+      if (!planRunning) queueRounds[chatId] = false;
     }
   }
 
@@ -4366,6 +4414,17 @@
       await uiAlert(fmtKey('container.project.devBlocked', { reason: blocked }), t('container.devEnv.biaoTi'));
       return;
     }
+    // **停用的牛马不能发消息**（产品要求：停用后只能查看，不能输入/发送）
+    try {
+      const cur = state.selectedChat;
+      if (cur && cur.kind === 'single') {
+        const inst = (state.instances || []).find((x) => x.id === cur.id);
+        if (inst && inst.status === 'stopped') {
+          showToast(tOr('instances.stopped', '已停用'));
+          return;
+        }
+      }
+    } catch { /* noop */ }
     const attachNote = state.attachments.length
       ? `\n[${state.attachments.map((a) => a.name || a.ming || '').join(', ')}]` +
         // 有真实路径的一并告诉模型（它可以用文件工具读到），截图/文件都不再是"看不见的附件"
@@ -4874,6 +4933,8 @@
           if (toggleBtn.isConnected) { toggleBtn.disabled = false; toggleBtn.textContent = yuanWenBen; }
           renderInstanceDetail();
           renderList();
+          // **停用后禁用输入/发送**（产品要求：停用后只能查看）
+          try { void yingYongXiangMuKaiFaMen(); } catch { /* noop */ }
           // 结果反馈：让用户明确知道"点生效了、现在是什么状态"
           try {
             showToast(inst.status === 'running' ? t('instances.running') : t('instances.stopped'));
@@ -4943,7 +5004,13 @@
        */
       if (inst2.allModels !== false && (!inst2.availableModels || !inst2.availableModels.length)) {
         try {
-          const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m));
+          const nengLi = window.__moXingNengLi || {};
+          const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m))
+            .filter((id) => {
+              const nl = nengLi[id] || {};
+              if (nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat') return false;
+              return true;
+            });
           inst2.availableModels = [...new Set(all)];
         } catch { /* noop */ }
       }
@@ -5065,7 +5132,13 @@
           // 取消智能模式时要能**看得到模型**：链是空的就先按「全部可用」补一次
           if (!smartChk.checked && inst2.allModels !== false && !(inst2.chain || []).length) {
             try {
-              const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m));
+              const nengLi = window.__moXingNengLi || {};
+              const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m))
+                .filter((id) => {
+                  const nl = nengLi[id] || {};
+                  if (nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat') return false;
+                  return true;
+                });
               inst2.availableModels = [...new Set(all)];
               inst2.chain = [...inst2.availableModels];
               inst2.chainDisabled = [];
@@ -5094,7 +5167,14 @@
           inst2.allModels = allChk.checked;
           manual?.classList.toggle('yinCang', allChk.checked);
           if (allChk.checked) {
-            const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m));
+            const nengLi = window.__moXingNengLi || {};
+            const all = state.providers.flatMap((p) => (p.models || []).map((m) => p.biaoQian + ' · ' + m))
+              .filter((id) => {
+                // **不能聊天的模型排除**（产品要求：即使勾了「全部可用」也要排除）
+                const nl = nengLi[id] || {};
+                if (nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat') return false;
+                return true;
+              });
             inst2.availableModels = [...new Set(all)];
             inst2.chain = [...inst2.availableModels];
             inst2.chainDisabled = [];
@@ -5844,6 +5924,7 @@
           </div>
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
             <div class="jinengSaoMiaoBiaoTi">${escapeHtml(t('settings.pluginScanTitle'))}</div>
+            <div class="jingYin">${escapeHtml(tOr('settings.pluginScanHint', '目录下含 plugin.json 的子目录（或目录本身）会被自动发现为插件；最多 10 个。无效路径会如实标注。'))}</div>
             <div id="plugSaoMiaoMuLuJi"></div>
             <div class="shiLiHang" style="margin-top:6px;align-items:center">
               <input id="plugSaoMiaoMuLuShuRu" style="flex:1;min-width:120px" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}"/>
@@ -6792,7 +6873,7 @@
       function renderPluginScanDirs(dirs) {
         const heZi = $('plugSaoMiaoMuLuJi');
         if (!heZi) return;
-        heZi.innerHTML = (dirs || []).map((d) => '<div class="ctgHang">' + escapeHtml(d) + '</div>').join('') || '<div class="jingYin">—</div>';
+        heZi.innerHTML = (dirs || []).map((d) => '<div class="ctgHang">' + escapeHtml(d) + '</div>').join('') || '<div class="jingYin">' + escapeHtml(tOr('settings.scanDirsEmpty', '尚未添加自动发现目录')) + '</div>';
       }
       function renderPluginList() {
         const heZi = $('plugLieBiao');
@@ -6824,6 +6905,8 @@
           const keXuan = (p.id === 'agent-teams' || p.id === 'memory-plus')
             ? tOr('plugin.optionalDsh', '可选 · 面向 dsh 运行时；移除不影响 WArmy 的记忆与牛马协作')
             : '';
+          // **内置插件不可删除**（产品要求：warmy-memory-system 是核心记忆系统）
+          const isBuiltin = p.id === 'warmy-memory';
           return '<div class="ctgHang" data-plugin-idx="' + suoYin + '">' +
             '<div style="font-weight:600">' + escapeHtml(p.ming || p.name || p.id) + '</div>' +
             '<div class="jingYin">' + escapeHtml(descText) + '</div>' +
@@ -6831,7 +6914,9 @@
             (keXuan ? '<div class="jingYin" style="font-size:11px;margin-top:2px">' + escapeHtml(keXuan) + '</div>' : '') +
             '<div style="margin-top:4px;display:flex;gap:6px">' +
             '<button class="anNiuXiao" data-plug-act="toggle" data-idx="' + suoYin + '">' + (p.enabled === false ? escapeHtml(t('settings.pluginEnable')) : escapeHtml(t('settings.pluginDisable'))) + '</button>' +
-            '<button class="anNiuXiao" data-plug-act="del" data-idx="' + suoYin + '">' + escapeHtml(t('settings.pluginDelete')) + '</button>' +
+            (isBuiltin
+              ? '<button class="anNiuXiao" disabled style="opacity:0.45;cursor:not-allowed" title="' + escapeHtml(tOr('plugin.builtinNoDelete', '内置插件不可删除')) + '">' + escapeHtml(t('settings.pluginDelete')) + '</button>'
+              : '<button class="anNiuXiao" data-plug-act="del" data-idx="' + suoYin + '">' + escapeHtml(t('settings.pluginDelete')) + '</button>') +
             '</div></div>';
         }).join('') || '<div class="jingYin">' + escapeHtml(t('settings.skillsEmpty') || '—') + '</div>';
         heZi.querySelectorAll('[data-plug-act]').forEach((b) => {
@@ -7492,7 +7577,7 @@
         function zhiMuLu(list, id) {
           const he = $(id);
           if (!he) return;
-          he.innerHTML = (list || []).map((d) => '<div class="ctgHang">' + escapeHtml(d) + '</div>').join('') || '<div class="jingYin">—</div>';
+          he.innerHTML = (list || []).map((d) => '<div class="ctgHang">' + escapeHtml(d) + '</div>').join('') || '<div class="jingYin">' + escapeHtml(tOr('settings.scanDirsEmpty', '尚未添加自动发现目录')) + '</div>';
         }
         async function xuanRanGongJu() {
           const he = $('gongJuLieBiao');
@@ -7572,6 +7657,8 @@
         void shuaMuLu();
         window.__xuanRanGongJu = xuanRanGongJu;
       })();
+      // **每次打开设置页都刷新工具列表**（真事故：首次进设置页工具列表为空）
+      try { void window.__xuanRanGongJu?.(); } catch { /* noop */ }
       // 快捷键「确定 / 取消」：未点确定的更改一律不生效（见 hkCaoGao）
       (function bindHotkeyConfirm() {
         if (window.__hkConfirmBound) return;
@@ -10973,10 +11060,6 @@
    * 于是"打开面板"既不会刷屏、也不会重复贴行（正文永远是 buffer 的一次快照）。
    */
   function renderConsole() {
-    const tiShi = $('kongZhiTaiTiShi');
-    if (tiShi) tiShi.textContent = fmtKey('console.tiShi', { n: (typeof CONSOLE_CAP === 'number' ? CONSOLE_CAP : __CONSOLE_CAP_EARLY) });
-    const btn = $('kongZhiTaiQingChu');
-    if (btn) btn.textContent = t('console.clear');
     const out = $('kongZhiTaiShuChu');
     if (!out || !state.consoleOpen) return;
     out.textContent = (consoleLines.length ? consoleLines.join('\n') : t('console.empty')) + '\n';
@@ -11047,7 +11130,29 @@
   window.__toggleDiagPanel = toggleDiagPanel;
   $('anNiuKongZhiTai')?.addEventListener('click', () => { toggleDiagPanel(); });
   $('diagKaiGuan')?.addEventListener('click', () => { toggleDiagPanel(); });
-  $('kongZhiTaiQingChu')?.addEventListener('click', () => { consoleClear(); });
+  // **右键菜单**：复制 / 清空（产品要求：去掉清空按钮，改右键）
+  $('kongZhiTaiShuChu')?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const menu = document.createElement('div');
+    menu.className = 'youJianCaiDan';
+    menu.style.cssText = 'position:fixed;z-index:99999;left:' + e.clientX + 'px;top:' + e.clientY + 'px;background:var(--bg,#222);border:1px solid var(--border,#555);border-radius:6px;padding:4px 0;min-width:120px;box-shadow:0 4px 12px rgba(0,0,0,.3)';
+    const mk = (label, fn) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = 'display:block;width:100%;text-align:left;padding:6px 12px;background:none;border:none;cursor:pointer;color:var(--ink,#eee);font-size:13px';
+      b.onmouseenter = () => { b.style.background = 'var(--accent,#4a9)'; };
+      b.onmouseleave = () => { b.style.background = 'none'; };
+      b.onclick = () => { fn(); menu.remove(); };
+      menu.appendChild(b);
+    };
+    mk(tOr('chat.copy', '复制'), () => {
+      try { navigator.clipboard.writeText(consoleLines.join('\n')); showToast(tOr('chat.copied', '已复制')); } catch { /* noop */ }
+    });
+    mk(tOr('console.clear', '清空'), () => { consoleClear(); });
+    document.body.appendChild(menu);
+    const close = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', close); } };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  });
   (function bindConsoleResize() {
     const yuanSu = $('kongZhiTaiTiaoZhengTiao');
     const mianBan = $('kongZhiTaiMianBan');
@@ -11078,45 +11183,138 @@
       ceng.className = 'jieTuCeng';
       ceng.innerHTML =
         '<img class="jieTuDi" src="' + cap.dataUrl + '" alt=""/>' +
-        '<div class="jieTuKuang yinCang"></div>' +
+        '<div class="jieTuKuang yinCang">' +
+        '<div class="jieTuJiao" data-jiao="nw"></div><div class="jieTuJiao" data-jiao="ne"></div>' +
+        '<div class="jieTuJiao" data-jiao="sw"></div><div class="jieTuJiao" data-jiao="se"></div>' +
+        '<div class="jieTuBian" data-bian="n"></div><div class="jieTuBian" data-bian="s"></div>' +
+        '<div class="jieTuBian" data-bian="w"></div><div class="jieTuBian" data-bian="e"></div>' +
+        '</div>' +
         '<div class="jieTuTiShi">' + escapeHtml(tOr('chat.shotHint', '拖动选择区域 · 单击/回车＝整屏 · 右键/Esc＝取消')) + '</div>';
       document.body.appendChild(ceng);
       const kuang = ceng.querySelector('.jieTuKuang');
-      let x0 = 0, y0 = 0, x1 = 0, y1 = 0, tuo = false;
+      let x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+      /** mode: 'draw'=新画选区 / 'move'=移动选区 / 'nw'|'ne'|'sw'|'se'|'n'|'s'|'w'|'e'=拉伸 */
+      let mode = '';
+      let tuo = false;
+      let moveOX = 0, moveOY = 0; // 移动时的偏移
+      let startRect = null;        // 拉伸起始矩形
       const huaKuang = () => {
         const l = Math.min(x0, x1), t = Math.min(y0, y1);
         const w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
         kuang.classList.toggle('yinCang', w < 4 && h < 4);
         kuang.style.cssText = `left:${l}px;top:${t}px;width:${w}px;height:${h}px`;
       };
+      const quRect = () => {
+        const l = Math.min(x0, x1), t = Math.min(y0, y1);
+        return { l, t, w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) };
+      };
+      const sheRect = (l, t, w, h) => {
+        x0 = l; y0 = t; x1 = l + w; y1 = t + h;
+        kuang.classList.toggle('yinCang', w < 4 && h < 4);
+        kuang.style.cssText = `left:${l}px;top:${t}px;width:${w}px;height:${h}px`;
+      };
       const shouWei = () => {
         ceng.remove();
-        document.removeEventListener('keydown', anJian);
+        document.removeEventListener('keydown', anJian2);
       };
-      const anJian = (e) => {
-        if (e.key === 'Escape') { shouWei(); resolve(null); }         // Esc 取消
-        else if (e.key === 'Enter') { shouWei(); resolve({ x: 0, y: 0, w: 0, h: 0 }); }  // 回车＝整屏
+      // 判断点击位置：角/边/内部/外部
+      const panDuanWeiZhi = (e) => {
+        const r = kuang.getBoundingClientRect();
+        if (kuang.classList.contains('yinCang') || r.width < 4) return 'draw';
+        const jiaoSize = 12;
+        const d = e.clientX, y = e.clientY;
+        const inJiao = (cx, cy) => Math.abs(d - cx) <= jiaoSize && Math.abs(y - cy) <= jiaoSize;
+        if (inJiao(r.left, r.top)) return 'nw';
+        if (inJiao(r.right, r.top)) return 'ne';
+        if (inJiao(r.left, r.bottom)) return 'sw';
+        if (inJiao(r.right, r.bottom)) return 'se';
+        const bianSize = 8;
+        if (Math.abs(y - r.top) <= bianSize && d >= r.left && d <= r.right) return 'n';
+        if (Math.abs(y - r.bottom) <= bianSize && d >= r.left && d <= r.right) return 's';
+        if (Math.abs(d - r.left) <= bianSize && y >= r.top && y <= r.bottom) return 'w';
+        if (Math.abs(d - r.right) <= bianSize && y >= r.top && y <= r.bottom) return 'e';
+        if (d >= r.left && d <= r.right && y >= r.top && y <= r.bottom) return 'move';
+        return 'draw';
       };
       ceng.addEventListener('pointerdown', (e) => {
-        if (e.button === 2) return;                                    // 右键由 contextmenu 处理
-        tuo = true; x0 = x1 = e.clientX; y0 = y1 = e.clientY; huaKuang();
+        if (e.button === 2) return;
+        mode = panDuanWeiZhi(e);
+        tuo = true;
+        if (mode === 'draw') {
+          x0 = x1 = e.clientX; y0 = y1 = e.clientY; huaKuang();
+        } else if (mode === 'move') {
+          const r = quRect();
+          moveOX = e.clientX - r.l; moveOY = e.clientY - r.t;
+        } else {
+          startRect = quRect();
+        }
         try { ceng.setPointerCapture(e.pointerId); } catch { /* noop */ }
       });
       ceng.addEventListener('pointermove', (e) => {
-        if (!tuo) return;
-        x1 = e.clientX; y1 = e.clientY; huaKuang();
+        // 光标提示
+        if (!tuo) {
+          const p = panDuanWeiZhi(e);
+          const cursors = { draw: 'crosshair', move: 'move', nw: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', se: 'nwse-resize', n: 'ns-resize', s: 'ns-resize', w: 'ew-resize', e: 'ew-resize' };
+          ceng.style.cursor = cursors[p] || 'crosshair';
+          return;
+        }
+        if (mode === 'draw') {
+          x1 = e.clientX; y1 = e.clientY; huaKuang();
+        } else if (mode === 'move') {
+          const r = quRect();
+          sheRect(e.clientX - moveOX, e.clientY - moveOY, r.w, r.h);
+        } else if (startRect) {
+          const sr = startRect;
+          let { l, t, w, h } = sr;
+          const dx = e.clientX - (sr.l + (mode.includes('w') ? 0 : sr.w));
+          const dy = e.clientY - (sr.t + (mode.includes('n') ? 0 : sr.h));
+          if (mode.includes('w')) { l = sr.l + dx; w = sr.w - dx; }
+          if (mode.includes('e')) { w = sr.w + dx; }
+          if (mode.includes('n')) { t = sr.t + dy; h = sr.h - dy; }
+          if (mode.includes('s')) { h = sr.h + dy; }
+          if (w < 4) w = 4;
+          if (h < 4) h = 4;
+          sheRect(l, t, w, h);
+        }
       });
       ceng.addEventListener('pointerup', () => {
         if (!tuo) return;
         tuo = false;
+        if (mode === 'draw') {
+          const r = kuang.getBoundingClientRect();
+          // **画完后保持选区可拉伸/移动**（真事故：draw 松手就 resolve，没机会调整）
+          // 单击（极小选区）＝整屏；有选区后等双击/回车确认
+          if (r.width < 4 || r.height < 4) {
+            shouWei();
+            resolve({ x: 0, y: 0, w: 0, h: 0 });
+          }
+          // 有选区：不关闭，让用户继续拉伸/移动
+        }
+        // move/resize 松手不结束，继续调整
+      });
+      // **双击确认选区**
+      ceng.addEventListener('dblclick', () => {
         const r = kuang.getBoundingClientRect();
-        if (r.width < 4 || r.height < 4) { shouWei(); resolve({ x: 0, y: 0, w: 0, h: 0 }); return; }  // 单击＝整屏
+        if (r.width < 4 || r.height < 4) return;
         shouWei();
         resolve({ x: r.left, y: r.top, w: r.width, h: r.height });
       });
-      // **右键取消**
+      // **回车确认选区**（有选区时）
+      const anJian2 = (e) => {
+        if (e.key === 'Escape') { shouWei(); resolve(null); }
+        else if (e.key === 'Enter') {
+          const r = kuang.getBoundingClientRect();
+          if (r.width >= 4 && r.height >= 4) {
+            shouWei();
+            resolve({ x: r.left, y: r.top, w: r.width, h: r.height });
+          } else {
+            shouWei();
+            resolve({ x: 0, y: 0, w: 0, h: 0 });
+          }
+        }
+      };
+      document.addEventListener('keydown', anJian2);
       ceng.addEventListener('contextmenu', (e) => { e.preventDefault(); shouWei(); resolve(null); });
-      document.addEventListener('keydown', anJian);
       document.addEventListener('contextmenu', function yiCi(ev) { ev.preventDefault(); }, { once: true });
     });
   }
@@ -11638,6 +11836,9 @@
       while ((state.instances || []).some((x) => x && x.id === id)) {
         id = 'inst-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
       }
+      // **随机使用专业模板**（产品要求：50 个模板随机分配）
+      const moBanJi = (typeof window !== 'undefined' && Array.isArray(window.__NIU_MA_TEMPLATES)) ? window.__NIU_MA_TEMPLATES : [];
+      const suiJiMoBan = moBanJi.length ? moBanJi[Math.floor(Math.random() * moBanJi.length)] : null;
       const inst = {
         id,
         ming,
@@ -11647,7 +11848,7 @@
         notify: true,
         model: 'deepseek-chat',
         memoryFile: 'persona/' + ming + '.md',
-        persona: t('instances.personaDefault'),
+        persona: suiJiMoBan ? suiJiMoBan.content : t('instances.personaDefault'),
         avatarPreset: randomPreset(),
         avatarDataUrl: '',
       };
@@ -11916,8 +12117,13 @@
     { id: 'readLatest', def: 'F7', alt: '{mod}+Shift+Space', run: () => { try { window.__duZuiXinHuiFu?.(); } catch { /* noop */ } } },
     // 切到「有最新回复」的会话
     { id: 'jumpLatest', def: 'F8', alt: '', run: () => { try { window.__tiaoZuiXinHuiFu?.(); } catch { /* noop */ } } },
-    // 截图（等于聊天输入框下的截图按钮）
-    { id: 'shotScreen', def: '{mod}+Shift+S', alt: '', run: () => { const b = $('anNiuShot'); if (b) b.click(); } },
+    // 截图（等于聊天输入框下的截图按钮）——**只在聊天界面生效**（产品要求）
+    { id: 'shotScreen', def: '{mod}+Shift+S', alt: '', run: () => {
+      // 不在聊天界面就不触发截图（其他界面没有截图功能）
+      const b = $('anNiuShot');
+      if (!b || !b.offsetParent) return;
+      b.click();
+    } },
   ];
 
   /** 当前页面的「新建」入口（实例页/项目页/群聊页/联系人页各不相同） */
@@ -14950,9 +15156,17 @@
         <label class="mgrLb">${escapeHtml(t('instances.availableModels'))}</label>
         <div class="mgrMoXingJi">${
           models.length
-            ? models.map((m) => `<span class="moXingChip">${escapeHtml(m)}${
-                editable ? `<button class="x" data-mgdel="${suoYin}" data-m="${escapeHtml(m)}" title="${escapeHtml(t('settings.removeModel'))}">×</button>` : ''
-              }</span>`).join('')
+            ? models.map((m) => {
+                const nl = (window.__moXingNengLi || {})[m] || {};
+                const buKeLiao = nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat' && !(nl.kind === 'chat' && nl.vision === true);
+                const wuGongJu = nl.tools === false;
+                const jingGaoSvg = '<svg class="moXingJingGao" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1L15 14H1L8 1Z" fill="none" stroke="#e6a23c" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="9" stroke="#e6a23c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.8" fill="#e6a23c"/></svg>';
+                const jingGao = wuGongJu ? ' <span class="moXingJingGaoWrap" title="' + escapeHtml(tOr('model.noToolsWarn', '该模型无法调用工具执行任务，只能纯聊天')) + '">' + jingGaoSvg + '</span>' : '';
+                const hui = buKeLiao ? ' style="opacity:0.45;cursor:not-allowed"' : '';
+                return `<span class="moXingChip"${hui}>${escapeHtml(m)}${jingGao}${
+                  editable && !buKeLiao ? `<button class="x" data-mgdel="${suoYin}" data-m="${escapeHtml(m)}" title="${escapeHtml(t('settings.removeModel'))}">×</button>` : ''
+                }</span>`;
+              }).join('')
             : '<span class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</span>'
         }</div>
         <label class="mgrLb">${escapeHtml(t('instances.fallbackChain'))}</label>
@@ -16864,12 +17078,20 @@
     const bubble = e.target.closest('.bubble');
     if (!bubble) return;
     e.preventDefault();
-    const text = bubble.textContent || '';
+    const fullText = bubble.textContent || '';
+    // **有选区就引用选区，否则引用整条**（产品要求）
+    const sel = window.getSelection();
+    const selText = sel && !sel.isCollapsed && bubble.contains(sel.anchorNode) ? String(sel) : '';
+    const quoteText = selText || fullText;
     openContextMenu(e.clientX, e.clientY, [
-      { biaoQian: t('common.copy'), onClick: () => { navigator.clipboard?.writeText(text); } },
+      { biaoQian: t('common.copy'), onClick: () => { navigator.clipboard?.writeText(selText || fullText); } },
       { biaoQian: t('common.quote'), onClick: () => {
           const input = $('shuRu');
-          if (input) input.value = '> ' + text.slice(0, 120) + '\n' + input.value;
+          if (!input) return;
+          // **引用完整内容**（真事故：以前 slice(0,120) 截断了）
+          const yin = quoteText.split('\n').map((l) => '> ' + l).join('\n');
+          input.value = yin + '\n' + input.value;
+          input.focus();
         } },
     ]);
   });
@@ -17152,6 +17374,8 @@
         // 单会话缓冲上限 200KB（防长文把内存撑大；到顶就不再追加）
         if (d.reasoning && b.reasoning.length < 200000) b.reasoning += String(d.reasoning);
         if (d.content && b.content.length < 200000) b.content += String(d.content);
+        // **累积后仍无实质内容 ⇒ 清空正文**（防流式里残留「？」变成幽灵气泡）
+        if (b.content && !youShiZhiWenBen(b.content)) b.content = '';
         if (state.selectedChat && String(state.selectedChat.id) === sid) xuanRanLiuShiKuai(sid, b);
       } catch { /* 流式渲染失败不影响主流程 */ }
     });

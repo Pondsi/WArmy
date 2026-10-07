@@ -2254,7 +2254,12 @@
   "settings.title": "Réglages",
   "settings.hotkey.act.shotScreen": "Capture d'écran",
   "chat.busy.started": "Début",
-  "chat.busy.updated": "Dernière mise à jour",
+  "chat.busy.updated": "Mis à jour",
   "gongJu.scanTitle": "Répertoires de découverte automatique",
-  "gongJu.scanHint": "Les sous-dossiers (ou le dossier lui-même) contenant TOOL.json sont découverts automatiquement comme packs d'outils ; 10 maximum. Les chemins invalides sont signalés tels quels."
+  "gongJu.scanHint": "Les sous-dossiers (ou le dossier lui-même) contenant TOOL.json sont découverts automatiquement comme packs d'outils ; 10 maximum. Les chemins invalides sont signalés tels quels.",
+  "settings.pluginScanHint": "Les sous-répertoires contenant plugin.json (ou le répertoire lui-même) sont automatiquement découverts comme plugins ; jusqu'à 10. Les chemins invalides sont signalés honnêtement.",
+  "plugin.builtinNoDelete": "Le plugin intégré ne peut pas être supprimé",
+  "model.noToolsWarn": "Ce modele ne peut pas appeler d outils pour executer des taches ; chat uniquement",
+  "console.helpTip": "Journal d evenements local reel (appels d outils/reseau/erreurs) pour le depannage. Faites un clic droit sur le contenu de l evenement pour copier ou effacer.",
+  "settings.scanDirsEmpty": "Aucun repertoire de decouverte automatique ajoute pour le moment"
 }

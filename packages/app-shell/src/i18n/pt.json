@@ -2254,7 +2254,12 @@
   "settings.title": "Configurações",
   "settings.hotkey.act.shotScreen": "Captura de tela",
   "chat.busy.started": "Início",
-  "chat.busy.updated": "Última atualização",
+  "chat.busy.updated": "Atualizado",
   "gongJu.scanTitle": "Diretórios de descoberta automática",
-  "gongJu.scanHint": "Subdiretórios (ou o próprio diretório) com TOOL.json são descobertos automaticamente como pacotes de ferramentas; até 10. Caminhos inválidos são marcados como estão."
+  "gongJu.scanHint": "Subdiretórios (ou o próprio diretório) com TOOL.json são descobertos automaticamente como pacotes de ferramentas; até 10. Caminhos inválidos são marcados como estão.",
+  "settings.pluginScanHint": "Subdiretórios contendo plugin.json (ou o próprio diretório) são descobertos automaticamente como plugins; até 10. Caminhos inválidos são rotulados honestamente.",
+  "plugin.builtinNoDelete": "O plugin integrado não pode ser excluído",
+  "model.noToolsWarn": "Este modelo nao pode chamar ferramentas para executar tarefas; apenas chat",
+  "console.helpTip": "Registro de eventos local real (chamadas de ferramentas/rede/erros) para solucao de problemas. Clique com o botao direito no conteudo do evento para copiar ou limpar.",
+  "settings.scanDirsEmpty": "Nenhum diretorio de descoberta automatica adicionado ainda"
 }

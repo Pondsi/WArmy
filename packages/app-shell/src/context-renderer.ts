@@ -39,6 +39,11 @@ export interface LogEntry {
    * 真事故：用户看到聊天里冒出一段自己没说过的话。
    */
   hidden?: boolean;
+  /**
+   * **续派回合合并进上一条**（一次用户对话 = 一条思考 + 一条回复）。
+   * 自动续派产生的 assistant 回复追加到上一条 assistant 消息末尾，不单开气泡。
+   */
+  mergeWithPrev?: boolean;
 }
 
 export interface XuanranXuanxiang {

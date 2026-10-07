@@ -2254,7 +2254,12 @@
   "settings.title": "Ajustes",
   "settings.hotkey.act.shotScreen": "Captura de pantalla",
   "chat.busy.started": "Inicio",
-  "chat.busy.updated": "Última actualización",
+  "chat.busy.updated": "Actualizado",
   "gongJu.scanTitle": "Directorios de descubrimiento automático",
-  "gongJu.scanHint": "Los subdirectorios (o el propio directorio) con TOOL.json se descubren automáticamente como paquetes de herramientas; hasta 10. Las rutas no válidas se marcan tal cual."
+  "gongJu.scanHint": "Los subdirectorios (o el propio directorio) con TOOL.json se descubren automáticamente como paquetes de herramientas; hasta 10. Las rutas no válidas se marcan tal cual.",
+  "settings.pluginScanHint": "Los subdirectorios que contienen plugin.json (o el propio directorio) se descubren automáticamente como complementos; hasta 10. Las rutas no válidas se etiquetan honestamente.",
+  "plugin.builtinNoDelete": "El complemento integrado no se puede eliminar",
+  "model.noToolsWarn": "Este modelo no puede llamar herramientas para ejecutar tareas; solo chat",
+  "console.helpTip": "Registro de eventos local real (llamadas a herramientas/red/errores) para solucionar problemas. Haga clic derecho en el contenido del evento para copiar o borrar.",
+  "settings.scanDirsEmpty": "Aún no se han añadido directorios de descubrimiento automático"
 }

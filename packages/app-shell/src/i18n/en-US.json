@@ -2254,7 +2254,12 @@
   "settings.title": "Settings",
   "settings.hotkey.act.shotScreen": "Screenshot",
   "chat.busy.started": "Started",
-  "chat.busy.updated": "Last update",
+  "chat.busy.updated": "Updated",
   "gongJu.scanTitle": "Auto-discovery directories",
-  "gongJu.scanHint": "Subdirectories (or the directory itself) containing TOOL.json are auto-discovered as tool packs; up to 10. Invalid paths are marked as-is."
+  "gongJu.scanHint": "Subdirectories (or the directory itself) containing TOOL.json are auto-discovered as tool packs; up to 10. Invalid paths are marked as-is.",
+  "settings.pluginScanHint": "Subdirectories containing plugin.json (or the directory itself) are auto-discovered as plugins; up to 10. Invalid paths are labeled honestly.",
+  "plugin.builtinNoDelete": "Built-in plugin cannot be deleted",
+  "model.noToolsWarn": "This model cannot call tools to execute tasks; chat-only",
+  "console.helpTip": "Real local event log (tool calls/networking/errors) for troubleshooting. Right-click event content to copy or clear.",
+  "settings.scanDirsEmpty": "No auto-discover directories added yet"
 }

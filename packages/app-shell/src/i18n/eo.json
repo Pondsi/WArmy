@@ -2254,7 +2254,12 @@
   "settings.title": "Agordoj",
   "settings.hotkey.act.shotScreen": "Ekrankapto",
   "chat.busy.started": "Komenco",
-  "chat.busy.updated": "Lasta ĝisdatigo",
+  "chat.busy.updated": "Ĝisdatigita",
   "gongJu.scanTitle": "Aŭtomataj serĉdosierujoj",
-  "gongJu.scanHint": "Subdosierujoj (aŭ la dosierujo mem) kun TOOL.json aŭtomate malkovriĝas kiel il-pakaĵoj; maksimume 10. Nevalidaj vojoj estas markitaj kiel estas."
+  "gongJu.scanHint": "Subdosierujoj (aŭ la dosierujo mem) kun TOOL.json aŭtomate malkovriĝas kiel il-pakaĵoj; maksimume 10. Nevalidaj vojoj estas markitaj kiel estas.",
+  "settings.pluginScanHint": "Subdosierujoj kun plugin.json (aŭ la dosierujo mem) estas aŭtomate malkovritaj kiel kromaĵoj; ĝis 10. Nevalidaj vojoj estas honeste markitaj.",
+  "plugin.builtinNoDelete": "Enkonstruita kromaĵo ne estas forigebla",
+  "model.noToolsWarn": "Cxi tiu modelo ne povas voki ilojn por plenumi taskojn; nur babilo",
+  "console.helpTip": "Reala loka eventprotokolo (ilovokoj/reto/eraroj) por problemasolvo. Dekstre alklaku la eventenhavon por kopii aub purigi.",
+  "settings.scanDirsEmpty": "Aŭtomataj malkovro-dosierujoj ankoraŭ ne aldonitaj"
 }

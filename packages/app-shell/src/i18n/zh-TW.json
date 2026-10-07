@@ -2254,7 +2254,12 @@
   "settings.title": "設定",
   "settings.hotkey.act.shotScreen": "截圖",
   "chat.busy.started": "開始",
-  "chat.busy.updated": "最近更新",
+  "chat.busy.updated": "更新",
   "gongJu.scanTitle": "自動發現目錄",
-  "gongJu.scanHint": "目錄下含 TOOL.json 的子目錄（或目錄本身）會被自動發現為工具包；最多 10 個。無效路徑會如實標註。"
+  "gongJu.scanHint": "目錄下含 TOOL.json 的子目錄（或目錄本身）會被自動發現為工具包；最多 10 個。無效路徑會如實標註。",
+  "settings.pluginScanHint": "目錄下含 plugin.json 的子目錄（或目錄本身）會被自動發現為外掛；最多 10 個。無效路徑會如實標註。",
+  "plugin.builtinNoDelete": "內建外掛不可刪除",
+  "model.noToolsWarn": "該模型無法調用工具執行任務，只能純聊天",
+  "console.helpTip": "本機真實事件日誌（工具調用/組網/錯誤），排障用。右擊事件內容可複製或清空。",
+  "settings.scanDirsEmpty": "尚未添加自動發現目錄"
 }

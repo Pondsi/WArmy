@@ -884,6 +884,18 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
 }
 .jinDu { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
 .jinDuTiao { height: 100%; background: var(--accent); border-radius: 99px; }
+/* ── 第四列各卡片内容区最大高度 + 滚动条 ── */
+#jiHuaLieBiao, #dingShiLieBiao, #kongZhiTaiShuChu, #xiangMuTaiHe, #gongZuoWenJianJi, #dengDaiXieZhuHe {
+  max-height: 220px; overflow-y: auto; scrollbar-width: thin;
+}
+#jiHuaLieBiao::-webkit-scrollbar, #dingShiLieBiao::-webkit-scrollbar, #kongZhiTaiShuChu::-webkit-scrollbar,
+#xiangMuTaiHe::-webkit-scrollbar, #gongZuoWenJianJi::-webkit-scrollbar, #dengDaiXieZhuHe::-webkit-scrollbar {
+  width: 4px;
+}
+#jiHuaLieBiao::-webkit-scrollbar-thumb, #dingShiLieBiao::-webkit-scrollbar-thumb, #kongZhiTaiShuChu::-webkit-scrollbar-thumb,
+#xiangMuTaiHe::-webkit-scrollbar-thumb, #gongZuoWenJianJi::-webkit-scrollbar-thumb, #dengDaiXieZhuHe::-webkit-scrollbar-thumb {
+  background: var(--line); border-radius: 2px;
+}
 
 /* Pages */
 .pageBuJu {
@@ -1020,6 +1032,8 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
   color: var(--muted); font-size: var(--fs-md); line-height: 1; padding: 0 2px;
 }
 .moXingChip .x:hover { color: var(--danger); }
+.moXingJingGao { vertical-align: middle; cursor: help; }
+.moXingJingGaoWrap { display: inline-flex; align-items: center; margin-left: 2px; cursor: help; }
 .provDongZuoJi { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ── 应用内弹窗（相对主窗口居中） ── */
@@ -1150,7 +1164,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
   display: flex; align-items: center; cursor: pointer;
   padding: 4px 0; user-select: none;
 }
-.mianBanKaiGuan .jianTou { transition: transform 0.15s; color: var(--muted); }
+.mianBanKaiGuan .jianTou { transition: transform 0.15s; color: var(--muted); margin-left: auto; }
 .mianBanKaiGuan.daKai .jianTou { transform: rotate(90deg); }
 
 /* 更多菜单边框 */
@@ -2646,9 +2660,9 @@ body.liaoTianChuangKou #appTi {
 }
 .yunXingDian.ok i { animation: none; opacity: 1; background: var(--ok-fg, #6fd18f); }
 .yunXingDian.cuo i { animation: none; opacity: 1; background: var(--danger, #e06060); }
-.yunXingWen { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.yunXingShiJian { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 6px; }
-.yunXingMiao { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 2px; }
+.yunXingWen { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.yunXingShiJian { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 12px; white-space: nowrap; flex-shrink: 0; }
+.yunXingMiao { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 6px; white-space: nowrap; flex-shrink: 0; min-width: 3em; text-align: right; }
 .yunXingZhuangTai.cuoWu { color: var(--danger, #e06060); }
 /* 减弱动效：打字点/转圈不再弹跳，只保留静态可见性（无障碍） */
 @media (prefers-reduced-motion: reduce) {
@@ -2726,6 +2740,16 @@ html { font-weight: var(--fw-ui, 400); }
 .jieTuCeng { position: fixed; inset: 0; z-index: 99999; cursor: crosshair; user-select: none; background: #000; }
 .jieTuCeng .jieTuDi { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: .92; pointer-events: none; }
 .jieTuCeng .jieTuKuang { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,.45); pointer-events: none; }
+.jieTuCeng .jieTuJiao { position: absolute; width: 12px; height: 12px; background: var(--accent); border: 1px solid #fff; border-radius: 2px; pointer-events: none; }
+.jieTuCeng .jieTuJiao[data-jiao="nw"] { left: -6px; top: -6px; cursor: nwse-resize; }
+.jieTuCeng .jieTuJiao[data-jiao="ne"] { right: -6px; top: -6px; cursor: nesw-resize; }
+.jieTuCeng .jieTuJiao[data-jiao="sw"] { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.jieTuCeng .jieTuJiao[data-jiao="se"] { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.jieTuCeng .jieTuBian { position: absolute; pointer-events: none; }
+.jieTuCeng .jieTuBian[data-bian="n"] { left: 8px; right: 8px; top: -4px; height: 8px; cursor: ns-resize; }
+.jieTuCeng .jieTuBian[data-bian="s"] { left: 8px; right: 8px; bottom: -4px; height: 8px; cursor: ns-resize; }
+.jieTuCeng .jieTuBian[data-bian="w"] { top: 8px; bottom: 8px; left: -4px; width: 8px; cursor: ew-resize; }
+.jieTuCeng .jieTuBian[data-bian="e"] { top: 8px; bottom: 8px; right: -4px; width: 8px; cursor: ew-resize; }
 .jieTuCeng .jieTuTiShi {
   position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
   background: rgba(0,0,0,.6); color: #fff; padding: 6px 12px; border-radius: 999px; font-size: var(--fs-sm);
@@ -2912,6 +2936,11 @@ html { font-weight: var(--fw-ui, 400); }
 .xiaoXiLangDu:hover { background: var(--hover); color: var(--ink); }
 /* 朗读图标改成**线条单色**（与复制图标同一路子），不再是彩色 emoji */
 .xiaoXiIco { width: 12px; height: 12px; display: block; }
+.xiaoXiYinYong {
+  background: none; border: none; cursor: pointer; padding: 2px 4px;
+  color: var(--muted); border-radius: 4px; line-height: 1; font-size: 12px;
+}
+.xiaoXiYinYong:hover { background: var(--hover); color: var(--ink); }
 
 /* 图片附件点击放大预览 */
 .tuPianYuLanCeng {

@@ -278,6 +278,7 @@ export class OllamaGongYing extends JichuGongYing {
       let supportsThinking = false;
       let thinkLevels: string[] = [];
       let contextLen = 0;
+      let kind = 'unknown';
       try {
         const res = await fetch(pinJieUrl(this.baseURL, 'api/show'), {
           method: 'POST',
@@ -297,6 +298,10 @@ export class OllamaGongYing extends JichuGongYing {
             vision = caps.some((c) => /vision|image/.test(c));
             tools = caps.some((c) => /tool|function/.test(c));
             supportsThinking = caps.some((c) => /think|reason/.test(c));
+            // **按 capabilities 判类型**（真事故：bge-m3 是 embedding 模型，被当成可用聊天模型）
+            if (caps.some((c) => /embedding/.test(c))) kind = 'embedding';
+            else if (caps.some((c) => /vision|image/.test(c)) && !caps.some((c) => /completion|generate|chat/.test(c))) kind = 'image';
+            else if (caps.some((c) => /completion|generate|chat|thinking/.test(c))) kind = 'chat';
           } else {
             // 旧版 Ollama：只能从 model_info 的 clip/projector/mmproj 判视觉
             const youShiJue = infoKeys.some((k) => /(^|\.)clip$|projector|mmproj|vision|(^|\.)llava/i.test(k));
@@ -313,7 +318,7 @@ export class OllamaGongYing extends JichuGongYing {
       } catch {
         /* 单个模型查不到 ⇒ 保持 unknown（不猜） */
       }
-      out.push({ id, thinkLevels, supportsThinking, vision, tools, kind: 'unknown', contextLen });
+      out.push({ id, thinkLevels, supportsThinking, vision, tools, kind, contextLen });
     }
     return out;
   }
