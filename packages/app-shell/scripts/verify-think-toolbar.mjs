@@ -44,7 +44,8 @@ check('插入触发器里有三个状态图标（P1 加急 / P2 插话 / P3 排�
 check('三态图标都用气泡底 + 各自的区分符号（闪电/感叹号/十字）', /M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z/.test(html) && /M12 7l-2 4h3l-2 4/.test(html) && /M12 8v4M12 15h.01/.test(html) && /M12 8v6M9 11h6/.test(html), 'glyphs');
 check('三态图标是**空心描边**（否则被 .ico 的 fill:currentColor 涂成实心块）', /\.jinJiTrigger \.ico\.chaRuIco[\s\S]{0,160}fill: none !important/.test(css1) && /\.jinJiTrigger \.ico\.chaRuIco[\s\S]{0,160}fill: none !important/.test(css2), 'hollow icons');
 check('菜单里三个选项各带图标（一眼分得清）', (() => {
-  const kuai = html.slice(html.indexOf('id="jinJiCaiDan"'), html.indexOf('id="jinJiCaiDan"') + 1400);
+  // 窗口放宽到 2400：菜单开头现在还有「标题 + 问号说明」块
+  const kuai = html.slice(html.indexOf('id="jinJiCaiDan"'), html.indexOf('id="jinJiCaiDan"') + 2400);
   return (kuai.match(/class="ico chaRuIco"/g) || []).length >= 3;
 })(), 'menu icons');
 check('插入触发器**没有文字、没有箭头**', (() => {

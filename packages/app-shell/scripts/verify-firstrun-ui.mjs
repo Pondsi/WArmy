@@ -175,7 +175,7 @@ await c.evaluate(`(function(){ const b=document.querySelector('#yinDaoTiao [data
 await sleep(400);
 await c.evaluate(`(function(){ document.querySelector('[data-nav="settings"]').click(); return 1; })()`);
 await sleep(1200);
-const secs = ['ui', 'notify', 'model', 'func', 'skill', 'plugin', 'hotkey', 'about', 'mimic'];
+const secs = ['ui', 'notify', 'model', 'func', 'skill', 'tool', 'plugin', 'hotkey', 'about', 'mimic'];
 let secOk = 0;
 const details = [];
 for (const s of secs) {
@@ -195,11 +195,11 @@ for (const s of secs) {
       navBtns: nav.querySelectorAll('button[data-sec]').length,
     };
   })()`);
-  const ok = !r.missing && r.visCount > 0 && r.inNav === 0 && r.outside === 0 && r.navBtns === 9 && r.minW > r.navW + 100;
+  const ok = !r.missing && r.visCount > 0 && r.inNav === 0 && r.outside === 0 && r.navBtns === secs.length && r.minW > r.navW + 100;
   if (ok) secOk++;
   else details.push(s + ':' + JSON.stringify(r));
 }
-check('设置页 9 个分区都渲染在内容列里（不挤进 200px 导航列、不互相嵌套）', secOk === secs.length, secOk === secs.length ? `9/9，卡片宽 ${'>'} 内容列` : details.join(' | '));
+check('设置页 10 个分区都渲染在内容列里（不挤进 200px 导航列、不互相嵌套）', secOk === secs.length, secOk === secs.length ? `${secs.length}/${secs.length}，卡片宽 > 内容列` : details.join(' | '));
 
 // 分区切换后卡片真的换了一批（不是全都堆着显示）
 const switchCheck = await c.evaluate(`(function(){ return document.querySelectorAll('#peiZhiNeiRong .sheZhiSection:not(.yinCang)').length; })()`);

@@ -41,6 +41,7 @@ import { EtaZhangBen, EtaLinShi, shuoShiChang, renWuQianMing, jiaEtaMiao, xingWe
 import { JianChaDianCang } from './checkpoint.js';
 import { ShenJiRiZhi } from './audit.js';
 import { DAO_MOREN } from './dao-default.js';
+import { FIND_SKILL_MD } from './skills-default.js';
 import { AnQuanMiyaoCang } from './secure-keys.js';
 import * as credentialModule from './credential.js';
 import { ZhiShiGuiDangQi, QingLiGuanLiQi, congGuiDangTiQuZhiShi, heBingYongHuPianHao, tiQuJieGouHuaZhaiYao } from './archive-cleanup.js';
@@ -978,6 +979,18 @@ function youShiZhiWenBen(wen: string): boolean {
   return s.length > 0;
 }
 
+/**
+ * **这条回复是不是「自称做不到 / 拒答」**（真机事故：模型说「我没有权限操作你的桌面文件系统」，
+ * 而 write_file / make_pptx / open_path / run_shell / wait_seconds 就在工具表里，本轮一个都没调）。
+ *
+ * 判据只认**明确的无能宣称**，不含正常的能力说明（例如"我可以用工具帮你写文件"不该命中）。
+ */
+function shiJueDaiJueKou(wen: string): boolean {
+  const s = String(wen || '');
+  if (!s) return false;
+  return /没有权限|无权限|无权|够不着|触不到|摸不到|无法操作|无法访问|不能操作|不能访问|不被允许|不许我|我无法(操作|访问|执行|计时|异步)|我做不到(这些|这个|这点)|无法(计时|异步执行)|请你在本地|请在本地|自己(在)?本地(操作|做)/.test(s);
+}
+
 
 /**
  * **流式包装**：把 `chat()` 换成「用 chatStream 边收边回调」的等价实现。
@@ -1177,7 +1190,16 @@ async function yunXingLiaoTianXunHuan(
         ...(xiaoDiShangXian > 0 ? (xiaoDiToolSpecs() as unknown as GongJuGuiGe[]) : []),
       ] as unknown as GongJuGuiGe[])
     : [];
-  const jiaJu = [...ganHuoTools, ...jiyiTools];
+  /**
+   * **工具启停**（产品要求）：设置→工具里停掉的工具，模型就看不到它。
+   * 自定义工具（从文件夹导入的 TOOL.json）也在这里挂上。
+   */
+  const ziDing = ziDingGongJuJiQu().filter((g) => gongJuKeJian(g.name));
+  const ziDingGuiGe = ziDing.map((g) => ({
+    type: 'function' as const,
+    function: { name: g.name, description: g.description || `自定义工具：${g.name}`, parameters: g.parameters },
+  })) as unknown as GongJuGuiGe[];
+  const jiaJu = [...ganHuoTools, ...jiyiTools, ...ziDingGuiGe].filter((g) => gongJuKeJian(g.function.name));
   const tools: GongJuGuiGe[] | undefined = jiaJu.length && limits.zuiDaLunShu > 0 ? jiaJu : undefined;
   const supported = gongYingZhiChiGongJu(provider);
 
@@ -1335,7 +1357,7 @@ async function yunXingLiaoTianXunHuan(
         fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: true, chars: huiBao.length, ms: Date.now() - t1 } });
         return huiBao.slice(0, ctx.zuiDaJieGuoZiShu);
       }
-      if (isHostTool(gongJuMing)) {
+      if (isHostTool(gongJuMing) || ziDingGongJuJiQu().some((g) => g.name === gongJuMing)) {
         /**
          * 宿主工具：打开文件/网页、登记定时任务。
          * 权限：普通/严格授权下 open_path 只允许**工作区内**；完全授权才放开任意本机路径。
@@ -1359,6 +1381,42 @@ async function yunXingLiaoTianXunHuan(
         }
         try {
           if (!jieH.ok) { /* 已如实回参错，跳过执行 */ }
+          /**
+           * **自定义工具**（设置→工具里从文件夹导入的 TOOL.json）：
+           * 只是把 `command` 里 `{{arg}}` 换成实参后交给命令行 —— **走 run_shell 同一套安全检查**
+           * （anquanJianCeMingLing + panDuanShouQuan + 越权询问），绝不绕过。
+           */
+          else if (ziDingGongJuJiQu().some((g) => g.name === gongJuMing)) {
+            const ziDingGongJu = ziDingGongJuJiQu().find((g) => g.name === gongJuMing)!;
+            let cmd = ziDingGongJu.command;
+            for (const [k, v] of Object.entries(argsH || {})) {
+              cmd = cmd.split('{{' + k + '}}').join(String(v ?? ''));
+            }
+            cmd = cmd.replace(/\{\{\s*[\w.]+\s*\}\}/g, '');
+            const jian = anquanJianCeMingLing(cmd);
+            const { dang: dangZ, ask: wenZ } = anQuanDangWei();
+            const pan = panDuanShouQuan(dangZ, wenZ, 'shell', jian);
+            if (!pan.allow && !pan.needAsk) {
+              okH = false;
+              huiBaoH = `[${gongJuMing}] 被拒（${dangZ}授权）：${pan.why}`;
+            } else if (pan.allow || !wenZ) {
+              const r2 = await yunXingMingLing(cmd, { cwd: baseH, timeoutMs: Number(argsH.timeoutMs) || 60000 });
+              huiBaoH = `[${gongJuMing}] exit=${r2.code} (${r2.ms}ms)\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
+              if (r2.code !== 0) okH = false;
+            } else {
+              const da = await qingQiuKaPian(sessionId, 'AI 请求运行自定义工具',
+                `工具：${gongJuMing}\n命令：${cmd}\n（同意 = 仅这一次放行；拒绝 = 不执行）`,
+                [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+              if (/^同意/.test(da)) {
+                const r2 = await yunXingMingLing(cmd, { cwd: baseH, timeoutMs: Number(argsH.timeoutMs) || 60000 });
+                huiBaoH = `[${gongJuMing}] exit=${r2.code} (${r2.ms}ms)\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
+                if (r2.code !== 0) okH = false;
+              } else {
+                okH = false;
+                huiBaoH = `[${gongJuMing}] 用户拒绝执行`;
+              }
+            }
+          }
           else if (gongJuMing === 'ask_user') {
             /**
              * AI 拿不准时的**选择卡**：列出候选项（永远带「其他」自定义），用户选完自动继续。
@@ -3067,6 +3125,7 @@ if (dedaoDangeSuo) {
     .then(async () => {
       qidong('whenReady');
       boZhongDaoMoRen();
+      boZhongNeiZhiJiNeng();
       chuangjianChuangkou();
       qidong('window created');
       /**
@@ -4557,6 +4616,27 @@ async function zhenZhengFaSong(
               }
             }
           } catch { /* 拿不到知识库就不加这段（不影响正常对话） */ }
+          /**
+           * **能力声明**（真机反馈：模型说「我没有权限操作你的桌面文件系统」「我无法计时」，
+           * 可是 write_file / make_pptx / open_path / run_shell / wait_seconds 就在工具表里，
+           * 一个都没调）。
+           *
+           * 这不是"没暴露工具"（审计里 `chat.tools.enabled` 列了全部），是**模型不知道自己有工具**。
+           * 所以必须在提示里**逐个点名**，并明确禁止"说自己做不到"。
+           */
+          try {
+            ju.push(tMain(
+              'llm.toolCapability',
+              '【能力清单】你可以**真的**做到下面这些事，用工具即可：' +
+                '写文件（write_file）、建 Word（make_docx）、建 PPT（make_pptx）、打开文件/目录（open_path / open_file）、' +
+                '读文件（read_file）、列目录（list_dir）、建目录（make_dir）、跑命令（run_shell）、' +
+                '取当前时间（get_time）、等待若干秒（wait_seconds）、向用户提问（ask_user）。\n' +
+                '用户要求「生成文件 / 放到桌面 / 写入文档 / 打开给我看 / 等 N 秒」这类**落地动作**时，' +
+                '**必须调用对应工具去完成**，再如实回报做了什么、文件在哪。\n' +
+                '**绝对不要说**「我没有权限 / 我够不着 / 我无法操作 / 我无法计时 / 请你自己在本地做」—— 这是事实错误：' +
+                '这些工具就在你手里。只有当某个工具调用**真的失败**时，才如实说失败原因与替代方案。'
+            ));
+          } catch { /* noop */ }
           if (ju.length) shenFenTou.push({ role: 'system', content: ju.join('') } as LiaoTianXiaoXi);
         }
         /**
@@ -4633,6 +4713,53 @@ async function zhenZhengFaSong(
             loop = await yunXingLiaoTianXunHuan(sessionId, provider, jiBenQiu, xiaoXi.xiaoDiShuLiang);
           } else {
             throw e0;
+          }
+        }
+        /**
+         * **自称做不到 ⇒ 纠正并重跑一轮完整工具循环**（真机事故：模型回「我没有权限操作你的
+         * 桌面文件系统」「我无法计时」，可 write_file / make_pptx / open_path / run_shell /
+         * wait_seconds 就在工具表里，本轮 `gongJuDiaoYongJi=0` —— 一个都没调）。
+         *
+         * 项目侧能做的就是这两件：① 提示里逐个点名能力（见 `llm.toolCapability`）；
+         * ② 识别这种"无能宣称"，把能力清单**再钉一次**，并给它一次真正动手的机会
+         * （走完整工具循环，不是只让它再打字）。只重试一次，避免死循环。
+         */
+        if (
+          !!loop.tooled &&
+          !Number(loop.gongJuDiaoYongJi || 0) &&
+          shiJueDaiJueKou(neiRongWenBen(loop.xiangYingTi.choices[0]?.message?.content))
+        ) {
+          const yuanWen = neiRongWenBen(loop.xiangYingTi.choices[0]?.message?.content);
+          audit?.log('chat.refusal-detected', { sessionId, model: modelId, chars: yuanWen.length });
+          try {
+            const jiuZheng: LiaoTianXiaoXi[] = [
+              {
+                role: 'system',
+                content: tMain('llm.forceTools',
+                  '【纠正 · 上一条回答不成立】你说自己「没有权限 / 够不着 / 无法操作 / 无法计时」—— 这是事实错误。' +
+                  '你手上有这些工具，并且**可以真的**做到：write_file（写任意文件，含桌面）、make_docx、make_pptx、' +
+                  'open_path / open_file（用系统默认程序打开）、read_file、list_dir、make_dir、run_shell、' +
+                  'get_time（取当前时间）、wait_seconds（等待 N 秒）、ask_user。\n' +
+                  '请**立即调用工具**，把用户的每一项要求真正落地：生成 txt 与 ppt → 写入内容 → 打开给用户看 → wait_seconds 等待 → 写出长文。' +
+                  '全部做完后，再用文字如实汇报每一步做了什么、文件在哪。**禁止再说做不到**；只有工具调用真的失败时才报失败原因。'),
+              } as LiaoTianXiaoXi,
+              ...(xiaoXiJiZui as LiaoTianXiaoXi[]),
+            ];
+            const loop2 = await yunXingLiaoTianXunHuan(
+              sessionId,
+              provider,
+              siKaoExtra ? { ...jiBenQiu, xiaoXiJi: jiuZheng, extra: siKaoExtra } : { ...jiBenQiu, xiaoXiJi: jiuZheng },
+              xiaoXi.xiaoDiShuLiang,
+            );
+            const hou2 = neiRongWenBen(loop2.xiangYingTi.choices[0]?.message?.content);
+            // 只有"真的动手了"或"真的吐了非拒答正文"才替换；否则保留原回复（至少如实）
+            const dongShou = Number(loop2.gongJuDiaoYongJi || 0) > 0;
+            if (dongShou || (youShiZhiWenBen(hou2) && !shiJueDaiJueKou(hou2))) {
+              audit?.log('chat.refusal-corrected', { sessionId, model: modelId, toolsUsed: Number(loop2.gongJuDiaoYongJi || 0), from: 'retry' });
+              loop = loop2;
+            }
+          } catch (eJ) {
+            audit?.log('chat.refusal-retry-failed', { sessionId, error: xiJingCuoWu(eJ).slice(0, 160) });
           }
         }
         return { shitu, loop, budgetChars };
@@ -6020,6 +6147,21 @@ chuliIpc('warmy:zuiGaoXinNianShe', (_e, p0?: { text?: string }) => {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
+
+/**
+ * **内置 find-skill 技能**（产品要求）：让 AI 自己能找到并装上需要的技能。
+ * 首次运行播种到 `userData/skills/find-skill/SKILL.md`，之后完全由用户编辑（不再覆盖）。
+ */
+function boZhongNeiZhiJiNeng(): void {
+  try {
+    const mu = path.join(app.getPath('userData'), 'skills', 'find-skill');
+    const wen = path.join(mu, 'SKILL.md');
+    if (fs.existsSync(wen)) return;
+    fs.mkdirSync(mu, { recursive: true });
+    fs.writeFileSync(wen, FIND_SKILL_MD, 'utf8');
+    audit?.log('skill.find-skill-seeded', { chars: FIND_SKILL_MD.length });
+  } catch { /* noop */ }
+}
 
 /**
  * **「道」**（`userData/dao.md`）：全局**最高优先级**的提示词，高于「规矩」(agents.md)。
@@ -7775,6 +7917,142 @@ function jinengGen(): Array<{ root: string; source: string }> {
   }
   return roots;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   「工具」面板（产品要求）：AI 要用的工具都放在这里，和技能一样
+   可停用/启用、手动安装/导入、添加自动发现的目录。
+   ══════════════════════════════════════════════════════════════════════ */
+
+/** 自定义工具（从文件夹导入的 TOOL.json）：只声明"叫什么/长什么样/跑哪条命令" */
+interface ZiDingGongJu {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  /** 要跑的命令行；参数用 {{arg}} 占位（走 run_shell 同一套安全检查） */
+  command: string;
+  source?: string;
+}
+function ziDingGongJuJiQu(): ZiDingGongJu[] {
+  try {
+    const s = settingsStore?.load() as { customTools?: ZiDingGongJu[] } | undefined;
+    const a = s?.customTools;
+    return Array.isArray(a) ? a.filter((x) => x && x.name && x.command) : [];
+  } catch { return []; }
+}
+function gongJuQiYongBiao(): Record<string, boolean> {
+  try {
+    const s = settingsStore?.load() as { toolEnabled?: Record<string, boolean> } | undefined;
+    return s?.toolEnabled && typeof s.toolEnabled === 'object' ? { ...s.toolEnabled } : {};
+  } catch { return {}; }
+}
+/** 这个工具对模型可见吗（默认可见；显式 false 才隐藏） */
+function gongJuKeJian(ming: string): boolean {
+  return gongJuQiYongBiao()[String(ming)] !== false;
+}
+
+chuliIpc('warmy:gongJuLieBiao', () => {
+  const qi = gongJuQiYongBiao();
+  const out: Array<{ name: string; description: string; source: string; enabled: boolean }> = [];
+  const add = (specs: Array<{ function: { name: string; description?: string } }> | undefined, source: string) => {
+    for (const s of specs || []) {
+      const name = String(s.function?.name || '');
+      if (!name) continue;
+      out.push({ name, description: String(s.function?.description || ''), source, enabled: qi[name] !== false });
+    }
+  };
+  try { add(workToolSpecs() as never, 'work'); } catch { /* noop */ }
+  try { add(hostToolSpecs() as never, 'host'); } catch { /* noop */ }
+  try { add(memory?.isReady ? (memoryToolSpecs() as never) : undefined, 'memory'); } catch { /* noop */ }
+  for (const g of ziDingGongJuJiQu()) {
+    out.push({ name: g.name, description: g.description, source: 'custom', enabled: qi[g.name] !== false });
+  }
+  return { ok: true, tools: out };
+});
+
+chuliIpc('warmy:gongJuQiYong', (_e, p0?: { name?: string; enabled?: boolean }) => {
+  try {
+    const name = String(p0?.name || '');
+    if (!name) return { ok: false, error: 'bad-payload' };
+    const s = settingsStore?.load() as { toolEnabled?: Record<string, boolean> } | undefined;
+    const m = { ...((s && s.toolEnabled) || {}) };
+    if (p0?.enabled === false) m[name] = false;
+    else delete m[name];
+    settingsStore?.save({ toolEnabled: m } as never);
+    return { ok: true, enabled: m[name] !== false };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/** 工具自动发现目录（与技能同款机制，独立一份设置） */
+function gongJuSaomiaoLuJingQu(): string[] {
+  try {
+    const s = settingsStore?.load() as { toolScanDirs?: unknown } | undefined;
+    const dirs = s && Array.isArray(s.toolScanDirs) ? s.toolScanDirs : [];
+    return dirs.map((d) => String(d || '').trim()).filter(Boolean).slice(0, SKILL_SCAN_DIRS_MAX);
+  } catch { return []; }
+}
+chuliIpc('warmy:gongJuSaoMiaoMuLuJiQu', () => ({ ok: true, dirs: gongJuSaomiaoLuJingQu() }));
+chuliIpc('warmy:gongJuSaoMiaoMuLuJiSheZhi', (_e, dirs: unknown) => {
+  try {
+    const LieBiao = (Array.isArray(dirs) ? dirs : []).map((d) => String(d || '').trim()).filter(Boolean).slice(0, SKILL_SCAN_DIRS_MAX);
+    settingsStore?.save({ toolScanDirs: LieBiao } as never);
+    return { ok: true, dirs: LieBiao };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 扫描自动发现目录里带 `TOOL.json` 的工具包（只登记、不执行） */
+chuliIpc('warmy:gongJuSaoMiao', () => {
+  const faXian: ZiDingGongJu[] = [];
+  for (const dir of gongJuSaomiaoLuJingQu()) {
+    let ems: string[] = [];
+    try { ems = fs.readdirSync(dir); } catch { continue; }
+    for (const e of ems.slice(0, 50)) {
+      const p = path.join(dir, e, 'TOOL.json');
+      const one = duGongJuBao(p);
+      if (one) faXian.push(one);
+    }
+  }
+  return { ok: true, found: faXian };
+});
+/** 读一个工具包（`TOOL.json`，可选 `TOOL.md` 做说明）；不合格返回 null */
+function duGongJuBao(josnLu: string): ZiDingGongJu | null {
+  try {
+    if (!josnLu || !fs.existsSync(josnLu)) return null;
+    const j = JSON.parse(fs.readFileSync(josnLu, 'utf8'));
+    const name = String(j?.name || '').trim();
+    const command = String(j?.command || '').trim();
+    if (!name || !command) return null;
+    if (!/^[\w.\-]{1,64}$/.test(name)) return null;
+    let description = String(j?.description || '').slice(0, 400);
+    const md = path.join(path.dirname(josnLu), 'TOOL.md');
+    if (!description && fs.existsSync(md)) description = fs.readFileSync(md, 'utf8').slice(0, 400);
+    return {
+      name,
+      description,
+      parameters: (j?.parameters && typeof j.parameters === 'object') ? j.parameters : { type: 'object', properties: {} },
+      command: command.slice(0, 2000),
+      source: path.dirname(josnLu),
+    };
+  } catch { return null; }
+}
+/** 手动安装/导入：从文件夹读 TOOL.json，登记为自定义工具 */
+chuliIpc('warmy:gongJuAnZhuang', (_e, mu: string) => {
+  try {
+    const dir = String(mu || '');
+    if (!dir || !fs.existsSync(dir)) return { ok: false, error: 'folder-not-found' };
+    const josnLu = fs.statSync(dir).isDirectory() ? path.join(dir, 'TOOL.json') : dir;
+    const one = duGongJuBao(josnLu);
+    if (!one) return { ok: false, error: 'not-a-tool-package', hint: '需要 TOOL.json（含 name 与 command）' };
+    const yiYou = ziDingGongJuJiQu().filter((x) => x.name !== one.name);
+    settingsStore?.save({ customTools: [...yiYou, one] } as never);
+    return { ok: true, tool: one };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:gongJuXieZai', (_e, name: string) => {
+  try {
+    const n = String(name || '');
+    settingsStore?.save({ customTools: ziDingGongJuJiQu().filter((x) => x.name !== n) } as never);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 
 chuliIpc('warmy:jinengJiLieBiao', () => {
   const jinengJi: Array<Record<string, unknown>> = [];

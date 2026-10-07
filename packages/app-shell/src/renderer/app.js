@@ -3373,6 +3373,28 @@
   }
   window.__biHeQiYuDanCeng = biHeQiYuDanCeng;
 
+  /**
+   * **问号说明**（产品要求）：标题旁的 `?` —— 悬停看说明，点击也可展开；
+   * 说明本身**不直接铺在弹层外面**。三处（对话模式 / 思考级别 / 上下文预算）共用。
+   */
+  (function bindWenHao() {
+    if (window.__ddWenBound) return;
+    window.__ddWenBound = 1;
+    document.addEventListener('click', (e) => {
+      const b = e.target && e.target.closest && e.target.closest('.ddWen');
+      // 点其它地方时收起所有已展开的问号
+      if (!b) {
+        document.querySelectorAll('.ddWen.kai').forEach((x) => x.classList.remove('kai'));
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      const kai = b.classList.contains('kai');
+      document.querySelectorAll('.ddWen.kai').forEach((x) => x.classList.remove('kai'));
+      if (!kai) b.classList.add('kai');
+    });
+  })();
+
   function bindCtxBudget() {
     const btn = $('anNiuShangXiaWen');
     if (!btn || btn.dataset.bound === '1') return;
@@ -5503,6 +5525,7 @@
           <button data-sec="model">${escapeHtml(t('settings.section.model'))}</button>
           <button data-sec="func">${escapeHtml(t('settings.section.func'))}</button>
           <button data-sec="skill">${escapeHtml(t('settings.tabSkills'))}</button>
+          <button data-sec="tool">${escapeHtml(tOr('settings.tabTools', '工具'))}</button>
           <button data-sec="plugin">${escapeHtml(t('settings.tabPlugins'))}</button>
           <button data-sec="hotkey">${escapeHtml(t('settings.section.hotkey'))}</button>
           <button data-sec="about">${escapeHtml(t('settings.section.about'))}</button>
@@ -5943,15 +5966,33 @@
           <div id="jinengLieBiao" class="jingYin">${escapeHtml(t('settings.skillsEmpty'))}</div>
           <div class="jingYin jinengLuJingJi" id="jinengLuJingJi"></div>
         </div>
-        <div class="sheZhiSection sheZhiKa" id="webgpuKa">
+        <!-- 图形加速：属于「功能」分区（产品要求：从「技能」挪过来） -->
+        <div class="sheZhiSection sheZhiKa" id="webgpuKa" data-sec="func">
           <h2>${escapeHtml(tOr('webgpu.section', '图形加速（WebGPU）'))}</h2>
           <p class="jingYin">${escapeHtml(tOr('webgpu.hint', '检测本机是否支持 WebGPU（与模型无关）。'))}</p>
           <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
         </div>
-        <div class="sheZhiSection sheZhiKa" id="yinDaoKa">
-          <h2>${escapeHtml(tOr('guide.section', '新手引导'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('guide.sectionHint', '第一次用的三步指引；随时可以再看一遍。'))}</p>
-          <div class="shiLiHang" style="margin-top:8px"><button type="button" class="anNiuXiao" id="anNiuChongKanYinDao">${escapeHtml(tOr('guide.restart', '重新查看引导'))}</button></div>
+        <!-- 「新手引导」卡已删除（产品要求）；重开入口在「关于」页底部的按钮上 -->
+        <!-- 「工具」：AI 要用的工具都在这里（与技能同款：可停用/启用、手动安装/导入、自动发现目录） -->
+        <div class="sheZhiSection" data-sec="tool"><h2 style="color:var(--accent)">${escapeHtml(tOr('settings.tabTools', '工具'))}</h2></div>
+        <div class="sheZhiSection sheZhiKa" id="gongJuKa">
+          <h2>${escapeHtml(tOr('gongJu.title', 'AI 工具'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('gongJu.hint', '模型能调用的工具都在这里。停用后模型就看不到它；已装的工具可手动安装/导入，也可添加自动发现的目录。'))}</p>
+          <div id="gongJuLieBiao" class="jingYin">${escapeHtml(tOr('gongJu.empty', '暂无工具'))}</div>
+          <div class="jinengSaoMiaoKuai" style="margin-top:10px">
+            <div class="jinengSaoMiaoBiaoTi">${escapeHtml(t('settings.skillsScanTitle'))}</div>
+            <div class="jingYin">${escapeHtml(t('settings.skillsScanHint'))}</div>
+            <div id="gongJuSaoMiaoMuLuJi"></div>
+            <div class="shiLiHang" style="margin-top:6px">
+              <input id="gongJuSaoMiaoMuLuShuRu" class="skill-scan-input" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}" style="flex:1;min-width:120px"/>
+              <button class="anNiuXiao" id="anNiuGongJuSaoMiaoBrowse">${escapeHtml(t('settings.pickFolder'))}</button>
+              <button class="anNiuXiao" id="anNiuGongJuSaoMiaoTianJia">${escapeHtml(t('settings.skillsScanAdd'))}</button>
+            </div>
+            <div class="shiLiHang" style="margin-top:6px">
+              <button class="anNiuXiao" id="anNiuGongJuAnZhuang">${escapeHtml(tOr('gongJu.install', '从文件夹安装工具…'))}</button>
+              <button class="anNiuXiao" id="anNiuGongJuSaoMiaoJianCha">${escapeHtml(t('settings.skillsScanCheck'))}</button>
+            </div>
+          </div>
         </div>
         <!-- R2「快捷」：**键盘快捷键在前**，AI/IPC 接口目录在后 -->
         <div class="sheZhiSection" data-sec="hotkey"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.hotkey'))}</h2></div>
@@ -5963,6 +6004,12 @@
             <thead><tr><th>${escapeHtml(t('settings.hotkey.colAction'))}</th><th>${escapeHtml(t('settings.hotkey.colBinding'))}</th><th>${escapeHtml(tOr('settings.hotkey.colAlt', '备用按键'))}</th><th>${escapeHtml(t('settings.hotkey.colDesc'))}</th></tr></thead>
             <tbody id="hkMiYaoJiTi"></tbody>
           </table>
+          <!-- 未保存提示（强调色）：有更改但还没点确定/取消 -->
+          <div class="hkWeiBaoCun yinCang" id="hkWeiBaoCun"></div>
+          <div class="shiLiHang" style="margin-top:8px">
+            <button type="button" class="anNiuZhuYao" id="hkQueDing" disabled>${escapeHtml(tOr('common.ok', '确定'))}</button>
+            <button type="button" class="anNiuXiao" id="hkQuXiao" disabled>${escapeHtml(tOr('common.cancel', '取消'))}</button>
+          </div>
           <div class="hkXiaoXi" id="hkMiYaoJiXiaoXi"></div>
         </div>
         <div class="sheZhiSection sheZhiKa" id="hkapiKa">
@@ -6221,10 +6268,10 @@
             });
           });
         })();
-        const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'plugin', 'hotkey', 'about', 'mimic'];
+        const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'tool', 'plugin', 'hotkey', 'about', 'mimic'];
         // skill 与 jineng 是同一分区的两种历史键名 —— 必须别名到同一数组
         const skillBucket = [];
-        const groups = { ui: [], notify: [], model: [], func: [], plugin: [], hotkey: [], about: [], mimic: [] };
+        const groups = { ui: [], notify: [], model: [], func: [], tool: [], plugin: [], hotkey: [], about: [], mimic: [] };
         groups['skill'] = skillBucket;
         groups['jineng'] = skillBucket;
         let curSec = 'ui';
@@ -7389,6 +7436,105 @@
             try { setNav('singleAi'); } catch { /* noop */ }
           }
           try { window.__showOnboardingGuide?.(true); } catch { /* noop */ }
+        });
+      })();
+      // 「工具」面板：列出全部 AI 工具（可停用/启用、手动安装/导入、自动发现目录）
+      (function bindGongJuKa() {
+        if (window.__gongJuKaBound) return;
+        window.__gongJuKaBound = 1;
+        const yuanShuju = (mu, id) => (mu || '').trim();
+        function zhiMuLu(list, id) {
+          const he = $(id);
+          if (!he) return;
+          he.innerHTML = (list || []).map((d) => '<div class="ctgHang">' + escapeHtml(d) + '</div>').join('') || '<div class="jingYin">—</div>';
+        }
+        async function xuanRanGongJu() {
+          const he = $('gongJuLieBiao');
+          if (!he) return;
+          const r = await window.warmy.toolsList?.().catch(() => null);
+          const tools = (r && r.tools) || [];
+          if (!tools.length) { he.textContent = tOr('gongJu.empty', '暂无工具'); return; }
+          const fen = { work: tOr('gongJu.work', '工作工具'), host: tOr('gongJu.host', '主机工具'), memory: tOr('gongJu.memory', '记忆工具'), custom: tOr('gongJu.custom', '自定义工具') };
+          const zu = {};
+          for (const g of tools) { (zu[g.source] = zu[g.source] || []).push(g); }
+          he.innerHTML = Object.keys(zu).map((k) =>
+            '<div class="pfHead">' + escapeHtml(fen[k] || k) + '</div>' +
+            zu[k].map((g) => (
+              '<div class="ctgHang" data-tool="' + escapeHtml(g.name) + '">' +
+              '<div class="ctgHangHead">' +
+              '<span class="pfMing">' + escapeHtml(g.name) + '</span>' +
+              '<label style="margin-left:auto;display:inline-flex;align-items:center;gap:4px">' +
+              '<input type="checkbox" data-tool-toggle="' + escapeHtml(g.name) + '"' + (g.enabled ? ' checked' : '') + '/>' +
+              '<span class="jingYin">' + escapeHtml(tOr('gongJu.enabled', '启用')) + '</span></label>' +
+              (g.source === 'custom' ? '<button class="anNiuXiao" data-tool-del="' + escapeHtml(g.name) + '">' + escapeHtml(t('settings.pluginDelete')) + '</button>' : '') +
+              '</div>' +
+              '<div class="ctgDim">' + escapeHtml((g.description || '').slice(0, 160)) + '</div>' +
+              '</div>'
+            )).join('')
+          ).join('');
+          he.querySelectorAll('[data-tool-toggle]').forEach((ck) => {
+            ck.onchange = async () => {
+              await window.warmy.toolEnable?.({ name: ck.dataset.toolToggle, enabled: ck.checked });
+            };
+          });
+          he.querySelectorAll('[data-tool-del]').forEach((b) => {
+            b.onclick = async () => {
+              await window.warmy.toolUninstall?.(b.dataset.toolDel);
+              void xuanRanGongJu();
+            };
+          });
+        }
+        async function shuaMuLu() {
+          const r = await window.warmy.toolScanDirsGet?.().catch(() => null);
+          zhiMuLu((r && r.dirs) || [], 'gongJuSaoMiaoMuLuJi');
+        }
+        document.addEventListener('click', async (e) => {
+          const btn = e.target && e.target.closest && e.target.closest('[id^="anNiuGongJu"]');
+          if (!btn) return;
+          const id = btn.id;
+          if (id === 'anNiuGongJuSaoMiaoBrowse') {
+            const mu = await window.warmy.pickDirectory?.().catch(() => null);
+            const s = $('gongJuSaoMiaoMuLuShuRu');
+            if (s && mu) s.value = mu;
+          } else if (id === 'anNiuGongJuSaoMiaoTianJia') {
+            const s = $('gongJuSaoMiaoMuLuShuRu');
+            const mu = (s && s.value || '').trim();
+            if (!mu) return;
+            const r = await window.warmy.toolScanDirsGet?.().catch(() => null);
+            const dirs = ((r && r.dirs) || []);
+            if (!dirs.includes(mu)) dirs.push(mu);
+            await window.warmy.toolScanDirsSet?.(dirs.slice(0, 10));
+            if (s) s.value = '';
+            void shuaMuLu();
+          } else if (id === 'anNiuGongJuSaoMiaoJianCha') {
+            const r = await window.warmy.toolScan?.().catch(() => null);
+            const found = (r && r.found) || [];
+            for (const f of found) {
+              await window.warmy.toolInstall?.(f.source).catch(() => {});
+            }
+            void xuanRanGongJu();
+          } else if (id === 'anNiuGongJuAnZhuang') {
+            const mu = await window.warmy.pickDirectory?.().catch(() => null);
+            if (!mu) return;
+            const r = await window.warmy.toolInstall?.(mu);
+            if (r && r.ok) void xuanRanGongJu();
+            else uiAlert((tOr('gongJu.installFail', '安装失败：')) + ' ' + ((r && r.error) || ''));
+          }
+        });
+        // 首次进入设置页时刷一次
+        void xuanRanGongJu();
+        void shuaMuLu();
+        window.__xuanRanGongJu = xuanRanGongJu;
+      })();
+      // 快捷键「确定 / 取消」：未点确定的更改一律不生效（见 hkCaoGao）
+      (function bindHotkeyConfirm() {
+        if (window.__hkConfirmBound) return;
+        window.__hkConfirmBound = 1;
+        document.addEventListener('click', (e) => {
+          const ok = e.target && e.target.closest && e.target.closest('#hkQueDing');
+          if (ok && !ok.disabled) { hkQueDing(); return; }
+          const no = e.target && e.target.closest && e.target.closest('#hkQuXiao');
+          if (no && !no.disabled) hkQuXiao();
         });
       })();
 
@@ -11662,26 +11808,38 @@
   }
 
   /**
+   * **平台修饰键**（产品要求）：Windows / Linux 用 Ctrl，macOS 用 Cmd（事件里记作 Meta）。
+   * 预置键里写 `{mod}`，落地时按设备换成 Ctrl / Meta；旧写法 `Cmd` 也归一成 `Meta`，
+   * 否则 macOS 上按 Cmd+X 永远匹配不到 `Cmd+X` 这条预置（事件产生的是 `Meta+X`）。
+   */
+  const IS_MAC = /Mac|iPhone|iPad/i.test(String(navigator.platform || navigator.userAgent || ''));
+  const MOD_JIAN = IS_MAC ? 'Meta' : 'Ctrl';
+  function guiYiZuhe(s) {
+    return String(s || '').replace(/\{mod\}/g, MOD_JIAN).replace(/\bCmd\b/g, 'Meta');
+  }
+
+  /**
    * 可绑定的动作：**只列真的接上了动作的**（跑不通的宁可不给绑，不要让用户绑了没反应）。
    * def = 预置的少数常用键；空串 = 默认留空，由用户自己设。
+   * `{mod}` = Ctrl（Win/Linux）或 Cmd（macOS）。
    */
   const SHORTCUT_ACTIONS = [
     { id: 'help', def: 'F1', alt: '', run: () => { try { window.__showOnboardingGuide?.(true); } catch { /* noop */ } } },
-    { id: 'toggleSidebar', def: 'Ctrl+B', alt: '', run: () => { const b = $('appTi'); if (b) b.classList.toggle('yinCangLieBiao'); } },
-    { id: 'openSettings', def: 'Ctrl+,', alt: '', run: () => setNav('settings') },
-    { id: 'newSession', def: 'Ctrl+N', alt: '', run: () => { const b = primaryAddButton(); if (b) b.click(); } },
-    { id: 'focusSearch', def: 'F3', alt: 'Ctrl+S', run: () => { const i = $('lieBiaoSouSuo'); if (i) { i.focus(); i.select(); } } },
+    { id: 'toggleSidebar', def: '{mod}+B', alt: '', run: () => { const b = $('appTi'); if (b) b.classList.toggle('yinCangLieBiao'); } },
+    { id: 'openSettings', def: '{mod}+,', alt: '', run: () => setNav('settings') },
+    { id: 'newSession', def: '{mod}+N', alt: '', run: () => { const b = primaryAddButton(); if (b) b.click(); } },
+    { id: 'focusSearch', def: 'F3', alt: '{mod}+S', run: () => { const i = $('lieBiaoSouSuo'); if (i) { i.focus(); i.select(); } } },
     { id: 'focusInput', def: '', alt: '', run: () => { const i = $('shuRu'); if (i) i.focus(); } },
     { id: 'toggleConsole', def: '', alt: '', run: () => { const b = $('diagKaiGuan') || $('anNiuKongZhiTai'); if (b) b.click(); } },
-    { id: 'stopAll', def: 'Ctrl+Backspace', alt: 'Cmd+Backspace', run: () => { const b = $('anNiuTingZhiAll'); if (b) b.click(); } },
+    { id: 'stopAll', def: '{mod}+Backspace', alt: '', run: () => { const b = $('anNiuTingZhiAll'); if (b) b.click(); } },
     { id: 'openMe', def: '', alt: '', run: () => setNav('wo') },
     { id: 'openContacts', def: '', alt: '', run: () => setNav('externalChat') },
     // 界面顶部「刷新」按钮（在最小化左侧）
     { id: 'uiRefresh', def: 'F5', alt: '', run: () => { const b = $('anNiuuiRefresh'); if (b) b.click(); } },
     // 语音输入（聊天输入框下的话筒）
-    { id: 'voiceInput', def: 'F6', alt: 'Ctrl+Space', run: () => { const b = $('anNiuYuYin'); if (b) b.click(); } },
+    { id: 'voiceInput', def: 'F6', alt: '{mod}+Space', run: () => { const b = $('anNiuYuYin'); if (b) b.click(); } },
     // 阅读当前界面上 AI 的最新回复（等同点那条回复下面的喇叭）；不在聊天界面/没有 AI 回复时无效
-    { id: 'readLatest', def: 'F7', alt: 'Ctrl+Shift+Space', run: () => { try { window.__duZuiXinHuiFu?.(); } catch { /* noop */ } } },
+    { id: 'readLatest', def: 'F7', alt: '{mod}+Shift+Space', run: () => { try { window.__duZuiXinHuiFu?.(); } catch { /* noop */ } } },
     // 切到「有最新回复」的会话
     { id: 'jumpLatest', def: 'F8', alt: '', run: () => { try { window.__tiaoZuiXinHuiFu?.(); } catch { /* noop */ } } },
   ];
@@ -11712,13 +11870,70 @@
   }
 
   /** 生效的按键：用户存过就用用户的（空串 = 显式解绑，不回落到预置值）
-   *  `alt=true` 时取**备用按键**（state.shortcuts2）。 */
-  function shortcutBinding(id, alt) {
+   *  `alt=true` 时取**备用按键**（state.shortcuts2）。
+   *  未点「确定」前读的是**草稿**（见 hkCaoGao），点确定才写进 state 并落盘。 */
+  function shortcutBindingJiZhun(id, alt) {
     const a = shortcutActionById(id);
     const store = alt ? (state.shortcuts2 || {}) : (state.shortcuts || {});
-    if (Object.prototype.hasOwnProperty.call(store, id)) return String(store[id] || '');
-    if (alt) return (a && a.alt) || '';
-    return (a && a.def) || '';
+    if (Object.prototype.hasOwnProperty.call(store, id)) return guiYiZuhe(String(store[id] || ''));
+    return guiYiZuhe(alt ? ((a && a.alt) || '') : ((a && a.def) || ''));
+  }
+  /**
+   * **快捷键草稿**（产品要求）：改了不立刻生效 —— 必须点「确定」才落盘，
+   * 点「取消」恢复原样；既没确定也没取消时，表下方用**强调色**提示"有更改未保存"，
+   * 被改过的键显示成**强调色**，正在录制的那个键**背景/文字颜色颠倒**。
+   */
+  let hkCaoGao = null; // { main, alt, ji: { main:{id:str}, alt:{id:str} } }
+  function hkYiYouGai() {
+    return !!hkCaoGao;
+  }
+  function hkCaoGaoKai() {
+    if (hkCaoGao) return hkCaoGao;
+    const ji = { main: {}, alt: {} };
+    for (const a of SHORTCUT_ACTIONS) {
+      ji.main[a.id] = shortcutBindingJiZhun(a.id, false);
+      ji.alt[a.id] = shortcutBindingJiZhun(a.id, true);
+    }
+    hkCaoGao = {
+      main: Object.assign({}, state.shortcuts || {}),
+      alt: Object.assign({}, state.shortcuts2 || {}),
+      ji,
+    };
+    return hkCaoGao;
+  }
+  /** 这一条相对"编辑前"改过没有 */
+  function hkGaiDong(id, alt) {
+    if (!hkCaoGao) return false;
+    return shortcutBinding(id, alt) !== hkCaoGao.ji[alt ? 'alt' : 'main'][id];
+  }
+  /** 任一条改过 = 有未保存的更改 */
+  function hkYouWeiBaoCun() {
+    if (!hkCaoGao) return false;
+    return SHORTCUT_ACTIONS.some((a) => hkGaiDong(a.id, false) || hkGaiDong(a.id, true));
+  }
+  function hkQueDing() {
+    if (!hkCaoGao) return;
+    state.shortcuts = Object.assign({}, hkCaoGao.main);
+    state.shortcuts2 = Object.assign({}, hkCaoGao.alt);
+    hkCaoGao = null;
+    saveShortcuts();
+    renderShortcuts();
+    shortcutMsg(t('settings.hotkey.saved'));
+  }
+  function hkQuXiao() {
+    hkCaoGao = null;
+    stopShortcutCapture();
+    renderShortcuts();
+    shortcutMsg(t('settings.hotkey.cancelled'));
+  }
+
+  function shortcutBinding(id, alt) {
+    const a = shortcutActionById(id);
+    const store = hkCaoGao
+      ? (alt ? hkCaoGao.alt : hkCaoGao.main)
+      : (alt ? (state.shortcuts2 || {}) : (state.shortcuts || {}));
+    if (Object.prototype.hasOwnProperty.call(store, id)) return guiYiZuhe(String(store[id] || ''));
+    return guiYiZuhe(alt ? ((a && a.alt) || '') : ((a && a.def) || ''));
   }
 
   /** 某个组合键是否已被任何动作（主键或备用键）占用；返回动作 id 或 null */
@@ -11772,11 +11987,11 @@
       const id = shortcutCapturing.id;
       const btn = shortcutCapturing.btn;
       const alt = !!shortcutCapturing.alt;
-      /** 写入主键或备用键各自的表 */
+      /** 写入主键或备用键各自的**草稿**（未点确定不生效） */
       const cunRu = (combo) => {
-        if (alt) { state.shortcuts2 = state.shortcuts2 || {}; state.shortcuts2[id] = combo; }
-        else { state.shortcuts = state.shortcuts || {}; state.shortcuts[id] = combo; }
-        saveShortcuts();
+        const g = hkCaoGaoKai();
+        if (alt) g.alt[id] = combo;
+        else g.main[id] = combo;
       };
       if (e.key === 'Escape') {
         stopShortcutCapture();
@@ -11839,8 +12054,11 @@
     const ti = $('hkMiYaoJiTi');
     if (!ti) return;
     const mk = (a, which) => {
-      const bound = shortcutBinding(a.id, which === 'alt');
-      return '<button type="button" class="hkMiYao' + (bound ? '' : ' unbound') + '" data-hk="' + a.id + '" data-hk-which="' + which + '" title="' +
+      const alt = which === 'alt';
+      const bound = shortcutBinding(a.id, alt);
+      const gai = hkGaiDong(a.id, alt);
+      const cls = ['hkMiYao', bound ? '' : 'unbound', gai ? 'hkGai' : ''].filter(Boolean).join(' ');
+      return '<button type="button" class="' + cls + '" data-hk="' + a.id + '" data-hk-which="' + which + '" title="' +
         escapeHtml(t('settings.hotkey.keyHint')) + '">' +
         escapeHtml(bound || t('settings.hotkey.unbound')) + '</button>';
     };
@@ -11853,8 +12071,19 @@
       '</tr>'
     )).join('');
     ti.querySelectorAll('[data-hk]').forEach((btn) => {
-      btn.onclick = () => startShortcutCapture(btn.dataset.hk, btn, btn.dataset.hkWhich === 'alt');
+      btn.onclick = () => { hkCaoGaoKai(); startShortcutCapture(btn.dataset.hk, btn, btn.dataset.hkWhich === 'alt'); };
     });
+    // 未保存提示 + 确定/取消按钮的可用态
+    const wei = $('hkWeiBaoCun');
+    const you = hkYouWeiBaoCun();
+    if (wei) {
+      wei.classList.toggle('yinCang', !you);
+      if (you) wei.textContent = t('settings.hotkey.unsaved');
+    }
+    const okBtn = $('hkQueDing');
+    const noBtn = $('hkQuXiao');
+    if (okBtn) okBtn.disabled = !you;
+    if (noBtn) noBtn.disabled = !you;
   }
 
   /* ── 给其他智能体的接口目录 ──

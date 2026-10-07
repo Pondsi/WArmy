@@ -134,56 +134,56 @@
 
 ## 实测结果（CDP 真实 IPC）
 
-生成时间：2026-10-07T10:22:44.943Z · 通过 46/46
+生成时间：2026-10-07T12:58:45.566Z · 通过 46/46
 
 | API | ok | ms | preview |
 | --- | --- | --- | --- |
-| `undefined` | ✅ | 2ms | {"cpus":32,"suggested":8,"max":8} |
-| `undefined` | ✅ | 1ms | [] |
-| `undefined` | ✅ | 0ms | "normal" |
+| `undefined` | ✅ | 1ms | {"cpus":32,"suggested":8,"max":8} |
+| `undefined` | ✅ | 0ms | [] |
+| `undefined` | ✅ | 1ms | "normal" |
 | `undefined` | ✅ | 2ms | {"ok":true,"ready":true,"CangLu":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\memory","jsonl":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\memory\\fast-memory.jsonl",… |
 | `undefined` | ✅ | 1ms | {"system":"zh-CN","resolved":"zh-CN","isZh":true,"supported":["zh-CN","zh-TW","en-US","ja","ko","ru","es","fr","pt","eo"]} |
-| `undefined` | ✅ | 0ms | {"shouldUseDarkColors":false,"themeSource":"system"} |
+| `undefined` | ✅ | 1ms | {"shouldUseDarkColors":false,"themeSource":"system"} |
 | `undefined` | ✅ | 1ms | {"ok":true,"groups":[],"count":0} |
-| `undefined` | ✅ | 1ms | {"ok":true,"configured":true,"url":"https://api.github.com/repos/Pondsi/WArmy/releases/latest","origin":"settings","channel":"","currentVersion":"0.2.11","lastCheck":null,"lastDownload":null} |
-| `undefined` | ✅ | 0ms | {"ok":true,"events":[]} |
-| `undefined` | ✅ | 1ms | {"ok":true,"sessions":[]} |
-| `undefined` | ✅ | 0ms | {"ok":true,"providerCfg":{"presetId":"deepseek","apiKey":"","baseURL":"","model":"deepseek-chat","protocol":"openai-compatible"},"hasKey":false} |
-| `undefined` | ✅ | 1ms | {"ok":true,"LieBiao":[],"space":{"maxBytes":536870912,"usedBytes":0,"count":0},"envByCheckpoint":{},"currentEnv":{"jiHuo":false,"runtimeId":"","revision":"host","at":1791368564406,"imageDigests":{}},"… |
-| `undefined` | ✅ | 0ms | {"ok":true,"entities":[],"events":[]} |
-| `undefined` | ✅ | 1ms | {"ok":true,"turns":0,"avgDurationMs":0,"promptTokens":0,"completionTokens":0,"cacheHitRate":0,"cacheHitTokens":0,"cacheMissTokens":0,"ccrOriginalBytes":0,"ccrCompressedBytes":0,"ccrRatio":1,"viewSampl… |
-| `undefined` | ✅ | 0ms | {"ok":true,"settings":{"yuYan":"zh-CN","themeMode":"system","accent":"#A78567","sound":{"complete":true,"request":true,"error":true},"soundFiles":{"complete":"","request":"","error":""},"emailOnReques… |
-| `undefined` | ✅ | 1ms | {"ok":true,"jinengJi":[],"scanDirs":[],"maxScanDirs":10} |
+| `undefined` | ✅ | 1ms | {"ok":true,"configured":true,"url":"https://api.github.com/repos/Pondsi/WArmy/releases/latest","origin":"settings","channel":"","currentVersion":"0.2.12","lastCheck":null,"lastDownload":null} |
+| `undefined` | ✅ | 1ms | {"ok":true,"events":[]} |
+| `undefined` | ✅ | 0ms | {"ok":true,"sessions":[]} |
+| `undefined` | ✅ | 1ms | {"ok":true,"providerCfg":{"presetId":"deepseek","apiKey":"","baseURL":"","model":"deepseek-chat","protocol":"openai-compatible"},"hasKey":false} |
+| `undefined` | ✅ | 0ms | {"ok":true,"LieBiao":[],"space":{"maxBytes":536870912,"usedBytes":0,"count":0},"envByCheckpoint":{},"currentEnv":{"jiHuo":false,"runtimeId":"","revision":"host","at":1791377925038,"imageDigests":{}},"… |
+| `undefined` | ✅ | 1ms | {"ok":true,"entities":[],"events":[]} |
+| `undefined` | ✅ | 0ms | {"ok":true,"turns":0,"avgDurationMs":0,"promptTokens":0,"completionTokens":0,"cacheHitRate":0,"cacheHitTokens":0,"cacheMissTokens":0,"ccrOriginalBytes":0,"ccrCompressedBytes":0,"ccrRatio":1,"viewSampl… |
+| `undefined` | ✅ | 1ms | {"ok":true,"settings":{"yuYan":"zh-CN","themeMode":"system","accent":"#A78567","sound":{"complete":true,"request":true,"error":true},"soundFiles":{"complete":"","request":"","error":""},"emailOnReques… |
+| `undefined` | ✅ | 1ms | {"ok":true,"jinengJi":[{"id":"find-skill","ming":"find-skill — 发现并安装技能","description":"> 这是**内置技能**，教你自己找到并装上需要的技能包。 > 装上后**重启会话**才生效（技能在会话开始时扫描）。","source":"userData","root":"C:\\Users\\p\\AppData\\L… |
 | `undefined` | ✅ | 1ms | {"ok":true,"paths":["C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\skills"],"scanDirs":[]} |
-| `undefined` | ✅ | 1ms | {"ok":true,"dirs":[],"scanDirs":[],"max":10} |
-| `undefined` | ✅ | 0ms | {"ok":true,"queues":{}} |
-| `undefined` | ✅ | 2ms | {"ok":true,"snapshot":{"version":1,"seq":0,"queues":{},"dutyState":{}},"file":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\router-queues.json"} |
-| `undefined` | ✅ | 2ms | {"ok":true,"profile":{"username":"主人","avatarDataUrl":"","email":"","deviceId":"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5","deviceIdSig":"bc6111d1f9d967bda223facfcd7dd0fd83f6ac3e1518d4e7d816… |
-| `undefined` | ✅ | 1ms | {"ok":true,"ming":"无限牛马","enName":"WArmy","version":"0.2.11","electron":"40.10.6","chrome":"144.0.7559.236","node":"24.15.0","platform":"win32","arch":"x64","dsh":"0.1.5-rc.1","deviceId":"DK07VSLKMNCA… |
+| `undefined` | ✅ | 0ms | {"ok":true,"dirs":[],"scanDirs":[],"max":10} |
+| `undefined` | ✅ | 1ms | {"ok":true,"queues":{}} |
+| `undefined` | ✅ | 1ms | {"ok":true,"snapshot":{"version":1,"seq":0,"queues":{},"dutyState":{}},"file":"C:\\Users\\p\\AppData\\Local\\Temp\\warmy-ipc-probe-profile\\router-queues.json"} |
+| `undefined` | ✅ | 1ms | {"ok":true,"profile":{"username":"主人","avatarDataUrl":"","email":"","deviceId":"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5","deviceIdSig":"bc6111d1f9d967bda223facfcd7dd0fd83f6ac3e1518d4e7d816… |
+| `undefined` | ✅ | 1ms | {"ok":true,"ming":"无限牛马","enName":"WArmy","version":"0.2.12","electron":"40.10.6","chrome":"144.0.7559.236","node":"24.15.0","platform":"win32","arch":"x64","dsh":"0.1.5-rc.1","deviceId":"DK07VSLKMNCA… |
 | `undefined` | ✅ | 1ms | {"ok":true,"identity":{"bieMing":"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5","zhiWen":"P9C7Z-X9XY7-JY9WS-VG1BT","generation":1,"algo":"Ed25519","createdAt":1790791478634,"updatedAt":17907914… |
-| `undefined` | ✅ | 1ms | {"ok":true,"peers":[]} |
+| `undefined` | ✅ | 0ms | {"ok":true,"peers":[]} |
 | `undefined` | ✅ | 1ms | {"ok":true,"meshEnabled":false,"link":{"reachable":false,"lastError":"mesh-disabled","peers":[]},"nodeId":"jieDian8af5ad76","sessions":0,"unlock":{"mode":"os","unlocked":true,"needsPassphrase":false,"… |
 | `undefined` | ✅ | 0ms | {"ok":true,"peers":[],"notes":{"lan":"net.note.lan","wanManual":"net.note.wanManual","wanHard":"net.note.wanHard"}} |
 | `undefined` | ✅ | 1ms | {"ok":true,"items":[]} |
 | `undefined` | ✅ | 0ms | {"ok":true,"state":{"yuYan":"zh-CN","themeMode":"system","accent":"#A78567","sound":{"complete":true,"request":true,"error":true},"soundFiles":{"complete":"","request":"","error":""},"emailOnRequest":… |
 | `undefined` | ✅ | 1ms | {"ok":true,"error":null} |
-| `undefined` | ✅ | 0ms | {"ok":true,"done":false,"guideDone":false,"yuYan":"zh-CN"} |
-| `undefined` | ✅ | 1ms | {"ok":true,"listening":false,"nodeId":"jieDian8af5ad76"} |
-| `undefined` | ✅ | 0ms | {"ok":true,"listening":false,"nodeId":"jieDian8af5ad76","peerCount":0,"sessions":0} |
+| `undefined` | ✅ | 1ms | {"ok":true,"done":false,"guideDone":false,"yuYan":"zh-CN"} |
+| `undefined` | ✅ | 0ms | {"ok":true,"listening":false,"nodeId":"jieDian8af5ad76"} |
+| `undefined` | ✅ | 1ms | {"ok":true,"listening":false,"nodeId":"jieDian8af5ad76","peerCount":0,"sessions":0} |
 | `undefined` | ✅ | 1ms | {"ok":true,"platform":"win32","isMac":false,"isWin":true,"isLinux":false} |
 | `undefined` | ✅ | 0ms | {"ok":true,"turns":0,"promptTokens":0,"completionTokens":0,"cacheHitRate":0,"avgDurationMs":0,"estCostCny":0} |
-| `undefined` | ✅ | 7ms | {"id":4,"ok":true,"cards":[],"timings":{"totalMs":5,"hydrateMs":0,"embedQueryMs":4,"uniMs":0,"triMs":1,"vecMs":0,"fuseMs":0,"cosines":0,"hydrated":0,"vectorBelowThreshold":0,"vectorUnkRatio":0.5},"sco… |
-| `undefined` | ✅ | 12ms | {"yuYan":"zh-CN","strings":{"about.author":"作者","about.authorBody":"Pondsi","about.checkUpdate":"检查更新","about.checking":"检查中…","about.contact":"联系方式","about.contactBody":"Public@numumu.com · 232307860… |
+| `undefined` | ✅ | 7ms | {"id":4,"ok":true,"cards":[],"timings":{"totalMs":6,"hydrateMs":0,"embedQueryMs":4,"uniMs":0,"triMs":0,"vecMs":1,"fuseMs":0,"cosines":0,"hydrated":0,"vectorBelowThreshold":0,"vectorUnkRatio":0.5},"sco… |
+| `undefined` | ✅ | 13ms | {"yuYan":"zh-CN","strings":{"about.author":"作者","about.authorBody":"Pondsi","about.checkUpdate":"检查更新","about.checking":"检查中…","about.contact":"联系方式","about.contactBody":"Public@numumu.com · 232307860… |
 | `undefined` | ✅ | 2ms | {"id":5,"ok":true,"result":null} |
 | `undefined` | ✅ | 3ms | {"ok":true,"state":{"devEnv":"host","containerOnly":false,"running":true,"stopped":false,"code":"host-dev","hostEditingRefused":false,"developmentAllowed":true,"developmentWhere":"host","testingAllowe… |
-| `undefined` | ✅ | 1ms | {"ok":true,"groupId":"","memory":"","chars":0} |
-| `undefined` | ✅ | 0ms | {"ok":true,"items":[]} |
+| `undefined` | ✅ | 0ms | {"ok":true,"groupId":"","memory":"","chars":0} |
+| `undefined` | ✅ | 1ms | {"ok":true,"items":[]} |
 | `undefined` | ✅ | 1ms | {"ok":true,"entries":[]} |
 | `undefined` | ✅ | 0ms | {"ok":true,"RenwuJi":[]} |
 | `undefined` | ✅ | 1ms | {"ok":true,"groupId":"","members":[],"localIsCreator":false} |
-| `undefined` | ✅ | 482ms | {"ok":true,"report":{"ok":true,"platform":"win32","probedAt":1791368564932,"elapsedMs":481,"cached":false,"runtimes":[{"id":"microsandbox","engine":{"kind":"microvm","api":"msb"},"status":"ready","run… |
-| `undefined` | ✅ | 9ms | {"ok":true,"requestedPort":59599,"recommended":[{"port":57757,"status":"ok","latencyMs":8},{"port":52555,"status":"ok","latencyMs":7},{"port":55151,"status":"ok","latencyMs":7},{"port":55335,"status":… |
-| `undefined` | ✅ | 2ms | {"ok":true,"restore":{"done":true,"ok":true,"entries":0,"sessions":0,"maxSeq":0,"reason":"","trigger":"ipc","at":1791368564943},"sessions":[],"logSeq":0} |
+| `undefined` | ✅ | 471ms | {"ok":true,"report":{"ok":true,"platform":"win32","probedAt":1791377925554,"elapsedMs":470,"cached":false,"runtimes":[{"id":"microsandbox","engine":{"kind":"microvm","api":"msb"},"status":"ready","run… |
+| `undefined` | ✅ | 9ms | {"ok":true,"requestedPort":59599,"recommended":[{"port":57757,"status":"ok","latencyMs":8},{"port":52555,"status":"ok","latencyMs":8},{"port":55151,"status":"ok","latencyMs":8},{"port":55335,"status":… |
+| `undefined` | ✅ | 1ms | {"ok":true,"restore":{"done":true,"ok":true,"entries":0,"sessions":0,"maxSeq":0,"reason":"","trigger":"ipc","at":1791377925564},"sessions":[],"logSeq":0} |
 
 > 本节由 `packages/app-shell/scripts/verify-ipc-probe.mjs` 在真实 Electron 会话内生成。
 
