@@ -3711,7 +3711,7 @@
             </div>
             ${q.ti ? `<div class="jingYin">${escapeHtml(q.ti)}</div>` : ''}
             <div class="aiqOpts">${opts}
-              <button class="anNiuZhuYao" data-aiq="${escapeHtml(q.id)}" data-opt="__allow__">${escapeHtml(tOr('aiq.allow', '允许'))}</button>
+              <button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__allow__">${escapeHtml(tOr('aiq.allow', '允许'))}</button>
               <button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__custom__">${escapeHtml(t('aiq.custom')||'Other')}</button>
             </div>
             ${juJueText ? `<div class="jingYin aiqJuJue">${escapeHtml(tOr('aiq.rejectNote', '拒绝后：'))}${juJueText}</div>` : ''}
@@ -3736,6 +3736,20 @@
                 const title = ka?.querySelector('.aiqBiaoTi')?.textContent?.trim() || '';
                 void window.warmy.authGrant?.({ sessionId: qunId, key: title, granted: true });
               } catch { /* noop */ }
+              /**
+               * 用**真实存在的选项 id** 回答（真事故：传 'allow' ⇒ option-not-found）。
+               * 优先找"同意/允许"类选项；找不到就用第一个选项。
+               */
+              const ka2 = host.querySelector(`[data-qid="${CSS.escape(id)}"]`);
+              const realBtn = [...(ka2?.querySelectorAll('[data-opt]') || [])]
+                .find((x) => !/__custom__|__allow__/.test(x.getAttribute('data-opt') || '') && /同意|允许|Allow|Approve|Yes/i.test(x.textContent || ''));
+              const firstBtn = [...(ka2?.querySelectorAll('[data-opt]') || [])]
+                .find((x) => !/__custom__|__allow__/.test(x.getAttribute('data-opt') || ''));
+              const useOpt = (realBtn || firstBtn)?.getAttribute('data-opt');
+              const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: useOpt || '__custom__', customText: useOpt ? undefined : '允许' });
+              if (r2 && r2.ok === false) uiAlert(String(r2.error||''));
+              renderAiQuestions();
+              return;
             }
             const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: opt === '__allow__' ? 'allow' : opt });
             if (r2 && r2.ok === false) uiAlert(String(r2.error||''));
@@ -4055,10 +4069,16 @@
   const BUSY_ROTATE_MS = (typeof window !== 'undefined' && Number(window.__BUSY_ROTATE_MS)) || 12000;
   /** 每轮从一个随机位置开始，两次对话不会永远是同一句 */
   let busyPhraseSeed = 0;
+  /** **当前这一句**（只在轮换点才换，不是每 250ms 都变；真事故：随机取导致每秒变 4 次） */
+  let busyPhraseCur = '';
   function busyPhraseAt(i) {
     if (!BUSY_PHRASES.length) return '';
-    // **真随机**（产品要求：不是按顺序出现）：每次取随机位置
-    return BUSY_PHRASES[Math.floor(Math.random() * BUSY_PHRASES.length)];
+    // 轮换点（i 变化）才重新随机取一句
+    if (busyPhraseSeed !== i) {
+      busyPhraseSeed = i;
+      busyPhraseCur = BUSY_PHRASES[Math.floor(Math.random() * BUSY_PHRASES.length)];
+    }
+    return busyPhraseCur;
   }
   const YUN_XING_CIHOU = 8;
   let yunXingJiShiQi = 0;
@@ -4089,8 +4109,8 @@
     yunXingZuiXin = yunXingKaiShi;
     yunXingXuHao = 1;
     yunXingShiDai += 1;
-    // 文案池从随机位置起（同一句别老重复）；起手段仍然是安静的「正在思考…」
-    busyPhraseSeed = Math.floor(Math.random() * Math.max(1, BUSY_PHRASES.length));
+    // 文案池每轮重新随机（首句即随机，之后每 12 秒换一次）
+    busyPhraseSeed = -1;
     clearInterval(yunXingJiShiQi);
     he.classList.remove('yinCang', 'cuoWu');
     /**
@@ -4796,8 +4816,13 @@
           <button class="anNiuXiao" id="iCogTianJia">${escapeHtml(t('instances.cognitionAdd'))}</button>
         </div>
         <div class="field" style="margin-top:12px">
-          <label>${escapeHtml(t('instances.persona'))}</label>
+          <label>${escapeHtml(tOr('instances.personaWrite', '写入认知'))}</label>
           <textarea id="iPersona" placeholder="${escapeHtml(t('instances.personaPlaceholder'))}">${escapeHtml(inst.persona || '')}</textarea>
+          <div class="jingYin" id="iPersonaWeiBaoCun" style="display:none">${escapeHtml(tOr('instances.personaDirty', '内容有更改但还未保存'))}</div>
+          <div style="margin-top:6px;display:flex;gap:6px">
+            <button class="anNiuZhuYao" id="iPersonaQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
+            <button class="anNiuXiao" id="iPersonaQuXiao">${escapeHtml(tOr('common.cancel', '取消'))}</button>
+          </div>
         </div>
         <div class="sheZhiKa" style="margin-top:14px" id="iModelcfg">
           <h3 style="margin:0 0 10px;font-size:14px">${escapeHtml(tOr('model.mgr', '管理模型'))}</h3>
@@ -4993,12 +5018,42 @@
       });
 
       $('iCogTianJia')?.addEventListener('click', async () => {
+        // **最多 10 个 md**
+        if (inst.cognitionFiles.length >= 10) {
+          uiAlert(tOr('instances.cognitionMax', '最多添加 10 个 md 文件'));
+          return;
+        }
         const r = await window.warmy.pickFile({ filters: ['md'] });
         if (!r?.ok) return;
         const ming = r.path.split(/[\\/]/).pop();
         inst.cognitionFiles.push({ ming, path: r.path, size: 0 });
         renderCog();
       });
+
+      // ── 写入认知：确定 / 取消 / 未保存提示 ──
+      (function bindPersonaEdit() {
+        const ta = $('iPersona');
+        const dirty = $('iPersonaWeiBaoCun');
+        const okBtn = $('iPersonaQueDing');
+        const cancelBtn = $('iPersonaQuXiao');
+        if (!ta) return;
+        const savedValue = String(inst.persona || '');
+        let curSaved = savedValue;
+        const sync = () => { if (dirty) dirty.style.display = (ta.value !== curSaved) ? '' : 'none'; };
+        ta.addEventListener('input', sync);
+        if (okBtn) okBtn.onclick = () => {
+          inst.persona = ta.value;
+          curSaved = ta.value;
+          try { window.warmy.instancesSave?.({ id: inst.id, persona: ta.value, cognitionFiles: inst.cognitionFiles }); } catch { /* noop */ }
+          window.__saveState?.();
+          if (dirty) dirty.style.display = 'none';
+          showToast(tOr('common.saved', '已保存'));
+        };
+        if (cancelBtn) cancelBtn.onclick = () => {
+          ta.value = curSaved;
+          if (dirty) dirty.style.display = 'none';
+        };
+      })();
     })();
 
     (function bindModelConfig() {
@@ -5951,7 +6006,7 @@
         </div>
         <!-- 门禁：dao 合规检查等开发工具 -->
         <div class="sheZhiSection" data-sec="gate"><h2 style="color:var(--accent)">${escapeHtml(tOr('settings.tabGates', '门禁'))}</h2></div>
-        <div class="sheZhiSection sheZhiKa">
+        <div class="sheZhiSection sheZhiKa" data-sec="gate">
           <h2>${escapeHtml(tOr('gate.title', '合规门禁'))}</h2>
           <p class="jingYin">${escapeHtml(tOr('gate.hint', '自动检查代码与文档是否符合 dao.md 的关键条款（硬编码密钥、静默吞异常、证据分级等）。在命令行运行，不显示在插件/工具列表中。'))}</p>
           <div class="ctgHang">
@@ -6426,7 +6481,7 @@
         const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'tool', 'plugin', 'gate', 'hotkey', 'about', 'mimic'];
         // skill 与 jineng 是同一分区的两种历史键名 —— 必须别名到同一数组
         const skillBucket = [];
-        const groups = { ui: [], notify: [], model: [], func: [], tool: [], plugin: [], hotkey: [], about: [], mimic: [] };
+        const groups = { ui: [], notify: [], model: [], func: [], tool: [], plugin: [], gate: [], hotkey: [], about: [], mimic: [] };
         groups['skill'] = skillBucket;
         groups['jineng'] = skillBucket;
         window.__settingsGroups = groups;

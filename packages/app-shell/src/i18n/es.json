@@ -2271,5 +2271,8 @@
   "aiq.allow": "Permitir",
   "aiq.allowOnce": "Permitir una vez",
   "aiq.helpTip": "Permitir=autorizacion a largo plazo (revocable en la tarjeta de Autorizacion); Permitir una vez=solo esta vez; Rechazar=denegar esta autorizacion.",
-  "aiq.rejectNote": "Si se rechaza:"
+  "aiq.rejectNote": "Si se rechaza:",
+  "instances.cognitionMax": "Hasta 10 archivos md",
+  "instances.personaWrite": "Escribir cognicion",
+  "instances.personaDirty": "Cambios aun no guardados"
 }

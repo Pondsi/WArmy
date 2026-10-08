@@ -2271,5 +2271,8 @@
   "aiq.allow": "許可",
   "aiq.allowOnce": "今回のみ許可",
   "aiq.helpTip": "許可=長期的な承認（右側の承認カードで取り消し可能）；今回のみ許可=今回だけ；拒否=今回の承認を拒否。",
-  "aiq.rejectNote": "拒否した場合："
+  "aiq.rejectNote": "拒否した場合：",
+  "instances.cognitionMax": "md ファイルは最大 10 個まで",
+  "instances.personaWrite": "認知を書き込む",
+  "instances.personaDirty": "変更が未保存です"
 }

@@ -2271,5 +2271,8 @@
   "aiq.allow": "允許",
   "aiq.allowOnce": "本次允許",
   "aiq.helpTip": "允許=長期授權（可在右側授權卡片中撤銷）；本次允許=僅這一次；拒絕=禁止本次授權。",
-  "aiq.rejectNote": "拒絕後："
+  "aiq.rejectNote": "拒絕後：",
+  "instances.cognitionMax": "最多添加 10 個 md 檔案",
+  "instances.personaWrite": "寫入認知",
+  "instances.personaDirty": "內容有更改但尚未儲存"
 }

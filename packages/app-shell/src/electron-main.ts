@@ -1495,8 +1495,22 @@ async function yunXingLiaoTianXunHuan(
                   note: String(it.note || '').slice(0, 300),
                 };
               }) : [];
-              jiHuaBaoCun(sessionId, bu);
-              huiBaoH = `[plan_update] 已更新计划（${bu.length} 步）。界面右侧「计划任务」卡片已同步；请继续逐个完成并逐个验证。`;
+              /**
+               * **保留已验证状态**（真事故：模型每轮重发全量计划，把 verified 重置成 pending
+               * ⇒ 无限重复派发同一步，用户看到"同一任务做了 10 遍"）。
+               * 只有新计划里**没有**的步骤才算被删；已 verified 的步骤不被降级。
+               */
+              const jiuMap = new Map(jiu.map((x) => [x.id, x]));
+              const heBing = bu.map((x) => {
+                const old = jiuMap.get(x.id);
+                if (old && old.status === 'verified' && x.status !== 'verified') {
+                  return { ...x, status: 'verified' as const, note: old.note || x.note };
+                }
+                return x;
+              });
+              jiHuaBaoCun(sessionId, heBing);
+              const shengYu = heBing.filter((x) => x.status !== 'verified').length;
+              huiBaoH = `[plan_update] 已更新计划（${heBing.length} 步，其中 ${shengYu} 步待完成）。界面右侧「计划任务」卡片已同步；请继续逐个完成并逐个验证。`;
             } else {
               const id0 = String(argsH.id || '');
               const i0 = jiu.findIndex((x) => x.id === id0);

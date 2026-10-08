@@ -2271,5 +2271,8 @@
   "aiq.allow": "Permesi",
   "aiq.allowOnce": "Permesi unufoje",
   "aiq.helpTip": "Permesi=longtempa aŭtorigo (revokebla en la Aŭtorigo-karto); Permesi unufoje=nur ĉi-foje; Malakcepti=malmesi ĉi tiun aŭtorigon.",
-  "aiq.rejectNote": "Se malakceptita:"
+  "aiq.rejectNote": "Se malakceptita:",
+  "instances.cognitionMax": "Ĝis 10 dosieroj md",
+  "instances.personaWrite": "Skribi kognon",
+  "instances.personaDirty": "Ŝanĝoj ankoraŭ ne konservitaj"
 }

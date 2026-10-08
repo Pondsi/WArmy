@@ -2271,5 +2271,8 @@
   "aiq.allow": "Autoriser",
   "aiq.allowOnce": "Autoriser une fois",
   "aiq.helpTip": "Autoriser=autorisation a long terme (revocable dans la carte Autorisation); Autoriser une fois=seulement cette fois; Refuser=refuser cette autorisation.",
-  "aiq.rejectNote": "En cas de refus :"
+  "aiq.rejectNote": "En cas de refus :",
+  "instances.cognitionMax": "Jusqu a 10 fichiers md",
+  "instances.personaWrite": "Ecrire la cognition",
+  "instances.personaDirty": "Modifications non enregistrees"
 }

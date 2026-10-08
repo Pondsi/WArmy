@@ -857,7 +857,7 @@
   "instances.cognition": "认知注入",
   "instances.cognitionAdd": "添加 md 文件",
   "instances.cognitionEmpty": "尚未添加认知文件",
-  "instances.cognitionHint": "添加 .md 文件为牛马注入提示词，可添加多个",
+  "instances.cognitionHint": "添加 .md 文件为牛马注入提示词，最多添加 10 个",
   "instances.cpus": "CPU 核数",
   "instances.defaultModel": "默认模型",
   "instances.delete": "删除",
@@ -2271,5 +2271,8 @@
   "aiq.allow": "允许",
   "aiq.allowOnce": "本次允许",
   "aiq.helpTip": "允许=长期授权（可在右侧授权卡片中撤销）；本次允许=仅这一次；拒绝=禁止本次授权。",
-  "aiq.rejectNote": "拒绝后："
+  "aiq.rejectNote": "拒绝后：",
+  "instances.cognitionMax": "最多添加 10 个 md 文件",
+  "instances.personaWrite": "写入认知",
+  "instances.personaDirty": "内容有更改但还未保存"
 }

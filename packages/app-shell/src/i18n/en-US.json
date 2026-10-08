@@ -2271,5 +2271,8 @@
   "aiq.allow": "Allow",
   "aiq.allowOnce": "Allow once",
   "aiq.helpTip": "Allow=long-term authorization (revocable in the Authorization card); Allow once=only this time; Reject=deny this authorization.",
-  "aiq.rejectNote": "If rejected:"
+  "aiq.rejectNote": "If rejected:",
+  "instances.cognitionMax": "Up to 10 md files",
+  "instances.personaWrite": "Write cognition",
+  "instances.personaDirty": "Changes not saved yet"
 }
