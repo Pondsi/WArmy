@@ -2267,5 +2267,9 @@
   "gate.hint": "Automatically checks code and docs against dao.md key clauses (hardcoded secrets, silent catch, evidence levels, etc.). Runs in CLI, not shown in plugin/tool lists.",
   "gate.daoCompliance": "dao.md compliance gate: checks hardcoded secrets, silent catch, evidence levels, changelog versioning, dao.md structure. Run: node packages/app-shell/scripts/verify-dao-compliance.mjs",
   "gate.daoEnforcement": "dao skill: auto-runs 12-item pre-action checklist + 7 bottom-line hard blocks + 8-item post-action checklist. Used as a MiMoCode skill.",
-  "gate.fullVerify": "Full verification: runs all verify-* scripts N rounds consecutively, resetting count on any failure. Run: node scripts/full-verify-rounds.mjs 3"
+  "gate.fullVerify": "Full verification: runs all verify-* scripts N rounds consecutively, resetting count on any failure. Run: node scripts/full-verify-rounds.mjs 3",
+  "aiq.allow": "Allow",
+  "aiq.allowOnce": "Allow once",
+  "aiq.helpTip": "Allow=long-term authorization (revocable in the Authorization card); Allow once=only this time; Reject=deny this authorization.",
+  "aiq.rejectNote": "If rejected:"
 }

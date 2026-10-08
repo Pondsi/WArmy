@@ -2267,5 +2267,9 @@
   "gate.hint": "Aŭtomate kontrolas ĉu kodo kaj dokumentoj kongruas kun ĉefaj klauzoloj de dao.md (enmetitaj sekretoj, silenta catch, pruvo-niveloj ktp). Ruliĝas en CLI, ne montriĝas en kromaĵ-ilaj listoj.",
   "gate.daoCompliance": "dao.md konformecpordego: kontrolas enmetitajn sekretojn, silentan catch, pruvo-nivelojn, changelog-versiigan, dao.md-strukturan integrecon. Ruli: node packages/app-shell/scripts/verify-dao-compliance.mjs",
   "gate.daoEnforcement": "dao-lerteco: aŭtomate rulas 12-elementan antaŭ-agan kontrol-liston + 7 malmolajn baza-liniajn blokojn + 8-elementan post-agan kontrol-liston. Uziĝas kiel MiMoCode-lerteco.",
-  "gate.fullVerify": "Plena kontrolo: rulas ĉiujn verify-* skriptojn N sinsekvajn raŭndojn, nuligante kalkulon je iu ajn fiasko. Ruli: node scripts/full-verify-rounds.mjs 3"
+  "gate.fullVerify": "Plena kontrolo: rulas ĉiujn verify-* skriptojn N sinsekvajn raŭndojn, nuligante kalkulon je iu ajn fiasko. Ruli: node scripts/full-verify-rounds.mjs 3",
+  "aiq.allow": "Permesi",
+  "aiq.allowOnce": "Permesi unufoje",
+  "aiq.helpTip": "Permesi=longtempa aŭtorigo (revokebla en la Aŭtorigo-karto); Permesi unufoje=nur ĉi-foje; Malakcepti=malmesi ĉi tiun aŭtorigon.",
+  "aiq.rejectNote": "Se malakceptita:"
 }

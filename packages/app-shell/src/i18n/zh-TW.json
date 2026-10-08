@@ -2267,5 +2267,9 @@
   "gate.hint": "自動檢查程式碼與文件是否符合 dao.md 的關鍵條款（硬編碼金鑰、靜默吞例外、證據分級等）。在命令列執行，不顯示在外掛/工具清單中。",
   "gate.daoCompliance": "dao.md 合規門禁：檢查硬編碼金鑰、靜默吞例外、證據分級、changelog 版本化、dao.md 結構完整性。執行：node packages/app-shell/scripts/verify-dao-compliance.mjs",
   "gate.daoEnforcement": "dao 技能：任務前/高風險操作前/收尾時自動執行行動前自檢 12 項 + 底線 7 條硬阻斷 + 行動後自檢 8 項。作為 MiMoCode 技能使用。",
-  "gate.fullVerify": "全量門禁：連續 N 輪執行所有 verify-* 腳本，任一失敗即重置計數。執行：node scripts/full-verify-rounds.mjs 3"
+  "gate.fullVerify": "全量門禁：連續 N 輪執行所有 verify-* 腳本，任一失敗即重置計數。執行：node scripts/full-verify-rounds.mjs 3",
+  "aiq.allow": "允許",
+  "aiq.allowOnce": "本次允許",
+  "aiq.helpTip": "允許=長期授權（可在右側授權卡片中撤銷）；本次允許=僅這一次；拒絕=禁止本次授權。",
+  "aiq.rejectNote": "拒絕後："
 }

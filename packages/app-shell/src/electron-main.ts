@@ -4431,10 +4431,10 @@ async function zhenZhengFaSong(
     // recordId 只在写入成功时才挂到日志（失败时宁缺勿假：死 id 会让模型白跑一轮工具）。
     const userRecordId = xinLiaoTianJiLuId('m');
     let userMemSeq: number | undefined;
+    const shiNeiBuCaiDan = !!(xiaoXi as { internal?: boolean }).internal;
     if (yiJingXieGuo(sessionId, 'user', yiYaSuo.content)) {
-      // 同一条用户消息已被另一条路径记账（内容级去重）⇒ 不再写第二遍 JSONL
       try { audit?.log('chat.dup-write-skipped', { sessionId, role: 'user', chars: yiYaSuo.content.length }); } catch { /* noop */ }
-    } else {
+    } else if (!shiNeiBuCaiDan) {
       try {
         userMemSeq = memSeqOf(
           await memory?.append(
@@ -4466,7 +4466,7 @@ async function zhenZhengFaSong(
        * **内部指令不进聊天记录**（真事故：用户看到聊天里冒出一段自己没说过的话）。
        * 自动续派的「继续执行计划…」只是给模型的工单，要进上下文、但界面不显示。
        */
-      hidden: !!(xiaoXi as { internal?: boolean }).internal,
+      hidden: shiNeiBuCaiDan,
     });
 
     await baozhangGongyingshangMiyao();

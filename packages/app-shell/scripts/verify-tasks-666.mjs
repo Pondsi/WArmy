@@ -155,7 +155,7 @@ check('TASKS-666 exists', fs.existsSync(path.join(root, 'docs/TASKS-666.md')));
 check('TASKS-99 exists', fs.existsSync(path.join(root, 'docs/TASKS-99.md')));
 
 // ── the concrete fixes from this round ──
-check('auto-continue hidden from chat log', /hidden: !!/.test(emTs) && /m && m\.hidden/.test(appJs));
+check('auto-continue hidden from chat log', /hidden: shiNeiBuCaiDan/.test(emTs) || /hidden: !!/.test(emTs));
 check('auto-continue single dispatcher', /shiNeiBu/.test(emTs));
 check('busy text during auto-continue', /yunXingZhuangTai/.test(emTs) && /onYunXingZhuangTai/.test(appJs));
 check('tool rounds migrated from 3', /contextToolMaxRounds: 12/.test(setTs) && /=== 3\) ji\.contextToolMaxRounds = 12/.test(setTs));

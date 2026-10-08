@@ -2267,5 +2267,9 @@
   "gate.hint": "Verifie automatiquement si le code et la documentation respectent les clauses cles de dao.md (secrets en dur, catch silencieux, niveaux de preuve, etc.). S execute en CLI, non affiche dans les listes de plugins/outils.",
   "gate.daoCompliance": "Passerelle de conformite dao.md : verifie les secrets en dur, le catch silencieux, les niveaux de preuve, le versionnage du changelog, l integrite de la structure dao.md. Executer : node packages/app-shell/scripts/verify-dao-compliance.mjs",
   "gate.daoEnforcement": "Competence dao : execute automatiquement la liste de verification pre-action de 12 elements + 7 blocages durs de ligne de base + la liste de verification post-action de 8 elements. Utilise comme competence MiMoCode.",
-  "gate.fullVerify": "Verification complete : execute tous les scripts verify-* N tours consecutifs, reinitialisant le compteur en cas d echec. Executer : node scripts/full-verify-rounds.mjs 3"
+  "gate.fullVerify": "Verification complete : execute tous les scripts verify-* N tours consecutifs, reinitialisant le compteur en cas d echec. Executer : node scripts/full-verify-rounds.mjs 3",
+  "aiq.allow": "Autoriser",
+  "aiq.allowOnce": "Autoriser une fois",
+  "aiq.helpTip": "Autoriser=autorisation a long terme (revocable dans la carte Autorisation); Autoriser une fois=seulement cette fois; Refuser=refuser cette autorisation.",
+  "aiq.rejectNote": "En cas de refus :"
 }

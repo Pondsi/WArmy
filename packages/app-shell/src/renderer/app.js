@@ -3695,16 +3695,26 @@
         const zongShu = items.length;
         host.innerHTML = pending.map((q) => {
           const qi = items.findIndex((x) => String(x.id) === String(q.id));
-          const opts = (q.options || []).map((o) =>
-            `<button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="${escapeHtml(o.id)}">${escapeHtml(o.biaoQian)}</button>`
-          ).join(' ');
+          const opts = (q.options || []).map((o) => {
+            // **改名**：同意→本次允许；新增「允许」（长期）
+            let label = escapeHtml(o.biaoQian);
+            if (label === '同意' || label === 'Allow') label = escapeHtml(tOr('aiq.allowOnce', '本次允许'));
+            return `<button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="${escapeHtml(o.id)}">${label}</button>`;
+          }).join(' ');
           const jiShu = zongShu > 1 ? '<span class="aiqJiShu">' + (qi + 1) + '/' + zongShu + '</span>' : '';
+          /** 拒绝说明（保留）+ 问号说明 */
+          const juJueShuoMing = (q.options || []).find((o) => /拒绝|Reject/i.test(o.biaoQian || ''));
+          const juJueText = juJueShuoMing ? escapeHtml(juJueShuoMing.description || juJueShuoMing.biaoQian) : '';
           return `<div class="aiqKa" data-qid="${escapeHtml(q.id)}">
-            <div class="aiqBiaoTi">${jiShu}${escapeHtml(t('aiq.biaoTi')||'')}${(q.biaoTi || q.title) ? ' · ' + escapeHtml(String(q.biaoTi || q.title)) : ''}</div>
+            <div class="aiqBiaoTi">${jiShu}${(q.biaoTi || q.title) ? escapeHtml(String(q.biaoTi || q.title)) : ''}
+              <button type="button" class="ddWen" title="${escapeHtml(tOr('aiq.helpTip', '允许=长期授权（可在右侧「授权」卡片中撤销）；本次允许=仅这一次；拒绝=禁止本次授权。'))}">?</button>
+            </div>
             ${q.ti ? `<div class="jingYin">${escapeHtml(q.ti)}</div>` : ''}
             <div class="aiqOpts">${opts}
+              <button class="anNiuZhuYao" data-aiq="${escapeHtml(q.id)}" data-opt="__allow__">${escapeHtml(tOr('aiq.allow', '允许'))}</button>
               <button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__custom__">${escapeHtml(t('aiq.custom')||'Other')}</button>
             </div>
+            ${juJueText ? `<div class="jingYin aiqJuJue">${escapeHtml(tOr('aiq.rejectNote', '拒绝后：'))}${juJueText}</div>` : ''}
             <div class="aiqCustom yinCang"><input class="aiqShuRu" placeholder="${escapeHtml(t('aiq.custom')||'')}"/>
               <button class="anNiuZhuYao" data-aiq-submit="${escapeHtml(q.id)}">${escapeHtml(t('aiq.submit')||'OK')}</button></div>
           </div>`;
@@ -3719,7 +3729,15 @@
               if (ka) ka.querySelector('.aiqCustom')?.classList.remove('yinCang');
               return;
             }
-            const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: opt });
+            // **长期允许**：写入授权卡，后续同类型授权自动通过
+            if (opt === '__allow__') {
+              try {
+                const ka = host.querySelector(`[data-qid="${CSS.escape(id)}"]`);
+                const title = ka?.querySelector('.aiqBiaoTi')?.textContent?.trim() || '';
+                void window.warmy.authGrant?.({ sessionId: qunId, key: title, granted: true });
+              } catch { /* noop */ }
+            }
+            const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: opt === '__allow__' ? 'allow' : opt });
             if (r2 && r2.ok === false) uiAlert(String(r2.error||''));
             renderAiQuestions();
           };
@@ -4039,8 +4057,8 @@
   let busyPhraseSeed = 0;
   function busyPhraseAt(i) {
     if (!BUSY_PHRASES.length) return '';
-    const n = BUSY_PHRASES.length;
-    return BUSY_PHRASES[(((busyPhraseSeed + i) % n) + n) % n];
+    // **真随机**（产品要求：不是按顺序出现）：每次取随机位置
+    return BUSY_PHRASES[Math.floor(Math.random() * BUSY_PHRASES.length)];
   }
   const YUN_XING_CIHOU = 8;
   let yunXingJiShiQi = 0;
