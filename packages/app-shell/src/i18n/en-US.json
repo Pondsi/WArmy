@@ -2274,5 +2274,8 @@
   "aiq.rejectNote": "If rejected:",
   "instances.cognitionMax": "Up to 10 md files",
   "instances.personaWrite": "Write cognition",
-  "instances.personaDirty": "Changes not saved yet"
+  "instances.personaDirty": "Changes not saved yet",
+  "panel.auth.title": "Authorizations",
+  "panel.auth.revoke": "Revoke",
+  "panel.auth.empty": "No authorizations"
 }

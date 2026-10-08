@@ -2274,5 +2274,8 @@
   "aiq.rejectNote": "拒绝后：",
   "instances.cognitionMax": "最多添加 10 个 md 文件",
   "instances.personaWrite": "写入认知",
-  "instances.personaDirty": "内容有更改但还未保存"
+  "instances.personaDirty": "内容有更改但还未保存",
+  "panel.auth.title": "授权",
+  "panel.auth.revoke": "撤销",
+  "panel.auth.empty": "暂无授权"
 }

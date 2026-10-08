@@ -2274,5 +2274,8 @@
   "aiq.rejectNote": "拒否した場合：",
   "instances.cognitionMax": "md ファイルは最大 10 個まで",
   "instances.personaWrite": "認知を書き込む",
-  "instances.personaDirty": "変更が未保存です"
+  "instances.personaDirty": "変更が未保存です",
+  "panel.auth.title": "承認",
+  "panel.auth.revoke": "取り消し",
+  "panel.auth.empty": "承認はありません"
 }

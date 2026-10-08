@@ -2274,5 +2274,8 @@
   "aiq.rejectNote": "Si se rechaza:",
   "instances.cognitionMax": "Hasta 10 archivos md",
   "instances.personaWrite": "Escribir cognicion",
-  "instances.personaDirty": "Cambios aun no guardados"
+  "instances.personaDirty": "Cambios aun no guardados",
+  "panel.auth.title": "Autorizaciones",
+  "panel.auth.revoke": "Revocar",
+  "panel.auth.empty": "Sin autorizaciones"
 }

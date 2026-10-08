@@ -162,6 +162,17 @@
       const cur = g && (g.providerCfg || g);
       if (cur && cur.presetId) state.activeProviderId = String(cur.presetId);
     } catch { /* 读不到就保持默认 */ }
+    /**
+     * **读回已落盘的模型能力**（真事故：能力只在内存，重启后警示图标就没了）。
+     * 拉取模型时把 kind/tools/vision/contextLen 存进了 settings.modelCaps，
+     * 这里启动时灌回 `window.__moXingNengLi` ⇒ 牛马管理局的能力徽章与警示图标立刻可用。
+     */
+    try {
+      const c = await window.warmy.modelCapsGet?.();
+      if (c?.ok && c.caps && typeof c.caps === 'object') {
+        window.__moXingNengLi = Object.assign({}, c.caps, window.__moXingNengLi || {});
+      }
+    } catch { /* 读不到不影响其它功能 */ }
   }
   window.__warmyReloadProviders = loadProvidersFromSettings;
   /**
@@ -576,10 +587,12 @@
     return PRESET_AVATARS[h % PRESET_AVATARS.length];
   }
   const PERSON_AVATARS = Array.from({ length: 10 }, (_, i) => `./icons/avatars/person-${i + 1}.svg`);
-  const PERSON_DEFAULT = './icons/avatars/person-default.svg';
-  const PRESET_AVATARS = Array.from({ length: 10 }, (_, i) => `./icons/avatars/preset-${i + 1}.svg`);
+  /** 牛马预设头像：11 个（第 11 个是新增的中性「主理人」形象） */
+  const PRESET_AVATARS = Array.from({ length: 11 }, (_, i) => `./icons/avatars/preset-${i + 1}.svg`);
+  /** **新的默认人物头像**：中性的「主理人」形象（礼帽 + 从容姿态），气质贴合 WArmy 的老板设定 */
+  const PERSON_DEFAULT = './icons/avatars/preset-11.svg';
 
-  /** 我的头像：自定义图片 > 选定的人物头像 > 人物头像默认 */
+  /** 我的头像：自定义图片 > 选定的人物头像 > 新的默认主理人头像 */
   function personAvatarSrc(p) {
     if (p && p.avatarDataUrl) return p.avatarDataUrl;
     const n = Number(p && p.avatarPreset);
@@ -598,7 +611,7 @@
   function instanceAvatarSrc(inst) {
     if (inst && inst.avatarDataUrl) return inst.avatarDataUrl;
     const n = Number(inst && inst.avatarPreset);
-    if (Number.isInteger(n) && n >= 1 && n <= 10) return PRESET_AVATARS[n - 1];
+    if (Number.isInteger(n) && n >= 1 && n <= PRESET_AVATARS.length) return PRESET_AVATARS[n - 1];
     // 没有 avatarPreset（例如新窗口还没把实例读回来）：按名字派生，保证同一牛马到处一致
     const byName = presetFromName(mingOf(inst) || (inst && inst.id) || '');
     return PRESET_AVATARS[byName - 1];
@@ -2371,6 +2384,35 @@
     }
   }
   /** 正式回复到了：把流式气泡收掉（正式那条里的思考块**自动折叠**） */
+  /**
+   * **授权卡**（产品要求）：每个会话一份长期授权，互不干扰；有内容才显示，可撤销。
+   */
+  async function renderShouQuanKa() {
+    const kuai = $('mianBanShouQuanKuai');
+    const ul = $('shouQuanLieBiao');
+    if (!kuai || !ul) return;
+    const sid = state.selectedChat && state.selectedChat.id;
+    if (!sid) { kuai.classList.add('yinCang'); return; }
+    let items = [];
+    try { const r = await window.warmy.authList?.(sid); items = (r && r.items) || []; } catch { /* noop */ }
+    // **默认不显示；有授权才自动出现**
+    if (!items.length) { kuai.classList.add('yinCang'); return; }
+    try { queBaoKaPian('shouQuan'); } catch { /* noop */ }
+    kuai.classList.remove('yinCang');
+    ul.innerHTML = items.map((x) => '<li class="assistHang" style="display:flex;align-items:center;gap:6px">' +
+      '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escapeHtml(x.text) + '">' + escapeHtml(x.text) + '</span>' +
+      '<button class="anNiuXiao" data-auth-revoke="' + escapeHtml(x.id) + '">' + escapeHtml(tOr('panel.auth.revoke', '撤销')) + '</button>' +
+      '</li>').join('');
+    ul.querySelectorAll('[data-auth-revoke]').forEach((b) => {
+      b.onclick = async () => {
+        try { await window.warmy.authRevoke?.({ sessionId: sid, id: b.dataset.authRevoke }); } catch { /* noop */ }
+        void renderShouQuanKa();
+      };
+    });
+  }
+  window.__renderShouQuanKa = renderShouQuanKa;
+  try { window.warmy.onAuthUpdated?.(() => { void renderShouQuanKa(); }); } catch { /* noop */ }
+
   function shouLiuShiKuai() {
     try {
       const heZi = $('xiaoXiJi');
@@ -2551,8 +2593,8 @@
               const bubble = q.closest('.bubbleWrap')?.querySelector('.bubble');
               const selText = sel && !sel.isCollapsed && bubble && bubble.contains(sel.anchorNode) ? String(sel) : '';
               const quoteText = selText || q.getAttribute('data-quote') || '';
-              const yin = quoteText.split('\n').map((l) => '> ' + l).join('\n');
-              input.value = yin + '\n' + input.value;
+              // **微信式引用**：放到输入框上方的小字引用条（不塞进正文）
+              try { window.__sheYinYong?.(quoteText); } catch { /* noop */ }
               input.focus();
             }
           }
@@ -2800,7 +2842,7 @@
   function panelVisibilityFor(kindRaw) {
     const kind = String(kindRaw || '');
     if (!kind || kind === 'none') {
-      return { state: false, files: false, jinDu: false, model: false, dir: false, members: false, kb: false, summary: false, assist: false };
+      return { state: false, files: false, jinDu: false, model: false, dir: false, members: false, kb: false, summary: false, assist: false, auth: false };
     }
     const work = kind === 'single' || kind === 'internal';
     const chat = kind === 'external' || kind === 'externalChat' || kind === 'extGroup' || kind === 'extgroup' || kind === 'externalGroup';
@@ -3208,6 +3250,7 @@
       void renderPanelSummary();
       void renderProgressTasks();
       void renderAssistList({ scrollBottom: false });
+      void renderShouQuanKa?.();
     } catch { /* noop */ }
   }
 
@@ -3484,7 +3527,7 @@
        * 拿不到才退回已知表 / 用户覆盖值。
        */
       if (model) {
-        const nl = (window.__moXingNengLi && window.__moXingNengLi[model]) || null;
+        const nl = (window.__modelCapsOf ? window.__modelCapsOf(model) : ((window.__moXingNengLi || {})[model] || null)) || null;
         const zhen = Number(nl && nl.contextLen) || 0;
         if (zhen >= 1024) return zhen;
         if (MODEL_CTX_MAP[model]) return MODEL_CTX_MAP[model];
@@ -4404,6 +4447,29 @@
   }
 
   let __lastSend = { text: '', at: 0 };
+  /**
+   * **微信式引用**：把被引用的内容放进输入框上方的引用条（小字、单行省略）。
+   * 实际发送时把完整内容作为「参考内容」前缀带给模型（显示限制 vs 内容完整）。
+   */
+  function sheYinYong(wen) {
+    const s = String(wen || '');
+    if (!s.trim()) return;
+    state.yinYong = s;
+    const tiao = $('yinYongTiao');
+    const w = $('yinYongWen');
+    if (w) w.textContent = s.replace(/\s+/g, ' ').slice(0, 200);
+    if (tiao) tiao.classList.remove('yinCang');
+  }
+  function qingYinYong() {
+    state.yinYong = '';
+    $('yinYongTiao')?.classList.add('yinCang');
+    const w = $('yinYongWen');
+    if (w) w.textContent = '';
+  }
+  window.__sheYinYong = sheYinYong;
+  window.__qingYinYong = qingYinYong;
+  $('yinYongGuan')?.addEventListener('click', () => qingYinYong());
+
   async function faSong() {
     const text = $('shuRu').value.trim();
     /**
@@ -4462,7 +4528,11 @@
           ? `\n[附件路径] ${state.attachments.filter((a) => a.path).map((a) => a.path).join('; ')}`
           : '')
       : '';
-    const Quan = text + attachNote;
+    // **引用作为参考内容**带给模型（引用条本身不占正文；内容完整带上）
+    const yinYongNote = state.yinYong
+      ? '\n\n【引用的参考内容】\n' + String(state.yinYong) + '\n【引用结束】'
+      : '';
+    const Quan = text + yinYongNote + attachNote;
     // 发送前先摘下附件（随后清空输入区），随本轮一直传到 deliver
     const fuJianJi = (state.attachments || []).map((a) => ({ name: a.name || a.ming || '', path: a.path || '', dataUrl: a.dataUrl || '' }));
 
@@ -4485,6 +4555,7 @@
     tuisongXiaoxi(id, 'wo', Quan);
     $('shuRu').value = '';
     state.attachments = [];
+    qingYinYong();
     xuanranFujian();
     renderChat();
 
@@ -6009,18 +6080,7 @@
         <div class="sheZhiSection sheZhiKa" data-sec="gate">
           <h2>${escapeHtml(tOr('gate.title', '合规门禁'))}</h2>
           <p class="jingYin">${escapeHtml(tOr('gate.hint', '自动检查代码与文档是否符合 dao.md 的关键条款（硬编码密钥、静默吞异常、证据分级等）。在命令行运行，不显示在插件/工具列表中。'))}</p>
-          <div class="ctgHang">
-            <div class="ctgHangHead"><span class="pfMing">verify-dao-compliance</span></div>
-            <div class="ctgDim">${escapeHtml(tOr('gate.daoCompliance', 'dao.md 合规门禁：检查硬编码密钥、静默吞异常、证据分级、changelog 版本化、dao.md 结构完整性。运行：node packages/app-shell/scripts/verify-dao-compliance.mjs'))}</div>
-          </div>
-          <div class="ctgHang">
-            <div class="ctgHangHead"><span class="pfMing">dao-enforcement</span></div>
-            <div class="ctgDim">${escapeHtml(tOr('gate.daoEnforcement', 'dao 技能：任务前/高风险操作前/收尾时自动跑行动前自检 12 项 + 底线 7 条硬阻断 + 行动后自检 8 项。作为 MiMoCode 技能使用。'))}</div>
-          </div>
-          <div class="ctgHang">
-            <div class="ctgHangHead"><span class="pfMing">full-verify-rounds</span></div>
-            <div class="ctgDim">${escapeHtml(tOr('gate.fullVerify', '全量门禁：连续 N 轮跑完所有 verify-* 脚本，任一失败即重置计数。运行：node scripts/full-verify-rounds.mjs 3'))}</div>
-          </div>
+          <div id="gateLieBiao"></div>
         </div>
         <!-- 内网同步 / 多节点组网 旧设置块已移除：功能由下方「组网设置」卡片承接。
              底层 IPC 通道 warmy:lan-* / warmy:mesh-* 保留为产品契约，仅去掉 UI 与死渲染代码。 -->
@@ -7015,6 +7075,48 @@
         });
       }
       window.__renderPluginList = renderPluginList;
+
+      // ── 门禁列表（可勾选启用，默认全勾）──
+      (function bindGateList() {
+        const he = $('gateLieBiao');
+        if (!he || he.dataset.bound) return;
+        he.dataset.bound = '1';
+        const GATES = [
+          { id: 'verify-dao-compliance', name: 'verify-dao-compliance', desc: tOr('gate.daoCompliance', 'dao.md 合规门禁：硬编码密钥、静默吞异常、证据分级、changelog、dao.md 结构'), cmd: 'node packages/app-shell/scripts/verify-dao-compliance.mjs' },
+          { id: 'verify-i18n-locales', name: 'verify-i18n-locales', desc: tOr('gate.i18n', '多语言一致性：10 语言键集合相等、占位符一致、无残留 CJK'), cmd: 'node packages/app-shell/scripts/verify-i18n-locales.mjs' },
+          { id: 'verify-security', name: 'verify-security', desc: tOr('gate.security', '安全门禁：路径越权、命令注入、凭据泄漏'), cmd: 'node packages/app-shell/scripts/verify-security.mjs' },
+          { id: 'verify-repo-guard', name: 'verify-repo-guard', desc: tOr('gate.repoGuard', '仓库守卫：坏路径、重复树、敏感文件'), cmd: 'node packages/app-shell/scripts/verify-repo-guard.mjs' },
+          { id: 'verify-firstrun-ui', name: 'verify-firstrun-ui', desc: tOr('gate.firstrun', '首启 UI：分区渲染、引导条、无渲染层异常'), cmd: 'node packages/app-shell/scripts/verify-firstrun-ui.mjs' },
+          { id: 'verify-tasks-666', name: 'verify-tasks-666', desc: tOr('gate.tasks', '任务台账：全部断言校验'), cmd: 'node packages/app-shell/scripts/verify-tasks-666.mjs' },
+          { id: 'full-verify-rounds', name: 'full-verify-rounds', desc: tOr('gate.fullVerify', '全量门禁：连续 N 轮跑完所有 verify-* 脚本'), cmd: 'node scripts/full-verify-rounds.mjs 3' },
+        ];
+        const qi = () => {
+          try { return (window.warmy.settingsGetSync?.()?.settings?.gateEnabled) || window.__gateEnabled || {}; } catch { return window.__gateEnabled || {}; }
+        };
+        const yong = qi();
+        he.innerHTML = GATES.map((g) => {
+          const on = yong[g.id] !== false;
+          return '<div class="ctgHang">' +
+            '<div class="ctgHangHead">' +
+            '<span class="pfMing">' + escapeHtml(g.name) + '</span>' +
+            '<label style="margin-left:auto;display:inline-flex;align-items:center;gap:4px">' +
+            '<input type="checkbox" data-gate-on="' + escapeHtml(g.id) + '"' + (on ? ' checked' : '') + '/>' +
+            '<span class="jingYin">' + escapeHtml(tOr('gongJu.enabled', '启用')) + '</span></label>' +
+            '</div>' +
+            '<div class="ctgDim">' + escapeHtml(g.desc) + '</div>' +
+            '<div class="ctgDim" style="font-family:monospace;font-size:11px;opacity:.75">' + escapeHtml(g.cmd) + '</div>' +
+            '</div>';
+        }).join('');
+        he.querySelectorAll('[data-gate-on]').forEach((ck) => {
+          ck.onchange = () => {
+            window.__gateEnabled = window.__gateEnabled || {};
+            if (ck.checked) delete window.__gateEnabled[ck.dataset.gateOn];
+            else window.__gateEnabled[ck.dataset.gateOn] = false;
+            try { window.warmy.settingsSave?.({ gateEnabled: window.__gateEnabled }); } catch { /* noop */ }
+          };
+        });
+      })();
+
       (async () => {
         try {
           const r = await window.warmy.pluginsScanDirsGet?.();
@@ -7111,7 +7213,26 @@
         };
         return m[k] ? tOr(m[k], k) : '';
       }
-      window.__moXingNengLi = {};
+      /**
+       * **不要清空能力表**（真事故：每次渲染设置页都 `= {}` ⇒ 拉取到的能力全丢，
+       * 牛马管理局的警示图标永远不出现）。只在首次初始化。
+       */
+      window.__moXingNengLi = window.__moXingNengLi || {};
+      /**
+       * **能力查表**：availableModels 里存的是「供应商 · 模型id」，而能力表的键是**裸模型 id**
+       * ⇒ 必须按两种形式都试一次，否则永远查不到（bge-m3 警示图标不显示的根因）。
+       */
+      window.__modelCapsOf = function (m) {
+        const all = window.__moXingNengLi || {};
+        const s = String(m || '');
+        if (all[s]) return all[s];
+        const bare = s.includes(' · ') ? s.split(' · ').slice(1).join(' · ') : s;
+        if (all[bare]) return all[bare];
+        // 再退化：去 provider 前缀后只留最后一段（处理 provider 名里也有点号的情况）
+        const tail = bare.split('/').pop() || bare;
+        if (all[tail]) return all[tail];
+        return {};
+      };
       window.__shangXiaWenBiaoQian = shangXiaWenBiaoQian;
       window.__kindWenAn = kindWenAn;
       function renderSmLian(key, allIds) {
@@ -8085,7 +8206,7 @@
               return '<span class="moXingChip' + ((inUse || GuoQi || zhongFu) ? ' ruShiYong' : '') + '" data-m="' + escapeHtml(m) + '" title="' + escapeHtml(tips.join(' · ')) + '">' +
                 escapeHtml(m) +
                 (function () {
-                  const nl = (window.__moXingNengLi || {})[m] || {};
+                  const nl = (window.__modelCapsOf ? window.__modelCapsOf(m) : ((window.__moXingNengLi || {})[m] || {}));
                   const k = nl.kind && nl.kind !== 'unknown' ? ' <span class="moXingKind">' + escapeHtml(kindWenAn(nl.kind)) + '</span>' : '';
                   const c = nl.contextLen ? ' <span class="moXingCtx">' + escapeHtml(shangXiaWenBiaoQian(nl.contextLen)) + '</span>' : '';
                   return k + c;
@@ -13368,6 +13489,7 @@
         else if (act === 'urgent') { payload.status = 'daKai'; payload.priority = 'urgent'; }
         try { await window.warmy.assistUpsert?.(payload); } catch { /* noop */ }
         void renderAssistList({ scrollBottom: false });
+      void renderShouQuanKa?.();
       };
     });
 
@@ -13376,6 +13498,7 @@
     }
   }
   window.__renderAssistList = renderAssistList;
+  window.__renderShouQuanKa = renderShouQuanKa;
 
   /**
    * 右栏「进度」= 真看板任务；限高滚动；每条带日期时间；越下越新。
@@ -15245,7 +15368,7 @@
         <div class="mgrMoXingJi">${
           models.length
             ? models.map((m) => {
-                const nl = (window.__moXingNengLi || {})[m] || {};
+                const nl = (window.__modelCapsOf ? window.__modelCapsOf(m) : ((window.__moXingNengLi || {})[m] || {}));
                 const buKeLiao = nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat' && !(nl.kind === 'chat' && nl.vision === true);
                 /** **不能调用工具**（embedding 等）或**不是聊天模型**都给警示 */
                 const wuGongJu = nl.tools === false || (nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat' && nl.kind !== 'unknown');
@@ -17175,12 +17298,9 @@
     openContextMenu(e.clientX, e.clientY, [
       { biaoQian: t('common.copy'), onClick: () => { navigator.clipboard?.writeText(selText || fullText); } },
       { biaoQian: t('common.quote'), onClick: () => {
-          const input = $('shuRu');
-          if (!input) return;
-          // **引用完整内容**（真事故：以前 slice(0,120) 截断了）
-          const yin = quoteText.split('\n').map((l) => '> ' + l).join('\n');
-          input.value = yin + '\n' + input.value;
-          input.focus();
+          // **微信式引用**：放到输入框上方的小字引用条
+          try { window.__sheYinYong?.(quoteText); } catch { /* noop */ }
+          try { $('shuRu')?.focus(); } catch { /* noop */ }
         } },
     ]);
   });

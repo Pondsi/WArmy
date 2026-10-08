@@ -2962,3 +2962,12 @@ html { font-weight: var(--fw-ui, 400); }
 
 /* 附件拖拽上传 */
 .shuRuQu.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
+
+/* ── 微信式引用条（输入框上方，小字单行，超长省略但内容完整）── */
+.yinYongTiao { display: flex; align-items: center; gap: 8px; padding: 6px 12px; margin: 0 8px 4px;
+  background: var(--hover); border-left: 3px solid var(--accent); border-radius: 6px; }
+.yinYongWen { flex: 1; min-width: 0; font-size: var(--fs-xs); color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yinYongGuan { flex-shrink: 0; background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 16px; line-height: 1; padding: 0 4px; border-radius: 4px; }
+.yinYongGuan:hover { background: var(--line); color: var(--ink); }

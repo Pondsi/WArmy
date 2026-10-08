@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-08T11:14:20.841Z",
+  "at": "2026-10-08T13:20:52.135Z",
   "total": 46,
   "ok": 46,
   "results": [
@@ -12,31 +12,31 @@
     {
       "ming": "listInstances",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "[]"
     },
     {
       "ming": "securityMode",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "\"normal\""
     },
     {
       "ming": "memoryStatus",
       "ok": true,
-      "ms": 3,
+      "ms": 2,
       "resultPreview": "{\"ok\":true,\"ready\":true,\"CangLu\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\",\"jsonl\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\\\\fast-memory.jsonl\",…"
     },
     {
       "ming": "localeInfo",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"system\":\"zh-CN\",\"resolved\":\"zh-CN\",\"isZh\":true,\"supported\":[\"zh-CN\",\"zh-TW\",\"en-US\",\"ja\",\"ko\",\"ru\",\"es\",\"fr\",\"pt\",\"eo\"]}"
     },
     {
       "ming": "themeInfo",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"shouldUseDarkColors\":false,\"themeSource\":\"system\"}"
     },
     {
@@ -54,13 +54,13 @@
     {
       "ming": "boardEvents",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"events\":[]}"
     },
     {
       "ming": "boardAggregate",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"sessions\":[]}"
     },
     {
@@ -72,8 +72,8 @@
     {
       "ming": "checkpointList",
       "ok": true,
-      "ms": 1,
-      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1791458060301,\"imageDigests\":{}},\"…"
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1791465651573,\"imageDigests\":{}},\"…"
     },
     {
       "ming": "knowledgeQuery",
@@ -96,7 +96,7 @@
     {
       "ming": "skillsList",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "resultPreview": "{\"ok\":true,\"jinengJi\":[{\"id\":\"find-skill\",\"ming\":\"find-skill — 发现并安装技能\",\"description\":\"> 这是**内置技能**，教你自己找到并装上需要的技能包。 > 装上后**重启会话**才生效（技能在会话开始时扫描）。\",\"source\":\"userData\",\"root\":\"C:\\\\Users\\\\p\\\\AppData\\\\L…"
     },
     {
@@ -108,7 +108,7 @@
     {
       "ming": "skillsScanDirsGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"dirs\":[],\"scanDirs\":[],\"max\":10}"
     },
     {
@@ -126,13 +126,13 @@
     {
       "ming": "profileGet",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"profile\":{\"username\":\"主人\",\"avatarDataUrl\":\"\",\"email\":\"\",\"deviceId\":\"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5\",\"deviceIdSig\":\"bc6111d1f9d967bda223facfcd7dd0fd83f6ac3e1518d4e7d816…"
     },
     {
       "ming": "appInfo",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "resultPreview": "{\"ok\":true,\"ming\":\"无限牛马\",\"enName\":\"WArmy\",\"version\":\"0.2.15\",\"electron\":\"40.10.6\",\"chrome\":\"144.0.7559.236\",\"node\":\"24.15.0\",\"platform\":\"win32\",\"arch\":\"x64\",\"dsh\":\"0.1.5-rc.1\",\"deviceId\":\"DK07VSLKMNCA…"
     },
     {
@@ -144,13 +144,13 @@
     {
       "ming": "identityPeers",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"peers\":[]}"
     },
     {
       "ming": "netStatus",
       "ok": true,
-      "ms": 7,
+      "ms": 6,
       "resultPreview": "{\"ok\":true,\"meshEnabled\":false,\"link\":{\"reachable\":false,\"lastError\":\"mesh-disabled\",\"peers\":[]},\"nodeId\":\"jieDian8af5ad76\",\"sessions\":0,\"unlock\":{\"mode\":\"os\",\"unlocked\":true,\"needsPassphrase\":false,\"…"
     },
     {
@@ -162,25 +162,25 @@
     {
       "ming": "executorsStatus",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"items\":[]}"
     },
     {
       "ming": "stateLoad",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"state\":{\"yuYan\":\"zh-CN\",\"themeMode\":\"system\",\"accent\":\"#A78567\",\"sound\":{\"complete\":true,\"request\":true,\"error\":true},\"soundFiles\":{\"complete\":\"\",\"request\":\"\",\"error\":\"\"},\"emailOnRequest\":…"
     },
     {
       "ming": "lastError",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"error\":null}"
     },
     {
       "ming": "setupState",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"done\":false,\"guideDone\":false,\"yuYan\":\"zh-CN\"}"
     },
     {
@@ -211,12 +211,12 @@
       "ming": "memoryRecall",
       "ok": true,
       "ms": 7,
-      "resultPreview": "{\"id\":4,\"ok\":true,\"cards\":[],\"timings\":{\"totalMs\":5,\"hydrateMs\":0,\"embedQueryMs\":4,\"uniMs\":1,\"triMs\":0,\"vecMs\":0,\"fuseMs\":0,\"cosines\":0,\"hydrated\":0,\"vectorBelowThreshold\":0,\"vectorUnkRatio\":0.5},\"sco…"
+      "resultPreview": "{\"id\":4,\"ok\":true,\"cards\":[],\"timings\":{\"totalMs\":5,\"hydrateMs\":0,\"embedQueryMs\":4,\"uniMs\":0,\"triMs\":1,\"vecMs\":0,\"fuseMs\":0,\"cosines\":0,\"hydrated\":0,\"vectorBelowThreshold\":0,\"vectorUnkRatio\":0.5},\"sco…"
     },
     {
       "ming": "i18n",
       "ok": true,
-      "ms": 26,
+      "ms": 13,
       "resultPreview": "{\"yuYan\":\"zh-CN\",\"strings\":{\"about.author\":\"作者\",\"about.authorBody\":\"Pondsi\",\"about.checkUpdate\":\"检查更新\",\"about.checking\":\"检查中…\",\"about.contact\":\"联系方式\",\"about.contactBody\":\"Public@numumu.com · 232307860…"
     },
     {
@@ -228,7 +228,7 @@
     {
       "ming": "projectState",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "resultPreview": "{\"ok\":true,\"state\":{\"devEnv\":\"host\",\"containerOnly\":false,\"running\":true,\"stopped\":false,\"code\":\"host-dev\",\"hostEditingRefused\":false,\"developmentAllowed\":true,\"developmentWhere\":\"host\",\"testingAllowe…"
     },
     {
@@ -258,14 +258,14 @@
     {
       "ming": "groupMembers",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"groupId\":\"\",\"members\":[],\"localIsCreator\":false}"
     },
     {
       "ming": "containerProbe",
       "ok": true,
-      "ms": 466,
-      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1791458060828,\"elapsedMs\":464,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
+      "ms": 498,
+      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1791465652122,\"elapsedMs\":496,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
     },
     {
       "ming": "netPortCandidates",
@@ -277,7 +277,7 @@
       "ming": "chatLogRestore",
       "ok": true,
       "ms": 1,
-      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1791458060839},\"sessions\":[],\"logSeq\":0}"
+      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1791465652134},\"sessions\":[],\"logSeq\":0}"
     }
   ]
 }

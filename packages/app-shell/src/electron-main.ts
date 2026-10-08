@@ -3916,10 +3916,16 @@ chuliIpc(
        * 重启后不必重新拉取，也能知道每个模型的**真实上下文大小**（上下文预算滑块据此显示）。
        */
       try {
-        const caps: Record<string, { contextLen?: number; kind?: string }> = {};
+        const caps: Record<string, { contextLen?: number; kind?: string; tools?: boolean | 'unknown'; vision?: boolean | 'unknown' }> = {};
         for (const [id0, neng0] of modelNengLiMeta) {
-          const c = Number((neng0 as { contextLen?: number }).contextLen) || 0;
-          if (c > 0) caps[id0] = { contextLen: c, kind: String((neng0 as { kind?: string }).kind || '') };
+          const n = neng0 as { contextLen?: number; kind?: string; tools?: boolean | 'unknown'; vision?: boolean | 'unknown' };
+          // **能力全量落盘**（不只看 contextLen）：kind/tools 是警示图标与筛选的依据
+          caps[id0] = {
+            contextLen: Number(n.contextLen) || 0,
+            kind: String(n.kind || ''),
+            tools: n.tools,
+            vision: n.vision,
+          };
         }
         const cur = (settingsStore?.load() as { modelCaps?: Record<string, unknown> } | undefined) || {};
         settingsStore?.save({ ...(cur as object), modelCaps: { ...(cur.modelCaps || {}), ...caps } } as never);
@@ -8076,6 +8082,78 @@ function gongJuQiYongBiao(): Record<string, boolean> {
 function gongJuKeJian(ming: string): boolean {
   return gongJuQiYongBiao()[String(ming)] !== false;
 }
+
+/**
+ * **授权卡**（产品要求）：每个会话一份长期授权，互不干扰。
+ * 授权过的不再重复询问；可在右栏撤销。
+ */
+const shouQuanCang = new Map<string, Array<{ id: string; text: string; ts: number }>>();
+function shouQuanQu(sid: string): Array<{ id: string; text: string; ts: number }> {
+  return shouQuanCang.get(String(sid)) || [];
+}
+function shouQuanCun(sid: string, list: Array<{ id: string; text: string; ts: number }>): void {
+  shouQuanCang.set(String(sid), list);
+  try {
+    const s = (settingsStore?.load() as { authGrants?: Record<string, unknown> } | undefined) || {};
+    const all = (s.authGrants && typeof s.authGrants === 'object') ? { ...s.authGrants } : {};
+    all[String(sid)] = list;
+    settingsStore?.save({ authGrants: all } as never);
+  } catch { /* 落盘失败不影响本次 */ }
+  try { broadcastToWindows('warmy:shouQuanUpdated', { sessionId: String(sid) }); } catch { /* noop */ }
+}
+/** 启动时把落盘的授权读回内存 */
+function shouQuanHuiFu(): void {
+  try {
+    const s = settingsStore?.load() as { authGrants?: Record<string, unknown> } | undefined;
+    const all = (s?.authGrants && typeof s.authGrants === 'object') ? s.authGrants : {};
+    for (const [sid, list] of Object.entries(all)) {
+      if (Array.isArray(list)) shouQuanCang.set(sid, list as Array<{ id: string; text: string; ts: number }>);
+    }
+  } catch { /* noop */ }
+}
+chuliIpc('warmy:shouQuanLieBiao', (_e, sid: string) => ({ ok: true, items: shouQuanQu(sid) }));
+chuliIpc('warmy:shouQuanTianJia', (_e, p0?: { sessionId?: string; key?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    const key = String(p0?.key || '').trim();
+    if (!sid || !key) return { ok: false, error: 'bad-payload' };
+    const list = shouQuanQu(sid);
+    if (!list.some((x) => x.text === key)) list.push({ id: 'a-' + Date.now(), text: key, ts: Date.now() });
+    shouQuanCun(sid, list);
+    return { ok: true, items: list };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:shouQuanCheXiao', (_e, p0?: { sessionId?: string; id?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    const list = shouQuanQu(sid).filter((x) => x.id !== String(p0?.id || ''));
+    shouQuanCun(sid, list);
+    return { ok: true, items: list };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 查是否已有该授权（有则跳过重复询问） */
+chuliIpc('warmy:shouQuanYouMeiYou', (_e, p0?: { sessionId?: string; key?: string }) => {
+  const sid = String(p0?.sessionId || '');
+  const key = String(p0?.key || '');
+  return { ok: true, has: shouQuanQu(sid).some((x) => x.text === key) };
+});
+
+/** 已落盘的模型能力（拉取时存的）——渲染层启动时读回，重启后警示图标也能显示 */chuliIpc('warmy:moXingNengLiQu', () => {
+  try {
+    const s = settingsStore?.load() as { modelCaps?: Record<string, unknown> } | undefined;
+    const m = (s && s.modelCaps && typeof s.modelCaps === 'object') ? s.modelCaps : {};
+    // 与内存里的合并（本次运行拉取到的优先）
+    for (const [id, v] of modelNengLiMeta) {
+      m[id] = {
+        contextLen: Number((v as { contextLen?: number }).contextLen) || 0,
+        kind: String((v as { kind?: string }).kind || ''),
+        tools: (v as { tools?: boolean | 'unknown' }).tools,
+        vision: (v as { vision?: boolean | 'unknown' }).vision,
+      };
+    }
+    return { ok: true, caps: m };
+  } catch { return { ok: true, caps: {} }; }
+});
 
 chuliIpc('warmy:gongJuLieBiao', () => {
   const qi = gongJuQiYongBiao();

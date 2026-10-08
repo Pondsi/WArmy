@@ -116,6 +116,12 @@ contextBridge.exposeInMainWorld('warmy', {
   appInfo: () => ipcRenderer.invoke('warmy:yingYongXinXi'),
   skillsList: () => ipcRenderer.invoke('warmy:jinengJiLieBiao'),
   // ── 「工具」面板：列出全部工具 / 启停 / 自动发现目录 / 安装导入 ──
+  authList: (sid) => ipcRenderer.invoke('warmy:shouQuanLieBiao', sid),
+  authGrant: (p) => ipcRenderer.invoke('warmy:shouQuanTianJia', p),
+  authRevoke: (p) => ipcRenderer.invoke('warmy:shouQuanCheXiao', p),
+  authCheck: (p) => ipcRenderer.invoke('warmy:shouQuanYouMeiYou', p),
+  onAuthUpdated: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:shouQuanUpdated', h); return () => ipcRenderer.removeListener('warmy:shouQuanUpdated', h); },
+  modelCapsGet: () => ipcRenderer.invoke('warmy:moXingNengLiQu'),
   toolsList: () => ipcRenderer.invoke('warmy:gongJuLieBiao'),
   toolEnable: (p) => ipcRenderer.invoke('warmy:gongJuQiYong', p),
   toolScanDirsGet: () => ipcRenderer.invoke('warmy:gongJuSaoMiaoMuLuJiQu'),

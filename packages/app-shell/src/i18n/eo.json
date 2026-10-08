@@ -2274,5 +2274,8 @@
   "aiq.rejectNote": "Se malakceptita:",
   "instances.cognitionMax": "Ĝis 10 dosieroj md",
   "instances.personaWrite": "Skribi kognon",
-  "instances.personaDirty": "Ŝanĝoj ankoraŭ ne konservitaj"
+  "instances.personaDirty": "Ŝanĝoj ankoraŭ ne konservitaj",
+  "panel.auth.title": "Aŭtorigoj",
+  "panel.auth.revoke": "Revoki",
+  "panel.auth.empty": "Neniuj aŭtorigoj"
 }

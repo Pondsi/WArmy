@@ -2274,5 +2274,8 @@
   "aiq.rejectNote": "При отказе:",
   "instances.cognitionMax": "До 10 файлов md",
   "instances.personaWrite": "Записать познание",
-  "instances.personaDirty": "Изменения ещё не сохранены"
+  "instances.personaDirty": "Изменения ещё не сохранены",
+  "panel.auth.title": "Авторизации",
+  "panel.auth.revoke": "Отозвать",
+  "panel.auth.empty": "Нет авторизаций"
 }

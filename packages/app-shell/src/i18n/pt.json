@@ -2274,5 +2274,8 @@
   "aiq.rejectNote": "Se rejeitado:",
   "instances.cognitionMax": "Ate 10 arquivos md",
   "instances.personaWrite": "Escrever cognicao",
-  "instances.personaDirty": "Alteracoes ainda nao salvas"
+  "instances.personaDirty": "Alteracoes ainda nao salvas",
+  "panel.auth.title": "Autorizacoes",
+  "panel.auth.revoke": "Revogar",
+  "panel.auth.empty": "Sem autorizacoes"
 }

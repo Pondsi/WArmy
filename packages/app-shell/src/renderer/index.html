@@ -198,6 +198,11 @@
           </div>
           <!-- 牛马在跑的动态小字（发出后到回包前）：轮换文案，让用户知道它没卡死 -->
           <div id="yunXingZhuangTai" class="yunXingZhuangTai yinCang" aria-live="polite"></div>
+          <!-- 微信式引用条：贴在输入框上方，小字单行，点击 × 取消 -->
+          <div id="yinYongTiao" class="yinYongTiao yinCang">
+            <div class="yinYongWen" id="yinYongWen"></div>
+            <button type="button" class="yinYongGuan" id="yinYongGuan" title="取消引用">×</button>
+          </div>
           <div id="shuRuDingTiaoZhengTiao" class="kongZhiTaiTiaoZhengTiao shuRuTiaoZhengTiao"></div>
           <footer class="shuRuQu">
             <div id="attachLieBiao" class="yinCang"></div>
@@ -371,6 +376,15 @@
               <span class="jianTou">›</span>
             </div>
             <ul id="renwuLieBiao" class="renwuLieBiao yinCang mianBanScroll"></ul>
+          </div>
+
+          <!-- 授权卡：默认不显示，有长期授权时自动出现；每条可撤销 -->
+          <div class="mianBanKuai yinCang" id="mianBanShouQuanKuai">
+            <div class="mianBanKaiGuan" id="shouQuanKaiGuan">
+              <span data-i18n="panel.auth.title">授权</span>
+              <span class="jianTou">›</span>
+            </div>
+            <ul id="shouQuanLieBiao" class="assistLieBiao mianBanScroll"></ul>
           </div>
 
           <!-- 等待协助：AI 运行中需要人处理的事；默认折叠；未读红/黄点。未选会话默认隐藏 -->
