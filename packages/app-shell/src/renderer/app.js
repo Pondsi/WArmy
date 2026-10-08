@@ -3425,6 +3425,40 @@
 
   // ── 上下文预算滑块 + 会话摘要（手动/自动） ──
   const CTX_MIN_TOKENS = 2048;
+/**
+ * **能力标签**（产品要求：不要"模型"两个字，直接写它会干什么）。
+ * 返回短标签数组，如 ['对话','看图','工具'] / ['向量']。
+ */
+function nengLiBiaoQian(nl) {
+  const out = [];
+  const k = String((nl && nl.kind) || '');
+  if (k === 'chat' || k === 'unknown' || !k) out.push('对话');
+  else if (k === 'embedding') out.push('向量');
+  else if (k === 'asr') out.push('听写');
+  else if (k === 'tts') out.push('朗读');
+  else if (k === 'image') out.push('画图');
+  else if (k === 'imageUnd') out.push('识图');
+  else if (k === 'videoGen') out.push('做视频');
+  else if (k === 'videoUnd') out.push('看视频');
+  else if (k === 'rerank') out.push('重排');
+  else if (k === 'translate') out.push('翻译');
+  else if (k === 'safety') out.push('审核');
+  else if (k === 'decision') out.push('决策');
+  if (nl && nl.vision === true && !out.includes('识图') && !out.includes('画图')) out.push('看图');
+  if (nl && nl.tools === true) out.push('工具');
+  return out;
+}
+/** 渲染成一串小标签 HTML */
+function nengLiBiaoQianHtml(nl) {
+  return nengLiBiaoQian(nl).map((x) => '<span class="moXingNengLi">' + escapeHtml(x) + '</span>').join('');
+}
+/** **能不能聊天**（不能聊的不能选为可用模型、也不进调用链） */
+function keYiLiaoTian(nl) {
+  const k = String((nl && nl.kind) || '');
+  if (!k || k === 'unknown' || k === 'chat') return true;
+  return false;
+}
+
   const CTX_DEFAULT_WINDOW = 32768;
   let ctxState = { percent: 60, maxTokens: CTX_DEFAULT_WINDOW };
 
@@ -7548,42 +7582,6 @@
       };
       window.__shangXiaWenBiaoQian = shangXiaWenBiaoQian;
       window.__kindWenAn = kindWenAn;
-      /**
-       * **能力标签**（产品要求：不要"模型"两个字，直接写它会干什么）。
-       * 返回短标签数组，如 ['对话','看图','工具'] / ['向量']。
-       */
-      function nengLiBiaoQian(nl) {
-        const out = [];
-        const k = String((nl && nl.kind) || '');
-        if (k === 'chat' || k === 'unknown' || !k) out.push('对话');
-        else if (k === 'embedding') out.push('向量');
-        else if (k === 'asr') out.push('听写');
-        else if (k === 'tts') out.push('朗读');
-        else if (k === 'image') out.push('画图');
-        else if (k === 'imageUnd') out.push('识图');
-        else if (k === 'videoGen') out.push('做视频');
-        else if (k === 'videoUnd') out.push('看视频');
-        else if (k === 'rerank') out.push('重排');
-        else if (k === 'translate') out.push('翻译');
-        else if (k === 'safety') out.push('审核');
-        else if (k === 'decision') out.push('决策');
-        if (nl && nl.vision === true && !out.includes('识图') && !out.includes('画图')) out.push('看图');
-        if (nl && nl.tools === true) out.push('工具');
-        return out;
-      }
-      window.__nengLiBiaoQian = nengLiBiaoQian;
-      /** 渲染成一串小标签 HTML */
-      function nengLiBiaoQianHtml(nl) {
-        return nengLiBiaoQian(nl).map((x) => '<span class="moXingNengLi">' + escapeHtml(x) + '</span>').join('');
-      }
-      window.__nengLiBiaoQianHtml = nengLiBiaoQianHtml;
-      /** **能不能聊天**（不能聊的不能选为可用模型、也不进调用链） */
-      function keYiLiaoTian(nl) {
-        const k = String((nl && nl.kind) || '');
-        if (!k || k === 'unknown' || k === 'chat') return true;
-        return false;
-      }
-      window.__keYiLiaoTian = keYiLiaoTian;
       function renderSmLian(key, allIds) {
         const he = $(SM_HE_JI[key]);
         if (!he) return;
