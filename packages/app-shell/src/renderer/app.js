@@ -104,6 +104,14 @@
         desc: 'plugin.warmyMemory.desc',
         source: 'builtin',
       },
+      {
+        // **占位插件**（产品要求：内容待定，先占位）
+        id: 'nm-file',
+        ming: 'nm文件',
+        enabled: true,
+        desc: 'plugin.nmFile.desc',
+        source: 'builtin',
+      },
     ],
     providers: PROVIDER_DEFAULTS.map((p) => ({ ...p, models: [] })),
     /** 当前**生效**供应商 id（聊天真正用谁）；编辑其它供应商绝不劫持它 */
@@ -588,9 +596,9 @@
   }
   const PERSON_AVATARS = Array.from({ length: 10 }, (_, i) => `./icons/avatars/person-${i + 1}.svg`);
   /** 牛马预设头像：11 个（第 11 个是新增的中性「主理人」形象） */
-  const PRESET_AVATARS = Array.from({ length: 11 }, (_, i) => `./icons/avatars/preset-${i + 1}.svg`);
+  const PRESET_AVATARS = Array.from({ length: 12 }, (_, i) => `./icons/avatars/preset-${i + 1}.svg`);
   /** **新的默认人物头像**：中性的「主理人」形象（礼帽 + 从容姿态），气质贴合 WArmy 的老板设定 */
-  const PERSON_DEFAULT = './icons/avatars/preset-11.svg';
+  const PERSON_DEFAULT = './icons/avatars/preset-12.svg';
 
   /** 我的头像：自定义图片 > 选定的人物头像 > 新的默认主理人头像 */
   function personAvatarSrc(p) {
@@ -766,19 +774,28 @@
     } else if (c) {
       r = Number(c[1]); g = Number(c[2]); b = Number(c[3]);
     }
-    const y = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
     /**
-     * 前景不做"非黑即白"，而是**多级灰阶**：越是中间调，越往对方那侧多走一点，
-     * 这样浅黄、中灰、暗绿、亮蓝等各种底色上都有足够对比度（不会只剩黑/白两档看不清）。
+     * **WCAG 相对亮度 + 对比度选色**（真机反馈：主题色下的文字看不清）。
+     * 旧实现用线性 RGB 近似（0.2126r+0.7152g+0.0722b），对中间调判断偏差大；
+     * 现在按 sRGB 反伽马算出**真正的相对亮度 L**，再在「深灰 / 白」两个候选里
+     * 选**对比度更高**的那个（WCAG 2.1 公式），保证任何底色都有足够清晰度。
      */
-    if (y > 0.82) return '#141414';
-    if (y > 0.68) return '#242424';
-    if (y > 0.55) return '#333333';
-    if (y > 0.45) return '#3d3d3d';
-    if (y > 0.35) return '#d8d8d8';
-    if (y > 0.22) return '#eaeaea';
-    if (y > 0.10) return '#f5f5f5';
-    return '#ffffff';
+    const lin = (v) => {
+      const x = v / 255;
+      return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+    };
+    const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    // 候选：浅底用近黑，深底用近白（各留一档中间色，避免纯黑纯白刺眼）
+    const anHei = 0.0;    // #0d0d0d ≈ L 0.0045
+    const liangBai = 1.0; // #ffffff
+    const cHei = ratio(L, anHei);
+    const cBai = ratio(L, liangBai);
+    if (cHei >= cBai) {
+      // 深色文字：按亮度微调深度，越亮底越深
+      return L > 0.6 ? '#0d0d0d' : (L > 0.4 ? '#1a1a1a' : '#242424');
+    }
+    return L < 0.12 ? '#ffffff' : (L < 0.25 ? '#f5f5f5' : '#eaeaea');
   }
   /** 气泡/强调色上的文字色跟随背景（换主题、换主题色后都要重算） */
   function tongBuBeiJingWenZi() {
@@ -1920,6 +1937,16 @@
    */
   function applyInstanceRowState(hangYuanSu, inst, sessionKind) {
     if (!hangYuanSu || !inst) return hangYuanSu;
+    // **拟态外框**：这只牛马被选为桌宠「原形」时，头像加一圈外框（产品要求）
+    try {
+      const shiYuanXing = String((state.mimicOriginId || '')) === String(inst.id);
+      const av = hangYuanSu.querySelector('.av,.touXiangTuPian,.avTuPian');
+      if (av) {
+        av.classList.toggle('mimicKuang', shiYuanXing);
+        if (shiYuanXing) av.setAttribute('title', tOr('mimic.frame', '拟态中'));
+        else av.removeAttribute('title');
+      }
+    } catch { /* noop */ }
     if (inst.status === 'stopped') {
       hangYuanSu.classList.add('isJinYong');
       const mingCheng = hangYuanSu.querySelector('.name');
@@ -2731,6 +2758,21 @@
     const yuanYou = window.__msgs[chatId];
     const shangYiTiao = yuanYou[yuanYou.length - 1];
     /**
+     * **窗口去重**（真事故：一轮会话出现两条一模一样的回复）。
+     * 以前只比"上一条"：若两条之间夹了系统小字/续派消息，就漏过去了。
+     * 现在回看最近 10 条，同 role + 同 text 且 10 分钟内 ⇒ 判定重复。
+     */
+    const kanZuiJin = (arr, role2, text2, ms2) => {
+      const n = Math.min(arr.length, 10);
+      const now2 = Date.now();
+      for (let k = arr.length - 1; k >= arr.length - n; k--) {
+        const it = arr[k];
+        if (!it) continue;
+        if (it.role === role2 && String(it.text) === text2 && now2 - Number(it.ts || 0) < ms2) return true;
+      }
+      return false;
+    };
+    /**
      * **只有标点的回复一律不显示**（真机反馈：回答完下面多出一个单独的「。」）。
      * 主进程已拦过一次，但群聊/续派/本地回显等入口各有各的路径 ⇒ 这里再拦一道兜底，
      * 任何入口进来的纯标点都不进窗口、不写日志。
@@ -2742,7 +2784,7 @@
       if (state.streamBuf) delete state.streamBuf[chatId];
       return;
     }
-    if (!(shangYiTiao && shangYiTiao.role === role && shangYiTiao.text === text)) {
+    if (!kanZuiJin(yuanYou, role, text, 600000)) {
       yuanYou.push({ role, text, ts: Date.now(), reasoning: (opts && opts.reasoning) || '', system: !!(opts && opts.system), moXing: (opts && opts.moXing) || '' });
       // 正式回复到了 ⇒ 收掉流式"正在进行"的气泡（里面的思考块随之折叠）
       if (role === 'them' && !(opts && opts.system)) {
@@ -3507,6 +3549,36 @@
     'gpt-4o-mini': 128000,
     'claude-3-5-sonnet': 200000,
   };
+  /**
+   * **模型名里的上下文提示**（真事故：`orcarouter/Qwen3.8-27B-Uncensored:q4_K_M-128K`
+   * 因为带前缀/后缀，精确匹配 `qwen3.8-27b` 失败 ⇒ 退回默认 32768，用户看到的
+   * 「97% 只有 31785 词元」就是这么来的）。
+   * 规则：名字里出现 `-128K` / `-256K` / `128k` 这类标记 ⇒ 直接取它。
+   */
+  function ctxHintFromName(model) {
+    const s = String(model || '').toLowerCase();
+    // `-128k` / `_128k` / ` 128k` / `128k上下文`
+    const m = s.match(/(?:^|[^0-9])(\d{2,4})\s*k(?![a-z0-9])/);
+    if (m) {
+      const n = Number(m[1]);
+      if (n >= 4 && n <= 2048) return n * 1024;
+    }
+    // 纯数字标记（如 `:32768` 结尾）
+    const m2 = s.match(/(?:^|[^0-9])(\d{5,6})(?:[^0-9]|$)/);
+    if (m2) {
+      const n = Number(m2[1]);
+      if (n >= 4096 && n <= 2097152) return n;
+    }
+    return 0;
+  }
+  /** 归一化模型名：去供应商前缀、去量化/标签后缀，用于模糊匹配 */
+  function ctxNormModel(model) {
+    let s = String(model || '').toLowerCase();
+    if (s.includes(' · ')) s = s.split(' · ').slice(1).join(' · ');
+    s = s.split('/').pop() || s;      // 去 orcarouter/ 前缀
+    s = s.split(':')[0] || s;         // 去 :q4_K_M-128K 标签
+    return s.trim();
+  }
   function modelContextTokensFor(nav) {
     try {
       let model = '';
@@ -3529,8 +3601,23 @@
       if (model) {
         const nl = (window.__modelCapsOf ? window.__modelCapsOf(model) : ((window.__moXingNengLi || {})[model] || null)) || null;
         const zhen = Number(nl && nl.contextLen) || 0;
+        /**
+         * 优先级（真机反馈修）：
+         *   ① 拉取到的**真实** contextLen（且 ≥1024）
+         *   ② **名字里的上下文标记**（-128K/-256K）——带前缀/后缀的模型靠它才认得出来
+         *   ③ 归一化后的模糊匹配（去 provider 前缀、去量化标签）
+         *   ④ 用户覆盖值 / 默认
+         */
         if (zhen >= 1024) return zhen;
+        const hint = ctxHintFromName(model);
+        if (hint >= 4096) return hint;
+        const norm = ctxNormModel(model);
         if (MODEL_CTX_MAP[model]) return MODEL_CTX_MAP[model];
+        if (MODEL_CTX_MAP[norm]) return MODEL_CTX_MAP[norm];
+        // 宽松包含匹配（如 `qwen3.8-27b-uncensored` 命中 `qwen3.8-27b`）
+        for (const [k, v] of Object.entries(MODEL_CTX_MAP)) {
+          if (norm.startsWith(k) || norm.includes(k)) return v;
+        }
       }
     } catch { /* noop */ }
     return ctxState.maxTokens || CTX_DEFAULT_WINDOW;
@@ -4887,12 +4974,11 @@
           <button class="anNiuXiao" id="iCogTianJia">${escapeHtml(t('instances.cognitionAdd'))}</button>
         </div>
         <div class="field" style="margin-top:12px">
-          <label>${escapeHtml(tOr('instances.personaWrite', '写入认知'))}</label>
+          <label>${escapeHtml(tOr('instances.personaWrite', '写入认知'))}<span id="iPersonaWeiBaoCun" class="personaDirty" style="display:none">${escapeHtml(tOr('instances.personaDirty', '内容有更改但还未保存'))}</span></label>
           <textarea id="iPersona" placeholder="${escapeHtml(t('instances.personaPlaceholder'))}">${escapeHtml(inst.persona || '')}</textarea>
-          <div class="jingYin" id="iPersonaWeiBaoCun" style="display:none">${escapeHtml(tOr('instances.personaDirty', '内容有更改但还未保存'))}</div>
           <div style="margin-top:6px;display:flex;gap:6px">
-            <button class="anNiuZhuYao" id="iPersonaQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
-            <button class="anNiuXiao" id="iPersonaQuXiao">${escapeHtml(tOr('common.cancel', '取消'))}</button>
+            <button class="anNiuZhuYao" id="iPersonaQueDing" disabled>${escapeHtml(tOr('common.ok', '确定'))}</button>
+            <button class="anNiuXiao" id="iPersonaQuXiao" disabled>${escapeHtml(tOr('common.cancel', '取消'))}</button>
           </div>
         </div>
         <div class="sheZhiKa" style="margin-top:14px" id="iModelcfg">
@@ -5110,19 +5196,26 @@
         if (!ta) return;
         const savedValue = String(inst.persona || '');
         let curSaved = savedValue;
-        const sync = () => { if (dirty) dirty.style.display = (ta.value !== curSaved) ? '' : 'none'; };
+        const sync = () => {
+          const bian = ta.value !== curSaved;
+          if (dirty) dirty.style.display = bian ? '' : 'none';
+          // **无变化时两个按钮都禁用**（产品要求）
+          if (okBtn) okBtn.disabled = !bian;
+          if (cancelBtn) cancelBtn.disabled = !bian;
+        };
+        sync();
         ta.addEventListener('input', sync);
         if (okBtn) okBtn.onclick = () => {
           inst.persona = ta.value;
           curSaved = ta.value;
           try { window.warmy.instancesSave?.({ id: inst.id, persona: ta.value, cognitionFiles: inst.cognitionFiles }); } catch { /* noop */ }
           window.__saveState?.();
-          if (dirty) dirty.style.display = 'none';
+          sync();
           showToast(tOr('common.saved', '已保存'));
         };
         if (cancelBtn) cancelBtn.onclick = () => {
           ta.value = curSaved;
-          if (dirty) dirty.style.display = 'none';
+          sync();
         };
       })();
     })();
@@ -6290,7 +6383,85 @@
         </div>
         <div class="sheZhiSection sheZhiKa" data-sec="mimic">
           <h2>${escapeHtml(tOr('settings.mimic', '拟态'))}</h2>
-          <div class="jingYin">${escapeHtml(tOr('settings.mimicHint', '（预留）拟态相关设置将在此处提供。'))}</div>
+          <p class="jingYin">${escapeHtml(tOr('mimic.hint', '让桌面上出现一个桌宠：可看屏幕、可用语音或文字对话。桌宠必须选定一只牛马作为「原形」，并在「我的牛马」里给它的头像加上拟态外框。'))}</p>
+
+          <div class="field" style="margin-top:10px">
+            <label>${escapeHtml(tOr('mimic.origin', '原形牛马'))}</label>
+            <select id="mimicYuanXing"></select>
+            <div class="jingYin">${escapeHtml(tOr('mimic.originHint', '桌宠使用这只牛马的模型与人格；拟态记忆独立保存，换原形后仍会继承。'))}</div>
+          </div>
+
+          <div class="field" style="margin-top:10px">
+            <label>${escapeHtml(tOr('mimic.voiceMode', '语音互动模式'))}</label>
+            <div id="mimicMoShiJi" style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
+              <label><input type="radio" name="mimicMoShi" value="off"/> ${escapeHtml(tOr('mimic.mode.off', '关闭语音互动（不接受音频、不看屏幕；只在原形牛马里打字才有反应）'))}</label>
+              <label><input type="radio" name="mimicMoShi" value="wake"/> ${escapeHtml(tOr('mimic.mode.wake', '仅关键词唤醒（听到唤醒词才响应；本地小模型守门，省电且隐私最好）'))}</label>
+              <label><input type="radio" name="mimicMoShi" value="always"/> ${escapeHtml(tOr('mimic.mode.always', '持续语音对话（一直听得见、一直会回）'))}</label>
+              <label><input type="radio" name="mimicMoShi" value="smart"/> ${escapeHtml(tOr('mimic.mode.smart', '智能模式（持续接收音频并持续观察屏幕，由单独的判断模型决定要不要回应）'))}</label>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:8px" id="mimicPanDuanMoXingKuai">
+            <label>${escapeHtml(tOr('mimic.judgeModel', '判断模型（仅智能模式使用）'))}</label>
+            <select id="mimicPanDuanMoXing"></select>
+            <div class="jingYin">${escapeHtml(tOr('mimic.judgeModelHint', '智能模式下由它判断"此刻该不该回应"，建议选小而快的模型。'))}</div>
+          </div>
+
+          <div class="field" style="margin-top:8px">
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="mimicZiMu"/> ${escapeHtml(tOr('mimic.subtitle', '显示字幕（回复时出现对话气泡）'))}
+            </label>
+          </div>
+
+          <div class="field" style="margin-top:8px">
+            <label>${escapeHtml(tOr('mimic.character', '人物模型'))}</label>
+            <select id="mimicRenWu"></select>
+            <div class="jingYin">${escapeHtml(tOr('mimic.characterHint', '把模型放进 resources/mimic/characters/ 会被自动识别。'))}</div>
+          </div>
+
+          <div class="field" style="margin-top:8px">
+            <label>${escapeHtml(tOr('mimic.actions', '动作模型'))}</label>
+            <div id="mimicDongZuoJi" class="jingYin">${escapeHtml(tOr('mimic.actionsEmpty', '未发现动作。把动作放进 resources/mimic/actions/ 后在此启用。'))}</div>
+            <div class="jingYin">${escapeHtml(tOr('mimic.actionsHint', '默认全部禁用。启用后请为每条写「触发提示词」，项目会约束模型只在满足条件时才触发。'))}</div>
+          </div>
+
+          <div class="field" style="margin-top:8px" id="mimicSheBeiKuai">
+            <label>${escapeHtml(tOr('mimic.devices', '音频设备'))}</label>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
+              <span class="jingYin" style="min-width:64px">${escapeHtml(tOr('mimic.mic', '麦克风'))}</span>
+              <select id="mimicMaiKeFeng" style="flex:1"></select>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
+              <span class="jingYin" style="min-width:64px">${escapeHtml(tOr('mimic.speaker', '播放器'))}</span>
+              <select id="mimicBoFangQi" style="flex:1"></select>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
+              <span class="jingYin" style="min-width:64px">${escapeHtml(tOr('mimic.volume', '声音大小'))}</span>
+              <input type="range" id="mimicYinLiang" min="0" max="100" step="1" value="90" style="flex:1"/>
+              <span class="jingYin" id="mimicYinLiangZhi" style="min-width:38px">90%</span>
+            </div>
+            <label style="display:flex;align-items:center;gap:6px;margin-top:6px">
+              <input type="checkbox" id="mimicXiTongYin"/> ${escapeHtml(tOr('mimic.sysAudio', '允许接收系统 / 应用的声音'))}
+            </label>
+          </div>
+
+          <div class="field" style="margin-top:8px">
+            <label>${escapeHtml(tOr('mimic.memory', '拟态记忆'))}</label>
+            <div class="jingYin">${escapeHtml(tOr('mimic.memoryHint', '与世界书/会话记忆同一套系统，但单独存一份；换原形牛马后仍继承，原形牛马本身不含这份记忆。'))}</div>
+            <div style="margin-top:4px"><button class="anNiuXiao" id="anNiuMimicQingJiYi">${escapeHtml(tOr('mimic.memoryClear', '清空拟态记忆'))}</button> <span class="jingYin" id="mimicJiYiXiaoXi"></span></div>
+          </div>
+
+          <div class="field" style="margin-top:8px">
+            <label>${escapeHtml(tOr('mimic.tasks', '定时任务'))}</label>
+            <div class="jingYin">${escapeHtml(tOr('mimic.tasksHint', '可以对桌宠说「每天早上八点提醒我喝水」这类话，它会建定时任务。每条任务可单独设置语音 / 字幕 / 音乐提醒。'))}</div>
+            <div id="mimicDingShiJi" class="jingYin">—</div>
+          </div>
+
+          <div class="shiLiHang" style="margin-top:12px">
+            <button class="anNiuZhuYao" id="anNiuMimicKaiShi">${escapeHtml(tOr('mimic.start', '启动桌宠'))}</button>
+            <button class="anNiuXiao" id="anNiuMimicTingZhi">${escapeHtml(tOr('mimic.stop', '收回桌宠'))}</button>
+            <span class="jingYin" id="mimicZhuangTai"></span>
+          </div>
         </div>
         <!--
           关于分区：**标题必须紧贴在内容之前**。
@@ -7074,6 +7245,148 @@
           };
         });
       }
+      /**
+       * ── 拟态设置 ──
+       * 关键联动（产品要求）：切到「关闭语音互动」时，麦克风 / 播放器 / 声音大小 /
+       * 系统音频 这些用不到的项一律**置灰不可用**；智能模式的「判断模型」也只在
+       * 智能模式下才可用。别的模式之间同理。
+       */
+      (function bindMimicSection() {
+        const moShiJi = $('mimicMoShiJi');
+        if (!moShiJi || moShiJi.dataset.bound) return;
+        moShiJi.dataset.bound = '1';
+
+        const setDi = (id, on) => {
+          const el = $(id);
+          if (!el) return;
+          el.disabled = !on;
+          el.style.opacity = on ? '' : '0.45';
+          el.style.cursor = on ? '' : 'not-allowed';
+        };
+        const duMoShi = () => {
+          const v = (document.querySelector('input[name="mimicMoShi"]:checked') || {}).value || 'off';
+          const yuYin = v !== 'off';          // 关语音 ⇒ 一切音频相关都不可用
+          const zhiNeng = v === 'smart';      // 判断模型只在智能模式用
+          const kanPing = v === 'smart';      // 只有智能模式持续看屏幕
+          setDi('mimicMaiKeFeng', yuYin);
+          setDi('mimicBoFangQi', yuYin);
+          setDi('mimicYinLiang', yuYin);
+          setDi('mimicXiTongYin', yuYin && kanPing);
+          setDi('mimicPanDuanMoXing', zhiNeng);
+          return v;
+        };
+        moShiJi.querySelectorAll('input[name="mimicMoShi"]').forEach((r) => {
+          r.onchange = () => {
+            const v = duMoShi();
+            try { window.warmy.settingsSave?.({ mimicVoiceMode: v }); } catch { /* noop */ }
+          };
+        });
+
+        // 音量滑块即时显示
+        const yl = $('mimicYinLiang');
+        const ylz = $('mimicYinLiangZhi');
+        if (yl && ylz) {
+          yl.oninput = () => { ylz.textContent = yl.value + '%'; };
+          yl.onchange = () => { try { window.warmy.settingsSave?.({ mimicVolume: Number(yl.value) / 100 }); } catch { /* noop */ } };
+        }
+        // 字幕开关
+        const zm = $('mimicZiMu');
+        if (zm) zm.onchange = () => { try { window.warmy.settingsSave?.({ mimicSubtitle: !!zm.checked }); } catch { /* noop */ } };
+
+        // 恢复已保存的配置
+        void (async () => {
+          try {
+            const r = await window.warmy.settingsGet?.();
+            const st = (r && r.settings) || {};
+            const v = String(st.mimicVoiceMode || 'off');
+            const rb = moShiJi.querySelector('input[name="mimicMoShi"][value="' + v + '"]');
+            if (rb) rb.checked = true;
+            if (zm) zm.checked = st.mimicSubtitle !== false;
+            if (yl) yl.value = String(Math.round((Number(st.mimicVolume) || 0.9) * 100));
+            if (ylz) ylz.textContent = yl.value + '%';
+          } catch { /* 默认 */ }
+          duMoShi();
+        })();
+
+        // 启动 / 收回桌宠
+        $('anNiuMimicKaiShi')?.addEventListener('click', async () => {
+          const sel = $('mimicRenWu');
+          const ch = sel ? sel.value : '';
+          const r = await window.warmy.mimicStart?.({ character: ch }).catch(() => null);
+          const st = $('mimicZhuangTai');
+          if (st) st.textContent = (r && r.ok) ? tOr('mimic.on', '桌宠已出场') : ((r && r.error) || '');
+        });
+        $('anNiuMimicTingZhi')?.addEventListener('click', async () => {
+          await window.warmy.mimicStop?.().catch(() => null);
+          const st = $('mimicZhuangTai');
+          if (st) st.textContent = tOr('mimic.off', '桌宠已收回');
+        });
+        $('anNiuMimicQingJiYi')?.addEventListener('click', async () => {
+          const x = $('mimicJiYiXiaoXi');
+          try { await window.warmy.settingsSave?.({ mimicMemory: [] }); if (x) x.textContent = tOr('mimic.memoryCleared', '已清空'); }
+          catch { if (x) x.textContent = tOr('common.error', '出错'); }
+        });
+        // 人物模型 / 动作模型：从磁盘扫描（自动识别用户放进目录的文件）
+        void (async () => {
+          try {
+            const rc = await window.warmy.mimicCharacters?.();
+            const sel = $('mimicRenWu');
+            if (sel && rc && rc.ok) {
+              sel.innerHTML = (rc.items || []).map((x) => '<option value="' + escapeHtml(x.id) + '">' + escapeHtml(x.name) + '</option>').join('') || '<option value="">—</option>';
+            }
+          } catch { /* noop */ }
+          try {
+            const ra = await window.warmy.mimicActions?.();
+            const he = $('mimicDongZuoJi');
+            if (he && ra && ra.ok) {
+              const items = ra.items || [];
+              he.innerHTML = items.length
+                ? items.map((x) => '<label style="display:flex;gap:6px;align-items:flex-start;margin:4px 0">' +
+                    '<input type="checkbox" data-mimic-act="' + escapeHtml(x.id) + '"/>' +
+                    '<span style="flex:1"><b>' + escapeHtml(x.name) + '</b>' +
+                    (x.desc ? ' <span class="jingYin">' + escapeHtml(x.desc) + '</span>' : '') +
+                    '<br/><input class="mimicTrigger" data-mimic-trigger="' + escapeHtml(x.id) + '" placeholder="' +
+                    escapeHtml(tOr('mimic.triggerPh', '触发提示词：什么情况下做这个动作')) + '" style="width:100%;margin-top:2px"/></span></label>').join('')
+                : escapeHtml(tOr('mimic.actionsEmpty', '未发现动作。把动作放进 resources/mimic/actions/ 后在此启用。'));
+              he.querySelectorAll('[data-mimic-act]').forEach((ck) => {
+                ck.onchange = () => {
+                  const tri = he.querySelector('[data-mimic-trigger="' + CSS.escape(ck.dataset.mimicAct) + '"]');
+                  try {
+                    window.warmy.settingsSave?.({
+                      mimicActions: Object.assign({}, (window.__mimicActions || {}), {
+                        [ck.dataset.mimicAct]: { enabled: ck.checked, trigger: tri ? tri.value : '' },
+                      }),
+                    });
+                  } catch { /* noop */ }
+                };
+              });
+              he.querySelectorAll('[data-mimic-trigger]').forEach((inp) => {
+                inp.onchange = () => {
+                  const ck = he.querySelector('[data-mimic-act="' + CSS.escape(inp.dataset.mimicTrigger) + '"]');
+                  try {
+                    window.warmy.settingsSave?.({
+                      mimicActions: Object.assign({}, (window.__mimicActions || {}), {
+                        [inp.dataset.mimicTrigger]: { enabled: !!(ck && ck.checked), trigger: inp.value },
+                      }),
+                    });
+                  } catch { /* noop */ }
+                };
+              });
+            }
+          } catch { /* noop */ }
+        })();
+
+        // 原形牛马下拉（从 state.instances 取）
+        try {
+          const sel = $('mimicYuanXing');
+          if (sel) {
+            sel.innerHTML = (state.instances || [])
+              .map((i) => '<option value="' + escapeHtml(i.id) + '">' + escapeHtml(mingOf(i) || i.id) + '</option>')
+              .join('') || '<option value="">—</option>';
+          }
+        } catch { /* noop */ }
+      })();
+
       window.__renderPluginList = renderPluginList;
 
       // ── 门禁列表（可勾选启用，默认全勾）──
@@ -7235,6 +7548,42 @@
       };
       window.__shangXiaWenBiaoQian = shangXiaWenBiaoQian;
       window.__kindWenAn = kindWenAn;
+      /**
+       * **能力标签**（产品要求：不要"模型"两个字，直接写它会干什么）。
+       * 返回短标签数组，如 ['对话','看图','工具'] / ['向量']。
+       */
+      function nengLiBiaoQian(nl) {
+        const out = [];
+        const k = String((nl && nl.kind) || '');
+        if (k === 'chat' || k === 'unknown' || !k) out.push('对话');
+        else if (k === 'embedding') out.push('向量');
+        else if (k === 'asr') out.push('听写');
+        else if (k === 'tts') out.push('朗读');
+        else if (k === 'image') out.push('画图');
+        else if (k === 'imageUnd') out.push('识图');
+        else if (k === 'videoGen') out.push('做视频');
+        else if (k === 'videoUnd') out.push('看视频');
+        else if (k === 'rerank') out.push('重排');
+        else if (k === 'translate') out.push('翻译');
+        else if (k === 'safety') out.push('审核');
+        else if (k === 'decision') out.push('决策');
+        if (nl && nl.vision === true && !out.includes('识图') && !out.includes('画图')) out.push('看图');
+        if (nl && nl.tools === true) out.push('工具');
+        return out;
+      }
+      window.__nengLiBiaoQian = nengLiBiaoQian;
+      /** 渲染成一串小标签 HTML */
+      function nengLiBiaoQianHtml(nl) {
+        return nengLiBiaoQian(nl).map((x) => '<span class="moXingNengLi">' + escapeHtml(x) + '</span>').join('');
+      }
+      window.__nengLiBiaoQianHtml = nengLiBiaoQianHtml;
+      /** **能不能聊天**（不能聊的不能选为可用模型、也不进调用链） */
+      function keYiLiaoTian(nl) {
+        const k = String((nl && nl.kind) || '');
+        if (!k || k === 'unknown' || k === 'chat') return true;
+        return false;
+      }
+      window.__keYiLiaoTian = keYiLiaoTian;
       function renderSmLian(key, allIds) {
         const he = $(SM_HE_JI[key]);
         if (!he) return;
@@ -7281,7 +7630,7 @@
         he.innerHTML = st.chain.map((m, i) => {
           const nl = nengLi[m] || {};
           const ctxB = nl.contextLen ? ' <span class="moXingCtx" title="' + escapeHtml(tOr('model.contextLen', '上下文长度')) + '">' + escapeHtml(shangXiaWenBiaoQian(nl.contextLen)) + '</span>' : '';
-          const kindB = (nl.kind && nl.kind !== 'unknown') ? ' <span class="moXingKind">' + escapeHtml(kindWenAn(nl.kind)) + '</span>' : '';
+          const kindB = window.__nengLiBiaoQianHtml ? window.__nengLiBiaoQianHtml(nl) : '';
           // **说话模型**等有专属参数（语速/语音）：拉取时拿到就摆出来可调
           let zhuan = '';
           if (nl.kind === 'tts') {
@@ -8207,7 +8556,7 @@
                 escapeHtml(m) +
                 (function () {
                   const nl = (window.__modelCapsOf ? window.__modelCapsOf(m) : ((window.__moXingNengLi || {})[m] || {}));
-                  const k = nl.kind && nl.kind !== 'unknown' ? ' <span class="moXingKind">' + escapeHtml(kindWenAn(nl.kind)) + '</span>' : '';
+                  const k = window.__nengLiBiaoQianHtml ? window.__nengLiBiaoQianHtml(nl) : '';
                   const c = nl.contextLen ? ' <span class="moXingCtx">' + escapeHtml(shangXiaWenBiaoQian(nl.contextLen)) + '</span>' : '';
                   return k + c;
                 })() +
@@ -15369,13 +15718,16 @@
           models.length
             ? models.map((m) => {
                 const nl = (window.__modelCapsOf ? window.__modelCapsOf(m) : ((window.__moXingNengLi || {})[m] || {}));
-                const buKeLiao = nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat' && !(nl.kind === 'chat' && nl.vision === true);
-                /** **不能调用工具**（embedding 等）或**不是聊天模型**都给警示 */
-                const wuGongJu = nl.tools === false || (nl.kind && nl.kind !== 'unknown' && nl.kind !== 'chat' && nl.kind !== 'unknown');
+                /** **不能聊天就不能选**（产品要求：无法聊天的模型不能成为可用模型，也不进调用链） */
+                const buKeLiao = !(window.__keYiLiaoTian ? window.__keYiLiaoTian(nl) : true);
+                /** 能聊天但不支持工具 ⇒ 警示 */
+                const wuGongJu = nl.tools === false && !buKeLiao;
                 const jingGaoSvg = '<svg class="moXingJingGao" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1L15 14H1L8 1Z" fill="none" stroke="#e6a23c" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="9" stroke="#e6a23c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.8" fill="#e6a23c"/></svg>';
                 const jingGao = wuGongJu ? ' <span class="moXingJingGaoWrap" title="' + escapeHtml(tOr('model.noToolsWarn', '该模型无法调用工具执行任务，只能纯聊天')) + '">' + jingGaoSvg + '</span>' : '';
+                const buKe = buKeLiao ? ' <span class="moXingJingGaoWrap" title="' + escapeHtml(tOr('model.notChatWarn', '该模型不是聊天模型，无法用于对话')) + '">' + jingGaoSvg + '</span>' : '';
+                const tags = window.__nengLiBiaoQianHtml ? window.__nengLiBiaoQianHtml(nl) : '';
                 const hui = buKeLiao ? ' style="opacity:0.45;cursor:not-allowed"' : '';
-                return `<span class="moXingChip"${hui}>${escapeHtml(m)}${jingGao}${
+                return `<span class="moXingChip"${hui}>${escapeHtml(m)}${tags}${jingGao}${buKe}${
                   editable && !buKeLiao ? `<button class="x" data-mgdel="${suoYin}" data-m="${escapeHtml(m)}" title="${escapeHtml(t('settings.removeModel'))}">×</button>` : ''
                 }</span>`;
               }).join('')
@@ -15384,12 +15736,23 @@
         <label class="mgrLb">${escapeHtml(t('instances.fallbackChain'))}</label>
         <ol class="mgrChain">${
           chain.length
-            ? chain.map((m, k) => `<li data-chain="${suoYin}" data-k="${k}"${editable ? ' draggable="true"' : ''}>
-                <span class="mgrChainMing">${escapeHtml(m)}</span>
+            ? chain.filter((m) => {
+                // **不能聊天的模型不进调用链**（产品要求）
+                const nl = (window.__modelCapsOf ? window.__modelCapsOf(m) : ((window.__moXingNengLi || {})[m] || {}));
+                return window.__keYiLiaoTian ? window.__keYiLiaoTian(nl) : true;
+              }).map((m, k) => {
+                const nl = (window.__modelCapsOf ? window.__modelCapsOf(m) : ((window.__moXingNengLi || {})[m] || {}));
+                const tags = window.__nengLiBiaoQianHtml ? window.__nengLiBiaoQianHtml(nl) : '';
+                const wuGongJu = nl.tools === false;
+                const svg = '<svg class="moXingJingGao" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 1L15 14H1L8 1Z" fill="none" stroke="#e6a23c" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="9" stroke="#e6a23c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.8" fill="#e6a23c"/></svg>';
+                const jg = wuGongJu ? ' <span class="moXingJingGaoWrap" title="' + escapeHtml(tOr('model.noToolsWarn', '该模型无法调用工具执行任务，只能纯聊天')) + '">' + svg + '</span>' : '';
+                return `<li data-chain="${suoYin}" data-k="${k}"${editable ? ' draggable="true"' : ''}>
+                <span class="mgrChainMing">${escapeHtml(m)}${tags}${jg}</span>
                 ${editable ? `
                   <button class="anNiuXiao" data-mgup="${suoYin}" data-k="${k}"${k === 0 ? ' disabled' : ''}>↑</button>
                   <button class="anNiuXiao" data-mgdn="${suoYin}" data-k="${k}"${k === chain.length - 1 ? ' disabled' : ''}>↓</button>` : ''}
-              </li>`).join('')
+              </li>`;
+              }).join('')
             : '<li class="jingYin">—</li>'
         }</ol>
       </div>

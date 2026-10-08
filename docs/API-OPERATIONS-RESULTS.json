@@ -1,24 +1,24 @@
 {
-  "at": "2026-10-08T13:20:52.135Z",
+  "at": "2026-10-08T17:51:17.581Z",
   "total": 46,
   "ok": 46,
   "results": [
     {
       "ming": "hardware",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "resultPreview": "{\"cpus\":32,\"suggested\":8,\"max\":8}"
     },
     {
       "ming": "listInstances",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "[]"
     },
     {
       "ming": "securityMode",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "\"normal\""
     },
     {
@@ -66,14 +66,14 @@
     {
       "ming": "getProvider",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"providerCfg\":{\"presetId\":\"deepseek\",\"apiKey\":\"\",\"baseURL\":\"\",\"model\":\"deepseek-chat\",\"protocol\":\"openai-compatible\"},\"hasKey\":false}"
     },
     {
       "ming": "checkpointList",
       "ok": true,
       "ms": 0,
-      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1791465651573,\"imageDigests\":{}},\"…"
+      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1791481877046,\"imageDigests\":{}},\"…"
     },
     {
       "ming": "knowledgeQuery",
@@ -84,13 +84,13 @@
     {
       "ming": "metricsSummary",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"turns\":0,\"avgDurationMs\":0,\"promptTokens\":0,\"completionTokens\":0,\"cacheHitRate\":0,\"cacheHitTokens\":0,\"cacheMissTokens\":0,\"ccrOriginalBytes\":0,\"ccrCompressedBytes\":0,\"ccrRatio\":1,\"viewSampl…"
     },
     {
       "ming": "settingsGet",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"settings\":{\"yuYan\":\"zh-CN\",\"themeMode\":\"system\",\"accent\":\"#A78567\",\"sound\":{\"complete\":true,\"request\":true,\"error\":true},\"soundFiles\":{\"complete\":\"\",\"request\":\"\",\"error\":\"\"},\"emailOnReques…"
     },
     {
@@ -108,7 +108,7 @@
     {
       "ming": "skillsScanDirsGet",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"dirs\":[],\"scanDirs\":[],\"max\":10}"
     },
     {
@@ -126,7 +126,7 @@
     {
       "ming": "profileGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"profile\":{\"username\":\"主人\",\"avatarDataUrl\":\"\",\"email\":\"\",\"deviceId\":\"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5\",\"deviceIdSig\":\"bc6111d1f9d967bda223facfcd7dd0fd83f6ac3e1518d4e7d816…"
     },
     {
@@ -138,7 +138,7 @@
     {
       "ming": "identityInfo",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"identity\":{\"bieMing\":\"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5\",\"zhiWen\":\"P9C7Z-X9XY7-JY9WS-VG1BT\",\"generation\":1,\"algo\":\"Ed25519\",\"createdAt\":1790791478634,\"updatedAt\":17907914…"
     },
     {
@@ -150,7 +150,7 @@
     {
       "ming": "netStatus",
       "ok": true,
-      "ms": 6,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"meshEnabled\":false,\"link\":{\"reachable\":false,\"lastError\":\"mesh-disabled\",\"peers\":[]},\"nodeId\":\"jieDian8af5ad76\",\"sessions\":0,\"unlock\":{\"mode\":\"os\",\"unlocked\":true,\"needsPassphrase\":false,\"…"
     },
     {
@@ -186,32 +186,32 @@
     {
       "ming": "lanStatus",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"listening\":false,\"nodeId\":\"jieDian8af5ad76\"}"
     },
     {
       "ming": "meshStatus",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"listening\":false,\"nodeId\":\"jieDian8af5ad76\",\"peerCount\":0,\"sessions\":0}"
     },
     {
       "ming": "platformInfo",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"platform\":\"win32\",\"isMac\":false,\"isWin\":true,\"isLinux\":false}"
     },
     {
       "ming": "costSummary",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"turns\":0,\"promptTokens\":0,\"completionTokens\":0,\"cacheHitRate\":0,\"avgDurationMs\":0,\"estCostCny\":0}"
     },
     {
       "ming": "memoryRecall",
       "ok": true,
       "ms": 7,
-      "resultPreview": "{\"id\":4,\"ok\":true,\"cards\":[],\"timings\":{\"totalMs\":5,\"hydrateMs\":0,\"embedQueryMs\":4,\"uniMs\":0,\"triMs\":1,\"vecMs\":0,\"fuseMs\":0,\"cosines\":0,\"hydrated\":0,\"vectorBelowThreshold\":0,\"vectorUnkRatio\":0.5},\"sco…"
+      "resultPreview": "{\"id\":4,\"ok\":true,\"cards\":[],\"timings\":{\"totalMs\":5,\"hydrateMs\":0,\"embedQueryMs\":4,\"uniMs\":0,\"triMs\":0,\"vecMs\":0,\"fuseMs\":0,\"cosines\":0,\"hydrated\":0,\"vectorBelowThreshold\":0,\"vectorUnkRatio\":0.5},\"sco…"
     },
     {
       "ming": "i18n",
@@ -228,7 +228,7 @@
     {
       "ming": "projectState",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"state\":{\"devEnv\":\"host\",\"containerOnly\":false,\"running\":true,\"stopped\":false,\"code\":\"host-dev\",\"hostEditingRefused\":false,\"developmentAllowed\":true,\"developmentWhere\":\"host\",\"testingAllowe…"
     },
     {
@@ -240,13 +240,13 @@
     {
       "ming": "aiQuestionList",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"items\":[]}"
     },
     {
       "ming": "archiveList",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"entries\":[]}"
     },
     {
@@ -258,14 +258,14 @@
     {
       "ming": "groupMembers",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"groupId\":\"\",\"members\":[],\"localIsCreator\":false}"
     },
     {
       "ming": "containerProbe",
       "ok": true,
-      "ms": 498,
-      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1791465652122,\"elapsedMs\":496,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
+      "ms": 479,
+      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1791481877568,\"elapsedMs\":477,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
     },
     {
       "ming": "netPortCandidates",
@@ -277,7 +277,7 @@
       "ming": "chatLogRestore",
       "ok": true,
       "ms": 1,
-      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1791465652134},\"sessions\":[],\"logSeq\":0}"
+      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1791481877579},\"sessions\":[],\"logSeq\":0}"
     }
   ]
 }

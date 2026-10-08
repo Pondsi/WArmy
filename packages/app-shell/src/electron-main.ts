@@ -614,6 +614,16 @@ function qingChongXieJiLu(sid?: string): void {
   for (const k of [...__yiXieRu.keys()]) if (k.startsWith(sid + '|')) __yiXieRu.delete(k);
 }
 
+/**
+ * **会话镜像的唯一写入点**（不变量：日志是唯一事实来源，镜像只能由日志派生）。
+ * hidden（内部指令）与普通消息都走这里 ⇒ 源码里不会再出现第二处镜像写入。
+ */
+function jingXiangXieRu(key: string, role: LiaoTianXiaoXi['role'], content: string): void {
+  const yingshe = chatHistories.get(key);
+  if (yingshe) yingshe.push({ role, content });
+  else chatHistories.set(key, [{ role, content }]);
+}
+
 function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
   // 归一后写入：去重、镜像、回读全部只认这一套角色名
   const tiaoMu = { ...entry, role: guiYiJiaoSe(entry.role) } as LogEntry;
@@ -622,9 +632,7 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
    * 自动续派的工单只进模型上下文（chatHistories），不进会话日志（chatLogs）⇒ 界面不显示。
    */
   if ((entry as { hidden?: boolean }).hidden) {
-    const yingshe = chatHistories.get(key);
-    if (yingshe) yingshe.push({ role: tiaoMu.role, content: tiaoMu.content });
-    else chatHistories.set(key, [{ role: tiaoMu.role, content: tiaoMu.content }]);
+    jingXiangXieRu(key, tiaoMu.role, tiaoMu.content);
     return;
   }
   /**
@@ -674,9 +682,7 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
   const shuZu = chatLogs.get(key);
   if (shuZu) shuZu.push(tiaoMu);
   else chatLogs.set(key, [tiaoMu]);
-  const yingshe = chatHistories.get(key);
-  if (yingshe) yingshe.push({ role: tiaoMu.role, content: tiaoMu.content });
-  else chatHistories.set(key, [{ role: tiaoMu.role, content: tiaoMu.content }]);
+  jingXiangXieRu(key, tiaoMu.role, tiaoMu.content);
   /**
    * 日志一写就**播给所有窗口**：对方（另一个窗口）据此重新拉一次该会话的日志。
    * 只带 sessionId 与 seq，不带正文 —— 正文仍由渲染层按既有通道回读，
@@ -3338,6 +3344,199 @@ chuliIpc('warmy:tingZhiDuiHua', (_e, sessionId: string) => {
     return true;
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+
+/**
+ * ══════════════════════════════════════════════════════════════
+ * 拟态（桌宠）
+ * ── 窗口要点（依 Electron 官方实践 / issue #52456）：
+ *    transparent + frame:false + alwaysOnTop + skipTaskbar + focusable:false；
+ *    **点击穿透**用 `setIgnoreMouseEvents(true, { forward: true })`，
+ *    并且只在鼠标**离开桌宠本体**时开启穿透（否则它会把桌面上所有点击都吃掉）。
+ * ══════════════════════════════════════════════════════════════
+ */
+let mimicWin: BrowserWindow | null = null;
+let mimicDragCun: { x: number; y: number; bx: number; by: number } | null = null;
+
+/** 拟态资源根目录：优先用户数据目录，其次随包资源目录 */
+function mimicGen(): { chars: string; actions: string; users: string } {
+  const users = path.join(app.getPath('userData'), 'mimic');
+  const bundled = path.join(__dirname, 'renderer', 'mimic');
+  return { chars: bundled, actions: bundled, users };
+}
+
+/** 扫描人物模型（静态图 / 精灵图 JSON / Live2D） */
+function mimicSaoRenWu(): Array<{ id: string; name: string; file: string; kind: string }> {
+  const out: Array<{ id: string; name: string; file: string; kind: string }> = [];
+  const roots: string[] = [];
+  try { roots.push(path.join(app.getPath('userData'), 'mimic', 'characters')); } catch { /* noop */ }
+  try { roots.push(path.join(__dirname, 'renderer', 'mimic', 'characters')); } catch { /* noop */ }
+  for (const root of roots) {
+    let names: string[] = [];
+    try { names = fs.readdirSync(root); } catch { continue; }
+    for (const n of names) {
+      const fp = path.join(root, n);
+      const ext = path.extname(n).toLowerCase();
+      // 内置默认（随包）用 app 相对路径，用户目录用 file://
+      const isBundled = root.includes(path.join('renderer', 'mimic'));
+      const ref = isBundled ? './mimic/characters/' + n : 'file://' + fp.replace(/\\/g, '/');
+      if (ext === '.json') {
+        // 精灵图定义
+        try {
+          const d = JSON.parse(fs.readFileSync(fp, 'utf8'));
+          const sheet = String(d.sheet || d.image || n.replace(/\.json$/i, '.png'));
+          const sheetRef = isBundled ? './mimic/characters/' + sheet : 'file://' + path.join(path.dirname(fp), sheet).replace(/\\/g, '/');
+          out.push({ id: n.replace(/\.json$/i, ''), name: String(d.name || n.replace(/\.json$/i, '')), file: sheetRef, kind: 'sheet' });
+        } catch { /* 坏 json 跳过 */ }
+      } else if (ext === '.model3.json') {
+        out.push({ id: n.replace(/\.model3\.json$/i, ''), name: n.replace(/\.model3\.json$/i, ''), file: ref, kind: 'live2d' });
+      } else if (['.png', '.webp', '.gif', '.svg'].includes(ext)) {
+        out.push({ id: n.replace(/\.[^.]+$/, ''), name: n.replace(/\.[^.]+$/, ''), file: ref, kind: 'image' });
+      }
+    }
+  }
+  // 去重（同名以内置优先）
+  const jian = new Map<string, { id: string; name: string; file: string; kind: string }>();
+  for (const x of out) if (!jian.has(x.id)) jian.set(x.id, x);
+  return [...jian.values()];
+}
+
+/** 扫描动作模型（每个子目录一个 action.json） */
+function mimicSaoDongZuo(): Array<{ id: string; name: string; desc: string; trigger: string; duration: number; cooldown: number; priority: number; file: string }> {
+  const out: Array<{ id: string; name: string; desc: string; trigger: string; duration: number; cooldown: number; priority: number; file: string }> = [];
+  const roots: Array<{ root: string; bundled: boolean }> = [];
+  try { roots.push({ root: path.join(app.getPath('userData'), 'mimic', 'actions'), bundled: false }); } catch { /* noop */ }
+  try { roots.push({ root: path.join(__dirname, 'renderer', 'mimic', 'actions'), bundled: true }); } catch { /* noop */ }
+  for (const { root, bundled } of roots) {
+    let subs: string[] = [];
+    try { subs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { continue; }
+    for (const d of subs) {
+      const jp = path.join(root, d, 'action.json');
+      try {
+        const j = JSON.parse(fs.readFileSync(jp, 'utf8'));
+        const sheet = String(j.sheet?.image || 'sheet.png');
+        const ref = bundled ? './mimic/actions/' + d + '/' + sheet
+          : 'file://' + path.join(root, d, sheet).replace(/\\/g, '/');
+        out.push({
+          id: d,
+          name: String(j.name || d),
+          desc: String(j.desc || ''),
+          trigger: String(j.trigger || ''),
+          duration: Number(j.duration) || 1500,
+          cooldown: Number(j.cooldown) || 8000,
+          priority: Number(j.priority) || 5,
+          file: ref,
+        });
+      } catch { /* 没 action.json 或坏 json：跳过 */ }
+    }
+  }
+  return out;
+}
+
+chuliIpc('warmy:mimicRenWuLieBiao', () => ({ ok: true, items: mimicSaoRenWu() }));
+chuliIpc('warmy:mimicDongZuoLieBiao', () => ({ ok: true, items: mimicSaoDongZuo() }));
+
+/** 启动桌宠窗口 */
+chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
+  try {
+    if (mimicWin && !mimicWin.isDestroyed()) {
+      try { mimicWin.focus(); } catch { /* noop */ }
+      return { ok: true, already: true };
+    }
+    const disp = screen.getPrimaryDisplay();
+    const wa = disp.workAreaSize;
+    const W = 240, H = 260;
+    mimicWin = new BrowserWindow({
+      width: W, height: H,
+      x: Math.round(wa.width - W - 40), y: Math.round(wa.height - H - 20),
+      frame: false, transparent: true, resizable: false, movable: true,
+      alwaysOnTop: true, skipTaskbar: true, focusable: false, hasShadow: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'mimic-preload.cjs'),
+        contextIsolation: true, nodeIntegration: false, webSecurity: true,
+        backgroundThrottling: false,
+      },
+    });
+    mimicWin.setAlwaysOnTop(true, 'screen-saver');
+    // 初始整窗穿透；渲染层会在鼠标进入桌宠本体时关掉穿透
+    try { mimicWin.setIgnoreMouseEvents(true, { forward: true }); } catch { /* noop */ }
+    await mimicWin.loadFile(path.join(__dirname, 'renderer', 'mimic.html'));
+    const cap = String(p0?.character || '');
+    if (cap) {
+      const list = mimicSaoRenWu();
+      const hit = list.find((x) => x.id === cap) || list[0];
+      if (hit) { try { mimicWin.webContents.send('warmy:mimicSetTi', { src: hit.file }); } catch { /* noop */ } }
+    }
+    mimicWin.on('closed', () => { mimicWin = null; });
+    try { broadcastToWindows('warmy:mimicState', { on: true }); } catch { /* noop */ }
+    audit?.log('mimic.start', { character: cap });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+chuliIpc('warmy:mimicStop', () => {
+  try {
+    if (mimicWin && !mimicWin.isDestroyed()) mimicWin.close();
+    mimicWin = null;
+    try { broadcastToWindows('warmy:mimicState', { on: false }); } catch { /* noop */ }
+    audit?.log('mimic.stop', {});
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+chuliIpc('warmy:mimicZhuangTai', () => ({ ok: true, on: !!(mimicWin && !mimicWin.isDestroyed()) }));
+
+/** 让桌宠说话（字幕 + 可选语音由渲染层负责） */
+chuliIpc('warmy:mimicShuo', (_e, p0?: { text?: string; ms?: number }) => {
+  try {
+    if (mimicWin && !mimicWin.isDestroyed()) {
+      mimicWin.webContents.send('warmy:mimicSay', { text: String(p0?.text || ''), ms: Number(p0?.ms) || 0 });
+    }
+    return { ok: true };
+  } catch { return { ok: false }; }
+});
+
+/** 状态灯（语音模式开着时亮） */
+chuliIpc('warmy:mimicDian', (_e, p0?: { on?: boolean }) => {
+  try {
+    if (mimicWin && !mimicWin.isDestroyed()) mimicWin.webContents.send('warmy:mimicDot', { on: !!p0?.on });
+    return { ok: true };
+  } catch { return { ok: false }; }
+});
+
+/** 拖动桌宠：用屏幕坐标差移动窗口（不是 CSS 位移，桌宠不会跑出屏幕） */
+ipcMain.on('warmy:mimicDragStart', (_e, p0?: { x?: number; y?: number }) => {
+  try {
+    if (!mimicWin || mimicWin.isDestroyed()) return;
+    const b = mimicWin.getBounds();
+    mimicDragCun = { x: Number(p0?.x) || 0, y: Number(p0?.y) || 0, bx: b.x, by: b.y };
+  } catch { /* noop */ }
+});
+ipcMain.on('warmy:mimicDragMove', (_e, p0?: { x?: number; y?: number }) => {
+  try {
+    if (!mimicWin || mimicWin.isDestroyed() || !mimicDragCun) return;
+    const dx = (Number(p0?.x) || 0) - mimicDragCun.x;
+    const dy = (Number(p0?.y) || 0) - mimicDragCun.y;
+    const b = mimicWin.getBounds();
+    const wa = screen.getPrimaryDisplay().workAreaSize;
+    const nx = Math.max(-b.width / 3, Math.min(wa.width - b.width * 2 / 3, mimicDragCun.bx + dx));
+    const ny = Math.max(0, Math.min(wa.height - b.height / 3, mimicDragCun.by + dy));
+    mimicWin.setBounds({ x: Math.round(nx), y: Math.round(ny), width: b.width, height: b.height });
+  } catch { /* noop */ }
+});
+ipcMain.on('warmy:mimicDragEnd', () => { mimicDragCun = null; });
+
+/** 点击穿透开关（Windows 支持 forward，鼠标移动事件仍能到渲染层） */
+ipcMain.on('warmy:mimicClickThrough', (_e, on: boolean) => {
+  try { if (mimicWin && !mimicWin.isDestroyed()) mimicWin.setIgnoreMouseEvents(!!on, { forward: true }); } catch { /* noop */ }
+});
+
+/** 双击桌宠 ⇒ 唤醒主窗口并打开与原形牛马的会话 */
+ipcMain.on('warmy:mimicOpenChat', () => {
+  try {
+    if (win && !win.isDestroyed()) { win.show(); win.focus(); broadcastToWindows('warmy:mimicOpenChat', {}); }
+  } catch { /* noop */ }
+});
+
 chuliIpc('warmy:anQuanMoShi', () => anQuanChuLi(() => p1?.security.getMode(), 'normal'));
 chuliIpc(
   'warmy:sheZhiAnQuanMoShi',

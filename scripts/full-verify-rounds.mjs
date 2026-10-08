@@ -320,8 +320,13 @@ function unitChecks() {
   // 2) 粗细/大小同一行；5) 小弟到 50
   if (!appJs.includes('ziTiCuXiShu') || !/max="650"/.test(appJs)) fails.push('font: 粗细/大小同行缺失（或字号范围不是 15-650）');
   if (!appJs.includes('[0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 30, 40, 50]')) fails.push('xiaoDi: 选项未到 50');
-  // 9) 前景色多级灰阶（不止黑白两档）
-  if (!/y > 0\.82/.test(appJs) || !/return '#3d3d3d'/.test(appJs)) fails.push('contrast: 仍只有黑白两档');
+  // 9) 前景色：WCAG 相对亮度 + 对比度选色，且**不能退化成纯黑白两档**
+  {
+    const hasWcag = /0\.03928/.test(appJs) && /Math\.pow\(\(x \+ 0\.055\) \/ 1\.055, 2\.4\)/.test(appJs);
+    // 多级色阶：源码里出现 ≥4 个十六进制色字面量（黑/深灰/浅灰/白各一档）
+    const duoDang = (appJs.match(/'#[0-9a-fA-F]{6}'/g) || []).length >= 4;
+    if (!hasWcag || !duoDang) fails.push('contrast: 前景色未按 WCAG 算、或退化成黑白两档');
+  }
   // ── 本轮（第四批）专项 ──
   // 1) 决策模型（模型选项卡内，独立调用链；UI 叫「决策模型」，内部键 fenLei*）
   // 分类/决策模型：**牛马局里那份已按产品要求移除**（用不到）；全局那份在「设置 → 模型」里，必须还在

@@ -101,6 +101,18 @@ function makeCopy(tag, opts = {}) {
   fs.mkdirSync(appRoot, { recursive: true });
   fs.cpSync(path.join(pkgRoot, 'dist'), path.join(appRoot, 'dist'), { recursive: true });
   fs.copyFileSync(path.join(pkgRoot, 'package.json'), path.join(appRoot, 'package.json'));
+  /**
+   * **临时副本要有 node_modules**（真事故：`Cannot find package '@warmy/memory-os'`）。
+   * dist 里的 ESM 仍按包名 import 工作区包，副本若不建链接就解析失败、主进程直接崩。
+   * 用 junction 指回真实的 node_modules（Windows 上目录符号链接需管理员，junction 不需要）。
+   */
+  {
+    const nm = path.join(appRoot, 'node_modules');
+    const src = path.join(pkgRoot, 'node_modules');
+    try {
+      if (!fs.existsSync(nm) && fs.existsSync(src)) fs.symlinkSync(src, nm, 'junction');
+    } catch { /* 建不了就跳过（非 Windows / 权限不足），后续按原有行为 */ }
+  }
   const userData = opts.userData || path.join(root, 'userdata');
   fs.mkdirSync(userData, { recursive: true });
   const mainFile = path.join(appRoot, 'dist', 'electron-main.js');

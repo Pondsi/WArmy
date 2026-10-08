@@ -313,6 +313,17 @@ export class OllamaGongYing extends JichuGongYing {
               if (Number.isFinite(n) && n > 0) { contextLen = Math.floor(n); break; }
             }
           }
+          /**
+           * **运行时上下文优先**（真机反馈修）：`model_info.*.context_length` 是模型的
+           * **架构上限**（如 262144），而 `parameters` 里的 `num_ctx` 才是**实际跑用多少**
+           * （如 131072）。预算滑块要跟"实际能用的窗口"走，否则显示虚高。
+           */
+          const can = String((j as { parameters?: string }).parameters || '');
+          const mn = can.match(/^\s*num_ctx\s+(\d+)\s*$/im);
+          if (mn) {
+            const nn = Number(mn[1]);
+            if (Number.isFinite(nn) && nn >= 1024) contextLen = Math.floor(nn);
+          }
           if (supportsThinking) thinkLevels = ['low', 'medium', 'high'];
         }
       } catch {

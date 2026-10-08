@@ -2971,3 +2971,15 @@ html { font-weight: var(--fw-ui, 400); }
 .yinYongGuan { flex-shrink: 0; background: none; border: none; cursor: pointer; color: var(--muted);
   font-size: 16px; line-height: 1; padding: 0 4px; border-radius: 4px; }
 .yinYongGuan:hover { background: var(--line); color: var(--ink); }
+
+/* 「写入认知」标题后的未保存提示：强调色、小字、左侧留白 */
+.personaDirty { margin-left: 8px; color: var(--accent); font-size: var(--fs-xs); font-weight: 500; }
+
+/* 模型能力标签：小圆角胶囊，多个并排 */
+.moXingNengLi { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px;
+  font-size: 10px; line-height: 15px; background: var(--line); color: var(--muted); vertical-align: middle; }
+
+/* 拟态外框：被选为桌宠「原形」的牛马头像加一圈强调色环 + 小角标 */
+.mimicKuang { box-shadow: 0 0 0 2px var(--accent), 0 0 8px 1px color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 50%; position: relative; }
+.mimicKuang::after { content: ''; position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px;
+  background: var(--accent); border: 1.5px solid var(--card, #fff); border-radius: 50%; }
