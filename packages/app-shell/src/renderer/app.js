@@ -602,10 +602,15 @@
    * 拟物；**不含政治、宗教、肤色、国籍因素**；并且全部**零圆形元素**。
    * 默认头像见 PERSON_DEFAULT（`user-default.svg`），它本身不在这份可选列表里。
    */
-  const PERSON_AVATARS = [
+  const PERSON_AVATARS_ALL = [
     ...Array.from({ length: 10 }, (_, i) => `./icons/avatars/person-${i + 1}.svg`),
     ...Array.from({ length: 17 }, (_, i) => `./icons/avatars/abs-${i + 1}.svg`),
   ];
+  /**
+   * 用户要求：把可选列表里的**第 1 个**与**第 15 个**去掉（1 起数）。
+   * 第 1 个改作默认头像（见 PERSON_DEFAULT），所以它不必再出现在可选列表里。
+   */
+  const PERSON_AVATARS = PERSON_AVATARS_ALL.filter((_, i) => i !== 0 && i !== 14);
   /**
    * **牛马**预设头像：preset-1..10。
    * 真事故（用户反馈「牛马头像里怎么有我最近做的用户头像」）：之前把**用户默认头像**
@@ -613,12 +618,8 @@
    * 现在两套彻底分开：牛马只用 preset-1..10；用户默认头像独立成一个文件，不进任何可选列表。
    */
   const PRESET_AVATARS = Array.from({ length: 10 }, (_, i) => `./icons/avatars/preset-${i + 1}.svg`);
-  /**
-   * 用户默认头像：**纯拟人角色**（无发型/衣着/道具/姿势 ⇒ 性别、年龄、肤色、职业全都无从谈起）。
-   * 两版教训：纯剪影+抬手被读成"战斗"，礼帽+墨镜被读成"老板/某种职业" ——
-   * 凡是能编出身份的东西都会带出偏见，所以这版只留一个抽象小人。
-   */
-  const PERSON_DEFAULT = './icons/avatars/user-default.svg';
+  /** 用户默认头像：用列表里的第 1 个（`person-1.svg`）—— 原来那张自绘默认头像已按用户要求删除 */
+  const PERSON_DEFAULT = './icons/avatars/person-1.svg';
 
   /** 我的头像：自定义图片 > 选定的人物头像 > 新的默认主理人头像 */
   function personAvatarSrc(p) {
@@ -6501,6 +6502,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
           <button data-sec="gate">${escapeHtml(tOr('settings.tabGates', '门禁'))}</button>
           <button data-sec="hotkey">${escapeHtml(t('settings.section.hotkey'))}</button>
           <button data-sec="mimic">${escapeHtml(tOr('settings.mimic', '拟态'))}</button>
+          <button data-sec="sponsor">${escapeHtml(tOr('sponsor.biaoTi', '赞助'))}</button>
           <button data-sec="about">${escapeHtml(t('settings.section.about'))}</button>
         </div>
         <div class="peiZhiNeiRong" id="peiZhiNeiRong">
@@ -6634,6 +6636,34 @@ window.__keYiLiaoTian = keYiLiaoTian;
           <div id="provLieBiao"></div>
         </div>
         <div class="sheZhiSection" data-sec="func"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.func'))}</h2></div>
+
+        <!-- 音频设备：**全局**设置（产品要求：放在「功能」分区**最上面**，在记忆系统之前）。
+             拟态桌宠、聊天输入框的麦克风、回复旁的喇叭，以及以后任何要用麦克风/播放器的地方都用这一套。
+             id 与原来一致，所以既有逻辑照旧可用。 -->
+        <div class="sheZhiSection sheZhiKa" id="yinPinSheBeiKa" data-sec="func">
+          <h2>${escapeHtml(tOr('audio.title', '音频设备'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('audio.hint', '这里是**全局**的音频设置：桌宠、聊天框的麦克风、回复旁的喇叭，以及以后其它用到麦克风/播放器的地方，都按这里的设备与音量来。'))}</p>
+          <div class="yinPinHang">
+            <div class="yinPinLie">
+              <span class="jingYin">${escapeHtml(tOr('mimic.mic', '麦克风'))}</span>
+              <select id="mimicMaiKeFeng"></select>
+            </div>
+            <div class="yinPinLie">
+              <span class="jingYin">${escapeHtml(tOr('mimic.speaker', '播放器'))}</span>
+              <select id="mimicBoFangQi"></select>
+            </div>
+            <div class="yinPinLie yinPinYinLiangLie">
+              <span class="jingYin">${escapeHtml(tOr('mimic.volume', '声音大小'))}</span>
+              <div class="yinPinYinLiangHang">
+                <input type="range" id="mimicYinLiang" min="0" max="100" step="1" value="90"/>
+                <span class="jingYin" id="mimicYinLiangZhi">90%</span>
+              </div>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:8px">
+            <input type="checkbox" id="mimicXiTongYin"/> ${escapeHtml(tOr('mimic.sysAudio', '允许接收系统 / 应用的声音'))}
+          </label>
+        </div>
         <div class="sheZhiSection sheZhiKa" id="jiYiXiTongKa">
           <h2>${escapeHtml(t('memory.statusTitle'))}</h2>
           <p class="jingYin">${escapeHtml(t('memory.desc'))}</p>
@@ -6846,7 +6876,10 @@ window.__keYiLiaoTian = keYiLiaoTian;
           <div id="peiZhiDataZhiBiaoJi" class="diagGrid"></div>
         </div>
         <div class="sheZhiSection sheZhiKa" data-sec="func">
-          <h2>${escapeHtml(t('ctx.archive'))}</h2>
+          <!-- 改名「已归档会话」：原来叫「归档」，与下面的「自动归档」撞名，用户分不清（真机反馈）。
+               二者是**两件不同的事**：这里是"已经归档、从主列表隐藏的会话清单"（可恢复/彻底删除）；
+               「自动归档」是"按计划把会话的新内容整理进知识库"的开关。 -->
+          <h2>${escapeHtml(tOr('archive.listTitle', '已归档会话'))}</h2>
           <p class="jingYin">${escapeHtml(t('archive.tiShi'))}</p>
           <div id="yiGuiDangHe" class="jingYin">—</div>
         </div>
@@ -6951,33 +6984,6 @@ window.__keYiLiaoTian = keYiLiaoTian;
           <h2>${escapeHtml(tOr('webgpu.section', '图形加速（WebGPU）'))}</h2>
           <p class="jingYin">${escapeHtml(tOr('webgpu.hint', '检测本机是否支持 WebGPU（与模型无关）。'))}</p>
           <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
-        </div>
-        <!-- 音频设备：**全局**设置（产品要求：从「拟态」上移）。
-             拟态桌宠、聊天输入框的麦克风、回复旁的喇叭播放，以及以后任何要用麦克风/播放器的地方，
-             都统一看这里 —— 元素 id 与原来一致，所以拟态的置灰联动（关语音互动时灰掉）照旧生效。 -->
-        <div class="sheZhiSection sheZhiKa" id="yinPinSheBeiKa" data-sec="func">
-          <h2>${escapeHtml(tOr('audio.title', '音频设备'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('audio.hint', '这里是**全局**的音频设置：桌宠、聊天框的麦克风、回复旁的喇叭，以及以后其它用到麦克风/播放器的地方，都按这里的设备与音量来。'))}</p>
-          <div class="mimicSheBeiHang" style="margin-top:8px">
-            <div class="mimicSheBeiLie">
-              <span class="jingYin">${escapeHtml(tOr('mimic.mic', '麦克风'))}</span>
-              <select id="mimicMaiKeFeng"></select>
-            </div>
-            <div class="mimicSheBeiLie">
-              <span class="jingYin">${escapeHtml(tOr('mimic.speaker', '播放器'))}</span>
-              <select id="mimicBoFangQi"></select>
-            </div>
-            <div class="mimicSheBeiYinLiang">
-              <span class="jingYin">${escapeHtml(tOr('mimic.volume', '声音大小'))}</span>
-              <div class="mimicYinLiangHe">
-                <input type="range" id="mimicYinLiang" class="mimicShuHuaKuai" min="0" max="100" step="1" value="90"/>
-                <span class="jingYin" id="mimicYinLiangZhi">90%</span>
-              </div>
-            </div>
-          </div>
-          <label style="display:flex;align-items:center;gap:6px;margin-top:6px">
-            <input type="checkbox" id="mimicXiTongYin"/> ${escapeHtml(tOr('mimic.sysAudio', '允许接收系统 / 应用的声音'))}
-          </label>
         </div>
         <!-- 自动归档：把右键菜单里勾了「自动归档」的会话整理后放进知识库；**增量**，只归档新增 -->
         <div class="sheZhiSection sheZhiKa" id="guiDangKa" data-sec="func">
@@ -7137,11 +7143,11 @@ window.__keYiLiaoTian = keYiLiaoTian;
           所以空标题留在前面、内容没有 data-sec 时，整块关于内容会被算进**拟态**里
           （真事故：点「关于」是空的，内容却出现在「拟态」下面）。
         -->
-        <!-- 赞助：放在「关于」上面（产品要求）。图片是项目内置资源，不指向本机路径 -->
-        <div class="sheZhiSection" data-sec="about"><h2 style="color:var(--accent)">${escapeHtml(tOr('sponsor.biaoTi', '赞助'))}</h2></div>
+        <!-- 赞助：**独立页面**（产品要求：左侧导航里放在「拟态」下面、「关于」上面） -->
+        <div class="sheZhiSection" data-sec="sponsor"><h2 style="color:var(--accent)">${escapeHtml(tOr('sponsor.biaoTi', '赞助'))}</h2></div>
         <div class="sheZhiSection sheZhiKa">
           <p class="jingYin">${escapeHtml(tOr('sponsor.tiShi1', '这个项目是开源的，里面没有任何收费内容 —— 你现在用到的一切，以后也一直免费。'))}</p>
-          <p class="jingYin" style="margin-top:8px">${escapeHtml(tOr('sponsor.tiShi2', '如果它对你有帮助，欢迎请作者喝杯咖啡。赞助纯粹是对作者的鼓励与资助，不会换来任何额外功能或特权：无论有没有赞助过，你都始终拥有对本项目的完全使用权。'))}</p>
+          <p class="jingYin" style="margin-top:8px">${escapeHtml(tOr('sponsor.tiShi2', '如果它对你有帮助，欢迎请作者喝杯咖啡。赞助是纯粹的心意，不会换来任何额外功能或特权：无论有没有赞助过，你都始终拥有对本项目的完全使用权。'))}</p>
           <div style="margin-top:12px">
             <div class="jingYin">${escapeHtml(tOr('sponsor.paypal', 'PayPal'))}</div>
             <div style="margin-top:4px"><a href="https://paypal.me/pondsi" target="_blank" rel="noreferrer">https://paypal.me/pondsi</a></div>
@@ -7398,10 +7404,10 @@ window.__keYiLiaoTian = keYiLiaoTian;
             });
           });
         })();
-        const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'tool', 'plugin', 'gate', 'hotkey', 'about', 'mimic'];
+        const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'tool', 'plugin', 'gate', 'hotkey', 'about', 'mimic', 'sponsor'];
         // skill 与 jineng 是同一分区的两种历史键名 —— 必须别名到同一数组
         const skillBucket = [];
-        const groups = { ui: [], notify: [], model: [], func: [], tool: [], plugin: [], gate: [], hotkey: [], about: [], mimic: [] };
+        const groups = { ui: [], notify: [], model: [], func: [], tool: [], plugin: [], gate: [], hotkey: [], about: [], mimic: [], sponsor: [] };
         groups['skill'] = skillBucket;
         groups['jineng'] = skillBucket;
         window.__settingsGroups = groups;
@@ -7974,13 +7980,13 @@ window.__keYiLiaoTian = keYiLiaoTian;
         };
         const duMoShi = () => {
           const v = (document.querySelector('input[name="mimicMoShi"]:checked') || {}).value || 'off';
-          const yuYin = v !== 'off';          // 关语音 ⇒ 一切音频相关都不可用
           const zhiNeng = v === 'smart';      // 判断模型只在智能模式用
-          const kanPing = v === 'smart';      // 只有智能模式持续看屏幕
-          setDi('mimicMaiKeFeng', yuYin);
-          setDi('mimicBoFangQi', yuYin);
-          setDi('mimicYinLiang', yuYin);
-          setDi('mimicXiTongYin', yuYin && kanPing);
+          /**
+           * **音频设备不再跟着拟态模式置灰**（真机反馈：麦克风/播放器/音量明明是灰的）。
+           * 原因：它们已经从「拟态」上移为**全局设置**（聊天框麦克风、回复旁的喇叭、桌宠都用它），
+           * 而拟态语音模式默认就是「关闭」⇒ 老逻辑把全局设置一起禁掉了，用户根本改不了。
+           * 只有**拟态专属**的「判断模型」才继续随模式置灰。
+           */
           setDi('mimicPanDuanMoXing', zhiNeng);
           return v;
         };

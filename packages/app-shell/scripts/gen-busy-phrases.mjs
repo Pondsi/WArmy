@@ -333,5 +333,18 @@ const body = `/**
 window.__BUSY_PHRASES = ${JSON.stringify(list, null, 0)};
 window.__BUSY_ROTATE_MS = 12000;
 `;
+/**
+ * **加一道保护**（真事故风险：这个脚本会把 `src/renderer/busy-phrases.js` **静默覆盖**）。
+ * 那个文件现在是**手写/重写过的 1000 条**，直接跑本脚本会把它们整套换回模板生成版，
+ * 而且不会有任何提示。所以默认**拒绝覆盖**；确实要重新生成时才加 `--force`。
+ */
+if (!process.argv.includes('--force')) {
+  console.error(
+    '[gen-busy-phrases] 已拒绝写入：这会覆盖 src/renderer/busy-phrases.js。\n'
+    + '  该文件当前是人工重写过的版本，覆盖后内容会丢。\n'
+    + '  确实要重新生成请显式执行：node scripts/gen-busy-phrases.mjs --force',
+  );
+  process.exit(1);
+}
 fs.writeFileSync(out, body, 'utf8');
 console.log('wrote', out, list.length, 'phrases');

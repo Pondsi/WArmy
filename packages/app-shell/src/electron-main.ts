@@ -859,7 +859,7 @@ function toolLimits(): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalCha
      * 「生成 txt + 生成 ppt + 打开 + 等 30 秒 + 写 6000 字小说」跑到一半就
      * `tingZhiYuanYin: 'max-rounds'`，任务直接停了。现在默认 12、最多 32。
      */
-    zuiDaLunShu: Number.isFinite(lunShu) ? Math.min(32, Math.max(0, Math.floor(lunShu))) : 12,
+    zuiDaLunShu: Number.isFinite(lunShu) ? Math.min(32, Math.max(0, Math.floor(lunShu))) : 20,
     zuiDaJieGuoZiShu: Number.isFinite(mei) ? Math.min(8000, Math.max(200, Math.floor(mei))) : 4000,
     totalChars: Number.isFinite(total) ? Math.min(40000, Math.max(200, Math.floor(total))) : 12000,
   };

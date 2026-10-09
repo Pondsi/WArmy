@@ -3122,3 +3122,11 @@ html { font-weight: var(--fw-ui, 400); }
 /* 停止后的流式块：保留内容，思考过程折叠起来（可点开） */
 .yiTingZhi .siKaoKuai .siKaoZheDie { cursor: pointer; font-size: var(--fs-xs); opacity: .75; }
 .yiTingZhi .siKaoKuai .siKaoZheDie:hover { opacity: 1; color: var(--accent); }
+
+/* 音频设备：麦克风 / 播放器 / 音量 **同一行**；音量横放。始终可用（不再随拟态模式置灰）。 */
+.yinPinHang { display: flex; gap: 12px; align-items: flex-end; margin-top: 6px; flex-wrap: wrap; }
+.yinPinLie { display: flex; flex-direction: column; gap: 4px; flex: 1 1 180px; min-width: 0; }
+.yinPinLie select { width: 100%; }
+.yinPinYinLiangLie { flex: 1 1 220px; }
+.yinPinYinLiangHang { display: flex; align-items: center; gap: 8px; }
+.yinPinYinLiangHang input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }

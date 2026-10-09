@@ -192,10 +192,26 @@ export async function liaoTianDaiGongJu(
         // 两个限制同时命中时，报"预算"（更具体：说明是被工具结果总量拦下的）
         tingZhiYuanYin = yuSuanShuChu ? 'budget' : 'max-rounds';
         emit({ kind: 'final', round: lunShu, detail: tingZhiYuanYin });
+        /**
+         * **收尾必须给出完整正文**（真事故：工具跑到轮数上限被强停，用户只看到
+         * 「核对完毕。临时脚本清一下：」这半句话 —— 那是模型在**发起工具调用前**的前导语，
+         * 被当成了最终答复）。
+         * 做法：逼收尾时先**明确要求"不要再调工具、直接给结论"**；若这一轮仍没有正文，
+         * 再补一次同样要求的请求（而不是退回半句前导语）。
+         */
+        const QIU_SHOU_WEI = '不要再调用任何工具了。请只输出面向用户的最终答复：直接给结论与要点，把已经查到/已经做完的事说清楚，不要再写"接下来要做什么"。';
+        xiaoXiJi.push({ role: 'user', content: QIU_SHOU_WEI });
         try {
-          const zuiZhongXiangYing = await diaoYongMoXing('none');
-          const text = neiRongWenBen(zuiZhongXiangYing.choices[0]?.message?.content);
-          // 强制收敛若仍不产出文本，就保留上一次响应的正文（避免把"空回复"当成答案）
+          let zuiZhongXiangYing = await diaoYongMoXing('none');
+          let text = neiRongWenBen(zuiZhongXiangYing.choices[0]?.message?.content);
+          if (!text) {
+            // 再逼一次：把要求写得更死
+            xiaoXiJi.push({ role: 'user', content: '请只回复正文结论（不要工具调用、不要前言、不要占位符）。' });
+            const zai = await diaoYongMoXing('none');
+            const t2 = neiRongWenBen(zai.choices[0]?.message?.content);
+            if (t2) { zuiZhongXiangYing = zai; text = t2; }
+          }
+          // 仍然没有正文，才退回上一次响应（避免把"空回复"当答案）
           const qianYiWenBen = neiRongWenBen(last?.choices[0]?.message?.content);
           if (text || !qianYiWenBen) last = zuiZhongXiangYing;
         } catch {
