@@ -297,7 +297,15 @@ check('renderer setProvider', appJs2.includes('warmy.setProvider'));
 
 // 8. ADR / agents / lock
 check('ADR archived', exists('docs', 'ADR', '000-多智能体群聊桌面应用定稿方案.md'));
-check('UI agents installed', exists('packages', 'app-shell', 'agents', 'design-ui-designer.md'));
+/**
+ * 第三方 agent 参考库（agency-agents）已于 2026-10-09 **从项目整体删除**：
+ * 用户要求，并且它对运行零依赖（只在 `packages/app-shell/agents/` 里当实现/评审参考，
+ * `copy-assets` 也不拷贝它）。旧断言要求 `design-ui-designer.md` 必须**存在** ——
+ * 那样删除后 CI 必红（真事故：连续 3 次推送的 CI 都挂在这条上）。
+ * 现在反过来断言它**必须不存在**，把"清理干净"变成可核对的门禁。
+ */
+check('third-party agent pack removed', !exists('packages', 'app-shell', 'agents', 'design-ui-designer.md'));
+check('third-party agent dir removed', !exists('packages', 'app-shell', 'agents'));
 check('pnpm lock', exists('pnpm-lock.yaml'));
 // .npmrc：原意图（防"意外注册表抢占"——那会静默改变所有人装到的东西）**保留**，
 // 但打包流水线需要一个**二进制镜像**：github.com 在本机不可达，electron-builder 的
