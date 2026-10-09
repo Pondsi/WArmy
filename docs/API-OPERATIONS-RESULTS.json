@@ -1,42 +1,42 @@
 {
-  "at": "2026-10-08T19:00:27.682Z",
+  "at": "2026-10-09T13:16:47.342Z",
   "total": 46,
   "ok": 46,
   "results": [
     {
       "ming": "hardware",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "resultPreview": "{\"cpus\":32,\"suggested\":8,\"max\":8}"
     },
     {
       "ming": "listInstances",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "[]"
     },
     {
       "ming": "securityMode",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "\"normal\""
     },
     {
       "ming": "memoryStatus",
       "ok": true,
-      "ms": 2,
+      "ms": 3,
       "resultPreview": "{\"ok\":true,\"ready\":true,\"CangLu\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\",\"jsonl\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\memory\\\\fast-memory.jsonl\",…"
     },
     {
       "ming": "localeInfo",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"system\":\"zh-CN\",\"resolved\":\"zh-CN\",\"isZh\":true,\"supported\":[\"zh-CN\",\"zh-TW\",\"en-US\",\"ja\",\"ko\",\"ru\",\"es\",\"fr\",\"pt\",\"eo\"]}"
     },
     {
       "ming": "themeInfo",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"shouldUseDarkColors\":false,\"themeSource\":\"system\"}"
     },
     {
@@ -54,13 +54,13 @@
     {
       "ming": "boardEvents",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"events\":[]}"
     },
     {
       "ming": "boardAggregate",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"sessions\":[]}"
     },
     {
@@ -72,13 +72,13 @@
     {
       "ming": "checkpointList",
       "ok": true,
-      "ms": 1,
-      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1791486027159,\"imageDigests\":{}},\"…"
+      "ms": 0,
+      "resultPreview": "{\"ok\":true,\"LieBiao\":[],\"space\":{\"maxBytes\":536870912,\"usedBytes\":0,\"count\":0},\"envByCheckpoint\":{},\"currentEnv\":{\"jiHuo\":false,\"runtimeId\":\"\",\"revision\":\"host\",\"at\":1791551806777,\"imageDigests\":{}},\"…"
     },
     {
       "ming": "knowledgeQuery",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"entities\":[],\"events\":[]}"
     },
     {
@@ -102,55 +102,55 @@
     {
       "ming": "skillsPaths",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"paths\":[\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\skills\"],\"scanDirs\":[]}"
     },
     {
       "ming": "skillsScanDirsGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"dirs\":[],\"scanDirs\":[],\"max\":10}"
     },
     {
       "ming": "uiQueuesGet",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"queues\":{}}"
     },
     {
       "ming": "routerQueuesGet",
       "ok": true,
-      "ms": 3,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"snapshot\":{\"version\":1,\"seq\":0,\"queues\":{},\"dutyState\":{}},\"file\":\"C:\\\\Users\\\\p\\\\AppData\\\\Local\\\\Temp\\\\warmy-ipc-probe-profile\\\\router-queues.json\"}"
     },
     {
       "ming": "profileGet",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"profile\":{\"username\":\"主人\",\"avatarDataUrl\":\"\",\"email\":\"\",\"deviceId\":\"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5\",\"deviceIdSig\":\"bc6111d1f9d967bda223facfcd7dd0fd83f6ac3e1518d4e7d816…"
     },
     {
       "ming": "appInfo",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "resultPreview": "{\"ok\":true,\"ming\":\"无限牛马\",\"enName\":\"WArmy\",\"version\":\"0.2.15\",\"electron\":\"40.10.6\",\"chrome\":\"144.0.7559.236\",\"node\":\"24.15.0\",\"platform\":\"win32\",\"arch\":\"x64\",\"dsh\":\"0.1.5-rc.1\",\"deviceId\":\"DK07VSLKMNCA…"
     },
     {
       "ming": "identityInfo",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"identity\":{\"bieMing\":\"DK07VSLKMNCANKVT7WNFCL8KAM2VFKM17DDH4JW6XGM75B2MXR5\",\"zhiWen\":\"P9C7Z-X9XY7-JY9WS-VG1BT\",\"generation\":1,\"algo\":\"Ed25519\",\"createdAt\":1790791478634,\"updatedAt\":17907914…"
     },
     {
       "ming": "identityPeers",
       "ok": true,
-      "ms": 1,
+      "ms": 0,
       "resultPreview": "{\"ok\":true,\"peers\":[]}"
     },
     {
       "ming": "netStatus",
       "ok": true,
-      "ms": 1,
+      "ms": 8,
       "resultPreview": "{\"ok\":true,\"meshEnabled\":false,\"link\":{\"reachable\":false,\"lastError\":\"mesh-disabled\",\"peers\":[]},\"nodeId\":\"jieDian8af5ad76\",\"sessions\":0,\"unlock\":{\"mode\":\"os\",\"unlocked\":true,\"needsPassphrase\":false,\"…"
     },
     {
@@ -162,7 +162,7 @@
     {
       "ming": "executorsStatus",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"items\":[]}"
     },
     {
@@ -186,7 +186,7 @@
     {
       "ming": "lanStatus",
       "ok": true,
-      "ms": 0,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"listening\":false,\"nodeId\":\"jieDian8af5ad76\"}"
     },
     {
@@ -222,13 +222,13 @@
     {
       "ming": "memoryRetrieve",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "resultPreview": "{\"id\":5,\"ok\":true,\"result\":null}"
     },
     {
       "ming": "projectState",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "resultPreview": "{\"ok\":true,\"state\":{\"devEnv\":\"host\",\"containerOnly\":false,\"running\":true,\"stopped\":false,\"code\":\"host-dev\",\"hostEditingRefused\":false,\"developmentAllowed\":true,\"developmentWhere\":\"host\",\"testingAllowe…"
     },
     {
@@ -264,20 +264,20 @@
     {
       "ming": "containerProbe",
       "ok": true,
-      "ms": 467,
-      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1791486027669,\"elapsedMs\":465,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
+      "ms": 499,
+      "resultPreview": "{\"ok\":true,\"report\":{\"ok\":true,\"platform\":\"win32\",\"probedAt\":1791551807325,\"elapsedMs\":497,\"cached\":false,\"runtimes\":[{\"id\":\"microsandbox\",\"engine\":{\"kind\":\"microvm\",\"api\":\"msb\"},\"status\":\"ready\",\"run…"
     },
     {
       "ming": "netPortCandidates",
       "ok": true,
-      "ms": 10,
-      "resultPreview": "{\"ok\":true,\"requestedPort\":59599,\"recommended\":[{\"port\":57757,\"status\":\"ok\",\"latencyMs\":9},{\"port\":52555,\"status\":\"ok\",\"latencyMs\":8},{\"port\":55151,\"status\":\"ok\",\"latencyMs\":8},{\"port\":55335,\"status\":…"
+      "ms": 13,
+      "resultPreview": "{\"ok\":true,\"requestedPort\":59599,\"recommended\":[{\"port\":57757,\"status\":\"ok\",\"latencyMs\":12},{\"port\":52555,\"status\":\"ok\",\"latencyMs\":12},{\"port\":55151,\"status\":\"ok\",\"latencyMs\":12},{\"port\":55335,\"statu…"
     },
     {
       "ming": "chatLogRestore",
       "ok": true,
-      "ms": 2,
-      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1791486027681},\"sessions\":[],\"logSeq\":0}"
+      "ms": 1,
+      "resultPreview": "{\"ok\":true,\"restore\":{\"done\":true,\"ok\":true,\"entries\":0,\"sessions\":0,\"maxSeq\":0,\"reason\":\"\",\"trigger\":\"ipc\",\"at\":1791551807340},\"sessions\":[],\"logSeq\":0}"
     }
   ]
 }

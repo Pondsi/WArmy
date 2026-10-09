@@ -663,6 +663,21 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .jinJiCaiDan button:hover { background: var(--hover); }
 .jinJiCaiDan button.qiYong { color: var(--accent); font-weight: 600; }
 .jinJiCaiDan button[data-u="P1"].qiYong { color: var(--danger); }
+
+/* 「授权」下拉的排布：一行 = 选项（占满、左对齐）+ 问号说明；勾选项 = 标签 + 问号。
+   选项文案（常规/严格/完全授权、允许提权）都带了说明，弹层需要略宽一点才好读。 */
+#secCaiDan { min-width: 176px; }
+.secXuanHang { display: flex; align-items: center; gap: 2px; }
+.secXuanHang .secXuanAnNiu { flex: 1 1 auto; min-width: 0; }
+.secWenXunHang { display: flex; align-items: center; gap: 2px; padding: 2px 4px; }
+.secWenXunLabel { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0;
+  font-size: var(--fs-base); color: var(--ink); cursor: pointer; padding: 4px 8px; }
+.secWenXunLabel input { accent-color: var(--accent); }
+
+/* 决策卡上的「推荐」标记（模型自评最优；开了「自动选择」会直接按它执行） */
+.aiqTuiJianNiu { border-color: var(--accent) !important; font-weight: 600; }
+.aiqTuiJian { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px;
+  font-size: 10px; line-height: 15px; background: var(--accent); color: #fff; vertical-align: middle; }
 /* 弹层标题 + 说明（插入 / 思考级别）：让用户知道这些选项是干什么的 */
 .ddHead { display: flex; align-items: center; gap: 4px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); padding: 6px 10px 4px; }
 /* 问号图标：与本行其它图标同一套**镂空描边**；说明收在问号里（点击/悬停展开） */
@@ -2503,6 +2518,37 @@ body.liaoTianChuangKou #appTi {
 
 /* 第四列卡片关闭叉：悬停才显示 */
 .mianBanKuai { position: relative; }
+/**
+ * 第四列卡片：**可拉高**（产品要求，且以后所有卡片都要如此）。
+ * 拉高的意义不是"卡片能变长"，而是**卡片里那些固定高度的滚动区跟着变高** ——
+ * 所以卡片要做成 flex 纵向容器，内部滚动区 `flex:1; min-height:0`，
+ * 这样拉大卡片 = 里面能多看几行（见下面的 .mianBanKuai > … 规则）。
+ */
+.mianBanKuai {
+  resize: vertical;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 44px;
+}
+.mianBanKuai > * { min-height: 0; }
+/* 卡片内可滚动列表：跟着卡片高度一起长（原先是写死 max-height，拉了也没用） */
+.mianBanKuai > .mianBanScroll,
+.mianBanKuai > #jiHuaLieBiao,
+.mianBanKuai > #dingShiLieBiao,
+.mianBanKuai > #fenShenLieBiao,
+.mianBanKuai > #zhiShiKuHe,
+.mianBanKuai > #zhiShiKuShuChu,
+.mianBanKuai > #cpSpace,
+.mianBanKuai > #cpXiangQingLieBiao {
+  flex: 1 1 auto;
+  max-height: none !important;
+  overflow: auto;
+}
+.mianBanKuai::-webkit-resizer {
+  background: var(--line);
+  border-radius: 2px;
+}
 .kaGuanBi {
   position: absolute; top: 6px; right: 6px;
   width: 20px; height: 20px; padding: 0;
@@ -2515,6 +2561,27 @@ body.liaoTianChuangKou #appTi {
 }
 .mianBanKuai:hover > .kaGuanBi { opacity: 1; pointer-events: auto; }
 .kaGuanBi:hover { background: var(--hover, rgba(0,0,0,0.08)); color: var(--danger, #c00); }
+
+/* 第四列卡片拖拽手柄：悬停才出现，位置在「×」左边。
+   只在手柄上按住才能拖动 —— 卡片体内全是可点元素，整块起拖会把这些操作全废掉。 */
+.kaTuoBa {
+  position: absolute; top: 4px; right: 32px;
+  width: 26px; height: 26px; padding: 0;
+  border: none; border-radius: 4px;
+  background: transparent; color: var(--ink-dim, #888);
+  font-size: 13px; line-height: 26px; letter-spacing: -2px; cursor: grab;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s, background 0.15s;
+}
+.mianBanKuai:hover > .kaTuoBa { opacity: 1; pointer-events: auto; }
+.kaTuoBa:hover { background: var(--hover, rgba(0,0,0,0.08)); color: var(--ink); }
+.kaTuoBa:active { cursor: grabbing; }
+/* 正在拖动的那张：浮起来（脱离文档流、贴着指针）*/
+.mianBanKuai.kaTuoZhong { opacity: .96; outline: 1px dashed var(--accent); outline-offset: 2px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .28); cursor: grabbing; }
+/* 原位留下的占位块：让"位置真的变了"看得见 */
+.kaZhanWei { border: 1px dashed var(--accent); border-radius: var(--radius); background: var(--hover);
+  opacity: .55; margin-bottom: 10px; }
 
 /* 自定义主题色色块 */
 .zhuTiSeKuai {
@@ -2964,8 +3031,29 @@ html { font-weight: var(--fw-ui, 400); }
 .shuRuQu.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
 
 /* ── 微信式引用条（输入框上方，小字单行，超长省略但内容完整）── */
-.yinYongTiao { display: flex; align-items: center; gap: 8px; padding: 6px 12px; margin: 0 8px 4px;
-  background: var(--hover); border-left: 3px solid var(--accent); border-radius: 6px; }
+/* 立体感：多层投影（内高光 + 近距接触影 + 中距扩散影 + 远距环境影），
+   悬停时整体抬升一档阴影，产生「离开纸面」的层次 */
+/* 引用条：**比聊天框窄**（用户反馈"不要比聊天框的宽度还大"），本身也压得更矮更紧 */
+.yinYongTiao { position: relative; display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px; margin: 0 12px 4px; max-width: 72%;
+  background: var(--hover); border-left: 3px solid var(--accent); border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45),
+              0 1px 1px rgba(0, 0, 0, .07),
+              0 4px 8px -2px rgba(0, 0, 0, .14),
+              0 10px 18px -8px rgba(0, 0, 0, .18);
+  transition: box-shadow .18s ease; }
+.yinYongTiao:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5),
+              0 2px 3px rgba(0, 0, 0, .08),
+              0 8px 14px -3px rgba(0, 0, 0, .18),
+              0 18px 30px -12px rgba(0, 0, 0, .24); }
+/* 悬停展开完整引用：作为引用条的**子元素**，鼠标移进来仍算 hover 在条上，不会闪断；
+   限高可滚动，方便长引用逐段阅读 */
+.yinYongQuan { display: none; position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 60;
+  max-height: 45vh; overflow: auto; padding: 10px 12px; border-radius: 8px;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line);
+  font-size: var(--fs-xs); line-height: 1.65; white-space: pre-wrap; word-break: break-word; text-align: left;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .14), 0 20px 40px -18px rgba(0, 0, 0, .35); }
+.yinYongTiao:hover .yinYongQuan { display: block; }
 .yinYongWen { flex: 1; min-width: 0; font-size: var(--fs-xs); color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .yinYongGuan { flex-shrink: 0; background: none; border: none; cursor: pointer; color: var(--muted);
@@ -2983,3 +3071,54 @@ html { font-weight: var(--fw-ui, 400); }
 .mimicKuang { box-shadow: 0 0 0 2px var(--accent), 0 0 8px 1px color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 50%; position: relative; }
 .mimicKuang::after { content: ''; position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px;
   background: var(--accent); border: 1.5px solid var(--card, #fff); border-radius: 50%; }
+
+/* 拟态音频设备：麦克风 / 播放器 / 音量 **同一行**，音量用竖滑块 */
+.mimicSheBeiHang { display: flex; gap: 10px; align-items: flex-start; margin-top: 4px; }
+.mimicSheBeiLie { display: flex; flex-direction: column; gap: 4px; flex: 1 1 0; min-width: 0; }
+.mimicSheBeiLie select { width: 100%; }
+.mimicSheBeiYinLiang { display: flex; flex-direction: column; gap: 4px; align-items: center; flex: 0 0 auto; }
+.mimicYinLiangHe { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+/* 竖滑块：writing-mode 是现代标准做法（Chrome 112+ / Electron 40 = Chromium 140）；
+   direction: rtl 让值自下而上（下=0%、上=100%），符合音量直觉 */
+.mimicShuHuaKuai { writing-mode: vertical-lr; direction: rtl; width: 22px; height: 96px; margin: 0; padding: 0; }
+
+/* 授权卡条目：三列 = 时间 / 内容 / 撤销 */
+.shouQuanHang { display: flex; align-items: center; gap: 8px; }
+.shouQuanShiJian { flex: 0 0 auto; color: var(--muted); font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* 内容是要「详细描述请求本身」的，单行装不下 ⇒ 显示两行后省略，悬停看全文 */
+.shouQuanNeiRong { flex: 1 1 0; min-width: 0; font-size: var(--fs-xs); line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+/* 定时任务卡条目 */
+.dingShiHang { margin: 8px 0; padding: 6px 0; border-top: 1px solid var(--line); }
+.dingShiHang:first-child { border-top: none; }
+.dingShiMing { font-weight: 600; margin-bottom: 2px; }
+
+/* 计划任务卡：标题旁的 X/X（进行中/总数）+ 可滚动任务列表（要能自动滚到底） */
+.jiHuaJiShu { margin-left: 6px; color: var(--accent); font-size: var(--fs-xs); font-weight: 600;
+  font-variant-numeric: tabular-nums; }
+/* #jiHuaLieBiao 的高度交给卡片 flex 拉伸（见 .mianBanKuai > #jiHuaLieBiao），不再写死 max-height */
+
+/* ── 分身（子代理）卡 ──────────────────────────────────────────────
+   进行中 = 左边强调色竖线；已停止 = 无竖线；异常停止 = 无竖线 + 删除线；
+   右键选中的那行 = 强调外框。 */
+.fenshenJiShu { margin-left: 6px; color: var(--accent); font-size: var(--fs-xs); font-weight: 600;
+  font-variant-numeric: tabular-nums; }
+.fenShenHang { position: relative; margin: 6px 0; padding: 4px 0 4px 8px;
+  border-left: 3px solid transparent; border-radius: 3px; }
+.fenShenHang.isRun { border-left-color: var(--accent); }
+.fenShenHang.isFail .fenShenHang1,
+.fenShenHang.isFail .fenShenWen { text-decoration: line-through; opacity: .7; }
+.fenShenHang.xuanZhong { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fenShenHang1 { display: flex; gap: 8px; align-items: baseline; }
+.fenShenShiJian { flex: 0 0 auto; color: var(--muted); font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums; cursor: pointer; }
+.fenShenMing { font-weight: 600; font-size: var(--fs-sm); }
+.fenShenWen { font-size: var(--fs-xs); cursor: pointer; word-break: break-word; }
+.fenShenWen.yiHang { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 停止后的流式块：保留内容，思考过程折叠起来（可点开） */
+.yiTingZhi .siKaoKuai .siKaoZheDie { cursor: pointer; font-size: var(--fs-xs); opacity: .75; }
+.yiTingZhi .siKaoKuai .siKaoZheDie:hover { opacity: 1; color: var(--accent); }

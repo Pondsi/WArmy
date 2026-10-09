@@ -311,10 +311,22 @@ export function jieXiKaPanDuan(txt: string): { stalled: boolean | null; reason: 
   // ② 话：中英文的"卡住/没卡住"
   let stalled: boolean | null = stalled0;
   if (stalled === null) {
-    const kaZhu = /(卡住了|已卡死|已经卡死|停滞了|\bstuck\b|\bstalled\b)/i.test(gan);
-    const meiKa = /(没\s*(卡住|卡死|停滞)|没有\s*(卡住|卡死|停滞)|未\s*停滞|还在(跑|继续|进展)|还在干活|\bnot\s+stuck\b|\bnot\s+stalled\b|\bprogressing\b|\brunning\b)/i.test(gan);
-    if (kaZhu && !meiKa) stalled = true;
-    else if (meiKa && !kaZhu) stalled = false;
+    /**
+     * **先抠掉否定式，再判肯定式**。
+     *
+     * 真缺陷（真机审计里 `plan.stall-analysis-badreply` 连续 9 次、`panBuChu: true`）：
+     * 原来的肯定式里有 `\bstuck\b` / `\bstalled\b`，它们会命中 "not stuck" / "not stalled"
+     * 里的那个词；而否定式同样命中 ⇒ **两条同时成立** ⇒ 按下面的逻辑既不是 true 也不是 false，
+     * 直接判成"判不出结论"。判断模型只要用英文回一句 "not stuck"，我们就白烧一次调用。
+     * 修法：把否定式整段从待检文本里抠掉后再测肯定式。
+     */
+    const FOU_DING = /(没\s*(卡住|卡死|停滞|问题)|没有\s*(卡住|卡死|停滞|问题)|未\s*(卡住|卡死|停滞)|不\s*(卡住|卡死)|还在(跑|继续|进展|进行|工作|正常)|仍在(继续|进行|工作)|正常(进行|运行|工作)|有(进展|输出|响应)|not\s+(stuck|stalled|hung|blocked)|no\s+(progress|issue|problem)|still\s+(running|working|progressing)|progressing|running\s+fine|keep\s+going)/i;
+    const KEN_DING = /(卡住了|卡死了|已卡死|已经卡死|停滞|无响应|未响应|没有(任何)?(进展|输出|响应)|无(进展|输出|响应)|\bstuck\b|\bstalled\b|\bhung\b|\bunresponsive\b|\bno\s+progress\b)/i;
+    const meiKa = FOU_DING.test(gan);
+    const sheng = gan.replace(new RegExp(FOU_DING.source, 'gi'), ' ');
+    const kaZhu = KEN_DING.test(sheng);
+    if (meiKa && !kaZhu) stalled = false;
+    else if (kaZhu && !meiKa) stalled = true;
     else stalled = null;
   }
   return {

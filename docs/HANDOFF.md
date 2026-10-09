@@ -11,7 +11,7 @@
 
 **WArmy（无限牛马）** —— Electron 多智能体群聊桌面应用。
 
-- 路径：`C:\Users\p\.openclaw\workspace\大龙虾互动区\WArmy`
+- 路径：本机仓库根目录（下文用 `<仓库根目录>` 指代）
 - ASCII 别名：`C:\wbuild`（junction，遇到中文路径问题时用）
 - 技术栈：Electron + TypeScript + 原生 JS 渲染层（无框架）
 - 包结构：`packages/app-shell`（主）、`contracts`、`providers`、`group-router`、`memory-os`、`knowledge-base`、`board` 等
@@ -49,7 +49,7 @@
 
 ## 三、搜索能力（已接入，勿再重复探索）
 
-调用链（按优先级降级）见 `C:\Users\p\.openclaw\workspace\大龙虾互动区\搜索助手.py`：
+调用链（按优先级降级）见仓库**上一级目录**里的 `搜索助手.py`：
 
 ```bash
 python 搜索助手.py probe                    # 逐层探活
@@ -62,7 +62,7 @@ python 搜索助手.py ollama "要总结的文本"
 
 | 层 | 状态 |
 |---|---|
-| Tavily（key 从 `C:\Users\p\.openclaw\openclaw.json` 运行时读取，**不落地不打印**） | ✅ |
+| Tavily（key 从本机 openclaw 配置里运行时读取，**不落地不打印**） | ✅ |
 | Firecrawl（**免 key 可用**，实测 scrape/search 都返回 200） | ✅ |
 | Ollama `127.0.0.1:11434`（`qwen3.8-27b` 等） | ✅ |
 | webfetch + Bing | ✅ |

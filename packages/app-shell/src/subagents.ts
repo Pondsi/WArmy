@@ -27,6 +27,15 @@ export interface XiaoDiJiLu {
   /** 第几号（1 起） */
   hao: number;
   createdAt: number;
+  /** 所属会话（第四列「分身」卡要按会话列） */
+  sessionId?: string;
+  /** 任务内容（派出时那句 task；卡片上要能展开看全文） */
+  task?: string;
+  /** 用的模型（如「Ollama · qwen3」）；卡片上默认折叠显示一行 */
+  model?: string;
+  /** 运行状态：running=进行中 / done=已完成 / failed=异常停止 / stopped=被手动停止 */
+  status?: 'running' | 'done' | 'failed' | 'stopped';
+  endedAt?: number;
 }
 
 /** 从已有名字里挑出下一个编号（1 起；跳过已占用） */
@@ -80,8 +89,33 @@ export class XiaoDiDengJiBu {
   list(fuMing: string): XiaoDiJiLu[] {
     return lieBiaoXiaoDi(this.items, fuMing);
   }
+  /** 某会话的全部子代理（第四列「分身」卡用；按创建时间倒序） */
+  listHuiHua(sessionId: string): XiaoDiJiLu[] {
+    const s = String(sessionId || '');
+    return this.items
+      .filter((x) => x.sessionId === s)
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+  /** 全部（不按会话过滤） */
+  all(): XiaoDiJiLu[] {
+    return [...this.items];
+  }
+  /** 更新状态（完成/失败/手动停止） */
+  gengXin(id: string, patch: Partial<XiaoDiJiLu>): XiaoDiJiLu | null {
+    const i = this.items.findIndex((x) => x.id === id);
+    if (i < 0) return null;
+    const old = this.items[i];
+    if (!old) return null;
+    this.items[i] = { ...old, ...patch };
+    this.save();
+    return this.items[i] ?? null;
+  }
   /** 派一个新小弟；成功返回记录，失败返回 error（不抛错） */
-  pai(fuMing: string, at = Date.now()): { ok: true; lu: XiaoDiJiLu } | { ok: false; error: string } {
+  pai(
+    fuMing: string,
+    at = Date.now(),
+    extra?: Omit<Partial<XiaoDiJiLu>, 'id' | 'ming' | 'fuMing' | 'hao' | 'createdAt'>,
+  ): { ok: true; lu: XiaoDiJiLu } | { ok: false; error: string } {
     const fu = String(fuMing || '').trim();
     if (!fu) return { ok: false, error: 'empty-parent-name' };
     const old = this.list(fu).map((x) => x.ming);
@@ -93,6 +127,8 @@ export class XiaoDiDengJiBu {
       fuMing: fu,
       hao: r.hao,
       createdAt: at,
+      status: 'running',
+      ...(extra || {}),
     };
     this.items.push(lu);
     this.save();

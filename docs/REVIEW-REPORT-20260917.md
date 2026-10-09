@@ -1,7 +1,7 @@
 # WArmy 项目审查报告
 
 **审查时间**：2026-09-17 19:00  
-**审查方法**：基于 agency-agents 6 个专业 Agent 方法论（Security Engineer / Code Reviewer / Frontend Developer / UI Designer / Mobile App Builder / Software Architect）  
+**审查方法**：按 6 个专业视角的审查清单进行（安全 / 代码质量 / 前端 / UI / 移动端 / 架构）  
 **审查范围**：`packages/app-shell/src/electron-main.ts`、`src/renderer/app.js`、`src/renderer/app.css`、`src/renderer/index.html`、`src/preload.cjs`、`mobile/` 全部文件、`src/i18n/`  
 
 ---
@@ -374,16 +374,20 @@ warmy:hardware       硬件建议
 
 ---
 
-## 附录：审查使用的 Agent 定义来源
+## 附录：审查使用的视角清单
 
-| Agent | 来源 | 用途 |
-|---|---|---|
-| Security Engineer | `agency-agents/engineering/engineering-security-engineer.md` | Electron 安全、输入验证、权限模型 |
-| Code Reviewer | `agency-agents/engineering/engineering-code-reviewer.md` | 代码质量、错误处理、内存泄漏 |
-| Frontend Developer | `agency-agents/engineering/engineering-frontend-developer.md` | 性能、CSP、响应式 |
-| UI Designer | `agency-agents/design/design-ui-designer.md` | 设计一致性、对比度、图标规范 |
-| Mobile App Builder | `agency-agents/engineering/engineering-mobile-app-builder.md` | 移动端布局、交互、安全区 |
-| Software Architect | `agency-agents/engineering/engineering-software-architect.md` | 架构分层、命名空间、可维护性 |
+> 原文列的是当时参考的第三方 agent 定义文件。该参考库已于 2026-10-09 **从项目整体删除**
+> （连本地副本、`.gitignore` 条目与关于页致谢一并移除）。这里只保留「审查视角 → 用途」的对照，
+> 作为这份历史报告的方法学记录，不再指向任何已删除的文件。
+
+| 视角 | 用途 |
+|---|---|
+| 安全 | Electron 安全、输入验证、权限模型 |
+| 代码质量 | 错误处理、内存泄漏 |
+| 前端 | 性能、CSP、响应式 |
+| UI | 设计一致性、对比度、图标规范 |
+| 移动端 | 布局、交互、安全区 |
+| 架构 | 分层、命名空间、可维护性 |
 
 ---
 

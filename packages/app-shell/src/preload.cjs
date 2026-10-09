@@ -356,6 +356,17 @@ contextBridge.exposeInMainWorld('warmy', {
   secureKeyLoad: (id) => ipcRenderer.invoke('warmy:anQuanMiYaoJiaZai', id),
   archiveExternal: (payload) => ipcRenderer.invoke('warmy:guiDangWaiBu', payload),
   archiveList: (groupId) => ipcRenderer.invoke('warmy:guiDangLieBiao', groupId),
+  /** 自动归档：增量归档（每个会话有游标，只归档新增，不从头重做） */
+  archiveDelta: (payload) => ipcRenderer.invoke('warmy:guiDangZengLiang', payload),
+  archiveBatch: (payload) => ipcRenderer.invoke('warmy:guiDangYiPi', payload),
+  archiveCursors: () => ipcRenderer.invoke('warmy:guiDangYouBiaoQu'),
+  archiveCursorClear: (payload) => ipcRenderer.invoke('warmy:guiDangYouBiaoQing', payload),
+  /** 分身（子代理）卡 */
+  xiaoDiLieBiao: (sessionId) => ipcRenderer.invoke('warmy:xiaoDiLieBiao', sessionId),
+  xiaoDiTingZhi: (payload) => ipcRenderer.invoke('warmy:xiaoDiTingZhi', payload),
+  /** 删除会话：连带本会话知识库 + 工作区；牛马在群聊/项目里会被拒绝 */
+  sessionDelete: (payload) => ipcRenderer.invoke('warmy:huiHuaShanChu', payload),
+  onXiaoDiBianGeng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:xiaoDiBianGeng', h); return () => ipcRenderer.removeListener('warmy:xiaoDiBianGeng', h); },
   sessionSummary: (payload) => ipcRenderer.invoke('warmy:huiHuaZhaiYao', payload),
   cleanupRun: (opts) => ipcRenderer.invoke('warmy:qingLiYunXing', opts),
   roleModelsSet: (roles) => ipcRenderer.invoke('warmy:jueSeMoXingJiSheZhi', roles),

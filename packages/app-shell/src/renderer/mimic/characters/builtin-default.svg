@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Mimic default character">
+  <defs>
+    <linearGradient id="mBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3d9b8"/>
+      <stop offset="1" stop-color="#e0bd93"/>
+    </linearGradient>
+  </defs>
+  <!-- 桌宠本体：圆润的小家伙，无性别特征 -->
+  <ellipse cx="64" cy="96" rx="30" ry="22" fill="#3f4d63" opacity="0.18"/>
+  <ellipse cx="64" cy="72" rx="34" ry="34" fill="url(#mBody)"/>
+  <!-- 耳/角：小小的两点，增加灵动感 -->
+  <ellipse cx="40" cy="42" rx="9" ry="12" fill="#e0bd93" transform="rotate(-18 40 42)"/>
+  <ellipse cx="88" cy="42" rx="9" ry="12" fill="#e0bd93" transform="rotate(18 88 42)"/>
+  <!-- 眼：两个亮点，不带性别 -->
+  <ellipse cx="52" cy="68" rx="5.5" ry="6.5" fill="#2b3444"/>
+  <ellipse cx="76" cy="68" rx="5.5" ry="6.5" fill="#2b3444"/>
+  <circle cx="54" cy="66" r="1.8" fill="#fff"/>
+  <circle cx="78" cy="66" r="1.8" fill="#fff"/>
+  <!-- 腮红 -->
+  <ellipse cx="42" cy="80" rx="6" ry="4" fill="#e8a08c" opacity="0.5"/>
+  <ellipse cx="86" cy="80" rx="6" ry="4" fill="#e8a08c" opacity="0.5"/>
+  <!-- 嘴：小弧 -->
+  <path d="M58 82 Q64 87 70 82" fill="none" stroke="#a8794f" stroke-width="2.2" stroke-linecap="round"/>
+  <!-- 胸口小领结：主理人感，中性 -->
+  <path d="M56 100 L64 96 L72 100 L64 104 Z" fill="#e6a23c"/>
+</svg>

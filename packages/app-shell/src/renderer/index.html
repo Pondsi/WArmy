@@ -114,14 +114,34 @@
                   <svg class="ico jinJiJianTou" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
                 </button>
                 <div class="jinJiCaiDan yinCang" id="secCaiDan" role="menu">
-                  <button type="button" data-s="normal" data-i18n="chat.securityNormal"></button>
-                  <button type="button" data-s="strict" data-i18n="chat.securityStrict"></button>
-                  <button type="button" data-s="full" data-i18n="chat.securityFull"></button>
-                  <!-- 超出权限是否询问：默认勾选；完全授权时灰掉（那时没什么需要用户授权的） -->
-                  <label class="secWenXunHang" id="secWenXunHang">
-                    <input type="checkbox" id="secWenXun"/>
-                    <span data-i18n="chat.askOnExceed">超出权限是否询问</span>
-                  </label>
+                  <div class="secXuanHang">
+                    <button type="button" class="secXuanAnNiu" data-s="normal" data-i18n="chat.securityNormal"></button>
+                    <button type="button" class="ddWen" aria-label="?"><svg class="ico hollowIco" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.8.36-1.1.9-1.1 1.8v.4"/><path d="M12 17.2h.01"/></svg><span class="ddDesc" data-i18n="chat.securityNormal.tiShi"></span></button>
+                  </div>
+                  <div class="secXuanHang">
+                    <button type="button" class="secXuanAnNiu" data-s="strict" data-i18n="chat.securityStrict"></button>
+                    <button type="button" class="ddWen" aria-label="?"><svg class="ico hollowIco" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.8.36-1.1.9-1.1 1.8v.4"/><path d="M12 17.2h.01"/></svg><span class="ddDesc" data-i18n="chat.securityStrict.tiShi"></span></button>
+                  </div>
+                  <div class="secXuanHang">
+                    <button type="button" class="secXuanAnNiu" data-s="full" data-i18n="chat.securityFull"></button>
+                    <button type="button" class="ddWen" aria-label="?"><svg class="ico hollowIco" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.8.36-1.1.9-1.1 1.8v.4"/><path d="M12 17.2h.01"/></svg><span class="ddDesc" data-i18n="chat.securityFull.tiShi"></span></button>
+                  </div>
+                  <!-- 允许提权：默认勾选；完全授权时灰掉（那时没什么需要用户授权的） -->
+                  <div class="secWenXunHang" id="secWenXunHang">
+                    <label class="secWenXunLabel">
+                      <input type="checkbox" id="secWenXun"/>
+                      <span data-i18n="chat.askOnExceed">允许提权</span>
+                    </label>
+                    <button type="button" class="ddWen" aria-label="?"><svg class="ico hollowIco" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.8.36-1.1.9-1.1 1.8v.4"/><path d="M12 17.2h.01"/></svg><span class="ddDesc" data-i18n="chat.askOnExceed.tiShi"></span></button>
+                  </div>
+                  <!-- 自动选择：默认不勾。出现选项卡且其中标了「推荐」时，自动按推荐方案执行 -->
+                  <div class="secWenXunHang" id="secZiDongHang">
+                    <label class="secWenXunLabel">
+                      <input type="checkbox" id="secZiDong"/>
+                      <span data-i18n="chat.autoSelect">自动选择</span>
+                    </label>
+                    <button type="button" class="ddWen" aria-label="?"><svg class="ico hollowIco" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.8.36-1.1.9-1.1 1.8v.4"/><path d="M12 17.2h.01"/></svg><span class="ddDesc" data-i18n="chat.autoSelect.tiShi"></span></button>
+                  </div>
                 </div>
               </div>
               <div class="jinJiDd" id="gengDuoDd">
@@ -198,8 +218,9 @@
           </div>
           <!-- 牛马在跑的动态小字（发出后到回包前）：轮换文案，让用户知道它没卡死 -->
           <div id="yunXingZhuangTai" class="yunXingZhuangTai yinCang" aria-live="polite"></div>
-          <!-- 微信式引用条：贴在输入框上方，小字单行，点击 × 取消 -->
+          <!-- 微信式引用条：贴在输入框上方，小字单行，点击 × 取消；悬停展开完整引用 -->
           <div id="yinYongTiao" class="yinYongTiao yinCang">
+            <div class="yinYongQuan" id="yinYongQuan"></div>
             <div class="yinYongWen" id="yinYongWen"></div>
             <button type="button" class="yinYongGuan" id="yinYongGuan" title="取消引用">×</button>
           </div>
@@ -324,6 +345,11 @@
         <div class="mianBanKuai yinCang" id="mianBanDingShiKuai">
           <div class="mianBanBiaoTi"><span data-i18n="panel.schedule.title">定时任务</span></div>
           <div id="dingShiLieBiao" class="jingYin">—</div>
+        </div>
+        <!-- 分身（子代理）：默认隐藏 —— 用户可以自行添加；一旦有子代理出现，由 queBaoKaPian 自动加回来 -->
+        <div class="mianBanKuai yinCang" id="mianBanFenShenKuai">
+          <div class="mianBanBiaoTi"><span data-i18n="panel.fenshen.title">分身</span><span class="fenshenJiShu" id="fenShenJiShu"></span></div>
+          <div id="fenShenLieBiao" class="jingYin">—</div>
         </div>
         <div class="mianBanKuai" id="xiangMuTaiKuai" data-only="proj-single">
             <h3 data-i18n="panel.projectState"></h3>

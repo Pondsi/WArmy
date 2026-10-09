@@ -605,13 +605,25 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'ask_user',
-        description: '当你有不确定的选择/决定时，列出候选项让用户在界面上点选（永远含「其他」自定义输入），用户选完你会拿到结果并继续。**不要自己猜、也不要因此停下。**',
+        description: '当你有不确定的选择/决定时，列出候选项让用户在界面上点选（永远含「其他」自定义输入），用户选完你会拿到结果并继续。**不要自己猜、也不要因此停下。** 如果其中有你自评最优的方案，把它标成 recommended=true —— 界面会给它加「推荐」标记；用户开了「自动选择」时会直接按推荐方案执行。',
         parameters: {
           type: 'object',
           properties: {
             title: { type: 'string', description: '要问用户的问题（一句话）' },
             hint: { type: 'string', description: '补充说明（可选）' },
-            options: { type: 'array', items: { type: 'string' }, description: '候选选项（2-8 个，纯文案）' },
+            options: {
+              type: 'array',
+              description: '候选选项（2-8 个）。推荐写成对象 {"label":"文案","recommended":true}；纯字符串也接受。',
+              items: {
+                type: 'object',
+                properties: {
+                  label: { type: 'string', description: '选项文案' },
+                  recommended: { type: 'boolean', description: '这是不是你自评最优的方案（最多标一个）' },
+                  description: { type: 'string', description: '这个选项的简短说明（可选）' },
+                },
+                required: ['label'],
+              },
+            },
           },
           required: ['title'],
         },

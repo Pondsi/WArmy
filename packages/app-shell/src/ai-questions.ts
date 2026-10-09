@@ -15,6 +15,8 @@ export interface AiWenTiXuanXiang {
   id: string;
   biaoQian: string;
   description?: string;
+  /** 模型自评的**最优方案**：界面上标「推荐」，并且「自动选择」开着时按它执行 */
+  tuiJian?: boolean;
 }
 
 export interface AiWenTi {
@@ -39,7 +41,7 @@ export class AiWenTiZhongXin {
     sessionId?: string;
     biaoTi: string;
     ti?: string;
-    options: Array<{ id?: string; biaoQian: string; description?: string }>;
+    options: Array<{ id?: string; biaoQian: string; description?: string; tuiJian?: boolean }>;
     dedupe?: boolean;
   }): AiWenTi {
     const groupId = String(shuRu.groupId || '');
@@ -55,6 +57,7 @@ export class AiWenTiZhongXin {
         id: String(o.id || crypto.randomBytes(4).toString('hex')),
         biaoQian: String(o.biaoQian).trim(),
         ...(o.description ? { description: String(o.description) } : {}),
+        ...(o.tuiJian ? { tuiJian: true } : {}),
       }));
     const q: AiWenTi = {
       id: 'q' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'),

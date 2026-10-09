@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Default avatar">
+  <defs>
+    <linearGradient id="ubg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#f3ead9"/>
+      <stop offset="1" stop-color="#cbb69c"/>
+    </linearGradient>
+    <linearGradient id="ubody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fb3a3"/>
+      <stop offset="1" stop-color="#5c8d82"/>
+    </linearGradient>
+    <linearGradient id="uhead" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fc0b0"/>
+      <stop offset="1" stop-color="#6ba493"/>
+    </linearGradient>
+  </defs>
+
+  <!--
+    用户默认头像（第 4 版）· 要求：**仅拟人（类人）**、创意、有趣、不冒犯、
+    无性别、无年龄、无肤色、无职业；**四角不要任何点/装饰**。
+    前三版教训：
+      1) 纯剪影 + 抬手     → 被读成「战斗」
+      2) 宽檐礼帽 + 方框墨镜 → 被读成「老板 / 某种职业」
+      3) 右上角的小方块 + 斜线 → 被指出「像个点之类的」
+    这版按检索到的做法走「抽象玩偶 / chibi」：
+      · **大头短身**（chibi 比例）＝ 像玩偶，不像真人；
+      · **圆润无棱角的 blob 造型**，四肢是短短的圆角块，坐姿放松（不摆任何动作姿势）；
+      · 身体用**非肤色**的青绿色 ＝ 明确是角色，不是「某个人」；
+      · 眼睛是两道短横（不是圆点：大圆眼会联想到小孩/女性）；
+      · **画面里除了小人本身什么都没有**，四角干净。
+  -->
+  <rect width="128" height="128" rx="30" ry="30" fill="url(#ubg)"/>
+
+  <!-- 腿：坐着，两只短短的圆角块自然分开 -->
+  <rect x="40" y="100" width="18" height="16" rx="8" fill="#5c8d82"/>
+  <rect x="70" y="100" width="18" height="16" rx="8" fill="#5c8d82"/>
+  <!-- 身体：圆润的小块 -->
+  <rect x="42" y="76" width="44" height="34" rx="15" fill="url(#ubody)"/>
+  <!-- 手臂：垂在身侧、微微外张（放松，不是举手） -->
+  <rect x="28" y="82" width="13" height="22" rx="6.5" fill="#5c8d82"/>
+  <rect x="87" y="82" width="13" height="22" rx="6.5" fill="#5c8d82"/>
+  <!-- 头：chibi 大头，圆角矩形（无头发、无帽、无饰） -->
+  <rect x="33" y="22" width="62" height="58" rx="26" fill="url(#uhead)"/>
+
+  <!-- 眼睛：两道短横 -->
+  <rect x="50" y="45" width="10" height="3.4" rx="1.7" fill="#2c4038"/>
+  <rect x="68" y="45" width="10" height="3.4" rx="1.7" fill="#2c4038"/>
+  <!-- 一点点笑意 -->
+  <path d="M56 60 Q64 65.5 72 60" fill="none" stroke="#2c4038" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

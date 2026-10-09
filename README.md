@@ -41,7 +41,7 @@ Chinese product name: **无限牛马** (ja: 無限社畜 / ko: 무한 사축).
 
 | Genre | Typical strength | How WArmy differs |
 | --- | --- | --- |
-| Agent prompt packs (agency-agents style) | Personas & recipes | WArmy is a **running desktop product** |
+| Agent prompt packs | Personas & recipes | WArmy is a **running desktop product** |
 | Single-window chat UIs | Simple model chat | Unit of work is **group + duty + board + memory + policy** |
 | Coding-agent CLIs / IDE plugins | Deep repo editing | WArmy is a **project command center**, not an IDE plugin |
 | Multi-agent frameworks | Code-first orchestration | WArmy ships **UI + persistence + security gates** out of the box |
