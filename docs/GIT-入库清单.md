@@ -21,7 +21,7 @@
 | `*.log` `*.tsbuildinfo` | 日志与增量编译缓存 | 正确 |
 | `.env` `.env.*` | 环境变量 | 正确，务必保持 |
 | `*.db` `*.db-journal/-shm/-wal` | SQLite 投影 | 正确（JSONL 才是事实源） |
-| `vendor/agency-agents/` | 第三方 agent 库 | 正确：它有自己的 LICENSE，不该并进本仓库 |
+| `vendor/`（第三方 agent 参考库） | 第三方 agent 库 | **2026-10-09 已从项目整体删除**：本地副本与 `.gitignore` 条目一并移除 |
 | `spikes/*/models/`、`spikes/spike-07-onnx/models/` | ONNX 模型（约 23 MB） | 正确 |
 | `spikes/node_modules/`、`spikes/*/node_modules/` | spike 的依赖 | 正确 |
 | `spikes/spike-08-helper/backups/` | hosts 备份 | **本次新增**：是证据，但内容是本机 hosts 快照，不宜入库 |
@@ -40,7 +40,7 @@
 
 - **没有跟踪任何凭据文件**：`git ls-files` 搜 `.env` / `secret` / `credential` / `*.key` / `*.pem` / `password` 均无命中（唯一命中 `tokenizer.ts` 是误报，它是分词器实现）。
 - **`audit.jsonl` 未入库**：它落在 userData，符合 ADR「审计日志绝不上传」。
-- **`vendor/agency-agents/` 未入库**：避免把第三方内容与其 LICENSE 一起并进本仓库；若确实要随仓库分发，应单独标注来源与许可证。
+- **第三方 agent 参考库已从项目整体删除**（2026-10-09）：连角色副本、本地克隆、`.gitignore` 条目与关于页的致谢一并移除——它对运行零依赖，留着只是徒增体积与许可义务。
 - **`resources/node/` 的 Node 二进制**：属第三方产物（Node.js，MIT），如要入库需一并保留其 LICENSE。
 
 ## 五、建议动作（可直接照做）
