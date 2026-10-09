@@ -970,7 +970,17 @@ async function lieKeYongMoXing(): Promise<string[]> {
       }
       for (const m of (p.models || [])) {
         const id = String(typeof m === 'string' ? m : (m as { id?: string })?.id || '');
-        if (id && !out.includes(id)) out.push(id);
+        if (!id || out.includes(id)) continue;
+        /**
+         * **只把能聊天的模型放进候选链**（真事故：降级链里混进了 `dimavz/whisper-tiny` ——
+         * 那是语音识别模型，Ollama 直接回 `does not support tools` / `unknown model archit`，
+         * 于是"换下一个模型"越换越糟、最后卡死）。非对话模型（向量/听写/朗读/画图…）
+         * 一律不进这条链。
+         */
+        const nl = moXingNengLi(id, null) as { kind?: string };
+        const k = String(nl && nl.kind ? nl.kind : '');
+        if (k && k !== 'unknown' && k !== 'chat') continue;
+        out.push(id);
       }
     }
     return out;
@@ -1015,9 +1025,39 @@ async function dengDaiKaPian(id: string, timeoutMs: number): Promise<string> {
  * 只在发送前做，日志里的原文一字不动。
  */
 function guiZhengXiaoXiJiZhuang<T extends { role?: string; content?: unknown }>(msgs: T[]): T[] {
-  const xs = Array.isArray(msgs) ? msgs.slice() : [];
+  let xs = Array.isArray(msgs) ? msgs.slice() : [];
   if (xs.length < 2) return xs;
   const shi = (m: T | undefined): boolean => !!m && String(m.role || '') === 'assistant';
+  /**
+   * ① **畸形的 `role:tool` 消息要修掉**。
+   *
+   * 真事故（用户报"默认模型用不了、工具不断反复调用最后停住"）：Ollama 反复报
+   * `HTTP 500 While executing CallExpression at line 85` —— 这是它**服务端 prompt 模板**
+   * 在执行时炸了，而**降级成不带 tools 的请求后同样炸**，说明根因不在 tools 本身，
+   * 而在**消息形状**：历史里残留了 `role:'tool'` 却没有对应的 assistant `tool_calls`，
+   * 模板一遇到这种就崩（图片块（`chat.image-attached`×27）会放大这个问题）。
+   * 处理：没有配对 tool_call 的 tool 消息 → 降级成普通 user 消息（内容照留，不丢信息）。
+   */
+  const zaiZhengTool = (list: T[]): T[] => {
+    const pei = new Set<string>();
+    for (const m of list) {
+      const tc = (m as { toolCalls?: unknown }).toolCalls;
+      if (Array.isArray(tc)) for (const c of tc) {
+        const id = String((c as { id?: unknown }).id || '');
+        if (id) pei.add(id);
+      }
+    }
+    return list.map((m) => {
+      if (String(m.role || '') !== 'tool') return m;
+      const id = String((m as { toolCallId?: unknown }).toolCallId || '');
+      if (id && pei.has(id)) return m;
+      // 没有配对的 tool_call ⇒ 模板会炸 ⇒ 降级成 user，内容原样保留
+      const wen = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '');
+      return { ...m, role: 'user', content: '【工具结果】' + wen } as T;
+    });
+  };
+  xs = zaiZhengTool(xs);
+  if (xs.length < 2) return xs;
   if (!shi(xs[xs.length - 1])) return xs;
   let j = xs.length - 1;
   while (j - 1 >= 0 && shi(xs[j - 1])) j -= 1;

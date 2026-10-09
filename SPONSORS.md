@@ -1,89 +1,60 @@
-# Sponsors
+# 赞助 · Sponsors
 
-> 复用模板：把 `发布规范\assets\alipay.jpg` 与 `wechat-pay.jpg` 复制到项目 `sponsors/` 目录。
-> 占位符 `<PROJECT>` 替换为项目名。
-
----
-
-## English
-
-If you find `<PROJECT>` helpful, consider supporting its development. Your support helps maintain and improve this project. Thank you!
-
-- **PayPal**: https://paypal.me/pondsi
-- **WeChat Pay**: <img src="sponsors/wechat-pay.jpg" width="200" alt="WeChat Pay QR Code">
-- **Alipay**: <img src="sponsors/alipay.jpg" width="200" alt="Alipay QR Code">
-
-## 简体中文
-
-如果 `<PROJECT>` 对你有帮助，欢迎支持它的持续开发。你的支持会让这个项目维护得更好。谢谢！
-
-- **PayPal**：https://paypal.me/pondsi
-- **微信支付**：<img src="sponsors/wechat-pay.jpg" width="200" alt="微信支付收款码">
-- **支付宝**：<img src="sponsors/alipay.jpg" width="200" alt="支付宝收款码">
-
-## 繁體中文
-
-如果 `<PROJECT>` 對你有幫助，歡迎支持它的持續開發。你的支持會讓這個專案維護得更好。謝謝！
-
-- **PayPal**：https://paypal.me/pondsi
-- **微信支付**：<img src="sponsors/wechat-pay.jpg" width="200" alt="微信支付收款碼">
-- **支付寶**：<img src="sponsors/alipay.jpg" width="200" alt="支付寶收款碼">
-
-## 한국어
-
-`<PROJECT>`가 도움이 되셨다면 개발을 후원해 주시기 바랍니다. 여러분의 후원은 이 프로젝트를 더 잘 유지보수하는 데 힘이 됩니다. 감사합니다!
-
-- **PayPal**: https://paypal.me/pondsi
-- **위챗페이**: <img src="sponsors/wechat-pay.jpg" width="200" alt="위챗페이 QR 코드">
-- **알리페이**: <img src="sponsors/alipay.jpg" width="200" alt="알리페이 QR 코드">
-
-## Русский
-
-Если `<PROJECT>` оказался полезным, вы можете поддержать его разработку. Ваша поддержка помогает поддерживать и улучшать проект. Спасибо!
-
-- **PayPal**: https://paypal.me/pondsi
-- **WeChat Pay**: <img src="sponsors/wechat-pay.jpg" width="200" alt="QR-код WeChat Pay">
-- **Alipay**: <img src="sponsors/alipay.jpg" width="200" alt="QR-код Alipay">
-
-## 日本語
-
-`<PROJECT>` がお役に立てば、開発のご支援をいただけると幸いです。皆さまのご支援がこのプロジェクトの維持と改善につながります。ありがとうございます！
-
-- **PayPal**: https://paypal.me/pondsi
-- **WeChat Pay**: <img src="sponsors/wechat-pay.jpg" width="200" alt="WeChat Pay QR コード">
-- **Alipay**: <img src="sponsors/alipay.jpg" width="200" alt="Alipay QR コード">
-
-## Español
-
-Si `<PROJECT>` te resulta útil, considera apoyar su desarrollo. Tu apoyo ayuda a mantener y mejorar este proyecto. ¡Gracias!
-
-- **PayPal**: https://paypal.me/pondsi
-- **WeChat Pay**: <img src="sponsors/wechat-pay.jpg" width="200" alt="Código QR de WeChat Pay">
-- **Alipay**: <img src="sponsors/alipay.jpg" width="200" alt="Código QR de Alipay">
-
-## Français
-
-Si `<PROJECT>` vous est utile, vous pouvez soutenir son développement. Votre soutien aide à maintenir et à améliorer ce projet. Merci !
-
-- **PayPal** : https://paypal.me/pondsi
-- **WeChat Pay** : <img src="sponsors/wechat-pay.jpg" width="200" alt="Code QR WeChat Pay">
-- **Alipay** : <img src="sponsors/alipay.jpg" width="200" alt="Code QR Alipay">
+> **无限牛马 / WArmy** · 作者 Pondsi
+>
+> 这个项目是开源的，里面**没有任何收费内容** —— 你现在用到的一切，以后也一直免费。
+> 如果它对你有帮助，欢迎请作者喝杯咖啡。赞助纯粹是对作者的**鼓励与资助**，不会换来任何额外功能或特权：
+> **无论有没有赞助过，你都始终拥有对本项目的完全使用权。**
 
 ---
 
-## Other Ways to Support / 其他支持方式
+## 赞助方式（Payment methods · 所有语言通用）
 
-- ⭐ Star this repo — it helps others discover `<PROJECT>`
-- 🐛 Report issues or suggest features
-- 🔧 Submit patches or improvements
-- 📣 Share with friends and colleagues
+收款方式与语言无关，因此**只在这里列一次**，不按语言重复。
 
-Thank you for your support! — Pondsi
+### PayPal
 
-<!-- SIGNATURE: list ONLY the AI models that actually participated in THIS project.
-     If none participated, write just "Pondsi". Ask the owner if unsure. -->
-Pondsi (+<model1> +<model2> +<model3>) — automatically committed by OpenClaw
+**https://paypal.me/pondsi**
+
+### 微信支付 · WeChat Pay
+
+<img src="sponsors/wxd.png" width="220" alt="微信支付收款码">
+
+### 支付宝 · Alipay
+
+<img src="sponsors/zfbd.png" width="220" alt="支付宝收款码">
 
 ---
 
-Pondsi (+mimo-X-por-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop
+## 谢谢 · Thank you
+
+不同语言的致谢，意思相同，不再重复收款信息。
+
+**简体中文** —— 谢谢每一位支持者，是你们让这个项目一直走下去。
+
+**繁體中文** —— 謝謝每一位支持者，是你們讓這個專案一直走下去。
+
+**English** —— Thank you to everyone who supports this project. You are the reason it keeps going.
+
+**日本語** —— 応援してくださる皆さまに感謝します。このプロジェクトを続けていけるのは、皆さまのおかげです。
+
+**한국어** —— 이 프로젝트를 후원해 주신 모든 분께 감사드립니다. 여러분 덕분에 계속 이어집니다.
+
+**Русский** —— Спасибо каждому, кто поддерживает проект. Именно вы помогаете ему развиваться.
+
+**Español** —— Gracias a cada persona que apoya este proyecto. Ustedes son la razón por la que sigue adelante.
+
+**Français** —— Merci à tous ceux qui soutiennent ce projet. C’est grâce à vous qu’il continue d’avancer.
+
+---
+
+## 其他支持方式 · Other ways to support
+
+- ⭐ **Star** 这个仓库 —— 让更多人发现它
+- 🐛 反馈问题、提功能建议
+- 🔧 提交补丁与改进
+- 📣 把它分享给朋友和同事
+
+---
+
+Pondsi (+mimo-X-pro-Preview +mimo-v2.5-pro) — automatically committed by Xiaomi MiMo Desktop

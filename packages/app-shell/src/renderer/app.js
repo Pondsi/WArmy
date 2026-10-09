@@ -596,7 +596,16 @@
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
     return PRESET_AVATARS[h % PRESET_AVATARS.length];
   }
-  const PERSON_AVATARS = Array.from({ length: 10 }, (_, i) => `./icons/avatars/person-${i + 1}.svg`);
+  /**
+   * **用户**可选头像：原有 10 张 + 新增 17 张抽象/几何/拟物（`abs-1..17`）。
+   * 新增 17 张的设计约束（用户要求）：不一定是人的样子，可以是几何形状、抽象色彩、
+   * 拟物；**不含政治、宗教、肤色、国籍因素**；并且全部**零圆形元素**。
+   * 默认头像见 PERSON_DEFAULT（`user-default.svg`），它本身不在这份可选列表里。
+   */
+  const PERSON_AVATARS = [
+    ...Array.from({ length: 10 }, (_, i) => `./icons/avatars/person-${i + 1}.svg`),
+    ...Array.from({ length: 17 }, (_, i) => `./icons/avatars/abs-${i + 1}.svg`),
+  ];
   /**
    * **牛马**预设头像：preset-1..10。
    * 真事故（用户反馈「牛马头像里怎么有我最近做的用户头像」）：之前把**用户默认头像**
@@ -615,7 +624,7 @@
   function personAvatarSrc(p) {
     if (p && p.avatarDataUrl) return p.avatarDataUrl;
     const n = Number(p && p.avatarPreset);
-    if (Number.isInteger(n) && n >= 1 && n <= 10) return PERSON_AVATARS[n - 1];
+    if (Number.isInteger(n) && n >= 1 && n <= PERSON_AVATARS.length) return PERSON_AVATARS[n - 1];
     return PERSON_DEFAULT;
   }
 
@@ -6943,6 +6952,33 @@ window.__keYiLiaoTian = keYiLiaoTian;
           <p class="jingYin">${escapeHtml(tOr('webgpu.hint', '检测本机是否支持 WebGPU（与模型无关）。'))}</p>
           <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
         </div>
+        <!-- 音频设备：**全局**设置（产品要求：从「拟态」上移）。
+             拟态桌宠、聊天输入框的麦克风、回复旁的喇叭播放，以及以后任何要用麦克风/播放器的地方，
+             都统一看这里 —— 元素 id 与原来一致，所以拟态的置灰联动（关语音互动时灰掉）照旧生效。 -->
+        <div class="sheZhiSection sheZhiKa" id="yinPinSheBeiKa" data-sec="func">
+          <h2>${escapeHtml(tOr('audio.title', '音频设备'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('audio.hint', '这里是**全局**的音频设置：桌宠、聊天框的麦克风、回复旁的喇叭，以及以后其它用到麦克风/播放器的地方，都按这里的设备与音量来。'))}</p>
+          <div class="mimicSheBeiHang" style="margin-top:8px">
+            <div class="mimicSheBeiLie">
+              <span class="jingYin">${escapeHtml(tOr('mimic.mic', '麦克风'))}</span>
+              <select id="mimicMaiKeFeng"></select>
+            </div>
+            <div class="mimicSheBeiLie">
+              <span class="jingYin">${escapeHtml(tOr('mimic.speaker', '播放器'))}</span>
+              <select id="mimicBoFangQi"></select>
+            </div>
+            <div class="mimicSheBeiYinLiang">
+              <span class="jingYin">${escapeHtml(tOr('mimic.volume', '声音大小'))}</span>
+              <div class="mimicYinLiangHe">
+                <input type="range" id="mimicYinLiang" class="mimicShuHuaKuai" min="0" max="100" step="1" value="90"/>
+                <span class="jingYin" id="mimicYinLiangZhi">90%</span>
+              </div>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px">
+            <input type="checkbox" id="mimicXiTongYin"/> ${escapeHtml(tOr('mimic.sysAudio', '允许接收系统 / 应用的声音'))}
+          </label>
+        </div>
         <!-- 自动归档：把右键菜单里勾了「自动归档」的会话整理后放进知识库；**增量**，只归档新增 -->
         <div class="sheZhiSection sheZhiKa" id="guiDangKa" data-sec="func">
           <h2>${escapeHtml(tOr('archive.autoTitle', '自动归档'))}</h2>
@@ -7067,28 +7103,14 @@ window.__keYiLiaoTian = keYiLiaoTian;
             <div class="jingYin">${escapeHtml(tOr('mimic.actionsHint', '默认全部禁用。启用后请为每条写「触发提示词」，项目会约束模型只在满足条件时才触发。'))}</div>
           </div>
 
+          <!-- 音频设备已上移为**全局设置**（设置→功能→音频设备）：
+               拟态桌宠、聊天框麦克风、回复旁的喇叭，以及以后任何用到麦克风/播放器的地方，都看那一处。
+               这里只留一句指引，避免用户以为拟态里漏了。 -->
           <div class="field" style="margin-top:8px" id="mimicSheBeiKuai">
-            <label>${escapeHtml(tOr('mimic.devices', '音频设备'))}</label>
-            <div class="mimicSheBeiHang">
-              <div class="mimicSheBeiLie">
-                <span class="jingYin">${escapeHtml(tOr('mimic.mic', '麦克风'))}</span>
-                <select id="mimicMaiKeFeng"></select>
-              </div>
-              <div class="mimicSheBeiLie">
-                <span class="jingYin">${escapeHtml(tOr('mimic.speaker', '播放器'))}</span>
-                <select id="mimicBoFangQi"></select>
-              </div>
-              <div class="mimicSheBeiYinLiang">
-                <span class="jingYin">${escapeHtml(tOr('mimic.volume', '声音大小'))}</span>
-                <div class="mimicYinLiangHe">
-                  <input type="range" id="mimicYinLiang" class="mimicShuHuaKuai" min="0" max="100" step="1" value="90"/>
-                  <span class="jingYin" id="mimicYinLiangZhi">90%</span>
-                </div>
-              </div>
+            <div class="jingYin">${escapeHtml(tOr('mimic.devicesMoved', '音频设备（麦克风 / 播放器 / 音量）已移到「设置 → 功能 → 音频设备」，桌宠、聊天麦克风与喇叭都用那一套全局设置。'))}</div>
+            <div class="shiLiHang" style="margin-top:6px">
+              <button class="anNiuXiao" id="anNiuQuYinPinSheBei">${escapeHtml(tOr('mimic.gotoAudio', '去设置音频设备'))}</button>
             </div>
-            <label style="display:flex;align-items:center;gap:6px;margin-top:6px">
-              <input type="checkbox" id="mimicXiTongYin"/> ${escapeHtml(tOr('mimic.sysAudio', '允许接收系统 / 应用的声音'))}
-            </label>
           </div>
 
           <div class="field" style="margin-top:8px">
@@ -7115,6 +7137,27 @@ window.__keYiLiaoTian = keYiLiaoTian;
           所以空标题留在前面、内容没有 data-sec 时，整块关于内容会被算进**拟态**里
           （真事故：点「关于」是空的，内容却出现在「拟态」下面）。
         -->
+        <!-- 赞助：放在「关于」上面（产品要求）。图片是项目内置资源，不指向本机路径 -->
+        <div class="sheZhiSection" data-sec="about"><h2 style="color:var(--accent)">${escapeHtml(tOr('sponsor.biaoTi', '赞助'))}</h2></div>
+        <div class="sheZhiSection sheZhiKa">
+          <p class="jingYin">${escapeHtml(tOr('sponsor.tiShi1', '这个项目是开源的，里面没有任何收费内容 —— 你现在用到的一切，以后也一直免费。'))}</p>
+          <p class="jingYin" style="margin-top:8px">${escapeHtml(tOr('sponsor.tiShi2', '如果它对你有帮助，欢迎请作者喝杯咖啡。赞助纯粹是对作者的鼓励与资助，不会换来任何额外功能或特权：无论有没有赞助过，你都始终拥有对本项目的完全使用权。'))}</p>
+          <div style="margin-top:12px">
+            <div class="jingYin">${escapeHtml(tOr('sponsor.paypal', 'PayPal'))}</div>
+            <div style="margin-top:4px"><a href="https://paypal.me/pondsi" target="_blank" rel="noreferrer">https://paypal.me/pondsi</a></div>
+          </div>
+          <div style="margin-top:14px;display:flex;gap:18px;flex-wrap:wrap">
+            <div style="text-align:center">
+              <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('sponsor.wechat', '微信收款'))}</div>
+              <img src="./icons/sponsor/wxd.png" alt="${escapeHtml(tOr('sponsor.wechatAlt', '微信收款二维码'))}" style="width:168px;height:168px;object-fit:contain;border:1px solid var(--line);border-radius:8px"/>
+            </div>
+            <div style="text-align:center">
+              <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('sponsor.alipay', '支付宝收款'))}</div>
+              <img src="./icons/sponsor/zfbd.png" alt="${escapeHtml(tOr('sponsor.alipayAlt', '支付宝收款二维码'))}" style="width:168px;height:168px;object-fit:contain;border:1px solid var(--line);border-radius:8px"/>
+            </div>
+          </div>
+          <div class="jingYin" style="margin-top:10px">${escapeHtml(tOr('sponsor.thanks', '谢谢每一位支持者 —— 是你们让这个项目一直走下去。'))}</div>
+        </div>
         <div class="sheZhiSection" data-sec="about"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.about'))}</h2></div>
         <div class="sheZhiSection sheZhiKa aboutKa">
           <div class="aboutPinPai">
