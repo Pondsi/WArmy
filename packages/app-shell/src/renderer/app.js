@@ -515,6 +515,37 @@
     });
   }
 
+  /**
+   * 三按钮删除确认（产品要求）：
+   *   入库 = 界面删掉、内容保留待后台归档
+   *   清除 = 马上彻底删除、不进知识库（需再确认一次）
+   *   取消 = 什么都不做
+   */
+  function uiConfirmDelete3(message, biaoTi) {
+    return new Promise((resolve) => {
+      const root = $('duiHuaKuangGen');
+      $('duiHuaKuangBiaoTi').textContent = biaoTi || displayName();
+      $('duiHuaKuangTi').textContent = String(message ?? '');
+      const dongZuoJi = $('duiHuaKuangDongZuoJi');
+      dongZuoJi.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.className = 'anNiuXiao';
+      cancel.textContent = t('common.cancel');
+      cancel.onclick = () => { root.classList.add('yinCang'); resolve('cancel'); };
+      const ruKu = document.createElement('button');
+      ruKu.className = 'anNiuZhuYao';
+      ruKu.textContent = tOr('ctx.deleteArchive', '入库');
+      ruKu.onclick = () => { root.classList.add('yinCang'); resolve('ruku'); };
+      const qingChu = document.createElement('button');
+      qingChu.className = 'anNiuDanger';
+      qingChu.textContent = tOr('ctx.deletePurge', '清除');
+      qingChu.onclick = () => { root.classList.add('yinCang'); resolve('qingchu'); };
+      dongZuoJi.append(cancel, ruKu, qingChu);
+      root.classList.remove('yinCang');
+      cancel.focus();
+    });
+  }
+
   /** 强制倒计时确认（危险操作） */
   function uiConfirmCountdown(message, biaoTi, seconds = 5) {
     return new Promise((resolve) => {
@@ -4738,24 +4769,42 @@ window.__keYiLiaoTian = keYiLiaoTian;
    * 按会话隔离：切换会话/并发轮不会互相串台。
    */
   /**
-   * 「干活中」小字文案池（1000 条，见 busy-phrases.js）。
-   * 起手段保持一句安静的「正在思考…」，之后才轮到这些有人味的短句。
+   * 「干活中」小字文案池（1000 条 · 十主题分组，见 busy-phrases.js）。
+   * **每次对话随机选一组**，只在该组内轮换 —— 不会跨主题乱跳。
    * 轮换**要慢**（12 秒一条）—— 以前 6 秒换一次，看着眼花。
    */
+  const BUSY_PHRASE_GROUPS = (typeof window !== 'undefined' && window.__BUSY_PHRASE_GROUPS && typeof window.__BUSY_PHRASE_GROUPS === 'object')
+    ? window.__BUSY_PHRASE_GROUPS : null;
   const BUSY_PHRASES = (typeof window !== 'undefined' && Array.isArray(window.__BUSY_PHRASES)) ? window.__BUSY_PHRASES : [];
   const BUSY_ROTATE_MS = (typeof window !== 'undefined' && Number(window.__BUSY_ROTATE_MS)) || 12000;
+  /** 当前这一轮对话锁定的文案组（只在 yunXingZhuangTaiKai 时重抽） */
+  let busyPhraseGroup = BUSY_PHRASES;
   /** 每轮从一个随机位置开始，两次对话不会永远是同一句 */
   let busyPhraseSeed = 0;
   /** **当前这一句**（只在轮换点才换，不是每 250ms 都变；真事故：随机取导致每秒变 4 次） */
   let busyPhraseCur = '';
   function busyPhraseAt(i) {
-    if (!BUSY_PHRASES.length) return '';
+    const pool = (busyPhraseGroup && busyPhraseGroup.length) ? busyPhraseGroup : BUSY_PHRASES;
+    if (!pool.length) return '';
     // 轮换点（i 变化）才重新随机取一句
     if (busyPhraseSeed !== i) {
       busyPhraseSeed = i;
-      busyPhraseCur = BUSY_PHRASES[Math.floor(Math.random() * BUSY_PHRASES.length)];
+      busyPhraseCur = pool[Math.floor(Math.random() * pool.length)];
     }
     return busyPhraseCur;
+  }
+  /** 每次开一轮对话：随机锁定一个主题组（生活/工作/…/魔法） */
+  function chongChouBusyZu() {
+    if (BUSY_PHRASE_GROUPS) {
+      const keys = Object.keys(BUSY_PHRASE_GROUPS);
+      if (keys.length) {
+        const k = keys[Math.floor(Math.random() * keys.length)];
+        const g = BUSY_PHRASE_GROUPS[k];
+        busyPhraseGroup = Array.isArray(g) && g.length ? g : BUSY_PHRASES;
+        return;
+      }
+    }
+    busyPhraseGroup = BUSY_PHRASES;
   }
   const YUN_XING_CIHOU = 8;
   let yunXingJiShiQi = 0;
@@ -4786,7 +4835,8 @@ window.__keYiLiaoTian = keYiLiaoTian;
     yunXingZuiXin = yunXingKaiShi;
     yunXingXuHao = 1;
     yunXingShiDai += 1;
-    // 文案池每轮重新随机（首句即随机，之后每 12 秒换一次）
+    // 文案池每轮重新随机：先锁定一个主题组，再在组内轮换
+    chongChouBusyZu();
     busyPhraseSeed = -1;
     clearInterval(yunXingJiShiQi);
     he.classList.remove('yinCang', 'cuoWu');
@@ -4797,7 +4847,9 @@ window.__keYiLiaoTian = keYiLiaoTian;
      *   ③ 持续了多久（秒）
      */
     he.innerHTML =
-      '<span class="yunXingDian" aria-hidden="true"><i></i><i></i><i></i></span>' +
+      '<span class="yunXingDian niuMaPao" aria-hidden="true">' +
+        '<img src="./icons/logo-16.png" alt=""/><img src="./icons/logo-16.png" alt=""/><img src="./icons/logo-16.png" alt=""/>' +
+      '</span>' +
       '<span class="yunXingWen"></span>' +
       '<span class="yunXingShiJian"></span>' +
       '<span class="yunXingMiao"></span>';
@@ -4808,13 +4860,15 @@ window.__keYiLiaoTian = keYiLiaoTian;
       const yong = Math.max(0, Math.floor((Date.now() - yunXingKaiShi) / 1000));
       let ju;
       if (yong < 8) ju = tOr('chat.busy.1', '正在思考…');
-      else if (yong >= 120) ju = tOr('chat.busy.still', '还在干，没卡住…');
       else if (BUSY_PHRASES.length) {
         // 文案池：**每 12 秒**才换一句（真反馈：换太快看着眼花）
+        // 超过 120s 不再钉死在「还在干」——继续轮换，只在整分钟时插一句安抚
         const idx = Math.floor((yong - 8) * 1000 / BUSY_ROTATE_MS);
-        ju = busyPhraseAt(idx);
-      } else {
-        yunXingXuHao = (Math.floor((yong - 8) / BUSY_ROTATE_MS) % (YUN_XING_CIHOU - 1)) + 2;
+        if (yong >= 120 && (yong % 60) < 12) ju = tOr('chat.busy.still', '还在干，没卡住…');
+        else ju = busyPhraseAt(idx);
+      } else if (yong >= 120 && (yong % 60) < 12) ju = tOr('chat.busy.still', '还在干，没卡住…');
+      else {
+        yunXingXuHao = (Math.floor((yong - 8) / (BUSY_ROTATE_MS / 1000)) % (YUN_XING_CIHOU - 1)) + 2;
         ju = tOr('chat.busy.' + yunXingXuHao, '正在干活…');
       }
       if (wen) wen.textContent = ju;
@@ -4840,12 +4894,16 @@ window.__keYiLiaoTian = keYiLiaoTian;
     if (shiDai !== yunXingShiDai) return;
     if (chengGong === true) {
       he.classList.remove('cuoWu');
-      he.innerHTML = '<span class="yunXingDian ok" aria-hidden="true"><i></i><i></i><i></i></span>' +
+      he.innerHTML = '<span class="yunXingDian ok niuMaPao" aria-hidden="true">' +
+        '<img src="./icons/logo-16.png" alt=""/><img src="./icons/logo-16.png" alt=""/><img src="./icons/logo-16.png" alt=""/>' +
+        '</span>' +
         '<span class="yunXingWen">' + escapeHtml(tOr('chat.busy.done', '干完了')) + '</span>';
       setTimeout(() => { he.classList.add('yinCang'); }, 1600);
     } else if (chengGong === false) {
       he.classList.add('cuoWu');
-      he.innerHTML = '<span class="yunXingDian cuo" aria-hidden="true"><i></i><i></i><i></i></span>' +
+      he.innerHTML = '<span class="yunXingDian cuo niuMaPao" aria-hidden="true">' +
+        '<img src="./icons/logo-16.png" alt=""/><img src="./icons/logo-16.png" alt=""/><img src="./icons/logo-16.png" alt=""/>' +
+        '</span>' +
         '<span class="yunXingWen">' + escapeHtml(tOr('chat.busy.fail', '出了点问题…')) + '</span>';
       setTimeout(() => { he.classList.add('yinCang'); he.classList.remove('cuoWu'); }, 2200);
     } else {
@@ -5647,32 +5705,49 @@ window.__keYiLiaoTian = keYiLiaoTian;
           </div>
         </div>
         <div class="shiLiHang" style="margin-top:14px">
-          <button class="anNiuZhuYao" id="iBaoCun" title="${escapeHtml(t('common.save'))}">${escapeHtml(t('common.save'))}</button>
+          <!-- 底部「保存」已删除（产品要求）：头像/模型/名称/md 改完立即生效；
+               只有「写入认知」需要点确定。 -->
           <button class="anNiuXiao" id="iQiDongTingZhi" title="${escapeHtml(inst.status === 'running' ? t('instances.stop') : t('instances.start'))}">${escapeHtml(inst.status === 'running' ? t('instances.stop') : t('instances.start'))}</button>
           <button class="anNiuDanger" id="iDel" title="${escapeHtml(t('instances.delete'))}">${escapeHtml(t('instances.delete'))}</button>
           <span class="huiZhang ${inst.status === 'running' ? '' : 'off'}">${inst.status === 'running' ? t('instances.running') : t('instances.stopped')}</span>
         </div>
       </div>`;
-    $('iBaoCun').onclick = () => {
-      const newMing = ($('iMing') && $('iMing').value.trim()) || mingOf(inst);
-      if (mingYiZhanYong(newMing, inst.id)) { uiAlert(t('instances.nameDup') || ('重名：' + newMing)); return; }
-      inst.name = newMing; inst.ming = newMing;
-      const personaEl = $('iPersona');
-      if (personaEl) inst.persona = personaEl.value;
-      // 「默认模型」已并入调用链：智能模式 = 自动安排；否则取链上第一个未禁用的
-      const smartEl = $('iSmartMoXing');
-      inst.smartMode = smartEl ? !!smartEl.checked : shiZhiNengMoShi(inst);
-      inst.defaultModel = inst.smartMode ? '' : lianMoRenMoXing(inst);
+    // ── 即时保存：名称 / 思考级别 / 小弟数量 / 头像 / 模型链 —— 改完就落盘，不再点底部保存 ──
+    (function bindInstanceLiveSave() {
+      const doSave = () => {
+        const newMing = ($('iMing') && $('iMing').value.trim()) || mingOf(inst);
+        if (newMing !== mingOf(inst) && mingYiZhanYong(newMing, inst.id)) {
+          uiAlert(t('instances.nameDup') || ('重名：' + newMing));
+          return;
+        }
+        inst.name = newMing; inst.ming = newMing;
+        const thinkEl = $('iThinkLevel');
+        if (thinkEl) inst.thinkLevel = THINK_STOPS[Number(thinkEl.value) || 0] || 'auto';
+        const xiaoDiEl = $('iXiaoDiShu');
+        if (xiaoDiEl) inst.xiaoDiShuLiang = xiaoDiEl.value === 'auto' ? 'auto' : Number(xiaoDiEl.value);
+        try { state.instances = state.instances.map((x) => (x.id === inst.id ? inst : x)); } catch { /* noop */ }
+        window.__saveState?.();
+      };
+      const mingEl = $('iMing');
+      if (mingEl) {
+        mingEl.onchange = () => { doSave(); renderList(); showToast(tOr('common.saved', '已保存')); };
+        mingEl.onblur = () => { if (mingEl.value.trim() !== mingOf(inst)) { doSave(); renderList(); } };
+      }
       const thinkEl = $('iThinkLevel');
-      if (thinkEl) inst.thinkLevel = THINK_STOPS[Number(thinkEl.value) || 0] || 'auto';
-      // 小弟数量：自适应 / 0..8（0 = 不许派小弟）
+      if (thinkEl) {
+        thinkEl.onchange = () => {
+          const lab = $('iThinkLabel');
+          if (lab) lab.textContent = thinkLabelOf(THINK_STOPS[Number(thinkEl.value) || 0] || 'auto');
+          doSave();
+        };
+        thinkEl.oninput = () => {
+          const lab = $('iThinkLabel');
+          if (lab) lab.textContent = thinkLabelOf(THINK_STOPS[Number(thinkEl.value) || 0] || 'auto');
+        };
+      }
       const xiaoDiEl = $('iXiaoDiShu');
-      if (xiaoDiEl) inst.xiaoDiShuLiang = xiaoDiEl.value === 'auto' ? 'auto' : Number(xiaoDiEl.value);
-      window.__saveState?.();
-      renderList();
-      // 简洁 Toast：无边框、半透明、点击穿透、2.6 秒自毁
-      showToast(tOr('common.saved', '已保存'));
-    };
+      if (xiaoDiEl) xiaoDiEl.onchange = () => { doSave(); };
+    })();
     const toggleBtn = $('iQiDongTingZhi');
     if (toggleBtn) {
       toggleBtn.onclick = async () => {
@@ -5761,6 +5836,9 @@ window.__keYiLiaoTian = keYiLiaoTian;
           b.onclick = () => {
             inst.cognitionFiles.splice(Number(b.dataset.cogDel), 1);
             renderCog();
+            // md 增删立即生效（产品要求：改完就落盘）
+            try { state.instances = state.instances.map((x) => (x.id === inst.id ? inst : x)); } catch { /* noop */ }
+            window.__saveState?.();
           };
         });
       }
@@ -5776,8 +5854,11 @@ window.__keYiLiaoTian = keYiLiaoTian;
         }
         inst.avatarPreset = r.preset;
         inst.avatarDataUrl = '';
-        renderInstanceDetail();
+        // 头像改完立即生效（真事故：以前要改模型才触发 saveInst）
+        try { state.instances = state.instances.map((x) => (x.id === inst.id ? inst : x)); } catch { /* noop */ }
         window.__saveState?.();
+        renderInstanceDetail();
+        renderList();
       });
 
       $('iCogTianJia')?.addEventListener('click', async () => {
@@ -5791,6 +5872,8 @@ window.__keYiLiaoTian = keYiLiaoTian;
         const ming = r.path.split(/[\\/]/).pop();
         inst.cognitionFiles.push({ ming, path: r.path, size: 0 });
         renderCog();
+        try { state.instances = state.instances.map((x) => (x.id === inst.id ? inst : x)); } catch { /* noop */ }
+        window.__saveState?.();
       });
 
       // ── 写入认知：确定 / 取消 / 未保存提示 ──
@@ -6827,6 +6910,18 @@ window.__keYiLiaoTian = keYiLiaoTian;
           <h2>${escapeHtml(tOr('gate.title', '合规门禁'))}</h2>
           <p class="jingYin">${escapeHtml(tOr('gate.hint', '自动检查代码与文档是否符合 dao.md 的关键条款（硬编码密钥、静默吞异常、证据分级等）。在命令行运行，不显示在插件/工具列表中。'))}</p>
           <div id="gateLieBiao"></div>
+          <!-- 门禁自动发现目录（产品要求：默认 1 个不可删，最多 10 个，加完自动扫描入库） -->
+          <div class="jinengSaoMiaoKuai" style="margin-top:10px">
+            <div class="jinengSaoMiaoBiaoTi">${escapeHtml(tOr('gate.scanTitle', '门禁自动发现目录'))}</div>
+            <div class="jingYin">${escapeHtml(tOr('gate.scanHint', '从这些目录自动发现门禁脚本。默认目录不可删，最多 10 个。'))}</div>
+            <div id="gateSaoMiaoMuLuJi"></div>
+            <div class="shiLiHang" style="margin-top:6px;align-items:center">
+              <input id="gateSaoMiaoMuLuShuRu" style="flex:1;min-width:120px" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}"/>
+              <button class="anNiuXiao" id="anNiuGateSaoMiaoBrowse">${escapeHtml(t('settings.pickFolder'))}</button>
+              <button class="anNiuXiao" id="anNiuGateSaoMiaoTianJia">${escapeHtml(t('settings.skillsScanAdd'))}</button>
+            </div>
+            <div class="jingYin" id="gateSaoMiaoXiaoXi"></div>
+          </div>
         </div>
         <!-- 内网同步 / 多节点组网 旧设置块已移除：功能由下方「组网设置」卡片承接。
              底层 IPC 通道 warmy:lan-* / warmy:mesh-* 保留为产品契约，仅去掉 UI 与死渲染代码。 -->
@@ -6875,14 +6970,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
           <p class="jingYin">${escapeHtml(t('settings.dataHint'))}</p>
           <div id="peiZhiDataZhiBiaoJi" class="diagGrid"></div>
         </div>
-        <div class="sheZhiSection sheZhiKa" data-sec="func">
-          <!-- 改名「已归档会话」：原来叫「归档」，与下面的「自动归档」撞名，用户分不清（真机反馈）。
-               二者是**两件不同的事**：这里是"已经归档、从主列表隐藏的会话清单"（可恢复/彻底删除）；
-               「自动归档」是"按计划把会话的新内容整理进知识库"的开关。 -->
-          <h2>${escapeHtml(tOr('archive.listTitle', '已归档会话'))}</h2>
-          <p class="jingYin">${escapeHtml(t('archive.tiShi'))}</p>
-          <div id="yiGuiDangHe" class="jingYin">—</div>
-        </div>
+
         <div class="sheZhiSection sheZhiKa" data-sec="model">
           <h2>${escapeHtml(tOr('settings.modelOptions', '模型选项'))}</h2>
           <p class="jingYin">${escapeHtml(t('settings.specialModelsHint'))}</p>
@@ -6989,6 +7077,11 @@ window.__keYiLiaoTian = keYiLiaoTian;
         <div class="sheZhiSection sheZhiKa" id="guiDangKa" data-sec="func">
           <h2>${escapeHtml(tOr('archive.autoTitle', '自动归档'))}</h2>
           <p class="jingYin">${escapeHtml(tOr('archive.autoHint', '把右键菜单里勾了「自动归档」的会话整理后放进知识库。每个会话都记得上次归档到哪，下次只归档新增内容，不从头重做。'))}</p>
+          <!-- 待归档会话列表（产品要求）：名称 + 悬停最近消息 + 打开/暂停/删除 -->
+          <div style="margin-top:10px">
+            <div class="jingYin" style="font-weight:600">${escapeHtml(tOr('archive.pendingTitle', '待归档会话'))}</div>
+            <div id="guiDangDaiGuiDang" class="jingYin" style="margin-top:6px"></div>
+          </div>
           <div class="field" style="margin-top:8px">
             <label>${escapeHtml(tOr('archive.model', '归档使用的模型'))}</label>
             <select id="guiDangMoXing"></select>
@@ -7147,10 +7240,10 @@ window.__keYiLiaoTian = keYiLiaoTian;
         <div class="sheZhiSection" data-sec="sponsor"><h2 style="color:var(--accent)">${escapeHtml(tOr('sponsor.biaoTi', '赞助'))}</h2></div>
         <div class="sheZhiSection sheZhiKa">
           <p class="jingYin">${escapeHtml(tOr('sponsor.tiShi1', '这个项目是开源的，里面没有任何收费内容 —— 你现在用到的一切，以后也一直免费。'))}</p>
-          <p class="jingYin" style="margin-top:8px">${escapeHtml(tOr('sponsor.tiShi2', '如果它对你有帮助，欢迎请作者喝杯咖啡。赞助是纯粹的心意，不会换来任何额外功能或特权：无论有没有赞助过，你都始终拥有对本项目的完全使用权。'))}</p>
+          <p class="jingYin" style="margin-top:8px">${escapeHtml(tOr('sponsor.tiShi2', '如果它对你有帮助，欢迎请作者喝杯咖啡。无论是否赞助过，你都将始终拥有对本项目的完全使用权。'))}</p>
           <div style="margin-top:12px">
             <div class="jingYin">${escapeHtml(tOr('sponsor.paypal', 'PayPal'))}</div>
-            <div style="margin-top:4px"><a href="https://paypal.me/pondsi" target="_blank" rel="noreferrer">https://paypal.me/pondsi</a></div>
+            <div style="margin-top:4px"><a href="https://paypal.me/pondsi" id="paypalLink" rel="noreferrer">https://paypal.me/pondsi</a></div>
           </div>
           <div style="margin-top:14px;display:flex;gap:18px;flex-wrap:wrap">
             <div style="text-align:center">
@@ -7384,6 +7477,17 @@ window.__keYiLiaoTian = keYiLiaoTian;
       (function bindSettingsMenu() {
         const neirongYuansu = $('peiZhiNeiRong');
         if (!neirongYuansu) return;
+        // PayPal：必须走系统默认浏览器（产品要求），禁止应用内打开
+        (function bindPayPal() {
+          const a = neirongYuansu.querySelector('#paypalLink') || neirongYuansu.querySelector('a[href*="paypal.me"]');
+          if (!a || a.dataset.bound) return;
+          a.dataset.bound = '1';
+          a.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            const url = a.getAttribute('href') || 'https://paypal.me/pondsi';
+            try { window.warmy.openExternal?.(url); } catch { /* noop */ }
+          });
+        })();
         // 设置页搜索：**只搜当前分区**里的卡片（产品要求：搜到的是「该选项中的全部内容」，
         // 不能把别的分区的卡片也翻出来 —— 以前 `querySelectorAll('.sheZhiKa')` 会跨分区，
         // 而且 `display:''` 还会把被分区隐藏的卡片重新显示出来）。
@@ -8004,6 +8108,57 @@ window.__keYiLiaoTian = keYiLiaoTian;
           yl.oninput = () => { ylz.textContent = yl.value + '%'; };
           yl.onchange = () => { try { window.warmy.settingsSave?.({ mimicVolume: Number(yl.value) / 100 }); } catch { /* noop */ } };
         }
+        /**
+         * 音频设备列表（麦克风 / 播放器）。
+         * 真机反馈：下拉框一直空的 —— 从没去 `enumerateDevices()`。
+         * 浏览器隐私规则：**必须先 getUserMedia 拿到权限**，设备才有名字；
+         * 否则 enumerateDevices 只给 deviceId 不给 label。
+         * 产品要求：默认「系统默认设备」+ 列出其它设备可选。
+         */
+        async function tianChongYinPinSheBei() {
+          const mic = $('mimicMaiKeFeng');
+          const spk = $('mimicBoFangQi');
+          if (!mic || !spk) return;
+          const tian = (sel, kind, savedId) => {
+            const ops = ['<option value="">' + escapeHtml(tOr('audio.defaultDevice', '系统默认设备')) + '</option>'];
+            try {
+              const list = window.__audioDeviceList || [];
+              list.filter((d) => d.kind === kind && d.deviceId).forEach((d) => {
+                const label = d.label || (kind === 'audioinput' ? tOr('audio.micUnnamed', '麦克风') : tOr('audio.spkUnnamed', '播放器')) + ' ' + (d.deviceId || '').slice(0, 6);
+                const sel = savedId && d.deviceId === savedId ? ' selected' : '';
+                ops.push('<option value="' + escapeHtml(d.deviceId) + '"' + sel + '>' + escapeHtml(label) + '</option>');
+              });
+            } catch { /* noop */ }
+            sel.innerHTML = ops.join('');
+          };
+          // 先拿权限再列设备（拿不到也继续列，至少有默认项）
+          try {
+            if (navigator.mediaDevices?.getUserMedia) {
+              const st = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+              try { st.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+            }
+          } catch { /* 用户拒绝权限也继续：至少显示「系统默认设备」 */ }
+          try {
+            const list = await navigator.mediaDevices?.enumerateDevices?.() || [];
+            window.__audioDeviceList = list;
+          } catch { window.__audioDeviceList = []; }
+          let savedMic = '';
+          let savedSpk = '';
+          try {
+            const r = await window.warmy.settingsGet?.();
+            const st = (r && r.settings) || {};
+            savedMic = String(st.audioMicDevice || st.mimicMicDevice || '');
+            savedSpk = String(st.audioSpeakerDevice || st.mimicSpeakerDevice || '');
+          } catch { /* noop */ }
+          tian(mic, 'audioinput', savedMic);
+          tian(spk, 'audiooutput', savedSpk);
+          mic.onchange = () => { try { window.warmy.settingsSave?.({ audioMicDevice: mic.value }); } catch { /* noop */ } };
+          spk.onchange = () => { try { window.warmy.settingsSave?.({ audioSpeakerDevice: spk.value }); } catch { /* noop */ } };
+        }
+        void tianChongYinPinSheBei();
+        try {
+          navigator.mediaDevices?.addEventListener?.('devicechange', () => { void tianChongYinPinSheBei(); });
+        } catch { /* noop */ }
         // 字幕开关
         const zm = $('mimicZiMu');
         if (zm) zm.onchange = () => { try { window.warmy.settingsSave?.({ mimicSubtitle: !!zm.checked }); } catch { /* noop */ } };
@@ -8150,6 +8305,84 @@ window.__keYiLiaoTian = keYiLiaoTian;
             try { window.warmy.settingsSave?.({ gateEnabled: window.__gateEnabled }); } catch { /* noop */ }
           };
         });
+      })();
+
+      // ── 门禁自动发现目录（默认 1 个不可删，最多 10 个，加完自动扫描入库）──
+      (function bindGateScanDirs() {
+        const he = $('gateSaoMiaoMuLuJi');
+        if (!he || he.dataset.bound) return;
+        he.dataset.bound = '1';
+        const MAX = 10;
+        const qu = async () => {
+          try {
+            const s = await window.warmy.settingsGet?.();
+            const dirs = ((s && s.settings && s.settings.gateScanDirs) || []).map(String).filter(Boolean);
+            return dirs.length ? dirs : [tOr('settings.defaultScanDir', '（默认目录）')];
+          } catch { return []; }
+        };
+        const cun = async (dirs) => {
+          try { await window.warmy.settingsSave?.({ gateScanDirs: dirs }); return true; } catch { return false; }
+        };
+        const hua = async () => {
+          const dirs = await qu();
+          if (!dirs.length) {
+            he.innerHTML = '<div class="jingYin">' + escapeHtml(t('settings.skillsScanEmpty')) + '</div>';
+            return;
+          }
+          he.innerHTML = dirs.map((p, i) => {
+            const shiMoRen = i === 0;
+            return '<div class="jinengSaoMiaoHang">' +
+              '<span class="jinengSaoMiaoLuJing">' + escapeHtml(p) + '</span>' +
+              '<button class="anNiuXiao" data-gdel="' + i + '"' + (shiMoRen ? ' disabled style="opacity:.45;cursor:not-allowed"' : '') + '>' + escapeHtml(t('settings.skillsScanRemove')) + '</button>' +
+              '<button class="anNiuXiao" data-gopen="' + i + '" title="' + escapeHtml(tOr('settings.scanOpen', '打开')) + '">📂</button>' +
+              '</div>';
+          }).join('');
+          he.querySelectorAll('[data-gdel]').forEach((b) => {
+            b.onclick = async () => {
+              const i = Number(b.dataset.gdel);
+              if (i === 0) return;
+              const next = (await qu()).slice();
+              next.splice(i, 1);
+              await cun(next);
+              await hua();
+            };
+          });
+          he.querySelectorAll('[data-gopen]').forEach((b) => {
+            b.onclick = () => {
+              const p = (window.__gateScanDirsCache || [])[Number(b.dataset.gopen)] || '';
+              if (!p) return;
+              try { window.warmy.openPath?.(p); } catch { /* noop */ }
+            };
+          });
+          window.__gateScanDirsCache = dirs;
+        };
+        $('anNiuGateSaoMiaoBrowse')?.addEventListener('click', async () => {
+          try {
+            const r = await window.warmy.pickFolder?.();
+            if (r && r.path && $('gateSaoMiaoMuLuShuRu')) $('gateSaoMiaoMuLuShuRu').value = r.path;
+          } catch { /* noop */ }
+        });
+        $('anNiuGateSaoMiaoTianJia')?.addEventListener('click', async () => {
+          const input = $('gateSaoMiaoMuLuShuRu');
+          const xiaoXi = $('gateSaoMiaoXiaoXi');
+          const v = String((input && input.value) || '').trim();
+          if (!v) return;
+          const dirs = await qu();
+          if (dirs.includes(v)) {
+            if (xiaoXi) xiaoXi.textContent = t('settings.skillsScanInvalid');
+            return;
+          }
+          if (dirs.length >= MAX) {
+            if (xiaoXi) xiaoXi.textContent = t('settings.skillsScanMax');
+            return;
+          }
+          dirs.push(v);
+          await cun(dirs);
+          if (input) input.value = '';
+          await hua();
+          if (xiaoXi) xiaoXi.textContent = t('settings.skillsScanOk');
+        });
+        void hua();
       })();
 
       (async () => {
@@ -11536,20 +11769,32 @@ window.__keYiLiaoTian = keYiLiaoTian;
       .map((p, i) => {
         const st = byPath[p] || null;
         const huai = st && st.ok === false;
+        const shiMoRen = i === 0; // 默认 1 个不可删
         return (
           '<div class="jinengSaoMiaoHang" data-scan-i="' + i + '" data-scan-path="' + escapeHtml(p) + '" data-ok="' +
           (huai ? '0' : '1') + '">' +
           '<span class="jinengSaoMiaoLuJing">' + escapeHtml(p) + '</span>' +
           '<span class="jinengSaoMiaoZhuangTai ' + (huai ? 'bad' : 'ok') + '">' + escapeHtml(skillScanStatusText(st)) + '</span>' +
-          '<button class="anNiuXiao" data-scan-edit="' + i + '">' + escapeHtml(t('settings.skillsScanEdit')) + '</button>' +
-          '<button class="anNiuXiao" data-scan-del="' + i + '">' + escapeHtml(t('settings.skillsScanRemove')) + '</button>' +
+          (shiMoRen ? '' : '<button class="anNiuXiao" data-scan-edit="' + i + '">' + escapeHtml(t('settings.skillsScanEdit')) + '</button>') +
+          // 默认目录：删除灰 + 后面一个打开按钮（产品要求）
+          '<button class="anNiuXiao" data-scan-del="' + i + '"' + (shiMoRen ? ' disabled style="opacity:.45;cursor:not-allowed"' : '') + '>' + escapeHtml(t('settings.skillsScanRemove')) + '</button>' +
+          '<button class="anNiuXiao" data-scan-open="' + i + '" title="' + escapeHtml(tOr('settings.scanOpen', '打开')) + '">📂</button>' +
           '</div>'
         );
       })
       .join('');
+    heZi.querySelectorAll('[data-scan-open]').forEach((b) => {
+      b.onclick = () => {
+        const p = dirs[Number(b.dataset.scanOpen)] || '';
+        if (!p) return;
+        try { window.warmy.openPath?.(p); } catch { /* noop */ }
+        try { window.warmy.shellShowItemInFolder?.(p); } catch { /* noop */ }
+      };
+    });
     heZi.querySelectorAll('[data-scan-del]').forEach((b) => {
       b.onclick = async () => {
         const i = Number(b.dataset.scanDel);
+        if (i === 0) return; // 默认目录不可删
         const next = dirs.slice();
         next.splice(i, 1);
         const yunXingJieGuo = await skillScanDirsSet(next);
@@ -14286,43 +14531,68 @@ window.__keYiLiaoTian = keYiLiaoTian;
         },
       },
       {
-        /**
-         * **删除**（原来是「清空」，只清队列 —— 用户反馈那个语义不清、也不够）。
-         * 现在：二次确认后**真的把这个会话删掉**，回到创建前的样子：
-         * 本会话自己的知识库、它的工作区一起清；已经归档进「知识库」（项目级）的内容不动。
-         * 删牛马时主进程会先查它在不在群聊/项目里 —— 在就如实拒绝并写清在哪儿。
-         */
-        biaoQian: t('ctx.delete'),
-        weixian: true,
-        onClick: async () => {
-          if (!(await uiConfirm(tOr('ctx.deleteConfirm1', '删除这个牛马？它的聊天记录、本会话知识库与工作区都会清掉，回到创建前的样子。')))) return;
-          if (!(await uiConfirm(tOr('ctx.deleteConfirm2', '再确认一次：删除后**不可恢复**（已经归档进知识库的内容不受影响）。确定删除？')))) return;
-          const r = await window.warmy.sessionDelete?.({ id: inst.id, kind: 'agent' }).catch(() => null);
-          if (r && r.ok === false) {
-            if (r.error === 'in-membership') {
-              uiAlert(tOr('ctx.deleteInGroup', '这个牛马还在这些群聊/项目里，请先把它们从这里移除，然后再删除：') + '\n· ' + (r.where || []).join('\n· '));
-            } else {
-              uiAlert(String(r.error || t('common.error')));
-            }
-            return;
-          }
-          state.queues[inst.id] = [];
-          window.__msgs = window.__msgs || {};
-          delete window.__msgs[inst.id];
-          state.instances = (state.instances || []).filter((x) => x.id !== inst.id);
-          try { window.__saveState?.(); } catch { /* noop */ }
-          if (state.selectedInstance?.id === inst.id) state.selectedInstance = null;
-          hideMain();
-          renderList();
-          renderQueueBar();
-        },
-      },
-      {
         // 默认**勾选**（跟随设置→通知里的提示音与邮件）；取消后仅本会话静音、且新回复不上移
         biaoQian: t('ctx.notify') + ((inst.notify !== false) ? ' ✓' : ''),
         onClick: () => {
           inst.notify = (inst.notify === false);
           renderList();
+        },
+      },
+      {
+        /**
+         * **删除**（产品要求：放在菜单**最底部**）。
+         * 二次确认是**三按钮**：入库 / 清除 / 取消。
+         *   入库 = 界面删掉、内容保留待后台归档
+         *   清除 = 马上彻底删除、不进知识库（还要再确认一次）
+         */
+        biaoQian: t('ctx.delete'),
+        weixian: true,
+        onClick: async () => {
+          const ze = await uiConfirmDelete3(
+            tOr('ctx.deleteConfirm1', '删除这个牛马？它的聊天记录、本会话知识库与工作区都会清掉，回到创建前的样子。'),
+            tOr('ctx.deleteTitle', '删除'),
+          );
+          if (ze === 'cancel' || !ze) return;
+          if (ze === 'qingchu') {
+            if (!(await uiConfirm(tOr('ctx.deleteConfirm2', '再确认一次：删除后**不可恢复**（已经归档进知识库的内容不受影响）。确定删除？')))) return;
+            const r = await window.warmy.sessionDelete?.({ id: inst.id, kind: 'agent', mode: 'purge' }).catch(() => null);
+            if (r && r.ok === false) {
+              if (r.error === 'in-membership') {
+                uiAlert(tOr('ctx.deleteInGroup', '这个牛马还在这些群聊/项目里，请先把它们从这里移除，然后再删除：') + '\n· ' + (r.where || []).join('\n· '));
+              } else {
+                uiAlert(String(r.error || t('common.error')));
+              }
+              return;
+            }
+            state.queues[inst.id] = [];
+            window.__msgs = window.__msgs || {};
+            delete window.__msgs[inst.id];
+            state.instances = (state.instances || []).filter((x) => x.id !== inst.id);
+            try { window.__saveState?.(); } catch { /* noop */ }
+            if (state.selectedInstance?.id === inst.id) state.selectedInstance = null;
+            hideMain();
+            renderList();
+            renderQueueBar();
+            return;
+          }
+          // 入库：界面删掉，内容保留待后台归档（不进 sessionDelete 的彻底删除）
+          try { await window.warmy.sessionDelete?.({ id: inst.id, kind: 'agent', mode: 'archive-later' }).catch(() => null); } catch { /* noop */ }
+          state.queues[inst.id] = [];
+          window.__msgs = window.__msgs || {};
+          delete window.__msgs[inst.id];
+          state.instances = (state.instances || []).filter((x) => x.id !== inst.id);
+          try {
+            state.pendingArchive = state.pendingArchive || [];
+            if (!state.pendingArchive.some((x) => x.id === inst.id)) {
+              state.pendingArchive.push({ id: inst.id, name: mingOf(inst) || inst.id, at: Date.now() });
+            }
+            window.__saveState?.();
+          } catch { /* noop */ }
+          if (state.selectedInstance?.id === inst.id) state.selectedInstance = null;
+          hideMain();
+          renderList();
+          renderQueueBar();
+          showToast(tOr('ctx.deleteArchived', '已入库，内容稍后归档'));
         },
       },
     ];
@@ -14353,40 +14623,6 @@ window.__keYiLiaoTian = keYiLiaoTian;
           renderList();
         },
       },
-      yiJiaRu
-        ? {
-            biaoQian: t('ctx.delete'),
-            weixian: true,
-            onClick: async () => {
-              if (blocked) {
-                uiAlert(t('ctx.taskRunning'));
-                return;
-              }
-              const ok = await uiConfirm(t('ctx.closeConfirm'));
-              if (!ok) return;
-              const dr = await window.warmy.groupDissolve(g.id).catch(() => null);
-              if (dr && dr.ok === false) {
-                uiAlert(t('ctx.dissolveFailed'));
-                return;
-              }
-              state.groups = state.groups.filter((x) => x.id !== g.id);
-              if (state.selectedChat?.id === g.id) state.selectedChat = null;
-              renderList();
-              setNav(state.nav);
-            },
-          }
-        : {
-            biaoQian: t('ctx.leave'),
-            weixian: true,
-            onClick: async () => {
-              // 本机单节点部署下，群记录只存在这台机器上，
-              // 因此「退出」与「解散」的效果一致；都必须在存储里删掉，
-              // 否则下次启动 syncGroupsFromStore() 会把它拉回来。
-              await window.warmy.groupDissolve(g.id).catch(() => null);
-              state.groups = state.groups.filter((x) => x.id !== g.id);
-              renderList();
-            },
-          },
       g.type === 'internal'
         ? {
             /* 与「我的牛马」里那项同一套语义：✓ 后缀（不是强调色），默认勾选 */
@@ -14405,6 +14641,54 @@ window.__keYiLiaoTian = keYiLiaoTian;
           renderList();
         },
       },
+      // 「删除/退出」放在**最底部**（产品要求）；二次确认三按钮
+      yiJiaRu
+        ? {
+            biaoQian: t('ctx.delete'),
+            weixian: true,
+            onClick: async () => {
+              if (blocked) {
+                uiAlert(t('ctx.taskRunning'));
+                return;
+              }
+              const ze = await uiConfirmDelete3(t('ctx.closeConfirm'), tOr('ctx.deleteTitle', '删除'));
+              if (ze === 'cancel' || !ze) return;
+              if (ze === 'qingchu') {
+                if (!(await uiConfirm(tOr('ctx.deleteConfirm2', '再确认一次：删除后**不可恢复**（已经归档进知识库的内容不受影响）。确定删除？')))) return;
+              }
+              const dr = await window.warmy.groupDissolve(g.id).catch(() => null);
+              if (dr && dr.ok === false) {
+                uiAlert(t('ctx.dissolveFailed'));
+                return;
+              }
+              state.groups = state.groups.filter((x) => x.id !== g.id);
+              if (state.selectedChat?.id === g.id) state.selectedChat = null;
+              if (ze === 'ruku') {
+                try {
+                  state.pendingArchive = state.pendingArchive || [];
+                  if (!state.pendingArchive.some((x) => x.id === g.id)) {
+                    state.pendingArchive.push({ id: g.id, name: g.name || g.id, at: Date.now() });
+                  }
+                  window.__saveState?.();
+                } catch { /* noop */ }
+                showToast(tOr('ctx.deleteArchived', '已入库，内容稍后归档'));
+              }
+              renderList();
+              setNav(state.nav);
+            },
+          }
+        : {
+            biaoQian: t('ctx.leave'),
+            weixian: true,
+            onClick: async () => {
+              // 本机单节点部署下，群记录只存在这台机器上，
+              // 因此「退出」与「解散」的效果一致；都必须在存储里删掉，
+              // 否则下次启动 syncGroupsFromStore() 会把它拉回来。
+              await window.warmy.groupDissolve(g.id).catch(() => null);
+              state.groups = state.groups.filter((x) => x.id !== g.id);
+              renderList();
+            },
+          },
     ].filter(Boolean));
   }
 
@@ -17153,6 +17437,55 @@ window.__keYiLiaoTian = keYiLiaoTian;
    * 归档**只处理增量**（主进程按会话游标只取新增），所以反复触发也不会重复归档。
    */
   function bindGuiDangKa() {
+    // ── 待归档会话列表（产品要求）：名称 + 悬停最近消息 + 打开/暂停/删除 ──
+    (function renderPendingArchive() {
+      const he = $('guiDangDaiGuiDang');
+      if (!he) return;
+      const list = (state.pendingArchive || []).filter(Boolean);
+      if (!list.length) {
+        he.innerHTML = '<div class="jingYin">' + escapeHtml(tOr('archive.pendingEmpty', '暂无待归档会话')) + '</div>';
+        return;
+      }
+      he.innerHTML = list.map((x, i) => {
+        const zan = x.paused ? tOr('archive.pendingResume', '继续') : tOr('archive.pendingPause', '暂停');
+        const lastMsg = String(x.lastMsg || x.name || '');
+        return '<div class="ctgHang" style="display:flex;align-items:center;gap:8px;margin:4px 0" title="' + escapeHtml(lastMsg) + '">' +
+          '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(x.name || x.id) + '</span>' +
+          '<button class="anNiuXiao" data-pa-open="' + i + '" title="' + escapeHtml(tOr('archive.pendingOpen', '打开')) + '">📂</button>' +
+          '<button class="anNiuXiao" data-pa-pause="' + i + '">' + escapeHtml(zan) + '</button>' +
+          '<button class="anNiuDanger" data-pa-del="' + i + '">' + escapeHtml(t('common.delete') || '删除') + '</button>' +
+          '</div>';
+      }).join('');
+      he.querySelectorAll('[data-pa-open]').forEach((b) => {
+        b.onclick = () => {
+          const x = list[Number(b.dataset.paOpen)];
+          if (!x) return;
+          try { window.warmy.openPath?.(x.folder || x.path || ''); } catch { /* noop */ }
+          try { window.warmy.shellOpenPath?.(x.folder || x.path || ''); } catch { /* noop */ }
+        };
+      });
+      he.querySelectorAll('[data-pa-pause]').forEach((b) => {
+        b.onclick = () => {
+          const i = Number(b.dataset.paPause);
+          const arr = state.pendingArchive || [];
+          if (arr[i]) {
+            arr[i].paused = !arr[i].paused;
+            try { window.__saveState?.(); } catch { /* noop */ }
+            renderPendingArchive();
+          }
+        };
+      });
+      he.querySelectorAll('[data-pa-del]').forEach((b) => {
+        b.onclick = async () => {
+          const i = Number(b.dataset.paDel);
+          if (!(await uiConfirm(tOr('archive.pendingDeleteConfirm', '从待归档列表移除？不会删除原始聊天记录。')))) return;
+          state.pendingArchive = (state.pendingArchive || []).filter((_, j) => j !== i);
+          try { window.__saveState?.(); } catch { /* noop */ }
+          renderPendingArchive();
+        };
+      });
+    })();
+
     const sel = $('guiDangMoXing');
     if (!sel) return;
     // 只列能聊天的模型：归档整理是对话任务
@@ -18549,17 +18882,31 @@ window.__keYiLiaoTian = keYiLiaoTian;
     renderChat();
   });
   // T. 消息右键：复制/引用
+  // 思考过程 / 内心活动也要能右键复制与引用（产品要求）—— 先看是不是点在 .siKaoKuai 上
   $('xiaoXiJi')?.addEventListener('contextmenu', (e) => {
+    const siKao = e.target.closest('.siKaoKuai');
     const bubble = e.target.closest('.bubble');
-    if (!bubble) return;
+    if (!siKao && !bubble) return;
     e.preventDefault();
-    const fullText = bubble.textContent || '';
-    // **有选区就引用选区，否则引用整条**（产品要求）
     const sel = window.getSelection();
-    const selText = sel && !sel.isCollapsed && bubble.contains(sel.anchorNode) ? String(sel) : '';
-    const quoteText = selText || fullText;
+    const selText = sel && !sel.isCollapsed
+      ? String(sel)
+      : '';
+    let fullText = '';
+    if (siKao) {
+      // 思考块：优先取 pre 里的思考正文；没有就整块文本
+      const pre = siKao.querySelector('pre');
+      fullText = (pre && pre.textContent) || siKao.textContent || '';
+    } else if (bubble) {
+      fullText = bubble.textContent || '';
+    }
+    const inScope = (siKao && sel && !sel.isCollapsed && siKao.contains(sel.anchorNode))
+      || (bubble && sel && !sel.isCollapsed && bubble.contains(sel.anchorNode));
+    const quoteText = (inScope ? selText : '') || fullText;
     openContextMenu(e.clientX, e.clientY, [
-      { biaoQian: t('common.copy'), onClick: () => { navigator.clipboard?.writeText(selText || fullText); } },
+      { biaoQian: t('common.copy'), onClick: () => {
+        try { navigator.clipboard?.writeText((inScope ? selText : '') || fullText); showToast(tOr('chat.copied', '已复制')); } catch { /* noop */ }
+      } },
       { biaoQian: t('common.quote'), onClick: () => {
           // **微信式引用**：放到输入框上方的小字引用条
           try { window.__sheYinYong?.(quoteText); } catch { /* noop */ }

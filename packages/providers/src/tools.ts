@@ -46,7 +46,7 @@ export const MOREN_GONGJU_JIEGUO_ZISHU = 4000;
 /** 一轮对话内所有工具结果的**总**预算（字符） */
 export const MOREN_GONGJU_ZONG_ZISHU = 12000;
 
-export type GongJuTingZhiYuan = 'stop' | 'max-rounds' | 'budget' | 'unsupported' | 'error';
+export type GongJuTingZhiYuan = 'stop' | 'max-rounds' | 'budget' | 'unsupported' | 'error' | 'max-rounds-extended';
 
 /** 工具执行器：入参是模型的 tool_call，返回值是回给模型的文本（不许抛错，抛了也会被兜住） */
 export type GongJuZhiXing = (
@@ -76,6 +76,13 @@ export interface GongJuXunHuanXuan {
   signal?: AbortSignal;
   /** 观测钩子（审计/指标用）：只带工具名与长度，不带正文 */
   onEvent?: (e: GongJuXunHuanShi) => void;
+  /**
+   * 轮数到上限时是否让**模型自估**是否还要加轮（产品要求）。
+   * 默认 true。false = 硬停（旧行为）。
+   */
+  daoShangXianWenMoXing?: boolean;
+  /** 自估加轮的硬顶（含初始轮），默认 64；防止无限续命 */
+  zuiDaZongLun?: number;
 }
 
 export interface GongJuXunHuanGuo {
@@ -133,6 +140,11 @@ export async function liaoTianDaiGongJu(
   const zongYuSuan = qianZhiZhengShu(o.maxToolResultChars, 0, 200000, MOREN_GONGJU_ZONG_ZISHU);
   const zhiChi = typeof o.supportsTools === 'boolean' ? o.supportsTools : gongYingZhiChiGongJu(provider);
   const emit = typeof o.onEvent === 'function' ? o.onEvent : () => {};
+  const daoShangXianWenMoXing = o.daoShangXianWenMoXing !== false;
+  const zuiDaZongLun = qianZhiZhengShu(o.zuiDaZongLun, 1, 128, 64);
+  /** 到过上限后由模型自估加过的轮数（只允许有限次，防无限续命） */
+  let jiaLunCiShu = 0;
+  let zuiDaLunShuDongTai = zuiDaLunShu;
 
   /** 不带 tools 的普通对话（= ADR 002 之前的现状行为） */
   const chunWenBen = async (degraded: boolean, reason?: string): Promise<GongJuXunHuanGuo> => {
@@ -186,11 +198,45 @@ export async function liaoTianDaiGongJu(
     for (;;) {
       // 工具轮 / 总预算已用尽：**下一次**就用 tool_choice:'none' 逼出文本答案（不再多发一次 auto）。
       // 这样"最多 maxRounds 轮工具 + 1 次强制收敛"是精确的请求数上界。
-      const daoLunShangXian = lunShu >= zuiDaLunShu;
+      const daoLunShangXian = lunShu >= zuiDaLunShuDongTai;
       const yuSuanShuChu = lunShu > 0 && jieGuoZiShu >= zongYuSuan;
       if (daoLunShangXian || yuSuanShuChu) {
-        // 两个限制同时命中时，报"预算"（更具体：说明是被工具结果总量拦下的）
-        tingZhiYuanYin = yuSuanShuChu ? 'budget' : 'max-rounds';
+        /**
+         * **轮数到上限先让模型自估**（产品要求：不要硬停）。
+         * 问它「活干完了吗？还要不要加轮？」——输出 JSON。
+         * 未完成且还要加 ⇒ 提高上限继续；已完成 / 说不清 / 加轮超硬顶 ⇒ 走原来的强制收敛。
+         * 预算用尽仍然硬停（那是结果体积闸，不是轮数闸）。
+         */
+        if (daoLunShangXian && !yuSuanShuChu && daoShangXianWenMoXing && jiaLunCiShu < 3 && lunShu < zuiDaZongLun) {
+          try {
+            const PAN = '工具轮数已到上限。请判断当前任务是否已经完成。\n'
+              + '只输出 JSON：{"done":true|false,"needRounds":数字（若未完成，还需要几轮工具调用；给偏保守的值，1~8）}\n'
+              + '若你已经可以给出面向用户的完整结论，done 必须为 true。';
+            xiaoXiJi.push({ role: 'user', content: PAN });
+            const pan = await diaoYongMoXing('none');
+            const panTxt = neiRongWenBen(pan.choices[0]?.message?.content) || '';
+            const doneM = panTxt.match(/"done"\s*:\s*(true|false)/i);
+            const needM = panTxt.match(/"needRounds"\s*:\s*(\d+)/i);
+            const done = doneM ? String(doneM[1]).toLowerCase() === 'true' : true;
+            const need = needM ? qianZhiZhengShu(Number(needM[1]), 1, 8, 4) : 4;
+            // 把这次判断从对话里撤掉，避免污染后续工具轮上下文
+            xiaoXiJi.pop();
+            if (!done && need > 0) {
+              jiaLunCiShu += 1;
+              zuiDaLunShuDongTai = Math.min(zuiDaZongLun, zuiDaLunShuDongTai + need);
+              emit({ kind: 'final', round: lunShu, detail: `max-rounds-extended(+${need})` });
+              continue;
+            }
+            // done=true 或说不清 ⇒ 落到强制收敛
+            tingZhiYuanYin = 'max-rounds';
+          } catch {
+            /* 自估失败不挡收敛 */
+            tingZhiYuanYin = 'max-rounds';
+          }
+        } else {
+          // 两个限制同时命中时，报"预算"（更具体：说明是被工具结果总量拦下的）
+          tingZhiYuanYin = yuSuanShuChu ? 'budget' : (jiaLunCiShu > 0 ? 'max-rounds-extended' : 'max-rounds');
+        }
         emit({ kind: 'final', round: lunShu, detail: tingZhiYuanYin });
         /**
          * **收尾必须给出完整正文**（真事故：工具跑到轮数上限被强停，用户只看到

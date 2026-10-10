@@ -850,7 +850,15 @@ function toolLimits(): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalCha
   } catch {
     /* 配置坏了就用默认 */
   }
-  const lunShu = Number(s?.contextToolMaxRounds);
+  /**
+   * 历史默认值迁移：`contextToolMaxRounds` 的旧默认是 **12**，而且启动时还把 12
+   * **写进了用户配置**（见 CHANGELOG「default 12 with migration from persisted 3」）——
+   * 所以现在读出来的 12 是**我们当初写进去的**，不是用户自己选的。
+   * 真事故：上一轮把默认提到 20 却不生效（审计里 `zuiDaLunShu` 仍是 12），
+   * 因为配置里那份 12 把默认盖掉了。这里把 12 一次性抬到 20；用户真正改过别的值就照旧尊重。
+   */
+  const lunShuYuan = Number(s?.contextToolMaxRounds);
+  const lunShu = lunShuYuan === 12 ? 20 : lunShuYuan;
   const mei = Number(s?.contextToolResultChars);
   const total = Number(s?.contextToolTotalChars);
   return {
@@ -2409,18 +2417,26 @@ async function teShuMoXingKeYong(lei: TeShuMoXingLei): Promise<{ mo: string; an:
 }
 
 /**
- * 让专业模型干一件活。**返回 null = 没有可用的专业模型（或它失败了）**，
- * 调用方据此回退到「该牛马的大模型调用链」—— 回退是**静默**的。
+ * 让专业模型干一件活。
+ *
+ * **不静默降级**（产品要求）：
+ *   · 轻量文本类（fenLei/safety/translate/rerank/organizer）：没配专业模型时仍可回退到
+ *     调用方的大模型链（返回 null，调用方自己处理）；
+ *   · **非聊天能力**（image/imageUnd/videoUnd/videoGen/asr/tts）：**只能走各自的
+ *     功能模型链**。没配或挂了 ⇒ 返回 `{ ok:false, reason }`，**不**偷偷丢给聊天链 ——
+ *     模型只能聊天不能用工具时也要如实告知，不降级。
  */
 async function wenTeShuMoXing(
   lei: TeShuMoXingLei,
   xiaoXiJi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   maxTokens = 256,
 ): Promise<string | null> {
+  const feiLiaoTian = (lei === 'image' || lei === 'imageUnd' || lei === 'videoUnd' || lei === 'videoGen' || lei === 'asr' || lei === 'tts');
   try {
     const hit = await teShuMoXingKeYong(lei);
     if (!hit) {
-      audit?.log('special-model.fallback', { lei, reason: 'not-configured-or-unusable' });
+      audit?.log('special-model.fallback', { lei, reason: 'not-configured-or-unusable', feiLiaoTian });
+      // 非聊天能力：不回退聊天链，如实说没有
       return null;
     }
     const p = congYuSheChuangJian(hit.an.presetId, { apiKey: hit.an.apiKey, baseURL: hit.an.baseURL || undefined, protocol: hit.an.protocol } as never, hit.an.protocol);
@@ -2429,9 +2445,29 @@ async function wenTeShuMoXing(
     audit?.log('special-model.used', { lei, model: hit.mo, chars: txt.length });
     return txt;
   } catch (e) {
-    audit?.log('special-model.failed', { lei, error: xiJingCuoWu(e).slice(0, 160) });
+    audit?.log('special-model.failed', { lei, error: xiJingCuoWu(e).slice(0, 160), feiLiaoTian });
+    // 失败也不降级到聊天链（尤其非聊天能力）
     return null;
   }
+}
+
+/**
+ * 非聊天能力入口：走各自功能模型链；不可用时**如实返回原因**，绝不静默改走聊天链。
+ */
+async function yongGongNengLian(
+  lei: Extract<TeShuMoXingLei, 'image' | 'imageUnd' | 'videoUnd' | 'videoGen' | 'asr' | 'tts'>,
+  xiaoXiJi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  maxTokens = 256,
+): Promise<{ ok: true; text: string } | { ok: false; reason: 'not-configured-or-unusable' | 'failed' | 'empty' }> {
+  const peiZhi = jieTeShuMoXingKey(lei);
+  if (!peiZhi) {
+    audit?.log('special-model.unavailable', { lei, reason: 'not-configured' });
+    return { ok: false, reason: 'not-configured-or-unusable' };
+  }
+  const txt = await wenTeShuMoXing(lei, xiaoXiJi, maxTokens);
+  if (txt === null) return { ok: false, reason: 'failed' };
+  if (!txt.trim()) return { ok: false, reason: 'empty' };
+  return { ok: true, text: txt };
 }
 
 /** 安全审核：有安全模型就让它判，没有就**回退到调用方的大模型判断**（返回 null） */
@@ -3017,6 +3053,27 @@ function qishiJiyiCangYibu() {
 let qiangzhiTuichu = false;
 /** 托盘实例：全应用只允许一个；退出时必须 destroy，否则通知区残留 */
 let tray: import('electron').Tray | null = null;
+
+/**
+ * 恢复主窗口到屏幕上并置于其它窗口上层（不是置顶）。
+ * **不改变位置/尺寸**：最小化前或点叉隐藏前的 bounds 由 resize/move/close
+ * 保存，restore()/show() 会按原样还原。托盘双击走这里。
+ */
+function xianshiZhuChuangKouZhiQian(): void {
+  try {
+    if (!win || win.isDestroyed()) {
+      chuangjianChuangkou();
+      return;
+    }
+    if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.show();
+    win.focus();
+    // moveTop：只把窗口抬到当前 z-order 顶层，不 setAlwaysOnTop
+    try { win.moveTop(); } catch { /* noop */ }
+  } catch {
+    try { chuangjianChuangkou(); } catch { /* noop */ }
+  }
+}
 
 /**
  * 禁止多开后的行为：重复启动不新建实例，只把**已运行**主窗口
@@ -5728,6 +5785,8 @@ const yanXuZhuangTai = new Map<string, YanXuZhuangTai>();
  * 以前停止按钮只杀实例进程，续派 `setTimeout` 还会照跑 ⇒ "停不下来"。
  */
 const stoppedSessions = new Set<string>();
+/** 连续「零工具调用」的续派次数：用来挡住"一直在思考却不动手"的空转循环 */
+const meiYouJinZhan = new Map<string, number>();
 /**
  * **取消信号**（用户反馈"停止功能还是不行，无法让会话内的 AI 停止工作"）。
  *
@@ -5782,13 +5841,35 @@ function yingGaiZiDongJiXu(
 ): { jiXu: boolean; liYou: string } {
   /** 已经判过异常 ⇒ **一步都不许再往下走**（用户回一句话才会清掉这个标记） */
   if (quEtaYiChang(sessionId)) return { jiXu: false, liYou: 'eta-anomaly' };
-  if (jiHuaHuanYouBuWeiBu(sessionId)) return { jiXu: true, liYou: 'plan-pending' };
+  /**
+   * **没有进展就不许再续派**（真事故：用户报"一直在生成内容，却始终没有输出结果"）。
+   * 审计原样：`plan.auto-continue | step:"T3", n:16` —— 同一个步骤连派 16 次，
+   * 而每一轮 `chat.tools.done | gongJuDiaoYongJi:0, tingZhiYuanYin:'stop'` ——
+   * 模型一个工具都没调、只吐几十个字，计划却永远停在 T3。
+   * 原来这里对「计划还没做完」是**无条件**续派的 ⇒ 只要模型不动手就死循环。
+   * 现在：上一轮**零工具调用**就算"没进展"，连续 2 轮没进展就停，并如实说明原因。
+   */
+  const lingGongJuBenLun = !shangLun || !shangLun.diaoYongJi;
+  if (lingGongJuBenLun) meiYouJinZhan.set(sessionId, (meiYouJinZhan.get(sessionId) || 0) + 1);
+  else meiYouJinZhan.delete(sessionId);
+  const kongZhuan = meiYouJinZhan.get(sessionId) || 0;
+  if (jiHuaHuanYouBuWeiBu(sessionId)) {
+    if (kongZhuan >= 2) {
+      meiYouJinZhan.delete(sessionId);
+      return { jiXu: false, liYou: 'no-progress' };
+    }
+    return { jiXu: true, liYou: 'plan-pending' };
+  }
   const t = yanXuZhuangTai.get(sessionId);
   const yiZaiXu = !!t && t.yanXu > 0;
-  const lingGongJu = !shangLun || !shangLun.diaoYongJi;
+  const lingGongJu = lingGongJuBenLun;
   const shangLunHuiFu = String(shangLun?.huiFu || '');
   const yaoDuoBu = DUOBU_YAOQIU.test(String(xiaoXi.content || '')) || yiZaiXu;
   if (lingGongJu && yaoDuoBu && ZHISHUO_BUZUO.test(shangLunHuiFu)) {
+    if (kongZhuan >= 2) {
+      meiYouJinZhan.delete(sessionId);
+      return { jiXu: false, liYou: 'no-progress' };
+    }
     return { jiXu: true, liYou: 'talk-only' };
   }
   return { jiXu: false, liYou: 'done' };
@@ -5981,6 +6062,20 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
       etaHuo().jieShuLun(sessionId);
       etaYiChang.delete(sessionId);
       yiShuoGuo.delete(sessionId);
+      /**
+       * **空转停机**：计划还没做完，但连续几轮模型一个工具都不调、只说话不动手 ⇒
+       * 再派下去只会一直"在思考"却永远没结果（真事故：同一个步骤连派 16 次）。
+       * 这里**如实说一次为什么停**，让人能接手。
+       */
+      if (pan.liYou === 'no-progress') {
+        meiYouJinZhan.delete(sessionId);
+        zhuiJiaLiaoTianRiZhi(sessionId, {
+          seq: xiaYiLiaoTianXuLie(), role: 'assistant',
+          content: '（已暂停自动继续：计划里还有未完成的步骤，但连续两轮模型都没有调用任何工具、也没有推进。'
+            + '再派下去只会一直转圈，所以我先停在这里。你可以直接回我一句，让我换个做法、或说清先做哪一步。）',
+          ts: Date.now(),
+        });
+      }
       yanXuZhuangTai.delete(sessionId);
       // **整轮真的结束了** ⇒ 关动态小字、收流式气泡
       try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
@@ -11483,7 +11578,8 @@ function chuangjianTuopan() {
   t.setContextMenu(Menu.buildFromTemplate([
     { label: tuopanGuanGongzuoBiaoqian, click: () => { tuichuYingyong('tray-off-work'); } },
   ]));
-  t.on('double-click', () => { zhuJiaoZhuChuangKouJuZhong(); });
+  // 双击托盘：只恢复显示并置前（保留最小化/隐藏前的位置与大小），不居中
+  t.on('double-click', () => { xianshiZhuChuangKouZhiQian(); });
   tray = t;
 }
 chuliIpc('warmy:tuoPanChuShi', () => {
@@ -12041,11 +12137,18 @@ chuliIpc('warmy:xiaoDiTingZhi', (_e, p0?: { id?: string }) => anQuanChuLi(() => 
  *   ④ 会话记录本身由渲染层从列表里去掉（主进程不再持有它）。
  * **已经归档进「知识库」（项目级）的内容不动** —— 那是另一份资产。
  */
-chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string }) => {
+chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string; mode?: string }) => {
   try {
     const id = String(p0?.id || '');
     if (!id) return { ok: false, error: 'bad-id' };
     const kind = String(p0?.kind || '');
+    /**
+     * mode（产品要求的三按钮删除）：
+     *   purge         = 马上彻底删除、不进知识库
+     *   archive-later = 界面删掉、内容保留待后台归档（**不**动知识库与工作区）
+     *   默认 purge（与旧行为一致）
+     */
+    const mode = String(p0?.mode || 'purge');
     // ① 牛马：在群聊/项目里就不许删
     if (kind === 'agent' || kind === 'single') {
       const zai: string[] = [];
@@ -12067,6 +12170,11 @@ chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string }) 
         await p1?.instances.stop(id);
       } catch { /* 停不掉也继续删 */ }
     }
+    // 入库：内容保留待后台归档 —— 不删知识库与工作区
+    if (mode === 'archive-later') {
+      try { audit?.log('session.archive-later', { sessionId: id, kind }); } catch { /* noop */ }
+      return { ok: true, removed: { knowledge: false, workspace: false }, mode };
+    }
     // ③ 本会话自己的知识库 + 工作区
     let kb = false;
     try { kb = !!knowledge?.removeEntity('sess-' + id); } catch { /* noop */ }
@@ -12075,8 +12183,8 @@ chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string }) 
       const dir = workspaceDirOf(app.getPath('userData'), id);
       if (dir && fs.existsSync(dir)) { fs.rmSync(dir, { recursive: true, force: true }); ws = true; }
     } catch { /* 删不掉就如实说 */ }
-    try { audit?.log('session.delete', { sessionId: id, kind, kb, workspace: ws }); } catch { /* noop */ }
-    return { ok: true, removed: { knowledge: kb, workspace: ws } };
+    try { audit?.log('session.delete', { sessionId: id, kind, kb, workspace: ws, mode }); } catch { /* noop */ }
+    return { ok: true, removed: { knowledge: kb, workspace: ws }, mode };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
