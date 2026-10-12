@@ -294,6 +294,7 @@ contextBridge.exposeInMainWorld('warmy', {
   dingShiRenWuShanChu: (p) => ipcRenderer.invoke('warmy:dingShiRenWuShanChu', p),
   dingShiRenWuGengXin: (p) => ipcRenderer.invoke('warmy:dingShiRenWuGengXin', p),
   ttsLangDu: (p) => ipcRenderer.invoke('warmy:ttsLangDu', p),
+  shuoHuaZhuangTai: () => ipcRenderer.invoke('warmy:shuoHuaZhuangTai'),
   /** 翻译（专业翻译模型优先，缺失回退对话模型） */
   fanYi: (p) => ipcRenderer.invoke('warmy:fanYi', p),
   /** 内容安全审核（专业安全模型优先，缺失回退对话模型） */

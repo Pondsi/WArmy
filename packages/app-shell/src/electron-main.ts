@@ -58,7 +58,7 @@ import {
   type LogEntry,
 } from './context-renderer.js';
 import { yunxingDuanCunhuoZhixingqi, yunXingZhiXingQiJi } from './executor.js';
-import { panKouTouWanCheng, kouTouTiShi } from './truth-guard.js';
+import { panKouTouWanCheng, kouTouTiShi, YAO_DONG_SHOU } from './truth-guard.js';
 import { chuShiZiChanGuanLi, retrieveAssetsForChat, zhuCeLiaoTianZiChan, jiLuZiChanShiYong, qingLiZiChan } from './asset-wire.js';
 import { ZhiBiaoCaiJiQi } from './metrics.js';
 import { BenDiZhangHuCang, PeizhiCang, shengChengPingzheng, type YingYongPeizhi, WARMY_DEFAULT_NET_PORT, SKILL_SCAN_DIRS_MAX,} from './settings-store.js';
@@ -220,6 +220,16 @@ import { jiexiYuyan, SUPPORTED_LOCALES } from './i18n/locales.js';
 import crypto from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/**
+ * **userData 固定到 `@warmy/app-shell`**（真机事故：不带 --user-data-dir 启动时落到
+ * `Roaming/Electron`，与打包态/验收脚本的 `@warmy/app-shell` 分裂成两套配置）。
+ * 必须在任何 `app.getPath('userData')` **之前** setPath，否则后面全读到旧目录。
+ */
+try {
+  app.setName('无限牛马');
+  const guDing = path.join(app.getPath('appData'), '@warmy', 'app-shell');
+  app.setPath('userData', guDing);
+} catch { /* 拿不到就用默认 userData（如单测） */ }
 const bootLog = path.join(app.getPath('userData'), 'warmy-boot.log');
 
 function qidong(xiaoXi: string) {
@@ -2474,9 +2484,27 @@ async function yunXingLiaoTianXunHuan(
       });
       return out.content;
   };
-  const loop = await liaoTianDaiGongJu(
+  /**
+   * **动手任务强制出工具**（真机事故：模型口头「已完成」却不调工具）。
+   * 用户话里有生成/打开/写入等动手词，或已有未完成计划 ⇒ toolChoice:'required'。
+   * tools.ts 首轮零工具会再强制一次；Ollama/OpenAI 兼容端认这个值。
+   */
+  const wenBenAll = String(Qiu.xiaoXiJi?.map((m) => String(m.content || '')).join('\n') || '');
+  /** 用户明确「不要调工具 / 只回复文字」时，禁止强制 tool_choice */
+  const jinZhiGongJu = /(不要|别|禁止|无需|不用).{0,8}(调用|使用|动用)?工具|只(回复|输出|回答)|不要做别的|do not use tools|no tools/i.test(wenBenAll);
+  const yaoDongShouBenLun = !jinZhiGongJu && YAO_DONG_SHOU.test(wenBenAll);
+  let loop: Awaited<ReturnType<typeof liaoTianDaiGongJu>>;
+  /**
+   * 整轮工具循环硬超时：工具成功后也不许把界面卡成永远 busy。
+   * 180s 对多步云模型太紧（真机：MiMo 多工具没跑完就被掐断）⇒ 放到 10 分钟；
+   * 单次请求仍有 60s/120s 超时兜住挂死。
+   */
+  const zhengLunShiChao = AbortSignal.timeout(600_000);
+  try {
+    loop = await Promise.race([
+      liaoTianDaiGongJu(
     liuShiProvider,
-    { ...Qiu, tools },
+    { ...Qiu, tools, toolChoice: yaoDongShouBenLun ? 'required' : (Qiu.toolChoice || 'auto') },
     async (call, ctx) => {
       const t1 = Date.now();
       const out = await zhiXingGongJu(call, ctx as { round: number; zuiDaJieGuoZiShu: number });
@@ -2516,11 +2544,32 @@ async function yunXingLiaoTianXunHuan(
       zuiDaLunShu: limits.zuiDaLunShu,
       zuiDaJieGuoZiShu: limits.zuiDaJieGuoZiShu,
       maxToolResultChars: limits.totalChars,
+      lingGongJuQiangZhi: true,
+      signal: zhengLunShiChao,
       onEvent: (Shi) => {
         if (Shi.kind === 'degraded') audit?.log('chat.tools.degraded', { sessionId, detail: Shi.detail });
       },
     }
-  );
+      ),
+      new Promise<never>((_res, rej) => {
+        const t = setTimeout(() => rej(new Error('tool-loop-timeout(600s)')), 605_000);
+        (t as unknown as { unref?: () => void }).unref?.();
+      }),
+    ]);
+  } catch (eLoop) {
+    // 模型请求超时/中断也要如实落一条 tools.done，避免界面永远 busy
+    audit?.log('chat.tools.done', {
+      sessionId,
+      qingQiuJi: 0,
+      lunShu: 0,
+      gongJuDiaoYongJi: 0,
+      toolResultChars: 0,
+      degraded: true,
+      tingZhiYuanYin: 'error',
+      error: xiJingCuoWu(eLoop).slice(0, 160),
+    });
+    throw eLoop;
+  }
 
   metrics.recordToolLoop({
     ts: Date.now(),
@@ -3248,6 +3297,7 @@ async function yindao() {
     log: (xiaoXi) => qidong(`updater: ${xiaoXi}`),
   });
   qingLiLinShiWenJian(path.join(userData, 'updates'));
+  await buMoRenNiuMa().catch(() => {});
   huiFuQunLieBiao();
   // 群骨架恢复之后再灌队列快照（否则 createGroup 会把 queues Map 清空）
   huiFuLuYouQiDuiLie();
@@ -3480,6 +3530,56 @@ async function yindao() {
 }
 
 // ── 群路由 / 群成员：持久化与重启恢复 ──
+
+/**
+ * **首启补一头默认牛马**（真机：清配置后 listInstances 空 ⇒ 输入区 0×0、没法发消息）。
+ * 主进程实例表是内存态；渲染层 stateSave 会恢复用户建过的牛马，但**全新安装什么都没有**。
+ * 这里在路由就绪前补一头「牛马-1」，用户可改名/删除。
+ */
+async function buMoRenNiuMa(): Promise<void> {
+  try {
+    if (!p1) return;
+    if ((p1.instances.LieBiao() || []).length) return;
+    /**
+     * 先**恢复**磁盘上已有的牛马工作区（真机：每启一次新建一头「牛马-1」，列表越堆越多）。
+     * 只有全新安装（一个工作区都没有）才补默认牛马-1。
+     */
+    const gen = path.join(app.getPath('userData'), 'instances');
+    let cun: string[] = [];
+    try { cun = fs.readdirSync(gen).filter((x) => { try { return fs.statSync(path.join(gen, x)).isDirectory(); } catch { return false; } }); } catch { /* empty */ }
+    const yiCun = new Set((p1.instances.LieBiao() || []).map((x) => x.id));
+    for (const id of cun) {
+      if (yiCun.has(id)) continue;
+      try {
+        await p1.instances.spawn({
+          config: {
+            id,
+            ming: id,
+            workspace: path.join(gen, id),
+            dutyEligible: true,
+          },
+        });
+        qidong('instance restored: ' + id);
+      } catch (e) {
+        qidong('instance restore skip ' + id + ' ' + String(e));
+      }
+    }
+    if ((p1.instances.LieBiao() || []).length) return;
+    const id = 'inst-' + Date.now().toString(36);
+    await p1.instances.spawn({
+      config: {
+        id,
+        ming: '牛马-1',
+        workspace: path.join(app.getPath('userData'), 'instances', id),
+        dutyEligible: true,
+      },
+    });
+    try { audit?.log('instance.auto-default', { id, ming: '牛马-1' }); } catch { /* noop */ }
+    qidong('default instance created: ' + id);
+  } catch (e) {
+    qidong('default instance skip ' + String(e));
+  }
+}
 
 /** 本机实例入群（路由 + 持久化成员表），已入群则跳过 */
 function joinLocalInstances(groupId: string): void {
@@ -6684,8 +6784,13 @@ chuliIpc('warmy:liaoTianFaSong', zhenZhengFaSong);
  */
 const YANXU_YUJING_CI = 40;                          // 首次次数预警：40 次自动继续
 const YANXU_YUJING_SHIJIAN_MS = 20 * 60 * 1000;      // 首次时间预警：20 分钟
-const KASI_PAN_CHAOSHI_MS = 90 * 1000;               // 单次卡死分析超时：90 秒
-const KASI_CHANGSHI = PAN_MO_XING_SHANG_XIAN;        // 分析最多换 5 个模型（= 产品要求的 5 次上限）
+const KASI_PAN_CHAOSHI_MS = 45 * 1000;               // 单次卡死分析超时：45 秒（原先 90s×5 个模型最多白等 7 分钟）
+/**
+ * 分析最多换几个模型：**2 个就够**。
+ * 因为现在「全都判断不出来/都没反应」的收尾语义已经是**不视为卡死**（见 panDuanKaSi 收尾），
+ * 多跑几个不改变结论，只是把用户晾着。
+ */
+const KASI_CHANGSHI = 2;
 /** 「没卡死」结论的复用窗口：同签名此窗口内不再重复跑多模型分析（每次约 40 秒） */
 const KASI_FUYONG_MS = 3 * 60 * 1000;
 /** 复用表：key = sessionId|行为|任务签名 → { at, by } */
@@ -7278,12 +7383,21 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
        */
       if (pan.liYou === 'no-progress') {
         meiYouJinZhan.delete(sessionId);
+        /**
+         * **模型连续不调工具 ⇒ 停，但要让人能一键接手**（真机反馈："显示无法完成任务"之后就死了）。
+         * 除了如实写一句为什么停，还要**登记中断** ⇒ 界面挂出「继续/重试」按钮。
+         */
+        const liYou = '连续两轮模型都没有调用任何工具、也没有推进（多为模型本身不擅长 function calling，或当前档位太小）';
         zhuiJiaLiaoTianRiZhi(sessionId, {
           seq: xiaYiLiaoTianXuLie(), role: 'assistant',
-          content: '（已暂停自动继续：计划里还有未完成的步骤，但连续两轮模型都没有调用任何工具、也没有推进。'
-            + '再派下去只会一直转圈，所以我先停在这里。你可以直接回我一句，让我换个做法、或说清先做哪一步。）',
+          content: '（已暂停自动继续：计划里还有未完成的步骤，但' + liYou + '。'
+            + '再派下去只会一直转圈，所以我先停在这里。'
+            + '上面若出现「已生成/已打开」字样而桌面没有对应文件，那是模型只在口头宣称、并未真正调用工具。'
+            + '你可以点下面的「继续 / 重试」，或换一个更擅长调用工具的模型（设置 → 模型 → 调用链）再试。）',
           ts: Date.now(),
         });
+        try { biaoRenWuZhongDuan(sessionId, liYou, 'no-progress', '自动继续'); } catch { /* noop */ }
+        try { audit?.log('plan.paused-no-progress', { sessionId, reason: 'model-made-zero-tool-calls' }); } catch { /* noop */ }
       }
       yanXuZhuangTai.delete(sessionId);
       // **整轮真的结束了** ⇒ 关动态小字、收流式气泡
@@ -13893,6 +14007,32 @@ chuliIpc('warmy:dingShiRenWuGengXin', (_e, p0?: { id?: string; enabled?: boolean
  * **朗读文字**（说话模型 / TTS）：用「模型选项 → 说话模型」里默认那个。
  * 没有可用的说话模型就如实回错误，不假装读了。
  */
+/**
+ * 说话模型是否就绪（朗读按钮先问这一句 —— 别误用听话/ASR 状态）。
+ * 真机反馈：已配置说话模型仍弹「没有配置模型」——前端误查 ASR + 从不赋值的 state.specialModels。
+ */
+chuliIpc('warmy:shuoHuaZhuangTai', async () => {
+  try {
+    await baozhangGongyingshangMiyao();
+    const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
+    const lian = Array.isArray(sm.ttsChain) ? (sm.ttsChain as string[]) : [];
+    const jin = Array.isArray(sm.ttsDisabled) ? (sm.ttsDisabled as string[]) : [];
+    const mo = lian.find((m) => m && !jin.includes(m)) || '';
+    if (!mo) {
+      return {
+        ok: true,
+        ready: false,
+        model: '',
+        reason: 'no-tts-model（请在「设置 → 模型 → 说话模型」里配置）',
+      };
+    }
+    const an = await jieMoXingGongYingShang(mo);
+    if (!an) return { ok: true, ready: false, model: mo, reason: 'tts-provider-not-found（模型不在任何供应商里）' };
+    if (!an.apiKey && an.protocol !== 'ollama') return { ok: true, ready: false, model: mo, reason: 'no-key（' + an.biaoQian + ' 未配密钥）' };
+    return { ok: true, ready: true, model: mo, provider: an.biaoQian };
+  } catch (e) { return { ok: false, ready: false, error: xiJingCuoWu(e) }; }
+});
+
 chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
   try {
     const s = String(p0?.text || '').trim();

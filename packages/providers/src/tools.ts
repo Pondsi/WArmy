@@ -83,6 +83,12 @@ export interface GongJuXunHuanXuan {
   daoShangXianWenMoXing?: boolean;
   /** 自估加轮的硬顶（含初始轮），默认 64；防止无限续命 */
   zuiDaZongLun?: number;
+  /**
+   * **首轮零工具调用时强制重试**（真机事故：多步任务模型只口头“已完成”却不调工具）。
+   * 默认 true：当 `Qiu.toolChoice === 'required'` 时，首轮若 0 个 tool_calls，
+   * 会用 `toolChoice:'required'` + 硬指令再试一次。
+   */
+  lingGongJuQiangZhi?: boolean;
 }
 
 export interface GongJuXunHuanGuo {
@@ -145,6 +151,8 @@ export async function liaoTianDaiGongJu(
   /** 到过上限后由模型自估加过的轮数（只允许有限次，防无限续命） */
   let jiaLunCiShu = 0;
   let zuiDaLunShuDongTai = zuiDaLunShu;
+  /** 首轮零工具后的强制 required 重试只做一次 */
+  let qiangZhiYiChong = false;
 
   /** 不带 tools 的普通对话（= ADR 002 之前的现状行为） */
   const chunWenBen = async (degraded: boolean, reason?: string): Promise<GongJuXunHuanGuo> => {
@@ -267,10 +275,34 @@ export async function liaoTianDaiGongJu(
         }
         break;
       }
-      const xiangYing = await diaoYongMoXing('auto');
+      /**
+       * **动手任务首轮零工具** ⇒ 立刻用 `toolChoice:'required'` 强制再试一次。
+       * 真机事故（2026-10-12）：用户让生成 txt+ppt 并打开，模型一轮就 `stop`、
+       * `gongJuDiaoYongJi:0`，正文却写“已生成并打开”。强制 required 能把 function calling
+       * 从“建议”变成“必须”（Ollama OpenAI 兼容端 / vLLM / OpenAI 都认这个值）。
+       */
+      const qiangZhiBenLun = Qiu.toolChoice === 'required' && (o.lingGongJuQiangZhi !== false);
+      const xiangYing = await diaoYongMoXing(qiangZhiBenLun ? 'required' : 'auto');
       last = xiangYing;
-      const xiaoXi = xiangYing.choices[0]?.message;
-      const diaoYongJi = Array.isArray(xiaoXi?.gongJuDiaoYongJi) ? xiaoXi.gongJuDiaoYongJi.filter(Boolean) : [];
+      let xiaoXi = xiangYing.choices[0]?.message;
+      let diaoYongJi = Array.isArray(xiaoXi?.gongJuDiaoYongJi) ? xiaoXi.gongJuDiaoYongJi.filter((c) => c && c.function?.name) : [];
+      if (!diaoYongJi.length && qiangZhiBenLun && !qiangZhiYiChong) {
+        qiangZhiYiChong = true;
+        xiaoXiJi.push({
+          role: 'user',
+          content: '你必须立即调用工具执行任务（write_file / make_pptx / open_path / run_shell 等），'
+            + '不要只用文字描述“已完成”。禁止在未调用工具前声称已生成/已打开任何文件。',
+        });
+        try {
+          const qiang = await diaoYongMoXing('required');
+          last = qiang;
+          xiaoXi = qiang.choices[0]?.message;
+          diaoYongJi = Array.isArray(xiaoXi?.gongJuDiaoYongJi) ? xiaoXi.gongJuDiaoYongJi.filter(Boolean) : [];
+          emit({ kind: 'final', round: lunShu, detail: 'force-tools-required' });
+        } catch {
+          /* 强制失败不挡正常路径 */
+        }
+      }
       if (!diaoYongJi.length) {
         tingZhiYuanYin = 'stop';
         break;

@@ -92,6 +92,14 @@ export class AnthropicGongYing extends JichuGongYing {
         description: t.function.description,
         input_schema: t.function.parameters || { type: 'object', properties: {} },
       })),
+      // Anthropic 口径：'required' → any（必须出工具）；'none' → auto 但清 tools；指定函数 → tool
+      ...(Qiu.toolChoice === 'required'
+        ? { tool_choice: { type: 'any' as const } }
+        : Qiu.toolChoice === 'none'
+          ? { tools: undefined }
+          : Qiu.toolChoice && typeof Qiu.toolChoice === 'object'
+            ? { tool_choice: { type: 'tool' as const, name: Qiu.toolChoice.function?.name || '' } }
+            : {}),
       ...Qiu.extra,
     };
   }

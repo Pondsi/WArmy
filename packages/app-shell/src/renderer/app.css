@@ -3025,6 +3025,8 @@ html { font-weight: var(--fw-ui, 400); }
 .huiFuRenWuBtn { margin-top: 4px; min-width: 120px; }
 .huiFuRenWuHang .xiaoXiJiao { opacity: 1 !important; }
 .huiFuRenWuHangDuli { padding: 2px 0 6px; }
+.huiFuRenWuJuZhong { display: flex; justify-content: center; align-items: center; width: 100%; }
+.huiFuRenWuJuZhong .huiFuRenWuBtn { margin: 0 auto; }
 .huiFuRenWuHang.yiGuoQi .huiFuRenWuBtn,
 .huiFuRenWuBtn:disabled {
   opacity: .45; cursor: not-allowed; filter: grayscale(1); pointer-events: none;

@@ -1175,6 +1175,113 @@
    *  - 可选文字处：复制 / 全选
    *  - 目标自己已有右键菜单（data-has-ctx / 原生菜单优先标记）⇒ 不覆盖
    */
+
+  /**
+   * **音频测试**（产品要求）：
+   *  - 麦克风：getUserMedia + AnalyserNode 实时电平，**5 秒自动关**
+   *  - 提示音：依次播 request/complete/error 三个（走既有 chuanBoYinXiao 通道）
+   */
+  /**
+   * 音频测试（并入「设置 → 功能 → 音频设备」）。
+   * **事件委托**：按钮由 renderPage 动态重建，直接绑定 id 在启动时会绑空
+   * （真机反馈：点了没反应）。委托到 document，重建后仍可点。
+   */
+  let ceShiZhuangTai = null;
+  function yinPinCeShiTing() {
+    const st = ceShiZhuangTai;
+    ceShiZhuangTai = null;
+    if (!st) return;
+    try { if (st.stopper) clearTimeout(st.stopper); } catch { /* noop */ }
+    try { if (st.raf) cancelAnimationFrame(st.raf); } catch { /* noop */ }
+    try { if (st.analyser && st.analyser.disconnect) st.analyser.disconnect(); } catch { /* noop */ }
+    try { if (st.source && st.source.disconnect) st.source.disconnect(); } catch { /* noop */ }
+    try { if (st.ctx && st.ctx.close) void st.ctx.close(); } catch { /* noop */ }
+    try { st.stream && st.stream.getTracks && st.stream.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+    const micTiao = $('maiKeFengJiBieTiao');
+    const micBtn = $('anNiuMaiKeFengCeShi');
+    if (micTiao) micTiao.style.width = '0%';
+    if (micBtn) micBtn.disabled = false;
+  }
+  async function yinPinCeShiMaiKe() {
+    const micBtn = $('anNiuMaiKeFengCeShi');
+    const micTiao = $('maiKeFengJiBieTiao');
+    const micXiaoXi = $('maiKeFengXiaoXi');
+    if (ceShiZhuangTai) { yinPinCeShiTing(); if (micXiaoXi) micXiaoXi.textContent = tOr('audioTest.stopped', '已停止'); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { uiAlert(tOr('audioTest.noMic', '本机不支持麦克风采集。'), tOr('audioTest.title', '音频测试')); return; }
+    if (micBtn) micBtn.disabled = true;
+    if (micXiaoXi) micXiaoXi.textContent = tOr('audioTest.micStarting', '正在打开麦克风…');
+    try {
+      /** 优先用「音频设备」里选中的麦克风 */
+      let constraints = { audio: true };
+      try {
+        const dev = String((window.__maiKeFengId || $('mimicMaiKeFeng')?.value || '').trim());
+        if (dev && navigator.mediaDevices.enumerateDevices) {
+          const list = await navigator.mediaDevices.enumerateDevices();
+          const hit = list.find((d) => d.kind === 'audioinput' && d.deviceId === dev);
+          if (hit) constraints = { audio: { deviceId: { exact: dev } } };
+        }
+      } catch { /* 用默认设备 */ }
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AC();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      const buf = new Float32Array(analyser.fftSize);
+      let zuiDa = 0;
+      const loop = () => {
+        const st = ceShiZhuangTai;
+        if (!st) return;
+        analyser.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        const rms = Math.sqrt(sum / buf.length);
+        const lv = Math.min(1, Math.pow(Math.max(0, rms) * 6, 0.5));
+        zuiDa = Math.max(zuiDa, lv);
+        if (micTiao) micTiao.style.width = (lv * 100).toFixed(1) + '%';
+        st.raf = requestAnimationFrame(loop);
+      };
+      ceShiZhuangTai = { stream, ctx, source, analyser, raf: 0, stopper: 0 };
+      loop();
+      ceShiZhuangTai.stopper = setTimeout(() => {
+        const zd = zuiDa;
+        yinPinCeShiTing();
+        if (micXiaoXi) micXiaoXi.textContent = zd > 0.06
+          ? tOr('audioTest.micOk', '收到声音（峰值 {p}%）').replace('{p}', String(Math.round(zd * 100)))
+          : tOr('audioTest.micSilent', '没收到声音：请检查系统输入设备/权限');
+      }, 5000);
+      if (micXiaoXi) micXiaoXi.textContent = tOr('audioTest.micListening', '正在收音…（5 秒后自动结束）');
+    } catch (e) {
+      if (micBtn) micBtn.disabled = false;
+      if (micXiaoXi) micXiaoXi.textContent = '';
+      uiAlert(tOr('audioTest.micFail', '打不开麦克风：{e}').replace('{e}', String((e && e.message) || e)), tOr('audioTest.title', '音频测试'));
+    }
+  }
+  async function yinPinCeShiTiShiYin() {
+    const sndBtn = $('anNiuTiShiYinCeShi');
+    const sndXiaoXi = $('tiShiYinXiaoXi');
+    if (sndBtn) sndBtn.disabled = true;
+    const xu = ['request', 'complete', 'error'];
+    const ming = { request: tOr('audioTest.sndRequest', '提示音'), complete: tOr('audioTest.sndComplete', '完成音'), error: tOr('audioTest.sndError', '失败音') };
+    for (const k of xu) {
+      if (sndXiaoXi) sndXiaoXi.textContent = tOr('audioTest.playing', '正在播放：{n}…').replace('{n}', ming[k]);
+      try { void chuanBoYinXiao(k, 'test-button'); } catch { /* noop */ }
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+    if (sndXiaoXi) sndXiaoXi.textContent = tOr('audioTest.sndDone', '三个提示音都放完了；若没听到，请检查系统音量/输出设备');
+    if (sndBtn) sndBtn.disabled = false;
+  }
+  function bindYinPinCeShi() {
+    if (window.__yinPinCeShiBound) return;
+    window.__yinPinCeShiBound = true;
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest('#anNiuMaiKeFengCeShi')) { void yinPinCeShiMaiKe(); return; }
+      if (t.closest('#anNiuTiShiYinCeShi')) void yinPinCeShiTiShiYin();
+    });
+  }
   function bindYouJianCaiDan() {
     if (window.__youJianBound) return;
     window.__youJianBound = 1;
@@ -1250,6 +1357,7 @@
     });
   }
   try { bindYouJianCaiDan(); } catch { /* noop */ }
+  try { bindYinPinCeShi(); } catch { /* noop */ }
 async function langDuWenBen(text, btnEl) {
     const s = String(text || '').trim();
     if (!s) return false;
@@ -1271,9 +1379,30 @@ async function langDuWenBen(text, btnEl) {
      * （产品要求：不能看起来像在播却无声）。
      */
     try {
-      const stTts = await window.warmy.tingHuaZhuangTai?.().catch(() => null);
-      const hasTts = !!(stTts && stTts.ready) || !!(state.specialModels && (state.specialModels.ttsChain || []).length)
-        || !!String(state.ttsModel || '');
+      /**
+       * 说话模型检测（真机反馈：配了说话模型仍弹「没有配置模型」）。
+       * 旧实现误用 tingHuaZhuangTai（那是听话/ASR状态）+ state.specialModels
+       * （渲染层从不赋值）⇒ 永远判成没配。现在直接问主进程「说话模型就绪吗」，
+       * 并兼容 specialModels.ttsChain / state.ttsModel 三种来源。
+       */
+      let hasTts = false;
+      try {
+        const stShuo = await window.warmy.shuoHuaZhuangTai?.().catch(() => null);
+        hasTts = !!(stShuo && stShuo.ready);
+        if (!hasTts && stShuo && stShuo.error) {
+          await uiAlert(String(stShuo.error), tOr('chat.read', '朗读'));
+          return false;
+        }
+      } catch { /* 查不到就继续查本地缓存 */ }
+      if (!hasTts) {
+        try {
+          const sp = await window.warmy.specialModelsGet?.().catch(() => null);
+          const sm = (sp && sp.specialModels) || state.specialModels || {};
+          const lian = Array.isArray(sm.ttsChain) ? sm.ttsChain : [];
+          const jin = Array.isArray(sm.ttsDisabled) ? sm.ttsDisabled : [];
+          hasTts = lian.some((m) => m && !jin.includes(m)) || !!String(sm.ttsModel || state.ttsModel || '');
+        } catch { /* noop */ }
+      }
       if (!hasTts) {
         await uiAlert(tOr('tts.noModel', '没有可用的说话模型（请在「设置 → 模型 → 说话模型」里配一个，才能朗读。）'), tOr('chat.read', '朗读'));
         return false;
@@ -2188,7 +2317,7 @@ async function langDuWenBen(text, btnEl) {
       const q = document.createElement('span');
       q.className = 'renWuZhongDuanMark';
       q.textContent = '?';
-      q.title = escapeHtml(tOr('chat.resumeTaskHint', '上次的任务被打断了（程序异常/退出/重启）。点这里接着做。'));
+      q.title = escapeHtml(tOr('chat.resumeTask', '继续 / 重试'));
       hangYuanSu.appendChild(q);
     }
     return hangYuanSu;
@@ -3183,8 +3312,7 @@ async function langDuWenBen(text, btnEl) {
         hang.className = 'xiaoXi huiFuRenWuHang' + (yiGuanBi ? ' yiGuoQi' : '');
         hang.innerHTML =
           '<div class="bubbleWrap">' +
-          '<div class="bubble">' + escapeHtml(tOr('chat.resumeTaskHint', '上次的任务被打断了（程序异常/退出/重启）。点这里接着做。')) + '</div>' +
-          '<div class="xiaoXiJiao"><div class="xiaoXiJiaoHang huiFuRenWuHangDuli">' + fuHuoAnNiuHtml + '</div></div></div>';
+          '<div class="xiaoXiJiao"><div class="xiaoXiJiaoHang huiFuRenWuHangDuli huiFuRenWuJuZhong">' + fuHuoAnNiuHtml + '</div></div></div>';
         heZi.appendChild(hang);
       }
       // 「继续 / 重试」：不管按钮挂在哪儿，共用一套行为
@@ -3195,8 +3323,11 @@ async function langDuWenBen(text, btnEl) {
           if (btn.disabled) return;
           const sid = state.selectedChat && state.selectedChat.id;
           const wei = (state.renWuZhongDuan && sid && state.renWuZhongDuan[String(sid)]) || {};
-          const why = String(wei.why || tOr('chat.resumeTaskHint', '任务被中断'));
-          const jieDuan = String(wei.jieDuan || '');
+          const why = String(wei.why || tOr('chat.resumeTaskWhy', '任务被中断'))
+            .replace(/上次的任务打断了[^。]*。?|上次的任务被打断了[^。]*。?/g, '')
+            .trim()
+            .slice(0, 80) || tOr('chat.resumeTaskWhy', '任务被中断');
+          const jieDuan = String(wei.jieDuan || '').slice(0, 40);
           /**
            * 点了就**带上中断原因**发一条内部指令：让模型先分析原因、规避/修复，
            * 再继续或重新执行（产品要求："点击后就会分析发生的错误…然后继续或重新执行"）。
@@ -8207,6 +8338,24 @@ async function renderDashboard(host) {
           <label style="display:flex;align-items:center;gap:6px;margin-top:8px">
             <input type="checkbox" id="mimicXiTongYin"/> ${escapeHtml(tOr('mimic.sysAudio', '允许接收系统 / 应用的声音'))}
           </label>
+          <!-- 音频测试（产品要求）：并入音频设备卡，不单独成卡 -->
+          <div class="yinPinCeShiQu" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line,#ddd)">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <b style="font-size:13px">${escapeHtml(tOr('audioTest.title', '音频测试'))}</b>
+              <span class="jingYin">${escapeHtml(tOr('audioTest.hint', '先测麦克风能不能收声，再听三个提示音确认输出设备正常。'))}</span>
+            </div>
+            <div class="shiLiHang" style="align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
+              <button class="anNiuXiao" id="anNiuMaiKeFengCeShi">${escapeHtml(tOr('audioTest.mic', '测试麦克风（5 秒）'))}</button>
+              <span style="display:inline-block;width:160px;height:10px;border-radius:6px;background:var(--hover);overflow:hidden;vertical-align:middle">
+                <span id="maiKeFengJiBieTiao" style="display:block;height:100%;width:0%;background:var(--accent);transition:width .06s linear"></span>
+              </span>
+              <span class="jingYin" id="maiKeFengXiaoXi"></span>
+            </div>
+            <div class="shiLiHang" style="align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
+              <button class="anNiuXiao" id="anNiuTiShiYinCeShi">${escapeHtml(tOr('audioTest.sound', '测试三个提示音'))}</button>
+              <span class="jingYin" id="tiShiYinXiaoXi"></span>
+            </div>
+          </div>
         </div>
         <div class="sheZhiSection sheZhiKa" id="jiYiXiTongKa">
           <h2>${escapeHtml(t('memory.statusTitle'))}</h2>
@@ -8564,6 +8713,8 @@ async function renderDashboard(host) {
           <p class="jingYin" id="webgpuKaiGuanTiShi"></p>
           <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
         </div>
+        <!-- 音频测试（产品要求）：麦克风能不能收声 + 三个提示音能不能听到 -->
+        <!-- 音频测试已并入「音频设备」卡（产品要求：不要单独一张卡） -->
         <!-- 自动归档：把右键菜单里勾了「自动归档」的会话整理后放进知识库；**增量**，只归档新增 -->
         <div class="sheZhiSection sheZhiKa" id="guiDangKa" data-sec="func">
           <!-- 标题行右侧「启用」开关（产品要求） -->
@@ -11057,11 +11208,19 @@ async function renderDashboard(host) {
           fenLeiChain: lian.fenLeiChain.slice(),
           fenLeiDisabled: lian.fenLeiDisabled.slice(),
         };
-        await window.warmy.specialModelsSet(cfg).catch(() => {});
-        const x = $('smXiaoXi');
-        if (x) {
-          x.textContent = tOr('common.saved', '已保存');
-          setTimeout(() => { if (x) x.textContent = ''; }, 1600);
+        try {
+          const r = await window.warmy.specialModelsSet(cfg);
+          const x = $('smXiaoXi');
+          if (x) {
+            x.textContent = (r && r.ok) ? tOr('common.saved', '已保存') : tOr('common.saveFailed', '保存失败');
+            setTimeout(() => { if (x) x.textContent = ''; }, 1600);
+          }
+        } catch (e) {
+          const x = $('smXiaoXi');
+          if (x) {
+            x.textContent = tOr('common.saveFailed', '保存失败') + '：' + String((e && e.message) || e);
+            setTimeout(() => { if (x) x.textContent = ''; }, 2400);
+          }
         }
       }
       window.__cunTeShuMoXing = cunTeShuMoXing;

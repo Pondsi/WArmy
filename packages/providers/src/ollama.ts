@@ -92,18 +92,120 @@ export class OllamaGongYing extends JichuGongYing {
           parameters: t.function.parameters || { type: 'object', properties: {} },
         },
       }));
+      /**
+       * tool_choice：新版 Ollama / OpenAI 兼容端认 `'required'`（强制出工具）。
+       * 旧版忽略该字段也不报错；不支持时外层降级链兜住。
+       */
+      if (Qiu.toolChoice) ji.tool_choice = Qiu.toolChoice;
     }
     return ji;
   }
 
+  /**
+   * toolChoice=required 走 OpenAI 兼容端（v1/chat/completions）：
+   * 原生 /api/chat 对 tool_choice 支持不完整；OpenAI 兼容端认 required。
+   * 失败返回 null，回落原生端。
+   */
+  private async chatOpenAIRequired(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing | null> {
+    try {
+      const body = {
+        model: Qiu.model,
+        messages: Qiu.xiaoXiJi.map((m) => {
+          const wen = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '');
+          const ji: Record<string, unknown> = { role: m.role, content: wen };
+          if (m.role === 'assistant' && m.gongJuDiaoYongJi?.length) {
+            ji.tool_calls = m.gongJuDiaoYongJi.filter((t) => t.function?.name).map((t) => ({
+              id: t.id,
+              type: 'function',
+              function: { name: t.function?.name || '', arguments: t.function?.arguments || '{}' },
+            }));
+          }
+          if (m.role === 'tool') {
+            ji.role = 'tool';
+            ji.tool_call_id = m.toolCallId;
+          }
+          return ji;
+        }),
+        tools: Qiu.tools?.map((t) => ({
+          type: 'function',
+          function: {
+            name: t.function.name,
+            description: t.function.description || '',
+            parameters: t.function.parameters || { type: 'object', properties: {} },
+          },
+        })),
+        tool_choice: 'required',
+        stream: false,
+        ...(Qiu.maxTokens != null ? { max_tokens: Qiu.maxTokens } : {}),
+      };
+      const yu2 = AbortSignal.timeout(this.auth.timeoutMs ?? 60_000);
+      const ben2 = signal ? AbortSignal.any([signal, yu2]) : yu2;
+      const res = await fetch(pinJieUrl(this.baseURL, 'v1/chat/completions'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.auth.headers },
+        body: JSON.stringify(body),
+        signal: ben2,
+      });
+      if (!res.ok) return null;
+      const json = await res.json() as {
+        model?: string;
+        choices?: Array<{ message?: { content?: string; thinking?: string; reasoning_content?: string; tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: unknown } }> } }>;
+      };
+      const msg = json.choices?.[0]?.message || {};
+      const gongJu = (msg.tool_calls || []).filter((t) => t && t.function?.name).map((t) => ({
+        id: t.id || 'call_' + Math.random().toString(36).slice(2),
+        type: 'function' as const,
+        function: {
+          name: String(t.function?.name || ''),
+          arguments: typeof t.function?.arguments === 'string'
+            ? t.function?.arguments
+            : JSON.stringify(t.function?.arguments ?? {}),
+        },
+      }));
+      return {
+        id: 'ollama-required',
+        model: json.model || Qiu.model,
+        choices: [{
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: String(msg.content || ''),
+            ...(String(msg.thinking || msg.reasoning_content || '')
+              ? { reasoning: String(msg.thinking || msg.reasoning_content || '') }
+              : {}),
+            ...(gongJu.length ? { gongJuDiaoYongJi: gongJu } : {}),
+          },
+          finishReason: gongJu.length ? 'tool_calls' : 'stop',
+        }],
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cacheHitTokens: 0,
+          cacheMissTokens: 0,
+          source: 'none',
+        },
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
+    if (Qiu.toolChoice === 'required') {
+      const forced = await this.chatOpenAIRequired(Qiu, signal);
+      if (forced) return forced;
+    }
+    /** 单次请求硬超时（真机：Ollama 无超时 fetch 会把工具循环挂死，界面永远 busy） */
+    const yu = AbortSignal.timeout(this.auth.timeoutMs ?? 60_000);
+    const ben = signal ? AbortSignal.any([signal, yu]) : yu;
     // HTTP 500 自动重试 1 次（模型瞬时加载失败/资源不足是常见原因）
     for (let ci = 0; ci < 2; ci++) {
     const res = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...this.auth.headers },
       body: JSON.stringify(this.qingQiuTi(Qiu, false)),
-      signal,
+      signal: ben,
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -117,23 +219,26 @@ export class OllamaGongYing extends JichuGongYing {
         /** Qwen3 / DeepSeek-R1 等：思考过程在**单独字段**里，不在 content */
         thinking?: string;
         reasoning_content?: string;
-        tool_calls?: Array<{ function?: { name?: string; arguments?: unknown } }>;
+        tool_calls?: Array<{ function?: { name?: string; arguments?: unknown }; name?: string; arguments?: unknown }>;
       };
       done_reason?: string;
       prompt_eval_count?: number;
       eval_count?: number;
     };
     // 模型发起的工具调用（Ollama 用 tool_calls，参数可能是对象）
-    const gongJu = (json.message?.tool_calls || []).map((t, i) => ({
-      id: `ollama-call-${Date.now()}-${i}`,
-      type: 'function' as const,
-      function: {
-        name: String(t?.function?.name || ''),
-        arguments: typeof t?.function?.arguments === 'string'
-          ? t.function.arguments
-          : JSON.stringify(t?.function?.arguments || {}),
-      },
-    }));
+    const gongJu = (json.message?.tool_calls || []).map((t, i) => {
+      const fn = t?.function || t;
+      return {
+        id: `ollama-call-${Date.now()}-${i}`,
+        type: 'function' as const,
+        function: {
+          name: String(fn?.name || ''),
+          arguments: typeof fn?.arguments === 'string'
+            ? fn.arguments
+            : JSON.stringify(fn?.arguments || {}),
+        },
+      };
+    }).filter((c) => c.function.name);
     return {
       id: `ollama-${Date.now()}`,
       model: json.model || Qiu.model,

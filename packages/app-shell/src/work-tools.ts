@@ -532,6 +532,27 @@ export function workMakePdf(baseDir: string, args: { path?: string; paragraphs?:
  * 策略：能严格解析就用；否则按顺序做常见修复（尾逗号 / 未闭合括号 / 单引号 / 未加引号的键），
  * 修不出来就返回 `{}` 并让调用方如实回「参数不是合法 JSON」——**绝不把裸解析器报错当回复**。
  */
+/**
+ * 路径字段兼容：不同模型会写 path / file / filePath / filename / name。
+ * 真机事故：MiMo 把 write_file 的 path 发成空 ⇒ empty-path，连试 7 次全挂。
+ */
+export function quLuJingCanShu(args: Record<string, unknown>): string {
+  const a = args || {};
+  for (const k of ['path', 'file', 'filePath', 'filepath', 'filename', 'fileName', 'name', 'target']) {
+    const v = a[k];
+    if (v != null && String(v).trim()) return String(v).trim();
+  }
+  return '';
+}
+
+/** make_* 生成器：缺扩展名时自动补上（真机：make_pptx 只给了 identity，一直报 need-pptx-extension） */
+export function buKuoZhanMing(p: string, ext: string): string {
+  const s = String(p || '').trim();
+  if (!s) return s;
+  const e = ext.startsWith('.') ? ext : '.' + ext;
+  return new RegExp(e.replace('.', '\\.') + '$', 'i').test(s) ? s : s + e;
+}
+
 export function jieXiGongJuCanShu(raw: unknown): { ok: boolean; args: Record<string, unknown>; error?: string } {
   if (raw === undefined || raw === null || raw === '') return { ok: true, args: {} };
   if (typeof raw === 'object' && !Array.isArray(raw)) return { ok: true, args: raw as Record<string, unknown> };
@@ -575,7 +596,18 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
   const rawArgs = call && call.function ? call.function.arguments : undefined;
   const jie = jieXiGongJuCanShu(rawArgs);
   if (!jie.ok) return fail(name || 'work', new Error(jie.error || 'bad-json-arguments'));
-  const args = jie.args;
+  /** 路径字段归一 + 生成器缺扩展名自动补 */
+  const args = { ...jie.args };
+  const p0 = quLuJingCanShu(args);
+  if (p0) args.path = p0;
+  if (name === 'write_file' && !args.path) {
+    args.path = 'output-' + Date.now() + '.txt';
+  }
+  if (name === 'make_dir' && !args.path) args.path = 'new-folder';
+  if (name === 'make_docx') args.path = buKuoZhanMing(String(args.path || 'document'), '.docx');
+  if (name === 'make_pptx') args.path = buKuoZhanMing(String(args.path || 'slides'), '.pptx');
+  if (name === 'make_xlsx') args.path = buKuoZhanMing(String(args.path || 'sheet'), '.xlsx');
+  if (name === 'make_pdf') args.path = buKuoZhanMing(String(args.path || 'document'), '.pdf');
   switch (name) {
     case 'list_dir': return workListDir(baseDir, args as { path?: string }, kuaiQuan);
     case 'read_file': return workReadFile(baseDir, args as { path?: string; maxChars?: number }, kuaiQuan);
@@ -602,7 +634,7 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
         description: '写入/覆盖一个文本文件（会自动建父目录）。默认写在**工作区**内（相对路径）。可直接写系统「桌面/文档/下载」：用 Desktop/xxx.txt、Documents/xxx.txt、~/Desktop/xxx.txt 这类路径（会映射到真实系统目录，需要用户授权；返回里会给绝对路径）。',
         parameters: {
           type: 'object',
-          properties: { path: { type: 'string', description: '工作区相对路径（如 notes/todo.txt）；或 Desktop/xx.txt、~/Desktop/xx.txt 等系统目录路径' }, content: { type: 'string', description: '文件内容' } },
+          properties: { path: { type: 'string', description: '【必填】文件路径字符串，例如 identity.txt 或 Desktop/identity.txt。不要省略本字段。' }, content: { type: 'string', description: '文件内容' } },
           required: ['path', 'content'],
         },
       },
@@ -651,7 +683,7 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'make_pptx',
-        description: '生成**真正的 PowerPoint**（.pptx，可用 PowerPoint 打开）。要生成 ppt/幻灯片**必须用本工具**，不要用 write_file 写 .pptx（那样得到的是假文件）。每张幻灯片有标题和要点。路径同 write_file（可写 Desktop/xx.pptx 等系统目录，需授权）。',
+        description: '生成**真正的 PowerPoint**（.pptx，可用 PowerPoint 打开）。要生成 ppt/幻灯片**必须用本工具**。path 参数必填，建议写成 xx.pptx（缺后缀会自动补）。不要用 write_file 写 .pptx。',
         parameters: {
           type: 'object',
           properties: {

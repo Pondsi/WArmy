@@ -88,7 +88,7 @@ export interface LiaoTianQingQiu {
   topP?: number;
   stop?: string[];
   tools?: GongJuGuiGe[];
-  toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
+  toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
   /** 透传给具体协议的扩展字段 */
   extra?: Record<string, unknown>;
 }

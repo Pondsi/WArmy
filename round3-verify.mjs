@@ -155,6 +155,7 @@ try {
   ok(!/plan\.task-interrupted|plan\.eta-anomaly"/.test(an), '没有任务中断/异常误判', (an.match(/plan\.[a-z-]+/g) || []).join(','));
 
   console.log('\n[6] 本轮改动：自动滚动策略 = min(lastTop, maxScroll)');
+  await sleep(2500); // 等滚动/布局稳定（长历史下 offsetTop 会再变）
   const gun = JSON.parse(await EV(`JSON.stringify((function(){
     var he=document.getElementById('xiaoXiJi'); if(!he) return {ok:false};
     var last=he.lastElementChild;
@@ -211,6 +212,12 @@ try {
     const a9 = readFrom(auditPath).length;
     // 明确"不要调工具、只回一句已完成" ⇒ 稳定复现"口头完成"
     const q = '请不要调用任何工具，只回复这一句话，不要做别的事：桌面文件已生成并打开 ✅ 请老板验收。第 ' + Date.now() + ' 号。';
+    // 等上一轮 busy 落下，避免消息被吞
+    for (let w = 0; w < 30; w++) {
+      const b = await EV(`!!document.getElementById('anNiuFaSong').classList.contains('faSongZhong')`);
+      if (!b) break;
+      await sleep(2000);
+    }
     await EV(`(function(){var t=document.getElementById('shuRu');t.value=${JSON.stringify(q)};t.dispatchEvent(new Event('input',{bubbles:true}));return 1;})()`);
     await c.clickSelector('#anNiuFaSong');
     let jianCe = false;

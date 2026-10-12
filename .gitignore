@@ -44,3 +44,11 @@ packages/app-shell/win-unpacked/
 **/profile-qr/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# local secrets / API keys (never commit)
+*key*.txt
+*token*.txt
+*令牌*.txt
+*apikey*.txt
+secure/keys.enc.json
+**/keys.enc.json

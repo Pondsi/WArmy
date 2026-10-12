@@ -183,10 +183,12 @@ export function zhuanHuanOpenAI(xiaoXiJi: LiaoTianXiaoXi[]): unknown[] {
       };
     }
     if (m.role === 'assistant' && m.gongJuDiaoYongJi?.length) {
+      /** 丢掉 function.name 为空的调用：API 会 400「missing a function name」 */
+      const youXiao = m.gongJuDiaoYongJi.filter((t) => t.function?.name);
       return {
         role: 'assistant',
         content: m.content || null,
-        tool_calls: m.gongJuDiaoYongJi.map((t) => ({
+        tool_calls: youXiao.map((t) => ({
           id: t.id,
           type: 'function',
           function: t.function,
@@ -218,14 +220,22 @@ export function jieXiOpenAIXiangYing(json: {
 }): LiaoTianXiangYing {
   const xuanXiang = json.choices?.[0];
   const xiaoXi = xuanXiang?.message;
-  const gongJuDiaoYongJi = (xiaoXi?.tool_calls || []).map((t) => ({
-    id: t.id,
-    type: 'function' as const,
-    function: {
-      name: t.function?.name || t.function?.name || '',
-      arguments: t.function?.arguments || '{}',
-    },
-  }));
+  const gongJuDiaoYongJi = (xiaoXi?.tool_calls || [])
+    .map((t) => {
+      const fn = (t as { function?: { name?: string; arguments?: unknown }; name?: string; arguments?: unknown }).function
+        || (t as { function?: { name?: string; arguments?: unknown }; name?: string; arguments?: unknown });
+      const name = String(fn?.name || (t as { name?: string }).name || '');
+      const args = fn?.arguments ?? (t as { arguments?: unknown }).arguments;
+      return {
+        id: t.id || `call-${Math.random().toString(36).slice(2)}`,
+        type: 'function' as const,
+        function: {
+          name,
+          arguments: typeof args === 'string' ? args : JSON.stringify(args ?? {}),
+        },
+      };
+    })
+    .filter((c) => c.function.name);
   return {
     id: json.id || `chatcmpl-${Date.now()}`,
     model: json.model || '',
