@@ -2023,7 +2023,6 @@
   "chat.resumeTask": "Daŭrigi / Reprovi",
   "chat.resumeTaskCmd": "[DAŬRIGI] La antaŭa tasko estis interrompita pro: {why}. Unue analizu la kaŭzon kaj evitu aŭ korektu ĝin, poste daŭrigu aŭ rerulu la reston.",
   "chat.unreadBadge": "Nova respondo; alklaku en ĉi tiu konversacio por forigi",
-  "chat.resumeTaskHint": "",
   "chat.resumeTaskExpired": "Eksvalidiĝis (vi komencis novan konversacion)",
   "chat.resumeTaskOpen": "Interrompita tasko",
   "llm.modelLine": "Vi funkcias sur modelo \"{model}\". Respondu honeste kiam oni demandas.",
@@ -2543,5 +2542,6 @@
   "audioTest.sndError": "Error sound",
   "audioTest.playing": "Playing: {n}…",
   "audioTest.sndDone": "All three played. If you heard nothing, check system volume / output device",
-  "chat.resumeTaskWhy": "task interrupted"
+  "chat.resumeTaskWhy": "task interrupted",
+  "chat.resumeTaskHint": "Daŭrigi / Reprovi"
 }

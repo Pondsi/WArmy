@@ -3297,7 +3297,7 @@ async function yindao() {
     log: (xiaoXi) => qidong(`updater: ${xiaoXi}`),
   });
   qingLiLinShiWenJian(path.join(userData, 'updates'));
-  await buMoRenNiuMa().catch(() => {});
+  await huiFuNiuMa().catch(() => {});
   huiFuQunLieBiao();
   // 群骨架恢复之后再灌队列快照（否则 createGroup 会把 queues Map 清空）
   huiFuLuYouQiDuiLie();
@@ -3532,21 +3532,21 @@ async function yindao() {
 // ── 群路由 / 群成员：持久化与重启恢复 ──
 
 /**
- * **首启补一头默认牛马**（真机：清配置后 listInstances 空 ⇒ 输入区 0×0、没法发消息）。
- * 主进程实例表是内存态；渲染层 stateSave 会恢复用户建过的牛马，但**全新安装什么都没有**。
- * 这里在路由就绪前补一头「牛马-1」，用户可改名/删除。
+ * **只恢复、不预置**（真机：用户要求首启干净，不要自动生成「牛马-1」）。
+ * 主进程实例表是内存态；磁盘上已有工作区时按目录名恢复。
+ * 全新安装就是 0 头牛马 —— 由用户在「牛马管理局」自己创建。
  */
-async function buMoRenNiuMa(): Promise<void> {
+async function huiFuNiuMa(): Promise<void> {
   try {
     if (!p1) return;
     if ((p1.instances.LieBiao() || []).length) return;
-    /**
-     * 先**恢复**磁盘上已有的牛马工作区（真机：每启一次新建一头「牛马-1」，列表越堆越多）。
-     * 只有全新安装（一个工作区都没有）才补默认牛马-1。
-     */
     const gen = path.join(app.getPath('userData'), 'instances');
     let cun: string[] = [];
-    try { cun = fs.readdirSync(gen).filter((x) => { try { return fs.statSync(path.join(gen, x)).isDirectory(); } catch { return false; } }); } catch { /* empty */ }
+    try {
+      cun = fs.readdirSync(gen).filter((x) => {
+        try { return fs.statSync(path.join(gen, x)).isDirectory(); } catch { return false; }
+      });
+    } catch { /* empty */ }
     const yiCun = new Set((p1.instances.LieBiao() || []).map((x) => x.id));
     for (const id of cun) {
       if (yiCun.has(id)) continue;
@@ -3564,20 +3564,8 @@ async function buMoRenNiuMa(): Promise<void> {
         qidong('instance restore skip ' + id + ' ' + String(e));
       }
     }
-    if ((p1.instances.LieBiao() || []).length) return;
-    const id = 'inst-' + Date.now().toString(36);
-    await p1.instances.spawn({
-      config: {
-        id,
-        ming: '牛马-1',
-        workspace: path.join(app.getPath('userData'), 'instances', id),
-        dutyEligible: true,
-      },
-    });
-    try { audit?.log('instance.auto-default', { id, ming: '牛马-1' }); } catch { /* noop */ }
-    qidong('default instance created: ' + id);
   } catch (e) {
-    qidong('default instance skip ' + String(e));
+    qidong('instance restore skip ' + String(e));
   }
 }
 

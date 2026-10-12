@@ -2023,7 +2023,6 @@
   "chat.resumeTask": "继续 / 重试",
   "chat.resumeTaskCmd": "【继续执行】上次任务因「{why}」中断。请先分析原因并规避或修复，然后继续或重新执行未完成的任务。",
   "chat.unreadBadge": "有新回复；点击这个聊天界面任意位置后消失",
-  "chat.resumeTaskHint": "",
   "chat.resumeTaskExpired": "已过期（你已开始新的对话）",
   "chat.resumeTaskOpen": "有被打断的任务",
   "llm.modelLine": "你当前运行在模型「{model}」上。用户问你是什么模型时如实回答它。",
@@ -2543,5 +2542,6 @@
   "audioTest.sndError": "失败音",
   "audioTest.playing": "正在播放：{n}…",
   "audioTest.sndDone": "三个提示音都放完了；若没听到，请检查系统音量/输出设备",
-  "chat.resumeTaskWhy": "任务被中断"
+  "chat.resumeTaskWhy": "任务被中断",
+  "chat.resumeTaskHint": "继续 / 重试"
 }

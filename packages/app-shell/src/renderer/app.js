@@ -4891,10 +4891,19 @@ window.__keYiLiaoTian = keYiLiaoTian;
         // ① 先处理音效（与能不能画出来无关）
         xiangKaPianYin(pending.map((q) => q.id), 'render');
         if (!host) return;
-        if (!qunId) { host.innerHTML = ''; return; }
+        if (!qunId) { if (host.innerHTML) host.innerHTML = ''; return; }
         if (!pending.length) {
-          host.innerHTML = '';
+          if (host.innerHTML) host.innerHTML = '';
           return;
+        }
+        /**
+         * **无变化不重建 DOM**（真机：每 1.2s innerHTML 整卡重画 ⇒ 按钮发闷/点不动）。
+         * 用 pending 的 id + 选项签名做指纹，变了才画。
+         */
+        {
+          const zhiWen = pending.map((q) => String(q.id) + ':' + (q.options || []).map((o) => o.id).join(',')).join('|');
+          if (host.getAttribute('data-aiq-fp') === zhiWen && host.childElementCount) return;
+          host.setAttribute('data-aiq-fp', zhiWen);
         }
         /**
          * X/N：**这一串决策里的第几个 / 一共几个**（含已答的，编号才稳定）。

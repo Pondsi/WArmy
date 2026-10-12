@@ -16,6 +16,7 @@
     "sourceMap": true,
     "composite": true,
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "typeRoots": ["./node_modules/@types", "./packages/app-shell/node_modules/@types"]
   }
 }

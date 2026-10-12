@@ -2023,7 +2023,6 @@
   "chat.resumeTask": "계속 / 재시도",
   "chat.resumeTaskCmd": "[계속 실행] 이전 작업이 '{why}' 때문에 중단되었습니다. 원인을 분석해 우회하거나 수정한 뒤, 남은 작업을 계속하거나 다시 실행하세요.",
   "chat.unreadBadge": "새 회신. 이 대화 영역을 클릭하면 사라집니다",
-  "chat.resumeTaskHint": "",
   "chat.resumeTaskExpired": "만료됨(새 대화를 시작함)",
   "chat.resumeTaskOpen": "중단된 작업",
   "llm.modelLine": "당신은 모델 \"{model}\" 위에서 실행 중입니다. 어떤 모델인지 물으면 사실대로 답하세요.",
@@ -2543,5 +2542,6 @@
   "audioTest.sndError": "Error sound",
   "audioTest.playing": "Playing: {n}…",
   "audioTest.sndDone": "All three played. If you heard nothing, check system volume / output device",
-  "chat.resumeTaskWhy": "task interrupted"
+  "chat.resumeTaskWhy": "task interrupted",
+  "chat.resumeTaskHint": "계속 / 다시 시도"
 }

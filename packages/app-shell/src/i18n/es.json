@@ -2023,7 +2023,6 @@
   "chat.resumeTask": "Continuar / Reintentar",
   "chat.resumeTaskCmd": "[CONTINUAR] La tarea anterior se interrumpió por: {why}. Primero analiza la causa y evítala o corrígela, luego continúa o reejecuta lo que falta.",
   "chat.unreadBadge": "Nueva respuesta; pulsa en esta conversación para quitarla",
-  "chat.resumeTaskHint": "",
   "chat.resumeTaskExpired": "Caducado (comenzaste otra conversación)",
   "chat.resumeTaskOpen": "Tarea interrumpida",
   "llm.modelLine": "Estás ejecutando el modelo \"{model}\". Responde con honestidad si te lo preguntan.",
@@ -2543,5 +2542,6 @@
   "audioTest.sndError": "Error sound",
   "audioTest.playing": "Playing: {n}…",
   "audioTest.sndDone": "All three played. If you heard nothing, check system volume / output device",
-  "chat.resumeTaskWhy": "task interrupted"
+  "chat.resumeTaskWhy": "task interrupted",
+  "chat.resumeTaskHint": "Continuar / Reintentar"
 }
