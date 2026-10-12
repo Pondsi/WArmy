@@ -101,10 +101,12 @@ export function xingWeiGui(x: XingWei): XingWeiGui {
 export const YU_JING_JIA_YI_DANG_MS = 20 * 60 * 1000;
 export const YU_JING_JIA_YI_DANG_LUN = 40;
 
-/** 连续超时几次算异常（产品定稿：3） */
-export const CHAO_SHI_LIAN_XU_XIAN = 3;
+/** 连续超时几次算异常（产品定稿：9 次预测都错才当异常，给模型自我修正的机会） */
+export const CHAO_SHI_LIAN_XU_XIAN = 9;
 /** 判断最多换几个模型（全都没反应 = 异常） */
 export const PAN_MO_XING_SHANG_XIAN = 5;
+/** 持久文件里保留最近 N 次真实样本（产品要求：9 次，供下次预测参考校准） */
+export const YANG_BEN_BAO_LIU = 9;
 /** 单次预测的可接受范围：10 秒 ~ 24 小时 */
 export const ETA_ZUI_XIAO_MS = 10 * 1000;
 export const ETA_ZUI_DA_MS = 24 * 60 * 60 * 1000;
@@ -142,9 +144,13 @@ export interface EtaFangFa {
   shiJiEmaMs: number;
   /** 校准系数 = 实际/预测 的滑动平均（>1 = 一贯偏乐观） */
   piaoYiXiShu: number;
+  /** Holt 双指数平滑：水平 + 趋势（能跟上"越跑越快/慢"） */
+  holtShuiPing: number;
+  holtQuShi: number;
   p50Ms: number;
   p90Ms: number;
   mingZhongLv: number;
+  /** 最近 9 次真实样本（产品要求：留 9 次供下次预测校准） */
   yangBenWei: number[];
   liZi: Array<{ ts: number; yuCeMs: number; shiJiMs: number; mingZhong: boolean; moXing?: string }>;
   gengXinTs: number;
@@ -229,6 +235,57 @@ export function emaXiShu(jiu: number, xin: number, alpha = 0.35): number {
   return Number((jiu * (1 - alpha) + xin * alpha).toFixed(4));
 }
 
+/**
+ * Holt 双指数平滑（线性趋势）—— 比单 EMA 更能跟上"任务越跑越快/越跑越慢"的趋势。
+ * 返回平滑后的水平值（预测下一步）。样本不足 2 时退化为单 EMA。
+ */
+export function holtYuCe(shuiPing: number, quShi: number, xin: number, alpha = 0.4, beta = 0.2): { shuiPing: number; quShi: number } {
+  if (!(shuiPing > 0)) return { shuiPing: Math.max(0, Math.round(xin)), quShi: 0 };
+  const p = alpha * xin + (1 - alpha) * (shuiPing + quShi);
+  const q = beta * (p - shuiPing) + (1 - beta) * quShi;
+  return { shuiPing: Math.round(p), quShi: Math.round(q) };
+}
+
+/**
+ * MAD（Median Absolute Deviation）—— 鲁棒离散度，不受极端值影响。
+ * 预测区间 = 预测值 ± k × MAD（k≈1.4826 对应正态 σ）。
+ */
+export function mad(yang: number[]): number {
+  const a = (yang || []).filter((x) => Number.isFinite(x) && x > 0).slice().sort((x, y) => x - y);
+  if (a.length < 2) return 0;
+  const med = a[Math.floor(a.length / 2)] as number;
+  const dev = a.map((x) => Math.abs(x - med)).sort((x, y) => x - y);
+  return dev[Math.floor(dev.length / 2)] as number;
+}
+
+/**
+ * 加权分位数：近期样本权重更高（指数衰减），比简单分位数更跟手。
+ * w[i] = 0.85^(n-1-i)，越新权重越大。
+ */
+export function jiaQuanFenWei(yang: number[], p: number): number {
+  const a = (yang || []).filter((x) => Number.isFinite(x) && x > 0);
+  if (!a.length) return 0;
+  const n = a.length;
+  const pairs = a.map((v, i) => ({ v, w: Math.pow(0.85, n - 1 - i) })).sort((x, y) => x.v - y.v);
+  const zong = pairs.reduce((s, x) => s + x.w, 0);
+  let lei = 0;
+  for (const { v, w } of pairs) {
+    lei += w;
+    if (lei / zong >= p) return Math.round(v);
+  }
+  return Math.round((pairs[pairs.length - 1] || { v: 0 }).v);
+}
+
+/**
+ * 自适应 alpha：预测误差大 → 多信新样本（alpha↑）；误差小 → 多信历史（alpha↓）。
+ * 基于最近 3 次预测误差的 EMA 动态调整。
+ */
+export function ziShiYingAlpha(wuChaEma: number): number {
+  // 误差比（实际/预测）偏离 1 越远，alpha 越大（更敏感）
+  const pianLi = Math.abs(Math.log(Math.max(0.1, wuChaEma)));
+  return Math.min(0.7, Math.max(0.15, 0.35 + pianLi * 0.3));
+}
+
 /** 把模型的"秒"夹到可用范围（无效值返回 null） */
 export function jiaEtaMiao(miao: unknown): number | null {
   const s = youXian(miao, 0);
@@ -279,7 +336,7 @@ export function moXingZu(mo?: string): string {
  *   ③ 都判不出来 ⇒ 返回 `stalled: null`（= **没给结论**，不等于卡死），
  *      由调用方决定"换下一个模型"，而不是当成"卡住了"。
  */
-export function jieXiKaPanDuan(txt: string): { stalled: boolean | null; reason: string; etaSeconds: number | null; etaBasis: string } {
+export function jieXiKaPanDuan(txt: string): { stalled: boolean | null; reason: string; etaSeconds: number | null; etaRounds: number; etaBasis: string } {
   const s = String(txt || '');
   const quan = (k: string): string | null => {
     const m = s.match(new RegExp('"' + k + '"\\s*:\\s*"([^"]*)"', 'i'));
@@ -333,6 +390,7 @@ export function jieXiKaPanDuan(txt: string): { stalled: boolean | null; reason: 
     stalled,
     reason: (quan('reason') || quan('理由') || (gan.match(/["']reason["']\s*:\s*["']([^"']*)["']/i) || [])[1] || '').slice(0, 200),
     etaSeconds: shu('etaSeconds') ?? shu('eta'),
+    etaRounds: shu('etaRounds') ?? shu('rounds') ?? 0,
     etaBasis: (quan('etaBasis') || '').slice(0, 200),
   };
 }
@@ -354,6 +412,7 @@ export function shiLiaoTianMoXing(id: string, kind?: string): boolean {
 function kongFangFa(xingWei: XingWei, qianMing: string, now: number): EtaFangFa {
   return {
     xingWei, qianMing, yangBen: 0, yuCeEmaMs: 0, shiJiEmaMs: 0, piaoYiXiShu: 1,
+    holtShuiPing: 0, holtQuShi: 0,
     p50Ms: 0, p90Ms: 0, mingZhongLv: 0, yangBenWei: [], liZi: [], gengXinTs: now,
   };
 }
@@ -412,13 +471,18 @@ export class EtaZhangBen {
     f.yuCeEmaMs = ema(f.yuCeEmaMs, yangBen.yuCeMs);
     f.shiJiEmaMs = ema(f.shiJiEmaMs, yangBen.shiJiMs);
     f.piaoYiXiShu = emaXiShu(f.piaoYiXiShu, Math.min(20, Math.max(0.05, bi)));
+    // Holt 双指数平滑：跟上"越跑越快/慢"的趋势
+    const h = holtYuCe(f.holtShuiPing, f.holtQuShi, yangBen.shiJiMs);
+    f.holtShuiPing = h.shuiPing;
+    f.holtQuShi = h.quShi;
     f.yangBenWei.push(yangBen.shiJiMs);
-    if (f.yangBenWei.length > 40) f.yangBenWei.splice(0, f.yangBenWei.length - 40);
+    // 产品要求：保留最近 9 次真实样本供下次预测校准
+    if (f.yangBenWei.length > YANG_BEN_BAO_LIU) f.yangBenWei.splice(0, f.yangBenWei.length - YANG_BEN_BAO_LIU);
     f.p50Ms = fenWei(f.yangBenWei, 0.5);
     f.p90Ms = fenWei(f.yangBenWei, 0.9);
     f.mingZhongLv = Number((f.yangBen > 1 ? f.mingZhongLv * 0.7 + (yangBen.mingZhong ? 0.3 : 0) : (yangBen.mingZhong ? 1 : 0)).toFixed(3));
     f.liZi.push({ ts: now, yuCeMs: yangBen.yuCeMs, shiJiMs: yangBen.shiJiMs, mingZhong: yangBen.mingZhong, moXing: yangBen.moXing });
-    if (f.liZi.length > 12) f.liZi.splice(0, f.liZi.length - 12);
+    if (f.liZi.length > YANG_BEN_BAO_LIU) f.liZi.splice(0, f.liZi.length - YANG_BEN_BAO_LIU);
     f.gengXinTs = now;
     an[qianMing] = f;
 
@@ -439,13 +503,33 @@ export class EtaZhangBen {
   yuCeByFangFa(xingWei: XingWei, qianMing: string, now = Date.now()): EtaYuCe | null {
     const f = this.chaFangFa(xingWei, qianMing);
     if (!f) return null;
-    // 方法 = 该类行为的历史中位数 × 它的偏移系数，再抬到 90 分位（宁可高估，别让长任务反复被判超时）
-    const ji = Math.max(f.p50Ms || 0, Math.round((f.shiJiEmaMs || 0) * (f.piaoYiXiShu || 1)));
-    const eta = Math.max(ETA_ZUI_XIAO_MS, Math.min(ETA_ZUI_DA_MS, f.p90Ms ? Math.max(ji, Math.round(f.p90Ms * 0.9)) : (ji || 0)));
+    /**
+     * 预测方法（科学组合，持久文件自我优化）：
+     *  1. Holt 双指数平滑：水平 + 趋势（能跟上"越跑越快/慢"）
+     *  2. 历史中位数 × 偏移系数（一贯偏乐观就自动放大）
+     *  3. 抬到 90 分位（宁可高估，别让长任务反复被判超时）
+     *  三者取较优（更保守 = 更大），再夹到 [10s, 24h]。
+     */
+    /**
+     * 预测方法 v2（科学组合，持久文件自我优化）：
+     *  1. Holt 双指数平滑（水平+趋势）
+     *  2. 加权分位数 p50/p90（近期样本权重指数衰减 0.85^(n-1-i)）
+     *  3. 中位数 × 偏移系数（一贯偏乐观就自动放大）
+     *  4. MAD 鲁棒区间：预测值 + 1.48×MAD 上界（宁可高估）
+     *  取较保守（更大）者，夹到 [10s, 24h]。
+     */
+    const holt = f.holtShuiPing > 0 ? Math.round(f.holtShuiPing + f.holtQuShi) : 0;
+    const jiaQuan50 = jiaQuanFenWei(f.yangBenWei, 0.5);
+    const jiaQuan90 = jiaQuanFenWei(f.yangBenWei, 0.9);
+    const zhongWei = Math.max(f.p50Ms || 0, jiaQuan50, Math.round((f.shiJiEmaMs || 0) * (f.piaoYiXiShu || 1)));
+    const p90 = Math.max(f.p90Ms ? Math.round(f.p90Ms * 0.9) : 0, jiaQuan90 ? Math.round(jiaQuan90 * 0.9) : 0);
+    const madQuJian = f.yangBenWei.length >= 3 ? Math.round(zhongWei + 1.4826 * mad(f.yangBenWei)) : 0;
+    const eta = Math.max(ETA_ZUI_XIAO_MS, Math.min(ETA_ZUI_DA_MS,
+      Math.max(holt, zhongWei, p90, madQuJian) || zhongWei || 0));
     if (!(eta > 0)) return null;
     return {
       etaMs: eta, jieZhiMs: now + eta, yiYongMs: 0,
-      genJu: `方法库（${f.yangBen} 次真实记录：中位 ${shuoShiChang(f.p50Ms)}／90 分位 ${shuoShiChang(f.p90Ms)}／偏移 ${f.piaoYiXiShu}）`,
+      genJu: `方法库（${f.yangBen} 次记录：加权中位 ${shuoShiChang(jiaQuan50)}／加权P90 ${shuoShiChang(jiaQuan90)}／偏移 ${f.piaoYiXiShu}／趋势 ${f.holtQuShi >= 0 ? '+' : ''}${shuoShiChang(Math.abs(f.holtQuShi))}／MAD区间 ${shuoShiChang(madQuJian)}）`,
       laiYuan: 'fangFa', ts: now, mingZhong: null,
     };
   }
@@ -531,7 +615,7 @@ export class EtaLinShi {
    *   · `kuiShi`  —— 没有上次预测（第一次，谈不上超）
    *   · `chaoShi` —— 超了没有
    *   · `ciShu`   —— 本轮累计超了几次
-   *   · `yiChang` —— 到 3 次了（**直接判异常，不再问模型**）
+   *   · `yiChang` —— 到 9 次了（**直接判异常，不再问模型**）
    *   · `shiZong` —— "应存在却查不到上次预测"（临时文件丢了；如实报告）
    */
   panChaoShi(sessionId: string, x: XingWei, now = Date.now()): {
@@ -615,11 +699,21 @@ export class EtaLinShi {
     return rec;
   }
 
-  /** 判"没卡死" ⇒ 预警点加一档（时间 +20 分钟 / 次数 +40，与既有产品行为一致） */
-  jiaYiDang(sessionId: string, x: XingWei, now = Date.now()): { yuJingMiao: number; yuJingLun: number } {
+  /**
+   * 判"没卡死" ⇒ **按持久预测文件续期**（产品要求 T14：不再简单翻倍/加档）。
+   * 优先用方法库预测剩余时间/轮次作为新预警点；没有方法时退回加一档。
+   * 同时更新持久预测文件（时间到了还没完成 = 之前的预测不准，用本次数据校准）。
+   */
+  jiaYiDang(sessionId: string, x: XingWei, yuCeEtaMs?: number, now = Date.now()): { yuJingMiao: number; yuJingLun: number } {
     const w = this.xingWei(sessionId, x, now);
-    w.yuJingMiao += YU_JING_JIA_YI_DANG_MS;
-    w.yuJingLun += YU_JING_JIA_YI_DANG_LUN;
+    if (yuCeEtaMs && yuCeEtaMs > 0) {
+      // 预测式续期：新预警点 = 现在 + 预测剩余时间（再留 20% 余量）
+      w.yuJingMiao = Math.max(w.yuJingMiao, Math.round(yuCeEtaMs * 1.2));
+      w.yuJingLun = Math.max(w.yuJingLun, Math.round(w.yuJingLun * 1.2));
+    } else {
+      w.yuJingMiao += YU_JING_JIA_YI_DANG_MS;
+      w.yuJingLun += YU_JING_JIA_YI_DANG_LUN;
+    }
     w.gengXinTs = now;
     this.baCun();
     return { yuJingMiao: w.yuJingMiao, yuJingLun: w.yuJingLun };

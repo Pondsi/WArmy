@@ -391,6 +391,18 @@ const mock = http.createServer((req, res) => {
   req.on('end', () => {
     try {
       seenPrompts.push(JSON.parse(raw));
+      /** 临时取证：把每次请求的"体积 + 首尾消息摘要"落文件，用来定位"一轮两条 prompt"是谁发的 */
+      if (process.env.WARMY_TRACE_PROMPT) {
+        const o = JSON.parse(raw);
+        const ms = o.messages || o.xiaoXiJi || [];
+        const txt = ms.map((m) => String(m.content ?? '')).join('');
+        fs.appendFileSync(process.env.WARMY_TRACE_PROMPT, JSON.stringify({
+          at: Date.now(), stream: !!o.stream, n: ms.length, chars: txt.length,
+          roles: ms.map((m) => m.role).join(','),
+          head: String((ms[0] && ms[0].content) || '').slice(0, 70),
+          tail: String((ms[ms.length - 1] && ms[ms.length - 1].content) || '').slice(0, 90),
+        }) + '\n');
+      }
     } catch {
       /* ignore */
     }

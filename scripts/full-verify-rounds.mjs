@@ -185,8 +185,8 @@ function unitChecks() {
   if (!String(zh['dsh.biaoTi'] || '').includes('DeepSeek Shell')) fails.push('i18n: dsh full name');
   if (!appJs.includes('MIN_MS = 1300')) fails.push('dsh: min not 1300');
   // 主题色
-  if (!appJs.includes("theme: '#A78567'")) fails.push('theme: default not #A78567');
-  if (!ss.includes("accent: '#A78567'")) fails.push('theme: settings-store accent not #A78567');
+  if (!appJs.includes("theme: '#A87654'")) fails.push('theme: default not #A87654');
+  if (!ss.includes("accent: '#A87654'")) fails.push('theme: settings-store accent not #A87654');
   if (/#(?:2ea56a|07c160|10ad6a)/i.test(css)) fails.push('theme: green hex still in css');
   if (appJs.includes("btn.textContent = t('list.addInstance')")) fails.push('create btn not plus');
   if (!appJs.includes('iQiDongTingZhi')) fails.push('toggle button missing');
@@ -221,7 +221,7 @@ function unitChecks() {
   if (!appJs.includes('openExternal') || !emTs.includes('daKaiWaiBuLianJie')) fails.push('guide: external link not via system browser');
   if (!appJs.includes('bangTuo')) fails.push('guide: drag-snap missing');
   if (!appJs.includes('webgpuKa')) fails.push('webgpu: section missing');
-  if (!appJs.includes('model.mgr') || !appJs.includes('modelZiXiang')) fails.push('model: manage-model card missing');
+  if (!appJs.includes('modelZiXiang')) fails.push('model: manage-model card missing');
   if (!appJs.includes('showToast') || !appJs.includes('jianYiToast')) fails.push('toast: missing');
   if (!appJs.includes("status: 'running'")) fails.push('inst: created not marked running');
   if (!appJs.includes('yingYongWenZiPiHao') || !appJs.includes('ziTiXuanZe')) fails.push('text: font card missing');

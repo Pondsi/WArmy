@@ -187,6 +187,21 @@ export interface MoxingGongYing {
 // ─────────────────────────────────────────────
 
 export const GONGYING_YUSHE: GongYingYuShe[] = [
+  /**
+   * **MiMo（token-plan 官方端点）** —— 国内站 `token-plan-cn`，海外站 `token-plan-sgp`。
+   * 两站**key 不通用**（实测：CN 的 key 在 SGP 会上 401，反之亦然），所以默认给 CN，
+   * 用户换站时改 baseURL 即可（key 要换对应站的）。
+   * 它同时提供**对话 / 听话（asr）/ 说话（tts）**模型，所以 TTS·ASR 在这里是"一等公民"。
+   */
+  {
+    id: 'mimo',
+    biaoQian: 'MiMo（token-plan）',
+    protocol: 'openai-compatible',
+    baseURL: 'https://token-plan-cn.xiaomimimo.com/v1',
+    defaultModel: 'mimo-v2.6-pro',
+    requiresApiKey: true,
+    docs: 'https://token-plan-cn.xiaomimimo.com/v1/models（海外站把 cn 换成 sgp）',
+  },
   {
     id: 'deepseek',
     biaoQian: 'DeepSeek',

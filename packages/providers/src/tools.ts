@@ -210,21 +210,23 @@ export async function liaoTianDaiGongJu(
         if (daoLunShangXian && !yuSuanShuChu && daoShangXianWenMoXing && jiaLunCiShu < 3 && lunShu < zuiDaZongLun) {
           try {
             const PAN = '工具轮数已到上限。请判断当前任务是否已经完成。\n'
-              + '只输出 JSON：{"done":true|false,"needRounds":数字（若未完成，还需要几轮工具调用；给偏保守的值，1~8）}\n'
+              + '只输出 JSON：{"done":true|false,"needRounds":数字（若未完成，还需要几轮工具调用；1~8）,"etaSeconds":数字（预计还需多少秒，可选）,"reason":"一句话理由"}\n'
               + '若你已经可以给出面向用户的完整结论，done 必须为 true。';
             xiaoXiJi.push({ role: 'user', content: PAN });
             const pan = await diaoYongMoXing('none');
             const panTxt = neiRongWenBen(pan.choices[0]?.message?.content) || '';
             const doneM = panTxt.match(/"done"\s*:\s*(true|false)/i);
             const needM = panTxt.match(/"needRounds"\s*:\s*(\d+)/i);
+            const etaM = panTxt.match(/"etaSeconds"\s*:\s*(\d+)/i);
             const done = doneM ? String(doneM[1]).toLowerCase() === 'true' : true;
             const need = needM ? qianZhiZhengShu(Number(needM[1]), 1, 8, 4) : 4;
+            const etaSec = etaM ? Number(etaM[1]) : null;
             // 把这次判断从对话里撤掉，避免污染后续工具轮上下文
             xiaoXiJi.pop();
             if (!done && need > 0) {
               jiaLunCiShu += 1;
               zuiDaLunShuDongTai = Math.min(zuiDaZongLun, zuiDaLunShuDongTai + need);
-              emit({ kind: 'final', round: lunShu, detail: `max-rounds-extended(+${need})` });
+              emit({ kind: 'final', round: lunShu, detail: `max-rounds-extended(+${need}${etaSec != null ? ',eta=' + etaSec + 's' : ''})` });
               continue;
             }
             // done=true 或说不清 ⇒ 落到强制收敛

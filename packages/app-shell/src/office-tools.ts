@@ -130,6 +130,22 @@ function tao(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
+/** XML 反转义（读回内容时用） */
+function jieTao(s: string): string {
+  return String(s ?? '')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+}
+
+/** 取某个标签的全部文本（去内层标签、反转义） */
+function quBiaoQianWenBen(xml: string, biaoQian: string): string[] {
+  const re = new RegExp(`<${biaoQian}[^>]*>([\\s\\S]*?)</${biaoQian}>`, 'g');
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml))) out.push(jieTao((m[1] || '').replace(/<[^>]+>/g, '')));
+  return out;
+}
+
 /* ────────────────────────────── .docx ────────────────────────────── */
 
 /** 生成真 .docx：每段一个 <w:p> */
@@ -244,4 +260,185 @@ export function shengChengPptx(muBanLu: string, pianJi: HuanDengPian[]): Buffer 
 export function keYongPptx(muBanLu: string): boolean {
   try { return fs.existsSync(muBanLu) && duZip(fs.readFileSync(muBanLu)).some((z) => z.name === 'ppt/slides/slide1.xml'); }
   catch { return false; }
+}
+
+/* ────────────────────────────── .xlsx ────────────────────────────── */
+
+export interface BiaoGeShu {
+  /** 工作表名（缺省「工作表1/2/…」；Excel 限制 31 字符且不含 []:*?/\） */
+  name?: string;
+  /** 行 × 列；单元格可以是字符串或数字（数字按数字写，其它按文本写） */
+  rows: Array<Array<string | number | null | undefined>>;
+}
+
+/** 0 基列号 → Excel 列名（0→A，25→Z，26→AA） */
+export function lieMing(i: number): string {
+  let s = '';
+  let n = Math.max(0, Math.floor(i)) + 1;
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+/** 清洗工作表名（Excel 硬性要求：≤31 字符、不含 []:*?/\） */
+function qingBiaoGeMing(name: string, idx: number): string {
+  const t = String(name || '').replace(/[[\]:*?/\\]/g, '_').trim().slice(0, 31);
+  return t || `工作表${idx + 1}`;
+}
+
+/**
+ * 生成**真正的 .xlsx**（Excel / WPS / LibreOffice 可打开）。
+ * 零依赖：按 SpreadsheetML 最小结构现拼，用 `inlineStr` 内联字符串，免去 sharedStrings 表。
+ */
+export function shengChengXlsx(sheets: BiaoGeShu[]): Buffer {
+  const shu = (sheets && sheets.length ? sheets : [{ rows: [['']] }]);
+  const ctList = shu.map((_, i) =>
+    `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+  const ct =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+    ctList +
+    '</Types>';
+  const rels =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+    '</Relationships>';
+  const sheetTags = shu.map((s, i) =>
+    `<sheet name="${tao(qingBiaoGeMing(String(s.name || ''), i))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('');
+  const workbook =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    `<sheets>${sheetTags}</sheets></workbook>`;
+  const wbRels =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    shu.map((_, i) =>
+      `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') +
+    '</Relationships>';
+
+  const items: ZipTiaoMu[] = [
+    { name: '[Content_Types].xml', data: Buffer.from(ct, 'utf8') },
+    { name: '_rels/.rels', data: Buffer.from(rels, 'utf8') },
+    { name: 'xl/workbook.xml', data: Buffer.from(workbook, 'utf8') },
+    { name: 'xl/_rels/workbook.xml.rels', data: Buffer.from(wbRels, 'utf8') },
+  ];
+  shu.forEach((s, i) => {
+    const rows = Array.isArray(s.rows) ? s.rows : [];
+    const rowXml = rows.map((hang, r) => {
+      const cells = (Array.isArray(hang) ? hang : []).map((v, c) => {
+        const ref = lieMing(c) + (r + 1);
+        if (v === null || v === undefined || v === '') return '';
+        if (typeof v === 'number' && Number.isFinite(v)) return `<c r="${ref}"><v>${v}</v></c>`;
+        return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${tao(String(v))}</t></is></c>`;
+      }).join('');
+      if (!cells) return '';
+      return `<row r="${r + 1}">${cells}</row>`;
+    }).join('');
+    const sheet =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      `<sheetData>${rowXml}</sheetData></worksheet>`;
+    items.push({ name: `xl/worksheets/sheet${i + 1}.xml`, data: Buffer.from(sheet, 'utf8') });
+  });
+  return xieZip(items);
+}
+
+/** 列名 → 0 基列号（A→0、Z→25、AA→26）；非法返回 -1 */
+function lieHao(ming: string): number {
+  const s = String(ming || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (!s) return -1;
+  let n = 0;
+  for (const ch of s) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+
+/** 读 .xlsx：把每个工作表的单元格还原成二维文本表（数字保持数字写法） */
+export function duXlsx(p: string): { ok: boolean; sheets: Array<{ name: string; rows: string[][] }>; error?: string } {
+  try {
+    const buf = fs.readFileSync(p);
+    const parts = duZip(buf);
+    const byName = new Map(parts.map((z) => [z.name, z.data]));
+    const wb = byName.get('xl/workbook.xml');
+    if (!wb) return { ok: false, sheets: [], error: 'not-a-xlsx' };
+    const wbXml = wb.toString('utf8');
+    // 工作表名（文档顺序）
+    const names: string[] = [];
+    for (const m of wbXml.matchAll(/<sheet\b[^>]*>/g)) {
+      const nm = /\bname="([^"]*)"/.exec(m[0]);
+      names.push(nm ? nm[1]!.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"') : '');
+    }
+    // r:id → 目标路径
+    const ridMap = new Map<string, string>();
+    const wbRels = byName.get('xl/_rels/workbook.xml.rels');
+    if (wbRels) {
+      for (const m of wbRels.toString('utf8').matchAll(/<Relationship\b[^>]*>/g)) {
+        const id = /\bId="([^"]*)"/.exec(m[0]);
+        const tg = /\bTarget="([^"]*)"/.exec(m[0]);
+        if (id && tg) ridMap.set(id[1]!, tg[1]!.replace(/^\/?(xl\/)?/, '').replace(/^\.\//, ''));
+      }
+    }
+    const sheetIds: string[] = [];
+    for (const m of wbXml.matchAll(/<sheet\b[^>]*>/g)) {
+      const rid = /\br:id="([^"]*)"/.exec(m[0]);
+      sheetIds.push(rid ? rid[1]! : '');
+    }
+    // 共享字符串表
+    const shared: string[] = [];
+    const ss = byName.get('xl/sharedStrings.xml');
+    if (ss) {
+      const xml = ss.toString('utf8');
+      for (const m of xml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)) {
+        shared.push(quBiaoQianWenBen(m[1] || '', 't').join(''));
+      }
+    }
+    // 工作表清单：优先按 rels 解析，否则退回 sheetN.xml 数值序
+    const sheetPaths: Array<{ name: string; path: string }> = [];
+    names.forEach((nm, i) => {
+      const tg = sheetIds[i] ? ridMap.get(sheetIds[i]!) : undefined;
+      if (tg) sheetPaths.push({ name: nm || `工作表${i + 1}`, path: 'xl/' + tg });
+    });
+    if (!sheetPaths.length) {
+      const cand = [...byName.keys()].filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
+        .sort((a, b) => parseInt(a.replace(/\D+/g, '') || '0', 10) - parseInt(b.replace(/\D+/g, '') || '0', 10));
+      cand.forEach((n, i) => sheetPaths.push({ name: names[i] || `工作表${i + 1}`, path: n }));
+    }
+    const outSheets: Array<{ name: string; rows: string[][] }> = [];
+    for (const sp of sheetPaths) {
+      const d = byName.get(sp.path) || byName.get(sp.path.replace(/^xl\//, ''));
+      if (!d) continue;
+      const xml = d.toString('utf8');
+      const rows: string[][] = [];
+      for (const rm of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+        const hang: string[] = [];
+        for (const cm of (rm[1] || '').matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>|<c\b([^>]*)\/>/g)) {
+          const attrs = cm[1] ?? cm[3] ?? '';
+          const body = cm[2] ?? '';
+          const refM = /\br="([A-Za-z]+)\d*"/.exec(attrs);
+          const ci = refM ? lieHao(refM[1]!) : hang.length;
+          const tM = /\bt="([^"]*)"/.exec(attrs);
+          const type = tM ? tM[1]! : '';
+          let val = '';
+          if (type === 'inlineStr') val = quBiaoQianWenBen(body, 't').join('');
+          else if (type === 's') {
+            const vm = /<v>([\s\S]*?)<\/v>/.exec(body);
+            const idx = vm ? parseInt(vm[1]!, 10) : -1;
+            val = idx >= 0 && idx < shared.length ? shared[idx]! : '';
+          } else {
+            const vm = /<v>([\s\S]*?)<\/v>/.exec(body);
+            val = vm ? vm[1]!.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"') : '';
+          }
+          if (ci >= 0) { while (hang.length < ci) hang.push(''); hang[ci] = val; }
+          else hang.push(val);
+        }
+        rows.push(hang);
+      }
+      outSheets.push({ name: sp.name, rows });
+    }
+    if (!outSheets.length) return { ok: false, sheets: [], error: 'no-worksheet' };
+    return { ok: true, sheets: outSheets };
+  } catch (e) { return { ok: false, sheets: [], error: String((e as Error)?.message || e) }; }
 }

@@ -72,8 +72,11 @@ check('口令非空且 ≥4 位', /weak-password/.test(emTs));
 check('导出项目为 .nm', /warmy:xiangMuDaoChu/.test(emTs));
 check('内置查看 .nm（read_file 认 .nm）', /\.nm\$/i.test(fs.readFileSync(path.join(root, 'packages/app-shell/src/work-tools.ts'), 'utf8')));
 
-console.log('\n[7] 自动滚动语义（DeepSeek 式）');
-check('未勾选：长回复顶部对齐 / 短回复底部对齐', /lastH <= heZi\.clientHeight/.test(appJs) && /lastTop \+ lastH - heZi\.clientHeight/.test(appJs) && /Math\.min\(lastTop, maxScroll\)/.test(appJs));
+console.log('\n[7] 自动滚动语义（产品定稿）');
+// 统一一条式子：`min(lastTop, maxScroll)` ⇒ 长回复把开头对齐顶部、短回复顶到不能再顶（底部对齐）
+check('未勾选：长回复顶部对齐 / 短回复底部对齐', /Math\.min\(lastTop, maxScroll\)/.test(appJs));
+// **有新内容就滚**：不许再用"那一刻在不在底部"短路（真机：上一条被顶到顶部后本来就不在底部 ⇒ 后面再也不滚了）
+check('未勾选时有新内容就滚（不再被 wasAtBottom 短路）', /else if \(last\)/.test(appJs) && !/else if \(last && wasAtBottom\)/.test(appJs));
 check('勾选 = 滚到底', /autoScrollChat\)\s*\{[\s\S]{0,80}scrollToBottom/.test(appJs));
 
 console.log('\n[8] 分类模型 = 决策模型（RLCD）');

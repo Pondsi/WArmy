@@ -1,0 +1,698 @@
+{
+  "note": "门禁审计清单：kind=universal 表示\"可给其他项目直接复用\"；project=本项目专项；probe=刻意不进默认门禁的探针；status=known-red 表示**当下红着**（redNote 写清证据，且必须出现在 docs/GATE-AUDIT.md）。由 packages/app-shell/scripts/verify-gate-manifest.mjs 校验与磁盘/主进程/界面一致。",
+  "generatedAt": "2026-10-12T00:39:41.824Z",
+  "counts": {
+    "total": 75,
+    "universal": 28,
+    "project": 42,
+    "probe": 5,
+    "knownRed": 10
+  },
+  "entries": [
+    {
+      "id": "probe-freeze-capability",
+      "file": "packages/app-shell/scripts/probe-freeze-capability.mjs",
+      "kind": "probe",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "能力探测：跑一遍看这台机器支不支持某项能力，结论随环境变，不能当门禁"
+    },
+    {
+      "id": "probe-mimo-audio",
+      "file": "packages/app-shell/scripts/probe-mimo-audio.mjs",
+      "kind": "probe",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "真机语音往返：需要网络 + 真实密钥（TTS 合成 → ASR 转回逐字比对），不能当门禁"
+    },
+    {
+      "id": "probe-research-pipeline",
+      "file": "packages/app-shell/scripts/probe-research-pipeline.mjs",
+      "kind": "probe",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "真机调研管线：需要网络 + 真实搜索密钥，用来一次性取证，不能当门禁"
+    },
+    {
+      "id": "probe-sound-gate-discriminates",
+      "file": "packages/app-shell/scripts/probe-sound-gate-discriminates.mjs",
+      "kind": "probe",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "门禁\"能失败\"的对照实验：把 dist 还原成老行为再跑一遍，用来证明门禁不是摆设"
+    },
+    {
+      "id": "verify-audio-first-class",
+      "file": "packages/app-shell/scripts/verify-audio-first-class.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "语音一等公民：型号必须被认成 asr/tts；只暴露 /chat/completions 的网关要有兜底；401 不许\"换形状\"硬试"
+    },
+    {
+      "id": "verify-busy-toggle",
+      "file": "packages/app-shell/scripts/verify-busy-toggle.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-chain-buttons",
+      "file": "packages/app-shell/scripts/verify-chain-buttons.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-chat-content",
+      "file": "packages/app-shell/scripts/verify-chat-content.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-chat-window",
+      "file": "packages/app-shell/scripts/verify-chat-window.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-container-exec",
+      "file": "packages/app-shell/scripts/verify-container-exec.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-container-probe",
+      "file": "packages/app-shell/scripts/verify-container-probe.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-container-real",
+      "file": "packages/app-shell/scripts/verify-container-real.mjs",
+      "kind": "probe",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "真机 Docker 启停与镜像拉取：会改本机状态、需要网络，文件头自己写明「不要挂进 CI/门禁」"
+    },
+    {
+      "id": "verify-context-renderer",
+      "file": "packages/app-shell/scripts/verify-context-renderer.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "已用「换回 HEAD 的 electron-main.ts 再跑」对照证明：**失败项完全一致**（同一批 bounded-view 断言），与本轮改动无关。根因：门禁的 mock 不实现 SSE，主链路走流式解析得空正文 ⇒ 触发\"逼出正文\"的第二次非流式请求（一轮两条 prompt），断言按\"一轮一条\"写死了。",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-credential",
+      "file": "packages/app-shell/scripts/verify-credential.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "凭据派生与格式（\"ID 即私钥\"那一类确定性）"
+    },
+    {
+      "id": "verify-css-consistency",
+      "file": "packages/app-shell/scripts/verify-css-consistency.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "CSS 变量必须真实存在（写了 --bg 而项目只有 --card ⇒ 深底深字）"
+    },
+    {
+      "id": "verify-dao-compliance",
+      "file": "packages/app-shell/scripts/verify-dao-compliance.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-docs",
+      "file": "packages/app-shell/scripts/verify-docs.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "文档里不许出现真实用户路径与密钥"
+    },
+    {
+      "id": "verify-e2e",
+      "file": "packages/app-shell/scripts/verify-e2e.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "需要**没有别的实例在跑**（单实例锁）——桌面应用正开着时必然 \"no devtools port\"。属环境依赖。",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-electron-app-binding",
+      "file": "packages/app-shell/scripts/verify-electron-app-binding.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "Electron 主进程绑定完整性"
+    },
+    {
+      "id": "verify-eta-forecast",
+      "file": "packages/app-shell/scripts/verify-eta-forecast.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-features-99",
+      "file": "packages/app-shell/scripts/verify-features-99.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-firstrun-ui",
+      "file": "packages/app-shell/scripts/verify-firstrun-ui.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-gate-manifest",
+      "file": "packages/app-shell/scripts/verify-gate-manifest.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "门禁清单必须与磁盘一致（这份审计本身不许腐烂）"
+    },
+    {
+      "id": "verify-group-store",
+      "file": "packages/app-shell/scripts/verify-group-store.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-history-persist",
+      "file": "packages/app-shell/scripts/verify-history-persist.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "在临时 userData 里 `memory-start-failed`（记忆服务没起来）⇒ 拿不到注入 prompt 里的「道」，断言自然红。属环境依赖，与本轮改动无关。",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-i18n-locales",
+      "file": "packages/app-shell/scripts/verify-i18n-locales.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "多语言键集合相等、占位符一致、拉丁语系不含 CJK"
+    },
+    {
+      "id": "verify-identity",
+      "file": "packages/app-shell/scripts/verify-identity.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "身份 / 私钥派生的确定性与可恢复性"
+    },
+    {
+      "id": "verify-import-integrity",
+      "file": "packages/app-shell/scripts/verify-import-integrity.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "导入的符号必须真的存在（删了实现忘了改引用）"
+    },
+    {
+      "id": "verify-ipc-probe",
+      "file": "packages/app-shell/scripts/verify-ipc-probe.mjs",
+      "kind": "universal",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "IPC 通道白名单一致性"
+    },
+    {
+      "id": "verify-live-ui",
+      "file": "packages/app-shell/scripts/verify-live-ui.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "真机 UI 断言（悬停提示/凭证截断显示/头像尺寸）与当前渲染实现有出入，需逐条核对后重写。",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-membership",
+      "file": "packages/app-shell/scripts/verify-membership.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-memory",
+      "file": "packages/app-shell/scripts/verify-memory.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-mobile-ui",
+      "file": "packages/app-shell/scripts/verify-mobile-ui.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "需要移动端 CDP 端口（`fetch failed`）。属环境依赖。",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-model-pick",
+      "file": "packages/app-shell/scripts/verify-model-pick.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-model-route",
+      "file": "packages/app-shell/scripts/verify-model-route.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-naming",
+      "file": "packages/app-shell/scripts/verify-naming.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-net-ui",
+      "file": "packages/app-shell/scripts/verify-net-ui.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "UI 联调 harness 起不来（`fetch failed`）：依赖端口/预览服务。属环境依赖。",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-nm-format",
+      "file": "packages/app-shell/scripts/verify-nm-format.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "文件包格式：加解密与格式校验，解不开如实报错"
+    },
+    {
+      "id": "verify-no-wsl-start",
+      "file": "packages/app-shell/scripts/verify-no-wsl-start.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-office-doc-suite",
+      "file": "packages/app-shell/scripts/verify-office-doc-suite.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "Office 生成 / 文档抽取 / 技能规范 / 凭据保管 / 门禁留档（生成→读回逐字比对）"
+    },
+    {
+      "id": "verify-office-ooxml",
+      "file": "packages/app-shell/scripts/verify-office-ooxml.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-planB",
+      "file": "packages/app-shell/scripts/verify-planB.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-planD",
+      "file": "packages/app-shell/scripts/verify-planD.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-qr-scan",
+      "file": "packages/app-shell/scripts/verify-qr-scan.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "21/22：一条 UI 等待超时（弹窗没在 12s 内出现）。属 flaky。",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-raf-batching",
+      "file": "packages/app-shell/scripts/verify-raf-batching.mjs",
+      "kind": "universal",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "同帧排队的回调必须全跑（rAF 节流写错的经典坑）"
+    },
+    {
+      "id": "verify-renderer-scope",
+      "file": "packages/app-shell/scripts/verify-renderer-scope.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "window.__x 只读别名（有读无写）、跨作用域调用、顶层重复声明"
+    },
+    {
+      "id": "verify-renderer-template-balance",
+      "file": "packages/app-shell/scripts/verify-renderer-template-balance.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "模板字面量 / 括号配平（字符串拼 HTML 的通病）"
+    },
+    {
+      "id": "verify-repo-guard",
+      "file": "packages/app-shell/scripts/verify-repo-guard.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "仓库守卫：坏路径、重复树、敏感文件入库"
+    },
+    {
+      "id": "verify-research-pipeline",
+      "file": "packages/app-shell/scripts/verify-research-pipeline.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "调研管线：搜索条目必须带 URL、抓取要摘录、**没密钥就如实失败**（不许编结果）"
+    },
+    {
+      "id": "verify-router-queue",
+      "file": "packages/app-shell/scripts/verify-router-queue.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-runtime-errors",
+      "file": "packages/app-shell/scripts/verify-runtime-errors.mjs",
+      "kind": "universal",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "真机运行期无未捕获异常"
+    },
+    {
+      "id": "verify-security",
+      "file": "packages/app-shell/scripts/verify-security.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "路径越权 / 命令注入 / 凭据泄漏 —— 任何带文件与命令的产品都适用"
+    },
+    {
+      "id": "verify-sound-card",
+      "file": "packages/app-shell/scripts/verify-sound-card.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-strict-language",
+      "file": "packages/app-shell/scripts/verify-strict-language.mjs",
+      "kind": "universal",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "界面文案语言一致性（不许中英硬编码混排）"
+    },
+    {
+      "id": "verify-subagents",
+      "file": "packages/app-shell/scripts/verify-subagents.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-summary-quality",
+      "file": "packages/app-shell/scripts/verify-summary-quality.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-tasks-4563",
+      "file": "packages/app-shell/scripts/verify-tasks-4563.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-tasks-666",
+      "file": "packages/app-shell/scripts/verify-tasks-666.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-tasks-6666",
+      "file": "packages/app-shell/scripts/verify-tasks-6666.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-template-integrity",
+      "file": "packages/app-shell/scripts/verify-template-integrity.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "模板里的 ${} 不许在改动中丢失"
+    },
+    {
+      "id": "verify-think-toolbar",
+      "file": "packages/app-shell/scripts/verify-think-toolbar.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-thinking-merge",
+      "file": "packages/app-shell/scripts/verify-thinking-merge.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-tool-call-e2e",
+      "file": "packages/app-shell/scripts/verify-tool-call-e2e.mjs",
+      "kind": "universal",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "19/34：桩模型场景按旧工具集/旧降级语义写的断言。与本轮改动无关（本轮只新增工具）。",
+      "why": "工具调用端到端（真跑到结果）"
+    },
+    {
+      "id": "verify-tool-calls",
+      "file": "packages/app-shell/scripts/verify-tool-calls.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "本轮已修 4 处 API 漂移（`renderBoundedView`→`xuanranYoujieShitu`、`runMemoryTool`→`yunxingJiyiCangGongju`、返回字段中文化、选项 `maxRounds`→`zuiDaLunShu`、mock 报文形状），**仍余约 10 项断言按旧语义写**（工具面从 2 个变 35 个、`supportsTools` 语义改了、`tool_choice` 收敛行为改了）。需按现语义重写。",
+      "why": "工具调用参数容错解析（截断/手写 JSON 不许把解析器报错当回复）"
+    },
+    {
+      "id": "verify-tray-quit",
+      "file": "packages/app-shell/scripts/verify-tray-quit.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-truth-guard",
+      "file": "packages/app-shell/scripts/verify-truth-guard.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "「声称完成但本轮零工具调用」必须判出来 —— 任何 agent 产品都会踩"
+    },
+    {
+      "id": "verify-two-windows",
+      "file": "packages/app-shell/scripts/verify-two-windows.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-ui-layout",
+      "file": "packages/app-shell/scripts/verify-ui-layout.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-updater-github",
+      "file": "packages/app-shell/scripts/verify-updater-github.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "发布/更新源校验"
+    },
+    {
+      "id": "verify-updater",
+      "file": "packages/app-shell/scripts/verify-updater.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "更新器行为"
+    },
+    {
+      "id": "verify-usage-table",
+      "file": "packages/app-shell/scripts/verify-usage-table.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-warmy-features",
+      "file": "packages/app-shell/scripts/verify-warmy-features.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-warmy-ipc-probe",
+      "file": "packages/app-shell/scripts/verify-warmy-ipc-probe.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "known-red",
+      "redNote": "harness 里 `ipcRenderer` 未定义（探针壳的问题），不是产品链路问题。",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-wiring",
+      "file": "packages/app-shell/scripts/verify-wiring.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "桥接接线一致性（界面用到的 API 必须真的挂在桥上）"
+    },
+    {
+      "id": "verify-work-tools",
+      "file": "packages/app-shell/scripts/verify-work-tools.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "工作区沙箱：越权路径 / 超限写入一律拒绝（不是尽力而为）"
+    }
+  ]
+}

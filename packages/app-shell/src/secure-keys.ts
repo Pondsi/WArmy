@@ -46,6 +46,14 @@ function yunxuMingwen(): boolean {
   return process.env['WARMY_ALLOW_PLAINTEXT_KEYS'] === '1';
 }
 
+/**
+ * 对外暴露"系统级保护"是否可用（给 `cred-vault` 的社交密码字段复用）。
+ * 返回 null = 这台机器上拿不到 OS 保护（此时**如实标记明文**，不冒充当加密）。
+ */
+export function anQuanCunChu(): { encryptString(s: string): Buffer; decryptString(b: Buffer): string; isEncryptionAvailable(): boolean } | null {
+  return anQuanCunChuOf();
+}
+
 export class AnQuanMiyaoCang {
   private file: string;
 

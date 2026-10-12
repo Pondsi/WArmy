@@ -20,6 +20,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+/**
+ * ESM 里没有 `require` —— 必须自己造一个。
+ * 历史缺陷（本轮修复）：本文件 `duZipMing()` 里写了 `require('node:zlib')`，
+ * 但顶层从未定义 `require` ⇒ 一旦真的调用 `duDocx` / `duPptx`，必然抛
+ * `ReferenceError: require is not defined`，被 catch 吞成"解析失败"。
+ * 于是"读 word/python-pptx"这条路**从来没真正通过**（和 secure-keys.ts 踩过的是同一个坑）。
+ */
+const require = createRequire(import.meta.url);
 
 export type AnquanDang = 'normal' | 'strict' | 'full';
 export type FengXian = 'low' | 'medium' | 'high';

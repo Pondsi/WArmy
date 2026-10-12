@@ -31,8 +31,8 @@ const appJs = fs.readFileSync(path.join(pkgRoot, 'src', 'renderer', 'app.js'), '
 const emTs = fs.readFileSync(path.join(pkgRoot, 'src', 'electron-main.ts'), 'utf8');
 check('金额与价目估算**全部删掉**（没有价格表 / 没有 ¥ / 没有估算文案）',
   !/JIA_GE_BIAO/.test(appJs) && !/cost\.estHint/.test(appJs) && !/cost\.localHint/.test(appJs) && !/'¥'/.test(appJs) && !/` · ¥/.test(appJs), 'cost removed');
-check('用量表是 <table>（表头：窗口/供应商/模型/提示词/补全/词元）',
-  /class="usageBiao"/.test(appJs) && /usage\.prompt/.test(appJs) && /usage\.completion/.test(appJs) && /usage\.total/.test(appJs));
+check('用量表是 <table>（表头：窗口/供应商/模型/输入/输出/总计）',
+  /class="usageBiao"/.test(appJs) && /usage\.input/.test(appJs) && /usage\.output/.test(appJs) && /usage\.grandTotal/.test(appJs) && /usage\.total/.test(appJs));
 check('窗口列用第二列的名称（mingBiaoQing）而不是 sessionId',
   /function mingBiaoQing\(id\)/.test(appJs) && /window: mingBiaoQing\(x\.sessionId/.test(appJs));
 check('供应商归属记的是**本轮真正用的那个**（zhu），不是设置里"当前生效的"',
@@ -80,22 +80,26 @@ try {
   await sleep(1600);
   const youKanBan = await c.evaluate(`(function(){
     const h = document.getElementById('dashHost');
-    return { has: !!h, html: h ? h.innerHTML.length : 0, sortBar: !!document.getElementById('costSortBar'), list: !!document.getElementById('costList') };
+    // 排序入口现在在**表头**上（[data-sort-h]）；旧的 #costSortBar 已废弃，别再当必要条件
+    return { has: !!h, html: h ? h.innerHTML.length : 0, sortBar: !!document.getElementById('costSortBar') || !!document.querySelector('#costList [data-sort-h]'), list: !!document.getElementById('costList') };
   })()`);
   console.log('  · 总看板: ' + JSON.stringify(youKanBan));
-  check('总看板渲染出来了（使用量区存在）', !!(youKanBan.has && youKanBan.html > 0 && youKanBan.sortBar && youKanBan.list), youKanBan);
+  // 使用量区存在即可（表头在有数据后才渲染，排序入口届时才出现）
+  check('总看板渲染出来了（使用量区存在）', !!(youKanBan.has && youKanBan.html > 0 && youKanBan.list), youKanBan);
   check('词元消耗卡**没有**"按内置价目估算"之类的说明', await c.evaluate(`(function(){
     const h = document.getElementById('dashHost');
     return h ? !/估算|价目|¥/.test(h.textContent || '') : false;
   })()`));
 
-  // 灌两轮假数据（本地 ollama + 云端 deepseek），再点"按供应商"触发重排
+  // 灌两轮假数据（本地 ollama + 云端 deepseek），再点表头「供应商」触发重排
   const biao = await c.evaluate(`(function(){
     window.__costData = [
       { windowId: 'inst-a', window: '牛马一号', provider: 'ollama-1791277810337', model: 'orcarouter/Qwen3.8-27B', ru: 100, chu: 200, tokens: 300 },
       { windowId: 'inst-b', window: '牛马二号', provider: 'deepseek', model: 'deepseek-chat', ru: 10, chu: 20, tokens: 30 },
     ];
-    const b = document.querySelector('[data-cost-sort="provider"]');
+    // 排序在**表头**上（data-sort-h）；旧门禁点的 data-cost-sort 早就不在了 ⇒ 表格永远是空态
+    if (typeof window.__renderCostTable === 'function') window.__renderCostTable();
+    const b = document.querySelector('#costList thead [data-sort-h="provider"]') || document.querySelector('[data-cost-sort="provider"]');
     if (b) b.click();
     const t = document.querySelector('#costList table');
     if (!t) return { table: false, text: (document.getElementById('costList') || {}).textContent || '' };
@@ -106,11 +110,11 @@ try {
   })()`);
   console.log('  · 表格: ' + JSON.stringify(biao));
   check('渲染成表格（有 thead/tbody）', biao.table === true, biao);
-  check('表头 6 列（窗口/供应商/模型/提示词/补全/词元）', Array.isArray(biao.heads) && biao.heads.length === 6, biao.heads);
+  check('表头 6 列（窗口/供应商/模型/输入/输出/总计）', Array.isArray(biao.heads) && biao.heads.length === 6, biao.heads);
   check('本地 ollama 那行的供应商显示 ollama（不再写死 deepseek）', !!(biao.rows || []).some((r) => String(r[1]).includes('ollama')), biao.rows);
   check('云端那行显示自己的供应商（deepseek）', !!(biao.rows || []).some((r) => String(r[1]) === 'deepseek'), biao.rows);
   check('窗口列用的是传入的名称（牛马一号/牛马二号），不是内部 id', !!(biao.rows || []).some((r) => r[0] === '牛马一号') && !!(biao.rows || []).some((r) => r[0] === '牛马二号'), biao.rows);
-  check('有合计行，且合计 = 提示词+补全（330）', Array.isArray(biao.foot) && biao.foot[5] === '330', biao.foot);
+  check('有合计行，且合计 = 输入+输出（330）', Array.isArray(biao.foot) && biao.foot[5] === '330', biao.foot);
   check('表格里**没有金额**（¥）', biao.hasYuan === false, biao);
 } catch (e) {
   console.error('门禁异常: ' + ((e && e.stack) || e));

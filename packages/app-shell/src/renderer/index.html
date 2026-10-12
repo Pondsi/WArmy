@@ -191,7 +191,7 @@
               <span class="jingYin" id="duiLieCount"></span>
             </div>
             <!-- 插话队列：**最多 3 条的高度**，多了滚动；这条是鼠标拉伸把手 -->
-            <div class="duiLieLaShen" id="duiLieLaShen" role="separator" aria-orientation="horizontal" title="拖动调整高度"></div>
+            <div class="duiLieLaShen" id="duiLieLaShen" role="separator" aria-orientation="horizontal" title="拖动调整高度" data-i18n-title="tip.dragHeight"></div>
             <ul id="duiLieTiaoMuJi" class="duiLieTiaoMuJi"></ul>
           </div>
           <!-- 诊断事件流（T194）：**不是控制台**，是排障用的本机事件日志；
@@ -222,7 +222,7 @@
           <div id="yinYongTiao" class="yinYongTiao yinCang">
             <div class="yinYongQuan" id="yinYongQuan"></div>
             <div class="yinYongWen" id="yinYongWen"></div>
-            <button type="button" class="yinYongGuan" id="yinYongGuan" title="取消引用">×</button>
+            <button type="button" class="yinYongGuan" id="yinYongGuan" title="取消引用" data-i18n-title="tip.clearQuote">×</button>
           </div>
           <div id="shuRuDingTiaoZhengTiao" class="kongZhiTaiTiaoZhengTiao shuRuTiaoZhengTiao"></div>
           <footer class="shuRuQu">
@@ -232,6 +232,10 @@
               <div class="shuRuCounter" id="shuRuCounter"></div>
               <div class="shuRuQuTiao">
                 <div class="shuRuQuZuo">
+                  <button class="anNiuTuBiao" id="anNiuBianJiQi" data-i18n-title="chat.editorTip" title="文本编辑器">
+                    <!-- 文本编辑器：镂空描边（与其它图标同风格） -->
+                    <svg viewBox="0 0 24 24" class="ico hollowIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3.5l5 5L8 21H3v-5z"/><path d="M13.5 5.5l5 5"/><path d="M3 21h18"/></svg>
+                  </button>
                   <button class="anNiuTuBiao" id="anNiuAttach" data-i18n-title="chat.attachTip">
                     <svg viewBox="0 0 100 100" class="ico"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter"><path d="M22,24 L56,24 L70,38 L70,86 L22,86 Z"/><polyline points="56,24 56,38 70,38"/></g><g stroke="currentColor" stroke-width="8" stroke-linecap="square"><line x1="76" y1="14" x2="76" y2="30"/><line x1="68" y1="22" x2="84" y2="22"/></g></svg>
                   </button>
@@ -525,6 +529,8 @@
   <script src="./vendor/jsqr-1.4.0.js"></script>
   <script src="./busy-phrases.js"></script>
   <script src="./niu-ma-templates.js"></script>
+  <script src="./persona-templates.js"></script>
+  <script src="./persona-templates-user.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

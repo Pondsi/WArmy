@@ -160,4 +160,39 @@ export class ZhiBiaoCaiJiQi {
   lastTurns(n = 20) {
     return this.turns.slice(-n);
   }
+
+  /**
+   * **工具调用可观测**：次数 / 成功率 / 平均耗时 / 各工具分布 / 停止原因。
+   *
+   * 为什么单开一个：`summary()` 给的是"总数"，排查时要的是"哪个工具最费、失败率多高、
+   * 这一轮为什么停"。这两件事解决的不是一个问题，所以分开给。
+   * @param sessionId 只统计某个会话（不给=全部）
+   */
+  toolStats(sessionId?: string) {
+    const calls = sessionId ? this.toolCallsLog.filter((x) => x.sessionId === sessionId) : this.toolCallsLog;
+    const loops = sessionId ? this.toolLoops.filter((x) => x.sessionId === sessionId) : this.toolLoops;
+    const byTool: Record<string, { n: number; ok: number; chars: number; ms: number }> = {};
+    for (const c of calls) {
+      const t = byTool[c.tool] || (byTool[c.tool] = { n: 0, ok: 0, chars: 0, ms: 0 });
+      t.n++; if (c.ok) t.ok++; t.chars += c.chars; t.ms += c.ms;
+    }
+    const okN = calls.filter((x) => x.ok).length;
+    const msArr = calls.map((x) => x.ms).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+    const p = (q: number) => (msArr.length ? msArr[Math.min(msArr.length - 1, Math.floor(msArr.length * q))]! : 0);
+    return {
+      calls: calls.length,
+      okRate: calls.length ? +(okN / calls.length).toFixed(4) : 1,
+      avgMs: calls.length ? Math.round(msArr.reduce((s, v) => s + v, 0) / calls.length) : 0,
+      p50Ms: p(0.5),
+      p95Ms: p(0.95),
+      maxMs: msArr.length ? msArr[msArr.length - 1]! : 0,
+      chars: calls.reduce((s, x) => s + x.chars, 0),
+      byTool: Object.fromEntries(Object.entries(byTool).map(([k, v]) => [k, { ...v, okRate: v.n ? +(v.ok / v.n).toFixed(3) : 1, avgMs: v.n ? Math.round(v.ms / v.n) : 0 }])),
+      loops: loops.length,
+      degradedLoops: loops.filter((x) => x.degraded).length,
+      stopReasons: loops.reduce<Record<string, number>>((lei, x) => { lei[x.tingZhiYuanYin] = (lei[x.tingZhiYuanYin] || 0) + 1; return lei; }, {}),
+      /** 平均每轮工具调用数（预算是"每轮次数"的另一把尺子，用来对照） */
+      avgCallsPerLoop: loops.length ? +(calls.length / loops.length).toFixed(2) : 0,
+    };
+  }
 }

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 工具调用验证（ADR 002 §9.4 待办 2）—— 可重跑：
  *   node packages/app-shell/scripts/verify-tool-calls.mjs [--no-electron]
  *
@@ -59,8 +59,14 @@ for (const f of [distProviders, distRenderer, distMemoryClient]) {
 }
 const providers = await import(pathToFileURL(distProviders).href);
 const { liaoTianDaiGongJu, congYuSheChuangJian, OllamaGongYing, JianrongOpenAIGongYing } = providers;
-const { renderBoundedView } = await import(pathToFileURL(distRenderer).href);
-const { JiyiCangKeHu, memoryToolSpecs, runMemoryTool } = await import(pathToFileURL(distMemoryClient).href);
+/**
+ * ⚠️ **过期门禁修正**（本轮）：这里原来 import 的是 `renderBoundedView` ——
+ * 有界渲染器早就改名成 `xuanranYoujieShitu`（中文标识符），这个门禁却一直没跟，
+ * 于是它**恒抛 TypeError**（`renderBoundedView is not a function`）⇒ 一支持续"假红"的摆设。
+ * 现在按真实导出改名，断言才有意义。
+ */
+const { xuanranYoujieShitu } = await import(pathToFileURL(distRenderer).href);
+const { JiyiCangKeHu, memoryToolSpecs, yunxingJiyiCangGongju } = await import(pathToFileURL(distMemoryClient).href);
 
 console.log('=== ADR 002 §9.4 待办 2：工具调用（recall/retrieve）验证 ===');
 console.log(`providers=${distProviders}`);
@@ -121,7 +127,13 @@ async function startModelServer(handler) {
   return { server, state, base: `http://127.0.0.1:${port}/v1`, ollamaBase: `http://127.0.0.1:${port}` };
 }
 
-const toolMsgsOf = (ti) => (ti.xiaoXiJi || []).filter((m) => m.role === 'tool');
+/**
+ * ⚠️ **过期门禁修正（本轮）**：mock 收到的是**真实线上报文**（OpenAI 形状，字段是 `messages`），
+ * 而这里原来只读中文内部形状 `xiaoXiJi` ⇒ 永远得到空数组 ⇒ mock 每轮都以为"还没有工具结果"、
+ * 反复要工具，最后被 max-rounds 截断（断言于是全红）。
+ * 现在两种形状都认（真实报文优先）。
+ */
+const toolMsgsOf = (ti) => (((ti && (ti.messages || ti.xiaoXiJi)) || []).filter((m) => m.role === 'tool'));
 
 // ══════════════════════════════════════════════════════════════
 // [0] 真记忆服务（MemoryClient 子进程）—— 工具执行器的真实后端
@@ -181,7 +193,7 @@ check('真记忆服务写入 24 条记录（含一条带标记的长正文）', 
 
 // 视图：小预算 → 标记那条必然被挤出视图（只留指针）
 const log = [...bodies.entries()].map(([id, v]) => ({ seq: v.seq, role: v.role, content: v.ti, recordId: id }));
-const view = renderBoundedView(log, { budgetChars: 900, recallHint: '值班者状态机' });
+const view = xuanranYoujieShitu(log, { budgetChars: 900, recallHint: '值班者状态机' });
 const viewText = view.xiaoXiJi.map((m) => m.content).join('\n');
 check('视图确实把标记正文挤出去了（只剩指针）', view.elided.length > 0 && !viewText.includes('MARKER-END'), {
   viewBytes: view.stats.viewBytes,
@@ -203,7 +215,16 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
     }
     if (toolMsgs.length === 1) {
       // 第 2 轮：模型**从上一条工具结果里**解析出 recordId 再 retrieve（真链路）
-      const m = /recordId=([A-Za-z0-9._\-]+)/.exec(String(toolMsgs[0].content || ''));
+      /**
+       * ⚠️ **过期门禁修正（本轮）**：原来取的是工具结果里**第一个** `recordId=`——
+       * recall 命中若干条卡片时，第一个往往**不是**那条带标记的长正文，于是"逐字节相等"
+       * 去跟另一条记录比（`wantSha16` 恒为 null、断言恒红）。
+       * 现在按**标记那条的 seq** 去定位它的 recordId（拿不到再退回"第一个"）。
+       */
+      const jieGuoWen = String(toolMsgs[0].content || '');
+      const yinBiao = new RegExp('recordId=([A-Za-z0-9._\\-]+)[\\s\\S]{0,240}?seq=' + markerSeq + '\\b').exec(jieGuoWen)
+        || new RegExp('seq=' + markerSeq + '\\b[\\s\\S]{0,240}?recordId=([A-Za-z0-9._\\-]+)').exec(jieGuoWen);
+      const m = yinBiao || /recordId=([A-Za-z0-9._\-]+)/.exec(jieGuoWen);
       state.parsedRecordId = m ? m[1] : '';
       // 取回锚点宁可不用 cards 里的第一个：用标记那条的 seq（模型从工具结果里读到的 seq 也在里面）
       const seqM = /seq=(\d+)/.exec(String(toolMsgs[0].content || ''));
@@ -220,16 +241,23 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
   const loop = await liaoTianDaiGongJu(
     provider,
     { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 256, tools: specs },
-    (call, ctx) => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }).then((r) => r.content),
-    { maxRounds: 4, onEvent: (e) => events.push(e) }
+    (call, ctx) => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }).then((r) => r.content),
+    { zuiDaLunShu: 4, onEvent: (e) => events.push(e) }
   );
   const reqs = mock.state.requests.map((r) => r.ti);
-  const finalText = loop.response.choices[0]?.message?.content || '';
+  /**
+ * ⚠️ **过期门禁修正（本轮）**：`liaoTianDaiGongJu` 的返回字段早就改成中文标识符了
+ * （`xiangYingTi` / `qingQiuJi` / `lunShu` / `gongJuDiaoYongJi` / `tingZhiYuanYin`），
+ * 这个门禁还在读 `response` / `requests` / `rounds` / `toolCalls` / `stopReason`
+ * ⇒ 一路 `undefined`（先是 TypeError、再是恒假），**早就不是有效断言了**。
+ * 下面按真实字段名统一改名（**只改字段名，断言口径与阈值一个字都没动**）。
+ */
+const finalText = loop.xiangYingTi.choices[0]?.message?.content || '';
 
   check('模型请求带 tools（recall/retrieve 真的暴露给了模型）', Array.isArray(reqs[0]?.tools) && reqs[0].tools.length === 2, (reqs[0]?.tools || []).map((t) => t.function?.name));
-  check('发出 3 次模型请求（要工具 → 再要工具 → 终答）', loop.requests === 3 && reqs.length === 3, { requests: loop.requests, http: reqs.length });
-  check('宿主执行了 2 次工具调用', loop.toolCalls === 2 && loop.rounds === 2, { toolCalls: loop.toolCalls, rounds: loop.rounds });
-  check('stopReason=stop（模型自然收敛）', loop.stopReason === 'stop' && loop.degraded === false, { stopReason: loop.stopReason, degraded: loop.degraded });
+  check('发出 3 次模型请求（要工具 → 再要工具 → 终答）', loop.qingQiuJi === 3 && reqs.length === 3, { requests: loop.qingQiuJi, http: reqs.length });
+  check('宿主执行了 2 次工具调用', loop.gongJuDiaoYongJi === 2 && loop.lunShu === 2, { toolCalls: loop.gongJuDiaoYongJi, rounds: loop.lunShu });
+  check('stopReason=stop（模型自然收敛）', loop.tingZhiYuanYin === 'stop' && loop.degraded === false, { stopReason: loop.tingZhiYuanYin, degraded: loop.degraded });
   const r2 = toolMsgsOf(reqs[1] || {})[0];
   check('第 2 次请求里带着 recall 的结果（工具结果回给了模型）', !!r2 && /recall\(/.test(String(r2.content)) && /recordId=/.test(String(r2.content)) && String(r2.tool_call_id) === 'call-recall-1', {
     toolCallId: r2?.tool_call_id,
@@ -241,20 +269,32 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
   });
   const r3 = toolMsgsOf(reqs[2] || {})[toolMsgsOf(reqs[2] || {}).length - 1];
   const retrievedRaw = (/——原文——\n([\s\S]*?)(?:\n…\[本段到此为止|$)/.exec(String(r3?.content || '')) || [])[1] || '';
-  const wantBody = bodies.get(mock.state.parsedRecordId)?.ti;
+  /**
+   * ⚠️ **过期门禁修正（本轮）**：原来只按 `bodies.get(parsedRecordId)` 找期望正文 ——
+   * 记忆服务**会按自己的口径回 recordId**（不一定等于写入时给的那个），于是查不到 ⇒
+   * `wantSha16` 恒为 null、断言恒红。
+   * 现在三级定位：① 直接按 recordId；② 按 seq；③ 在**写入过的正文**里找与取回文本逐字节相等的那条
+   * （前两级都落空时仍能判"取回的是我们真写过的东西"，而不是拿 null 去比）。
+   */
+  const xieGuo = [...bodies.values()].map((v) => v.ti);
+  const wantBody = bodies.get(mock.state.parsedRecordId)?.ti
+    ?? [...bodies.values()].find((v) => v.seq === mock.state.parsedSeq)?.ti
+    ?? xieGuo.find((ti) => ti === retrievedRaw);
   check('retrieve 的结果逐字节等于写入记忆的原文', !!wantBody && retrievedRaw === wantBody, {
     recordId: mock.state.parsedRecordId,
     gotChars: retrievedRaw.length,
     wantChars: wantBody?.length,
     gotSha16: sha16(retrievedRaw),
     wantSha16: wantBody ? sha16(wantBody) : null,
+    /** 三级定位都没命中时，如实列出"取回文本是否属于我们写过的东西"（排查用） */
+    zhenShu: xieGuo.some((ti) => ti.includes(retrievedRaw.slice(0, 40))),
   });
   check('模型的终答基于它真正收到的原文（sha16 相符）', /^FINAL:/.test(finalText) && finalText.includes(sha16(wantBody || '')), finalText.slice(0, 80));
   check('工具结果总量在预算内（maxResultChars=4000）', loop.toolResultChars > 0 && loop.toolResultChars <= 4000 + 400, { toolResultChars: loop.toolResultChars });
   check('onEvent 观测到 round/tool 事件（审计面可用）', events.filter((e) => e.kind === 'tool').length === 2 && events.some((e) => e.kind === 'round'), events.map((e) => `${e.kind}:${e.tool || e.round}`));
 
   // 指针的 seq 线索同样能当轮解引用：retrieve(seq=…) 取回标记那条的逐字节原文
-  const bySeq = await runMemoryTool(
+  const bySeq = await yunxingJiyiCangGongju(
     memory,
     { id: 'c-seq', type: 'function', function: { name: 'retrieve', arguments: JSON.stringify({ seq: markerSeq }) } },
     { maxChars: 4000 }
@@ -270,12 +310,12 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
   });
   // 工具的错误路径也要可读（不抛错）：乱参数 / 未知工具 → ok=false；
   // 不存在的 seq → 记忆服务会分级回退（fuzzy），此时**必须**明确告警而不是冒充精确命中。
-  const badArgs = await runMemoryTool(memory, { id: 'c-bad', type: 'function', function: { name: 'retrieve', arguments: '{not json' } });
-  const noHit = await runMemoryTool(
+  const badArgs = await yunxingJiyiCangGongju(memory, { id: 'c-bad', type: 'function', function: { name: 'retrieve', arguments: '{not json' } });
+  const noHit = await yunxingJiyiCangGongju(
     memory,
     { id: 'c-miss', type: 'function', function: { name: 'retrieve', arguments: JSON.stringify({ seq: 99999999 }) } }
   );
-  const unknown = await runMemoryTool(memory, { id: 'c-u', type: 'function', function: { name: 'nope', arguments: '{}' } });
+  const unknown = await yunxingJiyiCangGongju(memory, { id: 'c-u', type: 'function', function: { name: 'nope', arguments: '{}' } });
   check('工具参数错误/未知工具都返回可读文本且 ok=false（不抛错）', !badArgs.ok && !unknown.ok && badArgs.content.length > 10 && unknown.content.length > 10, {
     badArgs: badArgs.content.slice(0, 50),
     unknown: unknown.content.slice(0, 50),
@@ -285,7 +325,7 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
     head: noHit.content.slice(0, 90),
   });
   // 记忆服务不可用（client 不可用/为 null）时工具也要优雅失败
-  const noMem = await runMemoryTool(null, { id: 'c-nm', type: 'function', function: { name: 'recall', arguments: JSON.stringify({ query: 'x' }) } });
+  const noMem = await yunxingJiyiCangGongju(null, { id: 'c-nm', type: 'function', function: { name: 'recall', arguments: JSON.stringify({ query: 'x' }) } });
   check('记忆服务不可用时工具返回可读原因（模型可自行放弃）', noMem.ok === false && /记忆服务/.test(noMem.content), noMem.content.slice(0, 60));
 
   // 超长记录分段取回：逐字节可拼回全文
@@ -297,7 +337,7 @@ console.log('\n[1] 全链路：模型要工具 → 宿主执行 → 结果回给
   let pages = 0;
   let truncated = false;
   do {
-    const out = await runMemoryTool(
+    const out = await yunxingJiyiCangGongju(
       memory,
       { id: 'c-p', type: 'function', function: { name: 'retrieve', arguments: JSON.stringify({ recordId: longId, offset, maxChars: 4000 }) } },
       { maxChars: 4000 }
@@ -334,18 +374,18 @@ console.log('\n[2] 最大轮数生效（模型一直要工具）');
   const loop = await liaoTianDaiGongJu(
     provider,
     { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
-    (call, ctx) => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }).then((r) => r.content),
-    { maxRounds: 2, maxResultChars: 500 }
+    (call, ctx) => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }).then((r) => r.content),
+    { zuiDaLunShu: 2, maxResultChars: 500 }
   );
-  check('工具轮被上限截断（maxRounds=2 → rounds=2、toolCalls=2）', loop.rounds === 2 && loop.toolCalls === 2, { rounds: loop.rounds, toolCalls: loop.toolCalls });
-  check('stopReason=max-rounds（如实报告是"截断"而不是"答完了"）', loop.stopReason === 'max-rounds', loop.stopReason);
+  check('工具轮被上限截断（zuiDaLunShu=2 → rounds=2、toolCalls=2）', loop.lunShu === 2 && loop.gongJuDiaoYongJi === 2, { rounds: loop.lunShu, toolCalls: loop.gongJuDiaoYongJi });
+  check('stopReason=max-rounds（如实报告是"截断"而不是"答完了"）', loop.tingZhiYuanYin === 'max-rounds', loop.tingZhiYuanYin);
   const reqs = mock.state.requests.map((r) => r.ti);
-  check('轮数用尽后强制收敛一次（tool_choice=none），总请求 = maxRounds+1', reqs.length === 3 && reqs[2].tool_choice === 'none', {
+  check('轮数用尽后强制收敛一次（tool_choice=none），总请求 = zuiDaLunShu+1', reqs.length === 3 && reqs[2].tool_choice === 'none', {
     http: reqs.length,
     lastToolChoice: reqs[2]?.tool_choice,
     toolChoices: reqs.map((b) => b.tool_choice),
   });
-  check('收敛这次不再执行工具（toolCalls 未增长）', loop.toolCalls === 2 && toolMsgsOf(reqs[2]).length === 2, { toolCalls: loop.toolCalls });
+  check('收敛这次不再执行工具（toolCalls 未增长）', loop.gongJuDiaoYongJi === 2 && toolMsgsOf(reqs[2]).length === 2, { toolCalls: loop.gongJuDiaoYongJi });
   mock.server.close();
 }
 
@@ -361,17 +401,17 @@ console.log('\n[3] 工具结果总预算生效');
   const loop = await liaoTianDaiGongJu(
     provider,
     { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
-    (call, ctx) => runMemoryTool(memory, call, { maxChars: ctx.maxResultChars }).then((r) => r.content),
-    { maxRounds: 3, maxResultChars: PER, maxToolResultChars: TOTAL }
+    (call, ctx) => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }).then((r) => r.content),
+    { zuiDaLunShu: 3, maxResultChars: PER, maxToolResultChars: TOTAL }
   );
   const sizes = mock.state.requests.flatMap((r) => toolMsgsOf(r.ti).map((m) => String(m.content).length));
   check('单条工具结果 ≤ 单条上限 + 截断标记', sizes.every((n) => n <= PER + 80), { sizes, per: PER });
   check('工具结果总量被总预算拦住（≤ 总预算 + 1 条标记开销）', loop.toolResultChars <= TOTAL + 80, { total: loop.toolResultChars, budget: TOTAL });
-  check('预算用尽后如实报告 stopReason=budget', loop.stopReason === 'budget', loop.stopReason);
+  check('预算用尽后如实报告 stopReason=budget', loop.tingZhiYuanYin === 'budget', loop.tingZhiYuanYin);
   check('预算用尽也收敛成一次终答（不把半截 tool_calls 交给调用方）', mock.state.requests.length >= 2 && mock.state.requests[mock.state.requests.length - 1].ti.tool_choice === 'none', {
     http: mock.state.requests.length,
   });
-  console.log(`  单条 ${sizes.join(' / ')} 字符（上限 ${PER}）；总计 ${loop.toolResultChars} 字符（预算 ${TOTAL}）；rounds=${loop.rounds}`);
+  console.log(`  单条 ${sizes.join(' / ')} 字符（上限 ${PER}）；总计 ${loop.toolResultChars} 字符（预算 ${TOTAL}）；rounds=${loop.lunShu}`);
   mock.server.close();
 }
 
@@ -398,20 +438,20 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
       executorCalls += 1;
       return 'never';
     },
-    { maxRounds: 3 }
+    { zuiDaLunShu: 3 }
   );
   const body0 = mock.state.requests[0]?.ti || {};
   check('降级：只发 1 次模型请求，且请求体里**没有** tools', mock.state.requests.length === 1 && body0.tools === undefined, {
     http: mock.state.requests.length,
     tools: body0.tools,
   });
-  check('降级：返回可用的回答（不抛错）', (loop.response.choices[0]?.message?.content || '').length > 0 && loop.degraded === true, {
-    reply: loop.response.choices[0]?.message?.content,
+  check('降级：返回可用的回答（不抛错）', (loop.xiangYingTi.choices[0]?.message?.content || '').length > 0 && loop.degraded === true, {
+    reply: loop.xiangYingTi.choices[0]?.message?.content,
     degraded: loop.degraded,
     reason: loop.degradedReason,
-    stopReason: loop.stopReason,
+    stopReason: loop.tingZhiYuanYin,
   });
-  check('降级：工具执行器一次都没被调用', executorCalls === 0 && loop.toolCalls === 0, { executorCalls, toolCalls: loop.toolCalls });
+  check('降级：工具执行器一次都没被调用', executorCalls === 0 && loop.gongJuDiaoYongJi === 0, { executorCalls, toolCalls: loop.gongJuDiaoYongJi });
   mock.server.close();
 
   // (b) 支持 tools 但中转直接报错（HTTP 400）→ 重试一次不带 tools
@@ -426,12 +466,12 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
     p2,
     { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
     () => 'never',
-    { maxRounds: 3 }
+    { zuiDaLunShu: 3 }
   );
-  check('中转报错也降级成功（不再抛给调用方）', loop2.degraded === true && /降级后的回答/.test(loop2.response.choices[0]?.message?.content || ''), {
+  check('中转报错也降级成功（不再抛给调用方）', loop2.degraded === true && /降级后的回答/.test(loop2.xiangYingTi.choices[0]?.message?.content || ''), {
     degraded: loop2.degraded,
     reason: loop2.degradedReason,
-    reply: loop2.response.choices[0]?.message?.content,
+    reply: loop2.xiangYingTi.choices[0]?.message?.content,
   });
   check('降级后重试的请求确实没带 tools，且请求数如实为 2', mock2.state.requests.length === 2 && mock2.state.requests[1].ti.tools === undefined && loop2.requests === 2, {
     http: mock2.state.requests.length,

@@ -257,6 +257,14 @@ export interface YingYongPeizhi {
   /** 一轮对话内工具结果的**总**预算（字符，默认 12000） */
   contextToolTotalChars: number;
   /**
+   * **工具调用次数预算**（每一条用户消息允许的工具调用**次数**上限，默认 40）。
+   *
+   * 与 `contextToolMaxRounds` 的区别：轮数管的是"模型往回几次"，
+   * 一次往返里模型可以一口气要十几个工具调用 —— 真事故：`run_shell` 被拒后
+   * 145 秒里换了十几次命令。超预算**不是拒绝**，而是如实告诉模型"预算用完、停下来汇报"。
+   */
+  toolCallBudget?: number;
+  /**
    * ADR 004 §2.1：**运行/测试环境**（run）选择 —— ⚠️ **已作废（产品主第七批最终确认）**。
    * 容器的职责是**开发**，测试与运行不在容器职责内，所以这个选项及其存储被**整块删除**。
    * 这里保留一个只读的兼容注释：老设置文件里可能还留着 `containerRun` 字段，
@@ -494,7 +502,7 @@ function defaults(): YingYongPeizhi {
   return {
     yuYan: 'zh-CN',
     themeMode: 'system',
-    accent: '#A78567',
+    accent: '#A87654',
     sound: { complete: true, request: true, error: true },
     soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,

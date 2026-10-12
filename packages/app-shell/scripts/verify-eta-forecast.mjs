@@ -48,7 +48,7 @@ check('不同行为的次数上限确实不同', new Set(ciShu).size >= 3, ciShu
 check('每个初始值都写了依据（有据可查，不是拍脑袋）', LEI.every((x) => String(XING_WEI_MOREN[x].ju || '').length > 20 && /秒|分钟|轮|次/.test(XING_WEI_MOREN[x].ju)), LEI.map((x) => XING_WEI_MOREN[x].ju.length));
 check('工具调用比对话轮"短"（读文件不该等 5 分钟）', XING_WEI_MOREN.gongJu.miao < XING_WEI_MOREN.duiHua.miao);
 check('等待行动完成比单次工具调用"长"（构建/子代理天然更久）', XING_WEI_MOREN.dengDaiXingDong.miao > XING_WEI_MOREN.gongJu.miao);
-check('异常阈值 = 3 次、判断最多换 5 个模型', CHAO_SHI_LIAN_XU_XIAN === 3 && PAN_MO_XING_SHANG_XIAN === 5);
+check(`异常阈值 = ${CHAO_SHI_LIAN_XU_XIAN} 次、判断最多换 ${PAN_MO_XING_SHANG_XIAN} 个模型`, CHAO_SHI_LIAN_XU_XIAN === 9 && PAN_MO_XING_SHANG_XIAN === 5);
 
 // ── ⑤ 持久文件：方法库，开工时是空的 ──
 const cang = new EtaZhangBen(chiJiu, T0);
@@ -79,14 +79,15 @@ check('没到预计完成时间 ⇒ 不算超时、计数不动', (() => { const
 const chao1 = huo.panChaoShi('s1', 'gongJu', T0 + 100_000);
 check('超过预计完成时间 ⇒ 累计次数 +1', chao1.chaoShi === true && chao1.ciShu === 1 && chao1.yiChang === false, chao1);
 
-// ── ③ 累计 3 次 ⇒ 直接异常 ──
+// ── ③ 累计到阈值 ⇒ 直接异常（阈值走常量，别再硬编码，否则改阈值时门禁会假绿/假红） ──
 let yiChangZai = -1;
-for (let i = 2; i <= 4; i++) {
+// i 从 2 起 ⇒ 循环次数 = 阈值，第阈值次超时才该判异常
+for (let i = 2; i <= CHAO_SHI_LIAN_XU_XIAN + 1; i++) {
   huo.jiYuCe('s2', 'gongJu', { etaMs: 60_000, laiYuan: 'model' }, T0 + i * 1_000_000);
   const r = huo.panChaoShi('s2', 'gongJu', T0 + i * 1_000_000 + 120_000);
   if (r.yiChang && yiChangZai < 0) yiChangZai = r.ciShu;
 }
-check(`累计超出第 ${CHAO_SHI_LIAN_XU_XIAN} 次判定异常（门禁读到 ${yiChangZai}）`, yiChangZai === 3, { yiChangZai });
+check(`累计超出第 ${CHAO_SHI_LIAN_XU_XIAN} 次判定异常（门禁读到 ${yiChangZai}）`, yiChangZai === CHAO_SHI_LIAN_XU_XIAN, { yiChangZai });
 check('异常后仍能读到"上次预测"（要如实告诉用户它预计还剩多久）', !!huo.panChaoShi('s2', 'gongJu', T0 + 9e9).shangCi);
 
 // ── 中途没超 ⇒ 计数归零（"连续/累计"的语义都要对） ──

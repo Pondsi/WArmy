@@ -45,16 +45,16 @@
     <div class="bian" data-b="n"></div><div class="bian" data-b="s"></div>
     <div class="bian" data-b="w"></div><div class="bian" data-b="e"></div>
   </div>
-  <div id="ti">拖动框选 → 可拉伸/移动 → 双击/确定＝截取选区 · 整屏请点「整屏」 · 右键/Esc＝取消</div>
+  <div id="ti">拖动框选 → 可拉伸/移动 → 双击/确定＝截取选区 · 全屏请点「全屏」 · 右键/Esc＝取消</div>
   <div id="bar">
-    <button id="ok">确定</button>
+    <button id="full">全屏</button>
     <button id="cancel">取消</button>
-    <button id="full">整屏</button>
+    <button id="ok">确定</button>
   </div>
   <script>
     // 真·全屏截图遮罩：独立窗口，覆盖整个屏幕。
-    // 交互（产品定稿）：拖动框选 → 保留选区并出「确定/取消」；**双击＝截取当前框选**（不是整屏）；
-    // 整屏只走「整屏」按钮；右键/Esc＝取消。
+    // 交互（产品定稿）：拖动框选 → 保留选区并出「确定/取消」；**双击＝截取当前框选**（不是全屏）；
+    // 全屏只走「全屏」按钮；右键/Esc＝取消。
     const di = document.getElementById('di');
     const kuang = document.getElementById('kuang');
     const bar = document.getElementById('bar');
@@ -114,19 +114,37 @@
       kuang.style.left = l + 'px'; kuang.style.top = t + 'px';
       kuang.style.width = w + 'px'; kuang.style.height = h + 'px';
     }
-    // 选区定稿：显示操作条（贴在选区下方；放不下就放上方）
+    /**
+     * 操作条定位（产品要求）：**优先贴选区右下角**；
+     * 下方放不下就翻到选区上方，右边放不下就左移，最后夹进视口。
+     * 调整选框大小/移动位置时也会调用它 ⇒ 按钮组即时重定位。
+     */
+    function baiBar() {
+      if (!qu || qu.w <= 0 || qu.h <= 0) return;
+      bar.style.display = 'flex';
+      bar.style.transform = 'none';
+      const bw = bar.offsetWidth || 240;
+      const bh = bar.offsetHeight || 46;
+      const M = 8, GAP = 10;
+      // 右下角：右边缘与选区右边缘对齐
+      let left = qu.x + qu.w - bw;
+      let top = qu.y + qu.h + GAP;
+      if (top + bh > window.innerHeight - M) top = qu.y - bh - GAP;   // 下方不够 ⇒ 上方
+      if (top < M) top = Math.min(window.innerHeight - bh - M, Math.max(M, qu.y + GAP));
+      if (left + bw > window.innerWidth - M) left = window.innerWidth - bw - M;
+      if (left < M) left = M;
+      bar.style.left = left + 'px';
+      bar.style.top = top + 'px';
+    }
+
+    // 选区定稿：显示操作条（贴在选区右下角）
     function dingGao() {
       const w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
       if (w < 3 && h < 3) {
         // 这次只是点了一下、没拖出框：保持已有选区（双击还要用它截图），
-        // 一张都没有时也不在单击就当整屏 —— 整屏只走「整屏」按钮 / 确定。
+        // 一张都没有时也不在单击就当全屏 —— 全屏只走「全屏」按钮 / 确定。
         if (qu && qu.w > 0 && qu.h > 0) {
-          bar.style.display = 'flex';
-          bar.style.transform = 'none';
-          const bx = qu.x, by = qu.y + qu.h + 10;
-          const th = 46;
-          bar.style.left = Math.max(8, Math.min(bx, window.innerWidth - 220)) + 'px';
-          bar.style.top = (by + th > window.innerHeight ? Math.max(8, qu.y - th - 10) : by) + 'px';
+          baiBar();
           ti.textContent = '双击/确定＝截取选区 · 右键/Esc＝取消';
         } else {
           qu = null;
@@ -134,17 +152,12 @@
           bar.style.left = '50%';
           bar.style.top = '50%';
           bar.style.transform = 'translate(-50%,-50%)';
-          ti.textContent = '请拖动框选 · 确定＝整屏 · 右键/Esc＝取消';
+          ti.textContent = '请拖动框选 · 确定＝全屏 · 右键/Esc＝取消';
         }
         return;
       }
       qu = { x: Math.min(x0, x1), y: Math.min(y0, y1), w, h };
-      bar.style.display = 'flex';
-      bar.style.transform = 'none';
-      const bx = qu.x, by = qu.y + qu.h + 10;
-      const th = 46;
-      bar.style.left = Math.max(8, Math.min(bx, window.innerWidth - 220)) + 'px';
-      bar.style.top = (by + th > window.innerHeight ? Math.max(8, qu.y - th - 10) : by) + 'px';
+      baiBar();
       ti.textContent = '双击/确定＝截取选区 · 右键/Esc＝取消';
     }
 
@@ -183,6 +196,7 @@
         x1 = e.clientX; y1 = e.clientY; hua();
       } else if (mode === 'move') {
         sheQu({ x: e.clientX - moveOX, y: e.clientY - moveOY, w: qu.w, h: qu.h });
+        baiBar();
       } else if (startQu) {
         const sr = startQu;
         let { x, y, w, h } = sr;
@@ -195,6 +209,7 @@
         if (w < 3) w = 3;
         if (h < 3) h = 3;
         sheQu({ x, y, w, h });
+        baiBar();
       }
     });
     window.addEventListener('mouseup', (e) => {

@@ -1,7 +1,7 @@
 /**
  * Electron preload — 白名单 API
  */
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('warmy', {
   hardware: () => ipcRenderer.invoke('warmy:yingJian'),
@@ -19,9 +19,15 @@ contextBridge.exposeInMainWorld('warmy', {
   i18n: (yuYan) => ipcRenderer.invoke('warmy:i18n', yuYan),
   captureScreen: () => ipcRenderer.invoke('warmy:pingMuJieTu'),
   // 真·全屏截图：独立遮罩窗框选（右键/Esc 取消、单击/回车=整屏）
-  jieTuKaiShi: () => ipcRenderer.invoke('warmy:jieTuKaiShi'),
+  jieTuKaiShi: (p) => ipcRenderer.invoke('warmy:jieTuKaiShi', p),
   jieTuXuanQu: (q) => ipcRenderer.invoke('warmy:jieTuXuanQu', q),
   openExternal: (url) => ipcRenderer.invoke('warmy:daKaiWaiBuLianJie', url),
+  /** 打开文件/目录（系统默认程序）；与 daKaiLuJing 同一 IPC */
+  openPath: (p) => ipcRenderer.invoke('warmy:daKaiLuJing', typeof p === 'string' ? { path: p } : p),
+  shellOpenPath: (p) => ipcRenderer.invoke('warmy:daKaiLuJing', typeof p === 'string' ? { path: p } : p),
+  shellShowItemInFolder: (p) => ipcRenderer.invoke('warmy:xianShiWenJianJia', typeof p === 'string' ? { path: p } : p),
+  /** 默认扫描目录（真实绝对路径，已创建） */
+  defaultScanDirs: () => ipcRenderer.invoke('warmy:moRenSaoMiaoMuLuJi'),
   listSystemFonts: () => ipcRenderer.invoke('warmy:lieBiaoXiTongZiTi'),
   installFont: (p0) => ipcRenderer.invoke('warmy:anZhuangZiTi', p0),
   microsandboxInstall: (opts) => ipcRenderer.invoke('warmy:microsandboxAnZhuang', opts),
@@ -35,6 +41,19 @@ contextBridge.exposeInMainWorld('warmy', {
   pickSound: () => ipcRenderer.invoke('warmy:xuanZeSound'),
   checkUpdate: () => ipcRenderer.invoke('warmy:jianChaGengXin'),
   pickFile: () => ipcRenderer.invoke('warmy:xuanZeWenJian'),
+  /** 门禁：内置硬门禁清单 + 运行一个门禁（软门禁由设置里的 softGates 管理） */
+  menJinYingJi: () => ipcRenderer.invoke('warmy:menJinYingJi'),
+  menJinYunXing: (p) => ipcRenderer.invoke('warmy:menJinYunXing', p),
+  /**
+   * **拖进来的文件到底是磁盘上的哪个文件**。
+   * Electron 32 起 `File.path` 被移除（安全原因），必须走 `webUtils.getPathForFile`，
+   * 而它只能在 preload 里调（渲染层拿不到 webUtils）。
+   * 返回 '' 表示这个 File 不是磁盘上的文件（例如 JS 现造的 File）——调用方要按 '' 处理，
+   * 不能拿它当路径用。
+   */
+  filePathOf: (file) => {
+    try { return webUtils.getPathForFile(file) || ''; } catch { return ''; }
+  },
   groupCreate: (cfg) => ipcRenderer.invoke('warmy:qunChuangJian', cfg),
   groupList: () => ipcRenderer.invoke('warmy:qunLieBiao'),
   updateSourceGet: () => ipcRenderer.invoke('warmy:gengXinLaiYuanQu'),
@@ -56,6 +75,17 @@ contextBridge.exposeInMainWorld('warmy', {
   checkpointCreate: (phase) => ipcRenderer.invoke('warmy:checkpointChuangJian', phase),
   checkpointList: () => ipcRenderer.invoke('warmy:checkpointLieBiao'),
   checkpointRollback: (id) => ipcRenderer.invoke('warmy:checkpointHuiGun', id),
+  /** **会话级回滚**：一键回到某一轮之前（只回退这个会话的记录 + 工作区） */
+  chatRollbackRound: (payload) => ipcRenderer.invoke('warmy:huaTiHuiGun', payload),
+  /** 门禁结果留档：最近 N 条 + 趋势（"刚变红/连续红几次"） */
+  gateHistory: (payload) => ipcRenderer.invoke('warmy:menJinLiShi', payload),
+  /** 工具调用可观测：次数/成功率/耗时分布/各工具分布 + 当前预算 */
+  toolStats: (payload) => ipcRenderer.invoke('warmy:gongJuTongJi', payload),
+  toolBudgetSet: (v) => ipcRenderer.invoke('warmy:gongJuYuSuanSheZhi', v),
+  /** 调研管线的搜索密钥（只进 safeStorage；状态查询只回"有没有"） */
+  searchKeySet: (apiKey) => ipcRenderer.invoke('warmy:souSuoMiYaoSheZhi', { apiKey }),
+  searchKeyStatus: () => ipcRenderer.invoke('warmy:souSuoMiYaoZhuangTai'),
+  searchKeyClear: () => ipcRenderer.invoke('warmy:souSuoMiYaoQingChu'),
   knowledgeQuery: (q) => ipcRenderer.invoke('warmy:zhiShiQuery', q),
   knowledgeAddEvent: (Shi) => ipcRenderer.invoke('warmy:zhiShiTianJiaShiJian', Shi),
   setInsertMode: (sessionId, mode) => ipcRenderer.invoke('warmy:sheZhiInsertMoShi', sessionId, mode),
@@ -131,6 +161,7 @@ contextBridge.exposeInMainWorld('warmy', {
   modelCapsGet: () => ipcRenderer.invoke('warmy:moXingNengLiQu'),
   toolsList: () => ipcRenderer.invoke('warmy:gongJuLieBiao'),
   toolEnable: (p) => ipcRenderer.invoke('warmy:gongJuQiYong', p),
+  bianJiQiKai: () => ipcRenderer.invoke('warmy:bianJiQiKai'),
   toolScanDirsGet: () => ipcRenderer.invoke('warmy:gongJuSaoMiaoMuLuJiQu'),
   toolScanDirsSet: (dirs) => ipcRenderer.invoke('warmy:gongJuSaoMiaoMuLuJiSheZhi', dirs),
   toolScan: () => ipcRenderer.invoke('warmy:gongJuSaoMiao'),
@@ -151,6 +182,7 @@ contextBridge.exposeInMainWorld('warmy', {
   pluginsScan: () => ipcRenderer.invoke('warmy:chaJianJiSaoMiao'),
   assistList: (sessionId) => ipcRenderer.invoke('warmy:assistLieBiao', sessionId),
   assistUpsert: (payload) => ipcRenderer.invoke('warmy:assistGengXinHuoChaRu', payload),
+  assistResolve: (payload) => ipcRenderer.invoke('warmy:assistJueCe', payload),
   skillsPaths: () => ipcRenderer.invoke('warmy:jinengJiLuJingJi'),
   // Skill auto-discovery directories ride the EXISTING settings channel.
   skillsScanDirsGet: () => ipcRenderer.invoke('warmy:jinengJiSaoMiaoMuLuJiQu'),
@@ -218,6 +250,7 @@ contextBridge.exposeInMainWorld('warmy', {
   lanStatus: () => ipcRenderer.invoke('warmy:neiWangZhuangTai'),
   lanDualSmoke: (opts) => ipcRenderer.invoke('warmy:neiWangShuangJiMaoYan', opts),
   webgpuProbe: () => ipcRenderer.invoke('warmy:webgpuTanCe'),
+  webgpuKaiGuanSheZhi: (p) => ipcRenderer.invoke('warmy:webgpuKaiGuanSheZhi', p),
   meshStart: (port) => ipcRenderer.invoke('warmy:wangZhuangQiDong', port),
   meshStop: () => ipcRenderer.invoke('warmy:wangZhuangTingZhi'),
   peersList: () => ipcRenderer.invoke('warmy:duiDuanJiLieBiao'),

@@ -35,6 +35,16 @@ export interface LogEntry {
   /** 本轮实际用的模型名（牛马回复下方第一行显示；不进模型上下文） */
   moXing?: string;
   /**
+   * 本轮**模型降级**信息（换了模型时记下来）：只给界面做悬停提示，不进模型上下文。
+   * 形如 `{ shiBai: ['A','B'], shiYong: 'C', yuanYin: 'HTTP 500' }`。
+   */
+  moXingJiangJi?: { shiBai?: string[]; shiYong?: string; yuanYin?: string; fuZhu?: string };
+  /**
+   * 这条消息带的**文件/截图**（用户拖入的附件、本轮产出/读过的文件）：
+   * 只给界面画成图标行（悬停全路径、左键打开、右键定位），不进模型上下文。
+   */
+  artifacts?: Array<{ name?: string; path?: string; abs?: string; bytes?: number; ts?: number }>;
+  /**
    * **内部指令**（自动续派的「继续执行计划」等）：**进模型上下文，但不出现在聊天记录里**。
    * 真事故：用户看到聊天里冒出一段自己没说过的话。
    */

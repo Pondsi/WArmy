@@ -20,10 +20,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { shengChengDocx, shengChengPptx, keYongPptx } from './office-tools.js';
+import { shengChengDocx, shengChengPptx, keYongPptx, shengChengXlsx } from './office-tools.js';
+import { shengChengPdf } from './pdf-tools.js';
 
 /** 工具名（与 function calling 暴露给模型的 name 一致） */
-export const WORK_TOOL_NAMES = ['list_dir', 'read_file', 'write_file', 'make_dir', 'make_docx', 'make_pptx'] as const;
+export const WORK_TOOL_NAMES = ['list_dir', 'read_file', 'write_file', 'make_dir', 'make_docx', 'make_pptx', 'make_xlsx', 'make_pdf'] as const;
 export type WorkToolName = (typeof WORK_TOOL_NAMES)[number];
 
 export function isWorkTool(name: unknown): name is WorkToolName {
@@ -76,6 +77,10 @@ export interface WorkToolResult {
     error?: string;
     truncated?: boolean;
     entries?: number;
+    /** make_pdf：内嵌用的字体路径 */
+    font?: string;
+    /** make_pdf：字体里缺字形、渲染为空白的字符（如实上报） */
+    missing?: string[];
   };
 }
 
@@ -117,10 +122,39 @@ export function yingSheYongHuWenJianJia(raw: string): { abs: string; rest: strin
 }
 
 /**
+ * **一次性只读授权**（产品要求）：用户在聊天里添加的文件 = 允许 AI **本次**读取的路径，
+ * 不含「允许编辑」。授权只覆盖**读取类**工具，并在本轮结束后立刻清空。
+ *
+ * 为什么需要：附件常常在工作区外（桌面/下载/其它目录），没有这条白名单，
+ * 模型一 read_file 就被 `workspace-escape` 挡住 —— 用户明明把文件递过来了。
+ */
+let yiCiZhiDuGen: string[] = [];
+export function sheZhiYiCiZhiDuGen(paths: Array<string | undefined | null>): void {
+  yiCiZhiDuGen = (paths || [])
+    .map((p) => String(p || '').trim())
+    .filter(Boolean)
+    .map((p) => { try { return path.resolve(p); } catch { return ''; } })
+    .filter(Boolean);
+}
+export function qingKongYiCiZhiDuGen(): void { yiCiZhiDuGen = []; }
+export function yiCiZhiDuGenLieBiao(): string[] { return yiCiZhiDuGen.slice(); }
+/** 这个绝对路径是否落在一次性只读授权里（它就是被授权的文件，或在其被授权的目录下） */
+function zaiYiCiZhiDuNei(abs: string): boolean {
+  const a = path.resolve(abs);
+  for (const gen of yiCiZhiDuGen) {
+    if (a === gen) return true;
+    if (a.startsWith(gen + path.sep)) return true;
+  }
+  return false;
+}
+
+/**
  * 把一个"用户/模型给的相对路径"解析成 base 内的绝对路径。
  * 任何越界、绝对路径、非法字符都抛 `workspace-escape`（调用方转成文本回给模型）。
+ *
+ * @param zuoYong 'read' = 读取类工具，可命中一次性只读授权；'write'（默认）不行。
  */
-export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false): string {
+export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, zuoYong: 'read' | 'write' = 'write'): string {
   const raw = String(rel ?? '').trim();
   if (!raw) throw new Error('empty-path');
   if (raw.includes('\0')) throw new Error('nul-byte');
@@ -134,6 +168,7 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false): 
     if (jt) {
       const zhen = jt.rest ? path.resolve(jt.abs, jt.rest) : path.resolve(jt.abs);
       if (kuaiQuan) return zhen;
+      if (zuoYong === 'read' && zaiYiCiZhiDuNei(zhen)) return zhen;
       throw new Error('absolute-path-not-allowed: ' + raw + ' 映射到系统目录 ' + zhen + '（在工作区外，需要授权）');
     }
   }
@@ -142,13 +177,16 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false): 
    * 但仍然不许 NUL、不许空路径；且"做什么"始终受最高信念/戒律约束（策略层，不在这里）。
    */
   if (kuaiQuan) return path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(path.resolve(baseDir), raw);
-  // Windows 盘符 / UNC / POSIX 绝对路径：一律拒绝（工作区内只能用相对路径）
+  // Windows 盘符 / UNC / POSIX 绝对路径：默认拒绝 —— 但命中「一次性只读授权」且是读取操作时放行
   if (path.isAbsolute(raw) || /^[a-zA-Z]:/.test(raw) || raw.startsWith('\\\\') || raw.startsWith('/')) {
+    const absJue = path.resolve(raw);
+    if (zuoYong === 'read' && zaiYiCiZhiDuNei(absJue)) return absJue;
     throw new Error('absolute-path-not-allowed');
   }
   const base = path.resolve(baseDir);
   const target = path.resolve(base, raw);
   if (target !== base && !target.startsWith(base + path.sep)) {
+    if (zuoYong === 'read' && zaiYiCiZhiDuNei(target)) return target;
     throw new Error('workspace-escape');
   }
   return target;
@@ -173,7 +211,7 @@ function fail(tool: string, err: unknown, p?: string): WorkToolResult {
 export function workListDir(baseDir: string, args: { path?: string }, kuaiQuan = false): WorkToolResult {
   const tool = 'list_dir';
   try {
-    const dir = resolveInside(baseDir, args && args.path ? args.path : '.', kuaiQuan);
+    const dir = resolveInside(baseDir, args && args.path ? args.path : '.', kuaiQuan, 'read');
     if (!fs.existsSync(dir)) return fail(tool, new Error('not-found'), relOf(baseDir, dir));
     if (!fs.statSync(dir).isDirectory()) return fail(tool, new Error('not-a-directory'), relOf(baseDir, dir));
     const names = fs.readdirSync(dir).slice(0, WORK_TOOL_LIMITS.maxListEntries);
@@ -205,7 +243,25 @@ export function workListDir(baseDir: string, args: { path?: string }, kuaiQuan =
 export function workReadFile(baseDir: string, args: { path?: string; maxChars?: number }, kuaiQuan = false): WorkToolResult {
   const tool = 'read_file';
   try {
-    const file = resolveInside(baseDir, args && args.path, kuaiQuan);
+    let file = resolveInside(baseDir, args && args.path, kuaiQuan, 'read');
+    /**
+     * **回落解析**（真机事故：模型 `read_file` 读截图报 not-found）。
+     *
+     * 附件清单里给的是「工作区根」相对路径（`inst-xxx/shot-1.png`），而 `baseDir`
+     * 已经是**会话工作区**（`…/workspace/inst-xxx`）⇒ 拼成了
+     * `…/workspace/inst-xxx/inst-xxx/shot-1.png`（会话 id 叠了两遍）⇒ 必然找不到。
+     * 修法：原路径不存在时，再试「相对工作区根」一次（仍限制在工作区根内）。
+     */
+    if (!fs.existsSync(file)) {
+      const raw = String((args && args.path) || '').trim();
+      if (raw && !path.isAbsolute(raw)) {
+        const root = path.resolve(baseDir, '..');
+        const shang = path.resolve(root, raw);
+        if (shang !== root && shang.startsWith(root + path.sep) && fs.existsSync(shang)) {
+          file = shang;
+        }
+      }
+    }
     if (!fs.existsSync(file)) return fail(tool, new Error('not-found'), relOf(baseDir, file));
     if (fs.statSync(file).isDirectory()) return fail(tool, new Error('is-a-directory'), relOf(baseDir, file));
     const cap = Math.max(1, Math.min(Number(args?.maxChars) || WORK_TOOL_LIMITS.maxReadChars, WORK_TOOL_LIMITS.maxReadChars));
@@ -251,6 +307,27 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
       const text2 = zhaiYao.length > cap ? zhaiYao.slice(0, cap) + `\n…（已截断，原文 ${zhaiYao.length} 字符）` : zhaiYao;
       return { ok: true, content: text2, meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), truncated: zhaiYao.length > cap } };
     }
+    /**
+     * **图片不要用 read_file 读**（真机事故：模型把 53KB 截图当文本读回来，白白烧一轮）。
+     * 图片已经作为多模态内容块直接可见（见 `llm.imagesVisible`）；真要看"这是什么文件"，
+     * 这里如实给一句元信息就够了，不要倒二进制。
+     */
+    if (/\.(png|jpe?g|gif|webp|bmp|ico|tiff?)$/i.test(file)) {
+      const zhi = fs.statSync(file);
+      const shuoMing = `[read_file] 这是**图片文件**（${path.basename(file)}，${zhi.size} 字节，修改于 ${zhi.mtime.toISOString()}）。`
+        + '图片内容已经**直接可见**（多模态输入），不需要再 read_file 读它；要判断图里是什么，直接看图回答即可。';
+      return { ok: true, content: shuoMing, meta: { tool, ok: true, bytes: zhi.size, path: relOf(baseDir, file), truncated: false } };
+    }
+    // 其它二进制（字体/压缩包/可执行…）同样不倒字节：如实说类型与大小
+    if (/\.(ttf|otf|ttc|woff2?|zip|7z|rar|exe|dll|so|node|pdf|mp3|wav|mp4|mov|webm|avi|mkv)$/i.test(file)) {
+      const zhi = fs.statSync(file);
+      return {
+        ok: true,
+        content: `[read_file] 这是**二进制文件**（${path.basename(file)}，${zhi.size} 字节），read_file 只读文本，不倒二进制内容。`
+          + (/\.pdf$/i.test(file) ? '要读 PDF 正文请用 read_docx 同类的文档工具，或让用户导出为文本。' : '要处理它请用对应能力（看图/听音/看视频/文档工具）。'),
+        meta: { tool, ok: true, bytes: zhi.size, path: relOf(baseDir, file), truncated: false },
+      };
+    }
     const text = buf.toString('utf8');
     const truncated = text.length > cap;
     return {
@@ -273,11 +350,18 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
      * 如实拒绝并指向真正的生成器。
      */
     const rawP = String((args && args.path) || '');
-    if (/\.(docx|pptx|xlsx)$/i.test(rawP)) {
-      return fail(tool, new Error('office-binary-need-generator：' + rawP + ' 是 Office 二进制格式，write_file 只写纯文本（写出来的文件 Word/PowerPoint 打不开）。请改用 make_docx（生成 .docx）或 make_pptx（生成 .pptx）。'), rawP);
+    /**
+     * **硬门禁文件不许被改**（产品定稿：硬门禁＝随产品发的验证脚本，模型不得修改/删除）。
+     * 只按"仓库内 scripts/ 下的门禁脚本"这个形状拦（工作区里的同名文件不受影响）。
+     */
+    if (/(^|[\\/])packages[\\/]app-shell[\\/]scripts[\\/](?:verify-[\w.-]+|full-verify-rounds)\.mjs$/i.test(rawP)) {
+      return fail(tool, new Error('hard-gate-immutable：' + rawP + ' 是**硬门禁**脚本（随产品一起发的验证标准），不允许被写入/覆盖。要加自己的检查请新建一个**软门禁**（设置→门禁→新增软门禁），把它放在别处。'), rawP);
+    }
+    if (/\.(docx|pptx|xlsx|pdf)$/i.test(rawP)) {
+      return fail(tool, new Error('office-binary-need-generator：' + rawP + ' 是二进制文档格式，write_file 只写纯文本（写出来的文件 Word/PowerPoint/阅读器打不开）。请改用 make_docx（.docx）/ make_pptx（.pptx）/ make_xlsx（.xlsx）/ make_pdf（.pdf）。'), rawP);
     }
     if (/\.(doc|ppt|xls)$/i.test(rawP)) {
-      return fail(tool, new Error('legacy-office-unsupported：不支持老格式 ' + rawP + '，请用 make_docx / make_pptx 生成 .docx / .pptx。'), rawP);
+      return fail(tool, new Error('legacy-office-unsupported：不支持老格式 ' + rawP + '，请用 make_docx / make_pptx / make_xlsx 生成新格式。'), rawP);
     }
     const file = resolveInside(baseDir, args && args.path, kuaiQuan);
     const content = String((args && args.content) ?? '');
@@ -376,6 +460,67 @@ export function workMakePptx(baseDir: string, args: { path?: string; slides?: Ar
   }
 }
 
+/** 生成真 .xlsx（Excel / WPS / LibreOffice 可打开） */
+export function workMakeXlsx(baseDir: string, args: { path?: string; sheets?: Array<{ name?: string; rows?: Array<Array<string | number>> }>; rows?: Array<Array<string | number>> }, kuaiQuan = false): WorkToolResult {
+  const tool = 'make_xlsx';
+  try {
+    const rawP = String((args && args.path) || '').trim();
+    if (!/\.xlsx$/i.test(rawP)) return fail(tool, new Error('need-xlsx-extension：path 必须以 .xlsx 结尾'), rawP);
+    const shuRaw = args && args.sheets;
+    const shu = Array.isArray(shuRaw) && shuRaw.length
+      ? shuRaw.map((s, i) => ({
+          name: String((s && s.name) || `工作表${i + 1}`),
+          rows: Array.isArray(s && s.rows) ? (s.rows as Array<Array<string | number>>) : [],
+        }))
+      : [{ name: '工作表1', rows: Array.isArray(args && args.rows) ? (args.rows as Array<Array<string | number>>) : [['']] }];
+    const buf = shengChengXlsx(shu);
+    const file = resolveInside(baseDir, rawP, kuaiQuan);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, buf);
+    const hangShu = shu.reduce((s, x) => s + x.rows.length, 0);
+    return {
+      ok: true,
+      content: `已生成 Excel 表格 ${file}（${buf.length} 字节，${shu.length} 个工作表、共 ${hangShu} 行；可直接用 Excel/WPS 打开）`,
+      meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), abs: file },
+    };
+  } catch (e) {
+    return fail(tool, e);
+  }
+}
+
+/** 生成真 .pdf（内嵌子集中文字体，中文可复制/可检索） */
+export function workMakePdf(baseDir: string, args: { path?: string; paragraphs?: string[]; content?: string; title?: string; pageSize?: 'A4' | 'Letter' }, kuaiQuan = false): WorkToolResult {
+  const tool = 'make_pdf';
+  try {
+    const rawP = String((args && args.path) || '').trim();
+    if (!/\.pdf$/i.test(rawP)) return fail(tool, new Error('need-pdf-extension：path 必须以 .pdf 结尾'), rawP);
+    const duanRaw = args && args.paragraphs;
+    const duan = Array.isArray(duanRaw) && duanRaw.length
+      ? (duanRaw as unknown[]).map((s) => String(s))
+      : String((args && args.content) ?? '').split(/\r?\n/);
+    const r = shengChengPdf(duan.map((text) => ({ text })), {
+      title: String((args && args.title) || ''),
+      pageSize: args && args.pageSize === 'Letter' ? 'Letter' : 'A4',
+    });
+    if (!r.ok || !r.buffer) {
+      // **如实失败**：系统里没有可内嵌的 CJK 字体时不能装作生成了（否则打开是空白/乱码）
+      return fail(tool, new Error('pdf-font-unavailable：' + (r.error || 'unknown') + '。请如实告诉用户当前无法生成 PDF（可安装 simhei.ttf 或设 WARMY_PDF_FONT 指向 .ttf 字体）。'), rawP);
+    }
+    const file = resolveInside(baseDir, rawP, kuaiQuan);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, r.buffer);
+    const que = (r.queShi || []).slice(0, 20);
+    return {
+      ok: true,
+      content: `已生成 PDF ${file}（${r.buffer.length} 字节，${duan.length} 段；内嵌中文字体子集，中文可复制可检索）`
+        + (que.length ? `\n注意：字体里缺这些字形，渲染为空白：${que.join(' ')}` : ''),
+      meta: { tool, ok: true, bytes: r.buffer.length, path: relOf(baseDir, file), abs: file, font: r.fontPath, missing: que },
+    };
+  } catch (e) {
+    return fail(tool, e);
+  }
+}
+
 /** 统一入口：按 tool 名分发（未知工具 → 结构化失败，不抛错） */
 /**
  * 工具调用参数的**容错解析**。
@@ -438,6 +583,8 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
     case 'make_dir': return workMakeDir(baseDir, args as { path?: string }, kuaiQuan);
     case 'make_docx': return workMakeDocx(baseDir, args as { path?: string; paragraphs?: string[]; content?: string }, kuaiQuan);
     case 'make_pptx': return workMakePptx(baseDir, args as { path?: string; slides?: Array<{ title?: string; body?: string[] }> }, kuaiQuan, gaoJiMuLu);
+    case 'make_xlsx': return workMakeXlsx(baseDir, args as { path?: string; sheets?: Array<{ name?: string; rows?: Array<Array<string | number>> }>; rows?: Array<Array<string | number>> }, kuaiQuan);
+    case 'make_pdf': return workMakePdf(baseDir, args as { path?: string; paragraphs?: string[]; content?: string; title?: string; pageSize?: 'A4' | 'Letter' }, kuaiQuan);
     default: return fail(name || 'work', new Error('unknown-tool'));
   }
 }
@@ -526,6 +673,55 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
         },
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: 'make_xlsx',
+        description: '生成**真正的 Excel 表格**（.xlsx，可用 Excel / WPS / LibreOffice 打开）。要出表格**必须用本工具**，不要用 write_file 写 .xlsx（那是改后缀的文本，打不开）。路径同 write_file（可写 Desktop/xx.xlsx 等系统目录，需授权）。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '以 .xlsx 结尾的路径，如 Desktop/清单.xlsx' },
+            sheets: {
+              type: 'array',
+              description: '工作表列表（顺序即标签顺序）',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', description: '工作表名（≤31 字）' },
+                  rows: {
+                    type: 'array',
+                    description: '行列表；每行是单元格数组（数字按数字写，其它按文本）',
+                    items: { type: 'array', items: { type: ['string', 'number'] } },
+                  },
+                },
+                required: ['rows'],
+              },
+            },
+            rows: { type: 'array', description: '只建一个工作表时的简写：行列表', items: { type: 'array', items: { type: ['string', 'number'] } } },
+          },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'make_pdf',
+        description: '生成**真正的 PDF**（.pdf）。中文会被内嵌为字体子集，所以**可以复制、可以检索**（不是图片）。要出 PDF **必须用本工具**，不要用 write_file 写 .pdf。系统里没有可用 CJK 字体时会**如实报错**，不会装作成功。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '以 .pdf 结尾的路径，如 Desktop/报告.pdf' },
+            paragraphs: { type: 'array', items: { type: 'string' }, description: '正文段落（每项一段，自动折行分页）' },
+            content: { type: 'string', description: '正文（按换行分段；与 paragraphs 二选一）' },
+            title: { type: 'string', description: '文档标题（写入 PDF 元信息，可选）' },
+            pageSize: { type: 'string', description: 'A4（默认）或 Letter' },
+          },
+          required: ['path'],
+        },
+      },
+    },
   ];
 }
 
@@ -545,11 +741,10 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
  */
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'ask_user', 'plan_update', 'plan_verify',
-  'run_shell', 'find_skill', 'install_skill', 'check_safety', 'read_docx', 'read_pptx', 'fetch_url', 'download_file',
-  'get_time', 'wait_seconds', 'knowledge_query', 'knowledge_add',
+  'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'download_file',
+  'get_time', 'wait_seconds',
 ] as const;
 export function isHostTool(name: unknown): boolean {
-  if (name === 'knowledge_query' || name === 'knowledge_add') return true;
   return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
 }
 export function hostToolSpecs(): Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }> {
@@ -605,25 +800,13 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'ask_user',
-        description: '当你有不确定的选择/决定时，列出候选项让用户在界面上点选（永远含「其他」自定义输入），用户选完你会拿到结果并继续。**不要自己猜、也不要因此停下。** 如果其中有你自评最优的方案，把它标成 recommended=true —— 界面会给它加「推荐」标记；用户开了「自动选择」时会直接按推荐方案执行。',
+        description: '当你有不确定的选择/决定时，列出候选项让用户在界面上点选（永远含「其他」自定义输入），用户选完你会拿到结果并继续。**不要自己猜、也不要因此停下。**',
         parameters: {
           type: 'object',
           properties: {
             title: { type: 'string', description: '要问用户的问题（一句话）' },
             hint: { type: 'string', description: '补充说明（可选）' },
-            options: {
-              type: 'array',
-              description: '候选选项（2-8 个）。推荐写成对象 {"label":"文案","recommended":true}；纯字符串也接受。',
-              items: {
-                type: 'object',
-                properties: {
-                  label: { type: 'string', description: '选项文案' },
-                  recommended: { type: 'boolean', description: '这是不是你自评最优的方案（最多标一个）' },
-                  description: { type: 'string', description: '这个选项的简短说明（可选）' },
-                },
-                required: ['label'],
-              },
-            },
+            options: { type: 'array', items: { type: 'string' }, description: '候选选项（2-8 个，纯文案）' },
           },
           required: ['title'],
         },
@@ -737,6 +920,21 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
     {
       type: 'function',
       function: {
+        name: 'read_skill',
+        description: '读一个技能的**全文**（SKILL.md 正文 + 按需读取的资源清单）。find_skill 只给名称与用途（第 1 层）；确定要做这件事之前，用本工具把步骤读全再动手。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '技能目录（find_skill 会给出准确路径）' },
+            name: { type: 'string', description: '技能名（与 path 二选一；按 name/dirName 匹配）' },
+          },
+          required: [],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
         name: 'check_safety',
         description: '对一条命令或一个技能包做安全检测，返回风险等级（low/medium/high）与命中原因。做危险动作之前先用它自查。',
         parameters: {
@@ -752,8 +950,23 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
     {
       type: 'function',
       function: {
+        name: 'read_document',
+        description: '**读文档的统一入口**：docx / xlsx / pptx / pdf / txt / md / csv 都用它。要读用户给的文档优先用这个，别用 read_file 读二进制（那是乱码）。会按文件头认格式（后缀骗人也认得出）；PDF 抽不到文本层（扫描件）会**如实说**并提示需要 OCR，不会编造正文。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '文档路径（docx/xlsx/pptx/pdf/txt/md/csv）' },
+            maxChars: { type: 'number', description: '正文返回上限（默认 20000）' },
+          },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
         name: 'read_docx',
-        description: '读取 Word 文档（.docx）的正文文字。要查看/修改用户给的 word 文档用它，不要用 read_file 读二进制。',
+        description: '读取 Word 文档（.docx）的正文文字（read_document 的别名，保留兼容）。',
         parameters: { type: 'object', properties: { path: { type: 'string', description: '.docx 路径' } }, required: ['path'] },
       },
     },
@@ -761,8 +974,56 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'read_pptx',
-        description: '读取 PowerPoint（.pptx）每页的标题与文字。要查看用户给的 ppt 用它，不要用 read_file 读二进制。',
+        description: '读取 PowerPoint（.pptx）每页的标题与文字（read_document 的别名，保留兼容）。',
         parameters: { type: 'object', properties: { path: { type: 'string', description: '.pptx 路径' } }, required: ['path'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'read_xlsx',
+        description: '读取 Excel 表格（.xlsx）每个工作表的单元格（read_document 的别名，保留兼容）。要读表格优先用 read_document。',
+        parameters: { type: 'object', properties: { path: { type: 'string', description: '.xlsx 路径' } }, required: ['path'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'read_pdf',
+        description: '读取 PDF（.pdf）的文本层（read_document 的别名，保留兼容）。扫描件抽不到文本会如实说，别编造。',
+        parameters: { type: 'object', properties: { path: { type: 'string', description: '.pdf 路径' } }, required: ['path'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'web_search',
+        description: '**联网搜索**：返回排名 + 标题 + 摘要 + **URL**（先看再决定打开哪几条）。要查"现在的事实/新闻/文档"用它，**不要凭记忆编造**。没配搜索密钥时会如实失败并告诉你去哪配。写结论时必须带上出处 URL。',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '查询词（用能力/事实描述，别只给产品名）' },
+            count: { type: 'number', description: '返回条数（默认 8，最多 20）' },
+            topic: { type: 'string', description: 'general（默认）或 news' },
+            days: { type: 'number', description: '只要最近几天内的（配合 topic=news）' },
+          },
+          required: ['query'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'web_extract',
+        description: '**抓正文**：把网页抽成干净文本，并按查询词**摘录**命中段落（每条都带 URL）。搜索结果里挑 1~5 条用它看细节；比 fetch_url 更适合"有据可查"的调研。',
+        parameters: {
+          type: 'object',
+          properties: {
+            urls: { type: 'array', items: { type: 'string' }, description: '要抓的 http/https 网址（最多 5 条）' },
+            query: { type: 'string', description: '想在这几页里找什么（用于摘录）' },
+          },
+          required: ['urls'],
+        },
       },
     },
     {
@@ -792,62 +1053,6 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             path: { type: 'string', description: '保存路径，如 Desktop/资料.pdf 或 out/a.bin' },
           },
           required: ['url', 'path'],
-        },
-      },
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'knowledge_query',
-        description:
-          '查**知识库**（实体/事件，与 recall 记忆是两回事）。' +
-          '什么时候用：需要结构化事实（某人/某组织/某工具/某项目的属性）、或查某次事件/结论/方法时。' +
-          '触发线索：用户问「X 是什么/有什么/做过什么」，或你要引用长期结论、人、物、项目事实时。' +
-          '返回实体与事件列表；再用 knowledge_add 补记新事实。',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: '检索词（名称/属性/事件标题/结果关键词）' },
-          },
-          required: ['query'],
-        },
-      },
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'knowledge_add',
-        description:
-          '往**知识库**记一条事实（实体和/或事件）。' +
-          '什么时候用：用户给出长期有效的人/物/项目/结论/方法，或本次会话产生了值得沉淀的事件结果时。' +
-          '与 recall 记忆互补：这里存结构化事实，不是对话流水。',
-        parameters: {
-          type: 'object',
-          properties: {
-            entity: {
-              type: 'object',
-              description: '实体（可选）：{id?, kind: person|org|material|place|concept|tool|project, ming, attrs?}',
-              properties: {
-                id: { type: 'string' },
-                kind: { type: 'string', enum: ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] },
-                ming: { type: 'string' },
-                attrs: { type: 'object' },
-              },
-              required: ['kind', 'ming'],
-            },
-            event: {
-              type: 'object',
-              description: '事件（可选）：{biaoTi, result?, tool?, method?, entityIds?}',
-              properties: {
-                biaoTi: { type: 'string' },
-                result: { type: 'string' },
-                tool: { type: 'string' },
-                method: { type: 'string' },
-                entityIds: { type: 'array', items: { type: 'string' } },
-              },
-              required: ['biaoTi'],
-            },
-          },
         },
       },
     },

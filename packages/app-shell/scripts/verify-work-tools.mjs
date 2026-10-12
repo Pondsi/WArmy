@@ -103,7 +103,7 @@ console.log('\n[6] 工具规格（给模型看的）');
 {
   const specs = W.workToolSpecs();
   const names = specs.map((s) => s.function.name).sort();
-  check('暴露 6 个文件类工具（含 make_docx / make_pptx）', JSON.stringify(names) === JSON.stringify(['list_dir', 'make_dir', 'make_docx', 'make_pptx', 'read_file', 'write_file']), names);
+  check('暴露 8 个文件类工具（含 make_docx / make_pptx / make_xlsx / make_pdf）', JSON.stringify(names) === JSON.stringify(['list_dir', 'make_dir', 'make_docx', 'make_pdf', 'make_pptx', 'make_xlsx', 'read_file', 'write_file']), names);
   check('每个都有 description 与 parameters', specs.every((s) => s.function.description && s.function.parameters), specs.length);
   check('【安全】不含 shell 执行类工具', !names.some((n) => /exec|run|shell|cmd|bash/i.test(n)), names);
   check('【安全】声明不允许逃出工作区', W.WORK_TOOL_SECURITY.allowsWorkspaceEscape === false);

@@ -97,6 +97,8 @@ export class OllamaGongYing extends JichuGongYing {
   }
 
   async chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
+    // HTTP 500 自动重试 1 次（模型瞬时加载失败/资源不足是常见原因）
+    for (let ci = 0; ci < 2; ci++) {
     const res = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...this.auth.headers },
@@ -105,6 +107,7 @@ export class OllamaGongYing extends JichuGongYing {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
+      if (res.status === 500 && ci === 0) { await new Promise((r) => setTimeout(r, 2000)); continue; }
       throw new Error(`ollama HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
     const json = (await res.json()) as {
@@ -161,6 +164,8 @@ export class OllamaGongYing extends JichuGongYing {
       ),
       raw: json,
     };
+    }
+    throw new Error('ollama retry exhausted');
   }
 
   async *chatStream(Qiu: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
@@ -296,12 +301,33 @@ export class OllamaGongYing extends JichuGongYing {
           const infoKeys = Object.keys(info);
           if (caps.length) {
             vision = caps.some((c) => /vision|image/.test(c));
-            tools = caps.some((c) => /tool|function/.test(c));
+            /**
+             * **不要把「capabilities 里没写 tools」当成「不能用工具」**（真机：
+             * Qwen3.8-27B-Uncensored:iq4_xs 等明明能 function calling，却被标成
+             * 无法调用工具）。只有明确声明 tool/function 才写 true；
+             * 完全没提 ⇒ 'unknown'，交给已知表/外层降级链判断。
+             */
+            const youTools = caps.some((c) => /tool|function/.test(c));
+            if (youTools) tools = true;
+            else tools = 'unknown';
             supportsThinking = caps.some((c) => /think|reason/.test(c));
+            /**
+             * **名字优先**（真事故：`dimavz/whisper-tiny:latest` 的 capabilities 只有 `completion`，
+             * 于是被判成「对话 + 工具」——它其实是**语音识别**模型，被选进对话链必然出错）。
+             * 名字里明确是 ASR / TTS / 嵌入 / 重排 / 图像生成的，一律按名字归类。
+             */
+            const quanMing = String(id || '').toLowerCase();
+            if (/whisper|\basr\b|speech-to-text|\bstt\b|paraformer|sensevoice/.test(quanMing)) { kind = 'asr'; tools = false; }
+            else if (/\btts\b|text-to-speech|cosyvoice|vits|bark|sovits/.test(quanMing)) { kind = 'tts'; tools = false; }
+            else if (/bge-|embed|gte-|nomic-embed|text-embedding/.test(quanMing)) { kind = 'embedding'; tools = false; }
+            else if (/rerank/.test(quanMing)) { kind = 'rerank'; tools = false; }
+            else if (/stable-diffusion|sdxl|flux|text-to-image/.test(quanMing)) { kind = 'image'; tools = false; }
             // **按 capabilities 判类型**（真事故：bge-m3 是 embedding 模型，被当成可用聊天模型）
-            if (caps.some((c) => /embedding/.test(c))) kind = 'embedding';
+            else if (caps.some((c) => /embedding/.test(c))) kind = 'embedding';
             else if (caps.some((c) => /vision|image/.test(c)) && !caps.some((c) => /completion|generate|chat/.test(c))) kind = 'image';
             else if (caps.some((c) => /completion|generate|chat|thinking/.test(c))) kind = 'chat';
+            // 聊天类默认可试 tools（Ollama 多数 chat 模型支持；失败由外层降级）
+            if (kind === 'chat' && tools === 'unknown') tools = true;
           } else {
             // 旧版 Ollama：只能从 model_info 的 clip/projector/mmproj 判视觉
             const youShiJue = infoKeys.some((k) => /(^|\.)clip$|projector|mmproj|vision|(^|\.)llava/i.test(k));

@@ -34,6 +34,7 @@ const mock = http.createServer((req, res) => {
   let raw = '';
   req.on('data', (c) => (raw += c));
   req.on('end', () => {
+    mockHits.push({ url: req.url, at: Date.now(), body: raw.slice(0, 120) });
     setTimeout(() => {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
@@ -44,6 +45,8 @@ const mock = http.createServer((req, res) => {
     }, 3000);
   });
 });
+/** mock 收到了几次请求（失败时要能看出"请求根本没到"还是"回包没被吃进去"） */
+const mockHits = [];
 const mockPort = await new Promise((r) => mock.listen(0, '127.0.0.1', () => r(mock.address().port)));
 
 const env = { ...process.env };
@@ -179,6 +182,18 @@ if (detail.hasBtn) {
 
 // ════════ 3. 聊天动态小字 + 气泡不重复 ════════
 console.log('\n[3] 聊天进行中的动态小字');
+// 上一节刚把它**停用**过；这一节测的是"进行中反馈"，得先把牛马启回来
+// （否则发消息走的是"停用只能查看"的路径，动态小字那一套根本不会进入"进行中"）。
+// 此刻实例详情还开着（#iQiDongTingZhi 就在页面上），直接点「启动」即可。
+{
+  const btn = await c.evaluate(`(function(){ var b=document.getElementById('iQiDongTingZhi'); return b ? b.textContent.trim() : ''; })()`);
+  console.log('  · 停用后的按钮文案: ' + btn);
+  if (/启动/.test(btn)) {
+    await c.evaluate(`(function(){ document.getElementById('iQiDongTingZhi').click(); return 1; })()`);
+    await sleep(5000);
+  }
+  console.log('  · 启回牛马后状态: ' + await c.evaluate(`(function(){ var z=document.querySelector('.huiZhang'); return z ? z.textContent.trim() : ''; })()`));
+}
 await c.evaluate(`window.warmy.setProvider({ presetId:'deepseek', apiKey:'sk-mock', baseURL:'http://127.0.0.1:${mockPort}/v1', model:'deepseek-flash', protocol:'openai-compatible' })`);
 await c.evaluate(`(function(){ document.querySelector('[data-nav="singleAi"]').click(); return 1; })()`);
 await sleep(1000);
@@ -207,7 +222,8 @@ await c.evaluate(`(function(){
 })()`);
 const t0 = Date.now();
 let sawBusy = false, texts = [], sawSeconds = false, sawDone = false, hid = false, sendBusy = false;
-for (let i = 0; i < 48; i++) {
+// 窗口放宽到 25s：本地/串行环境下"决策模型兜底 + 真回包"偶尔要十几秒，12s 会把正常回包判成失败
+for (let i = 0; i < 100; i++) {
   await sleep(250);
   const s = await c.evaluate(`(function(){
     const he = document.getElementById('yunXingZhuangTai');
@@ -234,6 +250,20 @@ check('显示已用秒数（证明没卡死）', sawSeconds);
 check('文案有轮换（不是一行死字）', texts.length >= 2, JSON.stringify(texts.slice(0, 5)));
 check('回包后显示「干完了」', sawDone);
 check('结束后自动收起', hid);
+if (!sawDone || !hid) {
+  // 失败时留证：请求到底有没有到 mock、气泡里到底有什么、渲染层消息库里到底几条
+  console.log('  · 诊断: mockHits=' + JSON.stringify(mockHits.map((h) => h.url)));
+  console.log('  · 诊断: 气泡=' + JSON.stringify(await c.evaluate(`[...document.querySelectorAll('#xiaoXiJi .xiaoXi')].map((e)=>String(e.textContent||'').trim().slice(0,40))`)));
+  console.log('  · 诊断: 文案轨迹=' + JSON.stringify(texts.slice(0, 6)));
+}
+console.log('  · 诊断: __msgs=' + JSON.stringify(await c.evaluate(`(function(){
+  try {
+    var sid = (window.__warmyDebugState && window.__warmyDebugState().selected) || '';
+    var ms = (window.__msgs && window.__msgs[sid]) || [];
+    return ms.map(function(m){ return {r:m.role, ts:m.ts, t:String(m.text||'').slice(0,26), stream:!!m.stream}; });
+  } catch(e) { return 'err:'+e.message; }
+})()`)));
+console.log('  · 诊断: 队列=' + JSON.stringify(await c.evaluate(`(function(){ try { var sid=(window.__warmyDebugState&&window.__warmyDebugState().selected)||''; var q=(window.__uiQueues&&window.__uiQueues[sid])||[]; return q.map(function(x){return {id:x.id, t:String(x.text||'').slice(0,20)};}); } catch(e){ return 'err'; } })()`)));
 check('发送按钮进入"进行中"状态（防重复发送）', sendBusy);
 const bubbles = await c.evaluate(`(function(){
   return [...document.querySelectorAll('#xiaoXiJi .xiaoXi')].map((e) => (e.textContent||'').trim().slice(0, 20));

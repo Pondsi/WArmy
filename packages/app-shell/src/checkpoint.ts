@@ -27,6 +27,12 @@ export interface Jianchadian {
   summary: string;
   detail: JianChaDianXiangQing;
   bytes: number;
+  /**
+   * **会话级回滚**用：这个回退点属于哪个会话。
+   * 有它就支持"一键回到这一轮之前"（只回退**这个会话**的聊天记录 + 工作区，
+   * 别的会话在这之后的记录**原样保留**）。老数据没有这个字段，照常可用。
+   */
+  sessionId?: string;
 }
 
 export interface JianChaDianKongJian {
@@ -98,6 +104,8 @@ export class JianChaDianCang {
     maxBytes?: number;
     summary?: string;
     detail?: Partial<JianChaDianXiangQing>;
+    /** 会话级回滚标记（见 Jianchadian.sessionId） */
+    sessionId?: string;
   }): Jianchadian {
     const id = `cp-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
     const dir = path.join('shadows', id);
@@ -161,6 +169,7 @@ export class JianChaDianCang {
       },
       bytes,
     };
+    if (opts.sessionId) cp.sessionId = String(opts.sessionId);
     this.items.push(cp);
     const limit = opts.limit ?? 50;
     while (this.items.length > limit) {

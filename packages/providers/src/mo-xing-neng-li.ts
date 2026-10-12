@@ -38,7 +38,7 @@ export interface MoXingNengLi {
    *                 输出带置信度的决策，约束解码，小而快；用于意图分类、路由、裁判/审批）
    *  · unknown    = 认不出（不放进任何调用链，免得用时出错）
    */
-  kind: 'chat' | 'embedding' | 'rerank' | 'asr' | 'tts' | 'image' | 'imageUnd' | 'videoUnd' | 'videoGen' | 'translate' | 'safety' | 'decision' | 'unknown';
+  kind: 'chat' | 'embedding' | 'rerank' | 'asr' | 'tts' | 'image' | 'imageUnd' | 'videoUnd' | 'videoGen' | 'translate' | 'safety' | 'decision' | 'ocr' | 'reasoning' | 'code' | 'unknown';
   /** 上下文长度（token）；0 = 端点没给、表里也没有 */
   contextLen: number;
   /** TTS 等的音色清单（端点给 voices/speakers 才有；空 = 不知道） */
@@ -130,6 +130,17 @@ export function gouJianDangWeiAnShe(modelLevels: string[]): DangWeiAnShe {
 
 /** 已知模型能力表（只写**确定**的；不确定的不写 ⇒ 如实 unknown） */
 const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
+  /**
+   * **MiMo（token-plan 官方端点）**：`/models` 只回 id，不说能力、不说类别 ——
+   * 所以这里按**型号名**如实登记（能确定的那几条才写；不确定的写 'unknown'）。
+   * 关键点：`-asr` / `-tts` 这一类**必须显式列出** ——
+   * 通用 `asr-`（要求 asr 后面还有连字符）与 `\btts\b` 都抓不住 `mimo-v2.5-asr` / `mimo-v2.5-tts-voiceclone`，
+   * 结果是这两个模型**永远不会出现在「听话模型 / 说话模型」的可选列表里**（能力链空 ⇒ 一等公民名不副实）。
+   */
+  { shi: /^mimo-v2\.5-asr$/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'asr' } },
+  { shi: /^mimo-v2\.5-tts(-voiceclone|-voicedesign)?$/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
+  { shi: /^mimo-v2\.5(-pro)?$/i, neng: { vision: 'unknown', thinking: true, tools: true, thinkLevels: ['low', 'medium', 'high'], kind: 'chat' } },
+  { shi: /^mimo-v2\.6-(pro|flash)$/i, neng: { vision: 'unknown', thinking: true, tools: true, thinkLevels: ['low', 'medium', 'high'], kind: 'chat' } },
   // DeepSeek
   { shi: /^deepseek-chat$/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
   { shi: /^deepseek-reasoner$/i, neng: { vision: false, thinking: true, tools: true, thinkLevels: ['low', 'medium', 'high'], kind: 'chat' } },
@@ -163,7 +174,8 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
    * 代表：Jev（jev-1.13.0）、Qwen-2.5-1B-RLCD、各类 router / classifier / judge / arbiter。
    * 产品叫法：决策模型（不是经典 ML「分类器」；TypeSafe 称 System One / decision model）。
    */
-  { shi: /rlcd|\bjev\b|router|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'decision' } },
+  // 注意：不能用裸 `router` —— `orcarouter/...` 会被误判成决策模型（真机）
+  { shi: /rlcd|\bjev\b|(^|[^a-z])router(?!outer)|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'decision' } },
   // 嵌入重排（检索二次排序）
   { shi: /rerank|re-?rank|bge-?reranker|cohere-?rerank|rank-?t5|ms-?marco-?minilm/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'rerank' } },
   // 画图（图像生成）
@@ -185,8 +197,8 @@ export function caiZhongLei(ming: string): MoXingNengLi['kind'] {
   const s = String(ming || '').toLowerCase();
   if (/text-embedding|bge-|bge_|m3e|gte-|e5-|contriever|jina-embed|nomic-embed/.test(s)) return 'embedding';
   if (/rerank|re-?rank|bge-?reranker/.test(s)) return 'rerank';
-  if (/cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts/.test(s)) return 'tts';
-  if (/whisper|sense-?voice|paraformer|moonshine|speech-?to-?text|\bstt\b|asr-|vosk|sherpa/.test(s)) return 'asr';
+  if (/cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts|(^|[-_/])tts([-_/]|$)/.test(s)) return 'tts';
+  if (/whisper|sense-?voice|paraformer|moonshine|speech-?to-?text|\bstt\b|asr-|vosk|sherpa|(^|[-_/])asr([-_/]|$)/.test(s)) return 'asr';
   // 看图模型（图像**理解** / VLM）—— 必须在「画图」之前判，否则 *-vl 会被误当成生成
   if (/llava|minicpm-?v|qwen\d*-?vl|qwen2\.5-?vl|internvl|cogvlm|fuyu|paligemma|moondream|deepseek-?vl|janus|minigpt|glm-?4v|glm-?4\.5v|\bvlm\b|vision-?only|image-?understand|visual-?question/.test(s)) return 'imageUnd';
   if (/flux|stable-?diffusion|sdxl|dall-?e|qwen-?image|seedream|imagen|cogview|kolors|kontext/.test(s)) return 'image';
@@ -213,6 +225,9 @@ export function kindZhongWen(k: MoXingNengLi['kind']): string {
     case 'translate': return '翻译模型';
     case 'safety': return '安全审核';
     case 'decision': return '决策模型';
+    case 'ocr': return '文字识别';
+    case 'reasoning': return '推理模型';
+    case 'code': return '代码模型';
     case 'chat': return '对话模型';
     default: return '未知';
   }

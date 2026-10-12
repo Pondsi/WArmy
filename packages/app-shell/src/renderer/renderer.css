@@ -15,7 +15,7 @@
   --sp-5: 24px;
   --radius: 8px;
   --radius-sm: 6px;
-  --accent: #A78567;
+  --accent: #A87654;
   --danger: #fa5151;
   --focus: 0 0 0 2px rgba(7, 193, 96, 0.35);
   font-size: var(--fs-md);
@@ -78,7 +78,7 @@
   --logo-fg: #666;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
   --shadow-md: 0 4px 12px rgba(0,0,0,.4);
-  --accent: #A78567;
+  --accent: #A87654;
   --danger: #e06060;
   color-scheme: dark;
 }
@@ -263,14 +263,14 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 .ceLanTiaoMu { width: 48px; height: 48px; }
 .touXiang {
   width: 40px; height: 40px; border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent), #A78567);
+  background: linear-gradient(135deg, var(--accent), #A87654);
   color: var(--accent-ink, #fff); display: grid; place-items: center;
   font-size: var(--fs-md); font-weight: 600;
 }
 .touXiangTuPian { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; display: block; }
 .touXiangTuPian.big, .bigAv { width: 72px; height: 72px; border-radius: 16px; }
 .bigAv {
-  background: linear-gradient(135deg, var(--accent), #A78567);
+  background: linear-gradient(135deg, var(--accent), #A87654);
   color: var(--accent-ink, #fff); display: grid; place-items: center; font-size: 28px; font-weight: 700;
 }
 
@@ -1968,7 +1968,7 @@ body.liaoTianChuangKou #appTi {
 .zhuTiSeKuai {
   width: 36px; height: 36px; padding: 0;
   border-radius: 8px; border: 2px solid var(--line, #ccc);
-  cursor: pointer; background: #A78567;
+  cursor: pointer; background: #A87654;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
 }
 .zhuTiSeKuai:hover { border-color: var(--accent); }
@@ -2074,18 +2074,47 @@ body.liaoTianChuangKou #appTi {
 }
 .yunXingDian i:nth-child(2) { animation-delay: 0.18s; }
 .yunXingDian i:nth-child(3) { animation-delay: 0.36s; }
-/* 三只 logo 牛马小跑（替代原来的三个点） */
-.yunXingDian.niuMaPao { gap: 2px; }
+/* 三只 logo 牛马小跑：**连续走马灯**（两组同内容 → 无接缝循环）。
+ * 产品要求：①方向**从左往右**（内容向右移动）②速度**忽快忽慢**（缓慢变化、快慢差距大）
+ * ③间距 12px，可视窗 66px = 3 匹完整 + 不露第 4 匹 */
+.yunXingDian.niuMaPao {
+  width: 66px;
+  height: 16px;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+.yunXingDian.niuMaPao .niuMaGui {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  /* 从左往右 + 忽快忽慢：两段不同时长拼接（慢段 7s / 快段 2.5s），缓动各自 ease-in-out */
+  animation: niuMaZouMaDeng 9.5s infinite;
+}
+.yunXingDian.niuMaPao .niuMaZu {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-right: 12px;
+}
 .yunXingDian.niuMaPao img {
   width: 14px; height: 14px; object-fit: contain;
-  animation: niuMaXiaoPao 0.9s ease-in-out infinite;
+  animation: niuMaXiaoPao 1.5s ease-in-out infinite;
 }
-.yunXingDian.niuMaPao img:nth-child(2) { animation-delay: 0.15s; }
-.yunXingDian.niuMaPao img:nth-child(3) { animation-delay: 0.3s; }
+.yunXingDian.niuMaPao img:nth-child(2) { animation-delay: 0.3s; }
+.yunXingDian.niuMaPao img:nth-child(3) { animation-delay: 0.6s; }
+/* 从左往右：两组 [A][B]，translateX(-50%)→0 = 内容整体右移一组宽，视觉上从左往右跑。
+ * 0–70% 慢（7s），70–100% 快（2.5s）—— 缓入缓出，快慢差距大、变化缓慢 */
+@keyframes niuMaZouMaDeng {
+  0%   { transform: translateX(-50%); animation-timing-function: ease-in-out; }
+  70%  { transform: translateX(-12%); animation-timing-function: ease-in-out; }
+  100% { transform: translateX(0); }
+}
 @keyframes niuMaXiaoPao {
-  0%, 100% { transform: translateY(0) rotate(-6deg); opacity: 0.55; }
-  40% { transform: translateY(-3px) rotate(4deg); opacity: 1; }
-  70% { transform: translateY(-1px) rotate(-2deg); opacity: 0.85; }
+  0%, 100% { transform: translateY(0) rotate(-10deg); opacity: 0.65; }
+  35% { transform: translateY(-5px) rotate(8deg); opacity: 1; }
+  70% { transform: translateY(-2px) rotate(-3deg); opacity: 0.9; }
 }
 @keyframes yunXingTan {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
@@ -2158,7 +2187,47 @@ body.liaoTianChuangKou #appTi {
 .modelZiXiang { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .modelZiXiang:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
 .modelZiXiang h4 { margin: 0 0 6px; font-size: var(--fs-base); font-weight: 600; }
-.modelLiangLie { display: grid; grid-template-columns: 140px 1fr; gap: 8px; max-width: 520px; }
+/* 可用模型双列：可左右上下拉伸；中间分隔条拖动改两列宽度（flex，稳） */
+.modelLiangLie {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 240px;
+  height: 176px;
+  min-height: 120px;
+  max-height: 60vh;
+  overflow: hidden;
+  resize: both;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.modelLiangLie select {
+  box-sizing: border-box;
+  height: 100%;
+  min-width: 0;
+  overflow-y: auto;
+}
+.modelLiangLie select:first-child { flex: 1 1 40%; }
+.modelLiangLie select:last-child  { flex: 1 1 60%; }
+.lieFenGeTiao {
+  flex: 0 0 6px;
+  width: 6px;
+  cursor: col-resize;
+  background: var(--line, #ddd);
+  border-radius: 3px;
+  margin: 2px 1px;
+  transition: background .15s;
+  user-select: none;
+}
+.lieFenGeTiao:hover, .lieFenGeTiao.dragging {
+  background: var(--accent, #4a90e2);
+  opacity: .7;
+}
 
 /* 文字粗细：跟随设置 */
 html { font-weight: var(--fw-ui, 400); }
@@ -2268,3 +2337,71 @@ html { font-weight: var(--fw-ui, 400); }
 .pfMuLuHead:hover { background: var(--hover); }
 .pfMuLuNei { margin: 2px 0 6px 14px; border-left: 1px solid var(--line); padding-left: 8px; }
 .pfMuLuNei .ctgHang { margin-top: 4px; }
+
+/* ── 文件产物行：干净对齐 + 窄卡片隐藏（容器查询，按卡片宽度而非视口）── */
+/* 容器查询需要祖先声明 container-type；挂在文件产物卡上 */
+#xiangMuWenJianJiKuai { container-type: inline-size; }
+
+.pfHang .ctgHangHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+.pfHang .pfIcoJi { flex: 0 0 auto; display: inline-flex; align-items: center; }
+.pfHang .pfMing,
+.pfHang .pfHideXiao {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 图标按钮：只有第一个吃 margin-left:auto，把两个按钮一起顶到最右并并排（修两条 auto 互顶） */
+.pfHang .pfIconBtn { flex: 0 0 auto; margin-left: 0; }
+.pfHang .pfIconBtn:first-of-type { margin-left: auto; }
+.pfHang .pfIconBtn + .pfIconBtn { margin-left: 2px; }
+/* 图标按钮：同一套 SVG，固定 14px 盒子 + 垂直居中（emoji 字面框不一样大 ⇒ 文件夹/删除永远对不齐） */
+.pfHang .pfIconBtn { display: inline-flex; align-items: center; justify-content: center; }
+.pfHang .pfIconBtn .pfIco { width: 14px; height: 14px; display: block; }
+/* 产物行：文件名/大小·时分**宽度不够就截断**（不再整块隐藏）；右侧两个图标按钮永远保留 */
+.pfHang .pfFuXinXi { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--fs-xs); }
+/* 图标按钮里的图标：与行内文件图标同款（span.pfIcoJi 包一层，居中） */
+.pfHang .pfIconBtn .pfIcoJi { color: currentColor; }
+
+
+
+/* 窄卡片（≤ 300px）：只保留 文件图标 + 文件夹 + 删除；名字/大小/日期全部隐藏 */
+@container (max-width: 300px) {
+  .pfHang .pfHideXiao { display: none !important; }
+}
+
+/* ── 牛马「社交信息」：限高 10 行 + 超了才出滚动条/搜索框（产品要求）── */
+.sjKa { display: flex; flex-direction: column; gap: 10px; }
+.sjLie { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.sjTou { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.sjTou b { font-size: 12px; font-weight: 600; }
+.sjTou [data-sj-tian] { margin-left: auto; }
+.sjSou { flex: 0 1 220px; min-width: 120px; margin-left: 6px; }
+.sjGun { overflow-y: auto; overflow-x: hidden; }
+.sjHang { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+.sjHang[data-off="1"] { opacity: .55; }
+.sjQiYong { flex: 0 0 auto; display: inline-flex; align-items: center; }
+.sjIn { flex: 1 1 0; min-width: 60px; }
+.sjKong { flex: 1 1 0; min-width: 60px; }
+.sjShan { flex: 0 0 auto; width: 22px; min-width: 22px; padding: 0; }
+.sjTxYuLan { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 6px; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); }
+.sjTxYuLan img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ── 我的页：社交信息汇总表 ── */
+.sjBiao { table-layout: fixed; width: 100%; border-collapse: collapse; }
+.sjBiao th, .sjBiao td { padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.sjBiao th { cursor: pointer; user-select: none; white-space: nowrap; }
+.sjBiao th.jiHuo { background: var(--hover); }
+.sjBiao td { font-size: var(--fs-xs); }
+.sjDian { cursor: pointer; display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sjDian:hover { color: var(--accent); }
+.sjZhanKai { display: block; overflow: hidden; max-height: 160px; overflow-y: auto; }
+.sjYinCang { display: none !important; }
+.sjTouXiangTd img { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; display: block; }
