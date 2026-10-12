@@ -453,7 +453,7 @@ check('special-models ipc', mainTs.includes('warmy:teShuMoXingJiSheZhi'));
 check('ollama-asr ipc', mainTs.includes('warmy:asrollama'));
 check('renderer raf', appJs.includes('__rafDaiLie') || appJs.includes('__rafThrottle'));
 check('renderer import btn', appJs.includes('btn-import-openclaw'));
-check('renderer special models', appJs.includes('anNiuBaoCunTeShu'));
+check('renderer special models', appJs.includes('specialModelsSet') && appJs.includes('smXiaoXi'));
 check('i18n special models', typeof zh['settings.specialModels'] === 'string');
 check('dsh ipc', mainTs.includes('warmy:paiShengdshShiLi'));
 check('email ipc', mainTs.includes('warmy:youJianDuiLie'));
