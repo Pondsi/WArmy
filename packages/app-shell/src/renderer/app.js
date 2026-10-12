@@ -1636,6 +1636,13 @@ async function langDuWenBen(text, btnEl) {
         const lay = document.createElement('div');
         lay.id = 'quanPingQuSeCeng';
         lay.style.cssText = 'position:fixed;inset:0;z-index:20000;cursor:crosshair;background:#000;overflow:hidden';
+        // 兜底：任何原因没 resolve 也不能永久挡点击
+        const quXiaoQuSe = (v) => {
+          try { lay.remove(); } catch { /* noop */ }
+          try { resolve(v); } catch { /* noop */ }
+        };
+        setTimeout(() => { if (document.getElementById('quanPingQuSeCeng') === lay) quXiaoQuSe(null); }, 60000);
+        lay.addEventListener('keydown', (e) => { if (e.key === 'Escape') quXiaoQuSe(null); });
         const img = new Image();
         img.style.cssText = 'width:100%;height:100%;object-fit:fill;display:block;user-select:none;-webkit-user-drag:none;pointer-events:auto';
         img.src = shot.dataUrl;
@@ -14693,6 +14700,8 @@ async function renderDashboard(host) {
         '</div>' +
         '<div class="jieTuTiShi">' + escapeHtml(tOr('chat.shotHint', '拖动选择区域 · 单击/回车＝整屏 · 右键/Esc＝取消')) + '</div>';
       document.body.appendChild(ceng);
+      // 兜底：截图层异常也要卸掉，否则永久挡住全界面点击
+      setTimeout(() => { if (document.getElementById('jieTuCeng') === ceng) { try { ceng.remove(); } catch { /* noop */ } resolve(null); } }, 120000);
       const kuang = ceng.querySelector('.jieTuKuang');
       let x0 = 0, y0 = 0, x1 = 0, y1 = 0;
       /** mode: 'draw'=新画选区 / 'move'=移动选区 / 'nw'|'ne'|'sw'|'se'|'n'|'s'|'w'|'e'=拉伸 */

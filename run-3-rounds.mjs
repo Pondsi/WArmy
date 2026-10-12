@@ -7,7 +7,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const DATA = path.join(process.env.APPDATA || '', '@warmy', 'app-shell');
 const node = process.execPath;
 
-function resetLight() {
+async function resetLight() {
   for (const [f, v] of [['plans.json', '[]'], ['ui-queues.json', '{}'], ['eta-live.json', '{}']]) {
     try { fs.writeFileSync(path.join(DATA, f), v); } catch { /* noop */ }
   }
@@ -17,9 +17,31 @@ function resetLight() {
     const s = JSON.parse(fs.readFileSync(sp, 'utf8'));
     s.privacyConsent = true;
     s.guideDone = true;
+    // 本地 ollama 对话
+    const tags = await fetch('http://127.0.0.1:11434/api/tags').then((r) => r.json());
+    const models = (tags.models || []).map((m) => m.name).filter(Boolean);
+    const chatish = models.filter((m) => !/whisper|bge|nomic|embed/i.test(m));
+    const rank = (m) => (/thinkingcap/i.test(m) ? 3 : /qwen3\.8|qwen3\.6-35b|qwen3\.5-9b/i.test(m) ? 0 : 1);
+    chatish.sort((a, b) => rank(a) - rank(b) || String(a).length - String(b).length);
+    const providers = Array.isArray(s.providers) ? s.providers : [];
+    const oi = providers.findIndex((p) => p.protocol === 'ollama');
+    const ollama = {
+      id: oi >= 0 ? providers[oi].id : 'ollama-local',
+      biaoQian: 'Ollama', protocol: 'ollama', baseURL: 'http://127.0.0.1:11434',
+      models, defaultModel: chatish[0] || models[0] || '', timeoutMs: 45000,
+    };
+    if (oi >= 0) providers[oi] = { ...providers[oi], ...ollama };
+    else providers.push(ollama);
+    s.providers = providers;
+    s.specialModels = {
+      ...(s.specialModels || {}),
+      chatChain: chatish.slice(0, 6),
+      chatDisabled: [],
+      ttsChain: ['mimo-v2.5-tts'],
+      ttsDisabled: [],
+    };
     fs.writeFileSync(sp, JSON.stringify(s, null, 2));
   } catch { /* noop */ }
-  // 保证测试牛马在盘上（恢复逻辑会拉起）
   const id = 'inst-test-verify';
   const ws = path.join(DATA, 'instances', id);
   try {
@@ -31,10 +53,10 @@ function resetLight() {
   } catch { /* noop */ }
 }
 
-function runRound(n) {
+async function runRound(n) {
+  await resetLight();
+  console.log(`\n######## ROUND ${n} ########`);
   return new Promise((resolve) => {
-    resetLight();
-    console.log(`\n######## ROUND ${n} ########`);
     const child = spawn(node, [path.join(root, 'round3-verify.mjs'), String(n)], {
       stdio: ['ignore', 'pipe', 'pipe'],
       cwd: root,

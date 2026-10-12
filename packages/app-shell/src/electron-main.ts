@@ -3083,6 +3083,18 @@ const JIEGUO_GEN = process.resourcesPath || '';
 function jiexiJiedianYunxingShi(): { path: string; source: string } {
   const isWin = process.platform === 'win32';
   const exe = isWin ? 'node.exe' : 'node';
+  /**
+   * **优先 Electron 自身当 Node**（真机：Windows 提示「无法确定发布者 / 一部分已被阻止」）。
+   * 捆绑的 node.exe 无签名、可能带 MOTW；用户已经允许了 electron.exe，
+   * 用 ELECTRON_RUN_AS_NODE 启动同一二进制就不会再弹未知发布者。
+   * 环境变量 WARMY_NODE 仍可显式指定真 node。
+   */
+  if (process.env['WARMY_NODE'] && fs.existsSync(process.env['WARMY_NODE'])) {
+    return { path: process.env['WARMY_NODE'], source: 'env:WARMY_NODE' };
+  }
+  if (process.execPath && /electron(\.exe)?$/i.test(process.execPath)) {
+    return { path: process.execPath, source: 'electron-as-node' };
+  }
   // 仓库里的 Node 压缩包按 win-x64 / darwin-arm64 / linux-x64 命名，
   // 与 process.platform（win32）不同名，两种目录名都要认。
   const pingtaiMulu = [isWin ? 'win-' + process.arch : process.platform + '-' + process.arch,

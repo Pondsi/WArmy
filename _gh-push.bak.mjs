@@ -20,30 +20,25 @@ function git(cmd, env) {
   return execSync(cmd, { encoding: 'utf8', cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: env || process.env });
 }
 
-// 本脚本先挪开
 const self = path.join(root, '_gh-push.mjs');
 const bak = path.join(root, '_gh-push.bak.mjs');
 try { fs.renameSync(self, bak); } catch { /* noop */ }
-
 git('git add -A');
-const msg = 'fix(ci,ui): non-empty i18n resumeTaskHint (CI verify-i18n was empty-value fail); first-run no longer auto-creates 牛马-1 (restore-only); skip AIQ DOM rebuild when unchanged (UI lag); tsconfig typeRoots for node types';
+const msg = 'fix(runtime,ui): prefer Electron-as-node for memory/instances (avoids unsigned node.exe SmartScreen unknown-publisher prompt); overlay timeout+Esc so screenshot/picker layers cannot permanently eat clicks';
 try { git(`git commit -m ${JSON.stringify(msg)}`); } catch (e) {
-  console.log('commit', String(e.stdout || e.message || e).slice(0, 250));
+  console.log('commit', String(e.stdout || e.message || e).slice(0, 200));
 }
-
 try { fs.renameSync(bak, self); } catch { /* noop */ }
-
 try {
-  console.log('push', git('git push origin HEAD:main', gitEnv).slice(0, 250));
+  console.log('push', git('git push origin HEAD:main', gitEnv).slice(0, 200));
 } catch (e) {
-  console.log('push fail, try fetch+rebase', String(e.stderr || e.message || e).slice(0, 200));
+  console.log('push fail', String(e.stderr || e.message || e).slice(0, 200));
   try {
     git('git fetch origin main', gitEnv);
     git('git rebase origin/main', gitEnv);
-    console.log('push', git('git push origin HEAD:main', gitEnv).slice(0, 250));
+    console.log('push', git('git push origin HEAD:main', gitEnv).slice(0, 200));
   } catch (e2) {
-    console.log('push fail2', String(e2.stderr || e2.stdout || e2.message || e2).slice(0, 400));
-    try { execSync('git rebase --abort', { cwd: root, stdio: 'ignore' }); } catch { /* noop */ }
+    console.log('push fail2', String(e2.stderr || e2.message || e2).slice(0, 300));
     process.exit(1);
   }
 }
