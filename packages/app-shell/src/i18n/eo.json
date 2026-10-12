@@ -2518,5 +2518,10 @@
   "llm.chatOnlyPart": "(Sistemo) Iloj ne disponeblas ĉi-turne. Plenumu nur la babiladan parton. Ne ŝajnigu kaj ne ripetu ĉi tiun noton.",
   "llm.imagesVisible": "La aldonitaj bildoj jam videblas al vi; ne uzu read_file.",
   "chat.editorTip": "Teksta redaktilo",
-  "chat.capabilityDelegated": "Delegita:"
+  "chat.capabilityDelegated": "Delegita:",
+  "dsh.hasUpdate": "Ĝisdatigo de DeepSeek Shell haveblas: {from} → {to}",
+  "dsh.upToDate": "DeepSeek Shell estas ĝisdata",
+  "dsh.notInstalled": "DeepSeek Shell ne estas instalita",
+  "dsh.registryUnknown": "Versio de DeepSeek Shell nekonata (registry-kontrolo malsukcesis)",
+  "dsh.upgrade": "Ĝisdatigi DeepSeek Shell"
 }

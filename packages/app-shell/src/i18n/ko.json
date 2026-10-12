@@ -2518,5 +2518,10 @@
   "llm.chatOnlyPart": "(시스템) 이번 턴에는 도구를 쓸 수 없습니다. 도구가 필요 없는 대화 부분만 완성하세요. 못 하는 부분은 꾸미지 말고 이 안내도 반복하지 마세요.",
   "llm.imagesVisible": "이번에 첨부된 이미지는 이미 직접 보입니다. read_file 로 읽지 마세요. 불분명하면 솔직히 말하세요.",
   "chat.editorTip": "텍스트 편집기",
-  "chat.capabilityDelegated": "능력 위임:"
+  "chat.capabilityDelegated": "능력 위임:",
+  "dsh.hasUpdate": "DeepSeek Shell 업데이트 있음: {from} → {to}",
+  "dsh.upToDate": "DeepSeek Shell이 최신 버전입니다",
+  "dsh.notInstalled": "DeepSeek Shell이 설치되어 있지 않습니다",
+  "dsh.registryUnknown": "DeepSeek Shell 버전 알 수 없음(registry 조회 실패)",
+  "dsh.upgrade": "DeepSeek Shell 업그레이드"
 }

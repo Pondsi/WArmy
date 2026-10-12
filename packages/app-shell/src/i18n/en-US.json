@@ -2518,5 +2518,10 @@
   "llm.chatOnlyPart": "(System) Tools are unavailable this turn. Complete only the chat part: answer the user and write what is asked. Do not pretend to do the rest, and do not repeat this note.",
   "llm.imagesVisible": "Images attached this turn are already visible to you; do not read_file them. If unclear, say so honestly.",
   "chat.editorTip": "Text editor",
-  "chat.capabilityDelegated": "Delegated:"
+  "chat.capabilityDelegated": "Delegated:",
+  "dsh.hasUpdate": "DeepSeek Shell update available: {from} → {to}",
+  "dsh.upToDate": "DeepSeek Shell is up to date",
+  "dsh.notInstalled": "DeepSeek Shell is not installed",
+  "dsh.registryUnknown": "DeepSeek Shell version unknown (registry lookup failed)",
+  "dsh.upgrade": "Upgrade DeepSeek Shell"
 }

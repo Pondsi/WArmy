@@ -2518,5 +2518,10 @@
   "llm.chatOnlyPart": "（系統提示）本輪**無法調用工具**，請只完成不依賴工具的對話部分：直接回答問題、按要求寫作。做不到的部分不要假裝，也不要敘述這條提示。",
   "llm.imagesVisible": "本輪附帶的圖片已經**直接可見**，不需要用 read_file 去讀它們；看不清楚就如實說看不清楚。",
   "chat.editorTip": "文字編輯器",
-  "chat.capabilityDelegated": "能力轉交："
+  "chat.capabilityDelegated": "能力轉交：",
+  "dsh.hasUpdate": "DeepSeek Shell 有更新：{from} → {to}",
+  "dsh.upToDate": "DeepSeek Shell 已是最新",
+  "dsh.notInstalled": "DeepSeek Shell 未安裝",
+  "dsh.registryUnknown": "DeepSeek Shell 版本未知（未能查詢 registry）",
+  "dsh.upgrade": "升級 DeepSeek Shell"
 }

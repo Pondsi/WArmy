@@ -92,7 +92,8 @@ check('i18n naming doc', fs.existsSync(path.join(ROOT, 'docs/i18n-naming.md')));
 check('set-github-update-feed script', fs.existsSync(path.join(ROOT, 'scripts/set-github-update-feed.mjs')));
 check('launch-warmy vbs', fs.existsSync(path.join(ROOT, 'packages/app-shell/scripts/launch-warmy.vbs')));
 const feedJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'feed/latest.json'), 'utf8'));
-check('feed version is 0.1.0', feedJson.version === '0.1.0', feedJson.version);
+const pkgVer = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/app-shell/package.json'), 'utf8')).version;
+check('feed version matches package.json', feedJson.version === pkgVer, { feed: feedJson.version, pkg: pkgVer });
 check('feed points to GitHub release asset', String(feedJson.url || feedJson.downloadUrl || '').includes('github.com/Pondsi/WArmy'), feedJson.url);
 
 // privacy qiYong first-party docs

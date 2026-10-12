@@ -2518,5 +2518,10 @@
   "llm.chatOnlyPart": "(Система) Инструменты недоступны в этом ходе. Выполните только диалоговую часть. Не притворяйтесь и не повторяйте эту заметку.",
   "llm.imagesVisible": "Приложенные изображения уже видны вам напрямую; не читайте их через read_file.",
   "chat.editorTip": "Текстовый редактор",
-  "chat.capabilityDelegated": "Передано:"
+  "chat.capabilityDelegated": "Передано:",
+  "dsh.hasUpdate": "Доступно обновление DeepSeek Shell: {from} → {to}",
+  "dsh.upToDate": "DeepSeek Shell уже актуален",
+  "dsh.notInstalled": "DeepSeek Shell не установлен",
+  "dsh.registryUnknown": "Версия DeepSeek Shell неизвестна (не удалось запросить registry)",
+  "dsh.upgrade": "Обновить DeepSeek Shell"
 }

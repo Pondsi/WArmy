@@ -2518,5 +2518,10 @@
   "llm.chatOnlyPart": "（システム）今回ツールは使用できません。ツール不要の会話部分のみ行ってください。できない部分は装わず、この注記も繰り返さないでください。",
   "llm.imagesVisible": "今回添付された画像はすでに直接見えています。read_file で読む必要はありません。不明なら正直に伝えてください。",
   "chat.editorTip": "テキストエディタ",
-  "chat.capabilityDelegated": "能力委譲："
+  "chat.capabilityDelegated": "能力委譲：",
+  "dsh.hasUpdate": "DeepSeek Shell の更新あり：{from} → {to}",
+  "dsh.upToDate": "DeepSeek Shell は最新です",
+  "dsh.notInstalled": "DeepSeek Shell は未インストールです",
+  "dsh.registryUnknown": "DeepSeek Shell のバージョン不明（registry を照会できません）",
+  "dsh.upgrade": "DeepSeek Shell を更新"
 }

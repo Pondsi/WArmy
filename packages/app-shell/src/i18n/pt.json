@@ -2518,5 +2518,10 @@
   "llm.chatOnlyPart": "(Sistema) Ferramentas indisponíveis neste turno. Conclua apenas a parte de conversa. Não finja e não repita esta nota.",
   "llm.imagesVisible": "As imagens anexadas já são visíveis para você; não use read_file.",
   "chat.editorTip": "Editor de texto",
-  "chat.capabilityDelegated": "Delegado:"
+  "chat.capabilityDelegated": "Delegado:",
+  "dsh.hasUpdate": "Atualização do DeepSeek Shell disponível: {from} → {to}",
+  "dsh.upToDate": "DeepSeek Shell está atualizado",
+  "dsh.notInstalled": "DeepSeek Shell não está instalado",
+  "dsh.registryUnknown": "Versão do DeepSeek Shell desconhecida (falha ao consultar o registry)",
+  "dsh.upgrade": "Atualizar DeepSeek Shell"
 }
