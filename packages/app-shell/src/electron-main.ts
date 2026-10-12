@@ -1099,7 +1099,9 @@ function guiFanBaseURL(u: string): string {
   const s0 = String(u || '').trim().replace(/\/+$/, '');
   if (!s0) return s0;
   if (/\/v\d+[a-z]*$/i.test(s0)) return s0;                       // 已带版本段：不动
-  if (/api\.deepseek\.com$|api\.xiaomimimo\.com$|api\.openai\.com$|api\.moonshot\.cn$|api\.siliconflow\.cn$|open\.bigmodel\.cn\/api\/paas$/i.test(s0)) {
+  // 真事故：用户填到 `…/v` 就停了（缺 1）⇒ 401/404；把孤立的 /v 补成 /v1
+  if (/\/v$/i.test(s0)) return s0 + '1';
+  if (/token-plan-[a-z]+\.xiaomimimo\.com$|api\.deepseek\.com$|api\.xiaomimimo\.com$|api\.openai\.com$|api\.moonshot\.cn$|api\.siliconflow\.cn$|open\.bigmodel\.cn\/api\/paas$/i.test(s0)) {
     return s0 + '/v1';
   }
   return s0;
@@ -2021,6 +2023,61 @@ async function yunXingLiaoTianXunHuan(
             await new Promise((r2) => setTimeout(r2, Math.round(miao * 1000)));
             const shi = Date.now() - kai;
             huiBaoH = JSON.stringify({ waitedMs: shi, requestedSeconds: miao, local: new Date().toISOString(), note: '已按请求等待；请用 waitedMs 确认真的等满了。' });
+          } else if (gongJuMing === 'read_profile') {
+            /**
+             * **社交档案按需注入**（产品要求）：不自动塞进提示词；
+             * 模型需要时调用本工具，只回非密码字段（密码永不返回）。
+             */
+            try {
+              const shiLiJi = (settingsStore?.load() as { instances?: Array<Record<string, unknown>> } | undefined)?.instances || [];
+              const cur = shiLiJi.find((x) => String(x.id || '') === String(sessionId)) || shiLiJi[0];
+              const sj = ((cur && cur.sheJiao) || {}) as Record<string, unknown>;
+              const want = String(argsH.field || 'all').toLowerCase();
+              const map: Record<string, string> = {
+                email: 'youXiang', website: 'wangZhan', phone: 'shouJi', nick: 'niCheng',
+                wallet: 'qianBao', avatar: 'touXiang', youxiang: 'youXiang', wangzhan: 'wangZhan',
+              };
+              const pick: Record<string, unknown> = {};
+              const addVal = (k: string, v: unknown) => {
+                if (v === undefined || v === null || v === '') return;
+                if (Array.isArray(v)) {
+                  const arr = v.map((x) => {
+                    if (x && typeof x === 'object') {
+                      const o = { ...(x as Record<string, unknown>) };
+                      delete o.miMa; delete o.password;
+                      return o;
+                    }
+                    return x;
+                  });
+                  if (arr.length) pick[k] = arr;
+                } else if (typeof v === 'object') {
+                  const o = { ...(v as Record<string, unknown>) };
+                  delete o.miMa; delete o.password;
+                  pick[k] = o;
+                } else {
+                  pick[k] = v;
+                }
+              };
+              if (want === 'all') {
+                for (const [k, v] of Object.entries(sj)) {
+                  if (/密码|miMa|password/i.test(k)) continue;
+                  addVal(k, v);
+                }
+              } else {
+                const field = map[want] || want;
+                addVal(want, sj[field] ?? sj[want]);
+              }
+              if (!Object.keys(pick).length) {
+                okH = true;
+                huiBaoH = '[read_profile] 当前牛马没有填写对应社交档案（或该项为空）。如需请用户在「牛马管理局 → 社交信息」填写。';
+              } else {
+                okH = true;
+                huiBaoH = '[read_profile] 社交档案（不含密码）：\n' + JSON.stringify(pick, null, 1);
+              }
+            } catch (e) {
+              okH = false;
+              huiBaoH = '[read_profile] 读取失败：' + xiJingCuoWu(e);
+            }
           } else if (gongJuMing === 'open_url') {
             const url = String(argsH.url || '').trim();
             if (!/^https?:\/\//i.test(url)) { okH = false; huiBaoH = '[open_url] 只接受 http/https 网址'; }
@@ -5842,6 +5899,14 @@ async function zhenZhengFaSong(
             ));
           } catch { /* noop */ }
           if (ju.length) shenFenTou.push({ role: 'system', content: ju.join('') } as LiaoTianXiaoXi);
+        /**
+         * **社交档案按需注入**（产品要求）：只告诉模型「你有档案、怎么取」，
+         * 不把邮箱/手机/钱包等正文每次塞进上下文；需要时调 read_profile。
+         */
+        shenFenTou.push({
+          role: 'system',
+          content: '【档案能力提示】你（本牛马）在「牛马管理局 → 社交信息」里可能存有邮箱/网站账号/手机号/昵称/钱包等档案。它们**不会自动出现在对话里**；用户问到联系方式、账号、名片，或你要给外部服务填资料时，调用工具 read_profile 获取（可指定 field=email|website|phone|nick|wallet）。密码永不返回。没有该项就如实说没有，不要编造。',
+        } as LiaoTianXiaoXi);
         }
         /**
          * 图片附件 → 多模态内容块：模型因此能**真的看到**截图/图片
@@ -7239,7 +7304,7 @@ async function yanXuJiHuaRenWu(sessionId: string, xiaoXi: Parameters<typeof zhen
     const qingDan = bu.length ? bu.map((x) => `${x.id} ${x.title} [${x.status}]`).join('\n') : '（没有显式计划：请自己判断还剩哪些没做完）';
     const xia = jiHuaHuanYouBuWeiBu(sessionId);
     const zhiLing = pan.liYou === 'talk-only'
-      ? tMain('llm.continueNoAction', '【继续执行】你上一条**只说了要做什么，没有真的调用工具**。请现在**直接调用工具**把它做掉，做完再简短汇报；不要说"接下来我会…"就停。')
+      ? tMain('llm.continueNoAction', '【继续执行 · 必须动手】你上一条**只说了要做什么，一次工具都没调**，用户要的文件/操作并没有发生。现在**第一步就要发起工具调用**（write_file / make_pptx / open_path / get_time 等），禁止先写计划或口号。做完再简短汇报结果与路径。')
       : tMain('llm.planContinue', '【继续执行计划】请接着完成下一步（用工具真的去干，不要只说要做）。完成后用 plan_verify 标记验证，再继续下一步。');
     audit?.log('plan.auto-continue', { sessionId, why: pan.liYou, step: xia ? xia.id : '', n: tai.yanXu });
     /**

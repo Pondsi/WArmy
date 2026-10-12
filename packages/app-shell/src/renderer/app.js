@@ -8564,8 +8564,6 @@ async function renderDashboard(host) {
           <p class="jingYin">${escapeHtml(tOr('sponsor.tiShi1', '这个项目是开源的，里面没有任何收费内容 —— 你现在用到的一切，以后也一直免费。'))}</p>
           <p class="jingYin" style="margin-top:8px">${escapeHtml(tOr('sponsor.tiShi2', '如果它对你有帮助，欢迎请作者喝杯咖啡。无论是否赞助过，你都将始终拥有对本项目的完全使用权。'))}</p>
           <div style="margin-top:12px">
-            <div class="jingYin">${escapeHtml(tOr('sponsor.paypal', 'PayPal'))}</div>
-            <div style="margin-top:4px"><a href="https://paypal.me/pondsi" id="paypalLink" rel="noreferrer">https://paypal.me/pondsi</a></div>
           </div>
           <div style="margin-top:14px;display:flex;gap:18px;flex-wrap:wrap">
             <div style="text-align:center">
@@ -8833,17 +8831,7 @@ async function renderDashboard(host) {
       (function bindSettingsMenu() {
         const neirongYuansu = $('peiZhiNeiRong');
         if (!neirongYuansu) return;
-        // PayPal：必须走系统默认浏览器（产品要求），禁止应用内打开
-        (function bindPayPal() {
-          const a = neirongYuansu.querySelector('#paypalLink') || neirongYuansu.querySelector('a[href*="paypal.me"]');
-          if (!a || a.dataset.bound) return;
-          a.dataset.bound = '1';
-          a.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            const url = a.getAttribute('href') || 'https://paypal.me/pondsi';
-            try { window.warmy.openExternal?.(url); } catch { /* noop */ }
-          });
-        })();
+        // PayPal 已按产品要求移除
         // 设置页搜索：**只搜当前分区**里的卡片（产品要求：搜到的是「该选项中的全部内容」，
         // 不能把别的分区的卡片也翻出来 —— 以前 `querySelectorAll('.sheZhiKa')` 会跨分区，
         // 而且 `display:''` 还会把被分区隐藏的卡片重新显示出来）。
@@ -11091,7 +11079,7 @@ async function renderDashboard(host) {
           '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 5.5 12 5.5 22.5 12 22.5 12 18.5 18.5 12 18.5 1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3.2"/></svg>' +
           '</button></div></div>' +
           '</div>' +
-          '<div class="provDongZuoJi"><button class="anNiuXiao" data-fetch' + (laQuJiuXu ? '' : ' disabled') + ' title="' + escapeHtml(laQuBiaoTi) + '">' + escapeHtml(t('settings.fetchModels')) + '</button></div>' +
+          '<div class="provDongZuoJi"><button class="anNiuXiao" data-fetch' + ' title="' + escapeHtml(laQuBiaoTi) + '">' + escapeHtml(t('settings.fetchModels')) + '</button></div>' +
           '<div class="moXingHang">' +
           (((pr.models || [])
             .map((m) => {
@@ -11198,18 +11186,12 @@ async function renderDashboard(host) {
              */
             try {
               const btnF = yuanSu.querySelector('[data-fetch]');
-              const keyOk = pr.protocol === 'ollama' || !!String(pr.apiKey || '').trim() || !!pr.hasKey;
+              // 产品要求：拉取按钮**始终可点**；没密钥就点下去，失败如实显示（不再灰掉）
               const nameOk = !!String(pr.biaoQian || '').trim();
               const urlOk = !!String(pr.baseURL || '').trim();
               if (btnF) {
-                btnF.disabled = !(nameOk && urlOk && keyOk);
-                const miss = [];
-                if (!nameOk) miss.push(t('settings.fieldName'));
-                if (!urlOk) miss.push(t('settings.fieldBaseUrl'));
-                if (!keyOk) miss.push(t('settings.fieldApiKey'));
-                btnF.title = btnF.disabled
-                  ? fmtKey('settings.fetchDisabledHint', { fields: miss.join(' / ') })
-                  : t('settings.fetchModels');
+                btnF.disabled = false;
+                btnF.title = t('settings.fetchModels') + (!urlOk ? ' · ' + t('settings.fieldBaseUrl') : '');
               }
             } catch { /* noop */ }
           };

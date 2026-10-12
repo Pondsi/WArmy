@@ -742,7 +742,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'ask_user', 'plan_update', 'plan_verify',
   'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'download_file',
-  'get_time', 'wait_seconds',
+  'get_time', 'wait_seconds', 'read_profile',
 ] as const;
 export function isHostTool(name: unknown): boolean {
   return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
@@ -771,6 +771,25 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
         name: 'open_url',
         description: '用系统默认浏览器打开一个网页（只接受 http/https）。',
         parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'read_profile',
+        description: '按需读取本牛马的**社交档案**（邮箱/网站账号/手机号/昵称/钱包地址等）。'
+          + '档案不会自动注入上下文；用户问到联系方式、账号、名片，或你需要给外部服务填资料时再调用。'
+          + '**密码/口令不会返回**（安全保管）；没有该项就如实说没有。',
+        parameters: {
+          type: 'object',
+          properties: {
+            field: {
+              type: 'string',
+              description: '可选：只要某一项，如 email / website / phone / nick / wallet / all（默认 all）',
+            },
+          },
+          required: [],
+        },
       },
     },
     {

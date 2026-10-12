@@ -14,11 +14,11 @@ donate, you always have full use of everything in this project. A donation is si
 赞助只是一份心意，用来鼓励作者继续维护下去，不会换来任何额外功能、优先权或特权。
 
 - **简体中文**：谢谢每一位支持者 —— 是你们让这个项目一直走下去。
-- **繁體中文**：謝謝每一位支持者 —— 是你們讓這個專案一直走下去。
+- **繁体中文**：謝謝每一位支持者 —— 是你們讓這個專案一直走下去。
 - **English**：Thank you to everyone who supports this project. You are the reason it keeps going.
-- **日本語**：応援してくださる皆さまに感謝します。このプロジェクトを続けていけるのは、皆さまのおかげです。
-- **한국어**：이 프로젝트를 후원해 주신 모든 분께 감사드립니다. 여러분 덕분에 계속 이어집니다.
-- **Русский**：Спасибо каждому, кто поддерживает проект. Именно вы помогаете ему развиваться.
+- **日本語**：応援してくださる皆様に感謝いたします。このプロジェクトを続けていけるのは皆様のおかげです。
+- **한국어**：프로젝트를 응원해 주시는 모든 분께 감사드립니다. 여러분 덕분에 계속 나아갈 수 있습니다.
+- **Русский**：Спасибо всем, кто поддерживает проект. Именно вы помогаете ему развиваться.
 - **Español**：Gracias a cada persona que apoya este proyecto. Ustedes son la razón por la que sigue adelante.
 - **Français**：Merci à tous ceux qui soutiennent ce projet. C'est grâce à vous qu'il continue d'avancer.
 - **Português**：Obrigado a todos que apoiam este projeto. Vocês são o motivo de ele continuar.
@@ -29,10 +29,6 @@ donate, you always have full use of everything in this project. A donation is si
 ## Ways to donate · 赞助方式
 
 Every option is labelled in **English and Chinese**, so it can be understood in any locale.
-
-### PayPal
-
-<https://paypal.me/pondsi>
 
 ### WeChat Pay · 微信支付
 
@@ -52,12 +48,12 @@ Scan the QR code below.
 
 Donating is not the only way — these help just as much, and cost nothing:
 
-- ⭐ **Star** this repository — it helps others discover WArmy
-- 🐛 **Report issues** or suggest features
+- ★ **Star** this repository — it helps others discover WArmy
+- 🐞 **Report issues** or suggest features
 - 🔧 **Submit patches** or improvements
 - 📣 **Share it** with friends and colleagues
-- 📝 **Improve the docs** — even a typo fix is welcome
+- 📚 **Improve the docs** — even a typo fix is welcome
 
 ---
 
-Pondsi (+mimo-X-pro-Preview +mimo-v2.5-pro) — automatically committed by Xiaomi MiMo Desktop
+Pondsi — thank you for using and supporting WArmy.
