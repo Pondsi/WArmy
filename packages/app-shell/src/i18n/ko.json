@@ -2523,5 +2523,8 @@
   "dsh.upToDate": "DeepSeek Shell이 최신 버전입니다",
   "dsh.notInstalled": "DeepSeek Shell이 설치되어 있지 않습니다",
   "dsh.registryUnknown": "DeepSeek Shell 버전 알 수 없음(registry 조회 실패)",
-  "dsh.upgrade": "DeepSeek Shell 업그레이드"
+  "dsh.upgrade": "DeepSeek Shell 업그레이드",
+  "ctx.copy": "Copy",
+  "ctx.selectAll": "Select All",
+  "ctx.paste": "Paste"
 }

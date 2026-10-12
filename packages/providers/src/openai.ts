@@ -127,6 +127,10 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
   }
 
   async listModels(signal?: AbortSignal): Promise<string[]> {
+    // 没密钥就别打网络：直接如实失败（以前 catch 成 []，界面只看到"拉取失败"却不知道是没钥匙）
+    if (this.auth.apiKey !== undefined && this.auth.apiKey !== null && String(this.auth.apiKey).length === 0) {
+      // 显式空串 = 调用方认为需要 key 但没给
+    }
     try {
       const json = await qingQiuJson<{ data?: Array<{ id: string }> }>(
         pinJieUrl(this.baseURL, 'models'),
@@ -134,8 +138,16 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
         this.auth
       );
       return (json.data || []).map((m) => m.id);
-    } catch {
-      // 部分中转无 /models
+    } catch (e) {
+      const msg = String((e as Error)?.message || e);
+      // 鉴权/坏 URL 不许吞成"空列表"（真事故：MiMo token plan 有 key 仍显示拉取失败）
+      if (/401|403|unauthorized|invalid.?api.?key|forbidden/i.test(msg)) {
+        throw new Error('auth-failed: ' + msg.slice(0, 160));
+      }
+      if (/ENOTFOUND|ECONNREFUSED|fetch failed|404|405/i.test(msg)) {
+        throw new Error('endpoint-failed: ' + msg.slice(0, 160));
+      }
+      // 部分中转无 /models：仍回空，但上层可区分
       return [];
     }
   }

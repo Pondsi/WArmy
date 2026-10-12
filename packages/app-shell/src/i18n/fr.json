@@ -2523,5 +2523,8 @@
   "dsh.upToDate": "DeepSeek Shell est à jour",
   "dsh.notInstalled": "DeepSeek Shell n'est pas installé",
   "dsh.registryUnknown": "Version DeepSeek Shell inconnue (impossible de consulter le registry)",
-  "dsh.upgrade": "Mettre à jour DeepSeek Shell"
+  "dsh.upgrade": "Mettre à jour DeepSeek Shell",
+  "ctx.copy": "Copy",
+  "ctx.selectAll": "Select All",
+  "ctx.paste": "Paste"
 }

@@ -2523,5 +2523,8 @@
   "dsh.upToDate": "DeepSeek Shell 已是最新",
   "dsh.notInstalled": "DeepSeek Shell 未安裝",
   "dsh.registryUnknown": "DeepSeek Shell 版本未知（未能查詢 registry）",
-  "dsh.upgrade": "升級 DeepSeek Shell"
+  "dsh.upgrade": "升級 DeepSeek Shell",
+  "ctx.copy": "Copy",
+  "ctx.selectAll": "Select All",
+  "ctx.paste": "Paste"
 }

@@ -2523,5 +2523,8 @@
   "dsh.upToDate": "DeepSeek Shell は最新です",
   "dsh.notInstalled": "DeepSeek Shell は未インストールです",
   "dsh.registryUnknown": "DeepSeek Shell のバージョン不明（registry を照会できません）",
-  "dsh.upgrade": "DeepSeek Shell を更新"
+  "dsh.upgrade": "DeepSeek Shell を更新",
+  "ctx.copy": "Copy",
+  "ctx.selectAll": "Select All",
+  "ctx.paste": "Paste"
 }

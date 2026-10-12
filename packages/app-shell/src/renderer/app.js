@@ -1169,7 +1169,88 @@
    * 找不到可用的说话模型时**如实告知**，不假装读了。
    */
   let langDuMang = false;
-  async function langDuWenBen(text, btnEl) {
+  /**
+   * **右键菜单**（产品要求）：
+   *  - 输入框/可编辑区：全选 / 复制 / 粘贴
+   *  - 可选文字处：复制 / 全选
+   *  - 目标自己已有右键菜单（data-has-ctx / 原生菜单优先标记）⇒ 不覆盖
+   */
+  function bindYouJianCaiDan() {
+    if (window.__youJianBound) return;
+    window.__youJianBound = 1;
+    let cai = null;
+    const ensure = () => {
+      if (cai) return cai;
+      cai = document.createElement('div');
+      cai.id = 'youJianCaiDan';
+      cai.className = 'youJianCaiDan yinCang';
+      cai.style.cssText = 'position:fixed;z-index:99999;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:4px;min-width:140px';
+      document.body.appendChild(cai);
+      return cai;
+    };
+    const hide = () => { if (cai) cai.classList.add('yinCang'); };
+    const show = (x, y, items) => {
+      const el = ensure();
+      el.innerHTML = items.map((it, idx) =>
+        '<button type="button" data-ctx="' + idx + '" style="display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--ink)">' + escapeHtml(it.label) + '</button>'
+      ).join('');
+      el.querySelectorAll('[data-ctx]').forEach((b) => {
+        b.onmouseenter = () => { b.style.background = 'var(--hover)'; };
+        b.onmouseleave = () => { b.style.background = 'transparent'; };
+        b.onclick = () => {
+          const it = items[Number(b.dataset.ctx)];
+          hide();
+          try { it && it.run && it.run(); } catch { /* noop */ }
+        };
+      });
+      el.classList.remove('yinCang');
+      const r = el.getBoundingClientRect();
+      el.style.left = Math.min(x, window.innerWidth - r.width - 8) + 'px';
+      el.style.top = Math.min(y, window.innerHeight - r.height - 8) + 'px';
+    };
+    document.addEventListener('click', hide, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+
+    document.addEventListener('contextmenu', (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      // 本来就有右键菜单的：让位
+      if (t.closest('[data-has-ctx]') || t.closest('#youJianCaiDan')) return;
+      const editable = t.closest('input, textarea, [contenteditable="true"]');
+      const sel = String(window.getSelection ? window.getSelection().toString() : '');
+      const items = [];
+      if (editable) {
+        const el = editable;
+        const isPwd = el.type === 'password';
+        if (!isPwd) items.push({ label: tOr('ctx.copy', '复制'), run: () => { try { el.focus(); document.execCommand('copy'); } catch { /* noop */ } } });
+        items.push({ label: tOr('ctx.selectAll', '全选'), run: () => { try { el.focus(); el.select && el.select(); if (el.contentEditable === 'true') document.execCommand('selectAll'); } catch { /* noop */ } } });
+        items.push({ label: tOr('ctx.paste', '粘贴'), run: async () => {
+          try {
+            const txt = await navigator.clipboard.readText();
+            if (typeof el.value === 'string') {
+              const a = el.selectionStart || el.value.length;
+              const b = el.selectionEnd || el.value.length;
+              el.value = el.value.slice(0, a) + txt + el.value.slice(b);
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+            } else if (el.contentEditable === 'true') {
+              document.execCommand('insertText', false, txt);
+            }
+          } catch { /* noop */ }
+        } });
+      } else if (sel) {
+        items.push({ label: tOr('ctx.copy', '复制'), run: () => { try { navigator.clipboard.writeText(sel); } catch { document.execCommand('copy'); } } });
+        items.push({ label: tOr('ctx.selectAll', '全选'), run: () => { try { document.execCommand('selectAll'); } catch { /* noop */ } } });
+      } else {
+        items.push({ label: tOr('ctx.selectAll', '全选'), run: () => { try { document.execCommand('selectAll'); } catch { /* noop */ } } });
+      }
+      if (!items.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      show(e.clientX, e.clientY, items);
+    });
+  }
+  try { bindYouJianCaiDan(); } catch { /* noop */ }
+async function langDuWenBen(text, btnEl) {
     const s = String(text || '').trim();
     if (!s) return false;
     /**
@@ -1185,6 +1266,19 @@
       langDuTing();
       return false;
     }
+    /**
+     * **没配说话模型**：不触发播放、不上播放动态/强调色，弹窗要用户点掉
+     * （产品要求：不能看起来像在播却无声）。
+     */
+    try {
+      const stTts = await window.warmy.tingHuaZhuangTai?.().catch(() => null);
+      const hasTts = !!(stTts && stTts.ready) || !!(state.specialModels && (state.specialModels.ttsChain || []).length)
+        || !!String(state.ttsModel || '');
+      if (!hasTts) {
+        await uiAlert(tOr('tts.noModel', '没有可用的说话模型（请在「设置 → 模型 → 说话模型」里配一个，才能朗读。）'), tOr('chat.read', '朗读'));
+        return false;
+      }
+    } catch { /* 查不到就继续试播，让后端如实报错 */ }
     // 换一颗：先停旧的
     if (langDuDangQian) langDuTing();
 
@@ -11296,7 +11390,7 @@ async function renderDashboard(host) {
           let r = null;
           try {
             // 拉取模型**只用本卡的端点/密钥**（listModels 自带 providerId），不改生效供应商
-            r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, providerId: pr.id });
+            r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, providerId: pr.id, apiKey: pr.apiKey || undefined });
             // 记下模型能力（种类 / 上下文长度 / 视觉 / 思考），界面上按它过滤与标注
             if (r && r.nengLi) {
               window.__moXingNengLi = Object.assign({}, window.__moXingNengLi || {}, r.nengLi);
@@ -11331,7 +11425,7 @@ async function renderDashboard(host) {
             showToast(tOr('settings.modelsFetched', '已拉取') + '：' + pr.models.length + ' ' + tOr('settings.modelsUnit', '个模型'));
           } else {
             // 拉取失败**照实说**：不清空已有模型，也不假装成功（标红状态保持原样）
-            const msg = fmtKey('settings.modelsFetchFailed', { err: String(r?.error || t('common.error')) });
+            const msg = fmtKey('settings.modelsFetchFailed', { err: String((r && (r.error + (r.hint ? ' · ' + r.hint : ''))) || t('common.error')) });
             pr.lastFetchError = msg;
             if (note0) note0.textContent = msg;
             uiAlert(msg, t('settings.fetchModels'));

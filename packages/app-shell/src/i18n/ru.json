@@ -2523,5 +2523,8 @@
   "dsh.upToDate": "DeepSeek Shell уже актуален",
   "dsh.notInstalled": "DeepSeek Shell не установлен",
   "dsh.registryUnknown": "Версия DeepSeek Shell неизвестна (не удалось запросить registry)",
-  "dsh.upgrade": "Обновить DeepSeek Shell"
+  "dsh.upgrade": "Обновить DeepSeek Shell",
+  "ctx.copy": "Copy",
+  "ctx.selectAll": "Select All",
+  "ctx.paste": "Paste"
 }

@@ -4933,11 +4933,23 @@ chuliIpc(
        * 界面**从不**回传已保存的密钥（读不回），所以"重新拉取"必须能自己取到它。
        */
       const key = await jiexiGongyingshangMiyao(String(cfg.providerId || providerCfg.presetId || ''), cfg.apiKey);
+      const xieYi = (cfg.protocol as 'openai-compatible' | 'anthropic' | 'ollama') || 'openai-compatible';
+      if (xieYi !== 'ollama' && !String(key || '').trim()) {
+        return { ok: false, error: 'no-api-key', hint: '请先在本卡填写 API Key（会存入系统安全存储）再拉取' };
+      }
       const p = chuangjianGongYing(
-        (cfg.protocol as 'openai-compatible' | 'anthropic' | 'ollama') || 'openai-compatible',
+        xieYi,
         { baseURL: cfg.baseURL, apiKey: key }
       );
-      const models = await p.listModels();
+      let models: string[] = [];
+      try {
+        models = await p.listModels();
+      } catch (eList) {
+        const errTxt = xiJingCuoWu(eList);
+        try { audit?.log('models.fetch-failed', { providerId: String(cfg.providerId || ''), hasKey: !!String(key || '').trim(), keyLen: String(key || '').length, error: errTxt.slice(0, 200), baseURL: cfg.baseURL }); } catch { /* noop */ }
+        return { ok: false, error: errTxt, hint: String(key || '').trim() ? '密钥已读到，是端点拒绝或网络问题' : '没有读到密钥' };
+      }
+      try { audit?.log('models.fetch-ok', { providerId: String(cfg.providerId || ''), n: models.length, hasKey: !!String(key || '').trim(), keyLen: String(key || '').length }); } catch { /* noop */ }
       /**
        * 问出**该模型会什么**（视觉 / 思考档位 / 工具）：
        *  · 端点给字段（`input_modalities`/`capabilities`/`supported_parameters`）就用端点的；
@@ -6254,13 +6266,25 @@ async function zhenZhengFaSong(
               { role: 'system', content: tMain('llm.needTextPlain', '（系统提示）本机已经代你执行完所需操作，请直接用文字把结论/结果告诉用户，不要叙述内部执行过程，也不要复述这条提示。') },
               { role: 'user', content: xiaoXi.content.slice(0, 2000) },
             ],
-            maxTokens: 1024,
+            maxTokens: 4096,
           });
           reply0 = neiRongWenBen(zaiWen.choices[0]?.message?.content);
+          if (!youShiZhiWenBen(reply0)) {
+            const rz = String((zaiWen.choices?.[0]?.message as { reasoning?: unknown } | undefined)?.reasoning || '');
+            if (rz.trim()) reply0 = '(摘自思考) ' + rz.trim().slice(-800);
+          }
         } catch { /* 重试失败就走如实说明 */ }
       }
       if (!youShiZhiWenBen(reply0)) {
-        reply0 = tMain('chat.emptyReplyWhy', '本轮模型没有返回文字内容（可能是工具调用后未作说明）。请再问一次，或换个说法。');
+        // 思考模型常见：content 空、reasoning 有字。先把思考尾部当正文，仍没有才报空
+        const msg0 = xiangYing.choices?.[0]?.message as { reasoning?: unknown; reasoning_content?: unknown; thinking?: unknown } | undefined;
+        const siKaoWen = String(msg0?.reasoning || msg0?.reasoning_content || msg0?.thinking || '');
+        if (siKaoWen.trim()) {
+          reply0 = '(摘自思考) ' + siKaoWen.trim().slice(-800);
+          try { audit?.log('chat.reply-from-reasoning', { sessionId, model: modelId, chars: reply0.length }); } catch { /* noop */ }
+        } else {
+          reply0 = tMain('chat.emptyReplyWhy', '本轮模型没有返回文字内容（可能是工具调用后未作说明）。请再问一次，或换个说法。');
+        }
       }
       // 思考过程：DeepSeek 等放在 message.reasoning_content，有的叫 reasoning / thinking
       const rawMsg = ((xiangYing.raw as { choices?: Array<{ message?: Record<string, unknown> }> } | undefined)?.choices?.[0]?.message) || {};
