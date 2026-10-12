@@ -233,6 +233,7 @@ contextBridge.exposeInMainWorld('warmy', {
   dshAvailable: () => ipcRenderer.invoke('warmy:dshKeYong'),
   dshStatus: () => ipcRenderer.invoke('warmy:dshZhuangTai'),
   dshInstall: (opts) => ipcRenderer.invoke('warmy:dshAnZhuang', opts),
+  dshGengXinJianCha: () => ipcRenderer.invoke('warmy:dshGengXinJianCha'),
   // 兼容：旧英文频道名
   // (handlers also accept warmy:group-create via alias table)
   spawnDshInstance: (cfg) => ipcRenderer.invoke('warmy:paiShengdshShiLi', cfg),

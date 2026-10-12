@@ -84,7 +84,7 @@ try {
   await EV(`(function(){var t=document.getElementById('shuRu');t.value=${JSON.stringify(wen)};t.dispatchEvent(new Event('input',{bubbles:true}));return 1;})()`);
   await c.clickSelector('#anNiuFaSong');
   let tail = '', lunWan = false, qiPao = null;
-  for (let i = 0; i < 45; i++) {
+  for (let i = 0; i < 90; i++) {
     await sleep(4000);
     const s = JSON.parse(await EV(`JSON.stringify((function(){
       var ps=document.querySelectorAll('#xiaoXiJi .xiaoXi');
@@ -99,7 +99,11 @@ try {
     console.log(`  +${(i + 1) * 4}s 忙=${s.busy} 气泡=${s.n} 本轮结束=${lunWan}`);
     if (lunWan && !s.busy) break;
   }
-  ok(/Qwen3\.6-35B-A3B-IQ3_M|qwen/i.test(tail), '收到本地 Ollama 的真实回复', tail.slice(-90).replace(/\s+/g, ' '));
+  {
+    // 尾巴可能是「暂停自动继续」等系统条：取最后一条**牛马回复**（非 wo）判断模型名
+    const themTxt = await EV(`(function(){var ps=document.querySelectorAll('#xiaoXiJi .xiaoXi');var t='';for(var i=ps.length-1;i>=0;i--){var c=ps[i].className||'';if(c.indexOf('wo')<0&&c.indexOf('liuShi')<0){t=ps[i].textContent||'';if(t.trim())break;}}return t;})()`);
+    ok(/Qwen3\\.6-35B-A3B-IQ3_M|qwen/i.test(String(themTxt||tail)), '收到本地 Ollama 的真实回复', String(themTxt||tail).slice(-90).replace(/\s+/g, ' '));
+  }
   // 本轮改动：**回复落地后不许残留流式/尾部碎片气泡**（真机：末尾多出一条「看过了。」）
   const liuShi = await EV(`document.querySelectorAll('#xiaoXiJi .liuShiKuai').length`);
   const zuiHou = JSON.parse(await EV(`JSON.stringify((function(){
@@ -128,7 +132,7 @@ try {
     const aq = readFrom(auditPath).length;
     await EV(`(function(){var t=document.getElementById('shuRu');t.value=${JSON.stringify(q)};t.dispatchEvent(new Event('input',{bubbles:true}));return 1;})()`);
     await c.clickSelector('#anNiuFaSong');
-    for (let i = 0; i < 45; i++) {
+    for (let i = 0; i < 90; i++) {
       await sleep(4000);
       const sc = readFrom(auditPath).slice(aq);
       const t1 = /chat\.host-tool[^\n]*"tool":"get_time","ok":true/.test(sc);

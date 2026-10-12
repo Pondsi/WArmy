@@ -1628,7 +1628,11 @@ async function yunXingLiaoTianXunHuan(
     type: 'function' as const,
     function: { name: g.name, description: g.description || `自定义工具：${g.name}`, parameters: g.parameters },
   })) as unknown as GongJuGuiGe[];
-  const jiaJu = [...ganHuoTools, ...jiyiTools, ...ziDingGuiGe].filter((g) => gongJuKeJian(g.function.name));
+  // 降级链第 1 环：记忆服务不可用 → **整套工具都不暴露**（干活工具也会依赖会话历史/回滚，
+  // 文档契约是"退回普通单轮对话"，不是"只砍记忆工具"）。
+  const jiaJu = jiyiJiuxu
+    ? [...ganHuoTools, ...jiyiTools, ...ziDingGuiGe].filter((g) => gongJuKeJian(g.function.name))
+    : [];
   const tools: GongJuGuiGe[] | undefined = jiaJu.length && limits.zuiDaLunShu > 0 ? jiaJu : undefined;
   const supported = gongYingZhiChiGongJu(provider);
 
@@ -7104,10 +7108,11 @@ ${canKaoHuo ? canKaoHuo + '\n\n' : ''}${canKaoFangFa}
     }
   }
   /**
-   * **收尾语义**（产品要求对"5 个模型都没有反应"的解释）：
-   *   · **压根没反应**（超时/报错/没 Key）一个都没有 ⇒ 异常（stalled）；
-   *   · **有回应但判不出结论** ⇒ **不能当成卡死**（那是我们解析不了，不是用户的任务坏了）
-   *     ⇒ 判"没卡死"继续跑，并如实记账，让下一次判断能被看见。
+   * **收尾语义**（真事故：工具循环已 `tools.done(stop)` 收束，随后 5 个判定模型全部
+   * `analysis-timeout`，却被 `no-response` 判成卡死 ⇒ `task-interrupted` ⇒ 界面挂「继续/重试」）：
+   *   · **有回应但判不出结论** ⇒ 不能当成卡死（解析不了 ≠ 任务坏了）；
+   *   · **压根没反应**（超时/报错/没 Key）⇒ 这是**判定通道不可用**，同样不是用户任务卡死
+   *     ⇒ 判"没卡死"继续跑，并如实记账。宁可少误杀，不可把已完成的回复打成异常。
    */
   if (huiDaDanPanBuChu > 0) {
     audit?.log('plan.stall-analysis-unparseable', { sessionId, huiDaDanPanBuChu, genBenMeiHuiDa, changGuo: changGuo.length });
@@ -7118,7 +7123,13 @@ ${canKaoHuo ? canKaoHuo + '\n\n' : ''}${canKaoFangFa}
       eta: null, etaRaw: null, etaJiShi: '',
     };
   }
-  return { stalled: true, by: '', reason: `no-response（试过 ${changGuo.length} 个模型都没有反应）`, eta: null, etaRaw: null, etaJiShi: '' };
+  audit?.log('plan.stall-analysis-unavailable', { sessionId, genBenMeiHuiDa, changGuo: changGuo.length });
+  return {
+    stalled: false,
+    by: '',
+    reason: `no-response（试过 ${changGuo.length} 个模型都没有反应；判定通道不可用，不视为卡死）`,
+    eta: null, etaRaw: null, etaJiShi: '',
+  };
 }
 
 
@@ -11589,6 +11600,47 @@ async function dshZhiXingAnZhuang(_opts?: { force?: boolean }): Promise<{ ok: bo
 }
 chuliIpc('warmy:dshAnZhuang', async (_e, opts?: { force?: boolean }) => dshZhiXingAnZhuang(opts));
 
+/**
+ * 关于页「检查更新」要一并查 DeepSeek Shell（产品要求）。
+ * 对比本地已装版本 vs npm registry 最新版；查不到 registry 就如实说查不到，不编「已是最新」。
+ */
+chuliIpc('warmy:dshGengXinJianCha', async () => {
+  try {
+    const dir = findDshPackageDir(dshHouXuanLuJing());
+    let installed: string | null = null;
+    if (dir) {
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+        installed = typeof j.version === 'string' ? j.version : null;
+      } catch { /* noop */ }
+    }
+    let latest: string | null = null;
+    let registryError = '';
+    try {
+      const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      const { spawnSync } = await import('node:child_process');
+      const r = spawnSync(npmCmd, ['view', '@deepseek-ai/dsh', 'version', '--json'], {
+        encoding: 'utf8', windowsHide: true, timeout: 30000,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      });
+      const out = String(r.stdout || '').trim();
+      try {
+        const j = out ? JSON.parse(out) : null;
+        latest = typeof j === 'string' ? j : (j && typeof j.version === 'string' ? j.version : null);
+      } catch {
+        latest = out.replace(/^"|"$/g, '') || null;
+      }
+      if (!latest) registryError = String(r.stderr || 'registry-empty').slice(0, 160);
+    } catch (e) {
+      registryError = xiJingCuoWu(e).slice(0, 160);
+    }
+    const needUpdate = !!(installed && latest && installed !== latest);
+    return { ok: true, installed, latest, needUpdate, installedButNoRegistry: !!(installed && !latest), error: registryError || undefined };
+  } catch (e) {
+    return { ok: false, error: xiJingCuoWu(e) };
+  }
+});
+
 /** 产品定稿：PC 安装后**默认装 dsh**（后台一次；失败不挡启动，可在设置里手动再装） */
 function dshMoRenBaoZhuang(): void {
   try {
@@ -13324,7 +13376,7 @@ chuliIpc('warmy:zhiShiKuXiangQing', (_e, q: string) => {
  * 运行安全：只接受「node <脚本.mjs|.js> [少量纯标识参数]」这种形状，其余一律拒绝（不解释 shell）。
  */
 const MEN_JIN_YING = [
-  'verify-security', 'verify-repo-guard', 'verify-docs', 'verify-truth-guard',
+  'verify-security', 'verify-secret-at-rest', 'verify-no-empty-catch', 'verify-repo-guard', 'verify-docs', 'verify-truth-guard',
   'verify-renderer-scope', 'verify-renderer-template-balance', 'verify-template-integrity',
   'verify-import-integrity', 'verify-css-consistency', 'verify-i18n-locales', 'verify-strict-language',
   'verify-work-tools', 'verify-tool-calls', 'verify-tool-call-e2e',

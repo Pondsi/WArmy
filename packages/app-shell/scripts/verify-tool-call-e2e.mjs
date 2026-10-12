@@ -1,4 +1,4 @@
-﻿/**
+/**
  * verify-tool-call-e2e.mjs —— **真实应用**里的工具调用端到端证明（T204 待办：控制台那一类事件从来没人跑通过）
  *
  *   node packages/app-shell/scripts/verify-tool-call-e2e.mjs
@@ -91,24 +91,36 @@ const server = http.createServer((req, res) => {
       return;
     }
     const tools = Array.isArray(ti.tools) ? ti.tools : [];
-    const toolMsgs = (ti.xiaoXiJi || []).filter((m) => m.role === 'tool');
+    const toolMsgs = (ti.messages || ti.xiaoXiJi || []).filter((m) => m.role === 'tool');
     // users 是给「默认紧急度真的把消息发到模型了吗」取证用的：请求体里必须出现那条原文
-    const users = (ti.xiaoXiJi || []).filter((m) => m.role === 'user').map((m) => String(m.content || ''));
+    const users = (ti.messages || ti.xiaoXiJi || []).filter((m) => m.role === 'user').map((m) => String(m.content || ''));
     state.requests.push({ url: req.url, hasTools: tools.length > 0, toolNames: tools.map((x) => x.function && x.function.name), toolMsgs: toolMsgs.map((m) => String(m.content || '')), users });
     if (tools.length && !state.toolsSeen) state.toolsSeen = tools.map((x) => x.function && x.function.name);
     if (toolMsgs.length) state.toolResults.push(String(toolMsgs[toolMsgs.length - 1].content || ''));
     state.turns++;
-    res.writeHead(200, { 'content-type': 'application/json' });
+    // 流式请求回 SSE（真应用走 chatStream，只解析 data: 行）；非流式回 JSON。
+    const writeBody = (obj) => {
+      if (ti && ti.stream) {
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+        const frame = { ...obj, choices: (obj.choices || []).map((c) => ({ ...c, delta: { ...(c.message || {}), tool_calls: c.message?.tool_calls } })) };
+        res.write(`data: ${JSON.stringify(frame)}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+      } else {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(obj));
+      }
+    };
     // 第 1 次：要求 recall（宿主真去记忆服务里取）→ 拿到工具结果后：给终答
     if (tools.length >= 1 && toolMsgs.length === 0) {
-      res.end(JSON.stringify(toolCallResponse(String(state.turns), 'recall', { query: '无限牛马 工具链 实测', limit: 3 })));
+      writeBody(toolCallResponse(String(state.turns), 'recall', { query: '无限牛马 工具链 实测', limit: 3 }));
       return;
     }
     if (toolMsgs.length >= 1) {
-      res.end(JSON.stringify(textResponse('工具回答：宿主返回 ' + String(toolMsgs[toolMsgs.length - 1].content || '').length + ' 字符（桩模型终答）')));
+      writeBody(textResponse('工具回答：宿主返回 ' + String(toolMsgs[toolMsgs.length - 1].content || '').length + ' 字符（桩模型终答）'));
       return;
     }
-    res.end(JSON.stringify(textResponse('无工具普通回答（桩模型）')));
+    writeBody(textResponse('无工具普通回答（桩模型）'));
   });
 });
 const stubPort = await new Promise((r) => server.listen(0, '127.0.0.1', () => r(server.address().port)));
@@ -293,11 +305,14 @@ try {
   //     修前 P2/P3（P2 就是默认「插入」）只进本地队列、flushQueue 只回显不派发，
   //     所以这条 e2e 当时必须切 P1 才发得出去。现在默认就该真的到达模型。
   const urgUi = JSON.parse(await c.evaluate(`JSON.stringify((function(){
-    var lbl = document.querySelector('#jinJiBiaoQian');
+    var trigger = document.querySelector('#jinJiTrigger');
     var qiYong = document.querySelector('#jinJiCaiDan button.qiYong');
+    // 现 UI：文字在触发器的 aria-label/title 上，图标用 .chaRuIco[data-u] 表示当前档
+    var lbl = trigger ? String(trigger.getAttribute('aria-label') || trigger.title || '') : '';
+    var cur = trigger ? (trigger.querySelector('.chaRuIco:not(.yinCang)') || {}).dataset : null;
     return {
-      biaoQian: lbl ? String(lbl.textContent || '') : '',
-      qiYong: qiYong ? String(qiYong.dataset.u || '') : '',
+      biaoQian: lbl,
+      qiYong: qiYong ? String(qiYong.dataset.u || '') : (cur ? String(cur.u || '') : ''),
       p1On: (function(){ var b = document.querySelector('#jinJiCaiDan button[data-u="P1"]'); return !!(b && b.classList.contains('qiYong')); })()
     };
   })())`));
@@ -370,7 +385,7 @@ try {
   await c.waitFor(`document.querySelector('#duiHuaKuangDongZuoJi .anNiuDanger').disabled === false`, { timeout: 15000, biaoQian: 'P1 倒计时结束（确认键可用）' });
   await c.evaluate(`(function(){ document.querySelector('#duiHuaKuangDongZuoJi .anNiuDanger').click(); return true; })()`);
   await c.waitForQuiet(`document.querySelector('#duiHuaKuangGen').classList.contains('yinCang')`, { timeout: 6000, biaoQian: '紧急度确立' });
-  const p1Label = String(await c.evaluate(`(function(){ var e = document.querySelector('#jinJiBiaoQian'); return e ? String(e.textContent || '') : ''; })()`));
+  const p1Label = String(await c.evaluate(`(function(){ var e = document.querySelector('#jinJiTrigger'); return e ? String(e.getAttribute('aria-label') || e.title || '') : ''; })()`));
   ok(p1Label === ZH['urgency.urgentLabel'],
     '4-9 切到加急：界面上的紧急度变成 P1（原话「' + ZH['urgency.urgentLabel'] + '」，走完倒计时确认）', p1Label);
   const MSG_P1 = 'R16-P1-E2E：加急这条也要照旧立即插入（不排队）。';
@@ -447,16 +462,17 @@ try {
 
   /* ── 5. 工具真的被发起 + 真的被执行完（两端的证据：模型侧请求体 + 应用侧 metrics） ── */
   const withTools = state.requests.filter((r) => r.hasTools);
-  ok(withTools.length >= 1 && (state.toolsSeen || []).slice().sort().join(',') === 'recall,retrieve',
-    '5-1 应用真的把 tools（recall + retrieve）发给了模型 —— 工具被**发起**了，不是躺在源码里',
-    JSON.stringify({ requests: state.requests.length, tools: state.toolsSeen }));
+  const seenNames = (state.toolsSeen || []).slice();
+  ok(withTools.length >= 1 && seenNames.includes('recall') && seenNames.includes('retrieve'),
+    '5-1 应用真的把 tools 发给了模型（含 recall + retrieve，工具面现在是全套）—— 工具被**发起**了，不是躺在源码里',
+    JSON.stringify({ requests: state.requests.length, toolsLen: seenNames.length, hasMemory: seenNames.includes('recall') && seenNames.includes('retrieve') }));
   ok(state.toolResults.length >= 1 && state.toolResults[0].length > 0,
     '5-2 宿主真的执行了工具并把结果回给模型（后续请求里出现 role=tool 的消息，内容来自真记忆服务）',
     JSON.stringify({ toolMsgs: state.toolResults.length, sample: String(state.toolResults[0] || '').slice(0, 60) }));
   const metrics = JSON.parse(await c.evaluate(`(async function(){ var m = await window.warmy.metricsSummary(); return JSON.stringify(m || null); })()`));
-  ok(metrics && Number(metrics.toolCalls) >= 1,
+  ok(metrics && Number(metrics.gongJuDiaoYongJi ?? metrics.toolCalls) >= 1,
     '5-3 应用自己的 metrics 记下了工具调用（工具**完成**了：有 toolCalls，且宿主给了结论）',
-    JSON.stringify({ toolCalls: metrics && metrics.toolCalls, toolCallsOk: metrics && metrics.toolCallsOk, toolTurns: metrics && metrics.toolTurns }));
+    JSON.stringify({ toolCalls: metrics && (metrics.gongJuDiaoYongJi ?? metrics.toolCalls), toolCallsOk: metrics && metrics.toolCallsOk, toolTurns: metrics && metrics.toolTurns }));
 
   /* ── 6. 控制台（T194 那套真事件流）：原始 IPC + 页面 DOM 两处都要看得见 ── */
   await c.evaluate(`(function(){ var b = document.querySelector('#anNiuKongZhiTai'); if (b) b.click(); return true; })()`);

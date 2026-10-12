@@ -25,6 +25,8 @@ const scriptsDir = path.join(pkgRoot, 'scripts');
 /** 通用门禁：任何项目都该有这一档（每条的"为什么通用"必须写清） */
 const UNIVERSAL = {
   'verify-security': '路径越权 / 命令注入 / 凭据泄漏 —— 任何带文件与命令的产品都适用',
+  'verify-secret-at-rest': '用户数据/审计/导出面不得落盘明文密钥（secret scanning 通用）',
+  'verify-no-empty-catch': '产品源码禁止 catch 纯空块（静默吞异常）',
   'verify-repo-guard': '仓库守卫：坏路径、重复树、敏感文件入库',
   'verify-docs': '文档里不许出现真实用户路径与密钥',
   'verify-truth-guard': '「声称完成但本轮零工具调用」必须判出来 —— 任何 agent 产品都会踩',
@@ -63,8 +65,7 @@ const UNIVERSAL = {
 const YI_HONG = {
   'verify-context-renderer': '已用「换回 HEAD 的 electron-main.ts 再跑」对照证明：**失败项完全一致**（同一批 bounded-view 断言），与本轮改动无关。根因：门禁的 mock 不实现 SSE，主链路走流式解析得空正文 ⇒ 触发"逼出正文"的第二次非流式请求（一轮两条 prompt），断言按"一轮一条"写死了。',
   'verify-history-persist': '在临时 userData 里 `memory-start-failed`（记忆服务没起来）⇒ 拿不到注入 prompt 里的「道」，断言自然红。属环境依赖，与本轮改动无关。',
-  'verify-tool-calls': '本轮已修 4 处 API 漂移（`renderBoundedView`→`xuanranYoujieShitu`、`runMemoryTool`→`yunxingJiyiCangGongju`、返回字段中文化、选项 `maxRounds`→`zuiDaLunShu`、mock 报文形状），**仍余约 10 项断言按旧语义写**（工具面从 2 个变 35 个、`supportsTools` 语义改了、`tool_choice` 收敛行为改了）。需按现语义重写。',
-  'verify-tool-call-e2e': '19/34：桩模型场景按旧工具集/旧降级语义写的断言。与本轮改动无关（本轮只新增工具）。',
+  'verify-tool-call-e2e': '33/34（第 7 轮）：余 4-10——P1 加急经 fenLei 分类模型（桩环境缺该能力位）后终答气泡计数对不上；消息本身已进会话且模型被调用。',
   'verify-e2e': '需要**没有别的实例在跑**（单实例锁）——桌面应用正开着时必然 "no devtools port"。属环境依赖。',
   'verify-net-ui': 'UI 联调 harness 起不来（`fetch failed`）：依赖端口/预览服务。属环境依赖。',
   'verify-qr-scan': '21/22：一条 UI 等待超时（弹窗没在 12s 内出现）。属 flaky。',

@@ -194,13 +194,22 @@ export const GONGYING_YUSHE: GongYingYuShe[] = [
    * 它同时提供**对话 / 听话（asr）/ 说话（tts）**模型，所以 TTS·ASR 在这里是"一等公民"。
    */
   {
-    id: 'mimo',
-    biaoQian: 'MiMo（token-plan）',
+    id: 'mimo-token-plan',
+    biaoQian: 'MiMo token plan（cn）',
     protocol: 'openai-compatible',
     baseURL: 'https://token-plan-cn.xiaomimimo.com/v1',
     defaultModel: 'mimo-v2.6-pro',
     requiresApiKey: true,
-    docs: 'https://token-plan-cn.xiaomimimo.com/v1/models（海外站把 cn 换成 sgp）',
+    docs: 'https://token-plan-cn.xiaomimimo.com/v1/models（海外站把 cn 换成 sgp，key 不通用）',
+  },
+  {
+    id: 'mimo-api',
+    biaoQian: 'MiMo API',
+    protocol: 'openai-compatible',
+    baseURL: 'https://api.xiaomimimo.com/v1',
+    defaultModel: 'mimo-v2.5-pro',
+    requiresApiKey: true,
+    docs: 'https://api.xiaomimimo.com/v1/models',
   },
   {
     id: 'deepseek',

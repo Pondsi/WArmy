@@ -21,6 +21,12 @@ const MOREN_DIZHI: Record<GongYingXieYi, string> = {
 };
 
 const YUSHE_BIAO = Object.fromEntries(GONGYING_YUSHE.map((p) => [p.id, p]));
+/** 旧 id 别名：落盘里可能还是拆分前的 `mimo`（token-plan），映射到新 id，避免找不到预设 */
+const YUSHE_BIE_MING: Record<string, string> = {
+  mimo: 'mimo-token-plan',
+  'mimo-tokenplan': 'mimo-token-plan',
+  'mimo-cn': 'mimo-token-plan',
+};
 
 export function chuangjianGongYing(
   protocol: GongYingXieYi,
@@ -50,7 +56,8 @@ export function congYuSheChuangJian(
   auth: GongYingRenZheng = {},
   overrideProtocol?: GongYingXieYi
 ): MoxingGongYing {
-  const p = YUSHE_BIAO[presetId];
+  const zhenId = YUSHE_BIE_MING[presetId] || presetId;
+  const p = YUSHE_BIAO[zhenId];
   /**
    * 自定义供应商 id（如 `ollama-1791…`）不在预设表里 —— 此时**必须**由调用方
    * 带上 protocol，否则会退化成 openai-compatible，去打 `/chat/completions`

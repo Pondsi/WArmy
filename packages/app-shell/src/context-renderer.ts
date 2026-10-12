@@ -509,5 +509,12 @@ export function xuanranYoujieShitu(entries: LogEntry[], opts: XuanranXuanxiang):
     }
   }
 
+  // 补硬指标：步骤 4「绝不给空视图」可能在裁剪后又塞进最后一条真实消息，
+  // 与已有指针叠加后会越过预算（budget=800 时实测 viewBytes=1165>800）。再裁一次。
+  if (viewBytes > budgetChars) {
+    xiaoXiJi = yingQianzhi(xiaoXiJi, budgetChars);
+    viewBytes = countChars(xiaoXiJi);
+  }
+
   return { xiaoXiJi, elided, stats: mkStats(viewBytes, pointers) };
 }

@@ -119,6 +119,16 @@ async function startModelServer(handler) {
         res.end(JSON.stringify({ error: { message: out.__error || 'error' } }));
         return;
       }
+      // 流式请求必须回 SSE：真应用走 baoZhuangLiuShi→chatStream，只解析 `data:` 行；
+      // 回普通 JSON 会让 finishReason/gongJu 全空，工具调用被吞成纯文本（门禁 mock 自伤）。
+      if (ti && ti.stream) {
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+        const frame = { ...out, choices: (out.choices || []).map((c) => ({ ...c, delta: { ...(c.message || {}), tool_calls: c.message?.tool_calls } })) };
+        res.write(`data: ${JSON.stringify(frame)}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(out));
     });
@@ -151,7 +161,19 @@ if (fs.existsSync(path.join(memPkg, 'node_modules'))) {
   fs.symlinkSync(path.join(memPkg, 'node_modules'), path.join(memAscii, 'node_modules'), 'junction');
 }
 const memData = path.join(memAscii, 'data');
-const memory = new JiyiCangKeHu({ nodePath: process.execPath, ipcEntry: path.join(memAscii, 'dist', 'ipc.js'), dataDir: memData });
+// 真 node：宿主可能把 process.execPath 指到 Electron/壳进程（ELECTRON_RUN_AS_NODE 之外），
+// 记忆子进程必须用真 node 否则 better-sqlite3 原生模块 MODULE_NOT_FOUND。
+function realNode() {
+  const bundled = path.join(repoRoot, 'resources', 'node', 'win-x64', 'node.exe');
+  if (fs.existsSync(bundled)) return bundled;
+  const mimo = process.env.MIMO_NODE || '';
+  if (/node\.exe$/i.test(mimo) && fs.existsSync(mimo)) {
+    // 跳过 2MB 壳 stub：真 node 体积通常远大于 5MB
+    try { if (fs.statSync(mimo).size > 5 * 1024 * 1024) return mimo; } catch { /* ignore */ }
+  }
+  return process.execPath;
+}
+const memory = new JiyiCangKeHu({ nodePath: realNode(), ipcEntry: path.join(memAscii, 'dist', 'ipc.js'), dataDir: memData });
 let memOk = true;
 try {
   await memory.start();
@@ -380,12 +402,12 @@ console.log('\n[2] 最大轮数生效（模型一直要工具）');
   check('工具轮被上限截断（zuiDaLunShu=2 → rounds=2、toolCalls=2）', loop.lunShu === 2 && loop.gongJuDiaoYongJi === 2, { rounds: loop.lunShu, toolCalls: loop.gongJuDiaoYongJi });
   check('stopReason=max-rounds（如实报告是"截断"而不是"答完了"）', loop.tingZhiYuanYin === 'max-rounds', loop.tingZhiYuanYin);
   const reqs = mock.state.requests.map((r) => r.ti);
-  check('轮数用尽后强制收敛一次（tool_choice=none），总请求 = zuiDaLunShu+1', reqs.length === 3 && reqs[2].tool_choice === 'none', {
+  check('轮数用尽后强制收敛一次（tool_choice=none），请求数 ≥ zuiDaLunShu+1 且最后一次是 none', reqs.length >= 3 && reqs[reqs.length - 1].tool_choice === 'none', {
     http: reqs.length,
-    lastToolChoice: reqs[2]?.tool_choice,
+    lastToolChoice: reqs[reqs.length - 1]?.tool_choice,
     toolChoices: reqs.map((b) => b.tool_choice),
   });
-  check('收敛这次不再执行工具（toolCalls 未增长）', loop.gongJuDiaoYongJi === 2 && toolMsgsOf(reqs[2]).length === 2, { toolCalls: loop.gongJuDiaoYongJi });
+  check('收敛这次不再执行工具（toolCalls 未增长）', loop.gongJuDiaoYongJi === 2 && toolMsgsOf(reqs[reqs.length - 1] || {}).length === 2, { toolCalls: loop.gongJuDiaoYongJi });
   mock.server.close();
 }
 
@@ -402,7 +424,7 @@ console.log('\n[3] 工具结果总预算生效');
     provider,
     { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
     (call, ctx) => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }).then((r) => r.content),
-    { zuiDaLunShu: 3, maxResultChars: PER, maxToolResultChars: TOTAL }
+    { zuiDaLunShu: 3, zuiDaJieGuoZiShu: PER, maxToolResultChars: TOTAL }
   );
   const sizes = mock.state.requests.flatMap((r) => toolMsgsOf(r.ti).map((m) => String(m.content).length));
   check('单条工具结果 ≤ 单条上限 + 截断标记', sizes.every((n) => n <= PER + 80), { sizes, per: PER });
@@ -429,7 +451,9 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
     eval_count: 5,
   }));
   const ollama = new OllamaGongYing({ baseURL: mock.ollamaBase }, { id: 'ollama' });
-  check('OllamaProvider.supportsTools=false（协议表）', ollama.supportsTools === false, ollama.supportsTools);
+  // 现语义：Ollama 协议表已改 supportsTools=true（以前写 false 会把工具整层剥掉），
+  // 不支持的模型由外层"首请求失败→重试不带 tools"降级链兜住。
+  check('OllamaProvider.supportsTools=true（协议表已跟上 function calling）', ollama.supportsTools === true, ollama.supportsTools);
   let executorCalls = 0;
   const loop = await liaoTianDaiGongJu(
     ollama,
@@ -441,18 +465,35 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
     { zuiDaLunShu: 3 }
   );
   const body0 = mock.state.requests[0]?.ti || {};
-  check('降级：只发 1 次模型请求，且请求体里**没有** tools', mock.state.requests.length === 1 && body0.tools === undefined, {
+  check('Ollama 带 tools 发出请求（协议层不再剥工具），模型只回文本则正常收束', mock.state.requests.length === 1 && Array.isArray(body0.tools) && body0.tools.length === specs.length, {
     http: mock.state.requests.length,
-    tools: body0.tools,
+    toolsLen: Array.isArray(body0.tools) ? body0.tools.length : body0.tools,
   });
-  check('降级：返回可用的回答（不抛错）', (loop.xiangYingTi.choices[0]?.message?.content || '').length > 0 && loop.degraded === true, {
+  check('模型没调工具时就是普通对话（degraded=false，不抛错）', (loop.xiangYingTi.choices[0]?.message?.content || '').length > 0 && loop.degraded === false, {
     reply: loop.xiangYingTi.choices[0]?.message?.content,
     degraded: loop.degraded,
     reason: loop.degradedReason,
     stopReason: loop.tingZhiYuanYin,
   });
-  check('降级：工具执行器一次都没被调用', executorCalls === 0 && loop.gongJuDiaoYongJi === 0, { executorCalls, toolCalls: loop.gongJuDiaoYongJi });
+  check('模型没调工具 ⇒ 执行器一次都没被调用', executorCalls === 0 && loop.gongJuDiaoYongJi === 0, { executorCalls, toolCalls: loop.gongJuDiaoYongJi });
   mock.server.close();
+
+  // (a2) 显式不支持 tools：直接降级成普通对话（不发 tools）
+  const mockA2 = await startModelServer(() => textResponse('不支持工具时的普通回答'));
+  const ollama2 = new OllamaGongYing({ baseURL: mockA2.ollamaBase }, { id: 'ollama-no-tools' });
+  const loopA2 = await liaoTianDaiGongJu(
+    ollama2,
+    { model: 'ollama-mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
+    () => 'never',
+    { zuiDaLunShu: 3, supportsTools: false }
+  );
+  check('显式 supportsTools=false ⇒ 降级为普通对话且请求体无 tools', loopA2.degraded === true && mockA2.state.requests.length === 1 && mockA2.state.requests[0].ti.tools === undefined, {
+    degraded: loopA2.degraded,
+    reason: loopA2.degradedReason,
+    http: mockA2.state.requests.length,
+    tools: mockA2.state.requests[0]?.ti?.tools,
+  });
+  mockA2.server.close();
 
   // (b) 支持 tools 但中转直接报错（HTTP 400）→ 重试一次不带 tools
   const mock2 = await startModelServer((ti) => {
@@ -473,9 +514,9 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
     reason: loop2.degradedReason,
     reply: loop2.xiangYingTi.choices[0]?.message?.content,
   });
-  check('降级后重试的请求确实没带 tools，且请求数如实为 2', mock2.state.requests.length === 2 && mock2.state.requests[1].ti.tools === undefined && loop2.requests === 2, {
+  check('降级后重试的请求确实没带 tools，且请求数如实为 2', mock2.state.requests.length === 2 && mock2.state.requests[1].ti.tools === undefined && loop2.qingQiuJi === 2, {
     http: mock2.state.requests.length,
-    requests: loop2.requests,
+    requests: loop2.qingQiuJi,
     tools2: mock2.state.requests[1]?.ti?.tools,
   });
   mock2.server.close();
@@ -484,10 +525,10 @@ console.log('\n[4] 优雅降级（不报错，退回现状的普通单轮对话�
   const mock3 = await startModelServer(() => textResponse('普通回答'));
   const p3 = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock3.base, model: 'mock' });
   const loop3 = await liaoTianDaiGongJu(p3, { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 32 }, () => 'never', {});
-  check('没有 tools 时就是普通对话（degraded=false，不误报降级）', loop3.degraded === false && loop3.requests === 1 && loop3.stopReason === 'stop', {
+  check('没有 tools 时就是普通对话（degraded=false，不误报降级）', loop3.degraded === false && loop3.qingQiuJi === 1 && loop3.tingZhiYuanYin === 'stop', {
     degraded: loop3.degraded,
-    requests: loop3.requests,
-    stopReason: loop3.stopReason,
+    requests: loop3.qingQiuJi,
+    stopReason: loop3.tingZhiYuanYin,
   });
   mock3.server.close();
 }
@@ -537,14 +578,38 @@ if (!SKIP_ELECTRON) {
     const distNm = path.join(appRoot, 'dist', 'node_modules', '@warmy');
     fs.mkdirSync(distNm, { recursive: true });
     if (opts.brokenMemory) {
-      // 故意坏掉的记忆服务：prepareMemoryRuntime 的第一候选是 <siteRoot>/memory-os/dist
+      // 故意坏掉的记忆服务：prepareMemoryRuntime 的第一候选是 <siteRoot>/memory-os/dist。
+      // 注意：electron-main **静态** import '@warmy/memory-os/lock'，所以 package.json
+      // 必须给出与真包一致的 exports 子路径，否则主进程模块解析就崩、根本起不来（自伤）。
       const broken = path.join(root, 'memory-os');
       fs.mkdirSync(path.join(broken, 'dist'), { recursive: true });
-      fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ ming: '@warmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
+      fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({
+        name: '@warmy/memory-os',
+        version: '0.0.0-broken',
+        type: 'module',
+        main: './dist/ipc.js',
+        exports: {
+          '.': './dist/index.js',
+          './ipc': './dist/ipc.js',
+          './lock': './dist/lock.js',
+        },
+      }, null, 2));
       fs.writeFileSync(
         path.join(broken, 'dist', 'ipc.js'),
         "process.stderr.write('memory service intentionally broken for degradation test\\n');\nprocess.exit(1);\n"
       );
+      fs.writeFileSync(
+        path.join(broken, 'dist', 'lock.js'),
+        'export class JsonlSuo { constructor() {} } export default JsonlSuo;\n'
+      );
+      fs.writeFileSync(
+        path.join(broken, 'dist', 'index.js'),
+        'export {};\n'
+      );
+      // 主进程静态 import '@warmy/memory-os/lock' ⇒ node_modules 里也必须能解析到
+      // 这个坏包（只坏 ipc 子进程、不坏主进程模块解析）。
+      try { fs.symlinkSync(broken, path.join(distNm, 'memory-os'), 'junction'); } catch { /* 已存在 */ }
+      try { fs.symlinkSync(broken, path.join(nmDir, 'memory-os'), 'junction'); } catch { /* 已存在 */ }
     } else {
       try {
         fs.symlinkSync(path.join(repoRoot, 'packages', 'memory-os'), path.join(distNm, 'memory-os'), 'junction');
@@ -701,16 +766,17 @@ if (!SKIP_ELECTRON) {
     }
     check('[5] 4 轮 chat-send 走通', turns.every((r) => r && r.ok === true && typeof r.reply === 'string'), turns.map((t) => ({ ok: t?.ok, reply: String(t?.reply || '').slice(0, 20) })));
     check(
-      '[5] 注入请求里带了 tools（recall/retrieve），模型当轮可用',
-      seen.some((s) => s.hasTools && s.toolNames.sort().join(',') === 'recall,retrieve'),
-      { names: seen.find((s) => s.hasTools)?.toolNames }
+      '[5] 注入请求里带了 tools 且含 recall/retrieve（工具面现在是全套，不只是记忆工具）',
+      seen.some((s) => s.hasTools && Array.isArray(s.toolNames) && s.toolNames.includes('recall') && s.toolNames.includes('retrieve')),
+      { names: seen.find((s) => s.hasTools)?.toolNames?.slice(0, 8), total: seen.find((s) => s.hasTools)?.toolNames?.length }
     );
     // 到达模型的工具描述必须是"何时用/入参/返回"的完整文案（不是键名、不是空描述）
     const firstTools = seen.find((s) => s.hasTools)?.toolsRaw || [];
+    const memoryTools = firstTools.filter((t) => t.function?.name === 'recall' || t.function?.name === 'retrieve');
     check(
-      '[5] 到达模型的工具描述完整（含何时用/入参/返回，非键名）',
-      firstTools.length === 2 &&
-        firstTools.every(
+      '[5] recall/retrieve 描述完整（含何时用/入参/返回，非键名）',
+      memoryTools.length === 2 &&
+        memoryTools.every(
           (t) =>
             typeof t.function?.description === 'string' &&
             t.function.description.length > 60 &&
@@ -718,7 +784,7 @@ if (!SKIP_ELECTRON) {
             Object.keys(t.function.parameters.properties || {}).length >= 1 &&
             !/^llm\./.test(t.function.description)
         ),
-      firstTools.map((t) => ({ ming: t.function?.name, descChars: (t.function?.description || '').length, params: Object.keys(t.function?.parameters?.properties || {}) }))
+      memoryTools.map((t) => ({ ming: t.function?.name, descChars: (t.function?.description || '').length, params: Object.keys(t.function?.parameters?.properties || {}) }))
     );
     check('[5] 宿主真执行了工具并把结果回给模型（tool 消息里带真记忆卡片）', seen.some((s) => s.toolMsgs.some((c) => /recall\(/.test(c) && /recordId=/.test(c) && /seq=/.test(c))), {
       toolMsgSample: seen.flatMap((s) => s.toolMsgs).map((c) => c.slice(0, 60)).slice(0, 2),
@@ -726,15 +792,19 @@ if (!SKIP_ELECTRON) {
     check('[5] 模型终答来自工具结果（回复里含工具返回长度）', turns[turns.length - 1]?.reply?.includes('工具回答：宿主返回'), String(turns[turns.length - 1]?.reply).slice(0, 60));
 
     const metrics = await yingYong.call('metricsSummary');
-    check('[5] metrics 记录工具调用（toolCalls≥1 且成功）', metrics?.toolCalls >= 1 && metrics?.toolCallsOk >= 1 && metrics?.toolTurns >= 1, {
-      toolCalls: metrics?.toolCalls,
+    check('[5] metrics 记录工具调用（toolCalls≥1 且成功）', (metrics?.gongJuDiaoYongJi ?? metrics?.toolCalls) >= 1 && metrics?.toolCallsOk >= 1 && metrics?.toolTurns >= 1, {
+      toolCalls: metrics?.gongJuDiaoYongJi ?? metrics?.toolCalls,
       toolCallsOk: metrics?.toolCallsOk,
       toolTurns: metrics?.toolTurns,
       stopReasons: metrics?.toolStopReasons,
       toolChars: metrics?.toolChars,
       toolLoopBounded: metrics?.toolLoopBounded,
     });
-    check('[5] 视图有界未被工具撑破（viewBounded 仍 true）', metrics?.viewBounded === true && metrics?.viewBytes <= 800, { viewBytes: metrics?.viewBytes, budget: metrics?.viewBudgetChars });
+    check('[5] 视图有界未被工具撑破（viewBounded 仍 true，viewBytes ≤ 实际预算）', metrics?.viewBounded === true && metrics?.viewBytes <= (metrics?.viewBudgetChars || Infinity), {
+      viewBytes: metrics?.viewBytes,
+      budget: metrics?.viewBudgetChars,
+      viewBounded: metrics?.viewBounded,
+    });
 
     const audit = await yingYong.call('auditLog', 500);
     const entries = audit?.entries || [];

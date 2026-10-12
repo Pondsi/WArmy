@@ -4,7 +4,7 @@
 > 一致性由**硬门禁** `verify-gate-manifest.mjs` 双向校验（清单多一条/少一条/写错类别、主进程
 > `MEN_JIN_YING` 与清单不一致、界面列表与清单不一致、探针没声明"不进 CI"、**已知红门禁没写证据或没在本文登记**
 > —— 任何一条都判红）。
-> 本轮统计：**75 支**（通用 28 / 项目专项 42 / 探针 5）；其中**已知红 10 支**（下表逐条给证据）。
+> 本轮统计：**75 支**（通用 28 / 项目专项 42 / 探针 5）；其中**已知红 9 支**（原 10；`verify-tool-calls` 第 6 轮已修绿，下表逐条给证据）。
 
 ## 〇、当前状态：哪些门禁**事实上是红的**（附证据）
 
@@ -15,8 +15,8 @@
 |---|---|---|
 | `verify-context-renderer` | project | **换回 HEAD 的 `electron-main.ts` 重跑，失败项完全一致** ⇒ 与本轮改动无关。根因：门禁的 mock 不实现 SSE，主链路流式解析得空正文 ⇒ 触发"逼出正文"的第二次非流式请求（一轮两条 prompt），断言却按"一轮一条"写死 |
 | `verify-history-persist` | project | 临时 userData 里 `memory-start-failed`，拿不到注入 prompt 里的「道」⇒ 断言必红（环境依赖） |
-| `verify-tool-calls` | universal | 本轮已修 4 处 API 漂移（`renderBoundedView`→`xuanranYoujieShitu`、`runMemoryTool`→`yunxingJiyiCangGongju`、返回字段中文化、`maxRounds`→`zuiDaLunShu`、mock 报文形状）；**仍余约 10 项断言按旧语义**（工具面 2→35 个、`supportsTools` 与 `tool_choice` 收敛行为都变了） |
-| `verify-tool-call-e2e` | universal | 19/34：桩模型场景按旧工具集/旧降级语义写 |
+| `verify-tool-calls` | universal | **已修绿（第 6 轮）**：ALL PASS。旧语义断言按现实现重写（工具面 2→35、`supportsTools`/`tool_choice` 收敛、`maxResultChars`→`zuiDaJieGuoZiShu`、字段名 `qingQiuJi`/`tingZhiYuanYin`）；真 node 启动记忆服务；mock 支持 SSE；顺带修产品两处真 bug（视图硬界在「绝不给空视图」后越界、记忆服务挂了仍暴露干活工具） |
+| `verify-tool-call-e2e` | universal | **33/34（第 6 轮，原 19/34）**：旧断言已改（报文 `messages`、紧急度 DOM `#jinJiTrigger` aria-label、工具面全套、metrics 字段 `gongJuDiaoYongJi`）；mock 支持 SSE。**余 1 红：4-10**——P1 加急路径经 `fenLei` 分类模型（桩环境缺该能力位，审计有 `err.capability-missing cap=fenLei`）后再收束，终答气泡计数对不上「桩模型终答」；消息本身已进会话且模型被调用（turns 2→4） |
 | `verify-e2e` | project | 需要**没有别的实例在跑**（单实例锁）；桌面应用开着时必然 `no devtools port` |
 | `verify-net-ui` | project | UI 联调 harness `fetch failed`（依赖端口/预览服务） |
 | `verify-qr-scan` | project | 21/22：一条 UI 等待超时（弹窗 12s 内没出现），flaky |
@@ -116,3 +116,40 @@ node packages/app-shell/scripts/verify-gate-manifest.mjs   # 校验一致性（�
 # 界面上：设置 → 门禁 —— 硬门禁（26 支通用，不可改）+ 项目专项（可跑）+
 #          最近运行记录（时间/结果/耗时；「刚由绿转红」排最前，留档在 userData/gates-history.jsonl）
 ```
+
+---
+
+## 五、第 7 轮：主流智能体门禁对照与取舍（2026-10-12）
+
+> 依据：Tavily 检索（SWE-bench / AgentBench / Terminal-Bench / Cline Bench / smoke-test CI / AI 代码安全扫描）+ 本仓 75 支清单。
+
+### 5.1 哪些不是通用门禁、建议降级或合并
+
+| 门禁 | 判断 | 建议 |
+|---|---|---|
+| verify-tasks-666 / 6666 / 4563 | 本产品任务台账断言，体量巨大 | 保留为项目专项，不要当通用门禁 |
+| verify-firstrun-ui / live-ui / ui-layout / mobile-ui | 绑死本产品 DOM/真机 | 项目专项 + 探针 |
+| verify-dao-compliance | 本仓 dao.md 纪律 | 项目专项 |
+| verify-office-ooxml | 已被 verify-office-doc-suite 覆盖大半 | 建议合并 |
+| verify-qr-scan | flaky（弹窗超时） | 调超时，不当发布硬门禁 |
+| verify-net-ui / mobile-ui / e2e | 依赖预览服务/空闲实例/移动 CDP | 标明环境前置，默认不进 CI |
+
+结论：约 42 支项目专项随包发、可手动跑；硬门禁仍应只含通用 28 支口径。
+
+### 5.2 主流有、我们没有的（按价值排序）
+
+| 门禁 | 对应业界 | 为什么值得加 | 状态 |
+|---|---|---|---|
+| verify-secret-at-rest | secret scanning | 用户数据/审计/导出口令必须密文 | 建议下轮 |
+| verify-no-empty-catch | 静默失败 | catch{} 吞错是历史事故源 | 建议下轮 |
+| verify-persist-roundtrip | 持久化一致性 | 保存成功必须能读回 | 建议下轮 |
+| verify-smoke-critical-path | CI smoke 5–10 条 | 发布前只跑关键路径 | 建议 run-gates --smoke |
+| verify-prompt-injection-hygiene | 不可信输入 | 注释/附件名/工具回显不得直进系统提示 | 缺口 |
+| verify-dep-advisory | 依赖漏洞 | pnpm audit 或离线 advisory | 建议加 |
+| round3-verify ×3 | pass^k 可靠性 | 已有雏形，文档化即可 | 已有 |
+
+### 5.3 整体判断
+
+- 合理性：通用/项目专项/探针三档正确；verify-gate-manifest 防清单腐烂是关键资产。
+- 问题：①75 支不适合当 CI 硬闸；②环境耦合红灯多；③缺发布 smoke 与密钥落盘/静默 catch。
+- 建议：CI 只跑 smoke 包（安全+清单一致+工具链路+持久化+build）；全量夜间/发版前；下轮补 secret-at-rest、no-empty-catch、smoke-critical-path。

@@ -137,10 +137,16 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
    * 通用 `asr-`（要求 asr 后面还有连字符）与 `\btts\b` 都抓不住 `mimo-v2.5-asr` / `mimo-v2.5-tts-voiceclone`，
    * 结果是这两个模型**永远不会出现在「听话模型 / 说话模型」的可选列表里**（能力链空 ⇒ 一等公民名不副实）。
    */
+  // MiMo / 小米：显式列出（通用 asr- / \btts\b 抓不住 mimo-v2.5-asr 这类后缀式命名）
+  { shi: /mimo[-_]?v?\d*\.?\d*[-_]?(asr|stt|whisper)/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'asr' } },
+  { shi: /mimo[-_]?v?\d*\.?\d*[-_]?(tts|voice)/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
   { shi: /^mimo-v2\.5-asr$/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'asr' } },
-  { shi: /^mimo-v2\.5-tts(-voiceclone|-voicedesign)?$/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
+  { shi: /^mimo-v2\.5-tts(-voiceclone|-voicedesign|-voice-clone)?$/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
   { shi: /^mimo-v2\.5(-pro)?$/i, neng: { vision: 'unknown', thinking: true, tools: true, thinkLevels: ['low', 'medium', 'high'], kind: 'chat' } },
   { shi: /^mimo-v2\.6-(pro|flash)$/i, neng: { vision: 'unknown', thinking: true, tools: true, thinkLevels: ['low', 'medium', 'high'], kind: 'chat' } },
+  // 更泛的语音后缀（OpenAI whisper-1 / gpt-4o-mini-tts / *-tts-* / *-asr-* 等）
+  { shi: /(^|[-_/])(asr|stt)([-_/]|$)|whisper|paraformer|sense-?voice/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'asr' } },
+  { shi: /(^|[-_/])tts([-_/]|$)|text-?to-?speech|voice-?clone|cosyvoice|melo-?tts/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
   // DeepSeek
   { shi: /^deepseek-chat$/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
   { shi: /^deepseek-reasoner$/i, neng: { vision: false, thinking: true, tools: true, thinkLevels: ['low', 'medium', 'high'], kind: 'chat' } },
@@ -340,10 +346,18 @@ export function moXingNengLi(modelId: string, duanDian?: Partial<MoXingNengLi> |
     if (b !== undefined && b !== 'unknown') return b;
     return a !== undefined ? a : (b !== undefined ? b : 'unknown');
   };
-  // 种类：端点 > 已知表 > 按型号名猜
-  const kindDd = (dd as { kind?: MoXingNengLi['kind'] } | null)?.kind;
-  const kindBiao = (biao as { kind?: MoXingNengLi['kind'] } | null)?.kind;
-  const kind = kindDd || kindBiao || (caiZhongLei(modelId) !== 'unknown' ? caiZhongLei(modelId) : 'unknown');
+  // 种类：端点 > 已知表 > 按型号名猜。
+  // **端点回 `'unknown'` / 空 等于「它也不知道」**，不能当真值盖掉表/名字里的 asr/tts
+  // （真事故：小米 8 个模型里 tts/asr 全被标成「对话」——listModelsDetailed 把
+  //  kind 填成 'unknown'，下面 `kindDd || kindBiao` 把 unknown 当真值用了）。
+  const kindDdRaw = (dd as { kind?: string } | null)?.kind;
+  const kindDd = (kindDdRaw && kindDdRaw !== 'unknown' ? kindDdRaw : undefined) as MoXingNengLi['kind'] | undefined;
+  const kindBiaoRaw = (biao as { kind?: string } | null)?.kind;
+  const kindBiao = (kindBiaoRaw && kindBiaoRaw !== 'unknown' ? kindBiaoRaw : undefined) as MoXingNengLi['kind'] | undefined;
+  const caiDe = caiZhongLei(modelId);
+  // 顺序：**已知表 > 端点（非 unknown）> 按名猜**。
+  // 表是人工校过的（qwen-vl=chat+vision，mimo-asr=asr），不能被端点 unknown/泛化猜法盖掉。
+  const kind = kindBiao || kindDd || (caiDe !== 'unknown' ? caiDe : 'unknown');
   // 上下文长度：端点 > 已知表（表里没写就 0）
   const ctx = Number((dd as { contextLen?: number } | null)?.contextLen || (biao as { contextLen?: number } | null)?.contextLen || 0);
   return {

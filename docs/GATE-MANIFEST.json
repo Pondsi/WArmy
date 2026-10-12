@@ -1,12 +1,12 @@
 {
   "note": "门禁审计清单：kind=universal 表示\"可给其他项目直接复用\"；project=本项目专项；probe=刻意不进默认门禁的探针；status=known-red 表示**当下红着**（redNote 写清证据，且必须出现在 docs/GATE-AUDIT.md）。由 packages/app-shell/scripts/verify-gate-manifest.mjs 校验与磁盘/主进程/界面一致。",
-  "generatedAt": "2026-10-12T00:39:41.824Z",
+  "generatedAt": "2026-10-12T08:09:01.679Z",
   "counts": {
-    "total": 75,
-    "universal": 28,
-    "project": 42,
+    "total": 78,
+    "universal": 30,
+    "project": 43,
     "probe": 5,
-    "knownRed": 10
+    "knownRed": 9
   },
   "entries": [
     {
@@ -312,6 +312,15 @@
       "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
     },
     {
+      "id": "verify-model-kind",
+      "file": "packages/app-shell/scripts/verify-model-kind.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
       "id": "verify-model-pick",
       "file": "packages/app-shell/scripts/verify-model-pick.mjs",
       "kind": "project",
@@ -356,6 +365,15 @@
       "selfCheck": false,
       "status": "green",
       "why": "文件包格式：加解密与格式校验，解不开如实报错"
+    },
+    {
+      "id": "verify-no-empty-catch",
+      "file": "packages/app-shell/scripts/verify-no-empty-catch.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "产品源码禁止 catch 纯空块（静默吞异常）"
     },
     {
       "id": "verify-no-wsl-start",
@@ -476,6 +494,15 @@
       "why": "真机运行期无未捕获异常"
     },
     {
+      "id": "verify-secret-at-rest",
+      "file": "packages/app-shell/scripts/verify-secret-at-rest.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "用户数据/审计/导出面不得落盘明文密钥（secret scanning 通用）"
+    },
+    {
       "id": "verify-security",
       "file": "packages/app-shell/scripts/verify-security.mjs",
       "kind": "universal",
@@ -581,7 +608,7 @@
       "needsElectron": true,
       "selfCheck": false,
       "status": "known-red",
-      "redNote": "19/34：桩模型场景按旧工具集/旧降级语义写的断言。与本轮改动无关（本轮只新增工具）。",
+      "redNote": "33/34（第 7 轮）：余 4-10——P1 加急经 fenLei 分类模型（桩环境缺该能力位）后终答气泡计数对不上；消息本身已进会话且模型被调用。",
       "why": "工具调用端到端（真跑到结果）"
     },
     {
@@ -590,8 +617,7 @@
       "kind": "universal",
       "needsElectron": false,
       "selfCheck": false,
-      "status": "known-red",
-      "redNote": "本轮已修 4 处 API 漂移（`renderBoundedView`→`xuanranYoujieShitu`、`runMemoryTool`→`yunxingJiyiCangGongju`、返回字段中文化、选项 `maxRounds`→`zuiDaLunShu`、mock 报文形状），**仍余约 10 项断言按旧语义写**（工具面从 2 个变 35 个、`supportsTools` 语义改了、`tool_choice` 收敛行为改了）。需按现语义重写。",
+      "status": "green",
       "why": "工具调用参数容错解析（截断/手写 JSON 不许把解析器报错当回复）"
     },
     {

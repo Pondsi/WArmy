@@ -433,8 +433,9 @@
   function GONGYING_YUSHE_JIAN() {
     return [
       { id: 'deepseek', biaoQian: 'DeepSeek', protocol: 'openai-compatible', baseURL: 'https://api.deepseek.com/v1' },
-      // MiMo：实测的 OpenAI 兼容端点
-      { id: 'mimo', biaoQian: 'MiMo', protocol: 'openai-compatible', baseURL: 'https://api.xiaomimimo.com/v1' },
+      // MiMo 双预设：token-plan（cn）= 订阅制官方端点；MiMo API = 原 api.xiaomimimo.com
+      { id: 'mimo-token-plan', biaoQian: 'MiMo token plan（cn）', protocol: 'openai-compatible', baseURL: 'https://token-plan-cn.xiaomimimo.com/v1' },
+      { id: 'mimo-api', biaoQian: 'MiMo API', protocol: 'openai-compatible', baseURL: 'https://api.xiaomimimo.com/v1' },
       { id: 'openai', biaoQian: t('settings.provider.openai') || 'OpenAI', protocol: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
       { id: 'moonshot', biaoQian: t('settings.provider.moonshot') || 'Moonshot', protocol: 'openai-compatible', baseURL: 'https://api.moonshot.cn/v1' },
       { id: 'zhipu', biaoQian: t('settings.provider.zhipu') || 'Zhipu GLM', protocol: 'openai-compatible', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
@@ -2703,9 +2704,15 @@
     if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(e)) return svg(WEN + '<circle cx="9.5" cy="12" r="1.4"/><path d="M7 18l4-4 3 3 2-2 3 3"/>');
     if (['mp4', 'mov', 'webm', 'mkv', 'avi', 'mp3', 'wav', 'ogg', 'm4a'].includes(e)) return svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/>');
     if (['doc', 'docx', 'md', 'rtf'].includes(e)) return svg(WEN + '<path d="M8 13h8M8 17h8M8 9h3"/>');
-    if (['ppt', 'pptx', 'key'].includes(e)) return svg('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/>');
-    if (['xls', 'xlsx', 'csv', 'tsv'].includes(e)) return svg('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/>');
+    if (['ppt', 'pptx', 'key', 'pps', 'ppsx', 'odp'].includes(e)) {
+      // 演示文稿：幕布 + 台座（区别于表格的网格、文档的横线）
+      return svg('<rect x="3" y="4" width="18" height="11" rx="1.5"/><path d="M3 8h18"/><path d="M8 15v2M16 15v2M8 17h8"/><circle cx="7" cy="6" r="0.8"/>');
+    }
+    if (['xls', 'xlsx', 'csv', 'tsv', 'ods'].includes(e)) return svg('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/>');
     if (['pdf'].includes(e)) return svg(WEN + '<path d="M8 13h8M8 17h4"/>');
+    if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso'].includes(e)) return svg('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M12 6v12M9 9h6M9 12h6M9 15h6"/>');
+    if (['exe', 'msi', 'bat', 'cmd', 'com', 'scr'].includes(e)) return svg('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8l3 4-3 4M13 16h4"/>');
+    if (['txt', 'log', 'ini', 'cfg', 'conf', 'toml', 'env'].includes(e)) return svg(WEN + '<path d="M8 12h8M8 15h8M8 18h5"/>');
     if (['js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'cs', 'rb', 'php', 'sh', 'ps1', 'json', 'yml', 'yaml', 'xml', 'html', 'css'].includes(e)) return svg('<path d="M8 6l-4 6 4 6M16 6l4 6-4 6M13 5l-2 14"/>');
     return svg(WEN + '<path d="M8 13h8M8 17h5"/>');
   }
@@ -2883,7 +2890,6 @@
           + '<path d="M19 11h-4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v7a4 4 0 0 1-4 4"/>'
           + '</svg></button>' +
           '<button type="button" class="xiaoXiFuZhi" title="' + escapeHtml(tOr('chat.copy', '复制')) + '" data-copy="' + escapeHtml(m.text) + '">⧉</button>' +
-          (zuYaoHuiFuFu ? fuHuoAnNiuHtml : '') +
           '</div></div>'
         + '</div>';
       // 悬停复制：一次委托绑定（复制 + 朗读）
@@ -2988,22 +2994,19 @@
       updateScrollAffordances(heZi);
     }
     /**
-     * **被打断的任务：「继续/重试」按钮**（产品要求）。
-     * 形态 = 最新一条聊天记录的样子；点了就能接着做；用户若直接发了新消息而没点它，
-     * 按钮**自动失效变灰**（新对话已经开始，旧任务不再被自动续上）。
+     * **被打断的任务：「继续/重试」按钮**（产品要求 · 第 9 条）。
+     * 形态 = **独立一行、常显**（不挂在 hover 才出的 footer 里）；
+     * 点了就当用户自己发一条「继续/重试」消息（进聊天记录、不合并不隐藏）；
+     * 用过一次或用户已发过新消息 ⇒ 变灰不可再点。
      */
     try {
-      /**
-       * 兜底：一条牛马回复都没有时（例如任务刚开就崩了），仍给一行提示 + 按钮。
-       * 有回复时按钮**已经挂在最新那条回复里**（见上面 footer）。
-       */
-      if ((beiDaDuan || yiGuanBi) && zuiHouThem < 0) {
+      if (beiDaDuan || yiGuanBi) {
         const hang = document.createElement('div');
         hang.className = 'xiaoXi huiFuRenWuHang' + (yiGuanBi ? ' yiGuoQi' : '');
         hang.innerHTML =
           '<div class="bubbleWrap">' +
           '<div class="bubble">' + escapeHtml(tOr('chat.resumeTaskHint', '上次的任务被打断了（程序异常/退出/重启）。点这里接着做。')) + '</div>' +
-          '<div class="xiaoXiJiao"><div class="xiaoXiJiaoHang">' + fuHuoAnNiuHtml + '</div></div></div>';
+          '<div class="xiaoXiJiao"><div class="xiaoXiJiaoHang huiFuRenWuHangDuli">' + fuHuoAnNiuHtml + '</div></div></div>';
         heZi.appendChild(hang);
       }
       // 「继续 / 重试」：不管按钮挂在哪儿，共用一套行为
@@ -3024,9 +3027,17 @@
           const zhiLing = tOr('chat.resumeTaskCmd', '【继续执行】上次任务因「{why}」中断。请先分析原因并规避或修复，然后继续或重新执行未完成的任务。')
             .replace('{why}', why)
             + (jieDuan ? ' ' + tOr('chat.resumeTaskFrom', '（中断发生在：{jieDuan}）').replace('{jieDuan}', jieDuan) : '');
+          // **用过即失效**（产品要求）：当轮用户消息已代发，按钮变灰
+          if (sid) {
+            state.planResumeDisabled = state.planResumeDisabled || {};
+            state.planResumeDisabled[String(sid)] = true;
+            if (state.planInterrupted) state.planInterrupted.delete(String(sid));
+          }
+          btn.disabled = true;
+          const hang = btn.closest('.huiFuRenWuHang');
+          if (hang) hang.classList.add('yiGuoQi');
           const ru = $('shuRu');
           if (ru) { ru.value = zhiLing; void faSong(); }
-          if (sid && state.planInterrupted) state.planInterrupted.delete(String(sid));
           try { renderList(); } catch { /* noop */ }
         };
       });
@@ -8646,6 +8657,40 @@ async function renderDashboard(host) {
         // 自动检查失败时不要打扰（不弹窗）；界面若在关于页则仍更新文案
         if (r && r.status === 'update-available') await applyUpdateUi(r);
         else if (!fromAuto || (r && (r.status === 'up-to-date' || r.status))) await applyUpdateUi(r);
+        // 一并检查 DeepSeek Shell 是否需要更新（产品要求）；有更新时给一键升级
+        try {
+          const dsh = await (window.warmy.dshGengXinJianCha && window.warmy.dshGengXinJianCha());
+          if (dsh && dsh.ok) {
+            const buChong = dsh.needUpdate
+              ? tOr('dsh.hasUpdate', 'DeepSeek Shell 有更新：{from} → {to}').replace('{from}', dsh.installed || '?').replace('{to}', dsh.latest || '?')
+              : (!dsh.installed
+                ? tOr('dsh.notInstalled', 'DeepSeek Shell 未安装')
+                : (dsh.latest
+                  ? tOr('dsh.upToDate', 'DeepSeek Shell 已是最新') + ' · ' + dsh.installed
+                  : tOr('dsh.registryUnknown', 'DeepSeek Shell 版本未知（未能查询 registry）')));
+            if (yuanSu) {
+              const jiu = (yuanSu.textContent || '').replace(/\s*\[?DeepSeek Shell[^\]]*$/, '');
+              yuanSu.innerHTML = '';
+              const span = document.createElement('span');
+              span.textContent = jiu ? (jiu + ' · ' + buChong) : buChong;
+              yuanSu.appendChild(span);
+              if (dsh.needUpdate || !dsh.installed) {
+                const btn = document.createElement('button');
+                btn.className = 'anNiuXiao';
+                btn.style.marginLeft = '8px';
+                btn.textContent = dsh.needUpdate ? tOr('dsh.upgrade', '升级 DeepSeek Shell') : tOr('dsh.anZhuang', '一键安装 dsh');
+                btn.onclick = async () => {
+                  btn.disabled = true;
+                  btn.textContent = tOr('dsh.anZhuangZhong', '安装中…');
+                  const r2 = await window.warmy.dshInstall?.({ force: true }).catch(() => null);
+                  btn.textContent = (r2 && r2.ok) ? (tOr('dsh.anZhuangChengGong', '安装成功') + (r2.version ? ' · ' + r2.version : '')) : tOr('dsh.anZhuangShiBai', '安装失败');
+                };
+                yuanSu.appendChild(btn);
+              }
+            }
+            try { window.__dshGengXin = dsh; } catch { /* noop */ }
+          }
+        } catch { /* dsh 检查失败不挡主更新 */ }
         return r;
       }
       $('anNiuAboutGengXin').onclick = async () => {
@@ -9624,6 +9669,8 @@ async function renderDashboard(host) {
          */
         const GATE_UNIVERSAL = [
           ['verify-security', '安全：路径越权、命令注入、凭据泄漏'],
+          ['verify-secret-at-rest', '密钥落盘必须密文（用户数据/审计/导出）'],
+          ['verify-no-empty-catch', '产品源码禁止 catch 纯空块'],
           ['verify-repo-guard', '仓库守卫：坏路径、重复树、敏感文件'],
           ['verify-docs', '文档里不许出现真实用户路径与密钥'],
           ['verify-truth-guard', '如实性：「声称完成但本轮零工具调用」必须判出来'],
@@ -18532,8 +18579,9 @@ async function renderDashboard(host) {
     const models = inst.availableModels || [];
     const chain = (inst.chain && inst.chain.length) ? inst.chain : models;
     const dis = editable ? '' : ' disabled';
-    const daKai = __mgrOpen.has(suoYin) ? ' daKai' : '';
+    const daKai = __mgrOpen.has(suoYin) ? ' open' : '';
     // 产品定稿：第四列「模型管理」**只显示**可用模型 + 调用链，与牛马管理局一致，其余不放
+    // **`<details>` 的展开靠 `open` 属性**，不是 class —— 拖拽排序后整卡折叠就是踩了这个坑
     return `<details class="mgrKa${editable ? '' : ' zhiDuMianBan'}" data-mgidx="${suoYin}"${daKai}>
       <summary>
         <img class="avTuPian small" src="${escapeHtml(instanceAvatarSrc(inst))}" alt=""/>
@@ -18548,15 +18596,16 @@ async function renderDashboard(host) {
                 const nl = (window.__modelCapsOf ? window.__modelCapsOf(m) : ((window.__moXingNengLi || {})[m] || {}));
                 /** **不能聊天就不能选**（产品要求：无法聊天的模型不能成为可用模型，也不进调用链） */
                 const buKeLiao = !(window.__keYiLiaoTian ? window.__keYiLiaoTian(nl) : true);
-                /** 能聊天但不支持工具 ⇒ 警示 */
-                const wuGongJu = nl.tools === false && !buKeLiao;
+                if (buKeLiao) return '';
+                const wuGongJu = nl.tools === false;
                 const jingGaoSvg = '<svg class="moXingJingGao" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1L15 14H1L8 1Z" fill="none" stroke="#e6a23c" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="9" stroke="#e6a23c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.8" fill="#e6a23c"/></svg>';
                 const jingGao = wuGongJu ? ' <span class="moXingJingGaoWrap" title="' + escapeHtml(tOr('model.noToolsWarn', '该模型无法调用工具执行任务，只能纯聊天')) + '">' + jingGaoSvg + '</span>' : '';
-                const buKe = buKeLiao ? ' <span class="moXingJingGaoWrap" title="' + escapeHtml(tOr('model.notChatWarn', '该模型不是聊天模型，无法用于对话')) + '">' + jingGaoSvg + '</span>' : '';
-                const tags = window.__nengLiBiaoQianHtml ? window.__nengLiBiaoQianHtml(nl) : '';
-                const hui = buKeLiao ? ' style="opacity:0.45;cursor:not-allowed"' : '';
-                return `<span class="moXingChip"${hui}>${escapeHtml(m)}${tags}${jingGao}${buKe}${
-                  editable && !buKeLiao ? `<button class="x" data-mgdel="${suoYin}" data-m="${escapeHtml(m)}" title="${escapeHtml(t('settings.removeModel'))}">×</button>` : ''
+                const quanBiao = (window.__nengLiBiaoQian ? window.__nengLiBiaoQian(nl) : []);
+                const jianBiao = quanBiao.filter((x) => x === tOr('model.chip.chat', '对话') || x === tOr('model.chip.tools', '工具'));
+                const tags = jianBiao.map((x) => '<span class="moXingNengLi">' + escapeHtml(x) + '</span>').join('');
+                const hoverTitle = escapeHtml(m) + (quanBiao.length ? '\n' + escapeHtml(quanBiao.join(' · ')) : '');
+                return `<span class="moXingChip" title="${hoverTitle}"><span class="moXingMing">${escapeHtml(m)}</span>${tags}${jingGao}${
+                  editable ? `<button class="x" data-mgdel="${suoYin}" data-m="${escapeHtml(m)}" title="${escapeHtml(t('settings.removeModel'))}">×</button>` : ''
                 }</span>`;
               }).join('')
             : '<span class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</span>'
@@ -18564,21 +18613,18 @@ async function renderDashboard(host) {
         <label class="mgrLb">${escapeHtml(t('instances.fallbackChain'))}</label>
         <ol class="mgrChain">${
           chain.length
-            ? chain.filter((m) => {
+            ? chain.map((m, yuanK) => ({ m, yuanK })).filter(({ m }) => {
                 // **不能聊天的模型不进调用链**（产品要求）
                 const nl = (window.__modelCapsOf ? window.__modelCapsOf(m) : ((window.__moXingNengLi || {})[m] || {}));
                 return window.__keYiLiaoTian ? window.__keYiLiaoTian(nl) : true;
-              }).map((m, k) => {
+              }).map(({ m, yuanK }) => {
                 const nl = (window.__modelCapsOf ? window.__modelCapsOf(m) : ((window.__moXingNengLi || {})[m] || {}));
                 const tags = window.__nengLiBiaoQianHtml ? window.__nengLiBiaoQianHtml(nl) : '';
                 const wuGongJu = nl.tools === false;
                 const svg = '<svg class="moXingJingGao" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 1L15 14H1L8 1Z" fill="none" stroke="#e6a23c" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="9" stroke="#e6a23c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.8" fill="#e6a23c"/></svg>';
                 const jg = wuGongJu ? ' <span class="moXingJingGaoWrap" title="' + escapeHtml(tOr('model.noToolsWarn', '该模型无法调用工具执行任务，只能纯聊天')) + '">' + svg + '</span>' : '';
-                return `<li data-chain="${suoYin}" data-k="${k}"${editable ? ' draggable="true"' : ''}>
-                <span class="mgrChainMing">${escapeHtml(m)}${tags}${jg}</span>
-                ${editable ? `
-                  <button class="anNiuXiao" data-mgup="${suoYin}" data-k="${k}"${k === 0 ? ' disabled' : ''}>↑</button>
-                  <button class="anNiuXiao" data-mgdn="${suoYin}" data-k="${k}"${k === chain.length - 1 ? ' disabled' : ''}>↓</button>` : ''}
+                return `<li data-chain="${suoYin}" data-k="${yuanK}"${editable ? ' draggable="true"' : ''}>
+                <span class="mgrChainMing" title="${escapeHtml(m)}">${escapeHtml(m)}${tags}${jg}</span>
               </li>`;
               }).join('')
             : '<li class="jingYin">—</li>'
@@ -18593,7 +18639,7 @@ async function renderDashboard(host) {
     heZi.querySelectorAll('details.mgrKa').forEach((d) => {
       d.addEventListener('toggle', () => {
         const i = Number(d.dataset.mgidx);
-        if (d.daKai) __mgrOpen.add(i);
+        if (d.open) __mgrOpen.add(i);
         else __mgrOpen.delete(i);
       });
     });
@@ -18605,35 +18651,28 @@ async function renderDashboard(host) {
         window.__saveState?.();
       };
     });
-    heZi.querySelectorAll('[data-mgdel]').forEach((b) => {
-      b.onclick = () => {
-        const e = entries[Number(b.dataset.mgdel)];
-        if (!e || !e.editable) return;
-        const m = b.dataset.m;
-        e.inst.availableModels = (e.inst.availableModels || []).filter((x) => x !== m);
-        e.inst.chain = (e.inst.chain || []).filter((x) => x !== m);
-        renderModelMgr();
-        window.__saveState?.();
-      };
-    });
-    const move = (suoYin, k, dir) => {
+    /** 右键/× 删除模型：二次确认后才删（产品要求） */
+    const shanMoXing = async (suoYin, m) => {
       const e = entries[suoYin];
       if (!e || !e.editable) return;
-      const shuZu = e.inst.chain;
-      if (!shuZu) return;
-      const t2 = k + dir;
-      if (t2 < 0 || t2 >= shuZu.length) return;
-      [shuZu[k], shuZu[t2]] = [shuZu[t2], shuZu[k]];
+      const ok = await uiConfirm(tOr('model.deleteConfirm', '确定删除模型「{m}」？将同时从调用链移除。').replace('{m}', m), tOr('model.deleteTitle', '删除模型'));
+      if (!ok) return;
+      e.inst.availableModels = (e.inst.availableModels || []).filter((x) => x !== m);
+      e.inst.chain = (e.inst.chain || []).filter((x) => x !== m);
       renderModelMgr();
       window.__saveState?.();
     };
-    heZi.querySelectorAll('[data-mgup]').forEach((b) => {
-      b.onclick = () => move(Number(b.dataset.mgup), Number(b.dataset.k), -1);
+    heZi.querySelectorAll('[data-mgdel]').forEach((b) => {
+      b.onclick = () => shanMoXing(Number(b.dataset.mgdel), b.dataset.m);
     });
-    heZi.querySelectorAll('[data-mgdown]').forEach((b) => {
-      b.onclick = () => move(Number(b.dataset.mgdown), Number(b.dataset.k), 1);
+    heZi.querySelectorAll('.moXingChip').forEach((chip) => {
+      chip.oncontextmenu = (ev) => {
+        ev.preventDefault();
+        const btn = chip.querySelector('[data-mgdel]');
+        if (btn) void shanMoXing(Number(btn.dataset.mgdel), btn.dataset.m);
+      };
     });
-    // 拖拽排序
+    // 拖拽排序（不再提供 ↑↓ 按钮；产品要求只用拖动）
     let dragFrom = null;
     heZi.querySelectorAll('.mgrChain li[draggable="true"]').forEach((li) => {
       li.ondragstart = (e) => {
@@ -19505,7 +19544,7 @@ async function renderDashboard(host) {
 
     window.__skillsState = { items: items.slice(), scanDirs };
 
-    const touBu = '<div class="jinengLieBiaoHead">' + escapeHtml(t('settings.skillsDiscoveredTitle')) +
+    const touBu = '<div class="pfHead">' + escapeHtml(t('settings.skillsDiscoveredTitle')) +
       ' <span class="jingYin">(' + items.length + ')</span></div>';
 
     if (!items.length) {
@@ -19524,15 +19563,15 @@ async function renderDashboard(host) {
           const removable = s && s.removable !== false && !discovered;
           const id = escapeHtml(s.id || '');
           return (
-            '<div class="jinengHang' + (discovered ? ' isDiscovered' : '') + '" data-skill-id="' + id + '" data-skill-source="' + escapeHtml((s && s.source) || '') + '">' +
-            '<div class="jinengZhu">' +
-            '<div class="jinengMing">' + escapeHtml(s.name || s.id) +
-            ' <span class="jinengZhuangTai ' + (enabled ? 'isQiYong' : 'isOff') + '">' + escapeHtml(enabled ? t('settings.skillEnabled') : t('settings.skillPaused')) + '</span></div>' +
-            '<div class="jingYin jinengMiaoShu">' + escapeHtml(s.description || '—') + '</div>' +
-            '<div class="jingYin jinengSrc">' + escapeHtml(t('settings.skillFrom')) + ': ' + escapeHtml(skillSourceLabel(s)) +
-            (discovered ? ' · ' + escapeHtml(t('settings.skillSourceDiscovered')) : '') + '</div>' +
+            '<div class="ctgHang' + (discovered ? ' isDiscovered' : '') + '" data-skill-id="' + id + '" data-skill-source="' + escapeHtml((s && s.source) || '') + '">' +
+            '<div class="ctgHangHead">' +
+            '<span class="pfMing">' + escapeHtml(s.name || s.id) +
+            ' <span class="jinengZhuangTai ' + (enabled ? 'isQiYong' : 'isOff') + '">' + escapeHtml(enabled ? t('settings.skillEnabled') : t('settings.skillPaused')) + '</span></span>' +
             '</div>' +
-            '<div class="jinengDongZuoJi">' +
+            '<div class="jingYin">' + escapeHtml(s.description || '—') + '</div>' +
+            '<div class="jingYin">' + escapeHtml(t('settings.skillFrom')) + ': ' + escapeHtml(skillSourceLabel(s)) +
+            (discovered ? ' · ' + escapeHtml(t('settings.skillSourceDiscovered')) : '') + '</div>' +
+            '<div class="shiLiHang" style="margin-top:6px">' +
             '<button class="anNiuXiao" data-skill-toggle="' + id + '" data-enabled="' + (enabled ? '1' : '0') + '">' +
             escapeHtml(enabled ? t('settings.skillsPause') : t('settings.skillsEnable')) + '</button>' +
             (removable
