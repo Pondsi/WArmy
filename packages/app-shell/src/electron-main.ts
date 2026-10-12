@@ -5899,6 +5899,7 @@ async function zhenZhengFaSong(
             ));
           } catch { /* noop */ }
           if (ju.length) shenFenTou.push({ role: 'system', content: ju.join('') } as LiaoTianXiaoXi);
+        }
         /**
          * **社交档案按需注入**（产品要求）：只告诉模型「你有档案、怎么取」，
          * 不把邮箱/手机/钱包等正文每次塞进上下文；需要时调 read_profile。
@@ -5907,7 +5908,10 @@ async function zhenZhengFaSong(
           role: 'system',
           content: '【档案能力提示】你（本牛马）在「牛马管理局 → 社交信息」里可能存有邮箱/网站账号/手机号/昵称/钱包等档案。它们**不会自动出现在对话里**；用户问到联系方式、账号、名片，或你要给外部服务填资料时，调用工具 read_profile 获取（可指定 field=email|website|phone|nick|wallet）。密码永不返回。没有该项就如实说没有，不要编造。',
         } as LiaoTianXiaoXi);
-        }
+        shenFenTou.push({
+          role: 'system',
+          content: '【动手优先】用户若要求生成/创建/打开/写入/执行/等待/调用任何具体操作，**第一响应就是发起工具调用**（write_file、make_pptx、open_path、get_time、wait_seconds 等），不要先写长篇计划或只说「已完成」。文字只能在工具真正跑完之后做汇报。没有工具结果就不要声称文件已生成。',
+        } as LiaoTianXiaoXi);
         /**
          * 图片附件 → 多模态内容块：模型因此能**真的看到**截图/图片
          * （真事故：以前只把文件路径塞进文本，模型 read_file 到 PNG 字节 ⇒「没看出来」）。
@@ -12880,7 +12884,7 @@ async function ttsChatShi(
     const r = await fetch(pinJieUrl(an.baseURL, 'chat/completions'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(an.apiKey ? { Authorization: `Bearer ${an.apiKey}` } : {}) },
-      body: JSON.stringify(taoTtsChatBody({ model: mo, text: text.slice(0, 500), voice: v || undefined, format: 'wav', speed })),
+      body: JSON.stringify(taoTtsChatBody({ model: mo, text: text, voice: v || undefined, format: 'wav', speed })),
     });
     const j = await r.json().catch(() => null);
     return { status: r.status, jie: jieXiTtsChatResponse(j, 'wav') };
@@ -13890,7 +13894,7 @@ chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
       const res = await fetch(pinJieUrl(an.baseURL, 'audio/speech'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${an.apiKey}` },
-        body: JSON.stringify({ model: mo, input: s.slice(0, 500), voice, speed }),
+        body: JSON.stringify({ model: mo, input: s, voice, speed }),
       });
       if (res.ok) {
         const buf = Buffer.from(await res.arrayBuffer());

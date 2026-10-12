@@ -1079,7 +1079,8 @@
       try {
         const ctx = deDaoShangXiaWen();
         if (ctx) {
-          if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+          if (ctx.state !== 'running') await ctx.resume().catch(() => {});
+          baoHuoYinPin(ctx);
           const buf = await jieMaYinPin(u);
           const yinLiang = (state.soundVolume != null ? Number(state.soundVolume) : 0.9);
           if (buf && ctx.state === 'running' && yinLiang > 0) {
@@ -1087,16 +1088,17 @@
             const yuanYin = ctx.createBufferSource();
             yuanYin.buffer = buf;
             const zengYi = ctx.createGain();
-            zengYi.gain.value = yinLiang;
             yuanYin.connect(zengYi);
             zengYi.connect(ctx.destination);
-            /**
-             * **排一点点提前量**而不是 `start(0)`：`start(0)` 是"立刻"，若音频线程/设备还在起步，
-             * 最先几个量子会被吞掉（真机反馈："首次音效像开头几帧被挡"）。
-             * 保活源刚挂上不久时多给一点（50ms），之后 20ms 就够 —— 人耳听不出这几十毫秒。
-             */
             const baoHuoXin = (baoHuoAt && Date.now() - baoHuoAt < 500) ? 0.05 : 0.02;
             const qiShi = ctx.currentTime + baoHuoXin;
+            // 8ms 淡入：避免硬切起音被设备/采样边界削掉听感「缺头」
+            try {
+              zengYi.gain.setValueAtTime(0.0001, qiShi);
+              zengYi.gain.linearRampToValueAtTime(yinLiang, qiShi + 0.008);
+            } catch {
+              zengYi.gain.value = yinLiang;
+            }
             yuanYin.start(qiShi);
             yinXiaoDaiBo = null;
             jiYinXiao(Object.assign(jiao, { ok: true, lu: 'audio-context', ctxState: ctx.state, gain: yinLiang, seconds: buf.duration, baoHuo: !!yinPinBaoHuo }));
@@ -1167,27 +1169,106 @@
    * 找不到可用的说话模型时**如实告知**，不假装读了。
    */
   let langDuMang = false;
-  async function langDuWenBen(text) {
+  async function langDuWenBen(text, btnEl) {
     const s = String(text || '').trim();
     if (!s) return false;
-    if (langDuMang) return false;   // 一次只读一段，避免叠音
-    langDuMang = true;
-    try {
-      const r = await window.warmy.ttsLangDu?.({ text: s.slice(0, 500) });
-      if (r && r.ok && r.dataUrl) {
-        const a = new Audio(r.dataUrl);
-        a.volume = (state.soundVolume != null ? state.soundVolume : 0.9);
-        await a.play().catch(() => {});
-        return true;
+    /**
+     * **朗读播放器**（产品要求）：
+     *  - 点喇叭开播；再点同一喇叭 = 取消（含"正在连接"）
+     *  - 同一时间只有一路播放；点别的喇叭会停掉上一个再开新的
+     *  - 播放中喇叭不因悬停消失，呈强调色 + 声波动画
+     *  - 长文按段合成、紧挨着播（段间无等待）
+     */
+    const btn = btnEl || document.querySelector('.xiaoXiLangDu[aria-playing="1"]');
+    // 再点同一颗 = 取消
+    if (btn && btn.getAttribute('aria-playing') === '1' && langDuDangQian && langDuDangQian.btn === btn) {
+      langDuTing();
+      return false;
+    }
+    // 换一颗：先停旧的
+    if (langDuDangQian) langDuTing();
+
+    const fenDuan = (txt, n = 280) => {
+      const out = [];
+      let rest = txt;
+      while (rest.length) {
+        if (rest.length <= n) { out.push(rest); break; }
+        let cut = rest.lastIndexOf('。', n);
+        if (cut < n * 0.4) cut = rest.lastIndexOf('\n', n);
+        if (cut < n * 0.4) cut = rest.lastIndexOf('，', n);
+        if (cut < n * 0.4) cut = n;
+        out.push(rest.slice(0, cut + 1));
+        rest = rest.slice(cut + 1);
       }
-      showToast(String((r && r.error) || tOr('tts.noModel', '没有可用的说话模型（请在「设置 → 模型」里配置）')));
-      return false;
-    } catch (e) {
-      showToast(String(e && e.message || e));
-      return false;
-    } finally { langDuMang = false; }
+      return out;
+    };
+
+    const st = { btn, chengXiao: false, audio: null, abort: false };
+    langDuDangQian = st;
+    if (btn) {
+      btn.classList.add('langDuZhong');
+      btn.setAttribute('aria-playing', '1');
+      btn.title = tOr('chat.readStop', '朗读中 · 点击取消');
+    }
+
+    (async () => {
+      try {
+        const duan = fenDuan(s);
+        for (let i = 0; i < duan.length; i++) {
+          if (st.abort) return;
+          const r = await window.warmy.ttsLangDu?.({ text: duan[i] });
+          if (st.abort) return;
+          if (!r || !r.ok || !r.dataUrl) {
+            showToast(String((r && r.error) || tOr('tts.noModel', '没有可用的说话模型（请在「设置 → 模型」里配置）')));
+            return;
+          }
+          await new Promise((resolve) => {
+            const a = new Audio(r.dataUrl);
+            st.audio = a;
+            a.volume = (state.soundVolume != null ? state.soundVolume : 0.9);
+            a.onended = () => resolve();
+            a.onerror = () => resolve();
+            // 连接阶段：按钮先亮着（langDuZhong），开始播再加 boFangZhong
+            a.onplaying = () => { try { btn && btn.classList.add('boFangZhong'); } catch { /* noop */ } };
+            a.play().catch(() => resolve());
+          });
+          if (st.abort) return;
+          // 段间不插 sleep：上一段 ended 立刻合成下一段，体验最紧
+        }
+        if (btn) {
+          btn.classList.remove('langDuZhong', 'boFangZhong');
+          btn.removeAttribute('aria-playing');
+          btn.title = tOr('chat.read', '朗读');
+        }
+        langDuDangQian = null;
+      } catch (e) {
+        showToast(String(e && e.message || e));
+        if (btn) {
+          btn.classList.remove('langDuZhong', 'boFangZhong');
+          btn.removeAttribute('aria-playing');
+        }
+        langDuDangQian = null;
+      }
+    })();
+    return true;
   }
-  window.__langDuWenBen = langDuWenBen;
+  /** 停掉当前朗读（含未开始的连接） */
+  function langDuTing() {
+    const st = langDuDangQian;
+    if (!st) return;
+    st.abort = true;
+    try { st.audio && st.audio.pause(); } catch { /* noop */ }
+    try { st.audio && (st.audio.src = ''); } catch { /* noop */ }
+    if (st.btn) {
+      st.btn.classList.remove('langDuZhong', 'boFangZhong');
+      st.btn.removeAttribute('aria-playing');
+      st.btn.title = tOr('chat.read', '朗读');
+    }
+    langDuDangQian = null;
+  }
+  let langDuDangQian = null;
+  window.__langDuTing = langDuTing;
+  
   /**
    * **音频解锁**：浏览器自动播放策略会拦掉"没有用户手势"的播放。
    * 真事故：决定卡第 1 张没声音。
@@ -2505,7 +2586,10 @@
       si = kuai.querySelector('.liuShiSiKao');
     }
     if (si) {
-      si.textContent = b.reasoning || '';
+      // **不许被系统提示/空分片抹掉**（真事故：ETA 预警等系统条一来，思考全文消失，
+      // 要等下次真正吐 thinking 才回来）。只有新 reasoning 非空才更新；空的保留旧文。
+      if (b.reasoning) si.textContent = b.reasoning;
+      else if (!si.textContent) si.textContent = '';
       // 用户手动滚上去了 ⇒ 不抢视线；在底部（或很接近）⇒ 跟随到最新
       const zaiDi = si.scrollHeight - si.scrollTop - si.clientHeight < 28;
       if (!si.dataset.userScrolled || zaiDi) {
@@ -2882,7 +2966,7 @@
           '<span class="xiaoXiShiJian">' + escapeHtml(wanZhengShiJian(ts)) + '</span>' +
           '<button type="button" class="xiaoXiLangDu" title="' + escapeHtml(tOr('chat.read', '朗读')) + '" data-read="' + escapeHtml(m.text) + '">'
           + '<svg viewBox="0 0 24 24" class="xiaoXiIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-          + '<path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="M15.5 8.7a4.6 4.6 0 0 1 0 6.6"/>'
+          + '<path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path class="langDuBo" d="M15.5 8.7a4.6 4.6 0 0 1 0 6.6"/><path class="langDuBo" d="M18.2 6.8a7.5 7.5 0 0 1 0 10.4" style="animation-delay:.25s"/>'
           + '</svg></button>' +
           '<button type="button" class="xiaoXiYinYong" title="' + escapeHtml(tOr('common.quote', '引用')) + '" data-quote="' + escapeHtml(m.text) + '">'
           + '<svg viewBox="0 0 24 24" class="xiaoXiIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
@@ -2919,7 +3003,7 @@
           const d = e.target.closest('[data-read]');
           if (d) {
             e.preventDefault(); e.stopPropagation();
-            void langDuWenBen(d.getAttribute('data-read') || '');
+            void langDuWenBen(d.getAttribute('data-read') || '', d);
           }
           const q = e.target.closest('[data-quote]');
           if (q) {
@@ -13767,6 +13851,7 @@ async function renderDashboard(host) {
     try { yuYinZhuangTai?.stream?.getTracks?.().forEach((tr) => tr.stop()); } catch { /* noop */ }
     yuYinZhuangTai = null;
     yuYinDengJi(false);
+    try { $('anNiuYuYin')?.classList.remove('jieLianZhong'); } catch { /* noop */ }
   }
   async function yuYinTingXie() {
     const ru = $('shuRu');
@@ -13800,10 +13885,14 @@ async function renderDashboard(host) {
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) { uiAlert(t('chat.voiceUnsupported')); return; }
+    // 连接供应商/开麦：自下而上波纹（产品要求）
     try {
+      const btn0 = $('anNiuYuYin');
+      if (btn0) btn0.classList.add('jieLianZhong');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const rec = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       yuYinZhuangTai = { rec, stream, chunks: [], jiBen: (ru?.value || '') + (ru?.value ? ' ' : ''), busy: false, n: 0 };
+      if (btn0) btn0.classList.remove('jieLianZhong');
       rec.ondataavailable = (e) => {
         if (!e.data || !e.data.size || !yuYinZhuangTai) return;
         yuYinZhuangTai.chunks.push(e.data);
