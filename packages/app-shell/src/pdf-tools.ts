@@ -304,7 +304,8 @@ function quLiu(buf: Buffer): Array<{ dict: string; data: Buffer }> {
     let end = body.indexOf('endstream', p);
     if (end < 0) end = body.length;
     const raw = Buffer.from(body.slice(p, end), 'latin1');
-    let data = raw;
+    // 显式标 Buffer：inflateSync 返回 Buffer<ArrayBufferLike>，与 Buffer.from 的 Buffer<ArrayBuffer> 在 @types/node 新版下不兼容（CI typecheck 红）
+    let data: Buffer = raw;
     if (/\/FlateDecode/.test(dict)) {
       try { data = zlib.inflateSync(raw); } catch { try { data = zlib.inflateRawSync(raw); } catch { continue; } }
     }
