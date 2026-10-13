@@ -6,7 +6,7 @@ import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeIma
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { execFile, execFileSync, spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { chuangJianP1YunXingShi } from './runtime.js';
 import {
@@ -147,7 +147,7 @@ import {
   type AnquanDang,
 } from './agent-tools.js';
 import { jueCeMoXing, jieMoXingMing, type MoXingJueCeShuRu } from './model-pick.js';
-import { taoTtsChatBody, jieXiTtsChatResponse, taoAsrChatBody, jieXiAsrChatResponse, yingGaiHuanChatShi } from '@warmy/providers';
+import { taoTtsChatBody, jieXiTtsChatResponse, taoAsrChatBody, jieXiAsrChatResponse, yingGaiHuanChatShi, guiFanAsrGeShi, jieShouGeShi, yanShouGeShi, jianBieGeShi } from '@warmy/providers';
 import { tiQuWenDang } from './doc-extract.js';
 import { JsonlSuo } from '@warmy/memory-os/lock';
 import { saoMiaoJiNeng, duSkillMuLu, zhaiYao, zhengWen, jiNengDaFen } from './skill-md.js';
@@ -1385,6 +1385,11 @@ function dangQianYongHuMing(): string {
 
 /** 本轮工具调用的名字（空回复兜底时如实告诉用户"干了什么"） */
 let benLunGongJuMing: string[] = [];
+/**
+ * **跨轮重复工具调用指纹**（sessionId → 指纹 → 次数）。
+ * 判异常时用它回答"是不是在重复上一轮已经干过的活"；同一指纹 **≥3 次**即确认为异常。
+ */
+const huiHuaChongFu = new Map<string, Map<string, number>>();
 /** 本轮真正产出的文件（write_file/make_docx/make_pptx）——随回复返回，供界面渲染成附件图标 */
 let benLunChanPin: Array<{ path: string; abs: string; bytes: number; name: string }> = [];
 /** 本轮**涉及过**的文件都进图标行（产出 + 打开 + 读过）：产品要求"回复里的截图/文件显示成图标" */
@@ -1717,6 +1722,47 @@ async function yunXingLiaoTianXunHuan(
    * 而**"这一步是否异常"这件事只能在有结果时才算得清**（同步阻塞的工具也没法被抢占）。
    */
   const gongJuCiShu = new Map<string, number>();
+  /**
+   * **重复调用指纹**（工具名 + 规范化参数）→ 本轮出现次数。
+   *
+   * 为什么需要它（本机事故 + 厂商复盘）：牛马多轮"重复执行好几次、5 分钟不结束"，
+   * 审计里就是一串一模一样的 `run_shell` / `write_file`，一路烧到 `tool-loop-timeout(600s)`。
+   * 小米对 MiMo 工具调用重复问题的官方复盘（RL 阶段只按正确率给奖励 ⇒ 形成奖励盲区）说明
+   * 这是模型侧的已知退化，**必须由宿主侧兜住**。已有章节审计也印证：同一步骤 `plan.auto-continue`
+   * 会连派 N 次。做法（对齐 OpenAI Agents SDK 的 max_turns + 指纹去重惯例）：
+   * 同一轮里**同一个指纹第二次出现就如实叫停**，把控制权交回用户，而不是继续白烧。
+   */
+  const gongJuZhiWen = new Map<string, number>();
+  /**
+   * **跨轮重复指纹**（sessionId → 指纹 → 次数）。
+   *
+   * 产品要求（本轮）：让**判异常的模型**同时看"是不是在重复上一轮已经干过的活"；
+   * 同一个指纹重复 **≥3 次**就确认为异常（模型判不过来也按异常处理，不再无限续派）。
+   * 与 `gongJuZhiWen`（轮内去重）不同，这里跨轮累计 —— 真机事故正是"跨了好几轮都在重复同一件事"。
+   */
+  /**
+   * 这些工具"同样的参数再来一次"可能是有意的（等待/取时间/提问/定时），不算打转。
+   */
+  const zhiWenPaiChu = new Set(['wait_seconds', 'get_time', 'ask_user', 'schedule_task', 'plan_update', 'plan_verify']);
+  const zhiWenOf = (ming: string, can: unknown): string => {
+    let s = '';
+    try {
+      const raw = typeof can === 'string' ? can : JSON.stringify(can ?? {});
+      const obj = JSON.parse(raw || '{}');
+      // 稳定序列化（键排序）：{'a':1,'b':2} 与 {'b':2,'a':1} 视为同一指纹
+      const wen = (v: unknown): unknown => {
+        if (Array.isArray(v)) return v.map(wen);
+        if (v && typeof v === 'object') {
+          const o: Record<string, unknown> = {};
+          for (const k of Object.keys(v as Record<string, unknown>).sort()) o[k] = wen((v as Record<string, unknown>)[k]);
+          return o;
+        }
+        return v;
+      };
+      s = JSON.stringify(wen(obj));
+    } catch { s = String(can ?? ''); }
+    return ming + '|' + s.slice(0, 400);
+  };
   /** 「等待模型回复」本轮第几次请求（同一个会话累计） */
   const dengDaiCiShu = new Map<string, number>();
       type GongJuDiaoYong = GongJuDiaoYongTi;
@@ -1739,6 +1785,32 @@ async function yunXingLiaoTianXunHuan(
             + `**不要再调用任何工具**：请立刻用文字如实汇报——已经完成了什么、还没完成什么、卡在哪一步，让用户决定下一步怎么做。`;
         }
         fachuKongzhitai({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId } });
+        /**
+         * **同指纹第二次出现 ⇒ 如实叫停**（见 `gongJuZhiWen` 的说明）。
+         * 用"如实汇报"的口吻而不是"权限拒绝"，否则模型会换个工具继续硬试。
+         */
+        if (!zhiWenPaiChu.has(toolName)) {
+          const fp = zhiWenOf(toolName, (call as { function?: { arguments?: unknown } } | undefined)?.function?.arguments);
+          const ciFp = (gongJuZhiWen.get(fp) || 0) + 1;
+          gongJuZhiWen.set(fp, ciFp);
+          // **跨轮**累计（判异常时要看：是不是一直在重复上一轮干过的活）
+          try {
+            let kua = huiHuaChongFu.get(sessionId);
+            if (!kua) { kua = new Map(); huiHuaChongFu.set(sessionId, kua); }
+            kua.set(fp, (kua.get(fp) || 0) + 1);
+            const zong = kua.get(fp) || 0;
+            if (zong >= 3) {
+              audit?.log('chat.tool-repeat-3x', { sessionId, tool: toolName, n: zong });
+              fachuKongzhitai({ cat: 'tool', code: 'tool.repeat3', data: { sessionId, tool: toolName, n: zong } });
+            }
+          } catch { /* 记账失败不影响工具执行 */ }
+          if (ciFp >= 2) {
+            try { audit?.log('chat.tool-repeat-stopped', { sessionId, tool: toolName, n: ciFp }); } catch { /* noop */ }
+            fachuKongzhitai({ cat: 'tool', code: 'tool.repeat', data: { sessionId, tool: toolName, n: ciFp } });
+            return `[${toolName}] **这一步刚刚已经用完全相同的参数执行过了**（本轮第 ${ciFp} 次），不会有新结果。`
+              + `\n请不要重复调用同一个工具：改用文字如实汇报——已经拿到什么、还缺什么、卡在哪；需要换做法就换参数或换工具，确实做不下去就直说。`;
+          }
+        }
       // 干活工具（写/读/列目录）走工作区沙箱；记忆工具走记忆服务。
       // 两者都在文件访问作用域里执行 ⇒ 真实读写会记到**这个会话**的项目台账上。
       const gongJuMing = String((call && call.function && call.function.name) || '');
@@ -2990,22 +3062,29 @@ async function yuYinZhuanXie(att: Array<{ path?: string; name?: string; dataUrl?
   const a = (att || []).find((x) => /\.(mp3|wav|m4a|ogg|flac|webm)$/i.test(String(x?.path || x?.name || '')));
   if (!a) return null;
   try {
-    const hit = await teShuMoXingKeYong('asr');
-    if (!hit) { audit?.log('asr-delegate.no-model', {}); return null; }
     let buf: Buffer | null = null;
-    if (a.path && fs.existsSync(a.path)) buf = fs.readFileSync(a.path);
-    else if (a.dataUrl) { const b64 = String(a.dataUrl).replace(/^data:[^,]*,/, ''); buf = Buffer.from(b64, 'base64'); }
+    let geShi = '';
+    if (a.path && fs.existsSync(a.path)) {
+      buf = fs.readFileSync(a.path);
+      geShi = String(a.path).toLowerCase().replace(/^.*\./, '');
+    } else if (a.dataUrl) {
+      const b64 = String(a.dataUrl).replace(/^data:[^,]*,/, '');
+      buf = Buffer.from(b64, 'base64');
+      geShi = (/^data:audio\/([a-z0-9.+-]+)/i.exec(String(a.dataUrl))?.[1] || '').toLowerCase() || String(a.name || '').toLowerCase().replace(/^.*\./, '');
+    }
     if (!buf) return null;
-    const f = new FormData();
-    f.append('file', new Blob([new Uint8Array(buf)], { type: 'audio/mpeg' }), 'audio.mp3');
-    f.append('model', hit.mo);
-    const url = pinJieUrl(hit.an.baseURL || '', 'audio/transcriptions');
-    const res = await fetch(url, { method: 'POST', headers: { ...hit.an.apiKey ? { Authorization: 'Bearer ' + hit.an.apiKey } : {} }, body: f });
-    if (!res.ok) { audit?.log('asr-delegate.failed', { status: res.status }); return null; }
-    const d = await res.json() as { text?: string };
-    const txt = String(d?.text || '').trim();
-    audit?.log('asr.used', { model: hit.mo, chars: txt.length, source: 'rule3-delegate' });
-    return txt || null;
+    /**
+     * **共用的转写管线**：链上逐个试「标准端点 → chat 式」。
+     * 以前这里只试链上第一个模型、且只走 `/audio/transcriptions` ⇒
+     * 「明明配了听话模型，牛马却说没有可用的 ASR」。现在与 IPC 主路径同一套逻辑。
+     */
+    const r = await zhuanXieYinPinBuf(buf, geShi || 'wav');
+    if (r.ok && r.text) {
+      audit?.log('asr.used', { model: r.model, chars: r.text.length, source: 'rule3-delegate' });
+      return r.text;
+    }
+    audit?.log('asr-delegate.failed', { error: String(r.error || '').slice(0, 160) });
+    return null;
   } catch (e) {
     audit?.log('asr-delegate.error', { error: xiJingCuoWu(e).slice(0, 120) });
     return null;
@@ -4310,6 +4389,59 @@ chuliIpc('warmy:tingZhiDuiHua', (_e, sessionId: string) => {
  */
 let mimicWin: BrowserWindow | null = null;
 let mimicDragCun: { x: number; y: number; bx: number; by: number } | null = null;
+/** 桌宠本体在窗口内的矩形（CSS 像素 ≈ DIP；渲染层上报） */
+let mimicBodyRect: { x: number; y: number; w: number; h: number } = { x: 0, y: 100, w: 160, h: 160 };
+let mimicHoverTick: NodeJS.Timeout | null = null;
+let mimicLastInside: boolean | null = null;
+let mimicDragging = false;
+
+/**
+ * **桌宠点击穿透 —— Windows 稳妥方案**（本轮按官方 issue 结论重做）。
+ *
+ * 为什么**弃用** `setIgnoreMouseEvents(true, { forward: true })`：
+ *   Electron 官方仓库确认它在 Windows 有多条未修 bug ——
+ *     · hover/mouseenter 抖动、闪烁（#30808）
+ *     · 页面刷新后 forward 彻底失效（#15376）⇒ 桌宠要么永远吃掉桌面点击，要么永远点不到
+ *     · 拖动时让同应用其它窗口闪烁（#35030）
+ *     · 光标在 arrow/grab 之间抖动（#29152）；UIPI 还会让转发临时停止
+ *   用户看到的正是"桌宠开着时点击时有几率没反应 / 鼠标样式乱变"。
+ *
+ * 稳妥做法（issue #15376 官方示例的思路，**完全不依赖 forward**）：
+ *   主进程每 50ms 读一次屏幕光标坐标，用渲染层上报的"本体矩形"做命中测试：
+ *     · 光标在本体上 ⇒ `setIgnoreMouseEvents(false)`（可悬停、可拖动、可双击）
+ *     · 光标在本体外 ⇒ `setIgnoreMouseEvents(true)`（**不带 forward**：窗口彻底不参与命中测试，
+ *       桌面点击直达下层窗口，不再有"吃了点击"的问题）
+ *   命中状态变化时才通知渲染层切悬停样式（避免每帧 IPC）。
+ */
+function mimicStartHoverPoll(): void {
+  mimicStopHoverPoll();
+  mimicLastInside = null;
+  mimicHoverTick = setInterval(() => {
+    try {
+      if (!mimicWin || mimicWin.isDestroyed()) { mimicStopHoverPoll(); return; }
+      let inside = false;
+      if (mimicDragging) {
+        inside = true;   // 拖动中必须保持可交互，否则会中途"掉"进穿透态
+      } else {
+        const p = screen.getCursorScreenPoint();
+        const b = mimicWin.getBounds();
+        const rx = b.x + mimicBodyRect.x;
+        const ry = b.y + mimicBodyRect.y;
+        inside = p.x >= rx && p.x <= rx + mimicBodyRect.w && p.y >= ry && p.y <= ry + mimicBodyRect.h;
+      }
+      if (inside !== mimicLastInside) {
+        mimicLastInside = inside;
+        try { mimicWin.setIgnoreMouseEvents(!inside); } catch { /* noop */ }
+        try { mimicWin.webContents.send('warmy:mimicHover', { inside }); } catch { /* noop */ }
+      }
+    } catch { /* noop */ }
+  }, 50);
+  (mimicHoverTick as unknown as { unref?: () => void }).unref?.();
+}
+function mimicStopHoverPoll(): void {
+  if (mimicHoverTick) { try { clearInterval(mimicHoverTick); } catch { /* noop */ } mimicHoverTick = null; }
+  mimicLastInside = null;
+}
 
 /** 拟态资源根目录：优先用户数据目录，其次随包资源目录 */
 function mimicGen(): { chars: string; actions: string; users: string } {
@@ -4411,8 +4543,8 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
       },
     });
     mimicWin.setAlwaysOnTop(true, 'screen-saver');
-    // 初始整窗穿透；渲染层会在鼠标进入桌宠本体时关掉穿透
-    try { mimicWin.setIgnoreMouseEvents(true, { forward: true }); } catch { /* noop */ }
+    // 初始整窗穿透（**不带 forward**）；命中测试由主进程轮询接管，见 mimicStartHoverPoll
+    try { mimicWin.setIgnoreMouseEvents(true); } catch { /* noop */ }
     await mimicWin.loadFile(path.join(__dirname, 'renderer', 'mimic.html'));
     const cap = String(p0?.character || '');
     if (cap) {
@@ -4420,7 +4552,8 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
       const hit = list.find((x) => x.id === cap) || list[0];
       if (hit) { try { mimicWin.webContents.send('warmy:mimicSetTi', { src: hit.file }); } catch { /* noop */ } }
     }
-    mimicWin.on('closed', () => { mimicWin = null; });
+    mimicWin.on('closed', () => { mimicStopHoverPoll(); mimicWin = null; });
+    mimicStartHoverPoll();
     try { broadcastToWindows('warmy:mimicState', { on: true }); } catch { /* noop */ }
     audit?.log('mimic.start', { character: cap });
     return { ok: true };
@@ -4429,6 +4562,7 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
 
 chuliIpc('warmy:mimicStop', () => {
   try {
+    mimicStopHoverPoll();
     if (mimicWin && !mimicWin.isDestroyed()) mimicWin.close();
     mimicWin = null;
     try { broadcastToWindows('warmy:mimicState', { on: false }); } catch { /* noop */ }
@@ -4461,6 +4595,7 @@ chuliIpc('warmy:mimicDian', (_e, p0?: { on?: boolean }) => {
 ipcMain.on('warmy:mimicDragStart', (_e, p0?: { x?: number; y?: number }) => {
   try {
     if (!mimicWin || mimicWin.isDestroyed()) return;
+    mimicDragging = true;
     const b = mimicWin.getBounds();
     mimicDragCun = { x: Number(p0?.x) || 0, y: Number(p0?.y) || 0, bx: b.x, by: b.y };
   } catch { /* noop */ }
@@ -4477,12 +4612,26 @@ ipcMain.on('warmy:mimicDragMove', (_e, p0?: { x?: number; y?: number }) => {
     mimicWin.setBounds({ x: Math.round(nx), y: Math.round(ny), width: b.width, height: b.height });
   } catch { /* noop */ }
 });
-ipcMain.on('warmy:mimicDragEnd', () => { mimicDragCun = null; });
+ipcMain.on('warmy:mimicDragEnd', () => { mimicDragCun = null; mimicDragging = false; });
 
-/** 点击穿透开关（Windows 支持 forward，鼠标移动事件仍能到渲染层） */
-ipcMain.on('warmy:mimicClickThrough', (_e, on: boolean) => {
-  try { if (mimicWin && !mimicWin.isDestroyed()) mimicWin.setIgnoreMouseEvents(!!on, { forward: true }); } catch { /* noop */ }
+/**
+ * **本体矩形上报**（渲染层 → 主进程）：命中测试用。见 `mimicStartHoverPoll`。
+ */
+ipcMain.on('warmy:mimicBodyRect', (_e, r?: { x?: number; y?: number; w?: number; h?: number }) => {
+  try {
+    const x = Number(r?.x), y = Number(r?.y), w = Number(r?.w), h = Number(r?.h);
+    if ([x, y, w, h].every((v) => Number.isFinite(v)) && w > 0 && h > 0) {
+      mimicBodyRect = { x, y, w, h };
+      mimicLastInside = null;          // 矩形变了 ⇒ 下次轮询重算并同步
+    }
+  } catch { /* noop */ }
 });
+
+/**
+ * **兼容旧渲染层的穿透开关**：现在实际开关权在 `mimicStartHoverPoll`（主进程按光标命中测试）。
+ * 保留这个通道只为"旧 dist 仍会发它"时不至于报未注册 IPC；收到即忽略。
+ */
+ipcMain.on('warmy:mimicClickThrough', () => { /* 由主进程轮询接管（不再使用 forward） */ });
 
 /** 双击桌宠 ⇒ 唤醒主窗口并打开与原形牛马的会话 */
 ipcMain.on('warmy:mimicOpenChat', () => {
@@ -4622,7 +4771,14 @@ async function zhaoMsbKe(): Promise<string | null> {
 }
 
 /** 平台虚拟化前提是否满足（Windows=虚拟机平台 / Linux=KVM / macOS=Apple Silicon） */
-chuliIpc('warmy:microsandboxXuNiHua', async () => {
+/** 虚拟化前提检查结果缓存（5 分钟）：它要起**两个** PowerShell，不能每次进设置都跑 */
+let xuNiHuaHuanCun: { at: number; jie: unknown } | null = null;
+const XU_NI_HUA_HUAN_CUN_MS = 5 * 60 * 1000;
+chuliIpc('warmy:microsandboxXuNiHua', async (e, opts?: { force?: boolean }) => {
+  if (!opts?.force && xuNiHuaHuanCun && (Date.now() - xuNiHuaHuanCun.at) < XU_NI_HUA_HUAN_CUN_MS) {
+    return xuNiHuaHuanCun.jie as never;
+  }
+  const jie = await (async () => {
   try {
     if (process.platform === 'win32') {
       // 不依赖管理员：HypervisorPresent 为真 ⇒ 虚拟化栈已起来（VirtualMachinePlatform/Hyper-V 至少一套可用）
@@ -4684,6 +4840,9 @@ chuliIpc('warmy:microsandboxXuNiHua', async () => {
   } catch (e) {
     return { platform: process.platform, ok: false, feature: 'error', state: 'error', howTo: String(e) };
   }
+  })();
+  xuNiHuaHuanCun = { at: Date.now(), jie };
+  return jie as never;
 });
 
 chuliIpc('warmy:microsandboxAnZhuang', async (e, opts?: { force?: boolean }) => {
@@ -4741,10 +4900,43 @@ chuliIpc('warmy:microsandboxXieZai', async () => {
   }
 });
 
-/** 当前 Microsandbox 状态（装没装 + 版本 + 虚拟化前提） */
-chuliIpc('warmy:microsandboxZhuangTai', async () => {
+/** 只看路径在不在（不 execFile 探 PATH）：给界面做"零进程"的存在性判断 */
+function zhaoMsbKeCunZai(): string | null {
+  for (const p of msbHouXuanLuJing()) {
+    if (p === 'msb') continue;   // PATH 上的那份必须真跑才知道，跳过
+    try { if (fs.existsSync(p)) return p; } catch { /* next */ }
+  }
+  return null;
+}
+
+/** msb 状态探测结果缓存（默认 30s）：别每次进设置都 spawn msb.exe + 两个 PowerShell */
+let msbZhuangTaiHuanCun: { at: number; jie: unknown } | null = null;
+const MSB_HUAN_CUN_MS = 30_000;
+
+/**
+ * 当前 Microsandbox 状态（装没装 + 版本 + 虚拟化前提）。
+ *
+ * **本轮修（卡顿 / SmartScreen）**：以前每次调用都
+ *   `qingRongQiTanCeHuanCun()`（清缓存）→ `tanCeRongQiYunXing`（spawn msb.exe）
+ *   → 再起**两个** PowerShell 查虚拟化；
+ * 而设置页渲染会**连调两次**（立即 + 400ms 后）⇒ 一次进设置就是 6 个进程。
+ * `msb.exe` 是未签名第三方二进制 ⇒ Windows 会弹「无法确认谁发布了 msb.exe」并
+ * **在扫描期间卡住**（用户实测："弹窗前几秒明显卡顿"）。
+ * 现在：① 结果缓存 30s（`force:true` 才强制重探）② 二进制不在就**直接如实返回**，
+ * 连 msb 都不 spawn ③ 虚拟化两项也并进缓存。
+ */
+chuliIpc('warmy:microsandboxZhuangTai', async (e, opts?: { force?: boolean }) => {
+  if (!opts?.force && msbZhuangTaiHuanCun && (Date.now() - msbZhuangTaiHuanCun.at) < MSB_HUAN_CUN_MS) {
+    return msbZhuangTaiHuanCun.jie as never;
+  }
   const bin = await zhaoMsbKe();
-  qingRongQiTanCeHuanCun();
+  /** 没装就不 spawn 任何东西（这是"未安装"最省事也最诚实的判定） */
+  if (!bin) {
+    const jie = { ok: false, bin: null, status: 'not-installed', version: null, virt: { ok: false, howTo: '', platform: process.platform, state: 'unknown' } };
+    msbZhuangTaiHuanCun = { at: Date.now(), jie };
+    return jie;
+  }
+  if (!opts?.force) qingRongQiTanCeHuanCun();
   const rep = await tanCeRongQiYunXing({ cacheMs: 0, only: ['microsandbox'] });
   const row = (rep.runtimes || []).find((x) => x.id === 'microsandbox');
   let virt: { ok: boolean; howTo: string; platform: string; state: string } = { ok: false, howTo: '', platform: process.platform, state: 'unknown' };
@@ -4780,13 +4972,24 @@ chuliIpc('warmy:microsandboxZhuangTai', async () => {
       virt = { ok: arm, platform: 'darwin', state: arm ? 'ok' : 'unsupported-arch', howTo: arm ? '' : 'macOS 仅支持 Apple Silicon（M 系列）' };
     }
   } catch { /* keep unknown */ }
-  return {
+  const jie = {
     ok: !!bin && (!row || row.status !== 'not-installed'),
     bin,
     status: row?.status || (bin ? 'installed' : 'not-installed'),
     version: row?.version || null,
     virt,
   };
+  msbZhuangTaiHuanCun = { at: Date.now(), jie };
+  return jie;
+});
+
+/**
+ * **msb 在不在**（纯 fs，零进程）：界面要显示"未安装/未检测"时用它，
+ * **绝不**为了显示一个状态就去 spawn 一个未签名二进制。
+ */
+chuliIpc('warmy:msbCunZai', () => {
+  const p = zhaoMsbKeCunZai();
+  return { ok: true, exists: !!p, path: p || '' };
 });
 
 
@@ -4797,25 +5000,61 @@ chuliIpc('warmy:microsandboxZhuangTai', async () => {
      1) **系统已装字体**：只「点名使用」，不复制、不打包、不再分发；
      2) **用户自行安装**：用户把自己有权使用的字体装进本应用（仅存本机 userData）。
    ─────────────────────────────────────────────────────────────────────── */
-chuliIpc('warmy:lieBiaoXiTongZiTi', () => {
+/** 系统字体列表的"正在取"去重标记（别连点两次启两个 PowerShell） */
+let ziTiLieBiaoZaiQu = false;
+chuliIpc('warmy:lieBiaoXiTongZiTi', async () => {
   /**
    * ⚠️ 必须给**字体家族名**（font-family 认的是家族名）。
    * 以前这里拿字体**文件名**近似（arialbd / ANTQUAB…）⇒ CSS 里写 `font-family:"arialbd"`
    * 根本匹配不到任何字体 ⇒ 「改了字体没生效」。Windows 用 GDI+ 的
    * InstalledFontCollection 拿家族名；拿不到再退回文件名近似（其它平台）。
+   *
+   * **本轮修（卡顿主因之一）**：以前这里 `execFileSync('powershell.exe', …)` ——
+   * **同步**等 PowerShell 冷启动（Windows 上还要被 Defender 实时扫描）1~5 秒，
+   * 期间**整个 Electron 主进程被冻结**，所有 IPC 停摆 ⇒ 界面"点击没反应、鼠标是忙样式"。
+   * 真机复现：一进设置（字体下拉要拉列表）就卡；再点一次又卡。
+   * 现在：① **异步** `execFile`（不再阻塞主进程）② 结果**落盘缓存**（字体列表几乎不变，
+   * 24 小时内直接回缓存，连 PowerShell 都不启）③ 并发去重（连点两次只跑一次）。
    */
-  if (process.platform === 'win32') {
-    try {
-      const out = execFileSync('powershell.exe', [
+  const huanCunLu = path.join(app.getPath('userData'), 'fonts-cache.json');
+  const GUO_QI_MS = 24 * 60 * 60 * 1000;
+  try {
+    const c = JSON.parse(fs.readFileSync(huanCunLu, 'utf8')) as { at?: number; fonts?: string[] };
+    if (Array.isArray(c?.fonts) && c.fonts.length && Number(c.at) && (Date.now() - Number(c.at)) < GUO_QI_MS) {
+      return { ok: true, fonts: c.fonts, cached: true };
+    }
+  } catch { /* 缓存没有/坏了就重取 */ }
+  if (ziTiLieBiaoZaiQu) {
+    // 上一次还在跑：别再启一个 PowerShell，等它落盘后读缓存
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      try {
+        const c = JSON.parse(fs.readFileSync(huanCunLu, 'utf8')) as { fonts?: string[] };
+        if (Array.isArray(c?.fonts) && c.fonts.length) return { ok: true, fonts: c.fonts, cached: true };
+      } catch { /* 继续等 */ }
+    }
+  }
+  ziTiLieBiaoZaiQu = true;
+  try {
+    const pao = (file: string, args: string[]): Promise<string> => new Promise((resolve) => {
+      execFile(file, args, { encoding: 'utf8', timeout: 20000, windowsHide: true, maxBuffer: 1 << 22 }, (error, stdout) => {
+        resolve(error ? '' : String(stdout || ''));
+      });
+    });
+    let jia: string[] = [];
+    if (process.platform === 'win32') {
+      const out = await pao('powershell.exe', [
         '-NoProfile', '-NonInteractive', '-Command',
         'Add-Type -AssemblyName System.Drawing; [System.Drawing.Text.InstalledFontCollection]::new().Families | ForEach-Object { $_.Name }',
-      ], { encoding: 'utf8', timeout: 20000, windowsHide: true });
-      const jia = out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-      if (jia.length) {
-        return { ok: true, fonts: Array.from(new Set(jia)).sort((a, b) => a.localeCompare(b)) };
-      }
-    } catch { /* 落到下面的通用路径 */ }
-  }
+      ]);
+      jia = out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    }
+    if (jia.length) {
+      const yi = Array.from(new Set(jia)).sort((a, b) => a.localeCompare(b));
+      try { fs.writeFileSync(huanCunLu, JSON.stringify({ at: Date.now(), fonts: yi })); } catch { /* 缓存写失败不影响本次 */ }
+      return { ok: true, fonts: yi };
+    }
+  } catch { /* 落到下面的通用路径 */ } finally { ziTiLieBiaoZaiQu = false; }
   try {
     const dir = process.platform === 'win32'
       ? [path.join(process.env.windir || 'C:\\Windows', 'Fonts'), path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Windows', 'Fonts')]
@@ -5096,15 +5335,28 @@ chuliIpc(
        * 重启后不必重新拉取，也能知道每个模型的**真实上下文大小**（上下文预算滑块据此显示）。
        */
       try {
-        const caps: Record<string, { contextLen?: number; kind?: string; tools?: boolean | 'unknown'; vision?: boolean | 'unknown' }> = {};
+        const caps: Record<string, { contextLen?: number; kind?: string; tools?: boolean | 'unknown'; vision?: boolean | 'unknown'; mediaFormats?: string[] }> = {};
         for (const [id0, neng0] of modelNengLiMeta) {
           const n = neng0 as { contextLen?: number; kind?: string; tools?: boolean | 'unknown'; vision?: boolean | 'unknown' };
-          // **能力全量落盘**（不只看 contextLen）：kind/tools 是警示图标与筛选的依据
+          /**
+           * **能力全量落盘**（不只看 contextLen）：kind/tools 是警示图标与筛选的依据。
+           * `mediaFormats`：**拉取模型时就知道它收什么格式**（产品要求）——
+           * 发送前的格式验收门禁（`yanShouGeShi`）据此决定「原样发 / 转换 / 拒绝」。
+           */
+          const k = String(n.kind || '');
+          const mf = ((): string[] => {
+            const zhongLei = (k === 'asr' || k === 'tts')
+              ? 'audio'
+              : ((k === 'image' || n.vision === true) ? 'image' : null);
+            if (!zhongLei) return [];
+            return jieShouGeShi(zhongLei, 'openai-compatible', k).slice();
+          })();
           caps[id0] = {
             contextLen: Number(n.contextLen) || 0,
-            kind: String(n.kind || ''),
+            kind: k,
             tools: n.tools,
             vision: n.vision,
+            ...(mf.length ? { mediaFormats: mf } : {}),
           };
         }
         const cur = (settingsStore?.load() as { modelCaps?: Record<string, unknown> } | undefined) || {};
@@ -5836,6 +6088,14 @@ async function zhenZhengFaSong(
     const qiShiShiJian = Date.now();
     benLunGongJuMing = [];
     benLunChanPin = [];
+    /**
+     * **只在真实用户轮清空"续派计数器"**：自动续派是同一轮任务的延续（`internal:true`），
+     * 清掉就等于把 `buZhouYanXu` 的步骤上限废掉 —— 那正是"重复执行好几次停不下来"的成因。
+     */
+    if ((xiaoXi as { internal?: boolean }).internal !== true) {
+      meiYouJinZhan.delete(sessionId);
+      buZhouYanXu.delete(sessionId);
+    }
     let zuiHouCuo = '';
     /**
      * **调用失败自动降级**：把**整条调用链 / 全部可用模型**都试完（不是只试 3 个）——
@@ -5906,7 +6166,30 @@ async function zhenZhengFaSong(
           if (niMing) ju.push(tMain('llm.identityLine', '你是「{ming}」。').replace('{ming}', niMing));
           else ju.push(tMain('llm.identityAnon', '你是 WArmy 里的 AI 牛马。'));
           // 让它知道自己跑在哪个模型上（真事故：用户问"你是哪个模型"，它说"看不清蹄子底下"）
-          if (modelId) ju.push(tMain('llm.modelLine', '你当前运行在模型「{model}」上。').replace('{model}', String(modelId)));
+          if (modelId) ju.push(tMain('llm.modelLine', '你当前运行在模型「{model}」上。用户问你是什么模型时如实回答它。')
+            .replace(/\{model\}/g, String(modelId))
+            .replace(/\{ming\}/g, niMing || tMain('llm.identityAnon', 'AI 牛马')));
+          /**
+           * **身份锚 · 每轮重申**（真机事故：反复续派 + 模型降级后，牛马忘了自己是牛马，
+           * 只知道自己跑在 qwen 上，自称 qwen）。
+           * 联网调研结论（Anthropic "effective context engineering" / context rot）：长上下文会
+           * 逐轮稀释人格细节；解法是把「我是谁 + 我认谁」写成**短锚句、每轮随 user turn 重申**，
+           * 而不是只躺在第一条 system 里。这里就是那个锚。
+           */
+          ju.push(tMain('llm.identityAnchor', '【身份锚 · 每轮重申】你是「{ming}」，用户的 AI 牛马。')
+            .replace(/\{ming\}/g, niMing || tMain('llm.identityAnon', 'AI 牛马')));
+          /**
+           * **注入本牛马的人设正文**（真机反馈：人设在界面里写着，模型却完全不知道）。
+           * 以前 `persona` 只存 UI、从不进提示。现在按实例取来，截断后注入（不无界膨胀）。
+           */
+          try {
+            const lie = (settingsStore?.load() as { instances?: Array<{ id?: string; ming?: string; name?: string; persona?: string }> } | undefined)?.instances || [];
+            const ben = lie.find((x) => String(x?.id || '') === String(sessionId));
+            const renShe = String(ben?.persona || '').trim();
+            if (renShe) {
+              ju.push('\n【你的人设（用户为你写的，请始终符合）】\n' + renShe.slice(0, 1600));
+            }
+          } catch { /* 拿不到实例就不注入 */ }
           if (yongHuZhen) ju.push(tMain('llm.userLine', '你的用户是「{u}」，请这样称呼他。').replace('{u}', yongHuZhen));
           else ju.push(tMain('llm.userAnon', '你的用户是本机操作者，请称呼「你」，不要编造用户名。'));
           /** 产品语境一句：这是桌面多智能体应用，不是网页客服 */
@@ -6162,7 +6445,8 @@ async function zhenZhengFaSong(
                 : (mu.content as Array<{ text?: string }>).map((b) => b.text || '').join('');
               yuanXiaoXiJiBase[zuiHou] = {
                 role: mu.role,
-                content: yuanWen + tMain('chat.delegateNote', '\n\n【其他模型完成的子任务结果】\n') + jieGuoWenBen.join('\n'),
+                content: yuanWen + tMain('chat.delegateNote', '\n\n【其他模型完成的子任务结果】\n') + jieGuoWenBen.join('\n')
+                  + tMain('llm.delegateUseIt', '\n（上面这些子任务**已经由本机的专业模型替你完成**了：请**直接用这些结果**回答用户。不要再说"我看不了图 / 我读不了音频 / 我没有这个能力"——那是事实错误，能力已经由子任务补齐。若结果本身不足以回答，就说明缺什么。）'),
               };
             }
           }
@@ -6236,8 +6520,14 @@ async function zhenZhengFaSong(
               } else { throw e1; }
             }
           } else if (siKaoExtra && /reasoning|thinking|effort|unsupported|unknown (parameter|field)|invalid.*parameter|400/i.test(mo)) {
-            jiangJiTiShi = true;
-            audit?.log('chat.think-downgraded', { sessionId, level: xiaoXi.thinkLevel || 'auto', error: mo.slice(0, 160) });
+            /**
+             * **产品要求（本轮）**：思考级别是「自动」时，模型不支持思考就**静默**按"不思考"跑，
+             * 不要在界面上提示 —— 因为「自动」这个选项**本来就包含"不思考"**，
+             * 提示了反而是噪音。只有用户**明确选了档位**（low/medium/high/off）时才如实提示降级。
+             */
+            const ziDong = !String(xiaoXi.thinkLevel || '').trim() || String(xiaoXi.thinkLevel) === 'auto';
+            if (!ziDong) jiangJiTiShi = true;
+            audit?.log('chat.think-downgraded', { sessionId, level: xiaoXi.thinkLevel || 'auto', silent: ziDong, error: mo.slice(0, 160) });
             loop = await yunXingLiaoTianXunHuan(sessionId, provider, jiBenQiu, xiaoXi.xiaoDiShuLiang);
           } else {
             throw e0;
@@ -7066,6 +7356,16 @@ const stoppedSessions = new Set<string>();
 /** 连续「零工具调用」的续派次数：用来挡住"一直在思考却不动手"的空转循环 */
 const meiYouJinZhan = new Map<string, number>();
 /**
+ * **同一个计划步骤被自动续派的次数**（sessionId → 步骤 id → 次数）。
+ *
+ * 真机事故：审计里 `plan.auto-continue | step:"T4", n:16` —— 同一步骤反复续派；
+ * 本次事故事故更糟：它**每轮都调工具**（`run_shell` 被用户拒、`write_file` 落桌面被拒），
+ * 所以"零工具调用"那把尺子量不到它，一路烧到 `tool-loop-timeout(600s)`。
+ * 这里补一把**按步骤**的尺子：同一步骤续派超过上限就停，如实告诉用户卡在哪。
+ */
+const buZhouYanXu = new Map<string, Map<string, number>>();
+const BUZHOU_YANXU_SHANGXIAN = 4;
+/**
  * **取消信号**（用户反馈"停止功能还是不行，无法让会话内的 AI 停止工作"）。
  *
  * 真缺陷：`provider.chat(Qiu, signal)` **本来就收 AbortSignal**（见 providers/types.ts），
@@ -7120,6 +7420,20 @@ function yingGaiZiDongJiXu(
   /** 已经判过异常 ⇒ **一步都不许再往下走**（用户回一句话才会清掉这个标记） */
   if (quEtaYiChang(sessionId)) return { jiXu: false, liYou: 'eta-anomaly' };
   /**
+   * **跨轮重复 ≥3 次 ⇒ 确认为异常**（产品要求）。
+   * 判异常的模型也会看这条事实（见 `panDuanKaSi` 的提示），但**次数到了就直接定异常**，
+   * 不再依赖模型判 —— 真机事故里模型往往"觉得还能再试"，于是一直重复下去。
+   */
+  {
+    let zuiDuo = 0; let zuiDuoFp = '';
+    const kua = huiHuaChongFu.get(sessionId);
+    if (kua) for (const [fp, n] of kua) if (n > zuiDuo) { zuiDuo = n; zuiDuoFp = fp; }
+    if (zuiDuo >= 3) {
+      try { audit?.log('plan.auto-continue-repeat-anomaly', { sessionId, n: zuiDuo, fp: zuiDuoFp.slice(0, 80) }); } catch { /* noop */ }
+      return { jiXu: false, liYou: 'repeat-3x' };
+    }
+  }
+  /**
    * **没有进展就不许再续派**（真事故：用户报"一直在生成内容，却始终没有输出结果"）。
    * 审计原样：`plan.auto-continue | step:"T3", n:16` —— 同一个步骤连派 16 次，
    * 而每一轮 `chat.tools.done | gongJuDiaoYongJi:0, tingZhiYuanYin:'stop'` ——
@@ -7131,7 +7445,21 @@ function yingGaiZiDongJiXu(
   if (lingGongJuBenLun) meiYouJinZhan.set(sessionId, (meiYouJinZhan.get(sessionId) || 0) + 1);
   else meiYouJinZhan.delete(sessionId);
   const kongZhuan = meiYouJinZhan.get(sessionId) || 0;
-  if (jiHuaHuanYouBuWeiBu(sessionId)) {
+  const buNow = jiHuaHuanYouBuWeiBu(sessionId);
+  if (buNow) {
+    /**
+     * **同一步骤续派上限**（见 `buZhouYanXu` 的说明）：到顶就停下、如实说明。
+     * 不这样做的话，模型只要每轮"象征性调一个工具"就能无限续派，界面永远转圈。
+     */
+    const m = buZhouYanXu.get(sessionId) || new Map<string, number>();
+    const n = (m.get(buNow.id) || 0) + 1;
+    m.set(buNow.id, n);
+    buZhouYanXu.set(sessionId, m);
+    if (n > BUZHOU_YANXU_SHANGXIAN) {
+      meiYouJinZhan.delete(sessionId);
+      try { audit?.log('plan.auto-continue-step-capped', { sessionId, step: buNow.id, n }); } catch { /* noop */ }
+      return { jiXu: false, liYou: 'step-capped' };
+    }
     if (kongZhuan >= 2) {
       meiYouJinZhan.delete(sessionId);
       return { jiXu: false, liYou: 'no-progress' };
@@ -7213,6 +7541,23 @@ ${jinJi}
 
 【最近工具调用】（成功/被拒 + 耗时）
 ${zuiJinGongJuXianQing(sessionId, 8).map((x) => `· ${x.tool} → ${x.ok ? '成功' : '被拒'}（${x.ms}ms）`).join('\n') || '（还没有）'}
+
+【重复执行检查】（产品要求：同时判"是不是在重复上一轮已经干过的活"）
+${(() => {
+  const kua = huiHuaChongFu.get(sessionId);
+  const hang: string[] = [];
+  if (kua && kua.size) {
+    for (const [fp, n] of [...kua.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)) {
+      hang.push(`· ${fp.slice(0, 90)} → 已重复 ${n} 次`);
+    }
+    const zuiDuo = Math.max(...[...kua.values()]);
+    if (zuiDuo >= 3) hang.push(`⚠️ **同一个动作已经重复 ${zuiDuo} 次（≥3）—— 按约定这就是异常**，请判 stalled=true 并说明它在重复哪一步。`);
+    else hang.push('（重复次数未到 3 次；仅凭"重复了一两次"不算异常）');
+  } else {
+    hang.push('（还没有可比对的重复记录）');
+  }
+  return hang.join('\n');
+})()}
 
 【计划】
 ${qingDan}
@@ -8121,6 +8466,19 @@ chuliIpc('warmy:peiZhiBaoCun', (e, partial: Record<string, unknown>) => {
   if (partial && (partial as { restoreDefaults?: boolean }).restoreDefaults) {
     try {
       const ji = settingsStore?.reset();
+      /**
+       * **牛马一并清掉**（产品要求）：删配置文件时，里面的牛马也要删干净 ——
+       * 否则 `huiFuNiuMa()` 会在下次启动把 `instances/` 目录里的实例**原样恢复**出来，
+       * 表现就是"删了配置，首启还是有牛马"。
+       * 这里把实例目录清空（它们就是每头牛马的工作区），首启就是干净的 0 头。
+       */
+      try {
+        const gen = path.join(app.getPath('userData'), 'instances');
+        for (const n of fs.readdirSync(gen)) {
+          try { fs.rmSync(path.join(gen, n), { recursive: true, force: true }); } catch { /* 尽力清 */ }
+        }
+        qidong('restore-defaults: instances cleared');
+      } catch (e) { qidong('restore-defaults: instances clear skip ' + String(e)); }
       try { broadcastToWindows('warmy:peiZhiChanged', { keys: ['restoreDefaults'] }, e?.sender?.id); } catch { /* noop */ }
       return { ok: true, settings: ji, restored: true };
     } catch (err) { return { ok: false, error: xiJingCuoWu(err) }; }
@@ -9501,7 +9859,7 @@ chuliIpc('warmy:rongQiKongZhiTai', async (_e, payload?: { runtimeId?: string; ac
     }
     // **解锁**宿主目录（如果这个项目被加过锁）：容器要在同一份 bind mount 上写，
     // 让锁和正在运行的容器同时存在会互相打脸（这条在 fsGuard 那边也写着）
-    liftFsGuardIfAny(Qiu.sessionId, 'container-started');
+    await liftFsGuardIfAny(Qiu.sessionId, 'container-started');
     const opened = daKaiKongZhiTaiHuiHua({ groupId: Qiu.sessionId, runtimeId, containerName: yiBaoZhang.containerRef });
     if (!opened.ok) {
       fachuKongzhitai({ cat: 'error', code: 'container.console.refused', data: { code: opened.code, action: 'daKai' } });
@@ -9633,7 +9991,7 @@ chuliIpc('warmy:xiangMuZhiXing', async (_e, payload?: { sessionId?: string; comm
     if (status !== 'ready') return { ok: false, code: 'container-not-ready', executed: false, needsInstall: true };
     const yiBaoZhang = await baozhangXiangmuRongqi(id, runtimeId);
     if (!yiBaoZhang.ok) return { ok: false, code: yiBaoZhang.code, executed: false, containerRef: yiBaoZhang.containerRef, rawOutput: yiBaoZhang.raw };
-    liftFsGuardIfAny(id, 'container-started');
+    await liftFsGuardIfAny(id, 'container-started');
     const r = await yunXingRongQiZhiXing(runtimeId, 'exec-capture', { ming: yiBaoZhang.containerRef, command }, 120000);
     fachuKongzhitai({ cat: 'tool', code: 'container.project.exec', data: { sessionId: id, command, ok: r.ok } });
     return {
@@ -9789,13 +10147,13 @@ function writeFsGuardRecord(groupId: string, jiLu: { dir: string; sid: string; a
 }
 
 /** 容器一启动就解锁（如果这个项目被加过锁）；如实返回发生了什么 */
-function liftFsGuardIfAny(groupId: string, reason: string): { lifted: boolean; dir?: string } {
+async function liftFsGuardIfAny(groupId: string, reason: string): Promise<{ lifted: boolean; dir?: string }> {
   const jiLu = fsGuardRecordOf(groupId);
   if (!jiLu || jiLu.liftedAt) return { lifted: false };
   try {
     const plan = zhuJiMuLuHuLanJiHua({ action: 'lift', dir: jiLu.dir, sid: jiLu.sid });
     if (!plan.ok) return { lifted: false };
-    const r = runIcaclsSync(plan.plan);
+    const r = await runIcaclsSync(plan.plan);
     if (!r.ok) return { lifted: false };
     writeFsGuardRecord(groupId, { ...jiLu, liftedAt: Date.now() });
     audit?.log('container.fs-guard.lift', { sessionId: groupId, reason });
@@ -9806,14 +10164,21 @@ function liftFsGuardIfAny(groupId: string, reason: string): { lifted: boolean; d
   }
 }
 
-/** 同步跑一次 icacls（"启动容器之前"这条关键路径必须先把锁摘掉） */
-function runIcaclsSync(plan: { file: string; args: string[] }): { ok: boolean; err: string } {
-  try {
-    execFileSync(plan.file, plan.args, { windowsHide: true, timeout: 60000, stdio: 'ignore' });
-    return { ok: true, err: '' };
-  } catch (e) {
-    return { ok: false, err: xiJingCuoWu(e) };
-  }
+/**
+ * 跑一次 icacls（撤销目录锁）。
+ *
+ * **本轮修（卡顿）**：以前是 `execFileSync`（**同步**等 60 秒）—— 一旦 Defender 扫 icacls.exe
+ * 或命令跑得慢，**整个主进程被冻结**，界面全体点击没反应。改成异步：调用方 await，
+ * 但主进程的事件循环在这期间**照常跑**（IPC/窗口都不停）。
+ */
+async function runIcaclsSync(plan: { file: string; args: string[] }): Promise<{ ok: boolean; err: string }> {
+  return new Promise((resolve) => {
+    try {
+      execFile(plan.file, plan.args, { windowsHide: true, timeout: 20000, maxBuffer: 1 << 20 }, (error) => {
+        resolve(error ? { ok: false, err: xiJingCuoWu(error) } : { ok: true, err: '' });
+      });
+    } catch (e) { resolve({ ok: false, err: xiJingCuoWu(e) }); }
+  });
 }
 
 /**
@@ -12996,8 +13361,17 @@ chuliIpc('warmy:baoCunWenBen', async (_e, payload: { defaultName?: string; conte
 chuliIpc('warmy:tingHuaZhuangTai', async () => {
   try {
     await baozhangGongyingshangMiyao();
-    const hit = await teShuMoXingKeYong('asr');
-    if (hit) return { ok: true, ready: true, model: hit.mo, provider: hit.an.biaoQian, source: 'asr-chain' };
+    /**
+     * **扫整条听话模型链**（真机反馈：明明配了 ASR 模型，话筒仍说"需要配置听话模型"）。
+     * 以前只看链上**第一个**：第一个不可用（禁用/供应商没配/密钥没解出来）就一律判"没配"，
+     * 哪怕链上第二个是好的。现在逐个找，找到第一个真能用的就报 ready。
+     */
+    for (const mo of nengLiLianMoXing('asr')) {
+      const an = await jieMoXingGongYingShang(mo);
+      if (!an) continue;
+      if (!an.apiKey && an.protocol !== 'ollama') continue;
+      return { ok: true, ready: true, model: mo, provider: an.biaoQian, source: 'asr-chain' };
+    }
     // 没配专业听话模型：看看当前供应商能不能顶一下（DeepSeek 等不一定有 /audio/transcriptions）
     const keYong = !!(providerCfg.apiKey || providerCfg.protocol === 'ollama');
     return {
@@ -13044,11 +13418,26 @@ async function ttsChatShi(
 async function asrChatShi(
   an: MoXingGongYingXinXi, mo: string, buf: Buffer, fmt: string, prompt?: string,
 ): Promise<{ ok: boolean; text?: string; model?: string; error?: string }> {
+  /**
+   * **格式闸门**（真机事故的直接原因 + 产品要求的"发送前格式验收"）：chat 式 ASR 只吃 wav / mp3。
+   * 实测 MiMo：`input_audio.format must be one of: wav, mp3. Got: webm`。
+   * 麦克风录的是 webm ⇒ 以前总是白挨一个 400，界面表现为"配了听话模型却转不出字"。
+   * 渲染层已把录音转成 16kHz WAV（见 app.js 的 blobZhuanWav）；这里用 `yanShouGeShi`
+   * **统一门禁**再兜一道 —— 不合规就如实报错，绝不把注定 400 的请求发出去。
+   */
+  const men = yanShouGeShi(fmt, jieShouGeShi('audio', an.protocol === 'ollama' ? 'ollama' : 'openai-compatible', 'asr'));
+  if (men.action === 'reject') {
+    return { ok: false, error: String(men.reason || `format-unsupported（${fmt}）`) };
+  }
+  const gui = men.action === 'convert' ? (men.to as 'wav' | 'mp3') : guiFanAsrGeShi(fmt);
+  if (!gui) {
+    return { ok: false, error: `format-unsupported（chat 式 ASR 只支持 wav/mp3，收到 ${fmt}；请改用 wav 录音）` };
+  }
   try {
     const r = await fetch(pinJieUrl(an.baseURL, 'chat/completions'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(an.apiKey ? { Authorization: `Bearer ${an.apiKey}` } : {}) },
-      body: JSON.stringify(taoAsrChatBody({ model: mo, dataBase64: buf.toString('base64'), format: fmt as never, prompt })),
+      body: JSON.stringify(taoAsrChatBody({ model: mo, dataBase64: buf.toString('base64'), format: gui, prompt })),
     });
     const j = await r.json().catch(() => null);
     const jie = jieXiAsrChatResponse(j);
@@ -13058,6 +13447,64 @@ async function asrChatShi(
     return { ok: false, error: xiJingCuoWu(e) };
   }
 }
+
+/**
+ * **统一转写**：一段音频 buffer → 文字。**串起能力链**（不再只看链上第一个模型）。
+ *
+ * 每个候选模型先试标准 OpenAI `/audio/transcriptions`；端点不存在（404/400/405/422）就换
+ * **chat 式**再试。链上全试完仍失败 ⇒ 如实返回失败原因（供界面/界面外如实告知，不假装）。
+ *
+ * 真事故（本次）：`yuYinZhuanXie()` 以前只取链上**第一个**模型、且**只走**标准端点 ——
+ * MiMo 没有 `/audio/transcriptions` ⇒ 必然 404 ⇒ 牛马那边看到的就是"没有可用的听话模型"，
+ * 明明配了。这里改成和 IPC 主路径**共用同一套逻辑**。
+ */
+async function zhuanXieYinPinBuf(
+  buf: Buffer, geShi: string,
+): Promise<{ ok: boolean; text?: string; model?: string; error?: string }> {
+  await baozhangGongyingshangMiyao();
+  const houXuan = nengLiLianMoXing('asr');
+  const cuoWu: string[] = [];
+  for (const mo of houXuan) {
+    const an = await jieMoXingGongYingShang(mo);
+    if (!an) { cuoWu.push(`${mo}: provider-not-found`); continue; }
+    if (!an.apiKey && an.protocol !== 'ollama') { cuoWu.push(`${mo}: no-key`); continue; }
+    // ① 标准 OpenAI 音频端点
+    try {
+      const f = new FormData();
+      f.append('file', new Blob([new Uint8Array(buf)], { type: `audio/${geShi}` }), `audio.${geShi}`);
+      f.append('model', mo);
+      const res = await fetch(pinJieUrl(an.baseURL, 'audio/transcriptions'), {
+        method: 'POST',
+        headers: an.apiKey ? { Authorization: 'Bearer ' + an.apiKey } : undefined,
+        body: f,
+      });
+      if (res.ok) {
+        const d = (await res.json()) as { text?: string };
+        const t = String(d?.text || '').trim();
+        if (t) { audit?.log('asr.used', { model: mo, chars: t.length, source: 'audio-transcriptions' }); return { ok: true, text: t, model: mo }; }
+        cuoWu.push(`${mo}: empty`);
+      } else {
+        audit?.log('asr.failed', { model: mo, status: res.status });
+        // ② 端点走不通 ⇒ chat 式（只认 wav/mp3，asrChatShi 内部已挡）
+        if (yingGaiHuanChatShi(res.status)) {
+          const r2 = await asrChatShi(an, mo, buf, geShi);
+          if (r2.ok) {
+            audit?.log('asr.used', { model: mo, chars: String(r2.text || '').length, source: 'chat-completions', format: geShi });
+            return { ok: true, text: r2.text || '', model: mo };
+          }
+          audit?.log('asr.failed', { model: mo, source: 'chat-completions', error: String(r2.error || '').slice(0, 140) });
+          cuoWu.push(`${mo}: ${r2.error}`);
+        } else {
+          cuoWu.push(`${mo}: http ${res.status}`);
+        }
+      }
+    } catch (e) {
+      cuoWu.push(`${mo}: ${xiJingCuoWu(e)}`);
+    }
+  }
+  return { ok: false, error: cuoWu.length ? cuoWu.join(' | ').slice(0, 300) : 'no-asr-model（「设置 → 模型 → 听话模型」里没有可用模型）' };
+}
+
 
 chuliIpc('warmy:asrZhuanXie', async (_e, payload: { dataUrl: string; ext?: string }) => {
   try {
@@ -13072,75 +13519,23 @@ chuliIpc('warmy:asrZhuanXie', async (_e, payload: { dataUrl: string; ext?: strin
       const biao: Record<string, string> = { mpeg: 'mp3', 'x-wav': 'wav', wav: 'wav', webm: 'webm', ogg: 'ogg', opus: 'opus', mp4: 'm4a', 'x-m4a': 'm4a', flac: 'flac' };
       return biao[m.toLowerCase()] || 'webm';
     })();
-    const biaodan = () => {
-      const f = new FormData();
-      f.append('file', new Blob([buf], { type: 'audio/webm' }), 'voice.webm');
-      return f;
-    };
     /**
-     * ① **设置里的听话模型优先**（产品要求：有专业模型就用它，没有才回退）。
-     * 真事故：以前完全无视「听话模型」设置，硬发 whisper-1 给当前供应商 ⇒ 转不出来，
-     * 界面只能显示 `[语音] xxx.webm`。
+     * **统一管线**：听话模型链上逐个试「标准 `/audio/transcriptions` → chat 式」。
+     *
+     * 为什么要串链（本次真机事故）：以前只取链上**第一个**模型，它挂了整条就废；
+     * 而且标准端点在 MiMo 必然 404 —— 用户看到的就是"配了听话模型却转不出字"。
+     * 现在：链上每一个都试；chat 式只认 wav/mp3（`asrChatShi` 内部有格式闸门，不再白挨 400）。
      */
-    const hit = await teShuMoXingKeYong('asr');
-    if (hit) {
-      const form = biaodan();
-      form.append('model', hit.mo);
-      try {
-        const res = await fetch(pinJieUrl(hit.an.baseURL, 'audio/transcriptions'), {
-          method: 'POST',
-          headers: hit.an.apiKey ? { Authorization: 'Bearer ' + hit.an.apiKey } : undefined,
-          body: form,
-        });
-        if (res.ok) {
-          const data = (await res.json()) as { text?: string };
-          audit?.log('asr.used', { model: hit.mo, chars: String(data.text || '').length, source: 'asr-chain' });
-          return { ok: true, text: data.text || '', model: hit.mo, source: 'asr-chain' };
-        }
-        audit?.log('asr.failed', { model: hit.mo, status: res.status });
-        /**
-         * **换"chat 式"再试**：只暴露 `/chat/completions` 的网关（实测 MiMo）没有
-         * `/audio/transcriptions`。404/400 这类是"这条路走不通"，值得换形状；
-         * 401/403 是密钥问题，换形状没用（如实报错更诚实）。
-         */
-        if (yingGaiHuanChatShi(res.status)) {
-          const r2 = await asrChatShi(hit.an, hit.mo, buf, yinPinGeShi);
-          if (r2.ok) {
-            audit?.log('asr.used', { model: hit.mo, chars: String(r2.text || '').length, source: 'asr-chain-chat', format: yinPinGeShi });
-            return { ok: true, text: r2.text || '', model: hit.mo, source: 'asr-chain-chat', via: 'chat-completions' };
-          }
-          audit?.log('asr.failed', { model: hit.mo, source: 'chat-completions', error: String(r2.error || '').slice(0, 140) });
-        }
-      } catch (e1) {
-        audit?.log('asr.failed', { model: hit.mo, error: xiJingCuoWu(e1).slice(0, 120) });
-      }
+    const r = await zhuanXieYinPinBuf(buf, yinPinGeShi);
+    if (r.ok) return { ok: true, text: r.text || '', model: r.model, source: 'asr-chain' };
+    // ② 兜底：当前生效供应商（可能只暴露 /chat/completions ⇒ 走 chat 式）
+    if (providerCfg.apiKey || providerCfg.protocol === 'ollama') {
+      const base = (providerCfg.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '');
+      const anDie = { presetId: providerCfg.presetId, baseURL: base, protocol: providerCfg.protocol, apiKey: providerCfg.apiKey, biaoQian: providerCfg.presetId };
+      const r3 = await asrChatShi(anDie, providerCfg.model || 'mimo-v2.5-asr', buf, yinPinGeShi);
+      if (r3.ok) return { ok: true, text: r3.text || '', model: r3.model, source: 'chat-provider-fallback', via: 'chat-completions' };
     }
-    // ② 回退：当前生效供应商的 /audio/transcriptions（无感兜底）
-    if (!providerCfg.apiKey && providerCfg.protocol !== 'ollama') return { ok: false, error: 'no-asr-model（请在「设置 → 模型 → 听话模型」里配置）' };
-    const base = (providerCfg.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '');
-    const form2 = biaodan();
-    form2.append('model', 'whisper-1');
-    const res2 = await fetch(base + '/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + providerCfg.apiKey },
-      body: form2,
-    });
-    if (!res2.ok) {
-      /**
-       * 兜底也要能走 **chat 式**：当前供应商如果是"只有 /chat/completions"的网关，
-       * 标准音频端点必然 404 —— 这里再试一次，别让"能转的"白白转不出来。
-       */
-      if (yingGaiHuanChatShi(res2.status)) {
-        const r3 = await asrChatShi(
-          { presetId: providerCfg.presetId, baseURL: base, protocol: providerCfg.protocol, apiKey: providerCfg.apiKey, biaoQian: providerCfg.presetId },
-          'mimo-v2.5-asr', buf, yinPinGeShi,
-        );
-        if (r3.ok) return { ok: true, text: r3.text || '', model: r3.model || 'mimo-v2.5-asr', source: 'chat-provider-fallback', via: 'chat-completions' };
-      }
-      return { ok: false, error: 'http ' + res2.status };
-    }
-    const data2 = (await res2.json()) as { text?: string };
-    return { ok: true, text: data2.text || '', model: 'whisper-1', source: 'chat-provider-fallback' };
+    return { ok: false, error: String(r.error || 'no-asr-model（请在「设置 → 模型 → 听话模型」里配置）') };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
@@ -14196,9 +14591,21 @@ chuliIpc('warmy:wenJianYuLan', (_e, p0?: { path?: string; maxBytes?: number }) =
     return { ok: true, dataUrl: `data:${mime};base64,${fs.readFileSync(p).toString('base64')}`, bytes: st.size };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-/** 在资源管理器里显示这个文件（导出后给用户看文件在哪） */
-chuliIpc('warmy:xianShiWenJianJia', (_e, p0?: { path?: string }) => {
+/**
+ * **任意文件的字节数**：附件条要显示"多大"（产品要求：图片/文档/压缩包都要显示，
+ * 且超过 1024 要逐级进位到 KB/MB/GB —— 进位在渲染层做，这里只给真实字节数）。
+ */
+chuliIpc('warmy:wenJianDaXiao', (_e, p0?: { path?: string }) => {
   try {
+    const p = String(p0?.path || '').trim();
+    if (!p || !fs.existsSync(p)) return { ok: false, error: 'not-found' };
+    const st = fs.statSync(p);
+    if (!st.isFile()) return { ok: false, error: 'not-a-file' };
+    return { ok: true, bytes: st.size };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 在资源管理器里显示这个文件（导出后给用户看文件在哪） */
+chuliIpc('warmy:xianShiWenJianJia', (_e, p0?: { path?: string }) => {  try {
     const p = String(p0?.path || '').trim();
     if (!p || !fs.existsSync(p)) return { ok: false, error: 'not-found' };
     shell.showItemInFolder(p);

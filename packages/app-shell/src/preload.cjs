@@ -32,7 +32,9 @@ contextBridge.exposeInMainWorld('warmy', {
   installFont: (p0) => ipcRenderer.invoke('warmy:anZhuangZiTi', p0),
   microsandboxInstall: (opts) => ipcRenderer.invoke('warmy:microsandboxAnZhuang', opts),
   microsandboxUninstall: () => ipcRenderer.invoke('warmy:microsandboxXieZai'),
-  microsandboxStatus: () => ipcRenderer.invoke('warmy:microsandboxZhuangTai'),
+  microsandboxStatus: (opts) => ipcRenderer.invoke('warmy:microsandboxZhuangTai', opts),
+  /** **零进程**的存在性判断（纯 fs）：界面显示"未安装"用它，绝不为此 spawn 未签名的 msb.exe */
+  msbCunZai: () => ipcRenderer.invoke('warmy:msbCunZai'),
   microsandboxVirt: () => ipcRenderer.invoke('warmy:microsandboxXuNiHua'),
   localeInfo: () => ipcRenderer.invoke('warmy:yuYanXinXi'),
   setThemeSource: (s) => ipcRenderer.invoke('warmy:sheZhiZhuTiLaiYuan', s),
@@ -317,6 +319,14 @@ contextBridge.exposeInMainWorld('warmy', {
   onAiWenTi: (cb) => ipcRenderer.on('warmy:aiWenTi', (_e, d) => cb(d)),
   /** 在资源管理器里显示文件（导出后看文件在哪） */
   xianShiWenJianJia: (p) => ipcRenderer.invoke('warmy:xianShiWenJianJia', p),
+  /**
+   * **图片附件缩略图**（返回 dataUrl + 真实字节数）。
+   * 真事故：渲染层一直在调 `window.warmy.wenJianYuLan`，但 preload **从没暴露过它** ⇒
+   * 图片的缩略图与大小都永远出不来（"照片的大小似乎没有显示"的直接原因之一）。
+   */
+  wenJianYuLan: (p) => ipcRenderer.invoke('warmy:wenJianYuLan', p),
+  /** **任意文件的字节数**（附件条要显示"多大"，图片/文档/压缩包都要） */
+  wenJianDaXiao: (p) => ipcRenderer.invoke('warmy:wenJianDaXiao', typeof p === 'string' ? { path: p } : p),
   /**
    * 跨窗口同步：主窗口与独立会话窗是同一份数据的两个视图。
    *  · chatUpdated：某个会话的日志被追加过 → 正在看它的窗口重新拉一次；

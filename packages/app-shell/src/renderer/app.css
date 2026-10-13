@@ -2756,8 +2756,13 @@ body.liaoTianChuangKou #appTi {
   display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
-  /* 从左往右 + 忽快忽慢：两段不同时长拼接（慢段 7s / 快段 2.5s），缓动各自 ease-in-out */
-  animation: niuMaZouMaDeng 2s linear infinite;
+  /*
+   * 这条 CSS 动画只是**兜底**（JS 配速循环会立刻把 inline `animation` 设为 none 并接管 transform）。
+   * 用 2s linear 而不是"忽快忽慢"：真机反馈"速度没有变化"，根因之一就是**兜底也看起来在匀速跑**，
+   * 一旦 JS 因为任何原因没接管，界面就永远匀速 —— 用户看到的就是"配速没生效"。
+   * 现在改成明显的匀速基准，配速由 JS 拉开（1.6s~9.0s），快慢一眼可辨。
+   */
+  animation: niuMaZouMaDeng 3s linear infinite;
 }
 .yunXingDian.niuMaPao .niuMaZu {
   display: inline-flex;
@@ -2772,7 +2777,7 @@ body.liaoTianChuangKou #appTi {
 }
 .yunXingDian.niuMaPao img:nth-child(2) { animation-delay: 0.3s; }
 .yunXingDian.niuMaPao img:nth-child(3) { animation-delay: 0.6s; }
-/* 从左往右无缝循环：速度由 JS 配速循环动态改 animation-duration（产品要求 T5） */
+/* 从左往右无缝循环（匀速基准；**配速由 JS 接管**，见 app.js 的 peiSuXunHuan） */
 @keyframes niuMaZouMaDeng {
   0% { transform: translateX(-50%); }
   100% { transform: translateX(0); }
@@ -3025,6 +3030,66 @@ html { font-weight: var(--fw-ui, 400); }
 .huiFuRenWuBtn { margin-top: 4px; min-width: 120px; }
 .huiFuRenWuHang .xiaoXiJiao { opacity: 1 !important; }
 .huiFuRenWuHangDuli { padding: 2px 0 6px; }
+
+/* ── 设置页长列表：跳过屏外渲染（真机：点击卡顿 / 原生 select 弹层慢）── */
+.sheZhiKa {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
+}
+/* 自定义供应商下拉（替代无边框窗口里又慢又怪的原生 select 弹层） */
+.provXiaLa {
+  position: relative;
+  display: inline-block;
+  min-width: 220px;
+}
+.provXiaLaBtn {
+  width: 100%;
+  text-align: left;
+  padding: 8px 28px 8px 10px;
+  border: 1px solid var(--line, #ddd);
+  border-radius: 6px;
+  background: var(--card, #fff);
+  color: var(--ink, #222);
+  cursor: pointer;
+  font-size: 13px;
+  position: relative;
+}
+.provXiaLaBtn::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid var(--ink-dim, #888);
+  border-bottom: 1.5px solid var(--ink-dim, #888);
+  transform: translateY(-70%) rotate(45deg);
+}
+.provXiaLaPan {
+  position: fixed;
+  z-index: 100000;
+  max-height: 280px;
+  overflow: auto;
+  min-width: 220px;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #ddd);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  padding: 4px;
+}
+.provXiaLaPan button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink, #222);
+}
+.provXiaLaPan button:hover { background: var(--hover, #eee); }
 .huiFuRenWuJuZhong { display: flex; justify-content: center; align-items: center; width: 100%; }
 .huiFuRenWuJuZhong .huiFuRenWuBtn { margin: 0 auto; }
 .huiFuRenWuHang.yiGuoQi .huiFuRenWuBtn,
@@ -3395,7 +3460,51 @@ html { font-weight: var(--fw-ui, 400); }
   0% { transform: translateY(4px) scale(.4); opacity: .9; }
   100% { transform: translateY(-10px) scale(1.2); opacity: 0; }
 }
+/**
+ * 录音中（说话就绪）：**明显的呼吸效果**。
+ *
+ * 真机反馈：以前这里是**不透明**的强调色底 + 无动画 ⇒ 整块颜色"太满"，
+ * 呼吸看不出来，用户不知道它是"正在听"还是"坏了"。
+ * 现在：半透明强调色底 + 缩放/光晕呼吸 + 外扩波纹，两拍都看得见。
+ */
 #anNiuYuYin.jiLuZhong {
-  background: var(--accent) !important;
+  position: relative;
+  background: color-mix(in srgb, var(--accent) 52%, transparent) !important;
   color: var(--accent-ink, #fff) !important;
+  animation: huaTongHuXi 1.6s ease-in-out infinite;
+}
+#anNiuYuYin.jiLuZhong::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid var(--accent);
+  animation: huaTongBo 1.6s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes huaTongHuXi {
+  0%, 100% { transform: scale(1); opacity: .78; box-shadow: 0 0 0 0 transparent; }
+  50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 70%, transparent); }
+}
+@keyframes huaTongBo {
+  0% { transform: scale(1); opacity: .8; }
+  100% { transform: scale(1.38); opacity: 0; }
+}
+
+/**
+ * **统一的"启用"勾选框**（技能 / 工具 / 插件 / 门禁四处共用）。
+ * 产品要求：这些地方不再用「暂停 / 停用」按钮，改成勾选框 = 启用。
+ */
+.qiyongGou {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.qiyongGou input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }

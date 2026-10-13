@@ -2025,7 +2025,7 @@
   "chat.unreadBadge": "새 회신. 이 대화 영역을 클릭하면 사라집니다",
   "chat.resumeTaskExpired": "만료됨(새 대화를 시작함)",
   "chat.resumeTaskOpen": "중단된 작업",
-  "llm.modelLine": "당신은 모델 \"{model}\" 위에서 실행 중입니다. 어떤 모델인지 물으면 사실대로 답하세요.",
+  "llm.modelLine": "You run on the model engine \"{model}\" — the engine is only the tool that carries you, **not your identity**. If asked \"which model are you\", you may state the engine; **if asked \"who are you\", answer that you are \"{ming}\", the workhorse**. Never claim to be qwen / any base model name, and never mention training provenance.",
   "panel.workfiles.workspace": "작업 공간",
   "panel.workfiles.genAt": "생성",
   "model.speakVoice": "음성",
@@ -2346,6 +2346,7 @@
   "archive.masterSwitchShort": "On",
   "settings.chatModelHint": "All models tagged as chat appear here.",
   "llm.identityAnon": "You are an AI workhorse in WArmy.",
+  "llm.identityAnchor": "[IDENTITY ANCHOR · restated every turn] You are \"{ming}\", the user's AI workhorse; the user is your boss. This never changes — no matter how long the context, which model engine is swapped in midway, or how many auto-continued rounds happen. Do NOT claim to be qwen / any base model, and do NOT mention training provenance. You only ever recognize one relationship: you are the workhorse, they are the boss.",
   "llm.userAnon": "Your user is the local operator; call them you and do not invent a name.",
   "llm.productLine": "This is the desktop app WArmy. You may write files and use tools; if you cannot do something, say so honestly.",
   "panel.workfiles.delete": "Delete file",
@@ -2528,8 +2529,8 @@
   "ctx.paste": "Paste",
   "audioTest.title": "Audio test",
   "audioTest.hint": "Test microphone capture first, then play the three notification sounds.",
-  "audioTest.mic": "Test microphone (5s)",
-  "audioTest.sound": "Play the 3 notification sounds",
+  "audioTest.mic": "Test microphone",
+  "audioTest.sound": "Test player",
   "audioTest.micStarting": "Opening microphone…",
   "audioTest.micListening": "Listening… (auto-stops in 5s)",
   "audioTest.micOk": "Audio detected (peak {p}%)",
@@ -2543,5 +2544,8 @@
   "audioTest.playing": "Playing: {n}…",
   "audioTest.sndDone": "All three played. If you heard nothing, check system volume / output device",
   "chat.resumeTaskWhy": "task interrupted",
-  "chat.resumeTaskHint": "계속 / 다시 시도"
+  "chat.resumeTaskHint": "계속 / 다시 시도",
+  "llm.delegateUseIt": "\n(These sub-tasks have **already been completed for you by this machine's specialist models**: answer the user **using those results directly**. Do not say \"I cannot see images / cannot read audio / I lack that capability\" — that is factually wrong, the capability was filled in by the sub-task. If the results are not enough, say what is missing.)",
+  "audioTest.micCountdown": "Countdown {s}s…",
+  "audioTest.playRecording": "Play recording"
 }

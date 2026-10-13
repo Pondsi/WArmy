@@ -2025,7 +2025,7 @@
   "chat.unreadBadge": "有新回覆；點擊這個聊天介面任意位置後消失",
   "chat.resumeTaskExpired": "已過期（你已開始新的對話）",
   "chat.resumeTaskOpen": "有被打斷的任務",
-  "llm.modelLine": "你目前運行在模型「{model}」上。用戶問你是什麼模型時如實回答它。",
+  "llm.modelLine": "你用的是模型引擎「{model}」——引擎只是承載你的工具，**不是你的身份**。使用者問「你是什麼模型」時可以說明引擎型號；**問「你是誰」時必須回答你是「{ming}」這隻牛馬**，絕不要自稱 qwen / 通義千問 / 任何基座模型名，也不要提訓練出處。",
   "panel.workfiles.workspace": "工作區",
   "panel.workfiles.genAt": "生成於",
   "model.speakVoice": "語音",
@@ -2346,6 +2346,7 @@
   "archive.masterSwitchShort": "啟用",
   "settings.chatModelHint": "所有帶「對話」標籤的模型都在這裡。",
   "llm.identityAnon": "你是 WArmy 裡的 AI 牛馬。",
+  "llm.identityAnchor": "【身份錨 · 每輪重申】你是「{ming}」，使用者的 AI 牛馬；使用者是你的老闆。無論上下文多長、中途換了哪個模型引擎、或系統自動續派了幾輪，這一點都不變。**不要**自稱 qwen / 通義千問 / 任何基座模型，也**不要**提訓練來源。你只認這一條關係：你是牛馬，他是老闆。",
   "llm.userAnon": "你的使用者是本機操作者，請稱呼「你」，不要編造使用者名稱。",
   "llm.productLine": "這是桌面應用「無限牛馬 WArmy」。你可以在工作區寫檔案、調用工具；能力不足時如實說明，不要假裝。",
   "panel.workfiles.delete": "刪除檔案",
@@ -2528,8 +2529,8 @@
   "ctx.paste": "Paste",
   "audioTest.title": "Audio test",
   "audioTest.hint": "Test microphone capture first, then play the three notification sounds.",
-  "audioTest.mic": "Test microphone (5s)",
-  "audioTest.sound": "Play the 3 notification sounds",
+  "audioTest.mic": "测试麦克风",
+  "audioTest.sound": "测试播放器",
   "audioTest.micStarting": "Opening microphone…",
   "audioTest.micListening": "Listening… (auto-stops in 5s)",
   "audioTest.micOk": "Audio detected (peak {p}%)",
@@ -2543,5 +2544,8 @@
   "audioTest.playing": "Playing: {n}…",
   "audioTest.sndDone": "All three played. If you heard nothing, check system volume / output device",
   "chat.resumeTaskWhy": "task interrupted",
-  "chat.resumeTaskHint": "繼續 / 重試"
+  "chat.resumeTaskHint": "繼續 / 重試",
+  "llm.delegateUseIt": "\n（上面这些子任务**已经由本机的专业模型替你完成**了：请**直接用这些结果**回答用户。不要再说\"我看不了图 / 我读不了音频 / 我没有这个能力\"——那是事实错误，能力已经由子任务补齐。若结果本身不足以回答，就说明缺什么。）",
+  "audioTest.micCountdown": "倒计时 {s} 秒…",
+  "audioTest.playRecording": "播放录音"
 }

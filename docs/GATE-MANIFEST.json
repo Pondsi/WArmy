@@ -1,10 +1,10 @@
 {
   "note": "门禁审计清单：kind=universal 表示\"可给其他项目直接复用\"；project=本项目专项；probe=刻意不进默认门禁的探针；status=known-red 表示**当下红着**（redNote 写清证据，且必须出现在 docs/GATE-AUDIT.md）。由 packages/app-shell/scripts/verify-gate-manifest.mjs 校验与磁盘/主进程/界面一致。",
-  "generatedAt": "2026-10-12T08:09:01.679Z",
+  "generatedAt": "2026-10-13T04:36:19.847Z",
   "counts": {
-    "total": 78,
+    "total": 79,
     "universal": 30,
-    "project": 43,
+    "project": 44,
     "probe": 5,
     "knownRed": 9
   },
@@ -281,6 +281,15 @@
       "selfCheck": false,
       "status": "known-red",
       "redNote": "真机 UI 断言（悬停提示/凭证截断显示/头像尺寸）与当前渲染实现有出入，需逐条核对后重写。",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-media-format",
+      "file": "packages/app-shell/scripts/verify-media-format.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
       "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
     },
     {

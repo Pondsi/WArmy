@@ -141,3 +141,21 @@ export function jieXiAsrChatResponse(json: unknown): { ok: boolean; text?: strin
 export function yingGaiHuanChatShi(status: number): boolean {
   return status === 404 || status === 405 || status === 400 || status === 422 || status === 501;
 }
+
+/**
+ * **chat 式 ASR 只吃 wav / mp3**。
+ *
+ * 实测（2026-10-13，MiMo token-plan CN 站）：
+ *   `POST /v1/chat/completions` 带 `input_audio.format:'webm'` ⇒
+ *   `400 Param Incorrect: input_audio.format must be one of: wav, mp3. Got: webm`
+ *
+ * 而 Chromium 的 `MediaRecorder` 默认只录 `audio/webm` —— 这就是"配了听话模型却转不出字"
+ * 的直接原因。所以这里给一个**规范格式**函数：调用方先转码（渲染层用 decodeAudioData 转 WAV），
+ * 转不了的就**如实报错**，不要把 webm 直接发给端点白挨一个 400。
+ */
+export function guiFanAsrGeShi(geShi: string): 'wav' | 'mp3' | null {
+  const f = (String(geShi || '').toLowerCase().replace(/^\./, '').split(';')[0] ?? '').trim();
+  if (f === 'wav' || f === 'x-wav' || f === 'wave') return 'wav';
+  if (f === 'mp3' || f === 'mpeg' || f === 'x-mpeg') return 'mp3';
+  return null;
+}

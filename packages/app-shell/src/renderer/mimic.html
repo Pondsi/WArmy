@@ -11,6 +11,8 @@
   #pet { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
     width: 160px; height: 160px; cursor: grab; }
   #pet:active { cursor: grabbing; }
+  /* 悬停（主进程命中测试通知；不用 :hover，因为穿透态下收不到可靠的 hover 事件） */
+  #pet.xuanTing img { filter: drop-shadow(0 6px 12px rgba(0,0,0,.35)) drop-shadow(0 0 10px rgba(120,190,255,.65)); }
   #pet img { width: 100%; height: 100%; object-fit: contain; pointer-events: none;
     filter: drop-shadow(0 6px 12px rgba(0,0,0,.35)); }
   /* 漫画式对话框（字幕） */
@@ -65,17 +67,25 @@
     });
     window.addEventListener('mouseup', () => { dragging = false; window.warmyMimic?.dragEnd?.(); });
 
-    // 透传：鼠标在桌宠本体上 ⇒ 可交互；离开本体 ⇒ 点击穿透到下层桌面
+    // 透传：主进程按 50ms 轮询屏幕光标 + 我们上报的"本体矩形"做命中测试
+    // （**不用 mousemove/forward**：Windows 上 forward 的 hover 不可靠，见 electron #30808/#15376）
     let chuanTou = false;
-    window.addEventListener('mousemove', (e) => {
-      const r = pet.getBoundingClientRect();
-      const nei = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-      const yingChuanTou = !nei;
-      if (yingChuanTou !== chuanTou) {
-        chuanTou = yingChuanTou;
-        window.warmyMimic?.setClickThrough?.(yingChuanTou);
-      }
+    window.warmyMimic?.onHover?.((d) => {
+      const shang = d && d.inside;
+      chuanTou = !shang;
+      pet.classList.toggle('xuanTing', !!shang);
     });
+    function shangBaoBenTi() {
+      try {
+        const r = pet.getBoundingClientRect();
+        window.warmyMimic?.setBodyRect?.({ x: r.left, y: r.top, w: r.width, h: r.height });
+      } catch { /* noop */ }
+    }
+    window.__shangBaoBenTi = shangBaoBenTi;
+    window.addEventListener('resize', shangBaoBenTi);
+    tupian.addEventListener('load', shangBaoBenTi);
+    shangBaoBenTi();
+    setTimeout(shangBaoBenTi, 300);
 
     // 双击桌宠 = 打开主窗口聊天
     pet.addEventListener('dblclick', () => { window.warmyMimic?.openChat?.(); });
