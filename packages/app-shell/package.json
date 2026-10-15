@@ -33,9 +33,9 @@
     "@warmy/asset-governance": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "24.9.0",
-    "electron": "40.10.6",
-    "electron-builder": "25.1.8"
+    "@types/node": "26.6.5",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3"
   },
   "author": "Pondsi",
   "license": "SEE LICENSE IN LICENSE"
