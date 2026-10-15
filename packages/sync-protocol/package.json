@@ -17,6 +17,6 @@
     "typecheck": "tsc -b --pretty"
   },
   "devDependencies": {
-    "@types/node": "24.9.0"
+    "@types/node": "26.6.5"
   }
 }
