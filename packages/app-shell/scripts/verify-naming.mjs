@@ -168,8 +168,43 @@ const spawnFiles = [];
   }
 })(path.join(ROOT, 'packages/app-shell/src'));
 const consoleOffenders = [];
+/**
+ * **去掉注释再扫**（保持字符位置不变 ⇒ 行号仍然准确）。
+ * 真机：门禁把注释里"以前这里 `execFileSync('powershell.exe', …)`"当成了真调用，
+ * 于是 CI 的 verify naming 红。注释不是代码，不该被计为调用点。
+ */
+function quZhuShi(src) {
+  const a = src.split('');
+  let i = 0;
+  const n = a.length;
+  while (i < n) {
+    // 字符串里的 // 或 /* 不算注释 —— 简化处理：只跳过明显的字符串字面量
+    const ch = a[i];
+    if (ch === '"' || ch === "'" || ch === '`') {
+      const q = ch; i++;
+      while (i < n) {
+        if (a[i] === '\\') { i += 2; continue; }
+        if (a[i] === q) { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    if (ch === '/' && a[i + 1] === '/') {
+      while (i < n && a[i] !== '\n') { a[i] = ' '; i++; }
+      continue;
+    }
+    if (ch === '/' && a[i + 1] === '*') {
+      a[i] = ' '; a[i + 1] = ' '; i += 2;
+      while (i < n && !(a[i] === '*' && a[i + 1] === '/')) { if (a[i] !== '\n') a[i] = ' '; i++; }
+      if (i < n) { a[i] = ' '; a[i + 1] = ' '; i += 2; }
+      continue;
+    }
+    i++;
+  }
+  return a.join('');
+}
 for (const f of spawnFiles) {
-  const src = fs.readFileSync(f, 'utf8');
+  const src = quZhuShi(fs.readFileSync(f, 'utf8'));
   // 只看真正的子进程调用：spawn( / execFile( / execSync?（不含正则 .exec(）
   const rx = /(?:^|[^.\w])(spawn|execFile|execFileSync|spawnSync)\s*\(/g;
   let m;

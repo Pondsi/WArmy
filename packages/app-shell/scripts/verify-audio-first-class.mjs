@@ -105,7 +105,13 @@ console.log('\n[4] chat 式 ASR 形状');
   const kuai = c.find((x) => x.type === 'input_audio');
   check('input_audio 带 data/format', kuai.input_audio?.data === 'QUJD' && kuai.input_audio?.format === 'wav', kuai);
   const b2 = taoAsrChatBody({ model: 'm', dataBase64: 'QQ==', format: 'mp3', prompt: '请转写' });
-  check('可选提示作为 text 块排在前', b2.messages[0].content[0]?.type === 'text', b2.messages[0].content);
+  /**
+   * **契约（第 21 轮实测）**：MiMo token-plan 的 ASR 端点对"内容里带文本块"直接回
+   * `400 ASR request must not include text parts` ⇒ 提示只能走**顶层 `prompt`**。
+   * 早先这里断言"文本块排在前面"，那是按通用 chat 形状写的，与真实端点相反。
+   */
+  check('可选提示走顶层 prompt（不进 content 文本块）', b2.prompt === '请转写', { prompt: b2.prompt, content: b2.messages[0].content });
+  check('内容数组里**只有音频**（有文本块就等着 400）', b2.messages[0].content.every((x) => x.type === 'input_audio'), b2.messages[0].content);
   const ok = jieXiAsrChatResponse({ choices: [{ message: { content: '你好世界' } }] });
   check('正常响应解析出文本', ok.ok && ok.text === '你好世界', ok);
   const kong = jieXiAsrChatResponse({ choices: [{ message: { content: '' } }] });
@@ -128,7 +134,12 @@ console.log('\n[6] 主进程接线');
   const em = fs.readFileSync(path.join(pkgRoot, 'src', 'electron-main.ts'), 'utf8');
   check('TTS 走 chat 式兜底（ttsChatShi）', /async function ttsChatShi/.test(em) && /await ttsChatShi\(/.test(em));
   check('ASR 走 chat 式兜底（asrChatShi）', /async function asrChatShi/.test(em) && /await asrChatShi\(/.test(em));
-  check('只在"该换形状"的状态码上换', /if \(yingGaiHuanChatShi\(res\.status\)\)/.test(em) && /if \(yingGaiHuanChatShi\(res2\.status\)\)/.test(em));
+  /**
+   * 契约是"**换形状这件事只由状态码判据决定**"，不是"某个变量必须叫 `res2`"。
+   * 原来这里钉死了两处局部变量名，改名/换写法就把绿的产品判据判成红 —— 门禁不该管局部变量叫什么。
+   */
+  const panDuanChu = (em.match(/if \(yingGaiHuanChatShi\(/g) || []).length;
+  check('两处兜底都以状态码判据为前提（≥2 处，不许无条件换形状重试）', panDuanChu >= 2, { panDuanChu });
   check('音色被纠正后**如实记审计**', /tts\.voice-corrected/.test(em));
   check('TTS 把实际音色回给界面（voice 字段）', /voice: r2\.voice \|\| voice/.test(em));
   check('ASR 标注实际走的通道（via: chat-completions）', /via: 'chat-completions'/.test(em));

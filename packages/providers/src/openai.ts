@@ -5,7 +5,7 @@ import {
   zhuanHuanOpenAI,
   jieXiOpenAIXiangYing,
 } from './base.js';
-import { chouNengLiCongDuanDian } from './mo-xing-neng-li.js';
+import { chouNengLiCongDuanDian, moXingNengLi } from './mo-xing-neng-li.js';
 import type { LiaoTianPian, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
 
 /**
@@ -74,6 +74,19 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
     const duQuQi = res.body.getReader();
     const jieMaQi = new TextDecoder();
     let buf = '';
+    /**
+     * **index → 工具调用 id**：OpenAI 兼容协议**只在第一帧**给 `tool_calls[].id` 与 `name`，
+     * 后续追加 `arguments` 的帧**只有 `index`**（id/name 都是 undefined）。
+     *
+     * 真机事故：原来按 `t.id || 'call-' + t.index` 兜底 ⇒ 第一帧归到 `call_abc123`
+     * （有名字、参数空），后面所有帧归到 `call-0`（有参数、没名字）。上层按 id 归并，
+     * 于是**每轮都存在一个"有名字但参数为空"的条目** ⇒ 空参回退被无条件触发：
+     * 审计里 `chat.stream-fallback-empty-args` 刷了 20 多次，每轮多花一次非流式请求，
+     * 最终撞上 90s 超时（`chat.stream-fallback-timeout`）、`write_file` 以 empty-args 失败。
+     *
+     * 认准 `index` 才是同一个工具调用的身份，第一帧的 id 要一直用到这次调用结束。
+     */
+    const xuHaoDuiId = new Map<number, string>();
     while (true) {
       const { done, value } = await duQuQi.read();
       if (done) break;
@@ -93,14 +106,19 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
            * 界面变成"纯文本对话"）。OpenAI 的 `delta.tool_calls` 是**增量**的（同一个 id
            * 多帧拼 arguments），这里原样转成我们的 `gongJuDiaoYongJi`，由上层按 id 归并。
            */
-          const liuGongJu = (c?.delta?.tool_calls || []).map((t: { id?: string; index?: number; function?: { name?: string; arguments?: string } }) => ({
-            id: String(t?.id || `call-${t?.index ?? 0}`),
-            type: 'function' as const,
-            function: {
-              name: String(t?.function?.name || ''),
-              arguments: String(t?.function?.arguments || ''),
-            },
-          }));
+          const liuGongJu = (c?.delta?.tool_calls || []).map((t: { id?: string; index?: number; function?: { name?: string; arguments?: string } }) => {
+            const xu = Number(t?.index ?? 0);
+            const laiId = String(t?.id || '');
+            if (laiId) xuHaoDuiId.set(xu, laiId);
+            return {
+              id: laiId || xuHaoDuiId.get(xu) || `call-${xu}`,
+              type: 'function' as const,
+              function: {
+                name: String(t?.function?.name || ''),
+                arguments: String(t?.function?.arguments || ''),
+              },
+            };
+          });
           yield {
             id: j.id || '',
             model: j.model || Qiu.model,
@@ -166,15 +184,25 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
       );
       return (json.data || []).map((m) => {
         const id = String((m as { id?: unknown }).id || '');
-        const neng = chouNengLiCongDuanDian(m);
+        const duanDian = chouNengLiCongDuanDian(m);
+        /**
+         * **必须与「已知型号表」合并**（本轮修：拉取模型后按标签自动分配没生效）。
+         *
+         * 端点元数据（`/models`）对 MiMo/Ollama/多数网关**几乎不给** category/kind ——
+         * 只看 `chouNengLiCongDuanDian` 的话，kind 一直是 `unknown`，
+         * 于是"按标签归位到听话/说话/向量/看图"一个都落不进去。
+         * `moXingNengLi(id, duanDian)` 会先用端点给的、缺的用**名字表**兜底
+         * （`mimo-v2.5-asr`→asr、`whisper`→asr、`-tts`→tts、`bge-`→embedding…）。
+         */
+        const neng = moXingNengLi(id, duanDian);
         return {
           id,
-          thinkLevels: neng?.thinkLevels || [],
-          supportsThinking: neng?.thinking === true,
-          vision: (neng?.vision !== undefined ? neng.vision : 'unknown') as boolean | 'unknown',
-          tools: (neng?.tools !== undefined ? neng.tools : 'unknown') as boolean | 'unknown',
-          kind: String((neng as { kind?: unknown })?.kind || 'unknown'),
-          contextLen: Number((neng as { contextLen?: unknown })?.contextLen || 0),
+          thinkLevels: neng.thinkLevels || [],
+          supportsThinking: neng.thinking === true,
+          vision: (neng.vision !== undefined ? neng.vision : 'unknown') as boolean | 'unknown',
+          tools: (neng.tools !== undefined ? neng.tools : 'unknown') as boolean | 'unknown',
+          kind: String(neng.kind || 'unknown'),
+          contextLen: Number(neng.contextLen || 0),
         };
       });
     } catch {

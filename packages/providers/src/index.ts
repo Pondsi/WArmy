@@ -77,6 +77,12 @@ export function congYuSheChuangJian(
   );
 }
 
+/**
+ * 取预设。**必须与 `chuangjianGongYing` 用同一套旧 id 别名**：
+ * 落盘数据/界面里可能还是拆分前的 `mimo`，只在一处做别名 ⇒ 这里返回 undefined，
+ * 界面上 MiMo 的默认模型与 baseURL 就会**静默变空**（看起来像"预设丢了"）。
+ */
 export function quGongYingYuShe(presetId: string) {
-  return YUSHE_BIAO[presetId];
+  const zhenId = YUSHE_BIE_MING[presetId] || presetId;
+  return YUSHE_BIAO[zhenId] || YUSHE_BIAO[presetId];
 }

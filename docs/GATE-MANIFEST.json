@@ -1,12 +1,12 @@
 {
   "note": "门禁审计清单：kind=universal 表示\"可给其他项目直接复用\"；project=本项目专项；probe=刻意不进默认门禁的探针；status=known-red 表示**当下红着**（redNote 写清证据，且必须出现在 docs/GATE-AUDIT.md）。由 packages/app-shell/scripts/verify-gate-manifest.mjs 校验与磁盘/主进程/界面一致。",
-  "generatedAt": "2026-10-13T04:36:19.847Z",
+  "generatedAt": "2026-10-15T08:46:55.087Z",
   "counts": {
-    "total": 79,
+    "total": 83,
     "universal": 30,
-    "project": 44,
+    "project": 48,
     "probe": 5,
-    "knownRed": 9
+    "knownRed": 8
   },
   "entries": [
     {
@@ -123,8 +123,7 @@
       "kind": "project",
       "needsElectron": false,
       "selfCheck": false,
-      "status": "known-red",
-      "redNote": "已用「换回 HEAD 的 electron-main.ts 再跑」对照证明：**失败项完全一致**（同一批 bounded-view 断言），与本轮改动无关。根因：门禁的 mock 不实现 SSE，主链路走流式解析得空正文 ⇒ 触发\"逼出正文\"的第二次非流式请求（一轮两条 prompt），断言按\"一轮一条\"写死了。",
+      "status": "green",
       "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
     },
     {
@@ -144,6 +143,15 @@
       "selfCheck": false,
       "status": "green",
       "why": "CSS 变量必须真实存在（写了 --bg 而项目只有 --card ⇒ 深底深字）"
+    },
+    {
+      "id": "verify-ctx-budget",
+      "file": "packages/app-shell/scripts/verify-ctx-budget.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
     },
     {
       "id": "verify-dao-compliance",
@@ -265,6 +273,15 @@
       "why": "导入的符号必须真的存在（删了实现忘了改引用）"
     },
     {
+      "id": "verify-industry-gates",
+      "file": "packages/app-shell/scripts/verify-industry-gates.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
       "id": "verify-ipc-probe",
       "file": "packages/app-shell/scripts/verify-ipc-probe.mjs",
       "kind": "universal",
@@ -350,6 +367,15 @@
     {
       "id": "verify-naming",
       "file": "packages/app-shell/scripts/verify-naming.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-nat",
+      "file": "packages/app-shell/scripts/verify-nat.mjs",
       "kind": "project",
       "needsElectron": false,
       "selfCheck": false,
@@ -728,6 +754,15 @@
       "selfCheck": false,
       "status": "green",
       "why": "工作区沙箱：越权路径 / 超限写入一律拒绝（不是尽力而为）"
+    },
+    {
+      "id": "verify-zip-look",
+      "file": "packages/app-shell/scripts/verify-zip-look.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
     }
   ]
 }

@@ -166,6 +166,16 @@ export class GroupChatRouter {
     for (const m of LieBiao) m.fixedDuty = m.id === instanceId;
   }
 
+  /**
+   * **纯调度值班者**（需求：可设成只调度、永不参与回复）。
+   * `pureDispatcher` 本来只被 `route()` 读取（挑执行者时排除它），
+   * 但**没有任何写入点** —— 这个需求等于没有入口。这里补上。
+   */
+  setPureDispatcher(groupId: string, instanceId: string, pure: boolean): void {
+    const m = this.members.get(groupId)?.find((x) => x.id === instanceId);
+    if (m) m.pureDispatcher = pure;
+  }
+
   // ── 值班者选择（不变量 11：仅本机） ──
 
   /**

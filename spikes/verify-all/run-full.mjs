@@ -194,22 +194,75 @@ fs.rmSync(boardDir, { recursive: true, force: true });
 // 7. memory-os 直接类（ASCII 拷贝）
 const memSrc = path.join(root, 'packages', 'memory-os');
 const memAscii = path.join(os.tmpdir(), 'warmy-verify-mem');
+/**
+ * 先拆旧链接再删目录：`rmSync(recursive)` 跟进 junction 会把**真实依赖**一起删掉
+ * （本套件以前就是靠这一步把 node_modules 里的 better-sqlite3 删没的）。
+ */
+try { fs.unlinkSync(path.join(memAscii, 'node_modules', 'better-sqlite3')); } catch { /* noop */ }
+try { fs.unlinkSync(path.join(memAscii, 'node_modules')); } catch { /* noop */ }
 fs.rmSync(memAscii, { recursive: true, force: true });
 fs.mkdirSync(path.join(memAscii, 'dist'), { recursive: true });
 fs.copyFileSync(path.join(memSrc, 'package.json'), path.join(memAscii, 'package.json'));
 for (const f of fs.readdirSync(path.join(memSrc, 'dist'))) {
   fs.copyFileSync(path.join(memSrc, 'dist', f), path.join(memAscii, 'dist', f));
 }
-const nm = path.join(memSrc, 'node_modules');
-if (fs.existsSync(nm)) fs.symlinkSync(nm, path.join(memAscii, 'node_modules'), 'junction');
-const { JiyiCangFuwu } = await import(toImportUrl(path.join(memAscii, 'dist', 'index.js')));
-const memDir = path.join(os.tmpdir(), 'warmy-verify-memdata-' + Date.now());
-const mem = new JiyiCangFuwu({ CangLu: memDir });
-mem.append({ id: 'r1', sessionId: 's', kind: 'message', ti: '无限牛马项目进度' }, 'duty');
-const cards = mem.recall('牛马');
-check('memory fts recall', cards.length >= 1, cards.length);
-mem.close();
-fs.rmSync(memDir, { recursive: true, force: true });
+/**
+ * **链真正可用的 better-sqlite3 包**，而不是 `memory-os/node_modules`（pnpm 下那儿常常是空的，
+ * 或只有一个没编过的壳）。空壳 ⇒ `Cannot find module 'better-sqlite3'` 直接把整个套件炸掉
+ * （历史红：本套件第 7 节崩溃，后面全没跑）。
+ */
+function lianBetterSqlite3() {
+  const candidates = [
+    path.join(memSrc, 'vendor', 'better-sqlite3'),
+    ...(() => {
+      const store = path.join(root, 'node_modules', '.pnpm');
+      try {
+        return fs
+          .readdirSync(store)
+          .filter((d) => /^better-sqlite3@/.test(d))
+          .map((d) => path.join(store, d, 'node_modules', 'better-sqlite3'));
+      } catch { return []; }
+    })(),
+    path.join(root, 'node_modules', 'better-sqlite3'),
+    path.join(memSrc, 'node_modules', 'better-sqlite3'),
+  ];
+  const pingtai = `${process.platform}-${process.arch}`;
+  const shiXuan = (p) => {
+    try {
+      if (!fs.existsSync(path.join(p, 'package.json'))) return false;
+      /** 真能 require 的判据：本平台 prebuilds 里有 .node，或 build/Release 里编过 */
+      if (fs.existsSync(path.join(p, 'prebuilds', `${pingtai}.node`))) return true;
+      const build = path.join(p, 'build', 'Release');
+      return fs.existsSync(build) && fs.readdirSync(build).some((n) => n.endsWith('.node'));
+    } catch { return false; }
+  };
+  const src = candidates.find(shiXuan);
+  if (!src) return '';
+  const nm = path.join(memAscii, 'node_modules');
+  fs.mkdirSync(nm, { recursive: true });
+  try { fs.symlinkSync(src, path.join(nm, 'better-sqlite3'), 'junction'); } catch { /* noop */ }
+  return src;
+}
+const bs3 = lianBetterSqlite3();
+check(
+  'memory-os 可链接到已编译 better-sqlite3',
+  !!bs3,
+  bs3 || '未找到带原生二进制的 better-sqlite3（.pnpm 商店/vendor 都没有）'
+);
+try {
+  const { JiyiCangFuwu } = await import(toImportUrl(path.join(memAscii, 'dist', 'index.js')));
+  const memDir = path.join(os.tmpdir(), 'warmy-verify-memdata-' + Date.now());
+  const mem = new JiyiCangFuwu({ CangLu: memDir });
+  mem.append({ id: 'r1', sessionId: 's', kind: 'message', ti: '无限牛马项目进度' }, 'duty');
+  const cards = mem.recall('牛马');
+  check('memory fts recall', cards.length >= 1, cards.length);
+  mem.close();
+  fs.rmSync(memDir, { recursive: true, force: true });
+} catch (e) {
+  // 记忆原生依赖缺失 ⇒ 只记这一条 FAIL，**不许**炸掉整个套件（后面还有几十条断言）
+  check('memory fts recall', false, String((e && e.message) || e).slice(0, 160));
+}
+try { fs.unlinkSync(path.join(memAscii, 'node_modules', 'better-sqlite3')); } catch { /* noop */ }
 fs.rmSync(memAscii, { recursive: true, force: true });
 
 // 7b. CCR / knowledge / sync / assets / checkpoint

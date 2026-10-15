@@ -208,6 +208,9 @@ export function jieXiOpenAIXiangYing(json: {
     message?: {
       role?: string;
       content?: string | null;
+      /** 思考过程：各家字段名不同（MiMo/DeepSeek 用 reasoning_content，部分网关用 reasoning） */
+      reasoning_content?: string | null;
+      reasoning?: string | null;
       tool_calls?: Array<{
         id: string;
         type?: string;
@@ -245,6 +248,16 @@ export function jieXiOpenAIXiangYing(json: {
         message: {
           role: 'assistant',
           content: xiaoXi?.content || '',
+          /**
+           * **非流式也要带上思考过程**。
+           *
+           * 真缺陷：流式路径（openai.ts chatStream）一直读 `reasoning_content`，
+           * 这里非流式却整个丢掉 ⇒ 凡是走非流式的轮次（空参回退、流式失败兜底、
+           * 判卡死/分类等内部调用）思考过程**全部消失**，界面上那一轮就是"没思考"。
+           */
+          ...((xiaoXi?.reasoning_content || xiaoXi?.reasoning)
+            ? { reasoning: String(xiaoXi.reasoning_content || xiaoXi.reasoning) }
+            : {}),
           gongJuDiaoYongJi: gongJuDiaoYongJi.length ? gongJuDiaoYongJi : undefined,
         },
         finishReason: xuanXiang?.finish_reason || 'stop',

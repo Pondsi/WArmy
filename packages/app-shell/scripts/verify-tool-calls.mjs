@@ -150,15 +150,82 @@ const toolMsgsOf = (ti) => (((ti && (ti.messages || ti.xiaoXiJi)) || []).filter(
 // ══════════════════════════════════════════════════════════════
 console.log('[0] 真记忆服务子进程 + 真工具执行器（runMemoryTool）');
 const memAscii = path.join(os.tmpdir(), 'warmy-verify-tools-mem');
-fs.rmSync(memAscii, { recursive: true, force: true });
+/**
+ * ⚠️ **安全删除：先拆 junction/符号链接，再递归删**。
+ *
+ * 真机事故（第 20 轮）：这里原来直接 `fs.rmSync(memAscii, { recursive: true })`，
+ * 而 memAscii 里有一个指向**仓库真实依赖**的 junction（node_modules → pnpm 虚拟存储）。
+ * Windows 上递归删除会**顺着 junction 进去把目标内容删光** ——
+ * 于是 `node_modules/.pnpm/better-sqlite3@13.0.3/.../better-sqlite3` 被清空，
+ * 应用的记忆子进程随即 MODULE_NOT_FOUND，工具全部不暴露，牛马不能干活。
+ * 跑一次测试就毁一次开发环境，而且症状出现在完全无关的地方。
+ */
+function anQuanShan(mu) {
+  if (!fs.existsSync(mu)) return;
+  const zou = (d) => {
+    let ji = [];
+    try { ji = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const it of ji) {
+      const quan = path.join(d, it.name);
+      let lst = null;
+      try { lst = fs.lstatSync(quan); } catch { continue; }
+      if (lst.isSymbolicLink()) {
+        // junction 在 Windows 上 lstat 报告为符号链接：只删链接本身，绝不进入
+        try { fs.unlinkSync(quan); } catch { try { fs.rmdirSync(quan); } catch { /* noop */ } }
+      } else if (lst.isDirectory()) {
+        zou(quan);
+      }
+    }
+  };
+  zou(mu);
+  fs.rmSync(mu, { recursive: true, force: true });
+}
+anQuanShan(memAscii);
 fs.mkdirSync(path.join(memAscii, 'dist'), { recursive: true });
 const memPkg = path.join(repoRoot, 'packages', 'memory-os');
 fs.copyFileSync(path.join(memPkg, 'package.json'), path.join(memAscii, 'package.json'));
 for (const f of fs.readdirSync(path.join(memPkg, 'dist'))) {
   if (f.endsWith('.js') || f.endsWith('.json')) fs.copyFileSync(path.join(memPkg, 'dist', f), path.join(memAscii, 'dist', f));
 }
-if (fs.existsSync(path.join(memPkg, 'node_modules'))) {
-  fs.symlinkSync(path.join(memPkg, 'node_modules'), path.join(memAscii, 'node_modules'), 'junction');
+/**
+ * 记忆子进程要能 `require('better-sqlite3')`。
+ *
+ * ⚠️ 不能只链 `packages/memory-os/node_modules` —— 真机上它可能是个**空的 junction**
+ * （被链接/清理流程折腾过），链过去等于什么都没有，子进程照样 MODULE_NOT_FOUND，
+ * 表现为 `memory service start timeout`。
+ * 这里与主进程 `zhunbeiJiyiCangYunxingShi()` 用**同一套候选顺序**：
+ * vendor 自留副本 → 包内 node_modules → **pnpm 虚拟存储**（开发态真包在这）。
+ * 真包带 prebuilds/<platform>.node，拿它建一个只含 better-sqlite3 的 node_modules。
+ */
+{
+  const yuanSheng = `${process.platform}-${process.arch}.node`;
+  const keYong = (d) => {
+    try {
+      if (!fs.existsSync(path.join(d, 'package.json'))) return false;
+      return fs.existsSync(path.join(d, 'prebuilds', yuanSheng))
+        || fs.existsSync(path.join(d, 'build', 'Release', 'better_sqlite3.node'));
+    } catch { return false; }
+  };
+  let ban = '13.0.3';
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(memPkg, 'package.json'), 'utf8'));
+    ban = String(pkg?.dependencies?.['better-sqlite3'] || ban).replace(/^[^0-9]*/, '') || ban;
+  } catch { /* 用默认版本号 */ }
+  const houXuan = [
+    path.join(memPkg, 'vendor', 'better-sqlite3'),
+    path.join(memPkg, 'node_modules', 'better-sqlite3'),
+    path.join(repoRoot, 'node_modules', '.pnpm', `better-sqlite3@${ban}`, 'node_modules', 'better-sqlite3'),
+    path.join(repoRoot, 'node_modules', 'better-sqlite3'),
+  ];
+  const zhen = houXuan.find(keYong);
+  if (zhen) {
+    const mu = path.join(memAscii, 'node_modules');
+    fs.mkdirSync(mu, { recursive: true });
+    try { fs.symlinkSync(zhen, path.join(mu, 'better-sqlite3'), 'junction'); }
+    catch { fs.cpSync(zhen, path.join(mu, 'better-sqlite3'), { recursive: true }); }
+  } else {
+    console.log('  [提示] 找不到可用的 better-sqlite3（含原生二进制），记忆子进程将起不来');
+  }
 }
 const memData = path.join(memAscii, 'data');
 // 真 node：宿主可能把 process.execPath 指到 Electron/壳进程（ELECTRON_RUN_AS_NODE 之外），
@@ -549,6 +616,23 @@ if (!SKIP_ELECTRON) {
     fs.copyFileSync(path.join(pkgRoot, 'package.json'), path.join(appRoot, 'package.json'));
     const userData = path.join(root, 'userdata');
     fs.mkdirSync(userData, { recursive: true });
+    /**
+     * **预置 settings.json**：把 mock 模型注册进供应商清单。
+     *
+     * 不这样做的话：`jueCeMoXing` 只从 `settings.providers[].models` 里挑模型，
+     * 而 `setProvider` 只写 `providerCfg`（内存里的"当前供应商"），
+     * 不会往那份清单里加条目 ⇒ "mock" 永远进不了 `keYongMoXing`，
+     * 模型选择就一路回落到真实模型，mock 服务器一个请求都收不到，
+     * 断言全部报 `hasTools=false` / `requests=0`（看起来像产品没暴露工具，其实是走错了模型）。
+     */
+    fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify({
+      providers: [{
+        id: 'deepseek', biaoQian: 'mock', protocol: 'openai-compatible',
+        /** 用 mock 的真实地址（`jieMoXingGongYingShang` 从 settingsStore 读 baseURL） */
+        baseURL: opts.providerBase || 'http://127.0.0.1:9/v1', models: ['mock'], defaultModel: 'mock',
+      }],
+      instances: [],
+    }), 'utf8');
     const mainFile = path.join(appRoot, 'dist', 'electron-main.js');
     {
       const lines = fs.readFileSync(mainFile, 'utf8').split('\n');
@@ -628,10 +712,18 @@ if (!SKIP_ELECTRON) {
   async function launch({ appRoot, userData, mainFile }, tag) {
     const bundledNodeDir = process.platform === 'win32' ? `win-${process.arch}` : `${process.platform}-${process.arch}`;
     const bundledNode = path.join(repoRoot, 'resources', 'node', bundledNodeDir, process.platform === 'win32' ? 'node.exe' : 'node');
+    /**
+     * **必须剥掉 `ELECTRON_RUN_AS_NODE`**：宿主若是"electron 以 node 模式运行"
+     * （例如 MiMo 自带的 node），这个变量会一路继承下来 ⇒ 子 electron 也被当纯 Node 跑，
+     * `import { BrowserWindow } from 'electron'` 直接报
+     * "'electron' does not provide an export named 'BrowserWindow'"。
+     */
+    const huanJing = { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) };
+    delete huanJing.ELECTRON_RUN_AS_NODE;
     const child = spawn(electronPath, [mainFile, `--user-data-dir=${userData}`, '--remote-debugging-port=0'], {
       cwd: appRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) },
+      env: huanJing,
     });
     const logs = [];
     let devtoolsPort = 0;
@@ -699,8 +791,18 @@ if (!SKIP_ELECTRON) {
       }
       if (!ready) await sleep(400);
     }
-    const call = (api, ...args) =>
-      evaluate(`(async () => { try { return await window.warmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
+    /**
+     * **每次 IPC 调用都要有超时**：没有超时的话，chatSend 卡住就会把整个门禁挂死
+     * （真机上正是这种"没有反馈、没有卡死、就是不动"的形态）。
+     * 超时如实抛出，便于定位是哪一步卡住。
+     */
+    const call = (api, ...args) => {
+      const ms = (api === 'chatSend' || api === 'liaoTianFaSong') ? 120000 : 30000;
+      return Promise.race([
+        evaluate(`(async () => { try { return await window.warmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`),
+        new Promise((_, rej) => setTimeout(() => rej(new Error(`ipc-timeout ${api} after ${ms}ms`)), ms)),
+      ]);
+    };
     return {
       child,
       call,
@@ -728,9 +830,13 @@ if (!SKIP_ELECTRON) {
   // ── [5] 正常路径：真 Electron + 真记忆服务 + 会要工具的 mock 模型 ──
   console.log('\n[5] 真 Electron：chat-send 暴露工具 → 宿主执行 → audit 留痕');
   {
-    const copy = makeCopy('ok');
+    /**
+     * **先起 mock，再准备配置**：settings.json 里的 baseURL 必须是 mock 的真实端口。
+     * `jieMoXingGongYingShang()` 是**从 settingsStore 读 baseURL** 的（不是内存里
+     * `setProvider` 写的那份）⇒ 写死一个占位端口的话，请求会打到 127.0.0.1:9 ⇒
+     * `fetch failed`，看起来像"工具没暴露"，其实是连错地址。
+     */
     const seen = [];
-    // 会要工具的 mock 模型：第一轮要 recall，拿到结果后终答
     const mock = await startModelServer((ti, state) => {
       const toolMsgs = toolMsgsOf(ti);
       const hasTools = Array.isArray(ti.tools) && ti.tools.length > 0;
@@ -743,9 +849,21 @@ if (!SKIP_ELECTRON) {
       }
       return textResponse('无工具普通回答');
     });
+    /** mock 端口已知 ⇒ 用真实地址写配置（见上面注释） */
+    const copy = makeCopy('ok', { providerBase: mock.base });
 
     const yingYong = await launch(copy, 'ok');
     check('[5] Electron 起来且 bootstrap 完成', yingYong.ready === true);
+    /**
+     * **先把 mock 的密钥写进 SecureKeyStore**。
+     * `lieKeYongMoXing()` 会按 presetId 去 SecureKeyStore 取 key，
+     * 取不到就**跳过这个供应商** ⇒ "mock" 进不了可用清单 ⇒ 模型选择落回真实模型。
+     * `setProvider` 只写内存里的 `providerCfg.apiKey`，不写 SecureKeyStore。
+     * 注意 preload 桥接名是 **`providerKeySet`**（不是 IPC 内部名
+     * `gongYingShangMiYaoSheZhi` —— 写错名静默失败，mock 依然选不中）。
+     */
+    const keySet = await yingYong.call('providerKeySet', { providerId: 'deepseek', apiKey: 'sk-mock' });
+    console.log('  providerKeySet =>', JSON.stringify(keySet));
     const setP = await yingYong.call('setProvider', { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mock.base, model: 'mock', protocol: 'openai-compatible' });
     check('[5] provider 指向本地 mock', setP?.ok === true, setP);
 
@@ -760,9 +878,26 @@ if (!SKIP_ELECTRON) {
     check('[5] 记忆服务就绪 + 历史重建已完成', restore?.done === true && restore?.ok === true, restore);
 
     await yingYong.call('settingsSave', { contextBudgetChars: 800, contextToolMaxRounds: 3, contextToolResultChars: 1500, contextToolTotalChars: 6000 });
+    /** 诊断：确认 mock 真的进了可用模型清单（否则模型选择会落回真实模型） */
+    {
+      const pz = await yingYong.call('settingsGet');
+      const prov = pz?.settings?.providers || pz?.providers || [];
+      console.log('  providers =>', JSON.stringify(prov).slice(0, 300));
+      const zh = await yingYong.call('providerKeyHas', { providerIds: ['deepseek'] });
+      console.log('  providerKeyHas =>', JSON.stringify(zh));
+    }
     const turns = [];
     for (let i = 0; i < 4; i++) {
-      turns.push(await yingYong.call('chatSend', { sessionId: 's-tools-e2e', content: `第 ${i + 1} 轮：` + '牛马有界渲染工具链验证 '.repeat(30) }));
+      turns.push(await yingYong.call('chatSend', {
+        sessionId: 's-tools-e2e',
+        content: `第 ${i + 1} 轮：` + '牛马有界渲染工具链验证 '.repeat(30),
+        /**
+         * **显式指定 mock 为默认模型**（不走智能链）。
+         * 不传的话 `jueCeMoXing` 会按 `keYongMoXing` 里的真实模型挑，
+         * 一路选到 mimo/ollama ⇒ mock 服务器收不到请求、断言全空。
+         */
+        moXingJueCe: { defaultModel: 'mock', chain: [], chainDisabled: [] },
+      }));
     }
     check('[5] 4 轮 chat-send 走通', turns.every((r) => r && r.ok === true && typeof r.reply === 'string'), turns.map((t) => ({ ok: t?.ok, reply: String(t?.reply || '').slice(0, 20) })));
     check(
@@ -841,25 +976,68 @@ if (!SKIP_ELECTRON) {
   // ── [6] 记忆服务坏掉：对话仍能发 ──
   console.log('\n[6] 真 Electron + 记忆服务坏掉：工具撤销、重建跳过、对话仍能发');
   {
-    const copy = makeCopy('broken', { brokenMemory: true });
+    /** 同 [5]：先起 mock，把真实地址写进配置 */
     const seen = [];
     const mock = await startModelServer((ti) => {
-      seen.push({ hasTools: Array.isArray(ti.tools) && ti.tools.length > 0 });
+      seen.push({
+        hasTools: Array.isArray(ti.tools) && ti.tools.length > 0,
+        toolNames: (ti.tools || []).map((t) => t?.function?.name || ''),
+      });
       return textResponse('记忆服务不可用时也能收到回答');
     });
+    const copy = makeCopy('broken', { brokenMemory: true, providerBase: mock.base });
     const yingYong = await launch(copy, 'broken');
     check('[6] Electron 起来且 bootstrap 完成（记忆服务是坏的）', yingYong.ready === true);
+    /** 同 [5]：先写密钥进 SecureKeyStore（桥接名是 providerKeySet） */
+    await yingYong.call('providerKeySet', { providerId: 'deepseek', apiKey: 'sk-mock' });
     await yingYong.call('setProvider', { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mock.base, model: 'mock', protocol: 'openai-compatible' });
 
-    const r = await yingYong.call('chatSend', { sessionId: 's-broken', content: '记忆服务坏了，这条还能发出去吗？' });
+    const r = await yingYong.call('chatSend', {
+      sessionId: 's-broken',
+      content: '记忆服务坏了，这条还能发出去吗？',
+      /** 同 [5]：显式指定 mock，否则走智能链选中真实模型 */
+      moXingJueCe: { defaultModel: 'mock', chain: [], chainDisabled: [] },
+    });
     check('[6] 对话仍能发（ok:true 且有回复）', r?.ok === true && String(r.reply || '').length > 0, { ok: r?.ok, reply: r?.reply, error: r?.error });
-    check('[6] 请求体里没有 tools（记忆服务不可用 → 不暴露工具）', seen.length >= 1 && seen.every((s) => s.hasTools === false), { requests: seen.length, tools: seen.map((s) => s.hasTools) });
+    /**
+     * **记忆服务坏掉 ⇒ 只砍记忆工具，干活工具照常暴露**（第 20 轮产品改动）。
+     *
+     * 旧口径是「记忆不可用 ⇒ 整套工具都不暴露」，那正是真机上
+     * 牛马不能干活的根因：记忆子进程起不来，write_file/open_path 也跟着一起没，
+     * 用户说"生成文件"，模型只能口头说"已完成"。
+     * 现在断言反过来：**请求体里有 tools**（干活工具在里面），
+     * 但**没有 recall/retrieve**（记忆工具确实砍掉了）。
+     */
+    const juHao = seen.find((s) => s.hasTools);
+    check(
+      '[6] 记忆坏掉仍暴露工具，且不含 recall/retrieve（只砍记忆工具）',
+      seen.length >= 1 && !!juHao
+        && Array.isArray(juHao.toolNames)
+        && !juHao.toolNames.includes('recall') && !juHao.toolNames.includes('retrieve')
+        && juHao.toolNames.some((n) => ['write_file', 'read_file', 'open_path', 'list_dir'].includes(n)),
+      { requests: seen.length, names: juHao?.toolNames?.slice(0, 8) }
+    );
     const logRes = await yingYong.call('chatLog', { sessionId: 's-broken' });
     check('[6] 重建跳过但如实报告（restore.done=true & ok=false）', logRes?.stats?.restore?.done === true && logRes?.stats?.restore?.ok === false, logRes?.stats?.restore);
     check('[6] 日志照常只追加（进程内镜像仍可用）', (logRes?.count || 0) >= 2, { count: logRes?.count, entries: logRes?.entries?.map((e) => ({ seq: e.seq, role: e.role, chars: e.chars })) });
+    /**
+     * 记忆不可用**不再是 `chat.tools.unavailable` 的原因** ——
+     * 工具照常暴露时根本没有"unavailable"事件。改断言为：
+     * 审计里如实记了记忆起不来（`memory-start-failed` 见上面 restore），
+     * 且若真有 unavailable 事件，其原因不得是 memory-unavailable。
+     */
     const audit = await yingYong.call('auditLog', 200);
     const unavailable = (audit?.entries || []).find((e) => e.op === 'chat.tools.unavailable');
-    check('[6] audit 记录不可用原因 memory-unavailable', unavailable?.detail?.reason === 'memory-unavailable', unavailable?.detail);
+    check(
+      '[6] 记忆不可用不再当作工具整体不可用的原因',
+      !unavailable || unavailable?.detail?.reason !== 'memory-unavailable',
+      unavailable?.detail
+    );
+    check(
+      '[6] 审计如实记了 memoryReady=false（记忆确实没起来）',
+      (audit?.entries || []).some((e) => e.op === 'chat.tools.decide' && e.detail?.memoryReady === false),
+      (audit?.entries || []).filter((e) => e.op === 'chat.tools.decide').map((e) => e.detail)
+    );
     const bootLog = path.join(copy.userData, 'warmy-boot.log');
     if (fs.existsSync(bootLog)) {
       const lines = fs.readFileSync(bootLog, 'utf8').trim().split('\n').filter((l) => /memory|restore/i.test(l));
@@ -879,7 +1057,7 @@ try {
 } catch {
   /* 忽略 */
 }
-fs.rmSync(memAscii, { recursive: true, force: true });
+anQuanShan(memAscii);
 
 console.log('\n=== SUMMARY ===');
 console.log(`failures=${failures}`);

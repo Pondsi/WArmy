@@ -65,10 +65,12 @@ export const XING_WEI_MOREN: Record<XingWei, XingWeiGui> = {
   },
   gongJu: {
     ming: '单次工具调用',
-    miao: 60 * 1000,
-    lun: 3,
-    ju: '60 秒 = MCP TS SDK 的默认请求超时（本地读写通常几十毫秒，60 秒就是"明显不正常"）；'
-      + '次数 3 = 1 次 + 2 次重试（Anthropic SDK DEFAULT_MAX_RETRIES=2）',
+    miao: 120 * 1000,
+    lun: 12,
+    ju: '时间 120 秒 = Claude Code 前台 Bash 默认超时（原 60s 会把下载/构建/长命令误判成异常）；'
+      + '次数 12 = 一个多步任务里同名工具被正常调用很多次，"少数几次"绝不代表打转。'
+      + '真正的卡死由"无任何真实产出"判定（见 electron-main 的 jinZhanJinQi），'
+      + '不靠"调用了几次"这一个数字',
   },
   dengDaiHuiFu: {
     ming: '等待模型回复',

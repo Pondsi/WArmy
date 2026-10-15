@@ -27,13 +27,14 @@ export const MARKER_REPLY = 'WARMY-RELAY-PLAINTEXT-MARKER-REPLY-4c2b88';
 function identityFromSeedHex(hex) {
   const seed = sha256(Buffer.from(String(hex), 'utf8'));
   const kp = ed25519FromSeed(seed);
-  const fingerprint = warmyZhiWen(kp.publicKey);
+  const zhiWen = warmyZhiWen(kp.publicKey);
   return {
-    fingerprint,
+    /** 与产品侧 `ShenfenGongyingshang` 同名，父进程状态里也叫 `zhiWen`（别再叫 fingerprint） */
+    zhiWen,
     publicKey: kp.publicKey,
     privateKey: kp.privateKey,
     provider: {
-      fingerprint,
+      zhiWen,
       publicKey: kp.publicKey,
       sign: (m) => signEd25519Local(m, kp.privateKey),
       verify: (m, s, pk) => verifyEd25519Local(m, s, pk) === true,
@@ -118,7 +119,7 @@ async function roleListener() {
         remoteAddress: session.info.remoteAddress,
       });
       try {
-        session.send({ to: '*', channel: 'group', payload: { type: 'relay-reply', marker: MARKER_REPLY } });
+        session.faSong({ to: '*', channel: 'group', payload: { type: 'relay-reply', marker: MARKER_REPLY } });
       } catch (e) {
         writeState({ replyError: String(e && e.message ? e.message : e) });
       }
@@ -128,12 +129,12 @@ async function roleListener() {
     },
   });
   const serverPort = await server.start();
-  writeState({ phase: 'server-up', serverPort, fingerprint: id.fingerprint });
+  writeState({ phase: 'server-up', serverPort, zhiWen: id.zhiWen });
 
   const tunnel = new ZhongJiSuiDaoJianTing({
     relay: { host: '127.0.0.1', port: relayPort },
     token,
-    from: id.fingerprint,
+    from: id.zhiWen,
     localTarget: { host: '127.0.0.1', port: serverPort },
     readyTimeoutMs: 8000,
   });
@@ -169,7 +170,7 @@ async function roleDialer() {
   const tunnel = new ZhongJiSuiDaoBoHao({
     relay: { host: '127.0.0.1', port: relayPort },
     token,
-    from: id.fingerprint,
+    from: id.zhiWen,
     readyTimeoutMs: Number(args['ready-timeout'] ?? 8000),
   });
   const localPort = await tunnel.start();
@@ -201,7 +202,7 @@ async function roleDialer() {
     peerFingerprint: r.session ? r.session.info.peerFingerprint : null,
   });
   if (r.ok && r.session) {
-    r.session.send({ to: '*', channel: 'group', payload: { type: 'relay-probe', marker: MARKER_SEND } });
+    r.session.faSong({ to: '*', channel: 'group', payload: { type: 'relay-probe', marker: MARKER_SEND } });
     writeState({ phase: 'sent' });
     const deadline = Date.now() + Number(args['hold-ms'] ?? 6000);
     while (Date.now() < deadline && !reply) await sleep(50);

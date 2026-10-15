@@ -4,16 +4,16 @@
 > 一致性由**硬门禁** `verify-gate-manifest.mjs` 双向校验（清单多一条/少一条/写错类别、主进程
 > `MEN_JIN_YING` 与清单不一致、界面列表与清单不一致、探针没声明"不进 CI"、**已知红门禁没写证据或没在本文登记**
 > —— 任何一条都判红）。
-> 本轮统计：**75 支**（通用 28 / 项目专项 42 / 探针 5）；其中**已知红 9 支**（原 10；`verify-tool-calls` 第 6 轮已修绿，下表逐条给证据）。
+> 本轮统计：**83 支**（通用 30 / 项目专项 48 / 探针 5）；其中**已知红 8 支**（第 22 轮：`verify-context-renderer` 已修绿，见下表）。
 
 ## 〇、当前状态：哪些门禁**事实上是红的**（附证据）
 
-> 一份清单如果不写清"当下哪些是红的"，"清单全绿"就是自欺。以下 10 支本轮实测确认红着，
-> **并已逐条给出判断依据**（其中 `verify-context-renderer` 用"换回 HEAD 再跑"做过对照）。
+> 一份清单如果不写清"当下哪些是红的"，"清单全绿"就是自欺。以下本轮实测确认红着的都登记在此，
+> **并已逐条给出判断依据**（历史上有过用"换回 HEAD 再跑"做对照的证明）。
 
 | 门禁 | 类别 | 为什么红 / 证据 |
 |---|---|---|
-| `verify-context-renderer` | project | **换回 HEAD 的 `electron-main.ts` 重跑，失败项完全一致** ⇒ 与本轮改动无关。根因：门禁的 mock 不实现 SSE，主链路流式解析得空正文 ⇒ 触发"逼出正文"的第二次非流式请求（一轮两条 prompt），断言却按"一轮一条"写死 |
+| `verify-context-renderer` | project | **已修绿（第 22 轮）**。两支历史红项都不是产品缺陷：① `budgetChars=200 指针完整可执行` —— 渲染器在"绝不给空视图"那一步把最后一条真实消息塞在最前，把**已完整的指针**挤到预算外截断（`seq 1..30` 这种解不了引用的半根指针）；现在先**预留极简指针的字数**再给真实消息分配，指针三线索齐全、`pointers` 也如实计数。② `verify-all 跑完且零失败` —— `spikes/verify-all/run-full.mjs` 把 `memory-os/node_modules`（pnpm 下常是空壳）junction 进临时目录，`Cannot find module 'better-sqlite3'` **未捕获**直接把整个套件炸掉；现在按本平台 `prebuilds/*.node` 找真可用的包，并把该节包在 try 内（缺依赖只红那一条，不许拖垮全 suite） |
 | `verify-history-persist` | project | 临时 userData 里 `memory-start-failed`，拿不到注入 prompt 里的「道」⇒ 断言必红（环境依赖） |
 | `verify-tool-calls` | universal | **已修绿（第 6 轮）**：ALL PASS。旧语义断言按现实现重写（工具面 2→35、`supportsTools`/`tool_choice` 收敛、`maxResultChars`→`zuiDaJieGuoZiShu`、字段名 `qingQiuJi`/`tingZhiYuanYin`）；真 node 启动记忆服务；mock 支持 SSE；顺带修产品两处真 bug（视图硬界在「绝不给空视图」后越界、记忆服务挂了仍暴露干活工具） |
 | `verify-tool-call-e2e` | universal | **33/34（第 6 轮，原 19/34）**：旧断言已改（报文 `messages`、紧急度 DOM `#jinJiTrigger` aria-label、工具面全套、metrics 字段 `gongJuDiaoYongJi`）；mock 支持 SSE。**余 1 红：4-10**——P1 加急路径经 `fenLei` 分类模型（桩环境缺该能力位，审计有 `err.capability-missing cap=fenLei`）后再收束，终答气泡计数对不上「桩模型终答」；消息本身已进会话且模型被调用（turns 2→4） |

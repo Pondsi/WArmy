@@ -79,7 +79,7 @@ async function main() {
     const roster = Array.from({ length: 50 }, (_, i) => `ROSTER-${i}`);
     for (const fp of roster) lv.registerConnection(fp, { id: `r-${fp}`, kind: 'member-initiated' });
     lv.setDialable(true);
-    check('50 人名册全部在线（靠连接判活，零探测）', lv.list().filter((m) => m.online).length === 50, { online: lv.list().filter((m) => m.online).length, total: lv.list().length });
+    check('50 人名册全部在线（靠连接判活，零探测）', lv.LieBiao().filter((m) => m.online).length === 50, { online: lv.LieBiao().filter((m) => m.online).length, total: lv.LieBiao().length });
     check('在线阶段探测次数仍为 0', lv.probeCallCount.total === 0, lv.probeCallCount.total);
 
     /* ── [6] 可拨入但无待探测成员 → 不探测 ── */
@@ -100,7 +100,7 @@ async function main() {
     const s5 = await lv.sweep();
     check('可拨入后只拨待探测的那 1 人', s5.probed.length === 1 && s5.probed[0] === other, s5.probed);
     check('没有误拨名册里的其它 50 人', lv.probeCallCount.total === 1, lv.probeCallCount);
-    check('探测留痕', lv.probeLog.length === 1 && lv.probeLog[0].fingerprint === other, lv.probeLog);
+    check('探测留痕', lv.probeLog.length === 1 && lv.probeLog[0].zhiWen === other, lv.probeLog);
     const s6 = await lv.sweep();
     check('探测失败即放弃：下一轮不再拨同一人', s6.probed.length === 0 && lv.probeCallCount.total === 1, { probed: s6.probed, total: lv.probeCallCount.total });
     await sleep(120);
@@ -138,7 +138,7 @@ async function main() {
       nodeId: 'creator',
       port: 0,
       groupId: GROUP,
-      roster: (fp) => fp === memberId.fingerprint,
+      roster: (fp) => fp === memberId.zhiWen,
       onClose: (s, reason) => closedReasons.push(reason),
     });
     const port = await server.start();
@@ -159,29 +159,29 @@ async function main() {
       host: '127.0.0.1',
       port,
       groupId: GROUP,
-      peerFingerprint: creatorId.fingerprint,
+      peerFingerprint: creatorId.zhiWen,
     });
     const res = await client.connect();
     check('成员（拨入方）完成鉴权握手', res.ok === true, res.reason ?? 'ok');
     const srvSession = server.sessionList[0];
-    check('创建者侧拿到 inbound 会话', srvSession.info.direction === 'inbound' && srvSession.info.peerFingerprint === memberId.fingerprint);
+    check('创建者侧拿到 inbound 会话', srvSession.info.direction === 'inbound' && srvSession.info.peerFingerprint === memberId.zhiWen);
 
     // 创建者以"服务端收到的 inbound 会话"为在线判据
     const closeConn = () => srvSession.close('test');
-    lv.registerConnection(memberId.fingerprint, { id: 'inbound-1', kind: 'member-initiated', close: closeConn });
-    check('入站连接 → 成员在线', lv.status(memberId.fingerprint).online === true, lv.status(memberId.fingerprint));
+    lv.registerConnection(memberId.zhiWen, { id: 'inbound-1', kind: 'member-initiated', close: closeConn });
+    check('入站连接 → 成员在线', lv.status(memberId.zhiWen).online === true, lv.status(memberId.zhiWen));
     check('在线事件已触发', onlineEvents === 1, onlineEvents);
 
     // 成员侧断连 → 创建者的连接关闭 → 走 closeConnection
     client.close('member-going-offline');
     await sleep(250);
-    lv.closeConnection(memberId.fingerprint, 'inbound-1');
+    lv.closeConnection(memberId.zhiWen, 'inbound-1');
     check('连接断开后创建者侧观察到关闭', closedReasons.length >= 1, closedReasons);
-    check('断开瞬间仍在线（迟滞）', lv.status(memberId.fingerprint).online === true);
-    lv.markMiss(memberId.fingerprint);
+    check('断开瞬间仍在线（迟滞）', lv.status(memberId.zhiWen).online === true);
+    lv.markMiss(memberId.zhiWen);
     const s = await lv.sweep();
-    check('迟滞窗口过后判离线', lv.status(memberId.fingerprint).online === false && s.markedOffline.includes(memberId.fingerprint), s.markedOffline);
-    check('离线后 via = none', lv.status(memberId.fingerprint).via === 'none', lv.status(memberId.fingerprint));
+    check('迟滞窗口过后判离线', lv.status(memberId.zhiWen).online === false && s.markedOffline.includes(memberId.zhiWen), s.markedOffline);
+    check('离线后 via = none', lv.status(memberId.zhiWen).via === 'none', lv.status(memberId.zhiWen));
 
     // 成员重新拨入 → 再次在线（不需要创建者做任何巡检）
     const client2 = new AnQuanTongBuKeHu({
@@ -190,13 +190,13 @@ async function main() {
       host: '127.0.0.1',
       port,
       groupId: GROUP,
-      peerFingerprint: creatorId.fingerprint,
+      peerFingerprint: creatorId.zhiWen,
     });
     const res2 = await client2.connect();
     check('成员重新拨入（新的鉴权握手）', res2.ok === true, res2.reason ?? 'ok');
     const srvSession2 = server.sessionList.find((s2) => s2 !== srvSession) ?? server.sessionList[0];
-    lv.registerConnection(memberId.fingerprint, { id: 'inbound-2', kind: 'member-initiated' });
-    check('成员重新上线（创建者零巡检）', lv.status(memberId.fingerprint).online === true && lv.status(memberId.fingerprint).via === 'member-connection', lv.status(memberId.fingerprint));
+    lv.registerConnection(memberId.zhiWen, { id: 'inbound-2', kind: 'member-initiated' });
+    check('成员重新上线（创建者零巡检）', lv.status(memberId.zhiWen).online === true && lv.status(memberId.zhiWen).via === 'member-connection', lv.status(memberId.zhiWen));
     check('整个过程中创建者从未主动探测', lv.probeCallCount.total === 0, lv.probeCallCount);
     check('重连使用新会话密钥', res2.session.info.keyFingerprint !== res.session.info.keyFingerprint, {
       c1: res.session.info.keyFingerprint.slice(0, 8),

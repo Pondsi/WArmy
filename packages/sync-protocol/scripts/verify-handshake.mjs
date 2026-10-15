@@ -32,7 +32,7 @@ function group(biaoTi) {
 
 function mkIdentity(biaoQian) {
   const i = chuangjianLinShiShenFen(biaoQian);
-  return { provider: i.provider, privateKey: i.privateKey, fingerprint: i.fingerprint };
+  return { provider: i.provider, privateKey: i.privateKey, zhiWen: i.zhiWen };
 }
 
 function flipB64uByte(s) {
@@ -64,7 +64,7 @@ async function handshakePair(opts = {}) {
     identity: initiatorIdentity.provider,
     role: 'initiator',
     groupId,
-    peerFingerprint: peerPin === undefined ? responderIdentity.fingerprint : peerPin,
+    peerFingerprint: peerPin === undefined ? responderIdentity.zhiWen : peerPin,
     replayGuard: guardI,
     now: nowI,
     onEvent: (e) => events.push(e),
@@ -79,10 +79,10 @@ async function handshakePair(opts = {}) {
     onEvent: (e) => events.push(e),
   });
   const hs1 = await I.start();
-  const r1 = await R.step(JSON.parse(JSON.stringify(hs1)));
-  const hs3 = await I.step(JSON.parse(JSON.stringify(r1.out[0])));
-  const r2 = await R.step(JSON.parse(JSON.stringify(hs3.out[0])));
-  await I.step(JSON.parse(JSON.stringify(r2.out[0])));
+  const r1 = await R.buZhou(JSON.parse(JSON.stringify(hs1)));
+  const hs3 = await I.buZhou(JSON.parse(JSON.stringify(r1.out[0])));
+  const r2 = await R.buZhou(JSON.parse(JSON.stringify(hs3.out[0])));
+  await I.buZhou(JSON.parse(JSON.stringify(r2.out[0])));
   return { I, R, events, session: I.session };
 }
 
@@ -92,7 +92,7 @@ async function rejectReason(mutate, opts = {}) {
     identity: (opts.initiatorIdentity ?? A).provider,
     role: 'initiator',
     groupId: opts.initiatorGroupId ?? GROUP,
-    peerFingerprint: B.fingerprint,
+    peerFingerprint: B.zhiWen,
     now: opts.nowI,
     replayGuard: opts.guardI,
   });
@@ -105,7 +105,7 @@ async function rejectReason(mutate, opts = {}) {
   const hs1 = await I.start();
   const frame = mutate ? mutate({ ...hs1 }) : { ...hs1 };
   try {
-    await R.step(frame);
+    await R.buZhou(frame);
     return 'no-error';
   } catch (e) {
     return e.reason ?? String(e.message);
@@ -114,7 +114,7 @@ async function rejectReason(mutate, opts = {}) {
 
 async function main() {
   console.log('=== verify-handshake: 鉴权握手（Ed25519 认证 + X25519 ECDHE + AES-256-GCM）===');
-  console.log(`node ${process.version} | alice=${A.fingerprint.slice(0, 12)}… bob=${B.fingerprint.slice(0, 12)}…`);
+  console.log(`node ${process.version} | alice=${A.zhiWen.slice(0, 12)}… bob=${B.zhiWen.slice(0, 12)}…`);
 
   /* ── [1] 握手成功 ── */
   group('[1] 两个本地实例握手成功');
@@ -123,10 +123,10 @@ async function main() {
   check('被叫方握手完成', first.R.established === true, first.R.phase);
   check('双方 handshakeId 一致', first.I.session.handshakeId === first.R.session.handshakeId, first.I.session.handshakeId.slice(0, 16));
   check('双方 keyFingerprint 一致', first.I.session.keyFingerprint === first.R.session.keyFingerprint, first.I.session.keyFingerprint.slice(0, 16));
-  check('对端指纹识别正确', first.I.session.peerFingerprint === B.fingerprint && first.R.session.peerFingerprint === A.fingerprint);
+  check('对端指纹识别正确', first.I.session.peerFingerprint === B.zhiWen && first.R.session.peerFingerprint === A.zhiWen);
   check('pin 模式下非 TOFU', first.I.session.tofu === false);
   const tofuPair = await handshakePair({ peerPin: null });
-  check('未 pin 时标记 TOFU（首次接触）', tofuPair.I.session.tofu === true && tofuPair.session.peerFingerprint === B.fingerprint);
+  check('未 pin 时标记 TOFU（首次接触）', tofuPair.I.session.tofu === true && tofuPair.session.peerFingerprint === B.zhiWen);
   check('方向性子密钥不同（c2s ≠ s2c）', !first.I.session.c2sMaterial.equals(first.I.session.s2cMaterial));
   check('ECDHE 材料 32 字节（X25519，无 RSA 密钥传输）', first.I.session.c2sMaterial.length === 32 && first.I.session.transcriptHash.length === 32);
   check('双方各自记录 established 事件', first.events.filter((e) => e.type === 'established').length === 2);
@@ -142,14 +142,14 @@ async function main() {
 
   {
     const guard = new ChongfangFangYu();
-    const I = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
+    const I = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.zhiWen });
     const r1 = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
     const hs1 = await I.start();
-    await r1.step({ ...hs1 });
+    await r1.buZhou({ ...hs1 });
     const r2 = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
     let reason = 'no-error';
     try {
-      await r2.step({ ...hs1 });
+      await r2.buZhou({ ...hs1 });
     } catch (e) {
       reason = e.reason ?? String(e.message);
     }
@@ -160,20 +160,20 @@ async function main() {
     const guard = new ChongfangFangYu();
     const gOld1 = new ChongfangFangYu();
     gOld1.nextLocalCounter = () => 1;
-    const I1 = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint, replayGuard: gOld1 });
+    const I1 = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.zhiWen, replayGuard: gOld1 });
     const r1 = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
     const hs1 = await I1.start();
-    await r1.step({ ...hs1 });
-    const seen = guard.maxCounterSeen(A.fingerprint);
+    await r1.buZhou({ ...hs1 });
+    const seen = guard.maxCounterSeen(A.zhiWen);
 
     const gOld2 = new ChongfangFangYu();
     gOld2.nextLocalCounter = () => 1;
-    const I2 = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint, replayGuard: gOld2 });
+    const I2 = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.zhiWen, replayGuard: gOld2 });
     const r2 = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, replayGuard: guard });
     const hs1b = await I2.start();
     let reason = 'no-error';
     try {
-      await r2.step({ ...hs1b });
+      await r2.buZhou({ ...hs1b });
     } catch (e) {
       reason = e.reason ?? String(e.message);
     }
@@ -191,19 +191,19 @@ async function main() {
   {
     let reason = 'no-error';
     try {
-      await handshakePair({ roster: (fp) => fp !== A.fingerprint });
+      await handshakePair({ roster: (fp) => fp !== A.zhiWen });
     } catch (e) {
       reason = e.reason ?? String(e.message);
     }
     check('名册外的成员被拒（not-authorized）', reason === 'not-authorized', reason);
   }
   {
-    const I = new WoshouQudongqi({ identity: ATTACKER.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
-    const R = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, peerFingerprint: A.fingerprint });
+    const I = new WoshouQudongqi({ identity: ATTACKER.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.zhiWen });
+    const R = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP, peerFingerprint: A.zhiWen });
     const hs1 = await I.start();
     let reason = 'no-error';
     try {
-      await R.step({ ...hs1 });
+      await R.buZhou({ ...hs1 });
     } catch (e) {
       reason = e.reason ?? String(e.message);
     }
@@ -248,7 +248,7 @@ async function main() {
       host: '127.0.0.1',
       port,
       groupId: GROUP,
-      peerFingerprint: serverIdentity.fingerprint,
+      peerFingerprint: serverIdentity.zhiWen,
       onMessage: (m) => clientMsgs.push(m),
       onHandshakeEvent: (e) => {
         if (e.type === 'established') establishedEvents += 1;
@@ -259,16 +259,16 @@ async function main() {
     const serverSession = server.sessionList[0];
     check('服务端已注册 inbound 会话', !!serverSession && serverSession.info.direction === 'inbound');
     check('双方密钥指纹一致', serverSession.info.keyFingerprint === res.session.info.keyFingerprint, serverSession.info.keyFingerprint.slice(0, 12));
-    check('服务端看到客户端指纹', serverSession.info.peerFingerprint === clientIdentity.fingerprint);
+    check('服务端看到客户端指纹', serverSession.info.peerFingerprint === clientIdentity.zhiWen);
     check('客户端看到服务端指纹（pin 生效，非 TOFU）', res.session.info.tofu === false);
 
-    res.session.send({ to: '*', channel: 'group', payload: { text: 'hello-from-client' } });
-    serverSession.send({ to: '*', channel: 'group', payload: { text: 'hello-from-server' } });
+    res.session.faSong({ to: '*', channel: 'group', payload: { text: 'hello-from-client' } });
+    serverSession.faSong({ to: '*', channel: 'group', payload: { text: 'hello-from-server' } });
     await sleep(200);
     check('服务端收到并解密客户端消息', serverMsgs.length === 1 && serverMsgs[0].payload.text === 'hello-from-client', serverMsgs.map((m) => m.payload));
     check('客户端收到并解密服务端消息', clientMsgs.length === 1 && clientMsgs[0].payload.text === 'hello-from-server', clientMsgs.map((m) => m.payload));
 
-    for (let i = 0; i < 20; i += 1) res.session.send({ to: '*', channel: 'group', payload: { text: `m${i}` } });
+    for (let i = 0; i < 20; i += 1) res.session.faSong({ to: '*', channel: 'group', payload: { text: `m${i}` } });
     await sleep(300);
     check('同连接 20 条消息没有触发重握手', res.session.channelStats.handshakes === 1 && establishedEvents === 2, {
       clientHandshakes: res.session.channelStats.handshakes,
@@ -281,7 +281,7 @@ async function main() {
     await sleep(200);
     check('KeyUpdate 后发送代次 +1', res.session.generation === genBefore + 1, { before: genBefore, after: res.session.generation });
     check('KeyUpdate 后对端接收代次同步 +1', serverSession.recvGeneration === 1, serverSession.recvGeneration);
-    res.session.send({ to: '*', channel: 'group', payload: { text: 'after-keyupdate' } });
+    res.session.faSong({ to: '*', channel: 'group', payload: { text: 'after-keyupdate' } });
     await sleep(200);
     check('换密钥后消息仍互通', serverMsgs.length === 22 && serverMsgs[21].payload.text === 'after-keyupdate', serverMsgs.length);
     check('KeyUpdate 全程只握手一次', establishedEvents === 2, establishedEvents);
@@ -336,7 +336,7 @@ async function main() {
       nodeId: 'node-server2',
       port: 0,
       groupId: GROUP,
-      roster: (fp) => fp !== bogus.fingerprint,
+      roster: (fp) => fp !== bogus.zhiWen,
     });
     const port = await server.start();
     const attacker = new AnQuanTongBuKeHu({
@@ -345,7 +345,7 @@ async function main() {
       host: '127.0.0.1',
       port,
       groupId: GROUP,
-      peerFingerprint: serverIdentity.fingerprint,
+      peerFingerprint: serverIdentity.zhiWen,
     });
     const r = await attacker.connect();
     check('名册外客户端连不上', r.ok === false, r.reason);
@@ -358,20 +358,20 @@ async function main() {
   {
     let err = 'no-error';
     try {
-      await guiFanShenFen({ ...A.provider, fingerprint: 'NOT-A-REAL-FINGERPRINT' });
+      await guiFanShenFen({ ...A.provider, zhiWen: 'NOT-A-REAL-FINGERPRINT' });
     } catch (e) {
       err = e instanceof ShenfenQiyueCuowu ? 'ShenfenQiyueCuowu' : String(e.message);
     }
-    check('指纹与公钥不符 → ShenfenQiyueCuowu', err === 'IdentityContractError', err);
+    check('指纹与公钥不符 → ShenfenQiyueCuowu', err === 'ShenfenQiyueCuowu', err);
   }
   {
-    const stubIdentity = { fingerprint: A.fingerprint, publicKey: A.provider.publicKey, sign: A.provider.sign, verify: () => true };
-    const I = new WoshouQudongqi({ identity: stubIdentity, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
+    const stubIdentity = { zhiWen: A.zhiWen, publicKey: A.provider.publicKey, sign: A.provider.sign, verify: () => true };
+    const I = new WoshouQudongqi({ identity: stubIdentity, role: 'initiator', groupId: GROUP, peerFingerprint: B.zhiWen });
     const R = new WoshouQudongqi({ identity: B.provider, role: 'responder', groupId: GROUP });
     const hs1 = await I.start();
     let reason = 'no-error';
     try {
-      await R.step({ ...hs1, sig: flipB64uByte(hs1.sig) });
+      await R.buZhou({ ...hs1, sig: flipB64uByte(hs1.sig) });
     } catch (e) {
       reason = e.reason ?? String(e.message);
     }
@@ -380,8 +380,8 @@ async function main() {
     check('桩 verify（恒真）不影响真签名握手', okPair.I.established === true);
   }
   {
-    const denyIdentity = { fingerprint: B.fingerprint, publicKey: B.provider.publicKey, sign: B.provider.sign, verify: () => false };
-    const I = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.fingerprint });
+    const denyIdentity = { zhiWen: B.zhiWen, publicKey: B.provider.publicKey, sign: B.provider.sign, verify: () => false };
+    const I = new WoshouQudongqi({ identity: A.provider, role: 'initiator', groupId: GROUP, peerFingerprint: B.zhiWen });
     const R = new WoshouQudongqi({
       identity: denyIdentity,
       role: 'responder',
@@ -391,7 +391,7 @@ async function main() {
     const hs1 = await I.start();
     let reason = 'no-error';
     try {
-      await R.step({ ...hs1 });
+      await R.buZhou({ ...hs1 });
     } catch (e) {
       reason = e.reason ?? String(e.message);
     }
@@ -413,7 +413,7 @@ async function main() {
     const hs1 = await I.start();
     let reason = 'no-error';
     try {
-      await R.step({ ...hs1 });
+      await R.buZhou({ ...hs1 });
     } catch (e) {
       reason = e.reason ?? String(e.message);
     }
@@ -453,20 +453,20 @@ async function main() {
     const spkiB64 = (id) => Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), Buffer.from(id.provider.publicKey)]).toString('base64');
     /** 把现有身份线的形式（SPKI DER base64 + 自定义指纹）包装成注入接口 */
     const spkiAdapter = (id) => ({
-      fingerprint: deriveFingerprint(Buffer.from(id.provider.publicKey)),
+      zhiWen: deriveFingerprint(Buffer.from(id.provider.publicKey)),
       publicKey: spkiB64(id), // 44 字节 SPKI DER 的 base64（现身份线的形式）
       sign: id.provider.sign,
       verify: id.provider.verify,
     });
     const adapterA = spkiAdapter(A);
     const adapterB = spkiAdapter(B);
-    check('两种公钥表示得到同一指纹', deriveFingerprint(Buffer.from(A.provider.publicKey)) !== adapterB.fingerprint);
+    check('两种公钥表示得到同一指纹', deriveFingerprint(Buffer.from(A.provider.publicKey)) !== adapterB.zhiWen);
 
     const I = new WoshouQudongqi({
       identity: adapterA,
       role: 'initiator',
       groupId: GROUP,
-      peerFingerprint: adapterB.fingerprint,
+      peerFingerprint: adapterB.zhiWen,
       fingerprintDerivation: deriveFingerprint,
     });
     const R = new WoshouQudongqi({
@@ -476,13 +476,13 @@ async function main() {
       fingerprintDerivation: deriveFingerprint,
     });
     const hs1 = await I.start();
-    const r1 = await R.step({ ...hs1 });
-    const hs3 = await I.step({ ...r1.out[0] });
-    const r2 = await R.step({ ...hs3.out[0] });
-    await I.step({ ...r2.out[0] });
-    check('SPKI DER 公钥 + 自定义指纹方案可直接接入', I.established === true && R.established === true, adapterB.fingerprint);
-    check('双方对端指纹按自定义方案一致', I.session.peerFingerprint === adapterB.fingerprint, I.session.peerFingerprint);
-    check('携带短横分组的指纹在收发两侧原样保留', R.session.peerFingerprint === adapterA.fingerprint, R.session.peerFingerprint);
+    const r1 = await R.buZhou({ ...hs1 });
+    const hs3 = await I.buZhou({ ...r1.out[0] });
+    const r2 = await R.buZhou({ ...hs3.out[0] });
+    await I.buZhou({ ...r2.out[0] });
+    check('SPKI DER 公钥 + 自定义指纹方案可直接接入', I.established === true && R.established === true, adapterB.zhiWen);
+    check('双方对端指纹按自定义方案一致', I.session.peerFingerprint === adapterB.zhiWen, I.session.peerFingerprint);
+    check('携带短横分组的指纹在收发两侧原样保留', R.session.peerFingerprint === adapterA.zhiWen, R.session.peerFingerprint);
 
     // 同样的方案下，pin 指向"第三方"仍被拒（HS1.pins 必须等于被叫方指纹）
     const I2 = new WoshouQudongqi({
@@ -501,7 +501,7 @@ async function main() {
     const hs1b = await I2.start();
     let reason = 'no-error';
     try {
-      await R2.step({ ...hs1b });
+      await R2.buZhou({ ...hs1b });
     } catch (e) {
       reason = e.reason ?? String(e.message);
     }
@@ -510,11 +510,11 @@ async function main() {
     // 篡改 SPKI 表示的公钥（长度变了）→ 公钥非法
     let badKey = 'no-error';
     try {
-      await guiFanShenFen({ fingerprint: adapterA.fingerprint, publicKey: Buffer.alloc(7), sign: adapterA.sign, verify: adapterA.verify });
+      await guiFanShenFen({ zhiWen: adapterA.zhiWen, publicKey: Buffer.alloc(7), sign: adapterA.sign, verify: adapterA.verify });
     } catch (e) {
       badKey = e instanceof ShenfenQiyueCuowu ? 'ShenfenQiyueCuowu' : String(e.message);
     }
-    check('非法公钥长度 → ShenfenQiyueCuowu', badKey === 'IdentityContractError', badKey);
+    check('非法公钥长度 → ShenfenQiyueCuowu', badKey === 'ShenfenQiyueCuowu', badKey);
   }
 
   console.log(`\n=== verify-handshake 结果：${passes} 通过 / ${failures} 失败 ===`);

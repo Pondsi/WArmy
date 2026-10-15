@@ -63,7 +63,6 @@ const UNIVERSAL = {
  * （由 verify-gate-manifest.mjs 强制校验）—— 免得这份状态悄悄腐烂。
  */
 const YI_HONG = {
-  'verify-context-renderer': '已用「换回 HEAD 的 electron-main.ts 再跑」对照证明：**失败项完全一致**（同一批 bounded-view 断言），与本轮改动无关。根因：门禁的 mock 不实现 SSE，主链路走流式解析得空正文 ⇒ 触发"逼出正文"的第二次非流式请求（一轮两条 prompt），断言按"一轮一条"写死了。',
   'verify-history-persist': '在临时 userData 里 `memory-start-failed`（记忆服务没起来）⇒ 拿不到注入 prompt 里的「道」，断言自然红。属环境依赖，与本轮改动无关。',
   'verify-tool-call-e2e': '33/34（第 7 轮）：余 4-10——P1 加急经 fenLei 分类模型（桩环境缺该能力位）后终答气泡计数对不上；消息本身已进会话且模型被调用。',
   'verify-e2e': '需要**没有别的实例在跑**（单实例锁）——桌面应用正开着时必然 "no devtools port"。属环境依赖。',

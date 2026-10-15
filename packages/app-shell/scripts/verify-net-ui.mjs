@@ -46,7 +46,7 @@ const NEW_NET_KEYS = [
   'net.relay.selected', 'net.relay.missing.noneConfigured', 'net.relay.missing.unreachable', 'net.relay.missing.needsPublicRelay',
   'net.relay.notNeeded.peerDialable', 'net.relay.notNeeded.inboundExpected', 'net.relay.unknown',
   'net.dialability.peerVerified', 'net.dialability.ipv6Natural', 'net.dialability.undetermined', 'net.dialability.undialable',
-  'net.ladder.biaoTi', 'net.ladder.current', 'net.ladder.candidate', 'net.ladder.unsupported',
+  'net.ladder.biaoTi', 'net.ladder.current', 'net.ladder.candidate', 'net.ladder.needsConfig',
   'net.ladder.relay', 'net.ladder.dialability', 'net.ladder.none',
   'net.banner.relayTerminalTitle', 'net.banner.relayConfigure',
   'net.domainTitle', 'net.publicListEmpty', 'net.refresh', 'net.refreshDone', 'net.emptyList',
@@ -1390,35 +1390,35 @@ try {
   const supportedBad = supported.filter(([r, k]) => !rungTexts[r] || rungTexts[r].text !== ZH[k]);
   ok(supportedBad.length === 0, '12-2 已实现四档的文案**逐字**等于 zh-CN 语言包', JSON.stringify(supportedBad.map((x) => [x[0], rungTexts[x[0]] && rungTexts[x[0]].text, ZH[x[1]]])));
   const unsupportedBad = [['upnp', 'net.rung.upnp'], ['holepunch', 'net.rung.holepunch']]
-    .filter(([r, k]) => !rungTexts[r] || rungTexts[r].text !== ZH[k] + ' · ' + ZH['net.ladder.unsupported']);
-  ok(unsupportedBad.length === 0, '12-2 未实现两档的文案 = 档位名 + 「尚未实现（不可用）」（逐字比对 zh 包）',
+    .filter(([r, k]) => !rungTexts[r] || rungTexts[r].text !== ZH[k] + ' · ' + ZH['net.ladder.needsConfig']);
+  ok(unsupportedBad.length === 0, '12-2 已实现但未接入两档的文案 = 档位名 + 「已实现，未接入」（逐字比对 zh 包）',
     JSON.stringify(unsupportedBad.map((x) => [x[0], rungTexts[x[0]] && rungTexts[x[0]].text])));
   const leaked = order.filter((r) => /net\.(rung|relay|ladder|dialability)\./.test(rungTexts[r] ? rungTexts[r].text : ''));
   ok(leaked.length === 0, '12-2 六档文案里没有未翻译的 i18n key 泄漏', JSON.stringify(leaked));
 
-  // 12d. 未实现的档**不得**显示成"正在跑"
-  at = '12 未实现档不得像在跑';
-  ok(rungTexts['upnp'] && rungTexts['upnp'].state === 'unsupported' && rungTexts['holepunch'] && rungTexts['holepunch'].state === 'unsupported',
-    '12-3 upnp/holepunch 标为 unsupported（不是 current/candidate）', JSON.stringify({ upnp: rungTexts['upnp'], holepunch: rungTexts['holepunch'] }));
+  // 12d. 未接入的档**不得**显示成"正在跑"
+  at = '12 未接入档不得像在跑';
+  ok(rungTexts['upnp'] && rungTexts['upnp'].state === 'needs-config' && rungTexts['holepunch'] && rungTexts['holepunch'].state === 'needs-config',
+    '12-3 upnp/holepunch 标为 needs-config（不是 current/candidate）', JSON.stringify({ upnp: rungTexts['upnp'], holepunch: rungTexts['holepunch'] }));
   ok(rungTexts['ipv6-direct'] && rungTexts['ipv6-direct'].state === 'current',
     '12-3 IPv6 档被标为当前档（附八.9：IPv6 无 NAT，是阶梯第一档）', JSON.stringify(rungTexts['ipv6-direct']));
   ok((await cnt('#wangLuoLadder .wangLuoRung[data-state="current"]')) === 1, '12-3 当前档恒只有一个（不并列）', 'current=' + (await cnt('#wangLuoLadder .wangLuoRung[data-state="current"]')));
   await okContrast('#wangLuoLadder .wangLuoRung[data-state="current"] .net-rung-text', '12-3 当前档文案可读（对比度 >= 3.0）');
-  await okContrast('#wangLuoLadder .wangLuoRung[data-state="unsupported"] .net-rung-text', '12-3 未实现档文案可读（置灰用 --ink-dim）');
+  await okContrast('#wangLuoLadder .wangLuoRung[data-state="needs-config"] .net-rung-text', '12-3 未接入档文案可读（置灰用 --ink-dim）');
   await okContrast('#wangLuoLadder .wangLuoLadderV', '12-3 阶梯取值文案可读');
 
-  // 主进程若（错误地）把未实现的档报成当前档，UI 也只能显示成 unsupported
+  // 主进程若（错误地）把未接入的档报成当前档，UI 也只能显示成 needs-config
   await c.evaluate(`window.__netTest.setState({ reachability: Object.assign({}, window.__netTest.reachability, { suggestedRung: 'holepunch', i18n: { rung: 'net.rung.holepunch' } }) }); true`);
   await c.evaluate('void window.__netUi.heartbeat(); true');
-  await c.waitFor(`document.querySelector('#wangLuoLadder .wangLuoRung[data-rung="holepunch"]').dataset.state === 'unsupported'`, { timeout: 8000, biaoQian: '12：上报未实现档后仍标 unsupported' });
+  await c.waitFor(`document.querySelector('#wangLuoLadder .wangLuoRung[data-rung="holepunch"]').dataset.state === 'needs-config'`, { timeout: 8000, biaoQian: '12：上报未接入档后仍标 needs-config' });
   const claimedView = JSON.parse(await c.evaluate(`(function(){
     var li=document.querySelector('#wangLuoLadder .wangLuoRung[data-rung="holepunch"]');
     var cur=document.querySelector('#wangLuoLadderCurrent');
     return JSON.stringify({ state: li.dataset.state, curRung: cur.dataset.rung, claimed: cur.dataset.claimed,
       currentCount: document.querySelectorAll('#wangLuoLadder .wangLuoRung[data-state="current"]').length });
   })()`));
-  ok(claimedView.state === 'unsupported' && claimedView.currentCount === 0,
-    '12-3 即便组网层把打洞报成当前档，界面也**拒绝**显示成"正在打洞"（如实标未实现）', JSON.stringify(claimedView));
+  ok(claimedView.state === 'needs-config' && claimedView.currentCount === 0,
+    '12-3 即便组网层把打洞报成当前档，界面也**拒绝**显示成"正在打洞"（如实标未接入）', JSON.stringify(claimedView));
   ok(claimedView.claimed === 'holepunch', '12-3 但仍如实记录"组网层声称的档"（可诊断，不丢信息）', JSON.stringify(claimedView));
 
   // 12e. 中继状态四条文案（走 i18n）
@@ -1588,7 +1588,7 @@ try {
     return JSON.stringify(out);
   })()`));
   const enBad = RUNG_KEYS.filter(([r, k]) => {
-    const want = (r === 'upnp' || r === 'holepunch') ? EN[k] + ' · ' + EN['net.ladder.unsupported'] : EN[k];
+    const want = (r === 'upnp' || r === 'holepunch') ? EN[k] + ' · ' + EN['net.ladder.needsConfig'] : EN[k];
     return !enRungs[r] || enRungs[r].text !== want;
   });
   ok(enBad.length === 0, '12-8 英文包下六档文案**逐字**等于 en-US 语言包', JSON.stringify(enBad.map((x) => [x[0], enRungs[x[0]] && enRungs[x[0]].text, EN[x[1]]])));

@@ -119,17 +119,17 @@ async function relaySession(opts = {}) {
   const relayAddr = { host: '127.0.0.1', port: relayPort };
   const A = chuangjianLinShiShenFen('verify-A');
   const B = chuangjianLinShiShenFen('verify-B');
-  const token = opts.token ?? quZhongJiLingPai(A.fingerprint, B.fingerprint, relayAddr);
+  const token = opts.token ?? quZhongJiLingPai(A.zhiWen, B.zhiWen, relayAddr);
   const server = await mkSecureServer({
     id: B,
-    peerFp: A.fingerprint,
+    peerFp: A.zhiWen,
     handshakeTimeoutMs: opts.handshakeTimeoutMs ?? 6000,
     ...(opts.replayGuard ? { replayGuard: opts.replayGuard } : {}),
   });
   const listener = new ZhongJiSuiDaoJianTing({
     relay: relayAddr,
     token,
-    from: B.fingerprint,
+    from: B.zhiWen,
     localTarget: { host: '127.0.0.1', port: server.port },
     readyTimeoutMs: opts.readyTimeoutMs ?? 4000,
     sampleBytes: 4096,
@@ -138,7 +138,7 @@ async function relaySession(opts = {}) {
   const dialer = new ZhongJiSuiDaoBoHao({
     relay: relayAddr,
     token,
-    from: A.fingerprint,
+    from: A.zhiWen,
     readyTimeoutMs: opts.readyTimeoutMs ?? 4000,
     sampleBytes: 4096,
   });
@@ -197,8 +197,8 @@ async function relaySession(opts = {}) {
     host: '127.0.0.1',
     port: clientPort,
     groupId: null,
-    peerFingerprint: B.fingerprint,
-    roster: (fp) => fp === B.fingerprint,
+    peerFingerprint: B.zhiWen,
+    roster: (fp) => fp === B.zhiWen,
     handshakeTimeoutMs: opts.handshakeTimeoutMs ?? 6000,
     ...(opts.replayGuard ? { replayGuard: opts.replayGuard } : {}),
     onMessage: (m) => replies.push(m),
@@ -390,22 +390,22 @@ async function main() {
       // 真的跑一次鉴权会话：AnQuanTongBuFuWu 监听 IPv6，AnQuanTongBuKeHu 从 IPv6 连
       const idS = chuangjianLinShiShenFen('v6-server');
       const idC = chuangjianLinShiShenFen('v6-client');
-      const srv6 = await mkSecureServer({ id: idS, peerFp: idC.fingerprint, host: v6Global });
+      const srv6 = await mkSecureServer({ id: idS, peerFp: idC.zhiWen, host: v6Global });
       const cli6 = new AnQuanTongBuKeHu({
         identity: idC.provider,
         nodeId: 'v6-client',
         host: v6Global,
         port: srv6.port,
         groupId: null,
-        peerFingerprint: idS.fingerprint,
-        roster: (fp) => fp === idS.fingerprint,
+        peerFingerprint: idS.zhiWen,
+        roster: (fp) => fp === idS.zhiWen,
         handshakeTimeoutMs: 5000,
       });
       const r6 = await cli6.connect(6000);
       check('AnQuanTongBuFuWu 在全局 IPv6 上真监听 + 客户端真连上（真握手）', r6.ok === true, r6.reason);
-      check('握手后对端指纹与 pin 一致', r6.session?.info.peerFingerprint === idS.fingerprint, r6.session?.info.peerFingerprint);
+      check('握手后对端指纹与 pin 一致', r6.session?.info.peerFingerprint === idS.zhiWen, r6.session?.info.peerFingerprint);
       if (r6.ok && r6.session) {
-        r6.session.send({ to: '*', channel: 'group', payload: { type: 'ipv6-hello', over: 'ipv6' } });
+        r6.session.faSong({ to: '*', channel: 'group', payload: { type: 'ipv6-hello', over: 'ipv6' } });
         const deadline = Date.now() + 2000;
         while (srv6.received.length === 0 && Date.now() < deadline) await sleep(50);
         check('IPv6 上加密记录真送达（端到端）', srv6.received.length === 1 && srv6.received[0].payload.over === 'ipv6', srv6.received.map((m) => m.payload));
@@ -432,15 +432,26 @@ async function main() {
   {
     const l = new LianJieTiZi();
     check('relay 档已实现（supported=true，不再是 unsupported）', l.strategyFor('relay')?.supported === true, l.strategyFor('relay')?.unsupportedReason);
-    check('upnp 档仍**如实**标未实现', l.strategyFor('upnp')?.supported === false && /未实现/.test(l.strategyFor('upnp')?.unsupportedReason ?? ''), l.strategyFor('upnp')?.unsupportedReason);
-    check('holepunch 档仍**如实**标未实现', l.strategyFor('holepunch')?.supported === false && /未实现/.test(l.strategyFor('holepunch')?.unsupportedReason ?? ''), l.strategyFor('holepunch')?.unsupportedReason);
+    /**
+     * 契约更新（第 22 轮）：两档的**客户端已实现**（`nat.ts`），默认阶梯里仍是 `unsupported`，
+     * 但理由必须是"已实现 + 还缺什么"（映射要用户显式触发 / 打洞要两端指纹与 STUN 配置）。
+     * 再写"未实现"就是假信息 —— 这条断言现在判的是**不许说没做**。
+     */
+    check('upnp 档默认不接入，但理由不许谎称"未实现"', l.strategyFor('upnp')?.supported === false
+      && !/未实现/.test(l.strategyFor('upnp')?.unsupportedReason ?? '')
+      && /nat\.ts/.test(l.strategyFor('upnp')?.unsupportedReason ?? '')
+      && /显式触发/.test(l.strategyFor('upnp')?.unsupportedReason ?? ''), l.strategyFor('upnp')?.unsupportedReason);
+    check('holepunch 档默认不接入，但理由不许谎称"未实现"', l.strategyFor('holepunch')?.supported === false
+      && !/未实现/.test(l.strategyFor('holepunch')?.unsupportedReason ?? '')
+      && /nat\.ts/.test(l.strategyFor('holepunch')?.unsupportedReason ?? '')
+      && /STUN|指纹/.test(l.strategyFor('holepunch')?.unsupportedReason ?? ''), l.strategyFor('holepunch')?.unsupportedReason);
     check('ipv6-direct 档已实现', l.strategyFor('ipv6-direct')?.supported === true, {});
   }
 
   if (v6Global) {
     const g = await listenTcp(v6Global);
     const ladder = new LianJieTiZi({ perRungTimeoutMs: 1500 });
-    const res = await ladder.connect({ fingerprint: 'peer-ipv6', addresses: [{ host: v6Global, port: g.port, source: 'dht' }] });
+    const res = await ladder.connect({ zhiWen: 'peer-ipv6', addresses: [{ host: v6Global, port: g.port, source: 'dht' }] });
     check('IPv6 目标 → 第一档 ipv6-direct 命中（这是"成本最低的一档"）', res.ok === true && res.rung === 'ipv6-direct', { rung: res.rung, detail: res.attempts[0]?.detail });
     check('命中即停（只试了 1 档）', res.attempts.length === 1, res.attempts.map((a) => a.rung));
     check('结果带地址族 = 6（真走 IPv6，不是只起了个档位名）', res.family === 6 && res.attempts[0]?.family === 6, { family: res.family, attempt: res.attempts[0]?.family });
@@ -452,7 +463,7 @@ async function main() {
     // IPv6 档失败 → 真降级到 IPv4 公网直连
     const s4 = await listenTcp('127.0.0.1');
     const res2 = await ladder.connect({
-      fingerprint: 'peer-fallback',
+      zhiWen: 'peer-fallback',
       addresses: [
         { host: v6Global, port: 1, source: 'dht' }, // 全局 IPv6 但端口是关的（真实 ECONNREFUSED）
         { host: '127.0.0.1', port: s4.port, source: 'manual' },
@@ -471,7 +482,7 @@ async function main() {
     // IPv6 但**不是**公网候选（链路本地/ULA/文档段）→ 必须如实判"无候选"并列出被排除的地址
     const ladder = new LianJieTiZi({ perRungTimeoutMs: 600 });
     const res = await ladder.connect({
-      fingerprint: 'peer-ula',
+      zhiWen: 'peer-ula',
       addresses: [
         { host: 'fe80::117f:559c:8262:8b1d', port: 9001, source: 'lan' },
         { host: 'fd12:3456:789a::7', port: 9002, source: 'lan' },
@@ -491,7 +502,7 @@ async function main() {
     const relay = new ZhongJiJieDian({ port: 0, host: '127.0.0.1', pairTimeoutMs: 800 });
     const relayPort = await relay.start();
     const relayAddr = { host: '127.0.0.1', port: relayPort };
-    const target = { fingerprint: 'peer-relay-1', nodeId: 'node-relay-1' };
+    const target = { zhiWen: 'peer-relay-1', nodeId: 'node-relay-1' };
 
     const notNeeded1 = await jueDingZhongJi(target, { selfDialable: false, peerDialable: true, candidates: [] });
     check('对端可拨入 → 不需要中继（直连即可）', notNeeded1.needed === false && notNeeded1.code === 'relay-not-needed-peer-dialable', notNeeded1);
@@ -508,18 +519,18 @@ async function main() {
     check('reason 明确写出"需要一台有公网地址的机器做中继"', /需要一台有公网地址的机器做中继/.test(none.reason), none.reason);
     check('bothUndialable=true（双方各自报告不可拨入）', none.bothUndialable === true, none);
 
-    const badCandidate = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, candidates: [{ fingerprint: 'relay-dead', addr: { host: '203.0.113.1', port: 9 } }], timeoutMs: 700 });
+    const badCandidate = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, candidates: [{ zhiWen: 'relay-dead', addr: { host: '203.0.113.1', port: 9 } }], timeoutMs: 700 });
     check('配了中继候选但连不上 → relay-unreachable', badCandidate.code === 'relay-unreachable' && badCandidate.selected === false, badCandidate.reason);
     check('不可达中继的**真实探测结果**被留痕（ok=false + 耗时）', badCandidate.attempts.length === 1 && badCandidate.attempts[0].ok === false && typeof badCandidate.attempts[0].ms === 'number', badCandidate.attempts);
     check('relay-unreachable 同样要求 UI 明确告知', badCandidate.needsPublicRelayNotice === true, badCandidate.needsPublicRelayNotice);
 
-    const good = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ fingerprint: 'relay-good', addr: relayAddr }], timeoutMs: 1500 });
+    const good = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ zhiWen: 'relay-good', addr: relayAddr }], timeoutMs: 1500 });
     check('两端都不可拨入 + 真可达中继 → relay-selected', good.code === 'relay-selected' && good.selected === true && good.needed === true, good.reason);
     check('选中继后带地址与配对 token', good.relay?.port === relayPort && typeof good.token === 'string' && good.token.length === 32, { relay: good.relay, token: good.token });
     check('选中继的探测结果也是真实 TCP 成功', good.attempts[0]?.ok === true, good.attempts);
     check('reason 提示"经中继：更慢，但可用"', /更慢，但可用/.test(good.reason), good.reason);
 
-    const noSelfFp = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, candidates: [{ fingerprint: 'relay-good', addr: relayAddr }], timeoutMs: 1500 });
+    const noSelfFp = await jueDingZhongJi(target, { selfDialable: false, peerDialable: false, candidates: [{ zhiWen: 'relay-good', addr: relayAddr }], timeoutMs: 1500 });
     check('没给本机指纹时**不编** token（token 缺失 + tokenSymmetric=false，诚实）', noSelfFp.token === undefined && noSelfFp.tokenSymmetric === false, { token: noSelfFp.token, sym: noSelfFp.tokenSymmetric });
 
     const t1 = quZhongJiLingPai('fp-A', 'fp-B', relayAddr);
@@ -549,14 +560,14 @@ async function main() {
   {
     const S = await relaySession({ tap: true });
     check('中继路径上的握手成功（既有握手/鉴权语义原样复用）', S.connect.ok === true, S.connect.reason);
-    check('对端指纹与 pin 一致（中继不能冒充对端）', S.connect.session?.info.peerFingerprint === S.B.fingerprint, S.connect.session?.info.peerFingerprint);
+    check('对端指纹与 pin 一致（中继不能冒充对端）', S.connect.session?.info.peerFingerprint === S.B.zhiWen, S.connect.session?.info.peerFingerprint);
     check('被拨入侧（listener）先向中继注册成功', S.registration.ok === true && S.registration.registered === true, S.registration);
     check('中继统计：注册 2 条（listener + dialer）', S.relay.stats.registered === 2, S.relay.stats);
     check('中继统计：配对成功 1 对', S.relay.stats.pairs === 1, S.relay.stats);
 
     if (S.connect.ok && S.connect.session) {
       const mark = S.tap.mark();
-      S.connect.session.send({ to: '*', channel: 'group', payload: { type: 'secret', marker: MARKER_SEND, ti: 'x'.repeat(64) } });
+      S.connect.session.faSong({ to: '*', channel: 'group', payload: { type: 'secret', marker: MARKER_SEND, ti: 'x'.repeat(64) } });
       let waited = 0;
       while (S.server.received.length === 0 && waited < 3000) {
         await sleep(50);
@@ -568,7 +579,7 @@ async function main() {
 
       const responder = S.server.srv.sessionList[0];
       check('B 侧会话存在且活着（握手后的加密会话）', !!responder && responder.alive === true, S.server.srv.sessionList.length);
-      if (responder) responder.send({ to: '*', channel: 'group', payload: { type: 'reply', marker: MARKER_REPLY } });
+      if (responder) responder.faSong({ to: '*', channel: 'group', payload: { type: 'reply', marker: MARKER_REPLY } });
       waited = 0;
       while (S.replies.length === 0 && waited < 3000) {
         await sleep(50);
@@ -596,19 +607,19 @@ async function main() {
   {
     const guard = new ChongfangFangYu();
     const S = await relaySession({ tap: true, replayGuard: guard, handshakeTimeoutMs: 6000 });
-    check('中继路径上的握手也走既有 ChongfangFangYu（双方单调计数都被推进）', guard.maxCounterSeen(S.A.fingerprint) > 0 && guard.maxCounterSeen(S.B.fingerprint) > 0, {
-      a: guard.maxCounterSeen(S.A.fingerprint),
-      b: guard.maxCounterSeen(S.B.fingerprint),
+    check('中继路径上的握手也走既有 ChongfangFangYu（双方单调计数都被推进）', guard.maxCounterSeen(S.A.zhiWen) > 0 && guard.maxCounterSeen(S.B.zhiWen) > 0, {
+      a: guard.maxCounterSeen(S.A.zhiWen),
+      b: guard.maxCounterSeen(S.B.zhiWen),
     });
-    const seen = guard.maxCounterSeen(S.A.fingerprint);
-    const same = guard.check({ peer: S.A.fingerprint, nonce: 'nonce-fresh-0', counter: seen, ts: Date.now() });
-    const lower = guard.check({ peer: S.A.fingerprint, nonce: 'nonce-fresh-1', counter: Math.max(1, seen - 1), ts: Date.now() });
-    const higher = guard.check({ peer: S.A.fingerprint, nonce: 'nonce-fresh-2', counter: seen + 1, ts: Date.now() });
+    const seen = guard.maxCounterSeen(S.A.zhiWen);
+    const same = guard.check({ peer: S.A.zhiWen, nonce: 'nonce-fresh-0', counter: seen, ts: Date.now() });
+    const lower = guard.check({ peer: S.A.zhiWen, nonce: 'nonce-fresh-1', counter: Math.max(1, seen - 1), ts: Date.now() });
+    const higher = guard.check({ peer: S.A.zhiWen, nonce: 'nonce-fresh-2', counter: seen + 1, ts: Date.now() });
     check('counter 相等（回退到已见值）→ 被拒 replay-counter', same.ok === false && same.reason === 'replay-counter', same);
     check('counter 更低 → 被拒 replay-counter', lower.ok === false && lower.reason === 'replay-counter', lower);
     check('严格递增 → 被接受（不是一律拒绝，证明判据是单调性）', higher.ok === true, higher);
-    guard.commit({ peer: S.A.fingerprint, nonce: 'nonce-fresh-9', counter: seen + 9 });
-    const nonceReuse = guard.check({ peer: S.A.fingerprint, nonce: 'nonce-fresh-9', counter: seen + 10, ts: Date.now() });
+    guard.commit({ peer: S.A.zhiWen, nonce: 'nonce-fresh-9', counter: seen + 9 });
+    const nonceReuse = guard.check({ peer: S.A.zhiWen, nonce: 'nonce-fresh-9', counter: seen + 10, ts: Date.now() });
     check('同一 nonce 二次使用 → 被拒 replay-nonce', nonceReuse.ok === false && nonceReuse.reason === 'replay-nonce', nonceReuse);
     const skewed = guard.check({ peer: 'someone', nonce: 'n', counter: 1, ts: Date.now() - 3_600_000 });
     check('时间戳超容差 → 被拒 clock-skew', skewed.ok === false && skewed.reason === 'clock-skew', skewed);
@@ -616,7 +627,7 @@ async function main() {
     if (S.connect.ok && S.connect.session) {
       // 恶意中继：**原样重放**一条已加密的应用记录（不是伪造，攻击者只搬字节）
       const mark = S.tap.mark();
-      S.connect.session.send({ to: '*', channel: 'group', payload: { type: 'secret', marker: MARKER_SEND } });
+      S.connect.session.faSong({ to: '*', channel: 'group', payload: { type: 'secret', marker: MARKER_SEND } });
       let waited = 0;
       while (S.server.received.length === 0 && waited < 3000) {
         await sleep(50);
@@ -659,8 +670,8 @@ async function main() {
     const A = chuangjianLinShiShenFen('imp-A');
     const B = chuangjianLinShiShenFen('imp-B');
     const X = chuangjianLinShiShenFen('imp-stranger');
-    const token = quZhongJiLingPai(A.fingerprint, B.fingerprint, relayAddr);
-    const xServer = await mkSecureServer({ id: X, peerFp: A.fingerprint });
+    const token = quZhongJiLingPai(A.zhiWen, B.zhiWen, relayAddr);
+    const xServer = await mkSecureServer({ id: X, peerFp: A.zhiWen });
     const xTunnel = new ZhongJiSuiDaoJianTing({ relay: relayAddr, token, localTarget: { host: '127.0.0.1', port: xServer.port }, readyTimeoutMs: 4000 });
     await xTunnel.start();
     const dialer = new ZhongJiSuiDaoBoHao({ relay: relayAddr, token, readyTimeoutMs: 4000 });
@@ -671,8 +682,8 @@ async function main() {
       host: '127.0.0.1',
       port: localPort,
       groupId: null,
-      peerFingerprint: B.fingerprint, // A pin 的是 B
-      roster: (fp) => fp === B.fingerprint,
+      peerFingerprint: B.zhiWen, // A pin 的是 B
+      roster: (fp) => fp === B.zhiWen,
       handshakeTimeoutMs: 4000,
     });
     const r = await client.connect(5000);
@@ -697,7 +708,7 @@ async function main() {
 
     const ladder = new LianJieTiZi({ perRungTimeoutMs: 900, relay: { relays: () => [], selfDialable: () => false, selfFingerprint: () => 'fp-self' } });
     const res = await ladder.connect({
-      fingerprint: 'fp-peer',
+      zhiWen: 'fp-peer',
       addresses: [{ host: '100.64.10.21', port: 7892, source: 'dht' }],
       peerDialable: false,
     });
@@ -716,9 +727,9 @@ async function main() {
     // 配了中继但都连不上
     const ladder2 = new LianJieTiZi({
       perRungTimeoutMs: 800,
-      relay: { relays: () => [{ fingerprint: 'relay-dead', addr: { host: '203.0.113.1', port: 9 } }], selfDialable: () => false, selfFingerprint: () => 'fp-self' },
+      relay: { relays: () => [{ zhiWen: 'relay-dead', addr: { host: '203.0.113.1', port: 9 } }], selfDialable: () => false, selfFingerprint: () => 'fp-self' },
     });
-    const res2 = await ladder2.connect({ fingerprint: 'fp-peer', addresses: [{ host: '100.64.10.21', port: 7892, source: 'dht' }], peerDialable: false });
+    const res2 = await ladder2.connect({ zhiWen: 'fp-peer', addresses: [{ host: '100.64.10.21', port: 7892, source: 'dht' }], peerDialable: false });
     const relayAttempt2 = res2.attempts.find((a) => a.rung === 'relay');
     check('配了中继但连不上 → relay-unreachable（同样如实报缺口）', relayAttempt2?.code === 'relay-unreachable', relayAttempt2);
     check('该情形仍是 no-relay-available 且要求明确告知', res2.code === 'no-relay-available' && res2.reachability?.needsPublicRelayNotice === true, { code: res2.code, r: res2.reachability?.needsPublicRelayNotice });
@@ -730,15 +741,15 @@ async function main() {
     const rp = await relay.start();
     const ladder3 = new LianJieTiZi({
       perRungTimeoutMs: 900,
-      relay: { relays: () => [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }], selfDialable: () => false, selfFingerprint: () => 'fp-self' },
+      relay: { relays: () => [{ zhiWen: 'relay-node', addr: { host: '127.0.0.1', port: rp } }], selfDialable: () => false, selfFingerprint: () => 'fp-self' },
     });
-    const res3 = await ladder3.connect({ fingerprint: 'fp-peer', addresses: [{ host: '100.64.10.21', port: 7892, source: 'dht' }], peerDialable: false });
+    const res3 = await ladder3.connect({ zhiWen: 'fp-peer', addresses: [{ host: '100.64.10.21', port: 7892, source: 'dht' }], peerDialable: false });
     check('两端都不可拨入 + 真可达中继 → 阶梯选中 relay 档', res3.ok === true && res3.rung === 'relay', { rung: res3.rung, summary: res3.summary });
     const rung3 = res3.attempts.find((a) => a.rung === 'relay');
     check('relay 档命中时带中继地址 + 配对 token + "更慢但可用"标记', rung3?.relay?.relay?.port === rp && typeof rung3?.relay?.token === 'string' && rung3?.relay?.slowerButUsable === true, rung3?.relay);
     check('relay 档的 token = quZhongJiLingPai(本机, 对端, 中继)（两端可复算）', rung3?.relay?.token === quZhongJiLingPai('fp-self', 'fp-peer', { host: '127.0.0.1', port: rp }), rung3?.relay?.token);
     check('档位顺序：relay 在 lan 之前被尝试（附八.9 顺序）', res3.attempts.map((a) => a.rung).indexOf('relay') < (res3.attempts.map((a) => a.rung).indexOf('lan') === -1 ? 99 : res3.attempts.map((a) => a.rung).indexOf('lan')), res3.attempts.map((a) => `${a.rung}:${a.status}`));
-    check('两端的 token 对称（各自算得出同一个值）', (await jueDingZhongJi({ fingerprint: 'fp-peer' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token === (await jueDingZhongJi({ fingerprint: 'fp-self' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-peer', candidates: [{ fingerprint: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token, {});
+    check('两端的 token 对称（各自算得出同一个值）', (await jueDingZhongJi({ zhiWen: 'fp-peer' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-self', candidates: [{ zhiWen: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token === (await jueDingZhongJi({ zhiWen: 'fp-self' }, { selfDialable: false, peerDialable: false, selfFingerprint: 'fp-peer', candidates: [{ zhiWen: 'relay-node', addr: { host: '127.0.0.1', port: rp } }] })).token, {});
     await relay.stop();
   }
 
@@ -831,7 +842,7 @@ async function main() {
     ]);
     const regState = await waitFor(listenerC, (s) => s.phase === 'registered', 12000);
     check('多进程[2/3]：端点 B 进程已向中继**出站注册**（本机不接受任何入站）', regState?.registered === true, regState);
-    check('多进程：B 自报指纹与父进程按同一 seed 推导一致', regState?.fingerprint === FP_B, { got: String(regState?.fingerprint).slice(0, 12), want: FP_B.slice(0, 12) });
+    check('多进程：B 自报指纹与父进程按同一 seed 推导一致', regState?.zhiWen === FP_B, { got: String(regState?.zhiWen).slice(0, 12), want: FP_B.slice(0, 12) });
     check('多进程：B 的"本机服务"只监听回环端口（模拟不可拨入的一端）', typeof regState?.serverPort === 'number' && regState.serverPort > 0, regState?.serverPort);
 
     const dialerC = spawnChild('dialer', [
@@ -880,9 +891,9 @@ async function main() {
     // 阶梯在"两端都不可拨入 + 有真中继进程"时选中继档
     const ladderMP = new LianJieTiZi({
       perRungTimeoutMs: 1000,
-      relay: { relays: () => [{ fingerprint: 'relay-child', addr: { host: '127.0.0.1', port: relayUp.port } }], selfDialable: () => false, selfFingerprint: () => FP_A },
+      relay: { relays: () => [{ zhiWen: 'relay-child', addr: { host: '127.0.0.1', port: relayUp.port } }], selfDialable: () => false, selfFingerprint: () => FP_A },
     });
-    const mpRes = await ladderMP.connect({ fingerprint: FP_B, addresses: [{ host: '100.64.10.21', port: 7892, source: 'dht' }], peerDialable: false });
+    const mpRes = await ladderMP.connect({ zhiWen: FP_B, addresses: [{ host: '100.64.10.21', port: 7892, source: 'dht' }], peerDialable: false });
     check('多进程：阶梯在"双方都不可拨入"时选中 relay 档（真探测到中继进程）', mpRes.ok === true && mpRes.rung === 'relay', { rung: mpRes.rung, summary: mpRes.summary });
     check('多进程：relay 档 token = quZhongJiLingPai(A, B, 中继)（与子进程用的一致）', mpRes.attempts.find((a) => a.rung === 'relay')?.relay?.token === token, mpRes.attempts.find((a) => a.rung === 'relay')?.relay?.token);
     check('多进程：relay 档之前的直连档都如实失败（CGNAT 地址真拨不通）', mpRes.attempts.filter((a) => a.rung === 'public-direct')[0]?.status === 'failed', mpRes.attempts.map((a) => `${a.rung}:${a.status}`));
@@ -940,8 +951,10 @@ async function main() {
   /* ══════════════ 汇总 ══════════════ */
   group('[未验证 / 未实现的边界（如实列出）]');
   note('真实公网可达性：未验证。原因：没有第二台在公网的机器、本机也没有公网出口，DHT/autonat 只能在本机/同网验证。');
-  note('跨真实 NAT 的打洞（STUN + 同时打洞）：未实现（阶梯里仍为 unsupported），原因：需要两侧真 NAT 与 STUN 服务器，无第二网络环境。');
-  note('UPnP / NAT-PMP / PCP 端口映射：未实现（仍为 unsupported），原因：需要真实路由器与加解密依赖（本项目零依赖约束）。');
+  note('跨真实 NAT 的打洞：**客户端已实现**（nat.ts 的 STUN Binding + 同时打洞 + 打完必须拨通 TCP 才算成功），'
+    + '但**跨真 NAT 的成功率未验证**：需要两侧真 NAT 与可达的 STUN 服务器，本机单环境证明不了；阶梯里没注入两端指纹/服务器时仍如实标 unsupported。');
+  note('UPnP / NAT-PMP 端口映射：**NAT-PMP 客户端已实现**（RFC 6886 编解码 + 只读探针 + 租期 0 撤销），'
+    + 'UPnP 走 Windows 内置 HNetCfg.NATUPnP（主进程 IPC）；**未验证**的是真路由器上的实际映射效果，且申请映射必须用户显式触发，本脚本不擅自改路由器状态。PCP（RFC 7291）仍未实现。');
   note('真实中继服务器：未验证。原因：需要一个有公网地址的部署点；本脚本验证的是**本机回环上的真 socket 中继进程**（转发/加密/攻击面语义一致，但跨公网未验证）。');
   note('中继的元数据隐藏：未实现。中继必然看得到握手帧（指纹/nonce/公钥/签名），本轮不做流量混淆。');
   note('中继 token 的抢占（拿到同一 token 的第三方抢占配对槽位）：未实现防护，属于**拒绝服务**面（机密性不受影响：握手仍会按指纹拒掉冒充者）。');

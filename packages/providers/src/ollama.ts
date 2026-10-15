@@ -24,6 +24,56 @@ export class OllamaGongYing extends JichuGongYing {
     return true;
   }
 
+  /**
+   * **消息整形**（修 Failed to tokenize prompt）：
+   *  · 多条 system 合并成一条放最前（Qwen 视觉模板：system 只能在开头）
+   *  · 图片只允许出现在 user 消息（模板：System message cannot contain images）
+   *  · tool 消息补 tool_name（官方 API 约定）
+   *  · 保证至少有一条非 tool_response 的 user 提问
+   */
+  private zhengXingXiaoXi(xiaoXiJi: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+    const systemBuf: string[] = [];
+    const tuZhuanYi: string[] = [];
+    const out: Array<Record<string, unknown>> = [];
+    for (const m of xiaoXiJi) {
+      const role = String(m.role || '');
+      const images = Array.isArray(m.images) ? (m.images as string[]) : [];
+      const content = String(m.content ?? '');
+      if (role === 'system') {
+        if (content.trim()) systemBuf.push(content);
+        if (images.length) tuZhuanYi.push(...images);
+        continue;
+      }
+      if (role !== 'user' && images.length) {
+        // 非 user 不许带图：并到稍后的 user，或丢弃
+        tuZhuanYi.push(...images);
+      }
+      const ji: Record<string, unknown> = { ...m };
+      if (role !== 'user') delete ji.images;
+      out.push(ji);
+    }
+    // 图片挂到第一条 user（没有 user 就挂到后面补的那条，绝不丢图）
+    if (tuZhuanYi.length) {
+      const u = out.find((x) => x.role === 'user');
+      if (u) {
+        const yi = Array.isArray(u.images) ? (u.images as string[]) : [];
+        u.images = [...yi, ...tuZhuanYi];
+      } else {
+        out.push({ role: 'user', content: '请查看附带的图片，并继续完成用户交代的任务。', images: tuZhuanYi });
+      }
+    }
+    // system 合并到最前
+    if (systemBuf.length) {
+      out.unshift({ role: 'system', content: systemBuf.join('\n\n') });
+    }
+    // 保证有真实 user 提问（模板：No user query found）
+    const youTiWen = out.some((x) => x.role === 'user');
+    if (!youTiWen) {
+      out.push({ role: 'user', content: '请继续完成用户交代的任务，并如实汇报进度。' });
+    }
+    return out;
+  }
+
   private qingQiuTi(Qiu: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
     const xiaoXiJi = Qiu.xiaoXiJi.map((m) => {
       /**
@@ -54,8 +104,12 @@ export class OllamaGongYing extends JichuGongYing {
         content: wenBen,
       };
       if (tuJi.length) ji.images = tuJi;
-      // tool_call_id：Ollama 的 tool 消息要带，才能对上上一轮的 tool_calls
-      if (m.role === 'tool' && m.toolCallId) ji.tool_call_id = m.toolCallId;
+      // tool_call_id / tool_name：Ollama 官方 API 要求 tool 消息能对上上一轮的 tool_calls
+      if (m.role === 'tool') {
+        if (m.toolCallId) ji.tool_call_id = m.toolCallId;
+        const ming = String((m as { ming?: string; name?: string }).ming || (m as { name?: string }).name || '');
+        if (ming) ji.tool_name = ming;
+      }
       // assistant 发起的工具调用（arguments **必须是对象**）
       if (m.role === 'assistant' && m.gongJuDiaoYongJi?.length) {
         ji.tool_calls = m.gongJuDiaoYongJi.map((t) => {
@@ -72,7 +126,7 @@ export class OllamaGongYing extends JichuGongYing {
     });
     const ji: Record<string, unknown> = {
       model: Qiu.model,
-      messages: xiaoXiJi,
+      messages: this.zhengXingXiaoXi(xiaoXiJi),
       stream,
       options: {
         num_predict: Qiu.maxTokens,
@@ -110,9 +164,29 @@ export class OllamaGongYing extends JichuGongYing {
     try {
       const body = {
         model: Qiu.model,
-        messages: Qiu.xiaoXiJi.map((m) => {
-          const wen = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '');
-          const ji: Record<string, unknown> = { role: m.role, content: wen };
+        messages: this.zhengXingXiaoXi(Qiu.xiaoXiJi.map((m) => {
+          /**
+           * **多模态内容不能 JSON.stringify**（真事故：base64 被当成正文 ⇒ Failed to tokenize prompt）。
+           * 有图时转成 OpenAI 的 content 数组（text + image_url）；纯文本保持字符串。
+           */
+          let content: unknown;
+          if (typeof m.content === 'string') {
+            content = m.content;
+          } else if (Array.isArray(m.content)) {
+            const kuai = m.content.map((k) => {
+              if (!k) return null;
+              if (k.type === 'text') return { type: 'text', text: String(k.text || '') };
+              if (k.type === 'image_url' && k.image_url?.url) {
+                return { type: 'image_url', image_url: { url: String(k.image_url.url) } };
+              }
+              return null;
+            }).filter(Boolean);
+            const youTu = kuai.some((k) => (k as { type?: string }).type === 'image_url');
+            content = youTu ? kuai : kuai.map((k) => String((k as { text?: string }).text || '')).join('');
+          } else {
+            content = String(m.content ?? '');
+          }
+          const ji: Record<string, unknown> = { role: m.role, content };
           if (m.role === 'assistant' && m.gongJuDiaoYongJi?.length) {
             ji.tool_calls = m.gongJuDiaoYongJi.filter((t) => t.function?.name).map((t) => ({
               id: t.id,
@@ -123,9 +197,11 @@ export class OllamaGongYing extends JichuGongYing {
           if (m.role === 'tool') {
             ji.role = 'tool';
             ji.tool_call_id = m.toolCallId;
+            const ming = String((m as { ming?: string; name?: string }).ming || (m as { name?: string }).name || '');
+            if (ming) ji.name = ming;
           }
           return ji;
-        }),
+        }) as Array<Record<string, unknown>>),
         tools: Qiu.tools?.map((t) => ({
           type: 'function',
           function: {
@@ -192,26 +268,62 @@ export class OllamaGongYing extends JichuGongYing {
   }
 
   async chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
-    if (Qiu.toolChoice === 'required') {
+    /**
+     * toolChoice=required：原生 /api/chat 对 tool_choice 支持不稳，优先走 OpenAI 兼容端；
+     * **但消息里带图片时不能走那条捷径**（历史 bug：图片被 JSON.stringify ⇒ 分词失败），
+     * 走下面的原生路径（qingQiuTi 已把图片放进 images[]）。
+     */
+    const youTu = (Qiu.xiaoXiJi || []).some((m) => Array.isArray(m.content)
+      && (m.content as unknown[]).some((k) => k && (k as { type?: string }).type === 'image_url'));
+    if (Qiu.toolChoice === 'required' && !youTu) {
       const forced = await this.chatOpenAIRequired(Qiu, signal);
       if (forced) return forced;
     }
     /** 单次请求硬超时（真机：Ollama 无超时 fetch 会把工具循环挂死，界面永远 busy） */
     const yu = AbortSignal.timeout(this.auth.timeoutMs ?? 60_000);
     const ben = signal ? AbortSignal.any([signal, yu]) : yu;
-    // HTTP 500 自动重试 1 次（模型瞬时加载失败/资源不足是常见原因）
-    for (let ci = 0; ci < 2; ci++) {
-    const res = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...this.auth.headers },
-      body: JSON.stringify(this.qingQiuTi(Qiu, false)),
-      signal: ben,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      if (res.status === 500 && ci === 0) { await new Promise((r) => setTimeout(r, 2000)); continue; }
-      throw new Error(`ollama HTTP ${res.status}: ${text.slice(0, 200)}`);
+    /**
+     * **失败回退阶梯**（修 Failed to tokenize prompt 后的死循环）：
+     *  ① 原样请求
+     *  ② 400 分词失败且带图 ⇒ 去掉图片（正文里注明"图已省略"）再试
+     *  ③ 仍失败且带 tools ⇒ 不带 tools 再试（模板对 tools 形状敏感）
+     *  ④ 都失败才抛错 —— 外层降级链接手。
+     */
+    const jiShi = [
+      this.qingQiuTi(Qiu, false),
+    ];
+    {
+      const quTu = this.qingQiuTi({ ...Qiu, xiaoXiJi: (Qiu.xiaoXiJi || []).map((m) => {
+        if (!Array.isArray(m.content)) return m;
+        const hasImg = (m.content as unknown[]).some((k) => k && (k as { type?: string }).type === 'image_url');
+        if (!hasImg) return m;
+        const wen = (m.content as Array<{ type?: string; text?: string }>)
+          .map((k) => (k && k.type === 'text' ? String(k.text || '') : ''))
+          .filter(Boolean).join('');
+        return { ...m, content: (wen ? wen + '\n' : '') + '（本轮附带的图片已省略：当前请求无法带图，请按文字说明继续）' };
+      }) }, false);
+      jiShi.push(quTu);
+      if (Qiu.tools?.length) {
+        jiShi.push({ ...quTu, tools: undefined, tool_choice: undefined });
+      }
     }
+    let cuoWu = '';
+    for (let ci = 0; ci < jiShi.length; ci++) {
+      const res = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.auth.headers },
+        body: JSON.stringify(jiShi[ci]),
+        signal: ben,
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        cuoWu = `ollama HTTP ${res.status}: ${text.slice(0, 200)}`;
+        // 500 瞬时故障：稍等再试下一档
+        if (res.status === 500 && ci < jiShi.length - 1) { await new Promise((r) => setTimeout(r, 2000)); continue; }
+        // 400 分词/模板问题：进下一档（去图 / 去 tools）
+        if (res.status === 400 && ci < jiShi.length - 1) continue;
+        throw new Error(cuoWu);
+      }
     const json = (await res.json()) as {
       model: string;
       message?: {
@@ -274,15 +386,38 @@ export class OllamaGongYing extends JichuGongYing {
   }
 
   async *chatStream(Qiu: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
-    const res = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...this.auth.headers },
-      body: JSON.stringify(this.qingQiuTi(Qiu, true)),
-      signal,
-    });
-    if (!res.ok || !res.body) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`ollama stream ${res.status}: ${text.slice(0, 200)}`);
+    /** 与 chat() 同一套失败回退：原样 → 去图 → 去 tools（分词失败不再整轮崩） */
+    const caiDan = [this.qingQiuTi(Qiu, true)];
+    {
+      const quTu = this.qingQiuTi({ ...Qiu, xiaoXiJi: (Qiu.xiaoXiJi || []).map((m) => {
+        if (!Array.isArray(m.content)) return m;
+        const hasImg = (m.content as unknown[]).some((k) => k && (k as { type?: string }).type === 'image_url');
+        if (!hasImg) return m;
+        const wen = (m.content as Array<{ type?: string; text?: string }>)
+          .map((k) => (k && k.type === 'text' ? String(k.text || '') : ''))
+          .filter(Boolean).join('');
+        return { ...m, content: (wen ? wen + '\n' : '') + '（本轮附带的图片已省略：当前请求无法带图，请按文字说明继续）' };
+      }) }, true);
+      caiDan.push(quTu);
+      if (Qiu.tools?.length) caiDan.push({ ...quTu, tools: undefined, tool_choice: undefined });
+    }
+    let res: Response | null = null;
+    let cuoWu = '';
+    for (let ci = 0; ci < caiDan.length; ci++) {
+      const r = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.auth.headers },
+        body: JSON.stringify(caiDan[ci]),
+        signal,
+      });
+      if (r.ok && r.body) { res = r; break; }
+      const text = await r.text().catch(() => '');
+      cuoWu = `ollama stream ${r.status}: ${text.slice(0, 200)}`;
+      if (r.status === 400 && ci < caiDan.length - 1) continue;
+      if (r.status === 500 && ci < caiDan.length - 1) { await new Promise((x) => setTimeout(x, 1500)); continue; }
+    }
+    if (!res || !res.body) {
+      throw new Error(cuoWu || 'ollama stream failed');
     }
     const duQuQi = res.body.getReader();
     const jieMaQi = new TextDecoder();

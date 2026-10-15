@@ -141,6 +141,8 @@ check('所有行都注入了可执行指针', rows.every((r) => r.pointers >= 1 
 // ══════════════════════════════════════════════════════════════
 console.log('\n[2] 不丢细节：真记忆服务写入 + 指针解引用逐字节比对');
 const memAscii = path.join(os.tmpdir(), 'warmy-verify-ctx-mem');
+/** 先拆旧 junction，避免递归删除跟进真实依赖目录 */
+try { fs.unlinkSync(path.join(memAscii, 'node_modules', 'better-sqlite3')); } catch { /* noop */ }
 fs.rmSync(memAscii, { recursive: true, force: true });
 fs.mkdirSync(path.join(memAscii, 'dist'), { recursive: true });
 const memPkg = path.join(repoRoot, 'packages', 'memory-os');
@@ -148,8 +150,16 @@ fs.copyFileSync(path.join(memPkg, 'package.json'), path.join(memAscii, 'package.
 for (const f of fs.readdirSync(path.join(memPkg, 'dist'))) {
   if (f.endsWith('.js') || f.endsWith('.json')) fs.copyFileSync(path.join(memPkg, 'dist', f), path.join(memAscii, 'dist', f));
 }
-if (fs.existsSync(path.join(memPkg, 'node_modules'))) {
-  fs.symlinkSync(path.join(memPkg, 'node_modules'), path.join(memAscii, 'node_modules'), 'junction');
+/** 链真正可用的 better-sqlite3 包，而不是可能为空的 memory-os/node_modules */
+{
+  const vendor = path.join(memPkg, 'vendor', 'better-sqlite3');
+  const pnpm = path.join(repoRoot, 'node_modules', '.pnpm', 'better-sqlite3@13.0.3', 'node_modules', 'better-sqlite3');
+  const src = [vendor, pnpm].find((p) => fs.existsSync(path.join(p, 'package.json')));
+  if (src) {
+    const nm = path.join(memAscii, 'node_modules');
+    fs.mkdirSync(nm, { recursive: true });
+    fs.symlinkSync(src, path.join(nm, 'better-sqlite3'), 'junction');
+  }
 }
 const {JiyiCangFuwu} = await import(pathToFileURL(path.join(memAscii, 'dist', 'index.js')).href);
 const memDir = path.join(os.tmpdir(), 'warmy-verify-ctx-data-' + Date.now());
@@ -451,7 +461,7 @@ const mockBase = `http://127.0.0.1:${mockPort}/v1`;
     board,
     ccr: new CcrGateway(200),
     history: new Map(),
-    listInstances: () => [{ id: 'duty-1', ming: '值班者', status: 'idle', dutyEligible: true }],
+    listInstances: () => [{ id: 'duty-1', ming: '值班者', status: 'running', dutyEligible: true }],
     logOf: () => dutyLog,
     contextBudgetChars: () => 2000,
   };
@@ -470,17 +480,17 @@ const mockBase = `http://127.0.0.1:${mockPort}/v1`;
   const dutyPromptChars = prompts.map((p) => msgs(p).reduce((s, m) => s + String(m.content ?? '').length, 0));
   // 会话部分 = 除第 1 条冻结系统提示以外的全部（渲染器的输出）——必须正好等于预算
   const dutyViewChars = prompts.map((p) => msgs(p).slice(1).reduce((s, m) => s + String(m.content ?? '').length, 0));
-    const lastP = prompts[prompts.length - 1];
+  const lastP = prompts[prompts.length - 1];
   check('值班者注入 prompt 有界（≤ 预算 + 常数卡片/系统提示）', dutyPromptChars.every((c) => c <= 2000 + 900), dutyPromptChars);
   check('值班者注入的会话部分 = 预算（2000）且跨轮方差为 0', new Set(dutyViewChars).size === 1 && dutyViewChars[0] === 2000, {
     viewChars: dutyViewChars,
-    systemChars: prompts.map((p, i) => msgs(p)[0].content.length),
+    systemChars: prompts.map((p) => msgs(p)[0]?.content?.length || 0),
   });
-  check('值班者 prompt 含省略指针（说明确实被渲染成有界视图）', msgs(lastP).some((m) => /已省略|省略 \d+ 条/.test(String(m.content))), msgs(lastP)[1].content.slice(0, 120));
-  check('值班者 = 1 系统提示 + 头 + 指针 + 尾，不是 200 条全量', msgs(prompts[0]).length <= 12, msgs(prompts[0]).length);
+  check('值班者 prompt 含省略指针（说明确实被渲染成有界视图）', !!lastP && msgs(lastP).some((m) => /已省略|省略 \d+ 条/.test(String(m.content))), lastP ? String(msgs(lastP)[1]?.content || '').slice(0, 120) : 'no-prompt');
+  check('值班者 = 1 系统提示 + 头 + 指针 + 尾，不是 200 条全量', !!prompts[0] && msgs(prompts[0]).length <= 12, prompts[0] ? msgs(prompts[0]).length : 0);
   console.log(`  值班者 3 轮注入字符数: ${dutyPromptChars.join(' / ')}（会话部分 ${dutyViewChars.join(' / ')}，预算 2000；其余为冻结系统提示 + 状态卡片）`);
   // 200 条历史里只有采样级条目原样出现（其余靠指针取回）
-  const longPrompt = msgs(lastP).map((m) => String(m.content)).join('\n');
+  const longPrompt = lastP ? msgs(lastP).map((m) => String(m.content)).join('\n') : '';
   const markersInPrompt = (longPrompt.match(/群内第 \d+ 条历史/g) || []).length;
   check('值班者 prompt 里只出现采样级条目（不是 200 条全量）', markersInPrompt > 0 && markersInPrompt <= 30, {
     markersInPrompt,
@@ -823,6 +833,7 @@ try {
   /* 忽略 */
 }
 fs.rmSync(memDir, { recursive: true, force: true });
+try { fs.unlinkSync(path.join(memAscii, 'node_modules', 'better-sqlite3')); } catch { /* noop */ }
 fs.rmSync(memAscii, { recursive: true, force: true });
 
 console.log('\n=== SUMMARY ===');

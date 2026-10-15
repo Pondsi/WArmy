@@ -410,13 +410,45 @@ export class ShiliGuanliqi extends EventEmitter {
     await fs.promises.mkdir(ws, { recursive: true });
 
     const entry = opts.entryScript || path.join(ws, 'agent.mjs');
+    /**
+     * **旧 stub 要就地升级**：老版本写出的 `agent.mjs` 只有「ready + ping + setInterval」，
+     * 没有任何退出通道。`existsSync` 为真就不会重写 ⇒ 升级后老实例目录仍然漏进程。
+     * 只认我们自己写的 stub（有 keepalive、没有 `disconnect`），dsh 真入口不碰。
+     */
+    if (!opts.entryScript && fs.existsSync(entry)) {
+      try {
+        const jiu = await fs.promises.readFile(entry, 'utf8');
+        if (jiu.includes('1 << 30') && !jiu.includes('disconnect')) {
+          await fs.promises.rm(entry, { force: true });
+        }
+      } catch { /* 读不动就按原样用，spawn 仍会把它拉起来 */ }
+    }
     if (!fs.existsSync(entry)) {
-      // 默认 stub：可被真实 dsh 入口替换
+      /**
+       * 默认 stub：可被真实 dsh 入口替换。
+       *
+       * ⚠️ keepalive 定时器必须配**退出通道**，否则这个进程永远不死。
+       * 真机事故：`instances/inst-…/agent.mjs` 只有「ready + ping + setInterval」三行，
+       * 任务早已结束、主进程也退了，它仍靠那个永不触发的定时器把事件循环挂住，
+       * 在任务管理器里一直挂着（用户反馈「程序没有关闭」）。
+       *
+       * 三条退出通道，缺一不可：
+       *   · `shutdown` 消息 —— 主动停止（和 dsh 入口模板一致）；
+       *   · `disconnect` 事件 —— 父进程没了就自己走，不留孤儿；
+       *   · SIGTERM/SIGINT —— `stop()` 先发 SIGTERM，收到就干净退出，不用等 taskkill。
+       */
       await fs.promises.writeFile(
         entry,
         `process.send?.({ type: 'ready', pid: process.pid, ming: ${JSON.stringify(config.ming)} });\n` +
-          `process.on('message', (m) => { if (m === 'ping') process.send({ type: 'pong' }); });\n` +
-          `setInterval(() => {}, 1 << 30);\n`,
+          `const keepalive = setInterval(() => {}, 1 << 30);\n` +
+          `const zouBa = (code = 0) => { clearInterval(keepalive); process.exit(code); };\n` +
+          `process.on('message', (m) => {\n` +
+          `  if (m === 'ping') process.send?.({ type: 'pong' });\n` +
+          `  if (m === 'shutdown') zouBa(0);\n` +
+          `});\n` +
+          `process.on('disconnect', () => zouBa(0));\n` +
+          `process.on('SIGTERM', () => zouBa(0));\n` +
+          `process.on('SIGINT', () => zouBa(0));\n`,
         'utf8'
       );
     }
@@ -489,6 +521,12 @@ export class ShiliGuanliqi extends EventEmitter {
     h.status = 'stopping';
     if (h.Zhi && h.Zhi.exitCode === null) {
       const yiTuiChu = new Promise<void>((r) => h.Zhi!.once('exit', () => r()));
+      /**
+       * 先走**协作式退出**：`shutdown` 让子进程自己清掉 keepalive 定时器再退，
+       * 比直接 SIGTERM 干净（dsh 入口还要借这条消息去收它自己的子进程）。
+       * 发不出去（管道已断/不收 IPC）不要紧，紧接着的 SIGTERM 和 taskkill 兜底。
+       */
+      try { if (h.Zhi.connected) h.Zhi.send('shutdown'); } catch { /* 下面还有 SIGTERM */ }
       h.Zhi.kill('SIGTERM');
       await Promise.race([yiTuiChu, new Promise((r) => setTimeout(r, timeoutMs))]);
       if (h.Zhi.exitCode === null && h.pid) {

@@ -143,6 +143,7 @@ export * from './secure-channel.js';
 export * from './secure-session.js';
 export * from './dht.js';
 export * from './ladder.js';
+export * from './nat.js';
 export * from './dialability.js';
 export * from './relay.js';
 export * from './announce.js';

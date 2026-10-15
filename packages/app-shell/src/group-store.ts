@@ -65,7 +65,7 @@ export type ProjectDevEnv = 'host' | 'container';
 export type XiangmuKeyongxing = 'available' | 'stopped' | 'not-ready' | 'not-installed' | 'not-chosen' | 'unknown';
 
 /** 工具文件访问操作类型（"记录文件的改动"是产品功能 ⇒ 操作类型必须机器可读） */
-export type ProjectFileAccessOp = 'read' | 'write' | 'edit' | 'create' | 'delete' | 'backup' | 'restore';
+export type ProjectFileAccessOp = 'read' | 'write' | 'edit' | 'create' | 'delete' | 'backup' | 'restore' | 'move';
 
 /**
  * 工具文件访问台账的一条（**只记路径 + 操作 + 时间 + 结果**，
@@ -123,7 +123,7 @@ export interface QunXiangmuJilu {
 }
 
 /** 台账操作类型的合法集合（解析外来数据时用；不认识的**丢弃**，不是当成 write） */
-const FILE_ACCESS_OPS: readonly ProjectFileAccessOp[] = ['read', 'write', 'edit', 'create', 'delete', 'backup', 'restore'];
+const FILE_ACCESS_OPS: readonly ProjectFileAccessOp[] = ['read', 'write', 'edit', 'create', 'delete', 'backup', 'restore', 'move'];
 
 export function isFileAccessOp(v: unknown): v is ProjectFileAccessOp {
   return typeof v === 'string' && (FILE_ACCESS_OPS as readonly string[]).includes(v);

@@ -45,8 +45,8 @@ for (const root of SCAN_ROOTS) {
         for (const m of line.matchAll(TEMPLATE)) {
           const inner = m[0].slice(1, -1);
           if (inner.includes('${')) continue;
-          // 子进程/脚本源码正文（含 process.on / require / function）不是插值
-          if (/process\.on\(|process\.send\(|require\(|module\.exports/.test(inner)) continue;
+          // 子进程/脚本源码正文（`process.xxx(...)` 可选调用、require、module.exports）不是插值残留
+          if (/\bprocess\.[A-Za-z]+(\?\.)?\(|require\(|module\.exports/.test(inner)) continue;
           // 纯路径/命令/文档名示例跳过（无表达式调用）
           if (!/\(/.test(inner) && !/Date\.now|chatLogIdSeq|\.length|\.slice|\.join|GROUP_MEMBER/.test(inner)) {
             if (/^[\w./\\:@%-]+$/.test(inner) || /^[A-Za-z0-9_ .\\/:@%{}<>-]+$/.test(inner)) continue;

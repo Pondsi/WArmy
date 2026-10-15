@@ -37,7 +37,7 @@ const bob = mkIdentity('bob');
 const carol = mkIdentity('carol');
 const outsider = mkIdentity('outsider');
 /** 被宣告的"异地成员"（只有指纹，不需要真机） */
-const memberM = { fingerprint: warmyZhiWen(randomBytes(32)) };
+const memberM = { zhiWen: warmyZhiWen(randomBytes(32)) };
 
 function makeNode(identity, nodeId, tcpPort, opts = {}) {
   return new DhtJieDian({
@@ -57,7 +57,7 @@ function makeNode(identity, nodeId, tcpPort, opts = {}) {
 
 async function main() {
   console.log('=== verify-dht: Kademlia 风格发现（UDP，签名记录 + 群密钥加密）===');
-  console.log(`node ${process.version} | 群密钥 ${GROUP_KEY.length} 字节 | 成员指纹 M=${memberM.fingerprint.slice(0, 12)}…`);
+  console.log(`node ${process.version} | 群密钥 ${GROUP_KEY.length} 字节 | 成员指纹 M=${memberM.zhiWen.slice(0, 12)}…`);
 
   const A = makeNode(alice, 'node-a', 17701);
   const B = makeNode(bob, 'node-b', 17702);
@@ -69,9 +69,9 @@ async function main() {
 
   /* ── [1] 引导 ── */
   group('[1] 引导与路由表');
-  const r1 = await B.bootstrap([addrA]);
-  const r2 = await C.bootstrap([addrA, addrB]);
-  const r3 = await A.bootstrap([addrB, addrC]);
+  const r1 = await B.yindao([addrA]);
+  const r2 = await C.yindao([addrA, addrB]);
+  const r3 = await A.yindao([addrB, addrC]);
   check('B 引导成功', r1.ok === 1, r1);
   check('C 引导成功（可多 seed）', r2.ok === 2, r2);
   check('A 反向引导成功', r3.ok === 2, r3);
@@ -83,16 +83,16 @@ async function main() {
 
   /* ── [2] 发布 / 查询 ── */
   group('[2] 发布 / 查询：指纹 → 地址');
-  const published = await A.publish({ fingerprint: memberM.fingerprint });
+  const published = await A.publish({ zhiWen: memberM.zhiWen });
   check('发布成功', !!published.envelope && published.seq >= 1, { key: published.key.slice(0, 12), seq: published.seq });
-  check('记录键由指纹推出（不含明文指纹）', published.key === jiLuJianYouZhiWen(memberM.fingerprint));
+  check('记录键由指纹推出（不含明文指纹）', published.key === jiLuJianYouZhiWen(memberM.zhiWen));
   check('已 PUT 到其它节点', published.storedOn.length >= 1, published.storedOn);
 
-  const q = await C.query(memberM.fingerprint);
+  const q = await C.query(memberM.zhiWen);
   check('C 查询到记录', q.ok === true, q.ok ? 'ok' : JSON.stringify(q.rejected));
   check('解出的地址 = A 宣告的地址', q.record.host === '127.0.0.1' && q.record.port === 17701, q.record);
-  check('解出的指纹 = 被宣告成员', q.record.fp === memberM.fingerprint);
-  check('签名者 = A 的真实指纹（identity 模式）', q.signer === alice.fingerprint, q.signer?.slice(0, 12));
+  check('解出的指纹 = 被宣告成员', q.record.fp === memberM.zhiWen);
+  check('签名者 = A 的真实指纹（identity 模式）', q.signer === alice.zhiWen, q.signer?.slice(0, 12));
   check('查询尝试明细可观测', q.attempts.length >= 1, q.attempts);
 
   /* ── [3] 篡改与无密钥 ── */
@@ -104,7 +104,7 @@ async function main() {
     check('篡改密文（sl）→ 验签失败', res.ok === false && res.reason === 'signature-invalid', res.reason ?? res.detail);
   }
   {
-    const res = await yanZhengJiLuFeng({ ...published.envelope, sg: outsider.fingerprint }, { expectKey: published.key, groupKeys: new QunMiyaoHuan([GROUP_KEY]) });
+    const res = await yanZhengJiLuFeng({ ...published.envelope, sg: outsider.zhiWen }, { expectKey: published.key, groupKeys: new QunMiyaoHuan([GROUP_KEY]) });
     check('篡改签名者指纹 → signer-mismatch', res.ok === false && res.reason === 'signer-mismatch', res.reason);
   }
   {
@@ -126,13 +126,13 @@ async function main() {
       rpcTimeoutMs: 800,
     });
     await D.start();
-    await D.bootstrap([addrA, addrB, addrC]);
-    const dq = await D.query(memberM.fingerprint);
+    await D.yindao([addrA, addrB, addrC]);
+    const dq = await D.query(memberM.zhiWen);
     check('无正确群密钥 → 查询拿不到内容', dq.ok === false, dq.ok ? JSON.stringify(dq.record) : 'ok=false');
     check('拒绝原因 = decrypt-failed', dq.rejected.some((x) => x.reason === 'decrypt-failed'), dq.rejected.map((x) => x.reason));
     const soft = await yanZhengJiLuFeng(published.envelope, { expectKey: published.key, groupKeys: new QunMiyaoHuan([GROUP_KEY_WRONG]), requireDecrypt: false });
     check('宽松模式：签名通过但 record 为空（读不到内容）', soft.ok === true && soft.record === undefined, soft.ok);
-    check('（记录到报告的元数据泄露）无密钥者仍能看到发布者指纹', soft.signer === alice.fingerprint, soft.signer?.slice(0, 12));
+    check('（记录到报告的元数据泄露）无密钥者仍能看到发布者指纹', soft.signer === alice.zhiWen, soft.signer?.slice(0, 12));
     await D.stop();
   }
 
@@ -143,7 +143,7 @@ async function main() {
       identity: alice,
       groupKey: GROUP_KEY,
       key: published.key,
-      record: { fp: memberM.fingerprint, host: '127.0.0.1', port: 19999, scope: 'lan', announcedAt: Date.now() },
+      record: { fp: memberM.zhiWen, host: '127.0.0.1', port: 19999, scope: 'lan', announcedAt: Date.now() },
       seq: 1,
       ts: Date.now(),
     });
@@ -166,12 +166,12 @@ async function main() {
   {
     const events = [];
     const unwatch = B.watch(published.key, (env) => events.push(env));
-    const before = await C.query(memberM.fingerprint);
+    const before = await C.query(memberM.zhiWen);
     A.setTcpPort(27701); // 模拟端口变化（IP 变化同理：换 host + 重新宣告）
-    const republished = await A.publish({ fingerprint: memberM.fingerprint });
+    const republished = await A.publish({ zhiWen: memberM.zhiWen });
     check('重新宣告 seq 递增', republished.seq > published.seq, { before: published.seq, after: republished.seq });
     await sleep(200);
-    const after = await C.query(memberM.fingerprint);
+    const after = await C.query(memberM.zhiWen);
     check('查询到新端口', after.ok === true && after.record.port === 27701, after.record);
     check('旧记录已被新记录取代（seq 高者胜）', after.envelope.s === republished.seq, { got: after.envelope?.s, want: republished.seq });
     check('事件驱动：B 的 watch 被触发（无轮询）', events.length >= 1, events.map((e) => e.s));
@@ -180,11 +180,11 @@ async function main() {
 
     // IP 变化（host 变化）
     const ipRec = await A.publish({
-      fingerprint: memberM.fingerprint,
-      record: { fp: memberM.fingerprint, host: '10.20.30.40', port: 27701, scope: 'public', announcedAt: Date.now() },
+      zhiWen: memberM.zhiWen,
+      record: { fp: memberM.zhiWen, host: '10.20.30.40', port: 27701, scope: 'public', announcedAt: Date.now() },
     });
     await sleep(200);
-    const afterIp = await C.query(memberM.fingerprint);
+    const afterIp = await C.query(memberM.zhiWen);
     check('IP 变化后重新宣告可被查到', afterIp.ok === true && afterIp.record.host === '10.20.30.40', afterIp.record);
     check('再次宣告 seq 继续递增', ipRec.seq > republished.seq, { ipSeq: ipRec.seq, prev: republished.seq });
   }
@@ -198,7 +198,7 @@ async function main() {
       identity: outsider,
       groupKey: attackerKey,
       key: published.key,
-      record: { fp: memberM.fingerprint, host: '6.6.6.6', port: 6666, scope: 'public', announcedAt: Date.now() },
+      record: { fp: memberM.zhiWen, host: '6.6.6.6', port: 6666, scope: 'public', announcedAt: Date.now() },
       seq: 9999,
       ts: Date.now(),
     });
@@ -211,14 +211,14 @@ async function main() {
       rpcTimeoutMs: 800,
     });
     const addrHostile = await HOSTILE.start();
-    await HOSTILE.bootstrap([addrB]);
+    await HOSTILE.yindao([addrB]);
     const storedOnB = await HOSTILE.call(addrB, { t: 'store', key: garbage.k, env: garbage }, 'stored').then(
       () => true,
       () => false
     );
     check('存储节点只验签、不看内容 → 垃圾记录被存下（已知弱点）', storedOnB === true);
     check('B 的记录确实被垃圾占位（seq=9999）', B.localRecord(garbage.k)?.s === 9999, B.localRecord(garbage.k)?.s);
-    const q2 = await C.query(memberM.fingerprint);
+    const q2 = await C.query(memberM.zhiWen);
     check('查询仍返回合法记录（垃圾被验签/解密拒绝）', q2.ok === true && q2.record.host !== '6.6.6.6', q2.record);
     check(
       '查询明细里记录了垃圾的拒绝原因',
@@ -234,19 +234,19 @@ async function main() {
   {
     const P = makeNode(alice, 'node-p', 37701, { signing: 'pseudonymous' });
     await P.start();
-    await P.bootstrap([addrA, addrB, addrC]);
+    await P.yindao([addrA, addrB, addrC]);
     // 用另一个成员指纹发布，避免与前面 identity 模式的同键记录打架
     const member2 = warmyZhiWen(randomBytes(32));
-    const pub = await P.publish({ fingerprint: member2, signing: 'pseudonymous' });
+    const pub = await P.publish({ zhiWen: member2, signing: 'pseudonymous' });
     check('假名模式发布成功', !!pub.envelope, pub.seq);
-    check('公共 DHT 上签名者 ≠ 真实指纹', pub.envelope.sg !== alice.fingerprint, pub.envelope.sg.slice(0, 12));
+    check('公共 DHT 上签名者 ≠ 真实指纹', pub.envelope.sg !== alice.zhiWen, pub.envelope.sg.slice(0, 12));
 
     // 无群密钥者：验签通过但认不出是谁
     const vs = await yanZhengJiLuFeng(pub.envelope, { groupKeys: new QunMiyaoHuan([GROUP_KEY_WRONG]), requireDecrypt: false });
-    check('无密钥者：签名合法但不知道是谁', vs.ok === true && vs.signer !== alice.fingerprint, vs.signer?.slice(0, 12));
+    check('无密钥者：签名合法但不知道是谁', vs.ok === true && vs.signer !== alice.zhiWen, vs.signer?.slice(0, 12));
 
     // 群成员：用群密钥可推出"这个假名就是 alice"
-    const seed = hmacSha256Hash(GROUP_KEY, Buffer.from(`warmy-dht/1|pseudonym|${alice.fingerprint}`, 'utf8'));
+    const seed = hmacSha256Hash(GROUP_KEY, Buffer.from(`warmy-dht/1|pseudonym|${alice.zhiWen}`, 'utf8'));
     const expectPseudonym = warmyZhiWen(ed25519FromSeed(seed).publicKey);
     check('群成员可反推假名归属', expectPseudonym === pub.envelope.sg, { expect: expectPseudonym.slice(0, 12), got: pub.envelope.sg.slice(0, 12) });
 
@@ -260,7 +260,7 @@ async function main() {
       rpcTimeoutMs: 800,
     });
     await P2.start();
-    await P2.bootstrap([addrA, addrB, addrC, P.address]);
+    await P2.yindao([addrA, addrB, addrC, P.address]);
     const q2 = await P2.query(member2);
     check('群成员能解出假名记录内容', q2.ok === true && q2.record.port === 37701, q2.record);
     await P.stop();
@@ -278,8 +278,8 @@ async function main() {
     const fresh = await qianMingJiLuFeng({
       identity: alice,
       groupKey: GROUP_KEY,
-      key: jiLuJianYouZhiWen(memberM.fingerprint),
-      record: { fp: memberM.fingerprint, host: '127.0.0.1', port: 17701, scope: 'lan', announcedAt: now },
+      key: jiLuJianYouZhiWen(memberM.zhiWen),
+      record: { fp: memberM.zhiWen, host: '127.0.0.1', port: 17701, scope: 'lan', announcedAt: now },
       seq: 100000,
       ts: now,
     });

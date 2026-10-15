@@ -1,103 +1,79 @@
-# WArmy 交接（第 11 轮 → 第 12 轮）—— 点击卡顿专项
+# WArmy 交接（第 23 轮 → 第 24 轮）
 
-> 路径一律用占位符。中文回复、中途不汇报只记台账、脚本写 `.mjs` 别内联 `node -e`、
-> 改 `.ts` 后必须 `copy-assets`、`verify-security` 不许真实用户路径/密钥文件名。
-
----
+> 中文、脚本 `.mjs`、改 `.ts` 后 `copy-assets`、门禁无用户路径/密钥名。只能派 1 个子代理。
+> ⚠️ 千万别用 PowerShell 读写源码（GBK 毁中文）。
+> 仓库目录含中文，`run-gates.mjs` / `run-verify-22.mjs` 用 `C:\wbuild`（ASCII 绑定路径）跑。
 
 ## 0. 一句话现状
 
-**点击卡顿**已定位并修复主因：无边框窗口里的**原生 `<select>` 弹层** + **设置页整页 innerHTML 重绘**。
-实测「选择要添加的供应商」下拉开合 **1–4ms**（原先经常卡住）；smoke 6/6。
-本轮**只验了卡顿**，其它功能未重跑 3 轮。
+**第 23 轮 13 项已做完**（字体颜色全局统一与对比度、技能页对齐工具、文件卡片时间/最近改动、词元信息、呼吸加强、喇叭跨页恢复、云端 ASR 说明、DeepSeek Shell 文案、TTS 调研、Ollama+MiMo 真机联调、fast 3 遍全绿、配置已清、安全扫描过）。
+`node run-verify-22.mjs --tier=fast --times=3` → **连续 3 遍全绿（183 项次）**；
+`verify-round20-team.mjs --ollama` + `MIMO_KEY_FILE` → **29/29**；
+`verify-round23-live.mjs` → **22/22**（Ollama 对话/工具落盘 + MiMo token-plan 真实调用）。
 
----
+## 1. 本轮已做（第 23 轮）
 
-## 1. 根因（为何鼠标能动、点击却卡）
-
-| 层 | 原因 | 说明 |
-|---|---|---|
-| Chromium | **长任务阻塞主线程** | 鼠标移动走合成器线程，**点击要在主线程做命中测试**；主线程 >50ms 长任务 ⇒ 点击排队/丢失 |
-| Electron | **无边框窗口 + 原生 `<select>`** | Windows 上原生下拉弹层在 `frame:false` 里又慢又怪 |
-| 应用 | **`renderPage()` 整页重绘** | 设置页模板 3000+ 行，一次 innerHTML 数百毫秒～数秒 |
-| 桌宠 | `setIgnoreMouseEvents(true,{forward:true})` | Windows 上 forward 点击转发不稳（见 electron#35030）；桌宠开着时会挡点击 |
-
-联网结论（web.dev / Chromium jank / Electron issues）：
-- 长任务要**拆分**或 **跳过屏外渲染**
-- `forward:true` 穿透在 Windows 有 bug
-- 原生 select 在 frameless 里应换成自定义下拉
-
----
-
-## 2. 本轮改动
-
-| 项 | 做法 |
+| 项 | 结果 |
 |---|---|
-| 供应商下拉 | **自定义按钮 + 浮层**（`provXiaLa`），不再用原生 select；点击 1–4ms |
-| 设置页卡顿 | `.sheZhiKa { content-visibility: auto }` 跳过屏外渲染 |
-| 添加供应商 | 保存后**先更新按钮/占位**，`renderPage` 挪到 `setTimeout(0)`，点击立刻返回 |
-| 桌宠穿透 | 代码注释已标明 Windows `forward` 风险（未改行为，本轮只验卡顿） |
+| 字体颜色 | `applyInk` 派生 `--muted`/`--ink-dim`（淡化自字体色）；对话气泡 `tiaoZhengInkDuiBi` 按主题色/气泡底明暗灰度校正 ≥4.5 对比；强调文字仍走 `--accent`（主题色） |
+| 云端语音识别 | **不删**：主路径是听话模型链；云端 Deepgram/AssemblyAI 仅在听话模型效果不好时可选。提示文案已改清楚 |
+| 技能页 | 去掉「本地 SKILL」标题 →「AI 技能」；列表在上、自动发现目录在下（同工具页）；勾选框右侧 +「启用」，删除紧挨其右 |
+| DeepSeek Shell | 包名是 `@deepseek-ai/dsh`（不是 deepseek-harness）；`npm view` 失败时文案改为「registry 查询失败：网络不可达或未安装」 |
+| 呼吸效果 | `langDuHuXi` 光晕从 18%/38% 提到 32%/55% |
+| TTS 参数 | 已有语速（50–200）+ 音色（speakers 下拉）；ElevenLabs 常见参数：voice_id/model_id/stability/similarity_boost/style/speed；OpenAI：model/voice/speed/response_format/instructions。MiMo 有 `mimo-v2.5-tts` 但标准 `/audio/speech` 在 token-plan 端点 404 |
+| 喇叭图标 | `window.__langDuZhongKey` 跨 `renderChat` 重绘恢复播放态 |
+| 文件产物 | 时间（时分）放名称前、不截断；名称可截断；悬停年月日时分秒+大小 |
+| 最近改动 | work-tool 写/改/删/移写入 `groupStore.recordFileAccess`（新增 `move` 档）；无项目目录时并入工作区产出 |
+| 词元信息 | 时间右侧「输入X，输出Y」；usage 随 `LogEntry`/`chatLogAppend`/`liaoTianXiaoXiJi` 落盘可恢复 |
+| 真机联调 | Ollama 真实对话+usage；write_file/move_file 真实落盘；MiMo `token-plan-cn` + key 可用（`tp-` 开头，Bearer 直传） |
+| 安全 | `verify-security` 28/28；配置已清；无密钥/用户路径入库 |
 
-**实测**（`verify-click-lag.mjs`）：
-```
-dropdown panel latencyMs = 1~4
-8 clicks = 1,1,2,1,3,1,1,1  → LAG TEST PASS
-```
-「添加供应商」按钮仍会触发整页重绘（约 2.6s），已改成异步，**点击本身不再卡死**。
+## 2. 验证结果
 
----
+- `tsc -b` 四包 = 0；`copy-assets` 已跑。
+- **fast 3 遍连续全绿** 183 项次。
+- `verify-round20-team --ollama`（带 `MIMO_KEY_FILE`）29/29。
+- `verify-round23-live` 22/22。
 
-## 3. 必守约定（延续）
+## 3. 环境
 
-1. 中文回复；中途不汇报只记台账；做完一并汇报。
-2. 写中文用 write/edit；脚本写 `.mjs`。
-3. 改 `.ts` → `node scripts/copy-assets.mjs`。
-4. 测试用真本地 ollama；改行为后要 3 轮 `round3-verify` 全绿（本轮只验卡顿，未跑）。
-5. `verify-security` / `verify-i18n-locales` 等门禁先过再交。
-6. userData 固定 `@warmy/app-shell`；首启**不预置牛马**（只恢复磁盘实例）。
-7. 工具参数已支持 path/file/filePath 别名 + 自动补 office 扩展名；整轮工具循环超时 600s。
-
----
-
-## 4. 环境
-
-| 项 | 值 |
-|---|---|
-| 真 node | `<工作区>\resources\node\win-x64\node.exe` |
-| 记忆/实例子进程 | **优先 electron.exe + ELECTRON_RUN_AS_NODE**（避免未签名 node.exe 被 Windows 拦） |
-| 探针 | `verify-click-lag.mjs`（点验下拉延迟） |
-| 门禁 | `run-gates.mjs --smoke`、`verify-security.mjs`、`verify-i18n-locales.mjs` |
-
----
-
-## 5. 待办（第 12 轮）
-
-1. **继续压卡顿**：
-   - 「添加供应商」仍会 `renderPage()` 整页重绘（~2.6s）→ 抽成只刷新供应商列表
-   - 其它原生 `<select>`（音频设备、安全档位等）也可换成同一套自定义下拉
-   - 桌宠 `forward:true`：Windows 上改为「离开本体才 ignore 且不 forward」或 `setShape`
-2. **真机点验**：设置里连续点下拉/切换分区/滚动，确认不再出现「点击没反应」
-3. 若 Windows 仍弹「无法验证发布者」：正式发布需**代码签名**；开发期可对 electron/node 解除锁定（MOTW）
-4. 需要时再跑 3 轮 `round3-verify` + 推 GitHub
-
-### 校验
-```powershell
-Set-Location C:\wbuild
-& "C:\wbuild\resources\node\win-x64\node.exe" verify-click-lag.mjs
-& "C:\wbuild\resources\node\win-x64\node.exe" run-gates.mjs --smoke
-& node "C:\wbuild\node_modules\typescript\bin\tsc" -b packages/providers packages/app-shell
-# 改 .ts 后：
-Set-Location C:\wbuild\packages\app-shell
-& node scripts/copy-assets.mjs
+```bash
+cd C:\wbuild
+node node_modules/typescript/bin/tsc -b packages/providers packages/group-router packages/sync-protocol packages/app-shell
+cd packages/app-shell; node scripts/copy-assets.mjs; cd ../..
+node run-verify-22.mjs --tier=fast --times=3
+$env:MIMO_KEY_FILE="<key文件>"; node verify-round20-team.mjs --ollama
+$env:MIMO_KEY_FILE="<key文件>"; node verify-round23-live.mjs
 ```
 
----
+## 4. 关键事实
 
-## 6. 新窗口开场白（可直接粘贴）
+1. 禁止 PowerShell 读写源码（GBK 毁中文）。
+2. **MiMo key 形如 `tp-…`，走 `https://token-plan-cn.xiaomimimo.com/v1`**，`Authorization: Bearer <key>`（不要加 `sk-`）。`api.xiaomimimo.com` 会 401。
+3. MiMo 模型列表：`mimo-v2.5` / `mimo-v2.5-pro` / `mimo-v2.6-flash` / `mimo-v2.6-pro` / `mimo-v2.5-asr` / `mimo-v2.5-tts`（及 voiceclone/voicedesign）。
+4. **安全门禁会扫根目录脚本**：测试脚本里不能出现 `C:\Users\<name>`、`大龙虾互动区` 等；key 用 `MIMO_KEY_FILE` 环境变量。
+5. work-tool 成功路径会 `recordFileAccess`（create/edit/delete/move）；`group-store` 的 op 已含 `move`。
+6. 对话气泡文字色 = `tiaoZhengInkDuiBi(字体色, 气泡底)`，思考框仍用 `--muted`。
+
+## 5. 第 24 轮优先（遗留）
+
+1. **墙钟 24h 长程**仍未挂机（只做过压缩时间轴）。
+2. **UPnP/STUN 跨真 NAT 成功率**：需两台真机器/真路由器。
+3. **known-red 8 支**：`verify-e2e` / `verify-history-persist` / `verify-live-ui` / `verify-mobile-ui` / `verify-net-ui` / `verify-qr-scan` / `verify-tool-call-e2e` / `verify-warmy-ipc-probe`。
+4. **verify-round16 ①②⑤ / round17 追加A**：本地小模型写不足 5200 字（预存在，别当产品缺陷）。
+5. **verify-round17 ⑥ ASR 语言下拉**选项数与断言不一致，待核。
+6. **verify-round18*/19** 需云端 key 环境才能跑（本机已可配 token-plan key）。
+7. **usage 在 `mergeWithPrev` 续派合并**时如何累计显示，待产品定。
+8. **TTS 音色**：MiMo tts 模型的 voice 列表/参数尚未在 UI 联调（标准 speech 端点 404，可能要走 chat 式）。
+9. 改动已提交/推送 + 打了 `v0.2.22` 标签；exe 在 `release/`，GitHub Release 需手动挂附件或用带 token 的 `gh`。
+
+## 6. 新窗口开场白
 
 ```
-读 docs/HANDOFF-NEXT.md（第 11 轮·点击卡顿专项）。继续压 UI 卡顿：
-把 renderPage 整页重绘拆掉/只刷供应商列表，其余原生 select 换自定义下拉，
-桌宠 forward 穿透在 Windows 改稳妥方案。用 verify-click-lag.mjs 点验延迟。
-中文回复、中途不汇报、脚本写 .mjs、改 .ts 记得 copy-assets、门禁先过。
+读 docs/HANDOFF-NEXT.md（第 23 轮交接）。先看 §5 遗留：
+墙钟 24h、跨真 NAT、known-red 8 支、round16/17 长文与 ASR 下拉、TTS 音色联调。
+中文、中途不汇报、脚本 .mjs、改 .ts 记 copy-assets、门禁先过。
+验证入口：node run-verify-22.mjs --tier=fast --times=3（连续 3 遍全绿才算过）；
+MiMo key 走 token-plan-cn + Bearer tp-…（环境变量 MIMO_KEY_FILE）。
+⚠️ 千万别用 PowerShell 读写源码。
 ```

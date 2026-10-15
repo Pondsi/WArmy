@@ -182,8 +182,179 @@ export function congGuiDangTiQuZhiShi(shuRu: {
   return { entities, events, preferences };
 }
 
-/** 使用者偏好：userData/user-preferences.json（覆盖式 + 去重 key） */
+/**
+ * **使用者偏好独立配置**（产品要求：归档时整理到单独文件，格式化，门禁可约束）。
+ *
+ * **v3 软门禁格式**（行业通行：Constitutional AI / guardrails 都是「引导 + 可修正」而非一票否决）：
+ * - 所有规则都是 **soft**：注入提示词引导，默认不拦截；
+ * - 模型判断「异常由此门禁导致」时可 **skip**（带原因），归档时复盘改/删；
+ * - 每条规则有 id / match / action / severity / status / skipHistory。
+ *
+ * ```json
+ * {
+ *   "version": 3,
+ *   "updatedAt": "ISO-8601",
+ *   "rules": [
+ *     {
+ *       "id": "reply-style-concise",
+ *       "category": "style",
+ *       "match": { "type": "always", "pattern": "" },
+ *       "action": "advise",
+ *       "severity": "low",
+ *       "message": "回复尽量短",
+ *       "status": "active",
+ *       "source": "user|archive|model",
+ *       "skipHistory": [{ "at": 0, "by": "model", "reason": "..." }]
+ *     }
+ *   ],
+ *   "tools": { "confirm": ["run_shell"], "deny": [] },
+ *   "workflow": { "planFirst": true, "maxAutoContinue": 8 }
+ * }
+ * ```
+ * - action: advise（只提示） | warn（提示并记审计） | block（仍可被 skip 自愈）
+ * - status: active | skipped（暂时跳过） | retired（归档复盘后删除）
+ * - 归档时检查 skipped：分析 skipHistory，改 message/match 或 retired。
+ */
+export const PIAN_HAO_GE_SHI_SHUO_MING = 'user-preferences.json v3 soft-gate: {version,rules[{id,category,match,action,severity,message,status,skipHistory}],tools,workflow}';
+
+/**
+ * 供应商官方协议软门禁：来自各家官方 API 约定。
+ * 只做 advise/warn，不替代运行时真实错误；目的是让模型在配置供应商时少走弯路。
+ */
+export const GONG_YING_SHANG_RUAN_MEN_JIN: RuanMenJinGuiZe[] = [
+  { id: 'provider-openai-auth', category: 'model', match: { type: 'keyword', pattern: 'openai' }, action: 'warn', severity: 'medium', message: 'OpenAI 兼容接口通常使用 Authorization: Bearer <key>；聊天端点为 /v1/chat/completions。401/403 优先检查 key 与站点是否匹配，404 优先检查 baseURL 是否重复或缺少 /v1。', status: 'active', source: 'official-docs' },
+  { id: 'provider-anthropic-auth', category: 'model', match: { type: 'keyword', pattern: 'anthropic' }, action: 'warn', severity: 'medium', message: 'Anthropic Messages API 使用 x-api-key 与 anthropic-version 请求头，端点为 /v1/messages；不要套用 OpenAI Bearer/chat-completions 形状。', status: 'active', source: 'official-docs' },
+  { id: 'provider-ollama-local', category: 'model', match: { type: 'keyword', pattern: 'ollama' }, action: 'advise', severity: 'low', message: 'Ollama 原生根地址通常是 http://127.0.0.1:11434，不加 /v1；无需 API Key。连接拒绝时先确认 Ollama 服务与模型已启动。', status: 'active', source: 'official-docs' },
+  { id: 'provider-mimo-site-key', category: 'model', match: { type: 'keyword', pattern: 'mimo' }, action: 'warn', severity: 'medium', message: 'MiMo token-plan 的 CN/SGP 站点 key 不通用；401 时先核对 key 所属站点。工具调用优先走流式，reasoning_content 与 content 要分别解析。', status: 'active', source: 'official-docs' },
+  { id: 'provider-deepgram-asr', category: 'model', match: { type: 'keyword', pattern: 'deepgram' }, action: 'advise', severity: 'low', message: 'Deepgram 预录音转写：POST /v1/listen，Authorization: Token <key>，请求体为音频二进制；默认推荐 nova-3 + smart_format=true。', status: 'active', source: 'official-docs' },
+  { id: 'provider-assemblyai-asr', category: 'model', match: { type: 'keyword', pattern: 'assemblyai' }, action: 'advise', severity: 'low', message: 'AssemblyAI 预录音需先 /v2/upload，再 POST /v2/transcript，最后轮询 /v2/transcript/{id}；Authorization 头直接放 key，不加 Bearer。', status: 'active', source: 'official-docs' },
+];
+
+/** 软门禁规则（v3） */
+export interface RuanMenJinGuiZe {
+  id: string;
+  category: 'style' | 'tool' | 'file' | 'model' | 'workflow' | 'safety';
+  match: { type: 'always' | 'regex' | 'keyword'; pattern: string };
+  action: 'advise' | 'warn' | 'block';
+  severity: 'low' | 'medium' | 'high';
+  message: string;
+  status: 'active' | 'skipped' | 'retired';
+  source: string;
+  skipHistory?: Array<{ at: number; by: string; reason: string }>;
+}
+
+/** 模型自愈：标记某条门禁「暂时跳过」 */
+export function biaoJiZanShiTiaoGuo(userData: string, ruleId: string, reason: string, by = 'model'): { ok: boolean; file: string } {
+  const file = path.join(userData, 'user-preferences.json');
+  try {
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const r = (doc.rules || []).find((x: RuanMenJinGuiZe) => x && x.id === ruleId);
+    if (!r) return { ok: false, file };
+    r.status = 'skipped';
+    r.skipHistory = Array.isArray(r.skipHistory) ? r.skipHistory : [];
+    r.skipHistory.push({ at: Date.now(), by, reason: String(reason || '').slice(0, 300) });
+    doc.updatedAt = new Date().toISOString();
+    fs.writeFileSync(file, JSON.stringify(doc, null, 2) + '\n', 'utf8');
+    return { ok: true, file };
+  } catch { return { ok: false, file }; }
+}
+
+/** 归档复盘：把 skipped 规则列出来供模型决定改/删 */
+export function fuPanTiaoGuoGuiZe(userData: string): Array<RuanMenJinGuiZe> {
+  const file = path.join(userData, 'user-preferences.json');
+  try {
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return (doc.rules || []).filter((x: RuanMenJinGuiZe) => x && x.status === 'skipped');
+  } catch { return []; }
+}
+
 export function heBingYongHuPianHao(
+  userData: string,
+  prefs: Array<{ key: string; value: string; source: string }>
+): { ok: boolean; count: number; file: string } {
+  const file = path.join(userData, 'user-preferences.json');
+  try {
+    fs.mkdirSync(userData, { recursive: true });
+    let doc: {
+      version: number; updatedAt: string;
+      rules?: RuanMenJinGuiZe[];
+      hard: Array<{ id: string; rule: string; level: string; source: string }>;
+      prefer: Array<{ id: string; key: string; value: string; scope: string; confidence: number; source: string; updatedAt: number }>;
+      tools: { allow: string[]; deny: string[]; confirm: string[] };
+      files: { preferDir: string; naming: string };
+      models: { prefer: string[]; avoid: string[] };
+      workflow: { planFirst: boolean; askBeforeOpen: boolean; maxAutoContinue: number };
+    } = {
+      version: 3, updatedAt: new Date().toISOString(), rules: GONG_YING_SHANG_RUAN_MEN_JIN.map((r) => ({ ...r, match: { ...r.match } })),
+      hard: [], prefer: [],
+      tools: { allow: [], deny: [], confirm: [] },
+      files: { preferDir: 'workspace', naming: '' },
+      models: { prefer: [], avoid: [] },
+      workflow: { planFirst: true, askBeforeOpen: true, maxAutoContinue: 4 },
+    };
+    try {
+      const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (raw && typeof raw === 'object') {
+        if (raw.version >= 3 && Array.isArray(raw.rules)) {
+          // v3 直接读
+          return { ok: true, count: 0, file };
+        }
+        if (raw.version === 2 && Array.isArray(raw.prefer)) {
+          // v2 → v3：hard 变 block 规则，prefer 变 advise 规则
+          for (const h of (raw.hard || [])) {
+            (doc as unknown as { rules: RuanMenJinGuiZe[] }).rules.push({
+              id: String(h.id || 'r' + Date.now()), category: 'safety',
+              match: { type: 'always', pattern: '' },
+              action: 'block', severity: 'high',
+              message: String(h.rule || h.message || ''), status: 'active', source: String(h.source || 'user'),
+            });
+          }
+          for (const pr of (raw.prefer || [])) {
+            (doc as unknown as { rules: RuanMenJinGuiZe[] }).rules.push({
+              id: String(pr.id || 'p' + Date.now()), category: 'style',
+              match: { type: 'keyword', pattern: String(pr.key || '') },
+              action: 'advise', severity: 'low',
+              message: String(pr.value || ''), status: 'active', source: String(pr.source || 'user'),
+            });
+          }
+        }
+        else if (raw && !Array.isArray(raw)) {
+          // v1 扁平 map → 迁移
+          for (const [k, v] of Object.entries(raw as Record<string, { value?: string; source?: string; updatedAt?: number }>)) {
+            doc.prefer.push({
+              id: k.slice(0, 80), key: k, value: String(v?.value || ''), scope: 'global',
+              confidence: 0.7, source: String(v?.source || 'legacy'), updatedAt: Number(v?.updatedAt) || 0,
+            });
+          }
+        }
+      }
+    } catch { /* 空/坏文件重来 */ }
+    let n = 0;
+    for (const p of prefs) {
+      const id = `${p.key}:${p.value}`.slice(0, 160);
+      const yi = doc.prefer.find((x) => x.id === id || (x.key === p.key && x.value === p.value));
+      if (!yi) {
+        n += 1;
+        doc.prefer.push({
+          id, key: String(p.key || '').slice(0, 80), value: String(p.value || '').slice(0, 200),
+          scope: 'global', confidence: 0.8, source: String(p.source || ''), updatedAt: Date.now(),
+        });
+      } else {
+        yi.updatedAt = Date.now();
+        yi.source = String(p.source || yi.source);
+      }
+      if (doc.prefer.length >= 200) break;
+    }
+    doc.updatedAt = new Date().toISOString();
+    fs.writeFileSync(file, JSON.stringify(doc, null, 2) + '\n', 'utf8');
+    return { ok: true, count: n, file };
+  } catch {
+    return { ok: false, count: 0, file };
+  }
+}
+
+/** 旧实现残留（不再使用） */
+export function _legacyHeBingYongHuPianHao(
   userData: string,
   prefs: Array<{ key: string; value: string; source: string }>
 ): { ok: boolean; count: number; file: string } {

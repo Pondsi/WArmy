@@ -5,8 +5,9 @@
  *   1. `ipv6-direct`   **IPv6 公网直连**（全局单播地址；IPv6 无 NAT ⇒ 天然可拨入）
  *      —— **已实现（真实 TCP over IPv6，socket 自报 remoteFamily=IPv6）**
  *   2. `public-direct` IPv4 公网直连（拨对方宣告的地址）—— **已实现（真实 TCP）**
- *   3. `upnp`          路由器自动映射（UPnP / NAT-PMP / PCP）—— **未实现**
- *   4. `holepunch`     STUN + 同时打洞 —— **未实现**
+ *   3. `upnp`          路由器自动映射（UPnP / NAT-PMP / PCP）—— 客户端在 `nat.ts`，
+ *      本文件默认**未注入**（申请映射改的是路由器状态 ⇒ 必须用户显式触发才接进来）
+ *   4. `holepunch`     STUN + 同时打洞 —— 客户端在 `nat.ts`，同样要调用方注入两端指纹才开档
  *   5. `relay`         中继兜底（双 CGNAT 唯一出路）—— **已实现（真实转发，见 relay.ts）**
  *   6. `lan`           同网局域网（UDP 探测）—— **已实现（真实 UDP）**
  * 未实现的级会**明确标注 unsupported + 原因**，不假装成功（诚实要求）。
@@ -529,6 +530,12 @@ export interface TiziMubiao {
   nodeId?: string;
   addresses: TiziDizhi[];
   /**
+   * 对端**已映射到路由器**的公网地址（UPnP / NAT-PMP 成功后由对端宣告）。
+   * 只有 `upnp` 档用它：那是"路由器替我们开的门"，与 DHT/LAN 地址来源不同，
+   * 失败原因也能分开说（见 nat.ts 的 `chuangJianUpnpYingCelue`）。
+   */
+  mappedAddresses?: Array<{ host: string; port: number; mechanism: 'upnp' | 'natpmp' }>;
+  /**
    * 对端报告的"本机是否可拨入"（对端自己的 DialabilityProbe 结论）。
    * `undefined` = 未收到报告 → 阶梯**不猜**（附八.3 第 3 条：可检测就可明确表达）。
    */
@@ -837,11 +844,15 @@ export class LianJieTiZi {
     this.strategies.set(
       'upnp',
       opts.strategies?.upnp ??
-        buzhichiCelue('upnp', '未实现：UPnP/SSDP 与 NAT-PMP/PCP 需要额外依赖或原生模块（本项目零依赖约束）')
+        buzhichiCelue(
+          'upnp',
+          '未注入映射配置：NAT-PMP/UPnP 客户端已实现（nat.ts），但申请映射会改路由器状态，必须用户在设置里显式触发后把策略接进来'
+        )
     );
     this.strategies.set(
       'holepunch',
-      opts.strategies?.holepunch ?? buzhichiCelue('holepunch', '未实现：真实 STUN 服务器与同时打洞需要公网对端，本仓库无 STUN 客户端')
+      opts.strategies?.holepunch ??
+        buzhichiCelue('holepunch', '未注入打洞配置：STUN 客户端与同时打洞已实现（nat.ts），需要两端指纹与（可选）STUN 服务器才能开这一档')
     );
     // 中继档**已实现**（relay.ts）：未配置中继候选时也不是 unsupported —— 会如实报"缺中继"这个状态
     this.strategies.set('relay', opts.strategies?.relay ?? relay);

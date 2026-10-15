@@ -22,9 +22,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { shengChengDocx, shengChengPptx, keYongPptx, shengChengXlsx } from './office-tools.js';
 import { shengChengPdf } from './pdf-tools.js';
+import { lieYaSuoBaoTiaoMu, duYaSuoBaoTiaoMu, tiaoMuMingAnQuan } from './zip-look.js';
 
 /** 工具名（与 function calling 暴露给模型的 name 一致） */
-export const WORK_TOOL_NAMES = ['list_dir', 'read_file', 'write_file', 'make_dir', 'make_docx', 'make_pptx', 'make_xlsx', 'make_pdf'] as const;
+export const WORK_TOOL_NAMES = [
+  'list_dir', 'find_files', 'search_files', 'read_file', 'write_file', 'edit_file',
+  'copy_file', 'move_file', 'make_dir', 'make_docx', 'make_pptx', 'make_xlsx', 'make_pdf',
+  'list_archive', 'read_archive_entry',
+] as const;
 export type WorkToolName = (typeof WORK_TOOL_NAMES)[number];
 
 export function isWorkTool(name: unknown): name is WorkToolName {
@@ -77,6 +82,12 @@ export interface WorkToolResult {
     error?: string;
     truncated?: boolean;
     entries?: number;
+    /** write_file：写了多少**字符**（用户问"是不是真的写了 N 字"要看它） */
+    chars?: number;
+    /** write_file：写完自检，文件真的在不在 */
+    exists?: boolean;
+    /** read_archive_entry：读的是压缩包里的哪一条 */
+    entry?: string;
     /** make_pdf：内嵌用的字体路径 */
     font?: string;
     /** make_pdf：字体里缺字形、渲染为空白的字符（如实上报） */
@@ -239,6 +250,137 @@ export function workListDir(baseDir: string, args: { path?: string }, kuaiQuan =
   }
 }
 
+/** 把简单 glob（`*` / `?` / `**`）变成正则；只匹配规范化后的 `/` 路径。 */
+function globZhengZe(pattern: string): RegExp {
+  const p = String(pattern || '**/*').replace(/\\/g, '/');
+  let out = '^';
+  for (let i = 0; i < p.length; i++) {
+    const c = p[i];
+    if (c === '*') {
+      if (p[i + 1] === '*') { out += '.*'; i++; }
+      else out += '[^/]*';
+    } else if (c === '?') out += '[^/]';
+    else out += c && /[\\^$.*+?()[\]{}|]/.test(c) ? '\\' + c : c;
+  }
+  return new RegExp(out + '$', 'i');
+}
+
+/** 递归找文件（不跟随符号链接，防止逃出工作区）。 */
+export function workFindFiles(baseDir: string, args: { path?: string; pattern?: string; maxResults?: number }, kuaiQuan = false): WorkToolResult {
+  const tool = 'find_files';
+  try {
+    const root = resolveInside(baseDir, args.path || '.', kuaiQuan, 'read');
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return fail(tool, new Error('not-a-directory'), relOf(baseDir, root));
+    const re = globZhengZe(args.pattern || '**/*');
+    const cap = Math.max(1, Math.min(Number(args.maxResults) || 200, 1000));
+    const out: string[] = [];
+    const walk = (dir: string) => {
+      if (out.length >= cap) return;
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (out.length >= cap) break;
+        const abs = path.join(dir, ent.name);
+        if (ent.isSymbolicLink()) continue;
+        if (ent.isDirectory()) walk(abs);
+        else if (ent.isFile()) {
+          const rel = relOf(root, abs).replace(/\\/g, '/');
+          if (re.test(rel)) out.push(relOf(baseDir, abs));
+        }
+      }
+    };
+    walk(root);
+    return { ok: true, content: out.length ? out.join('\n') : '(没有匹配文件)', meta: { tool, ok: true, bytes: out.join('\n').length, path: relOf(baseDir, root), entries: out.length, truncated: out.length >= cap } };
+  } catch (e) { return fail(tool, e); }
+}
+
+/** 跨文件内容搜索；默认按字面量，regex=true 时使用 ECMAScript 正则。 */
+export function workSearchFiles(baseDir: string, args: { path?: string; query?: string; pattern?: string; regex?: boolean; maxResults?: number }, kuaiQuan = false): WorkToolResult {
+  const tool = 'search_files';
+  try {
+    const query = String(args.query || '');
+    if (!query) return fail(tool, new Error('query-required'));
+    const root = resolveInside(baseDir, args.path || '.', kuaiQuan, 'read');
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return fail(tool, new Error('not-a-directory'), relOf(baseDir, root));
+    const fileRe = globZhengZe(args.pattern || '**/*');
+    const hitRe = args.regex ? new RegExp(query, 'i') : null;
+    const cap = Math.max(1, Math.min(Number(args.maxResults) || 100, 500));
+    const out: string[] = [];
+    const walk = (dir: string) => {
+      if (out.length >= cap) return;
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (out.length >= cap) break;
+        const abs = path.join(dir, ent.name);
+        if (ent.isSymbolicLink()) continue;
+        if (ent.isDirectory()) { walk(abs); continue; }
+        if (!ent.isFile() || !fileRe.test(relOf(root, abs).replace(/\\/g, '/'))) continue;
+        const st = fs.statSync(abs);
+        if (st.size > 2 * 1024 * 1024) continue;
+        let text = '';
+        try { text = fs.readFileSync(abs, 'utf8'); } catch { continue; }
+        if (text.includes('\0')) continue;
+        const lines = text.split(/\r?\n/);
+        for (let i = 0; i < lines.length && out.length < cap; i++) {
+          const line = lines[i] || '';
+          if (hitRe ? (hitRe.lastIndex = 0, hitRe.test(line)) : line.toLowerCase().includes(query.toLowerCase())) {
+            out.push(`${relOf(baseDir, abs)}:${i + 1}: ${line.slice(0, 300)}`);
+          }
+        }
+      }
+    };
+    walk(root);
+    return { ok: true, content: out.length ? out.join('\n') : '(没有匹配内容)', meta: { tool, ok: true, bytes: out.join('\n').length, path: relOf(baseDir, root), entries: out.length, truncated: out.length >= cap } };
+  } catch (e) { return fail(tool, e); }
+}
+
+/** 精确局部编辑：默认要求 oldText 只出现一次；replaceAll=true 才替换全部。 */
+export function workEditFile(baseDir: string, args: { path?: string; oldText?: string; newText?: string; replaceAll?: boolean }, kuaiQuan = false): WorkToolResult {
+  const tool = 'edit_file';
+  try {
+    const file = resolveInside(baseDir, args.path, kuaiQuan, 'write');
+    if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return fail(tool, new Error('not-a-file'), relOf(baseDir, file));
+    const oldText = String(args.oldText ?? '');
+    const newText = String(args.newText ?? '');
+    if (!oldText) return fail(tool, new Error('oldText-required'), relOf(baseDir, file));
+    const text = fs.readFileSync(file, 'utf8');
+    const count = text.split(oldText).length - 1;
+    if (!count) return fail(tool, new Error('oldText-not-found'), relOf(baseDir, file));
+    if (!args.replaceAll && count !== 1) return fail(tool, new Error(`oldText-not-unique (${count} matches); provide more context or set replaceAll=true`), relOf(baseDir, file));
+    const next = args.replaceAll ? text.split(oldText).join(newText) : text.replace(oldText, newText);
+    fs.writeFileSync(file, next, 'utf8');
+    return { ok: true, content: `[edit_file] 已修改 ${relOf(baseDir, file)}（替换 ${args.replaceAll ? count : 1} 处）`, meta: { tool, ok: true, bytes: Buffer.byteLength(next), chars: [...next].length, path: relOf(baseDir, file), abs: file, exists: true } };
+  } catch (e) { return fail(tool, e); }
+}
+
+/** 复制文件（仅文件；默认不覆盖）。 */
+export function workCopyFile(baseDir: string, args: { path?: string; destination?: string; overwrite?: boolean }, kuaiQuan = false): WorkToolResult {
+  const tool = 'copy_file';
+  try {
+    const src = resolveInside(baseDir, args.path, kuaiQuan, 'read');
+    const dst = resolveInside(baseDir, args.destination, kuaiQuan, 'write');
+    if (!fs.existsSync(src) || !fs.statSync(src).isFile()) return fail(tool, new Error('source-not-a-file'), relOf(baseDir, src));
+    if (fs.existsSync(dst) && !args.overwrite) return fail(tool, new Error('destination-exists'), relOf(baseDir, dst));
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst);
+    return { ok: true, content: `[copy_file] 已复制到 ${dst}`, meta: { tool, ok: true, bytes: fs.statSync(dst).size, path: relOf(baseDir, dst), abs: dst, exists: true } };
+  } catch (e) { return fail(tool, e); }
+}
+
+/** 移动/重命名文件（仅工作区内，默认不覆盖）。 */
+export function workMoveFile(baseDir: string, args: { path?: string; destination?: string; overwrite?: boolean }, kuaiQuan = false): WorkToolResult {
+  const tool = 'move_file';
+  try {
+    const src = resolveInside(baseDir, args.path, kuaiQuan, 'write');
+    const dst = resolveInside(baseDir, args.destination, kuaiQuan, 'write');
+    if (!fs.existsSync(src) || !fs.statSync(src).isFile()) return fail(tool, new Error('source-not-a-file'), relOf(baseDir, src));
+    if (fs.existsSync(dst)) {
+      if (!args.overwrite) return fail(tool, new Error('destination-exists'), relOf(baseDir, dst));
+      fs.unlinkSync(dst);
+    }
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.renameSync(src, dst);
+    return { ok: true, content: `[move_file] 已移动到 ${dst}`, meta: { tool, ok: true, bytes: fs.statSync(dst).size, path: relOf(baseDir, dst), abs: dst, exists: true } };
+  } catch (e) { return fail(tool, e); }
+}
+
 /** 读文件 */
 export function workReadFile(baseDir: string, args: { path?: string; maxChars?: number }, kuaiQuan = false): WorkToolResult {
   const tool = 'read_file';
@@ -340,8 +482,34 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
   }
 }
 
-/** 写文件（必要时建父目录）；超上限**拒绝**，不截断 */
-export function workWriteFile(baseDir: string, args: { path?: string; content?: string }, kuaiQuan = false): WorkToolResult {
+/** 写文件（必要时建父目录）；超上限**拒绝**，不截断。`append:true` = 追加到已有文件末尾（长文分段写） */
+/** 会话 id 叠两遍时的回落解析（workspace/inst-x/inst-x/f → workspace/inst-x/f） */
+function huiLuoHuiHuaGen(baseDir: string, raw: string, file: string): string {
+  try {
+    if (fs.existsSync(file)) return file;
+    const r = String(raw || '').trim();
+    if (!r || path.isAbsolute(r)) return file;
+    const root = path.resolve(baseDir, '..');
+    const shang = path.resolve(root, r);
+    if (shang !== root && shang.startsWith(root + path.sep) && fs.existsSync(shang)) return shang;
+    const pei = r.match(/^[^/\\]+[\\/](.+)$/);
+    if (pei && pei[1]) {
+      const qu = path.resolve(baseDir, pei[1]);
+      if (fs.existsSync(qu)) return qu;
+      /**
+       * **新建文件**时也要防「会话 id 叠两遍」：raw 形如 inst-x/hello.txt，
+       * baseDir 已是 …/workspace/inst-x ⇒ 再拼会变成 inst-x/inst-x/hello.txt。
+       * 若前缀正好是本会话目录名，就写到去前缀的位置。
+       */
+      const gen = path.basename(path.resolve(baseDir));
+      const qian = String(r).split(/[\\/]/)[0] || '';
+      if (qian && qian === gen) return qu;
+    }
+    return file;
+  } catch { return file; }
+}
+
+export function workWriteFile(baseDir: string, args: { path?: string; content?: string; append?: boolean }, kuaiQuan = false): WorkToolResult {
   const tool = 'write_file';
   try {
     /**
@@ -363,19 +531,46 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
     if (/\.(doc|ppt|xls)$/i.test(rawP)) {
       return fail(tool, new Error('legacy-office-unsupported：不支持老格式 ' + rawP + '，请用 make_docx / make_pptx / make_xlsx 生成新格式。'), rawP);
     }
-    const file = resolveInside(baseDir, args && args.path, kuaiQuan);
+    let file = resolveInside(baseDir, args && args.path, kuaiQuan);
+    /**
+     * **会话 id 叠两遍回落**（真机：workspace/inst-x/inst-x/hello.txt 找不到时
+     * Windows 会弹「找不到文件」模态框）。append 时优先复用已存在的那份。
+     */
+    file = huiLuoHuiHuaGen(baseDir, String((args && args.path) || ''), file);
     const content = String((args && args.content) ?? '');
     const bytes = Buffer.byteLength(content, 'utf8');
     if (bytes > WORK_TOOL_LIMITS.maxWriteBytes) {
       return fail(tool, new Error(`content-too-large (${bytes} > ${WORK_TOOL_LIMITS.maxWriteBytes} bytes)`), relOf(baseDir, file));
     }
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, content, 'utf8');
+    /**
+     * **长文分段追加**（产品要求：一次写 5000+ 字要能真写完）。
+     * 一次 `write_file` 塞整篇长文时，小模型往往写到一半就截断（真机事故：
+     * 4B 模型一次写 5000 字 → 空回复 / 只落一个开头）。正确做法是业界通行的
+     * "分段写 + 追加"：第一段用 `append:false` 建文件，后续每次带 `append:true` 续写，
+     * 每次只写一段（几百到一千字），写完一段再写下一段。
+     */
+    const zhuiJia = (args as { append?: unknown }).append === true && fs.existsSync(file);
+    if (zhuiJia) fs.appendFileSync(file, content, 'utf8');
+    else fs.writeFileSync(file, content, 'utf8');
+    /**
+     * **写完自检**（真机事故：牛马说"写好了 6000 字小说《无声的齿轮》"，用户却找不到文件）。
+     * 成功响应必须：① 真的存在（`existsSync`）② 字节数与字符数都报 ③ **绝对路径**写清楚，
+     * 并明确要求模型把这条路径**原样告诉用户**（否则用户只能在工作区里翻）。
+     */
+    const cun = fs.existsSync(file);
+    let zongBytes = bytes;
+    let zongZi = [...content].length;
+    try {
+      const zhen = fs.readFileSync(file, 'utf8');
+      zongBytes = Buffer.byteLength(zhen, 'utf8');
+      zongZi = [...zhen].length;
+    } catch { /* 读不回来就只报本次的 */ }
     return {
-      ok: true,
-      // **报绝对路径**：否则模型看到「已写入 Desktop/…」会误以为写进了系统桌面
-      content: `已写入 ${file}（${bytes} 字节）`,
-      meta: { tool, ok: true, bytes, path: relOf(baseDir, file), abs: file },
+      ok: cun,
+      content: `${zhuiJia ? '已追加写入' : '已写入'} ${file}（本次 ${bytes} 字节 / ${[...content].length} 字符；文件当前共 ${zongBytes} 字节 / ${zongZi} 字符）${cun ? '，文件已自检存在' : '，⚠️ 自检未找到文件（异常）'}\n`
+        + `【请在给用户的最终回复里**原样引用这个绝对路径**】${file}`,
+      meta: { tool, ok: cun, bytes: zongBytes, chars: zongZi, path: relOf(baseDir, file), abs: file, exists: cun },
     };
   } catch (e) {
     return fail(tool, e);
@@ -383,6 +578,96 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
 }
 
 /** 建目录 */
+/**
+ * **看压缩包内部**（产品要求：内置一个可以查看压缩包内部文件的工具）。
+ *
+ * 只做两件事：列条目、读单个条目 —— **不落地解压**（避免 zip slip）。
+ * 条目名里的 `..`/绝对路径一律拒（见 zip-look.ts 的 `tiaoMuMingAnQuan`）。
+ */
+/**
+ * **按文件名在工作区里找**（真机：模型要 `list_archive D006.zip`，但那个 zip 不在工作区根，
+ * 于是 `not-found`、整步失败）。找不到就如实说找不到；找得到就用**真实位置**继续。
+ */
+function zhaoWenJianMing(baseDir: string, ming: string, ceng = 2): string | null {
+  const muBiao = String(ming || '').toLowerCase();
+  if (!muBiao) return null;
+  let souGuo = 0;
+  const sou = (dir: string, d: number): string | null => {
+    let tiao: fs.Dirent[] = [];
+    try { tiao = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+    for (const e of tiao) {
+      if (++souGuo > 400) return null;   // **上限**：工作区大时别把工具卡住（真机：一次调用耗了 10 分钟）
+      const p = path.join(dir, e.name);
+      if (e.isFile() && e.name.toLowerCase() === muBiao) return p;
+    }
+    if (d <= 0) return null;
+    for (const e of tiao) {
+      if (!e.isDirectory()) continue;
+      const hit = sou(path.join(dir, e.name), d - 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  return sou(baseDir, ceng);
+}
+
+export function workListArchive(baseDir: string, args: { path?: string }, kuaiQuan = false): WorkToolResult {
+  const tool = 'list_archive';
+  try {
+    let p = resolveInside(baseDir, args.path, kuaiQuan, 'read');
+    if (!fs.existsSync(p)) {
+      /** 找不到就按**文件名**在工作区里搜一层（模型常记错路径） */
+      const hit = zhaoWenJianMing(baseDir, path.basename(String(args.path || '')));
+      if (hit) p = hit;
+    }
+    if (!fs.existsSync(p)) return fail(tool, new Error(`not-found（工作区里没有「${String(args.path || '')}」；请先用 list_dir 看看工作区里有什么，或用正确路径）`), relOf(baseDir, p));
+    const zhi = fs.statSync(p);
+    if (!zhi.isFile()) return fail(tool, new Error('not-a-file'), relOf(baseDir, p));
+    const buf = fs.readFileSync(p);
+    const tiao = lieYaSuoBaoTiaoMu(buf);
+    const lu = relOf(baseDir, p);
+    if (!tiao.length) {
+      return { ok: true, content: '[list_archive] 压缩包里是空的。', meta: { tool, ok: true, bytes: buf.length, path: lu, entries: 0 } };
+    }
+    const hang = tiao.slice(0, 300).map((t) => {
+      const biao = t.isDirectory ? '（目录）' : `（${t.uncompressedSize} 字节）`;
+      return `· ${t.name}${biao}`;
+    }).join('\n');
+    const duo = tiao.length > 300 ? `\n…（共 ${tiao.length} 条，只列前 300）` : '';
+    return {
+      ok: true,
+      content: `[list_archive] ${path.basename(p)} 里共 ${tiao.length} 条：\n${hang}${duo}`,
+      meta: { tool, ok: true, bytes: buf.length, path: lu, entries: tiao.length },
+    };
+  } catch (e) { return fail(tool, e, String(args.path || '')); }
+}
+
+/** **读压缩包里的单个文件**（文本返回内容；二进制如实说明，不倒字节） */
+export function workReadArchiveEntry(baseDir: string, args: { path?: string; entry?: string; maxChars?: number }, kuaiQuan = false): WorkToolResult {
+  const tool = 'read_archive_entry';
+  try {
+    let p = resolveInside(baseDir, args.path, kuaiQuan, 'read');
+    if (!fs.existsSync(p)) {
+      const hit = zhaoWenJianMing(baseDir, path.basename(String(args.path || '')));
+      if (hit) p = hit;
+    }
+    const lu = relOf(baseDir, p);
+    const ming = String(args.entry || '').trim();
+    if (!ming) return fail(tool, new Error('need-entry（要给 entry：压缩包内的文件名，用 list_archive 查）'), lu);
+    if (!tiaoMuMingAnQuan(ming)) return fail(tool, new Error(`zip-slip（条目名不安全：${ming.slice(0, 80)}）`), lu);
+    if (!fs.existsSync(p)) return fail(tool, new Error('not-found'), lu);
+    const buf = duYaSuoBaoTiaoMu(fs.readFileSync(p), ming);
+    const shang = Math.max(200, Math.min(Number(args.maxChars) || 8000, 20000));
+    // 二进制判定：有 NUL 就当二进制，不倒内容
+    if (buf.includes(0)) {
+      return { ok: true, content: `[read_archive_entry] ${ming} 是二进制文件（${buf.length} 字节），只读文本，不倒二进制内容。`, meta: { tool, ok: true, bytes: buf.length, path: lu, entry: ming } };
+    }
+    const wen = buf.toString('utf8');
+    const jie = wen.length > shang ? wen.slice(0, shang) + `\n…（截断，全文 ${wen.length} 字符）` : wen;
+    return { ok: true, content: `[read_archive_entry] ${ming}（${buf.length} 字节）：\n${jie}`, meta: { tool, ok: true, bytes: buf.length, path: lu, entry: ming, truncated: wen.length > shang } };
+  } catch (e) { return fail(tool, e, String(args.path || '')); }
+}
+
 export function workMakeDir(baseDir: string, args: { path?: string }, kuaiQuan = false): WorkToolResult {
   const tool = 'make_dir';
   try {
@@ -592,7 +877,40 @@ export function jieXiGongJuCanShu(raw: unknown): { ok: boolean; args: Record<str
 }
 
 export function runWorkTool(baseDir: string, call: { function?: { name?: string; arguments?: unknown } }, kuaiQuan = false, gaoJiMuLu = ''): WorkToolResult {
-  const name = String((call && call.function && call.function.name) || '');
+  const name0 = String((call && call.function && call.function.name) || '');
+  /**
+   * **空参数工具调用**（真机：MiMo 偶发吐 name 但 arguments 为空 ⇒ write_file 落成 0 字节）。
+   * 如实报错并给出可执行示例，让模型下一轮带齐参数 —— 不要静默造空文件。
+   */
+  {
+    const raw0 = call && call.function ? call.function.arguments : undefined;
+    const parsed0 = jieXiGongJuCanShu(raw0);
+    const kong = !parsed0.args || Object.keys(parsed0.args).length === 0;
+    if (kong && !['get_time', 'list_dir', 'list_archive', 'list_subagents'].includes(String(parsed0.args && name0 || name0))) {
+      if (name0 === 'write_file') {
+        return fail('write_file', new Error('empty-args（工具参数为空：请重新调用并带上 path 与 content，例如 {\"path\":\"note.txt\",\"content\":\"正文\"}）'), '');
+      }
+    }
+  }
+  /**
+   * **工具名别名**（真机事故：模型调 `read_archive` 报 `unknown-tool`，于是"查看压缩包"这步
+   * 直接失败、任务完不成）。模型给工具起名常有偏差，这里做**宽容映射**，别让它因为一个
+   * 名字没对上就整步失败。映射不到才如实报 unknown-tool。
+   */
+  const BIE_MING: Record<string, string> = {
+    read_archive: 'read_archive_entry', read_zip: 'read_archive_entry', unzip_read: 'read_archive_entry',
+    extract_file: 'read_archive_entry', read_zip_entry: 'read_archive_entry', archive_read: 'read_archive_entry',
+    list_zip: 'list_archive', view_archive: 'list_archive', unzip_list: 'list_archive',
+    show_archive: 'list_archive', archive_list: 'list_archive', zip_list: 'list_archive',
+    create_file: 'write_file', save_file: 'write_file', write_text: 'write_file',
+    open_folder: 'open_path', reveal: 'open_path', show_in_folder: 'open_path',
+    list_files: 'list_dir', ls: 'list_dir', read_text: 'read_file',
+    find: 'find_files', glob: 'find_files', grep: 'search_files', search: 'search_files',
+    patch_file: 'edit_file', replace_in_file: 'edit_file',
+    cp: 'copy_file', copy: 'copy_file', mv: 'move_file', rename_file: 'move_file',
+    make_slides: 'make_pptx', make_doc: 'make_docx', make_sheet: 'make_xlsx',
+  };
+  const name = BIE_MING[name0] || name0;
   const rawArgs = call && call.function ? call.function.arguments : undefined;
   const jie = jieXiGongJuCanShu(rawArgs);
   if (!jie.ok) return fail(name || 'work', new Error(jie.error || 'bad-json-arguments'));
@@ -603,6 +921,19 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
   if (name === 'write_file' && !args.path) {
     args.path = 'output-' + Date.now() + '.txt';
   }
+  /**
+   * **空内容要拦**（真机事故：牛马生成了 txt/ppt，打开是**空文件**）。
+   * 审计里就是 `write_file … bytes:0` —— 模型只给了路径（或连路径都没给），
+   * 内容字段丢了/空了，于是落了一个 0 字节文件，用户看到"生成了但什么都没有"。
+   * 现在：内容为空**如实拒绝**，让模型补上内容再来（除非显式要建空文件）。
+   */
+  if (name === 'write_file') {
+    const nei = String((args as { content?: unknown }).content ?? '');
+    const yaoKong = (args as { allowEmpty?: unknown }).allowEmpty === true;
+    if (!nei.trim() && !yaoKong) {
+      return fail('write_file', new Error('empty-content（内容为空：真实产物不许是 0 字节空文件。请把正文放进 content 字段再调用；确实要建空文件请显式传 allowEmpty:true）'), String(args.path || ''));
+    }
+  }
   if (name === 'make_dir' && !args.path) args.path = 'new-folder';
   if (name === 'make_docx') args.path = buKuoZhanMing(String(args.path || 'document'), '.docx');
   if (name === 'make_pptx') args.path = buKuoZhanMing(String(args.path || 'slides'), '.pptx');
@@ -610,13 +941,20 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
   if (name === 'make_pdf') args.path = buKuoZhanMing(String(args.path || 'document'), '.pdf');
   switch (name) {
     case 'list_dir': return workListDir(baseDir, args as { path?: string }, kuaiQuan);
+    case 'find_files': return workFindFiles(baseDir, args as { pattern?: string; path?: string; maxResults?: number }, kuaiQuan);
+    case 'search_files': return workSearchFiles(baseDir, args as { query?: string; path?: string; pattern?: string; maxResults?: number; caseSensitive?: boolean }, kuaiQuan);
     case 'read_file': return workReadFile(baseDir, args as { path?: string; maxChars?: number }, kuaiQuan);
-    case 'write_file': return workWriteFile(baseDir, args as { path?: string; content?: string }, kuaiQuan);
+    case 'write_file': return workWriteFile(baseDir, args as { path?: string; content?: string; append?: boolean }, kuaiQuan);
+    case 'edit_file': return workEditFile(baseDir, args as { path?: string; oldText?: string; newText?: string; replaceAll?: boolean }, kuaiQuan);
+    case 'copy_file': return workCopyFile(baseDir, { path: String(args.path || args.source || ''), destination: String(args.destination || ''), overwrite: !!args.overwrite }, kuaiQuan);
+    case 'move_file': return workMoveFile(baseDir, { path: String(args.path || args.source || ''), destination: String(args.destination || ''), overwrite: !!args.overwrite }, kuaiQuan);
     case 'make_dir': return workMakeDir(baseDir, args as { path?: string }, kuaiQuan);
     case 'make_docx': return workMakeDocx(baseDir, args as { path?: string; paragraphs?: string[]; content?: string }, kuaiQuan);
     case 'make_pptx': return workMakePptx(baseDir, args as { path?: string; slides?: Array<{ title?: string; body?: string[] }> }, kuaiQuan, gaoJiMuLu);
     case 'make_xlsx': return workMakeXlsx(baseDir, args as { path?: string; sheets?: Array<{ name?: string; rows?: Array<Array<string | number>> }>; rows?: Array<Array<string | number>> }, kuaiQuan);
     case 'make_pdf': return workMakePdf(baseDir, args as { path?: string; paragraphs?: string[]; content?: string; title?: string; pageSize?: 'A4' | 'Letter' }, kuaiQuan);
+    case 'list_archive': return workListArchive(baseDir, args as { path?: string }, kuaiQuan);
+    case 'read_archive_entry': return workReadArchiveEntry(baseDir, args as { path?: string; entry?: string; maxChars?: number }, kuaiQuan);
     default: return fail(name || 'work', new Error('unknown-tool'));
   }
 }
@@ -631,10 +969,15 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'write_file',
-        description: '写入/覆盖一个文本文件（会自动建父目录）。默认写在**工作区**内（相对路径）。可直接写系统「桌面/文档/下载」：用 Desktop/xxx.txt、Documents/xxx.txt、~/Desktop/xxx.txt 这类路径（会映射到真实系统目录，需要用户授权；返回里会给绝对路径）。',
+        description: '写入/追加一个文本文件（会自动建父目录）。默认写在**工作区**内（相对路径）。可直接写系统「桌面/文档/下载」：用 Desktop/xxx.txt、Documents/xxx.txt、~/Desktop/xxx.txt 这类路径（会映射到真实系统目录，需要用户授权；返回里会给绝对路径）。**产出物必须在最终回复里原样给出返回的绝对路径**，否则用户找不到文件。'
+          + '**长文必须分段写**：要写超过 1500 字的长文时，不要在一次调用里塞整篇（会被截断、写不完）。正确做法：第 1 次 write_file 只写第 1 段（不带 append），之后每次调用都带 append:true 续写下一段，一段一段写到完结；每次返回里会告诉你文件当前总字数，可据此判断还需不需要再写。',
         parameters: {
           type: 'object',
-          properties: { path: { type: 'string', description: '【必填】文件路径字符串，例如 identity.txt 或 Desktop/identity.txt。不要省略本字段。' }, content: { type: 'string', description: '文件内容' } },
+          properties: {
+            path: { type: 'string', description: '【必填】文件路径字符串，例如 identity.txt 或 Desktop/identity.txt。不要省略本字段。' },
+            content: { type: 'string', description: '本次要写入的内容（分段写时就是这一段）' },
+            append: { type: 'boolean', description: 'true = 追加到该文件已有内容的末尾（长文分段续写用）；false/省略 = 覆盖整文件' },
+          },
           required: ['path', 'content'],
         },
       },
@@ -653,6 +996,74 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
         name: 'list_dir',
         description: '列出工作区某个目录下的文件与子目录（默认根目录）。',
         parameters: { type: 'object', properties: { path: { type: 'string', description: '相对路径，默认 .' } }, required: [] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'find_files',
+        description: '按 glob 模式递归查找工作区文件。默认跳过 node_modules 和 .git；结果有数量上限。',
+        parameters: { type: 'object', properties: { pattern: { type: 'string', description: '如 **/*.ts、docs/*.md' }, path: { type: 'string', description: '搜索根目录，默认 .' }, maxResults: { type: 'number' } }, required: ['pattern'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'search_files',
+        description: '在工作区文件内容中做正则搜索，返回 文件:行号:内容。跳过 node_modules/.git 和超过 2MB 的文件。',
+        parameters: { type: 'object', properties: { query: { type: 'string', description: '正则表达式' }, path: { type: 'string', description: '根目录，默认 .' }, pattern: { type: 'string', description: '文件 glob，默认 **/*' }, maxResults: { type: 'number' }, caseSensitive: { type: 'boolean' } }, required: ['query'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'edit_file',
+        description: '精确局部修改文本文件：把 oldText 替换为 newText。默认要求 oldText 唯一，避免误改；多处替换需显式 replaceAll:true。',
+        parameters: { type: 'object', properties: { path: { type: 'string' }, oldText: { type: 'string' }, newText: { type: 'string' }, replaceAll: { type: 'boolean' } }, required: ['path', 'oldText', 'newText'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'copy_file',
+        description: '在工作区内复制单个文件；目标已存在时拒绝覆盖。',
+        parameters: { type: 'object', properties: { source: { type: 'string' }, destination: { type: 'string' } }, required: ['source', 'destination'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'move_file',
+        description: '在工作区内移动或重命名单个文件；不允许逃出工作区。',
+        parameters: { type: 'object', properties: { source: { type: 'string' }, destination: { type: 'string' } }, required: ['source', 'destination'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'list_archive',
+        description: '**查看压缩包内部**（.zip）：列出里面有哪些文件/目录、各多大。要弄清一个压缩包里有什么，用这个，不要试图用 read_file 读 .zip 本身。',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string', description: '压缩包路径（工作区相对路径，如 data.zip）' } },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'read_archive_entry',
+        description: '读**压缩包里的单个文件**（先用 list_archive 查到条目名，再读）。只读文本；二进制会如实说明。不会解压到磁盘。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '压缩包路径' },
+            entry: { type: 'string', description: '压缩包内的条目名（与 list_archive 输出一致）' },
+            maxChars: { type: 'number', description: '最多返回多少字符（默认 8000）' },
+          },
+          required: ['path', 'entry'],
+        },
       },
     },
     {
@@ -772,7 +1183,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
  *      完全授权才允许任意本机路径（由调用方按 globalSecurity 判定，这里不判）。
  */
 export const HOST_TOOL_NAMES = [
-  'open_path', 'open_file', 'open_url', 'schedule_task', 'ask_user', 'plan_update', 'plan_verify',
+  'open_path', 'open_file', 'open_url', 'schedule_task', 'monitor_process', 'lsp_diagnostics', 'ask_user', 'plan_update', 'plan_verify',
   'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'download_file',
   'get_time', 'wait_seconds', 'read_profile',
 ] as const;
@@ -920,6 +1331,22 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
           },
           required: ['name', 'prompt'],
         },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'monitor_process',
+        description: '查看本机进程是否仍在运行以及 CPU/内存占用。只读，不结束进程。可按 pid 或名称筛选；适合长程任务做存活检查。',
+        parameters: { type: 'object', properties: { pid: { type: 'number' }, name: { type: 'string' } }, required: [] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'lsp_diagnostics',
+        description: '获取项目代码诊断。优先调用项目配置的 LSP/类型检查器；找不到语言服务器时回退到 TypeScript tsc --noEmit 或常见编译检查。只读源码。',
+        parameters: { type: 'object', properties: { path: { type: 'string', description: '项目目录或文件路径，默认工作区' }, language: { type: 'string', description: 'typescript/javascript/python/rust/go（可选）' }, timeoutMs: { type: 'number' } }, required: [] },
       },
     },
     {

@@ -44,6 +44,9 @@ export interface LogEntry {
    * 只给界面画成图标行（悬停全路径、左键打开、右键定位），不进模型上下文。
    */
   artifacts?: Array<{ name?: string; path?: string; abs?: string; bytes?: number; ts?: number }>;
+  /** 本轮词元（输入/输出）——界面时间行旁显示；不进模型上下文 */
+  promptTokens?: number;
+  completionTokens?: number;
   /**
    * **内部指令**（自动续派的「继续执行计划」等）：**进模型上下文，但不出现在聊天记录里**。
    * 真事故：用户看到聊天里冒出一段自己没说过的话。
@@ -493,18 +496,37 @@ export function xuanranYoujieShitu(entries: LogEntry[], opts: XuanranXuanxiang):
    *
    * 规则：只要日志里有内容，视图**至少**要把最后一条真实消息带给模型
    * （截断到预算内），宁可少给、不可不给。指针只是补充，不能当唯一内容。
+   *
+   * **预算的先后顺序**（本轮修「budgetChars=200 时指针被截成半根」）：
+   * 截断后的指针**不可执行**（`seq 1..30` 谁都解不了引用），所以先把
+   * 「极简但完整」的指针字数**预留**出来，剩下的才给真实消息；
+   * 只有连完整指针都放不下时，才退回"塞一条真实消息进去、指针如实记 0"。
    */
   if (log.length > 0) {
     const zhenShi = xiaoXiJi.filter((m) => m.role === 'user' || m.role === 'assistant');
     if (zhenShi.length === 0) {
       const zuiHou = log[n - 1]!;
-      const rong = budgetChars >= 40 ? jieWeiAnQuan(String(zuiHou.content || ''), Math.min(budgetChars - 20, 2000)) : String(zuiHou.content || '').slice(0, 20);
-      if (rong) {
+      const zuiHouJiaoSe = String(zuiHou.role || 'user');
+      const zuiHouNei = String(zuiHou.content || '');
+      /** 极简指针：带全三种可执行线索、不含要点正文 */
+      const zhen = elided.length ? zhizhenQianzhui('min', elided, tiShi, logBytes) : '';
+      if (zhen && zhen.length + 1 <= budgetChars && zuiHouNei) {
+        const rong = jieWeiAnQuan(zuiHouNei, budgetChars - zhen.length);
         xiaoXiJi = [
-          { role: String(zuiHou.role || 'user'), content: rong },
-          ...xiaoXiJi,
-        ].slice(0, 4);
+          { role: zuiHouJiaoSe, content: rong },
+          { role: 'system', content: zhen },
+        ];
         viewBytes = countChars(xiaoXiJi);
+        pointers = elided.length; // 指针一根线索都没掉 ⇒ 如实记为可执行
+      } else {
+        const rong = budgetChars >= 40 ? jieWeiAnQuan(zuiHouNei, Math.min(budgetChars - 20, 2000)) : zuiHouNei.slice(0, 20);
+        if (rong) {
+          xiaoXiJi = [
+            { role: zuiHouJiaoSe, content: rong },
+            ...xiaoXiJi,
+          ].slice(0, 4);
+          viewBytes = countChars(xiaoXiJi);
+        }
       }
     }
   }

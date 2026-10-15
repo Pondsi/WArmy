@@ -111,16 +111,38 @@ export interface AsrChatQingQiu {
   format?: AudioGeShi;
   /** 可选的提示（有些实现支持） */
   prompt?: string;
+  /** **语言**（ISO-639-1，如 zh / en）：中文语音被识别成英文就是缺它 */
+  language?: string;
+  /**
+   * 是否把语言提示写成前置文本块（默认 false）。
+   * 实测 MiMo：`input_audio` 旁边塞文本会让转写变空 ⇒ 只在"纯音频转不出来"的重试里打开。
+   */
+  daiYuYanTiShi?: boolean;
 }
 
 /** 造"chat 式 ASR"的请求体（input_audio 内容块） */
 export function taoAsrChatBody(q: AsrChatQingQiu): Record<string, unknown> {
   const fmt = String(q.format || 'wav');
-  const content: Array<Record<string, unknown>> = [];
-  const prompt = String(q.prompt || '').trim();
-  if (prompt) content.push({ type: 'text', text: prompt });
-  content.push({ type: 'input_audio', input_audio: { data: String(q.dataBase64 ?? ''), format: fmt } });
-  return { model: String(q.model || 'whisper-1'), messages: [{ role: 'user', content }] };
+  /**
+   * **实测约束（MiMo token-plan，2026-10-13）**：
+   *   · `content` 里**不许有文本块** —— 端点回 `400 Param Incorrect: ASR request must not
+   *     include text parts; text prompt is injected by the gateway`（这正是"识别成英文/转不出字"
+   *     与上一版"塞文本提示导致转写为空"的根因）；
+   *   · **可用**的语言载体：顶层 `language` / `input_audio.language` / 顶层 `prompt` / system 消息。
+   * 这里统一用 **顶层 `language` + `input_audio.language`** 双写（不同网关认的字段不同），
+   * 内容数组里只放音频。
+   */
+  const yu = String(q.language || '').trim().toLowerCase();
+  const audio: Record<string, unknown> = { data: String(q.dataBase64 ?? ''), format: fmt };
+  if (yu) audio['language'] = yu;
+  const body: Record<string, unknown> = {
+    model: String(q.model || 'whisper-1'),
+    messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: audio }] }],
+  };
+  if (yu) body['language'] = yu;
+  /** 顶层 prompt 也认（有的网关拿它当上下文提示）；只在显式给了 prompt 时带上 */
+  if (String(q.prompt || '').trim()) body['prompt'] = String(q.prompt).trim();
+  return body;
 }
 
 /** 解析 chat 式 ASR 的响应体 */

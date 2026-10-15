@@ -157,6 +157,11 @@ export interface YingYongPeizhi {
   yuYan: string;
   themeMode: 'light' | 'dark' | 'system';
   accent: string;
+  /**
+   * **字体颜色**（产品要求：主题色下面再给一个字体颜色，第一格自定义 + 后面预设色圈）。
+   * 默认就是现在的正文黑 `#191919`；空串/缺省 = 跟随主题（不改 `--ink`）。
+   */
+  ink?: string;
   sound: { complete: boolean; request: boolean; error: boolean };
   soundFiles: { complete: string; request: string; error: string };
   emailOnRequest: boolean;
@@ -167,6 +172,24 @@ export interface YingYongPeizhi {
   askOnExceed?: boolean;
   /** 最多 10 个 SMTP 账号 */
   smtpAccounts: SmtpZhanghao[];
+  /**
+   * **语音识别（ASR）开关**（产品要求：在"允许接收系统/应用的声音"后面加一项）。
+   * 关掉 = 不再调用任何 ASR 模型（如实告诉用户"语音识别已关闭"，而不是假装转不出字）。
+   */
+  asrEnabled?: boolean;
+  /**
+   * **识别语言**（ISO-639-1）。默认 `'auto'` = **不传语言参数**，由模型自行判断；
+   * 其它值（`zh`/`en`/`yue`…，见渲染层的 ASR_YU_YAN 全表）= 把语言参数显式带给模型。
+   */
+  asrLang?: string;
+  /** Deepgram/AssemblyAI 外部 ASR（密钥存 SecureKeyStore，这里只存选择与端点） */
+  asrCloudProvider?: 'none' | 'deepgram' | 'assemblyai';
+  asrCloudModel?: string;
+  /**
+   * 受信任文件夹：只对**读取**放行；写入与执行仍按全局安全档位审批。
+   * 父目录信任自动覆盖子目录（与 VS Code Workspace Trust 同一口径）。
+   */
+  trustedFolders?: string[];
   /**
    * Skill auto-discovery directories (absolute paths). Persisted through the
    * existing settings channel — no separate storage file.
@@ -198,6 +221,12 @@ export interface YingYongPeizhi {
   privacyConsent?: boolean;
   /** 聊天自动滚动到最新（默认关） */
   autoScrollChat?: boolean;
+  /**
+   * **回复内容加强**（默认关）：允许牛马按内容性质自选表达方式 ——
+   * 纯文字 / SVG 示意图 / 图表 / 可交互页面 / 语音讲解。
+   * 开启后更慢、更费 token，所以必须由用户显式勾选。
+   */
+  enhanceReply?: boolean;
   /**
    * 会话上下文注入总预算（百分比，相对所选模型的上下文窗口）。
    * 10..90，默认 60（留余地）。群聊不暴露该设置，由后台自动收敛。
@@ -435,7 +464,7 @@ export class BenDiZhangHuCang {
  * 其余功能设置仍写 `settings.json`。老配置里的这些键会在第一次保存时迁过来。
  */
 export const APPEARANCE_KEYS = [
-  'themeMode', 'accent', 'wenZi', 'listWidth', 'panelWidth', 'autoScrollChat',
+  'themeMode', 'accent', 'ink', 'wenZi', 'listWidth', 'panelWidth', 'autoScrollChat',
 ] as const;
 
 export class PeizhiCang {
@@ -503,6 +532,8 @@ function defaults(): YingYongPeizhi {
     yuYan: 'zh-CN',
     themeMode: 'system',
     accent: '#A87654',
+    /** 字体颜色默认 = 现在的正文黑（浅色主题下的 `--ink`），用户可改 */
+    ink: '#191919',
     sound: { complete: true, request: true, error: true },
     soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,
@@ -511,6 +542,12 @@ function defaults(): YingYongPeizhi {
     panelWidth: 300,
     globalSecurity: 'normal',
     askOnExceed: true,
+    /** 语音识别默认开；语言默认「自动」（不传语言参数，让模型判断） */
+    asrEnabled: true,
+    asrLang: 'auto',
+    asrCloudProvider: 'none',
+    asrCloudModel: '',
+    trustedFolders: [],
     smtpAccounts: [],
     skillScanDirs: [],
     pluginScanDirs: [],

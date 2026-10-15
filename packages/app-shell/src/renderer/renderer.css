@@ -113,6 +113,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   -webkit-app-region: drag;
   flex-shrink: 0;
 }
+/**
+ * 「手动添加模型」的模态遮罩。
+ *
+ * 产品要求：弹窗开着时主界面其他按钮**一个都不能点**，但主界面**仍要能拖动**。
+ * 所以它从标题栏下沿（40px）开始盖 —— 标题栏那一条不被遮住，
+ * 它的 `-webkit-app-region: drag` 继续生效，窗口还能拖着走。
+ */
+.shouDongMoXingZhe {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 40px;
+  bottom: 0;
+  z-index: 12000;
+  background: rgba(0, 0, 0, 0.28);
+  -webkit-app-region: no-drag;
+}
 .biaoTiLanTuoZhuai {
   display: flex;
   align-items: center;
@@ -401,7 +418,14 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 .xiaoXi.wo { justify-content: flex-start; }
 .xiaoXi.wo .bubble { text-align: left; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
 .xiaoXi.wo .bubbleWrap { align-items: flex-end; }
-[data-theme="dark"] .xiaoXi.wo .bubble { color: #e8ffe8; }
+/**
+ * 深色下我方气泡的文字色。
+ *
+ * ⚠️ 原来写死 `#e8ffe8` ⇒ 用户在设置里改「字体颜色」对**自己发的消息**完全无效
+ * （任务14：字体颜色全局生效）。现在走 `--me-bubble-ink`，
+ * 由主题变量提供深色默认值，用户设了 ink 就跟着变。
+ */
+[data-theme="dark"] .xiaoXi.wo .bubble { color: var(--me-bubble-ink, var(--ink)); }
 .shiJianFenGe {
   display: flex; align-items: center; justify-content: center;
   margin: 10px 0 12px; font-size: var(--fs-xs); color: var(--muted);
@@ -1402,6 +1426,12 @@ body.liaoTianChuangKou #appTi:not(.yinCangLieBiao) {
   left: 50%; right: auto; transform: translateX(-50%);
   bottom: 192px;
   max-width: 70%;
+  z-index: 30; /* 低于决策卡（.aiqKa z-index:50），避免挡住选项 */
+}
+/* 决策卡必须在上层（产品：不要被新消息提示气泡挡住） */
+.aiqKa, .aiqWrap, #aiqQuYu, .shouQuanKa {
+  position: relative;
+  z-index: 50;
 }
 
 /* ── 上下文预算：滑块弹层 ── */
@@ -2300,15 +2330,30 @@ html { font-weight: var(--fw-ui, 400); }
 .qZhengWen { font-size: var(--fs-base); width: 100%; display: flex; flex-direction: column; gap: 4px; }
 .qWenBen { white-space: pre-wrap; width: 100%; }
 
-/* 计划任务（任务树）：步骤可见、状态一目了然 */
-.jiHuaBu { margin: 6px 0; padding-left: 8px; border-left: 2px solid var(--line); }
+/**
+ * 计划任务（任务树）的状态竖条。
+ *
+ * ⚠️ **这一组必须和 app.css 里的同名规则保持一致**：index.html 先加载 app.css、
+ * 再加载 renderer.css ⇒ **这里的规则会盖掉 app.css**。
+ * 真机事故：app.css 早就按产品要求改好了（未完成=强调色、完成=无条、受阻=删除线），
+ * 但这里还留着旧的一套（done 绿条、blocked 红条、doing 黄条），
+ * 于是用户反馈「让你做过、说做好了，但我没有看到效果」——
+ * 看到的一直是这份后加载的旧规则。
+ *
+ * 产品定稿：
+ *   · pending / doing（未完成、进行中）⇒ **强调色竖条**
+ *   · done / verified（已完成）        ⇒ **不显示任何颜色的竖条**
+ *   · blocked（没完成且不再进行）      ⇒ 无色竖条 + **删除线**
+ */
+.jiHuaBu { margin: 6px 0; padding-left: 8px; border-left: 2px solid transparent; }
 .jiHuaId { font-size: var(--fs-xs); font-weight: 600; color: var(--accent); margin-right: 6px; }
 .jiHuaMing { font-size: var(--fs-sm); }
 .jiHuaZhuangTai { float: right; font-size: var(--fs-xs); opacity: .75; }
-.jiHuaBu[data-st="done"] { border-left-color: var(--ok-fg, #6fd18f); }
-.jiHuaBu[data-st="verified"] { border-left-color: var(--accent); }
-.jiHuaBu[data-st="blocked"] { border-left-color: var(--danger, #e06060); }
-.jiHuaBu[data-st="doing"] { border-left-color: var(--warn-fg, #e8c07a); }
+.jiHuaBu[data-st="pending"] { border-left-color: var(--accent); }
+.jiHuaBu[data-st="doing"] { border-left-color: var(--accent); }
+.jiHuaBu[data-st="done"] { border-left-color: transparent; }
+.jiHuaBu[data-st="verified"] { border-left-color: transparent; }
+.jiHuaBu[data-st="blocked"] { border-left-color: transparent; text-decoration: line-through; opacity: .72; }
 
 /* 消息悬停复制按钮 */
 .xiaoXiFuZhi {

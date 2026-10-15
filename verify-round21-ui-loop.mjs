@@ -1,0 +1,22 @@
+/** 第21轮：功能设置 UI + 循环决策卡门禁 */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = path.dirname(fileURLToPath(import.meta.url));
+const app = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.js'), 'utf8');
+const main = fs.readFileSync(path.join(root, 'packages/app-shell/src/electron-main.ts'), 'utf8');
+const pre = fs.readFileSync(path.join(root, 'packages/app-shell/src/preload.cjs'), 'utf8');
+let fail = 0;
+const ok=(x,m)=>{console.log((x?'PASS ':'FAIL ')+m);if(!x)fail++;};
+for(const id of ['asrYunTiGongShang','asrYunMoXing','asrYunMiYao','asrYunBaoCun','asrYunZhuangTai','xinRenWenJianJiaJi','xinRenWenJianJiaTianJia']) ok(app.includes(`id=\"${id}\"`),`设置→功能存在 #${id}`);
+ok(app.includes('(async function bindAsrLang()'), 'ASR绑定允许await');
+ok(app.includes("$('xinRenWenJianJiaTianJia')"), 'trusted folder添加按钮ID与处理器一致');
+ok(pre.includes('asrCloudGet')&&pre.includes('asrCloudSave'),'云ASR preload IPC');
+ok(pre.includes('trustedFoldersList')&&pre.includes('trustedFolderAdd')&&pre.includes('trustedFolderRemove'),'trusted folders preload IPC');
+ok(main.includes("'warmy:asrYunPeiZhi'")&&main.includes("'warmy:asrYunBaoCun'"),'云ASR主进程IPC');
+ok(main.includes("'warmy:shouXinMuLuLieBiao'")&&main.includes("'warmy:shouXinMuLuTianJia'")&&main.includes("'warmy:shouXinMuLuShanChu'"),'trusted folders主进程IPC');
+ok(main.includes('牛马连续两轮没有推进，需要你选择下一步'),'连续两轮无进展决策卡');
+ok(main.includes('检测到重复循环，需要你选择下一步'),'重复循环决策卡');
+ok(main.includes('换一种方法继续')&&main.includes('我补充要求或修改计划')&&main.includes('停止任务'),'决策卡提供完整选项');
+ok(main.includes("timeoutMs = 24 * 60 * 60 * 1000"),'决策卡默认等待24小时');
+console.log(`round21 UI/loop gate: ${fail?'FAIL':'PASS'} (${fail})`);process.exit(fail?1:0);

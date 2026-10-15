@@ -68,6 +68,14 @@ export interface XietiaoqiYilai {
   toolSpecs?: () => GongJuGuiGe[] | undefined;
   runTool?: (call: GongJuDiaoYong, ctx: { round: number; zuiDaJieGuoZiShu: number }) => Promise<string> | string;
   toolLimits?: () => { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalChars: number };
+  /**
+   * **执行者的干活工具**（write_file / open_path / run_shell / make_pptx …）。
+   * 与 `toolSpecs`（值班者的记忆工具）分开：值班者负责编排，执行者负责真的动手。
+   * 不给就退回"只说不做"的纯对话。
+   */
+  executorTools?: () => GongJuGuiGe[] | undefined;
+  /** 某个执行者牛马自己的模型与人格（没配就跟值班者同一套） */
+  executorConfig?: (instanceId: string) => { model?: string; persona?: string } | undefined;
   /** 项目 MEMORY（有界片段）；来自 group-store.project.memory，不来自 memory-os 流水 */
   projectMemory?: (groupId: string) => string;
   /** AI 求助选项卡的上下文片段 */
@@ -95,6 +103,22 @@ export async function xietiaoQunXiaoxi(
   xiaoXi: { groupId: string; userId?: string; content: string; urgency?: 'P0'|'P1'|'P2'|'P3'; mentionIds?: string[] }
 ): Promise<XietiaoJieguo> {
   const urgency = xiaoXi.urgency || 'P2';
+  /**
+   * **派活前先把成员状态同步成真实状态**（第 20 轮修）。
+   *
+   * 真机缺陷：`router.setStatus` 全仓**零调用** —— 成员 status 只在入群那一刻写死。
+   * 后果有两个，都会让"多牛马协同"用不起来：
+   *   ① 入群时还没 running 的牛马被钉成 `offline`，之后即使起来了也永远回不到 `idle`，
+   *      `selectDuty` 永久排除它 ⇒ 最坏情况全群无人可值班，消息只排队不回复；
+   *   ② 值班者干活时不转 busy、干完不转回 idle ⇒ "忙则顺延 +1" 永不生效。
+   * 现在每次派活前按 `listInstances()` 的真实 status 刷新一遍：
+   * running ⇒ idle（可被选中），其余 ⇒ offline。
+   */
+  try {
+    for (const it of deps.listInstances()) {
+      deps.router.setStatus(xiaoXi.groupId, it.id, it.status === 'running' ? 'idle' : 'offline');
+    }
+  } catch { /* 同步失败就按既有状态选，不拖垮本轮 */ }
   const route = deps.router.route({
     groupId: xiaoXi.groupId,
     userId: xiaoXi.userId || 'local-user',
@@ -124,6 +148,13 @@ export async function xietiaoQunXiaoxi(
   const duty = route.duty;
   const zhiXingQiJi = (route.decision?.executorIds || []).filter((id) => id !== duty.id);
   const queueLen = deps.router.listQueue(xiaoXi.groupId).length;
+  /**
+   * 值班者 + 执行者**干活期间标 busy**：下一条消息进来时 `selectDuty` 才会顺延到别的空闲牛马，
+   * 而不是永远落在序号最小那只身上。结束时（含出错）在 `finally` 里统一放回 idle。
+   */
+  const mangLu = [duty.id, ...zhiXingQiJi];
+  for (const id of mangLu) { try { deps.router.setStatus(xiaoXi.groupId, id, 'busy'); } catch { /* noop */ } }
+  try {
 
   // 状态卡片：有日志时以日志为准（不变量 #5：日志是唯一事实来源），否则退回历史镜像
   const logEntries: LogEntry[] | null = deps.logOf ? deps.logOf(xiaoXi.groupId) : null;
@@ -184,11 +215,44 @@ export async function xietiaoQunXiaoxi(
   if (cfg.apiKey || cfg.protocol === 'ollama' || cfg.presetId === 'ollama' || String(cfg.presetId || '').startsWith('ollama-')) {
     // 执行者（短命）
     if (zhiXingQiJi.length) {
-      const r = await yunxingDuanCunhuoZhixingqi(
-        { taskId: 't-' + Date.now(), brief, contextItems },
-        cfg
-      );
-      distilled = r.distilled;
+      /**
+       * **逐个派给真实的牛马**（第 20 轮修）。
+       *
+       * 真机缺陷：以前不管挑中几个执行者，这里都只发**一次**请求、且用全局 providerCfg ——
+       * `zhiXingQiJi` 只被拿去取名字做状态卡片，从未真正路由到那些牛马实例。
+       * 结果"多牛马协同"在模型侧退化成"同一个模型多答一句"：
+       * 没有各自的人格、没有各自的模型、没有工具。
+       *
+       * 现在：每个执行者带**自己的身份（名字+人格）与模型**，并拿到**和单聊一样的干活工具**；
+       * 多个执行者并发跑，各自回传蒸馏结论，由值班者汇总后回群。
+       */
+      const chengYuan = deps.listInstances();
+      const jieGuoJi = await Promise.all(zhiXingQiJi.map(async (zxId, xu) => {
+        const inst = chengYuan.find((x) => x.id === zxId);
+        const ming = inst?.ming || zxId;
+        const geRen = deps.executorConfig?.(zxId);
+        const benCfg = { ...cfg, ...(geRen?.model ? { model: geRen.model } : {}) };
+        const r = await yunxingDuanCunhuoZhixingqi({
+          taskId: 't-' + Date.now() + '-' + xu,
+          brief,
+          contextItems,
+          shenFen: { id: zxId, ming, persona: geRen?.persona },
+          tools: deps.executorTools?.(),
+          runTool: deps.runTool,
+          toolLimits: deps.toolLimits?.(),
+        }, benCfg);
+        return { zxId, ming, wen: String(r.distilled || '').trim(), cuo: r.error || '' };
+      }));
+      const youXiao = jieGuoJi.filter((x) => x.wen);
+      /** 单个执行者就直接用它的结论；多个则按牛马署名汇总（谁做的要看得见） */
+      distilled = youXiao.length === 1
+        ? youXiao[0]!.wen
+        : youXiao.map((x) => `【${x.ming}】${x.wen}`).join('\n\n');
+      /** 全都失败也要如实说，不能静默返回空回复 */
+      if (!distilled) {
+        const cuoJi = jieGuoJi.map((x) => `${x.ming}：${x.cuo || '无输出'}`).join('；');
+        distilled = `（派出的执行者都没有产出结果 —— ${cuoJi}）`;
+      }
     } else {
       // 无空闲执行者 → 值班者自己（带卡片）
       const { congYuSheChuangJian } = await import('@warmy/providers');
@@ -317,6 +381,19 @@ export async function xietiaoQunXiaoxi(
     queueLength: deps.router.listQueue(xiaoXi.groupId).length,
     usage,
   };
+  } finally {
+    /**
+     * **无论成功、排队还是抛错，都要把 busy 放回 idle**。
+     * 漏放一次，这只牛马之后就再也不会被 `selectDuty` 选中（真机表现：项目忽然没人回话）。
+     * 只放回那些**当前仍在运行**的实例；已经停掉的交给下一轮的真实状态同步去判。
+     */
+    try {
+      const huo = new Set(deps.listInstances().filter((x) => x.status === 'running').map((x) => x.id));
+      for (const id of mangLu) {
+        if (huo.has(id)) deps.router.setStatus(xiaoXi.groupId, id, 'idle');
+      }
+    } catch { /* noop */ }
+  }
 }
 
 /** 队列冲刷用的一轮：与主路径同一套卡片/工具预算，但不再递归冲刷自己的队列 */

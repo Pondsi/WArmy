@@ -988,6 +988,78 @@ export class Gengxinqi {
     return out;
   }
 
+  // ── 安装（本轮补齐：只装**校验过**的包） ──
+
+  /**
+   * **安装已下载的更新包**。
+   *
+   * 以前这一步整块未做（`installImplemented:false`），用户只能下载完自己去找文件。
+   *
+   * 安全口径（供应链）：
+   *   1. 只认 `readState().lastDownload` 里 `status==='downloaded' && yiYanZheng` 的那份；
+   *   2. **启动前重算一次 SHA-256**，与当初校验过的值比对 —— 下载完到点击安装之间
+   *      文件可能被替换（TOCTOU），不重算等于白校验；
+   *   3. 只允许本平台的安装包扩展名（Windows `.exe`/`.msi`，macOS `.dmg`/`.pkg`，Linux
+   *      `.AppImage`/`.deb`/`.rpm`），别的一律拒绝 —— 不给"随便执行一个文件"的通路；
+   *   4. 文件必须仍在我们自己的下载目录内（防路径穿越）。
+   * 任何一条不过就如实拒绝，不"尽力一试"。
+   */
+  async install(): Promise<{
+    ok: boolean;
+    status: 'installing' | 'no-artifact' | 'not-verified' | 'checksum-changed' | 'unsupported-artifact' | 'io-error';
+    message: string;
+    i18nKey: string;
+    filePath?: string;
+    version?: string;
+  }> {
+    const st = this.readState();
+    const dl = st.lastDownload;
+    if (!dl || dl.status !== 'downloaded' || !dl.filePath) {
+      return { ok: false, status: 'no-artifact', i18nKey: 'update.install.noArtifact',
+        message: 'no downloaded artifact: run download first' };
+    }
+    if (!dl.yiYanZheng || !dl.sha256) {
+      return { ok: false, status: 'not-verified', i18nKey: 'update.install.notVerified',
+        message: 'refuse to install an unverified artifact' };
+    }
+    const abs = path.resolve(String(dl.filePath));
+    const root = path.resolve(this.downloadDir) + path.sep;
+    if (!abs.startsWith(root) || !fs.existsSync(abs)) {
+      return { ok: false, status: 'no-artifact', i18nKey: 'update.install.noArtifact',
+        message: 'artifact missing or outside the download directory' };
+    }
+    /** 只允许本平台的安装包类型 */
+    const kuoZhan = path.extname(abs).toLowerCase();
+    const yunXu = process.platform === 'win32' ? ['.exe', '.msi']
+      : process.platform === 'darwin' ? ['.dmg', '.pkg']
+      : ['.appimage', '.deb', '.rpm'];
+    if (!yunXu.includes(kuoZhan)) {
+      return { ok: false, status: 'unsupported-artifact', i18nKey: 'update.install.unsupported',
+        message: `artifact type ${kuoZhan || '(none)'} is not an installer for ${process.platform}`,
+        filePath: abs };
+    }
+    /** TOCTOU：**执行前再算一次哈希** */
+    let xianZai = '';
+    try {
+      const h = crypto.createHash('sha256');
+      h.update(fs.readFileSync(abs));
+      xianZai = h.digest('hex').toLowerCase();
+    } catch {
+      return { ok: false, status: 'io-error', i18nKey: 'update.install.ioError',
+        message: 'cannot read artifact for re-verification', filePath: abs };
+    }
+    if (xianZai !== String(dl.sha256).toLowerCase()) {
+      this.log(`update install refused: sha256 changed after download (${abs})`);
+      return { ok: false, status: 'checksum-changed', i18nKey: 'update.install.checksumChanged',
+        message: 'artifact changed on disk after verification; refusing to run it', filePath: abs };
+    }
+    return {
+      ok: true, status: 'installing', i18nKey: 'update.install.launching',
+      message: 'installer verified; launching', filePath: abs,
+      ...(dl.version ? { version: dl.version } : {}),
+    };
+  }
+
   // ── 状态文件（诊断用，落盘失败不影响主流程） ──
 
   readState(): LuopanZhuangtai {

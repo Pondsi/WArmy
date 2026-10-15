@@ -6,6 +6,11 @@
 #   ERR_PNPM_BAD_PM_VERSION (Multiple versions of pnpm specified)
 # ⇒ **不要**在这里传 version，让 action 读 packageManager 字段（单一来源）。
 name: ci
+
+# 最小权限：默认只读仓库；任何需要写权限的 job 必须逐项显式申请。
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
