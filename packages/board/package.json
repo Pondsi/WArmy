@@ -20,6 +20,6 @@
     "@warmy/contracts": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "24.9.0"
+    "@types/node": "26.6.5"
   }
 }
