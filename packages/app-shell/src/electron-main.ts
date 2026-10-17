@@ -865,6 +865,142 @@ function qingChongXieJiLu(sid?: string): void {
 }
 
 /**
+ * **富元数据 + 执行过程的落盘**（第 38 轮 项 2 / 项 8）。
+ *
+ * 真机反馈：牛马跑到一半程序被关（崩/手动退出/断电），重新打开后
+ * ① 只剩用户那句话，**思考内容、工具操作、中间回复全部消失**；
+ * ② 回复下面那一行（用的什么模型 / 耗时 / 词元）也没有了；
+ * ③ 也没有"检测到异常中断 ⇒ 继续/重试"的按钮。
+ *
+ * 根因是**存的东西不够**，不是渲染的锅：
+ *  · 会话正文有唯一事实源（记忆服务 JSONL），但行形状只有 `{seq, role, ti, ts}`；
+ *  · `reasoning / moXing / promptTokens / completionTokens / turnCount / artifacts` 只在内存里的 `chatLogs` 上；
+ *  · 「执行过程」台账 `xingDongTai` 干脆是**渲染层内存 Map**，主进程只在工具跑的瞬间广播一次。
+ * ⇒ 重启后按 JSONL 重建，只能回 4 个字段，其余结构性丢失。
+ *
+ * 做法：**不动"JSONL 是唯一事实源"这条不变量**（`verify-history-persist` 逐字节比对注入内容，
+ * 改行形状风险极大），而是另存一份**旁路元数据** `userData/chat-meta.json`：
+ * 按 `会话 + (角色,时间戳)` 记富字段，按会话记执行过程明细；
+ * 启动重建完日志后**合并回去** ⇒ 界面上看起来"什么都没丢"。
+ * 有上限（每会话 400 条消息 / 200 条操作、最多 40 个会话），超了丢最旧 —— 这是缓存不是档案，
+ * 正文永远以 JSONL 为准，所以这份文件删了也只是丢掉重启前的思考/台账显示，不会丢对话。
+ */
+type ChatMetaXiaoXi = { ts: number; role: string; reasoning?: string; reasoningDuan?: Array<{ ts: number; text: string }>; moXing?: string; moXingJiangJi?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; artifacts?: unknown[]; zhengWen?: number };
+type ChatMetaXingDong = { hao: string; tool: string; detail?: string; phase: string; ok?: boolean; ms?: number; chars?: number; ts: number };
+type ChatMetaHuiHua = { msgs: ChatMetaXiaoXi[]; xingDong: ChatMetaXingDong[] };
+const chatMetaBen = new Map<string, ChatMetaHuiHua>();
+const META_XIAO_SHANG = 400, META_CAO_ZUO_SHANG = 200, META_HUI_HUA_SHANG = 40;
+function chatMetaWenJian(): string {
+  try { return path.join(app.getPath('userData'), 'chat-meta.json'); } catch { return ''; }
+}
+function duChatMeta(): void {
+  const f = chatMetaWenJian();
+  if (!f) return;
+  try {
+    const j = JSON.parse(fs.readFileSync(f, 'utf8')) as { sessions?: Record<string, ChatMetaHuiHua> };
+    chatMetaBen.clear();
+    for (const [k, v] of Object.entries(j?.sessions || {})) {
+      if (!v || typeof v !== 'object') continue;
+      chatMetaBen.set(k, { msgs: Array.isArray(v.msgs) ? v.msgs : [], xingDong: Array.isArray(v.xingDong) ? v.xingDong : [] });
+    }
+    try { audit?.log('chat.meta.loaded', { huiHua: chatMetaBen.size, xiaoxi: [...chatMetaBen.values()].reduce((a, b) => a + b.msgs.length, 0), caozuo: [...chatMetaBen.values()].reduce((a, b) => a + b.xingDong.length, 0) }); } catch { /* noop */ }
+  } catch { /* 没有/坏了都当空表，正文不依赖它 */ }
+}
+let metaCunJiShi: NodeJS.Timeout | null = null;
+function xieChatMeta(): void {
+  const f = chatMetaWenJian();
+  if (!f) return;
+  if (metaCunJiShi) return;
+  metaCunJiShi = setTimeout(() => {
+    metaCunJiShi = null;
+    try {
+      while (chatMetaBen.size > META_HUI_HUA_SHANG) {
+        const zao = chatMetaBen.keys().next().value as string | undefined;
+        if (!zao) break;
+        chatMetaBen.delete(zao);
+      }
+      anQuanYuanZiXieJson(f, { version: 1, savedAt: Date.now(), sessions: Object.fromEntries(chatMetaBen) });
+    } catch { /* 旁路写失败不影响对话 */ }
+  }, 800);
+  try { if (metaCunJiShi.unref) metaCunJiShi.unref(); } catch { /* noop */ }
+}
+function quMetaHuiHua(sid: string): ChatMetaHuiHua {
+  let h = chatMetaBen.get(sid);
+  if (!h) { h = { msgs: [], xingDong: [] }; chatMetaBen.set(sid, h); }
+  return h;
+}
+/** 记一条消息的富字段（同 (角色,时间戳) 覆盖 ⇒ 续派累加的词元也是最新的） */
+function jiLuMeta(sid: string, e: LogEntry | undefined | null): void {
+  if (!sid || !e) return;
+  const ts = Number(e.ts) || 0;
+  if (!ts) return;
+  const h = quMetaHuiHua(sid);
+  const ke = (x: ChatMetaXiaoXi) => x.ts === ts && x.role === String(e.role || '');
+  const tiao: ChatMetaXiaoXi = {
+    ts, role: String(e.role || ''),
+    reasoning: String(e.reasoning || ''), moXing: String((e as { moXing?: string }).moXing || ''),
+    reasoningDuan: Array.isArray((e as { reasoningDuan?: unknown[] }).reasoningDuan)
+      ? (e as unknown as { reasoningDuan: Array<{ ts: number; text: string }> }).reasoningDuan.map((x) => ({ ts: Number(x && x.ts) || 0, text: String((x && x.text) || '') }))
+      : undefined,
+    moXingJiangJi: String((e as { moXingJiangJi?: unknown }).moXingJiangJi || ''),
+    promptTokens: Number((e as { promptTokens?: number }).promptTokens || 0),
+    completionTokens: Number((e as { completionTokens?: number }).completionTokens || 0),
+    turnCount: Number((e as { turnCount?: number }).turnCount || 0),
+    artifacts: Array.isArray((e as { artifacts?: unknown[] }).artifacts) ? (e as { artifacts?: unknown[] }).artifacts : [],
+    zhengWen: String(e.content || '').length,
+  };
+  const i = h.msgs.findIndex(ke);
+  if (i >= 0) h.msgs[i] = tiao;
+  else h.msgs.push(tiao);
+  while (h.msgs.length > META_XIAO_SHANG) h.msgs.shift();
+  xieChatMeta();
+}
+function jiLuXingDong(p: { sessionId?: string; hao?: string; tool?: string; detail?: string; phase?: string; ok?: boolean; ms?: number; chars?: number; ts?: number }): void {
+  const sid = String(p.sessionId || '');
+  if (!sid || !p.hao) return;
+  const h = quMetaHuiHua(sid);
+  const tiao: ChatMetaXingDong = {
+    hao: String(p.hao), tool: String(p.tool || ''), detail: String(p.detail || '').slice(0, 4000),
+    phase: String(p.phase || ''), ok: p.ok, ms: Number(p.ms || 0), chars: Number(p.chars || 0), ts: Number(p.ts) || Date.now(),
+  };
+  const i = h.xingDong.findIndex((x) => x.hao === tiao.hao);
+  /** start 与 finish 是同一条：合并成"结束态"，明细以最后一次为准 */
+  if (i >= 0) h.xingDong[i] = { ...h.xingDong[i], ...tiao, detail: tiao.detail || h.xingDong[i].detail };
+  else h.xingDong.push(tiao);
+  while (h.xingDong.length > META_CAO_ZUO_SHANG) h.xingDong.shift();
+  xieChatMeta();
+}
+/** 重建完会话日志后把富字段合回去（按 角色+时间戳 对齐；对不上就按顺序补最近的） */
+function yingYongMeta(sid: string): number {
+  const h = chatMetaBen.get(sid);
+  const zhi = chatLogs.get(sid);
+  if (!h || !zhi || !zhi.length) return 0;
+  let bu = 0;
+  for (const m of zhi) {
+    const anyM = m as unknown as Record<string, unknown>;
+    if (anyM.reasoning || anyM.moXing || Number(anyM.promptTokens || 0) > 0) continue;
+    const zhao = h.msgs.find((x) => x.role === String(m.role || '') && Number(x.ts) === Number(m.ts || 0))
+      || h.msgs.find((x) => x.role === String(m.role || '') && Math.abs(Number(x.ts) - Number(m.ts || 0)) <= 4000);
+    if (!zhao) continue;
+    anyM.reasoning = zhao.reasoning || '';
+    if (Array.isArray(zhao.reasoningDuan) && zhao.reasoningDuan.length) anyM.reasoningDuan = zhao.reasoningDuan;
+    anyM.moXing = zhao.moXing || '';
+    anyM.moXingJiangJi = zhao.moXingJiangJi || null;
+    anyM.promptTokens = zhao.promptTokens || 0;
+    anyM.completionTokens = zhao.completionTokens || 0;
+    anyM.turnCount = zhao.turnCount || 0;
+    if (Array.isArray(zhao.artifacts) && zhao.artifacts.length) anyM.artifacts = zhao.artifacts;
+    bu += 1;
+  }
+  if (bu) try { audit?.log('chat.meta.merged', { sessionId: sid, tiao: bu, zhang: zhi.length }); } catch { /* noop */ }
+  return bu;
+}
+function xingDongDeng(sid: string): ChatMetaXingDong[] {
+  const h = chatMetaBen.get(sid);
+  return h ? [...h.xingDong].sort((a, b) => Number(a.ts) - Number(b.ts)) : [];
+}
+
+/**
  * **会话镜像的唯一写入点**（不变量：日志是唯一事实来源，镜像只能由日志派生）。
  * hidden（内部指令）与普通消息都走这里 ⇒ 源码里不会再出现第二处镜像写入。
  */
@@ -946,6 +1082,8 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
           if (lastM && lastM.role === 'assistant') lastM.content = last.content;
         }
         try { broadcastToWindows('warmy:liaoTianUpdated', { sessionId: key, seq: null, ts: Date.now() }); } catch { /* noop */ }
+        /** 合并后的富字段也要落盘（否则重启后这一条的思考/词元行是空的） */
+        try { jiLuMeta(key, last); } catch { /* noop */ }
         return;
       }
     }
@@ -975,6 +1113,8 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
   const shuZu = chatLogs.get(key);
   if (shuZu) shuZu.push(tiaoMu);
   else chatLogs.set(key, [tiaoMu]);
+  /** 第 38 轮 项 2/8：富字段（思考/模型/词元/附件）另存旁路，重启后还能显示 */
+  try { jiLuMeta(key, tiaoMu); } catch { /* noop */ }
   jingXiangXieRu(key, tiaoMu.role, tiaoMu.content);
   /**
    * 日志一写就**播给所有窗口**：对方（另一个窗口）据此重新拉一次该会话的日志。
@@ -1064,6 +1204,15 @@ async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyR
     chatLogSeq = Math.max(chatLogSeq, report.maxSeq);
     // 镜像整份重派生：重建后 chatHistories 与日志逐条对齐
     for (const key of chatLogs.keys()) chatHistories.set(key, quHuiHuaXiaoXiJi(key));
+    /**
+     * 第 38 轮 项 2/8：JSONL 只有 `{seq,role,ti,ts}` ⇒ 重建完把旁路元数据合回去
+     * （思考内容 / 用的哪只模型 / 词元 / 轮次 / 附件图标行），否则重启后这些全空。
+     */
+    try {
+      let he = 0;
+      for (const key of chatLogs.keys()) he += yingYongMeta(String(key));
+      if (he) qidong(`chat meta merged: ${he} 条富字段回填`);
+    } catch { /* 合并失败只影响显示，不影响对话 */ }
     report.ok = true;
     report.sessions = sessions.size;
     historyRestore = report;
@@ -6109,7 +6258,30 @@ function qishiJiyiCangYibu() {
       .then(() => {
         qidong('memory ready');
         // 不变量 #5：记忆服务的 JSONL 是唯一事实来源 → 启动即重建会话日志（ADR 002 §9.4 待办 4）
-        return youJiYiHuiFuHuiHuaRiZhi('boot');
+        // 第 38 轮 项 2/8：先把旁路元数据读进内存，重建完会话日志才能把思考/模型/词元/执行过程合回去
+        try { duChatMeta(); } catch { /* noop */ }
+        return youJiYiHuiFuHuiHuaRiZhi('boot').then((r) => {
+          /**
+           * 第 38 轮 项 2：账本里还挂着中断标记的会话，**重启后要把"继续/重试"重新点亮**
+           * （以前 `quZhongDuan()` 没人调用，按钮只在出事那一刻的广播里活过一次）。
+           */
+          try {
+            const duan = etaHuo().lieZhongDuan().filter((x) => x.at && Date.now() - x.at < 7 * 24 * 3600 * 1000);
+            if (duan.length) {
+              broadcastToWindows('warmy:jiHuaHuiFu', {
+                sessions: duan.map((x) => x.sessionId),
+                sessionId: duan[0].sessionId,
+                why: duan[0].why,
+                error: duan[0].error,
+                jieDuan: duan[0].jieDuan,
+                laiYuan: 'boot',
+              });
+              qidong(`interrupted replay: ${duan.length} 个会话`);
+              audit?.log('plan.interrupted-replay', { n: duan.length, xia: duan.map((x) => x.sessionId).slice(0, 5) });
+            }
+          } catch { /* 广播失败不影响启动 */ }
+          return r;
+        });
       })
       .catch((e) => {
         qidong(`memory start fail ${String(e)}`);
@@ -6469,6 +6641,8 @@ let xingDongHaoXu = 0;
 function fachuXingDong(d: { sessionId?: string; hao: string; phase: 'start' | 'finish'; tool?: string; detail?: string; ok?: boolean; ms?: number; chars?: number; ts?: number }): void {
   try {
     const payload = { ...d, ts: Number(d.ts) || Date.now() };
+    /** 第 38 轮 项 8：执行过程要**落盘**（以前只在工具跑的瞬间广播一次，重启即消失） */
+    try { jiLuXingDong(payload); } catch { /* noop */ }
     for (const w of BrowserWindow.getAllWindows()) {
       try {
         if (!w.isDestroyed()) w.webContents.send('warmy:xingDongShiJian', payload);
@@ -12494,6 +12668,8 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
       count: all.length,
       xiaoXiJi: all.slice(-limit).map((e) => ({
         role: e.role, text: e.content, ts: e.ts ?? null, reasoning: e.reasoning || null, system: e.system || false, moXing: e.moXing || '',
+        /** 第 38 轮 项 2：分段思考（界面把操作记录插在思考之间要用它） */
+        reasoningDuan: Array.isArray((e as { reasoningDuan?: unknown[] }).reasoningDuan) ? (e as unknown as { reasoningDuan: Array<{ ts: number; text: string }> }).reasoningDuan : [],
         /** 降级/换模型括号 + 附件图标行：一起回给渲染层（以前只回 moXing ⇒ 界面上的图标行被同步抹掉） */
         moXingJiangJi: (e as { moXingJiangJi?: unknown }).moXingJiangJi || null,
         artifacts: Array.isArray((e as { artifacts?: unknown[] }).artifacts) ? (e as { artifacts?: unknown[] }).artifacts : [],
@@ -12509,6 +12685,21 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
 });
 
 /**
+ * 第 38 轮 项 8：重启后要能看见**这一轮之前跑过的操作记录**（执行过程）。
+ * 以前台账只在渲染层内存里（`xingDongTai`），进程一死必然为空、连折叠壳都不建。
+ */
+chuliIpc('warmy:xingDongLieBiao', (_e, payload?: { sessionId?: string; limit?: number }) => {
+  try {
+    const sid = String(payload?.sessionId || '');
+    if (!sid) return { ok: false, xingDong: [], error: 'no-session' };
+    const shang = Math.min(400, Math.max(1, Math.floor(Number(payload?.limit)) || 200));
+    return { ok: true, sessionId: sid, xingDong: xingDongDeng(sid).slice(-shang) };
+  } catch (e) {
+    return { ok: false, xingDong: [], error: xiJingCuoWu(e) };
+  }
+});
+
+/**
  * **把一条消息补写进会话日志**（渲染层在用）。
  *
  * 为什么需要：项目/群聊的消息以前只 push 在发送窗口的内存里，主进程日志是空的 ——
@@ -12516,7 +12707,7 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
  * 去重：与**最后一条**的 role+content 相同时跳过，这样单聊路径（chat-send 已记账）
  * 不会因为渲染层也补写而重复。
  */
-chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string; role?: string; content?: string; system?: boolean; moXing?: string }) => {
+chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string; role?: string; content?: string; system?: boolean; moXing?: string; reasoningDuan?: Array<{ ts: number; text: string }> }) => {
   try {
     const sid = String(payload?.sessionId || '');
     // 角色归一：wo|user → user，them|assistant → assistant（旧实现只认 'wo'，
@@ -12528,6 +12719,18 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
     }
     const shuZu = chatLogs.get(sid) || [];
     const last = shuZu[shuZu.length - 1];
+    /**
+     * 第 38 轮 项 2：渲染层把**分段思考**带上来（界面要"思考→操作→思考"交替，重启后也要保持）。
+     * 主进程通常已经先记过这条回复（带着 reasoning），这里只补 `reasoningDuan` 进旁路元数据；
+     * 补不上也不影响本次显示（渲染层自己有一份），所以整段包在 try 里。
+     */
+    try {
+      const duan = Array.isArray(payload?.reasoningDuan) ? (payload as unknown as { reasoningDuan: Array<{ ts: number; text: string }> }).reasoningDuan : [];
+      if (role === 'assistant' && duan.length && last && last.role === 'assistant') {
+        (last as unknown as { reasoningDuan?: unknown[] }).reasoningDuan = duan.map((x) => ({ ts: Number(x && x.ts) || 0, text: String((x && x.text) || '') }));
+        jiLuMeta(sid, last);
+      }
+    } catch { /* 分段只是显示用，丢了不影响对话 */ }
     if (last && last.role === role && String(last.content) === content) {
       return { ok: true, appended: false, deduped: true };
     }
@@ -19090,16 +19293,44 @@ async function zhuanXieYinPinBuf(
    * 不成（没装、格式不吃、推理抛异常）就**照常往下走听话模型链** ——
    * 本地坏了不能让整体出不了字，但审计里要留下为什么降级。
    */
-  try {
-    const bd = await benDiShiBie(buf, geShi);
-    if (bd.ok) {
-      try { audit?.log('asr.bendi.used', { chars: String(bd.text || '').length, model: bd.moXing || '' }); } catch { /* noop */ }
-      return { ok: true, text: bd.text, model: bd.moXing };
-    }
-    if (String(bd.error || '') !== 'bendi-yuyin-not-enabled') {
-      try { audit?.log('asr.bendi.skip', { reason: String(bd.error || '').slice(0, 160) }); } catch { /* noop */ }
-    }
-  } catch { /* 降级到调用链 */ }
+  /**
+   * **谁先答：本机 sherpa 还是「听话模型」链？**（第 38 轮 项 7）
+   *
+   * 第 27 轮定的是"勾了本地语音识别就本机优先"，但真机反馈是：用户把**听话模型显式设成
+   * `mimo-v2.5-asr`**，识别出来的字却还是错的、"和之前毫无变化" —— 因为本机 sherpa
+   * （`paraformer-zh-small`）先抢答并返回了它自己的结果，**用户点名的模型压根没被调用**。
+   * 产品口径：用户显式点名的模型必须真被用到（这是"设置生效"的底线），本机只能兜底。
+   * 所以判据改成看**用户有没有显式配一条云链**：
+   *  · 有 ⇒ 先走链（链里第一个启用的模型就是用户点名的那只），链全败才退回本机；
+   *  · 没有 ⇒ 保持第 27 轮的本机优先（离线场景照旧能用）。
+   * 谁答的都会写进审计（`asr.used` / `asr.bendi.used` / `asr.bendi.fallback`），
+   * 界面自检面板把"这次是哪只模型答的"显示给用户 ⇒ 再出问题一眼能定位。
+   */
+  const chainTou = (() => {
+    try {
+      const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
+      const lian = Array.isArray(sm.asrChain) ? (sm.asrChain as string[]) : [];
+      const jin = Array.isArray(sm.asrDisabled) ? (sm.asrDisabled as string[]) : [];
+      return String(lian.find((m) => m && !jin.includes(m)) || '');
+    } catch { return ''; }
+  })();
+  const benDiShi = async (): Promise<{ text?: string; moXing?: string } | null> => {
+    try {
+      const bd = await benDiShiBie(buf, geShi);
+      if (bd.ok) {
+        try { audit?.log('asr.bendi.used', { chars: String(bd.text || '').length, model: bd.moXing || '' }); } catch { /* noop */ }
+        return { text: bd.text, moXing: bd.moXing };
+      }
+      if (String(bd.error || '') !== 'bendi-yuyin-not-enabled') {
+        try { audit?.log('asr.bendi.skip', { reason: String(bd.error || '').slice(0, 160) }); } catch { /* noop */ }
+      }
+    } catch { /* 本机不可用 ⇒ 交给链 */ }
+    return null;
+  };
+  if (!chainTou) {
+    const benDi = await benDiShi();
+    if (benDi) return { ok: true, text: benDi.text, model: benDi.moXing };
+  }
   const houXuan = nengLiLianMoXing('asr').filter((mo) => {
     /**
      * **听话模型配置必须真生效**（真机：dimavz/whisper-tiny 在 Ollama 上没有
@@ -19253,6 +19484,17 @@ async function zhuanXieYinPinBuf(
       }
     } catch (e) {
       cuoWu.push(`${mo}: ${xiJingCuoWu(e)}`);
+    }
+  }
+  /**
+   * **链全败 ⇒ 退回本机**（第 38 轮 项 7：显式云模型优先，但本机仍是安全网 ——
+   * 断网/密钥失效时至少还能出字，且审计里写明是 `asr.bendi.fallback`，界面自检也会说"这次是本机答的"）。
+   */
+  if (chainTou) {
+    const benDi = await benDiShi();
+    if (benDi) {
+      try { audit?.log('asr.bendi.fallback', { lianCuo: cuoWu.slice(0, 3), model: benDi.moXing || '' }); } catch { /* noop */ }
+      return { ok: true, text: benDi.text, model: benDi.moXing };
     }
   }
   return { ok: false, error: cuoWu.length ? cuoWu.join(' | ').slice(0, 300) : 'no-asr-model（「设置 → 模型 → 听话模型」里没有可用模型）' };

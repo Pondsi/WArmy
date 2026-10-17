@@ -24,7 +24,7 @@ function check(label, ok, detail) {
  * 跳过"构建产物 / 本地缓存 / 本机专属目录"——它们不在仓库里（.gitignore 已排除），
  * 但作者机器上存在，里面天然带着绝对路径，扫了只会制造假红。
  */
-const SKIP = /node_modules|[/\\]\.git[/\\]|[/\\]release[/\\]|[/\\]dist[/\\]|win-unpacked|[/\\]\.playwright-cli[/\\]|spikes[/\\]spike-05-plugins[/\\]dsh-memory-plus|[/\\]\.memory-stress-state[/\\]/;
+const SKIP = /node_modules|[/\\]\.git[/\\]|[/\\]release[/\\]|[/\\]dist[/\\]|win-unpacked|[/\\]\.playwright-cli[/\\]|spikes[/\\]spike-05-plugins[/\\]dsh-memory-plus|[/\\]\.memory-stress-state[/\\]|[\\/]\.tmp-/;
 const TEXT = new Set(['.ts', '.js', '.mjs', '.cjs', '.json', '.md', '.yml', '.yaml', '.txt', '.css', '.html', '.py', '.sh', '.ps1', '.bat', '.vbs']);
 function* walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

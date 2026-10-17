@@ -30,6 +30,12 @@ export interface LogEntry {
   ts?: number;
   /** 思考过程（模型的 reasoning_content 等）——只给界面看，不进模型上下文 */
   reasoning?: string;
+  /**
+   * **分段的思考过程**（第 38 轮 项 2）：界面要按时间把「操作记录」插在思考之间
+   * （思考一截 → 操作 → 思考一截 → 操作 …），所以思考不能只是一整块字符串。
+   * 每段 `{ts, text}`，`join('')` 与 `reasoning` 逐字相同 ⇒ 模型上下文与旧界面口径都不变。
+   */
+  reasoningDuan?: Array<{ ts: number; text: string }>;
   /** 系统小字（如提示）——只给界面画成居中浅色行，不进模型上下文 */
   system?: boolean;
   /** 本轮实际用的模型名（牛马回复下方第一行显示；不进模型上下文） */

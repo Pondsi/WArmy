@@ -1,12 +1,12 @@
 {
-  "version": "0.2.22",
-  "notes": "WArmy v0.2.21 — SKILL.md 规范对齐；Office xlsx/pdf（TrueType 子集化，PDF 中文可复制）；凭据保管；文档抽取统一入口；门禁结果留档；工具调用预算与可观测；会话级回滚；busy-toggle；100 轮长上下文；TTS/ASR 一等公民；调研管线 web_search/web_extract；门禁审计 GATE-AUDIT/MANIFEST。",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.2.21/WArmy-Portable-0.2.21.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.2.21/WArmy-Portable-0.2.21.exe",
-  "sha256": "5ec73f216da6e0a579849f1e26c94d47302b0d4ffc13862b8f0a184f6360dd5d",
-  "size": 124814521,
+  "version": "0.2.23",
+  "notes": "WArmy 0.2.23：新增产品门禁与内置技能；新增「印象」长期记忆（可编辑、归档归纳、软/硬门禁）；修语音识别（16k 单声道采集、近静音拒发、话筒自检）；执行明细并入思考并按时间插入；授权按路径+读写记忆；社交接入按牛马并支持微信扫码；头像重做。",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.2.23/WArmy-Setup-0.2.23.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.2.23/WArmy-Setup-0.2.23.exe",
+  "sha256": "8acfb29ea3acd6ee36f2b8dd71cb533633141ca26e391b064fc813ca7abd2b64",
+  "size": 136664258,
   "mandatory": false,
-  "publishedAt": "2026-10-12T00:00:00Z",
+  "publishedAt": "2026-10-18T04:17:53Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.2.21"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.2.23"
 }

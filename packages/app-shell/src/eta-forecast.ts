@@ -674,6 +674,24 @@ export class EtaLinShi {
     return h?.zhongDuan || null;
   }
 
+  /**
+   * **列出所有还挂着中断标记的会话**（第 38 轮 项 2）。
+   *
+   * 真机反馈：牛马跑到一半程序被关掉，重新打开后**没有"继续/重试"按钮** ——
+   * 中断信息其实已经落盘在 `eta-live.json` 里，但 `quZhongDuan()` 全仓没有任何调用方，
+   * 而界面那个按钮是靠**广播事件**点亮的（渲染层的 `state.renWuZhongDuan` 只在内存里），
+   * 重启后没人把账本里的断点重新播出去 ⇒ 内容丢了、按钮也没了。
+   */
+  lieZhongDuan(): Array<{ sessionId: string; jieDuan: string; why: string; error?: string; at: number }> {
+    const chu: Array<{ sessionId: string; jieDuan: string; why: string; error?: string; at: number }> = [];
+    for (const [sid, h] of Object.entries(this.ku.huiHua || {})) {
+      const z = (h && h.zhongDuan) || null;
+      if (!z || !z.at) continue;
+      chu.push({ sessionId: sid, jieDuan: String(z.jieDuan || ''), why: String(z.why || ''), error: z.error ? String(z.error) : undefined, at: Number(z.at) || 0 });
+    }
+    return chu.sort((a, b) => b.at - a.at);
+  }
+
   /** 续传成功后清掉中断标记（临时账本就该是临时的） */
   qingZhongDuan(sessionId: string, now = Date.now()): void {
     const h = this.ku.huiHua[String(sessionId || '')];

@@ -104,6 +104,8 @@ contextBridge.exposeInMainWorld('warmy', {
   /** 把消息补写进主进程日志（唯一事实来源）——两处视图才真的是同一套数据 */
   chatLogAppend: (payload) => ipcRenderer.invoke('warmy:liaoTianRiZhiZhuiJia', payload),
   chatLogRestore: () => ipcRenderer.invoke('warmy:liaoTianRiZhiHuiFu'),
+  /** 第 38 轮 项 8：重启后取回这一轮之前跑过的操作记录（执行过程） */
+  xingDongLieBiao: (payload) => ipcRenderer.invoke('warmy:xingDongLieBiao', payload),
   settingsGet: () => ipcRenderer.invoke('warmy:peiZhiQu'),
   settingsSave: (partial) => ipcRenderer.invoke('warmy:peiZhiBaoCun', partial),
   // ADR 004：执行环境探测（只探测，不安装不下载不提权）与启停（只接受预定义 id + 'start'|'stop'）

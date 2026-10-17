@@ -3317,6 +3317,8 @@ async function langDuWenBen(text, btnEl) {
         role: (m.role === 'user' || m.role === 'wo') ? 'wo' : 'them',
         text: m.text, ts: m.ts || Date.now(),
         reasoning: m.reasoning || '',
+        /** 第 38 轮 项 2：分段思考也从主进程带回（重启后"思考/操作交替"的排布要一样） */
+        reasoningDuan: Array.isArray(m.reasoningDuan) ? m.reasoningDuan : [],
         system: !!m.system,
         moXing: m.moXing || '',
         promptTokens: Number(m.promptTokens || 0),
@@ -3910,6 +3912,34 @@ async function langDuWenBen(text, btnEl) {
    * 时间关系：动作行按 `ts` 升序；中间回复节点按各自的 `ts` 一起排 —— 于是"先读文件、
    * 再输出一段、再写文件"的真实顺序在界面上一目了然，而不是"所有动作堆在开头"。
    */
+  /**
+   * 第 38 轮 项 2：**把思考按"操作发生"切成段**（界面要「思考一截 → 操作记录 → 思考一截 → 操作记录 …」交替）。
+   *
+   * 以前思考是一整块字符串（`reasoning`），操作记录全部排在它后面 ⇒
+   * 用户看到的永远是"先想完、再干活"，与真实的交错过程不符（产品明确要求穿插）。
+   * 段的边界由台账给：**一条新操作开始 ⇒ 关掉当前段**。
+   * ⚠️ 各段 `join('')` 与整块 `reasoning` **逐字相同** ⇒ 模型上下文、注入比对、旧界面口径都不受影响。
+   */
+  const SI_KAO_DUAN = new Map();
+  function siKaoZhuiDuan(sid, wen) {
+    if (!sid || !wen) return;
+    let a = SI_KAO_DUAN.get(sid);
+    if (!a) { a = []; SI_KAO_DUAN.set(sid, a); }
+    const wei = a[a.length - 1];
+    if (!wei || wei.feng) a.push({ ts: Date.now(), text: String(wen), feng: false });
+    else wei.text += String(wen);
+    while (a.length > 120) a.shift();
+  }
+  function siKaoFengDuan(sid) {
+    const a = sid && SI_KAO_DUAN.get(sid);
+    if (a && a.length) a[a.length - 1].feng = true;
+  }
+  function siKaoQuDuan(sid) {
+    const a = sid && SI_KAO_DUAN.get(sid);
+    return a ? a.filter((x) => String(x.text || '').length).map((x) => ({ ts: Number(x.ts) || 0, text: String(x.text) })) : [];
+  }
+  function siKaoQing(sid) { if (sid) SI_KAO_DUAN.delete(sid); }
+  window.__siKaoDuan = { zhui: siKaoZhuiDuan, feng: siKaoFengDuan, qu: siKaoQuDuan, qing: siKaoQing };
   function guiNaXingDong(heZi, zaiPao) {
     if (!heZi) return;
     /**
@@ -3954,11 +3984,47 @@ async function langDuWenBen(text, btnEl) {
     if (yao) yao.textContent = biao + '（' + zong + ' ' + tOr('chat.tiao', '条') + '）';
     if (zaiPao) kuai.setAttribute('open', ''); else kuai.removeAttribute('open');
     if (yao) yao.setAttribute('title', tOr('chat.actionLog', '执行过程'));
-    /** 重画时先把上一轮插入的行清掉（思考正文 `<pre>` 保留） */
+    /** 重画时先把上一轮插入的行清掉（思考的 `<pre>` / 分段块都保留，它们由 renderChat 生成） */
     kuai.querySelectorAll(':scope > .xingDongZu').forEach((n) => n.remove());
     /** 按 ts 升序插入（台账本身就是时间顺序，这里再排一次更稳） */
     mingXi.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
-    for (const m of mingXi) kuai.appendChild(xingDongHangNode(m));
+    /**
+     * 第 38 轮 项 2：**思考与操作按时间交替**（用户要求："思考内容中插入进行的操作记录，
+     * 操作之后继续写思考，再有操作就插在当前思考后面"）。
+     * renderChat 已经把思考渲染成**带 `data-ts` 的分段 `<pre class="siKaoDuanKuai">`**，
+     * 这里只负责把每条操作插到"它所属那一段"的后面 ⇒ 顺序天然与真实过程一致。
+     * 没有分段（旧数据/旧模型不吐增量思考）⇒ 退回原样：整块思考在前、操作列表在后。
+     */
+    const duanKuai = [...kuai.querySelectorAll(':scope > .siKaoDuanKuai')];
+    if (duanKuai.length >= 2) {
+      const chaDao = (ts) => {
+        let wei = -1;
+        for (let i = 0; i < duanKuai.length; i++) if (Number(duanKuai[i].dataset.ts) <= ts) wei = i;
+        return wei;
+      };
+      /** 早于第一段的操作插在最前面，不丢 */
+      for (const m of mingXi) {
+        const zh = chaDao(Number(m.ts) || 0);
+        if (zh < 0) kuai.insertBefore(xingDongHangNode(m), duanKuai[0]);
+      }
+      /** 每段之后接"这段时间里的操作"（用游标推进，保证段内也是时间顺序而不是倒序） */
+      for (let i = 0; i < duanKuai.length; i++) {
+        const kai = Number(duanKuai[i].dataset.ts) || 0;
+        const jie = i + 1 < duanKuai.length ? (Number(duanKuai[i + 1].dataset.ts) || 0) : Infinity;
+        let zhong = duanKuai[i];
+        for (const m of mingXi) {
+          const ts = Number(m.ts) || 0;
+          /** 最后一段用 `>=kai`（含之后到达的操作），中间段用 `[kai, jie)` */
+          if (ts >= kai && (jie === Infinity ? true : ts < jie)) {
+            const jd = xingDongHangNode(m);
+            zhong.after(jd);
+            zhong = jd;
+          }
+        }
+      }
+    } else {
+      for (const m of mingXi) kuai.appendChild(xingDongHangNode(m));
+    }
   }
   /**
    * 一条行动明细 = **单行（木马图标 + 开始时分 + 操作 + 右侧状态）**，点开看完整内容。
@@ -4034,12 +4100,15 @@ async function langDuWenBen(text, btnEl) {
       xian2.textContent = caoWen;
     }
     det.appendChild(xian2);
-    /** 第 3 行只在**已经有结局**时出现（进行中就先不写，免得又出一条重复的"更新…"） */
+    /**
+     * 第 38 轮 项 3：**每条操作记录结尾出现两次「完成」**。
+     * 行尾 `.xdZhuang` 已经是状态（完成/失败/进行中），展开后的第 3 行又以同一个 `ztWen` 开头 ⇒
+     * 一眼看去"完成 完成"。还有 `more`（每次状态变化都追一条）把「完成」再打 N 遍。
+     * 口径：**状态只在行尾出现一次**；展开区只补"什么时候结束、花了多久"，
+     * 中间的状态变化不再重复列（用户明确说过"更新…那条是重复"）。
+     */
     if (m.status !== 'running' && m.tsEnd) {
-      det.appendChild(mk('xdXian3', ztWen(m.status) + ' ·' + quan(m.tsEnd) + ' · ' + tOr('chat.xdCost', '耗时') + ' ' + haoShi(m.ms)));
-    }
-    for (const g of (m.more || [])) {
-      det.appendChild(mk('xdXianMore', ztWen(g.status) + ' ·' + quan(g.ts) + ' · ' + tOr('chat.xdCost', '耗时') + ' ' + haoShi(g.ms)));
+      det.appendChild(mk('xdXian3', tOr('chat.xdEnd', '结束') + ' ·' + quan(m.tsEnd) + ' · ' + tOr('chat.xdCost', '耗时') + ' ' + haoShi(m.ms)));
     }
     hang.addEventListener('click', (e) => {
       if (e.target.closest && e.target.closest('a')) return;
@@ -4048,6 +4117,8 @@ async function langDuWenBen(text, btnEl) {
     const bao = document.createElement('div');
     bao.className = 'xingDongZu';
     bao.dataset.ts = String(Number(m.ts) || 0);
+    /** 第 38 轮 项 2：分段重排时按编号去重（同一条操作不许出现两遍） */
+    bao.dataset.hao = String(m.hao || '');
     bao.appendChild(hang);
     bao.appendChild(det);
     return bao;
@@ -4814,10 +4885,19 @@ async function langDuWenBen(text, btnEl) {
       const zaiPao = !!queueRounds[cur.id];
       const shiZuiHou = i === slice.length - 1;
       const siKaoKai = zaiPao && shiZuiHou;
-      const siKao = m.reasoning
+      /**
+       * 第 38 轮 项 2：**有分段就按段落渲染**（每段带 `data-ts`，操作记录由 `guiNaXingDong` 插到
+       * 所属那一段的后面 ⇒ 界面上就是"思考一截 → 操作 → 思考一截 → 操作"）。
+       * 只有一段/没有分段（旧数据、或旧模型不吐增量思考）⇒ 仍是原来那一整块 `<pre>`。
+       */
+      const siKaoDuanXian = Array.isArray(m.reasoningDuan) ? m.reasoningDuan.filter((x) => x && String(x.text || '').trim()) : [];
+      const siKaoNei = siKaoDuanXian.length >= 2
+        ? siKaoDuanXian.map((x) => '<pre class="siKaoDuanKuai" data-ts="' + (Number(x.ts) || 0) + '">' + escapeHtml(String(x.text)) + '</pre>').join('')
+        : '<pre>' + escapeHtml(String(m.reasoning)) + '</pre>';
+      const siKao = m.reasoning || siKaoDuanXian.length
         ? '<details class="siKaoKuai"' + (siKaoKai ? ' open' : '') + '><summary>'
           + escapeHtml(siKaoKai ? tOr('chat.thinkingOpen', '思考中…') : tOr('chat.thinkingDone', '思考过程'))
-          + '</summary><pre>' + escapeHtml(String(m.reasoning)) + '</pre></details>'
+          + '</summary>' + siKaoNei + '</details>'
         : '';
       const zuYaoHuiFuFu = (i === dingWeiThem) && (beiDaDuan || yiGuanBi) && m.role !== 'wo';
       div.innerHTML = (m.role === 'wo' ? av : themAv)
@@ -5242,7 +5322,13 @@ async function langDuWenBen(text, btnEl) {
     }
     if (!kanZuiJin(yuanYou, role, text, 600000)) {
       const uYong = (opts && opts.usage) || null;
-      yuanYou.push({ role, text, ts: Date.now(), reasoning: (opts && opts.reasoning) || '', system: !!(opts && opts.system), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || null, artifacts: (opts && opts.artifacts) || [], promptTokens: uYong && uYong.promptTokens || 0, completionTokens: uYong && uYong.completionTokens || 0 });
+      /**
+       * 第 38 轮 项 2：这条回复的**分段思考**（思考/操作交替渲染用）。
+       * 优先用显式传入的，否则取本轮流式过程中攒下的段；落地后清掉该会话的临时段。
+       */
+      const duan = (Array.isArray(opts && opts.reasoningDuan) && opts.reasoningDuan.length)
+        ? opts.reasoningDuan : siKaoQuDuan(chatId);
+      yuanYou.push({ role, text, ts: Date.now(), reasoning: (opts && opts.reasoning) || '', reasoningDuan: duan, system: !!(opts && opts.system), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || null, artifacts: (opts && opts.artifacts) || [], promptTokens: uYong && uYong.promptTokens || 0, completionTokens: uYong && uYong.completionTokens || 0 });
       // 正式回复到了 ⇒ 收掉流式"正在进行"的气泡（里面的思考块随之折叠）
       if (role === 'them' && !(opts && opts.system)) {
         // 正式回复已落地 ⇒ 这一轮的流结束了：迟到的分片不许再新建气泡（真机：尾部多出「看过了。」）
@@ -5269,7 +5355,9 @@ async function langDuWenBen(text, btnEl) {
      * 以前项目/群聊的消息只 push 在本窗口内存里，新窗口打开就是空的。
      * 主进程侧对"与上一条完全相同"去重 ⇒ 单聊路径（chat-send 已记账）不会重复。
      */
-    try { void window.warmy.chatLogAppend?.({ sessionId: chatId, role, content: text, system: !!(opts && opts.system), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || undefined, artifacts: Array.isArray(opts && opts.artifacts) ? opts.artifacts : undefined, promptTokens: (opts && opts.usage && opts.usage.promptTokens) || undefined, completionTokens: (opts && opts.usage && opts.usage.completionTokens) || undefined }); } catch { /* noop */ }
+    try { void window.warmy.chatLogAppend?.({ sessionId: chatId, role, content: text, system: !!(opts && opts.system), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || undefined, artifacts: Array.isArray(opts && opts.artifacts) ? opts.artifacts : undefined, promptTokens: (opts && opts.usage && opts.usage.promptTokens) || undefined, completionTokens: (opts && opts.usage && opts.usage.completionTokens) || undefined, reasoningDuan: (role === 'them' && typeof yuanYou !== 'undefined' && yuanYou.length) ? (yuanYou[yuanYou.length - 1] && yuanYou[yuanYou.length - 1].reasoningDuan) || [] : undefined }); } catch { /* noop */ }
+    /** 落地后这一段流就结束了：清掉临时思考段（下一条消息重新攒） */
+    if (role === 'them') { try { siKaoQing(chatId); } catch { /* noop */ } }
     if (state.selectedChat && state.selectedChat.id === chatId) {
       const heZi = $('xiaoXiJi');
       const zaiDiBu = heZi ? isAtBottom(heZi) : true;
@@ -18006,6 +18094,8 @@ async function renderDashboard(host) {
           const detail = String(d.detail || '');
           const lei = LU_JING_GONG_JU.test(tool) ? 'path' : (detail ? 'cmd' : '');
           if (d.phase === 'start') {
+            /** 第 38 轮 项 2：操作开始 ⇒ 关掉当前思考段（下一条思考另起一段，形成"思考/操作"交替） */
+            try { siKaoFengDuan(sid); } catch { /* noop */ }
             xingDongJi(sid, {
               hao: String(d.hao || ''),
               ts: Number(d.ts) || Date.now(),
@@ -25735,7 +25825,11 @@ async function renderDashboard(host) {
         state.streamBuf = state.streamBuf || {};
         const b = state.streamBuf[sid] || (state.streamBuf[sid] = { reasoning: '', content: '' });
         // 单会话缓冲上限 200KB（防长文把内存撑大；到顶就不再追加）
-        if (d.reasoning && b.reasoning.length < 200000) b.reasoning += String(d.reasoning);
+        if (d.reasoning && b.reasoning.length < 200000) {
+          b.reasoning += String(d.reasoning);
+          /** 第 38 轮 项 2：同一份增量也进"分段思考"台账，界面据此把操作记录穿插进思考之间 */
+          try { siKaoZhuiDuan(sid, String(d.reasoning)); } catch { /* noop */ }
+        }
         if (d.content && b.content.length < 200000) b.content += String(d.content);
         /** 「NO_REPLY」是完成核对轮的收工记号，不给人看（主进程也不会把它写进聊天记录） */
         if (b.content && /NO\\?_REPLY/i.test(b.content)) {

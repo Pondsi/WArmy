@@ -20,7 +20,9 @@ const rCss = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/re
 const preload = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/preload.cjs'), 'utf8');
 
 check('single instance lock', /requestSingleInstanceLock/.test(main));
-check('second-instance centers+focusses', /second-instance[\s\S]{0,200}zhuJiaoZhuChuangKouJuZhong/.test(main));
+check('second-instance centers+focusses', /second-instance[\s\S]{0,2000}zhuJiaoZhuChuangKouJuZhong/.test(main));
+// 第 37 轮：二次启动还支持 --warmy-quit（让运行中的实例自己走退出流程，不再 taskkill）
+check('second-instance 支持 --warmy-quit 走应用自己的退出', /--warmy-quit[\s\S]{0,600}tuichuYingyong/.test(main));
 check('focusMainWindowCentered centers bounds', /workArea[\s\S]{0,200}setBounds/.test(main));
 check('退出函数置强制退出标志（tuichuYingyong / qiangzhiTuichu）', /function tuichuYingyong[\s\S]{0,200}qiangzhiTuichu = true/.test(main));
 check('托盘下班走统一退出函数（不是裸 app.quit）', /tray-off-work[\s\S]{0,80}tuichuYingyong|tuichuYingyong\('tray-off-work'\)/.test(main));
