@@ -75,7 +75,7 @@ const dangerCases = [
   { biaoQian: '.. 穿越：../outside.txt', entries: ['../outside.txt'], expect: 'parent-escape' },
   { biaoQian: '.. 穿越：src/../../etc/passwd', entries: ['src/../../etc/passwd'], expect: 'parent-escape' },
   { biaoQian: '绝对路径：/etc/passwd', entries: ['/etc/passwd'], expect: 'abs-path' },
-  { biaoQian: 'Windows 盘符：C:\\Users\\p\\secret.txt', entries: ['C:\\Users\\p\\secret.txt'], expect: 'abs-path' },
+  { biaoQian: 'Windows 盘符：C:\\Users\\<user>\\secret.txt', entries: ['C:\\Users\\<user>\\secret.txt'], expect: 'abs-path' },
   { biaoQian: 'UNC 路径：\\\\server\\share\\x', entries: ['\\\\server\\share\\x'], expect: 'abs-path' },
   { biaoQian: '家目录：~/x', entries: ['~/x'], expect: 'abs-path' },
   { biaoQian: 'NUL / 控制字符', entries: ['.git/config\u0000.txt'], expect: 'illegal-char' },

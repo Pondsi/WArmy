@@ -99,7 +99,7 @@ check('feed points to GitHub release asset', String(feedJson.url || feedJson.dow
 // privacy qiYong first-party docs
 const privacyPats = [
   [/(ghp_[A-Za-z0-9]+)/, 'TOKEN'],
-  [/C:\\Users\\p\\/, 'ABS_PATH_USER'],
+  [/C:\\Users\\<user>\\/, 'ABS_PATH_USER'],
   [/\b192\.168\.\d+\.\d+\b/, 'PRIVATE_IP'],
 ];
 for (const [re, ming] of privacyPats) {

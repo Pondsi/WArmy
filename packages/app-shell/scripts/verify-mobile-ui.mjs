@@ -9,7 +9,7 @@ import {attach, sleep, PORTS} from './cdp-lib.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkg = path.join(here, '..');
-const PERF = process.env.CARMY_PERF || 'C:\\Users\\p\\AppData\\Local\\Temp\\perf';
+const PERF = process.env.CARMY_PERF || 'C:\\Users\\<user>\\AppData\\Local\\Temp\\perf';
 const SHOTS = path.join(PERF, 'uiqa-mobile', 'fix-shots');
 const PORT = Number(process.env.MOBILE_CDP_PORT || PORTS.mobile || 9333);
 fs.mkdirSync(SHOTS, { recursive: true });

@@ -2478,3 +2478,23 @@ html { font-weight: var(--fw-ui, 400); }
 .sjZhanKai { display: block; overflow: hidden; max-height: 160px; overflow-y: auto; }
 .sjYinCang { display: none !important; }
 .sjTouXiangTd img { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; display: block; }
+
+/* 第 38 轮 项 10：计划行的状态样式此前挂在 .jiHuaBu[data-st] 上，而真实 DOM 是 .jiHuaHang2[data-st] ⇒ 一条都没命中（已完成仍带竖条、已停止没有删除线）。这里按实际 DOM 补一套：进行中/已创建保留强调色竖条，已完成/已停止/已删除去竖条，停止与删除加删除线。 */
+.jiHuaHang2[data-st="pending"] { border-left-color: var(--accent); }
+.jiHuaHang2[data-st="doing"] { border-left-color: var(--accent); }
+.jiHuaHang2[data-st="done"] { border-left-color: transparent; }
+.jiHuaHang2[data-st="verified"] { border-left-color: transparent; }
+.jiHuaHang2[data-st="blocked"] { border-left-color: transparent; }
+.jiHuaHang2[data-st="deleted"] { border-left-color: transparent; }
+.jiHuaHang2[data-st="blocked"], .jiHuaHang2[data-st="deleted"] { text-decoration: line-through; opacity: .72; }
+
+/* 第 38 轮 项 6：第四列的授权卡与计划任务卡要有**限高**（约 15 条任务的高度），超出走内部滚动条；不再靠"卡片无限长"把整列挤没。 */
+/* r38-mianBanXianGao */
+#mianBanJiHuaKuai { max-height: 460px; }
+#mianBanShouQuanKuai { max-height: 380px; }
+#mianBanJiHuaKuai > #jiHuaLieBiao,
+#mianBanShouQuanKuai > .mianBanScroll { overflow-y: auto; overscroll-behavior: contain; }
+@media (max-height: 760px) {
+  #mianBanJiHuaKuai { max-height: 320px; }
+  #mianBanShouQuanKuai { max-height: 260px; }
+}

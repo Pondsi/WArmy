@@ -740,7 +740,7 @@ audit/、checkpoints/、scan-dirs/、knowledge/、instances/、Local Storage/、
 **跑法（必须带这两个环境变量）**：
 ```bash
 cd /c/wbuild && MIMO_KEY_FILE="%USERPROFILE%\.openclaw\workspace\<中文工作区目录>\<密钥文件>.txt" \
-  WARMY_OPEN_PATH_DRYRUN=1 node verify-round34-live.mjs --trials=3 --ollama-trials=1 --all > "$TEMP/r34-live-*.log" 2>&1
+  WARMY_OPEN_PATH_DRYRUN=1 node dev/gates/verify-round34-live.mjs --trials=3 --ollama-trials=1 --all > "$TEMP/r34-live-*.log" 2>&1
 ```
 - 日志**最后一行 `exit=N` 才是真结果**（后台任务的 exit code 不可信）。
 - `WARMY_OPEN_PATH_DRYRUN=1` 走完整条打开链路但不真弹 Office（否则锁住测试产物、用户桌面弹一堆窗口）。
@@ -995,18 +995,18 @@ cd /c/wbuild/packages/app-shell && node scripts/check-syntax.mjs \
   && node scripts/copy-assets.mjs && node scripts/verify-i18n-locales.mjs
 
 # 本轮三层门禁
-cd /c/wbuild && node verify-round34-changes.mjs     # 116 条（含 work-tools 空稿闸真行为 + 交付物认定 6 条离线回放）
-cd /c/wbuild && node --check verify-round34-jiaofu.mjs && node verify-round34-ui.mjs
+cd /c/wbuild && node dev/gates/verify-round34-changes.mjs     # 116 条（含 work-tools 空稿闸真行为 + 交付物认定 6 条离线回放）
+cd /c/wbuild && node --check dev/gates/verify-round34-jiaofu.mjs && node dev/gates/verify-round34-ui.mjs
 # 真机（一次计次 = 界面 + 真机串跑，中间无空档；密钥只走环境变量、只取第一行、永不打印）
-cd /c/wbuild && (node verify-round34-ui.mjs; echo "ui-exit=$?"; \
+cd /c/wbuild && (node dev/gates/verify-round34-ui.mjs; echo "ui-exit=$?"; \
   MIMO_KEY_FILE="<工作区上级目录>/<密钥文件>.txt" WARMY_OPEN_PATH_DRYRUN=1 \
-  node verify-round34-live.mjs --trials=3 --ollama-trials=1 --all; echo "live-exit=$?") \
+  node dev/gates/verify-round34-live.mjs --trials=3 --ollama-trials=1 --all; echo "live-exit=$?") \
   > "$TEMP/r36-live-<N>.log" 2>&1
 #    ⇒ 判读只看两处：每行 `FAIL` 的标题，和最后 `试验 4 次 · 过 X · 败 Y` + `gate-exit=`（exit=0 才算这一次绿）
 
 # 全项目
-cd /c/wbuild && node run-verify-22.mjs --tier=fast            # 约 65 项次
-cd /c/wbuild && node run-verify-22.mjs --tier=live            # 已知红用 --skip=verify-round16 挪出清单（只在日志注明，不改代码）
+cd /c/wbuild && node dev/gates/run-verify-22.mjs --tier=fast            # 约 65 项次
+cd /c/wbuild && node dev/gates/run-verify-22.mjs --tier=live            # 已知红用 --skip=verify-round16 挪出清单（只在日志注明，不改代码）
 
 # 桌面基线核对（每次真机验收前拍快照、跑完必须 new 0 / missing 0）
 cd "$TEMP" && node r35-xzm.mjs snap "$TEMP/r36-xzm-before.json"     # 拍快照（当前 30 项）

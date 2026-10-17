@@ -965,7 +965,8 @@ function jiLuXingDong(p: { sessionId?: string; hao?: string; tool?: string; deta
   };
   const i = h.xingDong.findIndex((x) => x.hao === tiao.hao);
   /** start 与 finish 是同一条：合并成"结束态"，明细以最后一次为准 */
-  if (i >= 0) h.xingDong[i] = { ...h.xingDong[i], ...tiao, detail: tiao.detail || h.xingDong[i].detail };
+  const jiu = i >= 0 ? h.xingDong[i] : undefined;
+  if (i >= 0 && jiu) h.xingDong[i] = { ...jiu, ...tiao, detail: tiao.detail || jiu.detail };
   else h.xingDong.push(tiao);
   while (h.xingDong.length > META_CAO_ZUO_SHANG) h.xingDong.shift();
   xieChatMeta();
@@ -6267,13 +6268,14 @@ function qishiJiyiCangYibu() {
            */
           try {
             const duan = etaHuo().lieZhongDuan().filter((x) => x.at && Date.now() - x.at < 7 * 24 * 3600 * 1000);
-            if (duan.length) {
+            const tou = duan[0];
+            if (duan.length && tou) {
               broadcastToWindows('warmy:jiHuaHuiFu', {
                 sessions: duan.map((x) => x.sessionId),
-                sessionId: duan[0].sessionId,
-                why: duan[0].why,
-                error: duan[0].error,
-                jieDuan: duan[0].jieDuan,
+                sessionId: tou.sessionId,
+                why: tou.why,
+                error: tou.error,
+                jieDuan: tou.jieDuan,
                 laiYuan: 'boot',
               });
               qidong(`interrupted replay: ${duan.length} 个会话`);
@@ -8700,6 +8702,40 @@ function jiHuaAnZhengJuZiDongYanZheng(sessionId: string, huiFu: string): number 
           ziShu: renWuZiShu(sid),
         });
       } catch { /* noop */ }
+    }
+    return gai;
+  } catch { return 0; }
+}
+
+/**
+ * 第 38 轮 项 10：**自然收尾时把还挂着"已创建/进行中"的步骤对齐掉**。
+ *
+ * 真机反馈：任务其实都办了、模型也回复"全部完成"，第四列计划却留着好几条**永远"已创建"**
+ * （旧的自动验证只把**有宿主证据**的步骤标成 verified，没证据的一律原样留着 ⇒ 用户看到的
+ * 就是"计划说不完成，实际完成了"）。
+ *
+ * 口径：**不谎报完成**。没证据又没被再做的步骤，按"这件事被放弃了"处理：
+ * `blocked`（界面显示「已停止」、去掉强调竖条、文字加删除线），note 写明宿主为什么不认它完成，
+ * 并且仍然可以点重试/再交代一次。
+ * ⚠️ 只在**本轮是自然停下**时调用；被判异常中断（卡死/循环/到顶）的那条路走
+ * `biaoRenWuZhongDuan`，那里界面上该出「继续」，不能把步骤判死。
+ */
+function qiYongShouWeiDuiQi(sid: string): number {
+  try {
+    const bu = jiHuaRenWuJi.get(String(sid || ''));
+    if (!bu || !bu.length) return 0;
+    let gai = 0;
+    for (const b of bu) {
+      if ((b as { leiXing?: string }).leiXing === 'info') continue;
+      const st = String(b.status || 'pending');
+      if (st !== 'pending' && st !== 'doing') continue;
+      b.status = 'blocked';
+      b.note = String(b.note || '') .slice(0, 60) + '（本轮自然结束，宿主没有看到这一步的证据 ⇒ 按放弃处理；需要的话点重试或再交代一次）'.slice(0, 300);
+      gai += 1;
+    }
+    if (gai) {
+      jiHuaBaoCun(sid, bu);
+      try { audit?.log('plan.unverified-stopped', { sessionId: sid, n: gai, youJu: (benCiRenWuGongJu.get(String(sid || '')) || new Set<string>()).size }); } catch { /* noop */ }
     }
     return gai;
   } catch { return 0; }
@@ -11552,6 +11588,11 @@ function yingGaiZiDongJiXu(
       return pai('talk-only');
     }
   }
+  /**
+   * 第 38 轮 项 10：自然停下 ⇒ 把还挂着"已创建/进行中"的步骤对齐成「已停止」。
+   * 到这里说明**不续派了**（模型自己收的口、也没判异常），留着 pending 只会让计划卡永远"没完成"。
+   */
+  try { qiYongShouWeiDuiQi(sid); } catch { /* 对齐失败不影响收尾 */ }
   return { jiXu: false, liYou: 'done' };
 }
 
@@ -13332,11 +13373,47 @@ chuliIpc('warmy:yinXiangZhiYi', (_e, p0?: { wen?: string; yuanYin?: string }) =>
       const biao = zuiHao + '（已被用户否认 ' + new Date().toISOString().slice(0, 10) + '：用户说"' + wen.slice(0, 60) + '"）';
       xin = quan.split(zuiHao).join(biao);
     }
-    /** 追加一条提取纪律（这是"修改软门禁"的落点：下次归纳会照着它排掉同类内容） */
-    const jiLv = '## 提取纪律（用户否认后自动追加）\n- 不要把"' + (zuiHao ? zuiHao.replace(/^\s*-\s+/, '').slice(0, 40) : wen.slice(0, 40)) + '"归纳成用户的偏好或习惯'
+    /**
+     * 第 38 轮 项 5：**先改现有的提取纪律，改不动才追加**。
+     *
+     * 旧做法每被否认一次就新增一行纪律 ⇒ 否认十几条后纪律区比印象本身还长，
+     * 而且同类意思散成好几行，归纳时模型（和人都）抓不到重点。
+     * 现在：在 `## 提取纪律` 段里找**同一类**的那条（与被否认的内容关键词命中 ≥2），
+     * 把这次的排除口径**并进那一行**（并在末尾记下否认次数）；实在找不到同类才新增一行。
+     */
+    const guiZe = '不要把"' + (zuiHao ? zuiHao.replace(/^\s*-\s+/, '').slice(0, 40) : wen.slice(0, 40)) + '"归纳成用户的偏好或习惯'
       + (yin ? '（' + yin.slice(0, 80) + '）' : '') + '。';
-    if (!/## 提取纪律/.test(xin)) xin = xin.trimEnd() + '\n\n' + jiLv;
-    else xin = xin.trimEnd() + '\n' + jiLv.replace(/^## 提取纪律[^\n]*\n/, '');
+    const ju = xin.split('\n');
+    const kai = ju.findIndex((l) => /^##\s*提取纪律/.test(l));
+    const bu: string[] = [];
+    if (kai >= 0) {
+      for (let i = kai + 1; i < ju.length; i++) {
+        const hang2 = ju[i];
+        if (hang2 === undefined) break;
+        if (/^##\s/.test(hang2)) break;
+        if (/^\s*-\s+/.test(hang2)) bu.push(hang2);
+      }
+    }
+    const bei = (zuiHao || '- ' + wen).replace(/^\s*-\s+/, '').slice(0, 24);
+    const ci2 = (s: string) => (String(s).match(/[\u4e00-\u9fa5]{2,}|[A-Za-z0-9_]{3,}/g) || []).slice(0, 24);
+    const muCi2 = new Set(ci2(bei));
+    const tongLei = bu.find((l) => ci2(l).filter((c) => muCi2.has(c)).length >= 2);
+    if (tongLei) {
+      const i0 = ju.indexOf(tongLei);
+      const yuan2 = /（否认 ×(\d+)）/.exec(tongLei);
+      const fan = yuan2 ? (Number(yuan2[1]) || 1) : 0;
+      const xinHang = tongLei.replace(/\s*（否认 ×\d+）\s*$/, '').trim()
+        + ' ⇒ 也适用于"' + String(p0?.yuanYin || wen).slice(0, 40) + '"'
+        + '（否认 ×' + (fan + 1) + '）';
+      ju[i0] = xinHang.slice(0, 400);
+      xin = ju.join('\n');
+      try { audit?.log('yinxiang.discipline-updated', { hang: xinHang.slice(0, 80), fan: fan + 1 }); } catch { /* noop */ }
+    } else {
+      const jiLv = '## 提取纪律（用户否认后自动追加）\n- ' + guiZe;
+      if (kai < 0) xin = xin.trimEnd() + '\n\n' + jiLv;
+      else xin = xin.trimEnd() + '\n- ' + guiZe;
+      try { audit?.log('yinxiang.discipline-added', { hang: guiZe.slice(0, 80) }); } catch { /* noop */ }
+    }
     xieYinXiang(xin);
     audit?.log('yinxiang.denied', { mingZhong: zuiHao.slice(0, 60), fen: zuiFen, wen: wen.slice(0, 80) });
     return { ok: true, mingZhong: zuiHao, fen: zuiFen, xinZhi: !!(zuiHao && zuiFen >= 2) };
@@ -16014,7 +16091,41 @@ chuliIpc('warmy:sheJiaoSaoMaKaiShi', async (_e, p0?: { instId?: string; pingTai?
     /** 只留最近 20 个，避免内存里攒垃圾 */
     if (saoMaDai.size > 20) { const k = [...saoMaDai.keys()][0]; if (k) saoMaDai.delete(k); }
     try { audit?.log('shejiao.qr-started', { instId, pingTai, base }); } catch { /* noop */ }
-    return { ok: true, qrcode: String(j.qrcode), img: String(j.qrcode_img_content || ''), base };
+    /**
+     * 第 38 轮 项 1：**二维码必须显示出来**。
+     *
+     * 服务端给的是**远程图片 URL**（`qrcode_img_content`），而本应用的 CSP 是
+     * `img-src 'self' data: blob:`（`renderer/index.html:5`）⇒ `<img src="https://liteapp.weixin.qq.com/…">`
+     * 被渲染层直接拦掉，界面上只剩"暂无二维码"的灰字 —— 这就是用户看到的"二维码没有显示"。
+     * 修法不是放开 CSP（那等于给用户界面开远程图片口子，安全面变大），而是
+     * **主进程把这张图取回来转成 data URL** 再下发：同源、可缓存、CSP 认。
+     * 取不到也要如实带 `imgYuan`（原始 URL）与原因，界面可以提示用户手动打开。
+     */
+    let img = String(j.qrcode_img_content || '');
+    let imgLei = '';
+    if (/^https?:\/\//i.test(img)) {
+      try {
+        const t = await fetch(img, { headers: tou });
+        if (t.ok) {
+          const bu = Buffer.from(await t.arrayBuffer());
+          imgLei = (String(t.headers.get('content-type') || 'image/png').split(';')[0] || 'image/png').trim();
+          if (bu.length && bu.length < 2 * 1024 * 1024) img = 'data:' + imgLei + ';base64,' + bu.toString('base64');
+          else { img = ''; audit?.log('shejiao.qr-too-big', { bytes: bu.length }); }
+        } else {
+          audit?.log('shejiao.qr-img-failed', { status: t.status });
+          img = '';
+        }
+      } catch (e) {
+        audit?.log('shejiao.qr-img-error', { error: xiJingCuoWu(e).slice(0, 140) });
+        img = '';
+      }
+    }
+    return {
+      ok: true, qrcode: String(j.qrcode), img,
+      imgYuan: String(j.qrcode_img_content || ''),
+      cuo: img ? '' : '二维码图片取不回来（CSP 只允许本地/内联图片，已尝试由主进程代取）',
+      base,
+    };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e).slice(0, 240) };
   }

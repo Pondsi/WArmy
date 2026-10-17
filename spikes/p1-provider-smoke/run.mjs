@@ -36,7 +36,7 @@ const d2 = await sec.requestBoundaryWrite(
 );
 report.security = { mode: sec.getMode(), tool: d1, outsideWrite: d2 };
 
-const root = 'C:\\Users\\p\\AppData\\Local\\Temp\\warmy-p1-test';
+const root = 'C:\\Users\\<user>\\AppData\\Local\\Temp\\warmy-p1-test';
 const { instances, teardown } = createP1Runtime({ instancesRoot: root });
 report.hardware = instances.hardwareAdvice();
 const h = await instances.spawn({

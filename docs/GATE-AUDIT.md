@@ -107,7 +107,7 @@
 
 ```bash
 # 逐支跑（单支 420s 超时，避免被挂死的那支拖住整体）
-node run-gates.mjs verify-security verify-gate-manifest verify-office-doc-suite
+node dev/gates/run-gates.mjs verify-security verify-gate-manifest verify-office-doc-suite
 
 # 只看清单与统计
 node packages/app-shell/scripts/gen-gate-manifest.mjs      # 刷新清单

@@ -139,7 +139,7 @@
 ## 验证汇总（第 22 轮）
 
 - `tsc -b providers/group-router/sync-protocol/app-shell` = 0 错误；`copy-assets` 已跑。
-- **`node run-verify-22.mjs --tier=fast --times=3`：连续 3 遍全绿**（每遍 61 支、共 183 项次、真红 0、缺文件 0）。
+- **`node dev/gates/run-verify-22.mjs --tier=fast --times=3`：连续 3 遍全绿**（每遍 61 支、共 183 项次、真红 0、缺文件 0）。
   还原 HEAD 对照后又跑了一遍确认（第 4 遍）同样全绿。
 - 首轮 sweep 里 `verify-tool-calls` 的「超长记录分段取回拼回全文」偶发红过 1 次：
   单独复跑 3 次 + 之后 3 遍 sweep 全绿 ⇒ 判偶发；顺带把 runner 改成"红时优先打印失败行"

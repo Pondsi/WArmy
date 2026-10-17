@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dshHome = path.join(os.tmpdir(), `warmy-dsh-home2-${Date.now()}`);
 const profileName = 'warmy-spike5';
 const profileDir = path.join(dshHome, 'profiles', profileName);
-const pnpm = 'C:\\Users\\p\\AppData\\Local\\pnpm\\pnpm.cmd';
+const pnpm = 'C:\\Users\\<user>\\AppData\\Local\\pnpm\\pnpm.cmd';
 const node = process.execPath;
 
 const teamsPkg = path.join(__dirname, 'node_modules', '@nanmicoder', 'dsh-agent-teams');

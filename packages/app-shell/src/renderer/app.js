@@ -5965,7 +5965,8 @@ async function langDuWenBen(text, btnEl) {
    *  · 右键「复制任务内容」；右键期间该行呈选中态。
    */
   const JI_HUA_WEN_AN = {
-    pending: '已创建', doing: '进行中', done: '已完成', verified: '已完成', blocked: '已暂停', deleted: '已删除',
+    /** 第 38 轮 项 10：放弃的步骤界面写「已停止」（用户口径），不再用"已暂停" */
+    pending: '已创建', doing: '进行中', done: '已完成', verified: '已完成', blocked: '已停止', deleted: '已删除',
   };
   function jiHuaZhuangTaiWen(st) {
     return tOr('panel.plan.st.' + st, JI_HUA_WEN_AN[st] || st);
@@ -6228,7 +6229,12 @@ async function langDuWenBen(text, btnEl) {
          * 行内显示仍用 `时:分`（右列窄），但**右键复制出去的内容必须带完整时间**
          * （年月日时分秒）——用户要拿这段文字去别处对齐，只给"05:12"没法用（第 27 轮）。
          */
-        return '<div class="jiHuaHang2' + (wan ? ' yiWan' : '') + '" data-jh="' + escapeHtml(hao) + '" data-jhtext="' + escapeHtml(ren) + '" data-jhfull="' + escapeHtml(hao + '（' + wanZheng + '）' + ren + '（' + jiHuaZhuangTaiWen(st) + '）') + '" title="' + tipH + '">' +
+        /**
+         * 第 38 轮 项 10：**行上必须带 `data-st`**。
+         * CSS 的竖条/删除线规则写的是 `.jiHuaBu[data-st="…"]`，而这里的 DOM 是 `.jiHuaHang2` 且**从来没写
+         * data-st** ⇒ 选择器一条都没命中：已完成还带竖条、已停止也没有删除线（用户说的"状态样式不对"就是这个）。
+         */
+        return '<div class="jiHuaHang2' + (wan ? ' yiWan' : '') + '" data-st="' + escapeHtml(st) + '" data-jh="' + escapeHtml(hao) + '" data-jhtext="' + escapeHtml(ren) + '" data-jhfull="' + escapeHtml(hao + '（' + wanZheng + '）' + ren + '（' + jiHuaZhuangTaiWen(st) + '）') + '" title="' + tipH + '">' +
           '<span class="jiHuaHao">' + escapeHtml(hao) + '</span>' +
           '<span class="jiHuaNeiRong">' + escapeHtml(ren) + '</span>' +
           '<span class="jiHuaCe">' +
@@ -18591,9 +18597,29 @@ async function renderDashboard(host) {
   $('touXiangWenJian').addEventListener('change', (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
-    const duQuQi = new FileReader();
-    duQuQi.onload = () => {
-      const url = String(duQuQi.result || '');
+    /**
+     * 第 38 轮 项 9：**头像要能选 SVG 并正确显示**（本应用的头像本来就是 SVG）。
+     * 三件事：① 选择器 accept 放开 svg（`index.html`）；② 这里按"扩展名 + 声明的 mime"认一次，
+     * 不吃伪装成图片的其它文件；③ SVG 直接原样存 data URL（`<img>` 里画得出，
+     * 且 SVG 里的脚本在 `<img>` 上下文**不会执行**，比 innerHTML 插入安全）。
+     * 体积上限 512KB：头像是小圆图，超了多半是整页插画，如实拒绝并说明。
+     */
+    const ming = String(f.name || '').toLowerCase();
+    const lei = String(f.type || '').toLowerCase();
+    const shiSvg = lei === 'image/svg+xml' || /\.svg$/.test(ming);
+    const hetu = lei.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg)$/.test(ming);
+    if (!hetu) {
+      showToast(tOr('avatar.badType', '头像只能选图片文件（png / jpg / webp / svg）。'));
+      e.target.value = '';
+      return;
+    }
+    if (f.size > 512 * 1024) {
+      showToast(tOr('avatar.tooBig', '这个头像太大了（上限 512KB），换一个小一点的图片。'));
+      e.target.value = '';
+      return;
+    }
+    /** 落地（牛马实例 or 我的头像）——两条读取路径共用 */
+    const luoDing = (url) => {
       if (pendingAvatarTarget && pendingAvatarTarget.kind === 'instance') {
         const inst = pendingAvatarTarget.inst;
         inst.avatarDataUrl = url;
@@ -18610,6 +18636,36 @@ async function renderDashboard(host) {
       saveProfile();
       if (state.nav === 'wo') renderPage();
     };
+    const chengGong = (url) => {
+      if (!url || !/^data:image\//i.test(url)) {
+        showToast(tOr('avatar.readFail', '这个文件读不出图片，换一个。'));
+        return;
+      }
+      luoDing(url);
+    };
+    if (shiSvg) {
+      /**
+       * SVG 走**文本**读再自己拼 data URL：系统的 mime 常给成 `text/xml` /
+       * `application/octet-stream`，直接 readAsDataURL 会存成 `data:text/xml;base64,…`
+       * ⇒ `<img>` 画不出（这就是"选了 svg 头像不显示"）。顺带挡掉不是 svg 的文件。
+       */
+      const duBen = new FileReader();
+      duBen.onload = () => {
+        const wen = String(duBen.result || '');
+        if (!/<svg[\s>]/i.test(wen)) {
+          showToast(tOr('avatar.notSvg', '这个 .svg 文件里没有 <svg> 图形，换一张。'));
+          return;
+        }
+        chengGong('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(wen));
+      };
+      duBen.onerror = () => showToast(tOr('avatar.readFail', '这个文件读不出图片，换一个。'));
+      duBen.readAsText(f);
+      e.target.value = '';
+      return;
+    }
+    const duQuQi = new FileReader();
+    duQuQi.onload = () => chengGong(String(duQuQi.result || ''));
+    duQuQi.onerror = () => showToast(tOr('avatar.readFail', '这个文件读不出图片，换一个。'));
     duQuQi.readAsDataURL(f);
     e.target.value = '';
   });

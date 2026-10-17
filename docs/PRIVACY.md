@@ -125,7 +125,7 @@
 # 六、联系方式
 
 - 邮箱：Public@numumu.com
-- 备用邮箱：232307860@qq.com
+- 备用邮箱：Public@numumu.com
 - 仓库与问题反馈：https://github.com/Pondsi/WArmy
 
 ---

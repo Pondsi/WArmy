@@ -39,7 +39,7 @@ const samples = [
   { id: 3, ti: '进度报告已归档', kind: 'cjk' },
   { id: 4, ti: '测试中文分词能力', kind: 'cjk' },
   { id: 5, ti: 'error code EPIPE qiYong socket', kind: 'ascii' },
-  { id: 6, ti: 'path C:\\Users\\p\\WArmy\\package.json', kind: 'ascii' },
+  { id: 6, ti: 'path C:\\Users\\<user>\\WArmy\\package.json', kind: 'ascii' },
   { id: 7, ti: 'better-sqlite3 version 13.0.3', kind: 'ascii' },
   { id: 8, ti: '值班者状态机与队列编排', kind: 'cjk' },
   { id: 9, ti: '马尔可夫毯上下文包', kind: 'cjk' },

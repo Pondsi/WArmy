@@ -18,7 +18,7 @@ fs.mkdirSync(dshHome, { recursive: true });
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve) => {
-    const pnpmBin = 'C:\\Users\\p\\AppData\\Local\\pnpm';
+    const pnpmBin = 'C:\\Users\\<user>\\AppData\\Local\\pnpm';
     const p = spawn(cmd, args, {
       cwd: opts.cwd || __dirname,
       env: {

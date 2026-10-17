@@ -7,7 +7,7 @@ import os from 'node:os';
 import {createP1Runtime} from '@warmy/app-shell';
 import {findDshPackageDir, ensureDshProfile, writeDshInstanceEntry} from '@warmy/dsh-runtime';
 
-const root = 'C:\\Users\\p\\AppData\\Local\\Temp\\warmy-dsh-p1';
+const root = 'C:\\Users\\<user>\\AppData\\Local\\Temp\\warmy-dsh-p1';
 fs.mkdirSync(root, { recursive: true });
 
 const dshDir = findDshPackageDir([
