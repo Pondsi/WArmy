@@ -55,7 +55,7 @@ export type GongJuZhiXing = (
 ) => Promise<string> | string;
 
 export interface GongJuXunHuanShi {
-  kind: 'round' | 'tool' | 'degraded' | 'final';
+  kind: 'round' | 'tool' | 'degraded' | 'final' | 'retry';
   round: number;
   tool?: string;
   ok?: boolean;
@@ -89,6 +89,19 @@ export interface GongJuXunHuanXuan {
    * 会用 `toolChoice:'required'` + 硬指令再试一次。
    */
   lingGongJuQiangZhi?: boolean;
+  /**
+   * **宿主侧上下文压实钩子**（第 34 轮 项 12）。
+   *
+   * 真事故：模型写长文时每加一段就把**整篇**重发一遍（`write_file` 整篇覆盖，不是 append），
+   * 于是历史里堆了十几份全文 —— 实测一次请求 **23 万 token**，直接把 12.8 万窗口的本地
+   * Ollama 模型打到 `400 request exceeds the available context size`，整轮任务报废。
+   * 循环本身不知道"哪些参数是重复的大正文"（那是产品语义），所以留出这个钩子让宿主来压：
+   * 每次**真正发请求前**拿一份"更短但等价"的消息数组，本地累加的历史不动。
+   *
+   * @param xiaoXiJi 即将发出的消息数组（可以克隆后返回新的）
+   * @param jiYa 上一次请求已经因为"超出上下文"被拒 ⇒ 请压得更狠（把工具结果也截短）
+   */
+  yaSuoLai?: (xiaoXiJi: LiaoTianXiaoXi[], jiYa: boolean) => LiaoTianXiaoXi[];
 }
 
 export interface GongJuXunHuanGuo {
@@ -156,8 +169,9 @@ export async function liaoTianDaiGongJu(
 
   /** 不带 tools 的普通对话（= ADR 002 之前的现状行为） */
   const chunWenBen = async (degraded: boolean, reason?: string): Promise<GongJuXunHuanGuo> => {
+    const yS = typeof o.yaSuoLai === 'function' ? o.yaSuoLai : null;
     const xiangYingTi = await provider.chat(
-      { ...Qiu, tools: undefined, toolChoice: undefined },
+      { ...Qiu, xiaoXiJi: yS ? yS(Qiu.xiaoXiJi, false) : Qiu.xiaoXiJi, tools: undefined, toolChoice: undefined },
       o.signal
     );
     if (degraded) emit({ kind: 'degraded', round: 0, detail: reason });
@@ -196,7 +210,21 @@ export async function liaoTianDaiGongJu(
 
   const diaoYongMoXing = async (toolChoice: LiaoTianQingQiu['toolChoice']): Promise<LiaoTianXiangYing> => {
     qingQiuJi += 1;
-    const xiangYing = await provider.chat({ ...Qiu, xiaoXiJi, tools, toolChoice }, o.signal);
+    const yaSuo = typeof o.yaSuoLai === 'function' ? o.yaSuoLai : null;
+    const xiangYing = await (async (): Promise<LiaoTianXiangYing> => {
+      try {
+        return await provider.chat({ ...Qiu, xiaoXiJi: yaSuo ? yaSuo(xiaoXiJi, false) : xiaoXiJi, tools, toolChoice }, o.signal);
+      } catch (e) {
+        /**
+         * **超出上下文 ⇒ 压实后重发一次**（真机：本地 12.8 万窗口被 23 万 token 的请求打到 400，
+         * 整轮直接死掉、用户只看到"任务没完成"）。压不动就如实把错误交回去（不静默截断用户的活）。
+         */
+        const cuo = String((e && (e as Error).message) || e);
+        if (!yaSuo || !/exceeds the available context|context length|maximum context|too many tokens|token/i.test(cuo)) throw e;
+        emit({ kind: 'retry', round: lunShu, detail: 'compress-after-context-overflow' });
+        return await provider.chat({ ...Qiu, xiaoXiJi: yaSuo(xiaoXiJi, true), tools, toolChoice }, o.signal);
+      }
+    })();
     const siKao = String((xiangYing.choices?.[0]?.message as { reasoning?: unknown } | undefined)?.reasoning || '');
     if (siKao) siKaoJi.push(siKao);
     return xiangYing;
@@ -275,13 +303,8 @@ export async function liaoTianDaiGongJu(
         }
         break;
       }
-      /**
-       * **动手任务首轮零工具** ⇒ 立刻用 `toolChoice:'required'` 强制再试一次。
-       * 真机事故（2026-10-12）：用户让生成 txt+ppt 并打开，模型一轮就 `stop`、
-       * `gongJuDiaoYongJi:0`，正文却写“已生成并打开”。强制 required 能把 function calling
-       * 从“建议”变成“必须”（Ollama OpenAI 兼容端 / vLLM / OpenAI 都认这个值）。
-       */
-      const qiangZhiBenLun = Qiu.toolChoice === 'required' && (o.lingGongJuQiangZhi !== false);
+      // required 只用于首个请求：每轮都 required ⇒ 模型无法自然收尾，只能撞轮数上限（同 Agents SDK reset_tool_choice）
+      const qiangZhiBenLun = lunShu === 0 && Qiu.toolChoice === 'required' && (o.lingGongJuQiangZhi !== false);
       const xiangYing = await diaoYongMoXing(qiangZhiBenLun ? 'required' : 'auto');
       last = xiangYing;
       let xiaoXi = xiangYing.choices[0]?.message;
@@ -305,12 +328,29 @@ export async function liaoTianDaiGongJu(
       }
       if (!diaoYongJi.length) {
         tingZhiYuanYin = 'stop';
+        /**
+         * 跑过工具、模型自己收尾却没写正文 ⇒ 带着整段记忆（含图、工具结果）再要一次最终答复，
+         * 同 smolagents 的 provide_final_answer。真机：Qwen3-VL 一轮里把文件/打开/等待全做完，最后 content 为空，
+         * 宿主只能拿工具名凑一句，续派轮又从头做一遍。
+         */
+        if (lunShu > 0 && !/[\p{L}\p{N}]/u.test(neiRongWenBen(xiaoXi?.content) || '')) {
+          xiaoXiJi.push({ role: 'user', content: '工具都已执行完毕。不要再调用工具，请直接给出面向用户的最终答复：逐条回答用户原话里的问题，说清楚做成了什么、文件在哪里。' });
+          try {
+            const zai = await diaoYongMoXing('none');
+            if (/[\p{L}\p{N}]/u.test(neiRongWenBen(zai.choices[0]?.message?.content) || '')) last = zai;
+            emit({ kind: 'final', round: lunShu, detail: 'empty-stop-final-answer' });
+          } catch {
+            /* 收尾失败就退回原响应，由宿主兜底 */
+          }
+        }
         break;
       }
       lunShu += 1;
       emit({ kind: 'round', round: lunShu, detail: `${diaoYongJi.length} 个工具调用` });
-      // 模型的 tool_calls 必须以 assistant 消息入对话，随后每条都要有对应的 tool 结果
-      xiaoXiJi.push({ role: 'assistant', content: xiaoXi?.content || '', gongJuDiaoYongJi: diaoYongJi });
+      // 模型的 tool_calls 必须以 assistant 消息入对话，随后每条都要有对应的 tool 结果。
+      // 思考也要原样带回（MiMo/DeepSeek/Kimi 交错思考的硬要求）：丢了它，模型下一轮看不到自己为什么调了这个工具，会去"核实"或重做。
+      const siKaoBenLun = String((xiaoXi as { reasoning?: unknown } | undefined)?.reasoning || '');
+      xiaoXiJi.push({ role: 'assistant', content: xiaoXi?.content || '', gongJuDiaoYongJi: diaoYongJi, ...(siKaoBenLun ? { reasoning: siKaoBenLun } : {}) });
       for (const call of diaoYongJi) {
         const ming = call.function?.name || 'unknown';
         const shengYu = zongYuSuan - jieGuoZiShu;

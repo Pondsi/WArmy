@@ -28,6 +28,7 @@ const TIER = (argv.find((a) => /^--tier=/.test(a)) || '--tier=fast').split('=')[
 const FAST = [
   ['assets', 'verify-assets-fresh', 5],
   ['app-shell', 'verify-security', 120],
+  ['app-shell', 'check-syntax', 120],
   ['app-shell', 'verify-gate-manifest', 120],
   ['app-shell', 'verify-secret-at-rest', 120],
   ['app-shell', 'verify-no-empty-catch', 120],
@@ -86,6 +87,12 @@ const FAST = [
   ['root', 'verify-round21-ui-loop', 300],
   ['root', 'verify-round22-decision', 300],
   ['root', 'verify-round22-longrun', 1200],
+  ['root', 'verify-round27-changes', 300],
+  ['root', 'verify-round28-changes', 300],
+  ['root', 'verify-round34-changes', 300],
+  ['root', 'verify-round35-changes', 300],
+  ['root', 'verify-round36-changes', 300],
+  ['root', 'verify-round37-changes', 300],
   ['root', 'verify-tool-args', 300],
 ];
 
@@ -104,6 +111,11 @@ const LIVE = [
   ['root', 'verify-round18f', 900],
   ['root', 'verify-round19', 900],
   ['root', 'verify-round20-team', 1500, ['--ollama']],
+  ['root', 'verify-round27-live', 300],
+  ['root', 'verify-round28-live', 1200],
+  ['root', 'verify-round34-ui', 600],
+  ['root', 'verify-round34-live', 2400],
+  ['root', 'verify-round35-ui', 600],
   ['root', 'verify-ui-lag', 900],
   ['root', 'verify-click-lag', 900],
 ];
@@ -138,6 +150,24 @@ function qingChang() {
     }
     return kou.length;
   } catch { return 0; }
+}
+
+/**
+ * 有没有**用户自己的实例**在跑（没有 --remote-debugging-port、却加载了 electron-main.js）。
+ *
+ * 为什么要单独报：一批真机门禁（round12–19 等）**故意在真实 userData 上跑**（要验的就是真配置），
+ * 而应用是"禁止多开"的：第二个实例拿到锁失败就立刻退出 ⇒ 调试端口根本起不来 ⇒
+ * 日志里只有一句 "CDP not up"，看起来像产品坏了，其实是**用户的应用没关**。
+ * 这里提前说清楚，别让下一个人去改代码找不存在的 bug。
+ */
+function yongHuShiLiZaiPao() {
+  try {
+    const ps = 'Get-CimInstance Win32_Process -Filter "name=\'electron.exe\'" | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress';
+    const j = JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8', timeout: 60000 }));
+    const arr = Array.isArray(j) ? j : [j];
+    const xiao = arr.filter((p) => /electron-main\.js/.test(String(p.CommandLine || '')) && !/remote-debugging-port/.test(String(p.CommandLine || '')));
+    return xiao.map((p) => Number(p.ProcessId));
+  } catch { return []; }
 }
 
 function ziJianAssetsFresh() {
@@ -177,6 +207,13 @@ function pao(where, id, extra, msLimit) {
 }
 
 const results = [];
+const yonghuPids = TIER === 'live' ? yongHuShiLiZaiPao() : [];
+if (yonghuPids.length) {
+  console.log(`\n⚠ 检测到**用户自己的应用实例**正在运行（PID ${yonghuPids.join(', ')}）。`);
+  console.log('  应用禁止多开：真机门禁里那些"故意在真实 userData 上跑"的（round12–19、ui-lag、click-lag…）');
+  console.log('  第二个实例拿不到单实例锁会立刻退出 ⇒ 调试端口起不来 ⇒ 只会报 "CDP not up"。');
+  console.log('  这类失败在下面记为【环境阻塞】，不算产品红。**要真验这批，请先关闭应用再跑一遍。**');
+}
 for (let lun = 1; lun <= TIMES; lun++) {
   console.log(`\n######## 第 ${lun}/${TIMES} 遍 · tier=${TIER} ########`);
   let hong = 0, jzh = 0, que = 0;
@@ -190,17 +227,22 @@ for (let lun = 1; lun <= TIMES; lun++) {
     if (qing) console.log(`  · 清场：收掉 ${qing} 个遗留调试实例`);
     const r = pao(where, id, extra, ms);
     if (TIER === 'live') qingChang();
-    const biaoji = r.ok ? 'PASS' : KNOWN_RED.has(id) ? '已知红' : 'FAIL';
-    if (!r.ok && !KNOWN_RED.has(id)) hong++;
-    if (KNOWN_RED.has(id) && !r.ok) jzh++;
+    /** 用户实例占着真实 userData ⇒ 这类红不是产品红，单独记（别让人去修不存在的 bug） */
+    const beiSuo = !r.ok && TIER === 'live' && yonghuPids.length > 0 && /CDP not up|no CDP/i.test(String(r.tail || ''));
+    const biaoji = r.ok ? 'PASS' : KNOWN_RED.has(id) ? '已知红' : beiSuo ? '环境阻塞' : 'FAIL';
+    if (!r.ok && !KNOWN_RED.has(id) && !beiSuo) hong++;
+    if ((KNOWN_RED.has(id) || beiSuo) && !r.ok) jzh++;
     console.log(`  [${biaoji.padEnd(5)}] ${id.padEnd(32)} ${String(r.ms).padStart(8)}ms${r.ok ? '' : '  ' + r.tail}`);
-    results.push({ lun, tier: TIER, id, ok: r.ok, knownRed: KNOWN_RED.has(id), ms: r.ms });
+    results.push({ lun, tier: TIER, id, ok: r.ok, knownRed: KNOWN_RED.has(id) || beiSuo, ms: r.ms });
   }
   console.log(`\n---- 第 ${lun} 遍汇总（tier=${TIER}）：真红 ${hong} · 已知红(环境依赖) ${jzh} · 缺文件 ${que} ----`);
   if ((hong || que) && !argv.includes('--keep-going')) { console.log('有红项 ⇒ 停止后续轮次（如实报，不硬凑第三遍）'); break; }
 }
 const zong = results.filter((r) => !r.ok && !r.knownRed).length;
 const zongShu = results.length;
-console.log(`\n=== run-verify-22 tier=${TIER}：${TIMES} 遍 · ${zong === 0 ? `连续全绿（${zongShu} 项次）` : `${zong} 项红`} ===`);
+const beiSuoShu = TIER === 'live' && yonghuPids.length ? results.filter((r) => !r.ok && r.knownRed).length : 0;
+const jieLun = zong === 0 ? '无产品红（' + zongShu + ' 项次）' : zong + ' 项红';
+const zhuiJia = beiSuoShu ? ' · 另有 ' + beiSuoShu + ' 项被用户实例阻塞（关掉应用再跑才算真机全验）' : '';
+console.log('\n=== run-verify-22 tier=' + TIER + '：' + TIMES + ' 遍 · ' + jieLun + zhuiJia + ' ===');
 fs.writeFileSync(path.join(root, `verify-22-${TIER}-${TIMES}x.log`), results.map((r) => `${r.lun}\t${r.ok ? 'PASS' : 'FAIL'}\t${r.id}\t${r.ms}ms`).join('\n') + '\n', 'utf8');
 process.exit(zong ? 1 : 0);

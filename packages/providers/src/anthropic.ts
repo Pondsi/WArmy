@@ -1,4 +1,4 @@
-import { JichuGongYing, kongYongLiang, qingQiuJson, pinJieUrl, guiFanYongLiang } from './base.js';
+import { JichuGongYing, kongYongLiang, qingQiuJson, pinJieUrl, guiFanYongLiang, FEI_LIU_CHAT_MS } from './base.js';
 import type { LiaoTianPian, LiaoTianXiaoXi, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
 
 function chaiXiTong(xiaoXiJi: LiaoTianXiaoXi[]): { system?: string; qiYu: LiaoTianXiaoXi[] } {
@@ -118,6 +118,7 @@ export class AnthropicGongYing extends JichuGongYing {
         body: JSON.stringify(this.qingQiuTi(Qiu)),
         signal,
         headers: this.headers(),
+        timeoutMs: this.auth.timeoutMs ?? FEI_LIU_CHAT_MS,
       },
       this.auth
     );

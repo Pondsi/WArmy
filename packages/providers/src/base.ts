@@ -75,6 +75,12 @@ export function kongYongLiang(): HuanCunYongLiang {
   };
 }
 
+/**
+ * 非流式对话的单次上限：整段回复要在一个响应里生成完（长文 3000~5000 字按 ~40 tok/s 要 2~3 分钟），
+ * 用 120 s 的通用默认值会把正常的长回复截成超时。
+ */
+export const FEI_LIU_CHAT_MS = 300_000;
+
 export async function qingQiuJson<T>(
   url: string,
   init: RequestInit & { timeoutMs?: number },
@@ -89,10 +95,11 @@ export async function qingQiuJson<T>(
       ...auth.headers,
       ...((init.headers as Record<string, string>) || {}),
     };
+    // 调用方的取消信号与本函数的超时必须同时生效：只用调用方信号时，挂住的请求永远不会超时
     const res = await fetch(url, {
       ...init,
       headers,
-      signal: init.signal ?? kongZhiQi.signal,
+      signal: init.signal ? AbortSignal.any([init.signal, kongZhiQi.signal]) : kongZhiQi.signal,
     });
     const text = await res.text();
     if (!res.ok) {
@@ -188,6 +195,8 @@ export function zhuanHuanOpenAI(xiaoXiJi: LiaoTianXiaoXi[]): unknown[] {
       return {
         role: 'assistant',
         content: m.content || null,
+        // 只在端点自己吐过思考时回传（OpenAI 官方不吐 ⇒ 不会多出它不认的字段）
+        ...(m.reasoning ? { reasoning_content: m.reasoning } : {}),
         tool_calls: youXiao.map((t) => ({
           id: t.id,
           type: 'function',

@@ -17,7 +17,7 @@
   --radius-sm: 6px;
   --accent: #A87654;
   --danger: #fa5151;
-  --focus: 0 0 0 2px rgba(7, 193, 96, 0.35);
+  --focus: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
   font-size: var(--fs-md);
 }
 
@@ -280,14 +280,14 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 .ceLanTiaoMu { width: 48px; height: 48px; }
 .touXiang {
   width: 40px; height: 40px; border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent), #A87654);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #000 30%));
   color: var(--accent-ink, #fff); display: grid; place-items: center;
   font-size: var(--fs-md); font-weight: 600;
 }
 .touXiangTuPian { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; display: block; }
 .touXiangTuPian.big, .bigAv { width: 72px; height: 72px; border-radius: 16px; }
 .bigAv {
-  background: linear-gradient(135deg, var(--accent), #A87654);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #000 30%));
   color: var(--accent-ink, #fff); display: grid; place-items: center; font-size: 28px; font-weight: 700;
 }
 
@@ -442,8 +442,10 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 .siKaoKuai summary { cursor: pointer; user-select: none; }
 .siKaoKuai pre {
   margin: 6px 0 4px; white-space: pre-wrap; word-break: break-word;
-  /* 思考内容要能**自由滚动**（产品要求）：给足高度，超出出滚动条 */
-  max-height: 42vh; overflow: auto; overscroll-behavior: contain;
+  /* 第 35 轮 项 14：思考/执行内容展开后**不限高、不出滚动条**（完整显示）。
+     注意这份 CSS 在 app.css 之后加载 ⇒ 高度规则必须在这里也改一遍，
+     否则 app.css 里改好的值会被这一条覆盖（真机门禁抓到的就是这个）。 */
+  max-height: none; overflow: visible;
   font-size: var(--fs-xs); line-height: 1.5;
 }
 .moRenBiaoQian {
@@ -826,7 +828,7 @@ table.chaJianJi { width: 100%; border-collapse: collapse; font-size: var(--fs-ba
 table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .huiZhang {
   display: inline-block; padding: 2px 8px; border-radius: 99px;
-  font-size: var(--fs-xs); background: rgba(7,193,96,0.12); color: var(--accent);
+  font-size: var(--fs-xs); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
 }
 .huiZhang.off { background: var(--hover); color: var(--muted); }
 .chaJianMiaoShu { color: var(--muted); font-size: var(--fs-sm); margin-top: 4px; line-height: 1.4; }
@@ -1026,7 +1028,7 @@ details.ctgShouQi > .ctgShouQiTi {
 }
 .kanbanShiJian .evBiaoQian {
   font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
-  background: rgba(7,193,96,.12); color: var(--accent); flex-shrink: 0;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); flex-shrink: 0;
 }
 .provKa {
   border: 1px solid var(--line); border-radius: var(--radius);
@@ -1998,7 +2000,7 @@ body.liaoTianChuangKou #appTi {
 .zhuTiSeKuai {
   width: 36px; height: 36px; padding: 0;
   border-radius: 8px; border: 2px solid var(--line, #ccc);
-  cursor: pointer; background: #A87654;
+  cursor: pointer; background: var(--accent);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
 }
 .zhuTiSeKuai:hover { border-color: var(--accent); }
@@ -2106,13 +2108,39 @@ body.liaoTianChuangKou #appTi {
 .yunXingDian i:nth-child(3) { animation-delay: 0.36s; }
 /* 三只 logo 牛马小跑：**连续走马灯**（两组同内容 → 无接缝循环）。
  * 产品要求：①方向**从左往右**（内容向右移动）②速度**忽快忽慢**（缓慢变化、快慢差距大）
- * ③间距 12px，可视窗 66px = 3 匹完整 + 不露第 4 匹 */
+ * ③间距 12px，可视窗 66px = 3 匹完整 + 不露第 4 匹
+ * 第 35 轮 项 4：最左边**始终预留**一格给「上下蹦跶」的牛马 ⇒ 裁切框移到内层 `.niuMaKuai`，
+ * 外层改成不裁切的 flex 容器（这份 CSS 后加载，会覆盖 app.css，所以两处必须一致）。 */
 .yunXingDian.niuMaPao {
+  width: auto;
+  height: 16px;
+  overflow: visible;
+  position: relative;
+  flex-shrink: 0;
+  gap: 9px;
+}
+.yunXingDian.niuMaPao .niuMaBeng {
+  width: 22px; height: 16px; flex: 0 0 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  visibility: hidden;
+}
+.yunXingDian.niuMaPao .niuMaBeng img { width: 16px; height: 16px; object-fit: contain; }
+.yunXingDian.niuMaPao.youHouTai .niuMaBeng { visibility: visible; }
+.yunXingDian.niuMaPao.youHouTai .niuMaBeng img { animation: niuMaBengTiao 1.4s ease-in-out infinite; }
+@keyframes niuMaBengTiao {
+  0%, 100% { transform: translateY(2px) scaleY(0.9); opacity: 0.7; }
+  25% { transform: translateY(-5px) scaleY(1.06); opacity: 1; }
+  55% { transform: translateY(0) scaleY(0.98); opacity: 1; }
+  75% { transform: translateY(-2px) scaleY(1.02); opacity: 0.9; }
+}
+.yunXingDian.niuMaPao .niuMaKuai {
   width: 66px;
   height: 16px;
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
 }
 .yunXingDian.niuMaPao .niuMaGui {
   display: inline-flex;

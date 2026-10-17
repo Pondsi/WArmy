@@ -104,6 +104,8 @@ export interface LiaoTianXiangYing {
   model: string;
   choices: LiaoTianXuanXiang[];
   usage: HuanCunYongLiang;
+  /** 请求里的图片有几张没送到模型（格式不支持 / 回退阶梯去了图）；调用方据此判断"模型没看到图" */
+  tuShengLue?: number;
   /** 原始协议响应体，便于调试，不入业务逻辑 */
   raw?: unknown;
 }

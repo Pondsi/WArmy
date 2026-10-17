@@ -20,8 +20,11 @@
  *   第 2 层：技能被选中后才读全文正文 ——`zhengWen()`；
  *   第 3 层：正文里指向的 `scripts/`、`references/`、`assets/` 文件按需读。
  *
- * 纯函数、零依赖（自己写 YAML 子集解析，不引 yaml 包）—— 门禁可无头断言。
+ * 解析部分是纯函数、零第三方依赖（自己写 YAML 子集解析，不引 yaml 包）—— 门禁可无头断言。
+ * 唯一的副作用在**依赖探测**（`chaYiLaiQueShao`）：会 `where/which` 起一个子进程查 PATH，
+ * 带 TTL 缓存且不解析输出（本地路径不进日志）。
  */
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -32,6 +35,8 @@ export interface SkillFrontmatter {
   compatibility?: string;
   'allowed-tools'?: string;
   metadata?: Record<string, string>;
+  /** 社区常用写法：`requires: git, jq`（也可能是解析后落到 extra 里） */
+  requires?: string | string[];
   /** 规范之外的字段原样留着（不丢信息） */
   extra?: Record<string, string>;
 }
@@ -225,4 +230,253 @@ export function jiNengDaFen(s: { frontmatter: SkillFrontmatter; dirName: string;
     if (wen.includes(ci)) fen += 1;
   }
   return fen;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 依赖门控（requires）+ 大目录检索索引 —— 第 27 轮 项 4
+ *
+ * 官方口径（不是推断）：Agent Skills 规范把前置条件写在 `compatibility`
+ * （官方例子原文 "Requires git, docker, jq, and access to the internet"）；
+ * 《How to add skills support》的 Filtering 一节要求
+ * **"Hide filtered skills entirely from the catalog rather than listing them and
+ * blocking at activation time"** —— 依赖不满足就**整条从给模型的目录里藏掉**，
+ * 不是"列出来再在激活时拒绝"。`fenLanJiNeng` 就是这条的实现。
+ * 检索接口官方**没有**规定形态（调研结论"未找到权威来源"），下面这套倒排索引是本工程的实现。
+ * ══════════════════════════════════════════════════════════════ */
+
+export interface JinengYiLai {
+  /** 需要能在 PATH 里找到的命令（git / docker / jq / python…） */
+  mingLing: string[];
+  /** 需要的环境变量 */
+  huanJingBianLiang: string[];
+  /** 限定的操作系统（win32 / linux / darwin） */
+  caozuoXiTong: string[];
+  /** 声明里是否要求联网（只做文案，不主动外连探测） */
+  xuYaoWangLuo: boolean;
+  /** 原始声明文本（UI 要原样给人看） */
+  yuanWen: string;
+}
+
+const YI_LAI_GUO_LV = new Set(['requires', 'require', 'and', 'the', 'access', 'internet', 'to', 'of', 'with', 'for', '需要', '以及', '和']);
+
+/** 从 frontmatter 解析依赖：`compatibility` 为主，`metadata.requires` / `requires-bins` 为辅 */
+export function jieXiYiLai(fm: SkillFrontmatter): JinengYiLai {
+  const yuan = String(fm.compatibility || '').slice(0, 500);
+  const fu = String((fm.metadata && (fm.metadata.requires || fm.metadata['requires-bins'])) || '').slice(0, 300);
+  /** 显式 `requires:` 字段（社区常见写法；未识别的 frontmatter 键会进 extra）—— 直接当清单解析，不再猜句式 */
+  const xian = Array.isArray((fm as { requires?: unknown }).requires)
+    ? (fm as unknown as { requires: string[] }).requires.join(', ')
+    : String((fm as { requires?: unknown }).requires || fm.extra?.requires || fm.extra?.['requires-bins'] || '').slice(0, 300);
+  const quan = `${yuan} ; ${fu}${xian ? ' ; requires ' + xian : ''}`;
+  const xiaoXie = quan.toLowerCase();
+  const qingXi = (zheng: string) => zheng
+    .split(/[,，、;；\s]+/)
+    .map((x) => x.replace(/[^a-z0-9_.+-]/gi, ''))
+    .filter((x) => x.length >= 2 && !YI_LAI_GUO_LV.has(x.toLowerCase()));
+  const mingLing: string[] = [];
+  for (const ju of quan.split(/[;；\n]+/)) {
+    const miao = String(ju || '').trim();
+    if (!miao) continue;
+    /** "Requires git, docker, jq" 这种句式优先；没有句式但像逗号清单的（短、多逗号）也认 */
+    const yi = /requires?\s+(.+)/i.exec(miao);
+    const cai = yi ? yi[1] : (miao.length < 200 && miao.split(/[,，]/).length >= 2 ? miao : '');
+    if (!cai) continue;
+    for (const dan of qingXi(cai)) {
+      if (/internet|network|网络/.test(dan)) continue;
+      if (!mingLing.includes(dan)) mingLing.push(dan);
+    }
+    break;
+  }
+  const huanJingBianLiang = [...new Set((quan.match(/\b[A-Z][A-Z0-9_]{2,}\b/g) || []).filter((x) => !['AND', 'THE', 'API', 'URL', 'HTTP', 'HTTPS', 'JSON', 'YAML', 'SKILL', 'CLI', 'PATH', 'OSS'].includes(x)))];
+  const caozuoXiTong: string[] = [];
+  if (/windows|win32/.test(xiaoXie)) caozuoXiTong.push('win32');
+  if (/\blinux\b|ubuntu|debian/.test(xiaoXie)) caozuoXiTong.push('linux');
+  if (/macos|darwin|osx/.test(xiaoXie)) caozuoXiTong.push('darwin');
+  return {
+    mingLing: mingLing.slice(0, 12),
+    huanJingBianLiang: huanJingBianLiang.slice(0, 8),
+    caozuoXiTong,
+    xuYaoWangLuo: /internet|network|联网|网络/.test(xiaoXie),
+    yuanWen: yuan || fu,
+  };
+}
+
+/** 命令在不在 PATH（只看退出码，不解析输出 ⇒ 本地路径不进任何日志）。带 TTL 缓存，避免每次刷新技能列表都 spawn。 */
+const mingLingManCun = new Map<string, { ok: boolean; at: number }>();
+const MING_LING_TTL_MS = 10 * 60 * 1000;
+function mingLingZai(ming: string): boolean {
+  const xian = mingLingManCun.get(ming);
+  if (xian && Date.now() - xian.at < MING_LING_TTL_MS) return xian.ok;
+  let ok = false;
+  try {
+    const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [ming], {
+      encoding: 'utf8', timeout: 2500, windowsHide: true,
+    });
+    ok = !!r && r.status === 0;
+  } catch { ok = false; }
+  mingLingManCun.set(ming, { ok, at: Date.now() });
+  return ok;
+}
+/** 依赖探测结果里"缺什么"（空数组 = 满足） */
+export interface JinengQueShao {
+  mingLing: string[];
+  huanJing: string[];
+  caozuoXiTong: string[];
+}
+
+export function chaYiLaiQueShao(y: JinengYiLai): JinengQueShao {
+  const que: JinengQueShao = { mingLing: [], huanJing: [], caozuoXiTong: [] };
+  for (const m of y.mingLing) if (!mingLingZai(m)) que.mingLing.push(m);
+  for (const h of y.huanJingBianLiang) if (!process.env[h]) que.huanJing.push(h);
+  if (y.caozuoXiTong.length && !y.caozuoXiTong.includes(process.platform)) que.caozuoXiTong.push(y.caozuoXiTong.join('/'));
+  return que;
+}
+
+export function queShaoShuoMing(que: JinengQueShao): string {
+  const bu: string[] = [];
+  if (que.mingLing.length) bu.push(`缺命令 ${que.mingLing.join(' / ')}`);
+  if (que.huanJing.length) bu.push(`缺环境变量 ${que.huanJing.join(' / ')}`);
+  if (que.caozuoXiTong.length) bu.push(`只在 ${que.caozuoXiTong.join(' / ')} 可用（本机是 ${process.platform}）`);
+  return bu.join('；');
+}
+
+export function qingKongYiLaiManCun(): void { mingLingManCun.clear(); }
+
+/**
+ * 分栏：**给模型的目录**只留可用的；**给界面的全量视图**保留全部与"为什么不能用"。
+ * （官方 Filtering 口径：给模型的整条藏掉；对用户则要能解释"我装的技能去哪了"。）
+ */
+export function fenLanJiNeng(quan: Array<SkillJieGuo & { dir: string; dirName: string }>): {
+  quanBu: Array<{ s: SkillJieGuo & { dir: string; dirName: string }; shiYong: boolean; yuanYin: string }>;
+  geiMoXing: Array<SkillJieGuo & { dir: string; dirName: string }>;
+} {
+  const quanBu = quan.map((s) => {
+    if (!s.valid) return { s, shiYong: false, yuanYin: 'SKILL.md 不合规范（name/description 缺失或格式不对）' };
+    const que = queShaoShuoMing(chaYiLaiQueShao(jieXiYiLai(s.frontmatter)));
+    return que ? { s, shiYong: false, yuanYin: que } : { s, shiYong: true, yuanYin: '' };
+  });
+  return { quanBu, geiMoXing: quanBu.filter((x) => x.shiYong).map((x) => x.s) };
+}
+
+/** 索引条目（第 1 层信息：名称 + 用途 + 位置；正文按需再读） */
+export interface JinengSuoXiangMu {
+  dir: string;
+  dirName: string;
+  name: string;
+  description: string;
+  ziShu: number;
+  zhaiYao: string;
+  valid: boolean;
+  shiYong: boolean;
+  yuanYin: string;
+}
+
+export interface JinengSuo {
+  qianMing: string;
+  xiang: JinengSuoXiangMu[];
+  daoPai: Map<string, Set<number>>;
+  saoMiaoShu: number;
+  buHeGuiShu: number;
+}
+
+let jiNengSuo: JinengSuo | null = null;
+const TING_ZI_MU = new Set(['.git', 'node_modules', '.pnpm', 'dist', 'build', '__pycache__', '.venv', 'venv', '.cache']);
+
+function genQianMing(roots: string[]): string {
+  const bu: string[] = [];
+  for (const r of roots) {
+    let shu = -1;
+    let mt = 0;
+    try {
+      mt = Math.round(fs.statSync(r).mtimeMs);
+      shu = fs.readdirSync(r).length;
+    } catch { /* 不存在的根也进签名：从无到有必须重建 */ }
+    bu.push(`${r}|${shu}|${mt}`);
+  }
+  return bu.join('||');
+}
+
+function shouJiJiNeng(roots: string[], shangXian = 2000): Array<SkillJieGuo & { dir: string; dirName: string }> {
+  const out: Array<SkillJieGuo & { dir: string; dirName: string }> = [];
+  const kan = (dir: string, ceng: number) => {
+    if (ceng > 5 || out.length >= shangXian) return;
+    let ems: string[] = [];
+    try { ems = fs.readdirSync(dir); } catch { return; }
+    for (const e of ems) {
+      if (out.length >= shangXian) return;
+      if (TING_ZI_MU.has(e) || e.startsWith('.')) continue;
+      const p = path.join(dir, e);
+      try {
+        if (!fs.statSync(p).isDirectory()) continue;
+      } catch { continue; }
+      if (fs.existsSync(path.join(p, 'SKILL.md'))) {
+        const jie = duSkillMuLu(p);
+        // 技能包内部不再往下钻：scripts/ 里不会有第二个技能
+        if (jie) out.push(jie);
+        continue;
+      }
+      kan(p, ceng + 1);
+    }
+  };
+  for (const r of roots) { try { kan(r, 0); } catch { /* 单根不可读不影响其它根 */ } }
+  return out;
+}
+
+/**
+ * 建/取技能索引：**签名一致就直接复用，不再走盘**。
+ * 以前 `find_skill` 每次调用都 `saoMiaoJiNeng` 全量读目录 + 读每个 SKILL.md，
+ * 用户技能目录一大（几百个包）就是几十秒级的卡顿源。
+ */
+export function jiNengSuoYin(roots: string[], qiangZhiChongJian = false): JinengSuo {
+  const qianMing = genQianMing(roots);
+  if (!qiangZhiChongJian && jiNengSuo && jiNengSuo.qianMing === qianMing) return jiNengSuo;
+  const quan = shouJiJiNeng(roots);
+  const fen = fenLanJiNeng(quan);
+  const xiang: JinengSuoXiangMu[] = [];
+  const daoPai = new Map<string, Set<number>>();
+  for (const x of fen.quanBu) {
+    const i = xiang.length;
+    xiang.push({
+      dir: x.s.dir, dirName: x.s.dirName,
+      name: x.s.frontmatter.name || x.s.dirName,
+      description: String(x.s.frontmatter.description || '').slice(0, 300),
+      ziShu: (x.s.body || '').length,
+      zhaiYao: zhaiYao(x.s),
+      valid: x.s.valid, shiYong: x.shiYong, yuanYin: x.yuanYin,
+    });
+    const wen = `${x.s.frontmatter.name || x.s.dirName} ${x.s.frontmatter.description || ''} ${(x.s.body || '').slice(0, 4000)}`.toLowerCase();
+    for (const ci of new Set(wen.split(/[^a-z0-9_\u4e00-\u9fff-]+/).filter((c) => c.length >= 2))) {
+      const ji = daoPai.get(ci) || new Set<number>();
+      ji.add(i);
+      daoPai.set(ci, ji);
+    }
+  }
+  jiNengSuo = { qianMing, xiang, daoPai, saoMiaoShu: quan.length, buHeGuiShu: quan.filter((s) => !s.valid).length };
+  return jiNengSuo;
+}
+
+export function qingKongJiNengSuoYin(): void { jiNengSuo = null; }
+
+/** 在索引里检索（不走盘）。依赖不满足的一律不进结果（与给模型的目录同一把尺子）。 */
+export function souSuoJiNeng(s: JinengSuo, query: string, zuiDuo = 20): Array<{ xiang: JinengSuoXiangMu; fen: number; mingZhong: string[] }> {
+  if (!query) return s.xiang.filter((x) => x.shiYong).slice(0, zuiDuo).map((x) => ({ xiang: x, fen: 1, mingZhong: [] }));
+  const ciList = String(query).toLowerCase().split(/[^a-z0-9_\u4e00-\u9fff-]+/).filter((x) => x.length >= 2);
+  const de = new Map<number, { fen: number; ci: string[] }>();
+  for (const c of ciList) {
+    for (const [key, ji] of s.daoPai) {
+      if (key !== c && !key.includes(c)) continue;
+      for (const i of ji) {
+        const duo = s.xiang[i];
+        if (!duo || !duo.shiYong) continue;
+        const yi = de.get(i) || { fen: 0, ci: [] };
+        yi.fen += (key === c ? 3 : 1) * (duo.name.toLowerCase().includes(c) ? 10 : duo.description.toLowerCase().includes(c) ? 5 : 1);
+        if (!yi.ci.includes(c)) yi.ci.push(c);
+        de.set(i, yi);
+      }
+    }
+  }
+  return [...de.entries()]
+    .map(([i, x]) => ({ xiang: s.xiang[i]!, fen: x.fen, mingZhong: x.ci }))
+    .sort((a, b) => b.fen - a.fen || a.xiang.name.localeCompare(b.xiang.name))
+    .slice(0, zuiDuo);
 }

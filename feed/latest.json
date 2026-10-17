@@ -1,5 +1,5 @@
 {
-  "version": "0.2.21",
+  "version": "0.2.22",
   "notes": "WArmy v0.2.21 — SKILL.md 规范对齐；Office xlsx/pdf（TrueType 子集化，PDF 中文可复制）；凭据保管；文档抽取统一入口；门禁结果留档；工具调用预算与可观测；会话级回滚；busy-toggle；100 轮长上下文；TTS/ASR 一等公民；调研管线 web_search/web_extract；门禁审计 GATE-AUDIT/MANIFEST。",
   "url": "https://github.com/Pondsi/WArmy/releases/download/v0.2.21/WArmy-Portable-0.2.21.exe",
   "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.2.21/WArmy-Portable-0.2.21.exe",

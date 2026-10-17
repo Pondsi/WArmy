@@ -40,7 +40,8 @@ export class KnowledgeBase {
   private events = new Map<string, ZhishiShijian>();
 
   constructor(private CangLu: string) {
-    fs.mkdirSync(CangLu, { recursive: true });
+    // 目录建不出来也不许把应用带崩（下次写盘会自动重试重建）
+    try { fs.mkdirSync(CangLu, { recursive: true }); } catch { /* 稍后 save() 自愈 */ }
     this.load();
   }
 
@@ -58,12 +59,36 @@ export class KnowledgeBase {
     }
   }
 
+  /**
+   * **写盘自愈**（第 32 轮 项 11 的真因）。
+   *
+   * 真机事故：宿主预置/首启清理会把 userData 下的子目录整片移走（`knowledge/` 就是其中之一），
+   * 而构造器里的 `mkdirSync` **只在启动时跑一次** ⇒ 目录一旦消失就再也不会重建，
+   * 之后**每一轮、每一个模型**都在这里抛 `ENOENT: no such file or directory, open '…knowledge.json'`。
+   * 上层把它当成"模型调用失败"⇒ 调用链一路换模型、全部同样失败 ⇒ 永远出不了最终回复
+   * （用户看到的就是"计划任务都完成了，却没有最终回复，换个模型也没用"）。
+   *
+   * 现在与 `audit.ts` 同一套做法：目录不在就重建再写；仍失败则**降级为不落盘**（内存里的知识仍在），
+   * 绝不让"存知识"这件事把整轮对话带崩。
+   */
   private save(): void {
-    fs.writeFileSync(
+    const xie = () => fs.writeFileSync(
       this.storePath,
       JSON.stringify({ entities: [...this.entities.values()], events: [...this.events.values()] }, null, 2),
       'utf8'
     );
+    try {
+      xie();
+      return;
+    } catch {
+      /* 目录可能被外力清掉：重建一次再试 */
+    }
+    try {
+      fs.mkdirSync(this.CangLu, { recursive: true });
+      xie();
+    } catch {
+      /* 仍写不进去 ⇒ 如实放弃落盘（内存里的内容不丢，下次成功时再写） */
+    }
   }
 
   upsertEntity(partial: Omit<Shiti, 'updatedAt' | 'eventIds'> & { eventIds?: string[] }): Shiti {

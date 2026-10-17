@@ -112,8 +112,11 @@ console.log('\nB. 分身 stub 的退出通道（残留进程）');
 console.log('\nC. 字数统计口径（误判"没写够"）');
 {
   const src = fs.readFileSync(path.join(GEN, 'packages/app-shell/dist/electron-main.js'), 'utf8');
-  shuo(src.includes('function huiHuaZhenShiZiShu'), '存在统一的字数统计函数');
-  const ci = (src.match(/huiHuaZhenShiZiShu\(sessionId\)/g) || []).length;
+  // 统一的字数统计函数第 34 轮换过名字（huiHuaZhenShiZiShu → renWuZiShu，因为口径从"本轮"扩到"本次任务"）；
+  // 这里认**任一名字**，判据不变：有一个统一函数、至少三处判据在用它。
+  const han = /function (huiHuaZhenShiZiShu|renWuZiShu)\b/.exec(src);
+  shuo(!!han, '存在统一的字数统计函数');
+  const ci = ((han && han[1]) ? (src.match(new RegExp(han[1] + '\\((sessionId|sid|String\\(sessionId \\|\\| \'\'\\))\\)', 'g')) || []) : []).length;
   shuo(ci >= 3, `三处判据都改用它（实得 ${ci} 处调用）`);
   shuo(!/benLunChanPin\.reduce\(\(zui, x\) => Math\.max/.test(src),
     '旧的"只取 max"口径已彻底移除（它会把 425 字节的脚本当成正文）');

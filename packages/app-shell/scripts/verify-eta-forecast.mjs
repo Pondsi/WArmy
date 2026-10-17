@@ -155,7 +155,7 @@ check('五类行为都接进了执行路径', ['duiHua', 'gongJu', 'dengDaiHuiFu
 check('判断顺序：先读临时文件 → 3 次就异常 → 才请模型', /panChaoShi\(sessionId, x\)/.test(emTs) && /chao\.yiChang/.test(emTs) && /await panDuanKaSi\(/.test(emTs));
 check('模型没给预计值时：持久文件的方法 → 首次固定值（并如实标注来源）', /yuCeByFangFa\(x, qianMing\)/.test(emTs) && /laiYuan: 'fangFa'/.test(emTs) && /laiYuan: 'moren'/.test(emTs));
 check('换模型顺序：正在用的 → 该牛马调用链 → 云 → 本地（最多 5 个）', /jia\(dangQianMoXing\)/.test(emTs) && /lianMingOf\(sessionId\)/.test(emTs) && /KASI_CHANGSHI/.test(emTs));
-check('判异常后**拦住后续动作**（续派判据里检查标记）', /quEtaYiChang\(sessionId\)\) return \{ jiXu: false, liYou: 'eta-anomaly' \}/.test(emTs));
+check('判异常后**拦住后续动作**（续派判据里检查标记）', /quEtaYiChang\((?:sessionId|sid)\)\)\s*return \{ jiXu: false, liYou: 'eta-anomaly' \}/.test(emTs));
 check('命中上限与异常都写进审计（可追溯）', /plan\.eta-limit-hit/.test(emTs) && /plan\.eta-anomaly/.test(emTs) && /plan\.eta-learn/.test(emTs));
 check('退出前两个文件都落盘', /etaBaCun\(\)/.test(emTs));
 check('聊天里给出"这个预计值不是模型给的"的如实标注', /eta\.notFromModel/.test(emTs));

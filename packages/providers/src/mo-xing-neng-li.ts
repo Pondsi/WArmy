@@ -47,6 +47,12 @@ export interface MoXingNengLi {
   speed?: number;
   /** 能力来源：endpoint=端点给的 / table=已知型号表 / unknown */
   source: 'endpoint' | 'table' | 'unknown';
+  /**
+   * **这个模型在当前供应商上根本用不了**的原因（空/未设 = 能用）。
+   * 例如 Ollama 里 `details.family=unknown` 的 GGUF：引擎加载就失败，
+   * 名字带 whisper 也救不回来 ⇒ 不进任何调用链，界面上原样显示这句原因。
+   */
+  buKeYong?: string;
 }
 
 /** 我们的思考档位（与界面 THINK_STOPS 一致） */
@@ -360,15 +366,24 @@ export function moXingNengLi(modelId: string, duanDian?: Partial<MoXingNengLi> |
   const kind = kindBiao || kindDd || (caiDe !== 'unknown' ? caiDe : 'unknown');
   // 上下文长度：端点 > 已知表（表里没写就 0）
   const ctx = Number((dd as { contextLen?: number } | null)?.contextLen || (biao as { contextLen?: number } | null)?.contextLen || 0);
+  /**
+   * **引擎加载不动的模型，一律 kind='unknown'**（第 27 轮，真机实测）：
+   * Ollama 的 `details.family=unknown` 类 GGUF（如 whisper.cpp 转出来的 `dimavz/whisper-tiny`）
+   * 连纯文本补全都报 `unknown model architecture`，而它的 `capabilities` 却兜底写成 `completion`。
+   * 这种模型**不该进任何调用链**（听话/说话/向量/看图都不进），也不该被"按名字猜"救回来 ——
+   * 名字里带 whisper 只能说明它**原本是**语音模型，不能说明这台 Ollama 跑得动它。
+   */
+  const buKeYong = String((dd as { buKeYong?: string } | null)?.buKeYong || '').trim();
   return {
     vision: qBuZhi(dd?.vision, biao?.vision),
     thinking: qBuZhi(dd?.thinking, biao?.thinking),
     thinkLevels: paiXuDangWei(dd?.thinkLevels && dd.thinkLevels.length ? dd.thinkLevels : (biao?.thinkLevels || [])),
     tools: qBuZhi(dd?.tools, biao?.tools),
-    kind,
+    kind: buKeYong ? 'unknown' : kind,
     contextLen: Number.isFinite(ctx) && ctx > 0 ? Math.floor(ctx) : 0,
     ...(dd?.speakers?.length ? { speakers: dd.speakers } : (biao?.speakers?.length ? { speakers: biao.speakers } : {})),
     ...(dd?.speed ? { speed: dd.speed } : (biao?.speed ? { speed: biao.speed } : {})),
+    ...(buKeYong ? { buKeYong } : {}),
     source: src,
   };
 }

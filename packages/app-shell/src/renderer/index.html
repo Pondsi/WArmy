@@ -521,6 +521,35 @@
       <div class="duiHuaKuangDongZuoJi" id="duiHuaKuangDongZuoJi"></div>
     </div>
   </div>
+  <!-- dsh-market 应用内弹窗（第 27 轮 项 2）
+       · 铺满整窗口的遮罩 ⇒ 主界面点不到（不是新开窗口，也不做可拖动悬浮层）；
+       · 卡片相对视口固定居中 ⇒ 相对主界面位置不可移动；用户在屏幕上拖动主窗口，它自然跟着走。
+       文案全部由 app.js 按当前语言填（这里不放字面量，避免 10 语言漏一种）。 -->
+  <div id="dshMkGen" class="dshMkGen yinCang" role="dialog" aria-modal="true" aria-labelledby="dshMkBiaoTi">
+    <div class="dshMkMask" id="dshMkMask"></div>
+    <div class="dshMkKa">
+      <div class="dshMkHead">
+        <div class="dshMkBrand">
+          <span class="dshMkLogo" aria-hidden="true">dsh</span>
+          <span class="dshMkBiaoTi" id="dshMkBiaoTi">dsh-market</span>
+        </div>
+        <div class="dshMkFu" id="dshMkFu"></div>
+        <button class="dshMkX" id="dshMkGuan" type="button">&times;</button>
+      </div>
+      <div class="dshMkBar">
+        <input class="dshMkSou" id="dshMkSou" type="text" autocomplete="off" spellcheck="false" />
+        <button class="dshMkAn" id="dshMkShua" type="button"></button>
+      </div>
+      <div class="dshMkLei" id="dshMkLeiJi"></div>
+      <div class="dshMkXiaoXi" id="dshMkXiaoXi"></div>
+      <div class="dshMkWang" id="dshMkWang"></div>
+      <div class="dshMkFoot">
+        <span class="dshMkZhu2" id="dshMkZhu"></span>
+        <button class="dshMkAn" id="dshMkGithub" type="button"></button>
+        <button class="dshMkAn dshMkAnZhu" id="dshMkGuan2" type="button"></button>
+      </div>
+    </div>
+  </div>
   <!-- 二维码编码器 + 解码器：都是 vendored 的**经典脚本**（非 ESM，全局 `qrcode` / `jsQR`）。
        file:// + CSP `script-src 'self'` 下这是唯一可行的加载方式：本轮在真实 dist 产物上复现过
        —— 动态 import 与 module 脚本都被拦。两者都必须排在 app.js 之前。

@@ -117,6 +117,13 @@ export function tiQuWenDang(p: string, opts: { maxChars?: number } = {}): WenDan
     const cut = r.text.length > cap;
     return { ok: true, format: 'pdf', text: cut ? r.text.slice(0, cap) : r.text, bytes, pages: r.pages, ...(cut ? { hint: 'PDF 正文较长，已截断。' } : {}) };
   }
+  if (/\.(png|jpe?g|gif|webp|bmp|svg|ico|avif)$/i.test(p)) {
+    return {
+      ok: false, format: 'unknown', text: '', bytes,
+      error: 'is-an-image',
+      hint: '这是图片，不是文档。聊天里附上的图片已经交给看图模型看过，描述就在上下文里，直接用那份描述回答；不要再反复读取这张图。',
+    };
+  }
   return {
     ok: false, format: 'unknown', text: '', bytes,
     error: 'unknown-format',

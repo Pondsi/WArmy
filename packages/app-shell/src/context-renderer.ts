@@ -48,6 +48,11 @@ export interface LogEntry {
   promptTokens?: number;
   completionTokens?: number;
   /**
+   * **续派合并次数**（方案B：合计 + 次数）。
+   * `mergeWithPrev` 把续派回合并进上一条时，词元累加、次数 +1；界面显示「输入X，输出Y · N次」。
+   */
+  turnCount?: number;
+  /**
    * **内部指令**（自动续派的「继续执行计划」等）：**进模型上下文，但不出现在聊天记录里**。
    * 真事故：用户看到聊天里冒出一段自己没说过的话。
    */

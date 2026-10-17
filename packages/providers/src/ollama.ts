@@ -1,6 +1,12 @@
 import { JichuGongYing, pinJieUrl, guiFanYongLiang } from './base.js';
 import type { LiaoTianPian, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
 
+/** 只放行 PNG / JPEG 的 base64：一张解不开的图会让 Ollama 整个请求 400/500，连同截图一起丢 */
+function keFaTu(url: string): string {
+  const b64 = url.replace(/^data:[^,]*,/, '').replace(/^\s+/, '');
+  return /^(?:iVBORw0K|[/_]9j[/_])/.test(b64) ? b64 : '';
+}
+
 /**
  * Ollama 本地协议
  * https://github.com/ollama/ollama/blob/main/docs/api.md
@@ -84,6 +90,7 @@ export class OllamaGongYing extends JichuGongYing {
        */
       let wenBen = '';
       const tuJi: string[] = [];
+      let tuDiu = 0;
       if (typeof m.content === 'string') {
         wenBen = m.content;
       } else if (Array.isArray(m.content)) {
@@ -91,14 +98,15 @@ export class OllamaGongYing extends JichuGongYing {
           if (!kuai) continue;
           if (kuai.type === 'text') wenBen += String(kuai.text || '');
           else if (kuai.type === 'image_url' && kuai.image_url?.url) {
-            const url = String(kuai.image_url.url);
-            const b64 = url.replace(/^data:[^,]*,/, '');
+            const b64 = keFaTu(String(kuai.image_url.url));
             if (b64) tuJi.push(b64);
+            else tuDiu++;
           }
         }
       } else if (m.content != null) {
         wenBen = String(m.content);
       }
+      if (tuDiu) wenBen += `\n（附带的 ${tuDiu} 张图片不是 PNG/JPEG，没有送给模型；如被问到请如实说看不到它们）`;
       const ji: Record<string, unknown> = {
         role: m.role === 'tool' ? 'tool' : m.role,
         content: wenBen,
@@ -121,6 +129,7 @@ export class OllamaGongYing extends JichuGongYing {
           if (!can || typeof can !== 'object' || Array.isArray(can)) can = {};
           return { function: { name: t.function?.name || '', arguments: can } };
         });
+        if (m.reasoning) ji.thinking = m.reasoning;
       }
       return ji;
     });
@@ -153,6 +162,39 @@ export class OllamaGongYing extends JichuGongYing {
       if (Qiu.toolChoice) ji.tool_choice = Qiu.toolChoice;
     }
     return ji;
+  }
+
+  /**
+   * 失败回退阶梯：① 原样 → ② 带图才有：去图（正文注明已省略）→ ③ 带 tools 才有：再去 tools。
+   * 都失败才抛错，外层降级链接手。没有图时不重复发同一个请求体。
+   */
+  private huiTuiJieTi(Qiu: LiaoTianQingQiu, stream: boolean): Array<{ ti: Record<string, unknown>; diuTu: number }> {
+    let zongTu = 0;
+    let keFa = 0;
+    for (const m of Qiu.xiaoXiJi || []) {
+      if (!Array.isArray(m.content)) continue;
+      for (const k of m.content as Array<{ type?: string; image_url?: { url?: string } }>) {
+        if (!k || k.type !== 'image_url' || !k.image_url?.url) continue;
+        zongTu++;
+        if (keFaTu(String(k.image_url.url))) keFa++;
+      }
+    }
+    const yuanTi = this.qingQiuTi(Qiu, stream);
+    const jie = [{ ti: yuanTi, diuTu: zongTu - keFa }];
+    let youTu = false;
+    const quTuJi = (Qiu.xiaoXiJi || []).map((m) => {
+      if (!Array.isArray(m.content)) return m;
+      if (!(m.content as unknown[]).some((k) => k && (k as { type?: string }).type === 'image_url')) return m;
+      youTu = true;
+      const wen = (m.content as Array<{ type?: string; text?: string }>)
+        .map((k) => (k && k.type === 'text' ? String(k.text || '') : ''))
+        .filter(Boolean).join('');
+      return { ...m, content: (wen ? wen + '\n' : '') + '（本轮附带的图片已省略：当前请求无法带图，请按文字说明继续；被问到图片时如实说没看到）' };
+    });
+    const quTu = youTu ? this.qingQiuTi({ ...Qiu, xiaoXiJi: quTuJi }, stream) : yuanTi;
+    if (youTu) jie.push({ ti: quTu, diuTu: zongTu });
+    if (Qiu.tools?.length) jie.push({ ti: { ...quTu, tools: undefined, tool_choice: undefined }, diuTu: youTu ? zongTu : zongTu - keFa });
+    return jie;
   }
 
   /**
@@ -282,46 +324,23 @@ export class OllamaGongYing extends JichuGongYing {
     /** 单次请求硬超时（真机：Ollama 无超时 fetch 会把工具循环挂死，界面永远 busy） */
     const yu = AbortSignal.timeout(this.auth.timeoutMs ?? 60_000);
     const ben = signal ? AbortSignal.any([signal, yu]) : yu;
-    /**
-     * **失败回退阶梯**（修 Failed to tokenize prompt 后的死循环）：
-     *  ① 原样请求
-     *  ② 400 分词失败且带图 ⇒ 去掉图片（正文里注明"图已省略"）再试
-     *  ③ 仍失败且带 tools ⇒ 不带 tools 再试（模板对 tools 形状敏感）
-     *  ④ 都失败才抛错 —— 外层降级链接手。
-     */
-    const jiShi = [
-      this.qingQiuTi(Qiu, false),
-    ];
-    {
-      const quTu = this.qingQiuTi({ ...Qiu, xiaoXiJi: (Qiu.xiaoXiJi || []).map((m) => {
-        if (!Array.isArray(m.content)) return m;
-        const hasImg = (m.content as unknown[]).some((k) => k && (k as { type?: string }).type === 'image_url');
-        if (!hasImg) return m;
-        const wen = (m.content as Array<{ type?: string; text?: string }>)
-          .map((k) => (k && k.type === 'text' ? String(k.text || '') : ''))
-          .filter(Boolean).join('');
-        return { ...m, content: (wen ? wen + '\n' : '') + '（本轮附带的图片已省略：当前请求无法带图，请按文字说明继续）' };
-      }) }, false);
-      jiShi.push(quTu);
-      if (Qiu.tools?.length) {
-        jiShi.push({ ...quTu, tools: undefined, tool_choice: undefined });
-      }
-    }
+    const jiShi = this.huiTuiJieTi(Qiu, false);
     let cuoWu = '';
+    let chong500 = false;
     for (let ci = 0; ci < jiShi.length; ci++) {
       const res = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...this.auth.headers },
-        body: JSON.stringify(jiShi[ci]),
+        body: JSON.stringify(jiShi[ci]!.ti),
         signal: ben,
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         cuoWu = `ollama HTTP ${res.status}: ${text.slice(0, 200)}`;
-        // 500 瞬时故障：稍等再试下一档
-        if (res.status === 500 && ci < jiShi.length - 1) { await new Promise((r) => setTimeout(r, 2000)); continue; }
-        // 400 分词/模板问题：进下一档（去图 / 去 tools）
-        if (res.status === 400 && ci < jiShi.length - 1) continue;
+        // 500 多是 runner 加载中/瞬时崩：同一档先重发一次，仍失败才降档（别一次 500 就把图丢了）
+        if (res.status === 500 && !chong500) { chong500 = true; await new Promise((r) => setTimeout(r, 2000)); ci--; continue; }
+        chong500 = false;
+        if ((res.status === 400 || res.status === 500) && ci < jiShi.length - 1) continue;
         throw new Error(cuoWu);
       }
     const json = (await res.json()) as {
@@ -379,6 +398,7 @@ export class OllamaGongYing extends JichuGongYing {
         },
         'ollama'
       ),
+      ...(jiShi[ci]!.diuTu > 0 ? { tuShengLue: jiShi[ci]!.diuTu } : {}),
       raw: json,
     };
     }
@@ -386,35 +406,24 @@ export class OllamaGongYing extends JichuGongYing {
   }
 
   async *chatStream(Qiu: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian> {
-    /** 与 chat() 同一套失败回退：原样 → 去图 → 去 tools（分词失败不再整轮崩） */
-    const caiDan = [this.qingQiuTi(Qiu, true)];
-    {
-      const quTu = this.qingQiuTi({ ...Qiu, xiaoXiJi: (Qiu.xiaoXiJi || []).map((m) => {
-        if (!Array.isArray(m.content)) return m;
-        const hasImg = (m.content as unknown[]).some((k) => k && (k as { type?: string }).type === 'image_url');
-        if (!hasImg) return m;
-        const wen = (m.content as Array<{ type?: string; text?: string }>)
-          .map((k) => (k && k.type === 'text' ? String(k.text || '') : ''))
-          .filter(Boolean).join('');
-        return { ...m, content: (wen ? wen + '\n' : '') + '（本轮附带的图片已省略：当前请求无法带图，请按文字说明继续）' };
-      }) }, true);
-      caiDan.push(quTu);
-      if (Qiu.tools?.length) caiDan.push({ ...quTu, tools: undefined, tool_choice: undefined });
-    }
+    const caiDan = this.huiTuiJieTi(Qiu, true);
     let res: Response | null = null;
     let cuoWu = '';
+    let chong500 = false;
     for (let ci = 0; ci < caiDan.length; ci++) {
       const r = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...this.auth.headers },
-        body: JSON.stringify(caiDan[ci]),
+        body: JSON.stringify(caiDan[ci]!.ti),
         signal,
       });
       if (r.ok && r.body) { res = r; break; }
       const text = await r.text().catch(() => '');
       cuoWu = `ollama stream ${r.status}: ${text.slice(0, 200)}`;
-      if (r.status === 400 && ci < caiDan.length - 1) continue;
-      if (r.status === 500 && ci < caiDan.length - 1) { await new Promise((x) => setTimeout(x, 1500)); continue; }
+      if (r.status === 500 && !chong500) { chong500 = true; await new Promise((x) => setTimeout(x, 1500)); ci--; continue; }
+      chong500 = false;
+      if ((r.status === 400 || r.status === 500) && ci < caiDan.length - 1) continue;
+      break;
     }
     if (!res || !res.body) {
       throw new Error(cuoWu || 'ollama stream failed');
@@ -513,10 +522,10 @@ export class OllamaGongYing extends JichuGongYing {
   async listModelsDetailed(signal?: AbortSignal): Promise<Array<{
     id: string; thinkLevels: string[]; supportsThinking: boolean;
     vision: boolean | 'unknown'; tools: boolean | 'unknown';
-    kind: string; contextLen: number;
+    kind: string; contextLen: number; buKeYong?: string;
   }>> {
     const ids = await this.listModels(signal);
-    const out: Array<{ id: string; thinkLevels: string[]; supportsThinking: boolean; vision: boolean | 'unknown'; tools: boolean | 'unknown'; kind: string; contextLen: number }> = [];
+    const out: Array<{ id: string; thinkLevels: string[]; supportsThinking: boolean; vision: boolean | 'unknown'; tools: boolean | 'unknown'; kind: string; contextLen: number; buKeYong?: string }> = [];
     for (const id of ids) {
       let vision: boolean | 'unknown' = 'unknown';
       let tools: boolean | 'unknown' = 'unknown';
@@ -524,6 +533,7 @@ export class OllamaGongYing extends JichuGongYing {
       let thinkLevels: string[] = [];
       let contextLen = 0;
       let kind = 'unknown';
+      let jiaTing = '';
       try {
         const res = await fetch(pinJieUrl(this.baseURL, 'api/show'), {
           method: 'POST',
@@ -535,10 +545,27 @@ export class OllamaGongYing extends JichuGongYing {
           const j = (await res.json()) as {
             capabilities?: unknown[];
             model_info?: Record<string, unknown>;
+            details?: { family?: unknown; families?: unknown };
           };
           const caps = Array.isArray(j.capabilities) ? j.capabilities.map((x) => String(x).toLowerCase()) : [];
           const info = j.model_info || {};
           const infoKeys = Object.keys(info);
+          /**
+           * **`details.family` 是"这台 Ollama 到底加不加载得动"的硬事实**（第 27 轮，真机实测）：
+           * `dimavz/whisper-tiny:latest` → `family:"unknown"`，`/api/generate` **连纯文本都失败**：
+           * `error loading model: unknown model architecture: ''`（whisper.cpp 的 GGUF 不导出
+           * `general.architecture`，llama.cpp 认不出来）。它的 `capabilities` 却写着 `["completion"]`
+           * —— 那是识别不出架构时的**兜底值**，不能当成"它会对话"。
+           * ⇒ family 为 unknown/空的模型**不进任何调用链**（听话/说话/向量/看图都不进），
+           *    并在界面上写清为什么，免得用户以为"配了却不好用"。
+           */
+          const jiaTing0 = String((j.details && j.details.family) || '').trim().toLowerCase();
+          const jiaZu = Array.isArray(j.details?.families) ? (j.details?.families || []).map((x) => String(x).toLowerCase()) : [];
+          if (!jiaTing0 || jiaTing0 === 'unknown') {
+            const keNeng = jiaZu.filter((x) => x && x !== 'unknown');
+            if (!keNeng.length) jiaTing = 'Ollama 认不出这个模型的架构（details.family=unknown），实测加载失败：'
+              + '"error loading model: unknown model architecture" —— 它在 Ollama 里既不能对话也不能转写';
+          }
           if (caps.length) {
             vision = caps.some((c) => /vision|image/.test(c));
             /**
@@ -561,10 +588,23 @@ export class OllamaGongYing extends JichuGongYing {
             else if (/\btts\b|text-to-speech|cosyvoice|vits|bark|sovits/.test(quanMing)) { kind = 'tts'; tools = false; }
             else if (/bge-|embed|gte-|nomic-embed|text-embedding/.test(quanMing)) { kind = 'embedding'; tools = false; }
             else if (/rerank/.test(quanMing)) { kind = 'rerank'; tools = false; }
-            else if (/stable-diffusion|sdxl|flux|text-to-image/.test(quanMing)) { kind = 'image'; tools = false; }
+            else if (/stable-diffusion|sdxl|flux|text-to-image/.test(quanMing)) { kind = 'imageUnd'; tools = false; }
             // **按 capabilities 判类型**（真事故：bge-m3 是 embedding 模型，被当成可用聊天模型）
             else if (caps.some((c) => /embedding/.test(c))) kind = 'embedding';
-            else if (caps.some((c) => /vision|image/.test(c)) && !caps.some((c) => /completion|generate|chat/.test(c))) kind = 'image';
+            /**
+             * 第 35 轮 项 7：**先认 `decision`（分类/决策模型）**。
+             * 实测 `clef:latest` / `clef-flash:latest` 的能力是 `decision,vision` ——
+             * 没有 completion，但**会看图**做分类。旧代码只看到"有 vision 没 completion"
+             * 就判成 `image`（画图），界面上于是给一个决策模型打上「画图」标签。
+             * 用户也明确说：这两个是分类（决策）模型。
+             */
+            else if (caps.some((c) => /decision|classif/.test(c))) kind = 'decision';
+            /**
+             * 第 35 轮 项 7：**Ollama 根本不会生成图片**，`vision` 只代表"能读图"。
+             * 有 vision 而没有 completion ⇒ 明确是**图像理解**（`imageUnd`），
+             * 绝不能升级成 `image`（生成）。真正的生成模型只在显式声明时才算。
+             */
+            else if (caps.some((c) => /vision|image/.test(c)) && !caps.some((c) => /completion|generate|chat|thinking/.test(c))) kind = 'imageUnd';
             else if (caps.some((c) => /completion|generate|chat|thinking/.test(c))) kind = 'chat';
             // 聊天类默认可试 tools（Ollama 多数 chat 模型支持；失败由外层降级）
             if (kind === 'chat' && tools === 'unknown') tools = true;
@@ -595,7 +635,7 @@ export class OllamaGongYing extends JichuGongYing {
       } catch {
         /* 单个模型查不到 ⇒ 保持 unknown（不猜） */
       }
-      out.push({ id, thinkLevels, supportsThinking, vision, tools, kind, contextLen });
+      out.push({ id, thinkLevels, supportsThinking, vision, tools, kind: jiaTing ? 'unknown' : kind, contextLen, ...(jiaTing ? { buKeYong: jiaTing } : {}) });
     }
     return out;
   }

@@ -86,13 +86,27 @@ export interface WorkToolResult {
     chars?: number;
     /** write_file：写完自检，文件真的在不在 */
     exists?: boolean;
+    /** write_file：这次是追加（true）还是整篇覆盖 */
+    appended?: boolean;
+    /** write_file：这次调用本身写了多少字符（chars 是文件当前总字数） */
+    wroteChars?: number;
     /** read_archive_entry：读的是压缩包里的哪一条 */
     entry?: string;
     /** make_pdf：内嵌用的字体路径 */
     font?: string;
     /** make_pdf：字体里缺字形、渲染为空白的字符（如实上报） */
     missing?: string[];
+    /** make_* 生成器：参数里真正写进文件的净字数（空稿闸与"内容真的写进去了"的证据） */
+    ziShu?: number;
+    /** make_pptx：页数 */
+    pian?: number;
   };
+}
+
+let xiTongJia: { desktop?: string; documents?: string; downloads?: string } = {};
+/** 系统已知文件夹的真实位置（主进程用 app.getPath 注入）：桌面被重定向到别的盘时，home\Desktop 根本不存在 */
+export function sheZhiXiTongWenJianJia(m: { desktop?: string; documents?: string; downloads?: string }): void {
+  xiTongJia = { ...m };
 }
 
 /**
@@ -114,10 +128,26 @@ export function yingSheYongHuWenJianJia(raw: string): { abs: string; rest: strin
     const cun = path.join(home, zhong);
     return fs.existsSync(cun) ? cun : '';
   };
-  // 中文 Windows 的桌面/文档/下载可能是中文名；哪个存在用哪个（都不存在就用英文惯例名）
-  const zhuoMian = tiao('Desktop') || tiao('桌面') || path.join(home, 'Desktop');
-  const wenDang = tiao('Documents') || tiao('文档') || path.join(home, 'Documents');
-  const xiaZai = tiao('Downloads') || tiao('下载') || path.join(home, 'Downloads');
+  const zhen = (k: 'desktop' | 'documents' | 'downloads'): string => {
+    const p = String(xiTongJia[k] || '');
+    return p && fs.existsSync(p) ? p : '';
+  };
+  // 系统登记的位置优先；其次中文 Windows 的中文名；都不存在就用英文惯例名
+  const zhuoMian = zhen('desktop') || tiao('Desktop') || tiao('桌面') || path.join(home, 'Desktop');
+  const wenDang = zhen('documents') || tiao('Documents') || tiao('文档') || path.join(home, 'Documents');
+  const xiaZai = zhen('downloads') || tiao('Downloads') || tiao('下载') || path.join(home, 'Downloads');
+  // 模型照惯例猜的 C:\Users\<名>\Desktop\…：那个文件夹不存在、真实桌面在别处 ⇒ 落到真实桌面（不凭空新建一个"桌面"）
+  const homeXie = home.replace(/\\/g, '/').replace(/\/+$/, '');
+  const caiCe: Array<[string, string]> = [['Desktop', zhuoMian], ['桌面', zhuoMian], ['Documents', wenDang], ['文档', wenDang], ['Downloads', xiaZai], ['下载', xiaZai]];
+  for (const [ming, dir] of caiCe) {
+    const qian = (homeXie + '/' + ming).toLowerCase();
+    const xiao = s0.toLowerCase();
+    if (xiao !== qian && !xiao.startsWith(qian + '/')) continue;
+    const cai = path.join(home, ming);
+    if (!fs.existsSync(cai) && path.resolve(dir).toLowerCase() !== path.resolve(cai).toLowerCase()) {
+      return { abs: dir, rest: s0.slice(qian.length + 1) };
+    }
+  }
   const biao: Array<[RegExp, string]> = [
     [/^(?:~\/)?(?:Desktop|桌面)\/?(.*)$/i, zhuoMian],
     [/^(?:~\/)?(?:Documents|文档)\/?(.*)$/i, wenDang],
@@ -215,7 +245,62 @@ export function relOf(baseDir: string, abs: string): string {
 
 function fail(tool: string, err: unknown, p?: string): WorkToolResult {
   const msg = err instanceof Error ? err.message : String(err);
+  /**
+   * **文件被别的程序占着**（真机：桌面上那份 pptx 正被 PowerPoint 打开着，
+   * `make_pptx` 写同名文件直接 EBUSY）——
+   * 以前只回一句 `EBUSY: resource busy or locked`，模型就会**换个文件名再生成一份**
+   * （用户看到的就是"PPT 被重复生成"）。这里给出明确指引：**不要改名重造**，
+   * 先如实告诉用户关掉那个文件；确实需要时用新名字并说明原因。
+   */
+  if (/EBUSY|EPERM|resource busy or locked/i.test(msg)) {
+    const ming = p ? String(p).split(/[\\/]/).pop() : '';
+    const wen = `[${tool}] 失败：目标文件正被其他程序占用（${ming || '目标文件'} 已打开）。
+**不要改成别的文件名重新生成一份** —— 那会产出重复文件。请如实告诉用户「请先关闭 ${ming || '该文件'}，我再重写」，或改用另一个**明确的新名字**并把原因说清楚。`;
+    return { ok: false, content: wen, meta: { tool, ok: false, bytes: 0, ...(p ? { path: p } : {}), error: 'file-locked' } };
+  }
   return { ok: false, content: `[${tool}] 失败：${msg}`, meta: { tool, ok: false, bytes: 0, ...(p ? { path: p } : {}), error: msg } };
+}
+
+/**
+ * 目标被别的程序锁着（典型：同名 pptx/docx/xlsx 正在 Office 里开着）⇒ 不覆盖它，另存为「名 (2).扩展名」。
+ * 交给模型自己改名，它会一份接一份地重造（真机：同一个 PPT 出现好几份）；宿主改一次、如实说出来就够了。
+ * 已存在的「名 (n)」一律不碰（可能是用户自己的文件）。
+ */
+function xieRuBiKaiSuoDing(file: string, buf: Buffer): { file: string; lingCun: boolean } {
+  try {
+    fs.writeFileSync(file, buf);
+    return { file, lingCun: false };
+  } catch (e) {
+    if (!/EBUSY|EPERM|resource busy or locked/i.test(String((e as Error)?.message || e))) throw e;
+    const ext = path.extname(file);
+    const ji = file.slice(0, file.length - ext.length);
+    for (let i = 2; i <= 9; i++) {
+      const hou = `${ji} (${i})${ext}`;
+      if (fs.existsSync(hou)) continue;
+      try { fs.writeFileSync(hou, buf); } catch { break; }
+      return { file: hou, lingCun: true };
+    }
+    throw e;
+  }
+}
+function lingCunShuoMing(yuan: string, xie: { file: string; lingCun: boolean }, chengXu: string): string {
+  return xie.lingCun
+    ? `\n注意：${path.basename(yuan)} 正被其他程序占用（多半已在 ${chengXu} 里打开），没有覆盖它，已另存为 ${path.basename(xie.file)}。请如实告诉用户这一点，后续打开/引用都用新文件名；不要再换名字重新生成。`
+    : '';
+}
+/**
+ * **生成器空稿闸**（第 34 轮 项 12 收尾，真机 r35-live5-ollama-4）。
+ *
+ * 事故：模型把 `make_pptx` 的 `slides` 发成空数组（正文落在别的键上），旧代码兜底成
+ * `[{title:'',body:['']}]` ⇒ **照样写出一个"成功"的 pptx**，打开是模板自带的占位字（提取出来 9 字，
+ * 连用户要的标题都没有）。用户桌面上多出一个空壳交付物，而审计里全程 ok=true、计划步骤还被
+ * 自动判成 verified —— 这是"结果假成功"，比失败更难发现。
+ * 判据只用**参数里的事实**：去掉空白后一个字都没有 ⇒ 不写文件、如实失败并点名该填哪个字段。
+ * ⚠️ 只有"完全没有正文"才拦：一页只写标题（几个字）是合法的精简 PPT，不能误伤。
+ */
+/** 净字数（不计空白与换行）：只用来判"有没有真的写进内容" */
+function jingZi(wen: string): number {
+  return String(wen || '').replace(/[\s\u3000]+/g, '').length;
 }
 
 /** 列目录 */
@@ -451,22 +536,52 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
     }
     /**
      * **图片不要用 read_file 读**（真机事故：模型把 53KB 截图当文本读回来，白白烧一轮）。
-     * 图片已经作为多模态内容块直接可见（见 `llm.imagesVisible`）；真要看"这是什么文件"，
-     * 这里如实给一句元信息就够了，不要倒二进制。
+     * 只给元信息，并如实说明"看得到什么"：随消息附带的图已在对话里（图片本身，或本机看图模型写的描述）；
+     * 不在对话里的图 read_file 也看不到 —— 以前这里一律说"直接可见"，没附带的图也这么说，模型就照着编。
      */
     if (/\.(png|jpe?g|gif|webp|bmp|ico|tiff?)$/i.test(file)) {
       const zhi = fs.statSync(file);
-      const shuoMing = `[read_file] 这是**图片文件**（${path.basename(file)}，${zhi.size} 字节，修改于 ${zhi.mtime.toISOString()}）。`
-        + '图片内容已经**直接可见**（多模态输入），不需要再 read_file 读它；要判断图里是什么，直接看图回答即可。';
+      const shuoMing = `[read_file] 这是**图片文件**（${path.basename(file)}，${zhi.size} 字节，修改于 ${zhi.mtime.toISOString()}）。read_file 只读文本，读不到图片内容。`
+        + '如果它是用户随消息附带的：图已经在本轮对话里（图片本身，或本机看图模型写好的文字描述），直接据此回答，不要再读它；'
+        + '如果对话里没有这张图的内容，就如实告诉用户你看不到它，请对方把它作为附件发来。';
       return { ok: true, content: shuoMing, meta: { tool, ok: true, bytes: zhi.size, path: relOf(baseDir, file), truncated: false } };
     }
     // 其它二进制（字体/压缩包/可执行…）同样不倒字节：如实说类型与大小
-    if (/\.(ttf|otf|ttc|woff2?|zip|7z|rar|exe|dll|so|node|pdf|mp3|wav|mp4|mov|webm|avi|mkv)$/i.test(file)) {
+    /**
+     * 第 36 轮【项 7】：**"查看这个文件是什么"必须能靠 read_file 得到答案**。
+     *
+     * 真机反馈：用户让牛马"看看 `F:\XXZ\Qoder-win-x64-user.exe` 和 `视频.svg` 是什么"，
+     * 行动明细里显示的是**编辑**而不是**读取** —— 因为 read_file 这里只说"倒不出内容"，
+     * 模型只好换别的工具（换到 edit_file 去了）。
+     * 现在把**能确定的元信息一次说完**（类型判定 + 大小 + 修改时间 + 一句结论），
+     * 并明确告诉模型"这就是查看的结论，不需要换工具再读一遍"。
+     */
+    if (/\.(ttf|otf|ttc|woff2?|zip|7z|rar|exe|dll|so|node|pdf|mp3|wav|mp4|mov|webm|avi|mkv|svg|ico|dat|bin|iso|msi)$/i.test(file)) {
       const zhi = fs.statSync(file);
+      const qian = buf.subarray(0, 8);
+      const tou = qian.toString('hex').toUpperCase();
+      /** 按文件头认类型（后缀可以骗人）：只认几个最常见、判定可靠的 */
+      const lei = /^4D5A/.test(tou) ? 'Windows 可执行程序（PE，MZ 头）'
+        : /^504B0304/.test(tou) ? 'ZIP 容器（很多文档格式本质是 zip）'
+          : /^25504446/.test(tou) ? 'PDF 文档'
+            : /^89504E47/.test(tou) ? 'PNG 图片'
+              : /^FFD8FF/.test(tou) ? 'JPEG 图片'
+                : /^1F8B/.test(tou) ? 'gzip 压缩'
+                  : /^3C(\?xml|svg)/i.test(buf.subarray(0, 8).toString('latin1')) ? 'SVG 矢量图（文本文件，可用 read_file 直接读源码）'
+                    : '';
+      const houZhui = String(path.extname(file) || '（无扩展名）');
+      const shiSvg = /\.svg$/i.test(file) || /SVG 矢量图/.test(lei);
       return {
         ok: true,
-        content: `[read_file] 这是**二进制文件**（${path.basename(file)}，${zhi.size} 字节），read_file 只读文本，不倒二进制内容。`
-          + (/\.pdf$/i.test(file) ? '要读 PDF 正文请用 read_docx 同类的文档工具，或让用户导出为文本。' : '要处理它请用对应能力（看图/听音/看视频/文档工具）。'),
+        content: `[read_file] 已读到这个文件的**元信息**（这就是"它是什么"的答案）：
+· 名称：${path.basename(file)}
+· 扩展名：${houZhui}
+· 大小：${zhi.size} 字节
+· 修改时间：${zhi.mtime.toISOString()}
+· 文件头：${tou.slice(0, 16)} → ${lei || '未识别的二进制'}
+${shiSvg
+    ? '· 说明：SVG 是**文本**格式，看内容用 read_file 就行（后缀在二进制名单里是历史原因，这里已放行）。'
+    : '· 说明：这是二进制，read_file 不倒字节内容 —— 上面的类型/大小/时间就是能确定的事实，**不要换个工具再读一遍**。要处理它请用对应能力（看图 / 听音 / 看视频 / 文档工具 / 直接运行前先问用户）。'}`,
         meta: { tool, ok: true, bytes: zhi.size, path: relOf(baseDir, file), truncated: false },
       };
     }
@@ -483,30 +598,35 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
 }
 
 /** 写文件（必要时建父目录）；超上限**拒绝**，不截断。`append:true` = 追加到已有文件末尾（长文分段写） */
-/** 会话 id 叠两遍时的回落解析（workspace/inst-x/inst-x/f → workspace/inst-x/f） */
+/**
+ * 会话 id 叠两遍时的回落（workspace/inst-x/inst-x/f → workspace/inst-x/f）：只认「首段 = 本会话目录名」且落在工作区内。
+ * 不能「去掉任意首段找同名文件」：已授权的 `Desktop/x.txt` 曾被改写成工作区里早先那份 `x.txt`。
+ */
 function huiLuoHuiHuaGen(baseDir: string, raw: string, file: string): string {
   try {
     if (fs.existsSync(file)) return file;
     const r = String(raw || '').trim();
     if (!r || path.isAbsolute(r)) return file;
-    const root = path.resolve(baseDir, '..');
-    const shang = path.resolve(root, r);
-    if (shang !== root && shang.startsWith(root + path.sep) && fs.existsSync(shang)) return shang;
+    const base = path.resolve(baseDir);
+    const muBiao = path.resolve(file);
+    if (muBiao !== base && !muBiao.startsWith(base + path.sep)) return file;
+    const qian = r.split(/[\\/]/)[0] || '';
+    if (!qian || qian !== path.basename(base)) return file;
     const pei = r.match(/^[^/\\]+[\\/](.+)$/);
-    if (pei && pei[1]) {
-      const qu = path.resolve(baseDir, pei[1]);
-      if (fs.existsSync(qu)) return qu;
-      /**
-       * **新建文件**时也要防「会话 id 叠两遍」：raw 形如 inst-x/hello.txt，
-       * baseDir 已是 …/workspace/inst-x ⇒ 再拼会变成 inst-x/inst-x/hello.txt。
-       * 若前缀正好是本会话目录名，就写到去前缀的位置。
-       */
-      const gen = path.basename(path.resolve(baseDir));
-      const qian = String(r).split(/[\\/]/)[0] || '';
-      if (qian && qian === gen) return qu;
-    }
-    return file;
+    return pei && pei[1] ? path.resolve(base, pei[1]) : file;
   } catch { return file; }
+}
+
+/**
+ * write_file 的 append 开关：模型常把布尔值写成字符串（"true"）或 mode:"append"。
+ * 只认 `=== true` 时这类调用会被当成覆盖 ⇒ 分段写的长文每段都把前一段冲掉。
+ */
+export function shiZhuiJia(a: unknown): boolean {
+  const o = (a && typeof a === 'object' ? a : {}) as { append?: unknown; mode?: unknown };
+  const v = o.append;
+  if (v === true || v === 1) return true;
+  if (typeof v === 'string' && /^\s*(?:true|1|yes|append)\s*$/i.test(v)) return true;
+  return typeof o.mode === 'string' && /^\s*append\s*$/i.test(o.mode);
 }
 
 export function workWriteFile(baseDir: string, args: { path?: string; content?: string; append?: boolean }, kuaiQuan = false): WorkToolResult {
@@ -550,7 +670,7 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
      * "分段写 + 追加"：第一段用 `append:false` 建文件，后续每次带 `append:true` 续写，
      * 每次只写一段（几百到一千字），写完一段再写下一段。
      */
-    const zhuiJia = (args as { append?: unknown }).append === true && fs.existsSync(file);
+    const zhuiJia = shiZhuiJia(args) && fs.existsSync(file);
     if (zhuiJia) fs.appendFileSync(file, content, 'utf8');
     else fs.writeFileSync(file, content, 'utf8');
     /**
@@ -570,7 +690,7 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
       ok: cun,
       content: `${zhuiJia ? '已追加写入' : '已写入'} ${file}（本次 ${bytes} 字节 / ${[...content].length} 字符；文件当前共 ${zongBytes} 字节 / ${zongZi} 字符）${cun ? '，文件已自检存在' : '，⚠️ 自检未找到文件（异常）'}\n`
         + `【请在给用户的最终回复里**原样引用这个绝对路径**】${file}`,
-      meta: { tool, ok: cun, bytes: zongBytes, chars: zongZi, path: relOf(baseDir, file), abs: file, exists: cun },
+      meta: { tool, ok: cun, bytes: zongBytes, chars: zongZi, path: relOf(baseDir, file), abs: file, exists: cun, appended: zhuiJia, wroteChars: [...content].length },
     };
   } catch (e) {
     return fail(tool, e);
@@ -702,12 +822,17 @@ export function workMakeDocx(baseDir: string, args: { path?: string; paragraphs?
       ? (duanRaw as unknown[]).map((s) => String(s))
       : String((args && args.content) ?? '').split(/\r?\n/);
     const buf = shengChengDocx(duan);
+    const docZiShu = duan.reduce((n: number, s: string) => n + jingZi(s), 0);
+    if (docZiShu <= 0) {
+      return fail(tool, new Error('make_docx-empty-content：这次调用一个字正文都没有（paragraphs/content 是空的）⇒ 生成出来是空白 Word 文档，宿主没有写这个文件。'
+        + '请把内容放进参数再发一次：{"path":"…docx","content":"正文…"}（或 paragraphs:["第一段","第二段"]）。'), rawP);
+    }
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, buf);
+    const xie = xieRuBiKaiSuoDing(file, buf);
     return {
       ok: true,
-      content: `已生成 Word 文档 ${file}（${buf.length} 字节，${duan.length} 段；可直接用 Word 打开）`,
-      meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), abs: file },
+      content: `已生成 Word 文档 ${xie.file}（${buf.length} 字节，${duan.length} 段、正文合计 ${docZiShu} 字；可直接用 Word 打开）` + lingCunShuoMing(file, xie, 'Word'),
+      meta: { tool, ok: true, bytes: buf.length, ziShu: docZiShu, path: relOf(baseDir, xie.file), abs: xie.file },
     };
   } catch (e) {
     return fail(tool, e);
@@ -725,20 +850,42 @@ export function workMakePptx(baseDir: string, args: { path?: string; slides?: Ar
       return fail(tool, new Error('pptx-template-missing：随包模板不可用（' + muBan + '）。如实告知用户当前无法生成 .pptx，不要假装成功。'), rawP);
     }
     const pianRaw = args && args.slides;
-    const pian = Array.isArray(pianRaw) && pianRaw.length
+    const xiangWen = (v: unknown): string[] => (Array.isArray(v) ? (v as unknown[]).map((x) => String(x)) : String(v ?? '').split(/\r?\n/));
+    let pian: Array<{ title: string; body: string[] }> = Array.isArray(pianRaw) && pianRaw.length
       ? (pianRaw as Array<{ title?: string; body?: string[] }>).map((s) => ({
           title: String((s && s.title) ?? ''),
-          body: Array.isArray(s && s.body) ? (s.body as unknown[]).map((x) => String(x)) : String((s && (s as { body?: string }).body) ?? '').split(/\r?\n/),
+          body: xiangWen(s && (s as { body?: string | string[] }).body),
         }))
-      : [{ title: '', body: [''] }];
+      : [];
+    /**
+     * **正文落在别的键上也要认**（真机 r35-live5-ollama-4：模型没发 `slides`，内容发在
+     * `content`/`text` 里 ⇒ 旧代码兜底成"一页空白"，写出一个只有模板占位字的空壳 pptx 还回 ok=true）。
+     */
+    if (!pian.length) {
+      const a = (args || {}) as Record<string, unknown>;
+      let biao = String(a.title ?? a.subject ?? '');
+      for (const k of ['content', 'text', 'paragraphs', 'body', 'bullets', 'pages']) {
+        if (a[k] == null) continue;
+        pian.push({ title: biao, body: xiangWen(a[k]) });
+        biao = '';
+      }
+      if (!pian.length && biao.trim()) pian = [{ title: biao, body: [] }];
+    }
+    const pianZiShu = pian.reduce((n, s) => n + jingZi(s.title) + s.body.reduce((m, x) => m + jingZi(x), 0), 0);
+    if (pianZiShu <= 0) {
+      return fail(tool, new Error('make_pptx-empty-content：这次调用**一个字的内容都没有**（slides 是空的、每项标题和正文都是空白）。'
+        + '这样生成出来的 PPT 只有模板自带的占位字，用户打开是空的 ⇒ 宿主没有写这个文件。'
+        + '请**按 schema 重发一次**，把内容真的写进参数：{"path":"…pptx","slides":[{"title":"这一页的标题","body":["要点一","要点二"]}]}。'
+        + '（想重做已经生成的那一份：直接带上完整内容再发一次即可，宿主允许。）'), rawP);
+    }
     const buf = shengChengPptx(muBan, pian);
     const file = resolveInside(baseDir, rawP, kuaiQuan);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, buf);
+    const xie = xieRuBiKaiSuoDing(file, buf);
     return {
       ok: true,
-      content: `已生成 PowerPoint ${file}（${buf.length} 字节，${pian.length} 张幻灯片；可直接用 PowerPoint 打开）`,
-      meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), abs: file },
+      content: `已生成 PowerPoint ${xie.file}（${buf.length} 字节，${pian.length} 张幻灯片、正文合计 ${pianZiShu} 字；可直接用 PowerPoint 打开）` + lingCunShuoMing(file, xie, 'PowerPoint'),
+      meta: { tool, ok: true, bytes: buf.length, pian: pian.length, ziShu: pianZiShu, path: relOf(baseDir, xie.file), abs: xie.file },
     };
   } catch (e) {
     return fail(tool, e);
@@ -759,14 +906,19 @@ export function workMakeXlsx(baseDir: string, args: { path?: string; sheets?: Ar
         }))
       : [{ name: '工作表1', rows: Array.isArray(args && args.rows) ? (args.rows as Array<Array<string | number>>) : [['']] }];
     const buf = shengChengXlsx(shu);
+    const geShu = shu.reduce((n, x) => n + x.rows.reduce((m, r) => m + r.reduce((k: number, c) => k + jingZi(String(c ?? '')), 0), 0), 0);
+    if (geShu <= 0) {
+      return fail(tool, new Error('make_xlsx-empty-content：这次调用一个单元格内容都没有 ⇒ 生成出来是空表格，宿主没有写这个文件。'
+        + '请把数据放进参数再发一次：{"path":"…xlsx","sheets":[{"name":"表1","rows":[["表头1","表头2"],["值1","值2"]]}]}。'), rawP);
+    }
     const file = resolveInside(baseDir, rawP, kuaiQuan);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, buf);
+    const xie = xieRuBiKaiSuoDing(file, buf);
     const hangShu = shu.reduce((s, x) => s + x.rows.length, 0);
     return {
       ok: true,
-      content: `已生成 Excel 表格 ${file}（${buf.length} 字节，${shu.length} 个工作表、共 ${hangShu} 行；可直接用 Excel/WPS 打开）`,
-      meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), abs: file },
+      content: `已生成 Excel 表格 ${xie.file}（${buf.length} 字节，${shu.length} 个工作表、共 ${hangShu} 行、非空内容合计 ${geShu} 字；可直接用 Excel/WPS 打开）` + lingCunShuoMing(file, xie, 'Excel'),
+      meta: { tool, ok: true, bytes: buf.length, ziShu: geShu, path: relOf(baseDir, xie.file), abs: xie.file },
     };
   } catch (e) {
     return fail(tool, e);
@@ -790,6 +942,10 @@ export function workMakePdf(baseDir: string, args: { path?: string; paragraphs?:
     if (!r.ok || !r.buffer) {
       // **如实失败**：系统里没有可内嵌的 CJK 字体时不能装作生成了（否则打开是空白/乱码）
       return fail(tool, new Error('pdf-font-unavailable：' + (r.error || 'unknown') + '。请如实告诉用户当前无法生成 PDF（可安装 simhei.ttf 或设 WARMY_PDF_FONT 指向 .ttf 字体）。'), rawP);
+    }
+    const pdfZiShu = duan.reduce((n: number, s: string) => n + jingZi(s), 0);
+    if (pdfZiShu <= 0) {
+      return fail(tool, new Error('make_pdf-empty-content：这次调用一个字正文都没有 ⇒ 生成出来是空白 PDF，宿主没有写这个文件。请把内容放进参数（content 或 paragraphs）再发一次。'), rawP);
     }
     const file = resolveInside(baseDir, rawP, kuaiQuan);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -977,6 +1133,7 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
             path: { type: 'string', description: '【必填】文件路径字符串，例如 identity.txt 或 Desktop/identity.txt。不要省略本字段。' },
             content: { type: 'string', description: '本次要写入的内容（分段写时就是这一段）' },
             append: { type: 'boolean', description: 'true = 追加到该文件已有内容的末尾（长文分段续写用）；false/省略 = 覆盖整文件' },
+            overwrite: { type: 'boolean', description: '只在确实要把本任务已写过的文件整篇换成更短的内容时才设 true（续写请用 append）' },
           },
           required: ['path', 'content'],
         },
@@ -986,7 +1143,15 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'read_file',
-        description: '读取工作区里的一个文本文件（超长会截断）。路径必须是工作区内的相对路径。',
+        /**
+         * 第 36 轮【项 7】：**查看就用它**。旧文案写"路径必须是工作区内的相对路径"，
+         * 模型看到工作区外的路径（F:\XXZ\…）就不敢用它，转而去调 edit_file —— 于是
+         * 用户看到"查看文件"被记成**编辑**。这里把口径写清楚：
+         * 绝对路径也可以用（工作区外会先征求用户同意）；非文本文件会回"它是什么"的元信息。
+         */
+        description: '**查看/读取一个文件**（读取类工具，不会改动文件）。可以给绝对路径（工作区外会先征求用户同意）。'
+          + '文本文件返回正文（超长截断）；图片、exe、压缩包等二进制返回**类型/大小/修改时间**等元信息 —— '
+          + '这就是"它是什么"的答案，不要再换工具读第二遍。用户说"看看这个文件是什么"就用本工具。',
         parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
       },
     },
@@ -1183,7 +1348,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
  *      完全授权才允许任意本机路径（由调用方按 globalSecurity 判定，这里不判）。
  */
 export const HOST_TOOL_NAMES = [
-  'open_path', 'open_file', 'open_url', 'schedule_task', 'monitor_process', 'lsp_diagnostics', 'ask_user', 'plan_update', 'plan_verify',
+  'open_path', 'open_file', 'open_url', 'schedule_task', 'monitor_process', 'lsp_diagnostics', 'ask_user', 'plan_update', 'plan_verify', 'write_skill',
   'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'download_file',
   'get_time', 'wait_seconds', 'read_profile',
 ] as const;
@@ -1278,7 +1443,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'plan_update',
-        description: '计划模式：长任务先把计划列出来（任务树，T1/T1.1 形态），再逐个完成、逐个验证。每次用**全量**提交当前步骤表（id/title/status/note）。status: pending|doing|done|verified|blocked。计划卡会出现在界面右侧第四列。',
+        description: '计划任务（只给多步任务用）：用户这次要做的事包含 3 个及以上不同步骤时，先调用它列计划，再逐步完成；单一步骤、纯问答、闲聊不要建计划，直接做。宿主强制的门禁：新计划至少 2 步、最多 10 步；标题相同的步骤只留一条；同一时刻只能有 1 步 doing；verified 只能由 plan_verify 给。每步写成一个可验证的动作（动词开头，如「生成桌面 txt」「打开两个文件」），不要逐句照抄用户原话，不要把附件名或路径当步骤。每次提交全量步骤表（id/title/status/note）；计划建好后只更新状态，不要重建。status: pending|doing|done|blocked。计划卡显示在界面右侧第四列。',
         parameters: {
           type: 'object',
           properties: {
@@ -1290,7 +1455,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
                 properties: {
                   id: { type: 'string', description: '如 T1 / T1.1' },
                   title: { type: 'string' },
-                  status: { type: 'string', description: 'pending|doing|done|verified|blocked' },
+                  status: { type: 'string', description: 'pending|doing|done|blocked（verified 用 plan_verify）' },
                   note: { type: 'string', description: '进展/证据（可选）' },
                 },
                 required: ['id', 'title', 'status'],
@@ -1305,7 +1470,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'plan_verify',
-        description: '计划模式：逐个验证 —— 把某个步骤标为 verified（必须真的验过），并在 note 写证据。',
+        description: '计划任务：确认某一步真的做完了 —— 标为 verified，并在 note 里写证据（调用了哪个工具、生成的文件路径、看到的结果）。宿主会核对本次任务的工具记录：看不到证据时退回一次并说明缺什么，所以先把事做完再验证。',
         parameters: {
           type: 'object',
           properties: {
@@ -1377,6 +1542,24 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             path: { type: 'string', description: '要检查的技能目录（可选）' },
           },
           required: [],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'write_skill',
+        description: '把一套"以后还会反复用到的做法"**写成技能包**（自我扩展能力）：写进自动发现的默认技能目录，写完立刻可被 find_skill 搜到（不用重启）。必须符合 SKILL.md 规范：name 小写字母/数字/连字符（≤64，同时是目录名）、description 写清"做什么 + 什么时候用"（≤1024）、body 是可执行的步骤（不要写口号）。有外部命令/环境要求就写在 compatibility（如 "Requires git, docker, jq"）——依赖不满足时该技能会被自动隐藏，不会误导后续对话。正文含高危命令时会先弹授权卡给用户看。',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: '技能名 = 目录名，如 weekly-report-writer' },
+            description: { type: 'string', description: '做什么 + 什么时候用（模型常驻的唯一一层）' },
+            body: { type: 'string', description: 'SKILL.md 正文：步骤、判据、示例（Markdown）' },
+            compatibility: { type: 'string', description: '前置条件（可选）：如 "Requires git, jq, and access to the internet"' },
+            overwrite: { type: 'boolean', description: '同名技能已存在时是否覆盖（默认 false，避免静默盖掉用户的东西）' },
+          },
+          required: ['name', 'description', 'body'],
         },
       },
     },

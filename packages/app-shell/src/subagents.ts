@@ -33,6 +33,10 @@ export interface XiaoDiJiLu {
   task?: string;
   /** 用的模型（如「Ollama · qwen3」）；卡片上默认折叠显示一行 */
   model?: string;
+  /** 模型 id 原样（`model` 是给人看的全称，重试要的是这个原始值） */
+  modelId?: string;
+  /** 该模型属于哪个供应商预设（「重试」要能用**同一个供应商**再跑一遍） */
+  presetId?: string;
   /** 运行状态：running=进行中 / done=已完成 / failed=异常停止 / stopped=被手动停止 */
   status?: 'running' | 'done' | 'failed' | 'stopped';
   endedAt?: number;

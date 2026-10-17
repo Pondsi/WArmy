@@ -20,7 +20,11 @@ function check(label, ok, detail) {
   else { fail++; fails.push(label); console.log('  FAIL ' + label + (detail !== undefined ? ' => ' + String(detail).slice(0, 160) : '')); }
 }
 
-const SKIP = /node_modules|[/\\]\.git[/\\]|[/\\]release[/\\]|[/\\]dist[/\\]/;
+/**
+ * 跳过"构建产物 / 本地缓存 / 本机专属目录"——它们不在仓库里（.gitignore 已排除），
+ * 但作者机器上存在，里面天然带着绝对路径，扫了只会制造假红。
+ */
+const SKIP = /node_modules|[/\\]\.git[/\\]|[/\\]release[/\\]|[/\\]dist[/\\]|win-unpacked|[/\\]\.playwright-cli[/\\]|spikes[/\\]spike-05-plugins[/\\]dsh-memory-plus|[/\\]\.memory-stress-state[/\\]/;
 const TEXT = new Set(['.ts', '.js', '.mjs', '.cjs', '.json', '.md', '.yml', '.yaml', '.txt', '.css', '.html', '.py', '.sh', '.ps1', '.bat', '.vbs']);
 function* walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -44,13 +48,31 @@ const SECRET = [
 ];
 const FIXTURE = /repeat\(|'\w{5,}'\s*\+|TOKEN'|placeholder|example|fixture|假|测试|夹具|脱敏|正则|regex|scan|ghp_\$\{|'ghp_|"ghp_|sk-\$\{|'sk-|"sk-|never|永不/;
 
+/**
+ * **运行期**从本仓库自己的路径里取出"中文目录名"，用来当"真实工作区名"的判据。
+ * 为什么这么绕：这个门禁会随仓库发布，**库里不能出现作者的真实目录名**；
+ * 但在作者机器上跑时又必须能抓到"把真实目录名写进源码"这种泄露 ⇒ 只好运行期取。
+ * 取不到（例如 CI 上仓库在纯英文路径）就返回空数组，那条规则自动不存在。
+ */
+const siRenCi = (() => {
+  try {
+    return String(root).split(/[\\/]+/).filter((s) => /[\u4e00-\u9fa5]{2,}/.test(s));
+  } catch { return []; }
+})();
+
 const PRIV = [
   ['user-home', /C:[/\\]Users[/\\](?!<user>|x|user|test|Public|Default|All Users)[A-Za-z0-9._-]+[/\\]/],
   ['hostname', /DESKTOP-[A-Z0-9]*\d[A-Z0-9]*/],
   ['secret-file', /秘钥\.txt|令牌\.txt|api-key\.txt|apikey\.txt/i],
-  ['abs-temp-user', /C:[/\\]Users[/\\]p[/\\]/],
-  ['cn-workspace', /大龙虾互动区/],
-  ['local-drive', /[A-Z]:[/\\]XZM[/\\]/],
+  /**
+   * ⚠️ 这个文件会**随仓库发布**，所以这里**不写死任何真实路径/目录名/主机名**。
+   * 只描述"长什么样算泄露"：
+   *   · `abs-temp-user`：任何**具体的**用户目录（`C:\Users\<某人>\`），占位写法 `<用户名>` 不算；
+   *   · `cn-workspace`：**运行期从本仓库自己的路径里取出中文目录名**再拿去扫（源码里不留字面量，
+   *     发布出去也不会泄漏作者的真实工作区名；在 CI 上取不到就自动没有这条规则）。
+   */
+  ['abs-temp-user', /C:[/\\]Users[/\\](?!<|…|你|某|用|username|user|test|Public|Default|All)[^/\\\s"']+[/\\]/],
+  ...(siRenCi.length ? [['cn-workspace', new RegExp(siRenCi.join('|'))]] : []),
 ];
 
 const secHits = [], privHits = [];
@@ -150,8 +172,13 @@ check('无用户字段未转义 innerHTML', danger === 0, `hits=${danger}`);
 
 // git 不跟踪密钥文件
 try {
-  const tracked = execFileSync('git', ['-C', root, 'ls-files'], { encoding: 'utf8' });
-  const bad = ['github的令牌.txt', 'deepseek-api-key.txt', 'key-google.txt', 'api-key.txt'].filter((n) => tracked.includes(n));
+  const tracked = execFileSync('git', ['-C', root, 'ls-files'], { encoding: 'utf8' })
+    .split('\n').map((s) => s.trim()).filter(Boolean);
+  /**
+ * 真实密钥文件名**不入库**（这个文件会随仓库发布）：
+ * 只按【形态】判断有没有把 `*key*.txt` / `*token*.txt` 这类文件提交进来。
+ */
+const bad = tracked.filter((n) => /(^|[\\/])[^\\/]*(key|token|miyao)[^\\/]*\.txt$/i.test(n) && !/\.example\./i.test(n));
   check('git 未跟踪密钥文件名', bad.length === 0, bad.join(','));
 } catch {
   check('git 未跟踪密钥文件名', false, 'git ls-files failed');

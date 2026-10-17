@@ -23,10 +23,20 @@ export class ShenJiRiZhi {
 
   log(op: string, detail?: unknown, user?: string): void {
     const entry: ShenJiTiaoMu = { ts: Date.now(), op, detail, user };
+    const yiHang = JSON.stringify(entry) + '\n';
     try {
-      fs.appendFileSync(this.file, JSON.stringify(entry) + '\n', 'utf8');
+      fs.appendFileSync(this.file, yiHang, 'utf8');
     } catch {
-      /* ignore */
+      /**
+       * **自愈**（第 28 轮 项 6 取证时发现）：audit 目录被清掉后，构造器只在启动时 mkdir 一次，
+       * 之后每条日志都静默失败 ⇒ 出问题时无日志可查。写失败就重建目录再试一次。
+       */
+      try {
+        fs.mkdirSync(path.dirname(this.file), { recursive: true });
+        fs.appendFileSync(this.file, yiHang, 'utf8');
+      } catch {
+        /* 还是写不进（磁盘/权限）就放弃，绝不影响业务 */
+      }
     }
   }
 

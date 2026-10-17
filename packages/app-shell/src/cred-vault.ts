@@ -159,3 +159,25 @@ export function mingWenMiMaShu(instances: unknown): number {
   }
   return n;
 }
+
+/**
+ * 第 37 轮 项 11：**通用的"字符串加密落盘"**（给社交接入的 id/secret 用）。
+ *
+ * 为什么需要：社交接入的凭据以前**明文**躺在 settings.json 的 `sheJiao[].zheng` 里。
+ * 本轮改成按牛马存之后份数还会变多 ⇒ 必须与「社交信息里的密码」同一套纪律：
+ *   · 落盘 `enc:v1:<base64>`；内存里仍是明文（界面与适配器完全不用改）；
+ *   · 系统保护不可用时**如实退明文**（不冒充当加密），由调用方去提示用户。
+ */
+export function jiaMiWenBen(s: string, bao: MiMaBaoHuQi | null): { v: string; anQuan: boolean } {
+  const yuan = String(s || '');
+  if (!yuan) return { v: '', anQuan: true };
+  if (!bao || !bao.isEncryptionAvailable()) return { v: yuan, anQuan: false };
+  try { return { v: MI_MA_QIAN_ZHUI + bao.encryptString(yuan).toString('base64'), anQuan: true }; } catch { return { v: yuan, anQuan: false }; }
+}
+export function jieMiWenBen(s: string, bao: MiMaBaoHuQi | null): { v: string; ok: boolean } {
+  const yuan = String(s || '');
+  if (!yuan) return { v: '', ok: true };
+  if (!yuan.startsWith(MI_MA_QIAN_ZHUI)) return { v: yuan, ok: true };
+  if (!bao) return { v: '', ok: false };
+  try { return { v: bao.decryptString(Buffer.from(yuan.slice(MI_MA_QIAN_ZHUI.length), 'base64')), ok: true }; } catch { return { v: '', ok: false }; }
+}

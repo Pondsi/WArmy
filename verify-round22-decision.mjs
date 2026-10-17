@@ -91,8 +91,9 @@ ok(/const yingDingMs = yanZhangDao > Date.now\(\) \? YING_DING_MS \+ \(yanZhangD
 ok(mainTs.includes('if (yanZhangDao) toolXunHuanYanZhang.delete(String(sessionId || \'\'));'), '延长用完即失效（不许批一次永久免检）');
 ok(mainTs.includes("broadcastToWindows('warmy:jueCeKaJiXu'"), '选完方向后广播给界面（模型/牛马配置在界面那侧）');
 ok(pre.includes("onJueCeKaJiXu: (cb) => ipcRenderer.on('warmy:jueCeKaJiXu'"), 'preload 暴露 onJueCeKaJiXu');
-ok(appJs.includes('window.warmy.onJueCeKaJiXu?.(') && /onJueCeKaJiXu[\s\S]{0,700}?void deliver\(/.test(appJs), '界面用同一条 deliver 路径接着发');
-ok(/onJueCeKaJiXu[\s\S]{0,900}?state\.planResumeDisabled\[sid\] = true/.test(appJs), '卡片已续派的会话：「继续 / 重试」按钮随即失效（不许派两轮）');
+ok(appJs.includes('window.warmy.onJueCeKaJiXu?.(') && /onJueCeKaJiXu[\s\S]{0,900}?zhiXingJueCeKa\(d\)/.test(appJs) && /function zhiXingJueCeKa[\s\S]{0,700}?void deliver\(sid, prompt, 'P2'\)/.test(appJs), '界面用同一条 deliver 路径接着发（经 zhiXingJueCeKa）');
+ok(/function zhiXingJueCeKa[\s\S]{0,700}?state\.planResumeDisabled\[sid\] = true[\s\S]{0,300}?void deliver\(/.test(appJs), '卡片已续派的会话：「继续 / 重试」按钮随即失效（不许派两轮）');
+ok(/function zhiXingJueCeKa[\s\S]{0,300}?if \(queueBusy\(sid\)\)/.test(appJs), '第 28 轮：上一轮还在跑时不并行开新一轮（选完选项"像停了其实还在跑"的修法）');
 ok(mainTs.includes('chongZhiBeiTiaoGuoDeBuZhou(sessionId)') && /status === 'blocked'[\s\S]{0,80}status: 'pending'/.test(mainTs), '选「重试这一步」会把 blocked 步骤放回 pending');
 ok(mainTs.includes('etaYiChang.delete(sessionId);') && mainTs.includes('buZhouYanXu.delete(sessionId);'), '继续前清掉异常/续派计数（否则下一轮立刻又被判停）');
 /**

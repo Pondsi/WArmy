@@ -5,9 +5,11 @@
 <title>截图</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; cursor: crosshair; user-select: none; background: #000; }
+  /* 第 29 轮 项 14：颜色跟随主题强调色（主进程 load 后注入 --accent） */
+  :root { --accent: #A87654; --accent-ink: #fff; }
   img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: .95; pointer-events: none; }
-  #kuang { position: absolute; border: 2px solid #ffd28a; box-shadow: 0 0 0 9999px rgba(0,0,0,.62); display: none; }
-  .jiao { position: absolute; width: 14px; height: 14px; background: #ffd28a; border: 2px solid #fff; border-radius: 3px; z-index: 3; }
+  #kuang { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,.62); display: none; }
+  .jiao { position: absolute; width: 14px; height: 14px; background: var(--accent); border: 2px solid var(--accent-ink); border-radius: 3px; z-index: 3; }
   .jiao[data-j="nw"] { left: -7px; top: -7px; cursor: nwse-resize; }
   .jiao[data-j="ne"] { right: -7px; top: -7px; cursor: nesw-resize; }
   .jiao[data-j="sw"] { left: -7px; bottom: -7px; cursor: nesw-resize; }
@@ -18,7 +20,7 @@
   .bian[data-b="w"] { top: 12px; bottom: 12px; left: -5px; width: 10px; cursor: ew-resize; }
   .bian[data-b="e"] { top: 12px; bottom: 12px; right: -5px; width: 10px; cursor: ew-resize; }
   #ti { position: absolute; left: 50%; top: 18px; transform: translateX(-50%);
-        background: rgba(0,0,0,.65); color: #fff; padding: 6px 14px; border-radius: 999px; font: 12px/1.4 sans-serif;
+        background: color-mix(in srgb, var(--accent) 88%, transparent); color: var(--accent-ink); padding: 6px 14px; border-radius: 999px; font: 12px/1.4 sans-serif;
         pointer-events: none; }
   #bar {
     position: absolute; display: none; gap: 10px; align-items: center;
@@ -27,13 +29,13 @@
   }
   #bar button {
     border: none; border-radius: 7px; padding: 7px 16px; font: 13px/1.2 sans-serif;
-    cursor: pointer; color: #fff;
+    cursor: pointer; color: var(--accent-ink);
   }
-  #ok { background: #a78567; }
+  #ok { background: var(--accent); }
   #ok:hover { filter: brightness(1.1); }
-  #cancel { background: #555; }
+  #cancel { background: #555; color: #fff; }
   #cancel:hover { background: #666; }
-  #full { background: #3a3a3a; }
+  #full { background: #3a3a3a; color: #fff; }
   #full:hover { background: #4a4a4a; }
 </style>
 </head>

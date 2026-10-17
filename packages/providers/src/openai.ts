@@ -4,6 +4,7 @@ import {
   pinJieUrl,
   zhuanHuanOpenAI,
   jieXiOpenAIXiangYing,
+  FEI_LIU_CHAT_MS,
 } from './base.js';
 import { chouNengLiCongDuanDian, moXingNengLi } from './mo-xing-neng-li.js';
 import type { LiaoTianPian, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
@@ -50,7 +51,7 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
   async chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing> {
     const json = await qingQiuJson<Parameters<typeof jieXiOpenAIXiangYing>[0]>(
       pinJieUrl(this.baseURL, 'chat/completions'),
-      { method: 'POST', body: JSON.stringify(this.qingQiuTi(Qiu, false)), signal, headers: this.headers() },
+      { method: 'POST', body: JSON.stringify(this.qingQiuTi(Qiu, false)), signal, headers: this.headers(), timeoutMs: this.auth.timeoutMs ?? FEI_LIU_CHAT_MS },
       this.auth
     );
     return jieXiOpenAIXiangYing(json);

@@ -52,3 +52,21 @@ packages/app-shell/win-unpacked/
 *apikey*.txt
 secure/keys.enc.json
 **/keys.enc.json
+
+# 第 37 轮：一次性验收输出 / 本机状态 / 轮次专用小脚本，不入库
+acceptance-*.json
+.memory-stress-state/
+r3*-firstrun.mjs
+r3*-restart.mjs
+wipe-and-first-run.mjs
+round*-r*.log
+fv*.log
+full-verify-*.log
+verify-22-*.log
+*.tmp
+.tmp-*
+
+# 本机真实屏幕截图等夹具（可能含用户内容）+ 构建日志，不入库
+scripts/fixtures/r34-replay/*.png
+.build-log.txt
+packages/app-shell/.eb-run.mjs

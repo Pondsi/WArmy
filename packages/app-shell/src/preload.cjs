@@ -153,6 +153,34 @@ contextBridge.exposeInMainWorld('warmy', {
   // ── 「工具」面板：列出全部工具 / 启停 / 自动发现目录 / 安装导入 ──
   authList: (sid) => ipcRenderer.invoke('warmy:shouQuanLieBiao', sid),
   authGrant: (p) => ipcRenderer.invoke('warmy:shouQuanTianJia', p),
+  /** 项 10：用户附件自动进授权卡（允许的操作 = 读取查看，无需二次授权） */
+  fuJianShouQuan: (p) => ipcRenderer.invoke('warmy:fuJianShouQuan', p),
+  /**
+   * 第 37 轮【项 2】「印象」（yonghushuju.md）：牛马在归档时自行归纳的"对用户的长期理解"。
+   * 与道/规矩同一套读写；另有一个"用户否认某条印象"的归因入口。
+   */
+  yinXiangDu: () => ipcRenderer.invoke('warmy:yinXiangDu'),
+  yinXiangShe: (p) => ipcRenderer.invoke('warmy:yinXiangShe', p),
+  yinXiangZhiYi: (p) => ipcRenderer.invoke('warmy:yinXiangZhiYi', p),
+  /**
+   * 第 36 轮【项 2】：**社交接入**（从「设置→功能」搬到每只牛马自己的设置）。
+   *
+   * 真事故：这五个方法**以前一个都没有桥接**在这里 ⇒ 界面里 `window.warmy.sheJiaoXxx?.()`
+   * 全是 `undefined`，点「保存/连接/断开」什么都不会发生 —— 一块"看着能用、其实死的"UI。
+   * 现在补齐；`instId` 可选（不传 = 旧的全局配置，兼容老数据）。
+   */
+  sheJiaoPingTai: () => ipcRenderer.invoke('warmy:sheJiaoPingTai'),
+  sheJiaoPeiZhiQu: (p) => ipcRenderer.invoke('warmy:sheJiaoPeiZhiQu', p),
+  sheJiaoBaoCunPeiZhi: (p) => ipcRenderer.invoke('warmy:sheJiaoBaoCunPeiZhi', p),
+  sheJiaoLianJie: (p) => ipcRenderer.invoke('warmy:sheJiaoLianJie', p),
+  sheJiaoDuanKai: (p) => ipcRenderer.invoke('warmy:sheJiaoDuanKai', p),
+  sheJiaoFaSong: (p) => ipcRenderer.invoke('warmy:sheJiaoFaSong', p),
+  /**
+   * 第 37 轮【项 5】：**微信扫码连接**（官方 iLink / ClawBot 协议）。
+   * 开始 → 拿二维码；轮询 → wait/scaned/expired/confirmed；确认后凭据自动写入并加密保存。
+   */
+  sheJiaoSaoMaKaiShi: (p) => ipcRenderer.invoke('warmy:sheJiaoSaoMaKaiShi', p),
+  sheJiaoSaoMaZhuangTai: (p) => ipcRenderer.invoke('warmy:sheJiaoSaoMaZhuangTai', p),
   authRevoke: (p) => ipcRenderer.invoke('warmy:shouQuanCheXiao', p),
   authCheck: (p) => ipcRenderer.invoke('warmy:shouQuanYouMeiYou', p),
   onAuthUpdated: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:shouQuanUpdated', h); return () => ipcRenderer.removeListener('warmy:shouQuanUpdated', h); },
@@ -174,6 +202,19 @@ contextBridge.exposeInMainWorld('warmy', {
   toolUninstall: (name) => ipcRenderer.invoke('warmy:gongJuXieZai', name),
   skillsRemove: (id) => ipcRenderer.invoke('warmy:jinengJiYiChu', id),
   skillsImport: () => ipcRenderer.invoke('warmy:jinengJiDaoRu'),
+  skillMarketList: (p) => ipcRenderer.invoke('warmy:skillMarketList', p),
+  skillMarketInstall: (p) => ipcRenderer.invoke('warmy:skillMarketInstall', p),
+  dshShiChangZiLiao: () => ipcRenderer.invoke('warmy:dshShiChangZiLiao'),
+  // 本地语音（sherpa-onnx）：状态 / 安装 / 删除（下次更新不再装）/ 启用 / 自检 / 清单
+  benDiYuYinZhuangTai: () => ipcRenderer.invoke('warmy:benDiYuYinZhuangTai'),
+  benDiYuYinAnZhuang: () => ipcRenderer.invoke('warmy:benDiYuYinAnZhuang'),
+  benDiYuYinShanChu: (p) => ipcRenderer.invoke('warmy:benDiYuYinShanChu', p),
+  benDiYuYinQiYong: (p) => ipcRenderer.invoke('warmy:benDiYuYinQiYong', p),
+  benDiYuYinZiJian: () => ipcRenderer.invoke('warmy:benDiYuYinZiJian'),
+  benDiYuYinQingDan: () => ipcRenderer.invoke('warmy:benDiYuYinQingDan'),
+  onBenDiYuYinJinDu: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:benDiYuYinJinDu', h); return () => ipcRenderer.removeListener('warmy:benDiYuYinJinDu', h); },
+  uiPromptMulti: (p) => ipcRenderer.invoke('warmy:uiPromptMulti', p),
+  pickFileOrDir: () => ipcRenderer.invoke('warmy:pickFileOrDir'),
   pickDirectory: () => ipcRenderer.invoke('warmy:xuanZeMuLu'),
   scanMachine: (kind) => ipcRenderer.invoke('warmy:saoMiaoJiQi', kind),
   privacyConsentSet: (consent) => ipcRenderer.invoke('warmy:yinSiTongYiSheZhi', consent),
@@ -311,6 +352,8 @@ contextBridge.exposeInMainWorld('warmy', {
   onJueCeKaJiXu: (cb) => ipcRenderer.on('warmy:jueCeKaJiXu', (_e, d) => cb(d)),
   /** 文件产出：AI 写了文件 ⇒ 自动补「文件产物」卡片 */
   onWenJianChanSheng: (cb) => ipcRenderer.on('warmy:wenJianChanSheng', (_e, d) => cb(d)),
+  /** 第 34 轮 项 7：文件变化（新增/改/删/移，含用户在资源管理器里的手）⇒ 卡片自己重画，无需手动刷新 */
+  onWenJianBianGeng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:wenJianBianGeng', h); return () => ipcRenderer.removeListener('warmy:wenJianBianGeng', h); },
   /** 界面「打开」按钮：用系统默认程序打开文件 */
   daKaiLuJing: (p) => ipcRenderer.invoke('warmy:daKaiLuJing', p),
   /** 通知音：拿 data URL（用户没选就用内置默认音效） */
@@ -335,6 +378,10 @@ contextBridge.exposeInMainWorld('warmy', {
   wenJianYuLan: (p) => ipcRenderer.invoke('warmy:wenJianYuLan', p),
   /** **任意文件的字节数**（附件条要显示"多大"，图片/文档/压缩包都要） */
   wenJianDaXiao: (p) => ipcRenderer.invoke('warmy:wenJianDaXiao', typeof p === 'string' ? { path: p } : p),
+  /** 项 11：批量核真实存在性（虚拟/占位路径不挂右键菜单） */
+  luJingCunZai: (paths) => ipcRenderer.invoke('warmy:luJingCunZai', { paths: Array.isArray(paths) ? paths : [paths] }),
+  /** 项 12：打开编辑（**绝不执行**可执行文件） */
+  daKaiBianJi: (p) => ipcRenderer.invoke('warmy:daKaiBianJi', typeof p === 'string' ? { path: p } : p),
   /**
    * 跨窗口同步：主窗口与独立会话窗是同一份数据的两个视图。
    *  · chatUpdated：某个会话的日志被追加过 → 正在看它的窗口重新拉一次；
@@ -380,6 +427,16 @@ contextBridge.exposeInMainWorld('warmy', {
     ipcRenderer.on('warmy:kongZhiTaiShiJian', handler);
     return () => { try { ipcRenderer.removeListener('warmy:kongZhiTaiShiJian', handler); } catch { /* noop */ } };
   },
+  /**
+   * 第 35 轮 项 12：**行动台账**（「执行过程」里的单行明细）。
+   * 与控制台通道分开：这里**带完整路径/完整命令**（产品要求：能右键复制、打开目录），
+   * 控制台那条通道有"不许带路径"的硬约束，所以不能复用。
+   */
+  onXingDong: (cb) => {
+    const handler = (_e, d) => { try { cb(d); } catch { /* noop */ } };
+    ipcRenderer.on('warmy:xingDongShiJian', handler);
+    return () => { try { ipcRenderer.removeListener('warmy:xingDongShiJian', handler); } catch { /* noop */ } };
+  },
   checkpointAuto: (phase, logSeq) => ipcRenderer.invoke('warmy:checkpointZiDong', phase, logSeq),
   costSummary: () => ipcRenderer.invoke('warmy:chengBenZhaiYao'),
   executorsStatus: () => ipcRenderer.invoke('warmy:zhiXingQiJiZhuangTai'),
@@ -419,6 +476,8 @@ contextBridge.exposeInMainWorld('warmy', {
   /** 分身（子代理）卡 */
   xiaoDiLieBiao: (sessionId) => ipcRenderer.invoke('warmy:xiaoDiLieBiao', sessionId),
   xiaoDiTingZhi: (payload) => ipcRenderer.invoke('warmy:xiaoDiTingZhi', payload),
+  /** 第 34 轮 项 9：重试 = 用同一个供应商/模型把这件子任务再真跑一遍 */
+  xiaoDiChongShi: (payload) => ipcRenderer.invoke('warmy:xiaoDiChongShi', payload),
   /** 删除会话：连带本会话知识库 + 工作区；牛马在群聊/项目里会被拒绝 */
   sessionDelete: (payload) => ipcRenderer.invoke('warmy:huiHuaShanChu', payload),
   onXiaoDiBianGeng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:xiaoDiBianGeng', h); return () => ipcRenderer.removeListener('warmy:xiaoDiBianGeng', h); },

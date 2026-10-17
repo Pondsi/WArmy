@@ -246,7 +246,7 @@ console.log('\n[8] 工具面接线（源码级断言）');
   check('hostToolSpecs 暴露 read_document / read_xlsx / read_pdf / read_skill',
     /name:\s*'read_document'/.test(wt) && /name:\s*'read_xlsx'/.test(wt) && /name:\s*'read_pdf'/.test(wt) && /name:\s*'read_skill'/.test(wt));
   check('write_file 拒绝伪装成 .pdf/.xlsx 的文本写入', /office-binary-need-generator/.test(wt) && /docx\|pptx\|xlsx\|pdf/.test(wt));
-  check('文档读取走统一抽取器（tiQuWenDang）', /tiQuWenDang\(p0/.test(em));
+  check('文档读取走统一抽取器（tiQuWenDang）', /tiQuWenDang\(absD, \{ maxChars/.test(em) && /ReturnType<typeof tiQuWenDang>/.test(em));
   check('find_skill 用规范解析（不再读前 3 行）', /saoMiaoJiNeng\(/.test(em) && !/filter\(\(l\) => l\.trim\(\)\)\.slice\(0, 3\)/.test(em));
   check('install_skill 带规范校验并如实告知', /规范校验/.test(em));
   check('会话级回滚 IPC 存在（warmy:huaTiHuiGun）', /huaTiHuiGun/.test(em) && /chatRollbackRound/.test(fs.readFileSync(path.join(pkgRoot, 'src', 'preload.cjs'), 'utf8')));

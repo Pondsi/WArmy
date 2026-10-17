@@ -29,9 +29,12 @@ check('兜底按 defaultModel 归属', /defaultModel/.test(src));
 console.log('\n[2] 聊天路径按模型路由（不是只用全局 providerCfg）');
 // 聊天实现抽成了 `zhenZhengFaSong`（供 IPC 与「多循环自动继续」共用）——
 // 切片起点跟着它走，否则窗口落在 `chuliIpc(..., zhenZhengFaSong)` 这一行上，什么都测不到。
+// **窗口取 24000 字符**（以前写死 16000：第 34 轮在函数前段加了交付物落点纠正/守卫/上下文压缩接线，
+// 路由代码被顶到 17.7k 之外 ⇒ 门禁假红。这里的判据是"聊天这条路上有没有按模型定供应商"，
+// 窗口只要宽到能包住这一段就行 —— 取下一个函数头会包住更早的私有 helper，反而更不稳）。
 const fnAt = src.indexOf('async function zhenZhengFaSong');
 const qd = fnAt >= 0 ? fnAt : src.indexOf('warmy:liaoTianFaSong');
-const chatSeg = src.slice(qd, qd + 16000);
+const chatSeg = src.slice(qd, qd + 24000);
 check('聊天里调用了 jieMoXingGongYingShang', /jieMoXingGongYingShang\(/.test(chatSeg));
 check('先选模型再定供应商', chatSeg.indexOf('jueCeMoXing') < chatSeg.indexOf('jieMoXingGongYingShang') || /const modelId[\s\S]{0,400}jieMoXingGongYingShang/.test(chatSeg));
 check('密钥检查用的是**解析出来的**供应商', /!zhu\.apiKey && zhu\.protocol !== 'ollama'/.test(chatSeg));
