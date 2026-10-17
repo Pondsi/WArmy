@@ -69,4 +69,5 @@ verify-22-*.log
 # 本机真实屏幕截图等夹具（可能含用户内容）+ 构建日志，不入库
 scripts/fixtures/r34-replay/*.png
 .build-log.txt
+.ci-log.txt
 packages/app-shell/.eb-run.mjs
