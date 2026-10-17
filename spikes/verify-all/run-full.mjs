@@ -491,13 +491,30 @@ check('role-models ipc', mainTs.includes('warmy:jueSeMoXingJiSheZhi'));
 check('dissolve ipc', mainTs.includes('warmy:qunJieSan'));
 check('export-allowlist ipc', mainTs.includes('warmy:daoChuYunXuMingDan'));
 check('dsh-app protocol', mainTs.includes('dsh-app'));
-check('node binaries 5', [
-  'node-v24.20.0-win-x64.zip',
-  'node-v24.20.0-win-arm64.zip',
-  'node-v24.20.0-darwin-x64.tar.gz',
-  'node-v24.20.0-darwin-arm64.tar.gz',
-  'node-v24.20.0-linux-x64.tar.xz',
-].every((f) => exists('resources', 'node', f)));
+/**
+ * Node 运行时：**按平台压缩包不入库**（单个 node.exe 就 ~89MB，.gitignore 已排除；
+ * 公开克隆/CI 里本来就没有它们）。所以这里判的是**策略**：
+ *   ① 本地有压缩包 ⇒ 五个平台必须齐全（防止漏打包）；
+ *   ② 本地没有（干净检出）⇒ .gitignore 必须仍排除 resources/node/，且 electron-builder 仍从那里取。
+ */
+{
+  const wuGe = [
+    'node-v24.20.0-win-x64.zip',
+    'node-v24.20.0-win-arm64.zip',
+    'node-v24.20.0-darwin-x64.tar.gz',
+    'node-v24.20.0-darwin-arm64.tar.gz',
+    'node-v24.20.0-linux-x64.tar.xz',
+  ];
+  const you = wuGe.filter((f) => exists('resources', 'node', f));
+  if (you.length) {
+    check('node binaries 5（本地打包用）', you.length === wuGe.length);
+  } else {
+    const gi = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
+    const eb = fs.readFileSync(path.join(root, 'packages/app-shell/electron-builder.yml'), 'utf8');
+    check('node 运行时按策略不入库（.gitignore 排除 + 打包配置仍引用）',
+      /^resources\/node\/$/m.test(gi) && /.\.\/\.\.\/resources\/node\/win-x64/.test(eb));
+  }
+}
 check('rrf fusion', fs.readFileSync(path.join(root, 'packages/memory-os/src/vectors.ts'), 'utf8').includes('rrfRonghe'));
 check('swmr lock', fs.readFileSync(path.join(root, 'packages/memory-os/src/lock.ts'), 'utf8').includes('JsonlSuo'));
 check('session v3', fs.readFileSync(path.join(root, 'packages/memory-os/src/migrate.ts'), 'utf8').includes('migrateSessionV2ToV3'));
