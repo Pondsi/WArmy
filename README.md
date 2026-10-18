@@ -21,12 +21,6 @@ Create AI **workhorses** (agents), put them into **project groups**, and let a *
 Chinese product name: **无限牛马** (ja: 無限社畜 / ko: 무한 사축).  
 **Full Chinese manual:** [说明.md](./说明.md) — 详细中文说明请直接看该文件（本 README 以英文为主入口）。
 
-![UI preview](docs/screenshots/ui-home.png)
-
-| Home (English) | Settings · Functions / Skills | About / Memory |
-| --- | --- | --- |
-| ![home](docs/screenshots/ui-home.png) | ![skills](docs/screenshots/ui-skills.png) | ![about](docs/screenshots/ui-about.png) |
-
 ---
 
 ## What makes WArmy different
@@ -84,8 +78,6 @@ WArmy’s memory is **not** “chat history in a folder”. It is an explicit L2
 - Data dir default: app user-data `memory/` (override env **`WARMY_MEMORY_DIR`**).
 - If the service is down, tools **fail closed** with honest text — they do not invent history.
 
-Deep dive: [`references/ARCHITECTURE.md`](./references/ARCHITECTURE.md) · verify: `node packages/app-shell/scripts/verify-memory.mjs`
-
 ---
 
 ## Install
@@ -94,7 +86,6 @@ Deep dive: [`references/ARCHITECTURE.md`](./references/ARCHITECTURE.md) · verif
 
 1. [Releases v0.1.0](https://github.com/Pondsi/WArmy/releases/tag/v0.1.0) → **`WArmy-Setup-0.1.0.exe`**  
    Direct: [WArmy-Setup-0.1.0.exe](https://github.com/Pondsi/WArmy/releases/download/v0.1.0/WArmy-Setup-0.1.0.exe)
-2. Optional SHA-256 vs [`checksums.txt`](./checksums.txt)
 3. Launch **WArmy / 无限牛马** → Settings → language / providers
 
 ### Source
@@ -109,13 +100,6 @@ pnpm --filter @warmy/app-shell start
 
 Node.js **>= 24**, **pnpm** (repo pins `pnpm@10.23.0`).
 
-Bundled Node runtime (optional, for packaging / memory child):
-
-```bash
-node scripts/fetch-node-runtime.mjs
-```
-
-See also [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 
@@ -159,17 +143,6 @@ See also [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 
-## Quality gates
-
-```bash
-node packages/app-shell/scripts/verify-i18n-locales.mjs
-node packages/app-shell/scripts/verify-router-queue.mjs
-node packages/app-shell/scripts/verify-wiring.mjs
-node packages/app-shell/scripts/verify-container-probe.mjs
-node packages/sync-protocol/scripts/verify-connectivity.mjs
-node packages/app-shell/scripts/verify-memory.mjs
-node packages/app-shell/scripts/verify-docs.mjs
-```
 
 ---
 
@@ -177,7 +150,7 @@ node packages/app-shell/scripts/verify-docs.mjs
 
 zh-CN · zh-TW · en-US · ja · ko · ru · es · fr · pt · eo — equal key sets.
 
-Product nav naming: zh `我的牛马` · ja `マイ社畜たち` · ko `일꾼들` · others `My Workhorses`. See [docs/i18n-naming.md](./docs/i18n-naming.md).
+Product nav naming: zh `我的牛马` · ja `マイ社畜たち` · ko `일꾼들` · others `My Workhorses`.
 
 ---
 
@@ -185,9 +158,9 @@ Product nav naming: zh `我的牛马` · ja `マイ社畜たち` · ko `일꾼�
 
 ```text
 WArmy/
-├── README.md  说明.md  LICENSE  SPONSORS.md  CHANGELOG.md  CONTRIBUTING.md
-├── checksums.txt  index.html
-├── docs/  references/  packages/  sponsors/  spikes/
+├── README.md  说明.md  LICENSE  SPONSORS.md
+├── package.json  index.html
+├── packages/  sponsors/
 ```
 
 ---
@@ -209,8 +182,6 @@ WArmy is a local-first multi-agent group-chat desktop app. Install from GitHub R
 
 ## License & sponsors
 
-[LICENSE](./LICENSE) · [SPONSORS.md](./SPONSORS.md) · security: [.github/SECURITY.md](./.github/SECURITY.md) · mesh checklist: [docs/mesh-dual-machine.md](./docs/mesh-dual-machine.md)
+[LICENSE](./LICENSE) · [SPONSORS.md](./SPONSORS.md)
 
----
-
-Pondsi (+mimo-X-pro-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop
+ Xiaomi MiMo Desktop
