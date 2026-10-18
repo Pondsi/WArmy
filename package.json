@@ -1,8 +1,8 @@
-{
+﻿{
   "name": "warmy",
   "version": "0.2.23",
   "private": true,
-  "description": "Workhorse Army (WArmy / 无限牛马) — local-first multi-agent group-chat desktop app",
+  "description": "Workhorse Army (WArmy / 鏃犻檺鐗涢┈) 鈥?local-first multi-agent group-chat desktop app",
   "author": "Pondsi",
   "license": "MIT",
   "engines": {
@@ -13,8 +13,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
-    "verify": "node spikes/verify-all/run.mjs"
+    "test": "pnpm -r test"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -27,3 +26,4 @@
     "typescript": "5.9.3"
   }
 }
+
