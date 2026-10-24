@@ -118,6 +118,8 @@
     embedUseGpu: true,
     listWidth: 200,
     panelWidth: 300,
+    /** 宽屏适配：保存用户设定的栏宽（拖动才标记 yongHu），显示宽度按窗口另行计算 */
+    buJuKuan: { lieBiao: 200, mianBan: 300, lieBiaoYongHu: false, mianBanYongHu: false },
     /**
      * R2：用户自己设的快捷键（动作 id → 组合键字符串）。
      * 只存**用户改过的**；没写过的动作走 SHORTCUT_ACTIONS 里的预置值。
@@ -7291,16 +7293,50 @@ async function langDuWenBen(text, btnEl) {
       return hang.length ? hang.join('') : `<div class="jingYin">${escapeHtml(t('knowledge.empty') || '—')}</div>`;
     };
     try {
+      if (state.__kbViewSid !== qunId) { state.__kbViewSid = qunId; state.__kbViewUser = ''; }
       const keJian = await window.warmy.zhiShiCengKeJian?.({ sessionId: qunId }).catch(() => null);
       const layers = (keJian && keJian.layers) || ['session'];
-      const quanAll = await window.warmy.knowledgeQuery?.({ q: '', sessionId: qunId }).catch(() => null);
+      const perm = await window.warmy.kbPermDu?.({ sessionId: qunId }).catch(() => null);
+      const viewUser = String(state.__kbViewUser || '');
+      const quanAll = viewUser
+        ? await window.warmy.knowledgeQuery?.({ q: '', ceng: 'session' }).catch(() => null)
+        : await window.warmy.knowledgeQuery?.({ q: '', sessionId: qunId }).catch(() => null);
       const huiHua = await window.warmy.knowledgeQuery?.({ q: '', ceng: 'session' }).catch(() => null);
       const dai = await window.warmy.kbPendingLieBiao?.().catch(() => null);
       const daiItems = (dai && dai.items) || [];
-      const jiaoSe = keJian && keJian.isCreator ? tOr('kb.role.creator', '创建者') : tOr('kb.role.member', '成员');
+      const jiaoSe = viewUser
+        ? tOr('kb.viewAsPublic', '查看该用户的公开层')
+        : (keJian && keJian.isCreator ? tOr('kb.role.creator', '创建者') : tOr('kb.role.member', '成员'));
+      /** 在线用户切换：只展示公开的会话层，不展示内部/私密，也不给写入口 */
+      let userSel = '';
+      if (!viewUser && keJian && keJian.kind !== 'single') {
+        try {
+          const gm = await window.warmy.groupMembers?.(qunId);
+          const members = (gm && (gm.members || gm.items)) || [];
+          if (members.length) {
+            userSel = `<label class="jingYin" style="font-size:11px;display:flex;gap:6px;align-items:center;margin:4px 0">${escapeHtml(tOr('kb.viewAs', '查看身份'))}<select id="kbViewUser"><option value="">${escapeHtml(tOr('kb.viewSelf', '我自己（完整权限）'))}</option>`
+              + members.map((m) => `<option value="${escapeHtml(String(m.id || m.fingerprint || ''))}">${escapeHtml(String(m.name || m.ming || m.id || ''))}</option>`).join('')
+              + '</select></label>';
+          }
+        } catch { /* 成员列表拿不到就不显示切换 */ }
+      }
+      const permHtml = viewUser ? '' : (() => {
+        const row = (kind, label) => {
+          const hard = (kind === 'read' ? (perm && perm.hardRead) : (perm && perm.hardWrite)) || layers;
+          const on = (perm && perm[kind]) || [];
+          return `<div class="kbPermHang"><span class="kbPermMing">${escapeHtml(label)}</span>`
+            + ['session', 'internal', 'private'].map((c) => {
+              const off = !hard.includes(c);
+              return `<label class="kbPermCk${off ? ' off' : ''}"><input type="checkbox" data-kb-perm="${kind}" data-kb-ceng="${c}" ${on.includes(c) ? 'checked' : ''} ${off ? 'disabled' : ''}>${escapeHtml(cengMing(c))}</label>`;
+            }).join('') + '</div>';
+        };
+        return `<div class="kbPermBiao">${row('read', tOr('kb.perm.read', '可读'))}${row('write', tOr('kb.perm.write', '可写'))}${row('archive', tOr('kb.perm.archive', '可归档'))}</div>`
+          + `<div class="jingYin" style="font-size:10px;margin-bottom:2px">${escapeHtml(tOr('kb.perm.hint', '勾选只在本会话生效；后端会再按硬作用域复核（群聊只能会话库、项目不能私密库）。'))}</div>`;
+      })();
       host.innerHTML =
-        `<div class="jingYin" style="font-size:11px;margin-bottom:4px">${escapeHtml(tOr('kb.titleAll', '知识库（可见层）'))} · ${escapeHtml(jiaoSe)} · ${layers.map(cengMing).map(escapeHtml).join(' / ')}</div>`
-        + lieBiao(quanAll, true)
+        `<div class="jingYin" style="font-size:11px;margin-bottom:4px">${escapeHtml(tOr('kb.titleAll', '知识库（可见层）'))} · ${escapeHtml(jiaoSe)} · ${(viewUser ? ['session'] : layers).map(cengMing).map(escapeHtml).join(' / ')}</div>`
+        + userSel + permHtml
+        + lieBiao(quanAll, !viewUser)
         + `<div style="display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap"><button class="anNiuXiao" data-kb-rebuild>${escapeHtml(tOr('kb.rebuild', '重构'))}</button><button class="anNiuXiao" data-kb-merge>${escapeHtml(tOr('kb.merge', '合并'))}</button><span class="jingYin" style="font-size:11px">${escapeHtml(tOr('kb.selectHint', '勾选 1 条可重构，≥2 条可合并（都会二次确认）'))}</span></div>`
         + `<div class="jingYin" style="font-size:11px;margin:8px 0 4px">${escapeHtml(cengMing('session'))}</div>`
         + lieBiao(huiHua, false)
@@ -7310,12 +7346,30 @@ async function langDuWenBen(text, btnEl) {
           : '');
       if (!host.dataset.kbBound) {
         host.dataset.kbBound = '1';
-        host.addEventListener('change', (e) => {
-          const c = e.target && e.target.closest && e.target.closest('input.kbXuGou');
-          if (!c) return;
-          const id = c.getAttribute('data-kb-id') || '';
-          if (!id) return;
-          if (c.checked) kbXuan.add(id); else kbXuan.delete(id);
+        host.addEventListener('change', async (e) => {
+          const t = e.target;
+          if (!t) return;
+          if (t.id === 'kbViewUser') {
+            state.__kbViewUser = String(t.value || '');
+            void renderPanelKnowledge();
+            return;
+          }
+          const c = t.closest && t.closest('input.kbXuGou');
+          if (c) {
+            const id = c.getAttribute('data-kb-id') || '';
+            if (!id) return;
+            if (c.checked) kbXuan.add(id); else kbXuan.delete(id);
+            return;
+          }
+          const pk = t.closest && t.closest('input[data-kb-perm]');
+          if (pk) {
+            const sid = state.selectedChat ? String(state.selectedChat.id || '') : '';
+            if (!sid) return;
+            const pick = (kind) => [...host.querySelectorAll(`input[data-kb-perm="${kind}"]:checked`)].map((x) => x.getAttribute('data-kb-ceng')).filter(Boolean);
+            const r = await window.warmy.kbPermShe?.({ sessionId: sid, read: pick('read'), write: pick('write'), archive: pick('archive') });
+            if (!r || !r.ok) showToast(String((r && r.error) || t('common.error')));
+            void renderPanelKnowledge();
+          }
         });
         host.addEventListener('click', async (e) => {
           const b = e.target && e.target.closest && e.target.closest('[data-kb-rebuild],[data-kb-merge],[data-kb-pending-del]');
@@ -9207,6 +9261,8 @@ window.__keYiLiaoTian = keYiLiaoTian;
     try {
       if (kind === 'internal') {
         try {
+          // #106：先把这条用户消息发给地址簿里的对端（没有 peer 时如实 no-peers，不假装送达）
+          void window.warmy.chatNetSend?.({ sessionId: chatId, text }).catch(() => null);
           const r = await window.warmy.groupOrchestrate({ groupId: chatId, content: text, urgency: u });
           if (!benLunYouXiao()) return;
           const reply = r?.reply || `[${u}] ${r?.action || 'ok'}`;
@@ -11825,6 +11881,69 @@ async function renderDashboard(host) {
   /** 小眼睛图标（内联 SVG，不依赖字体/emoji） */
   const EYE_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 5.5 12 5.5 22.5 12 22.5 12 18.5 18.5 12 18.5 1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3.2"/></svg>';
 
+  /**
+   * 模型会在归档时自动改写的提示词（目前是「术」与「印象」）：
+   * 标题后挂一个主题色牛头图标，悬停/聚焦显示说明（说明进入 10 个语言包）。
+   */
+  function moXingGaiBiaoQian(ceng) {
+    const yu = ceng === 'shu'
+      ? tOr('prompt.aiEdit.shu', '牛马会在归档时自动补充这份「术」：只从你说过的话里挑做事章法，你手写的内容不会被改动。你也可以随时手动修改。')
+      : tOr('prompt.aiEdit.yinXiang', '牛马会在归档时自动归纳并更新这份「印象」；它可能出错，你可以随时修改或否认。');
+    const tip = String(yu || '').trim();
+    return `<span class="tiShiAiGai" tabindex="0" role="img" aria-label="${escapeHtml(tip)}" data-tip="${escapeHtml(tip)}"></span>`;
+  }
+
+  /**
+   * 图标的悬停说明用**固定层**渲染（挂在 body 下）。
+   * 不能只用 ::after：我的页卡片带 content-visibility/包含裁剪，说明框会被裁掉（实测）。
+   */
+  let __tiShiFuCeng = null;
+  function tiShiFuCeng() {
+    if (__tiShiFuCeng) return __tiShiFuCeng;
+    const d = document.createElement('div');
+    d.id = 'warmyQuanJuTiShi';
+    d.className = 'warmyQuanJuTiShi yinCang';
+    d.setAttribute('role', 'tooltip');
+    document.body.appendChild(d);
+    __tiShiFuCeng = d;
+    return d;
+  }
+  function xianShiTiShi(el) {
+    const wen = String(el.getAttribute('data-tip') || '');
+    if (!wen) return;
+    const k = tiShiFuCeng();
+    k.textContent = wen;
+    k.classList.remove('yinCang');
+    k.style.visibility = 'hidden';
+    const r = el.getBoundingClientRect();
+    const kr = k.getBoundingClientRect();
+    let left = r.left;
+    let top = r.bottom + 7;
+    if (top + kr.height > window.innerHeight - 8) top = r.top - kr.height - 7;
+    left = Math.max(8, Math.min(left, window.innerWidth - kr.width - 8));
+    k.style.left = Math.round(left) + 'px';
+    k.style.top = Math.round(Math.max(8, top)) + 'px';
+    k.style.visibility = '';
+  }
+  function yinCangTiShi() { __tiShiFuCeng?.classList.add('yinCang'); }
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target && e.target.closest ? e.target.closest('.tiShiAiGai') : null;
+    if (el) xianShiTiShi(el);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const el = e.target && e.target.closest ? e.target.closest('.tiShiAiGai') : null;
+    if (el && !(e.relatedTarget && el.contains(e.relatedTarget))) yinCangTiShi();
+  });
+  document.addEventListener('focusin', (e) => {
+    const el = e.target && e.target.closest ? e.target.closest('.tiShiAiGai') : null;
+    if (el) xianShiTiShi(el);
+  });
+  document.addEventListener('focusout', (e) => {
+    if (e.target && e.target.closest && e.target.closest('.tiShiAiGai')) yinCangTiShi();
+  });
+  window.addEventListener('scroll', yinCangTiShi, true);
+  window.addEventListener('resize', yinCangTiShi);
+
   function renderPage() {
     const heZi = $('pageTi');
     /**
@@ -11892,7 +12011,7 @@ async function renderDashboard(host) {
         </div>
         <!-- 「术」（第 51 轮）：方法论层，仅次于「道」 -->
         <div class="sheZhiKa" style="margin-top:14px" id="shuKa">
-          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.shu', '术'))}</h3>
+          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.shu', '术'))}${moXingGaiBiaoQian('shu')}</h3>
           <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.shuHint', '做事的章法与技巧：优先级**仅次于「道」**，高于教条与束缚。单独保存在配置文件夹的 shu.md。'))}</p>
           <textarea id="shuTi" rows="5" style="width:100%;max-width:100%;resize:vertical;box-sizing:border-box" placeholder="${escapeHtml(tOr('wo.shuPlaceholder', '例如：先查后问；一次只解决一个真问题；交付给结论/证据/风险/下一步…'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
@@ -11904,7 +12023,7 @@ async function renderDashboard(host) {
         <!-- 「印象」：第 37 轮 项 2 —— 牛马在后台归档时自行整理的"它对用户的长期理解"，单独文件 yinxiang.md；
              优先级**低于「规矩」**（规矩是用户明说的，印象是牛马归纳的），可由用户随时改写/否认 -->
         <div class="sheZhiKa" style="margin-top:14px" id="yinXiangKa">
-          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.yinXiang', '印象'))}</h3>
+          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.yinXiang', '印象'))}${moXingGaiBiaoQian('yinXiang')}</h3>
           <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.yinXiangHint', '牛马在后台归档时，会把你**喜欢什么、习惯怎么做事、长期要求、想让它记住的事**归纳到这里（单独文件 yinxiang.md）。优先级排在这套阶梯的最后：硬门禁 > 道 > 术 > 规范 > 教条 > 束缚 > 工具 > 软门禁 > 认知 > 印象。你可以随时改、删、或整段清空 —— 改完之后牛马就按新的来。若某条你根本没说过，直接否认它即可，它会去查这条是从哪条对话归纳出来的，并改掉归纳规则。'))}</p>
           <textarea id="yinXiangTi" rows="6" style="width:100%;max-width:100%;resize:vertical;box-sizing:border-box" placeholder="${escapeHtml(tOr('wo.yinXiangPlaceholder', '（空）牛马还没归纳出关于你的印象。它会在后台归档时自动补充。'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
@@ -12901,6 +13020,18 @@ async function renderDashboard(host) {
           <h2>${escapeHtml(t('join.blacklistTitle'))}</h2>
           <div id="heiMingDanHe" class="jingYin">${escapeHtml(t('join.blacklistEmpty'))}</div>
         </div>
+          <!-- #109：提示词校对 + 备份 diff / 回滚（道/术/教条/束缚/印象） -->
+          <div class="sheZhiSection sheZhiKa" id="tiShiJiaoDuiKa" data-sec="func">
+            <h2>${escapeHtml(tOr('prompt.tool.title', '提示词校对与回滚'))}</h2>
+            <p class="jingYin">${escapeHtml(tOr('prompt.tool.hint', '本地校对只查空值、超上限、重复行（不联网）；每次覆盖前自动留最近 5 份备份，可看差异并回滚。'))}</p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0">
+              <select id="tiShiJiaoDuiCeng"></select>
+              <button class="anNiuXiao" id="anNiuTiShiJiaoDui">${escapeHtml(tOr('prompt.tool.check', '本地校对'))}</button>
+              <span class="jingYin" id="tiShiJiaoDuiJieGuo"></span>
+            </div>
+            <div id="tiShiBeiFenLieBiao" class="jingYin" style="font-size:11px"></div>
+            <pre id="tiShiDiff" class="tiShiDiff yinCang"></pre>
+          </div>
           <!-- 最近删除（默认折叠）：48 小时内可恢复；只有这里的「永久删除」才二次确认 -->
           <div class="sheZhiSection sheZhiKa" id="laJiKuai" data-sec="func">
             <details id="laJiQu">
@@ -15364,6 +15495,77 @@ async function renderDashboard(host) {
             ? tOr('settings.nmOpenOn', '已启用：左键用 nm 打开，右键用系统默认程序')
             : tOr('settings.nmOpenOff', '已停用：左键用系统默认程序，右键用 nm 打开'));
         };
+      })();
+      // #109：提示词本地校对 + 备份 diff / 回滚
+      (function bindTiShiJiaoDui() {
+        const sel = $('tiShiJiaoDuiCeng');
+        const list = $('tiShiBeiFenLieBiao');
+        const out = $('tiShiJiaoDuiJieGuo');
+        const diff = $('tiShiDiff');
+        if (!sel || !list || !diff) return;
+        let data = null;
+        const diffHtml = (a, b) => {
+          const A = String(a || '').split('\n'), B = String(b || '').split('\n');
+          const n = Math.min(A.length, 300), m = Math.min(B.length, 300);
+          const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+          for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
+            dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+          }
+          const rows = [];
+          let i = 0, j = 0, plus = 0, minus = 0;
+          while (i < n || j < m) {
+            if (i < n && j < m && A[i] === B[j]) { rows.push('  ' + A[i]); i++; j++; }
+            else if (j < m && (i >= n || dp[i][j + 1] >= dp[i + 1][j])) { rows.push('+ ' + B[j]); j++; plus++; }
+            else { rows.push('- ' + A[i]); i++; minus++; }
+          }
+          return { text: rows.join('\n'), plus, minus };
+        };
+        const render = () => {
+          const c = (data && data.ceng || []).find((x) => x.id === sel.value);
+          if (!c) { list.textContent = ''; return; }
+          list.innerHTML = `<div style="margin:4px 0">${escapeHtml(c.ming)} · ${escapeHtml(tOr('prompt.tool.current', '当前'))} ${c.currentBytes || 0} B</div>`
+            + (c.backups.length
+              ? c.backups.map((b) => `<div class="tiShiBakHang"><span>${escapeHtml(new Date(b.at).toLocaleString())}</span><span class="jingYin">${b.bytes} B</span><button class="anNiuXiao" data-bak-view="${escapeHtml(b.file)}" data-bak-id="${escapeHtml(c.id)}">${escapeHtml(tOr('prompt.tool.viewDiff', '看差异'))}</button><button class="anNiuXiao" data-bak-restore="${escapeHtml(b.file)}" data-bak-id="${escapeHtml(c.id)}">${escapeHtml(tOr('prompt.tool.restore', '回滚'))}</button></div>`).join('')
+              : `<div>${escapeHtml(tOr('prompt.tool.noBackup', '还没有备份；下次保存/归档前会自动留一份。'))}</div>`);
+          diff.classList.add('yinCang');
+          diff.textContent = '';
+        };
+        const load = async () => {
+          data = await window.warmy.tiShiBeiFenLieBiao?.();
+          if (!data || !data.ok) { list.textContent = String((data && data.error) || 'ipc-unavailable'); return; }
+          const cur = sel.value;
+          sel.innerHTML = data.ceng.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.ming)}</option>`).join('');
+          if (cur && data.ceng.some((c) => c.id === cur)) sel.value = cur;
+          render();
+        };
+        sel.onchange = render;
+        $('anNiuTiShiJiaoDui')?.addEventListener('click', async () => {
+          const r = await window.warmy.tiShiJiaoDui?.();
+          if (!r || !r.ok) { if (out) out.textContent = String((r && r.error) || 'ipc-unavailable'); return; }
+          if (out) {
+            out.textContent = r.ceng.map((c) => `${c.ming}: ${c.chao ? '超上限' : '长度OK'}${c.empty ? ' · 空' : ''}${c.dup ? ' · 重复' + c.dup : ''}`).join(' | ');
+          }
+        });
+        list.addEventListener('click', async (e) => {
+          const b = e.target && e.target.closest && e.target.closest('[data-bak-view],[data-bak-restore]');
+          if (!b) return;
+          const id = b.getAttribute('data-bak-id') || '';
+          const file = b.getAttribute('data-bak-view') || b.getAttribute('data-bak-restore') || '';
+          if (b.hasAttribute('data-bak-view')) {
+            const r = await window.warmy.tiShiBeiFenDu?.({ id, file });
+            if (!r || !r.ok) { showToast(String((r && r.error) || t('common.error'))); return; }
+            const d = diffHtml(r.current, r.backup);
+            diff.textContent = d.text;
+            diff.classList.remove('yinCang');
+            showToast(tOr('prompt.tool.diffStat', '差异') + ` +${d.plus} / -${d.minus}`);
+            return;
+          }
+          if (!(await uiConfirm(tOr('prompt.tool.restoreConfirm', '用这份备份覆盖当前提示词？当前内容会先自动再备份一份。')))) return;
+          const r = await window.warmy.tiShiBeiFenHuiFu?.({ id, file });
+          showToast(r && r.ok ? tOr('prompt.tool.restored', '已回滚') : String((r && r.error) || t('common.error')));
+          void load();
+        });
+        void load();
       })();
       // P0-6 白名单 D：列出自动加入的能力类别，可一键撤销
       (function bindNengLiWai() {
@@ -21774,6 +21976,26 @@ async function renderDashboard(host) {
    *   opts.persistKey：松手 / 双击复位后把宽度写回**既有 settings 通道**（不新开存储文件）。
    *   opts.resetWidth：双击恢复的默认宽度。
    */
+  /**
+   * 宽屏/带鱼屏适配：列表栏与第四列在超宽窗口按比例放宽，但**用户拖过的宽度优先**。
+   * 无论哪种来源，窗口窄到放不下时先收右栏、再收列表，保证聊天区至少 360px。
+   * 阅读区上限（正文/输入区/头部居中）由 renderer.css 的 --du-wen-kuan 控制。
+   * 只改显示用的 CSS 变量，不回写设置；用户存的值在窗口恢复变宽后照原样生效。
+   */
+  function yingYongKuanPingShiPei() {
+    const vw = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
+    const d = state.buJuKuan;
+    let list = d.lieBiaoYongHu ? d.lieBiao : Math.max(200, Math.min(280, Math.round(vw * 0.14)));
+    let panel = d.mianBanYongHu ? d.mianBan : Math.max(300, Math.min(420, Math.round(vw * 0.16)));
+    const keYong = vw - 64 - 360;
+    if (list + panel > keYong) {
+      panel = Math.max(220, panel - (list + panel - keYong));
+      list = Math.max(180, Math.min(list, keYong - panel));
+    }
+    document.documentElement.style.setProperty('--list-w', Math.round(list) + 'px');
+    document.documentElement.style.setProperty('--panel-w', Math.round(panel) + 'px');
+  }
+
   function bindResizer(yuanSu, cssVar, min, max, opts) {
     if (!yuanSu) return;
     const o = opts || {};
@@ -21806,6 +22028,10 @@ async function renderDashboard(host) {
         /* 持久化失败不影响拖动本身 */
       }
     };
+    /** 把用户拖出的宽度交给宽屏适配层：拖动=用户宽度，双击=回到自动宽度 */
+    const commit = (w, yongHu) => {
+      try { o.onCommit?.(w, yongHu); } catch { /* 回调失败不影响拖动 */ }
+    };
     let startX = 0, startW = 0, dragging = false, lastW = 0;
     const onMove = (e) => {
       if (!dragging) return;
@@ -21818,6 +22044,7 @@ async function renderDashboard(host) {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       persist(lastW);
+      commit(lastW, true);
     };
     yuanSu.addEventListener('mousedown', (e) => {
       dragging = true;
@@ -21834,6 +22061,7 @@ async function renderDashboard(host) {
       e.preventDefault();
       lastW = setW(resetWidth);
       persist(lastW);
+      commit(lastW, false);
     });
   }
 
@@ -23060,6 +23288,130 @@ async function renderDashboard(host) {
     ];
   }
 
+  /** #112：项目/群/联系人「查看」弹窗（名称/头像/成员/网络/申请/退出）。 */
+  function kaiXinXiKuang(biaoTi, neiRong, dongZuo, onInline) {
+    return new Promise((resolve) => {
+      const root = $('duiHuaKuangGen');
+      $('duiHuaKuangBiaoTi').textContent = biaoTi;
+      const ti = $('duiHuaKuangTi');
+      ti.innerHTML = neiRong;
+      const inline = (e) => {
+        const b = e.target && e.target.closest && e.target.closest('[data-inline]');
+        if (!b || !onInline) return;
+        e.preventDefault();
+        Promise.resolve(onInline(b)).catch(() => {});
+      };
+      ti.addEventListener('click', inline);
+      const zuo = $('duiHuaKuangDongZuoJi');
+      zuo.innerHTML = '';
+      const guan = (v) => { ti.removeEventListener('click', inline); root.classList.add('yinCang'); resolve(v); };
+      const close = document.createElement('button');
+      close.className = 'anNiuXiao';
+      close.textContent = tOr('common.close', '关闭');
+      close.onclick = () => guan(null);
+      zuo.appendChild(close);
+      for (const x of dongZuo || []) {
+        const b = document.createElement('button');
+        b.className = x.weixian ? 'anNiuXiao' : 'anNiuZhuYao';
+        b.textContent = x.ming;
+        b.onclick = () => guan(x.value);
+        zuo.appendChild(b);
+      }
+      root.classList.remove('yinCang');
+    });
+  }
+  const xinXiHang = (k, v) => '<div class="shiLiHang" style="margin:4px 0"><span class="jingYin" style="min-width:96px">' + escapeHtml(k) + '</span><span>' + escapeHtml(String(v == null || v === '' ? '—' : v)) + '</span></div>';
+  async function kanQunKuang(g) {
+    const isProject = g.type === 'internal';
+    const isCreator = !g.joinedByOther;
+    let members = [];
+    try { const r = await window.warmy.qunChengYuan?.(g.id); members = (r && (r.members || r.items)) || []; } catch { /* noop */ }
+    let pend = [];
+    try { const r = await window.warmy.joinPending?.(); pend = ((r && r.items) || []).filter((x) => String(x.target || '') === String(g.id)); } catch { /* noop */ }
+    /** #112：创建者可在这里拿到本会话的邀请链接/二维码，并逐条审批加入申请 */
+    let invLink = '';
+    let invQr = '';
+    if (isCreator) {
+      try {
+        const inv = await window.warmy.inviteCreate(g.id);
+        const tok = String((inv && inv.invite && inv.invite.token) || '');
+        let node = '';
+        try { const st = await window.warmy.meshStatus(); node = String((st && st.nodeId) || ''); } catch { /* noop */ }
+        const port = Number(netState && netState.addr && netState.addr.port) || 0;
+        const pian = ['group=' + encodeURIComponent(g.id)];
+        if (node) pian.push('node=' + encodeURIComponent(node));
+        if (port) pian.push('port=' + port);
+        if (tok) pian.push('tok=' + encodeURIComponent(tok));
+        invLink = 'warmy://join?' + pian.join('&');
+        invQr = qrSvg(invLink, 168);
+      } catch { /* 拿不到就少显示，不画假码 */ }
+    }
+    const pendHtml = isCreator && pend.length
+      ? `<div class="jrgHe">${escapeHtml(tOr('info.pendingTitle', '加入申请（可逐条审批）'))}</div>`
+        + pend.map((x) => `<div class="jrHang"><span>${escapeHtml(String(x.ming || x.id || ''))}</span><button class="anNiuXiao" data-inline data-jr-id="${escapeHtml(String(x.id || ''))}" data-jr-action="agree">${escapeHtml(tOr('info.approve', '批准'))}</button><button class="anNiuXiao" data-inline data-jr-id="${escapeHtml(String(x.id || ''))}" data-jr-action="reject">${escapeHtml(tOr('info.reject', '拒绝'))}</button></div>`).join('')
+      : '';
+    const duiHua = '<div style="max-height:48vh;overflow:auto">'
+      + xinXiHang(tOr('info.name', '名称'), g.name || g.id)
+      + xinXiHang(tOr('info.kind', '类型'), isProject ? tOr('info.project', '项目') : tOr('info.group', '群聊'))
+      + xinXiHang(tOr('info.members', '成员'), members.length || '—')
+      + xinXiHang(tOr('info.network', '使用的网络服务商'), g.network || g.server || '—')
+      + xinXiHang(tOr('info.joinRequests', '本机最近 30 天申请'), pend.length ? pend.map((x) => x.ming || x.id).join('、') : tOr('info.none', '暂无'))
+      + xinXiHang(tOr('info.role', '我的权限'), isCreator ? tOr('info.creator', '创建者（可管理）') : tOr('info.member', '成员（只读）'))
+      + (isCreator && invLink
+        ? `<div class="jrgHe">${escapeHtml(tOr('info.inviteTitle', '邀请链接 / 二维码'))}</div>`
+          + `<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div class="jrQr">${invQr}</div><div style="flex:1;min-width:180px"><input id="jrInviteLink" readonly value="${escapeHtml(invLink)}" style="width:100%"><div class="jingYin" style="font-size:10px;margin-top:4px">${escapeHtml(tOr('info.inviteHint', '对方打开该链接即可带着本机指纹申请加入；批准后才会写进成员表。'))}</div><button class="anNiuXiao" data-inline data-jr-copy="1" style="margin-top:6px">${escapeHtml(tOr('info.copyLink', '复制链接'))}</button></div></div>`
+        : '')
+      + pendHtml
+      + '</div>';
+    const act = [];
+    if (isCreator) {
+      act.push({ ming: tOr('info.rename', '改名'), value: 'rename' });
+      act.push({ ming: tOr('info.dissolve', '解散'), value: 'dissolve', weixian: true });
+    } else {
+      act.push({ ming: tOr('info.exit', '退出'), value: 'exit', weixian: true });
+    }
+    const v = await kaiXinXiKuang((isProject ? tOr('info.project', '项目') : tOr('info.group', '群聊')) + ' · ' + (g.name || g.id), duiHua, act, async (b) => {
+      if (b.hasAttribute('data-jr-copy')) {
+        try { await navigator.clipboard.writeText(invLink); showToast(tOr('info.linkCopied', '链接已复制')); } catch { uiAlert(invLink); }
+        return;
+      }
+      const id = b.getAttribute('data-jr-id') || '';
+      const action = b.getAttribute('data-jr-action') === 'agree' ? 'agree' : 'reject';
+      if (!id) return;
+      const r = await window.warmy.joinRespond?.({ id, action });
+      if (!r || !r.ok) { uiAlert(String((r && r.error) || t('common.error'))); return; }
+      const hang = b.closest && b.closest('.jrHang');
+      if (hang) hang.innerHTML = `<span class="jingYin">${escapeHtml(action === 'agree' ? tOr('info.approved', '已批准并加入成员表') : tOr('info.rejected', '已拒绝'))}</span>`;
+      showToast(action === 'agree' ? tOr('info.approved', '已批准并加入成员表') : tOr('info.rejected', '已拒绝'));
+    });
+    if (!v) return;
+    if (v === 'rename') {
+      const ming = await uiPrompt(t('ctx.renamePrompt'), g.name || g.id);
+      if (ming) { g.name = ming; renderList(); window.__saveState?.(); }
+    } else if (v === 'exit' || v === 'dissolve') {
+      if (!(await uiConfirm(v === 'dissolve' ? tOr('info.dissolveConfirm', '解散后成员将无法继续访问，确定吗？') : tOr('info.exitConfirm', '退出后需要重新加入，确定吗？')))) return;
+      try { await window.warmy.groupDissolve(g.id); } catch { /* noop */ }
+      showToast(v === 'dissolve' ? tOr('info.dissolved', '已解散') : tOr('info.exited', '已退出'));
+      renderList();
+    }
+  }
+  async function kanLianXiRenKuang(c) {
+    const duiHua = '<div style="max-height:48vh;overflow:auto">'
+      + xinXiHang(tOr('info.note', '备注'), c.note || '—')
+      + xinXiHang(tOr('info.name', '名称'), c.name || c.ming || c.id)
+      + xinXiHang(tOr('info.email', '邮箱'), c.email || '—')
+      + xinXiHang(tOr('info.signature', '签名'), c.signature || c.qianMing || '—')
+      + xinXiHang(tOr('info.joinedAt', '加入时间'), c.joinedAt ? new Date(Number(c.joinedAt)).toLocaleString() : '—')
+      + '</div>';
+    const v = await kaiXinXiKuang(tOr('info.contact', '联系人') + ' · ' + (c.name || c.ming || c.id), duiHua, [{ ming: tOr('info.deleteContact', '删除联系人'), value: 'del', weixian: true }]);
+    if (v !== 'del') return;
+    if (!(await uiConfirm(tOr('info.delContactConfirm', '删除该联系人？48 小时内可在最近删除恢复。')))) return;
+    const r = await window.warmy.sessionDelete?.({ id: c.id, kind: 'contact', mode: 'purge', name: c.name || c.ming || c.id }).catch(() => null);
+    if (r && r.ok === false) { uiAlert(String(r.error || t('common.error'))); return; }
+    state.chats = (state.chats || []).filter((x) => x.id !== c.id);
+    renderList(); window.__saveState?.();
+    showToast(tOr('ctx.deletedSoft', '已删除，可在「设置 → 最近删除」48 小时内恢复'));
+  }
   async function qunCaidan(g, hangYuanSu) {
     const blocked = sessionHasBlockingTasks(g.id);
     const yiJiaRu = !g.joinedByOther;
@@ -23070,6 +23422,10 @@ async function renderDashboard(host) {
     const projectItems = g.type === 'internal' ? await projectMenuItems(g) : [];
     void hangYuanSu;
     return [
+      {
+        biaoQian: tOr('ctx.view', '查看'),
+        onClick: () => void kanQunKuang(g),
+      },
       {
         biaoQian: shiZhiDing(g.id) ? t('list.unpin') : t('list.pin'),
         checked: shiZhiDing(g.id),
@@ -23175,6 +23531,10 @@ async function renderDashboard(host) {
             tOr('ctx.contactPreview', '最近消息') + '：' + String(c.lastPreview || tOr('ctx.none', '（无）')),
           ].join('\n'));
         },
+      },
+      {
+        biaoQian: tOr('ctx.view', '查看'),
+        onClick: () => void kanLianXiRenKuang(c),
       },
       {
         biaoQian: t('ctx.rename'),
@@ -25942,7 +26302,15 @@ try {
    * 这里原先又绑了一份 ⇒ 同一次拖放触发两次、附件出现两份（真事故）。已删除。
    */
 
-  bindResizer($('lanTiaoZhengTiao'), '--list-w', 180, 480, { persistKey: 'listWidth', resetWidth: 200 });
+  bindResizer($('lanTiaoZhengTiao'), '--list-w', 180, 480, {
+    persistKey: 'listWidth',
+    resetWidth: 200,
+    onCommit: (w, yongHu) => {
+      state.buJuKuan.lieBiao = w;
+      state.buJuKuan.lieBiaoYongHu = yongHu;
+      yingYongKuanPingShiPei();
+    },
+  });
   // R3：聊天区 ↔ 右栏 —— 右栏在右边（dir:'you'），左侧聊天区保底 320px，宽度走 settings 里的 panelWidth
   bindResizer($('mianBanTiaoZhengTiao'), '--panel-w', 220, 480, {
     dir: 'you',
@@ -25950,6 +26318,18 @@ try {
     minOther: 320,
     persistKey: 'panelWidth',
     resetWidth: 300,
+    onCommit: (w, yongHu) => {
+      state.buJuKuan.mianBan = w;
+      state.buJuKuan.mianBanYongHu = yongHu;
+      yingYongKuanPingShiPei();
+    },
+  });
+
+  // 窗口尺寸变化（最大化/全屏/拖边）时重算列宽：只改显示，不覆盖用户存的值
+  let __buJuKuanRaf = 0;
+  window.addEventListener('resize', () => {
+    if (__buJuKuanRaf) return;
+    __buJuKuanRaf = requestAnimationFrame(() => { __buJuKuanRaf = 0; yingYongKuanPingShiPei(); });
   });
 
   async function refreshCost() {
@@ -26830,7 +27210,9 @@ try {
             escapeHtml(tOr('shejiao.qrConnect', '微信扫码连接')) + '</button>'
           : '<button type="button" class="anNiuXiao" data-sj-save="' + escapeHtml(p.id) + '">' + escapeHtml(tOr('common.save', '保存')) + '</button>' +
             '<button type="button" class="anNiuZhuYao" data-sj-conn="' + escapeHtml(p.id) + '">' + escapeHtml(tOr('shejiao.connect', '连接')) + '</button>' +
-            '<button type="button" class="anNiuXiao" data-sj-disc="' + escapeHtml(p.id) + '">' + escapeHtml(tOr('shejiao.disconnect', '断开')) + '</button>') +
+            '<button type="button" class="anNiuXiao" data-sj-disc="' + escapeHtml(p.id) + '">' + escapeHtml(tOr('shejiao.disconnect', '断开')) + '</button>' +
+            '<button type="button" class="anNiuXiao" data-sj-diag="' + escapeHtml(p.id) + '">' + escapeHtml(tOr('shejiao.diag', '连通性诊断')) + '</button>') +
+        '<div class="jingYin sheJiaoDiag" data-sj-diag-box="' + escapeHtml(p.id) + '" style="font-size:11px;margin-top:4px"></div>' +
         '</div></div>';
     }).join('');
     offState = window.warmy.onSheJiaoZhuangTai?.((s) => {
@@ -26894,6 +27276,21 @@ try {
         if (!current()) return;
         if (xi2) xi2.textContent = stateText(r || { error: 'ipc-failed' });
         void renderSheJiao(inst, he);
+      };
+    });
+    he.querySelectorAll('[data-sj-diag]').forEach((b) => {
+      b.onclick = async () => {
+        const id = b.getAttribute('data-sj-diag');
+        const row = b.closest('[data-sj-row]');
+        const box = row && row.querySelector('[data-sj-diag-box]');
+        const cfg = {};
+        row && row.querySelectorAll('input[data-sj-k]').forEach((inp) => { cfg[inp.getAttribute('data-sj-k')] = String(inp.value || ''); });
+        if (box) box.textContent = tOr('shejiao.diagRunning', '诊断中…');
+        const r = await window.warmy.sheJiaoLianTongCeShi?.({ pingTai: id, cfg }).catch((e) => ({ ok: false, steps: [], hint: String(e && e.message || e) }));
+        if (!current() || !box) return;
+        const bu = (r && r.steps) || [];
+        box.innerHTML = (bu.length ? bu.map((s) => `<span class="${s.ok ? 'ok' : 'bad'}">${escapeHtml(s.name)} ${s.ok ? '✓' : '✗'} ${escapeHtml(String(s.detail || ''))}</span>`).join('<br>') : escapeHtml(String((r && r.hint) || '—')))
+          + (r && r.hint ? `<br><span class="jingYin">${escapeHtml(String(r.hint))}</span>` : '');
       };
     });
     he.querySelectorAll('[data-sj-disc]').forEach((b) => {
@@ -27694,9 +28091,10 @@ try {
     yinDaoTimer = null;
   }
   function yinDaoKaiShiXunJian() {
+    /** 第 82 轮：**不再自动跳步**。只做高亮跟随，进度必须由用户点「下一步」推进。 */
     if (yinDaoTimer) return;
     yinDaoTimer = setInterval(() => {
-      try { yinDaoJinDu(); } catch { /* 巡检失败不挡用户操作 */ }
+      try { yinDaoJinDu(); } catch { /* 高亮失败不挡用户操作 */ }
     }, 300);
   }
   /** 完成/跳过后都要留下持久标记：跳过 = 不再自动提示，但功能照常可用 */
@@ -27718,14 +28116,7 @@ try {
     if (!step) { yinDaoTing(); return; }
     /** 重放模式：停在第 1 步等用户操作，不因历史状态已达成而自动跳过。 */
     if (yinDaoQiangZhiShouBu) return;
-    let da = false;
-    try { da = typeof step.done === 'function' ? !!step.done() : false; } catch { da = false; }
-    if (da) {
-      yinDaoBu += 1;
-      if (yinDaoBu >= yinDaoSteps.length) { yinDaoWanCheng(); return; }
-      yinDaoRender();
-      return;
-    }
+    // 只同步高亮，不自动推进；推进由「下一步/去操作」按钮负责。
     // 同一大步里目标也可能换（例如先高亮整张供应商卡，再高亮具体输入框）
     if (step.target) {
       const want = yinDaoTarget(step.target);
@@ -27872,18 +28263,13 @@ try {
         try { console.error('[guide] action failed', e); } catch { /* noop */ }
       }
       try { yinDaoHighlight(step.target); } catch { /* noop */ }
-      // 重放时巡检器不自动走：用户点「去操作」就是明确要继续，这里手动进下一步。
-      if (yinDaoQiangZhiShouBu) {
-        yinDaoQiangZhiShouBu = false;
-        yinDaoBu += 1;
-        if (yinDaoBu >= yinDaoSteps.length) { yinDaoWanCheng(); return; }
-        yinDaoRender();
-      }
+      // 「去操作」只做动作与高亮；是否完成由用户点「下一步」时校验。
     };
     const nx = bar.querySelector('[data-yd="next"]');
     if (nx) {
       nx.onclick = async () => {
-        if (typeof step.check === 'function' && !step.check()) {
+        const okStep = typeof step.check === 'function' ? step.check() : (typeof step.done === 'function' ? step.done() : true);
+        if (!okStep) {
           // 还没做完：提示但允许继续
           // ⚠️ 这里必须走 yinDaoWenAnHtml：以前用 textContent 重写，
           // 把 {icon:settings} 原样吐出来、图标也一起没了（本轮真事故）。
@@ -29427,12 +29813,14 @@ try {
         document.documentElement.style.setProperty('--accent', state.theme);
         document.documentElement.style.setProperty('--me-bubble', state.theme);
         try { tongBuBeiJingWenZi(); } catch { /* noop */ }
-        // R3：右栏宽度沿用上次拖到的值（没存过就吃 CSS 里的 300px 默认）
+        // R3：栏宽沿用上次拖到的值；默认值（200/300）视为"没设过"，宽屏时自动放宽
         const __lw = Number(s.settings.listWidth) >= 180 ? Number(s.settings.listWidth) : 200;
-        document.documentElement.style.setProperty('--list-w', Math.round(__lw) + 'px');
-        if (Number(s.settings.panelWidth) > 0) {
-          document.documentElement.style.setProperty('--panel-w', Math.round(Number(s.settings.panelWidth)) + 'px');
-        }
+        state.buJuKuan.lieBiao = Math.round(__lw);
+        state.buJuKuan.lieBiaoYongHu = Math.round(__lw) !== 200;
+        const __pw = Number(s.settings.panelWidth) >= 220 ? Number(s.settings.panelWidth) : 300;
+        state.buJuKuan.mianBan = Math.round(__pw);
+        state.buJuKuan.mianBanYongHu = Math.round(__pw) !== 300;
+        yingYongKuanPingShiPei();
         // R2：用户设过的快捷键（只覆盖存过的动作，没存过的仍走预置）
         if (s.settings.shortcuts && typeof s.settings.shortcuts === 'object') {
           state.shortcuts = Object.assign({}, s.settings.shortcuts);

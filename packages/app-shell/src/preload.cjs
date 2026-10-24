@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld('warmy', {
   providerKeyHas: (payload) => ipcRenderer.invoke('warmy:gongYingShangMiYaoHas', payload),
   providerKeyClear: (payload) => ipcRenderer.invoke('warmy:gongYingShangMiYaoQingChu', payload),
   chatSend: (xiaoXi) => ipcRenderer.invoke('warmy:liaoTianFaSong', xiaoXi),
+  chatNetSend: (p) => ipcRenderer.invoke('warmy:chatNetSend', p),
   /** 第 81 轮：nm 查看器右键「插入对话」→ 主窗口当前输入框 */
   chaRuDuiHua: (text) => ipcRenderer.invoke('warmy:chaRuDuiHua', text),
   onChaRuDuiHua: (cb) => ipcRenderer.on('warmy:chaRuDuiHua', (_e, d) => cb(d)),
@@ -94,6 +95,8 @@ contextBridge.exposeInMainWorld('warmy', {
   searchKeyClear: () => ipcRenderer.invoke('warmy:souSuoMiYaoQingChu'),
   knowledgeQuery: (p) => ipcRenderer.invoke('warmy:zhiShiQuery', p),
   zhiShiCengKeJian: (p) => ipcRenderer.invoke('warmy:zhiShiCengKeJian', p),
+  kbPermDu: (p) => ipcRenderer.invoke('warmy:kbPermDu', p),
+  kbPermShe: (p) => ipcRenderer.invoke('warmy:kbPermShe', p),
   knowledgeAddEvent: (Shi) => ipcRenderer.invoke('warmy:zhiShiTianJiaShiJian', Shi),
   kbMerge: (p) => ipcRenderer.invoke('warmy:kbMerge', p),
   kbRebuild: (p) => ipcRenderer.invoke('warmy:kbRebuild', p),
@@ -183,6 +186,7 @@ contextBridge.exposeInMainWorld('warmy', {
    * 现在补齐；`instId` 可选（不传 = 旧的全局配置，兼容老数据）。
    */
   sheJiaoPingTai: () => ipcRenderer.invoke('warmy:sheJiaoPingTai'),
+  sheJiaoLianTongCeShi: (p) => ipcRenderer.invoke('warmy:sheJiaoLianTongCeShi', p),
   sheJiaoPeiZhiQu: (p) => ipcRenderer.invoke('warmy:sheJiaoPeiZhiQu', p),
   sheJiaoBaoCunPeiZhi: (p) => ipcRenderer.invoke('warmy:sheJiaoBaoCunPeiZhi', p),
   sheJiaoZhangHaoBeiZhu: (p) => ipcRenderer.invoke('warmy:sheJiaoZhangHaoBeiZhu', p),
@@ -237,6 +241,8 @@ contextBridge.exposeInMainWorld('warmy', {
   scanMachine: (kind) => ipcRenderer.invoke('warmy:saoMiaoJiQi', kind),
   privacyConsentSet: (consent) => ipcRenderer.invoke('warmy:yinSiTongYiSheZhi', consent),
   appQuit: (reason) => ipcRenderer.invoke('warmy:yingYongTuiChu', reason),
+  shouQiChuangKouShiPei: () => ipcRenderer.invoke('warmy:shouQiChuangKouShiPei'),
+  shouQiChuangKouWanCheng: () => ipcRenderer.invoke('warmy:shouQiChuangKouWanCheng'),
   identityCredential: () => ipcRenderer.invoke('warmy:shenFenPingZheng'),
   credentialInfo: () => ipcRenderer.invoke('warmy:pingZhengXinXi'),
   credentialRestore: (credential) => ipcRenderer.invoke('warmy:pingZhengHuiFu', credential),
@@ -621,6 +627,10 @@ contextBridge.exposeInMainWorld('warmy', {
   daoShe: (p) => ipcRenderer.invoke('warmy:daoShe', p),
   /** 各层提示词的**硬上限表**（第 53 轮项 2）：渲染层拿它挡住输入，数字只有主进程那一份 */
   tiShiShangXian: () => ipcRenderer.invoke('warmy:tiShiShangXian'),
+  tiShiBeiFenLieBiao: () => ipcRenderer.invoke('warmy:tiShiBeiFenLieBiao'),
+  tiShiBeiFenDu: (p) => ipcRenderer.invoke('warmy:tiShiBeiFenDu', p),
+  tiShiBeiFenHuiFu: (p) => ipcRenderer.invoke('warmy:tiShiBeiFenHuiFu', p),
+  tiShiJiaoDui: () => ipcRenderer.invoke('warmy:tiShiJiaoDui'),
   shuDu: () => ipcRenderer.invoke('warmy:shuDu'),
   shuShe: (p) => ipcRenderer.invoke('warmy:shuShe', p),
   shuFuDu: () => ipcRenderer.invoke('warmy:shuFuDu'),
@@ -629,4 +639,6 @@ contextBridge.exposeInMainWorld('warmy', {
   guiFanDu: (p) => ipcRenderer.invoke('warmy:guiFanDu', p),
   guiFanShe: (p) => ipcRenderer.invoke('warmy:guiFanShe', p),
   yinXiangHuiHuaShe: (p) => ipcRenderer.invoke('warmy:yinXiangHuiHuaShe', p),
+  /** 仅门禁使用（主进程只在 WARMY_TEST_HOOKS=1 时执行）；普通运行永远返回 test-hooks-disabled */
+  testPromptPlacement: (p) => ipcRenderer.invoke('warmy:testPromptPlacement', p),
 });

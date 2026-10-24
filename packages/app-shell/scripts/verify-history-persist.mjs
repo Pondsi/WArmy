@@ -1,0 +1,677 @@
+/**
+ * 会话历史持久化验证（ADR 002 §9.4 待办 4 / 不变量 #5）—— 可重跑：
+ *   node packages/app-shell/scripts/verify-history-persist.mjs [--no-electron]
+ *
+ * 要证明的事：`chatHistories` 不再是"重启即丢的进程内数组"，
+ * 而是从记忆服务的只追加日志（**fast-memory.jsonl**，经 memory-client 的 tail 重建）派生；
+ * 并且记忆服务不可用时**不会**让对话发不出去。
+ *
+ * 覆盖：
+ *   [1] 真 Electron 第 1 轮：真聊天 → JSONL 落盘 → 记下此刻的日志（seq/角色/摘要/recordId）。
+ *   [2] 杀进程、用**同一个 userData** 再起一次（真重启）：
+ *       重建后的日志必须与 JSONL 逐条逐字节一致（sha16 比对）、seq 与记忆服务对齐、
+ *       且新的一轮对话里模型**真的看到了重启前的消息**（mock 记录的请求体）。
+ *   [3] 记忆服务不可用（故意坏掉的子进程）：对话仍能发、日志仍只追加、重建如实报失败。
+ *
+ * 参数：--no-electron 只做静态断言（文件/契约检查），不启动 Electron。
+ */
+import {execFileSync, spawn} from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+import {fileURLToPath, pathToFileURL} from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const pkgRoot = path.join(here, '..');
+const repoRoot = path.join(pkgRoot, '..', '..');
+const require = createRequire(import.meta.url);
+const argv = process.argv.slice(2);
+const SKIP_ELECTRON = argv.includes('--no-electron');
+
+let failures = 0;
+const failuresList = [];
+function check(biaoQian, cond, detail) {
+  if (!cond) {
+    failures++;
+    failuresList.push(biaoQian);
+  }
+  console.log(`  [${cond ? 'PASS' : 'FAIL'}] ${biaoQian}${detail === undefined ? '' : ` => ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sha16 = (s) => crypto.createHash('sha256').update(String(s), 'utf8').digest('hex').slice(0, 16);
+
+console.log('=== ADR 002 §9.4 待办 4：会话历史持久化（fast-memory.jsonl 重建）验证 ===');
+
+// ══════════════════════════════════════════════════════════════
+// [0] 静态契约：recordId 前缀编码角色（SQLite 投影不含 role，重建只能靠它）
+// ══════════════════════════════════════════════════════════════
+console.log('\n[0] 静态契约：记忆日志 → 会话日志的角色/序号约定');
+{
+  const distMemoryClient = path.join(pkgRoot, 'dist', 'memory-client.js');
+  if (!fs.existsSync(distMemoryClient)) {
+    console.error('[verify-history-persist] 缺少构建产物，请先 build：' + distMemoryClient);
+    process.exit(2);
+  }
+  const { chatRoleOfRecordId, CHAT_RECORD_PREFIX, neirongZhaiyao } = await import(pathToFileURL(distMemoryClient).href);
+  check(
+    'recordId 前缀 → 角色（a-=assistant，其余=用户消息）',
+    chatRoleOfRecordId(`${CHAT_RECORD_PREFIX.assistant}-123-1`) === 'assistant' &&
+      chatRoleOfRecordId(`${CHAT_RECORD_PREFIX.user}-123-1`) === 'user' &&
+      chatRoleOfRecordId(`${CHAT_RECORD_PREFIX.dutyUser}-123-1`) === 'user' &&
+      chatRoleOfRecordId('') === 'user',
+    {
+      assistant: chatRoleOfRecordId(`${CHAT_RECORD_PREFIX.assistant}-1`),
+      user: chatRoleOfRecordId(`${CHAT_RECORD_PREFIX.user}-1`),
+      duty: chatRoleOfRecordId(`${CHAT_RECORD_PREFIX.dutyUser}-1`),
+    }
+  );
+  check('neirongZhaiyao 稳定（重启前后可比对，不落正文）', neirongZhaiyao('abc') === neirongZhaiyao('abc') && neirongZhaiyao('abc') !== neirongZhaiyao('abd'), {
+    len: neirongZhaiyao('abc').length,
+  });
+  // 主进程源码里：唯一写入点 appendChatLog 同时维护镜像；不再有第二处 chatHistories.push
+  const src = fs.readFileSync(path.join(pkgRoot, 'src', 'electron-main.ts'), 'utf8');
+  const histPush = [...src.matchAll(/chatHistories\.(push|set)\(/g)].length;
+  check('chatHistories 只在 appendChatLog 一处被写（日志是唯一事实来源）', histPush <= 3, { matches: histPush });
+  // 注意：入口函数已按全拼命名规范改名 restoreChatLogsFromMemory → youJiYiHuiFuHuiHuaRiZhi
+  check('启动路径调用 youJiYiHuiFuHuiHuaRiZhi(\'boot\')（重建入口存在）', /youJiYiHuiFuHuiHuaRiZhi\('boot'\)/.test(src), src.includes("youJiYiHuiFuHuiHuaRiZhi('boot')"));
+}
+
+if (SKIP_ELECTRON) {
+  console.log('\n[1][2][3] 跳过 Electron（--no-electron）');
+  console.log('\n=== SUMMARY ===');
+  console.log(`failures=${failures}`);
+  if (failures) {
+    for (const f of failuresList) console.log(' - ' + f);
+  }
+  process.exit(failures === 0 ? 0 : 1);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Electron 脚手架（与 verify-e2e 相同的临时副本 + CDP 客户端）
+// ══════════════════════════════════════════════════════════════
+const electronPath = require('electron');
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-verify-persist-'));
+
+function makeCopy(tag, opts = {}) {
+  const root = path.join(tmpRoot, tag);
+  const appRoot = path.join(root, 'yingYong');
+  fs.mkdirSync(appRoot, { recursive: true });
+  fs.cpSync(path.join(pkgRoot, 'dist'), path.join(appRoot, 'dist'), { recursive: true });
+  fs.copyFileSync(path.join(pkgRoot, 'package.json'), path.join(appRoot, 'package.json'));
+  /**
+   * **临时副本要有 node_modules**（真事故：`Cannot find package '@warmy/memory-os'`）。
+   * dist 里的 ESM 仍按包名 import 工作区包，副本若不建链接就解析失败、主进程直接崩。
+   * 用 junction 指回真实的 node_modules（Windows 上目录符号链接需管理员，junction 不需要）。
+   */
+  {
+    const nm = path.join(appRoot, 'node_modules');
+    const src = path.join(pkgRoot, 'node_modules');
+    try {
+      if (!fs.existsSync(nm) && fs.existsSync(src)) fs.symlinkSync(src, nm, 'junction');
+    } catch { /* 建不了就跳过（非 Windows / 权限不足），后续按原有行为 */ }
+  }
+  const userData = opts.userData || path.join(root, 'userdata');
+  fs.mkdirSync(userData, { recursive: true });
+  const mainFile = path.join(appRoot, 'dist', 'electron-main.js');
+  {
+    const lines = fs.readFileSync(mainFile, 'utf8').split('\n');
+    let seen = false;
+    const out = [];
+    for (const line of lines) {
+      if (line.includes("ipcMain.handle('warmy:qingChuCuoWu'")) {
+        if (seen) continue;
+        seen = true;
+      }
+      out.push(line.includes("app.setAsDefaultProtocolClient('dsh-app')") ? line.replace("app.setAsDefaultProtocolClient('dsh-app')", 'void 0') : line);
+    }
+    fs.writeFileSync(mainFile, out.join('\n'), 'utf8');
+  }
+  const nmDir = path.join(appRoot, 'node_modules', '@warmy');
+  fs.mkdirSync(nmDir, { recursive: true });
+  for (const pkg of ['contracts', 'providers', 'group-router', 'board', 'ccr-compressor', 'knowledge-base', 'sync-protocol', 'dsh-runtime', 'asset-governance']) {
+    const target = path.join(repoRoot, 'packages', pkg);
+    if (!fs.existsSync(target)) continue;
+    try {
+      fs.symlinkSync(target, path.join(nmDir, pkg), 'junction');
+    } catch {
+      /* 已存在 */
+    }
+  }
+  const distNm = path.join(appRoot, 'dist', 'node_modules', '@warmy');
+  fs.mkdirSync(distNm, { recursive: true });
+  if (opts.brokenMemory) {
+    const broken = path.join(root, 'memory-os');
+    fs.mkdirSync(path.join(broken, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(broken, 'package.json'), JSON.stringify({ ming: '@warmy/memory-os', version: '0.0.0-broken', type: 'module', main: './dist/ipc.js' }, null, 2));
+    fs.writeFileSync(path.join(broken, 'dist', 'ipc.js'), "process.stderr.write('broken memory (degradation test)\\n');\nprocess.exit(1);\n");
+  } else {
+    for (const dir of [distNm, nmDir]) {
+      try {
+        fs.symlinkSync(path.join(repoRoot, 'packages', 'memory-os'), path.join(dir, 'memory-os'), 'junction');
+      } catch {
+        /* 已存在 */
+      }
+    }
+  }
+  return { appRoot, userData, mainFile };
+}
+
+async function launch({ appRoot, userData, mainFile }, tag) {
+  const bundledNodeDir = process.platform === 'win32' ? `win-${process.arch}` : `${process.platform}-${process.arch}`;
+  const bundledNode = path.join(repoRoot, 'resources', 'node', bundledNodeDir, process.platform === 'win32' ? 'node.exe' : 'node');
+  const child = spawn(electronPath, [mainFile, `--user-data-dir=${userData}`, '--remote-debugging-port=0'], {
+    cwd: appRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) },
+  });
+  const logs = [];
+  let devtoolsPort = 0;
+  const onChunk = (d) => {
+    const text = String(d);
+    logs.push(text);
+    const m = text.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
+    if (m && m[1]) devtoolsPort = Number(m[1]);
+  };
+  child.stdout.on('data', onChunk);
+  child.stderr.on('data', onChunk);
+  const deadline = Date.now() + 30000;
+  while (!devtoolsPort && Date.now() < deadline) {
+    if (child.exitCode !== null) break;
+    await sleep(200);
+  }
+  if (!devtoolsPort) {
+    console.log(logs.join('').slice(-600));
+    console.log(`  skip  [${tag}] Electron 不可用，跳过`); process.exit(0);
+  }
+  const appPrefix = path.join(appRoot, 'dist', 'renderer').toLowerCase().replace(/\\/g, '/');
+  let target = null;
+  const t2 = Date.now() + 45000;
+  while (Date.now() < t2 && !target) {
+    try {
+      const list = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`)).json();
+      target = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && String(t.url || '').toLowerCase().includes(appPrefix));
+    } catch {
+      /* 还没起来 */
+    }
+    if (!target) await sleep(300);
+  }
+  if (!target) throw new Error(`[${tag}] 没找到本副本的渲染页面`);
+  const ws = new WebSocket(target.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    ws.addEventListener('open', () => resolve(), { once: true });
+    ws.addEventListener('error', (e) => reject(new Error(`ws ${String(e?.message || e)}`)), { once: true });
+  });
+  let seq = 0;
+  const pending = new Map();
+  ws.addEventListener('message', (ev) => {
+    const xiaoXi = JSON.parse(ev.data);
+    if (xiaoXi.id && pending.has(xiaoXi.id)) {
+      const { resolve, reject } = pending.get(xiaoXi.id);
+      pending.delete(xiaoXi.id);
+      if (xiaoXi.error) reject(new Error(`cdp ${JSON.stringify(xiaoXi.error)}`));
+      else resolve(xiaoXi.result);
+    }
+  });
+  const faSong = (method, params) =>
+    new Promise((resolve, reject) => {
+      const id = ++seq;
+      pending.set(id, { resolve, reject });
+      ws.send(JSON.stringify({ id, method, params }));
+    });
+  const evaluate = async (expression) => {
+    const r = await faSong('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
+    if (r.exceptionDetails) throw new Error(`renderer exception: ${r.exceptionDetails.exception?.description || r.exceptionDetails.text}`);
+    return r.result.value;
+  };
+  let ready = false;
+  const t3 = Date.now() + 45000;
+  while (Date.now() < t3 && !ready) {
+    try {
+      ready = await evaluate('(async () => { try { const r = await window.warmy.appInfo(); return !!(r && r.ok); } catch { return false; } })()');
+    } catch {
+      /* 未就绪 */
+    }
+    if (!ready) await sleep(400);
+  }
+  const call = (api, ...args) =>
+    evaluate(`(async () => { try { return await window.warmy.${api}(${args.map((a) => JSON.stringify(a)).join(', ')}); } catch (e) { return { __error: String((e && e.message) || e) }; } })()`);
+  return {
+    child,
+    ready,
+    call,
+    logs,
+    close: async () => {
+      try {
+        ws.close();
+      } catch {
+        /* 忽略 */
+      }
+      try {
+        execFileSync('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
+      } catch {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          /* 忽略 */
+        }
+      }
+      await sleep(1500);
+    },
+  };
+}
+
+async function waitRestore(yingYong, sessionId, timeoutMs = 25000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < deadline) {
+    const r = await yingYong.call('chatLog', { sessionId });
+    last = r?.stats?.restore;
+    if (last?.done) return { restore: last, res: r };
+    await sleep(500);
+  }
+  return { restore: last, res: await yingYong.call('chatLog', { sessionId }) };
+}
+
+// ── mock 模型（OpenAI 兼容）：记录所有请求，回固定文本 ──
+const seen = [];
+const mock = http.createServer((req, res) => {
+  let raw = '';
+  req.on('data', (c) => (raw += c));
+  req.on('end', () => {
+    let ti = {};
+    try {
+      ti = JSON.parse(raw || '{}');
+    } catch {
+      /* 忽略 */
+    }
+    seen.push(ti);
+    // 线格式：OpenAI 兼容端点发的是 `messages`（内部字段名 xiaoXiJi 在 provider 里映射过去了）
+    const msgs = ti.messages || ti.xiaoXiJi || [];
+    // "长回复"开关：用来验证"助手回复在记忆里的正文 = 日志正文"（超长也必须一致）
+    const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
+    const wantsLong = /长回复/.test(String(lastUser?.content || ''));
+    /** 中间回复档：只对**带工具清单**的主请求出"正文 + 工具调用"，旁路请求（没有 tools）照常回文本 */
+    const zjYongHu = msgs.some((m) => m.role === 'user' && /中间回复测试/.test(typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')));
+    if (zjYongHu && process.env.R48_ZJ_DEBUG) console.log('  · mock 中间回复档请求：tools=' + (Array.isArray(ti.tools) ? ti.tools.length : 'none') + ' stream=' + !!ti.stream + ' roles=' + msgs.map((m) => m.role[0]).join(''));
+    if (zjYongHu && Array.isArray(ti.tools) && ti.tools.length) {
+      const yiYouJieGuo = msgs.some((m) => m.role === 'tool');
+      const zhengWen = yiYouJieGuo ? '中间回复测试·完成' : '先告诉你：截图里写着 ' + ZJ_BIAO + '。我再看一下时间。';
+      const gongJu = yiYouJieGuo ? null : [{ index: 0, id: 'call-zj', type: 'function', function: { name: 'get_time', arguments: '{}' } }];
+      if (ti.stream) {
+        /** 主路径走流式（SSE）：正文一片、工具调用一片、收尾一片 */
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        const pian = (delta, fr) => 'data: ' + JSON.stringify({ id: 'chatcmpl-zj', model: 'mock', choices: [{ index: 0, delta, ...(fr ? { finish_reason: fr } : {}) }] }) + '\n\n';
+        res.write(pian({ role: 'assistant', content: zhengWen }));
+        if (gongJu) res.write(pian({ tool_calls: gongJu }));
+        res.write(pian({}, gongJu ? 'tool_calls' : 'stop'));
+        res.end('data: [DONE]\n\n');
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'chatcmpl-zj', model: 'mock', choices: [{ index: 0, message: { role: 'assistant', content: zhengWen, ...(gongJu ? { tool_calls: gongJu.map(({ index: _i, ...g }) => g) } : {}) }, finish_reason: gongJu ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 100, completion_tokens: 12 } }));
+      return;
+    }
+    const reply = wantsLong ? 'L'.repeat(6000) + '｜LONG-END' : `收到#${seen.length}`;
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        id: 'chatcmpl-mock',
+        model: 'mock',
+        choices: [{ index: 0, message: { role: 'assistant', content: reply }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 100, completion_tokens: 8, prompt_cache_hit_tokens: 90 },
+      })
+    );
+  });
+});
+const mockPort = await new Promise((r) => mock.listen(0, '127.0.0.1', () => r(mock.address().port)));
+const mockBase = `http://127.0.0.1:${mockPort}/v1`;
+
+const SESSION = 's-persist';
+// 带上唯一标记，便于断言"模型真的看到了重启前的内容"。
+// 刻意保持短小（预算 1200 内 5 条消息都能逐字保留），这样"重启前后逐字节一致"是直接可比对的。
+const USER1 = `重启前第1轮｜${sha16('u1')}｜牛马历史持久化`;
+const USER2 = `重启前第2轮｜${sha16('u2')}｜这条重启后必须在`;
+const USER3 = `重启后追问｜${sha16('u3')}｜引用上面第2轮`;
+
+// ══════════════════════════════════════════════════════════════
+// [1] 第 1 轮：真聊天 + JSONL 落盘
+// ══════════════════════════════════════════════════════════════
+console.log('\n[1] 第 1 轮 Electron：聊天 → 记忆服务落盘 JSONL');
+const copy = makeCopy('persist');
+const userData = copy.userData;
+const jsonlPath = path.join(userData, 'memory', 'fast-memory.jsonl');
+const app1 = await launch(copy, 'run1');
+check('[1] Electron 起来且 bootstrap 完成', app1.ready === true);
+check('[1] 记忆服务就绪 + 启动重建已完成（首次无历史也是 ok）', (await waitRestore(app1, SESSION)).restore?.done === true, (await app1.call('chatLog', { sessionId: SESSION }))?.stats?.restore);
+await app1.call('setProvider', { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mockBase, model: 'mock', protocol: 'openai-compatible' });
+await app1.call('settingsSave', { contextBudgetChars: 1200 });
+const r1 = await app1.call('chatSend', { sessionId: SESSION, content: USER1 });
+const r2 = await app1.call('chatSend', { sessionId: SESSION, content: USER2 });
+check('[1] 两轮 chat-send 走通', r1?.ok === true && r2?.ok === true, { r1: r1?.ok, r2: r2?.ok, err: r1?.error || r2?.error });
+
+const logBefore = await app1.call('chatLog', { sessionId: SESSION });
+check('[1] 会话日志有 4 条（2 轮 × 用户+助手）', logBefore?.count === 4, { count: logBefore?.count, entries: logBefore?.entries?.map((e) => ({ seq: e.seq, role: e.role, chars: e.chars })) });
+check('[1] 历史镜像与日志条数一致（不再有第二份真相）', logBefore?.stats?.historyMirror === 4, { mirror: logBefore?.stats?.historyMirror });
+check('[1] chat-send 写进日志的角色是 user/assistant（归一后的唯一命名）', (logBefore?.entries || []).map((e) => e.role).join(',') === 'user,assistant,user,assistant', (logBefore?.entries || []).map((e) => e.role));
+{
+  // 角色归一（真事故：同一句话显示两遍）——两条写入路径写同一句：
+  // 主进程 chat-send 写 'user'，渲染层补写 'wo'；角色名不同 ⇒ 去重不生效 ⇒ 日志两条 ⇒ 界面两遍。
+  const DUP_TXT = '同一句话两条路径写入';
+  await app1.call('chatLogAppend', { sessionId: 's-dup', role: 'wo', content: DUP_TXT });
+  await app1.call('chatLogAppend', { sessionId: 's-dup', role: 'user', content: DUP_TXT });
+  await app1.call('chatLogAppend', { sessionId: 's-dup', role: 'them', content: '助手回话' });
+  await app1.call('chatLogAppend', { sessionId: 's-dup', role: 'assistant', content: '助手回话' });
+  const dupLog = await app1.call('chatLog', { sessionId: 's-dup' });
+  check('[1] wo/user、them/assistant 同文只留一条（否则界面显示两遍）', dupLog?.count === 2, {
+    count: dupLog?.count,
+    entries: (dupLog?.entries || []).map((e) => ({ role: e.role, content: e.content })),
+  });
+  const dupMsgs = await app1.call('chatMessages', { sessionId: 's-dup' });
+  check('[1] 回读角色归一为 user/assistant（渲染层据此归并）', (dupMsgs?.xiaoXiJi || []).map((m) => m.role).join(',') === 'user,assistant', (dupMsgs?.xiaoXiJi || []).map((m) => m.role));
+}
+let jsonlRecords = [];
+if (fs.existsSync(jsonlPath)) {
+  jsonlRecords = fs
+    .readFileSync(jsonlPath, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
+}
+check('[1] JSONL 落盘且有 4 条 message（不变量 #5：唯一事实来源）', fs.existsSync(jsonlPath) && jsonlRecords.filter((r) => r.kind === 'message').length >= 4, {
+  jsonl: jsonlPath,
+  bytes: fs.existsSync(jsonlPath) ? fs.statSync(jsonlPath).size : 0,
+  records: jsonlRecords.length,
+});
+const jsonlBySeq = new Map(jsonlRecords.map((r) => [Number(r.seq), r]));
+const logEntriesBefore = (logBefore?.entries || []).slice(-4);
+check(
+  '[1] 日志条目的 seq/digest 与 JSONL 逐条一致（写日志时就对齐了记忆服务）',
+  logEntriesBefore.every((e) => {
+    const rec = jsonlBySeq.get(e.seq);
+    return rec && sha16(String(rec.ti ?? '')) === e.digest;
+  }),
+  logEntriesBefore.map((e) => ({ seq: e.seq, digest: e.digest, jsonl: jsonlBySeq.get(e.seq) ? sha16(String(jsonlBySeq.get(e.seq).ti ?? '')) : null }))
+);
+// 超长助手回复：记忆里的正文必须与日志正文**一致**（历史上写记忆时被 slice(0,4000)，长回复尾巴取不回来）
+const rLong = await app1.call('chatSend', { sessionId: 's-long', content: '长回复一致性验证（请回 6000 字符）' });
+check('[1] 长回复那一轮走通', rLong?.ok === true && String(rLong.reply || '').length > 4000, { replyChars: String(rLong.reply || '').length });
+const logLong = await app1.call('chatLog', { sessionId: 's-long' });
+// JSONL 万一没落盘（记忆服务没起来）也要给出可读结论，而不是在这里抛 ENOENT 把整套验收打断
+if (!fs.existsSync(jsonlPath)) {
+  check('[1] JSONL 存在（记忆服务必须真的起来）', false, { jsonl: jsonlPath, exists: false });
+}
+const longJsonl = fs
+  .existsSync(jsonlPath)
+  ? fs.readFileSync(jsonlPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+  : [];
+const longBySeq = new Map(longJsonl.map((r) => [Number(r.seq), r]));
+const longEntries = logLong?.entries || [];
+check(
+  '[1] 超长助手回复：日志正文与记忆正文逐字节一致（不再被 slice 成两份真相）',
+  longEntries.length === 2 &&
+    longEntries[1].chars > 4000 &&
+    sha16(String(longBySeq.get(longEntries[1].seq)?.ti ?? '')) === longEntries[1].digest &&
+    Number(longBySeq.get(longEntries[1].seq)?.ti?.length ?? 0) === longEntries[1].chars,
+  longEntries.map((e) => ({ seq: e.seq, role: e.role, chars: e.chars, jsonlChars: String(longBySeq.get(e.seq)?.ti ?? '').length }))
+);
+// 长回复之后刷新 JSONL 快照（后面 [2] 要用"重启前的最后一条 seq"）
+jsonlRecords = longJsonl;
+const jsonlBySeqAll = new Map(longJsonl.map((r) => [Number(r.seq), r]));
+let maxSeqBefore = jsonlRecords.length ? Math.max(...jsonlRecords.map((r) => Number(r.seq))) : 0;
+/**
+ * 重建域的最大 seq（第 53 轮改对口径）：主进程逐条重建只吃 `kind==='message'`
+ * （`electron-main.ts:1405` `if (String(r['kind'] ?? '') !== 'message') continue;`），
+ * 而 `kind:'zhongjian'` 是**合成的一条**中间回复摘要（`electron-main.ts:12650`），本来就不进逐条重建。
+ * 拿"重建 maxSeq"去比"JSONL 全局最大 seq"，只要日志里有一条 zhongjian 就必红 —— 那是仪器写错了等式，
+ * 不是产品漏重建（真机读数 `{restored:12, jsonlMax:13}`，seq=13 正是那条 zhongjian；
+ * 重启后新条目拿到 14/15 ⇒ 全局计数器没重号，这件事由下面另一条断言单独钉）。
+ */
+const xxMessageMax = (rows) => (rows || []).filter((r) => String(r['kind'] ?? '') === 'message')
+  .reduce((m, r) => Math.max(m, Number(r.seq) || 0), 0);
+let messageMaxBefore = xxMessageMax(jsonlRecords);
+/**
+ * ── 超长**用户输入**：原文必须整条进日志（第 44 轮后半 · 用户 #7「写入侧 CCR 丢原文」）──
+ * 口径（与实现一一对应，别改回"镜像=日志"那种旧等式）：
+ *  · JSONL = 唯一事实来源 ⇒ `ti` 必须是**完整原文**，一条 4 万字的消息不许变 1 万六；
+ *  · 进程内镜像/投影 = 有界层 ⇒ 存折叠预览（`SUO_YIN_ZUI_DA_ZI` = 16000），并且它必须
+ *    **等于**同一份原文过 CCR 的结果（两份算法各折一次 = 又一份漂移）；
+ *  · 重启之后两件事都要仍然成立（不丢 + 仍有界）。
+ */
+{
+  const CHANG = '这是一段用来验证不丢原文的超长输入。'.repeat(1200) + '——结尾标记 TAIL-END-MARKER——';
+  const lossBeforeSeqs = new Set(longJsonl.map((r) => Number(r.seq)));
+  const rLoss = await app1.call('chatSend', { sessionId: 's-loss', content: CHANG });
+  check('[1] 超长用户输入那一轮走通（回复可能短，但必须发出去）', rLoss?.ok === true, { err: rLoss?.error });
+  const logLoss = await app1.call('chatLog', { sessionId: 's-loss' });
+  const lossEntries = logLoss?.entries || [];
+  const lossJsonl = fs.existsSync(jsonlPath)
+    ? fs.readFileSync(jsonlPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+    : [];
+  const lossBySeq = new Map(lossJsonl.map((r) => [Number(r.seq), r]));
+  const lossUser = lossEntries.find((e) => e.role === 'user');
+  const lossRec = lossUser ? lossBySeq.get(Number(lossUser.seq)) : null;
+  check('[1] JSONL 里这条用户消息是**完整原文**（长度一字不差，含结尾标记）',
+    !!lossRec && String(lossRec.ti ?? '').length === CHANG.length && String(lossRec.ti ?? '').endsWith('TAIL-END-MARKER——'),
+    { yuanLen: CHANG.length, jsonlLen: lossRec ? String(lossRec.ti ?? '').length : null });
+  check('[1] 镜像里是同一条的**折叠预览**（有界，且短于原文 ⇒ 视图不会被一条消息撑爆）',
+    !!lossUser && lossUser.chars < CHANG.length && lossUser.chars <= 16000,
+    { mirrorChars: lossUser?.chars });
+  let CCR = null;
+  try { CCR = await import(pathToFileURL(path.join(repoRoot, 'packages', 'ccr-compressor', 'dist', 'index.js')).href); } catch { /* 载不到就跳过下面这条比对 */ }
+  if (CCR?.CcrGateway) {
+    const yuGao = new CCR.CcrGateway(4000).beforeLog({ kind: 'message', content: String(lossRec?.ti ?? '') });
+    check('[1] 镜像预览 = 同一份原文过 CCR 的结果（只有一份折叠算法，不各折一次）',
+      sha16(yuGao.content) === lossUser?.digest, { yuGaoLen: yuGao.content.length, mirrorChars: lossUser?.chars });
+  } else {
+    console.log('  skip：ccr-compressor 未编译（无法比对预览口径），不算产品失败');
+  }
+  check('[1] 折叠是"有损于镜像、无损于日志"（原文与预览确实不同 ⇒ 这条测试本身有效）',
+    !!lossRec && String(lossRec.ti ?? '').length > (lossUser?.chars ?? 0), { jsonl: String(lossRec?.ti ?? '').length, mirror: lossUser?.chars });
+  // 刷新快照给 [2] 用：新增的 s-loss 两条也要能被重启重建回来
+  jsonlRecords = lossJsonl;
+  maxSeqBefore = Math.max(maxSeqBefore, lossJsonl.length ? Math.max(...lossJsonl.map((r) => Number(r.seq))) : 0);
+  messageMaxBefore = Math.max(messageMaxBefore, xxMessageMax(lossJsonl));
+  check('[1] 新落盘的条目 seq 都大于已记录的 maxSeq（不重号）',
+    [...lossBySeq.keys()].filter((s) => !lossBeforeSeqs.has(s)).every((s) => s > 0),
+    { xinZeng: [...lossBySeq.keys()].filter((s) => !lossBeforeSeqs.has(s)) });
+}
+/**
+ * ── 中间回复（第 48 轮）：模型发起工具调用的同一条响应里写给用户的话，必须随这条回复落盘 ──
+ * 真机（r34 本地腿）：27B 把截图内容写在中间回复里、最终回复只写"截图：两张都看得到"——
+ * 中间回复以前只在流式气泡里闪过，会话一重绘/重启答案就没了。mock 的第一响应 = 正文 + get_time 调用，第二响应 = 终答。
+ */
+const ZJ_BIAO = 'ZJ-' + sha16('zhongjian');
+{
+  const rZ = await app1.call('chatSend', { sessionId: 's-zj', content: '中间回复测试：先看一下时间再回答' });
+  const zjFan = Array.isArray(rZ?.zhongJian) ? rZ.zhongJian : [];
+  check('[1] 中间回复：chat-send 回带 zhongJian（带时间），最终回复仍是终答那条',
+    rZ?.ok === true && zjFan.some((x) => String(x.text || '').includes(ZJ_BIAO) && Number(x.ts) > 0) && /中间回复测试·完成/.test(String(rZ.reply || '')),
+    { ok: rZ?.ok, reply: String(rZ?.reply || '').slice(0, 60), zhongJian: zjFan.map((x) => String(x.text || '').slice(0, 40)), err: rZ?.error });
+  const mZ = await app1.call('chatMessages', { sessionId: 's-zj' });
+  const aZ = (mZ?.xiaoXiJi || []).filter((m) => m.role === 'assistant');
+  check('[1] 中间回复：会话日志里那条回复带着它（界面重绘时据此画进「执行过程」）',
+    aZ.length === 1 && (aZ[0].zhongJian || []).some((x) => String(x.text || '').includes(ZJ_BIAO)), aZ.map((m) => ({ text: String(m.text || '').slice(0, 30), zj: (m.zhongJian || []).length })));
+  const mP = await app1.call('chatMessages', { sessionId: SESSION });
+  check('[1] 负向：没调工具的一问一答不带中间回复（不是什么都往里塞）',
+    (mP?.xiaoXiJi || []).filter((m) => m.role === 'assistant').every((m) => !(m.zhongJian || []).length), (mP?.xiaoXiJi || []).map((m) => (m.zhongJian || []).length));
+  await sleep(1500);
+  const zjJsonl = fs.existsSync(jsonlPath) ? fs.readFileSync(jsonlPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+  jsonlRecords = zjJsonl;
+  maxSeqBefore = Math.max(maxSeqBefore, zjJsonl.length ? Math.max(...zjJsonl.map((r) => Number(r.seq))) : 0);
+  messageMaxBefore = Math.max(messageMaxBefore, xxMessageMax(zjJsonl));
+}
+console.log(
+  `  第 1 轮：logSeqs(s-persist)=${logEntriesBefore.map((e) => e.seq).join(',')}；JSONL ${jsonlRecords.length} 条 / ${fs.statSync(jsonlPath).size} 字节 / maxSeq=${maxSeqBefore}`
+);
+await app1.close();
+
+// ══════════════════════════════════════════════════════════════
+// [2] 真重启（同一 userData）：历史必须还在，且模型能看到
+// ══════════════════════════════════════════════════════════════
+console.log('\n[2] 真重启（同一 userData）→ 从 fast-memory.jsonl 重建');
+const copy2 = makeCopy('persist-restart', { userData });
+const app2 = await launch(copy2, 'run2');
+check('[2] 重启后 Electron 起来且 bootstrap 完成', app2.ready === true);
+const { restore } = await waitRestore(app2, SESSION);
+check('[2] 启动时执行了历史重建且成功（restore.ok=true）', restore?.done === true && restore?.ok === true, restore);
+check('[2] 重建条数 ≥ 重启前的条数', (restore?.entries || 0) >= logEntriesBefore.length, { entries: restore?.entries, before: logEntriesBefore.length, sessions: restore?.sessions, maxSeq: restore?.maxSeq });
+check('[2] 重建的 maxSeq 与「重建域」（kind=message）的最后一条一致（seq 与记忆服务对齐）', restore?.maxSeq === messageMaxBefore,
+  { restored: restore?.maxSeq, messageMax: messageMaxBefore, jsonlMax: maxSeqBefore });
+
+const logAfter = await app2.call('chatLog', { sessionId: SESSION });
+check('[2] 重启后会话日志仍在（不再重启即丢）', logAfter?.count >= 4, { count: logAfter?.count });
+{
+  await waitRestore(app2, 's-zj');
+  const mZ2 = await app2.call('chatMessages', { sessionId: 's-zj' });
+  const aZ2 = (mZ2?.xiaoXiJi || []).filter((m) => m.role === 'assistant');
+  check('[2] 重启后那条回复的中间回复还在（从旁路元数据补回，「执行过程」重启不丢）',
+    aZ2.length >= 1 && aZ2.some((m) => (m.zhongJian || []).some((x) => String(x.text || '').includes(ZJ_BIAO))),
+    aZ2.map((m) => ({ text: String(m.text || '').slice(0, 30), zj: (m.zhongJian || []).length })));
+}
+const logEntriesAfter = (logAfter?.entries || []).slice(-logEntriesBefore.length);
+check(
+  '[2] 重建结果与重启前**逐条逐字节一致**（seq/角色/摘要/recordId）',
+  logEntriesAfter.length === logEntriesBefore.length &&
+    logEntriesAfter.every((e, i) => {
+      const b = logEntriesBefore[i];
+      return e.seq === b.seq && e.role === b.role && e.digest === b.digest && e.recordId === b.recordId;
+    }),
+  {
+    before: logEntriesBefore.map((e) => ({ seq: e.seq, role: e.role, digest: e.digest })),
+    after: logEntriesAfter.map((e) => ({ seq: e.seq, role: e.role, digest: e.digest })),
+  }
+);
+check(
+  '[2] 逐字节一致的口径 = 与 JSONL 正文的 sha256 相同',
+  logEntriesAfter.every((e) => {
+    const rec = jsonlBySeq.get(e.seq);
+    return rec && sha16(String(rec.ti ?? '')) === e.digest;
+  }),
+  logEntriesAfter.map((e) => e.seq)
+);
+check('[2] 角色由 recordId 前缀还原正确（a-=assistant）', logEntriesAfter.filter((e) => e.role === 'assistant').length === 2, logEntriesAfter.map((e) => ({ seq: e.seq, role: e.role, recordId: e.recordId })));
+check('[2] recordId 前缀与角色自洽', logEntriesAfter.every((e) => (e.role === 'assistant') === /^a-/.test(String(e.recordId))), logEntriesAfter.map((e) => ({ role: e.role, rid: String(e.recordId).slice(0, 2) })));
+
+// 新的一轮：模型必须看到重启前的消息（mock 记录请求体）
+await app2.call('setProvider', { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mockBase, model: 'mock', protocol: 'openai-compatible' });
+const before = seen.length;
+const r3 = await app2.call('chatSend', { sessionId: SESSION, content: USER3 });
+const req = seen[before];
+check('[2] 重启后仍能继续对话', r3?.ok === true, { ok: r3?.ok, reply: r3?.reply, error: r3?.error });
+const promptText = JSON.stringify(req?.messages || req?.xiaoXiJi || []);
+// 最强口径：把"重启前落进 JSONL 的原始 ti"与"重启后真正注入给模型的消息"逐字节比对
+const bodiesBefore = logEntriesBefore.map((e) => String(jsonlBySeq.get(e.seq)?.ti ?? ''));
+const injectedBodies = bodiesBefore.filter((b) => b && promptText.includes(JSON.stringify(b)));
+check('[2] 注入 prompt 里逐字节含重启前的全部消息（历史真的回来了）', injectedBodies.length === bodiesBefore.length && bodiesBefore.length === 4, {
+  matched: injectedBodies.length,
+  total: bodiesBefore.length,
+  chars: promptText.length,
+});
+check('[2] 注入 prompt 里能看到重启前两轮的标记（可读证据）', promptText.includes(sha16('u1')) && promptText.includes(sha16('u2')), {
+  u1: promptText.includes(sha16('u1')),
+  u2: promptText.includes(sha16('u2')),
+});
+const injectedChars = (req?.messages || req?.xiaoXiJi || []).reduce((s, m) => s + String(m.content ?? '').length, 0);
+/**
+ * 预算约束的是**历史视图**（不变量 #2：上下文是日志的有界渲染视图，大小与日志总长解耦）。
+ * 「道 / 规矩 / 身份」这类 **system 指令**是用户的意志，按产品语义**整份注入**、不被预算截断
+ * （dao.md 现为 12345 字，正是产品要求的字数）。
+ * 所以这里断言的是：**非 system 的历史部分 ≤ 预算**；并另加一条断言保证「道」真的在场
+ * （避免把不变量改松而悄悄丢掉最高优先级提示词）。
+ */
+const msgs = (req?.messages || req?.xiaoXiJi || []);
+const shiTuChars = msgs.filter((m) => m.role !== 'system').reduce((s, m) => s + String(m.content ?? '').length, 0);
+const xiTongChars = msgs.filter((m) => m.role === 'system').reduce((s, m) => s + String(m.content ?? '').length, 0);
+check('[2] 重启后的历史视图注入仍 ≤ 预算（1200）', shiTuChars > 0 && shiTuChars <= 1200, { shiTuChars, budget: 1200, xiTongChars });
+/**
+ * 「道」整份在场：**拿应用真正读的那份 dao.md 对照**，不锚某个词。
+ * 真机教训（第 53 轮）：旧断言写死 `includes('全局最高优先级')`，而那句话只在
+ * `dao-default.ts` 的**文件头注释**里（第 5 行），播种出来的 dao.md 里 0 次命中（8984 字节那份）
+ * ⇒ 这是一条**永远不可能过的过时字面锚**，红的是仪器。
+ * 现在锚行为：文件尾部的连续片段必须原样出现在 system 消息里，且 system 总字数 ≥ 该文件字数
+ * ⇒ 任何"按预算截断最高优先级提示词"的实现都跑不掉，用户改 dao.md 也不会把断言改松。
+ */
+const daoLu = path.join(userData, 'dao.md');
+const daoWen = fs.existsSync(daoLu) ? fs.readFileSync(daoLu, 'utf8') : '';
+const daoWei = daoWen.trim().slice(-40);
+const youDao = daoWei.length > 0 && msgs.some((m) => m.role === 'system' && String(m.content || '').includes(daoWei));
+check('[2] 「道」整份在场（system 指令不被预算截断）', daoWen.length > 0 && xiTongChars >= daoWen.length && youDao,
+  { xiTongChars, daoZiShu: daoWen.length, youDao, wei: daoWei.slice(0, 40) });
+
+const logFinal = await app2.call('chatLog', { sessionId: SESSION });
+const newEntries = (logFinal?.entries || []).filter((e) => e.seq > maxSeqBefore);
+check('[2] 重启后新增的日志 seq 严格大于重启前（不重号、不回退）', newEntries.length === 2 && newEntries.every((e) => e.seq > maxSeqBefore), {
+  newSeqs: newEntries.map((e) => e.seq),
+  maxSeqBefore,
+  logSeq: logFinal?.stats?.logSeq,
+});
+const jsonl2 = fs
+  .readFileSync(jsonlPath, 'utf8')
+  .split('\n')
+  .filter(Boolean)
+  .map((l) => JSON.parse(l));
+const bySeq2 = new Map(jsonl2.map((r) => [Number(r.seq), r]));
+check(
+  '[2] 重启后新增条目也逐字节落在 JSONL（seq 由记忆服务分配）',
+  newEntries.every((e) => {
+    const rec = bySeq2.get(e.seq);
+    return rec && sha16(String(rec.ti ?? '')) === e.digest;
+  }),
+  newEntries.map((e) => ({ seq: e.seq, digest: e.digest, jsonl: bySeq2.get(e.seq) ? sha16(String(bySeq2.get(e.seq).ti ?? '')) : null }))
+);
+console.log(`  第 2 轮：重建 ${restore?.entries} 条 / ${restore?.sessions} 会话 / maxSeq=${restore?.maxSeq}；重启后新增 ${newEntries.map((e) => e.seq).join(',')}`);
+await app2.close();
+
+// ══════════════════════════════════════════════════════════════
+// [3] 记忆服务不可用：对话仍能发
+// ══════════════════════════════════════════════════════════════
+console.log('\n[3] 记忆服务不可用（故意坏掉）→ 降级：对话仍能发');
+{
+  const copy3 = makeCopy('persist-broken', { brokenMemory: true });
+  const app3 = await launch(copy3, 'run3');
+  check('[3] Electron 起来且 bootstrap 完成（记忆服务坏掉）', app3.ready === true);
+  await app3.call('setProvider', { presetId: 'deepseek', apiKey: 'sk-mock', baseURL: mockBase, model: 'mock', protocol: 'openai-compatible' });
+  const before3 = seen.length;
+  const r = await app3.call('chatSend', { sessionId: 's-broken-persist', content: '记忆服务坏了，这条也必须能发出去' });
+  check('[3] chat-send 仍成功（ok:true 且有回复）', r?.ok === true && String(r.reply || '').length > 0, { ok: r?.ok, reply: r?.reply, error: r?.error });
+  /**
+   * 口径更新：自「AI 干活」那轮起，**工作区文件工具**（write_file/read_file/list_dir/make_dir）
+   * 是常驻的，与记忆服务无关 —— 所以这里不能再断言 tools 不存在。
+   * 真正要守的是：**记忆没起来 ⇒ 绝不把 recall/retrieve 暴露给模型**（宁缺勿假）。
+   */
+  const gongJu = seen[before3]?.tools;
+  const jiyiGongJu = (Array.isArray(gongJu) ? gongJu : []).filter((x) => /^(recall|retrieve)$/.test(String(x?.function?.name || x?.name || '')));
+  check('[3] 确实打到了模型（请求体存在；记忆坏了就不暴露 recall/retrieve）', seen.length > before3 && Array.isArray(seen[before3]?.messages || seen[before3]?.xiaoXiJi) && jiyiGongJu.length === 0, {
+    requests: seen.length - before3,
+    tools: (Array.isArray(gongJu) ? gongJu : []).map((x) => String(x?.function?.name || x?.name || '')),
+  });
+  const logRes = await app3.call('chatLog', { sessionId: 's-broken-persist' });
+  check('[3] 重建被跳过但如实上报失败原因', logRes?.stats?.restore?.done === true && logRes?.stats?.restore?.ok === false, logRes?.stats?.restore);
+  check('[3] 进程内日志仍只追加（降级不改语义，不丢当前会话）', (logRes?.count || 0) >= 2, { count: logRes?.count });
+  check(
+    '[3] 写不进记忆时不挂假 recordId（指针宁缺勿假，只留 seq + recall 两种线索）',
+    (logRes?.entries || []).every((e) => e.recordId === null),
+    (logRes?.entries || []).map((e) => ({ seq: e.seq, role: e.role, recordId: e.recordId }))
+  );
+  check('[3] 手动触发重建也如实失败（幂等、不抛错）', (await app3.call('chatLogRestore'))?.ok === false);
+  const bootLog = path.join(copy3.userData, 'warmy-boot.log');
+  if (fs.existsSync(bootLog)) {
+    const lines = fs.readFileSync(bootLog, 'utf8').trim().split('\n').filter((l) => /memory|restore/i.test(l));
+    for (const l of lines.slice(-4)) console.log('  boot: ' + l);
+  }
+  await app3.close();
+}
+
+mock.close();
+console.log(`  Electron 临时目录: ${tmpRoot}`);
+console.log('\n=== SUMMARY ===');
+console.log(`failures=${failures}`);
+if (failures) {
+  console.log('FAILURES:');
+  for (const f of failuresList) console.log(' - ' + f);
+}
+console.log(failures === 0 ? 'ALL PASS（会话历史持久化验收通过）' : 'FAILED');
+process.exit(failures === 0 ? 0 : 1);

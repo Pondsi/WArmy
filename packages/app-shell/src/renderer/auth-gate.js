@@ -68,6 +68,7 @@
     bootPromise: null,
     resolveBoot: null,
     overlayHidden: false,
+    windowFitted: false,
     bootDone: false,
     lockTimer: null,
     fatal: '',
@@ -1414,8 +1415,15 @@
     root.className = 'warmyAuthGate';
     root.innerHTML = '<div class="warmyAuthScene warmyAuthSceneEmbed" aria-hidden="true">'
       + '<iframe src="./firstrun-scenes/index.html?embed=1&scenes=' + BEN_CI_CHANG_JING + '&rotate=0" tabindex="-1" scrolling="no"></iframe>'
-      + '</div><div class="warmyAuthCard" id="warmyAuthCard"></div>';
+      + '</div><div class="warmyAuthCard" id="warmyAuthCard"></div>'
+      + '<div class="warmyAuthCloseHot" aria-hidden="false"><button type="button" class="warmyAuthCloseX" id="warmyAuthCloseX" title="关闭程序" aria-label="关闭程序"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>';
     document.body.appendChild(root);
+    root.querySelector('#warmyAuthCloseX')?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      // 首启右上角关闭：直接退出程序，不是最小化到托盘。
+      void window.warmy.appQuit?.('first-run-close').catch(() => null);
+    });
     root.addEventListener('click', onClick);
     root.addEventListener('input', onInput);
     root.addEventListener('change', onChange);
@@ -1426,11 +1434,20 @@
     const root = ensureOverlay();
     root.classList.remove('warmyAuthHidden');
     state.overlayHidden = false;
+    // 新装首启：按屏幕约束窗口；已有账号（退出后回登录）不重新缩窗。
+    if (!state.windowFitted && state.auth && state.auth.hasAccount !== true) {
+      state.windowFitted = true;
+      void window.warmy.shouQiChuangKouShiPei?.().catch(() => null);
+    }
   }
   function hideOverlay() {
     const root = $('warmyAuthGate');
     if (root) root.classList.add('warmyAuthHidden');
     state.overlayHidden = true;
+    if (state.windowFitted) {
+      state.windowFitted = false;
+      void window.warmy.shouQiChuangKouWanCheng?.().catch(() => null);
+    }
   }
   /** 关闭后把卡片 DOM 也清空：明文助记词不留在隐藏节点里。 */
   function clearCard() {
@@ -2897,7 +2914,8 @@
     const ch = card.offsetHeight || 200;
     let cx;
     let cy;
-    if (h) {
+    // 固定右下角：卡片不追着目标跑，用户点击坐标稳定（按钮不会被换位/换步）。
+    if (false) {
       cx = h.x + h.w / 2 - cw / 2;
       const below = h.y + h.h + 12;
       const above = h.y - 12 - ch;
@@ -2905,8 +2923,8 @@
       else if (above >= 10) cy = above;
       else cy = vh - ch - 10; // 目标几乎占满屏幕：卡片贴底，仍不遮住目标中心
     } else {
-      cx = (vw - cw) / 2;
-      cy = vh - ch - 26;
+      cx = vw - cw - 24;
+      cy = vh - ch - 24;
     }
     cx = Math.max(10, Math.min(vw - cw - 10, cx));
     cy = Math.max(10, Math.min(vh - ch - 10, cy));

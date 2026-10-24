@@ -21,9 +21,11 @@ Create AI **workhorses** (agents), put them into **project groups**, and let a *
 Chinese product name: **无限牛马** (ja: 無限社畜 / ko: 무한 사축).  
 **Full Chinese manual:** [说明.md](./说明.md) — 详细中文说明请直接看该文件（本 README 以英文为主入口）。
 
+![UI preview](docs/screenshots/ui-home.png)
+
 | Home (English) | Settings · Functions / Skills | About / Memory |
 | --- | --- | --- |
-| | | |
+| ![home](docs/screenshots/ui-home.png) | ![skills](docs/screenshots/ui-skills.png) | ![about](docs/screenshots/ui-about.png) |
 
 ---
 
@@ -94,6 +96,9 @@ WArmy’s memory is **not** “chat history in a folder”. It is an explicit L2
 
 - Workers dispatched for the same task share an **append-only task blackboard** (facts / decisions / artifacts / open questions). The host stamps the source of every entry (a worker cannot claim to be someone else), stores each entry in memory with a real `recordId`, and only hands out `retrieve` pointers for entries that were actually stored. Workers read and write it through `heiban_read` / `heiban_write`; their context only gets a bounded digest (≤ 2,400 chars) plus pointers, so worker context stays O(task size).
 - Workers hand back a **structured distillation** (`jiao_fu` tool → JSON block → plain-text fallback): a hard-capped conclusion, facts, decisions, open questions and artifacts. The host checks every claimed artifact on disk and names the missing ones; an over-long conclusion is archived in full and linked by a pointer that resolves. Conflicting decisions on the same topic are shown to the duty agent / user instead of being silently picked.
+- Shared TypeScript contracts (`packages/contracts`, types only) are what the code actually uses — every contract has a real consumer, verified by `dev/gates/verify-r48-qiyue.mjs`.
+
+Deep dive: [`references/ARCHITECTURE.md`](./references/ARCHITECTURE.md) · verify: `node packages/app-shell/scripts/verify-memory.mjs`
 
 ---
 
@@ -186,6 +191,8 @@ node packages/app-shell/scripts/verify-docs.mjs
 
 zh-CN · zh-TW · en-US · ja · ko · ru · es · fr · pt · eo — equal key sets.
 
+Product nav naming: zh `我的牛马` · ja `マイ社畜たち` · ko `일꾼들` · others `My Workhorses`. See [docs/i18n-naming.md](./docs/i18n-naming.md).
+
 ---
 
 ## Repository layout
@@ -194,6 +201,7 @@ zh-CN · zh-TW · en-US · ja · ko · ru · es · fr · pt · eo — equal key 
 WArmy/
 ├── README.md  说明.md  LICENSE  SPONSORS.md  CHANGELOG.md  CONTRIBUTING.md
 ├── checksums.txt  index.html
+├── docs/  references/  packages/  sponsors/  spikes/
 ```
 
 ---
@@ -214,6 +222,8 @@ WArmy is a local-first multi-agent group-chat desktop app. Install from GitHub R
 ---
 
 ## License & sponsors
+
+[LICENSE](./LICENSE) · [SPONSORS.md](./SPONSORS.md) · security: [.github/SECURITY.md](./.github/SECURITY.md) · mesh checklist: [docs/mesh-dual-machine.md](./docs/mesh-dual-machine.md)
 
 ---
 

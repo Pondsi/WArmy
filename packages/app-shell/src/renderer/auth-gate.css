@@ -841,3 +841,41 @@ body.warmyTourOn .yinDaoGaoLiang {
   .woBrandR68 { flex-basis: 100%; min-width: 0; flex-direction: row; justify-content: center; gap: 16px; }
   .woBrandR68 .pinPailogo { width: 96px; }
 }
+
+/* 首启右上角关闭：平时隐藏，鼠标进入右上角热区才出现 */
+.warmyAuthCloseHot {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 72px;
+  height: 72px;
+  z-index: 2147483000;
+  pointer-events: auto;
+}
+.warmyAuthCloseX {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(184, 106, 60, .35);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, .94);
+  color: #b86a3c;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(.92);
+  transition: opacity .15s ease, transform .15s ease, background .15s ease;
+}
+.warmyAuthCloseX svg { width: 17px; height: 17px; display: block; }
+.warmyAuthCloseHot:hover .warmyAuthCloseX,
+.warmyAuthCloseX:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+.warmyAuthCloseX:hover { background: #fff; color: #9a4f28; }
+.warmyAuthGate.warmyAuthHidden .warmyAuthCloseHot { display: none; }

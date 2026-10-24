@@ -233,6 +233,13 @@ export interface YingYongPeizhi {
   privacyConsent?: boolean;
   /** 聊天自动滚动到最新（默认关） */
   autoScrollChat?: boolean;
+  /**
+   * **每个会话的知识库权限**（第 82 轮 #103）：
+   *   read / write / archive 各自勾选哪些层（session/internal/private）。
+   * 缺省 = 按会话类型的内置默认矩阵；后端会在内置硬作用域上再取交集，
+   * 前端勾选不能越过“群聊只能会话库、项目不能私密库”这些硬边界。
+   */
+  kbPerms?: Record<string, { read?: string[]; write?: string[]; archive?: string[] }>;
   /** 主窗口吸附开关：默认开；用户改过就落盘，下次启动保持 */
   zhuXiFuKai?: boolean;
   /** 项目内文件左键是否用 nm 查看器打开（默认关；右键「打开」走另一条路） */
@@ -670,6 +677,7 @@ function defaults(): YingYongPeizhi {
     netBannerDismissed: [],
     privacyConsent: false,
     autoScrollChat: false,
+    kbPerms: {},
     zhuXiFuKai: true,
     nmKaiWenJian: true,
     contextBudgetPercent: 60,

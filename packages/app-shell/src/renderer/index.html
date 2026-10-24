@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="./auth-gate.css" />
 </head>
 <body>
+  <!-- 独立会话窗：必须在任何界面节点之前打标记，避免先画出完整主界面再切走。
+       外部脚本是因为 CSP script-src 'self' 不允许内联；文件很小、同步执行。 -->
+  <script src="./chat-window-boot.js"></script>
   <div id="app">
     <div id="biaoTiLan">
       <div class="biaoTiLanTuoZhuai">

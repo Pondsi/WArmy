@@ -2872,3 +2872,147 @@ html { font-weight: var(--fw-ui, 400); }
 .woYouJianHang { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .woYouJianHang #pYouJian { min-width: 220px; flex: 1; max-width: 420px; }
 .woMingPianBtn { display: inline-flex; align-items: center; justify-content: center; padding: 7px 9px; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   宽屏适配（带鱼屏 / 超宽屏 / 全屏）
+   - 聊天正文、输入区、标题栏内容在超宽窗口里按阅读宽度居中：
+     一行不再被拉成 3000px，眼睛不用来回扫。
+   - 阅读宽度随窗口分档：1040 → 1160（≥2200）→ 1280（≥3200）。
+   - 侧栏宽度由 app.js 的 yingYongKuanPingShiPei() 按窗口计算：
+     列表 200→280、第四列 300→420；用户拖过的宽度优先。
+   - 全部用 max()/calc()，窄窗口自动退回原来的 24/16/12px 内边距。
+   ══════════════════════════════════════════════════════════════════════ */
+:root { --du-wen-kuan: 1040px; }
+@media (min-width: 2200px) { :root { --du-wen-kuan: 1160px; } }
+@media (min-width: 3200px) { :root { --du-wen-kuan: 1280px; } }
+
+/* 消息流：上下保留原内边距，左右按阅读宽度居中 */
+#xiaoXiJi {
+  padding-top: var(--sp-4);
+  padding-bottom: var(--sp-4);
+  padding-left: max(var(--sp-5), calc((100% - var(--du-wen-kuan)) / 2));
+  padding-right: max(var(--sp-5), calc((100% - var(--du-wen-kuan)) / 2));
+}
+
+/* 聊天标题栏：标题与右侧动作按钮跟阅读区同宽 */
+.liaoTianHead {
+  padding-left: max(var(--sp-4), calc((100% - var(--du-wen-kuan)) / 2));
+  padding-right: max(var(--sp-4), calc((100% - var(--du-wen-kuan)) / 2));
+}
+
+/* 输入区：整块输入框不再横跨带鱼屏 */
+.shuRuQu {
+  padding: 4px max(12px, calc((100% - var(--du-wen-kuan)) / 2)) 10px;
+}
+
+/* 与阅读区同左沿的条状元素：运行状态、通知卡、插话队列、引用条 */
+.yunXingZhuangTai {
+  padding-left: max(12px, calc((100% - var(--du-wen-kuan)) / 2));
+  padding-right: max(12px, calc((100% - var(--du-wen-kuan)) / 2));
+}
+.tongZhiQu {
+  margin-left: max(12px, calc((100% - var(--du-wen-kuan)) / 2));
+  margin-right: max(12px, calc((100% - var(--du-wen-kuan)) / 2));
+}
+.duiLieTiao {
+  margin-left: max(12px, calc((100% - var(--du-wen-kuan)) / 2));
+  margin-right: max(12px, calc((100% - var(--du-wen-kuan)) / 2));
+}
+.yinYongTiao {
+  max-width: min(72%, var(--du-wen-kuan));
+  margin-left: max(12px, calc((100% - var(--du-wen-kuan)) / 2));
+}
+
+/* 设置/我的/看板等整页：超宽窗口里把内容收在 1400px 居中，表单不再横跨整屏 */
+@media (min-width: 1600px) {
+  #pageBuJu > #pageTi > * {
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* 实例详情页（#shiLiXiangQing 不经过 #pageTi）：超宽窗口同样收在阅读宽度内 */
+@media (min-width: 1600px) {
+  #shiLiXiangQing > * {
+    max-width: var(--du-wen-kuan);
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* ── 模型会在归档时自动改写的提示词（术 / 印象）：标题后的主题色牛头 + 悬停说明 ──
+   图标用 mask + currentColor 的主题色（--accent），不引入第二套配色；
+   说明放在图标下方，避免顶部卡片把提示裁掉。 */
+.tiShiAiGai {
+  position: relative;
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  margin-left: 6px;
+  vertical-align: -0.12em;
+  background-color: var(--accent);
+  -webkit-mask: url("./icons/prompt-ai.svg") center / contain no-repeat;
+  mask: url("./icons/prompt-ai.svg") center / contain no-repeat;
+  cursor: help;
+  outline: none;
+  flex-shrink: 0;
+}
+.tiShiAiGai:focus-visible {
+  border-radius: 3px;
+  box-shadow: var(--focus);
+}
+.warmyQuanJuTiShi {
+  position: fixed;
+  z-index: 12050;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+
+/* 第四列知识库权限（#103）：读/写/归档 三层勾选 */
+.kbPermBiao {
+  margin: 4px 0 6px;
+  padding: 6px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+}
+.kbPermHang { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 3px 0; }
+.kbPermMing { min-width: 42px; font-size: 11px; color: var(--muted); }
+.kbPermCk { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--ink); cursor: pointer; }
+.kbPermCk input { margin: 0; }
+.kbPermCk.off { color: var(--muted); cursor: not-allowed; opacity: .55; }
+#kbViewUser { font: inherit; font-size: 11px; max-width: 180px; }
+
+/* #109 提示词备份 diff / 回滚 */
+.tiShiBakHang { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 2px 0; }
+.tiShiBakHang .anNiuXiao { padding: 2px 8px; }
+.tiShiDiff {
+  max-height: 320px; overflow: auto; margin: 6px 0 0; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+  color: var(--ink); font-family: var(--font-mono); font-size: 11px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+/* #112 邀请二维码 / 待审批 */
+.jrgHe { margin: 10px 0 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.jrQr { width: 168px; height: 168px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px; box-sizing: border-box; }
+.jrQr svg { width: 100%; height: 100%; display: block; }
+.jrHang { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.jrHang .anNiuXiao { padding: 2px 8px; }
+
+/* #113/#115 连通性诊断结果 */
+.sheJiaoDiag .ok { color: var(--ok-fg, #1a7f3c); }
+.sheJiaoDiag .bad { color: var(--danger-fg, #8a1f1f); }
