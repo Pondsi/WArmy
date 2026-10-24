@@ -4,31 +4,12 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-
-export type KanbanLingLei =
-  | 'create_task'
-  | 'update_progress'
-  | 'complete_task'
-  | 'add_note'
-  | 'block';
-
-export interface KanbanShi {
-  seq: number;
-  ts: number;
-  groupId: string;
-  action: KanbanLingLei;
-  biaoTi: string;
-  jinDu?: number;
-  note?: string;
-  /** 解析来源：值班者从自然语言解析 */
-  parsedFrom: string;
-  /**
-   * 可选父任务 id（= 父任务 biaoTi）。用于**轻量任务树**：
-   * 不是第二套任务系统，只是看板任务的父子层级（进度条仍聚合 BoardTask）。
-   * 约定：`新建任务 父任务 / 子任务` 或 `新建任务 父任务 > 子任务`
-   */
-  parentId?: string;
-}
+/**
+ * 看板指令与事件的形状只有一份（契约 v1.1 `KanbanLingLei / KanbanLing / KanbanShi`）。
+ * v1.1 的契约就是按本包与 board.jsonl 存量数据的真实形状定稿的；这里只再补本包独有的 parentId 说明。
+ */
+import type { KanbanLingLei, KanbanLing, KanbanShi } from '@warmy/contracts';
+export type { KanbanLingLei, KanbanLing, KanbanShi };
 
 export interface KanbanRenwu {
   id: string;

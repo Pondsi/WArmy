@@ -166,6 +166,12 @@ export interface ShouQuanPanDuan {
 /**
  * 按授权档位 + 「允许提权」勾选 决定一个动作是否放行。
  * @param kind 'shell' | 'skill'
+ *
+ * 第 55 轮口径（用户定稿）：
+ *  · **完全授权**：整台设备都开放，**没有需要问的**（连高风险 skill 也不再问）；
+ *  · **常规授权**：只能在工作区内读/写/删；命令/脚本/工具要过安全审核，安全才直接跑，否则问；
+ *  · **严格授权**：只能在工作区内读/写/删；此外任何命令/脚本/工具都要问。
+ * 文件读写删本身由路径判据把关（工作区外一律走越权流程），这里只管"命令/脚本/技能"。
  */
 export function panDuanShouQuan(
   dang: AnquanDang,
@@ -173,19 +179,10 @@ export function panDuanShouQuan(
   kind: 'shell' | 'skill',
   jiance: AnquanJianCeJieGuo,
 ): ShouQuanPanDuan {
-  if (dang === 'full') {
-    // 完全授权：shell 无限制；skill 仍要过安全检测（产品要求："确保安全再装"）
-    if (kind === 'skill' && jiance.risk === 'high') {
-      return askOnExceed
-        ? { allow: false, needAsk: true, why: '高风险 skill，需用户确认' }
-        : { allow: false, needAsk: false, why: '高风险 skill 被拒（未勾「允许提权」）' };
-    }
-    return { allow: true, needAsk: false, why: '' };
-  }
+  if (dang === 'full') return { allow: true, needAsk: false, why: '' };
   if (dang === 'strict') {
-    // 严格授权：一律询问；不勾「允许提权」= 直接拒绝
     return askOnExceed
-      ? { allow: false, needAsk: true, why: '严格授权需用户逐次确认' }
+      ? { allow: false, needAsk: true, why: '严格授权：任何命令/脚本/工具都要逐次确认' }
       : { allow: false, needAsk: false, why: '严格授权且未勾「允许提权」⇒ 直接拒绝' };
   }
   // 常规授权：低风险才自动放行；中/高风险询问或拒绝
@@ -193,6 +190,85 @@ export function panDuanShouQuan(
   return askOnExceed
     ? { allow: false, needAsk: true, why: jiance.summary }
     : { allow: false, needAsk: false, why: jiance.summary + '（未勾「允许提权」⇒ 拒绝）' };
+}
+
+/**
+ * **常规授权下"只能在工作区内操作"的可执行判据**（第 55 轮用户口径）：
+ * 命令里出现绝对路径、家目录、`..` 上跳、或盘符/UNC 路径且落在工作区外 ⇒ 视为越界。
+ * 为什么不能只靠"命令名白名单"：`cat /etc/passwd`、`type C:\Windows\win.ini`、`dir \\server\share`
+ * 的首词都在白名单里，但读的是工作区外 —— 白名单只说明"程序是谁"，不说明"它碰了哪里"。
+ */
+export function mingLingZaiGongZuoQu(cmd: string, base: string): { ok: boolean; why: string } {
+  const t = String(cmd || '');
+  const gen = path.resolve(String(base || '.'));
+  const zai = (p: string) => {
+    try {
+      const r = path.resolve(gen, p);
+      return r === gen || r.startsWith(gen + path.sep);
+    } catch { return false; }
+  };
+  // 家目录引用
+  if (/(^|[\s"'=])~(?=[\\/\s"']|$)/.test(t)) return { ok: false, why: '命令引用了家目录（~）' };
+  // 盘符绝对路径（Windows）
+  for (const m of t.matchAll(/([A-Za-z]:[\\/][^\s"']*)/g)) {
+    if (!zai(m[1]!)) return { ok: false, why: '命令访问工作区外的盘符路径：' + m[1]!.slice(0, 60) };
+  }
+  // UNC 路径
+  if (/(^|[\s"'])\\\\[^\s"']+/.test(t)) return { ok: false, why: '命令访问网络共享路径（UNC）' };
+  // POSIX 绝对路径（含 /etc、/usr、/tmp 等）
+  for (const m of t.matchAll(/(^|[\s"'=:])((?:\/[^\s"']+)+)/g)) {
+    const p = m[2]!;
+    if (p.startsWith('//')) continue;
+    if (!zai(p)) return { ok: false, why: '命令访问工作区外的路径：' + p.slice(0, 60) };
+  }
+  // 相对路径上跳出工作区
+  if (gen && /(^|[\s"'=])\.\.([\\/]|$)/.test(t)) return { ok: false, why: '命令包含 .. 上跳' };
+  return { ok: true, why: '' };
+}
+
+/**
+ * **命令类动作的授权决策**（run_shell 专用，第 55 轮）：
+ * 完全 ⇒ 放行；严格 ⇒ 一律问；常规 ⇒ 必须同时满足「在工作区内」+「首词在白名单」+「静态风险 low」才免问。
+ * 这样"常规授权只能在工作区读写删"不是一句产品文案，而是一条能被门禁跑真值表的判据。
+ */
+export function panDuanMingLingShouQuan(
+  dang: AnquanDang,
+  askOnExceed: boolean,
+  cmd: string,
+  base: string,
+): ShouQuanPanDuan & { jianCe: AnquanJianCeJieGuo; zaiGongZuoQu: boolean } {
+  const jianCe = anquanJianCeMingLing(cmd);
+  if (dang === 'full') return { allow: true, needAsk: false, why: '', jianCe, zaiGongZuoQu: true };
+  if (dang === 'strict') {
+    return {
+      allow: false, needAsk: askOnExceed,
+      why: '严格授权：任何命令/脚本/工具都要逐次确认',
+      jianCe, zaiGongZuoQu: mingLingZaiGongZuoQu(cmd, base).ok,
+    };
+  }
+  const zai = mingLingZaiGongZuoQu(cmd, base);
+  if (!zai.ok) {
+    return {
+      allow: false, needAsk: askOnExceed,
+      why: '常规授权只允许在工作区内操作：' + zai.why,
+      jianCe, zaiGongZuoQu: false,
+    };
+  }
+  if (!zaiBaiMingDan(cmd)) {
+    return {
+      allow: false, needAsk: askOnExceed,
+      why: '常规授权下这条命令不在白名单里（需要授权或改用完全授权）',
+      jianCe, zaiGongZuoQu: true,
+    };
+  }
+  if (jianCe.risk !== 'low') {
+    return {
+      allow: false, needAsk: askOnExceed,
+      why: '安全审核未通过：' + jianCe.summary,
+      jianCe, zaiGongZuoQu: true,
+    };
+  }
+  return { allow: true, needAsk: false, why: '', jianCe, zaiGongZuoQu: true };
 }
 
 /* ─────────────────────── 受限 shell ─────────────────────── */

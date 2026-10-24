@@ -10,6 +10,10 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { AcpKongzhiXiaoxi } from '@warmy/contracts';
+
+/** 控制面消息统一按契约定形（宿主 memory-client 按同一份类型解析） */
+export type DshKongzhiXiaoxi = AcpKongzhiXiaoxi;
 
 export interface DshLaunchOptions {
   /** node 可执行文件（bundled 或系统） */
@@ -25,7 +29,7 @@ export interface DshLaunchOptions {
   appArgs?: string[];
   onStdout?: (chunk: string) => void;
   onStderr?: (chunk: string) => void;
-  onMessage?: (xiaoXi: unknown) => void;
+  onMessage?: (xiaoXi: DshKongzhiXiaoxi | unknown) => void;
 }
 
 export interface DshHandle {
@@ -127,6 +131,8 @@ export function writeDshInstanceEntry(outFile: string, opts: {
 }): void {
   const entry = resolveDshEntry(opts.dshPackageDir);
   const src = `// WArmy dsh instance entry
+// 控制面消息按 @warmy/contracts 的 AcpKongzhiXiaoxi 定形（宿主 memory-client 按同一份类型解析）：
+//   { type:'ready', pid, dshPid } / { type:'dsh-exit', code } / { type:'pong' }
 import { spawn } from 'node:child_process';
 
 const entry = ${JSON.stringify(entry)};

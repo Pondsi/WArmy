@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { JsonlSuo } from '@warmy/memory-os/lock';
+import type { JianchadianZengliang } from '@warmy/contracts';
 
 export interface JianChaDianXiangQing {
   RenwuJi: string[];
@@ -16,23 +17,16 @@ export interface JianChaDianXiangQing {
   assets: string[];
 }
 
-export interface Jianchadian {
-  id: string;
-  phase: 'round_start' | 'round_end';
-  logSeq: number;
+/**
+ * 检查点 = 契约「状态差分」（id / phase / logSeq / strategy / dir / sessionId）+ 本模块的展示与统计字段。
+ * 契约 v1.1 就是按这里的真实形状定稿的（v1.0 写的 checkpointId / shadow-git 从没实现过）。
+ */
+export interface Jianchadian extends JianchadianZengliang {
   createdAt: number;
-  dir: string;
-  strategy: 'cow' | 'shadow';
   /** 人读摘要：几点几分、大致进行到哪一步 */
   summary: string;
   detail: JianChaDianXiangQing;
   bytes: number;
-  /**
-   * **会话级回滚**用：这个回退点属于哪个会话。
-   * 有它就支持"一键回到这一轮之前"（只回退**这个会话**的聊天记录 + 工作区，
-   * 别的会话在这之后的记录**原样保留**）。老数据没有这个字段，照常可用。
-   */
-  sessionId?: string;
 }
 
 export interface JianChaDianKongJian {

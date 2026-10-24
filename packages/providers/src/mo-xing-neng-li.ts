@@ -187,7 +187,12 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
    * 产品叫法：决策模型（不是经典 ML「分类器」；TypeSafe 称 System One / decision model）。
    */
   // 注意：不能用裸 `router` —— `orcarouter/...` 会被误判成决策模型（真机）
-  { shi: /rlcd|\bjev\b|(^|[^a-z])router(?!outer)|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'decision' } },
+  // `clef` / `clef-flash` 是用户实测的分类模型（Ollama 能力字段为 decision,vision）；
+  // 名字表也要兜住没有 capabilities 的旧版 Ollama。
+  { shi: /rlcd|\bjev\b|(^|[^a-z])router(?!outer)|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-|(^|[-_/])clef([-_/.:]|$)/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'decision' } },
+  // 通用 Qwen / 开源对话模型：必须在 qwen-vl / qwen-image / qwen-embedding 之后命中，
+  // 否则 `orcarouter/Qwen3.8-27B-Uncensored:*` 会落到 unknown，被 UI 误当“未探测”。
+  { shi: /qwen|orcarouter|uncensored|llama|mistral|phi-|gemma|deepseek-v[23]/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
   // 嵌入重排（检索二次排序）
   { shi: /rerank|re-?rank|bge-?reranker|cohere-?rerank|rank-?t5|ms-?marco-?minilm/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'rerank' } },
   // 画图（图像生成）
@@ -218,8 +223,11 @@ export function caiZhongLei(ming: string): MoXingNengLi['kind'] {
   if (/video-?vl|video-?llm|videochat|qwen.*video/.test(s)) return 'videoUnd';
   if (/nllb|marian|opus-?mt|translate|translation|deepl|madlad|m2m-100/.test(s)) return 'translate';
   if (/llama-?guard|guardian|moderation|content-?filter|shield/.test(s)) return 'safety';
-  // 决策模型（RLCD 类）
-  if (/rlcd|\bjev\b|router|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-/.test(s)) return 'decision';
+  // 决策模型（RLCD 类）。**不能用裸 `router`**：`orcarouter/...` 是供应商前缀，
+  // 用户实测那 5 个 Qwen3.8-27B-Uncensored 都是对话模型；只有独立单词 router 才算决策。
+  if (/rlcd|\bjev\b|(^|[^a-z])router(?!outer)|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-|(^|[-_/])clef([-_/.:]|$)/.test(s)) return 'decision';
+  // 明确的通用对话模型（含供应商前缀 orcarouter）；排在所有专用类型之后，不会误伤 vl/image/embedding。
+  if (/qwen|orcarouter|uncensored|llama|mistral|phi-|gemma|deepseek-v[23]/.test(s)) return 'chat';
   return 'unknown';
 }
 

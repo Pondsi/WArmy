@@ -36,6 +36,11 @@ export interface LogEntry {
    * 每段 `{ts, text}`，`join('')` 与 `reasoning` 逐字相同 ⇒ 模型上下文与旧界面口径都不变。
    */
   reasoningDuan?: Array<{ ts: number; text: string }>;
+  /**
+   * **中间回复**（第 48 轮）：同一轮里模型在发起工具调用时写给用户的话（按时间）。
+   * 只给界面画进「执行过程」折叠；不进模型上下文（模型在那一轮里已经看过，最终回复才是这一轮的答复）。
+   */
+  zhongJian?: Array<{ ts: number; text: string }>;
   /** 系统小字（如提示）——只给界面画成居中浅色行，不进模型上下文 */
   system?: boolean;
   /** 本轮实际用的模型名（牛马回复下方第一行显示；不进模型上下文） */

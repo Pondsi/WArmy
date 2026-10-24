@@ -1,13 +1,11 @@
 /**
  * 本地语音（sherpa-onnx）—— 第 27 轮 项 5。
  *
- * 这块东西的定位是「**本地优先，失败降级**」：
- *   · 装好并勾选启用后，听话（ASR）与说话（TTS）**先走本机推理**；
- *   · 任何一步不成（没装、没模型、格式不吃、推理抛异常）都**如实返回失败原因**，
- *     调用方继续按原来的「听话模型 / 说话模型」调用链走 ⇒ 用户不会突然哑掉。
+ * 2026-10-24：运行时和 ASR/TTS 两套模型安装齐全才允许启用。
+ * 启用后 ASR/TTS 只用本地；失败如实报错，不降级云端，也不修改用户的启用选择。
  *
  * 三个动作对应界面上的三个控件：
- *   · 启用勾选        —— 只影响是否优先用本地，不改文件；
+ *   · 启用勾选        —— 装齐后才可开启；关闭后由调用方走配置的模型链；
  *   · 删除            —— 删掉运行环境 + 模型，并写「下次更新不再安装」标记（项 5 原话）；
  *   · 安装（删除后出现）—— 按本文件里的**清单**（我们仓库钉死的版本）补齐运行时与模型。
  *
@@ -39,6 +37,8 @@ export interface BenDiZhuangTai {
   zhuangTai: BenDiZhuangTaiMing;
   qiYong: boolean;
   buZaiAnZhuang: boolean;
+  /** 兼容旧界面，固定空串；失败不修改用户选择。 */
+  ziDongGuan: string;
   muLu: string;
   yunXing: { zai: boolean; luJing: string; keYiBao: boolean; banBen: string; ziDai: boolean };
   moXing: { shiBie: boolean; heCheng: boolean };
@@ -126,6 +126,8 @@ interface JiZhuangTai { qiYong?: boolean; buZaiAnZhuang?: boolean; cuoWu?: strin
 function duJi(): JiZhuangTai {
   try { return JSON.parse(fs.readFileSync(zhuangTaiWenJian, 'utf8')) as JiZhuangTai; } catch { return {}; }
 }
+/** 兼容旧状态接口；推理失败不再自动取消勾选。 */
+export function benDiZiDongGuan(): string { return ''; }
 function xieJi(p: JiZhuangTai): void {
   try {
     fs.mkdirSync(path.dirname(zhuangTaiWenJian), { recursive: true });
@@ -142,7 +144,10 @@ export function chuShiHuaBenDiYuYin(o: { userDataDir: string; onJinDu?: (d: BenD
 function wenJianQing(ming: MoXingQing, lei: 'shiBie' | 'heCheng'): boolean {
   const gen = muLuMoXing(lei);
   return ming.wenJian.every((w) => {
-    try { return fs.statSync(path.join(gen, w)).isFile(); } catch { return false; }
+    try {
+      const st = fs.statSync(path.join(gen, w));
+      return st.isFile() && st.size > 0;
+    } catch { return false; }
   });
 }
 
@@ -169,7 +174,7 @@ function keYiBaoFrom(gen: string): boolean {
   if (!gen) return false;
   try {
     const r = createRequire(path.join(gen, 'package.json'))(YUN_XING_QING_DAN.name);
-    return !!(r && (r as { OfflineRecognizer?: unknown }).OfflineRecognizer && (r as { OfflineTts?: unknown }).OfflineTts);
+    return typeof r?.OfflineRecognizer === 'function' && typeof r?.OfflineTts === 'function';
   } catch { return false; }
 }
 
@@ -217,6 +222,10 @@ async function jieBao(tarBao: string, dirMing: string): Promise<{ ok: boolean; e
   return { ok: true };
 }
 
+/** 上一次下载成功的镜像下标：后面的文件直接从它开始试。
+ *  hf-mirror 挂掉时每个文件都要白等一次连接超时（实测 20 个文件 ≈ 多花 3 分钟），记住可用的那个就不再挨这一刀。 */
+let xiaZaiJingXiang = 0;
+
 async function xiaZaiMoXing(lei: 'shiBie' | 'heCheng'): Promise<{ ok: boolean; error?: string }> {
   const qing = MO_XING[lei];
   const gen = muLuMoXing(lei);
@@ -226,7 +235,8 @@ async function xiaZaiMoXing(lei: 'shiBie' | 'heCheng'): Promise<{ ok: boolean; e
     if (fs.existsSync(lu) && fs.statSync(lu).size > 0) continue;
     fs.mkdirSync(path.dirname(lu), { recursive: true });
     let cheng = false;
-    for (const m of MU_LU_JING_XI) {
+    const shou = MU_LU_JING_XI.map((m, k) => ({ m, jx: (k + xiaZaiJingXiang) % MU_LU_JING_XI.length }));
+    for (const { m, jx } of shou) {
       const u = m.replace('{luJing}', qing.luJing).replace('{wen}', w);
       try {
         const r = await fetch(u, { signal: AbortSignal.timeout(300000) });
@@ -258,6 +268,7 @@ async function xiaZaiMoXing(lei: 'shiBie' | 'heCheng'): Promise<{ ok: boolean; e
         } finally { fs.closeSync(fd); }
         fs.renameSync(tmp, lu);
         cheng = true;
+        xiaZaiJingXiang = jx;
         break;
       } catch (e) { cuoWuZuiHou = String((e as Error)?.message || e); }
     }
@@ -285,7 +296,7 @@ export function zhuangTaiBenDiYuYin(): BenDiZhuangTai {
   const yunXingZai = !!gen.luJing && !ji.buZaiAnZhuang;
   const shiBieZai = wenJianQing(MO_XING.shiBie, 'shiBie');
   const heChengZai = wenJianQing(MO_XING.heCheng, 'heCheng');
-  const yiQi = yunXingZai && keYiBao && (shiBieZai || heChengZai);
+  const yiQi = yunXingZai && keYiBao && shiBieZai && heChengZai;
   let zhuangTai: BenDiZhuangTaiMing = 'wei_an_zhuang';
   if (anZhuangZhong) zhuangTai = 'an_zhuang_zhong';
   else if (yiQi) zhuangTai = 'yi_an_zhuang';
@@ -293,7 +304,8 @@ export function zhuangTaiBenDiYuYin(): BenDiZhuangTai {
   return {
     ok: true,
     zhuangTai,
-    qiYong: !!ji.qiYong && zhuangTai === 'yi_an_zhuang',
+    qiYong: !!ji.qiYong,
+    ziDongGuan: '',
     buZaiAnZhuang: !!ji.buZaiAnZhuang,
     muLu: muLuGen(),
     yunXing: { zai: yunXingZai, luJing: gen.luJing, keYiBao, banBen: YUN_XING_QING_DAN.version, ziDai: gen.ziDai },
@@ -335,7 +347,11 @@ export async function anZhuangBenDiYuYin(): Promise<{ ok: boolean; error?: strin
     }
     xieJi({ buZaiAnZhuang: false, cuoWu: '' });
     cuoWuZuiHou = '';
-    return { ok: true, zhuangTai: zhuangTaiBenDiYuYin() };
+    anZhuangZhong = false;
+    const st = zhuangTaiBenDiYuYin();
+    return st.zhuangTai === 'yi_an_zhuang'
+      ? { ok: true, zhuangTai: st }
+      : { ok: false, error: 'bendi-yuyin-install-incomplete（运行时或模型未安装完整）', zhuangTai: st };
   } catch (e) {
     const x = String((e as Error)?.message || e);
     cuoWuZuiHou = x; xieJi({ cuoWu: x });
@@ -357,10 +373,15 @@ export function shanChuBenDiYuYin(o?: { buZaiAnZhuang?: boolean }): { ok: boolea
   } catch (e) { return { ok: false, error: String((e as Error)?.message || e) }; }
 }
 
-export function qiYongBenDiYuYin(kai: boolean): { ok: boolean; qiYong: boolean } {
+export function qiYongBenDiYuYin(kai: boolean): { ok: boolean; qiYong: boolean; error?: string } {
+  const st = zhuangTaiBenDiYuYin();
+  if (kai && st.zhuangTai !== 'yi_an_zhuang') {
+    return { ok: false, qiYong: st.qiYong, error: 'bendi-yuyin-not-ready（请先安装完整的本地运行时、ASR 和 TTS 模型）' };
+  }
   xieJi({ qiYong: !!kai });
   if (!kai) { shiBieQi = null; heChengQi = null; }
-  return { ok: true, qiYong: !!kai };
+  const qiYong = !!duJi().qiYong;
+  return qiYong === !!kai ? { ok: true, qiYong } : { ok: false, qiYong, error: 'bendi-yuyin-settings-write-failed' };
 }
 
 function huoYunXing(): Record<string, unknown> | null {
@@ -379,21 +400,31 @@ function linShiWav(lei: string): { lu: string; qing: () => void } {
   return { lu: wen, qing: () => { try { fs.rmSync(wen, { force: true }); } catch { /* noop */ } } };
 }
 
-function benDiQiYong(): boolean {
-  const ji = duJi();
-  return !!ji.qiYong && zhuangTaiBenDiYuYin().zhuangTai === 'yi_an_zhuang';
+function benDiKeYongCuoWu(ziJian: boolean): string {
+  const st = zhuangTaiBenDiYuYin();
+  if (!ziJian && !st.qiYong) return 'bendi-yuyin-not-enabled';
+  if (!st.yunXing.zai || !st.yunXing.keYiBao) return 'bendi-yuyin-runtime-missing';
+  if (!st.moXing.shiBie) return 'bendi-yuyin-no-asr-model';
+  if (!st.moXing.heCheng) return 'bendi-yuyin-no-tts-model';
+  if (st.zhuangTai !== 'yi_an_zhuang') return 'bendi-yuyin-not-ready';
+  return '';
 }
 
 export interface BenDiShiBieJieGuo { ok: boolean; text?: string; error?: string; moXing?: string }
 
-/** 本地识别：只吃 wav（麦克风那条路渲染层已经转成 16k wav 了），其它格式如实降级 */
-export async function benDiShiBie(buf: Buffer, geShi: string): Promise<BenDiShiBieJieGuo> {
-  if (!benDiQiYong()) return { ok: false, error: 'bendi-yuyin-not-enabled' };
-  if (!zhuangTaiBenDiYuYin().moXing.shiBie) return { ok: false, error: 'bendi-yuyin-no-asr-model' };
-  if (String(geShi || '').toLowerCase() !== 'wav') return { ok: false, error: 'bendi-yuyin-format（本地识别只吃 wav，收到 ' + geShi + '）' };
+/** 只吃 WAV。paraformer 仅中英自动识别，无 language 参数；显式非中英语种必须报限制。
+ * ziJian 仅供本地自检，不写用户启用状态。附件/话筒在渲染层现有边界转码。 */
+export async function benDiShiBie(buf: Buffer, geShi: string, yuYan?: string, ziJian = false): Promise<BenDiShiBieJieGuo> {
+  const shiBai = (error: string): BenDiShiBieJieGuo => ({ ok: false, error });
+  const cuo = benDiKeYongCuoWu(ziJian);
+  if (cuo) return shiBai(cuo);
+  if (yuYan && yuYan !== 'auto' && !/^(zh|en)(?:-|$)/i.test(yuYan)) {
+    return shiBai('bendi-yuyin-language-unsupported（本地 paraformer 仅支持中文和英文自动识别，不支持指定语言 ' + yuYan + '）');
+  }
+  if (String(geShi || '').toLowerCase() !== 'wav') return shiBai('bendi-yuyin-format（本地识别只吃 wav，收到 ' + geShi + '；请先转为 WAV）');
   try {
     const x = huoYunXing();
-    if (!x) return { ok: false, error: 'bendi-yuyin-runtime-missing' };
+    if (!x) return shiBai('bendi-yuyin-runtime-missing');
     if (!shiBieQi) {
       const Ctor = x.OfflineRecognizer as new (c: unknown) => unknown;
       shiBieQi = new Ctor({
@@ -408,31 +439,37 @@ export async function benDiShiBie(buf: Buffer, geShi: string): Promise<BenDiShiB
     const w = linShiWav('in');
     try {
       fs.writeFileSync(w.lu, buf);
-      const readWave = huoYunXing()?.readWave as ((p: string) => { samples: Float32Array; sampleRate: number }) | undefined;
-      if (!readWave) return { ok: false, error: 'bendi-yuyin-runtime-missing' };
-      const wave = readWave(w.lu);
-      if (!wave || !wave.samples || !wave.samples.length) return { ok: false, error: 'bendi-yuyin-empty-audio' };
+      /**
+       * 第二个参数 = 「别让原生侧建 external ArrayBuffer」。Electron 的 V8/N-API **禁止**创建外部缓冲区，
+       * 默认 `readWave(p)` 直接抛 `External buffers are not allowed` ⇒ **本机识别从来没成功过一次**，
+       * 每次都走链兜底（这正是"语音转文字一直不对/毫无变化"的最底层原因，第 38 轮由端到端门禁抓到）。
+       * 系统 node 24 下不会抛，所以只在真机 Electron 里复现 —— 别拿 node 自证。
+       */
+      const readWave = huoYunXing()?.readWave as ((p: string, waiBu?: boolean) => { samples: Float32Array; sampleRate: number }) | undefined;
+      if (!readWave) return shiBai('bendi-yuyin-runtime-missing');
+      const wave = readWave(w.lu, false);
+      if (!wave || !wave.samples || !wave.samples.length) return shiBai('bendi-yuyin-empty-audio');
       const st = rec.createStream();
       (st as { acceptWaveform: (o: unknown) => void }).acceptWaveform({ samples: wave.samples, sampleRate: wave.sampleRate });
       rec.decode(st);
       const jie = rec.getResult(st);
       const wen = String(jie?.text || '').trim();
-      if (!wen) return { ok: false, error: 'bendi-yuyin-empty-result' };
+      if (!wen) return shiBai('bendi-yuyin-empty-result');
       return { ok: true, text: wen, moXing: 'local/' + MO_XING.shiBie.ming };
     } finally { w.qing(); }
   } catch (e) {
     const x = String((e as Error)?.message || e).slice(0, 200);
     cuoWuZuiHou = x;
-    return { ok: false, error: 'bendi-yuyin-asr-failed：' + x };
+    return shiBai('bendi-yuyin-asr-failed：' + x);
   }
 }
 
 export interface BenDiHeChengJieGuo { ok: boolean; wav?: Buffer; error?: string; moXing?: string; yangShu?: number; sampleRate?: number }
 
-/** 本地合成：返回 16k wav Buffer；音色 sid 超出范围就用 0（模型给了几个就报几个） */
-export async function benDiHeCheng(text: string, sid = 0, speed = 1): Promise<BenDiHeChengJieGuo> {
-  if (!benDiQiYong()) return { ok: false, error: 'bendi-yuyin-not-enabled' };
-  if (!zhuangTaiBenDiYuYin().moXing.heCheng) return { ok: false, error: 'bendi-yuyin-no-tts-model' };
+/** 本地合成：返回 wav Buffer；ziJian 仅跳过启用检查，不修改用户选择。 */
+export async function benDiHeCheng(text: string, sid = 0, speed = 1, ziJian = false): Promise<BenDiHeChengJieGuo> {
+  const cuo = benDiKeYongCuoWu(ziJian);
+  if (cuo) return { ok: false, error: cuo };
   const s = String(text || '').trim();
   if (!s) return { ok: false, error: 'empty-text' };
   try {
@@ -454,11 +491,12 @@ export async function benDiHeCheng(text: string, sid = 0, speed = 1): Promise<Be
       });
     }
     const tts = heChengQi as {
-      generate: (o: { text: string; sid: number; speed: number }) => { samples: Float32Array; sampleRate: number };
+      generate: (o: { text: string; sid: number; speed: number; enableExternalBuffer?: boolean }) => { samples: Float32Array; sampleRate: number };
       numSpeakers: number; sampleRate: number;
     };
     const zuo = Math.max(0, Math.min(Number(sid) || 0, Math.max(0, (Number(tts.numSpeakers) || 1) - 1)));
-    const a = tts.generate({ text: s, sid: zuo, speed: Number(speed) > 0 ? Number(speed) : 1 });
+    // enableExternalBuffer:false —— 同 readWave，Electron 的 V8 禁止原生侧建外部缓冲区，默认调用必抛。
+    const a = tts.generate({ text: s, sid: zuo, speed: Number(speed) > 0 ? Number(speed) : 1, enableExternalBuffer: false });
     if (!a || !a.samples || !a.samples.length) return { ok: false, error: 'bendi-yuyin-empty-audio' };
     const w = linShiWav('out');
     try {

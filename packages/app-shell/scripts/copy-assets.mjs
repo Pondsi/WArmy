@@ -21,6 +21,10 @@ mkdirSync(path.join(dist, 'renderer'), { recursive: true });
 mkdirSync(path.join(dist, 'i18n'), { recursive: true });
 
 copyFileSync(path.join(src, 'preload.cjs'), path.join(dist, 'preload.cjs'));
+/** 第 66 轮认证：纯 JS 加密核心/词表不是 tsc 产物，必须显式带进 dist（否则启动 import 直接崩） */
+for (const f of ['auth-core.mjs', 'auth-core.d.mts', 'auth-wordlist.mjs', 'auth-friend-words.mjs', 'auth-friend-idioms.mjs']) {
+  if (fsExists(path.join(src, f))) copyFileSync(path.join(src, f), path.join(dist, f));
+}
 if (fsExists(path.join(src, 'snip-preload.cjs'))) copyFileSync(path.join(src, 'snip-preload.cjs'), path.join(dist, 'snip-preload.cjs'));
 copyFileSync(path.join(src, 'ipc-aliases.json'), path.join(dist, 'ipc-aliases.json'));
 copyDir(path.join(src, 'renderer'), path.join(dist, 'renderer'));

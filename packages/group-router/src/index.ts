@@ -12,10 +12,10 @@
 import type {
   ZhibanTai,
   QunPeizhi,
-  QunLei,
   OrchestrationDecision,
   OrchestrationRequest,
   Jinji,
+  QuanxianJuzhen,
 } from '@warmy/contracts';
 
 export interface LuyouqiShili {
@@ -446,4 +446,8 @@ export const DEFAULT_PERMISSIONS = {
     talk_to_duty: true,
     view_board: 'readonly',
   },
-} as const;
+  /**
+   * `satisfies` 契约 `QuanxianJuzhen`：四个角色 × 十项权限一项都不许少、值只能是 boolean / 'readonly'。
+   * 以前没有这层约束，宿主侧只能 `as never` 强转塞进 QunPeizhi（electron-main 两处）。
+   */
+} as const satisfies QuanxianJuzhen;

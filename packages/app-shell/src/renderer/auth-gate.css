@@ -1,0 +1,843 @@
+/* Auth gate — intentionally independent of app.css so the patch stays isolated. */
+.warmyAuthGate {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at 20% 10%, rgba(168, 118, 84, 0.22), transparent 42%),
+              radial-gradient(circle at 80% 90%, rgba(80, 120, 160, 0.18), transparent 45%),
+              rgba(16, 18, 22, 0.92);
+  color: #f4efe8;
+  font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  overflow: auto;
+}
+.warmyAuthGate.warmyAuthHidden { display: none; }
+.warmyAuthCard {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: #23262d;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+  padding: 24px;
+}
+.warmyAuthBrand { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+.warmyAuthLogo {
+  width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(145deg, #b9875d, #7a5134);
+  color: #fff; font-weight: 800; font-size: 12px; letter-spacing: 1px;
+}
+.warmyAuthTitle { font-size: 20px; font-weight: 700; line-height: 1.25; }
+.warmyAuthSub { color: #b9b3aa; font-size: 12.5px; margin-top: 4px; }
+.warmyAuthLabel { display: block; color: #d8d1c7; font-size: 13px; margin: 14px 0 6px; font-weight: 600; }
+.warmyAuthInput {
+  width: 100%; box-sizing: border-box; border-radius: 10px; border: 1px solid rgba(255,255,255,.16);
+  background: #17191e; color: #f4efe8; padding: 11px 12px; font: inherit; outline: none;
+}
+.warmyAuthInput:focus { border-color: #b9875d; box-shadow: 0 0 0 3px rgba(185,135,93,.2); }
+.warmyAuthInput:disabled { opacity: .55; }
+.warmyAuthTextarea { resize: vertical; min-height: 112px; line-height: 1.7; }
+.warmyAuthBtn {
+  border: 1px solid rgba(255,255,255,.18); background: #2e323a; color: #f4efe8;
+  border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer;
+}
+.warmyAuthBtn:hover:not(:disabled) { background: #383d47; }
+.warmyAuthBtn:disabled { opacity: .45; cursor: not-allowed; }
+.warmyAuthBtnPrimary { background: #a87654; border-color: #a87654; color: #fff; }
+.warmyAuthBtnPrimary:hover:not(:disabled) { background: #b9875d; }
+.warmyAuthBtnDanger { background: #7d2f2f; border-color: #a44; color: #fff; }
+.warmyAuthActions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+.warmyAuthLinks { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+.warmyAuthLink { border: 0; background: transparent; color: #d9a77d; padding: 0; font: inherit; cursor: pointer; text-align: left; }
+.warmyAuthLink:hover { text-decoration: underline; }
+.warmyAuthHint { color: #9e988f; font-size: 12px; margin-top: 8px; }
+.warmyAuthWarn { color: #e2b28c; background: rgba(185,135,93,.12); border: 1px solid rgba(185,135,93,.25); border-radius: 10px; padding: 10px 12px; margin-top: 12px; font-size: 12.5px; }
+.warmyAuthError { color: #ffb4b4; background: rgba(180,60,60,.15); border: 1px solid rgba(220,90,90,.35); border-radius: 10px; padding: 10px 12px; margin-top: 12px; font-size: 12.5px; }
+.warmyAuthCheck { display: flex; gap: 9px; align-items: flex-start; margin-top: 14px; color: #d8d1c7; cursor: pointer; }
+.warmyAuthCheck input { margin-top: 3px; accent-color: #a87654; }
+.warmyAuthDisabled { opacity: .55; cursor: not-allowed; }
+.warmyAuthTerms {
+  max-height: 260px; overflow: auto; margin-top: 12px; padding: 12px;
+  background: #17191e; border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
+  color: #c8c1b7; font-size: 12.5px; line-height: 1.65;
+}
+.warmyAuthMnemonic { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.warmyAuthWord {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  background: #17191e; border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px; padding: 6px 9px 7px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12.5px; word-break: break-all; min-width: 0;
+}
+.warmyAuthWordIndex { color: #a99480; font-weight: 600; font-size: 10px; line-height: 1.1; min-width: 18px; }
+.warmyAuthWordText { font-size: 13px; line-height: 1.3; word-break: break-all; }
+.warmyAuthWordPinyin { font-size: 11px; line-height: 1.3; color: #bdb3a7; word-break: normal; overflow-wrap: anywhere; letter-spacing: .01em; }
+.warmyAuthMnemonic.is-pinyin-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.warmyAuthPinyinToggle {
+  display: inline-flex; align-items: center; gap: 2px; margin-top: 8px; padding: 3px;
+  border: 1px solid rgba(255,255,255,.16); border-radius: 999px; background: #17191e;
+}
+.warmyAuthPinyinSwitch {
+  border: 0; background: transparent; color: #c8c1b7; border-radius: 999px;
+  padding: 5px 14px; font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.warmyAuthPinyinSwitch:hover { color: #f4efe8; }
+.warmyAuthPinyinSwitch.is-on { background: #a87654; color: #fff; }
+.warmyAuthRecoveryGrid { margin-top: 10px; }
+.warmyAuthRecoveryGrid.is-idiom-12 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.warmyAuthRecoveryCell { justify-content: center; }
+.warmyAuthRecoveryPair { gap: 3px; }
+.warmyAuthRecoveryPair .warmyAuthRecoveryInput { padding: 2px 0; }
+.warmyAuthRecoveryCell:focus-within { border-color: #a87654; box-shadow: 0 0 0 1px rgba(168,118,84,.45); }
+.warmyAuthRecoveryInput {
+  width: 100%; min-width: 0; border: 0; outline: 0; background: transparent;
+  color: #f4efe8; font: inherit; font-size: 12px; padding: 1px 0 0;
+}
+.warmyAuthRecoveryInput::placeholder { color: rgba(244,239,232,.28); }
+.warmyAuthSpin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(255,255,255,.18); border-top-color: #a87654; animation: warmyAuthSpin .8s linear infinite; margin: 18px auto; }
+@keyframes warmyAuthSpin { to { transform: rotate(360deg); } }
+.warmyAuthModal { position: fixed; inset: 0; z-index: 2147483001; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.62); }
+.warmyAuthModalCard { width: min(480px, 100%); background: #23262d; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.warmyAuthModalBody { color: #c8c1b7; font-size: 13px; margin-top: 10px; }
+
+/* My page card: reuse the app's .sheZhiKa shell but keep this widget's layout local. */
+.warmyAuthMyCard .warmyAuthMeta { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 6px 0 4px; font-size: 12.5px; }
+.warmyAuthMyCard .warmyAuthActions { justify-content: flex-start; margin-top: 12px; }
+.warmyAuthMyGrid { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-top: 10px; }
+.warmyAuthMyLeft { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; flex: 1; min-width: 190px; }
+.warmyAuthMyRight { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.warmyAuthMyLeft .warmyAuthBtnDanger { margin-top: 2px; }
+.warmyAuthMyCard .warmyAuthInput { margin-top: 6px; }
+.warmyAuthMyCard .warmyAuthBtn { padding: 8px 12px; }
+.warmyAuthMyPin { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(0,0,0,.16); }
+.warmyAuthMyPin .warmyAuthLabel { margin-top: 6px; }
+.warmyAuthMyCard .warmyAuthHint, .warmyAuthMyCard .warmyAuthWarn, .warmyAuthMyCard .warmyAuthError { color: inherit; }
+.warmyAuthMyCard .warmyAuthWarn { background: rgba(185,135,93,.1); }
+.warmyAuthMyCard .warmyAuthError { background: rgba(180,60,60,.08); }
+@media (max-width: 620px) {
+  .warmyAuthGate { padding: 10px; }
+  .warmyAuthCard { padding: 16px; border-radius: 12px; }
+  .warmyAuthMnemonic,
+  .warmyAuthMnemonic.is-pinyin-2,
+  .warmyAuthMnemonic.is-pinyin-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── 第 67 轮：首启语言页（像素风循环动画） ─────────────────────────── */
+.warmyAuthGate.warmyAuthGateFirstRun {
+  padding: 0;
+  overflow: hidden;
+  background: #0b0f16;
+}
+.warmyAuthCard.warmyAuthCardScene {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.warmyAuthScene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(180deg, #080b11 0%, #0d1320 55%, #17110c 100%);
+}
+.warmyAuthSceneSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+.warmyAuthFirstCard {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 10px;
+  width: min(330px, 88vw);
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(11, 15, 22, 0.78);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(4px);
+}
+.warmyAuthStartBtn {
+  width: auto;
+  flex: none;
+  min-width: 76px;
+  padding: 10px 16px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* 真的在循环：所有位移/姿态都是 steps 关键帧，无限次播放。 */
+@keyframes warmyAuthCharge {
+  0% { transform: translateX(-260px); }
+  100% { transform: translateX(1180px); }
+}
+@keyframes warmyAuthBob {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+  100% { transform: translateY(0); }
+}
+@keyframes warmyAuthGallopA {
+  0%, 100% { transform: rotate(14deg); }
+  50% { transform: rotate(-14deg); }
+}
+@keyframes warmyAuthGallopB {
+  0%, 100% { transform: rotate(-14deg); }
+  50% { transform: rotate(14deg); }
+}
+@keyframes warmyAuthLead {
+  0% { transform: translate(-4px, 0) rotate(-0.6deg); }
+  50% { transform: translate(5px, -1px) rotate(0.6deg); }
+  100% { transform: translate(-4px, 0) rotate(-0.6deg); }
+}
+@keyframes warmyAuthTail {
+  0% { transform: rotate(-7deg); }
+  50% { transform: rotate(8deg); }
+  100% { transform: rotate(-7deg); }
+}
+@keyframes warmyAuthDust {
+  0% { opacity: 0; transform: translate(4px, 0); }
+  35% { opacity: 0.85; transform: translate(-3px, -2px); }
+  100% { opacity: 0; transform: translate(-14px, -7px); }
+}
+@keyframes warmyAuthCommand {
+  0% { transform: rotate(-12deg); }
+  45% { transform: rotate(10deg); }
+  100% { transform: rotate(-12deg); }
+}
+@keyframes warmyAuthCapeFlap {
+  0% { transform: rotate(-3deg); }
+  50% { transform: rotate(4deg); }
+  100% { transform: rotate(-3deg); }
+}
+@keyframes warmyAuthBannerWave {
+  0% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+  100% { transform: rotate(-2deg); }
+}
+@keyframes warmyAuthGround {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-160px); }
+}
+@keyframes warmyAuthGroundSlow {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-120px); }
+}
+@keyframes warmyAuthTwinkle {
+  0% { opacity: 0.35; }
+  50% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+@keyframes warmyAuthMoonGlow {
+  0% { opacity: 0.82; }
+  50% { opacity: 1; }
+  100% { opacity: 0.82; }
+}
+@keyframes warmyAuthCloudFloat {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-26px); }
+}
+@keyframes warmyAuthMeteor {
+  0%, 72% { opacity: 0; transform: translate(0, 0); }
+  74% { opacity: 0.95; transform: translate(0, 0); }
+  79% { opacity: 0.7; transform: translate(-90px, 44px); }
+  84%, 100% { opacity: 0; transform: translate(-124px, 60px); }
+}
+@keyframes warmyAuthDustDrift {
+  0% { transform: translateX(0); opacity: 0.55; }
+  100% { transform: translateX(120px); opacity: 0.15; }
+}
+@keyframes warmyAuthOrder {
+  0% { opacity: 0.15; transform: translateX(0); }
+  40% { opacity: 0.9; transform: translateX(5px); }
+  100% { opacity: 0; transform: translateX(13px); }
+}
+@keyframes warmyAuthShout {
+  0% { opacity: 0.2; }
+  45% { opacity: 1; }
+  100% { opacity: 0.2; }
+}
+@keyframes warmyAuthEmber {
+  0% { opacity: 0; transform: translateY(0); }
+  35% { opacity: 0.9; transform: translateY(-7px); }
+  100% { opacity: 0; transform: translateY(-19px); }
+}
+.warmyAuthRunner {
+  animation: warmyAuthCharge 3.4s steps(12, end) infinite;
+  will-change: transform;
+}
+.warmyAuthBob {
+  animation: warmyAuthBob 0.44s steps(2, end) infinite;
+  will-change: transform;
+}
+.warmyAuthLegA,
+.warmyAuthLegB {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+  will-change: transform;
+}
+.warmyAuthLegA { animation: warmyAuthGallopA 0.42s steps(2, end) infinite; }
+.warmyAuthLegB { animation: warmyAuthGallopB 0.42s steps(2, end) infinite; }
+.warmyAuthTail {
+  transform-box: fill-box;
+  transform-origin: 100% 0%;
+  animation: warmyAuthTail 1.3s steps(2, end) infinite;
+}
+.warmyAuthDust {
+  animation: warmyAuthDust 0.9s steps(3, end) infinite;
+}
+.warmyAuthDustB { animation-delay: -0.45s; }
+.warmyAuthCommandArm {
+  animation: warmyAuthCommand 1.15s steps(2, end) infinite;
+  transform-box: fill-box;
+  transform-origin: 4% 92%;
+  will-change: transform;
+}
+.warmyAuthCape {
+  transform-box: fill-box;
+  transform-origin: 100% 0%;
+  animation: warmyAuthCapeFlap 1.1s steps(2, end) infinite;
+}
+.warmyAuthBanner {
+  transform-box: fill-box;
+  transform-origin: 0% 50%;
+  animation: warmyAuthBannerWave 1.6s steps(2, end) infinite;
+}
+.warmyAuthLogoMascot {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: warmyAuthLead 1.15s steps(2, end) infinite;
+  will-change: transform;
+}
+.warmyAuthLogoMascot image {
+  filter: drop-shadow(0 0 7px rgba(217, 119, 87, 0.45));
+}
+.warmyAuthGroundTiles {
+  animation: warmyAuthGroundSlow 2.4s steps(8, end) infinite;
+}
+.warmyAuthGroundSpeed {
+  animation: warmyAuthGround 0.9s steps(6, end) infinite;
+}
+.warmyAuthStars {
+  animation: warmyAuthTwinkle 2.2s steps(2, end) infinite;
+}
+.warmyAuthMoon {
+  filter: drop-shadow(0 0 10px rgba(234, 215, 167, 0.32));
+  animation: warmyAuthMoonGlow 5s steps(5, end) infinite;
+}
+.warmyAuthCloudA {
+  animation: warmyAuthCloudFloat 18s steps(9, end) infinite alternate;
+}
+.warmyAuthCloudB {
+  animation: warmyAuthCloudFloat 23s steps(9, end) infinite alternate;
+  animation-delay: -7s;
+}
+.warmyAuthMeteor {
+  opacity: 0;
+  animation: warmyAuthMeteor 7.5s steps(12, end) infinite;
+}
+.warmyAuthMeteorB { animation-duration: 11s; }
+.warmyAuthDustCloud {
+  animation: warmyAuthDustDrift 3.2s steps(6, end) infinite;
+}
+.warmyAuthDustCloudB { animation-duration: 4.2s; }
+.warmyAuthOrderMarks {
+  animation: warmyAuthOrder 1.15s steps(3, end) infinite;
+}
+.warmyAuthShout {
+  animation: warmyAuthShout 1.15s steps(2, end) infinite;
+}
+.warmyAuthEmber {
+  animation: warmyAuthEmber 3.2s steps(8, end) infinite;
+}
+
+/* ── 第 67 轮：条款 / PIN / 用户名 / 我的页 ─────────────────────────── */
+.warmyAuthPlainHead { margin-bottom: 14px; }
+.warmyAuthActionsBetween { justify-content: space-between; }
+.warmyAuthTerms {
+  max-height: min(50vh, 420px);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.warmyAuthCheck input:disabled { cursor: not-allowed; }
+.warmyAuthCheck.warmyAuthDisabled,
+.warmyAuthCheck.warmyAuthDisabled span { cursor: not-allowed; }
+.warmyAuthUsernameInput { font-size: 16px; }
+.warmyAuthModalCard .warmyAuthInput { margin-top: 10px; }
+
+.warmyAuthMyCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.warmyAuthMyCard h3 { margin: 0 0 2px; }
+.warmyAuthMyRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.warmyAuthMyAuto {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: inherit;
+  cursor: pointer;
+}
+.warmyAuthMyAuto input { accent-color: #a87654; }
+.warmyAuthMyAuto.warmyAuthDisabled { cursor: not-allowed; opacity: 0.62; }
+.warmyAuthMyCard .warmyAuthActions { margin-top: 2px; }
+.warmyAuthMyCard .warmyAuthError,
+.warmyAuthMyCard .warmyAuthHint { margin-top: 0; }
+
+/* ── 第 68 轮：我的页（左品牌 / 右资料 + 账号控制） ─────────────────── */
+.woDing.woDingR68 {
+  display: flex;
+  align-items: flex-start;
+  gap: 26px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.woBrandR68 {
+  flex: 0 0 27%;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 4px;
+}
+.woBrandR68 .pinPailogo { width: 104px; height: 104px; object-fit: contain; }
+.woBrandMing {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.woR68Body {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.woR68Profile {
+  flex: 0 1 44%;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.woR68Profile .avAnNiu { align-self: flex-start; }
+.woR68Profile .woMingHang { justify-content: flex-start; margin-top: 0; }
+.woR68Profile .woYouJianHang { width: 100%; }
+.woR68Profile .woYouJianHang #pYouJian { min-width: 0; flex: 1 1 180px; max-width: none; }
+.woDingR68 .warmyAuthMyCard {
+  flex: 0 1 46%;
+  min-width: 210px;
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#warmyAuthMyCard:empty { display: none; }
+.warmyAuthMyMnemonicLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.warmyAuthMyKey { font-weight: 600; }
+.warmyAuthMyValue { color: inherit; opacity: .78; }
+.warmyAuthMyView { padding: 6px 10px; font-size: 12.5px; }
+.woDingR68 .warmyAuthMyAuto { margin-top: 1px; }
+.warmyAuthMyButtons { display: flex; gap: 10px; flex-wrap: wrap; }
+.warmyAuthMyButtons .warmyAuthBtn { flex: 1 1 0; min-width: 104px; }
+.warmyAuthMyButtons .warmyAuthBtn:disabled { opacity: .45; cursor: not-allowed; }
+.warmyAuthMyCard .warmyAuthError { margin-top: 0; }
+@media (max-width: 980px) {
+  .woBrandR68 { flex-basis: 100%; flex-direction: row; align-items: center; }
+  .woBrandR68 .pinPailogo { width: 84px; height: 84px; }
+  .woR68Body { flex-basis: 100%; }
+}
+@media (max-width: 700px) {
+  .woR68Body { gap: 18px; }
+  .woR68Profile,
+  .woDingR68 .warmyAuthMyCard { flex-basis: 100%; }
+}
+
+@media (max-width: 620px) {
+  .warmyAuthFirstCard { width: min(316px, 92vw); padding: 10px; gap: 8px; }
+  .warmyAuthStartBtn { min-width: 68px; padding: 10px 12px; }
+}
+
+/* ── 第 74 轮：亮色首启主题（软件默认亮色，首启的按钮/卡片/输入/弹层全部转亮） ── */
+.warmyAuthGate {
+  background: radial-gradient(circle at 18% 8%, rgba(255, 232, 205, .55), transparent 44%),
+              radial-gradient(circle at 82% 92%, rgba(205, 226, 246, .5), transparent 46%),
+              #f7f2e9;
+  color: #2b2a31;
+}
+.warmyAuthGate.warmyAuthGateFirstRun { background: #f7f2e9; }
+.warmyAuthScene { background: linear-gradient(180deg, #fdf5ea 0%, #f7e9ee 52%, #e0eaf7 100%); }
+.warmyAuthCard {
+  background: #fffdf9;
+  border-color: rgba(43, 42, 49, .12);
+  box-shadow: 0 18px 50px rgba(120, 95, 70, .16);
+  color: #2b2a31;
+}
+.warmyAuthLogo { background: linear-gradient(145deg, #e8b27d, #c97a4a); }
+.warmyAuthTitle { color: #2b2a31; }
+.warmyAuthSub, .warmyAuthHint { color: #6f6b76; }
+.warmyAuthLabel, .warmyAuthCheck { color: #4a4750; }
+.warmyAuthInput {
+  background: #fff; color: #2b2a31; border-color: rgba(43, 42, 49, .18);
+}
+.warmyAuthInput:focus { border-color: #c97a4a; box-shadow: 0 0 0 3px rgba(201, 122, 74, .16); }
+.warmyAuthBtn { background: #fff; color: #2b2a31; border-color: rgba(43, 42, 49, .18); }
+.warmyAuthBtn:hover:not(:disabled) { background: #f7f2e9; }
+.warmyAuthBtnPrimary { background: #c97a4a; border-color: #c97a4a; color: #fff; }
+.warmyAuthBtnPrimary:hover:not(:disabled) { background: #b86a3c; }
+.warmyAuthBtnDanger { background: #fff0ed; border-color: #e2a69a; color: #a44532; }
+.warmyAuthLink { color: #b86a3c; }
+.warmyAuthWarn { color: #7a5234; background: #fdf0e2; border-color: #eccfae; }
+.warmyAuthError { color: #a33f3f; background: #fdecec; border-color: #edc0c0; }
+.warmyAuthCheck input { accent-color: #c97a4a; }
+.warmyAuthTerms { background: #fbf7f0; border-color: rgba(43, 42, 49, .12); color: #4a4750; }
+.warmyAuthWord { background: #fbf7f0; border-color: rgba(43, 42, 49, .14); color: #2b2a31; }
+.warmyAuthWordIndex { color: #a58b6f; }
+.warmyAuthWordPinyin { color: #7b746a; }
+.warmyAuthPinyinToggle { background: #fbf7f0; border-color: rgba(43, 42, 49, .16); }
+.warmyAuthPinyinSwitch { color: #6f6b76; }
+.warmyAuthPinyinSwitch:hover { color: #2b2a31; }
+.warmyAuthPinyinSwitch.is-on { background: #c97a4a; color: #fff; }
+.warmyAuthRecoveryInput { color: #2b2a31; }
+.warmyAuthRecoveryInput::placeholder { color: rgba(43, 42, 49, .3); }
+.warmyAuthSpin { border-color: rgba(43, 42, 49, .14); border-top-color: #c97a4a; }
+.warmyAuthModal { background: rgba(60, 50, 40, .32); }
+.warmyAuthModalCard {
+  background: #fffdf9; border-color: rgba(43, 42, 49, .14); color: #2b2a31;
+  box-shadow: 0 20px 50px rgba(120, 95, 70, .22);
+}
+.warmyAuthModalBody { color: #4a4750; }
+.warmyAuthFirstCard {
+  background: rgba(255, 253, 249, .88);
+  border-color: rgba(43, 42, 49, .12);
+  box-shadow: 0 14px 40px rgba(120, 95, 70, .16);
+}
+/* 亮色场景里的“站着的牛马”只做呼吸/尾摆，不原地跑 */
+.warmyAuthLightHorse .warmyAuthBob { animation: warmyAuthBob 3.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.warmyAuthLightHorse .warmyAuthTail { animation: warmyAuthTail 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: right center; }
+.warmyAuthSceneLight .warmyAuthCloudA,
+.warmyAuthSceneLight .warmyAuthCloudB { transform-box: fill-box; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * 第 78 轮（R78）：首启/登录 7 项
+ *  ② 语言平铺（无下拉）
+ *  ③ PIN 内嵌登录按钮 / 登录页更小 / 返回语言页
+ *  ④ 语言 + 条款 + 登录共用同一牛马背景
+ *  ⑦ 中文友好型「序号+词」同一行，每条两行
+ *  ⑧ 漫游式引导（spotlight）
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── ② 语言平铺 ─────────────────────────────────────────────────────── */
+.warmyAuthFirstCard.warmyAuthLangCard {
+  flex-direction: column;
+  align-items: stretch;
+  width: min(360px, 92vw);
+  gap: 10px;
+}
+.warmyAuthLangGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.warmyAuthLangTile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: #151a23;
+  color: #e8e2d9;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.warmyAuthLangTile:hover { border-color: #8e6a4e; background: #1b212c; }
+.warmyAuthLangTile:focus-visible { border-color: #b9875d; box-shadow: 0 0 0 3px rgba(185, 135, 93, 0.24); }
+.warmyAuthLangTile.is-on {
+  background: rgba(185, 135, 93, 0.22);
+  border-color: #c98f5d;
+  color: #fff5e8;
+}
+.warmyAuthLangTile.is-on::after { content: '✓'; color: #e6b98d; font-size: 12px; flex: none; }
+.warmyAuthLangTileName { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.warmyAuthLangFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.warmyAuthLangPick {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #cbb9a3;
+  font-size: 12.5px;
+}
+.warmyAuthLangFoot .warmyAuthStartBtn { width: auto; flex: none; min-width: 84px; }
+
+/* ── ④ 条款 / 登录叠在同一场景上（卡片浮在动画上） ───────────────────── */
+.warmyAuthCard.warmyAuthCardScene.warmyAuthCardOnScene {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: min(520px, 94vw);
+  height: auto;
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid rgba(43, 42, 49, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 253, 249, 0.95);
+  box-shadow: 0 18px 50px rgba(120, 95, 70, 0.2);
+  backdrop-filter: blur(3px);
+}
+/* ③ 登录页更小 */
+.warmyAuthCard.warmyAuthCardScene.warmyAuthCardCompact {
+  width: min(400px, 92vw);
+  padding: 14px 16px 16px;
+}
+.warmyAuthCardCompact .warmyAuthLabel { margin-top: 6px; }
+.warmyAuthCardCompact .warmyAuthActions { margin-top: 14px; }
+.warmyAuthCardCompact .warmyAuthActionsBetween .warmyAuthBtn { padding: 8px 12px; font-size: 12.5px; }
+
+/* ③ 返回首启语言页 */
+.warmyAuthBackChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 1px solid rgba(184, 106, 60, .35);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, .9);
+  color: #b86a3c;
+  cursor: pointer;
+}
+.warmyAuthBackChip svg { width: 18px; height: 18px; display: block; }
+.warmyAuthBackChip:hover { color: #9a4f28; border-color: #b86a3c; background: #fff; }
+
+/* ③ PIN 输入框右侧内嵌登录按钮（视觉上包在输入框里） */
+.warmyAuthPinRow { position: relative; display: flex; align-items: center; }
+.warmyAuthPinRow .warmyAuthPinInline { padding-right: 110px; }
+.warmyAuthPinGo {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+/* ── ⑦ 中文友好型：序号与词同一行，每条两行（序号+词 / 拼音） ───────── */
+.warmyAuthMnemonic.is-pinyin .warmyAuthWordFriendly {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: baseline;
+  column-gap: 6px;
+  row-gap: 1px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.warmyAuthWordFriendly .warmyAuthWordIndex { grid-column: 1; grid-row: 1; min-width: 26px; }
+.warmyAuthWordFriendly .warmyAuthWordText { grid-column: 2; grid-row: 1; }
+.warmyAuthWordFriendly .warmyAuthWordPinyin { grid-column: 2; grid-row: 2; }
+/* 助记词/恢复格子永远不超出屏幕：超高就在自己的框里滚 */
+.warmyAuthMnemonic {
+  max-height: min(56vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-height: 720px) {
+  .warmyAuthMnemonic { max-height: min(50vh, 440px); }
+  .warmyAuthCard.warmyAuthCardScene.warmyAuthCardCompact { padding: 12px 14px 14px; }
+}
+
+/* ── ⑧ 漫游式引导（spotlight） ──────────────────────────────────────── */
+/* 原引导条保留在 DOM 里给 app.js 驱动，但视觉上由漫游层替代 */
+body.warmyTourOn #yinDaoTiao { display: none !important; }
+body.warmyTourOn .yinDaoGaoLiang {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.warmyTour { position: fixed; inset: 0; z-index: 2147483300; pointer-events: none; }
+.warmyTourDim {
+  position: fixed;
+  background: rgba(24, 20, 16, 0.58);
+  /* 非阻塞：遮罩只压暗画面，不吃点击（app.js 的引导条本来就是非阻塞设计） */
+  pointer-events: none;
+  transition: left .16s ease, top .16s ease, width .16s ease, height .16s ease;
+}
+.warmyTourHole {
+  position: fixed;
+  pointer-events: none;
+  border: 2px solid #c97a4a;
+  border-radius: 10px;
+  box-shadow: 0 0 0 4px rgba(201, 122, 74, 0.26), 0 0 22px rgba(201, 122, 74, 0.35);
+  transition: left .16s ease, top .16s ease, width .16s ease, height .16s ease;
+}
+.warmyTourCard {
+  position: fixed;
+  z-index: 1;
+  width: min(360px, calc(100vw - 24px));
+  box-sizing: border-box;
+  padding: 13px 15px 14px;
+  border: 1px solid rgba(43, 42, 49, 0.14);
+  border-radius: 14px;
+  background: #fffdf9;
+  color: #2b2a31;
+  box-shadow: 0 18px 50px rgba(60, 45, 30, 0.3);
+  font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  pointer-events: auto;
+}
+.warmyTourHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.warmyTourStep {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #c97a4a;
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: .3px;
+  white-space: nowrap;
+}
+.warmyTourClose {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: #6f6b76;
+  font-size: 17px;
+  line-height: 1;
+  padding: 0 3px;
+  cursor: pointer;
+}
+.warmyTourClose:hover { color: #2b2a31; }
+.warmyTourTitle { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.warmyTourBody { font-size: 12.5px; line-height: 1.55; color: #4a4750; }
+.warmyTourValue {
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 3px solid #c97a4a;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b5a4a;
+}
+.warmyTourLink {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b86a3c;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+.warmyTourBtns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.warmyTourBtn {
+  border: 1px solid rgba(43, 42, 49, 0.18);
+  background: #fff;
+  color: #2b2a31;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.warmyTourBtn:hover { background: #f7f2e9; }
+.warmyTourBtnNext { background: #c97a4a; border-color: #c97a4a; color: #fff; }
+.warmyTourBtnNext:hover { background: #b86a3c; }
+.warmyTourBtnGo { background: #f8e3d5; border-color: #e2b493; color: #a4552f; }
+.warmyTourBtnGo:hover { background: #f3d6c3; }
+/* 引导文案里沿用 app.css 的真实图标尺寸（若 app.css 尚未加载，至少不塌） */
+.warmyTourCard .yinDaoTuBiao { display: inline-block; width: 1.15em; height: 1.15em; vertical-align: -0.22em; margin: 0 0.12em; color: #c97a4a; }
+.warmyTourCard .yinDaoTuBiao svg { width: 100%; height: 100%; display: block; }
+
+/* 亮色主题下的语言平铺 */
+.warmyAuthLangTile { background: #fff; color: #4a4750; border-color: rgba(43, 42, 49, 0.18); }
+.warmyAuthLangTile:hover { background: #f7f2e9; border-color: #d9b08d; }
+.warmyAuthLangTile.is-on { background: #f8e3d5; color: #a4552f; border-color: #c97a4a; }
+.warmyAuthLangTile.is-on::after { color: #b86a3c; }
+.warmyAuthLangPick { color: #6f6b76; }
+
+
+/* ══ R78 #22 首启/登录背景：六幕常驻 iframe（embed 模式隐藏 HUD） ══ */
+.warmyAuthSceneEmbed[hidden] { display: none; }
+.warmyAuthSceneEmbed iframe {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  border: 0; background: transparent; pointer-events: none;
+}
+
+/* ══ R78 #9 我的页：左半品牌居中、资料列居中、账号区不再像独立卡片 ══ */
+.woDing.woDingR68 { align-items: center; }
+.woBrandR68 {
+  flex: 0 0 46%; min-width: 260px;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 8px 0;
+}
+.woBrandR68 .pinPailogo {
+  width: min(46%, 240px); height: auto; aspect-ratio: 7 / 4;
+}
+.woR68Profile { align-items: center; text-align: center; }
+.woR68Profile .woMingHang { justify-content: center; }
+.woDingR68 .woR68Profile .woYouJianHang { width: auto; max-width: 280px; justify-content: center; }
+.woDingR68 .woR68Profile .woYouJianHang #pYouJian {
+  min-width: 180px; max-width: 260px; flex: 0 1 260px; text-align: center;
+}
+#warmyAuthMyCard {
+  background: transparent !important; border: none !important;
+  box-shadow: none !important; padding: 0 !important; border-radius: 0 !important;
+}
+@media (max-width: 980px) {
+  .woBrandR68 { flex-basis: 100%; min-width: 0; flex-direction: row; justify-content: center; gap: 16px; }
+  .woBrandR68 .pinPailogo { width: 96px; }
+}

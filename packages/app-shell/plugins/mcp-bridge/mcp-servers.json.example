@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "servers": {
+    "echo": {
+      "command": "node",
+      "args": ["./echo-server.mjs"],
+      "cwd": ".",
+      "env": {},
+      "timeoutMs": 15000,
+      "enabled": false,
+      "description": "Built-in demo MCP server shipped with this plugin. Flip enabled to true to see tools appear."
+    }
+  }
+}

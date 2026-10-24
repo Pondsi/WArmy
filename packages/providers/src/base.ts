@@ -32,7 +32,12 @@ export function guiFanYongLiang(
       totalTokens: shuZhi(raw?.total_tokens) || tiShiCi + wancheng,
       cacheHitTokens: mingZhong,
       cacheMissTokens: weiMingZhong || Math.max(0, tiShiCi - mingZhong),
-      source: mingZhong > 0 || weiMingZhong > 0 || xiangQing ? 'native' : tiShiCi ? 'estimated' : 'none',
+      /**
+       * `source` 的口径（第 44 轮 token 真实化）：**端点报出来的数字就是原生**，不能标成 `estimated`。
+       * 以前这里把"只有 prompt_tokens、没有缓存明细"标成估算 ⇒ 上层拿不到任何原生样本，
+       * 校准闭环（真实/估算 比值）永远不会启动。我们的猜测只在我们自己算的兜底里标 `estimated`。
+       */
+      source: tiShiCi || wancheng || mingZhong || weiMingZhong ? 'native' : 'none',
     };
   }
 
@@ -47,7 +52,7 @@ export function guiFanYongLiang(
       totalTokens: shuRu + huanCunChuangJian + huanCunDuQu + shuChu,
       cacheHitTokens: huanCunDuQu,
       cacheMissTokens: huanCunChuangJian + shuRu,
-      source: huanCunDuQu || huanCunChuangJian ? 'native' : shuRu ? 'estimated' : 'none',
+      source: shuRu || shuChu || huanCunDuQu || huanCunChuangJian ? 'native' : 'none',
     };
   }
 
@@ -60,7 +65,8 @@ export function guiFanYongLiang(
     totalTokens: tiShiCi + wancheng,
     cacheHitTokens: 0,
     cacheMissTokens: tiShiCi,
-    source: tiShiCi || wancheng ? 'estimated' : 'none',
+    /** Ollama 的 `prompt_eval_count` 是它**自己分词器数出来的**，是原生测量而非估算 ⇒ `native` */
+    source: tiShiCi || wancheng ? 'native' : 'none',
   };
 }
 

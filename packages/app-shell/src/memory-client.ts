@@ -9,6 +9,7 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { GongJuDiaoYong, GongJuGuiGe } from '@warmy/providers';
+import type { MemoryStore, JsonlXieRu, XieRuZhe, HuisuoChaxun, RetrieveRequest, AcpKongzhiXiaoxi } from '@warmy/contracts';
 
 export interface JiyiCangKeHuXuanXiang {
   nodePath?: string;
@@ -18,7 +19,14 @@ export interface JiyiCangKeHuXuanXiang {
   log?: (xiaoXi: string) => void;
 }
 
-export class JiyiCangKeHu {
+/** 子进程发来的消息：控制面（契约 AcpKongzhiXiaoxi，带 type）或某次调用的回包（带 id） */
+type ZiJinChengXiaoXi = (AcpKongzhiXiaoxi & { id?: undefined }) | { id: number; error?: string; [k: string]: unknown };
+
+/**
+ * 记忆库客户端 **implements 契约 `MemoryStore`**（v1.1）：签名改了编译器当场报错，
+ * 不会再出现"契约写一套、实现另一套、谁也不知道"的情况。
+ */
+export class JiyiCangKeHu implements MemoryStore {
   private Zhi: ChildProcess | null = null;
   private seq = 0;
   private ready = false;
@@ -74,12 +82,13 @@ export class JiyiCangKeHu {
       },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
-    this.Zhi.on('message', (m: any) => {
-      if (m?.type === 'ready') this.log('memory child ready');
+    this.Zhi.on('message', (m: ZiJinChengXiaoXi) => {
+      if (m && 'type' in m && m.type === 'ready') this.log('memory child ready');
+      if (!m || typeof m.id !== 'number') return;
       const p = this.pending.get(m.id);
       if (!p) return;
       this.pending.delete(m.id);
-      if (m.error) p.reject(new Error(m.error));
+      if (m.error) p.reject(new Error(String(m.error)));
       else p.resolve(m);
     });
     /**
@@ -107,8 +116,8 @@ export class JiyiCangKeHu {
     });
     await new Promise<void>((resolve, reject) => {
       const t = setTimeout(() => reject(new Error('memory service start timeout')), 10_000);
-      this.Zhi!.once('message', (m: any) => {
-        if (m?.type === 'ready') {
+      this.Zhi!.once('message', (m: ZiJinChengXiaoXi) => {
+        if (m && 'type' in m && m.type === 'ready') {
           clearTimeout(t);
           resolve();
         }
@@ -143,26 +152,12 @@ export class JiyiCangKeHu {
     });
   }
 
-  append(
-    record: {
-      id: string;
-      sessionId: string;
-      kind: string;
-      ti: string;
-      /**
-       * 角色（可选）。memory-os 会把它一起写进 JSONL（`...record`），
-       * 但 SQLite 投影 / `tail()` 查不到它 —— 所以重建时仍以 recordId 前缀为准（见 CHAT_RECORD_PREFIX），
-       * 这里落一份只是将来有"读 JSONL 的 IPC"时能直接用字段。
-       */
-      role?: 'user' | 'assistant';
-      /** 项目/群作用域（跨项目检索过滤用；不传则列空） */
-      groupId?: string;
-      /** 实体类型（chat / manual / system…；与 kind 正交） */
-      entityType?: string;
-      [k: string]: unknown;
-    },
-    Bi = 'duty'
-  ) {
+  /**
+   * 只追加写入（记录形状 = 契约 `JsonlXieRu`：公共头 + 任意附加字段原样进 JSONL）。
+   * role 等附加字段 memory-os 会一起写进 JSONL（`...record`），但 SQLite 投影 / `tail()` 查不到它
+   * —— 所以重建时仍以 recordId 前缀为准（见 CHAT_RECORD_PREFIX）。
+   */
+  append(record: JsonlXieRu & { ti: string; role?: 'user' | 'assistant' }, Bi: XieRuZhe = 'duty') {
     return this.call({ op: 'append', record, Bi });
   }
 
@@ -170,16 +165,21 @@ export class JiyiCangKeHu {
     return this.call({ op: 'tail', limit });
   }
 
+  /** 按会话分页的最近记录（重启恢复用：每个会话各取最近若干条，不许一个会话吃满整窗） */
+  tailPerSession(meiHuiHua = 120, huiHuaShang = 40) {
+    return this.call({ op: 'tail_per_session', meiHuiHua, huiHuaShang });
+  }
+
   recall(query: string, limit = 10) {
     return this.call({ op: 'recall', query, limit });
   }
 
   /** 带作用域的召回（权限先于相关性；scope 为空 = 不过滤） */
-  recallScoped(query: string, limit = 10, scope?: { sessionId?: string; groupId?: string; kind?: string; entityType?: string }) {
+  recallScoped(query: string, limit = 10, scope?: HuisuoChaxun['scope']) {
     return this.call({ op: 'recall', query, limit, scope });
   }
 
-  retrieve(anchor: { seq?: number; recordId?: string }, opts?: { huiTui?: 'exact' | 'nearby' | 'fuzzy'; window?: number }) {
+  retrieve(anchor: RetrieveRequest['anchor'], opts?: Pick<RetrieveRequest, 'huiTui' | 'window' | 'scope'>) {
     return this.call({ op: 'retrieve', anchor, opts });
   }
 
@@ -383,7 +383,11 @@ function sanitize(e: unknown): string {
 export async function yunxingJiyiCangGongju(
   client: JiyiCangKeHu | null,
   call: GongJuDiaoYong,
-  opts: { maxChars?: number } = {}
+  /**
+   * `scope`：宿主给的作用域（不变量 #9「权限过滤先于相关性」）。给了 ⇒ recall 走 recallScoped、
+   * retrieve 也只认作用域内的记录；不给 = 全局（单聊/内部项目只有你一个人，跨会话记得是承诺的一部分）。
+   */
+  opts: { maxChars?: number; scope?: HuisuoChaxun['scope'] } = {}
 ): Promise<JiyiCangGongjuJieGuo> {
   const ming = call?.function?.name || '';
   const args = jieXiCanShu(call?.function?.arguments);
@@ -405,7 +409,8 @@ export async function yunxingJiyiCangGongju(
       meta.queryChars = query.length;
       if (!query) return fail('recall 需要 query 参数（检索串），例：recall("值班者状态机")。', 'bad-args');
       const limit = qianZhiZhengShu(args['limit'], 1, JIYICANG_GONGJU_ZUIDA_KAPIAN, 5);
-      const res = await client.recall(query, limit);
+      const zuoYong = opts.scope && Object.values(opts.scope).some(Boolean) ? opts.scope : undefined;
+      const res = zuoYong ? await client.recallScoped(query, limit, zuoYong) : await client.recall(query, limit);
       const cards: Array<{ seq?: number; recordId?: string; snippet?: string; score?: number; source?: string; sources?: string[] }> =
         Array.isArray(res?.cards) ? res.cards : [];
       meta.cards = cards.length;
@@ -447,11 +452,13 @@ export async function yunxingJiyiCangGongju(
       const want = qianZhiZhengShu(args['maxChars'], 1, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU, shangXian);
       const limit = Math.min(want, shangXian, JIYICANG_GONGJU_ZUIDA_JIANSUO_ZISHU);
       meta.anchor = { seq, recordId, offset };
-      const res = await client.retrieve(recordId ? { recordId } : { seq: seq! });
+      const zuoYongR = opts.scope && Object.values(opts.scope).some(Boolean) ? opts.scope : undefined;
+      const res = await client.retrieve(recordId ? { recordId } : { seq: seq! }, zuoYongR ? { scope: zuoYongR } : undefined);
       const out = res?.result ?? res;
       const raw = typeof out?.raw === 'string' ? out.raw : '';
       if (!raw) {
-        const weiMingZhong = `retrieve(${recordId ? `recordId="${recordId}"` : `seq=${seq}`}) 没找到记录。可改用 recall("关键词") 按语义检索，或用指针里的 seq 范围换个序号。`;
+        const weiMingZhong = `retrieve(${recordId ? `recordId="${recordId}"` : `seq=${seq}`}) 没找到记录`
+          + `${zuoYongR ? '（或者它不在本会话可见的范围内：这里只能取本会话自己的记录）' : ''}。可改用 recall("关键词") 按语义检索，或用指针里的 seq 范围换个序号。`;
         return fail(weiMingZhong, 'not-found');
       }
       meta.hitLevel = typeof out?.hitLevel === 'string' ? out.hitLevel : undefined;

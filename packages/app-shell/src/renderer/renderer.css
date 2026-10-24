@@ -16,6 +16,7 @@
   --radius: 8px;
   --radius-sm: 6px;
   --accent: #A87654;
+  --accent-ink: #fff;
   --danger: #fa5151;
   --focus: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
   font-size: var(--fs-md);
@@ -25,9 +26,9 @@
 :root, [data-theme="light"] {
   --rail-bg: #ebebeb;
   --rail-active: var(--accent);
-  --rail-fg: #666;
-  --rail-fg-hover: #111;
-  --rail-active-fg: #fff;
+  --rail-fg: var(--ink-dim);
+  --rail-fg-hover: var(--ink);
+  --rail-active-fg: var(--accent-ink, #fff);
   --list-bg: #f7f7f7;
   --chat-bg: #ededed;
   --panel-bg: #f5f5f5;
@@ -37,7 +38,7 @@
   --line: #e5e5e5;
   --input-bg: #ffffff;
   --input-border: #e5e5e5;
-  --me-bubble: #95ec69;
+  --me-bubble: var(--accent);
   --them-bubble: #ffffff;
   --queue-bg: #fff7e6;
   --queue-border: #f0e0b0;
@@ -55,9 +56,9 @@
 [data-theme="dark"] {
   --rail-bg: #1e1e1e;
   --rail-active: var(--accent);
-  --rail-fg: #888;
-  --rail-fg-hover: #eee;
-  --rail-active-fg: #fff;
+  --rail-fg: var(--ink-dim);
+  --rail-fg-hover: var(--ink);
+  --rail-active-fg: var(--accent-ink, #fff);
   --list-bg: #252526;
   --chat-bg: #1e1e1e;
   --panel-bg: #252526;
@@ -67,7 +68,7 @@
   --line: #3a3a3a;
   --input-bg: #333;
   --input-border: #444;
-  --me-bubble: #2f6b3a;
+  --me-bubble: var(--accent);
   --them-bubble: #2d2d2d;
   --queue-bg: #3a3018;
   --queue-border: #5a4a20;
@@ -189,7 +190,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .biaoTiLanDongZuoJi button:hover { background: var(--hover); }
 .biaoTiLanDongZuoJi button:active { filter: brightness(0.92); }
-.biaoTiLanDongZuoJi button.biaoTiLanJiHuo { background: var(--hover); color: var(--accent); }
+.biaoTiLanDongZuoJi button.biaoTiLanJiHuo { background: transparent; color: var(--accent); }
+.biaoTiLansvg[fill="none"] { fill: none; }
 .biaoTiLanDongZuoJi #anNiuuiRefresh {
   margin-right: 8px;
 }
@@ -440,6 +442,12 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
   color: var(--muted); background: color-mix(in srgb, var(--card) 70%, transparent);
 }
 .siKaoKuai summary { cursor: pointer; user-select: none; }
+/* 第 48 轮：「执行过程」里的中间回复（模型发起工具调用时写给用户的话）—— 正文观感，不是思考的灰字 */
+.siKaoKuai .zhongJianHuiFu {
+  margin: 8px 0 6px; padding: 2px 0 2px 10px;
+  border: 0; border-left: 3px solid var(--accent); border-radius: 0;
+  background: transparent; color: var(--ink); font-size: var(--fs-md); line-height: 1.5;
+}
 .siKaoKuai pre {
   margin: 6px 0 4px; white-space: pre-wrap; word-break: break-word;
   /* 第 35 轮 项 14：思考/执行内容展开后**不限高、不出滚动条**（完整显示）。
@@ -1389,7 +1397,7 @@ body.liaoTianChuangKou #appTi:not(.yinCangLieBiao) {
   left: 0; right: 0; bottom: 52px;
   height: 160px;
   pointer-events: none;
-  background: url('./icons/logo-color.svg') no-repeat center bottom / 168px auto;
+  background: url('./icons/logo-color.svg') no-repeat center bottom / min(168px, calc(100% - 24px)) auto;
   opacity: 0.26;
 }
 #lieBiaoLan::before {
@@ -2498,3 +2506,369 @@ html { font-weight: var(--fw-ui, 400); }
   #mianBanJiHuaKuai { max-height: 320px; }
   #mianBanShouQuanKuai { max-height: 260px; }
 }
+
+/* r38-zhongDuanBaoZhi：中断保留卡（重启后把上一轮的半成品原样贴回来） */
+.zhongDuanBaoZhi { border:1px solid var(--line,#333); border-left:3px solid #d9822b; border-radius:10px; padding:10px 12px; background:var(--card,#1d1d1f); max-width:760px; }
+.zhongDuanBaoZhiBiao { font-size:12px; opacity:.75; margin-bottom:6px; }
+.zhongDuanBaoZhiZhengWen { margin-top:6px; white-space:pre-wrap; word-break:break-word; font-size:13px; }
+.zhongDuanBaoZhiKuai .xingDongKuai { margin-top:8px; }
+
+/* ── 第 41 轮 ─────────────────────────────────────────────────────────── */
+/* 模型额度弹窗：节点是直接挂到 <body> 的，以前**没有任何定位样式** ⇒ 被
+   z-index:12000 的遮罩整块盖住，用户只看到黑罩、看不到窗（真事故）。
+   这里给它自己的层：居中、可滚、比遮罩高 1 级。 */
+.shouDongMoXingTan {
+  position: fixed;
+  z-index: 12001;
+  left: 50%;
+  top: calc(50% + 20px);
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 40px));
+  max-height: min(78vh, 760px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #e5e5e5);
+  background: var(--panel-bg, #ffffff);
+  color: var(--ink, #191919);
+  box-shadow: var(--shadow-md, 0 18px 60px rgba(0, 0, 0, 0.28));
+}
+
+/* 授权卡的「撤销」小按钮：文字以前不是居中对齐（行高/内边距不匹配），
+   统一成居中的内联 flex，边框盒不再歪。 */
+.shouQuanCheXiaoXiao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+  min-height: 22px;
+  box-sizing: border-box;
+}
+
+/* 最近删除（设置底部，默认折叠） */
+#laJiQu > summary { list-style: none; }
+#laJiQu > summary::-webkit-details-marker { display: none; }
+#laJiQu > summary::before { content: '▸'; display: inline-block; width: 14px; transition: transform .15s; }
+#laJiQu[open] > summary::before { transform: rotate(90deg); }
+.laJiHang .laJiZhai { max-width: 100%; }
+/* 弹窗里的次级按钮：.anNiuXiao 默认按**浅色背景**配色（深字），
+   放进深色弹窗后文字和底色几乎一样 ⇒ 看起来像"空按钮"。这里给深底浅字。 */
+.shouDongMoXingTan .anNiuXiao {
+  color: var(--ink, #191919);
+  border: 1px solid var(--line, #e5e5e5);
+  background: var(--card, #ffffff);
+}
+.shouDongMoXingTan .anNiuXiao:hover { background: var(--hover, #ececec); }
+
+/* 第 44 轮（用户项 1「更紧凑」+ 项 2「精确读数」+ 必填才让提交）：模型额度窗。
+   app.css 与 renderer.css 两份都要有 —— renderer.css 后加载，只改一份会被覆盖回去。 */
+.moXingYuEDan .mqBiao { font-weight: 600; margin-bottom: 4px; }
+.moXingYuEDan .mqLai { margin-bottom: 6px; }
+.moXingYuEDan .mqHang { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 6px 0; }
+.moXingYuEDan .mqGe { margin: 0; min-width: 0; }
+.moXingYuEDan .mqGe > label { display: block; margin-bottom: 2px; }
+.moXingYuEDan .mqChang { margin: 6px 0; }
+.moXingYuEDan .mqShu { width: 88px; }
+.moXingYuEDan .mqXuan { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.moXingYuEDan .mqJingQue { font-size: 11px; color: var(--ink-3, #8a8a8a); margin-top: 2px; white-space: nowrap; }
+.moXingYuEDan .mqJingQue.mqPian { color: var(--warn, #b26a00); }
+.moXingYuEDan .mqBiTian { font-style: normal; color: var(--danger, #d10000); margin-left: 3px; }
+.moXingYuEDan .mqGuiGe { margin-top: 6px; font-size: 11px; line-height: 1.45; }
+.moXingYuEDan button:disabled,
+.moXingYuEDan .anNiuZhuYao.mqJin { opacity: .45; cursor: not-allowed; }
+
+/* ===== 第 44 轮 用户项 3：授权卡的按钮对齐（与 app.css 里同名那段**一字不差**，本文件后加载，漏改就等于白改） ===== */
+#shouQuanKaiGuan { gap: 6px; }
+#shouQuanKaiGuan > span:first-of-type { flex: 1 1 auto; }
+.shouQuanCheXiaoXiao,
+.shouQuanTianJiaXiao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 24px;
+  padding: 2px 8px;
+  margin: 0;
+  font-size: var(--fs-xs, 12px);
+  line-height: 1.2;
+}
+.shouQuanCheXiaoXiao { margin-left: auto; }
+.aiqOpts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: stretch; }
+.aiqOpts > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 30px;
+  line-height: 1.25;
+}
+.piZhunKa .aiqOpts > button { min-height: 30px; }
+
+.siKaoKuai, .xingDongKuai {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent); border-radius: 8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 96%, #fff 4%) 0%, var(--card) 55%, color-mix(in srgb, var(--card) 92%, #000 8%) 100%);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, #fff 72%, transparent), inset 0 -2px 0 color-mix(in srgb, #000 20%, transparent), 0 3px 10px color-mix(in srgb, #000 18%, transparent), 0 1px 2px color-mix(in srgb, #000 14%, transparent);
+  overflow-wrap: anywhere;
+}
+.siKaoKuai > summary, .xingDongKuai > summary {
+  display: flex; align-items: center; box-sizing: border-box; width: 100%;
+  min-height: 26px; padding: 3px 0; margin: 2px 0;
+  border: 0; background: transparent; box-shadow: none;
+  color: var(--muted); font-size: var(--fs-xs);
+}
+.xingDongXiang { padding: 4px 8px 6px 28px; margin: 0 0 0 10px; border-left: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 0; background: transparent; box-shadow: none; }
+.xingDongZu { border: none; box-shadow: none; background: transparent; }
+
+
+
+/* ===== R63：网络与主机卡（主机模式 / 主机服务商） =====
+   说明：组网基础样式仍由 app.css 提供；这里只加 R63 新增的折叠区、列表与忙碌动画。
+   预览构建默认不复制 renderer.css，验收脚本会显式把它放进预览目录（产品运行时 index.html 两张表都加载）。 */
+.wangLuoHostDetails,
+.wangLuoProviderDetails {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.wangLuoHostDetails > summary,
+.wangLuoProviderDetails > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.wangLuoHostDetails > summary::-webkit-details-marker,
+.wangLuoProviderDetails > summary::-webkit-details-marker { display: none; }
+.wangLuoHostDetails > summary::before,
+.wangLuoProviderDetails > summary::before {
+  content: '▸';
+  color: var(--muted);
+  transition: transform .15s ease;
+}
+.wangLuoHostDetails[open] > summary::before,
+.wangLuoProviderDetails[open] > summary::before { transform: rotate(90deg); }
+.wangLuoHostDetails > summary:hover,
+.wangLuoProviderDetails > summary:hover { background: var(--hover); }
+.wangLuoFoldTitle { font-weight: 600; }
+.wangLuoFoldSummary { margin-left: auto; font-weight: 400; font-size: var(--fs-xs); }
+.wangLuoHostBody,
+.wangLuoProviderBody { padding: 8px 2px 2px; }
+.wangLuoHostHint,
+.wangLuoProviderHint { margin: 0 0 8px; }
+.wangLuoHostEnable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 2px;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.wangLuoHostNote { margin: 2px 0 10px; }
+.wangLuoHostToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.wangLuoHostDetectBtn { position: relative; min-width: 156px; }
+.wangLuoHostDetectBtn.isBusy { padding-left: 30px; cursor: progress; opacity: .9; }
+.wangLuoHostDetectBtn.isBusy::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  margin-top: -7px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: wangLuoHostSpin .7s linear infinite;
+}
+@keyframes wangLuoHostSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .wangLuoHostDetectBtn.isBusy::before { animation-duration: 1.6s; }
+}
+.wangLuoHostDetectResult { margin-top: 10px; }
+.wangLuoHostDetectGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 16px;
+}
+.wangLuoHostDetectRow {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.wangLuoHostDetectK { color: var(--muted); flex: 0 0 auto; }
+.wangLuoHostDetectV {
+  color: var(--ink);
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.wangLuoHostListHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 12px 0 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.wangLuoHostCount { margin-left: auto; font-weight: 400; }
+.wangLuoHostList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 356px;
+  overflow-y: auto;
+}
+.wangLuoHostHang {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  box-sizing: border-box;
+}
+.wangLuoHostAddr {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+.wangLuoHostMeta {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.wangLuoHostMeta.isBad {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+}
+.wangLuoHostAddRow { display: flex; gap: 8px; margin-top: 8px; }
+.wangLuoHostAddRow input { flex: 1; min-width: 0; }
+.wangLuoHostMsg {
+  min-height: 16px;
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.wangLuoHostMsg[data-kind="bad"] { color: var(--danger); }
+.wangLuoHostMsg[data-kind="warn"] { color: var(--accent); }
+.wangLuoHostMsg[data-kind="ok"] { color: var(--accent); }
+.wangLuoHostPortHint { margin-top: 6px; }
+
+/* 主机服务商：固定 7 行可见（46px × 7 + 2px 边框），第 8 条起滚动。 */
+.wangLuoProviderList {
+  --net-provider-row: 46px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(var(--net-provider-row) * 7 + 2px);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  background: var(--card);
+}
+.wangLuoProviderHang {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  height: var(--net-provider-row);
+  min-height: var(--net-provider-row);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  box-sizing: border-box;
+}
+.wangLuoProviderHang:last-child { border-bottom: none; }
+.wangLuoProviderMain { min-width: 0; }
+.wangLuoProviderName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.wangLuoProviderAddr {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+.wangLuoCredBadge {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.wangLuoCredBadge[data-state="stored"] {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.wangLuoCredBadge[data-state="pending"] {
+  color: var(--accent);
+  border-style: dashed;
+}
+.wangLuoProviderActions { display: flex; gap: 4px; }
+.wangLuoProviderForm {
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+}
+.wangLuoProviderFormTitle { margin-bottom: 6px; font-weight: 600; }
+.wangLuoProviderField {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+  font-size: var(--fs-sm);
+}
+.wangLuoProviderField input { width: 100%; box-sizing: border-box; }
+.wangLuoProviderFormActions { display: flex; gap: 8px; margin-top: 8px; }
+.wangLuoProviderAddRow { margin-top: 10px; }
+.wangLuoProviderAddressHint { margin-top: 6px; }
+@media (max-width: 720px) {
+  .wangLuoHostDetectGrid { grid-template-columns: minmax(0, 1fr); }
+  .wangLuoProviderHang { grid-template-columns: minmax(0, 1fr) auto; }
+  .wangLuoProviderActions { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+/* 第 67 轮：我的页新布局（logo 左、头像右、邮箱左列） */
+.woDing.woDingR67 { align-items: flex-start; }
+.woDing.woDingR67 > .woLogoR67 { align-self: flex-start; }
+.woR67Main { flex: 1; min-width: 320px; display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; flex-wrap: wrap; }
+.woR67Left { flex: 1; min-width: 260px; max-width: 620px; display: flex; flex-direction: column; gap: 12px; }
+.woR67Right { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; min-width: 150px; padding-top: 2px; }
+.woR67Right .woMingHang { margin-top: 8px; }
+.woYouJianHang { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.woYouJianHang #pYouJian { min-width: 220px; flex: 1; max-width: 420px; }
+.woMingPianBtn { display: inline-flex; align-items: center; justify-content: center; padding: 7px 9px; }

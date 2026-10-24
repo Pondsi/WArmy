@@ -2,7 +2,7 @@
  * Electron 主进程 — 零原生模块
  * 注意：Windows 中文路径下 fork 子进程可能乱码，memory ipc 先拷到 userData（ASCII）
  */
-import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut, screen, desktopCapturer, shell, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut, screen, desktopCapturer, shell, clipboard, safeStorage } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -26,6 +26,8 @@ import {
   gongYingZhiChiGongJu,
   neiRongWenBen,
   moXingNengLi,
+  baoZhuangXianLiu,
+  sheProviderJiXieGou,
   gouJianDangWeiAnShe,
   pinJieUrl,
   type LiaoTianXiaoXi,
@@ -37,16 +39,51 @@ import {
   type GongJuDiaoYong as GongJuDiaoYongTi,
 } from '@warmy/providers';
 import { CcrGateway } from '@warmy/ccr-compressor';
-import { KnowledgeBase } from '@warmy/knowledge-base';
+import { KnowledgeBase, ZhishiCang, ZHISHI_CENG, type ZhishiCeng } from '@warmy/knowledge-base';
+import { paiFaZiYuanJian, panDuanPaiFa } from './pai-fa-pan-ding.js';
+import { panDuanTingZhi } from './chang-wen-ting-zhi.js';
+import { kongKu as banKuKong, shouTiao as banShouTiao, daiHuiZhaiYao } from './ban-ji-dai-hui.js';
+import type { BanDaiHuiKu } from './ban-ji-dai-hui.js';
+import { zaoXinFeng, yanZheng, shouXin, xinZhuangTai, jiaoHuanRenZhiYinXiang } from './niuma-tonghu.js';
 import { EtaZhangBen, EtaLinShi, shuoShiChang, renWuQianMing, jiaEtaMiao, xingWeiGui, XING_WEI_MOREN, CHAO_SHI_LIAN_XU_XIAN, PAN_MO_XING_SHANG_XIAN, jieXiKaPanDuan, shiLiaoTianMoXing, type EtaYuCe, type XingWei } from './eta-forecast.js';
 import { JianChaDianCang } from './checkpoint.js';
+import { yaoQiuDengDaiMiaoShu, yuanWenDengDaiCiShu } from './shi-chang.js';
+import { MODEL_GUIGE, chaMoXingGuiGe, danWeiBeiShu, zhanShiDanWei, panZeZhanShi } from './mo-xing-gui-ge.js';
+/** token 单一计量口径（保守上界 + 供应商回读校准）：预算、看板、窗口闸都必须走这里，不许再各写一份系数 */
+import { guJiToken, guJiTokenXiaoZhun, xinJiXiaoZhun, tokenDaoZiFu, tokenJian, chaXiaoZhun, zhongSuanXiaoZhun, PING_JUN_QIAN, type TokenXiaoZhun, type GuanCe } from './token-jiliang.js';
+import { jiYaoZhuRu, jiYaoFenE } from './zhai-yao-he-bing.js';
+import { jieGuoShouWei, readFileXuDu, type DuZheShouKou } from './jie-guo-shou-kou.js';
+/** 类型契约（v1.1）：实现处只 import、不再另写同名类型（门禁 verify-r48-qiyue 逐个核对） */
+import type { XiaoxiJilu } from '@warmy/contracts';
+import { zaoHeiBanCun, zaoHeShiChanWu, zaoCunZhengLiuQuanWen } from './hei-ban-cun.js';
+import { fenDangJieWei, dianMingGongJu } from './gong-ju-fen-dang.js';
+import { gongJuZhiWen as suanGongJuZhiWen } from './gong-ju-zhi-wen.js';
+/** 错误分类表的唯一实现（契约 CuowuLeibie/GuileiCuowu）：收缩重试、异常卡片、审计都按同一张表判 */
+import { fenLeiCuoWu, shiShangXiaWenChaoXian, LEI_BIE_MING } from './cuowu-fenlei.js';
+/** 归档证据锚点的唯一构造口径（宁缺不假）：纯函数，门禁直接跑真值表，不用去主进程里搜字面 */
+import { maidianCongRiZhi, maidianCongWaiBu, maidianWeiFan, maidianZhenBi, type GuiDangMaidian } from './guiDang-maidian.js';
+/** 产物审计（“已写入 X”必须真有 X）：纯函数判据，门禁可直接测 */
+import { chanWuShenJi, chanWuKouTouTiShi, shengChengDeWenJian } from './chanwu-shenji.js';
+/** 供应商风控拒绝判定（纯函数）：网关那句"high risk"不是回答，要走降级链，不许写进历史 */
+import { panFengKongJuJue, fengKongJuJueTiShi } from './fengKong-ju-jue.js';
+import { minGanLeiMing } from './yinxiang-guolv.js';
+import { jiageQingQiu, fenPeiYuSuan, JIANG_JI, tuChengBen, keYiFenCi, TU_ZHANG_SHANG_XIAN, TU_MEI_ZHANG_ZI_JIE, TU_DATA_URL_ZI_SHU, TU_JIANG_JI_BIAN_CHANG, ZHI_XING_YU_LIANG, SHI_TU_ZUI_XIAO_TOKENS, DAI_RU_CENG_ZUI_DA_ZI, ZHANG_BEN_ZUI_DA_ZI, BU_KE_YA_SUO, peizhiYuSuan, rangChuYuLiang, SHU_CHU_LIU_WEI_DI_BAO, WU_YANG_BEN_BEI_JIAN, congMingZiCaiChuangKou, MO_XING_CHUANG_KOU_DOU_DI, type JiangJiCao } from './yuSuan-jiage.js';
+import { BENG_DAO, cengOf, guiHuaYiLun, YA_SUO_BAN, YA_SUO_ZHEN, type YaSuoDuan } from './yaSuo-fenCeng.js';
+/** 长文副本判定（纯函数）：`write_file` 与 `copy_file` 共用同一套算法与放行条件，不留两份实现 */
+import { jingZiShu, chongHeLv, shiChangWenFuBen, fuBenBoHuiWen, type FuBenYueDing } from './chang-wen-fu-zhi.js';
+import { chuangjianXinTiao, XinTiao, type OsShouShiGou } from './xin-tiao.js';
 import { ShenJiRiZhi } from './audit.js';
-import { DAO_MOREN } from './dao-default.js';
+import { quMoRen, shiChuChangGao, MO_REN_YU_YAN_KE, YONG_HU_MING_MO_REN, shiMoRenYongHuMing } from './mo-ren-yu-yan/index.js';
+import { NENG_LI_BIAO, panDingCeng, paiShengDuiWaiGaiLao, heBingNengLi, jianChaXinNengLi } from './zhi-shi-fen-ceng.js';
+import { guiYiPanDing, jianChaYouZhengJu, chenJiuFen, shiHuHan } from './zhi-shi-ke-kao.js';
+import { guiHuaZhengLi } from './zhi-shi-zheng-li.js';
+import { jieXiFaShengShiJian, jieXiChaXunChuang, mingZhongZhou, liangShiJianMing, shiJianYiChang } from './shi-jian-shuang.js';
+import { TI_SHI_SHANG_XIAN, TI_SHI_ZONG_HE, chaoShangXian, dengJiaZiShu, guiHuaYaSuo, jinCouHua, shangXianOf, yiChuGuiXiang } from './ti-shi-shang-xian.js';
 import { FIND_SKILL_MD } from './skills-default.js';
 import { CHANPIN_MENJIN, ZIZHU_GAIZAO_SKILL } from './builtin-rules.js';
 import { AnQuanMiyaoCang, anQuanCunChu } from './secure-keys.js';
 import * as credentialModule from './credential.js';
-import { ZhiShiGuiDangQi, QingLiGuanLiQi, congGuiDangTiQuZhiShi, heBingYongHuPianHao, tiQuJieGouHuaZhaiYao } from './archive-cleanup.js';
+import { ZhiShiGuiDangQi, QingLiGuanLiQi, congGuiDangTiQuZhiShi, tiQuJieGouHuaZhaiYao, GONG_YING_SHANG_RUAN_MEN_JIN, piPeiRuanMenJin } from './archive-cleanup.js';
 import { type JueseMoxingPeizhi } from './model-roles.js';
 import { xietiaoQunXiaoxi, buildStatusCard } from './orchestrator.js';
 import { projectMemoryForContext, readProjectMemory, writeProjectMemory } from './project-memory.js';
@@ -109,6 +146,7 @@ import {
 } from './container-probe.js';
 import { lieYunXingShiLi, yunXingShiLiDongZuo, daKaiYunXingYingYong } from './container-instances.js';
 import { ShenFenCang, type ChengYuanMingceCang } from './identity-store.js';
+import { AuthService } from './auth-service.js';
 import {
   CONTACT_CARD_I18N,
   CONTACT_FREEZE_NOTE,
@@ -142,9 +180,9 @@ import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomi
  * **不是**落到本机设置里（产品主：记录文件的改动是无限牛马的功能，不是本机的功能）。
  */
 import { setFileAccessSink, withFileAccessScope, dangqianWenjianFangwenZuoyongyu } from './helper-tool.js';
-import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs, yingSheYongHuWenJianJia, sheZhiXiTongWenJianJia, resolveInside, jieXiGongJuCanShu, quLuJingCanShu, sheZhiYiCiZhiDuGen, qingKongYiCiZhiDuGen, shiZhuiJia } from './work-tools.js';
+import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs, yingSheYongHuWenJianJia, sheZhiXiTongWenJianJia, resolveInside, jieXiGongJuCanShu, quLuJingCanShu, sheZhiYiCiZhiDuGen, qingKongYiCiZhiDuGen, shiZhuiJia, type WorkToolResult } from './work-tools.js';
 import {
-  anquanJianCeMingLing, anquanJianCeJiNeng, panDuanShouQuan, yunXingMingLing,
+  anquanJianCeMingLing, anquanJianCeJiNeng, panDuanShouQuan, panDuanMingLingShouQuan, yunXingMingLing,
   duDocx, duPptx, zhuaQuWangZhi, xiaZaiWenJian,
   type AnquanDang,
 } from './agent-tools.js';
@@ -152,12 +190,21 @@ import { jueCeMoXing, jieMoXingMing, type MoXingJueCeShuRu } from './model-pick.
 import { taoTtsChatBody, jieXiTtsChatResponse, taoAsrChatBody, jieXiAsrChatResponse, yingGaiHuanChatShi, guiFanAsrGeShi, jieShouGeShi, yanShouGeShi, jianBieGeShi } from '@warmy/providers';
 import { daKaiZhiNengPeiZhi } from './smart-config.js';
 import { tiQuWenDang } from './doc-extract.js';
+import {
+  nmShiTuKai, nmDuWenJian, nmShiTuBaoCun, nmShiTuLingCunWei, nmShiTuSheZhi,
+  nmShiTuLieBiao, nmShiTuQiYong, nmShiTuQuanBuGuanBi, nmSheZhiZhuChuangKuang,
+  nmJieRuZhuChuang, nmZhuChuangXiFu, nmShiTuQuZiJie,
+} from './nm-viewer-win.js';
 import { JsonlSuo } from '@warmy/memory-os/lock';
 import { saoMiaoJiNeng, duSkillMuLu, zhaiYao, zhengWen, jiNengDaFen, fenLanJiNeng, jiNengSuoYin, souSuoJiNeng, qingKongJiNengSuoYin, qingKongYiLaiManCun, chaYiLaiQueShao, jieXiYiLai, queShaoShuoMing } from './skill-md.js';
 import { jiaMiSheJiao, jieMiSheJiao, jiaMiWenBen, jieMiWenBen, type MiMaBaoHuQi } from './cred-vault.js';
+import { chuangJuJueZhang, huiBaoShouQuanJu, huiBaoYongHuJu } from './ju-jue-zhang.js';
 import { chuangJianSheJiao, SHE_JIAO_PING_TAI, type SheJiaoAdapter, type SheJiaoXiaoXi, type SheJiaoPingZheng } from './she-jiao-adapter.js';
 import { souSuo, zhuaQuWenZhang, geShiYanJiu, geShiZhaiLu } from './research-tools.js';
 import { jiLuMenJin, duMenJinLiShi, menJinQuShi } from './gate-archive.js';
+import { TrashStore, jieZhiZhaiYao, shiTrashKind, type TrashKind } from './trash-store.js';
+import { yingMenJinQingDan, yingMenJinTiShi, jianChaRuanMenJin, panDuanRuanGai } from './gate-policy.js';
+import { xiaCiCron, jieXiCron, miaoShuCron } from './cron-lite.js';
 import { daBaoNm, chaiBaoNm, duXinFeng } from './nm-wen-jian.js';
 import { XiaoDiDengJiBu, xiaoDiToolSpecs, isXiaoDiTool, type XiaoDiJiLu } from './subagents.js';
 import { JieDianMingCe, TongbuZongxian, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
@@ -235,6 +282,7 @@ import {
   chuShiHuaBenDiYuYin, zhuangTaiBenDiYuYin, anZhuangBenDiYuYin, shanChuBenDiYuYin,
   qiYongBenDiYuYin, benDiShiBie, benDiHeCheng, BEN_DI_QING_DAN,
 } from './bendi-yuyin.js';
+import { yinPinZhuanWav } from './yin-pin-wav.js';
 import crypto from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -461,8 +509,134 @@ function huiFuJieMianDuiLie(): Record<string, unknown> {
 }
 let board: KanbanCang | null = null;
 const ccr = new CcrGateway(4000);
-let knowledge: KnowledgeBase | null = null;
+let knowledge: ZhishiCang | null = null;
 let checkpoints: JianChaDianCang | null = null;
+/**
+ * 第 67 轮 项 13：**回档的文件日志**。
+ * 工作区有自己的目录快照；工作区外（桌面/文档/下载等）由这里在工具真正写盘前保存原文件。
+ * 只记录“工具执行期间”的写入，设置/审计等本机数据不进来。
+ */
+const huiDangMuLuBySession = new Map<string, string>();
+let huiDangMuLuDangQian = '';
+let huiDangKai = false;
+let huiDangZhengZaiBeiFen = false;
+const huiDangYiJingJiLu = new Set<string>();
+const fsYuan = {
+  writeFileSync: fs.writeFileSync.bind(fs),
+  appendFileSync: fs.appendFileSync.bind(fs),
+  copyFileSync: fs.copyFileSync.bind(fs),
+  renameSync: fs.renameSync.bind(fs),
+  unlinkSync: fs.unlinkSync.bind(fs),
+  rmSync: fs.rmSync.bind(fs),
+};
+function huiDangLuJing(abs: string): string {
+  return crypto.createHash('sha256').update(path.resolve(String(abs))).digest('hex').slice(0, 32);
+}
+function huiDangBeiFen(absRaw: unknown): void {
+  if (!huiDangKai || !huiDangMuLuDangQian || huiDangZhengZaiBeiFen) return;
+  try {
+    const abs = path.resolve(String(absRaw || ''));
+    if (!abs || abs.startsWith(huiDangMuLuDangQian)) return;
+    // 应用自己的设置/记忆/缓存属于回档要保护的对象，不跟着工具写盘一起回退。
+    const userData = app.getPath('userData');
+    if (abs.startsWith(path.join(userData, 'checkpoints'))) return;
+    if (abs.startsWith(path.join(userData, 'audit'))) return;
+    if (abs.startsWith(path.join(userData, 'memory'))) return;
+    if (abs.startsWith(path.join(userData, 'archive'))) return;
+    if (huiDangYiJingJiLu.has(abs)) return;
+    huiDangYiJingJiLu.add(abs);
+    huiDangZhengZaiBeiFen = true;
+    const dir = path.join(huiDangMuLuDangQian, 'files');
+    fs.mkdirSync(dir, { recursive: true });
+    const key = huiDangLuJing(abs);
+    const backup = path.join(dir, key);
+    const existed = fs.existsSync(abs) && fs.statSync(abs).isFile();
+    if (existed) fsYuan.copyFileSync(abs, backup);
+    fsYuan.appendFileSync(path.join(huiDangMuLuDangQian, 'index.jsonl'),
+      JSON.stringify({ abs, existed, backup: existed ? path.relative(huiDangMuLuDangQian, backup) : '', ts: Date.now() }) + '\n', 'utf8');
+  } catch { /* 备份失败不能让工具本身失败 */ }
+  finally { huiDangZhengZaiBeiFen = false; }
+}
+function huiDangKaiShi(sid: string): void {
+  const k = String(sid || '');
+  const dir = huiDangMuLuBySession.get(k) || '';
+  huiDangMuLuDangQian = dir;
+  huiDangKai = !!dir;
+  huiDangYiJingJiLu.clear();
+}
+function huiDangJieShu(): void {
+  huiDangKai = false;
+  huiDangMuLuDangQian = '';
+}
+/** 同步执行一次会写盘的工具调用，并把它写到的每个文件先留一份原件 */
+function daiHuiDang<T>(sid: string, fn: () => T): T {
+  huiDangKaiShi(sid);
+  try { return fn(); } finally { huiDangJieShu(); }
+}
+/** 给回档点建立文件日志目录（工作区外文件的原件放这里） */
+function huiDangKaiDian(sid: string, cpDir: string): void {
+  const k = String(sid || '');
+  if (!k || !cpDir) return;
+  const dir = path.join(app.getPath('userData'), 'checkpoints', cpDir, 'file-journal');
+  try { fs.mkdirSync(path.join(dir, 'files'), { recursive: true }); } catch { /* noop */ }
+  huiDangMuLuBySession.set(k, dir);
+  try { audit?.log('checkpoint.journal-ready', { sessionId: k, dir }); } catch { /* noop */ }
+}
+/** 回档时按日志还原工作区外文件：原来有 ⇒ 覆盖回原件；原来无 ⇒ 删掉新建的文件 */
+function huiDangHuiFu(sid: string, cpDir?: string): { restored: number; removed: number; failed: number } {
+  const k = String(sid || '');
+  const dir = cpDir
+    ? path.join(app.getPath('userData'), 'checkpoints', cpDir, 'file-journal')
+    : (huiDangMuLuBySession.get(k) || '');
+  let restored = 0, removed = 0, failed = 0;
+  if (!dir) return { restored, removed, failed };
+  try {
+    const idx = path.join(dir, 'index.jsonl');
+    if (!fs.existsSync(idx)) return { restored, removed, failed };
+    const seen = new Set<string>();
+    for (const line of fs.readFileSync(idx, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const r = JSON.parse(line) as { abs?: string; existed?: boolean; backup?: string };
+        const abs = String(r.abs || '');
+        if (!abs || seen.has(abs)) continue;
+        seen.add(abs);
+        if (r.existed && r.backup) {
+          const bak = path.join(dir, String(r.backup));
+          if (!fs.existsSync(bak)) { failed++; continue; }
+          fs.mkdirSync(path.dirname(abs), { recursive: true });
+          fs.copyFileSync(bak, abs);
+          restored++;
+        } else if (!r.existed) {
+          try { if (fs.existsSync(abs)) { fs.rmSync(abs, { force: true }); removed++; } } catch { failed++; }
+        }
+      } catch { failed++; }
+    }
+  } catch { failed++; }
+  return { restored, removed, failed };
+}
+/** 把进程内的写盘方法包一层：只在工具执行期间记原件（其余时间零开销） */
+function zhuangXieRuHuiDangGouZi(): void {
+  const fsAny = fs as unknown as Record<string, unknown>;
+  if (fsAny.__warmyHuiDangGouZi) return;
+  fsAny.__warmyHuiDangGouZi = true;
+  const wrap1 = (name: 'writeFileSync' | 'appendFileSync' | 'unlinkSync' | 'rmSync') => {
+    const yuan = fsAny[name] as (...args: unknown[]) => unknown;
+    fsAny[name] = function (p: unknown, ...rest: unknown[]) {
+      if (typeof p === 'string') huiDangBeiFen(p);
+      return yuan.call(fs, p, ...rest);
+    };
+  };
+  const wrap2 = (name: 'copyFileSync' | 'renameSync') => {
+    const yuan = fsAny[name] as (...args: unknown[]) => unknown;
+    fsAny[name] = function (src: unknown, dst: unknown, ...rest: unknown[]) {
+      if (typeof dst === 'string') huiDangBeiFen(dst);
+      return yuan.call(fs, src, dst, ...rest);
+    };
+  };
+  wrap1('writeFileSync'); wrap1('appendFileSync'); wrap1('unlinkSync'); wrap1('rmSync');
+  wrap2('copyFileSync'); wrap2('renameSync');
+}
 const metrics = new ZhiBiaoCaiJiQi();
 let audit: ShenJiRiZhi | null = null;
 let secureKeys: AnQuanMiyaoCang | null = null;
@@ -476,8 +650,12 @@ let settingsStore: PeizhiCang | null = null;
  * 它是握手 / DHT 签名 / 成员证书的共同前提，所以在启动时最先就绪。
  */
 let identityStore: ShenFenCang | null = null;
+/** 第 66 轮 项 20/21：助记词账号 / PIN / 自动登录（userData/auth/vault.json） */
+let authService: AuthService | null = null;
 /** 群列表 / 群成员的真实持久化（userData/groups.json） */
 let groupStore: QunCang | null = null;
+/** 最近删除（48h）—— 见 trash-store.ts */
+let trashStore: TrashStore | null = null;
 /** 自动更新（真实查询 + 真实下载校验；安装未实现） */
 let updater: Gengxinqi | null = null;
 let nodeReg: JieDianMingCe | null = null;
@@ -524,7 +702,17 @@ const MIN_CONTEXT_BUDGET_CHARS = 200;
  * 只是不进本进程的日志镜像 —— 视图本来就有界，指针才是取回旧内容的通道。
  */
 const HISTORY_RESTORE_LIMIT = 400;
-const HISTORY_RESTORE_MAX_CHARS = 400000;
+const HISTORY_RESTORE_MAX_CHARS = 1200000;
+/**
+ * **按会话分页**（第 44 轮后半 · 用户 #6：「重启恢复按会话分页，不再全局 400 条共享」）。
+ * 旧做法的真实后果：全局按 seq 取 400 条 ⇒ 一个高频会话能把整窗占满，**其它会话重启后直接失忆**
+ * （界面上消息还在，但内存镜像里没有 ⇒ 模型看不到，而用户不知道还要手动让它回忆）。
+ */
+const HUI_FU_MEI_HUI_HUA_TIAO = 120;
+const HUI_FU_MEI_HUI_HUA_SHU = 60;
+const HUI_FU_MEI_HUI_HUA_ZI = 200000;
+/** 会话多到分不完总预算时，每个会话至少保住这么多字符（低于它就等于又回到"饿死后来者"） */
+const HUI_FU_MEI_HUI_HUA_ZUI_SHAO = 20000;
 /** 记忆服务重新拉起的冷却：晚起/崩过的场景下别把 fork 打爆 */
 const MEMORY_ENSURE_COOLDOWN_MS = 15000;
 
@@ -626,11 +814,45 @@ function shiJuJueXunHuan(sessionId: string): boolean {
   const jin = arr.slice(-3);
   return jin.length >= 3 && jin.every((x) => !x.ok && x.ms < 2000);
 }
-/** 这个工具在最近 2 分钟里被拒了几次（用于"别再重试"的硬闸） */
+/**
+ * 「被拒不认」的重试风暴闸（第 52 轮按用户拍板收紧口径）：
+ * 记账本单独成模块（能脱开 Electron 验真值表），这里只做接线与审计。
+ * 口径：同一条任务里同一工具累计被拒 2 次 ⇒ **本轮硬停用**（不再执行、不再计数），
+ * 时间窗不再放行；新的用户消息才重置，「继续执行」这类续接**保留**停用名单。
+ */
+const juJueZhang = chuangJuJueZhang();
+/** 拒绝点调它：如实记原因，累计到阈值就钉进本轮停用名单（钉死那一刻记一条审计） */
+function jiLuShouQuanJuJue(sessionId: string, tool: string, yuanYin: string): number {
+  const r = juJueZhang.jiLu(sessionId, tool, yuanYin);
+  if (r.gangTingYong) {
+    try { audit?.log('chat.tool-denied-locked', { sessionId: String(sessionId || ''), tool, n: r.n, yuanYin: r.yuanYin }); } catch { /* 记账失败不影响拦截 */ }
+  }
+  return r.n;
+}
+/** 这条任务里这个工具是否已被钉死（钉死后整轮不再放行） */
+function shiBenLunTingYong(sessionId: string, tool: string): boolean {
+  return juJueZhang.shiFouTingYong(sessionId, tool);
+}
+/** 这条任务里这个工具被拒过几次（提示语要如实报数，不再谎称"授权档不放行"） */
 function juJueCiShu(sessionId: string, tool: string): number {
-  const arr = zuiJinGongJu.get(String(sessionId || '')) || [];
-  const now = Date.now();
-  return arr.filter((x) => x.tool === tool && !x.ok && now - x.at < 120000).length;
+  return juJueZhang.ciShu(sessionId, tool);
+}
+/** 新任务开始 ⇒ 拒因与停用名单一起清零（续接不调这里） */
+function chongZhiBenLunJuJue(sessionId: string): void {
+  juJueZhang.chongZhi(sessionId);
+}
+/**
+ * **拒绝的唯一出口**：生成文案 + 当场记账，一次调用做完两件事。
+ * 为什么不用"扫文案反推拒绝"：第 52 轮的负向验证里，把某条拒绝文案换成「权限不足，不能执行」
+ * 就绕过了记账 —— 判据与文案同源的设计在**新写分支时**仍然靠措辞，等于没锁。
+ * 现在拒绝只有这一个入口，改措辞、改工具名都丢不掉那一笔账（门禁 `verify-r52-jujue` 钉住条数与"不许手写"）。
+ */
+function huiBaoJuJue(sessionId: string, gongJu: string, leiXing: 'shouQuan' | 'yongHu', yuanYin: string, buChong = ''): string {
+  const wen = leiXing === 'shouQuan'
+    ? huiBaoShouQuanJu(gongJu, anQuanDangWei().dang, yuanYin, buChong)
+    : huiBaoYongHuJu(gongJu, yuanYin, buChong);
+  jiLuShouQuanJuJue(sessionId, gongJu, wen);
+  return wen;
 }
 
 
@@ -725,6 +947,35 @@ function guiYiJiaoSe(role: string): string {
 const modelThinkMeta = new Map<string, string[]>();
 /** 模型能力（视觉/思考/工具/种类/上下文长度）——拉模型时问出来的 + 已知表兑底 */
 const modelNengLiMeta = new Map<string, { vision: boolean | 'unknown'; thinking: boolean | 'unknown'; tools: boolean | 'unknown'; thinkLevels: string[]; source: string; kind?: string; contextLen?: number; buKeYong?: string }>();
+/** 能力落盘的口径版本：读取侧与写入侧（拉取模型）必须是同一个数，口径一变旧落盘的 kind 就不再采信 */
+const CAPS_VERSION = 4;
+type LuoPanNengLi = { contextLen?: number; kind?: string; tools?: boolean | 'unknown'; vision?: boolean | 'unknown'; buKeYong?: string };
+/**
+ * 落盘的 `modelCaps` → 内存能力表。启动时、以及**任何一次带 `modelCaps` 的设置保存之后**都走这一份。
+ * 第 48 轮真机红（`verify-round34-live` 本地腿）：设置里写进了 contextLen=131072，内存表却要等重启才读 ⇒
+ * 预算按 32K 兜底算 ⇒ 工具面被裁到 11 条（make_pptx / wait_seconds 没了）、两张图被减掉、输出留位压到 2048。
+ * 而额度窗读的是落盘那份（显示 128K）—— 同一个模型两处口径打架。
+ */
+function nengLiCongLuoPan(caps: Record<string, LuoPanNengLi | undefined>, banBenDui: boolean): number {
+  let n = 0;
+  for (const [id0, c0] of Object.entries(caps || {})) {
+    if (!id0 || !c0 || typeof c0 !== 'object') continue;
+    const jiu = (modelNengLiMeta.get(id0) || {}) as Record<string, unknown>;
+    modelNengLiMeta.set(id0, {
+      ...(jiu as object),
+      contextLen: Number(c0.contextLen) || 0,
+      /** 版本不符不采信落盘的 kind；内存里本次探测到的保留（启动时内存是空的，等于回落成空） */
+      kind: banBenDui ? String(c0.kind || jiu.kind || '') : String(jiu.kind || ''),
+      // 落盘里没有的字段（老数据）保持原样，别用 undefined 覆盖掉探测出来的值
+      ...(c0.tools !== undefined ? { tools: c0.tools } : {}),
+      ...(c0.vision !== undefined ? { vision: c0.vision } : {}),
+      ...(c0.buKeYong ? { buKeYong: c0.buKeYong } : {}),
+      source: 'saved',
+    } as never);
+    n++;
+  }
+  return n;
+}
 /** 思考档位映射（我们的档 ↔ 该模型的档）——拉取模型时构建，使用时直接查 */
 const modelDangWeiAnShe = new Map<string, { woDaoMo: Record<string, string | null>; moDaoWo: Record<string, string> }>();
 
@@ -885,9 +1136,19 @@ function qingChongXieJiLu(sid?: string): void {
  * 有上限（每会话 400 条消息 / 200 条操作、最多 40 个会话），超了丢最旧 —— 这是缓存不是档案，
  * 正文永远以 JSONL 为准，所以这份文件删了也只是丢掉重启前的思考/台账显示，不会丢对话。
  */
-type ChatMetaXiaoXi = { ts: number; role: string; reasoning?: string; reasoningDuan?: Array<{ ts: number; text: string }>; moXing?: string; moXingJiangJi?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; artifacts?: unknown[]; zhengWen?: number };
+type ChatMetaXiaoXi = { ts: number; role: string; reasoning?: string; reasoningDuan?: Array<{ ts: number; text: string }>; zhongJian?: Array<{ ts: number; text: string }>; moXing?: string; moXingJiangJi?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; artifacts?: unknown[]; zhengWen?: number };
 type ChatMetaXingDong = { hao: string; tool: string; detail?: string; phase: string; ok?: boolean; ms?: number; chars?: number; ts: number };
-type ChatMetaHuiHua = { msgs: ChatMetaXiaoXi[]; xingDong: ChatMetaXingDong[] };
+type ChatMetaHuiHua = {
+  msgs: ChatMetaXiaoXi[];
+  xingDong: ChatMetaXingDong[];
+  /**
+   * 第 38 轮 项 2：**这一轮还没写完的半成品**（思考分段 + 已吐出的正文）。
+   * 以前它只活在渲染层内存里 ⇒ 应用被杀/崩溃后重开，"执行中的内容"全没了，
+   * 只剩用户那一句 ⇒ 用户看到的正是"全部消失"。现在每 2 秒落一次盘，重启后照常显示，
+   * 并把这一轮识别成"被中断"，点亮「继续 / 重试」。
+   */
+  jinXing?: { ts: number; reasoningDuan: Array<{ ts: number; text: string }>; content: string };
+};
 const chatMetaBen = new Map<string, ChatMetaHuiHua>();
 const META_XIAO_SHANG = 400, META_CAO_ZUO_SHANG = 200, META_HUI_HUA_SHANG = 40;
 function chatMetaWenJian(): string {
@@ -901,7 +1162,14 @@ function duChatMeta(): void {
     chatMetaBen.clear();
     for (const [k, v] of Object.entries(j?.sessions || {})) {
       if (!v || typeof v !== 'object') continue;
-      chatMetaBen.set(k, { msgs: Array.isArray(v.msgs) ? v.msgs : [], xingDong: Array.isArray(v.xingDong) ? v.xingDong : [] });
+      chatMetaBen.set(k, {
+        msgs: Array.isArray(v.msgs) ? v.msgs : [],
+        xingDong: Array.isArray(v.xingDong) ? v.xingDong : [],
+        /** 半成品必须一起读回来：这是"应用在写这一轮的时候被杀掉"之后**唯一**剩下的东西（项 2） */
+        jinXing: v.jinXing && typeof v.jinXing === 'object'
+          ? { ts: Number(v.jinXing.ts) || 0, reasoningDuan: Array.isArray(v.jinXing.reasoningDuan) ? v.jinXing.reasoningDuan : [], content: String(v.jinXing.content || '') }
+          : undefined,
+      });
     }
     try { audit?.log('chat.meta.loaded', { huiHua: chatMetaBen.size, xiaoxi: [...chatMetaBen.values()].reduce((a, b) => a + b.msgs.length, 0), caozuo: [...chatMetaBen.values()].reduce((a, b) => a + b.xingDong.length, 0) }); } catch { /* noop */ }
   } catch { /* 没有/坏了都当空表，正文不依赖它 */ }
@@ -938,9 +1206,11 @@ function jiLuMeta(sid: string, e: LogEntry | undefined | null): void {
   const ke = (x: ChatMetaXiaoXi) => x.ts === ts && x.role === String(e.role || '');
   const tiao: ChatMetaXiaoXi = {
     ts, role: String(e.role || ''),
-    reasoning: String(e.reasoning || ''), moXing: String((e as { moXing?: string }).moXing || ''),
-    reasoningDuan: Array.isArray((e as { reasoningDuan?: unknown[] }).reasoningDuan)
+    reasoning: String(e.reasoning || ''), moXing: String((e as { moXing?: string }).moXing || ''),    reasoningDuan: Array.isArray((e as { reasoningDuan?: unknown[] }).reasoningDuan)
       ? (e as unknown as { reasoningDuan: Array<{ ts: number; text: string }> }).reasoningDuan.map((x) => ({ ts: Number(x && x.ts) || 0, text: String((x && x.text) || '') }))
+      : undefined,
+    zhongJian: Array.isArray(e.zhongJian)
+      ? e.zhongJian.map((x) => ({ ts: Number(x && x.ts) || 0, text: String((x && x.text) || '').slice(0, 20000) })).filter((x) => x.text).slice(-64)
       : undefined,
     moXingJiangJi: String((e as { moXingJiangJi?: unknown }).moXingJiangJi || ''),
     promptTokens: Number((e as { promptTokens?: number }).promptTokens || 0),
@@ -950,8 +1220,23 @@ function jiLuMeta(sid: string, e: LogEntry | undefined | null): void {
     zhengWen: String(e.content || '').length,
   };
   const i = h.msgs.findIndex(ke);
-  if (i >= 0) h.msgs[i] = tiao;
-  else h.msgs.push(tiao);
+  const jiu = i >= 0 ? h.msgs[i] : undefined;
+  /**
+   * **已有值不许被空值盖掉**：同一条回复会被多次记账（先建账、再补分段思考、再补模型与词元），
+   * 早先那次没有的字段是空串 ⇒ 直接覆盖会把刚存好的模型/词元又抹掉（真机：重启后小字全空）。
+   */
+  if (jiu) {
+    for (const k of Object.keys(tiao) as Array<keyof ChatMetaXiaoXi>) {
+      const xin = tiao[k];
+      const kong = xin === undefined || xin === null || xin === ''
+        || (typeof xin === 'number' && xin === 0) || (Array.isArray(xin) && xin.length === 0);
+      if (kong) continue;
+      (jiu as unknown as Record<string, unknown>)[k as string] = xin;
+    }
+  } else h.msgs.push(tiao);
+  /** 半成品的作废**由渲染层决定**（它才知道"这一轮真的写完了"）：
+   *  中途的补写、完成核对轮写的 assistant 条目时间戳与正式回复一模一样，
+   *  在主进程里按角色/时间判"写完了"必然误杀（真机：半成品每写一次就被立刻抹掉）。 */
   while (h.msgs.length > META_XIAO_SHANG) h.msgs.shift();
   xieChatMeta();
 }
@@ -971,29 +1256,117 @@ function jiLuXingDong(p: { sessionId?: string; hao?: string; tool?: string; deta
   while (h.xingDong.length > META_CAO_ZUO_SHANG) h.xingDong.shift();
   xieChatMeta();
 }
+/** 落一份"这一轮还没写完"的半成品（渲染层每 2 秒送一次；崩溃/被杀时它就是重启后剩下的全部） */
+function jiJinXing(sid: string, p: { reasoningDuan?: Array<{ ts?: number; text?: string }>; content?: string; clear?: boolean }): void {
+  const s = String(sid || '');
+  if (!s) return;
+  const h = quMetaHuiHua(s);
+  if (p.clear) {
+    if (h.jinXing) { delete h.jinXing; xieChatMeta(); }
+    try { audit?.log('chat.inflight-clear', { sessionId: s }); } catch { /* noop */ }
+    return;
+  }
+  const duan = (Array.isArray(p.reasoningDuan) ? p.reasoningDuan : [])
+    .slice(-META_CAO_ZUO_SHANG)
+    .map((x) => ({ ts: Number(x && x.ts) || 0, text: String((x && x.text) || '').slice(0, 4000) }));
+  const nei = String(p.content || '').slice(0, 20000);
+  try { audit?.log('chat.inflight-write', { sessionId: s, zhengWen: nei.length, duan: duan.length, diu: !duan.length && !nei }); } catch { /* 审计不影响落盘 */ }
+  if (!duan.length && !nei) return;
+  h.jinXing = { ts: Date.now(), reasoningDuan: duan, content: nei };
+  xieChatMeta();
+}
 /** 重建完会话日志后把富字段合回去（按 角色+时间戳 对齐；对不上就按顺序补最近的） */
 function yingYongMeta(sid: string): number {
   const h = chatMetaBen.get(sid);
   const zhi = chatLogs.get(sid);
   if (!h || !zhi || !zhi.length) return 0;
   let bu = 0;
+  /**
+   * **配对口径**（第 38 轮 项 8 的真机教训）：以前只按"角色 + 时间戳（±4s）"认，
+   * 对不上就整条跳过 ⇒ 重启后模型名/词元/分段全空（JSONL 里的 ts 与旁路记账的 ts 能差几十秒：
+   * 一个在**发送**时盖，一个在**回复落地**时盖）。日志与旁路元数据都是**同一串按时间追加**的记录，
+   * 所以：先认时间戳，认不到就**按同角色的先后次序**配对 —— 次序不会骗人。
+   */
+  const chuan: Record<string, ChatMetaXiaoXi[]> = {};
+  for (const x of h.msgs) { const r = String(x.role || ''); (chuan[r] = chuan[r] || []).push(x); }
+  const xiaYin: Record<string, number> = {};
+  /** 旁路里有中间回复的会话才需要补它（没有的会话行为与以前逐字相同） */
+  const metaYouZJ = h.msgs.some((x) => Array.isArray(x.zhongJian) && x.zhongJian.length > 0);
   for (const m of zhi) {
+    /**
+     * 「已经合过了就跳过」以前只看 `reasoning || moXing || 词元` —— **任一个有就整条跳过**。
+     * 真机后果：重建回来的条目带着 reasoning（记忆服务那边有），于是词元/模型永远不再补，
+     * 用户看到的就是"重启后回复下方那行小字没了"。改成**缺哪个补哪个，全都齐了才跳过**。
+     */
     const anyM = m as unknown as Record<string, unknown>;
-    if (anyM.reasoning || anyM.moXing || Number(anyM.promptTokens || 0) > 0) continue;
-    const zhao = h.msgs.find((x) => x.role === String(m.role || '') && Number(x.ts) === Number(m.ts || 0))
-      || h.msgs.find((x) => x.role === String(m.role || '') && Math.abs(Number(x.ts) - Number(m.ts || 0)) <= 4000);
+    const queMoXing = !String(anyM.moXing || '');
+    const queCi = !(Number(anyM.promptTokens || 0) > 0 || Number(anyM.completionTokens || 0) > 0);
+    const queDuan = !(Array.isArray(anyM.reasoningDuan) && (anyM.reasoningDuan as unknown[]).length);
+    const queSiKao = !String(anyM.reasoning || '');
+    const queZJ = metaYouZJ && String(m.role || '') === 'assistant' && !(Array.isArray(anyM.zhongJian) && (anyM.zhongJian as unknown[]).length);
+    if (!queMoXing && !queCi && !queDuan && !queSiKao && !queZJ) continue;
+    const jse = String(m.role || '');
+    const duiLie = (chuan[jse] || []).slice();
+    const idx = xiaYin[jse] ?? 0;
+    /**
+     * 选哪一条旁路记录：**先挑"身上真有我缺的东西"的那条**，再按时间就近。
+     * 同一个角色在旁路里可能有好几条（中间回复一条、正式回复一条，时间戳差几秒），
+     * 以前只认时间戳最近的一条 ⇒ 恰好挑中没有模型名的那条，合并"成功"了但补的是空值
+     * （真机：审计写了 merged 3 条，界面上那行小字还是空的）。
+     */
+    const xinYao = (x: ChatMetaXiaoXi) => (queCi ? (Number(x.promptTokens || 0) > 0 || Number(x.completionTokens || 0) > 0) : false)
+      || (queMoXing ? !!String(x.moXing || '') : false)
+      || (queDuan ? (Array.isArray(x.reasoningDuan) && x.reasoningDuan.length > 0) : false)
+      || (queZJ ? (Array.isArray(x.zhongJian) && x.zhongJian.length > 0) : false);
+    const mTs = Number(m.ts || 0);
+    const cha = (x: ChatMetaXiaoXi) => Math.abs(Number(x.ts || 0) - mTs);
+    const youBenLing = duiLie.filter((x) => xinYao(x)).sort((a, b) => cha(a) - cha(b));
+    const jinKuan = duiLie.length ? duiLie.slice().sort((a, b) => cha(a) - cha(b))[0] : undefined;
+    const daiXuan = youBenLing[0];
+    const zhao = (daiXuan && cha(daiXuan) <= 600000 ? daiXuan : undefined)
+      || (jinKuan && cha(jinKuan) <= 4000 ? jinKuan : undefined)
+      || duiLie[idx];
+    if (zhao && (!youBenLing.length || cha(zhao) > 4000)) {
+      /** 靠"有东西"挑中的那条时间戳差得远也算数，但要把游标推进，免得下一条日志抢同一条 */
+      const k = (chuan[jse] || []).findIndex((x) => x === zhao);
+      if (k >= 0) xiaYin[jse] = Math.max(idx, k + 1);
+    } else if (zhao) xiaYin[jse] = idx + 1;
     if (!zhao) continue;
-    anyM.reasoning = zhao.reasoning || '';
-    if (Array.isArray(zhao.reasoningDuan) && zhao.reasoningDuan.length) anyM.reasoningDuan = zhao.reasoningDuan;
-    anyM.moXing = zhao.moXing || '';
-    anyM.moXingJiangJi = zhao.moXingJiangJi || null;
-    anyM.promptTokens = zhao.promptTokens || 0;
-    anyM.completionTokens = zhao.completionTokens || 0;
-    anyM.turnCount = zhao.turnCount || 0;
+    /** 只补"缺的那个"，已有值不动 ⇒ 多次合并、部分字段先到位的情况都不会被写回空值 */
+    if (queSiKao && zhao.reasoning) anyM.reasoning = zhao.reasoning;
+    if (queDuan && Array.isArray(zhao.reasoningDuan) && zhao.reasoningDuan.length) anyM.reasoningDuan = zhao.reasoningDuan;
+    if (queZJ && Array.isArray(zhao.zhongJian) && zhao.zhongJian.length) anyM.zhongJian = zhao.zhongJian;
+    if (queMoXing) anyM.moXing = zhao.moXing || '';
+    if (!anyM.moXingJiangJi) anyM.moXingJiangJi = zhao.moXingJiangJi || null;
+    if (queCi) {
+      anyM.promptTokens = zhao.promptTokens || 0;
+      anyM.completionTokens = zhao.completionTokens || 0;
+    }
+    if (!Number(anyM.turnCount || 0)) anyM.turnCount = zhao.turnCount || 0;
     if (Array.isArray(zhao.artifacts) && zhao.artifacts.length) anyM.artifacts = zhao.artifacts;
     bu += 1;
   }
   if (bu) try { audit?.log('chat.meta.merged', { sessionId: sid, tiao: bu, zhang: zhi.length }); } catch { /* noop */ }
+  /**
+   * 第 38 轮 项 2/8：**把这一轮跑过的操作归回它那条回复身上**。
+   * JSONL 里没有工具明细（只有正文与时间），明细在旁路台账里按会话存着一串时间戳。
+   * 归法按事实：一条操作属于"它之后最近的那条牛马回复"（工具必然先于最终回复发生）；
+   * 归不到（这一轮被中断、还没有回复）就留给最后一条 —— 渲染层的中断保留块会用。
+   */
+  try {
+    const ding = zhi.filter((m) => String(m.role || '') !== 'user' && !m.system)
+      .sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+    if (ding.length) {
+      for (const x of [...h.xingDong].sort((a, b) => Number(a.ts) - Number(b.ts))) {
+        let mubiao: LogEntry | undefined;
+        for (const m of ding) { if (Number(m.ts || 0) >= Number(x.ts || 0)) { mubiao = m; break; } }
+        if (!mubiao) mubiao = ding[ding.length - 1];
+        const nm = mubiao as unknown as { xingDong?: ChatMetaXingDong[] };
+        if (!Array.isArray(nm.xingDong)) nm.xingDong = [];
+        if (!nm.xingDong.some((y) => String(y.hao) === String(x.hao))) nm.xingDong.push(x);
+      }
+    }
+  } catch { /* 归不上就不归，不影响正文 */ }
   return bu;
 }
 function xingDongDeng(sid: string): ChatMetaXingDong[] {
@@ -1035,7 +1408,14 @@ function daBaoXieRuJsonl(key: string, role: string, ti: string): void {
     } catch { /* 文件还没有 */ }
     const ts = Date.now();
     const id = (String(role).toLowerCase() === 'assistant' ? 'a-' : 'u-') + 'fb-' + ts.toString(36);
-    const hang = JSON.stringify({ id, sessionId: key, kind: 'message', role, ti: String(ti || ''), groupId: key, entityType: 'chat', seq, ts }) + '\n';
+    /** 兜底直写的这一行必须与记忆服务写的同形（契约 `XiaoxiJilu`），否则重启重建会读出两种格式 */
+    const jiaoSe = String(role).toLowerCase();
+    const jiLu: XiaoxiJilu = {
+      id, sessionId: key, kind: 'message',
+      role: jiaoSe === 'assistant' ? 'assistant' : jiaoSe === 'system' ? 'system' : 'user',
+      ti: String(ti || ''), groupId: key, entityType: 'chat', seq, ts,
+    };
+    const hang = JSON.stringify(jiLu) + '\n';
     fs.appendFileSync(p, hang, 'utf8');
     audit?.log('chat.jsonl-fallback', { sessionId: key, role, chars: String(ti || '').length, seq });
   } catch { /* 兜底也写不进去时不打断对话 */ }
@@ -1063,6 +1443,9 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
       if (last && last.role === 'assistant') {
         last.content = String(last.content || '') + '\n\n---\n\n' + String(tiaoMu.content || '');
         if (tiaoMu.reasoning) last.reasoning = String(last.reasoning || '') + '\n\n' + String(tiaoMu.reasoning || '');
+        if (Array.isArray(tiaoMu.zhongJian) && tiaoMu.zhongJian.length) {
+          last.zhongJian = [...(Array.isArray(last.zhongJian) ? last.zhongJian : []), ...tiaoMu.zhongJian].slice(-64);
+        }
         /**
          * 词元合并（方案B 合计 + 次数，第 29 轮 项 17）：
          * 续派回合的词元**累加**进上一条，并把合并次数记在 `turnCount`；
@@ -1158,6 +1541,8 @@ async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyR
     sessions: 0,
     maxSeq: 0,
     reason: '',
+    /** 恢复走的是哪条路：`mei-hui-hua`（按会话分页）或 `quan-ju-diaoluo`（服务端不支持 ⇒ 退回全局 tail） */
+    fangShi: '',
     trigger,
     at: Date.now(),
   };
@@ -1168,57 +1553,93 @@ async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyR
     return report;
   }
   try {
-    const res = await memory.tail(HISTORY_RESTORE_LIMIT);
-    const records: Array<Record<string, unknown>> = Array.isArray(res?.records) ? res.records : [];
-    // tail() 是 seq 倒序（最近的在前），重建要按 seq 升序灌入
-    const shengxu = [...records]
-      .filter((r) => r && typeof r === 'object')
-      .sort((a, b) => Number(a['seq'] ?? 0) - Number(b['seq'] ?? 0));
-    const yiYou = new Map<string, Set<number>>();
-    for (const [k, shuZu] of chatLogs) yiYou.set(k, new Set(shuZu.map((e) => e.seq)));
-    const sessions = new Set<string>();
-    let chars = 0;
-    for (const r of shengxu) {
+    /**
+     * **按会话分页取回**（用户 #6）。服务端不支持这个 op（老的 runtime 副本）⇒ 如实退回全局 tail，
+     * 并把用了哪条路写进报告，不许静默降级成"看起来恢复了其实只恢复了一个会话"。
+     */
+    let records: Array<Record<string, unknown>> = [];
+    let fangShi = 'mei-hui-hua';
+    try {
+      const hui = await memory.tailPerSession(HUI_FU_MEI_HUI_HUA_TIAO, HUI_FU_MEI_HUI_HUA_SHU);
+      if (hui && Array.isArray(hui.records) && hui.records.length) records = hui.records;
+      else fangShi = 'quan-ju-diaoluo';
+    } catch { fangShi = 'quan-ju-diaoluo'; }
+    if (fangShi === 'quan-ju-diaoluo') {
+      const res = await memory.tail(HISTORY_RESTORE_LIMIT);
+      records = Array.isArray(res?.records) ? res.records : [];
+    }
+    report.fangShi = fangShi;
+    /** 分组：每个会话自己一份列表（升序灌入） */
+    const fenZu = new Map<string, Array<Record<string, unknown>>>();
+    const zuiHouSeqOf = new Map<string, number>();
+    for (const r of records) {
+      if (!r || typeof r !== 'object') continue;
       if (String(r['kind'] ?? '') !== 'message') continue;
       const key = String(r['sessionId'] ?? '');
       const seq = Number(r['seq']);
-      const ti = typeof r['ti'] === 'string' ? r['ti'] : '';
       if (!key || !Number.isFinite(seq) || seq <= 0) continue;
+      const Lie = fenZu.get(key);
+      if (Lie) Lie.push(r); else fenZu.set(key, [r]);
+      if (seq > (zuiHouSeqOf.get(key) || 0)) zuiHouSeqOf.set(key, seq);
+    }
+    const yiYou = new Map<string, Set<number>>();
+    for (const [k, shuZu] of chatLogs) yiYou.set(k, new Set(shuZu.map((e) => e.seq)));
+    /** 最近活跃的会话先分额度，但**每个会话都保住自己的一份**（不再互相抢同一条队） */
+    const paiXu = [...fenZu.keys()].sort((a, b) => (zuiHouSeqOf.get(b) || 0) - (zuiHouSeqOf.get(a) || 0));
+    const sessions = new Set<string>();
+    let chars = 0;
+    for (let i = 0; i < paiXu.length; i++) {
+      const key = paiXu[i]!;
+      const shengXia = paiXu.length - i;
+      const eBenZi = Math.max(
+        Math.min(HUI_FU_MEI_HUI_HUA_ZI, HUI_FU_MEI_HUI_HUA_ZUI_SHAO),
+        Math.floor((HISTORY_RESTORE_MAX_CHARS - chars) / shengXia)
+      );
+      const lu = (fenZu.get(key) || []).slice().sort((a, b) => Number(a['seq'] ?? 0) - Number(b['seq'] ?? 0));
       const yiKanDao = yiYou.get(key) ?? new Set<number>();
-      if (yiKanDao.has(seq)) continue;
-      if (chars + ti.length > HISTORY_RESTORE_MAX_CHARS) continue;
-      yiKanDao.add(seq);
-      yiYou.set(key, yiKanDao);
-      chars += ti.length;
-      const rid = String(r['id'] ?? '');
-      zhuiJiaLiaoTianRiZhi(key, {
-        seq,
-        role: chatRoleOfRecordId(rid),
-        content: ti,
-        recordId: rid || undefined,
-        ts: Number(r['ts']) || undefined,
-      });
-      sessions.add(key);
-      if (seq > report.maxSeq) report.maxSeq = seq;
-      report.entries += 1;
+      let benZi = 0;
+      for (const r of lu) {
+        const seq = Number(r['seq']);
+        const ti = typeof r['ti'] === 'string' ? r['ti'] : '';
+        if (yiKanDao.has(seq)) continue;
+        if (benZi + ti.length > eBenZi) continue;
+        if (chars + ti.length > HISTORY_RESTORE_MAX_CHARS) break;
+        benZi += ti.length;
+        chars += ti.length;
+        yiKanDao.add(seq);
+        yiYou.set(key, yiKanDao);
+        const rid = String(r['id'] ?? '');
+        zhuiJiaLiaoTianRiZhi(key, {
+          seq,
+          role: chatRoleOfRecordId(rid),
+          content: ti,
+          recordId: rid || undefined,
+          ts: Number(r['ts']) || undefined,
+        });
+        sessions.add(key);
+        if (seq > report.maxSeq) report.maxSeq = seq;
+        report.entries += 1;
+      }
     }
     chatLogSeq = Math.max(chatLogSeq, report.maxSeq);
-    // 镜像整份重派生：重建后 chatHistories 与日志逐条对齐
-    for (const key of chatLogs.keys()) chatHistories.set(key, quHuiHuaXiaoXiJi(key));
     /**
      * 第 38 轮 项 2/8：JSONL 只有 `{seq,role,ti,ts}` ⇒ 重建完把旁路元数据合回去
      * （思考内容 / 用的哪只模型 / 词元 / 轮次 / 附件图标行），否则重启后这些全空。
+     * **顺序很重要**：合完再派生镜像。以前是先派生再合，`chatHistories`（IPC 实际端给界面的那份）
+     * 拿到的是合之前的空字段 ⇒ 旁路里明明存着[有模型+有词元]，界面上那行小字却还是空的。
      */
     try {
       let he = 0;
       for (const key of chatLogs.keys()) he += yingYongMeta(String(key));
       if (he) qidong(`chat meta merged: ${he} 条富字段回填`);
     } catch { /* 合并失败只影响显示，不影响对话 */ }
+    // 镜像整份重派生：重建后 chatHistories 与日志逐条对齐（必须在富字段合回去之后）
+    for (const key of chatLogs.keys()) chatHistories.set(key, quHuiHuaXiaoXiJi(key));
     report.ok = true;
     report.sessions = sessions.size;
     historyRestore = report;
     qidong(
-      `chat log restored (trigger): ${report.entries} 条 / ${report.sessions} 会话 / maxSeq=${report.maxSeq}`
+      `chat log restored (trigger): ${report.entries} 条 / ${report.sessions} 会话 / maxSeq=${report.maxSeq} / 方式=${report.fangShi}`
     );
     audit?.log('chat.history.restore', {
       trigger,
@@ -1226,6 +1647,12 @@ async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyR
       sessions: report.sessions,
       maxSeq: report.maxSeq,
       limit: HISTORY_RESTORE_LIMIT,
+      fangShi: report.fangShi,
+      /** 按会话分页时的配额参数（审计里要能回答"哪个会话被饿死过"） */
+      meiHuiHua: HUI_FU_MEI_HUI_HUA_TIAO,
+      huiHuaShang: HUI_FU_MEI_HUI_HUA_SHU,
+      ziZong: HISTORY_RESTORE_MAX_CHARS,
+      yiYongZi: chars,
     });
     return report;
   } catch (e) {
@@ -1273,7 +1700,7 @@ function toolLabels(): Partial<JiyiCangGongjuBiaoqian> {
 }
 
 /** 工具调用上限（settings 可配；越界值一律夹到安全区间） */
-function toolLimits(): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalChars: number } {  let s: Partial<YingYongPeizhi> | undefined;
+function toolLimits(instId?: string): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalChars: number } {  let s: Partial<YingYongPeizhi> | undefined;
   try {
     s = settingsStore?.load();
   } catch {
@@ -1286,10 +1713,20 @@ function toolLimits(): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalCha
    * 真事故：上一轮把默认提到 20 却不生效（审计里 `zuiDaLunShu` 仍是 12），
    * 因为配置里那份 12 把默认盖掉了。这里把 12 一次性抬到 20；用户真正改过别的值就照旧尊重。
    */
-  const lunShuYuan = Number(s?.contextToolMaxRounds);
+  /** 第 51 轮：执行者优先用它自己那份配置（牛马管理局里设的），没有再回落全局 */
+  const instCfg = (() => {
+    try {
+      const id = String(instId || '').trim();
+      if (!id) return null;
+      const arr = (s as { instances?: Array<Record<string, unknown>> } | undefined)?.instances || [];
+      const it = arr.find((x) => String((x as { id?: unknown }).id || '') === id);
+      return (it as { toolLimits?: Partial<{ zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalChars: number }> } | undefined)?.toolLimits || null;
+    } catch { return null; }
+  })();
+  const lunShuYuan = Number(instCfg?.zuiDaLunShu ?? s?.contextToolMaxRounds);
   const lunShu = lunShuYuan === 12 ? 20 : lunShuYuan;
-  const mei = Number(s?.contextToolResultChars);
-  const total = Number(s?.contextToolTotalChars);
+  const mei = Number(instCfg?.zuiDaJieGuoZiShu ?? s?.contextToolResultChars);
+  const total = Number(instCfg?.totalChars ?? s?.contextToolTotalChars);
   return {
     /**
      * 轮数上限：**多任务必须能跑完**。真事故：默认 3 轮时
@@ -1312,22 +1749,177 @@ function toolLimits(): { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalCha
  * 免得它把预算当成"权限问题"再换工具硬试。
  */
 export const GONG_JU_YU_SUAN_MOREN = 40;
-function gongJuYuSuan(sid?: string): number {
+/**
+ * 工具调用次数**基线**（只读设置；界面「设置→工具」也显示这个数）。
+ *
+ * 第 39 轮额度重做：以前这里藏着一条 `×2`（"长文还在推进就翻倍"）。现在**不再预支** ——
+ * 该不该多给额度统一由 `huoBenLunYuSuan` / `huizhuYouJinZhan` 判（见下面账本），
+ * 免得四条各自为政的闸互相看不见对方。
+ */
+function gongJuYuSuan(): number {
   let jiZhun = GONG_JU_YU_SUAN_MOREN;
   try {
     const v = Number(settingsStore?.load()?.toolCallBudget);
     if (Number.isFinite(v) && v > 0) jiZhun = Math.min(400, Math.max(1, Math.floor(v)));
   } catch { /* 配置坏了用默认 */ }
-  /**
-   * 只有"用户要求了字数、还没达标、而且最近一次确实还在有效增长"时才临时翻倍
-   * （真机：本地 27B 写 6000 字要 4–6 段，固定 40 次会把它**掐死**而不是拦住它打转）。
-   * 判据不成立 ⇒ 额度与以前完全一样。
-   */
-  if (sid && zhangWenZaiTuiJin(String(sid))) return Math.min(400, jiZhun * 2);
   return jiZhun;
+}
+
+/**
+ * **本轮预算账本**（第 39 轮额度重做：把散在四处的额度补丁收成一条预算）。
+ *
+ * 改之前的样子（真机每一道都撞过）：轮数 20 + "要求长文就 +8"、结果字符 12000 × "还在写就 ×4"、
+ * 调用次数 40 × "还在写就 ×2"、到顶再问模型要不要加轮 —— **四道闸各自为政，而且模型一道都看不见**
+ * （它只知道第 41 次调用突然被拒）。后果：
+ *  ① 有效推进的长任务照样被掐死（实录 `字数进度=10 段 / 工具 26 次 / 1123s` 全程净增长，仍 `budget lun=20` 收场）；
+ *  ② "看着像有进展"的打转任务反而拿到 ×4 额度；
+ *  ③ 同一轮里三道闸报三种互相矛盾的停止原因，自动续派只能按 `tingZhi` 字符串猜。
+ *
+ * 现在一条预算、三条仪表、一个口径：
+ *  · 基线按**任务尺寸**给（用户点名要 N 字就按分段写入的次数估），来自设置；
+ *  · 撞顶**只能向宿主申请续**，宿主只认自己看到的事实（`huizhuYouJinZhan`：还有欠账 + 刚才那步有净产出 + 没被判停滞），
+ *    不认模型自述；每条用户消息最多续 `BEN_LUN_XU_YU_SUAN_ZUIDA` 次，且都不许越过 `YU_SUAN_TING`；
+ *  · **工具循环与工具执行器读同一份账本** ⇒ 模型看到的"还剩多少"和真正执法的上限是同一个数；
+ *  · 每次续了哪一条、抬到多少、为什么，全部进审计 `chat.budget.*`（出问题能一眼查是不是额度掐死了推进中的任务）。
+ */
+interface BenLunYuSuanZhang {
+  /** 生效上限（会被续预算抬高） */
+  lun: number;
+  ci: number;
+  zi: number;
+  /** 设置里的基线：续预算的增量按它算，不随次数复利膨胀 */
+  jiZhun: { lun: number; ci: number; zi: number };
+  /** 已续次数 */
+  xuCi: number;
+  /** 上次判定进展时宿主看到的证据指纹（要求"必须有**新**证据"才许再续） */
+  pingZheng: string;
+  /** 30 分钟硬顶有没有因为"真进展"被自动放宽过一次（一次性，之后仍按硬顶停） */
+  yingDingFangKuan: boolean;
+  kaiShiTs: number;
+}
+/** 续预算次数硬顶（一次用户消息内） */
+const BEN_LUN_XU_YU_SUAN_ZUIDA = 4;
+/** 三条仪表的绝对天花板：续到哪都不许越过（防失控，也防把"用户没叫停"当成"可以无限跑"） */
+const YU_SUAN_TING = { lun: 64, ci: 600, zi: 120000 };
+const benLunYuSuanZhang = new Map<string, BenLunYuSuanZhang>();
+
+/** 按任务尺寸开一条新预算（每次进入工具循环都重开：续派轮用的是**新额度**，进展证据另算） */
+function xinBenLunYuSuan(sid: string): BenLunYuSuanZhang {
+  const lim = toolLimits();
+  const jiCi = gongJuYuSuan();
+  /**
+   * 用户点名要 N 字 ⇒ 分段写必然要 ⌈N/每段约 1200 字⌉ 次写入（本地小模型一段只有 800–1500 字）。
+   * 按需求尺寸**开局就给够**，比等撞顶再补好（撞顶那一发是模型的一次"我没做完"，用户看得见）。
+   * ⚠️ 这只放大**基线**，放大倍数仍受 `YU_SUAN_TING` 硬顶约束；没点字数要求的任务一点没变。
+   */
+  const yao = yaoQiuZiShu(benCiRenWuYuanWen.get(String(sid || '')) || '');
+  const duan = yao > 0 ? Math.max(1, Math.ceil(yao / 1200)) : 0;
+  const zhang: BenLunYuSuanZhang = {
+    lun: Math.min(YU_SUAN_TING.lun, lim.zuiDaLunShu + (duan > 0 ? Math.min(12, duan * 2) : 0)),
+    ci: Math.min(YU_SUAN_TING.ci, jiCi + (duan > 0 ? Math.min(40, duan * 4) : 0)),
+    zi: Math.min(YU_SUAN_TING.zi, Math.max(lim.totalChars, lim.totalChars * (duan > 0 ? Math.min(4, 1 + duan) : 1))),
+    jiZhun: { lun: lim.zuiDaLunShu, ci: jiCi, zi: lim.totalChars },
+    xuCi: 0,
+    pingZheng: xuPaiKuaiZhao(String(sid || '')),
+    yingDingFangKuan: false,
+    kaiShiTs: Date.now(),
+  };
+  benLunYuSuanZhang.set(String(sid || ''), zhang);
+  return zhang;
+}
+/** 取本轮账本（没开过就现开一条 —— 分身/编排器那条路不走主循环入口） */
+function huoBenLunYuSuan(sid: string): BenLunYuSuanZhang {
+  return benLunYuSuanZhang.get(String(sid || '')) || xinBenLunYuSuan(String(sid || ''));
+}
+
+/** 同一工具指纹最多重复几次就不再算"进展"（与续派用的同一条判据） */
+function chongFuZuiDuoCiShu(sid: string): number {
+  let zuiDuo = 0;
+  const kua = huiHuaChongFu.get(String(sid || ''));
+  if (kua) for (const [, n] of kua) if (n > zuiDuo) zuiDuo = n;
+  return zuiDuo;
+}
+
+/**
+ * **宿主看到的"真进展"** —— 要不要给它续额度的唯一判据（第 39 轮额度重做）。
+ *
+ * 三条**同时**成立才算，缺一条就不续（不续 ≠ 判死，只是让循环按原设计收口并如实汇报）：
+ *  ① **还有欠账**：用户点名要的字数没到 95% 线，或计划里仍有没做完的步骤
+ *     （两条都不成立就是"没有下一步值得花额度"，续了也只是多烧一轮）；
+ *  ② **刚才那一步有净产出**：宿主证据指纹比上次判定时变了（`xuPaiKuaiZhao` = 成功的工具种类
+ *     ∪ 落盘产物 ∪ 字数档位 ∪ 计划步骤状态），要求"**新**证据"而不是"模型说它还要做"；
+ *  ③ **没被判停滞/打转**：长文已经写不动了、同一工具指纹 ≥3 次、续派连续两轮零新事实 ⇒ 一律不续。
+ *
+ * 这条判据同时用在三处：续预算、放宽 30 分钟硬顶、界面文案 —— 三处口径必须一致，
+ * 否则会出现"额度说还有进展、硬顶说没进展"这种自相矛盾的中止。
+ */
+function huizhuYouJinZhan(sid: string): { you: boolean; yin: string } {
+  const s = String(sid || '');
+  const zhang = huoBenLunYuSuan(s);
+  const yao = yaoQiuZiShu(benCiRenWuYuanWen.get(s) || '');
+  const qianZai = (yao > 0 && renWuZiShu(s) < yao * 0.95 && !changWenTingZhiLe(s))
+    || jiHuaWeiWanCheng(s).length > 0;
+  if (!qianZai) return { you: false, yin: '没有欠账（字数已达标或计划步骤都做完了）' };
+  const pingZheng = xuPaiKuaiZhao(s);
+  /**
+   * "刚才那一步有净产出"两种成立方式：
+   *  ① 宿主证据指纹变了（新产物 / 新成功的工具种类 / 字数上了档 / 计划步骤状态变了）；
+   *  ② 长文**还在有效增长**（`zhangWenZaiTuiJin`：还没到线、最近一次净增 ≥ 阈值、没被判停滞）
+   *     —— 分段追加时指纹里那个"字数档"可能刚好没跨过 100 字，这条把它补上。
+   */
+  if (pingZheng === zhang.pingZheng && !zhangWenZaiTuiJin(s)) return { you: false, yin: '上次判定后宿主没看到新的产出' };
+  if (changWenTingZhiLe(s)) return { you: false, yin: '长文已连续三次写不动' };
+  if (chongFuZuiDuoCiShu(s) >= 3) return { you: false, yin: '同一动作已重复 ≥3 次' };
+  const zhang2 = xuPaiJinZhan.get(s);
+  if (zhang2 && zhang2.kongZhuan >= 2) return { you: false, yin: '连续两轮续派没有任何新事实' };
+  return { you: true, yin: '还有欠账，且刚有宿主看到的净产出' };
+}
+
+/**
+ * **工具循环撞顶时向宿主申请续预算**（providers 层回调进来）。
+ * 只认 `huizhuYouJinZhan`；批准就把账本和循环的上限一起抬高（增量按基线算，不越硬顶）。
+ */
+function benLunXuYuSuan(sid: string, k: { yuanYin: string; lunShu: number; zuiDaLunShu: number; gongJuCiShu: number; zuiDaGongJuCiShu: number; jieGuoZiShu: number; zongYuSuan: number }): { lunShu?: number; gongJuCiShu?: number; jieGuoZiShu?: number } | null {
+  const s = String(sid || '');
+  const zhang = huoBenLunYuSuan(s);
+  if (zhang.xuCi >= BEN_LUN_XU_YU_SUAN_ZUIDA) {
+    try { audit?.log('chat.budget.extend-capped', { sessionId: s, reason: k.yuanYin, xuCi: zhang.xuCi }); } catch { /* noop */ }
+    return null;
+  }
+  const jin = huizhuYouJinZhan(s);
+  if (!jin.you) {
+    try { audit?.log('chat.budget.denied', { sessionId: s, reason: k.yuanYin, why: jin.yin }); } catch { /* noop */ }
+    return null;
+  }
+  /**
+   * ⚠️ 增量必须按**循环当前上限**算，不是按"已用"算（`k` 里两套数字都给到了）。
+   * 按已用算是个隐蔽的复利 bug：结果字符才用到 30% 时 `newCap - used` 会把上限一次抬走两倍，
+   * 下一轮再从更高的地方再抬 ⇒ 四条仪表只剩"名义上有额度"。
+   * 循环那边把增量解释成"从现在起还能再花多少"，撞顶时 used≈cap，所以两边对得上。
+   */
+  const jia: { lunShu?: number; gongJuCiShu?: number; jieGuoZiShu?: number } = {};
+  const xinLun = Math.min(YU_SUAN_TING.lun, zhang.lun + Math.max(4, Math.round(zhang.jiZhun.lun * 0.4)));
+  if (xinLun > zhang.lun) { jia.lunShu = xinLun - k.zuiDaLunShu; zhang.lun = xinLun; }
+  const xinCi = Math.min(YU_SUAN_TING.ci, zhang.ci + Math.max(8, Math.round(zhang.jiZhun.ci * 0.5)));
+  if (xinCi > zhang.ci && k.zuiDaGongJuCiShu > 0) { jia.gongJuCiShu = xinCi - k.zuiDaGongJuCiShu; zhang.ci = xinCi; }
+  const xinZi = Math.min(YU_SUAN_TING.zi, zhang.zi + Math.max(4000, zhang.jiZhun.zi));
+  if (xinZi > zhang.zi && k.zongYuSuan > 0) { jia.jieGuoZiShu = xinZi - k.zongYuSuan; zhang.zi = xinZi; }
+  zhang.xuCi += 1;
+  zhang.pingZheng = xuPaiKuaiZhao(s);
+  try {
+    audit?.log('chat.budget.extend', {
+      sessionId: s, reason: k.yuanYin, xuCi: zhang.xuCi,
+      dao: { lun: zhang.lun, ci: zhang.ci, zi: zhang.zi },
+    });
+  } catch { /* noop */ }
+  fachuKongzhitai({ cat: 'system', code: 'tool.budget-extend', data: { sessionId: s, reason: k.yuanYin, dao: { lun: zhang.lun, ci: zhang.ci, zi: zhang.zi } } });
+  if (!jia.lunShu && !jia.gongJuCiShu && !jia.jieGuoZiShu) return null;
+  return jia;
 }
 /** 本轮已用工具次数（sessionId → 次数）；每次 `yunXingLiaoTianXunHuan` 进入时清零 */
 const benLunGongJuShu = new Map<string, number>();
+/** 计划门禁上次提醒时的调用次数（sessionId → 次数）；没建计划就每 +6 次再提醒一次，防止刷屏也防止"只提醒一次" */
+const jiHuaTiXingCi = new Map<string, number>();
 
 /** 自动回退点的体积上限（超过就不打点，避免一次用户消息卡在拷贝上） */
 const HUI_TUI_DIAN_JSONL_MAX = 32 * 1024 * 1024;
@@ -1383,6 +1975,7 @@ function ziDongHuiTuiDian(sessionId: string): void {
     summary: `第 ${seq} 条之前的回退点（${new Date().toLocaleTimeString()}）`,
     limit: 50,
   });
+  huiDangKaiDian(sessionId, cp.dir);
   try { audit?.log('checkpoint.round-start', { sessionId, id: cp.id, seq, bytes: cp.bytes }); } catch { /* noop */ }
 }
 
@@ -1423,6 +2016,116 @@ function huiHuaKeGanHuo(sessionId: string): boolean {
   } catch {
     return true;
   }
+}
+
+/**
+ * **知识库三层作用域**（第 51 轮用户口径）：
+ *  · 群聊（external group）：只读会话层 —— 禁内部/私密
+ *  · 项目（internal group）：会话 + 内部 —— 禁私密
+ *  · 我的牛马 / 联系人（无群记录）：三层都可读写
+ * 任何情况下，非本机牛马与外部人都不得读私密层。
+ */
+/**
+ * **按执行者取上下文预算**（第 51 轮用户口径）：
+ *  · 子执行者 / 分身：用**牛马管理局里该牛马配置的上下文预算**（instances[i].contextBudgetPercent）
+ *  · 我的牛马「自己执行」/ 项目值班者自己执行：用**聊天框下面的预算**（全局 contextBudgetPercent）
+ *  · 群聊：没有聊天框预算，按牛马自己的配置
+ * 找不到该牛马的配置就回落到全局值（并如实说明是回落，不假装个性化）。
+ */
+function zhiXingZheYuSuanBaiFenBi(instId?: string): { percent: number; laiYuan: 'instance' | 'global' } {
+  try {
+    const s = settingsStore?.load() as { contextBudgetPercent?: number; instances?: Array<Record<string, unknown>> } | undefined;
+    const quan = Number(s?.contextBudgetPercent);
+    const g = Number.isFinite(quan) ? Math.min(100, Math.max(10, Math.round(quan))) : 60;
+    const id = String(instId || '').trim();
+    if (id) {
+      const inst = (s?.instances || []).find((x) => String((x as { id?: unknown }).id || '') === id);
+      const v = Number((inst as { contextBudgetPercent?: unknown } | undefined)?.contextBudgetPercent);
+      if (Number.isFinite(v) && v >= 10) return { percent: Math.min(100, Math.max(10, Math.round(v))), laiYuan: 'instance' };
+    }
+    return { percent: g, laiYuan: 'global' };
+  } catch {
+    return { percent: 60, laiYuan: 'global' };
+  }
+}
+
+/**
+ * **知识库读取作用域**（第 52 轮定稿矩阵，用户口径）：
+ *   | 会话 | 会话库 | 内部库 | 私密库 |
+ *   |---|---|---|---|
+ *   | 外部群 | ✓ | ✗ | ✗ |
+ *   | 联系人（未来的"加牛马"） | ✓ | ✗ | ✗ |
+ *   | 项目（内部群） | ✓ | ✓ | ✗ |
+ *   | 我的牛马 | ✓ | ✓ | **需牛马管理局勾选 `privateKb`** |
+ * 判不出会话类型时**收窄到只有会话库**（与不变量 #9 同一口径：宁可少看，不可多看）。
+ */
+function kbLayersFor(sessionId: string): ZhishiCeng[] {
+  try {
+    const sid = String(sessionId || '');
+    const g = groupStore?.getGroup?.(sid) as { type?: string } | undefined;
+    if (g) return g.type === 'internal' ? ['internal', 'session'] : ['session'];
+    const lie = (settingsStore?.load() as { instances?: Array<Record<string, unknown>> } | undefined)?.instances || [];
+    const ben = lie.find((x) => String(x?.id || '') === sid);
+    if (ben) {
+      /** 「允许查看私密知识库」是**读**权限，默认不勾；没勾就连列表里都不出现这一层 */
+      const yunXu = ben.privateKb === true;
+      return yunXu ? ['private', 'internal', 'session'] : ['internal', 'session'];
+    }
+    return ['session'];
+  } catch {
+    return ['session'];
+  }
+}
+/**
+ * **写入作用域与读取分开**（用户："归档可以写入私密/内部，与读权限不冲突"）：
+ * 我的牛马三层都可写；项目可写内部+会话；外部群/联系人只可写会话。
+ * 读勾选（`privateKb`）只关读，不关写 —— 否则归档往私密层放一条就被自己的勾选挡死。
+ */
+function kbWriteLayers(sessionId: string): ZhishiCeng[] {
+  try {
+    const sid = String(sessionId || '');
+    const g = groupStore?.getGroup?.(sid) as { type?: string } | undefined;
+    if (g) return g.type === 'internal' ? ['internal', 'session'] : ['session'];
+    const lie = (settingsStore?.load() as { instances?: Array<Record<string, unknown>> } | undefined)?.instances || [];
+    if (lie.some((x) => String(x?.id || '') === sid)) return ['private', 'internal', 'session'];
+    return ['session'];
+  } catch { return ['session']; }
+}
+/**
+ * 会话可写层：只认写侧名单（越权直接拒，不落盘）。
+ *
+ * 第 52 轮加了第二道闸：**内容自己也有层级**（`panDingCeng`）。模型/用户指定的层只是"想放哪"，
+ * 内容的敏感度决定"必须放哪" —— 两者取**更严**的那个：
+ *  · 判成私密却只想写会话库 ⇒ 升到私密库（可写就写进去，不可写就拒，绝不留在低层）；
+ *  · 判成业务却想写会话库 ⇒ 升到内部库，同理。
+ * 低层是"可以给外面看"的那一层，靠模型自觉分级必然漏（业界结论：摘要/改写本身就是泄露面）。
+ */
+function kbWritable(sessionId: string, ceng?: ZhishiCeng, neiRong?: string): ZhishiCeng | null {
+  const layers = kbWriteLayers(sessionId);
+  const want = ceng && ZHISHI_CENG_FOR_WRITE.includes(ceng) ? ceng : (layers.includes('session') ? 'session' : layers[0]!);
+  const xuYao = neiRong && String(neiRong).trim() ? panDingCeng(String(neiRong)) : want;
+  const shen = (x: ZhishiCeng) => (x === 'private' ? 3 : x === 'internal' ? 2 : 1);
+  const ding = (shen(want) >= shen(xuYao) ? want : xuYao) as ZhishiCeng;
+  if (ding !== want) {
+    try { audit?.log('kb.layer-raised', { sessionId, qing: want, ding, liYou: shen(xuYao) > shen(want) ? '内容敏感度更高' : '' }); } catch { /* noop */ }
+  }
+  return layers.includes(ding) ? ding : null;
+}
+const ZHISHI_CENG_FOR_WRITE: ZhishiCeng[] = ['session', 'internal', 'private'];
+
+/** 按会话作用域检索（越权层不参与） */
+function kbQueryFor(sessionId: string, q: string) {
+  const layers = kbLayersFor(sessionId);
+  return knowledge ? knowledge.queryLayers(layers, q) : { entities: [], events: [] };
+}
+/** 写一条实体/事件到指定层（越权直接拒绝并说明；内容更敏感时自动升到更严的层） */
+function kbWriteFor(sessionId: string, ceng: ZhishiCeng | undefined, xie: (kb: KnowledgeBase) => unknown, neiRong?: string): { ok: boolean; ceng?: ZhishiCeng; error?: string } {
+  const kai = kbWritable(sessionId, ceng, neiRong);
+  if (!kai || !knowledge) return { ok: false, error: 'kb-layer-denied' };
+  try {
+    xie(knowledge.allow(kai));
+    return { ok: true, ceng: kai };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 }
 
 
@@ -1796,9 +2499,19 @@ async function qingQiuKaPian(
       return String(tui.biaoQian || '');
     }
   }
+  /**
+   * **弹卡必须记账**（第 62 轮补的可观测性缺口）：以前只有"自动放行/自动选择/被停止抑制"三个分支写审计，
+   * 真正"弹卡等人"那一路一条 op 都没有 ⇒ 门禁超时后无法区分"在等一张没人点的卡"和"循环真的悬挂"。
+   * 这里只加成对的两条日志（等待 / 得到答案或超时），不改任何行为。
+   */
+  const kaBiaoTi = String(biaoTi || '').slice(0, 80);
+  try { audit?.log('chat.card-waiting', { sessionId, title: kaBiaoTi, authorization: shiShouQuanKa, options: (options || []).map((o) => String(o?.biaoQian || '')).slice(0, 8) }); } catch { /* noop */ }
   try { broadcastToWindows('warmy:aiWenTi', { sessionId, id: q.id }); } catch { /* noop */ }
   // 请求卡出现 ⇒ 播「请求」音效（渲染层在 onAiWenTi 里处理）
-  return dengDaiKaPian(q.id, timeoutMs);
+  const daiT0 = Date.now();
+  const daAn = await dengDaiKaPian(q.id, timeoutMs);
+  try { audit?.log('chat.card-answered', { sessionId, title: kaBiaoTi, ms: Date.now() - daiT0, choice: String(daAn || '').slice(0, 60), timeout: !daAn }); } catch { /* noop */ }
+  return daAn;
 }
 
 
@@ -1821,6 +2534,26 @@ const huiHuaMoXing = new Map<string, string>();
 function zhaoShiJiMoXing(sessionId?: string): string {
   const sid = String(sessionId || '');
   if (sid && huiHuaMoXing.has(sid)) return String(huiHuaMoXing.get(sid) || '');
+  /**
+   * **重启后不许退回"全局默认模型"**（真机抓出来的缺陷：`huiHuaMoXing` 是内存表，重启即空 ⇒
+   * 预算/窗口按另一个模型算：128K 的本地会话被当成 1M 的云端会话放行字符，或反过来把预算压小）。
+   * 每条消息落 chat-meta 时都带了自己用的模型 ⇒ 倒着找最后一条有模型的记录，就是这个会话的真实模型。
+   */
+  try {
+    const m = chatMetaBen.get(sid);
+    const ms = m && Array.isArray(m.msgs) ? m.msgs : [];
+    for (let i = ms.length - 1; i >= 0; i--) {
+      const yuan = String(ms[i]?.moXing || '').trim();
+      if (!yuan) continue;
+      /**
+       * 元数据里这个字段是**给人悬停看的**，形如 `供应商显示名 · model id`（第 36 轮起的既定形状）
+       * ⇒ 取最后一个 `·` 之后那段才是 model id。整串拿去查窗口会查不到 ⇒ 预算退回默认 32K（真缺陷）。
+       */
+      const dian = yuan.lastIndexOf('·');
+      const chun = (dian >= 0 ? yuan.slice(dian + 1) : yuan).trim();
+      if (chun) return chun;
+    }
+  } catch { /* 读不到会话元数据就退回全局默认 */ }
   return String(providerCfg.model || '');
 }
 /**
@@ -1842,7 +2575,7 @@ const huiHuaYiDaKai = new Map<string, Set<string>>();
 /** 本次用户任务里看图模型给出的描述：续派轮不再重发附件、不再重看，直接带上这份结果 */
 const huiHuaKanTuJie = new Map<string, string>();
 /** 当前模型自己能看图时：第一轮规范化后的图片块，续派轮原样带回（不重新转换、不重新转交） */
-const huiHuaTuKuai = new Map<string, { kuai: Array<{ type: 'image_url'; image_url: { url: string } }>; ming: string[] }>();
+const huiHuaTuKuai = new Map<string, { kuai: Array<{ type: 'image_url'; image_url: { url: string } }>; ming: string[]; che?: Array<{ kuan: number; gao: number }> }>();
 /**
  * **本次用户任务的证据账**（第 34 轮 项 12）：只在真实用户轮清零，续派轮累计。
  * 计划步骤按证据自动验证、续派判"有没有推进"都只认这里（宿主看到的事实），不认模型自述。
@@ -1855,10 +2588,7 @@ const benCiRenWuChanPin = new Map<string, Array<{ abs: string; name: string; ts:
 const benCiRenWuZiShu = new Map<string, number>();
 /** 其中**单条够长**（≥800 字）的回复合计：判"写 N 字"只认它 —— "已完成，文件在…"这类收尾汇报不是正文 */
 const benCiRenWuChangWen = new Map<string, number>();
-/** 字数按**不计空白和换行**算（中文"N 字"的通行口径；含换行算会把 5493 字的小说当成 6000 字） */
-function jingZiShu(s: string): number {
-  return [...String(s || '').replace(/\s+/g, '')].length;
-}
+/** 字数按**不计空白和换行**算：`jingZiShu()` 与重合率算法一起搬进 `chang-wen-fu-zhi.ts`（纯函数、可单测），这里只 import */
 /** 多长的文件/回复才算"那篇长文"：同一任务里顺手写的短文件（「你是谁」txt）不是 */
 function changWenMenKan(yao: number): number {
   return Math.min(800, Math.max(200, Math.round(yao * 0.12)));
@@ -1880,7 +2610,7 @@ const jiHuaYanZhengBoHui = new Map<string, Set<string>>();
  * 真机：mimo/qwen 在每个续派轮都把"写 txt → 生成 ppt → 打开 ×2 → 等 30 秒"整套重做一遍。
  */
 const benCiRenWuBuZhou = new Map<string, Map<string, BuZhouJi>>();
-type BuZhouJi = { tool: string; ts: number; jieGuo: string; shuo?: string; zhaiYao?: string; n?: number; lu?: string; abs?: string };
+type BuZhouJi = { tool: string; ts: number; jieGuo: string; shuo?: string; zhaiYao?: string; n?: number; lu?: string; abs?: string; miaoLeiJi?: number };
 /** 这一轮是不是续接轮（宿主续派 / 「继续执行」）：只有续接轮才拿日志拦重复 */
 const benLunXuJie = new Map<string, boolean>();
 const BU_ZHOU_BIE_MING: Record<string, string> = {
@@ -1904,6 +2634,34 @@ function buZhouLuJing(base: string, raw: string): { key: string; abs: string } {
   } catch { abs = r; }
   return { key: process.platform === 'win32' ? abs.toLowerCase() : abs, abs };
 }
+/** 当前这一轮是"完成核对轮"的会话（用户轮开始时清掉；核对轮由续派以 ziYouHuiDa 标记派出） */
+const heDuiLunZhong = new Set<string>();
+/**
+ * **完成核对轮不许整篇重写本任务已经交付的文件**（第 48 轮 live 真事故：r34 MiMo 腿的核对轮把已写好的
+ * 8326 字小说不带 append 整篇重发了一遍，白烧 330 秒）。核对指令里本来就写着"已生成的文件不要重做"，
+ * 模型照样重写 ⇒ 变成宿主的硬闸：本任务写过、磁盘上还在、这次又不带 append 整篇发 ⇒ 不执行，
+ * 回一句可执行的话（没问题就 plan_verify；要补就 append；要改局部用 edit_file）。
+ */
+function heDuiLunChongXieZuDang(sessionId: string, base: string, gongJuMing: string, call: unknown): WorkToolResult | null {
+  const sid = String(sessionId || '');
+  if (gongJuMing !== 'write_file' || !heDuiLunZhong.has(sid)) return null;
+  try {
+    const jie = jieXiGongJuCanShu((call as { function?: { arguments?: unknown } })?.function?.arguments);
+    const a = ((jie.ok && jie.args) || {}) as Record<string, unknown>;
+    if (shiZhuiJia(a)) return null;
+    const lu = buZhouLuJing(base, quLuJingCanShu(a));
+    const jiu = lu.key ? (benCiRenWuBuZhou.get(sid) || new Map()).get('write|' + lu.key) : undefined;
+    const zi = jiu && jiu.abs ? wenJianZiFuShu(String(jiu.abs)) : 0;
+    if (!jiu || zi <= 0) return null;
+    try { audit?.log('chat.verify-round-rewrite-blocked', { sessionId: sid, path: String(jiu.abs), zi }); } catch { /* noop */ }
+    return {
+      ok: false,
+      content: `[write_file] 没有执行：这是完成核对轮，${String(jiu.abs)} 本任务里已经写过（磁盘上现有 ${zi} 字）。`
+        + '核对轮不整篇重写已交付的文件：内容没问题就用 plan_verify 带证据标掉这一步；确实要补就带 append:true 只写新增部分；要改局部用 edit_file。',
+      meta: { tool: 'write_file', ok: false, bytes: 0, error: 'verify-round-rewrite-blocked' },
+    } as WorkToolResult;
+  } catch { return null; }
+}
 function buZhouJian(abs: string): string {
   const a = String(abs || '');
   return process.platform === 'win32' ? a.toLowerCase() : a;
@@ -1920,15 +2678,10 @@ function buZhouNeiRongZhaiYao(a: Record<string, unknown>): string {
   return buZhouZhaiYao(s);
 }
 /**
- * 用户原话里点了几次"等多久"（`等待30秒` ⇒ 1）。有"每隔/轮询/直到"这类循环说法 ⇒ 不设上限；
- * 一个都没有 ⇒ 0（等待由模型自己定，宿主不拦）。
+ * 「要等多久 / 等几回」的解析搬到了 `shi-chang.ts`（零依赖、能被门禁直接 import 跑断言）：
+ * 埋在 2 万行的主进程里就没人测得动，而 grep 字符串证明不了口径。
+ * 见 `yaoQiuDengDaiMiaoShu`（累计秒数）与 `yuanWenDengDaiCiShu`（次数）。
  */
-function yuanWenDengDaiCiShu(yuanWen: string): number {
-  const s = String(yuanWen || '');
-  if (/每隔|每\s*(?:\d+|[一二两三四五六七八九十]+)\s*(?:秒|分钟|小时)|轮询|直到|反复|every\s+\d|\bpoll|\buntil\b/i.test(s)) return 0;
-  const m = s.match(/(?:\d+(?:\.\d+)?|[零一二两三四五六七八九十百半]+)\s*(?:秒钟|秒|分钟|个?小时|seconds?|secs?|minutes?|mins?|hours?)/gi);
-  return m ? m.length : 0;
-}
 function buZhouRi(sid: string): Map<string, BuZhouJi> {
   let ri = benCiRenWuBuZhou.get(sid);
   if (!ri) { ri = new Map(); benCiRenWuBuZhou.set(sid, ri); }
@@ -2107,35 +2860,20 @@ function jiaoFuWuLuoDian(sid: string, rawPath: string, lei: string): string {
  * 另有一条**所有轮都拦**的：把本任务已写好的文件**覆盖丢稿**（见 `fuGaiDiuGao`）。
  * `zuDang` = 这次是拦下的失败（没有写入），不是"已经做过"。
  */
-type BuZhouLan = { wen: string; zuDang?: boolean; liYou?: string };
+type BuZhouLan = { wen: string; zuDang?: boolean; liYou?: string; oldChars?: number; newChars?: number };
 function shiFuGaiQueRen(a: Record<string, unknown>): boolean {
   const v = a.overwrite;
   return v === true || v === 1 || (typeof v === 'string' && /^\s*(?:true|1|yes)\s*$/i.test(v));
 }
-/** 8 字切片的重合率（以旧文为分母）：续写的下一段与旧文几乎不重合，改写过的整篇大量重合 */
-function chongHeLv(jiu: string, xin: string): number {
-  const K = 8;
-  const a = [...jiu];
-  if (a.length < K) return 1;
-  const xinJi = new Set<string>();
-  const b = [...xin];
-  for (let i = 0; i + K <= b.length; i++) xinJi.add(b.slice(i, i + K).join(''));
-  let zong = 0;
-  let zhong = 0;
-  const bu = Math.max(1, Math.floor((a.length - K + 1) / 400));
-  for (let i = 0; i + K <= a.length; i += bu) {
-    zong++;
-    if (xinJi.has(a.slice(i, i + K).join(''))) zhong++;
-  }
-  return zong ? zhong / zong : 1;
-}
+/** 8 字切片的重合率：搬进 `chang-wen-fu-zhi.ts` 与"副本判定"放在一起，`write_file`/`copy_file` 共用一份实现 */
 /**
  * **覆盖丢稿**闸（trial-1 审计：小说.txt 9139 → 2247 → 3598 字节，三次 write_file 都没带 append，
  * 每一段都把前一段覆盖掉了）。只管本任务里写过的文件；对齐 Claude Code「覆盖已有文件前必须先读过」的做法：
  * 宿主不替模型猜意图，而是**不执行并说明怎么做**（续写带 append、局部改用 edit_file、整篇替换带 overwrite）。
  */
 function fuGaiDiuGao(ri: Map<string, BuZhouJi>, a: Record<string, unknown>, base: string): BuZhouLan | null {
-  if (shiZhuiJia(a) || shiFuGaiQueRen(a)) return null;
+  if (shiZhuiJia(a)) return null;
+  const queRen = shiFuGaiQueRen(a);
   const lu = buZhouLuJing(base, quLuJingCanShu(a));
   const j = lu.key ? ri.get('write|' + lu.key) : undefined;
   if (!j) return null;
@@ -2150,9 +2888,26 @@ function fuGaiDiuGao(ri: Map<string, BuZhouJi>, a: Record<string, unknown>, base
   if (xin < xian) why = tMain('llm.writeShorterWhy', '比它短');
   else if (!content.startsWith(jiu.slice(0, 64)) && chongHeLv(jiu, content) < 0.15) why = tMain('llm.writeDisjointWhy', '和它几乎没有重合（像是接在后面的下一段）');
   if (!why) return null;
+  /**
+   * 模型自己带 `overwrite:true` 也不能跳过"破坏性覆盖"确认（第 63 轮项 7 的真缺口）：
+   * 真机 r34-mimo-1 就是带 overwrite 把 1743 字整篇覆盖成 961 字，旧闸看到 overwrite 直接放行。
+   * 现在仍返回 `zuDang`，由工具循环弹带推荐项的确认卡；只有人/卡明确同意才真正覆盖。
+   */
+  if (queRen) {
+    return {
+      zuDang: true,
+      liYou: xin < xian ? 'shorter-confirmed' : 'disjoint-confirmed',
+      oldChars: xian,
+      newChars: xin,
+      wen: tMain('llm.writeOverwriteBlocked', '【没有写入】{path} 里已经有本任务写好的 {old} 字，这次的内容（{new} 字）{why}，直接覆盖会丢掉已经写好的部分，宿主没有执行这次写入。\n· 要接着往后写：把这段内容原样再发一次，并带上 append:true（追加到文件末尾）；\n· 要局部修改：用 edit_file；\n· 确实要把整篇换成这次的内容：在确认卡里选「覆盖」。')
+        .replace('{path}', lu.abs).replace('{old}', String(xian)).replace('{new}', String(xin)).replace('{why}', why),
+    };
+  }
   return {
     zuDang: true,
     liYou: xin < xian ? 'shorter' : 'disjoint',
+    oldChars: xian,
+    newChars: xin,
     wen: tMain('llm.writeOverwriteBlocked', '【没有写入】{path} 里已经有本任务写好的 {old} 字，这次的内容（{new} 字）{why}，直接覆盖会丢掉已经写好的部分，宿主没有执行这次写入。\n· 要接着往后写：把这段内容原样再发一次，并带上 append:true（追加到文件末尾）；\n· 要局部修改：用 edit_file；\n· 确实要把整篇换成这次的内容：带上 overwrite:true 再发一次。')
       .replace('{path}', lu.abs).replace('{old}', String(xian)).replace('{new}', String(xin)).replace('{why}', why),
   };
@@ -2214,8 +2969,13 @@ function buZhouYiZuoGuo(sid: string, ming0: string, rawArgs: unknown, base: stri
   if (!jie.ok) return null;
   const a = (jie.args || {}) as Record<string, unknown>;
   if (ming === 'write_file') {
-    const lan = fuGaiDiuGao(ri, a, base) || zhuiJiaCuoWei(ri, a, base) || changWenFuZhiLan(ri, a, base);
+    const lan = fuGaiDiuGao(ri, a, base) || zhuiJiaCuoWei(ri, a, base) || changWenFuZhiLan(ri, a, base, sid);
     if (lan) return lan;
+  }
+  /** 同一篇长文改用 `copy_file` 另存一份，也算副本（老判据只挂在 write_file 上，被绕开过一次） */
+  if (ming === 'copy_file') {
+    const lanF = changWenFuZhiLanCongFuZhi(ri, a, base, sid);
+    if (lanF) return lanF;
   }
   const fanHui = (j: BuZhouJi, why: string): BuZhouLan => {
     const shi = new Date(j.ts).toLocaleTimeString('zh-CN', { hour12: false });
@@ -2269,7 +3029,14 @@ function buZhouYiZuoGuo(sid: string, ming0: string, rawArgs: unknown, base: stri
   if (ming === 'wait_seconds') {
     const j = ri.get('wait');
     const cap = yuanWenDengDaiCiShu(benCiRenWuYuanWen.get(sid) || '');
-    if (!j || !cap || (j.n || 0) < cap) return null;
+    const yaoMiao = yaoQiuDengDaiMiaoShu(benCiRenWuYuanWen.get(sid) || '');
+    if (!j || !cap) return null;
+    /**
+     * **欠着秒数就不许拦**（第 39 轮真机）：用户要"等 30 秒"，模型只等了 20 秒 ⇒
+     * 原来的次数口径已经满足了 cap ⇒ 宿主会把"补等"这一发当重复拦掉 ⇒
+     * 于是少的 10 秒永远补不回来。所以**次数与秒数都要够，才算这一项做完了**。
+     */
+    if (yaoMiao > 0 && (j.miaoLeiJi || 0) < yaoMiao) return null;
     return fanHui(j, tMain('llm.stepWaitDone', '用户要求的等待本任务里已经等完了（共 {n} 次）').replace('{n}', String(j.n || 0)));
   }
   if (ming === 'write_file') {
@@ -2308,19 +3075,31 @@ function buZhouYiZuoGuo(sid: string, ming0: string, rawArgs: unknown, base: stri
   }
   return null;
 }
+/** 用户原话里就要"再来一份"⇒ 那是需求，不是模型白做（两条防护共用同一个口径） */
+function yongHuYaoFuBen(sid: string): boolean {
+  return /复制|副本|另存|备份|再存一份|一份新的|拷/.test(benCiRenWuYuanWen.get(String(sid || '')) || '');
+}
 /**
  * **长文副本防护**（所有轮都拦；真机 r34-mimo-3：模型写完《守灯的人》后
  * 又另存了一份 `novel_check.txt`（5646 字）去"自己数字数"，界面上就出现两篇一样的长文）。
  * 字数由宿主统计并在写入结果里报给它，不需要另存副本 —— 所以这种"换个名字再存一份"
- * 不是新工作，直接拒掉并说清楚为什么。
+ * 不是新工作，直接拒掉并说清楚为什么。放行条件全部走 `shiChangWenFuBen()`（纯函数，门禁跑真值表）。
  */
-function changWenFuZhiLan(ri: Map<string, BuZhouJi>, a: Record<string, unknown>, base: string): BuZhouLan | null {
-  if (shiZhuiJia(a) || shiFuGaiQueRen(a)) return null;
+function changWenFuZhiLan(ri: Map<string, BuZhouJi>, a: Record<string, unknown>, base: string, sid = ''): BuZhouLan | null {
   const content = String(a.content ?? '');
-  if (jingZiShu(content) < 800) return null;
   const lu = buZhouLuJing(base, quLuJingCanShu(a));
   if (!lu.abs) return null;
-  try { if (fs.existsSync(lu.abs)) return null; } catch { return null; }
+  let yiCunZai = false;
+  try { yiCunZai = fs.existsSync(lu.abs); } catch { return null; }
+  const yue: Omit<FuBenYueDing, 'chongHe'> = {
+    muBiaoYiCunZai: yiCunZai,
+    tongYiWenJian: false,
+    wenBenLei: /\.(?:txt|md|markdown)$/i.test(lu.abs),
+    yongHuYaoFuBen: yongHuYaoFuBen(sid),
+    yiQueRen: shiFuGaiQueRen(a),
+    zhuiJia: shiZhuiJia(a),
+    neiRong: content,
+  };
   const yiXieGuo = new Set<string>();
   for (const j of ri.values()) {
     const other = String(j.abs || '');
@@ -2335,15 +3114,35 @@ function changWenFuZhiLan(ri: Map<string, BuZhouJi>, a: Record<string, unknown>,
     } catch { continue; }
     if (jingZiShu(jiu) < 800) continue;
     const lv = chongHeLv(jiu, content);
-    if (lv < 0.8) continue;
+    if (!shiChangWenFuBen({ ...yue, chongHe: lv })) continue;
     return {
       zuDang: true,
       liYou: 'long-copy',
-      wen: tMain('llm.longTextCopyBlocked', '【没有写入】{q} 与本任务已经写好的 {p} 内容重合约 {r}% —— 这是把同一篇长文**换个名字另存了一份副本**（通常是模型想自己数一遍字数）。宿主没有执行这次写入。\n字数由宿主统计并在每次写入结果里报给你（【字数进度】那一行），**不需要另存副本、也不需要读文件来数**。请基于 {p} 继续，或直接把现在的完成情况如实汇报给用户。')
-        .replace('{q}', () => lu.abs).replace('{p}', () => other).replace('{r}', () => String(Math.round(lv * 100))),
+      wen: fuBenBoHuiWen(tMain('llm.longTextCopyBlocked', '【没有写入】{q} 与本任务已经写好的 {p} 内容重合约 {r}% —— 这是把同一篇长文**换个名字另存了一份副本**（通常是模型想自己数一遍字数）。宿主没有执行这次写入。\n字数由宿主统计并在每次写入结果里报给你（【字数进度】那一行），**不需要另存副本、也不需要读文件来数**。请基于 {p} 继续，或直接把现在的完成情况如实汇报给用户。'), other, lu.abs, lv),
     };
   }
   return null;
+}
+/**
+ * **`copy_file` 也算"换个名字另存一份长文"**（第 44 轮真机 r34-mimo：小说 5945 字已经写完了，
+ * 模型为了"自己数一遍/取个尾"先写了 `get_tail.ps1`，接着用 `copy_file` 把整篇拷成 `novel_full.txt`
+ * ⇒ 同任务里出现两份一模一样的长文。`changWenFuZhiLan` 原本只挂在 `write_file` 上，换条工具路就绕开了）。
+ * 逻辑照旧：源是本任务写过的长文、目标是个新文件、8 字切片重合 ≥80% ⇒ 拦下并把为什么讲清楚。
+ * **两条放行**：用户原话里就要一份副本（复制/另存/备份…），或模型带 `overwrite:true` 明确确认 ——
+ * 防护不许挡住真需求（这条比"少拦一次"更重要）。
+ */
+function changWenFuZhiLanCongFuZhi(ri: Map<string, BuZhouJi>, a: Record<string, unknown>, base: string, sid: string): BuZhouLan | null {
+  const yuan = buZhouLuJing(base, String(a.from ?? a.source ?? a.src ?? a.path ?? ''));
+  const muB = buZhouLuJing(base, String(a.to ?? a.destination ?? a.dest ?? a.targetPath ?? ''));
+  if (!yuan.abs || !muB.abs || buZhouJian(yuan.abs) === buZhouJian(muB.abs)) return null;
+  let wen = '';
+  try {
+    const st = fs.statSync(yuan.abs);
+    if (!st.isFile() || st.size >= 8 * 1024 * 1024) return null;
+    wen = fs.readFileSync(yuan.abs, 'utf8');
+  } catch { return null; }
+  /** 放行条件（overwrite 确认 / 追加 / 用户原话就要副本 / 目标已存在 / 非文本 / 短文 / 重合不足）全在 `changWenFuZhiLan` 里 ⇒ 两条工具路共用一套，不许各写一份 */
+  return changWenFuZhiLan(ri, { ...a, content: wen, path: muB.abs, append: false }, base, sid);
 }
 /**
  * **本任务自己刚产出的文件，不许再白做一遍 / 另存一份去自查**（第 34 轮 项 12 收尾，真机 r34-c1）。
@@ -2393,7 +3192,7 @@ function benRenWuZiJiChanChuLan(ming: string, a: Record<string, unknown>, base: 
       zuDang: true,
       liYou: 'self-copy-out',
       wen: tMain('llm.verifyCopyBlocked', '【没有执行】{q} 是把本任务刚生成的 {p} **另存一份副本**（通常是为了"再看一眼内容对不对"）。工作区外多出一份一模一样的文件，用户会当成重复产物。\n要看内容请**直接对 {p} 用 read_pptx / read_docx / read_file**（宿主刚把它写进去，绝对路径就是这个）；不要另存副本。')
-        .replace('{q}', () => ming2.abs).replace('{p}', () => yuan.abs),
+        .replace(/\{q\}/g, () => ming2.abs).replace(/\{p\}/g, () => yuan.abs),
     };
   }
   if (!lu.abs) return null;
@@ -2417,7 +3216,7 @@ function benRenWuZiJiChanChuLan(ming: string, a: Record<string, unknown>, base: 
         zuDang: true,
         liYou: 'regen-own',
         wen: tMain('llm.regenOwnBlocked', '【没有执行】{p} 是本任务刚刚生成好的文件（{t}），宿主不需要再整篇生成一遍。\n· 只是想确认内容：直接对 {p} 用 read_pptx / read_docx / read_file；\n· 确实要按新内容重做这一份：把同样的调用带上 `overwrite:true` 再发一次。')
-          .replace('{p}', () => lu.abs).replace('{t}', () => new Date(x.mtime).toLocaleTimeString('zh-CN', { hour12: false })),
+          .replace(/\{p\}/g, () => lu.abs).replace(/\{t\}/g, () => new Date(x.mtime).toLocaleTimeString('zh-CN', { hour12: false })),
       };
     }
     try { audit?.log('chat.deliverable-repair', { sessionId: sid, tool: ming, abs: lu.abs, mtime: x.mtime }); } catch { /* noop */ }
@@ -2540,7 +3339,7 @@ function tongLeiDiErFenLan(ming: string, a: Record<string, unknown>, base: strin
       zuDang: true,
       liYou: 'abandon-draft',
       wen: tMain('llm.abandonDraftBlocked', '【没有写入】本任务在这个目录里已经有一篇**还没写完**的长文：{p}（现在 {n} 字，用户要求约 {y} 字）。这次是**另起一个文件名从头再写一篇**——那样桌面上会出现两篇都不够长的稿子，一篇都交付不了。\n请对 **{p} 这个原样路径**用 write_file 带 `append:true` 接着往下写（只发新增段落，字数由宿主每次报给你）；不要换名字重来。')
-        .replace('{p}', () => qiGaoWen).replace('{n}', () => String(naMe)).replace('{y}', () => String(yaoQiu)),
+        .replace(/\{p\}/g, () => qiGaoWen).replace(/\{n\}/g, () => String(naMe)).replace(/\{y\}/g, () => String(yaoQiu)),
     };
   }
   if (!yiYouWen) return null;
@@ -2548,7 +3347,7 @@ function tongLeiDiErFenLan(ming: string, a: Record<string, unknown>, base: strin
     zuDang: true,
     liYou: 'same-family-second',
     wen: tMain('llm.sameFamilySecondBlocked', '【没有写入】这个目录里已经有本次任务做好的同类交付物：{p}。这次的 {q} 是**换个名字又做一份**，用户在同一个文件夹里会看到两份一模一样的东西。\n要看内容请对 {p} 用 read_file / read_pptx；确实要另一份新文件（用户说了要两份），带上 `overwrite:true` 再发一次并把理由说清楚。')
-      .replace('{p}', () => yiYouWen).replace('{q}', () => lu.abs),
+      .replace(/\{p\}/g, () => yiYouWen).replace(/\{q\}/g, () => lu.abs),
   };
 }
 /** 记一笔成功的副作用（所有轮都记；只有续接轮才拿来拦） */
@@ -2565,7 +3364,9 @@ function jiBuZhou(sid: string, ming0: string, rawArgs: unknown, base: string, ji
       const j0 = ri.get('wait');
       const n = (j0?.n || 0) + 1;
       const miao = Math.max(0.5, Math.min(600, Number(a.seconds) || 0));
-      ri.set('wait', { tool: ming, ts: j0?.ts || now, jieGuo: jg, n, shuo: tMain('llm.ledgerWait', '已等待 {s} 秒（共等了 {n} 次）').replace('{s}', String(miao)).replace('{n}', String(n)) });
+      /** 次数与**累计秒数**都要记（第 39 轮真机红：只记次数 ⇒ 用户要 30 秒、模型等 20 秒也算"等过了"） */
+      const miaoLeiJi = (j0?.miaoLeiJi || 0) + miao;
+      ri.set('wait', { tool: ming, ts: j0?.ts || now, jieGuo: jg, n, miaoLeiJi, shuo: tMain('llm.ledgerWait', '已等待 {s} 秒（共等了 {n} 次）').replace('{s}', String(miao)).replace('{n}', String(n)) });
       return;
     }
     if (ming === 'open_path') {
@@ -2762,6 +3563,8 @@ function baoZhuangLiuShi(
   const KONG_XIAN_MS = benDi ? 180_000 : 150_000;   // 相邻两片的最长间隔
   const LIU_CHONG_FA = 1;
   const FEI_LIU_MS = 270_000;                       // 非流式兜底的上限：比外层 5 分钟卡死判定短
+  /** 这个供应商的指纹：校准表按 `供应商/模型/桶` 存，同模型挂不同中转不许共用一个系数（用户第 9 条补充） */
+  const gongYingFen = gongYingDai(yuan.baseURL, yuan.protocol);
   const daiChaoShi = (signal: AbortSignal | undefined, ms: number): AbortSignal => {
     const yu = AbortSignal.timeout(ms);
     return signal ? AbortSignal.any([signal, yu]) : yu;
@@ -2891,18 +3694,19 @@ function baoZhuangLiuShi(
           try { audit?.log('chat.stream-long', { model, ms: haoShi, attempt: ci + 1, chunks: pianShu, argChars: canShuZi, maxGapMs: zuiDaJianGe, reasoningChars: reasoning.length, contentChars: content.length }); } catch { /* noop */ }
         }
         /**
-         * **用量兜底**：端点在流式里没吐用量 ⇒ 按字符估算（标注 `estimated`，不冒充原生数据）。
+         * **用量兜底**：端点在流式里没吐用量 ⇒ 按**同一套 token 口径**估算（标注 `estimated`，不冒充原生数据）。
          * 真事故：不估的话总看板的「词元消耗」永远是 0。
+         * 旧口径这里是 `字符/3` 的**第二套硬编码系数**，与预算侧的 `×1.6` 互相不知道对方存在 ⇒ 第 44 轮统一到 `token-jiliang.ts`。
          */
         if (!usage.promptTokens && !usage.completionTokens) {
-          const ruZi = (Qiu.xiaoXiJi || []).reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 0), 0);
-          const chuZi = content.length + reasoning.length;
+          const ruTok = Math.max(0, guJiToken(qingQiuGuJiWen(Qiu)));
+          const chuTok = Math.max(0, guJiToken(`${reasoning}\n${content}`));
           usage = {
-            promptTokens: Math.max(0, Math.round(ruZi / 3)),
-            completionTokens: Math.max(0, Math.round(chuZi / 3)),
-            totalTokens: Math.round((ruZi + chuZi) / 3),
+            promptTokens: ruTok,
+            completionTokens: chuTok,
+            totalTokens: ruTok + chuTok,
             cacheHitTokens: 0,
-            cacheMissTokens: Math.max(0, Math.round(ruZi / 3)),
+            cacheMissTokens: ruTok,
             source: 'estimated',
           };
         }
@@ -2918,6 +3722,7 @@ function baoZhuangLiuShi(
           const hui = await yuan.chat(Qiu, daiChaoShi(signal, FEI_LIU_MS));
           huo(false);
           jieShu(true);
+          jiaZhunYongLiang(gongYingFen, Qiu, hui);
           return hui;
         }
         /**
@@ -2934,6 +3739,7 @@ function baoZhuangLiuShi(
             const jieGou = (hui.choices?.[0]?.message as { gongJuDiaoYongJi?: unknown } | undefined)?.gongJuDiaoYongJi;
             if (Array.isArray(jieGou) && jieGou.length) {
               jieShu(true);
+              jiaZhunYongLiang(gongYingFen, Qiu, hui);
               return hui;
             }
           } catch (e) {
@@ -2958,6 +3764,7 @@ function baoZhuangLiuShi(
         };
         huo(false);
         jieShu(true);
+        jiaZhunYongLiang(gongYingFen, Qiu, chu);
         return chu;
         }
       } catch (e) {
@@ -2967,7 +3774,9 @@ function baoZhuangLiuShi(
         if (signal?.aborted || yiHuiTui || /^stream-(?:first|idle)-timeout/.test(xiaoXi)) { jieShu(false); throw e; }
         // 端点不支持流式 / 流式出错 ⇒ 就地退回一次普通对话（有上限，绝不无声挂死）
         try {
-          return await yuan.chat(Qiu, daiChaoShi(signal, FEI_LIU_MS));
+          const hui = await yuan.chat(Qiu, daiChaoShi(signal, FEI_LIU_MS));
+          jiaZhunYongLiang(gongYingFen, Qiu, hui);
+          return hui;
         } finally {
           huo(false);
           jieShu(false);
@@ -3067,55 +3876,108 @@ function boXingPianDuan(sessionId: string, p: { reasoning?: string; content?: st
   }
 }
 
-async function yunXingLiaoTianXunHuan(
-  sessionId: string,
-  provider: MoxingGongYing,
-  Qiu: LiaoTianQingQiu,
-  /** 小弟数量：'auto'（=32）或 0..8（0 = 不许派小弟）—— 牛马管理里设的 */
-  xiaoDiShuLiang?: string | number
-): Promise<GongJuXunHuanGuo & { tooled: boolean }> {
-  const limits = toolLimits();
-  const jiyiJiuxu = await baozhangJiyiCangJiuxu();
-  const keGanHuo = huiHuaKeGanHuo(sessionId);
+/** 小弟数量上限：`auto` = 32（历史上限）；0 = 不许派小弟；N = 本轮最多派 N 个 */
+
+
+/** 本会话正在跑的子任务占用（真并发的守卫；串行调用时主要是留痕） */
+const paiFaZhanYong = new Map<string, string[]>();
+
+function xiaoDiShangXianOf(xiaoDiShuLiang?: string | number): number {
+  if (xiaoDiShuLiang === undefined || xiaoDiShuLiang === null || xiaoDiShuLiang === '' || xiaoDiShuLiang === 'auto') return 32;
+  const n = Number(xiaoDiShuLiang);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 32;
+}
+/**
+ * 模型自己调 recall/retrieve 时的作用域（ADR000 不变量 #9「权限过滤先于相关性检索」）：
+ * 外部群里有别人，AI 不许把你在别的会话里说过的话召回给群里看 ⇒ 只许查这个群自己的记录（召回与解引用两侧都守）。
+ * 单聊与内部项目只有你一个人，跨会话"永远记得"是承诺的一部分 ⇒ 不加作用域。
+ * 查群类型出错时**收窄**（按本会话作用域）而不是放开：宁可这次少召回，也不越权。
+ */
+function jiYiZuoYongYu(sessionId: string): { groupId: string } | undefined {
+  const sid = String(sessionId || '');
+  if (!sid) return undefined;
+  try {
+    const lei = groupStore?.getGroup(sid)?.type || router.getGroup(sid)?.type;
+    return lei === 'external' ? { groupId: sid } : undefined;
+  } catch {
+    return { groupId: sid };
+  }
+}
+
+/**
+ * **本轮真正挂给模型的工具规格**（第 44 轮后半抽成唯一入口）。
+ * 以前它只在内层工具循环里现拼一次 ⇒ 预算要按"所有发给模型的内容"计价时，工具规格这一段算不出来，
+ * 只能再抄一份逻辑（两份就会漂移）。现在**发送侧与计价侧共用这一个函数**。
+ *
+ * 降级链第 1 环（第 20 轮真事故）：记忆服务不可用时**只砍记忆工具**，干活工具照常暴露 ——
+ * 为了一个可选能力把核心能力全关掉是错的方向（那时用户看到的就是"牛马不能干活"）。
+ * 工具启停（设置→工具）在这里生效：停掉的工具模型就看不到。
+ */
+async function zuJingGongJuGuiGe(sessionId: string, xiaoDiShangXian: number, jiyiJiuxu: boolean, keGanHuo: boolean, zuiDuo = 0): Promise<GongJuGuiGe[]> {
   const jiyiTools: GongJuGuiGe[] = jiyiJiuxu ? (memoryToolSpecs(toolLabels()) as unknown as GongJuGuiGe[]) : [];
-  // 小弟数量：自适应 = 32（历史上限）；0 = 不给 spawn_subagent；N = 本轮最多派 N 个
-  const xiaoDiShangXian = (() => {
-    const v = xiaoDiShuLiang;
-    if (v === undefined || v === null || v === '' || v === 'auto') return 32;
-    const n = Number(v);
-    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 32;
-  })();
-  let yiPaiXiaoDi = 0;
-  // 干活工具：只有「我的牛马 / 项目」暴露；群聊保持仅聊天
   const ganHuoTools = keGanHuo
-    ? ([
-        ...workToolSpecs(),
-        ...hostToolSpecs(),
-        ...(xiaoDiShangXian > 0 ? (xiaoDiToolSpecs() as unknown as GongJuGuiGe[]) : []),
-      ] as unknown as GongJuGuiGe[])
+    ? ([...workToolSpecs(), ...hostToolSpecs(), ...(xiaoDiShangXian > 0 ? (xiaoDiToolSpecs() as unknown as GongJuGuiGe[]) : [])] as unknown as GongJuGuiGe[])
     : [];
-  /**
-   * **工具启停**（产品要求）：设置→工具里停掉的工具，模型就看不到它。
-   * 自定义工具（从文件夹导入的 TOOL.json）也在这里挂上。
-   */
   const ziDing = ziDingGongJuJiQu().filter((g) => gongJuKeJian(g.name));
   const ziDingGuiGe = ziDing.map((g) => ({
     type: 'function' as const,
     function: { name: g.name, description: g.description || `自定义工具：${g.name}`, parameters: g.parameters },
   })) as unknown as GongJuGuiGe[];
+  const quan = [...ganHuoTools, ...jiyiTools, ...ziDingGuiGe].filter((g) => gongJuKeJian(g.function.name));
   /**
-   * 降级链第 1 环：记忆服务不可用 ⇒ **只砍记忆工具**，干活工具照常暴露。
-   *
-   * 真机事故（第 20 轮）：这里原来是「记忆不可用 ⇒ **整套工具都不暴露**」。
-   * 记忆子进程因 better-sqlite3 找不到而起不来时，牛马就**一个工具都调不到**：
-   * 用户说"在桌面生成文件"，它只能嘴上说"已完成"（审计 `chat.false-claim`），
-   * 连续两轮零工具调用后被判 `no-progress` 停机 —— 用户看到的就是"牛马不能干活"。
-   *
-   * 干活工具（write_file / open_path / run_shell / make_pptx …）**不依赖记忆系统**：
-   * 它们读写的是工作区文件，不是记忆库。为了一个可选能力把核心能力全部关掉，
-   * 是错误的降级方向。记忆不可用时少的只是"回忆旧对话"，活照样能干。
+   * **窗口装不下整套工具规格时按档位截尾**（`gong-ju-fen-dang.ts`，计价侧与发送侧同调这一个函数）：
+   * 用户这一轮点名/明显要用的工具与最小干活集永远不许被裁 —— 裁到连活都干不了、或者把用户点名的工具裁掉，比超预算更坏。
    */
-  const jiaJu = [...ganHuoTools, ...jiyiTools, ...ziDingGuiGe].filter((g) => gongJuKeJian(g.function.name));
+  const dianMing = benLunDianMingGongJu.get(String(sessionId || ''));
+  const fd = fenDangJieWei(quan, zuiDuo, { ziDingMing: new Set(ziDing.map((z) => z.name)), dianMing });
+  if (fd.jieWei) {
+    try { audit?.log('chat.tools.trim-list', { sessionId, zuiDuo: fd.shou, baoDi: fd.baoDi, liu: fd.liu.map((g) => g.function.name), diu: fd.diu, dianMing: [...(dianMing || [])] }); } catch { /* 审计失败不挡发送 */ }
+  }
+  return fd.liu;
+}
+/** 这一轮用户点名的工具（新用户轮开始时算一次；内部续派轮沿用上一次，免得续派时把用户点名的工具又裁掉） */
+const benLunDianMingGongJu = new Map<string, Set<string>>();
+/** 全部可能挂给模型的工具名（点名识别只认真实存在的名字） */
+function quanBuGongJuMing(): string[] {
+  try {
+    return [
+      ...workToolSpecs(), ...hostToolSpecs(), ...(memoryToolSpecs(toolLabels()) as unknown as GongJuGuiGe[]),
+      ...(xiaoDiToolSpecs() as unknown as GongJuGuiGe[]),
+    ].map((g) => String((g as { function?: { name?: string } }).function?.name || '')).concat(ziDingGongJuJiQu().map((g) => g.name)).filter(Boolean);
+  } catch { return []; }
+}
+/** 工具规格的文本形态（只为算预算成本，不参与发送；发送用的仍是上面那份数组） */
+async function gongJuChengBenWen(sessionId: string, xiaoDiShuLiang?: string | number, zuiDuo = 0): Promise<string> {
+  try {
+    const g = await zuJingGongJuGuiGe(sessionId, xiaoDiShangXianOf(xiaoDiShuLiang), await baozhangJiyiCangJiuxu(), huiHuaKeGanHuo(sessionId), zuiDuo);
+    return g.length ? JSON.stringify(g) : '';
+  } catch { return ''; }
+}
+
+async function yunXingLiaoTianXunHuan(
+  sessionId: string,
+  provider: MoxingGongYing,
+  Qiu: LiaoTianQingQiu,
+  /** 小弟数量：'auto'（=32）或 0..8（0 = 不许派小弟）—— 牛马管理里设的 */
+  xiaoDiShuLiang?: string | number,
+  /** 窗口不足时这一轮允许暴露的工具条数上限（0 = 全套）；与计价侧 `gongJuZuiDuoShu` 同一个数 */
+  zuiDuoGongJu = 0
+): Promise<GongJuXunHuanGuo & { tooled: boolean }> {
+  const limits = toolLimits();
+  /**
+   * **一条预算**（第 39 轮额度重做）：轮数 / 工具调用次数 / 结果字符三条仪表都从这一份账本出发，
+   * 撞顶时由 `benLunXuYuSuan` 按"宿主看到的事实"决定是否抬高。
+   * 每次进入工具循环都重开一条 ⇒ 自动续派轮用的是**新额度**，但进展证据是累计的
+   * （续派总次数仍受 `XUPAI_ZONG_SHANGXIAN` 限制，不会无限滚）。
+   */
+  const yuSuanZhang = xinBenLunYuSuan(String(sessionId || ''));
+  const jiyiJiuxu = await baozhangJiyiCangJiuxu();
+  const keGanHuo = huiHuaKeGanHuo(sessionId);
+  // 小弟数量：自适应 = 32（历史上限）；0 = 不给 spawn_subagent；N = 本轮最多派 N 个
+  const xiaoDiShangXian = xiaoDiShangXianOf(xiaoDiShuLiang);
+  let yiPaiXiaoDi = 0;
+  // 工具规格的唯一入口（发送侧与预算计价侧同一份，见 `zuJingGongJuGuiGe` 的说明）
+  const jiaJu = await zuJingGongJuGuiGe(sessionId, xiaoDiShangXian, jiyiJiuxu, keGanHuo, zuiDuoGongJu);
   const tools: GongJuGuiGe[] | undefined = jiaJu.length && limits.zuiDaLunShu > 0 ? jiaJu : undefined;
   const supported = gongYingZhiChiGongJu(provider);
 
@@ -3258,25 +4120,8 @@ async function yunXingLiaoTianXunHuan(
     'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'read_skill', 'read_profile',
     'lsp_diagnostics', 'check_safety', 'monitor_process',
   ]);
-  const zhiWenOf = (ming: string, can: unknown): string => {
-    let s = '';
-    try {
-      const raw = typeof can === 'string' ? can : JSON.stringify(can ?? {});
-      const obj = JSON.parse(raw || '{}');
-      // 稳定序列化（键排序）：{'a':1,'b':2} 与 {'b':2,'a':1} 视为同一指纹
-      const wen = (v: unknown): unknown => {
-        if (Array.isArray(v)) return v.map(wen);
-        if (v && typeof v === 'object') {
-          const o: Record<string, unknown> = {};
-          for (const k of Object.keys(v as Record<string, unknown>).sort()) o[k] = wen((v as Record<string, unknown>)[k]);
-          return o;
-        }
-        return v;
-      };
-      s = JSON.stringify(wen(obj));
-    } catch { s = String(can ?? ''); }
-    return ming + '|' + s.slice(0, 400);
-  };
+  /** 稳定序列化 + 全文哈希（`gong-ju-zhi-wen.ts`）：只差路径的两个长正文调用不再撞成同一指纹 */
+  const zhiWenOf = (ming: string, can: unknown): string => suanGongJuZhiWen(ming, can);
   /** 「等待模型回复」本轮第几次请求（同一个会话累计） */
   const dengDaiCiShu = new Map<string, number>();
       type GongJuDiaoYong = GongJuDiaoYongTi;
@@ -3296,9 +4141,24 @@ async function yunXingLiaoTianXunHuan(
           const pA = quLuJingCanShu(aA);
           const cA = String((aA as { command?: unknown }).command
             || (aA as { cmd?: unknown }).cmd || (aA as { script?: unknown }).script || '');
-          if (pA) xingDongDetail = pA;
-          else if (cA) xingDongDetail = cA;
-          else {
+          if (pA) {
+            /**
+             * 台账里显示**完整绝对路径**（用户要求的样例：创建文件 F:\XZM\牛马演示.docx）。
+             * 这里复用主进程同一套「工作区 + Desktop/Documents 映射」，相对路径也能落到真实位置。
+             */
+            try {
+              const baseA = workspaceDirOf(app.getPath('userData'), String(sessionId || ''));
+              xingDongDetail = buZhouLuJing(baseA, pA).abs || pA;
+            } catch { xingDongDetail = pA; }
+          } else if (cA) xingDongDetail = cA;
+          else if (toolName === 'plan_update') {
+            const steps = Array.isArray((aA as { steps?: unknown }).steps) ? (aA as { steps: Array<Record<string, unknown>> }).steps : [];
+            const doing = steps.find((s) => String(s?.status || '') === 'doing');
+            const done = [...steps].reverse().find((s) => String(s?.status || '') === 'done' || String(s?.status || '') === 'verified');
+            xingDongDetail = '共 ' + steps.length + ' 步'
+              + (doing ? ' · 进行中：' + String(doing.title || doing.id || '') : '')
+              + (done ? ' · 最近完成：' + String(done.title || done.id || '') : '');
+          } else {
             const jian: Record<string, unknown> = {};
             for (const [k, v] of Object.entries(aA)) {
               if (typeof v === 'string' && v.length > 60) jian[k] = v.slice(0, 60) + '…';
@@ -3315,7 +4175,8 @@ async function yunXingLiaoTianXunHuan(
          */
         const yiYongCi = (benLunGongJuShu.get(sessionId) || 0) + 1;
         benLunGongJuShu.set(sessionId, yiYongCi);
-        const yuSuan = gongJuYuSuan(sessionId);
+        /** 读**同一份预算账本**：循环里的额度条与这里的执法必须是同一个数（设置页显示的仍是"基线"） */
+        const yuSuan = huoBenLunYuSuan(String(sessionId || '')).ci;
         /**
          * 第 35 轮 项 2（门禁 B 的**宿主校验**）：一轮里已经第 3 次调用工具，
          * 这条会话却连一个计划步骤都没有 ⇒ 把门禁条款就地塞回模型上下文
@@ -3324,17 +4185,27 @@ async function yunXingLiaoTianXunHuan(
          * 为什么要在第 3 次：单步琐事本来不该建计划；但一轮里连做三件不同的事，
          * 就该让用户看到进度了。判据只认"有没有计划步骤"，不猜任务大小。
          */
-        if (yiYongCi === 3) {
+        /**
+         * **原来写的是 `yiYongCi === 3`**（第 38 轮真机抓出来的洞）：这个计数**跨轮累加、从不清零**，
+         * 于是一条会话里这条提醒**一辈子只可能发一次**——只要用户先发了别的消息（比如先扔一张截图），
+         * 等到真正那条"六件事"的任务时计数早就过了 3 ⇒ 计划门禁**再也不会触发** ⇒
+         * 模型不列计划、想到哪做到哪，写到小说第 1 万字时把预算花光，剩下四件事没做（真机 840 秒那条红）。
+         * 现在：`>= 3` 且仍然一条计划都没有就提醒，并且**每再多 6 次调用还可以再提醒一次**（有上限、不打转）。
+         */
+        if (yiYongCi >= 3) {
           try {
-            if (!(jiHuaRenWuJi.get(sessionId) || []).length) {
+            const shangCi = jiHuaTiXingCi.get(sessionId) || 0;
+            if (!(jiHuaRenWuJi.get(sessionId) || []).length && (shangCi === 0 || yiYongCi - shangCi >= 6)) {
+              jiHuaTiXingCi.set(sessionId, yiYongCi);
               audit?.log('plan.missing', { sessionId, tools: yiYongCi, round: ctx.round });
               fachuKongzhitai({ cat: 'system', code: 'plan.missing', data: { sessionId, tools: yiYongCi } });
               zhuiJiaLiaoTianRiZhi(sessionId, {
                 seq: xiaYiLiaoTianXuLie(),
                 role: 'system',
-                content: '【产品门禁 B · 宿主校验】这一轮你已经调用了 3 次工具，但这条会话还没有任何计划任务。'
-                  + '请立刻用 `plan_update` 建计划（2–10 步、动词开头、每步可验证），把你正在做的和还要做的写进去，'
-                  + '然后继续；收尾时用 `plan_verify` 结掉最后一步。用户看的是计划任务里的进度，不是你的心里话。',
+                content: '【产品门禁 B · 宿主校验】这一条会话里你已经调用了 ' + yiYongCi + ' 次工具，但还没有任何计划任务。'
+                  + '请立刻用 `plan_update` 建计划（2–10 步、动词开头、每步可验证），**把用户这次要的所有东西都列进去**'
+                  + '（多件事就一步一件），然后逐步做完；收尾时用 `plan_verify` 结掉最后一步。'
+                  + '用户看的是计划任务里的进度，不是你的心里话。没列出的那几件事，请现在补做。',
                 hidden: true,
                 ts: Date.now(),
               } as never);
@@ -3346,7 +4217,8 @@ async function yunXingLiaoTianXunHuan(
           try { audit?.log('chat.tool-budget-exceeded', { sessionId, tool: toolName, n: yiYongCi, budget: yuSuan }); } catch { /* noop */ }
           fachuKongzhitai({ cat: 'tool', code: 'tool.budget', data: { sessionId, tool: toolName, n: yiYongCi, budget: yuSuan } });
           return `[${toolName}] 本轮**工具调用预算已用完**（上限 ${yuSuan} 次）。`
-            + `**不要再调用任何工具**：请立刻用文字如实汇报——已经完成了什么、还没完成什么、卡在哪一步，让用户决定下一步怎么做。`;
+            + '**这不是权限被拒，也不是执行失败** —— 是宿主给"一条用户消息"的用量闸到点了。'
+            + '**不要再调用任何工具**：请立刻用文字如实汇报——已经完成了什么、还没完成什么、卡在哪一步，让用户决定下一步怎么做。';
         }
         fachuKongzhitai({ cat: 'tool', code: 'tool.start', data: { tool: toolName, round: ctx.round, sessionId } });
         /**
@@ -3429,9 +4301,46 @@ async function yunXingLiaoTianXunHuan(
       // 本轮工具名记账：上限 64（防长跑无限增长）
       if (gongJuMing && benLunGongJuMing.length < 64) benLunGongJuMing.push(gongJuMing);
       {
-        const yiZuo = buZhouYiZuoGuo(String(sessionId || ''), gongJuMing,
+        let yiZuo = buZhouYiZuoGuo(String(sessionId || ''), gongJuMing,
           (call as { function?: { arguments?: unknown } } | undefined)?.function?.arguments,
           workspaceDirOf(app.getPath('userData'), sessionId));
+        /**
+         * 破坏性覆盖（第 63 轮用户项 7，方案 D）：新内容不到旧内容一半时，光靠文字拦截
+         * 仍可能被模型自带 `overwrite:true` 绕过。这里在真正执行前弹一张**带推荐项**的确认卡：
+         *  · 用户原话明确要求重写/精简 ⇒ 推荐「覆盖」；
+         *  · 否则推荐「不写」，把决定权交回人；
+         *  · 无人值守超时（2 分钟）按「不写」处理，绝不静默丢前文。
+         */
+        if (yiZuo && yiZuo.zuDang && (yiZuo.liYou === 'shorter' || yiZuo.liYou === 'shorter-confirmed')
+          && Number(yiZuo.newChars || 0) < Number(yiZuo.oldChars || 0) * 0.5) {
+          const yuanWen = String(benCiRenWuYuanWen.get(String(sessionId || '')) || '');
+          const yongHuYaoQiu = /重写|覆盖|缩成|精简|缩短|改成|改写/.test(yuanWen);
+          const da = await qingQiuKaPian(
+            String(sessionId || ''),
+            tMain('llm.writeOverwriteTitle', '覆盖前确认'),
+            tMain('llm.writeOverwriteBody', '这次要把本任务写过的文件整篇换成更短的内容：{old} 字 → {new} 字。覆盖会丢掉原文，追加会把这次内容接在原文末尾。')
+              .replace('{old}', String(yiZuo.oldChars || 0)).replace('{new}', String(yiZuo.newChars || 0)),
+            [
+              { id: 'overwrite', biaoQian: tMain('llm.writeOverwriteYes', '覆盖'), tuiJian: yongHuYaoQiu },
+              { id: 'append', biaoQian: tMain('llm.writeOverwriteAppend', '改为追加'), tuiJian: false },
+              { id: 'cancel', biaoQian: tMain('llm.writeOverwriteNo', '不写'), tuiJian: !yongHuYaoQiu },
+            ],
+            120_000,
+          );
+          try { audit?.log('chat.write-overwrite-card', { sessionId, oldChars: yiZuo.oldChars, newChars: yiZuo.newChars, choice: String(da || '').slice(0, 40), timeout: !da }); } catch { /* noop */ }
+          let gaiXie = '';
+          if (/覆盖/.test(da)) gaiXie = 'overwrite';
+          else if (/追加/.test(da)) gaiXie = 'append';
+          if (gaiXie) {
+            try {
+              const yuan = String((call as { function?: { arguments?: unknown } }).function?.arguments || '{}');
+              const o = JSON.parse(yuan) as Record<string, unknown>;
+              if (gaiXie === 'overwrite') o.overwrite = true; else o.append = true;
+              (call as { function: { arguments: string } }).function.arguments = JSON.stringify(o);
+              yiZuo = null;
+            } catch { /* 改不动参数就按拒绝处理 */ }
+          }
+        }
         if (yiZuo && yiZuo.zuDang) {
           try { audit?.log('chat.write-overwrite-blocked', { sessionId, tool: gongJuMing, liYou: yiZuo.liYou, round: ctx.round }); } catch { /* noop */ }
           /** 记下"这一发是被守卫拦下的"：模型原样重发时不再算循环（见 `lanXiaZhiWen`） */
@@ -3441,13 +4350,13 @@ async function yunXingLiaoTianXunHuan(
           } catch { /* 记账失败不影响拦截 */ }
           fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: false, chars: 0, ms: Date.now() - t1, blocked: true } });
           jiLuGongJu(sessionId, gongJuMing, false, Date.now() - t1, 0);
-          return yiZuo.wen.slice(0, ctx.zuiDaJieGuoZiShu);
+          return jieGuoShouWei(yiZuo.wen, ctx.zuiDaJieGuoZiShu, gongJuMing);
         }
         if (yiZuo) {
           try { audit?.log('chat.step-replay-skip', { sessionId, tool: gongJuMing, round: ctx.round }); } catch { /* noop */ }
           try { chongFuYiLanXia.set(String(sessionId || ''), Date.now()); } catch { /* noop */ }
           fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: true, chars: yiZuo.wen.length, ms: Date.now() - t1, skipped: true } });
-          return yiZuo.wen.slice(0, ctx.zuiDaJieGuoZiShu);
+          return jieGuoShouWei(yiZuo.wen, ctx.zuiDaJieGuoZiShu, gongJuMing);
         }
       }
       // 小弟：派出子代理 / 列出小弟
@@ -3470,6 +4379,20 @@ async function yunXingLiaoTianXunHuan(
         // 本牛马的小弟数量上限（牛马管理里设的）：到顶就如实拒绝
         if (yiPaiXiaoDi >= xiaoDiShangXian) {
           return `[spawn_subagent] 已达本牛马的小弟数量上限（${xiaoDiShangXian}），请等小弟完成或调高「小弟数量」。`;
+        }
+        /**
+         * **并行/接力硬门禁**（第 51 轮用户口径）：派发前先判资源冲突。
+         * 与正在跑的子任务共享资源 ⇒ 如实按接力处理（在这里等待/拒绝并说明），不并行硬上。
+         */
+        {
+          const zheng = paiFaZhanYong.get(sessionId) || [];
+          const pan = panDuanPaiFa([{ task: String(args.task || '') }], zheng);
+          try { audit?.log('chat.xiaodi-dispatch-plan', { sessionId, fangShi: pan.fangShi, chongTu: pan.chongTu.slice(0, 6), liYou: pan.liYou }); } catch { /* noop */ }
+          if (pan.fangShi === 'serial' && zheng.length) {
+            return '[spawn_subagent] 不能并行派发：' + pan.liYou + '。请等占用这些资源的子任务完成后再派，或改派不含这些资源的子任务。';
+          }
+          const woJian = paiFaZiYuanJian(String(args.task || ''));
+          paiFaZhanYong.set(sessionId, [...zheng, ...woJian]);
         }
         const fuMing = sessionMingOf(sessionId);
         const moXingId = String(Qiu.model || providerCfg.model || '');
@@ -3508,9 +4431,15 @@ async function yunXingLiaoTianXunHuan(
           });
           if (jie.yiChang) biaoEtaYiChang(sessionId, 'dengDaiXingDong', jie.liYou);
         } catch { /* 守卫出错不许影响子代理结论 */ }
+        /** 子任务结束 ⇒ 释放它占的资源键（否则后续派发会被误判成冲突） */
+        try {
+          const jian = paiFaZiYuanJian(String(args.task || ''));
+          const yu = (paiFaZhanYong.get(sessionId) || []).filter((k) => !jian.includes(k));
+          if (yu.length) paiFaZhanYong.set(sessionId, yu); else paiFaZhanYong.delete(sessionId);
+        } catch { /* noop */ }
         const huiBao = `[派出小弟] ${lu.ming}（第${lu.hao}号）\n【任务】${String(args.task || '').slice(0, 200)}\n【结论】${jieGuo}`;
         fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: true, chars: huiBao.length, ms: Date.now() - t1 } });
-        return huiBao.slice(0, ctx.zuiDaJieGuoZiShu);
+        return jieGuoShouWei(huiBao, ctx.zuiDaJieGuoZiShu, gongJuMing);
       }
       if (isHostTool(gongJuMing) || ziDingGongJuJiQu().some((g) => g.name === gongJuMing)) {
         /**
@@ -3536,14 +4465,17 @@ async function yunXingLiaoTianXunHuan(
         let okH = true;
         /**
          * **被拒之后别再重试**（真机事故：run_shell 被授权档拒了 12 次、每次秒回，
-         * 模型反复换着命令试，白烧 15 轮模型调用 / 145 秒）。同一工具 2 分钟内已被拒 2 次
-         * ⇒ 本轮起硬停，只回一句话让它换路子或如实告知用户。
+         * 模型反复换着命令试，白烧 15 轮模型调用 / 145 秒；第 51 轮又是 9 次 / 602 秒零产出）。
+         * 口径（第 52 轮定稿）：同一条任务里同一工具累计被拒 2 次 ⇒ **本轮硬停用**，
+         * 时间窗不再放行，新的用户消息才重置。见 `benLunTingYong`。
          */
-        if (juJueCiShu(sessionId, gongJuMing) >= 2) {
+        if (shiBenLunTingYong(sessionId, gongJuMing)) {
           okH = false;
           jiLuGongJu(sessionId, gongJuMing, false, 0, 0);
-          audit?.log('chat.host-tool', { sessionId, tool: gongJuMing, ok: false, security: quanQuan() ? 'full' : 'normal', juJueTingYong: true });
-          return `[${gongJuMing}] 本工具在最近两分钟内已被拒绝 ${juJueCiShu(sessionId, gongJuMing)} 次（当前授权档不放行），**已停用、不要再调用**。请换其它工具完成，或如实告诉用户「需要授权/换个方式」，不要反复重试同一工具。`.slice(0, ctx.zuiDaJieGuoZiShu);
+          const di = juJueCiShu(sessionId, gongJuMing);
+          const yin = juJueZhang.yuanYin(sessionId, gongJuMing);
+          audit?.log('chat.host-tool', { sessionId, tool: gongJuMing, ok: false, security: quanQuan() ? 'full' : 'normal', juJueTingYong: true, di });
+          return `[${gongJuMing}] 本工具在这条任务里已被拒绝 ${di} 次（最后一次：${yin}），**本轮已硬停用：再调用也不会执行**。请换别的工具完成，或如实告诉用户「需要把授权改成完全授权／勾上超出权限询问／换个方式」，不要反复重试同一工具。`.slice(0, ctx.zuiDaJieGuoZiShu);
         }
         if (!jieH.ok) {
           okH = false;
@@ -3568,7 +4500,7 @@ async function yunXingLiaoTianXunHuan(
             const pan = panDuanShouQuan(dangZ, wenZ, 'shell', jian);
             if (!pan.allow && !pan.needAsk) {
               okH = false;
-              huiBaoH = `[${gongJuMing}] 被拒（${dangZ}授权）：${pan.why}`;
+              huiBaoH = huiBaoJuJue(sessionId, gongJuMing, 'shouQuan', pan.why);
             } else if (pan.allow || !wenZ) {
               const r2 = await yunXingMingLing(cmd, { cwd: baseH, timeoutMs: Number(argsH.timeoutMs) || 60000 });
               huiBaoH = `[${gongJuMing}] exit=${r2.code} (${r2.ms}ms)\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
@@ -3583,7 +4515,7 @@ async function yunXingLiaoTianXunHuan(
                 if (r2.code !== 0) okH = false;
               } else {
                 okH = false;
-                huiBaoH = `[${gongJuMing}] 用户拒绝执行`;
+                huiBaoH = huiBaoJuJue(sessionId, gongJuMing, 'yongHu', '执行');
               }
             }
           }
@@ -3723,7 +4655,27 @@ async function yunXingLiaoTianXunHuan(
               for (const it of stepsRaw) {
                 let id0 = huanId(String(it.id || ''));
                 const zt0 = String(it.status || '').trim().toLowerCase();
-                if (zt0 === 'deleted' || zt0 === 'removed') { if (id0) shanIds.add(id0); continue; }
+                /**
+                 * **计划中途变更：不许抹掉旧步骤**（用户口径 2026-10-20）。
+                 * 模型标 deleted/removed 时不再从列表里删条 —— 旧步骤改成 `blocked`（界面「已停止」）留档，
+                 * 新步骤照常追加。只有「不再使用」才停，已完成的仍算已完成。
+                 */
+                if (zt0 === 'deleted' || zt0 === 'removed') {
+                  if (id0 && jiuMap.has(id0)) {
+                    const jiuHit = jiuMap.get(id0)!;
+                    if (jiuHit.status !== 'done' && jiuHit.status !== 'verified') {
+                      shanIds.add(id0);
+                      bu.push({
+                        id: id0,
+                        title: String(jiuHit.title || id0).slice(0, 200),
+                        status: 'blocked' as const,
+                        note: String(jiuHit.note || '').slice(0, 200) || '计划变更已停止（旧步骤保留）',
+                        ts: Number(jiuHit.ts || jiuHit.createdAt || 0) || Date.now(),
+                      });
+                    }
+                  }
+                  continue;
+                }
                 /**
                  * **标题不许空**（真机：模型只给 note 不给 title ⇒ 界面整列没内容；还有模型把 id 当标题）。
                  * 空标题或"标题=id"时用旧标题，再退到 note 的第一句 —— 显示用的字必须来自真实内容，不编。
@@ -3776,7 +4728,22 @@ async function yunXingLiaoTianXunHuan(
               });
               const xinIds = new Set(heBingXin.map((x) => x.id));
               /** 老版本按句切出来的预置行（note=host-seed）在真计划到达后退役，不再参与续派判定 */
-              const baoLiu = jiu.filter((x) => !xinIds.has(x.id) && !shanIds.has(x.id) && !(x.note === 'host-seed' && benCiIds.has(x.id)));
+              /**
+               * **旧步骤不再使用 ⇒ 标「已停止」而不是丢掉或留成待办**（用户口径：保留旧的、新的另加）。
+               * 已完成/已验证的原样保留（它们是历史事实）；host-seed 预置行仍按原规则退役。
+               */
+              const baoLiu = jiu
+                .filter((x) => !xinIds.has(x.id) && !shanIds.has(x.id) && !(x.note === 'host-seed' && benCiIds.has(x.id)))
+                .map((x) => {
+                  if ((x.status === 'pending' || x.status === 'doing') && x.leiXing !== 'info' && shiBenCiBuZhou(sessionId, x)) {
+                    return {
+                      ...x,
+                      status: 'blocked' as const,
+                      note: String(x.note || '').slice(0, 200) || '计划变更已停止（旧步骤保留）',
+                    };
+                  }
+                  return x;
+                });
               /** 顺序按 id 自然排（T1 < T2 < … < T10） */
               heBingXin.sort((a, b) => jiHuaIdZiRanXu(a.id, b.id));
               baoLiu.sort((a, b) => jiHuaIdZiRanXu(a.id, b.id));
@@ -3876,10 +4843,44 @@ async function yunXingLiaoTianXunHuan(
              */
             const miao = Math.max(0.5, Math.min(600, Number(argsH.seconds) || 0));
             const kai = Date.now();
-            await new Promise((r2) => setTimeout(r2, Math.round(miao * 1000)));
+            /**
+             * **等待改由心跳计时**（第 40 轮，用户口径："运行过程中用到的计时就用心跳完成"）。
+             * 内核的到期闹钟会把触发夹到真正那一点，所以等待比原来的裸 `setTimeout` 更准，
+             * 而且这一轮被用户掐掉时等待能被撤销 —— 原来是把 `setTimeout` 扔出去不管，
+             * 停止按钮点完，那个定时器还在背后数着秒。
+             */
+            const keng = huoQuXinTiao();
+            const dengId = 'wait-' + String(sessionId || '') + '-' + kai + '-' + Math.random().toString(36).slice(2, 6);
+            const xh = gongJuXunHuanQuXiao.get(String(sessionId || ''))?.signal;
+            const onAbort = () => { try { keng.dengDaiQuXiao(dengId); } catch { /* noop */ } };
+            if (xh) { if (xh.aborted) onAbort(); else xh.addEventListener('abort', onAbort, { once: true }); }
+            const jt = await keng.dengDai(miao, { id: dengId });
+            if (xh) { try { xh.removeEventListener('abort', onAbort); } catch { /* noop */ } }
             const shi = Date.now() - kai;
-            huiBaoH = JSON.stringify({ waitedMs: shi, requestedSeconds: miao, local: new Date().toISOString(), note: '已按请求等待；请用 waitedMs 确认真的等满了。' });
+            const quXiaoLe = jt.cancelled === true || jt.waitedMs === undefined;
+            huiBaoH = JSON.stringify({
+              waitedMs: shi, requestedSeconds: miao, jiShiYuan: 'xin-tiao', tickMs: jt.tickMs, quXiaoLe,
+              local: new Date().toISOString(),
+              note: quXiaoLe
+                ? '本轮已被停止 ⇒ 等待**提前结束**，不要当成等满了。'
+                : '已按请求等待（计时源=心跳）；请用 waitedMs 确认真的等满了。',
+            });
             jiBuZhou(sessionId, 'wait_seconds', rawArgsH, baseH, huiBaoH);
+            /**
+             * **等待进度由宿主报给模型**（第 39 轮真机红：用户要"等待 30 秒"，模型 `wait_seconds(20)` 就往下走）：
+             * 模型对自己的时长没有可靠感觉，和"字数由宿主报"同一课。这里把**累计已等**与**还差多少**算给它，
+             * 并且说清"补等就再用一次 wait_seconds，不要用文字代替"，也不要它等够了还继续等。
+             */
+            {
+              const yaoM = yaoQiuDengDaiMiaoShu(benCiRenWuYuanWen.get(String(sessionId || '')) || '');
+              if (yaoM > 0) {
+                const lei = Math.round(buZhouRi(String(sessionId || '')).get('wait')?.miaoLeiJi || 0);
+                const cha = Math.max(0, Math.round(yaoM - lei));
+                huiBaoH += cha > 0
+                  ? `\n【等待进度】用户要求累计等 ${yaoM} 秒：宿主实测本任务已等 ${lei} 秒，**还差 ${cha} 秒** ⇒ 请再调用一次 wait_seconds(seconds=${cha}) 补齐（不要用文字说"我等了"，也不要跳到下一步）。`
+                  : `\n【等待进度】用户要求累计等 ${yaoM} 秒：已经等够 ${lei} 秒 ⇒ **不用再等了**，直接做后面还没做完的事。`;
+              }
+            }
           } else if (gongJuMing === 'read_profile') {
             /**
              * **社交档案按需注入**（产品要求）：不自动塞进提示词；
@@ -4011,7 +5012,7 @@ async function yunXingLiaoTianXunHuan(
                       }
                     } catch { /* 记账失败不影响放行 */ }
                   }
-                  else { okH = false; abs = ''; huiBaoH = `[open_path] 用户拒绝/未授权打开 ${p0}。若需要，请让用户在顶部改成「完全授权」。`; }
+                  else { okH = false; abs = ''; huiBaoH = huiBaoJuJue(sessionId, 'open_path', 'yongHu', '/未授权打开 ' + p0, '若需要，请让用户在顶部改成「完全授权」'); }
                 } else {
                   okH = false;
                   huiBaoH = '[open_path] 普通/严格授权只允许工作区内的相对路径（要开本机任意路径请改成「完全授权」，或勾上「超出权限询问」由用户批准）';
@@ -4043,12 +5044,32 @@ async function yunXingLiaoTianXunHuan(
                   let r0 = '';
                   // 无人值守的真机回放测试：走完整条路径，只是不真的弹出程序窗口（否则 Office 会锁住测试产物）
                   const kongPao = process.env.WARMY_OPEN_PATH_DRYRUN === '1';
-                  if (!kongPao) {
+                  /**
+                   * 第 66 轮 项 5：模型 open_path 在启用 nm 插件时**也走 nm 查看器**。
+                   * 只对文件生效；开不起来才回落系统默认程序，并在回报里说明。
+                   */
+                  let nmKai = false;
+                  let nmCuo = '';
+                  if (!kongPao && nmKaiWenJianKai() && nmChaJianQiYong()) {
+                    try {
+                      if (fs.statSync(abs).isFile()) {
+                        const v = nmShiTuKai({ luJing: abs, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi() });
+                        nmKai = !!v.ok;
+                        if (!v.ok) nmCuo = String(v.cuo || '');
+                      }
+                    } catch (eNm) { nmCuo = xiJingCuoWu(eNm); }
+                  }
+                  if (!nmKai && !kongPao) {
                     try { r0 = await shell.openPath(abs); }
                     catch (eOpen) { r0 = String((eOpen as Error)?.message || eOpen); }
                   }
-                  try { audit?.log('open_path.try', { sessionId, abs, result: r0 || (kongPao ? 'dryrun' : 'ok') }); } catch { /* noop */ }
-                  if (r0) {
+                  try { audit?.log('open_path.try', { sessionId, abs, result: nmKai ? 'nm' : (r0 || (kongPao ? 'dryrun' : 'ok')), nm: nmCuo }); } catch { /* noop */ }
+                  if (nmKai) {
+                    kaiGuo.add(abs);
+                    okH = true;
+                    huiBaoH = `[open_path] 已用 nm 查看器打开 ${abs}`;
+                    jiBuZhou(sessionId, 'open_path', rawArgsH, baseH, huiBaoH, abs);
+                  } else if (r0) {
                     // 默认程序打不开：定位到资源管理器，并**如实**说是定位不是打开
                     let dingWei = '';
                     try { shell.showItemInFolder(abs); dingWei = 'ok'; } catch (eRe) { dingWei = String((eRe as Error)?.message || eRe); }
@@ -4102,13 +5123,16 @@ async function yunXingLiaoTianXunHuan(
           } else if (gongJuMing === 'run_shell') {
             const cmd = String(argsH.command || '').trim();
             const { dang, ask: yaoWen2 } = anQuanDangWei();
-            const jian = anquanJianCeMingLing(cmd);
-            const pan = panDuanShouQuan(dang, yaoWen2, 'shell', jian);
+            /** 第 55 轮：命令走"工作区范围 + 白名单 + 静态风险"三合一判据（常规授权不再只看风险） */
+            const mingPan = panDuanMingLingShouQuan(dang, yaoWen2, cmd, baseH);
+            const jian = mingPan.jianCe;
+            const pan = mingPan;
             if (!cmd) { okH = false; huiBaoH = '[run_shell] 请给出 command'; }
             else if (!pan.allow && !pan.needAsk) {
               okH = false;
               // 说清"这是权限拒绝、不是失败"，并明确要求换路子 —— 否则模型会换着命令反复试（真机 12 连拒）
-              huiBaoH = `[run_shell] 被拒（${dang}授权）：${pan.why}。这是**授权拒绝**，不是命令出错：请**不要再调用 run_shell**，改用别的工具（read_file/write_file/open_path 等）完成，或如实告诉用户「需要把授权改成完全授权/勾上超出权限询问」。`;
+              huiBaoH = huiBaoJuJue(sessionId, 'run_shell', 'shouQuan', pan.why,
+                '这是**授权拒绝**，不是命令出错：请**不要再调用 run_shell**，改用别的工具（read_file/write_file/open_path 等）完成，或如实告诉用户「需要把授权改成完全授权/勾上超出权限询问」');
             }
             else if (!pan.allow) {
               const da = await qingQiuKaPian(sessionId, 'AI 请求执行命令',
@@ -4117,7 +5141,7 @@ async function yunXingLiaoTianXunHuan(
               if (/^同意/.test(da)) {
                 const r2 = await yunXingMingLing(cmd, { cwd: String(argsH.cwd || baseH), timeoutMs: Number(argsH.timeoutMs) || 60000 });
                 huiBaoH = `[run_shell] exit=${r2.code} (${r2.ms}ms)\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
-              } else { okH = false; huiBaoH = `[run_shell] 用户拒绝执行：${cmd}`; }
+              } else { okH = false; huiBaoH = huiBaoJuJue(sessionId, 'run_shell', 'yongHu', '执行：' + cmd); }
             } else {
               const r2 = await yunXingMingLing(cmd, { cwd: String(argsH.cwd || baseH), timeoutMs: Number(argsH.timeoutMs) || 60000 });
               huiBaoH = `[run_shell] exit=${r2.code} (${r2.ms}ms, 风险 ${jian.risk})\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
@@ -4221,7 +5245,7 @@ async function yunXingLiaoTianXunHuan(
                   const xuan = await qingQiuKaPian(sessionId, `技能 ${ming} 的正文里有高危命令`, `${jianCe.summary}\n技能会在后续对话里被当作指引使用，请确认是否写入默认技能目录。`, [
                     { id: 'allow', biaoQian: '同意写入' }, { id: 'deny', biaoQian: '拒绝' },
                   ]);
-                  if (!/同意/.test(xuan)) { okH = false; huiBaoH = '[write_skill] 用户拒绝写入含高危命令的技能。'; }
+                  if (!/同意/.test(xuan)) { okH = false; huiBaoH = huiBaoJuJue(sessionId, 'write_skill', 'yongHu', '写入含高危命令的技能'); }
                   else {
                     fs.mkdirSync(mu, { recursive: true });
                     fs.writeFileSync(wenJian, xieJinengWen(ming, miaoShu, zhengWenNei, argsH.compatibility), 'utf8');
@@ -4250,13 +5274,13 @@ async function yunXingLiaoTianXunHuan(
               : `规范校验：**不通过** —— ${jie ? jie.problems.join('；') : '读不出 SKILL.md'}`;
             if (!p0 || !fs.existsSync(p0)) { okH = false; huiBaoH = `[install_skill] 目录不存在：${p0}`; }
             else if (!fs.existsSync(path.join(p0, 'SKILL.md'))) { okH = false; huiBaoH = '[install_skill] 不是技能包（缺 SKILL.md）'; }
-            else if (!pan.allow && !pan.needAsk) { okH = false; huiBaoH = `[install_skill] 被拒（${dang2}授权）：${pan.why}`; }
+            else if (!pan.allow && !pan.needAsk) { okH = false; huiBaoH = huiBaoJuJue(sessionId, 'install_skill', 'shouQuan', pan.why); }
             else if (!pan.allow) {
               const da = await qingQiuKaPian(sessionId, 'AI 请求安装技能',
                 `技能目录：${p0}\n安全检测：${jian.summary}\n${guiFan}\n（拒绝 = 不安装）`,
                 [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
               if (/^同意/.test(da)) huiBaoH = (await anZhuangJiNengBao(p0, String(argsH.name || ''))) + '\n' + guiFan;
-              else { okH = false; huiBaoH = `[install_skill] 用户拒绝安装 ${p0}`; }
+              else { okH = false; huiBaoH = huiBaoJuJue(sessionId, 'install_skill', 'yongHu', '安装 ' + p0); }
             } else {
               huiBaoH = (await anZhuangJiNengBao(p0, String(argsH.name || ''))) + '\n' + guiFan;
             }
@@ -4349,7 +5373,7 @@ async function yunXingLiaoTianXunHuan(
                   `地址：${url}\n保存到：${String(argsH.path || '')}\n（拒绝 = 不保存）`,
                   [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
                 if (/^同意/.test(da)) baoCun = String(argsH.path || '');
-                else { okH = false; huiBaoH = '[download_file] 用户拒绝'; }
+                else { okH = false; huiBaoH = huiBaoJuJue(sessionId, 'download_file', 'yongHu', ''); }
               } else { okH = false; huiBaoH = '[download_file] ' + String((eP as Error)?.message || eP); }
             }
             if (okH && baoCun) {
@@ -4363,14 +5387,44 @@ async function yunXingLiaoTianXunHuan(
             if (!q) { okH = false; huiBaoH = '[knowledge_query] 需要 query 参数'; }
             else if (!knowledge) { okH = false; huiBaoH = '[knowledge_query] 知识库未就绪'; }
             else {
-              const jieGuo = knowledge.query(q);
+              /** 第 51 轮：按会话作用域检索（群聊只读会话层；项目禁私密；我的牛马三层） */
+              const jieGuo = kbQueryFor(sessionId, q);
               okH = true;
+              /**
+               * **时间窗口按两个轴各查一遍**（第 53 轮项 5）：查询里的"昨天/上周"既可能指"什么时候说的"，
+               * 也可能指"事情本身什么时候发生的"。两个轴都要给，命中在哪个轴上要标出来 ——
+               * 调研的教训是：把时间条件做成**事后过滤**会把时间推理召回从 50% 打到 37.5%，
+               * 所以这里让"命中哪个轴"参与**排序**（双轴命中 > 发生轴命中 > 记录轴命中），不是筛完就完。
+               */
+              const chuang = jieXiChaXunChuang(q, Date.now());
+              const paiXu = (e: { jiluTs?: number; fashengTs?: number; ts: number }) => {
+                if (!chuang) return 0;
+                const jl = typeof e.jiluTs === 'number' && e.jiluTs >= chuang.qi && e.jiluTs <= chuang.zhi;
+                const fs = typeof e.fashengTs === 'number' && e.fashengTs >= chuang.qi && e.fashengTs <= chuang.zhi;
+                return (jl && fs) ? 0 : fs ? 1 : jl ? 2 : 3;
+              };
+              const shiJianLiu = (chuang ? (jieGuo.events || []).filter((e) => paiXu(e) < 3) : (jieGuo.events || []));
               const shiTi = (jieGuo.entities || []).slice(0, 10);
-              const shiJian = (jieGuo.events || []).slice(0, 10);
-              huiBaoH = `[knowledge_query] "${q}" 命中实体 ${shiTi.length}、事件 ${shiJian.length}\n`
-                + (shiTi.length ? '实体:\n' + shiTi.map((e) => `· [${e.kind}] ${e.ming}${Object.keys(e.attrs || {}).length ? ' ' + JSON.stringify(e.attrs) : ''} (id=${e.id})`).join('\n') + '\n' : '')
-                + (shiJian.length ? '事件:\n' + shiJian.map((e) => `· ${e.biaoTi}${e.result ? ' → ' + String(e.result).slice(0, 120) : ''} (id=${e.id})`).join('\n') : '')
+              const shiJian = (() => {
+                /** 一次取"现在"：排序比较器里反复调 Date.now() 会让同一批结果的前后顺序依赖时钟抖动 */
+                const xianZai = Date.now();
+                return shiJianLiu.slice().sort((a, b) => paiXu(a) - paiXu(b)
+                  /** 命中轴相同再看**陈旧度**（第 53 轮补）：三年前的旧事不该压过最近的说法，哪怕它是昨天才记下的 */
+                  || chenJiuFen(b, xianZai).deFen - chenJiuFen(a, xianZai).deFen
+                  || (b.jiluTs || b.ts) - (a.jiluTs || a.ts)).slice(0, 10);
+              })();
+              const mingZhongBiao = (e: { jiluTs?: number; fashengTs?: number }) => {
+                if (!chuang) return '';
+                const z = mingZhongZhou([{ jiluTs: e.jiluTs, fashengTs: e.fashengTs } as { jiluTs?: number; fashengTs?: number }], chuang)[0]?.zhou;
+                return z === 'fasheng' ? '〔按发生时间命中〕' : z === 'jilu' ? '〔按记录时间命中〕' : z === 'liang' ? '〔两轴都命中〕' : '';
+              };
+              huiBaoH = `[knowledge_query] "${q}" 命中实体 ${shiTi.length}、事件 ${shiJian.length}${chuang ? `（时间窗口：${chuang.biao}，记录轴与发生轴都查过）` : ''}\n`
+                + (shiTi.length ? '实体:\n' + shiTi.map((e) => `· [${e.kind}] ${e.ming}${Object.keys(e.attrs || {}).length ? ' ' + JSON.stringify(e.attrs) : ''}（记录于 ${liangShiJianMing(e.chuangJianTs).replace(/^记录时间 /, '')}；id=${e.id}）`).join('\n') + '\n' : '')
+                + (shiJian.length ? '事件:\n' + shiJian.map((e) => `· ${e.biaoTi}${e.result ? ' → ' + String(e.result).slice(0, 120) : ''} ${liangShiJianMing(e.jiluTs ?? e.ts, e.fashengTs, e.fashengBiao)}${mingZhongBiao(e)}${e.shiXiaoTs ? '〔已被更新的说法取代〕' : ''}${(() => { const cj = chenJiuFen({ jiluTs: e.jiluTs, fashengTs: e.fashengTs, ts: e.ts, shiXiaoTs: e.shiXiaoTs }, Date.now()); return cj.biao ? `〔${cj.biao}〕` : ''; })()}${shiHuHan(String(e.biaoTi) + String(e.result || '')) ? '〔待核：原话带"大概/也许/听说"这类含糊措辞〕' : ''} (id=${e.id})`).join('\n') + '\n' : '')
+                + '**两个时间不许混**：记录时间=你什么时候告诉我的；发生时间=事情本身什么时候发生的。回复时必须分开说（例："你昨天告诉我，你上个月5号决定戒烟"），'
+                + '发生时间是"（未记录）"就只说记录时间，**绝不拿记录时间冒充发生时间**。\n'
                 + (!shiTi.length && !shiJian.length ? '（无命中；可换关键词，或用 knowledge_add 记下新事实）' : '');
+              try { audit?.log('kb.query-timed', { sessionId, youChuang: !!chuang, biao: chuang?.biao || '', jin: shiJian.length }); } catch { /* noop */ }
             }
           } else if (gongJuMing === 'knowledge_add') {
             // **知识库写入**（实体和/或事件；结构化事实，不是对话流水）
@@ -4379,38 +5433,127 @@ async function yunXingLiaoTianXunHuan(
               try {
                 const eIn = (argsH.entity || null) as { id?: string; kind?: string; ming?: string; attrs?: Record<string, string> } | null;
                 const vIn = (argsH.event || null) as { biaoTi?: string; result?: string; tool?: string; method?: string; entityIds?: string[] } | null;
-                const ji = [];
-                if (eIn && eIn.ming) {
-                  const e = knowledge.upsertEntity({
-                    id: String(eIn.id || ('e-' + Date.now().toString(36))),
+                const ji: string[] = [];
+                /** 被证据闸挡下来的说法（不写库，但必须把原因如实回给模型，不许静默吞） */
+                let juJue = '';
+                /** 第 51 轮：写入落到本会话允许的层（参数可指定 internal/private，越权拒绝） */
+                const ceng = (String(argsH.layer || '').trim() as ZhishiCeng) || undefined;
+                const kb = (() => {
+                  /** 内容自己也要过层级判据（私密/业务的句子不许留在会话库这一"可公开"层） */
+                  const neiRong = [eIn?.ming || '', Object.values(eIn?.attrs || {}).join(' '), vIn?.biaoTi || '', vIn?.result || '', vIn?.method || ''].join('\n');
+                  const kai = kbWritable(sessionId, ceng, neiRong);
+                  return kai && knowledge ? knowledge.allow(kai) : null;
+                })();
+                if (!kb) {
+                  okH = false;
+                  huiBaoH = '[knowledge_add] 拒绝：这一层对本会话不可写，而这条内容的敏感度**高于本会话能写的层**（群聊只能写会话库；项目不能写私密库）。'
+                    + '涉及个人情况或对人对事的评价，请只在单聊/本牛马会话里记；这里不能留。';
+                } else if (eIn && eIn.ming) {
+                  /**
+                   * 实体归一三层裁决（第 53 轮项 4）：高分自动合并 / 中分**新建并标复核** / 低分新建。
+                   * person·org·project 是保护类型 ⇒ 只有归一后完全同名才自动合并（错合并会把两个人的事实串在一起，不可逆）。
+                   */
+                  const pan = guiYiPanDing({ kind: String(eIn.kind || 'concept'), ming: String(eIn.ming) }, kb.listEntities());
+                  const e = kb.upsertEntity({
+                    id: pan.pan === 'merge' ? pan.biaoId : String(eIn.id || ('e-' + Date.now().toString(36))),
                     kind: (eIn.kind as never) || 'concept',
                     ming: String(eIn.ming),
                     attrs: (eIn.attrs as Record<string, string>) || {},
                     anchors: [],
                   });
-                  ji.push('实体 ' + e.ming + ' (id=' + e.id + ')');
+                  if (pan.pan === 'review') {
+                    try { audit?.log('kb.entity-review', { sessionId, xinId: e.id, xuan: e.ming, dui: pan.duiXiang?.ming || '', deFen: Math.round(pan.deFen * 100) / 100, liYou: pan.liYou }); } catch { /* noop */ }
+                    ji.push(`实体 ${e.ming}（id=${e.id}）· **待复核**：与已有的「${pan.duiXiang?.ming || ''}」只差 ${Math.round(pan.deFen * 100)}% 相同，没有自动合并（${pan.liYou}）`);
+                  } else {
+                    ji.push((pan.pan === 'merge' ? '实体（合并进已有）' : '实体 ') + e.ming + ' (id=' + e.id + ')');
+                  }
                 }
-                if (vIn && vIn.biaoTi) {
+                if (kb && vIn && vIn.biaoTi) {
                   const ids = Array.isArray(vIn.entityIds) ? vIn.entityIds.map(String) : [];
-                  const e = knowledge.addEvent({
-                    id: 'ev-' + Date.now().toString(36),
-                    biaoTi: String(vIn.biaoTi),
-                    result: vIn.result ? String(vIn.result).slice(0, 2000) : undefined,
-                    tool: vIn.tool ? String(vIn.tool) : undefined,
-                    method: vIn.method ? String(vIn.method) : undefined,
-                    entityIds: ids,
-                    anchors: [],
-                    ts: Date.now(),
-                  });
-                  ji.push('事件 ' + e.biaoTi + ' (id=' + e.id + ')');
+                  /** 双时间（第 53 轮项 5）：记录时间 = 本轮说话时刻；发生时间只从原文里解析，解析不出留空 */
+                  const jieShi = [vIn.biaoTi, vIn.result || '', vIn.method || ''].join('\n');
+                  const ssj = shuangShiJian(jieShi, benLunShuoHuaTs(sessionId));
+                  /**
+                   * **证据闸**（第 53 轮项 4，evidence-before-belief）：这条内容必须能在用户原话里找到 ≥10 字连续重合、
+                   * 或带锚点、或是宿主派生的来源；否则**拒写**。理由：无证据的猜测一旦入库，之后每一轮检索都会把它当"已知"回灌。
+                   */
+                  const zj = jianChaYouZhengJu({ neiRong: jieShi, anchors: [], laiYuan: 'tool:knowledge_add', zhengWen: benLunYuanWen(sessionId) });
+                  if (!zj.ok) {
+                    juJue = zj.liYou + ' ⇒ 要留就把用户原话摘一句进 result（判定口径是"与原文连续重合 ≥10 字"），或带 anchor，或明写"这是推测，待核"等有依据再记。';
+                    try { audit?.log('kb.evidence-denied', { sessionId, biaoTi: String(vIn.biaoTi).slice(0, 60), liYou: zj.liYou }); } catch { /* noop */ }
+                  } else {
+                    /**
+                     * **写时去重与取代**（第 53 轮补；调研：Mem0 的更新阶段做冲突检测，NOOP 与 UPDATE 缺一不可）：
+                     * 同一层 + 同一标题（忽略空白/大小写）+ 有共同实体 ⇒ 视为"同一个说法的不同版本"；
+                     * 内容完全相同 ⇒ **NOOP，不重复写**（否则同一句会被存成 N 条、检索时挤占名额）；
+                     * 内容不同 ⇒ 旧说法打 `shiXiaoTs` 取代（**不删除**，审计可回看），新说法带 `quDaiIds`。
+                     */
+                    const gui = (s: string) => String(s || '').replace(/\s+/g, '').toLowerCase();
+                    const jiYou = kb.activeEvents().filter((e) => gui(e.biaoTi) === gui(String(vIn.biaoTi))
+                      && (!ids.length || ((e.entityIds || []).some((x) => ids.includes(String(x))))));
+                    const yiYang = jiYou.find((e) => String(e.result || '') === String(vIn.result || '')
+                      && String(e.method || '') === String(vIn.method || ''));
+                    if (yiYang) {
+                      ji.push('事件已存在（同标题、同实体、同内容 ⇒ 未重复写入）id=' + yiYang.id);
+                      try { audit?.log('kb.write-noop', { sessionId, eventId: yiYang.id, biaoTi: String(vIn.biaoTi).slice(0, 60) }); } catch { /* noop */ }
+                    } else {
+                      const quDai = jiYou.map((e) => e.id);
+                      for (const id of quDai) kb.supersedeEvent(id);
+                      const e = kb.addEvent({
+                        id: 'ev-' + Date.now().toString(36),
+                        biaoTi: String(vIn.biaoTi),
+                        result: vIn.result ? String(vIn.result).slice(0, 2000) : undefined,
+                        tool: vIn.tool ? String(vIn.tool) : undefined,
+                        method: vIn.method ? String(vIn.method) : undefined,
+                        entityIds: ids,
+                        anchors: [],
+                        ts: Date.now(),
+                        jiluTs: ssj.jiluTs,
+                        fashengTs: ssj.fashengTs,
+                        fashengBiao: ssj.fashengBiao,
+                        fashengJingDu: ssj.fashengJingDu as 'ri' | 'yue' | 'nian' | 'wu',
+                        fashengLaiYuan: ssj.fashengLaiYuan,
+                        laiYuan: 'tool:knowledge_add',
+                        quDaiIds: quDai.length ? quDai : undefined,
+                        tiShiCiBanBen: TI_SHI_CENG_BAN_BEN,
+                      });
+                      ji.push('事件 ' + e.biaoTi + ' (id=' + e.id + ')' + (quDai.length ? '·取代了 ' + quDai.length + ' 条旧说法（未删除，可审计）' : ''));
+                      try { audit?.log('kb.time-written', { sessionId, eventId: e.id, jingDu: ssj.fashengJingDu, youFaSheng: !!ssj.fashengTs, yiChang: ssj.yiChang, zou: 'tool' }); } catch { /* noop */ }
+                      if (quDai.length) { try { audit?.log('kb.superseded-on-write', { sessionId, xin: e.id, jiu: quDai, biaoTi: String(vIn.biaoTi).slice(0, 60) }); } catch { /* noop */ } }
+                    }
+                  }
                 }
                 okH = ji.length > 0;
-                huiBaoH = ji.length ? '[knowledge_add] 已记：' + ji.join('；') : '[knowledge_add] 未提供 entity.ming 或 event.biaoTi';
+                huiBaoH = ji.length
+                  ? '[knowledge_add] 已记：' + ji.join('；') + (juJue ? ' ｜ 这条**事件没写**：' + juJue : '')
+                  : (juJue ? '[knowledge_add] 拒绝：' + juJue : '[knowledge_add] 未提供 entity.ming 或 event.biaoTi');
               } catch (eK) {
                 okH = false;
                 huiBaoH = '[knowledge_add] 失败：' + xiJingCuoWu(eK);
               }
             }
+          } else if (gongJuMing === 'capability_propose') {
+            /**
+             * **自更新能力白名单**（第 54 轮项 3）：模型提案"我们能做某一类事"，宿主校验后落盘。
+             * 提案只扩大**可对外说的类别**；要真正对外说，仍然要 ≥2 条独立证据支撑（`TUMIN_ZUI_SHAO_ZHI_CHI`）。
+             */
+            try {
+              const hua = String(argsH.capability || argsH.hua || '').trim();
+              const ci = (Array.isArray(argsH.keywords) ? argsH.keywords : (Array.isArray(argsH.ci) ? argsH.ci : [])).map((x: unknown) => String(x));
+              const cha = jianChaXinNengLi(hua, ci, nengLiWai.map((x) => x.hua));
+              if (!cha.ok) {
+                okH = false;
+                huiBaoH = '[capability_propose] 参数不合规：' + cha.why.join('；') + '。能力短语要写成**类别**（≤14 字、不带数字/标点/客户名/做过…），并给 1–6 个匹配关键词。';
+                try { audit?.log('kb.capability-rejected', { sessionId, hua: hua.slice(0, 40), why: cha.why.slice(0, 3) }); } catch { /* noop */ }
+              } else {
+                nengLiWai.push({ id: 'z-' + Date.now().toString(36), hua, ci });
+                xieNengLiWai();
+                okH = true;
+                huiBaoH = '[capability_propose] 已加入能力类别白名单：「' + hua + '」（当前共 ' + nengLiBiao().length + ' 类）。'
+                  + '注意：它只是"可以说这一类"，还要内部库里至少 2 条独立证据支撑才会出现在对外概要里。';
+                try { audit?.log('kb.capability-added', { sessionId, hua, ci, zong: nengLiBiao().length }); } catch { /* noop */ }
+              }
+            } catch (eC) { okH = false; huiBaoH = '[capability_propose] 失败：' + xiJingCuoWu(eC); }
           } else {
             // schedule_task
             const ren = await dengJiDingShiRenWu(sessionId, {
@@ -4418,6 +5561,8 @@ async function yunXingLiaoTianXunHuan(
               prompt: String(argsH.prompt || '').trim(),
               everyMinutes: Number(argsH.everyMinutes) || 0,
               dailyAt: String(argsH.dailyAt || '').trim(),
+              cron: String(argsH.cron || '').trim(),
+              tz: String(argsH.tz || '').trim(),
             });
             okH = !!ren.ok;
             huiBaoH = ren.ok
@@ -4428,11 +5573,12 @@ async function yunXingLiaoTianXunHuan(
           okH = false;
           huiBaoH = `[${gongJuMing}] 失败：${xiJingCuoWu(eH)}`;
         }
+        /** 记账在**拒绝的唯一出口** huiBaoJuJue() 里当场完成：不靠文案反推，改措辞丢不掉那一笔账 */
         jiLuGongJu(sessionId, gongJuMing, okH, Date.now() - t1h, okH ? huiBaoH.length : 0);
         audit?.log('chat.host-tool', { sessionId, tool: gongJuMing, ok: okH, security: quanQuan() ? 'full' : 'normal', ms: Date.now() - t1h });
         metrics.recordToolCall({ ts: Date.now(), sessionId, round: ctx.round, tool: gongJuMing, ok: okH, chars: huiBaoH.length, ms: Date.now() - t1h });
         fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: okH, chars: huiBaoH.length, ms: Date.now() - t1h } });
-        return huiBaoH.slice(0, ctx.zuiDaJieGuoZiShu);
+        return jieGuoShouWei(huiBaoH, ctx.zuiDaJieGuoZiShu, gongJuMing);
       }
       if (isWorkTool(gongJuMing)) {
         const base = workspaceDirOf(app.getPath('userData'), sessionId);
@@ -4472,8 +5618,10 @@ async function yunXingLiaoTianXunHuan(
          * 完全授权 ⇒ 直接放开（可读写本机任意路径，AI 真正能操作这台电脑）；
          * 普通/严格 ⇒ 先在工作区内做；越权时按「超出权限是否询问」弹请求卡，
          * 用户同意就**这一次**放开，拒绝就如实回绝（AI 不会硬来）。
+         * 完成核对轮里整篇重写已交付文件的，先被 `heDuiLunChongXieZuDang` 拦下（不执行、不走授权）。
          */
-        let wr = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, full, app.getAppPath());
+        let wr = heDuiLunChongXieZuDang(String(sessionId || ''), base, gongJuMing, call)
+          || daiHuiDang(String(sessionId || ''), () => runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, full, app.getAppPath()));
         if (!wr.meta.ok && /workspace-escape|absolute-path-not-allowed/.test(String(wr.meta.error || '')) && !full) {
           let luJing = '';
           try {
@@ -4501,7 +5649,7 @@ async function yunXingLiaoTianXunHuan(
             yiShouQuan = luJingQuanPiPei(sessionId, absT, yaoLei);
           } catch { /* 判不出来就走正常询问 */ }
           if (yiShouQuan) {
-            wr = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, true, app.getAppPath());
+            wr = daiHuiDang(String(sessionId || ''), () => runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, true, app.getAppPath()));
             try { audit?.log('auth.auto-pass', { sessionId, tool: gongJuMing, path: luJing, mode: 'path-class', cls: yaoLei }); } catch { /* noop */ }
           } else if (ask) {
             /**
@@ -4528,7 +5676,7 @@ async function yunXingLiaoTianXunHuan(
               [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
             );
             if (/^同意|允许/.test(da)) {
-              wr = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, true, app.getAppPath());
+              wr = daiHuiDang(String(sessionId || ''), () => runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, true, app.getAppPath()));
               try {
                 audit?.log('auth.grant-once', { sessionId, tool: gongJuMing, path: luJing, title: 'AI 请求访问工作区外的文件' });
                 /**
@@ -4689,9 +5837,14 @@ async function yunXingLiaoTianXunHuan(
             return (String(wr.content).slice(0, Math.max(200, ctx.zuiDaJieGuoZiShu - jinDu.length - 1)) + '\n' + jinDu).slice(0, ctx.zuiDaJieGuoZiShu);
           }
         }
-        return String(wr.content).slice(0, ctx.zuiDaJieGuoZiShu);
+        const yuanWen = String(wr.content);
+        const shouKou = jieGuoShouWei(yuanWen, ctx.zuiDaJieGuoZiShu, String(wr.meta.tool || toolName), (k) => readFileXuDu(wr.meta, yuanWen.length, k));
+        if (shouKou.length < yuanWen.length) {
+          try { audit?.log('chat.result-truncated', { sessionId, round: ctx.round, tool: wr.meta.tool, qian: yuanWen.length, hou: shouKou.length }); } catch { /* 记账失败不影响返回 */ }
+        }
+        return shouKou;
       }
-      const out = await withFileAccessScope(sessionId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }));
+      const out = await withFileAccessScope(sessionId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu, scope: jiYiZuoYongYu(String(sessionId || '')) }));
       jiLuGongJu(sessionId, out.meta.tool || toolName, out.ok, Date.now() - t1, out.ok ? Number(out.chars) || 0 : 0);
       metrics.recordToolCall({
         ts: Date.now(),
@@ -4755,7 +5908,7 @@ async function yunXingLiaoTianXunHuan(
   const zhengLunQuXiao = new AbortController();
   try { gongJuXunHuanQuXiao.set(String(sessionId || ''), zhengLunQuXiao); } catch { /* noop */ }
   let tingZhiLiYou = '';
-  const xunShouKaiShi = Date.now();
+  let xunShouKaiShi = Date.now();
   let xunShou: ReturnType<typeof setInterval> | null = null;
   const xunShouPromise = new Promise<never>((_res, rej) => {
     xunShou = setInterval(() => {
@@ -4784,10 +5937,37 @@ async function yunXingLiaoTianXunHuan(
          */
         const yanZhangDao = toolXunHuanYanZhang.get(String(sessionId || '')) || 0;
         const yingDingMs = yanZhangDao > Date.now() ? YING_DING_MS + (yanZhangDao - Date.now()) : YING_DING_MS;
+        /**
+         * **30 分钟硬顶也要认进展**（第 39 轮额度重做，抄 OpenClaw 的"慢 ≠ 卡住"分类）。
+         * 真机：本地 27B 写 6000 字一段就是 60–180 秒，六件事的任务 30 分钟是**正常工时**，
+         * 一刀切掐死等于把用户要的活扔掉。判据仍只看宿主事实（`huizhuYouJinZhan`）：
+         *  ① 还有欠账 + 刚有净产出 ⇒ **一次性**放宽到 2 倍（60 分钟绝对顶），之后照旧停；
+         *  ② 没有净产出 ⇒ 一分不加，照旧停；停滞那条路（上面 `KONG_ZHUAN_MS`）本来就不看这里。
+         * 用户批准的延长（决策卡）走另一条，两者不叠加成"永久免检"。
+         */
+        const zhang2 = huoBenLunYuSuan(String(sessionId || ''));
+        if (zong >= YING_DING_MS && zong < YING_DING_MS * 2 && yanZhangDao <= Date.now() && !zhang2.yingDingFangKuan
+          && huizhuYouJinZhan(String(sessionId || '')).you) {
+          zhang2.yingDingFangKuan = true;
+          try { audit?.log('chat.tools.hard-cap-widened', { sessionId, zongMs: zong, dao: YING_DING_MS * 2, lun: zhang2.lun, ci: zhang2.ci, zi: zhang2.zi }); } catch { /* noop */ }
+          return;
+        }
         if (!gongJuZaiPao && anJingZhen >= KONG_ZHUAN_MS) {
           tingZhiLiYou = `tool-loop-stall(${Math.round(anJingZhen / 1000)}s 没有任何真实产出)`;
           audit?.log('chat.tools.stalled', { sessionId, anJingMs: Math.round(anJingZhen), anJingChanChuMs: Number.isFinite(anJing) ? Math.round(anJing) : null, anJingHuoMs: Number.isFinite(anJingHuo) ? Math.round(anJingHuo) : null, zongMs: zong, gongJuJi: benLunGongJuShu.get(sessionId) || 0 });
         } else if (zong >= yingDingMs) {
+          /**
+           * 第 63 轮用户项 34：**有净进展就不能因为"慢"停下**。
+           * 本地 27B 写长文单步就可能几十秒到几分钟；30/60 分钟硬顶会把
+           * "仍在推进但很慢"的任务误杀。只要宿主看到净产出，就把硬顶计时清零；
+           * 真正卡住仍由上面的「5 分钟零产出」判定兜住。
+           */
+          const jinZhan = huizhuYouJinZhan(String(sessionId || ''));
+          if (jinZhan.you) {
+            xunShouKaiShi = Date.now();
+            try { audit?.log('chat.tools.hard-cap-reset', { sessionId, zongMs: zong, yin: jinZhan.yin }); } catch { /* noop */ }
+            return;
+          }
           tingZhiLiYou = `tool-loop-hard-cap(${Math.round(zong / 1000)}s${yanZhangDao > Date.now() ? '，含用户批准的延长' : ''})`;
           if (yanZhangDao) toolXunHuanYanZhang.delete(String(sessionId || ''));
           audit?.log('chat.tools.hard-cap', { sessionId, zongMs: zong, yingDingMs, gongJuJi: benLunGongJuShu.get(sessionId) || 0 });
@@ -4860,15 +6040,30 @@ async function yunXingLiaoTianXunHuan(
     },
     {
       /**
-       * 轮数上限：**用户这次要求了长文就预先多给 8 轮**（providers 层再夹到 32 硬顶）。
-       * 真机 r34-f1-ollama-4：本地 27B 写 6000 字要 4–6 段、每段 60–180 秒，
-       * 固定 20 轮把它**掐死在上限上**（然后按"到顶"弹决策卡）—— 那不是打转，是额度不够。
-       * ⚠️ 必须在这里一次性决定：`liaoTianDaiGongJu` 进入时就把 `zuiDaLunShu` 读成常量，
-       *    跑一半再改是不生效的；"是不是在有效推进"交给**预算**（每次调用动态判）与**停滞叫停**去管。
+       * 轮数上限：从**预算账本**取（第 39 轮额度重做）。
+       * 以前这里是"要求长文就 +8"的一条硬编码补丁；现在基线按任务尺寸算
+       * （见 `xinBenLunYuSuan`），并且**跑一半也能抬高** —— 循环撞顶时回调 `xuYuSuanLai`
+       * 问宿主"这算不算还在推进"，有净产出才续、停滞立刻不续。
        */
-      zuiDaLunShu: limits.zuiDaLunShu + (yaoQiuZiShu(benCiRenWuYuanWen.get(String(sessionId || '')) || '') >= 2000 ? 8 : 0),
+      zuiDaLunShu: yuSuanZhang.lun,
       zuiDaJieGuoZiShu: limits.zuiDaJieGuoZiShu,
-      maxToolResultChars: limits.totalChars,
+      /**
+       * 结果字符预算：同样从账本取（第 38 轮的 `×4`、第 39 轮的续预算都在这里，见 `zi`）。
+       * 真机教训：① 默认 12000 会把"用户点名要 6000 字小说"**掐死**；② 只翻一倍仍不够
+       * （实录 `字数进度=10 段 / 工具 26 次 / 1123s` 全程有效增长还是被 `budget lun=20` 截断）。
+       */
+      maxToolResultChars: yuSuanZhang.zi,
+      /**
+       * **窗口闸**（第 39 轮真机红）：工具循环每轮往历史里追加工具结果与思考原文，
+       * 攒到 30932 token 才发 ⇒ 本地 `num_ctx=7680` 的 Ollama 直接 400 掐死整轮。
+       * 视图预算管不到这份"循环内部的历史"，所以把**当前模型的实际窗口预算**（字符）也交给循环，
+       * 让它在每次发请求之前自己夹一次（先压实、再中段收起，收起的段落留 retrieve 指针话）。
+       */
+      zuiDaQingQiuZi: youPeizhiSuanShangXiaWenYuSuan(String(Qiu.model || providerCfg.model || ''), yangBenCongQingQiu(Qiu), gongYingDai(provider.baseURL, provider.protocol)).chars,
+      /** 调用次数上限：与 `zhiXingGongJu` 里执法的那个数**同源**（模型看到的剩余 = 真正生效的上限） */
+      zuiDaGongJuCiShu: yuSuanZhang.ci,
+      /** 撞顶时向宿主申请续预算（只认 `huizhuYouJinZhan` 的宿主事实；不认模型自述） */
+      xuYuSuanLai: (k) => benLunXuYuSuan(String(sessionId || ''), k),
       lingGongJuQiangZhi: true,
       /** 整篇正文重复发送导致的上下文爆炸 ⇒ 发之前压实（见 `yaSuoMoXingXiaoXi`） */
       yaSuoLai: yaSuoMoXingXiaoXi,
@@ -4876,6 +6071,12 @@ async function yunXingLiaoTianXunHuan(
       onEvent: (Shi) => {
         if (Shi.kind === 'degraded') audit?.log('chat.tools.degraded', { sessionId, detail: Shi.detail });
         if (Shi.kind === 'retry') audit?.log('chat.context-overflow-retry', { sessionId, detail: Shi.detail });
+        /**
+         * 额度事件全部留痕（第 39 轮）：`warn(%)` = 给模型看过剩余额度；
+         * `extend(...)` = 宿主按事实批了续预算。出问题时要能一眼分清
+         * "额度掐死了正在推进的任务"还是"模型自己在打转"。
+         */
+        if (Shi.kind === 'budget') audit?.log('chat.budget.event', { sessionId, round: Shi.round, detail: Shi.detail });
       },
     }
       ),
@@ -4923,6 +6124,18 @@ async function yunXingLiaoTianXunHuan(
     toolResultChars: loop.toolResultChars,
     degraded: loop.degraded,
     tingZhiYuanYin: loop.tingZhiYuanYin,
+    /**
+     * **额度用到哪一档收的工**（第 39 轮）：审计里必须能一眼分清
+     * "任务做完了"和"额度用完了但活没干完"（`lv` 接近 1 + 停止原因不是 `stop` 就是后者）。
+     */
+    yuSuan: loop.yuSuan && {
+      lv: Math.round(loop.yuSuan.lv * 100) / 100,
+      zuiJin: loop.yuSuan.yuanYin,
+      lun: loop.yuSuan.lunShu + '/' + loop.yuSuan.zuiDaLunShu,
+      ci: loop.yuSuan.gongJuCiShu + '/' + loop.yuSuan.zuiDaGongJuCiShu,
+      zi: loop.yuSuan.jieGuoZiShu + '/' + loop.yuSuan.zongYuSuan,
+      xuCi: loop.yuSuan.xuYuSuanCiShu,
+    },
   });
   return { ...loop, tooled: !!tools };
 }
@@ -4930,28 +6143,473 @@ async function yunXingLiaoTianXunHuan(
 /** 视图预算：SettingsStore 可配（ADR 002 要求"注入上下文有固定上限"且可调） */
 /** 由百分比 → 实际字符预算；并保证不低于最小可用 token（约 2048） */
 const MIN_CONTEXT_TOKENS = 2048;
-const CHARS_PER_TOKEN_EST = 1.6;
-/** 已知模型上下文窗口（token）；settings.modelContextTokens 可覆盖 */
-const MODEL_CTX_MAP: Record<string, number> = {
-  'deepseek-chat': 65536,
-  'deepseek-reasoner': 65536,
+/**
+ * 旧口径：一个字符折多少 token 的**唯一硬编码猜测**。第 44 轮起只作为"连样本都取不到"时的最后兜底，
+ * 正常路径一律走 `token-jiliang.ts` 的分脚本上界估算 + 供应商回读校准（用户第 9 条点名优先完善的就是这个）。
+ */
+const CHARS_PER_TOKEN_EST = WU_YANG_BEN_BEI_JIAN;
+/**
+ * ── token 校准表（`userData/token-calibration.json`）──
+ * 每轮拿到供应商回传的真实 `usage.prompt_tokens` 后，与当时对**同一条请求**的保守估算比对，
+ * 按模型维度 EMA 更新比值 ⇒ 预算越用越准；没有 usage 的端点永远停在保守上界（宁可少发也不超窗）。
+ */
+const TOKEN_ZHU = new Map<string, TokenXiaoZhun>();
+/**
+ * 校准表**首次用到时才读盘**。
+ * 不在模块顶层读：顶层执行时 `TOKEN_ZHU` 这些 const 还在暂时性死区里，读盘会抛 ReferenceError
+ * 并被"没有校准表"的 catch 吞掉 ⇒ 表永远空，而界面上的预算看起来一切正常（假成功）。
+ */
+let tokenZhuYiDu = false;
+function tokenZhuQueRen(): void {
+  if (tokenZhuYiDu) return;
+  tokenZhuYiDu = true;
+  try { tokenZhuDuQu(); } catch { /* 读坏了就按未校准处理 */ }
+}
+let tokenZhuJiuDai = 0;
+function tokenZhuLuJing(): string {
+  try { return path.join(app.getPath('userData'), 'token-calibration.json'); } catch { return ''; }
+}
+function tokenZhuDuQu(): void {
+  const f = tokenZhuLuJing();
+  if (!f) return;
+  try {
+    const j = JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, Partial<TokenXiaoZhun>>;
+    for (const [k, v] of Object.entries(j || {})) {
+      if (v && Number.isFinite(Number(v.biLi))) TOKEN_ZHU.set(k, { biLi: Number(v.biLi), yangBenShu: Number(v.yangBenShu) || 0, wuCha: Number(v.wuCha) || undefined });
+    }
+  } catch { /* 没有校准表 = 未校准，走纯上界 */ }
+}
+function tokenZhuXiePan(): void {
+  const f = tokenZhuLuJing();
+  if (!f) return;
+  const now = Date.now();
+  if (now - tokenZhuJiuDai < 5000) return;
+  tokenZhuJiuDai = now;
+  try { fs.writeFileSync(f, JSON.stringify(Object.fromEntries(TOKEN_ZHU)), 'utf8'); } catch { /* 校准丢了不影响对话 */ }
+}
+/**
+ * **模型删除 ⇒ 它专属的 token 校准一起删除**（第 55 轮项 3 用户口径：专属算法随模型创建与消亡）。
+ * 保留 `@avg/` 通用条目（它由所有模型共同喂养，不能跟着单个模型消失）。
+ * 找不到模型列表时**不动**（宁可留旧条目，也不能把还在用的模型校准误删）。
+ */
+function qingLiTokenXiaoZhun(): void {
+  try {
+    tokenZhuQueRen();
+    const s = settingsStore?.load() as { models?: string[]; activeProvider?: { model?: string } } | undefined;
+    const lie = [
+      ...(Array.isArray(s?.models) ? s!.models! : []),
+      String(s?.activeProvider?.model || ''),
+    ].map((x) => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean);
+    if (!lie.length) return;
+    const you = new Set(lie);
+    let shan = 0;
+    for (const k of [...TOKEN_ZHU.keys()]) {
+      if (k.startsWith('@avg/')) continue;
+      const seg = k.split('/');
+      if (seg.length < 3) continue;
+      const mo = seg.slice(1, -1).join('/');
+      if (mo && !you.has(mo)) { TOKEN_ZHU.delete(k); shan++; }
+    }
+    if (shan) {
+      tokenZhuJiuDai = 0;
+      tokenZhuXiePan();
+      audit?.log('token.calibration-pruned', { shan, liu: TOKEN_ZHU.size });
+    }
+  } catch { /* 清理失败不影响对话 */ }
+}
+/**
+ * **供应商指纹**：域名(+协议)。同一个 model id 挂在不同中转上分词可能不同（用户口径：
+ * "只要有一个不同，他们计算 token 的方法也可能不同"）⇒ 校准的键必须带供应商，不能只按模型存。
+ */
+function gongYingDai(baseURL?: string, protocol?: string): string {
+  const u = String(baseURL || '').trim();
+  let host = '';
+  try { host = u ? new URL(u).host : ''; } catch { host = u.replace(/^https?:\/\//i, '').split('/')[0] || ''; }
+  const p = String(protocol || '').trim().toLowerCase();
+  return String(host || (p ? `proto:${p}` : '')).toLowerCase();
+}
+/** 只有模型 id 时（界面滑杆预演等）：在设置的供应商表里找谁提供了它；找不到就按"未知供应商"查 ⇒ 只会用平均法/先验，绝不瞎借别家的数 */
+function gongYingDaiTuModel(moXingId?: string): string {
+  const m = String(moXingId || '').trim().toLowerCase();
+  if (!m) return '';
+  try {
+    const s = settingsStore?.load() as { providers?: Array<{ baseURL?: string; protocol?: string; models?: unknown[]; defaultModel?: string }> } | undefined;
+    for (const p of (s && Array.isArray(s.providers) ? s.providers : [])) {
+      const mo = [String(p?.defaultModel || '').toLowerCase(), ...(Array.isArray(p?.models) ? p!.models.map((x) => String(x).toLowerCase()) : [])];
+      if (mo.some((x) => x === m)) return gongYingDai(p?.baseURL, p?.protocol);
+    }
+  } catch { /* 读不到供应商表就按未知 */ }
+  return '';
+}
+/** 校准表的键 = `供应商 / 模型 / 密度桶`（三段都在内 ⇒ 换供应商、换模型、换文字形状都不混） */
+function tokenZhuJian(gongYingFen: string, moXingId?: string, teZheng?: string): string {
+  if (teZheng === undefined) return String(moXingId || '').trim().toLowerCase();
+  return tokenJian(gongYingFen, String(moXingId || ''), teZheng);
+}
+/**
+ * 取该供应商该模型该密度桶的校准值。三条腿（都在 `chaXiaoZhun` 里，门禁可直接测）：
+ * 精确命中 → 该桶平均法（安全垫按观测散布加厚）→ 先验（比旧的万能 1.6 更准，仍偏保守）。
+ * **绝不借别的桶**：中文桶（实测 0.64）借给代码轮（≈0.9）会把字符放行得太多 ⇒ 直接超窗。
+ */
+function tokenZhuQu(moXingId?: string, teZheng?: string, gongYingFen = ''): TokenXiaoZhun | null {
+  tokenZhuQueRen();
+  if (!teZheng) return TOKEN_ZHU.get(tokenZhuJian(gongYingFen, moXingId)) || null;
+  return chaXiaoZhun(TOKEN_ZHU, gongYingFen, String(moXingId || ''), teZheng);
+}
+/** 把一条请求摊成文本（多模态的 image 部分不计字符——它按视觉 token 单独算） */
+function qingQiuWenBen(xiaoXiJi: unknown): string {
+  const chu: string[] = [];
+  for (const m of Array.isArray(xiaoXiJi) ? xiaoXiJi : []) {
+    const neng = (m as { content?: unknown })?.content;
+    if (typeof neng === 'string') { chu.push(neng); continue; }
+    if (Array.isArray(neng)) {
+      for (const b of neng) {
+        const bb = b as { type?: string; text?: string };
+        if (bb && (bb.type === 'text' || typeof bb.text === 'string')) chu.push(String(bb.text || ''));
+      }
+    }
+  }
+  return chu.join('\n');
+}
+/** 一条请求里"要占输入 token"的可估文本：消息正文 + 工具规格（工具 schema 同样占输入） */
+function qingQiuGuJiWen(Qiu: LiaoTianQingQiu): string {
+  const zheng = qingQiuWenBen(Qiu?.xiaoXiJi);
+  let gongJu = '';
+  try {
+    const g = Qiu?.tools;
+    gongJu = Array.isArray(g) && g.length ? JSON.stringify(g) : '';
+  } catch { /* 序列化不了就不算它 */ }
+  return gongJu ? `${zheng}\n${gongJu}` : zheng;
+}
+/** 请求里是否含图片块 —— 视觉 token 还没进预算口径，这类请求**不参与校准**，免得把系数带偏 */
+function qingQiuYouTu(xiaoXiJi: unknown): boolean {
+  for (const m of Array.isArray(xiaoXiJi) ? xiaoXiJi : []) {
+    const neng = (m as { content?: unknown })?.content;
+    if (Array.isArray(neng) && neng.some((b) => (b as { type?: string })?.type === 'image_url')) return true;
+  }
+  return false;
+}
+/**
+ * 预算折算用的**有界**文字构成样本（头 40% + 尾 60%）。
+ * 与校准的区别：校准必须数**整条请求**（真实 usage 是整条的），折算只需要知道"这批字是什么语言/形状" ⇒
+ * 2M 字符的一轮里也只截 6 万，绝不为了取样把整条请求再走一遍。
+ */
+function yangBenCongQingQiu(Qiu: LiaoTianQingQiu, chang = 60000): string {
+  const zheng = qingQiuWenBen(Qiu?.xiaoXiJi);
+  const tou = zheng.slice(0, Math.floor(chang * 0.4));
+  const wei = zheng.slice(Math.max(0, zheng.length - Math.floor(chang * 0.6)));
+  let gongJu = '';
+  try {
+    const g = Qiu?.tools;
+    gongJu = Array.isArray(g) && g.length ? `tools ${g.map((x) => String((x as { function?: { name?: string } })?.function?.name || '')).join(',')}` : '';
+  } catch { /* noop */ }
+  return `${tou}\n${wei}\n${gongJu}`.slice(0, chang);
+}
+/**
+ * **校准唯一入口**：任何出口只要拿到供应商**原生**用量，就用**同一条请求**当时的估算去更新比值。
+ * 只有包装层同时拿得到请求和响应 ⇒ 校准放这里，不放预算函数里（估算/真实必须指同一条请求才有意义）。
+ */
+/**
+ * 请求里图片块的视觉 token（用**和预算同一套算法**：`tuChengBen`，不留第二份口径）。
+ * 校准时必须把它从供应商回读里扣掉 —— 回读的 `prompt_tokens` 是"文字 + 图片"的合计，
+ * 拿它整体去校准文字系数，就等于把图片的账记到文字头上（第 44 轮为此一度直接跳过带图的轮，
+ * 结果是看图轮永远不参与校准，正好绕开最需要校准的那一类）。
+ */
+function qingQiuShiJueTok(Qiu: LiaoTianQingQiu): number {
+  const tu: Array<{ kuan: number; gao: number }> = [];
+  for (const m of (Array.isArray(Qiu?.xiaoXiJi) ? Qiu.xiaoXiJi : [])) {
+    const neng = (m as { content?: unknown })?.content;
+    if (!Array.isArray(neng)) continue;
+    for (const b of neng) {
+      const u = String((b as { image_url?: { url?: string } })?.image_url?.url || '');
+      if (!/^data:image\//i.test(u)) continue;
+      tu.push(tuCheCun(u));
+    }
+  }
+  return tu.length ? tuChengBen({ tu, moXing: String(Qiu?.model || '') }).shiJueTok : 0;
+}
+function jiaZhunYongLiang(gongYingFen: string, Qiu: LiaoTianQingQiu, hui: unknown): void {
+  try {
+    const yong = (hui as { usage?: { promptTokens?: number; source?: string } } | undefined)?.usage;
+    /** 只认真生用量：`estimated` 是自己的猜测，拿它校准 = 自己喂自己，系数会永远停在原地还装作已校准 */
+    if (!yong || yong.source !== 'native') return;
+    const zhen = Math.max(0, Number(yong.promptTokens) || 0);
+    if (!zhen) return;
+    const mo = String(Qiu?.model || '');
+    const shiJue = qingQiuYouTu(Qiu?.xiaoXiJi) ? qingQiuShiJueTok(Qiu) : 0;
+    /** 图片估得比整条回读还大 ⇒ 我们的视觉估算有问题，这一轮不参与校准（也不能让它把系数带偏） */
+    if (shiJue >= zhen) {
+      try { audit?.log('token.calibrate-skip', { model: `${gongYingFen}/${mo.toLowerCase()}`, zhenShi: zhen, shiJue, yinWei: 'image-estimate-over-usage' }); } catch { /* noop */ }
+      return;
+    }
+    if (shiJue > 0) {
+      try { audit?.log('token.calibrate-image-split', { model: `${gongYingFen}/${mo.toLowerCase()}`, zhenShi: zhen, shiJue, wenZi: zhen - shiJue }); } catch { /* noop */ }
+    }
+    tokenZhuJiaoZhun(gongYingFen, mo, qingQiuGuJiWen(Qiu), zhen, shiJue);
+  } catch { /* 校准是附加能力，坏了不许影响这轮回复 */ }
+}
+/**
+ * 本次要发出去的会话**形状样本**：给"token→字符"换算用（纯中文会话和纯代码会话折算出来的字符数必须不同）。
+ * 只取样、不全量 ⇒ 6000 轮的会话里这也是一次 O(取样量) 的工作：头 12 条 + 尾 24 条 + 本轮，截 6 万字符。
+ */
+function yangBenBenCi(sid: string, benLun?: string): string {
+  const z = chatLogs.get(String(sid || '')) || [];
+  const wen = (m: unknown): string => {
+    const neng = (m as { content?: unknown })?.content;
+    if (typeof neng === 'string') return neng;
+    return qingQiuWenBen([m]);
+  };
+  const tou: string[] = [];
+  const wei: string[] = [];
+  for (let i = 0; i < z.length && tou.length < 12; i++) tou.push(wen(z[i]));
+  for (let i = z.length - 1; i >= 0 && wei.length < 24; i--) wei.push(wen(z[i]));
+  return [String(benLun || ''), ...tou, ...wei].join('\n').slice(0, 60000);
+}
+/**
+ * 校准更新：真实/未校准上界 的比值进 EMA，并留一条审计让人看得见"这轮估得准不准"。
+ * 分母用 `guJiToken`（上界），**不用已校准的放行量** ⇒ 系数不会自我复合，换文字形状也能追得上。
+ * 每一次回读都另外**追加一条观测**（`token-observations.jsonl`）：EMA 是"在线"的、会被最近几轮主导，
+ * 归档时再用这份全量记录**离线重算**一遍（用户第 9 条补充口径："记录供应商给出的 token 计量，归档时据此更新算法"）。
+ */
+function tokenZhuJiaoZhun(gongYingFen: string, moXingId: string, xuLieHua: string, zhenShiPromptTokens: number, tuZhiTok = 0): void {
+  const zhenQuan = Math.max(0, Number(zhenShiPromptTokens) || 0);
+  if (!zhenQuan) return;
+  tokenZhuQueRen();
+  const jian = tokenZhuJian(gongYingFen, moXingId, xuLieHua);
+  if (!jian) return;
+  const shang = guJiToken(xuLieHua);
+  if (shang <= 0) return;
+  const zhen = Math.max(0, zhenQuan - Math.max(0, Number(tuZhiTok) || 0));
+  if (zhen <= 0) return;
+  const jiu = TOKEN_ZHU.get(jian) || WEI_ZHUN_KAO;
+  const xin = xinJiXiaoZhun(jiu, shang, zhen);
+  TOKEN_ZHU.set(jian, xin);
+  tokenZhuXiePan();
+  tokenGuanCeZhuiJia(gongYingFen, moXingId, jian.slice(jian.lastIndexOf('/') + 1), shang, zhen);
+  try { audit?.log('token.calibrate', { model: jian, shangJie: shang, zhenShi: zhen, biLi: Number(xin.biLi.toFixed(3)), n: xin.yangBenShu, wuCha: Number((xin.wuCha ?? 0).toFixed(3)) }); } catch { /* 审计失败不影响对话 */ }
+}
+/** 观测史的落点（append-only；归档重算后如果太长会截断保留最近的部分） */
+function tokenGuanCeLuJing(): string {
+  try { return path.join(app.getPath('userData'), 'token-observations.jsonl'); } catch { return ''; }
+}
+const GUAN_CE_SHANG_XIAN = 20000;
+function tokenGuanCeZhuiJia(gongYingFen: string, moXingId: string, tong: string, shangJie: number, zhenShi: number): void {
+  const f = tokenGuanCeLuJing();
+  if (!f) return;
+  try {
+    fs.appendFileSync(f, JSON.stringify({ ts: Date.now(), gongYing: gongYingFen, moXing: String(moXingId || '').toLowerCase(), tong, shangJie, zhenShi }) + '\n', 'utf8');
+  } catch { /* 观测丢了不影响对话，最多归档时少几个样本 */ }
+}
+/** 读观测史（只取最近 N 条，避免 6000 轮的机器上每次全量读） */
+function tokenGuanCeDuQu(zuiDuo = GUAN_CE_SHANG_XIAN): GuanCe[] {
+  const f = tokenGuanCeLuJing();
+  if (!f) return [];
+  try {
+    const Hang = fs.readFileSync(f, 'utf8').split(/\r?\n/).filter(Boolean);
+    const xuan = Hang.slice(Math.max(0, Hang.length - zuiDuo));
+    const chu: GuanCe[] = [];
+    for (const h of xuan) {
+      try {
+        const j = JSON.parse(h) as GuanCe;
+        if (j && Number(j.shangJie) > 0 && Number(j.zhenShi) > 0) chu.push({ gongYing: String(j.gongYing || ''), moXing: String(j.moXing || ''), tong: String(j.tong || ''), shangJie: Number(j.shangJie), zhenShi: Number(j.zhenShi) });
+      } catch { /* 半截行跳过（崩溃时可能写坏最后一行） */ }
+    }
+    return chu;
+  } catch { return []; }
+}
+/**
+ * **归档时重算**（用户要的"根据记录更新我们的 token 计算方法"）。
+ * 用全量观测重做一遍比值（均值 + 组内散布），并按桶汇总出 `@avg/桶` 的平均法条目，
+ * 覆盖在线 EMA 的结果；同时把观测史截断到最近的上限，不让它无限膨胀。
+ */
+function tokenGuiDangChongSuan(): { moXingShu: number; tongShu: number } {
+  const guanCe = tokenGuanCeDuQu();
+  const jiu: Record<string, TokenXiaoZhun> = Object.fromEntries(TOKEN_ZHU);
+  const xin = zhongSuanXiaoZhun(guanCe, jiu);
+  TOKEN_ZHU.clear();
+  for (const [k, v] of Object.entries(xin)) TOKEN_ZHU.set(k, v);
+  tokenZhuJiuDai = 0;
+  tokenZhuXiePan();
+  const f = tokenGuanCeLuJing();
+  if (f && guanCe.length > GUAN_CE_SHANG_XIAN) {
+    try { fs.writeFileSync(f, guanCe.slice(-GUAN_CE_SHANG_XIAN).map((x) => JSON.stringify(x)).join('\n') + '\n', 'utf8'); } catch { /* 截断失败就留着下次截 */ }
+  }
+  const moXingShu = Object.keys(xin).filter((k) => !k.startsWith(PING_JUN_QIAN) && k.includes('/d')).length;
+  const tongShu = Object.keys(xin).filter((k) => k.startsWith(PING_JUN_QIAN)).length;
+  try { audit?.log('token.recalc-at-archive', { guanCe: guanCe.length, moXingShu, tongShu }); } catch { /* noop */ }
+  return { moXingShu, tongShu };
+}
+const WEI_ZHUN_KAO: TokenXiaoZhun = { biLi: 1, yangBenShu: 0 };
+/**
+ * **官方规格表在 `./mo-xing-gui-ge.ts`**（第 44 轮，用户项 2）。放那边的原因：纯表 + 纯函数，
+ * 门禁脚本能直接 import 跑断言；主进程只负责按"拉取事实 → 官方表 → 默认+推导"三条腿取数。
+ * 数值出处、核对日期、以及"云端 `/models` 不回长度字段"的实测结论都写在那份文件头部。
+ */
+/** 兼容旧调用点：只要窗口数值的那一层投影（表里已经有的型号） */
+const MODEL_CTX_MAP: Record<string, number> = Object.fromEntries(
+  Object.entries(MODEL_GUIGE).map(([k, v]) => [k, v.chuangKou])
+);
+/**
+ * **模型额度（上下文窗口 / 输出 / rpm / tpm）的统一口径**（第 39 轮，用户两次纠正后定稿）。
+ *
+ * 1) 取值优先级（每条单独降级，不许互相顶）：
+ *   ① 用户在「设置 → 模型 → 右键模型」里存过的值（`settings.modelQuota`）；
+ *   ② **拉取模型时问到的信息**（`modelCaps.contextLen`；Ollama 读的是 `num_ctx`。端点若给了 rpm/tpm 也用它，没给**不猜**）；
+ *   ③ 已知型号表 `MODEL_CTX_MAP`；
+ *   ④ **默认 128K**（拉取不到窗口时）＋推导：**tpm = 基准窗口 × 2 且不低于 300,000**；**rpm = tpm ÷ 4000 且不低于 100 次**。
+ *
+ * 2) **快照语义（用户明确要求的）**：存过之后就是一座独立的岛 ——
+ *    改上下文窗口**不会**带动 rpm/tpm，改 rpm 或 tpm 也**不会**带动别的；
+ *    只有「拉取模型」与「恢复默认」这两条路会重新计算"没拉到的那些"。
+ *    ⇒ 推导用的基准窗口是 `moXingLaQuXinXi()` 那份（拉取信息/已知表/128K），**绝不用用户改过的窗口**，
+ *      否则"改窗口 ⇒ rpm/tpm 跟着变"这条被禁止的联动就从后门漏回来了。
+ *
+ * 3) 单位：只有**上下文窗口 / 输出 / 输入输出**有 k(×1000)、m(×1000000) 两个选项；
+ *    **rpm 的单位就是"次"、tpm 的单位就是 token，都不带单位选项**。
+ */
+const MO_XING_MO_REN_CHUANGKOU = 128000;
+const MO_XING_TPM_BEI_SHU = 2;
+const MO_XING_TPM_XIA_XIAN = 300000;
+/** rpm 由 tpm 推（**顺序定死：窗口 → tpm → rpm**）：一发平均按 4000 token 记，保底 100 次/分 */
+const MO_XING_RPM_FEN_MU = 4000;
+const MO_XING_RPM_XIA_XIAN = 100;
+/** 界面单位只有 k / m（默认 m）—— 乘数与显示换算都在 `./mo-xing-gui-ge.ts`，两处共用一份 */
+interface MoXingYuE {
+  /** 上下文窗口（token） */
+  chuangKou: number;
+  /** 单次输出上限（token）；0 = 没规定（由协议默认） */
+  shuChu: number;
+  /** 每分钟请求数（单位：次） */
+  rpm: number;
+  /** 每分钟 token 数（单位：token） */
+  tpm: number;
+  /** 每一项从哪一层取的（界面如实标"拉取信息 / 你的设置 / 计算"，不许含糊） */
+  laiYuan: { chuangKou: string; shuChu: string; rpm: string; tpm: string };
+}
+interface LaQuXinXi { chuangKou: number; shuChu: number; rpm: number; tpm: number; /** 这几项是从哪一层拿到的（拉取/官方表）；界面要能说出来 */ laiYuan?: string; /** 窗口是不是**真拉到的**（不是官方表补的） */ congLaQu?: boolean; spec?: { inTypes?: string[]; outTypes?: string[]; chuangKou: number; shuChu?: number; rpm?: number; tpm?: number } | null }
+/** **拉到的事实**（拿不到就是 0）——推导只许用它，不许掺进用户改过的值 */
+function moXingLaQuXinXi(modelId?: string): LaQuXinXi {
+  const m = String(modelId || '').trim();
+  const chu: LaQuXinXi = { chuangKou: 0, shuChu: 0, rpm: 0, tpm: 0 };
+  if (!m) return chu;
+  const jian = (o: Record<string, unknown> | undefined): Record<string, unknown> | undefined =>
+    o ? (o[m] as Record<string, unknown> || o[m.split('/').pop() || ''] as Record<string, unknown>) : undefined;
+  try {
+    const s = settingsStore?.load() as { modelCaps?: Record<string, unknown> } | undefined;
+    const c = jian(s?.modelCaps as Record<string, unknown> | undefined) as
+      { contextLen?: number; maxOut?: number; rpm?: number; tpm?: number } | undefined;
+    chu.chuangKou = Math.max(0, Math.round(Number(c?.contextLen) || 0));
+    chu.shuChu = Math.max(0, Math.round(Number(c?.maxOut) || 0));
+    chu.rpm = Math.max(0, Math.round(Number(c?.rpm) || 0));
+    chu.tpm = Math.max(0, Math.round(Number(c?.tpm) || 0));
+  } catch { /* 读不到就按没拉到 */ }
+  if (!chu.chuangKou) {
+    try {
+      const neng = modelNengLiMeta.get(m) || modelNengLiMeta.get(m.split('/').pop() || '');
+      const z = Number(neng && (neng as { contextLen?: number }).contextLen) || 0;
+      if (z >= 1024) chu.chuangKou = Math.round(z);
+    } catch { /* 同上 */ }
+  }
+  /** 到这一步还在，就是**真拉到的**（落盘 caps 或本次内存里的拉取结果）；官方表补的不算 */
+  chu.congLaQu = chu.chuangKou > 0 || chu.shuChu > 0 || chu.rpm > 0 || chu.tpm > 0;
   /**
-   * MiMo 系（真机反馈：用 mimo-v2.5 时上下文预算滑到 97% 也才 31785 —— 那是写死的 32K）。
-   * 官方口径：mimo-v2.5 / 2.6 系是 **1M** 级上下文；这里如实登记，滑块满值跟着真实窗口走。
+   * **第 44 轮补的一条腿（用户项 2）**：端点问不到、内存里也没有拉取记录时，
+   * 先查**官方规格表**（带来源与核对日期），查得到就用它，别一边"默认 128K"一边把 1M 的模型按 128K 裁剪。
+   * 输出上限 / rpm / tpm 也同一条腿取 —— 拉取信息里有的项**优先**，这里只补它没有的。
    */
-  'mimo-v2.5-pro': 1048576,
-  'mimo-v2.5': 1048576,
-  'mimo-v2.6-flash': 1048576,
-  'mimo-v2.6-pro': 1048576,
-  'qwen3.7-max': 131072,
-  'qwen3.8-27b': 32768,
-  'gpt-4o': 128000,
-  'gpt-4o-mini': 128000,
-  'claude-3-5-sonnet': 200000,
-};
+  const gg = chaMoXingGuiGe(m);
+  if (gg) {
+    chu.spec = gg;
+    if (!chu.chuangKou) chu.chuangKou = gg.chuangKou;
+    if (!chu.shuChu && gg.shuChu) chu.shuChu = gg.shuChu;
+    if (!chu.rpm && gg.rpm) chu.rpm = gg.rpm;
+    if (!chu.tpm && gg.tpm) chu.tpm = gg.tpm;
+    if (gg.chuangKou && !chu.laiYuan) chu.laiYuan = gg.laiYuan + (gg.heShiRi ? '（' + gg.heShiRi + ' 核对）' : '（未核对）');
+  }
+  return chu;
+}
+/**
+ * **唯一的一份推导**（拉取模型、恢复默认、以及"从没存过额度"的模型运行时都走这里）：
+ * 窗口 → tpm → rpm 的顺序写死，反过来会让"拍的次数"决定真实吞吐。
+ */
+function moXingYuEJiSuan(la: LaQuXinXi): { chuangKou: number; shuChu: number; rpm: number; tpm: number } {
+  const chuangKou = la.chuangKou > 0 ? la.chuangKou : MO_XING_MO_REN_CHUANGKOU;
+  const tpm = la.tpm > 0 ? la.tpm : Math.max(MO_XING_TPM_XIA_XIAN, Math.round(chuangKou * MO_XING_TPM_BEI_SHU));
+  const rpm = la.rpm > 0 ? la.rpm : Math.max(MO_XING_RPM_XIA_XIAN, Math.round(tpm / MO_XING_RPM_FEN_MU));
+  return { chuangKou, shuChu: la.shuChu, rpm, tpm };
+}
+function moXingQuotaDangQian(modelId?: string): { ctx?: number; out?: number; rpm?: number; tpm?: number; ziDong?: boolean } | null {
+  const m = String(modelId || '').trim();
+  if (!m) return null;
+  try {
+    const all = (settingsStore?.load() as { modelQuota?: Record<string, {
+      ctxNum?: number; ctxUnit?: string; outNum?: number; outUnit?: string;
+      /** 第 44 轮：**精确 token 数**（显示换算只影响"读法"，不影响事实；这一份才是预算算的根据） */
+      ctxTokens?: number; outTokens?: number;
+      rpm?: number; tpm?: number;
+      /** 这条快照是「拉取模型/恢复默认」自动写的（true）还是用户亲手存的（false/无）——决定下次拉取能不能覆盖它 */
+      ziDong?: boolean;
+    }> } | undefined)?.modelQuota;
+    const z = all && all[m];
+    if (!z) return null;
+    const cheng = (tokens: number | undefined, n?: number, u?: string): number | undefined => {
+      /** 有精确 token 数就用它（第 44 轮：`ctxNum=1048.576 / ctxUnit=k` 反算回来是 1,048,576 —— 但用户改了显示就该重算） */
+      if (Number.isFinite(Number(tokens)) && Number(tokens) > 0) return Math.round(Number(tokens));
+      return (Number.isFinite(Number(n)) && Number(n) > 0 ? Math.round(Number(n) * danWeiBeiShu(u)) : undefined);
+    };
+    /** rpm/tpm 没有单位：存进来就是"次"和"token"，不再乘任何系数 */
+    const zheng = (n?: number): number | undefined =>
+      (Number.isFinite(Number(n)) && Number(n) > 0 ? Math.round(Number(n)) : undefined);
+    return { ctx: cheng(z.ctxTokens, z.ctxNum, z.ctxUnit), out: cheng(z.outTokens, z.outNum, z.outUnit), rpm: zheng(z.rpm), tpm: zheng(z.tpm), ziDong: z.ziDong === true };
+  } catch { return null; }
+}
+/**
+ * **这条额度记录是不是"用户亲手认定的"**（第 44 轮自查补的漏）。
+ * 上一版只判"有没有记录"—— 而**每次拉取模型都会给每个模型写一条自动快照**，于是界面来源全变成"你的设置"，
+ * 把"我们算出来的"说成"用户填的"，正是本轮用户项 2 要禁止的那种含糊。
+ *
+ * 判据只看**显式写下来的那个标志**（两条写入路径都会写：自动快照 `ziDong:true`、用户点过「确定」`ziDong:false`）。
+ * ⚠️ 第 44 轮自查出的真缺陷（两头都错）：上一版写的是 `return !(ctxTokens>0 || outTokens>0)`，
+ * 于是 ① 缺字段的老记录被判成"用户认定" ⇒ **永不覆盖**（正是当初要修的那一半）；
+ * ② 带 `ctxTokens` 的**用户手工认定**被判成"没认定" ⇒ 下次拉取模型就被刷掉，来源也不再显示"你的设置"。
+ * 老记录（第 39 轮写的，没有 `ziDong`）自动与手工都带 `ctxTokens`，**分不出来** ⇒ 一律当"没认定过"：
+ * 宁可让用户重新点一次「确定」，也不许把上一次算出来的猜测钉死成事实。
+ */
+function shiYongHuRenDing(de?: { ziDong?: boolean; ctxTokens?: number; outTokens?: number } | null): boolean {
+  if (!de) return false;
+  return de.ziDong === false;
+}
+function moXingYuE(modelId?: string): MoXingYuE {
+  const m = String(modelId || '').trim();
+  const cun = moXingQuotaDangQian(m);
+  /**
+   * **只有"用户亲手认定过"的记录才享受快照优先**（第 44 轮自查补的漏）：
+   * 自动快照每次拉取都会重写，若也享受优先，就把"上一次算的"钉死成事实 —— 窗口刷错了也永远改不回来。
+   */
+  const yongHuRenDing = shiYongHuRenDing(cun);
+  const fu = yongHuRenDing ? cun : null;
+  const la = moXingLaQuXinXi(m);
+  /** 快照语义：认定过就用存的，没认定过才现算（算的是**拉取信息**，不是用户改过的窗口） */
+  const ji = moXingYuEJiSuan(la);
+  const ziDongWen = '自动快照（每次拉取重算，未认定）';
+  const laiYuan: MoXingYuE['laiYuan'] = {
+    /** 第 44 轮：官方规格表不是"拉取到的事实"，来源必须分开写（用户项 2 要的就是"这数从哪来的"） */
+    chuangKou: fu?.ctx ? '你的设置' : (la.chuangKou ? (la.congLaQu ? '拉取信息' : '官方规格表：' + (la.laiYuan || '')) : (cun?.ctx ? ziDongWen + ' · 沿用上次值' : '默认 128K（没拉到窗口）')),
+    shuChu: fu?.out ? '你的设置' : (la.shuChu ? (la.congLaQu ? '拉取信息' : '官方规格表：' + (la.laiYuan || '')) : '未规定'),
+    rpm: fu?.rpm ? '你的设置' : (la.rpm ? (la.congLaQu ? '拉取信息' : '官方规格表：' + (la.laiYuan || '')) : '计算（tpm ÷ 4000，不低于 100 次）'),
+    tpm: fu?.tpm ? '你的设置' : (la.tpm ? (la.congLaQu ? '拉取信息' : '官方规格表：' + (la.laiYuan || '')) : '计算（基准窗口 × 2，不低于 30 万）'),
+  };
+  return { chuangKou: fu?.ctx || ji.chuangKou, shuChu: fu?.out || ji.shuChu, rpm: fu?.rpm || ji.rpm, tpm: fu?.tpm || ji.tpm, laiYuan };
+}
+
 function modelWindowTokens(modelId?: string): number | null {
   if (!modelId) return null;
   const m = String(modelId).trim();
+  /** ⓪ **用户认定过**的窗口优先（设置 → 模型 → 右键后点确定）；自动快照不享受优先（第 44 轮自查补） */
+  try {
+    const fu = moXingQuotaDangQian(m);
+    if (shiYongHuRenDing(fu) && fu?.ctx) return fu.ctx;
+  } catch { /* 读设置失败就照旧往下退 */ }
   /**
    * **真实能力优先**（真机反馈）：上下文窗口要跟着**当前这个牛马实际在用的模型**走，
    * 不是写死的对照表。真实值是"拉取模型"时问出来的 `contextLen`（`modelNengLiMeta`），
@@ -4962,35 +6620,96 @@ function modelWindowTokens(modelId?: string): number | null {
     const zhen = Number(neng && (neng as { contextLen?: number }).contextLen) || 0;
     if (zhen >= 1024) return zhen;
   } catch { /* 读不到就退回已知表 */ }
-  return MODEL_CTX_MAP[m] || MODEL_CTX_MAP[m.split('/').pop() || ''] || null;
+  const biao = MODEL_CTX_MAP[m] || MODEL_CTX_MAP[m.split('/').pop() || ''];
+  if (biao) return biao;
+  /**
+   * 表格里也没有 ⇒ 从**模型名**里解析窗口（第 51 轮用户口径：先看名字里的 128K/32k/1M 之类）。
+   * 解析不到就返回 null，由 `peizhiYuSuan` 统一按 128K 兜底。
+   */
+  const ming = congMingZiCaiChuangKou(m);
+  return ming || null;
 }
-function youPeizhiSuanShangXiaWenYuSuan(modelId?: string): { chars: number; percent: number; tokens: number; maxTokens: number; minPercent: number } {
+/**
+ * **实测的"不可再小预算"**（用户 #3）：滑杆的下限不该是拍脑袋的 2048 token，
+ * 而应当是"这一轮真发出去时量出来的固定开销 + 工具规格 + 视图最小 + 执行余量"。
+ * 每轮装配时更新（`chat.budget.allocated` 那一处），界面拉预算时带回去给滑杆用。
+ */
+const ZUI_XIAO_JI = new Map<string, { guDing: number; gongJu: number; zuiXiaoTokens: number; shi: number }>();
+function zuiXiaoJiDangQian(gongYingFen: string, moXingId?: string): { guDing: number; gongJu: number; zuiXiaoTokens: number } | null {
+  const x = ZUI_XIAO_JI.get(`${gongYingFen}/${moXingId}`);
+  return x || null;
+}
+
+function youPeizhiSuanShangXiaWenYuSuan(modelId?: string, yangBenWen?: string, gongYingFen?: string, percentOverride?: number): { chars: number; percent: number; tokens: number; maxTokens: number; minPercent: number; anQuanChuangKou: number } {
   let percent = 60;
-  let maxTokens = 32768;
+  /** 第 51 轮用户口径：窗口未知统一按 128K（先试模型名解析，由下面 modelWindowTokens 负责） */
+  let maxTokens = MO_XING_CHUANG_KOU_DOU_DI;
   let youZhenShi = false;
   try {
     const mw = modelWindowTokens(modelId);
     if (mw && mw >= 4096) { maxTokens = mw; youZhenShi = true; }
 
     const s = settingsStore?.load();
-    const p = Number(s?.contextBudgetPercent);
+    // 副身/执行者可以带自己的预算百分比（牛马管理局滑杆）；没带就用全局聊天滑杆。
+    const p = Number.isFinite(Number(percentOverride)) ? Number(percentOverride) : Number(s?.contextBudgetPercent);
     // 上限放开到 100%：滑块的最高 = 当前牛马的**实际上下文**（真机反馈）
     if (Number.isFinite(p)) percent = Math.min(100, Math.max(10, Math.round(p)));
     const m = Number(s?.modelContextTokens);
     // 用户显式覆盖只在**拿不到真实窗口**时生效（不许把"实际上下文"盖掉）
     if (!youZhenShi && Number.isFinite(m) && m >= 4096) maxTokens = m;
   } catch { /* 用默认 */ }
-  const minPercent = Math.min(100, Math.ceil((MIN_CONTEXT_TOKENS / maxTokens) * 100));
-  const effPercent = Math.max(percent, minPercent);
-  const tokens = Math.max(MIN_CONTEXT_TOKENS, Math.round((effPercent / 100) * maxTokens));
-  const chars = Math.max(200, Math.round(tokens * CHARS_PER_TOKEN_EST));
-  return { chars, percent: effPercent, tokens, maxTokens, minPercent };
+  /**
+   * **算术只有一份**（第 45 轮）：窗口 → 预算 → 输出留位 → 2% 安全垫 → token↔字符折算，
+   * 全部交给 `yuSuan-jiage.ts:peizhiYuSuan()`。
+   * 抽出来的原因是真事故：压力档 `verify-memory-stress` 以前"逐行复刻"这段算术（还带着万能系数 1.6），
+   * 产品改了它不知道 ⇒ 压测跑的预算比生产宽，测得再绿也证不了产品。现在两边调同一个函数。
+   * 这里只负责**取事实**：滑杆百分比、真实窗口、用户手设窗口、该模型的输出上限、形状样本与校准系数。
+   */
+  let shuChuYueDing = 0;
+  try { shuChuYueDing = moXingYuE(modelId).shuChu || 0; } catch { /* 额度读不到就按百分比 */ }
+  /** 没给供应商指纹时按"谁提供了这个模型"现查；查不到就只走该桶平均法/先验，绝不借别家的系数 */
+  const fen = String(gongYingFen ?? '') || gongYingDaiTuModel(modelId);
+  const yangBen = String(yangBenWen || '').slice(0, 60000);
+  const pei = peizhiYuSuan({
+    percent,
+    windowTokens: maxTokens,
+    shuChuYueDing,
+    yangBen,
+    zhun: tokenZhuQu(modelId, yangBen, fen),
+  });
+  return {
+    chars: pei.chars,
+    percent: pei.percent,
+    tokens: pei.tokens,
+    maxTokens: pei.maxTokens,
+    minPercent: pei.minPercent,
+    anQuanChuangKou: pei.anQuanChuangKou,
+  };
 }
 
 const SHANGXIAWEN_CHONGSHI_BUZHOU = [1.0, 0.6, 0.35, 0.2];
+/** 本轮请求的输出预留：长文/加强回复给大的，其它给基础的（真事故：1024 把 5000 字小说截停在句中） */
+const SHU_CHU_CHANG = 12288;
+const SHU_CHU_DUAN = 4096;
+/**
+ * **发送侧与预算计价侧必须用同一个输出预留数**（否则一边按 `窗口−12288`、一边按整窗算 ⇒
+ * 预算看着安全，实际发出去仍会顶到窗口）。用户在额度里设了输出上限时以上限为准。
+ */
+function benLunShuChuYuZhan(yaoChangWen: boolean, jiaQiangHuiFu: boolean, moXingId?: string): number {
+  const base = (yaoChangWen || jiaQiangHuiFu) ? SHU_CHU_CHANG : SHU_CHU_DUAN;
+  try {
+    const yuE = moXingYuE(moXingId);
+    if (yuE.shuChu > 0) return Math.max(2048, Math.min(base, yuE.shuChu));
+  } catch { /* 读不到额度就按基础值 */ }
+  return base;
+}
+/**
+ * 收缩重试的触发条件 —— 委托给错误分类表（契约 v1.1 `CuowuLeibie`，`cuowu-fenlei.ts`）。
+ * 判据与旧正则同一条；区别只是先排除鉴权/风控/越界/IPC 断开，并去掉报错里的 URL
+ * （MiMo 端点域名带 `token-plan`，以前"连不上"会被当成"上下文太长"去收缩重试四次）。
+ */
 function isContextLengthError(err: unknown): boolean {
-  const s = String((err as Error)?.message || err || '');
-  return /context|token|too long|maximum length|context_length|maximum context/i.test(s);
+  return shiShangXiaWenChaoXian(err);
 }
 function budgetCharsForStep(baseChars: number, buZhou: number): number {
   return Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.round(baseChars * buZhou));
@@ -5027,7 +6746,7 @@ async function daiShangXiaWenChongShiYunXing<T>(
   };
 }
 
-function contextBudgetChars(modelId?: string): number {
+function contextBudgetChars(modelId?: string, yangBenWen?: string, gongYingFen?: string): number {
   try {
     /**
      * **预算必须跟着"当前真实模型"走**（产品要求 · 本轮修）。
@@ -5037,11 +6756,35 @@ function contextBudgetChars(modelId?: string): number {
      * 现在：**百分比 × 当前模型的真实窗口** 现算；落盘的绝对值只在**完全拿不到模型窗口**时兜底。
      * 模型被降级/换了之后，这里自然会按新模型重算（不需要额外通知）。
      */
-    const suan = youPeizhiSuanShangXiaWenYuSuan(modelId);
+    const suan = youPeizhiSuanShangXiaWenYuSuan(modelId, yangBenWen, gongYingFen);
     const v = suan.chars;
-    // 低于下限会让可执行指针放不下（下限 200 + 上限 200 万，防止误配出荒唐值）
+    /**
+     * 旧的"字符硬上限 200 万"去掉 ⇒ 上限由 **token 侧**（百分比 × 真实窗口，已经夹在 [2048, 窗口]）决定。
+     * 为什么：中文下 1M token ≈ 140–170 万字符，那条字符天花板会把 62%–100% 的滑杆区间**压成同一点**，
+     * 用户"设到 100%"就永远设不到（用户第 3 条：上限要能到 100%）。这里只留一个防荒唐值的宽口子。
+     */
     if (Number.isFinite(v)) {
-      return Math.min(2000000, Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.floor(v)));
+      const zhengTiao = Math.min(20000000, Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.floor(v)));
+      /**
+       * **视图额度 ≠ 整条预算**（用户 #2「预算设置多少，就是发送多少内容给模型」）。
+       * 第 45 轮自查抓到：单聊已经按余额分配了，群/值班这两条路还在把**整条预算**当视图额度用
+       * ⇒ 固定开销（系统提示 / 状态卡片 / 工具规格）全在预算之外，同一份设置在两条路上口径不一样。
+       * 扣的是 `ZUI_XIAO_JI` 里**上一轮实测**的固定开销，算术仍走 `fenPeiYuSuan`（不留第二套）。
+       * 真的还没量过（这台机器第一次跑这条路径）才按整条预算，并由 `chat.view-budget` 审计看得出"未扣"。
+       */
+      const ji = zuiXiaoJiDangQian(String(gongYingFen || ''), modelId);
+      if (!ji) return zhengTiao;
+      const zhuangZhun = tokenZhuQu(String(modelId || ''), yangBenWen, gongYingFen);
+      const keYongTok = fenPeiYuSuan({
+        yuSuanTokens: suan.tokens,
+        guDingTokens: ji.guDing,
+        gongJuTokens: ji.gongJu,
+        benLunTokens: 0,
+        chuangKouTokens: Math.max(MIN_CONTEXT_TOKENS,
+          Number(suan.anQuanChuangKou) - benLunShuChuYuZhan(false, false, String(modelId || ''))),
+      }).shiTuTokens;
+      return Math.min(zhengTiao, Math.max(MIN_CONTEXT_BUDGET_CHARS,
+        tokenDaoZiFu(Math.max(MIN_CONTEXT_TOKENS, keYongTok), String(yangBenWen || ''), zhuangZhun)));
     }
   } catch {
     /* 配置坏了就退回默认 */
@@ -5378,7 +7121,129 @@ async function tuZhuanPng(dataUrl: string, shiShiLiang: boolean): Promise<string
   }
 }
 
-type TuFuJian = { url: string; ming: string; geShi: 'png' | 'jpeg'; yuanGeShi: string };
+/**
+ * 视频取一帧：没有 videoUnd 专用模型时，用 Chromium 自带的解码能力抽首帧，
+ * 再交给「看图模型」链。只读、隐藏窗口、超时 20 秒；大文件直接放弃（不拖垮聊天）。
+ */
+async function shiPinChouZhen(buf: Buffer, mime: string): Promise<string | null> {
+  if (!buf.length || buf.length > 64 * 1024 * 1024) return null;
+  if (!/^video\//i.test(mime || '')) return null;
+  let chuang: BrowserWindow | null = null;
+  try {
+    chuang = new BrowserWindow({
+      show: false, width: 64, height: 64,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
+    });
+    await chuang.loadURL('about:blank');
+    const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+    const js = `(async (u) => {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = () => no(new Error('video-decode')); v.src = u; });
+      try { v.currentTime = Math.min(1, Math.max(0.1, (v.duration || 2) * 0.1)); } catch { /* noop */ }
+      await new Promise((r) => setTimeout(r, 350));
+      const w0 = v.videoWidth || 640, h0 = v.videoHeight || 360;
+      const k = Math.min(1, 1280 / Math.max(w0, h0));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(w0 * k)); cv.height = Math.max(1, Math.round(h0 * k));
+      const g = cv.getContext('2d');
+      g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+      g.drawImage(v, 0, 0, cv.width, cv.height);
+      return cv.toDataURL('image/png');
+    })(${JSON.stringify(dataUrl)})`;
+    const r = await Promise.race([
+      chuang.webContents.executeJavaScript(js, true),
+      new Promise<null>((res) => setTimeout(() => res(null), 20_000)),
+    ]);
+    return typeof r === 'string' && r.startsWith('data:image/png;base64,') && r.length > 64 ? r : null;
+  } catch {
+    return null;
+  } finally {
+    try { chuang?.destroy(); } catch { /* noop */ }
+  }
+}
+
+type TuFuJian = { url: string; ming: string; geShi: 'png' | 'jpeg'; yuanGeShi: string; kuan: number; gao: number };/**
+ * 图片真实像素：视觉 token 按**像素面积**算，不按文件字节猜（同一张 1024×1024 存 PNG 还是 JPEG
+ * 字节能差 10 倍，模型吃的补丁数却一样）。解不出来时按降分辨率档的边长兜底 —— **绝不返回 0**，
+ * 0 意味着"这张图免费"，那正是"预算设多少就发多少"被偷偷破掉的地方。
+ */
+function tuCheCun(dataUrl: string): { kuan: number; gao: number } {
+  try {
+    const b64 = String(dataUrl || '').replace(/^data:image\/[a-z0-9+.-]+;base64,/i, '');
+    const s = nativeImage.createFromBuffer(Buffer.from(b64, 'base64')).getSize();
+    if (s.width > 0 && s.height > 0) return { kuan: s.width, gao: s.height };
+  } catch { /* 解不出就走兜底 */ }
+  return { kuan: TU_JIANG_JI_BIAN_CHANG, gao: TU_JIANG_JI_BIAN_CHANG };
+}
+/**
+ * 阶梯里的「降分辨率」那一档：**真的把图缩**到最长边 ≤ `TU_JIANG_JI_BIAN_CHANG`
+ * （视觉 token 与面积近似成正比，2048² 缩到 1024² ≈ 省掉 3/4）。
+ * 返回 null = 这张已经够小 / 缩不动（调用方继续走「减张数 → 停止发送」，不许在这里假装降过）。
+ */
+function tuXiaoShao(url: string): { url: string; kuan: number; gao: number } | null {
+  try {
+    const img = nativeImage.createFromBuffer(Buffer.from(String(url || '').replace(/^data:image\/[a-z0-9+.-]+;base64,/i, ''), 'base64'));
+    const s = img.getSize();
+    if (!s.width || !s.height) return null;
+    const chang = Math.max(s.width, s.height);
+    if (chang <= TU_JIANG_JI_BIAN_CHANG) return null;
+    const k = TU_JIANG_JI_BIAN_CHANG / chang;
+    const xiao = img.resize({ width: Math.max(1, Math.round(s.width * k)), height: Math.max(1, Math.round(s.height * k)) });
+    const bu = xiao.toPNG();
+    if (!bu.length) return null;
+    const chu = `data:image/png;base64,${bu.toString('base64')}`;
+    if (chu.length > TU_DATA_URL_ZI_SHU) return null;
+    const c = xiao.getSize();
+    return { url: chu, kuan: c.width, gao: c.height };
+  } catch { return null; }
+}
+/**
+ * 「这个模型能不能直接吃图」的**唯一判据**（用户 #5：不支持的模型绝不该收到图片块）。
+ * 以前只有转交那一处内联写了 `vision === true`，专看图的 `imageUnd`/`ocr` kind 与官方规格表声明
+ * 都不算 ⇒ 同一个问题在代码里有三套答案（真机：能看图的被判成看不了，图被剥光）。
+ * 这里复用额度弹窗那条推导链（探测事实 → 官方规格表 → 只按文本），不再另起一份。
+ */
+function moXingKeyiKanTu(moXingId?: string): boolean {
+  const id = String(moXingId || '').trim();
+  if (!id) return false;
+  try { return moXingMoTaiCongLaQu(id).inTypes.includes('image'); } catch { return false; }
+}
+
+/**
+ * **这一轮需要哪些额外能力**（用户意图关键词 + 附件类型）。
+ * 抽成一个函数有两个原因：① 预算分配要在**转交发生之前**就把"迟注入层"（子模型结果 / 分次看图描述）
+ * 预留出来，判据必须提前拿到；② 判据只许有一份，分配侧与执行侧各写一套就会漂移。
+ * 续派轮的内容是宿主写的指令，不按关键词再转交一遍（真事故：每次续派都重跑一次画图）。
+ */
+function renWuXuYaoNengLi(p: {
+  wen: string;
+  neiBuLun: boolean;
+  tuShu: number;
+  attachments: Array<{ path?: string; name?: string }>;
+}): Array<{ lei: TeShuMoXingLei; why: string }> {
+  const yaoQiu: Array<{ lei: TeShuMoXingLei; why: string }> = [];
+  const wen = String(p.wen || '');
+  if (p.tuShu > 0) yaoQiu.push({ lei: 'imageUnd', why: '附件含图片' });
+  if (!p.neiBuLun) {
+    if (/(画|绘制|生成|做|来)(一)?(张|幅|个)?\s*(图|图片|插画|海报|封面|logo|图标)/i.test(wen)) yaoQiu.push({ lei: 'image', why: '用户要求画图' });
+    if (/(做|生成|制作)(一)?(个|段)?\s*(视频|短片|动画)/i.test(wen)) yaoQiu.push({ lei: 'videoGen', why: '用户要求做视频' });
+    if (/(朗读|读出来|念一下|配音|转语音|语音合成)/i.test(wen)) yaoQiu.push({ lei: 'tts', why: '用户要求语音合成' });
+    if (/(翻译|译成|翻成|译一下)/i.test(wen)) yaoQiu.push({ lei: 'translate', why: '用户要求翻译' });
+    if (/(识别文字|提取文字|OCR|扫描件|文档解析|把图(片)?里的字)/i.test(wen)) yaoQiu.push({ lei: 'ocr', why: '用户要求文字识别/文档解析' });
+    if (/(详细推理|证明|推导|复杂推理|一步一步推理|数学证明)/i.test(wen)) yaoQiu.push({ lei: 'reasoning', why: '用户要求复杂推理' });
+    if (/(写代码|改代码|改这个代码|代码审查|重构|实现.*函数|debug|调试代码)/i.test(wen)) yaoQiu.push({ lei: 'code', why: '用户要求代码任务' });
+    if (/(分类|归类|判断.*类别|决策|优先级判断|紧急度)/i.test(wen)) yaoQiu.push({ lei: 'fenLei', why: '用户要求分类/决策' });
+    if (/(重排|重新排序|rerank|按相关度排序)/i.test(wen)) yaoQiu.push({ lei: 'rerank', why: '用户要求重排' });
+    if (/(安全审核|内容审核|合规检查|是否违规)/i.test(wen)) yaoQiu.push({ lei: 'safety', why: '用户要求安全审核' });
+    if (/(整理|摘要|归纳|提炼要点|归档)/i.test(wen)) yaoQiu.push({ lei: 'organizer', why: '用户要求整理' });
+    if (/(嵌入|向量|embedding)/i.test(wen)) yaoQiu.push({ lei: 'embed', why: '用户要求嵌入' });
+  }
+  const lu = (p.attachments || []).map((a) => String((a && (a.path || a.name)) || ''));
+  if ((p.attachments || []).some(shiYinPinFuJian)) yaoQiu.push({ lei: 'asr', why: '附件含音频' });
+  if (lu.some((x) => /\.(mp4|mov|mkv|avi|webm)$/i.test(x))) yaoQiu.push({ lei: 'videoUnd', why: '附件含视频' });
+  return yaoQiu;
+}
 /**
  * 聊天附件 → 可以直接喂给看图模型的图片。
  * 磁盘原件优先：渲染层带来的 dataUrl 只是界面缩略图（SVG 会是 image/svg+xml，真机事故：
@@ -5394,7 +7259,7 @@ async function fuJianZhuanTu(a: { name?: string; path?: string; dataUrl?: string
   let buf: Buffer | null = null;
   try {
     if (lu && fs.existsSync(lu) && fs.statSync(lu).isFile()) {
-      if (fs.statSync(lu).size > 6 * 1024 * 1024) return { tiaoGuo: ming + '（图片超过 6MB，未喂给模型）' };
+      if (fs.statSync(lu).size > TU_MEI_ZHANG_ZI_JIE) return { tiaoGuo: ming + `（图片超过 ${Math.round(TU_MEI_ZHANG_ZI_JIE / 1024 / 1024)}MB，未喂给模型）` };
       buf = fs.readFileSync(lu);
     }
   } catch { buf = null; }
@@ -5410,20 +7275,21 @@ async function fuJianZhuanTu(a: { name?: string; path?: string; dataUrl?: string
     } catch { buf = null; }
   }
   if (!buf || !buf.length) return { tiaoGuo: ming + '（读取失败，未喂给模型）' };
-  if (buf.length > 6 * 1024 * 1024) return { tiaoGuo: ming + '（图片超过 6MB，未喂给模型）' };
+  if (buf.length > TU_MEI_ZHANG_ZI_JIE) return { tiaoGuo: ming + `（图片超过 ${Math.round(TU_MEI_ZHANG_ZI_JIE / 1024 / 1024)}MB，未喂给模型）` };
   const ge = tuZhenGeShi(buf);
   if (ge === 'png' || ge === 'jpeg') {
-    return { tu: { url: `data:image/${ge};base64,${buf.toString('base64')}`, ming, geShi: ge, yuanGeShi: ge } };
+    const url = `data:image/${ge};base64,${buf.toString('base64')}`;
+    return { tu: { url, ming, geShi: ge, yuanGeShi: ge, ...tuCheCun(url) } };
   }
   if (!ge) return { tiaoGuo: ming + '（文件内容不是可识别的图片，未喂给模型）' };
   const mime = ge === 'svg' ? 'image/svg+xml' : ge === 'ico' ? 'image/x-icon' : 'image/' + ge;
   const png = await tuZhuanPng(`data:${mime};base64,${buf.toString('base64')}`, ge === 'svg');
   if (!png) return { tiaoGuo: ming + `（${ge.toUpperCase()} 转位图失败，未喂给模型）` };
-  return { tu: { url: png, ming, geShi: 'png', yuanGeShi: ge } };
+  return { tu: { url: png, ming, geShi: 'png', yuanGeShi: ge, ...tuCheCun(png) } };
 }
 
 
-/** 规则三：音频附件 → 走 asr 链转写（无可用模型返回 null，调用方按规则四处理） */
+/** 规则三：能力转交共用链工具；音频转写另走严格的本地/ASR 路由。 */
 
 /** 该能力链上**按顺序、已启用**的全部模型（规则三：按链序逐个尝试，找到能胜任的） */
 function nengLiLianMoXing(lei: TeShuMoXingLei): string[] {
@@ -5508,59 +7374,154 @@ async function kanTuWeiTuoDaiMo(
   return { jie: duan.join('\n'), mo: yongGuo.join(' / ') };
 }
 
-async function yuYinZhuanXie(att: Array<{ path?: string; name?: string; dataUrl?: string }>): Promise<string | null> {
-  const a = (att || []).find((x) => /\.(mp3|wav|m4a|ogg|flac|webm)$/i.test(String(x?.path || x?.name || '')));
-  if (!a) return null;
-  try {
-    let buf: Buffer | null = null;
-    let geShi = '';
-    if (a.path && fs.existsSync(a.path)) {
-      buf = fs.readFileSync(a.path);
-      geShi = String(a.path).toLowerCase().replace(/^.*\./, '');
-    } else if (a.dataUrl) {
-      const b64 = String(a.dataUrl).replace(/^data:[^,]*,/, '');
-      buf = Buffer.from(b64, 'base64');
-      geShi = (/^data:audio\/([a-z0-9.+-]+)/i.exec(String(a.dataUrl))?.[1] || '').toLowerCase() || String(a.name || '').toLowerCase().replace(/^.*\./, '');
+/**
+ * **分次发送那一档真的执行**（用户 #5）：把图片按批分开，每批单独发一次请求给**当前这个能看图的模型**，
+ * 再把各批的结论拼成本轮上下文。只在 `keYiFenCi()` 判过"单张 + 固定开销放得下、且没有跨图对比需求"之后才走到这里。
+ * 某一批没看清（丢图 / 回答"我看不到图" / 报错）就**如实写明是第几批、哪几张**，
+ * 不许让主模型以为它已经看过全部图片。
+ */
+async function tuFenCiKanTu(
+  moXingId: string,
+  tuKuaiJi: Array<{ type: 'image_url'; image_url: { url: string } }>,
+  tuMingJi: string[],
+  yiCi: number,
+): Promise<{ wen: string; piCi: number; shibai: number } | null> {
+  const an = await jieMoXingGongYingShang(String(moXingId || ''));
+  if (!an || (!an.apiKey && an.protocol !== 'ollama')) return null;
+  const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL || undefined, protocol: an.protocol } as never, an.protocol);
+  const pi = Math.max(1, Math.floor(Number(yiCi) || 1));
+  const zongPi = Math.ceil(tuKuaiJi.length / pi);
+  const duan: string[] = [];
+  let shibai = 0;
+  for (let i = 0, n = 1; i < tuKuaiJi.length; i += pi, n++) {
+    const yiXie = tuKuaiJi.slice(i, i + pi);
+    const ming = yiXie.map((_, j) => String(tuMingJi[i + j] || `图片 ${i + j + 1}`));
+    const tou = `〔第 ${n}/${zongPi} 批：${ming.join('、')}〕`;
+    try {
+      const rr = await p.chat({
+        model: moXingId,
+        xiaoXiJi: [{ role: 'user', content: [
+          { type: 'text', text: `这是本轮的第 ${n} 批图片（共 ${zongPi} 批，因为一次放不下）。请**逐张**客观描述：画面内容、能看清的文字/数字（照原样抄出）、布局与颜色。文件名依次为 ${ming.join('、')}。看不清就如实说看不清，不要猜。` },
+          ...yiXie,
+        ] }] as never,
+        maxTokens: 900,
+      });
+      const wen = String(neiRongWenBen(rr.choices?.[0]?.message?.content) || '').trim();
+      if (Number((rr as { tuShengLue?: number }).tuShengLue) > 0 || !wen || kanTuMeiKanDao(wen)) {
+        shibai++;
+        duan.push(`${tou}（这一批没能看清：${Number((rr as { tuShengLue?: number }).tuShengLue) > 0 ? '供应商把图丢了' : '模型说它没看到图'}。内容未知，不要替它编。）`);
+      } else {
+        duan.push(`${tou}${wen}`);
+      }
+    } catch (e) {
+      shibai++;
+      duan.push(`${tou}（这一批请求失败：${xiJingCuoWu(e).slice(0, 80)}）`);
     }
-    if (!buf) return null;
-    /**
-     * **共用的转写管线**：链上逐个试「标准端点 → chat 式」。
-     * 以前这里只试链上第一个模型、且只走 `/audio/transcriptions` ⇒
-     * 「明明配了听话模型，牛马却说没有可用的 ASR」。现在与 IPC 主路径同一套逻辑。
-     */
-    const r = await zhuanXieYinPinBuf(buf, geShi || 'wav');
-    if (r.ok && r.text) {
-      audit?.log('asr.used', { model: r.model, chars: r.text.length, source: 'rule3-delegate' });
-      return r.text;
-    }
-    audit?.log('asr-delegate.failed', { error: String(r.error || '').slice(0, 160) });
-    return null;
-  } catch (e) {
-    audit?.log('asr-delegate.error', { error: xiJingCuoWu(e).slice(0, 120) });
-    return null;
   }
+  if (!duan.length) return null;
+  return { wen: duan.join('\n'), piCi: zongPi, shibai };
+}
+
+function shiYinPinFuJian(a: { path?: string; name?: string; dataUrl?: string }): boolean {
+  return /^data:audio\//i.test(String(a?.dataUrl || ''))
+    || /\.(mp3|wav|m4a|ogg|oga|opus|flac|webm)$/i.test(String(a?.path || a?.name || ''));
+}
+
+/** 附件不受话筒开关/语言影响。失败必须抛给调用方终止，不可冒充专业模型的转写结果。 */
+async function yuYinZhuanXie(att: Array<{ path?: string; name?: string; dataUrl?: string }>): Promise<string | null> {
+  const yinPin = (att || []).filter(shiYinPinFuJian);
+  if (!yinPin.length) return null;
+  const wen: string[] = [];
+  for (const a of yinPin) {
+    try {
+      let buf: Buffer | null = null;
+      let geShi = '';
+      // 上传转码后的 dataUrl 优先，不能又读回 path 指向的压缩原件。
+      if (/^data:audio\//i.test(String(a.dataUrl || ''))) {
+        buf = Buffer.from(String(a.dataUrl).replace(/^data:[^,]*,/, ''), 'base64');
+        geShi = (/^data:audio\/([a-z0-9.+-]+)/i.exec(String(a.dataUrl))?.[1] || '').toLowerCase();
+      } else if (a.path && fs.existsSync(a.path)) {
+        buf = fs.readFileSync(a.path);
+        geShi = String(a.path).toLowerCase().replace(/^.*\./, '');
+      }
+      if (!buf?.length) throw new Error('audio-attachment-read-failed（音频附件为空或无法读取）');
+      const aliases: Record<string, string> = { mpeg: 'mp3', 'x-wav': 'wav', wave: 'wav', mp4: 'm4a', 'x-m4a': 'm4a', oga: 'ogg' };
+      geShi = aliases[geShi] || geShi;
+      const r = await zhuanXieYinPinBuf(buf, geShi || 'wav', 'attachment');
+      if (!r.ok || !r.text?.trim()) throw new Error(r.error || 'asr-empty-result');
+      wen.push(yinPin.length === 1 ? r.text : `${a.name || a.path || '音频附件'}：${r.text}`);
+      try { audit?.log('asr.used', { model: r.model, chars: r.text.length, source: r.source }); } catch { /* noop */ }
+    } catch (e) {
+      const error = `${a.name || a.path || '音频附件'}: ${xiJingCuoWu(e)}`;
+      try { audit?.log('asr-delegate.failed', { error: error.slice(0, 160) }); } catch { /* noop */ }
+      throw new Error(error);
+    }
+  }
+  return wen.join('\n');
 }
 
 /** 规则三：视频附件 → 走 videoUnd 链描述（无可用模型返回 null） */
 async function kanShiPinWeiTuo(att: Array<{ path?: string; name?: string }>): Promise<string | null> {
   const a = (att || []).find((x) => /\.(mp4|mov|mkv|avi|webm)$/i.test(String(x?.path || x?.name || '')));
   if (!a) return null;
+  const lu = String(a.path || '');
+  const ming = String(a.name || path.basename(lu) || 'video');
+  const bu: string[] = [];
+  // ① 有专用视频理解模型就先走它
   const hit = await teShuMoXingKeYong('videoUnd');
-  if (!hit) { audit?.log('video-delegate.no-model', {}); return null; }
-  try {
-    const p = congYuSheChuangJian(hit.an.presetId, { apiKey: hit.an.apiKey, baseURL: hit.an.baseURL || undefined, protocol: hit.an.protocol } as never, hit.an.protocol);
-    const r = await p.chat({
-      model: hit.mo,
-      xiaoXiJi: [{ role: 'user', content: '请描述这个视频的内容（画面、动作、文字、可能含义）。文件：' + String(a.path || a.name || '') }],
-      maxTokens: 700,
-    } as never);
-    const txt = neiRongWenBen(r.choices[0]?.message?.content) || '';
-    audit?.log('special-model.used', { lei: 'videoUnd', model: hit.mo, chars: txt.length });
-    return txt || null;
-  } catch (e) {
-    audit?.log('special-model.failed', { lei: 'videoUnd', error: xiJingCuoWu(e).slice(0, 120) });
-    return null;
+  if (hit) {
+    try {
+      const p = congYuSheChuangJian(hit.an.presetId, { apiKey: hit.an.apiKey, baseURL: hit.an.baseURL || undefined, protocol: hit.an.protocol } as never, hit.an.protocol);
+      const r = await p.chat({
+        model: hit.mo,
+        xiaoXiJi: [{ role: 'user', content: '请描述这个视频的内容（画面、动作、文字、可能含义）。文件：' + (lu || ming) }],
+        maxTokens: 700,
+      } as never);
+      const txt = neiRongWenBen(r.choices[0]?.message?.content) || '';
+      if (txt.trim()) {
+        bu.push('【视频模型】' + txt.trim());
+        audit?.log('special-model.used', { lei: 'videoUnd', model: hit.mo, chars: txt.length });
+      }
+    } catch (e) {
+      audit?.log('special-model.failed', { lei: 'videoUnd', error: xiJingCuoWu(e).slice(0, 120) });
+    }
   }
+  if (!lu || !fs.existsSync(lu)) {
+    audit?.log('video-delegate.no-file', { ming });
+    return bu.length ? bu.join('\n') : null;
+  }
+  let buf: Buffer | null = null;
+  try { buf = fs.readFileSync(lu); } catch { buf = null; }
+  if (!buf || !buf.length) return bu.length ? bu.join('\n') : null;
+  const ge = path.extname(lu).toLowerCase().slice(1) || 'mp4';
+  const mime = ge === 'mov' ? 'video/quicktime' : ge === 'webm' ? 'video/webm' : ge === 'mkv' ? 'video/x-matroska' : ge === 'avi' ? 'video/x-msvideo' : 'video/mp4';
+
+  // ② 没有专用视频模型（或它失败）：抽一帧交给「看图模型」链
+  if (!bu.length || !/【视频模型】/.test(bu.join('\n'))) {
+    const zhen = await shiPinChouZhen(buf, mime);
+    if (zhen) {
+      const r = await kanTuWeiTuoDaiMo([{ type: 'image_url', image_url: { url: zhen } }], [ming + ' 的画面']);
+      if (r && r.jie) {
+        bu.push('【视频画面】' + r.jie);
+        audit?.log('video-delegate.frame', { model: r.mo, chars: r.jie.length });
+      }
+    }
+  }
+
+  // ③ 再用「听话模型」把视频里的语音转成文字（与音频附件同一条严格路由）
+  try {
+    const wav = await yinPinZhuanWav(buf);
+    const asr = await zhuanXieYinPinBuf(wav, 'wav', 'attachment');
+    if (asr.ok && String(asr.text || '').trim()) {
+      bu.push('【视频语音】' + String(asr.text).trim());
+      audit?.log('video-delegate.asr', { model: asr.model || '', chars: String(asr.text).length });
+    } else if (!asr.ok && asr.error) {
+      audit?.log('video-delegate.asr-failed', { error: String(asr.error).slice(0, 120) });
+    }
+  } catch (e) {
+    audit?.log('video-delegate.asr-failed', { error: xiJingCuoWu(e).slice(0, 120) });
+  }
+  return bu.length ? bu.join('\n') : null;
 }
 
 async function yongGongNengLian(
@@ -5798,8 +7759,11 @@ async function yindao() {
   qidong('p1 ready');
   const userData = app.getPath('userData');
   board = new KanbanCang(path.join(userData, 'board'));
-  knowledge = new KnowledgeBase(path.join(userData, 'knowledge'));
+  knowledge = new ZhishiCang(path.join(userData, 'knowledge'));
+  duBanDaiHui();
   checkpoints = new JianChaDianCang(path.join(userData, 'checkpoints'));
+  // 第 67 轮 项 13：工具写盘前留原件（工作区外也能回档）
+  zhuangXieRuHuiDangGouZi();
   accountStore = new BenDiZhangHuCang(path.join(userData, 'profile.json'));
   settingsStore = new PeizhiCang(path.join(userData, 'settings.json'));
   secureKeys = new AnQuanMiyaoCang(userData);
@@ -5822,25 +7786,38 @@ async function yindao() {
      * ——用户把程序更新了，界面上还是「画图」。所以版本不符时**不采信落盘的 kind**，
      * 让它回落成空 ⇒ 下次刷新模型列表会重新探测并写回新口径。
      */
-    const CAPS_VERSION = 2;
-    const caps0 = (settingsStore?.load() as { modelCaps?: Record<string, { contextLen?: number; kind?: string; tools?: boolean | 'unknown'; vision?: boolean | 'unknown'; buKeYong?: string }>; modelCapsVersion?: number } | undefined);
+    const caps0 = (settingsStore?.load() as { modelCaps?: Record<string, LuoPanNengLi>; modelCapsVersion?: number } | undefined);
     const caps = caps0?.modelCaps || {};
     const banBenDui = Number(caps0?.modelCapsVersion || 0) === CAPS_VERSION;
-    for (const [id0, c0] of Object.entries(caps)) {
-      const jiu = (modelNengLiMeta.get(id0) || {}) as Record<string, unknown>;
-      modelNengLiMeta.set(id0, {
-        ...(jiu as object),
-        contextLen: Number(c0 && c0.contextLen) || 0,
-        kind: banBenDui ? String((c0 && c0.kind) || jiu.kind || '') : '',
-        // 落盘里没有的字段（老数据）保持原样，别用 undefined 覆盖掉探测出来的值
-        ...(c0 && c0.tools !== undefined ? { tools: c0.tools } : {}),
-        ...(c0 && c0.vision !== undefined ? { vision: c0.vision } : {}),
-        ...(c0 && c0.buKeYong ? { buKeYong: c0.buKeYong } : {}),
-        source: 'saved',
-      } as never);
+    nengLiCongLuoPan(caps, banBenDui);
+    /**
+     * **旧口径把错的模型粘在「分类模型」链里**（用户点名：5 个
+     * `orcarouter/Qwen3.8-27B-Uncensored:*` 被归成分类模型，而 `clef:*` 反而是「未知」）。
+     * 落盘的 `fenLeiChain` 是旧判定规则的产物，规则改过之后不能继续采信：
+     * 口径版本不符时把它收敛回**用户手动指定**的那几条（`fenLeiManual`），
+     * 下次拉取模型再按新口径补全 —— 不猜、不保留错误的自动项。
+     */
+    if (!banBenDui) {
+      try {
+        const s2 = settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined;
+        const sm = (s2 && s2.specialModels) || {};
+        const manual = Array.isArray((sm as { fenLeiManual?: unknown[] }).fenLeiManual)
+          ? ((sm as { fenLeiManual?: unknown[] }).fenLeiManual || []).map((x) => String(x)).filter(Boolean)
+          : [];
+        const chain = Array.isArray((sm as { fenLeiChain?: unknown[] }).fenLeiChain)
+          ? ((sm as { fenLeiChain?: unknown[] }).fenLeiChain || []).map((x) => String(x)).filter(Boolean)
+          : [];
+        const same = chain.length === manual.length && chain.every((x, i) => x === manual[i]);
+        if (!same) {
+          settingsStore?.save({ specialModels: { ...sm, fenLeiChain: manual } } as never);
+        }
+      } catch { /* 迁移失败不影响启动：下次拉取模型会重新写 */ }
     }
   } catch { /* 读不到就等下次拉取 */ }
   groupStore = new QunCang(path.join(userData, 'groups.json'));
+  /** 最近删除（48h 可恢复）：右击删除不再二次确认，靠这张回收站兜底 */
+  trashStore = new TrashStore(path.join(userData, 'trash.json'));
+  try { trashStore.purgeExpired(); } catch { /* 首次没有文件 */ }
   /**
    * ADR 004 第十六批：把 helper-tool 的文件访问记录接到**项目台账**上。
    * 产品主的原话：**「记录文件的改动应该是无限牛马的功能，不是本机的功能」**
@@ -5890,6 +7867,27 @@ async function yindao() {
   localNodeId = nodeReg.LieBiao().find((n) => n.isLocal)?.nodeId || 'node-local';
   chuShiZiChanGuanLi(path.join(userData, 'assets.json'));
   audit = new ShenJiRiZhi(userData);
+  /**
+   * **给所有 provider 装上 rpm/tpm 限流**（第 39 轮）。
+   * 挂在"创建供应商"这一处而不是每个调用点：全仓十几处 `congYuSheChuangJian`
+   * （主对话、降级链、看图转交、压缩、分身、群编排、定时任务…），漏一处就等于那条路不限流。
+   * 额度按**模型**在每次请求时现取（用户刚改完设置立刻生效，不用重启），
+   * 等待被记进审计 `llm.rate-wait` —— 超没超时、等了多久、放行没有，都要看得见。
+   */
+  try {
+    sheProviderJiXieGou((p) => baoZhuangXianLiu(p, {
+      yuE: (moXingId) => {
+        const y = moXingYuE(moXingId);
+        return { rpm: y.rpm, tpm: y.tpm };
+      },
+      onDengDai: (x) => {
+        try { audit?.log('llm.rate-wait', { model: x.modelId, yuanYin: x.yuanYin, dengMs: x.ms, fangXingLe: x.fangXingLe }); } catch { /* noop */ }
+        if (x.ms > 3000) {
+          try { fachuKongzhitai({ cat: 'system', code: 'llm.rate-wait', data: { model: x.modelId, yuanYin: x.yuanYin, ms: x.ms } }); } catch { /* noop */ }
+        }
+      },
+    }));
+  } catch { /* 装不上就照旧不限流（不许因为限流器把启动打挂） */ }
   secureKeys = new AnQuanMiyaoCang(userData);
   archiver = new ZhiShiGuiDangQi(userData);
   cleanup = new QingLiGuanLiQi(userData);
@@ -5945,6 +7943,17 @@ async function yindao() {
   } catch (e) {
     qidong(`identity init fail ${String(e)}`);
   }
+  // 第 66 轮 项 20/21：助记词账号层（加密 seed + PIN/自动登录包装；明文助记词只在注册时出现一次）
+  authService = new AuthService({
+    vaultFile: path.join(userData, 'auth', 'vault.json'),
+    identity: identityStore,
+    profile: accountStore,
+    protector: {
+      available: () => { try { return safeStorage.isEncryptionAvailable(); } catch { return false; } },
+      protect: (value: string) => safeStorage.encryptString(value).toString('base64'),
+      unprotect: (value: string) => safeStorage.decryptString(Buffer.from(value, 'base64')),
+    },
+  });
   // 启动时结算一次对端冻结期：到期则把"待采用的新名片"提升为本机留存值（纯本地判定，无定时器）
   try {
     const yiJieSuan = identityStore.settlePeerContacts();
@@ -6143,13 +8152,17 @@ async function huiFuNiuMa(): Promise<void> {
  * **仅供手动添加路径调用**（IPC warmy:qunJiaRuShiLi）。
  * 创建项目或新建牛马时不再自动调用——成员必须用户手动添加。
  */
+/** 实例的显示名：老记录可能只有 `name`，缺名时退到 id —— **绝不把 undefined 写进成员表**（第 65 轮 项 24） */
+function shiLiMing(inst: { id?: string; ming?: string; name?: string } | null | undefined): string {
+  return String(inst?.ming || inst?.name || inst?.id || '').trim();
+}
 function joinLocalInstances(groupId: string): void {
   for (const inst of p1?.instances.LieBiao() || []) {
     if (router.listMembers(groupId).some((m) => m.id === inst.id)) continue;
     try {
       router.join(groupId, {
         id: inst.id,
-        ming: inst.ming,
+        ming: shiLiMing(inst),
         local: true,
         dutyEligible: inst.dutyEligible,
         status: inst.status === 'running' ? 'idle' : 'offline',
@@ -6159,7 +8172,7 @@ function joinLocalInstances(groupId: string): void {
     }
     groupStore?.addMemberWithFingerprint(
       groupId,
-      { ming: inst.ming, role: 'member', source: 'instance', instanceId: inst.id },
+      { ming: shiLiMing(inst), role: 'member', source: 'instance', instanceId: inst.id },
       { onAudit: (op, detail) => audit?.log(op, detail) }
     );
   }
@@ -6180,7 +8193,7 @@ function syncRouterFromGroupStore(groupId: string): void {
     try {
       router.join(groupId, {
         id: inst.id,
-        ming: inst.ming,
+        ming: shiLiMing(inst),
         local: true,
         dutyEligible: inst.dutyEligible,
         status: inst.status === 'running' ? 'idle' : 'offline',
@@ -6224,7 +8237,7 @@ function huiFuQunLieBiao(): void {
             dutyInstanceId: g.dutyInstanceId,
             directedMode: g.directedMode,
             members: [],
-            permissions: DEFAULT_PERMISSIONS as never,
+            permissions: DEFAULT_PERMISSIONS,
             checkpointLimit: 50,
           });
         } catch {
@@ -6482,7 +8495,16 @@ function chuangjianChuangkou() {
   try { qiDongDingShiJianCha(); } catch { /* noop */ }
   });
   win.on('resize', () => baocunChuangkouZhuangtaiJiukuai());
-  win.on('move', () => baocunChuangkouZhuangtaiJiukuai());
+  /** 第 63 轮项 24/25：拖动结束后再贴边（拖动中贴边会和 Windows 贴靠打架）；nm 也能吸主界面 */
+  let zhuTieDingShi: NodeJS.Timeout | null = null;
+  win.on('move', () => {
+    baocunChuangkouZhuangtaiJiukuai();
+    if (zhuTieDingShi) clearTimeout(zhuTieDingShi);
+    zhuTieDingShi = setTimeout(() => { zhuTieDingShi = null; tieBianZhuChuang(win); }, 160);
+  });
+  try { nmSheZhiZhuChuangKuang(() => (win && !win.isDestroyed() ? win.getBounds() : null)); } catch { /* noop */ }
+  /** 第 66 轮 项 7/10/11：主窗口与 nm 平等吸附（主窗口拖动带走 nm；主窗口自己也能吸 nm） */
+  try { nmJieRuZhuChuang(win); } catch { /* 吸附接线失败不影响启动 */ }
   win.on('maximize', () => baocunChuangkouZhuangtaiJiukuai(200));
   win.on('unmaximize', () => baocunChuangkouZhuangtaiJiukuai(200));
   // 点击叉 = 最小化到托盘，不关闭窗口。只有托盘「下班」才真正退出。
@@ -6803,6 +8825,12 @@ if (!dedaoDangeSuo) {
         setTimeout(() => { try { app.quit(); } catch { /* noop */ } }, 3000);
         return;
       }
+      /**
+       * **系统到点把程序叫醒**（第 40 轮）：程序本来开着时，第二个实例只会被单实例锁转交到这里 ⇒
+       * 直接由正在跑的实例把这条到期结掉并投递（用户不用重开程序，提醒也绝不会丢）。
+       */
+      const huanId = quHuanXingId(Array.isArray(argv) ? argv : []);
+      if (huanId) { chuliHuanXing(huanId, 'second-instance'); zhuJiaoZhuChuangKouJuZhong(); return; }
     } catch { /* 参数解析失败就按老行为：只聚焦窗口 */ }
     zhuJiaoZhuChuangKouJuZhong();
   });
@@ -6824,6 +8852,16 @@ if (dedaoDangeSuo) {
     .then(async () => {
       qidong('whenReady');
       boZhongDaoMoRen();
+      boZhongShuMoRen();
+      /** 提示词层超限自检（第 53 轮项 2）：超限就压缩提纯，溢出的旧条目搬进知识库 */
+      ziJianTiShangXian();
+      /** 自更新能力白名单（第 54 轮项 3）：坏文件按空表处理，不许挡住启动 */
+      duNengLiWai();
+      /** 模型列表里已经没有的模型 ⇒ 删掉它专属的 token 校准（第 55 轮项 3） */
+      qingLiTokenXiaoZhun();
+      /** 默认层随界面语言同步（第 54 轮项 1）：只换没被用户改过的 */
+      moRenYuYanTongBu();
+      yongHuMingSuiYuYan();
       boZhongNeiZhiJiNeng();
       try {
         sheZhiXiTongWenJianJia({ desktop: app.getPath('desktop'), documents: app.getPath('documents'), downloads: app.getPath('downloads') });
@@ -6890,6 +8928,13 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   qiangzhiTuichu = true;
+  /**
+   * 心跳退出前**必须落盘**：账本里存着"每个任务的下次到期"和"还没到点的一次性到期"，
+   * 没落下去的那些，下次启动就补不回来（用户看到的就变成"提醒莫名其妙少了"）。
+   */
+  try { xinTiao?.guanBi(); } catch { /* noop */ }
+  // nm 文件查看器是独立窗口：退出时一并收掉，别留一堆游离窗口拖住进程
+  try { nmShiTuQuanBuGuanBi(); } catch { /* noop */ }
   // 收尾：把流式"正在进行"的气泡收掉（否则退出后界面上留着半截）
   try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId: '*', reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
   // 托盘必须销毁，否则任务栏/通知区残留图标
@@ -7370,6 +9415,22 @@ chuliIpc('warmy:i18n', (_e, yuYan: string) => {
       strings['brand.name'] ||
       (weiZhi === 'zh-CN' || weiZhi === 'zh-TW' ? strings['yingYong.zhName'] || '无限牛马' : strings['yingYong.enName'] || 'WArmy');
   }
+  /**
+   * **认知预设的条目译名**（第 57 轮方案 A）：翻译流水线把结果写到 `i18n/persona/<lang>.json`，
+   * 这里按当前语言合并成 `persona.<id>.name/.sub` —— 渲染层只查 `t()`，不需要知道文件在哪。
+   * 文件不存在/坏了就回落中文原稿（绝不显示半成品键）。
+   */
+  try {
+    const pp = path.join(i18nDir(), 'persona', weiZhi + '.json');
+    if (fs.existsSync(pp)) {
+      const pj = JSON.parse(fs.readFileSync(pp, 'utf8')) as Record<string, { name?: string; sub?: string }>;
+      for (const [id, v] of Object.entries(pj || {})) {
+        if (!v || typeof v !== 'object') continue;
+        if (v.name) strings['persona.' + id + '.name'] = String(v.name);
+        if (v.sub) strings['persona.' + id + '.sub'] = String(v.sub);
+      }
+    }
+  } catch { /* 译名缺失不影响界面 */ }
   // Non-Chinese packs may still list zh ming in copyright context; UI display uses displayName.
   win?.setTitle(strings['yingYong.displayName'] || 'WArmy');
   return { yuYan: weiZhi, strings, displayName: strings['yingYong.displayName'], supported: SUPPORTED_LOCALES };
@@ -8065,8 +10126,50 @@ chuliIpc(
           ...(cur as object),
           modelCaps: { ...(cur.modelCaps || {}), ...caps },
           /** 与读取侧的 CAPS_VERSION 对齐：口径一变，旧落盘就不再被采信 */
-          modelCapsVersion: 2,
+          modelCapsVersion: 4,
         } as never);
+        /**
+         * **拉取模型时顺手把额度算好并存下来**（第 39 轮，用户定的口径：
+         * "只有拉取模型的时候或点『恢复默认』的时候才自动计算没有拉取的信息"）。
+         * 存下来之后各项就是**各自独立的快照** —— 用户改上下文窗口不会带动 tpm/rpm，反之也一样。
+         * 已经有记录的模型**一律不覆盖**（那是用户自己填的）。
+         */
+        try {
+          const after = settingsStore?.load() as { modelQuota?: Record<string, unknown> } | undefined;
+          const quan = { ...((after?.modelQuota || {}) as Record<string, Record<string, unknown>>) };
+          let le = 0;
+          for (const id0 of Object.keys(caps)) {
+            const jiu = quan[id0] as Record<string, unknown> | undefined;
+            /**
+             * 第 44 轮（用户项 2「杜绝这样的异常」）：**自动快照要能刷掉**。
+             * 原来只要"已有记录"就永不覆盖 ⇒ 上一版 Ollama 探测失败时存下 128K，
+             * 后来真机能读到 `num_ctx=131072` / `16384` 也永远改不掉，预算一直按错的走。
+             * 只有**用户亲手认定过的**才不动（含第 39 轮那批"既没 ziDong 也没精确 token 字段"的老自动快照，
+             * 它们按自动处理 ⇒ 这一次拉取就会把它们刷成带 `ctxTokens/ziDong` 的新口径）。
+             */
+            if (shiYongHuRenDing(jiu as { ziDong?: boolean; ctxTokens?: number; outTokens?: number } | null)) continue;
+            quan[id0] = moXingQuotaCongLaQu(id0);
+            le += 1;
+          }
+          if (le) {
+            settingsStore?.save({ modelQuota: quan } as never);
+            try { audit?.log('model.quota-fetched', { xinXie: le, ge: Object.keys(caps).length }); } catch { /* noop */ }
+          }
+          /**
+           * **自查（第 44 轮，用户项 2 的后半句）**：拉完就把"要上界面的显示值"机械过一遍，
+           * 异常直接进审计（`model.quota-anomaly`）—— 1048.576k 这一类以后再出现，是**当场可见的红**，
+           * 不是等用户截图来问。判据在 `mo-xing-gui-ge.ts` 的 `panZeZhanShi`（同一份，门禁也能 import）。
+           */
+          try {
+            const yiChang: string[] = [];
+            for (const id0 of Object.keys(caps)) {
+              const yu = moXingQuotaDangQian(id0);
+              if (yu?.ctx) yiChang.push(...panZeZhanShi(id0 + ' 窗口', zhanShiDanWei(yu.ctx)));
+              if (yu?.out) yiChang.push(...panZeZhanShi(id0 + ' 输出', zhanShiDanWei(yu.out)));
+            }
+            if (yiChang.length) audit?.log('model.quota-anomaly', { ge: yiChang.length, xiang: yiChang.slice(0, 20) });
+          } catch { /* 自查失败不影响拉取 */ }
+        } catch { /* 额度快照失败不影响本次拉取 */ }
       } catch { /* 落盘失败不影响本次拉取 */ }
       return {
         ok: true,
@@ -8152,7 +10255,7 @@ chuliIpc(
           dutyInstanceId: null,
           directedMode: !!cfg.directedMode,
           members: [],
-          permissions: DEFAULT_PERMISSIONS as never,
+          permissions: DEFAULT_PERMISSIONS,
           checkpointLimit: 50,
         });
       }
@@ -8309,7 +10412,36 @@ chuliIpc(
         // 值班系统提示是**冻结头**，不随日志增长，作为固定前缀在预算之外（常数开销）。
         // 计划1/2：值班路径同样自动收敛重试
         const zhibanMoxing = providerCfg.model;
-        const dutyBase = contextBudgetChars(zhibanMoxing);
+        const gongYingFenQun = gongYingDai(zhuD.baseURL, zhuD.protocol);
+        {
+          /**
+           * **值班路径的固定开销也要量**（用户 #2/#3）：它的 system 段与单聊不是同一份
+           * （只有 `llm.dutySystem`，但那一份本身就有几千 token）。量出来记进同一张 `ZUI_XIAO_JI`，
+           * **按两侧取大** ⇒ 任何一条路径都不会因为另一条量得更小而少扣（少扣 = 顶窗，
+           * 顶出去的那部分正是"用户设了却没生效"的预算）。
+           */
+          try {
+            const benCiQun = yangBenBenCi(xiaoXi.groupId, xiaoXi.content);
+            const qunGongJu = toolLimits().zuiDaLunShu > 0 ? await gongJuChengBenWen(xiaoXi.groupId, undefined) : '';
+            const cbQun = jiageQingQiu({
+              shangXiaWen: [{ role: 'system', content: String(tMain('llm.dutySystem', '')) }] as never,
+              gongJuWen: qunGongJu,
+              zhun: tokenZhuQu(zhibanMoxing, benCiQun, gongYingFenQun),
+            });
+            const jian = `${gongYingFenQun}/${zhibanMoxing}`;
+            const jiu = ZUI_XIAO_JI.get(jian);
+            ZUI_XIAO_JI.set(jian, {
+              guDing: Math.max(cbQun.guDing, jiu?.guDing || 0),
+              gongJu: Math.max(cbQun.gongJu, jiu?.gongJu || 0),
+              zuiXiaoTokens: Math.max(
+                Math.ceil((Math.max(cbQun.guDing, jiu?.guDing || 0) + Math.max(cbQun.gongJu, jiu?.gongJu || 0) + SHI_TU_ZUI_XIAO_TOKENS) / (1 - ZHI_XING_YU_LIANG)),
+                jiu?.zuiXiaoTokens || 0),
+              shi: Date.now(),
+            });
+            try { audit?.log('chat.budget.duty-measured', { sessionId: xiaoXi.groupId, guDing: cbQun.guDing, gongJu: cbQun.gongJu }); } catch { /* noop */ }
+          } catch { /* 量不上就按整条预算，这一段不许把值班轮抛掉 */ }
+        }
+        const dutyBase = contextBudgetChars(zhibanMoxing, yangBenBenCi(xiaoXi.groupId, xiaoXi.content), gongYingFenQun);
         const zhibanChongshi = await daiShangXiaWenChongShiYunXing(dutyBase, async (budgetChars) => {
           const shitu = renderChatView(xiaoXi.groupId, xiaoXi.content, budgetChars);
           // ADR 002 §9.4 待办 2：值班者路径也只走这一个循环入口（工具/降级/审计行为一致）
@@ -8328,6 +10460,31 @@ chuliIpc(
           llmReply = tMain('chat.contextTooSmall', '该模型上下文太小，无法满足当前聊天需求（已自动收缩重试到最小值仍失败）');
         } else if (loop) {
           llmReply = neiRongWenBen(loop.xiangYingTi.choices[0]?.message?.content);
+          /**
+           * **云端风控拒绝不是回答**——与单聊**同一套判据**（"两条路径同一个口径"）。
+           * 值班路径只有一只模型、没有降级链 ⇒ 原地重试一次；仍被拦就如实说明（带供应商原文），
+           * 不许把网关那句英文当成牛马的回答发进群里。
+           */
+          {
+            const fkMing = panFengKongJuJue({ huiFu: llmReply, benLunGongJuShu: Number(loop.gongJuDiaoYongJi || 0) });
+            if (fkMing) {
+              const yuanWen = String(llmReply || '');
+              try { audit?.log('chat.provider-moderation', { sessionId: xiaoXi.groupId, modelId: zhibanMoxing, ming: fkMing, lu: 'duty', yuanWen: yuanWen.slice(0, 200) }); } catch { /* noop */ }
+              let zaiShi = '';
+              try {
+                try { audit?.log('chat.moderation-retry', { sessionId: xiaoXi.groupId, model: zhibanMoxing, lu: 'duty' }); } catch { /* noop */ }
+                const shitu2 = renderChatView(xiaoXi.groupId, xiaoXi.content, Number(zhibanChongshi.result?.budgetChars) || dutyBase);
+                const loop2 = await yunXingLiaoTianXunHuan(xiaoXi.groupId, provider, {
+                  model: zhibanMoxing,
+                  xiaoXiJi: [{ role: 'system', content: tMain('llm.dutySystem') }, ...(shitu2.xiaoXiJi as LiaoTianXiaoXi[])],
+                  maxTokens: 512,
+                });
+                zaiShi = neiRongWenBen(loop2.xiangYingTi.choices[0]?.message?.content);
+                if (panFengKongJuJue({ huiFu: zaiShi, benLunGongJuShu: Number(loop2.gongJuDiaoYongJi || 0) })) zaiShi = '';
+              } catch { zaiShi = ''; }
+              llmReply = zaiShi || fengKongJuJueTiShi({ yuanWen, ming: fkMing, yiShiBai: [zhibanMoxing], t: tMain });
+            }
+          }
           /**
            * **空回复不再是死路**（与单聊同一套兜底）：工具跑完没吐正文时，
            * 如实合成一段总结；再要一次纯文本；都不行就明说原因。
@@ -8438,15 +10595,15 @@ chuliIpc('warmy:qunJiaRuShiLi', (_e, groupId: string, instanceId: string) => {
     if (!inst) return { ok: false };
     router.join(groupId, {
       id: inst.id,
-      ming: inst.ming,
+      ming: shiLiMing(inst),
       local: true,
       dutyEligible: inst.dutyEligible,
       status: inst.status === 'running' ? 'idle' : 'offline',
     });
-    // 成员关系落盘：重启后仍在群里
+    // 成员关系落盘：重启后仍在群内
     groupStore?.addMemberWithFingerprint(
       groupId,
-      { ming: inst.ming, role: 'member', source: 'instance', instanceId: inst.id },
+      { ming: shiLiMing(inst), role: 'member', source: 'instance', instanceId: inst.id },
       { onAudit: (op, detail) => audit?.log(op, detail) }
     );
     return { ok: true };
@@ -8548,10 +10705,43 @@ async function zhenZhengFaSong(
     return { ok: false, reply: '', error: 'in-flight（这个会话上一轮还在跑，内部续派已跳过，不重复开工）', skipped: 'in-flight' };
   }
   if (sid) zaiTuLiao.set(sid, Date.now());
+  /**
+   * **每一轮开工都在这里广播一次 `kai:true`**（第 48 轮真机缺陷）：渲染层用
+   * 「本轮已收尾」集合挡住正式回复之后迟到的尾包，而它只在收到这条广播时才清标记。
+   * 以前只有渲染层自己点发送的那一路会清 ⇒ 经 IPC 发的轮、主进程自己续派的轮，
+   * 上一轮收尾后**整轮流式分片被当尾包丢弃**：思考/中间回复不显示、半成品不落盘，
+   * 重启后这一轮就"全部消失"（`verify-round38-restart` 抓到 0 次 `chat.inflight-write`）。
+   */
+  try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId: sid, kai: true, ts: Date.now() }); } catch { /* noop */ }
+  let xuPai = false;
   try {
-    return await zhenZhengFaSongBen(_e, xiaoXi as never);
+    const jieGuo = await zhenZhengFaSongBen(_e, xiaoXi as never);
+    xuPai = jieGuo?.planPending === true;
+    /**
+     * 这一轮的正式回复已经落账 ⇒ 半成品作废（第 48 轮）。以前只有渲染层自己发的那一路会清：
+     * 经 IPC 直接发、主进程自己续派的轮次，半成品一直留在旁路里，重启后被当成"上次这一轮被中断"、
+     * 还亮出「继续 / 重试」（`verify-r48-zhongjian-ui` 截图实锤）。这里是所有发送的唯一出口。
+     */
+    if (sid && jieGuo && jieGuo.ok === true && String(jieGuo.reply || '').trim()) {
+      try { jiJinXing(sid, { clear: true }); } catch { /* noop */ }
+    }
+    return jieGuo;
   } finally {
     if (sid) zaiTuLiao.delete(sid);
+    /**
+     * **每一轮都要有收尾广播**（第 65 轮 项 12 真机：微信来消息 → 本机跑一轮 → 回复已发回，
+     * 界面上的"干活中"小字一直亮着）。`kai:true` 由这里统一发，但 `kai:false` 以前只有
+     * 渲染层自己点发送那一路在 `deliver().finally` 里收；经主进程直接派的轮（微信/定时）
+     * 没有人收 ⇒ 小字永亮。续派还会接着跑时不关（250ms 后它自己会再发 kai:true）。
+     * 重复的 false 是幂等的（该会话已 idle 时渲染层直接返回）。
+     */
+    /**
+     * 内部续派轮**不许关小字**：它由父级 `yanXuJiHuaRenWu` 统一定义"整轮是否结束"
+     *（每步之间闪一下"干完了"是旧缺陷）。只给用户可见的那一轮收尾。
+     */
+    if (!xuPai && !(xiaoXi as { internal?: boolean }).internal && !String(xiaoXi.content || '').startsWith('【继续执行')) {
+      try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId: sid, kai: false, ts: Date.now() }); } catch { /* noop */ }
+    }
   }
 }
 
@@ -8796,6 +10986,16 @@ async function zhenZhengFaSongBen(
     } catch { /* 取证失败不能影响正常派发 */ }
     /** 新一轮用户消息 ⇒ **工具调用预算清零**（预算按"一轮"算） */
     benLunGongJuShu.set(sessionId, 0);
+    /** 这一轮是不是完成核对轮（核对轮里不许整篇重写本任务已交付的文件，见 `heDuiLunChongXieZuDang`） */
+    if (xiaoXi.ziYouHuiDa === true) heDuiLunZhong.add(String(sessionId || ''));
+    else heDuiLunZhong.delete(String(sessionId || ''));
+    /**
+     * 这一轮用户点名的工具（"请用 list_archive…"、"看看这个 .zip"）：窗口不够、工具面要截尾时不许被裁。
+     * 只在**用户轮**重算；内部续派轮沿用（续派的指令是宿主写的，里面没有用户点的名）。
+     */
+    if ((xiaoXi as { internal?: boolean }).internal !== true) {
+      try { benLunDianMingGongJu.set(String(sessionId || ''), dianMingGongJu(String(xiaoXi.content || ''), quanBuGongJuMing())); } catch { /* 识别失败 = 按旧档位截尾 */ }
+    }
     /**
      * **新用户轮清掉「当前模型」粘滞**（本轮修：配了 MiMo 却一直用降级后的 Ollama）。
      * 降级黏住只服务**本轮内部续派**；用户再说话时应回到他配的默认模型。
@@ -8874,13 +11074,22 @@ async function zhenZhengFaSongBen(
       };
     }
 
-    // 写入侧 CCR
+    /**
+     * **写入侧不再折叠原文**（第 44 轮后半 · 用户 #7：「修复：写入侧 CCR 丢原文」）。
+     * 旧行为：进日志之前先按 `预算×4` 折叠 ⇒ 超长的中段**永久消失**，`retrieve` 拿回来的就是半截。
+     * 现在：JSONL 存原文（唯一事实来源必须完整），"有界"这件事由**投影预览 + 视图预算**两层负责：
+     *  · 投影只放 16K 索引预览（memory-os `SUO_YIN_ZUI_DA_ZI`），检索找得到就够；
+     *  · 发给模型的视图恒 ≤ 预算（`chat.budget.allocated` 那条已经按整条请求分配）；
+     *  · 工具结果**照旧压缩**（那是运行噪声，不是用户说过的话）。
+     * `beforeLog` 仍调用一次，只用于指标与"这条有多大"的度量，不再决定落盘内容。
+     */
     const yiYaSuo = ccr.beforeLog({ kind: 'message', content: xiaoXi.content });
+    const LuoPanNei = String(xiaoXi.content || '');
     metrics.recordCcr({
       ts: Date.now(),
       kind: 'message',
       originalBytes: yiYaSuo.originalBytes,
-      compressedBytes: yiYaSuo.compressedBytes,
+      compressedBytes: LuoPanNei.length,
     });
     // 用户开口了（含点「继续/重试」发出的续传指令）⇒ 清掉「从哪一步断的」标记
     try { etaHuo().qingZhongDuan(sessionId); } catch { /* noop */ }
@@ -8890,6 +11099,7 @@ async function zhenZhengFaSongBen(
     const userRecordId = xinLiaoTianJiLuId('m');
     let userMemSeq: number | undefined;
     const shiNeiBuCaiDan = !!(xiaoXi as { internal?: boolean }).internal;
+    /** 去重比的是**镜像里的那份**（镜像存压缩预览），所以这里传折叠后的文本，不是原文 */
     if (yiJingXieGuo(sessionId, 'user', yiYaSuo.content)) {
       try { audit?.log('chat.dup-write-skipped', { sessionId, role: 'user', chars: yiYaSuo.content.length }); } catch { /* noop */ }
     } else if (!shiNeiBuCaiDan) {
@@ -8903,7 +11113,7 @@ async function zhenZhengFaSongBen(
               // role 一并落 JSONL（SQLite 投影查不到它，但 JSONL 才是事实来源；
               // 重建时先用 recordId 前缀，将来有读 JSONL 的 IPC 就能直接用这个字段）
               role: 'user',
-              ti: yiYaSuo.content,
+              ti: LuoPanNei,
               groupId: sessionId,
               entityType: 'chat',
             },
@@ -9079,6 +11289,8 @@ async function zhenZhengFaSongBen(
        * 计数器清零，但证据账留着 —— 否则前面已经做完的步骤会被当成别的任务、没做完的步骤再也续不上。
        */
       const xuJie = /^\s*【(?:继续执行|用户决定)/.test(String(xiaoXi.content || ''));
+      /** 被拒停用名单按**任务**算：新用户消息才放开；点「继续执行」是同一个任务的续接 ⇒ 名单留着（否则一按继续就又把墙放开） */
+      if (!xuJie) chongZhiBenLunJuJue(sessionId);
       if (!xuJie || !benCiRenWuKaiShi.has(sessionId)) {
         benCiRenWuGongJu.delete(sessionId);
         benCiRenWuChanPin.delete(sessionId);
@@ -9112,6 +11324,12 @@ async function zhenZhengFaSongBen(
       }
     }
     let zuiHouCuo = '';
+    /**
+     * 风控拒绝**原地重试一次**的记账（每只模型只给一次）。
+     * 为什么要原地重试：网关风控是偶发的（同一条 prompt 直接打端点连着两次都正常返回 tool_calls），
+     * 而很多用户只配了一只云端模型 ⇒ 直接"换下一只"等于无处可换，白等一轮还报一句英文。
+     */
+    const fengKongChongShi = new Set<string>();
     /**
      * **调用失败自动降级**：把**整条调用链 / 全部可用模型**都试完（不是只试 3 个）——
      * 一个挂了换下一个，直到链上没有可换的才如实报错。
@@ -9170,11 +11388,20 @@ async function zhenZhengFaSongBen(
         modelId,
       ));
       let jiangJiTiShi = false;
-      const baseBudget = contextBudgetChars(modelId);
+      const yangBenBen = yangBenBenCi(sessionId, xiaoXi.content);
+      const gongYingFen = gongYingDai(provider.baseURL, provider.protocol);
+      const suanBen = youPeizhiSuanShangXiaWenYuSuan(modelId, yangBenBen, gongYingFen);
+      const baseBudget = contextBudgetChars(modelId, yangBenBen, gongYingFen);
+      /**
+       * 工具规格也占输入 ⇒ 必须计价。取法与发送侧**同一个入口**（`zuJingGongJuGuiGe`），
+       * 两份逻辑迟早漂移（这次抽出来的原因就是：预算要算整条请求，而工具清单原来只在内层循环里现拼）。
+       */
+      let gongJuWen = await gongJuChengBenWen(sessionId, xiaoXi.xiaoDiShuLiang);
       // 计划1/2：上下文超限自动收缩重试（100%→60%→35%→20%），到最小仍失败则如实停止
       const chongshi = await daiShangXiaWenChongShiYunXing(baseBudget, async (budgetChars) => {
-        // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）
-        const shitu = renderChatView(sessionId, xiaoXi.content, budgetChars);
+        // 不变量 #2：注入的是日志的**有界渲染视图**，不是日志本身（ADR 002 §4/§6）。
+        // ⚠️ 渲染挪到固定开销拼完**之后**（见下面 `benLunChengBen`）：视图额度 = 整条预算 − 固定开销 −
+        // 工具规格 − 本轮输入 − 图片。先渲染就等于"预算只管视图"（用户 #2 要改掉的就是这个）。
         /**
          * **长文判定**（真事故：要 5000 字小说，只回 546 字且停在句中）：
          * 既影响输出预算（1024 → 8192），也影响给模型的指令（别提前收尾）。
@@ -9189,50 +11416,26 @@ async function zhenZhengFaSongBen(
           : (settingsStore?.load() as { enhanceReply?: boolean } | undefined)?.enhanceReply === true;
         // ADR 002 §9.4 待办 2：模型可以当轮调用 recall/retrieve 把被省略的原文取回来
         /**
-         * 优先级（产品定稿）：**道（dao.md）> 规矩（agents.md）> 身份/模型/时间 > 有界视图**。
-         * 道是全局最高：与任何指示冲突时以道为准。
+         * 优先级（第 52 轮用户定稿）：
+         *   **产品硬门禁 > 道（dao.md）> 术（shu.md）> 规范（本会话）> 印象（yinxiang.md）
+         *   > 工具 > 软门禁 > 教条（agents.md）> 束缚（Memory.md）> 认知（本牛马 persona）> 身份/模型/时间**
+         *   （「工具」不是文本层：工具面由宿主决定，模型只能用它拿到的工具；「软门禁」的约束力在宿主校验里，
+         *    提示词只给一句指针。）
+         * 硬门禁放最前：用户可以放宽自己写的东西（道/术/规范/印象/教条/束缚），但放宽不了软件不许被绕过的那一半。
+         * 压缩口径：**只有硬门禁与道永不可压缩**；其余各层（术/规范/教条/束缚/工具/软门禁/认知/印象/身份）
+         * 按 `yaSuo-fenCeng.ts` 的分层递进压缩
+         * （第一层 印象/工具/软门禁 → 第二层 教条/束缚/认知/身份 → 第三层 规范/术；
+         *  每层先压到半极限（留 72%），走完一轮再回头压到真极限（留 45%、段内 ≥600 字）
+         *  ⇒ 优先级越高，上下文不足时留下越多）。
          */
         const shenFenTou: LiaoTianXiaoXi[] = [];
-        const dao = duDao().trim();
-        if (dao) {
-          shenFenTou.push({
-            role: 'system',
-            content: '【道 · 全局最高优先级】\n' + dao + '\n（以上是用户的「道」：它高于其它一切指示。与任何指令、惯例或后文冲突时，一律以本段为准，冲突的指令作废。）',
-          } as LiaoTianXiaoXi);
-        }
-        const zuiGao = duZuiGaoXinNian().trim();
-        if (zuiGao) {
-          shenFenTou.push({
-            role: 'system',
-            content: '【规矩 · 仅次于「道」】\n' + zuiGao + '\n（以上是用户的规矩：与「道」冲突时以「道」为准；与其它指示冲突时以本段为准。）',
-          } as LiaoTianXiaoXi);
-        }
-        /**
-         * 第 37 轮 项 2：**「印象」**（`yonghushuju.md`）。
-         * 优先级：道 > 规矩 > **印象** > 产品门禁 > 身份/模型/时间。
-         *
-         * 印象是**牛马自己在后台归纳**出来的（可能归纳错），所以：
-         *  · 永远低于「规矩」——用户明说的覆盖牛马归纳的；
-         *  · 注入时明写"这是归纳、可能是错的"，并要求"与用户当场说的话冲突时以用户为准"；
-         *  · 被用户否认过的条目会带「已被用户否认」标记，模型看到就知道别再用。
-         */
-        try {
-          const yinXiang = duYinXiang().trim();
-          if (yinXiang) {
-            const qie = yinXiang.length > YIN_XIANG_INJECT_CHARS ? yinXiang.slice(-YIN_XIANG_INJECT_CHARS) : yinXiang;
-            shenFenTou.push({
-              role: 'system',
-              content: '【印象 · 牛马对用户的长期理解（低于「规矩」）】\n' + qie
-                + '\n（以上是你在后台归档时自己归纳出来的"关于这个用户的长期印象"，**可能是错的**：'
-                + '与用户的「道」「规矩」冲突时以那两者为准；与用户当场说的话冲突时**一律以用户当场说的为准**，'
-                + '并且不要拿它去反驳用户。标了「已被用户否认」的条目，永远不要再使用或复述。）',
-            } as LiaoTianXiaoXi);
-          }
-        } catch { /* 印象读不到不影响对话 */ }
+        /** 本牛马的认知（persona）先取出来，注入点排在工具与束缚之后（阶梯里"认知"的位置）*/
+        let benNiuMaRenZhi = '';
+        /** 身份/模型/时间段的正文：阶梯最末一层，认知注入之后再 push */
+        let benNiuMaShenFen = '';
         /**
          * 第 35 轮 项 1/2/3：**产品门禁**（硬约束，随版本升级而更新）。
-         * 放在「规矩」之后、「身份/模型/时间」之前 —— 道 > 规矩 > 产品门禁 > 身份。
-         * 这是"软件门禁"的那一半：模型每一轮都看得见；另一半是宿主校验
+         * 第 51 轮改到**最前面**（先于道）：这是"软件门禁"看得见的那一半；另一半是宿主校验
          * （`planMenJinHeCha` 审计、附件免授权、后台任务状态等），见同文件的对应实现。
          */
         try {
@@ -9240,14 +11443,91 @@ async function zhenZhengFaSongBen(
           if (menjin) {
             shenFenTou.push({
               role: 'system',
-              content: '【产品门禁 · 第 35 轮（硬约束）】\n' + menjin
-                + '\n（以上是产品门禁：与「道」「规矩」冲突时以它们为准；其余一切指示与惯例与它冲突时，以本段为准。）',
+              content: '【产品门禁 · 最高优先级（硬约束）】\n' + menjin
+                + '\n\n' + yingMenJinTiShi()
+                + '\n（以上是产品硬门禁：用户的「道」「术」「教条」「束缚」可以放宽**用户自己**的要求，'
+                + '但放宽不了本段；本段与它们冲突时，按本段执行，并把冲突如实告诉用户。'
+                + '其余一切指示与惯例与本段冲突时，一律以本段为准。宿主侧还有强制校验，模型没有能力修改或跳过。）',
             } as LiaoTianXiaoXi);
           }
         } catch { /* 门禁文本读不到也不能拖累对话 */ }
+        const dao = duDao().trim();
+        if (dao) {
+          shenFenTou.push({
+            role: 'system',
+            content: '【道 · 最高优先级（除硬门禁）· 不可压缩】\n' + dao
+              + '\n（以上是用户的「道」：高于除产品硬门禁外的一切指示 —— 与术/教条/束缚/印象/惯例或后文冲突时，一律以本段为准，冲突的指示作废。'
+              + '压缩上下文时本段不许缩短或省略。它与产品硬门禁冲突时按硬门禁执行，并把冲突如实说出来。）',
+          } as LiaoTianXiaoXi);
+        }
+        const shu = duShu().trim();
+        if (shu) {
+          shenFenTou.push({
+            role: 'system',
+            content: '【术 · 方法论（仅次于硬门禁与「道」）】\n' + shu
+              + '\n（以上是用户的「术」：做事的章法与技巧。与硬门禁、「道」冲突时以它们为准；与规范/教条/束缚/认知/印象冲突时以本段为准。）',
+          } as LiaoTianXiaoXi);
+        }
+        /**
+         * **「规范」**（用户点名新增）：**只作用于当前这一个会话**的章法，位置在「术」之后、教条之前 ——
+         * 用户在这个聊天里定的规矩，比全局教条更贴近此刻要做的事，但压不过道与术。
+         * 存在 `userData/guifan/<sid>.md`（每个会话一份）；第四列「规范」卡里用户可手改；
+         * 归档时把与规范有关的结论一起整理进**本会话**的知识库（见 `guiDangYiGeHuiHua` 的规范段）。
+         */
+        const guiFan = duGuiFan(sessionId).trim();
+        if (guiFan) {
+          shenFenTou.push({
+            role: 'system',
+            content: '【规范 · 只作用于本会话（仅次于「术」）】\n' + guiFan
+              + '\n（以上是**这个会话**的规范：高于「教条」「束缚」「认知」「印象」，低于硬门禁、道、术。'
+              + '只在本会话内生效，不许把它当成对其它会话、其它牛马或全局的要求。与它们冲突时以本段为准，冲突要在收尾时说一次。）',
+          } as LiaoTianXiaoXi);
+          try { audit?.log('chat.guifan-injected', { sessionId, chars: guiFan.length }); } catch { /* noop */ }
+        }
+        /**
+         * **「印象」注入（阶梯第 5 层：规范之后、工具之前）**：牛马自己在后台归档时归纳出的"对这位用户的长期理解"。
+         * 全局那份已经**去掉隐私类目**（健康/性向/宗教政治/财务法律/家庭身份等一律不落印象，改进私密知识库），
+         * 留下的应是"可以对外的形象"；会话那份只在本会话里出现。
+         */
+        try {
+          const yinXiang = (duYinXiangHuiHua(sessionId) || duYinXiang()).trim();
+          if (yinXiang) {
+            const qie = yinXiang.length > yinXiangInjectChars() ? yinXiang.slice(-yinXiangInjectChars()) : yinXiang;
+            shenFenTou.push({
+              role: 'system',
+              content: '【印象 · 对用户的长期理解】\n' + qie
+                + '\n（以上是你在后台归档时自己归纳出来的"关于这个用户的长期理解"，**可能是错的**，位置在「规范」之后、「工具」之前：'
+                + '与产品硬门禁、「道」「术」「规范」以及「工具」「软门禁」「教条」「束缚」「认知」任何一条冲突时都以它们为准；'
+                + '与用户当场说的话冲突时**一律以用户当场说的为准**，并且不要拿它去反驳用户。'
+                + '标了「已被用户否认」的条目，永远不要再使用或复述。）',
+            } as LiaoTianXiaoXi);
+          }
+        } catch { /* 印象读不到不影响对话 */ }
+        /**
+         * 第 37 轮 项 2：**「印象」**（`yinxiang.md`）—— 位置**最低**（在认知之后），
+         * 因为它是牛马自己在后台归纳出来的（可能归纳错）：
+         *  · 永远低于硬门禁/道/术/规范/教条/束缚/工具/软门禁/认知 —— 用户明说的覆盖牛马归纳的；
+         *  · 注入时明写"这是归纳、可能是错的"，并要求"与用户当场说的话冲突时以用户为准"；
+         *  · 被用户否认过的条目会带「已被用户否认」标记，模型看到就知道别再用。
+         * 具体注入挪到了所有"工具/软门禁"段之后（见下面的 `【认知 …】` 与 `【印象 …】` 两处 push）。
+         */
+        /**
+         * **跨轮黑板摘要**（第 51 轮）：只对**真实用户轮**注入（续派轮不带，避免重复堆料）。
+         * 同一个会话、最近 6 小时、**最近一个任务号**的 ≤2400 字摘要 + 指针；没有就不加。
+         */
+        if (!(xiaoXi as { internal?: boolean }).internal) {
+          try {
+            const zh = daiHuiZhaiYao(banDaiHuiKu, sessionId);
+            if (zh) {
+              shenFenTou.push({ role: 'system', content: zh.wen } as LiaoTianXiaoXi);
+              try { audit?.log('chat.board-carry', { sessionId, renWuId: zh.renWuId, tiao: zh.tiaoShu, chars: zh.wen.length }); } catch { /* noop */ }
+            }
+          } catch { /* 带回失败不影响这一轮 */ }
+        }
         {
           const yongHu = dangQianYongHuMing();
           const ju = [];
+          const juShenFen: string[] = [];
           /**
            * **身份注入**（真机反馈：牛马不知道自己叫什么、也不知道用户是谁）。
            * 名字缺失时用角色兜底，不写空串；用户默认昵称不当真名。
@@ -9255,10 +11535,10 @@ async function zhenZhengFaSongBen(
           const niMing = String(xiaoXi.ming || '').trim();
           const zhenMing = String(yongHu || '').trim();
           const yongHuZhen = zhenMing && zhenMing !== 'nav.touXiang' && zhenMing !== 'user' ? zhenMing : '';
-          if (niMing) ju.push(tMain('llm.identityLine', '你是「{ming}」。').replace('{ming}', niMing));
-          else ju.push(tMain('llm.identityAnon', '你是 WArmy 里的 AI 牛马。'));
+          if (niMing) juShenFen.push(tMain('llm.identityLine', '你是「{ming}」。').replace('{ming}', niMing));
+          else juShenFen.push(tMain('llm.identityAnon', '你是 WArmy 里的 AI 牛马。'));
           // 让它知道自己跑在哪个模型上（真事故：用户问"你是哪个模型"，它说"看不清蹄子底下"）
-          if (modelId) ju.push(tMain('llm.modelLine', '你当前运行在模型「{model}」上。用户问你是什么模型时如实回答它。')
+          if (modelId) juShenFen.push(tMain('llm.modelLine', '你当前运行在模型「{model}」上。用户问你是什么模型时如实回答它。')
             .replace(/\{model\}/g, String(modelId))
             .replace(/\{ming\}/g, niMing || tMain('llm.identityAnon', 'AI 牛马')));
           /**
@@ -9268,24 +11548,31 @@ async function zhenZhengFaSongBen(
            * 逐轮稀释人格细节；解法是把「我是谁 + 我认谁」写成**短锚句、每轮随 user turn 重申**，
            * 而不是只躺在第一条 system 里。这里就是那个锚。
            */
-          ju.push(tMain('llm.identityAnchor', '【身份锚 · 每轮重申】你是「{ming}」，用户的 AI 牛马。')
+          juShenFen.push(tMain('llm.identityAnchor', '【身份锚 · 每轮重申】你是「{ming}」，用户的 AI 牛马。')
             .replace(/\{ming\}/g, niMing || tMain('llm.identityAnon', 'AI 牛马')));
           /**
-           * **注入本牛马的人设正文**（真机反馈：人设在界面里写着，模型却完全不知道）。
-           * 以前 `persona` 只存 UI、从不进提示。现在按实例取来，截断后注入（不无界膨胀）。
+           * **「认知」**（用户定稿：它是文本层，不是知识库）：**这只牛马的性格与背景**，
+           * 一份认知只作用于对应的那一只牛马 —— 它让不同的牛马成为差异化的个体，才合作得出多彩的结果。
+           * 数据源就是牛马管理局里那份「写入认知」（实例的 `persona`），也是互通协议里交给对方的那份认知。
+           * 注入位置：**束缚之后、身份之前**（见下面 `【认知 · …】` 的 push）—— 第 52 轮阶梯里它只高于身份。
            */
           try {
             const lie = (settingsStore?.load() as { instances?: Array<{ id?: string; ming?: string; name?: string; persona?: string }> } | undefined)?.instances || [];
             const ben = lie.find((x) => String(x?.id || '') === String(sessionId));
             const renShe = String(ben?.persona || '').trim();
-            if (renShe) {
-              ju.push('\n【你的人设（用户为你写的，请始终符合）】\n' + renShe.slice(0, 1600));
-            }
+            if (renShe) benNiuMaRenZhi = renShe.slice(0, renZhiInjectChars());
           } catch { /* 拿不到实例就不注入 */ }
-          if (yongHuZhen) ju.push(tMain('llm.userLine', '你的用户是「{u}」，请这样称呼他。').replace('{u}', yongHuZhen));
-          else ju.push(tMain('llm.userAnon', '你的用户是本机操作者，请称呼「你」，不要编造用户名。'));
+          if (yongHuZhen) {
+            juShenFen.push(tMain('llm.userLine', '你的用户是「{u}」，请这样称呼他。').replace('{u}', yongHuZhen));
+            /**
+             * 用户明确投诉过“界面改名后牛马还叫老板”。userLine 只说“请这样称呼”，
+             * 身份锚/人设里又有“老板”这个词 ⇒ 模型会退回泛称。这里加一条独立硬规则：
+             * 只准用当前用户名，不许用老板/主人/用户等泛称；改名后下一轮即可生效。
+             */
+            juShenFen.push(tMain('llm.userCallRule', '称呼用户时只使用「{u}」这个名字；不要叫“老板”“主人”“用户”等泛称（除非用户自己就叫这个名字）。').replace(/\{u\}/g, yongHuZhen));
+          } else juShenFen.push(tMain('llm.userAnon', '你的用户是本机操作者，请称呼「你」，不要编造用户名。'));
           /** 产品语境一句：这是桌面多智能体应用，不是网页客服 */
-          ju.push(tMain('llm.productLine', '这是桌面应用「无限牛马 WArmy」。你可以在工作区写文件、调用工具；能力不足时如实说明，不要假装。'));
+          juShenFen.push(tMain('llm.productLine', '这是桌面应用「无限牛马 WArmy」。你可以在工作区写文件、调用工具；能力不足时如实说明，不要假装。'));
           /**
            * 第 36 轮【项 6】：**把真实的系统目录告诉它，别让它猜**。
            *
@@ -9353,7 +11640,7 @@ async function zhenZhengFaSongBen(
            */
           {
             const shuoMing = tMain('llm.timeLineHint', '（系统会把当前时刻附在用户消息末尾；需要精确时刻或联网时间时调用 get_time；做"等待 N 秒"按时间戳算差值。）');
-            if (shuoMing) ju.push(shuoMing);
+            if (shuoMing) juShenFen.push(shuoMing);
           }
           /**
            * **加强 AI 语言约束**（设置 → 语言里那个勾）：思考过程与回复都严格用界面语言。
@@ -9397,7 +11684,7 @@ async function zhenZhengFaSongBen(
            */
           try {
             if (knowledge) {
-              const quan = knowledge.query('');
+              const quan = knowledge.queryLayers(ZHISHI_CENG as readonly ZhishiCeng[], '');
               const shiTiShu = (quan.entities || []).length;
               const shiJianShu = (quan.events || []).length;
               if (shiTiShu + shiJianShu > 0) {
@@ -9410,7 +11697,10 @@ async function zhenZhengFaSongBen(
                     '④ 用户明确问"我们以前是不是说过/记过"。\n' +
                     '**不该查**：闲聊、当前上下文已经写清楚的事、纯创作与算数。不要每轮都查。\n' +
                     '**怎么用**：先 knowledge_query("关键词")；命中就用其中的事实作答，并写明来自知识库；' +
-                    '**没命中就如实说"知识库里没有这条"**，绝不拿猜测当事实 —— 然后如值得沉淀，用 knowledge_add 记下来。'
+                    '**没命中就如实说"知识库里没有这条"**，绝不拿猜测当事实 —— 然后如值得沉淀，用 knowledge_add 记下来。\n' +
+                    '**每条知识有两个时间，不许混**：记录时间=你什么时候告诉我的；发生时间=事情本身什么时候发生的（原文没写就是未记录）。' +
+                    '问"什么时候/昨天/上周"这类事，两个轴都要查，回答时分开说（例："你昨天告诉我，你上个月5号决定戒烟"）；' +
+                    '发生时间未记录时**不要拿记录时间顶替**，要说"你昨天告诉我，但没说事情本身发生在什么时候"。'
                 ).replace('{e}', String(shiTiShu)).replace('{v}', String(shiJianShu)));
               }
             }
@@ -9436,45 +11726,63 @@ async function zhenZhengFaSongBen(
                 '这些工具就在你手里。只有当某个工具调用**真的失败**时，才如实说失败原因与替代方案。'
             ));
           } catch { /* noop */ }
-          if (ju.length) shenFenTou.push({ role: 'system', content: ju.join('') } as LiaoTianXiaoXi);
+          /**
+           * **社交档案按需注入**（产品要求）：只告诉模型「你有档案、怎么取」，
+           * 不把邮箱/手机/钱包等正文每次塞进上下文；需要时调 read_profile。
+           */
+          ju.push('【档案能力提示】你（本牛马）在「牛马管理局 → 社交信息」里可能存有邮箱/网站账号/手机号/昵称/钱包等档案。它们**不会自动出现在对话里**；用户问到联系方式、账号、名片，或你要给外部服务填资料时，调用工具 read_profile 获取（可指定 field=email|website|phone|nick|wallet）。密码永不返回。没有该项就如实说没有，不要编造。');
+          ju.push('【动手优先】用户若要求生成/创建/打开/写入/执行/等待/调用任何具体操作，**第一响应就是发起工具调用**（write_file、make_pptx、open_path、get_time、wait_seconds 等），不要先写长篇计划或只说「已完成」。文字只能在工具真正跑完之后做汇报。没有工具结果就不要声称文件已生成。');
+          /**
+           * **长文分段写**（产品要求：一次写 5000+ 字要能真写完）。
+           *
+           * 真机事故：用户要 5000 字以上内容，模型在一次 `write_file` 里塞整篇 ⇒
+           * 小模型写到一半就断了（空回复 / 只落一个开头）；或者反复用**完全相同的参数**重写被拦。
+           * 业界通行做法是"分段写 + 追加"（Anthropic《Building effective agents》也强调
+           * 把长产出拆成可验证的小步）。这里把规矩写进系统提示，工具侧 `write_file(append:true)` 支持续写。
+           */
+          ju.push('【长文分段写】要用 write_file 产出**超过 1500 字**的长文时：**不要在一次调用里塞整篇**。第 1 次调用不带 append（写第 1 段，约 600~1200 字），之后**每次都用 append:true 续写下一段**，一次一段，直到整篇写完；每次返回都会告诉你「文件当前共多少字节/字符」，据此判断还需要再写几段。**分段之间不要重复调用完全相同的参数**（那会被当成原地打转而挡下）。全部写完后，在最终回复里给出绝对路径与总字数。');
+          /**
+           * 第 29 轮 项 10：最终回复里出现文件时**必须写绝对路径**，并自带可点超链接。
+           */
+          ju.push('【文件要给绝对路径】最终回复里提到任何文件（创建/编辑/打开/产出）时，**必须写出完整绝对路径**（例如 C:\\Users\\…\\Desktop\\xx.txt，不要只写 xx.txt 或 Desktop/xx.txt），并用 Markdown 链接包一层：[xx.txt](C:\\Users\\…\\Desktop\\xx.txt)。用户点链接可直接打开；右键有复制/复制路径/打开所在目录。路径不全 = 用户找不到文件。');
+          if (ju.length) shenFenTou.push({ role: 'system', content: '【工具 · 能力清单与落地规矩】\n' + ju.join('\n') } as LiaoTianXiaoXi);
+          benNiuMaShenFen = juShenFen.join('\n');
         }
         /**
-         * **社交档案按需注入**（产品要求）：只告诉模型「你有档案、怎么取」，
-         * 不把邮箱/手机/钱包等正文每次塞进上下文；需要时调 read_profile。
+         * **「教条」「束缚」注入（第 52 轮新阶梯：工具/软门禁之后、认知之前）**
+         * 用户口径：这两层只为兼容其它智能体的移植而存在，按位置注入即可，不参与产品的思路。
          */
-        shenFenTou.push({
-          role: 'system',
-          content: '【档案能力提示】你（本牛马）在「牛马管理局 → 社交信息」里可能存有邮箱/网站账号/手机号/昵称/钱包等档案。它们**不会自动出现在对话里**；用户问到联系方式、账号、名片，或你要给外部服务填资料时，调用工具 read_profile 获取（可指定 field=email|website|phone|nick|wallet）。密码永不返回。没有该项就如实说没有，不要编造。',
-        } as LiaoTianXiaoXi);
-        shenFenTou.push({
-          role: 'system',
-          content: '【动手优先】用户若要求生成/创建/打开/写入/执行/等待/调用任何具体操作，**第一响应就是发起工具调用**（write_file、make_pptx、open_path、get_time、wait_seconds 等），不要先写长篇计划或只说「已完成」。文字只能在工具真正跑完之后做汇报。没有工具结果就不要声称文件已生成。',
-        } as LiaoTianXiaoXi);
+        const zuiGao = duZuiGaoXinNian().trim();
+        if (zuiGao) {
+          shenFenTou.push({
+            role: 'system',
+            content: '【教条 · 低于硬门禁、道、术、规范、印象、工具、软门禁】\n' + zuiGao + '\n（以上是用户的「教条」（agents.md）：为兼容其它智能体的移植而存在，位置在「软门禁」之后、「束缚」之前；与硬门禁、道、术、规范、印象、工具任何一条冲突时以它们为准。）',
+          } as LiaoTianXiaoXi);
+        }
+        const shuFu = duShuFu().trim();
+        if (shuFu) {
+          shenFenTou.push({
+            role: 'system',
+            content: '【束缚 · 补充约束（低于「教条」，只为移植兼容）】\n' + shuFu + '\n（以上是用户的「束缚」（Memory.md）：为兼容其它智能体的移植而存在，位置低于「教条」、高于「认知」；与硬门禁/道/术/规范/印象/工具/软门禁/教条冲突时以它们为准。）',
+          } as LiaoTianXiaoXi);
+        }
+        if (benNiuMaRenZhi) {
+          shenFenTou.push({
+            role: 'system',
+            content: '【认知 · 本牛马的性格与背景】\n' + benNiuMaRenZhi
+              + '\n（以上是**你这一只牛马**的认知：你在任何会话里都按这个性格与背景说话做事。'
+              + '它只对这只牛马有效，不代表别的牛马，也不是用户的偏好；与硬门禁/道/术/规范/教条/束缚冲突时以它们为准。'
+              + '牛马互通时，对方要走的正是这一份。）',
+          } as LiaoTianXiaoXi);
+          try { audit?.log('chat.renzhi-injected', { sessionId, chars: benNiuMaRenZhi.length }); } catch { /* noop */ }
+        }
         /**
-         * **长文分段写**（产品要求：一次写 5000+ 字要能真写完）。
-         *
-         * 真机事故：用户要 5000 字以上内容，模型在一次 `write_file` 里塞整篇 ⇒
-         * 小模型写到一半就断了（空回复 / 只落一个开头）；或者反复用**完全相同的参数**重写被拦。
-         * 业界通行做法是"分段写 + 追加"（Anthropic《Building effective agents》也强调
-         * 把长产出拆成可验证的小步）。这里把规矩写进系统提示，工具侧 `write_file(append:true)` 支持续写。
+         * **身份 / 模型 / 时间**：整条阶梯的最末一层（第 52 轮用户定稿）。
+         * 它仍**每轮都带**（身份锚重申的作用没变），只是排在最后 —— 长上下文吃紧时它先让路。
          */
-        shenFenTou.push({
-          role: 'system',
-          content: '【长文分段写】要用 write_file 产出**超过 1500 字**的长文时：**不要在一次调用里塞整篇**。'
-            + '第 1 次调用不带 append（写第 1 段，约 600~1200 字），之后**每次都用 append:true 续写下一段**，'
-            + '一次一段，直到整篇写完；每次返回都会告诉你「文件当前共多少字节/字符」，据此判断还需要再写几段。'
-            + '**分段之间不要重复调用完全相同的参数**（那会被当成原地打转而挡下）。全部写完后，在最终回复里给出绝对路径与总字数。',
-        } as LiaoTianXiaoXi);
-        /**
-         * 第 29 轮 项 10：最终回复里出现文件时**必须写绝对路径**，并自带可点超链接。
-         */
-        shenFenTou.push({
-          role: 'system',
-          content: '【文件要给绝对路径】最终回复里提到任何文件（创建/编辑/打开/产出）时，**必须写出完整绝对路径**'
-            + '（例如 C:\\Users\\…\\Desktop\\xx.txt，不要只写 xx.txt 或 Desktop/xx.txt），'
-            + '并用 Markdown 链接包一层：[xx.txt](C:\\Users\\…\\Desktop\\xx.txt)。'
-            + '用户点链接可直接打开；右键有复制/复制路径/打开所在目录。路径不全 = 用户找不到文件。',
-        } as LiaoTianXiaoXi);
+        if (benNiuMaShenFen) {
+          shenFenTou.push({ role: 'system', content: '【身份 · 模型 · 时间】\n' + benNiuMaShenFen } as LiaoTianXiaoXi);
+        }
         /**
          * **更早的对话（归档摘要）必须真的进上下文**（产品要求：聊天记录涨到 10M 也不许"忘记中间"）。
          *
@@ -9492,37 +11800,70 @@ async function zhenZhengFaSongBen(
          * 有界视图会压缩中段，长工具轮之后原始任务可能只剩指针；
          * 这里把最近几条 **user** 原文固定注入，模型永远能找回「上面的任务」。
          */
+        /** 这一段的**原文**留在手里：预算不足时按用户 #4 摘要它（而不是悄悄超发，也不是整段不发） */
+        const zuiJin5 = { msg: null as LiaoTianXiaoXi | null, items: [] as Array<{ seq: number; zi: string }> };
         try {
-          const yongHuShi = (chatLogs.get(sessionId) || [])
+          const zuiJin = (chatLogs.get(sessionId) || [])
             .filter((e) => e && (e as { role?: string }).role === 'user' && !(e as { hidden?: boolean }).hidden)
             .slice(-5)
-            .map((e, i) => `${i + 1}. ${String((e as { content?: string }).content || '').slice(0, 500)}`)
-            .join('\n');
+            .map((e) => ({ seq: Number((e as { seq?: number }).seq || 0), zi: String((e as { content?: string }).content || '') }));
+          zuiJin5.items = zuiJin;
+          const yongHuShi = zuiJin.map((x, i) => `${i + 1}. ${x.zi.slice(0, 500)}`).join('\n');
           if (yongHuShi.trim()) {
             /** 续接轮换一种说法：原话只供对照，不是"再做一遍"的指令（旧说法"重做上面的任务"会把模型往重做上引） */
             const xuJie = !!benLunXuJie.get(String(sessionId || ''));
-            shenFenTou.push({
+            const msg = {
               role: 'system',
               content: (xuJie
                 ? tMain('llm.recentUserTasksCont', '【本会话用户交代过的事】（原话，仅供对照）本轮是接着做的：下面这些里**已经做完的部分不要重做**（以执行日志和最后一条指令为准），只做还没完成的部分：\n')
                 : tMain('llm.recentUserTasks', '【本会话用户交代过的事】需要「接着做 / 重做上面的任务」时，以下面这些为准（不要说看不到）：\n'))
                 + yongHuShi,
-            } as LiaoTianXiaoXi);
+            } as LiaoTianXiaoXi;
+            zuiJin5.msg = msg;
+            shenFenTou.push(msg);
           }
         } catch { /* noop */ }
+        /** 预算不足时把「最近 5 条 user 原文」压成短摘录 + 可执行指针（用户 #4 点名的第一级降级） */
+        function yaSuoZuiJin5YuanWen(): boolean {
+          const m = zuiJin5.msg;
+          if (!m || !zuiJin5.items.length) return false;
+          const tou = String(m.content || '').split('\n')[0] || '';
+          const xin = zuiJin5.items.map((x, i) => `${i + 1}. ${x.zi.slice(0, 120)}${x.zi.length > 120 ? `…（要全文：retrieve(${x.seq ? `seq=${x.seq}` : `recall("${x.zi.slice(0, 24)}")`})）` : ''}`).join('\n');
+          m.content = `${tou}\n${xin}`;
+          return true;
+        }
         try {
           const ziDongZhaiYao = (settingsStore?.load() as { autoSummary?: boolean } | undefined)?.autoSummary !== false;
           if (ziDongZhaiYao) {
             const gui = archiver?.LieBiao(sessionId) || [];
-            const wen = gui.slice(-8).map((x) => String(x.summary || '')).filter(Boolean).join('\n\n').slice(0, 3000);
-            if (wen.trim()) {
+            /**
+             * **份额随本轮预算自适应**（用户 #10）：以前这里是写死的 `末 8 条 → 截 3000 字` ——
+             * 预算调大也不多给历史、调小却照样吃 3000 字，而且 6000 轮的会话里前面的归档被整段丢掉**且没人说**。
+             * 现在：最近的逐条保留，更早的**合并去重**成一段，装不下的条数如实写在正文里并给取回路径。
+             */
+            const fenE = jiYaoFenE(Number(suanBen?.chars) || 0) || 3000;
+            /** 带上归档自己的 id（摘要也回写进了记忆库）⇒ 没进上下文的那些能给出**可执行**的 retrieve 指针 */
+            const zhu = jiYaoZhuRu({
+              quanBu: gui.map((x) => ({
+                ts: Number(x.ts) || 0,
+                summary: String(x.summary || ''),
+                id: String((x as { id?: string }).id || ''),
+              })),
+              fenE,
+            });
+            if (zhu.duan.trim()) {
+              const fuGaiHang = zhu.fuGai.tiaoShu > 0
+                ? tMain('llm.archivedCoverage', '\n〔本次注入覆盖第 {a}–{b} 次归档（共 {n} 次归档）〕')
+                  .replace('{a}', String(zhu.fuGai.cong)).replace('{b}', String(zhu.fuGai.dao)).replace('{n}', String(gui.length))
+                : '';
               shenFenTou.push({
                 role: 'system',
-                content: tMain('llm.archivedSummaryHead', '【更早的对话（已归档摘要）】下面是本次会话**更早**内容的压缩摘要（越靠后越新）：\n\n')
-                  + wen
+                content: tMain('llm.archivedSummaryHead', '【更早的对话（已归档摘要）】下面是本次会话**更早**内容的压缩摘要（越靠后越新）：\n')
+                  + fuGaiHang + '\n'
+                  + zhu.duan
                   + tMain('llm.archivedSummaryTail', '\n\n（这是压缩摘要，细节可能不全：需要原文时用 recall / retrieve 按 seq 取回，**取不到就如实说"上下文里没有"，不要凭印象编造**。）'),
               } as LiaoTianXiaoXi);
-              try { audit?.log('chat.archived-summary-injected', { sessionId, n: gui.slice(-8).length, chars: wen.length }); } catch { /* noop */ }
+              try { audit?.log('chat.archived-summary-injected', { sessionId, zhuRu: zhu.fuGai.tiaoShu, quanBu: gui.length, weiFuGai: zhu.weiFuGai, chars: zhu.zi, fenE }); } catch { /* noop */ }
             }
           }
         } catch { /* 归档读不到就不注入（不影响正常对话） */ }
@@ -9587,12 +11928,23 @@ async function zhenZhengFaSongBen(
           }
         } catch { /* 授权登记失败不挡这一轮（读取会被正常拦截） */ }
         const tuMingJi: string[] = [];
+        /** 与 `tuKuaiJi` **同序**的真实像素（视觉 token 按面积算；少了这份就等于图片不计预算） */
+        const tuCheJi: Array<{ kuan: number; gao: number }> = [];
         for (const a of (xiaoXi.attachments || [])) {
+          /**
+           * 张数上限（用户 #5："张数和每张的大小都要有上限"）：超限的**如实登记**再丢弃，
+           * 不许静默截断 —— 丢掉的每一张都会出现在"未喂给模型的附件"里，模型自己也知道少了哪几张。
+           */
+          if (tuKuaiJi.length >= TU_ZHANG_SHANG_XIAN) {
+            tiaoGuoJi.push(String(a?.name || a?.path || '') + `（单轮最多 ${TU_ZHANG_SHANG_XIAN} 张，超出未喂给模型）`);
+            continue;
+          }
           const zhuan = await fuJianZhuanTu(a || {});
           if (!zhuan) continue;
           if (!zhuan.tu) { tiaoGuoJi.push(zhuan.tiaoGuo || String(a?.name || a?.path || '') + '（未喂给模型）'); continue; }
-          if (zhuan.tu.url.length > 8 * 1024 * 1024) { tiaoGuoJi.push(zhuan.tu.ming + '（图片过大，未喂给模型）'); continue; }
+          if (zhuan.tu.url.length > TU_DATA_URL_ZI_SHU) { tiaoGuoJi.push(zhuan.tu.ming + `（规范化后超过 ${Math.round(TU_DATA_URL_ZI_SHU / 1024 / 1024)}M 字符，未喂给模型）`); continue; }
           tuKuaiJi.push({ type: 'image_url', image_url: { url: zhuan.tu.url } });
+          tuCheJi.push({ kuan: zhuan.tu.kuan, gao: zhuan.tu.gao });
           tuMingJi.push(zhuan.tu.yuanGeShi !== zhuan.tu.geShi
             ? `${zhuan.tu.ming}（原为 ${zhuan.tu.yuanGeShi.toUpperCase()}，已转成 PNG 给模型看）`
             : zhuan.tu.ming);
@@ -9610,17 +11962,424 @@ async function zhenZhengFaSongBen(
         {
           const sidT = String(sessionId || '');
           if (!benLunXuJie.get(sidT) && tuKuaiJi.length) {
-            huiHuaTuKuai.set(sidT, { kuai: tuKuaiJi.slice(), ming: tuMingJi.slice() });
+            huiHuaTuKuai.set(sidT, { kuai: tuKuaiJi.slice(), ming: tuMingJi.slice(), che: tuCheJi.slice() });
           } else if (benLunXuJie.get(sidT) && !tuKuaiJi.length && !huiHuaKanTuJie.get(sidT)) {
             const jiu = huiHuaTuKuai.get(sidT);
             if (jiu && jiu.kuai.length) {
               tuKuaiJi.push(...jiu.kuai);
               tuMingJi.push(...jiu.ming);
+              tuCheJi.push(...(jiu.che || jiu.kuai.map(() => ({ kuan: TU_JIANG_JI_BIAN_CHANG, gao: TU_JIANG_JI_BIAN_CHANG }))));
               chongDaiTu = true;
               try { audit?.log('chat.attachments-reattached', { sessionId, images: jiu.kuai.length }); } catch { /* noop */ }
             }
           }
         }
+        /**
+         * **宿主前置召回**（第 44 轮记忆 #8）：文档定的是"宿主主动把相关历史放到模型眼前"，
+         * 但代码里只有模型自己调 `recall` —— 模型并不知道视图里少了什么，不调就永远召回不到，
+         * 于是"你在第 500 轮说过的那件事"对它是隐形的。这里由宿主在装配阶段先取一轮。
+         *
+         * 三条硬约束（缺一条就成了"再往里灌"的老毛病）：
+         *  · **有界份额**：条数 ≤3、每条 ≤200 字、整段 ≤本轮预算的 6%（600–2400 字）；
+         *  · **先记账再渲染**：这段进 `shenFenTou` 是在计价**之前**，视图拿的是扣掉它之后的余额，不是额外加的；
+         *  · **不许拖住这一轮**：记忆服务没就绪 / 超时 / 报错都按"没召回"处理，不阻塞聊天。
+         */
+        {
+          const kaiGuan = (settingsStore?.load() as { preRecall?: boolean } | undefined)?.preRecall !== false;
+          const chaXun = String(xiaoXi.content || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+          if (kaiGuan && memory && memory.isReady && chaXun.length >= 4) {
+            const fenE = Math.min(2400, Math.max(600, Math.round((Number(suanBen.chars) || 0) * 0.06) || 600));
+            try {
+              const zhao = await Promise.race([
+                memory.recallScoped(chaXun, 3, { sessionId: String(sessionId || '') }),
+                new Promise<null>((res) => setTimeout(() => res(null), 800)),
+              ]);
+              const ka = Array.isArray((zhao as { cards?: unknown[] } | null)?.cards)
+                ? ((zhao as { cards: Array<{ seq?: number; recordId?: string; snippet?: string; source?: string; sources?: string[] }> }).cards)
+                : [];
+              if (ka.length) {
+                const hang = ka.slice(0, 3).map((c, i) => {
+                  const src = String(c.source || (Array.isArray(c.sources) ? c.sources.join('+') : '') || '');
+                  return `${i + 1}. seq=${c.seq ?? '?'} recordId=${c.recordId || '?'}${src ? ` 来源=${src}` : ''}：${String(c.snippet || '').replace(/\s+/g, ' ').slice(0, 200)}`;
+                }).join('\n');
+                const zheng = `【前置召回 · 宿主按本轮内容主动取回的历史线索（不代表用户本轮的新要求）】\n${hang}\n要逐字节原文：retrieve(seq=…) 或 retrieve(recordId="…")；换关键词：recall("…")。这一段的份额已经从视图额度里扣过了。`;
+                const cai = zheng.length > fenE ? zheng.slice(0, fenE) + '…（前置召回份额已用满，其余命中项未注入：用 recall 自己取）' : zheng;
+                shenFenTou.push({ role: 'system', content: cai } as LiaoTianXiaoXi);
+                try { audit?.log('chat.pre-recall', { sessionId, tiao: ka.length, zi: cai.length, fenE, chaXun: chaXun.slice(0, 40) }); } catch { /* 记不上不影响这一轮 */ }
+              } else {
+                try { audit?.log('chat.pre-recall-empty', { sessionId, chaXun: chaXun.slice(0, 40) }); } catch { /* noop */ }
+              }
+            } catch (e) {
+              try { audit?.log('chat.pre-recall-failed', { sessionId, error: xiJingCuoWu(e).slice(0, 120) }); } catch { /* noop */ }
+            }
+          } else {
+            try { audit?.log('chat.pre-recall-skipped', { sessionId, yinWei: !kaiGuan ? '开关关闭' : (!memory ? '没有记忆句柄' : '记忆服务未就绪') }); } catch { /* noop */ }
+          }
+        }
+        /**
+         * **预算 = 所有发给模型的内容**（用户 #2 / #3 / #4 / #5）。
+         * 固定开销此刻已经拼完 ⇒ 先算成本，再决定视图能拿多少；装不下就按用户点名的顺序降级。
+         * ⚠️ 本轮用户消息**本身就在视图里**（它已进日志并从尾部带出）⇒ 不再单独计一遍，否则双重计费；
+         * 内部续派指令是**另外 push** 的（不进会话日志、视图里没有）⇒ 那一部分才要计。
+         * ⚠️ 图片按**真实像素**计视觉 token（用户 #5），但只计"真的会进这条请求"的那些：
+         *    不支持看图的模型收到的是文字描述，那部分成本走 `benLunZi`/摘要，不按图片重复收费。
+         */
+        /** 阶梯第④·五级可以收紧这一轮的工具面（计价与发送**共用这一个数**，不许一边全套一边截尾） */
+        let gongJuZuiDuoShu = 0;
+        const zhuangZhun = tokenZhuQu(modelId, yangBenBen, gongYingFen);
+        const lvBen = Math.min(1, Math.max(0.05, budgetChars / Math.max(1, baseBudget)));
+        const buYongTokens = Math.max(MIN_CONTEXT_TOKENS, Math.round(suanBen.tokens * lvBen));
+        /**
+         * 能装输入的窗口 = 模型窗口 − 本轮输出预留 − 2% 安全垫（用户：预算要预留一点点，防止溢出上下文）。
+         * 输出预留与真正发给端点的 `maxTokens` 是**同一个函数**算的（`benLunShuChuYuZhan`），
+         * 两边各算一次就会漂移：一边按 `窗口−12288`、一边按整窗 ⇒ 看着安全、发出去仍顶窗。
+         */
+        const yuZhanTok = benLunShuChuYuZhan(yaoChangWen, jiaQiangHuiFu, modelId);
+        let keZhuangShuRuChuangKou = Math.max(MIN_CONTEXT_TOKENS,
+          (Number(suanBen.anQuanChuangKou) || Number(suanBen.maxTokens) || 0) - yuZhanTok);
+        /** 执行余量（默认 5%）：只有走到「让出余量」那一级才退到 2%，退过就不再退 */
+        let yuLiangBiBenLun = ZHI_XING_YU_LIANG;
+        let rangChuGuo = false;
+        /**
+         * 让过余量之后**生效的输出留位**（0 = 没让过）。发送侧的 `maxTokens` 必须用它夹一次：
+         * 输入窗口是按"只留这么多输出"放行的，若发送侧仍按原留位要输出，输入 + 输出就顶穿窗口
+         * （正是这段代码上面那条注释警告的"两边各算一次就会漂移"）。
+         */
+        let yuZhanShengXiao = 0;
+        /** 这一轮的图到底会不会原样发给模型（false = 走文字描述，图片不占视觉额度） */
+        let zhiJieKanTu = moXingKeyiKanTu(modelId);
+        let fenCiKanTuWen = '';
+        const tuCb = (): ReturnType<typeof tuChengBen> => (zhiJieKanTu && tuKuaiJi.length
+          ? tuChengBen({ tu: tuCheJi, moXing: modelId })
+          : { shiJueTok: 0, geZhangTok: [], diZhang: 0, yaoJiangJi: false, zuiDaDanZhangTok: 0, zhangShu: 0 });
+        let benLunFaSongWen = String(xiaoXi.content || '');
+        /**
+         * **迟注入层也要预留**（ADR000「注入量恒定」+ 用户 #2「预算=所有发给模型的内容」）。
+         * 步骤账本、子模型结果、分次看图描述都是**视图渲染之后**才拼到消息上的 ——
+         * 不在分配前把这一段的份额扣出来，视图就会按"整段预算"装满，加上注入层必然顶窗
+         * （第 45 轮自查抓到的那条回归：分次看图的描述既不计价也不设上限）。
+         * 上限按"最坏情况"预留：真的会注入才留，预留量 = 上限字符 × 本会话的形状密度。
+         */
+        const daiRuShangXian = (): number => {
+          const zhang = benLunXuJie.get(String(sessionId || '')) ? ZHANG_BEN_ZUI_DA_ZI : 0;
+          const xuYao = renWuXuYaoNengLi({ wen: benLunFaSongWen, neiBuLun: shiNeiBuCaiDan, tuShu: tuKuaiJi.length, attachments: xiaoXi.attachments || [] }).length > 0
+            || (zhiJieKanTu && tuKuaiJi.length > 0);
+          const yao = xuYao ? DAI_RU_CENG_ZUI_DA_ZI : 0;
+          return zhang + yao;
+        };
+        const daiRuYangBen = (zi: number): string => {
+          if (zi <= 0) return '';
+          const src = yangBenBen || benLunFaSongWen || '注入层最坏情况估算用的形状样本';
+          let chu = '';
+          while (chu.length < zi) chu += src;
+          return chu.slice(0, zi);
+        };
+        const jiBen = (): ReturnType<typeof jiageQingQiu> => jiageQingQiu({
+          shangXiaWen: shenFenTou as never,
+          gongJuWen,
+          benLunZi: shiNeiBuCaiDan ? benLunFaSongWen : '',
+          daiRuZi: daiRuYangBen(daiRuShangXian()),
+          shiJueTok: tuCb().shiJueTok,
+          zhun: zhuangZhun,
+        });
+        const fpBen = (c: ReturnType<typeof jiageQingQiu>) => fenPeiYuSuan({
+          yuSuanTokens: buYongTokens,
+          guDingTokens: c.guDing,
+          gongJuTokens: c.gongJu,
+          benLunTokens: c.benLun,
+          shiJueTokens: c.shiJue,
+          daiRuTokens: c.daiRu,
+          chuangKouTokens: keZhuangShuRuChuangKou,
+          yuLiangBi: yuLiangBiBenLun,
+          /** 还能让出多少我们自己留的垫子（让过就不再报，阶梯不会原地打转） */
+          keRangTokens: rangChuGuo ? 0 : rangChuYuLiang({
+            maxTokens: suanBen.maxTokens, anQuanChuangKou: suanBen.anQuanChuangKou, yuZhanTok,
+          }).rangChu,
+        });
+        let chengBen = jiBen();
+        let fp = fpBen(chengBen);
+        let yiJiangJi = '';
+        /** 阶梯里点名要摘要「最近 5 条原文」就摘要（`chaoYu` 是更严重的"窗口都装不下"，两者不能混用条件） */
+        if (fp.jiangJi.includes(JIANG_JI.ZHAIYAO_ZUIJIN5) && yaSuoZuiJin5YuanWen()) {
+          chengBen = jiBen();
+          fp = fpBen(chengBen);
+          yiJiangJi = JIANG_JI.ZHAIYAO_ZUIJIN5;
+        }
+        /**
+         * 阶梯第②级（用户 #4）：**本轮输入本身超长 ⇒ 本轮原文也要摘要**，确保发送的不超预算。
+         * 摘要不是丢掉：原文完整留在会话日志里，尾部那句指针告诉模型怎么用 recall/retrieve 取回。
+         */
+        if (fp.jiangJi.includes(JIANG_JI.ZHAIYAO_BENLUN) && benLunFaSongWen.length > 1500) {
+          const yu = String(xiaoXi.content || '');
+          const yiShang = Math.max(600, tokenDaoZiFu(Math.max(SHI_TU_ZUI_XIAO_TOKENS, Math.floor(fp.shiTuTokens * 0.6)), yangBenBen, zhuangZhun));
+          const jie = yu.slice(0, Math.min(yiShang, yu.length));
+          if (jie.length < yu.length) {
+            benLunFaSongWen = jie + `…（本轮原文还有 ${yu.length - jie.length} 字**没有发出**：超出这一轮的预算，已按#4 摘要。要全文就说"取回本轮原文"，或用 recall("${yu.slice(0, 20)}") 从会话日志里取。）`;
+            chengBen = jiBen();
+            fp = fpBen(chengBen);
+            yiJiangJi = (yiJiangJi ? yiJiangJi + '+' : '') + JIANG_JI.ZHAIYAO_BENLUN;
+            try { audit?.log('chat.turn-summarized', { sessionId, yuanShi: yu.length, faSong: benLunFaSongWen.length, seq: chengBen.benLun }); } catch { /* noop */ }
+          }
+        }
+        /**
+         * 阶梯第③级（用户 #5，图片专用）：**先判能不能分次，能就分次；不能就降分辨率，再不够就减张数**。
+         * "分次"的前提是用户点名的那两条：单张 + 固定开销放得下，**且本轮没有跨图对比需求**
+         * （`keYiFenCi()` 里那条判据）；只要有一句"对比 / 哪张 / 差异 / 前后"，分次就等于让模型看漏另一张，
+         * 那是无声的错误 ⇒ 宁可不分。
+         */
+        let tuBianGuo = false;
+        if (zhiJieKanTu && tuKuaiJi.length && fp.jiangJi.some((x) => x === JIANG_JI.DI_FENBIANLV || x === JIANG_JI.JIAN_ZHANGSHU)) {
+          const tuKongJian = Math.max(0, Math.floor(fp.shengXiaoTokens * (1 - ZHI_XING_YU_LIANG))
+            - chengBen.guDing - chengBen.gongJu - chengBen.benLun - chengBen.daiRu - SHI_TU_ZUI_XIAO_TOKENS);
+          const cb0 = tuCb();
+          const fc = keYiFenCi({ tuShu: cb0.zhangShu, danZhangTok: cb0.zuiDaDanZhangTok, keYongTok: tuKongJian, benLunWen: benLunFaSongWen });
+          if (fc.keYi) {
+            const fen = await tuFenCiKanTu(modelId, tuKuaiJi, tuMingJi, fc.yiCiZhang);
+            if (fen) {
+              fenCiKanTuWen = fen.wen;
+              zhiJieKanTu = false;
+              tuKuaiJi.length = 0; tuCheJi.length = 0;
+              tuBianGuo = true;
+              chengBen = jiBen();
+              fp = fpBen(chengBen);
+              yiJiangJi = (yiJiangJi ? yiJiangJi + '+' : '') + 'fen-ci-tu';
+              try { audit?.log('chat.images-split', { sessionId, piCi: fen.piCi, shibai: fen.shibai, yuanYin: fc.yuanYin, ziJie: fen.wen.length }); } catch { /* noop */ }
+            }
+          }
+          /** 降分辨率：真的缩，缩完重算；还是装不下才继续减张数（顺序是用户定的，不许颠倒） */
+          if (tuKuaiJi.length && fp.jiangJi.some((x) => x === JIANG_JI.DI_FENBIANLV || x === JIANG_JI.JIAN_ZHANGSHU)) {
+            if (tuCb().yaoJiangJi) {
+              let jiangCheng = 0;
+              for (let i = 0; i < tuKuaiJi.length; i++) {
+                const xiao = tuXiaoShao(tuKuaiJi[i]?.image_url?.url || '');
+                if (!xiao) continue;
+                tuKuaiJi[i] = { type: 'image_url', image_url: { url: xiao.url } };
+                tuCheJi[i] = { kuan: xiao.kuan, gao: xiao.gao };
+                tuMingJi[i] = `${tuMingJi[i] || `图片 ${i + 1}`}（超预算，已降到 ${xiao.kuan}×${xiao.gao}）`;
+                jiangCheng++;
+              }
+              if (jiangCheng) {
+                tuBianGuo = true;
+                chengBen = jiBen();
+                fp = fpBen(chengBen);
+                yiJiangJi = (yiJiangJi ? yiJiangJi + '+' : '') + JIANG_JI.DI_FENBIANLV;
+                try { audit?.log('chat.images-downscaled', { sessionId, zhangShu: jiangCheng, bianChang: TU_JIANG_JI_BIAN_CHANG, shiJueTok: chengBen.shiJue }); } catch { /* noop */ }
+              }
+            }
+            /** 减张数：按额度从前往后装，装不下的**逐张登记**为什么没喂（静默丢弃是这一类缺陷里最难查的那种） */
+            if (fp.jiangJi.includes(JIANG_JI.JIAN_ZHANGSHU)) {
+              const ke = Math.max(0, Math.floor(fp.shengXiaoTokens * (1 - ZHI_XING_YU_LIANG))
+                - chengBen.guDing - chengBen.gongJu - chengBen.benLun - chengBen.daiRu - SHI_TU_ZUI_XIAO_TOKENS);
+              const ge = tuCb().geZhangTok;
+              let zong = 0; let dian = ge.length;
+              for (let i = 0; i < ge.length; i++) { if (zong + (ge[i] || 0) > ke) { dian = i; break; } zong += (ge[i] || 0); }
+              if (dian < tuKuaiJi.length) {
+                for (let i = dian; i < tuKuaiJi.length; i++) tiaoGuoJi.push(`${tuMingJi[i] || `图片 ${i + 1}`}（超出本轮预算，第 ${i + 1} 张起未喂给模型：单张约 ${ge[i] || 0} token，剩 ${Math.max(0, ke - zong)} token）`);
+                tuKuaiJi.length = Math.max(0, dian); tuCheJi.length = Math.max(0, dian); tuMingJi.length = Math.max(0, dian);
+                tuBianGuo = true;
+                chengBen = jiBen();
+                fp = fpBen(chengBen);
+                yiJiangJi = (yiJiangJi ? yiJiangJi + '+' : '') + JIANG_JI.JIAN_ZHANGSHU;
+              }
+            }
+          }
+        }
+        /** 图片被这一轮的阶梯动过 ⇒ 会话缓存必须跟着刷新，否则续接轮会把没降过的原图又带回来 */
+        if (tuBianGuo) {
+          const sidT2 = String(sessionId || '');
+          if (tuKuaiJi.length) huiHuaTuKuai.set(sidT2, { kuai: tuKuaiJi.slice(), ming: tuMingJi.slice(), che: tuCheJi.slice() });
+          else huiHuaTuKuai.delete(sidT2);
+        }
+        /**
+         * 阶梯第④·五级：**固定开销自己就装不进窗口** ⇒ 先动"允许动的部分"，再谈停止。
+         *  ① 可压缩的 system 段（能力清单 / 知识库 / 人设 / 时间说明…）按同一比例截短，
+         *     **道、规矩、印象、产品门禁、身份锚 一条都不许动**（用户定的优先级）；
+         *  ② 还不够就把这一轮的工具面截尾（记忆双刀与干活工具优先，自定义长尾先让路）。
+         * 压完仍装不下 ⇒ 才走第⑤级"停止发送"，并如实报"已经压到哪儿了"。
+         */
+        if (fp.jiangJi.includes(JIANG_JI.YA_SUO_GU_DING)) {
+          /**
+           * 两趟就走完（不靠反复试探）：① 一次性把可压缩段压到目标比例；② 还不够就把工具面按 12→6 收。
+           * 每趟之后都**重新核算**（`jiBen()/fpBen()` 是唯一算术），装得下就停手，装不下才继续下一级。
+           */
+          for (let lun = 0; lun < BENG_DAO.length + 2; lun++) {
+            chengBen = jiBen();
+            fp = fpBen(chengBen);
+            if (!fp.jiangJi.includes(JIANG_JI.TINGZHI)) break;
+            /** 缺口必须按**分配器实际用的那条上限**算（`shengXiaoTokens` 已经扣过执行余量），
+             * 拿裸窗口算会得到"chao≤0 但分配器仍判装不下"，于是这一趟直接空转过去、下一级阶梯永远走不到 */
+            const chao = chengBen.zong + SHI_TU_ZUI_XIAO_TOKENS - fp.shengXiaoTokens;
+            if (chao <= 0) break;
+            /**
+             * **分层压缩**（第 52 轮用户口径：不许一次压到极限）：
+             * 阶梯倒序分层 —— 第 0 层（不在阶梯上的通知类段）→ 第 1 层 印象/规范/工具/软门禁
+             * → 第 2 层 教条/束缚/认知/身份 → 第 3 层 术；每层先压到**半极限**（留 72%），
+             * 走完一轮还不够再来一轮压到**真极限**（留 45%，段内不少于 600 字）。
+             * 「道」和「产品门禁」在 BU_KE_YA_SUO 里，根本不进这个队列（永不可压缩）。
+             */
+            const dangQian: YaSuoDuan[] = [];
+            shenFenTou.forEach((m, i) => {
+              const c = typeof m.content === 'string' ? m.content : '';
+              if (!c || m.role !== 'system') return;
+              const biao = /^\s*【([^】\n]{1,24})】/.exec(c)?.[1] || '';
+              if (cengOf(biao, BU_KE_YA_SUO) === -1) return;
+              /** 原文长度从上一轮的压缩说明里取（不靠下标记账：后面还会往队列里加段，下标会串） */
+              const jiu = /本段从 (\d+) 字压到/.exec(c);
+              const yuanShi = Math.max(Number(jiu?.[1]) || 0, c.length);
+              dangQian.push({ i, biao, yuanShi, dangQian: c.length });
+            });
+            if (lun < BENG_DAO.length && dangQian.length) {
+              const lunXian = BENG_DAO[lun];
+              if (!lunXian) break;
+              let keZi = 0;
+              for (const d of dangQian) keZi += d.dangQian;
+              const chaoZi = Math.min(Math.floor(keZi * 0.55), Math.ceil(keZi * Math.min(1, chao / Math.max(1, chengBen.keYaSuo))));
+              const ji = guiHuaYiLun(dangQian, lunXian, chaoZi);
+              let sheng = 0;
+              for (const b of ji.bianGeng) {
+                const c = String(shenFenTou[b.i]?.content || '');
+                if (b.dao >= c.length) continue;
+                sheng += c.length - b.dao;
+                shenFenTou[b.i] = { role: 'system', content: c.slice(0, b.dao) + `…（窗口不足，本段从 ${b.yuanShi} 字压到 ${b.dao} 字：完整内容由记忆工具 recall/retrieve 取，不是删掉了）` } as LiaoTianXiaoXi;
+              }
+              if (sheng > 0) {
+                yiJiangJi = (yiJiangJi ? yiJiangJi + '+' : '') + JIANG_JI.YA_SUO_GU_DING;
+                try {
+                  audit?.log('chat.fixed-compressed', {
+                    sessionId, ceng: lunXian.ceng, qiangDu: lunXian.qiangDu,
+                    biLi: Math.round((1 - sheng / Math.max(1, keZi)) * 100) / 100,
+                    shengZi: sheng, duan: ji.bianGeng.length, keDuan: dangQian.length, chao,
+                  });
+                } catch { /* noop */ }
+              }
+              continue;
+            }
+            /** 第②趟：工具面按 12 → 6 收（记忆双刀与干活工具优先留下，自定义长尾先让路） */
+            if (gongJuZuiDuoShu === 0) { gongJuZuiDuoShu = 12; } else if (gongJuZuiDuoShu === 12) { gongJuZuiDuoShu = 6; } else break;
+            gongJuWen = await gongJuChengBenWen(sessionId, xiaoXi.xiaoDiShuLiang, gongJuZuiDuoShu);
+            yiJiangJi = (yiJiangJi ? yiJiangJi + '+' : '') + 'gongju-jianweishu';
+            /**
+             * **说了有什么就得真有什么**：工具面收窄必须当场告诉模型（否则它会去调一个这轮根本没暴露的工具，
+             * 表现为"莫名其妙没反应"）。
+             * ⚠️ 同一条通知只许在上下文里有一份：这一级可能连走两趟（12→6），真机审计里抓到过
+             * `duan` 出现两条一模一样的「本轮工具面收窄=79」——白吃 160 token，还让模型以为收窄了两次。
+             */
+            for (let i = shenFenTou.length - 1; i >= 0; i--) {
+              const c = typeof shenFenTou[i]?.content === 'string' ? String(shenFenTou[i]?.content) : '';
+              if (shenFenTou[i]?.role === 'system' && c.startsWith('【本轮工具面收窄】')) shenFenTou.splice(i, 1);
+            }
+            shenFenTou.push({ role: 'system', content: `【本轮工具面收窄】这一轮只暴露 ${gongJuZuiDuoShu} 条工具（窗口不足，其余暂时收起了；记忆 recall/retrieve 与读写文件仍在）。需要用的工具不在里面就如实告诉用户\"窗口不够，本轮工具被收窄\"，不要反复空试。` } as LiaoTianXiaoXi);
+            try { audit?.log('chat.tools-trimmed-for-window', { sessionId, zuiDuo: gongJuZuiDuoShu, chao }); } catch { /* noop */ }
+          }
+        }
+        /**
+         * 第④·六级：**让出我们自己加的余量**（2% 安全垫 + 超出地板的输出留位 + 执行余量 5%→2%）。
+         * 排在「压缩固定段 / 收窄工具面」之后、**停止发送**之前 —— 能发就别停。
+         * 为什么敢让：预算用的是分脚本**上界**估算，实测真实/上界 ≈0.64（中文）–0.89（代码），
+         * 上界本身已经比 2% 安全垫厚；输出留位不全让（留 1024 或窗口的 4%，剩下的交给续派）。
+         * 真机事故：模型窗口未知 ⇒ 兜底窗口偏小 ⇒ 道（不可压缩）+ 工具顶满 ⇒ `que:3356` 直接停止发送，
+         * 用户看到的是"什么都没干"（`verify-history-persist` 第 [1] 段两条红就是这么来的）。
+         */
+        if (fp.jiangJi.includes(JIANG_JI.RANG_CHU_YU_LIANG) && !rangChuGuo) {
+          const rc = rangChuYuLiang({ maxTokens: suanBen.maxTokens, anQuanChuangKou: suanBen.anQuanChuangKou, yuZhanTok });
+          if (rc.keZhuang > keZhuangShuRuChuangKou) {
+            rangChuGuo = true;
+            keZhuangShuRuChuangKou = rc.keZhuang;
+            yuLiangBiBenLun = rc.yuLiangBi;
+            yuZhanShengXiao = rc.yuZhanXin;
+            yiJiangJi = (yiJiangJi ? yiJiangJi + '+' : '') + JIANG_JI.RANG_CHU_YU_LIANG;
+            chengBen = jiBen();
+            fp = fpBen(chengBen);
+            try {
+              audit?.log('chat.budget.give-back-reserve', {
+                sessionId, modelId, rangChu: rc.rangChu, yuZhanYou: yuZhanTok, yuZhanXin: rc.yuZhanXin,
+                chuangKouYou: rc.keZhuang, rengQue: fp.jiangJi.includes(JIANG_JI.TINGZHI), mingXi: rc.mingXi,
+              });
+            } catch { /* noop */ }
+          }
+        }
+        /**
+         * 阶梯最后一级（用户 #4/#5："都不够 ⇒ **停止发送**"）。
+         * 以前这里只会闷着头把请求发出去、等供应商报 400 再收缩重试 —— 那是把"我们算过却装不下"
+         * 这件确定无疑的事，推给一次收费的网络往返去确认。现在当场停：
+         *  · 一条**具体原因**（哪一段多大、窗口多少、缺多少）写进聊天记录；
+         *  · 走项目异常系统：`biaoRenWuZhongDuan` ⇒ 警告音（按用户勾选）+「继续 / 重试」按钮 + 决策卡 + 台账。
+         */
+        if (fp.jiangJi.includes(JIANG_JI.TINGZHI)) {
+          const que = Math.max(0, chengBen.guDing + chengBen.gongJu + chengBen.benLun + chengBen.shiJue + chengBen.daiRu + SHI_TU_ZUI_XIAO_TOKENS - fp.shengXiaoTokens);
+          /**
+           * 原因里必须点名**最大的那一段**：真机上"装不下"几乎从来不是平均超支，而是某一段吃掉了窗口
+           * （例：用户自己写长的「道」到 2 万字符 ≈ 1.5 万 token，32K 窗口的本地模型就只剩 512 token 视图）。
+           * 不说出是哪一段，用户就只能猜该调哪个设置。
+           */
+          const zuiDa = (chengBen.mingXi || []).slice().sort((a, b) => b.tokens - a.tokens)[0];
+          const zuiDaHang = zuiDa && zuiDa.tokens > 0
+            ? tMain('chat.budget.stopLargest', '最大的一段是「{m}」= {t} token（{k}）')
+              .replace('{m}', zuiDa.ming).replace('{t}', String(zuiDa.tokens))
+              .replace('{k}', zuiDa.keYaSuo ? tMain('chat.budget.stopKe', '允许压缩，但已经压到下限') : tMain('chat.budget.stopBu', '按优先级不许压缩'))
+            : '';
+          const liYou = tMain('chat.budget.stopSend',
+            '本轮内容装不进模型窗口，已停止发送（没有发出任何请求，也就没有花钱）')
+            + `：窗口可用 ${keZhuangShuRuChuangKou} token，固定开销 ${chengBen.guDing} + 工具 ${chengBen.gongJu}`
+            + ` + 本轮 ${chengBen.benLun} + 图片 ${chengBen.shiJue} + 注入层 ${chengBen.daiRu} + 视图下限 ${SHI_TU_ZUI_XIAO_TOKENS}，还差 ${que} token。`
+            + (zuiDaHang ? zuiDaHang : '')
+            + (tuKuaiJi.length ? `（本轮还要发 ${tuKuaiJi.length} 张图片）` : '')
+            + tMain('chat.budget.stopTip', '\n可以：把上下文预算滑杆调大、减少图片张数、换一个窗口更大的模型，或点「继续 / 重试」让我们用更小的视图再试一次。');
+          try { audit?.log('chat.budget.stop-send', { sessionId, modelId, chuangKou: keZhuangShuRuChuangKou, guDing: chengBen.guDing, gongJu: chengBen.gongJu, benLun: chengBen.benLun, shiJue: chengBen.shiJue, tuShu: tuKuaiJi.length, que }); } catch { /* noop */ }
+          biaoRenWuZhongDuan(String(sessionId || ''), liYou.replace(/\n/g, ' ').slice(0, 180), 'budget-overflow', '预算分配');
+          fachuKongzhitai({ cat: 'error', code: 'err.budget-overflow', data: { sessionId, modelId, que, chuangKou: keZhuangShuRuChuangKou } });
+          /** `return` 直接写在收缩重试的回调里 = 把结果交回给壳，壳只认 `result.loop` ⇒ 会被当成"上下文太小"，具体原因全丢 */
+          return { tingZhi: {
+            ok: false,
+            reply: liYou,
+            error: 'budget-overflow',
+            needsKey: false,
+            retry: true,
+            budgetStopped: true,
+            moXing: modelId,
+          } };
+        }
+        const shiTuChars = Math.max(MIN_CONTEXT_BUDGET_CHARS, tokenDaoZiFu(Math.max(MIN_CONTEXT_TOKENS, fp.shiTuTokens), yangBenBen, zhuangZhun));
+        const shitu = renderChatView(sessionId, benLunFaSongWen, shiTuChars);
+        /** 记下**实测**的"不可再小预算"（用户 #3）：滑杆下限从这里来，不是拍脑袋的常数 */
+        try {
+          /** **取两侧最大值**：这张表的语义是"该模型在这家供应商上不可再小的预算"，被较小的测量覆盖就等于少扣 */
+          const jian = `${gongYingFen}/${modelId}`;
+          const jiu = ZUI_XIAO_JI.get(jian);
+          ZUI_XIAO_JI.set(jian, {
+            guDing: Math.max(chengBen.guDing, jiu?.guDing || 0),
+            gongJu: Math.max(chengBen.gongJu, jiu?.gongJu || 0),
+            zuiXiaoTokens: Math.max(fp.zuiXiaoYuSuan, jiu?.zuiXiaoTokens || 0),
+            shi: Date.now(),
+          });
+        } catch { /* 记不上就按常数下限 */ }
+        try {
+          audit?.log('chat.budget.allocated', {
+            sessionId,
+            yuSuanTokens: fp.shengXiaoTokens,
+            sheZhiTokens: buYongTokens,
+            lv: Math.round(lvBen * 100) / 100,
+            guDing: chengBen.guDing,
+            gongJu: chengBen.gongJu,
+            benLun: chengBen.benLun,
+            shiTuTokens: fp.shiTuTokens,
+            shiTuChars,
+            zuiXiaoYuSuan: fp.zuiXiaoYuSuan,
+            chaoYu: fp.chaoYu === true,
+            chuangKouBuGou: fp.chuangKouBuGou === true,
+            jiangJi: fp.jiangJi.join('+') || '',
+            yiZhi: yiJiangJi,
+            shiJue: chengBen.shiJue,
+            daiRu: chengBen.daiRu,
+            daiRuShangXian: daiRuShangXian(),
+            zhiJieKanTu: zhiJieKanTu === true,
+            chuangKou: keZhuangShuRuChuangKou,
+            yuZhan: yuZhanTok,
+            tuShu: tuKuaiJi.length,
+            tuDiZhang: tuCb().diZhang,
+            duan: chengBen.mingXi.map((d) => `${d.ming}=${d.tokens}`).slice(0, 20),
+          });
+        } catch { /* 审计失败不影响这一轮 */ }
         const yuanXiaoXiJiBase: LiaoTianXiaoXi[] = [...shenFenTou, ...(shitu.xiaoXiJi as LiaoTianXiaoXi[])];
         /**
          * **续派指令必须真的到模型眼前**（第 34 轮 项 12 根因）。
@@ -9647,7 +12406,12 @@ async function zhenZhengFaSongBen(
             try { audit?.log('chat.step-ledger-skipped', { sessionId, why: !zhang ? 'empty-ledger' : 'last-not-user', lastRole: String(yuanXiaoXiJiBase[zuiHou]?.role || '') }); } catch { /* noop */ }
           }
           if (zhang && yuanXiaoXiJiBase[zuiHou] && yuanXiaoXiJiBase[zuiHou].role === 'user') {
-            const wen = tMain('llm.ledgerHead', '【我在本任务里已经做完的操作（宿主执行日志，均已成功、结果已生效，不再重做）】') + '\n' + zhang
+            /** 账本这一段的份额在分配时就预留了 ⇒ 这里必须真的截到那个上限内，否则"预留"是假的 */
+            const zhangZi = zhang.length > ZHANG_BEN_ZUI_DA_ZI
+              ? zhang.slice(0, ZHANG_BEN_ZUI_DA_ZI) + tMain('llm.ledgerTruncated', '…（执行日志过长，已截到 {n} 字；更早的操作记录仍在会话台账里，需要就按序号问）').replace('{n}', String(ZHANG_BEN_ZUI_DA_ZI))
+              : zhang;
+            if (zhangZi !== zhang) { try { audit?.log('chat.step-ledger-capped', { sessionId, yuanShi: zhang.length, shangXian: ZHANG_BEN_ZUI_DA_ZI }); } catch { /* noop */ } }
+            const wen = tMain('llm.ledgerHead', '【我在本任务里已经做完的操作（宿主执行日志，均已成功、结果已生效，不再重做）】') + '\n' + zhangZi
               + '\n' + tMain('llm.ledgerTail', '接下来我只做还没完成的部分；上面这些如果再调用一次，宿主也只会把原结果交回、不会再执行。');
             const qian = yuanXiaoXiJiBase[zuiHou - 1];
             if (qian && qian.role === 'assistant' && typeof qian.content === 'string' && !(qian as { gongJuDiaoYongJi?: unknown[] }).gongJuDiaoYongJi?.length) {
@@ -9667,49 +12431,32 @@ async function zhenZhengFaSongBen(
          * 找不到对应模型 ⇒ 规则四：如实告知 + 标异常（当前模型总能聊天，所以总能正确提示）。
          */
         {
-          /** 用户意图关键词 → 需要的能力（续派轮的内容是宿主写的指令，不按关键词再转交一遍） */
           const wen = String(xiaoXi.content || '');
           const neiBuLun = (xiaoXi as { internal?: boolean }).internal === true;
-          const yaoQiu: Array<{ lei: TeShuMoXingLei; why: string }> = [];
-          if (tuKuaiJi.length) yaoQiu.push({ lei: 'imageUnd', why: '附件含图片' });
-          if (!neiBuLun) {
-          if (/(画|绘制|生成|做|来)(一)?(张|幅|个)?\s*(图|图片|插画|海报|封面|logo|图标)/i.test(wen)) yaoQiu.push({ lei: 'image', why: '用户要求画图' });
-          if (/(做|生成|制作)(一)?(个|段)?\s*(视频|短片|动画)/i.test(wen)) yaoQiu.push({ lei: 'videoGen', why: '用户要求做视频' });
-          if (/(朗读|读出来|念一下|配音|转语音|语音合成)/i.test(wen)) yaoQiu.push({ lei: 'tts', why: '用户要求语音合成' });
-          if (/(翻译|译成|翻成|译一下)/i.test(wen)) yaoQiu.push({ lei: 'translate', why: '用户要求翻译' });
-          if (/(识别文字|提取文字|OCR|扫描件|文档解析|把图(片)?里的字)/i.test(wen)) yaoQiu.push({ lei: 'ocr', why: '用户要求文字识别/文档解析' });
-          if (/(详细推理|证明|推导|复杂推理|一步一步推理|数学证明)/i.test(wen)) yaoQiu.push({ lei: 'reasoning', why: '用户要求复杂推理' });
-          if (/(写代码|改代码|改这个代码|代码审查|重构|实现.*函数|debug|调试代码)/i.test(wen)) yaoQiu.push({ lei: 'code', why: '用户要求代码任务' });
-          if (/(分类|归类|判断.*类别|决策|优先级判断|紧急度)/i.test(wen)) yaoQiu.push({ lei: 'fenLei', why: '用户要求分类/决策' });
-          if (/(重排|重新排序|rerank|按相关度排序)/i.test(wen)) yaoQiu.push({ lei: 'rerank', why: '用户要求重排' });
-          if (/(安全审核|内容审核|合规检查|是否违规)/i.test(wen)) yaoQiu.push({ lei: 'safety', why: '用户要求安全审核' });
-          if (/(整理|摘要|归纳|提炼要点|归档)/i.test(wen)) yaoQiu.push({ lei: 'organizer', why: '用户要求整理' });
-          if (/(嵌入|向量|embedding)/i.test(wen)) yaoQiu.push({ lei: 'embed', why: '用户要求嵌入' });
-          }
+          /** 判据唯一来源 = `renWuXuYaoNengLi`（预算分配侧也调它，两边必须同一份） */
+          const yaoQiu = renWuXuYaoNengLi({ wen, neiBuLun, tuShu: tuKuaiJi.length, attachments: xiaoXi.attachments || [] });
           /**
            * 续派轮不重发附件（真事故：每次续派都带 att:2 ⇒ 子模型把整套活从头再做一遍）。
            * 第一轮看图的结论缓存在会话上，续派轮直接注入这段文字，模型依然"知道图里是什么"。
            */
           const yiKanGuo = neiBuLun ? (huiHuaKanTuJie.get(String(sessionId || '')) || '') : '';
-          // 音频/视频附件
-          for (const a of (xiaoXi.attachments || [])) {
-            const lu = String((a && (a.path || a.name)) || '');
-            if (/\.(mp3|wav|m4a|ogg|flac|webm)$/i.test(lu)) { yaoQiu.push({ lei: 'asr', why: '附件含音频' }); break; }
-          }
-          for (const a of (xiaoXi.attachments || [])) {
-            const lu = String((a && (a.path || a.name)) || '');
-            if (/\.(mp4|mov|mkv|avi|webm)$/i.test(lu)) { yaoQiu.push({ lei: 'videoUnd', why: '附件含视频' }); break; }
-          }
 
           const jieGuoWenBen: string[] = [];
           if (yiKanGuo && !tuKuaiJi.length) {
             jieGuoWenBen.push(tMain('chat.imageSeenCached', '【imageUnd · 本任务附件（第一轮已看过，无需重看）】') + yiKanGuo);
           }
+          /**
+           * 分次看图的结论（本轮图片超出一张请求的额度、且判过"没有跨图对比需求"才走这条路）：
+           * 图已经不进主请求了，模型靠这段文字知道每张图里有什么。
+           */
+          if (fenCiKanTuWen) {
+            jieGuoWenBen.push(tMain('chat.imageSplitNote', '【imageUnd · 图片分次发给本模型看过（一次放不下）】') + fenCiKanTuWen);
+            try { huiHuaKanTuJie.set(String(sessionId || ''), fenCiKanTuWen.slice(0, 6000)); } catch { /* noop */ }
+          }
           for (const { lei, why } of yaoQiu) {
             // 当前模型已具备该能力 ⇒ 不转交
             if (lei === 'imageUnd') {
-              const nlNow = modelNengLiMeta.get(modelId) || moXingNengLi(modelId, null) as { vision?: boolean | 'unknown' };
-              if (nlNow.vision === true) continue;
+              if (zhiJieKanTu || moXingKeyiKanTu(modelId)) continue;
             }
             try {
               let jie = '';
@@ -9725,6 +12472,7 @@ async function zhenZhengFaSongBen(
                 if (jie) huiHuaKanTuJie.set(String(sessionId || ''), jie.slice(0, 6000));
               } else if (lei === 'asr') {
                 jie = (await yuYinZhuanXie(xiaoXi.attachments || [])) || '';
+                if (!jie) throw new Error('audio-attachment-not-found');
               } else if (lei === 'videoUnd') {
                 jie = (await kanShiPinWeiTuo(xiaoXi.attachments || [])) || '';
               } else {
@@ -9757,7 +12505,11 @@ async function zhenZhengFaSongBen(
                 // **关键**：看不了图就必须把图片块剥掉，否则喂给纯文本模型会 HTTP 400/500（真机事故：整链崩溃）
                 if (lei === 'imageUnd') tuKuaiJi.length = 0;
               }
-            } catch {
+            } catch (e) {
+              if (lei === 'asr') {
+                // 直接交给用户真实失败；禁止把缺失转写的音频继续交给聊天模型猜内容。
+                return { ok: false, error: '音频附件转写失败：' + xiJingCuoWu(e), needsKey: false };
+              }
               tiaoGuoJi.push(tMain('chat.capabilityMissing', '没有可用的模型来完成「') + lei + tMain('chat.capabilityMissingTail', '」能力，该子任务未完成'));
               buJiEtaYiChangFlag = true;
               nengLiQueShiFlag = true;
@@ -9766,6 +12518,13 @@ async function zhenZhengFaSongBen(
           }
           // 把转交结果注入最后一条用户消息（当前模型据此做最终回复）
           if (jieGuoWenBen.length) {
+            /** 同上：迟注入层"恒定"靠这一刀兑现 —— 超出预留份额的部分如实标注并截掉 */
+            let he = jieGuoWenBen.join('\n');
+            if (he.length > DAI_RU_CENG_ZUI_DA_ZI) {
+              const yuanShi = he.length;
+              he = he.slice(0, DAI_RU_CENG_ZUI_DA_ZI) + tMain('chat.delegateTruncated', '…（子任务结果过长，已截到 {n} 字，原始结果仍在执行记录里）').replace('{n}', String(DAI_RU_CENG_ZUI_DA_ZI));
+              try { audit?.log('chat.delegate-capped', { sessionId, yuanShi, shangXian: DAI_RU_CENG_ZUI_DA_ZI, xiangShu: jieGuoWenBen.length }); } catch { /* noop */ }
+            }
             const zuiHou = yuanXiaoXiJiBase.length - 1;
             const mu = yuanXiaoXiJiBase[zuiHou];
             if (mu) {
@@ -9773,7 +12532,7 @@ async function zhenZhengFaSongBen(
                 : (mu.content as Array<{ text?: string }>).map((b) => b.text || '').join('');
               yuanXiaoXiJiBase[zuiHou] = {
                 role: mu.role,
-                content: yuanWen + tMain('chat.delegateNote', '\n\n【其他模型完成的子任务结果】\n') + jieGuoWenBen.join('\n')
+                content: yuanWen + tMain('chat.delegateNote', '\n\n【其他模型完成的子任务结果】\n') + he
                   + tMain('llm.delegateUseIt', '\n（上面这些子任务**已经由本机的专业模型替你完成**了：请**直接用这些结果**回答用户。不要再说"我看不了图 / 我读不了音频 / 我没有这个能力"——那是事实错误，能力已经由子任务补齐。若结果本身不足以回答，就说明缺什么。）'),
               };
             }
@@ -9781,6 +12540,20 @@ async function zhenZhengFaSongBen(
         }
         const yuanXiaoXiJi = yuanXiaoXiJiBase;
         let xiaoXiJiZui: LiaoTianXiaoXi[] = yuanXiaoXiJi;
+        /**
+         * **兜底那道闸**（用户 #5：不支持看图的模型绝不该收到图片块）。
+         * 上面每一支转交路径都会把图剥掉，但那是"逐条分支都不出错"的保证；
+         * 一旦某条新分支忘了剥，纯文本模型收到 image_url 就是整请求 400（真机事故：整链崩）。
+         * 所以在合并前按**当前模型的最终形态**再判一次，判不过就当众登记"未喂给模型"再剥掉。
+         */
+        if (tuKuaiJi.length && !moXingKeyiKanTu(modelId)) {
+          try {
+            audit?.log('chat.images-blocked-by-capability', { sessionId, modelId, count: tuKuaiJi.length });
+            fachuKongzhitai({ cat: 'system', code: 'warn.images-stripped', data: { sessionId, modelId, count: tuKuaiJi.length } });
+          } catch { /* noop */ }
+          for (const m of tuMingJi) tiaoGuoJi.push(`${m}（当前模型 ${modelId} 不支持看图，图片未喂给它：看图能力已改由文字描述补上）`);
+          tuKuaiJi.length = 0;
+        }
         if (tuKuaiJi.length) {
           /**
            * 把图片块并进**最后一条用户消息**（模型看到的是"文字 + 图"）。
@@ -9809,7 +12582,31 @@ async function zhenZhengFaSongBen(
          * 「回复内容加强」也要大预算：画 SVG 本身就长，思考型模型还要先花一截 reasoning。
          * 真机（mimo-v2.6-flash）：4096 预算下 reasoning 3412 + 正文 1729 就被 length 截断。
          */
-        const shuChuShangXian = (yaoChangWen || jiaQiangHuiFu) ? 12288 : 4096;
+        const shuChuShangXian = yuZhanTok;
+        /**
+         * **输出上限跟着这个模型的额度走**（第 39 轮）：用户在「设置 → 模型 → 右键」里设了
+         * 输出大小 ⇒ `num_predict`/`max_tokens` 不许超过它（保底 2048：思考模型的 thinking
+         * 会吃光小配额，content 变空是本轮真机踩过的）。窗口侧同样由 `youPeizhiSuanShangXiaWenYuSuan`
+         * 预留了这块，所以"输入刚好卡满窗口"也不会再发生。
+         */
+        let yunXuShuChu = shuChuShangXian;
+        try {
+          const yuE = moXingYuE(modelId);
+          if (yuE.shuChu > 0) yunXuShuChu = Math.max(2048, Math.min(shuChuShangXian, yuE.shuChu));
+        } catch { /* 读不到额度就照旧 */ }
+        /**
+         * 走过阶梯第④·六级（让出余量）⇒ **发送侧的输出上限跟着降到同一个数**。
+         * 输入窗口是按"只给输出留 `yuZhanShengXiao`"放行的；这里若仍要原来的 12288，
+         * 输入 + 输出就会顶穿窗口（供应商 400 / Ollama 截断），等于把"让垫子"变成"偷偷超发"。
+         * 地板两边同源（`SHU_CHU_LIU_WEI_DI_BAO = 2048`，也是思考模型 thinking 的保底）。
+         */
+        if (rangChuGuo && yuZhanShengXiao > 0) {
+          const jiuYunXu = yunXuShuChu;
+          yunXuShuChu = Math.max(SHU_CHU_LIU_WEI_DI_BAO, Math.min(yunXuShuChu, yuZhanShengXiao));
+          if (yunXuShuChu !== jiuYunXu) {
+            try { audit?.log('chat.budget.output-cap-lowered', { sessionId, modelId, you: jiuYunXu, xian: yunXuShuChu, yuZhan: yuZhanShengXiao }); } catch { /* noop */ }
+          }
+        }
         /**
          * **发给模型前必须规范化消息形状**。
          *
@@ -9845,12 +12642,12 @@ async function zhenZhengFaSongBen(
         const jiBenQiu: { model: string; xiaoXiJi: typeof xiaoXiJiZui; maxTokens: number; toolChoice?: 'auto' } = {
           model: modelId,
           xiaoXiJi: xiaoXiJiZui,
-          maxTokens: shuChuShangXian,
+          maxTokens: yunXuShuChu,
           ...(xiaoXi.ziYouHuiDa ? { toolChoice: 'auto' as const } : {}),
         };
         let loop: Awaited<ReturnType<typeof yunXingLiaoTianXunHuan>>;
         try {
-          loop = await yunXingLiaoTianXunHuan(sessionId, provider, siKaoExtra ? { ...jiBenQiu, extra: siKaoExtra } : jiBenQiu, xiaoXi.xiaoDiShuLiang);
+          loop = await yunXingLiaoTianXunHuan(sessionId, provider, siKaoExtra ? { ...jiBenQiu, extra: siKaoExtra } : jiBenQiu, xiaoXi.xiaoDiShuLiang, gongJuZuiDuoShu);
         } catch (e0) {
           const mo = String((e0 as Error)?.message || e0);
           /**
@@ -9861,11 +12658,11 @@ async function zhenZhengFaSongBen(
             audit?.log('chat.max-tokens-downgraded', { sessionId, from: shuChuShangXian, error: mo.slice(0, 160) });
             try {
               // 降级也要保底 2048：思考模型 num_predict≤1024 时 thinking 吃光 token → content 空（真事故：Qwen3.6 每次都失败）
-              loop = await yunXingLiaoTianXunHuan(sessionId, provider, { ...jiBenQiu, maxTokens: Math.max(2048, Math.floor(shuChuShangXian / 2)) }, xiaoXi.xiaoDiShuLiang);
+              loop = await yunXingLiaoTianXunHuan(sessionId, provider, { ...jiBenQiu, maxTokens: Math.max(2048, Math.floor(shuChuShangXian / 2)) }, xiaoXi.xiaoDiShuLiang, gongJuZuiDuoShu);
             } catch (e1) {
               const mo1 = String((e1 as Error)?.message || e1);
               if (/max_?tokens|num_predict|maxTokens|too large|exceed|invalid.*(token|length)|400/i.test(mo1)) {
-                loop = await yunXingLiaoTianXunHuan(sessionId, provider, { ...jiBenQiu, maxTokens: 1024 }, xiaoXi.xiaoDiShuLiang);
+                loop = await yunXingLiaoTianXunHuan(sessionId, provider, { ...jiBenQiu, maxTokens: 1024 }, xiaoXi.xiaoDiShuLiang, gongJuZuiDuoShu);
               } else { throw e1; }
             }
           } else if (siKaoExtra && /reasoning|thinking|effort|unsupported|unknown (parameter|field)|invalid.*parameter|400/i.test(mo)) {
@@ -9877,7 +12674,7 @@ async function zhenZhengFaSongBen(
             const ziDong = !String(xiaoXi.thinkLevel || '').trim() || String(xiaoXi.thinkLevel) === 'auto';
             if (!ziDong) jiangJiTiShi = true;
             audit?.log('chat.think-downgraded', { sessionId, level: xiaoXi.thinkLevel || 'auto', silent: ziDong, error: mo.slice(0, 160) });
-            loop = await yunXingLiaoTianXunHuan(sessionId, provider, jiBenQiu, xiaoXi.xiaoDiShuLiang);
+            loop = await yunXingLiaoTianXunHuan(sessionId, provider, jiBenQiu, xiaoXi.xiaoDiShuLiang, gongJuZuiDuoShu);
           } else {
             throw e0;
           }
@@ -9931,6 +12728,16 @@ async function zhenZhengFaSongBen(
         }
         return { shitu, loop, budgetChars };
       });
+      /**
+       * **停止发送排在"上下文太小"之前判**（阶梯第⑤级是我们**算出来**的结论，
+       * 不是供应商报错）：不先认这个标记，就会被下面那条兜底成 `该模型上下文太小（已自动收缩重试到最小值仍失败）`，
+       * 把"固定开销 31719 + 工具 2456 装不进 26616"这句有用的话丢成一句没用的报错。
+       */
+      const tingZhi = (chongshi.result as { tingZhi?: { ok: boolean; reply: string; error: string } } | undefined)?.tingZhi;
+      if (tingZhi) {
+        lastError = { ts: Date.now(), message: String(tingZhi.error || ''), context: 'chat-send-budget-stop' };
+        return { ...tingZhi };
+      }
       if (chongshi.gaveUp || !chongshi.result?.loop) {
         const msgTxt = chongshi.gaveUp || 'context-too-small';
         lastError = { ts: Date.now(), message: msgTxt, context: 'chat-send-context' };
@@ -10111,6 +12918,28 @@ async function zhenZhengFaSongBen(
         ? (tMain('chat.thinkDowngraded', '【提示】该模型不支持所选思考档位，已降级为「自动」。') + '\n\n' + reply0)
         : reply0;
       /**
+       * **云端风控拒绝不是回答**（第 45 轮真机 · `verify-round18` 抓到的）：MiMo 网关没报错，
+       * 而是把一句 `The request was rejected because it was considered high risk` 当成**助手正文**回过来。
+       * 旧行为照单全收 ⇒ 写进会话历史、`ok:true` 返回、一个工具都没调（审计：`gongJuDiaoYongJi:0`、
+       * `tingZhiYuanYin:'stop'`），用户看到的是一句莫名其妙的英文，也不知道可以重试。
+       * 同一条 prompt 直接打端点（连同一份「道」当 system）却正常返回 `tool_calls` ⇒ 这是网关侧偶发风控。
+       * 现在按"这一档模型这次没做成"处理：抛出去走**同一条降级链**换下一只；全链都被拦才如实报
+       * （带供应商原文 + 已经换过谁），并且**不把这句话写进历史**（它不是模型的回答）。
+       */
+      const fengKongMing = panFengKongJuJue({ huiFu: reply, benLunGongJuShu: Number(loop.gongJuDiaoYongJi || 0) });
+      if (fengKongMing) {
+        try {
+          audit?.log('chat.provider-moderation', {
+            sessionId, modelId, ming: fengKongMing, gongJu: Number(loop.gongJuDiaoYongJi || 0),
+            yuanWen: String(reply || '').slice(0, 200),
+          });
+        } catch { /* noop */ }
+        throw Object.assign(
+          new Error(fengKongJuJueTiShi({ yuanWen: String(reply || ''), ming: fengKongMing, yiShiBai: [...yiShiBai, modelId], t: tMain })),
+          { fengKong: true },
+        );
+      }
+      /**
        * **工具能力不足如实告知**（产品要求 T15）：
        * 需要工具但当前模型不能调用工具 ⇒ 不静默降级，在回复开头写明「只能聊天」，
        * 并说明只完成了聊天能解决的部分。对话也异常时由调用链换下一个模型（已有逻辑）。
@@ -10278,10 +13107,38 @@ async function zhenZhengFaSongBen(
          */
         const renWuGongJuShu = Math.max(Number(loop.gongJuDiaoYongJi || 0), (benCiRenWuGongJu.get(sessionId) || new Set<string>()).size);
         const pan = panKouTouWanCheng(reply, benCiRenWuYuanWen.get(sessionId) || String(xiaoXi.content || ''), renWuGongJuShu);
-        if (pan.kouTou) {
+        /**
+         * **产物审计**（第 45 轮 · 压力档 A 第一轮抓到的那一类）：话里点名了文件（"已写入 youxi.html / 路径如下"），
+         * 工作区与那些路径里却找不到 ⇒ 与"没调工具"同等对待。
+         * 为什么两条都要：`truth-guard` 只看"有没有调工具"，可模型也会**调了别的工具**（读文件、列目录）
+         * 然后把要写的文件编出来 —— 只看工具计数会漏。这里按**东西在不在**判，不看它嘴上说什么。
+         */
+        let shenJi: ReturnType<typeof chanWuShenJi> | null = null;
+        try {
+          const gongZuoQu = workspaceDirOf(app.getPath('userData'), String(sessionId || ''));
+          shenJi = chanWuShenJi({
+            huiFu: reply,
+            gongJuTiaoYongShu: renWuGongJuShu,
+            cunZai: (lu) => { try { return !!lu && fs.existsSync(lu); } catch { return false; } },
+            zaiGongZuoQu: (ming) => {
+              try {
+                if (!fs.existsSync(gongZuoQu)) return '';
+                for (const x of fs.readdirSync(gongZuoQu, { recursive: true })) {
+                  const lu = path.join(gongZuoQu, String(x));
+                  if (path.basename(lu) === ming && fs.existsSync(lu)) return lu;
+                }
+              } catch { /* 扫不动就当没找到（宁漏不误报） */ }
+              return '';
+            },
+          });
+          if (shenJi.youShengCheng) {
+            try { audit?.log('chat.artifact-audit', { sessionId, shengCheng: shenJi.shengCheng.slice(0, 6), zhaoDao: shenJi.zhaoDao.length, queShao: shenJi.queShao.slice(0, 6), gongJuShu: renWuGongJuShu }); } catch { /* noop */ }
+          }
+        } catch { /* 审计不了就按原判定走，不许因为它把这一轮判坏 */ }
+        if (pan.kouTou || (shenJi && shenJi.kouTouZhiXing)) {
           kouTouWanCheng = true;
-          reply = reply + kouTouTiShi();
-          try { audit?.log('chat.false-claim', { sessionId, gongJuCiShu: loop.gongJuDiaoYongJi, liYou: pan.liYou }); } catch { /* noop */ }
+          reply = reply + (shenJi && shenJi.kouTouZhiXing && !pan.kouTou ? chanWuKouTouTiShi(shenJi.queShao) : kouTouTiShi());
+          try { audit?.log('chat.false-claim', { sessionId, gongJuCiShu: loop.gongJuDiaoYongJi, liYou: pan.liYou || 'artifact-missing', queShao: shenJi ? shenJi.queShao.slice(0, 6) : [] }); } catch { /* noop */ }
         }
       }
       metrics.recordTurn({
@@ -10304,6 +13161,41 @@ async function zhenZhengFaSongBen(
       });
       const replyRecordId = xinLiaoTianJiLuId('a');
       let replyMemSeq: number | undefined;
+      /**
+       * 第 38 轮：**看图结论必须由宿主保证送到用户眼前**。
+       * 真机现象：委托看图确实跑了（`chat.capability-delegate` 有、位图也转了），描述也喂回给主模型了，
+       * 但主模型偶尔**整段跳过用户那句"里面是什么内容"**，只回一句"全部任务完成" ⇒ 用户永远看不到那段描述。
+       * 宿主手里本来就有那段文字 ⇒ 回复里没提到就把**原文**贴上去（已经说过就不重复，避免两段一样的话）。
+       * 这不是替模型编内容：贴的是本机视觉模型真的看到的原文。
+       */
+      try {
+        const kanTuJie = String(huiHuaKanTuJie.get(String(sessionId || '')) || '').trim();
+        const yiJingTi = !!kanTuJie && String(reply || '').includes(kanTuJie.slice(0, 18));
+        if (kanTuJie && !yiJingTi) {
+          reply = String(reply || '') + tMain('chat.imageResultNote', '\n\n【看图模型看到的（本机视觉模型完成）】\n') + kanTuJie.slice(0, 900);
+          audit?.log('chat.image-result-surfaced', { sessionId, chars: kanTuJie.length });
+        }
+      } catch { /* 贴不上也不影响回复 */ }
+      /**
+       * 第 40 轮：**"本轮在用哪个模型"也交给宿主保证报到用户眼前**。
+       * 这是第 34 轮起就挂着的已知问题：模型可能把三项交付全做完，却漏掉用户那句"你用的什么模型"
+       * （真机 r40 第 1 遍第 17 项就是这么红的：交付表格齐全、全篇没有引擎名）。
+       * 宿主知道真实答案（实际出这一发的引擎 + 供应商显示名），贴上去不算替模型编内容；
+       * 它自己已经报过名就不重复。
+       */
+      try {
+        const yuanWen = String((xiaoXi as { content?: unknown })?.content || '');
+        const yaoQiuBao = /什么模型|哪个模型|哪来的模型|模型是|用的.{0,6}模型|which model|what model/i.test(yuanWen);
+        const benFaYinQing = String(modelId || (providerCfg as { model?: string }).model || '');
+        const yiJingShuo = /mimo|qwen|ollama|glm|deepseek|gpt|claude|moonshot|huihui|yiyan|llama|ERNIE/i.test(String(reply || ''))
+          || (benFaYinQing.length >= 3 && String(reply || '').toLowerCase().includes(benFaYinQing.toLowerCase()));
+        if (yaoQiuBao && !yiJingShuo && benFaYinQing) {
+          const ming = gongYingShangXianShiMing(String((providerCfg as { presetId?: string }).presetId || ''));
+          reply = String(reply || '') + tMain('chat.modelReportNote', '\n\n【宿主核实 · 本轮实际引擎】')
+            + ' ' + (ming && ming !== benFaYinQing ? ming + ' · ' : '') + benFaYinQing;
+          try { audit?.log('chat.model-selfreport-surfaced', { sessionId, moXing: benFaYinQing, gongYing: ming }); } catch { /* noop */ }
+        }
+      } catch { /* 报不上也不影响回复 */ }
       const replyChongFu = yiJingXieGuo(sessionId, 'assistant', reply);
       if (replyChongFu) {
         // 重复写入：**连会话日志也不写**（只留第一次），避免界面上出现两条一模一样的回复
@@ -10359,11 +13251,41 @@ async function zhenZhengFaSongBen(
       } catch {
         /* optional */
       }
+      const zhongJianBenLun = Array.isArray(loop.zhongJianHuiFu) && loop.zhongJianHuiFu.length
+        ? loop.zhongJianHuiFu.map((x) => ({ ts: Number(x.ts) || Date.now(), text: String(x.text || '') })).filter((x) => x.text)
+        : undefined;
+      if (zhongJianBenLun && zhongJianBenLun.length) {
+        try { audit?.log('chat.interim-replies-saved', { sessionId, n: zhongJianBenLun.length, zi: zhongJianBenLun.reduce((a, x) => a + x.text.length, 0) }); } catch { /* noop */ }
+        /**
+         * **中间回复进记忆的一条压缩摘要**（第 51 轮用户口径，§18.6 #7 按推荐）：
+         * 不把每条中间回复都塞进记忆（噪声大），而是合成**一条** `kind:'zhongjian'` 摘要，
+         * 能被 recall 找回"本轮中途说过什么"；正式结论仍以最终回复那条为准。
+         * 条数不变量：它是**额外一种记录类型**，不计入"日志条数 = 消息记忆条数"。
+         */
+        try {
+          const zhai = zhongJianBenLun.map((x) => String(x.text || '')).join('\n').slice(0, 1500);
+          if (zhai.trim() && memory?.isReady) {
+            const zjId = 'zj-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+            void memory.append({
+              id: zjId,
+              sessionId,
+              kind: 'zhongjian',
+              role: 'assistant',
+              ti: '（本轮中间回复摘要 · 供 recall 追述，正式结论见最终回复）\n' + zhai,
+              groupId: sessionId,
+              entityType: 'chat',
+            } as never, 'duty');
+            try { audit?.log('chat.interim-summary-memory', { sessionId, id: zjId, chars: zhai.length }); } catch { /* noop */ }
+          }
+        } catch { /* 摘要写入失败不影响回复 */ }
+      }
       zhuiJiaLiaoTianRiZhi(sessionId, {
         seq: xiaYiLiaoTianXuLie(replyMemSeq),
         role: 'assistant',
         content: reply,
         reasoning: siKaoGuoCheng || undefined,
+        /** 这一轮发起工具调用时写给用户的话：落旁路，界面画进「执行过程」（以前只在流式气泡里闪过） */
+        zhongJian: zhongJianBenLun,
         recordId: replyMemSeq !== undefined ? replyRecordId : undefined,
         ts: Date.now(),
         /**
@@ -10396,7 +13318,7 @@ async function zhenZhengFaSongBen(
          * 存知识是**附加面**，绝不允许它把一轮对话带崩。
          */
         try {
-          knowledge.upsertEntity({
+          knowledge.internal.upsertEntity({
             id: 'session-' + sessionId,
             kind: 'project',
             ming: sessionId,
@@ -10483,6 +13405,7 @@ async function zhenZhengFaSongBen(
         planPending,
         reply,
         reasoning: siKaoGuoCheng || undefined,
+        zhongJian: zhongJianBenLun,
         thinkDowngraded: jiangJiTiShi || undefined,
         usage: xiangYing.usage,
         needsKey: false,
@@ -10507,6 +13430,14 @@ async function zhenZhengFaSongBen(
     } catch (e) {
       const err = xiJingCuoWu(e);
       zuiHouCuo = err;
+      /**
+       * 风控拒绝先**原地重试同一只模型一次**（偶发；单模型链换无可换），仍被拦才计入失败换下一只。
+       */
+      if ((e as { fengKong?: boolean })?.fengKong && !fengKongChongShi.has(modelId)) {
+        fengKongChongShi.add(modelId);
+        try { audit?.log('chat.moderation-retry', { sessionId, model: modelId, reason: err.slice(0, 120) }); } catch { /* noop */ }
+        continue;
+      }
       // 这一档模型失败 ⇒ 记下它，换下一个再来（不直接把错误丢给用户）
       yiShiBai.push(modelId);
       audit?.log('chat.model-degraded', { sessionId, model: modelId, reason: err.slice(0, 120), provider: zhu.presetId });
@@ -10546,17 +13477,50 @@ async function zhenZhengFaSongBen(
     break;
     }
     if (zuiHouCuo) {
+      /**
+       * **供应商官方协议软门禁**（v3：advise/warn，引导 + 可修正，绝不一票否决）。
+       * 整条链都失败时，把命中的官方约定附在错误后面：401/403 十有八九是 key 与站点不匹配、
+       * 404 是 baseURL 少了/多了 `/v1`、Ollama 是根地址不加 `/v1` —— 这几句话能省用户一次盲试。
+       * 规则表与命中判定都是纯函数（`archive-cleanup.ts`），门禁可直接跑真值表。
+       */
+      let ruanTiShi = '';
+      try {
+        const ming = piPeiRuanMenJin(GONG_YING_SHANG_RUAN_MEN_JIN,
+          `${zhu?.presetId || ''} ${zhu?.protocol || providerCfg.protocol || ''} ${zuiHouCuo}`);
+        if (ming.length) {
+          ruanTiShi = tMain('chat.softGate.head', '\n官方协议提示（软门禁 · 只引导不拦截）：\n')
+            + ming.slice(0, 3).map((x) => `· [${x.action}] ${x.i18n ? tMain(x.i18n, x.message) : x.message}`).join('\n');
+          audit?.log('chat.soft-gate', { sessionId, mingZhong: ming.map((x) => x.id).join(','), action: ming.map((x) => x.action).join(',') });
+        }
+      } catch { /* 软门禁自己出错不许影响报错 */ }
+      /**
+       * 错误按契约分类表归类（`GuileiCuowu`）：异常卡片的原因带上类别名，审计/控制台带上类别与可恢复性，
+       * 返回值也带出去 —— 以前所有失败一律 `retry: true`，钥匙错了也让人点"重试"白等一轮。
+       * `retry` 维持原语义（界面按它挂「继续 / 重试」），可恢复性另给 `recoverable`，不悄悄改界面行为。
+       */
+      const fenLei = fenLeiCuoWu(zuiHouCuo);
+      const leiMing = tMain(`err.category.${fenLei.category}`, LEI_BIE_MING[fenLei.category]);
       lastError = { ts: Date.now(), message: zuiHouCuo, context: 'chat-send' };
-      fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: zuiHouCuo } });
+      fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: zuiHouCuo, ruanMenJin: !!ruanTiShi, category: fenLei.category, recoverable: fenLei.recoverable } });
+      try { audit?.log('chat.error-classified', { sessionId, category: fenLei.category, code: fenLei.code, recoverable: fenLei.recoverable }); } catch { /* noop */ }
       // 模型调用失败 ⇒ 任务停在半路：界面在最新回复里挂「继续 / 重试」
-      biaoRenWuZhongDuan(sessionId, '模型调用失败（整条调用链都试过了）', zuiHouCuo, '模型调用');
-      return { ok: false, reply: '', error: zuiHouCuo, needsKey: false, retry: true };
+      biaoRenWuZhongDuan(sessionId, `模型调用失败（整条调用链都试过了 · ${leiMing}）`, zuiHouCuo + ruanTiShi, '模型调用');
+      return { ok: false, reply: ruanTiShi ? `${zuiHouCuo}${ruanTiShi}` : '', error: zuiHouCuo + ruanTiShi, needsKey: false, retry: true, errorCategory: fenLei.category, recoverable: fenLei.recoverable };
     }
     // 兜底：整条链跑完既没成功也没留错（理论上不该走到，但类型必须闭合）
     biaoRenWuZhongDuan(sessionId, '模型调用失败（没有可用模型）', 'no-model-available', '模型调用');
     return { ok: false, reply: '', error: 'no-model-available', needsKey: false, retry: true };
 }
 chuliIpc('warmy:liaoTianFaSong', zhenZhengFaSong);
+/** 第 81 轮：nm 查看器把选中的文字插入主窗口当前聊天输入框。 */
+chuliIpc('warmy:chaRuDuiHua', (_e, text: unknown) => {
+  try {
+    const t = String(text == null ? '' : text).slice(0, 200000);
+    if (!t.trim()) return { ok: false, error: 'empty' };
+    broadcastToWindows('warmy:chaRuDuiHua', { text: t });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 
 /**
  * **多循环任务自动继续**（产品缺陷修复：模型说"接着做下一个"然后就停了）。
@@ -11307,7 +14271,7 @@ function renWuYaoQiuZiShu(sessionId: string, xiaoXi?: { content?: string }): num
  * **续派账**（第 34 轮 项 12）：一次用户任务内的续派次数、进展快照、完成核对/只说不做各用过几次。
  * 进展只认宿主看到的事实（成功的工具种类、写出的文件、字数、计划状态），不认模型自述。
  */
-type XuPaiZhang = { ci: number; kuaiZhao: string; kongZhuan: number; heDui: number; heDuiWeiWan: number; zhiShuo: number };
+type XuPaiZhang = { ci: number; kuaiZhao: string; kongZhuan: number; heDui: number; heDuiWeiWan: number; zhiShuo: number; heDuiEr: number };
 const xuPaiJinZhan = new Map<string, XuPaiZhang>();
 const XUPAI_ZONG_SHANGXIAN = 10;
 function xuPaiKuaiZhao(sessionId: string): string {
@@ -11354,7 +14318,7 @@ function yaoQiuZiShu(wen: string): number {
  *     明确叫停并要它如实汇报，而不是继续催。
  * 每个文件记一笔（会话|路径 → 最新净字数 + 连续小增量次数）。
  */
-const changWenJinZhan = new Map<string, { zuiHou: number; xia: number; tingZhi: boolean; zeng: number }>();
+const changWenJinZhan = new Map<string, { zuiHou: number; xia: number; tingZhi: boolean; zeng: number; duan?: string[]; nudge?: number }>();
 /**
  * **本任务里每个路径被宿主成功写入过几次**（`会话|路径` → 次数）。
  *
@@ -11416,13 +14380,38 @@ function ziShuJinDuHang(sid: string, abs: string, zhuiJia: boolean): string {
   zhuang.xia = zeng < xiaKuan ? zhuang.xia + 1 : 0;
   zhuang.zeng = zeng;
   zhuang.zuiHou = Math.max(zhuang.zuiHou, jing);
+  /**
+   * **内容层判定**（第 51 轮）：光看"增量小"会把「每段只写 100 字的慢写」误判成停滞。
+   * 新增信息量仍为正 ⇒ 只 nudge；重复率高且无新增 ⇒ 才是真复读，判 abort。
+   */
+  try {
+    const shou = Math.min(4000, wen.length);
+    const wei = wen.slice(-shou);
+    zhuang.duan = [...(zhuang.duan || []), wei.slice(-Math.max(300, Math.min(1200, wei.length)))].slice(-3);
+    const pan = panDuanTingZhi(zhuang.duan, wen.slice(0, Math.max(0, wen.length - wei.length)), zhuang.nudge || 0);
+    if (pan.dong === 'abort' && !zhuang.tingZhi) {
+      zhuang.tingZhi = true;
+      try { audit?.log('chat.length-stall-content', { sessionId: sid, path: abs, jing, yao, liYou: pan.liYou, rep: Number(pan.rep.toFixed(3)), cr: Number(pan.cr.toFixed(3)), info: Number(pan.info.toFixed(4)) }); } catch { /* noop */ }
+    } else if (pan.dong === 'nudge') {
+      zhuang.nudge = (zhuang.nudge || 0) + 1;
+    }
+  } catch { /* 内容判定失败不影响原有数量判定 */ }
   if (zhuang.xia >= 3 && !zhuang.tingZhi) {
     zhuang.tingZhi = true;
     try { audit?.log('chat.length-stall', { sessionId: sid, path: abs, jing, yao, xiaKuan }); } catch { /* noop */ }
   }
   changWenJinZhan.set(jian, zhuang);
-  const tiHuan = (s: string): string => s.replace('{n}', () => String(yao)).replace('{x}', () => String(zong)).replace('{y}', () => String(jing))
-    .replace('{z}', () => String(Math.max(0, yao - jing))).replace('{p}', () => abs);
+  /**
+   * **必须用带 `g` 的正则**：`String.replace(字符串, …)` 只换**第一次**出现。
+   * 真机 r34-ollama 抓到过两次：
+   *  · 漏填 `{k}` ⇒ 模型收到字面量"每次只增加不到 {k} 字"；
+   *  · 停滞文案里 `{y}` 出现**两遍**，串形式只换了第一遍 ⇒ 结尾还是"完成情况与字数（{y} 字）"。
+   * 文案里重复用同一个占位符是翻译时的正常写法，不该要求"每句只准用一次"。
+   */
+  const tiHuan = (s: string): string => s.replace(/\{n\}/g, () => String(yao)).replace(/\{x\}/g, () => String(zong)).replace(/\{y\}/g, () => String(jing))
+    .replace(/\{k\}/g, () => String(xiaKuan))
+    .replace(/\{z\}/g, () => String(Math.max(0, yao - jing))).replace(/\{p\}/g, () => abs);
+
   if (zhuang.tingZhi && jing < daBiaoXian) {
     return tiHuan(tMain('llm.lengthStall', '【字数进度】{p} 现在 {y} 字（用户要求约 {n} 字）。**连续三次每次只增加不到 {k} 字 ⇒ 宿主判定这段已经写不动了，不再催你续写**：请停止对这个文件写入，直接如实向用户汇报现在的完成情况与字数（{y} 字），需要的话让用户决定是否继续。'));
   }
@@ -11472,7 +14461,7 @@ function yingGaiZiDongJiXu(
   if (tingZhi === 'unsupported') return { jiXu: false, liYou: 'unsupported' };
   let zhang = xuPaiJinZhan.get(sid);
   if (!zhang) {
-    zhang = { ci: 0, kuaiZhao: '', kongZhuan: 0, heDui: 0, heDuiWeiWan: 0, zhiShuo: 0 };
+    zhang = { ci: 0, kuaiZhao: '', kongZhuan: 0, heDui: 0, heDuiWeiWan: 0, zhiShuo: 0, heDuiEr: 0 };
     xuPaiJinZhan.set(sid, zhang);
   }
   const z = zhang;
@@ -11499,7 +14488,7 @@ function yingGaiZiDongJiXu(
     try { audit?.log('plan.auto-continue-capped', { sessionId: sid, n: z.ci }); } catch { /* noop */ }
     return { jiXu: false, liYou: 'xupai-capped' };
   }
-  const beiJieDuan = tingZhi === 'max-rounds' || tingZhi === 'max-rounds-extended' || tingZhi === 'budget';
+  const beiJieDuan = tingZhi === 'max-rounds' || tingZhi === 'max-rounds-extended' || tingZhi === 'budget' || tingZhi === 'call-budget';
   /**
    * **目标长度没达到 ⇒ 接着写**。排在重复判定之前：长文分段追加时同一段常被去重挡下、
    * 累计成"重复 N 次"，不能因此把没写完的长文判停（重复账本在这里清零）。
@@ -11564,10 +14553,33 @@ function yingGaiZiDongJiXu(
     return pai(keXu);
   }
   /** 自述做完却缺证据 / 被截断 ⇒ 只核对一次（模型可以直接回 NO_REPLY） */
-  if ((beiJieDuan || jiHuaQueZhengJu(sid).length) && !z.heDui) {
+  /**
+   * 第 38 轮真机补的一条：模型**没建任何计划**就自己收工（`jiHuaWeiWanCheng` 恒为空 ⇒ 以前这条根本不会跑），
+   * 于是"用户要六件事、它只做了一件"也被当成做完了。判据保守：
+   * 只有"一条计划都没有 **且** 它这轮真的动过手（≥3 次工具）"才补一次完成核对，仍然受 `!z.heDui` 限制 ⇒ **每条用户消息最多一次**。
+   */
+  const wuJiHuaDanDongShou = !(jiHuaRenWuJi.get(sid) || []).length && (benLunGongJuShu.get(sid) || 0) >= 3;
+  if ((beiJieDuan || jiHuaQueZhengJu(sid).length || wuJiHuaDanDongShou) && !z.heDui) {
     if (chongFu3()) return { jiXu: false, liYou: 'repeat-3x' };
     z.heDui += 1;
     z.heDuiWeiWan = 0;
+    return pai('completion-check');
+  }
+  /**
+   * **核对轮只动嘴、没动手 ⇒ 再补一次"必须动手"的核对**（真机 r34-mimo-3：用户一次要四件事，
+   * 模型只写了那篇小说，核对轮回了一句"都能看到 ✅"就 0 工具收工 ⇒ 三份欠账就这么放过去了）。
+   *
+   * 判据保守，三条同时成立才补：① 已经核对过一次（`heDui=1`）；② 上一轮**一个工具都没调**，
+   * 而且**没走 NO_REPLY 这个"都做完了"的出口**（走了就说明它自认做完，那是另一条路的账）；
+   * ③ 计划仍然是空的（有计划的按步骤续派，不走这条）。最多补这一次（`heDuiEr`），
+   * 仍受"连续两次没有新事实就停"和总续派硬顶 10 次约束 ⇒ 不会变成追着模型要说法。
+   */
+  if (z.heDui >= 1 && !z.heDuiEr && !(jiHuaRenWuJi.get(sid) || []).length
+    && shangLun?.noReply !== true
+    && (Number(shangLun?.diaoYongJi) || 0) === 0) {
+    if (chongFu3()) return { jiXu: false, liYou: 'repeat-3x' };
+    z.heDuiEr = 1;
+    try { audit?.log('plan.auto-continue-hedui-ershen', { sessionId: sid, huiFuChang: String(shangLun?.huiFu || '').length }); } catch { /* noop */ }
     return pai('completion-check');
   }
   /**
@@ -12164,12 +15176,28 @@ async function yanXuJiHuaRenWu(
         ? (() => {
             const kai = jiHuaWeiWanCheng(sessionId);
             const que = jiHuaQueZhengJu(sessionId);
+            const wuJiHua = !(jiHuaRenWuJi.get(sessionId) || []).length;
+            /**
+             * **把宿主实测的"等待欠账"写进核对指令**（真机 r34-mimo-3：模型用一句"都能看到 ✅"
+             * 就把三份欠账带过去）。不猜、不编：用户原话要等几秒是解析出来的，实际等了多久是宿主记的。
+             */
+            const dengYao = yaoQiuDengDaiMiaoShu(benCiRenWuYuanWen.get(String(sessionId || '')) || '');
+            const dengYi = Math.round(Number((buZhouRi(String(sessionId || '')).get('wait') || {}).miaoLeiJi) || 0);
+            const dengQian = dengYao > 0 && dengYi < dengYao
+              ? `\n- 用户要求累计等待 ${dengYao} 秒，**宿主实测只等了 ${dengYi} 秒** ⇒ 还差 ${Math.max(1, Math.round(dengYao - dengYi))} 秒：现在就用 wait_seconds(seconds=${Math.max(1, Math.round(dengYao - dengYi))}) 补齐，不要用文字说"已经等了"。`
+              : '';
             const lie = [
               ...kai.map((b) => `- ${b.id} ${String(b.title || '').slice(0, 60)} [${b.status}]`),
               ...que.map((x) => `- ${x.b.id} ${String(x.b.title || '').slice(0, 60)} [done，宿主没看到证据：${x.que.join('；')}]`),
-            ].join('\n') || tMain('llm.completionCheckNone', '（计划里没有未完成的步骤）');
+            ].join('\n') + dengQian || (wuJiHua
+              /**
+               * 第 38 轮真机：模型**一条计划都没建**就自己收工（六件事只做了写小说一件）。
+               * 这时候不能写"没有未完成的步骤"——那是把"没记账"说成"没欠账"。
+               */
+              ? '（你**一条计划都没建**，宿主无法核对。请先用 `plan_update` 把用户这次要的**每一件事**列成步骤（2–10 步），\n  再对照它检查：已经做完的直接 `plan_verify` 带证据标掉，**没做的现在补**。\n  下面会附上本轮已产出的文件与已执行的工具 —— **用户要而清单里没有的那一件，就是还没做**，直接动手补，不要只用文字汇报"都完成了"。）'
+              : tMain('llm.completionCheckNone', '（计划里没有未完成的步骤）'));
             const jie = String(shangLun?.tingZhi || '');
-            const beiJie = jie === 'max-rounds' || jie === 'max-rounds-extended' || jie === 'budget';
+            const beiJie = jie === 'max-rounds' || jie === 'max-rounds-extended' || jie === 'budget' || jie === 'call-budget';
             return tMain('llm.completionCheck', '【完成核对】你刚才停下了。请对照用户的原始要求核对一遍（不要从头重做）：\n{list}{cut}\n按情况只做一件事：\n① 用户要的都已经做完 ⇒ 只回复 NO_REPLY（不要别的字）；\n② 已经做完、只是计划状态没更新 ⇒ 用 plan_verify 带上真实证据标记，然后回复 NO_REPLY；\n③ 确实还有没做的 ⇒ 只做没做完的那部分（已生成、已打开的文件不要重做、不要再打开），做完简短汇报。')
               .replace('{list}', lie)
               .replace('{cut}', beiJie ? '\n' + tMain('llm.completionCheckCut', '（注意：上一轮是被工具轮数/预算上限截断的，不是你主动收尾的。）') : '');
@@ -12492,17 +15520,29 @@ function recordCheckpointEnv(cpId: string, groupId?: string): void {
 chuliIpc('warmy:checkpointChuangJian', (_e, phase: 'round_start' | 'round_end', groupId?: string) => {
   try {
     if (!checkpoints) return { ok: false };
+    const sid = String(groupId || '');
     const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
     const jsonl = path.join(jiYiMuLu, 'fast-memory.jsonl');
-    const cp = checkpoints.create({ phase, logSeq: Date.now(), jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined });
+    const ws = sid ? workspaceDirOf(app.getPath('userData'), sid) : '';
+    /** 第 66 轮 项 26：回退点**跟随会话**，不再所有会话共用一套 */
+    const cp = checkpoints.create({
+      phase, logSeq: Date.now(), jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined,
+      sessionId: sid, ...(ws && fs.existsSync(ws) ? { workspace: ws } : {}),
+    });
+    if (sid) huiDangKaiDian(sid, cp.dir);
     recordCheckpointEnv(String((cp && cp.id) || ''), groupId);
-    return { ok: true, checkpoint: cp, LieBiao: checkpoints.LieBiao(), env: currentEnvFingerprint(String(groupId || '')) };
+    return { ok: true, checkpoint: cp, LieBiao: checkpoints.LieBiao(), env: currentEnvFingerprint(sid) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc('warmy:checkpointLieBiao', (_e, payload?: { sessionId?: string }) => ({
   ok: true,
-  LieBiao: checkpoints?.LieBiao() || [],
+  /** 第 66 轮 项 26：只返回**这个会话**的回退点；旧的无 sessionId 记录不再套给所有会话 */
+  LieBiao: (() => {
+    const sid = String(payload?.sessionId || '');
+    const all = checkpoints?.LieBiao() || [];
+    return sid ? all.filter((c) => String((c as { sessionId?: string }).sessionId || '') === sid) : all;
+  })(),
   space: checkpoints?.space() || { maxBytes: 512 * 1024 * 1024, usedBytes: 0, count: 0 },
   /** 每个回退点当时的**环境指纹**（没记过就没有 —— 不编） */
   envByCheckpoint: (settingsStore?.load()?.checkpointEnv) || {},
@@ -12518,21 +15558,57 @@ chuliIpc('warmy:checkpointLieBiao', (_e, payload?: { sessionId?: string }) => ({
 
 chuliIpc('warmy:checkpointHuiGun', (_e, id: string, opts?: { stopFirst?: boolean; sessionId?: string }) => {
   try {
-    if (!checkpoints) return { ok: false };
+    if (!checkpoints) return { ok: false, error: 'checkpoints-unavailable' };
+    const sid = String(opts?.sessionId || '');
+    // 项 13：回档 = 先停当前 AI/工具，再恢复文件；聊天记录**保留**，并追加一条上下文消息。
     if (opts?.stopFirst) {
-      void p1?.instances.stopAll();
+      // 真正掐断这个会话在途的模型请求/工具循环（以前只停容器实例，AI 还在跑）。
+      if (sid) {
+        try { zhongZhiXinHao(sid); } catch { /* noop */ }
+        try { xiaoDiKongZhi.get(sid)?.abort(); xiaoDiKongZhi.delete(sid); } catch { /* noop */ }
+      }
+      try { void p1?.instances.stopAll(); } catch { /* 停不下来也要继续恢复文件 */ }
     }
-    const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
-    const jsonl = path.join(jiYiMuLu, 'fast-memory.jsonl');
-    const ok = checkpoints.rollback(id, { jsonlPath: jsonl });
-    // 回退后**如实对比环境**：环境变了就提前告知（文件回退了、环境回不去）
+    const cp = checkpoints.LieBiao().find((x) => x.id === String(id));
+    if (!cp) return { ok: false, error: 'checkpoint-not-found' };
+    if (sid && cp.sessionId && String(cp.sessionId) !== sid) return { ok: false, error: 'checkpoint-belongs-to-other-session' };
+    const ws = sid ? workspaceDirOf(app.getPath('userData'), sid) : '';
+    // workspace 快照还原；**不传 jsonlPath** —— 聊天记录是上下文，不随回档删除。
+    const ok = checkpoints.rollback(id, { ...(ws ? { workspace: ws } : {}) });
+    const journal = sid ? huiDangHuiFu(sid, cp.dir) : { restored: 0, removed: 0, failed: 0 };
+    // 环境指纹仍如实对比
     const jilu = (settingsStore?.load()?.checkpointEnv || {})[String(id)] || null;
-    const current = currentEnvFingerprint(String(opts?.sessionId || ''));
+    const current = currentEnvFingerprint(sid);
     const envChanged = !!jilu && String(jilu.revision || '') !== String(current.revision || '');
+    // 在聊天记录里留一条“回档到 XXX”，并作为后续模型上下文（system 条目会被渲染层显示，模型也能看到）。
+    if (sid) {
+      try {
+        const when = new Date(Number(cp.createdAt) || Date.now()).toLocaleString();
+        const label = String(cp.summary || when);
+        zhuiJiaLiaoTianRiZhi(sid, {
+          seq: (chatLogs.get(sid) || []).length + 1,
+          ts: Date.now(),
+          sessionId: sid,
+          role: 'system',
+          system: true,
+          content: `回档到 ${label}（${when}）：已停止当前 AI/工具，并恢复所有本程序记录到的文件改动；聊天记录保留。`,
+        } as never);
+      } catch { /* 上下文消息写不进去也要如实返回回档结果 */ }
+    }
+    try {
+      audit?.log('checkpoint.hui-dang', {
+        sessionId: sid, cpId: cp.id, workspaceRestored: !!ws,
+        journalRestored: journal.restored, journalRemoved: journal.removed, journalFailed: journal.failed,
+        chatKept: true, envChanged,
+      });
+    } catch { /* 审计失败不影响回档结果 */ }
     return {
       ok,
+      cpId: cp.id,
+      workspaceRestored: !!ws,
+      journal,
+      chatKept: true,
       env: { jilu, current, changed: envChanged, jiHuo: current.jiHuo },
-      /** 文件回退成功 ≠ 环境也回退了 —— 这条一起回给渲染层，让 UI 如实提示 */
       noteKey: envChanged ? 'checkpoints.env.changed' : 'checkpoints.env.same',
     };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
@@ -12550,99 +15626,174 @@ chuliIpc('warmy:checkpointHuiGun', (_e, id: string, opts?: { stopFirst?: boolean
  *
  * 没给 cpId 时自动挑**这个会话最近的一个 `round_start` 回退点**（即"回到上一轮之前"）。
  */
-chuliIpc('warmy:huaTiHuiGun', (_e, payload?: { sessionId?: string; cpId?: string }) => {
-  try {
-    const sessionId = String(payload?.sessionId || '').trim();
-    if (!sessionId) return { ok: false, error: 'need-sessionId' };
-    if (!checkpoints) return { ok: false, error: 'checkpoints-unavailable' };
-    const quan = checkpoints.LieBiao();
-    const houXuan = quan.filter((c) => c.phase === 'round_start' && (c.sessionId ? c.sessionId === sessionId : false));
-    const cp = payload?.cpId
-      ? quan.find((c) => c.id === payload.cpId)
-      : houXuan.find((c) => c.logSeq < (chatLogs.get(sessionId) || []).length);
-    if (!cp) return { ok: false, error: 'no-round-checkpoint', hint: '这个会话还没有"轮之前"的回退点（回退点是在每条用户消息进入前自动打的）。' };
-    if (cp.sessionId && cp.sessionId !== sessionId) return { ok: false, error: 'checkpoint-belongs-to-other-session', cpSession: cp.sessionId };
+/**
+ * 第 67 轮 项 13：**“回到这一轮之前”已删除**（用户定稿：不再保留该按钮/功能）。
+ * 现在唯一入口是 `warmy:checkpointHuiGun`（回档：停 AI/工具 + 恢复文件 + 保留聊天并写入上下文）。
+ * 这段注释是拆除标记，不是留给未来恢复的口子；不要再把删聊天记录的旧实现加回来。
+ */
 
-    const jl = path.join(app.getPath('userData'), 'memory', 'fast-memory.jsonl');
-    const ws = workspaceDirOf(app.getPath('userData'), sessionId);
-    let removed = 0;
-    let backupPath = '';
-    if (fs.existsSync(jl)) {
-      const suo = new JsonlSuo(jl);
-      const naDao = suo.acquire(5000);
-      try {
-        const lines = fs.readFileSync(jl, 'utf8').split('\n').filter(Boolean);
-        const kept: string[] = [];
-        for (const line of lines) {
-          let drop = false;
-          try {
-            const o = JSON.parse(line) as { sessionId?: string; seq?: number };
-            // **只对本会话**生效：被删的是"这个会话在这一轮之后的记录"
-            if (o && o.sessionId === sessionId && typeof o.seq === 'number' && o.seq > cp.logSeq) drop = true;
-          } catch { /* 坏行保留（宁可留着也不要因为解析失败删数据） */ }
-          if (drop) removed++; else kept.push(line);
-        }
-        backupPath = `${jl}.bak-${Date.now().toString(36)}`;
-        fs.copyFileSync(jl, backupPath);
-        kept.push(JSON.stringify({
-          seq: 0, ts: Date.now(), sessionId: 'system', kind: 'rollback',
-          checkpointId: cp.id, reason: 'session-round-rollback', sessionRolledBack: sessionId,
-          targetSeq: cp.logSeq, removed, backupPath, rolledBackAt: Date.now(),
-        }));
-        fs.writeFileSync(jl, kept.join('\n') + '\n', 'utf8');
-      } finally {
-        if (naDao) suo.release();
-      }
+// ── 知识库 ──
+/**
+ * **待整理内容区**（第 55 轮项 1）：用户在知识库卡里点"重构"后，原文被取代、新描述先放这里，
+ * **下次归档时**再走一遍归档/整理流程（而不是当场直接写回知识库 —— 用户要的是"重新归档"）。
+ * 文件级持久化（tmp+rename），条数封顶，坏了按空表处理。
+ */
+function kbDaiZhengLiLu(): string { return path.join(app.getPath('userData'), 'kb-pending.json'); }
+type DaiZhengLiTiao = { id: string; text: string; from?: string; ceng?: ZhishiCeng; ts: number };
+function duDaiZhengLi(): DaiZhengLiTiao[] {
+  try {
+    const p = kbDaiZhengLiLu();
+    if (!fs.existsSync(p)) return [];
+    const j = JSON.parse(fs.readFileSync(p, 'utf8')) as { items?: DaiZhengLiTiao[] };
+    return (Array.isArray(j.items) ? j.items : []).filter((x) => x && typeof x.id === 'string' && typeof x.text === 'string').slice(0, 200);
+  } catch { return []; }
+}
+function xieDaiZhengLi(items: DaiZhengLiTiao[]): void {
+  const p = kbDaiZhengLiLu();
+  const tmp = p + '.tmp';
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(tmp, JSON.stringify({ items: items.slice(0, 200) }, null, 2), 'utf8');
+  fs.renameSync(tmp, p);
+}
+/** 找到这条事件所在的**可写层**（同一 id 在三层里不该重复，但按层查更稳） */
+function cengYouShiJian(sessionId: string, id: string): { ceng: ZhishiCeng; kb: KnowledgeBase } | null {
+  if (!knowledge) return null;
+  for (const c of kbWriteLayers(sessionId)) {
+    try {
+      if ((knowledge.allow(c).query('').events || []).some((e) => e.id === id)) return { ceng: c, kb: knowledge.allow(c) };
+    } catch { /* 某一层读失败就继续 */ }
+  }
+  return null;
+}
+chuliIpc('warmy:kbPendingLieBiao', () => ({ ok: true, items: duDaiZhengLi() }));
+chuliIpc('warmy:kbPendingShanChu', (_e, p0?: { id?: string }) => {
+  const id = String(p0?.id || '');
+  if (!id) return { ok: false, error: 'bad-id' };
+  const items = duDaiZhengLi().filter((x) => x.id !== id);
+  xieDaiZhengLi(items);
+  return { ok: true, n: items.length };
+});
+/**
+ * **重构**：把这条内容从知识库（活跃视图）里拿掉，用户重写后的描述进待整理区；
+ * 下次归档时再按归档流程重新写回。原条目**取代不删除**（保留审计），用户看到的是"没了"。
+ */
+chuliIpc('warmy:kbRebuild', (_e, p0?: { sessionId?: string; id?: string; text?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    const id = String(p0?.id || '');
+    const text = String(p0?.text || '').trim();
+    if (!id || !text) return { ok: false, error: '需要 id 与新的描述' };
+    if (text.length > 2000) return { ok: false, error: '新描述最多 2000 字' };
+    const zhao = cengYouShiJian(sid, id);
+    if (!zhao) return { ok: false, error: '找不到这条内容（可能已被整理）' };
+    const jiu = (zhao.kb.query('').events || []).find((e) => e.id === id);
+    zhao.kb.supersedeEvent(id);
+    const items = duDaiZhengLi();
+    items.push({ id: 'dz-' + Date.now().toString(36), text, from: jiu?.biaoTi, ceng: zhao.ceng, ts: Date.now() });
+    xieDaiZhengLi(items);
+    audit?.log('kb.rebuild-queued', { sessionId: sid, id, ceng: zhao.ceng, chars: text.length });
+    return { ok: true, pending: items.length };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/**
+ * **合并**：把 ≥2 条合并成一条（保留最新的标题与时间，内容去重拼接），其余取代不删除。
+ * 合并是"语义判断"，所以只由用户在界面上勾选 + 二次确认触发；模型不自动合并（除非归档裁决给高置信度）。
+ */
+chuliIpc('warmy:kbMerge', (_e, p0?: { sessionId?: string; ids?: string[] }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    const ids = (Array.isArray(p0?.ids) ? p0!.ids! : []).map(String).filter(Boolean);
+    if (ids.length < 2) return { ok: false, error: '至少要勾选 2 条' };
+    if (ids.length > 20) return { ok: false, error: '一次最多合并 20 条' };
+    const zhao = cengYouShiJian(sid, ids[0]!);
+    if (!zhao) return { ok: false, error: '找不到这些内容' };
+    const quan = zhao.kb.query('').events || [];
+    const xuan = ids.map((id) => quan.find((e) => e.id === id)).filter(Boolean) as typeof quan;
+    if (xuan.length < 2) return { ok: false, error: '可合并的条目不足 2 条' };
+    const zuiXin = xuan.slice().sort((a, b) => (b.jiluTs || b.ts) - (a.jiluTs || a.ts))[0]!;
+    const jian = new Set<string>();
+    const duan: string[] = [];
+    for (const e of [zuiXin, ...xuan.filter((x) => x.id !== zuiXin.id)]) {
+      const t = String(e.result || e.biaoTi || '').trim();
+      const k = t.replace(/\s+/g, '');
+      if (!t || jian.has(k)) continue;
+      jian.add(k);
+      duan.push(t);
     }
-    // 工作区按快照还原（有快照才动它）
-    let workspaceRestored = false;
-    try {
-      const snap = path.join(app.getPath('userData'), 'checkpoints', cp.dir, 'workspace');
-      if (fs.existsSync(snap)) {
-        if (fs.existsSync(ws)) fs.rmSync(ws, { recursive: true, force: true });
-        fs.cpSync(snap, ws, { recursive: true });
-        workspaceRestored = true;
-      }
-    } catch { /* 工作区还原失败也要如实返回（下面带上标记） */ }
-    // 内存同步截断（否则界面刷新又把删掉的读回来 = 假回滚）
-    const zhiQian = (chatLogs.get(sessionId) || []).length;
-    if (Array.isArray(chatLogs.get(sessionId))) chatLogs.set(sessionId, (chatLogs.get(sessionId) || []).slice(0, cp.logSeq));
-    try {
-      audit?.log('checkpoint.session-rollback', {
-        sessionId, cpId: cp.id, seq: cp.logSeq, removed, workspaceRestored,
-        logsBefore: zhiQian, logsAfter: (chatLogs.get(sessionId) || []).length,
+    const heBing = duan.join('；').slice(0, 2000);
+    const quDai = xuan.filter((x) => x.id !== zuiXin.id).map((x) => x.id);
+    for (const id of quDai) zhao.kb.supersedeEvent(id);
+    zhao.kb.addEvent({ ...zuiXin, result: heBing, quDaiIds: [...(zuiXin.quDaiIds || []), ...quDai] });
+    audit?.log('kb.merged', { sessionId: sid, ceng: zhao.ceng, liu: zuiXin.id, quDai, chars: heBing.length });
+    return { ok: true, id: zuiXin.id, merged: quDai.length };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 归档开始时把待整理区的内容按归档流程写回（用户重写稿不走走证据闸：它本身就来自用户） */
+function chouGanDaiZhengLi(sessionId: string): void {
+  try {
+    const items = duDaiZhengLi();
+    if (!items.length || !knowledge) return;
+    let xie = 0;
+    for (const x of items) {
+      const ceng = x.ceng || 'internal';
+      if (!kbWriteLayers(sessionId).includes(ceng)) continue;
+      const ssj = shuangShiJian(x.text, x.ts);
+      knowledge.allow(ceng).addEvent({
+        id: 'ev-dz-' + x.id, biaoTi: (x.from || '重构后的内容').slice(0, 80), result: x.text.slice(0, 2000),
+        entityIds: [], anchors: [], ts: Date.now(), jiluTs: ssj.jiluTs, fashengTs: ssj.fashengTs, fashengBiao: ssj.fashengBiao,
+        fashengJingDu: ssj.fashengJingDu as 'ri' | 'yue' | 'nian' | 'wu', fashengLaiYuan: ssj.fashengLaiYuan,
+        laiYuan: 'user:rebuild', tiShiCiBanBen: TI_SHI_CENG_BAN_BEN,
       });
-    } catch { /* noop */ }
-    return {
-      ok: true,
-      cpId: cp.id,
-      seq: cp.logSeq,
-      removed,
-      workspaceRestored,
-      backupPath,
-      logsAfter: (chatLogs.get(sessionId) || []).length,
-    };
+      xie++;
+    }
+    if (xie) { xieDaiZhengLi(items.filter((x) => !kbWriteLayers(sessionId).includes(x.ceng || 'internal'))); audit?.log('kb.pending-drained', { sessionId, n: xie }); }
+  } catch { /* 归档失败不影响归档本身 */ }
+}
+
+chuliIpc('warmy:zhiShiQuery', (_e, p0?: string | { q?: string; ceng?: ZhishiCeng; sessionId?: string }) => {
+  try {
+    /**
+     * 三种调用形态（第 51 轮）：
+     *  · 字符串 q            ⇒ 查全部三层（用户本机界面用）
+     *  · { q, ceng }         ⇒ 只查指定层（第四列「会话库 / 内部库」卡片）
+     *  · { q, sessionId }    ⇒ 按该会话作用域查（群聊只会话；项目会话+内部；我的牛马三层）
+     */
+    if (typeof p0 === 'string' || p0 === undefined) {
+      const q = String(p0 || '');
+      return { ok: true, layers: ZHISHI_CENG, ...(knowledge ? knowledge.queryLayers(ZHISHI_CENG as readonly ZhishiCeng[], q) : { entities: [], events: [] }) };
+    }
+    const q = String(p0.q || '');
+    const layers = p0.ceng ? [p0.ceng] as ZhishiCeng[] : kbLayersFor(String(p0.sessionId || ''));
+    return { ok: true, layers, ...(knowledge ? knowledge.queryLayers(layers, q) : { entities: [], events: [] }) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-// ── 知识库 ──
-chuliIpc('warmy:zhiShiQuery', (_e, q: string) => {
+/** 第四列知识库卡：这个会话当前可见哪些层、是不是创建者 */
+chuliIpc('warmy:zhiShiCengKeJian', (_e, p0?: { sessionId?: string }) => {
   try {
-    return { ok: true, ...(knowledge?.query(q) || { entities: [], events: [] }) };
+    const sid = String(p0?.sessionId || '');
+    const kind = (() => {
+      const g = groupStore?.getGroup?.(sid) as { type?: string } | undefined;
+      if (g) return g.type === 'internal' ? 'project' : 'group';
+      return 'single';
+    })();
+    let isCreator = true;
+    try { isCreator = benJiShiXiangMuChuangJianZhe(sid); } catch { /* 拿不到按创建者 */ }
+    return { ok: true, kind, isCreator, layers: kbLayersFor(sid) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 chuliIpc(
   'warmy:zhiShiTianJiaShiJian',
   (_e, Shi: { id: string; biaoTi: string; entityIds?: string[]; result?: string }) => {
-    knowledge?.upsertEntity({
+    knowledge?.internal.upsertEntity({
       id: 'default',
       kind: 'project',
       ming: 'default',
       attrs: {},
       anchors: [],
     });
-    knowledge?.addEvent({
+    knowledge?.internal.addEvent({
       id: Shi.id,
       biaoTi: Shi.biaoTi,
       result: Shi.result,
@@ -12703,6 +15854,15 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
     if (!sessionId) return { ok: false, sessionId, xiaoXiJi: [] };
     const limit = Math.min(1000, Math.max(1, Math.floor(Number(payload?.limit)) || 500));
     const all = chatLogs.get(sessionId) || [];
+    /**
+     * 第 38 轮 项 8：**端给界面之前自己补齐一次**。
+     * 开机那一次合并容易被重启顺序牵制（记忆服务可能起两遍、旁路文件在它之后才读……），
+     * 真机表现就是"执行过程回来了、回复下面那行模型/词元还是空的"。
+     * 补齐是幂等的（只往缺的字段里写），每次读都走一遍最省事，也不用再赌时序。
+     */
+    try {
+      if (all.some((m) => !String((m as { moXing?: string }).moXing || '') || !(Number((m as { promptTokens?: number }).promptTokens || 0) > 0))) yingYongMeta(sessionId);
+    } catch { /* 补不上就按现状给，不影响正文 */ }
     return {
       ok: true,
       sessionId,
@@ -12711,6 +15871,10 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
         role: e.role, text: e.content, ts: e.ts ?? null, reasoning: e.reasoning || null, system: e.system || false, moXing: e.moXing || '',
         /** 第 38 轮 项 2：分段思考（界面把操作记录插在思考之间要用它） */
         reasoningDuan: Array.isArray((e as { reasoningDuan?: unknown[] }).reasoningDuan) ? (e as unknown as { reasoningDuan: Array<{ ts: number; text: string }> }).reasoningDuan : [],
+        /** 第 48 轮：这一轮发起工具调用时写给用户的话（「执行过程」里按时间画出来） */
+        zhongJian: Array.isArray(e.zhongJian) ? e.zhongJian : [],
+        /** 第 38 轮 项 8：这一轮跑过的工具操作（重启后"执行过程"靠它，不再只剩一句话） */
+        xingDong: Array.isArray((e as { xingDong?: unknown[] }).xingDong) ? (e as unknown as { xingDong: unknown[] }).xingDong : [],
         /** 降级/换模型括号 + 附件图标行：一起回给渲染层（以前只回 moXing ⇒ 界面上的图标行被同步抹掉） */
         moXingJiangJi: (e as { moXingJiangJi?: unknown }).moXingJiangJi || null,
         artifacts: Array.isArray((e as { artifacts?: unknown[] }).artifacts) ? (e as { artifacts?: unknown[] }).artifacts : [],
@@ -12734,9 +15898,20 @@ chuliIpc('warmy:xingDongLieBiao', (_e, payload?: { sessionId?: string; limit?: n
     const sid = String(payload?.sessionId || '');
     if (!sid) return { ok: false, xingDong: [], error: 'no-session' };
     const shang = Math.min(400, Math.max(1, Math.floor(Number(payload?.limit)) || 200));
-    return { ok: true, sessionId: sid, xingDong: xingDongDeng(sid).slice(-shang) };
+    const h = chatMetaBen.get(sid);
+    return { ok: true, sessionId: sid, xingDong: xingDongDeng(sid).slice(-shang), jinXing: h && h.jinXing ? h.jinXing : null };
   } catch (e) {
     return { ok: false, xingDong: [], error: xiJingCuoWu(e) };
+  }
+});
+
+/** 第 38 轮 项 2：渲染层把"这一轮的半成品"送下来落盘（思考分段 + 已吐出的正文） */
+chuliIpc('warmy:huiFuJinXing', (_e, payload?: { sessionId?: string; reasoningDuan?: Array<{ ts?: number; text?: string }>; content?: string; clear?: boolean }) => {
+  try {
+    jiJinXing(String(payload?.sessionId || ''), { reasoningDuan: payload?.reasoningDuan, content: payload?.content, clear: !!payload?.clear });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
@@ -12767,8 +15942,20 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
      */
     try {
       const duan = Array.isArray(payload?.reasoningDuan) ? (payload as unknown as { reasoningDuan: Array<{ ts: number; text: string }> }).reasoningDuan : [];
-      if (role === 'assistant' && duan.length && last && last.role === 'assistant') {
-        (last as unknown as { reasoningDuan?: unknown[] }).reasoningDuan = duan.map((x) => ({ ts: Number(x && x.ts) || 0, text: String((x && x.text) || '') }));
+      if (role === 'assistant' && last && last.role === 'assistant') {
+        if (duan.length) (last as unknown as { reasoningDuan?: unknown[] }).reasoningDuan = duan.map((x) => ({ ts: Number(x && x.ts) || 0, text: String((x && x.text) || '') }));
+        /**
+         * 第 38 轮 项 8：**用的哪只模型、吃了/吐了多少词元、跑了几轮**也要跟着这条回复落账。
+         * 以前这里只补 `reasoningDuan` ⇒ 旁路元数据里的 `moXing/promptTokens` 一直是空的，
+         * 重启后"回复下方那行小字"就什么都没了（用户原话：重启后看不到所用模型等信息）。
+         */
+        const fu = payload as unknown as { moXing?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; moXingJiangJi?: string };
+        const you = last as unknown as { moXing?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; moXingJiangJi?: string };
+        if (String(fu.moXing || '')) you.moXing = String(fu.moXing);
+        if (Number(fu.promptTokens || 0) > 0) you.promptTokens = Number(fu.promptTokens);
+        if (Number(fu.completionTokens || 0) > 0) you.completionTokens = Number(fu.completionTokens);
+        if (Number(fu.turnCount || 0) > 0) you.turnCount = Number(fu.turnCount);
+        if (String(fu.moXingJiangJi || '')) you.moXingJiangJi = String(fu.moXingJiangJi);
         jiLuMeta(sid, last);
       }
     } catch { /* 分段只是显示用，丢了不影响对话 */ }
@@ -12877,10 +16064,32 @@ chuliIpc('warmy:liaoTianRiZhiHuiFu', async () => {
 chuliIpc('warmy:shangXiaWenYuSuan', async (_e, p0?: { sessionId?: string }) => {
   try {
     const mo = zhaoShiJiMoXing(p0?.sessionId);
-    const suan = youPeizhiSuanShangXiaWenYuSuan(mo);
-    return { ok: true, model: mo, ...suan };
+    const yangBen = yangBenBenCi(String(p0?.sessionId || ''));
+    const fen = gongYingDaiTuModel(mo);
+    const suan = youPeizhiSuanShangXiaWenYuSuan(mo, yangBen, fen);
+    /**
+     * **滑杆下限 = 实测的固定开销**（用户 #3：「这些一起算是固定大小、最小需求，
+     * 在设置上下文预算的时候这是不可再小的预算」）。没实测过就返回 null，界面按原样（不假装量过）。
+     */
+    const zuiXiao = zuiXiaoJiDangQian(fen, mo);
+    const zuiXiaoChars = zuiXiao ? Math.max(MIN_CONTEXT_BUDGET_CHARS, tokenDaoZiFu(zuiXiao.zuiXiaoTokens, yangBen, tokenZhuQu(mo, yangBen, fen))) : null;
+    /**
+     * 固定开销（含工具规格）比这个模型的窗口还大 ⇒ 下限没法在滑杆上表达（抬到 100% 也不够）。
+     * 这种情况**如实报**，让界面能说"该模型窗口装不下当前固定开销"，而不是把滑杆顶死假装能选。
+     */
+    const chaoChuangKou = !!zuiXiao && zuiXiao.zuiXiaoTokens > Number(suan.maxTokens || 0);
+    return {
+      ok: true,
+      model: mo,
+      ...suan,
+      guDingTokens: zuiXiao ? zuiXiao.guDing : null,
+      zuiXiaoTokens: zuiXiao ? zuiXiao.zuiXiaoTokens : null,
+      zuiXiaoChars,
+      zuiXiaoPercent: zuiXiao ? Math.min(99, Math.ceil((zuiXiao.zuiXiaoTokens / Math.max(1, suan.maxTokens)) * 100)) : null,
+      chuangKouBuGou: chaoChuangKou,
+    };
   } catch (e) {
-    return { ok: false, error: xiJingCuoWu(e), model: '', maxTokens: 32768, percent: 60, tokens: 19660, chars: 31456 };
+    return { ok: false, error: xiJingCuoWu(e), model: '', maxTokens: MO_XING_CHUANG_KOU_DOU_DI, percent: 60, tokens: 78643, chars: 31456, guDingTokens: null, zuiXiaoTokens: null, zuiXiaoChars: null, zuiXiaoPercent: null, chuangKouBuGou: false };
   }
 });
 
@@ -12949,7 +16158,67 @@ chuliIpc('warmy:peiZhiBaoCun', (e, partial: Record<string, unknown>) => {
       return { ok: true, settings: ji, restored: true };
     } catch (err) { return { ok: false, error: xiJingCuoWu(err) }; }
   }
+  /**
+   * **软门禁落盘前的硬门禁裁决**（第 42 轮，T2/T3/T4 的最后一段）：
+   * 以前冲突检查只在 IPC 里"可调用"，真正落盘这条路没人守 —— 等于门禁只是建议。
+   * 现在任何带 `softGates` 的保存都必须过 `panDuanRuanGai`：
+   *   · 与硬门禁冲突 ⇒ **按硬门禁执行**，冲突条目当场剔除（必要时整条删除），并把通知书回给界面；
+   *   · 用户没有明确要求、且给不出 3 条互不相同论证 ⇒ 拒绝保存（`liYou` 原样回传）；
+   *   · 用户明确要求（设置页里点保存就是明确要求）⇒ 放行，但必须回传"改了什么/风险/是否恢复"。
+   */
+  let menJinTongZhi = '';
+  try {
+    const sg = (partial as { softGates?: unknown })?.softGates;
+    if (Array.isArray(sg)) {
+      const mingQue = (partial as { softGatesUserExplicit?: unknown })?.softGatesUserExplicit === true;
+      const lun = Array.isArray((partial as { softGatesProofs?: unknown })?.softGatesProofs)
+        ? ((partial as { softGatesProofs: unknown[] }).softGatesProofs).map((x) => String(x))
+        : [];
+      const qiTa = Array.isArray((partial as { softGatesAlternatives?: unknown })?.softGatesAlternatives)
+        ? ((partial as { softGatesAlternatives: Array<Record<string, unknown>> }).softGatesAlternatives)
+          .map((x) => ({ fangAn: String(x?.fangAn || ''), zhiXinDu: Number(x?.zhiXinDu) || 0 }))
+        : [];
+      const wenBen = sg.map((g) => {
+        const o = (g || {}) as Record<string, unknown>;
+        return [o.id, o.ming, o.name, o.cmd, o.script, o.desc, o.body, o.text].map((v) => String(v || '')).join(' \n ');
+      }).join('\n');
+      const jue = panDuanRuanGai({ neiRong: wenBen, yongHuMingQue: mingQue, lunZheng: lun, qiTaFangAn: qiTa });
+      if (!jue.yunXu) {
+        try { audit?.log('gate.soft-save-denied', { liYou: jue.liYou }); } catch { /* noop */ }
+        return { ok: false, error: 'soft-gate-denied', liYou: jue.liYou, gaoZhi: '', yingXiuZheng: jue.yingXiuZheng };
+      }
+      menJinTongZhi = jue.gaoZhi;
+      if (jue.luJing === 'conflict-hard-wins') {
+        /** 硬门禁优先：把与硬门禁冲突的条目**当场剔除**（不保留冲突项） */
+        const baoLiu = sg.filter((g) => {
+          const o = (g || {}) as Record<string, unknown>;
+          const w = [o.id, o.ming, o.name, o.cmd, o.script, o.desc, o.body, o.text].map((v) => String(v || '')).join(' \n ');
+          return jianChaRuanMenJin(w).mingZhong.length === 0;
+        });
+        (partial as { softGates: unknown }).softGates = baoLiu;
+        try { audit?.log('gate.soft-save-conflict-fixed', { yuan: sg.length, sheng: baoLiu.length }); } catch { /* noop */ }
+      }
+    }
+  } catch { /* 门禁裁决失败不许挡住普通设置保存，但下一轮会被再一次拦 */ }
   const next = settingsStore?.save(partial as never);
+  /**
+   * 语言一改，默认层**当场跟着换**（第 54 轮项 1）：只换"没被用户改过"的那两个文件，
+   * 改过的保持原样（`moRenYuYanTongBu` 自己落审计说明为什么没换）。
+   */
+  try { qingLiTokenXiaoZhun(); } catch { /* 模型列表变了就顺手清一次专属校准 */ }
+  if (partial && typeof (partial as { yuYan?: unknown }).yuYan === 'string') {
+    try { moRenYuYanTongBu(); } catch { /* 换语言失败不许影响设置保存 */ }
+    try { yongHuMingSuiYuYan(); } catch { /* 同上 */ }
+  }
+  /** 带 `modelCaps` 的保存（设置 API / 导入）⇒ 内存能力表当场跟上，不等重启（预算、看图分流、工具判定都读内存那份） */
+  try {
+    const mc = (partial as { modelCaps?: unknown })?.modelCaps;
+    if (mc && typeof mc === 'object' && !Array.isArray(mc)) {
+      const banBen = Number((settingsStore?.load() as { modelCapsVersion?: number } | undefined)?.modelCapsVersion || 0) === CAPS_VERSION;
+      const n = nengLiCongLuoPan(mc as Record<string, LuoPanNengLi>, banBen);
+      try { audit?.log('model.caps-synced', { from: 'settings-save', n, banBenDui: banBen }); } catch { /* noop */ }
+    }
+  } catch { /* 同步失败不挡保存；下次启动仍会从落盘读回 */ }
   /** 语言改了 ⇒ 主进程文案包立刻跟着换（系统提示词/弹窗/错误文案不再落后于界面） */
   try {
     const yu = (partial as { yuYan?: unknown })?.yuYan;
@@ -12961,7 +16230,7 @@ chuliIpc('warmy:peiZhiBaoCun', (e, partial: Record<string, unknown>) => {
    * 跳过发起方自己（它已经渲染过了）。
    */
   try { broadcastToWindows('warmy:peiZhiChanged', { keys: Object.keys(partial || {}) }, e?.sender?.id); } catch { /* noop */ }
-  return { ok: true, settings: next };
+  return { ok: true, settings: next, ...(menJinTongZhi ? { menJinTongZhi } : {}) };
 });
 
 /**
@@ -13110,6 +16379,8 @@ chuliIpc('warmy:zuiGaoXinNianDu', () => anQuanChuLi(
 ));
 chuliIpc('warmy:zuiGaoXinNianShe', (_e, p0?: { text?: string }) => {
   try {
+    const ri = chaoShangXianRi('教条', String(p0?.text ?? ''));
+    if (ri) return ri;
     const t0 = String(p0?.text ?? '').slice(0, 20000);
     fs.mkdirSync(path.dirname(zuiGaoXinNianLu()), { recursive: true });
     fs.writeFileSync(zuiGaoXinNianLu(), t0, 'utf8');
@@ -13118,6 +16389,105 @@ chuliIpc('warmy:zuiGaoXinNianShe', (_e, p0?: { text?: string }) => {
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
+});
+
+/**
+ * **「术」**（`userData/shu.md`，第 51 轮）：教条之上的方法论/技巧层。
+ * 优先级（第 51 轮定稿）：产品硬门禁 > 道 > **术** > 教条(agents.md) > 束缚(Memory.md) > 工具 > 软门禁 > 认知 > 印象 > 身份/模型/时间。
+ * 与教条一样是用户的长期指示，可以被压缩（道不可以）。
+ */
+function shuLu(): string { return path.join(app.getPath('userData'), 'shu.md'); }
+function duShu(): string {
+  try {
+    if (!fs.existsSync(shuLu())) return '';
+    return fs.readFileSync(shuLu(), 'utf8');
+  } catch { return ''; }
+}
+chuliIpc('warmy:shuDu', () => anQuanChuLi(
+  () => ({ ok: true, text: duShu(), path: shuLu() }),
+  { ok: false, text: '', path: '' },
+));
+chuliIpc('warmy:shuShe', (_e, p0?: { text?: string }) => {
+  try {
+    const ri = chaoShangXianRi('术', String(p0?.text ?? ''));
+    if (ri) return ri;
+    const t0 = String(p0?.text ?? '').slice(0, 20000);
+    fs.mkdirSync(path.dirname(shuLu()), { recursive: true });
+    fs.writeFileSync(shuLu(), t0, 'utf8');
+    audit?.log('settings.shu-md-saved', { chars: t0.length });
+    return { ok: true, path: shuLu(), chars: t0.length };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/**
+ * **「规范」**（`userData/guifan/<sessionId>.md`，第 52 轮用户新增）：**每个会话一份**的做事规范。
+ * 与「术」的区别：术是全局章法，规范只在这个聊天里生效；优先级在术之后、教条之前。
+ * 谁可写：用户在第四列「规范」卡里手改（IPC `warmy:guiFanDu/She`）；归档时把与规范有关的结论
+ * 一起整理进**本会话**的知识库（见 `guiDangYiGeHuiHua`）。文件名做安全化，不许路径穿越。
+ */
+function guiFanLu(sessionId: string): string {
+  const sid = String(sessionId || '').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80) || 'default';
+  return path.join(app.getPath('userData'), 'guifan', sid + '.md');
+}
+function duGuiFan(sessionId: string): string {
+  try {
+    const p = guiFanLu(sessionId);
+    if (!fs.existsSync(p)) return '';
+    /**
+     * 第 53 轮项 2：规范也是**每轮都发**的层，同样有固定上限。
+     * 旧做法是读到超限时**悄悄截断**（用户以为自己写进去的东西还在），现在改成**当场压缩 + 溢出条目进知识库**，
+     * 然后把压好的整份交出去 —— 发出去的和文件里的是同一份，不留"看到的/发送的"两套口径。
+     */
+    yaSuoYiCeng({ ceng: '规范', du: () => fs.readFileSync(p, 'utf8'), xie: (t) => fs.writeFileSync(p, t, 'utf8'), lu: () => p });
+    return fs.readFileSync(p, 'utf8');
+  } catch { return ''; }
+}
+chuliIpc('warmy:guiFanDu', (_e, p0?: { sessionId?: string }) => anQuanChuLi(
+  () => ({ ok: true, text: duGuiFan(String(p0?.sessionId || '')), path: guiFanLu(String(p0?.sessionId || '')) }),
+  { ok: false, text: '', path: '' },
+));
+chuliIpc('warmy:guiFanShe', (_e, p0?: { sessionId?: string; text?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    if (!sid) return { ok: false, error: 'bad-session' };
+    const ri = chaoShangXianRi('规范', String(p0?.text ?? ''));
+    if (ri) return ri;
+    const t = String(p0?.text ?? '').slice(0, guiFanMaxChars());
+    const p = guiFanLu(sid);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    if (t.trim() === '') fs.rmSync(p, { force: true });
+    else fs.writeFileSync(p, t, 'utf8');
+    audit?.log('settings.guifan-md-saved', { sessionId: sid, chars: t.length });
+    return { ok: true, path: p, chars: t.length };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/**
+ * **「束缚」**（`userData/Memory.md`，第 51 轮）：教条之下的补充约束。
+ * 选这个文件名是为了兼容其它智能体的 Memory.md，方便移植。
+ * 优先级低于教条；可压缩（道不可以）。
+ */
+function shuFuLu(): string { return path.join(app.getPath('userData'), 'Memory.md'); }
+function duShuFu(): string {
+  try {
+    if (!fs.existsSync(shuFuLu())) return '';
+    return fs.readFileSync(shuFuLu(), 'utf8');
+  } catch { return ''; }
+}
+chuliIpc('warmy:shuFuDu', () => anQuanChuLi(
+  () => ({ ok: true, text: duShuFu(), path: shuFuLu() }),
+  { ok: false, text: '', path: '' },
+));
+chuliIpc('warmy:shuFuShe', (_e, p0?: { text?: string }) => {
+  try {
+    const ri = chaoShangXianRi('束缚', String(p0?.text ?? ''));
+    if (ri) return ri;
+    const t0 = String(p0?.text ?? '').slice(0, 20000);
+    fs.mkdirSync(path.dirname(shuFuLu()), { recursive: true });
+    fs.writeFileSync(shuFuLu(), t0, 'utf8');
+    audit?.log('settings.memory-md-saved', { chars: t0.length });
+    return { ok: true, path: shuFuLu(), chars: t0.length };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 /**
@@ -13171,6 +16541,54 @@ function boZhongNeiZhiJiNeng(): void {
 function daoLu(): string {
   return path.join(app.getPath('userData'), 'dao.md');
 }
+/** 提示词分层与压缩口径的版本号（进知识库溯源，改口径即递增 ⇒ 可据此重算派生条目） */
+const TI_SHI_CENG_BAN_BEN = 'r53-2';
+/**
+ * 一次写入的双时间（第 53 轮项 5）：调用方给"说话时刻"，这里解析发生时间并顺手做异常自检。
+ * 发生时间解析不出来 ⇒ 留空（绝不拿记录时间冒充发生时间 —— 那正是用户点名不许混的那件事）。
+ */
+function shuangShiJian(yuanWen: string, jiLuTs: number, xuHao?: number): {
+  jiluTs: number; fashengTs?: number; fashengBiao?: string; fashengJingDu: string; fashengLaiYuan: 'stated' | 'none'; xuHao?: number; yiChang: string;
+} {
+  const jl = Number(jiLuTs) || Date.now();
+  const sj = jieXiFaShengShiJian(String(yuanWen || ''), jl);
+  return {
+    jiluTs: jl, fashengTs: sj.faShengTs, fashengBiao: sj.faShengBiao, fashengJingDu: sj.jingDu,
+    fashengLaiYuan: sj.faShengTs ? 'stated' : 'none', xuHao: Number(xuHao) || undefined,
+    yiChang: shiJianYiChang(jl, sj.faShengTs),
+  };
+}
+/** 这一轮"说话时刻"：本会话最后一条真实用户消息的落地时间（取不到才回落到现在） */
+function benLunShuoHuaTs(sessionId: string): number {
+  const lie = chatLogs.get(String(sessionId || '')) || [];
+  for (let i = lie.length - 1; i >= 0; i--) {
+    const x = lie[i];
+    if (!x) continue;
+    if (guiYiJiaoSe(x.role) === 'user' && !((x as { hidden?: boolean }).hidden)) {
+      const t = Number(xiaoXiShiJian(x)) || 0;
+      if (t) return t;
+    }
+  }
+  return Date.now();
+}
+/**
+ * 本轮（近几条）用户原话 —— 证据闸要拿它比对"这条内容是不是从原文来的"（第 53 轮项 4）。
+ * 只看用户说的，不看模型说的：模型自己的输出被当成"原文依据"就等于让猜测自我印证。
+ */
+function benLunYuanWen(sessionId: string): string {
+  const lie = chatLogs.get(String(sessionId || '')) || [];
+  const qu: string[] = [];
+  for (let i = lie.length - 1; i >= 0 && qu.length < 6; i--) {
+    const x = lie[i];
+    if (!x) continue;
+    if (guiYiJiaoSe(x.role) === 'user' && !((x as { hidden?: boolean }).hidden)) {
+      const t = String((x as { content?: string }).content || '');
+      if (t.trim()) qu.push(t);
+    }
+  }
+  return qu.join('\n');
+}
+
 /**
  * 首次运行播种：`dao.md` 不存在时写入出厂「合篇」（`dao-default.ts`）。
  * 只在文件缺失时写一次；用户改过/删过之后**不覆盖**（删空表示用户主动清空）。
@@ -13180,8 +16598,10 @@ function boZhongDaoMoRen(): void {
     const p = daoLu();
     if (fs.existsSync(p)) return;
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, DAO_MOREN, 'utf8');
-    audit?.log('settings.dao-md-seeded', { chars: DAO_MOREN.length });
+    /** 第 54 轮项 1：按**当前界面语言**播种（10 种语言各有出厂稿） */
+    const mo = quMoRen(dangQianYuYan());
+    fs.writeFileSync(p, mo.dao, 'utf8');
+    audit?.log('settings.dao-md-seeded', { chars: mo.dao.length, lang: dangQianYuYan() });
   } catch { /* noop */ }
 }
 function duDao(): string {
@@ -13190,24 +16610,234 @@ function duDao(): string {
     return fs.readFileSync(daoLu(), 'utf8');
   } catch { return ''; }
 }
+/**
+ * 首次运行播种「术」（第 52 轮）：原来写在道里的**做事章法**（节制 / 把事做成 / 与人协作）搬到术，
+ * 因为术是可压缩的行为规范纲要，而道要永远原样在场。同样只播种一次，之后归用户维护。
+ */
+function boZhongShuMoRen(): void {
+  try {
+    const p = shuLu();
+    if (fs.existsSync(p)) return;
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    const mo = quMoRen(dangQianYuYan());
+    fs.writeFileSync(p, mo.shu, 'utf8');
+    audit?.log('settings.shu-md-seeded', { chars: mo.shu.length, lang: dangQianYuYan() });
+  } catch { /* noop */ }
+}
+/**
+ * **默认层随界面语言切换**（第 54 轮项 1）：
+ * 只有"内容仍等于任一语言的出厂稿"的层才跟着换（说明用户没改过）；改过的**保持用户版本**并落审计。
+ * 覆盖前留 `.bak-lang-<ts>`，与其它自动改写同一条可回退口径。
+ */
+function moRenYuYanTongBu(): void {
+  const lang = dangQianYuYan();
+  const yu = quMoRen(lang);
+  /** 第 81 轮：**道只有「我的」页里那一份**。界面换语言不再自动把道替换成 
+   *  另一种语言的出厂稿（那会覆盖用户版本、且英文稿更长）。道只在首次播种时写一次，
+   *  之后永远归用户维护；其它层仍可按出厂稿跟随语言。 */
+  const dian: Array<{ ceng: string; lu: () => string; wen: string }> = [
+    /**
+     * 第 82 轮用户定稿：道/术等**默认提示词**都要随语言变化；
+     * 只有用户手动改过的层才保持原样（`shiChuChangGao` 为 false）。
+     * 这样切语言后看到的是该语言的道，而不是永远停在首次播种的中文道。
+     */
+    { ceng: '道', lu: daoLu, wen: yu.dao },
+    { ceng: '术', lu: shuLu, wen: yu.shu },
+  ];
+  for (const x of dian) {
+    try {
+      const p = x.lu();
+      if (!fs.existsSync(p)) continue;
+      const cur = fs.readFileSync(p, 'utf8');
+      if (cur === x.wen) continue;
+      if (!shiChuChangGao(cur)) {
+        audit?.log('prompt.default-kept-user-edited', { ceng: x.ceng, lang, ziShu: cur.length });
+        continue;
+      }
+      try { fs.copyFileSync(p, p + '.bak-lang-' + Date.now()); } catch { /* noop */ }
+      fs.writeFileSync(p, x.wen, 'utf8');
+      audit?.log('prompt.default-relocalized', { ceng: x.ceng, lang, qian: cur.length, hou: x.wen.length });
+    } catch { /* 单层失败不影响其它层 */ }
+  }
+}
+/** 默认称呼跟着语言走（第 54 轮项 1）：只有它仍是**任一语言的出厂默认**时才换，用户改过就保留 */
+function yongHuMingSuiYuYan(): void {
+  try {
+    const s = settingsStore?.load() as { username?: string } | undefined;
+    if (!s) return;
+    const cur = String(s.username || '').trim();
+    if (!shiMoRenYongHuMing(cur)) return;
+    const lang = dangQianYuYan();
+    const mo = YONG_HU_MING_MO_REN[lang] || YONG_HU_MING_MO_REN['zh-CN'];
+    if (!mo || cur === mo) return;
+    settingsStore?.save({ username: mo } as never);
+    audit?.log('settings.username-relocalized', { lang, ming: mo });
+  } catch { /* 称呼换语言失败不影响启动 */ }
+}
+/**
+ * **每层提示词的自检与压缩**（第 53 轮项 2）：程序自己改（播种/归纳/升级）把某层顶超限时时，
+ * **当场压回上限内**，做法是"去空行装饰 → 仍超就把最旧的整条条目搬进知识库"，
+ * 并且**要点数必须守恒**（对不上就整步放弃、只报警不硬压 —— 宁可超限也不能悄悄吞掉规矩）。
+ * 溢出条目一个字不丢：写进对应层的知识库（术/教条/束缚/规范→内部库，印象→会话库），`recall` 还能取回来。
+ */
+type CengDingYi = { ceng: string; du: () => string; xie: (t: string) => void; lu: () => string };
+/**
+ * 这一层允不允许程序**自己动笔**？口径只有一份：`BU_KE_YA_SUO`（道 / 产品门禁）。
+ * 「道」写死不许程序改写：它的要点只能由用户自己删（连"去空行"都不做，免得出现"读出来再自动写回"这条路）。
+ * 超限的道只报警，由用户决定删哪一条 —— 这是"道永远原样在场"的代价，也是它的全部意义。
+ */
+function chengXuKeYiDong(ceng: string): boolean {
+  return !BU_KE_YA_SUO.some((b) => String(ceng || '').startsWith(b));
+}
+function yaSuoYiCeng(x: CengDingYi): void {
+  try {
+    const wen = x.du();
+    if (!wen.trim()) return;
+    const yuYan = dangQianYuYan();
+    if (!chaoShangXian(x.ceng, wen, yuYan).chao) {
+      /** 没超限也顺手做一次零损失的去空行（只在确实变短时落盘，避免每次启动都重写文件） */
+      if (!chengXuKeYiDong(x.ceng)) return;
+      const mj = jinCouHua(wen);
+      if (mj.length < wen.length) {
+        x.xie(mj);
+        audit?.log('prompt.compacted', { ceng: x.ceng, qian: wen.length, hou: mj.length });
+      }
+      return;
+    }
+    if (!chengXuKeYiDong(x.ceng)) {
+      audit?.log('prompt.over-cap-immovable', { ceng: x.ceng, ziShu: wen.length, shangXian: shangXianOf(x.ceng, yuYan), liYou: '这一层不许程序改写（永不可压缩），超限只能由用户自己删条目' });
+      return;
+    }
+    const ji = guiHuaYaSuo(x.ceng, wen, yuYan);
+    if (!ji.gaoDing) {
+      audit?.log('prompt.still-over-cap', { ceng: x.ceng, ziShu: String(wen).length, shangXian: shangXianOf(x.ceng, yuYan), liYou: ji.liYou });
+      return;
+    }
+    /** 覆盖前先留一份（与 daoShe 同一族做法：改的是用户拥有的文件，必须可回退） */
+    try { fs.copyFileSync(x.lu(), x.lu() + '.bak-compress-' + Date.now()); } catch { /* noop */ }
+    x.xie(ji.xinWen);
+    const guiCeng = yiChuGuiXiang(x.ceng);
+    for (const tiao of ji.yiChu) {
+      const clean = String(tiao).replace(/^\s*(?:\d+[\.、)]|[-*·—]\s*)/, '').trim();
+      if (!clean || !knowledge) continue;
+      knowledge.allow(guiCeng).addEvent({
+        id: 'ev-overflow-' + x.ceng + '-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e4).toString(36),
+        biaoTi: `「${x.ceng}」溢出的旧条目`,
+        result: clean.slice(0, 500),
+        entityIds: [],
+        anchors: [],
+        ts: Date.now(),
+        jiluTs: Date.now(),
+        fashengLaiYuan: 'none',
+        fashengJingDu: 'wu',
+        laiYuan: 'prompt:overflow',
+        tiShiCiBanBen: TI_SHI_CENG_BAN_BEN,
+      });
+    }
+    audit?.log('prompt.compressed', {
+      ceng: x.ceng, qian: ji.ziShuQian, hou: ji.ziShuHou,
+      yaoDianQian: ji.yaoDianQian, yaoDianHou: ji.yaoDianHou, yiChu: ji.yiChu.length, guiXiang: guiCeng, liYou: ji.liYou,
+    });
+  } catch { /* 自检失败不许拖累启动 / 不许挡住对话 */ }
+}
+const CENG_ZI_JIAN: Array<CengDingYi> = [
+  { ceng: '术', du: duShu, xie: (t) => fs.writeFileSync(shuLu(), t, 'utf8'), lu: shuLu },
+  { ceng: '教条', du: duZuiGaoXinNian, xie: (t) => fs.writeFileSync(zuiGaoXinNianLu(), t, 'utf8'), lu: zuiGaoXinNianLu },
+  { ceng: '束缚', du: duShuFu, xie: (t) => fs.writeFileSync(shuFuLu(), t, 'utf8'), lu: shuFuLu },
+  /** 印象是程序每轮归档都会改的层，最容易悄悄超限 ⇒ 必须进自检名单（第 53 轮项 2） */
+  { ceng: '印象', du: duYinXiang, xie: (t) => { xieYinXiang(t); }, lu: yinXiangLu },
+];
+/**
+ * **只报警、绝不写文件**的层：`BU_KE_YA_SUO` 里的那些（道 / 产品门禁）。
+ * 这里刻意**不给 `xie` 闭包** —— 一条永远不会执行的写路径留在代码里，就等于给"程序会改道"留了个口子，
+ * 也让静态判据（写 dao.md 的调用只有播种 + 用户保存两处）失去意义。超限的道只报 `prompt.over-cap-immovable`。
+ */
+const CENG_ZHI_BAO_JING: Array<{ ceng: string; du: () => string }> = [{ ceng: '道', du: duDao }];
+function ziJianTiShangXian(): void {
+  for (const x of CENG_ZI_JIAN) yaSuoYiCeng(x);
+  for (const x of CENG_ZHI_BAO_JING) {
+    try {
+      const wen = x.du();
+      const j = chaoShangXian(x.ceng, wen, dangQianYuYan());
+      if (j.chao) {
+        audit?.log('prompt.over-cap-immovable', {
+          ceng: x.ceng, ziShu: j.ziShu, shangXian: j.shangXian,
+          liYou: '这一层不许程序改写（永不可压缩），超限只能由用户自己删条目',
+        });
+      }
+    } catch { /* 报警失败不拖累启动 */ }
+  }
+  /**
+   * 总量报警（不自动删）：单层各有上限，但**每一轮发出去的是它们的和**。
+   * 和超过 `TI_SHI_ZONG_HE` ⇒ 说明该合并同类项了，把最大的几层点名报出去，让人决定删什么。
+   */
+  try {
+    const yuYan0 = dangQianYuYan();
+    const ming = CENG_ZI_JIAN.map((x) => ({ ceng: x.ceng, ziShu: String(x.du() || '').length, dengJia: dengJiaZiShu(String(x.du() || ''), yuYan0) }));
+    /** 总量按**中文字符当量**算（拉丁语言 0.3 左右/字符），不再让英文按原始字符数虚高报警 */
+    const zong = ming.reduce((n, m) => n + m.dengJia, 0);
+    if (zong > TI_SHI_ZONG_HE) {
+      audit?.log('prompt.over-total', {
+        zong, shangXian: TI_SHI_ZONG_HE,
+        ming: ming.sort((a, b) => b.ziShu - a.ziShu).slice(0, 3),
+        jiianYi: '每层单独都没超限但总量太大：这些字每一轮都发。请合并同类项，或把太旧的条目搬进知识库（knowledge_add 之后 recall 还能取回）',
+      });
+    }
+  } catch { /* 报警失败不影响启动 */ }
+  /**
+   * 第 67 轮 项 9：**每种语言的每个出厂提示词都审一次**（不是只看当前界面语言）。
+   * 超限只报警、绝不截断；维护侧用 `scripts/retranslate-default-prompts.mjs` 从中文原文重译，
+   * 重译后再跑 `verify-r67-prompt-caps` 的三轮门禁。
+   */
+  try {
+    const over: Array<{ lang: string; ceng: string; ziShu: number; shangXian: number }> = [];
+    for (const lang of MO_REN_YU_YAN_KE) {
+      const mo = quMoRen(lang);
+      for (const [ceng, wen] of [['道', mo.dao], ['术', mo.shu]] as const) {
+        const j = chaoShangXian(ceng, wen, lang);
+        if (j.chao) over.push({ lang, ceng, ziShu: j.ziShu, shangXian: j.shangXian });
+      }
+    }
+    audit?.log('prompt.lang-audit', { langs: MO_REN_YU_YAN_KE.length, over: over.length, items: over.slice(0, 12) });
+  } catch { /* 审计失败不拖累启动 */ }
+}
 chuliIpc('warmy:daoDu', () => anQuanChuLi(
   () => ({ ok: true, text: duDao(), path: daoLu() }),
   { ok: false, text: '', path: '' },
 ));
 chuliIpc('warmy:daoShe', (_e, p0?: { text?: string }) => {
   try {
+    const ri = chaoShangXianRi('道', String(p0?.text ?? ''));
+    if (ri) return ri;
     const t0 = String(p0?.text ?? '').slice(0, 20000);
     fs.mkdirSync(path.dirname(daoLu()), { recursive: true });
+    /**
+     * **道是不可自动改写的最高准则**（第 51 轮）：这一发只能由人从界面点「确定」进来，
+     * 而且**覆盖前先留一份备份**（`dao.md.bak-<时间戳>`，保留最近 5 份，多的删最旧），
+     * 免得一次误操作把道丢掉。审计写明备份路径，可追溯。
+     */
+    let beiFen = '';
+    try {
+      if (fs.existsSync(daoLu())) {
+        beiFen = daoLu() + '.bak-' + Date.now();
+        fs.copyFileSync(daoLu(), beiFen);
+        const bak = fs.readdirSync(path.dirname(daoLu())).filter((f) => /^dao\.md\.bak-\d+$/.test(f)).sort();
+        while (bak.length > 5) {
+          const qu = bak.shift()!;
+          try { fs.unlinkSync(path.join(path.dirname(daoLu()), qu)); } catch { /* noop */ }
+        }
+      }
+    } catch { /* 备份失败不挡保存，但要记 */ }
     fs.writeFileSync(daoLu(), t0, 'utf8');
-    audit?.log('settings.dao-md-saved', { chars: t0.length });
-    return { ok: true, path: daoLu(), chars: t0.length };
+    audit?.log('settings.dao-md-saved', { chars: t0.length, beiFen });
+    return { ok: true, path: daoLu(), chars: t0.length, beiFen };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   第 37 轮 项 2：**「印象」**（`userData/yonghushuju.md`）
+   第 37 轮 项 2：**「印象」**（`userData/yinxiang.md`）
    --------------------------------------------------------------------------
    是什么：牛马在**后台归档**时，自己归纳的"它对用户的长期理解"——
            喜欢什么 / 习惯怎么做事 / 长期要求 / 想让它记住的事。
@@ -13218,8 +16848,43 @@ chuliIpc('warmy:daoShe', (_e, p0?: { text?: string }) => {
    硬门禁：用户否认某条印象 ⇒ `warmy:yinXiangZhiYi` 找出归因、把该条标记为"用户否认"，
            并把这次否认写成一条**新的提取纪律**（下一节 `提取纪律`），后续归纳按新纪律走。
    ══════════════════════════════════════════════════════════════════════════ */
+/**
+ * **跨轮黑板摘要**（第 51 轮）：只存摘要行与指针，正文仍在记忆库（kind:'blackboard'）。
+ * 落在 `userData/board-carry.json`，有界（最多 40 条、6 小时窗口）。
+ */
+function banDaiHuiLu(): string { return path.join(app.getPath('userData'), 'board-carry.json'); }
+let banDaiHuiKu: BanDaiHuiKu = banKuKong();
+function duBanDaiHui(): void {
+  try {
+    const j = JSON.parse(fs.readFileSync(banDaiHuiLu(), 'utf8')) as BanDaiHuiKu;
+    if (j && Array.isArray(j.tiao)) banDaiHuiKu = j;
+  } catch { /* 首次/坏文件：空库 */ }
+}
+function cunBanDaiHui(): void {
+  try {
+    fs.mkdirSync(path.dirname(banDaiHuiLu()), { recursive: true });
+    fs.writeFileSync(banDaiHuiLu(), JSON.stringify(banDaiHuiKu), 'utf8');
+  } catch { /* 落盘失败不挡对话 */ }
+}
+
+/**
+ * 「印象」文件是 `userData/yinxiang.md`（第 51 轮从 `yonghushuju.md` 改名）：它和道/术/教条/束缚
+ * 是同一类东西 —— 用户的长期指示层，不该叫"用户数据"这种含糊名字。
+ * 老安装里若只有旧名文件，**读之前原地改名一次**（内容一字不动、不保留双份），并记审计。
+ */
+const YIN_XIANG_JIU_MING = 'yonghushuju.md';
 function yinXiangLu(): string {
-  return path.join(app.getPath('userData'), 'yonghushuju.md');
+  const xin = path.join(app.getPath('userData'), 'yinxiang.md');
+  try {
+    if (!fs.existsSync(xin)) {
+      const jiu = path.join(app.getPath('userData'), YIN_XIANG_JIU_MING);
+      if (fs.existsSync(jiu)) {
+        fs.renameSync(jiu, xin);
+        try { audit?.log('memory.impression-renamed', { from: YIN_XIANG_JIU_MING, to: 'yinxiang.md', chars: fs.statSync(xin).size }); } catch { /* noop */ }
+      }
+    }
+  } catch { /* 改名失败就按新名走：读不到旧文件也不能挡住对话 */ }
+  return xin;
 }
 function duYinXiang(): string {
   try {
@@ -13234,11 +16899,51 @@ function xieYinXiang(wen: string): boolean {
     return true;
   } catch { return false; }
 }
-/** 印象的硬上限（防膨胀）：行数 + 字符双闸；超了按"最旧先丢"裁 */
+/**
+ * 印象的硬上限（防膨胀）：行数 + 字符双闸；超了按"最旧先丢"裁。
+ * 第 53 轮项 2：字符闸与注入预算**都取自同一份上限表** `ti-shi-shang-xian.ts`
+ * —— 以前 印象 有 6000（存）/3000（发）两套数字，同一层两个口径就是缺陷的藏身处。
+ */
 const YIN_XIANG_MAX_LINES = 120;
-const YIN_XIANG_MAX_CHARS = 6000;
+
+/**
+ * 各层"每轮都发"的预算与存储闸 —— **按界面语言折算**（第 54 轮项 1）。
+ * 上限的原始口径是"中文字符数"；同一段规则翻成俄语约 2.7 倍字符、法语/西语约 2.6 倍，字符数不等于 token 成本。
+ * 按语言给一个折算系数（`YU_YAN_ZI_SHU_BEI_LV`），让**每种语言的出厂稿都放得下**，且每轮成本同量级。
+ */
+function yinXiangMaxChars(): number { return shangXianOf('印象', dangQianYuYan()); }
+function yinXiangInjectChars(): number { return shangXianOf('印象', dangQianYuYan()); }
+function guiFanMaxChars(): number { return shangXianOf('规范', dangQianYuYan()); }
+function renZhiInjectChars(): number { return shangXianOf('认知', dangQianYuYan()); }
+function shuZongLiangMax(): number { return shangXianOf('术', dangQianYuYan()); }
+
+/** 当前界面语言（只认 i18n 支持的 10 种；否则按系统语言归类，最后回落 zh-CN） */
+function dangQianYuYan(): string {
+  try {
+    const y = String((settingsStore?.load() as { yuYan?: string } | undefined)?.yuYan || '');
+    if (MO_REN_YU_YAN_KE.includes(y)) return y;
+  } catch { /* 设置没就绪就按系统语言 */ }
+  try {
+    const l = String(app.getLocale() || '');
+    if (MO_REN_YU_YAN_KE.includes(l)) return l;
+    if (/^zh/i.test(l)) return /TW|HK|Hant/i.test(l) ? 'zh-TW' : 'zh-CN';
+    if (/^en/i.test(l)) return 'en-US';
+    if (/^ja/i.test(l)) return 'ja';
+    if (/^ko/i.test(l)) return 'ko';
+    if (/^ru/i.test(l)) return 'ru';
+    if (/^fr/i.test(l)) return 'fr';
+    if (/^es/i.test(l)) return 'es';
+    if (/^pt/i.test(l)) return 'pt';
+  } catch { /* noop */ }
+  return 'zh-CN';
+}
+
 /** 注入时的预算（低于「规矩」，与归档摘要同量级，不吃爆上下文） */
-const YIN_XIANG_INJECT_CHARS = 3000;
+
+/** 会话规范的上限（也是注入上限）：它每轮都进上下文，必须有界 */
+
+/** 认知（persona）注入上限：以前写死 1600，收成常量好钉进门禁 */
+
 
 chuliIpc('warmy:yinXiangDu', () => anQuanChuLi(
   () => ({ ok: true, text: duYinXiang(), path: yinXiangLu() }),
@@ -13246,12 +16951,86 @@ chuliIpc('warmy:yinXiangDu', () => anQuanChuLi(
 ));
 chuliIpc('warmy:yinXiangShe', (_e, p0?: { text?: string }) => {
   try {
-    const t0 = String(p0?.text ?? '').slice(0, YIN_XIANG_MAX_CHARS * 2);
+    const ri = chaoShangXianRi('印象', String(p0?.text ?? ''));
+    if (ri) return ri;
+    /** 上限已经在上一行挡过了：这里**不再 slice**（留着就是"存进去的是半截、界面还显示完整"的旧病） */
+    const t0 = String(p0?.text ?? '');
     xieYinXiang(t0);
     audit?.log('settings.yinxiang-md-saved', { chars: t0.length });
     return { ok: true, path: yinXiangLu(), chars: t0.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+
+/**
+ * **每会话印象**（第 51 轮用户口径）：印象卡属于「每个聊天界面」，归档时按会话分别更新。
+ * 存放：`userData/impressions/<sessionId>.md`（文件名做安全化，不允许路径穿越）。
+ * 注入优先级：会话印象 > 全局 yinxiang.md（会话没有时回落到全局，避免空窗）。
+ */
+function yinXiangHuiHuaLu(sessionId: string): string {
+  const sid = String(sessionId || '').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80) || 'default';
+  return path.join(app.getPath('userData'), 'impressions', sid + '.md');
+}
+function duYinXiangHuiHua(sessionId: string): string {
+  try {
+    const p = yinXiangHuiHuaLu(sessionId);
+    if (!fs.existsSync(p)) return '';
+    return fs.readFileSync(p, 'utf8');
+  } catch { return ''; }
+}
+chuliIpc('warmy:yinXiangHuiHuaDu', (_e, p0?: { sessionId?: string }) => anQuanChuLi(
+  () => ({ ok: true, text: duYinXiangHuiHua(String(p0?.sessionId || '')), path: yinXiangHuiHuaLu(String(p0?.sessionId || '')) }),
+  { ok: false, text: '', path: '' },
+));
+chuliIpc('warmy:yinXiangHuiHuaShe', (_e, p0?: { sessionId?: string; text?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    if (!sid) return { ok: false, error: 'bad-session' };
+    /**
+     * 会话级印象草稿**也是提示词层**（注入时优先于全局「印象」），所以有同一个硬上限（第 53 轮项 2 的补洞）：
+     * 旧做法是 `slice(0, 上限×2)` 悄悄截断 —— 用户以为写进去了，实际只发一半。现在超限直接拒，并说明该搬去哪。
+     */
+    const ri = chaoShangXianRi('印象', String(p0?.text ?? ''));
+    if (ri) return ri;
+    const t0 = String(p0?.text ?? '');
+    const p = yinXiangHuiHuaLu(sid);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, t0, 'utf8');
+    audit?.log('settings.yinxiang-session-saved', { sessionId: sid, chars: t0.length });
+    return { ok: true, path: p, chars: t0.length };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/**
+ * **自更新能力白名单**（第 54 轮项 3，用户口径："白名单是否可以让模型自行更新"）。
+ *
+ * 模型用 `capability_propose` 提案"我们能做某类事"，**宿主校验后**写进 `userData/nengli.json`；
+ * 运行时的白名单 = 内置 12 类 + 自更新条目（`heBingNengLi` 合并、去重、总量封顶 32 条）。
+ * 边界（必须记住）：
+ *  · 自更新只扩大**可对外说的类别**，不改变"要有 ≥2 条独立证据才说"和"概要不含项目/时间/对象"这两条硬闸；
+ *  · 每一条提案都过 `jianChaXinNengLi`（不许数字/标点/路径/对象名/存在性说法），**不靠模型自觉**；
+ *  · 文件坏了按空表处理，绝不挡住启动；写入走 tmp+rename（半个文件比没文件更糟）。
+ */
+function nengLiDangLu(): string { return path.join(app.getPath('userData'), 'nengli.json'); }
+let nengLiWai: Array<{ id: string; hua: string; ci: string[] }> = [];
+function duNengLiWai(): void {
+  try {
+    const p = nengLiDangLu();
+    if (!fs.existsSync(p)) return;
+    const j = JSON.parse(fs.readFileSync(p, 'utf8')) as { items?: Array<{ id?: string; hua?: string; ci?: string[] }> };
+    nengLiWai = (Array.isArray(j.items) ? j.items : [])
+      .map((x, i) => ({ id: String(x?.id || ('z-' + i)), hua: String(x?.hua || '').trim(), ci: Array.isArray(x?.ci) ? x.ci.map(String).filter(Boolean) : [] }))
+      .filter((x) => x.hua && x.ci.length);
+  } catch { /* 坏文件按空表处理：不许挡住启动 */ }
+}
+function xieNengLiWai(): void {
+  const p = nengLiDangLu();
+  const tmp = p + '.tmp';
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(tmp, JSON.stringify({ items: nengLiWai }, null, 2), 'utf8');
+  fs.renameSync(tmp, p);
+}
+/** 当前生效的能力表（内置 + 自更新）；派生概要、检查器、计数都走这一份 */
+function nengLiBiao() { return heBingNengLi(nengLiWai); }
 
 /**
  * **软门禁：怎么从对话里提取"印象"**（写进归纳的提示词，也是代码里的判据）。
@@ -13275,7 +17054,166 @@ export const YIN_XIANG_TIQU_MENJIN = `【印象提取纪律（软门禁）】
  * 规则已经足够（用户自己说的话里就有明确措辞）。规则提取的好处是**永不幻觉**。
  * 需要更"懂语义"的归纳时，再由模型在对话里显式调用（同一条软门禁）。
  */
-function zhengLiYinXiang(caiLiao: { zhaiYao?: string; yuanHua?: string[]; zanCai?: Array<{ pingJia: string; wenTi?: string; moXing?: string }> }): { jia: number; shan: number; ziShu: number } {
+/**
+ * 第 38 轮 项 5：**归档时用模型整理「印象」**（旧实现只是确定性规则提取，用户觉得"该记的没记"）。
+ *
+ * 模型选择口径（与产品里"整理模型"这个档位一致）：
+ *  · 优先 `设置 → 模型 → 整理模型`（`organizerChain` 里第一个启用的）；
+ *  · 没配整理模型 ⇒ 用**这只牛马当前的对话模型**；
+ *  · 两个都拿不到 / 调用失败 ⇒ **如实降级**（记审计，保留确定性提取的结果），不假装整理过。
+ *
+ * 幻觉防线（这是本条改动的关键，不能松）：
+ *  · 提示词里带上**软门禁全文**（`YIN_XIANG_TIQU_MENJIN`）+ 印象里已有的**提取纪律**（含用户否认后改过的）；
+ *  · 要求"只能摘录或压缩用户说过的话"，每条 ≤40 字、最多 8 条、没有就说「无」；
+ *  · 回来后**逐条核验**：候选行必须能在素材原文里找到 ≥10 字连续原话（`zhengLiYinXiang` 的 ④ 段做这件事），
+ *    核验不过的行直接丢掉并记 `yinxiang.hallucination-dropped`。
+ */
+/**
+ * 第 38 轮 项 5：归档抽出的**用户偏好**直接进「印象」（`yinxiang.md`）。
+ *
+ * 以前这里写 `userData/user-preferences.json` —— 那份文件**只写不读**（没有任何地方把它放进上下文），
+ * 和「印象」是同一件事，却让用户在设置里看不到、模型也用不上。现在删掉那条死路径，统一落到印象，
+ * 仍然走 `zhengLiYinXiang` 的同一套闸：去重、被用户否认过的不再写入、120 行 / 6000 字防膨胀。
+ */
+function xiePianHaoDaoYinXiang(pianHao: Array<{ key?: string; value?: string; source?: string }>): number {
+  const hang = (pianHao || []).map((p) => String(p?.value || '').trim()).filter((x) => x.length >= 4 && x.length <= 60);
+  if (!hang.length) return 0;
+  try {
+    return zhengLiYinXiang({ moXingHang: hang, suCaiZhengWen: hang.join('\n'), yuanHua: [] }).jia;
+  } catch { return 0; }
+}
+
+async function moXingGuiNaYinXiang(
+  sid: string,
+  yuanHua: string[],
+  zanCai: Array<{ pingJia: string; wenTi?: string; moXing?: string }>,
+): Promise<{ ok: boolean; moXing: string; hang: number; yuanYin?: string }> {
+  const caiLiaoWen = (yuanHua || []).join('\n').slice(0, 12000);
+  if (!caiLiaoWen.trim()) return { ok: false, moXing: '', hang: 0, yuanYin: 'no-material' };
+  const lian = nengLiLianMoXing('organizer');
+  const mingQuan = String(lian[0] || zhaoShiJiMoXing(sid) || '').trim();
+  if (!mingQuan) return { ok: false, moXing: '', hang: 0, yuanYin: 'no-model' };
+  const mo = mingQuan.includes('·') ? mingQuan.split('·').pop()!.trim() : mingQuan;
+  const jiLv = duYinXiang().split('\n').filter((l) => /^##\s*提取纪律/.test(l) || /^\s*-\s+.*(不要把|归纳)/.test(l)).slice(0, 20).join('\n');
+  try {
+    const an = await jieMoXingGongYingShang(mo);
+    if (!an || (!an.apiKey && an.protocol !== 'ollama')) return { ok: false, moXing: mo, hang: 0, yuanYin: 'provider-or-key' };
+    const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL || undefined, protocol: an.protocol } as never, an.protocol);
+    const tiShi = '你在帮一只桌面助理整理它对用户的长期印象。下面是它这次要读的材料与规则，**只能摘录或压缩用户亲口说过的话**，不许补全、不许推测。\n\n'
+      + '【提取规则（软门禁，逐条遵守）】\n' + YIN_XIANG_TIQU_MENJIN + '\n\n'
+      + (jiLv ? '【已有提取纪律（用户否认后改/加过的，优先级最高）】\n' + jiLv + '\n\n' : '')
+      + '【用户这次说过的话】\n' + caiLiaoWen + '\n\n'
+      + (zanCai.length ? '【用户对答案的赞/踩】\n' + zanCai.slice(-20).map((v) => v.pingJia + '：' + String(v.wenTi || v.moXing || '')).join('\n') + '\n\n' : '')
+      + '输出：每行一条印象，最多 8 条，每条不超过 40 个字，行首不要序号；没有可提取的就只输出「无」。';
+    const r = await Promise.race([
+      p.chat({ model: mo, xiaoXiJi: [{ role: 'user', content: tiShi }], maxTokens: 500 }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('yinxiang-timeout')), 60000)),
+    ]);
+    const wen = neiRongWenBen((r as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message?.content) || '';
+    const houXuan = wen.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && l !== '无' && !/^【|^#{1,6}\s/.test(l)).slice(0, 8);
+    const bao = zhengLiYinXiang({ yuanHua, zanCai, moXingHang: houXuan, suCaiZhengWen: caiLiaoWen });
+    try { audit?.log('yinxiang.model-archived', { sessionId: sid, moXing: mo, houXuan: houXuan.length, jia: bao.jia, ziShu: bao.ziShu }); } catch { /* noop */ }
+    /** 同一份素材也整理「术」（用户新增：术=程序自动归纳 + 用户手动）；失败不影响印象那条链 */
+    try { guiNaShu({ yuanHua, suCaiZhengWen: caiLiaoWen }); } catch { /* noop */ }
+    return { ok: true, moXing: mo, hang: bao.jia };
+  } catch (e) {
+    const yuanYin = xiJingCuoWu(e).slice(0, 120);
+    try { audit?.log('yinxiang.model-degraded', { sessionId: sid, moXing: mo, error: yuanYin }); } catch { /* noop */ }
+    zhengLiYinXiang({ yuanHua, zanCai });
+    try { guiNaShu({ yuanHua }); } catch { /* 术归纳失败不影响降级 */ }
+    return { ok: false, moXing: mo, hang: 0, yuanYin };
+  }
+}
+
+/**
+ * **「术」的归档归纳**（用户新增：术也要在归档时整理进去，同样是"程序自动归纳 + 用户手动"）。
+ * 只从**用户自己说过的话**里挑"做事章法"（顺序、流程、验收、禁止），带与印象同一道幻觉硬闸
+ * （必须能在素材里找到连续原话 ⇒ 只能挑选与压缩，不许创作），敏感类目不落，去重后追加在自己的小节里；
+ * **用户手写的其它部分一字不动**，段内最多留 20 条（丢最旧的）。
+ */
+const SHU_GUI_ZE = /(先.+再|第一步|按.{1,10}(顺序|来|办|做)|每次|以后|从现在起|不要.+要|必须|禁止|验收|检查|核对)/;
+const SHU_GUI_BIAO = '## 牛马归纳（归档时自动整理；可直接改或删）';
+/** 「术」的总量上限（第 53 轮项 2：直接取硬上限表，不再有"存 8000 / 上限 4200"两套数字）——超了只停止**归纳侧追加**，用户手写的部分不动 */
+
+/**
+ * **保存前查硬上限**（第 53 轮项 2，用户口径：超出上限的时候不让用户继续输入）。
+ * 上限表在 `ti-shi-shang-xian.ts`（与压缩提纯、门禁真值表共用同一份，不留两套口径）。
+ * 拒绝时把"当前多少字 / 上限多少字 / 差多少字"如实报出去，用户才知道要删什么。
+ */
+function chaoShangXianRi(ceng: string, t: string): { ok: false; error: string; ziShu: number; shangXian: number } | null {
+  const j = chaoShangXian(ceng, t, dangQianYuYan());
+  if (!j.chao) return null;
+  try { audit?.log('prompt.over-cap-rejected', { ceng, ziShu: j.ziShu, shangXian: j.shangXian }); } catch { /* noop */ }
+  return {
+    ok: false,
+    error: '「' + ceng + '」太长了：现在 ' + j.ziShu + ' 字，上限 ' + j.shangXian + ' 字（这些字每一轮都会发给模型）。'
+      + '请合并同类项、删掉重复的说法，或把太旧的条目搬进知识库（用 knowledge_add 记下就能随时 recall 回来）。',
+    ziShu: j.ziShu, shangXian: j.shangXian,
+  };
+}
+/** 渲染层要的是同一份上限（用来把输入框挡在上限前），按**当前界面语言**折算后发出去，渲染层不再抄数字 */
+chuliIpc('warmy:tiShiShangXian', () => anQuanChuLi(
+  () => {
+    const lang = dangQianYuYan();
+    const biao: Record<string, number> = {};
+    for (const c of Object.keys(TI_SHI_SHANG_XIAN)) biao[c] = shangXianOf(c, lang);
+    return { ok: true, shangXian: biao, lang };
+  },
+  { ok: false, shangXian: {}, lang: 'zh-CN' },
+));
+function guiNaShu(caiLiao: { yuanHua?: string[]; suCaiZhengWen?: string }): { jia: number; diu: number } {
+  try {
+    const yuan = duShu();
+    const yiYou = new Set(yuan.split('\n').filter((l) => /^\s*-\s+/.test(l)).map((l) => l.replace(/^\s*-\s+/, '').trim()));
+    const quZheng = (s: string) => String(s || '').replace(/[\s\p{P}]/gu, '');
+    const suCai = quZheng(String(caiLiao.suCaiZhengWen || '') + (caiLiao.yuanHua || []).join('\n'));
+    const xian: string[] = [];
+    for (const h of (caiLiao.yuanHua || [])) {
+      for (const j of String(h || '').split(/[。！？!?\n]/)) {
+        const w = j.replace(/^\s*[-—•·]+\s*/, '').replace(/\s+/g, ' ').trim();
+        if (!w || w.length < 6 || w.length > 80) continue;
+        if (!SHU_GUI_ZE.test(w)) continue;
+        if (yiYou.has(w) || xian.includes(w)) continue;
+        if (minGanLeiMing(w)) continue;
+        if (suCai.length >= 10 && !suCai.includes(quZheng(w.slice(0, 12)))) continue;
+        xian.push(w);
+      }
+    }
+    const jia = xian.slice(0, 8);
+    if (!jia.length) return { jia: 0, diu: 0 };
+    /** 总量闸：整份「术」超过 8000 字就**不再追加**（用户手写的部分一个字都不动，只停止归纳侧的膨胀） */
+    if (yuan.length > shuZongLiangMax()) {
+      try { audit?.log('shu.over-cap', { ziShu: yuan.length, max: shuZongLiangMax(), benLunYi: jia.length }); } catch { /* noop */ }
+      return { jia: 0, diu: 0 };
+    }
+    let quan = yuan.trimEnd();
+    if (quan.includes(SHU_GUI_BIAO)) {
+      quan = quan.replace(SHU_GUI_BIAO, SHU_GUI_BIAO + '\n' + jia.map((s) => '- ' + s).join('\n'));
+    } else {
+      quan += (quan ? '\n\n' : '') + SHU_GUI_BIAO + '\n' + jia.map((s) => '- ' + s).join('\n') + '\n';
+    }
+    /** 段内防膨胀：最多留最近 20 条（丢最旧的），非条目行（标题、日期注释）原样保留 */
+    const hang = quan.split('\n');
+    let diu = 0;
+    const biaoHang = hang.indexOf(SHU_GUI_BIAO);
+    if (biaoHang >= 0) {
+      const jieShu = hang.findIndex((l, i) => i > biaoHang && /^##\s/.test(l));
+      const qian = hang.slice(0, biaoHang + 1);
+      const duan = hang.slice(biaoHang + 1, jieShu < 0 ? hang.length : jieShu);
+      const hou = jieShu < 0 ? [] : hang.slice(jieShu);
+      const feiTiao = duan.filter((l) => !/^\s*-\s+/.test(l));
+      const tiao = duan.filter((l) => /^\s*-\s+/.test(l));
+      if (tiao.length > 20) diu = tiao.length - 20;
+      quan = qian.concat(feiTiao, tiao.slice(-20), hou).join('\n');
+    }
+    fs.mkdirSync(path.dirname(shuLu()), { recursive: true });
+    fs.writeFileSync(shuLu(), quan, 'utf8');
+    try { audit?.log('shu.zhengli', { jia: jia.length, diu, yiYou: yiYou.size }); } catch { /* noop */ }
+    return { jia: jia.length, diu };
+  } catch { return { jia: 0, diu: 0 }; }
+}
+
+function zhengLiYinXiang(caiLiao: { zhaiYao?: string; yuanHua?: string[]; zanCai?: Array<{ pingJia: string; wenTi?: string; moXing?: string }>; /** 第 38 轮 项 5：整理模型给出的候选行（必须能在素材里找到原话，见下面的幻觉闸） */ moXingHang?: string[]; suCaiZhengWen?: string }): { jia: number; shan: number; ziShu: number } {
   const yuan = duYinXiang();
   /** 已经存在的行（保持用户手写/已修订的内容不动） */
   const jiu = yuan.split('\n');
@@ -13289,6 +17227,32 @@ function zhengLiYinXiang(caiLiao: { zhaiYao?: string; yuanHua?: string[]; zanCai
     const w = String(s || '').replace(/\s+/g, ' ').trim();
     if (!w || w.length < 4 || w.length > 60) return;
     if (yiYou.has(w) || fouRen.has(w) || xin.includes(w)) return;
+    /**
+     * **隐私不进印象**（用户定稿）：印象是"一个人可以对外公开的形象"，
+     * 命中敏感类目的那一条一律不写印象 —— 改投**私密知识库**（私密层写得进去时），
+     * 写不进去就直接丢弃并记审计。宁可少记一条，也不把健康/财务/家庭这类事留在每轮都注入的文本里。
+     */
+    const minGan = minGanLeiMing(w);
+    if (minGan) {
+      let zhuan = 'diu';
+      try {
+        const ceng = knowledge?.allow ? knowledge.allow('private' as never) : null;
+        const add = (ceng as unknown as { addEvent?: (e: Record<string, unknown>) => unknown } | null)?.addEvent;
+        if (typeof add === 'function') {
+          add.call(ceng, {
+            id: 'ev-min-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 46656).toString(36),
+            biaoTi: '私密·' + minGan,
+            result: w.slice(0, 500),
+            entityIds: [],
+            anchors: [],
+            ts: Date.now(),
+          });
+          zhuan = 'private-kb';
+        }
+      } catch { /* 私密层写不进去：如实丢弃，不退回印象 */ }
+      try { audit?.log('yinxiang.sensitive-skipped', { lei: minGan, quXiang: zhuan, chars: w.length }); } catch { /* noop */ }
+      return;
+    }
     xin.push(w);
   };
   /** ① 用户原话里带"长期口径"的句子 */
@@ -13308,6 +17272,31 @@ function zhengLiYinXiang(caiLiao: { zhaiYao?: string; yuanHua?: string[]; zanCai
   for (const v of (caiLiao.zanCai || []).slice(-20)) {
     if (!v) continue;
     if (v.pingJia === '赞' && v.moXing) tian('这种回答方式合口味（' + String(v.moXing).slice(0, 24) + '）');
+    /**
+     * 第 38 轮 项 5：**踩也是重要信息**（旧实现只处理赞）。
+     * 用户点踩的那条 = "这种答案/这个模型不要再用"，同样是长期偏好，必须进印象。
+     */
+    if (v.pingJia === '踩') tian('不喜欢这种回答' + (v.wenTi ? '（关于"' + String(v.wenTi).slice(0, 24) + '"）' : '')
+      + (v.moXing ? '，别再走 ' + String(v.moXing).slice(0, 24) : ''));
+  }
+  /**
+   * ④ 第 38 轮 项 5：**整理模型给的候选行**也要过同一道闸，而且加一条**幻觉硬闸**：
+   * 每一行必须能在本次归档的素材原文里找到一段 ≥10 字的连续原话（去掉空白与标点后比对），
+   * 找不到就丢 ⇒ 模型只能"挑选与压缩用户说过的话"，不许创作。
+   */
+  const zheng = (s: string) => String(s || '').replace(/[\s\p{P}]/gu, '');
+  const suCai = zheng(caiLiao.suCaiZhengWen || (caiLiao.yuanHua || []).join('\n'));
+  for (const h of (caiLiao.moXingHang || [])) {
+    const w = String(h || '').replace(/^\s*[-•·\d.、]+\s*/, '').replace(/\s+/g, ' ').trim();
+    if (!w) continue;
+    const a = w.slice(0, 12);
+    const b = w.slice(0, 8);
+    const zhaoDao = suCai.length >= 10 && (suCai.includes(zheng(a)) || suCai.includes(zheng(b)));
+    if (!zhaoDao) {
+      try { audit?.log('yinxiang.hallucination-dropped', { hang: w.slice(0, 40) }); } catch { /* noop */ }
+      continue;
+    }
+    tian(w);
   }
   if (!xin.length) {
     /** 即使没有新条目，也要按上限整理一次（防止用户手工写超） */
@@ -13336,7 +17325,7 @@ function zhengLiYinXiang(caiLiao: { zhaiYao?: string; yuanHua?: string[]; zanCai
     for (const i of sha.reverse()) { hang.splice(i, 1); diu += 1; }
   }
   let jie = hang.join('\n');
-  while (jie.length > YIN_XIANG_MAX_CHARS && /\n-\s[^\n]*$/.test(jie)) {
+  while (jie.length > yinXiangMaxChars() && /\n-\s[^\n]*$/.test(jie)) {
     jie = jie.replace(/\n-\s[^\n]*$/, '');
     diu += 1;
   }
@@ -14017,9 +18006,9 @@ async function projectFilesFor(sessionId: string): Promise<{
     projectDir = attrs.directory;
     projectDirReason = attrs.directorySource;
   }
-  // ② 回退点明细（真实 path + 真实 ts）
+  // ② 回退点明细（真实 path + 真实 ts）；先隔离会话，再取最近 20 条。
   try {
-    const cps = checkpoints?.LieBiao() || [];
+    const cps = (checkpoints?.LieBiao() || []).filter((cp) => !!id && cp.sessionId === id);
     for (const cp of cps.slice(-20)) {
       const detail = (cp && (cp as unknown as { detail?: { filesChanged?: Array<{ path: string; ts: number }>; filesCreated?: Array<{ path: string; ts: number }> } }).detail) || {};
       for (const f of detail.filesChanged || []) changed.push({ path: String(f.path), ts: Number(f.ts) || 0, kind: 'changed', scope: 'other', source: 'checkpoint-detail' });
@@ -15548,8 +19537,36 @@ chuliIpc('warmy:shouDongMoXingYanZheng', async (_e, p0?: {
         maxTokens: 8,
       });
       const txt = neiRongWenBen(r.choices?.[0]?.message?.content);
+      /**
+       * 验证通过 ⇒ 把用户填的能力**落盘 + 进内存能力表**（第 48 轮补）。以前只写进渲染层一个没人读的
+       * `state.modelCaps`：主进程从来不知道这个模型的窗口/输出上限/看图能力 ⇒ 预算按 32K 兜底，重启后能力也没了。
+       */
+      const capLie = Array.isArray(p0?.caps) ? p0!.caps!.map((x) => String(x)) : [];
+      const ruLie = Array.isArray(p0?.inputTypes) ? p0!.inputTypes!.map((x) => String(x)) : [];
+      const kind = capLie.includes('embedding') ? 'embedding' : capLie.includes('asr') ? 'asr' : capLie.includes('tts') ? 'tts' : 'chat';
+      const vision: boolean | 'unknown' = capLie.includes('vision') ? true : (ruLie.includes('image') ? 'unknown' : false);
+      const zhongLei = (kind === 'asr' || kind === 'tts') ? 'audio' : (capLie.includes('vision') ? 'image' : null);
+      const xieYi = (pr.protocol === 'ollama' || pr.protocol === 'anthropic') ? pr.protocol : 'openai-compatible';
+      const mf = zhongLei ? jieShouGeShi(zhongLei, xieYi, kind).slice() : [];
+      const shuChu = Math.max(0, Math.round(Number(p0?.maxOut) || 0));
+      const neng = {
+        contextLen: Math.max(0, Math.round(Number(p0?.contextLen) || 0)),
+        ...(shuChu ? { maxOut: shuChu } : {}),
+        kind,
+        tools: capLie.includes('tools'),
+        vision,
+        ...(mf.length ? { mediaFormats: mf } : {}),
+      };
+      let luoPan = false;
+      try {
+        const cur = (settingsStore?.load() as { modelCaps?: Record<string, unknown>; modelCapsVersion?: number } | undefined) || {};
+        settingsStore?.save({ modelCaps: { ...(cur.modelCaps || {}), [model]: neng } } as never);
+        nengLiCongLuoPan({ [model]: neng }, Number(cur.modelCapsVersion || 0) === CAPS_VERSION);
+        luoPan = true;
+        audit?.log('model.manual-add', { providerId: pid, model, contextLen: neng.contextLen, maxOut: shuChu, kind, tools: neng.tools, vision });
+      } catch { /* 落盘失败照样返回可用，界面据 luoPan 如实提示 */ }
       // 有响应即算可用（空文本也可能是 maxTokens=8 截断）
-      return { ok: true, sample: txt.slice(0, 40) };
+      return { ok: true, sample: txt.slice(0, 40), caps: neng, luoPan };
     } catch (e) {
       const msg = xiJingCuoWu(e);
       // 404/unknown model 明确失败
@@ -15777,14 +19794,12 @@ chuliIpc('warmy:benDiYuYinZiJian', async () => {
     if (!st.yunXing.keYiBao) return { ok: false, error: '运行环境加载不了：' + (st.cuoWu || st.yunXing.luJing) };
     const yuan = '今天天气很好';
     const t0 = Date.now();
-    /** 自检期间临时打开「启用」，否则会直接被 not-enabled 挡掉（不改用户勾选项） */
-    qiYongBenDiYuYin(true);
-    const he = await benDiHeCheng(yuan, 0, 1);
+    /** 自检可在未启用时运行，但绝不临时改写用户选择（包括失败早退）。 */
+    const he = await benDiHeCheng(yuan, 0, 1, true);
     if (!he.ok || !he.wav) return { ok: false, error: '合成失败：' + String(he.error || '') };
-    const shi = await benDiShiBie(he.wav, 'wav');
+    const shi = await benDiShiBie(he.wav, 'wav', undefined, true);
     if (!shi.ok) return { ok: false, error: '识别失败：' + String(shi.error || ''), heChengMB: Math.round(he.wav.length / 1024) };
     const yiZhi = String(shi.text || '').replace(/[，。,.!?！？\s]/g, '') === yuan.replace(/[，。,.!?！？\s]/g, '');
-    qiYongBenDiYuYin(st.qiYong);
     return {
       ok: true, yuan, huiZhuan: shi.text, yiZhi,
       heChengMs: Date.now() - t0, shiBieMoXing: shi.moXing, heChengMoXing: he.moXing,
@@ -15868,40 +19883,66 @@ chuliIpc('warmy:shouQuanYouMeiYou', (_e, p0?: { sessionId?: string; key?: string
 // 第 31 轮 项 6/7：社交 IM 接入（企微智能机器人 / Telegram / 飞书 / iLink）
 // ══════════════════════════════════════════════════════════════
 const sheJiaoLianJie = new Map<string, SheJiaoAdapter>();
+/**
+ * 第 67 轮 项 17：一个平台可以挂多个账号（同一个牛马最多 5 个个人微信）。
+ * 旧数据只有一条 `zheng`；读取时把它视为 0 号账号，写入时保留兼容。
+ */
+type SheJiaoZhangHao = {
+  id: string;
+  name: string;
+  createdAt: number;
+  lastUsedAt: number;
+  zheng: SheJiaoPingZheng;
+};
 /** 社交配置（凭据进 cred-vault，配置进 settings.sheJiao） */
-type SheJiaoPeiZhi = { pingTai: string; qiYong: boolean; huiHuaYingShe?: Record<string, string>; zheng?: SheJiaoPingZheng };
+type SheJiaoPeiZhi = {
+  pingTai: string;
+  qiYong: boolean;
+  huiHuaYingShe?: Record<string, string>;
+  zheng?: SheJiaoPingZheng;
+  /** 多账号（个人微信等）；旧数据只有 zheng 时由 `zhangHaoLieBiao` 补齐 */
+  accounts?: SheJiaoZhangHao[];
+};
+const SHE_JIAO_ZHANG_HAO_SHANG_XIAN = 5;
 
 /** 第 37 轮 项 11：社交接入的 id/secret **落盘加密**（与「社交信息里的密码」同一套 safeStorage 纪律） */
 function zhengJiaMi(z: SheJiaoPingZheng | undefined): SheJiaoPingZheng | undefined {
   if (!z) return z;
   const bao = anQuanCunChu();
-  const out: Record<string, unknown> = { ...(z as unknown as Record<string, unknown>) };
-  let n = 0;
+  const out = { ...zhengJieMi(z) } as SheJiaoPingZheng;
   for (const k of Object.keys(out)) {
-    if (k === 'pingTai') continue;
-    const yuan = String(out[k] ?? '');
-    if (!yuan) continue;
-    const j = jiaMiWenBen(yuan, bao);
-    if (j.v !== yuan) { out[k] = j.v; n += 1; }
+    if (k === 'pingTai' || !out[k]) continue;
+    const j = jiaMiWenBen(out[k]!, bao);
+    // 通用 vault 允许明文降级，IM 凭据不允许：整次保存失败，绝不部分写盘。
+    if (!j.anQuan || !j.v.startsWith('enc:v1:')) throw new Error('social-credential-encrypt-failed');
+    out[k] = j.v;
   }
-  if (n) { try { audit?.log('shejiao.cred-encrypted', { n, anQuan: !!bao && bao.isEncryptionAvailable() }); } catch { /* noop */ } }
-  return out as unknown as SheJiaoPingZheng;
+  return out;
 }
 function zhengJieMi(z: SheJiaoPingZheng | undefined): SheJiaoPingZheng | undefined {
   if (!z) return z;
   const bao = anQuanCunChu();
-  const out: Record<string, unknown> = { ...(z as unknown as Record<string, unknown>) };
+  const out = { ...z };
   for (const k of Object.keys(out)) {
     if (k === 'pingTai') continue;
-    const yuan = String(out[k] ?? '');
-    if (!yuan) continue;
-    const j = jieMiWenBen(yuan, bao);
-    if (j.ok && j.v !== yuan) out[k] = j.v;
+    if (out[k] !== undefined && typeof out[k] !== 'string') throw new Error('social-credential-invalid');
+    let yuan = out[k] || '';
+    // 修复旧版重复保存产生的嵌套密文；有界解包，未知版本/解密失败一律关闭网络路径。
+    for (let depth = 0; yuan.startsWith('enc:'); depth++) {
+      if (depth >= 8 || yuan.length > 262144 || !yuan.startsWith('enc:v1:') || !bao || !bao.isEncryptionAvailable()) throw new Error('social-credential-decrypt-failed');
+      const j = jieMiWenBen(yuan, bao);
+      if (!j.ok || !j.v || j.v === yuan) throw new Error('social-credential-decrypt-failed');
+      yuan = j.v;
+    }
+    out[k] = yuan;
   }
-  return out as unknown as SheJiaoPingZheng;
+  return out;
+}
+function sheJiaoPeiZhiZhuan(x: SheJiaoPeiZhi, zhuan: typeof zhengJieMi): SheJiaoPeiZhi {
+  return { ...x, zheng: zhuan(x.zheng), accounts: x.accounts?.map((a) => ({ ...a, zheng: zhuan(a.zheng)! })) };
 }
 function duSheJiaoPeiZhi(instId?: string): SheJiaoPeiZhi[] {
-  return duSheJiaoPeiZhi0(instId).map((x) => ({ ...x, zheng: zhengJieMi(x.zheng) }));
+  return duSheJiaoPeiZhi0(instId).map((x) => sheJiaoPeiZhiZhuan(x, zhengJieMi));
 }
 function duSheJiaoPeiZhi0(instId?: string): SheJiaoPeiZhi[] {
   try {
@@ -15927,40 +19968,149 @@ function duSheJiaoPeiZhi0(instId?: string): SheJiaoPeiZhi[] {
 /** 把一条平台配置写进**某只牛马**（没有 instId 时写回旧的全局键） */
 function cunSheJiaoPeiZhi(instId: string | undefined, tiao: SheJiaoPeiZhi): boolean {
   try {
+    if (!settingsStore) return false;
+    const s = settingsStore.load() as { sheJiao?: SheJiaoPeiZhi[]; instances?: Array<{ id?: string; sheJiaoJieRu?: Record<string, SheJiaoPeiZhi> }> };
+    const global = [...(s.sheJiao || [])];
+    const instances = [...(s.instances || [])];
     if (!instId) {
-      const list = duSheJiaoPeiZhi();
-      const i = list.findIndex((x) => x.pingTai === tiao.pingTai);
-      if (i >= 0) list[i] = tiao; else list.push(tiao);
-      settingsStore?.save({ sheJiao: list } as never);
-      return true;
+      const i = global.findIndex((x) => x.pingTai === tiao.pingTai);
+      if (i >= 0) global[i] = tiao; else global.push(tiao);
+    } else {
+      const i = instances.findIndex((x) => x.id === instId);
+      if (i < 0) return false;
+      instances[i] = { ...instances[i], sheJiaoJieRu: { ...instances[i]!.sheJiaoJieRu, [tiao.pingTai]: tiao } };
     }
-    const s = (settingsStore?.load() as { instances?: Array<{ id?: string; sheJiaoJieRu?: Record<string, SheJiaoPeiZhi> }> } | undefined) || {};
-    const list = Array.isArray(s.instances) ? s.instances.slice() : [];
-    const i = list.findIndex((x) => String(x?.id || '') === String(instId));
-    if (i < 0) return false;
-    const ben = { ...(list[i] || {}) } as { sheJiaoJieRu?: Record<string, SheJiaoPeiZhi> };
-    ben.sheJiaoJieRu = { ...(ben.sheJiaoJieRu || {}), [tiao.pingTai]: tiao };
-    list[i] = ben as never;
-    settingsStore?.save({ instances: list } as never);
+    // 唯一 IM 持久化入口：连未修改的平台/实例也先解包再加密，绝不把读回的明文带回磁盘。
+    const sheJiao = global.map((x) => sheJiaoPeiZhiZhuan(x, zhengJiaMi));
+    const encrypted = instances.map((x) => x.sheJiaoJieRu ? { ...x, sheJiaoJieRu: Object.fromEntries(
+      Object.entries(x.sheJiaoJieRu).map(([k, v]) => [k, sheJiaoPeiZhiZhuan(v, zhengJiaMi)]),
+    ) } : x);
+    settingsStore.save({ sheJiao, instances: encrypted } as never);
     return true;
   } catch { return false; }
 }
-/** 连接的键：`实例::平台` —— 同一个 bot token 给两只牛马配，不能互相吃消息 */
-function sheJiaoLianJieJian(instId: string | undefined, pingTai: string): string {
+/** 旧 renderer 的整份状态不拥有 IM 凭据；新增实例也不能经此旁路注入凭据。 */
+function baoLiuSheJiaoZiDuan(incoming: unknown[], current: unknown[]): unknown[] {
+  return incoming.map((x) => {
+    const item = { ...(x as Record<string, unknown>) };
+    const old = current.find((v) => (v as { id?: unknown })?.id === item.id) as Record<string, unknown> | undefined;
+    delete item.sheJiaoJieRu;
+    if (old?.sheJiaoJieRu) item.sheJiaoJieRu = old.sheJiaoJieRu;
+    return item;
+  });
+}
+/**
+ * 把一个平台的配置展开成账号列表（旧数据只有 `zheng` 时补成 id=legacy 的 0 号账号）。
+ * 这里**只读内存里的明文**，不写盘；写盘由 `cunSheJiaoPeiZhi` 负责重新加密。
+ */
+function sheJiaoZhangHaoLieBiao(pei: SheJiaoPeiZhi | undefined): SheJiaoZhangHao[] {
+  if (!pei) return [];
+  const out: SheJiaoZhangHao[] = [];
+  for (const a of Array.isArray(pei.accounts) ? pei.accounts : []) {
+    if (!a || !a.zheng) continue;
+    const id = String(a.id || a.zheng.botId || '').trim();
+    if (!id) continue;
+    out.push({
+      id,
+      name: String(a.name || ''),
+      createdAt: Number(a.createdAt) || 0,
+      lastUsedAt: Number(a.lastUsedAt) || 0,
+      zheng: a.zheng,
+    });
+  }
+  if (!out.length && pei.zheng) {
+    const id = String(pei.zheng.botId || pei.zheng.wxid || 'legacy').trim() || 'legacy';
+    out.push({ id, name: id, createdAt: 0, lastUsedAt: 0, zheng: pei.zheng });
+  }
+  return out.slice(0, SHE_JIAO_ZHANG_HAO_SHANG_XIAN);
+}
+/** 连接的键：`实例::平台::账号` —— 同一个平台可以同时挂多个账号，不能互相吃消息 */
+function sheJiaoLianJieJian(instId: string | undefined, pingTai: string, accountId = 'default'): string {
+  return String(instId || '') + '::' + String(pingTai || '') + '::' + String(accountId || 'default');
+}
+/** 旧键（兼容只连一个账号的既有调用） */
+function sheJiaoLianJieJianJiu(instId: string | undefined, pingTai: string): string {
   return String(instId || '') + '::' + String(pingTai || '');
 }
+/** 组装明文账号列表；由唯一持久化入口加密，`zheng` 保留最新一条做旧兼容。 */
+function cunSheJiaoZhangHao(instId: string | undefined, pingTai: string, accounts: SheJiaoZhangHao[]): boolean {
+  const list = duSheJiaoPeiZhi(instId || undefined);
+  const i = list.findIndex((x) => x.pingTai === pingTai);
+  const old = i >= 0 && list[i] ? list[i]! : { pingTai, qiYong: false };
+  const jie = accounts.slice(0, SHE_JIAO_ZHANG_HAO_SHANG_XIAN).map((a) => ({
+    id: a.id,
+    name: a.name,
+    createdAt: a.createdAt,
+    lastUsedAt: a.lastUsedAt,
+    zheng: { ...a.zheng, pingTai },
+  }));
+  const xiao: SheJiaoPeiZhi = {
+    ...old,
+    pingTai,
+    qiYong: jie.length > 0,
+    accounts: jie,
+    zheng: jie.length ? jie[jie.length - 1]!.zheng : undefined,
+    huiHuaYingShe: old.huiHuaYingShe && Object.keys(old.huiHuaYingShe).length ? old.huiHuaYingShe : { default: String(instId || '') },
+  };
+  return cunSheJiaoPeiZhi(instId || undefined, xiao);
+}
 
+chuliIpc('warmy:sheJiaoZhangHaoBeiZhu', (_e, p0?: { instId?: string; pingTai?: string; accountId?: string; name?: string }) => {
+  try {
+    if (typeof p0?.instId !== 'string' || p0.instId.length > 256 || p0.instId.includes('::')
+      || p0.pingTai !== 'ilink' || typeof p0.accountId !== 'string' || !p0.accountId || p0.accountId.length > 256 || p0.accountId.includes('::')
+      || typeof p0.name !== 'string' || p0.name.length > 80 || /[\u0000-\u001f\u007f]/.test(p0.name)) return { ok: false, error: 'bad-payload' };
+    const pei = duSheJiaoPeiZhi(p0.instId || undefined).find((x) => x.pingTai === p0.pingTai);
+    const accounts = sheJiaoZhangHaoLieBiao(pei);
+    const account = accounts.find((a) => a.id === p0.accountId);
+    if (!account) return { ok: false, error: 'account-not-found' };
+    // 协议没有可靠的昵称字段；仅本地备注，不从 IPC 接收/替换任何凭据。
+    account.name = p0.name.trim();
+    return cunSheJiaoZhangHao(p0.instId || undefined, p0.pingTai, accounts)
+      ? { ok: true } : { ok: false, error: 'settings-write-failed' };
+  } catch { return { ok: false, error: 'social-credential-decrypt-failed' }; }
+});
 chuliIpc('warmy:sheJiaoPingTai', () => ({ ok: true, items: SHE_JIAO_PING_TAI }));
 chuliIpc('warmy:sheJiaoPeiZhiQu', (_e, p0?: { instId?: string }) => anQuanChuLi(() => {
   const instId = String(p0?.instId || '');
-  const list = duSheJiaoPeiZhi(instId || undefined).map((x) => ({
-    pingTai: x.pingTai, qiYong: !!x.qiYong,
-    zaiXian: !!sheJiaoLianJie.get(sheJiaoLianJieJian(instId, x.pingTai))?.zaiXian(),
-    // 凭据不明文回传，只报「有没有」
-    youZheng: !!(x.zheng && Object.values(x.zheng).some((v) => v)),
-  }));
-  return { ok: true, items: list };
-}, { ok: true, items: [] }));
+  const list = duSheJiaoPeiZhi(instId || undefined).map((x) => {
+    const accounts = sheJiaoZhangHaoLieBiao(x).map((a) => {
+      const ad = sheJiaoLianJie.get(sheJiaoLianJieJian(instId, x.pingTai, a.id)) as
+        (SheJiaoAdapter & { zhuangTai?: () => { status?: string; zaiXian: boolean; cuoWu: string; zuiHouRenZhengAt: number } }) | undefined
+        || sheJiaoLianJie.get(sheJiaoLianJieJianJiu(instId, x.pingTai)) as
+        (SheJiaoAdapter & { zhuangTai?: () => { status?: string; zaiXian: boolean; cuoWu: string; zuiHouRenZhengAt: number } }) | undefined;
+      const zt = ad?.zhuangTai?.();
+      return {
+        id: a.id,
+        name: a.name,
+        createdAt: a.createdAt,
+        lastUsedAt: a.lastUsedAt,
+        status: zt?.status || (ad?.zaiXian() ? 'connected' : 'disconnected'),
+        zaiXian: zt ? zt.zaiXian : !!ad?.zaiXian(),
+        yuanYin: zt?.cuoWu || '',
+        zuiHouRenZhengAt: zt?.zuiHouRenZhengAt || 0,
+      };
+    });
+    const adJiu = sheJiaoLianJie.get(sheJiaoLianJieJianJiu(instId, x.pingTai)) as
+      (SheJiaoAdapter & { zhuangTai?: () => { status?: string; zaiXian: boolean; cuoWu: string; zuiHouRenZhengAt: number } }) | undefined;
+    const ztJiu = adJiu?.zhuangTai?.();
+    /**
+     * 第 44 轮（T15）：**"已连接 / 未连接 / 会话已过期要重扫"是三个不同状态**，界面必须分得清。
+     * 第 67 轮 项 17：每个账号各有一份连接（键里带 accountId），同时回传账号列表。
+     */
+    return {
+      pingTai: x.pingTai, qiYong: !!x.qiYong,
+      zaiXian: accounts.some((a) => a.zaiXian) || (ztJiu ? ztJiu.zaiXian : !!adJiu?.zaiXian()),
+      yuanYin: (accounts.find((a) => a.yuanYin) || {}).yuanYin || ztJiu?.cuoWu || '',
+      zuiHouRenZhengAt: Math.max(0, ...accounts.map((a) => a.zuiHouRenZhengAt), ztJiu?.zuiHouRenZhengAt || 0),
+      // 凭据不明文回传，只报「有没有」
+      youZheng: !!(x.zheng && Object.values(x.zheng).some((v) => v)) || accounts.length > 0,
+      accounts,
+      accountMax: SHE_JIAO_ZHANG_HAO_SHANG_XIAN,
+    };
+  });
+  return { ok: true, items: list, error: '' };
+}, { ok: false, error: 'social-credential-decrypt-failed', items: [] }));
 
 chuliIpc('warmy:sheJiaoBaoCunPeiZhi', async (_e, p0?: { pingTai?: string; zheng?: SheJiaoPingZheng; qiYong?: boolean; huiHuaYingShe?: Record<string, string>; instId?: string }) => {
   try {
@@ -15971,14 +20121,16 @@ chuliIpc('warmy:sheJiaoBaoCunPeiZhi', async (_e, p0?: { pingTai?: string; zheng?
     const i = list.findIndex((x) => x.pingTai === pingTai);
     const xiao: SheJiaoPeiZhi = i >= 0 && list[i] ? list[i]! : { pingTai, qiYong: false };
     if (p0?.zheng) {
-      /** 第 37 轮 项 11：凭据**落盘加密**（safeStorage），内存里仍是明文 */
-      xiao.zheng = zhengJiaMi({ ...p0.zheng, pingTai });
+      const fields = Object.entries(p0.zheng).filter(([k, v]) => k !== 'pingTai' && typeof v === 'string' && v.trim());
+      if (fields.some(([, v]) => v!.startsWith('enc:'))) return { ok: false, error: 'social-credential-invalid' };
+      // 空输入只代表没有修改；部分填写保留其它已有字段。
+      if (fields.length) xiao.zheng = { ...xiao.zheng, ...Object.fromEntries(fields), pingTai };
     }
     if (p0?.qiYong !== undefined) xiao.qiYong = !!p0.qiYong;
     /** 没给会话映射时，默认映射到**这只牛马自己的主会话**（否则接上了也收不到） */
     if (p0?.huiHuaYingShe) xiao.huiHuaYingShe = p0.huiHuaYingShe;
     else if (!xiao.huiHuaYingShe || !Object.keys(xiao.huiHuaYingShe).length) xiao.huiHuaYingShe = { default: instId || '' };
-    if (!cunSheJiaoPeiZhi(instId || undefined, xiao)) return { ok: false as const, error: 'instance-not-found' };
+    if (!cunSheJiaoPeiZhi(instId || undefined, xiao)) return { ok: false as const, error: 'settings-write-failed' };
     try { audit?.log('shejiao.config-saved', { instId, pingTai, youZheng: !!(xiao.zheng && Object.keys(xiao.zheng).length) }); } catch { /* noop */ }
     return { ok: true as const };
   } catch (e) {
@@ -15986,29 +20138,103 @@ chuliIpc('warmy:sheJiaoBaoCunPeiZhi', async (_e, p0?: { pingTai?: string; zheng?
   }
 });
 
-chuliIpc('warmy:sheJiaoLianJie', async (_e, p0?: { pingTai?: string; instId?: string }) => {
+/**
+ * **建立一条社交连接**（第 44 轮 T15：从 IPC 里抽出来，让"扫码确认"也能直接调）。
+ * 为什么必须抽：上一版扫完码只是把凭据存下来，**没人去连** ⇒ 界面上"已连接"永远不亮、
+ * 微信那边发消息过来也不会进会话 —— 用户看到的正是 T15 一直没完成的那半条。
+ */
+/** 记录某账号最近使用时间（只在内存里改配置并落盘；失败不影响收消息）。 */
+function biaoJiSheJiaoZhangHaoShiYong(instId: string, pingTai: string, accountId: string): void {
+  try {
+    if (!accountId) return;
+    const list = duSheJiaoPeiZhi(instId || undefined);
+    const pei = list.find((x) => x.pingTai === pingTai);
+    if (!pei) return;
+    const accounts = sheJiaoZhangHaoLieBiao(pei);
+    const account = accounts.find((a) => a.id === accountId);
+    if (!account) return;
+    // 一分钟内不重复写盘（每条消息都写会打断高频收信）。
+    if (Date.now() - Number(account.lastUsedAt || 0) < 60000) return;
+    account.lastUsedAt = Date.now();
+    cunSheJiaoZhangHao(instId || undefined, pingTai, accounts);
+  } catch { /* 最近使用时间写不进去不影响收消息 */ }
+}
+// 按本地会话串行（同实例的多个微信也不能同时推理），不同会话独立。
+// 上限包括执行中任务；满载只背压等待入队，不丢弃消息、不提前继续拉游标。
+const sheJiaoDuiLie = new Map<string, { tail: Promise<void>; n: number }>();
+const sheJiaoDuiLieKongWei = new Set<() => void>();
+let sheJiaoDuiLieShu = 0;
+async function sheJiaoRuDui(sid: string, task: () => Promise<void>): Promise<void> {
+  while (sheJiaoDuiLieShu >= 256 || (sheJiaoDuiLie.get(sid)?.n || 0) >= 64) {
+    await new Promise<void>((resolve) => sheJiaoDuiLieKongWei.add(resolve));
+  }
+  const q = sheJiaoDuiLie.get(sid) || { tail: Promise.resolve(), n: 0 };
+  q.n++; sheJiaoDuiLieShu++;
+  sheJiaoDuiLie.set(sid, q);
+  q.tail = q.tail.then(task).catch(() => {
+    audit?.log('shejiao.queue-task-failed', { sessionId: sid });
+  }).finally(() => {
+    q.n--; sheJiaoDuiLieShu--;
+    if (!q.n) sheJiaoDuiLie.delete(sid);
+    const waiting = [...sheJiaoDuiLieKongWei];
+    sheJiaoDuiLieKongWei.clear();
+    waiting.forEach((wake) => wake());
+  });
+}
+async function zhiXingSheJiaoLianJie(p0?: { pingTai?: string; instId?: string; accountId?: string }): Promise<{ ok: boolean; zaiXian?: boolean; status?: string; error?: string; accountId?: string }> {
   const pingTai = String(p0?.pingTai || '');
   const instId = String(p0?.instId || '');
-  const jian = sheJiaoLianJieJian(instId, pingTai);
-  const list = duSheJiaoPeiZhi(instId || undefined);
+  let list: SheJiaoPeiZhi[];
+  try { list = duSheJiaoPeiZhi(instId || undefined); }
+  catch { return { ok: false, error: 'social-credential-decrypt-failed' }; }
   const pei = list.find((x) => x.pingTai === pingTai);
-  if (!pei || !pei.zheng) return { ok: false, error: 'no-credentials' };
+  if (!pei) return { ok: false, error: 'no-credentials' };
+  const accounts = sheJiaoZhangHaoLieBiao(pei);
+  const account = (p0?.accountId ? accounts.find((a) => a.id === p0.accountId) : accounts[accounts.length - 1]) || null;
+  if (p0?.accountId && !account) return { ok: false, error: 'account-not-found' };
+  const zheng = account?.zheng || pei.zheng;
+  if (!zheng) return { ok: false, error: 'no-credentials' };
+  const accountId = String(account?.id || zheng.botId || 'default');
+  const jian = sheJiaoLianJieJian(instId, pingTai, accountId);
+  let connectingAdapter: SheJiaoAdapter | undefined;
   try {
-    // 先断旧连接（企微限单连接）
+    // 先断旧连接（企微限单连接；同一账号重连也先断）
     sheJiaoLianJie.get(jian)?.duanKai();
-    const ad = chuangJianSheJiao(pingTai, pei.zheng);
-    ad.shouXiaoXi(async (msg: SheJiaoXiaoXi) => {
+    sheJiaoLianJie.delete(jian);
+    sheJiaoLianJie.get(sheJiaoLianJieJianJiu(instId, pingTai))?.duanKai();
+    const ad = chuangJianSheJiao(pingTai, zheng);
+    connectingAdapter = ad;
+    ad.shouXiaoXi((msg: SheJiaoXiaoXi) => {
+      if (sheJiaoLianJie.get(jian) !== ad) return;
+      const sid = String((pei.huiHuaYingShe && pei.huiHuaYingShe[msg.huiHuaId]) || pei.huiHuaYingShe?.['default'] || instId);
+      return sheJiaoRuDui(sid, async () => {
       try {
-        audit?.log('shejiao.message-in', { pingTai: msg.pingTai, huiHuaId: msg.huiHuaId, chars: msg.wenBen.length });
-        // 外部消息 → 映射到本机会话（huiHuaYingShe 或 default）
-        const sid = String((pei.huiHuaYingShe && pei.huiHuaYingShe[msg.huiHuaId]) || pei.huiHuaYingShe?.['default'] || '');
+        // 断开/重连后的排队任务不可继续派发，更不可借用新连接回信。
+        if (sheJiaoLianJie.get(jian) !== ad) return;
+        audit?.log('shejiao.message-in', { pingTai: msg.pingTai, huiHuaId: msg.huiHuaId, chars: msg.wenBen.length, accountId });
+        try { biaoJiSheJiaoZhangHaoShiYong(instId, pingTai, accountId); } catch { /* noop */ }
         if (!sid) {
           audit?.log('shejiao.no-session-mapped', { pingTai: msg.pingTai, huiHuaId: msg.huiHuaId });
           return;
         }
-        // 广播给界面：外部消息进会话（界面据此刷新）
+        // 认知由发送主体按 sessionId 读取 persona；禁止映射到另一实例后混用身份/认知。
+        if (instId && sid !== instId) {
+          audit?.log('shejiao.instance-mismatch', { pingTai, instId, sessionId: sid });
+          return;
+        }
+        const instances = (settingsStore?.load() as { instances?: Array<{
+          id?: string; ming?: string; name?: string; defaultModel?: string;
+          chain?: string[]; chainDisabled?: string[]; thinkLevel?: string; xiaoDiShuLiang?: string | number;
+        }> } | undefined)?.instances || [];
+        const inst = instances.find((x) => x.id === (instId || sid));
+        if (!inst) {
+          audit?.log('shejiao.instance-not-found', { pingTai, instId: instId || sid });
+          return;
+        }
+        // 仅广播路由信息，不将 context_token 交给 renderer。
         broadcastToWindows('warmy:sheJiaoXiaoXi', {
           pingTai: msg.pingTai, huiHuaId: msg.huiHuaId, sessionId: sid,
+          instanceId: inst.id, recipient: msg.huiHuaId, xiaoXiId: msg.xiaoXiId,
           faSongZheMing: msg.faSongZheMing, wenBen: msg.wenBen, ts: msg.ts,
         });
         /**
@@ -16018,30 +20244,62 @@ chuliIpc('warmy:sheJiaoLianJie', async (_e, p0?: { pingTai?: string; instId?: st
         const r = await zhenZhengFaSong(null, {
           sessionId: sid,
           role: 'user',
+          ming: inst.ming || inst.name || '',
+          thinkLevel: inst.thinkLevel || 'auto',
+          xiaoDiShuLiang: inst.xiaoDiShuLiang ?? 'auto',
+          moXingJueCe: {
+            urgency: 'P2', defaultModel: inst.defaultModel || '',
+            chain: inst.chain || [], chainDisabled: inst.chainDisabled || [],
+          },
           content: `【来自 ${msg.pingTai} 的 ${msg.faSongZheMing}】${msg.wenBen}`,
-        } as never).catch((e) => ({ ok: false, reply: '', error: xiJingCuoWu(e) } as { ok: boolean; reply: string; error?: string }));
+        }).catch((e) => ({ ok: false, reply: '', error: xiJingCuoWu(e) } as { ok: boolean; reply: string; error?: string }));
         const hui = String((r && r.reply) || '').trim();
-        if (hui) {
-          const ad2 = sheJiaoLianJie.get(jian);
-          if (ad2 && ad2.zaiXian()) {
-            const sent = await ad2.faSong(msg.huiHuaId, hui.slice(0, 2000), { contextToken: msg.contextToken }).catch(() => false);
-            audit?.log('shejiao.replied', { pingTai, huiHuaId: msg.huiHuaId, ok: !!sent, chars: hui.length });
-          }
+        if (r?.ok === true && hui) {
+          // 不按瞬时 zaiXian 判成功；必须还是原连接，并以 faSong 的协议结果为准。
+          if (sheJiaoLianJie.get(jian) === ad) {
+            const sent = await ad.faSong(msg.huiHuaId, hui.slice(0, 2000), { contextToken: msg.contextToken }).catch(() => false);
+            audit?.log(sent ? 'shejiao.replied' : 'shejiao.reply-failed', {
+              pingTai, instId: inst.id, huiHuaId: msg.huiHuaId, ok: sent === true, chars: hui.length,
+            });
+          } else audit?.log('shejiao.reply-skipped', { pingTai, instId: inst.id, reason: 'connection-changed' });
         } else {
-          audit?.log('shejiao.no-reply', { pingTai, error: String((r && r.error) || '').slice(0, 160) });
+          audit?.log('shejiao.no-reply', { pingTai, error: xiJingCuoWu(String((r && r.error) || '')).slice(0, 160) });
         }
       } catch (e) {
         audit?.log('shejiao.in-handle-failed', { pingTai, error: xiJingCuoWu(e).slice(0, 160) });
       }
+      });
     });
-    await ad.lianJie();
+    /**
+     * 第 44 轮自查补：**先登记再连**。
+     * `lianJie()` 现在会首连即探、会话过期直接抛错 ⇒ 旧顺序（连完才 set）让抛错那条路**根本没进 map**，
+     * 于是 `warmy:sheJiaoPeiZhiQu` 取不到适配器、读不到 `cuoWu` ⇒
+     * 界面把"扫码成功但会话已过期"显示成普普通通的"未连接"，三态白做了。
+     */
     sheJiaoLianJie.set(jian, ad);
-    try { audit?.log('shejiao.connected', { pingTai }); } catch { /* noop */ }
-    return { ok: true, zaiXian: ad.zaiXian() };
+    const faZhuangTai = (zt: { status: string; zaiXian: boolean; cuoWu?: string }) => {
+      if (sheJiaoLianJie.get(jian) !== ad) return;
+      broadcastToWindows('warmy:sheJiaoZhuangTai', { pingTai, instId, accountId, ...zt, error: zt.cuoWu || '' });
+    };
+    ad.onZhuangTai?.(faZhuangTai);
+    faZhuangTai({ status: 'connecting', zaiXian: false });
+    await ad.lianJie();
+    if (sheJiaoLianJie.get(jian) !== ad) return { ok: false, error: 'connection-changed', accountId };
+    const zaiXian = ad.zaiXian();
+    const status = zaiXian ? 'connected' : 'connecting';
+    faZhuangTai({ status, zaiXian });
+    try { audit?.log('shejiao.connection-state', { pingTai, accountId, status }); } catch { /* noop */ }
+    return { ok: true, zaiXian, status, accountId };
   } catch (e) {
-    return { ok: false, error: xiJingCuoWu(e).slice(0, 200) };
+    // 不回传异常原文：网络异常可能包含 URL/token。适配器只提供分类码。
+    if (connectingAdapter && sheJiaoLianJie.get(jian) !== connectingAdapter) return { ok: false, error: 'connection-changed', accountId };
+    const zt = (connectingAdapter as SheJiaoAdapter & { zhuangTai?: () => { cuoWu: string } })?.zhuangTai?.();
+    const error = zt?.cuoWu || 'social-connect-failed';
+    broadcastToWindows('warmy:sheJiaoZhuangTai', { pingTai, instId, accountId, status: 'failed', zaiXian: false, error });
+    return { ok: false, zaiXian: false, status: 'failed', error, accountId };
   }
-});
+}
+chuliIpc('warmy:sheJiaoLianJie', (_e, p0?: { pingTai?: string; instId?: string; accountId?: string }) => zhiXingSheJiaoLianJie(p0));
 
 /* ══════════════════════════════════════════════════════════════════════════
    第 37 轮 项 5：**微信扫码连接**（官方 iLink / ClawBot 协议）
@@ -16060,7 +20318,17 @@ chuliIpc('warmy:sheJiaoLianJie', async (_e, p0?: { pingTai?: string; instId?: st
    ══════════════════════════════════════════════════════════════════════════ */
 const ILINK_MO_REN_JI = 'https://ilinkai.weixin.qq.com';
 /** 扫码登录里临时保存的轮询令牌（qrcode → { instId, pingTai, base }） */
-const saoMaDai = new Map<string, { instId: string; pingTai: string; base: string; ts: number }>();
+const saoMaDai = new Map<string, { instId: string; pingTai: string; base: string; ts: number; busy?: boolean; status?: string }>();
+
+/** 按**字节**判这份东西到底是不是图片（PNG/JPEG/GIF/WebP）——响应头会骗人，魔数不会。 */
+function tuPianZiJie(bu: Buffer): string {
+  if (bu.length >= 8 && bu[0] === 0x89 && bu[1] === 0x50 && bu[2] === 0x4e && bu[3] === 0x47) return 'image/png';
+  if (bu.length >= 3 && bu[0] === 0xff && bu[1] === 0xd8 && bu[2] === 0xff) return 'image/jpeg';
+  if (bu.length >= 6 && bu[0] === 0x47 && bu[1] === 0x49 && bu[2] === 0x46) return 'image/gif';
+  if (bu.length >= 12 && bu.subarray(0, 4).toString('latin1') === 'RIFF'
+    && bu.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  return '';
+}
 
 chuliIpc('warmy:sheJiaoSaoMaKaiShi', async (_e, p0?: { instId?: string; pingTai?: string; baseURL?: string }) => {
   const instId = String(p0?.instId || '');
@@ -16078,52 +20346,58 @@ chuliIpc('warmy:sheJiaoSaoMaKaiShi', async (_e, p0?: { instId?: string; pingTai?
     if (cfg.appId) tou['iLink-App-Id'] = String(cfg.appId);
     if (cfg.version) tou['iLink-App-ClientVersion'] = String(cfg.version);
     const botType = Number(cfg.botType || 3) || 3;
-    const r = await fetch(base + '/ilink/bot/get_bot_qrcode?bot_type=' + botType, { headers: tou });
+    const r = await fetch(base + '/ilink/bot/get_bot_qrcode?bot_type=' + botType, { headers: tou, signal: AbortSignal.timeout(10000) });
     const wen = await r.text();
-    if (!r.ok) {
-      try { audit?.log('shejiao.qr-failed', { status: r.status, head: wen.slice(0, 160) }); } catch { /* noop */ }
-      return { ok: false, error: 'HTTP ' + r.status + '：' + wen.slice(0, 200) };
-    }
-    let j: { qrcode?: string; qrcode_img_content?: string } | null = null;
+    if (!r.ok) return { ok: false, error: 'http:' + r.status };
+    let j: { qrcode?: string; qrcode_img_content?: string; ret?: number; errcode?: number } | null = null;
     try { j = JSON.parse(wen); } catch { j = null; }
-    if (!j || !j.qrcode) return { ok: false, error: '返回里没有 qrcode：' + wen.slice(0, 200) };
+    if (!j || Number(j.ret || j.errcode || 0) !== 0 || !j.qrcode) return { ok: false, error: 'qr-request-rejected' };
     saoMaDai.set(String(j.qrcode), { instId, pingTai, base, ts: Date.now() });
     /** 只留最近 20 个，避免内存里攒垃圾 */
     if (saoMaDai.size > 20) { const k = [...saoMaDai.keys()][0]; if (k) saoMaDai.delete(k); }
     try { audit?.log('shejiao.qr-started', { instId, pingTai, base }); } catch { /* noop */ }
     /**
-     * 第 38 轮 项 1：**二维码必须显示出来**。
+     * 第 38 轮 项 1：**二维码必须真的显示出来**（上一版修得不彻底，本轮真机门禁抓出来）。
      *
-     * 服务端给的是**远程图片 URL**（`qrcode_img_content`），而本应用的 CSP 是
-     * `img-src 'self' data: blob:`（`renderer/index.html:5`）⇒ `<img src="https://liteapp.weixin.qq.com/…">`
-     * 被渲染层直接拦掉，界面上只剩"暂无二维码"的灰字 —— 这就是用户看到的"二维码没有显示"。
-     * 修法不是放开 CSP（那等于给用户界面开远程图片口子，安全面变大），而是
-     * **主进程把这张图取回来转成 data URL** 再下发：同源、可缓存、CSP 认。
-     * 取不到也要如实带 `imgYuan`（原始 URL）与原因，界面可以提示用户手动打开。
+     * 服务端给的 `qrcode_img_content` 名字里有 "img"，**但它不是图片**：
+     * 真机实测 `https://liteapp.weixin.qq.com/q/xxxx?qrcode=…` 回的是 `content-type: text/html` 的**网页**
+     * （手机扫了以后打开的那个确认页）。上一版照"远程图片"处理，把这坨 HTML base64 成
+     * `data:text/html;base64,PCFkb2N0eXBlIGh0bWw+…` 塞进 `<img src>` ⇒ 浏览器画不出任何东西
+     * ⇒ 用户看到的还是**一片空白**，跟没修一样。
+     *
+     * 正确口径：这个 URL 本身就是**要编码进二维码的内容**，二维码应当**由本地画**
+     * （渲染层已有 `qrSvg()`，局域网加入二维码同一套；不外发数据、不依赖远程图片、CSP 不用放开）。
+     * 万一哪天服务端真给图片字节，仍然按 data URL 用 —— 判据是**字节是不是图**，不是它叫什么、也不是响应头。
      */
-    let img = String(j.qrcode_img_content || '');
-    let imgLei = '';
-    if (/^https?:\/\//i.test(img)) {
+    let img = '';
+    let tuNeiRong = String(j.qrcode_img_content || '');
+    const yuan = String(j.qrcode_img_content || '');
+    if (/^https?:\/\//i.test(yuan)) {
       try {
-        const t = await fetch(img, { headers: tou });
+        const t = await fetch(yuan, { headers: tou, signal: AbortSignal.timeout(3000) });
         if (t.ok) {
           const bu = Buffer.from(await t.arrayBuffer());
-          imgLei = (String(t.headers.get('content-type') || 'image/png').split(';')[0] || 'image/png').trim();
-          if (bu.length && bu.length < 2 * 1024 * 1024) img = 'data:' + imgLei + ';base64,' + bu.toString('base64');
-          else { img = ''; audit?.log('shejiao.qr-too-big', { bytes: bu.length }); }
-        } else {
-          audit?.log('shejiao.qr-img-failed', { status: t.status });
-          img = '';
-        }
+          const shiTu = tuPianZiJie(bu);
+          if (shiTu && bu.length < 2 * 1024 * 1024) {
+            img = 'data:' + shiTu + ';base64,' + bu.toString('base64');
+            tuNeiRong = '';
+          } else if (!shiTu) {
+            audit?.log('shejiao.qr-not-image', {
+              lei: (String(t.headers.get('content-type') || '').split(';')[0] || '?'),
+              ziJie: bu.length,
+            });
+          } else audit?.log('shejiao.qr-too-big', { bytes: bu.length });
+        } else audit?.log('shejiao.qr-img-failed', { status: t.status });
       } catch (e) {
         audit?.log('shejiao.qr-img-error', { error: xiJingCuoWu(e).slice(0, 140) });
-        img = '';
       }
     }
     return {
       ok: true, qrcode: String(j.qrcode), img,
-      imgYuan: String(j.qrcode_img_content || ''),
-      cuo: img ? '' : '二维码图片取不回来（CSP 只允许本地/内联图片，已尝试由主进程代取）',
+      /** 要本地编码成二维码的文本（通常是手机上微信打开的那个确认页地址） */
+      tuNeiRong,
+      imgYuan: yuan,
+      cuo: (img || tuNeiRong) ? '' : '服务端没给出二维码内容（可能没被灰度到 ClawBot）',
       base,
     };
   } catch (e) {
@@ -16131,10 +20405,196 @@ chuliIpc('warmy:sheJiaoSaoMaKaiShi', async (_e, p0?: { instId?: string; pingTai?
   }
 });
 
-chuliIpc('warmy:sheJiaoSaoMaZhuangTai', async (_e, p0?: { qrcode?: string }) => {
+/**
+ * **模型额度弹窗的读写口**（设置 → 模型 → 右键某个拉取到的模型）。
+ *
+ * 返回两份数字，界面必须把来源显示出来（产品口径：不许把"我们猜的"说成"模型报的"）：
+ *  · `dangQian` = 存过的额度（用户填的或自动快照）—— 第 44 轮起**按精确 token 数重读**成"数字 + 单位"，
+ *                 并带 `ziDong` 告诉界面"这条是自动拍的还是你填的"；
+ *  · `moren`    = **拉取模型时问到的信息 →（没问到才）官方规格表 → 内置默认 + 推导**折算出来的默认值，
+ *                 「恢复默认」就是按这一份重算并存下来。
+ */
+/**
+ * 折成界面好显示的"数字 + 单位"（**只有上下文窗口与输出用得上**；rpm 单位是"次"、tpm 单位是 token，都不带单位）。
+ * ⚠️ 单位是**乘数**（k=×1000、m=×1,000,000），不是标签 ⇒ 不能整除的值必须显示成小数（如 128000 → 128 k、
+ * 256000 → 256 k、1048576 → 1.049 m），输入框因此要允许小数（`step="any"`），否则默认值一打开就被改掉。
+ */
+/** `zhanShiDanWei` / `danWeiBeiShu` / `panZeZhanShi` / `zhanShiWen` 全部来自 `./mo-xing-gui-ge.ts`（第 44 轮） */
+/** 由**拉取到的能力**推输入/输出模态（能力是事实，不许被标签猜；拿不到能力就只有文本） */
+function moXingMoTaiCongLaQu(modelId: string): { inTypes: string[]; outTypes: string[]; laiYuan: string } {
+  const mo = String(modelId || '').trim();
+  const neng = (settingsStore?.load() as { modelCaps?: Record<string, { kind?: string; vision?: boolean }> } | undefined)?.modelCaps?.[mo]
+    || (modelNengLiMeta.get(mo) as { kind?: string; vision?: boolean } | undefined) || {};
+  const lei = String(neng.kind || '').toLowerCase();
+  const inTypes = ['text'];
+  const outTypes = ['text'];
+  let queDing = false;
+  if (neng.vision === true || lei === 'imageund' || lei === 'ocr') { inTypes.push('image'); queDing = true; }
+  if (lei === 'videound') { inTypes.push('video'); queDing = true; }
+  if (lei === 'asr') { inTypes.push('audio'); queDing = true; }
+  if (lei === 'image') { outTypes.push('image'); queDing = true; }
+  if (lei === 'videogen') { outTypes.push('video'); queDing = true; }
+  if (lei === 'tts') { outTypes.push('audio'); queDing = true; }
+  if (lei === 'rerank' || lei === 'decision' || lei === 'safety') { outTypes.push('classify'); queDing = true; }
+  /**
+   * **第 44 轮补（用户项 2）**：云端模型的能力探测只能给 `vision:"unknown"` ⇒ 官方声明"收图/视频/音频"的
+   * 模型被登记成"只读文本"。探测**真判过**（true/false，不是 unknown）才信探测；
+   * 没判过才用官方规格表声明的模态，并把来源写出来 —— 界面不许把表里的值说成"拉取信息"。
+   */
+  const gg = chaMoXingGuiGe(mo);
+  if (gg && !queDing && Array.isArray(gg.inTypes)) {
+    return { inTypes: gg.inTypes.slice(), outTypes: (gg.outTypes || ['text']).slice(), laiYuan: '官方规格表：' + gg.laiYuan + (gg.heShiRi ? '（' + gg.heShiRi + ' 核对）' : '（未核对）') };
+  }
+  return { inTypes, outTypes, laiYuan: queDing ? '拉取信息' : '只按文本（没探测到多模态）' };
+}
+/**
+ * **按拉取信息算出一份要存的快照**（「拉取模型」与「恢复默认」共用这一份，不留第二套口径）。
+ * 没拉到的项**留空**（例如输出上限），不许拿猜测值去填。
+ *
+ * 第 44 轮加两个字段：
+ *  · `ctxTokens/outTokens`：**精确 token 数** —— 预算按这一份算，`ctxNum/ctxUnit` 只是"界面怎么读"；
+ *  · `ziDong: true`：这条是自动拍的快照、**不是用户填的** ⇒ 下次拉到更准的事实可以覆盖它。
+ *    （原来"已有记录一律不覆盖"把自动快照也当成用户输入 ⇒ 上一版 Ollama 探测失败存下 128K，
+ *     后来真机能读到 131072/16384 也永远刷不掉 —— 正是"杜绝这样的异常"要抓的那一类。）
+ */
+function moXingQuotaCongLaQu(modelId: string): Record<string, unknown> {
+  const ji = moXingYuEJiSuan(moXingLaQuXinXi(modelId));
+  const c = zhanShiDanWei(ji.chuangKou);
+  const chu: Record<string, unknown> = { ctxNum: c.num, ctxUnit: c.unit, ctxTokens: c.tokens, rpm: ji.rpm, tpm: ji.tpm, ziDong: true };
+  if (ji.shuChu > 0) {
+    const o = zhanShiDanWei(ji.shuChu);
+    chu.outNum = o.num;
+    chu.outUnit = o.unit;
+    chu.outTokens = o.tokens;
+  }
+  const mt = moXingMoTaiCongLaQu(modelId);
+  chu.inTypes = mt.inTypes;
+  chu.outTypes = mt.outTypes;
+  return chu;
+}
+chuliIpc('warmy:moXingYuEDu', (_e, p0?: { modelId?: string }) => anQuanChuLi(() => {
+  const mo = String(p0?.modelId || '').trim();
+  if (!mo) return { ok: false, error: 'bad-model' };
+  const yuE = moXingYuE(mo);
+  const s = settingsStore?.load() as { modelQuota?: Record<string, Record<string, unknown>> } | undefined;
+  const cun = s?.modelQuota?.[mo] as
+    { ctxNum?: number; ctxUnit?: string; outNum?: number; outUnit?: string; ctxTokens?: number; outTokens?: number; rpm?: number; tpm?: number; inTypes?: string[]; outTypes?: string[]; ziDong?: boolean } | undefined;
+  const mt = moXingMoTaiCongLaQu(mo);
+  /**
+   * **第 44 轮（用户项 2）**：回显不再原样吐 `ctxNum/ctxUnit`，而是**按精确 token 数重新读一遍**。
+   * 老记录里 `ctxNum:1048.576 / ctxUnit:'k'` 这种"换算残渣"直接来自上一版 `zhanShiDanWei`，
+   * 不改存储也能立刻显示成 `1m`（精确数 `tokens` 照样带回去，界面在旁边写"= 1,048,576 token"）。
+   * 没有精确字段的旧记录：先按 `num × 单位` 还原成 token 数，再读一遍 —— 两步都是无损的。
+   */
+  const huanYuanTokens = (tokens: number | undefined, n: number | undefined, u: string | undefined): number | undefined => {
+    if (Number.isFinite(Number(tokens)) && Number(tokens) > 0) return Math.round(Number(tokens));
+    if (Number.isFinite(Number(n)) && Number(n) > 0) return Math.round(Number(n) * danWeiBeiShu(u));
+    return undefined;
+  };
+  const b = (tokens: number | undefined, n: number | undefined, u: string | undefined) => {
+    const t = huanYuanTokens(tokens, n, u);
+    return t ? zhanShiDanWei(t) : undefined;
+  };
+  const zheng = (x?: unknown) => (Number.isFinite(Number(x)) && Number(x) > 0 ? Number(x) : undefined);
+  return {
+    ok: true,
+    modelId: mo,
+    /** 用户/快照存过的（**按精确 token 数重读**）；rpm/tpm 是**纯数字** */
+    dangQian: cun ? {
+      ctx: b(cun.ctxTokens, cun.ctxNum, cun.ctxUnit), out: b(cun.outTokens, cun.outNum, cun.outUnit),
+      rpm: zheng(cun.rpm), tpm: zheng(cun.tpm),
+      inTypes: Array.isArray(cun.inTypes) ? cun.inTypes : undefined,
+      outTypes: Array.isArray(cun.outTypes) ? cun.outTypes : undefined,
+      ziDong: cun.ziDong === true,
+    } : null,
+    /** 拉取信息 + 推导出来的默认（恢复默认就是回到这一份） */
+    moren: {
+      ctx: zhanShiDanWei(yuE.chuangKou), out: yuE.shuChu ? zhanShiDanWei(yuE.shuChu) : undefined,
+      rpm: yuE.rpm, tpm: yuE.tpm,
+      inTypes: mt.inTypes, outTypes: mt.outTypes,
+    },
+    laiYuan: yuE.laiYuan,
+    /** 模态这一项是从哪条腿来的（拉取信息 / 官方规格表 / 只按文本）—— 界面要能说出来 */
+    laiYuanMoTai: mt.laiYuan,
+    /** 这个型号在官方规格表里的整条记录（没有 = null；界面据此标"官方核对日期"） */
+    guiGe: chaMoXingGuiGe(mo) || null,
+    nengLi: (s?.modelQuota || {}),
+  };
+}, { ok: false, error: 'ipc-failed' }));
+
+chuliIpc('warmy:moXingYuEDuSheZhi', (_e, p0?: {
+  modelId?: string;
+  reset?: boolean;
+  /** `tokens` = 界面打开时的精确值；`yiGai` = 用户到底动过这一栏没有（第 44 轮：没动过就不许因为显示四舍五入而改事实） */
+  ctx?: { num?: number; unit?: string; tokens?: number; yiGai?: boolean };
+  out?: { num?: number; unit?: string; tokens?: number; yiGai?: boolean };
+  rpm?: number; tpm?: number;
+  inTypes?: string[]; outTypes?: string[];
+}) => anQuanChuLi(() => {
+  const mo = String(p0?.modelId || '').trim();
+  if (!mo) return { ok: false, error: 'bad-model' };
+  const s = settingsStore?.load();
+  const quan = { ...((s as { modelQuota?: Record<string, unknown> }).modelQuota || {}) } as Record<string, unknown>;
+  /**
+   * **恢复默认 = 按拉取信息重算并存下来**（不是删掉让它悬着）：
+   * 拉到的用拉的，没拉到的按 窗口 → tpm → rpm 推一遍，**推不出信息的项留空**（比如端点没给输出上限就留空）。
+   */
+  if (p0?.reset) {
+    quan[mo] = moXingQuotaCongLaQu(mo);
+    settingsStore?.save({ modelQuota: quan } as never);
+    try { audit?.log('model.quota-reset', { model: mo, dao: moXingYuE(mo) }); } catch { /* noop */ }
+    return { ok: true, modelId: mo, reset: true, yuE: moXingYuE(mo) };
+  }
+  /**
+   * 上下文窗口/输出：**没动过这一栏 ⇒ 原样保留精确 token 数**；动过才按 `数字 × 单位`（k=1000、m=1000000）重算，
+   * 然后**夹到合理区间**。夹而不是拒：用户填 128 想表达 128k 时不该被一句"非法"打回去；
+   * 但越界值必须落在可用范围内，否则一次误填能让这个模型永远发不出请求。
+   */
+  const zh = (x?: { num?: number; unit?: string; tokens?: number; yiGai?: boolean }, lo = 0, hi = Number.MAX_SAFE_INTEGER): number | undefined => {
+    if (x?.yiGai === false && Number.isFinite(Number(x?.tokens)) && Number(x!.tokens) > 0) {
+      return Math.min(hi, Math.max(lo, Math.round(Number(x!.tokens))));
+    }
+    const n = Number(x?.num);
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    return Math.min(hi, Math.max(lo, Math.round(n * danWeiBeiShu(x?.unit))));
+  };
+  /** rpm/tpm **没有单位**：填多少就是多少（次 / token） */
+  const zheng = (x?: number, lo = 0, hi = Number.MAX_SAFE_INTEGER): number | undefined => {
+    const n = Number(x);
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    return Math.min(hi, Math.max(lo, Math.round(n)));
+  };
+  const xin: Record<string, unknown> = {};
+  const c = zh(p0?.ctx, 1024, 100000000);
+  if (c) { const z = zhanShiDanWei(c); xin.ctxNum = z.num; xin.ctxUnit = z.unit; xin.ctxTokens = z.tokens; }
+  const o = zh(p0?.out, 16, 10000000);
+  if (o) { const z = zhanShiDanWei(o); xin.outNum = z.num; xin.outUnit = z.unit; xin.outTokens = z.tokens; }
+  const r = zheng(p0?.rpm, 1, 1000000);
+  if (r) xin.rpm = r;
+  const t = zheng(p0?.tpm, 1000, 1000000000);
+  if (t) xin.tpm = t;
+  const HE_XUAN = ['text', 'image', 'disk', 'video', 'audio', 'classify'];
+  const guo = (a?: string[]) => Array.isArray(a) ? a.filter((x) => HE_XUAN.includes(String(x))) : undefined;
+  if (guo(p0?.inTypes)?.length) xin.inTypes = guo(p0?.inTypes);
+  if (guo(p0?.outTypes)?.length) xin.outTypes = guo(p0?.outTypes);
+  /** 每一项**各存各的**（快照）：没填的项**保留原值**，不因为"这次没动它"就被清空，也不联动重算 */
+  const jiu = (quan[mo] as Record<string, unknown> | undefined) || {};
+  /** 用户亲手点过「确定」⇒ 这条不再是自动快照（`ziDong:false`）——以后拉取模型不许覆盖它 */
+  quan[mo] = { ...jiu, ...xin, ziDong: false };
+  settingsStore?.save({ modelQuota: quan } as never);
+  try { audit?.log('model.quota-set', { model: mo, dao: moXingYuE(mo) }); } catch { /* noop */ }
+  return { ok: true, modelId: mo, yuE: moXingYuE(mo) };
+}, { ok: false, error: 'ipc-failed' }));
+
+chuliIpc('warmy:sheJiaoSaoMaZhuangTai', async (_e, p0?: { qrcode?: string; verifyCode?: string }) => {
   const qr = String(p0?.qrcode || '');
+  const verifyCode = String(p0?.verifyCode || '').trim();
+  if (verifyCode.length > 64) return { ok: false, status: 'error', error: 'invalid-verify-code' };
   const dai = saoMaDai.get(qr);
-  if (!dai) return { ok: false, error: 'unknown-qrcode' };
+  if (!dai) return { ok: false, status: 'error', error: 'unknown-qrcode' };
+  if (Date.now() - dai.ts > 600000) { saoMaDai.delete(qr); return { ok: true, status: 'expired' }; }
+  if (dai.busy) return { ok: true, status: dai.status || 'wait' };
+  dai.busy = true;
   try {
     const cfg = (() => {
       try {
@@ -16145,56 +20605,130 @@ chuliIpc('warmy:sheJiaoSaoMaZhuangTai', async (_e, p0?: { qrcode?: string }) => 
     const tou: Record<string, string> = {};
     if (cfg.appId) tou['iLink-App-Id'] = String(cfg.appId);
     if (cfg.version) tou['iLink-App-ClientVersion'] = String(cfg.version);
-    const r = await fetch(dai.base + '/ilink/bot/get_qrcode_status?qrcode=' + encodeURIComponent(qr), { headers: tou });
+    const r = await fetch(dai.base + '/ilink/bot/get_qrcode_status?qrcode=' + encodeURIComponent(qr)
+      + (verifyCode ? '&verify_code=' + encodeURIComponent(verifyCode) : ''), { headers: tou, signal: AbortSignal.timeout(8000) });
     const wen = await r.text();
-    if (!r.ok) return { ok: false, status: 'error', error: 'HTTP ' + r.status + '：' + wen.slice(0, 160) };
-    let j: { status?: string; bot_token?: string; ilink_bot_id?: string; baseurl?: string } | null = null;
+    if (!r.ok) { saoMaDai.delete(qr); return { ok: false, status: 'error', error: 'http:' + r.status }; }
+    let j: { status?: string; bot_token?: string; ilink_bot_id?: string; baseurl?: string; redirect_host?: string; ret?: number; errcode?: number; errCode?: number } | null = null;
     try { j = JSON.parse(wen); } catch { j = null; }
-    const st = String((j && j.status) || 'wait');
+    if (!j || [j.ret, j.errcode, j.errCode].some((x) => Number(x ?? 0) !== 0)) {
+      saoMaDai.delete(qr);
+      return { ok: false, status: 'error', error: 'qr-status-rejected' };
+    }
+    const st = String(j.status || 'wait');
+    dai.status = st;
+    if (st === 'scaned_but_redirect') {
+      const target = new URL('https://' + String(j.redirect_host || ''));
+      if (!target.hostname.endsWith('.weixin.qq.com') || target.username || target.password || target.port
+        || target.pathname !== '/' || target.search || target.hash) {
+        saoMaDai.delete(qr);
+        return { ok: false, status: 'error', error: 'qr-invalid-redirect' };
+      }
+      dai.base = target.origin;
+      dai.status = 'scaned';
+      return { ok: true, status: 'scaned' };
+    }
+    if (st === 'need_verifycode') return { ok: true, status: st };
     if (st === 'confirmed') {
+      // 先消耗令牌，禁止并发查询重复保存/重连同一个账号。
+      saoMaDai.delete(qr);
       const token = String(j?.bot_token || '');
       const botId = String(j?.ilink_bot_id || '');
       if (!token || !botId) return { ok: false, status: st, error: '已确认但没返回 bot_token / ilink_bot_id' };
-      /** 凭据**加密**写进这只牛马的社交接入配置（与手工填的走同一条路） */
-      const xiao: SheJiaoPeiZhi = {
-        pingTai: dai.pingTai,
-        qiYong: true,
-        zheng: zhengJiaMi({ pingTai: dai.pingTai, botId, botToken: token, baseURL: String(j?.baseurl || dai.base) }),
-        huiHuaYingShe: { default: dai.instId },
+      /**
+       * 第 67 轮 项 17：**扫码成功 = 新增一个账号，不是覆盖上一个**。
+       * 同一个牛马最多 5 个个人微信；每个账号单独存凭据、单独连接、单独显示最近使用时间。
+       */
+      const peiOld = duSheJiaoPeiZhi(dai.instId || undefined).find((x) => x.pingTai === dai.pingTai);
+      const accounts = sheJiaoZhangHaoLieBiao(peiOld);
+      const zheng: SheJiaoPingZheng = {
+        pingTai: dai.pingTai, botId, botToken: token,
+        baseURL: String(j?.baseurl || dai.base),
+        ilinkAppId: String(cfg.appId || ''), ilinkAppVersion: String(cfg.version || ''),
       };
-      cunSheJiaoPeiZhi(dai.instId || undefined, xiao);
+      const yiYou = accounts.findIndex((a) => a.id === botId);
+      if (yiYou < 0 && accounts.length >= SHE_JIAO_ZHANG_HAO_SHANG_XIAN) {
+        return { ok: false, status: st, error: `wechat-account-limit（一个牛马最多链接 ${SHE_JIAO_ZHANG_HAO_SHANG_XIAN} 个个人微信；请先断开一个再扫码）` };
+      }
+      if (yiYou >= 0) {
+        accounts[yiYou] = { ...accounts[yiYou]!, zheng, lastUsedAt: Date.now() };
+      } else {
+        accounts.push({ id: botId, name: '', createdAt: Date.now(), lastUsedAt: Date.now(), zheng });
+      }
+      if (!cunSheJiaoZhangHao(dai.instId || undefined, dai.pingTai, accounts)) {
+        return { ok: false, status: st, error: 'settings-write-failed' };
+      }
       saoMaDai.delete(qr);
-      try { audit?.log('shejiao.qr-confirmed', { instId: dai.instId, pingTai: dai.pingTai, botIdLen: botId.length }); } catch { /* noop */ }
-      return { ok: true, status: st, botId };
+      try { audit?.log('shejiao.qr-confirmed', { instId: dai.instId, pingTai: dai.pingTai, botIdLen: botId.length, accounts: accounts.length }); } catch { /* noop */ }
+      /**
+       * **T15 缺的那一步**：扫完码不只是"凭据存好了"，要**当场把连接建起来**并广播给界面，
+       * 否则"已连接"永远不亮、微信来的消息永远不进会话。连不上就如实带回错误（不许回一句"成功"糊过去）。
+       */
+      void zhiXingSheJiaoLianJie({ pingTai: dai.pingTai, instId: dai.instId, accountId: botId }).then((lian) => {
+        audit?.log('shejiao.qr-autoconnect', { pingTai: dai.pingTai, accountId: botId, ok: lian.ok, zaiXian: !!lian.zaiXian, error: lian.error || '' });
+      }).catch(() => { /* 状态由连接入口广播，异步审计失败不回写二维码 */ });
+      return { ok: true, status: 'connecting', qrStatus: 'confirmed', saved: true, botId, accountId: botId, zaiXian: false };
     }
-    if (st === 'expired') saoMaDai.delete(qr);
+    if (!['wait', 'scaned', 'scanned'].includes(st)) saoMaDai.delete(qr);
     return { ok: true, status: st };
   } catch (e) {
-    return { ok: false, status: 'error', error: xiJingCuoWu(e).slice(0, 200) };
-  }
+    if ((e as Error)?.name === 'TimeoutError' || (e as Error)?.name === 'AbortError') {
+      return { ok: true, status: dai.status || 'wait', pending: true };
+    }
+    saoMaDai.delete(qr);
+    return { ok: false, status: 'error', error: 'qr-status-failed' };
+  } finally { dai.busy = false; }
 });
 
-chuliIpc('warmy:sheJiaoDuanKai', (_e, p0?: { pingTai?: string; instId?: string }) => {
+chuliIpc('warmy:sheJiaoDuanKai', (_e, p0?: { pingTai?: string; instId?: string; accountId?: string; remove?: boolean }) => {
   const pingTai = String(p0?.pingTai || '');
-  const jian = sheJiaoLianJieJian(String(p0?.instId || ''), pingTai);
-  sheJiaoLianJie.get(jian)?.duanKai();
-  sheJiaoLianJie.delete(jian);
-  try { audit?.log('shejiao.disconnected', { pingTai }); } catch { /* noop */ }
+  const instId = String(p0?.instId || '');
+  const accountId = String(p0?.accountId || '');
+  if (accountId) {
+    const jian = sheJiaoLianJieJian(instId, pingTai, accountId);
+    sheJiaoLianJie.get(jian)?.duanKai();
+    sheJiaoLianJie.delete(jian);
+    // remove=true 才从列表删除；否则只断开，保留账号记录供下次一键重连。
+    if (p0?.remove === true) {
+      const pei = duSheJiaoPeiZhi(instId || undefined).find((x) => x.pingTai === pingTai);
+      const accounts = sheJiaoZhangHaoLieBiao(pei).filter((a) => a.id !== accountId);
+      cunSheJiaoZhangHao(instId || undefined, pingTai, accounts);
+    }
+  } else {
+    const jiu = sheJiaoLianJieJianJiu(instId, pingTai);
+    for (const [jian, ad] of sheJiaoLianJie) {
+      if (jian !== jiu && !jian.startsWith(jiu + '::')) continue;
+      ad.duanKai();
+      sheJiaoLianJie.delete(jian);
+    }
+  }
+  broadcastToWindows('warmy:sheJiaoZhuangTai', { pingTai, instId, accountId, status: 'disconnected', zaiXian: false, error: '' });
+  try { audit?.log('shejiao.disconnected', { pingTai, accountId, remove: p0?.remove === true }); } catch { /* noop */ }
   return { ok: true };
 });
 
-chuliIpc('warmy:sheJiaoFaSong', async (_e, p0?: { pingTai?: string; huiHuaId?: string; wenBen?: string; contextToken?: string }) => {
-  const pingTai = String(p0?.pingTai || '');
-  const ad = sheJiaoLianJie.get(pingTai);
-  if (!ad || !ad.zaiXian()) return { ok: false, error: 'not-connected' };
-  const ok = await ad.faSong(String(p0?.huiHuaId || ''), String(p0?.wenBen || ''), {
-    contextToken: p0?.contextToken,
-  });
-  try { audit?.log('shejiao.message-out', { pingTai, ok, chars: String(p0?.wenBen || '').length }); } catch { /* noop */ }
-  return { ok };
+chuliIpc('warmy:sheJiaoFaSong', async (_e, p0?: {
+  pingTai?: string; instanceId?: string; recipient?: string; wenBen?: string; accountId?: string;
+}) => {
+  // 只接受显式外发操作；旧的仅平台/本机会话参数不猜收件人，不遍历连接广播。
+  const pingTai = typeof p0?.pingTai === 'string' ? p0.pingTai.trim() : '';
+  const instanceId = typeof p0?.instanceId === 'string' ? p0.instanceId.trim() : '';
+  const recipient = typeof p0?.recipient === 'string' ? p0.recipient.trim() : '';
+  const wenBen = typeof p0?.wenBen === 'string' ? p0.wenBen : '';
+  if (!pingTai || !instanceId || !recipient || !wenBen.trim()
+    || instanceId.includes('::') || pingTai.includes('::')) return { ok: false, error: 'bad-payload' };
+  const accountId = String(p0?.accountId || '');
+  const ad = sheJiaoLianJie.get(sheJiaoLianJieJian(instanceId, pingTai, accountId || 'default'))
+    || sheJiaoLianJie.get(sheJiaoLianJieJianJiu(instanceId, pingTai));
+  if (!ad) return { ok: false, error: 'not-connected' };
+  // context 由所属适配器按 recipient 取，renderer 不提供也不能覆盖。
+  const ok = await ad.faSong(recipient, wenBen).catch(() => false);
+  try { audit?.log('shejiao.message-out', { pingTai, instId: instanceId, ok, chars: wenBen.length }); } catch { /* noop */ }
+  return ok ? { ok: true } : { ok: false, error: 'send-failed' };
 });
 
-/** 已落盘的模型能力（拉取时存的）——渲染层启动时读回，重启后警示图标也能显示 */chuliIpc('warmy:moXingNengLiQu', () => {
+/** 已落盘的模型能力（拉取时存的）——渲染层启动时读回，重启后警示图标也能显示 */
+chuliIpc('warmy:moXingNengLiQu', () => {
   try {
     const s = settingsStore?.load() as { modelCaps?: Record<string, unknown> } | undefined;
     const m = (s && s.modelCaps && typeof s.modelCaps === 'object') ? s.modelCaps : {};
@@ -16718,6 +21252,41 @@ chuliIpc('warmy:chaJianJiSaoMiaoMuLuJiSheZhi', (_e, dirs: unknown) => {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
+/**
+ * **内置插件播种（第 42 轮，T5）**：把随包的 `plugins/mcp-bridge` 复制进默认插件目录，
+ * 并在 `chaJianJi` 里登记一条 **enabled:false** 的记录 —— 用户要求"插件里看得到、但默认不启动"。
+ * 为什么不靠扫描自动发现：扫描会把发现到的插件标成 `enabled: true`（真机行为），
+ * 那样一开箱就是启用的，与产品口径相反。
+ */
+function boZhongNeiZhiChaJian(): void {
+  try {
+    const ming = 'mcp-bridge';
+    /** 开发态 app.getAppPath() 可能是仓库根，也可能是包目录 —— 两处都试，别猜一个 */
+    const gen = app.getAppPath();
+    const houXuan = [
+      path.join(gen, 'plugins', ming),
+      path.join(gen, 'packages', 'app-shell', 'plugins', ming),
+      path.join(process.cwd(), 'plugins', ming),
+      path.join(process.cwd(), 'packages', 'app-shell', 'plugins', ming),
+    ];
+    const src = houXuan.find((x) => fs.existsSync(path.join(x, 'bridge.mjs')));
+    if (!src) return;
+    const mu = path.join(app.getPath('userData'), 'scan-dirs', 'plugins');
+    const dst = path.join(mu, ming);
+    try { fs.mkdirSync(mu, { recursive: true }); } catch { /* 已存在 */ }
+    if (!fs.existsSync(dst)) {
+      try { fs.cpSync(src, dst, { recursive: true }); } catch { /* 复制失败不挡启动 */ }
+    }
+    const s = settingsStore?.load() as { chaJianJi?: Array<Record<string, unknown>> } | undefined;
+    const arr = Array.isArray(s?.chaJianJi) ? s.chaJianJi.slice() : [];
+    const id = 'warmy-plugin-mcp-bridge';
+    if (!arr.some((x) => String((x || {}).id || '') === id)) {
+      arr.push({ id, ming: 'MCP 桥接（mcp-bridge）', desc: '把 MCP 服务器桥接成牛马可用的工具；默认不启动。', path: dst, enabled: false });
+      try { settingsStore?.save({ chaJianJi: arr } as never); } catch { /* noop */ }
+      try { audit?.log('plugin.seed-mcp-bridge', { dst }); } catch { /* noop */ }
+    }
+  } catch { /* 播种失败不影响启动 */ }
+}
 chuliIpc('warmy:chaJianJiSaoMiao', () => {
   try {
     const dirs = chaRuMoRenMuLu([], 'plugins');
@@ -18649,6 +23218,51 @@ chuliIpc('warmy:winChongXinJiaZai', () => {
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+/** 主窗口**吸附**（第 62 轮）：靠近屏幕工作区边缘 12px 内自动贴边；与 nm 窗口的磁铁按钮同一图标与语义 */
+let zhuXiFuKai = true;
+let zhuXiFuChuShiHua = false;
+let zhuTieZhong = false;
+/** 读一次设置里的吸附开关（缺省 true）；用户改过就落盘，重启保持 */
+function zhuXiFuDangQian(): boolean {
+  if (!zhuXiFuChuShiHua) {
+    try {
+      const s = settingsStore?.load() as { zhuXiFuKai?: unknown } | undefined;
+      if (typeof s?.zhuXiFuKai === 'boolean') zhuXiFuKai = s.zhuXiFuKai;
+    } catch { /* 读不到就用默认开 */ }
+    zhuXiFuChuShiHua = true;
+  }
+  return zhuXiFuKai;
+}
+function tieBianZhuChuang(w: BrowserWindow | null): void {
+  if (!w || !zhuXiFuDangQian() || zhuTieZhong) return;
+  try {
+    if (w.isMaximized() || w.isFullScreen()) return;
+    const b = w.getBounds();
+    const d = screen.getDisplayMatching(b).workArea;
+    const J = 12;
+    let x = b.x, y = b.y;
+    if (Math.abs(b.x - d.x) <= J) x = d.x;
+    if (Math.abs(d.x + d.width - (b.x + b.width)) <= J) x = d.x + d.width - b.width;
+    if (Math.abs(b.y - d.y) <= J) y = d.y;
+    if (Math.abs(d.y + d.height - (b.y + b.height)) <= J) y = d.y + d.height - b.height;
+    if (x !== b.x || y !== b.y) {
+      zhuTieZhong = true;
+      try { w.setBounds({ ...b, x, y }); } catch { /* 贴边失败不影响拖动 */ } finally {
+        setTimeout(() => { zhuTieZhong = false; }, 120);
+      }
+    }
+  } catch { /* 贴边失败不影响拖动 */ }
+}
+chuliIpc('warmy:zhuXiFu', (e, kai?: boolean) => {
+  /** 只认主窗口：编辑窗/独立窗口也共享同一个 preload 时，不许它们改主窗的吸附状态 */
+  if (!win || e.sender !== win.webContents) return { ok: false, error: 'not-main-window', on: zhuXiFuDangQian() };
+  if (typeof kai === 'boolean') {
+    zhuXiFuKai = kai;
+    zhuXiFuChuShiHua = true;
+    try { settingsStore?.save({ zhuXiFuKai: kai } as never); } catch { /* 落盘失败不影响本次开关 */ }
+  }
+  return { ok: true, on: zhuXiFuDangQian() };
+});
 chuliIpc('warmy:winZongShiQiYongDing', (_e, qiYong?: boolean) => {
   try {
     if (!win) return { ok: false };
@@ -18742,7 +23356,7 @@ chuliIpc('warmy:ziChanJiSweep', () => anQuanChuLi(() => ({ ok: true, n: 0 }), { 
 // ── P6 知识库：从对话写入 ──
 chuliIpc('warmy:zhiShiKuCongLiaoTian', (_e, payload: { sessionId: string; biaoTi: string; ti: string }) => {
   try {
-    knowledge?.upsertEntity({
+    knowledge?.internal.upsertEntity({
       id: 'sess-' + payload.sessionId,
       kind: 'project',
       ming: payload.sessionId,
@@ -18750,7 +23364,7 @@ chuliIpc('warmy:zhiShiKuCongLiaoTian', (_e, payload: { sessionId: string; biaoTi
       anchors: [],
     });
     const evId = 'ev-' + Date.now();
-    knowledge?.addEvent({
+    knowledge?.internal.addEvent({
       id: evId,
       biaoTi: payload.biaoTi,
       result: payload.ti.slice(0, 500),
@@ -18798,11 +23412,27 @@ function xiaoXiShiJian(x: { seq?: number | string; ts?: number | string } | null
  */
 async function guiDangYiGeHuiHua(
   sessionId: string,
-  opts?: { moXing?: string; biaoTi?: string; quanLiang?: boolean },
-): Promise<{ ok: boolean; tiaoShu?: number; zhiShiJian?: string; jiangJi?: boolean; error?: string }> {
+  opts?: { moXing?: string; biaoTi?: string; quanLiang?: boolean; auto?: boolean },
+): Promise<{ ok: boolean; tiaoShu?: number; zhiShiJian?: string; jiangJi?: boolean; guiDangHeXin?: boolean; skipped?: string; error?: string }> {
   try {
     const sid = String(sessionId || '');
     if (!sid) return { ok: false, error: 'bad-session' };
+    /**
+     * **这一轮有对话在跑就跳过归档**（第 52 轮用户口径）。归档要读整段日志、写记忆服务与知识库，
+     * 和正在生成的一轮并发时两边都只看得到"半条消息"：刚说完的内容没进摘要、游标却已经推过那段 seq
+     * ⇒ 那几句永久消失（第 44 轮的教训就是"游标比事实跑得快"）。
+     * 跳过不等于丢掉：自动入口把 `guiDangZuiHouXu` 退回去（下一轮再补），手动入口如实回 `skipped` 给用户看。
+     */
+    if (zaiTuLiao.has(sid)) {
+      try {
+        audit?.log('chat.archive-skipped-inflight', {
+          sessionId: sid, kaiShi: zaiTuLiao.get(sid), chuFa: opts?.auto ? 'auto' : 'manual',
+        });
+      } catch { /* noop */ }
+      return { ok: false, skipped: 'in-flight', error: 'in-flight（这个会话正在生成回复，本轮归档跳过；下一轮会自动补上）' };
+    }
+    /** 用户点过"重构"的内容：在**这次归档**里按归档流程写回（第 55 轮项 1） */
+    chouGanDaiZhengLi(sid);
     /**
      * **归档时整理智能配置文件**（产品要求）：把散记的条目重排成「按模型分组的质量表 +
      * 用户评价小结」，让分类模型下次更容易读。先整理、再记本次的质量判断。
@@ -18818,19 +23448,34 @@ async function guiDangYiGeHuiHua(
     } catch { /* 整理失败不影响归档本身 */ }
     const suoyou = chatLogs.get(sid) || [];
     /**
-     * 第 37 轮 项 2：**归档时顺手更新「印象」**（`yonghushuju.md`）。
+     * 第 37 轮 项 2：**归档时顺手更新「印象」**（`yinxiang.md`）。
      *
      * 素材只用两种"用户自己说过的话"：
      *  · 本会话最近的用户原话（带长期措辞的句子，如"以后都…""我不喜欢…"）；
      *  · 归档要整理的这批原文里的用户部分。
      * 提取规则见 `YIN_XIANG_TIQU_MENJIN`（软门禁）；这里是**确定性提取**，不调用模型 ⇒ 永不幻觉。
      */
+    /**
+     * 第 38 轮 项 5：归档时**用模型整理印象**（整理模型优先，缺则用这只牛马的对话模型），
+     * 并按"只能摘录老板原话"的硬核验防幻觉。模型不可用时自动退回第 37 轮的确定性提取（同一条写入路径）。
+     * 素材仍然是"用户自己说过的话 + 赞/踩"，**不把牛马自己的话当成长期偏好**。
+     */
     try {
       const yongHuHua = suoyou
         .filter((x) => guiYiJiaoSe(x.role) === 'user' && !((x as { hidden?: boolean }).hidden))
         .slice(-40)
         .map((x) => String(x.content || ''));
-      zhengLiYinXiang({ yuanHua: yongHuHua });
+      /** 赞/踩来自 `userData/zhinengpeizhi.md`（智能配置）：那是纯文本档案，按行取最近 20 条 */
+      const zanCai = (() => {
+        try {
+          const wen = String(zhiNengPeiZhi().du() || '');
+          return wen.split(/\r?\n/)
+            .filter((l) => /踩|赞|👍|👎/.test(l))
+            .slice(-20)
+            .map((l) => ({ pingJia: /踩|👎/.test(l) ? '踩' : '赞', wenTi: l.replace(/^[-*\s]+/, '').slice(0, 60), moXing: '' }));
+        } catch { return []; }
+      })();
+      await moXingGuiNaYinXiang(String(sessionId || ''), yongHuHua.concat(zanCai.map((v) => v.wenTi || '').filter(Boolean)), zanCai);
     } catch { /* 印象整理失败不影响归档 */ }
     const youBiao = guiDangYouBiaoQu();
     const qiDian = opts?.quanLiang ? 0 : Number(youBiao[sid] || 0);
@@ -18845,8 +23490,14 @@ async function guiDangYiGeHuiHua(
     /**
      * 设置里存的是「供应商 · 模型id」（与可用模型同款），而 `jieMoXingGongYingShang` 要**裸模型 id**。
      * 不剥前缀的话模型永远解析不到 ⇒ 每次都静默降级，"归档使用的模型"就成了摆设。
+     *
+     * **两条入口用同一个模型**（第 52 轮用户口径"效果与质量要一致"）：手动那路把设置里的
+     * `archiveModel` 传进来，自动那路以前不传 ⇒ 自动归档永远是生拼的原文、手动归档才是整理过的，
+     * 同一个功能两种质量。现在没显式传就回落到了设置里那一份，两边同模型、同指令、同降级。
      */
-    const moQuan = String(opts?.moXing || '').trim();
+    const moXingPing = String(opts?.moXing || '').trim()
+      || String((settingsStore?.load() as { archiveModel?: string } | undefined)?.archiveModel || '').trim();
+    const moQuan = moXingPing;
     const mo = moQuan.includes('·') ? moQuan.split('·').pop()!.trim() : moQuan;
     if (mo) {
       try {
@@ -18858,7 +23509,16 @@ async function guiDangYiGeHuiHua(
               model: mo,
               xiaoXiJi: [{
                 role: 'user',
-                content: '把下面这段会话整理成一条可检索的知识条目：先给一句概括标题，再列要点/决定/待办/风险，最后保留关键事实。只输出整理结果，不要寒暄。\n\n' + yuanWen.slice(0, 12000),
+                content: '把下面这段会话整理成一条可检索的知识条目：先给一句概括标题，再列要点/决定/待办/风险，最后保留关键事实。只输出整理结果，不要寒暄。\n\n'
+                  + (() => {
+                    /**
+                     * **归档要对着规范整理**（用户新增）：这个会话写过规范，就把规范摆在整理指令前面，
+                     * 让整理结果按"这个会话定的规矩"归置（违反规范的事、为满足规范做的事都要写出来）。
+                     */
+                    const gf = duGuiFan(sid).trim();
+                    return gf ? '【本会话的规范（按它来归置）】\n' + gf.slice(0, 1500) + '\n\n' : '';
+                  })()
+                  + yuanWen.slice(0, 12000),
               }],
               maxTokens: 900,
             }),
@@ -18879,24 +23539,137 @@ async function guiDangYiGeHuiHua(
       || (zhengLi.split('\n')[0] || '').slice(0, 60)
       || ('会话归档 ' + new Date().toISOString().slice(0, 10));
     const evId = 'ev-arc-' + Date.now().toString(36);
-    knowledge?.upsertEntity({ id: 'sess-' + sid, kind: 'project', ming: sid, attrs: {}, anchors: [] });
-    knowledge?.addEvent({
+    /**
+     * **双时间**（第 53 轮项 5）：
+     *  · 记录时间 = 这批原文里**最后一条消息被说出来的时刻**（不是归档的此刻 —— 归档可能晚几天，
+     *    用此刻会把"你什么时候说的"抹成"机器什么时候处理的"）；
+     *  · 发生时间 = 从原文里解析出来的那句时间（"上个月5号"），**以说话时刻为参照系**，解析不出就留空。
+     */
+    /** 记录时间 = 这批原文里最后一条消息被说出来的时刻（不是归档的此刻；见上面 `shuangShiJian` 的注释） */
+    const jiLuTs = xin.reduce((mx, x) => Math.max(mx, Number(xiaoXiShiJian(x)) || 0), 0) || Date.now();
+    const zuiHouX = xin.reduce((mx, x) => Math.max(mx, Number(x.seq) || 0), 0);
+    const ssj = shuangShiJian(zhengLi + '\n' + yuanWen.slice(0, 8000), jiLuTs, zuiHouX);
+    knowledge?.internal.upsertEntity({ id: 'sess-' + sid, kind: 'project', ming: sid, attrs: {}, anchors: [] });
+    knowledge?.internal.addEvent({
       id: evId,
       biaoTi,
       result: zhengLi.slice(0, 500),
       entityIds: ['sess-' + sid],
       anchors: [],
       ts: Date.now(),
+      jiluTs: ssj.jiluTs,
+      fashengTs: ssj.fashengTs,
+      fashengBiao: ssj.fashengBiao,
+      fashengJingDu: ssj.fashengJingDu as 'ri' | 'yue' | 'nian' | 'wu',
+      fashengLaiYuan: ssj.fashengLaiYuan,
+      xuHao: ssj.xuHao,
+      laiYuan: opts?.auto ? 'archive:auto' : 'archive:manual',
+      tiShiCiBanBen: TI_SHI_CENG_BAN_BEN,
     });
+    try {
+      audit?.log('kb.time-written', {
+        sessionId: sid, eventId: evId, jingDu: ssj.fashengJingDu, youFaSheng: !!ssj.fashengTs, yiChang: ssj.yiChang,
+      });
+    } catch { /* noop */ }
     zhuCeLiaoTianZiChan({ id: evId, biaoTi, ti: zhengLi, scope: 'session' });
+
+    /**
+     * **内部库归档完成后，派生一份"可对外的能力概要"写进会话库**（第 52 轮项 6 的新功能）。
+     * 概要不是改写原文：只从能力白名单里挑条目，再过确定性检查器（数字/日期/路径/存在性说法/白名单外的字/哨兵）。
+     * 任何一项不过 ⇒ 整条不写，只落审计（宁缺勿泄）。写这层时**不做"内容升级"**：
+     * 概要的敏感度由检查器担保，`panDingCeng` 那套是给模型/用户手写内容用的。
+     */
+    try {
+      /**
+       * 抑制阈值要数得准，证据就得**按条给**：这批归档算一份，内部库里**其它未被取代的**事件各算一份。
+       * 刚写进去的那条要排除（否则同一件事被数两次，一条证据就凑够 k=2 把这一单业务说出去了）。
+       */
+      const bieDe = (knowledge?.internal.query('').events || [])
+        .filter((e) => e.id !== evId && !e.shiXiaoTs).map((e) => e.result || '');
+      const dm = paiShengDuiWaiGaiLao([zhengLi + '\n' + yuanWen.slice(0, 8000), ...bieDe], undefined, nengLiBiao());
+      if (!dm.ok || !dm.gai) {
+        try { audit?.log('kb.tumin-suppressed', { sessionId: sid, nengLi: dm.nengLi.length, why: dm.why.slice(0, 3).join(' | ').slice(0, 160) }); } catch { /* noop */ }
+      } else if (kbWriteLayers(sid).includes('session') && knowledge) {
+        const yaoTs = shuangShiJian(dm.gai, jiLuTs);
+        knowledge.session.addEvent({
+          id: 'ev-tu-' + Date.now().toString(36),
+          biaoTi: '能力清单（脱敏概要）',
+          result: dm.gai,
+          entityIds: ['sess-' + sid],
+          anchors: [],
+          ts: Date.now(),
+          jiluTs: yaoTs.jiluTs,
+          laiYuan: 'derived:redaction',
+          tiShiCiBanBen: TI_SHI_CENG_BAN_BEN,
+          /** 血缘：源事件被更正/取代时，这条对外概要要跟着重算（不能让它继续对外说旧话） */
+          yinZi: [evId],
+        });
+        try { audit?.log('kb.tumin-written', { sessionId: sid, nengLi: dm.nengLi.length, chars: dm.gai.length }); } catch { /* noop */ }
+      } else {
+        try { audit?.log('kb.tumin-denied', { sessionId: sid, why: '本会话不可写会话库' }); } catch { /* noop */ }
+      }
+    } catch { /* 脱敏概要失败不影响归档本身 */ }
+
+    /**
+     * **归档写完就要整理**（第 52 轮项 7；第 53 轮按调研升级）：同标题重复条目留最新、
+     * 超长截断；**被取代的说法不物理删除，只打 `shiXiaoTs`**（对齐 Graphiti/Zep 的双时态做法 ——
+     * Mem0 的纯 append-only 已被自家 issue 反证：可变事实会堆积、检索出陈旧矛盾；删掉又丢掉审计线索）。
+     * 源条目被取代 ⇒ 指向它的派生条目（会话库的脱敏概要）跟着标陈旧并**重算**，重算不过就降级为"不对外"。
+     */
+    try {
+      if (knowledge) {
+        const chaoQi: string[] = [];
+        for (const ceng of kbWriteLayers(sid)) {
+          const kb = knowledge.allow(ceng);
+          const quan = kb.query('').events;
+          const ji = guiHuaZhengLi(quan.map((e) => ({ id: e.id, biaoTi: e.biaoTi, result: e.result, ts: e.ts })));
+          for (const id of ji.shanChu) { if (kb.supersedeEvent(id)) chaoQi.push(id); }
+          for (const g of ji.gaiXie) {
+            const jiu = quan.find((e) => e.id === g.id);
+            if (!jiu) continue;
+            kb.addEvent({ ...jiu, biaoTi: g.biaoTi, result: g.result });
+          }
+          if (ji.shanChu.length || ji.gaiXie.length) {
+            audit?.log('kb.tidy', {
+              sessionId: sid, ceng, yuan: ji.yuan, hou: ji.hou,
+              shan: ji.shanChu.length, gai: ji.gaiXie.length,
+              fangShi: 'shiXiao（不删除）',
+              liYou: ji.liYou.slice(0, 6).map((x) => x.lei).join(','),
+            });
+          }
+        }
+        /** 派生层一致性：源被取代 ⇒ 概要陈旧 ⇒ 重算（重算不出来就把这条对外概要一起取代） */
+        if (chaoQi.length) {
+          const yinYong = (knowledge.session.query('').events || []).filter((e) => (e.yinZi || []).some((s) => chaoQi.includes(s)));
+          for (const y of yinYong) {
+            const re = paiShengDuiWaiGaiLao(knowledge.internal.activeEvents().map((x) => x.result || ''), undefined, nengLiBiao());
+            if (re.ok && re.gai) { knowledge.session.addEvent({ ...y, result: re.gai, ts: Date.now() }); audit?.log('kb.derived-rebuilt', { id: y.id }); }
+            else { knowledge.session.supersedeEvent(y.id); audit?.log('kb.derived-retired', { id: y.id, why: re.why.slice(0, 2).join(' | ') }); }
+          }
+          if (yinYong.length) { try { audit?.log('kb.stale-propagated', { sessionId: sid, yuan: chaoQi.length, yingXiang: yinYong.length }); } catch { /* noop */ } }
+        }
+      }
+    } catch { /* 整理失败不影响归档本身 */ }
+
+    /**
+     * 两条入口走同一条管线（用户定稿：立即归档与自动归档是同一个功能，只是一个手动一个自动）。
+     * 以前手动这一路只写知识库实体/事件，**不写 `kind:'archive'`、不写锚点、不出结构化摘要** ⇒
+     * 同样一句"归档"，两边落下的东西不一样，注入与召回的口径自然也不一样。现在手动也调同一个核心。
+     */
+    let heXinOk = false;
+    try {
+      const hx = await shengChengHuiHuaZhaiYao(sid, opts?.auto === true);
+      heXinOk = !!(hx && hx.ok);
+    } catch { heXinOk = false; }
+    if (!heXinOk) { try { audit?.log('chat.archive-core-fail', { sessionId: sid }); } catch { /* noop */ } }
 
     const next = guiDangYouBiaoQu();
     next[sid] = zuiHou;
     guiDangYouBiaoCun(next);
     try {
-      audit?.log('chat.archive-done', { sessionId: sid, tiaoShu: xin.length, jiangJi, hasMoXing: !!mo });
+      audit?.log('chat.archive-done', { sessionId: sid, tiaoShu: xin.length, jiangJi, hasMoXing: !!mo, guiDangHeXin: heXinOk, chuFa: opts?.auto ? 'auto' : 'manual' });
     } catch { /* noop */ }
-    return { ok: true, tiaoShu: xin.length, zhiShiJian: evId, jiangJi };
+    return { ok: true, tiaoShu: xin.length, zhiShiJian: evId, jiangJi, guiDangHeXin: heXinOk };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
@@ -18959,15 +23732,17 @@ chuliIpc('warmy:piZhunHuiYing', (_e, id: string, allowed: boolean, scope: string
 });
 
 // ── 4 自动检查点 ──
-chuliIpc('warmy:checkpointZiDong', (_e, phase: 'round_start' | 'round_end', logSeq?: number) => {
+chuliIpc('warmy:checkpointZiDong', (_e, phase: 'round_start' | 'round_end', sessionId?: string, logSeq?: number) => {
   try {
     if (!checkpoints) return { ok: false };
     const jiYiMuLu = path.join(app.getPath('userData'), 'memory');
     const jsonl = path.join(jiYiMuLu, 'fast-memory.jsonl');
+    /** 第 66 轮 项 26：自动回退点也必须带会话 id（否则每个会话都会看到同一套 3 个点） */
     const cp = checkpoints.create({
       phase,
       logSeq: logSeq || Date.now(),
       jsonlPath: fs.existsSync(jsonl) ? jsonl : undefined,
+      sessionId: String(sessionId || ''),
     });
     return { ok: true, checkpoint: cp, LieBiao: checkpoints.LieBiao() };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
@@ -19027,10 +23802,12 @@ chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: stri
       history: chatHistories,
       // 值班者输入与 chat-send 共享同一份日志 + 同一个渲染器（不变量 #2）
       logOf: (key: string) => chatLogs.get(key) || [],
-      contextBudgetChars: () => contextBudgetChars(providerCfg.model),
+      contextBudgetChars: (mo?: string, yangBen?: string) => contextBudgetChars(mo || providerCfg.model, yangBen, gongYingDai(providerCfg.baseURL, providerCfg.protocol)),
       // ADR 002 §9.4 待办 2：值班者路径共用同一套工具与限额（memory-client 是唯一实现）
       toolSpecs: () => (memory?.isReady && toolLimits().zuiDaLunShu > 0 ? memoryToolSpecs(toolLabels()) : undefined),
       toolLimits,
+      /** 派发决策（并行/接力）留痕（第 51 轮） */
+      audit: (op: string, detail?: Record<string, unknown>) => { try { audit?.log(op, detail); } catch { /* noop */ } },
       /**
        * **执行者的干活工具**（第 20 轮修：项目里的牛马要和单聊一样能干活）。
        *
@@ -19061,7 +23838,7 @@ chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: stri
         if (isWorkTool(toolName)) {
           const base = workspaceDirOf(app.getPath('userData'), xiaoXi.groupId);
           try { fs.mkdirSync(base, { recursive: true }); } catch { /* 建不出来 runWorkTool 会如实报错 */ }
-          const wr = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, false, app.getAppPath());
+          const wr = daiHuiDang(String(xiaoXi.groupId || ''), () => runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, false, app.getAppPath()));
           try {
             audit?.log('group.work-tool', {
               groupId: xiaoXi.groupId, tool: toolName, ok: wr.meta.ok,
@@ -19073,7 +23850,12 @@ chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: stri
             ts: Date.now(), sessionId: xiaoXi.groupId, round: ctx.round, tool: toolName,
             ok: wr.meta.ok, chars: String(wr.content || '').length, ms: Date.now() - t1,
           });
-          return String(wr.content || '').slice(0, ctx.zuiDaJieGuoZiShu);
+          const yuanQun = String(wr.content || '');
+          const shouQun = jieGuoShouWei(yuanQun, ctx.zuiDaJieGuoZiShu, String(toolName), (k) => readFileXuDu(wr.meta as DuZheShouKou, yuanQun.length, k));
+          if (shouQun.length < yuanQun.length) {
+            try { audit?.log('group.result-truncated', { groupId: xiaoXi.groupId, round: ctx.round, tool: toolName, qian: yuanQun.length, hou: shouQun.length }); } catch { /* 记账失败不影响返回 */ }
+          }
+          return shouQun;
         }
         // 工具里对文件做过的真实读写都记到**这个项目**的台账上（scope = 会话 id）
         const out = await withFileAccessScope(xiaoXi.groupId, () => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }));
@@ -19106,10 +23888,42 @@ chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: stri
       // 项目 MEMORY：从 group-store 读，**不**从 memory-os 流水复制（避免双源）
       projectMemory: (qunId) => projectMemoryForContext(groupStore, qunId),
       decisionContext: (qunId) => aiQuestions.contextFor(qunId),
+      /**
+       * 任务黑板 / 产物核实 / 超长结论存档：三件事走 hei-ban-cun.ts 的工厂（门禁接真记忆服务调同一份）。
+       * 只有记忆服务回 ok:true 才算落盘；落盘失败的条目不标已存档、超长结论不给指针。
+       */
+      /**
+       * 黑板落盘 + **跨轮摘要记账**（第 51 轮）：写成功才记摘要行（否则不记，避免指向不存在的东西）。
+       */
+      heiBanCun: (() => {
+        const ji = zaoHeiBanCun(() => memory, (code, data) => { audit?.log(code, data); });
+        return {
+          ...ji,
+          xie: async (t: Parameters<NonNullable<typeof ji.xie>>[0]) => {
+            const ok = await ji.xie(t);
+            if (ok) {
+              try {
+                banDaiHuiKu = banShouTiao(banDaiHuiKu, {
+                  sessionId: String(t.groupId || ''),
+                  renWuId: String(t.renWuId || ''),
+                  lei: String(t.lei || ''),
+                  wen: String(t.nei || t.luJing || t.zhuTi || '').slice(0, 200),
+                  ts: Date.now(),
+                });
+                cunBanDaiHui();
+              } catch { /* 记账失败不影响黑板本身 */ }
+            }
+            return ok;
+          },
+        };
+      })(),
+      heShiChanWu: zaoHeShiChanWu((qunId) => workspaceDirOf(app.getPath('userData'), qunId)),
+      cunZhengLiuQuanWen: zaoCunZhengLiuQuanWen(() => memory, (code, data) => { audit?.log(code, data); }),
+      t: tMain,
       runProjectGate: async (qunId, reason) => yunxingXiangmuMenjinYici(qunId, reason),
       addEvent: (biaoTi, ti, groupId) => {
-        knowledge?.upsertEntity({ id: 'grp-' + groupId, kind: 'project', ming: groupId, attrs: {}, anchors: [] });
-        knowledge?.addEvent({
+        knowledge?.internal.upsertEntity({ id: 'grp-' + groupId, kind: 'project', ming: groupId, attrs: {}, anchors: [] });
+        knowledge?.internal.addEvent({
           id: 'ev-' + Date.now(),
           biaoTi,
           result: ti.slice(0, 400),
@@ -19124,12 +23938,14 @@ chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: stri
       apiKey: providerCfg.apiKey,
       baseURL: providerCfg.baseURL || undefined,
       model: providerCfg.model,
+      /** 协议也要带上：其它所有建供应商的地方都传，唯独群聊这条以前漏了（自定义 openai 兼容端点会被按预设协议发） */
+      protocol: providerCfg.protocol,
     },
     {
       groupId: xiaoXi.groupId,
       userId: xiaoXi.userId,
       content: xiaoXi.content,
-      urgency: xiaoXi.urgency as never,
+      urgency: (['P0', 'P1', 'P2', 'P3'] as const).find((x) => x === xiaoXi.urgency),
     }
   );
 
@@ -19178,7 +23994,7 @@ chuliIpc('warmy:zhiXingQiJiYunXingJianYao', async (_e, payload: { brief: string;
         executorStatus.push(item);
         const r = await yunxingDuanCunhuoZhixingqi(
           { taskId: item.taskId, brief: payload.brief, contextItems: payload.contextItems || [] },
-          { presetId: providerCfg.presetId, apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL || undefined, model: providerCfg.model }
+          { presetId: providerCfg.presetId, apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL || undefined, model: providerCfg.model, protocol: providerCfg.protocol }
         );
         item.status = r.error ? 'error' : 'done';
         item.durationMs = Date.now() - qiShiShiJian;
@@ -19202,13 +24018,29 @@ chuliIpc('warmy:taiBaoCun', (_e, state: { chaJianJi?: unknown[]; instances?: unk
     const cur = settingsStore.load();
     let xie = state as Record<string, unknown>;
     if (Array.isArray(state?.instances)) {
-      const r = jiaMiSheJiao(state.instances, anQuanCunChu());
-      xie = { ...xie, instances: r.instances as unknown[] };
+      /**
+       * 认知层硬上限（第 53 轮项 2 的补洞）：注入时曾用 `slice(0, 1600)` **悄悄截断**（用户以为写进去的全都在发）。
+       * 渲染层现在会挡住超限输入；这里兜的是**老数据 / 手改文件**：保存时压到上限内并落审计（`prompt.persona-over-cap`），
+       * 不留在磁盘上"看起来完整、发出去是半截"的那种状态。
+       */
+      const xian = shangXianOf('认知', dangQianYuYan());
+      let qie = 0;
+      const qing = state.instances.map((x) => {
+        const o = (x || {}) as { persona?: unknown };
+        if (xian && typeof o.persona === 'string' && o.persona.length > xian) {
+          qie++;
+          return { ...o, persona: o.persona.slice(0, xian) };
+        }
+        return x;
+      });
+      if (qie) { try { audit?.log('prompt.persona-over-cap', { n: qie, shangXian: xian, liYou: '认知层每轮都注入；超限部分未发送，也不留在磁盘上' }); } catch { /* noop */ } }
+      const r = jiaMiSheJiao(qing, anQuanCunChu());
+      xie = { ...xie, instances: baoLiuSheJiaoZiDuan(r.instances as unknown[], (cur.instances || []) as unknown[]) };
       if (r.tong.jiaMi || r.tong.mingWen) {
         try { audit?.log('cred.social-encrypted', { jiaMi: r.tong.jiaMi, mingWen: r.tong.mingWen, moShi: r.tong.moShi }); } catch { /* noop */ }
       }
     }
-    const next = { ...cur, ...xie } as never;
+    const next = { ...cur, ...xie, sheJiao: cur.sheJiao } as never;
     settingsStore.save(next as never);
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
@@ -19235,7 +24067,12 @@ chuliIpc('warmy:taiJiaZai', () => {
 chuliIpc('warmy:zhiShiKuShanChu', (_e, payload: { kind: 'entity' | 'event'; id: string }) => {
   try {
     if (!knowledge) return { ok: false, error: 'kb not ready' };
-    const removed = payload?.kind === 'event' ? knowledge.removeEvent(payload.id) : knowledge.removeEntity(payload.id);
+    const jiXu = ['private', 'internal', 'session'] as ZhishiCeng[];
+    let removed = false;
+    for (const c of jiXu) {
+      const kb = knowledge.allow(c);
+      if (payload?.kind === 'event' ? kb.removeEvent(String(payload.id)) : kb.removeEntity(String(payload.id))) { removed = true; break; }
+    }
     return { ok: removed };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
@@ -19260,37 +24097,24 @@ chuliIpc('warmy:baoCunWenBen', async (_e, payload: { defaultName?: string; conte
 
 // ── 卡顿自检（diagnostics IPC）已下线：功能整块移除，IPC 通道不再注册 ──
 
-// ── D. ASR 语音转文字（**优先用设置里的「听话模型」**；没有再退回当前供应商） ──
+// ── D. ASR：本地启用即 strict local；未启用仅按配置的听话模型链 ──
 /**
  * 听话模型是否就绪（界面点语音按钮前先问这一句 —— 没配就提示去配，而不是录完才发现转不出来）。
  */
 chuliIpc('warmy:tingHuaZhuangTai', async () => {
   try {
-    await baozhangGongyingshangMiyao();
-    /**
-     * **扫整条听话模型链**（真机反馈：明明配了 ASR 模型，话筒仍说"需要配置听话模型"）。
-     * 以前只看链上**第一个**：第一个不可用（禁用/供应商没配/密钥没解出来）就一律判"没配"，
-     * 哪怕链上第二个是好的。现在逐个找，找到第一个真能用的就报 ready。
-     */
-    const bd = (() => { try { return zhuangTaiBenDiYuYin(); } catch { return null; } })();
-    if (bd && bd.qiYong && bd.moXing.shiBie) {
-      return { ok: true, ready: true, model: 'local/' + bd.moXingMing.shiBie, local: true, source: 'bendi-yuyin' };
+    const bd = zhuangTaiBenDiYuYin();
+    if (bd.qiYong) {
+      const ready = bd.zhuangTai === 'yi_an_zhuang';
+      return { ok: true, ready, model: 'local/' + bd.moXingMing.shiBie, local: true, source: 'bendi-yuyin',
+        reason: ready ? '' : 'bendi-yuyin-not-ready（本地运行时或模型不完整，请重新安装；不会改用云端）' };
     }
-    for (const mo of nengLiLianMoXing('asr')) {
+    for (const mo of new Set(nengLiLianMoXing('asr'))) {
       const an = await jieMoXingGongYingShang(mo);
-      if (!an) continue;
-      if (!an.apiKey && an.protocol !== 'ollama') continue;
+      if (!an || an.protocol === 'ollama' || !an.apiKey) continue;
       return { ok: true, ready: true, model: mo, provider: an.biaoQian, source: 'asr-chain' };
     }
-    // 没配专业听话模型：看看当前供应商能不能顶一下（DeepSeek 等不一定有 /audio/transcriptions）
-    const keYong = !!(providerCfg.apiKey || providerCfg.protocol === 'ollama');
-    return {
-      ok: true,
-      ready: false,
-      model: '',
-      source: keYong ? 'chat-provider-fallback' : 'none',
-      reason: keYong ? 'no-asr-model（用的是当前供应商的兜底转写，建议在「设置 → 模型 → 听话模型」里配一个）' : 'no-asr-model',
-    };
+    return { ok: true, ready: false, model: '', source: 'asr-chain', reason: 'no-asr-model（听话模型链中没有可用的音频服务）' };
   } catch (e) { return { ok: false, ready: false, error: xiJingCuoWu(e) }; }
 });
 
@@ -19324,7 +24148,58 @@ async function ttsChatShi(
   return { ok: false, error: r.jie.error || ('tts HTTP ' + r.status), ...(r.jie.voices ? { voices: r.jie.voices } : {}) };
 }
 
-/** **chat 式 ASR**：把音频当作 `input_audio` 内容块发 `/chat/completions`（同 MiMo）。 */
+/** 只依据真实 no_speech 元数据，不用字数、语种或常见短语猜测幻觉。
+ * 中间一个静音片段不能否定其余正常语音；只有全部片段均报告低置信无语音才拒绝。 */
+function asrWuYuYin(d: unknown): boolean {
+  const x = d as { no_speech?: boolean; no_speech_prob?: number; avg_logprob?: number; segments?: unknown[] } | null;
+  if (!x) return false;
+  if (x.no_speech === true) return true;
+  const wuYuYin = (v: unknown) => {
+    const s = v as { no_speech_prob?: number; avg_logprob?: number } | null;
+    return typeof s?.no_speech_prob === 'number' && s.no_speech_prob >= 0.85
+      && typeof s.avg_logprob === 'number' && s.avg_logprob <= -0.8;
+  };
+  return wuYuYin(x) || (Array.isArray(x.segments) && x.segments.length > 0 && x.segments.every(wuYuYin));
+}
+
+/** 仅解析完整 RIFF/WAVE PCM16；不可把浮点/压缩/8bit 音频当 int16 测静音。 */
+function asrPcm16JingYin(buf: Buffer, geShi: string): boolean {
+  if (geShi.toLowerCase() !== 'wav' || buf.length < 44 || buf.toString('ascii', 0, 4) !== 'RIFF'
+    || buf.toString('ascii', 8, 12) !== 'WAVE') return false;
+  const end = buf.readUInt32LE(4) + 8;
+  if (end > buf.length || end < 44) return false;
+  let rate = 0, align = 0, pcm16 = false;
+  const data: Array<{ start: number; len: number }> = [];
+  let off = 12;
+  while (off + 8 <= end) {
+    const id = buf.toString('ascii', off, off + 4), len = buf.readUInt32LE(off + 4), start = off + 8;
+    if (start + len > end) return false;
+    if (id === 'fmt ') {
+      if (len < 16) return false;
+      const channels = buf.readUInt16LE(start + 2);
+      rate = buf.readUInt32LE(start + 4);
+      align = buf.readUInt16LE(start + 12);
+      pcm16 = buf.readUInt16LE(start) === 1 && buf.readUInt16LE(start + 14) === 16
+        && channels > 0 && align === channels * 2 && rate > 0
+        && buf.readUInt32LE(start + 8) === rate * align;
+    } else if (id === 'data') data.push({ start, len });
+    off = start + len + (len % 2);
+  }
+  if (off !== end || !pcm16 || !data.length || data.some((d) => d.len % align !== 0)) return false;
+  const bytes = data.reduce((n, d) => n + d.len, 0);
+  if (bytes / (rate * align) < 0.1) return false;
+  let sum = 0, peak = 0;
+  for (const d of data) {
+    for (let i = d.start; i < d.start + d.len; i += 2) {
+      const v = buf.readInt16LE(i) / 32768;
+      sum += v * v;
+      peak = Math.max(peak, Math.abs(v));
+    }
+  }
+  return Math.sqrt(sum / (bytes / 2)) < 0.003 && peak < 0.02;
+}
+
+/** **chat 式 ASR**：只作为当前听话候选的协议兼容重试。 */
 async function asrChatShi(
   an: MoXingGongYingXinXi, mo: string, buf: Buffer, fmt: string, prompt?: string, yuYan?: string,
 ): Promise<{ ok: boolean; text?: string; model?: string; error?: string }> {
@@ -19332,16 +24207,13 @@ async function asrChatShi(
    * **格式闸门**（真机事故的直接原因 + 产品要求的"发送前格式验收"）：chat 式 ASR 只吃 wav / mp3。
    * 实测 MiMo：`input_audio.format must be one of: wav, mp3. Got: webm`。
    * 麦克风录的是 webm ⇒ 以前总是白挨一个 400，界面表现为"配了听话模型却转不出字"。
-   * 渲染层已把录音转成 16kHz WAV（见 app.js 的 blobZhuanWav）；这里用 `yanShouGeShi`
-   * **统一门禁**再兜一道 —— 不合规就如实报错，绝不把注定 400 的请求发出去。
+   * 渲染层在 blobZhuanWav 边界转成 WAV；这里只校验格式，不会靠修改标签冒充转码。
    */
-  const men = yanShouGeShi(fmt, jieShouGeShi('audio', an.protocol === 'ollama' ? 'ollama' : 'openai-compatible', 'asr'));
-  if (men.action === 'reject') {
-    return { ok: false, error: String(men.reason || `format-unsupported（${fmt}）`) };
-  }
-  const gui = men.action === 'convert' ? (men.to as 'wav' | 'mp3') : guiFanAsrGeShi(fmt);
+  if (an.protocol === 'ollama') return { ok: false, error: 'ollama-audio-unsupported' };
+  const gui = guiFanAsrGeShi(fmt);
   if (!gui) {
-    return { ok: false, error: `format-unsupported（chat 式 ASR 只支持 wav/mp3，收到 ${fmt}；请改用 wav 录音）` };
+    // 转码由渲染层完成，不能仅改 format 标签假装已经转换。
+    return { ok: false, error: `format-unsupported（chat 式 ASR 只支持 wav/mp3，收到 ${fmt}；请先转为 WAV）` };
   }
   try {
     /**
@@ -19352,11 +24224,14 @@ async function asrChatShi(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(an.apiKey ? { Authorization: `Bearer ${an.apiKey}` } : {}) },
       body: JSON.stringify(taoAsrChatBody({ model: mo, dataBase64: buf.toString('base64'), format: gui, prompt, language: yuYan })),
+      signal: AbortSignal.timeout(60000),
     });
-    const j = await r.json().catch(() => null);
+    const j = await r.json().catch(() => null) as { error?: { message?: unknown }; choices?: Array<{ message?: unknown }> } | null;
+    if (!r.ok) return { ok: false, error: `asr HTTP ${r.status}${j?.error?.message ? ' ' + String(j.error.message) : ''}` };
+    if (asrWuYuYin(j) || asrWuYuYin(j?.choices?.[0]?.message)) return { ok: false, error: 'no-speech（端点报告无有效语音）' };
     const jie = jieXiAsrChatResponse(j);
-    if (jie.ok) return { ok: true, text: jie.text, model: mo };
-    return { ok: false, error: jie.error || ('asr HTTP ' + r.status) };
+    if (jie.ok && jie.text?.trim()) return { ok: true, text: jie.text.trim(), model: mo };
+    return { ok: false, error: jie.error || 'asr-empty-result' };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
@@ -19373,242 +24248,81 @@ async function asrChatShi(
  * 明明配了。这里改成和 IPC 主路径**共用同一套逻辑**。
  */
 async function zhuanXieYinPinBuf(
-  buf: Buffer, geShi: string,
-): Promise<{ ok: boolean; text?: string; model?: string; error?: string }> {
-  await baozhangGongyingshangMiyao();
-  /**
-   * **识别语言**（产品要求：「设置 → 功能 → 语音识别」里选，默认「自动」）。
-   *
-   *   · `auto`（默认）⇒ **一个语言参数都不传**，让模型自己判断语种
-   *     （Whisper / MiMo 都支持语言自检，不传就是 autodetect）；
-   *   · 选了具体语言 ⇒ **显式带上**该 ISO-639-1 代码：
-   *     标准 OpenAI 兼容端点用表单字段 `language`（Whisper / faster-whisper /
-   *     whisper.cpp 服务端都认这个字段），chat 式（MiMo）走顶层 `language` +
-   *     输入音频的 `language`（见 `taoAsrChatBody`）。
-   *
-   * 以前这里**写死取界面语言**（zh ⇒ 永远传 zh），播英文录音时会强行按中文识别 ——
-   * 现在的默认是"不传"，把判断权交回模型；用户想固定语种时才传。
-   */
-  const asrCfg = (() => {
-    try {
-      const s = settingsStore?.load() as { asrLang?: string; asrEnabled?: boolean } | undefined;
-      return { kai: s?.asrEnabled !== false, lang: String(s?.asrLang || 'auto').trim() };
-    } catch { return { kai: true, lang: 'auto' }; }
-  })();
-  const yuYan = (!asrCfg.kai || !asrCfg.lang || asrCfg.lang === 'auto') ? '' : asrCfg.lang;
-  if (!asrCfg.kai) {
-    return { ok: false, error: 'asr-disabled（「设置 → 功能 → 语音识别」被关掉了：这里是用户明确的选择，不会再调用任何识别模型）' };
+  buf: Buffer, geShi: string, source: 'attachment' | 'microphone' = 'attachment',
+): Promise<{ ok: boolean; text?: string; model?: string; error?: string; source: string }> {
+  // 在任何 await/推理之前快照用户选择；ready 不是启用选择，失败后也不重读决定是否走云端。
+  const localEnabled = !!zhuangTaiBenDiYuYin().qiYong;
+  const luYou = localEnabled ? 'bendi-yuyin' : 'asr-chain';
+  const cfg = settingsStore?.load() as { asrLang?: string; asrEnabled?: boolean } | undefined;
+  if (source === 'microphone' && cfg?.asrEnabled === false) {
+    return { ok: false, error: 'asr-disabled（话筒语音识别已关闭）', source: luYou };
   }
-  /**
-   * **本地优先**（第 27 轮 项 5）：勾了「本地语音识别」就先在本机跑 sherpa-onnx。
-   * 不成（没装、格式不吃、推理抛异常）就**照常往下走听话模型链** ——
-   * 本地坏了不能让整体出不了字，但审计里要留下为什么降级。
-   */
-  /**
-   * **谁先答：本机 sherpa 还是「听话模型」链？**（第 38 轮 项 7）
-   *
-   * 第 27 轮定的是"勾了本地语音识别就本机优先"，但真机反馈是：用户把**听话模型显式设成
-   * `mimo-v2.5-asr`**，识别出来的字却还是错的、"和之前毫无变化" —— 因为本机 sherpa
-   * （`paraformer-zh-small`）先抢答并返回了它自己的结果，**用户点名的模型压根没被调用**。
-   * 产品口径：用户显式点名的模型必须真被用到（这是"设置生效"的底线），本机只能兜底。
-   * 所以判据改成看**用户有没有显式配一条云链**：
-   *  · 有 ⇒ 先走链（链里第一个启用的模型就是用户点名的那只），链全败才退回本机；
-   *  · 没有 ⇒ 保持第 27 轮的本机优先（离线场景照旧能用）。
-   * 谁答的都会写进审计（`asr.used` / `asr.bendi.used` / `asr.bendi.fallback`），
-   * 界面自检面板把"这次是哪只模型答的"显示给用户 ⇒ 再出问题一眼能定位。
-   */
-  const chainTou = (() => {
+  const lang = source === 'microphone' ? String(cfg?.asrLang || 'auto').trim().toLowerCase() : '';
+  const yuYan = lang && lang !== 'auto' ? lang : undefined;
+  if (!buf.length) return { ok: false, error: 'empty-audio', source: luYou };
+  if (geShi !== 'wav' && (localEnabled || geShi !== 'mp3')) {
     try {
-      const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
-      const lian = Array.isArray(sm.asrChain) ? (sm.asrChain as string[]) : [];
-      const jin = Array.isArray(sm.asrDisabled) ? (sm.asrDisabled as string[]) : [];
-      return String(lian.find((m) => m && !jin.includes(m)) || '');
-    } catch { return ''; }
-  })();
-  const benDiShi = async (): Promise<{ text?: string; moXing?: string } | null> => {
-    try {
-      const bd = await benDiShiBie(buf, geShi);
-      if (bd.ok) {
-        try { audit?.log('asr.bendi.used', { chars: String(bd.text || '').length, model: bd.moXing || '' }); } catch { /* noop */ }
-        return { text: bd.text, moXing: bd.moXing };
-      }
-      if (String(bd.error || '') !== 'bendi-yuyin-not-enabled') {
-        try { audit?.log('asr.bendi.skip', { reason: String(bd.error || '').slice(0, 160) }); } catch { /* noop */ }
-      }
-    } catch { /* 本机不可用 ⇒ 交给链 */ }
-    return null;
-  };
-  if (!chainTou) {
-    const benDi = await benDiShi();
-    if (benDi) return { ok: true, text: benDi.text, model: benDi.moXing };
-  }
-  const houXuan = nengLiLianMoXing('asr').filter((mo) => {
-    /**
-     * **听话模型配置必须真生效**（真机：dimavz/whisper-tiny 在 Ollama 上没有
-     * /audio/transcriptions，chat 式也转不出字，却排在链首把整条链拖垮）。
-     * 过滤规则：
-     *  · 名字里带 asr/whisper/gladia/paraformer 的优先保留；
-     *  · Ollama 上纯文本 chat 模型（非 whisper/asr）不进 ASR 链；
-     *  · 用户显式点名的模型永远保留（改设置即生效）。
-     */
-    const n = String(mo || '').toLowerCase();
-    // Ollama 的 whisper 名是文本模型（无音频端点）⇒ 排除
-    if (/whisper/.test(n) && !/whisper.*(server|api|http)/.test(n)) return false;
-    const shiAsr = /asr|whisper|paraformer|vosk|sherpa|sensevoice/.test(n);
-    if (shiAsr) return true;
-    // 非 asr 命名：只有在链上仅此一个时才留（别让链空掉）
-    return nengLiLianMoXing('asr').length <= 1;
-  });
-  // 重排：asr/whisper 命名的排前面，保证“改听话模型”立刻改变尝试顺序
-  houXuan.sort((a, b) => {
-    const sa = /asr|whisper|paraformer|vosk|sherpa|sensevoice/i.test(a) ? 0 : 1;
-    const sb = /asr|whisper|paraformer|vosk|sherpa|sensevoice/i.test(b) ? 0 : 1;
-    return sa - sb;
-  });
-  /**
-   * **听话模型更改必须立刻生效**（真机：默认改成 mimo-v2.5-asr 仍识别失败）。
-   * 策略：把「设置里第一个启用的听话模型」强制提到链首；并优先走标准
-   * /audio/transcriptions（mimo-v2.5-asr 支持），chat 式只作兜底且要求结果长度合理。
-   */
-  {
-    try {
-      const sm0 = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
-      const lian0 = Array.isArray(sm0.asrChain) ? (sm0.asrChain as string[]) : [];
-      const jin0 = Array.isArray(sm0.asrDisabled) ? (sm0.asrDisabled as string[]) : [];
-      const shou = lian0.find((m) => m && !jin0.includes(m));
-      if (shou) {
-        const i0 = houXuan.indexOf(shou);
-        if (i0 > 0) houXuan.splice(i0, 1);
-        if (i0 >= 0 || !houXuan.includes(shou)) houXuan.unshift(shou);
-      }
-    } catch { /* noop */ }
-  }
-  const cuoWu: string[] = [];
-  /**
-   * 云端专用 ASR（可选）：密钥只从 SecureKeyStore 读取，设置文件不存密钥。
-   * Deepgram 直接上传本地音频；AssemblyAI 需要先上传再提交转写并轮询。
-   */
-  try {
-    const cloud = (settingsStore?.load() as { asrCloudProvider?: string; asrCloudModel?: string } | undefined) || {};
-    const p = String(cloud.asrCloudProvider || 'none');
-    if (p === 'deepgram') {
-      const key = await jiexiGongyingshangMiyao('deepgram');
-      if (key) {
-        const q = new URLSearchParams({ model: String(cloud.asrCloudModel || 'nova-3'), smart_format: 'true' });
-        if (yuYan) q.set('language', yuYan);
-        const r = await fetch('https://api.deepgram.com/v1/listen?' + q.toString(), {
-          method: 'POST', headers: { Authorization: 'Token ' + key, 'Content-Type': `audio/${geShi}` }, body: new Uint8Array(buf),
-        });
-        const j = await r.json().catch(() => null) as { results?: { channels?: Array<{ alternatives?: Array<{ transcript?: string }> }> }; err_msg?: string } | null;
-        const t = String(j?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
-        if (r.ok && t) { audit?.log('asr.used', { model: cloud.asrCloudModel || 'nova-3', chars: t.length, source: 'deepgram' }); return { ok: true, text: t, model: 'deepgram/' + (cloud.asrCloudModel || 'nova-3') }; }
-        cuoWu.push(`deepgram: ${r.status} ${String(j?.err_msg || '').slice(0, 80)}`);
-      }
-    } else if (p === 'assemblyai') {
-      const key = await jiexiGongyingshangMiyao('assemblyai');
-      if (key) {
-        const h = { authorization: key };
-        const up = await fetch('https://api.assemblyai.com/v2/upload', { method: 'POST', headers: h, body: new Uint8Array(buf) });
-        const uj = await up.json().catch(() => null) as { upload_url?: string; error?: string } | null;
-        if (up.ok && uj?.upload_url) {
-          const sub = await fetch('https://api.assemblyai.com/v2/transcript', { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ audio_url: uj.upload_url, ...(cloud.asrCloudModel ? { speech_model: cloud.asrCloudModel } : {}), ...(yuYan ? { language_code: yuYan } : { language_detection: true }) }) });
-          const sj = await sub.json().catch(() => null) as { id?: string; error?: string } | null;
-          if (sub.ok && sj?.id) {
-            for (let i = 0; i < 120; i++) {
-              await new Promise((r2) => setTimeout(r2, 1000));
-              const gr = await fetch('https://api.assemblyai.com/v2/transcript/' + encodeURIComponent(sj.id), { headers: h });
-              const gj = await gr.json().catch(() => null) as { status?: string; text?: string; error?: string } | null;
-              if (gj?.status === 'completed') return { ok: true, text: String(gj.text || ''), model: 'assemblyai/' + (cloud.asrCloudModel || 'universal') };
-              if (gj?.status === 'error') { cuoWu.push('assemblyai: ' + String(gj.error || 'error').slice(0, 100)); break; }
-            }
-          } else cuoWu.push('assemblyai: ' + String(sj?.error || sub.status).slice(0, 100));
-        } else cuoWu.push('assemblyai upload: ' + String(uj?.error || up.status).slice(0, 100));
-      }
+      buf = await yinPinZhuanWav(buf);
+      geShi = 'wav';
+    } catch {
+      return { ok: false, error: 'audio-decode-failed（无法解码此音频，请提供可播放的 WAV、MP3、M4A、OGG 或 WebM 文件）', source: luYou };
     }
-  } catch (e) { cuoWu.push('cloud-asr: ' + xiJingCuoWu(e)); }
-  /** 音频时长（秒，按 wav 估算），用于判断转写结果是否合理 */
-  const yinPinMiao = (() => {
+  }
+  if (asrPcm16JingYin(buf, geShi)) {
+    return { ok: false, error: 'audio-silent（音频中没有有效声音，请检查录音或音频文件）', source: luYou };
+  }
+  if (localEnabled) {
     try {
-      if (String(geShi).toLowerCase() === 'wav' && buf.length > 44) return (buf.length - 44) / 32000;
-      return buf.length / 16000;
-    } catch { return 0; }
-  })();
-  const jieGuoHeLi = (t: string) => {
-    const s0 = String(t || '').trim();
-    if (!s0) return false;
-    // 音频 ≥1 秒却只回 ≤3 字 ⇒ 判为垃圾（真机：chat 式对 30s 录音回 "你好"）
-    if (yinPinMiao >= 1 && s0.replace(/\s/g, '').length <= 3) return false;
-    if (/^[\s\d\p{P}]{0,6}$/u.test(s0)) return false;
-    /**
-     * 第 35 轮 项 15：**"话太多"同样是症状**。
-     * 真事故：兜底把音频发给了**聊天模型**，它不报错、顺着编了一大段通顺文字 ⇒
-     * 输入框里就是"明显认错的话"。正常中文口播约 3~7 字/秒（含停顿），
-     * 超过 12 字/秒基本只能是幻觉；同一句重复 3 遍以上也判幻觉。
-     */
-    const zi = s0.replace(/\s/g, '').length;
-    if (yinPinMiao >= 1 && zi / yinPinMiao > 12) return false;
-    if (/(.{6,20})\1{2,}/.test(s0.replace(/\s/g, ''))) return false;
-    return true;
-  };
+      const bd = await benDiShiBie(buf, geShi, yuYan);
+      const text = String(bd.text || '').trim();
+      if (bd.ok && text) return { ok: true, text, model: bd.moXing, source: luYou };
+      return { ok: false, error: bd.error || 'bendi-yuyin-empty-result', source: luYou };
+    } catch (e) {
+      return { ok: false, error: 'bendi-yuyin-asr-failed：' + xiJingCuoWu(e), source: luYou };
+    }
+  }
+  // 各候选由 jieMoXingGongYingShang 解析自身凭据，不解锁无关的当前聊天供应商。
+  // 唯一候选来源：配置的听话链。只去禁用项和重复项，不猜名字、不重排。
+  const houXuan = [...new Set(nengLiLianMoXing('asr'))];
+  const cuoWu: string[] = [];
   for (const mo of houXuan) {
-    const an = await jieMoXingGongYingShang(mo);
-    if (!an) { cuoWu.push(`${mo}: provider-not-found`); continue; }
-    if (!an.apiKey && an.protocol !== 'ollama') { cuoWu.push(`${mo}: no-key`); continue; }
-    // ① 标准 OpenAI 音频端点
     try {
+      const an = await jieMoXingGongYingShang(mo);
+      if (!an) { cuoWu.push(`${mo}: provider-not-found`); continue; }
+      if (an.protocol === 'ollama') { cuoWu.push(`${mo}: ollama-audio-unsupported（Ollama 无音频识别接口）`); continue; }
+      if (!an.apiKey) { cuoWu.push(`${mo}: no-key`); continue; }
       const f = new FormData();
       f.append('file', new Blob([new Uint8Array(buf)], { type: `audio/${geShi}` }), `audio.${geShi}`);
       f.append('model', mo);
-      /** 标准端点有 `language` 参数（ISO-639-1）：中文语音被识别成英文就是缺它 */
       if (yuYan) f.append('language', yuYan);
+      // 不强制 verbose_json：部分合法 Whisper 兼容服务仅支持默认 JSON。
       const res = await fetch(pinJieUrl(an.baseURL, 'audio/transcriptions'), {
         method: 'POST',
-        headers: an.apiKey ? { Authorization: 'Bearer ' + an.apiKey } : undefined,
+        headers: { Authorization: 'Bearer ' + an.apiKey },
         body: f,
+        signal: AbortSignal.timeout(60000),
       });
+      const d = await res.json().catch(() => null) as { text?: unknown; error?: { message?: unknown } } | null;
       if (res.ok) {
-        const d = (await res.json()) as { text?: string };
-        const t = String(d?.text || '').trim();
-        if (t) { audit?.log('asr.used', { model: mo, chars: t.length, source: 'audio-transcriptions' }); return { ok: true, text: t, model: mo }; }
-        cuoWu.push(`${mo}: empty`);
-      } else {
-        audit?.log('asr.failed', { model: mo, status: res.status });
-        // ② 端点走不通 ⇒ chat 式（只认 wav/mp3，asrChatShi 内部已挡）
-        if (yingGaiHuanChatShi(res.status)) {
-          const r2 = await asrChatShi(an, mo, buf, geShi, undefined, yuYan);
-          const t2 = String(r2.text || '').trim();
-          // 乱码/过短结果当失败（whisper-tiny / mimo chat 式常吐 2 字无关内容）
-          if (r2.ok && jieGuoHeLi(t2)) {
-            audit?.log('asr.used', { model: mo, chars: t2.length, source: 'chat-completions', format: geShi });
-            return { ok: true, text: t2, model: mo };
-          }
-          if (r2.ok) {
-            audit?.log('asr.failed', { model: mo, source: 'chat-completions', error: 'asr-garbage(' + t2.length + ' chars)' });
-            cuoWu.push(mo + ': asr-garbage');
-            continue;
-          }
-          audit?.log('asr.failed', { model: mo, source: 'chat-completions', error: String(r2.error || '').slice(0, 140) });
-          cuoWu.push(`${mo}: ${r2.error}`);
-        } else {
-          cuoWu.push(`${mo}: http ${res.status}`);
-        }
+        const text = typeof d?.text === 'string' ? d.text.trim() : '';
+        if (d?.error) { cuoWu.push(`${mo}: audio/transcriptions ${String(d.error.message || d.error)}`); continue; }
+        if (asrWuYuYin(d)) { cuoWu.push(`${mo}: no-speech（端点报告无有效语音）`); continue; }
+        if (!text) { cuoWu.push(`${mo}: audio/transcriptions empty-result`); continue; }
+        return { ok: true, text, model: mo, source: luYou };
       }
+      const why = `audio/transcriptions HTTP ${res.status}${d?.error?.message ? ' ' + String(d.error.message) : ''}`;
+      // 协议兼容重试仍属于同一候选；不重试空结果/no_speech，也不在 IPC 另开一条链。
+      if (yingGaiHuanChatShi(res.status)) {
+        const r = await asrChatShi(an, mo, buf, geShi, undefined, yuYan);
+        if (r.ok && r.text?.trim()) return { ok: true, text: r.text.trim(), model: mo, source: luYou };
+        cuoWu.push(`${mo}: ${why}; chat/completions ${r.error || 'empty-result'}`);
+      } else cuoWu.push(`${mo}: ${why}`);
     } catch (e) {
       cuoWu.push(`${mo}: ${xiJingCuoWu(e)}`);
     }
   }
-  /**
-   * **链全败 ⇒ 退回本机**（第 38 轮 项 7：显式云模型优先，但本机仍是安全网 ——
-   * 断网/密钥失效时至少还能出字，且审计里写明是 `asr.bendi.fallback`，界面自检也会说"这次是本机答的"）。
-   */
-  if (chainTou) {
-    const benDi = await benDiShi();
-    if (benDi) {
-      try { audit?.log('asr.bendi.fallback', { lianCuo: cuoWu.slice(0, 3), model: benDi.moXing || '' }); } catch { /* noop */ }
-      return { ok: true, text: benDi.text, model: benDi.moXing };
-    }
-  }
-  return { ok: false, error: cuoWu.length ? cuoWu.join(' | ').slice(0, 300) : 'no-asr-model（「设置 → 模型 → 听话模型」里没有可用模型）' };
+  // 不截断整条错误链：每个实际候选的失败原因都要交给用户。
+  return { ok: false, error: cuoWu.length ? cuoWu.join(' | ') : 'no-asr-model（请在设置 → 模型 → 听话模型配置调用链）', source: luYou };
 }
 
 
@@ -19632,9 +24346,11 @@ chuliIpc('warmy:asrYunBaoCun', async (_e, p0?: { provider?: string; model?: stri
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:asrZhuanXie', async (_e, payload: { dataUrl: string; ext?: string }) => {
+chuliIpc('warmy:asrZhuanXie', async (_e, payload: { dataUrl: string; ext?: string; source?: 'attachment' | 'microphone' }) => {
   try {
-    await baozhangGongyingshangMiyao();
+    if (payload.source !== undefined && payload.source !== 'attachment' && payload.source !== 'microphone') {
+      return { ok: false, error: 'asr-invalid-source' };
+    }
     const b64 = String(payload.dataUrl).replace(/^data:[^,]+,/, '');
     const buf = Buffer.from(b64, 'base64');
     /** 音频容器格式：优先用调用方给的 ext，其次从 dataUrl 的 mime 推（chat 式 ASR 要显式给 format） */
@@ -19664,39 +24380,14 @@ chuliIpc('warmy:asrZhuanXie', async (_e, payload: { dataUrl: string; ext?: strin
       } catch { return 0; }
     })();
     try { audit?.log('asr.request', { geShi: yinPinGeShi, bytes: buf.length, miao: miao0 }); } catch { /* noop */ }
-    const r = await zhuanXieYinPinBuf(buf, yinPinGeShi);
+    const r = await zhuanXieYinPinBuf(buf, yinPinGeShi, payload.source ?? 'microphone');
     try {
       audit?.log('asr.result', {
-        ok: !!r.ok, model: String(r.model || ''), source: 'asr-chain',
+        ok: !!r.ok, model: String(r.model || ''), source: r.source,
         chars: String(r.text || '').length, error: String(r.error || '').slice(0, 160), miao: miao0,
       });
     } catch { /* noop */ }
-    if (r.ok) return { ok: true, text: r.text || '', model: r.model, source: 'asr-chain' };
-    // ② 兜底：当前生效供应商（可能只暴露 /chat/completions ⇒ 走 chat 式）
-    /**
-     * 第 35 轮 项 15（**这就是"语音转出来的字明显是错的"的真根因**）：
-     * 以前这里是 `asrChatShi(anDie, <当前聊天模型>, …, 'zh')` ——
-     *   · `providerCfg.model` 是**当前聊天模型**，不是听话模型。聊天模型收到音频不会报错，
-     *     它会顺着上下文**编一段通顺的话**回来 ⇒ 用户看到"识别错了"，其实是它在瞎猜；
-     *   · `'zh'` 是写死的，用户把识别语言设成"自动"也没用（英文录音必然被按中文硬转）。
-     * 现在：只用**真正被识别为听话模型**的那一个；没有就如实失败，
-     * 宁可告诉用户"没配听话模型"，也绝不把编出来的文字塞进输入框。
-     */
-    const asrMo = nengLiLianMoXing('asr').find((mo) => /asr|whisper|paraformer|vosk|sherpa|sensevoice|transcri/i.test(String(mo || ''))) || '';
-    const asrLang0 = (() => {
-      try {
-        const s = settingsStore?.load() as { asrLang?: string } | undefined;
-        return String(s?.asrLang || 'auto').trim();
-      } catch { return 'auto'; }
-    })();
-    const langArg = asrLang0 && asrLang0 !== 'auto' ? asrLang0 : undefined;
-    if (asrMo && (providerCfg.apiKey || providerCfg.protocol === 'ollama')) {
-      const base = (providerCfg.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '');
-      const anDie = { presetId: providerCfg.presetId, baseURL: base, protocol: providerCfg.protocol, apiKey: providerCfg.apiKey, biaoQian: providerCfg.presetId };
-      const r3 = await asrChatShi(anDie, asrMo, buf, yinPinGeShi, undefined, langArg);
-      if (r3.ok) return { ok: true, text: r3.text || '', model: r3.model, source: 'chat-provider-fallback', via: 'chat-completions' };
-    }
-    return { ok: false, error: String(r.error || 'no-asr-model（请在「设置 → 模型 → 听话模型」里配置）') };
+    return r;
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
@@ -19755,6 +24446,125 @@ chuliIpc('warmy:daKaiLiaoTianChuangKou', (_e, payload: { id: string; biaoTi?: st
     });
     w.on('closed', () => chatWindows.delete(payload.id));
     chatWindows.set(payload.id, w);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   L. **内置插件 `nm-file`（nm 文件查看器）** —— 独立窗口 + 吸附
+   ---------------------------------------------------------------------------
+   产品要求（本轮 T10）：
+     · 任何文件都能在这个查看器里打开：可编辑文本能改能存，文档（docx/xlsx/pptx/pdf）
+       抽正文只读，图片/音频/视频用原生控件，认不出的二进制给十六进制；
+     · 独立窗口（可移动/可缩放/多开）、每窗「总在最前」、每窗「吸附」（默认开）；
+     · 两个 nm 窗口靠近就贴边，并排的**高度拉平**，拖一个带动整组；
+     · 插件默认启用：项目里点文件链接时走这个查看器，而不是系统默认程序。
+   窗口池、吸附几何、每窗开关全在 `src/nm-viewer-win.ts`（纯几何部分可脱机断言）；
+   这里只做三件事：**读设置里的插件开关/主题**、**通道收口**、**打开路径分流**。
+   ══════════════════════════════════════════════════════════════════════════ */
+function nmShiTuZhuTi(): { mode: 'light' | 'dark'; accent: string; ink?: string } {
+  const s = settingsStore?.load();
+  const mode = s?.themeMode === 'dark' || s?.themeMode === 'light'
+    ? s.themeMode : nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+  return { mode, accent: s?.accent || '#A87654', ink: s?.ink };
+}
+/** 「用 nm 查看器打开项目文件」偏好（默认关；模型 open_path 也遵守它） */
+function nmKaiWenJianKai(): boolean {
+  try {
+    const s = settingsStore?.load() as { nmKaiWenJian?: unknown } | undefined;
+    return s?.nmKaiWenJian !== false;
+  } catch { return false; }
+}
+/** 插件开关：设置里的 `chaJianJi` 里 `nm-file` 的那条；没有那条 ⇒ 默认启用（产品要求） */
+function nmChaJianQiYong(): boolean {
+  try {
+    const s = settingsStore?.load() as { chaJianJi?: unknown } | undefined;
+    return nmShiTuQiYong(s?.chaJianJi);
+  } catch { return true; }
+}
+// ── 第 66 轮 项 20/21：助记词账号 / PIN / 自动登录（auth-service）──
+function yuAuth<T>(fn: (service: AuthService) => T): T | { ok: false; error: string } {
+  if (!authService) return { ok: false, error: 'auth-unavailable' };
+  try { return fn(authService); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}
+chuliIpc('warmy:authState', () => (process.env.WARMY_AUTH_BYPASS === '1'
+  ? { ok: true, hasAccount: true, loggedIn: true, bypass: true, pinSet: true, mnemonicConfirmed: true }
+  : yuAuth((s) => s.state())));
+chuliIpc('warmy:authRegisterBegin', (_e, payload?: { force?: boolean }) => yuAuth((s) => s.registerBegin(payload?.force === true)));
+chuliIpc('warmy:authRegisterCommit', (_e, payload: { mnemonicConfirmed?: boolean; pinyin?: boolean; autoLogin?: boolean; pin?: string; confirmPin?: string } = {}) => yuAuth((s) => s.registerCommit(payload)));
+chuliIpc('warmy:authRegisterCancel', () => yuAuth((s) => s.registerCancel()));
+chuliIpc('warmy:authLoginPin', (_e, pin: string) => yuAuth((s) => s.loginPin(pin)));
+chuliIpc('warmy:authLoginAuto', () => yuAuth((s) => s.loginAuto()));
+chuliIpc('warmy:authRecoverBegin', (_e, mnemonic: string) => yuAuth((s) => s.recoverBegin(mnemonic)));
+chuliIpc('warmy:authRecoverCommit', (_e, payload: { pinyin?: boolean; autoLogin?: boolean; pin?: string; confirmPin?: string } = {}) => yuAuth((s) => s.recoverCommit(payload)));
+chuliIpc('warmy:authChangePin', (_e, payload: { pin?: string; confirmPin?: string } = {}) => yuAuth((s) => s.changePin(payload)));
+chuliIpc('warmy:authViewMnemonic', () => yuAuth((s) => s.viewMnemonic()));
+chuliIpc('warmy:authConfirmMnemonic', (_e, mode: string) => yuAuth((s) => s.confirmMnemonic(mode)));
+chuliIpc('warmy:authSetPinyin', (_e, enabled: boolean) => yuAuth((s) => s.setPinyin(enabled)));
+chuliIpc('warmy:authSetAutoLogin', (_e, enabled: boolean | { enabled?: boolean }) =>
+  yuAuth((s) => s.setAutoLogin(enabled)));
+chuliIpc('warmy:authSetUsername', (_e, payload?: { username?: string } | string) =>
+  yuAuth((s) => s.setUsername(payload)));
+chuliIpc('warmy:authLogout', () => yuAuth((s) => s.logout()));
+
+chuliIpc('warmy:nmShiTuKai', (_e, p0?: { path?: string; luJing?: string }) => {
+  try {
+    const p = String(p0?.path || p0?.luJing || '').trim();
+    if (!p) return { ok: false, cuo: '没有文件路径' };
+    return nmShiTuKai({ luJing: p, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi() });
+  } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+/** 读内容（查看器页每次加载/后退前进都走这条；文档抽取复用 doc-extract） */
+chuliIpc('warmy:nmShiTuDu', (_e, p0?: { path?: string; luJing?: string }) => {
+  try {
+    const p = String(p0?.path || p0?.luJing || '').trim();
+    if (!p) return { ok: false, cuo: '没有文件路径' };
+    return nmDuWenJian(p);
+  } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nmShiTuBaoCun', (_e, p0?: { id?: number; wenBen?: string; huanHang?: 'crlf' | 'lf'; sha256?: string; bianGeng?: unknown }) => {
+  try {
+    return nmShiTuBaoCun(Number(p0?.id) || 0, { wenBen: p0?.wenBen, huanHang: p0?.huanHang, sha256: p0?.sha256, bianGeng: p0?.bianGeng });
+  } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nmShiTuLingCunWei', async (_e, p0?: { id?: number; wenBen?: string; huanHang?: 'crlf' | 'lf'; jianYiMing?: string; sha256?: string; bianGeng?: unknown }) => {
+  try {
+    return await nmShiTuLingCunWei(Number(p0?.id) || 0, { wenBen: p0?.wenBen, huanHang: p0?.huanHang, jianYiMing: p0?.jianYiMing, sha256: p0?.sha256, bianGeng: p0?.bianGeng });
+  } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+/** 第 66 轮 项 32：二进制文件按块读取（十六进制编辑），不整文件塞进渲染层 */
+chuliIpc('warmy:nmShiTuQuZiJie', (_e, p0?: { id?: number; offset?: number; length?: number }) => {
+  try { return nmShiTuQuZiJie(Number(p0?.id) || 0, Number(p0?.offset) || 0, Number(p0?.length) || 0); }
+  catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+/** 主窗口自己的吸附开关（与 nm 同一语义；关掉立刻断开与 nm 的链接） */
+chuliIpc('warmy:nmZhuXiFu', (e, kai?: boolean) => {
+  try {
+    if (win && e.sender !== win.webContents) return { ok: false, error: 'not-main-window' };
+    nmZhuChuangXiFu(kai !== false);
+    return { ok: true, on: kai !== false };
+  } catch (e2) { return { ok: false, error: xiJingCuoWu(e2) }; }
+});
+chuliIpc('warmy:nmShiTuSheZhi', (_e, p0?: { id?: number; zongShiDing?: boolean; xiFu?: boolean }) => {
+  try {
+    return nmShiTuSheZhi(Number(p0?.id) || 0, { zongShiDing: p0?.zongShiDing, xiFu: p0?.xiFu });
+  } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nmShiTuLieBiao', () => anQuanChuLi(() => ({ ok: true, chuangKou: nmShiTuLieBiao() }), { ok: false, chuangKou: [] }));
+/** 第 60 轮：工具栏「打开」——选文件后在**新窗口**打开（不覆盖当前窗口） */
+chuliIpc('warmy:nmDaKai', async () => {
+  try {
+    const r = await dialog.showOpenDialog({ title: '选择要打开的文件', properties: ['openFile'] });
+    if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+    return nmShiTuKai({ luJing: r.filePaths[0] });
+  } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+/** 第 60 轮：打开文件所在目录 */
+chuliIpc('warmy:nmSuoZaiMuLu', (_e, p0?: { id?: number }) => {
+  try {
+    const z = nmShiTuLieBiao().find((x) => x.id === Number(p0?.id));
+    if (!z) return { ok: false, error: '窗口不存在' };
+    shell.showItemInFolder(z.luJing);
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -20202,9 +25012,36 @@ chuliIpc('warmy:ccrGongJuShuChu', (_e, payload: { toolName?: string; content: st
 
 
 // ── P. 知识库详情 ──
+/**
+ * 能力白名单 D：模型提案自动生效，但必须可追溯、可撤销。
+ * 这里只暴露「自动加入的条目」，固定类别（NENG_LI_BIAO）不允许在界面上撤销。
+ */
+function nengLiWaiKuai() {
+  return {
+    base: NENG_LI_BIAO.length,
+    items: nengLiWai.map((x) => ({ id: x.id, hua: x.hua, ci: x.ci.slice() })),
+  };
+}
+chuliIpc('warmy:nengLiWaiLieBiao', () => {
+  try { return { ok: true, ...nengLiWaiKuai() }; }
+  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nengLiWaiCheXiao', (_e, payload: { id?: string }) => {
+  try {
+    const id = String(payload?.id || '');
+    const i = nengLiWai.findIndex((x) => x.id === id);
+    if (i < 0) return { ok: false, error: 'not-found' };
+    const removed = nengLiWai[i];
+    if (!removed) return { ok: false, error: 'not-found' };
+    nengLiWai.splice(i, 1);
+    xieNengLiWai();
+    try { audit?.log('kb.capability-removed', { id, hua: removed.hua, zong: nengLiBiao().length }); } catch { /* noop */ }
+    return { ok: true, ...nengLiWaiKuai() };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:zhiShiKuXiangQing', (_e, q: string) => {
   try {
-    const r = knowledge?.query(q) || { entities: [], events: [] };
+    const r = knowledge ? knowledge.queryLayers(ZHISHI_CENG as readonly ZhishiCeng[], q) : { entities: [], events: [] };
     return {
       ok: true,
       entities: r.entities.map((e) => ({ id: e.id, ming: e.ming, kind: e.kind, attrs: e.attrs, eventIds: e.eventIds })),
@@ -20238,6 +25075,22 @@ const MEN_JIN_YING = [
   'verify-audio-first-class', 'verify-research-pipeline',
 ];
 chuliIpc('warmy:menJinYingJi', () => ({ ok: true, ids: MEN_JIN_YING.slice() }));
+/** 硬门禁清单（含"最坏情况"）：界面与模型都用它回答"是哪一条在拦我" */
+chuliIpc('warmy:menJinYingQingDan', () => ({ ok: true, qingDan: yingMenJinQingDan(), tiShi: yingMenJinTiShi() }));
+/** 软门禁冲突检查（改软门禁前必须先跑这一条） */
+chuliIpc('warmy:menJinRuanJianCha', (_e, payload?: { neiRong?: string }) =>
+  anQuanChuLi(() => ({ ok: true, ...jianChaRuanMenJin(String(payload?.neiRong || '')) }), { ok: true, chongTu: false, mingZhong: [], zuiHuai: [] }));
+/** 软门禁改动裁决：冲突优先 → 用户明确要求 → 三次论证 → 拒绝 */
+chuliIpc('warmy:menJinRuanShenQing', (_e, payload?: { neiRong?: string; yongHuMingQue?: boolean; lunZheng?: unknown; qiTaFangAn?: unknown }) =>
+  anQuanChuLi(() => {
+    const lunZheng = Array.isArray(payload?.lunZheng) ? payload?.lunZheng.map((x) => String(x)) : [];
+    const qiTa = Array.isArray(payload?.qiTaFangAn)
+      ? (payload?.qiTaFangAn as Array<Record<string, unknown>>).map((x) => ({ fangAn: String(x?.fangAn || ''), zhiXinDu: Number(x?.zhiXinDu) || 0 }))
+      : [];
+    const r = panDuanRuanGai({ neiRong: String(payload?.neiRong || ''), yongHuMingQue: !!payload?.yongHuMingQue, lunZheng, qiTaFangAn: qiTa });
+    try { audit?.log('gate.soft-verdict', { luJing: r.luJing, yunXu: r.yunXu, mingZhong: r.yingXiuZheng.length }); } catch { /* noop */ }
+    return { ok: true, ...r };
+  }, { ok: false, yunXu: false, luJing: 'rejected', gaoZhi: '', yingXiuZheng: [], liYou: 'internal-error' }));
 chuliIpc('warmy:menJinYunXing', async (_e, payload?: { cmd?: string; id?: string }) => {
   try {
     const cmd = String(payload?.cmd || '').trim();
@@ -20459,11 +25312,34 @@ chuliIpc('warmy:jinengJiSaoMiaoMuLuJiSheZhi', (_e, dirs: unknown) => {
 type DingShiRenWu = {
   id: string; sessionId: string; name: string; prompt: string;
   everyMinutes: number; dailyAt: string; desc: string;
+  /** Cron 表达式（5 字段）；有它时优先于 everyMinutes/dailyAt */
+  cron?: string;
+  /** 时区（IANA）；空=本机时区 */
+  tz?: string;
   nextAt: number; lastAt: number; enabled: boolean;
+  /**
+   * 生命周期（用户口径 2026-10-20：**变更时不删旧**）：
+   * `active`=现役；`stopped`=已停止（被替换 / 用户停用 / 跑满 / 软删）。旧条目永远留档。
+   */
+  status?: 'active' | 'stopped';
+  /** 为什么停：被新任务替换 / 用户停止 / 次数用尽 / 用户删除（软删） */
+  stoppedReason?: string;
+  stoppedAt?: number;
+  /** 被哪条新任务替换（有的话） */
+  replacedBy?: string;
   /** 创建时间（产品要求：卡片上要显示） */
   createdAt: number;
   /** 循环几次：0 = 无限（产品要求：卡片上要显示） */
   repeat: number;
+  /** 已经执行过几次（第 40 轮：`repeat` 要真的能停，光显示不算） */
+  zhiXingGuo: number;
+  /**
+   * **最近一次真正执行的那个原定到点时刻**（幂等键）。
+   * 借鉴 Temporal/DBOS 的口径：计时是 at-least-once 的，**副作用必须自己幂等**。
+   * 没有这一条，"崩在触发之后、落盘之前"就会让下一次启动把同一条到点**再执行一遍**
+   * （用户看到的就是一条提醒响两次）。
+   */
+  zuiHouChuFaAt: number;
 };
 const dingShiRenWuJi: DingShiRenWu[] = [];
 function dingShiWenJian() { return path.join(app.getPath('userData'), 'scheduled-tasks.json'); }
@@ -20476,8 +25352,13 @@ function duQuDingShi() {
     if (Array.isArray(j)) { dingShiRenWuJi.length = 0; dingShiRenWuJi.push(...j); }
   } catch { /* 首次没有 */ }
 }
-function suanXiaCi(everyMinutes: number, dailyAt: string): number {
+function suanXiaCi(everyMinutes: number, dailyAt: string, cron?: string, tz?: string): number {
   const now = Date.now();
+  /** Cron 优先：能算出来就用它（含时区与 DST 处理）；算不出来才回退到简单周期 */
+  if (cron && jieXiCron(cron)) {
+    const at = xiaCiCron(cron, String(tz || ''), now);
+    if (at > 0) return at;
+  }
   if (everyMinutes > 0) return now + everyMinutes * 60000;
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(dailyAt || ''));
   if (m) {
@@ -20488,25 +25369,55 @@ function suanXiaCi(everyMinutes: number, dailyAt: string): number {
   }
   return now + 60 * 60000;
 }
-async function dengJiDingShiRenWu(sessionId: string, p: { name: string; prompt: string; everyMinutes?: number; dailyAt?: string; repeat?: number }) {
+async function dengJiDingShiRenWu(sessionId: string, p: { name: string; prompt: string; everyMinutes?: number; dailyAt?: string; repeat?: number; cron?: string; tz?: string }) {
   try {
     if (!String(p.prompt || '').trim()) return { ok: false, error: 'empty-prompt' };
     const everyMinutes = Math.max(0, Math.floor(Number(p.everyMinutes) || 0));
     const dailyAt = String(p.dailyAt || '').trim();
-    if (!everyMinutes && !/^(\d{1,2}):(\d{2})$/.test(dailyAt)) return { ok: false, error: 'need-everyMinutes-or-dailyAt' };
+    const cron = String(p.cron || '').trim();
+    const tz = String(p.tz || '').trim();
+    if (cron && !jieXiCron(cron)) return { ok: false, error: 'bad-cron（只支持 5 字段：分 时 日 月 周）' };
+    if (!cron && !everyMinutes && !/^(\d{1,2}):(\d{2})$/.test(dailyAt)) return { ok: false, error: 'need-everyMinutes-or-dailyAt-or-cron' };
+    /** 时区必须能被 Intl 认出来，认不出来就如实拒绝（不静默退回本机时区） */
+    if (tz) {
+      try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); } catch { return { ok: false, error: 'bad-timezone' }; }
+    }
     /** 循环次数：0 = 无限；负数/非数字按 0（无限）处理 */
     const repeat = Math.max(0, Math.floor(Number(p.repeat) || 0));
     const ren: DingShiRenWu = {
       id: 'sch-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
       sessionId: String(sessionId || ''), name: String(p.name || '定时任务').slice(0, 60),
       prompt: String(p.prompt).slice(0, 2000), everyMinutes, dailyAt,
-      desc: everyMinutes ? `每隔 ${everyMinutes} 分钟` : `每天 ${dailyAt}`,
-      nextAt: suanXiaCi(everyMinutes, dailyAt), lastAt: 0, enabled: true,
+      ...(cron ? { cron } : {}),
+      ...(tz ? { tz } : {}),
+      desc: cron ? miaoShuCron(cron, tz) : (everyMinutes ? `${everyMinutes} min` : dailyAt),
+      nextAt: suanXiaCi(everyMinutes, dailyAt, cron, tz), lastAt: 0, enabled: true,
+      status: 'active' as const,
       createdAt: Date.now(),
       repeat,
+      zhiXingGuo: 0,
+      zuiHouChuFaAt: 0,
     };
+    /**
+     * **中途变更不删旧**（用户口径）：同会话同名的旧定时任务先标「已停止」留档，再挂新的。
+     * 借鉴 Temporal Schedules「禁旧启新」：旧条目仍在列表里可追溯，只是不再到点自响。
+     */
+    const tongMingJiu = dingShiRenWuJi.filter((x) =>
+      x.sessionId === ren.sessionId && String(x.name || '').trim() === String(ren.name || '').trim()
+      && (x.status ?? 'active') === 'active' && x.enabled);
+    for (const jiu of tongMingJiu) {
+      jiu.enabled = false;
+      jiu.status = 'stopped';
+      jiu.stoppedReason = 'replaced-by-new';
+      jiu.stoppedAt = Date.now();
+      jiu.replacedBy = ren.id;
+      try { xinTiao?.daoJiQuXiao('sch:' + jiu.id); } catch { /* noop */ }
+      try { audit?.log('dingShi.superseded', { oldId: jiu.id, newId: ren.id, name: jiu.name, sessionId: ren.sessionId }); } catch { /* noop */ }
+    }
     dingShiRenWuJi.push(ren);
     baoCunDingShi();
+    /** 登记时就挂闹钟：到点由心跳叫醒（不等下一次巡检），长到点另挂系统保底 */
+    try { huoQuXinTiao().daoJiShenQing({ id: 'sch:' + ren.id, yaoAt: ren.nextAt, beiZhu: ren.name, chang: { taskId: ren.id, sessionId: ren.sessionId } }); } catch { /* noop */ }
     try { broadcastToWindows('warmy:dingShiRenWu', { tasks: dingShiRenWuJi }); } catch { /* noop */ }
     return { ok: true, task: ren };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
@@ -20542,12 +25453,63 @@ async function paoXiaoDiRenWu(zhi: {
 }): Promise<string> {
   const lu = zhi.lu;
   const sid = String(lu.sessionId || '');
+  /**
+   * **分身按它所属牛马的上下文预算来**（第 51 轮）：不是聊天框里那个滑杆。
+   * 父会话若是某只牛马（instances 里有它），就用该牛马配置的百分比；否则回落全局并记来源。
+   */
+  const yuSuanLaiYuan = zhiXingZheYuSuanBaiFenBi(String(lu.sessionId || ''));
+  /**
+   * 牛马管理局的百分比必须真的进入分身的请求窗口（旧实现只记审计、没传给循环）。
+   * 同时兜住 32K 词元下限：窗口大于 32K 时按比例抬；窗口只有 32K 时就是 100%。
+   */
+  const xiaoDiMoXing = String(zhi.moXing || '');
+  const xiaoDiChuangKou = Math.max(4096, modelWindowTokens(xiaoDiMoXing) || MO_XING_CHUANG_KOU_DOU_DI);
+  const xiaoDiFloor32 = Math.max(10, Math.min(100, Math.ceil(32768 / xiaoDiChuangKou * 100)));
+  const xiaoDiPercent = Math.min(100, Math.max(yuSuanLaiYuan.percent, xiaoDiFloor32));
+  const xiaoDiSuan = youPeizhiSuanShangXiaWenYuSuan(
+    xiaoDiMoXing,
+    '',
+    gongYingDai(zhi.provider.baseURL, zhi.provider.protocol),
+    xiaoDiPercent,
+  );
+  try {
+    audit?.log('chat.xiaodi-budget-source', {
+      sessionId: String(lu.sessionId || ''),
+      percent: xiaoDiPercent,
+      settingPercent: yuSuanLaiYuan.percent,
+      floor32: xiaoDiFloor32,
+      window: xiaoDiChuangKou,
+      chars: xiaoDiSuan.chars,
+      laiYuan: yuSuanLaiYuan.laiYuan,
+    });
+  } catch { /* noop */ }
   const kong = new AbortController();
   xiaoDiKongZhi.set(lu.id, kong);
   const bu = xiaoDiBu();
   let jieGuo = '';
   try {
-    const ziRenWu = `你是子代理「${lu.ming}」，由「${lu.fuMing}」派出。请独立完成下面这一件具体的事，需要写文件就直接写（路径用工作区相对路径），并在最后给出可交付的结论。\n\n【子任务】${String(lu.task || '').slice(0, 2000)}`;
+    /**
+     * **牛马互通协议 v1**（第 51 轮）：派发时带一份标准信封里的「认知」（目标/阻塞/黑板指针）。
+     * 印象默认不传（`impression_ok=false`）；要交换必须双方同意，避免把认知与印象混在一起。
+     */
+    const xinFeng = zaoXinFeng({
+      from: { role: 'duty', id: String(lu.fuMing || 'duty') },
+      to: { role: 'exec', id: String(lu.ming || 'exec') },
+      intent: 'delegate',
+      taskId: String(lu.id || ''),
+      seq: 1,
+      cognition: { goal: String(lu.task || '').slice(0, 240), blockers: [], facts_ref: [] },
+      impressionOk: false,
+    });
+    const jiao = jiaoHuanRenZhiYinXiang({
+      woDeRenZhi: String(lu.task || '').slice(0, 240),
+      duiFangTongYi: false,
+      duiFangYinXiang: '',
+      woDeYinXiang: '',
+    });
+    try { audit?.log('chat.tonghu-dispatch', { sessionId: sid, idem: xinFeng.idem_key, yanZheng: yanZheng(xinFeng).ok, shuoMing: jiao.shuoMing }); } catch { /* noop */ }
+    const xieyiTou = `【互通协议 v1】${xinFeng.from.id} → ${xinFeng.to.id} · intent=${xinFeng.intent} · idem=${xinFeng.idem_key}\n【认知】${jiao.geiDuiFangDeRenZhi || '（无）'}\n【印象】${jiao.woDeDaoDeYinXiang ? jiao.woDeDaoDeYinXiang.slice(0, 600) : '（对方未开启交换，不传）'}`;
+    const ziRenWu = `你是子代理「${lu.ming}」，由「${lu.fuMing}」派出。请独立完成下面这一件具体的事，需要写文件就直接写（路径用工作区相对路径），并在最后给出可交付的结论。\n\n${xieyiTou}\n\n【子任务】${String(lu.task || '').slice(0, 2000)}`;
     const subBase = workspaceDirOf(app.getPath('userData'), sid);
     try { fs.mkdirSync(subBase, { recursive: true }); } catch { /* noop */ }
     const subLoop = await liaoTianDaiGongJu(
@@ -20561,7 +25523,29 @@ async function paoXiaoDiRenWu(zhi: {
       async (subCall) => {
         if (kong.signal.aborted) throw new Error('aborted-by-user');
         const subName = String((subCall && subCall.function && subCall.function.name) || '');
+        /**
+         * **分身的用量记进父预算**（第 39 轮，对齐 Codex「descendant usage rolls into the parent」）。
+         * 改之前：小弟自己跑一份循环，父会话的次数/字符账本看不见它 ⇒
+         * 一个任务可以靠"疯狂派分身"绕过父额度（虽然小弟数与每只轮数都有上限，总量仍然失控）。
+         * 现在每发工具调用都先占父会话的格子：占不到就**如实说预算用完了**（不是权限被拒），
+         * 并让小弟带着已完成的结论收口 —— 口径与主循环那两条闸完全一致，读同一份账本。
+         */
+        const fuYuSuan = huoBenLunYuSuan(sid);
+        const fuYiYong = (benLunGongJuShu.get(sid) || 0) + 1;
+        if (sid && fuYiYong > fuYuSuan.ci) {
+          try {
+            audit?.log('chat.xiao-di-budget-exceeded', { sessionId: sid, xiaoDi: lu.ming, tool: subName, n: fuYiYong, budget: fuYuSuan.ci });
+          } catch { /* noop */ }
+          return `[${subName}] 父会话「${lu.fuMing}」这一轮的**工具调用预算已用完**（上限 ${fuYuSuan.ci} 次，本发由小弟「${lu.ming}」发起）。`
+            + '**这不是权限被拒，也不是执行失败** —— 是宿主的用量闸到点了。请基于已经做完的部分给出结论，并说清还差什么。';
+        }
+        benLunGongJuShu.set(sid, fuYiYong);
         const subOut = runWorkTool(subBase, subCall as { function?: { name?: string; arguments?: unknown } });
+        try {
+          audit?.log('chat.xiao-di-charged', {
+            sessionId: sid, xiaoDi: lu.ming, tool: subName, yiYong: fuYiYong, budget: fuYuSuan.ci,
+          });
+        } catch { /* noop */ }
         audit?.log('chat.xiao-di-tool', {
           sessionId: sid,
           xiaoDi: lu.ming,
@@ -20574,7 +25558,16 @@ async function paoXiaoDiRenWu(zhi: {
         });
         return String(subOut.content).slice(0, 2000);
       },
-      { zuiDaLunShu: 4, zuiDaJieGuoZiShu: zhi.zuiDaJieGuoZiShu, maxToolResultChars: 8000, signal: kong.signal, yaSuoLai: yaSuoMoXingXiaoXi },
+      {
+        zuiDaLunShu: 4,
+        zuiDaJieGuoZiShu: zhi.zuiDaJieGuoZiShu,
+        maxToolResultChars: 8000,
+        // 牛马管理局的预算滑杆 + 32K 下限，真正作用到分身的每次请求窗口
+        zuiDaQingQiuZi: xiaoDiSuan.chars,
+        signal: kong.signal,
+        yaSuoLai: yaSuoMoXingXiaoXi,
+        wuYuSuanTiShi: true,
+      },
     );
     jieGuo = String(subLoop.xiangYingTi?.choices?.[0]?.message?.content || '').slice(0, zhi.zuiDaJieGuoZiShu);
     if (kong.signal.aborted) throw new Error('aborted-by-user');
@@ -20659,11 +25652,40 @@ chuliIpc('warmy:xiaoDiChongShi', async (_e, p0?: { id?: string }) => {
  *   ④ 会话记录本身由渲染层从列表里去掉（主进程不再持有它）。
  * **已经归档进「知识库」（项目级）的内容不动** —— 那是另一份资产。
  */
-chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string; mode?: string }) => {
+chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string; mode?: string; name?: string; payload?: unknown }) => {
   try {
     const id = String(p0?.id || '');
     if (!id) return { ok: false, error: 'bad-id' };
     const kind = String(p0?.kind || '');
+    /**
+     * **删除前先给回收站留一份快照**（第 41 轮，用户口径：右击删除不再二次确认，
+     * 误删靠"最近删除"在 48 小时内恢复）。这里必须在清聊天日志/知识库/工作区**之前**取，
+     * 否则只留下一个空壳 id。
+     */
+    const laJiLei: TrashKind = (kind === 'project' ? 'project' : kind === 'group' ? 'group' : kind === 'contact' ? 'contact' : 'agent');
+    let laJiMing = String((p0 as { name?: string } | undefined)?.name || '').trim();
+    if (!laJiMing) {
+      try {
+        const shi = (settingsStore?.load() as { instances?: Array<Record<string, unknown>> } | undefined)?.instances || [];
+        const zhao = shi.find((x) => String(x.id || '') === id);
+        if (zhao) laJiMing = String(zhao.name || zhao.ming || '');
+      } catch { /* 取不到就用 id */ }
+    }
+    let laJiZhaiYao = '';
+    try {
+      const ji = chatLogs.get(id) || [];
+      const mo = [...ji].reverse().find((e) => String((e as { content?: unknown }).content || '').trim());
+      laJiZhaiYao = jieZhiZhaiYao(mo ? (mo as { content?: unknown }).content : '');
+    } catch { /* 没有日志就空着 */ }
+    try {
+      trashStore?.add({
+        id,
+        kind: laJiLei,
+        name: laJiMing || id,
+        preview: laJiZhaiYao,
+        payload: (p0 && typeof p0.payload === 'object' && p0.payload) ? (p0.payload as Record<string, unknown>) : {},
+      });
+    } catch { /* 回收站失败不挡住删除本身 */ }
     /**
      * mode（产品要求的三按钮删除）：
      *   purge         = 马上彻底删除、不进知识库
@@ -20697,6 +25719,20 @@ chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string; mo
       try { audit?.log('session.archive-later', { sessionId: id, kind }); } catch { /* noop */ }
       return { ok: true, removed: { knowledge: false, workspace: false }, mode };
     }
+    // ②.4 **该会话的定时任务一并删除**（T7：任务属于创建它的会话，会话没了任务不能变成孤儿）
+    try {
+      const shan = dingShiRenWuJi.filter((x) => String(x.sessionId || '') === id);
+      if (shan.length) {
+        for (const x of shan) {
+          try { huoQuXinTiao().daoJiQuXiao('sch:' + x.id); } catch { /* 撤闹钟失败不挡删除 */ }
+          const i = dingShiRenWuJi.findIndex((y) => y.id === x.id);
+          if (i >= 0) dingShiRenWuJi.splice(i, 1);
+        }
+        baoCunDingShi();
+        try { broadcastToWindows('warmy:dingShiRenWu', { tasks: dingShiRenWuJi }); } catch { /* noop */ }
+        try { audit?.log('dingShi.cascade-delete', { sessionId: id, n: shan.length }); } catch { /* noop */ }
+      }
+    } catch { /* 级联失败不挡住会话删除 */ }
     // ②.5 **聊天日志/镜像/计划必须一起清**（真机：删了牛马对话框里内容还在）
     try {
       chatLogs.delete(id);
@@ -20714,7 +25750,7 @@ chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string; mo
     } catch { /* 清不掉也继续 */ }
     // ③ 本会话自己的知识库 + 工作区
     let kb = false;
-    try { kb = !!knowledge?.removeEntity('sess-' + id); } catch { /* noop */ }
+    try { kb = ['private', 'internal', 'session'].some((c) => knowledge!.allow(c as ZhishiCeng).removeEntity('sess-' + id)); } catch { /* noop */ }
     let ws = false;
     try {
       const dir = workspaceDirOf(app.getPath('userData'), id);
@@ -20725,40 +25761,612 @@ chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string; mo
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
+/* ── 最近删除（第 41 轮）：48 小时内可恢复 ─────────────────────────────────── */
+chuliIpc('warmy:laJiJiLu', (_e, p0?: { id?: string; kind?: string; name?: string; preview?: string; payload?: unknown }) => {
+  try {
+    const id = String(p0?.id || '');
+    if (!id) return { ok: false, error: 'bad-id' };
+    const kind = shiTrashKind(p0?.kind) ? (p0?.kind as TrashKind) : 'group';
+    const e0 = trashStore?.add({
+      id, kind,
+      name: String(p0?.name || id),
+      preview: p0?.preview,
+      payload: (p0 && typeof p0.payload === 'object' && p0.payload) ? (p0.payload as Record<string, unknown>) : {},
+    });
+    return { ok: true, entry: e0 };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:laJiLieBiao', () => {
+  try {
+    const items = trashStore?.list() || [];
+    return { ok: true, items, ttlMs: 48 * 60 * 60 * 1000 };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:laJiHuiFu', (_e, p0?: { id?: string; kind?: string }) => {
+  try {
+    const id = String(p0?.id || '');
+    if (!id) return { ok: false, error: 'bad-id' };
+    const kind = shiTrashKind(p0?.kind) ? (p0?.kind as TrashKind) : undefined;
+    const e0 = trashStore?.get(id, kind);
+    if (!e0) return { ok: false, error: 'not-found' };
+    trashStore?.remove(e0.id, e0.kind);
+    try { audit?.log('trash.restore', { id: e0.id, kind: e0.kind }); } catch { /* noop */ }
+    // 渲染层拿到 payload 自己写回列表（主进程不持有界面状态）
+    return { ok: true, entry: e0 };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:laJiYongJiuShanChu', (_e, p0?: { id?: string; kind?: string }) => {
+  try {
+    const id = String(p0?.id || '');
+    if (!id) return { ok: false, error: 'bad-id' };
+    const kind = shiTrashKind(p0?.kind) ? (p0?.kind as TrashKind) : undefined;
+    const ok = trashStore?.remove(id, kind) || false;
+    try { audit?.log('trash.purge', { id, kind, ok }); } catch { /* noop */ }
+    return { ok, mode: 'purge' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 
-function qiDongDingShiJianCha() {
-  duQuDingShi();
-  setInterval(() => {
-    const now = Date.now();
-    for (const ren of dingShiRenWuJi) {
-      if (!ren.enabled || ren.nextAt > now) continue;
-      ren.lastAt = now;
-      ren.nextAt = suanXiaCi(ren.everyMinutes, ren.dailyAt);
-      baoCunDingShi();
-      // 到点：广播给界面发一轮（顺带把卡片补回来，见渲染层）
-      try { broadcastToWindows('warmy:dingShiDaoDian', { sessionId: ren.sessionId, prompt: ren.prompt, taskId: ren.id, name: ren.name }); } catch { /* noop */ }
+
+/* ── 心跳（第 40 轮）：全应用**唯一的计时源** ──────────────────────────────
+ *
+ * 用户口径："多久之后""模型估的时长"这类计时都要走心跳；心跳管不到（程序被关了）
+ * 就用系统脚本协助。原来这里是一堆互不相干的定时器：定时任务自建 `setInterval(20000)`、
+ * 租约 `sweep()` 注释写着"可在心跳里调"**但全仓没人调**、在途工具表只靠看门狗顺带清、
+ * 本机钟准不准没人管。现在统一由一个 tick 驱动，并把"错过合并 / 迟到留痕 / 重入保护 /
+ * 错误退避 / 时钟跳变 / 落盘补跑 / 系统保底"这些口径做实（内核见 `xin-tiao.ts`）。
+ */
+let xinTiao: XinTiao | null = null;
+let xinTiaoQian = '';
+function xinTiaoWenjian() { return path.join(app.getPath('userData'), 'xin-tiao.json'); }
+function xinTiaoHenjian() { return path.join(app.getPath('userData'), 'xin-tiao-wake.log'); }
+/** 任务名里不能有 `:`/空格（schtasks 会拒），留痕按归一后的名字再对回内核的 id */
+function ossRenWuMing(id: string) { return 'WArmy-XinTiao-' + String(id).replace(/[^A-Za-z0-9_-]/g, '-'); }
+/**
+ * 「到点由系统唤醒程序」开关 —— **默认关**（用户定稿口径）：
+ * 定时任务本身不能脱离程序，程序关了就**不再跑心跳、也不再跑任务**；
+ * 程序必须能被主动完全关闭，**不许自己把自己叫醒**。
+ * 只有用户在设置里显式打开这一条，才允许由系统（计划任务）在到点时把程序唤回来。
+ */
+function xinTiaoWakeKai(): boolean {
+  try { return (settingsStore?.load() as { xinTiaoWake?: boolean } | undefined)?.xinTiaoWake === true; } catch { return false; }
+}
+const HUAN_XING_QIAN = '--warmy-xin-tiao-wake=';
+/** 从一组参数里取出被唤醒的那个到期 id（没有就返回空） */
+function quHuanXingId(argv: string[]): string {
+  const x = (argv || []).map((a) => String(a)).find((a) => a.startsWith(HUAN_XING_QIAN));
+  return x ? x.slice(HUAN_XING_QIAN.length) : '';
+}
+/**
+ * **唤醒落账**：系统到点把程序叫醒（或转交给正在跑的实例）之后，把这条到期交回内核核对。
+ * 已经由本机心跳发过的不会重发（`waiBuDaoQi` 认这个账）；没发过的当场补触发并走投递。
+ */
+function chuliHuanXing(id: string, fangShi: string): boolean {
+  if (!id) return false;
+  try {
+    const xt = huoQuXinTiao();
+    const r = xt.waiBuDaoQi(id, Date.now());
+    try { audit?.log('xin-tiao.os-wake', { id, fangShi, duiShang: r.ok, buFa: !!(r as { buFa?: boolean }).buFa, yiFaGuo: !!(r as { yiFaGuo?: boolean }).yiFaGuo }); } catch { /* noop */ }
+    return r.ok;
+  } catch { return false; }
+}
+
+function jiLuXinTiao(e: { at: number; type: string; id: string; xiangxi: Record<string, unknown> }): void {
+  /**
+   * 审计**采样**而不是每 tick 全记：心跳 2 秒一跳，五个任务的成功回执会把审计刷成噪音，
+   * 而真正的异常（跳过、正忙、退避、时钟跳变、到期、系统保底）一条都不能落。
+   */
+  try {
+    if (e.type === 'ok') {
+      const hao = Number(e.xiangxi.haoShiMs) || 0;
+      const ci = Number(e.xiangxi.ciShu) || 0;
+      if (hao <= 3000 && ci % 30 !== 0) return;
     }
-  }, 20000);
+    audit?.log('xin-tiao.' + e.type, { taskId: e.id, ...e.xiangxi });
+  } catch { /* 观察口不能挡住心跳 */ }
+  if (e.type === 'daoJi-fire' && String(e.id).startsWith('sch:')) {
+    /**
+     * 定时任务的闹钟到点了。**执行仍然只在巡检里做**（两处都动手就会把同一任务跑两遍），
+     * 这里只是把心跳立刻叫醒去看一眼 ⇒ "到点"几乎不再迟到（原来最坏要等下一次 20 秒巡检）。
+     */
+    try { chunKaoDingShiRenWu(Date.now(), { buPao: e.xiangxi.laiYuan === 'buPao', tuoYanMs: Number(e.xiangxi.lateMs) || 0 }); } catch { /* noop */ }
+  }
+}
+
+/** 唤醒时要沿用的参数：**只带"用哪个数据目录"**，不带调试端口（那是上一支已经死掉的进程的） */
+function xinTiaoHuanXingMingLing(id: string): string | null {
+  const yudi = process.argv.slice(1).filter((a) => /^--user-data-dir=/.test(String(a))).map((a) => `"${a}"`);
+  const zhiBen = process.argv.slice(1).find((a) => !String(a).startsWith('-') && /electron-main\.(js|cjs)$/.test(String(a)));
+  const buFen = app.isPackaged || !zhiBen ? [] : [`"${zhiBen}"`];
+  const huanchen = `"--warmy-xin-tiao-wake=${String(id).replace(/[^A-Za-z0-9_:.-]/g, '-')}"`;
+  const mingLing = [`"${process.execPath}"`, ...buFen, ...yudi, huanchen].join(' ');
+  /**
+   * schtasks 的 `/tr` 上限 260 字符 ⇒ **放不下就不挂，并如实记一条**。
+   * 试过"退一步写个 `wake.cmd` 包装"：中文安装路径下批处理按 GBK 解码 ⇒ 路径乱码 ⇒
+   * 任务显示"运行成功"但程序根本没起来（真机 r40-wake 抓到的就是这个）。
+   * **假装保底生效比没有保底更坏** —— 用户会以为"关着也会响"。
+   * 正式安装的包（短路径 + 默认数据目录）这条命令只有几十字符，本来就走不到这里。
+   */
+  if (mingLing.length > 250) {
+    try { audit?.log('xin-tiao.os-decline', { id, changDu: mingLing.length, shangXian: 250 }); } catch { /* noop */ }
+    return null;
+  }
+  return mingLing;
+}
+
+function chouJianOSShouShi(): OsShouShiGou | undefined {
+  if (process.platform !== 'win32') return undefined;
+  const pao = (args: string[]) => new Promise<void>((res, rej) => {
+    // execFile + 参数数组：**不过 shell** —— 中文路径/引号不会被拼进命令，也堵掉命令注入
+    execFile('schtasks.exe', args, { windowsHide: true }, (err) => (err ? rej(err) : res()));
+  });
+  return {
+    async chuangJian(x) {
+      /**
+       * **开关在每次挂的时候现读**（不是启动时读一次）：用户在设置里刚打开就立刻对"下一个到点"生效，
+       * 刚关掉就不再往系统里留任何东西 —— 程序要能被**主动完全关闭**，不许留下会自己响的任务。
+       */
+      if (!xinTiaoWakeKai()) {
+        try { audit?.log('xin-tiao.os-off', { id: x.id }); } catch { /* noop */ }
+        return false;
+      }
+      /**
+       * `/st` 只精确到分钟 ⇒ **向上取整**到下一分钟：宁可晚 59 秒响，也不能早于约定的时间。
+       * 本机准点由心跳负责；这条只负责"程序没开着的时候，到点把程序唤回来"。
+       */
+      const yaoAt = Math.ceil(Math.max(0, Number(x.yaoAt) || 0) / 60_000) * 60_000;
+      if (yaoAt <= Date.now()) return false;
+      const d = new Date(yaoAt);
+      const liang = (v: number) => String(v).padStart(2, '0');
+      const sd = `${d.getFullYear()}/${liang(d.getMonth() + 1)}/${liang(d.getDate())}`;
+      const st = `${liang(d.getHours())}:${liang(d.getMinutes())}`;
+      /**
+       * 动作**就是启动我们自己的程序**并带上 `--warmy-xin-tiao-wake=<id>`：
+       * 不再串 `cmd.exe /c echo … & …` —— 上一版就是这么红的（`/tr` 里带 `&` 与多层引号，
+       * 计划任务把命令行截断成只剩第一个 token，到点自然什么也没发生）。
+       * 留痕由被唤醒的那个实例自己写审计，不需要在命令行里 echo。
+       */
+      const tr = xinTiaoHuanXingMingLing(x.id);
+      if (!tr) return false;   // 为什么没挂已经由 `xin-tiao.os-decline` 记过了，不在这里重复记
+      await pao(['/create', '/f', '/tn', ossRenWuMing(x.id), '/sc', 'once', '/sd', sd, '/st', st, '/tr', tr]);
+      return true;
+    },
+    async shanChu(id) {
+      try { await pao(['/delete', '/tn', ossRenWuMing(id), '/f']); } catch { /* 已经跑过、或本来就没挂上 */ }
+    },
+  };
+}
+
+/** 读回系统留痕：程序没开着时由 schtasks 写下的到期痕，交回内核核对"心跳有没有漏" */
+function chewRuOSShouShiHen(): number {
+  let n = 0;
+  try {
+    const wen = xinTiaoHenjian();
+    if (!fs.existsSync(wen)) return 0;
+    const hang = fs.readFileSync(wen, 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (!hang.length) return 0;
+    const xt = huoQuXinTiao();
+    const you = xt.daoJiLieBiao(false);
+    for (const h of hang) {
+      const [ming, at] = h.split(/\s+/);
+      if (!ming) continue;
+      const zhao = you.find((d) => ossRenWuMing(d.id) === ming);
+      const r = zhao ? xt.waiBuDaoQi(zhao.id, Number(at) || 0) : { ok: false };
+      n += 1;
+      try {
+        audit?.log('xin-tiao.os-hen', {
+          ren: ming, yaoAt: Number(at) || 0, duiShang: !!zhao,
+          buFa: !!(r as { buFa?: boolean }).buFa, yiFaGuo: !!(r as { yiFaGuo?: boolean }).yiFaGuo,
+        });
+      } catch { /* noop */ }
+    }
+    fs.writeFileSync(wen, '');
+  } catch { /* 留痕读不动也不能挡住启动 */ }
+  return n;
+}
+
+function huoQuXinTiao(): XinTiao {
+  if (!xinTiao) {
+    xinTiao = chuangjianXinTiao({
+      wenjian: xinTiaoWenjian(),
+      tiaoduMs: 2000,
+      osShouShi: chouJianOSShouShi(),
+      onShiJian: (e) => jiLuXinTiao(e),
+    });
+  }
+  return xinTiao;
+}
+
+/** 推给界面 / IPC 回读用的**同一份**状态（两处口径必须一样，否则面板有、读接口没有） */
+function xinTiaoZhuangTaiDuiXiang(): Record<string, unknown> {
+  return {
+    ...huoQuXinTiao().zhuangTai(),
+    wakeKai: xinTiaoWakeKai(),
+    keHuanXing: process.platform === 'win32',
+    huanJing: { ...huanJingZhuangTai },
+    dingShiShu: dingShiRenWuJi.filter((x) => x.enabled).length,
+  };
+}
+
+/** 心跳状态推给界面（签名没变就不发，不能拿 2 秒一跳去刷 DOM） */
+function xinTiaoZhuangTaiBu(): void {
+  try {
+    const zt = xinTiaoZhuangTaiDuiXiang();
+    const qian = JSON.stringify(zt);
+    if (qian === xinTiaoQian) return;
+    xinTiaoQian = qian;
+    broadcastToWindows('warmy:xinTiaoZhuangTai', zt);
+  } catch { /* noop */ }
+}
+
+/** 工具里的"等 N 秒"用心跳计时（内核没起来时自己降级，不挂死） */
+function dengDaiTongGuoXinTiao(miao: number, id: string, onQuXiao?: () => void): Promise<Record<string, unknown>> {
+  return huoQuXinTiao().dengDai(miao, { id, quXiao: onQuXiao });
+}
+
+/**
+ * **环境存活探针**（心跳的第 7 个任务）：磁盘写不满、内存没失控，是"任务能跑完"的地基。
+ * 只报**跨阈值那一刻**（不刷屏），状态本身随时可以在心跳面板上读到。
+ * 借鉴的是运维侧那条老教训：设备/机器掉线不是异常，是常态 —— 得先按会出问题来设计。
+ */
+const huanJingZhuangTai: { diskAvailBytes: number; rssBytes: number; ceSo: number; diPanLow: boolean; neiCunHigh: boolean } = {
+  diskAvailBytes: -1, rssBytes: -1, ceSo: 0, diPanLow: false, neiCunHigh: false,
+};
+const DI_PAN_DI_XIAN = 1024 * 1024 * 1024;   // <1 GiB 剩余 ⇒ 告警
+const NEI_CUN_DI_XIAN = 2 * 1024 * 1024 * 1024; // >2 GiB RSS ⇒ 告警
+
+function tanZhenHuanJing(): void {
+  let keYong = -1;
+  try {
+    const st = fs.statfsSync ? (fs.statfsSync(app.getPath('userData')) as unknown as { availInBytes?: number; bavail?: number; bsize?: number }) : null;
+    if (st) keYong = Number(st.availInBytes ?? (Number(st.bavail) * Number(st.bsize))) || -1;
+  } catch { /* 拿不到就不判 */ }
+  const rss = Number(process.memoryUsage().rss) || 0;
+  huanJingZhuangTai.diskAvailBytes = keYong;
+  huanJingZhuangTai.rssBytes = rss;
+  huanJingZhuangTai.ceSo += 1;
+  if (keYong >= 0) {
+    const di = keYong < DI_PAN_DI_XIAN;
+    if (di !== huanJingZhuangTai.diPanLow) {
+      huanJingZhuangTai.diPanLow = di;
+      try { audit?.log(di ? 'huanJing.disk-low' : 'huanJing.disk-recover', { keYongMB: Math.round(keYong / 1048576), luJing: app.getPath('userData') }); } catch { /* noop */ }
+      try { fachuKongzhitai({ cat: 'system', code: di ? 'disk.low' : 'disk.recover', data: { keYongMB: Math.round(keYong / 1048576) } }); } catch { /* noop */ }
+    }
+  }
+  const gao = rss > NEI_CUN_DI_XIAN;
+  if (gao !== huanJingZhuangTai.neiCunHigh) {
+    huanJingZhuangTai.neiCunHigh = gao;
+    try { audit?.log(gao ? 'huanJing.mem-high' : 'huanJing.mem-recover', { rssMB: Math.round(rss / 1048576) }); } catch { /* noop */ }
+    try { fachuKongzhitai({ cat: 'system', code: gao ? 'mem.high' : 'mem.recover', data: { rssMB: Math.round(rss / 1048576) } }); } catch { /* noop */ }
+  }
+}
+
+function anZhuangXinTiao(): void {
+  const xt = huoQuXinTiao();
+  xt.zhuCe({
+    id: 'dingShi.chunKao', ming: '定时任务巡检', meiMs: 20_000, chaoShiMs: 15_000,
+    run: (ci) => { chunKaoDingShiRenWu(ci.now, { buPao: ci.buPao, tuoYanMs: ci.tuoYanMs }); },
+  });
+  xt.zhuCe({
+    id: 'zuYue.huiShou', ming: '租约过期回收', meiMs: 30_000, chaoShiMs: 10_000,
+    run: () => {
+      /**
+       * **资源回收**：`lease.ts` 的 `sweep()` 注释一直写着"集成方可在心跳里调"，但全仓没人调 ——
+       * 过期租约只能等下一个碰同一路径的人顺带清。没人碰就永远占着表，也把"这个文件谁在改"答歪。
+       */
+      const guo = leases?.sweep() || [];
+      if (guo.length) {
+        try { audit?.log('zuYue.swept', { shu: guo.length, chiyouZhe: guo.slice(0, 8).map((l) => ({ holder: l.holder, kind: l.kind, scope: l.scope })) }); } catch { /* noop */ }
+      }
+    },
+  });
+  xt.zhuCe({
+    id: 'guEr.huiShou', ming: '孤儿在途记录回收', meiMs: 30_000, chaoShiMs: 10_000,
+    run: () => {
+      /**
+       * **环境存活的维持与隔离**：进程被打断时，"在跑的工具"和"在跑的小弟"会留下没人收的登记。
+       * 判据沿用看门狗自己的口径（11 分钟）—— 超过这个时长看门狗本来就不再认它，
+       * 留在表里只会让下一个会话读到别人的旧状态（跨会话串味）。
+       */
+      const ZH = 11 * 60_000;
+      const n = Date.now();
+      let qingLe = 0;
+      for (const [k, v] of [...zaiTuGongJu.entries()]) {
+        if (n - Number(v?.kai || 0) > ZH) { zaiTuGongJu.delete(k); qingLe += 1; }
+      }
+      const quanBu = xiaoDiBu().all();
+      for (const [id] of [...xiaoDiKongZhi.entries()]) {
+        const lu = quanBu.find((x) => x.id === id);
+        if (lu && lu.status !== 'running') { xiaoDiKongZhi.delete(id); qingLe += 1; }
+      }
+      if (qingLe) { try { audit?.log('guEr.qingLi', { shu: qingLe }); } catch { /* noop */ } }
+    },
+  });
+  xt.zhuCe({
+    id: 'shiZhong.yangBen', ming: '联网校时采样', meiMs: 5 * 60_000, chaoShiMs: 20_000,
+    run: async () => {
+      /**
+       * **心跳的前提是本机钟可信**。CMOS 电池没电、虚拟机/云桌面的时区重定向都会让钟偏。
+       * 每 5 分钟拿一次 HTTP `Date` 头对比：偏差 > 5 秒就记审计并推控制台 ——
+       * 不是要自动改系统时间（那要管理员权限，也不该由我们改），而是让"定时不准"可归因。
+       */
+      const benDi = Date.now();
+      try {
+        const res = await fetch('https://www.baidu.com', { method: 'HEAD', signal: AbortSignal.timeout(5000) });
+        const h = res.headers.get('date');
+        const w = h ? new Date(h).getTime() : NaN;
+        if (!Number.isFinite(w)) throw new Error('no-date-header');
+        const pianCha = w - benDi;
+        try { audit?.log('shiZhong.sample', { pianChaMs: pianCha, wangLuo: new Date(w).toISOString(), benDi: new Date(benDi).toISOString() }); } catch { /* noop */ }
+        if (Math.abs(pianCha) > 5000) {
+          fachuKongzhitai({ cat: 'system', code: 'clock.drift', data: { pianChaMs: pianCha, wangLuo: new Date(w).toISOString() } });
+          try { audit?.log('shiZhong.drift', { pianChaMs: pianCha }); } catch { /* noop */ }
+        }
+      } catch (e) {
+        // 断网/被拦：如实留一条，不猜"钟是准的"
+        try { audit?.log('shiZhong.unavailable', { cuo: String((e as Error)?.message || e).slice(0, 120) }); } catch { /* noop */ }
+      }
+    },
+  });
+  xt.zhuCe({ id: 'zhuangTai.tongBu', ming: '心跳状态同步', meiMs: 5000, chaoShiMs: 3000, run: () => { xinTiaoZhuangTaiBu(); } });
+  xt.zhuCe({
+    id: 'huanJing.tanZhen', ming: '环境存活探针', meiMs: 60_000, chaoShiMs: 15_000, kanPao: true,
+    run: () => { tanZhenHuanJing(); },
+  });
+  xt.zhuCe({
+    id: 'chiJiuHua.luoPan', ming: '状态落盘兜底（断点续传）', meiMs: 15_000, chaoShiMs: 8000,
+    run: () => {
+      /**
+       * 这几份账原来**只在退出时落**（`before-quit`）。进程被强杀/断电/崩溃 ⇒ 队列、预计完成时间、
+       * 定时任务下次到期全部退回上一次落盘的形状 —— 界面看起来就是"忘了刚才的事"。
+       * 心跳兜一层定期落盘：**断点续传的前提是断点真的在盘上**。
+       */
+      try { luoPanLuYouQiDuiLie(); } catch { /* 落不下去等下一跳 */ }
+      try { etaBaCun(); } catch { /* noop */ }
+      try { baoCunDingShi(); } catch { /* noop */ }
+    },
+  });
+  xt.qiDong();
+  xinTiaoZhuangTaiBu();
+}
+
+chuliIpc('warmy:xinTiaoZhuangTai', () => anQuanChuLi<{ ok: boolean; zhuangTai: Record<string, unknown> | null; shiJian: unknown[] }>(
+  () => ({ ok: true, zhuangTai: xinTiaoZhuangTaiDuiXiang(), shiJian: huoQuXinTiao().zuiJinShiJian(40) }),
+  { ok: false, zhuangTai: null, shiJian: [] },
+));
+/**
+ * 「到点由系统唤醒程序」开关（**默认关**）。
+ * 关下去的时候**当场把已经挂上的系统任务全部卸掉** —— 用户要的是"程序能完全关闭"，
+ * 留一条到点自己响的计划任务就等于没关掉。
+ */
+chuliIpc('warmy:xinTiaoWakeSheZhi', (_e, p0?: { kai?: boolean }) => anQuanChuLiYiBu(async () => {
+  const kai = p0?.kai === true;
+  settingsStore?.save({ xinTiaoWake: kai } as never);
+  const xt = huoQuXinTiao();
+  let xieLe = 0, chongGua = 0;
+  if (!kai) {
+    xieLe = await xt.osXieZai();
+  } else {
+    /**
+     * 刚打开就要生效：把**已经排着的到期**逐条重挂一次（同 id = 覆盖到期时间，不会多挂一份）。
+     * 不这么做的话，用户开了开关也得等到下一个周期才有第一条系统任务 —— 那看起来就像开关没起作用。
+     */
+    for (const d of xt.daoJiLieBiao()) {
+      try { xt.daoJiShenQing({ id: d.id, yaoAt: d.yaoAt, beiZhu: d.beiZhu, chang: d.chang }); chongGua += 1; } catch { /* noop */ }
+    }
+  }
+  try { audit?.log('xin-tiao.wake-shezhi', { kai, xieLe, chongGua }); } catch { /* noop */ }
+  xinTiaoZhuangTaiBu();
+  return { ok: true, kai, xieLe };
+}, { ok: false, kai: false, xieLe: 0 }));
+chuliIpc('warmy:xinTiaoPaoYiCi', (_e, p0?: { id?: string }) => anQuanChuLiYiBu(async () => {
+  const id = String(p0?.id || '');
+  if (!id) return { ok: false, error: 'no-id' };
+  const r = await huoQuXinTiao().paoYiCi(id, 'ui');
+  xinTiaoZhuangTaiBu();
+  return { ok: r.ok, tiaoGuo: r.tiaoGuo };
+}, { ok: false, error: 'failed' }));
+
+/**
+ * 心跳驱动的定时任务巡检（第 40 轮：从自建的 `setInterval(20000)` 迁进统一心跳）。
+ *
+ * 修掉的两个真缺陷：
+ *  · **重启不补**：原来只在"下一次 tick"时看 `nextAt`，程序关着错过的点到，重启后
+ *    按老时间立刻触发却**不告诉用户这是补跑**，也不说迟到多久 ⇒ 用户以为"到点很准"。
+ *  · **repeat 不生效**：卡片上写着"循环 3 次"，代码里从不递减 ⇒ 无限跑。
+ * 现在：一次 tick 内每个任务最多触发一次；迟到如实带 `lateMs/buPao`；跑满 `repeat` 自动停用。
+ */
+/**
+ * **定时任务以「分身」形式真正执行**（第 42 轮，T6/T7）。
+ *
+ * 改之前：到点只 `broadcastToWindows('warmy:dingShiDaoDian')`，而**渲染层从来没有订阅**它
+ * ⇒ 定时任务到点什么都不会发生。用户看到的是"任务列表里有这条，但永远不跑"。
+ *
+ * 现在：到点 → 登记一个分身（第四列「分身」卡会自动出现）→ 用该会话的模型跑一轮（有工具）
+ * → 完成后**不向牛马汇报**，直接把结果写进会话聊天记录，开头注明【XX定时任务汇报】。
+ */
+function dingShiHuiBaoNeiRong(name: string, text: string): string {
+  const biao = String(name || '定时任务').trim() || '定时任务';
+  return `【${biao}定时任务汇报】\n${String(text || '').trim() || '（没有产出内容）'}`;
+}
+async function paoDingShiRenWu(ren: DingShiRenWu): Promise<void> {
+  const sid = String(ren.sessionId || '');
+  if (!sid) return;
+  let moXing = '';
+  try {
+    const s = settingsStore?.load() as { instances?: Array<Record<string, unknown>>; providers?: Array<Record<string, unknown>> } | undefined;
+    const inst = (s?.instances || []).find((x) => String((x as { id?: unknown }).id || '') === sid);
+    moXing = String((inst && (inst.model || inst.defaultModel)) || '');
+    if (!moXing) {
+      const p0 = (s?.providers || [])[0];
+      moXing = String((p0 && (p0.defaultModel || (Array.isArray(p0.models) ? (p0.models as unknown[])[0] : ''))) || '');
+    }
+  } catch { /* 取不到模型就如实失败 */ }
+  const gyXinXi = moXing ? await jieMoXingGongYingShang(moXing) : null;
+  const gy = gyXinXi
+    ? congYuSheChuangJian(gyXinXi.presetId, { apiKey: gyXinXi.apiKey, baseURL: gyXinXi.baseURL || undefined, protocol: gyXinXi.protocol } as never, gyXinXi.protocol)
+    : null;
+  if (!gy || !gyXinXi || !moXing) {
+    try { zhuiJiaLiaoTianRiZhi(sid, { role: 'assistant', content: dingShiHuiBaoNeiRong(ren.name, '这台会话还没有可用模型，定时任务没跑起来。请在设置里给该牛马选一个模型。'), ts: Date.now() } as never); } catch { /* noop */ }
+    try { broadcastToWindows('warmy:dingShiHuiBao', { sessionId: sid, taskId: ren.id, name: ren.name, content: dingShiHuiBaoNeiRong(ren.name, '这台会话还没有可用模型，定时任务没跑起来。请在设置里给该牛马选一个模型。') }); } catch { /* noop */ }
+    return;
+  }
+  const bu = xiaoDiBu();
+  const fuMing = sessionMingOf(sid) || '定时任务';
+  const pai = bu.pai(`定时·${String(ren.name || '').slice(0, 20)}`, Date.now(), {
+    sessionId: sid,
+    task: String(ren.prompt || '').slice(0, 2000),
+    model: moXing,
+    modelId: moXing,
+    presetId: String(gyXinXi.presetId || ''),
+    status: 'running',
+  });
+  if (!pai.ok) {
+    try { audit?.log('dingShi.spawn-fail', { taskId: ren.id, sessionId: sid, error: pai.error }); } catch { /* noop */ }
+    return;
+  }
+  try { broadcastToWindows('warmy:xiaoDiBianGeng', { sessionId: sid, id: pai.lu.id, status: 'running' }); } catch { /* noop */ }
+  try { audit?.log('dingShi.spawn', { taskId: ren.id, sessionId: sid, xiaoDi: pai.lu.ming, model: moXing, fuMing }); } catch { /* noop */ }
+  const jieGuo = await paoXiaoDiRenWu({ lu: pai.lu, provider: gy, moXing, zuiDaJieGuoZiShu: 4000 });
+  const content = dingShiHuiBaoNeiRong(ren.name, jieGuo);
+  try {
+    zhuiJiaLiaoTianRiZhi(sid, { role: 'assistant', content, ts: Date.now() } as never);
+  } catch { /* noop */ }
+  try { broadcastToWindows('warmy:dingShiHuiBao', { sessionId: sid, taskId: ren.id, name: ren.name, xiaoDi: pai.lu.ming, content, status: jieGuo.startsWith('[') && /失败|停止/.test(jieGuo) ? 'failed' : 'done' }); } catch { /* noop */ }
+  try { audit?.log('dingShi.report', { taskId: ren.id, sessionId: sid, chars: content.length }); } catch { /* noop */ }
+}
+function chunKaoDingShiRenWu(n: number, ci: { buPao: boolean; tuoYanMs: number }): void {
+  let gaiLe = false;
+  for (const ren of dingShiRenWuJi) {
+    if (!ren.enabled) continue;
+    if (ren.nextAt > n) continue;
+    const lateMs = Math.max(0, n - ren.nextAt);
+    const yuan = ren.nextAt;
+    /**
+     * **同一个到点只执行一次**（幂等键 = 原定 nextAt）。崩在"已经触发、还没落盘"之间时，
+     * 下次启动会看到同一个 `nextAt` ⇒ 这里直接跳过，不再把同一份提醒投第二遍。
+     */
+    if (ren.zuiHouChuFaAt === yuan) {
+      ren.nextAt = suanXiaCi(ren.everyMinutes, ren.dailyAt, ren.cron, ren.tz);
+      baoCunDingShi();
+      try { audit?.log('dingShi.idempotent-skip', { taskId: ren.id, yuanDaoAt: yuan }); } catch { /* noop */ }
+      continue;
+    }
+    ren.zuiHouChuFaAt = yuan;
+    ren.lastAt = n;
+    ren.zhiXingGuo = Math.max(0, Number(ren.zhiXingGuo) || 0) + 1;
+    /**
+     * **循环次数到这里才真的生效**：`repeat>0` 且已跑满 ⇒ 停用并如实改描述。
+     * 原来这个字段只用于卡片显示，从不递减 —— 用户要"提醒三次"会收到永远提醒。
+     */
+    if (ren.repeat > 0 && ren.zhiXingGuo >= ren.repeat) {
+      ren.enabled = false;
+      ren.status = 'stopped';
+      ren.stoppedReason = ren.stoppedReason || 'repeat-exhausted';
+      ren.stoppedAt = Date.now();
+      ren.nextAt = 0;
+      ren.desc = `${ren.desc}（已跑满 ${ren.zhiXingGuo} 次，自动停用）`;
+      try { audit?.log('dingShi.exhausted', { taskId: ren.id, sessionId: ren.sessionId, zhiXingGuo: ren.zhiXingGuo, repeat: ren.repeat }); } catch { /* noop */ }
+    } else {
+      ren.nextAt = suanXiaCi(ren.everyMinutes, ren.dailyAt, ren.cron, ren.tz);
+    }
+    gaiLe = true;
+    try {
+      audit?.log('dingShi.dao', {
+        taskId: ren.id, sessionId: ren.sessionId, yuanDaoAt: yuan, shiJiAt: n, lateMs,
+        buPao: ci.buPao || lateMs > 60_000, zhiXingGuo: ren.zhiXingGuo, repeat: ren.repeat,
+      });
+    } catch { /* noop */ }
+    // 到点：广播给界面发一轮（顺带把卡片补回来，见渲染层）
+    // 到点：真的以「分身」形式跑一轮，完成后把结果写回聊天（不再只广播一个没人收的事件）
+    void paoDingShiRenWu(ren).catch((e) => { try { audit?.log('dingShi.run-fail', { taskId: ren.id, error: String(e && (e as Error).message || e).slice(0, 120) }); } catch { /* noop */ } });
+    try {
+      broadcastToWindows('warmy:dingShiDaoDian', {
+        sessionId: ren.sessionId, prompt: ren.prompt, taskId: ren.id, name: ren.name,
+        lateMs, buPao: ci.buPao || lateMs > 60_000, zhiXingGuo: ren.zhiXingGuo, repeat: ren.repeat,
+      });
+    } catch { /* noop */ }
+    // 重新挂上"下一次"的系统保底（程序没开着也能留痕）
+    if (ren.enabled && ren.nextAt > 0) {
+      try {
+        huoQuXinTiao().daoJiShenQing({ id: 'sch:' + ren.id, yaoAt: ren.nextAt, beiZhu: ren.name, chang: { taskId: ren.id, sessionId: ren.sessionId } });
+      } catch { /* 保底挂不上不影响本机心跳 */ }
+    }
+  }
+  if (gaiLe) {
+    baoCunDingShi();
+    try { broadcastToWindows('warmy:dingShiRenWu', { tasks: dingShiRenWuJi }); } catch { /* noop */ }
+  }
+  void xinTiaoZhuangTaiBu();
+}
+
+function qiDongDingShiJianCha(): void {
+  boZhongNeiZhiChaJian();
+  duQuDingShi();
+  anZhuangXinTiao();
+  /**
+   * 重启后把已有的定时任务的"下一次"重新挂进心跳：
+   * 落盘的账本在**新进程**里没有闹钟，不重挂就只能等基础 tick 撞上。
+   */
+  for (const ren of dingShiRenWuJi) {
+    if (!ren.enabled || !(ren.nextAt > 0)) continue;
+    try {
+      huoQuXinTiao().daoJiShenQing({ id: 'sch:' + ren.id, yaoAt: ren.nextAt, beiZhu: ren.name, chang: { taskId: ren.id, sessionId: ren.sessionId } });
+    } catch { /* noop */ }
+  }
+  /**
+   * 系统留痕要**在重挂闹钟之后**再吃：先吃的话表里还没有这些到期记录，
+   * 那条痕就只是"对不上号的一行字"，补跑与核对都做不了。
+   */
+  try { chewRuOSShouShiHen(); } catch { /* noop */ }
+  /**
+   * **程序本来关着、被系统叫醒**：这条到期就在启动参数里。结掉它 ⇒ 巡检当场把这轮投出去，
+   * 用户关掉程序也不再会丢提醒（这正是"超出心跳范围的计时不能依赖进程内心跳"要的东西）。
+   */
+  try { chuliHuanXing(quHuanXingId(process.argv.slice(1)), 'cold-start'); } catch { /* noop */ }
 }
 chuliIpc('warmy:dingShiRenWuLieBiao', () => anQuanChuLi(() => ({ ok: true, tasks: dingShiRenWuJi }), { ok: true, tasks: [] }));
 chuliIpc('warmy:dingShiRenWuShanChu', (_e, p0?: { id?: string }) => {
   try {
-    const i = dingShiRenWuJi.findIndex((x) => x.id === String(p0?.id || ''));
-    if (i >= 0) dingShiRenWuJi.splice(i, 1);
+    const it = dingShiRenWuJi.find((x) => x.id === String(p0?.id || ''));
+    if (!it) return { ok: false, error: 'not-found' };
+    /**
+     * **软删留档**（用户口径：不能删除旧的）：不再 `splice` 抹掉，
+     * 标成 `status=stopped` + 原因「用户删除」，列表里仍可追溯；闹钟照撤。
+     */
+    it.enabled = false;
+    it.status = 'stopped';
+    it.stoppedReason = it.stoppedReason || 'user-delete';
+    it.stoppedAt = Date.now();
     baoCunDingShi();
+    try { xinTiao?.daoJiQuXiao('sch:' + String(p0?.id || '')); } catch { /* noop */ }
     try { broadcastToWindows('warmy:dingShiRenWu', { tasks: dingShiRenWuJi }); } catch { /* noop */ }
-    return { ok: true };
+    try { audit?.log('dingShi.soft-delete', { id: it.id, name: it.name, sessionId: it.sessionId }); } catch { /* noop */ }
+    return { ok: true, stopped: true, id: it.id };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-// 定时任务暂停/恢复（enabled 开关）
+// 定时任务暂停/恢复（enabled 开关）；恢复时若已被替换则要求显式
 chuliIpc('warmy:dingShiRenWuGengXin', (_e, p0?: { id?: string; enabled?: boolean }) => {
   try {
     const it = dingShiRenWuJi.find((x) => x.id === String(p0?.id || ''));
     if (!it) return { ok: false, error: 'not-found' };
     it.enabled = p0?.enabled !== false;
+    if (it.enabled) {
+      it.status = 'active';
+      it.stoppedReason = undefined;
+      it.stoppedAt = undefined;
+    } else {
+      it.status = 'stopped';
+      it.stoppedReason = it.stoppedReason || 'user-pause';
+      it.stoppedAt = Date.now();
+    }
     baoCunDingShi();
+    /** 暂停就撤闹钟（心跳 + 系统都撤）；恢复就按原定 `nextAt` 重新挂上 */
+    try {
+      if (it.enabled) huoQuXinTiao().daoJiShenQing({ id: 'sch:' + it.id, yaoAt: it.nextAt, beiZhu: it.name, chang: { taskId: it.id, sessionId: it.sessionId } });
+      else xinTiao?.daoJiQuXiao('sch:' + it.id);
+    } catch { /* 保底挂不上不影响本机心跳 */ }
     try { broadcastToWindows('warmy:dingShiRenWu', { tasks: dingShiRenWuJi }); } catch { /* noop */ }
-    return { ok: true, enabled: it.enabled };
+    return { ok: true, enabled: it.enabled, status: it.status };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
@@ -20772,16 +26380,16 @@ chuliIpc('warmy:dingShiRenWuGengXin', (_e, p0?: { id?: string; enabled?: boolean
  */
 chuliIpc('warmy:shuoHuaZhuangTai', async () => {
   try {
-    await baozhangGongyingshangMiyao();
+    const bd = zhuangTaiBenDiYuYin();
+    if (bd.qiYong) {
+      const ready = bd.zhuangTai === 'yi_an_zhuang';
+      return { ok: true, ready, model: 'local/' + bd.moXingMing.heCheng, local: true, source: 'bendi-yuyin',
+        reason: ready ? '' : 'bendi-yuyin-not-ready（本地运行时或模型不完整，请重新安装；不会改用云端）' };
+    }
     const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
     const lian = Array.isArray(sm.ttsChain) ? (sm.ttsChain as string[]) : [];
     const jin = Array.isArray(sm.ttsDisabled) ? (sm.ttsDisabled as string[]) : [];
     const mo = lian.find((m) => m && !jin.includes(m)) || '';
-    /** 本地语音（勾了启用且模型齐）也算「能说话」—— 状态必须跟实际能力一致，不能只认调用链 */
-    const bd = (() => { try { return zhuangTaiBenDiYuYin(); } catch { return null; } })();
-    if (!mo && bd && bd.qiYong && bd.moXing.heCheng) {
-      return { ok: true, ready: true, model: 'local/' + bd.moXingMing.heCheng, local: true, reason: '' };
-    }
     if (!mo) {
       return {
         ok: true,
@@ -20798,33 +26406,30 @@ chuliIpc('warmy:shuoHuaZhuangTai', async () => {
 });
 
 chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
+  let localEnabled = false;
   try {
+    localEnabled = !!zhuangTaiBenDiYuYin().qiYong;
     const s = String(p0?.text || '').trim();
-    if (!s) return { ok: false, error: 'empty-text' };
+    if (!s) return { ok: false, error: 'empty-text', source: localEnabled ? 'bendi-yuyin' : 'tts-chain' };
     const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
     /** 音色/语速：界面配置优先（默认 alloy 是 OpenAI 的口径；不认的网关会在报错里给清单，见 ttsChatShi） */
     const voice = String((sm as { ttsVoice?: string }).ttsVoice || 'alloy');
     const speed = Number((sm as { ttsSpeed?: number }).ttsSpeed || 1);
-    /**
-     * **本地优先**（第 27 轮 项 5）：装了且勾了就在本机合成，**没配说话模型也能出声**。
-     * 失败（模型缺、推理抛异常）如实降级到说话模型调用链，并在审计里留原因。
-     * 音色是 OpenAI 口径的名字（alloy/…），本地 VITS 只有几个数字音色 ⇒ 从名字里抠数字，抠不到用 0。
-     */
-    const bdSt = (() => { try { return zhuangTaiBenDiYuYin(); } catch { return null; } })();
-    if (bdSt && bdSt.qiYong && bdSt.moXing.heCheng) {
+    // 启用即仅本地；音色按本地 VITS 的数字 sid 处理，失败不改选择、不走云端。
+    if (localEnabled) {
       const sidM = /(\d+)/.exec(voice);
       const he = await benDiHeCheng(s, sidM ? Number(sidM[1]) : 0, speed);
-      if (he.ok && he.wav) {
+      if (he.ok && he.wav?.length) {
         try { audit?.log('tts.bendi.used', { chars: s.length, model: he.moXing || '', sid: he.yangShu ?? 0 }); } catch { /* noop */ }
-        return { ok: true, dataUrl: `data:audio/wav;base64,${he.wav.toString('base64')}`, model: he.moXing, via: 'bendi-yuyin', voice, local: true };
+        return { ok: true, dataUrl: `data:audio/wav;base64,${he.wav.toString('base64')}`, model: he.moXing, via: 'bendi-yuyin', source: 'bendi-yuyin', voice, local: true };
       }
-      try { audit?.log('tts.bendi.skip', { reason: String(he.error || '').slice(0, 160) }); } catch { /* noop */ }
+      return { ok: false, error: he.error || 'bendi-yuyin-empty-audio', source: 'bendi-yuyin', local: true };
     }
     // 说话模型：取 tts 调用链上第一个未禁用的
     const lian = Array.isArray(sm.ttsChain) ? (sm.ttsChain as string[]) : [];
     const jin = Array.isArray(sm.ttsDisabled) ? (sm.ttsDisabled as string[]) : [];
     const mo = lian.find((m) => m && !jin.includes(m)) || '';
-    if (!mo) return { ok: false, error: bdSt && bdSt.qiYong ? 'no-tts-model（本地语音合成失败，且「设置 → 模型 → 说话模型」没配）' : 'no-tts-model（请在「设置 → 模型 → 说话模型」里配置）' };
+    if (!mo) return { ok: false, error: 'no-tts-model（请在「设置 → 模型 → 说话模型」里配置）' };
     const an = await jieMoXingGongYingShang(mo);
     if (!an) return { ok: false, error: 'tts-provider-not-found（模型 ' + mo + ' 不在任何供应商里）' };
     if (!an.apiKey && an.protocol !== 'ollama') return { ok: false, error: 'no-key（' + an.biaoQian + ' 未配密钥）' };
@@ -20860,7 +26465,7 @@ chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
     } catch (e2) {
       return { ok: false, error: 'tts-failed：' + xiJingCuoWu(e2) };
     }
-  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e), source: localEnabled ? 'bendi-yuyin' : 'tts-chain' }; }
 });
 /**
  * **翻译**（专业模型优先，缺失回退）：有翻译模型就用它；没有就交给当前生效的对话模型。
@@ -20965,6 +26570,18 @@ chuliIpc('warmy:daKaiLuJing', async (_e, p0?: { path?: string; create?: boolean 
         return { ok: false, error: 'not-found：' + abs };
       }
     }
+    /**
+     * **内置插件 `nm-file` 启用时，文件一律交给 nm 查看器**（产品要求：点文件链接
+     * 用内置查看器打开，不再默认弹系统程序 —— 打开 PDF 不该跳 Acrobat、打开 txt 不该跳记事本）。
+     * 目录仍走系统程序（查看器不显示目录树）；查看器自己开不起来就如实回落到系统默认程序，
+     * 绝不"假装打开过"。
+     */
+    try {
+      if (fs.statSync(abs).isFile() && nmChaJianQiYong()) {
+        const kai = nmShiTuKai({ luJing: abs, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi() });
+        if (kai.ok) return { ok: true, path: abs, viewer: true, viewerId: kai.id };
+      }
+    } catch { /* 判不了类型就按老路走系统默认程序 */ }
     const r = await shell.openPath(abs);
     return r ? { ok: false, error: r } : { ok: true, path: abs };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
@@ -21040,7 +26657,8 @@ chuliIpc('warmy:daKaiBianJi', async (_e, p0?: { path?: string }) => {
     return { ok: true, path: p };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-/** 在资源管理器里显示这个文件（导出后给用户看文件在哪） */chuliIpc('warmy:xianShiWenJianJia', (_e, p0?: { path?: string }) => {  try {
+/** 在资源管理器里显示这个文件（导出后给用户看文件在哪） */
+chuliIpc('warmy:xianShiWenJianJia', (_e, p0?: { path?: string }) => {  try {
     const p = String(p0?.path || '').trim();
     if (!p || !fs.existsSync(p)) return { ok: false, error: 'not-found' };
     shell.showItemInFolder(p);
@@ -21061,6 +26679,11 @@ chuliIpc('warmy:chuShiSheZhiTai', () => {
 chuliIpc('warmy:chuShiSheZhiWanCheng', (_e, payload: { yuYan?: string; provider?: Record<string, unknown>; guideDone?: boolean }) => {
   try {
     if (payload.yuYan) settingsStore?.save({ yuYan: payload.yuYan } as never);
+    /** 首启选了语言：默认层与默认称呼当场跟着换（第 54 轮项 1） */
+    if (payload.yuYan) {
+      try { moRenYuYanTongBu(); } catch { /* 不许影响首启 */ }
+      try { yongHuMingSuiYuYan(); } catch { /* noop */ }
+    }
     if (payload.guideDone) settingsStore?.save({ guideDone: true } as never);
     if (payload.provider) {
       // 预填 provider
@@ -21207,7 +26830,7 @@ chuliIpc('warmy:anQuanMiYaoJiaZai', async (_e, providerId: string) => {
 });
 
 // ── KnowledgeArchiver ──
-chuliIpc('warmy:guiDangWaiBu', (_e, payload: { groupId: string; biaoTi: string; summary: string; anchors?: Array<{ file: string; seq: number }> }) => {
+chuliIpc('warmy:guiDangWaiBu', (_e, payload: { groupId: string; biaoTi: string; summary: string; anchors?: Array<{ file: string; seq: number; recordId?: string }> }) => {
   let tiqu = null as null | ReturnType<typeof congGuiDangTiQuZhiShi> | { error?: string };
   let structured = null as null | ReturnType<typeof tiQuJieGouHuaZhaiYao>;
   try {
@@ -21229,7 +26852,8 @@ chuliIpc('warmy:guiDangWaiBu', (_e, payload: { groupId: string; biaoTi: string; 
     groupId: payload.groupId,
     biaoTi: payload.biaoTi,
     summary: payload.summary,
-    anchors: payload.anchors || [],
+    /** 锚点也走同一个纯构造口径：外部群通常只有 seq（没有记忆库的 id）⇒ 留空串，不许派生假 id */
+    anchors: maidianCongWaiBu(payload.anchors),
     ...(structured ? { structured: { bullets: structured.bullets, decisions: structured.decisions, todos: structured.todos, risks: structured.risks } } : {}),
   });
   // 归档触发整理：摘要 → 知识库实体/事件 + 使用者偏好（持久跨会话）
@@ -21239,26 +26863,26 @@ chuliIpc('warmy:guiDangWaiBu', (_e, payload: { groupId: string; biaoTi: string; 
       for (const e of liWai.entities) {
         const LeiXingBiao = ['person', 'org', 'material', 'place', 'concept', 'tool', 'project'] as const;
         const kind = (LeiXingBiao as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof LeiXingBiao)[number]) : 'concept';
-        knowledge.upsertEntity({ id: e.id, kind, ming: e.ming, attrs: e.attrs || {}, anchors: [] });
+        knowledge.internal.upsertEntity({ id: e.id, kind, ming: e.ming, attrs: e.attrs || {}, anchors: [] });
       }
-      knowledge.upsertEntity({
-        id: `grp-${payload.groupId}`,
+      knowledge.internal.upsertEntity({
+            id: `grp-${payload.groupId}`,
         kind: 'project',
         ming: String(payload.groupId),
         attrs: {},
-        anchors: (payload.anchors || []).map((a) => ({ file: a.file, seq: a.seq, recordId: `seq:${a.seq}` })),
+        anchors: maidianCongWaiBu(payload.anchors),
       });
       for (const Shi of liWai.events) {
-        knowledge.addEvent({
+        knowledge.internal.addEvent({
           id: Shi.id,
           biaoTi: Shi.biaoTi,
           result: Shi.result || '',
           entityIds: [`grp-${payload.groupId}`],
-          anchors: (payload.anchors || []).map((a) => ({ file: a.file, seq: a.seq, recordId: `seq:${a.seq}` })),
+          anchors: maidianCongWaiBu(payload.anchors),
           ts: Date.now(),
         });
       }
-      if (liWai.preferences?.length) heBingYongHuPianHao(app.getPath('userData'), liWai.preferences);
+      if (liWai.preferences?.length) xiePianHaoDaoYinXiang(liWai.preferences as Array<{ key?: string; value?: string; source?: string }>);
     }
   } catch (e) {
     tiqu = { error: xiJingCuoWu(e) };
@@ -21290,10 +26914,19 @@ async function shengChengHuiHuaZhaiYao(
         structured.risks.length ? `## 风险\n${structured.risks.map((d) => '- ' + d).join('\n')}` : '',
         `## 要点\n${structured.bullets.map((d) => '- ' + d).join('\n')}`,
       ].filter(Boolean).join('\n\n').slice(0, 4000);
-    // 尽量带上锚点：用最近日志的 seq（便于右栏「跳到原文」）
-    const anchors = rizhi.slice(-5)
-      .filter((l) => l && l.seq != null)
-      .map((l) => ({ file: 'chat-log', seq: Number(l.seq || 0), recordId: `seq:${l.seq}` }));
+    // 尽量带上锚点：用日志里**真实的 recordId + seq**（便于右栏「跳到原文」，也让模型能 retrieve）
+    /**
+     * ⚠️ 以前这里写的是 `recordId: 'seq:' + l.seq` —— **一个不存在的 id**。
+     * 指针必须可执行：模型照抄 `retrieve({recordId:'seq:12'})` 只会取回空，
+     * 用户看到的就是"它明明说有这条记录，怎么查不到"（第 44 轮后半用户 #7 点名要修的假锚点）。
+     * 构造口径现在只在 `guiDang-maidian.ts` 里有一份（纯函数，门禁跑真值表）：
+     * id 只能逐字来自日志、拿不到就留空串，seq 必须是日志里真的有的。
+     */
+    const anchors = maidianCongRiZhi(rizhi, { zuiDuo: 5 });
+    try {
+      const bi = maidianZhenBi(anchors);
+      audit?.log('guiDang.maidian', { groupId: qunId, ...bi, weiFan: maidianWeiFan(anchors, rizhi).join(',') || '' });
+    } catch { /* 审计写失败不影响归档 */ }
     const entry = archiver?.archive({
       id: 'arc-' + Date.now(),
       groupId: qunId,
@@ -21307,29 +26940,71 @@ async function shengChengHuiHuaZhaiYao(
         risks: structured.risks,
       },
     });
+    /**
+     * **归档摘要自己也要能被召回**（用户 #10「永远记得、永远可自行回忆」）。
+     * 注入上下文的那一段只覆盖最近几次归档，更早的会在正文里如实写明"另有 M 次归档没进这段上下文，
+     * 用 recall(关键词) 取" —— 可摘要此前**只落在 `archives.jsonl`**（界面读得到、模型读不到），
+     * 那句指针等于指了一条走不通的路（与 #7 的假 recordId 是同一类缺陷：指针必须可执行）。
+     * 现在同一条摘要也写进记忆库：`kind:'archive'`、id 用归档自己的真 id ⇒ `recall`/`retrieve(recordId)` 都取得回；
+     * 而重启重建只认 `kind === 'message'`（见 `youJiYiHuiFuHuiHuaRiZhi`）⇒ 摘要**不会**被当成聊天消息重放。
+     */
+    try {
+      if (memory?.isReady && entry?.id) {
+        /**
+         * ⚠️ 必须 await：`append` 走 IPC 返回 Promise —— 不等它，失败会变成**未处理的 rejection** 逃出这个 try，
+         * 而"回写成功"的审计却已经先写了（读审计的人会以为指针可执行，其实没写进去）。
+         */
+        const hui = await memory.append({
+          id: String(entry.id),
+          sessionId: qunId,
+          groupId: qunId,
+          kind: 'archive',
+          entityType: 'archive',
+          ti: `〔归档摘要 · ${biaoTi}〕\n${summary}`,
+        }, 'memory-service') as { ok?: boolean; seq?: number; error?: string } | undefined;
+        if (hui && hui.ok === false) throw new Error(String(hui.error || 'append-failed'));
+        audit?.log('guiDang.huiXie', { groupId: qunId, id: String(entry.id), seq: Number(hui?.seq || 0), zi: summary.length, maoDian: anchors.length });
+      }
+    } catch (e) {
+      /** 回写失败不影响归档本身（archives.jsonl 已经落了），但必须留痕：否则"指针可执行"又变成一句空话 */
+      try { audit?.log('guiDang.huiXie-fail', { groupId: qunId, error: xiJingCuoWu(e).slice(0, 140) }); } catch { /* noop */ }
+    }
     try {
       const liWai = congGuiDangTiQuZhiShi({ groupId: qunId, biaoTi, summary });
       if (knowledge) {
-        knowledge.upsertEntity({ id: `grp-${qunId}`, kind: 'project', ming: qunId, attrs: {}, anchors: [] });
+        knowledge.internal.upsertEntity({ id: `grp-${qunId}`, kind: 'project', ming: qunId, attrs: {}, anchors: [] });
         for (const e of liWai.entities) {
           const LeiXingBiao = ['person','org','material','place','concept','tool','project'] as const;
           const kind = (LeiXingBiao as readonly string[]).includes(String(e.kind)) ? (e.kind as (typeof LeiXingBiao)[number]) : 'concept';
-          knowledge.upsertEntity({ id: e.id, kind, ming: e.ming, attrs: e.attrs || {}, anchors: [] });
+          knowledge.internal.upsertEntity({ id: e.id, kind, ming: e.ming, attrs: e.attrs || {}, anchors: [] });
         }
         for (const Shi of liWai.events) {
-          knowledge.addEvent({ id: Shi.id, biaoTi: Shi.biaoTi, result: Shi.result || '', entityIds: [`grp-${qunId}`], anchors: [], ts: Date.now() });
+          knowledge.internal.addEvent({ id: Shi.id, biaoTi: Shi.biaoTi, result: Shi.result || '', entityIds: [`grp-${qunId}`], anchors: [], ts: Date.now() });
         }
       }
-      if (liWai.preferences?.length) heBingYongHuPianHao(app.getPath('userData'), liWai.preferences);
+      if (liWai.preferences?.length) xiePianHaoDaoYinXiang(liWai.preferences as Array<{ key?: string; value?: string; source?: string }>);
     } catch { /* 提炼失败不影响摘要落盘 */ }
     audit?.log('session.summary', { sessionId: qunId, auto });
+    /**
+     * **归档时顺手重算 token 算法**（用户第 9 条补充口径）：把累积的供应商回读（`token-observations.jsonl`）
+     * 离线重算成 供应商/模型/桶 的比值 + 该桶的平均法条目，覆盖在线 EMA 的结果。
+     * 失败只记审计，不许把摘要判成失败。
+     */
+    try { tokenGuiDangChongSuan(); } catch (e) { try { audit?.log('token.recalc-fail', { error: xiJingCuoWu(e).slice(0, 120) }); } catch { /* noop */ } }
     return { ok: true, entry, structured };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 }
-chuliIpc('warmy:huiHuaZhaiYao', async (_e, payload?: { sessionId?: string; auto?: boolean }) =>
-  shengChengHuiHuaZhaiYao(String(payload?.sessionId || ''), !!payload?.auto));
+chuliIpc('warmy:huiHuaZhaiYao', async (_e, payload?: { sessionId?: string; auto?: boolean }) => {
+  const sid = String(payload?.sessionId || '');
+  /** 摘要也走"正在生成就跳过"这一条闸（第 52 轮）：这个 IPC 是历史入口，绕过它就能看到半条消息 */
+  if (sid && zaiTuLiao.has(sid)) {
+    try { audit?.log('chat.archive-skipped-inflight', { sessionId: sid, kaiShi: zaiTuLiao.get(sid), chuFa: 'summary-ipc' }); } catch { /* noop */ }
+    return { ok: false, skipped: 'in-flight', error: 'in-flight（这个会话正在生成回复，本轮摘要跳过）' };
+  }
+  return shengChengHuiHuaZhaiYao(sid, !!payload?.auto);
+});
 
 /**
  * **每归档一次的进度锚**（sessionId → 归档时的日志序号），用来判"又攒够一轮新的了没"。
@@ -21358,8 +27033,18 @@ async function ziDongGuiDangRuGuoXuYao(sessionId: string): Promise<void> {
     const shangCi = guiDangZuiHouXu.get(k) || 0;
     if (zuiHou - shangCi < GUI_DANG_MEI_LUN) return;
     guiDangZuiHouXu.set(k, zuiHou);
-    const r = await shengChengHuiHuaZhaiYao(k, true);
-    audit?.log('chat.auto-archive', { sessionId: k, ok: !!r.ok, seq: zuiHou, at: Math.max(0, zuiHou - shangCi) });
+    /**
+     * **自动归档 = 立即归档的同一管线**（用户定稿）：以前自动只调摘要核心、手动只调知识条目，
+     * 两边各写一半（`kind:'archive'`/锚点 只在自动那路，印象归纳/产物登记 只在手动那路）⇒
+     * 同一个"归档"两种结果。现在自动入口只调 `guiDangYiGeHuiHua`，它内部再调摘要核心。
+     */
+    const r = await guiDangYiGeHuiHua(k, { auto: true });
+    /**
+     * **跳过时不许推进水位**（第 52 轮）：会话正在生成回复 ⇒ 这一轮归档被跳过，
+     * 如果水位照推进，被跳过的那几十条就永远不会被归档（丢的是原文，不是摘要）。
+     */
+    if (r && r.skipped === 'in-flight') guiDangZuiHouXu.set(k, shangCi);
+    audit?.log('chat.auto-archive', { sessionId: k, ok: !!r.ok, seq: zuiHou, at: Math.max(0, zuiHou - shangCi), jiangJi: !!r.jiangJi, guiDangHeXin: !!r.guiDangHeXin, tiaoguo: r.skipped === 'in-flight' ? 'in-flight' : '' });
   } catch (e) {
     try { audit?.log('chat.auto-archive-fail', { sessionId, error: xiJingCuoWu(e).slice(0, 140) }); } catch { /* noop */ }
   }
@@ -21478,11 +27163,15 @@ chuliIpc('warmy:asrollama', async (_e, payload: { audioBase64: string; model?: s
     const res = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: payload.model || 'dimavz/whisper-tiny', tiShiCi: 'Transcribe audio:', stream: false, options: { audio: payload.audioBase64 } }),
+      // Ollama 的生成接口字段是 prompt / response；原来写成 tiShiCi / xiangYingTi 等于什么都没发、
+      // 也永远读不到结果（第 42 轮修）。audio 走 options 的自定义字段，服务端不支持时会明确报错。
+      body: JSON.stringify({ model: payload.model || 'dimavz/whisper-tiny', prompt: 'Transcribe audio:', stream: false, options: { audio: payload.audioBase64 } }),
     });
     if (!res.ok) return { ok: false, error: 'http ' + res.status };
-    const data = (await res.json()) as { xiangYingTi?: string };
-    return { ok: true, text: data.xiangYingTi || '' };
+    const data = (await res.json()) as { response?: string };
+    const txt = String(data.response || '').trim();
+    if (!txt) return { ok: false, error: 'empty-transcript（本机模型没有返回文字）' };
+    return { ok: true, text: txt };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
@@ -21525,5 +27214,59 @@ chuliIpc('warmy:heiMingDanYiChu', (_e, id: string) => {
     const i = blacklist.findIndex((b) => b.id === id);
     if (i >= 0) blacklist.splice(i, 1);
     return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/**
+ * **网络配置的持久层**（第 59 轮）：服务器列表 + 公网 IP/网关，以及"每个会话用哪些服务器"的绑定。
+ * 两个文件分开：服务器列表是全局设置，绑定是会话级；都走 tmp+rename，坏了按空表处理（不许挡住启动）。
+ */
+function wangLuoLu(): string { return path.join(app.getPath('userData'), 'net.json'); }
+function wangLuoBangDingLu(): string { return path.join(app.getPath('userData'), 'net-bindings.json'); }
+function duWangLuo(): { servers: Array<{ id: string; name: string; url: string; credential: string }>; publicIp?: string; gongWangWangGuan?: string } {
+  try { const j = JSON.parse(fs.readFileSync(wangLuoLu(), 'utf8')); return { servers: Array.isArray(j?.servers) ? j.servers.filter((x: { url?: string }) => x && x.url) : [], publicIp: String(j?.publicIp || ''), gongWangWangGuan: String(j?.gongWangWangGuan || '') }; }
+  catch { return { servers: [] }; }
+}
+function xieWangLuo(j: unknown): void {
+  const p = wangLuoLu(); const t = p + '.tmp';
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(t, JSON.stringify(j, null, 2), 'utf8'); fs.renameSync(t, p);
+}
+function duBangDing(): Record<string, string[]> {
+  try { const j = JSON.parse(fs.readFileSync(wangLuoBangDingLu(), 'utf8')); const b = j?.bindings || {}; const out: Record<string, string[]> = {}; for (const [k, v] of Object.entries(b)) if (Array.isArray(v)) out[k] = (v as unknown[]).map(String); return out; }
+  catch { return {}; }
+}
+function xieBangDing(b: Record<string, string[]>): void {
+  const p = wangLuoBangDingLu(); const t = p + '.tmp';
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(t, JSON.stringify({ bindings: b }, null, 2), 'utf8'); fs.renameSync(t, p);
+}
+chuliIpc('warmy:netDu', () => ({ ok: true, ...duWangLuo() }));
+chuliIpc('warmy:netShe', (_e, p0?: { servers?: unknown[]; publicIp?: string; gongWangWangGuan?: string }) => {
+  try {
+    const yi = duWangLuo();
+    const servers = Array.isArray(p0?.servers) ? (p0!.servers as Array<Record<string, unknown>>).map((x, i) => ({
+      id: String(x.id || 'srv-' + i + '-' + Date.now().toString(36)), name: String(x.name || '').trim(),
+      url: String(x.url || '').trim().replace(/\/$/, ''), credential: String(x.credential || ''),
+    })).filter((x) => x.url) : yi.servers;
+    xieWangLuo({ servers, publicIp: String(p0?.publicIp ?? yi.publicIp ?? ''), gongWangWangGuan: String(p0?.gongWangWangGuan ?? yi.gongWangWangGuan ?? '') });
+    audit?.log('net.saved', { n: servers.length });
+    return { ok: true, servers };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:netBangDingDu', (_e, p0?: { sessionId?: string }) => {
+  const sid = String(p0?.sessionId || '');
+  const b = duBangDing();
+  return { ok: true, ids: sid ? (b[sid] || []) : [] };
+});
+chuliIpc('warmy:netBangDingShe', (_e, p0?: { sessionId?: string; ids?: unknown[] }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    if (!sid) return { ok: false, error: 'bad-session' };
+    const you = new Set(duWangLuo().servers.map((s) => s.id));
+    const ids = [...new Set((Array.isArray(p0?.ids) ? p0!.ids! : []).map(String).filter((id) => you.has(id)))];
+    const b = duBangDing(); b[sid] = ids; xieBangDing(b);
+    audit?.log('net.bound', { sessionId: sid, n: ids.length });
+    return { ok: true, ids };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });

@@ -11,12 +11,18 @@
  * - 只做本地存储，不引入任何 electron 依赖，便于脱离主进程直接跑验证脚本
  */
 import { duJsonWenJianGeLi, anQuanYuanZiXieJson } from './atomic-json.js';
+import type { QunLei as QiYueQunLei, QunJuese } from '@warmy/contracts';
 
 /** 与旧实现保持一致的成员上限 */
 export const QUN_CHENGYUAN_SHANGXIAN = 50;
 
-export type QunLei = 'internal' | 'external';
-export type QunChengyuanJuese = 'creator' | 'admin' | 'member';
+/**
+ * 群类型 / 成员角色**只有一份定义**（契约 v1.1 `QunLei` / `QunJuese`）。
+ * 本地存储只支持其中一部分（还没有 direct 群、没有外部成员角色），所以这里是**有意收窄**的子集，
+ * 而不是另写一份：契约改名或删值时这里会编译不过，不会再像以前那样悄悄少一个值。
+ */
+export type QunLei = Extract<QiYueQunLei, 'internal' | 'external'>;
+export type QunChengyuanJuese = Extract<QunJuese, 'creator' | 'admin' | 'member'>;
 export type QunChengyuanLaiyuan = 'instance' | 'invite' | 'migrated';
 
 export interface qunJilu {

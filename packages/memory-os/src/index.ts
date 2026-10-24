@@ -25,7 +25,24 @@ import { JsonlSuo } from './lock.js';
 
 const require = createRequire(import.meta.url);
 
-export type XieRuQi = 'duty' | 'router' | 'memory-service' | 'executor';
+/**
+ * 类型契约（v1.1）：**只 import type**。本包以子进程运行、运行时目录里没有 @warmy/contracts，
+ * 任何值 import 都会让子进程起不来（`import type` 编译后整行消失）。
+ * 下面这些名字保留为别名/扩展，是为了下游原有的 `import { X } from '@warmy/memory-os'` 不断。
+ */
+import type {
+  XieRuZhe,
+  JsonlJilu as QiYueJsonlJilu,
+  HuisuoLaiyuan as QiYueHuisuoLaiyuan,
+  HuisuoChaxun,
+  RecallCard as QiYueRecallCard,
+  ZhengjuMaodian as QiYueZhengjuMaodian,
+  JiansuoJieguo,
+  RetrieveRequest,
+  AcpKongzhiXiaoxi,
+} from '@warmy/contracts';
+
+export type XieRuQi = XieRuZhe;
 
 /** 投影 schema 版本：2 = 增加 fts_tri + vec_index + 作用域列 */
 export const MOSHI_BANBEN = 2;
@@ -33,30 +50,14 @@ export const MOSHI_BANBEN = 2;
 /** fts_tri（trigram）最小可查长度（FTS5 trigram 需要 ≥3 个字符） */
 export const TRI_MIN_CHARS = 3;
 
-export interface JsonlJilu {
-  seq: number;
-  ts: number;
-  sessionId: string;
-  kind: string;
-  id: string;
-  [k: string]: unknown;
-}
+export type JsonlJilu = QiYueJsonlJilu;
 
-export type HuisuoLaiyuan = 'fts_uni' | 'fts_tri' | 'vector' | 'fused';
+export type HuisuoLaiyuan = QiYueHuisuoLaiyuan;
 
-export interface HuisuoZuoyongyu {
-  sessionId?: string;
-  groupId?: string;
-  entityType?: string;
-  kind?: string;
-}
+export type HuisuoZuoyongyu = NonNullable<HuisuoChaxun['scope']>;
 
-export interface RecallCard {
-  seq: number;
-  recordId: string;
-  snippet: string;
-  score: number;
-  source: HuisuoLaiyuan;
+/** 契约里的索引卡 + 本服务的诊断字段（各通道排名、RRF 原始分、向量余弦） */
+export interface RecallCard extends QiYueRecallCard {
   /** 命中该证据的通道列表（RRF 融合前） */
   sources: HuisuoLaiyuan[];
   /** 各通道内排名（1-based） */
@@ -67,23 +68,11 @@ export interface RecallCard {
   rrfScore: number;
   /** 向量通道命中的余弦（未命中向量通道则缺省） */
   cosine?: number;
-  /** 可回原文的证据锚点 */
-  anchor: ZhengjuMaodian;
 }
 
-export interface ZhengjuMaodian {
-  /** JSONL 文件名（相对 dataDir） */
-  file: string;
-  seq: number;
-  recordId: string;
-  byteOffset?: number;
-}
+export type ZhengjuMaodian = QiYueZhengjuMaodian;
 
-export interface QueryLike {
-  query: string;
-  scope?: HuisuoZuoyongyu;
-  limit?: number;
-}
+export type QueryLike = HuisuoChaxun;
 
 export interface HuisuoXuanxiang {
   scope?: HuisuoZuoyongyu;
@@ -152,19 +141,8 @@ export interface JiansuoJibie {
   hitLevel: 'exact' | 'nearby' | 'fuzzy';
 }
 
-export interface RetrieveOutcome {
-  /** 原文 */
-  raw: string;
-  seq: number;
-  recordId: string;
-  /** 命中级别 */
-  hitLevel: 'exact' | 'nearby' | 'fuzzy';
-  /** 具体命中方式 */
-  via: string;
-  anchor: ZhengjuMaodian;
-  /** 人类可读说明（分级回退时记录了上一级为何失败） */
-  note?: string;
-}
+/** retrieve 的结果 = 契约 `JiansuoJieguo`（v1.1 按本服务的真实返回定稿：raw / via / note） */
+export type RetrieveOutcome = JiansuoJieguo;
 
 export interface JiansuoXuanxiang {
   huiTui?: 'exact' | 'nearby' | 'fuzzy';
@@ -172,6 +150,11 @@ export interface JiansuoXuanxiang {
   window?: number;
   /** fuzzy 级别的检索串（缺省时用 anchor.recordId） */
   query?: string;
+  /**
+   * 作用域（不变量 #9「权限过滤先于相关性」在解引用侧的那一半）：给了就只认作用域内的记录。
+   * 只做召回侧的过滤不够 —— 拿到别处的 seq/recordId 直接 retrieve，等于绕过了召回的作用域。
+   */
+  scope?: HuisuoZuoyongyu;
 }
 
 export interface XiangliangXuanxiang {
@@ -436,6 +419,15 @@ export class JiyiCangFuwu {
     }
 
     const ti = String(Quan.ti ?? Quan.content ?? Quan.text ?? JSON.stringify(Quan));
+    /**
+     * **投影只存索引预览**（第 44 轮后半 · 用户 #7：「写入侧 CCR 丢原文」的根因修复）。
+     * JSONL 里是整条原文（唯一事实来源，不许改写）；SQLite 投影是**可丢弃的检索投影**，
+     * 它只需要够用来"找到"，不需要够用来"复述"。所以：
+     *  · `records.ti` / 两张 FTS 只放前 `SUO_YIN_ZUI_DA_ZI` 个字符；
+     *  · 取原文一律走 `retrieve`（下面 `retrieveExact` 会优先读 JSONL），
+     *    这样"命中了投影却只拿回半截原文"这种事不会再发生（旧行为：模型以为拿到原文，其实是压缩预览）。
+     */
+    const YuGao = ti.length > SUO_YIN_ZUI_DA_ZI ? ti.slice(0, SUO_YIN_ZUI_DA_ZI) : ti;
     this.db
       .prepare(
         'INSERT OR REPLACE INTO records (seq, id, session_id, kind, ts, ti, group_id, entity_type) VALUES (?,?,?,?,?,?,?,?)'
@@ -446,15 +438,30 @@ export class JiyiCangFuwu {
         Quan.sessionId,
         Quan.kind,
         Quan.ts,
-        ti,
+        YuGao,
         (Quan.groupId as string) ?? null,
         (Quan.entityType as string) ?? null
       );
-    this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, ti) VALUES (?, ?)').run(seq, spaceChars(ti));
+    this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, ti) VALUES (?, ?)').run(seq, spaceChars(YuGao));
     // fts_tri 索引进原文（不插空格），trigram 才能覆盖 ASCII 标识符/路径与 ≥3 字 CJK 子串
-    this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, ti) VALUES (?, ?)').run(seq, ti);
+    this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, ti) VALUES (?, ?)').run(seq, YuGao);
     this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('last_seq', ?)").run(String(seq));
-    this.jsonlIndex = null;
+    /**
+     * **索引增量维护**（用户 #8：「JSONL 增量索引，不再全文件重读」）。
+     * 旧做法是每次 append 都把缓存置 null ⇒ 下一次 retrieve 从头扫整个文件；
+     * 6000 轮 × 每轮 2M 字符的日志上，这就是"越用越慢"的直接原因（而且慢在用户等回复的路上）。
+     * 现在：已知这一行的字节区间，直接追加到缓存里；文件被别人改过（长度对不上）才重建。
+     */
+    const HangZiJie = Buffer.byteLength(Hang, 'utf8');
+    if (this.jsonlIndex) {
+      const kaiShi = this.jsonlIndex.size;
+      const yueLan = Buffer.from(String(ti).slice(0, 500), 'utf8').toString('utf8');
+      this.jsonlIndex.entries.push({ start: kaiShi, end: kaiShi + HangZiJie, seq, id: String(record.id ?? ''), ti: yueLan });
+      this.jsonlIndex.size = kaiShi + HangZiJie;
+      try { this.jsonlIndex.mtimeMs = fs.statSync(this.jsonlPath).mtimeMs; } catch { this.jsonlIndex = null; }
+    } else {
+      this.jsonlIndex = null;
+    }
     return Quan;
   }
 
@@ -470,6 +477,33 @@ export class JiyiCangFuwu {
       id: r.id,
       ti: r.ti,
     }));
+  }
+
+  /**
+   * **按会话分页的最近记录**（第 44 轮后半 · 用户 #6：「重启恢复按会话分页，不再全局 400 条共享」）。
+   *
+   * 全局 `tail(400)` 的真实后果：一个高频会话能把整个窗口占满 ⇒ **其它会话重启后直接失忆**
+   * （界面上还在，但内存镜像里没有 ⇒ 模型看不到，只能靠指针取回，而用户不知道要取）。
+   * 这里先按"最近活跃"取若干个会话，再**每个会话各取最近 M 条**：仍然有界，但公平。
+   *
+   * @param meiHuiHua 每个会话最多取多少条（消息类）
+   * @param huiHuaShang 最多覆盖多少个最近活跃的会话
+   */
+  tailPerSession(meiHuiHua = 120, huiHuaShang = 40): JsonlJilu[] {
+    const hui = this.db
+      .prepare("SELECT session_id FROM records WHERE kind='message' AND session_id IS NOT NULL AND session_id <> '' GROUP BY session_id ORDER BY MAX(seq) DESC LIMIT ?")
+      .all(Math.max(1, Math.floor(huiHuaShang) || 1)) as Array<{ session_id: string }>;
+    const quXian = this.db.prepare("SELECT * FROM records WHERE session_id = ? AND kind='message' ORDER BY seq DESC LIMIT ?");
+    const chu: JsonlJilu[] = [];
+    for (const x of hui) {
+      const rows = quXian.all(x.session_id, Math.max(1, Math.floor(meiHuiHua) || 1)) as Array<{ seq: number; ts: number; session_id: string; kind: string; id: string; ti: string }>;
+      for (const r of rows) {
+        chu.push({ seq: r.seq, ts: r.ts, sessionId: r.session_id, kind: r.kind, id: r.id, ti: r.ti });
+      }
+    }
+    // 与 tail() 同口径：seq 倒序返回（调用方要升序自己排）
+    chu.sort((a, b) => Number(b.seq || 0) - Number(a.seq || 0));
+    return chu;
   }
 
   // ─────────────────────────────────────────────
@@ -961,6 +995,10 @@ export class JiyiCangFuwu {
           : level === 'nearby'
             ? this.retrieveNearby(anchor, opts.window ?? 5)
             : this.retrieveFuzzy(anchor, opts.query);
+      if (mingZhong && !this.zaiZuoYongYuNei(mingZhong.seq, opts.scope)) {
+        tried.push(`${level}(作用域外)`);
+        continue;
+      }
       if (mingZhong) {
         return {
           raw: mingZhong.raw,
@@ -977,29 +1015,53 @@ export class JiyiCangFuwu {
     return null;
   }
 
+  /**
+   * 解引用的作用域判定：与 recall 用同一条谓词（`scopePredicate`）。投影里查不到这一行（投影丢了还没重建）
+   * ⇒ 按作用域外处理 —— 宁可这一次取不到，也不把作用域外的原文交出去。
+   */
+  private zaiZuoYongYuNei(seq: number, scope?: HuisuoZuoyongyu): boolean {
+    const p = this.scopePredicate(scope);
+    if (!p.jiHuo) return true;
+    const hang = this.db.prepare(`SELECT 1 AS ok FROM records WHERE seq = ? AND ${p.predicate}`).get(Number(seq), ...p.params);
+    return !!hang;
+  }
+
   /** exact：SQLite 主键/唯键直取；SQLite 缺行时回 JSONL（JSONL 才是唯一事实来源） */
   private retrieveExact(anchor: JiansuoMaodianShuru): YuanwenMingzhong | null {
+    /**
+     * **原文一律优先读 JSONL**（第 44 轮后半 · 用户 #7）。
+     * 投影里现在只放索引预览（`SUO_YIN_ZUI_DA_ZI`）⇒ 若照旧先取投影，`retrieve` 会"命中成功、
+     * 内容半截"，那比取不到更坏（模型会拿半截原文当全文复述）。所以：
+     * 先按 seq/id 找 JSONL 那一行；找不到（投影里有）才退回预览，并把 `via` 如实写成 `sqlite:*-预览`。
+     */
+    const suoYin = this.jsonlIndexOrBuild();
+    if (anchor.seq !== undefined && anchor.seq !== null) {
+      const tiao = suoYin.entries.find((e) => e.seq === Number(anchor.seq));
+      if (tiao) return { raw: this.duJsonlQuanWen(tiao), seq: tiao.seq, recordId: tiao.id, via: 'jsonl:seq' };
+    }
     if (anchor.recordId) {
+      const tiao = suoYin.entries.find((e) => e.id === anchor.recordId);
+      if (tiao) return { raw: this.duJsonlQuanWen(tiao), seq: tiao.seq, recordId: tiao.id, via: 'jsonl:id' };
       const hang = this.db.prepare('SELECT seq, id, ti FROM records WHERE id = ?').get(anchor.recordId);
-      if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: 'sqlite:id' };
+      if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: 'sqlite:id-预览' };
     }
     if (anchor.seq !== undefined && anchor.seq !== null) {
       const hang = this.db.prepare('SELECT seq, id, ti FROM records WHERE seq = ?').get(anchor.seq);
-      if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: 'sqlite:seq' };
+      if (hang) return { raw: String(hang.ti), seq: Number(hang.seq), recordId: String(hang.id), via: 'sqlite:seq-预览' };
       // seq 已删除但 JSONL 仍在 → 直接读 JSONL（投影可丢弃，事实源不丢）
       const suoYin = this.jsonlIndexOrBuild();
       const entry = suoYin.entries.find((e) => e.seq === Number(anchor.seq));
-      if (entry) return { raw: entry.ti, seq: entry.seq, recordId: entry.id, via: 'jsonl:seq' };
+      if (entry) return { raw: this.duJsonlQuanWen(entry), seq: entry.seq, recordId: entry.id, via: 'jsonl:seq' };
     }
     if (anchor.recordId) {
       const suoYin = this.jsonlIndexOrBuild();
       const entry = suoYin.entries.find((e) => e.id === anchor.recordId);
-      if (entry) return { raw: entry.ti, seq: entry.seq, recordId: entry.id, via: 'jsonl:id' };
+      if (entry) return { raw: this.duJsonlQuanWen(entry), seq: entry.seq, recordId: entry.id, via: 'jsonl:id' };
     }
     if (anchor.byteOffset !== undefined) {
       const suoYin = this.jsonlIndexOrBuild();
       const entry = suoYin.entries.find((e) => anchor.byteOffset! >= e.start && anchor.byteOffset! < e.end);
-      if (entry) return { raw: entry.ti, seq: entry.seq, recordId: entry.id, via: 'jsonl:offset' };
+      if (entry) return { raw: this.duJsonlQuanWen(entry), seq: entry.seq, recordId: entry.id, via: 'jsonl:offset' };
     }
     return null;
   }
@@ -1033,7 +1095,7 @@ export class JiyiCangFuwu {
         .map((e) => ({ e, lcp: gongyongQianzhuiChangdu(e.id, String(anchor.recordId)) }))
         .filter((x) => x.lcp >= 8)
         .sort((a, b) => b.lcp - a.lcp)[0];
-      if (cand2) return { raw: cand2.e.ti, seq: cand2.e.seq, recordId: cand2.e.id, via: 'jsonl:id-prefix' };
+      if (cand2) return { raw: this.duJsonlQuanWen(cand2.e), seq: cand2.e.seq, recordId: cand2.e.id, via: 'jsonl:id-prefix' };
     }
     if (anchor.byteOffset !== undefined) {
       const suoYin = this.jsonlIndexOrBuild();
@@ -1041,7 +1103,7 @@ export class JiyiCangFuwu {
       for (const e of suoYin.entries) {
         if (!zuiJia || Math.abs(e.start - anchor.byteOffset) < Math.abs(zuiJia.start - anchor.byteOffset)) zuiJia = e;
       }
-      if (zuiJia) return { raw: zuiJia.ti, seq: zuiJia.seq, recordId: zuiJia.id, via: 'jsonl:offset-nearest' };
+      if (zuiJia) return { raw: this.duJsonlQuanWen(zuiJia), seq: zuiJia.seq, recordId: zuiJia.id, via: 'jsonl:offset-nearest' };
     }
     return null;
   }
@@ -1070,7 +1132,7 @@ export class JiyiCangFuwu {
     // SQLite 空投影 → 回 JSONL 最后一行
     const suoYin = this.jsonlIndexOrBuild();
     const last = suoYin.entries[suoYin.entries.length - 1];
-    if (last) return { raw: last.ti, seq: last.seq, recordId: last.id, via: 'jsonl:last' };
+    if (last) return { raw: this.duJsonlQuanWen(last), seq: last.seq, recordId: last.id, via: 'jsonl:last' };
     return null;
   }
 
@@ -1222,6 +1284,24 @@ export class JiyiCangFuwu {
   // ─────────────────────────────────────────────
 
   /** 从 JSONL 全量重建 SQLite 投影（records + fts_uni + fts_tri；向量下次查询时被动水合） */
+  /** 按索引里的字节区间从 JSONL 现读全文（>2GiB 安全；索引只存预览） */
+  private duJsonlQuanWen(tiao: { start: number; end: number; ti?: string }): string {
+    try {
+      const len = Math.max(0, Number(tiao.end) - Number(tiao.start));
+      if (!len) return String(tiao.ti || '');
+      const fd = fs.openSync(this.jsonlPath, 'r');
+      try {
+        const buf = Buffer.alloc(len);
+        fs.readSync(fd, buf, 0, len, Number(tiao.start));
+        const Hang = buf.toString('utf8').trim();
+        try {
+          const j = JSON.parse(Hang) as { ti?: string; content?: string; text?: string };
+          return String(j.ti ?? j.content ?? j.text ?? Hang);
+        } catch { return Hang; }
+      } finally { try { fs.closeSync(fd); } catch { /* noop */ } }
+    } catch { return String(tiao.ti || ''); }
+  }
+
   rebuildProjection(): number {
     this.db.exec('DROP TABLE IF EXISTS fts_uni; DROP TABLE IF EXISTS fts_tri;');
     this.db.exec('DELETE FROM records; DELETE FROM vec_index;');
@@ -1231,14 +1311,21 @@ export class JiyiCangFuwu {
       this.jsonlIndex = null;
       return 0;
     }
-    const HangJi = fs.readFileSync(this.jsonlPath, 'utf8').split('\n').filter(Boolean);
+    /**
+     * **分块流式逐行**（第 51 轮真缺陷）：`readFileSync` 在 >2 GiB 时抛 ERR_FS_FILE_TOO_LARGE，
+     * 重建投影会让整台记忆服务崩掉。这里改成块读 + 逐行回调，内存与文件大小无关。
+     */
+    /** 不把全部行堆进数组（2000 行×2M ≈ 4GB ⇒ OOM）：直接在事务里逐行处理 */
     const shiLi = this.db.prepare(
       'INSERT OR REPLACE INTO records (seq, id, session_id, kind, ts, ti, group_id, entity_type) VALUES (?,?,?,?,?,?,?,?)'
     );
     const insU = this.db.prepare('INSERT OR REPLACE INTO fts_uni (rowid, ti) VALUES (?, ?)');
     const insT = this.db.prepare('INSERT OR REPLACE INTO fts_tri (rowid, ti) VALUES (?, ?)');
+    let xieRuShu = 0;
     const shiwu = this.db.transaction(() => {
-      for (const Hang of HangJi) {
+      for (const Hang of meiHangLiu(this.jsonlPath)) {
+        if (!Hang.trim()) continue;
+        xieRuShu++;
         const r = JSON.parse(Hang) as JsonlJilu;
         const ti = String(r.ti ?? r.content ?? r.text ?? Hang);
         shiLi.run(r.seq, r.id, r.sessionId, r.kind, r.ts, ti, (r.groupId as string) ?? null, (r.entityType as string) ?? null);
@@ -1251,7 +1338,7 @@ export class JiyiCangFuwu {
     this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('last_seq', ?)").run(String(this.seq));
     this.db.prepare("INSERT OR REPLACE INTO meta (k,v) VALUES ('schema_version', ?)").run(String(MOSHI_BANBEN));
     this.jsonlIndex = null;
-    return HangJi.length;
+    return xieRuShu;
   }
 
   /**
@@ -1329,12 +1416,8 @@ export class JiyiCangFuwu {
 // 内部工具
 // ─────────────────────────────────────────────
 
-export interface JiansuoMaodianShuru {
-  seq?: number;
-  recordId?: string;
-  file?: string;
-  byteOffset?: number;
-}
+/** retrieve 的入参锚点 = 契约 `RetrieveRequest['anchor']`（至少给 seq 或 recordId 之一） */
+export type JiansuoMaodianShuru = RetrieveRequest['anchor'];
 
 interface YuanwenMingzhong {
   raw: string;
@@ -1342,6 +1425,12 @@ interface YuanwenMingzhong {
   recordId: string;
   via: string;
 }
+
+/**
+ * 投影里只放这么长的索引预览（第 44 轮后半 · 用户 #7）。
+ * 原文一律在 JSONL；`retrieve` 取的是 JSONL 那份，所以截预览不会丢内容，只会少索引尾巴。
+ */
+const SUO_YIN_ZUI_DA_ZI = 16000;
 
 interface JsonlSuoyinTiaomu {
   start: number;
@@ -1357,35 +1446,95 @@ interface JsonlSuoyin {
   entries: JsonlSuoyinTiaomu[];
 }
 
-/** 扫描 JSONL 一次，记录每行的字节区间与关键字段（证据锚点 byteOffset 的真实落点） */
+/** 同步分块逐行迭代（>2 GiB 文件安全；调用方只拿字符串行，不保留整文件） */
+export function* meiHangLiu(jsonlPath: string, chunk = 8 * 1024 * 1024): Generator<string> {
+  const buf = Buffer.allocUnsafe(chunk);
+  const fd = fs.openSync(jsonlPath, 'r');
+  try {
+    let pos = 0;
+    let carry = Buffer.alloc(0);
+    for (;;) {
+      const n = fs.readSync(fd, buf, 0, chunk, pos);
+      if (n <= 0) break;
+      const kuai = buf.subarray(0, n);
+      let data: Buffer = carry.length ? Buffer.concat([carry, kuai]) : kuai;
+      let from = 0;
+      for (let i = 0; i < data.length; i++) {
+        if (data[i] !== 0x0a) continue;
+        yield data.subarray(from, i).toString('utf8');
+        from = i + 1;
+      }
+      carry = Buffer.from(data.subarray(from));
+      pos += n;
+    }
+    if (carry.length) yield carry.toString('utf8');
+  } finally {
+    try { fs.closeSync(fd); } catch { /* noop */ }
+  }
+}
+
+/**
+ * 扫描 JSONL 一次，记录每行的字节区间与关键字段（证据锚点 byteOffset 的真实落点）。
+ *
+ * **必须分块流式读**（第 51 轮真缺陷）：以前用 `readFileSync` 一次读全文件，
+ * 长任务日志超过 2 GiB 时 Node 直接抛 `ERR_FS_FILE_TOO_LARGE`，
+ * 记忆服务在「检索→建索引」这一步崩掉 ⇒ 整轮任务失败（压力档 1000 轮×2M 第 999 轮实测）。
+ * 现在按 8 MiB 块读、跨块续行，内存占用与文件大小无关。
+ */
 export function gouJianJsonlSuoYin(jsonlPath: string): JsonlSuoyin {
   const empty: JsonlSuoyin = { size: 0, mtimeMs: 0, entries: [] };
   if (!fs.existsSync(jsonlPath)) return empty;
   const st = fs.statSync(jsonlPath);
-  const buf = fs.readFileSync(jsonlPath);
   const entries: JsonlSuoyinTiaomu[] = [];
-  let start = 0;
-  for (let i = 0; i < buf.length; i++) {
-    if (buf[i] !== 0x0a) continue;
-    const hangHuanchong = buf.subarray(start, i);
-    start = i + 1;
-    if (!hangHuanchong.length) continue;
-    const Hang = hangHuanchong.toString('utf8').trim();
-    if (!Hang) continue;
-    let parsed: any = null;
-    try {
-      parsed = JSON.parse(Hang);
-    } catch {
-      continue;
+  const CHUNK = 8 * 1024 * 1024;
+  const buf = Buffer.allocUnsafe(CHUNK);
+  const fd = fs.openSync(jsonlPath, 'r');
+  try {
+    let pos = 0;
+    /** 上一块末尾未闭合的行（拷贝出来，避免下一块覆写共享缓冲） */
+    let carry = Buffer.alloc(0);
+    /** carry 在文件中的绝对起始偏移 */
+    let carryStart = 0;
+    const tui = (lineBuf: Buffer, absStart: number, absEnd: number) => {
+      const Hang = lineBuf.toString('utf8').trim();
+      if (!Hang) return;
+      let parsed: any = null;
+      try { parsed = JSON.parse(Hang); } catch { return; }
+      /**
+       * 只存**预览**：全文按字节偏移现读（否则 2000 行×2M ≈ 4GB 常驻内存 ⇒ OOM）。
+       * ⚠️ 必须**复制成独立字符串**：V8 的 `slice` 是 sliced string，会保留整条 4.7MB 原文的父串，
+       * 于是"只存 500 字"依然把全文留在堆里（实测 RSS 线性涨到 4GB 后 OOM）。
+       */
+      const quan = String(parsed.ti ?? parsed.content ?? parsed.text ?? Hang);
+      const ti = Buffer.from(quan.slice(0, 500), 'utf8').toString('utf8');
+      entries.push({
+        start: absStart,
+        end: absEnd,
+        seq: Number(parsed.seq ?? entries.length + 1),
+        id: String(parsed.id ?? ''),
+        ti,
+      });
+    };
+    for (;;) {
+      const n = fs.readSync(fd, buf, 0, CHUNK, pos);
+      if (n <= 0) break;
+      const kuai = buf.subarray(0, n);
+      let data: Buffer = carry.length ? Buffer.concat([carry, kuai]) : kuai;
+      let dataStart = carryStart;
+      let from = 0;
+      for (let i = 0; i < data.length; i++) {
+        if (data[i] !== 0x0a) continue;
+        const line = data.subarray(from, i);
+        tui(line, dataStart + from, dataStart + i);
+        from = i + 1;
+      }
+      carry = Buffer.from(data.subarray(from));
+      carryStart = dataStart + from;
+      pos += n;
     }
-    const ti = String(parsed.ti ?? parsed.content ?? parsed.text ?? Hang);
-    entries.push({
-      start: i - hangHuanchong.length,
-      end: i,
-      seq: Number(parsed.seq ?? entries.length + 1),
-      id: String(parsed.id ?? ''),
-      ti,
-    });
+    if (carry.length) tui(carry, carryStart, carryStart + carry.length);
+  } finally {
+    try { fs.closeSync(fd); } catch { /* noop */ }
   }
   return { size: st.size, mtimeMs: st.mtimeMs, entries };
 }
@@ -1447,7 +1596,9 @@ export function qishiJiyiCangFuwuIpc(CangLu: string): JiyiCangFuwu {
       /* noop */
     }
   };
-  faSong({ type: 'ready', pid: process.pid, CangLu, schemaVersion: MOSHI_BANBEN });
+  /** 控制面消息按契约 `AcpKongzhiXiaoxi` 定形（宿主 memory-client 按同一份类型解析） */
+  const jiuXu: AcpKongzhiXiaoxi = { type: 'ready', pid: process.pid, CangLu, schemaVersion: MOSHI_BANBEN };
+  faSong(jiuXu);
 
   const handlers: Record<string, (xiaoXi: any) => Promise<any> | any> = {
     append: (xiaoXi) => {
@@ -1455,6 +1606,8 @@ export function qishiJiyiCangFuwuIpc(CangLu: string): JiyiCangFuwu {
       return { ok: true, seq: jiLu.seq };
     },
     tail: (xiaoXi) => ({ ok: true, records: fuwu.tail(xiaoXi.limit) }),
+    /** 按会话分页的最近记录（用户 #6：重启恢复不许一个会话吃满整窗） */
+    tail_per_session: (xiaoXi) => ({ ok: true, records: fuwu.tailPerSession(xiaoXi.meiHuiHua, xiaoXi.huiHuaShang) }),
     /** 完整三路 recall（fts_uni ∪ fts_tri ∪ 向量 → RRF），返回卡片 + 计时 + 作用域统计 */
     recall: async (xiaoXi) => {
       const detail = await fuwu.recallDetailed({ query: xiaoXi.query, scope: xiaoXi.scope, limit: xiaoXi.limit });

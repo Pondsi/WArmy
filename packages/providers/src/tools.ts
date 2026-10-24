@@ -45,8 +45,32 @@ export const MOREN_GONGJU_ZUIDA_LUN = 12;
 export const MOREN_GONGJU_JIEGUO_ZISHU = 4000;
 /** 一轮对话内所有工具结果的**总**预算（字符） */
 export const MOREN_GONGJU_ZONG_ZISHU = 12000;
+/**
+ * **额度分级预警点**（第 39 轮额度重做，抄 Claude Code 的 70/85/90 阶梯）。
+ *
+ * 真事故：模型**从来看不见自己的额度**。它只知道"调到第 41 次时宿主突然告诉我预算用完了"，
+ * 于是前面把力气花在琐碎核对上（实测反复 `read_file`/写脚本数自己刚写的字数），
+ * 等它真的开始交付最后一件事时额度已经没了 —— 用户看到的是"任务没做完"。
+ * 上游做法是**把剩余预算做成模型可见的倒计时**，让它自己安排节奏、并在耗尽前干净收尾。
+ * 这里按"三条仪表里最紧的一项"算同一个百分比，提前**警告而不是掐断**。
+ */
+export const YU_SUAN_YU_JING_DENG = [0.7, 0.9];
 
-export type GongJuTingZhiYuan = 'stop' | 'max-rounds' | 'budget' | 'unsupported' | 'error' | 'max-rounds-extended';
+export type GongJuTingZhiYuan = 'stop' | 'max-rounds' | 'budget' | 'call-budget' | 'unsupported' | 'error' | 'max-rounds-extended';
+
+/**
+ * **额度快照**（给宿主的续预算钩子与预警文案用；只有计数，绝不含正文/密钥/路径）。
+ * `yuanYin` = 是哪一条仪表先撞顶 —— 宿主据此决定抬哪一条。
+ */
+export interface YuSuanKuaiZhao {
+  yuanYin: 'lun' | 'ci' | 'zi';
+  lunShu: number;
+  zuiDaLunShu: number;
+  gongJuCiShu: number;
+  zuiDaGongJuCiShu: number;
+  jieGuoZiShu: number;
+  zongYuSuan: number;
+}
 
 /** 工具执行器：入参是模型的 tool_call，返回值是回给模型的文本（不许抛错，抛了也会被兜住） */
 export type GongJuZhiXing = (
@@ -55,7 +79,7 @@ export type GongJuZhiXing = (
 ) => Promise<string> | string;
 
 export interface GongJuXunHuanShi {
-  kind: 'round' | 'tool' | 'degraded' | 'final' | 'retry';
+  kind: 'round' | 'tool' | 'degraded' | 'final' | 'retry' | 'budget' | 'shrink';
   round: number;
   tool?: string;
   ok?: boolean;
@@ -71,6 +95,34 @@ export interface GongJuXunHuanXuan {
   zuiDaJieGuoZiShu?: number;
   /** 工具结果总预算（字符），默认 12000 */
   maxToolResultChars?: number;
+  /**
+   * 本轮**工具调用次数**上限（第 39 轮：以前这条闸只在宿主侧执法，循环不知道它存在，
+   * 于是"还剩 3 轮额度"这种话没法告诉模型）。循环拿它只为算"最紧的一项"并发预警；
+   * 真正的执法仍然宿主一侧照旧（两边读同一份账本 ⇒ 数字一致）。0/不给 = 这一路不计。
+   */
+  zuiDaGongJuCiShu?: number;
+  /**
+   * **额度到顶时向宿主申请续预算**（第 39 轮额度重做的核心）。
+   *
+   * 为什么要有这一条：固定上限会把"用户点名要 6000 字小说"这种任务**掐死在上限上**
+   * —— 那不是打转，是额度不够；但把上限一律调高又会给打转的模型无限续命。
+   * 所以判据交给宿主：只认**宿主看到的事实**（还有没交付的东西 + 刚才那一步有净进展 + 没被判停滞），
+   * 不认模型自述。返回 `null` ⇒ 不续，走原来的强制收敛；返回增量 ⇒ 抬高对应上限后继续干。
+   * 循环自己再套一层硬顶（`XU_YU_SUAN_ZUIDA` 次），保证"续命"是有限的。
+   */
+  xuYuSuanLai?: (k: YuSuanKuaiZhao) => { lunShu?: number; gongJuCiShu?: number; jieGuoZiShu?: number } | null;
+  /** 关掉额度分级预警（压缩/摘要这类一次性调用不需要，也免得把提示词占满） */
+  wuYuSuanTiShi?: boolean;
+  /**
+   * **发请求前的窗口闸**（字符）。0/不给 = 不预判（旧行为：撞 400 再压实重试）。
+   *
+   * 真机第 39 轮：本地 Ollama 的 `num_ctx` 只有 **7680**，而工具循环一轮轮往历史里追加
+   * 工具结果与思考原文，攒到 **30932 token** 才发出去 ⇒ Ollama 直接 `400 exceeding model's context length`
+   * ⇒ 整轮被掐。"渲染层的视图预算"管不到这里，因为**循环内部的历史是另一份**。
+   * 所以这里在**每次真正发请求之前**估一次：明知超窗就不发，先按宿主的压实钩子压，
+   * 压不下再从最旧的工具结果起**中段收起**（留一条"原文可 retrieve"的指针话，不静默截）。
+   */
+  zuiDaQingQiuZi?: number;
   /** 覆盖协议能力判定 */
   supportsTools?: boolean;
   signal?: AbortSignal;
@@ -119,6 +171,17 @@ export interface GongJuXunHuanGuo {
   degraded: boolean;
   /** 降级原因（审计用，不含密钥） */
   degradedReason?: string;
+  /**
+   * 收工时额度用到哪一档了**（第 39 轮）。宿主拿它如实告诉用户
+   * "这轮是把额度用完了才停的，不是活干完了"，也用来审计"额度是不是又掐死了正在推进的任务"。
+   */
+  yuSuan?: YuSuanKuaiZhao & { lv: number; xuYuSuanCiShu: number };
+  /**
+   * **中间回复**：模型在发起工具调用的同一条响应里写给用户的正文（按轮顺序、带落地时刻）。
+   * 最终响应只是最后一条；这些话以前只在流式气泡里闪过、落盘时丢掉（第 48 轮真机：27B 把截图内容
+   * 写在中间回复里，最终回复只写"截图：两张都看得到"，会话一重绘答案就没了）。
+   */
+  zhongJianHuiFu?: Array<{ lun: number; ts: number; text: string }>;
 }
 
 function qianZhiZhengShu(v: unknown, lo: number, hi: number, dflt: number): number {
@@ -152,11 +215,20 @@ export async function liaoTianDaiGongJu(
 ): Promise<GongJuXunHuanGuo> {
   const o = opts && typeof opts === 'object' ? opts : {};
   const tools = Array.isArray(Qiu.tools) ? Qiu.tools : [];
+  /** 工具清单本身也进 prompt（估窗口时不能只算消息） */
+  let gongJuBiaoZi = 0;
+  try { gongJuBiaoZi = tools.length ? JSON.stringify(tools).length : 0; } catch { gongJuBiaoZi = 0; }
   const qingQiuGongJuJi = tools.length > 0;
-  // 上限与设置里的 `contextToolMaxRounds` 对齐（原写死 8 ⇒ 用户设 12/32 被静默砍半）
-  const zuiDaLunShu = qianZhiZhengShu(o.zuiDaLunShu, 0, 32, MOREN_GONGJU_ZUIDA_LUN);
+  // 上限与设置里的 `contextToolMaxRounds` 对齐（原写死 8 ⇒ 用户设 12/32 被静默砍半）。
+  // ⚠️ 硬顶必须**不低到把宿主的预算基线夹掉**（第 39 轮真事故复盘：宿主要"长文任务"给的
+  // 基线被这里的 32 静默削减 ⇒ 抬了个寂寞 ⇒ 同一个洞在第 14/15 轮修过一次又复发）。
+  // 所以这里的天花板跟 `zuiDaZongLun` 一致（64），"设置里能填多少"由宿主自己夹。
+  const zuiDaLunShu = qianZhiZhengShu(o.zuiDaLunShu, 0, 64, MOREN_GONGJU_ZUIDA_LUN);
   const zuiDaJieGuoZiShu = qianZhiZhengShu(o.zuiDaJieGuoZiShu, 64, 20000, MOREN_GONGJU_JIEGUO_ZISHU);
-  const zongYuSuan = qianZhiZhengShu(o.maxToolResultChars, 0, 200000, MOREN_GONGJU_ZONG_ZISHU);
+  /** ⚠️ 可变：宿主批准续预算后会抬高（见 `shenQingXuYuSuan`） */
+  let zongYuSuan = qianZhiZhengShu(o.maxToolResultChars, 0, 200000, MOREN_GONGJU_ZONG_ZISHU);
+  /** 工具调用**次数**上限（同样可被续预算抬高；0 = 这一路不计） */
+  let zuiDaGongJuCiShu = qianZhiZhengShu(o.zuiDaGongJuCiShu, 0, 100000, 0);
   const zhiChi = typeof o.supportsTools === 'boolean' ? o.supportsTools : gongYingZhiChiGongJu(provider);
   const emit = typeof o.onEvent === 'function' ? o.onEvent : () => {};
   const daoShangXianWenMoXing = o.daoShangXianWenMoXing !== false;
@@ -192,6 +264,7 @@ export async function liaoTianDaiGongJu(
   if (!zhiChi) return chunWenBen(true, `unsupported(${provider.protocol})`);
 
   const xiaoXiJi: LiaoTianXiaoXi[] = Qiu.xiaoXiJi.map((m) => ({ ...m }));
+  const zhongJianHuiFu: Array<{ lun: number; ts: number; text: string }> = [];
   let qingQiuJi = 0;
   let lunShu = 0;
   let gongJuDiaoYongJi = 0;
@@ -208,42 +281,222 @@ export async function liaoTianDaiGongJu(
    */
   const siKaoJi: string[] = [];
 
+  /** 已经发过预警的额度档（同一档只发一次，不刷屏） */
+  const yiFaYuJing = new Set<number>();
+  /** 向宿主申请续预算的已用次数（硬上限，防无限续命） */
+  let xuYuSuanCiShu = 0;
+  const XU_YU_SUAN_ZUIDA = 4;
+
+  /** 三条仪表里**最紧**的一项 —— 额度条只报这一个数，免得模型收到互相矛盾的信号 */
+  const yuSuanZhuiJin = (): { lv: number; zuiJin: YuSuanKuaiZhao['yuanYin'] } => {
+    const xiang: Array<[number, YuSuanKuaiZhao['yuanYin']]> = [
+      [zuiDaLunShuDongTai > 0 ? lunShu / zuiDaLunShuDongTai : 0, 'lun'],
+      [zuiDaGongJuCiShu > 0 ? gongJuDiaoYongJi / zuiDaGongJuCiShu : 0, 'ci'],
+      [zongYuSuan > 0 ? jieGuoZiShu / zongYuSuan : 0, 'zi'],
+    ];
+    let zui = xiang[0]!;
+    for (const x of xiang) if (x[0] > zui[0]) zui = x;
+    return { lv: zui[0], zuiJin: zui[1] };
+  };
+
+  const yuSuanKuaiZhao = (yuanYin: YuSuanKuaiZhao['yuanYin']): YuSuanKuaiZhao => ({
+    yuanYin,
+    lunShu,
+    zuiDaLunShu: zuiDaLunShuDongTai,
+    gongJuCiShu: gongJuDiaoYongJi,
+    zuiDaGongJuCiShu: zuiDaGongJuCiShu,
+    jieGuoZiShu,
+    zongYuSuan,
+  });
+
+  /** 给模型看的额度条（只讲事实数字 + 该怎么安排力气；**明说这不是权限问题**） */
+  const yuJingWen = (deng: number): string => {
+    const z = yuSuanZhuiJin();
+    const ming = z.zuiJin === 'lun' ? `工具轮 ${lunShu}/${zuiDaLunShuDongTai}`
+      : z.zuiJin === 'ci' ? `工具调用 ${gongJuDiaoYongJi}/${zuiDaGongJuCiShu}`
+        : `工具结果 ${jieGuoZiShu}/${zongYuSuan} 字符`;
+    const bai = Math.min(100, Math.round(z.lv * 100));
+    const tou = `【宿主额度提示】一条用户消息的用量上限已用到约 ${bai}%（最紧的一项是${ming}）。`
+      + '**这不是权限被拒，也不是哪里出错了** —— 是宿主给"这一轮"的用量闸。';
+    if (deng >= 0.9) {
+      return tou + '现在请这样安排：① 用户明确要的东西里，**已经做完的先交付**（文件路径、结论写实）；'
+        + '② 还差哪几步，在答复里一条条列出来；③ 不要再自己数字数、也不要读回刚写的文件核对（字数与进度宿主每次都会报给你）。'
+        + '只要宿主看到你**确实还有没交付的东西、而且刚才那一步有真实进展**，就会再给你额度 —— 所以不必为了省额度而半途交差。';
+    }
+    return tou + '请从现在开始把力气花在用户明确要的结果上：不要重复读回自己刚写的文件、'
+      + '不要自己数字数或写脚本统计（宿主每次都会把进度报给你）；长文用 write_file 带 `append:true` 分段追加，'
+      + '不要把整篇正文重复发一遍。';
+  };
+
+  /**
+   * **额度到顶 ⇒ 先向宿主申请续预算**（第 39 轮额度重做）。
+   * 判据全在宿主手里（`o.xuYuSuanLai`）：还有没交付的东西 + 刚才那一步有净进展 + 没被判停滞 ⇒ 才抬上限。
+   * 拿不到批准就走原来的强制收敛 —— **给推进续命，不给打转续命**。
+   */
+  const shenQingXuYuSuan = (yuanYin: YuSuanKuaiZhao['yuanYin']): boolean => {
+    if (typeof o.xuYuSuanLai !== 'function' || xuYuSuanCiShu >= XU_YU_SUAN_ZUIDA) return false;
+    let jia: { lunShu?: number; gongJuCiShu?: number; jieGuoZiShu?: number } | null = null;
+    try {
+      jia = o.xuYuSuanLai(yuSuanKuaiZhao(yuanYin)) || null;
+    } catch {
+      return false;
+    }
+    if (!jia || typeof jia !== 'object') return false;
+    const dl = Math.max(0, Math.floor(Number(jia.lunShu) || 0));
+    const dc = Math.max(0, Math.floor(Number(jia.gongJuCiShu) || 0));
+    const dz = Math.max(0, Math.floor(Number(jia.jieGuoZiShu) || 0));
+    if (!dl && !dc && !dz) return false;
+    xuYuSuanCiShu += 1;
+    if (dl) zuiDaLunShuDongTai = Math.min(zuiDaZongLun, Math.max(zuiDaLunShuDongTai + 1, lunShu + dl));
+    if (dc) zuiDaGongJuCiShu = zuiDaGongJuCiShu + dc;
+    if (dz) zongYuSuan = Math.min(200000, Math.max(zongYuSuan + 1, zongYuSuan + dz));
+    emit({ kind: 'budget', round: lunShu, detail: `extend(${yuanYin}:+${dl}lun/+${dc}ci/+${dz}zi,#${xuYuSuanCiShu})` });
+    return true;
+  };
+
+  /** 一次请求的真实字符量（正文 + 思考原文 + 工具调用参数 + 工具清单本身都会进 prompt） */
+  const qingQiuZiShu = (arr: LiaoTianXiaoXi[]): number => {
+    let s = gongJuBiaoZi;
+    for (const m of arr) {
+      s += String((m as { content?: unknown }).content ?? '').length;
+      s += String((m as { reasoning?: unknown }).reasoning ?? '').length;
+      const dui = (m as { gongJuDiaoYongJi?: unknown }).gongJuDiaoYongJi;
+      if (Array.isArray(dui) && dui.length) s += JSON.stringify(dui).length;
+    }
+    return s;
+  };
+
+  /**
+   * **中段收起**（AutoGen 的 middle-out 那一路）：保头一条（用户原话/系统话）与最近 6 条，
+   * 从最旧的工具结果开始收起；每条都留下"原多少字、要原文请 retrieve"的话 ——
+   * 与"静默截断"的区别是：模型知道这里少了一段，而且知道去哪儿取回。
+   */
+  const shouQiZhongDuan = (arr: LiaoTianXiaoXi[], limitZi: number): { chu: LiaoTianXiaoXi[]; shou: number } => {
+    const chu = arr.map((m) => ({ ...m }));
+    let zi = qingQiuZiShu(chu);
+    let shou = 0;
+    const BAO_TAIL = 6;
+    if (limitZi <= 0 || zi <= limitZi || chu.length <= 3) return { chu, shou };
+    /** 收起一条消息（工具结果 / 超长的中间消息 / 超长思考），返回省下的字符数 */
+    const shouYiTiao = (m: LiaoTianXiaoXi): number => {
+      let jian = 0;
+      const c = String((m as { content?: unknown }).content ?? '');
+      const keJian = m.role === 'tool' || (m.role !== 'user' && c.length > 600);
+      if (keJian && c.length > 160) {
+        const xin = `（宿主为不超窗口收起了这一段 · 原 ${c.length} 字 · 需要原文请用 retrieve 按指针取回）`;
+        jian += c.length - xin.length;
+        (m as { content?: string }).content = xin;
+      }
+      const r = String((m as { reasoning?: unknown }).reasoning ?? '');
+      if (r.length > 800) {
+        const xin = r.slice(0, 300) + `…[思考已收起，原 ${r.length} 字]`;
+        jian += r.length - xin.length;
+        (m as { reasoning?: string }).reasoning = xin;
+      }
+      return jian;
+    };
+    /** 第一遍：只收中段，保住最近 `BAO_TAIL` 条（正常情况就该在这里收住） */
+    for (let i = 1; i < chu.length - BAO_TAIL && zi > limitZi; i++) { const j = shouYiTiao(chu[i]!); if (j > 0) { zi -= j; shou += 1; } }
+    /**
+     * 第二遍：**窗口是真的硬限制**，中段收完还超（最近几步本身就很大）就接着往前收，
+     * 只保住头两条（系统话 + 用户原话）与**最新那一条**（那是模型下一步要接的东西）。
+     * 没有这一遍，"明知超窗就不发"在最坏情况会退化成"照发、等 400"。
+     */
+    for (let i = 2; i < chu.length - 1 && zi > limitZi; i++) { const j = shouYiTiao(chu[i]!); if (j > 0) { zi -= j; shou += 1; } }
+    return { chu, shou };
+  };
+
   const diaoYongMoXing = async (toolChoice: LiaoTianQingQiu['toolChoice']): Promise<LiaoTianXiangYing> => {
     qingQiuJi += 1;
     const yaSuo = typeof o.yaSuoLai === 'function' ? o.yaSuoLai : null;
-    const xiangYing = await (async (): Promise<LiaoTianXiangYing> => {
-      try {
-        return await provider.chat({ ...Qiu, xiaoXiJi: yaSuo ? yaSuo(xiaoXiJi, false) : xiaoXiJi, tools, toolChoice }, o.signal);
-      } catch (e) {
-        /**
-         * **超出上下文 ⇒ 压实后重发一次**（真机：本地 12.8 万窗口被 23 万 token 的请求打到 400，
-         * 整轮直接死掉、用户只看到"任务没完成"）。压不动就如实把错误交回去（不静默截断用户的活）。
-         */
-        const cuo = String((e && (e as Error).message) || e);
-        if (!yaSuo || !/exceeds the available context|context length|maximum context|too many tokens|token/i.test(cuo)) throw e;
-        emit({ kind: 'retry', round: lunShu, detail: 'compress-after-context-overflow' });
-        return await provider.chat({ ...Qiu, xiaoXiJi: yaSuo(xiaoXiJi, true), tools, toolChoice }, o.signal);
+    /**
+     * **额度倒计时进模型上下文**（发请求前告知、拿到响应就撤）：
+     * 上游做法是让模型看得见剩余预算，它才可能自己安排节奏、在耗尽前干净收尾。
+     * 撤掉是为了不污染对话记录（重启回放/落盘都不该有宿主这句话）。
+     * 强制收敛那次（`toolChoice:'none'`）不再发 —— 那条路径已经有收尾指令了。
+     */
+    let zhanShiDeng: number | null = null;
+    let zhanShiTiShi: string | null = null;
+    if (o.wuYuSuanTiShi !== true && toolChoice !== 'none' && lunShu > 0) {
+      const z = yuSuanZhuiJin();
+      for (const d of YU_SUAN_YU_JING_DENG) {
+        if (z.lv >= d && !yiFaYuJing.has(d)) {
+          zhanShiDeng = d;
+          zhanShiTiShi = yuJingWen(d);
+          break;
+        }
       }
-    })();
-    const siKao = String((xiangYing.choices?.[0]?.message as { reasoning?: unknown } | undefined)?.reasoning || '');
-    if (siKao) siKaoJi.push(siKao);
-    return xiangYing;
+      if (zhanShiTiShi) xiaoXiJi.push({ role: 'user', content: zhanShiTiShi });
+    }
+    /**
+     * **发之前就按窗口夹一次**（第 39 轮真机：本地 `num_ctx=7680` 的模型被循环攒到 30932 token
+     * ⇒ Ollama 400 ⇒ 整轮被掐）。顺序：宿主压实钩子(轻) → (重) → 中段收起。
+     * 这里的 `faSong` 是**发出去的那份**，本地 `xiaoXiJi` 仍保留完整历史（不因为窗口闸丢记录）。
+     */
+    const chuangKouZi = Math.max(0, Math.floor(Number(o.zuiDaQingQiuZi) || 0));
+    const zhuangFaSong = (jiYa: boolean): LiaoTianXiaoXi[] => {
+      let chu: LiaoTianXiaoXi[] = yaSuo ? yaSuo(xiaoXiJi, jiYa) : xiaoXiJi.map((m) => ({ ...m }));
+      if (chuangKouZi > 0 && qingQiuZiShu(chu) > chuangKouZi) {
+        const s = shouQiZhongDuan(chu, chuangKouZi);
+        chu = s.chu;
+        if (s.shou > 0) emit({ kind: 'shrink', round: lunShu, detail: `pre-send(${qingQiuZiShu(chu)}/${chuangKouZi} 字, 收起 ${s.shou} 段)` });
+      }
+      return chu;
+    };
+    try {
+      const xiangYing = await (async (): Promise<LiaoTianXiangYing> => {
+        try {
+          return await provider.chat({ ...Qiu, xiaoXiJi: zhuangFaSong(false), tools, toolChoice }, o.signal);
+        } catch (e) {
+          /**
+           * **超出上下文 ⇒ 压实后重发一次**（真机：本地 12.8 万窗口被 23 万 token 的请求打到 400，
+           * 整轮直接死掉、用户只看到"任务没完成"）。压不动就如实把错误交回去（不静默截断用户的活）。
+           */
+          const cuo = String((e && (e as Error).message) || e);
+          if (!yaSuo || !/exceeds the available context|context length|maximum context|too many tokens|token/i.test(cuo)) throw e;
+          emit({ kind: 'retry', round: lunShu, detail: 'compress-after-context-overflow' });
+          return await provider.chat({ ...Qiu, xiaoXiJi: zhuangFaSong(true), tools, toolChoice }, o.signal);
+        }
+      })();
+      /**
+       * **送达才算发过**（Codex 的同一条纪律：只能在历史插入之后标记已投递；之前被取消要能重试）：
+       * 请求抛错时这一档预警不能记账，否则会出现"模型一次也没看见 90% 提示、
+       * 但宿主已经记成发过了" ⇒ 再也不会发第二次 —— 那正好把要修的"模型看不见额度"造回来。
+       */
+      if (zhanShiDeng !== null) {
+        yiFaYuJing.add(zhanShiDeng);
+        emit({ kind: 'budget', round: lunShu, detail: `warn(${Math.round(yuSuanZhuiJin().lv * 100)}%)` });
+      }
+      const siKao = String((xiangYing.choices?.[0]?.message as { reasoning?: unknown } | undefined)?.reasoning || '');
+      if (siKao) siKaoJi.push(siKao);
+      return xiangYing;
+    } finally {
+      if (zhanShiTiShi) xiaoXiJi.pop();
+    }
   };
 
   try {
     for (;;) {
-      // 工具轮 / 总预算已用尽：**下一次**就用 tool_choice:'none' 逼出文本答案（不再多发一次 auto）。
+      // 工具轮 / 总预算 / 调用次数已用尽：**下一次**就用 tool_choice:'none' 逼出文本答案（不再多发一次 auto）。
       // 这样"最多 maxRounds 轮工具 + 1 次强制收敛"是精确的请求数上界。
       const daoLunShangXian = lunShu >= zuiDaLunShuDongTai;
       const yuSuanShuChu = lunShu > 0 && jieGuoZiShu >= zongYuSuan;
-      if (daoLunShangXian || yuSuanShuChu) {
+      const ciShuShuChu = zuiDaGongJuCiShu > 0 && gongJuDiaoYongJi >= zuiDaGongJuCiShu;
+      if (daoLunShangXian || yuSuanShuChu || ciShuShuChu) {
+        /**
+         * **第一步永远是问宿主"这算不算还在推进"**（第 39 轮额度重做）。
+         * 以前三条闸各自硬停：轮数到顶去问模型（它自己说还要 4 轮就加），
+         * 结果字符到顶直接掐死（真机实录：1123 秒全程有效增长仍被 `budget lun=20` 截断）。
+         * 现在统一成一条预算：有进展就按宿主给的增量续（有硬顶、有次数上限），停滞立刻不续。
+         */
+        if (shenQingXuYuSuan(yuSuanShuChu ? 'zi' : ciShuShuChu ? 'ci' : 'lun')) continue;
         /**
          * **轮数到上限先让模型自估**（产品要求：不要硬停）。
          * 问它「活干完了吗？还要不要加轮？」——输出 JSON。
          * 未完成且还要加 ⇒ 提高上限继续；已完成 / 说不清 / 加轮超硬顶 ⇒ 走原来的强制收敛。
-         * 预算用尽仍然硬停（那是结果体积闸，不是轮数闸）。
+         * 这是**第二档**：宿主按事实拒绝续预算之后，才听模型自己的判断（它说要加也得有硬顶）。
          */
-        if (daoLunShangXian && !yuSuanShuChu && daoShangXianWenMoXing && jiaLunCiShu < 3 && lunShu < zuiDaZongLun) {
+        if (daoLunShangXian && !yuSuanShuChu && !ciShuShuChu && daoShangXianWenMoXing && jiaLunCiShu < 3 && lunShu < zuiDaZongLun) {
           try {
             const PAN = '工具轮数已到上限。请判断当前任务是否已经完成。\n'
               + '只输出 JSON：{"done":true|false,"needRounds":数字（若未完成，还需要几轮工具调用；1~8）,"etaSeconds":数字（预计还需多少秒，可选）,"reason":"一句话理由"}\n'
@@ -272,8 +525,10 @@ export async function liaoTianDaiGongJu(
             tingZhiYuanYin = 'max-rounds';
           }
         } else {
-          // 两个限制同时命中时，报"预算"（更具体：说明是被工具结果总量拦下的）
-          tingZhiYuanYin = yuSuanShuChu ? 'budget' : (jiaLunCiShu > 0 ? 'max-rounds-extended' : 'max-rounds');
+          // 报**最先撞顶**的那一条闸（越具体越好：说明是被什么拦下的，而不是笼统的"到上限了"）
+          tingZhiYuanYin = yuSuanShuChu ? 'budget'
+            : ciShuShuChu ? 'call-budget'
+              : (jiaLunCiShu > 0 ? 'max-rounds-extended' : 'max-rounds');
         }
         emit({ kind: 'final', round: lunShu, detail: tingZhiYuanYin });
         /**
@@ -283,7 +538,9 @@ export async function liaoTianDaiGongJu(
          * 做法：逼收尾时先**明确要求"不要再调工具、直接给结论"**；若这一轮仍没有正文，
          * 再补一次同样要求的请求（而不是退回半句前导语）。
          */
-        const QIU_SHOU_WEI = '不要再调用任何工具了。请只输出面向用户的最终答复：直接给结论与要点，把已经查到/已经做完的事说清楚，不要再写"接下来要做什么"。';
+        const QIU_SHOU_WEI = '不要再调用任何工具了。请只输出面向用户的最终答复：直接给结论与要点，把已经查到/已经做完的事说清楚，不要再写"接下来要做什么"。'
+          // 第 39 轮：额度收口要把"哪些已交付、哪些还欠着"写实，别让用户以为任务完成了。
+          + '如果用户的诉求还有没做完的部分，必须在答复里一条条列出来还差什么（这是宿主的额度到了，不是你做完了）。';
         xiaoXiJi.push({ role: 'user', content: QIU_SHOU_WEI });
         try {
           let zuiZhongXiangYing = await diaoYongMoXing('none');
@@ -347,6 +604,10 @@ export async function liaoTianDaiGongJu(
       }
       lunShu += 1;
       emit({ kind: 'round', round: lunShu, detail: `${diaoYongJi.length} 个工具调用` });
+      {
+        const wen = neiRongWenBen(xiaoXi?.content) || '';
+        if (/[\p{L}\p{N}]/u.test(wen) && zhongJianHuiFu.length < 64) zhongJianHuiFu.push({ lun: lunShu, ts: Date.now(), text: wen.slice(0, 20000) });
+      }
       // 模型的 tool_calls 必须以 assistant 消息入对话，随后每条都要有对应的 tool 结果。
       // 思考也要原样带回（MiMo/DeepSeek/Kimi 交错思考的硬要求）：丢了它，模型下一轮看不到自己为什么调了这个工具，会去"核实"或重做。
       const siKaoBenLun = String((xiaoXi as { reasoning?: unknown } | undefined)?.reasoning || '');
@@ -356,7 +617,15 @@ export async function liaoTianDaiGongJu(
         const shengYu = zongYuSuan - jieGuoZiShu;
         let text = '';
         if (shengYu <= 0) {
-          text = `（工具结果预算已用尽，未执行 ${ming}；请基于已有信息作答）`;
+          /**
+           * 额度用完的**话术必须不像拒绝**（第 35/39 轮的同一课）：写成"未执行/权限"，
+           * 模型就当成被拒，换一个工具再试一次、再被拒、再换 —— 真机 145 秒里跑了十几轮。
+           * 所以直说：这是宿主的用量闸、不是权限、也不是出错；并告诉它该怎么收口。
+           */
+          text = `（宿主给这一轮的**结果额度已用完**，${ming} 这次没有执行。`
+            + '**这不是权限被拒，也不是执行失败** —— 只是宿主的用量闸到点了。'
+            + '请基于已经拿到的信息如实汇报：已经做完了什么、还差哪几步、卡在哪一步。'
+            + '只要还有用户明确要的东西没交付、而且刚才那一步有真实进展，宿主会再给额度，所以不要把没做完的说成做完了。）';
           emit({ kind: 'tool', round: lunShu, tool: ming, ok: false, chars: text.length, detail: 'budget' });
         } else {
           const shangXian = Math.min(zuiDaJieGuoZiShu, shengYu);
@@ -440,5 +709,7 @@ export async function liaoTianDaiGongJu(
     toolResultChars: jieGuoZiShu,
     tingZhiYuanYin,
     degraded: false,
+    yuSuan: { ...yuSuanKuaiZhao(yuSuanZhuiJin().zuiJin), lv: yuSuanZhuiJin().lv, xuYuSuanCiShu: xuYuSuanCiShu },
+    ...(zhongJianHuiFu.length ? { zhongJianHuiFu } : {}),
   };
 }

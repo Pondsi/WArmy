@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>WArmy</title>
+  <link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+  <div id="yingYong">
+    <div id="biaoTiLan">
+      <div class="biaoTiLanTuoZhuai">
+        <div class="biaoTiLanlogo" id="biaoTiLanlogo" aria-hidden="true"><img src="./icons/logo-64.png" alt="" class="biaoTiLanlogoTuPian"/></div>
+      </div>
+      <div class="biaoTiLanDongZuoJi" id="biaoTiLanDongZuoJi">
+        <button id="anNiuZongShiDing" title="置顶窗口" aria-label="always qiYong top" data-i18n-title="tip.pin">
+          <svg class="biaoTiLansvg" viewBox="0 0 100 100" aria-hidden="true"><rect x="18" y="14" width="64" height="12" rx="6" fill="currentColor"/><polygon points="32,26 68,26 58,58 42,58" fill="none" stroke="currentColor" stroke-width="9" stroke-linejoin="round"/><rect x="45" y="58" width="10" height="28" rx="5" fill="currentColor"/></svg>
+        </button>
+        <button id="anNiuuiRefresh" title="刷新并清除缓存" aria-label="refresh" data-i18n-title="tip.refresh">
+          <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.7 0 3.2.7 4.2 1.9V3h1.5v4.5H9.2V6.2h1.9A4 4 0 1 0 12 8h1.5z"/></svg>
+        </button>
+        <span class="biaoTiLanFenGe" aria-hidden="true"></span>
+        <button id="anNiuwinMin" title="最小化" aria-label="minimize" data-i18n-title="tip.min">
+          <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 7.5h10v1H3v-1z"/></svg>
+        </button>
+        <button id="anNiuwinMax" title="最大化" aria-label="maximize" data-i18n-title="tip.max">
+          <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v8H4V4zm1 1v6h6V5H5z"/></svg>
+        </button>
+        <button id="anNiuwinGuanBi" class="biaoTiLanGuanBi" title="关闭" aria-label="close" data-i18n-title="tip.close">
+          <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="yingYongTi">
+    <nav id="ceLan">
+      <div class="ceLanDing">
+        <button class="ceLanTiaoMu" data-nav="wo" data-i18n-title="tip.wo">
+          <img class="touXiangTuPian yinCang" id="selfAvatarImg" alt="" />
+          <span class="touXiang" id="selfAvatar" data-i18n="nav.touXiang">我</span>
+        </button>
+        <button class="ceLanTiaoMu jiHuo" data-nav="singleAi" data-i18n-title="tip.singleAi">
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M14,78 C14,60 24,54 34,54 C40,54 45,56 49,60"/><rect x="58" y="26" width="24" height="24" rx="4"/><circle cx="70" cy="38" r="3" fill="currentColor"/><line x1="70" y1="26" x2="70" y2="18"/><circle cx="70" cy="16" r="3" fill="currentColor"/></g></svg>
+        </button>
+        <button class="ceLanTiaoMu" data-nav="internalGroup" data-i18n-title="tip.internalGroup">
+          <svg viewBox="0 0 100 100"><path d="M50,14 A36,36 0 1,1 21,71" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M34,50 C30,38 42,38 50,50 C58,62 70,62 66,50 C62,38 50,38 50,50" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/></svg>
+        </button>
+        <button class="ceLanTiaoMu" data-nav="externalChat" data-i18n-title="tip.externalChat">
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><circle cx="42" cy="34" r="14"/><path d="M18,82 C18,62 30,56 42,56 C48,56 53,58 57,62"/><path d="M68,32 C74,38 74,50 68,56"/><path d="M78,24 C88,36 88,52 78,64"/></g></svg>
+        </button>
+        <button class="ceLanTiaoMu" data-nav="externalGroup" data-i18n-title="tip.externalGroup">
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M16,78 C16,62 24,54 34,54 C44,54 52,62 52,78"/><circle cx="66" cy="34" r="12"/><path d="M48,78 C48,62 56,54 66,54 C76,54 84,62 84,78"/></g></svg>
+        </button>
+      </div>
+      <div class="ceLanDi">
+        <button class="ceLanTiaoMu" data-nav="settings" data-i18n-title="tip.settings">
+          <svg viewBox="0 0 100 100"><defs><mask id="h2"><rect width="100" height="100" fill="white"/><polygon points="50,32 66,42 66,58 50,68 34,58 34,42" fill="black"/></mask></defs><g fill="currentColor" mask="url(#h2)"><circle cx="50" cy="50" r="30"/><g stroke="currentColor" stroke-width="14"><line x1="50" y1="20" x2="50" y2="6"/><line x1="50" y1="80" x2="50" y2="94"/><line x1="20" y1="50" x2="6" y2="50"/><line x1="80" y1="50" x2="94" y2="50"/><line x1="29" y1="29" x2="19" y2="19"/><line x1="71" y1="71" x2="81" y2="81"/><line x1="71" y1="29" x2="81" y2="19"/><line x1="29" y1="71" x2="19" y2="81"/></g></g></svg>
+        </button>
+      </div>
+    </nav>
+
+    <aside id="lieBiaoLan">
+      <header class="lieBiaoHead">
+        <h2 id="lieBiaoBiaoTi">—</h2>
+        <div class="lieBiaoHeadDongZuoJi" id="lieBiaoHeadDongZuoJi" style="display:flex;gap:6px;align-items:center">
+          <button id="anNiuJiaRuqr" class="anNiuXiao yinCang" data-i18n="join.scanQr" data-i18n-title="join.qrHint"></button>
+          <button id="lieBiaoDongZuo" class="anNiuXiao yinCang"></button>
+        </div>
+      </header>
+      <div class="souSuoBaoGuo">
+        <input id="lieBiaoSouSuo" type="search" data-i18n-placeholder="list.search" data-i18n-title="list.search" />
+      </div>
+      <div id="lieBiaoTi" class="lieBiaoTi"></div>
+      <div id="lanTiaoZhengTiao" data-i18n-title="tip.dragWidth"></div>
+    </aside>
+
+    <main id="zhuLan">
+      <div id="kongTai" class="kongTai">
+        <div class="logoMark">
+          <div class="logoGlyph"><svg viewBox="0 0 140 100" style="width:96px;height:68px"><g><rect x="120" y="0" width="10" height="10" fill="#D2B48C"/><rect x="130" y="10" width="10" height="10" fill="#D2B48C"/><rect x="90" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="0" width="10" height="10" fill="#3E2723"/><rect x="100" y="10" width="10" height="10" fill="#3E2723"/><rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="110" y="20" width="10" height="10" fill="#A0522D"/><rect x="120" y="20" width="10" height="10" fill="#A0522D"/><rect x="110" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="30" width="10" height="10" fill="#A0522D"/><rect x="120" y="40" width="10" height="10" fill="#C19A6B"/><rect x="130" y="40" width="10" height="10" fill="#C19A6B"/><rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/><rect x="20" y="20" width="80" height="30" fill="#A0522D"/><rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/><rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/><rect x="10" y="30" width="10" height="10" fill="#3E2723"/><rect x="0" y="40" width="10" height="10" fill="#3E2723"/><rect x="0" y="50" width="10" height="10" fill="#3E2723"/><rect x="100" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="70" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="40" y="75" width="10" height="5" fill="#1A1A1A"/><rect x="10" y="75" width="10" height="5" fill="#1A1A1A"/></g></svg></div>
+          <div class="logoMing" id="logoMing">无限牛马</div>
+          <div class="logoFu" id="logoFu">Workhorse Army</div>
+        </div>
+      </div>
+
+      <div id="liaoTianBuJu" class="liaoTianBuJu yinCang">
+        <section id="liaoTianLan">
+          <header class="liaoTianHead">
+            <div>
+              <div class="liaoTianBiaoTi" id="liaoTianBiaoTi">—</div>
+              <div class="liaoTianYuanShuju" id="liaoTianYuanShuju"></div>
+            </div>
+            <div class="liaoTianDongZuoJi">
+              <button id="anNiuKongZhiTai" class="anNiuTuBiao" data-i18n-title="tip.console" aria-label="console">
+                <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="16" width="80" height="68" rx="6"/><polyline points="28,40 42,52 28,64"/><line x1="50" y1="64" x2="72" y2="64"/></g></svg>
+              </button>
+              <div class="jinJiDd" id="secDd">
+                <button class="jinJiTrigger" id="secTrigger" type="button" data-i18n-title="chat.security">
+                  <svg class="ico secWarn yinCang" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v11h-2V3zm0 13h2v2h-2v-2z"/></svg>
+                  <span id="secBiaoQian" data-i18n="chat.securityNormal"></span>
+                  <svg class="ico jinJiJianTou" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
+                </button>
+                <div class="jinJiCaiDan yinCang" id="secCaiDan" role="menu">
+                  <button type="button" data-s="normal" data-i18n="chat.securityNormal"></button>
+                  <button type="button" data-s="strict" data-i18n="chat.securityStrict"></button>
+                  <button type="button" data-s="full" data-i18n="chat.securityFull"></button>
+                </div>
+              </div>
+              <div class="jinJiDd" id="gengDuoDd">
+                <button class="jinJiTrigger" id="gengDuoTrigger" type="button" data-i18n-title="common.more">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
+                </button>
+                <div class="jinJiCaiDan gengDuoCaiDanMianBan yinCang" id="gengDuoCaiDan" role="menu">
+                  <button type="button" id="caiDanTuBiaoSouSuo" data-i18n="list.search"></button>
+                  <button type="button" id="caiDanTuBiaoDingXiang" class="gengDuoCaiDanAnNiu"><span data-i18n="group.directed"></span><span id="caiDanTuBiaoDingXiangMark" class="mark">✕</span></button>
+                  <button type="button" id="caiDanTuBiaoDaKai" data-i18n="chat.openWindow"></button>
+                  <button type="button" id="caiDanTuBiaoDaoChu" data-i18n="chat.export"></button>
+                </div>
+              </div>
+              <button id="anNiuTingZhiAll" class="anNiuTingZhiTuBiao" data-i18n-title="chat.stopAllTip" aria-label="stop"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path fill-rule="evenodd" fill="currentColor" d="M12 21a9 9 0 110-18 9 9 0 010 18zM9 9h6v6H9z"/></svg></button>
+            </div>
+          </header>
+          <div id="xiaoXiJi" class="xiaoXiJi"></div>
+          <div id="duiLieTiao" class="duiLieTiao yinCang">
+            <div class="duiLieTiaoHead">
+              <span data-i18n="chat.queueTitle"></span>
+              <span class="jingYin" id="duiLieCount"></span>
+            </div>
+            <ul id="duiLieTiaoMuJi" class="duiLieTiaoMuJi"></ul>
+          </div>
+          <div id="kongZhiTaiMianBan" class="kongZhiTaiMianBan yinCang">
+            <div id="kongZhiTaiDingTiaoZhengTiao" class="kongZhiTaiTiaoZhengTiao"></div>
+            <pre id="kongZhiTaiShuChu" class="kongZhiTaiShuChu"></pre>
+          </div>
+          <div id="shuRuDingTiaoZhengTiao" class="kongZhiTaiTiaoZhengTiao shuRuTiaoZhengTiao"></div>
+          <footer class="shuRuQu">
+            <div id="attachLieBiao" class="yinCang"></div>
+            <div class="shuRuQuZhu">
+              <textarea id="shuRu" rows="3" data-i18n-placeholder="chat.placeholder" spellcheck="false"></textarea>
+              <div class="shuRuQuTiao">
+                <div class="shuRuQuZuo">
+                  <button class="anNiuTuBiao" id="anNiuAttach" data-i18n-title="chat.attachTip">
+                    <svg viewBox="0 0 100 100" class="ico"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter"><path d="M22,24 L56,24 L70,38 L70,86 L22,86 Z"/><polyline points="56,24 56,38 70,38"/></g><g stroke="currentColor" stroke-width="8" stroke-linecap="square"><line x1="76" y1="14" x2="76" y2="30"/><line x1="68" y1="22" x2="84" y2="22"/></g></svg>
+                  </button>
+                  <button class="anNiuTuBiao" id="anNiuShot" data-i18n-title="chat.screenshotTip">
+                    <svg viewBox="0 0 1024 1024" class="ico"><path d="M334 111.6c0-24.6-20-44.4-44.4-44.4s-44.4 20-44.4 44.4v89H111.6c-24.6 0-44.4 20-44.4 44.4s20 44.4 44.4 44.4h623V690h89V245c0-24.6-20-44.4-44.4-44.4H334V111.6zM245 334v445c0 24.6 20 44.4 44.4 44.4h445v89c0 24.6 20 44.4 44.4 44.4s44.4-20 44.4-44.4v-89h89c24.6 0 44.4-20 44.4-44.4s-20-44.4-44.4-44.4H334V334h-89z"/></svg>
+                  </button>
+                  <div class="jinJiDd" id="urgencyDd">
+                    <button class="jinJiTrigger" id="jinJiTrigger" type="button" data-i18n-title="chat.urgency">
+                      <svg class="ico urgentI yinCang" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v11h-2V3zm0 13h2v2h-2v-2z"/></svg>
+                      <span id="jinJiBiaoQian" data-i18n="urgency.insertLabel"></span>
+                      <svg class="ico jinJiJianTou" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>
+                    </button>
+                    <div class="jinJiCaiDan yinCang" id="jinJiCaiDan" role="menu">
+                      <button type="button" data-u="P1" data-i18n="urgency.urgentLabel"></button>
+                      <button type="button" class="qiYong" data-u="P2" data-i18n="urgency.insertLabel"></button>
+                      <button type="button" data-u="P3" data-i18n="urgency.queueLabel"></button>
+                    </div>
+                  </div>
+                </div>
+                <div class="shuRuQuFaSongHang">
+                  <button class="anNiuTuBiao" id="anNiuYuYin" data-i18n-title="chat.voiceTip">
+                    <svg viewBox="0 0 24 24" class="ico"><path d="M12 3a3 3 0 013 3v6a3 3 0 11-6 0V6a3 3 0 013-3zm-7 9a7 7 0 0014 0h2a9 9 0 01-8 8.9V24h-2v-3.1A9 9 0 013 12h2z"/></svg>
+                  </button>
+                  <button id="anNiuFaSong" class="anNiuZhuYao" data-i18n="chat.faSong"></button>
+                </div>
+              </div>
+            </div>
+          </footer>
+        </section>
+        <aside id="mianBanLan">
+          <div id="mianBanTiaoZhengTiao" title="拖动调整宽度" data-i18n-title="tip.dragWidth"></div>
+
+          <!-- 进度（折叠：百分比条；展开：任务列表） -->
+          <div class="mianBanKuai">
+            <div class="mianBanKaiGuan" id="jinDuKaiGuan">
+              <span data-i18n="panel.jinDu"></span>
+              <div class="jinDu" style="flex:1;margin:0 8px"><div id="jinDuTiao" class="jinDuTiao" style="width:0%"></div></div>
+              <span id="jinDuWenBen" class="jingYin">0%</span>
+              <span class="jianTou">›</span>
+            </div>
+            <ul id="renwuLieBiao" class="renwuLieBiao yinCang">
+              <li class="renwuDone"><span data-i18n="panel.taskDemo.1"></span> <span class="dian done"></span></li>
+              <li class="renwuFail"><span data-i18n="panel.taskDemo.2"></span> <span class="dian fail"></span></li>
+              <li class="renwuJiHuo"><span data-i18n="panel.taskDemo.3"></span> <span class="dian jiHuo"></span></li>
+              <li><span data-i18n="panel.taskDemo.4"></span> <span class="dian"></span></li>
+              <li class="renwuAbandoned"><span data-i18n="panel.taskDemo.5"></span> <span class="dian fail"></span></li>
+            </ul>
+          </div>
+
+          <!-- 模型管理（我的牛马 / 项目 / 群聊 都显示） -->
+          <div class="mianBanKuai" id="moXingMgrKuai">
+            <h3 data-i18n="panel.modelMgr"></h3>
+            <div id="moXingMgr"></div>
+          </div>
+
+          <!-- 项目目录（仅项目/群聊） -->
+          <div class="mianBanKuai onlyQun">
+            <h3 data-i18n="panel.directory"></h3>
+            <div id="muLuHe" class="jingYin">—</div>
+          </div>
+
+          <!-- 成员（仅项目/群聊） -->
+          <div class="mianBanKuai onlyQun">
+            <h3 data-i18n="group.members"></h3>
+            <div id="chengYuanJiHe" class="jingYin">—</div>
+            <div style="margin-top:6px;display:flex;gap:6px">
+              <select id="chengYuanXuanZe" style="flex:1" data-i18n-title="group.pickInstance"></select>
+              <button class="anNiuXiao" id="anNiuChengYuanTianJia" data-i18n="group.pullIn"></button>
+            </div>
+          </div>
+
+          <!-- 值班者（仅项目/群聊） -->
+          <div class="mianBanKuai onlyQun">
+            <h3 data-i18n="panel.duty"></h3>
+            <div id="dutyXinXi" class="jingYin">—</div>
+          </div>
+
+          <!-- 知识库 -->
+          <div class="mianBanKuai">
+            <h3 data-i18n="knowledge.biaoTi"></h3>
+            <input id="zhiShiKuQ" data-i18n-placeholder="knowledge.search" style="width:100%;margin-bottom:6px"/>
+            <div style="display:flex;gap:6px">
+              <button class="anNiuXiao" id="anNiuZhiShiKuGo" data-i18n="knowledge.search"></button>
+              <button class="anNiuXiao" id="anNiuZhiShiKuBaoCun" data-i18n="knowledge.save"></button>
+            </div>
+            <div id="zhiShiKuShuChu" class="jingYin" style="margin-top:8px;max-height:100px;overflow:auto"></div>
+          </div>
+
+          <!-- 回退点 -->
+          <div class="mianBanKuai">
+            <h3 data-i18n="checkpoints.biaoTi"></h3>
+            <div class="jingYin" id="cpSpace"></div>
+            <div id="cpXiangQingLieBiao" class="cpLieBiao"></div>
+          </div>
+
+          <!-- 执行者（仅项目/群聊） -->
+          <div class="mianBanKuai onlyQun">
+            <h3 data-i18n="executors.biaoTi"></h3>
+            <div id="zhiXingHe" class="jingYin">—</div>
+            <div style="margin-top:8px">
+              <button class="anNiuXiao" id="anNiuZhiXingYunXing" data-i18n="executors.run"></button>
+            </div>
+          </div>
+
+          <!-- 指标 + 成本 -->
+          <div class="mianBanKuai">
+            <h3 data-i18n="metrics.biaoTi"></h3>
+            <div id="zhiBiaoJiHe" class="jingYin">—</div>
+            <div class="mianBanKaiGuan" id="chengBenKaiGuan" style="margin-top:8px">
+              <span data-i18n="cost.biaoTi"></span>
+              <span class="jianTou">›</span>
+            </div>
+            <div id="chengBenTi" class="yinCang">
+              <div id="chengBenDash" class="jingYin"></div>
+              <div style="margin-top:6px"><button class="anNiuXiao" id="anNiuChengBenCsv" data-i18n="cost.export"></button></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div id="shiLiXiangQing" class="pageBuJu yinCang"></div>
+
+      <div id="pageBuJu" class="pageBuJu full yinCang">
+        <div id="pageTi"></div>
+      </div>
+    </main>
+    </div><!-- /yingYongTi -->
+  </div>
+  <input type="file" id="touXiangWenJian" accept="image/png,image/jpeg,image/webp" class="yinCang" />
+  <div id="duiHuaKuangGen" class="duiHuaKuangGen yinCang" role="dialog" aria-modal="true">
+    <div class="duiHuaKuangMask"></div>
+    <div class="duiHuaKuangKa">
+      <div class="duiHuaKuangBiaoTi" id="duiHuaKuangBiaoTi"></div>
+      <div class="duiHuaKuangTi" id="duiHuaKuangTi"></div>
+      <div class="duiHuaKuangDongZuoJi" id="duiHuaKuangDongZuoJi"></div>
+    </div>
+  </div>
+  <script src="./bridge.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

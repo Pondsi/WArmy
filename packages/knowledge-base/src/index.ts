@@ -4,14 +4,15 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+/** 证据锚点只有一份定义（契约 v1.1）：以前这里自己写了一份、还少了 byteOffset */
+import type { ZhengjuMaodian } from '@warmy/contracts';
+export type { ZhengjuMaodian };
+
+/** 知识库三层（第 51 轮）：会话（全项目共用，可对外）/ 内部（业务与踩坑）/ 私密（仅用户本机） */
+export type ZhishiCeng = 'session' | 'internal' | 'private';
+export const ZHISHI_CENG: readonly ZhishiCeng[] = ['session', 'internal', 'private'];
 
 export type ShitiLeixing = 'person' | 'org' | 'material' | 'place' | 'concept' | 'tool' | 'project';
-
-export interface ZhengjuMaodian {
-  file: string;
-  seq: number;
-  recordId: string;
-}
 
 export interface Shiti {
   id: string;
@@ -21,6 +22,8 @@ export interface Shiti {
   eventIds: string[];
   anchors: ZhengjuMaodian[];
   updatedAt: number;
+  /** 实体第一次被记下的时刻（写一次不改；`updatedAt` 只反映最后一次改动） */
+  chuangJianTs?: number;
 }
 
 export interface ZhishiShijian {
@@ -33,20 +36,60 @@ export interface ZhishiShijian {
   entityIds: string[];
   anchors: ZhengjuMaodian[];
   ts: number;
+  /**
+   * **记录时间**（第 53 轮项 5）：这条信息**什么时候被说出来/写下来** —— 取原文那条消息的时刻，
+   * 不是 `Date.now()`。写一次不再改（重新索引、补写、整理都不能覆盖它）。缺省时回落到 `ts`。
+   */
+  jiluTs?: number;
+  /** **发生时间**：事情本身发生在什么时候，只有原文真写了才填（精度只到月/年时取区间起点） */
+  fashengTs?: number;
+  /** 原文里那句时间表述（"上个月5号"），一字不改留着，回复时可直接引用 */
+  fashengBiao?: string;
+  /** 发生时间的精度：日 / 月 / 年 / 无（"最近、以前"这类一律留 'wu'，不猜） */
+  fashengJingDu?: 'ri' | 'yue' | 'nian' | 'wu';
+  /**
+   * 发生时间的来源：`stated`=原文真的说了；`none`=没说（**绝不"默认成现在"** ——
+   * Graphiti 早期就犯过这毛病：回填的对话被全部标成入库时间，issue #1489）。
+   */
+  fashengLaiYuan?: 'stated' | 'none';
+  /**
+   * 原文那行的**单调序号**（同一毫秒内、或 Windows 时钟被 NTP 往回拨时，顺序以它为准；
+   * 时间戳只做标签，不做定序依据 —— 这是双时态系统与流式处理的共识：Lamport/HLC/Kafka 的 event/ingestion 时间三分）。
+   */
+  xuHao?: number;
+  /**
+   * **溯源与版本**（第 53 轮项 4，对齐 W3C PROV 的 wasGeneratedBy/wasDerivedFrom）：
+   * 哪次归档、哪个模型、哪一版提示词产出的 —— 升级或源被删时据此重算派生层，而不是就地瞎改。
+   */
+  laiYuan?: string;
+  moXing?: string;
+  tiShiCiBanBen?: string;
+  /** 派生条目（如会话库的脱敏概要）指向它的源条目 id；源变更时这条变陈旧并重建 */
+  yinZi?: string[];
+  /**
+   * 写入时**取代**了哪些旧说法（同一层 + 同一标题 + 有共同实体）。
+   * 与 `yinZi` 区分：`yinZi` 是"我由谁派生"，`quDaiIds` 是"我把谁的说法顶掉了"——
+   * 审计要回答"这条为什么现在是这个版本"，靠的是后者（第 53 轮补）。
+   */
+  quDaiIds?: string[];
+  /** 被更新的说法取代时置时间戳（**不物理删除**，保留可审计的历史） */
+  shiXiaoTs?: number;
 }
 
 export class KnowledgeBase {
   private entities = new Map<string, Shiti>();
   private events = new Map<string, ZhishiShijian>();
+  readonly ceng: ZhishiCeng;
 
-  constructor(private CangLu: string) {
+  constructor(private CangLu: string, ceng: ZhishiCeng = 'session') {
+    this.ceng = ZHISHI_CENG.includes(ceng) ? ceng : 'session';
     // 目录建不出来也不许把应用带崩（下次写盘会自动重试重建）
     try { fs.mkdirSync(CangLu, { recursive: true }); } catch { /* 稍后 save() 自愈 */ }
     this.load();
   }
 
   private get storePath() {
-    return path.join(this.CangLu, 'knowledge.json');
+    return path.join(this.CangLu, `knowledge-${this.ceng}.json`);
   }
 
   private load(): void {
@@ -99,6 +142,8 @@ export class KnowledgeBase {
       eventIds: partial.eventIds || prev?.eventIds || [],
       anchors: partial.anchors || prev?.anchors || [],
       updatedAt: Date.now(),
+      /** 首次落地才记创建时间（与事件侧的"记录时间写一次"同一口径） */
+      chuangJianTs: prev?.chuangJianTs ?? partial.chuangJianTs ?? Date.now(),
     };
     this.entities.set(e.id, e);
     this.save();
@@ -130,7 +175,14 @@ export class KnowledgeBase {
   }
 
   addEvent(Shi: ZhishiShijian): ZhishiShijian {
-    this.events.set(Shi.id, Shi);
+    /**
+     * **记录时间写一次就不再改**（第 53 轮项 5）：重新归档、补写、整理都可能带着"现在的时刻"再进来一次，
+     * 若让它覆盖旧值，"这条信息什么时候被说出"就退化成"最后一次被机器碰过的时间"，
+     * 用户问"昨天我们聊到哪了"就会得到错的轴。
+     */
+    const jiu = this.events.get(Shi.id);
+    const jiluTs = jiu?.jiluTs ?? Shi.jiluTs ?? Shi.ts;
+    this.events.set(Shi.id, { ...jiu, ...Shi, jiluTs });
     for (const shitiId of Shi.entityIds) {
       const tiaoMu = this.entities.get(shitiId);
       if (tiaoMu && !tiaoMu.eventIds.includes(Shi.id)) {
@@ -139,7 +191,24 @@ export class KnowledgeBase {
       }
     }
     this.save();
-    return Shi;
+    return this.events.get(Shi.id)!;
+  }
+
+  /**
+   * **取代而不是删除**（第 53 轮项 4）：新说法命中旧说法时只给旧条目打 `shiXiaoTs`，
+   * 历史仍可审计（Graphiti/Zep 的双时态做法；Mem0 的纯 append-only 已被反证会检索出陈旧矛盾）。
+   */
+  supersedeEvent(id: string, shiXiaoTs = Date.now()): boolean {
+    const Shi = this.events.get(id);
+    if (!Shi || Shi.shiXiaoTs) return false;
+    this.events.set(id, { ...Shi, shiXiaoTs });
+    this.save();
+    return true;
+  }
+
+  /** 只取仍在生效的事件（被取代的默认不进上下文） */
+  activeEvents(): ZhishiShijian[] {
+    return [...this.events.values()].filter((e) => !e.shiXiaoTs);
   }
 
   /** 实体 → 事件 */
@@ -173,5 +242,40 @@ export class KnowledgeBase {
 
   listEntities(kind?: ShitiLeixing): Shiti[] {
     return [...this.entities.values()].filter((e) => !kind || e.kind === kind);
+  }
+}
+
+/**
+ * **三层知识库**（第 51 轮）：会话 / 内部 / 私密。
+ *
+ * 作用域矩阵（硬门禁 verify-kb-scope 钉住）：
+ *  · 群聊（external group）：**只读会话层**（禁内部/私密）
+ *  · 项目（internal group）：**会话 + 内部**（禁私密）
+ *  · 我的牛马（单实例、用户本人）：**三层都可读写**
+ *
+ * 会话层是所有会话共用互通的那一层；内部层是本项目/本机的业务与踩坑；
+ * 私密层只有用户本人可见，任何非本机牛马与外部人都不得读取或输出。
+ */
+export class ZhishiCang {
+  readonly session: KnowledgeBase;
+  readonly internal: KnowledgeBase;
+  readonly private: KnowledgeBase;
+  constructor(dir: string) {
+    this.session = new KnowledgeBase(dir, 'session');
+    this.internal = new KnowledgeBase(dir, 'internal');
+    this.private = new KnowledgeBase(dir, 'private');
+  }
+  allow(ceng: ZhishiCeng) {
+    return ceng === 'session' ? this.session : ceng === 'internal' ? this.internal : this.private;
+  }
+  queryLayers(layers: readonly ZhishiCeng[], q: string) {
+    const out = { entities: [] as Array<Shiti & { _ceng?: ZhishiCeng }>, events: [] as Array<ZhishiShijian & { _ceng?: ZhishiCeng }> };
+    for (const c of layers) {
+      const kb = this.allow(c);
+      const r = kb.query(q);
+      out.entities.push(...r.entities.map((e) => ({ ...e, _ceng: c })));
+      out.events.push(...r.events.map((e) => ({ ...e, _ceng: c })));
+    }
+    return out;
   }
 }

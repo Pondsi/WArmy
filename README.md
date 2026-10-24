@@ -21,6 +21,10 @@ Create AI **workhorses** (agents), put them into **project groups**, and let a *
 Chinese product name: **无限牛马** (ja: 無限社畜 / ko: 무한 사축).  
 **Full Chinese manual:** [说明.md](./说明.md) — 详细中文说明请直接看该文件（本 README 以英文为主入口）。
 
+| Home (English) | Settings · Functions / Skills | About / Memory |
+| --- | --- | --- |
+| | | |
+
 ---
 
 ## What makes WArmy different
@@ -78,6 +82,19 @@ WArmy’s memory is **not** “chat history in a folder”. It is an explicit L2
 - Data dir default: app user-data `memory/` (override env **`WARMY_MEMORY_DIR`**).
 - If the service is down, tools **fail closed** with honest text — they do not invent history.
 
+**Context budget (whole request)**
+
+- The budget covers **everything sent to the model**: fixed overhead (Dao / rules / impressions / capabilities / knowledge), tool specs, the bounded view, this turn, late-injected ledgers, and images (priced by real pixels). The slider's floor is the measured fixed overhead; a 2% window margin and the output reservation are always kept.
+- Token counts are calibrated per **provider × model × density bucket** from the provider's own usage numbers; with no samples yet, a conservative per-script upper bound is used.
+- When a request does not fit, a fixed ladder runs: summarize the last 5 user messages → summarize this turn → split / downscale / drop images → shrink the view → compress only compressible system sections and narrow the tool surface (the minimal working set is never cut) → give back our own reserves (output reservation down to `max(2048, 4% of window)`, applied to the request's `max_tokens` as well) → **stop sending** with a concrete reason, a warning sound and Continue / Retry.
+- Archive summaries are merged and de-duplicated inside a budget-scaled share, so they never grow with the number of archives; each summary is also written into memory, so "not in this context" pointers resolve via `recall` / `retrieve(recordId)`.
+- A provider moderation refusal that arrives as plain text (e.g. "rejected … high risk") is **not** treated as an answer: it is retried once, then the fallback chain is tried, and the user sees the provider's original text.
+
+**Workers in a project (multi-agent)**
+
+- Workers dispatched for the same task share an **append-only task blackboard** (facts / decisions / artifacts / open questions). The host stamps the source of every entry (a worker cannot claim to be someone else), stores each entry in memory with a real `recordId`, and only hands out `retrieve` pointers for entries that were actually stored. Workers read and write it through `heiban_read` / `heiban_write`; their context only gets a bounded digest (≤ 2,400 chars) plus pointers, so worker context stays O(task size).
+- Workers hand back a **structured distillation** (`jiao_fu` tool → JSON block → plain-text fallback): a hard-capped conclusion, facts, decisions, open questions and artifacts. The host checks every claimed artifact on disk and names the missing ones; an over-long conclusion is archived in full and linked by a pointer that resolves. Conflicting decisions on the same topic are shown to the duty agent / user instead of being silently picked.
+
 ---
 
 ## Install
@@ -86,6 +103,7 @@ WArmy’s memory is **not** “chat history in a folder”. It is an explicit L2
 
 1. [Releases v0.1.0](https://github.com/Pondsi/WArmy/releases/tag/v0.1.0) → **`WArmy-Setup-0.1.0.exe`**  
    Direct: [WArmy-Setup-0.1.0.exe](https://github.com/Pondsi/WArmy/releases/download/v0.1.0/WArmy-Setup-0.1.0.exe)
+2. Optional SHA-256 vs [`checksums.txt`](./checksums.txt)
 3. Launch **WArmy / 无限牛马** → Settings → language / providers
 
 ### Source
@@ -100,6 +118,13 @@ pnpm --filter @warmy/app-shell start
 
 Node.js **>= 24**, **pnpm** (repo pins `pnpm@10.23.0`).
 
+Bundled Node runtime (optional, for packaging / memory child):
+
+```bash
+node scripts/fetch-node-runtime.mjs
+```
+
+See also [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 
@@ -143,6 +168,17 @@ Node.js **>= 24**, **pnpm** (repo pins `pnpm@10.23.0`).
 
 ---
 
+## Quality gates
+
+```bash
+node packages/app-shell/scripts/verify-i18n-locales.mjs
+node packages/app-shell/scripts/verify-router-queue.mjs
+node packages/app-shell/scripts/verify-wiring.mjs
+node packages/app-shell/scripts/verify-container-probe.mjs
+node packages/sync-protocol/scripts/verify-connectivity.mjs
+node packages/app-shell/scripts/verify-memory.mjs
+node packages/app-shell/scripts/verify-docs.mjs
+```
 
 ---
 
@@ -150,17 +186,14 @@ Node.js **>= 24**, **pnpm** (repo pins `pnpm@10.23.0`).
 
 zh-CN · zh-TW · en-US · ja · ko · ru · es · fr · pt · eo — equal key sets.
 
-Product nav naming: zh `我的牛马` · ja `マイ社畜たち` · ko `일꾼들` · others `My Workhorses`.
-
 ---
 
 ## Repository layout
 
 ```text
 WArmy/
-├── README.md  说明.md  LICENSE  SPONSORS.md
-├── package.json  index.html
-├── packages/  sponsors/
+├── README.md  说明.md  LICENSE  SPONSORS.md  CHANGELOG.md  CONTRIBUTING.md
+├── checksums.txt  index.html
 ```
 
 ---
@@ -182,6 +215,6 @@ WArmy is a local-first multi-agent group-chat desktop app. Install from GitHub R
 
 ## License & sponsors
 
-[LICENSE](./LICENSE) · [SPONSORS.md](./SPONSORS.md)
+---
 
- Xiaomi MiMo Desktop
+Pondsi (+mimo-X-pro-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash) — automatically committed by Xiaomi MiMo Desktop

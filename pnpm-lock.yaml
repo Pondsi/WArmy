@@ -108,6 +108,10 @@ importers:
         version: 24.9.0
 
   packages/knowledge-base:
+    dependencies:
+      '@warmy/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@types/node':
         specifier: 24.9.0

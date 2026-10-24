@@ -22,6 +22,8 @@ export interface BenjiZiliao {
   deviceIdSig?: string;
   /** 若本机 ID 是从历史形态升级来的，这里留下升级前的值（只作备查，不参与任何判定） */
   deviceIdUpgradedFrom?: string;
+  /** 第 66 轮：助记词账号接管后，旧明文凭证已销毁（界面不得再展示/复制） */
+  authManaged?: boolean;
 }
 
 /**
@@ -155,6 +157,8 @@ export const SETTINGS_SUPPORTED_LOCALES = [
 export interface YingYongPeizhi {
   /** One of SETTINGS_SUPPORTED_LOCALES. Stored as free string for backward compat; resolveLocale maps unknown tags. */
   yuYan: string;
+  /** 用户称呼（默认值随界面语言；第 54 轮项 1） */
+  username?: string;
   themeMode: 'light' | 'dark' | 'system';
   accent: string;
   /**
@@ -177,6 +181,14 @@ export interface YingYongPeizhi {
    * 关掉 = 不再调用任何 ASR 模型（如实告诉用户"语音识别已关闭"，而不是假装转不出字）。
    */
   asrEnabled?: boolean;
+  /**
+   * 心跳离线保底「到点由系统唤醒程序」（第 40 轮）—— **默认关**。
+   * 用户定稿口径：定时任务本身不能脱离程序，**程序关闭后就不再运行心跳或定时任务**，
+   * 而且程序必须能被主动完全关闭 ⇒ **不许自己把自己叫醒**。
+   * 只有显式设成 `true`，才允许在 Windows 上给"下一个到点"挂一条系统计划任务，
+   * 到点用 `--warmy-xin-tiao-wake=<id>` 把程序唤回来（关掉开关就不再往系统里留任何东西）。
+   */
+  xinTiaoWake?: boolean;
   /**
    * **识别语言**（ISO-639-1）。默认 `'auto'` = **不传语言参数**，由模型自行判断；
    * 其它值（`zh`/`en`/`yue`…，见渲染层的 ASR_YU_YAN 全表）= 把语言参数显式带给模型。
@@ -221,6 +233,10 @@ export interface YingYongPeizhi {
   privacyConsent?: boolean;
   /** 聊天自动滚动到最新（默认关） */
   autoScrollChat?: boolean;
+  /** 主窗口吸附开关：默认开；用户改过就落盘，下次启动保持 */
+  zhuXiFuKai?: boolean;
+  /** 项目内文件左键是否用 nm 查看器打开（默认关；右键「打开」走另一条路） */
+  nmKaiWenJian?: boolean;
   /**
    * **回复内容加强**（默认关）：允许牛马按内容性质自选表达方式 ——
    * 纯文字 / SVG 示意图 / 图表 / 可交互页面 / 语音讲解。
@@ -232,9 +248,45 @@ export interface YingYongPeizhi {
    * 10..90，默认 60（留余地）。群聊不暴露该设置，由后台自动收敛。
    */
   contextBudgetPercent?: number;
+  /**
+   * ── 下面这些字段**一直在被持久化**（`settingsStore.save({...} as never)`），但第 44 轮自查发现
+   * 接口里一个都没声明：`as never` 把类型检查整个绕过，于是"设置里到底存了什么"只能靠全文搜索，
+   * 改字段名时编译器一句话都不会说。声明出来（形状按各模块自己的类型写，注释点名归属），
+   * 这样新增/改名至少有一处可对账。**都是可选字段**：老设置文件里没有它们也照样能读。
+   */
+  /** 容器运行实例（`container-instances.ts` 写；每条自带 `sheJiaoJieRu` 等按牛马的配置） */
+  instances?: Array<Record<string, unknown>>;
+  /** 授权台账（越权请求卡批准过什么；`electron-main.ts` 授权卡那一段写） */
+  authGrants?: Record<string, unknown>;
+  /** 社交接入配置（微信 iLink / 飞书…；凭据本身在 cred-vault，这里只放非密配置） */
+  sheJiao?: Array<Record<string, unknown>>;
+  /** 拉取模型时问到的能力（`contextLen`/`kind`/`tools`/`vision`；Ollama 读的是 `num_ctx`） */
+  modelCaps?: Record<string, { contextLen?: number; kind?: string; tools?: boolean | 'unknown'; vision?: boolean | 'unknown'; buKeYong?: string }>;
+  /** `modelCaps` 的口径版本：不匹配就整份作废重拉（不许拿旧口径的能力位当事实） */
+  modelCapsVersion?: number;
+  /** 特殊用途模型指派（整理/摘要/分类/翻译… 各走哪只模型） */
+  specialModels?: Record<string, unknown>;
+  /** 用户自定义工具（`ZiDingGongJu`，形状见 electron-main 里的同名接口） */
+  customTools?: Array<Record<string, unknown>>;
+  /** 工具开关：工具名 → 是否启用 */
+  toolEnabled?: Record<string, boolean>;
+  /** 工具扫描目录（第 44 轮改成只有一个默认目录 + 用户追加） */
+  toolScanDirs?: string[];
+  /** 插件扫描目录 / 插件登记（`enabled:false` 表示"看得到但默认不启动"；目录本身见上面的 `pluginScanDirs`） */
+  chaJianJi?: Record<string, unknown>;
+  /** 自动归档游标：sessionId → 上次归档到的最后一条 seq（增量归档靠它，不许每次全量重做） */
+  archiveCursors?: Record<string, number>;
+  /** 计划任务上次清理时间（幂等：同一天不重复清） */
+  planLastCleanAt?: number;
+  /** WebGPU 开关（关掉走 CPU 推理；重启后生效） */
+  webgpuEnabled?: boolean;
+  /** 首启引导是否走完（首启动交付要看它） */
+  guideDone?: boolean;
+  /** 导入过的供应商（避免重复导入同一份配置） */
+  importedProviders?: Array<Record<string, unknown>>;
   /** 空闲自动摘要（默认开） */
   autoSummary?: boolean;
-  /** 预估用的模型上下文窗口（token）；拿不到就按默认 32768 */
+  /** 预估用的模型上下文窗口（token）；拿不到就按默认 128K（第 51 轮口径） */
   modelContextTokens?: number;
   /** 更新源（GitHub Releases API / feed JSON）。空串 = 未配置 */
   updateFeedUrl?: string;
@@ -249,6 +301,25 @@ export interface YingYongPeizhi {
     port?: number;
     domains?: string[];
     publicAddresses?: string[];
+    /**
+     * 主机模式（R63）：true = 用户希望在「别人连你」时使用下面的 host 地址。
+     * ⚠️ 目前只持久化意图，**协议层尚未接通**；不要把它当成“已经在监听/可被连入”。
+     * 兼容旧值：读回时同时接受 boolean 与 `{ enabled: boolean }`。
+     */
+    hostMode?: boolean | { enabled?: boolean };
+    /** 主机地址（`host:port`，IPv6 写成 `[::1]:59599`；缺省端口 59599，最多 10 条） */
+    hosts?: string[];
+    /**
+     * 主机服务商（最多 1000 条）。`hasCredential` 只表示 SecureKeyStore 里“有一条”，
+     * 明文凭证**绝不**写进 settings；`credentialState:'pending'` 表示安全存储写入失败/入口缺失。
+     */
+    providers?: Array<{
+      id: string;
+      name: string;
+      address: string;
+      hasCredential?: boolean;
+      credentialState?: 'stored' | 'pending' | 'none';
+    }>;
   };
   /** 嵌入是否使用 GPU（WebGPU）；false=WASM/CPU */
   embedUseGpu: boolean;
@@ -293,6 +364,49 @@ export interface YingYongPeizhi {
    * 145 秒里换了十几次命令。超预算**不是拒绝**，而是如实告诉模型"预算用完、停下来汇报"。
    */
   toolCallBudget?: number;
+  /**
+   * **每个模型的额度与能力**（设置 → 模型 → 右键某个拉取到的模型）。第 39 轮加。
+   *
+   * 键 = 模型 id（与 `providers[].models[]` 同一套命名）。每项都是**可选**：
+   * 没写的项一律回落到"拉取模型时问到的信息"（`modelCaps`）/ **官方规格表**（`mo-xing-gui-ge.ts`）/ 内置默认。
+   *
+   * ⚠️ **「恢复默认」= 按上面那条链重算一遍并存下来**（第 39 轮定的口径，注释以前写的是"整项删掉"，与实现不符）：
+   *   拉到的用拉的、拉不到才推，推不出来的项**留空**，不许拿猜测值填。
+   * ⚠️ 这里存的**既是数量也是精确值**：`ctxNum/ctxUnit` 是给界面读的（k=1000、m=1,000,000），
+   *   `ctxTokens/outTokens` 是事实本身（第 44 轮加，预算/窗口闸/限流都读它）。
+   * ⚠️ 与 `modelCaps` 的分工：`modelCaps` 是**机器问出来的事实**（只读、拉取时刷新），
+   *   `modelQuota` 是**额度**；其中 `ziDong:true` 的那份是「拉取/恢复默认」自动拍的 ⇒ 可以被下一次拉取覆盖，
+   *   只有用户点过「确定」的（`ziDong:false`）才是"认定"，永不自动改。
+   */
+  modelQuota?: Record<string, {
+    /** 上下文窗口：数字 + 单位（k=×1000、m=×1000000）——**这是"界面怎么读"** */
+    ctxNum?: number; ctxUnit?: 'k' | 'm';
+    /** 单次输出上限：数字 + 单位 */
+    outNum?: number; outUnit?: 'k' | 'm';
+    /**
+     * 第 44 轮新增：**精确 token 数**（`zhanShiDanWei` 一并回传的那一份）。
+     * 预算、窗口闸、限流都读这一份；`ctxNum/ctxUnit` 只是读法（1,048,576 读成 1m）。
+     * 老记录可能没有这两个字段 ⇒ 读取方按 `num × 单位` 还原，两者都没有才当没设过。
+     */
+    ctxTokens?: number; outTokens?: number;
+    /**
+     * **这条记录是谁写的**（第 44 轮）：`true` = 「拉取模型 / 恢复默认」自动拍的快照 ⇒ 下次拉取会重算覆盖；
+     * 缺省或 `false` = 用户点过「确定」亲手认定过 ⇒ 永不自动覆盖。
+     * 上一版没有这一位，把自动快照当用户输入 ⇒ 探测失败时存下的错窗口（如 Ollama 的 128K）永远刷不掉。
+     */
+    ziDong?: boolean;
+    /**
+     * **每分钟请求数：纯数字，单位就是"次"**（没有 k/m 选项 —— 产品定稿）。
+     * 存的是**快照**：改窗口不会带动它，改它也不会带动别的项；
+     * 只有「拉取模型」与「恢复默认」会重新计算没拉到的那些。
+     */
+    rpm?: number;
+    /** **每分钟 token 数：纯数字，单位就是 token**（同上，快照不联动） */
+    tpm?: number;
+    /** 输入/输出模态（决定能力标签：输入图像=看图，输出图像=画图，两侧不许混） */
+    inTypes?: string[];
+    outTypes?: string[];
+  }>;
   /**
    * ADR 004 §2.1：**运行/测试环境**（run）选择 —— ⚠️ **已作废（产品主第七批最终确认）**。
    * 容器的职责是**开发**，测试与运行不在容器职责内，所以这个选项及其存储被**整块删除**。
@@ -538,7 +652,7 @@ function defaults(): YingYongPeizhi {
     soundFiles: { complete: '', request: '', error: '' },
     emailOnRequest: false,
     /** 第二列默认取最小可读宽度；用户拖动后 persistKey=listWidth 记住 */
-    listWidth: 160,
+    listWidth: 200,
     panelWidth: 300,
     globalSecurity: 'normal',
     askOnExceed: true,
@@ -556,9 +670,11 @@ function defaults(): YingYongPeizhi {
     netBannerDismissed: [],
     privacyConsent: false,
     autoScrollChat: false,
+    zhuXiFuKai: true,
+    nmKaiWenJian: true,
     contextBudgetPercent: 60,
     autoSummary: true,
-    modelContextTokens: 32768,
+    modelContextTokens: 128000,
     /** 产品默认更新源：GitHub Releases API */
     updateFeedUrl: 'https://api.github.com/repos/Pondsi/WArmy/releases/latest',
     embedUseGpu: true,

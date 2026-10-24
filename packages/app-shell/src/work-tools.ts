@@ -81,6 +81,10 @@ export interface WorkToolResult {
     abs?: string;
     error?: string;
     truncated?: boolean;
+    /** read_file：本段从正文第几字符起读（分页游标） */
+    offset?: number;
+    /** read_file：本段**真实正文**字符数（不含末尾提示行；宿主收口时靠它算下一游标） */
+    bodyChars?: number;
     entries?: number;
     /** write_file：写了多少**字符**（用户问"是不是真的写了 N 字"要看它） */
     chars?: number;
@@ -221,6 +225,14 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, z
   // Windows 盘符 / UNC / POSIX 绝对路径：默认拒绝 —— 但命中「一次性只读授权」且是读取操作时放行
   if (path.isAbsolute(raw) || /^[a-zA-Z]:/.test(raw) || raw.startsWith('\\\\') || raw.startsWith('/')) {
     const absJue = path.resolve(raw);
+    /**
+     * **落在本会话工作区里的绝对路径就是工作区路径**（第 48 轮 live 真事故，`verify-round28-live`）：
+     * write_file 的返回里给的是绝对路径，模型照着它调 read_file ⇒ 以前一律当"越权"去弹授权卡，
+     * 门禁/用户不点就一直等，整轮卡 8 分钟。与相对路径同一个判据（在 base 之内），不放宽任何越界情况。
+     */
+    const jiDi = path.resolve(baseDir);
+    const bi = (s: string) => (process.platform === 'win32' ? s.toLowerCase() : s);
+    if (bi(absJue) === bi(jiDi) || bi(absJue).startsWith(bi(jiDi) + path.sep)) return absJue;
     if (zuoYong === 'read' && zaiYiCiZhiDuNei(absJue)) return absJue;
     throw new Error('absolute-path-not-allowed');
   }
@@ -384,7 +396,17 @@ export function workSearchFiles(baseDir: string, args: { path?: string; query?: 
     const query = String(args.query || '');
     if (!query) return fail(tool, new Error('query-required'));
     const root = resolveInside(baseDir, args.path || '.', kuaiQuan, 'read');
-    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return fail(tool, new Error('not-a-directory'), relOf(baseDir, root));
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+      /**
+       * 第 51 轮真机事故：模型把 path 传成**文件**（想在这一个文件里找词），旧返回只有
+       * `not-a-directory` 五个字 ⇒ 模型不懂怎么补救，转头反复撞 run_shell（被拒 9 次、602 秒零产出）。
+       * 现在如实给出可执行的出路。
+       */
+      if (fs.existsSync(root) && fs.statSync(root).isFile()) {
+        return fail(tool, new Error('path-is-a-file：search_files 的 path 只能是**目录**。想在这一个文件里找内容：用 read_file 读它，返回里出现「续读用 offset=N」就带上 offset 接着往下读（别用本工具、别绕 run_shell）。想搜整个目录：把 path 传它所在的目录（工作区内可传 "."）。'), relOf(baseDir, root));
+      }
+      return fail(tool, new Error('not-a-directory'), relOf(baseDir, root));
+    }
     const fileRe = globZhengZe(args.pattern || '**/*');
     const hitRe = args.regex ? new RegExp(query, 'i') : null;
     const cap = Math.max(1, Math.min(Number(args.maxResults) || 100, 500));
@@ -467,7 +489,7 @@ export function workMoveFile(baseDir: string, args: { path?: string; destination
 }
 
 /** 读文件 */
-export function workReadFile(baseDir: string, args: { path?: string; maxChars?: number }, kuaiQuan = false): WorkToolResult {
+export function workReadFile(baseDir: string, args: { path?: string; maxChars?: number; offset?: number }, kuaiQuan = false): WorkToolResult {
   const tool = 'read_file';
   try {
     let file = resolveInside(baseDir, args && args.path, kuaiQuan, 'read');
@@ -586,11 +608,34 @@ ${shiSvg
       };
     }
     const text = buf.toString('utf8');
-    const truncated = text.length > cap;
+    /**
+     * **分页读**（第 51 轮真机事故：模型只看到 youxi.html 前 4000 字，后半段的 `draw()`/主循环
+     * 永远看不见 ⇒ 没法定点编辑 ⇒ 第 3 轮 602 秒 mtime 不前进判红）。
+     * 每条结果的字符上限**不动**（宿主仍按 `zuiDaJieGuoZiShu` 收口），这里只给模型一条**往下走**的路。
+     */
+    const pianYi = Math.max(0, Math.floor(Number(args?.offset) || 0));
+    if (pianYi >= text.length) {
+      return {
+        ok: true,
+        content: `[read_file] offset=${pianYi} 已到/超过文件末尾：${path.basename(file)} 正文共 ${text.length} 字符，后面没有内容了。`,
+        meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), truncated: false, offset: pianYi, bodyChars: 0 },
+      };
+    }
+    const xian = text.slice(pianYi, pianYi + cap);
+    const beiQie = text.length - pianYi > cap;
+    const jie = pianYi + xian.length;
+    /**
+     * **续读提示写在最前面**（第 52 轮真机红：模型说"只看到前 130 行，后半段看不到"）：
+     * 提示原先挂在段尾，而工具结果进上下文时还会再被投影/迟注入截一刀 ⇒ 尾巴连同"带 offset=N 再读一次"
+     * 一起被切掉，模型于是改用 run_shell 绕（被授权档拒 ⇒ 整轮没做成）。写在开头就截不到。
+     */
+    const tou = beiQie
+      ? `[本段是第 ${pianYi}~${jie} 字符，原文共 ${text.length} 字符，后面还有；往下看请再调一次 read_file 带 offset=${jie}（别猜内容、也别用 run_shell 绕）]\n`
+      : pianYi > 0 ? `[本段是第 ${pianYi}~${text.length} 字符，已到文件末尾]\n` : '';
     return {
       ok: true,
-      content: truncated ? text.slice(0, cap) + `\n…（已截断，原文 ${text.length} 字符）` : text,
-      meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), truncated },
+      content: tou + xian,
+      meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), truncated: beiQie, offset: pianYi, bodyChars: xian.length },
     };
   } catch (e) {
     return fail(tool, e);
@@ -1099,7 +1144,7 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
     case 'list_dir': return workListDir(baseDir, args as { path?: string }, kuaiQuan);
     case 'find_files': return workFindFiles(baseDir, args as { pattern?: string; path?: string; maxResults?: number }, kuaiQuan);
     case 'search_files': return workSearchFiles(baseDir, args as { query?: string; path?: string; pattern?: string; maxResults?: number; caseSensitive?: boolean }, kuaiQuan);
-    case 'read_file': return workReadFile(baseDir, args as { path?: string; maxChars?: number }, kuaiQuan);
+    case 'read_file': return workReadFile(baseDir, args as { path?: string; maxChars?: number; offset?: number }, kuaiQuan);
     case 'write_file': return workWriteFile(baseDir, args as { path?: string; content?: string; append?: boolean }, kuaiQuan);
     case 'edit_file': return workEditFile(baseDir, args as { path?: string; oldText?: string; newText?: string; replaceAll?: boolean }, kuaiQuan);
     case 'copy_file': return workCopyFile(baseDir, { path: String(args.path || args.source || ''), destination: String(args.destination || ''), overwrite: !!args.overwrite }, kuaiQuan);
@@ -1151,8 +1196,18 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
          */
         description: '**查看/读取一个文件**（读取类工具，不会改动文件）。可以给绝对路径（工作区外会先征求用户同意）。'
           + '文本文件返回正文（超长截断）；图片、exe、压缩包等二进制返回**类型/大小/修改时间**等元信息 —— '
-          + '这就是"它是什么"的答案，不要再换工具读第二遍。用户说"看看这个文件是什么"就用本工具。',
-        parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
+          + '这就是"它是什么"的答案，不要再换工具读第二遍。用户说"看看这个文件是什么"就用本工具。'
+          + '**正文太长会分段给你**：段首出现「本段是第 X~Y 字符…后面还有」就说明后半段还没看到，'
+          + '要改后半段就再调一次并带上 `offset=Y`（别猜内容、也别换 run_shell 去绕）。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string' },
+            offset: { type: 'number', description: '从正文第几个字符开始读（默认 0）。上一段段首写的「offset=Y」就是它。' },
+            maxChars: { type: 'number', description: '本段最多给多少字符（默认与上限见返回提示；工具总上限 20000）。' },
+          },
+          required: ['path'],
+        },
       },
     },
     {
@@ -1485,7 +1540,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'schedule_task',
-        description: '登记一条定时任务：每隔 N 分钟（或每天 HH:mm）由系统自动替用户发一轮「prompt」。返回任务 id，可在界面「定时任务」卡片里看到。',
+        description: '登记一条定时任务：支持 ① 每隔 N 分钟；② 每天 HH:mm；③ **Cron 表达式 + 时区**（推荐，能表达「工作日 9:07」「每月 1 号 8:03」这类规则）。到点会以「分身」形式自动跑一轮，完成后把结果直接写回本会话聊天（开头【XX定时任务汇报】）。返回任务 id，可在界面「定时任务」卡片里看到。',
         parameters: {
           type: 'object',
           properties: {
@@ -1493,6 +1548,8 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             prompt: { type: 'string', description: '到点要发给牛马的内容' },
             everyMinutes: { type: 'number', description: '每隔多少分钟（与 dailyAt 二选一）' },
             dailyAt: { type: 'string', description: '每天 HH:mm（24 小时制，与 everyMinutes 二选一）' },
+            cron: { type: 'string', description: 'Cron 表达式（5 字段：分 时 日 月 周），有它时优先。例：`7 9 * * 1-5` = 工作日 09:07' },
+            tz: { type: 'string', description: 'IANA 时区名（如 Asia/Shanghai）。不填按本机时区；填了不认识的时区会被拒绝，不会静默忽略。' },
           },
           required: ['name', 'prompt'],
         },
@@ -1527,6 +1584,70 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             timeoutMs: { type: 'number', description: '超时毫秒（默认 60000，上限 10 分钟）' },
           },
           required: ['command'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'knowledge_query',
+        description: '查本机结构化知识库（实体/事件）。适合：用户提到某人/项目/工具而你找不到来历；要给"以前定过的事"下结论；需要某项目的目录、某人的偏好这类结构化属性；用户问"我们以前是不是说过"。闲聊/当前上下文已写清的事/纯创作不要查。每条知识有记录时间与发生时间两个轴，问"什么时候"时两个轴都会查。',
+        parameters: {
+          type: 'object',
+          properties: { query: { type: 'string', description: '关键词（人名/项目名/主题）' } },
+          required: ['query'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'knowledge_add',
+        description: '往本机知识库写一条**有原文依据**的事实（实体和/或事件）。事件必须能在用户原话里找到 ≥10 字连续重合，或带锚点，否则会被拒绝（防止把猜测沉淀成事实）。同标题+同实体+同内容不会重复写；内容不同会取代旧说法（旧说法保留可审计）。实体只是名字，不受证据闸限制。',
+        parameters: {
+          type: 'object',
+          properties: {
+            layer: { type: 'string', description: 'session / internal / private（可省略，默认按内容敏感度自动归层）' },
+            entity: {
+              type: 'object',
+              description: '实体（可选）',
+              properties: {
+                id: { type: 'string' },
+                kind: { type: 'string', description: 'person / org / project / tool / concept / goal' },
+                ming: { type: 'string', description: '名称' },
+                attrs: { type: 'object', description: '结构化属性（键值都是字符串）' },
+              },
+              required: ['ming'],
+            },
+            event: {
+              type: 'object',
+              description: '事件（可选；与实体至少给一个）',
+              properties: {
+                biaoTi: { type: 'string', description: '一句话标题（同一说法的不同版本用同一个标题）' },
+                result: { type: 'string', description: '结果/结论（尽量包含用户原话片段）' },
+                tool: { type: 'string' },
+                method: { type: 'string' },
+                entityIds: { type: 'array', items: { type: 'string' }, description: '关联实体 id' },
+              },
+              required: ['biaoTi'],
+            },
+          },
+          required: [],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'capability_propose',
+        description: '提议一条新的"能力类别"加入对外白名单（脱敏概要只能说白名单里的类别）。只在确实出现了一个**现有类别覆盖不了**的新能力时调用。短语必须是类别：≤14 字、不带数字/标点/客户名/"做过"/路径；并给 1–6 个 2–12 字的关键词（用来判断哪些内部内容支持它）。宿主会逐条校验，不合格直接拒。加入后仍需至少 2 条独立证据支撑才会出现在对外概要里。',
+        parameters: {
+          type: 'object',
+          properties: {
+            capability: { type: 'string', description: '能力类别短语，如「音视频转写与字幕」' },
+            keywords: { type: 'array', items: { type: 'string' }, description: '匹配关键词，如 ["转写","字幕"]' },
+          },
+          required: ['capability', 'keywords'],
         },
       },
     },

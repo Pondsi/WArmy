@@ -1,0 +1,1345 @@
+/* nm 文件查看器 —— 独立窗口的样式。
+   令牌与主界面 app.css 同名同值（--panel-bg / --ink / --line / --accent / --hover），
+   所以浅色/深色主题看起来是同一个软件，而不是一个外挂的白色窗口。
+   主题：主进程按 ?theme=light|dark 传入；**没有参数时跟随系统 prefers-color-scheme**，
+   再取不到才用下面的默认值（默认浅色 + #A87654）。主界面改主题不会自动刷新本窗口，
+   重开才生效 —— 这是产品要求，不要加 matchMedia 监听。 */
+
+:root {
+  --font-ui: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", Consolas, "Courier New", monospace;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --accent: #A87654;
+  /* 浅色（默认） */
+  --panel-bg: #f5f5f5;
+  --card: #ffffff;
+  --ink: #191919;
+  --muted: #888;
+  --line: #e5e5e5;
+  --hover: #ececec;
+  --lan-bg: #ebebeb;
+  --scroll: #c1c1c1;
+  --gongJu-bg: #f0f0f0;
+  --danger: #e81123;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --panel-bg: #252526;
+  --card: #2d2d2d;
+  --ink: #e8e8e8;
+  --muted: #9a9a9a;
+  --line: #3a3a3a;
+  --hover: #2a2a2a;
+  --lan-bg: #1e1e1e;
+  --scroll: #555;
+  --gongJu-bg: #202021;
+  color-scheme: dark;
+}
+
+/* 没有 ?theme= 参数、脚本也还没跑时，先按系统主题上色（避免白屏闪一下） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --panel-bg: #252526;
+    --card: #2d2d2d;
+    --ink: #e8e8e8;
+    --muted: #9a9a9a;
+    --line: #3a3a3a;
+    --hover: #2a2a2a;
+    --lan-bg: #1e1e1e;
+    --scroll: #555;
+    --gongJu-bg: #202021;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+/* hidden 必须压过下面的 display:flex（#meiTiLie 曾经因此常驻下半屏，正文只剩上半屏） */
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  color: var(--ink);
+  background: var(--panel-bg);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* ── 顶栏（可拖动） ── */
+#biaoTiLan {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0 var(--sp-2) 0 var(--sp-3);
+  background: var(--lan-bg);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+#paiZi {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 2px 5px;
+  flex-shrink: 0;
+}
+#wenJianMing {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-base);
+}
+#chuangKouAnNiu { display: flex; align-items: center; gap: 2px; -webkit-app-region: no-drag; flex-shrink: 0; }
+#chuangKouAnNiu button {
+  width: 42px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+/* 吸附/置顶比窗控窄一点，但图标尺寸一致 */
+#chuangKouAnNiu button.tb { width: 32px; }
+#chuangKouAnNiu button:hover { background: var(--hover); }
+#chuangKouAnNiu button:active { filter: brightness(.92); }
+#chuangKouAnNiu button.ck svg { width: 16px; height: 16px; display: block; }
+#chuangKouAnNiu button.tb .tbSvg { width: 16px; height: 16px; display: block; }
+#xiFuTu {
+  width: 16px; height: 16px; display: block; background: currentColor;
+  mask: url('./icons/ruo-ci-tie.svg') center / contain no-repeat;
+  -webkit-mask: url('./icons/ruo-ci-tie.svg') center / contain no-repeat;
+}
+#anNiuGuanBi:hover { background: var(--danger) !important; color: #fff; }
+#chuangKouAnNiu button.tb.kai { background: transparent; color: var(--accent); }
+
+/* ── 工具栏：一行（必要时两行），**没有横向滚动条**；窄了收进「…」 ── */
+#gongJuLan {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 6px var(--sp-2);
+  background: var(--gongJu-bg);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+  overflow: hidden;
+}
+.gongJuHang {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--sp-1);
+  min-width: 0;
+  overflow: hidden;
+}
+#gongJuHang2[hidden] { display: none !important; }
+.fenZu { display: inline-flex; align-items: center; gap: 1px; flex: 0 0 auto; }
+#gongJuLan button {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  height: 27px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#gongJuLan button.tb2 { padding: 3px 6px; min-width: 28px; }
+#gongJuLan button.tb2 svg { width: 14px; height: 14px; display: block; }
+#gongJuLan button:hover { background: var(--hover); }
+#gongJuLan button:disabled { opacity: .45; cursor: not-allowed; }
+#gongJuLan button.kai {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+}
+#gongJuLan button.xiaLa {
+  min-width: 17px;
+  width: 17px;
+  padding: 0;
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  color: var(--muted);
+}
+#gongJuLan button.xiaLa svg { width: 10px; height: 10px; }
+#baoChunZu > #anNiuBaoCun,
+#muLuZu > button:first-child,
+#houQianZu > button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.gengDuo { font-size: 15px; line-height: 1; padding-bottom: 6px; }
+
+/* 查找：输入框变短，上下箭头**在框内**（padding-right 让文字不压箭头） */
+#souKuang {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1 1 300px;
+  min-width: 132px;
+  max-width: 560px;
+}
+#souRuKe {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 150px;
+  min-width: 106px;
+  max-width: 210px;
+}
+#souRu {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  padding: 4px 44px 4px 8px;
+  height: 27px;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+#souJianKe {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  bottom: 2px;
+  display: inline-flex;
+  align-items: stretch;
+  gap: 1px;
+}
+#gongJuLan button.souJian {
+  width: 19px;
+  min-width: 19px;
+  height: 21px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+#gongJuLan button.souJian:hover { background: var(--hover); color: var(--ink); }
+#gongJuLan button.souJiAnNiu {
+  min-width: 46px;
+  padding: 3px 6px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+#gongJuLan button.souJiAnNiu .wuPiPeiTu { width: 15px; height: 15px; display: block; }
+#gongJuLan button.souJiAnNiu.wuPiPei { color: var(--muted); }
+#gongJuLan button.souJiAnNiu[aria-expanded="true"] {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 9%, var(--card));
+}
+#tiHuanZu { display: inline-flex; align-items: center; gap: 3px; min-width: 0; flex: 0 1 auto; }
+/* 第 81 轮项 11：替换框有最小宽度；一行放不下 ⇒ 两行（替换框落到查找框下方，与上方按钮左对齐） */
+#tiHuanRu {
+  flex: 0 1 150px;
+  min-width: 132px;
+  max-width: 190px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  padding: 4px 8px;
+  height: 27px;
+}
+#tiHuanRu:disabled { opacity: .5; cursor: not-allowed; }
+#gongJuLan #anNiuTiHuan { min-width: 28px; }
+#suoFangZu { gap: 2px; }
+#gongJuLan #suoFangZhi { width: 48px; color: var(--muted); font-size: var(--fs-sm); }
+#gongJuHang2 { padding-top: 2px; }
+#gongJuHang2 .tiHuanQian { flex: 0 0 auto; }
+/* 极窄：进一步压缩查找框（仍保留 保存 + 查找 + 上下箭头 + …） */
+#gongJuLan.zhai #souKuang { min-width: 96px; max-width: 260px; }
+#gongJuLan.zhai #souRuKe { min-width: 88px; }
+#gongJuLan.zhai #anNiuBaoCun { padding-left: 7px; padding-right: 7px; }
+
+/* 工具栏弹出的菜单（保存/目录/后退/… 共用） */
+.gongJuCaiDan {
+  position: fixed;
+  z-index: 12000;
+  min-width: 160px;
+  max-width: min(300px, 92vw);
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 10px 28px rgba(0,0,0,.22);
+  font-size: var(--fs-base);
+}
+.gongJuCaiDan[hidden] { display: none !important; }
+.gongJuCaiDan button,
+.gongJuCaiDan label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  font: inherit;
+}
+.gongJuCaiDan button:hover,
+.gongJuCaiDan label:hover { background: var(--hover); }
+.gongJuCaiDan button:disabled,
+.gongJuCaiDan label:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+.gongJuCaiDan button svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.gongJuCaiDan .caiDanGe { height: 1px; background: var(--line); margin: 4px 6px; }
+.gongJuCaiDan label input { accent-color: var(--accent); margin: 0; }
+.gongJuCaiDan .jianTou { margin-left: auto; color: var(--muted); }
+
+/* ── 正文区 ── */
+#zhengWen {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* 第 66 轮项 33：正文区自成布局/绘制边界，滚动时不让整页参与重排 */
+  contain: layout paint;
+}
+/* 只读视图的拖动画布：光标提示 + 关了原生触摸手势（鼠标 pointer 才接管） */
+.nmKeTuo { cursor: grab; touch-action: none; }
+body.nmTuoZhong { cursor: grabbing; user-select: none; }
+body.nmTuoZhong #wenBen { cursor: grabbing; }
+#meiTiLie.nmKeSuo { overflow: hidden; }
+#meiTiLie .tuPianHe { transform-origin: 50% 50%; }
+#neiRongHang { flex: 1 1 auto; min-height: 0; display: flex; overflow: hidden; contain: layout; }
+#tiShiLie {
+  flex-shrink: 0;
+  margin: var(--sp-2) var(--sp-3) 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+/* 编辑区：textarea + 高亮层（两层几何完全一致，颜色块才对得上字） */
+#juanCuo {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--panel-bg);
+  contain: strict;
+}
+#gaoLiang {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: transparent;
+  contain: strict;
+  transform-origin: 0 0;
+}
+#gaoLiangNei {
+  padding: 12px 16px;
+  /* 缩放用 transform（见 nm-viewer.js），两层同原点缩放，高亮才和文字始终对齐 */
+  transform-origin: 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  tab-size: 4;
+}
+#wenBen {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  margin: 0;
+  border: 0;
+  resize: none;
+  background: transparent;
+  color: var(--ink);
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  tab-size: 4;
+  overflow: auto;
+}
+/* 关掉自动换行：两层一起切成 nowrap，横向滚动同步 */
+#wenBen.buHuanHang { white-space: pre; overflow-wrap: normal; word-break: normal; }
+#gaoLiang.buHuanHang #gaoLiangNei { white-space: pre; overflow-wrap: normal; word-break: normal; }
+#wenBen[readonly] { color: var(--ink); background: transparent; }
+#wenBen::-webkit-scrollbar, #kuaiLie::-webkit-scrollbar, #gaoLiang::-webkit-scrollbar { width: 12px; height: 12px; }
+#wenBen::-webkit-scrollbar-thumb, #kuaiLie::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 6px; border: 3px solid transparent; background-clip: content-box; }
+#wenBen::-webkit-scrollbar-track, #kuaiLie::-webkit-scrollbar-track { background: transparent; }
+
+/* 源码 / 效果分栏：分隔条可拖动（JS 改 #juanCuo 的 flex-basis），双击回 50% */
+#fenGeTiao {
+  flex: 0 0 7px;
+  cursor: col-resize;
+  background: var(--line);
+  position: relative;
+  touch-action: none;
+  z-index: 5;
+}
+#fenGeTiao::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: .55;
+}
+#fenGeTiao:hover, body.tuoFenGe #fenGeTiao { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+body.tuoFenGe { cursor: col-resize; user-select: none; }
+body.tuoFenGe #wenBen { pointer-events: none; }
+#yuLanLie {
+  flex: 1 1 0;
+  min-width: 180px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+}
+#yuLanBiao {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 4px 8px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  background: var(--gongJu-bg);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+}
+#anNiuYuLanQuanPing { border: 1px solid var(--line); background: var(--card); border-radius: var(--radius-sm); padding: 1px 7px; cursor: pointer; font-size: var(--fs-sm); }
+#anNiuYuLanQuanPing:hover { background: var(--hover); }
+#yuLanNei { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; background: #fff; }
+#yuLanNei iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+#yuLanNei .yuLanTu { display: block; max-width: 100%; max-height: 100%; margin: auto; padding: 20px; object-fit: contain; }
+#yuLanNei .yuLanCuo {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: #fff4e5;
+  color: #8a4b00;
+  font-size: var(--fs-sm);
+  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+}
+
+/* 只读文档 */
+#kuaiLie {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sp-3) var(--sp-4) 32px;
+  contain: layout paint;
+  overscroll-behavior: contain;
+}
+/* 缩放作用在内容层，不作用在滚动容器：滚动条/scrollWidth 仍由浏览器按缩放后的内容算 */
+#kuaiNei { width: 100%; min-width: 0; transform-origin: 0 0; }
+.kuai { margin: 0 0 var(--sp-3); contain: layout paint style; }
+.kuaiBiaoTi {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  padding: 2px 0 6px;
+  border-bottom: 1px dashed var(--line);
+  margin-bottom: var(--sp-2);
+  user-select: none;
+}
+.kuaiWen {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  tab-size: 4;
+}
+
+/* DOCX / PDF：纸张式预览页（不是一块二进制文字） */
+.docYe {
+  max-width: 820px;
+  margin: 0 auto 22px;
+  padding: 42px 52px 52px;
+  background: #fff;
+  color: #1b1b1b;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18), 0 8px 28px rgba(0,0,0,.08);
+  border-radius: 3px;
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.75;
+  contain: layout paint style;
+}
+.docYeHao { font-size: 11px; color: #8a8a8a; border-bottom: 1px solid #e7e7e7; padding-bottom: 12px; margin-bottom: 20px; }
+.docWen p { margin: 0 0 .55em; white-space: pre-wrap; overflow-wrap: break-word; }
+.docWen p:empty { height: .55em; }
+.docKong { color: #999; font-style: italic; }
+
+/* PPTX：16:9 幻灯片页（文字版式；不是二进制） */
+.pptLie { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.pptYe {
+  position: relative;
+  width: min(820px, 100%);
+  aspect-ratio: 16 / 9;
+  padding: 6.5% 7%;
+  background: #fff;
+  color: #171717;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18), 0 8px 28px rgba(0,0,0,.10);
+  border-radius: 3px;
+  overflow: hidden;
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  contain: layout paint style;
+}
+.pptYeHao { position: absolute; right: 3%; bottom: 2.5%; font-size: 11px; color: #999; }
+.pptWen { height: 100%; overflow: auto; padding-right: 6px; }
+.pptWen h3 { font-size: clamp(17px, 2.4vw, 26px); line-height: 1.25; margin: 0 0 .55em; font-weight: 650; }
+.pptWen p { font-size: clamp(12px, 1.5vw, 16px); line-height: 1.5; margin: 0 0 .42em; white-space: pre-wrap; overflow-wrap: break-word; }
+.pptWen p:empty { height: .6em; }
+
+/* XLSX：工作表表格 */
+.xlsxKuai { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); overflow: hidden; }
+.xlsxKuai .kuaiBiaoTi { padding: 6px 10px; margin: 0; background: var(--gongJu-bg); border-bottom: 1px solid var(--line); }
+.biaoGeWai { max-height: calc(100vh - 230px); overflow: auto; }
+.biaoGeWai table { border-collapse: collapse; font-size: var(--fs-sm); min-width: 100%; }
+.biaoGeWai th, .biaoGeWai td {
+  border: 1px solid var(--line);
+  padding: 3px 8px;
+  text-align: left;
+  vertical-align: top;
+  white-space: pre-wrap;
+  max-width: 420px;
+  overflow-wrap: break-word;
+}
+.biaoGeWai thead th { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--accent) 10%, var(--card)); font-weight: 600; }
+.biaoGeWai tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--line) 22%, transparent); }
+.biaoGeWai th.hao, .biaoGeWai td.hao { width: 44px; min-width: 44px; color: var(--muted); text-align: right; user-select: none; background: var(--gongJu-bg); position: sticky; left: 0; }
+
+/* 媒体 */
+#meiTiLie {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-3);
+  background: var(--panel-bg);
+}
+#meiTiLie:not([hidden]) { display: flex; }
+#meiTiLie img { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: auto; }
+#meiTiLie video { max-width: 100%; max-height: 100%; background: #000; }
+#meiTiLie audio { width: min(560px, 100%); }
+.meiTiHe { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 100%; max-height: 100%; }
+.tuPianHe { cursor: zoom-in; }
+.tuPianHe img { display: block; }
+
+/* 视频：自定义控制条。原生 Chromium 控制条悬停时进度条会偶发变短，这里不用原生 controls。
+   第 81 轮修复：以前 #meiTiLie video 的 max-height:100%（ID 选择器）压过这里的 calc()，
+   宽高比高的视频把窗口撑满、控制条被顶到视口之外 ⇒ 看起来"视频打不开"。
+   现在播放器整体限高、视频用 flex 填剩余空间 + object-fit:contain，控制条永远可见。 */
+.shiPinHe {
+  width: min(960px, 100%);
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: #000;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: default;
+}
+.shiPinHe video {
+  display: block;
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+  object-fit: contain;
+}
+.shiPinKongZhi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px 9px;
+  background: linear-gradient(#0006, #000c);
+  color: #fff;
+}
+.shiPinKongZhi button {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+.shiPinKongZhi button:hover { background: #fff2; }
+.shiPinKongZhi .shiJian { font-size: 11px; color: #ddd; min-width: 86px; text-align: center; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+
+/* 进度条：**宽度只由 flex 决定**，悬停只放大圆点，绝不改 width/margin（修 MP4 悬停变短） */
+.jinDu {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+.jinDuDi { position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px; background: #ffffff3d; }
+.jinDuTian { position: absolute; left: 0; top: 50%; height: 4px; width: 0; transform: translateY(-50%); border-radius: 2px; background: var(--accent); }
+.jinDuHuaDian {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  transform: translate(-50%, -50%) scale(.9);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent);
+  pointer-events: none;
+  transition: transform .1s;
+}
+.jinDu:hover .jinDuHuaDian, .jinDu:focus-visible .jinDuHuaDian { transform: translate(-50%, -50%) scale(1.15); }
+
+/* 音乐：名称一直在进度条上方，不放进可折叠区；详情可折叠 */
+.yinPinHe {
+  width: min(640px, 100%);
+  padding: 18px 20px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  align-items: stretch;
+  box-shadow: 0 2px 10px rgba(0,0,0,.08);
+}
+.yinPinBiaoQian { font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+.yinPinJinDuKuai { width: 100%; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.geQuMing {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  min-height: 21px;
+  flex: 0 0 auto;
+}
+.geQuMing::-webkit-scrollbar { height: 4px; }
+.yinPinJinDuKuai .jinDu { width: 100%; height: 22px; }
+.yinPinJinDuKuai .jinDuDi, .yinPinJinDuKuai .jinDuTian { height: 5px; }
+/* 音频面板是浅色卡片，视频控制条那套半透明白色在这里看不见 —— 单独给轨道/圆点上色 */
+.yinPinJinDuKuai .jinDuDi { background: color-mix(in srgb, var(--muted) 34%, transparent); }
+.yinPinJinDuKuai .jinDuTian { background: var(--accent); }
+.yinPinJinDuKuai .jinDuHuaDian { background: var(--accent); box-shadow: 0 0 0 2px var(--card); }
+.yinPinKongZhi { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.yinPinKongZhi button {
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  border-radius: var(--radius-sm);
+  padding: 3px 12px;
+  cursor: pointer;
+}
+.yinPinKongZhi button:hover { background: var(--hover); }
+.yinPinKongZhi .shiJian { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* 第 81 轮项 6：倍速（0.1–5）；不再有静音按钮/「音乐 · 只读」标签 */
+.yinPinKongZhi .suDu { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.yinPinKongZhi .suDuXuan {
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.geQuXiangQing { margin-top: 8px; font-size: var(--fs-sm); color: var(--muted); }
+.geQuXiangQing summary { cursor: pointer; user-select: none; }
+.geQuXiangQingNei { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 6px 0 0; }
+.geQuXiangQingNei b { color: var(--ink); font-weight: 500; }
+.yinPinHe audio { display: none; }
+
+/* 二进制：虚拟十六进制视图（只渲染可见行；没有全量 DOM，滚动不卡） */
+#shiLiuLie {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  contain: strict;
+}
+#shiLiuBiao {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--gongJu-bg);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+}
+#shiLiuXuanZhong { overflow: hidden; text-overflow: ellipsis; }
+#shiLiuGunDong {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  contain: strict;
+  overscroll-behavior: contain;
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 22px;
+}
+#shiLiuGunDong:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+#shiLiuNei { position: relative; width: 100%; transform-origin: 0 0; }
+.shiLiuHang {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  white-space: pre;
+  contain: layout paint style;
+}
+.shiLiuHang:hover { background: color-mix(in srgb, var(--line) 25%, transparent); }
+.shiLiuPian { flex: 0 0 auto; color: var(--muted); }
+.shiLiuHex { flex: 0 0 auto; letter-spacing: .2px; }
+.shiLiuHex span { padding: 0 1px; border-radius: 2px; }
+.shiLiuHex span.gai { color: var(--accent); font-weight: 700; }
+.shiLiuHex span.xuan { background: var(--accent); color: #fff; }
+.shiLiuAscii { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--muted); }
+.shiLiuAscii span.gai { color: var(--accent); }
+.shiLiuAscii span.xuan { background: var(--accent); color: #fff; }
+.shiLiuShuRu {
+  position: absolute;
+  z-index: 3;
+  width: 36px;
+  height: 22px;
+  padding: 0 3px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 20px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18);
+}
+#shiLiuLie .kong { padding: 20px; color: var(--muted); }
+
+/* 查找命中 */
+mark.mingZhong {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: inherit;
+  border-radius: 2px;
+}
+#gaoLiangNei mark.mingZhong { color: transparent; }
+mark.mingZhong.dangQian { background: color-mix(in srgb, var(--accent) 70%, transparent); }
+
+/* 只读正文里的本地路径（点一下在本窗口打开，配合"后退/前进"） */
+a.luJing {
+  color: var(--accent);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+/* 状态栏 */
+#zhuangTaiLan {
+  flex-shrink: 0;
+  padding: 3px var(--sp-3);
+  border-top: 1px solid var(--line);
+  background: var(--lan-bg);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+/* 第 60 轮：标题栏「文件名 + 完整路径」、窗口按钮里的吸附/置顶图标 */
+#wenJianLuJing {
+  flex: 0 1 48%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+  direction: rtl; /* 路径太长时优先保留尾部（文件名与上级目录） */
+  text-align: left;
+}
+
+/* 全屏（Fullscreen API 或 .quanPing 兜底）：再次双击恢复 */
+:fullscreen { background: var(--panel-bg); }
+img:fullscreen, video:fullscreen { object-fit: contain; max-width: 100vw; max-height: 100vh; }
+.quanPing {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background: #111 !important;
+  overflow: auto !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+.docYe.quanPing, .pptYe.quanPing { background: #fff !important; color: #1b1b1b !important; display: block !important; padding: 28px; }
+.kuai.quanPing { background: var(--panel-bg) !important; display: block !important; padding: 24px; }
+img.quanPing { display: block !important; object-fit: contain !important; }
+#yuLanLie.quanPing { display: flex !important; background: var(--panel-bg) !important; }
+#yuLanLie.quanPing #yuLanBiao { position: sticky; top: 0; z-index: 2; }
+:fullscreen video { max-height: calc(100vh - 60px) !important; }
+
+/* 关闭确认 */
+#guanBiZheZhao {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0,0,0,.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+#guanBiKuang {
+  width: min(430px, 100%);
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px 18px 14px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.3);
+}
+#guanBiTi { font-size: 15px; font-weight: 650; margin-bottom: 6px; }
+#guanBiWen { font-size: var(--fs-sm); color: var(--muted); line-height: 1.55; margin-bottom: 14px; }
+#guanBiAnNiuHang { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+#guanBiAnNiuHang button {
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  cursor: pointer;
+}
+#guanBiAnNiuHang button:hover { background: var(--hover); }
+#guanBiAnNiuHang button.zhu { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+#daYinWenBen { display: none; }
+
+/* 第 81 轮项 6：文字类只读内容 —— 文字上 text 光标（可框选），文字外抓手（拖动画布） */
+#wenBen { cursor: text; }
+#juanCuo.nmKeTuo { cursor: grab; }
+#juanCuo.nmWenZiShang, #juanCuo.nmWenZiShang #wenBen { cursor: text; }
+.docWen, .pptWen, .kuaiWen, .biaoGeWai { cursor: text; }
+body.nmTuoZhong #juanCuo, body.nmTuoZhong #juanCuo #wenBen { cursor: grabbing; }
+
+/* 网站模式未保存提醒（与关闭确认同款式） */
+#wangYeWeiBaoCun {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0,0,0,.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+#wangYeWeiKuang {
+  width: min(430px, 100%);
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px 18px 14px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.3);
+}
+#wangYeWeiTi { font-size: 15px; font-weight: 650; margin-bottom: 6px; }
+#wangYeWeiWen { font-size: var(--fs-sm); color: var(--muted); line-height: 1.55; margin-bottom: 14px; }
+#wangYeWeiAnNiu { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+#wangYeWeiAnNiu button {
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  cursor: pointer;
+}
+#wangYeWeiAnNiu button.zhu { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   第 78 轮项 18：压缩包左树 / 网页卡 / 双栏收起 / 系统打开浮钮 / 密码框
+   ═══════════════════════════════════════════════════════════════════ */
+#neiRongWai { flex: 1 1 auto; min-height: 0; display: flex; overflow: hidden; }
+#neiRongHang { position: relative; }
+
+/* 压缩包：左侧目录树 */
+#yaSuoBaoLie {
+  flex: 0 0 clamp(180px, 28%, 330px);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--line);
+  contain: layout paint;
+}
+#yaSuoBaoTou {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--gongJu-bg);
+  font-size: var(--fs-sm);
+}
+#yaSuoBaoMing { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#yaSuoBaoJi { margin-left: auto; white-space: nowrap; font-size: 11px; }
+.yaSuoAnNiu {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 1px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.yaSuoAnNiu:hover { background: var(--hover); }
+#yaSuoShu { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 4px 24px; font-size: var(--fs-sm); }
+/* 第 81 轮项 6：压缩包左右分隔线（可拖动；双击恢复默认宽度） */
+#yaSuoFenGe {
+  flex: 0 0 7px;
+  cursor: col-resize;
+  background: var(--line);
+  position: relative;
+  touch-action: none;
+  z-index: 5;
+}
+#yaSuoFenGe::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: .55;
+}
+#yaSuoFenGe:hover, body.tuoYaSuoFenGe #yaSuoFenGe { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
+.yaSuoTiao {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: default;
+  user-select: none;
+}
+.yaSuoTiao:hover { background: var(--hover); }
+.yaSuoTiao.dangQian { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.yaSuoTiao .yaSuoChevron {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+}
+.yaSuoTiao .yaSuoChevron.kong { visibility: hidden; }
+.yaSuoTiao .yaSuoIcon { flex: 0 0 14px; width: 14px; height: 14px; opacity: .8; }
+.yaSuoTiao .yaSuoMing { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.yaSuoTiao .yaSuoDaXiao { margin-left: auto; color: var(--muted); font-size: 10px; }
+.yaSuoTiao .yaSuoBiao {
+  flex: 0 0 auto;
+  font-size: 9px;
+  line-height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.yaSuoTiao .yaSuoBiao.suo { border-color: #b07b2a; color: #8a5a12; }
+.yaSuoTiao .yaSuoBiao.wei { border-color: #b33; color: #a22; }
+.yaSuoTiao .yaSuoBiao.jia { border-color: #3a6ea5; color: #2c5886; }
+#yaSuoGeShi {
+  flex: 0 0 auto;
+  max-height: 45%;
+  overflow: auto;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  background: var(--card);
+}
+#yaSuoGeShi b { color: var(--ink); font-weight: 650; }
+#yaSuoJieGuo {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  font-size: 11px;
+  color: var(--muted);
+}
+#yaSuoJieGuoWen { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#yaSuoKong {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px;
+  color: var(--muted);
+  text-align: center;
+}
+#yaSuoKong .yaSuoKongTi { font-size: 15px; color: var(--ink); }
+#yaSuoKong .yaSuoKongWen { max-width: 460px; font-size: var(--fs-sm); line-height: 1.65; }
+
+/* 源码/效果：分隔条上的收起按钮 */
+#fenGeTiao { flex-basis: 15px; }
+.fenGeAnNiu {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+.fenGeAnNiu:hover { background: var(--hover); color: var(--ink); }
+#anNiuShouZuo { top: calc(50% - 26px); }
+#anNiuShouYou { top: calc(50% + 6px); }
+#neiRongHang.zuoShou #juanCuo { display: none !important; }
+#neiRongHang.youShou #yuLanLie { display: none !important; }
+#neiRongHang.zuoShou #anNiuShouZuo,
+#neiRongHang.youShou #anNiuShouYou { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* 网页卡工具栏 + sandbox iframe（第 81 轮项 12：两行：纯图标行 + 标签页行） */
+#wangYeGongJu {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--gongJu-bg);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+}
+.wangYeHang { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
+#wangYeGongJu button {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  min-width: 28px;
+  height: 26px;
+  padding: 2px 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+#wangYeGongJu button svg { width: 14px; height: 14px; display: block; }
+#wangYeGongJu button:hover { background: var(--hover); }
+#wangYeGongJu button:disabled { opacity: .45; cursor: not-allowed; }
+#wangYeGongJu button.fenLanAnNiu[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+}
+#wangYeUrl {
+  flex: 1 1 auto;
+  min-width: 60px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  padding: 3px 8px;
+  height: 26px;
+  font: inherit;
+}
+#wangYeUrl:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 0; }
+#wangYeTiShi { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+/* 标签页行：溢出用左右箭头滚动 */
+#wangYeTabLie {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+#wangYeTabLie::-webkit-scrollbar { height: 0; }
+.wangYeTab {
+  flex: 0 0 auto;
+  max-width: 190px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.wangYeTab.dangQian { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+.wangYeTab .tabMing { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wangYeTab .tabGuan {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+#wangYeGongJu button.tabGun { padding: 0 4px; font-size: 14px; line-height: 1; }
+#wangYeGongJu button.tabGun:disabled { opacity: .3; }
+
+/* 网站模式正文：4 态分栏（0 只网页 / 1 网页左源码右 / 2 源码左网页右 / 3 网页上源码下） */
+#wangYeLie { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; background: #fff; }
+#wangYeKuangHe { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; }
+#wangYeKuang { flex: 1 1 auto; width: 100%; height: 100%; border: 0; background: #fff; }
+#wangYeYuan {
+  flex: 0 0 50%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--line);
+}
+#wangYeLie.fen2 #wangYeYuan { order: -1; border-left: 0; border-right: 1px solid var(--line); }
+#wangYeLie.fen3 { flex-direction: column; }
+#wangYeLie.fen3 #wangYeKuangHe { flex: 1 1 60%; }
+#wangYeLie.fen3 #wangYeYuan { flex: 1 1 40%; border-left: 0; border-top: 1px solid var(--line); }
+#wangYeYuan .yuanHang {
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  background: var(--gongJu-bg);
+  border-bottom: 1px solid var(--line);
+}
+#wangYeYuan button {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  min-width: 26px;
+  height: 24px;
+  padding: 1px 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+#wangYeYuan button svg { width: 13px; height: 13px; display: block; }
+#wangYeYuan button:hover { background: var(--hover); }
+#wangYeYuan button:disabled { opacity: .45; cursor: not-allowed; }
+#wangYeYuan button.xiaLa { min-width: 15px; width: 15px; padding: 0; border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; color: var(--muted); }
+#wangYeYuan button.xiaLa svg { width: 10px; height: 10px; }
+#yuanBaoCunZu > #anNiuYuanBaoCun { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#wangYeYuan #yuanLeiXing { margin-left: auto; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#wangYeYuan #yuanSouRuKe { display: inline-flex; align-items: center; gap: 2px; flex: 0 1 190px; min-width: 110px; }
+#wangYeYuan #yuanSouRu { flex: 1 1 auto; min-width: 60px; height: 24px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); padding: 2px 6px; font: inherit; }
+#wangYeYuan #yuanTiHuanRu { flex: 0 1 140px; min-width: 90px; height: 24px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); padding: 2px 6px; font: inherit; }
+#wangYeYuan #anNiuYuanShang, #wangYeYuan #anNiuYuanXia { min-width: 20px; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; color: var(--muted); }
+#wangYeYuan .souJiAnNiu { border: 0; background: transparent; color: var(--muted); font-size: 11px; padding: 0 2px; }
+#wangYeYuanWen {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  resize: none;
+  background: transparent;
+  color: var(--ink);
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow: auto;
+  tab-size: 4;
+  cursor: text;
+}
+#wangYeYuanWen[readonly] { color: var(--muted); }
+#wangYeYuanWen:focus { outline: none; }
+
+/* 加密压缩包密码框 */
+#mimaZheZhao {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0,0,0,.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+#mimaKuang {
+  width: min(400px, 100%);
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.3);
+}
+#mimaTi { font-size: 15px; font-weight: 650; margin-bottom: 6px; }
+#mimaWen { margin-bottom: 10px; font-size: var(--fs-sm); line-height: 1.55; word-break: break-all; }
+#mimaShuRu {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-bg);
+  color: var(--ink);
+  padding: 7px 10px;
+  font: inherit;
+}
+#mimaShuRu:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.mimaCuo { margin-top: 6px; color: #b3261e; font-size: 11px; }
+#mimaAnNiu { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+#mimaAnNiu button {
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  cursor: pointer;
+}
+#mimaAnNiu button.zhu { background: var(--accent); border-color: var(--accent); color: #fff; }
+#mimaAnNiu button:hover { filter: brightness(.97); }
+
+/* 打印：只留内容；表格/幻灯片/纸张按页断开 */
+@media print {
+  #biaoTiLan, #gongJuLan, #wangYeGongJu, #zhuangTaiLan, #tiShiLie, #fenGeTiao, #guanBiZheZhao, #mimaZheZhao, #yuLanBiao,
+  #yaSuoBaoLie, #yaSuoFenGe, #wangYeYuan { display: none !important; }
+  html, body { height: auto; overflow: visible; background: #fff; color: #000; }
+  #zhengWen, #neiRongWai, #neiRongHang { display: block; overflow: visible; height: auto; }
+  #juanCuo, #meiTiLie, #wangYeLie { display: none !important; }
+  #yuLanLie { display: block !important; border: 0; overflow: visible; }
+  #yuLanNei { overflow: visible; }
+  #yuLanNei iframe { position: static; width: 100%; height: 80vh; }
+  #kuaiLie { overflow: visible; padding: 0; height: auto; }
+  /* 打印不带屏幕上的缩放/平移 */
+  #kuaiNei, #wenBen, #gaoLiang, #shiLiuNei { transform: none !important; }
+  .biaoGeWai { max-height: none; overflow: visible; }
+  .biaoGeWai thead th { position: static; }
+  .kuai, .docYe, .pptYe { break-inside: avoid; }
+  #daYinWenBen { display: block; white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px; }
+}

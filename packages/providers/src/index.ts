@@ -7,6 +7,7 @@ import type { MoxingGongYing, GongYingRenZheng, GongYingXieYi } from './types.js
 export * from './types.js';
 export * from './base.js';
 export * from './tools.js';
+export * from './xian-liu.js';
 export * from './util.js';
 export * from './mo-xing-neng-li.js';
 export * from './audio.js';
@@ -29,7 +30,19 @@ const YUSHE_BIE_MING: Record<string, string> = {
   'mimo-cn': 'mimo-token-plan',
 };
 
-export function chuangjianGongYing(
+/**
+ * **provider 创建之后的挂钩**（第 39 轮：装 rpm/tpm 限流用）。
+ *
+ * 为什么用挂钩而不是在每个调用点包一层：全仓有十几处 `congYuSheChuangJian(...)`
+ * （主对话、降级链、看图转交、压缩、分身、群编排、定时任务…），漏一处就等于那条路不限流。
+ * 宿主在启动时注册一次 ⇒ 所有创建点自动生效；不注册就**完全保持原行为**。
+ */
+let chuangJianHouGou: ((p: MoxingGongYing) => MoxingGongYing) | null = null;
+export function sheProviderJiXieGou(h: ((p: MoxingGongYing) => MoxingGongYing) | null): void {
+  chuangJianHouGou = h;
+}
+
+function zaoGongYingBen(
   protocol: GongYingXieYi,
   auth: GongYingRenZheng = {},
   id?: string
@@ -49,6 +62,15 @@ export function chuangjianGongYing(
       throw new Error(`unknown protocol ${String(never)}`);
     }
   }
+}
+
+export function chuangjianGongYing(
+  protocol: GongYingXieYi,
+  auth: GongYingRenZheng = {},
+  id?: string
+): MoxingGongYing {
+  const p = zaoGongYingBen(protocol, auth, id);
+  return chuangJianHouGou ? chuangJianHouGou(p) : p;
 }
 
 /** 按预设 id + 用户覆盖项创建 Provider */

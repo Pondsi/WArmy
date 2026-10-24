@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<!-- 独立页面（不走主界面）：脚本/样式只许本地文件，媒体只许本地 file://，不许任何外链 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src file: data:; media-src file: data:; font-src 'self'; frame-src 'self' data: https: http:"/>
+<title>nm 文件查看器</title>
+<link rel="stylesheet" href="./nm-viewer.css"/>
+</head>
+<body>
+  <!-- 顶栏：Windows/Linux 无系统边框（frame:false），拖动靠 -webkit-app-region: drag -->
+  <div id="biaoTiLan">
+    <span id="paiZi">nm</span>
+    <span id="wenJianMing" title="">文件</span>
+    <span id="wenJianLuJing" class="jingYin" title=""></span>
+    <div id="chuangKouAnNiu">
+      <!-- 顺序按主界面：吸附 → 置顶 → 最小化 → 最大化 → 关闭 -->
+      <button id="anNiuXiFu" class="tb" title="吸附：靠近其它 nm 窗口时自动贴边" aria-label="吸附">
+        <span id="xiFuTu" aria-hidden="true"></span>
+      </button>
+      <!-- 置顶：用 nm 自己的图钉（主界面部分由主界面改为同一枚） -->
+      <button id="anNiuZongShiDing" class="tb" title="总在最前（只影响本窗口）" aria-label="置顶" aria-pressed="false">
+        <svg class="tbSvg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3-1-6Z"/><path d="M12 15v5"/></svg>
+      </button>
+      <button id="anNiuZuiXiao" class="ck" title="最小化" aria-label="最小化">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 7.5h7v1h-7z" fill="currentColor"/></svg>
+      </button>
+      <button id="anNiuZuiDa" class="ck" title="最大化 / 还原" aria-label="最大化或还原">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="3" y="3" width="10" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.35"/></svg>
+      </button>
+      <button id="anNiuGuanBi" class="ck guanBi" title="关闭" aria-label="关闭">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.2 3.2l9.6 9.6M12.8 3.2l-9.6 9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!--
+    工具栏（第 66 轮项 9）：
+      · 正常 = 一行；窄窗时按钮收进「…」；
+      · 最小内联 = 保存 + 查找（含上下箭头）+「…」；
+      · 替换展开且一行放不下 ⇒ 两行：替换框落到查找下方，并把「…」里的项回排到第二行；
+      · 永远没有横向滚动条（overflow:hidden，靠测量收/放）。
+  -->
+  <div id="gongJuLan">
+    <div id="gongJuHang1" class="gongJuHang">
+      <span id="baoChunZu" class="fenZu">
+        <button id="anNiuBaoCun" class="tb2" title="保存（Ctrl+S）" aria-label="保存">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.2 2.8h8.1l2 2v8.4H3.2z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M5.6 2.9v3.4h5V2.9M5.4 13.1v-3.5h5.2v3.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="anNiuBaoCunXia" class="xiaLa" title="保存选项" aria-label="保存选项" aria-haspopup="menu">
+          <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false"><path d="M2 3.6 5 6.4l3-2.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </span>
+      <span id="muLuZu" class="fenZu" data-shouQi="1">
+        <button id="anNiuSuoZaiMuLu" class="tb2" title="打开文件所在目录" aria-label="目录">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 4.2h4l1.1 1.4H14v6.2c0 .6-.5 1.1-1.1 1.1H3.1c-.6 0-1.1-.5-1.1-1.1V4.2Z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="anNiuMuLuXia" class="xiaLa" title="目录选项" aria-label="目录选项" aria-haspopup="menu">
+          <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false"><path d="M2 3.6 5 6.4l3-2.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </span>
+      <!-- 第 81 轮项 11：网页卡/新建网页从文件工具栏移除；网页模式改成独立两行工具栏（见下方 #wangYeGongJu） -->
+      <span id="houQianZu" class="fenZu" data-shouQi="1">
+        <button id="anNiuHouTui" class="tb2" title="撤销 / 后退（Alt+←）" aria-label="撤销（后退）">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6.2 3.2 2.6 6.8l3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.8 6.8h5.1c2.8 0 4.6 1.5 4.6 4.1v1.4" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/></svg>
+        </button>
+        <!-- 第 81 轮项 11：撤销右侧直接是「前进」按钮（不是下拉） -->
+        <button id="anNiuQianJin" class="tb2" title="前进（Alt+→）" aria-label="前进">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M9.8 3.2l3.6 3.6-3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.2 6.8H8.1c-2.8 0-4.6 1.5-4.6 4.1v1.4" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/></svg>
+        </button>
+      </span>
+      <span id="souKuang">
+        <span id="souRuKe">
+          <input id="souRu" type="text" placeholder="查找…（Ctrl+F）" autocomplete="off" spellcheck="false" aria-label="查找"/>
+          <!-- 上下箭头**放在输入框内部右侧**：输入文字有 padding-right，不会压住箭头 -->
+          <span id="souJianKe">
+            <button id="anNiuShangYiGe" class="souJian" title="上一个（Shift+F3）" aria-label="上一个">↑</button>
+            <button id="anNiuXiaYiGe" class="souJian" title="下一个（F3 / 回车）" aria-label="下一个">↓</button>
+          </span>
+        </span>
+        <!-- 结果数 = 展开/收起替换的按钮（点它才出现替换输入与替换按钮）；无匹配时只显示图标 -->
+        <button id="souJi" class="souJiAnNiu" title="展开 / 收起替换" aria-expanded="false" aria-controls="tiHuanZu">0/0</button>
+        <span id="tiHuanZu" hidden>
+          <input id="tiHuanRu" type="text" placeholder="替换为…" autocomplete="off" spellcheck="false" aria-label="替换为"/>
+          <button id="anNiuTiHuan" class="tb2" title="替换当前匹配（需要先有搜索结果且文件可编辑）" aria-label="替换" disabled>
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h7.2l-1.8-1.8M13 11.5H5.8l1.8 1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 4.5 8.4 2.7m4.6 8.8-1.8 1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </button>
+        </span>
+      </span>
+      <!-- 第 81 轮项 11：自动换行紧挨在缩放左侧 -->
+      <button id="anNiuHuanHang" class="tb2 kai" aria-pressed="true" title="自动换行（Alt+Z）" aria-label="自动换行" data-shouQi="1">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 4.2h11M2.5 8h8.2a2.4 2.4 0 0 1 0 4.8H8.2M2.5 12h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="m9.4 10.5 1.7 1.7-1.7 1.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span id="suoFangZu" class="fenZu" data-shouQi="1">
+        <button id="anNiuSuoXiao" class="tb2" title="缩小（只读内容可直接滚轮；可编辑内容 Ctrl+滚轮）" aria-label="缩小">−</button>
+        <button id="suoFangZhi" class="tb2" title="点击复位 100%；Ctrl+9 适应窗口；也可在这里滚轮缩放">100%</button>
+        <button id="anNiuFangDa" class="tb2" title="放大（只读内容可直接滚轮；可编辑内容 Ctrl+滚轮）" aria-label="放大">+</button>
+      </span>
+      <button id="anNiuGengDuo" class="tb2 gengDuo" title="更多" aria-label="更多" aria-haspopup="menu" hidden>…</button>
+    </div>
+    <!-- 第二行：替换框（对齐到查找框下方）+ 「…」里回排出来的项；只在需要时显示 -->
+    <div id="gongJuHang2" class="gongJuHang" hidden></div>
+  </div>
+  <div id="gongJuCaiDan" class="gongJuCaiDan" role="menu" hidden></div>
+
+  <!--
+    第 81 轮项 12：网站模式 —— 全新两行工具栏。
+      第一行（纯图标）：后退 / 前进 / 刷新 / 地址栏 / 历史 / 在新标签页打开 / 分栏 / 关闭；
+      第二行：网页标签页（溢出用左右箭头滚动）。
+    分栏 4 态：只网页（正常色）/ 网页左源码右 / 源码左网页右 / 网页上源码下（后 3 态主题色）。
+    本地文件源码可编辑（即时反映到网页预览）；远程网页只读且源码工具禁用。
+  -->
+  <div id="wangYeGongJu" hidden>
+    <div id="wangYeHang1" class="wangYeHang">
+      <button id="anNiuWangYeHou" class="tb2" title="后退" aria-label="后退">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M9.8 3.2 5.4 7.6l4.4 4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="anNiuWangYeQian" class="tb2" title="前进" aria-label="前进">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6.2 3.2l4.4 4.4-4.4 4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="anNiuWangYeShua" class="tb2" title="刷新" aria-label="刷新">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M13 8a5 5 0 1 1-1.6-3.7M13.2 2.8v2.9h-2.9" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <input id="wangYeUrl" type="text" autocomplete="off" spellcheck="false" placeholder="输入网址或本地网页路径（https://…）" aria-label="网址"/>
+      <button id="anNiuWangYeLiShi" class="tb2" title="历史" aria-label="历史" aria-haspopup="menu">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.6V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </button>
+      <button id="anNiuWangYeXinBiaoQian" class="tb2" title="在新标签页打开" aria-label="在新标签页打开">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="2.8" y="4.3" width="8.2" height="7.2" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.3 4.3V3.4c0-.4.3-.7.7-.7h6.2c.4 0 .7.3.7.7v6.2c0 .4-.3.7-.7.7h-.9" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9.8 2.6v2.6M8.5 3.9h2.6" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </button>
+      <button id="anNiuWangYeFenLan" class="tb2 fenLanAnNiu" title="分栏：只网页" aria-label="分栏" aria-pressed="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="2.4" y="3" width="11.2" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9.2 3v10" fill="none" stroke="currentColor" stroke-width="1.2"/><path class="fenLanYouZhi" d="M2.4 8h6.8" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0"/></svg>
+      </button>
+      <button id="anNiuWangYeGuan" class="tb2" title="关闭网站模式，回到文件预览" aria-label="关闭网站模式">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.2 3.2l9.6 9.6M12.8 3.2l-9.6 9.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div id="wangYeHang2" class="wangYeHang">
+      <button id="anNiuWangYeTabZuo" class="tb2 tabGun" title="向左滚动标签页" aria-label="向左滚动标签页">‹</button>
+      <div id="wangYeTabLie" role="tablist" aria-label="网页标签页"></div>
+      <button id="anNiuWangYeTabYou" class="tb2 tabGun" title="向右滚动标签页" aria-label="向右滚动标签页">›</button>
+      <span id="wangYeTiShi" class="jingYin" hidden></span>
+    </div>
+  </div>
+
+  <!-- 菜单里保留的旧入口（不单独显示；由工具栏下拉菜单/「…」调用） -->
+  <button id="anNiuLingCunWei" hidden tabindex="-1" aria-hidden="true">另存为</button>
+  <label hidden><input type="checkbox" id="gouZiDongBaoCun" checked/></label>
+  <button id="anNiuDaYin" hidden tabindex="-1" aria-hidden="true">打印</button>
+  <button id="anNiuDaKai" hidden tabindex="-1" aria-hidden="true">打开</button>
+
+  <div id="zhengWen">
+    <div id="tiShiLie" hidden></div>
+    <div id="neiRongWai">
+      <!-- 第 78 轮项 18：压缩包左树右预览（树只显示包内条目；预览复用右侧各种查看器） -->
+      <aside id="yaSuoBaoLie" hidden aria-label="压缩包目录">
+        <div id="yaSuoBaoTou">
+          <span id="yaSuoBaoMing" title="">压缩包</span>
+          <span id="yaSuoBaoJi" class="jingYin"></span>
+          <button id="anNiuJieYaQuanBu" class="yaSuoAnNiu" title="把这一层全部解压到压缩包旁边的新目录">全部解压</button>
+          <button id="anNiuYaSuoGeShi" class="yaSuoAnNiu" title="可打开 / 受保护不可打开的格式说明">格式</button>
+        </div>
+        <div id="yaSuoShu" role="tree" aria-label="包内目录树"></div>
+        <div id="yaSuoGeShi" hidden></div>
+        <div id="yaSuoJieGuo" hidden>
+          <span id="yaSuoJieGuoWen"></span>
+          <button id="anNiuDaKaiJieYaMuLu" class="yaSuoAnNiu" hidden>打开目录</button>
+        </div>
+      </aside>
+      <!-- 第 81 轮项 6：压缩包左右分隔线（可拖动；双击恢复 28%） -->
+      <div id="yaSuoFenGe" hidden title="拖动调整目录宽度；双击恢复默认"></div>
+      <div id="neiRongHang">
+        <div id="yaSuoKong" hidden>
+          <div class="yaSuoKongTi">压缩包</div>
+          <div class="yaSuoKongWen">从左侧目录树选择文件预览；右键条目可解压。包内套的 .zip 会以文件夹展开。</div>
+        </div>
+        <!-- 可编辑文本：textarea 负责编辑，后面一层只画"高亮色块"（文字透明），两层字体/内边距/换行规则完全一致 -->
+        <div id="juanCuo" hidden>
+          <div id="gaoLiang" aria-hidden="true"><div id="gaoLiangNei"></div></div>
+          <textarea id="wenBen" spellcheck="false" wrap="soft"></textarea>
+        </div>
+        <!-- SVG / HTML / Markdown：左源码、右效果；中间分隔条可拖动，双击回 50%；两侧都能收起 -->
+        <div id="fenGeTiao" hidden title="拖动调整源码/效果宽度；双击恢复 50%">
+          <button id="anNiuShouZuo" class="fenGeAnNiu" title="收起源码（只留预览）" aria-label="收起源码">‹</button>
+          <button id="anNiuShouYou" class="fenGeAnNiu" title="收起预览（只留源码）" aria-label="收起预览">›</button>
+        </div>
+        <div id="yuLanLie" hidden>
+          <div id="yuLanBiao">
+            <span id="yuLanLei">效果预览</span>
+            <button id="anNiuYuLanQuanPing" class="tb2" title="全屏 / 恢复（也可以双击预览）">全屏</button>
+          </div>
+          <div id="yuLanNei"></div>
+        </div>
+        <!-- 只读文档：docx/pdf 一页、pptx 一页一段、xlsx 一个工作表一段（正文已抽取，查找在此生效） -->
+        <div id="kuaiLie" hidden><div id="kuaiNei"></div></div>
+        <!--
+          二进制：虚拟十六进制视图（第 66 轮项 32）。
+          只渲染可见行；字节按块向主进程取，不把整文件塞进页面。
+          可编辑时点字节 → 输入两位十六进制；保存走增量 + SHA-256 校验 + 备份 + 原子写。
+        -->
+        <div id="shiLiuLie" hidden>
+          <div id="shiLiuBiao">
+            <span id="shiLiuXinXi">十六进制</span>
+            <span id="shiLiuXuanZhong" class="jingYin"></span>
+          </div>
+          <div id="shiLiuGunDong" tabindex="0" role="grid" aria-label="十六进制字节视图">
+            <div id="shiLiuNei"></div>
+            <input id="shiLiuShuRu" class="shiLiuShuRu" maxlength="2" autocomplete="off" spellcheck="false" aria-label="字节值（两位十六进制）" hidden/>
+          </div>
+        </div>
+        <!-- 图片 / 音频 / 视频 -->
+        <div id="meiTiLie" hidden></div>
+        <!-- 网站模式正文：网页（sandbox iframe）+ 可选源码栏（第 81 轮项 12） -->
+        <div id="wangYeLie" hidden>
+          <div id="wangYeKuangHe">
+            <iframe id="wangYeKuang" title="网页预览" sandbox="allow-scripts allow-forms allow-popups allow-downloads" referrerpolicy="no-referrer"></iframe>
+          </div>
+          <!-- 源码栏：本地文件可编辑；远程网页只读且控件禁用。源码区自带 2 行工具栏 -->
+          <div id="wangYeYuan" hidden aria-label="网页源码">
+            <div id="wangYeYuanHang1" class="gongJuHang yuanHang">
+              <span id="yuanBaoCunZu" class="fenZu">
+                <button id="anNiuYuanBaoCun" class="tb2" title="保存源码（Ctrl+S）" aria-label="保存">
+                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.2 2.8h8.1l2 2v8.4H3.2z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M5.6 2.9v3.4h5V2.9M5.4 13.1v-3.5h5.2v3.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+                </button>
+                <button id="anNiuYuanBaoCunXia" class="xiaLa" title="保存选项" aria-label="保存选项" aria-haspopup="menu">
+                  <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false"><path d="M2 3.6 5 6.4l3-2.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </span>
+              <button id="anNiuYuanHouTui" class="tb2" title="后退" aria-label="后退">
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M9.8 3.2 5.4 7.6l4.4 4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button id="anNiuYuanQianJin" class="tb2" title="前进" aria-label="前进">
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6.2 3.2l4.4 4.4-4.4 4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button id="anNiuYuanHuanHang" class="tb2 kai" aria-pressed="true" title="自动换行（Alt+Z）" aria-label="自动换行">
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 4.2h11M2.5 8h8.2a2.4 2.4 0 0 1 0 4.8H8.2M2.5 12h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="m9.4 10.5 1.7 1.7-1.7 1.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <span id="yuanSuoFangZu" class="fenZu">
+                <button id="anNiuYuanSuoXiao" class="tb2" title="缩小源码" aria-label="缩小">−</button>
+                <button id="yuanSuoFangZhi" class="tb2" title="点击复位 100%">100%</button>
+                <button id="anNiuYuanFangDa" class="tb2" title="放大源码" aria-label="放大">+</button>
+              </span>
+              <span id="yuanLeiXing" class="jingYin"></span>
+            </div>
+            <div id="wangYeYuanHang2" class="gongJuHang yuanHang">
+              <span id="yuanSouRuKe">
+                <input id="yuanSouRu" type="text" placeholder="查找源码…" autocomplete="off" spellcheck="false" aria-label="查找源码"/>
+                <button id="anNiuYuanShang" class="souJian" title="上一个" aria-label="上一个">↑</button>
+                <button id="anNiuYuanXia" class="souJian" title="下一个" aria-label="下一个">↓</button>
+              </span>
+              <input id="yuanTiHuanRu" type="text" placeholder="替换为…" autocomplete="off" spellcheck="false" aria-label="替换为"/>
+              <button id="anNiuYuanTiHuan" class="tb2" title="替换当前匹配" aria-label="替换" disabled>
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h7.2l-1.8-1.8M13 11.5H5.8l1.8 1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 4.5 8.4 2.7m4.6 8.8-1.8 1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </button>
+              <span id="yuanSouJi" class="souJiAnNiu">0/0</span>
+            </div>
+            <textarea id="wangYeYuanWen" spellcheck="false" wrap="soft" aria-label="网页源码"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="zhuangTaiLan"><span id="zhuangTai">就绪</span></div>
+
+  <!-- 未保存改动的关闭确认（自定义窗控的可见降级；原生 Alt+F4 还需要主进程 will-prevent-unload 对话框） -->
+  <div id="guanBiZheZhao" hidden>
+    <div id="guanBiKuang" role="dialog" aria-modal="true" aria-labelledby="guanBiTi">
+      <div id="guanBiTi">有未保存的修改</div>
+      <div id="guanBiWen">关闭这个 nm 窗口前，要先把修改保存到文件吗？</div>
+      <div id="guanBiAnNiuHang">
+        <button id="anNiuBaoCunGuanBi" class="zhu">保存并关闭</button>
+        <button id="anNiuBuBaoCunGuanBi">不保存，直接关闭</button>
+        <button id="anNiuQuXiaoGuanBi">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 网站模式：关闭 / 切换分栏 / 切标签时，源码有未保存修改的提醒 -->
+  <div id="wangYeWeiBaoCun" hidden>
+    <div id="wangYeWeiKuang" role="dialog" aria-modal="true" aria-labelledby="wangYeWeiTi">
+      <div id="wangYeWeiTi">源码有未保存的修改</div>
+      <div id="wangYeWeiWen">继续之前，要先把源码保存到文件吗？</div>
+      <div id="wangYeWeiAnNiu">
+        <button id="anNiuWangYeSaveJiXu" class="zhu">保存并继续</button>
+        <button id="anNiuWangYeFangQi">不保存，继续</button>
+        <button id="anNiuWangYeQuXiao">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 加密压缩包：密码框（只在内存里用；不写设置/不落盘） -->
+  <div id="mimaZheZhao" hidden>
+    <div id="mimaKuang" role="dialog" aria-modal="true" aria-labelledby="mimaTi">
+      <div id="mimaTi">这个压缩包需要密码</div>
+      <div id="mimaWen" class="jingYin"></div>
+      <input id="mimaShuRu" type="password" autocomplete="off" spellcheck="false" placeholder="压缩包密码" aria-label="压缩包密码"/>
+      <div id="mimaCuo" class="mimaCuo" hidden></div>
+      <div id="mimaAnNiu">
+        <button id="anNiuMimaQue" class="zhu">解锁</button>
+        <button id="anNiuMimaQu">取消</button>
+      </div>
+      <div class="jingYin" style="font-size:11px;margin-top:8px">密码只保存在本窗口内存，关闭窗口即清除；不会写入磁盘或设置。</div>
+    </div>
+  </div>
+
+  <!-- 打印文本文件时用的替身：textarea 不能可靠地整篇打印 -->
+  <pre id="daYinWenBen" hidden></pre>
+
+  <script src="./nm-viewer.js"></script>
+</body>
+</html>

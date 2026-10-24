@@ -16,6 +16,7 @@
   --radius: 8px;
   --radius-sm: 6px;
   --accent: #A87654;
+  --accent-ink: #fff;
   --danger: #fa5151;
   --focus: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
   font-size: var(--fs-md);
@@ -25,9 +26,9 @@
 :root, [data-theme="light"] {
   --rail-bg: #ebebeb;
   --rail-active: var(--accent);
-  --rail-fg: #666;
-  --rail-fg-hover: #111;
-  --rail-active-fg: #fff;
+  --rail-fg: var(--ink-dim);
+  --rail-fg-hover: var(--ink);
+  --rail-active-fg: var(--accent-ink, #fff);
   --list-bg: #f7f7f7;
   --chat-bg: #ededed;
   --panel-bg: #f5f5f5;
@@ -37,7 +38,7 @@
   --line: #e5e5e5;
   --input-bg: #ffffff;
   --input-border: #e5e5e5;
-  --me-bubble: #95ec69;
+  --me-bubble: var(--accent);
   --them-bubble: #ffffff;
   --queue-bg: #fff7e6;
   --queue-border: #f0e0b0;
@@ -70,9 +71,9 @@
 [data-theme="dark"] {
   --rail-bg: #1e1e1e;
   --rail-active: var(--accent);
-  --rail-fg: #888;
-  --rail-fg-hover: #eee;
-  --rail-active-fg: #fff;
+  --rail-fg: var(--ink-dim);
+  --rail-fg-hover: var(--ink);
+  --rail-active-fg: var(--accent-ink, #fff);
   --list-bg: #252526;
   --chat-bg: #1e1e1e;
   --panel-bg: #252526;
@@ -82,7 +83,7 @@
   --line: #3a3a3a;
   --input-bg: #333;
   --input-border: #444;
-  --me-bubble: #2f6b3a;
+  --me-bubble: var(--accent);
   --them-bubble: #2d2d2d;
   --queue-bg: #3a3018;
   --queue-border: #5a4a20;
@@ -210,7 +211,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .biaoTiLanDongZuoJi button:hover { background: var(--hover); }
 .biaoTiLanDongZuoJi button:active { filter: brightness(0.92); }
-.biaoTiLanDongZuoJi button.biaoTiLanJiHuo { background: var(--hover); color: var(--accent); }
+.biaoTiLanDongZuoJi button.biaoTiLanJiHuo { background: transparent; color: var(--accent); }
+.biaoTiLansvg[fill="none"] { fill: none; }
 .biaoTiLanDongZuoJi #anNiuuiRefresh {
   margin-right: 8px;
 }
@@ -450,6 +452,8 @@ body.liaoTianChuangKou .liaoTianBuJu {
   flex: 1; overflow: auto; padding: var(--sp-4) var(--sp-5);
   contain: strict;
   height: 0;
+  /* 第 66 轮 项 30/33：滚动定位由我们自己的"最新内容顶部对齐"控制，禁止浏览器滚动锚定改回去 */
+  overflow-anchor: none;
 }
 /* 微信式：整行铺满，头像贴边、气泡自然撑开 */
 .xiaoXi { display: flex; margin-bottom: 14px; gap: 10px; animation: msg-in 0.12s ease; width: 100%; }
@@ -506,6 +510,12 @@ body.liaoTianChuangKou .liaoTianBuJu {
 /* 流式中的思考块：同一套规则（不再单独给高度） */
 .liuShiKuai .siKaoKuai pre.liuShiSiKao {
   max-height: none; overflow: visible;
+}
+/* 第 48 轮：「执行过程」里的中间回复（模型发起工具调用时写给用户的话）—— 正文观感，不是思考的灰字 */
+.siKaoKuai .zhongJianHuiFu {
+  margin: 8px 0 6px; padding: 2px 0 2px 10px;
+  border: 0; border-left: 3px solid var(--accent); border-radius: 0;
+  background: transparent; color: var(--ink); font-size: var(--fs-md); line-height: 1.5;
 }
 /* 调用链里「默认模型」标签 */
 .moRenBiaoQian {
@@ -895,10 +905,13 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
   background: var(--panel-bg);
   overflow: auto;
   padding: var(--sp-3);
+  overflow-anchor: none;
 }
 .mianBanKuai {
   background: var(--card); border: 1px solid var(--line);
   border-radius: var(--radius); padding: var(--sp-3); margin-bottom: 10px;
+  /* 第 66 轮 项 33：第四列卡片滚动时减少跨卡片的布局/绘制传播 */
+  contain: layout paint;
 }
 .mianBanKuai h3 {
   margin: 0 0 10px; font-size: var(--fs-sm); color: var(--muted);
@@ -1859,6 +1872,41 @@ table.hkMiYaoJi td.hkMiYaoJiMiaoShu { color: var(--ink-dim); font-size: var(--fs
   .tianJiaLianXiGrid { grid-template-columns: minmax(0, 1fr); }
   #lianXiMyqr svg { width: 160px; height: 160px; }
 }
+
+/* 项目/群聊：左侧加入、右侧创建的一体化窗口 */
+.duiHuaKuangKa:has(.erHeYiGrid) {
+  width: min(880px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.erHeYiGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.erHeYiLan {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--hover);
+}
+.erHeYiLan > h4 { margin: 0 0 8px; font-size: var(--fs-md); }
+.erHeYiInput {
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--input-bg, var(--card));
+  color: var(--ink);
+  font: inherit;
+}
+.erHeYiBtnRow { display: flex; justify-content: flex-end; margin-top: 12px; }
+@media (max-width: 720px) {
+  .erHeYiGrid { grid-template-columns: minmax(0, 1fr); }
+}
 /* R13：端口无法绑定 —— 明确告知 + 实测可用的建议端口（建议≠白名单；点一下只填输入框） */
 #wangLuoDuanKouConflict {
   border-left: 3px solid var(--warn-line);
@@ -2226,6 +2274,34 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 /* ── 我的页：用户名在头像下、邮箱在用户名右侧、凭证带小眼睛 ─────────────── */
 .woMingHang { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
 .woMingHang .usernameDisplay { font-size: 20px; font-weight: 600; }
+
+/* ── 第 67 轮 项 4：我的页 = logo 左 + 右侧左列邮箱/账号、右列头像/用户名 ── */
+.woDingR67 { display: flex; align-items: flex-start; gap: 22px; flex-wrap: wrap; }
+.woLogoR67 { flex: 0 0 auto; display: flex; align-items: flex-start; padding-top: 4px; }
+.woLogoR67 .pinPailogo { width: 96px; height: 96px; object-fit: contain; }
+.woR67Main { flex: 1; min-width: 320px; display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; flex-wrap: wrap; }
+.woR67Left { flex: 1; min-width: 260px; max-width: 620px; display: flex; flex-direction: column; gap: 12px; }
+.woR67Right { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; min-width: 150px; padding-top: 2px; }
+.woR67Right .avAnNiu { align-self: center; }
+.woR67Right .woMingHang { margin-top: 8px; }
+.woYouJianHang { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.woYouJianHang #pYouJian { min-width: 220px; flex: 1; max-width: 420px; }
+.woMingPianBtn { display: inline-flex; align-items: center; justify-content: center; padding: 7px 9px; }
+#warmyAuthMyCard { margin-top: 2px; }
+#warmyAuthMyCard:empty { display: none; }
+/* 我的名片弹窗：服务商多选 + 生成二维码/链接（链接一律纯文本，不做可点样式） */
+.woCardBody { min-width: min(520px, 72vw); }
+.woCardAvatar { margin-top: 0; }
+.woCardProvTitle { margin: 12px 0 6px; font-weight: 600; }
+.woCardProvList { display: flex; flex-direction: column; gap: 6px; max-height: 210px; overflow: auto; padding: 2px; }
+.woCardProv { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.woCardProv .jingYin { font-size: 11px; }
+.woCardOut { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.woCardQr { width: 300px; height: 300px; max-width: 100%; }
+.woCardQr svg { width: 100%; height: 100%; display: block; }
+.woCardLinkHang { display: flex; gap: 8px; width: 100%; align-items: center; }
+.woCardLinkHang input { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+.woCardLinkHang input, .woCardLinkHang input:focus { text-decoration: none; cursor: text; }
 .woYouJianInline { display: inline-flex; align-items: center; }
 .woYouJianInline input { min-width: 200px; }
 /* 小眼睛：低调的图标按钮，开启时高亮 */
@@ -2271,7 +2347,7 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 /* 改名对齐后：#appTi 三列布局 + 聊天列输入框可见 */
 #appTi {
   display: grid;
-  grid-template-columns: 64px var(--list-w, 200px) 1fr;
+  grid-template-columns: 64px var(--list-w, 240px) 1fr;
   height: calc(100vh - 40px);
   min-height: 0;
   overflow: hidden;
@@ -3965,7 +4041,7 @@ html { font-weight: var(--fw-ui, 400); }
   border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
   border-radius: 8px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--card) 96%, #fff 4%) 0%, var(--card) 55%, color-mix(in srgb, var(--card) 92%, #000 8%) 100%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent), inset 0 -1px 0 color-mix(in srgb, #000 12%, transparent), 0 1px 2px color-mix(in srgb, #000 10%, transparent);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, #fff 72%, transparent), inset 0 -2px 0 color-mix(in srgb, #000 20%, transparent), 0 3px 10px color-mix(in srgb, #000 18%, transparent), 0 1px 2px color-mix(in srgb, #000 14%, transparent);
   cursor: pointer; transition: transform .1s ease, box-shadow .12s ease;
 }
 .xingDongHang:hover {
@@ -4030,6 +4106,42 @@ html { font-weight: var(--fw-ui, 400); }
 .sheJiaoField span { font-size: 11px; color: var(--muted); }
 .sheJiaoField input { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-size: var(--fs-sm); }
 .sheJiaoDong { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+/* 第 67 轮 项 17：一个牛马可挂多个个人微信，每个账号单独显示时间与操作 */
+.sheJiaoWechatList { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.sheJiaoWechatAccount { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--bg); }
+.sheJiaoWechatMain { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sheJiaoWechatMain .sheJiaoZai { margin-left: auto; }
+.sheJiaoWechatMeta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.sheJiaoWechatDong { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
+/* 第 67 轮 项 16：标注哪些第四列卡片是真的每轮注入的提示词层 */
+.panInjectBadge {
+  display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 999px;
+  font-size: 10px; line-height: 16px; vertical-align: 1px;
+  color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+/* 第 67 轮 项 11/12：服务商附加内容 —— 纯文本、无链接样式；只有它自己有悬停气泡 */
+.waiJiaHang { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.waiJiaNeiRong {
+  position: relative; display: flex; flex-direction: column; gap: 3px;
+  padding: 7px 9px; border: 1px dashed var(--line); border-radius: 8px;
+  color: var(--ink); background: color-mix(in srgb, var(--card) 88%, transparent);
+  cursor: default; text-decoration: none; font-size: var(--fs-sm); line-height: 1.55;
+}
+.waiJiaWen { white-space: pre-wrap; overflow-wrap: anywhere; text-decoration: none; }
+.waiJiaLaiYuan { font-size: 10px; color: var(--muted); }
+.waiJiaNeiRong::after {
+  content: attr(data-tip); position: absolute; left: 0; bottom: calc(100% + 7px);
+  width: max-content; max-width: min(360px, 76vw); padding: 7px 9px;
+  border-radius: 8px; background: color-mix(in srgb, var(--ink) 92%, #000);
+  color: var(--card); font-size: 11px; line-height: 1.45; white-space: normal;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25); opacity: 0; visibility: hidden;
+  transform: translateY(3px); transition: opacity .12s ease, transform .12s ease;
+  pointer-events: none; z-index: 9;
+}
+.waiJiaNeiRong:hover::after, .waiJiaNeiRong:focus-visible::after { opacity: 1; visibility: visible; transform: translateY(0); }
+.waiJiaNeiRong:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+.waiJiaNeiRong a, .waiJiaNeiRong .luJingLian { color: inherit !important; text-decoration: none !important; cursor: default !important; }
 
 /* 第 33 轮 项 1：授权卡列表 —— 每行竖排、可滚动、不被卡片高度裁成「只有一条」 */
 .assistLieBiao li.shouQuanHang2, .shouQuanHang2 { display: flex !important; flex-direction: column; gap: 2px; padding: 6px 4px; }
@@ -4063,3 +4175,148 @@ html { font-weight: var(--fw-ui, 400); }
   #mianBanJiHuaKuai { max-height: 320px; }
   #mianBanShouQuanKuai { max-height: 260px; }
 }
+
+/* r38-zhongDuanBaoZhi：中断保留卡（重启后把上一轮的半成品原样贴回来） */
+.zhongDuanBaoZhi { border:1px solid var(--line,#333); border-left:3px solid #d9822b; border-radius:10px; padding:10px 12px; background:var(--card,#1d1d1f); max-width:760px; }
+.zhongDuanBaoZhiBiao { font-size:12px; opacity:.75; margin-bottom:6px; }
+.zhongDuanBaoZhiZhengWen { margin-top:6px; white-space:pre-wrap; word-break:break-word; font-size:13px; }
+.zhongDuanBaoZhiKuai .xingDongKuai { margin-top:8px; }
+
+/* ── 第 41 轮 ─────────────────────────────────────────────────────────── */
+/* 模型额度弹窗：节点是直接挂到 <body> 的，以前**没有任何定位样式** ⇒ 被
+   z-index:12000 的遮罩整块盖住，用户只看到黑罩、看不到窗（真事故）。
+   这里给它自己的层：居中、可滚、比遮罩高 1 级。 */
+.shouDongMoXingTan {
+  position: fixed;
+  z-index: 12001;
+  left: 50%;
+  top: calc(50% + 20px);
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 40px));
+  max-height: min(78vh, 760px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #e5e5e5);
+  background: var(--panel-bg, #ffffff);
+  color: var(--ink, #191919);
+  box-shadow: var(--shadow-md, 0 18px 60px rgba(0, 0, 0, 0.28));
+}
+
+/* 授权卡的「撤销」小按钮：文字以前不是居中对齐（行高/内边距不匹配），
+   统一成居中的内联 flex，边框盒不再歪。 */
+.shouQuanCheXiaoXiao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+  min-height: 22px;
+  box-sizing: border-box;
+}
+
+/* 最近删除（设置底部，默认折叠） */
+#laJiQu > summary { list-style: none; }
+#laJiQu > summary::-webkit-details-marker { display: none; }
+#laJiQu > summary::before { content: '▸'; display: inline-block; width: 14px; transition: transform .15s; }
+#laJiQu[open] > summary::before { transform: rotate(90deg); }
+.laJiHang .laJiZhai { max-width: 100%; }
+/* 弹窗里的次级按钮：.anNiuXiao 默认按**浅色背景**配色（深字），
+   放进深色弹窗后文字和底色几乎一样 ⇒ 看起来像"空按钮"。这里给深底浅字。 */
+.shouDongMoXingTan .anNiuXiao {
+  color: var(--ink, #191919);
+  border: 1px solid var(--line, #e5e5e5);
+  background: var(--card, #ffffff);
+}
+.shouDongMoXingTan .anNiuXiao:hover { background: var(--hover, #ececec); }
+
+/* 第 44 轮（用户项 1「更紧凑」+ 项 2「精确读数」+ 必填才让提交）：模型额度窗。
+   ⚠️ 与 renderer.css 里那一段**必须一字不差**（renderer.css 后加载会覆盖，两份不一致就会出现"改了一份没生效"）。 */
+.moXingYuEDan .mqBiao { font-weight: 600; margin-bottom: 4px; }
+.moXingYuEDan .mqLai { margin-bottom: 6px; }
+.moXingYuEDan .mqHang { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 6px 0; }
+.moXingYuEDan .mqGe { margin: 0; min-width: 0; }
+.moXingYuEDan .mqGe > label { display: block; margin-bottom: 2px; }
+.moXingYuEDan .mqChang { margin: 6px 0; }
+.moXingYuEDan .mqShu { width: 88px; }
+.moXingYuEDan .mqXuan { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.moXingYuEDan .mqJingQue { font-size: 11px; color: var(--ink-3, #8a8a8a); margin-top: 2px; white-space: nowrap; }
+.moXingYuEDan .mqJingQue.mqPian { color: var(--warn, #b26a00); }
+.moXingYuEDan .mqBiTian { font-style: normal; color: var(--danger, #d10000); margin-left: 3px; }
+.moXingYuEDan .mqGuiGe { margin-top: 6px; font-size: 11px; line-height: 1.45; }
+.moXingYuEDan button:disabled,
+.moXingYuEDan .anNiuZhuYao.mqJin { opacity: .45; cursor: not-allowed; }
+
+/* ===== 第 44 轮 用户项 3：授权卡的按钮对齐 =====
+   前几轮"改过了还是歪"的原因写在 app.js 的 `renderShouQuanKa` 注释里（「添加」被挂到卡片根 + 内联 marginLeft）。
+   这里把两个按钮钉成**同一个盒**，并让审批/决策那一行的按钮**等高**（`once` 是 .anNiuZhuYao、其余是 .anNiuXiao，
+   原本字号与内边距都不同 ⇒ 同一行里上沿下沿都不齐）。两份 CSS（app.css / renderer.css）必须一字不差。 */
+#shouQuanKaiGuan { gap: 6px; }
+#shouQuanKaiGuan > span:first-of-type { flex: 1 1 auto; }
+.shouQuanCheXiaoXiao,
+.shouQuanTianJiaXiao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 24px;
+  padding: 2px 8px;
+  margin: 0;
+  font-size: var(--fs-xs, 12px);
+  line-height: 1.2;
+}
+.shouQuanCheXiaoXiao { margin-left: auto; }
+.aiqOpts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: stretch; }
+.aiqOpts > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 30px;
+  line-height: 1.25;
+}
+.piZhunKa .aiqOpts > button { min-height: 30px; }
+
+.siKaoKuai, .xingDongKuai {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent); border-radius: 8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 96%, #fff 4%) 0%, var(--card) 55%, color-mix(in srgb, var(--card) 92%, #000 8%) 100%);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, #fff 72%, transparent), inset 0 -2px 0 color-mix(in srgb, #000 20%, transparent), 0 3px 10px color-mix(in srgb, #000 18%, transparent), 0 1px 2px color-mix(in srgb, #000 14%, transparent);
+  overflow-wrap: anywhere;
+}
+.siKaoKuai > summary, .xingDongKuai > summary {
+  display: flex; align-items: center; box-sizing: border-box; width: 100%;
+  min-height: 26px; padding: 3px 0; margin: 2px 0;
+  border: 0; background: transparent; box-shadow: none;
+  color: var(--muted); font-size: var(--fs-xs);
+}
+.xingDongXiang { padding: 4px 8px 6px 28px; margin: 0 0 0 10px; border-left: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 0; background: transparent; box-shadow: none; }
+.xingDongZu { border: none; box-shadow: none; background: transparent; }
+
+
+/* @ 提到牛马的下拉（第 51 轮）：固定定位、可滚动、循环选择 */
+.atTiShiKuang{position:fixed;z-index:13000;max-height:240px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:4px}
+.atHang{padding:6px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.atHang:hover{background:var(--hover)}
+.atHang.atXuan{background:var(--hover);outline:1px solid var(--accent, #4c8dff)}
+
+
+/* @ 搜索（第 51 轮）：隐藏输入法目标叠在聊天框上，候选框照常弹；查询串不显示在消息框 */
+.atShuRu{position:fixed;z-index:12900;opacity:0;pointer-events:none;border:0;outline:0;background:transparent;color:transparent;caret-color:transparent;resize:none}
+.atTiShiKuang{position:fixed;z-index:13000;max-height:240px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:4px}
+.atHang{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden}
+.atHang:hover{background:var(--hover)}
+.atHang.atXuan{background:var(--hover);outline:1px solid var(--accent, #4c8dff)}
+.atIco{display:inline-flex;width:16px;height:16px;flex:0 0 16px;opacity:.75}
+.atIco svg{width:16px;height:16px;display:block}
+.atMing{overflow:hidden;text-overflow:ellipsis}
+
+/* 第 67 轮：renderer.css 后加载的 .woDing{align-items:center} 会盖掉新布局，提高一级特异性 */
+.woDing.woDingR67 { align-items: flex-start; }
+.woDing.woDingR67 > .woLogoR67 { align-self: flex-start; }
+
+/* R78: 第二列入口按钮与「我的牛马」一致，去掉外框 */
+#lieBiaoDongZuo, #anNiuJiaRuqr { border: none !important; background: transparent !important; }
+#lieBiaoDongZuo:hover, #anNiuJiaRuqr:hover { background: var(--hover) !important; }
+/* R78: 第二列水印不因列变窄而被裁切 */
+#lieBiaoLan::after { background-size: min(168px, calc(100% - 24px)) auto; }

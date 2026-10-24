@@ -6,6 +6,7 @@
   <title>WArmy</title>
   <link rel="stylesheet" href="./app.css" />
   <link rel="stylesheet" href="./renderer.css" />
+  <link rel="stylesheet" href="./auth-gate.css" />
 </head>
 <body>
   <div id="app">
@@ -16,8 +17,9 @@
         <span class="biaoTiLanPinPai" id="biaoTiLanPinPai"></span>
       </div>
       <div class="biaoTiLanDongZuoJi" id="biaoTiLanDongZuoJi">
-        <button id="anNiuZongShiDing" title="置顶窗口" aria-label="always qiYong top" data-i18n-title="tip.pin">
-          <svg class="biaoTiLansvg" viewBox="0 0 100 100" aria-hidden="true"><rect x="18" y="14" width="64" height="12" rx="6" fill="currentColor"/><polygon points="32,26 68,26 58,58 42,58" fill="none" stroke="currentColor" stroke-width="9" stroke-linejoin="round"/><rect x="45" y="58" width="10" height="28" rx="5" fill="currentColor"/></svg>
+        <button id="anNiuZhuXiFu" title="吸附（靠近屏幕边缘自动贴边）" aria-label="snap"><svg class="biaoTiLansvg" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M716.8 409.6v204.8a204.8 204.8 0 1 1-409.6 0V409.6H204.8v204.8a307.2 307.2 0 1 0 614.4 0V409.6H716.8z m0-51.2h102.4V256H716.8v102.4z m-409.6 0V256H204.8v102.4h102.4z m51.2-153.6v409.6a153.6 153.6 0 0 0 307.2 0V204.8h204.8v409.6a358.4 358.4 0 0 1-716.8 0V204.8h204.8z"/></svg></button>
+        <button id="anNiuZongShiDing" title="置顶窗口" aria-label="always on top" data-i18n-title="tip.pin">
+          <svg class="biaoTiLansvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3-1-6Z"/><path d="M12 15v5"/></svg>
         </button>
         <button id="anNiuuiRefresh" title="刷新并清除缓存" aria-label="refresh" data-i18n-title="tip.refresh">
           <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.7 0 3.2.7 4.2 1.9V3h1.5v4.5H9.2V6.2h1.9A4 4 0 1 0 12 8h1.5z"/></svg>
@@ -41,14 +43,16 @@
           <img class="touXiangTuPian yinCang" id="selfAvatarImg" alt="" />
           <span class="touXiang" id="selfAvatar" data-i18n="nav.touXiang">我</span>
         </button>
+        <!-- 第 65 轮 项 21：我的智能体 = 牛马管理局图标（agents-hq.svg 同一形状） -->
         <button class="ceLanTiaoMu jiHuo" data-nav="singleAi" data-i18n-title="tip.singleAi">
-          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M14,78 C14,60 24,54 34,54 C40,54 45,56 49,60"/><rect x="58" y="26" width="24" height="24" rx="4"/><circle cx="70" cy="38" r="3" fill="currentColor"/><line x1="70" y1="26" x2="70" y2="18"/><circle cx="70" cy="16" r="3" fill="currentColor"/></g></svg>
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/><line x1="40" y1="52" x2="48" y2="52"/><line x1="52" y1="52" x2="60" y2="52"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>
         </button>
         <button class="ceLanTiaoMu" data-nav="internalGroup" data-i18n-title="tip.internalGroup">
           <svg viewBox="0 0 100 100"><path d="M50,14 A36,36 0 1,1 21,71" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M34,50 C30,38 42,38 50,50 C58,62 70,62 66,50 C62,38 50,38 50,50" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/></svg>
         </button>
+        <!-- 第 65 轮 项 21：联系人 = 旧「我的智能体」图标 -->
         <button class="ceLanTiaoMu" data-nav="externalChat" data-i18n-title="tip.externalChat">
-          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><circle cx="42" cy="34" r="14"/><path d="M18,82 C18,62 30,56 42,56 C48,56 53,58 57,62"/><path d="M68,32 C74,38 74,50 68,56"/><path d="M78,24 C88,36 88,52 78,64"/></g></svg>
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M14,78 C14,60 24,54 34,54 C40,54 45,56 49,60"/><rect x="58" y="26" width="24" height="24" rx="4"/><circle cx="70" cy="38" r="3" fill="currentColor"/><line x1="70" y1="26" x2="70" y2="18"/><circle cx="70" cy="16" r="3" fill="currentColor"/></g></svg>
         </button>
         <button class="ceLanTiaoMu" data-nav="externalGroup" data-i18n-title="tip.externalGroup">
           <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M16,78 C16,62 24,54 34,54 C44,54 52,62 52,78"/><circle cx="66" cy="34" r="12"/><path d="M48,78 C48,62 56,54 66,54 C76,54 84,62 84,78"/></g></svg>
@@ -363,14 +367,6 @@
             <div class="ctgDim" id="xiangMuTaiXiaoXi"></div>
           </div>
 
-        <!-- 项目记忆（项目规矩 / 目标）：**只属于项目**，所以只出现在右栏，
-             且渲染层按「这个会话是不是项目」决定显隐 —— 我的牛马/联系人/群聊不该看到它。
-             文案复用既有的 pm.* 键（不新增语言包键）。 -->
-        <div class="mianBanKuai yinCang" id="xiangMuJiYiKuai">
-          <div class="mianBanBiaoTi"><span data-i18n="pm.title">项目记忆</span></div>
-          <div id="xiangMuJiYiHe"></div>
-        </div>
-
           <!-- 聊天类会话（联系人/群聊）：本会话自己的知识库 -->
           <div class="mianBanKuai" id="mianBanZhiShiKuKuai" style="display:none">
             <h3 data-i18n="panel.kb.biaoTi"></h3>
@@ -388,6 +384,20 @@
                 <span data-i18n="panel.summary.auto"></span>
               </label>
               <span class="jingYin" id="zhaiYaoXiaoXi" style="font-size:11px"></span>
+            </div>
+          </div>
+
+          <!-- 「规范」（用户新增）：**只作用于当前这一个会话**的做事规范。
+               联系人 / 项目 / 群聊有这张卡（我的牛马没有），默认排在第四列底部并默认折叠；
+               展开是可编辑的提示词，存 userData/guifan/<sessionId>.md，优先级在「术」之后。 -->
+          <div class="mianBanKuai" id="mianBanGuiFanKuai" style="display:none">
+            <h3 data-i18n="panel.guifan.biaoTi"></h3><span class="panInjectBadge" title="每轮注入当前项目会话">注入</span>
+            <p class="jingYin" style="font-size:11px" data-i18n="panel.guifan.tiShi"></p>
+            <textarea id="shuRuKuangGuiFan" rows="5" style="width:100%;box-sizing:border-box"></textarea>
+            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <button class="anNiuXiao" id="anNiuGuiFanBaoCun" data-i18n="panel.guifan.baoCun"></button>
+              <button class="anNiuXiao" id="anNiuGuiFanChongZhi" data-i18n="panel.guifan.chongZhi"></button>
+              <span class="jingYin" id="guiFanXiaoXi" style="font-size:11px"></span>
             </div>
           </div>
 
@@ -562,6 +572,12 @@
   <script src="./niu-ma-templates.js"></script>
   <script src="./persona-templates.js"></script>
   <script src="./persona-templates-user.js"></script>
+  <script src="./du-yin.js"></script>
+  <!-- 主机地址/服务商的纯解析函数：经典脚本，挂在 window.WarmyNetHost；
+       与 scripts/verify-r63-net.mjs 共用同一份实现（不在测试里另写一套）。 -->
+  <script src="./net-host-pure.js"></script>
+  <!-- 第 66 轮 项 20：登录/注册/助记词门禁先于 app.js 加载 -->
+  <script src="./auth-gate.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
