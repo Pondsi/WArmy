@@ -1,12 +1,12 @@
 {
-  "version": "0.2.26",
-  "notes": "WArmy 0.2.26：成员角色矩阵（创建者可设/取消管理员、邀请可选 admin，服务端二次校验）；其余同 0.2.25（F11/4K、签名邀请、加入申请落盘、IM 发送、受控拟态）。",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.2.26/WArmy-Setup-0.2.26.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.2.26/WArmy-Setup-0.2.26.exe",
-  "sha256": "d08b78cc0052ff871d4eea3899d84c075bafb0be6c0ed7ffeb2a5a5562806dfd",
-  "size": 146653068,
+  "version": "0.2.27",
+  "notes": "WArmy 0.2.27：首启右上角关闭二次确认（牛马图标串 + 返回界面/关闭程序）；其余同 0.2.26。",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.2.27/WArmy-Setup-0.2.27.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.2.27/WArmy-Setup-0.2.27.exe",
+  "sha256": "22d7b27db83a2705c7fb09eadce0ac2ef9a5226972671d4634de45445662e47a",
+  "size": 146654176,
   "mandatory": false,
-  "publishedAt": "2026-10-25T14:30:27.991Z",
+  "publishedAt": "2026-10-25T15:06:20.914Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.2.26"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.2.27"
 }

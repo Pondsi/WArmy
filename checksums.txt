@@ -1,1 +1,1 @@
-d08b78cc0052ff871d4eea3899d84c075bafb0be6c0ed7ffeb2a5a5562806dfd  WArmy-Setup-0.2.26.exe
+22d7b27db83a2705c7fb09eadce0ac2ef9a5226972671d4634de45445662e47a  WArmy-Setup-0.2.27.exe

@@ -97,6 +97,8 @@
       seconds: '秒',
       error: '操作失败',
       close: '关闭',
+      quitBack: '返回界面',
+      quitApp: '关闭程序',
       termsTitle: '隐私与使用条款',
       termsFallback: '请阅读并同意以下条款后继续。',
       termsAgree: '我已阅读并同意以上全部条款',
@@ -192,6 +194,8 @@
       seconds: '秒',
       error: '操作失敗',
       close: '關閉',
+      quitBack: '返回介面',
+      quitApp: '關閉程式',
       termsTitle: '隱私與使用條款',
       termsFallback: '請閱讀並同意以下條款後繼續。',
       termsAgree: '我已閱讀並同意以上全部條款',
@@ -287,6 +291,8 @@
       seconds: 's',
       error: 'Operation failed',
       close: 'Close',
+      quitBack: 'Back to app',
+      quitApp: 'Quit app',
       termsTitle: 'Privacy & terms',
       termsFallback: 'Please read and accept the terms below to continue.',
       termsAgree: 'I have read and agree to all of the above',
@@ -382,6 +388,8 @@
       seconds: '秒',
       error: '操作に失敗しました',
       close: '閉じる',
+      quitBack: '画面に戻る',
+      quitApp: 'アプリを終了',
       termsTitle: 'プライバシーと利用規約',
       termsFallback: '以下の規約を読んで同意すると続行できます。',
       termsAgree: '上記の規約をすべて読み、同意します',
@@ -477,6 +485,8 @@
       seconds: '초',
       error: '작업에 실패했습니다',
       close: '닫기',
+      quitBack: '화면으로 돌아가기',
+      quitApp: '앱 종료',
       termsTitle: '개인정보 및 이용약관',
       termsFallback: '아래 약관을 읽고 동의하면 계속할 수 있습니다.',
       termsAgree: '위 약관을 모두 읽고 동의합니다',
@@ -572,6 +582,8 @@
       seconds: 's',
       error: 'Échec de l’opération',
       close: 'Fermer',
+      quitBack: "Retour à l'interface",
+      quitApp: "Quitter l'application",
       termsTitle: 'Confidentialité et conditions',
       termsFallback: 'Veuillez lire et accepter les conditions ci-dessous pour continuer.',
       termsAgree: 'J’ai lu et j’accepte l’ensemble de ce qui précède',
@@ -667,6 +679,8 @@
       seconds: 's',
       error: 'La operación falló',
       close: 'Cerrar',
+      quitBack: 'Volver a la interfaz',
+      quitApp: 'Cerrar la aplicación',
       termsTitle: 'Privacidad y condiciones',
       termsFallback: 'Lee y acepta las condiciones siguientes para continuar.',
       termsAgree: 'He leído y acepto todo lo anterior',
@@ -762,6 +776,8 @@
       seconds: 's',
       error: 'A operação falhou',
       close: 'Fechar',
+      quitBack: 'Voltar à interface',
+      quitApp: 'Fechar o aplicativo',
       termsTitle: 'Privacidade e termos',
       termsFallback: 'Leia e aceite os termos abaixo para continuar.',
       termsAgree: 'Li e aceito tudo o que está acima',
@@ -857,6 +873,8 @@
       seconds: 'с',
       error: 'Операция не удалась',
       close: 'Закрыть',
+      quitBack: 'Вернуться в интерфейс',
+      quitApp: 'Закрыть приложение',
       termsTitle: 'Конфиденциальность и условия',
       termsFallback: 'Прочитайте и примите условия ниже, чтобы продолжить.',
       termsAgree: 'Я прочитал(а) и принимаю всё вышеизложенное',
@@ -952,6 +970,8 @@
       seconds: 's',
       error: 'Operacio malsukcesis',
       close: 'Fermi',
+      quitBack: 'Reiri al interfaco',
+      quitApp: 'Fermu la programon',
       termsTitle: 'Privateco kaj kondiĉoj',
       termsFallback: 'Bonvolu legi kaj akcepti la subajn kondiĉojn por daŭrigi.',
       termsAgree: 'Mi legis kaj akceptas ĉion ĉi-supre',
@@ -1416,13 +1436,50 @@
     root.innerHTML = '<div class="warmyAuthScene warmyAuthSceneEmbed" aria-hidden="true">'
       + '<iframe src="./firstrun-scenes/index.html?embed=1&scenes=' + BEN_CI_CHANG_JING + '&rotate=0" tabindex="-1" scrolling="no"></iframe>'
       + '</div><div class="warmyAuthCard" id="warmyAuthCard"></div>'
-      + '<div class="warmyAuthCloseHot" aria-hidden="false"><button type="button" class="warmyAuthCloseX" id="warmyAuthCloseX" title="关闭程序" aria-label="关闭程序"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>';
+      + '<div class="warmyAuthCloseHot" aria-hidden="false"><button type="button" class="warmyAuthCloseX" id="warmyAuthCloseX" title="' + escapeHtml(t('quitApp')) + '" aria-label="' + escapeHtml(t('quitApp')) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>'
+      /* 首启关闭二次确认：内容是一串项目里用过的牛马图标，选项只有「返回界面 / 关闭程序」 */
+      + '<div class="warmyAuthQuitMask" id="warmyAuthQuitMask">'
+      + '<div class="warmyAuthQuitCard" role="dialog" aria-modal="true" aria-label="' + escapeHtml(t('quitApp')) + '">'
+      + '<div class="warmyAuthQuitHorses" aria-hidden="true">'
+      + '<img class="warmyAuthQuitHorse h1" src="./icons/logo-color.svg" alt=""/>'
+      + '<img class="warmyAuthQuitHorse h2" src="./icons/logo-tight.png" alt=""/>'
+      + '<img class="warmyAuthQuitHorse h3" src="./icons/logo-16.png" alt=""/>'
+      + '<img class="warmyAuthQuitHorse h4" src="./icons/muMa.svg" alt=""/>'
+      + '<img class="warmyAuthQuitHorse h5" src="./icons/prompt-ai.svg" alt=""/>'
+      + '<img class="warmyAuthQuitHorse h6" src="./mimic/characters/builtin-default.svg" alt=""/>'
+      + '</div>'
+      + '<div class="warmyAuthQuitActs">'
+      + '<button type="button" class="warmyAuthQuitBtn" id="warmyAuthQuitBack">' + escapeHtml(t('quitBack')) + '</button>'
+      + '<button type="button" class="warmyAuthQuitBtn danger" id="warmyAuthQuitNow">' + escapeHtml(t('quitApp')) + '</button>'
+      + '</div></div></div>';
     document.body.appendChild(root);
+    const quitMask = root.querySelector('#warmyAuthQuitMask');
+    const quitBack = root.querySelector('#warmyAuthQuitBack');
+    const quitNow = root.querySelector('#warmyAuthQuitNow');
+    const closeQuitConfirm = () => {
+      quitMask?.classList.remove('on');
+      try { root.querySelector('#warmyAuthCloseX')?.focus(); } catch { /* noop */ }
+    };
     root.querySelector('#warmyAuthCloseX')?.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      // 首启右上角关闭：直接退出程序，不是最小化到托盘。
+      // 首启右上角关闭：先二次确认；只有确认后才真的退出程序。
+      if (quitMask) {
+        quitMask.classList.add('on');
+        try { quitBack?.focus(); } catch { /* noop */ }
+      }
+    });
+    quitBack?.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); closeQuitConfirm(); });
+    quitNow?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
       void window.warmy.appQuit?.('first-run-close').catch(() => null);
+    });
+    quitMask?.addEventListener('click', (ev) => {
+      if (ev.target === quitMask) { ev.preventDefault(); closeQuitConfirm(); }
+    });
+    quitMask?.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); closeQuitConfirm(); }
     });
     root.addEventListener('click', onClick);
     root.addEventListener('input', onInput);

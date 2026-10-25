@@ -1,3 +1,13 @@
+## 0.2.27 — 2026-10-25（已发布）
+
+> Release: https://github.com/Pondsi/WArmy/releases/tag/v0.2.27 · 安装包 WArmy-Setup-0.2.27.exe（146,654,176 B，sha256 22d7b27d…2e47a）
+
+### 第 83 轮补丁（首启关闭二次确认）
+- 首启右上角 X 不再直接退出：先弹确认层，内容为项目用过的 6 个牛马图标（logo-color / logo-tight / logo-16 / muMa / prompt-ai / 拟态角色）。
+- 选项只有「返回界面」与「关闭程序」；返回只收起确认层，关闭才真的 `appQuit('first-run-close')`。
+- 支持 Esc 返回、点击遮罩空白返回、键盘焦点回到 X；10 语言文案。
+- 门禁：`verify-r83-quit-confirm` **8/0**（不直接退、图标真实加载、两个选项、返回后仍活着、关闭真的退出）。
+
 ## 0.2.26 — 2026-10-25（已发布）
 
 > Release: https://github.com/Pondsi/WArmy/releases/tag/v0.2.26 · 安装包 WArmy-Setup-0.2.26.exe（146,653,068 B，sha256 d08b78cc…06dfd）

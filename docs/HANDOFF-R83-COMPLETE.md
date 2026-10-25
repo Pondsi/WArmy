@@ -94,3 +94,14 @@
 - 记录：[VERIFY-R84-10X.md](VERIFY-R84-10X.md) · [VERIFY-R84-10X.log](VERIFY-R84-10X.log)。
 - 安装包：`release/WArmy-Setup-0.2.26.exe`，146,653,068 B，sha256 `d08b78cc0052ff871d4eea3899d84c075bafb0be6c0ed7ffeb2a5a5562806dfd`。
 - 发布：Release v0.2.26；真实 profile 已删除，首启语言页已打开。
+
+## 10. 0.2.27：首启关闭二次确认
+
+- 首启右上角 X 改为先弹确认层，不再直接退出。
+- 内容：项目用过的 6 个牛马图标（`logo-color.svg`、`logo-tight.png`、`logo-16.png`、`muMa.svg`、`prompt-ai.svg`、拟态角色 `builtin-default.svg`），带轻微错峰上下浮动；窄屏自动换行。
+- 选项只有「返回界面」「关闭程序」；返回只收起层，关闭才 `appQuit('first-run-close')`；Esc/点遮罩空白返回，焦点回到 X。
+- 10 语言文案；`prefers-reduced-motion` 下关闭动画。
+- 门禁：`verify-r83-quit-confirm` **8/0**；fast 31 门禁全绿。
+- **0.2.27 最终 10 轮**：**10/10 PASSED**（2026-10-25 14:37:43 → 15:04:50，约 27 分 07 秒）；单轮 684 项 ×10 + 专项 432 项，0 FAIL；记录 [VERIFY-R85-10X.md](VERIFY-R85-10X.md)。
+- 安装包：`release/WArmy-Setup-0.2.27.exe`，146,654,176 B，sha256 `22d7b27db83a2705c7fb09eadce0ac2ef9a5226972671d4634de45445662e47a`。
+- 发布：Release v0.2.27；真实 profile 已删除，首启语言页已打开。可在首启直接点右上角 X 验收二次确认。

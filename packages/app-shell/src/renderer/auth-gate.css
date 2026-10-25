@@ -879,3 +879,85 @@ body.warmyTourOn .yinDaoGaoLiang {
 }
 .warmyAuthCloseX:hover { background: #fff; color: #9a4f28; }
 .warmyAuthGate.warmyAuthHidden .warmyAuthCloseHot { display: none; }
+
+/* 首启关闭二次确认：一串用过的牛马图标 + 返回界面 / 关闭程序 */
+.warmyAuthQuitMask {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483001;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(28, 20, 14, .42);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.warmyAuthQuitMask.on { display: flex; }
+.warmyAuthQuitCard {
+  width: min(520px, calc(100vw - 48px));
+  padding: 20px 20px 16px;
+  border: 1px solid rgba(184, 106, 60, .35);
+  border-radius: 18px;
+  background: #fffdf8;
+  box-shadow: 0 24px 64px rgba(60, 36, 20, .28), 0 2px 8px rgba(60, 36, 20, .12);
+  animation: warmyAuthQuitIn .18s ease-out both;
+}
+.warmyAuthQuitHorses {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  min-height: 94px;
+  padding: 6px 2px 8px;
+}
+.warmyAuthQuitHorse {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 3px 3px rgba(90, 58, 32, .18));
+  animation: warmyAuthQuitBob 2.4s ease-in-out infinite;
+}
+.warmyAuthQuitHorse.h1 { width: 82px; height: 82px; transform: rotate(-5deg); }
+.warmyAuthQuitHorse.h2 { width: 92px; height: 74px; animation-delay: -.35s; }
+.warmyAuthQuitHorse.h3 { width: 44px; height: 44px; animation-delay: -.7s; }
+.warmyAuthQuitHorse.h4 { width: 56px; height: 56px; transform: rotate(4deg); animation-delay: -1.05s; }
+.warmyAuthQuitHorse.h5 { width: 52px; height: 52px; animation-delay: -1.4s; }
+.warmyAuthQuitHorse.h6 { width: 58px; height: 58px; transform: rotate(-3deg); animation-delay: -1.75s; }
+.warmyAuthQuitActs {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.warmyAuthQuitBtn {
+  min-width: 132px;
+  padding: 10px 18px;
+  border: 1px solid rgba(184, 106, 60, .45);
+  border-radius: 999px;
+  background: #fff;
+  color: #8a4f2c;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.warmyAuthQuitBtn:hover { background: #fff4ea; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(138, 79, 44, .14); }
+.warmyAuthQuitBtn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(184, 106, 60, .28); }
+.warmyAuthQuitBtn.danger { background: #b86a3c; border-color: #b86a3c; color: #fff; }
+.warmyAuthQuitBtn.danger:hover { background: #9a4f28; }
+@keyframes warmyAuthQuitIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes warmyAuthQuitBob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+@media (max-width: 560px) {
+  .warmyAuthQuitHorses { flex-wrap: wrap; min-height: 0; }
+  .warmyAuthQuitHorse, .warmyAuthQuitHorse.h1, .warmyAuthQuitHorse.h2, .warmyAuthQuitHorse.h3,
+  .warmyAuthQuitHorse.h4, .warmyAuthQuitHorse.h5, .warmyAuthQuitHorse.h6 { width: 44px; height: 44px; }
+  .warmyAuthQuitActs { flex-direction: column-reverse; }
+  .warmyAuthQuitBtn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .warmyAuthQuitCard, .warmyAuthQuitHorse { animation: none; }
+}
