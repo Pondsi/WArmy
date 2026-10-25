@@ -105,3 +105,4 @@
 - **0.2.27 最终 10 轮**：**10/10 PASSED**（2026-10-25 14:37:43 → 15:04:50，约 27 分 07 秒）；单轮 684 项 ×10 + 专项 432 项，0 FAIL；记录 [VERIFY-R85-10X.md](VERIFY-R85-10X.md)。
 - 安装包：`release/WArmy-Setup-0.2.27.exe`，146,654,176 B，sha256 `22d7b27db83a2705c7fb09eadce0ac2ef9a5226972671d4634de45445662e47a`。
 - 发布：Release v0.2.27；真实 profile 已删除，首启语言页已打开。可在首启直接点右上角 X 验收二次确认。
+- **本机环境异常（如实记录）**：2026-10-25 23:08 起，Windows Code Integrity（Policy ID `0283ac0f-fff1-49ae-ada1-8a933130cad6`）开始阻止未签名的 `release/win-unpacked/WARMY.exe`（“已被组织 Device Guard 阻止”）。这是本机策略变化，不是程序缺陷；0.2.27 的功能/10 轮门禁全部通过。首启验收改用同版本源码的 Electron 运行（窗口 1280×800、语言页正常），安装包与 Release 已在 GitHub。若本机要继续用打包版，需要给 exe 做企业签名或让管理员放行该哈希/发布者。
