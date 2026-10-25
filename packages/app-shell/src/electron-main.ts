@@ -25619,6 +25619,7 @@ chuliIpc('warmy:qunTi', async (_e, payload: { groupId: string; memberId: string 
   try {
     if (!groupStore) return { ok: false, error: 'group store unavailable' };
     const qunId = String(payload?.groupId || '');
+    if (!benJiChuangJianZhe(qunId)) return { ok: false, error: 'not-creator' };
     const zhongJian = String(payload?.memberId || '');
     const before = groupStore.listMembers(qunId).find((m) => m.id === zhongJian);
     const r = groupStore.removeMember(qunId, zhongJian);
@@ -25672,6 +25673,7 @@ chuliIpc('warmy:qunSheZhiGuanLiYuan', (_e, payload: { groupId: string; memberId:
   try {
     if (!groupStore) return { ok: false, error: 'group store unavailable' };
     const qunId = String(payload?.groupId || '');
+    if (!benJiChuangJianZhe(qunId)) return { ok: false, error: 'not-creator' };
     const zhongJian = String(payload?.memberId || '');
     const r = groupStore.setAdmin(qunId, zhongJian, !!payload?.admin);
     if (!r.ok) return { ok: false, error: r.error || 'set admin failed', members: r.members };
@@ -27915,6 +27917,7 @@ interface JiaRuJiLu {
   zhiWen?: string;
   subjectFp?: string;
   subjectPublicKey?: string;
+  role?: string;
   token?: string;
   signed?: boolean;
   host?: string;
@@ -27945,6 +27948,7 @@ function duJoinQingQiu(): void {
         ...(x.zhiWen ? { zhiWen: String(x.zhiWen) } : {}),
         ...(x.subjectFp ? { subjectFp: String(x.subjectFp) } : {}),
         ...(x.subjectPublicKey ? { subjectPublicKey: String(x.subjectPublicKey) } : {}),
+        ...(x.role ? { role: String(x.role) } : {}),
         ...(x.token ? { token: String(x.token) } : {}),
         ...(x.signed ? { signed: true } : {}),
         ...(x.host ? { host: String(x.host) } : {}),
@@ -28081,6 +28085,7 @@ function shouDaoJiaRuQingQiu(p0: Partial<JiaRuJiLu>, peerFp: string): void {
       direction: 'in',
       status: 'pending',
       subjectFp: guiYiZhiWen(subjectFp),
+      role: String(v.payload.role),
       ...(identityFp ? { zhiWen: identityFp } : {}),
       ...(subjectPub ? { subjectPublicKey: subjectPub } : {}),
       token,
@@ -28150,6 +28155,14 @@ chuliIpc('warmy:jiaRuQingQiu', async (_e, payload: { ming: string; kind: string;
     let subjectFp = '';
     try { if (identityPub) subjectFp = yaoQingZhiWen(identityPub); } catch { subjectFp = ''; }
     const token = String(payload.token || link.token || '');
+    let tokenRole = '';
+    if (token) {
+      try {
+        const jie = jieYaoQingToken(token);
+        const p = jie && jie.payload && typeof jie.payload === 'object' ? (jie.payload as { role?: unknown }) : null;
+        if (p && (p.role === 'member' || p.role === 'admin' || p.role === 'viewer' || p.role === 'owner')) tokenRole = p.role;
+      } catch { /* 结构不对就当没角色，批准时退回 member */ }
+    }
     const groupId = String(link.groupId || targetRaw);
     const id = 'out-' + now.toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     const rec: JiaRuJiLu = {
@@ -28163,6 +28176,7 @@ chuliIpc('warmy:jiaRuQingQiu', async (_e, payload: { ming: string; kind: string;
       direction: 'out',
       status: 'pending',
       ...(subjectFp ? { subjectFp } : {}),
+      ...(tokenRole ? { role: tokenRole } : {}),
       ...(identityPub ? { subjectPublicKey: identityPub } : {}),
       ...(identityFp ? { zhiWen: identityFp } : {}),
       ...(token ? { token, signed: true } : {}),
@@ -28224,7 +28238,7 @@ chuliIpc('warmy:jiaRuHuiYing', async (_e, payload: { id: string; action: 'agree'
     if (payload.action === 'agree') {
       const r = groupStore?.addMember(Qiu.target, {
         ming: Qiu.ming,
-        role: Qiu.kind === 'human' ? 'member' : 'member',
+        role: Qiu.role === 'admin' ? 'admin' : 'member',
         source: 'invite',
         ...(Qiu.zhiWen || Qiu.subjectFp ? { zhiWen: String(Qiu.zhiWen || Qiu.subjectFp) } : {}),
       });

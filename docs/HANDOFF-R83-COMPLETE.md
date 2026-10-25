@@ -66,11 +66,31 @@
 
 - fast 套件从 25 扩到 **30 门禁**：新增 `verify-r83-quanping`（6）、`verify-r83-invite-sign`（9）、`verify-r83-join-signed`（11）、`verify-r83-im`（16）、`verify-r83-mimic-look`（5）。
 - 单轮 fast 判据：原 628 + 47 = **675 项**。
-- 版本升 **0.2.25**；安装包与发布信息在收尾时补齐。
-- 交接：[HANDOFF-R82-WIDE.md](HANDOFF-R82-WIDE.md)、[HANDOFF-R82-TEST10.md](HANDOFF-R82-TEST10.md)、[VERIFY-R83-10X.md](VERIFY-R83-10X.md)。
+- 版本升 **0.2.25**；安装包 `release/WArmy-Setup-0.2.25.exe`，**146,652,698 B**，sha256 `b410020df46b5f55e4a0b1825460b9079d5aa73c5664b59af6f651ef5852c294`；`checksums.txt` / `feed/latest.json` 已更新。
+- 发布：源码 + 文档经 GitHub Git Data API 提交 `f7310c5`；Release https://github.com/Pondsi/WArmy/releases/tag/v0.2.25 （资产 `WArmy-Setup-0.2.25.exe`）。
+- 交付：真实 profile 已删除，0.2.25 `release/win-unpacked/WARMY.exe` 重启到首启语言页（1280×800，随机单幕背景，10 语言）。
 
-## 8. 10 轮验收
+## 8. 10 轮验收（0.2.25 最终代码）
 
 规则同第 82 轮：5 种内容 × 各连续 2 轮；每轮 30 门禁 fast 套件 + 内容专项；失败即停、修复后从第 1 轮重跑。
 
-结果：**见 VERIFY-R83-10X.md / 最终回复**。
+- 结果：**10/10 PASSED**（2026-10-25 13:23:35 → 13:49:59，约 26 分 24 秒）。
+- 单轮 fast 675 项 × 10 = 6,750 项；内容专项 432 项；**全部 0 FAIL**。
+- 记录：[VERIFY-R83-10X.md](VERIFY-R83-10X.md) · [VERIFY-R83-10X.log](VERIFY-R83-10X.log)。
+- 内容：① r103 接线；② 真 MiMo 长会话 + ASR；③ 微信凭据/协议；④ FWArmy 扩网；⑤ 预算/额度 + 独立会话窗。
+- 边界：企微/钉钉接收仍需公网回调或官方 SDK；四平台真实凭据需用户提供；双机公网 E2E 需第二台设备。
+
+## 9. 0.2.26 补丁：成员角色矩阵
+
+- 第四列成员面板：创建者可为非 creator 成员「设为管理员 / 取消管理员」；非创建者不显示管理按钮。
+- 主进程二次校验：`warmy:qunSheZhiGuanLiYuan` 与 `warmy:qunTi` 都要求调用者是本群创建者（`not-creator`），不再只信界面。
+- 签名邀请可选「成员 / 管理员」；邀请 token 的角色在批准时写进成员表（admin 保留，其它回落 member）。
+- 复测：`verify-r83-join-signed` **12/0**；fast 30 门禁全绿。
+
+### 0.2.26 最终 10 轮
+
+- **10/10 PASSED**（2026-10-25 14:01:54 → 14:28:19，约 26 分 25 秒）。
+- 单轮 fast **676 项** × 10 = 6,760 项；专项 432 项；全部 0 FAIL。
+- 记录：[VERIFY-R84-10X.md](VERIFY-R84-10X.md) · [VERIFY-R84-10X.log](VERIFY-R84-10X.log)。
+- 安装包：`release/WArmy-Setup-0.2.26.exe`，146,653,068 B，sha256 `d08b78cc0052ff871d4eea3899d84c075bafb0be6c0ed7ffeb2a5a5562806dfd`。
+- 发布：Release v0.2.26；真实 profile 已删除，首启语言页已打开。

@@ -1,3 +1,13 @@
+## 0.2.26 — 2026-10-25（已发布）
+
+> Release: https://github.com/Pondsi/WArmy/releases/tag/v0.2.26 · 安装包 WArmy-Setup-0.2.26.exe（146,653,068 B，sha256 d08b78cc…06dfd）
+
+### 第 83 轮补丁（成员角色矩阵）
+- 第四列成员面板：创建者可为成员「设为管理员 / 取消管理员」；非创建者不显示管理按钮，主进程对设管理员/踢人二次校验 `not-creator`。
+- 签名邀请可选角色（成员/管理员）；邀请 token 的 `role` 在批准后真的写进成员表（`admin` 保留，其它回落 `member`）。
+- 门禁：`verify-r83-join-signed` 扩到 **12/0**；fast 30 门禁全绿。
+- 其余内容同 0.2.25（F11/4K、签名邀请、加入申请落盘、IM 发送、受控拟态）。
+
 ## 0.2.25 — 2026-10-25（已发布）
 
 > Release: https://github.com/Pondsi/WArmy/releases/tag/v0.2.25 · 安装包 WArmy-Setup-0.2.25.exe（146,652,698 B，sha256 b410020d…2c294）

@@ -1,12 +1,12 @@
 {
-  "version": "0.2.25",
-  "notes": "WArmy 0.2.25：F11 真全屏与 4K 字号；签名邀请绑定身份私钥（Ed25519）；加入申请落盘+创建者审批+批准回执验签；飞书/企微/钉钉真实发送协议（飞书支持轮询收）+ Telegram；受控拟态观察（默认关，仅点一次截应用窗口，不落盘）；外部联系人/多会话也走加密发件箱。",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.2.25/WArmy-Setup-0.2.25.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.2.25/WArmy-Setup-0.2.25.exe",
-  "sha256": "b410020df46b5f55e4a0b1825460b9079d5aa73c5664b59af6f651ef5852c294",
-  "size": 146652698,
+  "version": "0.2.26",
+  "notes": "WArmy 0.2.26：成员角色矩阵（创建者可设/取消管理员、邀请可选 admin，服务端二次校验）；其余同 0.2.25（F11/4K、签名邀请、加入申请落盘、IM 发送、受控拟态）。",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.2.26/WArmy-Setup-0.2.26.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.2.26/WArmy-Setup-0.2.26.exe",
+  "sha256": "d08b78cc0052ff871d4eea3899d84c075bafb0be6c0ed7ffeb2a5a5562806dfd",
+  "size": 146653068,
   "mandatory": false,
-  "publishedAt": "2026-10-25T00:00:00.000Z",
+  "publishedAt": "2026-10-25T14:30:27.991Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.2.25"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.2.26"
 }

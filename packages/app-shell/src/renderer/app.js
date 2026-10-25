@@ -23435,6 +23435,7 @@ async function renderDashboard(host) {
             + '<select id="jrSignSubject" style="flex:1;min-width:180px">'
             + items.map((x) => '<option value="' + escapeHtml(String(x.zhiWen || '')) + '">' + escapeHtml(String(x.zhiWen || '').slice(0, 19) + (x.online ? ' · ' + tOr('info.online', '在线') : '')) + '</option>').join('')
             + '</select>'
+            + '<select id="jrSignRole" style="width:110px"><option value="member">' + escapeHtml(tOr('info.roleMember', '成员')) + '</option><option value="admin">' + escapeHtml(tOr('info.roleAdmin', '管理员')) + '</option></select>'
             + '<button class="anNiuXiao" data-inline data-jr-sign="1">' + escapeHtml(tOr('info.signInvite', '生成签名邀请')) + '</button></div>'
             + '<div id="jrSignOut" class="jingYin" style="font-size:10px;margin-top:4px"></div>'
           : '<div class="jrgHe">' + escapeHtml(tOr('info.signedInvite', '签名邀请（绑定到人）')) + '</div>'
@@ -23475,7 +23476,7 @@ async function renderDashboard(host) {
         const card = await window.warmy.identityPeerContact?.(fp).catch(() => null);
         const pub = String((card && card.peer && card.peer.publicKey) || '');
         if (!pub) { if (out) out.textContent = tOr('info.signNoKey', '没有这个联系人的公钥；先和他交换一次名片'); return; }
-        const r = await window.warmy.inviteSign?.({ groupId: g.id, role: 'member', subjectPublicKey: pub }).catch(() => null);
+        const r = await window.warmy.inviteSign?.({ groupId: g.id, role: String($('jrSignRole')?.value || 'member'), subjectPublicKey: pub }).catch(() => null);
         if (!r || r.ok !== true) {
           if (out) out.textContent = tOr('info.signFailed', '签发失败') + '：' + String((r && (r.error || r.detail)) || 'identity');
           return;
@@ -27843,6 +27844,8 @@ try {
       const name = qingMing(m.ming) || qingMing(m.name) || qingMing(m.instanceId) || qingMing(m.id) || '—';
       return { ...m, id: String(m.id || m.instanceId || ''), instanceId: String(m.instanceId || ''), ming: name, name };
     });
+    /** 只有创建者能改角色/踢人（主进程还会再校验一次，界面这里只是少给错按钮） */
+    const keGuanLi = r.localIsCreator === true;
     /* 成员表**回填进 state.groups**：
        群记录（group-store 的 GroupRecord / warmy:qunLieBiao）里**没有**成员形状，
        而「模型管理」面板与列表行的成员数都读 `g.members` —— 不回填的话这两个地方会
@@ -27901,7 +27904,10 @@ try {
               (v.kind === 'offline'
                 ? '<div class="chengYuanTiShi jingYin">' + escapeHtml(t('group.memberPendingConfirm')) + ' · ' + escapeHtml(t('group.memberPendingConfirmHint')) + '</div>'
                 : '') +
-              '<button class="anNiuXiao" data-mkick="' + escapeHtml(String(x.id || x.name)) + '">' + escapeHtml(t('group.kick')) + '</button>' +
+              (keGuanLi && x.role !== 'creator'
+                ? '<button class="anNiuXiao" data-madmin="' + escapeHtml(String(x.id || x.name)) + '" data-madmin-on="' + (x.role === 'admin' ? '0' : '1') + '">' + escapeHtml(x.role === 'admin' ? tOr('group.unsetAdmin', '取消管理员') : tOr('group.setAdmin', '设为管理员')) + '</button>'
+                : '') +
+              (keGuanLi ? '<button class="anNiuXiao" data-mkick="' + escapeHtml(String(x.id || x.name)) + '">' + escapeHtml(t('group.kick')) + '</button>' : '') +
               '</div>'
             );
           })
@@ -27914,6 +27920,17 @@ try {
         if (!memberId) return;
         const r = await window.warmy.groupKick({ groupId, memberId }).catch(() => null);
         if (r && r.ok === true && current()) void refreshMembers();
+      };
+    });
+    heZi.querySelectorAll('[data-madmin]').forEach((b) => {
+      const groupId = sid;
+      const memberId = b.dataset.madmin;
+      b.onclick = async () => {
+        if (!memberId) return;
+        const admin = b.dataset.madminOn === '1';
+        const r = await window.warmy.groupSetAdmin({ groupId, memberId, admin }).catch(() => null);
+        if (r && r.ok === true && current()) void refreshMembers();
+        else if (current()) showToast(String((r && r.error) || t('common.error')));
       };
     });
     // 身份按 instanceId / id 排除，不按可能重名的显示名称。
