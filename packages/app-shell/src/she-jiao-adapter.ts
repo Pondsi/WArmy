@@ -85,34 +85,74 @@ export abstract class LunXunAdapter implements SheJiaoAdapter {
   zaiXian(): boolean { return this.pao; }
 }
 
-/** 企微智能机器人（长连接）—— P0 */
+/**
+ * 企业微信应用：官方 HTTP API（发送）。
+ *  · GET /cgi-bin/gettoken?corpid&corpsecret → access_token
+ *  · POST /cgi-bin/message/send?access_token= → {touser,msgtype:'text',agentid,text:{content}}
+ * 接收需要企业微信后台配置回调 URL 并做 AES 验签；本适配器只做"发送 + 凭据验证"，
+ * 没配置回调时 UI 不会假装能收消息（见 zhuangTai().receiveMode）。
+ */
 export class WeiXinAdapter implements SheJiaoAdapter {
   readonly pingTai = 'wecom';
   private cb: ((msg: SheJiaoXiaoXi) => void | Promise<void>) | null = null;
   private online = false;
+  private corpId: string;
+  private corpSecret: string;
+  private agentId: string;
+  private base: string;
+  private token = '';
+  private tokenAt = 0;
   private jinSu = new Map<number, number>();
 
-  constructor(private _zheng: SheJiaoPingZheng) {}
+  constructor(zheng: SheJiaoPingZheng) {
+    this.corpId = String(zheng.corpId || zheng.botId || zheng.clientId || '');
+    this.corpSecret = String(zheng.corpSecret || zheng.appSecret || zheng.clientSecret || '');
+    this.agentId = String(zheng.agentId || '');
+    this.base = String(zheng.baseURL || 'https://qyapi.weixin.qq.com').replace(/\/+$/, '');
+    if (!this.corpId || !this.corpSecret) throw new Error('missing-wecom-corp-credentials');
+  }
   shouXiaoXi(cb: (msg: SheJiaoXiaoXi) => void | Promise<void>): void { this.cb = cb; }
-
-  async lianJie(): Promise<void> {
-    // SDK 可选：@wecom/aibot-node-sdk。装了才连，没装如实报错。
-    try {
-      await import('@wecom/aibot-node-sdk' as string);
-      this.online = true;
-    } catch {
-      this.online = false;
-      throw new Error('missing-sdk:@wecom/aibot-node-sdk');
-    }
+  zhuangTai(): { status: string; zaiXian: boolean; cuoWu: string; receiveMode: 'webhook-required' } {
+    return { status: this.online ? 'connected' : 'disconnected', zaiXian: this.online, cuoWu: '', receiveMode: 'webhook-required' };
   }
 
-  async faSong(_huiHuaId: string, _wenBen: string): Promise<boolean> {
+  private async quToken(): Promise<string> {
+    if (this.token && Date.now() - this.tokenAt < 90 * 60_000) return this.token;
+    const url = this.base + '/cgi-bin/gettoken?corpid=' + encodeURIComponent(this.corpId)
+      + '&corpsecret=' + encodeURIComponent(this.corpSecret);
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const j = (await r.json().catch(() => ({}))) as { errcode?: number; access_token?: string };
+    if (!r.ok || j.errcode !== 0 || !j.access_token) throw new Error('wecom-token-failed:' + (j.errcode ?? r.status));
+    this.token = j.access_token;
+    this.tokenAt = Date.now();
+    return this.token;
+  }
+
+  async lianJie(): Promise<void> {
+    await this.quToken();
+    this.online = true;
+  }
+
+  async faSong(huiHuaId: string, wenBen: string): Promise<boolean> {
     if (!this.online) return false;
     const now = Date.now();
     const win = [...this.jinSu.values()].filter((t) => now - t < 60000);
     if (win.length >= 28) return false;
     this.jinSu.set(now, now);
-    return true;
+    const token = await this.quToken();
+    const r = await fetch(this.base + '/cgi-bin/message/send?access_token=' + encodeURIComponent(token), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({
+        touser: String(huiHuaId || '@all'),
+        msgtype: 'text',
+        agentid: Number(this.agentId) || 0,
+        text: { content: wenBen.slice(0, 2000) },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const j = (await r.json().catch(() => ({}))) as { errcode?: number };
+    return !!(r.ok && j.errcode === 0);
   }
 
   duanKai(): void { this.online = false; }
@@ -123,18 +163,20 @@ export class WeiXinAdapter implements SheJiaoAdapter {
 export class TelegramAdapter extends LunXunAdapter {
   readonly pingTai = 'telegram';
   private token: string;
+  private base: string;
   private offset = 0;
 
   constructor(zheng: SheJiaoPingZheng) {
     super();
     this.token = String(zheng.botToken || '');
+    this.base = String(zheng.baseURL || 'https://api.telegram.org').replace(/\/+$/, '');
     if (!this.token) throw new Error('missing-bot-token');
   }
 
   protected override jianGeMs(): number { return 1000; }
 
   async laQu(): Promise<SheJiaoXiaoXi[]> {
-    const url = `https://api.telegram.org/bot${this.token}/getUpdates?timeout=25&offset=${this.offset}`;
+    const url = `${this.base}/bot${this.token}/getUpdates?timeout=25&offset=${this.offset}`;
     const r = await fetch(url, { signal: AbortSignal.timeout(35000) });
     if (!r.ok) return [];
     const j = await r.json() as { ok?: boolean; result?: Array<Record<string, unknown>> };
@@ -159,7 +201,7 @@ export class TelegramAdapter extends LunXunAdapter {
   }
 
   async faYiTiao(huiHuaId: string, wenBen: string): Promise<boolean> {
-    const r = await fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
+    const r = await fetch(`${this.base}/bot${this.token}/sendMessage`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat_id: huiHuaId, text: wenBen.slice(0, 4000) }),
@@ -169,31 +211,104 @@ export class TelegramAdapter extends LunXunAdapter {
   }
 }
 
-/** 飞书（WS 长连接） */
-export class FeiShuAdapter implements SheJiaoAdapter {
+/**
+ * 飞书 / Lark：官方 HTTP API。
+ *  · 发消息：tenant_access_token → POST /open-apis/im/v1/messages（chat_id 或 open_id）
+ *  · 收消息：轮询 /open-apis/im/v1/messages?container_id_type=chat&container_id=<chatId>
+ *    （需要应用开通 im:message:readonly 与目标会话的可见权限；没有权限会如实报错）
+ * baseURL 可覆盖，门禁用回环 HTTP 验证真实请求形状。
+ */
+export class FeiShuAdapter extends LunXunAdapter {
   readonly pingTai = 'feishu';
-  private cb: ((msg: SheJiaoXiaoXi) => void | Promise<void>) | null = null;
-  private online = false;
+  private appId: string;
+  private appSecret: string;
+  private base: string;
+  private chatId: string;
+  private token = '';
+  private tokenAt = 0;
+  private yiJian = new Set<string>();
 
-  constructor(private _zheng: SheJiaoPingZheng) {}
-  shouXiaoXi(cb: (msg: SheJiaoXiaoXi) => void | Promise<void>): void { this.cb = cb; }
+  constructor(zheng: SheJiaoPingZheng) {
+    super();
+    this.appId = String(zheng.appId || '');
+    this.appSecret = String(zheng.appSecret || '');
+    this.base = String(zheng.baseURL || 'https://open.feishu.cn').replace(/\/+$/, '');
+    this.chatId = String(zheng.chatId || zheng.channelId || '');
+    if (!this.appId || !this.appSecret) throw new Error('missing-feishu-app-credentials');
+  }
+  override shouXiaoXi(cb: (msg: SheJiaoXiaoXi) => void | Promise<void>): void { this.cb = cb; }
+  protected override jianGeMs(): number { return 2500; }
 
-  async lianJie(): Promise<void> {
-    try {
-      await import('@larksuiteoapi/node-sdk' as string);
-      this.online = true;
-    } catch {
-      this.online = false;
-      throw new Error('missing-sdk:@larksuiteoapi/node-sdk');
+  private async quToken(): Promise<string> {
+    if (this.token && Date.now() - this.tokenAt < 90 * 60_000) return this.token;
+    const r = await fetch(this.base + '/open-apis/auth/v3/tenant_access_token/internal', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ app_id: this.appId, app_secret: this.appSecret }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const j = (await r.json().catch(() => ({}))) as { code?: number; tenant_access_token?: string; msg?: string };
+    if (!r.ok || j.code !== 0 || !j.tenant_access_token) throw new Error('feishu-token-failed:' + (j.code ?? r.status));
+    this.token = j.tenant_access_token;
+    this.tokenAt = Date.now();
+    return this.token;
+  }
+
+  override async lianJie(): Promise<void> {
+    await this.quToken();
+    this.pao = true;
+    if (this.chatId) void this.xunHuan();
+  }
+
+  override async laQu(): Promise<SheJiaoXiaoXi[]> {
+    if (!this.chatId) return [];
+    const token = await this.quToken();
+    const url = this.base + '/open-apis/im/v1/messages?container_id_type=chat&container_id=' + encodeURIComponent(this.chatId)
+      + '&sort_type=ByCreateTimeDesc&page_size=20';
+    const r = await fetch(url, { headers: { authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(15000) });
+    const j = (await r.json().catch(() => ({}))) as { code?: number; data?: { items?: Array<Record<string, unknown>> } };
+    if (!r.ok || j.code !== 0) return [];
+    const out: SheJiaoXiaoXi[] = [];
+    for (const m of (j.data?.items || []).slice().reverse()) {
+      const id = String(m.message_id || '');
+      if (!id || this.yiJian.has(id)) continue;
+      this.yiJian.add(id);
+      if (this.yiJian.size > 1000) this.yiJian.delete(this.yiJian.values().next().value!);
+      if (String(m.msg_type || '') !== 'text') continue;
+      let text = '';
+      try {
+        const body = typeof m.body === 'object' && m.body ? (m.body as { content?: string }) : {};
+        text = String(JSON.parse(String(body.content || '{}')).text || '');
+      } catch { text = ''; }
+      if (!text) continue;
+      const sender = (m.sender || {}) as { id?: string; sender_type?: string };
+      if (String(sender.sender_type || '') === 'app') continue;
+      out.push({
+        pingTai: 'feishu',
+        huiHuaId: this.chatId,
+        faSongZheId: String(sender.id || ''),
+        faSongZheMing: String(sender.id || 'feishu-user'),
+        wenBen: text,
+        ts: Number(m.create_time) || Date.now(),
+        xiaoXiId: id,
+      });
     }
+    return out;
   }
 
-  async faSong(_huiHuaId: string, _wenBen: string): Promise<boolean> {
-    return this.online;
+  async faYiTiao(huiHuaId: string, wenBen: string): Promise<boolean> {
+    const chat = huiHuaId || this.chatId;
+    if (!chat) return false;
+    const token = await this.quToken();
+    const r = await fetch(this.base + '/open-apis/im/v1/messages?receive_id_type=chat_id', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8', authorization: 'Bearer ' + token },
+      body: JSON.stringify({ receive_id: chat, msg_type: 'text', content: JSON.stringify({ text: wenBen.slice(0, 8000) }) }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const j = (await r.json().catch(() => ({}))) as { code?: number };
+    return !!(r.ok && j.code === 0);
   }
-
-  duanKai(): void { this.online = false; }
-  zaiXian(): boolean { return this.online; }
 }
 
 /**
@@ -621,32 +736,77 @@ export class DiscordAdapter extends LunXunAdapter {
  * 没装 SDK 就如实报错（不假装已连接）。
  * 凭据：clientId(AppKey) + clientSecret(AppSecret)。
  */
+/**
+ * 钉钉：官方 HTTP API（发送）。
+ *  · POST /v1.0/oauth2/accessToken → accessToken
+ *  · POST /v1.0/robot/oToMessages/batchSend（x-acs-dingtalk-access-token）
+ * 接收需要 Stream 长连接（官方 SDK）或回调；本适配器只做"发送 + 凭据验证"。
+ */
 export class DingTalkAdapter implements SheJiaoAdapter {
   readonly pingTai = 'dingtalk';
   private cb: ((msg: SheJiaoXiaoXi) => void | Promise<void>) | null = null;
   private online = false;
-  private client: { send?: (m: unknown) => Promise<unknown> } | null = null;
+  private clientId: string;
+  private clientSecret: string;
+  private base: string;
+  private robotCode: string;
+  private userIds: string[];
+  private token = '';
+  private tokenAt = 0;
 
-  constructor(private _zheng: SheJiaoPingZheng) {}
+  constructor(zheng: SheJiaoPingZheng) {
+    this.clientId = String(zheng.clientId || '');
+    this.clientSecret = String(zheng.clientSecret || '');
+    this.base = String(zheng.baseURL || 'https://api.dingtalk.com').replace(/\/+$/, '');
+    this.robotCode = String(zheng.robotCode || zheng.botId || zheng.clientId || '');
+    this.userIds = String(zheng.userIds || zheng.toUser || '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (!this.clientId || !this.clientSecret) throw new Error('missing-dingtalk-credentials');
+  }
   shouXiaoXi(cb: (msg: SheJiaoXiaoXi) => void | Promise<void>): void { this.cb = cb; }
+  zhuangTai(): { status: string; zaiXian: boolean; cuoWu: string; receiveMode: 'sdk-required' } {
+    return { status: this.online ? 'connected' : 'disconnected', zaiXian: this.online, cuoWu: '', receiveMode: 'sdk-required' };
+  }
+
+  private async quToken(): Promise<string> {
+    if (this.token && Date.now() - this.tokenAt < 90 * 60_000) return this.token;
+    const r = await fetch(this.base + '/v1.0/oauth2/accessToken', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ appKey: this.clientId, appSecret: this.clientSecret }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const j = (await r.json().catch(() => ({}))) as { accessToken?: string };
+    if (!r.ok || !j.accessToken) throw new Error('dingtalk-token-failed:' + r.status);
+    this.token = j.accessToken;
+    this.tokenAt = Date.now();
+    return this.token;
+  }
 
   async lianJie(): Promise<void> {
-    try {
-      const mod = await import('dingtalk-stream' as string) as { DWClient?: new (o: unknown) => unknown };
-      if (!mod || !mod.DWClient) throw new Error('no-DWClient');
-      // 真实接入按其 README：new DWClient({clientId, clientSecret}) → registerCallbackListener → client.connect()
-      this.online = true;
-    } catch {
-      this.online = false;
-      throw new Error('missing-sdk:dingtalk-stream');
-    }
+    await this.quToken();
+    this.online = true;
   }
 
-  async faSong(_huiHuaId: string, _wenBen: string): Promise<boolean> {
-    return this.online && !!this.client;
+  async faSong(huiHuaId: string, wenBen: string): Promise<boolean> {
+    if (!this.online) return false;
+    const token = await this.quToken();
+    const userIds = huiHuaId ? [String(huiHuaId)] : this.userIds;
+    if (!userIds.length || !this.robotCode) return false;
+    const r = await fetch(this.base + '/v1.0/robot/oToMessages/batchSend', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8', 'x-acs-dingtalk-access-token': token },
+      body: JSON.stringify({
+        robotCode: this.robotCode,
+        userIds,
+        msgKey: 'sampleText',
+        msgParam: JSON.stringify({ content: wenBen.slice(0, 4000) }),
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    return r.ok;
   }
 
-  duanKai(): void { this.online = false; this.client = null; }
+  duanKai(): void { this.online = false; }
   zaiXian(): boolean { return this.online; }
 }
 

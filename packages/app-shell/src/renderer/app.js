@@ -1148,6 +1148,8 @@
   window.__tongBuBeiJingWenZi = tongBuBeiJingWenZi;
 
   const FS_ZHI = { 'fs-xs': 11, 'fs-sm': 12, 'fs-base': 13, 'fs-md': 14, 'fs-lg': 16, 'fs-xl': 20 };
+  /** ≥3200 CSS px（4K/超宽）字号基准适度放大；仍乘用户自己的字号比例，不覆盖用户设置。 */
+  const FS_ZHI_DA = { 'fs-xs': 12, 'fs-sm': 13, 'fs-base': 14, 'fs-md': 15, 'fs-lg': 18, 'fs-xl': 22 };
   function yingYongWenZiPiHao(p) {
     const pp = p || {};
     const root = document.documentElement;
@@ -1157,8 +1159,10 @@
     const cuXi = Number(pp.fontWeight) || 400;
     root.style.setProperty('--fw-ui', String(cuXi));
     const daxiao = Math.max(15, Math.min(650, Number(pp.fontSize) || 100)) / 100;
+    const daPing = window.innerWidth >= 3200;
     Object.entries(FS_ZHI).forEach(([k, v]) => {
-      root.style.setProperty('--' + k, (Math.round(v * daxiao * 10) / 10) + 'px');
+      const ji = daPing ? FS_ZHI_DA[k] || v : v;
+      root.style.setProperty('--' + k, (Math.round(ji * daxiao * 10) / 10) + 'px');
     });
     root.style.setProperty('--text-scale', String(daxiao));
   }
@@ -9259,10 +9263,19 @@ window.__keYiLiaoTian = keYiLiaoTian;
     const faSongAnNiu = $('anNiuFaSong');
     if (faSongAnNiu) { faSongAnNiu.disabled = true; faSongAnNiu.classList.add('faSongZhong'); }
     try {
+      /**
+       * #106：所有会话类型都先把这条用户消息送到地址簿对端（单 AI / 外部联系人 / 群聊）。
+       * 没有 peer 时主进程如实返回 no-peers；有 peer 但全失败会返回 ok:false 并触发只读广播，
+       * 这里只做"用户看得见"的提示，不假装送达。
+       */
+      void window.warmy.chatNetSend?.({ sessionId: chatId, text }).then((r) => {
+        if (!r || r.ok !== false) return;
+        const why = String(r.error || '');
+        if (r.readonly || why === 'readonly') showToast(tOr('chat.netReadonly', '网络不可用：本条未送达，会话已只读'));
+        else showToast(tOr('chat.netFailed', '网络发送失败：本条未送达'));
+      }).catch(() => null);
       if (kind === 'internal') {
         try {
-          // #106：先把这条用户消息发给地址簿里的对端（没有 peer 时如实 no-peers，不假装送达）
-          void window.warmy.chatNetSend?.({ sessionId: chatId, text }).catch(() => null);
           const r = await window.warmy.groupOrchestrate({ groupId: chatId, content: text, urgency: u });
           if (!benLunYouXiao()) return;
           const reply = r?.reply || `[${u}] ${r?.action || 'ok'}`;
@@ -13214,6 +13227,18 @@ async function renderDashboard(host) {
           </div>
 
           <div class="field" style="margin-top:8px">
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="mimicLookConsent"/> ${escapeHtml(tOr('mimic.lookConsent', '允许桌宠在你点击「看一眼」时截取本应用窗口（不截桌面、不自动截）'))}
+            </label>
+            <div class="shiLiHang" style="margin-top:6px;align-items:center">
+              <button type="button" class="anNiuXiao" id="anNiuMimicLook">${escapeHtml(tOr('mimic.lookOnce', '看一眼'))}</button>
+              <span class="jingYin" id="mimicLookMsg"></span>
+              <button type="button" class="anNiuXiao" id="anNiuMimicLookSend" disabled>${escapeHtml(tOr('mimic.lookSend', '把这张图发给当前牛马'))}</button>
+            </div>
+            <div id="mimicLookPreview" style="margin-top:6px"></div>
+          </div>
+
+          <div class="field" style="margin-top:8px">
             <label>${escapeHtml(tOr('mimic.character', '人物模型'))}</label>
             <select id="mimicRenWu"></select>
             <div class="jingYin">${escapeHtml(tOr('mimic.characterHint', '把模型放进 resources/mimic/characters/ 会被自动识别。'))}</div>
@@ -14380,6 +14405,36 @@ async function renderDashboard(host) {
         // 字幕开关
         const zm = $('mimicZiMu');
         if (zm) zm.onchange = () => { try { window.warmy.settingsSave?.({ mimicSubtitle: !!zm.checked }); } catch { /* noop */ } };
+        // A9 方案 B（保守版）：显式同意后，点一次才截一次本应用窗口；不自动、不落盘。
+        let mimicLookPng = '';
+        const lookCk = $('mimicLookConsent');
+        if (lookCk) lookCk.onchange = () => { try { window.warmy.settingsSave?.({ mimicLookConsent: !!lookCk.checked }); } catch { /* noop */ } };
+        $('anNiuMimicLook')?.addEventListener('click', async () => {
+          const msg = $('mimicLookMsg');
+          const r = await window.warmy.mimicLook?.().catch(() => null);
+          if (!r || r.ok !== true) {
+            if (msg) msg.textContent = r?.error === 'consent-required' ? tOr('mimic.lookNeedConsent', '先勾选上面的允许项') : tOr('common.error', '失败');
+            return;
+          }
+          mimicLookPng = String(r.dataUrl || '');
+          if (msg) msg.textContent = tOr('mimic.lookOk', '已截取（仅本次，未落盘）') + ' · ' + r.width + '×' + r.height;
+          const box = $('mimicLookPreview');
+          if (box) box.innerHTML = '<img src="' + escapeHtml(mimicLookPng) + '" alt="" style="max-width:360px;max-height:220px;border:1px solid var(--line);border-radius:8px"/>';
+          const send = $('anNiuMimicLookSend');
+          if (send) send.disabled = false;
+        });
+        $('anNiuMimicLookSend')?.addEventListener('click', async () => {
+          const msg = $('mimicLookMsg');
+          if (!mimicLookPng) { if (msg) msg.textContent = tOr('mimic.lookFirst', '先点「看一眼」'); return; }
+          const sid = String((state.selectedChat && state.selectedChat.id) || '');
+          if (!sid) { if (msg) msg.textContent = tOr('mimic.lookNoChat', '先打开一个会话'); return; }
+          const r = await window.warmy.chatSend?.({
+            sessionId: sid,
+            content: tOr('mimic.lookPrompt', '这是我刚主动让你看的一张应用界面截图。请只根据图里看得到的内容回答：界面里有什么、我可能想让你做什么；看不清就直说。'),
+            attachments: [{ name: 'mimic-look.png', path: '', dataUrl: mimicLookPng }],
+          }).catch(() => null);
+          if (msg) msg.textContent = r?.ok ? tOr('mimic.lookSent', '已交给当前牛马；回复在会话里') : tOr('common.error', '失败');
+        });
 
         // 恢复已保存的配置
         void (async () => {
@@ -14399,6 +14454,7 @@ async function renderDashboard(host) {
             const rb = moShiJi.querySelector('input[name="mimicMoShi"][value="' + v + '"]');
             if (rb) rb.checked = true;
             if (zm) zm.checked = st.mimicSubtitle !== false;
+            if (lookCk) lookCk.checked = st.mimicLookConsent === true;
             if (yl) yl.value = String(Math.round((Number(st.mimicVolume) || 0.9) * 100));
             if (ylz) ylz.textContent = yl.value + '%';
           } catch { /* 默认 */ }
@@ -21758,14 +21814,37 @@ async function renderDashboard(host) {
     // 左列：加入
     const joinMsg = $('jiaRuqrXiaoXi');
     const submitJoin = async (link) => {
+      let q = null;
+      try { q = new URLSearchParams(String(link || '').split('?')[1] || ''); } catch { q = null; }
+      const tok = String((q && q.get('tok')) || '');
+      const pk = String((q && q.get('pk')) || '');
+      const gid = String((q && q.get('group')) || '');
+      const node = String((q && q.get('node')) || '');
+      const port = Number((q && q.get('port')) || 0) || 0;
+      // 带公钥的签名邀请先验签：绑定到本机身份、未过期、未重放才允许发申请。
+      if (tok && pk && gid) {
+        const v = await window.warmy.inviteVerify?.({ token: tok, groupId: gid, gongYao: pk }).catch(() => null);
+        if (!v || v.ok !== true) {
+          const code = String((v && (v.code || v.detail)) || 'bad-signature');
+          if (joinMsg) joinMsg.textContent = tOr('join.badInvite', '邀请无效或已过期') + '：' + code;
+          return { ok: false, error: code };
+        }
+      }
       const r = await window.warmy.joinRequest({
         ming: state.profile.username || 'user',
         kind: 'human',
         target: link,
         targetType: joinMode,
         ka: { email: ka.email || '', phone: ka.phone || '' },
+        ...(tok ? { token: tok } : {}),
+        ...(node ? { nodeId: node } : {}),
+        ...(port ? { port } : {}),
       }).catch(() => null);
-      if (joinMsg) joinMsg.textContent = r?.ok ? t('join.ok') : t('join.fail');
+      if (joinMsg) {
+        joinMsg.textContent = r?.ok
+          ? (r.sent > 0 ? t('join.ok') : tOr('join.queued', '申请已记录；对方不在线，等对端上线后再送达'))
+          : t('join.fail');
+      }
       return r;
     };
     const joinBtn = $('erHeYiJoinBtn');
@@ -23331,6 +23410,7 @@ async function renderDashboard(host) {
     /** #112：创建者可在这里拿到本会话的邀请链接/二维码，并逐条审批加入申请 */
     let invLink = '';
     let invQr = '';
+    let signSubjectHtml = '';
     if (isCreator) {
       try {
         const inv = await window.warmy.inviteCreate(g.id);
@@ -23345,6 +23425,21 @@ async function renderDashboard(host) {
         invLink = 'warmy://join?' + pian.join('&');
         invQr = qrSvg(invLink, 168);
       } catch { /* 拿不到就少显示，不画假码 */ }
+      // #108：为已知在线联系人签发"绑定到人"的签名邀请（私钥在主进程，不出安全存储）
+      try {
+        const ap = await window.warmy.activePeers?.();
+        const items = (ap && ap.items) || [];
+        signSubjectHtml = items.length
+          ? '<div class="jrgHe">' + escapeHtml(tOr('info.signedInvite', '签名邀请（绑定到人）')) + '</div>'
+            + '<div class="shiLiHang" style="align-items:center;margin-top:4px">'
+            + '<select id="jrSignSubject" style="flex:1;min-width:180px">'
+            + items.map((x) => '<option value="' + escapeHtml(String(x.zhiWen || '')) + '">' + escapeHtml(String(x.zhiWen || '').slice(0, 19) + (x.online ? ' · ' + tOr('info.online', '在线') : '')) + '</option>').join('')
+            + '</select>'
+            + '<button class="anNiuXiao" data-inline data-jr-sign="1">' + escapeHtml(tOr('info.signInvite', '生成签名邀请')) + '</button></div>'
+            + '<div id="jrSignOut" class="jingYin" style="font-size:10px;margin-top:4px"></div>'
+          : '<div class="jrgHe">' + escapeHtml(tOr('info.signedInvite', '签名邀请（绑定到人）')) + '</div>'
+            + '<div class="jingYin" style="font-size:10px">' + escapeHtml(tOr('info.signedInviteHint', '当前没有带身份指纹的在线联系人；签名邀请需要先连上对方一次。')) + '</div>';
+      } catch { /* 没有签名能力就只显示通用链接 */ }
     }
     const pendHtml = isCreator && pend.length
       ? `<div class="jrgHe">${escapeHtml(tOr('info.pendingTitle', '加入申请（可逐条审批）'))}</div>`
@@ -23361,6 +23456,7 @@ async function renderDashboard(host) {
         ? `<div class="jrgHe">${escapeHtml(tOr('info.inviteTitle', '邀请链接 / 二维码'))}</div>`
           + `<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div class="jrQr">${invQr}</div><div style="flex:1;min-width:180px"><input id="jrInviteLink" readonly value="${escapeHtml(invLink)}" style="width:100%"><div class="jingYin" style="font-size:10px;margin-top:4px">${escapeHtml(tOr('info.inviteHint', '对方打开该链接即可带着本机指纹申请加入；批准后才会写进成员表。'))}</div><button class="anNiuXiao" data-inline data-jr-copy="1" style="margin-top:6px">${escapeHtml(tOr('info.copyLink', '复制链接'))}</button></div></div>`
         : '')
+      + signSubjectHtml
       + pendHtml
       + '</div>';
     const act = [];
@@ -23371,6 +23467,42 @@ async function renderDashboard(host) {
       act.push({ ming: tOr('info.exit', '退出'), value: 'exit', weixian: true });
     }
     const v = await kaiXinXiKuang((isProject ? tOr('info.project', '项目') : tOr('info.group', '群聊')) + ' · ' + (g.name || g.id), duiHua, act, async (b) => {
+      if (b.hasAttribute('data-jr-sign')) {
+        const out = $('jrSignOut');
+        const fp = String($('jrSignSubject')?.value || '').trim();
+        if (!fp) { if (out) out.textContent = tOr('info.signNoSubject', '先选择一个带指纹的在线联系人'); return; }
+        // 身份层指纹与邀请模块的指纹编码不同：必须拿对方公钥，由主进程现推。
+        const card = await window.warmy.identityPeerContact?.(fp).catch(() => null);
+        const pub = String((card && card.peer && card.peer.publicKey) || '');
+        if (!pub) { if (out) out.textContent = tOr('info.signNoKey', '没有这个联系人的公钥；先和他交换一次名片'); return; }
+        const r = await window.warmy.inviteSign?.({ groupId: g.id, role: 'member', subjectPublicKey: pub }).catch(() => null);
+        if (!r || r.ok !== true) {
+          if (out) out.textContent = tOr('info.signFailed', '签发失败') + '：' + String((r && (r.error || r.detail)) || 'identity');
+          return;
+        }
+        let node = '';
+        try { const st = await window.warmy.meshStatus(); node = String((st && st.nodeId) || ''); } catch { /* noop */ }
+        const port = Number(netState && netState.addr && netState.addr.port) || 0;
+        const pian = ['group=' + encodeURIComponent(g.id)];
+        if (node) pian.push('node=' + encodeURIComponent(node));
+        if (port) pian.push('port=' + port);
+        pian.push('tok=' + encodeURIComponent(String(r.invite.token || '')));
+        pian.push('pk=' + encodeURIComponent(String(r.invite.publicKey || '')));
+        const link = 'warmy://join?' + pian.join('&');
+        if (out) {
+          out.innerHTML = '<div class="shiLiHang" style="align-items:center;margin-top:4px">'
+            + '<input id="jrSignedLink" readonly value="' + escapeHtml(link) + '" style="flex:1;min-width:160px">'
+            + '<button class="anNiuXiao" data-inline data-jr-copy-signed="1">' + escapeHtml(tOr('info.copyLink', '复制链接')) + '</button></div>'
+            + '<div class="jrQr" style="margin-top:6px">' + qrSvg(link, 168) + '</div>'
+            + '<div style="font-size:10px;margin-top:4px">' + escapeHtml(tOr('info.signedInviteHint2', '该邀请绑定到所选联系人的指纹，只能由对方使用；过期或换人都会验签失败。')) + '</div>';
+        }
+        return;
+      }
+      if (b.hasAttribute('data-jr-copy-signed')) {
+        const link = String($('jrSignedLink')?.value || '');
+        try { await navigator.clipboard.writeText(link); showToast(tOr('info.linkCopied', '链接已复制')); } catch { uiAlert(link); }
+        return;
+      }
       if (b.hasAttribute('data-jr-copy')) {
         try { await navigator.clipboard.writeText(invLink); showToast(tOr('info.linkCopied', '链接已复制')); } catch { uiAlert(invLink); }
         return;
@@ -26329,7 +26461,12 @@ try {
   let __buJuKuanRaf = 0;
   window.addEventListener('resize', () => {
     if (__buJuKuanRaf) return;
-    __buJuKuanRaf = requestAnimationFrame(() => { __buJuKuanRaf = 0; yingYongKuanPingShiPei(); });
+    __buJuKuanRaf = requestAnimationFrame(() => {
+      __buJuKuanRaf = 0;
+      yingYongKuanPingShiPei();
+      // 4K/超宽字号基准随窗口宽度切换（用户字号比例仍保留）
+      try { yingYongWenZiPiHao(state.wenZi); } catch { /* noop */ }
+    });
   });
 
   async function refreshCost() {
@@ -27145,9 +27282,9 @@ try {
       if (id === 'slack') return [['botToken', 'Bot Token (xoxb-)'], ['channelId', 'Channel ID']];
       if (id === 'discord') return [['botToken', 'Bot Token'], ['channelId', 'Channel ID']];
       if (id === 'matrix') return [['baseURL', 'Homeserver URL'], ['botToken', 'Access Token'], ['channelId', 'Room ID']];
-      if (id === 'dingtalk') return [['clientId', 'AppKey'], ['clientSecret', 'AppSecret']];
-      if (id === 'feishu') return [['appId', 'App ID (cli_)'], ['appSecret', 'App Secret']];
-      return [['botId', 'Bot ID'], ['appSecret', 'Secret']];   // wecom
+      if (id === 'dingtalk') return [['clientId', 'AppKey'], ['clientSecret', 'AppSecret'], ['robotCode', 'RobotCode'], ['userIds', '接收人 userId（逗号分隔）']];
+      if (id === 'feishu') return [['appId', 'App ID (cli_)'], ['appSecret', 'App Secret'], ['chatId', '群 chat_id（接收/发送目标）']];
+      return [['botId', 'CorpID'], ['appSecret', 'CorpSecret'], ['agentId', 'AgentId'], ['toUser', '接收人（默认 @all）']];   // wecom
     };
     he.innerHTML = pingTaiLie.map((p, i) => {
       const z = zhuangTai(p.id);
@@ -29329,6 +29466,21 @@ try {
    * 两条都只发"变化通知"，正文/设置本身仍旧从主进程读，避免出现第二个真相。
    * ══════════════════════════════════════════════════════════════════════ */
   try {
+    // F11 真全屏 / Esc 退出（渲染层兜底；主进程 before-input-event 也处理真实的物理按键）
+    window.addEventListener('keydown', async (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'F11') {
+        e.preventDefault();
+        try { await window.warmy.winQuanPing?.(); } catch { /* noop */ }
+        return;
+      }
+      if (e.key === 'Escape') {
+        try {
+          const z = await window.warmy.winZhuangTai?.();
+          if (z && z.fullscreen) { e.preventDefault(); await window.warmy.winQuanPing?.(); }
+        } catch { /* noop */ }
+      }
+    });
     window.warmy.onChatUpdated?.((d) => {
       const sid = String((d && d.sessionId) || '');
       if (!sid) return;
@@ -29336,6 +29488,12 @@ try {
       void loadSessionMessages(sid);
       // 若它正是本窗口正在看的会话，右侧（进度/成员/项目状态）也要跟着一致
       if (state.selectedChat && String(state.selectedChat.id) === sid) void refreshEntityView(sid);
+    });
+    // #108：对方批准后，主进程已验签并落本地群；这里只负责刷新列表并如实提示。
+    window.warmy.onJoinApproved?.((d) => {
+      const ming = String((d && d.ming) || '');
+      showToast(tOr('join.approvedToast', '已获批准并加入') + (ming ? '：' + ming : ''));
+      try { renderList(); } catch { /* noop */ }
     });
     /**
      * 实体级状态变化（群定向 / 项目启用停用 / 项目属性）：

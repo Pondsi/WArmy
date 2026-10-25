@@ -268,8 +268,11 @@ export function jianChaPeiZhi(
       break;
     }
     case 'wecom': {
-      jianChaBiaoShi(errors, 'corpId', wenBen(cfg, 'corpId').trim());
-      jianChaMiYao(errors, 'corpSecret', wenBen(cfg, 'corpSecret'));
+      // 兼容界面的旧字段名：botId/appSecret 就是 corpId/corpSecret
+      const corpId = wenBen(cfg, 'corpId') || wenBen(cfg, 'botId') || wenBen(cfg, 'clientId');
+      const corpSecret = wenBen(cfg, 'corpSecret') || wenBen(cfg, 'appSecret') || wenBen(cfg, 'clientSecret');
+      jianChaBiaoShi(errors, 'corpId', corpId.trim());
+      jianChaMiYao(errors, 'corpSecret', corpSecret);
       const agentId = wenBen(cfg, 'agentId').trim();
       if (!agentId) {
         errors.push('agentId 不能为空，且必须是正整数');
@@ -355,8 +358,8 @@ function gouZaoQingQiu(platform: SheJiaoPingTai, cfg: unknown): QingQiuMiaoShu {
       };
     }
     case 'wecom': {
-      const corpId = wenBen(cfg, 'corpId').trim();
-      const corpSecret = wenBen(cfg, 'corpSecret').trim();
+      const corpId = wenBen(cfg, 'corpId') || wenBen(cfg, 'botId') || wenBen(cfg, 'clientId');
+      const corpSecret = wenBen(cfg, 'corpSecret') || wenBen(cfg, 'appSecret') || wenBen(cfg, 'clientSecret');
       if (!corpId || !corpSecret) throw new Error('企微配置缺少 corpId 或 corpSecret，无法探测');
       return {
         url:

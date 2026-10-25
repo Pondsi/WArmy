@@ -3016,3 +3016,17 @@ html { font-weight: var(--fw-ui, 400); }
 /* #113/#115 连通性诊断结果 */
 .sheJiaoDiag .ok { color: var(--ok-fg, #1a7f3c); }
 .sheJiaoDiag .bad { color: var(--danger-fg, #8a1f1f); }
+
+/* 4K / 超宽屏：字号随屏幕适度放大（不跟系统 DPI 打架，只在 ≥3200 CSS px 生效）。
+   只放大字号与阅读列，不放大固定高度的工具条，避免工具栏被挤坏。 */
+@media (min-width: 3200px) {
+  :root {
+    --fs-xs: 12px;
+    --fs-sm: 13px;
+    --fs-base: 14px;
+    --fs-md: 15px;
+    --fs-lg: 18px;
+    --fs-xl: 22px;
+    --du-wen-kuan: 1320px;
+  }
+}

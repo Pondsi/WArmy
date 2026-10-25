@@ -31,7 +31,7 @@ export interface WangZhuangXiaoXi {
   id: string;
   from: string;
   to: string | '*';
-  channel: 'group' | 'control' | 'invite' | 'gossip';
+  channel: 'group' | 'control' | 'invite' | 'join' | 'gossip';
   groupId?: string;
   payload: unknown;
   ts: number;

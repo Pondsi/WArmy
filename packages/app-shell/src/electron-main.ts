@@ -269,6 +269,15 @@ import {
   chexiaoChengyuanZhengshu,
   lunHuanChengYuanZhengShu,
 } from './identity-provider.js';
+// #108：Ed25519 签名邀请（私钥不出安全存储，签名走 identity.signSync）
+import {
+  shengChengYaoQing,
+  yanZhengYaoQing,
+  jieYaoQingToken,
+  zhiWen as yaoQingZhiWen,
+  guiYiZhiWen,
+  type YaoQingJieGuo,
+} from './yao-qing-anchor.js';
 // 本体协作层：ref/路径门禁 + 租约（写操作前 acquire、写完 release）
 import { jiaoYanTuiSongLuJing, jiaoYanYinYongGengXin, type TuiSongLuJingTiaoMu } from './repo-guard.js';
 import { LeaseRegistry, type HuoQuQingQiu, type ZuYueYinYongQingQiu } from './lease.js';
@@ -8046,7 +8055,11 @@ async function yindao() {
       qidong(`mesh inbound ${xiaoXi.channel} from ${xiaoXi.peerFingerprint.slice(0, 12)}`);
       // 成员证书 / 吊销列表的**同步落点**：对端指纹来自握手（xiaoXi.peerFingerprint），
       // 不是消息体自称 —— 只有本群创建者发来的吊销列表才会被接受。
-      const payload = xiaoXi.payload as { type?: string; groupId?: string; LieBiao?: unknown; chuanShu?: boolean; zhen?: ChuanShuZhen } | null;
+      const payload = xiaoXi.payload as {
+        type?: string; groupId?: string; LieBiao?: unknown; chuanShu?: boolean; zhen?: ChuanShuZhen;
+        joinRequest?: Partial<JiaRuJiLu>;
+        joinApproved?: { groupId?: string; ming?: string; kind?: string; token?: string; publicKey?: string; issuerFp?: string; role?: string; creatorMing?: string };
+      } | null;
       /**
        * #106：远端发来的聊天消息。先按 msgId 去重，再写本地会话日志；
        * 写日志会走既有广播，所以打开着的会话窗口会自己刷新。
@@ -8065,6 +8078,14 @@ async function yindao() {
             audit?.log('chat.net-inbound', { sessionId: z.sessionId, msgId: z.msgId, peer: xiaoXi.peerFingerprint.slice(0, 12) });
           } catch { /* 入站写日志失败不影响其它通道 */ }
         }
+      }
+      /**
+       * #112/#108：加入申请与批准回执。申请必须带创建者签发的 token；
+       * 这里只落"待审批"，批准仍由创建者在界面点一次。
+       */
+      if (xiaoXi.channel === 'join' && payload) {
+        if (payload.joinRequest) shouDaoJiaRuQingQiu(payload.joinRequest as Partial<JiaRuJiLu>, xiaoXi.peerFingerprint);
+        else if (payload.joinApproved) void shouDaoJiaRuPiZhun(payload.joinApproved);
       }
       /**
        * ADR 004 第十六批：**项目属性 / 可用性信号的落点**（成员侧）。
@@ -8576,6 +8597,23 @@ function chuangjianChuangkou() {
   try { nmJieRuZhuChuang(win); } catch { /* 吸附接线失败不影响启动 */ }
   win.on('maximize', () => baocunChuangkouZhuangtaiJiukuai(200));
   win.on('unmaximize', () => baocunChuangkouZhuangtaiJiukuai(200));
+  /**
+   * F11 真全屏（无边框铺满整块屏幕，不是最大化）：F11 切换，Esc 退出。
+   * 只处理主窗口；独立会话窗保持普通窗口，避免用户找不到退出方式。
+   */
+  win.webContents.on('before-input-event', (_e, input) => {
+    if (!win || win.isDestroyed() || input.type !== 'keyDown') return;
+    if (input.alt || input.control || input.meta) return;
+    if (input.key === 'F11') {
+      _e.preventDefault();
+      try { win.setFullScreen(!win.isFullScreen()); } catch { /* noop */ }
+    } else if (input.key === 'Escape' && win.isFullScreen()) {
+      _e.preventDefault();
+      try { win.setFullScreen(false); } catch { /* noop */ }
+    }
+  });
+  win.on('enter-full-screen', () => qidong('window fullscreen=on'));
+  win.on('leave-full-screen', () => qidong('window fullscreen=off'));
   // 点击叉 = 最小化到托盘，不关闭窗口。只有托盘「下班」才真正退出。
   win.on('close', (e) => {
     try { baocunChuangkouZhuangtaiJiukuai(0); } catch { /* noop */ }
@@ -9265,6 +9303,26 @@ function mimicSaoDongZuo(): Array<{ id: string; name: string; desc: string; trig
 
 chuliIpc('warmy:mimicRenWuLieBiao', () => ({ ok: true, items: mimicSaoRenWu() }));
 chuliIpc('warmy:mimicDongZuoLieBiao', () => ({ ok: true, items: mimicSaoDongZuo() }));
+/**
+ * A9 方案 B（保守版）：用户显式打开开关后，点一次「看一眼」才截**本应用自己的窗口**。
+ * 不截桌面、不自动定时、不落盘；返回 data URL 仅供当次预览/随消息发送。
+ */
+chuliIpc('warmy:mimicKanYiYan', async () => {
+  try {
+    const st = settingsStore?.load() as { mimicLookConsent?: boolean } | undefined;
+    if (st?.mimicLookConsent !== true) return { ok: false, error: 'consent-required' };
+    const w = mimicWin && !mimicWin.isDestroyed() ? mimicWin : win;
+    if (!w || w.isDestroyed()) return { ok: false, error: 'window-missing' };
+    const img = await w.capturePage();
+    const sz = img.getSize();
+    if (!sz.width || !sz.height) return { ok: false, error: 'empty-capture' };
+    const out = sz.width > 1280 ? img.resize({ width: 1280 }) : img;
+    const png = out.toPNG();
+    if (!png.length) return { ok: false, error: 'empty-png' };
+    audit?.log('mimic.look', { width: out.getSize().width, height: out.getSize().height, bytes: png.length });
+    return { ok: true, dataUrl: 'data:image/png;base64,' + png.toString('base64'), width: out.getSize().width, height: out.getSize().height };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 
 /** 启动桌宠窗口 */
 chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
@@ -22837,6 +22895,98 @@ chuliIpc('warmy:jieDianJiCheXiao', (_e, nodeId: string) => {
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+/**
+ * #108：把签名邀请接到本机身份私钥。
+ * 私钥只在主进程内解密、签名、清零；渲染层只拿到 token/URL/公钥/指纹。
+ */
+function yaoQingNonceLu(): string {
+  return path.join(app.getPath('userData'), 'invite-nonces.json');
+}
+let yaoQingNonceJi: Set<string> | null = null;
+function duYaoQingNonces(): Set<string> {
+  if (yaoQingNonceJi) return yaoQingNonceJi;
+  yaoQingNonceJi = new Set<string>();
+  try {
+    const j = JSON.parse(fs.readFileSync(yaoQingNonceLu(), 'utf8'));
+    for (const n of Array.isArray(j?.nonces) ? j.nonces : []) {
+      if (typeof n === 'string' && n) yaoQingNonceJi.add(n);
+    }
+  } catch { /* 首次运行 */ }
+  return yaoQingNonceJi;
+}
+function cunYaoQingNonces(): void {
+  try {
+    const lu = yaoQingNonceLu();
+    const arr = [...duYaoQingNonces()].slice(-2000);
+    fs.mkdirSync(path.dirname(lu), { recursive: true });
+    const tmp = lu + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ nonces: arr }), 'utf8');
+    fs.renameSync(tmp, lu);
+  } catch { /* 写盘失败不阻断验证；内存里的 nonce 仍然生效 */ }
+}
+chuliIpc('warmy:yaoQingQianMing', (_e, p0?: { groupId?: string; role?: string; subjectFp?: string; subjectPublicKey?: string; ttlMs?: number }) => {
+  try {
+    const groupId = String(p0?.groupId || '').trim();
+    if (!groupId) return { ok: false, error: 'group-id-empty' };
+    const subjectFp = String(p0?.subjectFp || '').trim();
+    const subjectPublicKey = String(p0?.subjectPublicKey || '').trim();
+    if (!subjectFp && !subjectPublicKey) return { ok: false, error: 'subject-required' };
+    const signer = identityStore ? chuangjianShenfenQianmingzhe(identityStore) : null;
+    if (!signer) return { ok: false, error: 'identity-missing' };
+    if (!signer.signReady()) return { ok: false, error: 'identity-locked', unlock: signer.unlockState() };
+    const gongYao = signer.publicKey;
+    const r: YaoQingJieGuo = shengChengYaoQing({
+      sessionId: groupId,
+      role: p0?.role || 'member',
+      ...(subjectPublicKey ? { subjectGongYao: subjectPublicKey } : { subjectFp }),
+      gongYao,
+      sign: (bytes) => signer.signSync(bytes).toString('base64'),
+      issuerRole: 'owner',
+      ownerFp: signer.zhiWen,
+      ttlMs: Number(p0?.ttlMs) > 0 ? Number(p0?.ttlMs) : undefined,
+    });
+    audit?.log('invite.signed-create', { groupId, issuerFp: signer.zhiWen, subjectPublicKey: !!subjectPublicKey, expiresAt: r.expiresAt });
+    return { ok: true, invite: { ...r, issuerFp: signer.zhiWen, publicKey: gongYao } };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:yaoQingYanZheng', (_e, p0?: { token?: string; groupId?: string; gongYao?: string }) => {
+  try {
+    const token = String(p0?.token || '').trim();
+    const groupId = String(p0?.groupId || '').trim();
+    const gongYao = String(p0?.gongYao || '').trim();
+    if (!token || !groupId || !gongYao) return { ok: false, code: 'bad-token', detail: 'missing-input' };
+    const jie = jieYaoQingToken(token);
+    if (!jie) return { ok: false, code: 'bad-token' };
+    const benJiPub = String(identityStore?.info()?.publicKey || '');
+    if (!benJiPub) return { ok: false, code: 'bad-subject', detail: 'local-identity-missing' };
+    // 身份层指纹与 yao-qing 指纹编码不同；必须由公钥现推，不能拿身份层指纹硬比。
+    let subjectFp = '';
+    try { subjectFp = yaoQingZhiWen(benJiPub); } catch { return { ok: false, code: 'bad-subject', detail: 'bad-local-key' }; }
+    const r = yanZhengYaoQing(token, {
+      gongYao,
+      sessionId: groupId,
+      subjectFp,
+      usedNonces: duYaoQingNonces(),
+      consumeNonce: true,
+      issuerRole: 'owner',
+    });
+    if (r.ok) {
+      cunYaoQingNonces();
+      audit?.log('invite.signed-verified', { groupId, issuerFp: r.payload.issuerFp, subjectFp });
+    } else {
+      audit?.log('invite.signed-rejected', { groupId, code: r.code, detail: r.detail || '' });
+    }
+    return r;
+  } catch (e) { return { ok: false, code: 'bad-token', detail: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:huoDongDuiDuan', () => anQuanChuLi(() => {
+  const benJi = String(identityStore?.info()?.zhiWen || '');
+  const items = (secureMesh?.presence() ?? [])
+    .filter((x) => !!x && !!x.zhiWen && x.zhiWen !== benJi)
+    .map((x) => ({ zhiWen: x.zhiWen, online: x.online === true, lastSeenAt: x.lastSeenAt }));
+  return { ok: true, items };
+}, { ok: true, items: [] }));
+
 chuliIpc('warmy:yaoQingChuangJian', (_e, groupId?: string) => anQuanChuLi(() => ({ ok: true, invite: chuangjianYaoQing(15 * 60_000, groupId) }), { ok: true, invite: { token: "", expiresAt: 0, used: false } }))
 chuliIpc('warmy:yaoQingShiYong', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
   ok: shiYongYaoQing(tok),
@@ -23700,6 +23850,20 @@ chuliIpc('warmy:winZuiDaHua', (e) => anQuanChuLi(() => {
   else sender.maximize();
   return true;
 }, null));
+/** F11 真全屏：与快捷键走同一条路；返回切换后的真实状态。 */
+chuliIpc('warmy:winQuanPing', (e) => anQuanChuLi(() => {
+  const sender = BrowserWindow.fromWebContents(e.sender) || win;
+  if (!sender) return { ok: false };
+  sender.setFullScreen(!sender.isFullScreen());
+  return { ok: true, fullscreen: sender.isFullScreen() };
+}, { ok: false }));
+/** 门禁/界面读取真实窗口状态（不猜 CSS）。 */
+chuliIpc('warmy:winZhuangTai', (e) => anQuanChuLi(() => {
+  const sender = BrowserWindow.fromWebContents(e.sender) || win;
+  if (!sender) return { ok: false };
+  const b = sender.getBounds();
+  return { ok: true, fullscreen: sender.isFullScreen(), maximized: sender.isMaximized(), width: b.width, height: b.height };
+}, { ok: false }));
 chuliIpc('warmy:winChongXinJiaZai', () => {
   try {
     if (!win) return { ok: false };
@@ -27736,47 +27900,370 @@ chuliIpc('warmy:asrollama', async (_e, payload: { audioBase64: string; model?: s
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-// ── 加入请求 / 黑名单 ──
-const joinRequests: Array<{ id: string; ming: string; kind: string; target: string; targetType: string; ts: number; expireAt: number; zhiWen?: string }> = [];
-const blacklist: Array<{ id: string; ming: string; blockedAt: number; target: string }> = [];
-chuliIpc('warmy:jiaRuQingQiu', (_e, payload: { ming: string; kind: string; target: string; targetType: string; zhiWen?: string }) => {
+// ── 加入请求 / 黑名单（#112：持久化 + 走 SecureMesh 到创建者；#108：签名邀请验签） ──
+type JrZhuangTai = 'pending' | 'approved' | 'rejected' | 'blocked';
+interface JiaRuJiLu {
+  id: string;
+  ming: string;
+  kind: string;
+  target: string;
+  targetType: string;
+  ts: number;
+  expireAt: number;
+  direction: 'in' | 'out';
+  status: JrZhuangTai;
+  zhiWen?: string;
+  subjectFp?: string;
+  subjectPublicKey?: string;
+  token?: string;
+  signed?: boolean;
+  host?: string;
+  port?: number;
+  nodeId?: string;
+  decidedAt?: number;
+  reason?: string;
+}
+const joinQingQiuLu = path.join(app.getPath('userData'), 'join-requests.json');
+const heiMingDanLu = path.join(app.getPath('userData'), 'join-blocklist.json');
+let joinRequests: JiaRuJiLu[] = [];
+let blacklist: Array<{ id: string; ming: string; blockedAt: number; target: string; zhiWen?: string }> = [];
+function duJoinQingQiu(): void {
   try {
-    const id = "jr" + Date.now();
-    const ts = Date.now();
-    joinRequests.push({ id, ming: payload.ming, kind: payload.kind, target: payload.target, targetType: payload.targetType, ts, expireAt: ts + 30 * 24 * 3600_000, ...(payload.zhiWen ? { zhiWen: String(payload.zhiWen) } : {}) });
-    audit?.log('join.request', { id, ming: payload.ming, target: payload.target, hasFingerprint: !!payload.zhiWen });
-    return { ok: true, id };
+    const j = JSON.parse(fs.readFileSync(joinQingQiuLu, 'utf8'));
+    joinRequests = (Array.isArray(j?.items) ? j.items : [])
+      .filter((x: Partial<JiaRuJiLu>) => x && typeof x.id === 'string' && typeof x.target === 'string')
+      .map((x: Partial<JiaRuJiLu>) => ({
+        id: String(x.id),
+        ming: String(x.ming || ''),
+        kind: String(x.kind || 'human'),
+        target: String(x.target || ''),
+        targetType: String(x.targetType || 'group'),
+        ts: Number(x.ts) || Date.now(),
+        expireAt: Number(x.expireAt) || Date.now() + 30 * 24 * 3600_000,
+        direction: x.direction === 'out' ? 'out' : 'in',
+        status: (['pending', 'approved', 'rejected', 'blocked'] as const).includes(x.status as JrZhuangTai) ? (x.status as JrZhuangTai) : 'pending',
+        ...(x.zhiWen ? { zhiWen: String(x.zhiWen) } : {}),
+        ...(x.subjectFp ? { subjectFp: String(x.subjectFp) } : {}),
+        ...(x.subjectPublicKey ? { subjectPublicKey: String(x.subjectPublicKey) } : {}),
+        ...(x.token ? { token: String(x.token) } : {}),
+        ...(x.signed ? { signed: true } : {}),
+        ...(x.host ? { host: String(x.host) } : {}),
+        ...(Number(x.port) > 0 ? { port: Number(x.port) } : {}),
+        ...(x.nodeId ? { nodeId: String(x.nodeId) } : {}),
+        ...(Number(x.decidedAt) > 0 ? { decidedAt: Number(x.decidedAt) } : {}),
+        ...(x.reason ? { reason: String(x.reason) } : {}),
+      }))
+      .slice(-500);
+  } catch {
+    joinRequests = [];
+  }
+  try {
+    const j = JSON.parse(fs.readFileSync(heiMingDanLu, 'utf8'));
+    blacklist = (Array.isArray(j?.items) ? j.items : []).filter((x: { id?: unknown }) => x && typeof x.id === 'string').slice(-500);
+  } catch {
+    blacklist = [];
+  }
+}
+function cunJoinQingQiu(): void {
+  try {
+    fs.mkdirSync(path.dirname(joinQingQiuLu), { recursive: true });
+    const tmp = joinQingQiuLu + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ items: joinRequests.slice(-500) }, null, 2), 'utf8');
+    fs.renameSync(tmp, joinQingQiuLu);
+  } catch { /* 写盘失败不阻断内存态；下次再试 */ }
+}
+function cunHeiMingDan(): void {
+  try {
+    fs.mkdirSync(path.dirname(heiMingDanLu), { recursive: true });
+    const tmp = heiMingDanLu + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ items: blacklist.slice(-500) }, null, 2), 'utf8');
+    fs.renameSync(tmp, heiMingDanLu);
+  } catch { /* noop */ }
+}
+function youXiaoJiaRu(now = Date.now()): JiaRuJiLu[] {
+  // pending 过期即清理；已决策的记录保留 30 天供审计，之后清掉。
+  joinRequests = joinRequests.filter((r) => {
+    if (r.status === 'pending') return r.expireAt > now;
+    return now - (r.decidedAt || r.ts) < 30 * 24 * 3600_000;
+  });
+  return joinRequests.filter((r) => r.status === 'pending' && r.expireAt > now);
+}
+function jieJoinLianJie(target: string): { groupId: string; nodeId: string; port: number; token: string; pk: string } {
+  const raw = String(target || '').trim();
+  const out = { groupId: '', nodeId: '', port: 0, token: '', pk: '' };
+  if (!raw.startsWith('warmy://join')) return out;
+  try {
+    const q = new URLSearchParams(raw.split('?')[1] || '');
+    out.groupId = String(q.get('group') || '');
+    out.nodeId = String(q.get('node') || '');
+    out.port = Number(q.get('port')) || 0;
+    out.token = String(q.get('tok') || '');
+    out.pk = String(q.get('pk') || '');
+  } catch { /* 解析失败按空处理 */ }
+  return out;
+}
+function benJiChuangJianZhe(groupId: string): boolean {
+  const chuang = String(groupStore?.getGroup(groupId)?.creatorFingerprint || '');
+  const benJi = String(identityStore?.info()?.zhiWen || '');
+  return !!chuang && !!benJi && zhiwenPipei(chuang, benJi);
+}
+function qianMingYaoQingDuiXi(groupId: string, subjectFp: string, role = 'member'): { ok: true; token: string; publicKey: string; issuerFp: string } | { ok: false; error: string } {
+  try {
+    const signer = identityStore ? chuangjianShenfenQianmingzhe(identityStore) : null;
+    if (!signer) return { ok: false, error: 'identity-missing' };
+    if (!signer.signReady()) return { ok: false, error: 'identity-locked' };
+    const r = shengChengYaoQing({
+      sessionId: groupId,
+      role,
+      subjectFp,
+      gongYao: signer.publicKey,
+      sign: (bytes) => signer.signSync(bytes).toString('base64'),
+      issuerRole: 'owner',
+      ownerFp: signer.zhiWen,
+    });
+    return { ok: true, token: r.token, publicKey: signer.publicKey, issuerFp: signer.zhiWen };
+  } catch (e) {
+    return { ok: false, error: xiJingCuoWu(e) };
+  }
+}
+/**
+ * 创建者侧收到的加入申请：必须是本机创建者的群 + 签名 token 验签通过（绑定申请人指纹）。
+ * 未签名/验签失败的申请不落库，避免"看起来能批准"的假冒申请。
+ */
+function shouDaoJiaRuQingQiu(p0: Partial<JiaRuJiLu>, peerFp: string): void {
+  try {
+    const groupId = String(p0.target || '').trim();
+    const identityFp = String(p0.zhiWen || '').trim();
+    const subjectPub = String(p0.subjectPublicKey || '').trim();
+    let subjectFp = String(p0.subjectFp || '').trim();
+    // 邀请 token 绑定的是 yao-qing 指纹；有申请人公钥就现推，不能信消息体自称的指纹。
+    if (subjectPub) {
+      try { subjectFp = guiYiZhiWen(yaoQingZhiWen(subjectPub)); } catch { return; }
+    }
+    const token = String(p0.token || '').trim();
+    if (!groupId || !subjectFp || !token) return;
+    if (!benJiChuangJianZhe(groupId)) {
+      audit?.log('join.inbound-rejected', { groupId, reason: 'not-creator' });
+      return;
+    }
+    const signer = identityStore ? chuangjianShenfenQianmingzhe(identityStore) : null;
+    if (!signer || !signer.signReady()) return;
+    const v = yanZhengYaoQing(token, {
+      gongYao: signer.publicKey,
+      sessionId: groupId,
+      subjectFp,
+      usedNonces: duYaoQingNonces(),
+      consumeNonce: true,
+      issuerRole: 'owner',
+      anchorFp: signer.zhiWen,
+    });
+    if (!v.ok) {
+      audit?.log('join.inbound-rejected', { groupId, code: v.code, detail: v.detail || '' });
+      return;
+    }
+    cunYaoQingNonces();
+    // 握手得到的身份层指纹必须与申请自称一致（申请绑定到人，不能借别人的 token）
+    if (peerFp && identityFp && !zhiwenPipei(peerFp, identityFp)) {
+      audit?.log('join.inbound-rejected', { groupId, reason: 'peer-subject-mismatch' });
+      return;
+    }
+    const dup = joinRequests.find((r) => r.direction === 'in' && r.target === groupId && r.status === 'pending' && r.subjectFp && zhiwenPipei(r.subjectFp, subjectFp));
+    if (dup) return;
+    const now = Date.now();
+    joinRequests.push({
+      id: 'in-' + now.toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+      ming: String(p0.ming || identityFp || subjectFp.slice(0, 12)),
+      kind: String(p0.kind || 'human'),
+      target: groupId,
+      targetType: String(p0.targetType || 'group'),
+      ts: now,
+      expireAt: now + 30 * 24 * 3600_000,
+      direction: 'in',
+      status: 'pending',
+      subjectFp: guiYiZhiWen(subjectFp),
+      ...(identityFp ? { zhiWen: identityFp } : {}),
+      ...(subjectPub ? { subjectPublicKey: subjectPub } : {}),
+      token,
+      signed: true,
+      ...(p0.host ? { host: String(p0.host) } : {}),
+      ...(Number(p0.port) > 0 ? { port: Number(p0.port) } : {}),
+      ...(p0.nodeId ? { nodeId: String(p0.nodeId) } : {}),
+    });
+    cunJoinQingQiu();
+    audit?.log('join.inbound-pending', { groupId, subjectFp });
+    try { broadcastToWindows('warmy:joinPendingChanged', { count: youXiaoJiaRu().length }); } catch { /* noop */ }
+  } catch { /* 入站坏包不影响其它通道 */ }
+}
+/** 申请人侧收到批准：验签 + 落本地群 + 通知渲染层。 */
+async function shouDaoJiaRuPiZhun(p0: { groupId?: string; ming?: string; kind?: string; token?: string; publicKey?: string; issuerFp?: string; role?: string; creatorMing?: string }): Promise<void> {
+  try {
+    const groupId = String(p0.groupId || '').trim();
+    const token = String(p0.token || '').trim();
+    const pk = String(p0.publicKey || '').trim();
+    if (!groupId || !token || !pk) return;
+    const benJiPub = String(identityStore?.info()?.publicKey || '');
+    let subjectFp = '';
+    try { if (benJiPub) subjectFp = yaoQingZhiWen(benJiPub); } catch { subjectFp = ''; }
+    if (!subjectFp) return;
+    const v = yanZhengYaoQing(token, {
+      gongYao: pk,
+      sessionId: groupId,
+      subjectFp,
+      usedNonces: duYaoQingNonces(),
+      consumeNonce: true,
+      issuerRole: 'owner',
+    });
+    if (!v.ok) {
+      audit?.log('join.approved-rejected', { groupId, code: v.code });
+      return;
+    }
+    cunYaoQingNonces();
+    const type = p0.kind === 'project' ? 'internal' : 'external';
+    groupStore?.upsertGroup({
+      groupId,
+      ming: String(p0.ming || groupId),
+      type,
+      origin: 'migrated',
+      ...(p0.issuerFp ? { creatorFingerprint: String(p0.issuerFp) } : {}),
+    });
+    if (p0.issuerFp) {
+      groupStore?.addMember(groupId, {
+        ming: String(p0.creatorMing || '创建者'),
+        role: 'creator',
+        source: 'invite',
+        zhiWen: String(p0.issuerFp),
+      });
+    }
+    try { syncRouterFromGroupStore(groupId); } catch { /* noop */ }
+    audit?.log('join.approved', { groupId, issuerFp: p0.issuerFp || '' });
+    try { broadcastToWindows('warmy:joinApproved', { groupId, ming: String(p0.ming || groupId), kind: String(p0.kind || 'group') }); } catch { /* noop */ }
+  } catch { /* 坏包不崩主进程 */ }
+}
+
+chuliIpc('warmy:jiaRuQingQiu', async (_e, payload: { ming: string; kind: string; target: string; targetType: string; zhiWen?: string; token?: string; host?: string; port?: number; nodeId?: string }) => {
+  try {
+    const now = Date.now();
+    const targetRaw = String(payload.target || '').trim();
+    const link = jieJoinLianJie(targetRaw);
+    const identityFp = String(identityStore?.info()?.zhiWen || payload.zhiWen || '');
+    const identityPub = String(identityStore?.info()?.publicKey || '');
+    let subjectFp = '';
+    try { if (identityPub) subjectFp = yaoQingZhiWen(identityPub); } catch { subjectFp = ''; }
+    const token = String(payload.token || link.token || '');
+    const groupId = String(link.groupId || targetRaw);
+    const id = 'out-' + now.toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    const rec: JiaRuJiLu = {
+      id,
+      ming: String(payload.ming || ''),
+      kind: String(payload.kind || 'human'),
+      target: groupId,
+      targetType: String(payload.targetType || 'group'),
+      ts: now,
+      expireAt: now + 30 * 24 * 3600_000,
+      direction: 'out',
+      status: 'pending',
+      ...(subjectFp ? { subjectFp } : {}),
+      ...(identityPub ? { subjectPublicKey: identityPub } : {}),
+      ...(identityFp ? { zhiWen: identityFp } : {}),
+      ...(token ? { token, signed: true } : {}),
+      ...(payload.host ? { host: String(payload.host) } : {}),
+      ...(Number(payload.port) > 0 ? { port: Number(payload.port) } : {}),
+      ...(payload.nodeId ? { nodeId: String(payload.nodeId) } : {}),
+    };
+    joinRequests.push(rec);
+    cunJoinQingQiu();
+    // 网络投递：优先按链接里的 node/port 找地址簿主机；找不到就向已知对端广播。
+    let sent = 0;
+    let failed = 0;
+    const errors: string[] = [];
+    if (secureMesh?.enabled && token) {
+      const body = {
+        to: '*',
+        channel: 'join' as const,
+        payload: {
+          joinRequest: {
+            ming: rec.ming, kind: rec.kind, target: groupId, targetType: rec.targetType,
+            subjectFp, subjectPublicKey: identityPub, zhiWen: identityFp,
+            token, host: payload.host || '', port: Number(payload.port) || link.port || 0,
+            nodeId: payload.nodeId || link.nodeId || '',
+          },
+        },
+      };
+      const peer = link.nodeId ? duiduanYinyong().find((p) => p.nodeId === link.nodeId) : null;
+      if (peer) {
+        const r = await secureMesh.sendToHost(peer.host, peer.port, body, {});
+        if (r.ok) sent = 1; else { failed = 1; errors.push(String(r.error || 'send-failed')); }
+      } else {
+        const r = await secureMesh.broadcast(body);
+        sent = r.sent;
+        failed = r.failed;
+        errors.push(...r.errors.map((x) => String(x).slice(0, 120)));
+      }
+    }
+    audit?.log('join.request', { id, groupId, hasToken: !!token, sent, failed });
+    return { ok: true, id, sent, failed, errors: errors.slice(0, 5), signed: !!token };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:jiaRuPending', () => {
   try {
-    const now = Date.now();
-    const valid = joinRequests.filter((r) => r.expireAt > now);
+    const valid = youXiaoJiaRu();
     return { ok: true, items: valid, count: valid.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:jiaRuHuiYing', (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
+chuliIpc('warmy:jiaRuHuiYing', async (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
   try {
+    youXiaoJiaRu();
     const suoYin = joinRequests.findIndex((r) => r.id === payload.id);
     if (suoYin < 0) return { ok: false };
-    const Qiu = joinRequests[suoYin];
-    if (!Qiu) return { ok: false };
+    const Qiu = joinRequests[suoYin]!;
+    if (Qiu.status !== 'pending') return { ok: true, changed: false, shengYu: youXiaoJiaRu().length };
     if (payload.action === 'block') {
-      blacklist.push({ id: Qiu.id, ming: Qiu.ming, blockedAt: Date.now(), target: Qiu.target });
+      blacklist.push({ id: Qiu.id, ming: Qiu.ming, blockedAt: Date.now(), target: Qiu.target, ...(Qiu.zhiWen || Qiu.subjectFp ? { zhiWen: String(Qiu.zhiWen || Qiu.subjectFp) } : {}) });
+      cunHeiMingDan();
     }
-    /** 同意加入：真的写进成员表（不是只把申请删掉），有指纹就一起落证书锚点 */
     if (payload.action === 'agree') {
       const r = groupStore?.addMember(Qiu.target, {
-        ming: Qiu.ming, source: 'invite',
-        ...(Qiu.zhiWen ? { zhiWen: Qiu.zhiWen } : {}),
+        ming: Qiu.ming,
+        role: Qiu.kind === 'human' ? 'member' : 'member',
+        source: 'invite',
+        ...(Qiu.zhiWen || Qiu.subjectFp ? { zhiWen: String(Qiu.zhiWen || Qiu.subjectFp) } : {}),
       });
-      if (!r || r.ok === false) return { ok: false, error: (r && r.error) || 'join-add-failed', shengYu: joinRequests.filter((x) => x.expireAt > Date.now()).length };
+      if (!r || r.ok === false) return { ok: false, error: (r && r.error) || 'join-add-failed', shengYu: youXiaoJiaRu().length };
       try { syncRouterFromGroupStore(Qiu.target); } catch { /* noop */ }
-      audit?.log('join.approved-member', { id: Qiu.id, groupId: Qiu.target, hasFingerprint: !!Qiu.zhiWen, members: r.members.length });
+      // 回执：把"批准"本身也签成绑定申请人的 token，申请人可离线验签。
+      if (Qiu.subjectFp) {
+        const qian = qianMingYaoQingDuiXi(Qiu.target, Qiu.subjectFp, 'member');
+        if (qian.ok && secureMesh?.enabled) {
+          const g = groupStore?.getGroup(Qiu.target);
+          const body = {
+            to: '*', channel: 'join' as const,
+            payload: {
+              joinApproved: {
+                groupId: Qiu.target,
+                ming: g?.ming || Qiu.target,
+                kind: g?.type === 'internal' ? 'project' : 'group',
+                token: qian.token,
+                publicKey: qian.publicKey,
+                issuerFp: qian.issuerFp,
+                role: 'member',
+                creatorMing: '创建者',
+              },
+            },
+          };
+          try {
+            if (Qiu.host && Number(Qiu.port) > 0) await secureMesh.sendToHost(Qiu.host, Number(Qiu.port), body, {});
+            else await secureMesh.broadcast(body);
+          } catch { /* 回执失败不回滚成员；申请人可重新申请 */ }
+        }
+      }
+      audit?.log('join.approved-member', { id: Qiu.id, groupId: Qiu.target, signed: !!Qiu.signed, members: r.members.length });
     }
-    joinRequests.splice(suoYin, 1);
+    Qiu.status = payload.action === 'agree' ? 'approved' : payload.action === 'block' ? 'blocked' : 'rejected';
+    Qiu.decidedAt = Date.now();
+    Qiu.reason = payload.action;
+    cunJoinQingQiu();
     audit?.log('join.respond', { id: Qiu.id, action: payload.action });
-    return { ok: true, shengYu: joinRequests.filter((r) => r.expireAt > Date.now()).length };
+    return { ok: true, changed: true, shengYu: youXiaoJiaRu().length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:heiMingDanLieBiao', () => anQuanChuLi(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
@@ -27784,9 +28271,11 @@ chuliIpc('warmy:heiMingDanYiChu', (_e, id: string) => {
   try {
     const i = blacklist.findIndex((b) => b.id === id);
     if (i >= 0) blacklist.splice(i, 1);
+    cunHeiMingDan();
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+duJoinQingQiu();
 
 /**
  * **网络配置的持久层**（第 59 轮）：服务器列表 + 公网 IP/网关，以及"每个会话用哪些服务器"的绑定。

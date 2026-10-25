@@ -25,6 +25,15 @@
  */
 import crypto, { KeyObject } from 'node:crypto';
 
+function xiJingCuoWuWen(e: unknown): string {
+  try {
+    const m = (e as { message?: unknown })?.message;
+    return String(m || e || 'unknown').slice(0, 160);
+  } catch {
+    return 'unknown';
+  }
+}
+
 // ── 常量 ──
 
 export const YAO_QING_BAN_BEN = 1 as const;
@@ -402,8 +411,13 @@ export interface ChengYuan {
 }
 
 export interface YaoQingCanShu {
-  /** 创建者（会话锚点持有者）私钥 */
-  siYao: SiYaoShuRu;
+  /** 创建者（会话锚点持有者）私钥；与 `sign` 二选一 */
+  siYao?: SiYaoShuRu;
+  /**
+   * 外部签名函数（已解锁的身份签名者）：输入签名覆盖的字节，返回 base64 的 64 字节 Ed25519 签名。
+   * 用它可以做到**私钥不出安全存储**；提供时 `gongYao` 必填，用于推导锚点指纹与自校验。
+   */
+  sign?: (bytes: Buffer) => string;
   /** 创建者公钥；不传则从私钥推导（两者都给时会核对一致） */
   gongYao?: GongYaoShuRu;
   sessionId: string;
@@ -464,13 +478,24 @@ export function shengChengYaoQing(p: YaoQingCanShu): YaoQingJieGuo {
     throw new YaoQingCuoWu('role-escalation', `${issuerRole}->${role}`);
   }
 
-  const siKey = siYaoKeyObject(p.siYao);
-  // node:crypto 的 createPublicKey 运行期接受私钥 KeyObject，但类型声明只列了输入形状
-  const derivedPub = crypto.createPublicKey(siKey as unknown as Parameters<typeof crypto.createPublicKey>[0]);
-  const derivedFp = guiYiZhiWen(zhiWen(derivedPub));
-  if (p.gongYao !== undefined) {
-    const givenFp = guiYiZhiWen(zhiWen(p.gongYao));
-    if (givenFp !== derivedFp) throw new YaoQingCuoWu('bad-key', 'public-private-mismatch');
+  let siKey: KeyObject | null = null;
+  let derivedPub: KeyObject;
+  let derivedFp: string;
+  if (p.sign !== undefined) {
+    if (p.gongYao === undefined) throw new YaoQingCuoWu('bad-key', 'public-key-required-with-sign');
+    if (typeof p.sign !== 'function') throw new YaoQingCuoWu('bad-key', 'sign-not-function');
+    derivedPub = gongYaoKeyObject(p.gongYao);
+    derivedFp = guiYiZhiWen(zhiWen(derivedPub));
+  } else {
+    if (p.siYao === undefined) throw new YaoQingCuoWu('bad-key', 'private-key-required');
+    siKey = siYaoKeyObject(p.siYao);
+    // node:crypto 的 createPublicKey 运行期接受私钥 KeyObject，但类型声明只列了输入形状
+    derivedPub = crypto.createPublicKey(siKey as unknown as Parameters<typeof crypto.createPublicKey>[0]);
+    derivedFp = guiYiZhiWen(zhiWen(derivedPub));
+    if (p.gongYao !== undefined) {
+      const givenFp = guiYiZhiWen(zhiWen(p.gongYao));
+      if (givenFp !== derivedFp) throw new YaoQingCuoWu('bad-key', 'public-private-mismatch');
+    }
   }
 
   let subjectFp: string;
@@ -517,7 +542,22 @@ export function shengChengYaoQing(p: YaoQingCanShu): YaoQingJieGuo {
     nonce,
   }) as YaoQingPayload;
 
-  const token = bianToken(payload, qianMing(siKey, yaoQingQianMingWen(payload)));
+  const qianMingWen = yaoQingQianMingWen(payload);
+  let signature: string;
+  if (p.sign !== undefined) {
+    try {
+      signature = String(p.sign(Buffer.from(qianMingWen, 'utf8')) ?? '');
+    } catch (e) {
+      throw new YaoQingCuoWu('bad-signature', `sign-failed:${xiJingCuoWuWen(e)}`);
+    }
+    // 外部签名者也要自校验：签名和公钥不匹配就拒绝产出 token，不把坏邀请发出去。
+    if (!yanQian(derivedPub, qianMingWen, signature)) {
+      throw new YaoQingCuoWu('bad-signature', 'signer-mismatch');
+    }
+  } else {
+    signature = qianMing(siKey as KeyObject, qianMingWen);
+  }
+  const token = bianToken(payload, signature);
   const url = `${YAO_QING_URL_QIANZHUI}${Buffer.from(token, 'utf8').toString('base64url')}`;
   return Object.freeze({ token, url, qrText: url, expiresAt: payload.expiresAt });
 }
