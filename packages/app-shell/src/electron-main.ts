@@ -157,6 +157,8 @@ import {
   zhiwenPipei,
   isValidFingerprint,
   yanZhengShenFenKa,
+  daoChuShenFenKa,
+  keyObjectFromPrivateDer,
   verifyRevocationDeclaration,
   verifyRotationDeclaration,
   type LianXiKa,
@@ -17244,6 +17246,14 @@ chuliIpc('warmy:yinXiangHuiHuaShe', (_e, p0?: { sessionId?: string; text?: strin
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
+/** 仅测试用：读取会话日志正文（正常 IPC 只回摘要/哈希，门禁需要证明内容真的到了）。 */
+chuliIpc('warmy:testChatLogText', (_e, p0?: { sessionId?: string; limit?: number }) => {
+  if (process.env.WARMY_TEST_HOOKS !== '1') return { ok: false, error: 'test-hooks-disabled' };
+  const sid = String(p0?.sessionId || '');
+  const limit = Math.min(50, Math.max(1, Number(p0?.limit) || 20));
+  const all = chatLogs.get(sid) || [];
+  return { ok: true, entries: all.slice(-limit).map((e) => ({ role: e.role, content: e.content, ts: e.ts ?? null })) };
+});
 /**
  * **仅测试用**（`WARMY_TEST_HOOKS=1`）：直接跑一次术/印象的互斥放置。
  * 门禁需要真的验证“旧条目迁出、重复条目跳过”，而不是只 grep 源码。
@@ -22058,6 +22068,28 @@ chuliIpc('warmy:shenFenKaLiShi', () =>
   anQuanChuLi(() => ({ ok: true, history: identityStore?.contactCardHistory() ?? [], freeze: identityStore?.contactFreeze() ?? null }), { ok: true, history: [], freeze: null }),
 );
 
+/**
+ * 导出**本机签名名片**（公开信息 + 自签）。用于把名片交给对端，对端验签后
+ * 才能把本机指纹/公钥放进名册 —— 双实例 E2E 与"交换名片"产品入口共用。
+ * 私钥只在主进程内解密、签名、清零，不出 IPC。
+ */
+chuliIpc('warmy:shenFenWoDeKa', () =>
+  anQuanChuLi(() => {
+    if (!identityStore) return { ok: false, error: 'identity-unavailable' };
+    const info = identityStore.info();
+    if (!info) return { ok: false, error: 'identity-missing' };
+    const load = identityStore.load();
+    if (!load.ok) return { ok: false, error: 'identity-locked' };
+    const der = load.privateKeyDer;
+    try {
+      const key = keyObjectFromPrivateDer(der);
+      const card = daoChuShenFenKa(load.identity, key);
+      return { ok: true, card };
+    } finally {
+      der.fill(0);
+    }
+  }, { ok: false, error: 'identity-unavailable' })
+);
 /**
  * 接收方侧：记录对方的名片（加入时交换 / 换证后补发）。
  * 首次加入直接留存、**不冻结**；处于冻结期则只记为 pending，展示继续用本机留存值。
@@ -27992,6 +28024,20 @@ function youXiaoJiaRu(now = Date.now()): JiaRuJiLu[] {
   });
   return joinRequests.filter((r) => r.status === 'pending' && r.expireAt > now);
 }
+/** 本机组网地址：用于把"批准回执"发回申请人（链接里的 port 是创建者的，不是申请人的）。 */
+function benJiWangZhuangDiZhi(): { host: string; port: number } {
+  const port = Number(secureMesh?.boundPort) || 0;
+  let host = '';
+  try {
+    for (const x of Object.values(os.networkInterfaces())) {
+      for (const a of x || []) {
+        if (a && !a.internal && a.family === 'IPv4' && a.address && !a.address.startsWith('169.254.')) { host = a.address; break; }
+      }
+      if (host) break;
+    }
+  } catch { /* 拿不到就回环 */ }
+  return { host: host || '127.0.0.1', port };
+}
 function jieJoinLianJie(target: string): { groupId: string; nodeId: string; port: number; token: string; pk: string } {
   const raw = String(target || '').trim();
   const out = { groupId: '', nodeId: '', port: 0, token: '', pk: '' };
@@ -28059,7 +28105,6 @@ function shouDaoJiaRuQingQiu(p0: Partial<JiaRuJiLu>, peerFp: string): void {
       usedNonces: duYaoQingNonces(),
       consumeNonce: true,
       issuerRole: 'owner',
-      anchorFp: signer.zhiWen,
     });
     if (!v.ok) {
       audit?.log('join.inbound-rejected', { groupId, code: v.code, detail: v.detail || '' });
@@ -28191,6 +28236,7 @@ chuliIpc('warmy:jiaRuQingQiu', async (_e, payload: { ming: string; kind: string;
     let failed = 0;
     const errors: string[] = [];
     if (secureMesh?.enabled && token) {
+      const wo = benJiWangZhuangDiZhi();
       const body = {
         to: '*',
         channel: 'join' as const,
@@ -28198,7 +28244,7 @@ chuliIpc('warmy:jiaRuQingQiu', async (_e, payload: { ming: string; kind: string;
           joinRequest: {
             ming: rec.ming, kind: rec.kind, target: groupId, targetType: rec.targetType,
             subjectFp, subjectPublicKey: identityPub, zhiWen: identityFp,
-            token, host: payload.host || '', port: Number(payload.port) || link.port || 0,
+            token, host: wo.host, port: wo.port,
             nodeId: payload.nodeId || link.nodeId || '',
           },
         },

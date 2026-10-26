@@ -279,6 +279,7 @@ contextBridge.exposeInMainWorld('warmy', {
   // 接收方侧：对端名片 + 7 天冻结期（本机各自判定）
   identityPeerContact: (zhiWen) => ipcRenderer.invoke('warmy:shenFenDuiDuanLianXi', zhiWen),
   identityPeerCard: (payload) => ipcRenderer.invoke('warmy:shenFenDuiDuanKa', payload),
+  identityMyCard: () => ipcRenderer.invoke('warmy:shenFenWoDeKa'),
   identityPeerRotation: (payload) => ipcRenderer.invoke('warmy:shenFenDuiDuanLunHuan', payload),
   identityPeerConfirm: (zhiWen) => ipcRenderer.invoke('warmy:shenFenDuiDuanQueRen', zhiWen),
   // 身份变更横幅（附六）：本机换证 + 对端换证；ack 必须审计成功才算数
@@ -649,4 +650,5 @@ contextBridge.exposeInMainWorld('warmy', {
   yinXiangHuiHuaShe: (p) => ipcRenderer.invoke('warmy:yinXiangHuiHuaShe', p),
   /** 仅门禁使用（主进程只在 WARMY_TEST_HOOKS=1 时执行）；普通运行永远返回 test-hooks-disabled */
   testPromptPlacement: (p) => ipcRenderer.invoke('warmy:testPromptPlacement', p),
+  testChatLogText: (p) => ipcRenderer.invoke('warmy:testChatLogText', p),
 });

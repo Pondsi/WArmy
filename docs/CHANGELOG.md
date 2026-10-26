@@ -1,3 +1,14 @@
+## 0.2.28 — 2026-10-25（已发布）
+
+> Release: https://github.com/Pondsi/WArmy/releases/tag/v0.2.28 · 安装包 WArmy-Setup-0.2.28.exe（146,654,680 B，sha256 421a0e53…1417d）
+
+### 第 83 轮补丁（双实例 E2E 与真实缺陷）
+- 新增 `warmy:shenFenWoDeKa` / `identityMyCard`：导出本机签名名片（私钥不出主进程），供交换名片与双实例联调。
+- **修复入站签名加入验签锚点**：之前把身份层指纹当邀请锚点传给 yao-qing，导致真实双实例申请被拒；改为由创建者公钥推导锚点。
+- **修复批准回执地址**：申请消息现在带申请人自己的组网 host/port（之前误用邀请链接里创建者的端口，批准回执会发给自己）。
+- 新门禁 `verify-r83-shuang-li` **16/0**：两个真实 Electron 实例交换名片 → SecureMesh 聊天真的到达 → 签名邀请 → 申请 → 审批 → 双方成员表带指纹。
+- 其余同 0.2.27（首启关闭二次确认、F11/4K、角色矩阵、IM 发送、受控拟态）。
+
 ## 0.2.27 — 2026-10-25（已发布）
 
 > Release: https://github.com/Pondsi/WArmy/releases/tag/v0.2.27 · 安装包 WArmy-Setup-0.2.27.exe（146,654,176 B，sha256 22d7b27d…2e47a）
