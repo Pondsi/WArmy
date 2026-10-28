@@ -9630,9 +9630,13 @@ function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeE
       }
     }
     if (IPC_LOGIN_REQUIRED.has(channel) && process.env.WARMY_AUTH_BYPASS !== '1') {
-      let unlocked = false;
-      try { unlocked = authService?.state()?.unlocked === true; } catch { unlocked = false; }
-      if (!unlocked) throw new Error('ipc: login required');
+      let st: { hasAccount?: boolean; unlocked?: boolean } | null = null;
+      try { st = authService?.state() ?? null; } catch { st = null; }
+      /**
+       * 只有“已经有账号但还没解锁”才拒绝。**没有账号**（首启/开发门禁）允许配置供应商等本机设置，
+       * 真正需要数据/身份的通道自己会返回 no-account / vault-locked；这里不能把首启直接锁死。
+       */
+      if (st?.hasAccount === true && st.unlocked !== true) throw new Error('ipc: login required');
     }
     try {
       return await fn(event, ...args);
