@@ -23,6 +23,8 @@ import path from 'node:path';
 import { shengChengDocx, shengChengPptx, keYongPptx, shengChengXlsx } from './office-tools.js';
 import { shengChengPdf } from './pdf-tools.js';
 import { lieYaSuoBaoTiaoMu, duYaSuoBaoTiaoMu, tiaoMuMingAnQuan } from './zip-look.js';
+import { shiJianChuoWen } from './time-utils.js';
+import { protectedPathReason, consumeProtectedOnce } from './protected-paths.js';
 
 /** 工具名（与 function calling 暴露给模型的 name 一致） */
 export const WORK_TOOL_NAMES = [
@@ -174,23 +176,43 @@ export function yingSheYongHuWenJianJia(raw: string): { abs: string; rest: strin
  * 模型一 read_file 就被 `workspace-escape` 挡住 —— 用户明明把文件递过来了。
  */
 let yiCiZhiDuGen: string[] = [];
-export function sheZhiYiCiZhiDuGen(paths: Array<string | undefined | null>): void {
-  yiCiZhiDuGen = (paths || [])
+const yiCiZhiDuGenHuiHua = new Map<string, string[]>();
+function guiFanZhiDu(paths: Array<string | undefined | null>): string[] {
+  return (paths || [])
     .map((p) => String(p || '').trim())
     .filter(Boolean)
     .map((p) => { try { return path.resolve(p); } catch { return ''; } })
     .filter(Boolean);
 }
-export function qingKongYiCiZhiDuGen(): void { yiCiZhiDuGen = []; }
-export function yiCiZhiDuGenLieBiao(): string[] { return yiCiZhiDuGen.slice(); }
-/** 这个绝对路径是否落在一次性只读授权里（它就是被授权的文件，或在其被授权的目录下） */
-function zaiYiCiZhiDuNei(abs: string): boolean {
+/** 一次性只读授权按会话隔离；不传 sessionId 的旧调用只作为测试/兼容的全局集合。 */
+export function sheZhiYiCiZhiDuGen(paths: Array<string | undefined | null>, sessionId?: string): void {
+  const list = guiFanZhiDu(paths);
+  const sid = String(sessionId || '').trim();
+  if (sid) yiCiZhiDuGenHuiHua.set(sid, list);
+  else yiCiZhiDuGen = list;
+}
+export function qingKongYiCiZhiDuGen(): void { yiCiZhiDuGen = []; yiCiZhiDuGenHuiHua.clear(); }
+export function yiCiZhiDuGenLieBiao(sessionId?: string): string[] {
+  const sid = String(sessionId || '').trim();
+  return (sid ? (yiCiZhiDuGenHuiHua.get(sid) || []) : [...yiCiZhiDuGen, ...[...yiCiZhiDuGenHuiHua.values()].flat()]).slice();
+}
+/** 这个绝对路径是否落在本会话的一次性只读授权里（它就是被授权的文件，或在其被授权的目录下） */
+function zaiYiCiZhiDuNei(abs: string, sessionId?: string): boolean {
   const a = path.resolve(abs);
-  for (const gen of yiCiZhiDuGen) {
-    if (a === gen) return true;
-    if (a.startsWith(gen + path.sep)) return true;
+  const sid = String(sessionId || '').trim();
+  const lists = sid
+    ? [yiCiZhiDuGenHuiHua.get(sid) || [], ...(yiCiZhiDuGen.length ? [yiCiZhiDuGen] : [])]
+    : [...(yiCiZhiDuGen.length ? [yiCiZhiDuGen] : []), ...yiCiZhiDuGenHuiHua.values()];
+  for (const list of lists) {
+    for (const gen of list) {
+      if (a === gen) return true;
+      if (a.startsWith(gen + path.sep)) return true;
+    }
   }
   return false;
+}
+function huiHuaIdOfBase(baseDir: string): string {
+  try { return path.basename(path.resolve(baseDir)); } catch { return ''; }
 }
 
 /**
@@ -203,6 +225,13 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, z
   const raw = String(rel ?? '').trim();
   if (!raw) throw new Error('empty-path');
   if (raw.includes('\0')) throw new Error('nul-byte');
+  const sessionId = huiHuaIdOfBase(baseDir);
+  /** 第 93 轮：完全授权也不能碰其他会话工作区/历史与程序安装目录；用户单独授权的一次性放行除外 */
+  const shenCha = (abs: string): string => {
+    const why = protectedPathReason(abs, baseDir);
+    if (why && !consumeProtectedOnce(abs)) throw new Error('protected-path: ' + why);
+    return abs;
+  };
   /**
    * 系统用户文件夹别名（Desktop/桌面/…）⇒ 真实路径（绝对）。
    * 走下面同一套越权判定：普通授权下它在工作区外 ⇒ 如实拒绝/问用户。
@@ -212,8 +241,8 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, z
     const jt = yingSheYongHuWenJianJia(raw);
     if (jt) {
       const zhen = jt.rest ? path.resolve(jt.abs, jt.rest) : path.resolve(jt.abs);
-      if (kuaiQuan) return zhen;
-      if (zuoYong === 'read' && zaiYiCiZhiDuNei(zhen)) return zhen;
+      if (kuaiQuan) return shenCha(zhen);
+      if (zuoYong === 'read' && zaiYiCiZhiDuNei(zhen, sessionId)) return shenCha(zhen);
       throw new Error('absolute-path-not-allowed: ' + raw + ' 映射到系统目录 ' + zhen + '（在工作区外，需要授权）');
     }
   }
@@ -221,7 +250,7 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, z
    * **完全授权**（用户显式选的）：允许绝对路径、允许工作区外 —— 此时 AI 可以直接操作本机。
    * 但仍然不许 NUL、不许空路径；且"做什么"始终受最高信念/戒律约束（策略层，不在这里）。
    */
-  if (kuaiQuan) return path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(path.resolve(baseDir), raw);
+  if (kuaiQuan) return shenCha(path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(path.resolve(baseDir), raw));
   // Windows 盘符 / UNC / POSIX 绝对路径：默认拒绝 —— 但命中「一次性只读授权」且是读取操作时放行
   if (path.isAbsolute(raw) || /^[a-zA-Z]:/.test(raw) || raw.startsWith('\\\\') || raw.startsWith('/')) {
     const absJue = path.resolve(raw);
@@ -232,17 +261,17 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, z
      */
     const jiDi = path.resolve(baseDir);
     const bi = (s: string) => (process.platform === 'win32' ? s.toLowerCase() : s);
-    if (bi(absJue) === bi(jiDi) || bi(absJue).startsWith(bi(jiDi) + path.sep)) return absJue;
-    if (zuoYong === 'read' && zaiYiCiZhiDuNei(absJue)) return absJue;
+    if (bi(absJue) === bi(jiDi) || bi(absJue).startsWith(bi(jiDi) + path.sep)) return shenCha(absJue);
+    if (zuoYong === 'read' && zaiYiCiZhiDuNei(absJue, sessionId)) return shenCha(absJue);
     throw new Error('absolute-path-not-allowed');
   }
   const base = path.resolve(baseDir);
   const target = path.resolve(base, raw);
   if (target !== base && !target.startsWith(base + path.sep)) {
-    if (zuoYong === 'read' && zaiYiCiZhiDuNei(target)) return target;
+    if (zuoYong === 'read' && zaiYiCiZhiDuNei(target, sessionId)) return shenCha(target);
     throw new Error('workspace-escape');
   }
-  return target;
+  return shenCha(target);
 }
 
 /** 展示用：把绝对路径折回 base 相对路径（失败则原样返回） */
@@ -439,9 +468,13 @@ export function workSearchFiles(baseDir: string, args: { path?: string; query?: 
 }
 
 /** 精确局部编辑：默认要求 oldText 只出现一次；replaceAll=true 才替换全部。 */
+/** 会话「要求」目录（第 92 轮）：用户亲写，模型不能写/改名/覆盖 */
+const shiYaoQiuLuJing = (p: unknown): boolean => /(^|[\\/])yaoqiu([\\/]|$)/i.test(String(p || ''));
+
 export function workEditFile(baseDir: string, args: { path?: string; oldText?: string; newText?: string; replaceAll?: boolean }, kuaiQuan = false): WorkToolResult {
   const tool = 'edit_file';
   try {
+    if (shiYaoQiuLuJing(args.path)) return fail(tool, new Error('yaoqiu-readonly：会话「要求」只能由用户修改（产品硬门禁 E）'), String(args.path || ''));
     const file = resolveInside(baseDir, args.path, kuaiQuan, 'write');
     if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return fail(tool, new Error('not-a-file'), relOf(baseDir, file));
     const oldText = String(args.oldText ?? '');
@@ -461,6 +494,7 @@ export function workEditFile(baseDir: string, args: { path?: string; oldText?: s
 export function workCopyFile(baseDir: string, args: { path?: string; destination?: string; overwrite?: boolean }, kuaiQuan = false): WorkToolResult {
   const tool = 'copy_file';
   try {
+    if (shiYaoQiuLuJing(args.destination)) return fail(tool, new Error('yaoqiu-readonly：会话「要求」只能由用户修改（产品硬门禁 E）'), String(args.destination || ''));
     const src = resolveInside(baseDir, args.path, kuaiQuan, 'read');
     const dst = resolveInside(baseDir, args.destination, kuaiQuan, 'write');
     if (!fs.existsSync(src) || !fs.statSync(src).isFile()) return fail(tool, new Error('source-not-a-file'), relOf(baseDir, src));
@@ -475,6 +509,7 @@ export function workCopyFile(baseDir: string, args: { path?: string; destination
 export function workMoveFile(baseDir: string, args: { path?: string; destination?: string; overwrite?: boolean }, kuaiQuan = false): WorkToolResult {
   const tool = 'move_file';
   try {
+    if (shiYaoQiuLuJing(args.path) || shiYaoQiuLuJing(args.destination)) return fail(tool, new Error('yaoqiu-readonly：会话「要求」只能由用户修改（产品硬门禁 E）'), String(args.path || args.destination || ''));
     const src = resolveInside(baseDir, args.path, kuaiQuan, 'write');
     const dst = resolveInside(baseDir, args.destination, kuaiQuan, 'write');
     if (!fs.existsSync(src) || !fs.statSync(src).isFile()) return fail(tool, new Error('source-not-a-file'), relOf(baseDir, src));
@@ -493,24 +528,8 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
   const tool = 'read_file';
   try {
     let file = resolveInside(baseDir, args && args.path, kuaiQuan, 'read');
-    /**
-     * **回落解析**（真机事故：模型 `read_file` 读截图报 not-found）。
-     *
-     * 附件清单里给的是「工作区根」相对路径（`inst-xxx/shot-1.png`），而 `baseDir`
-     * 已经是**会话工作区**（`…/workspace/inst-xxx`）⇒ 拼成了
-     * `…/workspace/inst-xxx/inst-xxx/shot-1.png`（会话 id 叠了两遍）⇒ 必然找不到。
-     * 修法：原路径不存在时，再试「相对工作区根」一次（仍限制在工作区根内）。
-     */
-    if (!fs.existsSync(file)) {
-      const raw = String((args && args.path) || '').trim();
-      if (raw && !path.isAbsolute(raw)) {
-        const root = path.resolve(baseDir, '..');
-        const shang = path.resolve(root, raw);
-        if (shang !== root && shang.startsWith(root + path.sep) && fs.existsSync(shang)) {
-          file = shang;
-        }
-      }
-    }
+    // 只允许“本会话 id 被重复拼了一遍”的回落；绝不向工作区父目录找兄弟会话。
+    file = huiLuoHuiHuaGen(baseDir, String((args && args.path) || ''), file);
     if (!fs.existsSync(file)) return fail(tool, new Error('not-found'), relOf(baseDir, file));
     if (fs.statSync(file).isDirectory()) return fail(tool, new Error('is-a-directory'), relOf(baseDir, file));
     const cap = Math.max(1, Math.min(Number(args?.maxChars) || WORK_TOOL_LIMITS.maxReadChars, WORK_TOOL_LIMITS.maxReadChars));
@@ -526,7 +545,7 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
       try {
         const xin = JSON.parse(raw) as { kind?: string; createdAt?: number; meta?: Record<string, unknown>; data?: string };
         const shiMingWen = String(xin.data || '').startsWith('plain.');
-        zhaiYao += `[.nm 包] 类型=${xin.kind || '?'} 导出于=${xin.createdAt ? new Date(xin.createdAt).toLocaleString() : '?'}\n`;
+        zhaiYao += `[.nm 包] 类型=${xin.kind || '?'} 导出于=${xin.createdAt ? shiJianChuoWen(Number(xin.createdAt)) : '?'}\n`;
         if (xin.meta && typeof xin.meta === 'object') zhaiYao += `元信息：${JSON.stringify(xin.meta)}\n`;
         if (!shiMingWen) {
           zhaiYao += '这是**加密包**，需要口令才能解开内容（可以让用户在界面上导入，或让用户告知口令后用 nmYueDu 通道读）。\n';
@@ -683,6 +702,8 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
      * 如实拒绝并指向真正的生成器。
      */
     const rawP = String((args && args.path) || '');
+    /** 会话「要求」只能用户改（第 92 轮，产品硬门禁 E） */
+    if (shiYaoQiuLuJing(rawP)) return fail(tool, new Error('yaoqiu-readonly：会话「要求」只能由用户修改（产品硬门禁 E）'), rawP);
     /**
      * **硬门禁文件不许被改**（产品定稿：硬门禁＝随产品发的验证脚本，模型不得修改/删除）。
      * 只按"仓库内 scripts/ 下的门禁脚本"这个形状拦（工作区里的同名文件不受影响）。
@@ -1170,12 +1191,12 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'write_file',
-        description: '写入/追加一个文本文件（会自动建父目录）。默认写在**工作区**内（相对路径）。可直接写系统「桌面/文档/下载」：用 Desktop/xxx.txt、Documents/xxx.txt、~/Desktop/xxx.txt 这类路径（会映射到真实系统目录，需要用户授权；返回里会给绝对路径）。**产出物必须在最终回复里原样给出返回的绝对路径**，否则用户找不到文件。'
+        description: '写入/追加一个文本文件（会自动建父目录）。**默认且优先写在会话工作区内（相对路径）**；用户没有明确要求桌面/文档/下载时，禁止自行使用 Desktop/… 等系统目录。只有用户明确要求时，才可用 Desktop/xxx.txt、Documents/xxx.txt、~/Desktop/xxx.txt（会映射到真实系统目录，需要用户授权；返回里会给绝对路径）。**产出物必须在最终回复里原样给出返回的绝对路径**，否则用户找不到文件。'
           + '**长文必须分段写**：要写超过 1500 字的长文时，不要在一次调用里塞整篇（会被截断、写不完）。正确做法：第 1 次 write_file 只写第 1 段（不带 append），之后每次调用都带 append:true 续写下一段，一段一段写到完结；每次返回里会告诉你文件当前总字数，可据此判断还需不需要再写。',
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: '【必填】文件路径字符串，例如 identity.txt 或 Desktop/identity.txt。不要省略本字段。' },
+            path: { type: 'string', description: '【必填】文件路径字符串，默认写工作区相对路径，例如 identity.txt；只有用户明确要求桌面时才用 Desktop/identity.txt。不要省略本字段。' },
             content: { type: 'string', description: '本次要写入的内容（分段写时就是这一段）' },
             append: { type: 'boolean', description: 'true = 追加到该文件已有内容的末尾（长文分段续写用）；false/省略 = 覆盖整文件' },
             overwrite: { type: 'boolean', description: '只在确实要把本任务已写过的文件整篇换成更短的内容时才设 true（续写请用 append）' },

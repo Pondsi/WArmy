@@ -43,6 +43,12 @@ export interface LogEntry {
   zhongJian?: Array<{ ts: number; text: string }>;
   /** 系统小字（如提示）——只给界面画成居中浅色行，不进模型上下文 */
   system?: boolean;
+  /**
+   * **用户主动停止时留下的那一截**（不是完整回复）：界面照常画成牛马消息，
+   * 但标题/角标写明「已停止」，并保留当时的思考、操作、中间回复与正文。
+   * 不进模型上下文（下一次用户说话时不把半截当已交付的答复）。
+   */
+  stopped?: boolean;
   /** 本轮实际用的模型名（牛马回复下方第一行显示；不进模型上下文） */
   moXing?: string;
   /**
@@ -59,8 +65,8 @@ export interface LogEntry {
   promptTokens?: number;
   completionTokens?: number;
   /**
-   * **续派合并次数**（方案B：合计 + 次数）。
-   * `mergeWithPrev` 把续派回合并进上一条时，词元累加、次数 +1；界面显示「输入X，输出Y · N次」。
+   * **工具循环轮数**（同一发模型请求里跑了几轮工具）。
+   * 界面时间行显示「输入X，输出Y · N次」；每条回复各记各的，跨回复不再累加。
    */
   turnCount?: number;
   /**
@@ -68,11 +74,6 @@ export interface LogEntry {
    * 真事故：用户看到聊天里冒出一段自己没说过的话。
    */
   hidden?: boolean;
-  /**
-   * **续派回合合并进上一条**（一次用户对话 = 一条思考 + 一条回复）。
-   * 自动续派产生的 assistant 回复追加到上一条 assistant 消息末尾，不单开气泡。
-   */
-  mergeWithPrev?: boolean;
 }
 
 export interface XuanranXuanxiang {

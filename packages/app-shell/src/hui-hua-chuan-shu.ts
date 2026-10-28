@@ -76,6 +76,40 @@ export type ChuanShuKuaiZhao = {
 
 export const CHUAN_SHU_AAD = 'chuan-shu:v1';
 
+export interface QunRuXiangJianYanShuRu {
+  groupId?: string;
+  sessionId?: string;
+  payloadGroupId?: string;
+  peerFingerprint?: string;
+  memberFingerprints?: string[];
+  creatorFingerprint?: string;
+}
+
+/**
+ * 群聊入站消息的会话归属校验（第 109 轮定稿：**新版本不再兼容无指纹旧群**）。
+ *
+ * 发布口径：所有用户都用新版本，旧版本不兼容、不维护、数据不互通。
+ * 因此“群没有成员指纹”不再是可放行的历史状态，而是**无法证明成员身份**的群：
+ * 发送和接收都拒绝，直到创建者/成员重新签发指纹。绝不静默接收。
+ */
+export function qunRuXiangJianYan(p0: QunRuXiangJianYanShuRu): { ok: boolean; reason?: string } {
+  const gid = String(p0?.groupId || '').trim();
+  const sid = String(p0?.sessionId || '').trim();
+  if (!gid) return { ok: false, reason: 'missing-group' };
+  if (!sid || sid !== gid) return { ok: false, reason: 'session-group-mismatch' };
+  const payloadGid = String(p0?.payloadGroupId || '').trim();
+  if (payloadGid && payloadGid !== gid) return { ok: false, reason: 'payload-group-mismatch' };
+  const peer = String(p0?.peerFingerprint || '').trim();
+  if (!peer) return { ok: false, reason: 'missing-peer' };
+  const members = (Array.isArray(p0?.memberFingerprints) ? p0.memberFingerprints : [])
+    .map((x) => String(x || '').trim()).filter(Boolean);
+  const creator = String(p0?.creatorFingerprint || '').trim();
+  if (members.length === 0 && !creator) return { ok: false, reason: 'no-member-fingerprint' };
+  if (creator && creator === peer) return { ok: true };
+  if (members.includes(peer)) return { ok: true };
+  return { ok: false, reason: 'not-a-member' };
+}
+
 /**
  * 推荐的 AAD：包含 sessionId，防止密文被搬到别的会话里重放。
  * 加密与解密必须使用同一个 AAD。

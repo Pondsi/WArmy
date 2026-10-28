@@ -15,8 +15,12 @@
   'use strict';
 
   const el = (id) => document.getElementById(id);
+  /** 时间显示统一走 time-tz.js（记录是 epoch，显示按设置里的时区） */
+  const TZ = window.__warmyTime;
   const canShu = new URLSearchParams(location.search);
   const chuangKouId = Number(canShu.get('id') || '0');
+  /** 聊天框临时编辑模式：内容实时回传聊天框，不落盘、不提示保存 */
+  const chatEditor = canShu.get('chatEditor') === '1';
 
   /* ── 主题 / 强调色 / 字体颜色 ─────────────────────────────
    * 参数优先；缺 theme 时用系统深浅色；再取不到用 CSS 默认值。
@@ -39,6 +43,7 @@
     keBianJi: false,
     huanHang: 'lf',
     zang: false,
+    chatEditor,
     kuai: [],
     ziJie: 0,
     huanHangKai: true,
@@ -193,6 +198,7 @@
     anPaiGongJuLan();
     try { yingYongShiTu(); } catch { /* 缩放系统还没初始化时忽略 */ }
     try { gengXinXiTongAnNiu(); } catch { /* 浮钮还没初始化时忽略 */ }
+    try { wangYeShiTuTongBu(); } catch { /* noop */ }
   }
 
   /* ── 历史（后退 / 前进）—— 记**内容快照**，不只是路径 ──────
@@ -225,6 +231,13 @@
       el('wenBen').value = x.wen;
     }
     zt.zang = false;
+    /**
+     * 第 101 轮：聊天框临时编辑模式下，后退/前进只是改 textarea.value 不会触发 input
+     * ⇒ 聊天框那边收不到同步、历史按钮看着"没生效"。这里补发一次 input，让同步与预览都走真实路径。
+     */
+    if (zt.chatEditor && zt.leiXing === 'text') {
+      try { el('wenBen').dispatchEvent(new Event('input', { bubbles: true })); } catch { /* noop */ }
+    }
     gengXinBiaoTi();
     gengXinYuLan();
     chongXinSouSuo();
@@ -913,10 +926,26 @@
     gengXinBiaoTi();
     zhuangTaiWen(ka.shiBenDi ? ('本地网页 · ' + (ka.luJing || '')) : ('网页 · ' + (ka.url || '')));
   }
+  /** 第 104 轮 项 12：量网页容器，交给主进程的 WebContentsView（CSS px = DIP） */
+  function wangYeKuangCeLiang() {
+    const box = el('wangYeKuangHe');
+    if (!box) return { x: 0, y: 0, width: 0, height: 0 };
+    const r = box.getBoundingClientRect();
+    return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+  }
+  /** 远程网页显示/隐藏/换边界；本地网页和文件模式一律隐藏视图（视图会盖住 DOM）。 */
+  function wangYeShiTuTongBu() {
+    const ka = wangYeDangQian();
+    const ying = !!(zt.wangYe.kai && ka && !ka.shiBenDi && ka.url && !zt.wangYe.yeKuangHide);
+    try {
+      if (!ying) { window.warmy.nmWangYeGuan?.(chuangKouId); return; }
+      window.warmy.nmWangYeKai?.({ id: chuangKouId, url: ka.url, kuang: wangYeKuangCeLiang() });
+    } catch { /* 视图不可用时保持 iframe 空态，不阻塞查看器 */ }
+  }
   function huaWangYeYuLan(ka) {
     const f = el('wangYeKuang');
     if (!f) return;
-    if (!ka) { f.src = 'about:blank'; return; }
+    if (!ka) { f.src = 'about:blank'; wangYeShiTuTongBu(); return; }
     if (ka.shiBenDi) {
       const u = wenJianUrl(ka.luJing);
       const base = u.slice(0, u.lastIndexOf('/') + 1);
@@ -924,12 +953,14 @@
       f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><base href="' + escapeHtml(base) + '"></head><body>'
         + String(ka.yuan || '') + '</body></html>';
       el('wangYeTiShi').hidden = true;
+      wangYeShiTuTongBu();
       return;
     }
     f.removeAttribute('srcdoc');
-    f.src = ka.url || 'about:blank';
-    el('wangYeTiShi').hidden = !ka.url;
-    el('wangYeTiShi').textContent = ka.url ? '若页面空白，多半是该站点禁止内嵌。' : '';
+    f.src = 'about:blank';
+    el('wangYeTiShi').hidden = !!ka.url;
+    el('wangYeTiShi').textContent = ka.url ? '' : '输入网址开始浏览';
+    wangYeShiTuTongBu();
   }
   function wangYeKai(kai) {
     zt.wangYe.kai = !!kai;
@@ -938,6 +969,7 @@
       el('wangYeKuang').src = 'about:blank';
       el('wangYeKuang').removeAttribute('srcdoc');
       el('wangYeTiShi').hidden = true;
+      try { window.warmy.nmWangYeGuan?.(chuangKouId); } catch { /* noop */ }
       if (zt.yaSuoBao) {
         huaYaSuoShu();
         xianShi(zt.tiaoMu ? (zt.leiXing === 'binary' ? 'hex' : zt.leiXing === 'text' ? 'text' : zt.leiXing === 'image' || zt.leiXing === 'audio' || zt.leiXing === 'video' ? 'meiTi' : 'kuai') : 'archive');
@@ -1026,6 +1058,7 @@
   function buXuanZhuan() {
     const f = el('wangYeKuang');
     if (f) f.src = 'about:blank';
+    try { window.warmy.nmWangYeGuan?.(chuangKouId); } catch { /* noop */ }
     gengXinWangYe();
     gengXinBiaoTi();
   }
@@ -1086,8 +1119,7 @@
       return;
     }
     if (!ka.url) return;
-    el('wangYeKuang').src = 'about:blank';
-    setTimeout(() => { if (wangYeDangQian() === ka) el('wangYeKuang').src = ka.url; }, 30);
+    try { window.warmy.nmWangYeDaoHang?.({ id: chuangKouId, dong: 'reload' }); } catch { /* noop */ }
     zhuangTaiWen('刷新 · ' + ka.url);
   }
   function wangYeLiShiCaiDan() {
@@ -1137,6 +1169,7 @@
       b.classList.toggle('kai', n > 0);
     }
     if (!wuTiShi) zhuangTaiWen('分栏 · ' + WANG_YE_FEN_LAN_MING[n]);
+    try { wangYeShiTuTongBu(); } catch { /* noop */ }
   }
   async function xunHuanWangYeFenLan() {
     const xin = (zt.wangYe.fenLan + 1) % 4;
@@ -1233,7 +1266,7 @@
     huaWangYeTab();
     yuanChongXinSouSuo();
     anPaiWangYeYuLan();
-    zhuangTaiWen('已替换 1 处 · ' + new Date().toLocaleTimeString());
+    zhuangTaiWen('已替换 1 处 · ' + TZ.locTime(Date.now()));
   }
   function yuanYuLanShua() {
     const ka = wangYeDangQian();
@@ -1260,7 +1293,7 @@
       }
       gengXinBiaoTi();
       huaWangYeTab();
-      zhuangTaiWen('已保存 · ' + new Date().toLocaleTimeString() + ' · ' + ziJieWen(r.ziJie));
+      zhuangTaiWen('已保存 · ' + TZ.locTime(Date.now()) + ' · ' + ziJieWen(r.ziJie));
       return true;
     }
     tiShiWen('保存失败：' + ((r && (r.cuo || r.error)) || '未知原因'));
@@ -1383,13 +1416,17 @@
     el('neiRongHang').classList.toggle('youShou', zt.fenLanYouShou);
     el('anNiuShouZuo').title = zt.fenLanZuoShou ? '展开源码' : '收起源码（只留预览）';
     el('anNiuShouYou').title = zt.fenLanYouShou ? '展开预览' : '收起预览（只留源码）';
-    if (!zt.fenLanZuoShou) {
-      el('juanCuo').style.display = '';
+    el('juanCuo').style.display = '';
+    el('yuLanLie').style.display = '';
+    if (!zt.fenLanZuoShou && !zt.fenLanYouShou) {
       yingYongFenLanBi();
-    }
-    if (!zt.fenLanYouShou) {
-      el('yuLanLie').style.display = '';
-      yingYongFenLanBi();
+    } else {
+      /**
+       * 第 97 轮项 10：只收起一侧时，**留下的一侧必须铺满**。
+       * 以前预览收起后 #juanCuo 仍保留 62% 的 flex，右侧 38% 就成了空白 —— 用户看到的正是"文档不见了、只剩空白"。
+       */
+      el('juanCuo').style.flex = zt.fenLanYouShou ? '1 1 0' : '0 0 62%';
+      el('yuLanLie').style.flex = '1 1 0';
     }
     zhuangTaiWen(zt.fenLanZuoShou || zt.fenLanYouShou ? '分栏已收起一侧（点分隔条上的箭头恢复）' : '分栏已展开');
   }
@@ -1673,6 +1710,10 @@
     shu.style.left = (r.left - kuang.left + el('shiLiuGunDong').scrollLeft - 2) + 'px';
     shu.style.top = (r.top - kuang.top + el('shiLiuGunDong').scrollTop - 3) + 'px';
     shu.value = '';
+    /** 第 97 轮项 5：空输入框用「原内容」当提示（当前字节的两位十六进制），避免看起来像被清空了 */
+    const yuanZiJie = shiLiuHuanCun(s.xuanZhong);
+    shu.placeholder = yuanZiJie == null ? '??' : yuanZiJie.toString(16).toUpperCase().padStart(2, '0');
+    shu.title = yuanZiJie == null ? '原内容未知' : '原内容：' + shu.placeholder;
     try { shu.focus({ preventScroll: true }); } catch { shu.focus(); }
   }
 
@@ -2201,7 +2242,7 @@
     tuiRuLiShi(zt.luJing, ta.value);
     chongXinSouSuo();
     gengXinYuLan();
-    zhuangTaiWen('已替换 1 处 · ' + new Date().toLocaleTimeString());
+    zhuangTaiWen('已替换 1 处 · ' + TZ.locTime(Date.now()));
   }
 
   function huaGaoLiang() {
@@ -2319,6 +2360,25 @@
   /* ── 编辑 / 保存 ──────────────────────────────────────── */
   function yiXiuGai() {
     if (!zt.keBianJi) return;
+    /**
+     * 聊天框临时编辑模式：**不设脏标记、不自动保存到文件**，只把内容实时回传聊天框。
+     * 关闭时 therefore 不会弹“未保存”确认。
+     */
+    if (zt.chatEditor) {
+      if (yiXiuGai.sync) clearTimeout(yiXiuGai.sync);
+      yiXiuGai.sync = setTimeout(() => {
+        try { void window.warmy.chatEditorSync?.({ content: el('wenBen').value }); } catch { /* noop */ }
+      }, 120);
+      /**
+       * 第 101 轮：聊天编辑器也要有**撤销/后退/前进**。旧代码在这里直接 return，
+       * 历史永远只有进入时的那一条 ⇒ 两个按钮全灰。现在按普通编辑同一套防抖压历史；
+       * 只压"内容快照"（虚拟路径不变），不写文件、不设脏标记。
+       */
+      if (yiXiuGai.lishi) clearTimeout(yiXiuGai.lishi);
+      yiXiuGai.lishi = setTimeout(() => { tuiRuLiShi(zt.luJing, el('wenBen').value); }, 600);
+      anPaiYuLan();
+      return;
+    }
     if (!zt.zang) { zt.zang = true; gengXinBiaoTi(); }
     /** 改动也进历史（防抖 600ms）：这样后退能回到改动前，后退之后还能前进回来 */
     if (yiXiuGai.lishi) clearTimeout(yiXiuGai.lishi);
@@ -2336,6 +2396,14 @@
   }
 
   async function baoCun() {
+    if (zt.chatEditor) {
+      try {
+        const r = await window.warmy.chatEditorSync?.({ content: el('wenBen').value });
+        if (r && r.ok) { zhuangTaiWen('已同步到聊天框（不保存成文件）'); return true; }
+        tiShiWen('同步到聊天框失败：' + ((r && r.error) || '未知原因'));
+        return false;
+      } catch (e) { tiShiWen('同步到聊天框失败：' + String((e && e.message) || e)); return false; }
+    }
     if (!zt.keBianJi) { tiShiWen('这个格式是只读的，不能保存。'); return false; }
     if (zt.leiXing === 'binary' && zt.shiLiu) {
       const s = zt.shiLiu;
@@ -2360,7 +2428,7 @@
         zt.zang = false;
         gengXinBiaoTi();
         huiShiLiu(true);
-        zhuangTaiWen('已保存 · ' + new Date().toLocaleTimeString() + ' · ' + ziJieWen(r.ziJie)
+        zhuangTaiWen('已保存 · ' + TZ.locTime(Date.now()) + ' · ' + ziJieWen(r.ziJie)
           + (r.beiFen ? ' · 备份：' + r.beiFen : ''));
         return true;
       }
@@ -2379,7 +2447,7 @@
       // 保存期间又改了：保留"未保存"标记，别把新改动误标成已保存
       if (ta.value === ciShi) zt.zang = false;
       gengXinBiaoTi();
-      zhuangTaiWen('已保存 · ' + new Date().toLocaleTimeString() + ' · ' + ziJieWen(r.ziJie));
+      zhuangTaiWen('已保存 · ' + TZ.locTime(Date.now()) + ' · ' + ziJieWen(r.ziJie));
       return !zt.zang;
     }
     tiShiWen('保存失败：' + ((r && (r.cuo || r.error)) || '未知原因'));
@@ -2733,6 +2801,11 @@
     try { el('zhengWen').releasePointerCapture?.(t.pointerId); } catch { /* 指针已经释放 */ }
   }
   function daYin() {
+    const ka = wangYeDangQian();
+    if (zt.wangYe.kai && ka && !ka.shiBenDi && ka.url) {
+      try { window.warmy.nmWangYeDaYin?.(chuangKouId); } catch { /* noop */ }
+      return;
+    }
     const pre = el('daYinWenBen');
     // 分栏时打印"效果"这一侧；纯文本文件才用 pre 替身（textarea 不能可靠地整篇打印）
     if (!el('juanCuo').hidden && !zt.fenLan) {
@@ -2868,6 +2941,14 @@
   function kaiCaiDan(anchor, xiang, zhongLei, dian) {
     const m = el('gongJuCaiDan');
     if (!m || (!anchor && !dian)) return;
+    /**
+     * 第 97 轮项 6：同一个按钮再点一次 = 收起（不是重新展开）。
+     * 菜单外的点击由 document 捕获阶段统一收起（同一按钮的 mousedown 会放行，交给这里切换）。
+     */
+    if (!m.hidden && !dian && caiDanZuiHou && caiDanZuiHou.anchor === anchor && caiDanZuiHou.zhongLei === zhongLei) {
+      guanCaiDan();
+      return;
+    }
     m.innerHTML = '';
     for (const x of xiang) {
       if (!x) continue;
@@ -3540,7 +3621,7 @@
 
   // 尺寸变化：工具栏重新收/放；高亮层宽度按新宽度对齐（都合并到 rAF）
   const anPaiChiCun = anPaiZhen(() => { duiQiGaoLiang(); anPaiGongJuLan(); });
-  window.addEventListener('resize', anPaiChiCun, { passive: true });
+  window.addEventListener('resize', () => { anPaiChiCun(); if (zt.wangYe.kai) wangYeShiTuTongBu(); }, { passive: true });
   try {
     if (typeof ResizeObserver === 'function') {
       new ResizeObserver(() => anPaiGongJuLan()).observe(el('gongJuLan'));
@@ -3563,7 +3644,9 @@
     const m = el('gongJuCaiDan');
     if (!m || m.hidden) return;
     if (m.contains(e.target)) return;
-    if (e.target && e.target.closest && e.target.closest('#gongJuLan')) return;
+    /** 第 97 轮项 6：点菜单外的任何位置都收起；只有「当前这个展开按钮」交给 click 做切换 */
+    const anchor = caiDanZuiHou && caiDanZuiHou.anchor;
+    if (anchor && anchor.contains && anchor.contains(e.target)) return;
     guanCaiDan();
   }, true);
   document.addEventListener('keydown', (e) => {
@@ -3575,6 +3658,8 @@
   // 不补一个可见提示的话，Alt+F4 看起来像"点了没反应"。原生对话框仍建议主进程
   // 监听 will-prevent-unload（见交接清单），但这一层已经做到"有改动一定能看见提示"。
   window.addEventListener('beforeunload', (e) => {
+    /** 聊天框临时编辑：关闭不提醒、不保存（改动已实时回传） */
+    if (zt.chatEditor) return;
     if (!zt.zang && !youWeiBaoCun()) return;
     e.preventDefault();
     e.returnValue = '';
@@ -3637,7 +3722,23 @@
 
   /* ── 启动 ─────────────────────────────────────────────── */
   (function qiDong() {
+    try {
+      window.warmy?.settingsGet?.().then((r) => {
+        const tz = r && r.settings && r.settings.timezone;
+        if (tz) TZ.setTimezone(tz);
+      }).catch(() => { /* 读不到就按系统时区显示 */ });
+    } catch { /* noop */ }
     const lu = String(canShu.get('path') || '');
+    if (chatEditor) {
+      try {
+        document.body.classList.add('chatEditorMode');
+        document.title = '编辑聊天内容 · nm 文件查看器';
+        for (const id of ['anNiuBaoCun', 'anNiuLingCunWei', 'anNiuZongShiDing', 'anNiuXiFu']) {
+          const b = el(id);
+          if (b) b.style.display = 'none';
+        }
+      } catch { /* noop */ }
+    }
     sheHuanHang(true);
     gengXinHouQianJin();
     el('anNiuTiHuan').disabled = true;
@@ -3649,11 +3750,34 @@
     zt.ziDong = true;
     sheZiDongBaoCun();
     anPaiGongJuLan();
+    try {
+      const he = el('wangYeKuangHe');
+      if (he && typeof ResizeObserver === 'function') {
+        new ResizeObserver(() => { if (zt.wangYe.kai) wangYeShiTuTongBu(); }).observe(he);
+      }
+    } catch { /* noop */ }
+    try {
+      window.warmy.nmWangYeZhuangTai?.((d) => {
+        if (!d || Number(d.id) !== chuangKouId) return;
+        const ka = wangYeDangQian();
+        if (!ka || ka.shiBenDi) return;
+        if (d.url) ka.url = String(d.url);
+        if (d.title) ka.title = String(d.title);
+        if (d.crashed) zhuangTaiWen('网页进程异常：' + (d.reason || ''));
+        else if (d.blocked) zhuangTaiWen('已拦截非 http(s) 跳转：' + String(d.blocked).slice(0, 80));
+        else if (d.loading === true) zhuangTaiWen('载入中 · ' + (ka.url || ''));
+        else if (d.loading === false) zhuangTaiWen('网页 · ' + (ka.url || ''));
+        gengXinWangYe();
+      });
+    } catch { /* noop */ }
     if (!lu) {
       tiShiWen('没有拿到文件路径（这个窗口需要由 WArmy 打开某个文件才会显示内容）。');
       zhuangTaiWen('就绪');
       return;
     }
-    void jiaZai(lu, true);
+    void jiaZai(lu, true).then(() => {
+      /** 聊天编辑器打开后直接聚焦正文：用户马上可以 Ctrl+Z / 输入，撤销快捷键不用先点一下 */
+      if (chatEditor) { try { el('wenBen')?.focus(); } catch { /* noop */ } }
+    });
   })();
 })();

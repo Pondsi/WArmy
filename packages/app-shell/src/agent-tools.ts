@@ -227,9 +227,9 @@ export function mingLingZaiGongZuoQu(cmd: string, base: string): { ok: boolean; 
 }
 
 /**
- * **命令类动作的授权决策**（run_shell 专用，第 55 轮）：
+ * **命令类动作的授权决策**（run_shell 专用，第 99 轮定稿）：
  * 完全 ⇒ 放行；严格 ⇒ 一律问；常规 ⇒ 必须同时满足「在工作区内」+「首词在白名单」+「静态风险 low」才免问。
- * 这样"常规授权只能在工作区读写删"不是一句产品文案，而是一条能被门禁跑真值表的判据。
+ * “常规授权可以执行工作区命令”不再需要用户勾选开关 —— 白名单/工作区/低风险三条同时满足就是“检测没问题”。
  */
 export function panDuanMingLingShouQuan(
   dang: AnquanDang,
@@ -278,6 +278,7 @@ export const MING_LING_BAI_MING_DAN = [
   'ls', 'dir', 'cat', 'type', 'head', 'tail', 'pwd', 'cd', 'echo', 'whoami', 'hostname', 'date',
   'find', 'grep', 'rg', 'wc', 'file', 'stat', 'du', 'df', 'node', 'python', 'python3', 'py',
   'npm', 'npx', 'pnpm', 'yarn', 'git', 'mkdir', 'cp', 'copy', 'mv', 'move', 'python -m',
+  'tar', 'powershell', 'pwsh', 'zip', 'unzip', '7z',
 ];
 
 export function zaiBaiMingDan(cmd: string): boolean {

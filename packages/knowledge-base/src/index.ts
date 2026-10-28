@@ -74,6 +74,19 @@ export interface ZhishiShijian {
   quDaiIds?: string[];
   /** 被更新的说法取代时置时间戳（**不物理删除**，保留可审计的历史） */
   shiXiaoTs?: number;
+  /**
+   * **被模型实际检索命中过多少次**（第 93 轮）：只统计 `knowledge_query` 真正把这条交给模型的次数，
+   * 不统计写入、UI 浏览、归档整理。短记忆用它决定“先留谁、先删谁”。
+   */
+  useCount?: number;
+  /** 最后一次被检索命中的时刻（epoch ms） */
+  lastUsedAt?: number;
+  /**
+   * **最近若干次检索命中的时刻**（第 96 轮，最多 64 条）：
+   * 短记忆的“使用频率”要看窗口内/带时间衰减的次数，单靠 useCount + lastUsedAt 推不出来。
+   * 只存时间戳，不存查询词/正文；封顶 64 条防止长跑无限膨胀。
+   */
+  useLog?: number[];
 }
 
 export class KnowledgeBase {
@@ -211,6 +224,28 @@ export class KnowledgeBase {
     return [...this.events.values()].filter((e) => !e.shiXiaoTs);
   }
 
+  /**
+   * **记一次“被用”**（第 93 轮）：短记忆要按使用频率留高频、删低频，
+   * 这个计数必须只在**真的把内容交给模型**时累加。批量写一次盘，避免每条都 fsync。
+   */
+  noteUse(ids: readonly string[], at = Date.now()): number {
+    let n = 0;
+    for (const id of ids) {
+      const e = this.events.get(String(id || ''));
+      if (!e) continue;
+      const useLog = [...(Array.isArray(e.useLog) ? e.useLog : []), at].slice(-64);
+      this.events.set(e.id, {
+        ...e,
+        useCount: (Number(e.useCount) || 0) + 1,
+        lastUsedAt: at,
+        useLog,
+      });
+      n += 1;
+    }
+    if (n) this.save();
+    return n;
+  }
+
   /** 实体 → 事件 */
   eventsOfEntity(entityId: string): ZhishiShijian[] {
     const e = this.entities.get(entityId);
@@ -277,5 +312,26 @@ export class ZhishiCang {
       out.events.push(...r.events.map((e) => ({ ...e, _ceng: c })));
     }
     return out;
+  }
+  /** 本会话有权读的层里，所有仍在生效的事件（带 _ceng，便于按层回溯） */
+  activeEventsIn(layers: readonly ZhishiCeng[]): Array<ZhishiShijian & { _ceng: ZhishiCeng }> {
+    const out: Array<ZhishiShijian & { _ceng: ZhishiCeng }> = [];
+    for (const c of layers) out.push(...this.allow(c).activeEvents().map((e) => ({ ...e, _ceng: c })));
+    return out;
+  }
+  /** 把“本次检索真的交给模型”的事件按层累加使用次数 */
+  noteUse(items: ReadonlyArray<{ id?: string; _ceng?: ZhishiCeng }>, at = Date.now()): number {
+    const by = new Map<ZhishiCeng, string[]>();
+    for (const it of items) {
+      const id = String(it?.id || '');
+      const c = it?._ceng;
+      if (!id || !c) continue;
+      const arr = by.get(c) || [];
+      arr.push(id);
+      by.set(c, arr);
+    }
+    let n = 0;
+    for (const [c, ids] of by) n += this.allow(c).noteUse(ids, at);
+    return n;
   }
 }

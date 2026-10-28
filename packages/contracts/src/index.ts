@@ -72,9 +72,23 @@ export interface AcpHuihuaLingpai {
 /* ───────────────────────── 2. 编排 Schema ───────────────────────── */
 
 /** 指令紧急度分级 */
-export type Jinji = 'P0' | 'P1' | 'P2' | 'P3';
+export type Jinji = 'P0' | 'P1' | 'P2' | 'P3' | 'P4';
 /** 值班者状态 */
 export type ZhibanTai = 'idle' | 'listening' | 'orchestrating' | 'busy' | 'queued' | 'dead';
+/** 值班者可用的插话方式（只影响投递/插队，不影响模型） */
+export type CuoHuaFangShi = 'none' | 'stop' | 'urgent' | 'insert' | 'queue';
+/** 思考档位：auto + 界面 7 个非自动档（off=灵机，l1..l6=微觉..参悟） */
+export type SiKaoDangWei = 'auto' | 'off' | 'l1' | 'l2' | 'l3' | 'l4' | 'l5' | 'l6';
+/** 值班者给某只执行者的派发安排（**不含模型**：模型由牛马自己的设置决定） */
+export interface ZhiXingFenPei {
+    executorId: string;
+    ming: string;
+    /** auto = 跟随牛马自己的思考级别；具体档位 = 值班者为本次任务指定 */
+    thinkLevel: SiKaoDangWei;
+    /** 目标正在对话/任务中时，值班者选择的插话方式 */
+    interrupt: CuoHuaFangShi;
+    why: string;
+}
 /** 群内一次用户发言 → 值班者编排决策 */
 export interface OrchestrationRequest {
     groupId: string;
@@ -86,8 +100,12 @@ export interface OrchestrationRequest {
     timestamp: number;
 }
 export interface OrchestrationDecision {
-    /** 被派发任务的执行者实例 ID 列表 */
+    /** 被派发任务的执行者实例 ID 列表（兼容旧字段；以 assignments 为准） */
     executorIds: string[];
+    /** 候选执行者池（含忙碌成员，供值班者按紧急度/难易度挑） */
+    candidateIds?: string[];
+    /** 值班者派发安排：执行者/思考级别/插话方式；**不包含模型** */
+    assignments?: ZhiXingFenPei[];
     /** 值班者给每个执行者的任务摘要（已过 CCR 压缩） */
     taskBrief: string;
     /** 注入上下文的 token 预算 */

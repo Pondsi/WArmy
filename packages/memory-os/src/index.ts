@@ -182,6 +182,11 @@ export interface MemoryOsOptions {
   CangLu: string;
   /** JSONL 日志文件名，默认 fast-memory.jsonl */
   jsonlName?: string;
+  /**
+   * 第 111 轮：SQLCipher 兼容库密钥（64 位 hex，32 字节）。
+   * 有值时 `memory.db`、WAL、回滚日志一起加密；没有值时保持旧的明文投影（只在未登录/迁移前）。
+   */
+  dbKeyHex?: string;
   /** 向量/嵌入配置 */
   vector?: XiangliangXuanxiang;
 }
@@ -267,8 +272,25 @@ export class JiyiCangFuwu {
     this.jsonlPath = path.join(opts.CangLu, opts.jsonlName || 'fast-memory.jsonl');
     this.dbPath = path.join(opts.CangLu, 'memory.db');
     this.jsonlSuo = new JsonlSuo(this.jsonlPath);
-    const Shujuku = require('better-sqlite3');
+    /**
+     * 有密钥 ⇒ 用 SQLCipher 兼容驱动打开，先校验密钥能读 schema；
+     * 密钥错/库损坏一律抛错，绝不把加密库当明文库继续写。
+     */
+    const keyHex = String(opts.dbKeyHex || '').trim();
+    const Shujuku = keyHex ? require('better-sqlite3-multiple-ciphers') : require('better-sqlite3');
     this.db = new Shujuku(this.dbPath);
+    if (keyHex) {
+      if (!/^[0-9a-f]{64}$/i.test(keyHex)) throw new Error('memory-db-key-invalid');
+      this.db.pragma(`key = "x'${keyHex}'"`);
+      /**
+       * 这个驱动构建里 `cipher_version` 返回空表，但 `PRAGMA cipher` 会给出实际 cipher 名；
+       * 用后者确认“确实走了加密驱动”，而不是悄悄退回明文 SQLite。
+       */
+      const cipher = this.db.pragma('cipher', { simple: true });
+      if (!cipher) throw new Error('memory-db-cipher-unavailable');
+      try { this.db.prepare('SELECT count(*) AS n FROM sqlite_master').get(); }
+      catch { throw new Error('memory-db-key-mismatch'); }
+    }
     this.db.pragma('journal_mode = WAL');
     this.db.exec(SQL_JILU);
     this.upgrade = this.ensureSchema();
@@ -387,6 +409,27 @@ export class JiyiCangFuwu {
   // ─────────────────────────────────────────────
 
   /** 只追加写入 JSONL + 投影到 SQLite */
+  /**
+   * 导出检索投影里的记录（按会话/时间过滤）。第 109 轮：选择性导出用。
+   * 只导出投影字段；正文全文以 JSONL 为准（导入时按 id 去重）。
+   */
+  exportRecords(opts: { sessionIds?: string[]; from?: number; to?: number; limit?: number } = {}): Array<Record<string, unknown>> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const ids = Array.isArray(opts.sessionIds) ? opts.sessionIds.map(String).filter(Boolean) : [];
+    if (ids.length) {
+      where.push(`session_id IN (${ids.map(() => '?').join(',')})`);
+      params.push(...ids);
+    }
+    if (Number(opts.from) > 0) { where.push('ts >= ?'); params.push(Math.floor(Number(opts.from))); }
+    if (Number(opts.to) > 0) { where.push('ts <= ?'); params.push(Math.floor(Number(opts.to))); }
+    const limit = Math.max(1, Math.min(500000, Math.floor(Number(opts.limit) || 500000)));
+    const sql = `SELECT id, session_id AS sessionId, kind, ts, ti, group_id AS groupId, entity_type AS entityType
+      FROM records ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY ts ASC LIMIT ?`;
+    params.push(limit);
+    return this.db.prepare(sql).all(...params) as Array<Record<string, unknown>>;
+  }
+
   append(
     record: { id: string; sessionId: string; kind: string; [k: string]: unknown },
     Bi: XieRuQi
@@ -404,7 +447,8 @@ export class JiyiCangFuwu {
     const Quan: JsonlJilu = {
       ...record,
       seq,
-      ts: Date.now(),
+      /** 导入的记录保留原时间戳（否则历史全变成“导入那一刻”，时间线彻底错乱） */
+      ts: Number(record.ts) > 0 ? Math.floor(Number(record.ts)) : Date.now(),
       id: record.id,
       sessionId: record.sessionId,
       kind: record.kind,
@@ -1587,8 +1631,8 @@ function encodeVectorToInt8ForQuery(vec: Float32Array): { data: Int8Array; scale
 // ─────────────────────────────────────────────
 
 /** IPC 子进程入口（pnpm --filter @warmy/memory-os start） */
-export function qishiJiyiCangFuwuIpc(CangLu: string): JiyiCangFuwu {
-  const fuwu = new JiyiCangFuwu({ CangLu });
+export function qishiJiyiCangFuwuIpc(CangLu: string, opts?: { dbKeyHex?: string }): JiyiCangFuwu {
+  const fuwu = new JiyiCangFuwu({ CangLu, ...(opts?.dbKeyHex ? { dbKeyHex: opts.dbKeyHex } : {}) });
   const faSong = (xiaoXi: any) => {
     try {
       process.send?.(xiaoXi);
@@ -1608,6 +1652,21 @@ export function qishiJiyiCangFuwuIpc(CangLu: string): JiyiCangFuwu {
     tail: (xiaoXi) => ({ ok: true, records: fuwu.tail(xiaoXi.limit) }),
     /** 按会话分页的最近记录（用户 #6：重启恢复不许一个会话吃满整窗） */
     tail_per_session: (xiaoXi) => ({ ok: true, records: fuwu.tailPerSession(xiaoXi.meiHuiHua, xiaoXi.huiHuaShang) }),
+    /** 选择性导出：按会话/时间取记录（不读大字段，全文仍以 JSONL 为准） */
+    export_records: (xiaoXi) => ({ ok: true, records: fuwu.exportRecords(xiaoXi) }),
+    /** 选择性导入：逐条 append（保留原 ts；同 id 覆盖投影，JSONL 是追加事实源） */
+    import_records: (xiaoXi) => {
+      const list = Array.isArray(xiaoXi.records) ? xiaoXi.records : [];
+      let n = 0;
+      for (const r of list) {
+        if (!r || !r.id || !r.sessionId) continue;
+        try {
+          fuwu.append({ ...r, kind: String(r.kind || 'message') }, xiaoXi.Bi || 'duty');
+          n += 1;
+        } catch { /* 单条坏记录不影响其余 */ }
+      }
+      return { ok: true, count: n };
+    },
     /** 完整三路 recall（fts_uni ∪ fts_tri ∪ 向量 → RRF），返回卡片 + 计时 + 作用域统计 */
     recall: async (xiaoXi) => {
       const detail = await fuwu.recallDetailed({ query: xiaoXi.query, scope: xiaoXi.scope, limit: xiaoXi.limit });

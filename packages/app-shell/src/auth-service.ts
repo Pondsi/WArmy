@@ -29,6 +29,7 @@ import {
   credentialFromSeed,
   decryptBlob,
   deriveMasterKey,
+  deriveKroot,
   derivePinKey,
   encryptBlob,
   friendlyMnemonic,
@@ -105,6 +106,7 @@ interface PendingRecovery {
   seed: Buffer;
   mnemonic: string;
   masterKey: Buffer;
+  kdf: { salt: string; iterations: number };
 }
 
 export interface AuthState {
@@ -512,7 +514,7 @@ export class AuthService {
     }
     this.clearPending();
     this.clearRecovery();
-    this.pendingRecovery = { mnemonic, seed, masterKey };
+    this.pendingRecovery = { mnemonic, seed, masterKey, kdf: { ...file.kdf } };
     const friendly = friendlyMnemonic(mnemonic);
     return { ok: true, pinyin: mnemonicToPinyin(mnemonic), friendlyWords: friendly.words, friendlyIdioms: friendly.idioms };
   }
@@ -558,8 +560,8 @@ export class AuthService {
       }
     }
 
-    const salt = crypto.randomBytes(16).toString('base64');
-    const masterKey = deriveMasterKey(pending.mnemonic, salt, MASTER_KDF_ITERATIONS);
+    // 登录方式的重设不能改变旧数据仓库仍在使用的主密钥。
+    const masterKey = Buffer.from(pending.masterKey);
     const file: AuthVaultFile = {
       schema: 'warmy.auth.v1',
       version: 1,
@@ -567,7 +569,7 @@ export class AuthService {
       updatedAt: this.now(),
       mnemonicConfirmed: true,
       pinyin: payload?.pinyin === true,
-      kdf: { salt, iterations: MASTER_KDF_ITERATIONS },
+      kdf: { ...pending.kdf },
       identity: {
         seed: encryptBlob(masterKey, pending.seed),
         mnemonic: encryptBlob(masterKey, pending.mnemonic),
@@ -601,6 +603,64 @@ export class AuthService {
   }
 
   // ── session / My page ─────────────────────────────────────────────────
+
+  /**
+   * 第 104 轮：数据仓库解锁需要账号主密钥的**副本**。
+   * 调用方用完必须自己清零；AuthService 仍持有原密钥，logout/lock 时照常擦除。
+   */
+  sessionMasterKeyCopy(): Buffer | null {
+    return this.sessionMasterKey ? Buffer.from(this.sessionMasterKey) : null;
+  }
+
+  /**
+   * 稳定恢复根 Kroot 的会话副本（第 111 轮）。调用方用完清零。
+   * 只由助记词熵派生，不含账号随机盐 ⇒ 同一句助记词在新设备上得到同一把根密钥。
+   */
+  sessionKrootCopy(): Buffer | null {
+    if (!this.unlocked || !this.sessionMasterKey) return null;
+    const { file } = this.readVault();
+    if (!file) return null;
+    try {
+      const mnemonic = decryptBlob(this.sessionMasterKey, file.identity.mnemonic).toString('utf8');
+      return deriveKroot(mnemonic);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 第 104 轮：登录成功 → 解包数据 → 重启应用后，用一次性令牌里的主密钥恢复会话。
+   * 不经过 PIN/助记词输入，但必须能解开 auth/vault.json 的 seed 并与助记词一致。
+   */
+  resumeWithMasterKey(masterKey: Buffer): AuthResult {
+    if (!masterKey || masterKey.length !== 32) return err('bad-session-key');
+    if (this.unlocked && this.sessionMasterKey) return { ok: true, state: this.state() };
+    const { file } = this.readVault();
+    if (!file) return err('no-account');
+    let seed: Buffer | null = null;
+    try {
+      const mnemonic = decryptBlob(masterKey, file.identity.mnemonic).toString('utf8');
+      seed = decryptBlob(masterKey, file.identity.seed);
+      const entropy = mnemonicToEntropy(mnemonic);
+      if (entropy.length !== seed.length || !crypto.timingSafeEqual(entropy, seed)) throw new Error('seed-mismatch');
+      const applied = this.applyIdentity(seed, masterKey);
+      if (!applied.ok) return applied;
+    } catch {
+      return err('vault-corrupt');
+    } finally {
+      if (seed) wipeBuffer(seed);
+    }
+    this.sessionMasterKey = Buffer.from(masterKey);
+    this.unlocked = true;
+    file.lastLoginAt = this.now();
+    file.updatedAt = this.now();
+    const written = this.writeVault(file);
+    if (!written.ok) {
+      this.lockSession();
+      return written;
+    }
+    return { ok: true, state: this.state() };
+  }
 
   changePin(payload: { pin?: string; confirmPin?: string; disableAutoLogin?: boolean }): AuthResult {
     const { file } = this.readVault();

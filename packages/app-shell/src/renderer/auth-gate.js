@@ -62,6 +62,8 @@
     rec: null,
     reminder: null,
     viewer: null,
+    /** 窗口失焦时把助记词藏起来；回来要用户主动点一下才显示（防截图/防旁人瞥见） */
+    mnemonicHidden: false,
     mnemonicConfirmed: false,
     pinyinPref: false,
     pinAuto: false,
@@ -124,7 +126,7 @@
       existingAccountWarn: '此设备已有账号。继续注册会替换当前账号及其本机身份（旧认证库会先备份）。确定吗？',
       back: '返回',
       recoverTitle: "请输入助记词",
-      recoverBody: '输入 24 词英文助记词，或中文友好型全拼（无数字、无符号）。',
+      recoverBody: '输入 24 词英文助记词，或助记拼音（全拼，无数字、无符号）。',
       recoverHint: '助记词只在本机校验，不会上传。',
       verify: '验证助记词',
       badPin: 'PIN 不正确',
@@ -137,9 +139,10 @@
       osUnavailable: '系统安全存储不可用。请改用 PIN，助记词是唯一的恢复方法。',
       authManaged: '该操作已由助记词账号接管。',
       mnemonicTitle: '助记词（24 词）',
+      mnemonicHidden: '已隐藏助记词 · 点击显示',
       mnemonicBody: '请立刻用笔抄写两份，分别放在不同地方。不要截图、不要复制、不要存在电脑或云端。助记词是你唯一的凭证，没有任何找回的方法！',
       mnemonicReminderBody: '你上次选择了“稍后提醒我”。请现在补抄：请立刻用笔抄写两份，分别放在不同地方。不要截图、不要复制、不要存在电脑或云端。助记词是你唯一的凭证，没有任何找回的方法！',
-      pinyinFriendly: '中文友好型（全拼）',
+      pinyinFriendly: '助记拼音',
       pinyinGroupTwo: "词组",
       pinyinGroupFour: "成语",
       later: '稍后提醒我',
@@ -221,7 +224,7 @@
       existingAccountWarn: '此裝置已有帳號。繼續註冊會替換目前帳號及其本機身分（舊認證庫會先備份）。確定嗎？',
       back: '返回',
       recoverTitle: "請輸入助記詞",
-      recoverBody: '輸入 24 詞英文助記詞，或中文友善型全拼（無數字、無符號）。',
+      recoverBody: '輸入 24 詞英文助記詞，或助記拼音（全拼，無數字、無符號）。',
       recoverHint: '助記詞只在本機驗證，不會上傳。',
       verify: '驗證助記詞',
       badPin: 'PIN 不正確',
@@ -234,9 +237,10 @@
       osUnavailable: '系統安全儲存不可用。請改用 PIN，助記詞是唯一的恢復方法。',
       authManaged: '此操作已由助記詞帳號接管。',
       mnemonicTitle: '助記詞（24 詞）',
+      mnemonicHidden: '已隱藏助記詞 · 點擊顯示',
       mnemonicBody: '請立刻用筆抄寫兩份，分別放在不同地方。不要截圖、不要複製、不要存在電腦或雲端。助記詞是你唯一的憑證，沒有任何找回的方法！',
       mnemonicReminderBody: '你上次選擇了「稍後提醒我」。請現在補抄：請立刻用筆抄寫兩份，分別放在不同地方。不要截圖、不要複製、不要存在電腦或雲端。助記詞是你唯一的憑證，沒有任何找回的方法！',
-      pinyinFriendly: '中文友善型（全拼）',
+      pinyinFriendly: '助記拼音',
       pinyinGroupTwo: "詞組",
       pinyinGroupFour: "成語",
       later: '稍後提醒我',
@@ -318,7 +322,7 @@
       existingAccountWarn: 'An account already exists. Continuing replaces the current account and local identity (the old vault is backed up first). Continue?',
       back: 'Back',
       recoverTitle: "Enter your mnemonic",
-      recoverBody: 'Enter the 24-word English mnemonic, or the Chinese-friendly full pinyin (no digits or symbols).',
+      recoverBody: 'Enter the 24-word English mnemonic, or the mnemonic pinyin (full pinyin, no digits or symbols).',
       recoverHint: 'The mnemonic is verified locally and never uploaded.',
       verify: 'Verify mnemonic',
       badPin: 'Incorrect PIN',
@@ -331,9 +335,10 @@
       osUnavailable: 'OS secure storage is unavailable. Use a PIN; the mnemonic is the only way to recover.',
       authManaged: 'This action is managed by the mnemonic account.',
       mnemonicTitle: 'Mnemonic (24 words)',
+      mnemonicHidden: 'Mnemonic hidden · click to show',
       mnemonicBody: 'Write it down on paper right now — two copies, kept in different places. Do not screenshot it, do not copy it, and do not store it on a computer or in the cloud. The mnemonic is your only credential; there is no way to recover it.',
       mnemonicReminderBody: 'You chose “Remind me later” last time. Please write it down now: two copies on paper, kept in different places. Do not screenshot it, do not copy it, and do not store it on a computer or in the cloud. The mnemonic is your only credential; there is no way to recover it.',
-      pinyinFriendly: 'Chinese-friendly (full pinyin)',
+      pinyinFriendly: 'Mnemonic pinyin',
       pinyinGroupTwo: "Words",
       pinyinGroupFour: "Idioms",
       later: 'Remind me later',
@@ -415,7 +420,7 @@
       existingAccountWarn: 'この端末には既にアカウントがあります。続行すると現在のアカウントと端末 ID を置き換えます（旧認証庫は先にバックアップされます）。続行しますか？',
       back: '戻る',
       recoverTitle: "助記詞を入力してください",
-      recoverBody: '24 語の英語助記詞、または中国語向けのフルピンイン（数字・記号なし）を入力してください。',
+      recoverBody: '24 語の英語助記詞、または助記ピンイン（フルピンイン、数字・記号なし）を入力してください。',
       recoverHint: '助記詞はこの端末内だけで検証され、アップロードされません。',
       verify: '助記詞を検証',
       badPin: 'PIN が正しくありません',
@@ -428,9 +433,10 @@
       osUnavailable: 'OS の安全な保存領域が利用できません。PIN を使用してください。助記詞だけが復元方法です。',
       authManaged: 'この操作は助記詞アカウントが管理しています。',
       mnemonicTitle: '助記詞（24 語）',
+      mnemonicHidden: '助記詞を隠しました · クリックで表示',
       mnemonicBody: 'すぐに紙に 2 部書き写し、それぞれ別の場所に保管してください。スクリーンショット、コピー、パソコンやクラウドへの保存は禁止です。助記句は唯一の証明であり、取り戻す方法はありません。',
       mnemonicReminderBody: '前回「後で通知」を選びました。今すぐ書き写してください：紙に 2 部、別々の場所に。スクリーンショット、コピー、パソコンやクラウドへの保存は禁止です。助記句は唯一の証明であり、取り戻す方法はありません。',
-      pinyinFriendly: '中国語向け（フルピンイン）',
+      pinyinFriendly: '助記ピンイン',
       pinyinGroupTwo: "単語",
       pinyinGroupFour: "成語",
       later: '後で通知',
@@ -512,7 +518,7 @@
       existingAccountWarn: '이 기기에 이미 계정이 있습니다. 계속하면 현재 계정과 로컬 신원이 교체됩니다(이전 보관함은 먼저 백업됨). 계속할까요?',
       back: '뒤로',
       recoverTitle: "니모닉을 입력하세요",
-      recoverBody: '24단어 영어 니모닉 또는 중국어 친화형 전체 병음(숫자·기호 없음)을 입력하세요.',
+      recoverBody: '24단어 영어 니모닉 또는 니모닉 병음(전체 병음, 숫자·기호 없음)을 입력하세요.',
       recoverHint: '니모닉은 이 기기에서만 검증되며 업로드되지 않습니다.',
       verify: '니모닉 확인',
       badPin: 'PIN이 올바르지 않습니다',
@@ -525,9 +531,10 @@
       osUnavailable: 'OS 보안 저장소를 사용할 수 없습니다. PIN을 사용하세요. 니모닉이 유일한 복구 방법입니다.',
       authManaged: '이 작업은 니모닉 계정이 관리합니다.',
       mnemonicTitle: '니모닉(24단어)',
+      mnemonicHidden: '니모닉 숨김 · 클릭하여 표시',
       mnemonicBody: '지금 바로 종이에 두 부를 적어 서로 다른 곳에 보관하세요. 스크린샷, 복사, 컴퓨터나 클라우드 저장은 하지 마세요. 니모닉은 유일한 증명이며 되찾을 방법이 없습니다.',
       mnemonicReminderBody: '지난번에 “나중에 알림”을 선택했습니다. 지금 적어 주세요: 종이에 두 부, 서로 다른 곳에. 스크린샷, 복사, 컴퓨터나 클라우드 저장은 하지 마세요. 니모닉은 유일한 증명이며 되찾을 방법이 없습니다.',
-      pinyinFriendly: '중국어 친화형(전체 병음)',
+      pinyinFriendly: '니모닉 병음',
       pinyinGroupTwo: "단어",
       pinyinGroupFour: "성어",
       later: '나중에 알림',
@@ -622,9 +629,10 @@
       osUnavailable: 'Le stockage sécurisé du système est indisponible. Utilisez un PIN ; la phrase mnémonique est le seul moyen de récupération.',
       authManaged: 'Cette action est gérée par le compte mnémonique.',
       mnemonicTitle: 'Phrase mnémonique (24 mots)',
+      mnemonicHidden: 'Phrase masquée · cliquez pour afficher',
       mnemonicBody: 'Recopiez-la immédiatement sur papier en deux exemplaires, conservés à des endroits différents. Ne faites pas de capture d’écran, ne la copiez pas et ne la stockez pas sur un ordinateur ou dans le cloud. La phrase mnémonique est votre seul justificatif ; aucun moyen de récupération n’existe.',
       mnemonicReminderBody: 'Vous avez choisi « Me le rappeler plus tard » la dernière fois. Recopiez-la maintenant : deux exemplaires sur papier, à des endroits différents. Pas de capture d’écran, pas de copie, pas de stockage sur ordinateur ou dans le cloud. La phrase mnémonique est votre seul justificatif ; aucun moyen de récupération n’existe.',
-      pinyinFriendly: 'Adapté au chinois (pinyin complet)',
+      pinyinFriendly: 'Pinyin mnémonique',
       pinyinGroupTwo: "Слова",
       pinyinGroupFour: "Идиомы",
       later: 'Me le rappeler plus tard',
@@ -719,9 +727,10 @@
       osUnavailable: 'El almacenamiento seguro del sistema no está disponible. Usa un PIN; la frase mnemónica es la única forma de recuperación.',
       authManaged: 'Esta acción la gestiona la cuenta mnemónica.',
       mnemonicTitle: 'Frase mnemónica (24 palabras)',
+      mnemonicHidden: 'Frase oculta · clic para mostrar',
       mnemonicBody: 'Cópiala ahora mismo en papel por duplicado y guárdalas en lugares distintos. No hagas capturas, no la copies y no la guardes en un ordenador ni en la nube. La frase mnemónica es tu única credencial; no existe ningún método de recuperación.',
       mnemonicReminderBody: 'La última vez elegiste «Recordármelo más tarde». Cópiala ahora: dos copias en papel, en lugares distintos. Sin capturas, sin copiar y sin guardarla en un ordenador ni en la nube. La frase mnemónica es tu única credencial; no existe ningún método de recuperación.',
-      pinyinFriendly: 'Adaptado al chino (pinyin completo)',
+      pinyinFriendly: 'Pinyin mnemónico',
       pinyinGroupTwo: "Palabras",
       pinyinGroupFour: "Modismos",
       later: 'Recordármelo más tarde',
@@ -816,9 +825,10 @@
       osUnavailable: 'O armazenamento seguro do sistema não está disponível. Use um PIN; a frase mnemônica é a única forma de recuperação.',
       authManaged: 'Esta ação é gerenciada pela conta mnemônica.',
       mnemonicTitle: 'Frase mnemônica (24 palavras)',
+      mnemonicHidden: 'Frase oculta · clique para mostrar',
       mnemonicBody: 'Copie agora mesmo à mão em duas folhas e guarde-as em lugares diferentes. Não tire print, não copie e não guarde no computador ou na nuvem. A frase mnemônica é sua única credencial; não existe método de recuperação.',
       mnemonicReminderBody: 'Você escolheu “Lembrar mais tarde” da última vez. Copie agora: duas folhas de papel, em lugares diferentes. Sem print, sem copiar e sem guardar no computador ou na nuvem. A frase mnemônica é sua única credencial; não existe método de recuperação.',
-      pinyinFriendly: 'Adaptado ao chinês (pinyin completo)',
+      pinyinFriendly: 'Pinyin mnemônico',
       pinyinGroupTwo: "Mots",
       pinyinGroupFour: "Idiomes",
       later: 'Lembrar mais tarde',
@@ -913,9 +923,10 @@
       osUnavailable: 'Безопасное хранилище ОС недоступно. Используйте PIN; мнемоническая фраза — единственный способ восстановления.',
       authManaged: 'Это действие управляется аккаунтом с мнемоникой.',
       mnemonicTitle: 'Мнемоническая фраза (24 слова)',
+      mnemonicHidden: 'Фраза скрыта · нажмите, чтобы показать',
       mnemonicBody: 'Немедленно перепишите её от руки в двух экземплярах и храните в разных местах. Не делайте скриншотов, не копируйте и не храните на компьютере или в облаке. Мнемоническая фраза — ваше единственное подтверждение; способа восстановления не существует.',
       mnemonicReminderBody: 'В прошлый раз вы выбрали «Напомнить позже». Перепишите сейчас: два экземпляра на бумаге, в разных местах. Без скриншотов, копирования и хранения на компьютере или в облаке. Мнемоническая фраза — ваше единственное подтверждение; способа восстановления не существует.',
-      pinyinFriendly: 'Для китайского (полный пиньинь)',
+      pinyinFriendly: 'Мнемонический пиньинь',
       pinyinGroupTwo: "Palavras",
       pinyinGroupFour: "Expressões",
       later: 'Напомнить позже',
@@ -1010,9 +1021,10 @@
       osUnavailable: 'Sekura konservado de la operaciumo ne disponeblas. Uzu PIN; la mnemonika frazo estas la sola maniero reakiri.',
       authManaged: 'Ĉi tiun agon administras la mnemonika konto.',
       mnemonicTitle: 'Mnemonika frazo (24 vortoj)',
+      mnemonicHidden: 'Mnemoniko kaŝita · klaku por montri',
       mnemonicBody: 'Tuj kopiu ĝin permane du ekzemplerojn kaj konservu ilin en malsamaj lokoj. Ne faru ekrankopion, ne kopiu, kaj ne konservu ĝin en komputilo aŭ nubo. La mnemonika frazo estas via sola pruvo; ne ekzistas maniero reakiri ĝin.',
       mnemonicReminderBody: 'Vi lastfoje elektis “Rememorigi poste”. Bonvolu kopii nun: du paperajn ekzemplerojn, en malsamaj lokoj. Sen ekrankopio, sen kopio, kaj sen konservado en komputilo aŭ nubo. La mnemonika frazo estas via sola pruvo; ne ekzistas maniero reakiri ĝin.',
-      pinyinFriendly: 'Ĉin-amika (plena pinyin)',
+      pinyinFriendly: 'Mnemonika pinjino',
       pinyinGroupTwo: "Vortoj",
       pinyinGroupFour: "Idiomoj",
       later: 'Rememorigi min poste',
@@ -1425,6 +1437,166 @@
     </div>`;
   }
 
+  /**
+   * **首启关闭确认里的牛马跑过**（产品要求）：
+   * 每个 logo 用内联 SVG（腿 / 尾 / 头各自成组），腿的摆动周期由行进速度推导，
+   * 尾巴周期跟随步频，头只偶尔微动（随机时长 + 随机相位，不是固定动画）。
+   * 每只的速度、尺寸、直线/斜线/曲线路径、出现间隔全部随机；从左进、从右出。
+   */
+  const QUIT_HORSE_SVG = `<svg viewBox="0 0 140 100" shape-rendering="crispEdges" aria-hidden="true" focusable="false">
+    <ellipse cx="72" cy="86" rx="50" ry="4" fill="#5a3e28" opacity=".14"/>
+    <g class="qLeg qLegBackFar">
+      <rect x="40" y="50" width="10" height="30" fill="#8B5A2B"/>
+      <rect x="40" y="75" width="10" height="5" fill="#1A1A1A"/>
+    </g>
+    <g class="qLeg qLegBackNear">
+      <rect x="20" y="50" width="10" height="15" fill="#8B5A2B"/>
+      <rect x="10" y="65" width="10" height="15" fill="#8B5A2B"/>
+      <rect x="10" y="75" width="10" height="5" fill="#1A1A1A"/>
+    </g>
+    <g class="qLeg qLegFrontFar">
+      <rect x="70" y="50" width="10" height="30" fill="#8B5A2B"/>
+      <rect x="70" y="75" width="10" height="5" fill="#1A1A1A"/>
+    </g>
+    <g class="qLeg qLegFrontNear">
+      <rect x="90" y="50" width="10" height="15" fill="#8B5A2B"/>
+      <rect x="100" y="65" width="10" height="15" fill="#8B5A2B"/>
+      <rect x="100" y="75" width="10" height="5" fill="#1A1A1A"/>
+    </g>
+    <g class="qBodyBob">
+      <g class="qTail">
+        <rect x="10" y="30" width="10" height="10" fill="#3E2723"/>
+        <rect x="0" y="40" width="10" height="10" fill="#3E2723"/>
+        <rect x="0" y="50" width="10" height="10" fill="#3E2723"/>
+      </g>
+      <rect x="20" y="20" width="80" height="30" fill="#A0522D"/>
+      <g class="qHead">
+        <rect x="90" y="0" width="10" height="10" fill="#3E2723"/>
+        <rect x="100" y="0" width="10" height="10" fill="#3E2723"/>
+        <rect x="100" y="10" width="10" height="10" fill="#3E2723"/>
+        <rect x="110" y="10" width="10" height="10" fill="#8B5A2B"/>
+        <rect x="110" y="20" width="10" height="10" fill="#A0522D"/>
+        <rect x="120" y="20" width="10" height="10" fill="#A0522D"/>
+        <rect x="110" y="30" width="10" height="10" fill="#A0522D"/>
+        <rect x="120" y="30" width="10" height="10" fill="#A0522D"/>
+        <rect x="120" y="40" width="10" height="10" fill="#C19A6B"/>
+        <rect x="130" y="40" width="10" height="10" fill="#C19A6B"/>
+        <rect x="100" y="20" width="10" height="10" fill="#8B5A2B"/>
+        <rect x="100" y="30" width="10" height="10" fill="#8B5A2B"/>
+      </g>
+    </g>
+  </svg>`;
+  const QUIT_HORSE_MAX = 6;
+  let quitHorseTimer = 0;
+  let quitHorseGen = 0;
+  let quitHorseN = 0;
+  const tiaoZheng = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  function quitHorseNode() {
+    const el = document.createElement('div');
+    el.className = 'warmyAuthQuitRunner';
+    el.dataset.qiId = String(++quitHorseN);
+    el.innerHTML = QUIT_HORSE_SVG;
+    return el;
+  }
+  function spawnQuitHorse(track, gen, startAt) {
+    if (!track || gen !== quitHorseGen) return;
+    if (track.querySelectorAll('.warmyAuthQuitRunner').length >= QUIT_HORSE_MAX) return;
+    const rect = track.getBoundingClientRect();
+    const W = rect.width || 480;
+    const H = rect.height || 150;
+    const pao = Math.random() < 0.4;
+    const size = pao ? 54 + Math.random() * 34 : 44 + Math.random() * 26;
+    const gao = size * (100 / 140);
+    const el = quitHorseNode();
+    el.style.width = size.toFixed(1) + 'px';
+    el.style.height = gao.toFixed(1) + 'px';
+    /**
+     * 步频跟速度走：跑得越快，腿的周期越短；尾巴周期是步频的两倍。
+     * 这些值写在元素上，CSS 的腿/尾/头动画直接读。
+     */
+    const kuai = pao ? 2100 + Math.random() * 1700 : 4300 + Math.random() * 2600;
+    const bu = Math.round(kuai * (pao ? 0.07 + Math.random() * 0.015 : 0.095 + Math.random() * 0.02));
+    el.style.setProperty('--step', bu + 'ms');
+    el.style.setProperty('--swing', (pao ? 19 + Math.random() * 5 : 10 + Math.random() * 5).toFixed(1) + 'deg');
+    el.style.setProperty('--bob', (pao ? -2 : -1) + 'px');
+    el.style.setProperty('--headDur', Math.round(1300 + Math.random() * 2100) + 'ms');
+    el.style.setProperty('--headDelay', '-' + Math.round(Math.random() * 2600) + 'ms');
+    const y0 = tiaoZheng(3 + Math.random() * Math.max(1, H - gao - 8), 0, Math.max(0, H - gao - 2));
+    /** 从最左侧外面进场、从最右侧外面离场（轨道本身无背景，不靠底色区分边界） */
+    const x0 = -size - 60;
+    const x1 = W + 60;
+    const zhong = Math.random();
+    let frames;
+    if (zhong < 0.28) {
+      frames = [{ transform: `translate(${x0}px, ${y0}px)` }, { transform: `translate(${x1}px, ${y0}px)` }];
+    } else if (zhong < 0.68) {
+      /** 斜线：坡度明显加大，但终点仍夹在轨道内，避免整只跑出卡片 */
+      const y1 = tiaoZheng(y0 + (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 45), 0, Math.max(0, H - gao - 2));
+      frames = [{ transform: `translate(${x0}px, ${y0}px)` }, { transform: `translate(${x1}px, ${y1}px)` }];
+    } else {
+      /** 曲线：控制点拉到更远，弧线更明显；仍保留一部分平移（28%） */
+      const fang = Math.random() < 0.5 ? -1 : 1;
+      const cy = tiaoZheng(y0 + fang * (45 + Math.random() * 55), 0, Math.max(0, H - gao - 2));
+      const y1 = tiaoZheng(y0 + fang * (10 + Math.random() * 40), 0, Math.max(0, H - gao - 2));
+      frames = [0, 0.16, 0.33, 0.5, 0.67, 0.84, 1].map((t) => ({
+        transform: `translate(${(x0 + (x1 - x0) * t).toFixed(1)}px, ${((1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * cy + t * t * y1).toFixed(1)}px)`,
+      }));
+    }
+    track.appendChild(el);
+    let anim = null;
+    try { anim = el.animate(frames, { duration: kuai, easing: 'linear', fill: 'both' }); } catch { /* noop */ }
+    if (anim) {
+      if (startAt > 0) { try { anim.currentTime = kuai * startAt; } catch { /* noop */ } }
+      anim.onfinish = () => { try { el.remove(); } catch { /* noop */ } };
+    } else {
+      el.style.transform = `translate(${x0}px, ${y0}px)`;
+      setTimeout(() => { try { el.remove(); } catch { /* noop */ } }, kuai);
+    }
+  }
+  function stopQuitHorses(track) {
+    quitHorseGen++;
+    if (quitHorseTimer) { clearTimeout(quitHorseTimer); quitHorseTimer = 0; }
+    if (!track) return;
+    track.querySelectorAll('.warmyAuthQuitRunner').forEach((el) => {
+      try { el.getAnimations().forEach((a) => a.cancel()); } catch { /* noop */ }
+      el.remove();
+    });
+    track.innerHTML = '';
+  }
+  function startQuitHorses(track) {
+    if (!track) return;
+    stopQuitHorses(track);
+    const gen = quitHorseGen;
+    let jian = false;
+    try { jian = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch { /* noop */ }
+    if (jian) {
+      for (let i = 0; i < 3; i++) {
+        const el = quitHorseNode();
+        el.classList.add('is-static');
+        const size = 48 + i * 10;
+        el.style.width = size + 'px';
+        el.style.height = (size * (100 / 140)).toFixed(1) + 'px';
+        el.style.left = (8 + i * 30) + '%';
+        el.style.top = (14 + (i % 2) * 22) + 'px';
+        track.appendChild(el);
+      }
+      return;
+    }
+    // 打开时画面上已经“在跑”：三只均匀分布在轨道里，之后从左侧随机补。
+    spawnQuitHorse(track, gen, 0.2);
+    spawnQuitHorse(track, gen, 0.45);
+    spawnQuitHorse(track, gen, 0.7);
+    const loop = () => {
+      if (gen !== quitHorseGen) return;
+      quitHorseTimer = setTimeout(() => {
+        if (gen !== quitHorseGen) return;
+        spawnQuitHorse(track, gen, 0);
+        loop();
+      }, 360 + Math.random() * 820);
+    };
+    loop();
+  }
+
   // ── overlay shell ───────────────────────────────────────────────────────
 
   function ensureOverlay() {
@@ -1437,26 +1609,21 @@
       + '<iframe src="./firstrun-scenes/index.html?embed=1&scenes=' + BEN_CI_CHANG_JING + '&rotate=0" tabindex="-1" scrolling="no"></iframe>'
       + '</div><div class="warmyAuthCard" id="warmyAuthCard"></div>'
       + '<div class="warmyAuthCloseHot" aria-hidden="false"><button type="button" class="warmyAuthCloseX" id="warmyAuthCloseX" title="' + escapeHtml(t('quitApp')) + '" aria-label="' + escapeHtml(t('quitApp')) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>'
-      /* 首启关闭二次确认：内容是一串项目里用过的牛马图标，选项只有「返回界面 / 关闭程序」 */
+      /* 首启关闭二次确认：牛马 logo 从左往右跑过；选项「返回界面 / 关闭程序」 */
       + '<div class="warmyAuthQuitMask" id="warmyAuthQuitMask">'
       + '<div class="warmyAuthQuitCard" role="dialog" aria-modal="true" aria-label="' + escapeHtml(t('quitApp')) + '">'
-      + '<div class="warmyAuthQuitHorses" aria-hidden="true">'
-      + '<img class="warmyAuthQuitHorse h1" src="./icons/logo-color.svg" alt=""/>'
-      + '<img class="warmyAuthQuitHorse h2" src="./icons/logo-tight.png" alt=""/>'
-      + '<img class="warmyAuthQuitHorse h3" src="./icons/logo-16.png" alt=""/>'
-      + '<img class="warmyAuthQuitHorse h4" src="./icons/muMa.svg" alt=""/>'
-      + '<img class="warmyAuthQuitHorse h5" src="./icons/prompt-ai.svg" alt=""/>'
-      + '<img class="warmyAuthQuitHorse h6" src="./mimic/characters/builtin-default.svg" alt=""/>'
-      + '</div>'
+      + '<div class="warmyAuthQuitHorses" id="warmyAuthQuitTrack" aria-hidden="true"></div>'
       + '<div class="warmyAuthQuitActs">'
       + '<button type="button" class="warmyAuthQuitBtn" id="warmyAuthQuitBack">' + escapeHtml(t('quitBack')) + '</button>'
       + '<button type="button" class="warmyAuthQuitBtn danger" id="warmyAuthQuitNow">' + escapeHtml(t('quitApp')) + '</button>'
       + '</div></div></div>';
     document.body.appendChild(root);
     const quitMask = root.querySelector('#warmyAuthQuitMask');
+    const quitTrack = root.querySelector('#warmyAuthQuitTrack');
     const quitBack = root.querySelector('#warmyAuthQuitBack');
     const quitNow = root.querySelector('#warmyAuthQuitNow');
     const closeQuitConfirm = () => {
+      stopQuitHorses(quitTrack);
       quitMask?.classList.remove('on');
       try { root.querySelector('#warmyAuthCloseX')?.focus(); } catch { /* noop */ }
     };
@@ -1465,14 +1632,18 @@
       ev.stopPropagation();
       // 首启右上角关闭：先二次确认；只有确认后才真的退出程序。
       if (quitMask) {
+        if (quitMask.classList.contains('on')) return;
         quitMask.classList.add('on');
         try { quitBack?.focus(); } catch { /* noop */ }
+        // 等遮罩真正显示、拿到轨道尺寸后再开始跑（否则 getBoundingClientRect 全是 0）。
+        requestAnimationFrame(() => { if (quitMask.classList.contains('on')) startQuitHorses(quitTrack); });
       }
     });
     quitBack?.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); closeQuitConfirm(); });
     quitNow?.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
+      stopQuitHorses(quitTrack);
       void window.warmy.appQuit?.('first-run-close').catch(() => null);
     });
     quitMask?.addEventListener('click', (ev) => {
@@ -1499,7 +1670,11 @@
   }
   function hideOverlay() {
     const root = $('warmyAuthGate');
-    if (root) root.classList.add('warmyAuthHidden');
+    if (root) {
+      stopQuitHorses(root.querySelector('#warmyAuthQuitTrack'));
+      root.classList.add('warmyAuthHidden');
+    }
+    try { const p = window.warmy?.authScreenProtect?.(false); if (p && p.catch) p.catch(() => null); } catch { /* noop */ }
     state.overlayHidden = true;
     if (state.windowFitted) {
       state.windowFitted = false;
@@ -1519,6 +1694,7 @@
   }
   function setStep(step) {
     if (state.step === 'terms' && step !== 'terms') stopTermsClock();
+    if (step === 'mnemonic-register' || step === 'mnemonic-reminder') state.mnemonicHidden = false;
     state.step = step;
     state.error = '';
     render();
@@ -1555,6 +1731,15 @@
     const root = $('warmyAuthGate');
     const card = $('warmyAuthCard');
     if (!root || !card) return;
+    /**
+     * 敏感屏（助记词/PIN/恢复）请求系统级截屏保护：
+     * Windows/macOS 会让常规截图/录屏/共享看不到窗口内容；Linux 可能不支持（如实降级，不假装）。
+     */
+    try {
+      const minGan = ['mnemonic-register', 'mnemonic-reminder', 'recover', 'viewer', 'login', 'pin-setup'].includes(state.step);
+      const p = window.warmy?.authScreenProtect?.(minGan);
+      if (p && p.catch) p.catch(() => null);
+    } catch { /* 截屏保护失败不影响登录 */ }
     const scene = stepHasScene(state.step);
     root.classList.toggle('warmyAuthGateFirstRun', scene);
     let cls = 'warmyAuthCard';
@@ -1641,7 +1826,6 @@
     return `<div class="warmyAuthFirstCard warmyAuthLangCard">
         <div class="warmyAuthLangGrid" id="warmyAuthLang" role="radiogroup" aria-label="Language">${opts}</div>
         <div class="warmyAuthLangFoot">
-          <span class="warmyAuthLangPick" aria-live="polite">${escapeHtml(LOCALE_SHORT[cur] || cur)}</span>
           <button class="warmyAuthBtn warmyAuthBtnPrimary warmyAuthStartBtn" id="warmyAuthStart" data-auth-action="language-start">${escapeHtml(t('start'))}</button>
         </div>
         <input type="hidden" id="warmyAuthLocale" value="${escapeHtml(cur)}"/>
@@ -1770,17 +1954,29 @@
     const isIdiom = state.pinyinGroup === 4;
     const items = useFriendly
       ? (isIdiom ? pairIdiomItems(friendly) : friendly)
-      : english.map((w) => ({ w, p: '' }));
+        .map((it, i) => ({
+          ...it,
+          /** 英文 BIP-39 词才是助记词本体；中文码字/拼音只是辅助 */
+          en: isIdiom ? [english[i * 2], english[i * 2 + 1]].filter(Boolean).join(' ') : english[i],
+        }))
+      : english.map((w) => ({ w, p: '', en: w }));
     const cls = useFriendly ? ` is-pinyin is-pinyin-${isIdiom ? 4 : 2}` : '';
     return `<div class="warmyAuthMnemonic${cls}">${items
       .map((it, i) => {
         const cover = it.cover || [i + 1];
         const pair = it.w2 ? `${it.w}|${it.w2}` : '';
+        /**
+         * 第 97 轮项 1：勾选助记拼音时，**拼音才是助记词本体**（主题色，第二行）；
+         * 中文辅助上移与序号并排；英文 BIP-39 词不再重复显示（用户明确说"显示 2 遍助记词"）。
+         * 未勾选时仍是英文 BIP-39 词当本体。
+         */
         return `<span class="warmyAuthWord${useFriendly ? ' warmyAuthWordFriendly' : ''}"
             data-cover="${cover.join(',')}"${pair ? ` data-pair="${escapeHtml(pair)}"` : ''}>
         <b class="warmyAuthWordIndex">${cover.length > 1 ? `${cover[0]}-${cover[1]}` : cover[0]}</b>
-        <span class="warmyAuthWordText">${escapeHtml(it.w)}</span>
-        ${useFriendly ? `<span class="warmyAuthWordPinyin">${escapeHtml(it.p)}</span>` : ''}
+        ${useFriendly
+          ? `<span class="warmyAuthWordText">${escapeHtml(it.w)}</span>
+        <span class="warmyAuthWordPinyin">${escapeHtml(it.p)}</span>`
+          : `<span class="warmyAuthWordEn">${escapeHtml(it.en || '')}</span>`}
       </span>`;
       })
       .join('')}</div>`;
@@ -1804,6 +2000,13 @@
     const source = mnemonicSource();
     if (!source || !source.mnemonic) {
       return `<div class="warmyAuthError">${escapeHtml(t('vaultCorrupt'))}</div>`;
+    }
+    if (state.mnemonicHidden) {
+      return `${plainHeader(t('mnemonicTitle'))}
+        <div class="warmyAuthMnemonicHidden">
+          <div class="warmyAuthHint">${escapeHtml(t('mnemonicHidden'))}</div>
+          <button type="button" class="warmyAuthBtn warmyAuthBtnPrimary" data-auth-action="mnemonic-reveal">${escapeHtml(t('viewTitle'))}</button>
+        </div>`;
     }
     const english = wordsOf(source.mnemonic);
     const reminder = state.step === 'mnemonic-reminder';
@@ -1892,6 +2095,13 @@
   function renderViewer() {
     const source = state.viewer;
     if (!source || !source.mnemonic) return plainHeader(t('viewTitle'), t('vaultCorrupt'));
+    if (state.mnemonicHidden) {
+      return `${plainHeader(t('viewTitle'))}
+        <div class="warmyAuthMnemonicHidden">
+          <div class="warmyAuthHint">${escapeHtml(t('mnemonicHidden'))}</div>
+          <button type="button" class="warmyAuthBtn warmyAuthBtnPrimary" data-auth-action="viewer-reveal">${escapeHtml(t('viewTitle'))}</button>
+        </div>`;
+    }
     const english = wordsOf(source.mnemonic);
     const needConfirm = !!(state.auth && !state.auth.mnemonicConfirmed);
     return plainHeader(t('viewTitle')) + `
@@ -2063,6 +2273,8 @@
     const fresh = await call('authState');
     if (fresh && fresh.ok) state.auth = fresh;
     if (fresh && fresh.bypass === true) { finishAuth(); return; }
+    /** 第 104 轮：一次性令牌已在主进程恢复会话（数据仓库已解锁）⇒ 直接进入。 */
+    if (fresh && fresh.unlocked === true && fresh.hasAccount === true) { finishAuth(); return; }
     if (!state.auth || !state.auth.hasAccount) { showLogin(); return; }
     /**
      * 第 67 轮 项 4：勾了「自动登录」且本机绑定仍然有效 ⇒ **启动直接进入**，
@@ -2088,7 +2300,7 @@
   }
 
   async function handleAction(action, el) {
-    if (state.busy && !['viewer-close', 'viewer-later'].includes(action)) return;
+    if (state.busy && !['viewer-close', 'viewer-later', 'viewer-reveal', 'mnemonic-reveal'].includes(action)) return;
     if (action === 'retry-boot') {
       location.reload();
       return;
@@ -2260,11 +2472,16 @@
       openPinSetup();
       return;
     }
+    if (action === 'mnemonic-reveal') {
+      state.mnemonicHidden = false;
+      render();
+      return;
+    }
     if (action === 'mnemonic-later' || action === 'mnemonic-confirm') {
       const confirm = action === 'mnemonic-confirm';
       // 确认弹层没有标题（用户要求），只显示正文与按钮。
       const ok = confirm
-        ? await askConfirm('', t('confirmBody'), t('confirmOk'), true)
+        ? await askConfirm('', t('confirmBody'), t('confirmOk'), true, t('back'))
         : await askConfirm(t('laterConfirmTitle'), t('laterConfirmBody'), t('laterConfirmOk'), false);
       if (!ok) return;
       if (state.step === 'mnemonic-register') {
@@ -2330,6 +2547,11 @@
     }
     if (action === 'username-finish') {
       await submitUsername();
+      return;
+    }
+    if (action === 'viewer-reveal') {
+      state.mnemonicHidden = false;
+      render();
       return;
     }
     if (action === 'viewer-later' || action === 'viewer-close') {
@@ -2471,7 +2693,15 @@
     showOverlay();
     state.step = 'loading';
     render();
-    const st = await call('authState');
+    const st = await (async () => {
+      /** 第 104 轮：数据仓库解包在主进程启动流程里，可能比渲染层晚一点就绪。 */
+      let x = await call('authState');
+      for (let i = 0; i < 300 && (!x || x.error === 'auth-unavailable'); i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        x = await call('authState');
+      }
+      return x;
+    })();
     if (!st || st.ok === false) {
       state.fatal = st && st.error ? errorText(st.error) : t('fatal');
       state.step = 'fatal';
@@ -2721,7 +2951,7 @@
 
   // ── confirmation / viewer / logout ──────────────────────────────────────
 
-  function askConfirm(title, body, okText, danger) {
+  function askConfirm(title, body, okText, danger, cancelText) {
     return new Promise((resolve) => {
       const modal = document.createElement('div');
       modal.className = 'warmyAuthModal';
@@ -2730,7 +2960,7 @@
           ${title ? `<div class="warmyAuthTitle">${escapeHtml(title)}</div>` : ''}
           <div class="warmyAuthModalBody">${escapeHtml(body)}</div>
           <div class="warmyAuthActions">
-            <button class="warmyAuthBtn" data-modal="cancel">${escapeHtml(t('cancel'))}</button>
+            <button class="warmyAuthBtn" data-modal="cancel">${escapeHtml(cancelText || t('cancel'))}</button>
             <button class="warmyAuthBtn ${danger ? 'warmyAuthBtnDanger' : 'warmyAuthBtnPrimary'}" data-modal="ok">${escapeHtml(okText)}</button>
           </div>
         </div>`;
@@ -2781,6 +3011,7 @@
       friendlyIdioms: Array.isArray(r.friendlyIdioms) ? r.friendlyIdioms : null,
     };
     state.pinyinPref = !!state.auth.pinyin;
+    state.mnemonicHidden = false;
     state.step = 'viewer';
     state.error = '';
     showOverlay();
@@ -2798,217 +3029,6 @@
     location.reload();
   }
 
-  // ── R78：漫游式引导（spotlight / 分步高亮）──────────────────────────────
-  /**
-   * app.js 仍然是「步骤数据 + 达成条件 + 跳过/重看入口」的唯一来源：
-   *   · 设置 → 关于 → 「重新打开首次引导卡」、window.__showOnboardingGuide(true)
-   *   · 每步跳到目标、加 .yinDaoGaoLiang、写 #yinDaoTiao 的标题/正文/按钮
-   * 这里只把那条固定在右下角的引导条改写成**跟随目标的 spotlight 卡片**：
-   *   · #yinDaoTiao 原样留在 DOM 里（display:none），按钮仍由它驱动 ⇒ 不改 app.js；
-   *   · 四块遮罩挖出目标区域 + 描边高亮，卡片贴在目标下方/上方；
-   *   · 跳过 / 下一步 / 去操作 全部代理到原引导条的同名按钮；
-   *   · 引导条被移除（跳过/完成）时一起收摊；再次出现（重看）时自动重新接管。
-   */
-  const tour = { on: false, sig: '', target: null, timer: 0 };
-  const TOUR_PAD = 6;
-
-  function tourBar() {
-    return $('yinDaoTiao');
-  }
-
-  function tourEnsure() {
-    let root = $('warmyTour');
-    if (root) return root;
-    root = document.createElement('div');
-    root.id = 'warmyTour';
-    root.className = 'warmyTour';
-    root.innerHTML = `
-      <div class="warmyTourDim" data-side="top"></div>
-      <div class="warmyTourDim" data-side="bottom"></div>
-      <div class="warmyTourDim" data-side="left"></div>
-      <div class="warmyTourDim" data-side="right"></div>
-      <div class="warmyTourHole" id="warmyTourHole" aria-hidden="true"></div>
-      <div class="warmyTourCard" id="warmyTourCard" role="dialog" aria-live="polite"></div>`;
-    document.body.appendChild(root);
-    return root;
-  }
-
-  function tourStart() {
-    if (state.step !== 'done') return;
-    tourEnsure(); // 先建好漫游层，再隐藏原引导条（建不出来就不动它）
-    tour.on = true;
-    tour.sig = '';
-    document.body.classList.add('warmyTourOn');
-    const card = $('warmyTourCard');
-    if (card && card.dataset.bound !== '1') {
-      card.dataset.bound = '1';
-      card.addEventListener('click', (e) => {
-        const el = e.target && e.target.closest ? e.target.closest('[data-tour]') : null;
-        if (!el) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const act = el.getAttribute('data-tour');
-        const bar = tourBar();
-        if (act === 'skip') {
-          if (bar) { const b = bar.querySelector('[data-yd="skip"]'); if (b) b.click(); }
-          tourTeardown();
-          return;
-        }
-        if (!bar) return;
-        if (act === 'go') {
-          const b = bar.querySelector('[data-yd="go"]');
-          if (b) b.click();
-        } else if (act === 'next') {
-          const b = bar.querySelector('[data-yd="next"]');
-          if (b) b.click();
-        } else if (act === 'tip') {
-          const b = bar.querySelector('[data-yd="tip"]');
-          if (b) b.click();
-        }
-        // 让 app.js 自己的重绘/跳转先跑完，再重新取目标与文案。
-        setTimeout(tourSync, 140);
-      });
-    }
-    tourSync();
-  }
-
-  function tourTeardown() {
-    tour.on = false;
-    tour.sig = '';
-    tour.target = null;
-    document.body.classList.remove('warmyTourOn');
-    const root = $('warmyTour');
-    if (root) root.remove();
-  }
-
-  function tourSync() {
-    const bar = tourBar();
-    // 没进软件（认证遮罩还在）或引导条不在了：不接管。
-    if (!bar || state.step !== 'done') {
-      if (tour.on) tourTeardown();
-      return;
-    }
-    // 页面切换后目标会变（设置→模型、我的牛马→管理局）：让 app.js 按当前页重选高亮。
-    try { window.__yinDaoTargetRefresh?.(); } catch { /* noop */ }
-    if (!tour.on) tourStart();
-    if (!tour.on) return;
-    if (bar.innerHTML === tour.sig) {
-      // 文案没变也可能换了目标（「去操作」跳转后会重新高亮），每拍都跟一下。
-      const now = document.querySelector('.yinDaoGaoLiang');
-      if (now !== tour.target) tour.target = now;
-      tourLayout();
-      return;
-    }
-    tour.sig = bar.innerHTML;
-    const card = $('warmyTourCard');
-    if (!card) return;
-    const html = (sel) => { const n = bar.querySelector(sel); return n ? n.innerHTML : ''; };
-    const text = (sel) => { const n = bar.querySelector(sel); return n ? n.textContent.trim() : ''; };
-    const btnText = (act) => text(`[data-yd="${act}"]`);
-    const progress = text('.yinDaoJiDu');
-    const tip = text('[data-yd="tip"]');
-    card.innerHTML = `
-      <div class="warmyTourHead">
-        <span class="warmyTourStep">${escapeHtml(progress)}</span>
-        <button type="button" class="warmyTourClose" data-tour="skip"
-                aria-label="${escapeHtml(tOr('guide.skip', '跳过'))}">×</button>
-      </div>
-      <div class="warmyTourTitle">${html('.yinDaoTi')}</div>
-      <div class="warmyTourBody">${html('.yinDaoWen')}</div>
-      ${html('.yinDaoJiaZhi') ? `<div class="warmyTourValue">${html('.yinDaoJiaZhi')}</div>` : ''}
-      ${tip ? `<button type="button" class="warmyTourLink" data-tour="tip">${escapeHtml(tip)}</button>` : ''}
-      <div class="warmyTourBtns">
-        <button type="button" class="warmyTourBtn" data-tour="skip">${escapeHtml(tOr('guide.skip', '跳过'))}</button>
-        ${btnText('go') ? `<button type="button" class="warmyTourBtn warmyTourBtnGo" data-tour="go">${escapeHtml(btnText('go'))}</button>` : ''}
-        <button type="button" class="warmyTourBtn warmyTourBtnNext" data-tour="next">${escapeHtml(btnText('next') || tOr('guide.next', '下一步'))}</button>
-      </div>`;
-    tour.target = document.querySelector('.yinDaoGaoLiang');
-    tourLayout();
-  }
-
-  function tourLayout() {
-    const root = $('warmyTour');
-    const card = $('warmyTourCard');
-    const hole = $('warmyTourHole');
-    if (!root || !card || !hole) return;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const dims = root.querySelectorAll('.warmyTourDim');
-    const setBox = (el, x, y, w, h) => {
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-      el.style.width = Math.max(0, w) + 'px';
-      el.style.height = Math.max(0, h) + 'px';
-    };
-    // 目标可能在滚动/跳转：每 220ms 重新量一次；出了视口就退回“无目标”形态。
-    const t = tour.target && tour.target.isConnected ? tour.target.getBoundingClientRect() : null;
-    let h = null;
-    if (t && t.width > 3 && t.height > 3 && t.bottom > 0 && t.top < vh && t.right > 0 && t.left < vw) {
-      h = {
-        x: Math.max(2, t.left - TOUR_PAD),
-        y: Math.max(2, t.top - TOUR_PAD),
-        w: Math.min(vw - 4, t.width + TOUR_PAD * 2),
-        h: Math.min(vh - 4, t.height + TOUR_PAD * 2),
-      };
-      if (h.x + h.w > vw - 2) h.w = vw - 2 - h.x;
-      if (h.y + h.h > vh - 2) h.h = vh - 2 - h.y;
-    }
-    if (h) {
-      setBox(dims[0], 0, 0, vw, h.y);
-      setBox(dims[1], 0, h.y + h.h, vw, vh - (h.y + h.h));
-      setBox(dims[2], 0, h.y, h.x, h.h);
-      setBox(dims[3], h.x + h.w, h.y, vw - (h.x + h.w), h.h);
-      hole.style.display = '';
-      setBox(hole, h.x, h.y, h.w, h.h);
-    } else {
-      setBox(dims[0], 0, 0, vw, vh);
-      setBox(dims[1], 0, 0, 0, 0);
-      setBox(dims[2], 0, 0, 0, 0);
-      setBox(dims[3], 0, 0, 0, 0);
-      hole.style.display = 'none';
-    }
-    const cw = card.offsetWidth || 340;
-    const ch = card.offsetHeight || 200;
-    let cx;
-    let cy;
-    // 固定右下角：卡片不追着目标跑，用户点击坐标稳定（按钮不会被换位/换步）。
-    if (false) {
-      cx = h.x + h.w / 2 - cw / 2;
-      const below = h.y + h.h + 12;
-      const above = h.y - 12 - ch;
-      if (below + ch <= vh - 10) cy = below;
-      else if (above >= 10) cy = above;
-      else cy = vh - ch - 10; // 目标几乎占满屏幕：卡片贴底，仍不遮住目标中心
-    } else {
-      cx = vw - cw - 24;
-      cy = vh - ch - 24;
-    }
-    cx = Math.max(10, Math.min(vw - cw - 10, cx));
-    cy = Math.max(10, Math.min(vh - ch - 10, cy));
-    card.style.left = Math.round(cx) + 'px';
-    card.style.top = Math.round(cy) + 'px';
-  }
-
-  // 漫游层要一直“看着”引导条：不挂在 app.js 里，也不改它。
-  setInterval(() => {
-    try { tourSync(); } catch { /* 引导失败不挡主流程 */ }
-  }, 220);
-  try {
-    window.addEventListener('resize', () => {
-      if (state.step === 'login') fitPinInline();
-    });
-  } catch { /* noop */ }
-  try {
-    document.addEventListener('keydown', (ev) => {
-      if (!tour.on || ev.key !== 'Escape') return;
-      ev.preventDefault();
-      const bar = tourBar();
-      const b = bar && bar.querySelector('[data-yd="skip"]');
-      if (b) b.click();
-      tourTeardown();
-    }, true);
-  } catch { /* noop */ }
-
   // Expose a tiny API for app.js / My page. No secrets are stored on window.
   window.__warmyAuthGate = {
     boot,
@@ -3018,23 +3038,15 @@
     decorateMyPage,
     state: () => state.auth,
   };
-  /** 第 78 轮：漫游式引导的最小只读/重放入口（门禁与「重看」用）。 */
-  window.__warmyTour = {
-    active: () => tour.on,
-    replay: () => { try { window.__showOnboardingGuide?.(true, { restart: true }); } catch { /* noop */ } return true; },
-    stop: () => {
-      const bar = tourBar();
-      const b = bar && bar.querySelector('[data-yd="skip"]');
-      if (b) b.click();
-      tourTeardown();
-    },
-    state: () => ({
-      on: tour.on,
-      target: tour.target && tour.target.isConnected
-        ? (tour.target.id ? '#' + tour.target.id : tour.target.tagName.toLowerCase())
-        : '',
-    }),
-  };
+
+  // 引导已由 app.js 的「开始使用」清单接管（R98 删除旧 spotlight 漫游层）。
+  // 登录页的内嵌按钮宽度随语言变化：窗口缩放/语言切换后要重新留出右侧空间
+  // （原监听器与漫游层写在同一个块里，删除漫游层时必须保留这一条）。
+  try {
+    window.addEventListener('resize', () => {
+      if (state.step === 'login') fitPinInline();
+    });
+  } catch { /* noop */ }
 
   // app.js renders the My page repeatedly; a light observer is enough because
   // the auth card is idempotent and only touches the credential block.
@@ -3066,6 +3078,18 @@
         })();
       } catch { /* noop */ }
     });
+  } catch { /* noop */ }
+
+  // ── 窗口失焦时隐藏助记词（防截图/防旁人瞥见） ─────────────────────────
+  const hideMnemonicOnBlur = () => {
+    if (!['mnemonic-register', 'mnemonic-reminder', 'viewer'].includes(state.step)) return;
+    if (state.mnemonicHidden) return;
+    state.mnemonicHidden = true;
+    try { render(); } catch { /* 隐藏失败不影响登录 */ }
+  };
+  try { window.addEventListener('blur', hideMnemonicOnBlur); } catch { /* noop */ }
+  try {
+    document.addEventListener('visibilitychange', () => { if (document.hidden) hideMnemonicOnBlur(); });
   } catch { /* noop */ }
 
   // Keep the gate visible even if app.js throws before calling boot().

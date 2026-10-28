@@ -292,6 +292,24 @@ export function pinyinToMnemonic(pinyin) {
   return parseMnemonicInput(pinyin);
 }
 
+/**
+ * 稳定恢复根 `Kroot`（第 111 轮）。
+ *
+ * 旧主密钥 = PBKDF2(助记词, **每账号随机 salt**) —— 同一句助记词在新设备/新账号上
+ * 会得到不同密钥，所以“同词恢复”打不开旧数据。Kroot 只由助记词熵派生，不掺账号 salt，
+ * 因此同一句助记词在任何设备上都能得到同一把根密钥；数据本身再用随机 DEK 包裹。
+ */
+export function deriveKroot(mnemonic) {
+  const entropy = mnemonicToEntropy(parseMnemonicInput(mnemonic));
+  return Buffer.from(crypto.hkdfSync('sha256', entropy, Buffer.from('warmy-root-v2', 'utf8'), Buffer.from('recovery', 'utf8'), 32));
+}
+
+/** Kroot 的公开短指纹：写进 .nm 头，用来判断“这个包是不是当前账号导出的” */
+export function krootFingerprint(kroot) {
+  if (!Buffer.isBuffer(kroot) || kroot.length !== 32) throw new Error('auth: kroot must be 32 bytes');
+  return crypto.createHash('sha256').update('warmy-kroot-fingerprint-v1', 'utf8').update(kroot).digest('hex').slice(0, 32);
+}
+
 /** PBKDF2-HMAC-SHA512 master key. Same phrase + salt + iterations ⇒ same key. */
 export function deriveMasterKey(mnemonic, saltB64, iterations = MASTER_KDF_ITERATIONS) {
   const canonical = parseMnemonicInput(mnemonic);

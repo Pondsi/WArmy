@@ -15,6 +15,8 @@ export interface JiyiCangKeHuXuanXiang {
   nodePath?: string;
   ipcEntry: string;
   CangLu: string;
+  /** 第 111 轮：SQLCipher 兼容库密钥（hex）；未登录/迁移前为空时保持旧的明文投影 */
+  dbKeyHex?: () => string | null;
   /** 启动日志出口（主进程的 qidong）。子进程崩溃/stderr 过去被直接丢掉，只看到"启动超时" */
   log?: (xiaoXi: string) => void;
 }
@@ -70,6 +72,7 @@ export class JiyiCangKeHu implements MemoryStore {
     // 只有在拿 Electron 二进制兜底当 Node 时才需要这个开关；
     // 用真正的 node.exe 时设了也无害，但不设的话 electron 会当普通 GUI 启动并立刻崩。
     const useElectronAsNode = /electron(\.exe)?$/i.test(execPath);
+    const memoryDbKey = String(this.opts.dbKeyHex?.() || '');
     this.Zhi = fork(this.opts.ipcEntry, [], {
       execPath,
       execArgv: [],
@@ -78,6 +81,7 @@ export class JiyiCangKeHu implements MemoryStore {
         WARMY_MEMORY_DIR: this.opts.CangLu,
         // legacy alias during rename window
         CCA_ARMY_MEMORY_DIR: this.opts.CangLu,
+        ...(memoryDbKey ? { WARMY_MEMORY_DB_KEY_HEX: memoryDbKey } : {}),
         ...(useElectronAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -163,6 +167,16 @@ export class JiyiCangKeHu implements MemoryStore {
 
   tail(limit = 20) {
     return this.call({ op: 'tail', limit });
+  }
+
+  /** 选择性导出：按会话/时间取记录 */
+  exportRecords(opts: { sessionIds?: string[]; from?: number; to?: number; limit?: number } = {}) {
+    return this.call({ op: 'export_records', ...opts }, 60_000);
+  }
+
+  /** 选择性导入：逐条 append（保留原 ts） */
+  importRecords(records: Array<Record<string, unknown>>) {
+    return this.call({ op: 'import_records', records, Bi: 'duty' }, 120_000);
   }
 
   /** 按会话分页的最近记录（重启恢复用：每个会话各取最近若干条，不许一个会话吃满整窗） */

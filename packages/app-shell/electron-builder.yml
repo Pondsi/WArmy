@@ -58,6 +58,7 @@ extraResources:
     to: pnpm-store
     filter:
       - "**/better-sqlite3/**"
+      - "**/better-sqlite3-multiple-ciphers/**"
       - "**/bindings/**"
       - "**/file-uri-to-path/**"
 

@@ -73,9 +73,11 @@
   border-radius: 8px; padding: 6px 9px 7px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 12.5px; word-break: break-all; min-width: 0;
 }
-.warmyAuthWordIndex { color: #a99480; font-weight: 600; font-size: 10px; line-height: 1.1; min-width: 18px; }
-.warmyAuthWordText { font-size: 13px; line-height: 1.3; word-break: break-all; }
-.warmyAuthWordPinyin { font-size: 11px; line-height: 1.3; color: #bdb3a7; word-break: normal; overflow-wrap: anywhere; letter-spacing: .01em; }
+.warmyAuthWordIndex { color: #8f8a82; font-weight: 600; font-size: 10px; line-height: 1.1; min-width: 18px; }
+/* 英文 BIP-39 词 = 助记词本体：主题色；中文码字/拼音只是辅助，低调灰 */
+.warmyAuthWordEn { color: var(--accent); font-weight: 600; font-size: 13px; line-height: 1.3; word-break: break-all; }
+.warmyAuthWordText { color: #8a8680; font-size: 12px; line-height: 1.3; word-break: break-all; }
+.warmyAuthWordPinyin { font-size: 11px; line-height: 1.3; color: #9a948c; word-break: normal; overflow-wrap: anywhere; letter-spacing: .01em; }
 .warmyAuthMnemonic.is-pinyin-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .warmyAuthPinyinToggle {
   display: inline-flex; align-items: center; gap: 2px; margin-top: 8px; padding: 3px;
@@ -375,7 +377,7 @@
 .warmyAuthActionsBetween { justify-content: space-between; }
 .warmyAuthTerms {
   max-height: min(50vh, 420px);
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   scrollbar-gutter: stable;
 }
 .warmyAuthCheck input:disabled { cursor: not-allowed; }
@@ -413,7 +415,8 @@
 /* ── 第 68 轮：我的页（左品牌 / 右资料 + 账号控制） ─────────────────── */
 .woDing.woDingR68 {
   display: flex;
-  align-items: flex-start;
+  /* 第 92 轮：以左侧牛马 logo 为锚点，右侧资料/账号整体上下居中 */
+  align-items: center;
   gap: 26px;
   flex-wrap: wrap;
   margin-bottom: 12px;
@@ -439,25 +442,36 @@
   flex: 1 1 0;
   min-width: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 28px;
   flex-wrap: wrap;
 }
 .woR68Profile {
-  flex: 0 1 44%;
+  flex: 0 1 40%;
   min-width: 210px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  /* 第 92 轮：头像 + 「用户名 + 名片」整体水平居中 */
+  align-items: center;
+  text-align: center;
   gap: 10px;
 }
-.woR68Profile .avAnNiu { align-self: flex-start; }
-.woR68Profile .woMingHang { justify-content: flex-start; margin-top: 0; }
-.woR68Profile .woYouJianHang { width: 100%; }
-.woR68Profile .woYouJianHang #pYouJian { min-width: 0; flex: 1 1 180px; max-width: none; }
-.woDingR68 .warmyAuthMyCard {
+.woR68Profile .avAnNiu { align-self: center; }
+.woR68Profile .woMingHang { justify-content: center; margin-top: 0; }
+/* 第 92 轮：邮箱在助记词上方；整列相对左侧 logo 上下居中并略微下移 */
+.woR68Account {
   flex: 0 1 46%;
   min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+}
+.woR68Account .woYouJianHang { width: 100%; }
+.woR68Account .woYouJianHang #pYouJian { min-width: 0; flex: 1 1 180px; max-width: none; }
+.woR68Account .warmyAuthMyCard {
+  width: 100%;
+  min-width: 0;
   margin-top: 0;
   display: flex;
   flex-direction: column;
@@ -486,7 +500,8 @@
 @media (max-width: 700px) {
   .woR68Body { gap: 18px; }
   .woR68Profile,
-  .woDingR68 .warmyAuthMyCard { flex-basis: 100%; }
+  .woR68Account { flex-basis: 100%; }
+  .woR68Account { padding-top: 0; }
 }
 
 @media (max-width: 620px) {
@@ -528,8 +543,10 @@
 .warmyAuthCheck input { accent-color: #c97a4a; }
 .warmyAuthTerms { background: #fbf7f0; border-color: rgba(43, 42, 49, .12); color: #4a4750; }
 .warmyAuthWord { background: #fbf7f0; border-color: rgba(43, 42, 49, .14); color: #2b2a31; }
-.warmyAuthWordIndex { color: #a58b6f; }
-.warmyAuthWordPinyin { color: #7b746a; }
+.warmyAuthWordIndex { color: #8f8a82; }
+.warmyAuthWordEn { color: #a4552f; }
+.warmyAuthWordText { color: #8a8680; }
+.warmyAuthWordPinyin { color: #9a948c; }
 .warmyAuthPinyinToggle { background: #fbf7f0; border-color: rgba(43, 42, 49, .16); }
 .warmyAuthPinyinSwitch { color: #6f6b76; }
 .warmyAuthPinyinSwitch:hover { color: #2b2a31; }
@@ -605,16 +622,8 @@
 .warmyAuthLangFoot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 10px;
-}
-.warmyAuthLangPick {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: #cbb9a3;
-  font-size: 12.5px;
 }
 .warmyAuthLangFoot .warmyAuthStartBtn { width: auto; flex: none; min-width: 84px; }
 
@@ -677,7 +686,9 @@
   white-space: nowrap;
 }
 
-/* ── ⑦ 中文友好型：序号与词同一行，每条两行（序号+词 / 拼音） ───────── */
+/* ── ⑦ 助记拼音：拼音是助记词本体（主题色）+ 中文码字与序号并排（灰色辅助） ─────────
+ * 第 97 轮项 1：不再同时显示英文 BIP-39 词 —— 用户看到的"2 遍助记词"就是英文行 + 拼音行。
+ */
 .warmyAuthMnemonic.is-pinyin .warmyAuthWordFriendly {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -689,125 +700,34 @@
   padding-bottom: 6px;
 }
 .warmyAuthWordFriendly .warmyAuthWordIndex { grid-column: 1; grid-row: 1; min-width: 26px; }
-.warmyAuthWordFriendly .warmyAuthWordText { grid-column: 2; grid-row: 1; }
-.warmyAuthWordFriendly .warmyAuthWordPinyin { grid-column: 2; grid-row: 2; }
+.warmyAuthWordFriendly .warmyAuthWordText { grid-column: 2; grid-row: 1; font-size: 11.5px; }
+.warmyAuthWordFriendly .warmyAuthWordPinyin {
+  grid-column: 2; grid-row: 2;
+  font-size: 13px; font-weight: 600;
+  color: var(--accent);
+}
+/* 窗口失焦后助记词只显示这一块，回来必须主动点一次 */
+.warmyAuthMnemonicHidden {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 28px 12px; margin-top: 14px; text-align: center;
+  border: 1px dashed rgba(43, 42, 49, .18); border-radius: 10px; background: #fbf7f0;
+}
 /* 助记词/恢复格子永远不超出屏幕：超高就在自己的框里滚 */
 .warmyAuthMnemonic {
   max-height: min(56vh, 560px);
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
 }
 @media (max-height: 720px) {
   .warmyAuthMnemonic { max-height: min(50vh, 440px); }
   .warmyAuthCard.warmyAuthCardScene.warmyAuthCardCompact { padding: 12px 14px 14px; }
 }
 
-/* ── ⑧ 漫游式引导（spotlight） ──────────────────────────────────────── */
-/* 原引导条保留在 DOM 里给 app.js 驱动，但视觉上由漫游层替代 */
-body.warmyTourOn #yinDaoTiao { display: none !important; }
-body.warmyTourOn .yinDaoGaoLiang {
-  outline: none !important;
-  box-shadow: none !important;
-}
-.warmyTour { position: fixed; inset: 0; z-index: 2147483300; pointer-events: none; }
-.warmyTourDim {
-  position: fixed;
-  background: rgba(24, 20, 16, 0.58);
-  /* 非阻塞：遮罩只压暗画面，不吃点击（app.js 的引导条本来就是非阻塞设计） */
-  pointer-events: none;
-  transition: left .16s ease, top .16s ease, width .16s ease, height .16s ease;
-}
-.warmyTourHole {
-  position: fixed;
-  pointer-events: none;
-  border: 2px solid #c97a4a;
-  border-radius: 10px;
-  box-shadow: 0 0 0 4px rgba(201, 122, 74, 0.26), 0 0 22px rgba(201, 122, 74, 0.35);
-  transition: left .16s ease, top .16s ease, width .16s ease, height .16s ease;
-}
-.warmyTourCard {
-  position: fixed;
-  z-index: 1;
-  width: min(360px, calc(100vw - 24px));
-  box-sizing: border-box;
-  padding: 13px 15px 14px;
-  border: 1px solid rgba(43, 42, 49, 0.14);
-  border-radius: 14px;
-  background: #fffdf9;
-  color: #2b2a31;
-  box-shadow: 0 18px 50px rgba(60, 45, 30, 0.3);
-  font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-  pointer-events: auto;
-}
-.warmyTourHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-.warmyTourStep {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #c97a4a;
-  color: #fff;
-  font-size: 11px;
-  letter-spacing: .3px;
-  white-space: nowrap;
-}
-.warmyTourClose {
-  flex: none;
-  border: 0;
-  background: transparent;
-  color: #6f6b76;
-  font-size: 17px;
-  line-height: 1;
-  padding: 0 3px;
-  cursor: pointer;
-}
-.warmyTourClose:hover { color: #2b2a31; }
-.warmyTourTitle { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
-.warmyTourBody { font-size: 12.5px; line-height: 1.55; color: #4a4750; }
-.warmyTourValue {
-  margin-top: 6px;
-  padding-left: 8px;
-  border-left: 3px solid #c97a4a;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #6b5a4a;
-}
-.warmyTourLink {
-  margin-top: 6px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #b86a3c;
-  font: inherit;
-  font-size: 12px;
-  text-decoration: underline;
-  cursor: pointer;
-  text-align: left;
-}
-.warmyTourBtns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 10px; }
-.warmyTourBtn {
-  border: 1px solid rgba(43, 42, 49, 0.18);
-  background: #fff;
-  color: #2b2a31;
-  border-radius: 8px;
-  padding: 6px 12px;
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.warmyTourBtn:hover { background: #f7f2e9; }
-.warmyTourBtnNext { background: #c97a4a; border-color: #c97a4a; color: #fff; }
-.warmyTourBtnNext:hover { background: #b86a3c; }
-.warmyTourBtnGo { background: #f8e3d5; border-color: #e2b493; color: #a4552f; }
-.warmyTourBtnGo:hover { background: #f3d6c3; }
-/* 引导文案里沿用 app.css 的真实图标尺寸（若 app.css 尚未加载，至少不塌） */
-.warmyTourCard .yinDaoTuBiao { display: inline-block; width: 1.15em; height: 1.15em; vertical-align: -0.22em; margin: 0 0.12em; color: #c97a4a; }
-.warmyTourCard .yinDaoTuBiao svg { width: 100%; height: 100%; display: block; }
-
 /* 亮色主题下的语言平铺 */
 .warmyAuthLangTile { background: #fff; color: #4a4750; border-color: rgba(43, 42, 49, 0.18); }
 .warmyAuthLangTile:hover { background: #f7f2e9; border-color: #d9b08d; }
 .warmyAuthLangTile.is-on { background: #f8e3d5; color: #a4552f; border-color: #c97a4a; }
 .warmyAuthLangTile.is-on::after { color: #b86a3c; }
-.warmyAuthLangPick { color: #6f6b76; }
 
 
 /* ══ R78 #22 首启/登录背景：六幕常驻 iframe（embed 模式隐藏 HUD） ══ */
@@ -842,13 +762,13 @@ body.warmyTourOn .yinDaoGaoLiang {
   .woBrandR68 .pinPailogo { width: 96px; }
 }
 
-/* 首启右上角关闭：平时隐藏，鼠标进入右上角热区才出现 */
+/* 首启右上角关闭：平时隐藏，鼠标进入右上角**大热区**才出现（产品要求：触发范围更大） */
 .warmyAuthCloseHot {
   position: fixed;
   top: 0;
   right: 0;
-  width: 72px;
-  height: 72px;
+  width: 180px;
+  height: 160px;
   z-index: 2147483000;
   pointer-events: auto;
 }
@@ -856,8 +776,8 @@ body.warmyTourOn .yinDaoGaoLiang {
   position: absolute;
   top: 10px;
   right: 10px;
-  width: 34px;
-  height: 34px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -871,7 +791,7 @@ body.warmyTourOn .yinDaoGaoLiang {
   transform: scale(.92);
   transition: opacity .15s ease, transform .15s ease, background .15s ease;
 }
-.warmyAuthCloseX svg { width: 17px; height: 17px; display: block; }
+.warmyAuthCloseX svg { width: 18px; height: 18px; display: block; }
 .warmyAuthCloseHot:hover .warmyAuthCloseX,
 .warmyAuthCloseX:focus-visible {
   opacity: 1;
@@ -880,7 +800,7 @@ body.warmyTourOn .yinDaoGaoLiang {
 .warmyAuthCloseX:hover { background: #fff; color: #9a4f28; }
 .warmyAuthGate.warmyAuthHidden .warmyAuthCloseHot { display: none; }
 
-/* 首启关闭二次确认：一串用过的牛马图标 + 返回界面 / 关闭程序 */
+/* 首启关闭二次确认：牛马 logo 从左往右跑过 + 返回界面 / 关闭程序 */
 .warmyAuthQuitMask {
   position: fixed;
   inset: 0;
@@ -905,27 +825,50 @@ body.warmyTourOn .yinDaoGaoLiang {
   animation: warmyAuthQuitIn .18s ease-out both;
 }
 .warmyAuthQuitHorses {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 8px;
-  min-height: 94px;
-  padding: 6px 2px 8px;
+  position: relative;
+  height: 150px;
+  overflow: hidden;
+  /* 产品要求：牛马直接在卡片上跑，不用任何背景色/边框来区分轨道 */
+  background: transparent;
+  pointer-events: none;
 }
-.warmyAuthQuitHorse {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 3px 3px rgba(90, 58, 32, .18));
-  animation: warmyAuthQuitBob 2.4s ease-in-out infinite;
+.warmyAuthQuitRunner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+  filter: drop-shadow(0 2px 2px rgba(90, 58, 32, .16));
 }
-.warmyAuthQuitHorse.h1 { width: 82px; height: 82px; transform: rotate(-5deg); }
-.warmyAuthQuitHorse.h2 { width: 92px; height: 74px; animation-delay: -.35s; }
-.warmyAuthQuitHorse.h3 { width: 44px; height: 44px; animation-delay: -.7s; }
-.warmyAuthQuitHorse.h4 { width: 56px; height: 56px; transform: rotate(4deg); animation-delay: -1.05s; }
-.warmyAuthQuitHorse.h5 { width: 52px; height: 52px; animation-delay: -1.4s; }
-.warmyAuthQuitHorse.h6 { width: 58px; height: 58px; transform: rotate(-3deg); animation-delay: -1.75s; }
+.warmyAuthQuitRunner svg { width: 100%; height: 100%; display: block; overflow: visible; }
+/* 腿：绕髋部摆动，周期由外层 --step 决定（JS 按行进速度写入） */
+.warmyAuthQuitRunner .qLeg {
+  transform-box: fill-box;
+  transform-origin: 50% 3%;
+  animation: warmyAuthQuitLeg var(--step, 360ms) ease-in-out infinite alternate;
+}
+.warmyAuthQuitRunner .qLegBackFar,
+.warmyAuthQuitRunner .qLegFrontNear { animation-delay: calc(var(--step, 360ms) * -0.5); }
+/* 尾：周期跟随步频（步频越快，尾巴摆得越快） */
+.warmyAuthQuitRunner .qTail {
+  transform-box: fill-box;
+  transform-origin: 100% 15%;
+  animation: warmyAuthQuitTail calc(var(--step, 360ms) * 2) ease-in-out infinite alternate;
+}
+/* 头：只在随机相位偶尔微动一下，不是固定节奏 */
+.warmyAuthQuitRunner .qHead {
+  transform-box: fill-box;
+  transform-origin: 18% 70%;
+  animation: warmyAuthQuitHead var(--headDur, 1800ms) linear infinite;
+  animation-delay: var(--headDelay, 0ms);
+}
+.warmyAuthQuitRunner .qBodyBob {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: warmyAuthQuitBody calc(var(--step, 360ms) * 2) ease-in-out infinite alternate;
+}
+.warmyAuthQuitRunner.is-static,
+.warmyAuthQuitRunner.is-static * { animation: none !important; }
 .warmyAuthQuitActs {
   display: flex;
   justify-content: center;
@@ -950,14 +893,24 @@ body.warmyTourOn .yinDaoGaoLiang {
 .warmyAuthQuitBtn.danger { background: #b86a3c; border-color: #b86a3c; color: #fff; }
 .warmyAuthQuitBtn.danger:hover { background: #9a4f28; }
 @keyframes warmyAuthQuitIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
-@keyframes warmyAuthQuitBob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+@keyframes warmyAuthQuitLeg {
+  from { transform: rotate(calc(var(--swing, 14deg) * -1)); }
+  to { transform: rotate(var(--swing, 14deg)); }
+}
+@keyframes warmyAuthQuitTail { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+@keyframes warmyAuthQuitHead {
+  0%, 60%, 84%, 100% { transform: rotate(0deg); }
+  66% { transform: rotate(-3.5deg); }
+  72% { transform: rotate(2.5deg); }
+  78% { transform: rotate(-1.5deg); }
+}
+@keyframes warmyAuthQuitBody { from { transform: translateY(0); } to { transform: translateY(var(--bob, -1px)); } }
 @media (max-width: 560px) {
-  .warmyAuthQuitHorses { flex-wrap: wrap; min-height: 0; }
-  .warmyAuthQuitHorse, .warmyAuthQuitHorse.h1, .warmyAuthQuitHorse.h2, .warmyAuthQuitHorse.h3,
-  .warmyAuthQuitHorse.h4, .warmyAuthQuitHorse.h5, .warmyAuthQuitHorse.h6 { width: 44px; height: 44px; }
+  .warmyAuthQuitHorses { height: 120px; }
   .warmyAuthQuitActs { flex-direction: column-reverse; }
   .warmyAuthQuitBtn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .warmyAuthQuitCard, .warmyAuthQuitHorse { animation: none; }
+  .warmyAuthQuitCard { animation: none; }
+  .warmyAuthQuitRunner, .warmyAuthQuitRunner * { animation: none !important; }
 }

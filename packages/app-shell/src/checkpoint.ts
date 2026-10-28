@@ -152,7 +152,7 @@ export class JianChaDianCang {
       strategy,
       summary:
         opts.summary ||
-        `${new Date(now).toLocaleTimeString()} · ${opts.phase === 'round_start' ? '轮起' : '轮末'}`,
+        `${new Date(now).toISOString()} · ${opts.phase === 'round_start' ? '轮起' : '轮末'}`,
       detail: {
         RenwuJi: [],
         filesChanged,

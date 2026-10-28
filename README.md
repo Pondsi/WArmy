@@ -6,7 +6,7 @@
 
 > An infinite army of AI workhorses working for you.
 
-[![Release](https://img.shields.io/github/v/release/Pondsi/WArmy?include_prereleases&label=v0.2.28)](https://github.com/Pondsi/WArmy/releases/tag/v0.2.28)
+[![Release](https://img.shields.io/github/v/release/Pondsi/WArmy?include_prereleases&label=v0.2.29)](https://github.com/Pondsi/WArmy/releases/tag/v0.2.29)
 [![License](https://img.shields.io/badge/license-custom%20MIT%20%2B%20attribution-blue)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-informational)](https://github.com/Pondsi/WArmy/releases)
 [![Electron](https://img.shields.io/badge/Electron-33-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
@@ -106,8 +106,8 @@ Deep dive: [`references/ARCHITECTURE.md`](./references/ARCHITECTURE.md) · verif
 
 ### Windows
 
-1. [Releases v0.2.28](https://github.com/Pondsi/WArmy/releases/tag/v0.2.28) → **`WArmy-Setup-0.2.28.exe`**  
-   Direct: [WArmy-Setup-0.2.28.exe](https://github.com/Pondsi/WArmy/releases/download/v0.2.28/WArmy-Setup-0.2.28.exe)
+1. [Releases v0.2.29](https://github.com/Pondsi/WArmy/releases/tag/v0.2.29) → **`WArmy-Setup-0.2.29.exe`**  
+   Direct: [WArmy-Setup-0.2.29.exe](https://github.com/Pondsi/WArmy/releases/download/v0.2.29/WArmy-Setup-0.2.29.exe)
 2. Optional SHA-256 vs [`checksums.txt`](./checksums.txt)
 3. Launch **WArmy / 无限牛马** → Settings → language / providers
 
@@ -215,7 +215,7 @@ WArmy/
 <details>
 <summary>繁體中文 / 한국어 / Русский / 日本語 / Español / Français / Português / Esperanto（摘要）</summary>
 
-WArmy is a local-first multi-agent group-chat desktop app. Install from GitHub Releases (`WArmy-Setup-0.2.28.exe`) or build with pnpm. Full Chinese manual: [说明.md](./说明.md). Details are equivalent to the English sections above.
+WArmy is a local-first multi-agent group-chat desktop app. Install from GitHub Releases (`WArmy-Setup-0.2.29.exe`) or build with pnpm. Full Chinese manual: [说明.md](./说明.md). Details are equivalent to the English sections above.
 
 </details>
 

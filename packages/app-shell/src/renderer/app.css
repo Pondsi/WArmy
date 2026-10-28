@@ -248,7 +248,7 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 #appTi {
   display: grid;
   grid-template-columns: 64px var(--list-w, 200px) 1fr;
-  height: calc(100vh - 40px); /* 标题栏 40px */
+  height: calc(100vh - var(--titlebar-h, 40px)); /* 标题栏 40px */
   min-height: 0;
   overflow: hidden;
   flex: 1;
@@ -270,7 +270,7 @@ body.liaoTianChuangKou #kongTai {
 body.liaoTianChuangKou #appTi,
 body.liaoTianChuangKou #appTi.yinCangLieBiao {
   grid-template-columns: 1fr !important;
-  height: calc(100vh - 40px) !important;
+  height: calc(100vh - var(--titlebar-h, 40px)) !important;
 }
 body.liaoTianChuangKou .liaoTianBuJu {
   grid-template-columns: 1fr var(--panel-w, 300px) !important;
@@ -582,7 +582,10 @@ body.liaoTianChuangKou .liaoTianBuJu {
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* 整理特效层绝对定位在输入框本体上（不占布局） */
+  position: relative;
+  /* 语音选项弹层挂在工具条上、向上展开：这里必须是 visible，否则弹层会被裁掉一半 */
+  overflow: visible;
   transition: border-color 0.12s;
 }
 #shuRu {
@@ -600,6 +603,89 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .shuRuQuZhu:focus-within { border-color: var(--input-border); }
 #shuRu:focus, #shuRu:focus-visible {
   outline: none; box-shadow: none; border: none; background: transparent;
+}
+/* ── 整理语言时的输入框特效：逐字明暗 + 主题色魔法光点，整体很淡 ── */
+#shuRu.zhengLiZhong {
+  color: transparent;
+  caret-color: var(--accent);
+  cursor: progress;
+}
+#shuRu[aria-readonly="true"] { cursor: progress; }
+.shuRuQuZhu.zhengLiZhong { border-color: color-mix(in srgb, var(--accent) 36%, var(--input-border)); }
+.zhengLiTeXiao {
+  position: absolute; left: 0; top: 0;
+  pointer-events: none; overflow: hidden;
+  border-radius: 8px; z-index: 3;
+}
+.zhengLiTeXiao::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 0 16px color-mix(in srgb, var(--accent) 12%, transparent);
+  opacity: .7;
+  animation: zhengLiBian 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.zhengLiTeXiaoWen {
+  position: absolute; left: 0; top: 0;
+  width: 100%; height: 100%;
+  box-sizing: border-box;
+  padding: 12px 12px 4px;
+  font: inherit;
+  font-size: var(--fs-base);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  color: color-mix(in srgb, var(--accent) 38%, var(--ink));
+  z-index: 1;
+  will-change: transform;
+}
+.zhengLiZi { opacity: .95; }
+.zhengLiZi.isLiang {
+  animation: zhengLiZiLiang var(--zi-dur, 3.2s) ease-in-out infinite;
+  animation-delay: var(--zi-delay, 0s);
+}
+.zhengLiTeXiaoHua {
+  position: absolute; left: 0; top: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+/* 只读提示：说明“现在不能改字”不是因为卡死，取消/完成会恢复 */
+.zhengLiTiShi {
+  position: absolute; right: 10px; bottom: 6px;
+  z-index: 2;
+  font-size: var(--fs-xs);
+  color: color-mix(in srgb, var(--accent) 62%, var(--muted));
+  opacity: .72;
+  pointer-events: none;
+  letter-spacing: .02em;
+}
+.zhengLiChangWen .zhengLiTeXiaoWen {
+  opacity: .82;
+  animation: zhengLiChangWen 4.6s ease-in-out infinite;
+}
+@keyframes zhengLiZiLiang {
+  0%, 100% {
+    opacity: var(--zi-ji, .78);
+    color: color-mix(in srgb, var(--accent) 32%, var(--ink));
+    text-shadow: none;
+  }
+  50% {
+    opacity: 1;
+    color: var(--accent);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+}
+@keyframes zhengLiBian {
+  0%, 100% { opacity: .55; }
+  50% { opacity: .9; }
+}
+@keyframes zhengLiChangWen {
+  0%, 100% { opacity: .7; }
+  50% { opacity: .92; }
 }
 .shuRuCounter {
   text-align: right; font-size: var(--fs-xs); color: var(--muted);
@@ -838,6 +924,29 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
 .jinJiPills button.qiYong { background: var(--card); color: var(--ink); box-shadow: var(--shadow-sm); }
 .jinJiPills button.qiYong[data-u="P1"] { color: var(--danger); font-weight: 600; }
 .shuRuQuFaSongHang { display: flex; align-items: center; gap: 4px; }
+/* 话筒右侧的下拉：重组语言 / 自动发送 */
+/* 下拉箭头紧挨话筒：话筒按钮 36px 内含 7px 空 padding，箭头按钮 20px 内含 2px，
+   再把整块左移 12px ⇒ 两个图标的视觉间距约 1px（第 107 轮用户口径）。 */
+.yuYinDd { position: relative; display: flex; align-items: center; margin-left: -12px; }
+.yuYinXiaLa {
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  width: 20px; height: 30px; display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; padding: 0;
+}
+.yuYinXiaLa:hover { background: var(--hover); color: var(--ink); }
+.yuYinXiaLa .ico { width: 16px; height: 16px; }
+.yuYinCaiDan {
+  position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 1300;
+  width: min(292px, calc(100vw - 40px));
+  padding: 10px 12px; border-radius: 12px;
+  background: var(--card, #fff); color: var(--ink, #1c1b1a);
+  border: 1px solid var(--line, rgba(0,0,0,.12));
+  box-shadow: 0 14px 36px rgba(30,25,18,.18), 0 2px 8px rgba(30,25,18,.06);
+}
+.yuYinHang { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.yuYinXuanXiang { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 5px 0; cursor: pointer; }
+.yuYinXuanXiang input:disabled + span { color: var(--muted); opacity: .6; }
+.yuYinXuanXiangShuo { margin: 0 0 6px 22px; font-size: 11px; line-height: 1.5; }
 #anNiuFaSong {
   border: none; border-radius: 6px;
   padding: 6px 18px;
@@ -1114,6 +1223,9 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
 .duiHuaKuangKa {
   position: relative;
   width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
   background: var(--card);
   color: var(--ink);
   border-radius: 12px;
@@ -1122,6 +1234,10 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
   border: 1px solid var(--line);
   animation: modal-in .16s ease;
 }
+/* 数据范围/定时导出：内容多，卡片变宽；高度永远服从主界面，超出就在内容区滚动 */
+.duiHuaKuangKa:has(.daoChuShu) { width: min(780px, calc(100vw - 48px)); }
+.duiHuaKuangBiaoTi, .duiHuaKuangDongZuoJi { flex: 0 0 auto; }
+.duiHuaKuangTi { min-height: 0; overflow: auto; padding-right: 4px; }
 @keyframes modal-in {
   from { opacity: 0; transform: translateY(8px) scale(.98); }
   to { opacity: 1; transform: none; }
@@ -1130,6 +1246,38 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
 .duiHuaKuangTi { font-size: var(--fs-base); line-height: 1.5; color: var(--ink); margin-bottom: 16px; white-space: pre-wrap; }
 .duiHuaKuangDongZuoJi { display: flex; justify-content: flex-end; gap: 8px; }
 .duiHuaKuangDongZuoJi button { min-width: 72px; }
+/* ── 导出/导入数据范围：大类 + 默认折叠的子分类 ── */
+.daoChuShu { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.daoChuCat {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: color-mix(in srgb, var(--card) 88%, var(--accent) 4%);
+}
+.daoChuCat > summary { cursor: pointer; list-style-position: outside; }
+.daoChuCatTou { display: inline-flex; align-items: center; gap: 8px; }
+.daoChuCatTou input { pointer-events: auto; }
+.daoChuCatOff > summary { opacity: .72; }
+.daoChuZi { display: flex; flex-direction: column; gap: 8px; padding: 8px 2px 2px 22px; }
+.daoChuShuoMing { font-size: var(--fs-xs); }
+.daoChuQuanXuan { flex-wrap: wrap; margin: 0; }
+.daoChuQingDan {
+  max-height: 150px; overflow: auto;
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 8px;
+}
+.daoChuXiang {
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 2px 0;
+}
+.daoChuXiang > span { overflow: hidden; text-overflow: ellipsis; }
+.daoChuShiJian { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.daoChuShiJian input { max-width: 190px; }
+/* 循环次数与间隔必须同一行（用户要求）；窄到放不下才换行 */
+.dscZhouQi { flex-wrap: nowrap; }
+.dscZhouQi label { white-space: nowrap; }
+@media (max-width: 700px) { .dscZhouQi { flex-wrap: wrap; } }
 .usernameDisplay {
   font-size: 18px; font-weight: 600; cursor: text;
   border-bottom: 1px dashed transparent; padding-bottom: 1px;
@@ -1690,6 +1838,10 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
   flex-shrink: 0; font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
   background: var(--danger-line); color: var(--danger-fg); font-weight: 600;
 }
+.jiuQunMark {
+  flex-shrink: 0; font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
+  background: var(--warn-bg); color: var(--warn-fg); border: 1px solid var(--warn-line); font-weight: 600;
+}
 .lieBiaoTiaoMu.isJinYong .name, .lieBiaoTiaoMu.isJinYong .fu, .lieBiaoTiaoMu.isJinYong .av { color: var(--ink-dim); }
 .lieBiaoTiaoMu.isJinYong .name.struck, .chengYuanHang .chengYuanMing.struck { text-decoration: line-through; }
 .hangHuiZhang {
@@ -2116,7 +2268,7 @@ table.hkMiYaoJi td.hkMiYaoJiMiaoShu { color: var(--ink-dim); font-size: var(--fs
 /* 独立会话窗布局加固：聊天 + 右栏铺满，不出现错位 */
 body.liaoTianChuangKou #zhuLan {
   display: block !important;
-  height: calc(100vh - 40px) !important;
+  height: calc(100vh - var(--titlebar-h, 40px)) !important;
   overflow: hidden !important;
 }
 body.liaoTianChuangKou #liaoTianBuJu {
@@ -2348,7 +2500,7 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 #appTi {
   display: grid;
   grid-template-columns: 64px var(--list-w, 240px) 1fr;
-  height: calc(100vh - 40px);
+  height: calc(100vh - var(--titlebar-h, 40px));
   min-height: 0;
   overflow: hidden;
   flex: 1;
@@ -2379,7 +2531,7 @@ body.liaoTianChuangKou #appTi {
 #appTi {
   display: grid !important;
   grid-template-columns: 64px var(--list-w, 200px) minmax(0, 1fr) !important;
-  height: calc(100vh - 40px) !important;
+  height: calc(100vh - var(--titlebar-h, 40px)) !important;
   min-height: 0 !important;
   overflow: hidden !important;
   flex: 1 1 auto !important;
@@ -2792,60 +2944,125 @@ body.liaoTianChuangKou #appTi {
 #quanPingQuSeCeng img { pointer-events: auto; }
 
 
-/* 首启引导条（非阻塞，页内教练标记）
- * ⚠️ **renderer.css 里也有一份同名规则，而且它后加载 ⇒ 那份才是生效的**。
- * 这里必须与 renderer.css **逐字一致**：曾经一份 top:50%、另一份 bottom:24px，
- * 两个同时生效 ⇒ 卡片被从屏幕中拉到右下，又高又空一大块（真事故）。 */
-.yinDaoTiao {
-  /* 主界面右下角：尺寸**按内容收**，不许拉伸 */
-  position: fixed; right: 16px; bottom: 16px; top: auto; left: auto;
-  height: auto;
-  z-index: 9000;
-  width: min(320px, calc(100vw - 32px));
-  max-height: min(420px, calc(100vh - 48px));
-  overflow: auto;
-  background: var(--card, #fff); color: var(--ink, #111);
-  border: 1px solid var(--line, #ddd); border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 12px 14px;
-  /**
-   * **必须 no-drag**：拖到顶部时会压在 #biaoTiLan（-webkit-app-region: drag）上，
-   * 那片区域的点击会被系统判成"拖窗口"，卡片自己的 pointerdown 收不到 ⇒ 拖到顶部就再也拖不动，
-   * 且卡在顶部条里的按钮也点不了。no-drag 会把这块从窗口拖动区里减掉。
-   */
+/* ── 开始使用清单（R98；非阻塞 onboarding checklist） ─────────────── */
+.startGuide {
+  /* 第 99 轮：可拖动 + 贴边；z-index 高于普通弹窗（1000），创建牛马时不被挡住 */
+  position: fixed; right: 18px; top: 64px; bottom: auto; z-index: 1100;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 15px 16px 12px;
+  background: var(--card, #fff); color: var(--ink, #1c1b1a);
+  border: 1px solid var(--line, rgba(0, 0, 0, .12));
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(30, 25, 18, .18), 0 2px 8px rgba(30, 25, 18, .06);
   -webkit-app-region: no-drag;
 }
-.yinDaoTiao * { -webkit-app-region: no-drag; }
-.yinDaoLianJie {
-  display: inline-block; margin-top: 6px; font-size: var(--fs-sm);
-  color: var(--accent); text-decoration: underline; cursor: pointer;
+.startGuide * { -webkit-app-region: no-drag; }
+.startGuideHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; cursor: move; user-select: none; touch-action: none; }
+.startGuideHead button { cursor: pointer; }
+.startGuideTitle { font-size: var(--fs-md, 15px); font-weight: 700; line-height: 1.35; letter-spacing: .2px; }
+.startGuideSub { margin-top: 2px; font-size: var(--fs-xs, 11.5px); line-height: 1.45; color: var(--ink-dim, #6b6b6b); }
+.startGuideIconBtn {
+  flex: none; border: 0; background: transparent; color: inherit; opacity: .55;
+  font-size: 16px; line-height: 1; padding: 3px 7px; border-radius: 7px; cursor: pointer;
 }
-.yinDaoHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.yinDaoJiDu {
-  font-size: var(--fs-xs); letter-spacing: .3px; color: var(--accent-ink, #fff);
-  background: var(--accent); padding: 2px 8px; border-radius: 999px;
+.startGuideIconBtn:hover { opacity: 1; background: var(--hover, rgba(0, 0, 0, .06)); }
+.startGuideBar {
+  height: 4px; margin: 11px 0 8px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
-.yinDaoClose {
-  border: none; background: transparent; cursor: pointer; font-size: 16px;
-  line-height: 1; color: inherit; opacity: .6; padding: 0 4px; border-radius: 4px;
+.startGuideBar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .25s ease; }
+.startGuideList { display: flex; flex-direction: column; gap: 2px; }
+.startGuideStep {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 8px; border-radius: 10px; cursor: pointer;
+  transition: background .15s ease;
 }
-.yinDaoClose:hover { opacity: 1; background: var(--hover, rgba(0,0,0,.06)); }
-.yinDaoTi { font-weight: 700; font-size: var(--fs-md); margin-bottom: 4px; }
-.yinDaoWen { font-size: var(--fs-base); line-height: 1.55; opacity: .92; }
-/* 文案里的真实图标（与左侧导航同一套图形）：1.15em ≈ 15px，与 13px 正文齐平 */
-.yinDaoTuBiao {
-  display: inline-block; width: 1.15em; height: 1.15em;
-  vertical-align: -0.22em; margin: 0 0.12em; color: var(--accent);
+.startGuideStep:hover { background: var(--hover, rgba(0, 0, 0, .035)); }
+.startGuideStep.isActive { background: color-mix(in srgb, var(--accent) 8%, transparent); cursor: default; }
+.startGuideStep.isDone { cursor: default; opacity: .62; }
+.startGuideStep.isSkipped { opacity: .55; }
+.startGuideRing {
+  flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--line, rgba(0, 0, 0, .18));
+  font-size: 11.5px; font-weight: 700; line-height: 1; color: var(--ink-dim, #6b6b6b);
+  background: transparent; transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
-.yinDaoTuBiao svg { width: 100%; height: 100%; display: block; }
-.yinDaoJiaZhi {
-  margin-top: 6px; font-size: var(--fs-sm); line-height: 1.5;
-  border-left: 3px solid var(--accent); padding-left: 8px; opacity: .88;
+.startGuideStep.isActive .startGuideRing {
+  border-color: var(--accent); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
-.yinDaoDongZuo { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
-.yinDaoGaoLiang {
-  outline: 2px solid var(--accent) !important; outline-offset: 3px; border-radius: 6px;
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 28%, transparent);
-  transition: outline .2s, box-shadow .2s;
+.startGuideStep.isDone .startGuideRing { border-color: var(--accent); background: var(--accent); color: var(--accent-ink, #fff); }
+.startGuideStepMain { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.startGuideStepTitle { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.startGuideSkipTag {
+  display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 999px;
+  font-size: 10px; font-weight: 500; line-height: 16px; vertical-align: 1px;
+  color: var(--ink-dim, #6b6b6b); background: var(--hover, rgba(0, 0, 0, .06));
+}
+.startGuideStepDesc { margin-top: 4px; font-size: 12px; line-height: 1.6; color: var(--ink-dim, #5b5b5b); }
+.startGuideStepActs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 9px; }
+.startGuideGo { font-size: 12px; padding: 6px 12px; }
+.startGuideStepSkip {
+  border: 0; background: transparent; padding: 2px 0; cursor: pointer;
+  font: inherit; font-size: 11.5px; color: var(--ink-dim, #6b6b6b); text-decoration: underline;
+}
+.startGuideStepSkip:hover { color: var(--ink, #1c1b1a); }
+.startGuideDone { padding: 8px 2px 0; text-align: center; }
+.startGuideDoneIcon {
+  width: 34px; height: 34px; margin: 0 auto 7px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--accent-ink, #fff); font-size: 17px; font-weight: 700;
+}
+.startGuideDoneTitle { font-size: 13.5px; font-weight: 700; }
+.startGuideDoneSub { margin-top: 3px; font-size: 11.5px; line-height: 1.55; color: var(--ink-dim, #6b6b6b); }
+.startGuideSkippedAll {
+  margin-top: 8px; padding: 9px 10px; border-radius: 9px;
+  font-size: 11.5px; line-height: 1.55; color: var(--ink-dim, #5b5b5b);
+  background: var(--hover, rgba(0, 0, 0, .04));
+}
+.startGuideSkippedAll .startGuideStepSkip { margin-left: 4px; }
+.startGuideFoot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line, rgba(0, 0, 0, .08));
+}
+.startGuideLater {
+  border: 0; background: transparent; padding: 2px 0; cursor: pointer;
+  font: inherit; font-size: 11.5px; color: var(--ink-dim, #6b6b6b);
+}
+.startGuideLater:hover { color: var(--ink, #1c1b1a); text-decoration: underline; }
+.startGuideHint { font-size: 10.5px; line-height: 1.4; color: var(--ink-dim, #6b6b6b); opacity: .8; text-align: right; }
+.startGuidePill {
+  /* 放在左侧栏右边：右下角是聊天发送按钮，胶囊不能压住它 */
+  position: fixed; left: 76px; right: auto; bottom: 18px; z-index: 900;
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 13px; border-radius: 999px; cursor: pointer;
+  background: var(--card, #fff); color: var(--ink, #1c1b1a);
+  border: 1px solid var(--line, rgba(0, 0, 0, .12));
+  box-shadow: 0 8px 24px rgba(30, 25, 18, .16);
+  font: inherit; font-size: 12px;
+  -webkit-app-region: no-drag;
+}
+.startGuidePill:hover { background: var(--hover, rgba(0, 0, 0, .04)); }
+.startGuidePill b {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink, #fff); font-size: 10.5px; font-weight: 700;
+}
+.startGuidePulse {
+  outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px;
+  animation: startGuidePulse 1.2s ease-in-out 2;
+}
+@keyframes startGuidePulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 24%, transparent); }
+}
+@media (max-width: 560px) {
+  .startGuide { left: 10px; right: 10px; width: auto; }
+  .startGuidePill { left: 10px; }
 }
 
 /* 聊天气泡：名称 + 气泡包一层（群聊/项目显示发言者名称，微信样式） */
@@ -3285,8 +3502,18 @@ html { font-weight: var(--fw-ui, 400); }
   color: var(--ink, #222);
 }
 .provXiaLaPan button:hover { background: var(--hover, #eee); }
-.huiFuRenWuJuZhong { display: flex; justify-content: center; align-items: center; width: 100%; }
+.huiFuRenWuJuZhong { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; width: 100%; }
 .huiFuRenWuJuZhong .huiFuRenWuBtn { margin: 0 auto; }
+.huiFuRenWuYuanYin {
+  flex-basis: 100%;
+  margin-top: 4px;
+  text-align: center;
+  color: var(--ink-3, #888);
+  font-size: var(--fs-sm, 12px);
+  line-height: 1.35;
+  max-width: 82%;
+  overflow-wrap: anywhere;
+}
 /**
  * 「继续/重试」这一行要**水平居中于聊天区**（产品要求）。
  * 它带 xiaoXi/bubbleWrap 这套消息类，会被消息的左右对齐带跑 —— 这里强制拉满宽度并居中。
@@ -3340,7 +3567,7 @@ html { font-weight: var(--fw-ui, 400); }
 #duiLieTiaoMuJi {
   max-height: var(--queue-h, 232px);
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   padding-right: 2px;
 }
 /* 单条正文最多 3 行，别把一条插话撑满整屏（否则按钮又被挤下去） */
@@ -3444,7 +3671,7 @@ html { font-weight: var(--fw-ui, 400); }
    悬停时整体抬升一档阴影，产生「离开纸面」的层次 */
 /* 引用条：**比聊天框窄**（用户反馈"不要比聊天框的宽度还大"），本身也压得更矮更紧 */
 .yinYongTiao { position: relative; display: flex; align-items: center; gap: 8px;
-  padding: 4px 10px; margin: 0 12px 4px; max-width: 72%;
+  padding: 4px 10px; margin: 0 12px 4px; max-width: min(72%, var(--du-wen-kuan));
   background: var(--hover); border-left: 3px solid var(--accent); border-radius: 6px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45),
               0 1px 1px rgba(0, 0, 0, .07),
@@ -3839,6 +4066,37 @@ html { font-weight: var(--fw-ui, 400); }
   0% { transform: scale(1); opacity: .8; }
   100% { transform: scale(1.38); opacity: 0; }
 }
+/* 整理中：话筒只做静态主题色提示；真正的动效在输入框里（用户要求不要两层抢眼） */
+#anNiuYuYin.zhengLiZhong {
+  position: relative;
+  color: var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 9%, transparent) !important;
+  animation: none !important;
+}
+#anNiuYuYin.zhengLiZhong::after {
+  content: '';
+  position: absolute;
+  width: 5px; height: 5px;
+  right: 7px; top: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: .55;
+  animation: zhengLiDian 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes zhengLiDian {
+  0%, 100% { opacity: .25; transform: scale(.8); }
+  50% { opacity: .7; transform: scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zhengLiZi.isLiang,
+  .zhengLiTeXiao::after,
+  .zhengLiChangWen .zhengLiTeXiaoWen,
+  #anNiuYuYin.zhengLiZhong::after {
+    animation: none !important;
+  }
+  .zhengLiZi.isLiang { opacity: .8; color: var(--accent); }
+}
 
 /**
  * **统一的"启用"勾选框**（技能 / 工具 / 插件 / 门禁四处共用）。
@@ -4071,6 +4329,36 @@ html { font-weight: var(--fw-ui, 400); }
 .xingDongXiang .xdXian { margin: 2px 0; }
 .xingDongXiang .xdXian2 { color: var(--ink); }
 .xingDongXiang .xdJuTi { word-break: break-all; }
+/* 执行过程段默认折叠，中间回复浮雕卡始终显示正文。 */
+.guoChengLie { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.guoChengDuan { margin-bottom: 0; }
+.zhongJianKa {
+  margin: 2px 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 10px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 96%, #fff 4%) 0%, var(--card) 55%, color-mix(in srgb, var(--card) 92%, #000 8%) 100%);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, #fff 72%, transparent), inset 0 -2px 0 color-mix(in srgb, #000 20%, transparent), 0 3px 10px color-mix(in srgb, #000 18%, transparent), 0 1px 2px color-mix(in srgb, #000 14%, transparent);
+  overflow: hidden;
+}
+.zhongJianKa > summary {
+  cursor: pointer; list-style: none; user-select: none;
+  padding: 6px 11px; font-size: var(--fs-sm); color: var(--muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.zhongJianKa > summary::-webkit-details-marker { display: none; }
+.zhongJianKa > summary::before {
+  content: '▸'; display: inline-block; margin-right: 6px;
+  transition: transform .12s ease;
+}
+.zhongJianKa[open] > summary::before { transform: rotate(90deg); }
+.zhongJianKa > .zhongJianHuiFu {
+  margin: 0; padding: 9px 11px;
+  border: 0; background: transparent; color: var(--ink);
+  font-size: var(--fs-md); line-height: 1.55;
+}
+.zhongJianKa > .zhongJianHuiFu > :first-child { margin-top: 0; }
+.zhongJianKa > .zhongJianHuiFu > :last-child { margin-bottom: 0; }
+
 /* 【项 5】行动行现在长在「思考/执行过程」块里面 —— 去掉左缩进，与思考正文对齐 */
 .siKaoKuai .xingDongZu { margin: 4px 0 3px; }
 .siKaoKuai .xingDongHang { font-size: var(--fs-xs); }
@@ -4170,7 +4458,7 @@ html { font-weight: var(--fw-ui, 400); }
 #mianBanJiHuaKuai { max-height: 460px; }
 #mianBanShouQuanKuai { max-height: 380px; }
 #mianBanJiHuaKuai > #jiHuaLieBiao,
-#mianBanShouQuanKuai > .mianBanScroll { overflow-y: auto; overscroll-behavior: contain; }
+#mianBanShouQuanKuai > .mianBanScroll { overflow-y: auto; overscroll-behavior: auto; }
 @media (max-height: 760px) {
   #mianBanJiHuaKuai { max-height: 320px; }
   #mianBanShouQuanKuai { max-height: 260px; }
@@ -4320,3 +4608,19 @@ html { font-weight: var(--fw-ui, 400); }
 #lieBiaoDongZuo:hover, #anNiuJiaRuqr:hover { background: var(--hover) !important; }
 /* R78: 第二列水印不因列变窄而被裁切 */
 #lieBiaoLan::after { background-size: min(168px, calc(100% - 24px)) auto; }
+
+/* R100：用户主动停止后的现场 —— 照常是牛马气泡，但带“停在哪”的摘要 */
+.xiaoXi.tingZhiHuiFu .bubble { opacity: .92; }
+.tingZhiZhaiYao {
+  margin: 4px 0 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--jingYin, #8a8a8a);
+  border-left: 2px solid var(--accent, #A87654);
+  padding-left: 8px;
+  user-select: text;
+}
+
+/* R100：用户停止时，正在执行的操作行显示「已停止」（中性色，不当成失败） */
+.xingDongHang.isStopped::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--jingYin, #8a8a8a); opacity: .6; }
+.xingDongHang .xdZhuang.yiTingZhi { color: var(--jingYin, #8a8a8a); }

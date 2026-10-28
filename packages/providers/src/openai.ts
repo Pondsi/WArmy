@@ -42,6 +42,26 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
     return h;
   }
 
+  /**
+   * 第 104 轮 项 11：Chat Completions **没有**服务端取消接口；只有 Responses API
+   * 的 `resp_…` 才可 `POST /responses/{id}/cancel`。拿到 chatcmpl id 时如实返回 unsupported，
+   * 调用方仍会 abort 本地连接。
+   */
+  override async cancel(req: { id?: string; signal?: AbortSignal }): Promise<{ supported: boolean; ok: boolean; detail?: string }> {
+    const id = String(req.id || '');
+    if (!/^resp_/.test(id)) return { supported: false, ok: false, detail: 'chat/completions has no cancel endpoint' };
+    try {
+      const res = await fetch(pinJieUrl(this.baseURL, `responses/${encodeURIComponent(id)}/cancel`), {
+        method: 'POST',
+        headers: { ...this.headers(), ...this.auth.headers },
+        signal: req.signal,
+      });
+      return { supported: true, ok: res.ok, detail: `HTTP ${res.status}` };
+    } catch (e) {
+      return { supported: true, ok: false, detail: String((e as Error).message || e) };
+    }
+  }
+
   private qingQiuTi(Qiu: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
     return {
       model: Qiu.model,

@@ -193,7 +193,8 @@ export interface BeifenXinxi {
   path: string;
   bytes: number;
   sha256: string;
-  createdAt: string;
+  /** epoch 毫秒（第 91 轮：记录一律时间戳；文件名里的时间串只是命名，不作为记录） */
+  createdAt: number;
 }
 
 export interface WenjianZhiwen {
@@ -769,7 +770,7 @@ export function backupFile(source: string, backupDir = morenBeifenMulu(), biaoQi
   beizhuWenjianFangwen('backup', target, { bytes: buf.length });
   const readBack = fs.readFileSync(target);
   if (!readBack.equals(buf)) throw new Error(`备份校验失败：${target} 内容与源不一致`);
-  return { source, path: target, bytes: buf.length, sha256: sha256(buf), createdAt: new Date().toISOString() };
+  return { source, path: target, bytes: buf.length, sha256: sha256(buf), createdAt: Date.now() };
 }
 
 export function zhiwenWenjian(file: string, spec?: ZhujiTiaomuGuige): WenjianZhiwen {

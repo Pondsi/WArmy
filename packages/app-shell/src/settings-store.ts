@@ -157,6 +157,18 @@ export const SETTINGS_SUPPORTED_LOCALES = [
 export interface YingYongPeizhi {
   /** One of SETTINGS_SUPPORTED_LOCALES. Stored as free string for backward compat; resolveLocale maps unknown tags. */
   yuYan: string;
+  /**
+   * **界面显示时区**（第 91 轮用户口径）：IANA 名，例如 `Asia/Shanghai`。
+   * 记录本身一律存 epoch 毫秒；这里只决定界面上怎么换算。
+   * 空/缺省 = 还没落盘过 —— 登录后首次读取时写入当时的系统时区作为基线，
+   * 之后系统时区再变就会在登录 5 秒后提醒用户选择（保持 / 更换）。
+   */
+  timezone?: string;
+  /**
+   * 用户明确"保持之前的时区"时记下当时的系统时区：同一台机器再启动不再重复问，
+   * 直到系统时区又变成另一个值（换城市/改系统设置）才重新提醒。
+   */
+  timezoneKeepFor?: string;
   /** 用户称呼（默认值随界面语言；第 54 轮项 1） */
   username?: string;
   themeMode: 'light' | 'dark' | 'system';
@@ -194,6 +206,10 @@ export interface YingYongPeizhi {
    * 其它值（`zh`/`en`/`yue`…，见渲染层的 ASR_YU_YAN 全表）= 把语言参数显式带给模型。
    */
   asrLang?: string;
+  /** 语音输入后是否用整理模型重组输入框（默认开；关掉后绝不再自动整理） */
+  yuYinChongZu?: boolean;
+  /** 语音输入后是否自动发送（默认关） */
+  yuYinZiDongFaSong?: boolean;
   /** Deepgram/AssemblyAI 外部 ASR（密钥存 SecureKeyStore，这里只存选择与端点） */
   asrCloudProvider?: 'none' | 'deepgram' | 'assemblyai';
   asrCloudModel?: string;
@@ -245,6 +261,11 @@ export interface YingYongPeizhi {
   /** 项目内文件左键是否用 nm 查看器打开（默认关；右键「打开」走另一条路） */
   nmKaiWenJian?: boolean;
   /**
+   * **用户主动卸载过 nm 查看器插件**（默认 false）：为 true 时更新/重启都不许自动装回，
+   * 只有设置→功能里点「安装 nm 查看器」才清除。与 `chaJianJi` 分开存，避免列表被同步覆盖后“复活”。
+   */
+  nmFileRemoved?: boolean;
+  /**
    * **回复内容加强**（默认关）：允许牛马按内容性质自选表达方式 ——
    * 纯文字 / SVG 示意图 / 图表 / 可交互页面 / 语音讲解。
    * 开启后更慢、更费 token，所以必须由用户显式勾选。
@@ -289,6 +310,8 @@ export interface YingYongPeizhi {
   webgpuEnabled?: boolean;
   /** 首启引导是否走完（首启动交付要看它） */
   guideDone?: boolean;
+  /** 新手清单：第一句对话是否真的收到过回复（发送成功才写 true） */
+  guideChatDone?: boolean;
   /** 导入过的供应商（避免重复导入同一份配置） */
   importedProviders?: Array<Record<string, unknown>>;
   /** 空闲自动摘要（默认开） */
@@ -486,6 +509,50 @@ export interface YingYongPeizhi {
     appliedAt: number;
     liftedAt?: number;
   }>;
+  /** 定时导出（第 107 轮）：时间、循环、间隔、跳过无变化、加密、多个位置、凭证、数据范围。 */
+  dingShiDaoChu?: DingShiDaoChu;
+}
+
+export interface DingShiDaoChuWeiZhi {
+  path: string;
+  enabled: boolean;
+  /** 网络位置的登录用户名（密码只存 SecureKeyStore，绝不写进 settings.json） */
+  username?: string;
+  /** 该位置是否已保存凭证（真实值在安全存储里） */
+  credentialSet?: boolean;
+}
+
+export interface DingShiDaoChu {
+  enabled: boolean;
+  /** 下一次执行的时间戳（epoch ms）；0 = 还没排过 */
+  nextAt: number;
+  /** 总共执行几次；0 = 无限循环（用户自己输入，>=0 的整数） */
+  cycles: number;
+  /** 每两次之间的间隔（毫秒；界面按秒输入） */
+  intervalMs: number;
+  /** 数据指纹没变就跳过本次（不写文件，但照样排下一次） */
+  skipUnchanged: boolean;
+  /** 导出包是否加密（关闭会明确警告为明文包）；加密始终用当前登录主密钥 */
+  encrypt: boolean;
+  /** 旧字段，只为兼容旧配置；第 109 轮起界面不再提供，实际恒为 false */
+  requireCredential?: boolean;
+  /** 最多 10 个位置；只会导出到 enabled=true 的位置 */
+  locations: DingShiDaoChuWeiZhi[];
+  /** 导出范围：chat / knowledge / contacts / settings / account / logs */
+  include: string[];
+  /** 细粒度范围：具体会话、知识库层、时间范围 */
+  scope?: {
+    chatIds?: string[];
+    kbLayers?: string[];
+    from?: number;
+    to?: number;
+  };
+  /** 已执行次数（成功或跳过都算一次排期） */
+  runsDone: number;
+  lastRunAt?: number;
+  lastStatus?: string;
+  lastFingerprint?: string;
+  lastPaths?: string[];
 }
 
 function hash(pw: string) {
@@ -651,6 +718,9 @@ export class PeizhiCang {
 function defaults(): YingYongPeizhi {
   return {
     yuYan: 'zh-CN',
+    /** 空 = 还没落盘过；生效值由渲染层按系统时区补上并写回一次（见 timezone 注释） */
+    timezone: '',
+    timezoneKeepFor: '',
     themeMode: 'system',
     accent: '#A87654',
     /** 字体颜色默认 = 现在的正文黑（浅色主题下的 `--ink`），用户可改 */
@@ -666,6 +736,9 @@ function defaults(): YingYongPeizhi {
     /** 语音识别默认开；语言默认「自动」（不传语言参数，让模型判断） */
     asrEnabled: true,
     asrLang: 'auto',
+    /** 重组语言默认开；自动发送默认关 */
+    yuYinChongZu: true,
+    yuYinZiDongFaSong: false,
     asrCloudProvider: 'none',
     asrCloudModel: '',
     trustedFolders: [],
@@ -724,6 +797,19 @@ function defaults(): YingYongPeizhi {
     checkpointEnv: {},
     /** ADR 004：默认没有任何目录被加锁（**绝不自动加锁**） */
     fsGuard: {},
+    /** 定时导出：默认关闭；打开后由主进程按 nextAt 执行 */
+    dingShiDaoChu: {
+      enabled: false,
+      nextAt: 0,
+      cycles: 0,
+      intervalMs: 24 * 60 * 60 * 1000,
+      skipUnchanged: true,
+      encrypt: true,
+      requireCredential: false,
+      locations: [],
+      include: ['chat', 'knowledge', 'contacts', 'settings', 'account', 'logs'],
+      runsDone: 0,
+    },
   };
 }
 

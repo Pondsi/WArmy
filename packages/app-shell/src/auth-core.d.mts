@@ -52,6 +52,8 @@ export function parseMnemonicInput(text: string): string;
 export function friendlyMnemonic(mnemonic: string): { words: Array<{ w: string; p: string }>; idioms: Array<{ w: string; p: string }> };
 export function mnemonicToPinyin(mnemonic: string): string;
 export function pinyinToMnemonic(pinyin: string): string;
+export function deriveKroot(mnemonic: string): Buffer;
+export function krootFingerprint(kroot: Buffer): string;
 export function deriveMasterKey(mnemonic: string, saltB64: string, iterations?: number): Buffer;
 export function derivePinKey(pin: string, saltB64: string, iterations?: number): Buffer;
 export function pinVerifier(key: Buffer): string;

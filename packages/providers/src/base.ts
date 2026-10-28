@@ -93,27 +93,53 @@ export async function qingQiuJson<T>(
   auth: GongYingRenZheng
 ): Promise<T> {
   const timeoutMs = init.timeoutMs ?? auth.timeoutMs ?? 120_000;
-  const kongZhiQi = new AbortController();
-  const jiShiQi = setTimeout(() => kongZhiQi.abort(new Error('timeout')), timeoutMs);
-  try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...auth.headers,
-      ...((init.headers as Record<string, string>) || {}),
-    };
-    // 调用方的取消信号与本函数的超时必须同时生效：只用调用方信号时，挂住的请求永远不会超时
-    const res = await fetch(url, {
-      ...init,
-      headers,
-      signal: init.signal ? AbortSignal.any([init.signal, kongZhiQi.signal]) : kongZhiQi.signal,
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+  const jieZhi = Date.now() + timeoutMs;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...auth.headers,
+    ...((init.headers as Record<string, string>) || {}),
+  };
+  /**
+   * **429/5xx 必须退避重试**（多项目并发验收真机：同一家供应商 10 路并发直接 429，
+   * 执行者被整轮判崩溃 —— 这不是任务失败，是供应商让我们慢一点）。
+   * 只重试临时错误；401/400 这类配置/参数错误一次就够，绝不拿重试掩盖。
+   */
+  for (let ci = 1; ; ci++) {
+    if (init.signal?.aborted) throw new Error('aborted');
+    const shengYu = Math.max(1000, jieZhi - Date.now());
+    const kongZhiQi = new AbortController();
+    const jiShiQi = setTimeout(() => kongZhiQi.abort(new Error('timeout')), shengYu);
+    try {
+      // 调用方的取消信号与本函数的超时必须同时生效：只用调用方信号时，挂住的请求永远不会超时
+      const res = await fetch(url, {
+        ...init,
+        headers,
+        signal: init.signal ? AbortSignal.any([init.signal, kongZhiQi.signal]) : kongZhiQi.signal,
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        const linShi = res.status === 429 || (res.status >= 500 && res.status <= 504);
+        if (linShi && ci < 6 && Date.now() < jieZhi) {
+          const retryAfter = Number(res.headers.get('retry-after')) || 0;
+          const deng = Math.min(15_000, Math.max(800, retryAfter > 0 ? retryAfter * 1000 : ci * 1500));
+          await new Promise((r) => setTimeout(r, deng));
+          continue;
+        }
+        throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+      }
+      return JSON.parse(text) as T;
+    } catch (e) {
+      const msg = String((e as Error)?.message || e);
+      const shiHttp = /^HTTP \d{3}:/.test(msg);
+      const keChong = !shiHttp || /^HTTP (429|5\d\d):/.test(msg);
+      if (keChong && ci < 6 && Date.now() < jieZhi && !init.signal?.aborted) {
+        await new Promise((r) => setTimeout(r, Math.min(8000, ci * 1500)));
+        continue;
+      }
+      throw e;
+    } finally {
+      clearTimeout(jiShiQi);
     }
-    return JSON.parse(text) as T;
-  } finally {
-    clearTimeout(jiShiQi);
   }
 }
 
@@ -149,6 +175,11 @@ export abstract class JichuGongYing implements MoxingGongYing {
   abstract chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing>;
   abstract chatStream(Qiu: LiaoTianQingQiu, signal?: AbortSignal): AsyncIterable<LiaoTianPian>;
   abstract listModels(signal?: AbortSignal): Promise<string[]>;
+
+  /** 第 104 轮：默认没有服务端取消接口；只有真有接口的子类才覆盖。 */
+  async cancel(_req: { id?: string; signal?: AbortSignal }): Promise<{ supported: boolean; ok: boolean; detail?: string }> {
+    return { supported: false, ok: false, detail: 'provider has no server-side cancel endpoint' };
+  }
 
   /**
    * function calling 能力：默认按协议表判定（tools.ts）。
@@ -207,6 +238,7 @@ export function zhuanHuanOpenAI(xiaoXiJi: LiaoTianXiaoXi[]): unknown[] {
           id: t.id,
           type: 'function',
           function: t.function,
+          ...(t.extra_content ? { extra_content: t.extra_content } : {}),
         })),
       };
     }
@@ -244,6 +276,7 @@ export function jieXiOpenAIXiangYing(json: {
         || (t as { function?: { name?: string; arguments?: unknown }; name?: string; arguments?: unknown });
       const name = String(fn?.name || (t as { name?: string }).name || '');
       const args = fn?.arguments ?? (t as { arguments?: unknown }).arguments;
+      const extra = (t as { extra_content?: Record<string, unknown> }).extra_content;
       return {
         id: t.id || `call-${Math.random().toString(36).slice(2)}`,
         type: 'function' as const,
@@ -251,6 +284,7 @@ export function jieXiOpenAIXiangYing(json: {
           name,
           arguments: typeof args === 'string' ? args : JSON.stringify(args ?? {}),
         },
+        ...(extra ? { extra_content: extra } : {}),
       };
     })
     .filter((c) => c.function.name);

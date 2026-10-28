@@ -33,6 +33,8 @@ import {
 import { fenLeiCuoWu } from './cuowu-fenlei.js';
 
 export interface ZhixingqiRenwu extends GongzuozheRenwuShuru {
+  /** 用户原话长度（压缩前）：只用于验收/排障，证明超长输入确实被压到有界提示里 */
+  yuanWenChars?: number;
   /**
    * **这个执行者是哪只牛马**（id + 名字 + 人格）。
    *
@@ -41,6 +43,13 @@ export interface ZhixingqiRenwu extends GongzuozheRenwuShuru {
    * 既没有各自的人格，也没有各自的模型。现在把身份带进来，系统提示里如实注入。
    */
   shenFen?: { id: string; ming: string; persona?: string };
+  /**
+   * 值班者为本次任务指定的思考级别（auto = 跟随牛马自己的设置）。
+   * 只影响本任务的思考强度，**不影响模型**（模型由各牛马自己的设置决定）。
+   */
+  thinkLevel?: 'auto' | 'off' | 'low' | 'medium' | 'high' | string;
+  /** 思考级别映射到本模型的请求参数（宿主按模型能力生成；没有就发普通请求） */
+  thinkExtra?: Record<string, unknown>;
   /**
    * **可用工具**（产品要求：项目里的执行者要和单聊牛马一样能干活）。
    * 不给就退回"只说不做"的纯对话 —— 那正是以前的行为。
@@ -52,8 +61,12 @@ export interface ZhixingqiRenwu extends GongzuozheRenwuShuru {
   heiBan?: { gongJu: GongJuGuiGe[]; zhiXing: (call: GongJuDiaoYong) => Promise<string> | string; zhaiYao: () => string };
   /** 宿主核实产物：真实存在 ⇒ 返回绝对路径，否则空串（缺省只认存在的绝对路径） */
   heShiChanWu?: (lu: string) => string;
+  /** 上下文压缩留痕（验收/排障用）：毯子裁了几条、丢了几条、最终提示多少字 */
+  onAudit?: (op: string, detail?: Record<string, unknown>) => void;
   /** 结论超长时存完整原文（返回记忆库里的真 recordId；失败返回空串 ⇒ 不给指针） */
   cunQuanWen?: (wen: string) => Promise<string>;
+  /** 第 104 轮：项目停止时中止在途请求（客户端 abort；供应商有 cancel 接口时由上层另行调用） */
+  signal?: AbortSignal;
 }
 
 /** 契约结果 + "结论是否被截过"（回复里据此决定要不要写存档说明） */
@@ -65,6 +78,8 @@ export interface ZhixingqiGongyingshangPeizhi {
   baseURL?: string;
   model?: string;
   protocol?: string;
+  /** 单次模型调用上限（毫秒）：执行者不能因为供应商卡住而无限期占着项目 */
+  timeoutMs?: number;
 }
 
 /**
@@ -131,6 +146,7 @@ export async function yunxingDuanCunhuoZhixingqi(
     '只根据给定任务与上下文完成工作，不继承值班者的完整历史。',
     youGongJu
       ? '需要生成/修改/打开文件、执行命令时，**必须真的调用工具**去做，不要只描述打算怎么做。'
+        + '如果任务只是创建一个文件：**直接调用 write_file**，不要先 list_dir / read_file 绕圈；写完立刻调用交付工具。'
         + `做完后**必须调用 ${JIAO_FU_GONG_JU_MING}** 提交结构化结果：jieLun（结论，≤${JIE_LUN_YOU_GONG_JU} 字）、chanWu（产物的**绝对路径**）、shiShi（关键事实）、jueDing（决定，带主题）、wenTi（还没解决的问题）。宿主会逐个核实你说的产物是否真的存在。`
       : `最后用一个 \`\`\`json 代码块给出 {"jieLun":"结论（≤${JIE_LUN_WU_GONG_JU}字）","shiShi":[],"jueDing":[{"zhuTi":"","nei":""}],"wenTi":[]}，不要复述完整过程。`,
     youGongJu && renwu.heiBan
@@ -151,6 +167,20 @@ export async function yunxingDuanCunhuoZhixingqi(
   /** 任务黑板的有界摘要（≤2400 字，与黑板大小无关）；并行的执行者之后用 heiban_read 看实时的 */
   let heiBanZhai = '';
   try { heiBanZhai = renwu.heiBan ? String(renwu.heiBan.zhaiYao() || '') : ''; } catch { heiBanZhai = ''; }
+  try {
+    renwu.onAudit?.('group.executor-context', {
+      taskId: renwu.taskId,
+      zhanBianChars: tan.wen.length,
+      zhanBianClipped: tan.beiJian,
+      zhanBianDropped: tan.diuShu,
+      briefChars: briefZai.length,
+      heiBanChars: heiBanZhai.length,
+      yuanWenChars: Number(renwu.yuanWenChars || 0),
+      thinkLevel: String(renwu.thinkLevel || 'auto'),
+      thinkParams: !!renwu.thinkExtra,
+      promptChars: xiTong.length + briefZai.length + tan.wen.length + heiBanZhai.length,
+    });
+  } catch { /* 留痕失败不许拖累执行 */ }
   const xiaoXiJi: LiaoTianXiaoXi[] = [
     { role: 'system', content: xiTong },
     {
@@ -162,6 +192,12 @@ export async function yunxingDuanCunhuoZhixingqi(
   ];
   /** 交付工具收到的结构化结果（模型可能调多次：以最后一次有效的为准） */
   let jiaoFu: JiaoFuCanShu | null = null;
+  /**
+   * **工具实际写出的、宿主核实存在的产物**。
+   * 模型偶尔会调用 jiao_fu 却漏填 chanWu（真机：本地 9B 写文件成功、交付里 artifacts 为空），
+   * 这时不能把"真的做完了"判成"没产物"；以宿主核实的工具结果兜底。
+   */
+  const shiJiChanWu = new Set<string>();
   const gongJu: GongJuGuiGe[] | undefined = youGongJu
     ? (() => {
       const kan = new Set<string>();
@@ -182,7 +218,16 @@ export async function yunxingDuanCunhuoZhixingqi(
       return `[${JIAO_FU_GONG_JU_MING}] 已收到交付（结论 ${can.jieLun.length} 字、产物 ${can.chanWu.length} 个）。不需要再复述，回一句"已交付"即可。`;
     }
     if (renwu.heiBan && (ming === 'heiban_write' || ming === 'heiban_read')) return String(await renwu.heiBan.zhiXing(call));
-    return String(await renwu.runTool!(call, ctx));
+    const jieGuo = String(await renwu.runTool!(call, ctx));
+    if (ming === 'write_file' || ming === 'edit_file') {
+      try {
+        const can = JSON.parse(call.function.arguments || '{}') as { path?: unknown; file?: unknown };
+        const lu = String(can.path || can.file || '');
+        const abs = lu && renwu.heShiChanWu ? renwu.heShiChanWu(lu) : '';
+        if (abs) shiJiChanWu.add(abs);
+      } catch { /* 参数坏了由工具自己报错，这里不猜 */ }
+    }
+    return jieGuo;
   };
   const tongJiKong = { durationMs: 0, promptTokens: 0, completionTokens: 0 };
   try {
@@ -190,6 +235,7 @@ export async function yunxingDuanCunhuoZhixingqi(
       apiKey: cfg.apiKey,
       baseURL: cfg.baseURL || undefined,
       protocol: cfg.protocol,
+      ...(cfg.timeoutMs ? { timeoutMs: cfg.timeoutMs } : {}),
     } as never, cfg.protocol as never);
     const Qiu = {
       model: cfg.model || 'deepseek-chat',
@@ -197,6 +243,7 @@ export async function yunxingDuanCunhuoZhixingqi(
       /** 有工具要多给预算：工具参数（如 write_file 的正文）本身就占输出 token */
       maxTokens: youGongJu ? Math.max(2048, renwu.budgetTokens || 4096) : Math.min(512, renwu.budgetTokens || 512),
       ...(gongJu ? { tools: gongJu } : {}),
+      ...(renwu.thinkExtra ? { extra: renwu.thinkExtra } : {}),
     };
     const lim = renwu.toolLimits || { zuiDaLunShu: 8, zuiDaJieGuoZiShu: 4000, totalChars: 12000 };
     const xiangYing = youGongJu
@@ -206,8 +253,9 @@ export async function yunxingDuanCunhuoZhixingqi(
           maxToolResultChars: lim.totalChars,
           // 一次性蒸馏任务：额度预警只会占掉它本来就不多的输出预算（第 39 轮：预警只给主对话循环）
           wuYuSuanTiShi: true,
+          ...(renwu.signal ? { signal: renwu.signal } : {}),
         })).xiangYingTi
-      : await provider.chat(Qiu);
+      : await provider.chat(Qiu, renwu.signal);
     const zl = zhengLiu({
       taskId: renwu.taskId,
       jiaoFu,
@@ -221,6 +269,32 @@ export async function yunxingDuanCunhuoZhixingqi(
       },
     });
     let jg = zl.jieGuo;
+    if (shiJiChanWu.size) {
+      jg = { ...jg, artifacts: [...new Set([...(jg.artifacts || []), ...shiJiChanWu])] };
+    }
+    /**
+     * **没核实到的产物不许在汇报里冒充真产物**：模型有时会在结论里多写一个不存在的路径
+     * （宿主已在 `unverifiedArtifacts` 里记账）。把它从面向用户的结论中替换成「（未核实）」，
+     * 真实产物一个不少；值班者汇总时就不会把假路径当成交付物报给用户。
+     */
+    if ((jg.unverifiedArtifacts || []).length) {
+      let wen = String(jg.distilled || '');
+      const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      for (const u of jg.unverifiedArtifacts || []) {
+        const lu = String(u || '');
+        const ji = lu.split(/[\\/]/).pop() || lu;
+        if (lu) wen = wen.split(lu).join('（未核实）');
+        /**
+         * 裸文件名只按**独立词**替换：真产物 `…-01.txt` 里也含 `01.txt`，
+         * 直接全局替换会把好路径改成 `…-（未核实）`（反而毁掉真实产物）。
+         */
+        if (ji && ji !== lu) {
+          const re = new RegExp('(^|[\\s`"（(【])' + esc(ji) + '(?=$|[\\s`"）)】,，。;；])', 'g');
+          wen = wen.replace(re, '$1（未核实）');
+        }
+      }
+      jg = { ...jg, distilled: wen };
+    }
     /** 超长：完整原文存档，**存成功**才挂指针（存不上，回复里如实说"未能存档"） */
     if (zl.chaoChang && renwu.cunQuanWen) {
       let id = '';

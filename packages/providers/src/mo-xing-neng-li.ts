@@ -83,54 +83,45 @@ export interface DangWeiAnShe {
 
 /**
  * **档位映射表**（拉取模型时构建，之后按它发请求）。
- * 档位数量不同也能正确对应：
- *  · 0 档 ⇒ 全部 null（不发思考参数）
- *  · 1 档 ⇒ 除 off/auto 外都指向它
- *  · n 档 ⇒ 按强度**比例**铺到 l1..l6（n=3 → l1/l3-l4/l6；n=4 → l1/l2-l3/l5/l6 …）
- *  · 'off' 指向模型里最弱那一档（通常叫 none/off/minimal）；'auto' 指向模型自己的 auto，没有则 null
+ *
+ * 第 99 轮用户口径：不再有“模型不支持所选档位”这一说 —— 拉取模型时拿到它**实际**
+ * 有哪些思考档位，然后按**百分比位置**铺到我们的 7 个非自动档上：
+ *
+ *   我们的档位：灵机(off) 0% · 微觉 16.7% · 慎思 33.3% · 明辨 50% · 沉吟 66.7% · 穷理 83.3% · 参悟 100%
+ *   模型档位：  N 档按 (j/(N-1)) 均匀铺开
+ *   我们的第 i 档 → 模型第 round(i*(N-1)/6) 档
+ *
+ * 例：模型实际 6 档 ⇒ 灵机/微觉/慎思/明辨/明辨/穷理/参悟（第三、四档会落在同一档，
+ * 这是比例映射的正常结果，不是“降级”）。模型只有 3 档 ⇒ 低/低/中/中/高/高/高。
+ * `auto` 单独映射到模型自带的 auto；没有就 null（不发该参数，让服务端默认）。
  */
 export function gouJianDangWeiAnShe(modelLevels: string[]): DangWeiAnShe {
   const pai = paiXuDangWei(modelLevels.filter(Boolean));
   const woDaoMo: Record<string, string | null> = {};
   const moDaoWo: Record<string, string> = {};
-  for (const p of pai) moDaoWo[p] = 'l3';
-  if (!pai.length) {
-    for (const w of WO_MEN_DANG_WEI) woDaoMo[w] = null;
-    return { woDaoMo, moDaoWo };
-  }
-  const guanBi = pai.find((p) => /^(none|off|disable|0|minimal)$/i.test(p)) ?? null;
   const ziDong = pai.find((p) => /^(auto|adaptive|default|normal)$/i.test(p)) ?? null;
-  // 具体强度档（去掉 off/auto，避免占掉比例位）
-  const juTi = pai.filter((p) => p !== guanBi && p !== ziDong);
-  woDaoMo.off = guanBi ?? pai[0] ?? null;
+  /** 具体档（去掉 auto；明确的 off/none/minimal 也算一档，按比例参与映射） */
+  const juTi = pai.filter((p) => p !== ziDong);
+  const WO = ['off', 'l1', 'l2', 'l3', 'l4', 'l5', 'l6'];
+  if (!juTi.length) {
+    for (const w of WO) woDaoMo[w] = null;
+    woDaoMo.auto = ziDong;
+    return { woDaoMo, moDaoWo };
+  }
+  const n = juTi.length;
+  if (n === 1) {
+    for (const w of WO) woDaoMo[w] = juTi[0]!;
+    moDaoWo[juTi[0]!] = 'l3';
+    woDaoMo.auto = ziDong;
+    return { woDaoMo, moDaoWo };
+  }
+  for (let i = 0; i < WO.length; i += 1) {
+    const j = Math.round((i * (n - 1)) / (WO.length - 1));
+    const src = juTi[Math.max(0, Math.min(n - 1, j))]!;
+    woDaoMo[WO[i]!] = src;
+    if (moDaoWo[src] === undefined) moDaoWo[src] = WO[i]!;
+  }
   woDaoMo.auto = ziDong;
-  if (juTi.length === 0) {
-    for (const w of WO_MEN_DANG_WEI) if (woDaoMo[w] === undefined) woDaoMo[w] = pai[0] ?? null;
-    for (const p of juTi) moDaoWo[p] = 'l3';
-    return { woDaoMo, moDaoWo };
-  }
-  if (juTi.length === 1) {
-    const t0 = juTi[0]!;
-    for (const w of ['l1', 'l2', 'l3', 'l4', 'l5', 'l6']) woDaoMo[w] = t0;
-    moDaoWo[t0] = 'l3';
-    return { woDaoMo, moDaoWo };
-  }
-  // n≥2：按比例铺到 l1..l6
-  const liu = ['l1', 'l2', 'l3', 'l4', 'l5', 'l6'];
-  juTi.forEach((p, i) => {
-    const idx = Math.round((i * (liu.length - 1)) / (juTi.length - 1));
-    const wo = liu[Math.max(0, Math.min(liu.length - 1, idx))]!;
-    woDaoMo[wo] = p;
-    moDaoWo[p] = wo;
-  });
-  // 空档位（n<6 时某些 l* 没被指到）⇒ 取最近的已映射档
-  for (const w of liu) {
-    if (woDaoMo[w] === undefined) {
-      const yiYou = liu.filter((x) => woDaoMo[x] !== undefined && woDaoMo[x] !== null);
-      const zuiHou = yiYou[yiYou.length - 1];
-      woDaoMo[w] = (zuiHou !== undefined ? (woDaoMo[zuiHou] ?? null) : (juTi[0] ?? null));
-    }
-  }
   return { woDaoMo, moDaoWo };
 }
 

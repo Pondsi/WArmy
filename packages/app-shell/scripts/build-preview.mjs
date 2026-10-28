@@ -41,6 +41,17 @@ for (const f of ['app.css', 'app.js']) {
   fs.copyFileSync(path.join(renderer, f), path.join(out, f));
   console.log('  ' + f);
 }
+/**
+ * 预览 index.html 里还引用这些**经典脚本**：不复制就 404。
+ * 最典型的是 `time-tz.js`（第 91 轮起 app.js 的 TZ 来自它）：缺了会让设置页
+ * 渲染中途抛 `TZ is not defined`，预览停在空白设置页。
+ * `auth-gate.js` 故意不复制：预览是"已进软件"的界面，不需要登录遮罩。
+ */
+for (const f of ['chat-window-boot.js', 'busy-phrases.js', 'niu-ma-templates.js',
+  'persona-templates.js', 'persona-templates-user.js', 'du-yin.js', 'net-host-pure.js', 'time-tz.js']) {
+  fs.copyFileSync(path.join(renderer, f), path.join(out, f));
+  console.log('  ' + f);
+}
 copyDir(path.join(renderer, 'vendor'), path.join(out, 'vendor'));
 console.log('  vendor/ (二维码编码器 + 解码器：vendored 经典脚本，全局 qrcode / jsQR)');
 

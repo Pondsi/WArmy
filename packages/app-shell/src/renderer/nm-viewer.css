@@ -439,6 +439,10 @@ body.nmTuoZhong #wenBen { cursor: grabbing; }
 #fenGeTiao:hover, body.tuoFenGe #fenGeTiao { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 body.tuoFenGe { cursor: col-resize; user-select: none; }
 body.tuoFenGe #wenBen { pointer-events: none; }
+/* 第 97 轮项 10：拖动分隔条时，右侧预览的 iframe 会吃掉 mousemove（拖到右边就停住）。
+   拖拽期间让整块预览不接收指针事件，document 才能持续收到移动。 */
+body.tuoFenGe #yuLanLie,
+body.tuoFenGe #yuLanLie * { pointer-events: none !important; }
 #yuLanLie {
   flex: 1 1 0;
   min-width: 180px;
@@ -487,7 +491,7 @@ body.tuoFenGe #wenBen { pointer-events: none; }
   overflow: auto;
   padding: var(--sp-3) var(--sp-4) 32px;
   contain: layout paint;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
 }
 /* 缩放作用在内容层，不作用在滚动容器：滚动条/scrollWidth 仍由浏览器按缩放后的内容算 */
 #kuaiNei { width: 100%; min-width: 0; transform-origin: 0 0; }
@@ -753,7 +757,7 @@ body.tuoFenGe #wenBen { pointer-events: none; }
   min-height: 0;
   overflow: auto;
   contain: strict;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   outline: none;
   font-family: var(--font-mono);
   font-size: 12.5px;

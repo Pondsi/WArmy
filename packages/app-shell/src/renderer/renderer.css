@@ -8,6 +8,7 @@
   --fs-md: 14px;
   --fs-lg: 16px;
   --fs-xl: 20px;
+  --titlebar-h: 40px;
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -125,7 +126,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   position: fixed;
   left: 0;
   right: 0;
-  top: 40px;
+  top: var(--titlebar-h, 40px);
   bottom: 0;
   z-index: 12000;
   background: rgba(0, 0, 0, 0.28);
@@ -227,7 +228,7 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 #appTi {
   display: grid;
   grid-template-columns: 64px var(--list-w, 200px) 1fr;
-  height: calc(100vh - 40px);
+  height: calc(100vh - var(--titlebar-h, 40px));
   min-height: 0;
   overflow: hidden;
   flex: 1;
@@ -513,7 +514,8 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* 语音选项弹层向上展开，不能被输入区裁切 */
+  overflow: visible;
   transition: border-color 0.12s;
 }
 #shuRu {
@@ -1083,6 +1085,23 @@ details.ctgShouQi > .ctgShouQiTi {
 .duiHuaKuangTi { font-size: var(--fs-base); line-height: 1.5; color: var(--ink); margin-bottom: 16px; white-space: pre-wrap; }
 .duiHuaKuangDongZuoJi { display: flex; justify-content: flex-end; gap: 8px; }
 .duiHuaKuangDongZuoJi button { min-width: 72px; }
+/* 牛马设置弹窗：复用原牛马管理局详情内容，放大 + 内部滚动（第 98 轮） */
+.duiHuaKuangGen.niuMaSheZhi .duiHuaKuangKa {
+  width: min(960px, calc(100vw - 48px));
+  max-height: min(88vh, 920px);
+  display: flex;
+  flex-direction: column;
+}
+.duiHuaKuangGen.niuMaSheZhi .duiHuaKuangBiaoTi { flex: 0 0 auto; }
+.duiHuaKuangGen.niuMaSheZhi .duiHuaKuangTi {
+  white-space: normal;
+  overflow: auto;
+  max-height: calc(88vh - 118px);
+  margin-bottom: 8px;
+  padding-right: 4px;
+}
+.duiHuaKuangGen.niuMaSheZhi .duiHuaKuangTi .sheZhiKa { max-width: none !important; }
+.duiHuaKuangGen.niuMaSheZhi .duiHuaKuangDongZuoJi { flex: 0 0 auto; }
 .usernameDisplay {
   font-size: 18px; font-weight: 600; cursor: text;
   border-bottom: 1px dashed transparent; padding-bottom: 1px;
@@ -1461,7 +1480,7 @@ body.liaoTianChuangKou #appTi:not(.yinCangLieBiao) {
 /* 独立会话窗布局加固：聊天 + 右栏铺满，不出现错位 */
 body.liaoTianChuangKou #zhuLan {
   display: block !important;
-  height: calc(100vh - 40px) !important;
+  height: calc(100vh - var(--titlebar-h, 40px)) !important;
   overflow: hidden !important;
 }
 body.liaoTianChuangKou #liaoTianBuJu {
@@ -1663,7 +1682,7 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 #appTi {
   display: grid;
   grid-template-columns: 64px var(--list-w, 200px) 1fr;
-  height: calc(100vh - 40px);
+  height: calc(100vh - var(--titlebar-h, 40px));
   min-height: 0;
   overflow: hidden;
   flex: 1;
@@ -1694,7 +1713,7 @@ body.liaoTianChuangKou #appTi {
 #appTi {
   display: grid !important;
   grid-template-columns: 64px var(--list-w, 200px) minmax(0, 1fr) !important;
-  height: calc(100vh - 40px) !important;
+  height: calc(100vh - var(--titlebar-h, 40px)) !important;
   min-height: 0 !important;
   overflow: hidden !important;
   flex: 1 1 auto !important;
@@ -2042,47 +2061,6 @@ body.liaoTianChuangKou #appTi {
 #quanPingQuSeCeng img { pointer-events: auto; }
 
 
-/* 首启引导条（非阻塞，页内教练标记）
- * ⚠️ app.css 里有一份同名规则，且 index.html 里**本文件后加载** ⇒ 这里才是生效的那份。
- * 两边的 top/bottom/height 必须一致：曾经一份写 top:50%、另一份写 bottom:24px，
- * 两个同时生效 ⇒ 卡片被从屏幕中拉到右下，**又高又空一大块**（真事故）。 */
-.yinDaoTiao {
-  /* 主界面右下角：尺寸**按内容收**，不许拉伸 */
-  position: fixed; right: 16px; bottom: 16px; top: auto; left: auto;
-  height: auto;
-  z-index: 9000;
-  width: min(320px, calc(100vw - 32px));
-  max-height: min(420px, calc(100vh - 48px));
-  overflow: auto;
-  background: var(--card, #fff); color: var(--ink, #111);
-  border: 1px solid var(--line, #ddd); border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 12px 14px;
-  /* 拖到顶部会压在 #biaoTiLan（drag 区）上：不 no-drag 就再也拖不动、按钮也点不了 */
-  -webkit-app-region: no-drag;
-}
-.yinDaoTiao * { -webkit-app-region: no-drag; }
-.yinDaoLianJie {
-  display: inline-block; margin-top: 6px; font-size: var(--fs-sm);
-  color: var(--accent); text-decoration: underline; cursor: pointer;
-}
-.yinDaoHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.yinDaoJiDu {
-  font-size: var(--fs-xs); letter-spacing: .3px; color: var(--accent-ink, #fff);
-  background: var(--accent); padding: 2px 8px; border-radius: 999px;
-}
-.yinDaoClose {
-  border: none; background: transparent; cursor: pointer; font-size: 16px;
-  line-height: 1; color: inherit; opacity: .6; padding: 0 4px; border-radius: 4px;
-}
-.yinDaoClose:hover { opacity: 1; background: var(--hover, rgba(0,0,0,.06)); }
-.yinDaoTi { font-weight: 700; font-size: var(--fs-md); margin-bottom: 4px; }
-.yinDaoWen { font-size: var(--fs-base); line-height: 1.55; opacity: .92; }
-/* 文案里的真实图标（与左侧导航同一套图形）：1.15em ≈ 15px，与 13px 正文齐平 */
-.yinDaoTuBiao {
-  display: inline-block; width: 1.15em; height: 1.15em;
-  vertical-align: -0.22em; margin: 0 0.12em; color: var(--accent);
-}
-.yinDaoTuBiao svg { width: 100%; height: 100%; display: block; }
 /* 拉取模型：进行中的动画（至少 1.7s，直到完成/报错） */
 .laQuZhuan {
   display: inline-block; width: 0.95em; height: 0.95em; margin-right: 5px;
@@ -2206,17 +2184,6 @@ body.liaoTianChuangKou #appTi {
   border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%;
   animation: laQuZhuan 0.8s linear infinite; vertical-align: -0.12em;
 }
-.yinDaoJiaZhi {
-  margin-top: 6px; font-size: var(--fs-sm); line-height: 1.5;
-  border-left: 3px solid var(--accent); padding-left: 8px; opacity: .88;
-}
-.yinDaoDongZuo { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
-.yinDaoGaoLiang {
-  outline: 2px solid var(--accent) !important; outline-offset: 3px; border-radius: 6px;
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 28%, transparent);
-  transition: outline .2s, box-shadow .2s;
-}
-
 /* 聊天气泡：名称 + 气泡包一层（群聊/项目显示发言者名称，微信样式）
  * 宽度上限在这条**高特异性**规则上给（它会盖掉 app.css 的 .bubbleWrap） */
 .xiaoXi .bubbleWrap {
@@ -2501,7 +2468,7 @@ html { font-weight: var(--fw-ui, 400); }
 #mianBanJiHuaKuai { max-height: 460px; }
 #mianBanShouQuanKuai { max-height: 380px; }
 #mianBanJiHuaKuai > #jiHuaLieBiao,
-#mianBanShouQuanKuai > .mianBanScroll { overflow-y: auto; overscroll-behavior: contain; }
+#mianBanShouQuanKuai > .mianBanScroll { overflow-y: auto; overscroll-behavior: auto; }
 @media (max-height: 760px) {
   #mianBanJiHuaKuai { max-height: 320px; }
   #mianBanShouQuanKuai { max-height: 260px; }
@@ -2620,6 +2587,25 @@ html { font-weight: var(--fw-ui, 400); }
 }
 .xingDongXiang { padding: 4px 8px 6px 28px; margin: 0 0 0 10px; border-left: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 0; background: transparent; box-shadow: none; }
 .xingDongZu { border: none; box-shadow: none; background: transparent; }
+/* 第 101 轮：**展开后的明细也要在浮雕里** —— 浮雕从"标题行"上移到"整条记录"。
+   折叠时仍由 .xingDongHang 自带浮雕；一旦明细展开，外层包成一张卡、标题行让位。 */
+.xingDongZu { border-radius: 8px; transition: transform .1s ease, box-shadow .12s ease; }
+.xingDongZu:has(> .xingDongXiang:not(.yinCang)) {
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 96%, #fff 4%) 0%, var(--card) 55%, color-mix(in srgb, var(--card) 92%, #000 8%) 100%);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, #fff 72%, transparent), inset 0 -2px 0 color-mix(in srgb, #000 20%, transparent), 0 3px 10px color-mix(in srgb, #000 18%, transparent), 0 1px 2px color-mix(in srgb, #000 14%, transparent);
+  overflow: hidden;
+}
+.xingDongZu:has(> .xingDongXiang:not(.yinCang)) > .xingDongHang {
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  transform: none;
+}
+.xingDongZu:has(> .xingDongXiang:not(.yinCang)):hover { transform: translateY(-1px); }
+.xingDongZu:has(> .xingDongXiang:not(.yinCang)) > .xingDongXiang {
+  margin: 0; padding: 7px 10px 9px 29px;
+  border-left: 0; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--card) 97%, #000 3%);
+}
 
 
 
@@ -3028,5 +3014,28 @@ html { font-weight: var(--fw-ui, 400); }
     --fs-lg: 18px;
     --fs-xl: 22px;
     --du-wen-kuan: 1320px;
+    --titlebar-h: 46px;
   }
+  .ceLanTiaoMu { width: 54px; height: 54px; }
+  .ceLanTiaoMu svg { width: 30px; height: 30px; }
+  .lieBiaoTiaoMu { padding: 12px 9px; }
+  .lieBiaoTiaoMu .av { width: 44px; height: 44px; }
+  .scrollDiAnNiu { width: 38px; height: 38px; }
+}
+
+/* R103：标题栏高度统一走 --titlebar-h（4K@100% 时 46px；4K@200% 逻辑宽度仍是 1920，不重复放大）。
+   按钮内容高度减 1px：border-box 的标题栏含 1px 下边框，避免 1px 溢出。 */
+#biaoTiLan { height: var(--titlebar-h, 40px) !important; }
+#biaoTiLan .biaoTiLanlogo {
+  width: calc(var(--titlebar-h, 40px) - 1px) !important;
+  height: calc(var(--titlebar-h, 40px) - 1px) !important;
+}
+#biaoTiLan .biaoTiLanlogoTuPian {
+  width: calc(var(--titlebar-h, 40px) - 1px) !important;
+  height: calc(var(--titlebar-h, 40px) - 12px) !important;
+}
+#biaoTiLan .biaoTiLanDongZuoJi button { height: calc(var(--titlebar-h, 40px) - 1px) !important; }
+@media (min-width: 3200px) {
+  #biaoTiLan .biaoTiLanDongZuoJi button { width: 62px; }
+  #biaoTiLan .biaoTiLansvg { width: 20px; height: 20px; }
 }

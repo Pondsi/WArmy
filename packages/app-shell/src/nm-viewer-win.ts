@@ -16,7 +16,7 @@
  * 纪律：这个模块**不读设置**（主题/强调色/插件开关由 electron-main 传进来），
  * 这样它不依赖 settings-store，也不会和主进程形成环形依赖。
  */
-import { app, BrowserWindow, dialog, screen, shell, type Rectangle } from 'electron';
+import { app, BrowserWindow, dialog, screen, shell, WebContentsView, type Rectangle } from 'electron';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -360,6 +360,15 @@ function erJinZhiXinXi(p: string, ziJie: number): NmErJinZhi {
  */
 export function nmDuWenJian(luJing: string): NmNeiRong {
   const p = String(luJing || '');
+  /** 聊天框文本编辑器：内存中的虚拟文件（不落盘、不保存） */
+  if (p.startsWith('warmy-chat-editor://')) {
+    const xu = xuNiWenJian?.(p);
+    if (xu) return xu;
+    return {
+      ok: false, luJing: p, ming: '聊天内容.txt', kuoZhan: 'txt',
+      leiXing: 'text', keBianJi: false, ziJie: 0, cuo: '这个编辑窗口已经关闭',
+    };
+  }
   /**
    * 压缩包请求：`path` 是唯一的自由字符串通道（主进程不加新 IPC）。
    * 先认出信封再碰文件系统；信封里可能带密码，**只用后即弃，不写任何地方**。
@@ -514,6 +523,25 @@ export function nmSheZhiZhuChuangKuang(fn: (() => NmKuang | null) | null): void 
 }
 
 /**
+ * 主界面**第四列宽度**提供者（第 99 轮）：主窗口最大化时，nm 查看器不再开到屏幕外，
+ * 而是用“第四列宽度”贴在主窗口右缘、正好填补右侧空出来的位置。
+ * 只读；由 electron-main 按设置 `panelWidth` 注入，nm 模块不读设置。
+ */
+let mianBanKuan: (() => number) | null = null;
+export function nmSheZhiMianBanKuan(fn: (() => number) | null): void {
+  mianBanKuan = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * **虚拟文件**提供者（第 99 轮）：聊天框的“文本编辑器”用 nm 查看器打开一段**内存中的文字**，
+ * 不落盘、不保存。路径形如 `warmy-chat-editor://<id>`；nm 模块只负责问主进程要内容。
+ */
+let xuNiWenJian: ((p: string) => NmNeiRong | null) | null = null;
+export function nmSheZhiXuNiWenJian(fn: ((p: string) => NmNeiRong | null) | null): void {
+  xuNiWenJian = typeof fn === 'function' ? fn : null;
+}
+
+/**
  * 把主窗口登记成**平等参与者**（第 66 轮项 7/10/11）。
  *
  * 以前主窗口只是 nm 吸附的"死目标"：nm 可以贴上去，但主窗口拖动不会带走 nm，
@@ -564,23 +592,212 @@ export function nmZhuChuangXiFu(kai: boolean): void {
   if (!Z.xiFu) duanKai(Z);
 }
 
-/**
- * 沿"右边"一路走到最右（用于新窗口落点；不跨过空边、不怕异常数据成环）。
- * 主窗口右边空 ⇒ 返回主窗口自己；右边已挂 nm ⇒ 返回最右那扇。
- */
-function zuiYouCeLian(start: NmZhuangTai): NmZhuangTai {
-  const yiZou = new Set<number>();
-  let cur: NmZhuangTai | undefined = start;
-  let zuiHou = start;
-  while (cur && !yiZou.has(cur.id)) {
-    yiZou.add(cur.id);
-    zuiHou = cur;
-    const nextId: number | null = cur.bian.you;
-    const next: NmZhuangTai | undefined = nextId == null ? undefined : CHUANG_KOU.get(nextId);
-    if (!next || next.win.isDestroyed()) break;
-    cur = next;
+/* ══════════════════════════════════════════════════════════════════════
+   三·二、主窗口最大化 + nm 预留第四列（第 102 轮）
+   ---------------------------------------------------------------------------
+   产品口径：
+     · nm 自己点「最大化」= 这个窗口按系统语义最大化，铺满所在显示器工作区；
+     · 主窗口点「最大化」：
+         - 没有吸附 nm ⇒ 原生最大化；
+         - 有吸附 nm   ⇒ 主窗口占满工作区里**除吸附方向预留第四列宽**以外的部分，
+           nm 被重新调整成正好放进预留条（不留缝、不重叠），工作区仍排除任务栏；
+     · 再点一次还原：主窗口与所有被调整的 nm 都回到原位置/尺寸。
+   实现放在 nm 模块，因为这里同时掌握"谁和谁吸附"以及 nm 窗口实例；
+   主进程只决定"该走原生最大化还是这条预留布局"。
+   ══════════════════════════════════════════════════════════════════════ */
+
+interface NmZhuZuiDaCun {
+  zhu: Rectangle;
+  zhuZuiXiao: [number, number];
+  nm: Array<{ id: number; kuang: Rectangle; zuiXiao: [number, number] }>;
+  ce: NmBian[];
+}
+
+export interface NmZhuZuiDaJieGuo {
+  ok: boolean;
+  yiJiHuo?: boolean;
+  ce?: NmBian[];
+  zhu?: Rectangle;
+  chuangKou?: Array<{ id: number; kuang: Rectangle }>;
+  cuo?: string;
+}
+
+let zhuZuiDaCun: NmZhuZuiDaCun | null = null;
+/** 布局期间（含事件回流窗口）挡住 move/resize 校准，避免自己把刚接好的边判成"拖开了" */
+let zhuZuiDaBuJuZhi = 0;
+
+/** 与主窗口直接吸附、且当前可见/非最大化的 nm 及其方向（每边最多一个） */
+export function nmZhuZuiDaXiFuCe(): Array<{ id: number; bian: NmBian }> {
+  const Z = CHUANG_KOU.get(NM_ZHU_CHUANG_ID);
+  if (!Z || Z.win.isDestroyed() || !Z.xiFu) return [];
+  const out: Array<{ id: number; bian: NmBian }> = [];
+  for (const bian of NM_SI_BIAN) {
+    const id = Z.bian[bian];
+    if (id == null) continue;
+    const o = CHUANG_KOU.get(id);
+    if (!o || o.win.isDestroyed() || !o.xiFu) continue;
+    if (o.win.isMaximized() || o.win.isMinimized() || o.win.isFullScreen()) continue;
+    if (o.bian[NM_BIAN_DUI[bian]] !== Z.id) continue;
+    out.push({ id, bian });
   }
-  return zuiHou;
+  return out;
+}
+
+export interface NmZhuZuiDaBuJu {
+  zhu: NmKuang;
+  nm: Array<{ bian: NmBian; kuang: NmKuang }>;
+}
+
+/**
+ * 纯几何：给定显示器工作区、预留条厚度和主窗口被吸附的方向，算出
+ *   · 主窗口矩形（工作区扣掉预留条）；
+ *   · 每个方向上的 nm 矩形（正好放进预留条，不留缝、不重叠）。
+ * 左右条占满整个工作区高度；上下条只占主窗口的宽度区间，避免四个角互相压住。
+ * 返回 null = 工作区太小，装不下主窗口。
+ */
+export function nmJiSuanZhuZuiDaBuJu(wa: NmKuang, panelKuan: number, ce: NmBian[]): NmZhuZuiDaBuJu | null {
+  const p = Math.max(220, Math.min(480, Math.round(Number(panelKuan) || 300)));
+  const fang = [...new Set(Array.isArray(ce) ? ce : [])];
+  if (!fang.length) return null;
+  const zhu: NmKuang = { x: wa.x, y: wa.y, width: wa.width, height: wa.height };
+  if (fang.includes('zuo')) { zhu.x += p; zhu.width -= p; }
+  if (fang.includes('you')) zhu.width -= p;
+  if (fang.includes('shang')) { zhu.y += p; zhu.height -= p; }
+  if (fang.includes('xia')) zhu.height -= p;
+  if (zhu.width < 480 || zhu.height < 320) return null;
+  const nm = fang.map((bian) => {
+    if (bian === 'zuo') return { bian, kuang: { x: wa.x, y: wa.y, width: p, height: wa.height } };
+    if (bian === 'you') return { bian, kuang: { x: wa.x + wa.width - p, y: wa.y, width: p, height: wa.height } };
+    if (bian === 'shang') return { bian, kuang: { x: zhu.x, y: wa.y, width: zhu.width, height: p } };
+    return { bian, kuang: { x: zhu.x, y: wa.y + wa.height - p, width: zhu.width, height: p } };
+  });
+  return { zhu, nm };
+}
+
+function zhongZhiBuJuHuiLiu(ms = 420): void {
+  zhuZuiDaBuJuZhi = Math.max(zhuZuiDaBuJuZhi, Date.now() + ms);
+}
+
+function liangGe(n: number[] | undefined): [number, number] {
+  return [Number(n?.[0]) || 0, Number(n?.[1]) || 0];
+}
+
+function xiZhengMainZuiXiao(z: NmZhuangTai, k: NmKuang, yuan: [number, number]): void {
+  const kuan = Math.min(Number(yuan[0]) || 960, Math.max(480, Math.round(k.width)));
+  const gao = Math.min(Number(yuan[1]) || 600, Math.max(320, Math.round(k.height)));
+  try { z.win.setMinimumSize(kuan, gao); } catch { /* 设不上就按原最小值 */ }
+}
+
+function xiZhengNmZuiXiao(z: NmZhuangTai, k: NmKuang, yuan: [number, number]): void {
+  const kuan = Math.min(Number(yuan[0]) || 420, Math.max(200, Math.round(k.width)));
+  const gao = Math.min(Number(yuan[1]) || 300, Math.max(200, Math.round(k.height)));
+  try { z.win.setMinimumSize(kuan, gao); } catch { /* 同上 */ }
+}
+
+/**
+ * 主窗口进入"预留第四列"的最大化。
+ * @param panelKuan 预留条厚度；调用方按设置/宽屏规则算好（没给就 300）
+ */
+export function nmZhuZuiDaHuaKai(panelKuan?: number): NmZhuZuiDaJieGuo {
+  const Z = CHUANG_KOU.get(NM_ZHU_CHUANG_ID);
+  if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '主窗口不存在' };
+  if (zhuZuiDaCun) return { ok: true, yiJiHuo: true };
+  const ce = nmZhuZuiDaXiFuCe();
+  if (!ce.length) return { ok: false, cuo: '没有吸附的 nm 窗口', ce: [] };
+  try {
+    const zhengZai = Z.win.isMaximized();
+    const zhuYuan = zhengZai
+      ? ((Z.win as unknown as { getNormalBounds?: () => Rectangle }).getNormalBounds?.() || Z.win.getBounds())
+      : Z.win.getBounds();
+    const wa = screen.getDisplayMatching(zhuYuan).workArea;
+    const bu = nmJiSuanZhuZuiDaBuJu(
+      { x: wa.x, y: wa.y, width: wa.width, height: wa.height },
+      Number(panelKuan) || 300,
+      ce.map((x) => x.bian),
+    );
+    if (!bu) {
+      return { ok: false, cuo: '工作区太小，放不下主窗口和预留条', ce: ce.map((x) => x.bian) };
+    }
+    const zhu = bu.zhu;
+    const nmJi: Array<{ id: number; kuang: Rectangle; zuiXiao: [number, number]; z: NmZhuangTai }> = [];
+    for (const x of ce) {
+      const o = CHUANG_KOU.get(x.id);
+      if (!o || o.win.isDestroyed()) continue;
+      const ji = bu.nm.find((y) => y.bian === x.bian);
+      if (!ji) continue;
+      nmJi.push({ id: o.id, kuang: ji.kuang, zuiXiao: liangGe(o.win.getMinimumSize()), z: o });
+    }
+    if (!nmJi.length) return { ok: false, cuo: '吸附窗口已经关闭', ce: ce.map((x) => x.bian) };
+
+    const cun: NmZhuZuiDaCun = {
+      zhu: zhuYuan,
+      zhuZuiXiao: liangGe(Z.win.getMinimumSize()),
+      nm: nmJi.map((x) => ({ id: x.id, kuang: x.z.win.getBounds(), zuiXiao: x.zuiXiao })),
+      ce: ce.map((x) => x.bian),
+    };
+    zhuZuiDaCun = cun;
+    zhongZhiBuJuHuiLiu();
+    /** 原生最大化状态先退出，否则 setBounds 会被系统最大化状态吃掉 */
+    if (zhengZai) { try { Z.win.unmaximize(); } catch { /* noop */ } }
+    xiZhengMainZuiXiao(Z, zhu, cun.zhuZuiXiao);
+    Z.sheZhiZhong = true;
+    try { Z.win.setBounds(zhu); } finally { Z.shangCi = Z.win.getBounds(); Z.sheZhiZhong = false; }
+    for (const x of nmJi) {
+      const o = x.z;
+      xiZhengNmZuiXiao(o, x.kuang, x.zuiXiao);
+      o.sheZhiZhong = true;
+      try { o.win.setBounds(x.kuang); } finally { o.shangCi = o.win.getBounds(); o.sheZhiZhong = false; }
+    }
+    zhongZhiBuJuHuiLiu();
+    return {
+      ok: true,
+      ce: cun.ce,
+      zhu: Z.win.getBounds(),
+      chuangKou: nmJi.map((x) => ({ id: x.id, kuang: x.z.win.getBounds() })),
+    };
+  } catch (e) {
+    zhuZuiDaCun = null;
+    return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 200) };
+  }
+}
+
+/** 还原主窗口与所有被本次最大化调整过的 nm 窗口 */
+export function nmZhuZuiDaHuaGuan(): NmZhuZuiDaJieGuo {
+  const cun = zhuZuiDaCun;
+  if (!cun) return { ok: false, cuo: '当前没有预留式最大化' };
+  const Z = CHUANG_KOU.get(NM_ZHU_CHUANG_ID);
+  zhuZuiDaCun = null;
+  if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '主窗口不存在' };
+  zhongZhiBuJuHuiLiu();
+  try {
+    for (const x of cun.nm) {
+      const o = CHUANG_KOU.get(x.id);
+      if (!o || o.win.isDestroyed()) continue;
+      try { o.win.setMinimumSize(x.zuiXiao[0], x.zuiXiao[1]); } catch { /* noop */ }
+      if (o.win.isMaximized() || o.win.isFullScreen() || o.win.isMinimized()) continue;
+      o.sheZhiZhong = true;
+      try { o.win.setBounds(x.kuang); } finally { o.shangCi = o.win.getBounds(); o.sheZhiZhong = false; }
+    }
+    if (Z.win.isMaximized()) { try { Z.win.unmaximize(); } catch { /* noop */ } }
+    try { Z.win.setMinimumSize(cun.zhuZuiXiao[0], cun.zhuZuiXiao[1]); } catch { /* noop */ }
+    Z.sheZhiZhong = true;
+    try { Z.win.setBounds(cun.zhu); } finally { Z.shangCi = Z.win.getBounds(); Z.sheZhiZhong = false; }
+    zhongZhiBuJuHuiLiu();
+    return { ok: true, ce: cun.ce, zhu: Z.win.getBounds(), chuangKou: cun.nm.map((x) => ({ id: x.id, kuang: x.kuang })) };
+  } catch (e) {
+    return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 200) };
+  }
+}
+
+/** 给主进程/门禁用：当前是否处于预留式最大化，以及吸附方向 */
+export function nmZhuZuiDaHuaZhuangTai(): { active: boolean; ce: NmBian[]; zhu?: Rectangle; nm?: Array<{ id: number; kuang: Rectangle }> } {
+  if (!zhuZuiDaCun) return { active: false, ce: [] };
+  return {
+    active: true,
+    ce: [...zhuZuiDaCun.ce],
+    zhu: { ...zhuZuiDaCun.zhu },
+    nm: zhuZuiDaCun.nm.map((x) => ({ id: x.id, kuang: { ...x.kuang } })),
+  };
 }
 
 /**
@@ -863,6 +1080,8 @@ interface NmZhuangTai {
   /** 上次记录的矩形（算位移量用） */
   shangCi: Rectangle;
   yiDongDingShi: NodeJS.Timeout | null;
+  /** 第 104 轮 项 12：远程网页用 WebContentsView（本地网页仍走 sandbox iframe/srcdoc） */
+  wangYeView?: WebContentsView;
 }
 
 /** 主窗口在窗口池里的固定 id（nm 窗口 id 都是正数，不会撞） */
@@ -949,6 +1168,12 @@ function sheZhiBianKuang(Z: NmZhuangTai, k: NmKuang): void {
  */
 function tuoDongZu(Z: NmZhuangTai, dx: number, dy: number): void {
   const keZou = (id: number): number[] => {
+    /**
+     * 第 97 轮项 7：**主窗口是吸附锚点**。拖主窗口 ⇒ 整组跟着走；
+     * 拖其它 nm 窗口 ⇒ 不反过来拖主窗口（主窗只由用户自己移动）。
+     * 这也保证"其它窗口被拖远"时只是那条连接失效，而不是把主界面一起拽走。
+     */
+    if (id === NM_ZHU_CHUANG_ID && Z.id !== NM_ZHU_CHUANG_ID) return [];
     const o = CHUANG_KOU.get(id);
     if (!o || o.win.isDestroyed() || !o.xiFu) return [];
     if (o.win.isMaximized() || o.win.isMinimized() || o.win.isFullScreen()) return [];
@@ -957,6 +1182,8 @@ function tuoDongZu(Z: NmZhuangTai, dx: number, dy: number): void {
   const chengYuan = nmBianLiLianTong(Z.id, keZou);
   for (const id of chengYuan) {
     if (id === Z.id) continue;
+    /** 拖 nm 时，主窗口即使出现在连通分量里也不能被带走（主窗只由用户自己移动） */
+    if (id === NM_ZHU_CHUANG_ID && Z.id !== NM_ZHU_CHUANG_ID) continue;
     const o = CHUANG_KOU.get(id);
     if (!o || o.win.isDestroyed() || !o.xiFu) continue;
     if (o.win.isMaximized() || o.win.isMinimized() || o.win.isFullScreen()) continue;
@@ -1019,6 +1246,7 @@ function gongZuoQuOf(k: NmKuang): NmKuang | null {
  */
 function chuLiYiDong(Z: NmZhuangTai): void {
   if (Z.sheZhiZhong || Z.win.isDestroyed()) return;
+  if (Date.now() < zhuZuiDaBuJuZhi) return;
   if (Z.win.isMaximized() || Z.win.isFullScreen() || Z.win.isMinimized()) return;
   const xin = Z.win.getBounds();
   const jiu = Z.shangCi;
@@ -1068,21 +1296,28 @@ function shouLianYiBian(Z: NmZhuangTai, bian: NmBian, o: NmZhuangTai): boolean {
   const b = Z.win.getBounds();
   const ob = o.win.getBounds();
   const jia = NM_XI_FU_JIA * 2;
+  /**
+   * ⚠️ 方向口径：`bian` 是**本窗自己的边**，不是邻窗的边。
+   *   · side='you' ⇒ 本窗右边贴邻窗左边（本窗在左）；
+   *   · side='zuo' ⇒ 本窗左边贴邻窗右边（本窗在右）。
+   * 旧实现把这两支写反了：平时看不出来，窗口最大化/还原触发 resize 校准时会
+   * 把仍然贴着的左右连接误判成"拖开了"并删掉（第 102 轮真机复现）。
+   */
   if (bian === 'you') {
+    const gap = (b.x + b.width) - ob.x;
+    if (Math.abs(gap) > jia) return false;
+    const kuan = ob.x - b.x;
+    if (kuan < 200) return false;
+    if (gap !== 0) sheZhiBianKuang(Z, { x: b.x, y: b.y, width: kuan, height: b.height });
+    return true;
+  }
+  if (bian === 'zuo') {
     const gap = b.x - (ob.x + ob.width);
     if (Math.abs(gap) > jia) return false;
     const you = b.x + b.width;
     const x = ob.x + ob.width;
     if (you - x < 200) return false;
     if (gap !== 0) sheZhiBianKuang(Z, { x, y: b.y, width: you - x, height: b.height });
-    return true;
-  }
-  if (bian === 'zuo') {
-    const gap = (b.x + b.width) - ob.x;
-    if (Math.abs(gap) > jia) return false;
-    const kuan = ob.x - b.x;
-    if (kuan < 200) return false;
-    if (gap !== 0) sheZhiBianKuang(Z, { x: b.x, y: b.y, width: kuan, height: b.height });
     return true;
   }
   if (bian === 'xia') {
@@ -1127,6 +1362,7 @@ function xiFuXinBian(Z: NmZhuangTai): void {
 
 function chuLiTiaoZheng(Z: NmZhuangTai, jieShu = false): void {
   if (Z.sheZhiZhong || !Z.xiFu || Z.win.isDestroyed()) return;
+  if (Date.now() < zhuZuiDaBuJuZhi) return;
   if (Z.win.isMaximized() || Z.win.isMinimized() || Z.win.isFullScreen()) return;
   if (tiaoZhengShen > 0) return;
   tiaoZhengShen += 1;
@@ -1180,10 +1416,11 @@ function xiaYiGeWeiZhi(kuan: number, gao: number): { x: number; y: number } {
 }
 
 /**
- * 新 nm 窗口的落点（第 67 轮项 19 修订）：
- *   · 主窗口在、且**主窗口右边还空** ⇒ 紧贴主窗口右侧（顶边对齐）并默认吸附；
- *   · 主窗口右边已经被占了 ⇒ 仍开在右侧（沿右边那条链排到最右），但**不吸附**
- *     （用户定稿：先来的连接永不被挤掉；后来的邻窗不抢已占的边）；
+ * 新 nm 窗口的落点（第 97 轮项 7 定稿）：
+ *   · 主窗口在 ⇒ **永远**贴着主窗口右侧打开，顶边对齐、**高度和主窗口一致**；
+ *   · 主窗口右边还空 ⇒ 默认吸附（fuZhu = 主窗口）；
+ *   · 主窗口右边已经被别的 nm 吸附 ⇒ 仍然开在同一个位置（叠在那扇窗上），但**不吸附**，
+ *     也不挤掉先来的连接（用户定稿：一扇窗只占一条边，后来的只能重叠）；
  *   · 主窗口不在 ⇒ 沿用旧的层叠落点。
  */
 function nmXinChuangLuoDian(kuan: number, gao: number): {
@@ -1198,39 +1435,31 @@ function nmXinChuangLuoDian(kuan: number, gao: number): {
     const ji = xiaYiGeWeiZhi(kuan, gao);
     return { ...ji, kuan, gao, fuZhu: null };
   }
+  /**
+   * **主窗口最大化**（第 99 轮用户口径）：主界面右侧会空出“第四列宽度”的位置。
+   * nm 查看器直接用这个宽度贴在**主窗口右缘**（不是 normalBounds 的右侧 —— 那会跑到屏幕外），
+   * 高度与主窗口一致；它覆盖的是主界面右侧那条空位，不抢吸附连接。
+   */
+  try {
+    if (zhu.win.isMaximized()) {
+      const zb = zhu.win.getBounds();
+      const kuai = Math.max(220, Math.min(480, Math.round(Number(mianBanKuan?.()) || Math.max(300, Math.min(420, zb.width * 0.16)))));
+      const kuan2 = Math.max(220, Math.min(kuai, zb.width - 200));
+      return { x: zb.x + zb.width - kuan2, y: zb.y, kuan: kuan2, gao: Math.max(300, zb.height), fuZhu: null };
+    }
+  } catch { /* 拿不到最大化状态就按普通窗口 */ }
   let zb: Rectangle;
   try {
-    zb = zhu.win.isMaximized() ? zhu.win.getNormalBounds() : zhu.win.getBounds();
-  } catch {
     zb = zhu.win.getBounds();
+  } catch {
+    zb = { x: 0, y: 0, width: kuan, height: gao };
   }
-  // 主窗口右边空 ⇒ 新窗接在主窗口右边；已占 ⇒ 接在最右那扇的右边（并直接吸上去，形成一组）。
-  // 不只看"已连成链"的窗：只要它实际落在主窗口右侧，就按它的右边缘继续排，
-  // 否则第一扇没连上时，第二扇会又落回主窗口右侧、和第一扇重叠。
-  let zuiYou = zuiYouCeLian(zhu);
-  let zuiYouYou = zb.x + zb.width;
-  if (zuiYou.id !== zhu.id) {
-    try {
-      const pb = zuiYou.win.isMaximized() ? zuiYou.win.getNormalBounds() : zuiYou.win.getBounds();
-      if (pb.x >= zb.x + zb.width - 8) zuiYouYou = pb.x + pb.width;
-    } catch { /* 拿不到那扇窗的矩形就仍贴主窗口右侧 */ }
-  }
-  for (const o of CHUANG_KOU.values()) {
-    if (!o || o.id === zhu.id || o.win.isDestroyed() || !o.xiFu) continue;
-    try {
-      const pb = o.win.isMaximized() ? o.win.getNormalBounds() : o.win.getBounds();
-      const you = pb.x + pb.width;
-      // 只接在主窗口右侧那一排；更靠右的窗右边缘继续往后排
-      if (pb.x >= zb.x + zb.width - 8 && you > zuiYouYou) { zuiYouYou = you; zuiYou = o; }
-    } catch { /* 单扇窗拿不到就跳过 */ }
-  }
-  let x = zuiYouYou;
-  let gao2 = gao;
+  let x = zb.x + zb.width;
   let kuan2 = kuan;
+  let gao2 = Math.max(300, zb.height);
   let keFu = true;
   try {
     const wa = screen.getDisplayNearestPoint({ x, y: zb.y }).workArea;
-    // 放得下就保持 960×720；主窗口比 720 矮时也不硬撑（吸附不强制等高）
     const keYongKuan = wa.x + wa.width - x;
     if (keYongKuan >= 420) {
       kuan2 = Math.min(kuan, keYongKuan);
@@ -1241,16 +1470,139 @@ function nmXinChuangLuoDian(kuan: number, gao: number): {
       x = Math.max(wa.x, wa.x + wa.width - kuan2);
       keFu = false;
     }
-    const keYongGao = Math.max(300, wa.y + wa.height - zb.y);
-    gao2 = Math.min(gao, keYongGao);
+    // 高度跟主窗口一致；超出工作区时按工作区裁到最小 300
+    gao2 = Math.max(300, Math.min(zb.height, wa.y + wa.height - zb.y));
   } catch { /* 屏幕信息拿不到就按算出来的落点开 */ }
-  // 第 81 轮项 9：第二扇 nm 接在"已吸附窗口"右侧，并直接连成一组（右边缘是链尾，必然空着）
-  return { x, y: zb.y, kuan: kuan2, gao: gao2, fuZhu: (keFu && zhu.xiFu && zuiYou.bian.you == null) ? zuiYou : null };
+  /**
+   * 只有「主窗口开着吸附、且右侧那条边还空」才默认吸附。
+   * 右侧已被先来的 nm 占用 ⇒ 这扇新窗只重叠显示，不抢连接。
+   */
+  const youBianKong = zhu.xiFu && zhu.bian.you == null;
+  return { x, y: zb.y, kuan: kuan2, gao: gao2, fuZhu: keFu && youBianKong ? zhu : null };
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   三、远程网页：WebContentsView（第 104 轮 项 12 / 方案 C）
+   ──────────────────────────────────────────────────────────────────────
+   远程 http(s) 页面由主进程的 WebContentsView 承载（顶层 WebContents，不再被
+   X-Frame-Options / frame-ancestors 拦住）；本地网页仍由渲染层 sandbox iframe +
+   srcdoc 承载，源码可编辑、即时预览。视图边界由渲染层量 #wangYeKuangHe 后传上来
+   （CSS px = DIP，与 Electron setBounds 同一坐标）。
+   ══════════════════════════════════════════════════════════════════════ */
+export interface NmWangYeKuang { x: number; y: number; width: number; height: number }
+function anQuanWangYeKuang(b: NmWangYeKuang): Rectangle {
+  const x = Math.max(0, Math.round(Number(b?.x) || 0));
+  const y = Math.max(0, Math.round(Number(b?.y) || 0));
+  return { x, y, width: Math.max(0, Math.round(Number(b?.width) || 0)), height: Math.max(0, Math.round(Number(b?.height) || 0)) };
+}
+function wangYeZhuangTai(Z: NmZhuangTai, extra: Record<string, unknown> = {}): void {
+  try {
+    if (Z.win.isDestroyed()) return;
+    Z.win.webContents.send('warmy:nmWangYeZhuangTai', { id: Z.id, ...extra });
+  } catch { /* noop */ }
+}
+function quWangYeView(Z: NmZhuangTai): WebContentsView {
+  if (Z.wangYeView && !Z.wangYeView.webContents.isDestroyed()) return Z.wangYeView;
+  const v = new WebContentsView({
+    webPreferences: {
+      partition: 'nm-web',
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      spellcheck: false,
+      backgroundThrottling: false,
+    },
+  });
+  const wc = v.webContents;
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+  wc.on('will-navigate', (e, u) => {
+    if (!/^https?:\/\//i.test(String(u || ''))) { e.preventDefault(); wangYeZhuangTai(Z, { blocked: u }); }
+  });
+  try { wc.session.setPermissionRequestHandler((_wc, _p, cb) => cb(false)); } catch { /* noop */ }
+  try { wc.session.setPermissionCheckHandler(() => false); } catch { /* noop */ }
+  wc.on('page-title-updated', (_e, title) => wangYeZhuangTai(Z, { title }));
+  wc.on('did-navigate', (_e, url) => wangYeZhuangTai(Z, { url, loading: false }));
+  wc.on('did-navigate-in-page', (_e, url, isMain) => { if (isMain) wangYeZhuangTai(Z, { url }); });
+  wc.on('did-start-loading', () => wangYeZhuangTai(Z, { loading: true }));
+  wc.on('did-stop-loading', () => wangYeZhuangTai(Z, { loading: false }));
+  wc.on('render-process-gone', (_e, d) => wangYeZhuangTai(Z, { crashed: true, reason: d?.reason || '' }));
+  wc.on('found-in-page', (_e, r) => wangYeZhuangTai(Z, { found: { matches: r.matches, active: r.activeMatchOrdinal } }));
+  Z.win.contentView.addChildView(v);
+  v.setVisible(false);
+  Z.wangYeView = v;
+  return v;
+}
+
+/** 打开/切换远程网页（本地网页由渲染层 iframe 负责，不调用这里） */
+export function nmWangYeKai(p0: { id?: number; url?: string; kuang?: NmWangYeKuang }): { ok: boolean; cuo?: string } {
+  try {
+    const Z = CHUANG_KOU.get(Number(p0?.id) || 0);
+    if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
+    const url = String(p0?.url || '').trim();
+    if (!/^https?:\/\//i.test(url)) return { ok: false, cuo: '只支持 http/https 网页' };
+    const v = quWangYeView(Z);
+    if (p0?.kuang) v.setBounds(anQuanWangYeKuang(p0.kuang));
+    v.setVisible(true);
+    const cur = v.webContents.getURL();
+    if (cur !== url) void v.webContents.loadURL(url).catch(() => { /* 错误由 did-fail-load / 状态事件如实回报 */ });
+    return { ok: true };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 200) }; }
+}
+
+export function nmWangYeKuang(id: number, kuang: NmWangYeKuang): { ok: boolean } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false };
+  try { Z.wangYeView.setBounds(anQuanWangYeKuang(kuang)); return { ok: true }; } catch { return { ok: false }; }
+}
+
+export function nmWangYeGuan(id: number): { ok: boolean } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z || !Z.wangYeView) return { ok: true };
+  try { Z.wangYeView.setVisible(false); } catch { /* noop */ }
+  return { ok: true };
+}
+
+export function nmWangYeDaoHang(id: number, dong: 'back' | 'forward' | 'reload' | 'stop' | 'load', url?: string): { ok: boolean; cuo?: string } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  const wc = Z.wangYeView.webContents;
+  try {
+    if (dong === 'back') { if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); }
+    else if (dong === 'forward') { if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); }
+    else if (dong === 'reload') wc.reload();
+    else if (dong === 'stop') wc.stop();
+    else {
+      const u = String(url || '').trim();
+      if (!/^https?:\/\//i.test(u)) return { ok: false, cuo: '只支持 http/https 网页' };
+      void wc.loadURL(u).catch(() => { /* noop */ });
+    }
+    return { ok: true };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e) }; }
+}
+
+/** 远程页内查找（DOM 查找只能查 nm 自己的页面，查不到 WebContentsView） */
+export function nmWangYeChaZhao(id: number, wen: string, xiangQian = true): { ok: boolean; requestId?: number } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false };
+  const wc = Z.wangYeView.webContents;
+  const s = String(wen || '');
+  if (!s) { try { wc.stopFindInPage('clearSelection'); } catch { /* noop */ } return { ok: true }; }
+  try {
+    const requestId = wc.findInPage(s, { forward: !!xiangQian, findNext: true });
+    return { ok: true, requestId };
+  } catch { return { ok: false }; }
+}
+
+/** 打印远程页（window.print() 不会带 WebContentsView 的内容） */
+export function nmWangYeDaYin(id: number): { ok: boolean; cuo?: string } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  try { Z.wangYeView.webContents.print({}, (ok, why) => { if (!ok && why) wangYeZhuangTai(Z, { printError: why }); }); return { ok: true }; }
+  catch (e) { return { ok: false, cuo: String((e as Error)?.message || e) }; }
 }
 
 /** 打开（或聚焦）一个 nm 查看器窗口 */
-export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yiCunZai?: boolean; cuo?: string } {
-  try {
+export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yiCunZai?: boolean; cuo?: string } {  try {
     const abs = path.resolve(String(xuan?.luJing || ''));
     if (!abs || !fs.existsSync(abs)) return { ok: false, cuo: '文件不存在' };
     if (fs.statSync(abs).isDirectory()) return { ok: false, cuo: '这是目录，不是文件' };
@@ -1328,6 +1680,8 @@ export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yi
     w.on('closed', () => {
       quXiaoDingShi(Z);
       duanKai(Z);
+      try { if (Z.wangYeView && !Z.wangYeView.webContents.isDestroyed()) Z.wangYeView.webContents.close(); } catch { /* noop */ }
+      Z.wangYeView = undefined;
       CHUANG_KOU.delete(Z.id);
     });
     void w.loadFile(path.join(__dirname, 'renderer', 'nm-viewer.html'), {
@@ -1570,12 +1924,12 @@ export async function nmShiTuLingCunWei(
   }
 }
 
-/** 当前所有 nm 窗口（调试/自检用：主进程与界面都要能问"现在开了几个、谁连着谁"） */
-export function nmShiTuLieBiao(): Array<{ id: number; luJing: string; zongShiDing: boolean; xiFu: boolean; lianJie: number[] }> {
-  const out: Array<{ id: number; luJing: string; zongShiDing: boolean; xiFu: boolean; lianJie: number[] }> = [];
+/** 当前所有 nm 窗口（调试/自检用：主进程与界面都要能问"现在开了几个、谁连着谁、窗口在哪"） */
+export function nmShiTuLieBiao(): Array<{ id: number; luJing: string; zongShiDing: boolean; xiFu: boolean; lianJie: number[]; kuang: Rectangle; max: boolean }> {
+  const out: Array<{ id: number; luJing: string; zongShiDing: boolean; xiFu: boolean; lianJie: number[]; kuang: Rectangle; max: boolean }> = [];
   for (const z of CHUANG_KOU.values()) {
     if (z.win.isDestroyed() || z.id === NM_ZHU_CHUANG_ID) continue;
-    out.push({ id: z.id, luJing: z.luJing, zongShiDing: z.zongShiDing, xiFu: z.xiFu, lianJie: linJuIds(z) });
+    out.push({ id: z.id, luJing: z.luJing, zongShiDing: z.zongShiDing, xiFu: z.xiFu, lianJie: linJuIds(z), kuang: z.win.getBounds(), max: z.win.isMaximized() });
   }
   return out;
 }

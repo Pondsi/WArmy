@@ -65,11 +65,11 @@ export function zhaoHuChiWeiZhi(
 }
 
 /**
- * 只有这两层参与互斥；规范/道/教条/束缚/认知都豁免（可重复）。
- * 保留成表，避免以后有人把“规范”加进互斥时没有一处可查的口径。
+ * 只有这两层参与互斥；要求/短记忆（guifan）/道/教条/束缚/认知都豁免（可重复）。
+ * 保留成表，避免以后有人把“要求/短记忆”加进互斥时没有一处可查的口径。
  */
 export const HU_CHI_TI_SHI_CENG = ['shu', 'yinXiang'] as const;
-export const BU_HU_CHI_TI_SHI_CENG = ['guifan', 'dao', 'jiaotiao', 'shufu', 'renzhi'] as const;
+export const BU_HU_CHI_TI_SHI_CENG = ['yaoqiu', 'guifan', 'dao', 'jiaotiao', 'shufu', 'renzhi'] as const;
 
 export function shiHuChiTiShiCeng(ceng: string): boolean {
   return (HU_CHI_TI_SHI_CENG as readonly string[]).includes(String(ceng));
