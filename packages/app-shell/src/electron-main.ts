@@ -6081,7 +6081,7 @@ async function yunXingLiaoTianXunHuan(
                   jie.push({ id: 'disk', title: fenQuMing('disk'), items: [], note: '当前会话不是「我的牛马」，禁止全盘搜索' });
                 } else {
                   const da = await qingQiuKaPian(sessionId, 'AI 请求全盘搜索',
-                    `搜索词：${q}\n范围：本机所有磁盘（只读；敏感内容会打码；不建常驻索引）。\n（拒绝 = 不扫描）`,
+                    `搜索词：${q}\n范围：本机所有磁盘（只读；敏感内容会打码；后台索引 + 按需扫描；可在设置中关闭后台索引）。\n（拒绝 = 不扫描）`,
                     [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
                   if (/同意/.test(da)) {
                     let items: SousuoMingzhong[] = [];
@@ -31103,7 +31103,7 @@ const quanPanHuanCun = new Map<string, { items: SousuoMingzhong[]; truncated: bo
 
 /**
  * 用户主动搜索 = 已知风险且已授权：不弹提示，直接按顺序给结果。
- * 顺序：当前会话 → 程序全部界面文案 → 其他会话 → 知识库；全盘另走按需扫描 IPC。
+ * 顺序：当前会话 → 程序全部界面文案 → 其他会话 → 知识库；全盘优先查后台索引，未命中时按需扫描。
  * 敏感内容默认打码；悬停时才通过 `souSuoJieMi` 取回明文（5 分钟过期）。
  */
 let benDiUIWenAnSuoYin: UIWenAnTiao[] | null = null;

@@ -15943,7 +15943,7 @@ async function renderDashboard(host) {
           ['verify-gate-manifest', '门禁清单必须与磁盘一致（这份审计本身不许腐烂）'],
           ['verify-audio-first-class', '语音一等公民：型号识别 + 只支持 chat/completions 的网关兜底'],
           ['verify-research-pipeline', '调研管线：条目带 URL、抓取摘录、免注册可用、额度用尽如实失败'],
-          ['verify-local-search', '统一本地搜索：分区顺序、敏感打码、按需扫描、只读、全盘权限'],
+          ['verify-local-search', '统一本地搜索：分区顺序、敏感打码、后台索引与按需扫描、只读、全盘权限'],
           ['verify-search-providers', '联网搜索供应商：默认关闭、Tavily/DeepSeek/自定义映射、429 与回退'],
         ];
         const GATES = GATE_UNIVERSAL.map(([id, fb]) => ({
