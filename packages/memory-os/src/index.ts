@@ -1049,6 +1049,7 @@ export class JiyiCangFuwu {
         seq,
         recordId: hang.id,
         snippet: String(hang.ti).slice(0, 200),
+        sessionId: String(hang.session_id || ''),
         score: sc.vector ?? sc.tri ?? sc.uni ?? f.rrfScore,
         source,
         hitLevel: source,

@@ -222,7 +222,10 @@ import { saoMiaoJiNeng, duSkillMuLu, zhaiYao, zhengWen, jiNengDaFen, fenLanJiNen
 import { jiaMiSheJiao, jieMiSheJiao, jiaMiWenBen, jieMiWenBen, type MiMaBaoHuQi } from './cred-vault.js';
 import { chuangJuJueZhang, huiBaoShouQuanJu, huiBaoYongHuJu } from './ju-jue-zhang.js';
 import { chuangJianSheJiao, SHE_JIAO_PING_TAI, type SheJiaoAdapter, type SheJiaoXiaoXi, type SheJiaoPingZheng } from './she-jiao-adapter.js';
-import { souSuo, zhuaQuWenZhang, geShiYanJiu, geShiZhaiLu } from './research-tools.js';
+import { geShiYanJiu, geShiZhaiLu } from './research-tools.js';
+import { souSuoProviders, zhuaQuProviders, type SousuoGongYingPeiZhi } from './search-providers.js';
+import { QuanPanSuoYin, moRenSuoYinLu } from './disk-index.js';
+import { chaUIWenAn, jianUIWenAnSuoYin, tiQuJieMianWenAn, saoMiaoQuanPan, zhengLiMingzhong, geShiSousuoJieGuo, fenQuMing, type SousuoFenQuJie, type SousuoMingzhong, type UIWenAnTiao } from './local-search.js';
 import { jiLuMenJin, duMenJinLiShi, menJinQuShi } from './gate-archive.js';
 import { TrashStore, jieZhiZhaiYao, shiTrashKind, type TrashKind } from './trash-store.js';
 import { TuoMinQi } from './redactor.js';
@@ -2376,6 +2379,29 @@ function kbHardReadLayers(sessionId: string): ZhishiCeng[] {
   } catch {
     return ['session'];
   }
+}
+/** 「我的牛马」会话：没有群记录、且 sessionId 是本机牛马实例。全盘搜索只允许这一类会话。 */
+function shiFouWoDeNiuMa(sessionId: string): boolean {
+  try {
+    const sid = String(sessionId || '');
+    if (!sid) return false;
+    if (groupStore?.getGroup?.(sid)) return false;
+    const lie = (settingsStore?.load() as { instances?: Array<Record<string, unknown>> } | undefined)?.instances || [];
+    return lie.some((x) => String(x?.id || '') === sid);
+  } catch {
+    return false;
+  }
+}
+
+/** 会话类型：我的牛马 / 项目 / 群聊 / 联系人。用于跨会话搜索权限。 */
+function huiHuaLeiXing(sessionId: string): 'my' | 'project' | 'group' | 'contact' {
+  try {
+    const sid = String(sessionId || '');
+    const g = groupStore?.getGroup?.(sid) as { type?: string } | undefined;
+    if (g) return g.type === 'internal' ? 'project' : 'group';
+    if (shiFouWoDeNiuMa(sid)) return 'my';
+    return 'contact';
+  } catch { return 'contact'; }
 }
 function kbHardWriteLayers(sessionId: string): ZhishiCeng[] {
   try {
@@ -5981,26 +6007,119 @@ async function yunXingLiaoTianXunHuan(
           } else if (gongJuMing === 'web_search' || gongJuMing === 'web_extract') {
             /**
              * **调研管线**（搜索 → 抓取 → 摘录 → 带引用的结论）。
-             * 密钥只从 SecureKeyStore 取（`warmy:souSuoMiYaoSheZhi` 写入）——
-             * **没密钥就如实失败**，绝不返回"看起来像结果"的假数据。
+             * 默认走 Firecrawl Keyless（无需注册）；可选 key 只从 SecureKeyStore 取，
+             * 用来提高额度。抓取失败自动回退 Jina Reader（同样无需注册）。
+             * **没额度就如实失败**，绝不返回"看起来像结果"的假数据。
              */
-            const k = (await secureKeys?.load('search')) || '';
+            const pei = await souSuoPeiZhiDangQian();
             if (gongJuMing === 'web_search') {
-              const r = await souSuo(k, String(argsH.query || ''), {
+              const r = await souSuoProviders(pei, String(argsH.query || ''), {
                 count: Number(argsH.count) || 8,
                 topic: argsH.topic === 'news' ? 'news' : 'general',
                 days: Number(argsH.days) || undefined,
               });
               okH = r.ok;
               huiBaoH = geShiYanJiu(r);
-              try { audit?.log('research.search', { sessionId, ok: r.ok, n: r.items.length, error: r.error }); } catch { /* noop */ }
+              try { audit?.log('research.search', { sessionId, ok: r.ok, n: r.items.length, error: r.error, provider: r.provider, rateLimited: !!r.rateLimited, retryAfterSec: r.retryAfterSec }); } catch { /* noop */ }
             } else {
-              const r = await zhuaQuWenZhang(k, Array.isArray(argsH.urls) ? (argsH.urls as string[]) : [String(argsH.urls || '')], { query: String(argsH.query || '') });
+              const r = await zhuaQuProviders(pei, Array.isArray(argsH.urls) ? (argsH.urls as string[]) : [String(argsH.urls || '')]);
               okH = r.ok;
               huiBaoH = r.ok
                 ? geShiZhaiLu(r.items, String(argsH.query || ''))
                 : `[web_extract] 失败：${r.error}${r.hint ? '\n提示：' + r.hint : ''}`;
               try { audit?.log('research.extract', { sessionId, ok: r.ok, n: r.items.length, error: r.error }); } catch { /* noop */ }
+            }
+          } else if (gongJuMing === 'local_search') {
+            /**
+             * **只读本地搜索**：当前会话/可读知识层/本会话工作区；跨会话按会话类型授权；
+             * 全盘只给「我的牛马」并且每次弹授权。群聊/联系人一律不得跨会话或全盘。
+             */
+            const q = String(argsH.query || '').trim();
+            if (!q) { okH = false; huiBaoH = '[local_search] 需要 query 参数'; }
+            else {
+              const limit = Math.max(1, Math.min(30, Number(argsH.limit) || 10));
+              const jie: SousuoFenQuJie[] = [];
+              const ben = await sousuoHuiHuaJiYi(q, limit, { sessionId });
+              jie.push({ id: 'session', title: fenQuMing('session'), items: zhengLiMingzhong('session', ben, limit) });
+              jie.push({ id: 'ui', title: fenQuMing('ui'), items: chaUIWenAn(naBenDiUIWenAnSuoYin(), q, { limit, locale: dangQianYuYan() }) });
+              jie.push({ id: 'knowledge', title: fenQuMing('knowledge'), items: zhengLiMingzhong('knowledge', sousuoZhiShiKu(q, sessionId, false), limit), note: '仅本会话可读的知识库层' });
+              if (argsH.include_other_sessions === true) {
+                const lei = huiHuaLeiXing(sessionId);
+                if (lei === 'group' || lei === 'contact') {
+                  jie.push({ id: 'otherSessions', title: fenQuMing('otherSessions'), items: [], note: kuaHuiHuaShuoMing(lei) });
+                } else {
+                  const yunXu = await qingQiuKuaHuiHua(sessionId, lei, q);
+                  if (yunXu) {
+                    const rows = await sousuoQiTaHuiHua(q, limit, lei, sessionId);
+                    jie.push({
+                      id: 'otherSessions',
+                      title: fenQuMing('otherSessions'),
+                      items: zhengLiMingzhong('otherSessions', rows, limit),
+                      note: lei === 'project' ? kuaHuiHuaShuoMing('project') : '',
+                    });
+                  } else {
+                    jie.push({ id: 'otherSessions', title: fenQuMing('otherSessions'), items: [], note: '用户拒绝读取其他会话' });
+                  }
+                }
+              }
+              try {
+                const ws = await saoMiaoQuanPan(q, { roots: [baseH], maxMs: 2500, maxResults: limit, maxFiles: 15000, maxBytes: 1024 * 1024 });
+                jie.push({
+                  id: 'workspace',
+                  title: fenQuMing('workspace'),
+                  items: zhengLiMingzhong('workspace', ws.items.map((x) => ({
+                    title: x.title,
+                    snippet: x.snippet,
+                    meta: x.sensitive ? '本会话工作区 · 敏感路径已隐藏' : x.meta,
+                    path: x.sensitive ? undefined : x.path,
+                  })), limit),
+                  note: ws.truncated ? '已截断（时间/数量上限）' : '',
+                });
+              } catch { /* 工作区扫描失败不挡其它分区 */ }
+              if (argsH.include_disk === true) {
+                if (!shiFouWoDeNiuMa(sessionId)) {
+                  jie.push({ id: 'disk', title: fenQuMing('disk'), items: [], note: '当前会话不是「我的牛马」，禁止全盘搜索' });
+                } else {
+                  const da = await qingQiuKaPian(sessionId, 'AI 请求全盘搜索',
+                    `搜索词：${q}\n范围：本机所有磁盘（只读；敏感内容会打码；不建常驻索引）。\n（拒绝 = 不扫描）`,
+                    [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+                  if (/同意/.test(da)) {
+                    let items: SousuoMingzhong[] = [];
+                    let truncated = false;
+                    let files = 0;
+                    const ix = naQuanPanSuoYin();
+                    if (ix) {
+                      const ir = ix.search(q, 0, limit);
+                      items = ir.items;
+                      truncated = ir.hasMore;
+                      files = ix.stats().files;
+                    }
+                    if (!items.length) {
+                      const r = await saoMiaoQuanPan(q, { maxMs: 10000, maxResults: limit, maxFiles: 80000 });
+                      items = r.items;
+                      truncated = r.truncated;
+                      files = r.files;
+                    }
+                    jie.push({
+                      id: 'disk',
+                      title: fenQuMing('disk'),
+                      items: zhengLiMingzhong('disk', items.map((x) => ({
+                        title: x.title,
+                        snippet: x.snippet,
+                        meta: x.sensitive ? String(x.drive || '') + ' · 敏感路径已隐藏' : x.meta,
+                        path: x.sensitive ? undefined : x.path,
+                      })), limit),
+                      note: truncated ? '已截断/索引仍在建立' : '',
+                    });
+                    try { audit?.log('local.search.model-disk', { sessionId, queryChars: q.length, items: items.length, files, truncated }); } catch { /* noop */ }
+                  } else {
+                    jie.push({ id: 'disk', title: fenQuMing('disk'), items: [], note: '用户拒绝全盘搜索' });
+                  }
+                }
+              }
+              okH = true;
+              huiBaoH = geShiSousuoJieGuo(jie);
+              try { audit?.log('local.search.model', { sessionId, queryChars: q.length, sections: jie.map((x) => x.items.length) }); } catch { /* noop */ }
             }
           } else if (gongJuMing === 'fetch_url') {
             const url = String(argsH.url || '').trim();
@@ -8686,6 +8805,8 @@ async function yindao() {
   zhuangXieRuHuiDangGouZi();
   accountStore = new BenDiZhangHuCang(path.join(userData, 'profile.json'));
   settingsStore = new PeizhiCang(path.join(userData, 'settings.json'));
+  // 后台全盘索引：默认开；构造后会按低占空比在后台增量建立，不阻塞启动
+  try { void naQuanPanSuoYin(); } catch { /* 索引失败不影响启动 */ }
   secureKeys = new AnQuanMiyaoCang(userData);
   void shuaXinTuoMinQi();
   void (async () => {
@@ -15250,12 +15371,15 @@ async function zhenZhengFaSongBen(
        */
       const fenLei = fenLeiCuoWu(zuiHouCuo);
       const leiMing = tMain(`err.category.${fenLei.category}`, LEI_BIE_MING[fenLei.category]);
+      const lv429 = fenLei.code === 'rate-limit'
+        ? '\n\n供应商返回 429（限流/额度/并发超限，已自动退避重试过）。请选择下一步：等待一段时间后点「继续 / 重试」、换一个模型/供应商，或停止本次任务。'
+        : '';
       lastError = { ts: Date.now(), message: zuiHouCuo, context: 'chat-send' };
-      fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: zuiHouCuo, ruanMenJin: !!ruanTiShi, category: fenLei.category, recoverable: fenLei.recoverable } });
-      try { audit?.log('chat.error-classified', { sessionId, category: fenLei.category, code: fenLei.code, recoverable: fenLei.recoverable }); } catch { /* noop */ }
+      fachuKongzhitai({ cat: 'error', code: 'err.chat-send', data: { sessionId, message: zuiHouCuo, ruanMenJin: !!ruanTiShi, category: fenLei.category, code: fenLei.code, recoverable: fenLei.recoverable, rateLimited: fenLei.code === 'rate-limit' } });
+      try { audit?.log('chat.error-classified', { sessionId, category: fenLei.category, code: fenLei.code, recoverable: fenLei.recoverable, rateLimited: fenLei.code === 'rate-limit' }); } catch { /* noop */ }
       // 模型调用失败 ⇒ 任务停在半路：界面在最新回复里挂「继续 / 重试」
-      biaoRenWuZhongDuan(sessionId, `模型调用失败（整条调用链都试过了 · ${leiMing}）`, zuiHouCuo + ruanTiShi, '模型调用');
-      return { ok: false, reply: ruanTiShi ? `${zuiHouCuo}${ruanTiShi}` : '', error: zuiHouCuo + ruanTiShi, needsKey: false, retry: true, errorCategory: fenLei.category, recoverable: fenLei.recoverable };
+      biaoRenWuZhongDuan(sessionId, `模型调用失败（整条调用链都试过了 · ${leiMing}）`, zuiHouCuo + ruanTiShi + lv429, '模型调用');
+      return { ok: false, reply: ruanTiShi || lv429 ? `${zuiHouCuo}${ruanTiShi}${lv429}` : '', error: zuiHouCuo + ruanTiShi + lv429, needsKey: false, retry: true, errorCategory: fenLei.category, recoverable: fenLei.recoverable, rateLimited: fenLei.code === 'rate-limit' };
     }
     // 兜底：整条链跑完既没成功也没留错（理论上不该走到，但类型必须闭合）
     biaoRenWuZhongDuan(sessionId, '模型调用失败（没有可用模型）', 'no-model-available', '模型调用');
@@ -29121,7 +29245,7 @@ const MEN_JIN_YING = [
   'verify-raf-batching', 'verify-wiring', 'verify-ipc-probe', 'verify-electron-app-binding',
   'verify-updater', 'verify-updater-github', 'verify-runtime-errors',
   'verify-office-doc-suite', 'verify-gate-manifest',
-  'verify-audio-first-class', 'verify-research-pipeline',
+  'verify-audio-first-class', 'verify-research-pipeline', 'verify-local-search', 'verify-search-providers',
 ];
 chuliIpc('warmy:menJinYingJi', () => ({ ok: true, ids: MEN_JIN_YING.slice() }));
 /** 硬门禁清单（含"最坏情况"）：界面与模型都用它回答"是哪一条在拦我" */
@@ -29205,28 +29329,129 @@ chuliIpc('warmy:zuiHouCuoWu', () => anQuanChuLi(() => ({ ok: true, error: lastEr
 chuliIpc('warmy:qingChuCuoWu', () => { lastError = null; return { ok: true }; });
 
 /**
- * **搜索密钥**（调研管线用）：只进 SecureKeyStore，与 provider 的密钥同一套纪律。
- * 查状态时**只说有没有**，绝不回显密钥本身。
+ * **联网搜索供应商配置**（设置 → 功能 → 网络搜索）。
+ * 密钥只进 SecureKeyStore；查状态时只说有没有，绝不回显。
+ * 默认全部关闭；Jina Reader 只参与抓取，不参与搜索。
  */
-chuliIpc('warmy:souSuoMiYaoSheZhi', async (_e, payload?: { apiKey?: string }) => {
+function souSuoMiYaoId(provider: unknown): string {
+  const p = String(provider || 'firecrawl').trim();
+  if (p === 'firecrawl') return 'search:firecrawl';
+  if (p === 'tavily') return 'search:tavily';
+  if (p === 'deepseek') return 'search:deepseek';
+  if (p.startsWith('custom:')) return 'search:custom:' + p.slice('custom:'.length).replace(/[^\w.-]/g, '_').slice(0, 60);
+  return '';
+}
+
+chuliIpc('warmy:souSuoPeiZhiQu', async () => {
+  try {
+    const s = settingsStore?.load() as { searchProviders?: Record<string, unknown>; fullDiskIndex?: boolean } | undefined;
+    const sp = (s?.searchProviders || {}) as {
+      firecrawl?: { enabled?: boolean }; jinaReader?: { enabled?: boolean };
+      tavily?: { enabled?: boolean }; deepseek?: { enabled?: boolean };
+      custom?: Array<{ id?: string; name?: string; url?: string; enabled?: boolean }>;
+    };
+    const has = async (id: string): Promise<boolean> => {
+      try { return !!String((await secureKeys?.load(id)) || '').trim(); } catch { return false; }
+    };
+    const custom = (Array.isArray(sp.custom) ? sp.custom : []).slice(0, 20).map((x) => ({
+      id: String(x?.id || ''), name: String(x?.name || ''), url: String(x?.url || ''), enabled: x?.enabled === true,
+    })).filter((x) => x.id && x.url);
+    const customKeys: Record<string, boolean> = {};
+    for (const x of custom) customKeys[x.id] = await has('search:custom:' + x.id);
+    return {
+      ok: true,
+      firecrawl: { enabled: sp.firecrawl?.enabled === true, hasKey: await has('search:firecrawl') || await has('search') },
+      jinaReader: { enabled: sp.jinaReader?.enabled === true },
+      tavily: { enabled: sp.tavily?.enabled === true, hasKey: await has('search:tavily') },
+      deepseek: { enabled: sp.deepseek?.enabled === true, hasKey: await has('search:deepseek') },
+      custom: custom.map((x) => ({ ...x, hasKey: customKeys[x.id] === true })),
+      fullDiskIndex: s?.fullDiskIndex !== false,
+      uncovered: !!secureKeys && secureKeys.isUnprotected?.('search:firecrawl') === true,
+    };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+chuliIpc('warmy:souSuoPeiZhiSheZhi', async (_e, payload?: Record<string, unknown>) => {
+  try {
+    const p = (payload || {}) as {
+      firecrawl?: { enabled?: boolean }; jinaReader?: { enabled?: boolean };
+      tavily?: { enabled?: boolean }; deepseek?: { enabled?: boolean };
+      custom?: Array<{ id?: string; name?: string; url?: string; enabled?: boolean }>;
+      fullDiskIndex?: boolean;
+    };
+    const cur = (settingsStore?.load() as { searchProviders?: Record<string, unknown> } | undefined)?.searchProviders || {};
+    const old = cur as {
+      firecrawl?: { enabled?: boolean }; jinaReader?: { enabled?: boolean };
+      tavily?: { enabled?: boolean }; deepseek?: { enabled?: boolean };
+      custom?: Array<{ id?: string; name?: string; url?: string; enabled?: boolean }>;
+    };
+    const next = {
+      firecrawl: { enabled: p.firecrawl ? p.firecrawl.enabled === true : old.firecrawl?.enabled === true },
+      jinaReader: { enabled: p.jinaReader ? p.jinaReader.enabled === true : old.jinaReader?.enabled === true },
+      tavily: { enabled: p.tavily ? p.tavily.enabled === true : old.tavily?.enabled === true },
+      deepseek: { enabled: p.deepseek ? p.deepseek.enabled === true : old.deepseek?.enabled === true },
+      custom: (Array.isArray(p.custom) ? p.custom : (old.custom || [])).slice(0, 20).map((x) => ({
+        id: String(x?.id || '').replace(/[^\w.-]/g, '_').slice(0, 60),
+        name: String(x?.name || '').slice(0, 80),
+        url: String(x?.url || '').slice(0, 500),
+        enabled: x?.enabled === true,
+      })).filter((x) => x.id && x.url),
+    };
+    const patch: Record<string, unknown> = { searchProviders: next };
+    if (payload && typeof payload.fullDiskIndex === 'boolean') patch.fullDiskIndex = payload.fullDiskIndex;
+    settingsStore?.save(patch as never);
+    if (payload && typeof payload.fullDiskIndex === 'boolean') {
+      try { naQuanPanSuoYin()?.setEnabled(payload.fullDiskIndex); } catch { /* noop */ }
+    }
+    try { audit?.log('research.providers-set', { firecrawl: next.firecrawl.enabled, jinaReader: next.jinaReader.enabled, tavily: next.tavily.enabled, deepseek: next.deepseek.enabled, custom: next.custom.length, fullDiskIndex: patch.fullDiskIndex }); } catch { /* noop */ }
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+chuliIpc('warmy:souSuoMiYaoSheZhi', async (_e, payload?: { provider?: string; apiKey?: string }) => {
   try {
     const k = String(payload?.apiKey || '').trim();
     if (!k) return { ok: false, error: 'empty-key' };
     if (!secureKeys) return { ok: false, error: 'secure-store-unavailable' };
-    await secureKeys.save('search', k);
-    try { audit?.log('research.key-set', { len: k.length }); } catch { /* noop */ }
+    const id = souSuoMiYaoId(payload?.provider);
+    if (!id) return { ok: false, error: 'bad-provider' };
+    await secureKeys.save(id, k);
+    try { audit?.log('research.key-set', { provider: String(payload?.provider || 'firecrawl'), len: k.length }); } catch { /* noop */ }
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:souSuoMiYaoZhuangTai', async () => {
   try {
-    const k = (await secureKeys?.load('search')) || '';
-    return { ok: true, has: !!k, provider: 'tavily', uncovered: !!secureKeys && secureKeys.isUnprotected?.('search') === true };
-  } catch { return { ok: true, has: false, provider: 'tavily' }; }
+    const get = async (id: string) => { try { return !!String((await secureKeys?.load(id)) || '').trim(); } catch { return false; } };
+    return {
+      ok: true,
+      has: await get('search:firecrawl') || await get('search'),
+      firecrawl: await get('search:firecrawl') || await get('search'),
+      tavily: await get('search:tavily'),
+      deepseek: await get('search:deepseek'),
+      keyless: true,
+      extractFallback: 'jina-reader',
+      optional: true,
+      uncovered: !!secureKeys && secureKeys.isUnprotected?.('search:firecrawl') === true,
+    };
+  } catch {
+    return { ok: true, has: false, firecrawl: false, tavily: false, deepseek: false, keyless: true, extractFallback: 'jina-reader', optional: true };
+  }
 });
-chuliIpc('warmy:souSuoMiYaoQingChu', async () => {
+chuliIpc('warmy:quanPanSuoYinZhuangTai', () => {
   try {
-    secureKeys?.delete('search');
+    const ix = naQuanPanSuoYin();
+    if (!ix) return { ok: false, error: 'index-unavailable' };
+    return { ok: true, ...ix.stats() };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+chuliIpc('warmy:souSuoMiYaoQingChu', async (_e, provider?: string) => {
+  try {
+    const id = souSuoMiYaoId(provider);
+    if (!id) return { ok: false, error: 'bad-provider' };
+    secureKeys?.delete(id);
+    if (id === 'search:firecrawl') { try { secureKeys?.delete('search'); } catch { /* noop */ } }
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -30823,7 +31048,347 @@ chuliIpc('warmy:jinengJiSheZhiEnabled', (_e, payload: { id?: string; enabled?: b
   }
 });
 // patch skills-list to include enabled flag
-// ── S. 消息搜索（从 memory-os recall） ──
+// ── S. 统一本地搜索（用户主动搜索） ──
+/** 当前启用的联网搜索供应商（密钥从 SecureKeyStore 取；默认全关） */
+async function souSuoPeiZhiDangQian(): Promise<SousuoGongYingPeiZhi[]> {
+  const out: SousuoGongYingPeiZhi[] = [];
+  try {
+    const s = settingsStore?.load() as { searchProviders?: Record<string, unknown> } | undefined;
+    const sp = (s?.searchProviders || {}) as {
+      firecrawl?: { enabled?: boolean }; jinaReader?: { enabled?: boolean };
+      tavily?: { enabled?: boolean }; deepseek?: { enabled?: boolean };
+      custom?: Array<{ id?: string; name?: string; url?: string; enabled?: boolean }>;
+    };
+    const keyOf = async (id: string): Promise<string> => {
+      try { return String((await secureKeys?.load(id)) || '').trim(); } catch { return ''; }
+    };
+    if (sp.firecrawl?.enabled === true) {
+      out.push({ id: 'firecrawl', name: 'Firecrawl Keyless', kind: 'firecrawl', enabled: true, key: (await keyOf('search:firecrawl')) || (await keyOf('search')) });
+    }
+    if (sp.tavily?.enabled === true) out.push({ id: 'tavily', name: 'Tavily', kind: 'tavily', enabled: true, key: await keyOf('search:tavily') });
+    if (sp.deepseek?.enabled === true) out.push({ id: 'deepseek', name: 'DeepSeek Search', kind: 'deepseek', enabled: true, key: await keyOf('search:deepseek') });
+    if (sp.jinaReader?.enabled === true) out.push({ id: 'jina-reader', name: 'Jina Reader', kind: 'jina-reader', enabled: true });
+    for (const c of (Array.isArray(sp.custom) ? sp.custom : [])) {
+      const id = String(c?.id || '').trim();
+      const url = String(c?.url || '').trim();
+      if (!id || !url || c?.enabled !== true) continue;
+      out.push({ id: 'custom:' + id, name: String(c?.name || id), kind: 'custom', enabled: true, url, key: await keyOf('search:custom:' + id) });
+    }
+  } catch { /* 设置读不到 = 全关 */ }
+  return out;
+}
+
+function fullDiskIndexEnabled(): boolean {
+  try {
+    const s = settingsStore?.load() as { fullDiskIndex?: boolean } | undefined;
+    return s?.fullDiskIndex !== false;
+  } catch { return true; }
+}
+
+let quanPanSuoYin: QuanPanSuoYin | null = null;
+function naQuanPanSuoYin(): QuanPanSuoYin | null {
+  if (quanPanSuoYin) return quanPanSuoYin;
+  try {
+    quanPanSuoYin = new QuanPanSuoYin(moRenSuoYinLu(app.getPath('userData')));
+    quanPanSuoYin.setEnabled(fullDiskIndexEnabled());
+    return quanPanSuoYin;
+  } catch (e) {
+    try { audit?.log('local.index.init-failed', { error: String((e as Error)?.message || e).slice(0, 160) }); } catch { /* noop */ }
+    return null;
+  }
+}
+
+/** 按需扫描结果的短缓存：支持“往下拉加载更多”，不重复扫整盘 */
+const quanPanHuanCun = new Map<string, { items: SousuoMingzhong[]; truncated: boolean; files: number; ms: number; at: number }>();
+
+/**
+ * 用户主动搜索 = 已知风险且已授权：不弹提示，直接按顺序给结果。
+ * 顺序：当前会话 → 程序全部界面文案 → 其他会话 → 知识库；全盘另走按需扫描 IPC。
+ * 敏感内容默认打码；悬停时才通过 `souSuoJieMi` 取回明文（5 分钟过期）。
+ */
+let benDiUIWenAnSuoYin: UIWenAnTiao[] | null = null;
+function naBenDiUIWenAnSuoYin(): UIWenAnTiao[] {
+  if (benDiUIWenAnSuoYin) return benDiUIWenAnSuoYin;
+  const packs: Array<{ locale: string; strings: Record<string, unknown> }> = [];
+  try {
+    const dir = i18nDir();
+    for (const f of fs.readdirSync(dir).filter((x) => /^[A-Za-z-]+\.json$/.test(x)).sort()) {
+      try {
+        packs.push({ locale: f.replace(/\.json$/i, ''), strings: JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) });
+      } catch { /* 单个语言包坏掉不影响搜索 */ }
+    }
+  } catch { /* i18n 目录不可读时只返回静态文案 */ }
+  let staticText: string[] = [];
+  for (const p of [path.join(__dirname, 'renderer', 'app.js'), path.join(__dirname, '..', 'src', 'renderer', 'app.js')]) {
+    try {
+      if (fs.existsSync(p)) { staticText = tiQuJieMianWenAn(fs.readFileSync(p, 'utf8'), { max: 6000 }); break; }
+    } catch { /* 读不到就跳过 */ }
+  }
+  benDiUIWenAnSuoYin = jianUIWenAnSuoYin(packs, staticText);
+  return benDiUIWenAnSuoYin;
+}
+
+/**
+ * 敏感搜索结果只在**内存**里留 5 分钟，并且以 AES-256-GCM 密文保存；
+ * 悬停时才通过 IPC 解密返回。不落盘、不进日志。
+ */
+const souSuoJieMiKey = crypto.randomBytes(32);
+type SouSuoMiWen = { iv: string; tag: string; data: string; exp: number };
+const souSuoJieMiCang = new Map<string, SouSuoMiWen>();
+/** 索引里的敏感命中只存“路径 + 查询词”，悬停时从源文件读回匹配行（不把明文写进索引） */
+const souSuoJieMiLuJingCang = new Map<string, { path: string; query: string; exp: number }>();
+function jiaMiSouSuoWenBen(text: string): { iv: string; tag: string; data: string } {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', souSuoJieMiKey, iv);
+  const data = Buffer.concat([c.update(String(text || ''), 'utf8'), c.final()]);
+  return { iv: iv.toString('base64'), tag: c.getAuthTag().toString('base64'), data: data.toString('base64') };
+}
+function jieMiSouSuoWenBen(x: SouSuoMiWen): string {
+  const d = crypto.createDecipheriv('aes-256-gcm', souSuoJieMiKey, Buffer.from(x.iv, 'base64'));
+  d.setAuthTag(Buffer.from(x.tag, 'base64'));
+  return Buffer.concat([d.update(Buffer.from(x.data, 'base64')), d.final()]).toString('utf8');
+}
+function anQuanHuaMingzhong(items: SousuoMingzhong[], query = ''): SousuoMingzhong[] {
+  const now = Date.now();
+  if (souSuoJieMiCang.size > 500) {
+    for (const [k, v] of souSuoJieMiCang) if (v.exp <= now) souSuoJieMiCang.delete(k);
+  }
+  if (souSuoJieMiLuJingCang.size > 500) {
+    for (const [k, v] of souSuoJieMiLuJingCang) if (v.exp <= now) souSuoJieMiLuJingCang.delete(k);
+  }
+  return (Array.isArray(items) ? items : []).map((x) => {
+    if (x.sensitive && x.full) {
+      const id = 'sr-' + now.toString(36) + '-' + crypto.randomBytes(4).toString('hex');
+      souSuoJieMiCang.set(id, { ...jiaMiSouSuoWenBen(x.full), exp: now + 5 * 60 * 1000 });
+      return { ...x, revealId: id, full: undefined };
+    }
+    if (x.sensitive && x.path && query) {
+      const id = 'sp-' + now.toString(36) + '-' + crypto.randomBytes(4).toString('hex');
+      souSuoJieMiLuJingCang.set(id, { path: x.path, query, exp: now + 5 * 60 * 1000 });
+      return { ...x, revealId: id, full: undefined };
+    }
+    return { ...x, full: undefined };
+  });
+}
+
+async function sousuoHuiHuaJiYi(q: string, limit: number, scope?: { sessionId?: string; groupId?: string }): Promise<Array<{ title?: string; snippet?: string; meta?: string; ts?: number; sessionId?: string }>> {
+  try {
+    const r = await memory?.recallScoped(q, limit, scope);
+    const cards = (r?.cards || []) as Array<{ seq?: number; recordId?: string; snippet?: string; sessionId?: string }>;
+    return cards.map((c) => ({
+      title: c.sessionId ? sessionMingOf(c.sessionId) : String(c.snippet || '').slice(0, 80),
+      snippet: String(c.snippet || ''),
+      meta: `记录 #${c.seq ?? ''}${c.sessionId ? ' · ' + sessionMingOf(c.sessionId) : ''}`,
+      sessionId: c.sessionId,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 跨会话搜索（模型用）：按会话类型过滤。
+ *  · 我的牛马：可看所有其他会话（需要授权；完全授权直接放行）
+ *  · 项目：只能看所有项目与群聊；我的牛马/联系人被禁止且**没有授权途径**
+ *  · 群聊/联系人：直接拒绝，没有授权途径
+ */
+async function sousuoQiTaHuiHua(
+  q: string,
+  limit: number,
+  mode: 'my' | 'project' | 'group' | 'contact',
+  selfId: string,
+): Promise<Array<{ title?: string; snippet?: string; meta?: string }>> {
+  if (mode === 'group' || mode === 'contact') return [];
+  const raw = await sousuoHuiHuaJiYi(q, Math.max(20, limit * 4));
+  const seen = new Set<string>();
+  const out: Array<{ title?: string; snippet?: string; meta?: string }> = [];
+  for (const c of raw) {
+    const sid = String(c.sessionId || '');
+    if (!sid || sid === selfId) continue;
+    const lei = huiHuaLeiXing(sid);
+    if (mode === 'project' && lei !== 'project' && lei !== 'group') continue;
+    const key = sid + '\u0000' + String(c.snippet || '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      title: sessionMingOf(sid),
+      snippet: String(c.snippet || ''),
+      meta: (lei === 'project' ? '项目' : lei === 'group' ? '群聊' : lei === 'my' ? '我的牛马' : '联系人') + ' · ' + sessionMingOf(sid),
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** 跨会话授权的短说明（给授权卡/拒绝文案共用） */
+function kuaHuiHuaShuoMing(mode: 'my' | 'project' | 'group' | 'contact'): string {
+  if (mode === 'my') return '这次只读取其他会话的消息片段，用于回答你的问题；不会修改任何会话。';
+  if (mode === 'project') return '项目中的牛马只能读取**所有项目和群聊**的会话片段；我的牛马与联系人的会话被禁止，且没有授权途径。';
+  if (mode === 'group') return '群聊中的牛马无权查看其他会话，且没有授权途径；这是被禁止的行为。';
+  return '联系人会话中的牛马无权查看其他会话，且没有授权途径；这是被禁止的行为。';
+}
+
+async function qingQiuKuaHuiHua(
+  sessionId: string,
+  mode: 'my' | 'project',
+  q: string,
+): Promise<boolean> {
+  if (anQuanDangWei().full) return true;
+  const da = await qingQiuKaPian(sessionId, 'AI 请求查看其他会话',
+    `会读取其他会话的消息片段来回答问题。\n搜索词：${q}\n${kuaHuiHuaShuoMing(mode)}\n（拒绝 = 不读取）`,
+    [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+  return /同意/.test(da);
+}
+
+function sousuoZhiShiKu(q: string, sessionId: string, quanBu: boolean): Array<{ title?: string; snippet?: string; meta?: string }> {  try {
+    if (!knowledge) return [];
+    const layers = quanBu ? (['session', 'internal', 'private'] as ZhishiCeng[]) : kbLayersFor(sessionId);
+    const r = knowledge.queryLayers(layers, q) as unknown as { entities?: Array<Record<string, unknown>>; events?: Array<Record<string, unknown>> };
+    const out: Array<{ title?: string; snippet?: string; meta?: string }> = [];
+    for (const e of (r?.entities || []).slice(0, 10)) {
+      out.push({
+        title: String(e.ming || e.name || e.id || ''),
+        snippet: Object.keys((e.attrs as Record<string, unknown>) || {}).length ? JSON.stringify(e.attrs) : String(e.kind || '实体'),
+        meta: '知识实体 · ' + String(e.kind || ''),
+      });
+    }
+    for (const e of (r?.events || []).slice(0, 10)) {
+      out.push({
+        title: String(e.biaoTi || e.title || e.id || ''),
+        snippet: String(e.result || e.summary || ''),
+        meta: '知识事件 · ' + String(e.id || ''),
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+chuliIpc('warmy:tongYiSouSuo', async (_e, payload?: { query?: string; sessionId?: string }) => {
+  try {
+    const q = String(payload?.query || '').trim();
+    const sid = String(payload?.sessionId || '');
+    if (!q) return { ok: true, query: '', sections: [] };
+    const [ben, qiTa] = await Promise.all([
+      sousuoHuiHuaJiYi(q, 20, { sessionId: sid }),
+      sousuoHuiHuaJiYi(q, 40),
+    ]);
+    const benItems = zhengLiMingzhong('session', ben, 20);
+    const qiTaItems = (() => {
+      const seen = new Set<string>();
+      const rows: Array<{ title?: string; snippet?: string; meta?: string }> = [];
+      for (const c of qiTa) {
+        const otherSid = String(c.sessionId || '');
+        if (!otherSid || otherSid === sid) continue;
+        const key = otherSid + '\u0000' + String(c.snippet || '');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rows.push({
+          title: sessionMingOf(otherSid),
+          snippet: String(c.snippet || ''),
+          meta: '会话 · ' + sessionMingOf(otherSid),
+        });
+      }
+      return zhengLiMingzhong('otherSessions', rows, 20);
+    })();
+    const ui = chaUIWenAn(naBenDiUIWenAnSuoYin(), q, { limit: 15, locale: dangQianYuYan() });
+    const kb = zhengLiMingzhong('knowledge', sousuoZhiShiKu(q, sid, true), 20);
+    const jie: SousuoFenQuJie[] = [
+      { id: 'session', title: fenQuMing('session'), items: anQuanHuaMingzhong(benItems, q) },
+      { id: 'ui', title: fenQuMing('ui'), items: anQuanHuaMingzhong(ui, q) },
+      { id: 'otherSessions', title: fenQuMing('otherSessions'), items: anQuanHuaMingzhong(qiTaItems, q) },
+      { id: 'knowledge', title: fenQuMing('knowledge'), items: anQuanHuaMingzhong(kb, q) },
+    ];
+    try { audit?.log('local.search.user', { sessionId: sid, queryChars: q.length, sections: jie.map((x) => x.items.length) }); } catch { /* noop */ }
+    return { ok: true, query: q, sections: jie };
+  } catch (e) {
+    return { ok: false, sections: [], error: xiJingCuoWu(e) };
+  }
+});
+
+let quanPanYongHuZhongZhi: AbortController | null = null;
+chuliIpc('warmy:quanPanSouSuo', async (_e, payload?: { query?: string; sessionId?: string; offset?: number; limit?: number }) => {
+  try {
+    const q = String(payload?.query || '').trim();
+    const sid = String(payload?.sessionId || '');
+    const off = Math.max(0, Number(payload?.offset) || 0);
+    const limit = Math.max(5, Math.min(50, Number(payload?.limit) || 20));
+    if (!q) return { ok: true, items: [], total: 0, hasMore: false, roots: [], files: 0, truncated: false, ms: 0, offset: off };
+    const cacheKey = q + '\u0000' + sid;
+    const cache = quanPanHuanCun.get(cacheKey);
+    // 第一页优先走后台索引；有结果就立即返回，不足时由渲染层继续下拉
+    if (off === 0) {
+      const ix = naQuanPanSuoYin();
+      if (ix) {
+        const ir = ix.search(q, 0, limit);
+        if (ir.items.length) {
+          try { audit?.log('local.search.index', { sessionId: sid, queryChars: q.length, items: ir.items.length, total: ir.total, hasMore: ir.hasMore }); } catch { /* noop */ }
+          return { ok: true, items: anQuanHuaMingzhong(ir.items, q), total: ir.total, hasMore: ir.hasMore, roots: ix.stats().roots, files: ix.stats().files, truncated: ir.hasMore, ms: 0, offset: 0, source: 'index' };
+        }
+      }
+      if (cache && Date.now() - cache.at < 120_000) {
+        const part = cache.items.slice(off, off + limit);
+        return { ok: true, items: anQuanHuaMingzhong(part, q), total: cache.items.length, hasMore: off + part.length < cache.items.length || cache.truncated, roots: [os.homedir()], files: cache.files, errors: 0, truncated: cache.truncated, ms: cache.ms, offset: off, source: 'scan' };
+      }
+    }
+    if (cache && Date.now() - cache.at < 120_000) {
+      const part = cache.items.slice(off, off + limit);
+      return { ok: true, items: anQuanHuaMingzhong(part, q), total: cache.items.length, hasMore: off + part.length < cache.items.length || cache.truncated, roots: [os.homedir()], files: cache.files, errors: 0, truncated: cache.truncated, ms: cache.ms, offset: off, source: 'scan' };
+    }
+    if (off > 0) {
+      const ix = naQuanPanSuoYin();
+      if (ix) {
+        const ir = ix.search(q, off, limit);
+        return { ok: true, items: anQuanHuaMingzhong(ir.items, q), total: ir.total, hasMore: ir.hasMore, roots: ix.stats().roots, files: ix.stats().files, truncated: ir.hasMore, ms: 0, offset: off, source: 'index' };
+      }
+      return { ok: true, items: [], total: off, hasMore: false, roots: [], files: 0, truncated: false, ms: 0, offset: off, source: 'scan' };
+    }
+    // 没有索引命中：按需扫描一次，缓存前 200 条供后续懒加载
+    try { quanPanYongHuZhongZhi?.abort(); } catch { /* noop */ }
+    const ac = new AbortController();
+    quanPanYongHuZhongZhi = ac;
+    const r = await saoMiaoQuanPan(q, { maxMs: 12000, maxResults: 200, maxFiles: 120000, signal: ac.signal });
+    if (ac.signal.aborted) return { ok: true, items: [], total: 0, hasMore: true, roots: r.roots, files: r.files, errors: r.errors, truncated: true, aborted: true, ms: r.ms, offset: off, source: 'scan' };
+    if (quanPanHuanCun.size > 20) quanPanHuanCun.clear();
+    quanPanHuanCun.set(cacheKey, { items: r.items, truncated: r.truncated, files: r.files, ms: r.ms, at: Date.now() });
+    const part = r.items.slice(0, limit);
+    try { audit?.log('local.search.disk', { sessionId: sid, queryChars: q.length, items: r.items.length, files: r.files, truncated: r.truncated, ms: r.ms, source: 'scan' }); } catch { /* noop */ }
+    return { ok: true, items: anQuanHuaMingzhong(part, q), total: r.items.length, hasMore: r.items.length > part.length || r.truncated, roots: r.roots, files: r.files, errors: r.errors, truncated: r.truncated, ms: r.ms, offset: 0, source: 'scan' };
+  } catch (e) {
+    return { ok: false, items: [], error: xiJingCuoWu(e) };
+  }
+});
+
+chuliIpc('warmy:souSuoJieMi', (_e, id?: string) => {
+  try {
+    const key = String(id || '');
+    const it = souSuoJieMiCang.get(key);
+    if (it && it.exp > Date.now()) return { ok: true, text: jieMiSouSuoWenBen(it) };
+    if (it) souSuoJieMiCang.delete(key);
+    const lp = souSuoJieMiLuJingCang.get(key);
+    if (lp && lp.exp > Date.now()) {
+      try {
+        const st = fs.statSync(lp.path);
+        if (!st.isFile() || st.size > 4 * 1024 * 1024) return { ok: false, error: 'too-large' };
+        const text = fs.readFileSync(lp.path, 'utf8');
+        const low = text.toLowerCase();
+        const at = low.indexOf(lp.query.toLowerCase());
+        if (at < 0) return { ok: true, text: text.slice(0, 8000).trim() };
+        const a = text.lastIndexOf('\n', at) + 1;
+        const b = text.indexOf('\n', at);
+        return { ok: true, text: text.slice(a, b < 0 ? Math.min(text.length, a + 8000) : Math.min(b, a + 8000)).trim() };
+      } catch {
+        return { ok: false, error: 'read-failed' };
+      }
+    }
+    if (lp) souSuoJieMiLuJingCang.delete(key);
+    return { ok: false, error: 'expired' };
+  } catch (e) {
+    return { ok: false, error: xiJingCuoWu(e) };
+  }
+});
+
 chuliIpc('warmy:souSuoXiaoXiJi', async (_e, q: string) => {
   try {
     const r = await memory?.recall(q, 20);

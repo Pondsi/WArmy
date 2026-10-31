@@ -2,13 +2,13 @@
 
 **无限牛马** · Workhorse Army
 
-### Your AI work has a team now.
+### An army that's yours.
 
-WArmy is a local-first desktop command center for AI workhorses. Give each agent a role and a model. A duty agent assigns the work, a shared board keeps it moving, and a local memory service remembers what happened. Point it at any local or self-hosted model endpoint that speaks a supported protocol, or at your own cloud provider, and keep the workspace on your disk by default.
+WArmy is a local-first, private-first, secure-first desktop command center for AI workhorses. Give each agent a role and a model. A duty agent assigns the work, a shared board keeps it moving, and a local memory service remembers what happened. Your workspace, chats, and files stay on your machine by default. Cloud models and networking are optional, explicit choices.
 
-[Download for Windows](https://github.com/Pondsi/WArmy/releases/tag/v0.2.31) · [Chinese manual](./说明.md) · [How it works](#how-it-works)
+[Download for Windows](https://github.com/Pondsi/WArmy/releases/tag/v0.2.32) · [Chinese manual](./说明.md) · [How it works](#how-it-works)
 
-[![Release](https://img.shields.io/github/v/release/Pondsi/WArmy?label=v0.2.31)](https://github.com/Pondsi/WArmy/releases/tag/v0.2.31)
+[![Release](https://img.shields.io/github/v/release/Pondsi/WArmy?label=v0.2.32)](https://github.com/Pondsi/WArmy/releases/tag/v0.2.32)
 [![License](https://img.shields.io/badge/license-MIT%20%2B%20attribution-blue)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-informational)](https://github.com/Pondsi/WArmy/releases)
 [![Electron](https://img.shields.io/badge/Electron-45.1-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
@@ -23,7 +23,38 @@ WArmy is a local-first desktop command center for AI workhorses. Give each agent
 
 It is 11 p.m. One chat wrote the plan. Another wrote the code. A third has no idea why any of it exists. You paste the same background into every window and hope the next one remembers.
 
-WArmy keeps the team in one workspace. The plan, the task board, the files, and the memory survive the window.
+WArmy keeps the team in one workspace. The plan, the task board, the files, and the memory survive the window. And because the workspace is yours, the default path does not go through someone else's server.
+
+## Local-first is the architecture, not a slogan
+
+- **Your data lives on your disk.** Chats, projects, the board, artifacts, memory, and settings are stored in `WArmyData` next to `WARMY.exe` in the install folder you choose. There is no WArmy account and no WArmy cloud.
+- **Local models are first-class.** Point WArmy at any local or self-hosted endpoint that speaks a supported protocol. Enter the base URL and model name; add a key only if the server asks for one.
+- **The network layer is off until you turn it on.** LAN discovery, direct connections, DHT discovery, relays, and IM adapters are explicit options. Sharing a project is a decision, not a default.
+- **Memory is a local service, not a transcript pile.** An append-only JSONL log is the source of truth; SQLite holds a rebuildable FTS5 projection with optional vectors. `recall` finds evidence cards and `retrieve` returns the original bytes.
+- **The work survives interruption.** A long task can stop with a stated reason, keep what was produced, and continue later. P0 to P3 queues persist across restarts.
+
+Local-first does not mean "nothing ever leaves the machine". It means the default is local, and every outbound path is visible: a cloud model receives the prompt you send it, a configured search provider receives the query, and a connected IM platform receives its messages. The rest stays on your disk.
+
+## Private-first in practice
+
+- **No analytics SDK, no ad SDK, no silent upload.** WArmy contacts GitHub for update checks and only the providers and services you configure. Crash logs stay on your machine.
+- **Secrets use OS secure storage.** Model API keys, the identity key, the mnemonic, and social credentials are kept through the platform's secure storage. The UI never reads a saved key back into the DOM.
+- **Logout seals the local data store.** The vault uses AES-256-GCM with a scrypt-derived key and a one-time session token after unlock.
+- **Search respects the same boundary.** Local search results can show sensitive values only as `*****` by default; hovering reveals a short-lived copy from main-process memory, and moving away masks it again. Search is read-only.
+- **Permissions are per session.** Knowledge layers, workspace access, and cross-session reads have separate rules. A group-chat workhorse cannot browse a project or a private workhorse session just because it can chat.
+
+Honest boundary: most workspace files are plaintext while the app is unlocked, and a cloud model provider receives whatever you send it. Full at-rest protection still depends on your OS account, disk encryption, and the provider you choose.
+
+## Secure-first by construction
+
+- **One IPC surface, checked twice.** Business IPC accepts only the app's own main window and the nm viewer, requires the main frame, and validates payloads against schemas.
+- **Dangerous actions stop at a card.** Shell commands, writes outside the workspace, protected directories, other-session data, and full-disk model searches require an explicit approval unless the user has chosen full authorization for that scope.
+- **Every tool call is auditable.** Tool calls, permission decisions, model changes, exports, and network handshakes leave an audit trail.
+- **Claimed artifacts are verified on disk.** The host checks that a file an agent says it created actually exists before the board treats it as done.
+- **Optional isolation.** Workhorses can run on the host or in a container; an unavailable container is reported as unavailable, not silently replaced with the host.
+- **Updates are checked, not blindly installed.** The app verifies update metadata and packages; it does not install automatically.
+
+No software is "unhackable". WArmy does not claim a third-party security certification or a penetration-test badge. The design goal is narrower and testable: local by default, explicit before dangerous actions, and honest when a boundary is hit.
 
 ## What you get
 
@@ -33,7 +64,8 @@ WArmy keeps the team in one workspace. The plan, the task board, the files, and 
 | You hand-address every message | A duty agent picks the worker, sets the thinking level, and dispatches one worker at a time |
 | Agents claim a file they did not write | The host checks every claimed artifact against the file system |
 | A long task dies at 90 percent | It can stop with a stated reason, keep what was produced, and continue later |
-| Memory is a pile of old chats | Memory is a queryable service with pointers back to the original messages |
+| Memory is a pile of old chats | Memory is a queryable local service with pointers back to the original messages |
+| The cloud is the only option | Local and self-hosted model endpoints are first-class; cloud is optional |
 
 **You bring the models. WArmy brings the organization.**
 
@@ -45,7 +77,7 @@ WArmy keeps the team in one workspace. The plan, the task board, the files, and 
 
 **Run recurring operations.** Schedule tasks and exports. Watch long-running processes. Keep an audit trail of tool calls and permission decisions.
 
-**Keep sensitive work local.** Point WArmy at a local model server on your machine and the model runs there. Use any server that speaks a supported protocol; enter its base URL, and add a key only if the server requires one. Cloud providers are optional.
+**Keep sensitive work local.** Run a local model server on `127.0.0.1` and the model stays on your machine. Use any server that speaks a supported protocol; enter its base URL, and add a key only if the server requires one.
 
 **Coordinate more than one machine.** Turn on the optional network layer to join projects across devices, or connect the IM adapters (WeChat, WeCom, DingTalk, Telegram, Feishu) to bring messages into a project. Every network feature is off until you configure it.
 
@@ -77,13 +109,17 @@ The context budget covers everything sent to the model: system rules, tool specs
 
 WArmy ships more than 40 built-in tools: file operations, shell commands, document creation and reading (DOCX, PPTX, XLSX, PDF), web search and extraction, image and video generation through ComfyUI when you connect it, subagents, schedules, process monitoring, and LSP diagnostics. Shell commands go through permission prompts, and tool calls are written to an audit log.
 
+### Search you can control
+
+Web search is built in but **off by default**. Open **Settings → Functions → Web search** and enable at least one provider: Firecrawl Keyless, Tavily, DeepSeek search, or a custom HTTP endpoint. Jina Reader is available as an extraction provider, not a search provider. Keys are stored through OS secure storage; a provider that returns 429 is reported as rate-limited with a choice of wait, switch provider, or stop.
+
+The search box in the chat header searches in order: the current session, every visible label in the app, other sessions, the knowledge base, then local disks. The local disk index is built in the background (on by default) and indexes file names/paths for every file, then adds masked content later. Results are paged as you scroll; when a scan or index reaches its current end, the UI says so instead of pretending it is complete. Sensitive values are masked as `*****`; hovering reveals a short-lived copy and moving away masks it again.
+
+Models get a scoped `local_search` tool. It can read the current session, permitted knowledge layers, and the session workspace. Cross-session reads require an approval card: My Workhorses may read other sessions; project workhorses may read only projects and group chats; group-chat and contact workhorses are denied with no authorization path. Full-disk model search is limited to My Workhorses and requires a separate approval card.
+
 ### A workbench for the output
 
 The nm viewer is a separate window that snaps to the main window. It handles Markdown with draggable source and preview panes, HTML and SVG previews, DOCX, PDF, PPTX, and XLSX extraction, a hex editor for binary files, and archive trees. Browser mode adds tabs, a new-tab toggle for links, per-tab split layouts, a read-only source view for remote pages, and downloads. You can check the work without leaving the app.
-
-### Privacy and safety defaults
-
-WArmy works without a server account. The identity key, mnemonic, model API keys, and social credentials use OS secure storage. Logging out seals the data store with AES-256-GCM and a scrypt-derived key. The IPC layer accepts only the app's own windows and validates payloads against schemas. Mnemonic and PIN screens use OS screen protection where the platform supports it. Most workspace files are plaintext while the app is unlocked, so full at-rest protection still depends on your OS account and disk encryption.
 
 ### Models and optional networking
 
@@ -97,6 +133,7 @@ Bring a local or self-hosted model that speaks a supported protocol, an OpenAI-c
 - Languages / 语言: 简体中文 · 繁體中文 · English · 日本語 · 한국어 · Русский · Español · Français · Português · Esperanto.
 - Light and dark themes, 4K-aware layout. Physical 4K verification is still pending.
 - Local memory database: SQLite with FTS5, optionally SQLCipher-encrypted through `better-sqlite3-multiple-ciphers`.
+- Full-disk search index: Node's built-in SQLite + FTS5, stored under `WArmyData/search-index`.
 - Vault: AES-256-GCM; key derivation with scrypt; one-time session token after unlock.
 - Network transport: X25519 key agreement, Ed25519 signatures, HKDF-SHA256. Mesh ports: 59599 production, 58588 dev, 62666 test.
 - Data directory: `WArmyData` next to `WARMY.exe` in the chosen install directory.
@@ -115,8 +152,8 @@ Bring a local or self-hosted model that speaks a supported protocol, an OpenAI-c
 
 ### Windows 10 or 11, x64
 
-1. Open the [v0.2.31 release](https://github.com/Pondsi/WArmy/releases/tag/v0.2.31).
-2. Download `WArmy-Setup-0.2.31.exe`.
+1. Open the [v0.2.32 release](https://github.com/Pondsi/WArmy/releases/tag/v0.2.32).
+2. Download `WArmy-Setup-0.2.32.exe`.
 3. Run the installer and launch **WArmy / 无限牛马**.
 
 The installer lets you choose the installation folder. WArmy stores its data in `WArmyData` inside that folder, and keeps that folder when you uninstall or upgrade. The installer is not code-signed. Windows SmartScreen may show an unknown publisher warning. The release page lists the SHA-256 so you can verify the download. WArmy is free under the MIT license with attribution. You pay your model provider directly.
@@ -127,7 +164,7 @@ Choose a language, accept the terms, create an identity, and save the 24-word mn
 
 ## Status
 
-0.2.31 runs on Windows 10 and 11 x64. Core workflows are verified with local model servers. Five of the ten planned acceptance rounds are complete with zero failures. macOS, physical 4K, real IM accounts, and cloud providers are still being verified.
+0.2.32 runs on Windows 10 and 11 x64. Core workflows are verified with local model servers. Three consecutive rounds of the offline gate suite plus the first-run, search-provider, full-disk index, sensitive-reveal, and lazy-loading checks passed with zero failures. macOS, physical 4K, real IM accounts, and cloud providers are still being verified.
 
 The installer is unsigned. Most workspace files are plaintext while the app is unlocked. Model output can be wrong, so review artifacts before shipping them.
 
@@ -166,11 +203,32 @@ No. It is a project command center that can read and write files and run command
 **Does it work on macOS?**
 Not yet. The current release targets Windows x64.
 
+## Acknowledgments
+
+WArmy stands on open-source work. The main components are listed below; the complete transitive dependency tree, with each package's own license, is recorded in `pnpm-lock.yaml` and the package manifests.
+
+- **DeepSeek Harness (dsh)** — MIT — [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). WArmy bundles the dsh runtime (`@deepseek-ai/dsh` 0.1.5-rc.1) for the optional dsh execution path. Its plugin-first harness design shaped how we think about a host that stays in control while agents stay extensible. Thank you to the DeepSeek team and contributors.
+- **Electron** — MIT — [electronjs.org](https://www.electronjs.org/). The desktop shell.
+- **Chromium** — BSD-3-Clause — the rendering engine inside Electron.
+- **Node.js** — MIT — the runtime for the main process and local services.
+- **TypeScript** — Apache-2.0 — the language used across the monorepo.
+- **pnpm** — MIT — the workspace package manager.
+- **electron-builder** — MIT — Windows installer and packaging.
+- **SQLite** — Public Domain — the local database engine, including FTS5.
+- **better-sqlite3** — MIT — the SQLite binding used by the memory service.
+- **better-sqlite3-multiple-ciphers / SQLCipher** — MIT / BSD-style — optional encryption for the memory database.
+- **ONNX Runtime Web** — MIT — optional local embedding runtime.
+- **sherpa-onnx** — Apache-2.0 — optional local speech recognition and synthesis.
+- **qrcode-generator 2.0.4** — MIT — © 2009 Kazuhiko Arase — QR encoding (vendored).
+- **jsQR 1.4.0** — Apache-2.0 — QR decoding (vendored).
+- **Ollama**, **ComfyUI**, and other model servers or creative tools are optional external services, not bundled code; their own licenses and terms apply.
+- Every other dependency retains its own copyright and license. If you redistribute WArmy, keep the upstream notices and license texts.
+
+**无限牛马** is the Chinese name. The pixel ox is the mascot. The work is the point.
+
 ## Documentation and license
 
 - [说明.md](./说明.md): full Chinese manual.
 - [LICENSE](./LICENSE): MIT with attribution.
 - [SPONSORS.md](./SPONSORS.md): support the project.
 - [Issues](https://github.com/Pondsi/WArmy/issues): bug reports and feature requests.
-
-**无限牛马** is the Chinese name, roughly "infinite workhorses". The pixel ox is the mascot. The work is the point.

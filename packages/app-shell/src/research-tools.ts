@@ -1,20 +1,13 @@
 /**
  * research-tools —— **调研管线**：搜索 → 抓取 → 摘录 → **带引用的结论**。
  *
- * 为什么必须有它
- * ---------------------------------------------------------------------------
- * 真事故：模型要"查资料"，手里只有一个 `fetch_url` —— 它得**先猜一个网址**再抓，
- * 猜错了就是 404；抓到一整页 HTML 也不会摘录，最后给用户的"结论"里**一条出处都没有**，
- * 用户没法核对（"有据可查"变成了"听它说"）。
+ * 供应商口径（第 123 轮用户定稿）：
+ *   · 搜索：**Firecrawl Keyless**（不注册、不填 key，按 IP 每日免额度重置）；
+ *   · 抓取：Firecrawl Keyless 优先，失败时回退 **Jina Reader**（同样不注册）；
+ *   · Jina Search 目前无 key 会返回 401，因此**不作为搜索供应商**，绝不假装它能用。
  *
- * 这条管线的口径：
- *   1. **搜索**（`web_search`）：给出**排名 + 标题 + 摘要 + URL**，让模型先看再决定打开哪几条；
- *   2. **抓取**（`web_extract`）：把网页正文抽成干净文本（不是塞一坨 HTML）；
- *   3. **摘录**：按查询词把命中段落截出来，**每条都带 URL**；
- *   4. **结论**：由**模型**写，但必须基于上面带 URL 的材料 —— 工具本身不编结论。
- *
- * 供应商：Tavily（`/search` + `/extract`）。没有密钥时**如实失败**并告诉用户去哪儿配，
- * 绝不返回"看起来像结果"的假数据（这是本仓一贯的纪律）。
+ * 不注册也能用，是本项目对普通用户的硬要求：没有 key 时**不许失败**，也不许编结果。
+ * Key 只在用户主动填写时作为可选增强（更高额度），不是使用前提。
  *
  * 纯函数 + 全局 fetch —— 门禁可以注入假 fetch 直接断言（见 scripts/verify-research-pipeline.mjs）。
  */
@@ -22,7 +15,7 @@
 export interface YanJiuJieGuo {
   ok: boolean;
   /** 命中的条目（已排序） */
-  items: Array<{ title: string; url: string; snippet: string; score?: number }>;
+  items: Array<{ title: string; url: string; snippet: string; score?: number; via?: string }>;
   /** 供应商给出的"直接答案"（有就带，没就不编） */
   answer?: string;
   error?: string;
@@ -30,86 +23,192 @@ export interface YanJiuJieGuo {
   hint?: string;
   /** 实际用的供应商 */
   provider?: string;
+  /** 429 时供应商要求的等待秒数 */
+  retryAfterSec?: number;
+  /** 是否命中限流/额度 */
+  rateLimited?: boolean;
+  /** 多供应商尝试记录（按顺序） */
+  attempts?: Array<{ provider: string; error?: string; status?: number; retryAfterSec?: number }>;
 }
 
-export const YAN_JIU_GONG_YING_SHANG = 'tavily';
+export const YAN_JIU_GONG_YING_SHANG = 'firecrawl-keyless';
+export const FIRECRAWL_SEARCH_URL = 'https://api.firecrawl.dev/v2/search';
+export const FIRECRAWL_SCRAPE_URL = 'https://api.firecrawl.dev/v2/scrape';
+export const JINA_READER_URL = 'https://r.jina.ai/';
 
-/** 搜索：Tavily `/search`（只回**真实返回**的条目，不做任何"补全"） */
+type FetchImpl = typeof fetch;
+
+function qingKey(key: unknown): string {
+  return String(key || '').trim();
+}
+
+function tou(key: unknown): Record<string, string> {
+  const k = qingKey(key);
+  return k ? { Authorization: 'Bearer ' + k } : {};
+}
+
+function httpUrl(u: unknown): string {
+  const s = String(u || '').trim();
+  return /^https?:\/\//i.test(s) ? s : '';
+}
+
+async function duJson(r: Response | { json?: () => Promise<unknown>; ok?: boolean; status?: number }): Promise<any> {
+  try {
+    return await (r as { json?: () => Promise<unknown> }).json?.();
+  } catch {
+    return null;
+  }
+}
+
+async function duText(r: Response | { text?: () => Promise<string> }): Promise<string> {
+  try {
+    return String(await (r as { text?: () => Promise<string> }).text?.() || '');
+  } catch {
+    return '';
+  }
+}
+
+function quRetryAfter(r: unknown): number {
+  try {
+    const v = (r as { headers?: { get?: (k: string) => string | null } })?.headers?.get?.('retry-after');
+    if (!v) return 0;
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return Math.min(3600, Math.round(n));
+    const ts = Date.parse(v);
+    if (Number.isFinite(ts)) return Math.max(0, Math.min(3600, Math.round((ts - Date.now()) / 1000)));
+  } catch { /* noop */ }
+  return 0;
+}
+
+function shiBaiTiShi(status: number, retryAfterSec = 0): { error: string; hint?: string; rateLimited?: boolean; retryAfterSec?: number } {
+  if (status === 429) {
+    return {
+      error: 'search-quota-exceeded',
+      hint: '供应商返回 429（限流/额度/并发超限）' + (retryAfterSec > 0 ? `，建议等待 ${retryAfterSec} 秒` : '') + '。可以等待后重试、换一个已启用的搜索供应商，或停止本次搜索；不要凭记忆编造搜索结果。',
+      rateLimited: true,
+      retryAfterSec: retryAfterSec || undefined,
+    };
+  }
+  if (status === 401 || status === 403) {
+    return {
+      error: 'search-auth-failed',
+      hint: '供应商拒绝了这次请求（key 无效或无权限）。检查设置 → 功能 → 网络搜索里的 Key；不要凭记忆编造结果。',
+    };
+  }
+  if (status >= 500) {
+    return { error: 'search-provider-unavailable', hint: '搜索服务暂时不可用，稍后重试。不要凭记忆编造结果。' };
+  }
+  return { error: 'search-http-' + status, hint: '搜索服务返回了 HTTP ' + status + '，稍后重试。' };
+}
+
+/** 搜索：Firecrawl Keyless `/v2/search`（只回**真实返回**的条目，不做任何"补全"） */
 export async function souSuo(
   key: string,
   query: string,
   opts: { count?: number; depth?: 'basic' | 'advanced'; topic?: 'general' | 'news'; days?: number } = {},
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: FetchImpl = fetch,
 ): Promise<YanJiuJieGuo> {
   const q = String(query || '').trim();
   if (!q) return { ok: false, items: [], error: 'empty-query' };
-  if (!String(key || '').trim()) {
-    return {
-      ok: false, items: [], error: 'no-search-key',
-      hint: '没有配置搜索密钥：请在「设置 → 搜索」里填 Tavily API Key（或让管理员配置），然后重试。不要凭记忆编造结果。',
-    };
-  }
+  const limit = Math.min(20, Math.max(1, Number(opts.count) || 8));
   try {
-    const body: Record<string, unknown> = {
-      query: q,
-      search_depth: opts.depth || 'advanced',
-      max_results: Math.min(20, Math.max(1, Number(opts.count) || 8)),
-      include_answer: true,
-    };
-    if (opts.topic) body['topic'] = opts.topic;
-    if (opts.days) body['time_range'] = `${opts.days}d`;
-    const r = await fetchImpl('https://api.tavily.com/search', {
+    const body: Record<string, unknown> = { query: q, limit };
+    const days = Number(opts.days) || 0;
+    if (days > 0) body.tbs = days <= 1 ? 'qdr:d' : days <= 7 ? 'qdr:w' : days <= 31 ? 'qdr:m' : 'qdr:y';
+    const r = await fetchImpl(FIRECRAWL_SEARCH_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      headers: { 'Content-Type': 'application/json', ...tou(key) },
       body: JSON.stringify(body),
     });
-    const j = (await r.json().catch(() => null)) as { results?: Array<{ title?: string; url?: string; content?: string; score?: number }>; answer?: string; detail?: { error?: string } } | null;
+    const j = await duJson(r);
     if (!r.ok) {
-      return { ok: false, items: [], error: `search HTTP ${r.status}`, hint: String(j?.detail?.error || '').slice(0, 200) || undefined };
+      // 可选 key 失效不该把免注册用户挡在门外：401/403 回退一次 Keyless。
+      if ((Number(r.status) === 401 || Number(r.status) === 403) && qingKey(key)) {
+        const hui = await souSuo('', query, opts, fetchImpl);
+        return { ...hui, hint: '已配置的 Firecrawl Key 无效，已回退免注册额度。' + (hui.hint ? ' ' + hui.hint : '') };
+      }
+      const t = shiBaiTiShi(Number(r.status), quRetryAfter(r));
+      return { ok: false, items: [], ...t };
     }
-    const items = (j?.results || []).map((x) => ({
-      title: String(x.title || ''),
-      url: String(x.url || ''),
-      snippet: String(x.content || '').slice(0, 600),
-      score: typeof x.score === 'number' ? x.score : undefined,
+    const arr: any[] = Array.isArray(j?.data?.web) ? j.data.web
+      : Array.isArray(j?.data) ? j.data
+        : Array.isArray(j?.results) ? j.results
+          : [];
+    const items = arr.map((x) => ({
+      title: String(x?.title || x?.metadata?.title || '').trim(),
+      url: httpUrl(x?.url || x?.metadata?.url),
+      snippet: String(x?.description || x?.content || x?.markdown || x?.metadata?.description || '').replace(/\s+/g, ' ').slice(0, 900),
+      score: typeof x?.score === 'number' ? x.score : undefined,
+      via: 'firecrawl',
     })).filter((x) => x.url);
-    return { ok: true, items, answer: j?.answer ? String(j.answer) : undefined, provider: YAN_JIU_GONG_YING_SHANG };
+    return {
+      ok: true,
+      items,
+      provider: qingKey(key) ? 'firecrawl-key' : YAN_JIU_GONG_YING_SHANG,
+    };
   } catch (e) {
     return { ok: false, items: [], error: 'search-failed：' + String((e as Error)?.message || e) };
   }
 }
 
-/** 抓取：Tavily `/extract`（拿正文，不是 HTML） */
+/** 抓取单条：Firecrawl `/v2/scrape`（正文 markdown） */
+export async function zhuaQuFirecrawl(url: string, key: string, fetchImpl: FetchImpl): Promise<{ ok: boolean; text: string; status: number; error?: string }> {
+  try {
+    const r = await fetchImpl(FIRECRAWL_SCRAPE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...tou(key) },
+      body: JSON.stringify({ url, formats: ['markdown'] }),
+    });
+    const j = await duJson(r);
+    if (!r.ok) return { ok: false, text: '', status: Number(r.status), error: (j?.error || '') + '' };
+    const text = String(j?.data?.markdown || j?.data?.content || j?.markdown || '').trim();
+    return { ok: !!text, text, status: Number(r.status), error: text ? undefined : 'empty' };
+  } catch (e) {
+    return { ok: false, text: '', status: 0, error: String((e as Error)?.message || e) };
+  }
+}
+
+/** 抓取单条：Jina Reader（keyless；返回带标题头的 markdown，去掉头部只留正文） */
+export async function zhuaQuJina(url: string, fetchImpl: FetchImpl): Promise<{ ok: boolean; text: string; status: number; error?: string }> {
+  try {
+    const r = await fetchImpl(JINA_READER_URL + url, {
+      method: 'GET',
+      headers: { Accept: 'text/plain' },
+    });
+    const raw = await duText(r);
+    if (!r.ok) return { ok: false, text: '', status: Number(r.status), error: raw.slice(0, 160) };
+    const cut = raw.indexOf('Markdown Content:');
+    const text = (cut >= 0 ? raw.slice(cut + 'Markdown Content:'.length) : raw).trim();
+    return { ok: !!text, text, status: Number(r.status), error: text ? undefined : 'empty' };
+  } catch (e) {
+    return { ok: false, text: '', status: 0, error: String((e as Error)?.message || e) };
+  }
+}
+
+/** 抓取：Firecrawl Keyless 优先，Jina Reader 兜底（都不需要 key） */
 export async function zhuaQuWenZhang(
   key: string,
   urls: string[],
   opts: { query?: string; depth?: 'basic' | 'advanced' } = {},
-  fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: boolean; items: Array<{ url: string; text: string }>; error?: string; hint?: string }> {
-  const lie = (Array.isArray(urls) ? urls : []).map((u) => String(u || '').trim()).filter((u) => /^https?:\/\//i.test(u)).slice(0, 5);
+  fetchImpl: FetchImpl = fetch,
+): Promise<{ ok: boolean; items: Array<{ url: string; text: string; via?: string }>; error?: string; hint?: string }> {
+  const lie = (Array.isArray(urls) ? urls : []).map((u) => httpUrl(u)).filter(Boolean).slice(0, 5);
   if (!lie.length) return { ok: false, items: [], error: 'no-url', hint: '要抓取就给我 http/https 网址。' };
-  if (!String(key || '').trim()) return { ok: false, items: [], error: 'no-search-key', hint: '没有配置搜索密钥（设置 → 搜索）。' };
-  try {
-    const body: Record<string, unknown> = { urls: lie, extract_depth: opts.depth || 'advanced' };
-    if (opts.query) body['query'] = String(opts.query);
-    const r = await fetchImpl('https://api.tavily.com/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify(body),
-    });
-    const j = (await r.json().catch(() => null)) as { results?: Array<{ url?: string; raw_content?: string }>; failed_results?: Array<{ url?: string; error?: string }> } | null;
-    if (!r.ok) return { ok: false, items: [], error: `extract HTTP ${r.status}` };
-    const items = (j?.results || []).map((x) => ({ url: String(x.url || ''), text: String(x.raw_content || '') }));
-    const shiBai = (j?.failed_results || []).map((x) => String(x.url || '')).filter(Boolean);
-    return {
-      ok: items.length > 0,
-      items,
-      error: items.length ? undefined : 'extract-empty',
-      hint: shiBai.length ? `这几条抓不到：${shiBai.slice(0, 3).join(' ')}` : undefined,
-    };
-  } catch (e) {
-    return { ok: false, items: [], error: 'extract-failed：' + String((e as Error)?.message || e) };
+  const items: Array<{ url: string; text: string; via?: string }> = [];
+  const shiBai: string[] = [];
+  for (const url of lie) {
+    const a = await zhuaQuFirecrawl(url, key, fetchImpl);
+    if (a.ok) { items.push({ url, text: a.text, via: 'firecrawl' }); continue; }
+    const b = await zhuaQuJina(url, fetchImpl);
+    if (b.ok) { items.push({ url, text: b.text, via: 'jina-reader' }); continue; }
+    shiBai.push(url);
   }
+  return {
+    ok: items.length > 0,
+    items,
+    error: items.length ? undefined : 'extract-empty',
+    hint: shiBai.length ? `这几条抓不到：${shiBai.slice(0, 3).join(' ')}` : undefined,
+  };
 }
 
 /** 在正文里按查询词**摘录**命中段落（每条都能指回原文，便于"有据可查"） */
@@ -133,7 +232,7 @@ export function zhaiLu(zhengWen: string, query: string, maxSeg = 3, kuan = 240):
  */
 export function geShiYanJiu(jie: YanJiuJieGuo, opts: { kuan?: number } = {}): string {
   if (!jie.ok) {
-    return `[web_search] 失败：${jie.error}${jie.hint ? '\n提示：' + jie.hint : ''}\n（**不要凭记忆编造搜索结果**；要么按提示配好密钥，要么如实告诉用户查不到。）`;
+    return `[web_search] 失败：${jie.error}${jie.hint ? '\n提示：' + jie.hint : ''}\n（**不要凭记忆编造搜索结果**；要么按提示重试，要么如实告诉用户查不到。）`;
   }
   const kuan = opts.kuan || 220;
   const hang = jie.items.map((x, i) => `[${i + 1}] ${x.title}\n    ${x.url}\n    ${x.snippet.slice(0, kuan)}`);
@@ -144,10 +243,10 @@ export function geShiYanJiu(jie: YanJiuJieGuo, opts: { kuan?: number } = {}): st
 }
 
 /** 抓取结果 → 带 URL 的摘录文本 */
-export function geShiZhaiLu(items: Array<{ url: string; text: string }>, query: string): string {
+export function geShiZhaiLu(items: Array<{ url: string; text: string; via?: string }>, query: string): string {
   if (!items.length) return '[web_extract] 没有抓到正文（如实告诉用户，不要编造内容）。';
   return items.map((x, i) => {
     const zhai = zhaiLu(x.text, query);
-    return `[${i + 1}] ${x.url}\n` + (zhai.length ? zhai.map((z) => '    · ' + z).join('\n') : '    （正文里没找到与查询相关的段落）');
+    return `[${i + 1}] ${x.url}${x.via ? '（经 ' + x.via + '）' : ''}\n` + (zhai.length ? zhai.map((z) => '    · ' + z).join('\n') : '    （正文里没找到与查询相关的段落）');
   }).join('\n');
 }

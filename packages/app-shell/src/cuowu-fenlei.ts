@@ -46,7 +46,9 @@ const GUI_ZE: GuiZe[] = [
   { lei: 'IPC_DEAD', re: /ERR_IPC_CHANNEL_CLOSED|channel closed|memory service not started|memory ipc timeout|memory child exit/i, keHuiFu: true, code: 'ipc' },
   { lei: 'CONTEXT_OVERFLOW', re: SHANG_XIA_WEN_CHAO_XIAN, keHuiFu: true, code: 'context' },
   { lei: 'PROTO_TIMEOUT', re: /ETIMEDOUT|timed? ?out|timeout|AbortError|aborted|超时/i, keHuiFu: true, code: 'timeout' },
-  { lei: 'MODEL_UNAVAILABLE', re: new RegExp(`ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|fetch failed|socket hang up|${ZHUANG_TAI('429|500|502|503|504')}|rate.?limit|overloaded|\\bmodel\\b[^\\n]{0,40}\\bnot found\\b|no such model|service unavailable|模型不可用`, 'i'), keHuiFu: true, code: 'unavailable' },
+  // 429 单独给 code=rate-limit：界面/日志能把它和普通 5xx 区分开，提示用户等待/换模型/停止。
+  { lei: 'MODEL_UNAVAILABLE', re: new RegExp(`${ZHUANG_TAI('429')}|rate.?limit|too many requests|overloaded|quota (?:exceeded|exhausted)`, 'i'), keHuiFu: true, code: 'rate-limit' },
+  { lei: 'MODEL_UNAVAILABLE', re: new RegExp(`ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|fetch failed|socket hang up|${ZHUANG_TAI('500|502|503|504')}|\\bmodel\\b[^\\n]{0,40}\\bnot found\\b|no such model|service unavailable|模型不可用`, 'i'), keHuiFu: true, code: 'unavailable' },
 ];
 
 function wenBenOf(e: unknown): string {

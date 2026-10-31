@@ -4795,3 +4795,16 @@ html { font-weight: var(--fw-ui, 400); }
     scroll-behavior: auto !important;
   }
 }
+
+/* ── 第 123 轮：统一本地搜索浮窗（分区 + 敏感内容悬停解密） ───────── */
+.ssWrap { margin-top: 8px; max-height: 380px; overflow: auto; color: var(--ink, #222); }
+.ssSec { margin-top: 10px; border-top: 1px solid var(--line, #ddd); padding-top: 6px; }
+.ssSec:first-child { border-top: none; margin-top: 0; }
+.ssSecHead { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--accent, #A87654); padding: 4px 6px; }
+.ssSecHead span { font-weight: 400; color: var(--muted, #888); }
+.ssHit { padding: 6px 8px; border-radius: 6px; cursor: default; }
+.ssHit:hover { background: color-mix(in srgb, var(--accent, #A87654) 9%, transparent); }
+.ssTitle { font-size: 13px; font-weight: 600; line-height: 1.45; word-break: break-all; }
+.ssSnippet { font-size: 12px; line-height: 1.55; opacity: .9; white-space: pre-wrap; word-break: break-all; }
+.ssHit[data-reveal]:not([data-reveal=""]) .ssSnippet { cursor: help; }
+.ssMeta { font-size: 11px; opacity: .55; margin-top: 2px; word-break: break-all; }

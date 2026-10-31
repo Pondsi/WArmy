@@ -1425,7 +1425,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
  */
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'monitor_process', 'lsp_diagnostics', 'ask_user', 'plan_update', 'plan_verify', 'write_skill',
-  'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'download_file',
+  'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'local_search', 'download_file',
   'get_time', 'wait_seconds', 'read_profile', 'image_generate', 'video_generate',
 ] as const;
 export function isHostTool(name: unknown): boolean {
@@ -1801,7 +1801,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'web_search',
-        description: '**联网搜索**：返回排名 + 标题 + 摘要 + **URL**（先看再决定打开哪几条）。要查"现在的事实/新闻/文档"用它，**不要凭记忆编造**。没配搜索密钥时会如实失败并告诉你去哪配。写结论时必须带上出处 URL。',
+        description: '**联网搜索**：返回排名 + 标题 + 摘要 + **URL**（先看再决定打开哪几条）。要查"现在的事实/新闻/文档"用它，**不要凭记忆编造**。默认走 Firecrawl 免注册额度，不需要用户配置密钥；额度用尽会如实失败并说明。写结论时必须带上出处 URL。',
         parameters: {
           type: 'object',
           properties: {
@@ -1818,7 +1818,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'web_extract',
-        description: '**抓正文**：把网页抽成干净文本，并按查询词**摘录**命中段落（每条都带 URL）。搜索结果里挑 1~5 条用它看细节；比 fetch_url 更适合"有据可查"的调研。',
+        description: '**抓正文**：把网页抽成干净文本，并按查询词**摘录**命中段落（每条都带 URL）。搜索结果里挑 1~5 条用它看细节；比 fetch_url 更适合"有据可查"的调研。默认 Firecrawl 免注册额度，失败自动回退 Jina Reader，同样不需要密钥。',
         parameters: {
           type: 'object',
           properties: {
@@ -1826,6 +1826,23 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             query: { type: 'string', description: '想在这几页里找什么（用于摘录）' },
           },
           required: ['urls'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'local_search',
+        description: '**只读本地搜索**：按当前会话已授权的范围搜索——当前会话记录、程序界面文案、本会话知识库层、本会话工作区文件。不会修改/删除任何内容。`include_other_sessions:true` 用于用户明确要求查看其他会话时：我的牛马会弹授权（完全授权直接放行）；项目只能看项目和群聊且需授权；群聊/联系人直接拒绝且无授权途径。`include_disk:true` 仅「我的牛马」会话可用，且每次会弹用户授权。敏感内容会以 ***** 返回，不要尝试还原。',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '搜索词（用户会用的自然语言关键词）' },
+            include_other_sessions: { type: 'boolean', description: '用户明确要求查看其他会话时才置 true；受会话类型权限限制' },
+            include_disk: { type: 'boolean', description: '是否请求全盘搜索（仅我的牛马可用，需用户授权；默认 false）' },
+            limit: { type: 'number', description: '每个分区最多返回多少条（默认 10，最多 30）' },
+          },
+          required: ['query'],
         },
       },
     },

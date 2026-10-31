@@ -89,8 +89,24 @@ export interface gongyingshangJilu {
    * 没拉到但**正在被使用**的模型保留并继续标红（悬停显示占用位置）。
    */
   staleModels?: Record<string, boolean>;
-  /** 是否已存有密钥（密钥本体在 SecureKeyStore） */
+  /** 已保存的密钥（只存"有/无"状态，绝不存明文） */
   hasKey?: boolean;
+}
+
+/**
+ * 联网搜索供应商设置（设置 → 功能 → 网络搜索）。
+ *
+ * **默认全部关闭**：项目内置了搜索能力，但用户必须显式启用至少一个供应商，
+ * 否则 web_search / web_extract 会如实返回「未启用」，而不是偷偷联网。
+ * 密钥一律走 SecureKeyStore；这里只保存可公开的开关与自定义项元数据。
+ */
+export interface SousuoGongYingSheZhi {
+  firecrawl?: { enabled?: boolean };
+  /** Jina Reader 是**抓取**供应商，不是搜索供应商 */
+  jinaReader?: { enabled?: boolean };
+  tavily?: { enabled?: boolean };
+  deepseek?: { enabled?: boolean };
+  custom?: Array<{ id: string; name: string; url: string; enabled?: boolean }>;
 }
 
 /**
@@ -235,6 +251,10 @@ export interface YingYongPeizhi {
    * Missing key = enabled (default qiYong). Persisted so pause survives restart.
    */
   skillEnabled?: Record<string, boolean>;
+  /** 联网搜索供应商开关（默认全关；密钥在 SecureKeyStore，不在这里） */
+  searchProviders?: SousuoGongYingSheZhi;
+  /** 全盘后台索引（默认开；空闲时建立，用于更快/更完整的本地搜索） */
+  fullDiskIndex?: boolean;
   /**
    * First-run onboarding: language picker shown until true.
    * Installer/first launch must surface language selection immediately.
@@ -771,6 +791,14 @@ function defaults(): YingYongPeizhi {
     skillScanDirs: [],
     pluginScanDirs: [],
     skillEnabled: {},
+    searchProviders: {
+      firecrawl: { enabled: false },
+      jinaReader: { enabled: false },
+      tavily: { enabled: false },
+      deepseek: { enabled: false },
+      custom: [],
+    },
+    fullDiskIndex: true,
     setupDone: false,
     netBannerDismissed: [],
     privacyConsent: false,

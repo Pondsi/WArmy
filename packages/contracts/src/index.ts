@@ -139,6 +139,8 @@ export interface RecallCard {
     snippet: string;
     score: number;
     source: HuisuoLaiyuan;
+    /** 记录所属会话（统一搜索需要按会话分组；旧实现没带，这里是可选扩展） */
+    sessionId?: string;
 }
 /** retrieve：解引用，三级回退（exact → nearby → fuzzy） */
 export interface RetrieveRequest {
